@@ -2,11 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 Canvas.vue 中的硬编码菜单逻辑、连接验证逻辑、端口配置全部抽成独立插件；新增 Ctrl+F 节点搜索；修复 StoragePlugin 保存时改坏 node type 的 bug 并添加导出和卸载清理。
+**Goal:** 把菜单、端口配置、节点搜索和保存清洗继续从 `Canvas.vue` 迁到插件系统；修复保存时改坏 `node.type` 的 P0 bug。
 
-**Architecture:** MenuRegistry（单例注册表）作为菜单路由引擎，ContextMenuPlugin 注册内置菜单项，CustomHandlePlugin 接管连接验证和端口配置，NodeFindPlugin 通过 `mountOverlay` 挂载搜索弹窗。存储方面：`sanitizeForSave` 抽为纯函数 + 测试保护。
+**Architecture:** `MenuRegistry` 是当前 Canvas runtime 的实例，不是全局单例；创建节点菜单从 `NodeRegistry` 动态生成；插件内拿其他插件 API 统一使用 `context.getPluginAPI()`。
 
 **Tech Stack:** Vue 3 + TypeScript, VueFlow, Pinia, Node native `node:test`, pnpm。
+
+---
+
+## 复查后必须修正的点
+
+- 不要做 `MenuRegistry.getInstance()`，这会继续制造全局状态。`MenuRegistry` 要挂在当前 `CanvasRuntime`。
+- 菜单不要再次硬编码 text/image/video/stage，要从 `NodeRegistry.getMenuItems()` 生成。
+- `registerHandleConfig()` 不能写不存在的 `state.handleConfig`，当前 store 字段是 `handleRadius`、`handleRestOffset` 等平铺字段。
+- 右键复制不能只选中节点，要调用 clipboard API。
+- 原计划写了 edge 菜单，但 `Canvas.vue` 没绑定 `@edge-context-menu`，要补上。
+- `exportPNG()` 需要安装 `html-to-image`，且用 `toPng` 下载 `.png`，不要 `toJpeg` 下载 `.jpg`。
+- `NodeFindPlugin` 必须在卸载时注销快捷键并清理 overlay。
 
 ---
 
@@ -29,46 +41,224 @@
 - `src/canvas/core/plugins/storage/__tests__/sanitizeForSave.test.ts`
 
 修改：
-- `src/canvas/core/plugins/types.ts` — 添加 MenuItemDefinition、HandleConfig、MenuContext 类型
-- `src/canvas/core/plugins/PluginContext.ts` — 添加 menus、registerHandleConfig 实现
-- `src/canvas/core/components/CanvasMenu.types.ts` — 扩展 CanvasMenuMode、CanvasMenuItem
-- `src/canvas/core/components/CanvasMenu.vue` — 支持 group 分隔、danger 红色、shortcut 显示
-- `src/canvas/core/Canvas.vue` — 接入 MenuResolver、删除硬编码菜单逻辑
-- `src/canvas/core/plugins/storage/StoragePlugin.ts` — 拆分 sanitizeForSave、添加 uninstall/export
-- `src/App.vue` — 注册三个新插件
+- `package.json`
+- `src/canvas/core/runtime/CanvasRuntime.ts`
+- `src/canvas/core/plugins/types.ts`
+- `src/canvas/core/plugins/PluginContext.ts`
+- `src/canvas/core/components/CanvasMenu.types.ts`
+- `src/canvas/core/components/CanvasMenu.vue`
+- `src/canvas/core/Canvas.vue`
+- `src/canvas/core/plugins/storage/StoragePlugin.ts`
+- `src/App.vue`
 
 ---
 
-### Task 1: 扩展 PluginContext API（menus + handle）
+### Task 1: 创建 MenuRegistry / MenuResolver 并挂到 CanvasRuntime
 
 **Files:**
-- Modify: `src/canvas/core/plugins/types.ts`
-- Modify: `src/canvas/core/plugins/PluginContext.ts`
+- Create: `src/canvas/core/menu/MenuRegistry.ts`
+- Create: `src/canvas/core/menu/MenuResolver.ts`
+- Create: `src/canvas/core/menu/index.ts`
+- Modify: `src/canvas/core/runtime/CanvasRuntime.ts`
+- Modify: `src/canvas/core/Canvas.vue`
 
-- [ ] **Step 1: types.ts 添加新类型**
+- [ ] **Step 1: 写 MenuRegistry**
 
-In `src/canvas/core/plugins/types.ts`, add before the `PluginContext` interface:
+Create `src/canvas/core/menu/MenuRegistry.ts`:
 
 ```typescript
+export interface MenuContext {
+  mode: 'pane' | 'node' | 'connection' | 'edge'
+  nodeId?: string
+  nodeType?: string
+  edgeId?: string
+  sourceNodeId?: string
+  flowPosition?: { x: number; y: number }
+}
+
 export interface MenuItemDefinition {
   id: string
   label: string
   description?: string
-  icon?: string
+  icon?: 'text' | 'image' | 'video' | 'layers' | 'link' | 'delete' | 'duplicate'
+  badge?: string
   shortcut?: string
   danger?: boolean
-  group?: string
+  group?: 'create' | 'action' | 'delete'
   priority?: number
   visible: (ctx: MenuContext) => boolean
 }
 
-export interface MenuContext {
-  mode: string
-  nodeId?: string
-  nodeType?: string
-  flowPosition?: { x: number; y: number }
+interface RegistryEntry {
+  source: string
+  item: MenuItemDefinition
 }
 
+export class MenuRegistry {
+  private entries: RegistryEntry[] = []
+
+  register(source: string, items: MenuItemDefinition[]): void {
+    this.unregisterSource(source)
+    for (const item of items) this.entries.push({ source, item })
+  }
+
+  unregister(source: string, ids: string[]): void {
+    const idSet = new Set(ids)
+    this.entries = this.entries.filter(entry => !(entry.source === source && idSet.has(entry.item.id)))
+  }
+
+  unregisterSource(source: string): void {
+    this.entries = this.entries.filter(entry => entry.source !== source)
+  }
+
+  getAll(): RegistryEntry[] {
+    return [...this.entries]
+  }
+}
+```
+
+- [ ] **Step 2: 写 MenuResolver**
+
+Create `src/canvas/core/menu/MenuResolver.ts`:
+
+```typescript
+import type { NodeRegistry } from '../registry/NodeRegistry'
+import type { MenuContext, MenuItemDefinition, MenuRegistry } from './MenuRegistry'
+
+export interface ResolvedMenuItem {
+  id: string
+  label: string
+  description?: string
+  icon?: MenuItemDefinition['icon']
+  badge?: string
+  shortcut?: string
+  danger?: boolean
+  group: string
+  priority?: number
+}
+
+const GROUP_ORDER: Record<string, number> = { create: 1, action: 2, delete: 3 }
+
+function createNodeItems(ctx: MenuContext, nodeRegistry: NodeRegistry): ResolvedMenuItem[] {
+  if (ctx.mode !== 'pane' && ctx.mode !== 'connection') return []
+  const prefix = ctx.mode === 'connection' ? 'connect:' : 'create:'
+  return nodeRegistry.getMenuItems().map((item, index) => ({
+    id: `${prefix}${item.id}`,
+    label: item.label,
+    description: item.description,
+    icon: item.icon,
+    badge: item.badge,
+    group: 'create',
+    priority: 100 - index,
+  }))
+}
+
+export function resolveMenuItems(ctx: MenuContext, menuRegistry: MenuRegistry, nodeRegistry: NodeRegistry): ResolvedMenuItem[] {
+  const items: ResolvedMenuItem[] = createNodeItems(ctx, nodeRegistry)
+
+  for (const entry of menuRegistry.getAll()) {
+    try {
+      if (!entry.item.visible(ctx)) continue
+      items.push({
+        id: entry.item.id,
+        label: entry.item.label,
+        description: entry.item.description,
+        icon: entry.item.icon,
+        badge: entry.item.badge,
+        shortcut: entry.item.shortcut,
+        danger: entry.item.danger,
+        group: entry.item.group || 'action',
+        priority: entry.item.priority ?? 0,
+      })
+    } catch (err) {
+      console.warn(`[MenuResolver] visible() failed for ${entry.item.id}:`, err)
+    }
+  }
+
+  return items.sort((a, b) => {
+    const ga = GROUP_ORDER[a.group] ?? 99
+    const gb = GROUP_ORDER[b.group] ?? 99
+    if (ga !== gb) return ga - gb
+    const pa = a.priority ?? 0
+    const pb = b.priority ?? 0
+    if (pa !== pb) return pb - pa
+    return a.id.localeCompare(b.id)
+  })
+}
+```
+
+Create `src/canvas/core/menu/index.ts`:
+
+```typescript
+export { MenuRegistry } from './MenuRegistry'
+export type { MenuContext, MenuItemDefinition } from './MenuRegistry'
+export { resolveMenuItems } from './MenuResolver'
+export type { ResolvedMenuItem } from './MenuResolver'
+```
+
+- [ ] **Step 3: CanvasRuntime 加 menuRegistry**
+
+Modify `src/canvas/core/runtime/CanvasRuntime.ts`:
+
+```typescript
+import type { MenuRegistry } from '../menu/MenuRegistry'
+```
+
+Constructor becomes:
+
+```typescript
+constructor(
+  readonly pluginManager: PluginManager,
+  readonly eventBus: EventBus,
+  readonly nodeRegistry: NodeRegistry,
+  readonly menuRegistry: MenuRegistry,
+  readonly vueFlowInstance: any,
+) {}
+```
+
+- [ ] **Step 4: Canvas.vue 创建 menuRegistry**
+
+Add import:
+
+```typescript
+import { MenuRegistry, resolveMenuItems } from './menu'
+```
+
+Near `nodeRegistry`:
+
+```typescript
+const menuRegistry = new MenuRegistry()
+const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, vueFlowInstance as any)
+```
+
+- [ ] **Step 5: 构建 + 提交**
+
+```powershell
+pnpm build
+git add src/canvas/core/menu src/canvas/core/runtime/CanvasRuntime.ts src/canvas/core/Canvas.vue
+git commit -m "feat: add per-canvas MenuRegistry and resolver"
+```
+
+---
+
+### Task 2: PluginContext 添加 menus 和 handle config API
+
+**Files:**
+- Modify: `src/canvas/core/plugins/types.ts`
+- Modify: `src/canvas/core/plugins/PluginContext.ts`
+- Modify: `src/canvas/core/Canvas.vue`
+
+- [ ] **Step 1: types.ts 添加类型和字段**
+
+Add import:
+
+```typescript
+import type { MenuItemDefinition } from '../menu/MenuRegistry'
+```
+
+Add:
+
+```typescript
 export interface HandleConfig {
   radius: number
   restOffset: number
@@ -79,203 +269,78 @@ export interface HandleConfig {
   snapInnerRatio: number
   snapHeightRatio: number
 }
-```
 
-In `PluginContext` interface, add:
-
-```typescript
-menus: {
+export interface MenuRegistryAPI {
   register(items: MenuItemDefinition[]): void
   unregister(ids: string[]): void
+  unregisterAll(): void
 }
+```
+
+Inside `PluginContext`, add:
+
+```typescript
+readonly menus: MenuRegistryAPI
 registerHandleConfig(config: Partial<HandleConfig>): void
 ```
 
-- [ ] **Step 2: PluginContext.ts 实现 menus 和 registerHandleConfig**
+- [ ] **Step 2: PluginContext.ts 实现**
 
-In `src/canvas/core/plugins/PluginContext.ts`, add import:
+Import:
 
 ```typescript
-import { MenuRegistry } from '../menu/MenuRegistry'
+import type { MenuRegistry } from '../menu/MenuRegistry'
+import type { HandleConfig, MenuItemDefinition } from './types'
 ```
 
-In the `context` object (before `return context`), add:
+Add to `CreatePluginContextOptions`:
+
+```typescript
+menuRegistry?: MenuRegistry
+```
+
+Destructure `menuRegistry` from options。
+
+Inside returned `context` object:
 
 ```typescript
 menus: {
   register(items: MenuItemDefinition[]): void {
-    MenuRegistry.getInstance().register(pluginName, items)
+    menuRegistry?.register(`plugin:${pluginName}`, items)
   },
   unregister(ids: string[]): void {
-    MenuRegistry.getInstance().unregister(pluginName, ids)
+    menuRegistry?.unregister(`plugin:${pluginName}`, ids)
+  },
+  unregisterAll(): void {
+    menuRegistry?.unregisterSource(`plugin:${pluginName}`)
   },
 },
+
 registerHandleConfig(config: Partial<HandleConfig>): void {
-  const current = effectiveStore.state.handleConfig || {}
-  effectiveStore.state.handleConfig = { ...current, ...config }
+  const state = effectiveStore.state as Record<string, unknown>
+  if (typeof config.radius === 'number') state.handleRadius = config.radius
+  if (typeof config.restOffset === 'number') state.handleRestOffset = config.restOffset
+  if (typeof config.cursorGap === 'number') state.handleCursorGap = config.cursorGap
+  if (typeof config.buttonSize === 'number') state.handleButtonSize = config.buttonSize
+  if (typeof config.overlap === 'number') state.handleOverlap = config.overlap
+  if (typeof config.snapOuterRatio === 'number') state.connectionSnapOuterRatio = config.snapOuterRatio
+  if (typeof config.snapInnerRatio === 'number') state.connectionSnapInnerRatio = config.snapInnerRatio
+  if (typeof config.snapHeightRatio === 'number') state.connectionSnapHeightRatio = config.snapHeightRatio
 },
 ```
 
-- [ ] **Step 3: 构建验证**
+- [ ] **Step 3: Canvas.vue createPluginContext 传 menuRegistry**
+
+```typescript
+menuRegistry,
+```
+
+- [ ] **Step 4: 构建 + 提交**
 
 ```powershell
 pnpm build
-```
-
-Expected: exit code `0`（此时 MenuRegistry 还不存在，但 PluginContext 中只是 import 它，构建时会报找不到模块。需要先创建 MenuRegistry 的骨架文件再构建，或者这一步和 Task 2 合并构建）。
-
-实际做法：这一步先写代码不构建，Task 2 创建 MenuRegistry 后一起构建。
-
-- [ ] **Step 4: 提交（与 Task 2 合并提交）**
-
-```powershell
-# 暂存，等 Task 2 完成后一起提交
-git add src/canvas/core/plugins/types.ts src/canvas/core/plugins/PluginContext.ts
-```
-
----
-
-### Task 2: 创建 MenuRegistry + MenuResolver
-
-**Files:**
-- Create: `src/canvas/core/menu/MenuRegistry.ts`
-- Create: `src/canvas/core/menu/MenuResolver.ts`
-- Create: `src/canvas/core/menu/index.ts`
-
-- [ ] **Step 1: 写 MenuRegistry**
-
-Create `src/canvas/core/menu/MenuRegistry.ts`:
-
-```typescript
-import type { MenuItemDefinition } from '../plugins/types'
-
-interface RegistryEntry {
-  source: string
-  item: MenuItemDefinition
-}
-
-export class MenuRegistry {
-  private static instance: MenuRegistry
-  private items: RegistryEntry[] = []
-
-  static getInstance(): MenuRegistry {
-    if (!MenuRegistry.instance) {
-      MenuRegistry.instance = new MenuRegistry()
-    }
-    return MenuRegistry.instance
-  }
-
-  registerDefaults(items: MenuItemDefinition[]): void {
-    for (const item of items) {
-      this.items.push({ source: 'builtin', item })
-    }
-  }
-
-  register(pluginName: string, items: MenuItemDefinition[]): void {
-    for (const item of items) {
-      this.items.push({ source: `plugin:${pluginName}`, item })
-    }
-  }
-
-  unregister(sourceName: string, ids: string[]): void {
-    const key = `plugin:${sourceName}`
-    const idSet = new Set(ids)
-    this.items = this.items.filter(
-      (e) => !(e.source === key && idSet.has(e.item.id)),
-    )
-  }
-
-  getAll(): RegistryEntry[] {
-    return this.items
-  }
-
-  reset(): void {
-    this.items = []
-  }
-}
-```
-
-- [ ] **Step 2: 写 MenuResolver**
-
-Create `src/canvas/core/menu/MenuResolver.ts`:
-
-```typescript
-import type { MenuItemDefinition, MenuContext } from '../plugins/types'
-import { MenuRegistry } from './MenuRegistry'
-
-export interface ResolvedMenuItem {
-  id: string
-  label: string
-  description?: string
-  icon?: string
-  shortcut?: string
-  danger?: boolean
-  group: string
-}
-
-const GROUP_ORDER: Record<string, number> = {
-  create: 1,
-  action: 2,
-  transform: 3,
-  connect: 4,
-  delete: 5,
-}
-
-export function resolveMenuItems(ctx: MenuContext): ResolvedMenuItem[] {
-  const all = MenuRegistry.getInstance().getAll()
-  const filtered: { item: MenuItemDefinition; source: string }[] = []
-
-  for (const entry of all) {
-    try {
-      if (entry.item.visible(ctx)) {
-        filtered.push({ item: entry.item, source: entry.source })
-      }
-    } catch (err) {
-      console.warn(
-        `[MenuResolver] visible() threw for "${entry.item.id}", skipping:`,
-        err,
-      )
-    }
-  }
-
-  const sorted = [...filtered].sort((a, b) => {
-    const ga = GROUP_ORDER[a.item.group || 'action'] ?? 3
-    const gb = GROUP_ORDER[b.item.group || 'action'] ?? 3
-    if (ga !== gb) return ga - gb
-    const pa = a.item.priority ?? 0
-    const pb = b.item.priority ?? 0
-    if (pa !== pb) return pb - pa
-    return a.item.id.localeCompare(b.item.id)
-  })
-
-  return sorted.map((e) => ({
-    id: e.item.id,
-    label: e.item.label,
-    description: e.item.description,
-    icon: e.item.icon,
-    shortcut: e.item.shortcut,
-    danger: e.item.danger,
-    group: e.item.group || 'action',
-  }))
-}
-```
-
-- [ ] **Step 3: 写 index.ts**
-
-Create `src/canvas/core/menu/index.ts`:
-
-```typescript
-export { MenuRegistry } from './MenuRegistry'
-export { resolveMenuItems } from './MenuResolver'
-export type { ResolvedMenuItem } from './MenuResolver'
-```
-
-- [ ] **Step 4: 构建 + 提交（含 Task 1 改动）**
-
-```powershell
-pnpm build
-git add src/canvas/core/menu src/canvas/core/plugins/types.ts src/canvas/core/plugins/PluginContext.ts
-git commit -m "feat: add MenuRegistry + MenuResolver, extend PluginContext with menus and handle config API"
+git add src/canvas/core/plugins/types.ts src/canvas/core/plugins/PluginContext.ts src/canvas/core/Canvas.vue
+git commit -m "feat: expose menu and handle config APIs through PluginContext"
 ```
 
 ---
@@ -283,148 +348,32 @@ git commit -m "feat: add MenuRegistry + MenuResolver, extend PluginContext with 
 ### Task 3: 创建 ContextMenuPlugin
 
 **Files:**
-- Create: `src/canvas/core/plugins/context-menu/ContextMenuPlugin.ts`
 - Create: `src/canvas/core/plugins/context-menu/builtinMenuItems.ts`
+- Create: `src/canvas/core/plugins/context-menu/ContextMenuPlugin.ts`
 - Create: `src/canvas/core/plugins/context-menu/index.ts`
 - Modify: `src/App.vue`
 
-- [ ] **Step 1: 写 builtinMenuItems**
+- [ ] **Step 1: 内置动作菜单，只注册动作，不注册节点类型**
 
 Create `src/canvas/core/plugins/context-menu/builtinMenuItems.ts`:
 
 ```typescript
-import type { MenuItemDefinition } from '../../plugins/types'
+import type { MenuItemDefinition } from '../../menu/MenuRegistry'
 
 export function createBuiltinMenuItems(): MenuItemDefinition[] {
   return [
-    // ---- pane: create nodes ----
-    {
-      id: 'create:text',
-      group: 'create',
-      label: 'text',
-      description: 'create text node',
-      icon: 'text',
-      visible: (c) => c.mode === 'pane',
-      priority: 10,
-    },
-    {
-      id: 'create:image',
-      group: 'create',
-      label: 'image',
-      description: 'create image node',
-      icon: 'image',
-      visible: (c) => c.mode === 'pane',
-      priority: 9,
-    },
-    {
-      id: 'create:video',
-      group: 'create',
-      label: 'video',
-      description: 'create video node',
-      icon: 'video',
-      visible: (c) => c.mode === 'pane',
-      priority: 8,
-    },
-    {
-      id: 'create:stage',
-      group: 'create',
-      label: 'stage',
-      description: 'create stage node',
-      icon: 'layers',
-      visible: (c) => c.mode === 'pane',
-      priority: 7,
-    },
-
-    // ---- connection: create + connect ----
-    {
-      id: 'connect:text',
-      group: 'create',
-      label: 'text',
-      description: 'create text node and connect',
-      visible: (c) => c.mode === 'connection',
-      priority: 10,
-    },
-    {
-      id: 'connect:image',
-      group: 'create',
-      label: 'image',
-      description: 'create image node and connect',
-      visible: (c) => c.mode === 'connection',
-      priority: 9,
-    },
-    {
-      id: 'connect:video',
-      group: 'create',
-      label: 'video',
-      description: 'create video node and connect',
-      visible: (c) => c.mode === 'connection',
-      priority: 8,
-    },
-    {
-      id: 'connect:stage',
-      group: 'create',
-      label: 'stage',
-      description: 'create stage node and connect',
-      visible: (c) => c.mode === 'connection',
-      priority: 7,
-    },
-
-    // ---- node: common actions ----
-    {
-      id: 'node:copy',
-      group: 'action',
-      label: 'copy',
-      shortcut: 'Ctrl+C',
-      visible: (c) => c.mode === 'node',
-    },
-    {
-      id: 'node:duplicate',
-      group: 'action',
-      label: 'duplicate',
-      shortcut: 'Ctrl+D',
-      visible: (c) => c.mode === 'node',
-    },
-    {
-      id: 'node:bring-to-front',
-      group: 'action',
-      label: 'bring to front',
-      visible: (c) => c.mode === 'node',
-    },
-    {
-      id: 'node:send-to-back',
-      group: 'action',
-      label: 'send to back',
-      visible: (c) => c.mode === 'node',
-    },
-    {
-      id: 'node:delete',
-      group: 'delete',
-      label: 'delete',
-      shortcut: 'Del',
-      danger: true,
-      visible: (c) => c.mode === 'node' || c.mode === 'edge',
-    },
-
-    // ---- edge: edge actions ----
-    {
-      id: 'edge:delete',
-      group: 'delete',
-      label: 'delete edge',
-      shortcut: 'Del',
-      danger: true,
-      visible: (c) => c.mode === 'edge',
-    },
+    { id: 'node:copy', group: 'action', label: '复制', shortcut: 'Ctrl+C', icon: 'duplicate', visible: ctx => ctx.mode === 'node', priority: 30 },
+    { id: 'node:duplicate', group: 'action', label: '复制一份', shortcut: 'Ctrl+D', icon: 'duplicate', visible: ctx => ctx.mode === 'node', priority: 20 },
+    { id: 'node:delete', group: 'delete', label: '删除节点', shortcut: 'Del', icon: 'delete', danger: true, visible: ctx => ctx.mode === 'node', priority: 10 },
+    { id: 'edge:delete', group: 'delete', label: '删除连线', shortcut: 'Del', icon: 'delete', danger: true, visible: ctx => ctx.mode === 'edge', priority: 10 },
   ]
 }
 ```
-
-- [ ] **Step 2: 写 ContextMenuPlugin**
 
 Create `src/canvas/core/plugins/context-menu/ContextMenuPlugin.ts`:
 
 ```typescript
 import type { CanvasPlugin, PluginContext } from '../types'
-import { MenuRegistry } from '../../menu/MenuRegistry'
 import { createBuiltinMenuItems } from './builtinMenuItems'
 
 export const ContextMenuPlugin: CanvasPlugin = {
@@ -432,13 +381,15 @@ export const ContextMenuPlugin: CanvasPlugin = {
   version: '1.0.0',
 
   install(context: PluginContext) {
-    MenuRegistry.getInstance().registerDefaults(createBuiltinMenuItems())
-    context.logger.info('ContextMenuPlugin installed, builtin menu items registered')
+    context.menus.register(createBuiltinMenuItems())
+    return {
+      uninstall() {
+        context.menus.unregisterAll()
+      },
+    }
   },
 }
 ```
-
-- [ ] **Step 3: 写 index.ts**
 
 Create `src/canvas/core/plugins/context-menu/index.ts`:
 
@@ -446,62 +397,46 @@ Create `src/canvas/core/plugins/context-menu/index.ts`:
 export { ContextMenuPlugin } from './ContextMenuPlugin'
 ```
 
-- [ ] **Step 4: App.vue 注册**
+- [ ] **Step 2: App.vue 注册**
 
-In `src/App.vue`, add:
+Add import and plugin slot after node plugins。
 
-```typescript
-import { ContextMenuPlugin } from './canvas/core/plugins/context-menu'
-```
-
-Add to `pluginSlots` (after node plugins, before other plugins):
-
-```typescript
-{
-  plugin: markRaw(ContextMenuPlugin) as CanvasPlugin,
-  enabled: true,
-  label: 'context menu',
-  description: 'right-click context menu with builtin items',
-  usage: 'auto-loaded',
-},
-```
-
-- [ ] **Step 5: 构建 + 提交**
+- [ ] **Step 3: 构建 + 提交**
 
 ```powershell
 pnpm build
 git add src/canvas/core/plugins/context-menu src/App.vue
-git commit -m "feat: add ContextMenuPlugin with builtin menu items"
+git commit -m "feat: add ContextMenuPlugin for menu actions"
 ```
 
 ---
 
-### Task 4: CanvasMenu 支持 group/danger/shortcut + Canvas.vue 接入 MenuResolver
+### Task 4: CanvasMenu 支持 group / danger / shortcut / edge
 
 **Files:**
 - Modify: `src/canvas/core/components/CanvasMenu.types.ts`
 - Modify: `src/canvas/core/components/CanvasMenu.vue`
-- Modify: `src/canvas/core/Canvas.vue`
 
-- [ ] **Step 1: 扩展 CanvasMenu.types.ts**
+- [ ] **Step 1: 扩展类型**
 
-Replace `src/canvas/core/components/CanvasMenu.types.ts`:
+Replace `CanvasMenu.types.ts`:
 
 ```typescript
 export type CanvasMenuMode = 'pane' | 'node' | 'connection' | 'edge'
 
-export interface CanvasMenuItem {
+export type CanvasMenuItem = {
   id: string
   label: string
   description?: string
-  icon?: string
-  shortcut?: string
-  danger?: boolean
-  group?: string
+  badge?: string
   disabled?: boolean
+  danger?: boolean
+  shortcut?: string
+  group?: string
+  icon?: 'text' | 'image' | 'video' | 'layers' | 'link' | 'delete' | 'duplicate'
 }
 
-export interface CanvasMenuState {
+export type CanvasMenuState = {
   visible: boolean
   title: string
   mode: CanvasMenuMode
@@ -510,224 +445,167 @@ export interface CanvasMenuState {
 }
 ```
 
-- [ ] **Step 2: CanvasMenu.vue 添加 group 分隔线和 danger/shortcut**
+- [ ] **Step 2: CanvasMenu.vue 添加分组 computed 和样式**
 
-Replace `<template>` in `src/canvas/core/components/CanvasMenu.vue`:
-
-```vue
-<template>
-  <div v-if="menu.visible" class="canvas-menu-overlay" @click.self="$emit('close')">
-    <div class="canvas-menu" :style="{ left: menu.position.x + 'px', top: menu.position.y + 'px' }">
-      <div class="canvas-menu-title">{{ menu.title }}</div>
-      <template v-for="(groupItems, groupName) in groupedItems" :key="groupName">
-        <div v-if="groupName !== firstGroup" class="canvas-menu-divider" />
-        <div
-          v-for="item in groupItems"
-          :key="item.id"
-          class="canvas-menu-item"
-          :class="{ 'is-danger': item.danger, 'is-disabled': item.disabled }"
-          @click="!item.disabled && $emit('select', item)"
-        >
-          <span class="canvas-menu-item-label">{{ item.label }}</span>
-          <span class="canvas-menu-item-desc" v-if="item.description">{{ item.description }}</span>
-          <kbd class="canvas-menu-item-shortcut" v-if="item.shortcut">{{ item.shortcut }}</kbd>
-        </div>
-      </template>
-    </div>
-  </div>
-</template>
-```
-
-Add `<script setup>` computed:
+Add script computed:
 
 ```typescript
 const groupedItems = computed(() => {
   const groups = new Map<string, CanvasMenuItem[]>()
   for (const item of props.menu.items) {
-    const g = item.group || 'action'
-    if (!groups.has(g)) groups.set(g, [])
-    groups.get(g)!.push(item)
+    const group = item.group || 'action'
+    if (!groups.has(group)) groups.set(group, [])
+    groups.get(group)!.push(item)
   }
-  return Object.fromEntries(groups)
+  return [...groups.entries()].map(([name, items]) => ({ name, items }))
 })
-
-const firstGroup = computed(() => Object.keys(groupedItems.value)[0] || '')
 ```
 
-- [ ] **Step 3: Canvas.vue 接入 MenuResolver**
+Template should loop groups, add divider between groups, and show `shortcut` before `badge`.
 
-Import at top:
+Add CSS:
 
-```typescript
-import { resolveMenuItems } from './menu/MenuResolver'
+```css
+.canvas-menu-divider { height: 1px; margin: 8px 0; background: rgb(255 255 255 / 0.08); }
+.canvas-menu-item.is-danger { color: #fecaca; }
+.canvas-menu-item.is-danger:hover:not(.is-disabled) { background: rgb(239 68 68 / 0.18); }
+.canvas-menu-shortcut { color: #a1a1aa; font-size: 11px; font-weight: 700; }
 ```
 
-Modify `onNodeContextMenu`:
-
-```typescript
-function onNodeContextMenu({ event, node }: NodeMouseEvent) {
-  event.preventDefault()
-  const e = event as MouseEvent
-  const flowPosition = toFlowPosition(e.clientX, e.clientY)
-  const items = resolveMenuItems({
-    mode: 'node',
-    nodeId: node.id,
-    nodeType: (node.data as any)?.nodeType,
-    flowPosition,
-  })
-  menuState.visible = true
-  menuState.title = (node.data as any)?.label || 'node menu'
-  menuState.mode = 'node'
-  menuState.position = { x: e.clientX, y: e.clientY }
-  menuState.items = items as any
-  menuContext.value = { nodeId: node.id, flowPosition }
-}
-```
-
-Modify `onPaneContextMenu`:
-
-```typescript
-function onPaneContextMenu(event: MouseEvent) {
-  event.preventDefault()
-  const flowPosition = toFlowPosition(event.clientX, event.clientY)
-  const items = resolveMenuItems({ mode: 'pane', flowPosition })
-  menuState.visible = true
-  menuState.title = 'add node'
-  menuState.mode = 'pane'
-  menuState.position = { x: event.clientX, y: event.clientY }
-  menuState.items = items as any
-  menuContext.value = { flowPosition }
-}
-```
-
-Modify `createTempConnectionMenu` — replace `openCreateNodeMenu(...)` call with:
-
-```typescript
-const items = resolveMenuItems({
-  mode: 'connection',
-  sourceNodeId,
-  flowPosition,
-})
-openMenu(
-  {
-    mode: 'connection',
-    title: 'create and connect',
-    position: { x: point.x, y: point.y },
-    items: items as any,
-  },
-  {
-    pendingConnection: { sourceNodeId, sourceHandle, tempNodeId, tempEdgeId, flowPosition },
-  },
-)
-```
-
-Modify `onMenuSelect` — replace body with:
-
-```typescript
-async function onMenuSelect(item: CanvasMenuItem) {
-  const ctx = menuContext.value
-  const id = item.id as string
-
-  // connection mode: create node + connect
-  if (menuState.mode === 'connection' && ctx.pendingConnection) {
-    const pending = { ...ctx.pendingConnection }
-    menuState.visible = false
-    menuContext.value = {}
-    vueFlowInstance.removeEdges([pending.tempEdgeId])
-    vueFlowInstance.removeNodes([pending.tempNodeId])
-    await nextTick()
-    const nodeType = id.replace('connect:', '')
-    const node = createNodeFromMenuItem({ id: nodeType, label: nodeType } as any, pending.flowPosition, { requireTarget: true })
-    await nextTick()
-    createConnection({ source: pending.sourceNodeId, target: node.id, sourceHandle: pending.sourceHandle, targetHandle: 'target' }, 'blank-menu')
-    return
-  }
-
-  // pane/node mode: create node
-  if (id.startsWith('create:') && ctx.flowPosition) {
-    const nodeType = id.replace('create:', '')
-    createNodeFromMenuItem({ id: nodeType, label: nodeType } as any, ctx.flowPosition)
-    closeMenu()
-    return
-  }
-
-  // node:delete
-  if (id === 'node:delete' && ctx.nodeId) {
-    const edgeIds = (getEdges.value as Edge[]).filter(e => e.source === ctx.nodeId || e.target === ctx.nodeId).map(e => e.id)
-    vueFlowInstance.removeEdges(edgeIds)
-    vueFlowInstance.removeNodes([ctx.nodeId])
-    closeMenu()
-    return
-  }
-
-  // node:copy
-  if (id === 'node:copy' && ctx.nodeId) {
-    canvas.setSelectedNodeIds([ctx.nodeId])
-    closeMenu()
-    return
-  }
-
-  closeMenu()
-}
-```
-
-- [ ] **Step 4: 构建 + 提交**
+- [ ] **Step 3: 构建 + 提交**
 
 ```powershell
 pnpm build
-git add src/canvas/core/components/CanvasMenu.types.ts src/canvas/core/components/CanvasMenu.vue src/canvas/core/Canvas.vue
-git commit -m "refactor: CanvasMenu supports group/danger/shortcut, Canvas.vue uses MenuResolver"
+git add src/canvas/core/components/CanvasMenu.types.ts src/canvas/core/components/CanvasMenu.vue
+git commit -m "feat: support grouped context menu items"
 ```
 
 ---
 
-### Task 5: 创建 CustomHandlePlugin
+### Task 5: Canvas.vue 接入 MenuResolver 和 edge 菜单
 
 **Files:**
-- Create: `src/canvas/core/plugins/custom-handle/CustomHandlePlugin.ts`
-- Create: `src/canvas/core/plugins/custom-handle/ConnectionValidator.ts`
-- Create: `src/canvas/core/plugins/custom-handle/index.ts`
-- Modify: `src/App.vue`
+- Modify: `src/canvas/core/Canvas.vue`
 
-- [ ] **Step 1: 写 ConnectionValidator**
-
-Create `src/canvas/core/plugins/custom-handle/ConnectionValidator.ts`:
+- [ ] **Step 1: 添加 EdgeMouseEvent 类型**
 
 ```typescript
-import type { Connection, Node, Edge } from '@vue-flow/core'
+import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
+```
 
-function normalize(connection: Connection): Connection {
-  return {
-    ...connection,
-    sourceHandle: connection.sourceHandle || 'source',
-    targetHandle: connection.targetHandle || 'target',
-  }
-}
+- [ ] **Step 2: 替换 onNodeContextMenu / onPaneContextMenu**
 
-export function isValidConnection(
-  connection: Connection,
-  getNodes: () => Node[],
-  getEdges: () => Edge[],
-): boolean {
-  const c = normalize(connection)
-  if (!c.source || !c.target) return false
-  if (c.sourceHandle !== 'source') return false
-  if (c.targetHandle !== 'target') return false
-  if (c.source === c.target) return false
+`onNodeContextMenu` uses:
 
-  const src = getNodes().find((n) => n.id === c.source)
-  const tgt = getNodes().find((n) => n.id === c.target)
-  if (!src || !tgt) return false
-  if (!src.sourcePosition) return false
-  if (!tgt.targetPosition) return false
+```typescript
+items: resolveMenuItems({ mode: 'node', nodeId: node.id, nodeType: (node.data as any)?.nodeType, flowPosition }, menuRegistry, nodeRegistry)
+```
 
-  return true
+`onPaneContextMenu` uses:
+
+```typescript
+items: resolveMenuItems({ mode: 'pane', flowPosition }, menuRegistry, nodeRegistry)
+```
+
+- [ ] **Step 3: 双击画布直接创建文本节点**
+
+After node/edge target guard:
+
+```typescript
+const flowPosition = toFlowPosition(event.clientX, event.clientY)
+createNodeFromMenuItem({ id: 'text', label: nodeRegistry.getLabel('text'), icon: 'text' }, flowPosition)
+```
+
+- [ ] **Step 4: 添加 edge context menu**
+
+Add function:
+
+```typescript
+function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
+  event.preventDefault()
+  const e = event as MouseEvent
+  const flowPosition = toFlowPosition(e.clientX, e.clientY)
+  openMenu({
+    mode: 'edge',
+    title: `连线 ${edge.id} 菜单`,
+    position: { x: e.clientX, y: e.clientY },
+    items: resolveMenuItems({ mode: 'edge', edgeId: edge.id, flowPosition }, menuRegistry, nodeRegistry),
+  }, { edgeId: edge.id, flowPosition })
 }
 ```
 
-- [ ] **Step 2: 写 CustomHandlePlugin**
+Add to `<VueFlow>`:
 
-Create `src/canvas/core/plugins/custom-handle/CustomHandlePlugin.ts`:
+```vue
+@edge-context-menu="onEdgeContextMenu"
+```
+
+- [ ] **Step 5: onMenuSelect 处理 create/connect/copy/duplicate/delete**
+
+Important rules:
+
+- `connect:*`：删除临时点和临时边，创建对应 `nodeType`，再连线。
+- `create:*`：创建对应 `nodeType`。
+- `node:copy`：先 `canvas.setSelection({ nodeIds: [context.nodeId], edgeIds: [] })`，再 `manager.getPluginAPI('clipboard')?.copy()`。
+- `node:duplicate`：copy 后 paste。
+- `node:delete`：删节点和相连边。
+- `edge:delete`：删边。
+
+- [ ] **Step 6: 构建 + 提交**
+
+```powershell
+pnpm build
+git add src/canvas/core/Canvas.vue
+git commit -m "refactor: route canvas context menus through MenuResolver"
+```
+
+---
+
+### Task 6: CustomHandlePlugin + ConnectionValidator
+
+**Files:**
+- Create: `src/canvas/core/plugins/custom-handle/ConnectionValidator.ts`
+- Create: `src/canvas/core/plugins/custom-handle/CustomHandlePlugin.ts`
+- Create: `src/canvas/core/plugins/custom-handle/index.ts`
+- Modify: `src/canvas/core/Canvas.vue`
+- Modify: `src/App.vue`
+
+- [ ] **Step 1: 写验证函数**
+
+Create `ConnectionValidator.ts`:
+
+```typescript
+import type { Connection, Edge, Node } from '@vue-flow/core'
+
+export function normalizeConnection(connection: Connection): Connection {
+  return { ...connection, sourceHandle: connection.sourceHandle || 'source', targetHandle: connection.targetHandle || 'target' }
+}
+
+export function isValidCanvasConnection(connection: Connection, getNodes: () => Node[], getEdges: () => Edge[]): boolean {
+  const normalized = normalizeConnection(connection)
+  if (!normalized.source || !normalized.target) return false
+  if (normalized.sourceHandle !== 'source') return false
+  if (normalized.targetHandle !== 'target') return false
+  if (normalized.source === normalized.target) return false
+
+  const source = getNodes().find(node => node.id === normalized.source)
+  const target = getNodes().find(node => node.id === normalized.target)
+  if (!source || !target) return false
+  if (!source.sourcePosition || !target.targetPosition) return false
+
+  return !getEdges().some(edge =>
+    edge.source === normalized.source &&
+    edge.target === normalized.target &&
+    (edge.sourceHandle ?? 'source') === normalized.sourceHandle &&
+    (edge.targetHandle ?? 'target') === normalized.targetHandle &&
+    !(edge.data as any)?.isTemp
+  )
+}
+```
+
+- [ ] **Step 2: 写插件**
+
+Create `CustomHandlePlugin.ts`:
 
 ```typescript
 import type { CanvasPlugin, PluginContext } from '../types'
@@ -735,316 +613,100 @@ import type { CanvasPlugin, PluginContext } from '../types'
 export const CustomHandlePlugin: CanvasPlugin = {
   name: 'custom-handle',
   version: '1.0.0',
-
   install(context: PluginContext) {
-    context.registerHandleConfig({
-      radius: 76,
-      restOffset: 36,
-      cursorGap: 22,
-      buttonSize: 32,
-      overlap: 16,
-      snapOuterRatio: 1.4,
-      snapInnerRatio: 1.0,
-      snapHeightRatio: 1.5,
-    })
-
-    context.logger.info('CustomHandlePlugin installed, handle config registered')
+    context.registerHandleConfig({ radius: 86, restOffset: 36, cursorGap: 24, buttonSize: 32, overlap: 16, snapOuterRatio: 0.75, snapInnerRatio: 0.6, snapHeightRatio: 1.35 })
   },
 }
 ```
 
-- [ ] **Step 3: App.vue 注册**
+Create index export。
 
-Add import and pluginSlot entry for `CustomHandlePlugin`。
+- [ ] **Step 3: Canvas.vue 和 App.vue 接入**
+
+Canvas.vue import validator and replace duplicated validation body.
+
+App.vue add `CustomHandlePlugin` slot。
 
 - [ ] **Step 4: 构建 + 提交**
 
 ```powershell
 pnpm build
-git add src/canvas/core/plugins/custom-handle src/App.vue
-git commit -m "feat: add CustomHandlePlugin for handle config and connection validation"
+git add src/canvas/core/plugins/custom-handle src/canvas/core/Canvas.vue src/App.vue
+git commit -m "feat: extract handle config and connection validation"
 ```
 
 ---
 
-### Task 6: 创建 NodeFindPlugin（Ctrl+F 节点搜索）
+### Task 7: NodeFindPlugin
 
 **Files:**
-- Create: `src/canvas/core/plugins/node-find/NodeFindPlugin.ts`
 - Create: `src/canvas/core/plugins/node-find/NodeFindOverlay.vue`
+- Create: `src/canvas/core/plugins/node-find/NodeFindPlugin.ts`
 - Create: `src/canvas/core/plugins/node-find/index.ts`
 - Modify: `src/App.vue`
 
-- [ ] **Step 1: 写 NodeFindOverlay.vue**
+- [ ] **Step 1: Overlay 支持输入、上下选择、Enter 聚焦、Esc 关闭**
 
-Create `src/canvas/core/plugins/node-find/NodeFindOverlay.vue`:
-
-```vue
-<script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import type { Node } from '@vue-flow/core'
-
-const props = defineProps<{
-  nodes: Node[]
-  onFocus: (nodeId: string) => void
-  onClose: () => void
-}>()
-
-const query = ref('')
-const selectedIndex = ref(0)
-const inputRef = ref<HTMLInputElement>()
-
-const results = computed(() => {
-  if (!query.value.trim()) return []
-  const q = query.value.toLowerCase()
-  return props.nodes
-    .filter((n) => {
-      const label = ((n.data as any)?.label as string) || ''
-      return label.toLowerCase().includes(q)
-    })
-    .map((n) => ({
-      id: n.id,
-      label: (n.data as any)?.label as string || n.id,
-      nodeType: (n.data as any)?.nodeType as string,
-    }))
-})
-
-onMounted(() => {
-  nextTick(() => inputRef.value?.focus())
-})
-
-function onSelect(index: number) {
-  const item = results.value[index]
-  if (item) {
-    props.onFocus(item.id)
-    props.onClose()
-  }
-}
-
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    selectedIndex.value = Math.min(selectedIndex.value + 1, results.value.length - 1)
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
-  } else if (e.key === 'Enter') {
-    e.preventDefault()
-    onSelect(selectedIndex.value)
-  } else if (e.key === 'Escape') {
-    e.preventDefault()
-    props.onClose()
-  }
-}
-</script>
-
-<template>
-  <div class="node-find-overlay" @click.self="onClose">
-    <div class="node-find-dialog" @keydown="onKeydown">
-      <input
-        ref="inputRef"
-        v-model="query"
-        type="text"
-        placeholder="search nodes..."
-        class="node-find-input"
-      />
-      <div class="node-find-results" v-if="results.length > 0">
-        <div
-          v-for="(item, i) in results"
-          :key="item.id"
-          class="node-find-result"
-          :class="{ 'is-selected': i === selectedIndex }"
-          @click="onSelect(i)"
-          @mouseenter="selectedIndex = i"
-        >
-          <span class="node-find-result-label">{{ item.label }}</span>
-          <span class="node-find-result-type">{{ item.nodeType }}</span>
-        </div>
-      </div>
-      <div class="node-find-empty" v-else-if="query.trim()">no matching nodes</div>
-      <div class="node-find-footer">arrow keys navigate . enter focus . esc close</div>
-    </div>
-  </div>
-</template>
-```
-
-- [ ] **Step 2: 写 NodeFindPlugin**
-
-Create `src/canvas/core/plugins/node-find/NodeFindPlugin.ts`:
+Create `NodeFindOverlay.vue` with props:
 
 ```typescript
-import { createApp, h } from 'vue'
-import type { CanvasPlugin, PluginContext } from '../types'
-import NodeFindOverlay from './NodeFindOverlay.vue'
-
-export const NodeFindPlugin: CanvasPlugin = {
-  name: 'node-find',
-  version: '1.0.0',
-
-  install(context: PluginContext) {
-    let overlayEl: HTMLDivElement | null = null
-
-    context.registerShortcut('ctrl+f', () => {
-      if (overlayEl) return
-
-      const nodes = context.actions.getNodes()
-      const div = document.createElement('div')
-      div.id = 'node-find-overlay-root'
-
-      const app = createApp({
-        render: () =>
-          h(NodeFindOverlay, {
-            nodes,
-            onFocus: (nodeId: string) => {
-              const node = nodes.find((n) => n.id === nodeId)
-              if (node) {
-                context.viewport.setCenter(
-                  node.position.x + 150,
-                  node.position.y + 130,
-                  Math.max(context.viewport.getViewport().zoom, 1.0),
-                )
-              }
-            },
-            onClose: () => {
-              app.unmount()
-              div.remove()
-              overlayEl = null
-            },
-          }),
-      })
-
-      app.mount(div)
-      document.body.appendChild(div)
-      overlayEl = div
-    }, 'search nodes')
-
-    context.logger.info('NodeFindPlugin installed, Ctrl+F to search nodes')
-  },
-}
+nodes: Node[]
+onFocus: (nodeId: string) => void
+onClose: () => void
 ```
+
+Search label、id、nodeType。
+
+- [ ] **Step 2: 插件用 context.mountOverlay，卸载要清理**
+
+`NodeFindPlugin.ts` must:
+
+- `context.registerShortcut('ctrl+f', openOverlay, '搜索节点')`
+- `openOverlay()` creates a Vue app and mounts overlay
+- `closeOverlay()` unmounts app and removes DOM
+- `uninstall()` calls `context.unregisterShortcut('ctrl+f')` and `closeOverlay()`
 
 - [ ] **Step 3: App.vue 注册**
 
-Add import and pluginSlot entry for `NodeFindPlugin`。
+Add `NodeFindPlugin`。
 
 - [ ] **Step 4: 构建 + 提交**
 
 ```powershell
 pnpm build
 git add src/canvas/core/plugins/node-find src/App.vue
-git commit -m "feat: add NodeFindPlugin for Ctrl+F node search"
+git commit -m "feat: add Ctrl+F node search plugin"
 ```
 
 ---
 
-### Task 7: 修复保存数据清洗 + StoragePlugin 卸载清理 + 导出
+### Task 8: 修复 StoragePlugin 保存清洗、卸载清理、导出
 
 **Files:**
 - Create: `src/canvas/core/plugins/storage/sanitizeForSave.ts`
 - Create: `src/canvas/core/plugins/storage/__tests__/sanitizeForSave.test.ts`
 - Modify: `src/canvas/core/plugins/storage/StoragePlugin.ts`
+- Modify: `package.json`
 
-- [ ] **Step 1: 写测试**
+- [ ] **Step 1: 安装导出依赖**
 
-Create `src/canvas/core/plugins/storage/__tests__/sanitizeForSave.test.ts`:
-
-```typescript
-import test from 'node:test'
-import assert from 'node:assert/strict'
-import { sanitizeForSave } from '../sanitizeForSave.ts'
-
-test('sanitizeForSave keeps VueFlow custom node type and data.nodeType', () => {
-  const result = sanitizeForSave(
-    [
-      {
-        id: 'node-1',
-        type: 'custom',
-        position: { x: 10, y: 20 },
-        data: {
-          nodeType: 'image',
-          assetId: 'asset-1',
-          imageUrl: 'blob:http://localhost/img',
-          _cropMode: true,
-          _cropRect: { x: 0, y: 0, width: 10, height: 10 },
-        },
-      },
-    ],
-    [],
-  )
-
-  assert.equal(result.nodes[0].type, 'custom')
-  assert.equal(result.nodes[0].data.nodeType, 'image')
-  assert.equal(result.nodes[0].data.assetId, 'asset-1')
-  assert.equal('imageUrl' in result.nodes[0].data, false)
-  assert.equal('_cropMode' in result.nodes[0].data, false)
-  assert.equal('_cropRect' in result.nodes[0].data, false)
-})
-
-test('sanitizeForSave removes temp nodes and temp edges', () => {
-  const result = sanitizeForSave(
-    [
-      { id: 'node-1', type: 'custom', position: { x: 0, y: 0 }, data: { nodeType: 'text' } },
-      { id: 'temp-target-1', type: 'tempTarget', position: { x: 1, y: 1 }, data: { isTemp: true } },
-    ],
-    [
-      { id: 'edge-1', source: 'node-1', target: 'node-2', data: {} },
-      { id: 'temp-edge-1', source: 'node-1', target: 'temp-target-1', data: { isTemp: true } },
-    ],
-  )
-
-  assert.deepEqual(result.nodes.map((n) => n.id), ['node-1'])
-  assert.deepEqual(result.edges.map((e) => e.id), ['edge-1'])
-})
-
-test('sanitizeForSave removes nested runtime _url without mutating input', () => {
-  const original = [
-    {
-      id: 'node-1',
-      type: 'custom',
-      position: { x: 0, y: 0 },
-      data: {
-        nodeType: 'stage',
-        values: {
-          first: { assetId: 'a', _url: 'blob:http://localhost/a' },
-          second: { text: 'ok' },
-        },
-      },
-    },
-  ]
-
-  const result = sanitizeForSave(original, [])
-
-  assert.equal(result.nodes[0].data.values.first.assetId, 'a')
-  assert.equal('_url' in result.nodes[0].data.values.first, false)
-  // input must NOT be mutated
-  assert.equal((original[0].data.values.first as any)._url, 'blob:http://localhost/a')
-})
-
-test('sanitizeForSave removes videoUrl and thumbUrl', () => {
-  const result = sanitizeForSave(
-    [
-      {
-        id: 'video-1',
-        type: 'custom',
-        position: { x: 0, y: 0 },
-        data: {
-          nodeType: 'video',
-          videoUrl: 'blob:http://localhost/video',
-          thumbUrl: 'blob:http://localhost/thumb',
-        },
-      },
-    ],
-    [],
-  )
-
-  assert.equal('videoUrl' in result.nodes[0].data, false)
-  assert.equal('thumbUrl' in result.nodes[0].data, false)
-})
+```powershell
+pnpm add html-to-image
 ```
 
-- [ ] **Step 2: 实现 sanitizeForSave**
+- [ ] **Step 2: 写 sanitizeForSave 测试**
 
-Create `src/canvas/core/plugins/storage/sanitizeForSave.ts`:
+Create tests covering:
+
+- 保留 `node.type === 'custom'` 和 `node.data.nodeType`
+- 删除 `imageUrl/videoUrl/thumbUrl/_cropMode/_cropRect`
+- 删除 `data.values[*]._url`
+- 删除 `type === 'tempTarget'`、`id` 以 `temp-` 开头、`data.isTemp` 的临时节点/边
+- 不修改输入对象
+
+- [ ] **Step 3: 实现 sanitizeForSave**
+
+Create `sanitizeForSave.ts`:
 
 ```typescript
 const RUNTIME_FIELDS = ['imageUrl', 'videoUrl', 'thumbUrl', '_cropRect', '_cropMode'] as const
@@ -1054,47 +716,65 @@ function cloneCanvasData(nodes: unknown[], edges: unknown[]): { nodes: any[]; ed
 }
 
 function removeRuntimeData(data: Record<string, unknown>): void {
-  for (const key of RUNTIME_FIELDS) {
-    delete data[key]
-  }
+  for (const key of RUNTIME_FIELDS) delete data[key]
   const values = data.values
   if (!values || typeof values !== 'object') return
-  for (const v of Object.values(values as Record<string, unknown>)) {
-    if (v && typeof v === 'object') {
-      delete (v as Record<string, unknown>)._url
-    }
+  for (const value of Object.values(values as Record<string, unknown>)) {
+    if (value && typeof value === 'object') delete (value as Record<string, unknown>)._url
   }
 }
 
-export function sanitizeForSave(
-  nodes: unknown[],
-  edges: unknown[],
-): { nodes: any[]; edges: any[] } {
+export function sanitizeForSave(nodes: unknown[], edges: unknown[]): { nodes: any[]; edges: any[] } {
   const cleaned = cloneCanvasData(nodes, edges)
-
   for (const node of cleaned.nodes) {
-    if (node.data && typeof node.data === 'object') {
-      removeRuntimeData(node.data)
-    }
+    if (node.data && typeof node.data === 'object') removeRuntimeData(node.data)
   }
-
-  cleaned.nodes = cleaned.nodes.filter(
-    (n) => !String(n.id ?? '').startsWith('temp-') && !n.data?.isTemp,
-  )
-  cleaned.edges = cleaned.edges.filter(
-    (e) => !String(e.id ?? '').startsWith('temp-') && !e.data?.isTemp,
-  )
-
+  cleaned.nodes = cleaned.nodes.filter(node => node.type !== 'tempTarget' && !String(node.id ?? '').startsWith('temp-') && !node.data?.isTemp)
+  cleaned.edges = cleaned.edges.filter(edge => !String(edge.id ?? '').startsWith('temp-') && !edge.data?.isTemp)
   return cleaned
 }
 ```
 
-- [ ] **Step 3: StoragePlugin 改用新函数 + 添加 uninstall/export**
+- [ ] **Step 4: StoragePlugin 改用新函数并删除旧函数**
 
-In `StoragePlugin.ts`:
-- Add `import { sanitizeForSave } from './sanitizeForSave'`
-- Delete old `function sanitizeForSave(...)` block
-- In `install()` return, add `uninstall()` function:
+Add import:
+
+```typescript
+import { sanitizeForSave } from './sanitizeForSave'
+```
+
+Delete old inline `sanitizeForSave()` that rewrites node type。
+
+- [ ] **Step 5: 添加 exportJSON/exportPNG**
+
+StorageAPI adds:
+
+```typescript
+exportJSON(): string
+exportPNG(): Promise<void>
+```
+
+api adds:
+
+```typescript
+exportJSON() {
+  return JSON.stringify(sanitizeForSave(context.actions.getNodes(), context.actions.getEdges()), null, 2)
+},
+async exportPNG() {
+  const viewport = document.querySelector('.vue-flow__viewport') as HTMLElement | null
+  if (!viewport) throw new Error('VueFlow viewport not found')
+  const { toPng } = await import('html-to-image')
+  const dataUrl = await toPng(viewport, { backgroundColor: '#ffffff' })
+  const link = document.createElement('a')
+  link.download = `canvas-export-${Date.now()}.png`
+  link.href = dataUrl
+  link.click()
+},
+```
+
+- [ ] **Step 6: 添加 uninstall 清理**
+
+Return:
 
 ```typescript
 return {
@@ -1113,48 +793,24 @@ return {
 }
 ```
 
-- Add to `StorageAPI` interface and `api` object:
-
-```typescript
-exportJSON(): string {
-  const nodes = context.actions.getNodes()
-    .filter((n: any) => n.type !== 'tempTarget' && !(n.data as any)?.isTemp)
-  const edges = context.actions.getEdges()
-    .filter((e: any) => !e.id?.startsWith('temp-') && !(e.data as any)?.isTemp)
-  return JSON.stringify({ nodes, edges }, null, 2)
-},
-
-async exportPNG(): Promise<void> {
-  const vfEl = document.querySelector('.vue-flow__viewport') as HTMLElement
-  if (!vfEl) throw new Error('VueFlow viewport not found')
-  const { toJpeg } = await import('html-to-image')
-  const dataUrl = await toJpeg(vfEl, { quality: 1.0, backgroundColor: '#ffffff' })
-  const link = document.createElement('a')
-  link.download = `canvas-export-${Date.now()}.jpg`
-  link.href = dataUrl
-  link.click()
-},
-```
-
-- [ ] **Step 4: 运行测试 + 构建 + 提交**
+- [ ] **Step 7: 测试 + 构建 + 提交**
 
 ```powershell
 node --test src\canvas\core\plugins\storage\__tests__\sanitizeForSave.test.ts
 pnpm build
-git add src/canvas/core/plugins/storage
-git commit -m "fix: extract sanitizeForSave, add storage uninstall cleanup, add exportJSON/exportPNG"
+git add package.json pnpm-lock.yaml src/canvas/core/plugins/storage
+git commit -m "fix: preserve custom node type in storage sanitize and add cleanup"
 ```
 
 ---
 
 ## 完成标准
 
-- [ ] `pnpm build` 通过
-- [ ] `node --test src\canvas\core\plugins\storage\__tests__\sanitizeForSave.test.ts` 4 tests PASS
-- [ ] 右键画布显示创建节点菜单（create group 在前）
-- [ ] 右键节点显示操作菜单（含红色 delete、shortcut 提示）
-- [ ] 双击画布直接创建文本节点
-- [ ] 拖线到空白释放 → 弹出连线创建菜单
-- [ ] Ctrl+F → 搜索弹窗 → ↑↓ 导航 → Enter 聚焦
-- [ ] 刷新页面后节点 type 仍为 `custom`（不再被 sanitizeForSave 改坏）
-- [ ] 保存的数据不含 imageUrl/videoUrl/_cropMode 等运行时字段
+- [ ] `pnpm build` 通过。
+- [ ] storage sanitize 测试通过。
+- [ ] 右键画布菜单从 NodeRegistry 动态显示节点类型。
+- [ ] 右键节点有复制、复制一份、删除。
+- [ ] 右键连线有删除。
+- [ ] 双击空白画布直接创建文本节点。
+- [ ] Ctrl+F 能搜索节点并聚焦。
+- [ ] 保存后节点仍是 `type: 'custom'`，业务类型在 `data.nodeType`。
