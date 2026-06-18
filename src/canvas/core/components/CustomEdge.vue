@@ -46,7 +46,7 @@ const edgePath = computed(() => {
     }
     case 'bezier':
     default: {
-      const dx = Math.abs(targetX - sourceX) * 0.5
+      const dx = (targetX - sourceX) * 0.5
       return `M ${sourceX} ${sourceY} C ${sourceX + dx} ${sourceY}, ${targetX - dx} ${targetY}, ${targetX} ${targetY}`
     }
   }
@@ -75,7 +75,7 @@ function samplePath(t: number): { x: number; y: number } {
       }
     }
     default: {
-      const dx = Math.abs(targetX - sourceX) * 0.5
+      const dx = (targetX - sourceX) * 0.5
       const c1x = sourceX + dx; const c1y = sourceY
       const c2x = targetX - dx; const c2y = targetY
       const mt = 1 - t
