@@ -7,6 +7,7 @@ import PanelTabGeneral from './components/panel/PanelTabGeneral.vue'
 import PanelTabTheme from './components/panel/PanelTabTheme.vue'
 import PanelTabStorage from './components/panel/PanelTabStorage.vue'
 import PanelTabLayout from './components/panel/PanelTabLayout.vue'
+import PanelTabPerformance from './components/panel/PanelTabPerformance.vue'
 
 export interface ToggleDef {
   key: string
@@ -59,6 +60,9 @@ const props = defineProps<{
   layoutInterSpacingY?: number
   layoutFocusHeightRatio?: number
   storageStatus?: StorageStatus & { projects: ProjectMeta[] }
+  performancePanelEnabled: boolean
+  performancePanelShowCharts: boolean
+  performancePanelShowMemory: boolean
 }>()
 
 const emit = defineEmits<{
@@ -103,46 +107,62 @@ const emit = defineEmits<{
   (e: 'update:layoutInterSpacingX', v: number): void
   (e: 'update:layoutInterSpacingY', v: number): void
   (e: 'update:layoutFocusHeightRatio', v: number): void
+  (e: 'update:performancePanelEnabled', v: boolean): void
+  (e: 'update:performancePanelShowCharts', v: boolean): void
+  (e: 'update:performancePanelShowMemory', v: boolean): void
+  (e: 'clearPerformanceSamples'): void
 }>()
 
 const collapsed = ref(true)
 function toggleCollapsed() { collapsed.value = !collapsed.value }
 
-type TabKey = 'general' | 'theme' | 'storage' | 'layout'
+type TabKey = 'general' | 'theme' | 'storage' | 'layout' | 'performance'
 const activeTab = ref<TabKey>('general')
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'general', label: '通用' },
   { key: 'theme', label: '主题' },
   { key: 'storage', label: '存储' },
   { key: 'layout', label: '布局' },
+  { key: 'performance', label: '性能' },
 ]
 
-const tabBase = 'px-3 py-1.5 rounded-t-md text-[11px] font-semibold transition-colors cursor-pointer border border-b-0'
-const tabActive = 'bg-[#1e1c21] text-[#f0f0f2] border-[#3a3740]'
-const tabInactive = 'bg-transparent text-[#78767b] border-transparent hover:text-[#b2b0b9]'
+const tabBase = 'flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors duration-200 cursor-pointer select-none'
+const tabActive = 'bg-[#000000] text-white shadow-sm'
+const tabInactive = 'text-[#47464a] hover:text-[#1a1c1d] hover:bg-[#f3f3f4]'
 </script>
 
 <template>
-  <Panel
-    position="top-right"
-    class="pannel-container"
-    :class="{ 'pannel-collapsed': collapsed }"
-  >
-    <div class="pannel-inner">
-      <button class="pannel-toggle" @click="toggleCollapsed">
-        {{ collapsed ? '◀' : '▶' }}
-      </button>
-
-      <div v-if="!collapsed" class="pannel-body">
-        <!-- Tab headers -->
-        <div class="flex gap-0 border-b border-[#3a3740] mb-2">
+  <Panel position="top-right" class="pannel-container">
+    <div
+      class="bg-white/95 backdrop-blur border border-[#c8c5ca] rounded-xl flex flex-col w-[300px] max-w-[300px] max-h-[85vh] shadow-[0_4px_12px_rgba(0,0,0,0.04)] text-xs select-none font-sans overflow-hidden"
+      :class="collapsed ? '!w-auto !min-w-0' : ''"
+    >
+      <div class="flex items-center flex-wrap gap-0.5 px-3 pt-3 pb-2 border-b border-[#c8c5ca]/40 bg-[#f9f9fa]">
+        <template v-if="!collapsed">
           <button v-for="tab in tabs" :key="tab.key"
             :class="[tabBase, activeTab === tab.key ? tabActive : tabInactive]"
             @click="activeTab = tab.key">
             {{ tab.label }}
           </button>
-        </div>
+        </template>
+        <button
+          class="ml-auto w-6 h-6 flex items-center justify-center rounded-md text-[#78767b] hover:text-[#1a1c1d] hover:bg-[#e8e8e9] cursor-pointer transition-colors shrink-0"
+          :title="collapsed ? '展开面板' : '折叠面板'"
+          @click="toggleCollapsed"
+        >
+          <svg v-if="collapsed" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
 
+      <div v-if="!collapsed" class="flex-1 overflow-y-auto p-3 space-y-2">
         <!-- Tab content -->
         <PanelTabGeneral v-if="activeTab === 'general'"
           :toggles="toggles"
@@ -230,6 +250,16 @@ const tabInactive = 'bg-transparent text-[#78767b] border-transparent hover:text
           @update:layout-inter-spacing-x="emit('update:layoutInterSpacingX', $event)"
           @update:layout-inter-spacing-y="emit('update:layoutInterSpacingY', $event)"
           @update:layout-focus-height-ratio="emit('update:layoutFocusHeightRatio', $event)"
+        />
+
+        <PanelTabPerformance v-if="activeTab === 'performance'"
+          :performance-panel-enabled="performancePanelEnabled"
+          :performance-panel-show-charts="performancePanelShowCharts"
+          :performance-panel-show-memory="performancePanelShowMemory"
+          @update:performance-panel-enabled="emit('update:performancePanelEnabled', $event)"
+          @update:performance-panel-show-charts="emit('update:performancePanelShowCharts', $event)"
+          @update:performance-panel-show-memory="emit('update:performancePanelShowMemory', $event)"
+          @clear-performance-samples="emit('clearPerformanceSamples')"
         />
       </div>
     </div>

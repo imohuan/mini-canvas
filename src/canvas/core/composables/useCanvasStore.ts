@@ -48,6 +48,9 @@ const serializer = {
       selectionFramePaddingX: numberOr(data.selectionFramePaddingX, 16),
       selectionFramePaddingTop: numberOr(data.selectionFramePaddingTop, 34),
       selectionFramePaddingBottom: numberOr(data.selectionFramePaddingBottom, 16),
+      performancePanelEnabled: data.performancePanelEnabled ?? false,
+      performancePanelShowCharts: data.performancePanelShowCharts ?? true,
+      performancePanelShowMemory: data.performancePanelShowMemory ?? true,
       connectionMode:
         data.connectionMode === 'loose' ? ConnectionMode.Loose : ConnectionMode.Strict,
       selectionMode:
@@ -105,6 +108,11 @@ export const useCanvasStore = defineStore('canvasState', () => {
     selectionFramePaddingX: 16,
     selectionFramePaddingTop: 34,
     selectionFramePaddingBottom: 16,
+
+    // ==================== 性能检测面板 ====================
+    performancePanelEnabled: false,
+    performancePanelShowCharts: true,
+    performancePanelShowMemory: true,
 
     // ==================== 连线模式 ====================
     connectionMode: ConnectionMode.Strict,

@@ -9,11 +9,13 @@ import {
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
 import Pannel from './Pannel.vue'
+import CanvasPerformancePanel from './components/performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
 import CanvasMenu from './components/CanvasMenu.vue'
 import type { CanvasMenuItem, CanvasMenuState } from './components/CanvasMenu.types'
 import { useCanvasStore } from './composables/useCanvasStore'
+import { useCanvasPerformance } from './composables/useCanvasPerformance'
 import type { CanvasPlugin } from './plugins/types.ts'
 import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
@@ -54,6 +56,21 @@ function makeEdgeData() {
 const CANVAS_ID = 'main-canvas'
 const vueFlowInstance = useVueFlow(CANVAS_ID)
 const { zoomIn, zoomOut, fitView, getNodes, getEdges } = vueFlowInstance
+const canvasContainerRef = ref<HTMLElement | null>(null)
+const canvasContainerSize = ref({ width: 0, height: 0 })
+let canvasResizeObserver: ResizeObserver | null = null
+
+const performanceEnabled = computed(() => canvas.state.performancePanelEnabled)
+const performanceMonitor = useCanvasPerformance({ enabled: performanceEnabled })
+
+function updateCanvasContainerSize() {
+  const rect = canvasContainerRef.value?.getBoundingClientRect()
+  canvasContainerSize.value = {
+    width: rect?.width ?? window.innerWidth,
+    height: rect?.height ?? window.innerHeight,
+  }
+}
+
 
 /** 节点 ID 索引（O(1) 查找，消除 findNearestValidTarget/Source 中的 O(n) find） */
 const nodesById = computed(() => {
@@ -1318,6 +1335,12 @@ const canvasStorageApi = shallowRef<StorageAPI | null>(null)
 provide('canvasStorageApi', canvasStorageApi)
 
 onMounted(async () => {
+  updateCanvasContainerSize()
+  if (canvasContainerRef.value && typeof ResizeObserver !== 'undefined') {
+    canvasResizeObserver = new ResizeObserver(updateCanvasContainerSize)
+    canvasResizeObserver.observe(canvasContainerRef.value)
+  }
+  window.addEventListener('resize', updateCanvasContainerSize)
 
   const pluginList = props.plugins || []
   if (pluginList.length === 0) {
@@ -1449,6 +1472,9 @@ onMounted(async () => {
 })
 
 onUnmounted(async () => {
+  window.removeEventListener('resize', updateCanvasContainerSize)
+  canvasResizeObserver?.disconnect()
+  canvasResizeObserver = null
   cancelBatchConnect()
 
   // 持久化当前快捷键映射到 Store
@@ -1470,7 +1496,7 @@ onUnmounted(async () => {
 
 <template>
   <CanvasRuntimeProvider :runtime="runtime">
-  <div class="canvas-container">
+  <div ref="canvasContainerRef" class="canvas-container">
     <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
       :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.connectionMode"
       :nodes-draggable="canvas.state.nodesDraggable" :nodes-connectable="canvas.state.nodesConnectable"
@@ -1518,7 +1544,11 @@ onUnmounted(async () => {
           v-model:connectionSnapHeightRatio="canvas.state.connectionSnapHeightRatio"
           v-model:selectionFramePaddingX="canvas.state.selectionFramePaddingX"
           v-model:selectionFramePaddingTop="canvas.state.selectionFramePaddingTop"
-          v-model:selectionFramePaddingBottom="canvas.state.selectionFramePaddingBottom" :plugins="loadedPlugins"
+          v-model:selectionFramePaddingBottom="canvas.state.selectionFramePaddingBottom"
+          v-model:performancePanelEnabled="canvas.state.performancePanelEnabled"
+          v-model:performancePanelShowCharts="canvas.state.performancePanelShowCharts"
+          v-model:performancePanelShowMemory="canvas.state.performancePanelShowMemory"
+          :plugins="loadedPlugins"
           :theme-preset="themeState.activePreset" :theme-accent="themeState.accent"
           :theme-surface="themeState.surface"
           :storage-status="storageState"
@@ -1543,10 +1573,32 @@ onUnmounted(async () => {
           @update:layout-inter-spacing-x="onUpdateLayoutInterSpacingX"
           @update:layout-inter-spacing-y="onUpdateLayoutInterSpacingY"
           @update:layout-focus-height-ratio="onUpdateLayoutFocusHeightRatio"
+          @clear-performance-samples="performanceMonitor.clear"
           @toggle-edge-dashed="onToggleEdgeDashed" @toggle-edge-animated="onToggleEdgeAnimated"
           @toggle-mode="toggleMode" @zoom-in="zoomIn" @zoom-out="zoomOut" @fit-view="fitView" />
       </Panel>
     </VueFlow>
+
+    <CanvasPerformancePanel
+      :enabled="canvas.state.performancePanelEnabled"
+      :samples="performanceMonitor.samples.value"
+      :long-tasks="performanceMonitor.longTasks.value"
+      :status="performanceMonitor.currentStatus.value"
+      :summary="performanceMonitor.summary.value"
+      :fps="performanceMonitor.fps.value"
+      :frame-ms="performanceMonitor.lastFrameMs.value"
+      :nodes="vueFlowInstance.getNodes.value"
+      :edges-count="vueFlowInstance.getEdges.value.length"
+      :viewport="vueFlowInstance.viewport.value"
+      :container-size="canvasContainerSize"
+      :selected-node-count="canvas.selectionState.selectedNodeIds.size"
+      :selected-edge-count="canvas.selectionState.selectedEdgeIds.size"
+      :only-render-visible-elements="canvas.state.onlyRenderVisibleElements"
+      :show-charts="canvas.state.performancePanelShowCharts"
+      :show-memory="canvas.state.performancePanelShowMemory"
+      :memory="performanceMonitor.memory.value"
+    />
+
 
     <!-- 多选背景框（2+ 节点选中时自动显示）
              读取 useCanvasStore.selectionState.selectedNodeIds + VueFlow getNodes -->
