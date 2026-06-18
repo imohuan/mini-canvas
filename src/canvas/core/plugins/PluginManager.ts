@@ -1,4 +1,4 @@
-import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
+﻿import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
 import { PluginLifecycle } from './types'
 import { EventBus } from './PluginContext'
 
@@ -542,6 +542,12 @@ export class PluginManager {
       registerNodeType: (_name, _component) => stubWarn('registerNodeType'),
       registerEdgeType: (_name, _component) => stubWarn('registerEdgeType'),
       registerComponent: (_name, _component) => stubWarn('registerComponent'),
+      canvasNodes: {
+        register: (_definition) => stubWarn('canvasNodes.register'),
+        unregister: (_type) => stubWarn('canvasNodes.unregister'),
+        get: (_type) => null,
+        getMenuItems: () => [],
+      },
       on: (_event, _handler) => {
         stubWarn('on')
         return () => {}
@@ -552,6 +558,7 @@ export class PluginManager {
       unmountOverlay: (_el) => stubWarn('unmountOverlay'),
       registerShortcut: (_keys, _handler, _description) => stubWarn('registerShortcut'),
       unregisterShortcut: (_keys) => stubWarn('unregisterShortcut'),
+      getPluginAPI: <T = unknown>(_name: string): T | null => null,
       getPlugin: <T = CanvasPlugin>(name: string): T | null => {
         return this.getPlugin(name) as T | null
       },

@@ -1,8 +1,9 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
 import { watch } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type {
   PluginContext,
+  CanvasNodeDefinition,
   CanvasStoreAPI,
   CanvasActions,
   CanvasSelectionAPI,
@@ -13,6 +14,7 @@ import type {
   Point,
   ViewportState,
 } from './types'
+import type { NodeRegistry } from '../registry/NodeRegistry'
 import { ShortcutManager } from './ShortcutManager'
 
 // ============================================================================
@@ -42,24 +44,12 @@ interface VueFlowInstance {
 }
 
 // ============================================================================
-// EventBus — simple inter-plugin event bus
+// EventBus - simple inter-plugin event bus
 // ============================================================================
 
-/**
- * 轻量级事件总线，用于插件间通信。
- *
- * 支持 on/off/emit 三元操作，基于 Map 实现。
- * 单个处理函数的异常会被捕获并记录到 console，不影响其他处理函数。
- */
 export class EventBus {
   private handlers = new Map<string, Set<(...args: any[]) => void>>()
 
-  /**
-   * 注册事件监听器
-   *
-   * @param event - 事件名称
-   * @param handler - 事件处理函数
-   */
   on(event: string, handler: (...args: any[]) => void): () => void {
     if (!this.handlers.has(event)) {
       this.handlers.set(event, new Set())
@@ -68,12 +58,6 @@ export class EventBus {
     return () => this.off(event, handler)
   }
 
-  /**
-   * 取消事件监听器
-   *
-   * @param event - 事件名称
-   * @param handler - 要移除的处理函数
-   */
   off(event: string, handler: (...args: any[]) => void): void {
     const handlers = this.handlers.get(event)
     if (handlers) {
@@ -84,15 +68,6 @@ export class EventBus {
     }
   }
 
-  /**
-   * 触发事件
-   *
-   * 同步调用所有注册的处理函数。
-   * 单个处理函数的异常会被捕获并记录，不影响其他处理函数。
-   *
-   * @param event - 事件名称
-   * @param payload - 事件负载数据
-   */
   emit(event: string, payload?: unknown): void {
     const handlers = this.handlers.get(event)
     if (!handlers || handlers.size === 0) return
@@ -106,9 +81,6 @@ export class EventBus {
     }
   }
 
-  /**
-   * 清除所有事件监听器
-   */
   clear(): void {
     this.handlers.clear()
   }
@@ -119,11 +91,8 @@ export class EventBus {
 // ============================================================================
 
 interface CreatePluginContextOptions {
-  /** 画布实例唯一标识 */
   canvasId: string
-  /** VueFlow 组合式 API 返回的实例 */
   vueFlowInstance: VueFlowInstance
-  /** Pinia 画布状态 store（selection + plugins 命名空间 + 自定义节点/边注册） */
   canvasStore?: {
     state: Record<string, any>
     selectionState: {
@@ -138,37 +107,15 @@ interface CreatePluginContextOptions {
     registerCustomNodeType?(name: string, component: Component): void
     registerCustomEdgeType?(name: string, component: Component): void
   }
-  /** 可选：共享事件总线（通常从 PluginManager 传入） */
   eventBus?: EventBus
-  /** 可选：PluginManager 引用（用于 getPlugin 查找） */
-  pluginManager?: { getPlugin(name: string): unknown }
+  nodeRegistry?: NodeRegistry
+  pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
 }
 
 // ============================================================================
 // Factory: createPluginContext
 // ============================================================================
 
-/**
- * 创建 PluginContext 实例
- *
- * PluginContext 是插件与画布系统之间的核心适配器，
- * 包装了 VueFlow API、Pinia store 和事件总线等底层能力。
- * 插件通过 PluginContext 进行所有画布操作，不直接调用 useVueFlow()。
- *
- * @param pluginName - 插件唯一名称
- * @param options - 上下文配置项
- * @returns 完整的 PluginContext 实例
- *
- * @example
- * ```typescript
- * const ctx = createPluginContext('myPlugin', {
- *   canvasId: 'canvas-1',
- *   vueFlowInstance: useVueFlow(),
- *   canvasStore: useCanvasStore(),
- *   eventBus: sharedBus,
- * })
- * ```
- */
 export function createPluginContext(
   pluginName: string,
   options: CreatePluginContextOptions,
@@ -178,10 +125,10 @@ export function createPluginContext(
     vueFlowInstance,
     canvasStore,
     eventBus = new EventBus(),
+    nodeRegistry,
     pluginManager,
   } = options
 
-  // 安全回退：当 canvasStore 未提供时（如 PluginManager stub），使用空 Set
   const effectiveStore = canvasStore ?? {
     state: {
       plugins: {} as Record<string, Record<string, unknown>>,
@@ -193,10 +140,6 @@ export function createPluginContext(
     },
   }
 
-  // ================================================================
-  // Logger — prefix-scoped console wrapper
-  // ================================================================
-
   const logger: Logger = {
     debug: (...args: unknown[]) => console.debug(`[${pluginName}]`, ...args),
     info: (...args: unknown[]) => console.info(`[${pluginName}]`, ...args),
@@ -204,16 +147,7 @@ export function createPluginContext(
     error: (...args: unknown[]) => console.error(`[${pluginName}]`, ...args),
   }
 
-  // ================================================================
-  // Store — namespace-isolated state read/write on Pinia store
-  // ================================================================
-
   const store: CanvasStoreAPI = createPluginStore(pluginName, effectiveStore, logger)
-
-  // ================================================================
-  // Actions — node/edge CRUD wrapping VueFlow composable
-  // ================================================================
-
   const actions: CanvasActions = createActions(vueFlowInstance, logger)
 
   function syncSelectionToVueFlow(nodeIds: Iterable<string>, edgeIds: Iterable<string>): void {
@@ -294,19 +228,8 @@ export function createPluginContext(
     },
   }
 
-  // ================================================================
-
   const viewport: ViewportAPI = createViewport(vueFlowInstance, logger)
-
-  // ================================================================
-  // Component registry — stores registered node/edge types
-  // ================================================================
-
   const registeredComponents = new Map<string, Component>()
-
-  // ================================================================
-  // Event delegation — pre-define functions to bypass any object literal issues
-  // ================================================================
 
   function contextOn(event: string, handler: (...args: any[]) => void): () => void {
     eventBus.on(event, handler)
@@ -320,10 +243,6 @@ export function createPluginContext(
   function contextEmit(event: string, payload: unknown): void {
     eventBus.emit(event, payload)
   }
-
-  // ================================================================
-  // Build and return the PluginContext
-  // ================================================================
 
   const context: PluginContext = {
     canvasId,
@@ -358,6 +277,23 @@ export function createPluginContext(
       } catch (err) {
         logger.error(`Failed to register component "${name}":`, err)
       }
+    },
+
+    canvasNodes: {
+      register(definition: CanvasNodeDefinition): void {
+        nodeRegistry?.register(definition)
+        logger.debug(`Registered canvas node: "${definition.type}"`)
+      },
+      unregister(type: string): void {
+        nodeRegistry?.unregister(type)
+        logger.debug(`Unregistered canvas node: "${type}"`)
+      },
+      get(type: string) {
+        return nodeRegistry?.get(type) ?? null
+      },
+      getMenuItems() {
+        return nodeRegistry?.getMenuItems() ?? []
+      },
     },
 
     on: contextOn,
@@ -397,16 +333,6 @@ export function createPluginContext(
       }
     },
 
-    /**
-     * 注册快捷键（委托给 ShortcutManager 统一管理）
-     *
-     * 签名与旧版完全兼容。内部生成稳定 ID（格式：pluginName:keys）
-     * 并转发给 ShortcutManager 完成注册、冲突检测和键盘监听。
-     *
-     * @param keys - 快捷键字符串，如 'ctrl+z'
-     * @param handler - 快捷键触发时的回调函数
-     * @param description - 人类可读的功能描述
-     */
     registerShortcut(keys: string, handler: () => void, description?: string): void {
       const manager = ShortcutManager.getInstance()
       const id = `${pluginName}:${keys.replace(/\+/g, '-').replace(/\s+/g, '')}`
@@ -424,17 +350,19 @@ export function createPluginContext(
       }
     },
 
-    /**
-     * 注销快捷键（委托给 ShortcutManager 统一管理）
-     *
-     * 使用与 registerShortcut 相同的 ID 生成规则，从 ShortcutManager 中注销。
-     *
-     * @param keys - 快捷键字符串，如 'ctrl+z'
-     */
     unregisterShortcut(keys: string): void {
       const manager = ShortcutManager.getInstance()
       const id = `${pluginName}:${keys.replace(/\+/g, '-').replace(/\s+/g, '')}`
       manager.unregister(id)
+    },
+
+    getPluginAPI<T = unknown>(name: string): T | null {
+      try {
+        return pluginManager?.getPluginAPI(name) as T ?? null
+      } catch (err) {
+        logger.error(`Failed to get plugin API "${name}":`, err)
+        return null
+      }
     },
 
     getPlugin<T = CanvasPlugin>(name: string): T | null {
@@ -457,22 +385,11 @@ export function createPluginContext(
 // Module factories
 // ============================================================================
 
-/**
- * 创建命名空间隔离的插件状态存储
- *
- * 读写操作限定在 `canvasStore.state.plugins[pluginName]` 命名空间内。
- *
- * @param pluginName - 插件名称
- * @param canvasStore - Pinia 画布状态 store
- * @param logger - 日志记录器
- * @returns CanvasStoreAPI 实例
- */
 function createPluginStore(
   pluginName: string,
   canvasStore: { state: Record<string, any> },
   logger: Logger,
 ): CanvasStoreAPI {
-  /** 确保插件命名空间已初始化 */
   function ensureNamespace(): void {
     if (!canvasStore.state.plugins) {
       canvasStore.state.plugins = {}
@@ -532,144 +449,78 @@ function createPluginStore(
   }
 }
 
-/**
- * 创建节点与边的 CRUD 操作代理
- *
- * 直接透传给 VueFlow 实例的对应方法。
- * nodes/edges 由 VueFlow 内部唯一管理，不再双写到 Pinia。
- *
- * @param vf - VueFlow 实例
- * @param logger - 日志记录器
- * @returns CanvasActions 实例
- */
 function createActions(vf: VueFlowInstance, logger: Logger) {
   return {
     addNodes(nodes: Node[]): void {
       try { vf.addNodes(nodes) } catch (err) { logger.error('actions.addNodes failed:', err) }
     },
-
     removeNodes(ids: string[]): void {
       try { vf.removeNodes(ids) } catch (err) { logger.error('actions.removeNodes failed:', err) }
     },
-
     addEdges(edges: Edge[]): void {
       try { vf.addEdges(edges) } catch (err) { logger.error('actions.addEdges failed:', err) }
     },
-
     removeEdges(ids: string[]): void {
       try { vf.removeEdges(ids) } catch (err) { logger.error('actions.removeEdges failed:', err) }
     },
-
     updateNode(id: string, data: Partial<Omit<Node, 'id'>>): void {
       try { vf.updateNode(id, data) } catch (err) { logger.error(`actions.updateNode("${id}") failed:`, err) }
     },
-
     updateEdge(id: string, data: Partial<Omit<Edge, 'id'>>): void {
       try { vf.updateEdge(id, data) } catch (err) { logger.error(`actions.updateEdge("${id}") failed:`, err) }
     },
-
     getNodes(): Node[] {
       try { return vf.getNodes.value } catch (err) { logger.error('actions.getNodes failed:', err); return [] }
     },
-
     getEdges(): Edge[] {
       try { return vf.getEdges.value } catch (err) { logger.error('actions.getEdges failed:', err); return [] }
     },
-
     addSelectedNodes(nodes: Node[]): void {
       try { vf.addSelectedNodes(nodes) } catch (err) { logger.error('actions.addSelectedNodes failed:', err) }
     },
-
     removeSelectedNodes(nodes: Node[]): void {
       try { vf.removeSelectedNodes(nodes) } catch (err) { logger.error('actions.removeSelectedNodes failed:', err) }
     },
-
     removeSelectedElements(): void {
       try { vf.removeSelectedElements() } catch (err) { logger.error('actions.removeSelectedElements failed:', err) }
     },
   }
 }
 
-/**
- * 创建视口控制代理
- *
- * 包装 VueFlow 的缩放、平移和坐标转换方法。
- *
- * @param vf - VueFlow 实例
- * @param logger - 日志记录器
- * @returns ViewportAPI 实例
- */
 function createViewport(vf: VueFlowInstance, logger: Logger): ViewportAPI {
   return {
     zoomIn(): void {
-      try {
-        vf.zoomIn()
-      } catch (err) {
-        logger.error('viewport.zoomIn failed:', err)
-      }
+      try { vf.zoomIn() } catch (err) { logger.error('viewport.zoomIn failed:', err) }
     },
-
     zoomOut(): void {
-      try {
-        vf.zoomOut()
-      } catch (err) {
-        logger.error('viewport.zoomOut failed:', err)
-      }
+      try { vf.zoomOut() } catch (err) { logger.error('viewport.zoomOut failed:', err) }
     },
-
     zoomTo(level: number): void {
-      try {
-        vf.zoomTo(level)
-      } catch (err) {
-        logger.error(`viewport.zoomTo(${level}) failed:`, err)
-      }
+      try { vf.zoomTo(level) } catch (err) { logger.error(`viewport.zoomTo(${level}) failed:`, err) }
     },
-
     fitView(): void {
-      try {
-        vf.fitView()
-      } catch (err) {
-        logger.error('viewport.fitView failed:', err)
-      }
+      try { vf.fitView() } catch (err) { logger.error('viewport.fitView failed:', err) }
     },
-
     setCenter(x: number, y: number, zoom?: number): void {
-      try {
-        vf.setCenter(x, y, zoom !== undefined ? { zoom } : undefined)
-      } catch (err) {
-        logger.error(`viewport.setCenter(${x}, ${y}, ${zoom}) failed:`, err)
-      }
+      try { vf.setCenter(x, y, zoom !== undefined ? { zoom } : undefined) } catch (err) { logger.error(`viewport.setCenter(${x}, ${y}, ${zoom}) failed:`, err) }
     },
-
     setViewport(viewport: ViewportState): void {
-      try {
-        vf.setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })
-      } catch (err) {
-        logger.error(`viewport.setViewport(${viewport.x}, ${viewport.y}, ${viewport.zoom}) failed:`, err)
-      }
+      try { vf.setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom }) } catch (err) { logger.error(`viewport.setViewport(${viewport.x}, ${viewport.y}, ${viewport.zoom}) failed:`, err) }
     },
-
     screenToFlowCoordinate(position: Point): Point {
       try {
-        // vf.project() 期望 renderer-relative 坐标（clientX - rendererBounds.left）
-        // 但调用者传入的可能是屏幕坐标，需要先转换
         const rendererEl = document.querySelector('.vue-flow__renderer') as HTMLElement | null
         if (rendererEl) {
           const bounds = rendererEl.getBoundingClientRect()
-          const rendererRelative = {
-            x: position.x - bounds.left,
-            y: position.y - bounds.top,
-          }
+          const rendererRelative = { x: position.x - bounds.left, y: position.y - bounds.top }
           return vf.project(rendererRelative)
         }
-        // fallback: 直接用 project（假设已经是 renderer-relative）
         return vf.project(position)
       } catch (err) {
         logger.error('viewport.screenToFlowCoordinate failed:', err)
         return position
       }
     },
-
     getViewport(): ViewportState {
       try {
         const vp = vf.viewport.value

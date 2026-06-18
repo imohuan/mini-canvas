@@ -1,23 +1,17 @@
-import type { CanvasPlugin, PluginContext } from '../types'
+﻿import type { CanvasPlugin, PluginContext } from '../types'
 
 export interface AutoSaveOptions {
-  interval?: number // debounce ms (default: 1000)
-  enabled?: boolean // default: true
+  interval?: number
+  enabled?: boolean
   [key: string]: unknown
 }
 
 export interface AutoSaveAPI {
-  /** 监听自动保存事件 */
   on(event: string, handler: (...args: any[]) => void): void
-  /** 取消监听 */
   off(event: string, handler: (...args: any[]) => void): void
-  /** 获取当前是否脏数据 */
   get isDirty(): boolean
-  /** 获取自动保存是否启用 */
   get isEnabled(): boolean
-  /** 手动触发保存 */
   saveNow(): Promise<void>
-  /** 设置启用/禁用 */
   setEnabled(v: boolean): void
 }
 
@@ -33,13 +27,10 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
     let saveTimer: ReturnType<typeof setTimeout> | null = null
     let isHistoryRestoring = false
 
-    // ---- Storage API access ----
     function getStorageAPI(): any {
-      const storagePlugin = context.getPlugin('storage') as any
-      return storagePlugin?.api ?? null
+      return context.getPluginAPI('storage')
     }
 
-    // ---- Debounced save ----
     function markDirty() {
       if (!enabled || isHistoryRestoring) return
       dirty = true
@@ -65,7 +56,6 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
       }
     }
 
-    // ---- Emergency save on page close ----
     function handleBeforeUnload() {
       if (saveTimer) {
         clearTimeout(saveTimer)
@@ -74,7 +64,6 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
       performSave()
     }
 
-    // ---- Event listeners — context.on() 返回取消函数，无需手动管理 listenerMap ----
     const offNodesChange = context.on('nodesChange', () => markDirty())
     const offEdgesChange = context.on('edgesChange', () => markDirty())
     const offNodeDragStop = context.on('nodeDragStop', () => markDirty())
@@ -91,7 +80,6 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
 
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // ---- External listener map (for AutoSaveAPI.on/off) ----
     const externalListeners = new Map<string, Set<(...args: any[]) => void>>()
 
     const api: AutoSaveAPI = {
