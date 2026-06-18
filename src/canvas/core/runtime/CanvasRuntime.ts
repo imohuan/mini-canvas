@@ -2,12 +2,14 @@ import type { PluginManager } from '../plugins/PluginManager'
 import type { EventBus } from '../plugins/PluginContext'
 import type { NodeRegistry } from '../registry/NodeRegistry'
 import type { MenuRegistry } from '../menu/MenuRegistry'
+import { ShortcutManager } from '../plugins/ShortcutManager'
 
 export class CanvasRuntime {
   readonly pluginManager: PluginManager
   readonly eventBus: EventBus
   readonly nodeRegistry: NodeRegistry
   readonly menuRegistry: MenuRegistry
+  readonly shortcutManager!: ShortcutManager
   readonly vueFlowInstance: any
 
   constructor(
