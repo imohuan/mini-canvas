@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
-import { computed, ref, onMounted, onUnmounted, useTemplateRef } from 'vue'
+import { computed, ref, onMounted, onUnmounted, useTemplateRef, nextTick } from 'vue'
 
 const props = defineProps<NodeProps>()
 const text = ref((props.data?.text as string) || '双击编辑文本...')
 const editing = ref(false)
-const editRef = useTemplateRef("editRef")
+const editRef = useTemplateRef('editRef')
 
 const { viewport } = useVueFlow('main-canvas')
 
@@ -21,14 +21,27 @@ const contentScaleStyle = computed(() => ({
 
 function startEdit() {
   editing.value = true
-  editRef.value?.focus()
+  nextTick(() => {
+    editRef.value?.focus()
+  })
 }
 
 function finishEdit() {
   editing.value = false
 }
 
-// VueFlow d3-drag 拦截原生 dblclick，通过 window CustomEvent 桥接
+function isTextInputTarget(target: EventTarget | null): target is HTMLTextAreaElement | HTMLInputElement {
+  return target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
+}
+
+function stopInputPropagation(event: Event) {
+  if (!editing.value) return
+  if (isTextInputTarget(event.target)) {
+    event.stopPropagation()
+    event.stopImmediatePropagation?.()
+  }
+}
+
 function onCanvasDoubleClick(e: Event) {
   const detail = (e as CustomEvent).detail as { nodeId: string }
   if (detail?.nodeId === props.id && !editing.value) {
@@ -39,6 +52,7 @@ function onCanvasDoubleClick(e: Event) {
 onMounted(() => {
   window.addEventListener('canvas:nodeDoubleClick', onCanvasDoubleClick)
 })
+
 onUnmounted(() => {
   window.removeEventListener('canvas:nodeDoubleClick', onCanvasDoubleClick)
 })
@@ -46,12 +60,26 @@ onUnmounted(() => {
 
 <template>
   <div class="w-full h-full p-4 overflow-hidden">
-    <textarea ref="editRef" v-show="editing" v-model="text"
+    <textarea
+      ref="editRef"
+      v-show="editing"
+      v-model="text"
       class="text-node-content w-full h-full resize-none border-none outline-none bg-transparent text-gray-700 leading-relaxed"
-      :style="contentScaleStyle" placeholder="输入文本..." @blur="finishEdit" @keydown.escape="finishEdit" autofocus />
-    <div v-show="!editing"
+      :style="contentScaleStyle"
+      placeholder="输入文本..."
+      @blur="finishEdit"
+      @keydown.escape="finishEdit"
+      @pointerdown="stopInputPropagation"
+      @pointerup="stopInputPropagation"
+      @mousedown="stopInputPropagation"
+      @click="stopInputPropagation"
+      autofocus />
+
+    <div
+      v-show="!editing"
       class="text-node-content w-full h-full text-gray-700 leading-relaxed whitespace-pre-wrap overflow-hidden cursor-text"
-      :style="contentScaleStyle" @dblclick="startEdit">
+      :style="contentScaleStyle"
+      @dblclick="startEdit">
       {{ text }}
     </div>
   </div>
