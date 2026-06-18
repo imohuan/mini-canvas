@@ -6,6 +6,8 @@ import { ImageNodePlugin } from './canvas/core/nodes/image/ImageNodePlugin'
 import { VideoNodePlugin } from './canvas/core/nodes/Video/VideoNodePlugin'
 import { StageNodePlugin } from './canvas/core/nodes/stage/StageNodePlugin'
 import { ContextMenuPlugin } from './canvas/core/plugins/context-menu/index'
+import { CustomHandlePlugin } from './canvas/core/plugins/custom-handle/index'
+import { NodeFindPlugin } from './canvas/core/plugins/node-find/index'
 import { AlignGuidePlugin } from './canvas/core/plugins/align-guide/index'
 import { AutoSavePlugin } from './canvas/core/plugins/auto-save/index'
 import { ClipboardPlugin } from './canvas/core/plugins/clipboard/index'
@@ -62,6 +64,20 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '右键菜单',
     description: '节点/画布右键菜单（复制、删除等）',
     usage: '右键节点或画布空白处',
+  },
+  {
+    plugin: markRaw(CustomHandlePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '自定义连接点',
+    description: '注册 handle 配置和连接验证',
+    usage: '自动配置连接点样式和验证规则',
+  },
+  {
+    plugin: markRaw(NodeFindPlugin) as CanvasPlugin,
+    enabled: true,
+    label: '节点搜索',
+    description: 'Ctrl+F 搜索节点并聚焦',
+    usage: 'Ctrl+F 打开搜索框 → 输入名称/类型 → Enter 聚焦',
   },
   {
     plugin: markRaw(AlignGuidePlugin) as CanvasPlugin,

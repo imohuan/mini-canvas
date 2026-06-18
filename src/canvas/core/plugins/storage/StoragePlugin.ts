@@ -1,4 +1,5 @@
 import type { CanvasPlugin, PluginContext } from '../types'
+import { sanitizeForSave } from './sanitizeForSave'
 import { IndexedDBAdapter } from './adapters/IndexedDBAdapter'
 import { FileSystemAdapter } from './adapters/FileSystemAdapter'
 import { AssetManager } from './adapters/AssetManager'
@@ -67,41 +68,8 @@ export interface StorageAPI {
   readonly assets: AssetManager
 }
 
-function sanitizeForSave(nodes: any[], edges: any[]): CanvasData {
-  const cleaned = JSON.parse(JSON.stringify({ nodes, edges }))
 
-  for (const n of cleaned.nodes) {
-    if (!n.data) continue
 
-    // 清理运行时字段（blob URL 不持久化）
-    const runtimeFields = ['imageUrl', 'videoUrl', 'thumbUrl', '_cropRect', '_cropMode']
-    for (const key of runtimeFields) {
-      delete n.data[key]
-    }
-
-    // 清理 values 中的 _url
-    if (n.data.values) {
-      for (const v of Object.values(n.data.values) as any[]) {
-        if (v && typeof v === 'object') {
-          delete v._url
-        }
-      }
-    }
-
-    // 过滤无效节点类型
-    const validTypes = ['image-input', 'video-generation']
-    if (!validTypes.includes(n.type)) {
-      n.type = 'image-input'
-    }
-  }
-
-  cleaned.nodes = cleaned.nodes.filter((n: any) => !n.id?.startsWith('temp-'))
-  cleaned.edges = cleaned.edges.filter(
-    (e: any) => !e.id?.startsWith('temp-') && !e.data?.isTemp,
-  )
-
-  return cleaned
-}
 
 // ===== LocalStorage fallback constants =====
 const LS_KEY_PROJECT_INDEX = 'canvas-ai:project-index'
