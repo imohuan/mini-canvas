@@ -1,0 +1,19 @@
+@import "tailwindcss";
+@import "./canvas/core/components/Decoration/node-theme.css";
+
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 保留 VueFlow 原生框选视觉（MultiSelectPlugin v0.5 不再接管 selection，改用原生选中 + 增强模式） */
+
+/* 多选插件：选中节点视觉反馈 */
+.canvas-node-selected {
+  outline: 2px solid var(--canvas-node-ring) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 8px var(--canvas-node-shadow-strong);
+}
