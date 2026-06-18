@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { CanvasMenuItem, CanvasMenuState } from './CanvasMenu.types'
 
-defineProps<{
+const props = defineProps<{
   menu: CanvasMenuState
 }>()
 
@@ -14,6 +15,16 @@ function onSelect(item: CanvasMenuItem) {
   if (item.disabled) return
   emit('select', item)
 }
+
+const groupedItems = computed(() => {
+  const groups = new Map<string, CanvasMenuItem[]>()
+  for (const item of props.menu.items) {
+    const group = item.group || 'action'
+    if (!groups.has(group)) groups.set(group, [])
+    groups.get(group)!.push(item)
+  }
+  return [...groups.entries()].map(([name, items]) => ({ name, items }))
+})
 </script>
 
 <template>
@@ -27,53 +38,60 @@ function onSelect(item: CanvasMenuItem) {
       >
         <div class="canvas-menu-title">{{ menu.title }}</div>
 
-        <button
-          v-for="item in menu.items"
-          :key="item.id"
-          class="canvas-menu-item"
-          :class="{ 'is-disabled': item.disabled }"
-          :disabled="item.disabled"
-          type="button"
-          @click="onSelect(item)"
-        >
-          <span class="canvas-menu-icon" :class="`canvas-menu-icon--${item.icon || 'text'}`">
-            <svg v-if="item.icon === 'image'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="item.icon === 'video'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="4" y="5" width="12" height="14" rx="2" />
-              <path d="M16 9l5-3v12l-5-3" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="item.icon === 'layers'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 3l9 5-9 5-9-5 9-5Z" stroke-linejoin="round" />
-              <path d="M3 12l9 5 9-5" stroke-linecap="round" stroke-linejoin="round" />
-              <path d="M3 16l9 5 9-5" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="item.icon === 'link'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M10 13a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.1 1.1" stroke-linecap="round" />
-              <path d="M14 11a5 5 0 0 0-7.07 0l-2 2A5 5 0 0 0 12 20.07l1.1-1.1" stroke-linecap="round" />
-            </svg>
-            <svg v-else-if="item.icon === 'delete'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 7h16" stroke-linecap="round" />
-              <path d="M10 11v6M14 11v6" stroke-linecap="round" />
-              <path d="M6 7l1 14h10l1-14M9 7V4h6v3" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="item.icon === 'duplicate'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="8" y="8" width="12" height="12" rx="2" />
-              <path d="M4 16V6a2 2 0 0 1 2-2h10" stroke-linecap="round" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 7h16M4 12h10M4 17h16" stroke-linecap="round" />
-            </svg>
-          </span>
-          <span class="canvas-menu-copy">
-            <span class="canvas-menu-label">{{ item.label }}</span>
-            <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
-          </span>
-          <span v-if="item.badge" class="canvas-menu-badge">{{ item.badge }}</span>
-        </button>
+        <template v-for="(group, gIdx) in groupedItems" :key="group.name">
+          <div v-if="gIdx > 0" class="canvas-menu-divider" />
+          <button
+            v-for="item in group.items"
+            :key="item.id"
+            class="canvas-menu-item"
+            :class="{
+              'is-disabled': item.disabled,
+              'is-danger': item.danger,
+            }"
+            :disabled="item.disabled"
+            type="button"
+            @click="onSelect(item)"
+          >
+            <span class="canvas-menu-icon" :class="`canvas-menu-icon--${item.icon || 'text'}`">
+              <svg v-if="item.icon === 'image'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else-if="item.icon === 'video'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="4" y="5" width="12" height="14" rx="2" />
+                <path d="M16 9l5-3v12l-5-3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else-if="item.icon === 'layers'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 3l9 5-9 5-9-5 9-5Z" stroke-linejoin="round" />
+                <path d="M3 12l9 5 9-5" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M3 16l9 5 9-5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else-if="item.icon === 'link'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.1 1.1" stroke-linecap="round" />
+                <path d="M14 11a5 5 0 0 0-7.07 0l-2 2A5 5 0 0 0 12 20.07l1.1-1.1" stroke-linecap="round" />
+              </svg>
+              <svg v-else-if="item.icon === 'delete'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16" stroke-linecap="round" />
+                <path d="M10 11v6M14 11v6" stroke-linecap="round" />
+                <path d="M6 7l1 14h10l1-14M9 7V4h6v3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg v-else-if="item.icon === 'duplicate'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="8" y="8" width="12" height="12" rx="2" />
+                <path d="M4 16V6a2 2 0 0 1 2-2h10" stroke-linecap="round" />
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16M4 12h10M4 17h16" stroke-linecap="round" />
+              </svg>
+            </span>
+            <span class="canvas-menu-copy">
+              <span class="canvas-menu-label">{{ item.label }}</span>
+              <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
+            </span>
+            <span v-if="item.shortcut" class="canvas-menu-shortcut">{{ item.shortcut }}</span>
+            <span v-if="item.badge" class="canvas-menu-badge">{{ item.badge }}</span>
+          </button>
+        </template>
       </div>
     </div>
   </Teleport>
@@ -109,6 +127,12 @@ function onSelect(item: CanvasMenuItem) {
   font-weight: 700;
 }
 
+.canvas-menu-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: rgb(255 255 255 / 0.08);
+}
+
 .canvas-menu-item {
   width: 100%;
   display: flex;
@@ -131,6 +155,14 @@ function onSelect(item: CanvasMenuItem) {
 .canvas-menu-item.is-disabled {
   cursor: not-allowed;
   opacity: 0.38;
+}
+
+.canvas-menu-item.is-danger {
+  color: #fecaca;
+}
+
+.canvas-menu-item.is-danger:hover:not(.is-disabled) {
+  background: rgb(239 68 68 / 0.18);
 }
 
 .canvas-menu-icon {
@@ -168,6 +200,12 @@ function onSelect(item: CanvasMenuItem) {
   color: #a1a1aa;
   font-size: 12px;
   line-height: 1.2;
+}
+
+.canvas-menu-shortcut {
+  color: #a1a1aa;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .canvas-menu-badge {

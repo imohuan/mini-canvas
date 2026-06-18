@@ -5,6 +5,7 @@ import { TextNodePlugin } from './canvas/core/nodes/text/TextNodePlugin'
 import { ImageNodePlugin } from './canvas/core/nodes/image/ImageNodePlugin'
 import { VideoNodePlugin } from './canvas/core/nodes/Video/VideoNodePlugin'
 import { StageNodePlugin } from './canvas/core/nodes/stage/StageNodePlugin'
+import { ContextMenuPlugin } from './canvas/core/plugins/context-menu/index'
 import { AlignGuidePlugin } from './canvas/core/plugins/align-guide/index'
 import { AutoSavePlugin } from './canvas/core/plugins/auto-save/index'
 import { ClipboardPlugin } from './canvas/core/plugins/clipboard/index'
@@ -54,6 +55,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '导演台节点',
     description: '注册导演台节点到 NodeRegistry',
     usage: '内置节点类型，自动注册',
+  },
+  {
+    plugin: markRaw(ContextMenuPlugin) as CanvasPlugin,
+    enabled: true,
+    label: '右键菜单',
+    description: '节点/画布右键菜单（复制、删除等）',
+    usage: '右键节点或画布空白处',
   },
   {
     plugin: markRaw(AlignGuidePlugin) as CanvasPlugin,
