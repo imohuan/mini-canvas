@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -14,7 +14,6 @@ import CustomEdge from './components/CustomEdge.vue'
 import CanvasMenu from './components/CanvasMenu.vue'
 import type { CanvasMenuItem, CanvasMenuState } from './components/CanvasMenu.types'
 import { useCanvasStore } from './useCanvasStore.ts'
-import { NODE_TYPE_LABELS } from './constants.ts'
 import type { CanvasPlugin } from './plugins/types.ts'
 import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
@@ -291,8 +290,6 @@ function toFlowPosition(clientX: number, clientY: number) {
   }
 }
 
-function nodeLabelFromMenuItem(item: CanvasMenuItem) {
-  return NODE_TYPE_LABELS[item.id] || item.label
 }
 
 // NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
@@ -309,7 +306,7 @@ function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: 
       y: position.y - defaultSize.cardHeight / 2,
     },
     data: {
-      label: nodeLabelFromMenuItem(item),
+      label: item.label,
       nodeType: item.id,
       cardWidth: defaultSize.cardWidth,
       cardHeight: defaultSize.cardHeight,

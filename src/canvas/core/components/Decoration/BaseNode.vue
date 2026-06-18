@@ -1,10 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import { useCanvasStore } from '../../useCanvasStore'
-import { NODE_TYPE_LABELS } from '../../constants'
 import { createCappedStyle } from '../../utils/viewportSpace'
 
 const props = defineProps<NodeProps & {
@@ -191,7 +190,7 @@ function updateCardMousePosition(event: MouseEvent) {
 const nodeLabel = computed(() => {
   const label = props.data?.label as string | undefined
   const nt = props.data?.nodeType as string | undefined
-  return label || (nt ? (NODE_TYPE_LABELS[nt] || nt) : '节点')
+  return label || nt || '节点'
 })
 
 const nodeExtra = computed(() => {
