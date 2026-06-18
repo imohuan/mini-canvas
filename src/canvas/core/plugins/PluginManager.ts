@@ -542,6 +542,12 @@ export class PluginManager {
       registerNodeType: (_name, _component) => stubWarn('registerNodeType'),
       registerEdgeType: (_name, _component) => stubWarn('registerEdgeType'),
       registerComponent: (_name, _component) => stubWarn('registerComponent'),
+      dom: {
+        getPane: () => null,
+        getViewport: () => null,
+        onDocument: (_type, _handler, _opts) => { stubWarn('dom.onDocument'); return () => {} },
+        onWindow: (_type, _handler, _opts) => { stubWarn('dom.onWindow'); return () => {} },
+      },
       menus: {
         register: (_items) => stubWarn('menus.register'),
         unregister: (_ids) => stubWarn('menus.unregister'),

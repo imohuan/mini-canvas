@@ -89,6 +89,13 @@ export interface HandleConfig {
   snapHeightRatio: number
 }
 
+export interface CanvasDomServiceAPI {
+  getPane(): HTMLElement | null
+  getViewport(): HTMLElement | null
+  onDocument<K extends keyof DocumentEventMap>(type: K, handler: (event: DocumentEventMap[K]) => void, options?: AddEventListenerOptions): () => void
+  onWindow<K extends keyof WindowEventMap>(type: K, handler: (event: WindowEventMap[K]) => void, options?: AddEventListenerOptions): () => void
+}
+
 export interface MenuRegistryAPI {
   register(items: MenuItemDefinition[]): void
   unregister(ids: string[]): void
@@ -144,6 +151,7 @@ export interface PluginContext {
   registerComponent: (name: string, component: Component) => void
   readonly canvasNodes: CanvasNodeRegistryAPI
   readonly menus: MenuRegistryAPI
+  readonly dom: CanvasDomServiceAPI
   registerHandleConfig: (config: Partial<HandleConfig>) => void
   on: (event: string, handler: (...args: any[]) => void) => () => void
   off: (event: string, handler: (...args: any[]) => void) => void

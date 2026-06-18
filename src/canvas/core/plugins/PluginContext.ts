@@ -16,6 +16,7 @@ import type {
 } from './types'
 import type { NodeRegistry } from '../registry/NodeRegistry'
 import type { MenuRegistry } from '../menu/MenuRegistry'
+import { CanvasDomService } from '../runtime/CanvasDomService'
 import type { HandleConfig, MenuItemDefinition } from './types'
 import { ShortcutManager } from './ShortcutManager'
 
@@ -282,6 +283,8 @@ export function createPluginContext(
         logger.error(`Failed to register component "${name}":`, err)
       }
     },
+
+    dom: createDomService(),
 
     menus: {
       register(items: MenuItemDefinition[]): void {
@@ -558,5 +561,15 @@ function createViewport(vf: VueFlowInstance, logger: Logger): ViewportAPI {
         return { x: 0, y: 0, zoom: 1 }
       }
     },
+  }
+}
+
+function createDomService() {
+  const service = new CanvasDomService()
+  return {
+    getPane: () => service.getPane(),
+    getViewport: () => service.getViewport(),
+    onDocument: (type: any, handler: any, opts?: any) => service.onDocument(type, handler, opts),
+    onWindow: (type: any, handler: any, opts?: any) => service.onWindow(type, handler, opts),
   }
 }
