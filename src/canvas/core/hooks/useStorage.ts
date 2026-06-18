@@ -1,4 +1,9 @@
 /**
+ * @deprecated 旧兼容层。新代码请用：
+ * - 组件：usePluginApi<StorageAPI>('storage')
+ * - 插件：context.getPluginAPI<StorageAPI>('storage')
+ */
+/**
  * useStorage — 存储状态管理 + 模块级单例
  *
  * 提供 reactive storageState（供 Pannel 展示）和存储操作方法。
