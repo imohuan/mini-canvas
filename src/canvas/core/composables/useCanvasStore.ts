@@ -3,9 +3,9 @@ import { useStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import type { NodeTypesObject } from '@vue-flow/core'
 import { ConnectionMode, SelectionMode } from '@vue-flow/core'
-import CustomNode from './components/CustomNode.vue'
-import TempTargetNode from './components/TempTargetNode.vue'
-import CustomEdge from './components/CustomEdge.vue'
+import CustomNode from '../components/CustomNode.vue'
+import TempTargetNode from '../components/TempTargetNode.vue'
+import CustomEdge from '../components/CustomEdge.vue'
 
 /**
  * 连接线类型：

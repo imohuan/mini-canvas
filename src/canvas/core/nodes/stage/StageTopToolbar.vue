@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Position } from '@vue-flow/core'
-import { useCanvasStore } from '../../useCanvasStore'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 

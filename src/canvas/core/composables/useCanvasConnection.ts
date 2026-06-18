@@ -4,7 +4,7 @@ import type { ConnectionLineProps } from '@vue-flow/core'
 import type { CanvasMenuItem, CanvasMenuState } from '../components/CanvasMenu.types'
 
 interface UseCanvasConnectionOptions {
-  canvas: ReturnType<typeof import('../useCanvasStore').useCanvasStore>
+  canvas: ReturnType<typeof import('../composables/useCanvasStore').useCanvasStore>
   vueFlowInstance: any
   getNodes: any
   getEdges: any

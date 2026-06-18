@@ -6,7 +6,7 @@
 import { nextTick, shallowRef } from 'vue'
 import { useVueFlow, Position } from '@vue-flow/core'
 import type { Node, Edge } from '@vue-flow/core'
-import { useCanvasStore } from '../useCanvasStore'
+import { useCanvasStore } from '../composables/useCanvasStore'
 import { markRaw } from 'vue'
 import BaseNode from '../components/Decoration/BaseNode.vue'
 import CustomEdge from '../components/CustomEdge.vue'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ConnectionMode } from '@vue-flow/core'
-import type { EdgeType } from '../../useCanvasStore' // eslint-disable-line
+import type { EdgeType } from '../../composables/useCanvasStore' // eslint-disable-line
 import type { ToggleDef, PluginDef } from '../../Pannel.vue'
 
 defineProps<{

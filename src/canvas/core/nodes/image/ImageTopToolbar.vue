@@ -4,7 +4,7 @@ defineOptions({ inheritAttrs: false })
 import type { NodeProps } from '@vue-flow/core'
 import { Position, useVueFlow } from '@vue-flow/core'
 import { ref, computed } from 'vue'
-import { useCanvasStore } from '../../useCanvasStore'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 import ImageCropper from './ImageCropper.vue'

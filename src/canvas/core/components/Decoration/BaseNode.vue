@@ -1,9 +1,9 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
-import { useCanvasStore } from '../../useCanvasStore'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 import { createCappedStyle } from '../../utils/viewportSpace'
 
 const props = defineProps<NodeProps & {

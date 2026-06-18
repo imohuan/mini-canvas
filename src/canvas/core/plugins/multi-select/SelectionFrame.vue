@@ -10,7 +10,7 @@
  * 注意：SelectionFrame 必须跟 VueFlow 的真实节点状态保持一致，否则节点已经蓝了，大框却不显示。
  */
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useCanvasStore } from '../../useCanvasStore'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 import type { Node } from '@vue-flow/core'
 import TopToolbar from './TopToolbar.vue'
 

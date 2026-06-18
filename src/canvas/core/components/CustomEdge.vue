@@ -2,7 +2,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { EdgeProps } from '@vue-flow/core'
-import { useCanvasStore } from '../useCanvasStore'
+import { useCanvasStore } from '../composables/useCanvasStore'
 
 type CustomEdgeExtraProps = {
   temporary?: boolean
