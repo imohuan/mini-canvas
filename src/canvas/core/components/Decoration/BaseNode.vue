@@ -289,7 +289,7 @@ const nodeExtra = computed(() => {
           </slot>
         </div>
 
-        <div class="custom-node-content-clip" :style="cardFrameStyle">
+        <div class="custom-node-content-clip pointer-events-none" :style="cardFrameStyle">
           <!-- 边框叠加层：z-index: 1，选中环 / idle 边框 / hover 阴影 -->
           <div class="custom-node-border-layer" :class="selected ? 'is-selected' : 'is-idle'" />
         </div>
