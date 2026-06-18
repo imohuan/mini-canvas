@@ -21,6 +21,7 @@ import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
 import type { ThemeAPI } from './plugins/theme/types'
 import { setStorageApi } from './hooks/useStorage'
+import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
 import { MenuRegistry, resolveMenuItems } from './menu'
@@ -55,85 +56,6 @@ function makeEdgeData() {
 const CANVAS_ID = 'main-canvas'
 const vueFlowInstance = useVueFlow(CANVAS_ID)
 const { zoomIn, zoomOut, fitView, getNodes, getEdges } = vueFlowInstance
-
-// ===== VueFlow 持久化（唯一数据源） =====
-const LS_KEY = 'canvas-data'
-let persistReady = false  // 抑制初始化期间的写回
-
-const defaultNodes: Node[] = [
-  { id: '1', type: 'custom', position: { x: 200, y: 260 }, data: { label: '输入图像', nodeType: 'image' }, sourcePosition: Position.Right },
-  { id: '2', type: 'custom', position: { x: 700, y: 260 }, data: { label: '生成图像', nodeType: 'image' }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: '3', type: 'custom', position: { x: 1200, y: 260 }, data: { label: '生成图像', nodeType: 'image' }, sourcePosition: Position.Right, targetPosition: Position.Left },
-]
-const defaultEdges: Edge[] = [
-  {
-    id: 'e1-2', type: 'custom', source: '1', target: '2', sourceHandle: 'source', targetHandle: 'target',
-    data: { edgeType: canvas.state.edgeType, edgeLineWidth: canvas.state.edgeLineWidth, edgeColor: canvas.state.edgeColor, edgeDashed: canvas.state.edgeDashed },
-  },
-]
-
-function initCanvasData() {
-  const saved = localStorage.getItem(LS_KEY)
-  if (saved) {
-    try {
-      const data = JSON.parse(saved)
-      vueFlowInstance.fromObject(data)
-      console.log('[Canvas] ✅ 从 localStorage 恢复画布数据，节点数:', data.nodes?.length, '边数:', data.edges?.length)
-    } catch (err) {
-      console.warn('[Canvas] localStorage 恢复失败，使用默认数据:', err)
-      vueFlowInstance.addNodes(defaultNodes)
-      vueFlowInstance.addEdges(defaultEdges)
-    }
-  } else {
-    vueFlowInstance.addNodes(defaultNodes)
-    vueFlowInstance.addEdges(defaultEdges)
-  }
-  // 初始化完成后解锁持久化，避免 fromObject 触发立即写回
-  nextTick(() => { persistReady = true })
-}
-
-function safeLocalStorageSet(key: string, value: string): boolean {
-  try {
-    localStorage.setItem(key, value)
-    return true
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-      console.error(`[Canvas] localStorage 配额超出 (key: ${key})，数据未保存`)
-    } else {
-      console.error('[Canvas] localStorage 写入失败:', err)
-    }
-    return false
-  }
-}
-
-// 防抖持久化（事件驱动，不对大数组做深度监听）
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-function persistCanvas() {
-  if (!persistReady) return
-  try {
-    const data = vueFlowInstance.toObject()
-    data.nodes = data.nodes.filter((n: any) => n.type !== 'tempTarget' && !n.data?.isTemp)
-    data.edges = data.edges.filter((e: any) => !e.id?.startsWith?.('temp-') && !e.data?.isTemp)
-    safeLocalStorageSet(LS_KEY, JSON.stringify(data))
-  } catch (err) {
-    console.error('[Canvas] 持久化序列化失败:', err)
-  }
-}
-
-function scheduleSave() {
-  if (!persistReady) return
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(persistCanvas, 500)
-}
-
-// 事件驱动持久化 — 不对 nodes/edges 大数组做深度监听
-function onPersistenceEvent() { scheduleSave() }
-
-function handleBeforeUnload() {
-  persistReady = true  // 卸载前强制允许保存
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  persistCanvas()      // 同步写入 localStorage（beforeunload 不允许异步）
-}
 
 /** 节点 ID 索引（O(1) 查找，消除 findNearestValidTarget/Source 中的 O(n) find） */
 const nodesById = computed(() => {
@@ -1181,6 +1103,12 @@ const nodeRegistry = new NodeRegistry()
 const menuRegistry = new MenuRegistry()
 const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, vueFlowInstance as any)
 
+const bootstrap = useCanvasBootstrap(
+  vueFlowInstance,
+  () => manager.getPluginAPI<StorageAPI>('storage'),
+  makeEdgeData,
+)
+
 /**
  * 已安装的插件名称（reactive ref — 确保 Panel 能感知变化）
  */
@@ -1395,17 +1323,10 @@ const canvasStorageApi = shallowRef<StorageAPI | null>(null)
 provide('canvasStorageApi', canvasStorageApi)
 
 onMounted(async () => {
-  // 持久化事件监听（事件驱动，不对大数组做深度监听）
-  manager.eventBus.on('nodesChange', onPersistenceEvent)
-  manager.eventBus.on('edgesChange', onPersistenceEvent)
-  manager.eventBus.on('nodeDragStop', onPersistenceEvent)
-  manager.eventBus.on('connect', onPersistenceEvent)
-  window.addEventListener('beforeunload', handleBeforeUnload)
 
   const pluginList = props.plugins || []
   if (pluginList.length === 0) {
     // 无插件时，直接初始化画布数据（持久化监听已注册）
-    initCanvasData()
     return
   }
 
@@ -1460,10 +1381,12 @@ onMounted(async () => {
     console.log(`[Canvas] ✅ ${installedPluginNames.value.length} 个插件已加载:`, installedPluginNames.value)
 
     // 同步 auto-layout 插件的默认配置到 Pannel
+    // 从 StoragePlugin 加载画布数据（或创建默认数据）
+    await bootstrap.loadInitialCanvas()
+
     syncLayoutState()
 
     // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
-    initCanvasData()
 
     // 监听存储插件状态变化
     manager.eventBus.on('storage:status', () => refreshStorageState())
@@ -1533,7 +1456,6 @@ onMounted(async () => {
 
 onUnmounted(async () => {
   cancelBatchConnect()
-  window.removeEventListener('beforeunload', handleBeforeUnload)
 
   // 持久化当前快捷键映射到 Store
   const mgr = ShortcutManager.getInstance()
