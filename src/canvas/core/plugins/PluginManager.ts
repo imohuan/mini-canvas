@@ -528,6 +528,7 @@ export class PluginManager {
         zoomTo: (_level) => stubWarn('viewport.zoomTo'),
         fitView: () => stubWarn('viewport.fitView'),
         setCenter: (_x, _y, _zoom) => stubWarn('viewport.setCenter'),
+        setViewport: (_viewport) => stubWarn('viewport.setViewport'),
         screenToFlowCoordinate: (position) => {
           stubWarn('viewport.screenToFlowCoordinate')
           return position

@@ -144,6 +144,8 @@ export interface ViewportAPI {
   fitView(): void
   /** 设置视口中心点，可同时指定缩放级别 */
   setCenter(x: number, y: number, zoom?: number): void
+  /** 直接设置视口位置和缩放 */
+  setViewport(viewport: ViewportState): void
   /** 将屏幕坐标转换为画布坐标 */
   screenToFlowCoordinate(position: Point): Point
   /** 获取当前视口状态 */

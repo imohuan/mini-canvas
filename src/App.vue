@@ -11,6 +11,7 @@ import { ShortcutManagerPlugin } from './canvas/core/plugins/shortcut-manager/in
 import { GroupPlugin } from './canvas/core/plugins/group/index'
 import { FileDropPlugin } from './canvas/core/plugins/file-drop/index'
 import { ThemePlugin } from './canvas/core/plugins/theme/index'
+import { AutoLayoutPlugin } from './canvas/core/plugins/auto-layout/index'
 import type { CanvasPlugin } from './canvas/core/plugins/types'
 
 interface PluginSlot {
@@ -91,6 +92,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '主题配色',
     description: '切换节点主题色系：灰蓝 / 科技蓝 / 翠绿 / 暖棕，支持自定义配色',
     usage: '在右侧面板「主题」区域切换预设，或自定义 accent 色自动计算全量 CSS 变量',
+  },
+  {
+    plugin: markRaw(AutoLayoutPlugin) as CanvasPlugin,
+    enabled: true,
+    label: '智能自动布局',
+    description: '嵌套分簇布局：组内排列 → 连通分量排列 → 全局块级排列 + Group bounds 自动重算',
+    usage: 'Pannel 控件触发自动布局 | F 键聚焦选中节点 | Ctrl+L 自动布局',
   },
 ])
 const activePlugins = computed(() => pluginSlots.value.filter(s => s.enabled).map(s => s.plugin))

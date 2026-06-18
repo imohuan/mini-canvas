@@ -54,6 +54,18 @@ const props = defineProps<{
   themeAccent?: string
   /** 当前主题 surface 色 */
   themeSurface?: string
+  /** 自动布局方向 */
+  layoutDirection?: string
+  /** 簇内间距 X */
+  layoutIntraSpacingX?: number
+  /** 簇内间距 Y */
+  layoutIntraSpacingY?: number
+  /** 簇间间距 X */
+  layoutInterSpacingX?: number
+  /** 簇间间距 Y */
+  layoutInterSpacingY?: number
+  /** F 聚焦时选中内容高度占视图高度的比例 */
+  layoutFocusHeightRatio?: number
   /** 存储插件状态 */
   storageStatus?: StorageStatus & { projects: ProjectMeta[] }
 }>()
@@ -95,6 +107,15 @@ const emit = defineEmits<{
   (e: 'storageCreateProject', name: string): void
   (e: 'storageDeleteProject', id: string): void
   (e: 'storageSwitchProject', id: string): void
+  /** 自动布局 */
+  (e: 'autoLayout'): void
+  (e: 'focusSelected'): void
+  (e: 'update:layoutDirection', v: string): void
+  (e: 'update:layoutIntraSpacingX', v: number): void
+  (e: 'update:layoutIntraSpacingY', v: number): void
+  (e: 'update:layoutInterSpacingX', v: number): void
+  (e: 'update:layoutInterSpacingY', v: number): void
+  (e: 'update:layoutFocusHeightRatio', v: number): void
 }>()
 
 // ===========================
@@ -109,13 +130,14 @@ function toggleCollapsed() {
 // ===========================
 // Tab 状态
 // ===========================
-type TabKey = 'general' | 'theme' | 'storage'
+type TabKey = 'general' | 'theme' | 'storage' | 'layout'
 const activeTab = ref<TabKey>('general')
 
 const tabs: { key: TabKey; label: string }[] = [
   { key: 'general', label: '通用' },
   { key: 'theme', label: '主题' },
   { key: 'storage', label: '存储' },
+  { key: 'layout', label: '布局' },
 ]
 
 // ===========================
@@ -627,6 +649,127 @@ function statusBadgeClass(mode: string) {
                 @click="showNewProjectInput = true">
                 + 新建项目
               </button>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <!-- ======================== Tab 4: 布局 ======================== -->
+      <template v-if="activeTab === 'layout'">
+        <!-- 布局操作 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">操作</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div :class="rowBase">
+              <button :class="[btnBase, 'flex-1 text-center font-semibold', btnActive]"
+                @click="emit('autoLayout')">
+                ⚡ 自动布局 (Ctrl+L)
+              </button>
+            </div>
+            <div :class="rowBase">
+              <button :class="[btnBase, 'flex-1 text-center']"
+                @click="emit('focusSelected')">
+                🔍 聚焦选中 (F)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 布局方向 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">方向</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div class="flex gap-0.5">
+              <button v-for="d in ['TB','LR','BT','RL']" :key="d"
+                :class="[btnBase, 'flex-1 text-center', layoutDirection === d && btnActive]"
+                @click="emit('update:layoutDirection', d)">
+                {{ d === 'TB' ? '↓' : d === 'LR' ? '→' : d === 'BT' ? '↑' : '←' }} {{ d }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 簇内间距 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">簇内间距</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div :class="rowBase">
+              <span :class="labelClass">水平</span>
+              <input type="range" min="20" max="200" :value="layoutIntraSpacingX"
+                class="flex-1 h-1 accent-[#000000] cursor-pointer"
+                @input="emit('update:layoutIntraSpacingX', Number(($event.target as HTMLInputElement).value))" />
+              <span class="text-[11px] text-[#78767b] w-10 text-right">{{ layoutIntraSpacingX }}px</span>
+            </div>
+            <div :class="rowBase">
+              <span :class="labelClass">垂直</span>
+              <input type="range" min="20" max="200" :value="layoutIntraSpacingY"
+                class="flex-1 h-1 accent-[#000000] cursor-pointer"
+                @input="emit('update:layoutIntraSpacingY', Number(($event.target as HTMLInputElement).value))" />
+              <span class="text-[11px] text-[#78767b] w-10 text-right">{{ layoutIntraSpacingY }}px</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 簇间间距 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">簇间间距</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div :class="rowBase">
+              <span :class="labelClass">水平</span>
+              <input type="range" min="40" max="300" :value="layoutInterSpacingX"
+                class="flex-1 h-1 accent-[#000000] cursor-pointer"
+                @input="emit('update:layoutInterSpacingX', Number(($event.target as HTMLInputElement).value))" />
+              <span class="text-[11px] text-[#78767b] w-10 text-right">{{ layoutInterSpacingX }}px</span>
+            </div>
+            <div :class="rowBase">
+              <span :class="labelClass">垂直</span>
+              <input type="range" min="40" max="300" :value="layoutInterSpacingY"
+                class="flex-1 h-1 accent-[#000000] cursor-pointer"
+                @input="emit('update:layoutInterSpacingY', Number(($event.target as HTMLInputElement).value))" />
+              <span class="text-[11px] text-[#78767b] w-10 text-right">{{ layoutInterSpacingY }}px</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 聚焦显示比例 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">聚焦比例</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div :class="rowBase">
+              <span :class="labelClass">高度</span>
+              <input type="range" min="0.2" max="0.9" step="0.05" :value="layoutFocusHeightRatio ?? 0.5"
+                class="flex-1 h-1 accent-[#000000] cursor-pointer"
+                @input="emit('update:layoutFocusHeightRatio', Number(($event.target as HTMLInputElement).value))" />
+              <span class="text-[11px] text-[#78767b] w-10 text-right">{{ Math.round((layoutFocusHeightRatio ?? 0.5) * 100) }}%</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 快捷键提示 -->
+        <section :class="sectionCard">
+          <div :class="sectionHeader">
+            <span :class="sectionTitle">快捷键</span>
+          </div>
+          <div :class="sectionBodySpace">
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2 text-[11px]">
+                <kbd class="px-1.5 py-0.5 bg-[#e8e8e9] rounded text-[10px] font-mono text-[#47464a]">Ctrl+L</kbd>
+                <span class="text-[#78767b]">全部节点自动布局</span>
+              </div>
+              <div class="flex items-center gap-2 text-[11px]">
+                <kbd class="px-1.5 py-0.5 bg-[#e8e8e9] rounded text-[10px] font-mono text-[#47464a]">F</kbd>
+                <span class="text-[#78767b]">聚焦选中节点居中</span>
+              </div>
             </div>
           </div>
         </section>

@@ -16,10 +16,19 @@ const DEFAULT_HEIGHT = 100
 // Types
 // ============================================================================
 
+export interface GroupBounds {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface GroupAPI {
   createGroup(nodeIds: string[]): string | null
   ungroup(groupId: string): void
   getGroupNodeIds(): string[]
+  /** 根据组内子节点的绝对坐标重新计算 GroupNode 的 bounds 并更新 */
+  recalculateBounds(groupId: string): GroupBounds | null
 }
 
 // ============================================================================
@@ -357,6 +366,64 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
     }, '解散分组')
 
     // ====================================================================
+    // recalculateBounds: 根据组内子节点重新计算 GroupNode bounds
+    // 供 AutoLayoutPlugin 调用
+    // ====================================================================
+
+    function recalculateBounds(groupId: string): GroupBounds | null {
+      const allNodes = context.actions.getNodes()
+      const groupNode = allNodes.find(n => n.id === groupId && n.type === 'group')
+      if (!groupNode) return null
+
+      const childNodes = allNodes.filter(n => n.parentNode === groupId)
+
+      if (childNodes.length === 0) {
+        // 空组保持当前尺寸
+        const gDim = getDimensions(groupNode)
+        return {
+          x: groupNode.position.x,
+          y: groupNode.position.y,
+          w: gDim.w,
+          h: gDim.h,
+        }
+      }
+
+      // 用 computedPosition 获取子节点的绝对坐标
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      for (const n of childNodes) {
+        const pos = getComputedPos(n)
+        const dim = getDimensions(n)
+        minX = Math.min(minX, pos.x)
+        minY = Math.min(minY, pos.y)
+        maxX = Math.max(maxX, pos.x + dim.w)
+        maxY = Math.max(maxY, pos.y + dim.h)
+      }
+
+      const newW = Math.max(maxX - minX + GROUP_PADDING * 2, 200)
+      const newH = Math.max(maxY - minY + GROUP_PADDING * 2 + GROUP_PADDING_TOP, 150)
+      const newX = minX - GROUP_PADDING
+      const newY = minY - GROUP_PADDING - GROUP_PADDING_TOP
+
+      // 更新 GroupNode 的位置和尺寸
+      context.actions.updateNode(groupId, {
+        position: { x: newX, y: newY },
+        style: { width: `${newW}px`, height: `${newH}px` },
+      })
+
+      // 更新子节点的相对位置
+      for (const n of childNodes) {
+        const pos = getComputedPos(n)
+        context.actions.updateNode(n.id, {
+          position: { x: pos.x - newX, y: pos.y - newY },
+          parentNode: groupId,
+        })
+      }
+
+      logger.debug(`Group ${groupId} bounds recalculated: (${newX},${newY}) ${newW}x${newH}`)
+      return { x: newX, y: newY, w: newW, h: newH }
+    }
+
+    // ====================================================================
     // API
     // ====================================================================
 
@@ -364,7 +431,7 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
       return context.actions.getNodes().filter(n => n.type === 'group').map(n => n.id)
     }
 
-    const api: GroupAPI = { createGroup, ungroup, getGroupNodeIds }
+    const api: GroupAPI = { createGroup, ungroup, getGroupNodeIds, recalculateBounds }
 
     logger.info('GroupPlugin v0.1.0 ready (Ctrl+G group, Ctrl+Shift+G ungroup, auto-drag in/out)')
 

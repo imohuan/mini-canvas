@@ -36,6 +36,7 @@ interface VueFlowInstance {
   zoomTo(level: number, options?: { duration?: number }): void
   fitView(options?: { padding?: number; duration?: number }): void
   setCenter(x: number, y: number, options?: { zoom?: number; duration?: number }): void
+  setViewport(transform: { x: number; y: number; zoom: number }, options?: { duration?: number }): void
   project(position: { x: number; y: number }): { x: number; y: number }
   viewport: { value: { x: number; y: number; zoom: number } }
 }
@@ -637,6 +638,14 @@ function createViewport(vf: VueFlowInstance, logger: Logger): ViewportAPI {
         vf.setCenter(x, y, zoom !== undefined ? { zoom } : undefined)
       } catch (err) {
         logger.error(`viewport.setCenter(${x}, ${y}, ${zoom}) failed:`, err)
+      }
+    },
+
+    setViewport(viewport: ViewportState): void {
+      try {
+        vf.setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom })
+      } catch (err) {
+        logger.error(`viewport.setViewport(${viewport.x}, ${viewport.y}, ${viewport.zoom}) failed:`, err)
       }
     },
 

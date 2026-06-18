@@ -909,6 +909,8 @@ function onToggleEdgeAnimated() {
 function onNodeDoubleClick({ event, node }: NodeMouseEvent) {
   const e = event as MouseEvent
   console.log('[双击-节点]', { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
+  manager.eventBus.emit('nodeDoubleClick', { nodeId: node.id, nodeType: node.type })
+  window.dispatchEvent(new CustomEvent('canvas:nodeDoubleClick', { detail: { nodeId: node.id } }))
 }
 function onNodeContextMenu({ event, node }: NodeMouseEvent) {
   event.preventDefault()
@@ -1285,6 +1287,101 @@ function onApplyCustomTheme(accent: string) {
   if (api) { api.applyCustom(accent) }
 }
 
+// ===========================
+// 布局状态（从 auto-layout 插件 API 获取，供 Pannel 展示）
+// ===========================
+interface LayoutState {
+  direction: string
+  intraSpacingX: number
+  intraSpacingY: number
+  interSpacingX: number
+  interSpacingY: number
+  focusHeightRatio: number
+}
+
+const layoutState = ref<LayoutState>({
+  direction: 'LR',
+  intraSpacingX: 60,
+  intraSpacingY: 80,
+  interSpacingX: 120,
+  interSpacingY: 120,
+  focusHeightRatio: 0.5,
+})
+
+function syncLayoutState() {
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (!api) return
+  const cfg = api.getConfig()
+  if (cfg) {
+    layoutState.value = {
+      direction: cfg.direction || 'LR',
+      intraSpacingX: cfg.intraSpacing?.x ?? 60,
+      intraSpacingY: cfg.intraSpacing?.y ?? 80,
+      interSpacingX: cfg.interSpacing?.x ?? 120,
+      interSpacingY: cfg.interSpacing?.y ?? 120,
+      focusHeightRatio: cfg.focusHeightRatio ?? 0.5,
+    }
+  }
+}
+
+function pushLayoutConfig() {
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (!api) return null
+  api.setConfig({
+    direction: layoutState.value.direction,
+    intraSpacing: { x: layoutState.value.intraSpacingX, y: layoutState.value.intraSpacingY },
+    interSpacing: { x: layoutState.value.interSpacingX, y: layoutState.value.interSpacingY },
+    focusHeightRatio: layoutState.value.focusHeightRatio,
+    minZoom: canvas.state.minZoom,
+    maxZoom: canvas.state.maxZoom,
+    debug: true,
+  })
+  return api
+}
+
+function onAutoLayout() {
+  const api = pushLayoutConfig()
+  if (!api) return
+  api.run()
+}
+
+function onFocusSelected() {
+  const api = pushLayoutConfig()
+  if (api) { api.focusSelected() }
+}
+
+function onUpdateLayoutDirection(v: string) {
+  layoutState.value.direction = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ direction: v as any }) }
+}
+
+function onUpdateLayoutIntraSpacingX(v: number) {
+  layoutState.value.intraSpacingX = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ intraSpacing: { x: v } }) }
+}
+function onUpdateLayoutIntraSpacingY(v: number) {
+  layoutState.value.intraSpacingY = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ intraSpacing: { y: v } }) }
+}
+function onUpdateLayoutInterSpacingX(v: number) {
+  layoutState.value.interSpacingX = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ interSpacing: { x: v } }) }
+}
+function onUpdateLayoutInterSpacingY(v: number) {
+  layoutState.value.interSpacingY = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ interSpacing: { y: v } }) }
+}
+function onUpdateLayoutFocusHeightRatio(v: number) {
+  layoutState.value.focusHeightRatio = v
+  const api = manager.getPluginAPI<any>('auto-layout')
+  if (api) { api.setConfig({ focusHeightRatio: v }) }
+}
+
 // provide ref — setup 阶段提供，onMounted 后赋值
 const canvasStorageApi = shallowRef<StorageAPI | null>(null)
 provide('canvasStorageApi', canvasStorageApi)
@@ -1352,6 +1449,9 @@ onMounted(async () => {
     installedPluginNames.value = pluginList.map(p => p.name)
     console.log(`[Canvas] ✅ ${installedPluginNames.value.length} 个插件已加载:`, installedPluginNames.value)
 
+    // 同步 auto-layout 插件的默认配置到 Pannel
+    syncLayoutState()
+
     // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
     initCanvasData()
 
@@ -1401,6 +1501,14 @@ onMounted(async () => {
 
     // 同步 VueFlow keyboard refs
     syncVueFlowKeymap()
+
+    // 同步 zoom 限制给 auto-layout，F 快捷键也要遵守通用设置里的缩放范围
+    pushLayoutConfig()
+    watch(
+      () => [canvas.state.minZoom, canvas.state.maxZoom],
+      () => pushLayoutConfig(),
+      { deep: false }
+    )
 
     // 监听快捷键重映射 → 同步到 VueFlow
     watch(
@@ -1487,6 +1595,12 @@ onUnmounted(async () => {
           :theme-preset="themeState.activePreset" :theme-accent="themeState.accent"
           :theme-surface="themeState.surface"
           :storage-status="storageState"
+          :layout-direction="layoutState.direction"
+          :layout-intra-spacing-x="layoutState.intraSpacingX"
+          :layout-intra-spacing-y="layoutState.intraSpacingY"
+          :layout-inter-spacing-x="layoutState.interSpacingX"
+          :layout-inter-spacing-y="layoutState.interSpacingY"
+          :layout-focus-height-ratio="layoutState.focusHeightRatio"
           @apply-theme-preset="onApplyThemePreset"
           @apply-custom-theme="onApplyCustomTheme"
           @storage-connect="onStorageConnect"
@@ -1494,6 +1608,14 @@ onUnmounted(async () => {
           @storage-create-project="onStorageCreateProject"
           @storage-delete-project="onStorageDeleteProject"
           @storage-switch-project="onStorageSwitchProject"
+          @auto-layout="onAutoLayout"
+          @focus-selected="onFocusSelected"
+          @update:layout-direction="onUpdateLayoutDirection"
+          @update:layout-intra-spacing-x="onUpdateLayoutIntraSpacingX"
+          @update:layout-intra-spacing-y="onUpdateLayoutIntraSpacingY"
+          @update:layout-inter-spacing-x="onUpdateLayoutInterSpacingX"
+          @update:layout-inter-spacing-y="onUpdateLayoutInterSpacingY"
+          @update:layout-focus-height-ratio="onUpdateLayoutFocusHeightRatio"
           @toggle-edge-dashed="onToggleEdgeDashed" @toggle-edge-animated="onToggleEdgeAnimated"
           @toggle-mode="toggleMode" @zoom-in="zoomIn" @zoom-out="zoomOut" @fit-view="fitView" />
       </Panel>
@@ -1514,5 +1636,6 @@ onUnmounted(async () => {
   width: 100vw;
   height: 100vh;
   position: relative;
+  user-select: none;
 }
 </style>
