@@ -23,6 +23,7 @@ import type { ThemeAPI } from './plugins/theme/types'
 import { setStorageApi } from './hooks/useStorage'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
+import { MenuRegistry } from './menu'
 
 // ========================
 // 插件系统 Props
@@ -1164,7 +1165,8 @@ function syncVueFlowKeymap() {
 // ========================
 const manager = new PluginManager()
 const nodeRegistry = new NodeRegistry()
-const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, vueFlowInstance as any)
+const menuRegistry = new MenuRegistry()
+const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, vueFlowInstance as any)
 
 /**
  * 已安装的插件名称（reactive ref — 确保 Panel 能感知变化）
