@@ -1,6 +1,8 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type { CanvasNodeDefinition, CanvasNodeMenuItem } from '../registry/NodeRegistry'
+import type { MenuItemDefinition } from '../menu/MenuRegistry'
+export type { MenuItemDefinition }
 export type { CanvasNodeDefinition, CanvasNodeMenuItem }
 
 /**
@@ -76,6 +78,23 @@ export interface CanvasActions {
   removeSelectedElements(): void
 }
 
+export interface HandleConfig {
+  radius: number
+  restOffset: number
+  cursorGap: number
+  buttonSize: number
+  overlap: number
+  snapOuterRatio: number
+  snapInnerRatio: number
+  snapHeightRatio: number
+}
+
+export interface MenuRegistryAPI {
+  register(items: MenuItemDefinition[]): void
+  unregister(ids: string[]): void
+  unregisterAll(): void
+}
+
 export interface CanvasNodeRegistryAPI {
   register(definition: CanvasNodeDefinition): void
   unregister(type: string): void
@@ -124,6 +143,8 @@ export interface PluginContext {
   registerEdgeType: (name: string, component: Component) => void
   registerComponent: (name: string, component: Component) => void
   readonly canvasNodes: CanvasNodeRegistryAPI
+  readonly menus: MenuRegistryAPI
+  registerHandleConfig: (config: Partial<HandleConfig>) => void
   on: (event: string, handler: (...args: any[]) => void) => () => void
   off: (event: string, handler: (...args: any[]) => void) => void
   emit: (event: string, payload: unknown) => void

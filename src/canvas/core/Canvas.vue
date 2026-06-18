@@ -1439,6 +1439,7 @@ onMounted(async () => {
         pluginManager: manager,
         eventBus: manager.eventBus,
         nodeRegistry,
+        menuRegistry,
       }),
     })
 

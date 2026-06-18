@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import { watch } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type {
@@ -15,6 +15,8 @@ import type {
   ViewportState,
 } from './types'
 import type { NodeRegistry } from '../registry/NodeRegistry'
+import type { MenuRegistry } from '../menu/MenuRegistry'
+import type { HandleConfig, MenuItemDefinition } from './types'
 import { ShortcutManager } from './ShortcutManager'
 
 // ============================================================================
@@ -109,6 +111,7 @@ interface CreatePluginContextOptions {
   }
   eventBus?: EventBus
   nodeRegistry?: NodeRegistry
+  menuRegistry?: MenuRegistry
   pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
 }
 
@@ -126,6 +129,7 @@ export function createPluginContext(
     canvasStore,
     eventBus = new EventBus(),
     nodeRegistry,
+    menuRegistry,
     pluginManager,
   } = options
 
@@ -277,6 +281,30 @@ export function createPluginContext(
       } catch (err) {
         logger.error(`Failed to register component "${name}":`, err)
       }
+    },
+
+    menus: {
+      register(items: MenuItemDefinition[]): void {
+        menuRegistry?.register(`plugin:${pluginName}`, items)
+      },
+      unregister(ids: string[]): void {
+        menuRegistry?.unregister(`plugin:${pluginName}`, ids)
+      },
+      unregisterAll(): void {
+        menuRegistry?.unregisterSource(`plugin:${pluginName}`)
+      },
+    },
+
+    registerHandleConfig(config: Partial<HandleConfig>): void {
+      const state = effectiveStore.state as Record<string, unknown>
+      if (typeof config.radius === 'number') state.handleRadius = config.radius
+      if (typeof config.restOffset === 'number') state.handleRestOffset = config.restOffset
+      if (typeof config.cursorGap === 'number') state.handleCursorGap = config.cursorGap
+      if (typeof config.buttonSize === 'number') state.handleButtonSize = config.buttonSize
+      if (typeof config.overlap === 'number') state.handleOverlap = config.overlap
+      if (typeof config.snapOuterRatio === 'number') state.connectionSnapOuterRatio = config.snapOuterRatio
+      if (typeof config.snapInnerRatio === 'number') state.connectionSnapInnerRatio = config.snapInnerRatio
+      if (typeof config.snapHeightRatio === 'number') state.connectionSnapHeightRatio = config.snapHeightRatio
     },
 
     canvasNodes: {

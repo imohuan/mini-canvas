@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
+import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
 import { PluginLifecycle } from './types'
 import { EventBus } from './PluginContext'
 
@@ -542,6 +542,12 @@ export class PluginManager {
       registerNodeType: (_name, _component) => stubWarn('registerNodeType'),
       registerEdgeType: (_name, _component) => stubWarn('registerEdgeType'),
       registerComponent: (_name, _component) => stubWarn('registerComponent'),
+      menus: {
+        register: (_items) => stubWarn('menus.register'),
+        unregister: (_ids) => stubWarn('menus.unregister'),
+        unregisterAll: () => stubWarn('menus.unregisterAll'),
+      },
+      registerHandleConfig: (_config) => stubWarn('registerHandleConfig'),
       canvasNodes: {
         register: (_definition) => stubWarn('canvasNodes.register'),
         unregister: (_type) => stubWarn('canvasNodes.unregister'),
