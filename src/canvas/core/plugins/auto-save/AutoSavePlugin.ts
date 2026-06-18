@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext } from '../types'
+import type { CanvasPlugin, PluginContext } from '../types'
 
 export interface AutoSaveOptions {
   interval?: number
@@ -56,6 +56,19 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
       }
     }
 
+    function flushBeforePageHide() {
+      if (saveTimer) {
+        clearTimeout(saveTimer)
+        saveTimer = null
+      }
+      if (!dirty) return
+      void performSave()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'hidden') flushBeforePageHide()
+    }
+
     function handleBeforeUnload() {
       if (saveTimer) {
         clearTimeout(saveTimer)
@@ -79,6 +92,7 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
     })
 
     window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     const externalListeners = new Map<string, Set<(...args: any[]) => void>>()
 
@@ -103,6 +117,7 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
       uninstall() {
         if (saveTimer) clearTimeout(saveTimer)
         window.removeEventListener('beforeunload', handleBeforeUnload)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
         offNodesChange()
         offEdgesChange()
         offNodeDragStop()
