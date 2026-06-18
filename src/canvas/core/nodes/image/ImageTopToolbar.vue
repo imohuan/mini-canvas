@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
 import type { NodeProps } from '@vue-flow/core'
@@ -8,7 +8,8 @@ import { useCanvasStore } from '../../composables/useCanvasStore'
 import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 import ImageCropper from './ImageCropper.vue'
-import { getAssetManager } from '../../composables/useStorage'
+import { usePluginApi } from '../../runtime'
+import type { StorageAPI } from '../../plugins/storage/StoragePlugin'
 
 const props = defineProps<NodeProps>()
 const canvas = useCanvasStore()
@@ -60,7 +61,7 @@ async function uploadImage(event: Event) {
   const node = getNodes.value.find(n => n.id === props.id)
 
   // 通过 storage 单例持久化
-  const assetManager = getAssetManager()
+  const assetManager = usePluginApi<StorageAPI>('storage')?.assets
   let assetId: string | undefined
   if (assetManager) {
     try {
@@ -133,7 +134,7 @@ function confirmCrop() {
     ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height)
     canvas.toBlob(async (blob) => {
       if (!blob) return
-      const am = getAssetManager()
+      const am = usePluginApi<StorageAPI>('storage')?.assets
 
       let newAssetId: string | undefined
       if (am) {

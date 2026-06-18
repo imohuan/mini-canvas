@@ -1,7 +1,7 @@
 ﻿import type { CanvasPlugin, PluginContext, Point } from '../types'
 import type { Node } from '@vue-flow/core'
 import { Position } from '@vue-flow/core'
-import { getAssetManager } from '../../composables/useStorage'
+import type { StorageAPI } from '../storage/StoragePlugin'
 
 // ============================================================================
 // Types
@@ -210,7 +210,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             : NODE_SIZES.image
 
           // 通过 AssetManager 持久化
-          const am = getAssetManager()
+          const am = context.getPluginAPI<StorageAPI>('storage')?.assets
           let assetId: string | undefined
           if (am) {
             try {
@@ -239,7 +239,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
           const dims = await getVideoDims(file)
 
           // 通过 AssetManager 持久化
-          const am = getAssetManager()
+          const am = context.getPluginAPI<StorageAPI>('storage')?.assets
           let assetId: string | undefined
           if (am) {
             try {
@@ -355,7 +355,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
               })()
             : NODE_SIZES.image
 
-          const am = getAssetManager()
+          const am = context.getPluginAPI<StorageAPI>('storage')?.assets
           let assetId: string | undefined
           if (am) {
             try {
@@ -386,7 +386,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
           const url = URL.createObjectURL(blob)
           const dims = await getVideoDims(blob)
 
-          const am = getAssetManager()
+          const am = context.getPluginAPI<StorageAPI>('storage')?.assets
           let assetId: string | undefined
           if (am) {
             try {

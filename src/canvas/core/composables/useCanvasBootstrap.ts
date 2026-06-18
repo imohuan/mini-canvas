@@ -17,9 +17,9 @@ export function createDefaultCanvasData(edgeData: Record<string, unknown>): { no
   return { nodes, edges }
 }
 
-export function useCanvasBootstrap(vueFlowInstance: any, getStorageApi: () => StorageAPI | null, makeEdgeData: () => Record<string, unknown>) {
+export function useCanvasBootstrap(vueFlowInstance: any, getStorageApiFn: () => StorageAPI | null, makeEdgeData: () => Record<string, unknown>) {
   async function loadInitialCanvas() {
-    const storage = getStorageApi()
+    const storage = getStorageApiFn()
     const currentProjectId = storage?.currentProjectId
 
     if (storage && currentProjectId) {

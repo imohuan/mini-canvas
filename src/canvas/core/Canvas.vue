@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -19,7 +19,6 @@ import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
 import type { ThemeAPI } from './plugins/theme/types'
-import { setStorageApi } from './composables/useStorage'
 import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
@@ -290,7 +289,6 @@ function toFlowPosition(clientX: number, clientY: number) {
   }
 }
 
-}
 
 // NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
 
@@ -1399,7 +1397,6 @@ onMounted(async () => {
     const storageApi = manager.getPluginAPI<any>('storage')
     if (storageApi) {
       canvasStorageApi.value = storageApi as any
-      setStorageApi(storageApi)
     }
 
     // 注册 VueFlow 内置键位到 ShortcutManager（系统管理，不执行 handler）
