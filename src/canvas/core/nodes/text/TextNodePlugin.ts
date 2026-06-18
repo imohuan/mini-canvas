@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { TextNode, TextTopToolbar, TextBottomToolbar } from '../../components/nodes/text/index'
+import { TextNode, TextTopToolbar, TextBottomToolbar } from './index'
 
 export const TextNodePlugin: CanvasPlugin = {
   name: 'node:text',

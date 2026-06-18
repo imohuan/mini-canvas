@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { VideoNode, VideoTopToolbar, VideoBottomToolbar } from '../../components/nodes/Video/index'
+import { VideoNode, VideoTopToolbar, VideoBottomToolbar } from './index'
 
 export const VideoNodePlugin: CanvasPlugin = {
   name: 'node:video',

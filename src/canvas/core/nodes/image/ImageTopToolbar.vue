@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
 import type { NodeProps } from '@vue-flow/core'
@@ -8,7 +8,7 @@ import { useCanvasStore } from '../../../useCanvasStore'
 import NodeToolbar from '../../Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../Decoration/ToolbarButton.vue'
 import ImageCropper from './ImageCropper.vue'
-import { getAssetManager } from '../../../hooks/useStorage'
+import { getAssetManager } from '../../../composables/useStorage'
 
 const props = defineProps<NodeProps>()
 const canvas = useCanvasStore()

@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { ImageNode, ImageTopToolbar, ImageBottomToolbar } from '../../components/nodes/image/index'
+import { ImageNode, ImageTopToolbar, ImageBottomToolbar } from './index'
 
 export const ImageNodePlugin: CanvasPlugin = {
   name: 'node:image',

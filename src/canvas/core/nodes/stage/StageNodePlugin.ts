@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { StageNode, StageTopToolbar, StageBottomToolbar } from '../../components/nodes/stage/index'
+import { StageNode, StageTopToolbar, StageBottomToolbar } from './index'
 
 export const StageNodePlugin: CanvasPlugin = {
   name: 'node:stage',

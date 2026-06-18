@@ -1,7 +1,7 @@
-import type { CanvasPlugin, PluginContext, Point } from '../types'
+﻿import type { CanvasPlugin, PluginContext, Point } from '../types'
 import type { Node } from '@vue-flow/core'
 import { Position } from '@vue-flow/core'
-import { getAssetManager } from '../../hooks/useStorage'
+import { getAssetManager } from '../../composables/useStorage'
 
 // ============================================================================
 // Types

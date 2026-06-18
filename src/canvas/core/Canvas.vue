@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -20,7 +20,7 @@ import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
 import type { ThemeAPI } from './plugins/theme/types'
-import { setStorageApi } from './hooks/useStorage'
+import { setStorageApi } from './composables/useStorage'
 import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
