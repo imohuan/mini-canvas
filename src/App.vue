@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, markRaw } from 'vue'
 import Canvas from './canvas/core/Canvas.vue'
+import { TextNodePlugin } from './canvas/core/nodes/text/TextNodePlugin'
+import { ImageNodePlugin } from './canvas/core/nodes/image/ImageNodePlugin'
+import { VideoNodePlugin } from './canvas/core/nodes/Video/VideoNodePlugin'
+import { StageNodePlugin } from './canvas/core/nodes/stage/StageNodePlugin'
 import { AlignGuidePlugin } from './canvas/core/plugins/align-guide/index'
 import { AutoSavePlugin } from './canvas/core/plugins/auto-save/index'
 import { ClipboardPlugin } from './canvas/core/plugins/clipboard/index'
@@ -23,6 +27,34 @@ interface PluginSlot {
 }
 
 const pluginSlots = ref<PluginSlot[]>([
+  {
+    plugin: markRaw(TextNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '文本节点',
+    description: '注册文本节点到 NodeRegistry',
+    usage: '内置节点类型，自动注册',
+  },
+  {
+    plugin: markRaw(ImageNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '图片节点',
+    description: '注册图片节点到 NodeRegistry',
+    usage: '内置节点类型，自动注册',
+  },
+  {
+    plugin: markRaw(VideoNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '视频节点',
+    description: '注册视频节点到 NodeRegistry',
+    usage: '内置节点类型，自动注册',
+  },
+  {
+    plugin: markRaw(StageNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '导演台节点',
+    description: '注册导演台节点到 NodeRegistry',
+    usage: '内置节点类型，自动注册',
+  },
   {
     plugin: markRaw(AlignGuidePlugin) as CanvasPlugin,
     enabled: true,
