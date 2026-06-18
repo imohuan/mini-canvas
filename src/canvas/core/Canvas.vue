@@ -6,7 +6,7 @@ import {
   VueFlow, Panel, useVueFlow,
   ConnectionMode, Position,
 } from '@vue-flow/core'
-import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
+import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
 import Pannel from './Pannel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
@@ -23,7 +23,7 @@ import type { ThemeAPI } from './plugins/theme/types'
 import { setStorageApi } from './hooks/useStorage'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
-import { MenuRegistry } from './menu'
+import { MenuRegistry, resolveMenuItems } from './menu'
 
 // ========================
 // 插件系统 Props
@@ -181,6 +181,7 @@ const menuState = reactive<CanvasMenuState>({
 
 type MenuContext = {
   nodeId?: string
+  edgeId?: string
   flowPosition?: { x: number; y: number }
   pendingConnection?: {
     sourceNodeId: string
@@ -927,6 +928,18 @@ function onPaneContextMenu(event: MouseEvent) {
   )
   console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
+function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
+  event.preventDefault()
+  const e = event as MouseEvent
+  const flowPosition = toFlowPosition(e.clientX, e.clientY)
+  openMenu({
+    mode: 'edge',
+    title: `连线 ${edge.id} 菜单`,
+    position: { x: e.clientX, y: e.clientY },
+    items: resolveMenuItems({ mode: 'edge', edgeId: edge.id, flowPosition }, menuRegistry, nodeRegistry),
+  }, { edgeId: edge.id, flowPosition })
+}
+
 function onPaneDoubleClick(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
@@ -1568,7 +1581,7 @@ onUnmounted(async () => {
       @pane-mouse-down="manager.eventBus.emit('paneMouseDown', $event)"
       @pane-mouse-up="manager.eventBus.emit('paneMouseUp', $event)"
       @pane-mouse-move="manager.eventBus.emit('paneMouseMove', $event)" @node-double-click="onNodeDoubleClick"
-      @node-context-menu="onNodeContextMenu" @pane-context-menu="onPaneContextMenu" @dblclick="onPaneDoubleClick">
+      @node-context-menu="onNodeContextMenu" @pane-context-menu="onPaneContextMenu" @edge-context-menu="onEdgeContextMenu" @dblclick="onPaneDoubleClick">
       <template #connection-line="connectionLineProps">
         <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
       </template>
