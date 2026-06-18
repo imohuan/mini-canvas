@@ -21,6 +21,8 @@ import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
 import type { ThemeAPI } from './plugins/theme/types'
 import { setStorageApi } from './hooks/useStorage'
+import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
+import { NodeRegistry } from './registry/NodeRegistry'
 
 // ========================
 // 插件系统 Props
@@ -58,9 +60,9 @@ const LS_KEY = 'canvas-data'
 let persistReady = false  // 抑制初始化期间的写回
 
 const defaultNodes: Node[] = [
-  { id: '1', type: 'custom', position: { x: 200, y: 260 }, data: { label: '输入图像' }, sourcePosition: Position.Right },
-  { id: '2', type: 'custom', position: { x: 700, y: 260 }, data: { label: '生成图像' }, sourcePosition: Position.Right, targetPosition: Position.Left },
-  { id: '3', type: 'custom', position: { x: 1200, y: 260 }, data: { label: '生成图像' }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: '1', type: 'custom', position: { x: 200, y: 260 }, data: { label: '输入图像', nodeType: 'image' }, sourcePosition: Position.Right },
+  { id: '2', type: 'custom', position: { x: 700, y: 260 }, data: { label: '生成图像', nodeType: 'image' }, sourcePosition: Position.Right, targetPosition: Position.Left },
+  { id: '3', type: 'custom', position: { x: 1200, y: 260 }, data: { label: '生成图像', nodeType: 'image' }, sourcePosition: Position.Right, targetPosition: Position.Left },
 ]
 const defaultEdges: Edge[] = [
   {
@@ -166,12 +168,7 @@ const batchConnectState = ref<{
   tempEdgeIds: string[]
 } | null>(null)
 
-const NODE_MENU_ITEMS: CanvasMenuItem[] = [
-  { id: 'text', label: '文本', description: '创建文本节点', icon: 'text' },
-  { id: 'image', label: '图片', description: '创建图片节点', icon: 'image' },
-  { id: 'video', label: '视频', description: '创建视频节点', icon: 'video' },
-  { id: 'stage', label: '导演台', description: '创建编排节点', badge: 'NEW', icon: 'layers' },
-]
+// NODE_MENU_ITEMS removed - use nodeRegistry.getMenuItems() instead
 
 const menuState = reactive<CanvasMenuState>({
   visible: false,
@@ -374,18 +371,12 @@ function nodeLabelFromMenuItem(item: CanvasMenuItem) {
   return NODE_TYPE_LABELS[item.id] || item.label
 }
 
-/** 每种节点类型的默认卡片尺寸 */
-const NODE_TYPE_DEFAULT_SIZE: Record<string, { cardWidth: number; cardHeight: number }> = {
-  text: { cardWidth: 300, cardHeight: 320 },
-  image: { cardWidth: 360, cardHeight: 270 },
-  video: { cardWidth: 480, cardHeight: 320 },
-  stage: { cardWidth: 320, cardHeight: 320 },
-}
+// NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
 
 function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: number }, options: { requireTarget?: boolean } = {}) {
   const nodeId = `node-${item.id}-${Date.now()}`
-  const canReceiveInput = options.requireTarget || item.id !== 'text'
-  const defaultSize = NODE_TYPE_DEFAULT_SIZE[item.id] || { cardWidth: DEFAULT_NODE_SIZE, cardHeight: DEFAULT_NODE_SIZE }
+  const canReceiveInput = options.requireTarget || nodeRegistry.canReceiveInput(item.id)
+  const defaultSize = nodeRegistry.getDefaultSize(item.id)
   const node: Node = {
     id: nodeId,
     type: 'custom',
@@ -438,7 +429,7 @@ function openCreateNodeMenu(position: { x: number; y: number }, mode: 'pane' | '
     mode,
     title,
     position,
-    items: NODE_MENU_ITEMS,
+    items: nodeRegistry.getMenuItems(),
   }, context)
 }
 
@@ -1172,6 +1163,8 @@ function syncVueFlowKeymap() {
 // 插件系统生命周期
 // ========================
 const manager = new PluginManager()
+const nodeRegistry = new NodeRegistry()
+const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, vueFlowInstance as any)
 
 /**
  * 已安装的插件名称（reactive ref — 确保 Panel 能感知变化）
@@ -1443,6 +1436,7 @@ onMounted(async () => {
         canvasStore: canvas,
         pluginManager: manager,
         eventBus: manager.eventBus,
+        nodeRegistry,
       }),
     })
 
@@ -1543,6 +1537,7 @@ onUnmounted(async () => {
 </script>
 
 <template>
+  <CanvasRuntimeProvider :runtime="runtime">
   <div class="canvas-container">
     <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
       :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.connectionMode"
@@ -1629,6 +1624,7 @@ onUnmounted(async () => {
 
     <CanvasMenu :menu="menuState" @select="onMenuSelect" @close="closeMenu" />
   </div>
+  </CanvasRuntimeProvider>
 </template>
 
 <style scoped>
