@@ -2,9 +2,9 @@
 defineOptions({ inheritAttrs: false })
 
 import { Position } from '@vue-flow/core'
-import { useCanvasStore } from '../../../useCanvasStore'
-import NodeToolbar from '../../Decoration/NodeToolbar.vue'
-import ToolbarButton from '../../Decoration/ToolbarButton.vue'
+import { useCanvasStore } from '../../useCanvasStore'
+import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
+import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 const canvas = useCanvasStore()
 </script>
