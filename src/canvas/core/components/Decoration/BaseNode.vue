@@ -178,6 +178,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function updateCardMousePosition(event: MouseEvent) {
+  if (!showConnectFeedback.value && !debugHandle.value) return
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   mousePosition.value = {
     x: clamp((event.clientX - rect.left) / rect.width, 0, 1),

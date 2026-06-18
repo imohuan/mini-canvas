@@ -127,7 +127,7 @@ export const useCanvasStore = defineStore('canvasState', () => {
     connectOnClick: false,
     zoomOnDoubleClick: false,
     selectionMode: SelectionMode.Full as SelectionMode,
-    onlyRenderVisibleElements: false,
+    onlyRenderVisibleElements: true,
     selectNodesOnDrag: false,
     preventScrolling: true,
 
