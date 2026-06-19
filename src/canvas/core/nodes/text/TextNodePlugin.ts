@@ -13,7 +13,7 @@ export const TextNodePlugin: CanvasPlugin = {
       topToolbar: markRaw(TextTopToolbar),
       bottomToolbar: markRaw(TextBottomToolbar),
       label: '文本',
-      defaultSize: { cardWidth: 300, cardHeight: 320 },
+      defaultSize: { cardWidth: 300, cardHeight: 200 },
       menuItem: { label: '文本', description: '创建文本节点', icon: 'text' },
       canReceiveInput: false,
       resizable: true,
