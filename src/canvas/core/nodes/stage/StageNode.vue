@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 </script>
 

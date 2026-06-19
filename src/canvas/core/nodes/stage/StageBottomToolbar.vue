@@ -4,6 +4,7 @@ import { useCanvasStore } from '../../composables/useCanvasStore'
 import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
+defineOptions({ inheritAttrs: false })
 const canvas = useCanvasStore()
 </script>
 

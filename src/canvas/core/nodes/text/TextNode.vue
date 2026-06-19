@@ -3,6 +3,7 @@ import type { NodeProps } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
 import { computed, ref, onMounted, onUnmounted, useTemplateRef, nextTick } from 'vue'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const text = ref((props.data?.text as string) || '双击编辑文本...')
 const editing = ref(false)

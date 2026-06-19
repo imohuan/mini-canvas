@@ -2,6 +2,7 @@
 import type { NodeProps } from '@vue-flow/core'
 import { ref } from 'vue'
 
+defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const playing = ref(false)
 </script>

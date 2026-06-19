@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ConnectionMode } from '@vue-flow/core'
+import { ConnectionMode, Panel } from '@vue-flow/core'
 import type { EdgeType } from './composables/useCanvasStore'
 import type { StorageStatus, ProjectMeta } from './plugins/storage/StoragePlugin'
 import PanelTabGeneral from './components/panel/PanelTabGeneral.vue'

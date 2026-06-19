@@ -2,6 +2,8 @@
 import type { NodeProps } from '@vue-flow/core'
 import { ref, computed, watch } from 'vue'
 
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps<NodeProps>()
 const error = ref(false)
 
