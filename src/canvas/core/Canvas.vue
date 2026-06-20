@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
+import { ref, onMounted, onUnmounted, computed, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
 import {
   VueFlow, useVueFlow,
   Position,
@@ -12,8 +12,6 @@ import DynamicSettingsPanel from './components/Panel/DynamicSettingsPanel.vue'
 import CanvasPerformancePanel from './components/Performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
-import CanvasMenu from './components/Menu/CanvasMenu.vue'
-import type { CanvasMenuItem, CanvasMenuState, CanvasMenuMode } from './registry/types'
 import { useCanvasStore } from './composables/useCanvasStore'
 import { useCanvasPerformance } from './composables/useCanvasPerformance'
 import type { CanvasPlugin } from './plugins/types.ts'
@@ -26,7 +24,7 @@ import { NodeRegistry } from './registry/NodeRegistry'
 import { CommandRegistry } from './registry/CommandRegistry'
 import { ToolbarRegistry } from './registry/ToolbarRegistry'
 import { PanelRegistry } from './registry/PanelRegistry'
-import { MenuRegistry, resolveMenuItems, type MenuContext } from './registry/MenuRegistry'
+import { MenuRegistry } from './registry/MenuRegistry'
 
 // ========================
 // 插件系统 Props
@@ -142,18 +140,6 @@ const batchConnectState = ref<{
 } | null>(null)
 
 // NODE_MENU_ITEMS removed - use nodeRegistry.getMenuItems() instead
-
-const menuState = reactive<CanvasMenuState>({
-  visible: false,
-  title: '',
-  mode: 'pane',
-  position: { x: 0, y: 0 },
-  items: [],
-})
-
-
-/** 右键菜单上下文（当前节点/边/连线信息） */
-const menuContext = ref<MenuContext>({})
 
 // --- 选中同步：事件驱动，直接写入 Pinia store ---
 
@@ -465,119 +451,6 @@ function toFlowPosition(clientX: number, clientY: number) {
 }
 
 
-// NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
-
-function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: number }, options: { requireTarget?: boolean; requireSource?: boolean } = {}) {
-  const nodeType = item.nodeType || item.id
-  const nodeId = `node-${nodeType}-${Date.now()}`
-  const canReceiveInput = options.requireTarget || nodeRegistry.canReceiveInput(nodeType)
-  const defaultSize = nodeRegistry.getDefaultSize(nodeType)
-  const node: Node = {
-    id: nodeId,
-    type: 'custom',
-    position: {
-      x: position.x - defaultSize.cardWidth / 2,
-      y: position.y - defaultSize.cardHeight / 2,
-    },
-    data: {
-      label: item.label,
-      nodeType,
-      cardWidth: defaultSize.cardWidth,
-      cardHeight: defaultSize.cardHeight,
-      resizable: nodeRegistry.isResizable(nodeType),
-    },
-    ...(options.requireSource !== false ? { sourcePosition: Position.Right } : {}),
-    ...(canReceiveInput ? { targetPosition: Position.Left } : {}),
-  }
-
-  vueFlowInstance.addNodes([node])
-  return node
-}
-
-/** 打开右键菜单：设置菜单状态和上下文 */
-function openMenu(next: Omit<CanvasMenuState, 'visible'>, context: MenuContext = {}) {
-  menuState.visible = true
-  menuState.title = next.title
-  menuState.mode = next.mode
-  menuState.position = next.position
-  menuState.items = next.items
-  menuContext.value = context
-}
-
-/** 移除连线菜单中的临时节点和边 */
-function removeTempConnection() {
-  const pending = menuContext.value.pendingConnection
-  if (!pending) return
-
-  vueFlowInstance.removeEdges([pending.tempEdgeId])
-  vueFlowInstance.removeNodes([pending.tempNodeId])
-}
-
-/** 关闭右键菜单：清理临时连线 */
-function closeMenu() {
-  if (menuState.mode === 'connection') {
-    removeTempConnection()
-  }
-  menuState.visible = false
-  menuContext.value = {}
-}
-
-/** 打开"创建节点"菜单：合并 NodeRegistry + MenuRegistry 生成菜单项 */
-function openCreateNodeMenu(position: { x: number; y: number }, mode: CanvasMenuMode, title: string, context: MenuContext) {
-  openMenu({
-    mode,
-    title,
-    position,
-    items: resolveMenuItems({ mode, nodeId: context.nodeId, nodeType: context.nodeType, edgeId: context.edgeId, flowPosition: context.flowPosition }, menuRegistry, nodeRegistry),
-  }, context)
-}
-
-/** 菜单项选中回调：创建节点或执行连线 */
-async function onMenuSelect(item: CanvasMenuItem) {
-  const context = menuContext.value
-
-  if (menuState.mode === 'connection' && context.pendingConnection) {
-    const pending = { ...context.pendingConnection }
-    menuState.visible = false
-    menuContext.value = {}
-    vueFlowInstance.removeEdges([pending.tempEdgeId])
-    vueFlowInstance.removeNodes([pending.tempNodeId])
-    await nextTick()
-
-    const isReverseConnection = pending.sourceHandle === 'target'
-    const node = createNodeFromMenuItem(item, pending.flowPosition, {
-      requireSource: isReverseConnection,
-      requireTarget: !isReverseConnection,
-    })
-    await nextTick()
-
-    createConnection(isReverseConnection
-      ? {
-        source: node.id,
-        target: pending.sourceNodeId,
-        sourceHandle: 'source',
-        targetHandle: pending.sourceHandle,
-      }
-      : {
-        source: pending.sourceNodeId,
-        target: node.id,
-        sourceHandle: pending.sourceHandle,
-        targetHandle: 'target',
-      }, 'blank-menu')
-    return
-  }
-
-  if ((menuState.mode === 'pane' || menuState.mode === 'node') && context.flowPosition) {
-    createNodeFromMenuItem(item, context.flowPosition)
-    menuState.visible = false
-    menuContext.value = {}
-    return
-  }
-
-  closeMenu()
-}
-
-/** VueFlow connect 事件：从端口拖出连线成功时触发 */
 function onConnect(connection: Connection) {
   lastNativeConnectAt = Date.now()
   createConnection(connection, 'handle')
@@ -767,20 +640,15 @@ function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId:
     },
   } as Edge])
 
-  openCreateNodeMenu(
-    { x: point.x, y: point.y },
-    'connection',
-    '引用该节点生成',
-    {
-      pendingConnection: {
-        sourceNodeId,
-        sourceHandle,
-        tempNodeId,
-        tempEdgeId,
-        flowPosition,
-      },
-    },
-  )
+  manager.eventBus.emit("connectionContextMenu", {
+    clientX: point.x,
+    clientY: point.y,
+    sourceNodeId,
+    sourceHandle,
+    tempNodeId,
+    tempEdgeId,
+    flowPosition,
+  })
 }
 
 /** 在屏幕坐标附近查找最近的可连线源节点（考虑吸附区域） */
@@ -1090,14 +958,8 @@ function onNodeDoubleClick({ event, node }: NodeMouseEvent) {
 function onNodeContextMenu({ event, node }: NodeMouseEvent) {
   event.preventDefault()
   const e = event as MouseEvent
-  const flowPosition = toFlowPosition(e.clientX, e.clientY)
-  openCreateNodeMenu(
-    { x: e.clientX, y: e.clientY },
-    'node',
-    `节点 ${node.id} 菜单`,
-    { nodeId: node.id, flowPosition },
-  )
-  console.log('[右键-节点]', { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
+  manager.eventBus.emit("nodeContextMenu", { clientX: e.clientX, clientY: e.clientY, nodeId: node.id, nodeType: node.data?.nodeType ?? node.type })
+  console.log("[右键-节点]", { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
 }
 /** 画布右键事件：打开"添加节点"菜单 */
 function onPaneContextMenu(event: MouseEvent) {
@@ -1110,13 +972,7 @@ function onPaneContextMenu(event: MouseEvent) {
 function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
   event.preventDefault()
   const e = event as MouseEvent
-  const flowPosition = toFlowPosition(e.clientX, e.clientY)
-  openMenu({
-    mode: 'edge',
-    title: `连线 ${edge.id} 菜单`,
-    position: { x: e.clientX, y: e.clientY },
-    items: resolveMenuItems({ mode: 'edge', edgeId: edge.id, flowPosition }, menuRegistry, nodeRegistry),
-  }, { edgeId: edge.id, flowPosition })
+  manager.eventBus.emit("edgeContextMenu", { clientX: e.clientX, clientY: e.clientY, edgeId: edge.id })
 }
 
 /** 画布空白处双击：打开"添加节点"菜单 */
@@ -1646,15 +1502,6 @@ onMounted(async () => {
   manager.eventBus.on('storage:project-switched', () => refreshStorageState())
   manager.eventBus.on('storage:connected', () => refreshStorageState())
   manager.eventBus.on('storage:disconnected', () => refreshStorageState())
-  // 响应插件菜单请求
-  manager.eventBus.on('canvas:showCreateMenu', (payload: any) => {
-    openCreateNodeMenu(
-      payload.position,
-      payload.mode,
-      payload.title,
-      payload.context,
-    )
-  })
   // 初始加载
   nextTick(() => refreshStorageState())
 
@@ -1803,10 +1650,6 @@ onUnmounted(async () => {
       <SelectionFrame v-if="canvas.selectionState.selectedNodeIds.size > 1" :nodes="vueFlowInstance.getNodes.value"
         :viewport="vueFlowInstance.viewport.value" :vf-instance="vueFlowInstance"
         @pan="(vp: any) => vueFlowInstance.setViewport(vp)" @batch-connect-start="onSelectionBatchConnectStart" />
-
-      <slot name="context-menu" :menu-state="menuState" :on-select="onMenuSelect" :on-close="closeMenu">
-        <CanvasMenu :menu="menuState" @select="onMenuSelect" @close="closeMenu" />
-      </slot>
     </div>
   </CanvasRuntimeProvider>
 </template>

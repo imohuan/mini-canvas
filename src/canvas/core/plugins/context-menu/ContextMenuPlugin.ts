@@ -156,14 +156,14 @@ export const ContextMenuPlugin: CanvasPlugin = {
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "pane", "添加节点", { flowPosition: p.flowPosition })
     })
     const off3 = context.on("nodeContextMenu", (p: any) => {
-      openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "node", `节点 ${p.nodeId} 菜单`, {
+      openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "node", `节点菜单`, {
         nodeId: p.nodeId, nodeType: p.nodeType, flowPosition: toFlowPosition(p.clientX, p.clientY, context),
       })
     })
     const off4 = context.on("edgeContextMenu", (p: any) => {
       const fp = toFlowPosition(p.clientX, p.clientY, context)
       openMenu({
-        mode: "edge", title: `连线 ${p.edgeId} 菜单`, position: { x: p.clientX, y: p.clientY },
+        mode: "edge", title: `连线菜单`, position: { x: p.clientX, y: p.clientY },
         items: resolveItems("edge", undefined, context),
       }, { edgeId: p.edgeId, flowPosition: fp })
     })
