@@ -27,17 +27,20 @@ const value = computed({
     <input v-if="setting.type === 'text'" v-model="value" type="text" class="ax-input" />
     <input v-else-if="setting.type === 'number'" v-model.number="value" type="number" class="ax-input" />
 
-    <button
-      v-else-if="setting.type === 'boolean'"
-      class="ax-switch"
-      :class="{ on: value === true }"
-      type="button"
-      role="switch"
-      :aria-checked="value === true"
-      @click="value = !value"
-    >
-      <span class="ax-switch-knob" />
-    </button>
+    <!-- boolean (switch) - horizontal -->
+    <div v-else-if="setting.type === 'boolean'" class="ax-switch-row">
+      <span class="ax-switch-label">{{ setting.title }}</span>
+      <button
+        class="ax-switch"
+        :class="{ on: value === true }"
+        type="button"
+        role="switch"
+        :aria-checked="value === true"
+        @click="value = !value"
+      >
+        <span class="ax-switch-knob" />
+      </button>
+    </div>
 
     <select v-else-if="setting.type === 'select'" v-model="value" class="ax-input ax-select">
       <option v-for="opt in setting.options" :key="String(opt.value)" :value="opt.value">{{ opt.title }}</option>
