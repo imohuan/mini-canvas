@@ -13,8 +13,8 @@ const props = withDefaults(defineProps<{
 }>(), {
   width: 240,
   height: 160,
-  nodeColor: "#888",
-  viewportBorderColor: "#fff",
+  nodeColor: "#cbd5e1",
+  viewportBorderColor: "#3b82f6",
   padding: 8,
 })
 
@@ -25,19 +25,15 @@ const emit = defineEmits<{
 
 const containerRef = ref<HTMLDivElement>()
 
-// ---- 拖拽状态 ----
 let dragging = false
 let lastClientX = 0
 let lastClientY = 0
 
-// 拖拽开始时保存的节点快照
 const frozenNodes = shallowRef<any[] | null>(null)
-
 const renderNodes = computed(() => {
   return (frozenNodes.value ?? props.nodes).filter((n: any) => !n.hidden)
 })
 
-// ---- 节点包围盒 ----
 const contentBB = computed(() => {
   const visible = renderNodes.value
   if (visible.length === 0) return { x: 0, y: 0, w: 1, h: 1 }
@@ -56,7 +52,6 @@ const contentBB = computed(() => {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 })
 
-// ---- 视口在 flow 坐标中的矩形 ----
 const viewBB = computed(() => ({
   x: -props.viewport.x / props.viewport.zoom,
   y: -props.viewport.y / props.viewport.zoom,
@@ -64,7 +59,6 @@ const viewBB = computed(() => ({
   h: props.dimensions.height / props.viewport.zoom,
 }))
 
-// ---- 并集 ----
 const unionBB = computed(() => {
   const cb = contentBB.value
   const vb = viewBB.value
@@ -75,7 +69,6 @@ const unionBB = computed(() => {
   return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 })
 
-// ---- mapState：始终实时计算 ----
 const mapState = computed(() => {
   const u = unionBB.value
   if (u.w <= 0 || u.h <= 0) return { scale: 1, minX: 0, minY: 0, offsetX: 0, offsetY: 0 }
@@ -91,7 +84,6 @@ const mapState = computed(() => {
   return { scale, minX: u.x, minY: u.y, offsetX, offsetY }
 })
 
-// ---- 节点样式 ----
 function nodeStyle(node: any) {
   const x = node.computedPosition?.x ?? node.position.x
   const y = node.computedPosition?.y ?? node.position.y
@@ -108,7 +100,6 @@ function nodeStyle(node: any) {
   }
 }
 
-// ---- 视口指示器 ----
 const viewerStyle = computed(() => {
   const vb = viewBB.value
   const ms = mapState.value
@@ -121,11 +112,9 @@ const viewerStyle = computed(() => {
   }
 })
 
-// ---- 拖拽 ----
 function onViewerDown(e: PointerEvent) {
   if (e.button !== 0) return
   dragging = true
-  // 只冻结节点数据，不冻结 mapState（让 scale 实时生效）
   frozenNodes.value = props.nodes.map((n: any) => ({
     ...n,
     position: { ...n.position },
@@ -159,7 +148,6 @@ function onPointerUp(e: PointerEvent) {
   ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
 }
 
-// ---- 点击跳转 ----
 function onMinimapClick(e: MouseEvent) {
   if ((e.target as HTMLElement).classList.contains("mini-viewer")) return
 
@@ -203,24 +191,25 @@ function onMinimapClick(e: MouseEvent) {
 <style scoped>
 .mini-map {
   position: relative;
-  background: #2a2a2a;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   cursor: crosshair;
 }
 
 .mini-node {
   position: absolute;
-  border-radius: 1px;
+  border-radius: 2px;
   pointer-events: none;
 }
 
 .mini-viewer {
   position: absolute;
-  border: 1.5px solid #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 4px;
   cursor: move;
   pointer-events: auto;
   z-index: 1;

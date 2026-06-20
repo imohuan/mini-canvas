@@ -1,4 +1,4 @@
-import { reactive, computed, type Ref } from 'vue'
+﻿import { reactive, computed, type Ref } from 'vue'
 import type { PanelSettingDefinition, PanelRegistryAPI } from './types'
 
 /**
@@ -87,7 +87,11 @@ export class PanelRegistry implements PanelRegistryAPI {
     id: string,
     store: Ref<{ core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }> | { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> },
     defaultValue: T,
-  ): Ref<T> {
+  ): any {
+    // 2 参数重载：直接抛错，由 PluginContext 层拦截
+    if (arguments.length === 2) {
+      throw new Error('[PanelRegistry] useValue requires store as second argument')
+    }
     // 兼容 Ref 和普通 reactive 对象
     const s = 'value' in store ? store.value : store
     const parts = id.split('.')

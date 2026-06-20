@@ -121,6 +121,8 @@ interface CreatePluginContextOptions {
   toolbarRegistry?: ToolbarRegistry
   panelRegistry?: PanelRegistry
   pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
+  /** canvas.state 引用，供 useValue 使用 */
+  canvasState?: { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }
 }
 
 // ============================================================================
@@ -141,6 +143,7 @@ export function createPluginContext(
     commandRegistry,
     toolbarRegistry,
     panelRegistry,
+    canvasState,
     pluginManager,
   } = options
 
@@ -365,6 +368,7 @@ export function createPluginContext(
       unregisterSource(source: string) { panelRegistry?.unregisterSource(source) },
       getAll() { return panelRegistry?.getAll() ?? [] },
       getBySource(source: string) { return panelRegistry?.getBySource(source) ?? [] },
+      useValue<T>(id: string, store: any, defaultValue: T) { return panelRegistry?.useValue<T>(id, store ?? canvasState as any, defaultValue) ?? (null as any) },
     },
 
     on: contextOn,

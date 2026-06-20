@@ -117,6 +117,7 @@ export interface PanelRegistryAPI {
   unregisterSource(source: string): void
   getAll(): PanelSettingDefinition[]
   getBySource(source: string): PanelSettingDefinition[]
+  useValue<T>(id: string, store: any, defaultValue: T): any
 }
 
 export interface MenuRegistryAPI {

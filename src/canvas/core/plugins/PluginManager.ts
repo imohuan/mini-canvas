@@ -603,6 +603,7 @@ export class PluginManager {
         unregisterSource: (_source: string) => stubWarn('panels.unregisterSource'),
         getAll: () => [],
         getBySource: () => [],
+        useValue: () => null,
       },
       on: (_event, _handler) => {
         stubWarn('on')
