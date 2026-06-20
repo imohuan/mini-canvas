@@ -321,13 +321,11 @@ function findSameConnection(connection: Connection) {
 
 /**
  * 返回连线不可创建的原因描述字符串。
- * 如果返回空字符串，表示可以创建。
+ * 拖线过程中只判断循环连接；其他规则（重复/方向等）留给最终创建时拦截。
  */
 function getInvalidConnectionReason(connection: Connection) {
   const canonical = toCanonicalConnection(connection)
   if (!canonical?.source || !canonical.target) return '无法连接'
-  if (canonical.source === canonical.target) return '无法连接'
-  if (findSameConnection(canonical)) return '无法连接'
   if (wouldCreateCycle(canonical.source, canonical.target)) return '无法连接'
   return ''
 }
@@ -555,17 +553,17 @@ async function onMenuSelect(item: CanvasMenuItem) {
 
     createConnection(isReverseConnection
       ? {
-          source: node.id,
-          target: pending.sourceNodeId,
-          sourceHandle: 'source',
-          targetHandle: pending.sourceHandle,
-        }
+        source: node.id,
+        target: pending.sourceNodeId,
+        sourceHandle: 'source',
+        targetHandle: pending.sourceHandle,
+      }
       : {
-          source: pending.sourceNodeId,
-          target: node.id,
-          sourceHandle: pending.sourceHandle,
-          targetHandle: 'target',
-        }, 'blank-menu')
+        source: pending.sourceNodeId,
+        target: node.id,
+        sourceHandle: pending.sourceHandle,
+        targetHandle: 'target',
+      }, 'blank-menu')
     return
   }
 
@@ -655,7 +653,8 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
     const node = nodesById.value.get(nodeId)
     if (!node || isTempNode(node) || !node.targetPosition) continue
 
-    const rect = getNodeCardRectFromNodeElement(el)
+    // 使用整个节点元素的矩形（包括 toolbar），而不是只查卡片
+    const rect = el.getBoundingClientRect()
     const nodeSize = getNodeSize(node)
     const zoomScale = nodeSize.width > 0 ? rect.width / nodeSize.width : 1
     const snapOuterInScreen = snapOuter * zoomScale
@@ -703,7 +702,11 @@ function findNearestConnectableNode(clientX: number, clientY: number, startHandl
  * 判断鼠标是否落在某个节点的卡片主体区域内。
  * 不管端口方向，只要鼠标在节点矩形内就返回该节点。
  */
-function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: Iterable<string> = []) {
+/**
+ * 判断鼠标是否落在某个节点的整体区域内（包括卡片和 toolbar）。
+ * 用于拖线结束时判断：如果落在节点上，直接连接而不是弹菜单。
+ */
+function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: Iterable<string> = []): Node | null {
   const excluded = new Set(excludedNodeIds)
   const nodeEls = document.querySelectorAll('.vue-flow__node')
 
@@ -714,7 +717,8 @@ function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: 
     const node = nodesById.value.get(nodeId)
     if (!node || isTempNode(node)) continue
 
-    const rect = getNodeCardRectFromNodeElement(el)
+    // 使用整个节点元素的矩形（包括 toolbar），而不是只查卡片
+    const rect = el.getBoundingClientRect()
     const inside =
       clientX >= rect.left &&
       clientX <= rect.right &&
@@ -726,6 +730,7 @@ function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: 
 
   return null
 }
+
 
 /** 从节点拖出连线后弹出"选择目标节点类型"菜单 */
 function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId: string, sourceHandle: string) {
@@ -1022,23 +1027,42 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
     if (targetNode) {
       const connection = sourceHandle === 'target'
         ? {
-            source: targetNode.id,
-            target: sourceNodeId,
-            sourceHandle: 'source',
-            targetHandle: sourceHandle,
-          }
+          source: targetNode.id,
+          target: sourceNodeId,
+          sourceHandle: 'source',
+          targetHandle: sourceHandle,
+        }
         : {
-            source: sourceNodeId,
-            target: targetNode.id,
-            sourceHandle,
-            targetHandle: 'target',
-          }
+          source: sourceNodeId,
+          target: targetNode.id,
+          sourceHandle,
+          targetHandle: 'target',
+        }
       if (getInvalidConnectionReason(connection)) return
       createConnection(connection, 'snap')
       return
     }
 
-    if (findNodeBodyAtPoint(point.x, point.y, [sourceNodeId])) return
+    // 检查是否落在节点主体上（不是端口吸附区），如果是则直接连接
+    const bodyNode = findNodeBodyAtPoint(point.x, point.y, [sourceNodeId])
+    if (bodyNode) {
+      const connection = sourceHandle === 'target'
+        ? {
+          source: bodyNode.id,
+          target: sourceNodeId,
+          sourceHandle: 'source',
+          targetHandle: sourceHandle,
+        }
+        : {
+          source: sourceNodeId,
+          target: bodyNode.id,
+          sourceHandle,
+          targetHandle: 'target',
+        }
+      if (getInvalidConnectionReason(connection)) return
+      createConnection(connection, 'snap')
+      return
+    }
 
     createTempConnectionMenu(point, sourceNodeId, sourceHandle)
   } finally {
@@ -1059,7 +1083,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
 function onNodeDoubleClick({ event, node }: NodeMouseEvent) {
   const e = event as MouseEvent
   console.log('[双击-节点]', { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
-  manager.eventBus.emit('nodeDoubleClick', { nodeId: node.id, nodeType: node.type })
+  manager.eventBus.emit('nodeDoubleClick', { nodeId: node.id, nodeType: node.data?.nodeType ?? node.type })
   window.dispatchEvent(new CustomEvent('canvas:nodeDoubleClick', { detail: { nodeId: node.id } }))
 }
 /** 节点右键事件：打开节点右键菜单 */
@@ -1245,7 +1269,6 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   let endX = connectionLineProps.targetX
   let endY = connectionLineProps.targetY
   let bestDistance = Number.POSITIVE_INFINITY
-  let feedbackNodeId: string | null = null
   let invalidNodeId: string | null = null
   let snappedNodeId: string | null = null
 
@@ -1260,17 +1283,17 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
 
     const candidateConnection = isReverseConnection
       ? {
-          source: zone.id,
-          target: sourceId,
-          sourceHandle: 'source',
-          targetHandle: startHandle,
-        }
+        source: zone.id,
+        target: sourceId,
+        sourceHandle: 'source',
+        targetHandle: startHandle,
+      }
       : {
-          source: sourceId,
-          target: zone.id,
-          sourceHandle: startHandle,
-          targetHandle: 'target',
-        }
+        source: sourceId,
+        target: zone.id,
+        sourceHandle: startHandle,
+        targetHandle: 'target',
+      }
 
     if (getInvalidConnectionReason(candidateConnection)) {
       invalidNodeId = zone.id
@@ -1286,8 +1309,9 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
     }
   }
 
-  // 节点主体只负责识别“你正在碰到这个节点”，不能当成合法连接区域。
+  // 节点主体只负责识别"你正在碰到这个节点"，不能当成合法连接区域。
   // 真正合法连接只能来自上面的端口吸附区。
+  let bodyNodeId: string | null = null
   for (const zone of feedbackZones) {
     const x = connectionLineProps.targetX
     const y = connectionLineProps.targetY
@@ -1298,22 +1322,40 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
       y <= zone.y + zone.height
 
     if (inZone) {
-      feedbackNodeId = zone.nodeId
+      bodyNodeId = zone.nodeId
       break
     }
   }
 
-  if (snappedNodeId) {
-    feedbackNodeId = snappedNodeId
-  } else if (feedbackNodeId && !invalidNodeId) {
-    invalidNodeId = feedbackNodeId
+  // 节点主体命中时：检查是否会循环，如果会循环就标禁止
+  // 否则节点主体也可以作为连接目标（不只是端口吸附区）
+  if (!snappedNodeId && bodyNodeId) {
+    const candidateConnection = isReverseConnection
+      ? {
+        source: bodyNodeId,
+        target: sourceId,
+        sourceHandle: 'source',
+        targetHandle: startHandle,
+      }
+      : {
+        source: sourceId,
+        target: bodyNodeId,
+        sourceHandle: startHandle,
+        targetHandle: 'target',
+      }
+    if (getInvalidConnectionReason(candidateConnection)) {
+      invalidNodeId = bodyNodeId
+    } else {
+      snappedNodeId = bodyNodeId
+    }
   }
 
-  const nextFeedbackPoint = feedbackNodeId && !invalidNodeId && snappedNodeId
+  const effectiveFeedbackNodeId = snappedNodeId || bodyNodeId
+  const nextFeedbackPoint = effectiveFeedbackNodeId
     ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
     : null
   const currentFeedbackPoint = canvas.connectionState.hoverFeedbackPoint
-  const nextFeedbackNodeId = invalidNodeId ? null : snappedNodeId
+  const nextFeedbackNodeId = effectiveFeedbackNodeId
   const feedbackChanged =
     canvas.connectionState.hoverFeedbackNodeId !== nextFeedbackNodeId ||
     currentFeedbackPoint?.x !== nextFeedbackPoint?.x ||
@@ -1327,13 +1369,14 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const invalidPoint = invalidNodeId
     ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
     : null
+  const invalidReason = invalidNodeId ? '无法连接' : ''
   const invalidChanged =
     canvas.connectionState.invalidFeedbackNodeId !== invalidNodeId ||
     canvas.connectionState.invalidFeedbackPoint?.x !== invalidPoint?.x ||
     canvas.connectionState.invalidFeedbackPoint?.y !== invalidPoint?.y
 
   if (invalidChanged) {
-    setInvalidConnectionFeedback(invalidNodeId, invalidPoint)
+    setInvalidConnectionFeedback(invalidNodeId, invalidPoint, invalidReason)
   }
 
   return {
