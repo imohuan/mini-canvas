@@ -1,9 +1,7 @@
 ﻿import type { Component } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 
-/**
- * 命令执行时的上下文
- */
+/** 命令执行时的上下文 */
 export interface CommandContext {
   runtime: unknown
   actions: unknown

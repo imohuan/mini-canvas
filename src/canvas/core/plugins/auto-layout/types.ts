@@ -1,21 +1,15 @@
 import type { Node } from '@vue-flow/core'
 
-/**
- * 布局方向
- */
+/** 布局方向 */
 export type LayoutDirection = 'TB' | 'LR' | 'BT' | 'RL'
 
-/**
- * 间距配置
- */
+/** 间距配置 */
 export interface Spacing {
   x: number
   y: number
 }
 
-/**
- * 自动布局配置
- */
+/** 自动布局配置 */
 export interface AutoLayoutConfig {
   /** 布局方向 */
   direction: LayoutDirection
@@ -38,9 +32,7 @@ export type AutoLayoutConfigPatch = Partial<Omit<AutoLayoutConfig, 'intraSpacing
   interSpacing?: Partial<Spacing>
 }
 
-/**
- * Group 的 bounds（供 recalculateBounds 返回）
- */
+/** Group 的 bounds（供 recalculateBounds 返回） */
 export interface GroupBounds {
   x: number
   y: number
@@ -48,9 +40,7 @@ export interface GroupBounds {
   h: number
 }
 
-/**
- * 布局簇（内部使用）
- */
+/** 布局簇（内部使用） */
 export interface LayoutCluster {
   id: string
   type: 'group' | 'connected' | 'single' | 'super'
@@ -60,9 +50,7 @@ export interface LayoutCluster {
   bounds: GroupBounds | null
 }
 
-/**
- * 原始图数据（简化版，供布局引擎使用）
- */
+/** 原始图数据（简化版，供布局引擎使用） */
 export interface SimpleNode {
   id: string
   label?: string
@@ -87,9 +75,7 @@ export interface SimpleGroup {
   nodes: string[]
 }
 
-/**
- * AutoLayoutPlugin 对外 API
- */
+/** AutoLayoutPlugin 对外 API */
 export interface AutoLayoutAPI {
   /** 执行自动布局 */
   run(config?: AutoLayoutConfigPatch): void
@@ -103,9 +89,7 @@ export interface AutoLayoutAPI {
   focusNode(nodeId: string): void
 }
 
-/**
- * GroupPlugin 新增 API
- */
+/** GroupPlugin 新增 API */
 export interface GroupLayoutAPI {
   /** 根据组内子节点重新计算并更新 GroupNode 的 bounds */
   recalculateBounds(groupId: string): GroupBounds | null

@@ -1,17 +1,13 @@
 import type { CanvasPlugin, PluginContext, Point } from '../types'
 
-/**
- * 剪贴板数据格式
- */
+/** 剪贴板数据格式 */
 interface ClipboardData {
   nodes: any[]
   edges: any[]
   copyTime: number
 }
 
-/**
- * ClipboardPlugin API
- */
+/** ClipboardPlugin API */
 export interface ClipboardAPI {
   /** 手动触发粘贴 */
   paste(): boolean
@@ -21,9 +17,7 @@ export interface ClipboardAPI {
   readonly hasData: boolean
 }
 
-/**
- * 全局剪贴板（跨插件共享）
- */
+/** 全局剪贴板（跨插件共享） */
 let clipboard: ClipboardData | null = null
 let pasteCount = 0
 
@@ -262,9 +256,7 @@ export const ClipboardPlugin: CanvasPlugin<Record<string, unknown>, ClipboardAPI
       return true
     }
 
-    /**
-     * 剪切选中节点到剪贴板
-     */
+    /** 剪切选中节点到剪贴板 */
     function performCut(): boolean {
       const selectedIds = getSelectedNodeIds()
       if (selectedIds.size === 0) {

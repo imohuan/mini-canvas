@@ -1,6 +1,4 @@
-/**
- * 资产记录——持久化的元数据，不含二进制数据
- */
+/** 资产记录——持久化的元数据，不含二进制数据 */
 export interface AssetRecord {
   /** 唯一标识，基于内容 SHA-256 */
   assetId: string

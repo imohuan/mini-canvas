@@ -299,9 +299,7 @@ export class PluginManager {
 
   // ===================== 私有方法 =====================
 
-  /**
-   * 验证插件列表中是否有重复名称
-   */
+  /** 验证插件列表中是否有重复名称 */
   private validateDuplicateNames(plugins: CanvasPlugin[]): void {
     const seen = new Set<string>()
     for (const p of plugins) {

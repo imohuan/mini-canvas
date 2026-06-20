@@ -100,9 +100,7 @@ export const THEME_CSS_VARS = [
 
 export type ThemeCssVar = (typeof THEME_CSS_VARS)[number]
 
-/**
- * 主题插件配置选项（接口传参）
- */
+/** 主题插件配置选项（接口传参） */
 export interface ThemeOptions {
   /** 初始预设 */
   preset?: ThemePresetName
@@ -115,9 +113,7 @@ export interface ThemeOptions {
   [key: string]: unknown
 }
 
-/**
- * 主题插件暴露的 API
- */
+/** 主题插件暴露的 API */
 export interface ThemeAPI {
   /** 当前主题状态（响应式） */
   readonly state: ThemeState

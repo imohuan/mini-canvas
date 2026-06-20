@@ -123,9 +123,7 @@ export function mix(hexA: string, hexB: string, ratio: number): string {
 // 从基准色计算完整主题 CSS 变量
 // ============================================================================
 
-/**
- * 单个 CSS 变量的计算值
- */
+/** 单个 CSS 变量的计算值 */
 export type ComputedVars = Record<string, string>
 
 /**

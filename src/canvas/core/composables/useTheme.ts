@@ -1,6 +1,4 @@
-/**
- * useTheme — 主题状态管理
- */
+/** useTheme — 主题状态管理 */
 import { computed } from 'vue'
 import type { ThemeAPI, ThemePresetName } from '../plugins/theme/types'
 import type { usePluginSystem } from './usePluginSystem'

@@ -424,9 +424,7 @@ export class ShortcutManager {
   // Internal helpers
   // ================================================================
 
-  /**
-   * 将 entry 写入 registry 和 reverseKeyMap，记录默认键位
-   */
+  /** 将 entry 写入 registry 和 reverseKeyMap，记录默认键位 */
   private insertEntry(entry: ShortcutEntry): void {
     this.registry.set(entry.id, entry)
     this.reverseKeyMap.set(entry.keys, entry.id)
@@ -623,9 +621,7 @@ export class ShortcutManager {
     document.addEventListener('keydown', this.listener)
   }
 
-  /**
-   * 停止全局 keydown 监听并清理 listener
-   */
+  /** 停止全局 keydown 监听并清理 listener */
   private stopListening(): void {
     if (!this.listener) return
 

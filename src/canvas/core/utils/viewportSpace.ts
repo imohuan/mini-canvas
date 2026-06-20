@@ -38,9 +38,7 @@ export function screenToCanvas(
 //  节点 DOM 空间 — zoom 封顶
 // ============================================================
 
-/**
- * 反向缩放系数：zoom≤1 时不干预（1），zoom>1 时用 1/zoom 抵消放大
- */
+/** 反向缩放系数：zoom≤1 时不干预（1），zoom>1 时用 1/zoom 抵消放大 */
 export function inverseZoom(zoom: number): number {
   return 1 / Math.max(zoom, 1)
 }
@@ -54,9 +52,7 @@ export interface CappedStyleOptions {
   scale?: boolean
 }
 
-/**
- * 为节点 DOM 内的元素生成封顶样式：zoom>1 时文本不放大、偏移不增加
- */
+/** 为节点 DOM 内的元素生成封顶样式：zoom>1 时文本不放大、偏移不增加 */
 export function createCappedStyle(
   zoom: number,
   opts: CappedStyleOptions = {},

@@ -1,8 +1,6 @@
 import type { CanvasPlugin, PluginContext } from '../types'
 
-/**
- * 历史记录条目
- */
+/** 历史记录条目 */
 export interface HistoryRecord {
   /** 操作类型 */
   type: string
@@ -16,18 +14,14 @@ export interface HistoryRecord {
   description: string
 }
 
-/**
- * HistoryPlugin 配置选项
- */
+/** HistoryPlugin 配置选项 */
 export interface HistoryOptions {
   /** 最大历史记录数（默认 100） */
   maxRecords?: number
   [key: string]: unknown
 }
 
-/**
- * HistoryPlugin 暴露的 API
- */
+/** HistoryPlugin 暴露的 API */
 export interface HistoryAPI {
   /** 是否可以撤销 */
   readonly canUndo: boolean
@@ -96,9 +90,7 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
     let currentBatch: HistoryRecord[] | null = null
     let dragStartPositions: Map<string, { x: number; y: number }> | null = null
 
-    /**
-     * 发射状态变化事件
-     */
+    /** 发射状态变化事件 */
     function emitState() {
       context.emit('history:state-change', {
         canUndo: undoStack.length > 0,

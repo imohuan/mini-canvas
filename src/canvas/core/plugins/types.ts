@@ -6,24 +6,18 @@ import type { MenuItemDefinition } from '../registry/types'
 export type { MenuItemDefinition }
 export type { CanvasNodeDefinition, CanvasNodeMenuItem }
 
-/**
- * 二维坐标点
- */
+/** 二维坐标点 */
 export interface Point {
   x: number
   y: number
 }
 
-/**
- * 视口状态（位置 + 缩放）
- */
+/** 视口状态（位置 + 缩放） */
 export interface ViewportState extends Point {
   zoom: number
 }
 
-/**
- * 插件生命周期状态枚举
- */
+/** 插件生命周期状态枚举 */
 export const PluginLifecycle = {
   INSTALLING: 'installing',
   INSTALLED: 'installed',

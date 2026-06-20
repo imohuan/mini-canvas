@@ -1,17 +1,13 @@
 import type { CanvasPlugin, PluginContext } from '../types'
 
-/**
- * 辅助线数据类型
- */
+/** 辅助线数据类型 */
 interface HelperLine {
   type: 'horizontal' | 'vertical'
   /** flow 坐标位置（垂直参考线时为 x，水平参考线时为 y） */
   position: number
 }
 
-/**
- * 吸附阈值（像素）
- */
+/** 吸附阈值（像素） */
 const SNAP_THRESHOLD = 8
 
 /**
@@ -169,9 +165,7 @@ export const AlignGuidePlugin: CanvasPlugin = {
       return { x: node.position.x, y: node.position.y }
     }
 
-    /**
-     * 计算节点边界框（绝对 flow 坐标）
-     */
+    /** 计算节点边界框（绝对 flow 坐标） */
     function getNodeBounds(node: any) {
       const pos = getAbsolutePos(node)
       const w = node.dimensions?.width || 256

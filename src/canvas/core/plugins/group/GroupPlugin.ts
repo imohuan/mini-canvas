@@ -64,9 +64,7 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
       return overlapArea / nodeArea > OVERLAP_RATIO
     }
 
-    /**
-     * 获取节点的绝对坐标（flow 坐标系）。
-     */
+    /** 获取节点的绝对坐标（flow 坐标系）。 */
     function getComputedPos(node: any): { x: number; y: number } {
       if (node.parentNode && node.computedPosition && node.computedPosition.x !== undefined) {
         return node.computedPosition

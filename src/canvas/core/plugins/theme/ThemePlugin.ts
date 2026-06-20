@@ -39,9 +39,7 @@ function defaultState(): ThemeState {
   }
 }
 
-/**
- * 从 store 读取当前主题状态（带默认值回退）
- */
+/** 从 store 读取当前主题状态（带默认值回退） */
 function readState(store: PluginContext['store']): ThemeState {
   const ds = defaultState()
   return {
@@ -55,9 +53,7 @@ function readState(store: PluginContext['store']): ThemeState {
   }
 }
 
-/**
- * 写入完整状态到 store
- */
+/** 写入完整状态到 store */
 function writeState(store: PluginContext['store'], state: ThemeState): void {
   store.set('activePreset', state.activePreset)
   store.set('accent', state.accent)
@@ -68,9 +64,7 @@ function writeState(store: PluginContext['store'], state: ThemeState): void {
   store.set('customVariables', { ...state.customVariables })
 }
 
-/**
- * 全量刷新：读当前 store 状态 → 计算变量 → 写入 DOM
- */
+/** 全量刷新：读当前 store 状态 → 计算变量 → 写入 DOM */
 function refreshTheme(store: PluginContext['store']): void {
   const st = readState(store)
   console.log('[🎨 ThemePlugin] refreshTheme — accent:', st.accent, 'surface:', st.surface, 'custom vars count:', Object.keys(st.customVariables).length)

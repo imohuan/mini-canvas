@@ -40,9 +40,7 @@ export class ToolbarRegistry implements ToolbarRegistryAPI {
     }
   }
 
-  /**
-   * 获取指定位置的按钮，按 order 排序
-   */
+  /** 获取指定位置的按钮，按 order 排序 */
   getByPosition(position: 'top' | 'bottom'): ToolbarButtonDefinition[] {
     const result: ToolbarButtonDefinition[] = []
     for (const btn of this.buttons.values()) {

@@ -6,9 +6,7 @@
 
 import type { ThemePreset, ThemePresetName } from './types'
 
-/**
- * 所有内置预设的注册表
- */
+/** 所有内置预设的注册表 */
 export const THEME_PRESETS: Record<ThemePresetName, ThemePreset> = {
   /** 默认 Slate 灰蓝主题 — 沉稳、专业 */
   slate: {
@@ -85,16 +83,12 @@ export const THEME_PRESETS: Record<ThemePresetName, ThemePreset> = {
   },
 }
 
-/**
- * 获取所有预设列表
- */
+/** 获取所有预设列表 */
 export function getPresetsList(): ThemePreset[] {
   return Object.values(THEME_PRESETS)
 }
 
-/**
- * 获取指定预设；不存在则返回 slate
- */
+/** 获取指定预设；不存在则返回 slate */
 export function getPreset(name: ThemePresetName): ThemePreset {
   return THEME_PRESETS[name] || THEME_PRESETS.slate
 }

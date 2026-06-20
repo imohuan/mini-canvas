@@ -141,9 +141,7 @@ function createNodeItems(ctx: MenuContext, nodeRegistry: NodeRegistry): Resolved
   }))
 }
 
-/**
- * 解析菜单项：合并 NodeRegistry（创建节点）和 MenuRegistry（操作命令）
- */
+/** 解析菜单项：合并 NodeRegistry（创建节点）和 MenuRegistry（操作命令） */
 export function resolveMenuItems(
   ctx: MenuContext,
   menuRegistry: MenuRegistry,

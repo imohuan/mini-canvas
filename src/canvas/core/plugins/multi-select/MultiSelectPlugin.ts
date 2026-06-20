@@ -163,9 +163,7 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       selectionBox.style.height = `${height}px`
     }
 
-    /**
-     * 根据当前框选矩形更新选中状态（只计算，不 emit 事件）
-     */
+    /** 根据当前框选矩形更新选中状态（只计算，不 emit 事件） */
     function updateBoxSelection(flowRect: { x: number; y: number; w: number; h: number }) {
       const nodes = context.actions.getNodes()
       const nodeIds: string[] = []
