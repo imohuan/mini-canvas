@@ -12,7 +12,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import type { Node } from '@vue-flow/core'
-import BaseToolbar from '../../components/toolbar/BaseToolbar.vue'
+import BaseToolbar from '../../components/Toolbar/BaseToolbar.vue'
 
 const props = defineProps<{
   viewport: { x: number; y: number; zoom: number }

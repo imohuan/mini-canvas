@@ -2,7 +2,7 @@
 import type { NodeProps } from '@vue-flow/core'
 import { computed, type Component } from 'vue'
 import BaseNode from './Decoration/BaseNode.vue'
-import BaseToolbar from './toolbar/BaseToolbar.vue'
+import BaseToolbar from './Toolbar/BaseToolbar.vue'
 import { useCanvasRuntime } from '../runtime/useCanvasRuntime'
 
 const props = defineProps<NodeProps>()

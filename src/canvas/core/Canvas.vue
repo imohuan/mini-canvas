@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -8,11 +8,11 @@ import {
 } from '@vue-flow/core'
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
-import DynamicSettingsPanel from './components/panel/DynamicSettingsPanel.vue'
+import DynamicSettingsPanel from './components/Panel/DynamicSettingsPanel.vue'
 import CanvasPerformancePanel from './components/performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
-import CanvasMenu from './components/menu/CanvasMenu.vue'
+import CanvasMenu from './components/Menu/CanvasMenu.vue'
 import type { CanvasMenuItem, CanvasMenuState, CanvasMenuMode } from './registry/types'
 import { useCanvasStore } from './composables/useCanvasStore'
 import { useCanvasPerformance } from './composables/useCanvasPerformance'
