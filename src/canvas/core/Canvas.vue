@@ -1453,11 +1453,11 @@ onUnmounted(async () => {
         <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
       </template>
 
-      <Panel position="top-right">
-        <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
+      <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
+        <Panel position="top-right">
           <DynamicSettingsPanel />
-        </slot>
-      </Panel>
+        </Panel>
+      </slot>
     </VueFlow>
 
     <CanvasPerformancePanel
