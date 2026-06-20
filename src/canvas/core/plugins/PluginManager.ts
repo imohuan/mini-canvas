@@ -569,9 +569,9 @@ export class PluginManager {
         onWindow: (_type, _handler, _opts) => { stubWarn('dom.onWindow'); return () => {} },
       },
       menus: {
-        register: (_items) => stubWarn('menus.register'),
-        unregister: (_ids) => stubWarn('menus.unregister'),
-        unregisterAll: () => stubWarn('menus.unregisterAll'),
+        register: (_source, _item) => stubWarn('menus.register'),
+        unregister: (_id) => stubWarn('menus.unregister'),
+        unregisterSource: (_source) => stubWarn('menus.unregisterSource'),
       },
       registerHandleConfig: (_config) => stubWarn('registerHandleConfig'),
       canvasNodes: {

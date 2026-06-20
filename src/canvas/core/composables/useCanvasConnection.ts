@@ -1,7 +1,7 @@
-import { nextTick, type Ref } from 'vue'
+﻿import { nextTick, type Ref } from 'vue'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
-import type { CanvasMenuItem, CanvasMenuState } from '../components/CanvasMenu.types'
+import type { CanvasMenuItem, CanvasMenuState } from '../registry/types'
 
 interface UseCanvasConnectionOptions {
   canvas: ReturnType<typeof import('../composables/useCanvasStore').useCanvasStore>

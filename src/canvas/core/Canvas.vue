@@ -12,8 +12,8 @@ import DynamicSettingsPanel from './components/panel/DynamicSettingsPanel.vue'
 import CanvasPerformancePanel from './components/performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
-import CanvasMenu from './components/CanvasMenu.vue'
-import type { CanvasMenuItem, CanvasMenuState } from './components/CanvasMenu.types'
+import CanvasMenu from './components/menu/CanvasMenu.vue'
+import type { CanvasMenuItem, CanvasMenuState, CanvasMenuMode } from './registry/types'
 import { useCanvasStore } from './composables/useCanvasStore'
 import { useCanvasPerformance } from './composables/useCanvasPerformance'
 import type { CanvasPlugin } from './plugins/types.ts'
@@ -26,7 +26,7 @@ import { NodeRegistry } from './registry/NodeRegistry'
 import { CommandRegistry } from './registry/CommandRegistry'
 import { ToolbarRegistry } from './registry/ToolbarRegistry'
 import { PanelRegistry } from './registry/PanelRegistry'
-import { MenuRegistry, resolveMenuItems } from './menu'
+import { MenuRegistry, resolveMenuItems, type MenuContext } from './registry/MenuRegistry'
 
 // ========================
 // 插件系统 Props
@@ -141,18 +141,6 @@ const menuState = reactive<CanvasMenuState>({
   items: [],
 })
 
-type MenuContext = {
-  nodeId?: string
-  edgeId?: string
-  flowPosition?: { x: number; y: number }
-  pendingConnection?: {
-    sourceNodeId: string
-    sourceHandle: string
-    tempNodeId: string
-    tempEdgeId: string
-    flowPosition: { x: number; y: number }
-  }
-}
 
 const menuContext = ref<MenuContext>({})
 
@@ -385,12 +373,12 @@ function closeMenu() {
   menuContext.value = {}
 }
 
-function openCreateNodeMenu(position: { x: number; y: number }, mode: 'pane' | 'node' | 'connection', title: string, context: MenuContext) {
+function openCreateNodeMenu(position: { x: number; y: number }, mode: CanvasMenuMode, title: string, context: MenuContext) {
   openMenu({
     mode,
     title,
     position,
-    items: nodeRegistry.getMenuItems(),
+    items: resolveMenuItems({ mode, nodeId: context.nodeId, nodeType: context.nodeType, edgeId: context.edgeId, flowPosition: context.flowPosition }, menuRegistry, nodeRegistry),
   }, context)
 }
 
@@ -1489,7 +1477,9 @@ onUnmounted(async () => {
       :vf-instance="vueFlowInstance" @pan="(vp: any) => vueFlowInstance.setViewport(vp)"
       @batch-connect-start="onSelectionBatchConnectStart" />
 
-    <CanvasMenu :menu="menuState" @select="onMenuSelect" @close="closeMenu" />
+    <slot name="context-menu" :menu-state="menuState" :on-select="onMenuSelect" :on-close="closeMenu">
+        <CanvasMenu :menu="menuState" @select="onMenuSelect" @close="closeMenu" />
+      </slot>
   </div>
   </CanvasRuntimeProvider>
 </template>

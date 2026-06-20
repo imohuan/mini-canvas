@@ -1,6 +1,6 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
-import type { CanvasMenuItem, CanvasMenuState } from './CanvasMenu.types'
+import type { CanvasMenuItem, CanvasMenuState } from '../../registry/types'
 
 const props = defineProps<{
   menu: CanvasMenuState

@@ -1,15 +1,15 @@
-import type { CanvasPlugin, PluginContext } from '../types'
-import { createBuiltinMenuItems } from './builtinMenuItems'
+﻿import type { CanvasPlugin, PluginContext } from '../types'
+import { registerBuiltinMenuItems } from './builtinMenuItems'
 
 export const ContextMenuPlugin: CanvasPlugin = {
   name: 'context-menu',
   version: '1.0.0',
 
   install(context: PluginContext) {
-    context.menus.register(createBuiltinMenuItems())
+    registerBuiltinMenuItems(context)
     return {
       uninstall() {
-        context.menus.unregisterAll()
+        context.menus.unregisterSource('context-menu')
       },
     }
   },

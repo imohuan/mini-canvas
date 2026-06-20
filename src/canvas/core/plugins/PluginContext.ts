@@ -1,4 +1,4 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
 import { watch } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type {
@@ -15,7 +15,7 @@ import type {
   ViewportState,
 } from './types'
 import type { NodeRegistry } from '../registry/NodeRegistry'
-import type { MenuRegistry } from '../menu/MenuRegistry'
+import type { MenuRegistry } from '../registry/MenuRegistry'
 import type { CommandRegistry } from '../registry/CommandRegistry'
 import type { ToolbarRegistry } from '../registry/ToolbarRegistry'
 import type { PanelRegistry } from '../registry/PanelRegistry'
@@ -296,14 +296,14 @@ export function createPluginContext(
     dom: createDomService(),
 
     menus: {
-      register(items: MenuItemDefinition[]): void {
-        menuRegistry?.register(`plugin:${pluginName}`, items)
+      register(source: string, item: MenuItemDefinition): void {
+        menuRegistry?.register(source, item)
       },
-      unregister(ids: string[]): void {
-        menuRegistry?.unregister(`plugin:${pluginName}`, ids)
+      unregister(id: string): void {
+        menuRegistry?.unregister(id)
       },
-      unregisterAll(): void {
-        menuRegistry?.unregisterSource(`plugin:${pluginName}`)
+      unregisterSource(source: string): void {
+        menuRegistry?.unregisterSource(source)
       },
     },
 

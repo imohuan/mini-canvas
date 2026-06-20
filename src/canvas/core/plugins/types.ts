@@ -2,7 +2,7 @@
 import type { CommandRegistryAPI, ToolbarRegistryAPI, PanelRegistryAPI } from '../registry/types'
 import type { Node, Edge } from '@vue-flow/core'
 import type { CanvasNodeDefinition, CanvasNodeMenuItem } from '../registry/NodeRegistry'
-import type { MenuItemDefinition } from '../menu/MenuRegistry'
+import type { MenuItemDefinition } from '../registry/types'
 export type { MenuItemDefinition }
 export type { CanvasNodeDefinition, CanvasNodeMenuItem }
 
@@ -98,9 +98,12 @@ export interface CanvasDomServiceAPI {
 }
 
 export interface MenuRegistryAPI {
-  register(items: MenuItemDefinition[]): void
-  unregister(ids: string[]): void
-  unregisterAll(): void
+  /** 注册单个菜单项（同 id 覆盖） */
+  register(source: string, item: MenuItemDefinition): void
+  /** 按 id 注销菜单项 */
+  unregister(id: string): void
+  /** 注销某来源的所有菜单项 */
+  unregisterSource(source: string): void
 }
 
 export interface CanvasNodeRegistryAPI {

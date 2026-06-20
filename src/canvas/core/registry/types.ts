@@ -119,12 +119,40 @@ export interface PanelRegistryAPI {
 }
 
 export interface MenuRegistryAPI {
-  /** 注册菜单项（替换该 source 下的所有项） */
-  register(source: string, items: MenuItemDefinition[]): void
-  /** 注销指定 source 下的指定 id 菜单项 */
-  unregister(source: string, ids: string[]): void
+  /** 注册单个菜单项（同 id 覆盖，打 warn 日志） */
+  register(source: string, item: MenuItemDefinition): void
+  /** 按 id 注销单个菜单项 */
+  unregister(id: string): void
   /** 注销某来源的所有菜单项 */
   unregisterSource(source: string): void
   /** 获取所有菜单项 */
   getAll(): { source: string; item: MenuItemDefinition }[]
+  /** 获取指定区域的菜单项，按 order 排序 */
+  getByArea(area: string): MenuItemDefinition[]
+}
+
+// ============================================================
+// CanvasMenu 类型（供 CanvasMenu.vue 使用）
+// ============================================================
+
+export type CanvasMenuMode = 'pane' | 'node' | 'connection' | 'edge'
+
+export interface CanvasMenuItem {
+  id: string
+  label: string
+  description?: string
+  badge?: string
+  disabled?: boolean
+  danger?: boolean
+  shortcut?: string
+  group?: string
+  icon?: 'text' | 'image' | 'video' | 'layers' | 'link' | 'delete' | 'duplicate'
+}
+
+export interface CanvasMenuState {
+  visible: boolean
+  title: string
+  mode: CanvasMenuMode
+  position: { x: number; y: number }
+  items: CanvasMenuItem[]
 }

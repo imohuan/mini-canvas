@@ -1,10 +1,56 @@
-import type { MenuItemDefinition } from '../../menu/MenuRegistry'
+﻿import type { PluginContext } from '../types'
+import type { MenuItemDefinition } from '../../registry/types'
 
-export function createBuiltinMenuItems(): MenuItemDefinition[] {
-  return [
-    { id: 'node:copy', group: 'action', label: '复制', shortcut: 'Ctrl+C', icon: 'duplicate', visible: ctx => ctx.mode === 'node', priority: 30 },
-    { id: 'node:duplicate', group: 'action', label: '复制一份', shortcut: 'Ctrl+D', icon: 'duplicate', visible: ctx => ctx.mode === 'node', priority: 20 },
-    { id: 'node:delete', group: 'delete', label: '删除节点', shortcut: 'Del', icon: 'delete', danger: true, visible: ctx => ctx.mode === 'node', priority: 10 },
-    { id: 'edge:delete', group: 'delete', label: '删除连线', shortcut: 'Del', icon: 'delete', danger: true, visible: ctx => ctx.mode === 'edge', priority: 10 },
-  ]
+/**
+ * 注册系统自带的右键菜单项
+ *
+ * 这些是画布核心功能，通过 commandId 引用命令。
+ * 命令的 disabled 状态由 CommandRegistry 管理，菜单渲染时自动读取。
+ */
+export function registerBuiltinMenuItems(ctx: PluginContext): void {
+  // ---- 节点操作 ----
+
+  ctx.menus.register('context-menu', {
+    id: 'node:copy',
+    commandId: 'clipboard.copy',
+    title: '复制',
+    icon: 'duplicate',
+    shortcut: 'Ctrl+C',
+    areas: ['node'],
+    order: 30,
+  } as MenuItemDefinition)
+
+  ctx.menus.register('context-menu', {
+    id: 'node:duplicate',
+    commandId: 'clipboard.duplicate',
+    title: '复制一份',
+    icon: 'duplicate',
+    shortcut: 'Ctrl+D',
+    areas: ['node'],
+    order: 20,
+  } as MenuItemDefinition)
+
+  ctx.menus.register('context-menu', {
+    id: 'node:delete',
+    commandId: 'core.deleteNode',
+    title: '删除节点',
+    icon: 'delete',
+    shortcut: 'Del',
+    danger: true,
+    areas: ['node'],
+    order: 10,
+  } as MenuItemDefinition)
+
+  // ---- 边操作 ----
+
+  ctx.menus.register('context-menu', {
+    id: 'edge:delete',
+    commandId: 'core.deleteEdge',
+    title: '删除连线',
+    icon: 'delete',
+    shortcut: 'Del',
+    danger: true,
+    areas: ['edge'],
+    order: 10,
+  } as MenuItemDefinition)
 }
