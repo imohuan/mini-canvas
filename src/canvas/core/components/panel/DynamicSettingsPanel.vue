@@ -31,7 +31,8 @@ const collapsed = ref(false)
       </button>
     </div>
 
-    <div v-if="!collapsed" class="ax-panel-body">
+    <Transition name="panel-expand">
+      <div v-if="!collapsed" class="ax-panel-body">
       <div v-for="group in groupedSettings" :key="group.name" class="ax-settings-group">
         <div class="ax-group-title">{{ group.name }}</div>
         <DynamicSettingField
@@ -43,6 +44,7 @@ const collapsed = ref(false)
       </div>
       <div v-if="settings.length === 0" class="ax-settings-empty">暂无可配置项</div>
     </div>
+      </Transition>
   </div>
 </template>
 
@@ -122,5 +124,23 @@ const collapsed = ref(false)
   color: #78767b;
   font-size: 13px;
   padding: 24px 0;
+}
+
+/* ===== 展开/折叠过渡 ===== */
+.panel-expand-enter-active {
+  transition: opacity 0.2s ease, max-height 0.25s ease;
+  overflow: hidden;
+}
+.panel-expand-leave-active {
+  transition: opacity 0.15s ease, max-height 0.2s ease;
+  overflow: hidden;
+}
+.panel-expand-enter-from {
+  opacity: 0;
+  max-height: 0;
+}
+.panel-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
 }
 </style>
