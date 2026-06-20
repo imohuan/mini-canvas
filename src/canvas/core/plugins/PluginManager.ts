@@ -528,6 +528,7 @@ export class PluginManager {
         addSelectedNodes: (_nodes) => stubWarn('actions.addSelectedNodes'),
         removeSelectedNodes: (_nodes) => stubWarn('actions.removeSelectedNodes'),
         removeSelectedElements: () => stubWarn('actions.removeSelectedElements'),
+        getAllNodes: () => { stubWarn('actions.getAllNodes'); return [] },
       },
       selection: {
         getSelectedNodeIds: () => new Set<string>(),

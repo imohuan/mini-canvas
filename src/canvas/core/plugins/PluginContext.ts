@@ -543,6 +543,9 @@ function createActions(vf: VueFlowInstance, logger: Logger) {
     getNodes(): Node[] {
       try { return vf.getNodes.value } catch (err) { logger.error('actions.getNodes failed:', err); return [] }
     },
+    getAllNodes(): Node[] {
+      try { return (vf as any).nodes?.value ?? vf.getNodes.value } catch (err) { logger.error('actions.getAllNodes failed:', err); return [] }
+    },
     getEdges(): Edge[] {
       try { return vf.getEdges.value } catch (err) { logger.error('actions.getEdges failed:', err); return [] }
     },

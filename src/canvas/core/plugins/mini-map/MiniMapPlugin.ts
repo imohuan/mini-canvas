@@ -21,11 +21,11 @@ export const MiniMapPlugin: CanvasPlugin = {
     })
 
     // 初始化
-    state.nodes = context.actions.getNodes()
+    state.nodes = context.actions.getAllNodes()
     state.viewport = context.viewport.getViewport()
 
     function syncNodes() {
-      state.nodes = context.actions.getNodes()
+      state.nodes = context.actions.getAllNodes()
     }
 
     const offNodesChange = context.on("nodesChange", syncNodes)

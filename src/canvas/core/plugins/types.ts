@@ -71,6 +71,8 @@ export interface CanvasActions {
   addSelectedNodes(nodes: Node[]): void
   removeSelectedNodes(nodes: Node[]): void
   removeSelectedElements(): void
+  /** 获取全部节点（不受虚拟化过滤） */
+  getAllNodes(): Node[]
 }
 
 export interface HandleConfig {
