@@ -1351,6 +1351,10 @@ onMounted(async () => {
     syncVueFlowKeymap()
 
     // 同步 zoom 限制给 auto-layout，F 快捷键也要遵守通用设置里的缩放范围
+    function pushLayoutConfig() {
+      const api = manager.getPluginAPI<any>("auto-layout")
+      if (api) api.setConfig({ minZoom: canvas.state.core.minZoom, maxZoom: canvas.state.core.maxZoom })
+    }
     pushLayoutConfig()
     watch(
       () => [canvas.state.core.minZoom, canvas.state.core.maxZoom],
