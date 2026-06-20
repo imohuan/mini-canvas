@@ -1,31 +1,19 @@
 <script setup lang="ts">
-import { computed, ref } from "vue"
-import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { useCanvasStore } from '../../composables/useCanvasStore'
+import { computed, ref, type Ref } from "vue"
 import DynamicSettingField from './DynamicSettingField.vue'
 import type { PanelSettingDefinition } from '../../registry/types'
 
-const runtime = useCanvasRuntime()
-const canvas = useCanvasStore()
+const props = defineProps<{
+  settings: PanelSettingDefinition[]
+  groupedSettings: { name: string; items: PanelSettingDefinition[] }[]
+  getValue: (id: string) => Ref<unknown>
+}>()
 
 const collapsed = ref(false)
-
-const settings = computed<PanelSettingDefinition[]>(() => runtime.panelRegistry.getAll())
-
-const groupedSettings = computed(() => {
-  const groups = new Map<string, PanelSettingDefinition[]>()
-  for (const s of settings.value) {
-    const g = s.group || 'default'
-    if (!groups.has(g)) groups.set(g, [])
-    groups.get(g)!.push(s)
-  }
-  return [...groups.entries()].map(([name, items]) => ({ name, items }))
-})
 </script>
 
 <template>
   <div class="ax-settings-panel" :class="{ collapsed }">
-    <!-- 头部：折叠按钮 -->
     <div class="ax-panel-header">
       <button
         class="ax-panel-toggle"
@@ -43,7 +31,6 @@ const groupedSettings = computed(() => {
       </button>
     </div>
 
-    <!-- 内容区 -->
     <div v-if="!collapsed" class="ax-panel-body">
       <div v-for="group in groupedSettings" :key="group.name" class="ax-settings-group">
         <div class="ax-group-title">{{ group.name }}</div>
@@ -51,7 +38,7 @@ const groupedSettings = computed(() => {
           v-for="setting in group.items"
           :key="setting.id"
           :setting="setting"
-          :model-value="runtime.panelRegistry.useValue(setting.id, canvas.state as any, setting.defaultValue)"
+          :model-value="getValue(setting.id)"
         />
       </div>
       <div v-if="settings.length === 0" class="ax-settings-empty">暂无可配置项</div>
@@ -60,7 +47,6 @@ const groupedSettings = computed(() => {
 </template>
 
 <style scoped>
-/* ===== 面板容器 ===== */
 .ax-settings-panel {
   position: fixed;
   top: 12px;
@@ -82,8 +68,6 @@ const groupedSettings = computed(() => {
   width: auto;
   min-width: 0;
 }
-
-/* ===== 头部 ===== */
 .ax-panel-header {
   display: flex;
   align-items: center;
@@ -110,8 +94,6 @@ const groupedSettings = computed(() => {
   background: #e8e8e9;
   color: #1a1c1d;
 }
-
-/* ===== 内容区 ===== */
 .ax-panel-body {
   flex: 1;
   overflow-y: auto;
@@ -119,8 +101,6 @@ const groupedSettings = computed(() => {
   scrollbar-width: thin;
   scrollbar-color: #c8c5ca transparent;
 }
-
-/* ===== 设置组 ===== */
 .ax-settings-group {
   margin-bottom: 16px;
 }
@@ -137,8 +117,6 @@ const groupedSettings = computed(() => {
   padding: 4px 0;
   margin-bottom: 4px;
 }
-
-/* ===== 空状态 ===== */
 .ax-settings-empty {
   text-align: center;
   color: #78767b;

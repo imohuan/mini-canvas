@@ -1458,7 +1458,7 @@ onUnmounted(async () => {
     <!-- 设置面板（Teleport 到 body，不受 VueFlow transform 影响） -->
     <Teleport to="body">
       <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
-        <DynamicSettingsPanel />
+        <DynamicSettingsPanel :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue" />
       </slot>
     </Teleport>
 
