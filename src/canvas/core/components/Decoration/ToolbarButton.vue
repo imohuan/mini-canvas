@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, type Component } from 'vue'
+import { ref, type Component, nextTick } from 'vue'
 
 const props = withDefaults(defineProps<{
   icon?: Component | string
@@ -21,10 +21,26 @@ const emit = defineEmits<{
 }>()
 
 const showDropdown = ref(false)
+const buttonRef = ref<HTMLElement | null>(null)
+const dropdownStyle = ref<Record<string, string>>({})
 
 function onButtonClick() {
   if (props.disabled) return
   if (props.dropdown && props.dropdown.length > 0) {
+    if (!showDropdown.value) {
+      // 计算下拉菜单位置
+      nextTick(() => {
+        const btn = buttonRef.value
+        if (btn) {
+          const rect = btn.getBoundingClientRect()
+          dropdownStyle.value = {
+            position: 'fixed',
+            top: rect.bottom + 4 + 'px',
+            left: rect.left + 'px',
+          }
+        }
+      })
+    }
     showDropdown.value = !showDropdown.value
     return
   }
@@ -40,7 +56,7 @@ function onDropdownItemClick(id: string) {
 <template>
   <div class="toolbar-button-wrapper" @mouseleave="showDropdown = false">
     <component v-if="customRender" :is="customRender" @action="emit('action')" />
-    <button v-else class="toolbar-button"
+    <button ref="buttonRef" v-else class="toolbar-button"
       :class="{
         'toolbar-button--primary': variant === 'primary',
         'toolbar-button--danger': danger,
@@ -57,7 +73,7 @@ function onDropdownItemClick(id: string) {
     </button>
     <Teleport to="body">
       <Transition name="dropdown-fade">
-        <div v-if="showDropdown && dropdown && dropdown.length > 0" class="toolbar-dropdown">
+        <div v-if="showDropdown && dropdown && dropdown.length > 0" class="toolbar-dropdown" :style="dropdownStyle">
           <button v-for="item in dropdown" :key="item.id" class="toolbar-dropdown-item"
             :class="{ 'toolbar-dropdown-item--danger': item.danger, 'is-disabled': item.disabled }"
             :disabled="item.disabled" type="button" @click.stop="onDropdownItemClick(item.id)">
@@ -93,7 +109,7 @@ function onDropdownItemClick(id: string) {
 .toolbar-button-label { font-size: 12px; }
 .toolbar-button-chevron { opacity: 0.5; margin-left: 2px; }
 .toolbar-dropdown {
-  position: fixed; z-index: 99999; margin-top: 4px; min-width: 140px;
+  z-index: 99999; min-width: 140px;
   padding: 4px; background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
   border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.12);
