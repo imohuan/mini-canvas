@@ -224,6 +224,23 @@ function normalizeConnection(connection: Connection): Connection {
   }
 }
 
+function toCanonicalConnection(connection: Connection): Connection | null {
+  const normalized = normalizeConnection(connection)
+  if (normalized.sourceHandle === 'source' && normalized.targetHandle === 'target') {
+    return normalized
+  }
+  if (normalized.sourceHandle === 'target' && normalized.targetHandle === 'source') {
+    return {
+      ...normalized,
+      source: normalized.target,
+      target: normalized.source,
+      sourceHandle: 'source',
+      targetHandle: 'target',
+    }
+  }
+  return null
+}
+
 // --- connection validation ---
 function isValidConnection(connection: Connection): boolean {
   const normalized = normalizeConnection(connection)
@@ -232,22 +249,27 @@ function isValidConnection(connection: Connection): boolean {
     console.warn('[连线拦截] 缺少源节点或目标节点:', connection)
     return false
   }
-  if (normalized.sourceHandle !== 'source') {
-    console.warn('[连线拦截] 只能从右侧输出端口拖出:', normalized.sourceHandle)
-    return false
-  }
-  if (normalized.targetHandle !== 'target') {
-    console.warn('[连线拦截] 只能连到左侧输入端口:', normalized.targetHandle)
+  if (normalized.sourceHandle === normalized.targetHandle) {
+    console.warn('[连线拦截] 不能连接两个相同类型端口:', {
+      sourceHandle: normalized.sourceHandle,
+      targetHandle: normalized.targetHandle,
+    })
     return false
   }
   if (normalized.source === normalized.target) {
     console.warn('[连线拦截] 不能连接自己:', normalized.source)
     return false
   }
-  const src = getConnectableNode(normalized.source)
-  const tgt = getConnectableNode(normalized.target)
+  const canonical = toCanonicalConnection(normalized)
+  if (!canonical) {
+    console.warn('[连线拦截] 端口方向不合法:', normalized)
+    return false
+  }
+
+  const src = getConnectableNode(canonical.source)
+  const tgt = getConnectableNode(canonical.target)
   if (!src || !tgt) {
-    console.warn('[连线拦截] 节点不存在:', { source: normalized.source, target: normalized.target })
+    console.warn('[连线拦截] 节点不存在:', { source: canonical.source, target: canonical.target })
     return false
   }
   if (!src.sourcePosition) { console.warn('[连线拦截] 源节点无输出端口:', src.id); return false }
@@ -279,7 +301,8 @@ function repairExistingConnection(edge: Edge, connection: Connection) {
 
 /** 创建新连线：验证 → 去重 → 添加。source 参数标识触发来源 */
 function createConnection(connection: Connection, source = 'manual') {
-  const normalized = normalizeConnection(connection)
+  const normalized = toCanonicalConnection(connection)
+  if (!normalized) return false
   if (!isValidConnection(normalized)) return false
 
   const existingEdge = findSameConnection(normalized)
@@ -341,7 +364,7 @@ function toFlowPosition(clientX: number, clientY: number) {
 
 // NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
 
-function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: number }, options: { requireTarget?: boolean } = {}) {
+function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: number }, options: { requireTarget?: boolean; requireSource?: boolean } = {}) {
   const nodeId = `node-${item.id}-${Date.now()}`
   const canReceiveInput = options.requireTarget || nodeRegistry.canReceiveInput(item.id)
   const defaultSize = nodeRegistry.getDefaultSize(item.id)
@@ -359,7 +382,7 @@ function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: 
       cardHeight: defaultSize.cardHeight,
       resizable: item.id === 'text',
     },
-    sourcePosition: Position.Right,
+    ...(options.requireSource !== false ? { sourcePosition: Position.Right } : {}),
     ...(canReceiveInput ? { targetPosition: Position.Left } : {}),
   }
 
@@ -417,15 +440,26 @@ async function onMenuSelect(item: CanvasMenuItem) {
     vueFlowInstance.removeNodes([pending.tempNodeId])
     await nextTick()
 
-    const node = createNodeFromMenuItem(item, pending.flowPosition, { requireTarget: true })
+    const isReverseConnection = pending.sourceHandle === 'target'
+    const node = createNodeFromMenuItem(item, pending.flowPosition, {
+      requireSource: isReverseConnection,
+      requireTarget: !isReverseConnection,
+    })
     await nextTick()
 
-    createConnection({
-      source: pending.sourceNodeId,
-      target: node.id,
-      sourceHandle: pending.sourceHandle,
-      targetHandle: 'target',
-    }, 'blank-menu')
+    createConnection(isReverseConnection
+      ? {
+          source: node.id,
+          target: pending.sourceNodeId,
+          sourceHandle: 'source',
+          targetHandle: pending.sourceHandle,
+        }
+      : {
+          source: pending.sourceNodeId,
+          target: node.id,
+          sourceHandle: pending.sourceHandle,
+          targetHandle: 'target',
+        }, 'blank-menu')
     return
   }
 
@@ -550,20 +584,32 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
   return bestNode
 }
 
+function findNearestConnectableNode(clientX: number, clientY: number, startHandle: string | null, startNodeId?: string | null) {
+  if (startHandle === 'source') {
+    return findNearestValidTarget(clientX, clientY, startNodeId || undefined)
+  }
+  if (startHandle === 'target') {
+    return findNearestValidSource(clientX, clientY, new Set(startNodeId ? [startNodeId] : []))
+  }
+  return null
+}
+
 /** 从节点拖出连线后弹出"选择目标节点类型"菜单 */
 function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId: string, sourceHandle: string) {
-  if (sourceHandle !== 'source') return
+  if (sourceHandle !== 'source' && sourceHandle !== 'target') return
 
   const flowPosition = toFlowPosition(point.x, point.y)
   const tempNodeId = `temp-target-${Date.now()}`
   const tempEdgeId = `temp-edge-${sourceNodeId}-${Date.now()}`
+  const isReverseConnection = sourceHandle === 'target'
 
   vueFlowInstance.addNodes([{
     id: tempNodeId,
     type: 'tempTarget',
     position: flowPosition,
     data: { isTemp: true },
-    targetPosition: Position.Left,
+    sourcePosition: isReverseConnection ? Position.Right : undefined,
+    targetPosition: isReverseConnection ? undefined : Position.Left,
     draggable: false,
     selectable: false,
   } as Node])
@@ -571,10 +617,10 @@ function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId:
   vueFlowInstance.addEdges([{
     id: tempEdgeId,
     type: 'custom',
-    source: sourceNodeId,
-    target: tempNodeId,
-    sourceHandle,
-    targetHandle: 'target',
+    source: isReverseConnection ? tempNodeId : sourceNodeId,
+    target: isReverseConnection ? sourceNodeId : tempNodeId,
+    sourceHandle: isReverseConnection ? 'source' : sourceHandle,
+    targetHandle: isReverseConnection ? sourceHandle : 'target',
     selectable: false,
     zIndex: 99999,
     data: {
@@ -777,8 +823,8 @@ function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'sourc
     type: 'tempTarget',
     position: flowPosition,
     data: { isTemp: true },
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
+    sourcePosition: payload.type === 'target' ? Position.Right : undefined,
+    targetPosition: payload.type === 'source' ? Position.Left : undefined,
     draggable: false,
     selectable: false,
   } as Node])
@@ -832,14 +878,21 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
     // 如果已经精确连到了 Handle，@connect 会先创建边，这里不要再抢着处理。
     if (!point || !sourceNodeId || !sourceHandle || Date.now() - lastNativeConnectAt < 80) return
 
-    const targetNode = findNearestValidTarget(point.x, point.y)
+    const targetNode = findNearestConnectableNode(point.x, point.y, sourceHandle, sourceNodeId)
     if (targetNode) {
-      createConnection({
-        source: sourceNodeId,
-        target: targetNode.id,
-        sourceHandle,
-        targetHandle: 'target',
-      }, 'snap')
+      createConnection(sourceHandle === 'target'
+        ? {
+            source: targetNode.id,
+            target: sourceNodeId,
+            sourceHandle: 'source',
+            targetHandle: sourceHandle,
+          }
+        : {
+            source: sourceNodeId,
+            target: targetNode.id,
+            sourceHandle,
+            targetHandle: 'target',
+          }, 'snap')
       return
     }
 
@@ -968,6 +1021,8 @@ function getNodeCardFlowRect(nodeId: string, fallbackPosition: { x: number; y: n
 /** 构建拖拽连线时的吸附区域和反馈数据 */
 function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const sourceId = connectionLineProps.sourceNode?.id || canvas.connectionState.sourceNodeId || '__source__'
+  const startHandle = canvas.connectionState.sourceHandle || (connectionLineProps as any).sourceHandleId || 'source'
+  const isReverseConnection = startHandle === 'target'
   const handleRadius = canvas.state.core.handleRadius
   const snapOuter = handleRadius * canvas.state.core.connectionSnapOuterRatio
   const snapInner = handleRadius * canvas.state.core.connectionSnapInnerRatio
@@ -976,7 +1031,7 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
 
   const liveNodes = (getNodes.value as Node[])
   const targetNodes = liveNodes
-    .filter(node => node.id !== sourceId && node.targetPosition)
+    .filter(node => node.id !== sourceId && (isReverseConnection ? node.sourcePosition : node.targetPosition))
     .map((node) => {
       const size = getNodeSize(node)
       const anyNode = node as any
@@ -998,9 +1053,8 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const snapZones = targetNodes
     .map(({ node, size, position }) => {
       const centerY = position.y + size.height / 2
-      // 黄色矩形：只负责“吸附到左端口”。
-      // 形状参考图2：围绕左端口，上下有留白，并且往节点内部压一点。
-      const snapX = position.x - snapOuter
+      const anchorX = isReverseConnection ? position.x + size.width : position.x
+      const snapX = isReverseConnection ? anchorX - snapInner : position.x - snapOuter
       const snapY = centerY - snapHeight / 2
       return {
         id: node.id,
@@ -1008,7 +1062,7 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
         y: snapY,
         width: snapWidth,
         height: snapHeight,
-        anchorX: position.x,
+        anchorX,
         anchorY: centerY,
       }
     })
@@ -1091,6 +1145,8 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
     forceFlow: true,
     targetX: endX,
     targetY: endY,
+    sourceHandleId: startHandle,
+    targetHandleId: isReverseConnection ? 'source' : 'target',
     targetNode: connectionLineProps.targetNode || connectionLineProps.sourceNode,
     sourceNode: connectionLineProps.sourceNode,
   } as any

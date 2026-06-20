@@ -3,6 +3,123 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { EdgeProps } from '@vue-flow/core'
 import { useCanvasStore } from '../composables/useCanvasStore'
+type EdgeType = 'bezier' | 'straight' | 'step'
+type PortSide = 'left' | 'right'
+
+type CustomEdgePathOptions = {
+  edgeType: EdgeType
+  sourceX: number
+  sourceY: number
+  targetX: number
+  targetY: number
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  sourcePosition?: string | null
+  targetPosition?: string | null
+  temporaryTargetHandle?: boolean
+}
+
+function normalizePosition(position?: string | null): PortSide | null {
+  const value = String(position || '').toLowerCase()
+  if (value.includes('left')) return 'left'
+  if (value.includes('right')) return 'right'
+  return null
+}
+
+function getPortSide(handle?: string | null, position?: string | null): PortSide | null {
+  if (handle === 'source') return 'right'
+  if (handle === 'target') return 'left'
+  return normalizePosition(position)
+}
+
+function getSideDirection(side: PortSide) {
+  return side === 'right' ? 1 : -1
+}
+
+function getControlDistance(sourceX: number, targetX: number) {
+  return Math.max(Math.abs(targetX - sourceX) * 0.5, 80)
+}
+
+function getEdgeGeometry(options: CustomEdgePathOptions) {
+  const sourceSide = getPortSide(options.sourceHandle, options.sourcePosition) ?? 'right'
+  const targetSide = options.temporaryTargetHandle
+    ? (sourceSide === 'right' ? 'left' : 'right')
+    : getPortSide(options.targetHandle, options.targetPosition) ?? 'left'
+  const distance = getControlDistance(options.sourceX, options.targetX)
+
+  return {
+    sourceDirection: getSideDirection(sourceSide),
+    targetDirection: getSideDirection(targetSide),
+    distance,
+  }
+}
+
+function buildCustomEdgePath(options: CustomEdgePathOptions) {
+  const { edgeType, sourceX, sourceY, targetX, targetY } = options
+  const { sourceDirection, targetDirection, distance } = getEdgeGeometry(options)
+
+  switch (edgeType) {
+    case 'straight':
+      return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`
+    case 'step': {
+      const sourceBendX = sourceX + sourceDirection * distance
+      const targetBendX = targetX + targetDirection * distance
+      const midX = (sourceBendX + targetBendX) / 2
+      return `M ${sourceX} ${sourceY} L ${sourceBendX} ${sourceY} L ${midX} ${sourceY} L ${midX} ${targetY} L ${targetBendX} ${targetY} L ${targetX} ${targetY}`
+    }
+    case 'bezier':
+    default: {
+      const c1x = sourceX + sourceDirection * distance
+      const c2x = targetX + targetDirection * distance
+      return `M ${sourceX} ${sourceY} C ${c1x} ${sourceY}, ${c2x} ${targetY}, ${targetX} ${targetY}`
+    }
+  }
+}
+
+function sampleCustomEdgePath(t: number, options: CustomEdgePathOptions): { x: number; y: number } {
+  const { edgeType, sourceX, sourceY, targetX, targetY } = options
+  const { sourceDirection, targetDirection, distance } = getEdgeGeometry(options)
+
+  switch (edgeType) {
+    case 'straight':
+      return {
+        x: sourceX + (targetX - sourceX) * t,
+        y: sourceY + (targetY - sourceY) * t,
+      }
+    case 'step': {
+      const sourceBendX = sourceX + sourceDirection * distance
+      const targetBendX = targetX + targetDirection * distance
+      const midX = (sourceBendX + targetBendX) / 2
+      const points = [
+        { x: sourceX, y: sourceY },
+        { x: sourceBendX, y: sourceY },
+        { x: midX, y: sourceY },
+        { x: midX, y: targetY },
+        { x: targetBendX, y: targetY },
+        { x: targetX, y: targetY },
+      ]
+      const segment = Math.min(points.length - 2, Math.floor(t * (points.length - 1)))
+      const segmentStart = segment / (points.length - 1)
+      const segmentT = (t - segmentStart) * (points.length - 1)
+      const from = points[segment]
+      const to = points[segment + 1]
+      return {
+        x: from.x + (to.x - from.x) * segmentT,
+        y: from.y + (to.y - from.y) * segmentT,
+      }
+    }
+    case 'bezier':
+    default: {
+      const c1x = sourceX + sourceDirection * distance
+      const c2x = targetX + targetDirection * distance
+      const mt = 1 - t
+      return {
+        x: mt ** 3 * sourceX + 3 * mt ** 2 * t * c1x + 3 * mt * t ** 2 * c2x + t ** 3 * targetX,
+        y: mt ** 3 * sourceY + 3 * mt ** 2 * t * sourceY + 3 * mt * t ** 2 * targetY + t ** 3 * targetY,
+      }
+    }
+  }
+}
 
 type CustomEdgeExtraProps = {
   temporary?: boolean
@@ -36,55 +153,34 @@ const isHighlighted = computed(() =>
 
 // ---- 路径计算 ----
 const edgePath = computed(() => {
-  const { sourceX, sourceY, targetX, targetY } = props
-  switch (edgeType.value) {
-    case 'straight':
-      return `M ${sourceX} ${sourceY} L ${targetX} ${targetY}`
-    case 'step': {
-      const mx = (sourceX + targetX) / 2
-      return `M ${sourceX} ${sourceY} L ${mx} ${sourceY} L ${mx} ${targetY} L ${targetX} ${targetY}`
-    }
-    case 'bezier':
-    default: {
-      const dx = (targetX - sourceX) * 0.5
-      return `M ${sourceX} ${sourceY} C ${sourceX + dx} ${sourceY}, ${targetX - dx} ${targetY}, ${targetX} ${targetY}`
-    }
-  }
+  return buildCustomEdgePath({
+    edgeType: edgeType.value,
+    sourceX: props.sourceX,
+    sourceY: props.sourceY,
+    targetX: props.targetX,
+    targetY: props.targetY,
+    sourceHandle: props.sourceHandleId,
+    targetHandle: props.targetHandleId,
+    sourcePosition: props.sourcePosition,
+    targetPosition: props.targetPosition,
+    temporaryTargetHandle: isTemporaryEdge.value,
+  })
 })
 
 // ---- 路径采样 ----
 function samplePath(t: number): { x: number; y: number } {
-  const { sourceX, sourceY, targetX, targetY } = props
-  switch (edgeType.value) {
-    case 'straight':
-      return {
-        x: sourceX + (targetX - sourceX) * t,
-        y: sourceY + (targetY - sourceY) * t,
-      }
-    case 'step': {
-      const mx = (sourceX + targetX) / 2
-      if (t < 0.25) {
-        const s = t / 0.25
-        return { x: sourceX + (mx - sourceX) * s, y: sourceY }
-      } else if (t < 0.75) {
-        const s = (t - 0.25) / 0.5
-        return { x: mx, y: sourceY + (targetY - sourceY) * s }
-      } else {
-        const s = (t - 0.75) / 0.25
-        return { x: mx + (targetX - mx) * s, y: targetY }
-      }
-    }
-    default: {
-      const dx = (targetX - sourceX) * 0.5
-      const c1x = sourceX + dx; const c1y = sourceY
-      const c2x = targetX - dx; const c2y = targetY
-      const mt = 1 - t
-      return {
-        x: mt ** 3 * sourceX + 3 * mt ** 2 * t * c1x + 3 * mt * t ** 2 * c2x + t ** 3 * targetX,
-        y: mt ** 3 * sourceY + 3 * mt ** 2 * t * c1y + 3 * mt * t ** 2 * c2y + t ** 3 * targetY,
-      }
-    }
-  }
+  return sampleCustomEdgePath(t, {
+    edgeType: edgeType.value,
+    sourceX: props.sourceX,
+    sourceY: props.sourceY,
+    targetX: props.targetX,
+    targetY: props.targetY,
+    sourceHandle: props.sourceHandleId,
+    targetHandle: props.targetHandleId,
+    sourcePosition: props.sourcePosition,
+    targetPosition: props.targetPosition,
+    temporaryTargetHandle: isTemporaryEdge.value,
+  })
 }
 
 function findClosestPoint(mx: number, my: number) {
