@@ -17,6 +17,7 @@ import type {
 import type { NodeRegistry } from '../registry/NodeRegistry'
 import type { MenuRegistry } from '../registry/MenuRegistry'
 import type { CommandRegistry } from '../registry/CommandRegistry'
+import type { CommandContext } from '../registry/types'
 import type { ToolbarRegistry } from '../registry/ToolbarRegistry'
 import type { PanelRegistry } from '../registry/PanelRegistry'
 import { CanvasDomService } from '../runtime/CanvasDomService'
@@ -340,8 +341,8 @@ export function createPluginContext(
       register(command: any) { commandRegistry?.register(command) },
       unregister(id: string) { commandRegistry?.unregister(id) },
       unregisterSource(source: string) { commandRegistry?.unregisterSource(source) },
-      async execute(id: string, args?: unknown) {
-        commandRegistry?.execute(id, { runtime: null, actions: null, selection: null, viewport: null, store: null, logger }, args)
+      async execute<T = void>(id: string, ctx?: CommandContext, args?: unknown): Promise<T | undefined> {
+        return commandRegistry?.execute<T>(id, ctx ?? { runtime: null, actions: null, selection: null, viewport: null, store: null, logger }, args)
       },
       canExecute(id: string) { return commandRegistry?.canExecute(id) ?? false },
       has(id: string) { return commandRegistry?.has(id) ?? false },

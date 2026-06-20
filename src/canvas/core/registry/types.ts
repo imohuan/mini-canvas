@@ -42,7 +42,7 @@ export interface CanvasCommand extends BaseRegistryItem {
   dropdown?: ToolbarDropdownItem[]
   customRender?: Component
   areas?: Array<'pane' | 'node' | 'edge' | 'connection'>
-  run: (ctx: CommandContext, args?: unknown) => void | Promise<void>
+  run: (ctx: CommandContext, args?: unknown) => unknown
 }
 
 export interface MenuItemDefinition extends BaseRegistryItem {
@@ -95,7 +95,7 @@ export interface CommandRegistryAPI {
   register(command: CanvasCommand): void
   unregister(id: string): void
   unregisterSource(source: string): void
-  execute(id: string, ctx: CommandContext, args?: unknown): void | Promise<void>
+  execute<T = void>(id: string, ctx: CommandContext, args?: unknown): T | Promise<T | undefined>
   canExecute(id: string, ctx?: CommandContext): boolean
   has(id: string): boolean
   get(id: string): CanvasCommand | null

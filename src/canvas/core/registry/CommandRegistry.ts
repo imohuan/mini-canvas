@@ -1,4 +1,4 @@
-import { reactive } from 'vue'
+﻿import { reactive } from 'vue'
 import type { CanvasCommand, CommandContext, CommandRegistryAPI } from './types'
 
 /**
@@ -80,18 +80,30 @@ export class CommandRegistry implements CommandRegistryAPI {
   /**
    * 执行命令
    *
-   * - 命令不存在 -> 抛错
-   * - run 报错 -> 捕获并记入 logger，不抛出
+   * 支持泛型返回值。
+   *
+   * ```typescript
+   * // fire-and-forget（不关心返回值）
+   * await registry.execute('core.deleteNode', ctx)
+   *
+   * // 需要返回值
+   * const data = await registry.execute<Blob>('canvas-export.toBlob', ctx)
+   * ```
+   *
+   * - 命令不存在 → 抛错
+   * - run 报错 → 捕获并记入 logger，不抛出，返回 undefined
    */
-  async execute(id: string, ctx: CommandContext, args?: unknown): Promise<void> {
+  async execute<T = void>(id: string, ctx: CommandContext, args?: unknown): Promise<T | undefined> {
     const cmd = this.commands.get(id)
     if (!cmd) {
       throw new Error(`[CommandRegistry] Command not found: "${id}"`)
     }
     try {
-      await cmd.run(ctx, args)
+      const result = await cmd.run(ctx, args)
+      return result as T
     } catch (err) {
       ctx.logger?.error?.(`[CommandRegistry] Command "${id}" failed:`, err)
+      return undefined
     }
   }
 

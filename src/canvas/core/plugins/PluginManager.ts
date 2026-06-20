@@ -1,4 +1,4 @@
-import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
+﻿import type { CanvasPlugin, PluginContext, CanvasConfig, Logger, PluginInstallResult } from './types'
 import { PluginLifecycle } from './types'
 import { EventBus } from './PluginContext'
 
@@ -582,7 +582,7 @@ export class PluginManager {
         register: (_cmd: any) => stubWarn('commands.register'),
         unregister: (_id: string) => stubWarn('commands.unregister'),
         unregisterSource: (_source: string) => stubWarn('commands.unregisterSource'),
-        execute: async (_id: string) => stubWarn('commands.execute'),
+        execute: async <T = void>(_id: string) => { stubWarn('commands.execute'); return undefined as T | undefined },
         canExecute: () => false,
         has: () => false,
         get: () => null,
