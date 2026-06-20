@@ -70,11 +70,23 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
     }
 
     function handleBeforeUnload() {
-      if (saveTimer) {
-        clearTimeout(saveTimer)
-        saveTimer = null
-      }
-      performSave()
+      if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+      if (!dirty) return
+      const storage = getStorageAPI()
+      if (!storage || !storage.isConnected || !storage.currentProjectId) return
+      try {
+        const nodes = context.actions.getNodes()
+        const edges = context.actions.getEdges()
+        const cleaned = JSON.parse(JSON.stringify({ nodes, edges }))
+        cleaned.nodes = cleaned.nodes.filter((n: any) =>
+          n.type !== 'tempTarget' && !String(n.id ?? '').startsWith('temp-') && !n.data?.isTemp
+        )
+        cleaned.edges = cleaned.edges.filter((e: any) =>
+          !String(e.id ?? '').startsWith('temp-') && !e.data?.isTemp
+        )
+        localStorage.setItem(`canvas-ai:project:${storage.currentProjectId}`, JSON.stringify(cleaned))
+        dirty = false
+      } catch (_err) { /* 静默失败 */ }
     }
 
     const offNodesChange = context.on('nodesChange', () => markDirty())

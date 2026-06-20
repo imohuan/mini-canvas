@@ -6,7 +6,7 @@ import {
   summarizeSamples,
   type PerformanceSample,
   type PerformanceThresholds,
-} from '../components/performance/performanceMetrics'
+} from '../components/Performance/performanceMetrics'
 
 interface UseCanvasPerformanceOptions {
   enabled: Ref<boolean>

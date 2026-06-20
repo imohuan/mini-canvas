@@ -9,7 +9,7 @@ import {
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
 import DynamicSettingsPanel from './components/Panel/DynamicSettingsPanel.vue'
-import CanvasPerformancePanel from './components/performance/CanvasPerformancePanel.vue'
+import CanvasPerformancePanel from './components/Performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
 import CanvasMenu from './components/Menu/CanvasMenu.vue'
