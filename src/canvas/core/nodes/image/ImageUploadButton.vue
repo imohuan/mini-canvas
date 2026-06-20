@@ -1,11 +1,24 @@
 ﻿<script setup lang="ts">
-import { ref } from 'vue'
-const emit = defineEmits<{ (e: 'action'): void }>()
+import { ref, inject } from 'vue'
+import { NodeIdInjection } from '@vue-flow/core'
+import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
+
+const runtime = useCanvasRuntime()
+const nodeId = inject(NodeIdInjection, null) as string | null
 const fileInputRef = ref<HTMLInputElement | null>(null)
+
 function openPicker() { fileInputRef.value?.click() }
-function onFileChange(event: Event) {
+
+async function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
-  if (input.files?.[0]) emit('action')
+  const file = input.files?.[0]
+  if (!file || !nodeId) return
+
+  const node = (runtime.vueFlowInstance.getNodes.value as any[]).find((n: any) => n.id === nodeId)
+  await runtime.commandRegistry.execute('image.upload', {
+    runtime, actions: null, selection: null, viewport: null, store: null,
+    logger: console, node, nodeType: 'image',
+  }, { file })
   input.value = ''
 }
 </script>
