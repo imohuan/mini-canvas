@@ -1,6 +1,7 @@
-﻿import { describe, it, before, after } from 'node:test'
-import assert from 'node:assert/strict'
-import type { CanvasCommand, CommandContext } from './types'
+﻿import { describe, it, before, after } from "node:test"
+import assert from "node:assert/strict"
+import { CommandRegistry } from "./CommandRegistry.ts"
+import type { CanvasCommand, CommandContext } from "./types"
 
 // ---------- helpers ----------
 const noop = () => {}
@@ -14,150 +15,153 @@ const makeCtx = (overrides?: Partial<CommandContext>): CommandContext => ({
   ...overrides,
 })
 
-// ---------- minimal mock ----------
-function createRegistry() {
-  const commands = new Map<string, CanvasCommand>()
-  return {
-    register(cmd: CanvasCommand) {
-      if (commands.has(cmd.id)) throw new Error(Command '' already registered)
-      commands.set(cmd.id, cmd)
-    },
-    unregister(id: string) { commands.delete(id) },
-    unregisterSource(source: string) {
-      for (const [id, cmd] of commands) {
-        if (cmd.source === source) commands.delete(id)
-      }
-    },
-    execute(id: string, ctx: CommandContext, args?: unknown) {
-      const cmd = commands.get(id)
-      if (!cmd) throw new Error(Command '' not found)
-      return cmd.run(ctx, args)
-    },
-    canExecute(id: string, ctx?: CommandContext): boolean {
-      const cmd = commands.get(id)
-      if (!cmd) return false
-      if (typeof cmd.disabled === 'function') return !cmd.disabled(ctx ?? makeCtx())
-      return !cmd.disabled
-    },
-    has(id: string) { return commands.has(id) },
-    get(id: string) { return commands.get(id) ?? null },
-    getPublic() {
-      return [...commands.values()].filter(c => !c.id.startsWith('_'))
-    },
-    getAll() { return [...commands.values()] },
-  }
-}
-
 // ---------- tests ----------
-describe('CommandRegistry', () => {
-  let registry: ReturnType<typeof createRegistry>
+describe("CommandRegistry", () => {
+  let registry: CommandRegistry
 
-  before(() => { registry = createRegistry() })
-  after(() => { registry = createRegistry() })
+  before(() => { registry = new CommandRegistry() })
+  after(() => { registry = new CommandRegistry() })
 
-  it('register and get a command', () => {
+  it("register and get a command", () => {
     const cmd: CanvasCommand = {
-      id: 'test:hello',
-      source: 'test',
-      title: 'Hello',
-      run: () => 'ok',
+      id: "test:hello",
+      source: "test",
+      title: "Hello",
+      run: () => {},
     }
     registry.register(cmd)
-    assert.ok(registry.has('test:hello'))
-    assert.equal(registry.get('test:hello')?.title, 'Hello')
+    assert.ok(registry.has("test:hello"))
+    assert.equal(registry.get("test:hello")?.title, "Hello")
   })
 
-  it('execute a command', () => {
+  it("execute a command", async () => {
     let called = false
     registry.register({
-      id: 'test:exec',
-      source: 'test',
+      id: "test:exec",
+      source: "test",
       run: () => { called = true },
     })
-    registry.execute('test:exec', makeCtx())
+    await registry.execute("test:exec", makeCtx())
     assert.ok(called)
   })
 
-  it('execute with args', () => {
+  it("execute with args", async () => {
     let captured: unknown
     registry.register({
-      id: 'test:args',
-      source: 'test',
+      id: "test:args",
+      source: "test",
       run: (_ctx, args) => { captured = args },
     })
-    registry.execute('test:args', makeCtx(), 42)
+    await registry.execute("test:args", makeCtx(), 42)
     assert.equal(captured, 42)
   })
 
-  it('throw on duplicate id', () => {
+  it("execute unknown command throws", async () => {
+    await assert.rejects(
+      () => registry.execute("nonexistent", makeCtx()),
+      /Command not found/,
+    )
+  })
+
+  it("duplicate id overwrites", () => {
     registry.register({
-      id: 'test:dup',
-      source: 'test',
+      id: "test:dup",
+      source: "test",
       run: () => {},
     })
-    assert.throws(() => {
-      registry.register({
-        id: 'test:dup',
-        source: 'test2',
-        run: () => {},
-      })
-    }, /already registered/)
-  })
-
-  it('unregister by id', () => {
     registry.register({
-      id: 'test:remove',
-      source: 'test',
+      id: "test:dup",
+      source: "test2",
       run: () => {},
     })
-    assert.ok(registry.has('test:remove'))
-    registry.unregister('test:remove')
-    assert.ok(!registry.has('test:remove'))
+    // 后注册的覆盖先注册的
+    assert.equal(registry.get("test:dup")?.source, "test2")
   })
 
-  it('unregisterSource removes all commands from a source', () => {
-    registry.register({ id: 'a:1', source: 'pluginA', run: () => {} })
-    registry.register({ id: 'a:2', source: 'pluginA', run: () => {} })
-    registry.register({ id: 'b:1', source: 'pluginB', run: () => {} })
-    registry.unregisterSource('pluginA')
-    assert.ok(!registry.has('a:1'))
-    assert.ok(!registry.has('a:2'))
-    assert.ok(registry.has('b:1'))
+  it("unregister by id", () => {
+    registry.register({
+      id: "test:remove",
+      source: "test",
+      run: () => {},
+    })
+    assert.ok(registry.has("test:remove"))
+    registry.unregister("test:remove")
+    assert.ok(!registry.has("test:remove"))
   })
 
-  it('getPublic filters internal commands', () => {
-    registry.register({ id: '_internal', source: 'test', run: () => {} })
-    registry.register({ id: 'visible', source: 'test', run: () => {} })
+  it("unregisterSource removes all commands from a source", () => {
+    registry.register({ id: "a:1", source: "pluginA", run: () => {} })
+    registry.register({ id: "a:2", source: "pluginA", run: () => {} })
+    registry.register({ id: "b:1", source: "pluginB", run: () => {} })
+    registry.unregisterSource("pluginA")
+    assert.ok(!registry.has("a:1"))
+    assert.ok(!registry.has("a:2"))
+    assert.ok(registry.has("b:1"))
+  })
+
+  it("getPublic returns only commands with title", () => {
+    registry.register({ id: "_hidden", source: "test", run: () => {} })
+    registry.register({ id: "shown", source: "test", title: "Shown", run: () => {} })
     const pub = registry.getPublic()
-    assert.equal(pub.length, 1)
-    assert.equal(pub[0].id, 'visible')
+    const ids = pub.map(c => c.id)
+    assert.ok(ids.includes("shown"))
+    assert.ok(!ids.includes("_hidden"))
   })
 
-  it('canExecute checks disabled', () => {
+  it("canExecute checks disabled boolean", () => {
     registry.register({
-      id: 'test:enabled',
-      source: 'test',
+      id: "test:enabled",
+      source: "test",
       disabled: false,
       run: () => {},
     })
     registry.register({
-      id: 'test:disabled',
-      source: 'test',
+      id: "test:disabled",
+      source: "test",
       disabled: true,
       run: () => {},
     })
-    assert.ok(registry.canExecute('test:enabled'))
-    assert.ok(!registry.canExecute('test:disabled'))
+    assert.ok(registry.canExecute("test:enabled"))
+    assert.ok(!registry.canExecute("test:disabled"))
   })
 
-  it('canExecute handles function disabled', () => {
+  it("canExecute handles function disabled", () => {
     registry.register({
-      id: 'test:fn-disabled',
-      source: 'test',
+      id: "test:fn-disabled",
+      source: "test",
       disabled: (ctx) => !ctx.node,
       run: () => {},
     })
-    assert.ok(!registry.canExecute('test:fn-disabled', makeCtx()))
-    assert.ok(registry.canExecute('test:fn-disabled', makeCtx({ node: { id: 'n1', type: 'text', position: { x: 0, y: 0 }, data: {} } })))
+    assert.ok(!registry.canExecute("test:fn-disabled", makeCtx()))
+    assert.ok(registry.canExecute("test:fn-disabled", makeCtx({
+      node: { id: "n1", type: "text", position: { x: 0, y: 0 }, data: {} },
+    })))
+  })
+
+  it("execute catches run errors via logger", async () => {
+    let loggedError = false
+    registry.register({
+      id: "test:throws",
+      source: "test",
+      run: () => { throw new Error("boom") },
+    })
+    const ctx = makeCtx({
+      logger: { debug: noop, info: noop, warn: noop, error: () => { loggedError = true } },
+    })
+    await registry.execute("test:throws", ctx)
+    assert.ok(loggedError)
+  })
+
+  it("visible command still executable via code", async () => {
+    let called = false
+    registry.register({
+      id: "test:invisible",
+      source: "test",
+      title: "Invisible",
+      visible: false,
+      run: () => { called = true },
+    })
+    await registry.execute("test:invisible", makeCtx())
+    assert.ok(called)
   })
 })

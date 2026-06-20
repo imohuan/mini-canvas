@@ -1,15 +1,11 @@
-<script setup lang="ts">
-import { Position } from '@vue-flow/core'
-import { useCanvasStore } from '../../composables/useCanvasStore'
-import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
+﻿<script setup lang="ts">
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 defineOptions({ inheritAttrs: false })
-const canvas = useCanvasStore()
 </script>
 
 <template>
-  <NodeToolbar :position="Position.Bottom" :offset="canvas.state.core.bottomToolbarOffset">
+  <div class="node-toolbar-inline">
     <div class="flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
       <ToolbarButton>
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -33,5 +29,5 @@ const canvas = useCanvasStore()
         <span>删除</span>
       </ToolbarButton>
     </div>
-  </NodeToolbar>
+  </div>
 </template>

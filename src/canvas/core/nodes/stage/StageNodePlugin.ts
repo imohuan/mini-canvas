@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { StageNode, StageTopToolbar, StageBottomToolbar } from './index'
+import { StageNode } from './index'
 
 export const StageNodePlugin: CanvasPlugin = {
   name: 'node:stage',
@@ -10,8 +10,6 @@ export const StageNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'stage',
       node: markRaw(StageNode),
-      topToolbar: markRaw(StageTopToolbar),
-      bottomToolbar: markRaw(StageBottomToolbar),
       label: '导演台',
       defaultSize: { cardWidth: 320, cardHeight: 320 },
       menuItem: { label: '导演台', description: '创建编排节点', icon: 'layers', badge: 'NEW' },

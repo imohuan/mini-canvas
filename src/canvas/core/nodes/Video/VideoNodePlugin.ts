@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { VideoNode, VideoTopToolbar, VideoBottomToolbar } from './index'
+import { VideoNode } from './index'
 
 export const VideoNodePlugin: CanvasPlugin = {
   name: 'node:video',
@@ -10,8 +10,6 @@ export const VideoNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'video',
       node: markRaw(VideoNode),
-      topToolbar: markRaw(VideoTopToolbar),
-      bottomToolbar: markRaw(VideoBottomToolbar),
       label: '视频',
       defaultSize: { cardWidth: 480, cardHeight: 320 },
       menuItem: { label: '视频', description: '创建视频节点', icon: 'video' },

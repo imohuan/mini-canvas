@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import type { NodeProps } from '@vue-flow/core'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
@@ -60,7 +60,7 @@ function onClick(btn: ToolbarButtonDefinition) {
 </script>
 
 <template>
-  <div v-if="visibleButtons.length > 0" class="base-toolbar" :class="`base-toolbar--${position}`">
+  <div v-if="visibleButtons.length > 0" class="base-toolbar" :class="`base-toolbar--${toolbarPosition}`">
     <button
       v-for="btn in visibleButtons"
       :key="btn.id"

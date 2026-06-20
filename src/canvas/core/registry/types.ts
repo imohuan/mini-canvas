@@ -1,4 +1,4 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 
 /**
@@ -39,6 +39,9 @@ export interface CanvasCommand extends BaseRegistryItem {
   keybinding?: string
   priority?: number
   nodeTypes?: string[]
+  tooltip?: string
+  dropdown?: ToolbarDropdownItem[]
+  customRender?: Component
   areas?: Array<'pane' | 'node' | 'edge' | 'connection'>
   run: (ctx: CommandContext, args?: unknown) => void | Promise<void>
 }
@@ -49,16 +52,31 @@ export interface MenuItemDefinition extends BaseRegistryItem {
   icon?: string | Component
   areas?: Array<'pane' | 'node' | 'edge' | 'connection'>
   nodeTypes?: string[]
+  tooltip?: string
+  dropdown?: ToolbarDropdownItem[]
+  customRender?: Component
   danger?: boolean
   shortcut?: string
 }
 
+
+export interface ToolbarDropdownItem {
+  id: string
+  title?: string
+  icon?: string | Component
+  commandId?: string
+  disabled?: boolean | ((ctx: CommandContext) => boolean)
+  danger?: boolean
+}
 export interface ToolbarButtonDefinition extends BaseRegistryItem {
   commandId: string
   title?: string
   icon?: string | Component
   position: 'top' | 'bottom'
   nodeTypes?: string[]
+  tooltip?: string
+  dropdown?: ToolbarDropdownItem[]
+  customRender?: Component
 }
 
 export interface PanelSettingDefinition extends BaseRegistryItem {
@@ -101,8 +119,12 @@ export interface PanelRegistryAPI {
 }
 
 export interface MenuRegistryAPI {
-  register(source: string, item: MenuItemDefinition): void
-  unregister(id: string): void
+  /** 注册菜单项（替换该 source 下的所有项） */
+  register(source: string, items: MenuItemDefinition[]): void
+  /** 注销指定 source 下的指定 id 菜单项 */
+  unregister(source: string, ids: string[]): void
+  /** 注销某来源的所有菜单项 */
   unregisterSource(source: string): void
-  getAll(): MenuItemDefinition[]
+  /** 获取所有菜单项 */
+  getAll(): { source: string; item: MenuItemDefinition }[]
 }

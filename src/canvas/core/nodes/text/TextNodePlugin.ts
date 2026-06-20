@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { TextNode, TextTopToolbar, TextBottomToolbar } from './index'
+import { TextNode } from './index'
 
 export const TextNodePlugin: CanvasPlugin = {
   name: 'node:text',
@@ -10,8 +10,6 @@ export const TextNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'text',
       node: markRaw(TextNode),
-      topToolbar: markRaw(TextTopToolbar),
-      bottomToolbar: markRaw(TextBottomToolbar),
       label: '文本',
       defaultSize: { cardWidth: 300, cardHeight: 200 },
       menuItem: { label: '文本', description: '创建文本节点', icon: 'text' },

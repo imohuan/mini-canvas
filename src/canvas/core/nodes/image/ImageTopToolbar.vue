@@ -1,18 +1,16 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
 import type { NodeProps } from '@vue-flow/core'
 import { Position, useVueFlow } from '@vue-flow/core'
 import { ref, computed } from 'vue'
-import { useCanvasStore } from '../../composables/useCanvasStore'
-import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
-import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 import ImageCropper from './ImageCropper.vue'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 import { usePluginApi } from '../../runtime'
 import type { StorageAPI } from '../../plugins/storage/StoragePlugin'
 
-const props = defineProps<NodeProps>()
 const canvas = useCanvasStore()
+const props = defineProps<NodeProps>()
 const { getNodes, updateNode, fitView } = useVueFlow()
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const MAX_PREVIEW_WIDTH = 420
@@ -171,7 +169,7 @@ function confirmCrop() {
 </script>
 
 <template>
-  <NodeToolbar :position="Position.Top" :offset="canvas.state.core.topToolbarOffset" :is-visible="isCropping || undefined">
+  <div v-if="isCropping || true" class="node-toolbar-inline">
     <!-- Normal mode -->
     <div v-if="!isCropping" class="flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="uploadImage" />
@@ -211,7 +209,7 @@ function confirmCrop() {
         <span>确认裁剪</span>
       </ToolbarButton>
     </div>
-  </NodeToolbar>
+  </div>
 
   <!-- Crop overlay (self-teleports to viewport) -->
   <ImageCropper

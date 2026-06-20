@@ -1,6 +1,6 @@
-import { markRaw } from 'vue'
+﻿import { markRaw } from 'vue'
+import { ImageNode } from './index'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import { ImageNode, ImageTopToolbar, ImageBottomToolbar } from './index'
 
 export const ImageNodePlugin: CanvasPlugin = {
   name: 'node:image',
@@ -10,8 +10,6 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'image',
       node: markRaw(ImageNode),
-      topToolbar: markRaw(ImageTopToolbar),
-      bottomToolbar: markRaw(ImageBottomToolbar),
       label: '图片',
       defaultSize: { cardWidth: 360, cardHeight: 270 },
       menuItem: { label: '图片', description: '创建图片节点', icon: 'image' },

@@ -1,4 +1,4 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
 
 export interface NodeMenuItemDefinition {
   label: string
@@ -14,8 +14,6 @@ export interface CanvasNodeDefinition {
   order?: number
   type: string
   node?: Component
-  topToolbar?: Component
-  bottomToolbar?: Component
   label: string
   defaultSize: { cardWidth: number; cardHeight: number }
   menuItem: NodeMenuItemDefinition

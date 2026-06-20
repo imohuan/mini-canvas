@@ -1,10 +1,7 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
 import { computed } from 'vue'
-import { Position } from '@vue-flow/core'
-import { useCanvasStore } from '../../composables/useCanvasStore'
-import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 const props = withDefaults(defineProps<{
@@ -19,12 +16,11 @@ const emit = defineEmits<{
   group: []
 }>()
 
-const canvas = useCanvasStore()
 const selectedCount = computed(() => props.nodeIds.length)
 </script>
 
 <template>
-  <NodeToolbar :node-id="nodeIds" :position="Position.Top" :offset="canvas.state.core.topToolbarOffset + offset" :is-visible="true">
+  <div class="node-toolbar-inline">
     <div class="multi-select-top-toolbar">
       <span class="multi-select-top-toolbar__count">已选 {{ selectedCount }} 个节点</span>
 
@@ -38,7 +34,7 @@ const selectedCount = computed(() => props.nodeIds.length)
         <span>打组</span>
       </ToolbarButton>
     </div>
-  </NodeToolbar>
+  </div>
 </template>
 
 <style scoped>

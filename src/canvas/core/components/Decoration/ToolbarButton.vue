@@ -1,3 +1,4 @@
+﻿/** 通用工具栏按钮组件（纯样式）。节点 Toolbar 迁移到 BaseToolbar 后，旧节点 Toolbar 中仍在使用。 */
 <script setup lang="ts">
 withDefaults(defineProps<{
   variant?: 'default' | 'primary'
