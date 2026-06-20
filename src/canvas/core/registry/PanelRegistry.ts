@@ -85,9 +85,11 @@ export class PanelRegistry implements PanelRegistryAPI {
    */
   useValue<T>(
     id: string,
-    store: Ref<{ core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }>,
+    store: Ref<{ core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }> | { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> },
     defaultValue: T,
   ): Ref<T> {
+    // 兼容 Ref 和普通 reactive 对象
+    const s = 'value' in store ? store.value : store
     const parts = id.split('.')
     const root = parts[0]
     const pathParts = parts.slice(1)
@@ -97,10 +99,10 @@ export class PanelRegistry implements PanelRegistryAPI {
     const namespace = isCore ? 'core' : root
 
     if (isCore) {
-      // core 路径：直接读写 store.value.core.<path>
+      // core 路径：直接读写 s.core.<path>
       // 如果路径不存在，写入 defaultValue
       if (pathParts.length > 0) {
-        let obj: Record<string, unknown> = store.value.core
+        let obj: Record<string, unknown> = s.core
         for (let i = 0; i < pathParts.length - 1; i++) {
           const key = pathParts[i]
           if (obj[key] === undefined || obj[key] === null) {
@@ -116,7 +118,7 @@ export class PanelRegistry implements PanelRegistryAPI {
 
       return computed<T>({
         get: () => {
-          let obj: Record<string, unknown> | undefined = store.value.core
+          let obj: Record<string, unknown> | undefined = s.core
           for (const p of pathParts) {
             if (obj === undefined || obj === null) return defaultValue
             obj = obj[p] as Record<string, unknown> | undefined
@@ -124,7 +126,7 @@ export class PanelRegistry implements PanelRegistryAPI {
           return (obj as T) ?? defaultValue
         },
         set: (val: T) => {
-          let obj: Record<string, unknown> = store.value.core
+          let obj: Record<string, unknown> = s.core
           for (let i = 0; i < pathParts.length - 1; i++) {
             const key = pathParts[i]
             if (obj[key] === undefined || obj[key] === null) {
@@ -138,12 +140,12 @@ export class PanelRegistry implements PanelRegistryAPI {
     }
 
     // plugins 路径：确保命名空间存在
-    if (!store.value.plugins[namespace]) {
-      store.value.plugins[namespace] = {}
+    if (!s.plugins[namespace]) {
+      s.plugins[namespace] = {}
     }
 
     // 沿路径遍历/创建
-    let current: Record<string, unknown> = store.value.plugins[namespace]
+    let current: Record<string, unknown> = s.plugins[namespace]
     for (let i = 0; i < pathParts.length - 1; i++) {
       const key = pathParts[i]
       if (current[key] === undefined || current[key] === null) {
@@ -162,7 +164,7 @@ export class PanelRegistry implements PanelRegistryAPI {
     // 返回 computed ref 实现双向绑定
     return computed<T>({
       get: () => {
-        let obj: Record<string, unknown> | undefined = store.value.plugins[namespace]
+        let obj: Record<string, unknown> | undefined = s.plugins[namespace]
         for (const p of pathParts) {
           if (obj === undefined || obj === null) return defaultValue
           obj = obj[p] as Record<string, unknown> | undefined
@@ -170,10 +172,10 @@ export class PanelRegistry implements PanelRegistryAPI {
         return (obj as T) ?? defaultValue
       },
       set: (val: T) => {
-        let obj: Record<string, unknown> = store.value.plugins[namespace]
+        let obj: Record<string, unknown> = s.plugins[namespace]
         if (!obj) {
           obj = {}
-          store.value.plugins[namespace] = obj
+          s.plugins[namespace] = obj
         }
         for (let i = 0; i < pathParts.length - 1; i++) {
           const key = pathParts[i]

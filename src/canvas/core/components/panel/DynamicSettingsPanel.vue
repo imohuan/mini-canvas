@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, toRef } from 'vue'
+import { computed } from 'vue'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import DynamicSettingField from './DynamicSettingField.vue'
@@ -7,7 +7,7 @@ import type { PanelSettingDefinition } from '../../registry/types'
 
 const runtime = useCanvasRuntime()
 const canvas = useCanvasStore()
-const canvasStateRef = computed(() => canvas.state)
+
 
 const settings = computed<PanelSettingDefinition[]>(() => runtime.panelRegistry.getAll())
 
@@ -30,7 +30,7 @@ const groupedSettings = computed(() => {
         v-for="setting in group.items"
         :key="setting.id"
         :setting="setting"
-        :model-value="runtime.panelRegistry.useValue(setting.id, canvasStateRef, setting.defaultValue)"
+        :model-value="runtime.panelRegistry.useValue(setting.id, canvas.state as any, setting.defaultValue)"
       />
     </div>
     <div v-if="settings.length === 0" class="settings-empty">暂无可配置项</div>
