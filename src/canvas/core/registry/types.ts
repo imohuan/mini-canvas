@@ -149,6 +149,8 @@ export interface CanvasMenuItem {
   shortcut?: string
   group?: string
   icon?: string
+  /** 创建节点菜单项的节点类型（如 text, image），非创建类菜单项为空 */
+  nodeType?: string
 }
 
 export interface CanvasMenuState {

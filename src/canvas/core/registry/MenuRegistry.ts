@@ -96,6 +96,8 @@ export interface ResolvedMenuItem {
   disabled?: boolean
   group: string
   order?: number
+  /** 创建节点菜单项的节点类型（如 text, image），非创建类菜单项为空 */
+  nodeType?: string
 }
 
 const GROUP_ORDER: Record<string, number> = { create: 1, action: 2, delete: 3 }
@@ -138,6 +140,7 @@ function createNodeItems(ctx: MenuContext, nodeRegistry: NodeRegistry): Resolved
     badge: item.badge,
     group: 'create',
     order: 100 - index,
+    nodeType: item.id,
   }))
 }
 

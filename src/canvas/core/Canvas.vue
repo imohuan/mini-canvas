@@ -470,9 +470,10 @@ function toFlowPosition(clientX: number, clientY: number) {
 // NODE_TYPE_DEFAULT_SIZE removed - use nodeRegistry.getDefaultSize() instead
 
 function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: number }, options: { requireTarget?: boolean; requireSource?: boolean } = {}) {
-  const nodeId = `node-${item.id}-${Date.now()}`
-  const canReceiveInput = options.requireTarget || nodeRegistry.canReceiveInput(item.id)
-  const defaultSize = nodeRegistry.getDefaultSize(item.id)
+  const nodeType = item.nodeType || item.id
+  const nodeId = `node-${nodeType}-${Date.now()}`
+  const canReceiveInput = options.requireTarget || nodeRegistry.canReceiveInput(nodeType)
+  const defaultSize = nodeRegistry.getDefaultSize(nodeType)
   const node: Node = {
     id: nodeId,
     type: 'custom',
@@ -482,10 +483,10 @@ function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: 
     },
     data: {
       label: item.label,
-      nodeType: item.id,
+      nodeType,
       cardWidth: defaultSize.cardWidth,
       cardHeight: defaultSize.cardHeight,
-      resizable: item.id === 'text',
+      resizable: nodeRegistry.isResizable(nodeType),
     },
     ...(options.requireSource !== false ? { sourcePosition: Position.Right } : {}),
     ...(canReceiveInput ? { targetPosition: Position.Left } : {}),
@@ -1783,6 +1784,6 @@ body {
 }
 
 .vue-flow__edges {
-  z-index: 1 !important
+  /* z-index: 1 !important */
 }
 </style>
