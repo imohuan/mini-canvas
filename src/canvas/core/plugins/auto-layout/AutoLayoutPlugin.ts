@@ -47,6 +47,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
   install(context: PluginContext, options: Partial<AutoLayoutConfig>) {
     const logger = context.logger
     const config: AutoLayoutConfig = { ...DEFAULT_CONFIG, ...options }
+    let isLayouting = false
 
     // 注册面板设置项
     context.panels.registerSetting('auto-layout', {
@@ -136,6 +137,8 @@ export const AutoLayoutPlugin: CanvasPlugin<
     // ==================================================================
 
     function run(configOverride?: AutoLayoutConfigPatch): void {
+      if (isLayouting) { logger.warn('自动布局正在进行中，跳过重复调用'); return }
+      isLayouting = true
       const effectiveConfig = mergeAutoLayoutConfig(config, configOverride)
 
       const allNodes = context.actions.getNodes()
@@ -303,6 +306,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
         // 布局后只移动视图到布局结果中心，不再 fitView 把视图缩得很小
         requestAnimationFrame(() => {
           focusBounds(result.nodes, { keepZoom: true })
+          isLayouting = false
           if (debug) {
             requestAnimationFrame(() => {
               log('07-final-vueflow-state', snapshotForLog(context.actions.getNodes()))
