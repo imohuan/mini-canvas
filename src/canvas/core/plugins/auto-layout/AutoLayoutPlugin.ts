@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AutoLayoutPlugin — 智能自动布局插件
  *
  * 功能：
@@ -436,6 +436,11 @@ export const AutoLayoutPlugin: CanvasPlugin<
       return true
     }, '自动布局所有节点')
 
+    context.registerShortcut('r', () => {
+      context.viewport.fitView()
+      return true
+    }, '恢复画布适应视图')
+
     // ==================================================================
     // Config API
     // ==================================================================
@@ -479,6 +484,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       uninstall() {
         try { context.unregisterShortcut('f') } catch (_e) { /* ignore */ }
         try { context.unregisterShortcut('ctrl+l') } catch (_e) { /* ignore */ }
+        try { context.unregisterShortcut('r') } catch (_e) { /* ignore */ }
       },
     }
   },
