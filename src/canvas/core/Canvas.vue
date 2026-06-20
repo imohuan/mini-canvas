@@ -1,15 +1,11 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
-import '@vue-flow/minimap/dist/style.css'
-import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
 import {
   VueFlow, useVueFlow,
   Position,
 } from '@vue-flow/core'
-import { MiniMap } from '@vue-flow/minimap'
-import { Controls } from '@vue-flow/controls'
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
 import DynamicSettingsPanel from './components/Panel/DynamicSettingsPanel.vue'
@@ -1470,10 +1466,6 @@ onUnmounted(async () => {
         <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
       </template>
 
-      <MiniMap style="position:absolute;bottom:12px;right:12px;width:180px;height:120px"
-        :node-stroke-color="'#3b82f6'" :mask-color="'rgba(0,0,0,0.08)'" :pannable="true" :zoomable="true" />
-      <Controls style="position:absolute;bottom:12px;left:12px"
-        :show-zoom="true" :show-fit-view="true" :show-interactive="false" />
     </VueFlow>
 
     <!-- 设置面板（Teleport 到 body，不受 VueFlow transform 影响） -->

@@ -1,0 +1,1 @@
+﻿export { MiniMapPlugin } from "./MiniMapPlugin"

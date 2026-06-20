@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, markRaw } from 'vue'
 import Canvas from './canvas/core/Canvas.vue'
 import { TextNodePlugin } from './canvas/core/nodes/text/TextNodePlugin'
@@ -21,6 +21,7 @@ import { ThemePlugin } from './canvas/core/plugins/theme/index'
 import { AutoLayoutPlugin } from './canvas/core/plugins/auto-layout/index'
 import { AlignArrangePlugin } from './canvas/core/plugins/align-arrange/index'
 import { CanvasExportPlugin } from './canvas/core/plugins/canvas-export/index'
+import { MiniMapPlugin } from './canvas/core/plugins/mini-map/index'
 import type { CanvasPlugin } from './canvas/core/plugins/types'
 
 interface PluginSlot {
@@ -171,6 +172,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '画布导出',
     description: '导出画布或选中节点为 PNG',
     usage: 'Ctrl+E 导出全画布 / Ctrl+Shift+E 导出选中节点',
+  },
+  {
+    plugin: markRaw(MiniMapPlugin) as CanvasPlugin,
+    enabled: true,
+    label: '小地图',
+    description: '右下角缩略小地图，支持拖拽平移、滚轮缩放',
+    usage: '自动显示在画布右下角，拖拽移动视口，滚轮缩放',
   },
 ])
 const activePlugins = computed(() => pluginSlots.value.filter(s => s.enabled).map(s => s.plugin))
