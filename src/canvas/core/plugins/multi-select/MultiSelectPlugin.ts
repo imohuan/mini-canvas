@@ -402,6 +402,81 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
 
 
     // 1. 给现有节点打标
+    // ====== 批量改色（通过 ThemePlugin API）======
+
+    const BATCH_COLORS = [
+      { label: 'Slate', accent: '#111827', surface: '#f9fafb' },
+      { label: 'Blue', accent: '#2563eb', surface: '#eff6ff' },
+      { label: 'Green', accent: '#059669', surface: '#ecfdf5' },
+      { label: 'Red', accent: '#dc2626', surface: '#fef2f2' },
+      { label: 'Purple', accent: '#7c3aed', surface: '#f5f3ff' },
+      { label: 'Amber', accent: '#d97706', surface: '#fffbeb' },
+    ]
+
+    context.commands.register({
+      id: 'multi-select.batch-color',
+      source: 'multi-select',
+      title: '批量改色',
+      nodeTypes: [],
+      dropdown: BATCH_COLORS.map(c => ({
+        id: `multi-select.batch-color.${c.label.toLowerCase()}`,
+        title: c.label,
+        commandId: `multi-select.batch-color.${c.label.toLowerCase()}`,
+      })),
+      run(_cmdCtx: any) {
+        // 父级按钮点击：不做任何事，靠 dropdown 子项触发
+      },
+    })
+
+    for (const c of BATCH_COLORS) {
+      context.commands.register({
+        id: `multi-select.batch-color.${c.label.toLowerCase()}`,
+        source: 'multi-select',
+        run(_cmdCtx: any) {
+          const themeApi = context.getPluginAPI<any>('theme')
+          if (themeApi?.applyCustom) {
+            themeApi.applyCustom(c.accent, c.surface)
+            logger.info(`批量改色: ${c.label} (accent=${c.accent})`)
+          } else {
+            logger.warn('ThemePlugin 未安装，无法改色')
+          }
+        },
+      })
+    }
+
+    context.commands.register({
+      id: 'multi-select.batch-color.custom',
+      source: 'multi-select',
+      run(_cmdCtx: any) {
+        const color = prompt('输入强调色 (hex):', '#3b82f6')
+        if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return
+        const themeApi = context.getPluginAPI<any>('theme')
+        if (themeApi?.applyCustom) {
+          themeApi.applyCustom(color)
+          logger.info(`自定义改色: accent=${color}`)
+        }
+      },
+    })
+
+    context.toolbars.register('multi-select', {
+      id: 'multi-select.batch-color',
+      source: 'multi-select',
+      commandId: 'multi-select.batch-color',
+      position: 'top',
+      title: '批量改色',
+      nodeTypes: [],
+      order: 10,
+      icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>`,
+      dropdown: [
+        ...BATCH_COLORS.map(c => ({
+          id: `multi-select.batch-color.${c.label.toLowerCase()}`,
+          title: c.label,
+          commandId: `multi-select.batch-color.${c.label.toLowerCase()}`,
+        })),
+        { id: 'multi-select.batch-color.custom', title: '自定义...', commandId: 'multi-select.batch-color.custom' },
+      ],
+    })
+
     patchAllNodesSelectable()
 
     // 2. 不再关闭 elementsSelectable。
