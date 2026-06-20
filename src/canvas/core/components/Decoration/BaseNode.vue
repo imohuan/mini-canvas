@@ -123,10 +123,16 @@ const shouldShowHandles = computed(() =>
 const showConnectFeedback = computed(() =>
   canvas.connectionState.isConnecting &&
   canvas.connectionState.sourceNodeId !== props.id &&
+  canvas.connectionState.invalidFeedbackNodeId !== props.id &&
   (
     isHovered.value ||
     canvas.connectionState.hoverFeedbackNodeId === props.id
   )
+)
+
+const isInvalidConnectionTarget = computed(() =>
+  canvas.connectionState.isConnecting &&
+  canvas.connectionState.invalidFeedbackNodeId === props.id
 )
 
 const showTargetZones = computed(() =>
@@ -146,12 +152,35 @@ const CONNECT_FEEDBACK_PERSPECTIVE = 800
 const CONNECT_FEEDBACK_SCALE = 1.018
 
 const cardTransform = computed(() => {
+  if (isInvalidConnectionTarget.value) return ''
   if (!showConnectFeedback.value) return ''
   const p = feedbackMousePosition.value
   const rotateX = (p.y - 0.5) * CONNECT_FEEDBACK_ROTATE_X
   const rotateY = (p.x - 0.5) * -CONNECT_FEEDBACK_ROTATE_Y
   return `perspective(${CONNECT_FEEDBACK_PERSPECTIVE}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px) scale(${CONNECT_FEEDBACK_SCALE})`
 })
+
+const invalidFeedbackPosition = computed(() => {
+  const point = canvas.connectionState.invalidFeedbackPoint
+  if (!isInvalidConnectionTarget.value || !point) return { x: 0.08, y: 0.5 }
+
+  const node = (vf.getNodes.value as GraphNode[]).find((item) => item.id === props.id)
+  const position = node?.computedPosition || node?.position
+  if (!position) return { x: 0.08, y: 0.5 }
+
+  const w = cardWidth.value || node?.dimensions?.width || 256
+  const h = cardHeight.value || node?.dimensions?.height || 256
+
+  return {
+    x: clamp((point.x - position.x) / w, 0.06, 0.94),
+    y: clamp((point.y - position.y) / h, 0.08, 0.92),
+  }
+})
+
+const invalidTooltipStyle = computed(() => ({
+  left: `${invalidFeedbackPosition.value.x * 100}%`,
+  top: `${invalidFeedbackPosition.value.y * 100}%`,
+}))
 
 const feedbackMousePosition = computed(() => {
   const point = canvas.connectionState.hoverFeedbackPoint
@@ -247,11 +276,19 @@ const nodeExtra = computed(() => {
 
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
-      :class="{ 'is-connecting-hover': showConnectFeedback }" :style="{
+      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isInvalidConnectionTarget }" :style="{
         width: cardWidth + 'px',
         height: cardHeight + 'px',
         transform: cardTransform,
       }" @mousemove="updateCardMousePosition">
+
+      <div
+        v-if="isInvalidConnectionTarget"
+        class="invalid-connection-tooltip"
+        :style="invalidTooltipStyle"
+      >
+        {{ canvas.connectionState.invalidFeedbackMessage || '无法连接' }}
+      </div>
 
       <!-- Debug：目标吸附区域可视化（仅连接中 + debug 模式可见） -->
       <template v-if="shouldShowTargetZones && debugHandle">
@@ -393,6 +430,34 @@ const nodeExtra = computed(() => {
     0 24px 54px var(--canvas-node-shadow-strong),
     0 10px 26px var(--canvas-node-shadow-soft);
   transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.custom-node-card.is-connection-invalid .custom-node-content-clip {
+  filter: blur(4px) saturate(0.55) brightness(0.72);
+  transition: filter 120ms ease;
+}
+
+.custom-node-card.is-connection-invalid .custom-node-border-layer {
+  border-color: rgba(239, 68, 68, 0.78);
+  box-shadow:
+    0 0 0 2px rgba(239, 68, 68, 0.22),
+    0 18px 44px rgba(0, 0, 0, 0.22);
+}
+
+.invalid-connection-tooltip {
+  position: absolute;
+  z-index: 60;
+  transform: translate(-50%, -50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(31, 41, 55, 0.94);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
 }
 
 .target-feedback-zone,

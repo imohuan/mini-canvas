@@ -241,6 +241,84 @@ function toCanonicalConnection(connection: Connection): Connection | null {
   return null
 }
 
+function getCanonicalEdgeEndpoints(edge: Edge) {
+  const sourceHandle = edge.sourceHandle ?? 'source'
+  const targetHandle = edge.targetHandle ?? 'target'
+
+  if (sourceHandle === 'source' && targetHandle === 'target') {
+    return { source: edge.source, target: edge.target }
+  }
+  if (sourceHandle === 'target' && targetHandle === 'source') {
+    return { source: edge.target, target: edge.source }
+  }
+  return null
+}
+
+function wouldCreateCycle(sourceId: string, targetId: string) {
+  if (sourceId === targetId) return true
+
+  const stack = [targetId]
+  const visited = new Set<string>()
+  const edges = (getEdges.value as Edge[])
+    .filter(edge => !isTempEdge(edge))
+    .map(getCanonicalEdgeEndpoints)
+    .filter((edge): edge is { source: string; target: string } => Boolean(edge))
+
+  while (stack.length > 0) {
+    const current = stack.pop()!
+    if (current === sourceId) return true
+    if (visited.has(current)) continue
+    visited.add(current)
+
+    for (const edge of edges) {
+      if (edge.source === current && !visited.has(edge.target)) {
+        stack.push(edge.target)
+      }
+    }
+  }
+
+  return false
+}
+
+function isSameCanonicalConnection(edge: Edge, connection: Connection) {
+  const edgeEndpoints = getCanonicalEdgeEndpoints(edge)
+  const canonical = toCanonicalConnection(connection)
+  if (!edgeEndpoints || !canonical) return false
+
+  return (
+    edgeEndpoints.source === canonical.source &&
+    edgeEndpoints.target === canonical.target
+  )
+}
+
+function findSameConnection(connection: Connection) {
+  return (getEdges.value as Edge[]).find(edge =>
+    !isTempEdge(edge) &&
+    isSameCanonicalConnection(edge, connection)
+  ) as Edge | undefined
+}
+
+function getInvalidConnectionReason(connection: Connection) {
+  const canonical = toCanonicalConnection(connection)
+  if (!canonical?.source || !canonical.target) return '无法连接'
+  if (canonical.source === canonical.target) return '无法连接'
+  if (findSameConnection(canonical)) return '无法连接'
+  if (wouldCreateCycle(canonical.source, canonical.target)) return '无法连接'
+  return ''
+}
+
+function clearInvalidConnectionFeedback() {
+  canvas.connectionState.invalidFeedbackNodeId = null
+  canvas.connectionState.invalidFeedbackPoint = null
+  canvas.connectionState.invalidFeedbackMessage = ''
+}
+
+function setInvalidConnectionFeedback(nodeId: string | null, point: { x: number; y: number } | null, message = '无法连接') {
+  canvas.connectionState.invalidFeedbackNodeId = nodeId
+  canvas.connectionState.invalidFeedbackPoint = point
+  canvas.connectionState.invalidFeedbackMessage = nodeId ? message : ''
+}
+
 // --- connection validation ---
 function isValidConnection(connection: Connection): boolean {
   const normalized = normalizeConnection(connection)
@@ -274,18 +352,11 @@ function isValidConnection(connection: Connection): boolean {
   }
   if (!src.sourcePosition) { console.warn('[连线拦截] 源节点无输出端口:', src.id); return false }
   if (!tgt.targetPosition) { console.warn('[连线拦截] 目标节点无输入端口:', tgt.id); return false }
+  if (wouldCreateCycle(canonical.source, canonical.target)) {
+    console.warn('[连线拦截] 禁止循环连接:', { source: canonical.source, target: canonical.target })
+    return false
+  }
   return true
-}
-
-/** 查找是否已存在相同的连线（去重） */
-function findSameConnection(connection: Connection) {
-  return (getEdges.value as any[]).find((edge: Edge) =>
-    !isTempEdge(edge) &&
-    edge.source === connection.source &&
-    edge.target === connection.target &&
-    (edge.sourceHandle ?? 'source') === connection.sourceHandle &&
-    (edge.targetHandle ?? 'target') === connection.targetHandle
-  ) as Edge | undefined
 }
 
 /** 修复已存在连线的类型和数据 */
@@ -487,6 +558,7 @@ function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnec
   canvas.connectionState.suppressHandles = true
   canvas.connectionState.hoverFeedbackNodeId = null
   canvas.connectionState.hoverFeedbackPoint = null
+  clearInvalidConnectionFeedback()
 }
 
 /** 从 MouseEvent 或 TouchEvent 提取屏幕坐标 */
@@ -564,13 +636,7 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
       clientY >= snapTop &&
       clientY <= snapBottom
 
-    const insideBodyArea =
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-
-    if (!insideSnapArea && !insideBodyArea) continue
+    if (!insideSnapArea) continue
 
     const centerX = rect.left
     const distance = Math.hypot(clientX - centerX, clientY - centerY)
@@ -591,6 +657,30 @@ function findNearestConnectableNode(clientX: number, clientY: number, startHandl
   if (startHandle === 'target') {
     return findNearestValidSource(clientX, clientY, new Set(startNodeId ? [startNodeId] : []))
   }
+  return null
+}
+
+function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: Iterable<string> = []) {
+  const excluded = new Set(excludedNodeIds)
+  const nodeEls = document.querySelectorAll('.vue-flow__node')
+
+  for (const el of nodeEls) {
+    const nodeId = getNodeIdFromElement(el)
+    if (!nodeId || excluded.has(nodeId)) continue
+
+    const node = nodesById.value.get(nodeId)
+    if (!node || isTempNode(node)) continue
+
+    const rect = getNodeCardRectFromNodeElement(el)
+    const inside =
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+
+    if (inside) return node
+  }
+
   return null
 }
 
@@ -677,13 +767,7 @@ function findNearestValidSource(clientX: number, clientY: number, targetNodeIds:
       clientY >= snapTop &&
       clientY <= snapBottom
 
-    const insideBodyArea =
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-
-    if (!insideSnapArea && !insideBodyArea) continue
+    if (!insideSnapArea) continue
 
     const distance = Math.hypot(clientX - rect.right, clientY - centerY)
     if (distance < bestDistance) {
@@ -712,6 +796,7 @@ function resetBatchConnectState() {
   canvas.connectionState.suppressHandles = true
   canvas.connectionState.hoverFeedbackNodeId = null
   canvas.connectionState.hoverFeedbackPoint = null
+  clearInvalidConnectionFeedback()
   document.removeEventListener('mousemove', onBatchConnectMove)
   document.removeEventListener('mouseup', onBatchConnectEnd)
   window.removeEventListener('blur', cancelBatchConnect)
@@ -747,15 +832,26 @@ function updateBatchConnectFeedback(point: { x: number; y: number }) {
   if (!batch) return
 
   let feedbackNode: Node | null = null
+  let invalidNode: Node | null = null
   if (batch.type === 'source') {
     const sourceNodeIds = new Set(batch.nodeIds)
     feedbackNode = findNearestValidTarget(point.x, point.y, batch.nodeIds[0], sourceNodeIds)
+    if (feedbackNode) {
+      const sourceNodes = (getNodes.value as Node[]).filter(node => batch.nodeIds.includes(node.id) && node.sourcePosition)
+      invalidNode = sourceNodes.some(sourceNode => wouldCreateCycle(sourceNode.id, feedbackNode!.id)) ? feedbackNode : null
+    }
   } else {
     feedbackNode = findNearestValidSource(point.x, point.y, new Set(batch.nodeIds))
+    if (feedbackNode) {
+      const targetNodes = (getNodes.value as Node[]).filter(node => batch.nodeIds.includes(node.id) && node.targetPosition)
+      invalidNode = targetNodes.some(targetNode => wouldCreateCycle(feedbackNode!.id, targetNode.id)) ? feedbackNode : null
+    }
   }
 
-  canvas.connectionState.hoverFeedbackNodeId = feedbackNode?.id ?? null
-  canvas.connectionState.hoverFeedbackPoint = feedbackNode ? toFlowPosition(point.x, point.y) : null
+  const flowPoint = feedbackNode ? toFlowPosition(point.x, point.y) : null
+  canvas.connectionState.hoverFeedbackNodeId = invalidNode ? null : feedbackNode?.id ?? null
+  canvas.connectionState.hoverFeedbackPoint = invalidNode ? null : flowPoint
+  setInvalidConnectionFeedback(invalidNode?.id ?? null, invalidNode ? flowPoint : null)
 }
 
 /** 批量连线结束：创建实际连线或取消 */
@@ -861,6 +957,7 @@ function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'sourc
   canvas.connectionState.suppressHandles = true
   canvas.connectionState.hoverFeedbackNodeId = null
   canvas.connectionState.hoverFeedbackPoint = null
+  clearInvalidConnectionFeedback()
 
   document.addEventListener('mousemove', onBatchConnectMove)
   document.addEventListener('mouseup', onBatchConnectEnd)
@@ -880,7 +977,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
 
     const targetNode = findNearestConnectableNode(point.x, point.y, sourceHandle, sourceNodeId)
     if (targetNode) {
-      createConnection(sourceHandle === 'target'
+      const connection = sourceHandle === 'target'
         ? {
             source: targetNode.id,
             target: sourceNodeId,
@@ -892,9 +989,13 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
             target: targetNode.id,
             sourceHandle,
             targetHandle: 'target',
-          }, 'snap')
+          }
+      if (getInvalidConnectionReason(connection)) return
+      createConnection(connection, 'snap')
       return
     }
+
+    if (findNodeBodyAtPoint(point.x, point.y, [sourceNodeId])) return
 
     createTempConnectionMenu(point, sourceNodeId, sourceHandle)
   } finally {
@@ -904,6 +1005,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
     canvas.connectionState.suppressHandles = true
     canvas.connectionState.hoverFeedbackNodeId = null
     canvas.connectionState.hoverFeedbackPoint = null
+    clearInvalidConnectionFeedback()
   }
 }
 
@@ -1030,7 +1132,7 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const snapWidth = snapOuter + snapInner
 
   const liveNodes = (getNodes.value as Node[])
-  const targetNodes = liveNodes
+  const connectableNodes = liveNodes
     .filter(node => node.id !== sourceId && (isReverseConnection ? node.sourcePosition : node.targetPosition))
     .map((node) => {
       const size = getNodeSize(node)
@@ -1050,7 +1152,27 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
       }
     })
 
-  const snapZones = targetNodes
+  const feedbackNodes = liveNodes
+    .filter(node => node.id !== sourceId && !isTempNode(node))
+    .map((node) => {
+      const size = getNodeSize(node)
+      const anyNode = node as any
+      const position = anyNode.computedPosition || node.position
+      const cardRect = getNodeCardFlowRect(node.id, position, size)
+      return {
+        node,
+        size: {
+          width: cardRect.width,
+          height: cardRect.height,
+        },
+        position: {
+          x: cardRect.x,
+          y: cardRect.y,
+        },
+      }
+    })
+
+  const snapZones = connectableNodes
     .map(({ node, size, position }) => {
       const centerY = position.y + size.height / 2
       const anchorX = isReverseConnection ? position.x + size.width : position.x
@@ -1067,7 +1189,7 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
       }
     })
 
-  const feedbackZones: ConnectionFeedbackZone[] = targetNodes.map(({ node, size, position }) => ({
+  const feedbackZones: ConnectionFeedbackZone[] = feedbackNodes.map(({ node, size, position }) => ({
     id: `${node.id}-body`,
     nodeId: node.id,
     kind: 'body',
@@ -1081,6 +1203,8 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   let endY = connectionLineProps.targetY
   let bestDistance = Number.POSITIVE_INFINITY
   let feedbackNodeId: string | null = null
+  let invalidNodeId: string | null = null
+  let snappedNodeId: string | null = null
 
   for (const zone of snapZones) {
     const inZone =
@@ -1091,15 +1215,36 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
 
     if (!inZone) continue
 
+    const candidateConnection = isReverseConnection
+      ? {
+          source: zone.id,
+          target: sourceId,
+          sourceHandle: 'source',
+          targetHandle: startHandle,
+        }
+      : {
+          source: sourceId,
+          target: zone.id,
+          sourceHandle: startHandle,
+          targetHandle: 'target',
+        }
+
+    if (getInvalidConnectionReason(candidateConnection)) {
+      invalidNodeId = zone.id
+      continue
+    }
+
     const distance = Math.hypot(connectionLineProps.targetX - zone.anchorX, connectionLineProps.targetY - zone.anchorY)
     if (distance < bestDistance) {
       bestDistance = distance
       endX = zone.anchorX
       endY = zone.anchorY
+      snappedNodeId = zone.id
     }
   }
 
-  // 绿色节点主体：只负责 3D/模糊反馈，不负责吸附。
+  // 节点主体只负责识别“你正在碰到这个节点”，不能当成合法连接区域。
+  // 真正合法连接只能来自上面的端口吸附区。
   for (const zone of feedbackZones) {
     const x = connectionLineProps.targetX
     const y = connectionLineProps.targetY
@@ -1115,18 +1260,37 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
     }
   }
 
-  const nextFeedbackPoint = feedbackNodeId
+  if (snappedNodeId) {
+    feedbackNodeId = snappedNodeId
+  } else if (feedbackNodeId && !invalidNodeId) {
+    invalidNodeId = feedbackNodeId
+  }
+
+  const nextFeedbackPoint = feedbackNodeId && !invalidNodeId && snappedNodeId
     ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
     : null
   const currentFeedbackPoint = canvas.connectionState.hoverFeedbackPoint
+  const nextFeedbackNodeId = invalidNodeId ? null : snappedNodeId
   const feedbackChanged =
-    canvas.connectionState.hoverFeedbackNodeId !== feedbackNodeId ||
+    canvas.connectionState.hoverFeedbackNodeId !== nextFeedbackNodeId ||
     currentFeedbackPoint?.x !== nextFeedbackPoint?.x ||
     currentFeedbackPoint?.y !== nextFeedbackPoint?.y
 
   if (feedbackChanged) {
-    canvas.connectionState.hoverFeedbackNodeId = feedbackNodeId
+    canvas.connectionState.hoverFeedbackNodeId = nextFeedbackNodeId
     canvas.connectionState.hoverFeedbackPoint = nextFeedbackPoint
+  }
+
+  const invalidPoint = invalidNodeId
+    ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
+    : null
+  const invalidChanged =
+    canvas.connectionState.invalidFeedbackNodeId !== invalidNodeId ||
+    canvas.connectionState.invalidFeedbackPoint?.x !== invalidPoint?.x ||
+    canvas.connectionState.invalidFeedbackPoint?.y !== invalidPoint?.y
+
+  if (invalidChanged) {
+    setInvalidConnectionFeedback(invalidNodeId, invalidPoint)
   }
 
   return {

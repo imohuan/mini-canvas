@@ -228,6 +228,11 @@ export const useCanvasStore = defineStore('canvasState', () => {
     hoverFeedbackNodeId: null as string | null,
     /** 拖线时鼠标在画布坐标里的位置，用来让目标节点做 3D 跟随 */
     hoverFeedbackPoint: null as { x: number; y: number } | null,
+    /** 拖线时如果悬停节点不能连接，这里记录该节点，用于显示禁止状态 */
+    invalidFeedbackNodeId: null as string | null,
+    /** 禁止连接提示的位置（画布坐标） */
+    invalidFeedbackPoint: null as { x: number; y: number } | null,
+    invalidFeedbackMessage: '' as string,
   })
 
   // ==================== 选中状态（不持久化） ====================
