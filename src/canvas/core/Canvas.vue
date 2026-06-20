@@ -1101,16 +1101,11 @@ function onNodeContextMenu({ event, node }: NodeMouseEvent) {
 }
 /** 画布右键事件：打开"添加节点"菜单 */
 function onPaneContextMenu(event: MouseEvent) {
-  event.preventDefault()
-  const flowPosition = toFlowPosition(event.clientX, event.clientY)
-  openCreateNodeMenu(
-    { x: event.clientX, y: event.clientY },
-    'pane',
-    '添加节点',
-    { flowPosition },
-  )
-  console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
-}
+    event.preventDefault()
+    const flowPosition = toFlowPosition(event.clientX, event.clientY)
+    manager.eventBus.emit('paneContextMenu', { clientX: event.clientX, clientY: event.clientY, flowPosition })
+    console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
+  }
 /** 边右键事件：打开边操作菜单 */
 function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
   event.preventDefault()
@@ -1126,17 +1121,12 @@ function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
 
 /** 画布空白处双击：打开"添加节点"菜单 */
 function onPaneDoubleClick(event: MouseEvent) {
-  const target = event.target as HTMLElement
-  if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
-  const flowPosition = toFlowPosition(event.clientX, event.clientY)
-  openCreateNodeMenu(
-    { x: event.clientX, y: event.clientY },
-    'pane',
-    '添加节点',
-    { flowPosition },
-  )
-  console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
-}
+    const target = event.target as HTMLElement
+    if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
+    const flowPosition = toFlowPosition(event.clientX, event.clientY)
+    manager.eventBus.emit('paneDoubleClick', { clientX: event.clientX, clientY: event.clientY, flowPosition })
+    console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
+  }
 
 /** 节点默认尺寸（用于无法获取实际尺寸时的回退值） */
 const DEFAULT_NODE_SIZE = 256
@@ -1656,6 +1646,25 @@ onMounted(async () => {
   manager.eventBus.on('storage:project-switched', () => refreshStorageState())
   manager.eventBus.on('storage:connected', () => refreshStorageState())
   manager.eventBus.on('storage:disconnected', () => refreshStorageState())
+  // 响应插件菜单请求
+  manager.eventBus.on('canvas:showCreateMenu', (payload: any) => {
+    openCreateNodeMenu(
+      payload.position,
+      payload.mode,
+      payload.title,
+      payload.context,
+    )
+  })
+  // 双击画布空白处 → 打开添加节点菜单
+  
+  manager.eventBus.on('paneDoubleClick', (payload: any) => {
+    openCreateNodeMenu(
+      { x: payload.clientX, y: payload.clientY },
+      'pane',
+      '添加节点',
+      { flowPosition: payload.flowPosition },
+    )
+  })
   // 初始加载
   nextTick(() => refreshStorageState())
 
@@ -1830,3 +1839,7 @@ body {
   /* z-index: 1 !important */
 }
 </style>
+
+
+
+
