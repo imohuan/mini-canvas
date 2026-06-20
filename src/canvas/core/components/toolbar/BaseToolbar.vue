@@ -10,8 +10,9 @@ import type { ToolbarButtonDefinition, CommandContext } from '../../registry/typ
 
 const props = defineProps<Partial<NodeProps> & {
   toolbarPosition: 'top' | 'bottom'
-  /** 多选模式：传入多个 nodeId 时，toolbar 定位在所有节点的包围矩形上方 */
+  /** 多选模式：传入多个 nodeId */
   nodeIds?: string[]
+  /** 多选时的额外偏移 */
   extraOffset?: number
 }>()
 
@@ -20,13 +21,18 @@ const canvas = useCanvasStore()
 
 const nodeType = computed(() => props.data?.nodeType as string | undefined)
 
-/** 多选模式：有 nodeIds 时只显示 position 匹配的按钮，不过滤 nodeTypes */
+/** 多选模式 */
 const isMultiSelect = computed(() => !!(props.nodeIds && props.nodeIds.length))
 
 const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
   const all = runtime.toolbarRegistry.getByPosition(props.toolbarPosition)
-  if (isMultiSelect.value) return all.filter(btn => btn.source === "multi-select")
+  // 多选：只显示 source === 'multi-select' 的按钮
+  if (isMultiSelect.value) {
+    return all.filter(btn => btn.source === 'multi-select')
+  }
+  // 单选：排除多选按钮，按 nodeTypes 过滤
   return all.filter((btn) => {
+    if (btn.source === 'multi-select') return false
     if (btn.nodeTypes && btn.nodeTypes.length > 0 && nodeType.value) {
       if (!btn.nodeTypes.includes(nodeType.value)) return false
     }
@@ -34,7 +40,7 @@ const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
   })
 })
 
-/** 多选模式用 nodeIds 数组，否则用单个 node id */
+/** 传给 NodeToolbar 的 nodeId */
 const toolbarNodeId = computed(() => {
   if (isMultiSelect.value) return props.nodeIds!
   return props.id
@@ -85,24 +91,20 @@ function onDropdownSelect(btn: ToolbarButtonDefinition, itemId: string) {
   <NodeToolbar v-if="visibleButtons.length > 0" :node-id="toolbarNodeId" :position="nodeToolbarPosition"
     :offset="nodeToolbarOffset" :is-visible="isMultiSelect || undefined">
     <div class="base-toolbar">
-      <ToolbarButton v-for="btn in visibleButtons" :key="btn.id" :icon="btn.icon" :title="btn.title"
-        :tooltip="btn.tooltip" :disabled="isDisabled(btn)" :dropdown="btn.dropdown" :custom-render="btn.customRender"
-        @action="onButtonAction(btn)" @dropdown-select="(id: string) => onDropdownSelect(btn, id)" />
+      <ToolbarButton v-for="btn in visibleButtons" :key="btn.id"
+        :icon="btn.icon" :title="btn.title" :tooltip="btn.tooltip"
+        :disabled="isDisabled(btn)" :dropdown="btn.dropdown" :custom-render="btn.customRender"
+        @action="onButtonAction(btn)"
+        @dropdown-select="(id: string) => onDropdownSelect(btn, id)" />
     </div>
   </NodeToolbar>
 </template>
 
 <style scoped>
 .base-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  pointer-events: auto;
+  display: flex; align-items: center; gap: 2px; padding: 4px;
+  border: 1px solid rgba(0,0,0,0.08); border-radius: 8px;
+  background: rgba(255,255,255,0.92); backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08); pointer-events: auto;
 }
 </style>

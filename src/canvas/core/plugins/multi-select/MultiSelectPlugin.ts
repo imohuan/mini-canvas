@@ -378,6 +378,28 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       order: 100,
     })
 
+    context.commands.register({
+      id: 'multi-select:delete',
+      source: 'multi-select',
+      title: '删除',
+      run() {
+        const nodeIds = [...context.selection.getSelectedNodeIds()]
+        if (nodeIds.length === 0) return
+        context.actions.removeNodes(nodeIds)
+        context.selection.clearSelection()
+      },
+    })
+
+    context.toolbars.register('multi-select', {
+      id: 'multi-select:delete-btn',
+      source: 'multi-select',
+      commandId: 'multi-select:delete',
+      title: '删除',
+      position: 'top',
+      icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`,
+      order: 200,
+    })
+
 
     // 1. 给现有节点打标
     patchAllNodesSelectable()

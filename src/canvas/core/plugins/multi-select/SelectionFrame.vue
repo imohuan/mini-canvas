@@ -29,6 +29,8 @@ const emit = defineEmits<{
 
 const canvas = useCanvasStore()
 
+/** 多选 toolbar 按钮：只取 source 为 multi-select 的 */
+
 const selectionFrameRef = ref<HTMLElement | null>(null)
 const isFrameHovered = ref(false)
 
@@ -308,7 +310,6 @@ onUnmounted(() => {
   background: rgba(96, 165, 250, 0.045);
   pointer-events: none;
 }
-
 
 .selection-frame-connect-handle {
   position: absolute;
