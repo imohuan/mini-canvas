@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue"
+import { computed, ref, shallowRef } from "vue"
 
 const props = withDefaults(defineProps<{
   nodes: any[]
@@ -8,137 +8,134 @@ const props = withDefaults(defineProps<{
   width?: number
   height?: number
   nodeColor?: string
-  nodeStrokeColor?: string
-  nodeStrokeWidth?: number
-  nodeBorderRadius?: number
-  maskColor?: string
-  pannable?: boolean
-  zoomable?: boolean
-  offsetScale?: number
+  viewportBorderColor?: string
+  padding?: number
 }>(), {
-  width: 180,
-  height: 120,
-  nodeColor: "#e2e2e2",
-  nodeStrokeColor: "transparent",
-  nodeStrokeWidth: 2,
-  nodeBorderRadius: 5,
-  maskColor: "rgba(0,0,0,0.08)",
-  pannable: true,
-  zoomable: true,
-  offsetScale: 5,
+  width: 240,
+  height: 160,
+  nodeColor: "#888",
+  viewportBorderColor: "#fff",
+  padding: 8,
 })
 
 const emit = defineEmits<{
   pan: [payload: { x: number; y: number }]
-  zoom: [payload: { zoom: number }]
+  jump: [payload: { x: number; y: number }]
 }>()
 
-const svgRef = ref<SVGSVGElement>()
+const containerRef = ref<HTMLDivElement>()
 
-// ---- 计算所有节点的包围盒 ----
-const nodesBB = computed(() => {
-  const visibleNodes = props.nodes.filter((n: any) => !n.hidden)
-  if (visibleNodes.length === 0) {
-    return { x: 0, y: 0, width: 0, height: 0 }
-  }
+// ---- 拖拽状态 ----
+let dragging = false
+let lastClientX = 0
+let lastClientY = 0
+
+// 拖拽开始时保存的节点快照
+const frozenNodes = shallowRef<any[] | null>(null)
+
+const renderNodes = computed(() => {
+  return (frozenNodes.value ?? props.nodes).filter((n: any) => !n.hidden)
+})
+
+// ---- 节点包围盒 ----
+const contentBB = computed(() => {
+  const visible = renderNodes.value
+  if (visible.length === 0) return { x: 0, y: 0, w: 1, h: 1 }
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-  for (const node of visibleNodes) {
-    const x = node.computedPosition?.x ?? node.position.x
-    const y = node.computedPosition?.y ?? node.position.y
-    const w = node.dimensions?.width ?? 200
-    const h = node.dimensions?.height ?? 100
+  for (const n of visible) {
+    const x = n.computedPosition?.x ?? n.position.x
+    const y = n.computedPosition?.y ?? n.position.y
+    const w = n.dimensions?.width ?? 200
+    const h = n.dimensions?.height ?? 100
     minX = Math.min(minX, x)
     minY = Math.min(minY, y)
     maxX = Math.max(maxX, x + w)
     maxY = Math.max(maxY, y + h)
   }
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 })
 
-// ---- 当前视口在 flow 坐标系中的矩形 ----
+// ---- 视口在 flow 坐标中的矩形 ----
 const viewBB = computed(() => ({
   x: -props.viewport.x / props.viewport.zoom,
   y: -props.viewport.y / props.viewport.zoom,
-  width: props.dimensions.width / props.viewport.zoom,
-  height: props.dimensions.height / props.viewport.zoom,
+  w: props.dimensions.width / props.viewport.zoom,
+  h: props.dimensions.height / props.viewport.zoom,
 }))
 
-// ---- 合并后的包围盒 ----
-const boundingRect = computed(() => {
-  const bb = nodesBB.value
+// ---- 并集 ----
+const unionBB = computed(() => {
+  const cb = contentBB.value
   const vb = viewBB.value
-  if (bb.width === 0 && bb.height === 0) return vb
+  const minX = Math.min(cb.x, vb.x)
+  const minY = Math.min(cb.y, vb.y)
+  const maxX = Math.max(cb.x + cb.w, vb.x + vb.w)
+  const maxY = Math.max(cb.y + cb.h, vb.y + vb.h)
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+})
+
+// ---- mapState：始终实时计算 ----
+const mapState = computed(() => {
+  const u = unionBB.value
+  if (u.w <= 0 || u.h <= 0) return { scale: 1, minX: 0, minY: 0, offsetX: 0, offsetY: 0 }
+
+  const pad = props.padding
+  const availW = props.width - pad * 2
+  const availH = props.height - pad * 2
+
+  const scale = Math.min(availW / u.w, availH / u.h)
+  const offsetX = pad + (availW - u.w * scale) / 2
+  const offsetY = pad + (availH - u.h * scale) / 2
+
+  return { scale, minX: u.x, minY: u.y, offsetX, offsetY }
+})
+
+// ---- 节点样式 ----
+function nodeStyle(node: any) {
+  const x = node.computedPosition?.x ?? node.position.x
+  const y = node.computedPosition?.y ?? node.position.y
+  const w = node.dimensions?.width ?? 200
+  const h = node.dimensions?.height ?? 100
+
+  const ms = mapState.value
   return {
-    x: Math.min(bb.x, vb.x),
-    y: Math.min(bb.y, vb.y),
-    width: Math.max(bb.x + bb.width, vb.x + vb.width) - Math.min(bb.x, vb.x),
-    height: Math.max(bb.y + bb.height, vb.y + vb.height) - Math.min(bb.y, vb.y),
+    left: `${ms.offsetX + (x - ms.minX) * ms.scale}px`,
+    top: `${ms.offsetY + (y - ms.minY) * ms.scale}px`,
+    width: `${Math.max(1, w * ms.scale)}px`,
+    height: `${Math.max(1, h * ms.scale)}px`,
+    background: props.nodeColor,
+  }
+}
+
+// ---- 视口指示器 ----
+const viewerStyle = computed(() => {
+  const vb = viewBB.value
+  const ms = mapState.value
+  return {
+    left: `${ms.offsetX + (vb.x - ms.minX) * ms.scale}px`,
+    top: `${ms.offsetY + (vb.y - ms.minY) * ms.scale}px`,
+    width: `${Math.max(1, vb.w * ms.scale)}px`,
+    height: `${Math.max(1, vb.h * ms.scale)}px`,
+    borderColor: props.viewportBorderColor,
   }
 })
 
-// ---- 缩放比例 ----
-const viewScale = computed(() => {
-  const br = boundingRect.value
-  if (br.width <= 0 || br.height <= 0) return 1
-  const sx = br.width / props.width
-  const sy = br.height / props.height
-  return Math.max(sx, sy)
-})
-
-// ---- viewBox ----
-const viewBox = computed(() => {
-  const scale = viewScale.value
-  const br = boundingRect.value
-  const offset = props.offsetScale * scale
-
-  const vw = scale * props.width
-  const vh = scale * props.height
-
-  return {
-    x: br.x - (vw - br.width) / 2 - offset,
-    y: br.y - (vh - br.height) / 2 - offset,
-    width: vw + offset * 2,
-    height: vh + offset * 2,
-  }
-})
-
-// ---- 遮罩 path ----
-const maskPath = computed(() => {
-  const vb = viewBB.value
-  const box = viewBox.value
-  const offset = props.offsetScale * viewScale.value
-
-  // 外围大矩形
-  const outer = [
-    `M${box.x - offset},${box.y - offset}`,
-    `h${box.width + offset * 2}`,
-    `v${box.height + offset * 2}`,
-    `h${-(box.width + offset * 2)}z`,
-  ].join("")
-
-  // 视口矩形（挖空）
-  const inner = [
-    `M${vb.x},${vb.y}`,
-    `h${vb.width}`,
-    `v${vb.height}`,
-    `h${-vb.width}z`,
-  ].join("")
-
-  return outer + inner
-})
-
-// ---- 拖拽平移 ----
-let dragging = false
-let lastClientX = 0
-let lastClientY = 0
-
-function onPointerDown(e: PointerEvent) {
-  if (!props.pannable || e.button !== 0) return
+// ---- 拖拽 ----
+function onViewerDown(e: PointerEvent) {
+  if (e.button !== 0) return
   dragging = true
+  // 只冻结节点数据，不冻结 mapState（让 scale 实时生效）
+  frozenNodes.value = props.nodes.map((n: any) => ({
+    ...n,
+    position: { ...n.position },
+    computedPosition: n.computedPosition ? { ...n.computedPosition } : undefined,
+    dimensions: n.dimensions ? { ...n.dimensions } : undefined,
+  }))
   lastClientX = e.clientX
   lastClientY = e.clientY
-  ;(e.target as Element).setPointerCapture(e.pointerId)
+  e.stopPropagation()
+  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
 }
 
 function onPointerMove(e: PointerEvent) {
@@ -148,87 +145,84 @@ function onPointerMove(e: PointerEvent) {
   lastClientX = e.clientX
   lastClientY = e.clientY
 
-  const moveScale = viewScale.value * Math.max(1, props.viewport.zoom)
+  const ms = mapState.value
   emit("pan", {
-    x: props.viewport.x - dx * moveScale,
-    y: props.viewport.y - dy * moveScale,
+    x: props.viewport.x - dx / ms.scale * props.viewport.zoom,
+    y: props.viewport.y - dy / ms.scale * props.viewport.zoom,
   })
 }
 
 function onPointerUp(e: PointerEvent) {
   if (!dragging) return
   dragging = false
-  ;(e.target as Element).releasePointerCapture(e.pointerId)
+  frozenNodes.value = null
+  ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
 }
 
-// ---- 滚轮缩放 ----
-function onWheel(e: WheelEvent) {
-  if (!props.zoomable) return
-  e.preventDefault()
+// ---- 点击跳转 ----
+function onMinimapClick(e: MouseEvent) {
+  if ((e.target as HTMLElement).classList.contains("mini-viewer")) return
 
-  const delta = -e.deltaY * 0.002
-  const nextZoom = props.viewport.zoom * (1 + delta)
-  emit("zoom", { zoom: Math.max(0.1, Math.min(4, nextZoom)) })
+  const rect = containerRef.value?.getBoundingClientRect()
+  if (!rect) return
+
+  const ms = mapState.value
+  const clickX = e.clientX - rect.left - ms.offsetX
+  const clickY = e.clientY - rect.top - ms.offsetY
+
+  const targetX = ms.minX + clickX / ms.scale
+  const targetY = ms.minY + clickY / ms.scale
+
+  emit("jump", { x: targetX, y: targetY })
 }
-
-onMounted(() => {
-  svgRef.value?.addEventListener("wheel", onWheel, { passive: false })
-})
-
-onUnmounted(() => {
-  svgRef.value?.removeEventListener("wheel", onWheel)
-})
 </script>
 
 <template>
-  <svg
-    ref="svgRef"
-    :width="width"
-    :height="height"
-    :viewBox="`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`"
-    class="mini-map-svg"
-    :class="{ pannable, zoomable }"
-    @pointerdown="onPointerDown"
+  <div
+    ref="containerRef"
+    class="mini-map"
+    :style="{ width: width + 'px', height: height + 'px' }"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
+    @mousedown="onMinimapClick"
   >
-    <!-- 节点缩略 -->
-    <rect
-      v-for="node in nodes.filter((n: any) => !n.hidden)"
+    <div
+      v-for="node in renderNodes"
       :key="node.id"
-      :x="node.computedPosition?.x ?? node.position.x"
-      :y="node.computedPosition?.y ?? node.position.y"
-      :width="node.dimensions?.width ?? 200"
-      :height="node.dimensions?.height ?? 100"
-      :rx="nodeBorderRadius"
-      :ry="nodeBorderRadius"
-      :fill="nodeColor"
-      :stroke="nodeStrokeColor"
-      :stroke-width="nodeStrokeWidth"
-      shape-rendering="crispEdges"
+      class="mini-node"
+      :style="nodeStyle(node)"
     />
-
-    <!-- 遮罩 -->
-    <path
-      :d="maskPath"
-      :fill="maskColor"
-      fill-rule="evenodd"
+    <div
+      class="mini-viewer"
+      :style="viewerStyle"
+      @pointerdown="onViewerDown"
     />
-  </svg>
+  </div>
 </template>
 
 <style scoped>
-.mini-map-svg {
-  background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+.mini-map {
+  position: relative;
+  background: #2a2a2a;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  cursor: crosshair;
 }
 
-.mini-map-svg.pannable {
-  cursor: grab;
+.mini-node {
+  position: absolute;
+  border-radius: 1px;
+  pointer-events: none;
 }
 
-.mini-map-svg.pannable:active {
-  cursor: grabbing;
+.mini-viewer {
+  position: absolute;
+  border: 1.5px solid #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  cursor: move;
+  pointer-events: auto;
+  z-index: 1;
 }
 </style>

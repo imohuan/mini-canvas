@@ -1,15 +1,9 @@
-﻿import { createApp, h, ref } from "vue"
+﻿import { createApp, h, reactive } from "vue"
 import type { CanvasPlugin, PluginContext } from "../types"
 import MiniMap from "./MiniMap.vue"
 
 /**
  * MiniMapPlugin — 小地图插件
- *
- * 在画布右下角显示缩略小地图，支持：
- * - 所有节点缩略显示
- * - 当前视口位置遮罩
- * - 拖拽平移画布
- * - 滚轮缩放
  */
 export const MiniMapPlugin: CanvasPlugin = {
   name: "mini-map",
@@ -19,51 +13,58 @@ export const MiniMapPlugin: CanvasPlugin = {
     let appInstance: ReturnType<typeof createApp> | null = null
     let containerEl: HTMLDivElement | null = null
 
-    // 响应式数据，供 MiniMap 组件读取
-    const miniNodes = ref(context.actions.getNodes())
-    const miniViewport = ref(context.viewport.getViewport())
-    const miniDims = ref({ width: 0, height: 0 })
-
-    // 监听画布变化
-    const offNodesChange = context.on("nodesChange", () => {
-      miniNodes.value = context.actions.getNodes()
-    })
-    const offNodeDragStop = context.on("nodeDragStop", () => {
-      miniNodes.value = context.actions.getNodes()
+    // 用 reactive 包裹简单对象，直接响应式
+    const state = reactive({
+      nodes: [] as any[],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      dimensions: { width: 0, height: 0 },
     })
 
-    // 定时同步 viewport（没有 viewport change 事件，用 rAF 轮询）
+    // 初始化
+    state.nodes = context.actions.getNodes()
+    state.viewport = context.viewport.getViewport()
+
+    function syncNodes() {
+      state.nodes = context.actions.getNodes()
+    }
+
+    const offNodesChange = context.on("nodesChange", syncNodes)
+    const offNodeDrag = context.on("nodeDrag", syncNodes)
+    const offNodeDragStop = context.on("nodeDragStop", syncNodes)
+
+    // rAF 同步 viewport + dimensions
     let rafId = 0
     function syncViewport() {
-      miniViewport.value = context.viewport.getViewport()
+      const vp = context.viewport.getViewport()
+      state.viewport = vp
       const el = context.dom.getViewport()
       if (el) {
-        miniDims.value = { width: el.clientWidth, height: el.clientHeight }
+        state.dimensions = { width: el.clientWidth, height: el.clientHeight }
       }
       rafId = requestAnimationFrame(syncViewport)
     }
     rafId = requestAnimationFrame(syncViewport)
 
-    // 挂载 MiniMap
+    // 挂载
     containerEl = document.createElement("div")
     containerEl.style.cssText = "position:fixed;bottom:12px;right:12px;z-index:10;pointer-events:auto"
     document.body.appendChild(containerEl)
 
     appInstance = createApp({
-      render() {
-        return h(MiniMap, {
-          nodes: miniNodes.value,
-          viewport: miniViewport.value,
-          dimensions: miniDims.value,
+      setup() {
+        return () => h(MiniMap, {
+          nodes: state.nodes,
+          viewport: state.viewport,
+          dimensions: state.dimensions,
           onPan(payload: { x: number; y: number }) {
-            context.viewport.setViewport({
-              x: payload.x,
-              y: payload.y,
-              zoom: miniViewport.value.zoom,
-            })
+            state.viewport = { x: payload.x, y: payload.y, zoom: state.viewport.zoom }
+            context.viewport.setViewport({ x: payload.x, y: payload.y, zoom: state.viewport.zoom })
           },
           onZoom(payload: { zoom: number }) {
             context.viewport.zoomTo(payload.zoom)
+          },
+          onJump(payload: { x: number; y: number }) {
+            context.viewport.setCenter(payload.x, payload.y, state.viewport.zoom)
           },
         })
       },
@@ -76,15 +77,10 @@ export const MiniMapPlugin: CanvasPlugin = {
       uninstall() {
         cancelAnimationFrame(rafId)
         offNodesChange()
+        offNodeDrag()
         offNodeDragStop()
-        if (appInstance) {
-          appInstance.unmount()
-          appInstance = null
-        }
-        if (containerEl) {
-          containerEl.remove()
-          containerEl = null
-        }
+        if (appInstance) { appInstance.unmount(); appInstance = null }
+        if (containerEl) { containerEl.remove(); containerEl = null }
       },
     }
   },
