@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * SelectionFrame — 多选虚线背景框
  *
@@ -12,7 +12,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import type { Node } from '@vue-flow/core'
-import TopToolbar from './TopToolbar.vue'
+import BaseToolbar from '../../components/toolbar/BaseToolbar.vue'
 
 const props = defineProps<{
   viewport: { x: number; y: number; zoom: number }
@@ -268,7 +268,7 @@ onUnmounted(() => {
       @mousedown="handleMouseDown">
       <div v-if="innerBoundsStyle" class="selection-frame-inner-bounds" :style="innerBoundsStyle" />
 
-      <TopToolbar :offset="canvas.state.core.selectionFramePaddingTop" :node-ids="selectedNodeIds" />
+      <BaseToolbar :node-ids="selectedNodeIds" toolbar-position="top" :extra-offset="canvas.state.core.selectionFramePaddingTop" />
 
       <button v-show="showFrameDecorations" class="selection-frame-connect-handle" type="button"
         @mousedown.stop.prevent="handleBatchConnectStart">
