@@ -41,6 +41,29 @@ const props = defineProps<{
 // --- Pinia 画布状态 ---
 const canvas = useCanvasStore()
 
+// ========================
+// 设置面板 slot props（暴露给外部自定义面板）
+// ========================
+import type { PanelSettingDefinition } from './registry/types'
+const allSettings = computed<PanelSettingDefinition[]>(() => panelRegistry.getAll())
+
+const groupedSettings = computed(() => {
+  const groups = new Map<string, PanelSettingDefinition[]>()
+  for (const s of allSettings.value) {
+    const g = s.group || 'default'
+    if (!groups.has(g)) groups.set(g, [])
+    groups.get(g)!.push(s)
+  }
+  return [...groups.entries()].map(([name, items]) => ({ name, items }))
+})
+
+/** 获取设置项的响应式值（可直接 v-model） */
+function getSettingValue(id: string) {
+  const setting = panelRegistry.getAll().find(s => s.id === id)
+  return panelRegistry.useValue(id, canvas.state as any, setting?.defaultValue)
+}
+
+
 // 创建连接线 data
 
 // 创建连接线 data
@@ -1431,7 +1454,9 @@ onUnmounted(async () => {
       </template>
 
       <Panel position="top-right">
-        <DynamicSettingsPanel />
+        <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
+          <DynamicSettingsPanel />
+        </slot>
       </Panel>
     </VueFlow>
 
