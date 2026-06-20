@@ -3,8 +3,8 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
 import {
-  VueFlow, Panel, useVueFlow,
-  ConnectionMode, Position,
+  VueFlow, useVueFlow,
+  Position,
 } from '@vue-flow/core'
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
@@ -80,7 +80,7 @@ function makeEdgeData() {
 // 显式 ID，确保 useVueFlow() 和 <VueFlow> 共享同一个实例
 const CANVAS_ID = 'main-canvas'
 const vueFlowInstance = useVueFlow(CANVAS_ID)
-const { zoomIn, zoomOut, fitView, getNodes, getEdges } = vueFlowInstance
+const { getNodes, getEdges } = vueFlowInstance
 const canvasContainerRef = ref<HTMLElement | null>(null)
 const canvasContainerSize = ref({ width: 0, height: 0 })
 let canvasResizeObserver: ResizeObserver | null = null
@@ -1139,42 +1139,6 @@ function refreshStorageState() {
   }
 }
 
-function onStorageConnect() {
-  const api = manager.getPluginAPI<any>('storage')
-  if (api) { api.connect().then(() => refreshStorageState()) }
-}
-
-function onStorageDisconnect() {
-  const api = manager.getPluginAPI<any>('storage')
-  if (api) { api.disconnect().then(() => refreshStorageState()) }
-}
-
-function onStorageCreateProject(name: string) {
-  const api = manager.getPluginAPI<any>('storage')
-  if (api) { api.createProject(name); refreshStorageState() }
-}
-
-function onStorageDeleteProject(id: string) {
-  const api = manager.getPluginAPI<any>('storage')
-  if (api) { api.deleteProject(id).then(() => refreshStorageState()) }
-}
-
-async function onStorageSwitchProject(id: string) {
-  const api = manager.getPluginAPI<any>('storage')
-  if (!api) return
-  const result = await api.switchProject(id)
-  if (result) {
-    const nodeIds = (getNodes.value as Node[]).map((n: Node) => n.id)
-    const edgeIds = (getEdges.value as Edge[]).map((e: Edge) => e.id)
-    vueFlowInstance.removeNodes(nodeIds)
-    vueFlowInstance.removeEdges(edgeIds)
-    nextTick(() => {
-      vueFlowInstance.addNodes(result.nodes || [])
-      vueFlowInstance.addEdges(result.edges || [])
-    })
-  }
-  refreshStorageState()
-}
 
 // ===========================
 // provide ref — setup 阶段提供，onMounted 后赋值

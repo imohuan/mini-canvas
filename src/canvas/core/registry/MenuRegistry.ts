@@ -1,5 +1,6 @@
 ﻿import { reactive } from 'vue'
-import type { MenuItemDefinition, MenuRegistryAPI } from './types'
+import type { MenuItemDefinition, MenuRegistryAPI, CommandContext } from './types'
+import type { NodeRegistry } from './NodeRegistry'
 
 /**
  * 菜单注册中心
@@ -63,21 +64,25 @@ export class MenuRegistry implements MenuRegistryAPI {
   }
 }
 
-
 // ============================================================
 // 菜单解析器 — 合并 NodeRegistry + MenuRegistry 生成最终菜单
 // ============================================================
 
-import type { NodeRegistry } from './NodeRegistry'
-
 /** 菜单上下文 — 描述菜单打开时的画布状态 */
 export interface MenuContext {
-  mode: 'pane' | 'node' | 'connection' | 'edge'
+  mode?: 'pane' | 'node' | 'connection' | 'edge'
   nodeId?: string
   nodeType?: string
   edgeId?: string
   sourceNodeId?: string
   flowPosition?: { x: number; y: number }
+  pendingConnection?: {
+    sourceNodeId: string
+    sourceHandle: string
+    tempNodeId: string
+    tempEdgeId: string
+    flowPosition: { x: number; y: number }
+  }
 }
 
 export interface ResolvedMenuItem {
@@ -146,7 +151,7 @@ export function resolveMenuItems(
 ): ResolvedMenuItem[] {
   const items: ResolvedMenuItem[] = createNodeItems(ctx, nodeRegistry)
 
-  const area = ctx.mode
+  const area = ctx.mode || "pane"
   const registeredItems = menuRegistry.getByArea(area)
 
   for (const item of registeredItems) {

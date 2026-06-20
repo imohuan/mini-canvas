@@ -56,11 +56,12 @@ function onButtonAction(btn: ToolbarButtonDefinition) {
 
 function onDropdownSelect(btn: ToolbarButtonDefinition, itemId: string) {
   const item = btn.dropdown?.find(d => d.id === itemId)
-  if (!item || item.disabled) return
+  if (!item) return
+  const itemDisabled = typeof item.disabled === 'function' ? item.disabled(buildContext()) : item.disabled
+  if (itemDisabled) return
   if (item.commandId) {
     runtime.commandRegistry.execute(item.commandId, buildContext(), { filter: itemId })
   } else {
-    // dropdown item 没有自己的 commandId，用按钮的 commandId + 传递选中的 filter
     runtime.commandRegistry.execute(btn.commandId, buildContext(), { filter: itemId })
   }
 }

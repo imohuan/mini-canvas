@@ -40,6 +40,7 @@ export interface CanvasCommand extends BaseRegistryItem {
   priority?: number
   nodeTypes?: string[]
   tooltip?: string
+  badge?: string
   dropdown?: ToolbarDropdownItem[]
   customRender?: Component
   areas?: Array<'pane' | 'node' | 'edge' | 'connection'>
@@ -49,10 +50,12 @@ export interface CanvasCommand extends BaseRegistryItem {
 export interface MenuItemDefinition extends BaseRegistryItem {
   commandId: string
   title?: string
+  description?: string
   icon?: string | Component
   areas?: Array<'pane' | 'node' | 'edge' | 'connection'>
   nodeTypes?: string[]
   tooltip?: string
+  badge?: string
   dropdown?: ToolbarDropdownItem[]
   customRender?: Component
   danger?: boolean
@@ -146,7 +149,7 @@ export interface CanvasMenuItem {
   danger?: boolean
   shortcut?: string
   group?: string
-  icon?: 'text' | 'image' | 'video' | 'layers' | 'link' | 'delete' | 'duplicate'
+  icon?: string
 }
 
 export interface CanvasMenuState {

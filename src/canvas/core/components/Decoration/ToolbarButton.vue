@@ -10,7 +10,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   dropdown?: Array<{
     id: string; title?: string; icon?: Component | string
-    danger?: boolean; disabled?: boolean
+    danger?: boolean; disabled?: boolean | ((ctx: any) => boolean)
   }>
   customRender?: Component
 }>(), { variant: 'default', danger: false, disabled: false })
@@ -76,7 +76,7 @@ function onDropdownItemClick(id: string) {
         <div v-if="showDropdown && dropdown && dropdown.length > 0" class="toolbar-dropdown" :style="dropdownStyle">
           <button v-for="item in dropdown" :key="item.id" class="toolbar-dropdown-item"
             :class="{ 'toolbar-dropdown-item--danger': item.danger, 'is-disabled': item.disabled }"
-            :disabled="item.disabled" type="button" @click.stop="onDropdownItemClick(item.id)">
+            :disabled="typeof item.disabled === 'function' ? item.disabled({}) : item.disabled" type="button" @click.stop="onDropdownItemClick(item.id)">
             <component v-if="typeof item.icon === 'object' && item.icon" :is="item.icon" class="toolbar-dropdown-item-icon" />
             <span v-else-if="typeof item.icon === 'string' && item.icon" class="toolbar-dropdown-item-icon" v-html="item.icon" />
             <span v-if="item.title" class="toolbar-dropdown-item-label">{{ item.title }}</span>
