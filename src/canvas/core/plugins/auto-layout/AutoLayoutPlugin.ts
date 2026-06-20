@@ -11,6 +11,7 @@
  */
 
 import type { CanvasPlugin, PluginContext } from '../types'
+import type { PanelSettingDefinition } from '../../registry/types'
 import type { AutoLayoutConfig, AutoLayoutAPI, AutoLayoutConfigPatch } from './types'
 import { runAutoLayout } from './layoutEngine'
 import { calculateFocusZoom, centerViewportOnBounds } from './focusViewport'
@@ -46,6 +47,89 @@ export const AutoLayoutPlugin: CanvasPlugin<
   install(context: PluginContext, options: Partial<AutoLayoutConfig>) {
     const logger = context.logger
     const config: AutoLayoutConfig = { ...DEFAULT_CONFIG, ...options }
+
+    // 注册面板设置项
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.direction',
+      title: '排列方向',
+      description: '节点自动布局的走向',
+      type: 'select',
+      group: '布局',
+      order: 10,
+      defaultValue: config.direction,
+      options: [
+        { value: 'LR', title: '左→右 (LR)' },
+        { value: 'TB', title: '上→下 (TB)' },
+        { value: 'RL', title: '右→左 (RL)' },
+        { value: 'BT', title: '下→上 (BT)' },
+      ],
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.intraSpacingX',
+      title: '组内水平间距',
+      description: '同一组内节点之间的水平距离',
+      type: 'slider',
+      group: '布局',
+      order: 20,
+      defaultValue: config.intraSpacing.x,
+      min: 20,
+      max: 300,
+      step: 10,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.intraSpacingY',
+      title: '组内垂直间距',
+      description: '同一组内节点之间的垂直距离',
+      type: 'slider',
+      group: '布局',
+      order: 30,
+      defaultValue: config.intraSpacing.y,
+      min: 20,
+      max: 300,
+      step: 10,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.interSpacingX',
+      title: '组间水平间距',
+      description: '不同组之间的水平距离',
+      type: 'slider',
+      group: '布局',
+      order: 40,
+      defaultValue: config.interSpacing.x,
+      min: 40,
+      max: 500,
+      step: 10,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.interSpacingY',
+      title: '组间垂直间距',
+      description: '不同组之间的垂直距离',
+      type: 'slider',
+      group: '布局',
+      order: 50,
+      defaultValue: config.interSpacing.y,
+      min: 40,
+      max: 500,
+      step: 10,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('auto-layout', {
+      id: 'auto-layout.focusHeightRatio',
+      title: '聚焦高度占比',
+      description: '聚焦节点时，节点占视口高度的比例',
+      type: 'slider',
+      group: '布局',
+      order: 60,
+      defaultValue: config.focusHeightRatio,
+      min: 0.1,
+      max: 0.9,
+      step: 0.05,
+    } as PanelSettingDefinition)
+
 
     // ==================================================================
     // Core: 自动布局

@@ -68,18 +68,82 @@ export class PanelRegistry implements PanelRegistryAPI {
    * @param defaultValue - 默认值
    * @returns 与 store 双向绑定的 Ref
    */
-  useValue<T>(id: string, store: Ref<Record<string, Record<string, unknown>>>, defaultValue: T): Ref<T> {
+  /**
+   * 获取设置项的响应式值
+   *
+   * id 格式为 dotted path：
+   *   - 'core.edgeColor' → 读写 canvas.state.core.edgeColor
+   *   - 'theme.accent'   → 读写 canvas.state.plugins.theme.accent
+   *
+   * 第一段为 'core' 时走 core 命名空间，否则走 plugins 命名空间。
+   * 如果目标路径无值，写入 defaultValue 后返回。
+   *
+   * @param id - 设置项 ID
+   * @param store - canvas.state 的 ref（含 core + plugins）
+   * @param defaultValue - 默认值
+   * @returns 与 store 双向绑定的 Ref
+   */
+  useValue<T>(
+    id: string,
+    store: Ref<{ core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }>,
+    defaultValue: T,
+  ): Ref<T> {
     const parts = id.split('.')
-    const namespace = parts[0]
+    const root = parts[0]
     const pathParts = parts.slice(1)
 
-    // 确保命名空间存在
-    if (!store.value[namespace]) {
-      store.value[namespace] = {}
+    // 判断走 core 还是 plugins
+    const isCore = root === 'core'
+    const namespace = isCore ? 'core' : root
+
+    if (isCore) {
+      // core 路径：直接读写 store.value.core.<path>
+      // 如果路径不存在，写入 defaultValue
+      if (pathParts.length > 0) {
+        let obj: Record<string, unknown> = store.value.core
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          const key = pathParts[i]
+          if (obj[key] === undefined || obj[key] === null) {
+            obj[key] = {}
+          }
+          obj = obj[key] as Record<string, unknown>
+        }
+        const leafKey = pathParts[pathParts.length - 1]
+        if (obj[leafKey] === undefined) {
+          obj[leafKey] = defaultValue
+        }
+      }
+
+      return computed<T>({
+        get: () => {
+          let obj: Record<string, unknown> | undefined = store.value.core
+          for (const p of pathParts) {
+            if (obj === undefined || obj === null) return defaultValue
+            obj = obj[p] as Record<string, unknown> | undefined
+          }
+          return (obj as T) ?? defaultValue
+        },
+        set: (val: T) => {
+          let obj: Record<string, unknown> = store.value.core
+          for (let i = 0; i < pathParts.length - 1; i++) {
+            const key = pathParts[i]
+            if (obj[key] === undefined || obj[key] === null) {
+              obj[key] = {}
+            }
+            obj = obj[key] as Record<string, unknown>
+          }
+          obj[pathParts[pathParts.length - 1]] = val
+        },
+      }) as Ref<T>
+    }
+
+    // plugins 路径：确保命名空间存在
+    if (!store.value.plugins[namespace]) {
+      store.value.plugins[namespace] = {}
     }
 
     // 沿路径遍历/创建
-    let current: Record<string, unknown> = store.value[namespace]
+    let current: Record<string, unknown> = store.value.plugins[namespace]
     for (let i = 0; i < pathParts.length - 1; i++) {
       const key = pathParts[i]
       if (current[key] === undefined || current[key] === null) {
@@ -98,7 +162,7 @@ export class PanelRegistry implements PanelRegistryAPI {
     // 返回 computed ref 实现双向绑定
     return computed<T>({
       get: () => {
-        let obj: Record<string, unknown> | undefined = store.value[namespace]
+        let obj: Record<string, unknown> | undefined = store.value.plugins[namespace]
         for (const p of pathParts) {
           if (obj === undefined || obj === null) return defaultValue
           obj = obj[p] as Record<string, unknown> | undefined
@@ -106,10 +170,10 @@ export class PanelRegistry implements PanelRegistryAPI {
         return (obj as T) ?? defaultValue
       },
       set: (val: T) => {
-        let obj: Record<string, unknown> = store.value[namespace]
+        let obj: Record<string, unknown> = store.value.plugins[namespace]
         if (!obj) {
           obj = {}
-          store.value[namespace] = obj
+          store.value.plugins[namespace] = obj
         }
         for (let i = 0; i < pathParts.length - 1; i++) {
           const key = pathParts[i]

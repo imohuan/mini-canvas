@@ -24,6 +24,7 @@ import type { CanvasPlugin, PluginContext } from '../types'
 import type { ThemeOptions, ThemeAPI, ThemeState, ThemePresetName } from './types'
 import { getPreset, getPresetsList } from './themePresets'
 import { computeThemeVars, applyThemeToDOM } from './colorUtils'
+import type { PanelSettingDefinition } from '../../registry/types'
 
 /** 默认主题状态 */
 function defaultState(): ThemeState {
@@ -112,6 +113,38 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
 
     writeState(store, initState)
 
+    // 注册面板设置项
+    const presetOptions = getPresetsList().map(p => ({ value: p.name, title: p.name }))
+    context.panels.registerSetting('theme', {
+      id: 'theme.activePreset',
+      title: '主题预设',
+      description: '一键切换整体配色方案',
+      type: 'select',
+      group: '主题',
+      order: 10,
+      defaultValue: initState.activePreset,
+      options: presetOptions,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('theme', {
+      id: 'theme.accent',
+      title: '强调色',
+      description: '节点边框和高亮的主色调',
+      type: 'color',
+      group: '主题',
+      order: 20,
+      defaultValue: initState.accent,
+    } as PanelSettingDefinition)
+
+    context.panels.registerSetting('theme', {
+      id: 'theme.surface',
+      title: '底色',
+      description: '节点和面板的背景色',
+      type: 'color',
+      group: '主题',
+      order: 30,
+      defaultValue: initState.surface,
+    } as PanelSettingDefinition)
     // 2. 初始渲染
     refreshTheme(store)
     logger.info(`Initialized with preset: ${initState.activePreset}, accent: ${initState.accent}`)

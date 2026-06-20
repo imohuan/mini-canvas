@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -8,7 +8,7 @@ import {
 } from '@vue-flow/core'
 import type { Node, Edge, Connection, EdgeChange, NodeMouseEvent, EdgeMouseEvent, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
-import Pannel from './Pannel.vue'
+import DynamicSettingsPanel from './components/panel/DynamicSettingsPanel.vue'
 import CanvasPerformancePanel from './components/performance/CanvasPerformancePanel.vue'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
@@ -20,7 +20,6 @@ import type { CanvasPlugin } from './plugins/types.ts'
 import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
-import type { ThemeAPI } from './plugins/theme/types'
 import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
@@ -801,39 +800,8 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
   }
 }
 
-// --- toggles (直接操作 Pinia store) ---
-const s = canvas.state.core
-const toggles = [
-  { key: 'nodesDraggable', label: '可拖拽', get: () => s.nodesDraggable, set: (v: boolean) => { s.nodesDraggable = v } },
-  { key: 'nodesConnectable', label: '可连线', get: () => s.nodesConnectable, set: (v: boolean) => { s.nodesConnectable = v } },
-  { key: 'elementsSelectable', label: '可选中', get: () => s.elementsSelectable, set: (v: boolean) => { s.elementsSelectable = v } },
-  { key: 'edgesUpdatable', label: '边可编辑', get: () => s.edgesUpdatable, set: (v: boolean) => { s.edgesUpdatable = v } },
-  { key: 'snapToGrid', label: '网格吸附', get: () => s.snapToGrid, set: (v: boolean) => { s.snapToGrid = v } },
-  { key: 'zoomOnScroll', label: '滚轮缩放', get: () => s.zoomOnScroll, set: (v: boolean) => { s.zoomOnScroll = v } },
-  { key: 'panOnScroll', label: '滚轮平移', get: () => s.panOnScroll, set: (v: boolean) => { s.panOnScroll = v } },
-  { key: 'panOnDrag', label: '拖拽平移', get: () => s.panOnDrag, set: (v: boolean) => { s.panOnDrag = v } },
-  { key: 'connectOnClick', label: '点击连线', get: () => s.connectOnClick, set: (v: boolean) => { s.connectOnClick = v } },
-  { key: 'zoomOnDoubleClick', label: '双击缩放', get: () => s.zoomOnDoubleClick, set: (v: boolean) => { s.zoomOnDoubleClick = v } },
-  { key: 'onlyRenderVisibleElements', label: '只渲染可见', get: () => s.onlyRenderVisibleElements, set: (v: boolean) => { s.onlyRenderVisibleElements = v } },
-  { key: 'selectNodesOnDrag', label: '拖拽选中', get: () => s.selectNodesOnDrag, set: (v: boolean) => { s.selectNodesOnDrag = v } },
-]
 
-function toggleMode() {
-  canvas.state.core.connectionMode = canvas.state.core.connectionMode === ConnectionMode.Strict ? ConnectionMode.Loose : ConnectionMode.Strict
-}
 
-function onToggleEdgeDashed() {
-  canvas.state.core.edgeDashed = !canvas.state.core.edgeDashed
-}
-
-function onToggleEdgeAnimated() {
-  canvas.state.core.edgeAnimated = !canvas.state.core.edgeAnimated
-  const raw = getEdges.value as Edge[]
-  for (const e of raw) {
-    e.animated = canvas.state.core.edgeAnimated
-  }
-  console.log('[Canvas] onToggleEdgeAnimated:', { animated: canvas.state.core.edgeAnimated, affectedEdges: raw.length })
-}
 
 // --- custom events ---
 function onNodeDoubleClick({ event, node }: NodeMouseEvent) {
@@ -1132,36 +1100,7 @@ const bootstrap = useCanvasBootstrap(
 /**
  * 已安装的插件名称（reactive ref — 确保 Panel 能感知变化）
  */
-const installedPluginNames = ref<string[]>([])
-/** 插件标签映射 */
-const pluginLabels: Record<string, string> = {
-  'storage': '存储底座',
-  'history': '撤销重做',
-  'multi-select': '多选框选',
-  'clipboard': '复制粘贴',
-  'auto-save': '自动保存',
-  'align-guide': '对齐辅助线',
-  'file-drop': '文件拖入',
-  'group': '节点分组',
-  'shortcut-manager': '快捷键管理',
-  'theme': '主题配色',
-}
-
-/**
- * 已加载的插件列表（computed，供 Pannel 展示）
- * 因为 installedPluginNames 是 reactive ref，此 computed 会自动更新
- */
-const loadedPlugins = computed(() =>
-  installedPluginNames.value.map(name => ({
-    name,
-    label: pluginLabels[name] || name,
-    description: '',
-    enabled: true,
-  }))
-)
-
-// ===========================
-// 存储状态（从 storage 插件 API 获取，供 Pannel 展示）
+// 存储状态（从 storage 插件 API 获取）
 // ===========================
 import type { StorageStatus, ProjectMeta, StorageAPI } from './plugins/storage/StoragePlugin'
 
@@ -1222,122 +1161,6 @@ async function onStorageSwitchProject(id: string) {
 }
 
 // ===========================
-// 主题状态（从 store 读取，供 Pannel 展示）
-// ===========================
-const themeState = computed(() => {
-  const ts = (canvas.state.plugins as any)?.theme || {}
-  return {
-    activePreset: ts.activePreset || 'slate',
-    accent: ts.accent || '#111827',
-    surface: ts.surface || '#f9fafb',
-  }
-})
-
-function onApplyThemePreset(name: string) {
-  const api = manager.getPluginAPI<ThemeAPI>('theme')
-  if (api) { api.applyPreset(name as any) }
-}
-
-function onApplyCustomTheme(accent: string) {
-  const api = manager.getPluginAPI<ThemeAPI>('theme')
-  if (api) { api.applyCustom(accent) }
-}
-
-// ===========================
-// 布局状态（从 auto-layout 插件 API 获取，供 Pannel 展示）
-// ===========================
-interface LayoutState {
-  direction: string
-  intraSpacingX: number
-  intraSpacingY: number
-  interSpacingX: number
-  interSpacingY: number
-  focusHeightRatio: number
-}
-
-const layoutState = ref<LayoutState>({
-  direction: 'LR',
-  intraSpacingX: 60,
-  intraSpacingY: 80,
-  interSpacingX: 120,
-  interSpacingY: 120,
-  focusHeightRatio: 0.5,
-})
-
-function syncLayoutState() {
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (!api) return
-  const cfg = api.getConfig()
-  if (cfg) {
-    layoutState.value = {
-      direction: cfg.direction || 'LR',
-      intraSpacingX: cfg.intraSpacing?.x ?? 60,
-      intraSpacingY: cfg.intraSpacing?.y ?? 80,
-      interSpacingX: cfg.interSpacing?.x ?? 120,
-      interSpacingY: cfg.interSpacing?.y ?? 120,
-      focusHeightRatio: cfg.focusHeightRatio ?? 0.5,
-    }
-  }
-}
-
-function pushLayoutConfig() {
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (!api) return null
-  api.setConfig({
-    direction: layoutState.value.direction,
-    intraSpacing: { x: layoutState.value.intraSpacingX, y: layoutState.value.intraSpacingY },
-    interSpacing: { x: layoutState.value.interSpacingX, y: layoutState.value.interSpacingY },
-    focusHeightRatio: layoutState.value.focusHeightRatio,
-    minZoom: canvas.state.core.minZoom,
-    maxZoom: canvas.state.core.maxZoom,
-    debug: true,
-  })
-  return api
-}
-
-function onAutoLayout() {
-  const api = pushLayoutConfig()
-  if (!api) return
-  api.run()
-}
-
-function onFocusSelected() {
-  const api = pushLayoutConfig()
-  if (api) { api.focusSelected() }
-}
-
-function onUpdateLayoutDirection(v: string) {
-  layoutState.value.direction = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ direction: v as any }) }
-}
-
-function onUpdateLayoutIntraSpacingX(v: number) {
-  layoutState.value.intraSpacingX = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ intraSpacing: { x: v } }) }
-}
-function onUpdateLayoutIntraSpacingY(v: number) {
-  layoutState.value.intraSpacingY = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ intraSpacing: { y: v } }) }
-}
-function onUpdateLayoutInterSpacingX(v: number) {
-  layoutState.value.interSpacingX = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ interSpacing: { x: v } }) }
-}
-function onUpdateLayoutInterSpacingY(v: number) {
-  layoutState.value.interSpacingY = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ interSpacing: { y: v } }) }
-}
-function onUpdateLayoutFocusHeightRatio(v: number) {
-  layoutState.value.focusHeightRatio = v
-  const api = manager.getPluginAPI<any>('auto-layout')
-  if (api) { api.setConfig({ focusHeightRatio: v }) }
-}
-
 // provide ref — setup 阶段提供，onMounted 后赋值
 const canvasStorageApi = shallowRef<StorageAPI | null>(null)
 provide('canvasStorageApi', canvasStorageApi)
@@ -1409,11 +1232,70 @@ onMounted(async () => {
     installedPluginNames.value = pluginList.map(p => p.name)
     console.log(`[Canvas] ✅ ${installedPluginNames.value.length} 个插件已加载:`, installedPluginNames.value)
 
-    // 同步 auto-layout 插件的默认配置到 Pannel
+    // auto-layout 插件配置已通过 panelRegistry 注册
     // 从 StoragePlugin 加载画布数据（或创建默认数据）
     await bootstrap.loadInitialCanvas()
 
-    syncLayoutState()
+    // 注册通用设置项到面板（通过 PanelRegistry → DynamicSettingsPanel 自动渲染）
+    const core = canvas.state.core
+    const registerCore = (id: string, rest: Record<string, unknown>) => {
+      panelRegistry.registerSetting("canvas-core", {
+        id: "core." + id,
+        ...rest,
+      } as any)
+    }
+
+    // --- 节点交互 toggles ---
+    registerCore('nodesDraggable', { title: '可拖拽', type: 'boolean', group: '交互', order: 10, defaultValue: core.nodesDraggable })
+    registerCore('nodesConnectable', { title: '可连线', type: 'boolean', group: '交互', order: 11, defaultValue: core.nodesConnectable })
+    registerCore('elementsSelectable', { title: '可选中', type: 'boolean', group: '交互', order: 12, defaultValue: core.elementsSelectable })
+    registerCore('edgesUpdatable', { title: '边可编辑', type: 'boolean', group: '交互', order: 13, defaultValue: core.edgesUpdatable })
+    registerCore('snapToGrid', { title: '网格吸附', type: 'boolean', group: '交互', order: 14, defaultValue: core.snapToGrid })
+    registerCore('selectNodesOnDrag', { title: '拖拽选中', type: 'boolean', group: '交互', order: 15, defaultValue: core.selectNodesOnDrag })
+
+    // --- 视口交互 ---
+    registerCore('zoomOnScroll', { title: '滚轮缩放', type: 'boolean', group: '视口', order: 20, defaultValue: core.zoomOnScroll })
+    registerCore('panOnScroll', { title: '滚轮平移', type: 'boolean', group: '视口', order: 21, defaultValue: core.panOnScroll })
+    registerCore('panOnDrag', { title: '拖拽平移', type: 'boolean', group: '视口', order: 22, defaultValue: core.panOnDrag })
+    registerCore('connectOnClick', { title: '点击连线', type: 'boolean', group: '视口', order: 23, defaultValue: core.connectOnClick })
+    registerCore('zoomOnDoubleClick', { title: '双击缩放', type: 'boolean', group: '视口', order: 24, defaultValue: core.zoomOnDoubleClick })
+    registerCore('onlyRenderVisibleElements', { title: '只渲染可见', type: 'boolean', group: '视口', order: 25, defaultValue: core.onlyRenderVisibleElements })
+    registerCore('minZoom', { title: '最小缩放', type: 'number', group: '视口', order: 26, defaultValue: core.minZoom })
+    registerCore('maxZoom', { title: '最大缩放', type: 'number', group: '视口', order: 27, defaultValue: core.maxZoom })
+
+    // --- 连线样式 ---
+    registerCore('edgeLineWidth', { title: '边线宽度', type: 'slider', group: '连线', order: 30, defaultValue: core.edgeLineWidth, min: 1, max: 10, step: 0.5 })
+    registerCore('edgeColor', { title: '边线颜色', type: 'color', group: '连线', order: 31, defaultValue: core.edgeColor })
+
+    // --- 自定义端口 ---
+    registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })
+    registerCore('handleRestOffset', { title: '端口偏移', type: 'slider', group: '端口', order: 41, defaultValue: core.handleRestOffset, min: 0, max: 100, step: 1 })
+    registerCore('handleCursorGap', { title: '光标间隙', type: 'slider', group: '端口', order: 42, defaultValue: core.handleCursorGap, min: 0, max: 80, step: 1 })
+    registerCore('handleButtonSize', { title: '按钮大小', type: 'slider', group: '端口', order: 43, defaultValue: core.handleButtonSize, min: 16, max: 64, step: 1 })
+    registerCore('handleOverlap', { title: '重叠距离', type: 'slider', group: '端口', order: 44, defaultValue: core.handleOverlap, min: 0, max: 50, step: 1 })
+    registerCore('connectionSnapOuterRatio', { title: '吸附外比例', type: 'slider', group: '端口', order: 45, defaultValue: core.connectionSnapOuterRatio, min: 0.1, max: 2, step: 0.05 })
+    registerCore('connectionSnapInnerRatio', { title: '吸附内比例', type: 'slider', group: '端口', order: 46, defaultValue: core.connectionSnapInnerRatio, min: 0.1, max: 2, step: 0.05 })
+    registerCore('connectionSnapHeightRatio', { title: '吸附高度比', type: 'slider', group: '端口', order: 47, defaultValue: core.connectionSnapHeightRatio, min: 0.1, max: 3, step: 0.05 })
+
+    // --- 工具栏偏移 ---
+    registerCore('topToolbarOffset', { title: '上工具栏偏移', type: 'slider', group: '工具栏', order: 50, defaultValue: core.topToolbarOffset, min: 0, max: 40, step: 1 })
+    registerCore('bottomToolbarOffset', { title: '下工具栏偏移', type: 'slider', group: '工具栏', order: 51, defaultValue: core.bottomToolbarOffset, min: 0, max: 40, step: 1 })
+
+    // --- 多选框 ---
+    registerCore('selectionFramePaddingX', { title: '选框水平内边距', type: 'slider', group: '选框', order: 60, defaultValue: core.selectionFramePaddingX, min: 0, max: 60, step: 1 })
+    registerCore('selectionFramePaddingTop', { title: '选框上内边距', type: 'slider', group: '选框', order: 61, defaultValue: core.selectionFramePaddingTop, min: 0, max: 80, step: 1 })
+    registerCore('selectionFramePaddingBottom', { title: '选框下内边距', type: 'slider', group: '选框', order: 62, defaultValue: core.selectionFramePaddingBottom, min: 0, max: 80, step: 1 })
+
+    // --- 性能面板 ---
+    registerCore('performancePanelEnabled', { title: '启用性能面板', type: 'boolean', group: '性能', order: 70, defaultValue: core.performancePanelEnabled })
+    registerCore('performancePanelShowCharts', { title: '显示图表', type: 'boolean', group: '性能', order: 71, defaultValue: core.performancePanelShowCharts })
+    registerCore('performancePanelShowMemory', { title: '显示内存', type: 'boolean', group: '性能', order: 72, defaultValue: core.performancePanelShowMemory })
+
+    // --- 调试 ---
+    registerCore('handleDebug', { title: '端口调试', type: 'boolean', group: '调试', order: 80, defaultValue: core.handleDebug })
+    registerCore('connectionSnapDebugVisible', { title: '吸附调试', type: 'boolean', group: '调试', order: 81, defaultValue: core.connectionSnapDebugVisible })
+
+
 
     // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
 
@@ -1540,53 +1422,7 @@ onUnmounted(async () => {
       </template>
 
       <Panel position="top-right">
-        <Pannel :toggles="toggles" :connection-mode="canvas.state.core.connectionMode"
-          v-model:edgeLineWidth="canvas.state.core.edgeLineWidth" v-model:edgeColor="canvas.state.core.edgeColor"
-          v-model:edgeType="canvas.state.core.edgeType" :edgeDashed="canvas.state.core.edgeDashed"
-          :edgeAnimated="canvas.state.core.edgeAnimated" v-model:minZoom="canvas.state.core.minZoom"
-          v-model:maxZoom="canvas.state.core.maxZoom" v-model:topToolbarOffset="canvas.state.core.topToolbarOffset"
-          v-model:bottomToolbarOffset="canvas.state.core.bottomToolbarOffset" v-model:handleDebug="canvas.state.core.handleDebug"
-          v-model:handleRadius="canvas.state.core.handleRadius" v-model:handleRestOffset="canvas.state.core.handleRestOffset"
-          v-model:handleCursorGap="canvas.state.core.handleCursorGap"
-          v-model:handleButtonSize="canvas.state.core.handleButtonSize" v-model:handleOverlap="canvas.state.core.handleOverlap"
-          v-model:connectionSnapDebugVisible="canvas.state.core.connectionSnapDebugVisible"
-          v-model:connectionSnapOuterRatio="canvas.state.core.connectionSnapOuterRatio"
-          v-model:connectionSnapInnerRatio="canvas.state.core.connectionSnapInnerRatio"
-          v-model:connectionSnapHeightRatio="canvas.state.core.connectionSnapHeightRatio"
-          v-model:selectionFramePaddingX="canvas.state.core.selectionFramePaddingX"
-          v-model:selectionFramePaddingTop="canvas.state.core.selectionFramePaddingTop"
-          v-model:selectionFramePaddingBottom="canvas.state.core.selectionFramePaddingBottom"
-          v-model:performancePanelEnabled="canvas.state.core.performancePanelEnabled"
-          v-model:performancePanelShowCharts="canvas.state.core.performancePanelShowCharts"
-          v-model:performancePanelShowMemory="canvas.state.core.performancePanelShowMemory"
-          :plugins="loadedPlugins"
-          :theme-preset="themeState.activePreset" :theme-accent="themeState.accent"
-          :theme-surface="themeState.surface"
-          :storage-status="storageState"
-          :layout-direction="layoutState.direction"
-          :layout-intra-spacing-x="layoutState.intraSpacingX"
-          :layout-intra-spacing-y="layoutState.intraSpacingY"
-          :layout-inter-spacing-x="layoutState.interSpacingX"
-          :layout-inter-spacing-y="layoutState.interSpacingY"
-          :layout-focus-height-ratio="layoutState.focusHeightRatio"
-          @apply-theme-preset="onApplyThemePreset"
-          @apply-custom-theme="onApplyCustomTheme"
-          @storage-connect="onStorageConnect"
-          @storage-disconnect="onStorageDisconnect"
-          @storage-create-project="onStorageCreateProject"
-          @storage-delete-project="onStorageDeleteProject"
-          @storage-switch-project="onStorageSwitchProject"
-          @auto-layout="onAutoLayout"
-          @focus-selected="onFocusSelected"
-          @update:layout-direction="onUpdateLayoutDirection"
-          @update:layout-intra-spacing-x="onUpdateLayoutIntraSpacingX"
-          @update:layout-intra-spacing-y="onUpdateLayoutIntraSpacingY"
-          @update:layout-inter-spacing-x="onUpdateLayoutInterSpacingX"
-          @update:layout-inter-spacing-y="onUpdateLayoutInterSpacingY"
-          @update:layout-focus-height-ratio="onUpdateLayoutFocusHeightRatio"
-          @clear-performance-samples="performanceMonitor.clear"
-          @toggle-edge-dashed="onToggleEdgeDashed" @toggle-edge-animated="onToggleEdgeAnimated"
-          @toggle-mode="toggleMode" @zoom-in="zoomIn" @zoom-out="zoomOut" @fit-view="fitView" />
+        <DynamicSettingsPanel />
       </Panel>
     </VueFlow>
 

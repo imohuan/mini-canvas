@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from 'vue'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../../composables/useCanvasStore'
@@ -29,7 +29,7 @@ const groupedSettings = computed(() => {
         v-for="setting in group.items"
         :key="setting.id"
         :setting="setting"
-        :model-value="runtime.panelRegistry.useValue(setting.id, canvas.state.plugins as any, setting.defaultValue)"
+        :model-value="runtime.panelRegistry.useValue(setting.id, canvas.state as any, setting.defaultValue)"
       />
     </div>
     <div v-if="settings.length === 0" class="settings-empty">暂无可配置项</div>
