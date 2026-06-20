@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin } from './types'
+import type { CanvasPlugin } from './types'
 
 export class PluginDependencyGraph {
   sort(plugins: CanvasPlugin[]): string[] {

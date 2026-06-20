@@ -1,4 +1,5 @@
-import type { Component } from 'vue'
+﻿import type { Component } from 'vue'
+import type { CommandRegistryAPI, ToolbarRegistryAPI, PanelRegistryAPI } from '../registry/types'
 import type { Node, Edge } from '@vue-flow/core'
 import type { CanvasNodeDefinition, CanvasNodeMenuItem } from '../registry/NodeRegistry'
 import type { MenuItemDefinition } from '../menu/MenuRegistry'
@@ -151,6 +152,12 @@ export interface PluginContext {
   registerComponent: (name: string, component: Component) => void
   readonly canvasNodes: CanvasNodeRegistryAPI
   readonly menus: MenuRegistryAPI
+  /** 命令注册 — 注册可执行能力，菜单/toolbar/快捷键都引用命令 */
+  readonly commands: CommandRegistryAPI
+  /** Toolbar 按钮注册 — 给节点上下工具栏追加按钮 */
+  readonly toolbars: ToolbarRegistryAPI
+  /** Panel 设置项注册 — 注册全局设置，值自动持久化 */
+  readonly panels: PanelRegistryAPI
   readonly dom: CanvasDomServiceAPI
   registerHandleConfig: (config: Partial<HandleConfig>) => void
   on: (event: string, handler: (...args: any[]) => void) => () => void
@@ -162,7 +169,7 @@ export interface PluginContext {
   unregisterShortcut: (keys: string) => void
   /** 按名称获取其他插件的公共 API（类型安全） */
   getPluginAPI: <T = unknown>(name: string) => T | null
-  /** @deprecated 只返回插件定义对象。插件间调用 API 请用 getPluginAPI()。 */
+  /** @deprecated 只返回插件定义对象。插件间调用 API 请使用 getPluginAPI()。 */
   getPlugin: <T = CanvasPlugin>(name: string) => T | null
 }
 

@@ -1,4 +1,4 @@
-﻿import { inject } from 'vue'
+import { inject } from 'vue'
 import { CanvasRuntimeKey } from './CanvasRuntimeKey'
 import type { CanvasRuntime } from './CanvasRuntime'
 

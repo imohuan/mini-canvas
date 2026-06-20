@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext, PluginInstallResult, Logger } from './types'
+import type { CanvasPlugin, PluginContext, PluginInstallResult, Logger } from './types'
 import { PluginLifecycle } from './types'
 import type { PluginRegistry } from './PluginRegistry'
 

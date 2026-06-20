@@ -1,2 +1,2 @@
-﻿export { CustomHandlePlugin } from './CustomHandlePlugin'
+export { CustomHandlePlugin } from './CustomHandlePlugin'
 export { isValidCanvasConnection, normalizeConnection } from './ConnectionValidator'

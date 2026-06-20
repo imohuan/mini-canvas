@@ -1,4 +1,4 @@
-﻿import { nextTick } from 'vue'
+import { nextTick } from 'vue'
 import { Position } from '@vue-flow/core'
 import type { Edge, Node } from '@vue-flow/core'
 import type { StorageAPI } from '../plugins/storage/StoragePlugin'

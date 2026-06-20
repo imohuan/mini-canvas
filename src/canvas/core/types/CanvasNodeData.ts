@@ -1,4 +1,4 @@
-﻿export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | (string & {})
+export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | (string & {})
 
 export interface BaseCanvasNodeData {
   nodeType: CanvasNodeKind

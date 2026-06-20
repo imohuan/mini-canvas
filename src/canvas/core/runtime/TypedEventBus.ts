@@ -1,4 +1,4 @@
-﻿export class TypedEventBus<Events extends Record<string, unknown>> {
+export class TypedEventBus<Events extends Record<string, unknown>> {
   private handlers = new Map<keyof Events, Set<(payload: any) => void>>()
 
   on<K extends keyof Events>(event: K, handler: (payload: Events[K]) => void): () => void {

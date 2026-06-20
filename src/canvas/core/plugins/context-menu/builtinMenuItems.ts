@@ -1,4 +1,4 @@
-﻿import type { MenuItemDefinition } from '../../menu/MenuRegistry'
+import type { MenuItemDefinition } from '../../menu/MenuRegistry'
 
 export function createBuiltinMenuItems(): MenuItemDefinition[] {
   return [

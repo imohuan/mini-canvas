@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext, Point } from '../types'
+import type { CanvasPlugin, PluginContext, Point } from '../types'
 import type { Node } from '@vue-flow/core'
 import { Position } from '@vue-flow/core'
 import type { StorageAPI } from '../storage/StoragePlugin'

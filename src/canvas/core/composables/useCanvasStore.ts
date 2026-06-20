@@ -31,37 +31,68 @@ function sameStringSet(a: Set<string>, b: Set<string>) {
 const serializer = {
   read(raw: string) {
     const data = JSON.parse(raw)
-    if (!data.plugins) data.plugins = {}
-    if (!data.shortcutKeymap) data.shortcutKeymap = {}
+    const core = data.core || data
+    if (!core.plugins) data.plugins = data.plugins || {}
     return {
-      ...data,
-      handleDebug: data.handleDebug ?? false,
-      handleRadius: numberOr(data.handleRadius, 86),
-      handleRestOffset: numberOr(data.handleRestOffset, 36),
-      handleCursorGap: numberOr(data.handleCursorGap, 24),
-      handleButtonSize: numberOr(data.handleButtonSize, 32),
-      handleOverlap: numberOr(data.handleOverlap, 16),
-      connectionSnapDebugVisible: data.connectionSnapDebugVisible ?? false,
-      connectionSnapOuterRatio: numberOr(data.connectionSnapOuterRatio, 0.75),
-      connectionSnapInnerRatio: numberOr(data.connectionSnapInnerRatio, 0.6),
-      connectionSnapHeightRatio: numberOr(data.connectionSnapHeightRatio, 1.35),
-      selectionFramePaddingX: numberOr(data.selectionFramePaddingX, 16),
-      selectionFramePaddingTop: numberOr(data.selectionFramePaddingTop, 34),
-      selectionFramePaddingBottom: numberOr(data.selectionFramePaddingBottom, 16),
-      performancePanelEnabled: data.performancePanelEnabled ?? false,
-      performancePanelShowCharts: data.performancePanelShowCharts ?? true,
-      performancePanelShowMemory: data.performancePanelShowMemory ?? true,
-      connectionMode:
-        data.connectionMode === 'loose' ? ConnectionMode.Loose : ConnectionMode.Strict,
-      selectionMode:
-        data.selectionMode === 'partial' ? SelectionMode.Partial : SelectionMode.Full,
+      core: {
+        handleDebug: core.handleDebug ?? false,
+        handleRadius: numberOr(core.handleRadius, 86),
+        handleRestOffset: numberOr(core.handleRestOffset, 36),
+        handleCursorGap: numberOr(core.handleCursorGap, 24),
+        handleButtonSize: numberOr(core.handleButtonSize, 32),
+        handleOverlap: numberOr(core.handleOverlap, 16),
+        connectionSnapDebugVisible: core.connectionSnapDebugVisible ?? false,
+        connectionSnapOuterRatio: numberOr(core.connectionSnapOuterRatio, 0.75),
+        connectionSnapInnerRatio: numberOr(core.connectionSnapInnerRatio, 0.6),
+        connectionSnapHeightRatio: numberOr(core.connectionSnapHeightRatio, 1.35),
+        selectionFramePaddingX: numberOr(core.selectionFramePaddingX, 16),
+        selectionFramePaddingTop: numberOr(core.selectionFramePaddingTop, 34),
+        selectionFramePaddingBottom: numberOr(core.selectionFramePaddingBottom, 16),
+        performancePanelEnabled: core.performancePanelEnabled ?? false,
+        performancePanelShowCharts: core.performancePanelShowCharts ?? true,
+        performancePanelShowMemory: core.performancePanelShowMemory ?? true,
+        connectionMode:
+          core.connectionMode === 'loose' ? ConnectionMode.Loose : ConnectionMode.Strict,
+        selectionMode:
+          core.selectionMode === 'partial' ? SelectionMode.Partial : SelectionMode.Full,
+        edgeLineWidth: core.edgeLineWidth ?? 2,
+        edgeColor: core.edgeColor ?? '#3b82f6',
+        edgeType: core.edgeType ?? 'bezier',
+        edgeDashed: core.edgeDashed ?? false,
+        edgeAnimated: core.edgeAnimated ?? false,
+        topToolbarOffset: core.topToolbarOffset ?? 12,
+        bottomToolbarOffset: core.bottomToolbarOffset ?? 12,
+        nodesDraggable: core.nodesDraggable ?? true,
+        nodesConnectable: core.nodesConnectable ?? true,
+        elementsSelectable: core.elementsSelectable ?? true,
+        edgesUpdatable: core.edgesUpdatable ?? true,
+        snapToGrid: core.snapToGrid ?? false,
+        snapGrid: core.snapGrid ?? [15, 15],
+        zoomOnPinch: core.zoomOnPinch ?? true,
+        minZoom: core.minZoom ?? 0.1,
+        maxZoom: core.maxZoom ?? 4,
+        zoomOnScroll: core.zoomOnScroll ?? true,
+        panOnScroll: core.panOnScroll ?? false,
+        panOnDrag: core.panOnDrag ?? true,
+        connectOnClick: core.connectOnClick ?? false,
+        zoomOnDoubleClick: core.zoomOnDoubleClick ?? false,
+        onlyRenderVisibleElements: core.onlyRenderVisibleElements ?? true,
+        selectNodesOnDrag: core.selectNodesOnDrag ?? false,
+        preventScrolling: core.preventScrolling ?? true,
+        shortcutKeymap: core.shortcutKeymap ?? {},
+      },
+      plugins: data.plugins ?? {},
     }
   },
   write(value: any) {
+    const core = value.core || value
     return JSON.stringify({
-      ...value,
-      connectionMode: value.connectionMode === ConnectionMode.Loose ? 'loose' : 'strict',
-      selectionMode: value.selectionMode === SelectionMode.Partial ? 'partial' : 'full',
+      core: {
+        ...core,
+        connectionMode: core.connectionMode === ConnectionMode.Loose ? 'loose' : 'strict',
+        selectionMode: core.selectionMode === SelectionMode.Partial ? 'partial' : 'full',
+      },
+      plugins: value.plugins ?? {},
     })
   },
 }
@@ -81,69 +112,83 @@ const serializer = {
  */
 export const useCanvasStore = defineStore('canvasState', () => {
   const state = ref({
-    // ==================== 连接线样式 ====================
-    edgeLineWidth: 2,
-    edgeColor: '#3b82f6',
-    edgeType: 'bezier' as EdgeType,
-    edgeDashed: false,
-    edgeAnimated: false,
+    /**
+     * 核心画布配置
+     *
+     * 这里放 canvas core 自己提供的全局设置。
+     * 包括：连线样式、工具栏偏移、自定义端口、多选框、性能面板、
+     *       连线模式、节点交互、视口交互、快捷键映射等。
+     */
+    core: {
+      // ==================== 连线样式 ====================
+      edgeLineWidth: 2,
+      edgeColor: '#3b82f6',
+      edgeType: 'bezier' as EdgeType,
+      edgeDashed: false,
+      edgeAnimated: false,
 
-    // ==================== 工具栏偏移 ====================
-    topToolbarOffset: 12,
-    bottomToolbarOffset: 12,
+      // ==================== 工具栏偏移 ====================
+      topToolbarOffset: 12,
+      bottomToolbarOffset: 12,
 
-    // ==================== 自定义端口 ====================
-    handleDebug: false,
-    handleRadius: 86,
-    handleRestOffset: 36,
-    handleCursorGap: 24,
-    handleButtonSize: 32,
-    handleOverlap: 16,
-    connectionSnapDebugVisible: false,
-    connectionSnapOuterRatio: 0.75,
-    connectionSnapInnerRatio: 0.6,
-    connectionSnapHeightRatio: 1.35,
+      // ==================== 自定义端口 ====================
+      handleDebug: false,
+      handleRadius: 86,
+      handleRestOffset: 36,
+      handleCursorGap: 24,
+      handleButtonSize: 32,
+      handleOverlap: 16,
+      connectionSnapDebugVisible: false,
+      connectionSnapOuterRatio: 0.75,
+      connectionSnapInnerRatio: 0.6,
+      connectionSnapHeightRatio: 1.35,
 
-    // ==================== 多选框 ====================
-    selectionFramePaddingX: 16,
-    selectionFramePaddingTop: 34,
-    selectionFramePaddingBottom: 16,
+      // ==================== 多选框 ====================
+      selectionFramePaddingX: 16,
+      selectionFramePaddingTop: 34,
+      selectionFramePaddingBottom: 16,
 
-    // ==================== 性能检测面板 ====================
-    performancePanelEnabled: false,
-    performancePanelShowCharts: true,
-    performancePanelShowMemory: true,
+      // ==================== 性能侦测面板 ====================
+      performancePanelEnabled: false,
+      performancePanelShowCharts: true,
+      performancePanelShowMemory: true,
 
-    // ==================== 连线模式 ====================
-    connectionMode: ConnectionMode.Strict,
+      // ==================== 连线模式 ====================
+      connectionMode: ConnectionMode.Strict,
 
-    // ==================== 节点交互 ====================
-    nodesDraggable: true,
-    nodesConnectable: true,
-    elementsSelectable: true,
-    edgesUpdatable: true,
-    snapToGrid: false,
-    snapGrid: [15, 15] as [number, number],
-    zoomOnPinch: true,
-    minZoom: 0.1,
-    maxZoom: 4,
+      // ==================== 节点交互 ====================
+      nodesDraggable: true,
+      nodesConnectable: true,
+      elementsSelectable: true,
+      edgesUpdatable: true,
+      snapToGrid: false,
+      snapGrid: [15, 15] as [number, number],
+      zoomOnPinch: true,
+      minZoom: 0.1,
+      maxZoom: 4,
 
-    // ==================== 视口交互 ====================
-    zoomOnScroll: true,
-    panOnScroll: false,
-    panOnDrag: true,
-    connectOnClick: false,
-    zoomOnDoubleClick: false,
-    selectionMode: SelectionMode.Full as SelectionMode,
-    onlyRenderVisibleElements: true,
-    selectNodesOnDrag: false,
-    preventScrolling: true,
+      // ==================== 视口交互 ====================
+      zoomOnScroll: true,
+      panOnScroll: false,
+      panOnDrag: true,
+      connectOnClick: false,
+      zoomOnDoubleClick: false,
+      selectionMode: SelectionMode.Full as SelectionMode,
+      onlyRenderVisibleElements: true,
+      selectNodesOnDrag: false,
+      preventScrolling: true,
 
-    // ==================== 插件命名空间状态 ====================
+      // ==================== 快捷键映射 ====================
+      shortcutKeymap: {} as Record<string, string>,
+    },
+
+    /**
+     * 插件配置命名空间
+     *
+     * 每个插件一个 key，key 名 = 插件 name。
+     * 插件通过 PanelRegistry.useValue() 注册的设置项会写入这里。
+     */
     plugins: {} as Record<string, Record<string, unknown>>,
-
-    // ==================== 快捷键映射 ====================
-    shortcutKeymap: {} as Record<string, string>,
   })
 
   useStorage('canvas-state', state, localStorage, { serializer })
@@ -317,3 +362,4 @@ export function usePluginStore(pluginName: string) {
   }
   return { get, set, namespace }
 }
+

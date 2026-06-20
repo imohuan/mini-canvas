@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -24,6 +24,9 @@ import type { ThemeAPI } from './plugins/theme/types'
 import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
 import { NodeRegistry } from './registry/NodeRegistry'
+import { CommandRegistry } from './registry/CommandRegistry'
+import { ToolbarRegistry } from './registry/ToolbarRegistry'
+import { PanelRegistry } from './registry/PanelRegistry'
 import { MenuRegistry, resolveMenuItems } from './menu'
 
 // ========================
@@ -43,7 +46,7 @@ const canvas = useCanvasStore()
 
 // 创建连接线 data
 function makeEdgeData() {
-  const s = canvas.state
+  const s = canvas.state.core
   return {
     edgeType: s.edgeType,
     edgeLineWidth: s.edgeLineWidth,
@@ -60,7 +63,7 @@ const canvasContainerRef = ref<HTMLElement | null>(null)
 const canvasContainerSize = ref({ width: 0, height: 0 })
 let canvasResizeObserver: ResizeObserver | null = null
 
-const performanceEnabled = computed(() => canvas.state.performancePanelEnabled)
+const performanceEnabled = computed(() => canvas.state.core.performancePanelEnabled)
 const performanceMonitor = useCanvasPerformance({ enabled: performanceEnabled })
 
 function updateCanvasContainerSize() {
@@ -457,9 +460,9 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
   const excludedNodeIds = new Set(excludedNodeIdsOverride ?? [sourceNodeId])
   let bestNode: Node | null = null
   let bestDistance = Number.POSITIVE_INFINITY
-  const snapHeight = canvas.state.handleRadius * canvas.state.connectionSnapHeightRatio
-  const snapOuter = canvas.state.handleRadius * canvas.state.connectionSnapOuterRatio
-  const snapInner = canvas.state.handleRadius * canvas.state.connectionSnapInnerRatio
+  const snapHeight = canvas.state.core.handleRadius * canvas.state.core.connectionSnapHeightRatio
+  const snapOuter = canvas.state.core.handleRadius * canvas.state.core.connectionSnapOuterRatio
+  const snapInner = canvas.state.core.handleRadius * canvas.state.core.connectionSnapInnerRatio
   const nodeEls = document.querySelectorAll('.vue-flow__node')
 
   for (const el of nodeEls) {
@@ -556,9 +559,9 @@ function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId:
 function findNearestValidSource(clientX: number, clientY: number, targetNodeIds: Set<string>) {
   let bestNode: Node | null = null
   let bestDistance = Number.POSITIVE_INFINITY
-  const snapHeight = canvas.state.handleRadius * canvas.state.connectionSnapHeightRatio
-  const snapOuter = canvas.state.handleRadius * canvas.state.connectionSnapOuterRatio
-  const snapInner = canvas.state.handleRadius * canvas.state.connectionSnapInnerRatio
+  const snapHeight = canvas.state.core.handleRadius * canvas.state.core.connectionSnapHeightRatio
+  const snapOuter = canvas.state.core.handleRadius * canvas.state.core.connectionSnapOuterRatio
+  const snapInner = canvas.state.core.handleRadius * canvas.state.core.connectionSnapInnerRatio
   const nodeEls = document.querySelectorAll('.vue-flow__node')
 
   for (const el of nodeEls) {
@@ -799,7 +802,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
 }
 
 // --- toggles (直接操作 Pinia store) ---
-const s = canvas.state
+const s = canvas.state.core
 const toggles = [
   { key: 'nodesDraggable', label: '可拖拽', get: () => s.nodesDraggable, set: (v: boolean) => { s.nodesDraggable = v } },
   { key: 'nodesConnectable', label: '可连线', get: () => s.nodesConnectable, set: (v: boolean) => { s.nodesConnectable = v } },
@@ -816,20 +819,20 @@ const toggles = [
 ]
 
 function toggleMode() {
-  canvas.state.connectionMode = canvas.state.connectionMode === ConnectionMode.Strict ? ConnectionMode.Loose : ConnectionMode.Strict
+  canvas.state.core.connectionMode = canvas.state.core.connectionMode === ConnectionMode.Strict ? ConnectionMode.Loose : ConnectionMode.Strict
 }
 
 function onToggleEdgeDashed() {
-  canvas.state.edgeDashed = !canvas.state.edgeDashed
+  canvas.state.core.edgeDashed = !canvas.state.core.edgeDashed
 }
 
 function onToggleEdgeAnimated() {
-  canvas.state.edgeAnimated = !canvas.state.edgeAnimated
+  canvas.state.core.edgeAnimated = !canvas.state.core.edgeAnimated
   const raw = getEdges.value as Edge[]
   for (const e of raw) {
-    e.animated = canvas.state.edgeAnimated
+    e.animated = canvas.state.core.edgeAnimated
   }
-  console.log('[Canvas] onToggleEdgeAnimated:', { animated: canvas.state.edgeAnimated, affectedEdges: raw.length })
+  console.log('[Canvas] onToggleEdgeAnimated:', { animated: canvas.state.core.edgeAnimated, affectedEdges: raw.length })
 }
 
 // --- custom events ---
@@ -935,10 +938,10 @@ function getNodeCardFlowRect(nodeId: string, fallbackPosition: { x: number; y: n
 
 function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const sourceId = connectionLineProps.sourceNode?.id || canvas.connectionState.sourceNodeId || '__source__'
-  const handleRadius = canvas.state.handleRadius
-  const snapOuter = handleRadius * canvas.state.connectionSnapOuterRatio
-  const snapInner = handleRadius * canvas.state.connectionSnapInnerRatio
-  const snapHeight = handleRadius * canvas.state.connectionSnapHeightRatio
+  const handleRadius = canvas.state.core.handleRadius
+  const snapOuter = handleRadius * canvas.state.core.connectionSnapOuterRatio
+  const snapInner = handleRadius * canvas.state.core.connectionSnapInnerRatio
+  const snapHeight = handleRadius * canvas.state.core.connectionSnapHeightRatio
   const snapWidth = snapOuter + snapInner
 
   const liveNodes = (getNodes.value as Node[])
@@ -1089,10 +1092,10 @@ function toVueFlowKey(key: string): string {
 }
 
 /**
- * 将 canvas.state.shortcutKeymap 中的 VueFlow 键位映射同步到 VueFlow store
+ * 将 canvas.state.core.shortcutKeymap 中的 VueFlow 键位映射同步到 VueFlow store
  */
 function syncVueFlowKeymap() {
-  const keymap = canvas.state.shortcutKeymap || {}
+  const keymap = canvas.state.core.shortcutKeymap || {}
   const vf = vueFlowInstance as any
   const mapping: Record<string, string> = {
     'vueflow.delete': 'deleteKeyCode',
@@ -1113,7 +1116,12 @@ function syncVueFlowKeymap() {
 const manager = new PluginManager()
 const nodeRegistry = new NodeRegistry()
 const menuRegistry = new MenuRegistry()
-const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, vueFlowInstance as any)
+const commandRegistry = new CommandRegistry()
+const toolbarRegistry = new ToolbarRegistry()
+const panelRegistry = new PanelRegistry()
+const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, commandRegistry, toolbarRegistry, panelRegistry, vueFlowInstance as any)
+commandRegistry.setShortcutManager(ShortcutManager.getInstance())
+manager.setRegistries({ commandRegistry, toolbarRegistry, panelRegistry })
 
 const bootstrap = useCanvasBootstrap(
   vueFlowInstance,
@@ -1280,8 +1288,8 @@ function pushLayoutConfig() {
     intraSpacing: { x: layoutState.value.intraSpacingX, y: layoutState.value.intraSpacingY },
     interSpacing: { x: layoutState.value.interSpacingX, y: layoutState.value.interSpacingY },
     focusHeightRatio: layoutState.value.focusHeightRatio,
-    minZoom: canvas.state.minZoom,
-    maxZoom: canvas.state.maxZoom,
+    minZoom: canvas.state.core.minZoom,
+    maxZoom: canvas.state.core.maxZoom,
     debug: true,
   })
   return api
@@ -1392,6 +1400,9 @@ onMounted(async () => {
         eventBus: manager.eventBus,
         nodeRegistry,
         menuRegistry,
+        commandRegistry,
+        toolbarRegistry,
+        panelRegistry,
       }),
     })
 
@@ -1446,7 +1457,7 @@ onMounted(async () => {
     }
 
     // 从持久化存储加载用户自定义的快捷键映射
-    const keymap = canvas.state.shortcutKeymap || {}
+    const keymap = canvas.state.core.shortcutKeymap || {}
     ShortcutManager.getInstance().loadKeymap(keymap)
 
     // 同步 VueFlow keyboard refs
@@ -1455,14 +1466,14 @@ onMounted(async () => {
     // 同步 zoom 限制给 auto-layout，F 快捷键也要遵守通用设置里的缩放范围
     pushLayoutConfig()
     watch(
-      () => [canvas.state.minZoom, canvas.state.maxZoom],
+      () => [canvas.state.core.minZoom, canvas.state.core.maxZoom],
       () => pushLayoutConfig(),
       { deep: false }
     )
 
     // 监听快捷键重映射 → 同步到 VueFlow
     watch(
-      () => canvas.state.shortcutKeymap,
+      () => canvas.state.core.shortcutKeymap,
       () => syncVueFlowKeymap(),
       { deep: true }
     )
@@ -1479,7 +1490,7 @@ onUnmounted(async () => {
 
   // 持久化当前快捷键映射到 Store
   const mgr = ShortcutManager.getInstance()
-  canvas.state.shortcutKeymap = mgr.exportKeymap()
+  canvas.state.core.shortcutKeymap = mgr.exportKeymap()
 
   // 按依赖拓扑顺序反向卸载（先卸载依赖方，再卸载被依赖方）
   const names = [...manager.getLoadOrder()].reverse()
@@ -1498,16 +1509,16 @@ onUnmounted(async () => {
   <CanvasRuntimeProvider :runtime="runtime">
   <div ref="canvasContainerRef" class="canvas-container">
     <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
-      :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.connectionMode"
-      :nodes-draggable="canvas.state.nodesDraggable" :nodes-connectable="canvas.state.nodesConnectable"
-      :elements-selectable="canvas.state.elementsSelectable" :edges-updatable="canvas.state.edgesUpdatable"
-      :snap-to-grid="canvas.state.snapToGrid" :snap-grid="canvas.state.snapGrid"
-      :zoom-on-scroll="canvas.state.zoomOnScroll" :zoom-on-pinch="canvas.state.zoomOnPinch"
-      :pan-on-scroll="canvas.state.panOnScroll" :pan-on-drag="canvas.state.panOnDrag"
-      :connect-on-click="canvas.state.connectOnClick" :min-zoom="canvas.state.minZoom" :max-zoom="canvas.state.maxZoom"
-      :zoom-on-double-click="canvas.state.zoomOnDoubleClick" :selection-mode="canvas.state.selectionMode"
-      :only-render-visible-elements="canvas.state.onlyRenderVisibleElements"
-      :select-nodes-on-drag="canvas.state.selectNodesOnDrag" :prevent-scrolling="canvas.state.preventScrolling"
+      :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
+      :nodes-draggable="canvas.state.core.nodesDraggable" :nodes-connectable="canvas.state.core.nodesConnectable"
+      :elements-selectable="canvas.state.core.elementsSelectable" :edges-updatable="canvas.state.core.edgesUpdatable"
+      :snap-to-grid="canvas.state.core.snapToGrid" :snap-grid="canvas.state.core.snapGrid"
+      :zoom-on-scroll="canvas.state.core.zoomOnScroll" :zoom-on-pinch="canvas.state.core.zoomOnPinch"
+      :pan-on-scroll="canvas.state.core.panOnScroll" :pan-on-drag="canvas.state.core.panOnDrag"
+      :connect-on-click="canvas.state.core.connectOnClick" :min-zoom="canvas.state.core.minZoom" :max-zoom="canvas.state.core.maxZoom"
+      :zoom-on-double-click="canvas.state.core.zoomOnDoubleClick" :selection-mode="canvas.state.core.selectionMode"
+      :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
+      :select-nodes-on-drag="canvas.state.core.selectNodesOnDrag" :prevent-scrolling="canvas.state.core.preventScrolling"
       :selection-key-code="null" :multi-selection-key-code="'Shift'" fit-view-on-init
       :is-valid-connection="isValidConnection" :auto-connect="false"
       @connect="onConnect($event); manager.eventBus.emit('connect', $event)"
@@ -1529,25 +1540,25 @@ onUnmounted(async () => {
       </template>
 
       <Panel position="top-right">
-        <Pannel :toggles="toggles" :connection-mode="canvas.state.connectionMode"
-          v-model:edgeLineWidth="canvas.state.edgeLineWidth" v-model:edgeColor="canvas.state.edgeColor"
-          v-model:edgeType="canvas.state.edgeType" :edgeDashed="canvas.state.edgeDashed"
-          :edgeAnimated="canvas.state.edgeAnimated" v-model:minZoom="canvas.state.minZoom"
-          v-model:maxZoom="canvas.state.maxZoom" v-model:topToolbarOffset="canvas.state.topToolbarOffset"
-          v-model:bottomToolbarOffset="canvas.state.bottomToolbarOffset" v-model:handleDebug="canvas.state.handleDebug"
-          v-model:handleRadius="canvas.state.handleRadius" v-model:handleRestOffset="canvas.state.handleRestOffset"
-          v-model:handleCursorGap="canvas.state.handleCursorGap"
-          v-model:handleButtonSize="canvas.state.handleButtonSize" v-model:handleOverlap="canvas.state.handleOverlap"
-          v-model:connectionSnapDebugVisible="canvas.state.connectionSnapDebugVisible"
-          v-model:connectionSnapOuterRatio="canvas.state.connectionSnapOuterRatio"
-          v-model:connectionSnapInnerRatio="canvas.state.connectionSnapInnerRatio"
-          v-model:connectionSnapHeightRatio="canvas.state.connectionSnapHeightRatio"
-          v-model:selectionFramePaddingX="canvas.state.selectionFramePaddingX"
-          v-model:selectionFramePaddingTop="canvas.state.selectionFramePaddingTop"
-          v-model:selectionFramePaddingBottom="canvas.state.selectionFramePaddingBottom"
-          v-model:performancePanelEnabled="canvas.state.performancePanelEnabled"
-          v-model:performancePanelShowCharts="canvas.state.performancePanelShowCharts"
-          v-model:performancePanelShowMemory="canvas.state.performancePanelShowMemory"
+        <Pannel :toggles="toggles" :connection-mode="canvas.state.core.connectionMode"
+          v-model:edgeLineWidth="canvas.state.core.edgeLineWidth" v-model:edgeColor="canvas.state.core.edgeColor"
+          v-model:edgeType="canvas.state.core.edgeType" :edgeDashed="canvas.state.core.edgeDashed"
+          :edgeAnimated="canvas.state.core.edgeAnimated" v-model:minZoom="canvas.state.core.minZoom"
+          v-model:maxZoom="canvas.state.core.maxZoom" v-model:topToolbarOffset="canvas.state.core.topToolbarOffset"
+          v-model:bottomToolbarOffset="canvas.state.core.bottomToolbarOffset" v-model:handleDebug="canvas.state.core.handleDebug"
+          v-model:handleRadius="canvas.state.core.handleRadius" v-model:handleRestOffset="canvas.state.core.handleRestOffset"
+          v-model:handleCursorGap="canvas.state.core.handleCursorGap"
+          v-model:handleButtonSize="canvas.state.core.handleButtonSize" v-model:handleOverlap="canvas.state.core.handleOverlap"
+          v-model:connectionSnapDebugVisible="canvas.state.core.connectionSnapDebugVisible"
+          v-model:connectionSnapOuterRatio="canvas.state.core.connectionSnapOuterRatio"
+          v-model:connectionSnapInnerRatio="canvas.state.core.connectionSnapInnerRatio"
+          v-model:connectionSnapHeightRatio="canvas.state.core.connectionSnapHeightRatio"
+          v-model:selectionFramePaddingX="canvas.state.core.selectionFramePaddingX"
+          v-model:selectionFramePaddingTop="canvas.state.core.selectionFramePaddingTop"
+          v-model:selectionFramePaddingBottom="canvas.state.core.selectionFramePaddingBottom"
+          v-model:performancePanelEnabled="canvas.state.core.performancePanelEnabled"
+          v-model:performancePanelShowCharts="canvas.state.core.performancePanelShowCharts"
+          v-model:performancePanelShowMemory="canvas.state.core.performancePanelShowMemory"
           :plugins="loadedPlugins"
           :theme-preset="themeState.activePreset" :theme-accent="themeState.accent"
           :theme-surface="themeState.surface"
@@ -1580,7 +1591,7 @@ onUnmounted(async () => {
     </VueFlow>
 
     <CanvasPerformancePanel
-      :enabled="canvas.state.performancePanelEnabled"
+      :enabled="canvas.state.core.performancePanelEnabled"
       :samples="performanceMonitor.samples.value"
       :long-tasks="performanceMonitor.longTasks.value"
       :status="performanceMonitor.currentStatus.value"
@@ -1593,9 +1604,9 @@ onUnmounted(async () => {
       :container-size="canvasContainerSize"
       :selected-node-count="canvas.selectionState.selectedNodeIds.size"
       :selected-edge-count="canvas.selectionState.selectedEdgeIds.size"
-      :only-render-visible-elements="canvas.state.onlyRenderVisibleElements"
-      :show-charts="canvas.state.performancePanelShowCharts"
-      :show-memory="canvas.state.performancePanelShowMemory"
+      :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
+      :show-charts="canvas.state.core.performancePanelShowCharts"
+      :show-memory="canvas.state.core.performancePanelShowMemory"
       :memory="performanceMonitor.memory.value"
     />
 
@@ -1619,3 +1630,8 @@ onUnmounted(async () => {
   user-select: none;
 }
 </style>
+
+
+
+
+

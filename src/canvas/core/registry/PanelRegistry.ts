@@ -1,28 +1,127 @@
-﻿import type { Component } from 'vue'
+import { reactive, computed, type Ref } from 'vue'
+import type { PanelSettingDefinition, PanelRegistryAPI } from './types'
 
-export interface PanelSectionDefinition {
-  id: string
-  label: string
-  component: Component
-  priority?: number
-}
+/**
+ * Panel 设置项注册中心
+ *
+ * 注册全局设置项（JSON schema），值存储在 canvas.state.plugins.<source> 下。
+ * useValue() 返回与 store 双向绑定的 Ref，插件和 Panel UI 共享同一份响应式数据。
+ * 内部使用 reactive Map，注册变化时自动触发 Vue 重渲染。
+ */
+export class PanelRegistry implements PanelRegistryAPI {
+  /** 设置项存储：id -> PanelSettingDefinition */
+  private settings = reactive(new Map<string, PanelSettingDefinition>())
 
-export class PanelRegistry {
-  private sections: Map<string, { source: string; definition: PanelSectionDefinition }> = new Map()
-
-  register(source: string, definition: PanelSectionDefinition): void {
-    this.sections.set(definition.id, { source, definition })
+  /**
+   * 注册设置项
+   *
+   * 同 id 后注册的覆盖先注册的。
+   */
+  registerSetting(source: string, setting: PanelSettingDefinition): void {
+    const existing = this.settings.get(setting.id)
+    if (existing) {
+      console.warn(
+        `[PanelRegistry] Setting "${setting.id}" is overridden: ` +
+        `source "${existing.source}" -> "${source}"`,
+      )
+    }
+    this.settings.set(setting.id, { ...setting, source })
   }
 
+  /** 注销设置项 */
+  unregisterSetting(id: string): void {
+    this.settings.delete(id)
+  }
+
+  /** 注销某来源的所有设置项（插件卸载时调用） */
   unregisterSource(source: string): void {
-    for (const [id, entry] of this.sections) {
-      if (entry.source === source) this.sections.delete(id)
+    for (const [id, setting] of this.settings) {
+      if (setting.source === source) this.settings.delete(id)
     }
   }
 
-  getAll(): PanelSectionDefinition[] {
-    return [...this.sections.values()]
-      .map(e => e.definition)
-      .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0))
+  /** 获取所有设置项，按 order 排序 */
+  getAll(): PanelSettingDefinition[] {
+    const result: PanelSettingDefinition[] = []
+    for (const s of this.settings.values()) result.push(s)
+    return result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }
+
+  /** 获取某来源的设置项 */
+  getBySource(source: string): PanelSettingDefinition[] {
+    const result: PanelSettingDefinition[] = []
+    for (const s of this.settings.values()) {
+      if (s.source === source) result.push(s)
+    }
+    return result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  }
+
+  /**
+   * 获取设置项的响应式值
+   *
+   * id 格式为 dotted path，如 'theme.accent' 或 'theme.colors.accent'。
+   * 第一段是 plugins 下的命名空间（插件名），后续段是嵌套路径。
+   * 如果 store 中无值，写入 defaultValue 后返回。
+   *
+   * @param id - 设置项 ID，如 'theme.accent'
+   * @param store - canvas.state.plugins 的 ref
+   * @param defaultValue - 默认值
+   * @returns 与 store 双向绑定的 Ref
+   */
+  useValue<T>(id: string, store: Ref<Record<string, Record<string, unknown>>>, defaultValue: T): Ref<T> {
+    const parts = id.split('.')
+    const namespace = parts[0]
+    const pathParts = parts.slice(1)
+
+    // 确保命名空间存在
+    if (!store.value[namespace]) {
+      store.value[namespace] = {}
+    }
+
+    // 沿路径遍历/创建
+    let current: Record<string, unknown> = store.value[namespace]
+    for (let i = 0; i < pathParts.length - 1; i++) {
+      const key = pathParts[i]
+      if (current[key] === undefined || current[key] === null) {
+        current[key] = {}
+      }
+      current = current[key] as Record<string, unknown>
+    }
+
+    const leafKey = pathParts[pathParts.length - 1]
+
+    // 如果无值，写入默认值
+    if (current[leafKey] === undefined) {
+      current[leafKey] = defaultValue
+    }
+
+    // 返回 computed ref 实现双向绑定
+    return computed<T>({
+      get: () => {
+        let obj: Record<string, unknown> | undefined = store.value[namespace]
+        for (const p of pathParts) {
+          if (obj === undefined || obj === null) return defaultValue
+          obj = obj[p] as Record<string, unknown> | undefined
+        }
+        return (obj as T) ?? defaultValue
+      },
+      set: (val: T) => {
+        let obj: Record<string, unknown> = store.value[namespace]
+        if (!obj) {
+          obj = {}
+          store.value[namespace] = obj
+        }
+        for (let i = 0; i < pathParts.length - 1; i++) {
+          const key = pathParts[i]
+          if (obj[key] === undefined || obj[key] === null) {
+            obj[key] = {}
+          }
+          obj = obj[key] as Record<string, unknown>
+        }
+        obj[pathParts[pathParts.length - 1]] = val
+      },
+    }) as Ref<T>
   }
 }
+
+

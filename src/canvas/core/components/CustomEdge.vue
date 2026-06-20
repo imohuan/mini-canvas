@@ -17,10 +17,10 @@ const isTemporaryEdge = computed(() => Boolean(props.temporary || props.data?.is
 // ---- 状态及配置 ----
 const canvas = useCanvasStore()
 
-const edgeType = computed(() => canvas.state.edgeType as 'bezier' | 'straight' | 'step' || 'bezier')
-const lineWidth = computed(() => canvas.state.edgeLineWidth)
-const edgeColor = computed(() => canvas.state.edgeColor)
-const dashArray = computed(() => canvas.state.edgeDashed ? `${lineWidth.value * 4} ${lineWidth.value * 2}` : undefined)
+const edgeType = computed(() => canvas.state.core.edgeType as 'bezier' | 'straight' | 'step' || 'bezier')
+const lineWidth = computed(() => canvas.state.core.edgeLineWidth)
+const edgeColor = computed(() => canvas.state.core.edgeColor)
+const dashArray = computed(() => canvas.state.core.edgeDashed ? `${lineWidth.value * 4} ${lineWidth.value * 2}` : undefined)
 
 // 剪切按钮
 const showCutButton = ref(false)

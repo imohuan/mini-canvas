@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 
 export interface NodeMenuItemDefinition {
   label: string
@@ -8,6 +8,10 @@ export interface NodeMenuItemDefinition {
 }
 
 export interface CanvasNodeDefinition {
+  /** 来源（插件名或 'core'），用于批量卸载 */
+  source?: string
+  /** 排序，数字越小越靠前 */
+  order?: number
   type: string
   node?: Component
   topToolbar?: Component

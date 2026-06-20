@@ -16,6 +16,9 @@ import type {
 } from './types'
 import type { NodeRegistry } from '../registry/NodeRegistry'
 import type { MenuRegistry } from '../menu/MenuRegistry'
+import type { CommandRegistry } from '../registry/CommandRegistry'
+import type { ToolbarRegistry } from '../registry/ToolbarRegistry'
+import type { PanelRegistry } from '../registry/PanelRegistry'
 import { CanvasDomService } from '../runtime/CanvasDomService'
 import type { HandleConfig, MenuItemDefinition } from './types'
 import { ShortcutManager } from './ShortcutManager'
@@ -113,6 +116,9 @@ interface CreatePluginContextOptions {
   eventBus?: EventBus
   nodeRegistry?: NodeRegistry
   menuRegistry?: MenuRegistry
+  commandRegistry?: CommandRegistry
+  toolbarRegistry?: ToolbarRegistry
+  panelRegistry?: PanelRegistry
   pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
 }
 
@@ -131,6 +137,9 @@ export function createPluginContext(
     eventBus = new EventBus(),
     nodeRegistry,
     menuRegistry,
+    commandRegistry,
+    toolbarRegistry,
+    panelRegistry,
     pluginManager,
   } = options
 
@@ -325,6 +334,36 @@ export function createPluginContext(
       getMenuItems() {
         return nodeRegistry?.getMenuItems() ?? []
       },
+    },
+
+    commands: {
+      register(command: any) { commandRegistry?.register(command) },
+      unregister(id: string) { commandRegistry?.unregister(id) },
+      unregisterSource(source: string) { commandRegistry?.unregisterSource(source) },
+      async execute(id: string, args?: unknown) {
+        commandRegistry?.execute(id, { runtime: null, actions: null, selection: null, viewport: null, store: null, logger }, args)
+      },
+      canExecute(id: string) { return commandRegistry?.canExecute(id) ?? false },
+      has(id: string) { return commandRegistry?.has(id) ?? false },
+      get(id: string) { return commandRegistry?.get(id) ?? null },
+      getPublic() { return commandRegistry?.getPublic() ?? [] },
+      getAll() { return commandRegistry?.getAll() ?? [] },
+    },
+
+    toolbars: {
+      register(source: string, button: any) { toolbarRegistry?.register(source, button) },
+      unregister(id: string) { toolbarRegistry?.unregister(id) },
+      unregisterSource(source: string) { toolbarRegistry?.unregisterSource(source) },
+      getByPosition(position: 'top' | 'bottom') { return toolbarRegistry?.getByPosition(position) ?? [] },
+      getAll() { return toolbarRegistry?.getAll() ?? [] },
+    },
+
+    panels: {
+      registerSetting(source: string, setting: any) { panelRegistry?.registerSetting(source, setting) },
+      unregisterSetting(id: string) { panelRegistry?.unregisterSetting(id) },
+      unregisterSource(source: string) { panelRegistry?.unregisterSource(source) },
+      getAll() { return panelRegistry?.getAll() ?? [] },
+      getBySource(source: string) { return panelRegistry?.getBySource(source) ?? [] },
     },
 
     on: contextOn,
@@ -573,3 +612,4 @@ function createDomService() {
     onWindow: (type: any, handler: any, opts?: any) => service.onWindow(type, handler, opts),
   }
 }
+

@@ -1,4 +1,4 @@
-﻿import { markRaw } from 'vue'
+import { markRaw } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
 import { ImageNode, ImageTopToolbar, ImageBottomToolbar } from './index'
 

@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext, PluginInstallResult } from './types'
+import type { CanvasPlugin, PluginContext, PluginInstallResult } from './types'
 
 export class PluginRegistry {
   private plugins = new Map<string, CanvasPlugin>()

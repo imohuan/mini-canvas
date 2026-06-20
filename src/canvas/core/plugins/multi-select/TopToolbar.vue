@@ -24,7 +24,7 @@ const selectedCount = computed(() => props.nodeIds.length)
 </script>
 
 <template>
-  <NodeToolbar :node-id="nodeIds" :position="Position.Top" :offset="canvas.state.topToolbarOffset + offset" :is-visible="true">
+  <NodeToolbar :node-id="nodeIds" :position="Position.Top" :offset="canvas.state.core.topToolbarOffset + offset" :is-visible="true">
     <div class="multi-select-top-toolbar">
       <span class="multi-select-top-toolbar__count">已选 {{ selectedCount }} 个节点</span>
 

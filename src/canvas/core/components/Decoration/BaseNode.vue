@@ -109,7 +109,7 @@ onUnmounted(() => {
 
 const isHovered = ref(false)
 const mousePosition = ref({ x: 0.5, y: 0.5 })
-const debugHandle = computed(() => Boolean(canvas.state.handleDebug || props.data?.debugHandle || props.data?.debugHandles))
+const debugHandle = computed(() => Boolean(canvas.state.core.handleDebug || props.data?.debugHandle || props.data?.debugHandles))
 const isCurrentConnectingNode = computed(() =>
   canvas.connectionState.isConnecting &&
   canvas.connectionState.sourceNodeId === props.id
@@ -137,7 +137,7 @@ const showTargetZones = computed(() =>
 
 const shouldShowTargetZones = computed(() =>
   Boolean(props.targetPosition) &&
-  (canvas.state.connectionSnapDebugVisible || showTargetZones.value)
+  (canvas.state.core.connectionSnapDebugVisible || showTargetZones.value)
 )
 
 const CONNECT_FEEDBACK_ROTATE_X = 18
@@ -257,18 +257,18 @@ const nodeExtra = computed(() => {
       <template v-if="shouldShowTargetZones && debugHandle">
         <div class="target-feedback-zone target-feedback-zone--body" />
         <div class="target-snap-zone" :style="{
-          width: `${canvas.state.handleRadius * (canvas.state.connectionSnapOuterRatio + canvas.state.connectionSnapInnerRatio)}px`,
-          height: `${canvas.state.handleRadius * canvas.state.connectionSnapHeightRatio}px`,
-          left: `${-canvas.state.handleRadius * canvas.state.connectionSnapOuterRatio}px`,
-          top: `calc(50% - ${canvas.state.handleRadius * canvas.state.connectionSnapHeightRatio / 2}px)`,
+          width: `${canvas.state.core.handleRadius * (canvas.state.core.connectionSnapOuterRatio + canvas.state.core.connectionSnapInnerRatio)}px`,
+          height: `${canvas.state.core.handleRadius * canvas.state.core.connectionSnapHeightRatio}px`,
+          left: `${-canvas.state.core.handleRadius * canvas.state.core.connectionSnapOuterRatio}px`,
+          top: `calc(50% - ${canvas.state.core.handleRadius * canvas.state.core.connectionSnapHeightRatio / 2}px)`,
         }" />
       </template>
 
       <!-- 左侧连接点（target handle）：悬停/选中时显示，用于接收连线 -->
       <MovingHandle v-if="targetPosition" id="target" type="target" :position="Position.Left"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.handleRadius"
-        :rest-offset="canvas.state.handleRestOffset" :cursor-gap="canvas.state.handleCursorGap"
-        :button-size="canvas.state.handleButtonSize" :overlap="canvas.state.handleOverlap" :node-size="cardWidth"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
+        :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
+        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap" :node-size="cardWidth"
         :debug="debugHandle" @hover="isHovered = $event" />
 
       <!-- 背景与边框裁剪层：overflow hidden 确保不溢出卡片圆角 -->
@@ -307,9 +307,9 @@ const nodeExtra = computed(() => {
 
       <!-- 右侧连接点（source handle）：悬停/选中时显示，用于拖出连线 -->
       <MovingHandle v-if="sourcePosition" id="source" type="source" :position="Position.Right"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.handleRadius"
-        :rest-offset="canvas.state.handleRestOffset" :cursor-gap="canvas.state.handleCursorGap"
-        :button-size="canvas.state.handleButtonSize" :overlap="canvas.state.handleOverlap" :node-size="cardWidth"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
+        :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
+        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap" :node-size="cardWidth"
         :debug="debugHandle" @hover="isHovered = $event" />
     </div>
 

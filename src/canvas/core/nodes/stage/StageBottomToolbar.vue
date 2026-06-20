@@ -9,7 +9,7 @@ const canvas = useCanvasStore()
 </script>
 
 <template>
-  <NodeToolbar :position="Position.Bottom" :offset="canvas.state.bottomToolbarOffset">
+  <NodeToolbar :position="Position.Bottom" :offset="canvas.state.core.bottomToolbarOffset">
     <div class="flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
       <ToolbarButton>
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

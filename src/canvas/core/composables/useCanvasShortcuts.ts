@@ -15,7 +15,7 @@ export function useCanvasShortcuts(canvas: any, vueFlowInstance: any) {
   }
 
   function syncVueFlowKeymap() {
-    const keymap = canvas.state.shortcutKeymap || {}
+    const keymap = canvas.state.core.shortcutKeymap || {}
     const mgr = ShortcutManager.getInstance()
     const entries = [
       { shortcutId: 'vueflow.delete', vfProp: 'deleteKeyCode' },
@@ -32,7 +32,7 @@ export function useCanvasShortcuts(canvas: any, vueFlowInstance: any) {
   }
 
   function persistShortcutKeymap() {
-    canvas.state.shortcutKeymap = ShortcutManager.getInstance().exportKeymap()
+    canvas.state.core.shortcutKeymap = ShortcutManager.getInstance().exportKeymap()
   }
 
   return { toVueFlowKey, syncVueFlowKeymap, persistShortcutKeymap }

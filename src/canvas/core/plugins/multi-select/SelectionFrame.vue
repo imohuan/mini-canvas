@@ -119,9 +119,9 @@ const canvasBounds = computed(() => {
   const bounds = rawSelectionBounds.value
   if (!bounds) return null
 
-  const paddingX = canvas.state.selectionFramePaddingX
-  const paddingTop = canvas.state.selectionFramePaddingTop
-  const paddingBottom = canvas.state.selectionFramePaddingBottom
+  const paddingX = canvas.state.core.selectionFramePaddingX
+  const paddingTop = canvas.state.core.selectionFramePaddingTop
+  const paddingBottom = canvas.state.core.selectionFramePaddingBottom
   return {
     x: bounds.x - paddingX,
     y: bounds.y - paddingTop,
@@ -135,8 +135,8 @@ const innerBoundsStyle = computed(() => {
   if (!bounds) return undefined
 
   return {
-    left: canvas.state.selectionFramePaddingX + 'px',
-    top: canvas.state.selectionFramePaddingTop + 'px',
+    left: canvas.state.core.selectionFramePaddingX + 'px',
+    top: canvas.state.core.selectionFramePaddingTop + 'px',
     width: bounds.width + 'px',
     height: bounds.height + 'px',
   }
@@ -268,7 +268,7 @@ onUnmounted(() => {
       @mousedown="handleMouseDown">
       <div v-if="innerBoundsStyle" class="selection-frame-inner-bounds" :style="innerBoundsStyle" />
 
-      <TopToolbar :offset="canvas.state.selectionFramePaddingTop" :node-ids="selectedNodeIds" />
+      <TopToolbar :offset="canvas.state.core.selectionFramePaddingTop" :node-ids="selectedNodeIds" />
 
       <button v-show="showFrameDecorations" class="selection-frame-connect-handle" type="button"
         @mousedown.stop.prevent="handleBatchConnectStart">

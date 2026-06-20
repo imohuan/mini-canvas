@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Teleport to="body">
     <div class="node-find-overlay" @click.self="$emit('close')">
       <div class="node-find-panel" @click.stop>

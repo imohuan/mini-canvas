@@ -56,12 +56,12 @@ export function usePluginSystem(cf: ReturnType<typeof useCanvasFlow>) {
   }
 
   function loadShortcutKeymap() {
-    const keymap = cf.canvas.state.shortcutKeymap || {}
+    const keymap = cf.canvas.state.core.shortcutKeymap || {}
     ShortcutManager.getInstance().loadKeymap(keymap)
   }
 
   function syncVueFlowKeymap() {
-    const keymap = cf.canvas.state.shortcutKeymap || {}
+    const keymap = cf.canvas.state.core.shortcutKeymap || {}
     const instance = cf.vf as any
     const map: Record<string, string> = {
       'vueflow.delete': 'deleteKeyCode',
@@ -99,3 +99,4 @@ export function usePluginSystem(cf: ReturnType<typeof useCanvasFlow>) {
     uninstallAll,
   }
 }
+

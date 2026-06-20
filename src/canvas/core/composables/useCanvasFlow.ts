@@ -64,7 +64,7 @@ export function useCanvasFlow() {
   }
 
   function makeEdgeData() {
-    const s = canvas.state
+    const s = canvas.state.core
     return { edgeType: s.edgeType, edgeLineWidth: s.edgeLineWidth, edgeColor: s.edgeColor, edgeDashed: s.edgeDashed }
   }
 
@@ -78,7 +78,7 @@ export function useCanvasFlow() {
     persistCanvasData,
     makeEdgeData,
     connectionLineOptions: {
-      style: { stroke: canvas.state.edgeColor, strokeWidth: canvas.state.edgeLineWidth },
+      style: { stroke: canvas.state.core.edgeColor, strokeWidth: canvas.state.core.edgeLineWidth },
     },
   }
 }

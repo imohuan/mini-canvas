@@ -1,1 +1,1 @@
-﻿export { ContextMenuPlugin } from './ContextMenuPlugin'
+export { ContextMenuPlugin } from './ContextMenuPlugin'

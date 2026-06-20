@@ -1,4 +1,4 @@
-﻿export class CanvasDomService {
+export class CanvasDomService {
   private cleanups: Array<() => void> = []
 
   getPane(): HTMLElement | null {

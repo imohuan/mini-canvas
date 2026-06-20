@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { installConsoleInterceptor } from './installConsoleInterceptor'
+// import { installConsoleInterceptor } from './installConsoleInterceptor'
 import './style.css'
 import App from './App.vue'
 

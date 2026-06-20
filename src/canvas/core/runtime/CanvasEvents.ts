@@ -1,4 +1,4 @@
-﻿import type { EdgeChange, NodeChange } from '@vue-flow/core'
+import type { EdgeChange, NodeChange } from '@vue-flow/core'
 import type { StorageStatus } from '../plugins/storage/StoragePlugin'
 
 export interface CanvasEvents {

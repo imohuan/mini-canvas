@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 defineOptions({ inheritAttrs: false })
 
 import type { NodeProps } from '@vue-flow/core'
@@ -107,7 +107,7 @@ function startCrop() {
   fitView({
     nodes: [props.id],
     padding: 0.15,
-    maxZoom: canvas.state.maxZoom,
+    maxZoom: canvas.state.core.maxZoom,
     duration: 250,
   })
 }
@@ -171,7 +171,7 @@ function confirmCrop() {
 </script>
 
 <template>
-  <NodeToolbar :position="Position.Top" :offset="canvas.state.topToolbarOffset" :is-visible="isCropping || undefined">
+  <NodeToolbar :position="Position.Top" :offset="canvas.state.core.topToolbarOffset" :is-visible="isCropping || undefined">
     <!-- Normal mode -->
     <div v-if="!isCropping" class="flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg p-1 shadow-sm">
       <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="uploadImage" />

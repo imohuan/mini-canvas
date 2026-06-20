@@ -79,7 +79,7 @@ function parseCaller(stack: string | undefined, level: ConsoleLevel) {
 export function installConsoleInterceptor() {
   if (!import.meta.env.DEV) return
   if ((window as any).__consoleInterceptorInstalled) return
-  ;(window as any).__consoleInterceptorInstalled = true
+    ; (window as any).__consoleInterceptorInstalled = true
 
   for (const level of LEVELS) {
     const original = console[level].bind(console)

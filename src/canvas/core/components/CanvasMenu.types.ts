@@ -1,4 +1,4 @@
-﻿export type CanvasMenuMode = 'pane' | 'node' | 'connection' | 'edge'
+export type CanvasMenuMode = 'pane' | 'node' | 'connection' | 'edge'
 
 export type CanvasMenuItem = {
   id: string

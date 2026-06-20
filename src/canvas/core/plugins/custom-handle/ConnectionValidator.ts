@@ -1,4 +1,4 @@
-﻿import type { Connection, Edge, Node } from '@vue-flow/core'
+import type { Connection, Edge, Node } from '@vue-flow/core'
 
 export function normalizeConnection(connection: Connection): Connection {
   return { ...connection, sourceHandle: connection.sourceHandle || 'source', targetHandle: connection.targetHandle || 'target' }

@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext } from '../types'
+import type { CanvasPlugin, PluginContext } from '../types'
 
 export const CustomHandlePlugin: CanvasPlugin = {
   name: 'custom-handle',

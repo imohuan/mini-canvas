@@ -1,4 +1,4 @@
-﻿import type { CanvasPlugin, PluginContext } from '../types'
+import type { CanvasPlugin, PluginContext } from '../types'
 import { createBuiltinMenuItems } from './builtinMenuItems'
 
 export const ContextMenuPlugin: CanvasPlugin = {

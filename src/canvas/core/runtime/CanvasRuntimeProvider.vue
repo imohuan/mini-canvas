@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { provide } from 'vue'
 import type { CanvasRuntime } from './CanvasRuntime'
 import { CanvasRuntimeKey } from './CanvasRuntimeKey'

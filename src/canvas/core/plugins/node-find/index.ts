@@ -1,1 +1,1 @@
-﻿export { NodeFindPlugin } from './NodeFindPlugin'
+export { NodeFindPlugin } from './NodeFindPlugin'

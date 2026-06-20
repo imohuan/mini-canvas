@@ -42,6 +42,21 @@ export class PluginManager {
   /** 共享事件总线，所有 PluginContext 共用此实例实现插件间通信 */
   readonly eventBus: EventBus
 
+  /** 注册中心引用（用于插件卸载时清理） */
+  private _registries: {
+    command?: { unregisterSource(source: string): void }
+    toolbar?: { unregisterSource(source: string): void }
+    panel?: { unregisterSource(source: string): void }
+  } | null = null
+
+  setRegistries(regs: { commandRegistry?: { unregisterSource(source: string): void }; toolbarRegistry?: { unregisterSource(source: string): void }; panelRegistry?: { unregisterSource(source: string): void } }): void {
+    this._registries = {
+      command: regs.commandRegistry,
+      toolbar: regs.toolbarRegistry,
+      panel: regs.panelRegistry,
+    }
+  }
+
   /** 默认日志实现（使用 console） */
   private static readonly defaultLogger: Logger = {
     debug: (...args: unknown[]) => console.debug('[PluginManager]', ...args),
@@ -174,6 +189,11 @@ export class PluginManager {
 
     // 2. 设置生命周期为卸载中
     this.setLifecycle(pluginName, PluginLifecycle.UNINSTALLING)
+
+    // 清理该插件注册的所有注册项
+    this._registries?.command?.unregisterSource(pluginName)
+    this._registries?.toolbar?.unregisterSource(pluginName)
+    this._registries?.panel?.unregisterSource(pluginName)
 
     // 3. 调用清理函数：优先使用 install() 返回的 uninstall，fallback 到 plugin.uninstall()
     const installResult = this.installResults.get(pluginName)
@@ -560,6 +580,31 @@ export class PluginManager {
         get: (_type) => null,
         getMenuItems: () => [],
       },
+      commands: {
+        register: (_cmd: any) => stubWarn('commands.register'),
+        unregister: (_id: string) => stubWarn('commands.unregister'),
+        unregisterSource: (_source: string) => stubWarn('commands.unregisterSource'),
+        execute: async (_id: string) => stubWarn('commands.execute'),
+        canExecute: () => false,
+        has: () => false,
+        get: () => null,
+        getPublic: () => [],
+        getAll: () => [],
+      },
+      toolbars: {
+        register: (_source: string, _button: any) => stubWarn('toolbars.register'),
+        unregister: (_id: string) => stubWarn('toolbars.unregister'),
+        unregisterSource: (_source: string) => stubWarn('toolbars.unregisterSource'),
+        getByPosition: () => [],
+        getAll: () => [],
+      },
+      panels: {
+        registerSetting: (_source: string, _setting: any) => stubWarn('panels.registerSetting'),
+        unregisterSetting: (_id: string) => stubWarn('panels.unregisterSetting'),
+        unregisterSource: (_source: string) => stubWarn('panels.unregisterSource'),
+        getAll: () => [],
+        getBySource: () => [],
+      },
       on: (_event, _handler) => {
         stubWarn('on')
         return () => {}
@@ -731,3 +776,5 @@ export class PluginManager {
     }
   }
 }
+
+
