@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
 import { computed, type Component } from 'vue'
 import BaseNode from './Decoration/BaseNode.vue'
@@ -8,12 +8,10 @@ import { useCanvasRuntime } from '../runtime/useCanvasRuntime'
 const props = defineProps<NodeProps>()
 const runtime = useCanvasRuntime()
 
-/** 节点内容组件（从 NodeRegistry 获取） */
 const ContentComponent = computed<Component | null>(() => {
   const nodeType = props.data?.nodeType as string | undefined
   if (!nodeType) return null
-  const definition = runtime.nodeRegistry.get(nodeType)
-  return definition?.node ?? null
+  return runtime.nodeRegistry.get(nodeType)?.node ?? null
 })
 </script>
 
