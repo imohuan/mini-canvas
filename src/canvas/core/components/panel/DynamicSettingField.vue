@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed } from "vue"
 import type { PanelSettingDefinition } from '../../registry/types'
 
@@ -63,9 +63,22 @@ const value = computed({
 .ax-field-label-row { display: flex; flex-direction: column; gap: 2px; }
 .ax-field-title { font-family: "JetBrains Mono", "Microsoft YaHei", monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; color: #1a1c1d; line-height: 16px; }
 .ax-field-desc { font-size: 11px; color: #78767b; line-height: 14px; }
+.ax-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+.ax-switch-label {
+  font-size: 12px;
+  color: #1a1c1d;
+  flex: 1;
+}
+
 .ax-input { height: 24px; padding: 0 8px; border: 1px solid #c8c5ca; border-radius: 8px; background: #f3f3f4; font-size: 12px; color: #1a1c1d; outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
 .ax-input:focus { border-color: #000000; box-shadow: 0 0 0 1px #000000; }
-.ax-select { appearance: none; cursor: pointer; padding-right: 24px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f5e61' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
+.ax-switch-row {\r\n  display: flex;\r\n  align-items: center;\r\n  justify-content: space-between;\r\n  gap: 12px;\r\n  padding: 4px 0;\r\n}\r\n.ax-switch-label {\r\n  font-size: 12px;\r\n  color: #1a1c1d;\r\n  flex: 1;\r\n}\r\n\r\n.ax-select { appearance: none; cursor: pointer; padding-right: 24px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f5e61' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
 .ax-switch { width: 36px; height: 20px; border: none; border-radius: 10px; background: #78767b; cursor: pointer; position: relative; transition: background 0.2s ease; padding: 0; align-self: flex-start; }
 .ax-switch.on { background: #000000; }
 .ax-switch-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #ffffff; transition: transform 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
