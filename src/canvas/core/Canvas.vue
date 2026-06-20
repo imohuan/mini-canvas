@@ -65,8 +65,6 @@ function getSettingValue(id: string) {
 
 
 // 创建连接线 data
-
-// 创建连接线 data
 function makeEdgeData() {
   const s = canvas.state.core
   return {
@@ -79,15 +77,20 @@ function makeEdgeData() {
 
 // 显式 ID，确保 useVueFlow() 和 <VueFlow> 共享同一个实例
 const CANVAS_ID = 'main-canvas'
+/** VueFlow 实例，提供节点/边操作和视口控制 */
 const vueFlowInstance = useVueFlow(CANVAS_ID)
 const { getNodes, getEdges } = vueFlowInstance
+/** 画布容器 DOM 引用 */
 const canvasContainerRef = ref<HTMLElement | null>(null)
+/** 画布容器当前宽高 */
 const canvasContainerSize = ref({ width: 0, height: 0 })
 let canvasResizeObserver: ResizeObserver | null = null
 
 const performanceEnabled = computed(() => canvas.state.core.performancePanelEnabled)
+/** 性能监控器，追踪 FPS、帧时间、内存使用 */
 const performanceMonitor = useCanvasPerformance({ enabled: performanceEnabled })
 
+/** 更新画布容器的宽高尺寸，响应窗口大小变化 */
 function updateCanvasContainerSize() {
   const rect = canvasContainerRef.value?.getBoundingClientRect()
   canvasContainerSize.value = {
@@ -122,8 +125,10 @@ watch(() => [canvas.nodeTypes, canvas.customNodeTypes, canvas.edgeTypes, canvas.
   mergedEdgeTypes.value = et
 }, { immediate: true, deep: false })
 
+/** 最后一次原生 connect 事件的时间戳，用于防止 connectEnd 重复处理 */
 let lastNativeConnectAt = 0
 
+/** 批量连线状态：类型、节点列表、临时元素 ID */
 const batchConnectState = ref<{
   type: 'source' | 'target'
   nodeIds: string[]
@@ -142,6 +147,7 @@ const menuState = reactive<CanvasMenuState>({
 })
 
 
+/** 右键菜单上下文（当前节点/边/连线信息） */
 const menuContext = ref<MenuContext>({})
 
 // --- 选中同步：事件驱动，直接写入 Pinia store ---
@@ -170,6 +176,7 @@ function onNodesChange(changes: any[]) {
   }
 }
 
+/** 画布空白处点击：清除所有选中 */
 function onPaneClick() {
   if (canvas.selectionState.selectedNodeIds.size === 0 && canvas.selectionState.selectedEdgeIds.size === 0) return
   if (canvas.clearSelection()) {
@@ -177,6 +184,7 @@ function onPaneClick() {
   }
 }
 
+/** VueFlow 边变化事件：同步删除/选中状态到 Pinia store */
 function onEdgesChange(changes: EdgeChange[]) {
   const removeChanges = changes.filter((c): c is Extract<EdgeChange, { type: 'remove' }> => c.type === 'remove')
   if (removeChanges.length > 0) {
@@ -196,11 +204,13 @@ function onEdgesChange(changes: EdgeChange[]) {
   }
 }
 
+/** 根据 ID 查找可连线的节点 */
 function getConnectableNode(id: string | null | undefined) {
   if (!id) return undefined
   return (getNodes.value as Node[]).find(node => node.id === id)
 }
 
+/** 标准化连接对象：补全默认的 sourceHandle/targetHandle */
 function normalizeConnection(connection: Connection): Connection {
   return {
     ...connection,
@@ -240,6 +250,7 @@ function isValidConnection(connection: Connection): boolean {
   return true
 }
 
+/** 查找是否已存在相同的连线（去重） */
 function findSameConnection(connection: Connection) {
   return (getEdges.value as any[]).find((edge: Edge) =>
     !isTempEdge(edge) &&
@@ -250,6 +261,7 @@ function findSameConnection(connection: Connection) {
   ) as Edge | undefined
 }
 
+/** 修复已存在连线的类型和数据 */
 function repairExistingConnection(edge: Edge, connection: Connection) {
   edge.type = 'custom'
   edge.sourceHandle = connection.sourceHandle
@@ -260,6 +272,7 @@ function repairExistingConnection(edge: Edge, connection: Connection) {
   }
 }
 
+/** 创建新连线：验证 → 去重 → 添加。source 参数标识触发来源 */
 function createConnection(connection: Connection, source = 'manual') {
   const normalized = normalizeConnection(connection)
   if (!isValidConnection(normalized)) return false
@@ -307,6 +320,7 @@ function createConnection(connection: Connection, source = 'manual') {
   return true
 }
 
+/** 屏幕坐标 → 画布坐标系坐标（考虑视口偏移和缩放） */
 function toFlowPosition(clientX: number, clientY: number) {
   const viewport = vueFlowInstance.viewport.value
   const zoom = viewport.zoom || 1
@@ -348,6 +362,7 @@ function createNodeFromMenuItem(item: CanvasMenuItem, position: { x: number; y: 
   return node
 }
 
+/** 打开右键菜单：设置菜单状态和上下文 */
 function openMenu(next: Omit<CanvasMenuState, 'visible'>, context: MenuContext = {}) {
   menuState.visible = true
   menuState.title = next.title
@@ -357,6 +372,7 @@ function openMenu(next: Omit<CanvasMenuState, 'visible'>, context: MenuContext =
   menuContext.value = context
 }
 
+/** 移除连线菜单中的临时节点和边 */
 function removeTempConnection() {
   const pending = menuContext.value.pendingConnection
   if (!pending) return
@@ -365,6 +381,7 @@ function removeTempConnection() {
   vueFlowInstance.removeNodes([pending.tempNodeId])
 }
 
+/** 关闭右键菜单：清理临时连线 */
 function closeMenu() {
   if (menuState.mode === 'connection') {
     removeTempConnection()
@@ -373,6 +390,7 @@ function closeMenu() {
   menuContext.value = {}
 }
 
+/** 打开"创建节点"菜单：合并 NodeRegistry + MenuRegistry 生成菜单项 */
 function openCreateNodeMenu(position: { x: number; y: number }, mode: CanvasMenuMode, title: string, context: MenuContext) {
   openMenu({
     mode,
@@ -382,6 +400,7 @@ function openCreateNodeMenu(position: { x: number; y: number }, mode: CanvasMenu
   }, context)
 }
 
+/** 菜单项选中回调：创建节点或执行连线 */
 async function onMenuSelect(item: CanvasMenuItem) {
   const context = menuContext.value
 
@@ -415,11 +434,13 @@ async function onMenuSelect(item: CanvasMenuItem) {
   closeMenu()
 }
 
+/** VueFlow connect 事件：从端口拖出连线成功时触发 */
 function onConnect(connection: Connection) {
   lastNativeConnectAt = Date.now()
   createConnection(connection, 'handle')
 }
 
+/** VueFlow connectStart 事件：开始拖拽连线时记录源节点信息 */
 function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnectStartParams)) {
   canvas.connectionState.isConnecting = true
   canvas.connectionState.sourceNodeId = payload.nodeId || null
@@ -429,6 +450,7 @@ function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnec
   canvas.connectionState.hoverFeedbackPoint = null
 }
 
+/** 从 MouseEvent 或 TouchEvent 提取屏幕坐标 */
 function getMousePoint(event?: MouseEvent | TouchEvent) {
   if (!event) return null
   if ('changedTouches' in event && event.changedTouches.length > 0) {
@@ -441,6 +463,7 @@ function getMousePoint(event?: MouseEvent | TouchEvent) {
   return null
 }
 
+/** 从 DOM 元素上提取节点 ID（data-id / data-nodeid） */
 function getNodeIdFromElement(el: Element) {
   return (
     el.getAttribute('data-id') ||
@@ -450,18 +473,22 @@ function getNodeIdFromElement(el: Element) {
   )
 }
 
+/** 获取节点卡片 DOM 元素的屏幕矩形 */
 function getNodeCardRectFromNodeElement(el: Element) {
   return (el.querySelector('.custom-node-card') || el).getBoundingClientRect()
 }
 
+/** 判断节点是否为临时节点（连线菜单中的占位节点） */
 function isTempNode(node: Node | undefined | null) {
   return Boolean(node?.type === 'tempTarget' || node?.data?.isTemp)
 }
 
+/** 判断边是否为临时边（连线菜单中的占位边） */
 function isTempEdge(edge: Edge | undefined | null) {
   return Boolean(edge?.data?.isTemp)
 }
 
+/** 在屏幕坐标附近查找最近的可连线目标节点（考虑吸附区域） */
 function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOverride?: string, excludedNodeIdsOverride?: Iterable<string>) {
   const sourceNodeId = sourceNodeIdOverride || canvas.connectionState.sourceNodeId
   const sourceHandle = sourceNodeIdOverride ? 'source' : canvas.connectionState.sourceHandle
@@ -518,6 +545,7 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
   return bestNode
 }
 
+/** 从节点拖出连线后弹出"选择目标节点类型"菜单 */
 function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId: string, sourceHandle: string) {
   if (sourceHandle !== 'source') return
 
@@ -566,6 +594,7 @@ function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId:
   )
 }
 
+/** 在屏幕坐标附近查找最近的可连线源节点（考虑吸附区域） */
 function findNearestValidSource(clientX: number, clientY: number, targetNodeIds: Set<string>) {
   let bestNode: Node | null = null
   let bestDistance = Number.POSITIVE_INFINITY
@@ -615,6 +644,7 @@ function findNearestValidSource(clientX: number, clientY: number, targetNodeIds:
   return bestNode
 }
 
+/** 移除批量连线中的临时节点和边 */
 function removeBatchTempConnection(batch = batchConnectState.value) {
   if (!batch) return
 
@@ -622,6 +652,7 @@ function removeBatchTempConnection(batch = batchConnectState.value) {
   vueFlowInstance.removeNodes([batch.tempNodeId])
 }
 
+/** 重置批量连线状态并解绑全局事件 */
 function resetBatchConnectState() {
   batchConnectState.value = null
   canvas.connectionState.isConnecting = false
@@ -636,12 +667,14 @@ function resetBatchConnectState() {
   document.removeEventListener('pointercancel', cancelBatchConnect)
 }
 
+/** 取消批量连线操作 */
 function cancelBatchConnect() {
   if (!batchConnectState.value) return
   removeBatchTempConnection()
   resetBatchConnectState()
 }
 
+/** 更新批量连线中临时目标节点的位置 */
 function updateBatchTempTarget(point: { x: number; y: number }) {
   const batch = batchConnectState.value
   if (!batch) return
@@ -650,12 +683,14 @@ function updateBatchTempTarget(point: { x: number; y: number }) {
   vueFlowInstance.updateNode(batch.tempNodeId, { position })
 }
 
+/** 批量连线时鼠标移动：更新临时目标和吸附反馈 */
 function onBatchConnectMove(event: MouseEvent) {
   const point = { x: event.clientX, y: event.clientY }
   updateBatchTempTarget(point)
   updateBatchConnectFeedback(point)
 }
 
+/** 更新批量连线时的吸附反馈节点 */
 function updateBatchConnectFeedback(point: { x: number; y: number }) {
   const batch = batchConnectState.value
   if (!batch) return
@@ -672,6 +707,7 @@ function updateBatchConnectFeedback(point: { x: number; y: number }) {
   canvas.connectionState.hoverFeedbackPoint = feedbackNode ? toFlowPosition(point.x, point.y) : null
 }
 
+/** 批量连线结束：创建实际连线或取消 */
 function onBatchConnectEnd(event: MouseEvent) {
   const batch = batchConnectState.value
   if (!batch) return
@@ -719,6 +755,7 @@ function onBatchConnectEnd(event: MouseEvent) {
   }
 }
 
+/** 框选后批量连线开始：创建临时节点和边 */
 function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'source' | 'target'; nodeIds: string[] }) {
   const activeNodes = (getNodes.value as Node[]).filter(node =>
     payload.nodeIds.includes(node.id) &&
@@ -780,6 +817,7 @@ function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'sourc
   document.addEventListener('pointercancel', cancelBatchConnect)
 }
 
+/** VueFlow connectEnd 事件：连线结束时尝试吸附目标或弹出菜单 */
 function onConnectEnd(event?: MouseEvent | TouchEvent) {
   const point = getMousePoint(event)
   const sourceNodeId = canvas.connectionState.sourceNodeId
@@ -821,6 +859,7 @@ function onNodeDoubleClick({ event, node }: NodeMouseEvent) {
   manager.eventBus.emit('nodeDoubleClick', { nodeId: node.id, nodeType: node.type })
   window.dispatchEvent(new CustomEvent('canvas:nodeDoubleClick', { detail: { nodeId: node.id } }))
 }
+/** 节点右键事件：打开节点右键菜单 */
 function onNodeContextMenu({ event, node }: NodeMouseEvent) {
   event.preventDefault()
   const e = event as MouseEvent
@@ -833,6 +872,7 @@ function onNodeContextMenu({ event, node }: NodeMouseEvent) {
   )
   console.log('[右键-节点]', { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
 }
+/** 画布右键事件：打开"添加节点"菜单 */
 function onPaneContextMenu(event: MouseEvent) {
   event.preventDefault()
   const flowPosition = toFlowPosition(event.clientX, event.clientY)
@@ -844,6 +884,7 @@ function onPaneContextMenu(event: MouseEvent) {
   )
   console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
+/** 边右键事件：打开边操作菜单 */
 function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
   event.preventDefault()
   const e = event as MouseEvent
@@ -856,6 +897,7 @@ function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
   }, { edgeId: edge.id, flowPosition })
 }
 
+/** 画布空白处双击：打开"添加节点"菜单 */
 function onPaneDoubleClick(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
@@ -869,6 +911,7 @@ function onPaneDoubleClick(event: MouseEvent) {
   console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
 
+/** 节点默认尺寸（用于无法获取实际尺寸时的回退值） */
 const DEFAULT_NODE_SIZE = 256
 
 type ConnectionFeedbackZone = {
@@ -881,6 +924,7 @@ type ConnectionFeedbackZone = {
   height: number
 }
 
+/** 获取节点的实际渲染尺寸（优先 dimensions，回退到 width/height） */
 function getNodeSize(node: Node) {
   const anyNode = node as any
   return {
@@ -889,6 +933,7 @@ function getNodeSize(node: Node) {
   }
 }
 
+/** 获取节点卡片在画布坐标系中的矩形区域 */
 function getNodeCardFlowRect(nodeId: string, fallbackPosition: { x: number; y: number }, fallbackSize: { width: number; height: number }) {
   const nodeEl = [...document.querySelectorAll('.vue-flow__node')]
     .find(el => getNodeIdFromElement(el) === nodeId)
@@ -915,6 +960,7 @@ function getNodeCardFlowRect(nodeId: string, fallbackPosition: { x: number; y: n
   }
 }
 
+/** 构建拖拽连线时的吸附区域和反馈数据 */
 function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const sourceId = connectionLineProps.sourceNode?.id || canvas.connectionState.sourceNodeId || '__source__'
   const handleRadius = canvas.state.core.handleRadius
@@ -1073,6 +1119,7 @@ function toVueFlowKey(key: string): string {
 /**
  * 将 canvas.state.core.shortcutKeymap 中的 VueFlow 键位映射同步到 VueFlow store
  */
+/** 将 canvas.state 中的快捷键映射同步到 VueFlow 内部 refs */
 function syncVueFlowKeymap() {
   const keymap = canvas.state.core.shortcutKeymap || {}
   const vf = vueFlowInstance as any
@@ -1093,11 +1140,17 @@ function syncVueFlowKeymap() {
 // 插件系统生命周期
 // ========================
 const manager = new PluginManager()
+/** 节点类型注册中心：管理可创建的节点类型 */
 const nodeRegistry = new NodeRegistry()
+/** 菜单注册中心：管理右键菜单项 */
 const menuRegistry = new MenuRegistry()
+/** 命令注册中心：管理所有可执行命令 */
 const commandRegistry = new CommandRegistry()
+/** Toolbar 注册中心：管理节点工具栏按钮 */
 const toolbarRegistry = new ToolbarRegistry()
+/** 设置面板注册中心：管理全局设置项 */
 const panelRegistry = new PanelRegistry()
+/** 画布运行时：持有所有 Registry 实例，通过 provide/inject 共享 */
 const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuRegistry, commandRegistry, toolbarRegistry, panelRegistry, vueFlowInstance as any)
 commandRegistry.setShortcutManager(ShortcutManager.getInstance())
 manager.setRegistries({ commandRegistry, toolbarRegistry, panelRegistry })
@@ -1129,6 +1182,7 @@ const storageState = ref<StorageStatus & { projects: ProjectMeta[] }>({
   projects: [],
 })
 
+/** 刷新存储插件状态（连接状态、项目列表） */
 function refreshStorageState() {
   const api = manager.getPluginAPI<any>('storage')
   if (!api) return
