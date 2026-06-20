@@ -5,6 +5,7 @@ import { TextNodePlugin } from './canvas/core/nodes/text/TextNodePlugin'
 import { ImageNodePlugin } from './canvas/core/nodes/image/ImageNodePlugin'
 import { VideoNodePlugin } from './canvas/core/nodes/Video/VideoNodePlugin'
 import { StageNodePlugin } from './canvas/core/nodes/stage/StageNodePlugin'
+import { PanoramaNodePlugin } from './canvas/core/nodes/panorama/PanoramaNodePlugin'
 import { ContextMenuPlugin } from './canvas/core/plugins/context-menu/index'
 import { CustomHandlePlugin } from './canvas/core/plugins/custom-handle/index'
 import { NodeFindPlugin } from './canvas/core/plugins/node-find/index'
@@ -60,6 +61,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '导演台节点',
     description: '注册导演台节点到 NodeRegistry',
     usage: '内置节点类型，自动注册',
+  },
+  {
+    plugin: markRaw(PanoramaNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '360全景节点',
+    description: '注册360全景图片查看节点到 NodeRegistry，用 Three.js 渲染可拖拽旋转的全景球体',
+    usage: '右键画布 → 360全景 → 上传全景图 → 拖拽旋转查看 / 滚轮缩放',
   },
   {
     plugin: markRaw(ContextMenuPlugin) as CanvasPlugin,

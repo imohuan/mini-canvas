@@ -1,4 +1,4 @@
-export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | (string & {})
+﻿export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | 'panorama' | (string & {})
 
 export interface BaseCanvasNodeData {
   nodeType: CanvasNodeKind
@@ -41,4 +41,13 @@ export interface StageNodeData extends BaseCanvasNodeData {
   values?: Record<string, unknown>
 }
 
-export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | StageNodeData | BaseCanvasNodeData
+export interface PanoramaNodeData extends BaseCanvasNodeData {
+  nodeType: 'panorama'
+  assetId?: string
+  imageName?: string
+  imageType?: string
+  imageUrl?: string // runtime only, 保存前删除
+  panoUrl?: string  // 备用的全景图URL
+}
+
+export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | StageNodeData | PanoramaNodeData | BaseCanvasNodeData
