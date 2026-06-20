@@ -1276,137 +1276,137 @@ onMounted(async () => {
     installedPluginNames.value = []
   }
 
-    // auto-layout 插件配置已通过 panelRegistry 注册
-    // 从 StoragePlugin 加载画布数据（或创建默认数据）
-    await bootstrap.loadInitialCanvas()
+  // auto-layout 插件配置已通过 panelRegistry 注册
+  // 从 StoragePlugin 加载画布数据（或创建默认数据）
+  await bootstrap.loadInitialCanvas()
 
-    // 注册通用设置项到面板（通过 PanelRegistry → DynamicSettingsPanel 自动渲染）
-    const core = canvas.state.core
-    const registerCore = (id: string, rest: Record<string, unknown>) => {
-      panelRegistry.registerSetting("canvas-core", {
-        id: "core." + id,
-        ...rest,
-      } as any)
-    }
+  // 注册通用设置项到面板（通过 PanelRegistry → DynamicSettingsPanel 自动渲染）
+  const core = canvas.state.core
+  const registerCore = (id: string, rest: Record<string, unknown>) => {
+    panelRegistry.registerSetting("canvas-core", {
+      id: "core." + id,
+      ...rest,
+    } as any)
+  }
 
-    // --- 节点交互 toggles ---
-    registerCore('nodesDraggable', { title: '可拖拽', type: 'boolean', group: '交互', order: 10, defaultValue: core.nodesDraggable })
-    registerCore('nodesConnectable', { title: '可连线', type: 'boolean', group: '交互', order: 11, defaultValue: core.nodesConnectable })
-    registerCore('elementsSelectable', { title: '可选中', type: 'boolean', group: '交互', order: 12, defaultValue: core.elementsSelectable })
-    registerCore('edgesUpdatable', { title: '边可编辑', type: 'boolean', group: '交互', order: 13, defaultValue: core.edgesUpdatable })
-    registerCore('snapToGrid', { title: '网格吸附', type: 'boolean', group: '交互', order: 14, defaultValue: core.snapToGrid })
-    registerCore('selectNodesOnDrag', { title: '拖拽选中', type: 'boolean', group: '交互', order: 15, defaultValue: core.selectNodesOnDrag })
+  // --- 节点交互 toggles ---
+  registerCore('nodesDraggable', { title: '可拖拽', type: 'boolean', group: '交互', order: 10, defaultValue: core.nodesDraggable })
+  registerCore('nodesConnectable', { title: '可连线', type: 'boolean', group: '交互', order: 11, defaultValue: core.nodesConnectable })
+  registerCore('elementsSelectable', { title: '可选中', type: 'boolean', group: '交互', order: 12, defaultValue: core.elementsSelectable })
+  registerCore('edgesUpdatable', { title: '边可编辑', type: 'boolean', group: '交互', order: 13, defaultValue: core.edgesUpdatable })
+  registerCore('snapToGrid', { title: '网格吸附', type: 'boolean', group: '交互', order: 14, defaultValue: core.snapToGrid })
+  registerCore('selectNodesOnDrag', { title: '拖拽选中', type: 'boolean', group: '交互', order: 15, defaultValue: core.selectNodesOnDrag })
 
-    // --- 视口交互 ---
-    registerCore('zoomOnScroll', { title: '滚轮缩放', type: 'boolean', group: '视口', order: 20, defaultValue: core.zoomOnScroll })
-    registerCore('panOnScroll', { title: '滚轮平移', type: 'boolean', group: '视口', order: 21, defaultValue: core.panOnScroll })
-    registerCore('panOnDrag', { title: '拖拽平移', type: 'boolean', group: '视口', order: 22, defaultValue: core.panOnDrag })
-    registerCore('connectOnClick', { title: '点击连线', type: 'boolean', group: '视口', order: 23, defaultValue: core.connectOnClick })
-    registerCore('zoomOnDoubleClick', { title: '双击缩放', type: 'boolean', group: '视口', order: 24, defaultValue: core.zoomOnDoubleClick })
-    registerCore('onlyRenderVisibleElements', { title: '只渲染可见', type: 'boolean', group: '视口', order: 25, defaultValue: core.onlyRenderVisibleElements })
-    registerCore('minZoom', { title: '最小缩放', type: 'number', group: '视口', order: 26, defaultValue: core.minZoom })
-    registerCore('maxZoom', { title: '最大缩放', type: 'number', group: '视口', order: 27, defaultValue: core.maxZoom })
+  // --- 视口交互 ---
+  registerCore('zoomOnScroll', { title: '滚轮缩放', type: 'boolean', group: '视口', order: 20, defaultValue: core.zoomOnScroll })
+  registerCore('panOnScroll', { title: '滚轮平移', type: 'boolean', group: '视口', order: 21, defaultValue: core.panOnScroll })
+  registerCore('panOnDrag', { title: '拖拽平移', type: 'boolean', group: '视口', order: 22, defaultValue: core.panOnDrag })
+  registerCore('connectOnClick', { title: '点击连线', type: 'boolean', group: '视口', order: 23, defaultValue: core.connectOnClick })
+  registerCore('zoomOnDoubleClick', { title: '双击缩放', type: 'boolean', group: '视口', order: 24, defaultValue: core.zoomOnDoubleClick })
+  registerCore('onlyRenderVisibleElements', { title: '只渲染可见', type: 'boolean', group: '视口', order: 25, defaultValue: core.onlyRenderVisibleElements })
+  registerCore('minZoom', { title: '最小缩放', type: 'number', group: '视口', order: 26, defaultValue: core.minZoom })
+  registerCore('maxZoom', { title: '最大缩放', type: 'number', group: '视口', order: 27, defaultValue: core.maxZoom })
 
-    // --- 连线样式 ---
-    registerCore('edgeLineWidth', { title: '边线宽度', type: 'slider', group: '连线', order: 30, defaultValue: core.edgeLineWidth, min: 1, max: 10, step: 0.5 })
-    registerCore('edgeColor', { title: '边线颜色', type: 'color', group: '连线', order: 31, defaultValue: core.edgeColor })
+  // --- 连线样式 ---
+  registerCore('edgeLineWidth', { title: '边线宽度', type: 'slider', group: '连线', order: 30, defaultValue: core.edgeLineWidth, min: 1, max: 10, step: 0.5 })
+  registerCore('edgeColor', { title: '边线颜色', type: 'color', group: '连线', order: 31, defaultValue: core.edgeColor })
 
-    // --- 自定义端口 ---
-    registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })
-    registerCore('handleRestOffset', { title: '端口偏移', type: 'slider', group: '端口', order: 41, defaultValue: core.handleRestOffset, min: 0, max: 100, step: 1 })
-    registerCore('handleCursorGap', { title: '光标间隙', type: 'slider', group: '端口', order: 42, defaultValue: core.handleCursorGap, min: 0, max: 80, step: 1 })
-    registerCore('handleButtonSize', { title: '按钮大小', type: 'slider', group: '端口', order: 43, defaultValue: core.handleButtonSize, min: 16, max: 64, step: 1 })
-    registerCore('handleOverlap', { title: '重叠距离', type: 'slider', group: '端口', order: 44, defaultValue: core.handleOverlap, min: 0, max: 50, step: 1 })
-    registerCore('connectionSnapOuterRatio', { title: '吸附外比例', type: 'slider', group: '端口', order: 45, defaultValue: core.connectionSnapOuterRatio, min: 0.1, max: 2, step: 0.05 })
-    registerCore('connectionSnapInnerRatio', { title: '吸附内比例', type: 'slider', group: '端口', order: 46, defaultValue: core.connectionSnapInnerRatio, min: 0.1, max: 2, step: 0.05 })
-    registerCore('connectionSnapHeightRatio', { title: '吸附高度比', type: 'slider', group: '端口', order: 47, defaultValue: core.connectionSnapHeightRatio, min: 0.1, max: 3, step: 0.05 })
+  // --- 自定义端口 ---
+  registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })
+  registerCore('handleRestOffset', { title: '端口偏移', type: 'slider', group: '端口', order: 41, defaultValue: core.handleRestOffset, min: 0, max: 100, step: 1 })
+  registerCore('handleCursorGap', { title: '光标间隙', type: 'slider', group: '端口', order: 42, defaultValue: core.handleCursorGap, min: 0, max: 80, step: 1 })
+  registerCore('handleButtonSize', { title: '按钮大小', type: 'slider', group: '端口', order: 43, defaultValue: core.handleButtonSize, min: 16, max: 64, step: 1 })
+  registerCore('handleOverlap', { title: '重叠距离', type: 'slider', group: '端口', order: 44, defaultValue: core.handleOverlap, min: 0, max: 50, step: 1 })
+  registerCore('connectionSnapOuterRatio', { title: '吸附外比例', type: 'slider', group: '端口', order: 45, defaultValue: core.connectionSnapOuterRatio, min: 0.1, max: 2, step: 0.05 })
+  registerCore('connectionSnapInnerRatio', { title: '吸附内比例', type: 'slider', group: '端口', order: 46, defaultValue: core.connectionSnapInnerRatio, min: 0.1, max: 2, step: 0.05 })
+  registerCore('connectionSnapHeightRatio', { title: '吸附高度比', type: 'slider', group: '端口', order: 47, defaultValue: core.connectionSnapHeightRatio, min: 0.1, max: 3, step: 0.05 })
 
-    // --- 工具栏偏移 ---
-    registerCore('topToolbarOffset', { title: '上工具栏偏移', type: 'slider', group: '工具栏', order: 50, defaultValue: core.topToolbarOffset, min: 0, max: 40, step: 1 })
-    registerCore('bottomToolbarOffset', { title: '下工具栏偏移', type: 'slider', group: '工具栏', order: 51, defaultValue: core.bottomToolbarOffset, min: 0, max: 40, step: 1 })
+  // --- 工具栏偏移 ---
+  registerCore('topToolbarOffset', { title: '上工具栏偏移', type: 'slider', group: '工具栏', order: 50, defaultValue: core.topToolbarOffset, min: 0, max: 40, step: 1 })
+  registerCore('bottomToolbarOffset', { title: '下工具栏偏移', type: 'slider', group: '工具栏', order: 51, defaultValue: core.bottomToolbarOffset, min: 0, max: 40, step: 1 })
 
-    // --- 多选框 ---
-    registerCore('selectionFramePaddingX', { title: '选框水平内边距', type: 'slider', group: '选框', order: 60, defaultValue: core.selectionFramePaddingX, min: 0, max: 60, step: 1 })
-    registerCore('selectionFramePaddingTop', { title: '选框上内边距', type: 'slider', group: '选框', order: 61, defaultValue: core.selectionFramePaddingTop, min: 0, max: 80, step: 1 })
-    registerCore('selectionFramePaddingBottom', { title: '选框下内边距', type: 'slider', group: '选框', order: 62, defaultValue: core.selectionFramePaddingBottom, min: 0, max: 80, step: 1 })
+  // --- 多选框 ---
+  registerCore('selectionFramePaddingX', { title: '选框水平内边距', type: 'slider', group: '选框', order: 60, defaultValue: core.selectionFramePaddingX, min: 0, max: 60, step: 1 })
+  registerCore('selectionFramePaddingTop', { title: '选框上内边距', type: 'slider', group: '选框', order: 61, defaultValue: core.selectionFramePaddingTop, min: 0, max: 80, step: 1 })
+  registerCore('selectionFramePaddingBottom', { title: '选框下内边距', type: 'slider', group: '选框', order: 62, defaultValue: core.selectionFramePaddingBottom, min: 0, max: 80, step: 1 })
 
-    // --- 性能面板 ---
-    registerCore('performancePanelEnabled', { title: '启用性能面板', type: 'boolean', group: '性能', order: 70, defaultValue: core.performancePanelEnabled })
-    registerCore('performancePanelShowCharts', { title: '显示图表', type: 'boolean', group: '性能', order: 71, defaultValue: core.performancePanelShowCharts })
-    registerCore('performancePanelShowMemory', { title: '显示内存', type: 'boolean', group: '性能', order: 72, defaultValue: core.performancePanelShowMemory })
+  // --- 性能面板 ---
+  registerCore('performancePanelEnabled', { title: '启用性能面板', type: 'boolean', group: '性能', order: 70, defaultValue: core.performancePanelEnabled })
+  registerCore('performancePanelShowCharts', { title: '显示图表', type: 'boolean', group: '性能', order: 71, defaultValue: core.performancePanelShowCharts })
+  registerCore('performancePanelShowMemory', { title: '显示内存', type: 'boolean', group: '性能', order: 72, defaultValue: core.performancePanelShowMemory })
 
-    // --- 调试 ---
-    registerCore('handleDebug', { title: '端口调试', type: 'boolean', group: '调试', order: 80, defaultValue: core.handleDebug })
-    registerCore('connectionSnapDebugVisible', { title: '吸附调试', type: 'boolean', group: '调试', order: 81, defaultValue: core.connectionSnapDebugVisible })
+  // --- 调试 ---
+  registerCore('handleDebug', { title: '端口调试', type: 'boolean', group: '调试', order: 80, defaultValue: core.handleDebug })
+  registerCore('connectionSnapDebugVisible', { title: '吸附调试', type: 'boolean', group: '调试', order: 81, defaultValue: core.connectionSnapDebugVisible })
 
 
 
-    // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
+  // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
 
-    // 监听存储插件状态变化
-    manager.eventBus.on('storage:status', () => refreshStorageState())
-    manager.eventBus.on('storage:project-created', () => refreshStorageState())
-    manager.eventBus.on('storage:project-deleted', () => refreshStorageState())
-    manager.eventBus.on('storage:project-switched', () => refreshStorageState())
-    manager.eventBus.on('storage:connected', () => refreshStorageState())
-    manager.eventBus.on('storage:disconnected', () => refreshStorageState())
-    // 初始加载
-    nextTick(() => refreshStorageState())
+  // 监听存储插件状态变化
+  manager.eventBus.on('storage:status', () => refreshStorageState())
+  manager.eventBus.on('storage:project-created', () => refreshStorageState())
+  manager.eventBus.on('storage:project-deleted', () => refreshStorageState())
+  manager.eventBus.on('storage:project-switched', () => refreshStorageState())
+  manager.eventBus.on('storage:connected', () => refreshStorageState())
+  manager.eventBus.on('storage:disconnected', () => refreshStorageState())
+  // 初始加载
+  nextTick(() => refreshStorageState())
 
-    // 赋值 storage API ref + 单例（由子组件 inject 使用）
-    const storageApi = manager.getPluginAPI<any>('storage')
-    if (storageApi) {
-      canvasStorageApi.value = storageApi as any
-    }
+  // 赋值 storage API ref + 单例（由子组件 inject 使用）
+  const storageApi = manager.getPluginAPI<any>('storage')
+  if (storageApi) {
+    canvasStorageApi.value = storageApi as any
+  }
 
-    // 注册 VueFlow 内置键位到 ShortcutManager（系统管理，不执行 handler）
-    const mgr = ShortcutManager.getInstance()
-    const vfSystemEntries = [
-      { id: 'vueflow.delete', command: '删除选中', prop: 'deleteKeyCode', defaultKey: 'Backspace' },
-      { id: 'vueflow.selection', command: '框选模式', prop: 'selectionKeyCode', defaultKey: 'Shift' },
-      { id: 'vueflow.multi-selection', command: '多选模式', prop: 'multiSelectionKeyCode', defaultKey: 'Control' },
-      { id: 'vueflow.zoom', command: '缩放', prop: 'zoomActivationKeyCode', defaultKey: 'Control' },
-      { id: 'vueflow.pan', command: '平移画布', prop: 'panActivationKeyCode', defaultKey: 'Space' },
-    ]
-    for (const entry of vfSystemEntries) {
-      const currentVal = (vueFlowInstance as any)[entry.prop]?.value
-      mgr.register({
-        id: entry.id,
-        command: entry.command,
-        keys: String(currentVal ?? entry.defaultKey),
-        handler: () => { },
-        priority: 0,
-        pluginId: 'vueflow',
-        group: 'system',
-        isSystemManaged: true,
-      })
-    }
+  // 注册 VueFlow 内置键位到 ShortcutManager（系统管理，不执行 handler）
+  const mgr = ShortcutManager.getInstance()
+  const vfSystemEntries = [
+    { id: 'vueflow.delete', command: '删除选中', prop: 'deleteKeyCode', defaultKey: 'Backspace' },
+    { id: 'vueflow.selection', command: '框选模式', prop: 'selectionKeyCode', defaultKey: 'Shift' },
+    { id: 'vueflow.multi-selection', command: '多选模式', prop: 'multiSelectionKeyCode', defaultKey: 'Control' },
+    { id: 'vueflow.zoom', command: '缩放', prop: 'zoomActivationKeyCode', defaultKey: 'Control' },
+    { id: 'vueflow.pan', command: '平移画布', prop: 'panActivationKeyCode', defaultKey: 'Space' },
+  ]
+  for (const entry of vfSystemEntries) {
+    const currentVal = (vueFlowInstance as any)[entry.prop]?.value
+    mgr.register({
+      id: entry.id,
+      command: entry.command,
+      keys: String(currentVal ?? entry.defaultKey),
+      handler: () => { },
+      priority: 0,
+      pluginId: 'vueflow',
+      group: 'system',
+      isSystemManaged: true,
+    })
+  }
 
-    // 从持久化存储加载用户自定义的快捷键映射
-    const keymap = canvas.state.core.shortcutKeymap || {}
-    ShortcutManager.getInstance().loadKeymap(keymap)
+  // 从持久化存储加载用户自定义的快捷键映射
+  const keymap = canvas.state.core.shortcutKeymap || {}
+  ShortcutManager.getInstance().loadKeymap(keymap)
 
-    // 同步 VueFlow keyboard refs
-    syncVueFlowKeymap()
+  // 同步 VueFlow keyboard refs
+  syncVueFlowKeymap()
 
-    // 同步 zoom 限制给 auto-layout，F 快捷键也要遵守通用设置里的缩放范围
-    function pushLayoutConfig() {
-      const api = manager.getPluginAPI<any>("auto-layout")
-      if (api) api.setConfig({ minZoom: canvas.state.core.minZoom, maxZoom: canvas.state.core.maxZoom })
-    }
-    pushLayoutConfig()
-    watch(
-      () => [canvas.state.core.minZoom, canvas.state.core.maxZoom],
-      () => pushLayoutConfig(),
-      { deep: false }
-    )
+  // 同步 zoom 限制给 auto-layout，F 快捷键也要遵守通用设置里的缩放范围
+  function pushLayoutConfig() {
+    const api = manager.getPluginAPI<any>("auto-layout")
+    if (api) api.setConfig({ minZoom: canvas.state.core.minZoom, maxZoom: canvas.state.core.maxZoom })
+  }
+  pushLayoutConfig()
+  watch(
+    () => [canvas.state.core.minZoom, canvas.state.core.maxZoom],
+    () => pushLayoutConfig(),
+    { deep: false }
+  )
 
-    // 监听快捷键重映射 → 同步到 VueFlow
-    watch(
-      () => canvas.state.core.shortcutKeymap,
-      () => syncVueFlowKeymap(),
-      { deep: true }
-    )
+  // 监听快捷键重映射 → 同步到 VueFlow
+  watch(
+    () => canvas.state.core.shortcutKeymap,
+    () => syncVueFlowKeymap(),
+    { deep: true }
+  )
 
 })
 
@@ -1435,78 +1435,74 @@ onUnmounted(async () => {
 
 <template>
   <CanvasRuntimeProvider :runtime="runtime">
-  <div ref="canvasContainerRef" class="canvas-container">
-    <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
-      :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
-      :nodes-draggable="canvas.state.core.nodesDraggable" :nodes-connectable="canvas.state.core.nodesConnectable"
-      :elements-selectable="canvas.state.core.elementsSelectable" :edges-updatable="canvas.state.core.edgesUpdatable"
-      :snap-to-grid="canvas.state.core.snapToGrid" :snap-grid="canvas.state.core.snapGrid"
-      :zoom-on-scroll="canvas.state.core.zoomOnScroll" :zoom-on-pinch="canvas.state.core.zoomOnPinch"
-      :pan-on-scroll="canvas.state.core.panOnScroll" :pan-on-drag="canvas.state.core.panOnDrag"
-      :connect-on-click="canvas.state.core.connectOnClick" :min-zoom="canvas.state.core.minZoom" :max-zoom="canvas.state.core.maxZoom"
-      :zoom-on-double-click="canvas.state.core.zoomOnDoubleClick" :selection-mode="canvas.state.core.selectionMode"
-      :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
-      :select-nodes-on-drag="canvas.state.core.selectNodesOnDrag" :prevent-scrolling="canvas.state.core.preventScrolling"
-      :selection-key-code="null" :multi-selection-key-code="'Shift'" fit-view-on-init
-      :is-valid-connection="isValidConnection" :auto-connect="false"
-      @connect="onConnect($event); manager.eventBus.emit('connect', $event)"
-      @connect-start="onConnectStart($event); manager.eventBus.emit('connectStart', $event)"
-      @connect-end="onConnectEnd($event); manager.eventBus.emit('connectEnd', $event)"
-      @nodes-change="onNodesChange($event); manager.eventBus.emit('nodesChange', $event)"
-      @edges-change="onEdgesChange($event); manager.eventBus.emit('edgesChange', $event)"
-      @node-drag="manager.eventBus.emit('nodeDrag', $event)"
-      @node-drag-start="manager.eventBus.emit('nodeDragStart', $event)"
-      @node-drag-stop="manager.eventBus.emit('nodeDragStop', $event)"
-      @node-click="manager.eventBus.emit('nodeClick', $event)"
-      @pane-click="onPaneClick(); manager.eventBus.emit('paneClick', $event)"
-      @pane-mouse-down="manager.eventBus.emit('paneMouseDown', $event)"
-      @pane-mouse-up="manager.eventBus.emit('paneMouseUp', $event)"
-      @pane-mouse-move="manager.eventBus.emit('paneMouseMove', $event)" @node-double-click="onNodeDoubleClick"
-      @node-context-menu="onNodeContextMenu" @pane-context-menu="onPaneContextMenu" @edge-context-menu="onEdgeContextMenu" @dblclick="onPaneDoubleClick">
-      <template #connection-line="connectionLineProps">
-        <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
-      </template>
+    <div ref="canvasContainerRef" class="canvas-container">
+      <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
+        :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
+        :nodes-draggable="canvas.state.core.nodesDraggable" :nodes-connectable="canvas.state.core.nodesConnectable"
+        :elements-selectable="canvas.state.core.elementsSelectable" :edges-updatable="canvas.state.core.edgesUpdatable"
+        :snap-to-grid="canvas.state.core.snapToGrid" :snap-grid="canvas.state.core.snapGrid"
+        :zoom-on-scroll="canvas.state.core.zoomOnScroll" :zoom-on-pinch="canvas.state.core.zoomOnPinch"
+        :pan-on-scroll="canvas.state.core.panOnScroll" :pan-on-drag="canvas.state.core.panOnDrag"
+        :connect-on-click="canvas.state.core.connectOnClick" :min-zoom="canvas.state.core.minZoom"
+        :max-zoom="canvas.state.core.maxZoom" :zoom-on-double-click="canvas.state.core.zoomOnDoubleClick"
+        :selection-mode="canvas.state.core.selectionMode"
+        :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
+        :select-nodes-on-drag="canvas.state.core.selectNodesOnDrag"
+        :prevent-scrolling="canvas.state.core.preventScrolling" :selection-key-code="null"
+        :multi-selection-key-code="'Shift'" fit-view-on-init :is-valid-connection="isValidConnection"
+        :auto-connect="false" @connect="onConnect($event); manager.eventBus.emit('connect', $event)"
+        @connect-start="onConnectStart($event); manager.eventBus.emit('connectStart', $event)"
+        @connect-end="onConnectEnd($event); manager.eventBus.emit('connectEnd', $event)"
+        @nodes-change="onNodesChange($event); manager.eventBus.emit('nodesChange', $event)"
+        @edges-change="onEdgesChange($event); manager.eventBus.emit('edgesChange', $event)"
+        @node-drag="manager.eventBus.emit('nodeDrag', $event)"
+        @node-drag-start="manager.eventBus.emit('nodeDragStart', $event)"
+        @node-drag-stop="manager.eventBus.emit('nodeDragStop', $event)"
+        @node-click="manager.eventBus.emit('nodeClick', $event)"
+        @pane-click="onPaneClick(); manager.eventBus.emit('paneClick', $event)"
+        @pane-mouse-down="manager.eventBus.emit('paneMouseDown', $event)"
+        @pane-mouse-up="manager.eventBus.emit('paneMouseUp', $event)"
+        @pane-mouse-move="manager.eventBus.emit('paneMouseMove', $event)" @node-double-click="onNodeDoubleClick"
+        @node-context-menu="onNodeContextMenu" @pane-context-menu="onPaneContextMenu"
+        @edge-context-menu="onEdgeContextMenu" @dblclick="onPaneDoubleClick">
+        <template #connection-line="connectionLineProps">
+          <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
+        </template>
 
-    </VueFlow>
+      </VueFlow>
 
-    <!-- 设置面板（Teleport 到 body，不受 VueFlow transform 影响） -->
-    <Teleport to="body">
-      <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
-        <DynamicSettingsPanel :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue" />
-      </slot>
-    </Teleport>
+      <!-- 设置面板（Teleport 到 body，不受 VueFlow transform 影响） -->
+      <Teleport to="body">
+        <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings"
+          :get-value="getSettingValue">
+          <DynamicSettingsPanel :settings="allSettings" :grouped-settings="groupedSettings"
+            :get-value="getSettingValue" />
+        </slot>
+      </Teleport>
 
-    <CanvasPerformancePanel
-      :enabled="canvas.state.core.performancePanelEnabled"
-      :samples="performanceMonitor.samples.value"
-      :long-tasks="performanceMonitor.longTasks.value"
-      :status="performanceMonitor.currentStatus.value"
-      :summary="performanceMonitor.summary.value"
-      :fps="performanceMonitor.fps.value"
-      :frame-ms="performanceMonitor.lastFrameMs.value"
-      :nodes="vueFlowInstance.getNodes.value"
-      :edges-count="vueFlowInstance.getEdges.value.length"
-      :viewport="vueFlowInstance.viewport.value"
-      :container-size="canvasContainerSize"
-      :selected-node-count="canvas.selectionState.selectedNodeIds.size"
-      :selected-edge-count="canvas.selectionState.selectedEdgeIds.size"
-      :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
-      :show-charts="canvas.state.core.performancePanelShowCharts"
-      :show-memory="canvas.state.core.performancePanelShowMemory"
-      :memory="performanceMonitor.memory.value"
-    />
+      <CanvasPerformancePanel :enabled="canvas.state.core.performancePanelEnabled"
+        :samples="performanceMonitor.samples.value" :long-tasks="performanceMonitor.longTasks.value"
+        :status="performanceMonitor.currentStatus.value" :summary="performanceMonitor.summary.value"
+        :fps="performanceMonitor.fps.value" :frame-ms="performanceMonitor.lastFrameMs.value"
+        :nodes="vueFlowInstance.getNodes.value" :edges-count="vueFlowInstance.getEdges.value.length"
+        :viewport="vueFlowInstance.viewport.value" :container-size="canvasContainerSize"
+        :selected-node-count="canvas.selectionState.selectedNodeIds.size"
+        :selected-edge-count="canvas.selectionState.selectedEdgeIds.size"
+        :only-render-visible-elements="canvas.state.core.onlyRenderVisibleElements"
+        :show-charts="canvas.state.core.performancePanelShowCharts"
+        :show-memory="canvas.state.core.performancePanelShowMemory" :memory="performanceMonitor.memory.value" />
 
 
-    <!-- 多选背景框（2+ 节点选中时自动显示）
+      <!-- 多选背景框（2+ 节点选中时自动显示）
              读取 useCanvasStore.selectionState.selectedNodeIds + VueFlow getNodes -->
-    <SelectionFrame v-if="canvas.selectionState.selectedNodeIds.size > 1" :nodes="vueFlowInstance.getNodes.value" :viewport="vueFlowInstance.viewport.value"
-      :vf-instance="vueFlowInstance" @pan="(vp: any) => vueFlowInstance.setViewport(vp)"
-      @batch-connect-start="onSelectionBatchConnectStart" />
+      <SelectionFrame v-if="canvas.selectionState.selectedNodeIds.size > 1" :nodes="vueFlowInstance.getNodes.value"
+        :viewport="vueFlowInstance.viewport.value" :vf-instance="vueFlowInstance"
+        @pan="(vp: any) => vueFlowInstance.setViewport(vp)" @batch-connect-start="onSelectionBatchConnectStart" />
 
-    <slot name="context-menu" :menu-state="menuState" :on-select="onMenuSelect" :on-close="closeMenu">
+      <slot name="context-menu" :menu-state="menuState" :on-select="onMenuSelect" :on-close="closeMenu">
         <CanvasMenu :menu="menuState" @select="onMenuSelect" @close="closeMenu" />
       </slot>
-  </div>
+    </div>
   </CanvasRuntimeProvider>
 </template>
 
@@ -1519,7 +1515,12 @@ onUnmounted(async () => {
 }
 </style>
 
+<style>
+body {
+  user-select: none;
+}
 
-
-
-
+.vue-flow__edges {
+  z-index: 1 !important
+}
+</style>
