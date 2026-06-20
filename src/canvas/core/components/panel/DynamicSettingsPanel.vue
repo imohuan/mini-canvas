@@ -62,6 +62,10 @@ const groupedSettings = computed(() => {
 <style scoped>
 /* ===== 面板容器 ===== */
 .ax-settings-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 1000;
   background: #ffffff;
   border: 1px solid #c8c5ca;
   border-radius: 12px;

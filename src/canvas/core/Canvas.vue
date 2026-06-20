@@ -1453,10 +1453,14 @@ onUnmounted(async () => {
         <CustomEdge v-bind="buildConnectionEdgeProps(connectionLineProps)" />
       </template>
 
+    </VueFlow>
+
+    <!-- 设置面板（Teleport 到 body，不受 VueFlow transform 影响） -->
+    <Teleport to="body">
       <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
         <DynamicSettingsPanel />
       </slot>
-    </VueFlow>
+    </Teleport>
 
     <CanvasPerformancePanel
       :enabled="canvas.state.core.performancePanelEnabled"
