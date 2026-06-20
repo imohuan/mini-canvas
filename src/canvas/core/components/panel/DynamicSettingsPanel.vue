@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { computed, ref, type Ref } from "vue"
+﻿<script setup lang="ts">
+import { ref, type Ref } from "vue"
 import DynamicSettingField from './DynamicSettingField.vue'
 import type { PanelSettingDefinition } from '../../registry/types'
 
@@ -13,10 +13,10 @@ const collapsed = ref(false)
 </script>
 
 <template>
-  <div class="ax-settings-panel" :class="{ collapsed }">
-    <div class="ax-panel-header">
+  <div class="ax-panel" :class="{ collapsed }">
+    <div class="ax-panel-hd">
       <button
-        class="ax-panel-toggle"
+        class="ax-panel-btn"
         :title="collapsed ? '展开设置' : '折叠设置'"
         @click="collapsed = !collapsed"
       >
@@ -32,24 +32,26 @@ const collapsed = ref(false)
     </div>
 
     <Transition name="panel-expand">
-      <div v-if="!collapsed" class="ax-panel-body">
-      <div v-for="group in groupedSettings" :key="group.name" class="ax-settings-group">
-        <div class="ax-group-title">{{ group.name }}</div>
-        <DynamicSettingField
-          v-for="setting in group.items"
-          :key="setting.id"
-          :setting="setting"
-          v-model="getValue(setting.id).value"
-        />
+      <div v-if="!collapsed" class="ax-panel-bd">
+        <template v-for="group in groupedSettings" :key="group.name">
+          <div class="ax-panel-group">
+            <div class="ax-panel-group-title">{{ group.name }}</div>
+            <DynamicSettingField
+              v-for="setting in group.items"
+              :key="setting.id"
+              :setting="setting"
+              v-model="getValue(setting.id).value"
+            />
+          </div>
+        </template>
+        <div v-if="settings.length === 0" class="ax-panel-empty">暂无可配置项</div>
       </div>
-      <div v-if="settings.length === 0" class="ax-settings-empty">暂无可配置项</div>
-    </div>
-      </Transition>
+    </Transition>
   </div>
 </template>
 
 <style scoped>
-.ax-settings-panel {
+.ax-panel {
   position: fixed;
   top: 12px;
   right: 12px;
@@ -64,22 +66,31 @@ const collapsed = ref(false)
   flex-direction: column;
   overflow: hidden;
   font-family: "Geist", "Microsoft YaHei", sans-serif;
-  transition: width 0.2s ease;
+  transition: width 0.25s ease;
 }
-.ax-settings-panel.collapsed {
-  width: auto;
-  min-width: 0;
+.ax-panel.collapsed {
+  width: 36px;
+  border-radius: 50%;
 }
-.ax-panel-header {
+
+.ax-panel-hd {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid #c8c5ca;
   background: #f3f3f4;
   flex-shrink: 0;
+  transition: padding 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
-.ax-panel-toggle {
+.ax-panel.collapsed .ax-panel-hd {
+  justify-content: center;
+  padding: 5px;
+  border-bottom-color: transparent;
+  background: #ffffff;
+}
+
+.ax-panel-btn {
   width: 24px;
   height: 24px;
   display: flex;
@@ -90,55 +101,53 @@ const collapsed = ref(false)
   border-radius: 8px;
   color: #5f5e61;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.ax-panel-toggle:hover {
+.ax-panel-btn:hover {
   background: #e8e8e9;
   color: #1a1c1d;
 }
-.ax-panel-body {
+
+.ax-panel-bd {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 10px 12px;
   scrollbar-width: thin;
   scrollbar-color: #c8c5ca transparent;
 }
-.ax-settings-group {
-  margin-bottom: 16px;
+
+.ax-panel-group {
+  margin-bottom: 14px;
 }
-.ax-settings-group:last-child {
+.ax-panel-group:last-child {
   margin-bottom: 0;
 }
-.ax-group-title {
+.ax-panel-group-title {
   font-family: "JetBrains Mono", "Microsoft YaHei", monospace;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: #5f5e61;
   text-transform: uppercase;
-  padding: 4px 0;
+  padding: 2px 0;
   margin-bottom: 4px;
 }
-.ax-settings-empty {
+
+.ax-panel-empty {
   text-align: center;
   color: #78767b;
   font-size: 13px;
   padding: 24px 0;
 }
 
-/* ===== 展开/折叠过渡 ===== */
-.panel-expand-enter-active {
+/* ===== 展开/折叠动画 ===== */
+.panel-expand-enter-active,
+.panel-expand-leave-active {
   transition: opacity 0.2s ease, max-height 0.25s ease;
   overflow: hidden;
 }
-.panel-expand-leave-active {
-  transition: opacity 0.15s ease, max-height 0.2s ease;
-  overflow: hidden;
-}
-.panel-expand-enter-from {
-  opacity: 0;
-  max-height: 0;
-}
+.panel-expand-enter-from,
 .panel-expand-leave-to {
   opacity: 0;
   max-height: 0;
