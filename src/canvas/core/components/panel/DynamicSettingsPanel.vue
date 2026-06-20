@@ -38,7 +38,7 @@ const collapsed = ref(false)
           v-for="setting in group.items"
           :key="setting.id"
           :setting="setting"
-          :model-value="getValue(setting.id)"
+          v-model="getValue(setting.id).value"
         />
       </div>
       <div v-if="settings.length === 0" class="ax-settings-empty">暂无可配置项</div>
