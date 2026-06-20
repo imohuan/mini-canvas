@@ -104,16 +104,27 @@ export const MiniMapPlugin: CanvasPlugin = {
             dimensions: state.dimensions,
             width: widthRef.value,
             height: heightRef.value,
+            // 灵敏度传给 Vue 组件，让它直接在 onPointerMove 里处理
+            sensitivityX: sensXRef.value,
+            sensitivityY: sensYRef.value,
             onPan(payload: { x: number; y: number }) {
+              // ---- 完整日志链 ----
+              context.logger.debug(`[MiniMap] onPan 收到(已含灵敏度): x=${payload.x.toFixed(1)}, y=${payload.y.toFixed(1)}`)
+              context.logger.debug(`[MiniMap] 实际 viewport: x=${state.viewport.x.toFixed(1)}, y=${state.viewport.y.toFixed(1)}, zoom=${state.viewport.zoom}`)
+
+              // payload 已经是灵敏度处理后的值，直接 setViewport
+              context.viewport.setViewport({ x: payload.x, y: payload.y, zoom: state.viewport.zoom })
+
+              // 同步更新 state.viewport
               state.viewport = { x: payload.x, y: payload.y, zoom: state.viewport.zoom }
-              context.viewport.setViewport({
-                x: payload.x * sensXRef.value,
-                y: payload.y * sensYRef.value,
-                zoom: state.viewport.zoom,
-              })
+
+              context.logger.debug(`[MiniMap] setViewport 完成`)
             },
             onJump(payload: { x: number; y: number }) {
+              context.logger.debug(`[MiniMap] onJump 目标: x=${payload.x.toFixed(1)}, y=${payload.y.toFixed(1)}`)
               context.viewport.setCenter(payload.x, payload.y, state.viewport.zoom)
+              const after = context.viewport.getViewport()
+              context.logger.debug(`[MiniMap] onJump 后 viewport: x=${after.x.toFixed(1)}, y=${after.y.toFixed(1)}, zoom=${after.zoom}`)
             },
           })
         }

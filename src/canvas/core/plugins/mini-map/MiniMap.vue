@@ -10,12 +10,16 @@ const props = withDefaults(defineProps<{
   nodeColor?: string
   viewportBorderColor?: string
   padding?: number
+  sensitivityX?: number
+  sensitivityY?: number
 }>(), {
   width: 240,
   height: 160,
   nodeColor: "#cbd5e1",
   viewportBorderColor: "#3b82f6",
   padding: 8,
+  sensitivityX: 1,
+  sensitivityY: 1,
 })
 
 const emit = defineEmits<{
@@ -135,9 +139,13 @@ function onPointerMove(e: PointerEvent) {
   lastClientY = e.clientY
 
   const ms = mapState.value
+  // 灵敏度作用在屏幕像素差上，直接缩放 dx/dy
+  const scaledDx = dx * props.sensitivityX
+  const scaledDy = dy * props.sensitivityY
+
   emit("pan", {
-    x: props.viewport.x - dx / ms.scale * props.viewport.zoom,
-    y: props.viewport.y - dy / ms.scale * props.viewport.zoom,
+    x: props.viewport.x - scaledDx / ms.scale * props.viewport.zoom,
+    y: props.viewport.y - scaledDy / ms.scale * props.viewport.zoom,
   })
 }
 
