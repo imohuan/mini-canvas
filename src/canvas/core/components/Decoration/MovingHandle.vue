@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 
@@ -110,6 +110,8 @@ const debugMousePoint = computed(() => ({
   x: isSource.value ? mouseX.value : radius.value - mouseX.value,
   y: radius.value / 2 + mouseY.value,
 }))
+
+const debugViewBox = computed(() => `0 0 ${radius.value} ${radius.value}`)
 
 resetPosition()
 
@@ -236,7 +238,7 @@ onBeforeUnmount(() => {
       'is-debug': debug,
     }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
       @mouseleave="handleLeave" @mousemove="updatePosition">
-      <svg v-if="debug" class="moving-handle-debug" :viewBox="`0 0 ${radius} ${radius}`" preserveAspectRatio="none">
+      <svg v-if="debug" class="moving-handle-debug" :viewBox="debugViewBox" preserveAspectRatio="none">
         <!-- 半圆边界 -->
         <path class="moving-handle-debug__arc" :d="debugArcPath" />
 
