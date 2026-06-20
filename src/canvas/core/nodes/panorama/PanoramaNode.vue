@@ -1,10 +1,12 @@
 ﻿<script setup lang="ts">
 import type { NodeProps } from "@vue-flow/core"
-import { ref, onMounted, onUnmounted, watch, nextTick, computed } from "vue"
+import { ref, onMounted, onUnmounted, watch, nextTick, computed, inject } from "vue"
+import { NodeIdInjection } from "@vue-flow/core"
 import * as THREE from "three"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
+const nodeId = inject(NodeIdInjection, null) as string | null
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const fullscreenContainerRef = ref<HTMLDivElement | null>(null)
@@ -169,41 +171,47 @@ function destroyThree() {
   initialized = false
 }
 
-function enterFullscreen() {
-  fullscreen.value = true
-  nextTick(() => {
-    if (fullscreenContainerRef.value && renderer) {
-      fullscreenContainerRef.value.appendChild(renderer.domElement)
-      const { w, h } = getContainerSize(fullscreenContainerRef.value)
-      if (w > 0 && h > 0 && camera) {
-        renderer.setSize(w, h, false)
-        camera.aspect = w / h
-        camera.updateProjectionMatrix()
+function toggleFullscreen() {
+  if (!fullscreen.value) {
+    fullscreen.value = true
+    nextTick(() => {
+      if (fullscreenContainerRef.value && renderer) {
+        fullscreenContainerRef.value.appendChild(renderer.domElement)
+        const { w, h } = getContainerSize(fullscreenContainerRef.value)
+        if (w > 0 && h > 0 && camera) {
+          renderer.setSize(w, h, false)
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
       }
-    }
-  })
+    })
+  } else {
+    fullscreen.value = false
+    nextTick(() => {
+      if (containerRef.value && renderer) {
+        containerRef.value.appendChild(renderer.domElement)
+        const { w, h } = getContainerSize(containerRef.value)
+        if (w > 0 && h > 0 && camera) {
+          renderer.setSize(w, h, false)
+          camera.aspect = w / h
+          camera.updateProjectionMatrix()
+        }
+      }
+    })
+  }
 }
 
-function exitFullscreen() {
-  fullscreen.value = false
-  nextTick(() => {
-    if (containerRef.value && renderer) {
-      containerRef.value.appendChild(renderer.domElement)
-      const { w, h } = getContainerSize(containerRef.value)
-      if (w > 0 && h > 0 && camera) {
-        renderer.setSize(w, h, false)
-        camera.aspect = w / h
-        camera.updateProjectionMatrix()
-      }
-    }
-  })
-}
-
-// ESC 退出全屏
 function onKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape" && fullscreen.value) {
-    exitFullscreen()
+    toggleFullscreen()
   }
+}
+
+// 监听 toolbar 全屏命令
+function onFullscreenCmd(e: Event) {
+  const detail = (e as CustomEvent).detail
+  if (detail?.nodeId !== nodeId) return
+  toggleFullscreen()
 }
 
 onMounted(async () => {
@@ -211,11 +219,13 @@ onMounted(async () => {
   hasImage.value = !!getImageUrl()
   initThree()
   window.addEventListener("keydown", onKeyDown)
+  window.addEventListener("panorama:fullscreen", onFullscreenCmd)
 })
 
 onUnmounted(() => {
   destroyThree()
   window.removeEventListener("keydown", onKeyDown)
+  window.removeEventListener("panorama:fullscreen", onFullscreenCmd)
 })
 
 watch(() => props.data?.imageUrl ?? props.data?.panoUrl, (newUrl, oldUrl) => {
@@ -227,11 +237,6 @@ watch(() => props.data?.imageUrl ?? props.data?.panoUrl, (newUrl, oldUrl) => {
     destroyThree()
     nextTick(() => { hasImage.value = false; initThree() })
   }
-})
-
-watch(() => (props.data as any)?._fullscreen, (val) => {
-  if (val) enterFullscreen()
-  else if (fullscreen.value) exitFullscreen()
 })
 </script>
 
@@ -256,14 +261,12 @@ watch(() => (props.data as any)?._fullscreen, (val) => {
     </div>
   </div>
 
-  <!-- 全屏浮层 -->
   <Teleport to="body">
     <div v-if="fullscreen" ref="fullscreenContainerRef" class="fixed inset-0 z-[99999] bg-black">
-      <!-- 右上角退出全屏按钮 -->
       <button
         class="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center rounded-xl bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors"
         title="退出全屏 (Esc)"
-        @click="exitFullscreen"
+        @click="toggleFullscreen"
       >
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 14 10 14 10 20" />

@@ -30,13 +30,9 @@ async function handlePanoramaUpload(ctx: CommandContext, args?: unknown) {
 }
 
 function handlePanoramaFullscreen(ctx: CommandContext) {
-  const runtime = ctx.runtime as any
-  const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
-  if (!vf || !nodeId) return
-  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
-  const wasFullscreen = !!(node?.data as any)?._fullscreen
-  vf.updateNode(nodeId, { data: { ...(node?.data ?? {}), _fullscreen: !wasFullscreen } })
+  if (!nodeId) return
+  window.dispatchEvent(new CustomEvent("panorama:fullscreen", { detail: { nodeId } }))
 }
 
 function handlePanoramaReset(ctx: CommandContext) {
@@ -46,7 +42,7 @@ function handlePanoramaReset(ctx: CommandContext) {
   if (!vf || !nodeId) return
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
   vf.updateNode(nodeId, {
-    data: { ...(node?.data ?? {}), imageUrl: undefined, panoUrl: undefined, label: "360全景", _editing: false, _fullscreen: false },
+    data: { ...(node?.data ?? {}), imageUrl: undefined, panoUrl: undefined, label: "360全景", _editing: false },
   })
 }
 
@@ -86,7 +82,6 @@ export const PanoramaNodePlugin: CanvasPlugin = {
     context.toolbars.register("node:panorama", {
       id: "panorama.fullscreen", source: "node:panorama", commandId: "panorama.fullscreen",
       position: "top", title: "全屏", icon: fullscreenSvg, nodeTypes: ["panorama"], order: 20,
-      visible: (ctx) => !!(ctx.node?.data as any)?._editing,
     })
     context.toolbars.register("node:panorama", {
       id: "panorama.reset", source: "node:panorama", commandId: "panorama.reset",
@@ -97,43 +92,31 @@ export const PanoramaNodePlugin: CanvasPlugin = {
       position: "top", title: "下载", icon: downloadSvg, nodeTypes: ["panorama"], order: 40,
     })
 
-    // 双击节点进入编辑模式
-    const onDblClick = (e: Event) => {
-      const detail = (e as CustomEvent).detail
-      if (!detail?.nodeId) return
-      const node = context.actions.getNodes().find((n: Node) => n.id === detail.nodeId)
-      if (!node || node.data?.nodeType !== "panorama") return
+    const offNodeDblClick = context.on("nodeDoubleClick", (payload: { nodeId: string; nodeType: string }) => {
+      if (payload.nodeType !== "panorama") return
+      const node = context.actions.getNodes().find((n: Node) => n.id === payload.nodeId)
+      if (!node) return
       if ((node.data as any)?._editing) return
       if (!(node.data as any)?.imageUrl && !(node.data as any)?.panoUrl) return
-      context.actions.updateNode(detail.nodeId, { data: { ...(node.data as any), _editing: true } })
-    }
-    window.addEventListener("canvas:nodeDoubleClick", onDblClick)
+      context.actions.updateNode(payload.nodeId, { data: { ...(node.data as any), _editing: true } })
+    })
 
-    // 点击画布空白处 / 其他节点 → 退出编辑模式
-    const onPaneClick = () => {
+    const offPaneClick = context.on("paneClick", () => {
       const nodes = context.actions.getNodes()
       for (const n of nodes) {
         if ((n.data as any)?.nodeType === "panorama" && (n.data as any)?._editing) {
           context.actions.updateNode(n.id, { data: { ...(n.data as any), _editing: false } })
         }
       }
-    }
-    // 监听画布点击事件
-    const onPaneMouseDown = (e: Event) => {
-      const target = (e as MouseEvent).target as HTMLElement
-      // 如果点击的是 panorama 节点内部，不退出编辑
-      if (target?.closest(".vue-flow__node")) return
-      onPaneClick()
-    }
-    window.addEventListener("mousedown", onPaneMouseDown, true)
+    })
 
     return {
       uninstall() {
         context.canvasNodes.unregister("panorama")
         context.toolbars.unregisterSource("node:panorama")
         context.commands.unregisterSource("node:panorama")
-        window.removeEventListener("canvas:nodeDoubleClick", onDblClick)
-        window.removeEventListener("mousedown", onPaneMouseDown, true)
+        offNodeDblClick()
+        offPaneClick()
       },
     }
   },
