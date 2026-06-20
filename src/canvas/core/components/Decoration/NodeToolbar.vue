@@ -1,5 +1,4 @@
-﻿/** @deprecated 使用 BaseToolbar 替代。BaseToolbar 通过 slot 渲染在节点 DOM 内，不需要 Teleport 定位。 */
-<script lang="ts" setup>
+﻿<script lang="ts" setup>
 defineOptions({ inheritAttrs: false })
 
 import { computed, inject } from 'vue'
