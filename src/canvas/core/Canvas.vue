@@ -1091,6 +1091,11 @@ const runtime = new CanvasRuntime(manager, manager.eventBus, nodeRegistry, menuR
 commandRegistry.setShortcutManager(ShortcutManager.getInstance())
 manager.setRegistries({ commandRegistry, toolbarRegistry, panelRegistry })
 
+/**
+ * 已安装的插件名称（reactive ref）
+ */
+const installedPluginNames = ref<string[]>([])
+
 const bootstrap = useCanvasBootstrap(
   vueFlowInstance,
   () => manager.getPluginAPI<StorageAPI>('storage'),
