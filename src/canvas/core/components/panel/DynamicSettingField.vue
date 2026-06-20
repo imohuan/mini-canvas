@@ -19,7 +19,7 @@ const value = computed({
 
 <template>
   <div class="ax-setting-field">
-    <div class="ax-field-label-row">
+    <div class="ax-field-label-row" v-if="setting.type !== 'boolean'">
       <label class="ax-field-title">{{ setting.title }}</label>
       <span v-if="setting.description" class="ax-field-desc">{{ setting.description }}</span>
     </div>
