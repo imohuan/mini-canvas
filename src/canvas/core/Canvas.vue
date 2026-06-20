@@ -1454,9 +1454,7 @@ onUnmounted(async () => {
       </template>
 
       <slot name="settings-panel" :settings="allSettings" :grouped-settings="groupedSettings" :get-value="getSettingValue">
-        <Panel position="top-right">
-          <DynamicSettingsPanel />
-        </Panel>
+        <DynamicSettingsPanel />
       </slot>
     </VueFlow>
 
