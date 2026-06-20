@@ -216,6 +216,7 @@ function getConnectableNode(id: string | null | undefined) {
 }
 
 /** 标准化连接对象：补全默认的 sourceHandle/targetHandle */
+/** 把连接对象的方向标准化：补全默认的 sourceHandle / targetHandle */
 function normalizeConnection(connection: Connection): Connection {
   return {
     ...connection,
@@ -224,6 +225,10 @@ function normalizeConnection(connection: Connection): Connection {
   }
 }
 
+/**
+ * 把连接对象转换为统一方向（source 永远是输出端，target 永远是输入端）。
+ * 如果用户从输入端拖出连线，这里会自动翻转 source / target。
+ */
 function toCanonicalConnection(connection: Connection): Connection | null {
   const normalized = normalizeConnection(connection)
   if (normalized.sourceHandle === 'source' && normalized.targetHandle === 'target') {
@@ -241,6 +246,10 @@ function toCanonicalConnection(connection: Connection): Connection | null {
   return null
 }
 
+/**
+ * 获取一条已有边的标准化起点和终点。
+ * 因为历史上可能出现反向边，所以需要先统一方向再查链路。
+ */
 function getCanonicalEdgeEndpoints(edge: Edge) {
   const sourceHandle = edge.sourceHandle ?? 'source'
   const targetHandle = edge.targetHandle ?? 'target'
@@ -254,6 +263,10 @@ function getCanonicalEdgeEndpoints(edge: Edge) {
   return null
 }
 
+/**
+ * 判断添加一条连接是否会形成循环链路。
+ * 从目标节点沿已有边一直往后查，如果能走回起点，就是循环。
+ */
 function wouldCreateCycle(sourceId: string, targetId: string) {
   if (sourceId === targetId) return true
 
@@ -280,6 +293,10 @@ function wouldCreateCycle(sourceId: string, targetId: string) {
   return false
 }
 
+/**
+ * 判断已有边和新连接是否完全相同（按标准化方向比较）。
+ * 用于去重，防止创建完全一样的连线。
+ */
 function isSameCanonicalConnection(edge: Edge, connection: Connection) {
   const edgeEndpoints = getCanonicalEdgeEndpoints(edge)
   const canonical = toCanonicalConnection(connection)
@@ -291,6 +308,10 @@ function isSameCanonicalConnection(edge: Edge, connection: Connection) {
   )
 }
 
+/**
+ * 查找是否已存在相同的连线（按标准化方向去重）。
+ * 只查非临时边。
+ */
 function findSameConnection(connection: Connection) {
   return (getEdges.value as Edge[]).find(edge =>
     !isTempEdge(edge) &&
@@ -298,6 +319,10 @@ function findSameConnection(connection: Connection) {
   ) as Edge | undefined
 }
 
+/**
+ * 返回连线不可创建的原因描述字符串。
+ * 如果返回空字符串，表示可以创建。
+ */
 function getInvalidConnectionReason(connection: Connection) {
   const canonical = toCanonicalConnection(connection)
   if (!canonical?.source || !canonical.target) return '无法连接'
@@ -307,12 +332,17 @@ function getInvalidConnectionReason(connection: Connection) {
   return ''
 }
 
+/** 清空拖线时的"禁止连接"反馈状态 */
 function clearInvalidConnectionFeedback() {
   canvas.connectionState.invalidFeedbackNodeId = null
   canvas.connectionState.invalidFeedbackPoint = null
   canvas.connectionState.invalidFeedbackMessage = ''
 }
 
+/**
+ * 设置拖线时的"禁止连接"反馈状态。
+ * 会触发对应节点的模糊禁用效果和提示文字。
+ */
 function setInvalidConnectionFeedback(nodeId: string | null, point: { x: number; y: number } | null, message = '无法连接') {
   canvas.connectionState.invalidFeedbackNodeId = nodeId
   canvas.connectionState.invalidFeedbackPoint = point
@@ -320,6 +350,10 @@ function setInvalidConnectionFeedback(nodeId: string | null, point: { x: number;
 }
 
 // --- connection validation ---
+/**
+ * 判断连接是否合法。
+ * 检查项：节点存在、端口方向正确、不连接自己、不形成循环。
+ */
 function isValidConnection(connection: Connection): boolean {
   const normalized = normalizeConnection(connection)
 
@@ -650,6 +684,10 @@ function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOv
   return bestNode
 }
 
+/**
+ * 根据起始端口类型，在屏幕坐标附近查找最近的可连线节点。
+ * 右侧输出 → 找左侧输入节点；左侧输入 → 找右侧输出节点。
+ */
 function findNearestConnectableNode(clientX: number, clientY: number, startHandle: string | null, startNodeId?: string | null) {
   if (startHandle === 'source') {
     return findNearestValidTarget(clientX, clientY, startNodeId || undefined)
@@ -660,6 +698,10 @@ function findNearestConnectableNode(clientX: number, clientY: number, startHandl
   return null
 }
 
+/**
+ * 判断鼠标是否落在某个节点的卡片主体区域内。
+ * 不管端口方向，只要鼠标在节点矩形内就返回该节点。
+ */
 function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: Iterable<string> = []) {
   const excluded = new Set(excludedNodeIds)
   const nodeEls = document.querySelectorAll('.vue-flow__node')
