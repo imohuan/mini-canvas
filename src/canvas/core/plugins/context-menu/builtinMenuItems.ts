@@ -8,6 +8,58 @@ import type { MenuItemDefinition } from '../../registry/types'
  * 命令的 disabled 状态由 CommandRegistry 管理，菜单渲染时自动读取。
  */
 export function registerBuiltinMenuItems(ctx: PluginContext): void {
+  // ---- 核心命令 ----
+
+  ctx.commands.register({
+    id: 'core.deleteNode',
+    source: 'context-menu',
+    title: '删除节点',
+    run(_cmdCtx) {
+      const ids = [...ctx.selection.getSelectedNodeIds()]
+      if (ids.length > 0) {
+        ctx.actions.removeNodes(ids)
+        ctx.selection.clearSelection()
+      }
+    },
+  })
+
+  ctx.commands.register({
+    id: 'core.deleteEdge',
+    source: 'context-menu',
+    title: '删除连线',
+    run(_cmdCtx) {
+      const ids = [...ctx.selection.getSelectedEdgeIds()]
+      if (ids.length > 0) {
+        ctx.actions.removeEdges(ids)
+        ctx.selection.clearSelection()
+      }
+    },
+  })
+
+  ctx.commands.register({
+    id: 'clipboard.copy',
+    source: 'context-menu',
+    title: '复制',
+    run(_cmdCtx) {
+      const nodes = ctx.actions.getNodes().filter(n => ctx.selection.getSelectedNodeIds().has(n.id))
+      if (nodes.length > 0) {
+        ctx.emit('clipboard:copy', { nodes })
+      }
+    },
+  })
+
+  ctx.commands.register({
+    id: 'clipboard.duplicate',
+    source: 'context-menu',
+    title: '复制一份',
+    run(_cmdCtx) {
+      const nodes = ctx.actions.getNodes().filter(n => ctx.selection.getSelectedNodeIds().has(n.id))
+      if (nodes.length > 0) {
+        ctx.emit('clipboard:duplicate', { nodes })
+      }
+    },
+  })
+
   // ---- 节点操作 ----
 
   ctx.menus.register('context-menu', {
