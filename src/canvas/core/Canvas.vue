@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, reactive, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -1653,16 +1653,6 @@ onMounted(async () => {
       payload.mode,
       payload.title,
       payload.context,
-    )
-  })
-  // 双击画布空白处 → 打开添加节点菜单
-  
-  manager.eventBus.on('paneDoubleClick', (payload: any) => {
-    openCreateNodeMenu(
-      { x: payload.clientX, y: payload.clientY },
-      'pane',
-      '添加节点',
-      { flowPosition: payload.flowPosition },
     )
   })
   // 初始加载
