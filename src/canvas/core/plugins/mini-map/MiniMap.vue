@@ -1,5 +1,5 @@
-﻿<script setup lang="ts">
-import { computed, ref, shallowRef } from "vue"
+<script setup lang="ts">
+import { computed, shallowRef } from "vue"
 
 const props = withDefaults(defineProps<{
   nodes: any[]
@@ -24,14 +24,14 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{
   pan: [payload: { x: number; y: number }]
-  jump: [payload: { x: number; y: number }]
 }>()
 
-const containerRef = ref<HTMLDivElement>()
-
 let dragging = false
-let lastClientX = 0
-let lastClientY = 0
+let dragPointerId: number | null = null
+let dragCaptureEl: HTMLElement | null = null
+let dragStartPoint = { x: 0, y: 0 }
+let dragStartViewport = { x: 0, y: 0, zoom: 1 }
+let dragStartMapState = { scale: 1, minX: 0, minY: 0, offsetX: 0, offsetY: 0 }
 
 const frozenNodes = shallowRef<any[] | null>(null)
 const renderNodes = computed(() => {
@@ -116,71 +116,82 @@ const viewerStyle = computed(() => {
   }
 })
 
-function onViewerDown(e: PointerEvent) {
-  if (e.button !== 0) return
+function applyMovement(clientX: number, clientY: number) {
+  const ms = dragStartMapState
+  const zoom = dragStartViewport.zoom || 1
+  const dx = (clientX - dragStartPoint.x) * props.sensitivityX
+  const dy = (clientY - dragStartPoint.y) * props.sensitivityY
+
+  emit("pan", {
+    x: dragStartViewport.x - dx / ms.scale * zoom,
+    y: dragStartViewport.y - dy / ms.scale * zoom,
+  })
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (!dragging) return
+  if (dragPointerId !== null && e.pointerId !== dragPointerId) return
+  applyMovement(e.clientX, e.clientY)
+}
+
+function startDrag(e: PointerEvent) {
   dragging = true
+  dragPointerId = e.pointerId
+  dragStartPoint = { x: e.clientX, y: e.clientY }
+  dragStartViewport = { ...props.viewport }
+  dragStartMapState = { ...mapState.value }
   frozenNodes.value = props.nodes.map((n: any) => ({
     ...n,
     position: { ...n.position },
     computedPosition: n.computedPosition ? { ...n.computedPosition } : undefined,
     dimensions: n.dimensions ? { ...n.dimensions } : undefined,
   }))
-  lastClientX = e.clientX
-  lastClientY = e.clientY
+  applyMovement(e.clientX, e.clientY)
   e.stopPropagation()
-  ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  e.preventDefault()
+
+  const target = e.currentTarget as HTMLElement
+  dragCaptureEl = target
+  target.setPointerCapture(e.pointerId)
 }
 
-function onPointerMove(e: PointerEvent) {
-  if (!dragging) return
-  const dx = e.clientX - lastClientX
-  const dy = e.clientY - lastClientY
-  lastClientX = e.clientX
-  lastClientY = e.clientY
-
-  const ms = mapState.value
-  // 灵敏度作用在屏幕像素差上，直接缩放 dx/dy
-  const scaledDx = dx * props.sensitivityX
-  const scaledDy = dy * props.sensitivityY
-
-  emit("pan", {
-    x: props.viewport.x - scaledDx / ms.scale * props.viewport.zoom,
-    y: props.viewport.y - scaledDy / ms.scale * props.viewport.zoom,
-  })
+function onViewerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  startDrag(e)
 }
 
 function onPointerUp(e: PointerEvent) {
   if (!dragging) return
+  if (dragPointerId !== null && e.pointerId !== dragPointerId) return
+  finishDrag(e)
+}
+
+function onPointerCancel(e: PointerEvent) {
+  if (!dragging) return
+  if (dragPointerId !== null && e.pointerId !== dragPointerId) return
+  finishDrag(e)
+}
+
+function finishDrag(e: PointerEvent) {
   dragging = false
+  dragPointerId = null
   frozenNodes.value = null
-  ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+  if (dragCaptureEl?.hasPointerCapture?.(e.pointerId)) {
+    dragCaptureEl.releasePointerCapture(e.pointerId)
+  }
+  dragCaptureEl = null
 }
 
-function onMinimapClick(e: MouseEvent) {
-  if ((e.target as HTMLElement).classList.contains("mini-viewer")) return
 
-  const rect = containerRef.value?.getBoundingClientRect()
-  if (!rect) return
-
-  const ms = mapState.value
-  const clickX = e.clientX - rect.left - ms.offsetX
-  const clickY = e.clientY - rect.top - ms.offsetY
-
-  const targetX = ms.minX + clickX / ms.scale
-  const targetY = ms.minY + clickY / ms.scale
-
-  emit("jump", { x: targetX, y: targetY })
-}
 </script>
 
 <template>
   <div
-    ref="containerRef"
     class="mini-map"
     :style="{ width: width + 'px', height: height + 'px' }"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
-    @mousedown="onMinimapClick"
+    @pointercancel="onPointerCancel"
   >
     <div
       v-for="node in renderNodes"
@@ -205,6 +216,7 @@ function onMinimapClick(e: MouseEvent) {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   cursor: crosshair;
+  touch-action: none;
 }
 
 .mini-node {

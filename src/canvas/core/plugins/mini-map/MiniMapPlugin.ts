@@ -120,12 +120,6 @@ export const MiniMapPlugin: CanvasPlugin = {
 
               context.logger.debug(`[MiniMap] setViewport 完成`)
             },
-            onJump(payload: { x: number; y: number }) {
-              context.logger.debug(`[MiniMap] onJump 目标: x=${payload.x.toFixed(1)}, y=${payload.y.toFixed(1)}`)
-              context.viewport.setCenter(payload.x, payload.y, state.viewport.zoom)
-              const after = context.viewport.getViewport()
-              context.logger.debug(`[MiniMap] onJump 后 viewport: x=${after.x.toFixed(1)}, y=${after.y.toFixed(1)}, zoom=${after.zoom}`)
-            },
           })
         }
       },
