@@ -100,6 +100,10 @@ export interface MenuRegistryAPI {
   unregister(id: string): void
   /** 注销某来源的所有菜单项 */
   unregisterSource(source: string): void
+  /** 获取所有菜单项 */
+  getAll(): { source: string; item: MenuItemDefinition }[]
+  /** 获取指定区域的菜单项 */
+  getByArea(area: string): MenuItemDefinition[]
 }
 
 export interface CanvasNodeRegistryAPI {

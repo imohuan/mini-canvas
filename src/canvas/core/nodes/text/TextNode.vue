@@ -51,11 +51,11 @@ function onCanvasDoubleClick(e: Event) {
 }
 
 onMounted(() => {
-  window.addEventListener('canvas:nodeDoubleClick', onCanvasDoubleClick)
+  window.addEventListener('nodeDoubleClick', onCanvasDoubleClick)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('canvas:nodeDoubleClick', onCanvasDoubleClick)
+  window.removeEventListener('nodeDoubleClick', onCanvasDoubleClick)
 })
 </script>
 

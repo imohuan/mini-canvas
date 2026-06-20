@@ -571,6 +571,8 @@ export class PluginManager {
         register: (_source, _item) => stubWarn('menus.register'),
         unregister: (_id) => stubWarn('menus.unregister'),
         unregisterSource: (_source) => stubWarn('menus.unregisterSource'),
+        getAll: () => [],
+        getByArea: (_area) => [],
       },
       registerHandleConfig: (_config) => stubWarn('registerHandleConfig'),
       canvasNodes: {

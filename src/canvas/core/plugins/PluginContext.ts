@@ -77,6 +77,8 @@ export class EventBus {
 
   emit(event: string, payload?: unknown): void {
     const handlers = this.handlers.get(event)
+    window.dispatchEvent(new CustomEvent(event, { detail: payload }))
+
     if (!handlers || handlers.size === 0) return
 
     for (const handler of handlers) {
@@ -297,6 +299,8 @@ export function createPluginContext(
       }
     },
 
+
+    // 暴露给 context-menu 插件用于 resolveMenuItems
     dom: createDomService(),
 
     menus: {
@@ -308,6 +312,12 @@ export function createPluginContext(
       },
       unregisterSource(source: string): void {
         menuRegistry?.unregisterSource(source)
+      },
+      getByArea(area: string) {
+        return menuRegistry?.getByArea(area) ?? []
+      },
+      getAll() {
+        return menuRegistry?.getAll() ?? []
       },
     },
 
@@ -508,7 +518,7 @@ function createPluginStore(
         return stop
       } catch (err) {
         logger.error(`store.watch("${storeKey}") failed:`, err)
-        return () => {}
+        return () => { }
       }
     },
 
