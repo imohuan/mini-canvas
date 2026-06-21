@@ -1,12 +1,16 @@
 ﻿<script setup lang="ts">
 import type { NodeProps } from "@vue-flow/core"
+import { useVueFlow } from "@vue-flow/core"
 import { ref, onMounted, onUnmounted, watch, nextTick, computed, inject } from "vue"
 import { NodeIdInjection } from "@vue-flow/core"
+import type { Edge, Node } from "@vue-flow/core"
 import * as THREE from "three"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const nodeId = inject(NodeIdInjection, null) as string | null
+
+const { getEdges, findNode } = useVueFlow({ id: undefined as any })
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const fullscreenContainerRef = ref<HTMLDivElement | null>(null)
@@ -14,6 +18,23 @@ const fullscreen = ref(false)
 
 const editing = computed(() => !!(props.data as any)?._editing)
 const hasImage = ref(false)
+
+/** 从上游连接的 image 节点获取 imageUrl（优先级高于自身 data） */
+const connectedImageUrl = computed(() => {
+  if (!nodeId) return ""
+  const edges = getEdges.value as Edge[]
+  const connectedEdge = edges.find(
+    (e) => e.target === nodeId && e.targetHandle === "target"
+  )
+  if (!connectedEdge) return ""
+  const sourceNode = (findNode(connectedEdge.source) as Node | undefined)
+  return (sourceNode?.data as any)?.imageUrl as string || ""
+})
+
+/** 自身 data 上的 imageUrl（兜底） */
+const ownImageUrl = computed(() =>
+  (props.data?.imageUrl as string) || (props.data?.panoUrl as string) || ""
+)
 
 let scene: THREE.Scene | null = null
 let camera: THREE.PerspectiveCamera | null = null
@@ -32,7 +53,7 @@ let dragStartX = 0, dragStartY = 0
 let dragStartLon = 0, dragStartLat = 0
 
 function getImageUrl(): string {
-  return (props.data?.imageUrl as string) || (props.data?.panoUrl as string) || ""
+  return connectedImageUrl.value || ownImageUrl.value
 }
 
 function getContainerSize(el?: HTMLElement | null) {
@@ -228,16 +249,20 @@ onUnmounted(() => {
   window.removeEventListener("panorama:fullscreen", onFullscreenCmd)
 })
 
-watch(() => props.data?.imageUrl ?? props.data?.panoUrl, (newUrl, oldUrl) => {
-  const url = (newUrl as string) || ""
-  if (url) {
-    if (!initialized) initThree()
-    updateTexture(url)
-  } else if (oldUrl) {
-    destroyThree()
-    nextTick(() => { hasImage.value = false; initThree() })
+/** 统一监听：上游连接变化 或 自身 data 变化时更新纹理 */
+watch(
+  () => connectedImageUrl.value || ownImageUrl.value,
+  (newUrl, oldUrl) => {
+    const url = (newUrl as string) || ""
+    if (url) {
+      if (!initialized) initThree()
+      updateTexture(url)
+    } else if (oldUrl) {
+      destroyThree()
+      nextTick(() => { hasImage.value = false; initThree() })
+    }
   }
-})
+)
 </script>
 
 <template>
