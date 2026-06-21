@@ -41,8 +41,10 @@ const cardFrameStyle = computed(() => ({
  * 标题放在卡片上方绝对定位，zoom 变化时通过 createCappedStyle
  * 同时调整文字大小和上移距离，避免标题和卡片重叠或离太远。
  * zoom=1 时封顶，不再继续放大。
+ * width 做"宽度反缩放"：scale 从左上角收缩会让标题只剩 1/zoom 宽，
+ * 这里把布局宽度按 1/inv 放大，缩放后视觉宽度重新撑满卡片（去掉了 right-1）。
  */
-const titleTransformStyle = computed(() => createCappedStyle(zoom.value, { topOffset: -20 }))
+const titleTransformStyle = computed(() => createCappedStyle(zoom.value, { topOffset: -20, width: cardWidth.value - 8 }))
 
 /**
  * 卡片实际宽度（响应式 ref）。
@@ -423,7 +425,7 @@ const nodeExtra = computed(() => {
     <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸） -->
     <slot name="title">
       <!-- 标题容器：绝对定位在卡片上方，pointer-events-none 防止遮挡操作 -->
-      <div class="absolute left-1 right-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
+      <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
         :style="titleTransformStyle">
         <slot name="title-icon">
           <!-- 默认图标：根据 nodeType 显示图片/视频/文本类型图标 -->
