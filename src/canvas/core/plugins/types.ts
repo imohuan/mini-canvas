@@ -162,6 +162,12 @@ export interface PluginContext {
   /** Panel 设置项注册 — 注册全局设置，值自动持久化 */
   readonly panels: PanelRegistryAPI
   readonly dom: CanvasDomServiceAPI
+  /** 连线拖拽状态（响应式 ref，可直接 .value 读取） */
+  readonly connectionState: import('vue').Ref<ConnectionState>
+  /** 是否正在拖线（派生 computed） */
+  readonly isConnecting: import('vue').ComputedRef<boolean>
+  /** 是否可以弹出"拖到空白"菜单（派生 computed） */
+  readonly canShowConnectionMenu: import('vue').ComputedRef<boolean>
   registerHandleConfig: (config: Partial<HandleConfig>) => void
   on: (event: string, handler: (...args: any[]) => void) => () => void
   off: (event: string, handler: (...args: any[]) => void) => void

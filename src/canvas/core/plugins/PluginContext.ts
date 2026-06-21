@@ -123,6 +123,12 @@ interface CreatePluginContextOptions {
   toolbarRegistry?: ToolbarRegistry
   panelRegistry?: PanelRegistry
   pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
+  /** 连线拖拽状态 ref */
+  connectionState?: import('vue').Ref<import('./types').ConnectionState>
+  /** 是否正在拖线 computed */
+  isConnecting?: import('vue').ComputedRef<boolean>
+  /** 是否可弹连线菜单 computed */
+  canShowConnectionMenu?: import('vue').ComputedRef<boolean>
   /** canvas.state 引用，供 useValue 使用 */
   canvasState?: { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }
 }
@@ -147,6 +153,9 @@ export function createPluginContext(
     panelRegistry,
     canvasState,
     pluginManager,
+    connectionState: connectionStateRef,
+    isConnecting: isConnectingComputed,
+    canShowConnectionMenu: canShowConnectionMenuComputed,
   } = options
 
   const effectiveStore = canvasStore ?? {
@@ -302,6 +311,10 @@ export function createPluginContext(
 
     // 暴露给 context-menu 插件用于 resolveMenuItems
     dom: createDomService(),
+
+    connectionState: connectionStateRef as any,
+    isConnecting: isConnectingComputed as any,
+    canShowConnectionMenu: canShowConnectionMenuComputed as any,
 
     menus: {
       register(source: string, item: MenuItemDefinition): void {

@@ -13,6 +13,7 @@ import CanvasPerformancePanel from './components/Performance/CanvasPerformancePa
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
 import { useCanvasStore } from './composables/useCanvasStore'
+import { storeToRefs } from 'pinia'
 import { useCanvasPerformance } from './composables/useCanvasPerformance'
 import type { CanvasPlugin } from './plugins/types.ts'
 import { PluginManager } from './plugins/PluginManager.ts'
@@ -38,6 +39,8 @@ const props = defineProps<{
 
 // --- Pinia 画布状态 ---
 const canvas = useCanvasStore()
+// 拿到 ref/computed 本身（store 直接访问会被自动解包成值）
+const { connectionState, isConnecting, canShowConnectionMenu } = storeToRefs(canvas)
 
 // ========================
 // 设置面板 slot props（暴露给外部自定义面板）
@@ -1412,6 +1415,9 @@ onMounted(async () => {
         canvasStore: canvas,
         pluginManager: manager,
         canvasState: canvas.state as any,
+        connectionState,
+        isConnecting,
+        canShowConnectionMenu,
         eventBus: manager.eventBus,
         nodeRegistry,
         menuRegistry,
