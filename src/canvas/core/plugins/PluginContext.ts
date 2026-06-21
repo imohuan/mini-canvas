@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+﻿import type { Component, Ref, ComputedRef } from 'vue'
 import { watch } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type {
@@ -13,6 +13,7 @@ import type {
   CanvasPlugin,
   Point,
   ViewportState,
+  ConnectionState,
 } from './types'
 import type { NodeRegistry } from '../registry/NodeRegistry'
 import type { MenuRegistry } from '../registry/MenuRegistry'
@@ -124,11 +125,11 @@ interface CreatePluginContextOptions {
   panelRegistry?: PanelRegistry
   pluginManager?: { getPlugin(name: string): unknown; getPluginAPI(name: string): unknown }
   /** 连线拖拽状态 ref */
-  connectionState?: import('vue').Ref<import('./types').ConnectionState>
+  connectionState?: Ref<ConnectionState>
   /** 是否正在拖线 computed */
-  isConnecting?: import('vue').ComputedRef<boolean>
+  isConnecting?: ComputedRef<boolean>
   /** 是否可弹连线菜单 computed */
-  canShowConnectionMenu?: import('vue').ComputedRef<boolean>
+  canShowConnectionMenu?: ComputedRef<boolean>
   /** canvas.state 引用，供 useValue 使用 */
   canvasState?: { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }
 }
@@ -273,6 +274,12 @@ export function createPluginContext(
     eventBus.emit(event, payload)
   }
 
+  // 早抛错：connectionState/isConnecting/canShowConnectionMenu 是 PluginContext 的必填字段，
+  // 但 CreatePluginContextOptions 中是可选的。这里做运行时检查 + 类型收窄，避免 as any。
+  if (!connectionStateRef || !isConnectingComputed || !canShowConnectionMenuComputed) {
+    throw new Error('[createPluginContext] connectionState, isConnecting, canShowConnectionMenu are required')
+  }
+
   const context: PluginContext = {
     canvasId,
     store,
@@ -312,9 +319,9 @@ export function createPluginContext(
     // 暴露给 context-menu 插件用于 resolveMenuItems
     dom: createDomService(),
 
-    connectionState: connectionStateRef as any,
-    isConnecting: isConnectingComputed as any,
-    canShowConnectionMenu: canShowConnectionMenuComputed as any,
+    connectionState: connectionStateRef,
+    isConnecting: isConnectingComputed,
+    canShowConnectionMenu: canShowConnectionMenuComputed,
 
     menus: {
       register(source: string, item: MenuItemDefinition): void {

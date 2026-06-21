@@ -39,7 +39,9 @@ const props = defineProps<{
 
 // --- Pinia 画布状态 ---
 const canvas = useCanvasStore()
-// 拿到 ref/computed 本身（store 直接访问会被自动解包成值）
+// 拿到 ref/computed 本身（store 直接访问会被自动解包成值）。
+// 此处仅在 setup 顶层取 ref 引用并透传给插件系统，不在 computed 内读 .value，
+// 规避操作指南中记录的 storeToRefs + VueFlow Teleport 断链场景。
 const { connectionState, isConnecting, canShowConnectionMenu } = storeToRefs(canvas)
 
 // ========================

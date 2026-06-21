@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+﻿import type { Component, Ref, ComputedRef } from 'vue'
 import type { CommandRegistryAPI, ToolbarRegistryAPI, PanelRegistryAPI } from '../registry/types'
 import type { Node, Edge } from '@vue-flow/core'
 import type { CanvasNodeDefinition, CanvasNodeMenuItem } from '../registry/NodeRegistry'
@@ -163,11 +163,11 @@ export interface PluginContext {
   readonly panels: PanelRegistryAPI
   readonly dom: CanvasDomServiceAPI
   /** 连线拖拽状态（响应式 ref，可直接 .value 读取） */
-  readonly connectionState: import('vue').Ref<ConnectionState>
+  readonly connectionState: Ref<ConnectionState>
   /** 是否正在拖线（派生 computed） */
-  readonly isConnecting: import('vue').ComputedRef<boolean>
+  readonly isConnecting: ComputedRef<boolean>
   /** 是否可以弹出"拖到空白"菜单（派生 computed） */
-  readonly canShowConnectionMenu: import('vue').ComputedRef<boolean>
+  readonly canShowConnectionMenu: ComputedRef<boolean>
   registerHandleConfig: (config: Partial<HandleConfig>) => void
   on: (event: string, handler: (...args: any[]) => void) => () => void
   off: (event: string, handler: (...args: any[]) => void) => void
