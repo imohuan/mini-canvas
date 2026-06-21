@@ -567,6 +567,9 @@ export class PluginManager {
         onDocument: (_type, _handler, _opts) => { stubWarn('dom.onDocument'); return () => {} },
         onWindow: (_type, _handler, _opts) => { stubWarn('dom.onWindow'); return () => {} },
       },
+      connectionState: {} as any,
+      isConnecting: {} as any,
+      canShowConnectionMenu: {} as any,
       menus: {
         register: (_source, _item) => stubWarn('menus.register'),
         unregister: (_id) => stubWarn('menus.unregister'),
