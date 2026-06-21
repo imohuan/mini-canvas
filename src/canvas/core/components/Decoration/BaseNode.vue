@@ -178,8 +178,8 @@ const debugHandle = computed(() => Boolean(canvas.state.core.handleDebug || prop
  * 如果是，则隐藏自己的端口按钮，避免拖线时端口还在显示干扰操作。
  */
 const isCurrentConnectingNode = computed(() =>
-  canvas.connectionState.isConnecting &&
-  canvas.connectionState.sourceNodeId === props.id
+  canvas.isConnecting &&
+  canvas.connectionState.activeConnection?.sourceNodeId === props.id
 )
 
 /**
@@ -198,12 +198,13 @@ const shouldShowHandles = computed(() =>
  * 且鼠标悬停在此节点上或此节点是当前反馈目标。
  */
 const showConnectFeedback = computed(() =>
-  canvas.connectionState.isConnecting &&
-  canvas.connectionState.sourceNodeId !== props.id &&
-  canvas.connectionState.invalidFeedbackNodeId !== props.id &&
+  canvas.isConnecting &&
+  canvas.connectionState.activeConnection?.sourceNodeId !== props.id &&
+  !isInvalidConnectionTarget.value &&
   (
     isHovered.value ||
-    canvas.connectionState.hoverFeedbackNodeId === props.id
+    (canvas.connectionState.hoverNode?.nodeId === props.id &&
+     canvas.connectionState.hoverNode?.status === 'valid')
   )
 )
 
@@ -213,8 +214,9 @@ const showConnectFeedback = computed(() =>
  * 此时节点会显示模糊禁用效果 + "无法连接"提示气泡。
  */
 const isInvalidConnectionTarget = computed(() =>
-  canvas.connectionState.isConnecting &&
-  canvas.connectionState.invalidFeedbackNodeId === props.id
+  canvas.isConnecting &&
+  canvas.connectionState.hoverNode?.nodeId === props.id &&
+  canvas.connectionState.hoverNode?.status === 'invalid'
 )
 
 /**
@@ -226,8 +228,8 @@ const isInvalidConnectionTarget = computed(() =>
  * 仅在拖线中且当前节点有输入端口时显示。
  */
 const showTargetZones = computed(() =>
-  canvas.connectionState.isConnecting &&
-  canvas.connectionState.sourceNodeId !== props.id &&
+  canvas.isConnecting &&
+  canvas.connectionState.activeConnection?.sourceNodeId !== props.id &&
   Boolean(props.targetPosition)
 )
 
@@ -283,7 +285,9 @@ const cardTransform = computed(() => {
  * 气泡会跟随鼠标大致位置显示，但限制在卡片内部 6%~94% 范围内不会跑出边界。
  */
 const invalidFeedbackPosition = computed(() => {
-  const point = canvas.connectionState.invalidFeedbackPoint
+  const point = canvas.connectionState.hoverNode?.status === 'invalid'
+    ? canvas.connectionState.hoverNode.flowPosition
+    : null
   if (!isInvalidConnectionTarget.value || !point) return { x: 0.08, y: 0.5 }
 
   const node = (vf.getNodes.value as GraphNode[]).find((item) => item.id === props.id)
@@ -323,8 +327,10 @@ const invalidTooltipStyle = computed(() => ({
  * 只在当前节点是反馈目标时计算，否则返回默认的鼠标位置（卡片中心）。
  */
 const feedbackMousePosition = computed(() => {
-  const point = canvas.connectionState.hoverFeedbackPoint
-  if (canvas.connectionState.hoverFeedbackNodeId !== props.id || !point) {
+  const point = canvas.connectionState.hoverNode?.status === 'valid'
+    ? canvas.connectionState.hoverNode.flowPosition
+    : null
+  if (canvas.connectionState.hoverNode?.nodeId !== props.id || !point) {
     return mousePosition.value
   }
 
@@ -410,7 +416,7 @@ const nodeExtra = computed(() => {
   <!-- 节点根元素：relative 定位容器，绑定选中/悬停状态，控制 handles 显示/隐藏 -->
   <div class="custom-node-root relative" :class="{ 'is-selected': selected, 'is-hovered': isHovered }"
     @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false; if (!canvas.connectionState.isConnecting) canvas.connectionState.suppressHandles = false">
+    @mouseleave="isHovered = false; if (!canvas.isConnecting) canvas.connectionState.suppressHandles = false">
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
@@ -431,6 +437,13 @@ const nodeExtra = computed(() => {
             stroke="currentColor" stroke-width="2">
             <polygon points="23 7 16 12 23 17" />
             <rect x="1" y="5" width="15" height="14" rx="2" />
+          </svg>
+          <svg v-else-if="data?.nodeType === 'panorama'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <ellipse cx="12" cy="12" rx="6" ry="2.5" />
+            <path d="M6 12c0 3.3 2.7 6 6 6s6-2.7 6-6" />
+            <path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" />
           </svg>
           <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2">
@@ -463,7 +476,7 @@ const nodeExtra = computed(() => {
         class="invalid-connection-tooltip"
         :style="invalidTooltipStyle"
       >
-        {{ canvas.connectionState.invalidFeedbackMessage || '无法连接' }}
+        {{ canvas.connectionState.hoverNode?.message || '无法连接' }}
       </div>
 
       <!-- Debug：目标吸附区域可视化（仅连接中 + debug 模式可见） -->
