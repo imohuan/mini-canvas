@@ -32,6 +32,14 @@ async function handlePanoramaUpload(ctx: CommandContext, args?: unknown) {
 function handlePanoramaFullscreen(ctx: CommandContext) {
   const nodeId = ctx.node?.id
   if (!nodeId) return
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  if (vf) {
+    const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+    vf.updateNode(nodeId, {
+      data: { ...(node?.data ?? {}), _editing: true },
+    })
+  }
   window.dispatchEvent(new CustomEvent("panorama:fullscreen", { detail: { nodeId } }))
 }
 
