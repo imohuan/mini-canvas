@@ -193,3 +193,72 @@ export interface PluginManifest {
   author?: string
   description?: string
 }
+
+// ============================================================================
+// 连线拖拽状态
+// ============================================================================
+
+/** 鼠标下方的目标类型（实时判定，用于菜单触发条件） */
+export type HoverTarget =
+  | { type: 'pane' }                                                       // 画布空白
+  | { type: 'node'; nodeId: string }                                       // 节点主体
+  | { type: 'node-handle'; nodeId: string; handle: 'source' | 'target' }   // 节点端口
+  | { type: 'toolbar'; nodeId: string; position: 'top' | 'bottom' }        // 节点工具栏
+  | { type: 'edge'; edgeId: string }                                       // 已存在连线
+  | { type: 'connection-line' }                                            // 拖拽中的临时线
+  | { type: 'overlay' }                                                    // 其他 UI 覆盖层
+  | null                                                                   // 画布外
+
+/** 拖线时悬停目标节点的反馈状态（合并原 hover/invalid 两组字段） */
+export interface ConnectionHoverNode {
+  nodeId: string
+  status: 'valid' | 'invalid'
+  flowPoint: Point
+  message?: string
+}
+
+/** 吸附目标 */
+export interface ConnectionSnapTarget {
+  nodeId: string
+  isSnapped: boolean
+}
+
+/** 临时连接节点信息（拖到空白时创建） */
+export interface TempConnection {
+  tempNodeId: string
+  tempEdgeId: string
+  flowPosition: Point
+}
+
+/** 活动连接源信息 */
+export interface ActiveConnection {
+  sourceNodeId: string
+  sourceHandle: 'source' | 'target'
+}
+
+/** 连线拖拽完整状态 */
+export interface ConnectionState {
+  /** null = 未拖线；非 null = 正在拖 */
+  activeConnection: ActiveConnection | null
+
+  /** 拖线时悬停目标节点的反馈状态 */
+  hoverNode: ConnectionHoverNode | null
+
+  /** 吸附目标（拖线时实时计算） */
+  snapTarget: ConnectionSnapTarget | null
+
+  /** 鼠标当前位置（画布坐标） */
+  mouseFlowPosition: Point | null
+
+  /** 鼠标当前位置（屏幕坐标） */
+  mouseScreenPosition: Point | null
+
+  /** 鼠标下方的目标类型（核心判定依据） */
+  hoverTarget: HoverTarget
+
+  /** 拖到空白时创建的临时节点信息 */
+  tempConnection: TempConnection | null
+
+  /** UI 开关：是否隐藏所有节点的端口 */
+  suppressHandles: boolean
+}
