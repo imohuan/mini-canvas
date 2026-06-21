@@ -220,6 +220,36 @@ export const PanoramaNodePlugin: CanvasPlugin = {
       }
     })
 
+    /** 限制 panorama 节点只保留一个输入连接：新边连入时删除旧边及关联的自动创建 image 节点 */
+    const offConnect = context.on("connect", (connection: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null }) => {
+      if (connection.targetHandle !== "target") return
+      const targetNode = context.actions.getNodes().find((n: Node) => n.id === connection.target)
+      if ((targetNode?.data as any)?.nodeType !== "panorama") return
+
+      const allEdges = context.actions.getEdges()
+      const inputEdges = allEdges.filter(
+        (e) => e.target === connection.target && e.targetHandle === "target"
+      )
+      if (inputEdges.length <= 1) return
+
+      // 按 id 排序，最新创建的边排在最后（id 含时间戳）
+      const sorted = [...inputEdges].sort((a, b) => a.id.localeCompare(b.id))
+      const keepEdge = sorted[sorted.length - 1]
+      const removeEdges = sorted.filter(e => e.id !== keepEdge.id)
+
+      // 删除旧边
+      context.actions.removeEdges(removeEdges.map(e => e.id))
+
+      // 清理旧边关联的自动创建 image 节点（id 格式: image-{panoramaNodeId}-{timestamp}）
+      const prefix = `image-${connection.target}-`
+      const orphanImageIds = removeEdges
+        .map(e => e.source)
+        .filter(id => id.startsWith(prefix))
+      if (orphanImageIds.length > 0) {
+        context.actions.removeNodes(orphanImageIds)
+      }
+    })
+
     return {
       uninstall() {
         context.canvasNodes.unregister("panorama")
@@ -227,6 +257,7 @@ export const PanoramaNodePlugin: CanvasPlugin = {
         context.commands.unregisterSource("node:panorama")
         offNodeDblClick()
         offPaneClick()
+        offConnect()
       },
     }
   },
