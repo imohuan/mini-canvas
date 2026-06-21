@@ -438,13 +438,6 @@ const nodeExtra = computed(() => {
             <polygon points="23 7 16 12 23 17" />
             <rect x="1" y="5" width="15" height="14" rx="2" />
           </svg>
-          <svg v-else-if="data?.nodeType === 'panorama'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <ellipse cx="12" cy="12" rx="6" ry="2.5" />
-            <path d="M6 12c0 3.3 2.7 6 6 6s6-2.7 6-6" />
-            <path d="M6 12c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-          </svg>
           <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="2">
             <polyline points="4 7 4 4 20 4 20 7" />
