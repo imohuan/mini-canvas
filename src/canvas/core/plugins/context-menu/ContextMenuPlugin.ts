@@ -46,6 +46,8 @@ function findNearestValidTarget(
   sourceNodeId: string,
 ): Node | null {
   const excludedNodeIds = new Set([sourceNodeId])
+  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
+  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
   let bestNode: Node | null = null
   let bestDistance = Number.POSITIVE_INFINITY
   const SNAP_THRESHOLD = 50
@@ -55,7 +57,7 @@ function findNearestValidTarget(
     const nodeId = getNodeIdFromElement(el)
     if (!nodeId || excludedNodeIds.has(nodeId)) continue
 
-    const node = context.actions.getNodes().find(n => n.id === nodeId)
+    const node = nodeMap.get(nodeId)
     if (!node || isTempNode(node) || !node.targetPosition) continue
 
     const rect = el.getBoundingClientRect()
@@ -80,6 +82,50 @@ function findNearestValidTarget(
   return bestNode
 }
 
+/** 在屏幕坐标附近查找最近的可连线源节点（右侧吸附，用于反向拖线） */
+function findNearestValidSource(
+  clientX: number,
+  clientY: number,
+  context: PluginContext,
+  targetNodeIds: Set<string>,
+): Node | null {
+  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
+  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
+  let bestNode: Node | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  const SNAP_THRESHOLD = 50
+
+  const nodeEls = document.querySelectorAll('.vue-flow__node')
+  for (const el of nodeEls) {
+    const nodeId = getNodeIdFromElement(el)
+    if (!nodeId || targetNodeIds.has(nodeId)) continue
+
+    const node = nodeMap.get(nodeId)
+    if (!node || isTempNode(node) || !node.sourcePosition) continue
+
+    const rect = el.getBoundingClientRect()
+    // 源节点吸附区域在右侧
+    const insideSnapArea =
+      clientX >= rect.right - SNAP_THRESHOLD &&
+      clientX <= rect.right + SNAP_THRESHOLD &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+
+    if (!insideSnapArea) continue
+
+    const centerX = rect.right
+    const centerY = rect.top + rect.height / 2
+    const distance = Math.hypot(clientX - centerX, clientY - centerY)
+
+    if (distance < bestDistance) {
+      bestNode = node
+      bestDistance = distance
+    }
+  }
+
+  return bestNode
+}
+
 /** 判断鼠标是否落在某个节点主体区域内 */
 function findNodeBodyAtPoint(
   clientX: number,
@@ -88,13 +134,15 @@ function findNodeBodyAtPoint(
   excludedNodeIds: Iterable<string> = [],
 ): Node | null {
   const excluded = new Set(excludedNodeIds)
+  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
+  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
   const nodeEls = document.querySelectorAll('.vue-flow__node')
 
   for (const el of nodeEls) {
     const nodeId = getNodeIdFromElement(el)
     if (!nodeId || excluded.has(nodeId)) continue
 
-    const node = context.actions.getNodes().find(n => n.id === nodeId)
+    const node = nodeMap.get(nodeId)
     if (!node || isTempNode(node)) continue
 
     const rect = el.getBoundingClientRect()
@@ -255,6 +303,9 @@ export const ContextMenuPlugin: CanvasPlugin = {
         targetHandle: isReverseConnection ? sourceHandle : 'target',
         selectable: false,
         zIndex: 99999,
+        // CustomEdge.vue 不读取 edge.data 中的样式字段（edgeType/edgeLineWidth/edgeColor/edgeDashed），
+        // 而是从 useCanvasStore() 的 canvas.state.core.* 获取并有兜底默认值（如 edgeType 默认 'bezier'）。
+        // 因此临时边只需 { isTemp: true } 即可正确渲染，无需注入 makeEdgeData 字段。
         data: { isTemp: true },
       } as Edge])
 
@@ -299,10 +350,13 @@ export const ContextMenuPlugin: CanvasPlugin = {
       const hoverTarget = resolveHoverTarget(point.x, point.y, context, sourceNodeId)
       context.connectionState.value.hoverTarget = hoverTarget
 
-      // 判定吸附（只在 source 方向时查找目标）
-      const snapNode = sourceHandle === 'source'
-        ? findNearestValidTarget(point.x, point.y, context, sourceNodeId)
-        : null
+      // 判定吸附（source 方向查目标节点，target 方向反向查源节点）
+      let snapNode: Node | null = null
+      if (sourceHandle === 'source') {
+        snapNode = findNearestValidTarget(point.x, point.y, context, sourceNodeId)
+      } else if (sourceHandle === 'target') {
+        snapNode = findNearestValidSource(point.x, point.y, context, new Set([sourceNodeId]))
+      }
       context.connectionState.value.snapTarget = snapNode
         ? { nodeId: snapNode.id, isSnapped: true }
         : null
