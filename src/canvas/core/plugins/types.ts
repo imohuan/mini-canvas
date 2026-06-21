@@ -213,7 +213,7 @@ export type HoverTarget =
 export interface ConnectionHoverNode {
   nodeId: string
   status: 'valid' | 'invalid'
-  flowPoint: Point
+  flowPosition: Point
   message?: string
 }
 
