@@ -453,8 +453,13 @@ function onConnect(connection: Connection) {
 
 /** VueFlow connectStart 事件：开始拖拽连线时记录源节点信息 */
 function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnectStartParams)) {
+  const nodeId = payload.nodeId
+  if (!nodeId) {
+    canvas.connectionState.activeConnection = null
+    return
+  }
   canvas.connectionState.activeConnection = {
-    sourceNodeId: payload.nodeId || '',
+    sourceNodeId: nodeId,
     sourceHandle: (payload.handleId as 'source' | 'target') || 'source',
   }
   canvas.connectionState.suppressHandles = true
