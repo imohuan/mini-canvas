@@ -222,20 +222,41 @@ export const PanoramaNodePlugin: CanvasPlugin = {
 
     /** 限制 panorama 节点只保留一个输入连接：新边连入时删除旧边及关联的自动创建 image 节点 */
     const offConnect = context.on("connect", (connection: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null }) => {
-      if (connection.targetHandle !== "target") return
+      console.log("[panorama:single-input] connect 事件触发", connection)
+
+      if (connection.targetHandle !== "target") {
+        console.log("[panorama:single-input] 跳过: targetHandle !== 'target'", connection.targetHandle)
+        return
+      }
+
       const targetNode = context.actions.getNodes().find((n: Node) => n.id === connection.target)
-      if ((targetNode?.data as any)?.nodeType !== "panorama") return
+      console.log("[panorama:single-input] 目标节点", { nodeId: targetNode?.id, nodeType: (targetNode?.data as any)?.nodeType, data: targetNode?.data })
+
+      if ((targetNode?.data as any)?.nodeType !== "panorama") {
+        console.log("[panorama:single-input] 跳过: 目标节点不是 panorama", (targetNode?.data as any)?.nodeType)
+        return
+      }
 
       const allEdges = context.actions.getEdges()
+      console.log("[panorama:single-input] 当前总边数", allEdges.length, allEdges.map(e => `${e.id}: ${e.source}->${e.target}[${e.targetHandle}]`))
+
       const inputEdges = allEdges.filter(
         (e) => e.target === connection.target && e.targetHandle === "target"
       )
-      if (inputEdges.length <= 1) return
+      console.log("[panorama:single-input] 匹配的输入边数", inputEdges.length, inputEdges.map(e => e.id))
+
+      if (inputEdges.length <= 1) {
+        console.log("[panorama:single-input] 跳过: 只有1条或0条输入边，不需要清理")
+        return
+      }
 
       // 按 id 排序，最新创建的边排在最后（id 含时间戳）
       const sorted = [...inputEdges].sort((a, b) => a.id.localeCompare(b.id))
       const keepEdge = sorted[sorted.length - 1]
       const removeEdges = sorted.filter(e => e.id !== keepEdge.id)
+
+      console.log("[panorama:single-input] 保留边", keepEdge.id)
+      console.log("[panorama:single-input] 删除边", removeEdges.map(e => e.id))
 
       // 删除旧边
       context.actions.removeEdges(removeEdges.map(e => e.id))
@@ -245,6 +266,7 @@ export const PanoramaNodePlugin: CanvasPlugin = {
       const orphanImageIds = removeEdges
         .map(e => e.source)
         .filter(id => id.startsWith(prefix))
+      console.log("[panorama:single-input] 待清理的自动创建 image 节点", orphanImageIds)
       if (orphanImageIds.length > 0) {
         context.actions.removeNodes(orphanImageIds)
       }
