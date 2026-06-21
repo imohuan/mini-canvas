@@ -885,6 +885,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
       }
       createConnection(connection, 'snap')
       canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
+      manager.eventBus.emit('connect', connection)
       return
     }
 
@@ -910,6 +911,7 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
       }
       createConnection(connection, 'snap')
       canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
+      manager.eventBus.emit('connect', connection)
       return
     }
 
