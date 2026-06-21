@@ -250,13 +250,19 @@ export const PanoramaNodePlugin: CanvasPlugin = {
         return
       }
 
-      // 按 id 排序，最新创建的边排在最后（id 含时间戳）
-      const sorted = [...inputEdges].sort((a, b) => a.id.localeCompare(b.id))
-      const keepEdge = sorted[sorted.length - 1]
-      const removeEdges = sorted.filter(e => e.id !== keepEdge.id)
+      // 通过 connection 的 source/target/handle 精确匹配新边，删除其余旧边
+      const newEdge = inputEdges.find(
+        e => e.source === connection.source && e.target === connection.target
+          && e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle
+      )
+      if (!newEdge) {
+        console.log("[panorama:single-input] 跳过: 未找到新边", connection)
+        return
+      }
+      const removeEdges = inputEdges.filter(e => e.id !== newEdge.id)
 
-      console.log("[panorama:single-input] 保留边", keepEdge.id)
-      console.log("[panorama:single-input] 删除边", removeEdges.map(e => e.id))
+      console.log("[panorama:single-input] 保留新边", newEdge.id)
+      console.log("[panorama:single-input] 删除旧边", removeEdges.map(e => e.id))
 
       // 删除旧边
       context.actions.removeEdges(removeEdges.map(e => e.id))
