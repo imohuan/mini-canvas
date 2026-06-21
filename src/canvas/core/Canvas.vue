@@ -323,19 +323,9 @@ function getInvalidConnectionReason(connection: Connection) {
 
 /** 清空拖线时的"禁止连接"反馈状态 */
 function clearInvalidConnectionFeedback() {
-  canvas.connectionState.invalidFeedbackNodeId = null
-  canvas.connectionState.invalidFeedbackPoint = null
-  canvas.connectionState.invalidFeedbackMessage = ''
-}
-
-/**
- * 设置拖线时的"禁止连接"反馈状态。
- * 会触发对应节点的模糊禁用效果和提示文字。
- */
-function setInvalidConnectionFeedback(nodeId: string | null, point: { x: number; y: number } | null, message = '无法连接') {
-  canvas.connectionState.invalidFeedbackNodeId = nodeId
-  canvas.connectionState.invalidFeedbackPoint = point
-  canvas.connectionState.invalidFeedbackMessage = nodeId ? message : ''
+  if (canvas.connectionState.hoverNode?.status === 'invalid') {
+    canvas.connectionState.hoverNode = null
+  }
 }
 
 // --- connection validation ---
@@ -463,13 +453,15 @@ function onConnect(connection: Connection) {
 
 /** VueFlow connectStart 事件：开始拖拽连线时记录源节点信息 */
 function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnectStartParams)) {
-  canvas.connectionState.isConnecting = true
-  canvas.connectionState.sourceNodeId = payload.nodeId || null
-  canvas.connectionState.sourceHandle = payload.handleId || null
+  canvas.connectionState.activeConnection = {
+    sourceNodeId: payload.nodeId || '',
+    sourceHandle: (payload.handleId as 'source' | 'target') || 'source',
+  }
   canvas.connectionState.suppressHandles = true
-  canvas.connectionState.hoverFeedbackNodeId = null
-  canvas.connectionState.hoverFeedbackPoint = null
-  clearInvalidConnectionFeedback()
+  canvas.connectionState.hoverNode = null
+  canvas.connectionState.hoverTarget = null
+  canvas.connectionState.snapTarget = null
+  canvas.connectionState.tempConnection = null
 }
 
 /** 从 MouseEvent 或 TouchEvent 提取屏幕坐标 */
@@ -512,8 +504,9 @@ function isTempEdge(edge: Edge | undefined | null) {
 
 /** 在屏幕坐标附近查找最近的可连线目标节点（考虑吸附区域） */
 function findNearestValidTarget(clientX: number, clientY: number, sourceNodeIdOverride?: string, excludedNodeIdsOverride?: Iterable<string>) {
-  const sourceNodeId = sourceNodeIdOverride || canvas.connectionState.sourceNodeId
-  const sourceHandle = sourceNodeIdOverride ? 'source' : canvas.connectionState.sourceHandle
+  const active = canvas.connectionState.activeConnection
+  const sourceNodeId = sourceNodeIdOverride || active?.sourceNodeId
+  const sourceHandle = sourceNodeIdOverride ? 'source' : active?.sourceHandle
   if (!sourceNodeId || sourceHandle !== 'source') return null
 
   const excludedNodeIds = new Set(excludedNodeIdsOverride ?? [sourceNodeId])
@@ -610,52 +603,6 @@ function findNodeBodyAtPoint(clientX: number, clientY: number, excludedNodeIds: 
 }
 
 
-/** 从节点拖出连线后弹出"选择目标节点类型"菜单 */
-function createTempConnectionMenu(point: { x: number; y: number }, sourceNodeId: string, sourceHandle: string) {
-  if (sourceHandle !== 'source' && sourceHandle !== 'target') return
-
-  const flowPosition = toFlowPosition(point.x, point.y)
-  const tempNodeId = `temp-target-${Date.now()}`
-  const tempEdgeId = `temp-edge-${sourceNodeId}-${Date.now()}`
-  const isReverseConnection = sourceHandle === 'target'
-
-  vueFlowInstance.addNodes([{
-    id: tempNodeId,
-    type: 'tempTarget',
-    position: flowPosition,
-    data: { isTemp: true },
-    sourcePosition: isReverseConnection ? Position.Right : undefined,
-    targetPosition: isReverseConnection ? undefined : Position.Left,
-    draggable: false,
-    selectable: false,
-  } as Node])
-
-  vueFlowInstance.addEdges([{
-    id: tempEdgeId,
-    type: 'custom',
-    source: isReverseConnection ? tempNodeId : sourceNodeId,
-    target: isReverseConnection ? sourceNodeId : tempNodeId,
-    sourceHandle: isReverseConnection ? 'source' : sourceHandle,
-    targetHandle: isReverseConnection ? sourceHandle : 'target',
-    selectable: false,
-    zIndex: 99999,
-    data: {
-      ...makeEdgeData(),
-      isTemp: true,
-    },
-  } as Edge])
-
-  manager.eventBus.emit("connectionContextMenu", {
-    clientX: point.x,
-    clientY: point.y,
-    sourceNodeId,
-    sourceHandle,
-    tempNodeId,
-    tempEdgeId,
-    flowPosition,
-  })
-}
-
 /** 在屏幕坐标附近查找最近的可连线源节点（考虑吸附区域） */
 function findNearestValidSource(clientX: number, clientY: number, targetNodeIds: Set<string>) {
   let bestNode: Node | null = null
@@ -711,12 +658,9 @@ function removeBatchTempConnection(batch = batchConnectState.value) {
 /** 重置批量连线状态并解绑全局事件 */
 function resetBatchConnectState() {
   batchConnectState.value = null
-  canvas.connectionState.isConnecting = false
-  canvas.connectionState.sourceNodeId = null
-  canvas.connectionState.sourceHandle = null
+  canvas.connectionState.activeConnection = null
   canvas.connectionState.suppressHandles = true
-  canvas.connectionState.hoverFeedbackNodeId = null
-  canvas.connectionState.hoverFeedbackPoint = null
+  canvas.connectionState.hoverNode = null
   clearInvalidConnectionFeedback()
   document.removeEventListener('mousemove', onBatchConnectMove)
   document.removeEventListener('mouseup', onBatchConnectEnd)
@@ -770,9 +714,22 @@ function updateBatchConnectFeedback(point: { x: number; y: number }) {
   }
 
   const flowPoint = feedbackNode ? toFlowPosition(point.x, point.y) : null
-  canvas.connectionState.hoverFeedbackNodeId = invalidNode ? null : feedbackNode?.id ?? null
-  canvas.connectionState.hoverFeedbackPoint = invalidNode ? null : flowPoint
-  setInvalidConnectionFeedback(invalidNode?.id ?? null, invalidNode ? flowPoint : null)
+  if (invalidNode) {
+    canvas.connectionState.hoverNode = {
+      nodeId: invalidNode.id,
+      status: 'invalid',
+      flowPosition: flowPoint || { x: 0, y: 0 },
+      message: '无法连接',
+    }
+  } else if (feedbackNode) {
+    canvas.connectionState.hoverNode = {
+      nodeId: feedbackNode.id,
+      status: 'valid',
+      flowPosition: flowPoint || { x: 0, y: 0 },
+    }
+  } else {
+    canvas.connectionState.hoverNode = null
+  }
 }
 
 /** 批量连线结束：创建实际连线或取消 */
@@ -872,12 +829,14 @@ function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'sourc
     tempEdgeIds,
   }
 
-  canvas.connectionState.isConnecting = true
-  canvas.connectionState.sourceNodeId = payload.type === 'source' ? activeNodes[0].id : tempNodeId
-  canvas.connectionState.sourceHandle = 'source'
+  canvas.connectionState.activeConnection = {
+    sourceNodeId: payload.type === 'source' ? activeNodes[0].id : tempNodeId,
+    sourceHandle: 'source',
+  }
   canvas.connectionState.suppressHandles = true
-  canvas.connectionState.hoverFeedbackNodeId = null
-  canvas.connectionState.hoverFeedbackPoint = null
+  canvas.connectionState.hoverNode = null
+  canvas.connectionState.hoverTarget = null
+  canvas.connectionState.snapTarget = null
   clearInvalidConnectionFeedback()
 
   document.addEventListener('mousemove', onBatchConnectMove)
@@ -886,16 +845,19 @@ function onSelectionBatchConnectStart(payload: { event: MouseEvent; type: 'sourc
   document.addEventListener('pointercancel', cancelBatchConnect)
 }
 
-/** VueFlow connectEnd 事件：连线结束时尝试吸附目标或弹出菜单 */
+/** VueFlow connectEnd 事件：处理 snap/body hit 连线，设置 hoverTarget/snapTarget 供插件判定 */
 function onConnectEnd(event?: MouseEvent | TouchEvent) {
   const point = getMousePoint(event)
-  const sourceNodeId = canvas.connectionState.sourceNodeId
-  const sourceHandle = canvas.connectionState.sourceHandle
+  const active = canvas.connectionState.activeConnection
 
   try {
-    // 如果已经精确连到了 Handle，@connect 会先创建边，这里不要再抢着处理。
-    if (!point || !sourceNodeId || !sourceHandle || Date.now() - lastNativeConnectAt < 80) return
+    if (!point || !active) return
+    // 如果已经精确连到了 Handle，@connect 会先创建边，这里不要再抢着处理
+    if (Date.now() - lastNativeConnectAt < 80) return
 
+    const { sourceNodeId, sourceHandle } = active
+
+    // 1. 尝试吸附连接（snap target）
     const targetNode = findNearestConnectableNode(point.x, point.y, sourceHandle, sourceNodeId)
     if (targetNode) {
       const connection = sourceHandle === 'target'
@@ -911,12 +873,17 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
           sourceHandle,
           targetHandle: 'target',
         }
-      if (getInvalidConnectionReason(connection)) return
+      if (getInvalidConnectionReason(connection)) {
+        canvas.connectionState.hoverTarget = { type: 'node', nodeId: targetNode.id }
+        canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
+        return
+      }
       createConnection(connection, 'snap')
+      canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
       return
     }
 
-    // 检查是否落在节点主体上（不是端口吸附区），如果是则直接连接
+    // 2. 检查是否落在节点主体上（body hit）
     const bodyNode = findNodeBodyAtPoint(point.x, point.y, [sourceNodeId])
     if (bodyNode) {
       const connection = sourceHandle === 'target'
@@ -932,20 +899,21 @@ function onConnectEnd(event?: MouseEvent | TouchEvent) {
           sourceHandle,
           targetHandle: 'target',
         }
-      if (getInvalidConnectionReason(connection)) return
+      if (getInvalidConnectionReason(connection)) {
+        canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
+        return
+      }
       createConnection(connection, 'snap')
+      canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
       return
     }
 
-    createTempConnectionMenu(point, sourceNodeId, sourceHandle)
+    // 3. 拖到空白：设置 hoverTarget 为 pane，由 ContextMenuPlugin 的 canShowMenu 判定弹菜单
+    canvas.connectionState.hoverTarget = { type: 'pane' }
+    canvas.connectionState.snapTarget = null
   } finally {
-    canvas.connectionState.isConnecting = false
-    canvas.connectionState.sourceNodeId = null
-    canvas.connectionState.sourceHandle = null
     canvas.connectionState.suppressHandles = true
-    canvas.connectionState.hoverFeedbackNodeId = null
-    canvas.connectionState.hoverFeedbackPoint = null
-    clearInvalidConnectionFeedback()
+    canvas.connectionState.hoverNode = null
   }
 }
 
@@ -1040,8 +1008,8 @@ function getNodeCardFlowRect(nodeId: string, fallbackPosition: { x: number; y: n
 
 /** 构建拖拽连线时的吸附区域和反馈数据 */
 function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
-  const sourceId = connectionLineProps.sourceNode?.id || canvas.connectionState.sourceNodeId || '__source__'
-  const startHandle = canvas.connectionState.sourceHandle || (connectionLineProps as any).sourceHandleId || 'source'
+  const sourceId = connectionLineProps.sourceNode?.id || canvas.connectionState.activeConnection?.sourceNodeId || '__source__'
+  const startHandle = canvas.connectionState.activeConnection?.sourceHandle || (connectionLineProps as any).sourceHandleId || 'source'
   const isReverseConnection = startHandle === 'target'
   const handleRadius = canvas.state.core.handleRadius
   const snapOuter = handleRadius * canvas.state.core.connectionSnapOuterRatio
@@ -1205,29 +1173,23 @@ function buildConnectionEdgeProps(connectionLineProps: ConnectionLineProps) {
   const nextFeedbackPoint = effectiveFeedbackNodeId
     ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
     : null
-  const currentFeedbackPoint = canvas.connectionState.hoverFeedbackPoint
-  const nextFeedbackNodeId = effectiveFeedbackNodeId
-  const feedbackChanged =
-    canvas.connectionState.hoverFeedbackNodeId !== nextFeedbackNodeId ||
-    currentFeedbackPoint?.x !== nextFeedbackPoint?.x ||
-    currentFeedbackPoint?.y !== nextFeedbackPoint?.y
+  const currentHover = canvas.connectionState.hoverNode
+  const hoverChanged =
+    currentHover?.nodeId !== effectiveFeedbackNodeId ||
+    currentHover?.flowPosition?.x !== nextFeedbackPoint?.x ||
+    currentHover?.flowPosition?.y !== nextFeedbackPoint?.y
 
-  if (feedbackChanged) {
-    canvas.connectionState.hoverFeedbackNodeId = nextFeedbackNodeId
-    canvas.connectionState.hoverFeedbackPoint = nextFeedbackPoint
-  }
-
-  const invalidPoint = invalidNodeId
-    ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY }
-    : null
-  const invalidReason = invalidNodeId ? '无法连接' : ''
-  const invalidChanged =
-    canvas.connectionState.invalidFeedbackNodeId !== invalidNodeId ||
-    canvas.connectionState.invalidFeedbackPoint?.x !== invalidPoint?.x ||
-    canvas.connectionState.invalidFeedbackPoint?.y !== invalidPoint?.y
-
-  if (invalidChanged) {
-    setInvalidConnectionFeedback(invalidNodeId, invalidPoint, invalidReason)
+  if (hoverChanged) {
+    if (effectiveFeedbackNodeId && nextFeedbackPoint) {
+      canvas.connectionState.hoverNode = {
+        nodeId: effectiveFeedbackNodeId,
+        status: invalidNodeId ? 'invalid' : 'valid',
+        flowPosition: nextFeedbackPoint,
+        message: invalidNodeId ? '无法连接' : undefined,
+      }
+    } else {
+      canvas.connectionState.hoverNode = null
+    }
   }
 
   return {
@@ -1612,7 +1574,7 @@ onUnmounted(async () => {
         :multi-selection-key-code="'Shift'" fit-view-on-init :is-valid-connection="isValidConnection"
         :auto-connect="false" @connect="onConnect($event); manager.eventBus.emit('connect', $event)"
         @connect-start="onConnectStart($event); manager.eventBus.emit('connectStart', $event)"
-        @connect-end="onConnectEnd($event); manager.eventBus.emit('connectEnd', $event)"
+        @connect-end="onConnectEnd($event); manager.eventBus.emit('connectEnd', $event); canvas.connectionState.activeConnection = null"
         @nodes-change="onNodesChange($event); manager.eventBus.emit('nodesChange', $event)"
         @edges-change="onEdgesChange($event); manager.eventBus.emit('edgesChange', $event)"
         @node-drag="manager.eventBus.emit('nodeDrag', $event)"
