@@ -10,7 +10,7 @@ defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const nodeId = inject(NodeIdInjection, null) as string | null
 
-const { getEdges, findNode } = useVueFlow({ id: undefined as any })
+const { getEdges, findNode } = useVueFlow()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const fullscreenContainerRef = ref<HTMLDivElement | null>(null)
