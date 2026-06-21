@@ -6,6 +6,7 @@ import { ConnectionMode, SelectionMode } from '@vue-flow/core'
 import CustomNode from '../components/CustomNode.vue'
 import TempTargetNode from '../components/TempTargetNode.vue'
 import CustomEdge from '../components/CustomEdge.vue'
+import type { ConnectionState } from '../plugins/types'
 
 /**
  * 连接线类型：
@@ -219,20 +220,15 @@ export const useCanvasStore = defineStore('canvasState', () => {
   }
 
   // ==================== 连线拖拽状态（不持久化） ====================
-  const connectionState = ref({
-    isConnecting: false,
-    sourceNodeId: null as string | null,
-    sourceHandle: null as string | null,
+  const connectionState = ref<ConnectionState>({
+    activeConnection: null,
+    hoverNode: null,
+    snapTarget: null,
+    mouseFlowPosition: null,
+    mouseScreenPosition: null,
+    hoverTarget: null,
+    tempConnection: null,
     suppressHandles: false,
-    /** 拖线时，鼠标正落在哪个节点的"反馈区"（节点主体 + 端口半圆） */
-    hoverFeedbackNodeId: null as string | null,
-    /** 拖线时鼠标在画布坐标里的位置，用来让目标节点做 3D 跟随 */
-    hoverFeedbackPoint: null as { x: number; y: number } | null,
-    /** 拖线时如果悬停节点不能连接，这里记录该节点，用于显示禁止状态 */
-    invalidFeedbackNodeId: null as string | null,
-    /** 禁止连接提示的位置（画布坐标） */
-    invalidFeedbackPoint: null as { x: number; y: number } | null,
-    invalidFeedbackMessage: '' as string,
   })
 
   // ==================== 选中状态（不持久化） ====================
@@ -315,6 +311,19 @@ export const useCanvasStore = defineStore('canvasState', () => {
     return true
   }
 
+  /** 是否正在拖线（派生） */
+  const isConnecting = computed(() => connectionState.value.activeConnection !== null)
+
+  /** 是否可以弹出"拖到空白"的节点选择菜单（核心判定） */
+  const canShowConnectionMenu = computed(() => {
+    const s = connectionState.value
+    if (!s.activeConnection) return false
+    if (s.hoverTarget?.type !== 'pane') return false
+    if (s.snapTarget?.isSnapped) return false
+    if (s.tempConnection) return false
+    return true
+  })
+
   return {
     state,
     nodeTypes,
@@ -324,6 +333,8 @@ export const useCanvasStore = defineStore('canvasState', () => {
     registerCustomNodeType,
     registerCustomEdgeType,
     connectionState,
+    isConnecting,
+    canShowConnectionMenu,
     selectionState,
     setSelectedNodeIds,
     setSelectedEdgeIds,
