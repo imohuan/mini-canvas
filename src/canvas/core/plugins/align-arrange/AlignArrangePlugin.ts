@@ -36,8 +36,10 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
       const selectedNodes = allNodes.filter(n => selectedIds.has(n.id))
       if (selectedNodes.length < 2) return
 
+      // 始终使用 position（相对坐标），与 updateNode 写入的坐标系一致
+      // computedPosition 是绝对坐标（含父级偏移），直接写回 position 会漂移
       const nodeRects = selectedNodes.map(n => {
-        const pos = (n as any).computedPosition?.x !== undefined ? (n as any).computedPosition : n.position
+        const pos = n.position
         const dim = getNodeDim(n)
         return { id: n.id, x: pos.x, y: pos.y, w: dim.w, h: dim.h }
       })
@@ -56,6 +58,27 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
       logger.info(`排列完成: ${newPositions.size} 个节点, 方向=${direction}`)
     }
 
+    // VueFlow 内置方向键微移（nudge），不检查 Ctrl 修饰键。
+    // Ctrl+Arrow 时 VueFlow 的 NodesSelection + NodeWrapper keydown handler
+    // 会先于 ShortcutManager 触发（它们在子元素上，事件冒泡先经过），
+    // 导致每次排列附带 1~2px 漂移。
+    // 解决方案：capture 阶段拦截 Ctrl+Arrow，阻止事件传播到 VueFlow 子元素。
+    const arrowDirectionMap: Record<string, ArrangeDirection> = {
+      ArrowLeft: 'ArrowLeft',
+      ArrowRight: 'ArrowRight',
+      ArrowUp: 'ArrowUp',
+      ArrowDown: 'ArrowDown',
+    }
+    function captureCtrlArrow(e: KeyboardEvent) {
+      if (!e.ctrlKey || e.shiftKey || e.altKey || e.metaKey) return
+      const direction = arrowDirectionMap[e.key]
+      if (!direction) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      arrange(direction)
+    }
+    document.addEventListener('keydown', captureCtrlArrow, true)
+
     context.registerShortcut('ctrl+arrowleft', () => { arrange('ArrowLeft'); return true }, '向左排列节点')
     context.registerShortcut('ctrl+arrowright', () => { arrange('ArrowRight'); return true }, '向右排列节点')
     context.registerShortcut('ctrl+arrowup', () => { arrange('ArrowUp'); return true }, '向上排列节点')
@@ -66,11 +89,12 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
       setGap(gap: number) { gapRef.value = gap },
       getConfig() { return { gap: gapRef.value, debug: config.debug } },
     }
-    logger.info('AlignArrangePlugin v0.1.0 ready (Ctrl+方向键 排列)')
+    logger.info('AlignArrangePlugin v0.1.0 ready (Ctrl+方向键 排列, capture intercept)')
 
     return {
       api,
       uninstall() {
+        document.removeEventListener('keydown', captureCtrlArrow, true)
         try { context.unregisterShortcut('ctrl+arrowleft') } catch (_e) { /* ignore */ }
         try { context.unregisterShortcut('ctrl+arrowright') } catch (_e) { /* ignore */ }
         try { context.unregisterShortcut('ctrl+arrowup') } catch (_e) { /* ignore */ }
