@@ -44,6 +44,8 @@ export interface CanvasStoreAPI {
   set(key: string, value: unknown): void
   watch(key: string, callback: (val: unknown) => void): () => void
   getState(): Record<string, unknown>
+  /** 返回与 store 中指定 key 双向绑定的 Ref（底层是 computed），自动走 plugins.<pluginName> 命名空间 */
+  toRef<T>(key: string, defaultValue: T): Ref<T>
 }
 
 export interface SelectionOptions {

@@ -2,6 +2,7 @@ import type { CanvasPlugin, PluginContext } from '../types'
 import type { PanelSettingDefinition } from '../../registry/types'
 import type { ArrangeDirection, AlignArrangeConfig, AlignArrangeAPI } from './types'
 import { computeArrange } from './arrangeEngine'
+import { watch } from 'vue'
 
 const DEFAULT_CONFIG: AlignArrangeConfig = { gap: 20, debug: false }
 
@@ -16,9 +17,16 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
     context.panels.registerSetting('align-arrange', {
       id: 'align-arrange.gap', title: '排列间距',
       description: 'Ctrl+方向键排列节点时的间距',
-      type: 'slider', group: '布局', order: 70,
+      type: 'slider', group: '布局 Align-Arrange', order: 70,
       defaultValue: config.gap, min: 0, max: 100, step: 1,
     } as PanelSettingDefinition)
+
+    // store 参数应传 canvas.state ({ core, plugins })，不是 context.store (CanvasStoreAPI)
+    // 传 null 让 PluginContext 自动用 canvasState 兜底
+    const gapRef = context.store.toRef('gap', config.gap)
+    watch(gapRef, () => {
+      console.log(111, gapRef.value);
+    })
 
     function getNodeDim(node: any): { w: number; h: number } {
       return {

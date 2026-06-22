@@ -509,6 +509,10 @@ export class PluginManager {
           stubWarn('store.getState')
           return {}
         },
+        toRef: <T>(_key: string, _defaultValue: T) => {
+          stubWarn('store.toRef')
+          return { value: _defaultValue } as any
+        },
       },
       actions: {
         addNodes: (_nodes) => stubWarn('actions.addNodes'),
@@ -608,7 +612,6 @@ export class PluginManager {
         unregisterSource: (_source: string) => stubWarn('panels.unregisterSource'),
         getAll: () => [],
         getBySource: () => [],
-        useValue: () => null,
       },
       on: (_event, _handler) => {
         stubWarn('on')

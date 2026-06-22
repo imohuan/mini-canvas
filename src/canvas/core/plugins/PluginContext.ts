@@ -1,5 +1,5 @@
 ﻿import type { Component, Ref, ComputedRef } from 'vue'
-import { watch } from 'vue'
+import { watch, computed } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 import type {
   PluginContext,
@@ -130,8 +130,6 @@ interface CreatePluginContextOptions {
   isConnecting?: ComputedRef<boolean>
   /** 是否可弹连线菜单 computed */
   canShowConnectionMenu?: ComputedRef<boolean>
-  /** canvas.state 引用，供 useValue 使用 */
-  canvasState?: { core: Record<string, unknown>; plugins: Record<string, Record<string, unknown>> }
 }
 
 // ============================================================================
@@ -152,7 +150,6 @@ export function createPluginContext(
     commandRegistry,
     toolbarRegistry,
     panelRegistry,
-    canvasState,
     pluginManager,
     connectionState: connectionStateRef,
     isConnecting: isConnectingComputed,
@@ -398,7 +395,6 @@ export function createPluginContext(
       unregisterSource(source: string) { panelRegistry?.unregisterSource(source) },
       getAll() { return panelRegistry?.getAll() ?? [] },
       getBySource(source: string) { return panelRegistry?.getBySource(source) ?? [] },
-      useValue<T>(id: string, store: any, defaultValue: T) { return panelRegistry?.useValue<T>(id, store ?? canvasState as any, defaultValue) ?? (null as any) },
     },
 
     on: contextOn,
@@ -550,6 +546,18 @@ function createPluginStore(
         logger.error('store.getState() failed:', err)
         return {}
       }
+    },
+
+    toRef<T>(key: string, defaultValue: T): Ref<T> {
+      ensureNamespace()
+      const ns = canvasStore.state.plugins[pluginName]
+      if (!(key in ns)) {
+        ns[key] = defaultValue
+      }
+      return computed<T>({
+        get: () => ns[key] as T,
+        set: (val: T) => { ns[key] = val },
+      }) as Ref<T>
     },
   }
 }

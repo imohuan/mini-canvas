@@ -1385,7 +1385,6 @@ onMounted(async () => {
         vueFlowInstance: vueFlowInstance as any,
         canvasStore: canvas,
         pluginManager: manager,
-        canvasState: canvas.state as any,
         connectionState,
         isConnecting,
         canShowConnectionMenu,

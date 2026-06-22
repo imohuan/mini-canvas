@@ -11,12 +11,12 @@ export const MiniMapPlugin: CanvasPlugin = {
     let appInstance: ReturnType<typeof createApp> | null = null
     let containerEl: HTMLDivElement | null = null
 
-    // 用 useValue 获取响应式配置（双向绑定到 panel）
-    const widthRef = context.panels.useValue<number>("mini-map.width", null, 240)
-    const heightRef = context.panels.useValue<number>("mini-map.height", null, 160)
-    const sensXRef = context.panels.useValue<number>("mini-map.sensitivityX", null, 1)
-    const sensYRef = context.panels.useValue<number>("mini-map.sensitivityY", null, 1)
-    const visibleRef = context.panels.useValue<boolean>("mini-map.visible", null, true)
+    // 用 store.toRef 获取响应式配置（双向绑定到 panel）
+    const widthRef = context.store.toRef<number>("width", 240)
+    const heightRef = context.store.toRef<number>("height", 160)
+    const sensXRef = context.store.toRef<number>("sensitivityX", 1)
+    const sensYRef = context.store.toRef<number>("sensitivityY", 1)
+    const visibleRef = context.store.toRef<boolean>("visible", true)
 
     // ---- 注册 Panel 设置 ----
     context.panels.registerSetting("mini-map", {
