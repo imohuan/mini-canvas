@@ -20,6 +20,8 @@ const props = defineProps<{
   nodes: Node[]
   /** VueFlow 实例（用于 updateNode 同步拖拽位置） */
   vfInstance: { updateNode(id: string, data: Partial<Omit<Node, 'id'>>): void; getNodes: { value: Node[] } }
+  /** 连接拖拽期间设为 true，禁止 SelectionFrame 拦截 pointer 事件 */
+  disablePointerEvents?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -258,7 +260,7 @@ onUnmounted(() => {
     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
     transformOrigin: '0 0',
   }">
-    <div v-if="canvasBounds" ref="selectionFrameRef" class="selection-frame" :class="{ 'is-dragging': isDragging }"
+    <div v-if="canvasBounds" ref="selectionFrameRef" class="selection-frame" :class="{ 'is-dragging': isDragging, 'pass-through': props.disablePointerEvents }"
       :style="canvasBounds ? {
         position: 'absolute',
         left: canvasBounds.x + 'px',
@@ -266,8 +268,9 @@ onUnmounted(() => {
         width: canvasBounds.width + 'px',
         height: canvasBounds.height + 'px',
         ...inverseViewportScaleStyle,
-      } : undefined" @mouseenter="isFrameHovered = true" @mouseleave="isFrameHovered = false"
-      @mousedown="handleMouseDown">
+      } : undefined"
+      @mouseenter="isFrameHovered = true" @mouseleave="isFrameHovered = false"
+      @mousedown="props.disablePointerEvents ? undefined : handleMouseDown($event)">
       <div v-if="innerBoundsStyle" class="selection-frame-inner-bounds" :style="innerBoundsStyle" />
 
       <BaseToolbar :node-ids="selectedNodeIds" toolbar-position="top" :extra-offset="canvas.state.core.selectionFramePaddingTop" />
@@ -360,6 +363,10 @@ onUnmounted(() => {
   border-color: rgba(148, 163, 184, 0.95);
   background: rgba(148, 163, 184, 0.1);
 }
+
+.selection-frame.pass-through {
+  pointer-events: none !important;
+}  
 
 .selection-frame.is-dragging .selection-frame-inner-bounds {
   border-color: rgba(96, 165, 250, 0.6);
