@@ -748,6 +748,10 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       forceFlow: true,
       targetX: endX,
       targetY: endY,
+      sourceHandleId: startHandle,
+      targetHandleId: isReverseConnection ? 'source' : 'target',
+      targetNode: connectionLineProps.targetNode || connectionLineProps.sourceNode || undefined as any,
+      sourceNode: connectionLineProps.sourceNode,
     } as any
   }
 
@@ -769,6 +773,10 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     canvas.connectionState.suppressHandles = true
     canvas.connectionState.hoverNode = null
     clearInvalidConnectionFeedback()
+    document.removeEventListener('mousemove', onBatchConnectMove)
+    document.removeEventListener('mouseup', onBatchConnectEnd)
+    window.removeEventListener('blur', cancelBatchConnect)
+    document.removeEventListener('pointercancel', cancelBatchConnect)
   }
 
   /** 取消批量连线 */
@@ -778,11 +786,40 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     resetBatchConnectState()
   }
 
-  /** 更新批量连线中临时目标节点位置 */
+  /** 更新批量连线中临时目标节点位置（含 snap 到端口） */
   function updateBatchTempTarget(point: Point) {
     const batch = batchConnectState.value
     if (!batch) return
-    const position = toFlowPosition(viewport.value, point.x, point.y)
+
+    // 只在吸附区域（端口附近的窄条）内才 snap
+    // 节点主体命中不 snap，只产生 3D 反馈（由 updateBatchConnectFeedback 处理）
+    let snapNode: Node | null = null
+    if (batch.type === 'source') {
+      const sourceNodeIds = new Set(batch.nodeIds)
+      snapNode = findNearestValidTarget(point.x, point.y, batch.nodeIds[0], sourceNodeIds)
+    } else {
+      const targetNodeIds = new Set(batch.nodeIds)
+      snapNode = findNearestValidSource(point.x, point.y, targetNodeIds)
+    }
+
+    let position: Point
+    if (snapNode) {
+      // snap 到目标节点的端口位置（和单条连线 buildConnectionEdgeProps 一致）
+      const size = getNodeSize(snapNode)
+      const anySnap = snapNode as any
+      const snapPos = anySnap.computedPosition || snapNode.position
+      const cardRect = getNodeCardFlowRect(snapNode.id, snapPos, size, viewport.value)
+      if (batch.type === 'source') {
+        // 目标节点的左侧端口（target handle）
+        position = { x: cardRect.x, y: cardRect.y + cardRect.height / 2 }
+      } else {
+        // 源节点的右侧端口（source handle）
+        position = { x: cardRect.x + cardRect.width, y: cardRect.y + cardRect.height / 2 }
+      }
+    } else {
+      // 不在吸附区域，跟鼠标走
+      position = toFlowPosition(viewport.value, point.x, point.y)
+    }
     updateNode(batch.tempNodeId, { position })
   }
 
@@ -811,14 +848,29 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         invalidNode = sourceNodes.some(sn => wouldCreateCycle(sn.id, feedbackNode!.id, getEdges.value as Edge[]))
           ? feedbackNode : null
       }
+      // 回退：节点主体命中
+      if (!feedbackNode) {
+        const bodyNode = findNodeBodyAtPoint(point.x, point.y, sourceNodeIds)
+        if (bodyNode && bodyNode.targetPosition) {
+          feedbackNode = bodyNode
+        }
+      }
     } else {
-      feedbackNode = findNearestValidSource(point.x, point.y, new Set(batch.nodeIds))
+      const targetNodeIds = new Set(batch.nodeIds)
+      feedbackNode = findNearestValidSource(point.x, point.y, targetNodeIds)
       if (feedbackNode) {
         const targetNodes = (getNodes.value as Node[]).filter(
           node => batch.nodeIds.includes(node.id) && node.targetPosition,
         )
         invalidNode = targetNodes.some(tn => wouldCreateCycle(feedbackNode!.id, tn.id, getEdges.value as Edge[]))
           ? feedbackNode : null
+      }
+      // 回退：节点主体命中
+      if (!feedbackNode) {
+        const bodyNode = findNodeBodyAtPoint(point.x, point.y, targetNodeIds)
+        if (bodyNode && bodyNode.sourcePosition) {
+          feedbackNode = bodyNode
+        }
       }
     }
 
@@ -856,6 +908,9 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         const sourceNodes = (getNodes.value as Node[]).filter(
           node => batch.nodeIds.includes(node.id) && node.sourcePosition,
         )
+        const sourceNodeIds = new Set(batch.nodeIds)
+
+        // 1. 尝试吸附
         const targetNode = sourceNodes.length > 0
           ? findNearestValidTarget(point.x, point.y, sourceNodes[0].id, sourceNodes.map(n => n.id))
           : null
@@ -867,6 +922,18 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
               sourceHandle: 'source', targetHandle: 'target',
             }, 'selection-batch')
           }
+          return
+        }
+
+        // 2. 回退：节点主体命中（和单条连接线行为一致）
+        const bodyNode = findNodeBodyAtPoint(point.x, point.y, sourceNodeIds)
+        if (bodyNode && bodyNode.targetPosition) {
+          for (const sourceNode of sourceNodes) {
+            createConnection({
+              source: sourceNode.id, target: bodyNode.id,
+              sourceHandle: 'source', targetHandle: 'target',
+            }, 'selection-batch')
+          }
         }
         return
       }
@@ -874,11 +941,26 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       const targetNodes = (getNodes.value as Node[]).filter(
         node => batch.nodeIds.includes(node.id) && node.targetPosition,
       )
+      const targetNodeIds = new Set(batch.nodeIds)
+
+      // 1. 尝试吸附
       const sourceNode = findNearestValidSource(point.x, point.y, new Set(targetNodes.map(n => n.id)))
       if (sourceNode) {
         for (const targetNode of targetNodes) {
           createConnection({
             source: sourceNode.id, target: targetNode.id,
+            sourceHandle: 'source', targetHandle: 'target',
+          }, 'selection-batch')
+        }
+        return
+      }
+
+      // 2. 回退：节点主体命中
+      const bodySource = findNodeBodyAtPoint(point.x, point.y, targetNodeIds)
+      if (bodySource && bodySource.sourcePosition) {
+        for (const targetNode of targetNodes) {
+          createConnection({
+            source: bodySource.id, target: targetNode.id,
             sourceHandle: 'source', targetHandle: 'target',
           }, 'selection-batch')
         }
@@ -939,6 +1021,12 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     canvas.connectionState.hoverNode = null
     canvas.connectionState.hoverTarget = null
     canvas.connectionState.snapTarget = null
+
+    // 绑定全局鼠标事件 — 跟着鼠标移动更新临时节点位置
+    document.addEventListener('mousemove', onBatchConnectMove)
+    document.addEventListener('mouseup', onBatchConnectEnd)
+    window.addEventListener('blur', cancelBatchConnect)
+    document.addEventListener('pointercancel', cancelBatchConnect)
   }
 
   // ==========================================================================

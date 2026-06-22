@@ -89,6 +89,11 @@ const canvasContainerSize = ref({ width: 0, height: 0 })
 let canvasResizeObserver: ResizeObserver | null = null
 
 // ========================
+// 插件管理器（提前创建，供 composable 使用 eventBus）
+// ========================
+const manager = new PluginManager()
+
+// ========================
 // 连接线 Core Composable
 // ========================
 const conn = useCanvasConnection({
@@ -100,6 +105,7 @@ const conn = useCanvasConnection({
   removeEdges: (ids: string[]) => vueFlowInstance.removeEdges(ids),
   updateNode: (id: string, data: Partial<Omit<Node, 'id'>>) => vueFlowInstance.updateNode(id, data),
   viewport: vueFlowInstance.viewport as any,
+  eventBus: manager.eventBus,
 })
 
 const performanceEnabled = computed(() => canvas.state.core.performancePanelEnabled)
@@ -301,7 +307,7 @@ function syncVueFlowKeymap() {
 // ========================
 // 插件系统生命周期
 // ========================
-const manager = new PluginManager()
+// manager 已在上方提前创建（供 useCanvasConnection 使用 eventBus）
 /** 节点类型注册中心：管理可创建的节点类型 */
 const nodeRegistry = new NodeRegistry()
 /** 菜单注册中心：管理右键菜单项 */
@@ -595,7 +601,7 @@ onUnmounted(async () => {
 <template>
   <CanvasRuntimeProvider :runtime="runtime">
     <div ref="canvasContainerRef" class="canvas-container">
-      <VueFlow :id="CANVAS_ID" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
+      <VueFlow :id="CANVAS_ID" :class="{ 'is-batch-connecting': conn.batchConnectState.value !== null }" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
         :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
         :nodes-draggable="canvas.state.core.nodesDraggable" :nodes-connectable="canvas.state.core.nodesConnectable"
         :elements-selectable="canvas.state.core.elementsSelectable" :edges-updatable="canvas.state.core.edgesUpdatable"
@@ -676,10 +682,13 @@ body {
   user-select: none;
 }
 
-.vue-flow__edges {
-  /* z-index: 1 !important */
+.is-batch-connecting .vue-flow__edges {
+  z-index: 10 !important;
 }
-</style>
+
+.vue-flow__edges {
+  pointer-events: none;
+}</style>
 
 
 

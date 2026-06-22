@@ -1,10 +1,10 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-// import { installConsoleInterceptor } from './installConsoleInterceptor'
+import { installConsoleInterceptor } from './installConsoleInterceptor'
 import './style.css'
 import App from './App.vue'
 
-// installConsoleInterceptor()
+installConsoleInterceptor()
 
 const app = createApp(App)
 app.use(createPinia())
