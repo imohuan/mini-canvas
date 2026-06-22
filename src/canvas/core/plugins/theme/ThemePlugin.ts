@@ -20,6 +20,7 @@
  *
  * @event theme:changed — 主题变化时触发，携带完整 ThemeState
  */
+import { watch } from 'vue'
 import type { CanvasPlugin, PluginContext } from '../types'
 import type { ThemeOptions, ThemeAPI, ThemeState, ThemePresetName } from './types'
 import { getPreset, getPresetsList } from './themePresets'
@@ -107,6 +108,11 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
 
     writeState(store, initState)
 
+    // 用 toRef 双向绑定面板设置项
+    const presetRef = context.store.toRef<ThemePresetName>('activePreset', initState.activePreset)
+    const accentRef = context.store.toRef<string>('accent', initState.accent)
+    const surfaceRef = context.store.toRef<string>('surface', initState.surface)
+
     // 注册面板设置项
     const presetOptions = getPresetsList().map(p => ({ value: p.name, title: p.name }))
     context.panels.registerSetting('theme', {
@@ -114,8 +120,7 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
       title: '主题预设',
       description: '一键切换整体配色方案',
       type: 'select',
-      group: '主题',
-      order: 10,
+      group: '主题 theme',
       defaultValue: initState.activePreset,
       options: presetOptions,
     } as PanelSettingDefinition)
@@ -125,7 +130,7 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
       title: '强调色',
       description: '节点边框和高亮的主色调',
       type: 'color',
-      group: '主题',
+      group: '主题 theme',
       order: 20,
       defaultValue: initState.accent,
     } as PanelSettingDefinition)
@@ -135,7 +140,7 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
       title: '底色',
       description: '节点和面板的背景色',
       type: 'color',
-      group: '主题',
+      group: '主题 theme',
       order: 30,
       defaultValue: initState.surface,
     } as PanelSettingDefinition)
@@ -143,9 +148,10 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
     refreshTheme(store)
     logger.info(`Initialized with preset: ${initState.activePreset}, accent: ${initState.accent}`)
 
-    // 3. 监听关键字段变化 → 自动刷新
-    const unwatchAccent = store.watch('accent', () => refreshTheme(store))
-    const unwatchSurface = store.watch('surface', () => refreshTheme(store))
+    // 3. 用 toRef 的 watch 监听面板设置变化 → 自动刷新
+    const unwatchPreset = watch(presetRef, () => refreshTheme(store))
+    const unwatchAccent = watch(accentRef, () => refreshTheme(store))
+    const unwatchSurface = watch(surfaceRef, () => refreshTheme(store))
     const unwatchCustom = store.watch('customVariables', () => refreshTheme(store))
 
     // ====================================================================
@@ -246,6 +252,7 @@ export const ThemePlugin: CanvasPlugin<ThemeOptions, ThemeAPI> = {
         offApplyCustom()
         offSetVariable()
         offReset()
+        unwatchPreset()
         unwatchAccent()
         unwatchSurface()
         unwatchCustom()

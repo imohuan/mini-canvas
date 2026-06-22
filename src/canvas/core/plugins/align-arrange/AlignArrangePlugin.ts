@@ -2,7 +2,6 @@ import type { CanvasPlugin, PluginContext } from '../types'
 import type { PanelSettingDefinition } from '../../registry/types'
 import type { ArrangeDirection, AlignArrangeConfig, AlignArrangeAPI } from './types'
 import { computeArrange } from './arrangeEngine'
-import { watch } from 'vue'
 
 const DEFAULT_CONFIG: AlignArrangeConfig = { gap: 20, debug: false }
 
@@ -17,16 +16,11 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
     context.panels.registerSetting('align-arrange', {
       id: 'align-arrange.gap', title: '排列间距',
       description: 'Ctrl+方向键排列节点时的间距',
-      type: 'slider', group: '布局 Align-Arrange', order: 70,
+      type: 'slider', group: '排列 align-arrange', order: 70,
       defaultValue: config.gap, min: 0, max: 100, step: 1,
     } as PanelSettingDefinition)
 
-    // store 参数应传 canvas.state ({ core, plugins })，不是 context.store (CanvasStoreAPI)
-    // 传 null 让 PluginContext 自动用 canvasState 兜底
     const gapRef = context.store.toRef('gap', config.gap)
-    watch(gapRef, () => {
-      console.log(111, gapRef.value);
-    })
 
     function getNodeDim(node: any): { w: number; h: number } {
       return {
@@ -49,7 +43,7 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
       })
 
       const oldPositions = new Map(nodeRects.map(r => [r.id, { x: r.x, y: r.y }]))
-      const newPositions = computeArrange(nodeRects, direction, config.gap)
+      const newPositions = computeArrange(nodeRects, direction, gapRef.value)
 
       context.emit('history:record', {
         type: 'arrangeNodes',
@@ -69,8 +63,8 @@ export const AlignArrangePlugin: CanvasPlugin<Partial<AlignArrangeConfig>, Align
 
     const api: AlignArrangeAPI = {
       arrange,
-      setGap(gap: number) { config.gap = gap },
-      getConfig() { return { ...config } },
+      setGap(gap: number) { gapRef.value = gap },
+      getConfig() { return { gap: gapRef.value, debug: config.debug } },
     }
     logger.info('AlignArrangePlugin v0.1.0 ready (Ctrl+方向键 排列)')
 

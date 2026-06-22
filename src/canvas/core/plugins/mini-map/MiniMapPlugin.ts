@@ -21,31 +21,31 @@ export const MiniMapPlugin: CanvasPlugin = {
     // ---- 注册 Panel 设置 ----
     context.panels.registerSetting("mini-map", {
       id: "mini-map.width", title: "宽度", description: "小地图宽度（px）",
-      type: "slider", group: "小地图", order: 10,
+      type: "slider", group: "小地图 mini-map", order: 10,
       defaultValue: 240, min: 120, max: 400, step: 10,
     } as PanelSettingDefinition)
 
     context.panels.registerSetting("mini-map", {
       id: "mini-map.height", title: "高度", description: "小地图高度（px）",
-      type: "slider", group: "小地图", order: 20,
+      type: "slider", group: "小地图 mini-map", order: 20,
       defaultValue: 160, min: 80, max: 300, step: 10,
     } as PanelSettingDefinition)
 
     context.panels.registerSetting("mini-map", {
       id: "mini-map.sensitivityX", title: "X轴灵敏度", description: "拖拽时 X 轴移动倍率",
-      type: "slider", group: "小地图", order: 30,
+      type: "slider", group: "小地图 mini-map", order: 30,
       defaultValue: 1, min: 0.1, max: 3, step: 0.1,
     } as PanelSettingDefinition)
 
     context.panels.registerSetting("mini-map", {
       id: "mini-map.sensitivityY", title: "Y轴灵敏度", description: "拖拽时 Y 轴移动倍率",
-      type: "slider", group: "小地图", order: 40,
+      type: "slider", group: "小地图 mini-map", order: 40,
       defaultValue: 1, min: 0.1, max: 3, step: 0.1,
     } as PanelSettingDefinition)
 
     context.panels.registerSetting("mini-map", {
       id: "mini-map.visible", title: "显示小地图", description: "切换显示/隐藏",
-      type: "boolean", group: "小地图", order: 50,
+      type: "boolean", group: "小地图 mini-map", order: 50,
       defaultValue: true,
     } as PanelSettingDefinition)
 

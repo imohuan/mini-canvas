@@ -49,13 +49,26 @@ export const AutoLayoutPlugin: CanvasPlugin<
     const config: AutoLayoutConfig = { ...DEFAULT_CONFIG, ...options }
     let isLayouting = false
 
+    // 用 toRef 双向绑定面板设置项
+    const directionRef = context.store.toRef<AutoLayoutConfig['direction']>('direction', config.direction)
+    const intraSpacingXRef = context.store.toRef<number>('intraSpacingX', config.intraSpacing.x)
+    const intraSpacingYRef = context.store.toRef<number>('intraSpacingY', config.intraSpacing.y)
+    const interSpacingXRef = context.store.toRef<number>('interSpacingX', config.interSpacing.x)
+    const interSpacingYRef = context.store.toRef<number>('interSpacingY', config.interSpacing.y)
+    const focusHeightRatioRef = context.store.toRef<number>('focusHeightRatio', config.focusHeightRatio)
+
+    // 非面板配置，保留本地
+    let minZoom = config.minZoom
+    let maxZoom = config.maxZoom
+    let debug = config.debug
+
     // 注册面板设置项
     context.panels.registerSetting('auto-layout', {
       id: 'auto-layout.direction',
       title: '排列方向',
       description: '节点自动布局的走向',
       type: 'select',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 10,
       defaultValue: config.direction,
       options: [
@@ -71,7 +84,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       title: '组内水平间距',
       description: '同一组内节点之间的水平距离',
       type: 'slider',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 20,
       defaultValue: config.intraSpacing.x,
       min: 20,
@@ -84,7 +97,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       title: '组内垂直间距',
       description: '同一组内节点之间的垂直距离',
       type: 'slider',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 30,
       defaultValue: config.intraSpacing.y,
       min: 20,
@@ -97,7 +110,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       title: '组间水平间距',
       description: '不同组之间的水平距离',
       type: 'slider',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 40,
       defaultValue: config.interSpacing.x,
       min: 40,
@@ -110,7 +123,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       title: '组间垂直间距',
       description: '不同组之间的垂直距离',
       type: 'slider',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 50,
       defaultValue: config.interSpacing.y,
       min: 40,
@@ -123,7 +136,7 @@ export const AutoLayoutPlugin: CanvasPlugin<
       title: '聚焦高度占比',
       description: '聚焦节点时，节点占视口高度的比例',
       type: 'slider',
-      group: '布局',
+      group: '布局 auto-layout',
       order: 60,
       defaultValue: config.focusHeightRatio,
       min: 0.1,
@@ -139,7 +152,15 @@ export const AutoLayoutPlugin: CanvasPlugin<
     function run(configOverride?: AutoLayoutConfigPatch): void {
       if (isLayouting) { logger.warn('自动布局正在进行中，跳过重复调用'); return }
       isLayouting = true
-      const effectiveConfig = mergeAutoLayoutConfig(config, configOverride)
+      const effectiveConfig = mergeAutoLayoutConfig({
+        direction: directionRef.value,
+        intraSpacing: { x: intraSpacingXRef.value, y: intraSpacingYRef.value },
+        interSpacing: { x: interSpacingXRef.value, y: interSpacingYRef.value },
+        focusHeightRatio: focusHeightRatioRef.value,
+        minZoom,
+        maxZoom,
+        debug,
+      }, configOverride)
 
       const allNodes = context.actions.getNodes()
       const allEdges = context.actions.getEdges()
@@ -149,10 +170,10 @@ export const AutoLayoutPlugin: CanvasPlugin<
         return
       }
 
-      const debug = Boolean(effectiveConfig.debug)
+      const isDebug = Boolean(effectiveConfig.debug)
       const runId = `layout-${Date.now().toString(36)}`
       const log = (stage: string, payload: unknown) => {
-        if (!debug) return
+        if (!isDebug) return
         console.log(`[auto-layout][${runId}] ${stage}`, payload)
       }
 
@@ -402,9 +423,9 @@ export const AutoLayoutPlugin: CanvasPlugin<
         : calculateFocusZoom({
             boundsHeight: bounds.height,
             viewportHeight: size.height,
-            heightRatio: config.focusHeightRatio,
-            minZoom: config.minZoom,
-            maxZoom: config.maxZoom,
+            heightRatio: focusHeightRatioRef.value,
+            minZoom,
+            maxZoom,
           })
       context.viewport.setViewport(centerViewportOnBounds({
         bounds,
@@ -446,23 +467,31 @@ export const AutoLayoutPlugin: CanvasPlugin<
     // ==================================================================
 
     function getConfig(): AutoLayoutConfig {
-      return { ...config }
+      return {
+        direction: directionRef.value,
+        intraSpacing: { x: intraSpacingXRef.value, y: intraSpacingYRef.value },
+        interSpacing: { x: interSpacingXRef.value, y: interSpacingYRef.value },
+        focusHeightRatio: focusHeightRatioRef.value,
+        minZoom,
+        maxZoom,
+        debug,
+      }
     }
 
     function setConfig(partial: AutoLayoutConfigPatch): void {
-      if (partial.direction) config.direction = partial.direction
+      if (partial.direction) directionRef.value = partial.direction
       if (partial.intraSpacing) {
-        if (partial.intraSpacing.x !== undefined) config.intraSpacing.x = partial.intraSpacing.x
-        if (partial.intraSpacing.y !== undefined) config.intraSpacing.y = partial.intraSpacing.y
+        if (partial.intraSpacing.x !== undefined) intraSpacingXRef.value = partial.intraSpacing.x
+        if (partial.intraSpacing.y !== undefined) intraSpacingYRef.value = partial.intraSpacing.y
       }
       if (partial.interSpacing) {
-        if (partial.interSpacing.x !== undefined) config.interSpacing.x = partial.interSpacing.x
-        if (partial.interSpacing.y !== undefined) config.interSpacing.y = partial.interSpacing.y
+        if (partial.interSpacing.x !== undefined) interSpacingXRef.value = partial.interSpacing.x
+        if (partial.interSpacing.y !== undefined) interSpacingYRef.value = partial.interSpacing.y
       }
-      if (partial.focusHeightRatio !== undefined) config.focusHeightRatio = partial.focusHeightRatio
-      if (partial.minZoom !== undefined) config.minZoom = partial.minZoom
-      if (partial.maxZoom !== undefined) config.maxZoom = partial.maxZoom
-      if (partial.debug !== undefined) config.debug = partial.debug
+      if (partial.focusHeightRatio !== undefined) focusHeightRatioRef.value = partial.focusHeightRatio
+      if (partial.minZoom !== undefined) minZoom = partial.minZoom
+      if (partial.maxZoom !== undefined) maxZoom = partial.maxZoom
+      if (partial.debug !== undefined) debug = partial.debug
     }
 
     // ==================================================================
