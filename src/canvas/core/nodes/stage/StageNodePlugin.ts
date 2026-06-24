@@ -18,14 +18,14 @@ const switchBaseSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" 
 
 function noopCmd(ctx: CommandContext) { ctx.logger.debug('stage command stub:', ctx.node?.id) }
 
-/** 切换节点工具组：写入 node.data._toolbarGroup，BaseToolbar 自动响应重渲染 */
+/** 切换节点工具组：写入 _overlay._toolbarGroup，BaseToolbar 自动响应重渲染 */
 function switchToolbarGroup(ctx: CommandContext, group: string | undefined) {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
   if (!vf || !nodeId) return
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
-  vf.updateNode(nodeId, { data: { ...(node?.data ?? {}), _toolbarGroup: group } })
+  vf.updateNode(nodeId, { data: { ...(node?.data ?? {}), _overlay: { _toolbarGroup: group } } })
 }
 
 export const StageNodePlugin: CanvasPlugin = {
@@ -63,8 +63,8 @@ export const StageNodePlugin: CanvasPlugin = {
     context.toolbars.register('node:stage', { id: 'stage.layout', source: 'node:stage', commandId: 'stage.layout', position: 'top', title: '布局', icon: layoutSvg, nodeTypes: ['stage'], group: 'advanced', order: 10 })
     context.toolbars.register('node:stage', { id: 'stage.theme', source: 'node:stage', commandId: 'stage.theme', position: 'top', title: '主题', icon: themeSvg, nodeTypes: ['stage'], group: 'advanced', order: 20 })
     // 切换器（不标 group → 永远显示，用 visible 互斥省空间）
-    context.toolbars.register('node:stage', { id: 'stage.toAdvanced', source: 'node:stage', commandId: 'stage.toAdvanced', position: 'top', title: '高级', icon: switchAdvSvg, tooltip: '切换到高级工具组', nodeTypes: ['stage'], order: 0, visible: (ctx) => (ctx.node?.data as any)?._toolbarGroup !== 'advanced' })
-    context.toolbars.register('node:stage', { id: 'stage.toBasic', source: 'node:stage', commandId: 'stage.toBasic', position: 'top', title: '基础', icon: switchBaseSvg, tooltip: '切回基础工具组', nodeTypes: ['stage'], order: 0, visible: (ctx) => (ctx.node?.data as any)?._toolbarGroup === 'advanced' })
+    context.toolbars.register('node:stage', { id: 'stage.toAdvanced', source: 'node:stage', commandId: 'stage.toAdvanced', position: 'top', title: '高级', icon: switchAdvSvg, tooltip: '切换到高级工具组', nodeTypes: ['stage'], order: 0, visible: (ctx) => (ctx.node?.data as any)?._overlay?._toolbarGroup !== 'advanced' })
+    context.toolbars.register('node:stage', { id: 'stage.toBasic', source: 'node:stage', commandId: 'stage.toBasic', position: 'top', title: '基础', icon: switchBaseSvg, tooltip: '切回基础工具组', nodeTypes: ['stage'], order: 0, visible: (ctx) => (ctx.node?.data as any)?._overlay?._toolbarGroup === 'advanced' })
 
     // —— bottom toolbar（不标 group，始终显示，作对比）——
     context.toolbars.register('node:stage', { id: 'stage.export', source: 'node:stage', commandId: 'stage.export', position: 'bottom', title: '导出', icon: exportSvg, nodeTypes: ['stage'], order: 10 })

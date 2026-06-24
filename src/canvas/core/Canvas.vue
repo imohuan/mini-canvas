@@ -180,9 +180,21 @@ function onNodesChange(changes: any[]) {
   }
 }
 
-/** 画布空白处点击：清除所有选中 */
+/** 画布空白处点击：清除所有选中，同时退出所有节点的裁剪等临时模式 */
 function onPaneClick() {
+  // 遍历所有节点，删除 _overlay 退出临时模式（裁剪等）
+  for (const node of vueFlowInstance.getNodes.value) {
+    if (node.data?._overlay) {
+      const data = { ...node.data }
+      delete data._overlay
+      delete data._cropRect
+      delete data._cropMode
+      vueFlowInstance.updateNode(node.id, { data })
+    }
+  }
+
   if (canvas.selectionState.selectedNodeIds.size === 0 && canvas.selectionState.selectedEdgeIds.size === 0) return
+
   if (canvas.clearSelection()) {
     manager.eventBus.emit('selection:clear')
   }
@@ -240,10 +252,10 @@ function onNodeContextMenu({ event, node }: NodeMouseEvent) {
 }
 /** 画布右键事件：打开"添加节点"菜单 */
 function onPaneContextMenu(event: MouseEvent) {
-    event.preventDefault()
-    const flowPosition = toFlowPosition(event.clientX, event.clientY)
-    manager.eventBus.emit('paneContextMenu', { clientX: event.clientX, clientY: event.clientY, flowPosition })
-    console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
+  event.preventDefault()
+  const flowPosition = toFlowPosition(event.clientX, event.clientY)
+  manager.eventBus.emit('paneContextMenu', { clientX: event.clientX, clientY: event.clientY, flowPosition })
+  console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
 /** 边右键事件：打开边操作菜单 */
 function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
@@ -253,11 +265,11 @@ function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
 }
 /** 画布空白处双击：打开"添加节点"菜单 */
 function onPaneDoubleClick(event: MouseEvent) {
-    const target = event.target as HTMLElement
-    if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
-    const flowPosition = toFlowPosition(event.clientX, event.clientY)
-    manager.eventBus.emit('paneDoubleClick', { clientX: event.clientX, clientY: event.clientY, flowPosition })
-    console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
+  const target = event.target as HTMLElement
+  if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
+  const flowPosition = toFlowPosition(event.clientX, event.clientY)
+  manager.eventBus.emit('paneDoubleClick', { clientX: event.clientX, clientY: event.clientY, flowPosition })
+  console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
 // ========================
 // VueFlow 键位同步
@@ -601,8 +613,9 @@ onUnmounted(async () => {
 <template>
   <CanvasRuntimeProvider :runtime="runtime">
     <div ref="canvasContainerRef" class="canvas-container">
-      <VueFlow :id="CANVAS_ID" :class="{ 'is-batch-connecting': conn.batchConnectState.value !== null }" :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value"
-        :node-types="mergedNodeTypes" :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
+      <VueFlow :id="CANVAS_ID" :class="{ 'is-batch-connecting': conn.batchConnectState.value !== null }"
+        :nodes="vueFlowInstance.nodes.value" :edges="vueFlowInstance.edges.value" :node-types="mergedNodeTypes"
+        :edge-types="mergedEdgeTypes" :connection-mode="canvas.state.core.connectionMode"
         :nodes-draggable="canvas.state.core.nodesDraggable" :nodes-connectable="canvas.state.core.nodesConnectable"
         :elements-selectable="canvas.state.core.elementsSelectable" :edges-updatable="canvas.state.core.edgesUpdatable"
         :snap-to-grid="canvas.state.core.snapToGrid" :snap-grid="canvas.state.core.snapGrid"
@@ -661,8 +674,7 @@ onUnmounted(async () => {
       <!-- 多选背景框（2+ 节点选中时自动显示）
              读取 useCanvasStore.selectionState.selectedNodeIds + VueFlow getNodes -->
       <SelectionFrame v-if="canvas.selectionState.selectedNodeIds.size > 1" :nodes="vueFlowInstance.getNodes.value"
-        :viewport="vueFlowInstance.viewport.value" :vf-instance="vueFlowInstance"
-        :disable-pointer-events="isConnecting"
+        :viewport="vueFlowInstance.viewport.value" :vf-instance="vueFlowInstance" :disable-pointer-events="isConnecting"
         @pan="(vp: any) => vueFlowInstance.setViewport(vp)" @batch-connect-start="conn.onSelectionBatchConnectStart" />
     </div>
   </CanvasRuntimeProvider>
@@ -688,8 +700,5 @@ body {
 
 .vue-flow__edges {
   pointer-events: none;
-}</style>
-
-
-
-
+}
+</style>

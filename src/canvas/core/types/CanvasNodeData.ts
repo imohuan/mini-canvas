@@ -19,8 +19,6 @@ export interface BaseCanvasNodeData {
   cardWidth?: number
   cardHeight?: number
   resizable?: boolean
-  /** 当前激活的工具组 */
-  _toolbarGroup?: string
   /** 临时覆写状态（裁剪等模式），退出时 delete 一步恢复所有临时状态 */
   _overlay?: CanvasNodeOverlay
 }
