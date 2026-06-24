@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
 import { ref, computed, watch } from 'vue'
+import { useVueFlow } from '@vue-flow/core'
 import ImageCropper from './ImageCropper.vue'
 
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps<NodeProps>()
+const { updateNode } = useVueFlow()
 const error = ref(false)
 
-const isCropping = computed(() => (props.data?._cropMode as boolean) ?? false)
+// 裁剪模式 → 读 _overlay._cropMode，退出时 delete _overlay 一步恢复
+const isCropping = computed(() => props.data?._overlay?._cropMode === true)
+
+// 同步裁剪区域到 node.data._cropRect，供确认命令读取
+function onCropUpdate(rect: { x: number; y: number; width: number; height: number }) {
+  updateNode(props.id, { data: { ...props.data, _cropRect: rect } })
+}
 
 watch(
   () => props.data?.imageUrl,
@@ -40,6 +48,7 @@ watch(
       :image-url="data.imageUrl"
       :image-width="(data.imageWidth as number) || 0"
       :image-height="(data.imageHeight as number) || 0"
+      @update:crop="onCropUpdate"
     />
   </div>
 </template>

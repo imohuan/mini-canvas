@@ -275,15 +275,19 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .moving-handle-anchor {
-  position: absolute;
+  position: absolute !important;
   width: 1px;
   height: 1px;
+  top: 50% !important;
+  margin: 0 !important;
+  padding: 0 !important;
   border: 0;
   background: transparent;
   opacity: 1;
   pointer-events: all;
   z-index: 10;
-  transform: translateY(-50%);
+  /* 锁死 transform：覆盖 VueFlow Handle 注入的内联 transform */
+  transform: translateY(-50%) !important;
   overflow: visible;
 }
 

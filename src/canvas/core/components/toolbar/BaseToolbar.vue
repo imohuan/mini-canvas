@@ -29,9 +29,9 @@ const dataSnapshot = computed(() => props.data)
 // fallback 到 _toolbarGroup（常规分组）
 // 都为 undefined → 不做 group 过滤，全部显示（向后兼容）
 const activeGroup = computed(() => {
-  const overlay = (props.data as any)?._overlay as Record<string, any> | undefined
-  if (overlay?._toolbarGroup !== undefined) return overlay._toolbarGroup as string
-  return (props.data as any)?._toolbarGroup as string | undefined
+  const overlay = props.data?._overlay
+  if (overlay?._toolbarGroup !== undefined) return overlay._toolbarGroup
+  return props.data?._toolbarGroup as string | undefined
 })
 
 const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {

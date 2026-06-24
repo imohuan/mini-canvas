@@ -1,11 +1,28 @@
 ﻿export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | 'panorama' | (string & {})
 
+/** 临时覆写状态对象。进入特殊模式（裁剪等）时设此对象，退出时 delete 一步恢复。 */
+export interface CanvasNodeOverlay {
+  _cropMode?: boolean
+  _toolbarGroup?: string
+}
+
+export interface CropRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 export interface BaseCanvasNodeData {
   nodeType: CanvasNodeKind
   label?: string
   cardWidth?: number
   cardHeight?: number
   resizable?: boolean
+  /** 当前激活的工具组 */
+  _toolbarGroup?: string
+  /** 临时覆写状态（裁剪等模式），退出时 delete 一步恢复所有临时状态 */
+  _overlay?: CanvasNodeOverlay
 }
 
 export interface ImageNodeData extends BaseCanvasNodeData {
@@ -16,8 +33,6 @@ export interface ImageNodeData extends BaseCanvasNodeData {
   imageWidth?: number
   imageHeight?: number
   imageUrl?: string // runtime only, 保存前删除
-  _cropMode?: boolean // runtime only
-  _cropRect?: unknown // runtime only
 }
 
 export interface VideoNodeData extends BaseCanvasNodeData {
