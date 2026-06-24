@@ -24,10 +24,15 @@ const isMultiSelect = computed(() => !!(props.nodeIds && props.nodeIds.length))
 
 const dataSnapshot = computed(() => props.data)
 
-// 当前激活的工具组：存于 node.data._toolbarGroup，未设置时为 undefined
-// undefined → 不做 group 过滤（所有按钮都显示，向后兼容）
-// 设为某值 → 只显示匹配该 group 的按钮 + 没标 group 的按钮
-const activeGroup = computed(() => (props.data as any)?._toolbarGroup as string | undefined)
+// 当前激活的工具组：
+// 优先读取 _overlay._toolbarGroup（裁剪等临时状态切换）
+// fallback 到 _toolbarGroup（常规分组）
+// 都为 undefined → 不做 group 过滤，全部显示（向后兼容）
+const activeGroup = computed(() => {
+  const overlay = (props.data as any)?._overlay as Record<string, any> | undefined
+  if (overlay?._toolbarGroup !== undefined) return overlay._toolbarGroup as string
+  return (props.data as any)?._toolbarGroup as string | undefined
+})
 
 const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
   void dataSnapshot.value
