@@ -24,6 +24,11 @@ const isMultiSelect = computed(() => !!(props.nodeIds && props.nodeIds.length))
 
 const dataSnapshot = computed(() => props.data)
 
+// 当前激活的工具组：存于 node.data._toolbarGroup，未设置时为 undefined
+// undefined → 不做 group 过滤（所有按钮都显示，向后兼容）
+// 设为某值 → 只显示匹配该 group 的按钮 + 没标 group 的按钮
+const activeGroup = computed(() => (props.data as any)?._toolbarGroup as string | undefined)
+
 const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
   void dataSnapshot.value
   const all = runtime.toolbarRegistry.getByPosition(props.toolbarPosition)
@@ -35,6 +40,9 @@ const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
     if (btn.nodeTypes && btn.nodeTypes.length > 0 && nodeType.value) {
       if (!btn.nodeTypes.includes(nodeType.value)) return false
     }
+    // 工具组过滤：标了 group 的按钮，仅在节点设了 _toolbarGroup 且匹配时显示
+    // _toolbarGroup 未设（undefined）→ 跳过过滤，全部显示（向后兼容）
+    if (btn.group && activeGroup.value !== undefined && btn.group !== activeGroup.value) return false
     return true
   })
 })
