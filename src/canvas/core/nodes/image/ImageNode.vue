@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
 import { ref, computed, watch } from 'vue'
+import ImageCropper from './ImageCropper.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -32,5 +33,13 @@ watch(
         <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </div>
+
+    <ImageCropper
+      v-if="isCropping && data?.imageUrl"
+      :node-id="id"
+      :image-url="data.imageUrl"
+      :image-width="(data.imageWidth as number) || 0"
+      :image-height="(data.imageHeight as number) || 0"
+    />
   </div>
 </template>

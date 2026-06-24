@@ -21,8 +21,10 @@ const { viewport, findNode } = useVueFlow()
 const MIN_CROP = 20
 
 // ==================== Container tracking ====================
-const containerW = ref(256)
-const containerH = ref(256)
+// 独立 computed：直接依赖 nodeRect 和 zoom，和 wrapperStyle 并行计算
+// 不通过 side-effect 写入，避免了 zoom 变化时 display.scale 过期导致的拖拽弹回
+const containerW = computed(() => nodeRect.value.width * viewport.value.zoom)
+const containerH = computed(() => nodeRect.value.height * viewport.value.zoom)
 
 // Position computed via viewport transform (like NodeToolbar)
 const node = computed(() => findNode(props.nodeId))
@@ -31,7 +33,7 @@ const nodeRect = computed(() => {
   return n ? getRectOfNodes([n]) : { x: 0, y: 0, width: 256, height: 256 }
 })
 
-const zIndex = computed(() => (node.value?.computedPosition?.z || 1) + 10)
+const zIndex = computed(() => (node.value?.computedPosition?.z || 1) + 100)
 
 // Real-time position via viewport transform (follows pan/zoom)
 const wrapperStyle = computed<CSSProperties>(() => {
@@ -45,9 +47,6 @@ const wrapperStyle = computed<CSSProperties>(() => {
   const w = rect.width * z
   const h = rect.height * z
 
-  containerW.value = w
-  containerH.value = h
-
   return {
     position: 'fixed',
     left: `${left}px`,
@@ -56,7 +55,6 @@ const wrapperStyle = computed<CSSProperties>(() => {
     height: `${h}px`,
     zIndex: zIndex.value,
     borderRadius: '12px',
-    overflow: 'hidden',
     pointerEvents: 'auto',
   }
 })
@@ -177,16 +175,30 @@ function onPointerMove(e: PointerEvent) {
     const r = clamp(d.scX + dx, d.scY + dy, crop.w, crop.h)
     crop.x = r.x; crop.y = r.y
   } else {
-    const ax = d.dir.includes('w') ? d.scX + d.scW : d.scX
-    const ay = d.dir.includes('n') ? d.scY + d.scH : d.scY
+    // 正确的 resize 逻辑：固定对边，移动当前边
+    const right = d.scX + d.scW
+    const bottom = d.scY + d.scH
+    let nx = d.scX, ny = d.scY, nw = d.scW, nh = d.scH
 
-    let nx = d.dir.includes('w') ? Math.min(ax, d.scX + dx) : d.scX
-    let ny = d.dir.includes('n') ? Math.min(ay, d.scY + dy) : d.scY
-    let nw = d.dir.includes('w') || d.dir.includes('e') ? Math.abs(d.dir.includes('e') ? (d.scX + dx) - ax : ax - (d.scX + dx)) : d.scW
-    let nh = d.dir.includes('n') || d.dir.includes('s') ? Math.abs(d.dir.includes('s') ? (d.scY + dy) - ay : ay - (d.scY + dy)) : d.scH
+    // X 轴
+    if (d.dir.includes('w')) {
+      nx = Math.max(0, Math.min(d.scX + dx, right - MIN_CROP))
+      nw = right - nx
+    } else if (d.dir.includes('e')) {
+      nx = d.scX
+      nw = Math.max(MIN_CROP, Math.min(d.scW + dx, props.imageWidth - nx))
+    }
 
-    const r = clamp(nx, ny, nw, nh)
-    crop.x = r.x; crop.y = r.y; crop.w = r.w; crop.h = r.h
+    // Y 轴
+    if (d.dir.includes('n')) {
+      ny = Math.max(0, Math.min(d.scY + dy, bottom - MIN_CROP))
+      nh = bottom - ny
+    } else if (d.dir.includes('s')) {
+      ny = d.scY
+      nh = Math.max(MIN_CROP, Math.min(d.scH + dy, props.imageHeight - ny))
+    }
+
+    crop.x = nx; crop.y = ny; crop.w = nw; crop.h = nh
   }
 }
 
@@ -269,7 +281,6 @@ onMounted(() => {
   cursor: crosshair;
   touch-action: none;
   border-radius: 12px;
-  overflow: hidden;
 }
 
 .crop-letterbox {
