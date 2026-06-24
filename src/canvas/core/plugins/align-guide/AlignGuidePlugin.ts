@@ -48,6 +48,19 @@ export const AlignGuidePlugin: CanvasPlugin = {
   install(context: PluginContext, _options: Record<string, unknown>) {
     const logger = context.logger
 
+    // ====== Panel 开关：启用/禁用对齐辅助线 ======
+    context.panels.registerSetting('align-guide', {
+      id: 'align-guide.enabled',
+      source: 'align-guide',
+      title: '启用对齐辅助线',
+      description: '拖拽节点时显示对齐参考线并自动吸附对齐',
+      type: 'boolean',
+      group: '对齐 Align Guide',
+      order: 60,
+      defaultValue: true,
+    })
+    const enabledRef = context.store.toRef('enabled', true)
+
     /** 辅助线 DOM 容器（渲染在 viewport 外层） */
     let containerEl: HTMLDivElement | null = null
     /** 缓存的垂直辅助线元素（预创建，仅更新 CSS 以避免 DOM 重建闪烁） */
@@ -277,6 +290,7 @@ export const AlignGuidePlugin: CanvasPlugin = {
     // ====== 事件监听 ======
 
     const offNodeDrag = context.on('nodeDrag', ({ node }: any) => {
+      if (!enabledRef.value) return
       if (draggingNodeId !== null && draggingNodeId !== node.id) return
       draggingNodeId = node.id
 
@@ -286,6 +300,7 @@ export const AlignGuidePlugin: CanvasPlugin = {
     })
 
     const offNodeDragStart = context.on('nodeDragStart', ({ node }: any) => {
+      if (!enabledRef.value) return
       draggingNodeId = node.id
       // 锁定拖拽起始时的 dimensions，整个拖拽期间只用这个值
       const dims = node.dimensions
