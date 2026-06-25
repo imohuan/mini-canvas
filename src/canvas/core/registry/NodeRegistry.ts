@@ -19,6 +19,10 @@ export interface CanvasNodeDefinition {
   menuItem: NodeMenuItemDefinition
   canReceiveInput?: boolean
   resizable?: boolean
+  /** 自定义 top toolbar 组件，不传则使用默认 BaseToolbar */
+  topToolbar?: Component
+  /** 自定义 bottom toolbar 组件，不传则使用默认 BaseToolbar */
+  bottomToolbar?: Component
 }
 
 export interface CanvasNodeMenuItem {

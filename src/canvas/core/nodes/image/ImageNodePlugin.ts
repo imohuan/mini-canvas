@@ -2,6 +2,7 @@
 import type { Node } from '@vue-flow/core'
 import { ImageNode } from './index'
 import ImageUploadButton from './ImageUploadButton.vue'
+import ImageBottomToolbar from './ImageBottomToolbar.vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
 import type { CommandContext } from '../../registry/types'
 
@@ -279,6 +280,8 @@ export const ImageNodePlugin: CanvasPlugin = {
       defaultSize: { cardWidth: 360, cardHeight: 270 },
       menuItem: { label: '图片', description: '创建图片节点', icon: 'image' },
       canReceiveInput: true, resizable: false,
+      topToolbar: undefined,
+      bottomToolbar: markRaw(ImageBottomToolbar),
     })
 
     // 注册命令

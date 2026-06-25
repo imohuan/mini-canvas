@@ -406,7 +406,8 @@ export const ContextMenuPlugin: CanvasPlugin = {
         const pending = ctx.pendingConnection
         closeMenu()
         const isReverse = pending.sourceHandle === "target"
-        const node = createNode(item, pending.flowPosition, context, { requireSource: isReverse, requireTarget: !isReverse })
+        // 只控制输入端口方向，不覆盖输出端口（输出端口由节点类型定义决定）
+        const node = createNode(item, pending.flowPosition, context, { requireTarget: !isReverse })
         await nextTick()
         context.actions.addEdges([isReverse ? {
           id: `e-${node.id}-${pending.sourceNodeId}-${Date.now()}`, type: "custom",
