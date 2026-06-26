@@ -64,6 +64,8 @@ const serializer = {
         edgeMarkerEnd: core.edgeMarkerEnd ?? false,
         edgeMarkerSize: core.edgeMarkerSize ?? 8,
         edgeVisible: core.edgeVisible ?? true,
+        edgeStepOffset: core.edgeStepOffset ?? 20,
+        edgeSmoothRadius: core.edgeSmoothRadius ?? 5,
         topToolbarOffset: core.topToolbarOffset ?? 12,
         bottomToolbarOffset: core.bottomToolbarOffset ?? 12,
         nodesDraggable: core.nodesDraggable ?? true,
@@ -132,6 +134,8 @@ export const useCanvasStore = defineStore('canvasState', () => {
       edgeAnimated: true,
       edgeMarkerEnd: false,
       edgeMarkerSize: 8,
+      edgeStepOffset: 20,
+      edgeSmoothRadius: 5,
       edgeVisible: true,
 
       // ==================== 工具栏偏移 ====================

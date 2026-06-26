@@ -497,7 +497,9 @@ onMounted(async () => {
   registerCore('edgeAnimated', { title: '流动动画', type: 'boolean', group: '连线', order: 34, defaultValue: core.edgeAnimated })
   registerCore('edgeMarkerEnd', { title: '目标箭头', type: 'boolean', group: '连线', order: 35, defaultValue: core.edgeMarkerEnd })
   registerCore('edgeMarkerSize', { title: '箭头大小', type: 'slider', group: '连线', order: 36, defaultValue: core.edgeMarkerSize, min: 4, max: 24, step: 1 })
-  registerCore('edgeVisible', { title: '显示连线', type: 'boolean', group: '连线', order: 37, defaultValue: core.edgeVisible })
+  registerCore('edgeStepOffset', { title: '阶梯偏移', type: 'slider', group: '连线', order: 37, defaultValue: core.edgeStepOffset, min: 0, max: 200, step: 1 })
+  registerCore('edgeSmoothRadius', { title: '圆角大小', type: 'slider', group: '连线', order: 38, defaultValue: core.edgeSmoothRadius, min: 0, max: 30, step: 0.5 })
+  registerCore('edgeVisible', { title: '显示连线', type: 'boolean', group: '连线', order: 39, defaultValue: core.edgeVisible })
 
   // --- 自定义端口 ---
   registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })
