@@ -22,18 +22,16 @@ const vf = useVueFlow()
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
 /**
- * 卡片外框的"反向缩放"样式。
- * 画布缩小时节点视觉会变小，这里通过 scale(1/zoom) 把卡片内部元素撑回原大小。
- * 同时把圆角和选中环的粗细也按 zoom 缩放，保证不管画布怎么缩放，外观一致。
+ * 卡片行内样式：尺寸 + 3D 倾斜 + 边框。
+ * 边框宽度做 counter-scale：borderWidth = visualPx / zoom，
+ * 画布缩小时 CSS 边框自动加粗，视觉上保持始终一致的粗细。
  */
-const cardFrameStyle = computed(() => ({
-  width: `${zoom.value * 100}%`,
-  height: `${zoom.value * 100}%`,
-  borderRadius: `${8 * zoom.value}px`,
-  '--node-base-ring-width': `${1 * zoom.value}px`,
-  '--node-selected-ring-width': `${2 * zoom.value}px`,
-  transform: `scale(${1 / zoom.value}) translateZ(0)`,
-  transformOrigin: 'top left',
+const cardInlineStyle = computed(() => ({
+  width: cardWidth.value + 'px',
+  height: cardHeight.value + 'px',
+  transform: cardTransform.value,
+  borderWidth: `${(props.selected ? 3 : 1) / zoom.value}px`,
+  borderRadius: `${8 / zoom.value}px`,
 }))
 
 /**
@@ -460,11 +458,9 @@ const nodeExtra = computed(() => {
 
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
-      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isInvalidConnectionTarget }" :style="{
-        width: cardWidth + 'px',
-        height: cardHeight + 'px',
-        transform: cardTransform,
-      }" @mousemove="updateCardMousePosition">
+      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isInvalidConnectionTarget }"
+      :style="cardInlineStyle"
+      @mousemove="updateCardMousePosition">
 
       <div
         v-if="isInvalidConnectionTarget"
@@ -510,11 +506,6 @@ const nodeExtra = computed(() => {
           </slot>
         </div>
 
-        <div class="custom-node-content-clip pointer-events-none" :style="cardFrameStyle">
-          <!-- 边框叠加层：z-index: 1，选中环 / idle 边框 / hover 阴影 -->
-          <div class="custom-node-border-layer" :class="selected ? 'is-selected' : 'is-idle'" />
-        </div>
-
       </div>
 
       <!-- Resize 拖拽句柄：右下角对角线图标，pointer 事件控制节点尺寸 -->
@@ -540,16 +531,19 @@ const nodeExtra = computed(() => {
 </template>
 
 <style scoped>
-/* 注册可动画的 length 类型自定义属性，使 border-width 的 transition 生效 */
-@property --anim-border-width {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 1px;
-}
-
 .custom-node-card {
   transform-origin: center;
-  transition: transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: var(--canvas-node-border);
+  transition:
+    border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* selected 状态 */
+.custom-node-card.is-selected {
+  border-color: var(--canvas-node-border-selected);
 }
 
 .custom-node-content-clip {
@@ -573,47 +567,17 @@ const nodeExtra = computed(() => {
   will-change: filter;
 }
 
-/* 边框叠加层：使用真实 border + @property 注册的可动画自定义属性 */
-.custom-node-border-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  box-sizing: border-box;
-  border-radius: inherit;
-  border-style: solid;
-  --anim-border-width: var(--node-base-ring-width, 1px);
-  border-width: var(--anim-border-width);
-  border-color: var(--canvas-node-border);
-  transition:
-    --anim-border-width 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-/* idle 状态 */
-.custom-node-border-layer.is-idle {
-  --anim-border-width: var(--node-base-ring-width, 1px);
-  border-color: var(--canvas-node-border);
-}
-
-/* selected 状态：加粗边框，@property 使 --anim-border-width 平滑过渡 */
-.custom-node-border-layer.is-selected {
-  --anim-border-width: calc(var(--node-base-ring-width, 1px) + var(--node-selected-ring-width, 2px));
-  border-color: var(--canvas-node-border-selected);
-}
-
-/* connecting-hover 状态：高亮边框色 + 外部投影（仅用于发光效果） */
+/* connecting-hover 状态：高亮边框 + 发光投影 */
 .custom-node-card.is-connecting-hover .custom-node-frame {
   filter: blur(0.8px);
   transition: filter 80ms ease;
 }
 
-.custom-node-card.is-connecting-hover .custom-node-border-layer {
+.custom-node-card.is-connecting-hover {
   border-color: var(--canvas-node-border-selected);
   box-shadow:
     0 24px 54px var(--canvas-node-shadow-strong),
     0 10px 26px var(--canvas-node-shadow-soft);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .custom-node-card.is-connection-invalid .custom-node-content-clip {
@@ -621,7 +585,7 @@ const nodeExtra = computed(() => {
   transition: filter 120ms ease;
 }
 
-.custom-node-card.is-connection-invalid .custom-node-border-layer {
+.custom-node-card.is-connection-invalid {
   border-color: rgba(239, 68, 68, 0.78);
   box-shadow:
     0 0 0 2px rgba(239, 68, 68, 0.22),
