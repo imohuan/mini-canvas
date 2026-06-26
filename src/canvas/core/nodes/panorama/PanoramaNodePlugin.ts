@@ -67,7 +67,6 @@ async function handlePanoramaUpload(ctx: CommandContext, args?: unknown) {
       imageHeight: dims?.height,
       cardWidth: nextSize.cardWidth,
       cardHeight: nextSize.cardHeight,
-      resizable: true,
     },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
@@ -172,7 +171,7 @@ export const PanoramaNodePlugin: CanvasPlugin = {
       type: "panorama", node: markRaw(PanoramaNode), label: "360全景",
       defaultSize: { cardWidth: 640, cardHeight: 400 },
       menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: "image", badge: "VR" },
-      canReceiveInput: true, resizable: true,
+      canReceiveInput: true,
     })
 
     context.commands.register({ id: "panorama.upload", source: "node:panorama", run: handlePanoramaUpload })

@@ -487,6 +487,17 @@ onMounted(async () => {
   // --- 连线样式 ---
   registerCore('edgeLineWidth', { title: '边线宽度', type: 'slider', group: '连线', order: 30, defaultValue: core.edgeLineWidth, min: 1, max: 10, step: 0.5 })
   registerCore('edgeColor', { title: '边线颜色', type: 'color', group: '连线', order: 31, defaultValue: core.edgeColor })
+  registerCore('edgeType', { title: '线型', type: 'select', group: '连线', order: 32, defaultValue: core.edgeType, options: [
+    { title: '贝塞尔', value: 'bezier' },
+    { title: '直线', value: 'straight' },
+    { title: '阶梯', value: 'step' },
+    { title: '平滑阶梯', value: 'smoothstep' },
+  ] })
+  registerCore('edgeDashed', { title: '虚线', type: 'boolean', group: '连线', order: 33, defaultValue: core.edgeDashed })
+  registerCore('edgeAnimated', { title: '流动动画', type: 'boolean', group: '连线', order: 34, defaultValue: core.edgeAnimated })
+  registerCore('edgeMarkerEnd', { title: '目标箭头', type: 'boolean', group: '连线', order: 35, defaultValue: core.edgeMarkerEnd })
+  registerCore('edgeMarkerSize', { title: '箭头大小', type: 'slider', group: '连线', order: 36, defaultValue: core.edgeMarkerSize, min: 4, max: 24, step: 1 })
+  registerCore('edgeVisible', { title: '显示连线', type: 'boolean', group: '连线', order: 37, defaultValue: core.edgeVisible })
 
   // --- 自定义端口 ---
   registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })

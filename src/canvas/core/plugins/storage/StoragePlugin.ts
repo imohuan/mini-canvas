@@ -216,6 +216,22 @@ export const StoragePlugin: CanvasPlugin<StorageOptions, StorageAPI> = {
       context.emit('storage:project-created', { project: defaultProject })
     }
 
+    /**
+     * FS handle 失效处理 — 断开文件系统，回退到 localStorage
+     * 保留 projectIndex/canvasDataCache（数据已在 localStorage 中）
+     */
+    function handleFSInvalidated(reason: string) {
+      context.logger.warn('[Storage] FS handle invalidated, switching to localStorage-only:', reason)
+      fsAdapter?.invalidateCache()
+      fsAdapter = null
+      connectionMode = 'localStorage'
+      // 回退 AssetStore 到 IndexedDB
+      assetManager.revokeAllURLs()
+      assetManager.setStore(new IndexedDBAssetStore())
+      emitStatus()
+      context.emit('storage:disconnected', {})
+    }
+
     const api: StorageAPI = {
       get isConnected() {
         return isConnected
@@ -484,7 +500,11 @@ export const StoragePlugin: CanvasPlugin<StorageOptions, StorageAPI> = {
             await fsAdapter.writeProjectJSON(currentProjectId, 'project.json', cleaned)
             await fsAdapter.writeRootJSON('canvas-ai-project-index.json', projectIndex)
           } catch (err) {
-            context.logger.warn('[Storage] FS save failed, data saved to localStorage:', err)
+            if (err instanceof DOMException && err.name === 'InvalidStateError') {
+              handleFSInvalidated(err.message)
+            } else {
+              context.logger.warn('[Storage] FS save failed, data saved to localStorage:', err)
+            }
           }
         }
 

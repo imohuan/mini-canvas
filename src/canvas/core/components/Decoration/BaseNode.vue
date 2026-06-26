@@ -22,16 +22,16 @@ const vf = useVueFlow()
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
 /**
- * 卡片行内样式：尺寸 + 3D 倾斜 + 边框。
- * 边框宽度做 counter-scale：borderWidth = visualPx / zoom，
- * 画布缩小时 CSS 边框自动加粗，视觉上保持始终一致的粗细。
+ * 卡片行内样式：尺寸 + 3D 倾斜 + 边框（counter-scale）。
+ * 选中环用 outline 叠加在 border 外侧，不参与盒模型。
  */
 const cardInlineStyle = computed(() => ({
   width: cardWidth.value + 'px',
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
-  borderWidth: `${(props.selected ? 3 : 1) / zoom.value}px`,
+  borderWidth: `${1 / zoom.value}px`,
   borderRadius: `${8 / zoom.value}px`,
+  '--card-outline-width': props.selected ? `${2 / zoom.value}px` : '0px',
 }))
 
 /**
@@ -488,24 +488,16 @@ const nodeExtra = computed(() => {
         :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap" :node-size="cardWidth"
         :debug="debugHandle" @hover="isHovered = $event" />
 
-      <!-- 背景与边框裁剪层：overflow hidden 确保不溢出卡片圆角 -->
+      <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="custom-node-content-clip">
-        <!-- 卡片背景层：z-index: -1，位于内容下方 -->
-        <div class="custom-node-frame" :class="selected ? 'is-selected' : 'is-idle'" />
-
-        <div class="custom-node-content-clip">
-          <!-- 节点内容：不受 counter-scale 影响，自然跟随画布缩放 -->
-          <slot name="content">
-            <!-- 默认占位：空图片图标 -->
-            <svg class="w-12 h-12 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-              <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </slot>
-        </div>
-
+        <slot name="content">
+          <svg class="w-12 h-12 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+            <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </slot>
       </div>
 
       <!-- Resize 拖拽句柄：右下角对角线图标，pointer 事件控制节点尺寸 -->
@@ -536,14 +528,17 @@ const nodeExtra = computed(() => {
   box-sizing: border-box;
   border-style: solid;
   border-color: var(--canvas-node-border);
+  background: var(--canvas-node-surface);
   transition:
     border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* selected 状态 */
-.custom-node-card.is-selected {
+/* selected — outline 叠加在 border 外侧，不挤压内容 */
+.custom-node-root.is-selected .custom-node-card {
   border-color: var(--canvas-node-border-selected);
+  outline: var(--card-outline-width) solid var(--canvas-node-border-selected);
+  outline-offset: 0;
 }
 
 .custom-node-content-clip {
@@ -556,25 +551,11 @@ const nodeExtra = computed(() => {
   overflow: hidden;
 }
 
-.custom-node-frame {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  box-sizing: border-box;
-  background: var(--canvas-node-surface);
-  border-radius: inherit;
-  will-change: filter;
-}
-
-/* connecting-hover 状态：高亮边框 + 发光投影 */
-.custom-node-card.is-connecting-hover .custom-node-frame {
-  filter: blur(0.8px);
-  transition: filter 80ms ease;
-}
-
+/* connecting-hover — 高亮边框 + elevation shadow */
 .custom-node-card.is-connecting-hover {
   border-color: var(--canvas-node-border-selected);
+  outline: 2px solid var(--canvas-node-border-selected);
+  outline-offset: 0;
   box-shadow:
     0 24px 54px var(--canvas-node-shadow-strong),
     0 10px 26px var(--canvas-node-shadow-soft);

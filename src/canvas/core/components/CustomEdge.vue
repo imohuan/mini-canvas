@@ -3,7 +3,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { EdgeProps } from '@vue-flow/core'
 import { useCanvasStore } from '../composables/useCanvasStore'
-type EdgeType = 'bezier' | 'straight' | 'step'
+type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep'
 type PortSide = 'left' | 'right'
 
 type CustomEdgePathOptions = {
@@ -67,6 +67,45 @@ function buildCustomEdgePath(options: CustomEdgePathOptions) {
       const midX = (sourceBendX + targetBendX) / 2
       return `M ${sourceX} ${sourceY} L ${sourceBendX} ${sourceY} L ${midX} ${sourceY} L ${midX} ${targetY} L ${targetBendX} ${targetY} L ${targetX} ${targetY}`
     }
+    case 'smoothstep': {
+      // 标准 smoothstep: 水平段 → 圆角 → 垂直段 → 圆角 → 水平段
+      const sourceBendX = sourceX + sourceDirection * distance
+      const targetBendX = targetX + targetDirection * distance
+      // 圆角半径，不超过水平段长度的一半
+      const r = Math.min(Math.abs(targetBendX - sourceBendX) * 0.2, Math.abs(targetY - sourceY) * 0.2, 20)
+      // 确保圆角半径不为负且不会导致路径退化
+      const safeR = Math.max(0.1, Math.min(r, Math.abs(sourceBendX - sourceX) * 0.9, Math.abs(targetX - targetBendX) * 0.9))
+
+      const segments: string[] = []
+      // 起点
+      segments.push(`M ${sourceX} ${sourceY}`)
+
+      if (targetY > sourceY) {
+        // 目标在源下方: 先向右→向下弯→垂直→向上弯到目标水平线→向右到目标
+        // 1) 水平: source → 接近 bendX（留出圆角空间）
+        segments.push(`L ${sourceBendX - sourceDirection * safeR} ${sourceY}`)
+        // 2) Q 圆角: 从水平转向下
+        segments.push(`Q ${sourceBendX} ${sourceY} ${sourceBendX} ${sourceY + safeR}`)
+        // 3) 垂直下降到目标 Y 上方
+        segments.push(`L ${sourceBendX} ${targetY - safeR}`)
+        // 4) Q 圆角: 从垂直转向右（朝向 target）
+        segments.push(`Q ${sourceBendX} ${targetY} ${sourceBendX + sourceDirection * safeR} ${targetY}`)
+        // 5) 水平到达 target
+        segments.push(`L ${targetX} ${targetY}`)
+      } else if (targetY < sourceY) {
+        // 目标在源上方: 先向右→向上弯→垂直→向下弯到目标水平线→向右到目标
+        segments.push(`L ${sourceBendX - sourceDirection * safeR} ${sourceY}`)
+        segments.push(`Q ${sourceBendX} ${sourceY} ${sourceBendX} ${sourceY - safeR}`)
+        segments.push(`L ${sourceBendX} ${targetY + safeR}`)
+        segments.push(`Q ${sourceBendX} ${targetY} ${sourceBendX + sourceDirection * safeR} ${targetY}`)
+        segments.push(`L ${targetX} ${targetY}`)
+      } else {
+        // Y 相同: 退化为带圆角的直线（或直接 bezier）
+        segments.push(`L ${targetX} ${targetY}`)
+      }
+
+      return segments.join(' ')
+    }
     case 'bezier':
     default: {
       const c1x = sourceX + sourceDirection * distance
@@ -108,6 +147,33 @@ function sampleCustomEdgePath(t: number, options: CustomEdgePathOptions): { x: n
         y: from.y + (to.y - from.y) * segmentT,
       }
     }
+    case 'smoothstep': {
+      // 与 buildCustomEdgePath smoothstep 分段一致
+      const sourceBendX = sourceX + sourceDirection * distance
+      const r = Math.min(Math.abs(targetX - sourceX) * 0.2, Math.abs(targetY - sourceY) * 0.2, 20)
+      const safeR = Math.max(0.1, r)
+      const points: { x: number; y: number }[] = [
+        { x: sourceX, y: sourceY },
+        { x: sourceBendX - sourceDirection * safeR, y: sourceY },
+        { x: sourceBendX, y: targetY > sourceY ? sourceY + safeR : sourceY - safeR },
+        { x: sourceBendX, y: targetY > sourceY ? targetY - safeR : targetY + safeR },
+        { x: sourceBendX + sourceDirection * safeR, y: targetY },
+        { x: targetX, y: targetY },
+      ]
+      // Y 相同时退化
+      if (Math.abs(targetY - sourceY) < 0.5) {
+        return { x: sourceX + (targetX - sourceX) * t, y: sourceY }
+      }
+      const segment = Math.min(points.length - 2, Math.floor(t * (points.length - 1)))
+      const segmentStart = segment / (points.length - 1)
+      const segmentT = (t - segmentStart) * (points.length - 1)
+      const from = points[segment]
+      const to = points[segment + 1]
+      return {
+        x: from.x + (to.x - from.x) * segmentT,
+        y: from.y + (to.y - from.y) * segmentT,
+      }
+    }
     case 'bezier':
     default: {
       const c1x = sourceX + sourceDirection * distance
@@ -134,10 +200,14 @@ const isTemporaryEdge = computed(() => Boolean(props.temporary || props.data?.is
 // ---- 状态及配置 ----
 const canvas = useCanvasStore()
 
-const edgeType = computed(() => canvas.state.core.edgeType as 'bezier' | 'straight' | 'step' || 'bezier')
+const edgeType = computed(() => canvas.state.core.edgeType as EdgeType || 'bezier')
 const lineWidth = computed(() => canvas.state.core.edgeLineWidth)
 const edgeColor = computed(() => canvas.state.core.edgeColor)
 const dashArray = computed(() => canvas.state.core.edgeDashed ? `${lineWidth.value * 4} ${lineWidth.value * 2}` : undefined)
+const edgeAnimated = computed(() => canvas.state.core.edgeAnimated ?? true)
+const edgeMarkerEnd = computed(() => canvas.state.core.edgeMarkerEnd ?? false)
+const edgeMarkerSize = computed(() => canvas.state.core.edgeMarkerSize ?? 8)
+const edgeVisible = computed(() => canvas.state.core.edgeVisible ?? true)
 
 // 剪切按钮
 const showCutButton = ref(false)
@@ -236,72 +306,122 @@ const animateFlow = computed(() => props.forceFlow || isHighlighted.value)
 
 <template>
   <g
-    class="custom-edge" :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }"
+    class="custom-edge"
+    :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }"
     :style="{
       '--ce-da': dashArray || 'none',
-      '--flow-color': edgeColor,
-      '--flow-width': lineWidth,
     }"
-    @dblclick="showCutButtonAtPointer" @mousemove="onMouseMove"
+    @dblclick="showCutButtonAtPointer"
+    @mousemove="onMouseMove"
   >
-    <!-- 高亮 / 动画：底线 + 光晕 + 跑动光段 -->
-    <template v-if="animateFlow">
-      <defs>
-        <filter :id="`ce-glow-${id}`" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur" />
-          <feMerge>
-            <feMergeNode in="blur" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-      </defs>
+    <template v-if="edgeVisible">
+    <!-- 线条箭头: orient=auto 自动沿路径切线方向旋转 -->
+    <defs>
+      <marker
+        :id="`ce-arrow-${id}`"
+        :markerWidth="edgeMarkerSize"
+        :markerHeight="edgeMarkerSize"
+        :refX="edgeMarkerSize * 0.85"
+        :refY="edgeMarkerSize * 0.5"
+        orient="auto"
+      >
+        <!-- 开口 V 形箭头，尖在 X+ 方向(右)。
+             refX=85% 处对齐路径终点 → 尖端伸出终点 15%，不会被节点遮挡 -->
+        <path
+          :d="`M ${edgeMarkerSize * 0.15} 0 L ${edgeMarkerSize} ${edgeMarkerSize * 0.5} L ${edgeMarkerSize * 0.15} ${edgeMarkerSize}`"
+          fill="none"
+          :stroke="edgeColor"
+          :stroke-width="Math.max(1, lineWidth)"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </marker>
+    </defs>
 
-      <!-- 柔和外发光：只比配置线宽略宽，不再把线撑得很粗 -->
-      <path class="edge-flow-glow" :d="edgePath" fill="none" :stroke="edgeColor"
-        :stroke-width="lineWidth * 1.8" stroke-linecap="round" />
-
-      <!-- 蓝色底线：宽度严格跟随面板线宽 -->
-      <path class="edge-flow-base" :d="edgePath" fill="none" :stroke="edgeColor"
-        :stroke-width="lineWidth" stroke-linecap="round" :stroke-dasharray="dashArray" />
-
-      <!-- 白色芯线：在内部，不额外扩宽整体视觉 -->
-      <path class="edge-flow-core" :d="edgePath" fill="none"
-        :stroke-width="Math.max(1, lineWidth * 0.42)" stroke-linecap="round" />
-
-      <!-- 流光：pathLength 归一化后固定 3 段，不随线条长短改变数量 -->
-      <path class="edge-flow-runner edge-flow-runner--halo" :d="edgePath" fill="none" :stroke="edgeColor"
-        :stroke-width="lineWidth * 1.25" stroke-linecap="round" pathLength="300" />
-      <path class="edge-flow-runner edge-flow-runner--hot" :d="edgePath" fill="none" :stroke="edgeColor"
-        :stroke-width="lineWidth" stroke-linecap="round" pathLength="300" />
+    <!-- 默认态：淡灰线 -->
+    <template v-if="!animateFlow">
+      <path
+        class="ef-base ef-base--dim"
+        :d="edgePath"
+        fill="none"
+        :stroke="edgeColor"
+        :stroke-width="lineWidth"
+        stroke-linecap="round"
+        :stroke-dasharray="dashArray"
+        :marker-end="edgeMarkerEnd ? `url(#ce-arrow-${id})` : undefined"
+      />
     </template>
 
-    <!-- 默认：淡灰线 -->
+    <!-- 高亮态：底线 + 白芯 + 可选流光 -->
     <template v-else>
-      <path :d="edgePath" fill="none" stroke="rgba(128,128,128,0.35)"
-        :stroke-width="lineWidth" stroke-linecap="round" :stroke-dasharray="dashArray" />
+      <!-- 底线 -->
+      <path
+        class="ef-base"
+        :d="edgePath"
+        fill="none"
+        :stroke="edgeColor"
+        :stroke-width="lineWidth"
+        stroke-linecap="round"
+        :stroke-dasharray="dashArray"
+        :marker-end="edgeMarkerEnd ? `url(#ce-arrow-${id})` : undefined"
+      />
+      <!-- 白芯 -->
+      <path
+        class="ef-core"
+        :d="edgePath"
+        fill="none"
+        :stroke-width="Math.max(1, lineWidth * 0.42)"
+        stroke-linecap="round"
+      />
+      <!-- 经典 3 块流光（仅 edgeAnimated 开启时） -->
+      <template v-if="edgeAnimated">
+        <path
+          class="ef-runner ef-runner-glow"
+          :d="edgePath"
+          fill="none"
+          :stroke="edgeColor"
+          :stroke-width="lineWidth"
+          stroke-linecap="round"
+          pathLength="300"
+        />
+        <path
+          class="ef-runner ef-runner-hot"
+          :d="edgePath"
+          fill="none"
+          :stroke="edgeColor"
+          :stroke-width="lineWidth"
+          stroke-linecap="round"
+          pathLength="300"
+        />
+      </template>
     </template>
 
-    <path class="edge-hit-area" :d="edgePath" fill="none" stroke="transparent"
-      :stroke-width="Math.max(12, lineWidth * 1)" stroke-linecap="round" />
+    <!-- 点击热区 -->
+    <path
+      class="edge-hit-area"
+      :d="edgePath"
+      fill="none"
+      stroke="transparent"
+      :stroke-width="Math.max(12, lineWidth)"
+      stroke-linecap="round"
+    />
 
     <!-- 剪切按钮 -->
     <foreignObject
       v-if="showCutButton"
-      :x="cutButtonPosition.x - 16" :y="cutButtonPosition.y - 16"
-      width="32" height="32"
+      :x="cutButtonPosition.x - 16"
+      :y="cutButtonPosition.y - 16"
+      width="32"
+      height="32"
       style="overflow:visible"
     >
-      <button
-        class="cut-btn"
-        @click.stop="cutEdge" @mousedown.stop
-        title="删除连线"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-          class="w-4 h-4">
+      <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
           <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
     </foreignObject>
+    </template>
   </g>
 </template>
 
@@ -316,56 +436,47 @@ const animateFlow = computed(() => props.forceFlow || isHighlighted.value)
   pointer-events: stroke;
 }
 
-.edge-flow-glow {
-  opacity: 0.18;
-  filter: blur(4px);
-  animation: edge-flow-breathe 1.8s ease-in-out infinite;
-}
-
-.edge-flow-base {
+/* ===== 底线 ===== */
+.ef-base {
   opacity: 0.45;
 }
+.ef-base--dim {
+  opacity: 0.3;
+}
 
-.edge-flow-core {
+/* ===== 白芯 ===== */
+.ef-core {
   stroke: rgba(255, 255, 255, 0.72);
   opacity: 0.78;
 }
 
-.edge-flow-runner {
-  /* pathLength=300，28+72=100，所以整条线上永远是 3 段光 */
+/* ===== 经典 3 块流光（pathLength=300, dash-cycle=100） ===== */
+.ef-runner {
   stroke-dasharray: 28 72;
   stroke-dashoffset: 0;
   animation:
-    edge-flow-dash 1.35s linear infinite,
-    edge-flow-breathe 1.8s ease-in-out infinite;
+    ef-dash 1.35s linear infinite,
+    ef-breathe 1.8s ease-in-out infinite;
 }
 
-.edge-flow-runner--halo {
+/* 光晕散斑：与热斑同宽，仅靠 opacity 区分层级 */
+.ef-runner-glow {
   opacity: 0.42;
-  filter: blur(3px);
 }
 
-.edge-flow-runner--hot {
-  opacity: 0.95;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--flow-color) 70%, white));
+/* 热斑：高亮，制造"前亮后暗"的深度感 */
+.ef-runner-hot {
+  opacity: 0.88;
 }
 
-@keyframes edge-flow-dash {
-  from {
-    stroke-dashoffset: 100;
-  }
+@keyframes ef-dash {
   to {
-    stroke-dashoffset: 0;
+    stroke-dashoffset: -100;
   }
 }
-
-@keyframes edge-flow-breathe {
-  0%, 100% {
-    opacity: 0.45;
-  }
-  50% {
-    opacity: 1;
-  }
+@keyframes ef-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 
 .cut-btn {

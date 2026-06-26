@@ -14,7 +14,7 @@ import type { ConnectionState } from '../plugins/types'
  * - straight: 直线
  * - step: 阶梯线（直角折线）
  */
-export type EdgeType = 'bezier' | 'straight' | 'step'
+export type EdgeType = 'bezier' | 'straight' | 'step' | 'smoothstep'
 
 function numberOr(value: unknown, fallback: number) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
@@ -60,7 +60,10 @@ const serializer = {
         edgeColor: core.edgeColor ?? '#3b82f6',
         edgeType: core.edgeType ?? 'bezier',
         edgeDashed: core.edgeDashed ?? false,
-        edgeAnimated: core.edgeAnimated ?? false,
+        edgeAnimated: core.edgeAnimated ?? true,
+        edgeMarkerEnd: core.edgeMarkerEnd ?? false,
+        edgeMarkerSize: core.edgeMarkerSize ?? 8,
+        edgeVisible: core.edgeVisible ?? true,
         topToolbarOffset: core.topToolbarOffset ?? 12,
         bottomToolbarOffset: core.bottomToolbarOffset ?? 12,
         nodesDraggable: core.nodesDraggable ?? true,
@@ -126,7 +129,10 @@ export const useCanvasStore = defineStore('canvasState', () => {
       edgeColor: '#3b82f6',
       edgeType: 'bezier' as EdgeType,
       edgeDashed: false,
-      edgeAnimated: false,
+      edgeAnimated: true,
+      edgeMarkerEnd: false,
+      edgeMarkerSize: 8,
+      edgeVisible: true,
 
       // ==================== 工具栏偏移 ====================
       topToolbarOffset: 12,

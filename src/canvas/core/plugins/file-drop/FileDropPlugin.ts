@@ -230,7 +230,6 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             imageHeight: dims?.height,
             cardWidth: size.cardWidth,
             cardHeight: size.cardHeight,
-            resizable: true,
           }
           nodes.push(buildNode('image', extra, pos))
           logger.info(`拖入图片: ${file.name}${dims ? ` (${dims.width}×${dims.height})` : ''}`)
@@ -373,7 +372,6 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             imageType: blob.type,
             cardWidth: size.cardWidth,
             cardHeight: size.cardHeight,
-            resizable: true,
           }
           if (dims) {
             extra.imageWidth = dims.width

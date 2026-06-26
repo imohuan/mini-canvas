@@ -25,12 +25,12 @@ watch(
 </script>
 
 <template>
-  <div class="w-full h-full overflow-hidden rounded-xl relative">
+  <div class="w-full h-full relative">
     <img
       v-if="data?.imageUrl && !error"
       :src="data.imageUrl"
       :alt="data?.label || '图片'"
-      class="w-full h-full object-contain bg-gray-50"
+      class="w-full h-full object-cover bg-gray-50"
       :class="{ 'opacity-30': isCropping }"
       @error="error = true"
     />

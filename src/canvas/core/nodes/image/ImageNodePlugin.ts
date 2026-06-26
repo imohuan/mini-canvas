@@ -65,7 +65,6 @@ async function handleImageUpload(ctx: CommandContext, args?: unknown) {
       imageWidth: dims?.width, imageHeight: dims?.height,
       cardWidth: nextSize?.cardWidth ?? node?.data?.cardWidth,
       cardHeight: nextSize?.cardHeight ?? node?.data?.cardHeight,
-      resizable: true,
     },
   })
 }
@@ -207,7 +206,6 @@ async function handleImageCropConfirm(ctx: CommandContext) {
       imageHeight: sh,
       cardWidth,
       cardHeight,
-      resizable: true,
     },
     sourcePosition: 'right' as any,
     targetPosition: 'left' as any,

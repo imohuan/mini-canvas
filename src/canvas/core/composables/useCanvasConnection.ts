@@ -254,6 +254,12 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   const canvas = useCanvasStore()
   const { getNodes, getEdges, addNodes, addEdges, removeNodes, removeEdges, updateNode, viewport, eventBus } = options
 
+  // --- 调试 ---
+  const DEBUG_CONNECT = false
+  const debugLog = (...args: any[]) => {
+    if (DEBUG_CONNECT) console.log('[ConnectDebug]', ...args)
+  }
+
   // --- 状态 ---
   let lastNativeConnectAt = 0
   const batchConnectState = ref<BatchConnectState | null>(null)
@@ -432,7 +438,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   function getInvalidConnectionReason(connection: Connection): string {
     const canonical = toCanonicalConnection(connection)
     if (!canonical?.source || !canonical.target) return '无法连接'
+    if (canonical.source === canonical.target) return '无法连接'
     if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) return '无法连接'
+    // 确保两端节点存在且有正确的端口
+    const src = nodesById.value.get(canonical.source)
+    const tgt = nodesById.value.get(canonical.target)
+    if (!src || !tgt) return '无法连接'
+    if (!src.sourcePosition || !tgt.targetPosition) return '无法连接'
     return ''
   }
 
@@ -465,17 +477,29 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   /** 创建新连线：验证 → 去重 → 添加 */
   function createConnection(connection: Connection, _source = 'manual'): boolean {
     const normalized = toCanonicalConnection(connection)
-    if (!normalized) return false
-    if (!isValidConnection(normalized)) return false
+    if (!normalized) {
+      debugLog('createConnection fail: toCanonical returned null', connection)
+      return false
+    }
+    if (!isValidConnection(normalized)) {
+      debugLog('createConnection fail: isValidConnection false', {
+        normalized,
+        nodes: (getNodes.value as Node[]).map(n => ({ id: n.id, sp: n.sourcePosition, tp: n.targetPosition })),
+      })
+      return false
+    }
 
     const existingEdge = findSameConnection(normalized, getEdges.value as Edge[])
     if (existingEdge) {
+      debugLog('createConnection: repair existing edge', existingEdge.id)
       repairExistingConnection(existingEdge, normalized)
       const renderedEdge = (getEdges.value as Edge[]).find(e => e.id === existingEdge.id)
       if (!renderedEdge) {
         addEdges([{ ...existingEdge }])
+        debugLog('createConnection: re-added existing edge')
         return true
       }
+      debugLog('createConnection: edge already rendered, skipped')
       return false
     }
 
@@ -490,6 +514,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       data: makeEdgeData(canvas.state.core),
     }
     addEdges([edge])
+    debugLog('createConnection: NEW edge added', edgeId)
     return true
   }
 
@@ -515,7 +540,9 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   /** VueFlow connectStart：开始拖拽连线 */
   function onConnectStart(payload: ({ event?: MouseEvent | TouchEvent } & OnConnectStartParams)) {
     const nodeId = payload.nodeId
+    debugLog('onConnectStart', { nodeId, handleId: payload.handleId })
     if (!nodeId) {
+      debugLog('onConnectStart bail: no nodeId')
       canvas.connectionState.activeConnection = null
       return
     }
@@ -535,26 +562,46 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     const point = getMousePoint(event)
     const active = canvas.connectionState.activeConnection
 
+    debugLog('onConnectEnd', {
+      hasPoint: !!point, point,
+      hasActive: !!active, active,
+      timeSinceConnect: Date.now() - lastNativeConnectAt,
+    })
+
     try {
-      if (!point || !active) return
+      if (!point || !active) {
+        debugLog('onConnectEnd bail: no point or active')
+        return
+      }
       // 如果 @connect 已处理，跳过
-      if (Date.now() - lastNativeConnectAt < 80) return
+      if (Date.now() - lastNativeConnectAt < 80) {
+        debugLog('onConnectEnd bail: @connect handled recently')
+        return
+      }
 
       const { sourceNodeId, sourceHandle } = active
 
       // 1. 尝试吸附连接
       const targetNode = findNearestConnectableNode(point.x, point.y, sourceHandle, sourceNodeId)
+      debugLog('snap/body search', {
+        foundId: targetNode?.id,
+        sourceNodeId, sourceHandle, mouse: point,
+      })
+
       if (targetNode) {
         const connection = sourceHandle === 'target'
           ? { source: targetNode.id, target: sourceNodeId, sourceHandle: 'source', targetHandle: sourceHandle }
           : { source: sourceNodeId, target: targetNode.id, sourceHandle, targetHandle: 'target' }
 
-        if (getInvalidConnectionReason(connection)) {
+        const reason = getInvalidConnectionReason(connection)
+        if (reason) {
+          debugLog('snap connection INVALID:', reason)
           canvas.connectionState.hoverTarget = { type: 'node', nodeId: targetNode.id }
           canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
           return
         }
-        createConnection(connection, 'snap')
+        const ok = createConnection(connection, 'snap')
+        debugLog('snap connection result:', ok, connection)
         canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
         eventBus?.emit('connect', connection)
         return
@@ -562,35 +609,46 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
 
       // 2. 检查节点主体命中
       const bodyNode = findNodeBodyAtPoint(point.x, point.y, [sourceNodeId])
+      debugLog('body hit', { foundId: bodyNode?.id })
+
       if (bodyNode) {
         const connection = sourceHandle === 'target'
           ? { source: bodyNode.id, target: sourceNodeId, sourceHandle: 'source', targetHandle: sourceHandle }
           : { source: sourceNodeId, target: bodyNode.id, sourceHandle, targetHandle: 'target' }
 
-        if (getInvalidConnectionReason(connection)) {
+        const reason = getInvalidConnectionReason(connection)
+        if (reason) {
+          debugLog('body connection INVALID:', reason)
           canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
           return
         }
-        createConnection(connection, 'snap')
+        const ok = createConnection(connection, 'snap')
+        debugLog('body connection result:', ok, connection)
         canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
         eventBus?.emit('connect', connection)
         return
       }
 
       // 3. 拖到空白
+      debugLog('released on blank area')
       canvas.connectionState.hoverTarget = { type: 'pane' }
       canvas.connectionState.snapTarget = null
     } finally {
-      canvas.connectionState.suppressHandles = true
+      canvas.connectionState.suppressHandles = false
+      canvas.connectionState.activeConnection = null
       canvas.connectionState.hoverNode = null
+      canvas.connectionState.hoverTarget = null
+      canvas.connectionState.snapTarget = null
     }
   }
 
   /** VueFlow connect：Handle 精确匹配 */
   function onConnect(connection: Connection) {
     lastNativeConnectAt = Date.now()
+    debugLog('onConnect (handle match)', connection)
     try {
-      createConnection(connection, 'handle')
+      const ok = createConnection(connection, 'handle')
+      debugLog('onConnect createConnection result:', ok)
     } finally {
       canvas.connectionState.suppressHandles = false
       canvas.connectionState.hoverNode = null
