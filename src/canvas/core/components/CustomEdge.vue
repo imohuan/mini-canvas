@@ -326,6 +326,9 @@ const edgeAnimated = computed(() => canvas.state.core.edgeAnimated ?? true)
 const edgeMarkerEnd = computed(() => canvas.state.core.edgeMarkerEnd ?? false)
 const edgeMarkerSize = computed(() => canvas.state.core.edgeMarkerSize ?? 8)
 const edgeVisible = computed(() => canvas.state.core.edgeVisible ?? true)
+const edgeGlowEnabled = computed(() => canvas.state.core.edgeGlowEnabled ?? true)
+const edgeGlowIntensity = computed(() => canvas.state.core.edgeGlowIntensity ?? 1)
+const edgeGlowColor = computed(() => canvas.state.core.edgeGlowColor || edgeColor.value)
 
 // 剪切按钮
 const showCutButton = ref(false)
@@ -465,9 +468,9 @@ const arrowPath = computed(() => {
       />
     </template>
 
-    <!-- 高亮态：底线 + 白芯 + 可选流光 -->
+    <!-- 高亮态：原始连接线 + 辉光流光色块 -->
     <template v-else>
-      <!-- 底线 -->
+      <!-- 底层原始连接线（保持完整颜色和宽度） -->
       <path
         class="ef-base"
         :d="edgePath"
@@ -477,31 +480,38 @@ const arrowPath = computed(() => {
         stroke-linecap="round"
         :stroke-dasharray="dashArray"
       />
-      <!-- 白芯 -->
-      <path
-        class="ef-core"
-        :d="edgePath"
-        fill="none"
-        :stroke-width="Math.max(1, lineWidth * 0.42)"
-        stroke-linecap="round"
-      />
-      <!-- 经典 3 块流光（仅 edgeAnimated 开启时） -->
-      <template v-if="edgeAnimated">
+      <!-- 辉光流光色块（edgeAnimated + edgeGlowEnabled 均开启时） -->
+      <template v-if="edgeAnimated && edgeGlowEnabled">
         <path
           class="ef-runner ef-runner-glow"
           :d="edgePath"
           fill="none"
-          :stroke="edgeColor"
+          :stroke="edgeGlowColor"
           :stroke-width="lineWidth"
           stroke-linecap="round"
           pathLength="300"
+          :style="{
+            filter: `drop-shadow(0 0 ${5 * edgeGlowIntensity}px ${edgeGlowColor}) drop-shadow(0 0 ${10 * edgeGlowIntensity}px ${edgeGlowColor})`,
+          }"
         />
         <path
           class="ef-runner ef-runner-hot"
           :d="edgePath"
           fill="none"
-          :stroke="edgeColor"
-          :stroke-width="lineWidth"
+          :stroke="edgeGlowColor"
+          :stroke-width="Math.max(1, lineWidth * 0.65)"
+          stroke-linecap="round"
+          pathLength="300"
+        />
+      </template>
+      <!-- 无辉光时的热斑（仅 edgeAnimated 开启，edgeGlowEnabled 关闭时） -->
+      <template v-else-if="edgeAnimated && !edgeGlowEnabled">
+        <path
+          class="ef-runner ef-runner-hot"
+          :d="edgePath"
+          fill="none"
+          :stroke="edgeGlowColor"
+          :stroke-width="Math.max(1, lineWidth * 0.65)"
           stroke-linecap="round"
           pathLength="300"
         />
@@ -570,27 +580,27 @@ const arrowPath = computed(() => {
 
 /* ===== 白芯 ===== */
 .ef-core {
-  stroke: rgba(255, 255, 255, 0.72);
-  opacity: 0.78;
+  stroke: rgba(255, 255, 255, 0.8);
+  opacity: 0.82;
 }
 
-/* ===== 经典 3 块流光（pathLength=300, dash-cycle=100） ===== */
+/* ===== 流光块（pathLength=300, dash-cycle=100） ===== */
 .ef-runner {
-  stroke-dasharray: 28 72;
+  stroke-dasharray: 24 76;
   stroke-dashoffset: 0;
   animation:
-    ef-dash 1.35s linear infinite,
-    ef-breathe 1.8s ease-in-out infinite;
+    ef-dash 1.2s linear infinite,
+    ef-breathe 1.6s ease-in-out infinite;
 }
 
-/* 光晕散斑：与热斑同宽，仅靠 opacity 区分层级 */
+/* 辉光散斑：拖尾发光效果，blur 半径通过 inline style 动态控制 */
 .ef-runner-glow {
-  opacity: 0.42;
+  opacity: 0.55;
 }
 
-/* 热斑：高亮，制造"前亮后暗"的深度感 */
+/* 热斑：高亮核心，制造"前亮后暗"的深度感 */
 .ef-runner-hot {
-  opacity: 0.88;
+  opacity: 0.92;
 }
 
 /* 箭头：!important 确保不被外部 CSS 覆盖 */

@@ -66,6 +66,9 @@ const serializer = {
         edgeVisible: core.edgeVisible ?? true,
         edgeStepOffset: core.edgeStepOffset ?? 20,
         edgeSmoothRadius: core.edgeSmoothRadius ?? 5,
+        edgeGlowEnabled: core.edgeGlowEnabled ?? true,
+        edgeGlowIntensity: core.edgeGlowIntensity ?? 1,
+        edgeGlowColor: core.edgeGlowColor ?? '#ffffff',
         topToolbarOffset: core.topToolbarOffset ?? 12,
         bottomToolbarOffset: core.bottomToolbarOffset ?? 12,
         nodesDraggable: core.nodesDraggable ?? true,
@@ -137,6 +140,9 @@ export const useCanvasStore = defineStore('canvasState', () => {
       edgeStepOffset: 20,
       edgeSmoothRadius: 5,
       edgeVisible: true,
+      edgeGlowEnabled: true,
+      edgeGlowIntensity: 1,
+      edgeGlowColor: '#ffffff',
 
       // ==================== 工具栏偏移 ====================
       topToolbarOffset: 12,

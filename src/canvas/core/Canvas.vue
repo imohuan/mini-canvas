@@ -500,6 +500,9 @@ onMounted(async () => {
   registerCore('edgeStepOffset', { title: '阶梯偏移', type: 'slider', group: '连线', order: 37, defaultValue: core.edgeStepOffset, min: 0, max: 200, step: 1 })
   registerCore('edgeSmoothRadius', { title: '圆角大小', type: 'slider', group: '连线', order: 38, defaultValue: core.edgeSmoothRadius, min: 0, max: 30, step: 0.5 })
   registerCore('edgeVisible', { title: '显示连线', type: 'boolean', group: '连线', order: 39, defaultValue: core.edgeVisible })
+  registerCore('edgeGlowEnabled', { title: '辉光效果', type: 'boolean', group: '连线', order: 40, defaultValue: core.edgeGlowEnabled })
+  registerCore('edgeGlowIntensity', { title: '辉光强度', type: 'slider', group: '连线', order: 41, defaultValue: core.edgeGlowIntensity, min: 0.1, max: 3, step: 0.1 })
+  registerCore('edgeGlowColor', { title: '辉光颜色', type: 'color', group: '连线', order: 42, defaultValue: core.edgeGlowColor })
 
   // --- 自定义端口 ---
   registerCore('handleRadius', { title: '端口半径', type: 'slider', group: '端口', order: 40, defaultValue: core.handleRadius, min: 20, max: 200, step: 1 })
