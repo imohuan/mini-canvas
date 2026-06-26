@@ -59,7 +59,7 @@ function onAi() {
         v-model="inputValue"
         class="prompt-textarea"
         placeholder="描述你想要生成的画面内容，@引用素材"
-        rows="3"
+        rows="6"
         @input="onInput"
       />
       <button class="expand-btn" @click="onMore">
@@ -175,7 +175,7 @@ function onAi() {
 .expand-btn {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  top: 12px;
   width: 20px;
   height: 20px;
   padding: 2px;
