@@ -13,6 +13,10 @@ const rotateSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stro
 const downloadSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
 const confirmSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`
 const cancelSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+// 扩展图标（向外箭头）
+const expandSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
+// 上传/生成箭头（底部工具栏用）
+const uploadArrowSvg = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`
 // 菜单图标（CanvasMenu 使用）— 无 class，由 CSS 控制 16x16
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 // 标题图标（BaseNode title 使用）— 由外层 span 控制尺寸
@@ -82,12 +86,15 @@ function handleImageCrop(ctx: CommandContext) {
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
   if (!node?.data?.imageUrl || !node.data.imageWidth || !node.data.imageHeight) return
 
-  // 设置 overlay 统一管理裁剪状态（_cropMode + toolbar 切换到 crop 组）
+  // 设置 overlay 统一管理裁剪状态
   vf.updateNode(nodeId, {
     data: {
       ...(node.data),
-      _overlay: { _cropMode: true, _toolbarGroup: 'crop' },
-      _cropRect: { x: 0, y: 0, width: node.data.imageWidth, height: node.data.imageHeight },
+      _overlay: {
+        _cropMode: true,
+        _toolbarGroup: 'crop',
+        _cropRect: { x: 0, y: 0, width: node.data.imageWidth, height: node.data.imageHeight },
+      },
     },
   })
   vf.fitView({ nodes: [nodeId], padding: 0.15, maxZoom: 4, duration: 250 })
@@ -106,14 +113,12 @@ async function handleImageCropConfirm(ctx: CommandContext) {
   const { imageUrl, imageWidth, imageHeight } = sourceData
   if (!imageUrl || !imageWidth || !imageHeight) return
 
-  const cropRect = sourceData._cropRect as { x: number; y: number; width: number; height: number } | undefined
+  const cropRect = sourceData._overlay?._cropRect as { x: number; y: number; width: number; height: number } | undefined
   if (!cropRect || cropRect.width <= 0 || cropRect.height <= 0) return
 
   // 1. 退出裁剪模式
   const cleanedData = { ...sourceData }
   delete cleanedData._overlay
-  delete cleanedData._cropRect
-  delete cleanedData._cropMode
   vf.updateNode(nodeId, { data: cleanedData })
 
   // 2. Canvas 裁剪图片
@@ -227,8 +232,69 @@ function handleImageCropCancel(ctx: CommandContext) {
 
   const data = { ...(node.data) }
   delete data._overlay
-  delete data._cropRect
-  delete data._cropMode
+  vf.updateNode(nodeId, { data })
+}
+
+// ==================== 图片扩展（Outpaint）====================
+
+function handleImageExpand(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node?.data?.imageUrl || !node.data.imageWidth || !node.data.imageHeight) return
+
+  // 设置 overlay 统一管理扩展状态
+  vf.updateNode(nodeId, {
+    data: {
+      ...(node.data),
+      _overlay: {
+        _expandMode: true,
+        _toolbarGroup: 'expand',
+        _expandRect: { x: 0, y: 0, width: node.data.imageWidth, height: node.data.imageHeight },
+      },
+    },
+  })
+}
+
+async function handleImageExpandConfirm(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node?.data) return
+
+  const sourceData = node.data
+  const { imageUrl, imageWidth, imageHeight } = sourceData
+  if (!imageUrl || !imageWidth || !imageHeight) return
+
+  const expandRect = sourceData._overlay?._expandRect as { x: number; y: number; width: number; height: number } | undefined
+  if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) return
+
+  // TODO: 实现扩展生成逻辑（Canvas 拼接 + AI 填充）
+  ctx.logger.debug('[Expand] expandRect:', JSON.stringify(expandRect))
+
+  // 退出扩展模式
+  const cleanedData = { ...sourceData }
+  delete cleanedData._overlay
+  vf.updateNode(nodeId, { data: cleanedData })
+}
+
+function handleImageExpandCancel(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node) return
+
+  const data = { ...(node.data) }
+  delete data._overlay
   vf.updateNode(nodeId, { data })
 }
 
@@ -292,6 +358,9 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.commands.register({ id: 'image.crop', source: 'node:image', title: '裁剪', run: handleImageCrop })
     context.commands.register({ id: 'image.cropConfirm', source: 'node:image', title: '确认裁剪', run: handleImageCropConfirm })
     context.commands.register({ id: 'image.cropCancel', source: 'node:image', title: '取消裁剪', run: handleImageCropCancel })
+    context.commands.register({ id: 'image.expand', source: 'node:image', title: '扩展', run: handleImageExpand })
+    context.commands.register({ id: 'image.expandConfirm', source: 'node:image', title: '确认扩展', run: handleImageExpandConfirm })
+    context.commands.register({ id: 'image.expandCancel', source: 'node:image', title: '取消扩展', run: handleImageExpandCancel })
     context.commands.register({ id: 'image.filter', source: 'node:image', title: '滤镜', run: handleImageFilter })
     context.commands.register({ id: 'image.rotate', source: 'node:image', title: '旋转', run: handleImageRotate })
     context.commands.register({ id: 'image.download', source: 'node:image', title: '下载', run: handleImageDownload })
@@ -304,6 +373,12 @@ export const ImageNodePlugin: CanvasPlugin = {
     // top: crop 组（仅裁剪模式 overlay._toolbarGroup='crop' 时显示）
     context.toolbars.register('node:image', { id: 'image.cropConfirm', source: 'node:image', commandId: 'image.cropConfirm', position: 'top', title: '确认', icon: confirmSvg, tooltip: '确认裁剪', nodeTypes: ['image'], group: 'crop', order: 10, visible: (ctx) => ctx.node?.data?._overlay?._cropMode === true })
     context.toolbars.register('node:image', { id: 'image.cropCancel', source: 'node:image', commandId: 'image.cropCancel', position: 'top', title: '取消', icon: cancelSvg, tooltip: '取消裁剪', nodeTypes: ['image'], group: 'crop', order: 20, visible: (ctx) => ctx.node?.data?._overlay?._cropMode === true })
+
+    // top: 扩展按钮（default 组，正常状态显示）
+    context.toolbars.register('node:image', { id: 'image.expand', source: 'node:image', commandId: 'image.expand', position: 'top', title: '扩展', icon: expandSvg, tooltip: '扩展图片', nodeTypes: ['image'], group: 'default', order: 25 })
+    // top: expand 组（仅扩展模式 overlay._toolbarGroup='expand' 时显示）
+    context.toolbars.register('node:image', { id: 'image.expandConfirm', source: 'node:image', commandId: 'image.expandConfirm', position: 'top', title: '确认扩展', icon: confirmSvg, tooltip: '确认扩展', nodeTypes: ['image'], group: 'expand', order: 10, visible: (ctx) => ctx.node?.data?._overlay?._expandMode === true })
+    context.toolbars.register('node:image', { id: 'image.expandCancel', source: 'node:image', commandId: 'image.expandCancel', position: 'top', title: '取消', icon: cancelSvg, tooltip: '取消扩展', nodeTypes: ['image'], group: 'expand', order: 0, visible: (ctx) => ctx.node?.data?._overlay?._expandMode === true })
     // bottom: 不标 group，始终显示
     context.toolbars.register('node:image', { id: 'image.rotate', source: 'node:image', commandId: 'image.rotate', position: 'bottom', title: '旋转', icon: rotateSvg, nodeTypes: ['image'], order: 10 })
     context.toolbars.register('node:image', { id: 'image.download', source: 'node:image', commandId: 'image.download', position: 'bottom', title: '下载', icon: downloadSvg, nodeTypes: ['image'], order: 20 })

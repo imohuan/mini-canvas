@@ -10,13 +10,14 @@ const emit = defineEmits<{
 
 const inputValue = ref('')
 
-const imageData = computed(() => {
-  return {
-    width: (props.data?.imageWidth as number) || 0,
-    height: (props.data?.imageHeight as number) || 0,
-    name: (props.data?.imageName as string) || 'image',
-  }
-})
+// _overlay 存在时（裁剪/扩展模式）隐藏面板，避免干扰
+const hasOverlay = computed(() => !!props.data?._overlay)
+
+const imageData = computed(() => ({
+  width: (props.data?.imageWidth as number) || 0,
+  height: (props.data?.imageHeight as number) || 0,
+  name: (props.data?.imageName as string) || 'image',
+}))
 
 function onInput() {
   emit('action', 'input', inputValue.value)
@@ -52,7 +53,7 @@ function onAi() {
 </script>
 
 <template>
-  <div class="image-bottom-panel">
+  <div v-if="!hasOverlay" class="image-bottom-panel">
     <!-- 输入框区域 -->
     <div class="input-area">
       <textarea

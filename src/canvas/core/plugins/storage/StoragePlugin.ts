@@ -517,6 +517,16 @@ export const StoragePlugin: CanvasPlugin<StorageOptions, StorageAPI> = {
         }
         const cached = loadCanvasFromLocalStorage(projectId)
         if (cached.nodes.length > 0 || cached.edges.length > 0) {
+          // Strip _overlay — 刷新后不应保留裁剪/扩展模式
+          for (const node of cached.nodes) {
+            if (node.data && typeof node.data === 'object') {
+              delete node.data._overlay
+              delete node.data._cropRect
+              delete node.data._cropMode
+              delete node.data._expandRect
+              delete node.data._expandMode
+            }
+          }
           // 为每个有 assetId 的节点恢复 runtime object URL
           for (const node of cached.nodes) {
             if (node.data?.assetId) {

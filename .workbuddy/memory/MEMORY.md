@@ -23,9 +23,35 @@
 
 ## _overlay 临时状态模式
 
-- 进入特殊模式（裁剪等）→ `node.data._overlay = { _cropMode: true, _toolbarGroup: 'xxx' }`
+- 进入特殊模式（裁剪/扩展等）→ `node.data._overlay = { _cropMode: true, _toolbarGroup: 'xxx' }`
 - 退出 → `delete node.data._overlay` 一步恢复所有状态
 - `BaseCanvasNodeData._overlay?: CanvasNodeOverlay`（types/CanvasNodeData.ts）
+- `_overlay` 存在时 BaseNode 隐藏选中边框（`showSelectionOutline` computed 检查 `!props.data?._overlay`）
+
+## 图片扩展（Outpaint）功能
+
+- **`ImageExpander.vue`** — `Teleport :to="viewportRef"`（非 body），`position: absolute; inset: 0`
+- 与裁剪的关键差异：裁剪容器 = 节点大小（overflow hidden），扩展容器 = 全 viewport（允许向外拖拽超出原图边界）
+- 交互层 `pointer-events: auto`，backdrop `pointer-events: none`
+- expand rect 坐标用图片像素，x/y 可为负（向左/上扩展），w/h 可超原图尺寸（向右/下扩展）
+- Toolbar 按钮：用 `ToolbarButton` 渲染 registry `group:'expand'` 的按钮，定位在 expand 框底部
+- 根因：不能用 `Teleport to="body"`（stacking context 高于 viewport，压住所有 toolbar）
+
+### _overlay 完整结构
+```ts
+_overlay: {
+  _cropMode: true,
+  _expamdMode: true,
+  _toolbarGroup: 'expand' | 'crop',
+  _cropRect: { x, y, width, height },     // ← 全在 _overlay 内，非顶层
+  _expandRect: { x, y, width, height },   // ← 同上
+}
+```
+
+### Storage 双重清理
+- `sanitizeForSave` — RUNTIME_FIELDS 含 `_overlay`, `_cropRect`, `_cropMode`, `_expandRect`, `_expandMode`
+- `loadCanvas` — 加载时对每个 node 直接 `delete _overlay`（防御刷新后残留模式）
+- 退出模式一律 `delete data._overlay` 一步清空
 
 ## Vue Render 阶段禁止写入 Reactive State
 

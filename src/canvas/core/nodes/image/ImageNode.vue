@@ -3,6 +3,7 @@ import type { NodeProps } from '@vue-flow/core'
 import { ref, computed, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import ImageCropper from './ImageCropper.vue'
+import ImageExpander from './ImageExpander.vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -13,9 +14,17 @@ const error = ref(false)
 // 裁剪模式 → 读 _overlay._cropMode，退出时 delete _overlay 一步恢复
 const isCropping = computed(() => props.data?._overlay?._cropMode === true)
 
-// 同步裁剪区域到 node.data._cropRect，供确认命令读取
+// 扩展模式 → 读 _overlay._expandMode
+const isExpanding = computed(() => props.data?._overlay?._expandMode === true)
+
+// 同步裁剪区域到 _overlay._cropRect
 function onCropUpdate(rect: { x: number; y: number; width: number; height: number }) {
-  updateNode(props.id, { data: { ...props.data, _cropRect: rect } })
+  updateNode(props.id, { data: { ...props.data, _overlay: { ...props.data._overlay, _cropRect: rect } } })
+}
+
+// 同步扩展区域到 _overlay._expandRect
+function onExpandUpdate(rect: { x: number; y: number; width: number; height: number }) {
+  updateNode(props.id, { data: { ...props.data, _overlay: { ...props.data._overlay, _expandRect: rect } } })
 }
 
 watch(
@@ -31,7 +40,7 @@ watch(
       :src="data.imageUrl"
       :alt="data?.label || '图片'"
       class="w-full h-full object-cover bg-gray-50"
-      :class="{ '-opacity-30': isCropping }"
+      :class="{ '-opacity-30': isCropping || isExpanding }"
       @error="error = true"
     />
     <div v-else class="w-full h-full flex items-center justify-center bg-gray-100">
@@ -49,6 +58,15 @@ watch(
       :image-width="(data.imageWidth as number) || 0"
       :image-height="(data.imageHeight as number) || 0"
       @update:crop="onCropUpdate"
+    />
+
+    <ImageExpander
+      v-if="isExpanding && data?.imageUrl"
+      :node-id="id"
+      :image-url="data.imageUrl"
+      :image-width="(data.imageWidth as number) || 0"
+      :image-height="(data.imageHeight as number) || 0"
+      @update:expand="onExpandUpdate"
     />
   </div>
 </template>

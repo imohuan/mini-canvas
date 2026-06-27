@@ -10,14 +10,17 @@ test('sanitizeForSave preserves node.type as custom and node.data.nodeType', () 
 })
 
 test('sanitizeForSave removes runtime fields', () => {
-  const nodes = [{ id: '1', type: 'custom', data: { nodeType: 'image', imageUrl: 'blob:...', videoUrl: 'blob:...', thumbUrl: 'blob:...', _cropMode: true, _cropRect: { x: 0 }, label: 'test' } }]
+  const nodes = [{ id: '1', type: 'custom', data: { nodeType: 'image', imageUrl: 'blob:...', videoUrl: 'blob:...', thumbUrl: 'blob:...', _overlay: { _cropMode: true, _cropRect: { x: 0 }, _expandMode: true, _expandRect: { x: 1 } }, _cropMode: true, _cropRect: { x: 0 }, _expandMode: true, _expandRect: { x: 1 }, label: 'test' } }]
   const result = sanitizeForSave(nodes, [])
   const data = result.nodes[0].data
   assert.equal(data.imageUrl, undefined)
   assert.equal(data.videoUrl, undefined)
   assert.equal(data.thumbUrl, undefined)
+  assert.equal(data._overlay, undefined)
   assert.equal(data._cropMode, undefined)
   assert.equal(data._cropRect, undefined)
+  assert.equal(data._expandMode, undefined)
+  assert.equal(data._expandRect, undefined)
   assert.equal(data.label, 'test')
 })
 

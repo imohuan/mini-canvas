@@ -1,16 +1,24 @@
-﻿export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | 'panorama' | (string & {})
+export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | 'panorama' | (string & {})
 
-/** 临时覆写状态对象。进入特殊模式（裁剪等）时设此对象，退出时 delete 一步恢复。 */
-export interface CanvasNodeOverlay {
-  _cropMode?: boolean
-  _toolbarGroup?: string
-}
-
-export interface CropRect {
+/** 裁剪/扩展矩形 */
+export interface Rect {
   x: number
   y: number
   width: number
   height: number
+}
+
+/** @deprecated 使用 Rect */
+export type CropRect = Rect
+
+/** 临时覆写状态对象。进入特殊模式时设此对象，退出时 delete 一步恢复。
+ *  刷新页面后 storage 加载时必须 strip _overlay。 */
+export interface CanvasNodeOverlay {
+  _cropMode?: boolean
+  _expandMode?: boolean
+  _toolbarGroup?: string
+  _cropRect?: Rect
+  _expandRect?: Rect
 }
 
 export interface BaseCanvasNodeData {
@@ -19,7 +27,7 @@ export interface BaseCanvasNodeData {
   cardWidth?: number
   cardHeight?: number
   resizable?: boolean
-  /** 临时覆写状态（裁剪等模式），退出时 delete 一步恢复所有临时状态 */
+  /** 临时覆写状态，退出时 delete 一步恢复。storage 加载时强制清除。 */
   _overlay?: CanvasNodeOverlay
 }
 

@@ -1,4 +1,4 @@
-const RUNTIME_FIELDS = ['imageUrl', 'videoUrl', 'thumbUrl', '_cropRect', '_cropMode'] as const
+const RUNTIME_FIELDS = ['imageUrl', 'videoUrl', 'thumbUrl', '_overlay', '_cropRect', '_cropMode', '_expandRect', '_expandMode'] as const
 
 function cloneCanvasData(nodes: unknown[], edges: unknown[]): { nodes: any[]; edges: any[] } {
   return JSON.parse(JSON.stringify({ nodes, edges }))

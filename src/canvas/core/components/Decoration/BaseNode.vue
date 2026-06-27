@@ -275,13 +275,26 @@ const cardTransform = computed(() => {
  * 选中环用 outline 叠加在 border 外侧，不参与盒模型。
  * 用 shallowRef + watch 稳定引用，避免每次 computed 返回新对象触发不必要重绘。
  */
+/**
+ * 是否显示选中边框。
+ * 进入特殊模式（裁剪/扩展等 _overlay 存在时）隐藏选中环，避免干扰。
+ */
+const showSelectionOutline = computed(() =>
+  props.selected && !props.data?._overlay
+)
+
+/**
+ * 卡片行内样式：尺寸 + 3D 倾斜 + 边框（counter-scale）。
+ * 选中环用 outline 叠加在 border 外侧，不参与盒模型。
+ * 用 shallowRef + watch 稳定引用，避免每次 computed 返回新对象触发不必要重绘。
+ */
 const cardInlineStyle = shallowRef<Record<string, string>>({
   width: cardWidth.value + 'px',
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
   borderWidth: `${1 / zoom.value}px`,
   borderRadius: `${8 / zoom.value}px`,
-  '--card-outline-width': props.selected ? `${2 / zoom.value}px` : '0px',
+  '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
 })
 watch(
   () => ({
@@ -289,7 +302,7 @@ watch(
     h: cardHeight.value,
     t: cardTransform.value,
     z: zoom.value,
-    sel: props.selected,
+    sel: showSelectionOutline.value,
   }),
   ({ w, h, t, z, sel }) => {
     cardInlineStyle.value = {
@@ -439,7 +452,7 @@ const nodeExtra = computed(() => {
 
 <template>
   <!-- 节点根元素：relative 定位容器，绑定选中/悬停状态，控制 handles 显示/隐藏 -->
-  <div class="custom-node-root relative" :class="{ 'is-selected': selected, 'is-hovered': isHovered }"
+  <div class="custom-node-root relative" :class="{ 'is-selected': showSelectionOutline, 'is-hovered': isHovered }"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false; if (!canvas.isConnecting) canvas.connectionState.suppressHandles = false">
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->

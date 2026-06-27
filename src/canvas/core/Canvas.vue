@@ -187,8 +187,6 @@ function onPaneClick() {
     if (node.data?._overlay) {
       const data = { ...node.data }
       delete data._overlay
-      delete data._cropRect
-      delete data._cropMode
       vueFlowInstance.updateNode(node.id, { data })
     }
   }
