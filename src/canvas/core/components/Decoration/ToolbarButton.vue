@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, type Component, nextTick } from 'vue'
+import { ref, watch, type Component, nextTick, onBeforeUnmount } from 'vue'
 
 const props = withDefaults(defineProps<{
   icon?: Component | string
@@ -22,7 +22,35 @@ const emit = defineEmits<{
 
 const showDropdown = ref(false)
 const buttonRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
 const dropdownStyle = ref<Record<string, string>>({})
+
+function onDocumentClick(e: MouseEvent) {
+  if (!showDropdown.value) return
+  const target = e.target as Node
+  // 点击按钮本身 → toggle 在 onButtonClick 里处理，这里忽略
+  if (buttonRef.value?.contains(target)) return
+  // 点击下拉菜单内部 → 忽略
+  if (dropdownRef.value?.contains(target)) return
+  // 其他位置 → 关闭
+  showDropdown.value = false
+}
+
+// 下拉打开/关闭时绑定/解绑 document click 监听
+watch(showDropdown, (open) => {
+  if (open) {
+    // 下一帧再绑定，避免触发 button 的 click 时立即捕获
+    nextTick(() => {
+      document.addEventListener('click', onDocumentClick, true)
+    })
+  } else {
+    document.removeEventListener('click', onDocumentClick, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick, true)
+})
 
 function onButtonClick() {
   if (props.disabled) return
@@ -54,7 +82,7 @@ function onDropdownItemClick(id: string) {
 </script>
 
 <template>
-  <div class="toolbar-button-wrapper" @mouseleave="showDropdown = false">
+  <div class="toolbar-button-wrapper">
     <component v-if="customRender" :is="customRender" @action="emit('action')" />
     <button ref="buttonRef" v-else class="toolbar-button"
       :class="{
@@ -73,7 +101,7 @@ function onDropdownItemClick(id: string) {
     </button>
     <Teleport to="body">
       <Transition name="dropdown-fade">
-        <div v-if="showDropdown && dropdown && dropdown.length > 0" class="toolbar-dropdown" :style="dropdownStyle">
+        <div ref="dropdownRef" v-if="showDropdown && dropdown && dropdown.length > 0" class="toolbar-dropdown" :style="dropdownStyle">
           <button v-for="item in dropdown" :key="item.id" class="toolbar-dropdown-item"
             :class="{ 'toolbar-dropdown-item--danger': item.danger, 'is-disabled': item.disabled }"
             :disabled="typeof item.disabled === 'function' ? item.disabled({}) : item.disabled" type="button" @click.stop="onDropdownItemClick(item.id)">
