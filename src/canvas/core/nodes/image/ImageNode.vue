@@ -31,7 +31,7 @@ watch(
       :src="data.imageUrl"
       :alt="data?.label || '图片'"
       class="w-full h-full object-cover bg-gray-50"
-      :class="{ 'opacity-30': isCropping }"
+      :class="{ '-opacity-30': isCropping }"
       @error="error = true"
     />
     <div v-else class="w-full h-full flex items-center justify-center bg-gray-100">
