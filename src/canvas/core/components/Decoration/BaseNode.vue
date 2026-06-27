@@ -583,8 +583,8 @@ const nodeExtra = computed(() => {
 /* selected — outline 叠加在 border 外侧，不挤压内容 */
 .custom-node-root.is-selected .custom-node-card {
   border-color: var(--canvas-node-border-selected);
-  outline: var(--card-outline-width) solid var(--canvas-node-border-selected);
-  outline-offset: 0;
+  /* outline: var(--card-outline-width) solid var(--canvas-node-border-selected);
+  outline-offset: 0; */
 }
 
 .custom-node-content-clip {
