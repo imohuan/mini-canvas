@@ -57,11 +57,9 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
   if (align === 'start') alignmentOffset = 0
   else if (align === 'end') alignmentOffset = 1
 
-  const zoomedOffset = offset * transform.zoom
-
   let pos = [
     (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x,
-    nodeRect.y * transform.zoom + transform.y - zoomedOffset,
+    nodeRect.y * transform.zoom + transform.y - offset,
   ]
   let shift = [-100 * alignmentOffset, -100]
 
@@ -70,7 +68,7 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
       break
     case Position.Right:
       pos = [
-        (nodeRect.x + nodeRect.width) * transform.zoom + transform.x + zoomedOffset,
+        (nodeRect.x + nodeRect.width) * transform.zoom + transform.x + offset,
         (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y,
       ]
       shift = [0, -100 * alignmentOffset]
@@ -78,13 +76,13 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
     case Position.Bottom:
       pos = [
         (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x,
-        (nodeRect.y + nodeRect.height) * transform.zoom + transform.y + zoomedOffset,
+        (nodeRect.y + nodeRect.height) * transform.zoom + transform.y + offset,
       ]
       shift = [-100 * alignmentOffset, 0]
       break
     case Position.Left:
       pos = [
-        nodeRect.x * transform.zoom + transform.x - zoomedOffset,
+        nodeRect.x * transform.zoom + transform.x - offset,
         (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y,
       ]
       shift = [-100, -100 * alignmentOffset]
