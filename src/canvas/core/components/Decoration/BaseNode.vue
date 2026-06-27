@@ -578,14 +578,9 @@ const nodeLabel = computed(() => {
   overflow: hidden;
 }
 
-/* connecting-hover — 高亮边框 + elevation shadow */
+/* connecting-hover — 仅切换边框颜色，不添加 outline/box-shadow */
 .custom-node-card.is-connecting-hover {
   border-color: var(--canvas-node-border-selected);
-  outline: 2px solid var(--canvas-node-border-selected);
-  outline-offset: 0;
-  box-shadow:
-    0 24px 54px var(--canvas-node-shadow-strong),
-    0 10px 26px var(--canvas-node-shadow-soft);
 }
 
 .custom-node-card.is-connection-invalid .custom-node-content-clip {
