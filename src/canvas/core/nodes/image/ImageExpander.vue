@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
+import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 const props = defineProps<{
   nodeId: string
@@ -21,6 +22,10 @@ const { viewport, findNode } = useVueFlow()
 const MIN_EXPAND = 20
 const GRID_COLS = 3
 const GRID_ROWS = 3
+
+// SVG icons for ToolbarButton
+const cancelIcon = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+const confirmIcon = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'
 
 // ==================== Node tracking ====================
 const node = computed(() => findNode(props.nodeId))
@@ -48,12 +53,10 @@ const display = computed(() => {
   return { dw, dh, ox, oy, scale: dw / iw }
 })
 
-// ==================== Screen coordinate helpers (for body-level fixed positioning) ====================
 const zoom = computed(() => viewport.value.zoom)
 const panX = computed(() => viewport.value.x)
 const panY = computed(() => viewport.value.y)
 
-// Image display origin on screen (top-left of object-fit area)
 function imgOriginScreen() {
   const d = display.value
   return {
@@ -62,7 +65,7 @@ function imgOriginScreen() {
   }
 }
 
-// ==================== Expand area (image pixel coords) ====================
+// ==================== Expand area ====================
 const expand = reactive({ x: 0, y: 0, w: 0, h: 0 })
 function initExpand() {
   expand.x = 0; expand.y = 0
@@ -72,24 +75,22 @@ function initExpand() {
 // ==================== Drag ====================
 type Handle = 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'w' | 'e'
 type Drag =
-  | { kind: 'move'; sx: number; sy: number; scX: number; scY: number }
-  | { kind: 'resize'; dir: Handle; sx: number; sy: number; scX: number; scY: number; scW: number; scH: number }
+  | { kind: 'move'; sx: number; sy: number; scX: number; scY: number; captureEl: HTMLElement }
+  | { kind: 'resize'; dir: Handle; sx: number; sy: number; scX: number; scY: number; scW: number; scH: number; captureEl: HTMLElement }
   | null
 
 const drag = ref<Drag>(null)
-const overlayRef = ref<HTMLElement | null>(null)
 
-// ==================== Frame screen position ====================
+// ==================== Frame ====================
 const frameStyle = computed<CSSProperties>(() => {
   const d = display.value
   const { x, y } = imgOriginScreen()
   return {
-    position: 'fixed',
+    position: 'fixed' as const,
     left: `${x + expand.x * d.scale}px`,
     top: `${y + expand.y * d.scale}px`,
     width: `${expand.w * d.scale}px`,
     height: `${expand.h * d.scale}px`,
-    pointerEvents: 'none',
   }
 })
 
@@ -106,7 +107,7 @@ const gridLines = computed(() => {
   return { fl, ft, fw, fh, lines }
 })
 
-// ==================== Handle style ====================
+// ==================== Handles ====================
 function handleStyle(dir: Handle): CSSProperties {
   const d = display.value
   const { x, y } = imgOriginScreen()
@@ -128,15 +129,29 @@ function handleStyle(dir: Handle): CSSProperties {
 }
 
 // ==================== Pointer events ====================
-function onPointerDown(e: PointerEvent, dir?: Handle) {
+function onMoveStart(e: PointerEvent) {
   e.preventDefault(); e.stopPropagation()
-  if (!overlayRef.value) return
-  if (dir) {
-    drag.value = { kind: 'resize', dir, sx: e.clientX, sy: e.clientY, scX: expand.x, scY: expand.y, scW: expand.w, scH: expand.h }
-  } else {
-    drag.value = { kind: 'move', sx: e.clientX, sy: e.clientY, scX: expand.x, scY: expand.y }
-  }
-  overlayRef.value.setPointerCapture(e.pointerId)
+  const el = e.currentTarget as HTMLElement
+  cleanupDrag() // 清理可能残留的旧 listener
+  drag.value = { kind: 'move', sx: e.clientX, sy: e.clientY, scX: expand.x, scY: expand.y, captureEl: el }
+  el.setPointerCapture(e.pointerId)
+  window.addEventListener('pointermove', onPointerMove, { passive: false })
+  window.addEventListener('pointerup', onPointerUpCb)
+}
+
+function onResizeStart(e: PointerEvent, dir: Handle) {
+  e.preventDefault(); e.stopPropagation()
+  const el = e.currentTarget as HTMLElement
+  cleanupDrag()
+  drag.value = { kind: 'resize', dir, sx: e.clientX, sy: e.clientY, scX: expand.x, scY: expand.y, scW: expand.w, scH: expand.h, captureEl: el }
+  el.setPointerCapture(e.pointerId)
+  window.addEventListener('pointermove', onPointerMove, { passive: false })
+  window.addEventListener('pointerup', onPointerUpCb)
+}
+
+function cleanupDrag() {
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', onPointerUpCb)
 }
 
 function onPointerMove(e: PointerEvent) {
@@ -151,7 +166,6 @@ function onPointerMove(e: PointerEvent) {
   if (d.kind === 'move') {
     let nx = d.scX + dx
     let ny = d.scY + dy
-    // 选框必须包含原图 (0,0,iw,ih)
     if (nx > 0) nx = 0
     if (ny > 0) ny = 0
     if (nx + expand.w < iw) nx = iw - expand.w
@@ -160,35 +174,23 @@ function onPointerMove(e: PointerEvent) {
   } else {
     const right = d.scX + d.scW; const bottom = d.scY + d.scH
     let nx = d.scX, ny = d.scY, nw = d.scW, nh = d.scH
-
-    // X axis
-    if (d.dir.includes('w')) {
-      nx = Math.min(0, d.scX + dx) // left 不能 > 0
-      nw = right - nx
-    } else if (d.dir.includes('e')) {
-      nw = d.scW + dx
-    }
-    // Y axis
-    if (d.dir.includes('n')) {
-      ny = Math.min(0, d.scY + dy) // top 不能 > 0
-      nh = bottom - ny
-    } else if (d.dir.includes('s')) {
-      nh = d.scH + dy
-    }
-
-    // 确保右边 >= iw, 下边 >= ih
-    if (nx + nw < iw) { nw = iw - nx }
-    if (ny + nh < ih) { nh = ih - ny }
-
+    if (d.dir.includes('w')) { nx = Math.min(0, d.scX + dx); nw = right - nx }
+    else if (d.dir.includes('e')) { nw = d.scW + dx }
+    if (d.dir.includes('n')) { ny = Math.min(0, d.scY + dy); nh = bottom - ny }
+    else if (d.dir.includes('s')) { nh = d.scH + dy }
+    if (nx + nw < iw) nw = iw - nx
+    if (ny + nh < ih) nh = ih - ny
     nw = Math.max(MIN_EXPAND, Math.max(iw, nw))
     nh = Math.max(MIN_EXPAND, Math.max(ih, nh))
     expand.x = nx; expand.y = ny; expand.w = nw; expand.h = nh
   }
 }
 
-function onPointerUp(e: PointerEvent) {
+function onPointerUpCb(e: PointerEvent) {
+  if (!drag.value) return
+  drag.value.captureEl.releasePointerCapture(e.pointerId)
   drag.value = null
-  overlayRef.value?.releasePointerCapture(e.pointerId)
+  cleanupDrag()
   emitExpand()
 }
 
@@ -199,7 +201,7 @@ function emitExpand() { emit('update:expand', getExpandRect()) }
 let emitTimer: ReturnType<typeof setTimeout> | null = null
 watch(expand, () => { if (emitTimer) clearTimeout(emitTimer); emitTimer = setTimeout(emitExpand, 16) }, { deep: true })
 
-// ==================== Action bar (follows frame bottom center) ====================
+// ==================== Action bar ====================
 const actionBarStyle = computed<CSSProperties>(() => {
   const d = display.value
   const { x, y } = imgOriginScreen()
@@ -219,19 +221,17 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
 <template>
   <Teleport to="body">
     <div v-if="node" class="expander-root">
-      <!-- Backdrop: full screen, no pointer capture -->
+      <!-- Backdrop: passes events through to canvas -->
       <div class="expand-backdrop" />
 
-      <!-- Original image at node position -->
+      <!-- Original image -->
       <div class="expand-image-host" :style="{
         position: 'fixed',
         left: `${nodeRect.x * zoom + panX}px`,
         top: `${nodeRect.y * zoom + panY}px`,
         width: `${nodeRect.width * zoom}px`,
         height: `${nodeRect.height * zoom}px`,
-        borderRadius: '12px',
-        overflow: 'hidden',
-        pointerEvents: 'none',
+        borderRadius: '12px', overflow: 'hidden', pointerEvents: 'none',
       }">
         <img :src="imageUrl" class="expand-image" draggable="false" />
       </div>
@@ -246,7 +246,7 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
         pointerEvents: 'none',
       }" />
 
-      <!-- Expand frame + grid -->
+      <!-- Expand frame -->
       <div class="expand-frame" :style="frameStyle">
         <svg :width="gridLines.fw" :height="gridLines.fh">
           <template v-for="(line, i) in gridLines.lines" :key="i">
@@ -254,36 +254,24 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
             <line v-else x1="0" :y1="line.pos - gridLines.ft" :x2="gridLines.fw" :y2="line.pos - gridLines.ft" class="grid-line" />
           </template>
         </svg>
+        <!-- Frame interior: capture events, drag to move. Outside: pass through to canvas. -->
+        <div class="frame-move-area" @pointerdown="onMoveStart" />
       </div>
 
-      <!-- Interactive layer: full screen on body, nothing can block it -->
-      <div ref="overlayRef"
-        style="position: fixed; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; z-index: 10;"
-        @pointerdown="onPointerDown($event)" @pointermove="onPointerMove" @pointerup="onPointerUp">
-        <div class="expand-handle" :style="handleStyle('nw')" @pointerdown.stop="onPointerDown($event, 'nw')" />
-        <div class="expand-handle" :style="handleStyle('ne')" @pointerdown.stop="onPointerDown($event, 'ne')" />
-        <div class="expand-handle" :style="handleStyle('sw')" @pointerdown.stop="onPointerDown($event, 'sw')" />
-        <div class="expand-handle" :style="handleStyle('se')" @pointerdown.stop="onPointerDown($event, 'se')" />
-        <div class="expand-handle" :style="handleStyle('n')"  @pointerdown.stop="onPointerDown($event, 'n')" />
-        <div class="expand-handle" :style="handleStyle('s')"  @pointerdown.stop="onPointerDown($event, 's')" />
-        <div class="expand-handle" :style="handleStyle('w')"  @pointerdown.stop="onPointerDown($event, 'w')" />
-        <div class="expand-handle" :style="handleStyle('e')"  @pointerdown.stop="onPointerDown($event, 'e')" />
-      </div>
+      <!-- Resize handles (positioned at frame edges) -->
+      <div class="expand-handle" :style="handleStyle('nw')" @pointerdown="onResizeStart($event, 'nw')" />
+      <div class="expand-handle" :style="handleStyle('ne')" @pointerdown="onResizeStart($event, 'ne')" />
+      <div class="expand-handle" :style="handleStyle('sw')" @pointerdown="onResizeStart($event, 'sw')" />
+      <div class="expand-handle" :style="handleStyle('se')" @pointerdown="onResizeStart($event, 'se')" />
+      <div class="expand-handle" :style="handleStyle('n')"  @pointerdown="onResizeStart($event, 'n')" />
+      <div class="expand-handle" :style="handleStyle('s')"  @pointerdown="onResizeStart($event, 's')" />
+      <div class="expand-handle" :style="handleStyle('w')"  @pointerdown="onResizeStart($event, 'w')" />
+      <div class="expand-handle" :style="handleStyle('e')"  @pointerdown="onResizeStart($event, 'e')" />
 
       <!-- Action toolbar -->
       <div class="expand-action-bar" :style="{ ...actionBarStyle, zIndex: 20 }">
-        <button class="action-btn action-btn--cancel" @click="$emit('cancel')">
-          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-          <span>取消</span>
-        </button>
-        <button class="action-btn action-btn--confirm" @click="$emit('confirm')">
-          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="20 6 9 17 4 12"/>
-          </svg>
-          <span>确认扩展</span>
-        </button>
+        <ToolbarButton :icon="cancelIcon" title="取消" danger @action="$emit('cancel')" />
+        <ToolbarButton :icon="confirmIcon" title="确认扩展" variant="primary" @action="$emit('confirm')" />
       </div>
     </div>
   </Teleport>
@@ -309,9 +297,16 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
   border-radius: 2px;
   z-index: 2;
-  overflow: hidden;
+  overflow: visible;
 }
 .grid-line { stroke: rgba(255, 255, 255, 0.4); stroke-width: 1; }
+
+/* Frame interior captures events for move; exterior passes through */
+.frame-move-area {
+  position: absolute; inset: 0;
+  cursor: move; touch-action: none;
+  pointer-events: auto;
+}
 
 .expand-handle {
   position: fixed;
@@ -319,6 +314,7 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
   background: #fff; border: 1.5px solid rgba(0, 0, 0, 0.5);
   border-radius: 2px;
   z-index: 15;
+  pointer-events: auto;
 }
 
 .expand-action-bar {
@@ -330,15 +326,4 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
-.action-btn {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 8px; border: 0; border-radius: 6px;
-  background: transparent; color: #374151;
-  font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
-}
-.action-btn:hover { background: rgba(0, 0, 0, 0.06); color: #111827; }
-.action-icon { width: 14px; height: 14px; flex-shrink: 0; }
-.action-btn--confirm { color: #111827; }
-.action-btn--confirm:hover { background: rgba(59, 130, 246, 0.12); }
 </style>

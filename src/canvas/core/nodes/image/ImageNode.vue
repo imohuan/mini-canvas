@@ -25,10 +25,10 @@ function onExpandUpdate(rect: { x: number; y: number; width: number; height: num
 }
 
 function onExpandCancel() {
-  runtime.commandRegistry.execute('image.expandCancel', { node: props } as any)
+  runtime.commandRegistry.execute('image.expandCancel', { runtime, node: props } as any)
 }
 function onExpandConfirm() {
-  runtime.commandRegistry.execute('image.expandConfirm', { node: props } as any)
+  runtime.commandRegistry.execute('image.expandConfirm', { runtime, node: props } as any)
 }
 
 watch(
