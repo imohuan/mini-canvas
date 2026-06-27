@@ -489,13 +489,9 @@ export function useEditor(
     }
   }
 
-  // 显示菜单
+  // 显示菜单（filteredVariables/filteredResources 由调用方在调用前设置）
   function showMenu(coords: { left: number; top: number; bottom: number; right: number }, type: "resource" | "variable" = "variable") {
     menuType.value = type;
-    // 同时显示变量和资源
-    filteredVariables.value = unref(props.variables) || [];
-    filteredResources.value = unref(props.resources) || [];
-
     menuVisible.value = true;
 
     // 智能定位逻辑：预估菜单尺寸并进行边界检测
@@ -880,6 +876,9 @@ export function useEditor(
               const allResources = unref(props.resources) || [];
 
               if (allVariables.length > 0 || allResources.length > 0) {
+                // 先设置过滤列表（showMenu 不再覆盖）
+                filteredVariables.value = allVariables;
+                filteredResources.value = allResources;
                 // 优先激活变量分类
                 showMenu({ left: coords.left, top: coords.top, bottom: coords.bottom, right: coords.right }, allVariables.length > 0 ? "variable" : "resource");
               }

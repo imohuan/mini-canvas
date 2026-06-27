@@ -46,10 +46,6 @@
         </div>
       </div>
 
-      <!-- 无匹配结果 -->
-      <div v-if="variables.length === 0 && resources.length === 0" class="empty-message">
-        无匹配结果
-      </div>
     </div>
   </div>
 </template>
@@ -224,12 +220,5 @@ watch([() => props.activeIndex, () => props.menuType], () => {
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-.empty-message {
-  padding: 12px;
-  text-align: center;
-  font-size: 13px;
-  color: #9ca3af;
 }
 </style>

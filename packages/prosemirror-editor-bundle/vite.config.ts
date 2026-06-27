@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
       }),
     ].filter(Boolean),
     build: {
+      emptyOutDir: !(isWebComponent || isWebComponentVue),
       lib: {
         entry: resolve(__dirname,
           isWebComponent ? 'src/web-component.ts' :
@@ -37,7 +38,7 @@ export default defineConfig(({ mode }) => {
         },
       },
       rollupOptions: {
-        external: (isWebComponent || isWebComponentVue) ? [] : [],
+        external: (isWebComponent || isWebComponentVue) ? [] : ['vue', 'prosemirror-view', 'prosemirror-state', 'prosemirror-model', 'prosemirror-keymap', 'prosemirror-history', 'prosemirror-commands', 'prosemirror-gapcursor', 'prosemirror-dropcursor', 'prosemirror-inputrules', 'prosemirror-transform'],
         output: {
           globals: {},
           assetFileNames: (assetInfo) => {
