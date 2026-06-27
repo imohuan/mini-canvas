@@ -27,6 +27,9 @@ export interface CanvasNodeDefinition {
   bottomToolbar?: Component
   /** 标题栏图标（SVG HTML 字符串或 Vue 组件）。不传则回到 BaseNode 内置 fallback */
   titleIcon?: string | Component
+  /** 自渲染模式：true 时 CustomNode 不做 BaseNode 组装，完全由 node 组件自己控制渲染。
+   * 此时 topToolbar / bottomToolbar / titleIcon 等字段均被忽略。 */
+  selfRender?: boolean
 }
 
 export interface CanvasNodeMenuItem {

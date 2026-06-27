@@ -1,8 +1,7 @@
 ﻿import { markRaw } from 'vue'
 import type { Node } from '@vue-flow/core'
-import { ImageNode } from './index'
+import ImageNode from './ImageNode.vue'
 import ImageUploadButton from './ImageUploadButton.vue'
-import ImageBottomToolbar from './ImageBottomToolbar.vue'
 import MaskBrushButton from './MaskBrushButton.vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
 import type { CommandContext } from '../../registry/types'
@@ -21,8 +20,6 @@ const expandSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stro
 const uploadArrowSvg = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`
 // 菜单图标（CanvasMenu 使用）— 无 class，由 CSS 控制 16x16
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
-// 标题图标（BaseNode title 使用）— 由外层 span 控制尺寸
-const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 // 蒙版图标
 const maskSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-width="1.5" opacity="0.5"/></svg>`
 const eraserSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14 2.2c.8-.8 2-.8 2.8 0L20 5.2"/><line x1="18" y1="12.8" x2="12" y2="18.8"/></svg>`
@@ -474,9 +471,7 @@ export const ImageNodePlugin: CanvasPlugin = {
       canReceiveInput: true,
       canProduceOutput: true,
       resizable: false,
-      titleIcon: titleIconSvg,
-      topToolbar: undefined,
-      bottomToolbar: markRaw(ImageBottomToolbar),
+      selfRender: true,
     })
 
     // 注册命令

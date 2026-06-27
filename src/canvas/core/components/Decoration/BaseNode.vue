@@ -432,22 +432,6 @@ const nodeLabel = computed(() => {
   return label || nt || '节点'
 })
 
-/**
- * 节点标题栏的额外信息。
- * 目前用于显示图片/视频的原始分辨率，如 "1920×1080"。
- * 如果节点不是图片/视频类型，返回空字符串。
- */
-/**
- * 节点标题栏的额外信息。
- * 目前用于显示图片/视频的原始分辨率，如 1920×1080。
- * 如果节点不是图片/视频类型，返回空字符串。
- */
-const nodeExtra = computed(() => {
-  const w = props.data?.imageWidth as number || props.data?.videoWidth as number
-  const h = props.data?.imageHeight as number || props.data?.videoHeight as number
-  if (w && h) return `${w}×${h}`
-  return ''
-})
 </script>
 
 <template>
@@ -501,10 +485,7 @@ const nodeExtra = computed(() => {
             <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
             <span class="truncate">{{ nodeLabel }}</span>
           </slot>
-          <slot name="title-extra">
-            <!-- 额外信息：如图片/视频原始分辨率 "1920×1080" -->
-            <span v-if="nodeExtra" class="text-gray-400 shrink-0 ml-auto">{{ nodeExtra }}</span>
-          </slot>
+          <slot name="title-extra" />
         </div>
       </slot>
 

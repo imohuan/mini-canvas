@@ -70,6 +70,29 @@ _overlay: {
 - **修复**：用 `nextTick(() => { state.value = x })` 迁出 render 阶段
 - 已在 `useCanvasConnection.ts` 的 `buildConnectionEdgeProps` 中应用此修复（hoverNode 写入）
 
+## 节点自渲染模式 (selfRender)
+
+- `CanvasNodeDefinition.selfRender?: boolean` — true 时 CustomNode 不做 BaseNode 组装，直接渲染 node 组件
+- 自渲染节点接收完整 `NodeProps`，内部自由使用 BaseNode（填充所有 slot）或完全自定义
+- 注册时不需要 `titleIcon`/`topToolbar`/`bottomToolbar` 等碎片字段 — 全由组件内部控制
+- `BaseNode.vue` 的 `title-extra` slot 默认空，不再包含任何节点类型特定逻辑
+- 当前只有 `image` 节点使用 selfRender，其他节点类型保持原有组装模式
+
+### selfRender 节点模板模式
+
+```vue
+<template>
+  <BaseNode v-bind="$props">
+    <template #title-icon>...</template>
+    <template #title-label>...</template>
+    <template #title-extra>...</template>
+    <template #top-toolbar>...</template>
+    <template #content>...</template>
+    <template #bottom-toolbar>...</template>
+  </BaseNode>
+</template>
+```
+
 ## 图片对比节点 (image-compare)
 
 - 节点类型 `'image-compare'`，单一 target 输入端口，最多 2 条连接（FIFO 淘汰）

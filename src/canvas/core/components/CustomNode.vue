@@ -21,13 +21,16 @@ const nodeDef = computed(() => {
 const ContentComponent = computed<Component | null>(() => nodeDef.value?.node ?? null)
 const TopToolbarComponent = computed<Component | null>(() => nodeDef.value?.topToolbar ?? null)
 const BottomToolbarComponent = computed<Component | null>(() => nodeDef.value?.bottomToolbar ?? null)
+const selfRender = computed(() => nodeDef.value?.selfRender === true)
 
 const topOffset = computed(() => canvas.state.core.topToolbarOffset)
 const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
 </script>
 
 <template>
-  <BaseNode v-bind="$props">
+  <!-- 自渲染节点：完全自定义，不做 BaseNode 组装 -->
+  <component v-if="selfRender && ContentComponent" :is="ContentComponent" v-bind="$props" />
+  <BaseNode v-else v-bind="$props">
     <template #top-toolbar>
       <slot name="top-toolbar">
         <NodeToolbar v-if="TopToolbarComponent" :node-id="id" :position="Position.Top" :offset="topOffset">
