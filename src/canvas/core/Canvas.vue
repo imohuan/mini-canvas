@@ -646,7 +646,7 @@ onUnmounted(async () => {
         :multi-selection-key-code="'Shift'" fit-view-on-init :is-valid-connection="conn.isValidConnection"
         :auto-connect="false" @connect="conn.onConnect($event); manager.eventBus.emit('connect', $event)"
         @connect-start="conn.onConnectStart($event); manager.eventBus.emit('connectStart', $event)"
-        @connect-end="conn.onConnectEnd($event); manager.eventBus.emit('connectEnd', $event); canvas.connectionState.activeConnection = null"
+        @connect-end="manager.eventBus.emit('connectEnd', $event); conn.onConnectEnd($event); canvas.connectionState.activeConnection = null"
         @nodes-change="onNodesChange($event); manager.eventBus.emit('nodesChange', $event)"
         @edges-change="onEdgesChange($event); manager.eventBus.emit('edgesChange', $event)"
         @node-drag="manager.eventBus.emit('nodeDrag', $event)"
