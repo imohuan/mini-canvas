@@ -257,6 +257,8 @@ function handleImageExpand(ctx: CommandContext) {
       },
     },
   })
+  // 居中显示节点，占窗口约 50%
+  vf.fitView({ nodes: [nodeId], padding: 0.8, maxZoom: 4, duration: 250 })
 }
 
 async function handleImageExpandConfirm(ctx: CommandContext) {
