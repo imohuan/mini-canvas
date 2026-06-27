@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
           :style="menuStyle"
           v-bind="panelEvents"
           :class="[
-            'z-50 rounded-xl bg-surface-container-lowest border border-outline-variant shadow-lg ring-1 ring-black ring-opacity-5 pro-shadow',
+            'z-[99999] rounded-xl bg-surface-container-lowest border border-outline-variant shadow-lg ring-1 ring-black ring-opacity-5 pro-shadow',
             bodyClass,
           ]"
           role="menu"

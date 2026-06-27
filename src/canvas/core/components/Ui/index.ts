@@ -6,6 +6,7 @@
  */
 
 export { default as AxButton } from './AxButton.vue'
+export { default as AxInput } from './AxInput.vue'
 export { default as AxDropdown } from './AxDropdown.vue'
 export type { DropdownTrigger } from './AxDropdown.vue'
 export { default as AxSelect } from './AxSelect.vue'
