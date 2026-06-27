@@ -7,8 +7,8 @@ import {
   AxSelect,
   AxSwitch,
   AxSlider,
-} from '../canvas/core/components/Ui'
-import type { SelectOption } from '../canvas/core/components/Ui/types'
+} from '@mini-canvas/canvas-core/components/Ui'
+import type { SelectOption } from '@mini-canvas/canvas-core/components/Ui/types'
 
 const router = useRouter()
 
