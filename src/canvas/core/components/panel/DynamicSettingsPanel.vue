@@ -49,19 +49,19 @@ const collapsed = ref(false)
   top: 12px;
   right: 12px;
   z-index: 1000;
-  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--color-outline-variant);
   border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
   width: 280px;
   max-height: 70vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: "Geist", "Microsoft YaHei", sans-serif;
-  transition: width 0.25s ease, border-radius 0.25s ease;
+  transition: width 0.25s ease;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
 }
 .ax-panel.collapsed {
   width: 44px;
