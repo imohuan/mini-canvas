@@ -458,53 +458,55 @@ const nodeExtra = computed(() => {
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
-    <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸） -->
-    <slot name="title">
-      <!-- 标题容器：绝对定位在卡片上方，pointer-events-none 防止遮挡操作 -->
-      <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
-        :style="titleTransformStyle">
-        <slot name="title-icon">
-          <!-- 图标优先用插件注册的 titleIcon，否则 fallback 到 nodeType 匹配 -->
-          <component v-if="typeof nodeDef?.titleIcon === 'object' && nodeDef?.titleIcon"
-            :is="nodeDef.titleIcon"
-            class="w-3.5 h-3.5 shrink-0" />
-          <span v-else-if="typeof nodeDef?.titleIcon === 'string' && nodeDef?.titleIcon"
-            class="w-3.5 h-3.5 shrink-0 inline-flex items-center"
-            v-html="nodeDef.titleIcon" />
-          <svg v-else-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-            <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <svg v-else-if="data?.nodeType === 'video'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2">
-            <polygon points="23 7 16 12 23 17" />
-            <rect x="1" y="5" width="15" height="14" rx="2" />
-          </svg>
-          <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2">
-            <polyline points="4 7 4 4 20 4 20 7" />
-            <line x1="9" y1="20" x2="15" y2="20" />
-            <line x1="12" y1="4" x2="12" y2="20" />
-          </svg>
-        </slot>
-        <slot name="title-label">
-          <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
-          <span class="truncate">{{ nodeLabel }}</span>
-        </slot>
-        <slot name="title-extra">
-          <!-- 额外信息：如图片/视频原始分辨率 "1920×1080" -->
-          <span v-if="nodeExtra" class="text-gray-400 shrink-0 ml-auto">{{ nodeExtra }}</span>
-        </slot>
-      </div>
-    </slot>
-
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
+    <!-- 标题栏也放在卡片内，这样拖线 3D 倾斜效果会同时作用在标题上 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
       :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isInvalidConnectionTarget }"
       :style="cardInlineStyle"
       @mousemove="updateCardMousePosition">
+
+      <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸）。
+           放在卡片内以参与 3D 倾斜效果 -->
+      <slot name="title">
+        <!-- 标题容器：绝对定位在卡片上方，pointer-events-none 防止遮挡操作 -->
+        <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
+          :style="titleTransformStyle">
+          <slot name="title-icon">
+            <!-- 图标优先用插件注册的 titleIcon，否则 fallback 到 nodeType 匹配 -->
+            <component v-if="typeof nodeDef?.titleIcon === 'object' && nodeDef?.titleIcon"
+              :is="nodeDef.titleIcon"
+              class="w-3.5 h-3.5 shrink-0" />
+            <span v-else-if="typeof nodeDef?.titleIcon === 'string' && nodeDef?.titleIcon"
+              class="w-3.5 h-3.5 shrink-0 inline-flex items-center"
+              v-html="nodeDef.titleIcon" />
+            <svg v-else-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+              <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <svg v-else-if="data?.nodeType === 'video'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
+            <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <polyline points="4 7 4 4 20 4 20 7" />
+              <line x1="9" y1="20" x2="15" y2="20" />
+              <line x1="12" y1="4" x2="12" y2="20" />
+            </svg>
+          </slot>
+          <slot name="title-label">
+            <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
+            <span class="truncate">{{ nodeLabel }}</span>
+          </slot>
+          <slot name="title-extra">
+            <!-- 额外信息：如图片/视频原始分辨率 "1920×1080" -->
+            <span v-if="nodeExtra" class="text-gray-400 shrink-0 ml-auto">{{ nodeExtra }}</span>
+          </slot>
+        </div>
+      </slot>
 
       <div
         v-if="isInvalidConnectionTarget"
