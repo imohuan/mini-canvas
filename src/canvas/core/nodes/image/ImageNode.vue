@@ -11,6 +11,7 @@ import ImageMasker from './ImageMasker.vue'
 import ImageBottomToolbar from './ImageBottomToolbar.vue'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../../composables/useCanvasStore'
+import { formatFileSize } from '../../utils/format'
 import type { MaskConfig } from '../../types/CanvasNodeData'
 
 defineOptions({ inheritAttrs: false })
@@ -58,8 +59,11 @@ const nodeLabel = computed(() => (props.data?.label as string) || (props.data?.n
 const dims = computed(() => {
   const w = props.data?.imageWidth as number
   const h = props.data?.imageHeight as number
-  if (w && h) return `${w}\u00d7${h}`
-  return ''
+  const size = props.data?.imageSize as number
+  const parts: string[] = []
+  if (w && h) parts.push(`${w}\u00d7${h}`)
+  if (size) parts.push(formatFileSize(size))
+  return parts.join(' \u00b7 ')
 })
 
 const titleIconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>'

@@ -72,6 +72,7 @@ async function handleImageUpload(ctx: CommandContext, args?: unknown) {
       ...(node?.data ?? {}),
       assetId, imageUrl,
       imageName: file.name, imageType: file.type,
+      imageSize: file.size,
       imageWidth: dims?.width, imageHeight: dims?.height,
       cardWidth: nextSize?.cardWidth ?? node?.data?.cardWidth,
       cardHeight: nextSize?.cardHeight ?? node?.data?.cardHeight,

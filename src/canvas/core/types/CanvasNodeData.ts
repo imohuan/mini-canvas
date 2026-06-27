@@ -46,6 +46,7 @@ export interface ImageNodeData extends BaseCanvasNodeData {
   assetId?: string
   imageName?: string
   imageType?: string
+  imageSize?: number   // 文件大小（bytes）
   imageWidth?: number
   imageHeight?: number
   imageUrl?: string // runtime only, 保存前删除
@@ -56,8 +57,10 @@ export interface VideoNodeData extends BaseCanvasNodeData {
   assetId?: string
   videoName?: string
   videoType?: string
+  videoSize?: number     // 文件大小（bytes）
   videoWidth?: number
   videoHeight?: number
+  videoDuration?: number // 时长（秒）
   videoUrl?: string // runtime only, 保存前删除
   thumbUrl?: string // runtime only, 保存前删除
 }

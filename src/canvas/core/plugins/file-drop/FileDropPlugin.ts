@@ -89,13 +89,13 @@ function getImageDims(file: File): Promise<{ width: number; height: number } | n
   })
 }
 
-function getVideoDims(file: File): Promise<{ width: number; height: number } | null> {
+function getVideoMeta(blob: Blob | File): Promise<{ width: number; height: number; duration: number } | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video')
-    const url = URL.createObjectURL(file)
+    const url = URL.createObjectURL(blob)
     video.preload = 'metadata'
     video.onloadedmetadata = () => {
-      resolve({ width: video.videoWidth, height: video.videoHeight })
+      resolve({ width: video.videoWidth, height: video.videoHeight, duration: video.duration })
       URL.revokeObjectURL(url)
     }
     video.onerror = () => {
@@ -226,6 +226,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             imageUrl: url,
             imageName: file.name,
             imageType: file.type,
+            imageSize: file.size,
             imageWidth: dims?.width,
             imageHeight: dims?.height,
             cardWidth: size.cardWidth,
@@ -235,7 +236,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
           logger.info(`拖入图片: ${file.name}${dims ? ` (${dims.width}×${dims.height})` : ''}`)
         } else if (isVideoFile(file)) {
           const url = URL.createObjectURL(file)
-          const dims = await getVideoDims(file)
+          const meta = await getVideoMeta(file)
 
           // 通过 AssetManager 持久化
           const am = context.getPluginAPI<StorageAPI>('storage')?.assets
@@ -254,13 +255,15 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             videoUrl: url,
             videoName: file.name,
             videoType: file.type,
+            videoSize: file.size,
           }
-          if (dims) {
-            extra.videoWidth = dims.width
-            extra.videoHeight = dims.height
+          if (meta) {
+            extra.videoWidth = meta.width
+            extra.videoHeight = meta.height
+            extra.videoDuration = Math.round(meta.duration)
           }
           nodes.push(buildNode('video', extra, pos))
-          logger.info(`拖入视频: ${file.name}${dims ? ` (${dims.width}×${dims.height})` : ''}`)
+          logger.info(`拖入视频: ${file.name}${meta ? ` (${meta.width}×${meta.height})` : ''}`)
         } else if (isTextFile(file)) {
           try {
             const content = await readAsText(file)
@@ -370,6 +373,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             imageUrl: url,
             imageName: 'pasted-image',
             imageType: blob.type,
+            imageSize: blob.size,
             cardWidth: size.cardWidth,
             cardHeight: size.cardHeight,
           }
@@ -382,7 +386,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
         } else if (pi.kind === 'video') {
           const blob = pi.blob
           const url = URL.createObjectURL(blob)
-          const dims = await getVideoDims(blob)
+          const meta = await getVideoMeta(blob)
 
           const am = context.getPluginAPI<StorageAPI>('storage')?.assets
           let assetId: string | undefined
@@ -400,10 +404,12 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             videoUrl: url,
             videoName: 'pasted-video',
             videoType: blob.type,
+            videoSize: blob.size,
           }
-          if (dims) {
-            extra.videoWidth = dims.width
-            extra.videoHeight = dims.height
+          if (meta) {
+            extra.videoWidth = meta.width
+            extra.videoHeight = meta.height
+            extra.videoDuration = Math.round(meta.duration)
           }
           nodes.push(buildNode('video', extra, pos))
           logger.info(`粘贴视频到画布${dims ? ` (${dims.width}×${dims.height})` : ''}`)
