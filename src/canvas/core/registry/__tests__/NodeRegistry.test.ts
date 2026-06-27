@@ -36,6 +36,7 @@ test("NodeRegistry fallback for unknown type", () => {
   const registry = new NodeRegistry()
   assert.deepEqual(registry.getDefaultSize("unknown"), { cardWidth: 256, cardHeight: 256 })
   assert.equal(registry.canReceiveInput("unknown"), true)
+  assert.equal(registry.canProduceOutput("unknown"), true)
   assert.equal(registry.isResizable("unknown"), false)
 })
 

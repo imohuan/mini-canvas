@@ -250,12 +250,13 @@ function createNode(
   const def = context.canvasNodes.get(nodeType)
   const defaultSize = def?.defaultSize ?? { cardWidth: 256, cardHeight: 256 }
   const canReceiveInput = options.requireTarget ?? def?.canReceiveInput ?? true
+  const canProduceOutput = options.requireSource ?? def?.canProduceOutput ?? true
 
   const node: Node = {
     id: nodeId, type: "custom",
     position: { x: flowPosition.x - defaultSize.cardWidth / 2, y: flowPosition.y - defaultSize.cardHeight / 2 },
     data: { label: item.label, nodeType, cardWidth: defaultSize.cardWidth, cardHeight: defaultSize.cardHeight, resizable: def?.resizable ?? false },
-    ...(options.requireSource !== false ? { sourcePosition: Position.Right } : {}),
+    ...(canProduceOutput ? { sourcePosition: Position.Right } : {}),
     ...(canReceiveInput ? { targetPosition: Position.Left } : {}),
   }
   context.actions.addNodes([node])

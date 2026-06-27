@@ -19,6 +19,7 @@ export interface CanvasNodeDefinition {
   defaultSize: { cardWidth: number; cardHeight: number }
   menuItem: NodeMenuItemDefinition
   canReceiveInput?: boolean
+  canProduceOutput?: boolean
   resizable?: boolean
   /** 自定义 top toolbar 组件，不传则使用默认 BaseToolbar */
   topToolbar?: Component
@@ -67,6 +68,10 @@ export class NodeRegistry {
 
   canReceiveInput(type: string): boolean {
     return this.definitions.get(type)?.canReceiveInput ?? true
+  }
+
+  canProduceOutput(type: string): boolean {
+    return this.definitions.get(type)?.canProduceOutput ?? true
   }
 
   isResizable(type: string): boolean {

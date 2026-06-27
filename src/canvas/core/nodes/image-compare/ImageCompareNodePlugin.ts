@@ -25,6 +25,7 @@ export const ImageCompareNodePlugin: CanvasPlugin = {
         badge: 'Compare',
       },
       canReceiveInput: true,
+      canProduceOutput: false,
       resizable: false,
       titleIcon: titleIconSvg,
     })
