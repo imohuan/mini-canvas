@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ProseMirror Editor - Web Component 独立使用</title>
+    <link rel="stylesheet" href="./dist/prosemirror-editor-bundle.css" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        padding: 20px;
+        background: #f5f5f5;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        margin-bottom: 20px;
+        color: #333;
+      }
+      .editor-wrapper {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        min-height: 200px;
+      }
+      .output {
+        margin-top: 20px;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+      }
+      .output h3 {
+        margin-bottom: 10px;
+        color: #666;
+        font-size: 14px;
+      }
+      .output pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>ProseMirror Editor - Web Component 独立使用</h1>
+      <p style="color: #666; margin-bottom: 15px">
+        无需 Vue，纯原生 Web Component
+      </p>
+
+      <div class="editor-wrapper">
+        <prosemirror-editor id="editor"></prosemirror-editor>
+      </div>
+
+      <div class="output">
+        <h3>输出内容：</h3>
+        <pre id="output">这是一个测试编辑器，输入 @ 可以插入资源</pre>
+      </div>
+    </div>
+
+    <!-- 只需引入一个 JS 文件，无需 Vue -->
+    <script src="./dist/prosemirror-editor.standalone.js"></script>
+
+    <script>
+      const editor = document.getElementById("editor");
+      const output = document.getElementById("output");
+
+      // 设置初始值
+      editor.setValue("这是一个测试编辑器，输入 @ 可以插入资源");
+
+      // 设置资源列表
+      const resources = [
+        {
+          id: "1",
+          name: "示例图片1",
+          url: "https://picsum.photos/200/300",
+          type: "image",
+        },
+        {
+          id: "2",
+          name: "示例图片2",
+          url: "https://picsum.photos/300/200",
+          type: "image",
+        },
+        {
+          id: "3",
+          name: "示例图片3",
+          url: "https://picsum.photos/250/250",
+          type: "image",
+        },
+      ];
+
+      editor.setResources(resources);
+
+      // 监听内容变化
+      editor.addEventListener("change", (e) => {
+        output.textContent = e.detail.value;
+      });
+
+      // 监听资源插入
+      editor.addEventListener("resource-insert", (e) => {
+        console.log("插入资源:", e.detail);
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,388 @@
+/* ProseMirror 编辑器基础样式 */
+.prose-mirror-editor .ProseMirror {
+  outline: none !important;
+  min-height: 120px;
+  font-size: 16px;
+  line-height: 24px;
+  color: #111;
+}
+
+.prose-mirror-editor .ProseMirror p {
+  padding: 0px;
+  margin: 0px;
+}
+
+/* 变量标签基础样式 */
+.prose-mirror-editor .variable-node {
+  display: inline-block;
+  padding: 0 4px !important;
+  cursor: default;
+  user-select: none;
+  vertical-align: baseline;
+  font-size: 0.95em;
+  position: relative;
+  height: 24px;
+}
+
+/* 变量标签内层样式 - 提供背景和圆角 */
+.prose-mirror-editor .variable-node-inner {
+  display: inline;
+  padding: 2px 6px;
+  background-color: #eff6ff;
+  color: #2563eb;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+/* 使用 CSS 伪元素创建光标停靠点 - 这是浏览器原生支持的方式 */
+.prose-mirror-editor .variable-node::before,
+.prose-mirror-editor .variable-node::after {
+  content: "\200B"; /* 零宽空格 */
+  display: inline;
+  letter-spacing: 0;
+  font-size: 0;
+  line-height: 0;
+}
+
+/* 资源标签基础样式 */
+.prose-mirror-editor .resource-node {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  margin: 0 0px;
+  cursor: pointer;
+  /* 关键对齐：确保视觉对齐 */
+  vertical-align: bottom;
+  user-select: none;
+  background: transparent;
+  line-height: 1; /* 与正文行高保持一致 */
+  position: relative;
+  height: 24px; /* 明确设置容器高度 */
+  border-bottom: 1px solid #111;
+}
+
+/* 使用 CSS 伪元素创建光标停靠点 */
+.prose-mirror-editor .resource-node::before,
+.prose-mirror-editor .resource-node::after {
+  content: "\200B"; /* 零宽空格 */
+  display: inline;
+  letter-spacing: 0;
+  font-size: 0;
+  line-height: 0;
+}
+.prose-mirror-editor .resource-node img {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+  margin-right: 4px;
+  display: block;
+  pointer-events: none;
+  /* 确保图片不干扰选区色块 */
+  background-color: transparent;
+  /* 图片垂直居中 */
+  align-self: center;
+}
+
+.prose-mirror-editor .resource-node .label {
+  color: #374151;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 16px;
+  /* 文字垂直居中 */
+  align-self: center;
+  font-weight: 600;
+  line-height: 1.2; /* 稍微调整文字行高 */
+}
+
+/* 光标锚点：解决 atom 节点在行尾时光标跳动问题 */
+.prose-mirror-editor .resource-node .cursor-anchor {
+  display: inline;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* 光标 widget：用于 atom 节点在行尾时的光标定位 */
+.prose-mirror-editor .cursor-widget {
+  display: inline;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* 终极修复：选中背景 */
+/* 1. 当 ProseMirror 将其标记为选中节点时 */
+.prose-mirror-editor .ProseMirror-selectednode.resource-node {
+  background-color: #2b6df2 !important;
+  color: #ffffff !important;
+  outline: none;
+  /* 确保选中时也保持正确的高度和对齐 */
+  height: 24px;
+  align-items: center;
+}
+
+.prose-mirror-editor .ProseMirror-selectednode.resource-node .label {
+  color: #ffffff !important;
+}
+
+/* 2. 装饰插件添加的选中样式 */
+.prose-mirror-editor .resource-node-selected {
+  background-color: #2b6df2 !important;
+  color: #ffffff !important;
+  outline: none;
+  /* 确保选中时也保持正确的高度和对齐 */
+  height: 24px;
+  align-items: center;
+}
+
+.prose-mirror-editor .resource-node-selected .label {
+  color: #ffffff !important;
+}
+
+/* 变量节点选中样式 */
+.prose-mirror-editor
+  .ProseMirror-selectednode.variable-node
+  .variable-node-inner,
+.prose-mirror-editor .variable-node-selected {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  outline: none;
+  height: 24px !important;
+}
+
+.prose-mirror-editor .variable-node-selected .variable-node-inner {
+  background-color: unset;
+  color: #ffffff !important;
+  outline: none;
+}
+
+/* 2. 处理原生拖拽选中时的背景覆盖 */
+.prose-mirror-editor .ProseMirror ::selection {
+  background-color: #2b6df2 !important;
+  color: #ffffff !important;
+}
+
+/* 强制图片在选中区域内背景透明，防止白块 */
+.prose-mirror-editor .resource-node img::selection {
+  background: transparent !important;
+}
+
+/* 联想菜单 */
+.mention-menu {
+  position: fixed;
+  z-index: 9999;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5e7eb;
+  width: 200px;
+  padding: 6px;
+  padding-right: 0px;
+  max-height: 280px;
+  overflow: hidden;
+}
+
+/* 自定义滚动条样式 */
+.mention-menu .menu-content {
+  max-height: 268px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Firefox 滚动条 */
+.mention-menu .menu-content {
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+
+/* Webkit 滚动条 (Chrome, Safari, Edge) */
+.mention-menu .menu-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mention-menu .menu-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.mention-menu .menu-content::-webkit-scrollbar-thumb {
+  background-color: #d1d5db;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.mention-menu .menu-content::-webkit-scrollbar-thumb:hover {
+  background-color: #9ca3af;
+}
+
+.mention-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.mention-menu .menu-item:hover {
+  background-color: #f3f4f6;
+}
+
+.mention-menu .menu-item.active {
+  background-color: #eff6ff;
+  color: #2b6df2;
+}
+
+.mention-menu .menu-item img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background-color: #f3f4f6;
+}
+
+.mention-menu .menu-item span {
+  font-size: 14px;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mention-menu .menu-item.active span {
+  color: #2b6df2;
+}
+
+/* 变量菜单项样式 */
+.mention-menu .variable-item {
+  gap: 8px;
+}
+
+.mention-menu .variable-item .variable-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.mention-menu .variable-item .variable-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mention-menu .variable-item.active .variable-icon {
+  color: #2563eb;
+}
+
+/* 预览框样式 */
+.preview-box {
+  position: fixed;
+  z-index: 1000;
+  max-width: 400px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.preview-box .preview-header {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.preview-box .preview-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+}
+
+.preview-box .preview-image {
+  max-width: 400px;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-box .preview-video {
+  max-width: 400px;
+  max-height: 400px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-box .preview-footer {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 10;
+  color: white;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* 全屏预览样式 */
+.fullscreen-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-preview img,
+.fullscreen-preview video {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+}
+
+.fullscreen-preview .close-btn {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fullscreen-preview .close-btn:hover {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+/* 拖拽参考线样式 */
+.drop-cursor {
+  opacity: 1;
+  border-radius: 1px;
+  box-shadow: 0 0 4px rgba(43, 109, 242, 0.5);
+}
