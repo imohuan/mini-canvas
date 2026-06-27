@@ -289,14 +289,24 @@ export const AlignGuidePlugin: CanvasPlugin = {
 
     // ====== 事件监听 ======
 
+    // rAF 节流：nodeDrag 每帧触发 ~60Hz，对齐引导线不需要逐帧重算
+    let dragRafId: number | null = null
+    let latestDragNode: any = null
+
     const offNodeDrag = context.on('nodeDrag', ({ node }: any) => {
       if (!enabledRef.value) return
       if (draggingNodeId !== null && draggingNodeId !== node.id) return
       draggingNodeId = node.id
+      latestDragNode = node
 
-      const guides = calculateGuides(node)
-      renderLines(guides)
-      context.emit('align-guide:update', { guides })
+      if (dragRafId) return
+      dragRafId = requestAnimationFrame(() => {
+        dragRafId = null
+        if (!latestDragNode) return
+        const guides = calculateGuides(latestDragNode)
+        renderLines(guides)
+        context.emit('align-guide:update', { guides })
+      })
     })
 
     const offNodeDragStart = context.on('nodeDragStart', ({ node }: any) => {

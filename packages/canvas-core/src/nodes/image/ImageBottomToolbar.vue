@@ -103,8 +103,8 @@ function onMore() {
 }
 
 function onInputAreaClick() {
-  const pm = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
-  pm?.focus()
+  // const pm = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
+  // pm?.focus()
 }
 
 function onAi() {

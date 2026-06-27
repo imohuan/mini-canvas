@@ -95,7 +95,7 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
 
 <template>
   <Teleport :to="viewportRef" :disabled="!viewportRef">
-    <div v-if="isActive && nodes.length" :style="wrapperStyle" class="vf-node-toolbar select-none" @dblclick.stop>
+    <div v-if="isActive && nodes.length" :style="wrapperStyle" class="vf-node-toolbar select-none nodrag nopan" @dblclick.stop>
       <slot />
     </div>
   </Teleport>

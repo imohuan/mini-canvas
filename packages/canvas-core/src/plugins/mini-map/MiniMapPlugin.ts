@@ -73,8 +73,18 @@ export const MiniMapPlugin: CanvasPlugin = {
 
     function syncNodes() { state.nodes = context.actions.getAllNodes() }
     const offNodesChange = context.on("nodesChange", syncNodes)
-    const offNodeDrag = context.on("nodeDrag", syncNodes)
     const offNodeDragStop = context.on("nodeDragStop", syncNodes)
+
+    // rAF 节流：nodeDrag 每帧触发 ~60Hz，小地图不需要逐帧同步
+    let dragRafId: number | null = null
+    const throttledDragSync = () => {
+      if (dragRafId) return
+      dragRafId = requestAnimationFrame(() => {
+        dragRafId = null
+        syncNodes()
+      })
+    }
+    const offNodeDrag = context.on("nodeDrag", throttledDragSync)
 
     let rafId = 0
     function syncViewport() {

@@ -156,7 +156,15 @@ watch(() => [canvas.nodeTypes, canvas.customNodeTypes, canvas.edgeTypes, canvas.
 
 // --- 选中同步：事件驱动，直接写入 Pinia store ---
 
+/** 拖拽过程中的 position change 不需要广播到 eventBus — 各插件不需要逐帧响应 */
+function isDragPositionChange(changes: any[]): boolean {
+  return changes.length > 0 && changes.every((c: any) => c.type === 'position' && c.dragging)
+}
+
 function onNodesChange(changes: any[]) {
+  // 拖拽期间的纯位置变化 — 跳过，减少 filter 开销
+  if (isDragPositionChange(changes)) return
+
   const removeChanges = changes.filter((c: any) => c.type === 'remove')
   if (removeChanges.length > 0) {
     const removeIds = new Set(removeChanges.map((c: any) => c.id))
@@ -645,7 +653,7 @@ onUnmounted(async () => {
         :auto-connect="false" @connect="conn.onConnect($event); manager.eventBus.emit('connect', $event)"
         @connect-start="conn.onConnectStart($event); manager.eventBus.emit('connectStart', $event)"
         @connect-end="manager.eventBus.emit('connectEnd', $event); conn.onConnectEnd($event); canvas.connectionState.activeConnection = null"
-        @nodes-change="onNodesChange($event); manager.eventBus.emit('nodesChange', $event)"
+        @nodes-change="onNodesChange($event); isDragPositionChange($event) || manager.eventBus.emit('nodesChange', $event)"
         @edges-change="onEdgesChange($event); manager.eventBus.emit('edgesChange', $event)"
         @node-drag="manager.eventBus.emit('nodeDrag', $event)"
         @node-drag-start="manager.eventBus.emit('nodeDragStart', $event)"
