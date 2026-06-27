@@ -13,6 +13,10 @@ const rotateSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stro
 const downloadSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
 const confirmSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`
 const cancelSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+// 菜单图标（CanvasMenu 使用）— 无 class，由 CSS 控制 16x16
+const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+// 标题图标（BaseNode title 使用）— 由外层 span 控制尺寸
+const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 
 // ---- helpers ----
 const MAX_PREVIEW_WIDTH = 420
@@ -276,8 +280,9 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'image', node: markRaw(ImageNode), label: '图片',
       defaultSize: { cardWidth: 360, cardHeight: 270 },
-      menuItem: { label: '图片', description: '创建图片节点', icon: 'image' },
+      menuItem: { label: '图片', description: '创建图片节点', icon: menuIconSvg },
       canReceiveInput: true, resizable: false,
+      titleIcon: titleIconSvg,
       topToolbar: undefined,
       bottomToolbar: markRaw(ImageBottomToolbar),
     })

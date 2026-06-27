@@ -10,6 +10,11 @@ const fullscreenSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" 
 const resetSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>`
 const downloadSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
 
+// 菜单图标（CanvasMenu 使用）
+const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+// 标题图标（BaseNode title 使用）— 全景节点用地球仪风格的图标
+const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`
+
 const MAX_PREVIEW_WIDTH = 420
 const MAX_PREVIEW_HEIGHT = 300
 
@@ -170,8 +175,9 @@ export const PanoramaNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: "panorama", node: markRaw(PanoramaNode), label: "360全景",
       defaultSize: { cardWidth: 640, cardHeight: 400 },
-      menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: "image", badge: "VR" },
+      menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: menuIconSvg, badge: "VR" },
       canReceiveInput: true,
+      titleIcon: titleIconSvg,
     })
 
     context.commands.register({ id: "panorama.upload", source: "node:panorama", run: handlePanoramaUpload })

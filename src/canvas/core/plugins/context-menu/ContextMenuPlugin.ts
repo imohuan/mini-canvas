@@ -1,11 +1,11 @@
-﻿import { createApp, h, reactive, nextTick } from "vue"
+﻿import { createApp, h, reactive, nextTick, type Component } from "vue"
 import type { Node, Edge } from "@vue-flow/core"
 import { Position } from "@vue-flow/core"
 import type { CanvasPlugin, PluginContext } from "../types"
 import type { ConnectionState, Point } from "../types"
 import type { MenuContext } from "../../registry/MenuRegistry"
 import type { CanvasMenuItem, CanvasMenuState } from "../../registry/types"
-import CanvasMenu from "./CanvasMenu.vue"
+import CanvasMenu from "../../components/Menu/CanvasMenu.vue"
 import { registerBuiltinMenuItems } from "./builtinMenuItems"
 
 // ==================== 连线拖拽菜单工具函数（从 Canvas.vue 移植） ====================
@@ -193,7 +193,7 @@ function resolveHoverTarget(
 const GROUP_ORDER: Record<string, number> = { create: 1, action: 2, delete: 3 }
 
 interface ResolvedMenuItem {
-  id: string; label: string; description?: string; icon?: string; badge?: string
+  id: string; label: string; description?: string; icon?: string | Component; badge?: string
   shortcut?: string; danger?: boolean; disabled?: boolean; group: string; order?: number
   nodeType?: string
 }
@@ -227,7 +227,7 @@ function resolveItems(
 
     items.push({
       id: item.id, label: item.title || item.id, description: item.description,
-      icon: typeof item.icon === "string" ? item.icon : undefined,
+      icon: item.icon,
       badge: item.badge, shortcut: item.shortcut, danger: item.danger, disabled,
       group: item.group || "action", order: item.order ?? 0,
     })

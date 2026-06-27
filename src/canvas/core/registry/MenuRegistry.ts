@@ -1,4 +1,4 @@
-﻿import { reactive } from 'vue'
+﻿import { reactive, type Component } from 'vue'
 import type { MenuItemDefinition, MenuRegistryAPI, CommandContext } from './types'
 import type { NodeRegistry } from './NodeRegistry'
 
@@ -89,7 +89,7 @@ export interface ResolvedMenuItem {
   id: string
   label: string
   description?: string
-  icon?: string
+  icon?: string | Component
   badge?: string
   shortcut?: string
   danger?: boolean
@@ -169,7 +169,7 @@ export function resolveMenuItems(
       id: item.id,
       label: item.title || item.id,
       description: item.description,
-      icon: typeof item.icon === 'string' ? item.icon : undefined,
+      icon: item.icon,
       badge: item.badge,
       shortcut: item.shortcut,
       danger: item.danger,

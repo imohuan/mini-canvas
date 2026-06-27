@@ -147,7 +147,7 @@ export interface CanvasMenuItem {
   danger?: boolean
   shortcut?: string
   group?: string
-  icon?: string
+  icon?: string | Component
   /** 创建节点菜单项的节点类型（如 text, image），非创建类菜单项为空 */
   nodeType?: string
 }

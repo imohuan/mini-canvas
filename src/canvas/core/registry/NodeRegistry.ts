@@ -3,7 +3,8 @@
 export interface NodeMenuItemDefinition {
   label: string
   description?: string
-  icon?: 'text' | 'image' | 'video' | 'layers' | 'link' | 'delete' | 'duplicate'
+  /** 图标：SVG HTML 字符串或 Vue 组件，由插件注册时提供 */
+  icon?: string | Component
   badge?: string
 }
 
@@ -23,6 +24,8 @@ export interface CanvasNodeDefinition {
   topToolbar?: Component
   /** 自定义 bottom toolbar 组件，不传则使用默认 BaseToolbar */
   bottomToolbar?: Component
+  /** 标题栏图标（SVG HTML 字符串或 Vue 组件）。不传则回到 BaseNode 内置 fallback */
+  titleIcon?: string | Component
 }
 
 export interface CanvasNodeMenuItem {

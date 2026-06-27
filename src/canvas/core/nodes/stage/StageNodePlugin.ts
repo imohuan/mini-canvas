@@ -16,6 +16,11 @@ const themeSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" strok
 const switchAdvSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>`
 const switchBaseSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>`
 
+// 菜单图标（CanvasMenu 使用）
+const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5Z" stroke-linejoin="round"/><path d="M3 12l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+// 标题图标（BaseNode title 使用）
+const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5Z" stroke-linejoin="round"/><path d="M3 12l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 16l9 5 9-5" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+
 function noopCmd(ctx: CommandContext) { ctx.logger.debug('stage command stub:', ctx.node?.id) }
 
 /** 切换节点工具组：写入 _overlay._toolbarGroup，BaseToolbar 自动响应重渲染 */
@@ -36,8 +41,9 @@ export const StageNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'stage', node: markRaw(StageNode), label: '导演台',
       defaultSize: { cardWidth: 320, cardHeight: 320 },
-      menuItem: { label: '导演台', description: '创建编排节点', icon: 'layers', badge: 'NEW' },
+      menuItem: { label: '导演台', description: '创建编排节点', icon: menuIconSvg, badge: 'NEW' },
       canReceiveInput: true, resizable: false,
+      titleIcon: titleIconSvg,
     })
 
     // —— 命令 ——

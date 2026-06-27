@@ -4,6 +4,7 @@ import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
+import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { createCappedStyle } from '../../utils/viewportSpace'
 
 const props = defineProps<NodeProps & {
@@ -13,6 +14,14 @@ const props = defineProps<NodeProps & {
 
 const canvas = useCanvasStore()
 const vf = useVueFlow()
+const runtime = useCanvasRuntime()
+
+/** 节点类型定义（含 titleIcon） */
+const nodeDef = computed(() => {
+  const nodeType = props.data?.nodeType as string | undefined
+  if (!nodeType) return null
+  return runtime.nodeRegistry.get(nodeType)
+})
 
 /**
  * 画布当前的缩放比例。
@@ -426,8 +435,14 @@ const nodeExtra = computed(() => {
       <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
         :style="titleTransformStyle">
         <slot name="title-icon">
-          <!-- 默认图标：根据 nodeType 显示图片/视频/文本类型图标 -->
-          <svg v-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
+          <!-- 图标优先用插件注册的 titleIcon，否则 fallback 到 nodeType 匹配 -->
+          <component v-if="typeof nodeDef?.titleIcon === 'object' && nodeDef?.titleIcon"
+            :is="nodeDef.titleIcon"
+            class="w-3.5 h-3.5 shrink-0" />
+          <span v-else-if="typeof nodeDef?.titleIcon === 'string' && nodeDef?.titleIcon"
+            class="w-3.5 h-3.5 shrink-0 inline-flex items-center"
+            v-html="nodeDef.titleIcon" />
+          <svg v-else-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />

@@ -10,6 +10,11 @@ const alignSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" strok
 const copySvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`
 const deleteSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`
 
+// 菜单图标（CanvasMenu 使用）
+const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h10M4 17h16" stroke-linecap="round"/></svg>`
+// 标题图标（BaseNode title 使用）
+const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`
+
 // stub 命令实现 — 后续可接入富文本编辑
 function noopCmd(ctx: CommandContext) { ctx.logger.debug('text command stub:', ctx.node?.id) }
 
@@ -21,8 +26,9 @@ export const TextNodePlugin: CanvasPlugin = {
     context.canvasNodes.register({
       type: 'text', node: markRaw(TextNode), label: '文本',
       defaultSize: { cardWidth: 300, cardHeight: 200 },
-      menuItem: { label: '文本', description: '创建文本节点', icon: 'text' },
+      menuItem: { label: '文本', description: '创建文本节点', icon: menuIconSvg },
       canReceiveInput: false, resizable: true,
+      titleIcon: titleIconSvg,
     })
 
     context.commands.register({ id: 'text.bold', source: 'node:text', run: noopCmd })

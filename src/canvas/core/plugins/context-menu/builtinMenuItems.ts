@@ -1,6 +1,10 @@
 ﻿import type { PluginContext } from '../types'
 import type { MenuItemDefinition } from '../../registry/types'
 
+// 内置菜单图标的 SVG 字符串
+const deleteIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16" stroke-linecap="round"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/><path d="M6 7l1 14h10l1-14M9 7V4h6v3" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+const duplicateIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10" stroke-linecap="round"/></svg>`
+
 /**
  * 注册系统自带的右键菜单项
  *
@@ -66,7 +70,7 @@ export function registerBuiltinMenuItems(ctx: PluginContext): void {
     id: 'node:copy',
     commandId: 'clipboard.copy',
     title: '复制',
-    icon: 'duplicate',
+    icon: duplicateIconSvg,
     shortcut: 'Ctrl+C',
     areas: ['node'],
     order: 30,
@@ -76,7 +80,7 @@ export function registerBuiltinMenuItems(ctx: PluginContext): void {
     id: 'node:duplicate',
     commandId: 'clipboard.duplicate',
     title: '复制一份',
-    icon: 'duplicate',
+    icon: duplicateIconSvg,
     shortcut: 'Ctrl+D',
     areas: ['node'],
     order: 20,
@@ -86,7 +90,7 @@ export function registerBuiltinMenuItems(ctx: PluginContext): void {
     id: 'node:delete',
     commandId: 'core.deleteNode',
     title: '删除节点',
-    icon: 'delete',
+    icon: deleteIconSvg,
     shortcut: 'Del',
     danger: true,
     areas: ['node'],
@@ -99,7 +103,7 @@ export function registerBuiltinMenuItems(ctx: PluginContext): void {
     id: 'edge:delete',
     commandId: 'core.deleteEdge',
     title: '删除连线',
-    icon: 'delete',
+    icon: deleteIconSvg,
     shortcut: 'Del',
     danger: true,
     areas: ['edge'],
