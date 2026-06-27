@@ -19,7 +19,7 @@
  *     <CustomEdge v-bind="conn.buildConnectionEdgeProps(props)" />
  *   </template>
  */
-import { ref, shallowRef, watch } from 'vue'
+import { ref, shallowRef, watch, nextTick } from 'vue'
 import { useCanvasStore } from './useCanvasStore'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
@@ -778,16 +778,19 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       currentHover?.flowPosition?.y !== nextFeedbackPoint?.y
 
     if (hoverChanged) {
-      if (effectiveFeedbackNodeId && nextFeedbackPoint) {
-        canvas.connectionState.hoverNode = {
-          nodeId: effectiveFeedbackNodeId,
-          status: invalidNodeId ? 'invalid' : 'valid',
-          flowPosition: nextFeedbackPoint,
-          message: invalidNodeId ? '无法连接' : undefined,
-        }
-      } else {
-        canvas.connectionState.hoverNode = null
-      }
+      // 延迟到 nextTick 写入，避免在 render 阶段触发 reactive state 变更
+      // 导致 Vue 递归更新检测（Maximum recursive updates exceeded in <BaseNode>）
+      const nextHover = effectiveFeedbackNodeId && nextFeedbackPoint
+        ? {
+            nodeId: effectiveFeedbackNodeId,
+            status: (invalidNodeId ? 'invalid' : 'valid') as 'valid' | 'invalid',
+            flowPosition: { x: nextFeedbackPoint.x, y: nextFeedbackPoint.y },
+            message: invalidNodeId ? '无法连接' : undefined,
+          }
+        : null
+      nextTick(() => {
+        canvas.connectionState.hoverNode = nextHover
+      })
     }
 
     return {

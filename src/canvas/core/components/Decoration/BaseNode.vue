@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
@@ -29,19 +29,6 @@ const nodeDef = computed(() => {
  * 最小保证 0.01，防止除零或负缩放导致节点消失。
  */
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
-
-/**
- * 卡片行内样式：尺寸 + 3D 倾斜 + 边框（counter-scale）。
- * 选中环用 outline 叠加在 border 外侧，不参与盒模型。
- */
-const cardInlineStyle = computed(() => ({
-  width: cardWidth.value + 'px',
-  height: cardHeight.value + 'px',
-  transform: cardTransform.value,
-  borderWidth: `${1 / zoom.value}px`,
-  borderRadius: `${8 / zoom.value}px`,
-  '--card-outline-width': props.selected ? `${2 / zoom.value}px` : '0px',
-}))
 
 /**
  * 标题栏的缩放跟随样式。
@@ -284,11 +271,40 @@ const cardTransform = computed(() => {
 })
 
 /**
- * "无法连接"提示气泡在卡片内的相对位置（0~1 归一化）。
- * 根据拖线时鼠标在画布中的位置，换算成节点内部的百分比坐标。
- * 气泡会跟随鼠标大致位置显示，但限制在卡片内部 6%~94% 范围内不会跑出边界。
+ * 卡片行内样式：尺寸 + 3D 倾斜 + 边框（counter-scale）。
+ * 选中环用 outline 叠加在 border 外侧，不参与盒模型。
+ * 用 shallowRef + watch 稳定引用，避免每次 computed 返回新对象触发不必要重绘。
  */
+const cardInlineStyle = shallowRef<Record<string, string>>({
+  width: cardWidth.value + 'px',
+  height: cardHeight.value + 'px',
+  transform: cardTransform.value,
+  borderWidth: `${1 / zoom.value}px`,
+  borderRadius: `${8 / zoom.value}px`,
+  '--card-outline-width': props.selected ? `${2 / zoom.value}px` : '0px',
+})
+watch(
+  () => ({
+    w: cardWidth.value,
+    h: cardHeight.value,
+    t: cardTransform.value,
+    z: zoom.value,
+    sel: props.selected,
+  }),
+  ({ w, h, t, z, sel }) => {
+    cardInlineStyle.value = {
+      width: w + 'px',
+      height: h + 'px',
+      transform: t,
+      borderWidth: `${1 / z}px`,
+      borderRadius: `${8 / z}px`,
+      '--card-outline-width': sel ? `${2 / z}px` : '0px',
+    }
+  },
+)
+
 /**
+ * "无法连接"提示气泡在卡片内的相对位置（0~1 归一化）。
  * 无法连接提示气泡在卡片内的相对位置（0~1 归一化）。
  * 根据拖线时鼠标在画布中的位置，换算成节点内部的百分比坐标。
  * 气泡会跟随鼠标大致位置显示，但限制在卡片内部 6%~94% 范围内不会跑出边界。

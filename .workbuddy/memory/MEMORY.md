@@ -26,3 +26,10 @@
 - 进入特殊模式（裁剪等）→ `node.data._overlay = { _cropMode: true, _toolbarGroup: 'xxx' }`
 - 退出 → `delete node.data._overlay` 一步恢复所有状态
 - `BaseCanvasNodeData._overlay?: CanvasNodeOverlay`（types/CanvasNodeData.ts）
+
+## Vue Render 阶段禁止写入 Reactive State
+
+- **模板表达式/插槽中调用的函数禁止写入 reactive state** — 会导致 `Maximum recursive updates exceeded`
+- 典型反模式：`<template #slot>{{ updateState() }}</template>` 中的 `updateState` 写入 Pinia ref
+- **修复**：用 `nextTick(() => { state.value = x })` 迁出 render 阶段
+- 已在 `useCanvasConnection.ts` 的 `buildConnectionEdgeProps` 中应用此修复（hoverNode 写入）
