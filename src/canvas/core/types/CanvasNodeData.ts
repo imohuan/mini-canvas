@@ -11,14 +11,24 @@ export interface Rect {
 /** @deprecated 使用 Rect */
 export type CropRect = Rect
 
+/** 蒙版绘制配置 */
+export interface MaskConfig {
+  brushSize: number
+  brushColor: string
+  brushOpacity: number
+  isErasing: boolean
+}
+
 /** 临时覆写状态对象。进入特殊模式时设此对象，退出时 delete 一步恢复。
  *  刷新页面后 storage 加载时必须 strip _overlay。 */
 export interface CanvasNodeOverlay {
   _cropMode?: boolean
   _expandMode?: boolean
+  _maskMode?: boolean
   _toolbarGroup?: string
   _cropRect?: Rect
   _expandRect?: Rect
+  _maskConfig?: MaskConfig
 }
 
 export interface BaseCanvasNodeData {

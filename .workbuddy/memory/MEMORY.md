@@ -42,11 +42,21 @@
 _overlay: {
   _cropMode: true,
   _expamdMode: true,
-  _toolbarGroup: 'expand' | 'crop',
+  _maskMode: true,
+  _toolbarGroup: 'expand' | 'crop' | 'mask',
   _cropRect: { x, y, width, height },     // ← 全在 _overlay 内，非顶层
   _expandRect: { x, y, width, height },   // ← 同上
+  _maskConfig: { brushSize, brushColor, brushOpacity, isErasing }, // ← 蒙版画笔配置
 }
 ```
+
+## 图片蒙版（Mask）功能
+
+- **`ImageMasker.vue`** — `Teleport to="body"`（同 ImageCropper），双 canvas 层（背景图 + 绘制层）
+- brushSize/brushColor/brushOpacity/isErasing 通过 `_overlay._maskConfig` 配置
+- 蒙版绘制数据通过 `maskUrl`（blob URL）存在 node.data 顶层，持久化走 assetManager
+- 橡皮擦用 Canvas `destination-out` composite
+- toolbar group 使用 `'mask'`，按钮：大小下拉/颜色下拉/橡皮擦/清除/确认/取消
 
 ### Storage 双重清理
 - `sanitizeForSave` — RUNTIME_FIELDS 含 `_overlay`, `_cropRect`, `_cropMode`, `_expandRect`, `_expandMode`

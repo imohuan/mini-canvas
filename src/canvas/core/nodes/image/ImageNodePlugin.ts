@@ -3,8 +3,10 @@ import type { Node } from '@vue-flow/core'
 import { ImageNode } from './index'
 import ImageUploadButton from './ImageUploadButton.vue'
 import ImageBottomToolbar from './ImageBottomToolbar.vue'
+import MaskBrushButton from './MaskBrushButton.vue'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
 import type { CommandContext } from '../../registry/types'
+import type { MaskConfig } from '../../types/CanvasNodeData'
 
 // ---- SVG icons ----
 const cropSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>`
@@ -21,6 +23,9 @@ const uploadArrowSvg = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" str
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 // 标题图标（BaseNode title 使用）— 由外层 span 控制尺寸
 const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+// 蒙版图标
+const maskSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-width="1.5" opacity="0.5"/></svg>`
+const eraserSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14 2.2c.8-.8 2-.8 2.8 0L20 5.2"/><line x1="18" y1="12.8" x2="12" y2="18.8"/></svg>`
 
 // ---- helpers ----
 const MAX_PREVIEW_WIDTH = 420
@@ -300,6 +305,123 @@ function handleImageExpandCancel(ctx: CommandContext) {
   vf.updateNode(nodeId, { data })
 }
 
+// ==================== 蒙版绘制（Mask）====================
+
+const DEFAULT_MASK_CONFIG: MaskConfig = {
+  brushSize: 20,
+  brushColor: '#ff0000',
+  brushOpacity: 0.5,
+  isErasing: false,
+}
+
+function handleImageMask(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node?.data?.imageUrl || !node.data.imageWidth || !node.data.imageHeight) return
+
+  vf.updateNode(nodeId, {
+    data: {
+      ...(node.data),
+      _overlay: {
+        _maskMode: true,
+        _toolbarGroup: 'mask',
+        _maskConfig: { ...DEFAULT_MASK_CONFIG },
+      },
+    },
+  })
+  vf.fitView({ nodes: [nodeId], padding: 0.8, maxZoom: 4, duration: 250 })
+}
+
+async function handleImageMaskConfirm(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node?.data) return
+
+  const sourceData = node.data
+  const { imageWidth, imageHeight } = sourceData
+  if (!imageWidth || !imageHeight) return
+
+  // 获取蒙版 blob（通过 ImageNode 内的 ImageMasker ref，这里走 data 通信路径）
+  const maskUrl = sourceData.maskUrl as string | undefined
+
+  // 退出蒙版模式
+  const cleanedData = { ...sourceData }
+  delete cleanedData._overlay
+  // 保留 maskUrl（持久化用）
+  vf.updateNode(nodeId, { data: cleanedData })
+
+  // 持久化蒙版资产
+  if (maskUrl) {
+    const assetManager = runtime.getPluginAPI?.('storage')?.assets
+    if (assetManager) {
+      try {
+        const response = await fetch(maskUrl)
+        const blob = await response.blob()
+        const name = `${(sourceData.imageName as string) || 'image'}_mask.png`
+        await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png')
+      } catch (err) { ctx.logger.error('保存蒙版资产失败:', err) }
+    }
+  }
+}
+
+function handleImageMaskCancel(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node) return
+
+  const data = { ...(node.data) }
+  delete data._overlay
+  delete data.maskUrl
+  vf.updateNode(nodeId, { data })
+}
+
+function handleImageMaskClear(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node) return
+
+  vf.updateNode(nodeId, {
+    data: { ...node.data, maskUrl: null },
+  })
+}
+
+function handleImageMaskEraser(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  if (!node?.data?._overlay?._maskConfig) return
+
+  const cfg = node.data._overlay._maskConfig
+  vf.updateNode(nodeId, {
+    data: {
+      ...node.data,
+      _overlay: {
+        ...node.data._overlay,
+        _maskConfig: { ...cfg, isErasing: !cfg.isErasing },
+      },
+    },
+  })
+}
+
 function handleImageFilter(ctx: CommandContext, args?: unknown) {
   const filterType = (args as { filter?: string })?.filter || 'none'
   const runtime = ctx.runtime as any
@@ -363,6 +485,13 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.commands.register({ id: 'image.expand', source: 'node:image', title: '扩展', run: handleImageExpand })
     context.commands.register({ id: 'image.expandConfirm', source: 'node:image', title: '确认扩展', run: handleImageExpandConfirm })
     context.commands.register({ id: 'image.expandCancel', source: 'node:image', title: '取消扩展', run: handleImageExpandCancel })
+    context.commands.register({ id: 'image.mask', source: 'node:image', title: '蒙版', run: handleImageMask })
+    context.commands.register({ id: 'image.maskConfirm', source: 'node:image', title: '确认蒙版', run: handleImageMaskConfirm })
+    context.commands.register({ id: 'image.maskCancel', source: 'node:image', title: '取消蒙版', run: handleImageMaskCancel })
+    context.commands.register({ id: 'image.maskClear', source: 'node:image', title: '清除蒙版', run: handleImageMaskClear })
+    context.commands.register({ id: 'image.maskEraser', source: 'node:image', title: '橡皮擦', run: handleImageMaskEraser })
+    // no-op: MaskBrushButton customRender 自己处理交互，不通过命令
+    context.commands.register({ id: 'image.maskBrushConfig', source: 'node:image', title: '画笔配置', run: () => {} })
     context.commands.register({ id: 'image.filter', source: 'node:image', title: '滤镜', run: handleImageFilter })
     context.commands.register({ id: 'image.rotate', source: 'node:image', title: '旋转', run: handleImageRotate })
     context.commands.register({ id: 'image.download', source: 'node:image', title: '下载', run: handleImageDownload })
@@ -378,6 +507,18 @@ export const ImageNodePlugin: CanvasPlugin = {
 
     // top: 扩展按钮（default 组，正常状态显示）
     context.toolbars.register('node:image', { id: 'image.expand', source: 'node:image', commandId: 'image.expand', position: 'top', title: '扩展', icon: expandSvg, tooltip: '扩展图片', nodeTypes: ['image'], group: 'default', order: 25 })
+    // top: 蒙版入口按钮（default 组）
+    context.toolbars.register('node:image', { id: 'image.mask', source: 'node:image', commandId: 'image.mask', position: 'top', title: '蒙版', icon: maskSvg, tooltip: '绘制蒙版', nodeTypes: ['image'], group: 'default', order: 27 })
+    // top: mask 组 — 仅蒙版模式下显示（画笔配置面板在 ImageMasker 内部）
+    // 画笔配置面板（customRender：滑块 + 颜色 + 橡皮擦）
+    context.toolbars.register('node:image', { id: 'image.maskBrushConfig', source: 'node:image', commandId: 'image.maskBrushConfig', position: 'top', title: '', tooltip: '画笔配置', nodeTypes: ['image'], group: 'mask', order: 5, customRender: markRaw(MaskBrushButton), visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true })
+    // 橡皮擦（同时也在面板中）
+    context.toolbars.register('node:image', { id: 'image.maskConfig.eraser', source: 'node:image', commandId: 'image.maskEraser', position: 'top', title: '橡皮擦', icon: eraserSvg, tooltip: '切换橡皮擦', nodeTypes: ['image'], group: 'mask', order: 15, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true })
+    // 清除
+    context.toolbars.register('node:image', { id: 'image.maskClear', source: 'node:image', commandId: 'image.maskClear', position: 'top', title: '清除', icon: cancelSvg, tooltip: '清除蒙版', nodeTypes: ['image'], group: 'mask', order: 20, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true, danger: true })
+    // 确认 / 取消
+    context.toolbars.register('node:image', { id: 'image.maskConfirm', source: 'node:image', commandId: 'image.maskConfirm', position: 'top', title: '完成', icon: confirmSvg, tooltip: '确认蒙版', nodeTypes: ['image'], group: 'mask', order: 30, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true })
+    context.toolbars.register('node:image', { id: 'image.maskCancel', source: 'node:image', commandId: 'image.maskCancel', position: 'top', title: '取消', icon: cancelSvg, tooltip: '取消蒙版', nodeTypes: ['image'], group: 'mask', order: 35, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true, danger: true })
     // bottom: 不标 group，始终显示
     context.toolbars.register('node:image', { id: 'image.rotate', source: 'node:image', commandId: 'image.rotate', position: 'bottom', title: '旋转', icon: rotateSvg, nodeTypes: ['image'], order: 10 })
     context.toolbars.register('node:image', { id: 'image.download', source: 'node:image', commandId: 'image.download', position: 'bottom', title: '下载', icon: downloadSvg, nodeTypes: ['image'], order: 20 })
