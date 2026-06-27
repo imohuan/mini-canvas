@@ -1,5 +1,7 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from "vue"
+import { AxInput, AxSwitch, AxSelect, AxSlider } from "../Ui"
+import type { SelectOption } from "../Ui/types"
 import type { PanelSettingDefinition } from '../../registry/types'
 
 const props = defineProps<{
@@ -11,9 +13,27 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
 }>()
 
-const value = computed({
+// DynamicSettingField 负责把 v-model 桥接到具体的 Ax 组件
+// setting.type 在运行时保证组件与值类型一一对应，ComputedRef<any> 消除编译期类型不匹配
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const value = computed<any>({
   get: () => props.modelValue,
-  set: (v) => emit("update:modelValue", v),
+  set: (v) => {
+    // AxInput 始终 emit string；number 字段需转换回 number
+    if (props.setting.type === 'number') {
+      emit("update:modelValue", Number(v))
+    } else {
+      emit("update:modelValue", v)
+    }
+  },
+})
+
+const selectOptions = computed<SelectOption[]>(() => {
+  if (props.setting.type !== 'select' || !props.setting.options) return []
+  return props.setting.options.map(opt => ({
+    value: opt.value,
+    label: opt.title,
+  }))
 })
 </script>
 
@@ -24,60 +44,97 @@ const value = computed({
       <span v-if="setting.description" class="ax-field-desc">{{ setting.description }}</span>
     </div>
 
-    <input v-if="setting.type === 'text'" v-model="value" type="text" class="ax-input" />
-    <input v-else-if="setting.type === 'number'" v-model.number="value" type="number" class="ax-input" />
+    <!-- text -->
+    <AxInput v-if="setting.type === 'text'" v-model="value" size="lg" type="text" :placeholder="setting.description" />
 
-    <!-- boolean (switch) - horizontal -->
+    <!-- number -->
+    <AxInput v-else-if="setting.type === 'number'" v-model="value" size="lg" type="number"
+      :placeholder="setting.description" />
+
+    <!-- boolean → AxSwitch -->
     <div v-else-if="setting.type === 'boolean'" class="ax-switch-row">
       <span class="ax-switch-label">{{ setting.title }}</span>
-      <button
-        class="ax-switch"
-        :class="{ on: value === true }"
-        type="button"
-        role="switch"
-        :aria-checked="value === true"
-        @click="value = !value"
-      >
-        <span class="ax-switch-knob" />
-      </button>
+      <AxSwitch v-model="value" size="sm" />
     </div>
 
-    <select v-else-if="setting.type === 'select'" v-model="value" class="ax-input ax-select">
-      <option v-for="opt in setting.options" :key="String(opt.value)" :value="opt.value">{{ opt.title }}</option>
-    </select>
+    <!-- select → AxSelect -->
+    <AxSelect v-else-if="setting.type === 'select'" v-model="value" :options="selectOptions" size="lg" />
 
+    <!-- color (keep native) -->
     <div v-else-if="setting.type === 'color'" class="ax-color-wrap">
       <input v-model="value" type="color" class="ax-color-input" />
       <span class="ax-color-value">{{ value }}</span>
     </div>
 
-    <div v-else-if="setting.type === 'slider'" class="ax-slider-wrap">
-      <input v-model.number="value" type="range" :min="setting.min ?? 0" :max="setting.max ?? 100" :step="setting.step ?? 1" class="ax-slider" />
-      <span class="ax-slider-value">{{ value }}</span>
-    </div>
+    <!-- slider → AxSlider -->
+    <AxSlider v-else-if="setting.type === 'slider'" v-model="value" :min="setting.min ?? 0" :max="setting.max ?? 100"
+      :step="setting.step ?? (setting.max && setting.max > 10 ? 1 : 0.1)" show-value :value-label="String(value)"
+      :label-position="'right'" />
   </div>
 </template>
 
 <style scoped>
-.ax-setting-field { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; }
-.ax-field-label-row { display: flex; flex-direction: column; gap: 2px; }
-.ax-field-title { font-family: "JetBrains Mono", "Microsoft YaHei", monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; color: #1a1c1d; line-height: 16px; }
-.ax-field-desc { font-size: 11px; color: #78767b; line-height: 14px; }
-.ax-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
-.ax-switch-label { font-size: 12px; color: #1a1c1d; flex: 1; }
-.ax-input { height: 24px; padding: 0 8px; border: 1px solid #c8c5ca; border-radius: 8px; background: #f3f3f4; font-size: 12px; color: #1a1c1d; outline: none; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
-.ax-input:focus { border-color: #000000; box-shadow: 0 0 0 1px #000000; }
-.ax-select { appearance: none; cursor: pointer; padding-right: 24px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f5e61' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; }
-.ax-switch { width: 36px; height: 20px; border: none; border-radius: 10px; background: #78767b; cursor: pointer; position: relative; transition: background 0.2s ease; padding: 0; align-self: flex-start; }
-.ax-switch.on { background: #000000; }
-.ax-switch-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #ffffff; transition: transform 0.2s ease; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
-.ax-switch.on .ax-switch-knob { transform: translateX(16px); }
-.ax-color-wrap { display: flex; align-items: center; gap: 8px; }
-.ax-color-input { width: 28px; height: 24px; border: 1px solid #c8c5ca; border-radius: 6px; cursor: pointer; padding: 2px; background: transparent; }
-.ax-color-value { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #5f5e61; }
-.ax-slider-wrap { display: flex; align-items: center; gap: 8px; }
-.ax-slider { flex: 1; height: 4px; appearance: none; background: #c8c5ca; border-radius: 2px; outline: none; cursor: pointer; }
-.ax-slider::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #000000; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
-.ax-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #000000; cursor: pointer; border: 2px solid #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
-.ax-slider-value { font-family: "JetBrains Mono", monospace; font-size: 11px; color: #5f5e61; min-width: 32px; text-align: right; }
+.ax-setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+}
+
+.ax-field-label-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ax-field-title {
+  font-family: "JetBrains Mono", "Microsoft YaHei", monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--color-on-surface);
+  line-height: 16px;
+}
+
+.ax-field-desc {
+  font-size: 11px;
+  color: var(--color-on-surface-variant);
+  line-height: 14px;
+}
+
+.ax-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.ax-switch-label {
+  font-size: 12px;
+  color: var(--color-on-surface);
+  flex: 1;
+}
+
+.ax-color-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ax-color-input {
+  width: 28px;
+  height: 24px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: transparent;
+}
+
+.ax-color-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--color-secondary);
+}
 </style>

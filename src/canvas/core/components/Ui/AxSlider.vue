@@ -6,6 +6,7 @@ const props = withDefaults(
     modelValue: number
     min?: number
     max?: number
+    step?: number
     showLabels?: boolean
     labelLeft?: string
     labelRight?: string
@@ -16,6 +17,7 @@ const props = withDefaults(
   {
     min: 0,
     max: 100,
+    step: 1,
     showLabels: false,
     labelLeft: '',
     labelRight: '',
@@ -86,6 +88,7 @@ const onChange = async () => {
         :value="internalValue"
         :min="min"
         :max="max"
+        :step="step"
         class="w-full h-1.5 appearance-none bg-transparent cursor-pointer outline-none focus:outline-none relative z-10"
         @input="onInput"
         @change="onChange"
@@ -134,6 +137,7 @@ const onChange = async () => {
         :value="internalValue"
         :min="min"
         :max="max"
+        :step="step"
         class="w-full h-1.5 appearance-none bg-transparent cursor-pointer outline-none focus:outline-none relative z-10"
         @input="onInput"
         @change="onChange"

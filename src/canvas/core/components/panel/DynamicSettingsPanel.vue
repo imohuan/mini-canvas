@@ -1,5 +1,6 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, type Ref } from "vue"
+import { AxButton } from "../Ui"
 import DynamicSettingField from './DynamicSettingField.vue'
 import type { PanelSettingDefinition } from '../../registry/types'
 
@@ -15,20 +16,12 @@ const collapsed = ref(false)
 <template>
   <div class="ax-panel" :class="{ collapsed }">
     <div class="ax-panel-hd">
-      <button
-        class="ax-panel-btn"
-        :title="collapsed ? '展开设置' : '折叠设置'"
+      <AxButton
+        variant="ghost"
+        size="icon"
+        :icon="collapsed ? 'tune' : 'close'"
         @click="collapsed = !collapsed"
-      >
-        <svg v-if="collapsed" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-        </svg>
-        <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
+      />
     </div>
 
     <Transition name="panel-expand">
@@ -56,20 +49,22 @@ const collapsed = ref(false)
   top: 12px;
   right: 12px;
   z-index: 1000;
-  background: #ffffff;
-  border: 1px solid #c8c5ca;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
   width: 280px;
   max-height: 70vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: "Geist", "Microsoft YaHei", sans-serif;
-  transition: width 0.25s ease;
+  transition: width 0.25s ease, border-radius 0.25s ease;
 }
 .ax-panel.collapsed {
-  width: 36px;
+  width: 44px;
   border-radius: 50%;
 }
 
@@ -78,35 +73,15 @@ const collapsed = ref(false)
   align-items: center;
   justify-content: flex-end;
   padding: 6px 8px;
-  border-bottom: 1px solid #c8c5ca;
-  background: #f3f3f4;
+  border-bottom: 1px solid var(--color-outline-variant);
+  background: transparent;
   flex-shrink: 0;
-  transition: padding 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  transition: padding 0.2s ease, border-color 0.2s ease;
 }
 .ax-panel.collapsed .ax-panel-hd {
   justify-content: center;
-  padding: 5px;
+  padding: 6px;
   border-bottom-color: transparent;
-  background: #ffffff;
-}
-
-.ax-panel-btn {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  border-radius: 8px;
-  color: #5f5e61;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.ax-panel-btn:hover {
-  background: #e8e8e9;
-  color: #1a1c1d;
 }
 
 .ax-panel-bd {
@@ -114,7 +89,7 @@ const collapsed = ref(false)
   overflow-y: auto;
   padding: 10px 12px;
   scrollbar-width: thin;
-  scrollbar-color: #c8c5ca transparent;
+  scrollbar-color: var(--color-outline-variant) transparent;
 }
 
 .ax-panel-group {
@@ -128,7 +103,7 @@ const collapsed = ref(false)
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: #5f5e61;
+  color: var(--color-on-surface-variant);
   text-transform: uppercase;
   padding: 2px 0;
   margin-bottom: 4px;
@@ -136,12 +111,12 @@ const collapsed = ref(false)
 
 .ax-panel-empty {
   text-align: center;
-  color: #78767b;
+  color: var(--color-on-surface-variant);
   font-size: 13px;
   padding: 24px 0;
 }
 
-/* ===== 展开/折叠动画 ===== */
+/* 展开/折叠动画 */
 .panel-expand-enter-active,
 .panel-expand-leave-active {
   transition: opacity 0.2s ease, max-height 0.25s ease;
