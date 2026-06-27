@@ -1,0 +1,297 @@
+﻿import { markRaw } from "vue"
+import type { Node, Edge } from "@vue-flow/core"
+import { Position } from "@vue-flow/core"
+import { PanoramaNode } from "./index"
+import PanoramaUploadButton from "./PanoramaUploadButton.vue"
+import type { CanvasPlugin, PluginContext } from "../../plugins/types"
+import type { CommandContext } from "../../registry/types"
+
+const fullscreenSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
+const resetSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>`
+const downloadSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
+
+// 菜单图标（CanvasMenu 使用）
+const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+// 标题图标（BaseNode title 使用）— 全景节点用地球仪风格的图标
+const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>`
+
+const MAX_PREVIEW_WIDTH = 420
+const MAX_PREVIEW_HEIGHT = 300
+
+function fitCardSize(width: number, height: number) {
+  const ratio = Math.min(MAX_PREVIEW_WIDTH / width, MAX_PREVIEW_HEIGHT / height, 1)
+  return { cardWidth: Math.max(120, Math.round(width * ratio)), cardHeight: Math.max(80, Math.round(height * ratio)) }
+}
+
+function readImageDims(file: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const image = new Image()
+    const url = URL.createObjectURL(file)
+    image.onload = () => { resolve({ width: image.naturalWidth, height: image.naturalHeight }); URL.revokeObjectURL(url) }
+    image.onerror = () => { resolve(null); URL.revokeObjectURL(url) }
+    image.src = url
+  })
+}
+
+async function handlePanoramaUpload(ctx: CommandContext, args?: unknown) {
+  const file = (args as { file?: File })?.file
+  if (!file) return
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const panoramaNodeId = ctx.node?.id
+  if (!vf || !panoramaNodeId) return
+
+  const imageUrl = URL.createObjectURL(file)
+  const dims = await readImageDims(file)
+  const nextSize = dims ? fitCardSize(dims.width, dims.height) : { cardWidth: 360, cardHeight: 270 }
+
+  // 获取 panorama 节点位置
+  const panoNode = (vf.getNodes.value as Node[]).find((n: Node) => n.id === panoramaNodeId)
+  const panoPos = panoNode?.position ?? { x: 0, y: 0 }
+  const panoCardHeight = (panoNode?.data as any)?.cardHeight ?? 400
+
+  // 计算 image 节点位置（panorama 左侧 80px 间距，垂直居中）
+  const imageNodeId = `image-${panoramaNodeId}-${Date.now()}`
+  const imagePos = {
+    x: panoPos.x - nextSize.cardWidth - 80,
+    y: panoPos.y + (panoCardHeight - nextSize.cardHeight) / 2,
+  }
+
+  // 创建 image 节点
+  vf.addNodes([{
+    id: imageNodeId,
+    type: "custom",
+    position: imagePos,
+    data: {
+      label: file.name,
+      nodeType: "image",
+      imageUrl,
+      imageName: file.name,
+      imageType: file.type,
+      imageWidth: dims?.width,
+      imageHeight: dims?.height,
+      cardWidth: nextSize.cardWidth,
+      cardHeight: nextSize.cardHeight,
+    },
+    sourcePosition: Position.Right,
+    targetPosition: Position.Left,
+  } as Node])
+
+  // 创建边：image → panorama
+  await new Promise(r => setTimeout(r, 0)) // nextTick
+  vf.addEdges([{
+    id: `e-${imageNodeId}-${panoramaNodeId}-${Date.now()}`,
+    type: "custom",
+    source: imageNodeId,
+    target: panoramaNodeId,
+    sourceHandle: "source",
+    targetHandle: "target",
+  } as Edge])
+
+  // 持久化
+  const assetManager = runtime.getPluginAPI?.("storage")?.assets
+  if (assetManager) {
+    try { await assetManager.saveAsset(file, file.name, file.type) }
+    catch (err) { ctx.logger.error("保存全景图资产失败:", err) }
+  }
+}
+
+function handlePanoramaFullscreen(ctx: CommandContext) {
+  const nodeId = ctx.node?.id
+  if (!nodeId) return
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  if (vf) {
+    const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+    vf.updateNode(nodeId, {
+      data: { ...(node?.data ?? {}), _editing: true },
+    })
+  }
+  window.dispatchEvent(new CustomEvent("panorama:fullscreen", { detail: { nodeId } }))
+}
+
+function handlePanoramaReset(ctx: CommandContext) {
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const panoramaNodeId = ctx.node?.id
+  if (!vf || !panoramaNodeId) return
+
+  // 查找所有连接到输入端口的上游 image 节点
+  const edges = (vf.getEdges.value as Edge[]).filter(
+    (e) => e.target === panoramaNodeId && e.targetHandle === "target"
+  )
+
+  // 删除边和关联的 image 节点
+  if (edges.length > 0) {
+    vf.removeEdges(edges.map(e => e.id))
+    vf.removeNodes(edges.map(e => e.source))
+  }
+
+  // 重置 panorama 节点状态
+  const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === panoramaNodeId)
+  vf.updateNode(panoramaNodeId, {
+    data: { ...(node?.data ?? {}), imageUrl: undefined, panoUrl: undefined, label: "360全景", _editing: false },
+  })
+}
+
+function handlePanoramaDownload(ctx: CommandContext) {
+  const node = ctx.node
+  if (!node) return
+
+  // 优先从上游连接的 image 节点获取 imageUrl
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  let url = ""
+  let name = "panorama.jpg"
+
+  if (vf) {
+    const edges = (vf.getEdges.value as Edge[]).filter(
+      (e) => e.target === node.id && e.targetHandle === "target"
+    )
+    if (edges.length > 0) {
+      const sourceNode = (vf.getNodes.value as Node[]).find((n: Node) => n.id === edges[0].source)
+      url = (sourceNode?.data as any)?.imageUrl as string || ""
+      name = (sourceNode?.data as any)?.imageName as string || name
+    }
+  }
+
+  // 兜底：自身 data
+  if (!url) {
+    url = ((node.data as any)?.imageUrl as string) || ((node.data as any)?.panoUrl as string)
+  }
+
+  if (!url) return
+  const a = document.createElement("a")
+  a.href = url
+  a.download = name
+  a.click()
+}
+
+export const PanoramaNodePlugin: CanvasPlugin = {
+  name: "node:panorama",
+  version: "1.0.0",
+
+  install(context: PluginContext) {
+    context.canvasNodes.register({
+      type: "panorama", node: markRaw(PanoramaNode), label: "360全景",
+      defaultSize: { cardWidth: 640, cardHeight: 400 },
+      menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: menuIconSvg, badge: "VR" },
+      canReceiveInput: true,
+      titleIcon: titleIconSvg,
+    })
+
+    context.commands.register({ id: "panorama.upload", source: "node:panorama", run: handlePanoramaUpload })
+    context.commands.register({ id: "panorama.fullscreen", source: "node:panorama", run: handlePanoramaFullscreen })
+    context.commands.register({ id: "panorama.reset", source: "node:panorama", run: handlePanoramaReset })
+    context.commands.register({ id: "panorama.download", source: "node:panorama", run: handlePanoramaDownload })
+
+    context.toolbars.register("node:panorama", {
+      id: "panorama.upload", source: "node:panorama", commandId: "panorama.upload",
+      position: "top", nodeTypes: ["panorama"], order: 10,
+      customRender: markRaw(PanoramaUploadButton),
+    })
+    context.toolbars.register("node:panorama", {
+      id: "panorama.fullscreen", source: "node:panorama", commandId: "panorama.fullscreen",
+      position: "top", title: "全屏", icon: fullscreenSvg, nodeTypes: ["panorama"], order: 20,
+    })
+    context.toolbars.register("node:panorama", {
+      id: "panorama.reset", source: "node:panorama", commandId: "panorama.reset",
+      position: "top", title: "重置", icon: resetSvg, nodeTypes: ["panorama"], order: 30,
+    })
+    context.toolbars.register("node:panorama", {
+      id: "panorama.download", source: "node:panorama", commandId: "panorama.download",
+      position: "top", title: "下载", icon: downloadSvg, nodeTypes: ["panorama"], order: 40,
+    })
+
+    const offNodeDblClick = context.on("nodeDoubleClick", (payload: { nodeId: string; nodeType: string }) => {
+      if (payload.nodeType !== "panorama") return
+      const node = context.actions.getNodes().find((n: Node) => n.id === payload.nodeId)
+      if (!node) return
+      if ((node.data as any)?._editing) return
+      // 检查是否有上游连接（输入端口是否有 edge）
+      const hasInputConnection = context.actions.getEdges().some(
+        (e) => e.target === payload.nodeId && e.targetHandle === "target"
+      )
+      if (!hasInputConnection) return
+      context.actions.updateNode(payload.nodeId, { data: { ...(node.data as any), _editing: true } })
+    })
+
+    const offPaneClick = context.on("paneClick", () => {
+      const nodes = context.actions.getNodes()
+      for (const n of nodes) {
+        if ((n.data as any)?.nodeType === "panorama" && (n.data as any)?._editing) {
+          context.actions.updateNode(n.id, { data: { ...(n.data as any), _editing: false } })
+        }
+      }
+    })
+
+    /** 限制 panorama 节点只保留一个输入连接：新边连入时删除旧边及关联的自动创建 image 节点 */
+    const offConnect = context.on("connect", (connection: { source: string; target: string; sourceHandle: string | null; targetHandle: string | null }) => {
+      console.log("[panorama:single-input] connect 事件触发", connection)
+
+      if (connection.targetHandle !== "target") {
+        console.log("[panorama:single-input] 跳过: targetHandle !== 'target'", connection.targetHandle)
+        return
+      }
+
+      const targetNode = context.actions.getNodes().find((n: Node) => n.id === connection.target)
+      console.log("[panorama:single-input] 目标节点", { nodeId: targetNode?.id, nodeType: (targetNode?.data as any)?.nodeType, data: targetNode?.data })
+
+      if ((targetNode?.data as any)?.nodeType !== "panorama") {
+        console.log("[panorama:single-input] 跳过: 目标节点不是 panorama", (targetNode?.data as any)?.nodeType)
+        return
+      }
+
+      const allEdges = context.actions.getEdges()
+      console.log("[panorama:single-input] 当前总边数", allEdges.length, allEdges.map(e => `${e.id}: ${e.source}->${e.target}[${e.targetHandle}]`))
+
+      const inputEdges = allEdges.filter(
+        (e) => e.target === connection.target && e.targetHandle === "target"
+      )
+      console.log("[panorama:single-input] 匹配的输入边数", inputEdges.length, inputEdges.map(e => e.id))
+
+      if (inputEdges.length <= 1) {
+        console.log("[panorama:single-input] 跳过: 只有1条或0条输入边，不需要清理")
+        return
+      }
+
+      // 通过 connection 的 source/target/handle 精确匹配新边，删除其余旧边
+      const newEdge = inputEdges.find(
+        e => e.source === connection.source && e.target === connection.target
+          && e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle
+      )
+      if (!newEdge) {
+        console.log("[panorama:single-input] 跳过: 未找到新边", connection)
+        return
+      }
+      const removeEdges = inputEdges.filter(e => e.id !== newEdge.id)
+
+      console.log("[panorama:single-input] 保留新边", newEdge.id)
+      console.log("[panorama:single-input] 删除旧边", removeEdges.map(e => e.id))
+
+      // 删除旧边
+      context.actions.removeEdges(removeEdges.map(e => e.id))
+
+      // 清理旧边关联的自动创建 image 节点（id 格式: image-{panoramaNodeId}-{timestamp}）
+      const prefix = `image-${connection.target}-`
+      const orphanImageIds = removeEdges
+        .map(e => e.source)
+        .filter(id => id.startsWith(prefix))
+      console.log("[panorama:single-input] 待清理的自动创建 image 节点", orphanImageIds)
+      if (orphanImageIds.length > 0) {
+        context.actions.removeNodes(orphanImageIds)
+      }
+    })
+
+    return {
+      uninstall() {
+        context.canvasNodes.unregister("panorama")
+        context.toolbars.unregisterSource("node:panorama")
+        context.commands.unregisterSource("node:panorama")
+        offNodeDblClick()
+        offPaneClick()
+        offConnect()
+      },
+    }
+  },
+}

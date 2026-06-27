@@ -1,30 +1,32 @@
 <script setup lang="ts">
 import { ref, computed, markRaw } from 'vue'
-import Canvas from '../canvas/core/Canvas.vue'
-import { TextNodePlugin } from '../canvas/core/nodes/text/TextNodePlugin'
-import { ImageNodePlugin } from '../canvas/core/nodes/image/ImageNodePlugin'
-import { VideoNodePlugin } from '../canvas/core/nodes/Video/VideoNodePlugin'
-import { StageNodePlugin } from '../canvas/core/nodes/stage/StageNodePlugin'
-import { PanoramaNodePlugin } from '../canvas/core/nodes/panorama/PanoramaNodePlugin'
-import { ImageCompareNodePlugin } from '../canvas/core/nodes/image-compare/ImageCompareNodePlugin'
-import { ContextMenuPlugin } from '../canvas/core/plugins/context-menu/index'
-import { CustomHandlePlugin } from '../canvas/core/plugins/custom-handle/index'
-import { NodeFindPlugin } from '../canvas/core/plugins/node-find/index'
-import { AlignGuidePlugin } from '../canvas/core/plugins/align-guide/index'
-import { AutoSavePlugin } from '../canvas/core/plugins/auto-save/index'
-import { ClipboardPlugin } from '../canvas/core/plugins/clipboard/index'
-import { HistoryPlugin } from '../canvas/core/plugins/history/index'
-import { MultiSelectPlugin } from '../canvas/core/plugins/multi-select/index'
-import { StoragePlugin } from '../canvas/core/plugins/storage/index'
-import { ShortcutManagerPlugin } from '../canvas/core/plugins/shortcut-manager/index'
-import { GroupPlugin } from '../canvas/core/plugins/group/index'
-import { FileDropPlugin } from '../canvas/core/plugins/file-drop/index'
-import { ThemePlugin } from '../canvas/core/plugins/theme/index'
-import { AutoLayoutPlugin } from '../canvas/core/plugins/auto-layout/index'
-import { AlignArrangePlugin } from '../canvas/core/plugins/align-arrange/index'
-import { CanvasExportPlugin } from '../canvas/core/plugins/canvas-export/index'
-import { MiniMapPlugin } from '../canvas/core/plugins/mini-map/index'
-import type { CanvasPlugin } from '../canvas/core/plugins/types'
+import {
+  Canvas,
+  TextNodePlugin,
+  ImageNodePlugin,
+  VideoNodePlugin,
+  StageNodePlugin,
+  PanoramaNodePlugin,
+  ImageCompareNodePlugin,
+  ContextMenuPlugin,
+  CustomHandlePlugin,
+  NodeFindPlugin,
+  AlignGuidePlugin,
+  AutoSavePlugin,
+  ClipboardPlugin,
+  HistoryPlugin,
+  MultiSelectPlugin,
+  StoragePlugin,
+  ShortcutManagerPlugin,
+  GroupPlugin,
+  FileDropPlugin,
+  ThemePlugin,
+  AutoLayoutPlugin,
+  AlignArrangePlugin,
+  CanvasExportPlugin,
+  MiniMapPlugin,
+  type CanvasPlugin,
+} from '@mini-canvas/canvas-core'
 
 interface PluginSlot {
   plugin: CanvasPlugin

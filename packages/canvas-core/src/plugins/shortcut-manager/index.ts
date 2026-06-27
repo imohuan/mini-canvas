@@ -1,0 +1,1 @@
+export { ShortcutManagerPlugin } from './ShortcutManagerPlugin'

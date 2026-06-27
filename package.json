@@ -10,6 +10,7 @@
     "test:performance": "node src/canvas/core/components/performance/__tests__/performanceMetrics.test.mjs"
   },
   "dependencies": {
+    "@mini-canvas/canvas-core": "workspace:*",
     "@dagrejs/dagre": "^3.0.0",
     "@floating-ui/vue": "^1",
     "@tailwindcss/vite": "^4.3.1",

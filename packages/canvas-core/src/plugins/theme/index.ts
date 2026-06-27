@@ -1,0 +1,5 @@
+export { ThemePlugin } from './ThemePlugin'
+export type { ThemeOptions, ThemeAPI, ThemeState, ThemePresetName, ThemePreset, ThemeCssVar } from './types'
+export { THEME_CSS_VARS } from './types'
+export { THEME_PRESETS, getPresetsList, getPreset } from './themePresets'
+export { computeThemeVars, applyThemeToDOM, hexToRgb, rgbToHexString, lighten, darken, mix } from './colorUtils'
