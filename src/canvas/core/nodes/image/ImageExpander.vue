@@ -2,11 +2,7 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
-import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
-import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import type { ToolbarButtonDefinition } from '../../registry/types'
 
-// ==================== Props ====================
 const props = defineProps<{
   nodeId: string
   imageUrl: string
@@ -16,12 +12,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:expand', rect: { x: number; y: number; width: number; height: number }): void
+  (e: 'cancel'): void
+  (e: 'confirm'): void
 }>()
 
-const { viewport, findNode, viewportRef } = useVueFlow()
-const runtime = useCanvasRuntime()
+const { viewport, findNode } = useVueFlow()
 
-// ==================== Constants ====================
 const MIN_EXPAND = 20
 const GRID_COLS = 3
 const GRID_ROWS = 3
@@ -52,49 +48,21 @@ const display = computed(() => {
   return { dw, dh, ox, oy, scale: dw / iw }
 })
 
-// Container: absolute inside viewportRef, z-index below toolbar (which is node.z+1)
-const viewportX = computed(() => viewport.value.x)
-const viewportY = computed(() => viewport.value.y)
+// ==================== Screen coordinate helpers (for body-level fixed positioning) ====================
 const zoom = computed(() => viewport.value.zoom)
+const panX = computed(() => viewport.value.x)
+const panY = computed(() => viewport.value.y)
 
-// Background + frame styles — all absolute in viewport, using viewport-relative coords
-const containerStyle = computed<CSSProperties>(() => ({
-  position: 'absolute',
-  inset: '0',
-  pointerEvents: 'none',
-}))
-
-// Image display at node's viewport-relative position
-function imgScreenX() { return nodeRect.value.x * zoom.value + viewportX.value + display.value.ox }
-function imgScreenY() { return nodeRect.value.y * zoom.value + viewportY.value + display.value.oy }
-
-const imageScreenStyle = computed<CSSProperties>(() => ({
-  position: 'absolute',
-  left: `${nodeRect.value.x * zoom.value + viewportX.value}px`,
-  top: `${nodeRect.value.y * zoom.value + viewportY.value}px`,
-  width: `${nodeRect.value.width * zoom.value}px`,
-  height: `${nodeRect.value.height * zoom.value}px`,
-  borderRadius: '12px',
-  overflow: 'hidden',
-  pointerEvents: 'none',
-}))
-
-// Interactive area — larger than node to support outward drag
-const interactiveStyle = computed<CSSProperties>(() => {
-  const rect = nodeRect.value
-  const pad = Math.max(rect.width, rect.height) * zoom.value * 2
+// Image display origin on screen (top-left of object-fit area)
+function imgOriginScreen() {
+  const d = display.value
   return {
-    position: 'absolute',
-    left: `${rect.x * zoom.value + viewportX.value - pad}px`,
-    top: `${rect.y * zoom.value + viewportY.value - pad}px`,
-    width: `${rect.width * zoom.value + pad * 2}px`,
-    height: `${rect.height * zoom.value + pad * 2}px`,
-    pointerEvents: 'auto',
-    cursor: 'crosshair',
+    x: nodeRect.value.x * zoom.value + panX.value + d.ox,
+    y: nodeRect.value.y * zoom.value + panY.value + d.oy,
   }
-})
+}
 
-// ==================== Expand area ====================
+// ==================== Expand area (image pixel coords) ====================
 const expand = reactive({ x: 0, y: 0, w: 0, h: 0 })
 function initExpand() {
   expand.x = 0; expand.y = 0
@@ -111,25 +79,25 @@ type Drag =
 const drag = ref<Drag>(null)
 const overlayRef = ref<HTMLElement | null>(null)
 
-// ==================== Frame ====================
-const frameScreenStyle = computed<CSSProperties>(() => {
+// ==================== Frame screen position ====================
+const frameStyle = computed<CSSProperties>(() => {
   const d = display.value
-  const ox = imgScreenX(); const oy = imgScreenY()
+  const { x, y } = imgOriginScreen()
   return {
-    position: 'absolute',
-    left: `${ox + expand.x * d.scale}px`,
-    top: `${oy + expand.y * d.scale}px`,
+    position: 'fixed',
+    left: `${x + expand.x * d.scale}px`,
+    top: `${y + expand.y * d.scale}px`,
     width: `${expand.w * d.scale}px`,
     height: `${expand.h * d.scale}px`,
     pointerEvents: 'none',
   }
 })
 
-const gridData = computed(() => {
+const gridLines = computed(() => {
   const d = display.value
-  const ox = imgScreenX(); const oy = imgScreenY()
-  const fl = ox + expand.x * d.scale
-  const ft = oy + expand.y * d.scale
+  const { x, y } = imgOriginScreen()
+  const fl = x + expand.x * d.scale
+  const ft = y + expand.y * d.scale
   const fw = expand.w * d.scale
   const fh = expand.h * d.scale
   const lines: { type: 'h' | 'v'; pos: number }[] = []
@@ -138,43 +106,25 @@ const gridData = computed(() => {
   return { fl, ft, fw, fh, lines }
 })
 
-const originalBoundaryStyle = computed<CSSProperties>(() => {
-  const d = display.value
-  return {
-    position: 'absolute',
-    left: `${imgScreenX()}px`,
-    top: `${imgScreenY()}px`,
-    width: `${d.dw}px`,
-    height: `${d.dh}px`,
-    pointerEvents: 'none',
-  }
-})
-
 // ==================== Handle style ====================
 function handleStyle(dir: Handle): CSSProperties {
   const d = display.value
-  const rect = nodeRect.value
-  const pad = Math.max(rect.width, rect.height) * zoom.value * 2
-  const iox = rect.x * zoom.value + viewportX.value - pad
-  const ioy = rect.y * zoom.value + viewportY.value - pad
-
-  const ox = imgScreenX(); const oy = imgScreenY()
-  const fl = ox + expand.x * d.scale - iox
-  const ft = oy + expand.y * d.scale - ioy
-  const fw = expand.w * d.scale
-  const fh = expand.h * d.scale
-
+  const { x, y } = imgOriginScreen()
+  const l = x + expand.x * d.scale
+  const t = y + expand.y * d.scale
+  const w = expand.w * d.scale
+  const h = expand.h * d.scale
   switch (dir) {
-    case 'nw': return { position: 'absolute', left: `${fl - 5}px`, top: `${ft - 5}px`, cursor: 'nw-resize' }
-    case 'ne': return { position: 'absolute', left: `${fl + fw - 5}px`, top: `${ft - 5}px`, cursor: 'ne-resize' }
-    case 'sw': return { position: 'absolute', left: `${fl - 5}px`, top: `${ft + fh - 5}px`, cursor: 'sw-resize' }
-    case 'se': return { position: 'absolute', left: `${fl + fw - 5}px`, top: `${ft + fh - 5}px`, cursor: 'se-resize' }
-    case 'n':  return { position: 'absolute', left: `${fl + fw / 2 - 5}px`, top: `${ft - 5}px`, cursor: 'n-resize' }
-    case 's':  return { position: 'absolute', left: `${fl + fw / 2 - 5}px`, top: `${ft + fh - 5}px`, cursor: 's-resize' }
-    case 'w':  return { position: 'absolute', left: `${fl - 5}px`, top: `${ft + fh / 2 - 5}px`, cursor: 'w-resize' }
-    case 'e':  return { position: 'absolute', left: `${fl + fw - 5}px`, top: `${ft + fh / 2 - 5}px`, cursor: 'e-resize' }
+    case 'nw': return { left: `${l - 5}px`, top: `${t - 5}px`, cursor: 'nw-resize' }
+    case 'ne': return { left: `${l + w - 5}px`, top: `${t - 5}px`, cursor: 'ne-resize' }
+    case 'sw': return { left: `${l - 5}px`, top: `${t + h - 5}px`, cursor: 'sw-resize' }
+    case 'se': return { left: `${l + w - 5}px`, top: `${t + h - 5}px`, cursor: 'se-resize' }
+    case 'n':  return { left: `${l + w / 2 - 5}px`, top: `${t - 5}px`, cursor: 'n-resize' }
+    case 's':  return { left: `${l + w / 2 - 5}px`, top: `${t + h - 5}px`, cursor: 's-resize' }
+    case 'w':  return { left: `${l - 5}px`, top: `${t + h / 2 - 5}px`, cursor: 'w-resize' }
+    case 'e':  return { left: `${l + w - 5}px`, top: `${t + h / 2 - 5}px`, cursor: 'e-resize' }
   }
-  return { position: 'absolute' }
+  return {}
 }
 
 // ==================== Pointer events ====================
@@ -195,16 +145,43 @@ function onPointerMove(e: PointerEvent) {
   const scale = display.value.scale
   const dx = (e.clientX - d.sx) / scale
   const dy = (e.clientY - d.sy) / scale
+  const iw = props.imageWidth
+  const ih = props.imageHeight
+
   if (d.kind === 'move') {
-    expand.x = d.scX + dx; expand.y = d.scY + dy
+    let nx = d.scX + dx
+    let ny = d.scY + dy
+    // 选框必须包含原图 (0,0,iw,ih)
+    if (nx > 0) nx = 0
+    if (ny > 0) ny = 0
+    if (nx + expand.w < iw) nx = iw - expand.w
+    if (ny + expand.h < ih) ny = ih - expand.h
+    expand.x = nx; expand.y = ny
   } else {
     const right = d.scX + d.scW; const bottom = d.scY + d.scH
     let nx = d.scX, ny = d.scY, nw = d.scW, nh = d.scH
-    if (d.dir.includes('w')) { nx = d.scX + dx; nw = right - nx }
-    else if (d.dir.includes('e')) { nw = d.scW + dx }
-    if (d.dir.includes('n')) { ny = d.scY + dy; nh = bottom - ny }
-    else if (d.dir.includes('s')) { nh = d.scH + dy }
-    nw = Math.max(MIN_EXPAND, nw); nh = Math.max(MIN_EXPAND, nh)
+
+    // X axis
+    if (d.dir.includes('w')) {
+      nx = Math.min(0, d.scX + dx) // left 不能 > 0
+      nw = right - nx
+    } else if (d.dir.includes('e')) {
+      nw = d.scW + dx
+    }
+    // Y axis
+    if (d.dir.includes('n')) {
+      ny = Math.min(0, d.scY + dy) // top 不能 > 0
+      nh = bottom - ny
+    } else if (d.dir.includes('s')) {
+      nh = d.scH + dy
+    }
+
+    // 确保右边 >= iw, 下边 >= ih
+    if (nx + nw < iw) { nw = iw - nx }
+    if (ny + nh < ih) { nh = ih - ny }
+
+    nw = Math.max(MIN_EXPAND, Math.max(iw, nw))
+    nh = Math.max(MIN_EXPAND, Math.max(ih, nh))
     expand.x = nx; expand.y = ny; expand.w = nw; expand.h = nh
   }
 }
@@ -222,44 +199,14 @@ function emitExpand() { emit('update:expand', getExpandRect()) }
 let emitTimer: ReturnType<typeof setTimeout> | null = null
 watch(expand, () => { if (emitTimer) clearTimeout(emitTimer); emitTimer = setTimeout(emitExpand, 16) }, { deep: true })
 
-// ==================== Registry toolbar buttons (group:'expand') ====================
-const overlayButtons = computed<ToolbarButtonDefinition[]>(() => {
-  const nodeType = props.data?.nodeType as string | undefined
-  const all = [...runtime.toolbarRegistry.getByPosition('top'), ...runtime.toolbarRegistry.getByPosition('bottom')]
-  return all.filter((btn) => {
-    if (btn.nodeTypes && btn.nodeTypes.length > 0 && nodeType) { if (!btn.nodeTypes.includes(nodeType)) return false }
-    return btn.group === 'expand'
-  })
-})
-
-function buildContext(): any {
-  return { runtime, actions: null, selection: null, viewport: null, store: null, logger: console, node: props as any, nodeType: props.data?.nodeType as string | undefined }
-}
-function btnVisible(btn: ToolbarButtonDefinition): boolean {
-  if (btn.visible === undefined) return true
-  if (typeof btn.visible === 'boolean') return btn.visible
-  try { return btn.visible(buildContext()) } catch { return true }
-  return true
-}
-function btnDisabled(btn: ToolbarButtonDefinition): boolean {
-  if (btn.disabled === undefined) return false
-  if (typeof btn.disabled === 'boolean') return btn.disabled
-  try { return btn.disabled(buildContext()) } catch { return true }
-  return false
-}
-function onBtnAction(btn: ToolbarButtonDefinition) {
-  if (btnDisabled(btn)) return
-  runtime.commandRegistry.execute(btn.commandId, buildContext())
-}
-
-// Action bar positioned below expand frame
+// ==================== Action bar (follows frame bottom center) ====================
 const actionBarStyle = computed<CSSProperties>(() => {
   const d = display.value
-  const ox = imgScreenX(); const oy = imgScreenY()
-  const fb = oy + expand.y * d.scale + expand.h * d.scale
-  const fcx = ox + expand.x * d.scale + (expand.w * d.scale) / 2
+  const { x, y } = imgOriginScreen()
+  const fb = y + expand.y * d.scale + expand.h * d.scale
+  const fcx = x + expand.x * d.scale + (expand.w * d.scale) / 2
   return {
-    position: 'absolute',
+    position: 'fixed',
     left: `${fcx}px`, top: `${fb + 14}px`,
     transform: 'translateX(-50%)',
     pointerEvents: 'auto',
@@ -270,31 +217,48 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
 </script>
 
 <template>
-  <Teleport :to="viewportRef" :disabled="!viewportRef">
-    <div v-if="node" class="expand-container" :style="containerStyle">
-      <!-- Backdrop -->
+  <Teleport to="body">
+    <div v-if="node" class="expander-root">
+      <!-- Backdrop: full screen, no pointer capture -->
       <div class="expand-backdrop" />
 
-      <!-- Image -->
-      <div class="expand-image-host" :style="imageScreenStyle">
+      <!-- Original image at node position -->
+      <div class="expand-image-host" :style="{
+        position: 'fixed',
+        left: `${nodeRect.x * zoom + panX}px`,
+        top: `${nodeRect.y * zoom + panY}px`,
+        width: `${nodeRect.width * zoom}px`,
+        height: `${nodeRect.height * zoom}px`,
+        borderRadius: '12px',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+      }">
         <img :src="imageUrl" class="expand-image" draggable="false" />
       </div>
 
-      <!-- Original boundary dashed -->
-      <div class="expand-original-boundary" :style="originalBoundaryStyle" />
+      <!-- Dashed original boundary -->
+      <div class="expand-boundary" :style="{
+        position: 'fixed',
+        left: `${imgOriginScreen().x}px`,
+        top: `${imgOriginScreen().y}px`,
+        width: `${display.dw}px`,
+        height: `${display.dh}px`,
+        pointerEvents: 'none',
+      }" />
 
-      <!-- Expand frame -->
-      <div class="expand-frame" :style="frameScreenStyle">
-        <svg class="expand-grid-svg" :width="gridData.fw" :height="gridData.fh">
-          <template v-for="(line, i) in gridData.lines" :key="i">
-            <line v-if="line.type === 'v'" :x1="line.pos - gridData.fl" y1="0" :x2="line.pos - gridData.fl" :y2="gridData.fh" class="grid-line" />
-            <line v-else x1="0" :y1="line.pos - gridData.ft" :x2="gridData.fw" :y2="line.pos - gridData.ft" class="grid-line" />
+      <!-- Expand frame + grid -->
+      <div class="expand-frame" :style="frameStyle">
+        <svg :width="gridLines.fw" :height="gridLines.fh">
+          <template v-for="(line, i) in gridLines.lines" :key="i">
+            <line v-if="line.type === 'v'" :x1="line.pos - gridLines.fl" y1="0" :x2="line.pos - gridLines.fl" :y2="gridLines.fh" class="grid-line" />
+            <line v-else x1="0" :y1="line.pos - gridLines.ft" :x2="gridLines.fw" :y2="line.pos - gridLines.ft" class="grid-line" />
           </template>
         </svg>
       </div>
 
-      <!-- Interactive overlay -->
-      <div ref="overlayRef" class="expand-interactive" :style="interactiveStyle"
+      <!-- Interactive layer: full screen on body, nothing can block it -->
+      <div ref="overlayRef"
+        style="position: fixed; inset: 0; pointer-events: auto; cursor: crosshair; touch-action: none; z-index: 10;"
         @pointerdown="onPointerDown($event)" @pointermove="onPointerMove" @pointerup="onPointerUp">
         <div class="expand-handle" :style="handleStyle('nw')" @pointerdown.stop="onPointerDown($event, 'nw')" />
         <div class="expand-handle" :style="handleStyle('ne')" @pointerdown.stop="onPointerDown($event, 'ne')" />
@@ -306,56 +270,75 @@ onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
         <div class="expand-handle" :style="handleStyle('e')"  @pointerdown.stop="onPointerDown($event, 'e')" />
       </div>
 
-      <!-- Action toolbar (registry) -->
-      <div v-if="overlayButtons.length > 0" class="expand-action-bar" :style="actionBarStyle">
-        <ToolbarButton
-          v-for="btn in overlayButtons" :key="btn.id" v-show="btnVisible(btn)"
-          :icon="btn.icon" :title="btn.title" :tooltip="btn.tooltip"
-          :disabled="btnDisabled(btn)" :dropdown="btn.dropdown" :custom-render="btn.customRender"
-          @action="onBtnAction(btn)" />
+      <!-- Action toolbar -->
+      <div class="expand-action-bar" :style="{ ...actionBarStyle, zIndex: 20 }">
+        <button class="action-btn action-btn--cancel" @click="$emit('cancel')">
+          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          <span>取消</span>
+        </button>
+        <button class="action-btn action-btn--confirm" @click="$emit('confirm')">
+          <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span>确认扩展</span>
+        </button>
       </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.expand-container { touch-action: none; }
+.expander-root { pointer-events: none; }
 
 .expand-backdrop {
-  position: absolute; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.45);
   pointer-events: none;
+  z-index: 0;
 }
 
-.expand-image-host { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
-.expand-image { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.expand-image-host { box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); z-index: 1; }
+.expand-image { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
 
-.expand-original-boundary { border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: 4px; box-sizing: border-box; }
+.expand-boundary { border: 2px dashed rgba(255, 255, 255, 0.5); border-radius: 4px; box-sizing: border-box; z-index: 1; }
 
 .expand-frame {
-  position: absolute;
+  position: fixed;
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
   border-radius: 2px;
+  z-index: 2;
+  overflow: hidden;
 }
-.expand-grid-svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .grid-line { stroke: rgba(255, 255, 255, 0.4); stroke-width: 1; }
 
-.expand-interactive { touch-action: none; }
 .expand-handle {
+  position: fixed;
   width: 10px; height: 10px;
   background: #fff; border: 1.5px solid rgba(0, 0, 0, 0.5);
-  border-radius: 2px; z-index: 5; flex-shrink: 0;
+  border-radius: 2px;
+  z-index: 15;
 }
 
 .expand-action-bar {
   display: flex; align-items: center; gap: 2px;
   padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  background: rgba(30, 30, 30, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
-.expand-action-bar :deep(.toolbar-button) { color: #e5e7eb !important; }
-.expand-action-bar :deep(.toolbar-button:hover) { background: rgba(255, 255, 255, 0.12) !important; }
+.action-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 8px; border: 0; border-radius: 6px;
+  background: transparent; color: #374151;
+  font-size: 12px; line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.action-btn:hover { background: rgba(0, 0, 0, 0.06); color: #111827; }
+.action-icon { width: 14px; height: 14px; flex-shrink: 0; }
+.action-btn--confirm { color: #111827; }
+.action-btn--confirm:hover { background: rgba(59, 130, 246, 0.12); }
 </style>

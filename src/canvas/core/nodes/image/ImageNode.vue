@@ -4,27 +4,31 @@ import { ref, computed, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import ImageCropper from './ImageCropper.vue'
 import ImageExpander from './ImageExpander.vue'
+import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps<NodeProps>()
 const { updateNode } = useVueFlow()
+const runtime = useCanvasRuntime()
 const error = ref(false)
 
-// 裁剪模式 → 读 _overlay._cropMode，退出时 delete _overlay 一步恢复
 const isCropping = computed(() => props.data?._overlay?._cropMode === true)
-
-// 扩展模式 → 读 _overlay._expandMode
 const isExpanding = computed(() => props.data?._overlay?._expandMode === true)
 
-// 同步裁剪区域到 _overlay._cropRect
 function onCropUpdate(rect: { x: number; y: number; width: number; height: number }) {
   updateNode(props.id, { data: { ...props.data, _overlay: { ...props.data._overlay, _cropRect: rect } } })
 }
 
-// 同步扩展区域到 _overlay._expandRect
 function onExpandUpdate(rect: { x: number; y: number; width: number; height: number }) {
   updateNode(props.id, { data: { ...props.data, _overlay: { ...props.data._overlay, _expandRect: rect } } })
+}
+
+function onExpandCancel() {
+  runtime.commandRegistry.execute('image.expandCancel', { node: props } as any)
+}
+function onExpandConfirm() {
+  runtime.commandRegistry.execute('image.expandConfirm', { node: props } as any)
 }
 
 watch(
@@ -67,6 +71,8 @@ watch(
       :image-width="(data.imageWidth as number) || 0"
       :image-height="(data.imageHeight as number) || 0"
       @update:expand="onExpandUpdate"
+      @cancel="onExpandCancel"
+      @confirm="onExpandConfirm"
     />
   </div>
 </template>

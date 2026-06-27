@@ -376,9 +376,6 @@ export const ImageNodePlugin: CanvasPlugin = {
 
     // top: 扩展按钮（default 组，正常状态显示）
     context.toolbars.register('node:image', { id: 'image.expand', source: 'node:image', commandId: 'image.expand', position: 'top', title: '扩展', icon: expandSvg, tooltip: '扩展图片', nodeTypes: ['image'], group: 'default', order: 25 })
-    // top: expand 组（仅扩展模式 overlay._toolbarGroup='expand' 时显示）
-    context.toolbars.register('node:image', { id: 'image.expandConfirm', source: 'node:image', commandId: 'image.expandConfirm', position: 'top', title: '确认扩展', icon: confirmSvg, tooltip: '确认扩展', nodeTypes: ['image'], group: 'expand', order: 10, visible: (ctx) => ctx.node?.data?._overlay?._expandMode === true })
-    context.toolbars.register('node:image', { id: 'image.expandCancel', source: 'node:image', commandId: 'image.expandCancel', position: 'top', title: '取消', icon: cancelSvg, tooltip: '取消扩展', nodeTypes: ['image'], group: 'expand', order: 0, visible: (ctx) => ctx.node?.data?._overlay?._expandMode === true })
     // bottom: 不标 group，始终显示
     context.toolbars.register('node:image', { id: 'image.rotate', source: 'node:image', commandId: 'image.rotate', position: 'bottom', title: '旋转', icon: rotateSvg, nodeTypes: ['image'], order: 10 })
     context.toolbars.register('node:image', { id: 'image.download', source: 'node:image', commandId: 'image.download', position: 'bottom', title: '下载', icon: downloadSvg, nodeTypes: ['image'], order: 20 })
