@@ -303,8 +303,47 @@ export const ClipboardPlugin: CanvasPlugin<Record<string, unknown>, ClipboardAPI
     context.registerShortcut('ctrl+c', () => performCopy(), '复制选中节点')
     context.registerShortcut('ctrl+v', () => performPaste(), '粘贴剪切板内容')
     context.registerShortcut('ctrl+x', () => performCut(), '剪切选中节点')
+    context.registerShortcut('ctrl+d', () => { performCopy() && performPaste() }, '复制一份选中节点')
 
-    logger.info(`ClipboardPlugin installed. Shortcuts: Ctrl+C/V/X`)
+    logger.info(`ClipboardPlugin installed. Shortcuts: Ctrl+C/V/X/D`)
+
+    // ---- 监听上下文菜单事件（由 builtinMenuItems 或外部 emit） ----
+    const offClipboardCopy = context.on('clipboard:copy', (payload: any) => {
+      if (payload?.nodes?.length > 0) {
+        const nodes = payload.nodes
+        const nodeIds = new Set(nodes.map((n: any) => n.id))
+        const allEdges = context.actions.getEdges()
+        const edgesToCopy = allEdges.filter(
+          (e: any) => nodeIds.has(e.source) && nodeIds.has(e.target),
+        )
+        clipboard = {
+          nodes: JSON.parse(JSON.stringify(nodes)),
+          edges: JSON.parse(JSON.stringify(edgesToCopy)),
+          copyTime: Date.now(),
+        }
+        pasteCount = 0
+        logger.info(`Copied via event: ${clipboard.nodes.length} nodes, ${clipboard.edges.length} edges`)
+      }
+    })
+
+    const offClipboardDuplicate = context.on('clipboard:duplicate', (payload: any) => {
+      if (payload?.nodes?.length > 0) {
+        const nodes = payload.nodes
+        const nodeIds = new Set(nodes.map((n: any) => n.id))
+        const allEdges = context.actions.getEdges()
+        const edgesToCopy = allEdges.filter(
+          (e: any) => nodeIds.has(e.source) && nodeIds.has(e.target),
+        )
+        clipboard = {
+          nodes: JSON.parse(JSON.stringify(nodes)),
+          edges: JSON.parse(JSON.stringify(edgesToCopy)),
+          copyTime: Date.now(),
+        }
+        pasteCount = 0
+        performPaste()
+        logger.info(`Duplicated via event: ${clipboard.nodes.length} nodes`)
+      }
+    })
 
     return {
       api: {
@@ -316,6 +355,8 @@ export const ClipboardPlugin: CanvasPlugin<Record<string, unknown>, ClipboardAPI
       } satisfies ClipboardAPI,
       uninstall() {
         offPaneMouseMove()
+        offClipboardCopy()
+        offClipboardDuplicate()
         clipboard = null
         pasteCount = 0
       },
