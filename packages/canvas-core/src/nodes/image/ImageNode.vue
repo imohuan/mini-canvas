@@ -9,6 +9,7 @@ import ImageCropper from './ImageCropper.vue'
 import ImageExpander from './ImageExpander.vue'
 import ImageMasker from './ImageMasker.vue'
 import ImageBottomToolbar from './ImageBottomToolbar.vue'
+import type { ToolbarConfig } from './ImageBottomToolbar.vue'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { formatFileSize } from '../../utils/format'
@@ -69,6 +70,23 @@ const dims = computed(() => {
 const titleIconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 
 const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
+
+/** 全屏 Dialog 状态 */
+const showExpandDialog = ref(false)
+
+/** 底部工具栏配置（v-model） */
+const toolbarConfig = ref<ToolbarConfig>({
+  promptText: '',
+  selectedStyle: 'hollywood-retro',
+  selectedModel: 'anycook',
+  selectedSize: '9:16-3k',
+})
+
+function onToolbarAction(action: string) {
+  if (action === 'more') {
+    showExpandDialog.value = !showExpandDialog.value
+  }
+}
 </script>
 
 <template>
@@ -147,9 +165,62 @@ const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
 
     <!-- 底部工具栏：旋转/下载 -->
     <template #bottom-toolbar>
-      <NodeToolbar :node-id="id" :position="Position.Bottom" :offset="bottomOffset">
-        <ImageBottomToolbar v-bind="$props" />
+      <NodeToolbar v-if="!showExpandDialog" :node-id="id" :position="Position.Bottom" :offset="bottomOffset">
+        <ImageBottomToolbar v-bind="$props" v-model="toolbarConfig" @action="onToolbarAction" />
       </NodeToolbar>
     </template>
   </BaseNode>
+
+  <!-- 全屏 Dialog -->
+  <Teleport to="body">
+    <div v-if="showExpandDialog" class="expand-dialog-overlay" @click.self="showExpandDialog = false">
+      <div class="expand-dialog">
+        <div class="expand-dialog-body">
+          <ImageBottomToolbar v-bind="$props" v-model="toolbarConfig" :is-fullscreen="true" @action="onToolbarAction" />
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
+
+<style>
+.expand-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+
+.expand-dialog {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  width: 50vw;
+  height: 70vh;
+  overflow: hidden;
+}
+
+.expand-dialog-body {
+  padding: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.expand-dialog-body .image-bottom-panel {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.expand-dialog-body .ProseMirror {
+  min-height: 200px !important;
+}
+</style>

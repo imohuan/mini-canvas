@@ -1,11 +1,24 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
 import type { SelectOption } from '../../components/Ui'
 
-const props = defineProps<NodeProps>()
+export interface ToolbarConfig {
+  promptText: string
+  selectedStyle: string
+  selectedModel: string
+  selectedSize: string
+}
+
+interface Props extends NodeProps {
+  isFullscreen?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), { isFullscreen: false })
+
+const config = defineModel<ToolbarConfig>({ required: true })
 
 const emit = defineEmits<{
   (e: 'action', action: string, value?: string): void
@@ -39,12 +52,29 @@ const SIZE_OPTIONS: SelectOption[] = [
   { label: '21:9 · 5K', value: '21:9-5k' },
 ]
 
-// ── 状态 ──
+// ── v-model 双向绑定字段 ──
 
-const promptText = ref('')
-const selectedStyle = ref(STYLE_OPTIONS[0].value)
-const selectedModel = ref(MODEL_OPTIONS[0].value)
-const selectedSize = ref(SIZE_OPTIONS[0].value)
+const promptText = computed({
+  get: () => config.value.promptText,
+  set: (val: string) => { config.value = { ...config.value, promptText: val } },
+})
+
+const selectedStyle = computed({
+  get: () => config.value.selectedStyle,
+  set: (val: string) => { config.value = { ...config.value, selectedStyle: val } },
+})
+
+const selectedModel = computed({
+  get: () => config.value.selectedModel,
+  set: (val: string) => { config.value = { ...config.value, selectedModel: val } },
+})
+
+const selectedSize = computed({
+  get: () => config.value.selectedSize,
+  set: (val: string) => { config.value = { ...config.value, selectedSize: val } },
+})
+
+const inputAreaRef = ref<HTMLElement | null>(null)
 
 const hasOverlay = computed(() => !!props.data?._overlay)
 
@@ -72,20 +102,20 @@ function onMore() {
   emit('action', 'more')
 }
 
+function onInputAreaClick() {
+  const pm = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
+  pm?.focus()
+}
+
 function onAi() {
   emit('action', 'ai', promptText.value)
 }
-
-// 下拉选择变化 → 通知父组件
-watch(selectedStyle, (val) => emit('action', 'style', val as string))
-watch(selectedModel, (val) => emit('action', 'model', val as string))
-watch(selectedSize, (val) => emit('action', 'length', val as string))
 </script>
 
 <template>
   <div v-if="!hasOverlay" class="image-bottom-panel">
     <!-- 输入区域 — ProseMirrorEditor -->
-    <div class="input-area">
+    <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
       <div class="editor-wrapper">
         <ProseMirrorEditor
           v-model="promptText"
@@ -93,8 +123,16 @@ watch(selectedSize, (val) => emit('action', 'length', val as string))
           @update:model-value="onInput"
         />
       </div>
-      <button class="expand-btn" @click="onMore">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button class="expand-btn" :title="props.isFullscreen ? '退出全屏' : '全屏显示'" @click="onMore">
+        <!-- 全屏 → 缩小图标 -->
+        <svg v-if="props.isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="21 9 21 3 15 3" />
+          <polyline points="3 15 3 21 9 21" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+        <!-- 非全屏 → 放大图标 -->
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="15 3 21 3 21 9" />
           <polyline points="9 21 3 21 3 15" />
           <line x1="21" y1="3" x2="14" y2="10" />
@@ -180,6 +218,10 @@ watch(selectedSize, (val) => emit('action', 'length', val as string))
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(12px);
   overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 }
 
 /* ── 输入区域 ── */
@@ -187,6 +229,8 @@ watch(selectedSize, (val) => emit('action', 'length', val as string))
 .input-area {
   position: relative;
   padding: 10px 14px 4px;
+  flex: 1;
+  width: 100%;
 }
 
 .editor-wrapper {
@@ -251,6 +295,7 @@ watch(selectedSize, (val) => emit('action', 'length', val as string))
   justify-content: space-between;
   padding: 6px 10px 10px;
   gap: 6px;
+  width: 100%;
 }
 
 .toolbar-left {
