@@ -100,7 +100,7 @@ const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
           v-if="data?.imageUrl && !error"
           :src="data.imageUrl"
           :alt="data?.label || '图片'"
-          class="w-full h-full object-cover bg-gray-50"
+          class="w-full h-full object-cover bg-gray-50 pointer-events-none"
           :class="{ 'opacity-30': isCropping || isExpanding || isMasking }"
           @error="error = true"
         />
