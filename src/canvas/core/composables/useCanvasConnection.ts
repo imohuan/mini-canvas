@@ -19,7 +19,7 @@
  *     <CustomEdge v-bind="conn.buildConnectionEdgeProps(props)" />
  *   </template>
  */
-import { ref, shallowRef, watch, nextTick } from 'vue'
+import { ref, shallowRef, watch, nextTick, computed } from 'vue'
 import { useCanvasStore } from './useCanvasStore'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
@@ -264,17 +264,12 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   let lastNativeConnectAt = 0
   const batchConnectState = ref<BatchConnectState | null>(null)
 
-  /** 节点 ID 索引（O(1) 查找） */
-  const nodesById = shallowRef(new Map<string, Node>())
-  watch(
-    () => getNodes.value,
-    (nodes) => {
-      const map = new Map<string, Node>()
-      for (const n of nodes as Node[]) map.set(n.id, n)
-      nodesById.value = map
-    },
-    { immediate: true, deep: false },
-  )
+  /** 节点 ID 索引（O(1) 查找）。computed 确保与 getNodes 同步，避免 shallowRef+watch 异步延迟 */
+  const nodesById = computed(() => {
+    const map = new Map<string, Node>()
+    for (const n of getNodes.value as Node[]) map.set(n.id, n)
+    return map
+  })
 
   // ==========================================================================
   // 节点查找
