@@ -1,6 +1,8 @@
 // Canvas Core — Public API
 // 画布引擎核心包入口
 
+import "./components/Decoration/node-theme.css"
+
 // ─── Core Canvas Component ───────────────────────────────────────────
 export { default as Canvas } from './Canvas.vue'
 

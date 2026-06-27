@@ -164,5 +164,4 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 0.5rem;
 }
 
-/* ── Import node theme (existing project) ── */
-@import "./canvas/core/components/Decoration/node-theme.css";
+
