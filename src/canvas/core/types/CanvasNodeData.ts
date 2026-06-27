@@ -81,4 +81,12 @@ export interface PanoramaNodeData extends BaseCanvasNodeData {
   panoUrl?: string  // 备用的全景图URL
 }
 
-export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | StageNodeData | PanoramaNodeData | BaseCanvasNodeData
+export interface ImageCompareNodeData extends BaseCanvasNodeData {
+  nodeType: 'image-compare'
+  leftImageUrl?: string  // 左侧图片 URL（runtime only）
+  rightImageUrl?: string // 右侧图片 URL（runtime only）
+  dividerPosition?: number // 分割线位置百分比 0-100
+  compareMode?: 'slider' | 'side-by-side' | 'overlay' // 对比模式
+}
+
+export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | StageNodeData | PanoramaNodeData | ImageCompareNodeData | BaseCanvasNodeData

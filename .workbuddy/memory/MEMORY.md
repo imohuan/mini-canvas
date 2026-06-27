@@ -69,3 +69,11 @@ _overlay: {
 - 典型反模式：`<template #slot>{{ updateState() }}</template>` 中的 `updateState` 写入 Pinia ref
 - **修复**：用 `nextTick(() => { state.value = x })` 迁出 render 阶段
 - 已在 `useCanvasConnection.ts` 的 `buildConnectionEdgeProps` 中应用此修复（hoverNode 写入）
+
+## 图片对比节点 (image-compare)
+
+- 节点类型 `'image-compare'`，单一 target 输入端口，最多 2 条连接（FIFO 淘汰）
+- 视图用 CSS `clip-path: inset()` 实现滑块对比效果
+- 从上游 image 节点读取 `imageUrl`，不依赖自身 data 存储图片
+- `leftImageUrl`/`rightImageUrl` 是 runtime-only blob URL，已加入 `RUNTIME_FIELDS`
+- `dividerPosition`/`compareMode` 是持久化配置字段

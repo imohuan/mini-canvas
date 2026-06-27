@@ -6,6 +6,7 @@ import { ImageNodePlugin } from './canvas/core/nodes/image/ImageNodePlugin'
 import { VideoNodePlugin } from './canvas/core/nodes/Video/VideoNodePlugin'
 import { StageNodePlugin } from './canvas/core/nodes/stage/StageNodePlugin'
 import { PanoramaNodePlugin } from './canvas/core/nodes/panorama/PanoramaNodePlugin'
+import { ImageCompareNodePlugin } from './canvas/core/nodes/image-compare/ImageCompareNodePlugin'
 import { ContextMenuPlugin } from './canvas/core/plugins/context-menu/index'
 import { CustomHandlePlugin } from './canvas/core/plugins/custom-handle/index'
 import { NodeFindPlugin } from './canvas/core/plugins/node-find/index'
@@ -68,6 +69,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '360全景节点',
     description: '注册360全景图片查看节点到 NodeRegistry，用 Three.js 渲染可拖拽旋转的全景球体',
     usage: '右键画布 → 360全景 → 上传全景图 → 拖拽旋转查看 / 滚轮缩放',
+  },
+  {
+    plugin: markRaw(ImageCompareNodePlugin) as CanvasPlugin,
+    enabled: true,
+    label: '图片对比节点',
+    description: '注册图片对比节点到 NodeRegistry，连接 2 个图片节点进行并排对比，带可拖拽分割线',
+    usage: '右键画布 → 图片对比 → 连接 2 个图片节点 → 拖拽分割线对比',
   },
   {
     plugin: markRaw(ContextMenuPlugin) as CanvasPlugin,
