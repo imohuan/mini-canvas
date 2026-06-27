@@ -80,13 +80,25 @@ const zoneStyle = computed(() => ({
   // top: `${-radius.value - buttonY .value}px`,
 }))
 
-const buttonStyle = computed(() => ({
-  width: `${buttonSize.value}px`,
-  height: `${buttonSize.value}px`,
-  left: `${buttonX.value}px`,
-  top: `${buttonY.value}px`,
-  transform: `translate(-50%, -50%) scale(${isMoving.value ? 1.06 : 1})`,
-}))
+const buttonStyle = computed(() => {
+  const style: any = {
+    width: `${buttonSize.value}px`,
+    height: `${buttonSize.value}px`,
+    top: `${buttonY.value}px`,
+    transform: `translate(-50%, -50%) scale(${isMoving.value ? 1.06 : 1})`,
+  }
+
+  if (isSource.value) {
+    style.left = `${buttonX.value}px`
+  } else {
+    // .vue-flow__handle 有一个样式 min-width: 5px; 出现在左侧的时候 需要减去这个值
+    style.left = `${buttonX.value + 5}px`
+  }
+
+  console.log({ style });
+
+  return style
+})
 
 const debugArcPath = computed(() => {
   const r = radius.value
@@ -223,15 +235,16 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor" :class="{
-    'moving-handle-anchor--source': isSource,
-    'moving-handle-anchor--target': !isSource,
-    'is-visible': isShown,
-    'is-moving': isMoving,
-    'is-restoring': isRestoring,
-    'is-disabled': disabled,
-    'is-preview': preview,
-  }">
+  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor"
+    :class="{
+      'moving-handle-anchor--source': isSource,
+      'moving-handle-anchor--target': !isSource,
+      'is-visible': isShown,
+      'is-moving': isMoving,
+      'is-restoring': isRestoring,
+      'is-disabled': disabled,
+      'is-preview': preview,
+    }">
     <span class="moving-handle-zone" :class="{
       'moving-handle-zone--source': isSource,
       'moving-handle-zone--target': !isSource,
@@ -265,11 +278,12 @@ onBeforeUnmount(() => {
 
     </span>
 
-    <span class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
+    <!-- <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown"> -->
+    <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
         <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-    </span>
+    </div>
   </component>
 </template>
 
@@ -316,7 +330,7 @@ onBeforeUnmount(() => {
 }
 
 .moving-handle-zone.is-debug {
-  outline: 1px dashed var(--canvas-node-debug-danger);
+  /* outline: 1px dashed var(--canvas-node-debug-danger); */
 }
 
 .moving-handle-zone--source {
@@ -344,7 +358,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  left: 0;
   top: 0;
   pointer-events: none;
   z-index: 2;
@@ -358,6 +371,15 @@ onBeforeUnmount(() => {
     color 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
+}
+
+
+.moving-handle-anchor--target .moving-handle-button {
+  left: 0
+}
+
+.moving-handle-anchor--source .moving-handle-button {
+  right: 0
 }
 
 .moving-handle-anchor.is-moving .moving-handle-button {
