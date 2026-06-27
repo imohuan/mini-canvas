@@ -105,7 +105,7 @@ function onDividerPointerMove(e: PointerEvent) {
   if (!isDragging.value || !containerRef.value) return
   const rect = containerRef.value.getBoundingClientRect()
   const x = e.clientX - rect.left
-  const pct = Math.max(3, Math.min(97, (x / rect.width) * 100))
+  const pct = Math.max(0, Math.min(100, (x / rect.width) * 100))
   dividerPos.value = pct
 }
 
