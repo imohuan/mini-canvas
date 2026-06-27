@@ -238,8 +238,8 @@ const addMenuLog = (action: string) => {
           <h3 class="text-[13px] font-semibold text-secondary mb-2.5">Click Trigger</h3>
           <div class="flex items-start gap-ax-sm flex-wrap">
             <AxDropdown placement="bottom-start" :offset="6" menu-max-width="220px">
-              <template #trigger="{ open, toggle }">
-                <AxButton variant="outline" size="sm" icon="menu" @click="toggle">
+              <template #trigger="{ open }">
+                <AxButton variant="outline" size="sm" icon="menu">
                   Menu {{ open ? '▲' : '▼' }}
                 </AxButton>
               </template>
@@ -271,8 +271,8 @@ const addMenuLog = (action: string) => {
           <h3 class="text-[13px] font-semibold text-secondary mb-2.5">Multiple Placements</h3>
           <div class="flex items-center gap-2 flex-wrap">
             <AxDropdown placement="bottom-start" :offset="4" menu-width="140px">
-              <template #trigger="{ toggle }">
-                <AxButton variant="ghost" size="sm" @click="toggle">↓ Start</AxButton>
+              <template #trigger>
+                <AxButton variant="ghost" size="sm">↓ Start</AxButton>
               </template>
               <template #default="{ close }">
                 <div class="p-0.5">
@@ -284,8 +284,8 @@ const addMenuLog = (action: string) => {
             </AxDropdown>
 
             <AxDropdown placement="top-start" :offset="4" menu-width="140px">
-              <template #trigger="{ toggle }">
-                <AxButton variant="ghost" size="sm" @click="toggle">↑ Start</AxButton>
+              <template #trigger>
+                <AxButton variant="ghost" size="sm">↑ Start</AxButton>
               </template>
               <template #default="{ close }">
                 <div class="p-0.5">
@@ -297,8 +297,8 @@ const addMenuLog = (action: string) => {
             </AxDropdown>
 
             <AxDropdown placement="bottom-end" :offset="4" menu-width="140px">
-              <template #trigger="{ toggle }">
-                <AxButton variant="ghost" size="sm" @click="toggle">↓ End</AxButton>
+              <template #trigger>
+                <AxButton variant="ghost" size="sm">↓ End</AxButton>
               </template>
               <template #default="{ close }">
                 <div class="p-0.5">
@@ -310,8 +310,8 @@ const addMenuLog = (action: string) => {
             </AxDropdown>
 
             <AxDropdown placement="right-start" :offset="4" menu-width="140px">
-              <template #trigger="{ toggle }">
-                <AxButton variant="ghost" size="sm" @click="toggle">→ Start</AxButton>
+              <template #trigger>
+                <AxButton variant="ghost" size="sm">→ Start</AxButton>
               </template>
               <template #default="{ close }">
                 <div class="p-0.5">
