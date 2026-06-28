@@ -10,6 +10,7 @@ import type { SelectOption } from '../../components/Ui'
 
 export interface ToolbarConfig {
   promptText: string
+  promptDoc?: any
   selectedStyle: string
   selectedModel: string
   selectedSize: string
@@ -184,6 +185,11 @@ const promptText = computed({
   set: (val: string) => { config.value = { ...config.value, promptText: val } },
 })
 
+const promptDoc = computed({
+  get: () => config.value.promptDoc,
+  set: (val: any) => { config.value = { ...config.value, promptDoc: val } },
+})
+
 const selectedStyle = computed({
   get: () => config.value.selectedStyle,
   set: (val: string) => { config.value = { ...config.value, selectedStyle: val } },
@@ -249,7 +255,7 @@ function onEditorKeydown(e: KeyboardEvent) {
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
       <div class="editor-wrapper" @keydown="onEditorKeydown">
-        <ProseMirrorEditor ref="editorRef" v-model="promptText" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
+        <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
           @update:model-value="onInput" @click.stop>
           <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
             <Teleport :to="teleportTarget">

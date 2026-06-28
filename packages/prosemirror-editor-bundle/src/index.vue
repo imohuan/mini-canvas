@@ -44,6 +44,7 @@ import type { ResourceItem } from './types.ts';
 
 const props = defineProps<{
   modelValue?: string;
+  promptDoc?: any;
   resources?: ResourceItem[];
   placeholder?: string;
   resolveResource?: (name: string) => ResourceItem | null;
@@ -51,11 +52,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
+  'update:promptDoc': [value: any];
   'resource-insert': [resource: ResourceItem];
 }>();
 
 const editorRef = ref<HTMLElement | null>(null);
 const modelValueRef = toRef(props, 'modelValue');
+const promptDocRef = toRef(props, 'promptDoc');
 const resourcesRef = toRef(props, 'resources');
 const resolveResourceRef = toRef(props, 'resolveResource');
 
@@ -78,6 +81,7 @@ const {
   focusEnd,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
+  promptDoc: promptDocRef,
   resources: resourcesRef,
   resolveResource: resolveResourceRef,
 }, emit);

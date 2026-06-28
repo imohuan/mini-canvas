@@ -341,7 +341,9 @@ function createCursorFixPlugin() {
 }
 
 // 粘贴处理插件
-function createPasteHandlerPlugin() {
+function createPasteHandlerPlugin(
+  getResolver: () => ((name: string) => ResourceItem | null) | undefined,
+) {
   return new Plugin({
     key: new PluginKey("paste-handler"),
     props: {
@@ -352,11 +354,23 @@ function createPasteHandlerPlugin() {
         }
 
         const text = event.clipboardData?.getData("text/plain");
-        if (text && !html) {
-          const cleanedText = text.replace(/\n+/g, " ").trim();
+        if (text && (!html || text.includes('\n'))) {
           const { from, to } = view.state.selection;
-          const tr = view.state.tr.replaceWith(from, to, view.state.schema.text(cleanedText));
-          view.dispatch(tr);
+          const lines = text.split('\n')
+          const resolver = getResolver()
+          if (lines.length > 1) {
+            const nodes: any[] = []
+            for (const line of lines) {
+              const content = parsePlainTextToContent(line, resolver)
+              nodes.push(view.state.schema.node("paragraph", null, content.length > 0 ? content : undefined))
+            }
+            const tr = view.state.tr.replaceWith(from, to, nodes);
+            view.dispatch(tr);
+          } else {
+            const content = parsePlainTextToContent(text.trim(), resolver)
+            const tr = view.state.tr.replaceWith(from, to, content.length > 0 ? content : view.state.schema.text(''));
+            view.dispatch(tr);
+          }
           return true;
         }
 
@@ -415,11 +429,13 @@ export function useEditor(
   editorRef: Ref<HTMLElement | null>,
   props: {
     modelValue?: Ref<string | undefined>
+    promptDoc?: Ref<any | undefined>
     resources?: Ref<ResourceItem[] | undefined>
     resolveResource?: Ref<((name: string) => ResourceItem | null) | undefined>
   },
   emit: {
     (e: "update:modelValue", value: string): void
+    (e: "update:promptDoc", value: any): void
     (e: "resource-insert", resource: ResourceItem): void
   },
 ) {
@@ -737,21 +753,41 @@ export function useEditor(
       },
     });
 
-    const initialValue = unref(props.modelValue);
-    const initialContent = initialValue
-      ? parsePlainTextToContent(initialValue, unref(props.resolveResource))
-      : undefined
+    const promptDocJson = unref(props.promptDoc);
+    let paragraphs: any[];
+    if (promptDocJson) {
+      // 优先用 JSON 恢复完整文档结构
+      try {
+        const doc = mySchema.nodeFromJSON(promptDocJson)
+        paragraphs = []
+        doc.forEach(child => paragraphs.push(child))
+      } catch {
+        // JSON 恢复失败，降级到文本解析
+        const initialValue = unref(props.modelValue)
+        paragraphs = initialValue
+          ? initialValue.split('\n').map(line => {
+              const content = parsePlainTextToContent(line, unref(props.resolveResource))
+              return mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
+            })
+          : [mySchema.node("paragraph")]
+      }
+    } else {
+      const initialValue = unref(props.modelValue)
+      paragraphs = initialValue
+        ? initialValue.split('\n').map(line => {
+            const content = parsePlainTextToContent(line, unref(props.resolveResource))
+            return mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
+          })
+        : [mySchema.node("paragraph")]
+    }
     const state = EditorState.create({
       schema: mySchema,
-      doc: mySchema.node(
-        "doc", null,
-        initialContent ? [mySchema.node("paragraph", null, initialContent)] : [mySchema.node("paragraph")],
-      ),
+      doc: mySchema.node("doc", null, paragraphs),
       plugins: [
         history(),
         mentionKeymap,
         createSelectionDecorationPlugin(),
-        createPasteHandlerPlugin(),
+        createPasteHandlerPlugin(() => unref(props.resolveResource)),
         createCursorFixPlugin(),
         createDropCursorPlugin({ color: "#2b6df2", width: 2 }),
         keymap(baseKeymap),
@@ -766,6 +802,7 @@ export function useEditor(
         view.updateState(newState);
 
         emit("update:modelValue", getPlainText());
+        emit("update:promptDoc", serializeDoc());
 
         const sel = newState.selection;
         if (sel.empty && (sel as any).$cursor) {
@@ -864,22 +901,34 @@ export function useEditor(
     }
   });
 
-  // 监听外部 modelValue 变化
+  // 监听外部 modelValue / promptDoc 变化
+  // promptDoc 仅在文本不匹配时用于 JSON 恢复（避免破坏正常编辑流程）
   watch(
-    () => unref(props.modelValue),
-    (newValue) => {
-      if (view && getPlainText() !== newValue) {
-        const tr = view.state.tr;
-        tr.delete(0, view.state.doc.content.size);
-        if (newValue) {
-          const content = parsePlainTextToContent(newValue, unref(props.resolveResource));
-          if (content.length > 0) {
-            const paragraph = mySchema.node("paragraph", null, content);
-            tr.insert(0, paragraph);
-          }
-        }
-        view.dispatch(tr);
+    () => [unref(props.modelValue), unref(props.promptDoc)] as const,
+    ([newModelValue, newPromptDoc]) => {
+      if (!view) return
+
+      // 正常编辑流程：文本匹配则跳过
+      if (getPlainText() === newModelValue) return
+
+      // 文本不匹配（外部变更），优先用 JSON 完整恢复
+      if (newPromptDoc) {
+        deserializeDoc(newPromptDoc)
+        return
       }
+
+      // 降级：纯文本恢复（无 promptDoc 的向后兼容路径）
+      const tr = view.state.tr;
+      tr.delete(0, view.state.doc.content.size);
+      if (newModelValue) {
+        const lines = newModelValue.split('\n')
+        for (const line of lines) {
+          const content = parsePlainTextToContent(line, unref(props.resolveResource))
+          const paragraph = mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
+          tr.insert(tr.doc.content.size, paragraph)
+        }
+      }
+      view.dispatch(tr);
     },
   );
 

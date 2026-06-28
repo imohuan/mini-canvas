@@ -77,6 +77,7 @@ const showExpandDialog = ref(false)
 /** 底部工具栏配置（v-model） */
 const toolbarConfig = ref<ToolbarConfig>({
   promptText: '',
+  promptDoc: null,
   selectedStyle: 'hollywood-retro',
   selectedModel: 'anycook',
   selectedSize: '9:16-3k',
