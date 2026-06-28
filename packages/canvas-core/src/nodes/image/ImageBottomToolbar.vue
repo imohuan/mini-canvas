@@ -110,13 +110,20 @@ function onInputAreaClick() {
 function onAi() {
   emit('action', 'ai', promptText.value)
 }
+
+/** 拦截 Delete/Backspace 键，防止 VueFlow 删除当前节点 */
+function onEditorKeydown(e: KeyboardEvent) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.stopPropagation()
+  }
+}
 </script>
 
 <template>
   <div v-if="!hasOverlay" class="image-bottom-panel">
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
-      <div class="editor-wrapper">
+      <div class="editor-wrapper" @keydown="onEditorKeydown">
         <ProseMirrorEditor
           v-model="promptText"
           placeholder="描述你想要生成的画面内容，@引用素材"
