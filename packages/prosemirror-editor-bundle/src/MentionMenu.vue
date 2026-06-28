@@ -17,8 +17,15 @@
             @mouseenter="hoveredIndex = getGlobalIndex(item)"
             @mouseleave="hoveredIndex = -1"
           >
-            <component v-if="item.renderItem" :is="() => item.renderItem!(item)" />
-            <template v-else>
+            <slot
+              name="item"
+              :item="item"
+              :category="category"
+              :is-active="getGlobalIndex(item) === activeIndex"
+              :is-hovered="getGlobalIndex(item) === hoveredIndex"
+            >
+              <component v-if="item.renderItem" :is="() => item.renderItem!(item)" />
+              <template v-else>
               <span v-if="item.icon" class="item-icon" v-html="item.icon" />
               <span v-else class="item-icon-default">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
@@ -28,6 +35,7 @@
               </span>
               <span class="text-sm">{{ item.name }}</span>
             </template>
+            </slot>
           </div>
         </div>
       </template>

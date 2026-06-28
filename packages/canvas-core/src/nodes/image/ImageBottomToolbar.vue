@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import type { NodeProps } from '@vue-flow/core'
-import { computed, ref } from 'vue'
+import type { NodeProps, Edge, Node } from '@vue-flow/core'
+import { useVueFlow } from '@vue-flow/core'
+import { computed, ref, h } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
+import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
 
 export interface ToolbarConfig {
@@ -23,6 +26,97 @@ const config = defineModel<ToolbarConfig>({ required: true })
 const emit = defineEmits<{
   (e: 'action', action: string, value?: string): void
 }>()
+
+// ── 连接的上游图片节点 → 素材资源 ──
+
+const teleportTarget = useTeleportTarget()
+
+const { getEdges, findNode } = useVueFlow()
+
+const connectedImages = computed<ResourceItem[]>(() => {
+  const id = props.id as string
+  if (!id) return []
+  const edges = getEdges.value as Edge[]
+  const result = edges
+    .filter(e => e.target === id && e.targetHandle === 'target')
+    .map((e, i) => {
+      const sourceNode = findNode(e.source) as Node | undefined
+      const data = sourceNode?.data as any
+      const url = (data?.imageUrl as string) || ''
+      const name = (data?.imageName as string) || (data?.label as string) || `素材${i + 1}`
+      if (!url) return null
+      const item: ResourceItem = {
+        id: `connected-${e.source}`,
+        name,
+        category: '素材',
+        url,
+        mediaType: 'image',
+        renderEditor: (self) => {
+          const el = document.createElement('span')
+          el.style.display = 'inline-flex'
+          el.style.alignItems = 'center'
+          el.style.gap = '4px'
+          el.style.verticalAlign = 'middle'
+          const img = document.createElement('img')
+          img.src = self.url || ''
+          img.style.width = '16px'
+          img.style.height = '16px'
+          img.style.borderRadius = '2px'
+          img.style.objectFit = 'cover'
+          img.draggable = false
+          img.style.pointerEvents = 'none'
+          el.appendChild(img)
+          const label = document.createElement('span')
+          label.style.fontSize = '12px'
+          label.style.lineHeight = '1'
+          label.style.pointerEvents = 'none'
+          label.textContent = self.name
+          el.appendChild(label)
+          return el
+        },
+        onClick: () => {
+          // 点击 → 全屏预览已连接节点的图片
+          const viewer = document.createElement('div')
+          viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer'
+          const img = document.createElement('img')
+          img.src = url; img.style.maxWidth = '90vw'; img.style.maxHeight = '90vh'; img.style.objectFit = 'contain'
+          viewer.appendChild(img)
+          viewer.onclick = () => viewer.remove()
+          document.body.appendChild(viewer)
+        },
+      }
+      return item
+    })
+    .filter((x): x is ResourceItem => x !== null)
+  // 确保至少有一项，验证菜单 pipeline
+  if (result.length === 0) {
+    result.push({
+      id: 'test-fallback',
+      name: '测试素材（请连接图片节点）',
+      category: '素材',
+      url: '',
+      mediaType: 'image',
+    })
+  }
+  return result
+})
+
+/** 计算 ResourceItem 在分组中的全局索引 */
+function getItemGlobalIndex(
+  item: ResourceItem,
+  groupedItems: Map<string, ResourceItem[]>,
+  categoryOrder: string[],
+): number {
+  let count = 0
+  for (const cat of categoryOrder) {
+    const catItems = groupedItems.get(cat)
+    if (!catItems) continue
+    const idx = catItems.indexOf(item)
+    if (idx !== -1) return count + idx
+    count += catItems.length
+  }
+  return -1
+}
 
 // ── 下拉选项 ──
 
@@ -124,11 +218,46 @@ function onEditorKeydown(e: KeyboardEvent) {
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
       <div class="editor-wrapper" @keydown="onEditorKeydown">
-        <ProseMirrorEditor
-          v-model="promptText"
-          placeholder="描述你想要生成的画面内容，@引用素材"
-          @update:model-value="onInput"
-        />
+        <ProseMirrorEditor v-model="promptText" :resources="connectedImages" placeholder="描述你想要生成的画面内容，@引用素材"
+          @update:model-value="onInput">
+          <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
+            <Teleport :to="teleportTarget">
+              <Transition name="ax-fade-scale">
+                <div v-if="visible" class="mention-menu-custom" :style="{
+                  position: 'fixed',
+                  left: position.left,
+                  top: position.top,
+                  transformOrigin: position.origin || 'top left',
+                  zIndex: 99999,
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 24px rgba(0,0,0,.08)',
+                  minWidth: '180px',
+                  maxHeight: '280px',
+                  overflowY: 'auto',
+                  padding: '4px',
+                }">
+                  <template v-for="category in categoryOrder" :key="category">
+                    <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
+                      <div style="padding:6px 10px 2px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase">{{ category }}</div>
+                      <div v-for="item in groupedItems.get(category)!" :key="item.id"
+                        style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:14px;border-radius:6px"
+                        :style="{
+                          background: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#eff6ff' : 'transparent',
+                          color: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#2b6df2' : '#374151',
+                        }" @mousedown.prevent="onSelect(item)">
+                        <img v-if="item.url" :src="item.url" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0" draggable="false" />
+                        <span v-else-if="item.icon" v-html="item.icon" />
+                        <span>{{ item.name }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </Transition>
+            </Teleport>
+          </template>
+        </ProseMirrorEditor>
       </div>
       <button class="expand-btn" :title="props.isFullscreen ? '退出全屏' : '全屏显示'" @click="onMore">
         <!-- 全屏 → 缩小图标 -->
@@ -152,58 +281,22 @@ function onEditorKeydown(e: KeyboardEvent) {
     <div class="toolbar-row">
       <!-- 左侧 -->
       <div class="toolbar-left">
-        <AxButton
-          variant="ghost"
-          size="icon"
-          icon="add"
-          title="添加"
-          @click="onAdd"
-        />
+        <AxButton variant="ghost" size="icon" icon="add" title="添加" @click="onAdd" />
 
-        <AxButton
-          variant="ghost"
-          size="icon"
-          icon="settings"
-          title="设置"
-          @click="onSettings"
-        />
+        <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" />
 
         <div class="toolbar-divider" />
 
-        <AxSelect
-          v-model="selectedStyle"
-          :options="STYLE_OPTIONS"
-          size="sm"
-          placeholder="选择风格"
-          trigger-width="110px"
-        />
+        <AxSelect v-model="selectedStyle" :options="STYLE_OPTIONS" size="sm" placeholder="选择风格" trigger-width="110px" />
 
-        <AxSelect
-          v-model="selectedModel"
-          :options="MODEL_OPTIONS"
-          size="sm"
-          placeholder="选择模型"
-          trigger-width="130px"
-        />
+        <AxSelect v-model="selectedModel" :options="MODEL_OPTIONS" size="sm" placeholder="选择模型" trigger-width="130px" />
 
-        <AxSelect
-          v-model="selectedSize"
-          :options="SIZE_OPTIONS"
-          size="sm"
-          placeholder="选择尺寸"
-          trigger-width="95px"
-        />
+        <AxSelect v-model="selectedSize" :options="SIZE_OPTIONS" size="sm" placeholder="选择尺寸" trigger-width="95px" />
       </div>
 
       <!-- 右侧 -->
       <div class="toolbar-right">
-        <AxButton
-          variant="ghost"
-          size="icon"
-          icon="add_circle"
-          title="更多"
-          @click="onMore"
-        />
+        <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" />
 
         <button class="btn-ai" @click="onAi">
           <svg class="ai-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -265,6 +358,12 @@ function onEditorKeydown(e: KeyboardEvent) {
   height: 0;
   pointer-events: none;
 }
+
+.ax-fade-scale-enter-active { transition: opacity .15s ease, transform .15s ease; }
+.ax-fade-scale-leave-active { transition: opacity .1s ease, transform .1s ease; }
+.ax-fade-scale-enter-from { opacity: 0; transform: scale(.95); }
+.ax-fade-scale-leave-to { opacity: 0; transform: scale(.95); }
+
 
 .editor-wrapper :deep(.prose-mirror-editor) {
   width: 100%;

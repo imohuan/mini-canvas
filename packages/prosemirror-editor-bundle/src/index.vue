@@ -2,16 +2,27 @@
   <div class="prose-mirror-editor">
     <div ref="editorRef"></div>
 
-    <!-- 资源/变量选择菜单 -->
-    <MentionMenu
+    <!-- @ 菜单插槽：调用方完全控制渲染 -->
+    <slot
+      name="mention-menu"
       :visible="menuVisible"
       :items="filteredItems"
       :grouped-items="groupedItems"
       :category-order="categoryOrder"
       :position="menuPosition"
       :active-index="activeIndex"
-      @select="insertSelectedItem"
-    />
+      :on-select="insertSelectedItem"
+    >
+      <MentionMenu
+        :visible="menuVisible"
+        :items="filteredItems"
+        :grouped-items="groupedItems"
+        :category-order="categoryOrder"
+        :position="menuPosition"
+        :active-index="activeIndex"
+        @select="insertSelectedItem"
+      />
+    </slot>
 
     <!-- 悬停预览框 -->
     <PreviewBox

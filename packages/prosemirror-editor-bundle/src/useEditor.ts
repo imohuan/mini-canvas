@@ -174,6 +174,9 @@ const mySchema = new Schema({
           const el = item.renderEditor(item)
           el.classList.add("resource-node")
           el.setAttribute("data-id", node.attrs.id)
+          el.setAttribute("data-url", node.attrs.url || "")
+          el.setAttribute("data-name", node.attrs.name || "")
+          el.setAttribute("data-category", node.attrs.category || "")
           return el
         }
         // 默认渲染
@@ -593,8 +596,6 @@ export function useEditor(
       el.onmouseenter = () => handleResourceMouseEnter(el);
       el.onmouseleave = () => handleResourceMouseLeave(el);
       el.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
         handleResourceClick(el);
       };
 
