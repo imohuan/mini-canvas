@@ -208,7 +208,7 @@ function onToolbarAction(action: string) {
 .expand-dialog-body {
   padding: 0;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .expand-dialog-body .image-bottom-panel {

@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
+import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
 
 export interface ToolbarConfig {
@@ -27,6 +28,8 @@ const emit = defineEmits<{
 }>()
 
 // ── 连接的上游图片节点 → 素材资源 ──
+
+const teleportTarget = useTeleportTarget()
 
 const { getEdges, findNode } = useVueFlow()
 
@@ -95,14 +98,36 @@ function resolveResource(name: string): ResourceItem | null {
   return connectedImages.value.find(item => item.name === name) || null
 }
 
-/** mention-menu 定位：将 ProseMirrorEditor 传来的 viewport 坐标转为 inputArea 容器相对坐标 */
+/** mention-menu 定位：从 DOM selection 获取实际光标位置，修正 ProseMirror coordsAtPos 在 transform 容器下的偏差 */
 function getMentionMenuStyle(vpPos: { left: string; top: string; origin?: string }) {
-  const container = inputAreaRef.value
-  if (!container) return { left: vpPos.left, top: vpPos.top }
-  const rect = container.getBoundingClientRect()
+  const fallback = { left: vpPos.left, top: vpPos.top, transformOrigin: vpPos.origin || 'top left' }
+  const editorEl = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
+  if (!editorEl) return fallback
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return fallback
+  if (!editorEl.contains(sel.anchorNode)) return fallback
+
+  const range = sel.getRangeAt(0).cloneRange()
+  range.collapse(true)
+  const rect = range.getClientRects()[0]
+  if (!rect || rect.width === 0) return fallback
+
+  // 边界检测（同 useEditor.ts showMenu 逻辑）
+  const menuWidth = 200
+  const menuMaxHeight = 280
+  const gap = 8
+  const minMargin = 8
+
+  let left = rect.left
+  let top = rect.bottom + gap
+
+  if (left + menuWidth > window.innerWidth) left = rect.right - menuWidth
+  if (top + menuMaxHeight > window.innerHeight) top = rect.top - menuMaxHeight - gap
+
   return {
-    left: `${parseFloat(vpPos.left) - rect.left}px`,
-    top: `${parseFloat(vpPos.top) - rect.top}px`,
+    left: `${Math.max(minMargin, left)}px`,
+    top: `${Math.max(minMargin, top)}px`,
     transformOrigin: vpPos.origin || 'top left',
   }
 }
@@ -227,23 +252,25 @@ function onEditorKeydown(e: KeyboardEvent) {
         <ProseMirrorEditor v-model="promptText" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
           @update:model-value="onInput">
           <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
-            <Transition name="ax-fade-scale">
-              <div v-if="visible" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
-                <template v-for="category in categoryOrder" :key="category">
-                  <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
-                    <div class="mention-menu-category">{{ category }}</div>
-                    <div v-for="item in groupedItems.get(category)!" :key="item.id"
-                      class="mention-menu-item"
-                      :class="{ active: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex }"
-                      @mousedown.prevent="onSelect(item)">
-                      <img v-if="item.url" :src="item.url" class="mention-menu-thumb" draggable="false" />
-                      <span v-else-if="item.icon" v-html="item.icon" class="mention-menu-icon" />
-                      <span class="mention-menu-name">{{ item.name }}</span>
+            <Teleport :to="teleportTarget">
+              <Transition name="ax-fade-scale">
+                <div v-if="visible" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
+                  <template v-for="category in categoryOrder" :key="category">
+                    <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
+                      <div class="mention-menu-category">{{ category }}</div>
+                      <div v-for="item in groupedItems.get(category)!" :key="item.id"
+                        class="mention-menu-item"
+                        :class="{ active: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex }"
+                        @mousedown.prevent="onSelect(item)">
+                        <img v-if="item.url" :src="item.url" class="mention-menu-thumb" draggable="false" />
+                        <span v-else-if="item.icon" v-html="item.icon" class="mention-menu-icon" />
+                        <span class="mention-menu-name">{{ item.name }}</span>
+                      </div>
                     </div>
-                  </div>
-                </template>
-              </div>
-            </Transition>
+                  </template>
+                </div>
+              </Transition>
+            </Teleport>
           </template>
         </ProseMirrorEditor>
       </div>
@@ -310,15 +337,22 @@ function onEditorKeydown(e: KeyboardEvent) {
   align-items: center;
   justify-content: center;
   flex-direction: column;
+  position: relative;
 }
 
 /* ── 输入区域 ── */
 
 .input-area {
-  position: relative;
   padding: 10px 14px 4px;
   flex: 1;
   width: 100%;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.input-area::-webkit-scrollbar {
+  display: none;
 }
 
 .editor-wrapper {
@@ -350,7 +384,7 @@ function onEditorKeydown(e: KeyboardEvent) {
 /* ── mention-menu 下拉框 ── */
 
 .mention-menu-dropdown {
-  position: absolute;
+  position: fixed;
   z-index: 99999;
   background: #fff;
   border: 1px solid #e5e7eb;

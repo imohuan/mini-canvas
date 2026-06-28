@@ -818,17 +818,24 @@ export function useEditor(
       },
       clipboardTextSerializer: (slice) => {
         let text = "";
-        slice.content.forEach((node) => {
-          if (node.type.name === "resource") {
-            text += `@${node.attrs.name} `;
-          } else if (node.isText) {
-            // 过滤掉零宽空格
-            text += node.text?.replace(/\u200B/g, "") || "";
-          } else if (node.isBlock) {
-            text += "\n";
-          }
-        });
-        return text;
+        function collect(fragment: any) {
+          fragment.forEach((node: any) => {
+            if (node.type.name === "resource") {
+              text += `@${node.attrs.name} `;
+            } else if (node.isText) {
+              // 过滤掉零宽空格
+              text += node.text?.replace(/\u200B/g, "") || "";
+            } else if (node.isBlock) {
+              // 递归深入 block 内部，遍历其子节点（text / resource 等）
+              collect(node.content);
+              if (text.length > 0 && !text.endsWith("\n")) {
+                text += "\n";
+              }
+            }
+          });
+        }
+        collect(slice.content);
+        return text.trim();
       },
     });
 
