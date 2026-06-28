@@ -200,6 +200,7 @@ const selectedSize = computed({
 })
 
 const inputAreaRef = ref<HTMLElement | null>(null)
+const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
 
 const hasOverlay = computed(() => !!props.data?._overlay)
 
@@ -228,8 +229,7 @@ function onMore() {
 }
 
 function onInputAreaClick() {
-  // const pm = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
-  // pm?.focus()
+  editorRef.value?.focusEnd()
 }
 
 function onAi() {
@@ -249,8 +249,8 @@ function onEditorKeydown(e: KeyboardEvent) {
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
       <div class="editor-wrapper" @keydown="onEditorKeydown">
-        <ProseMirrorEditor v-model="promptText" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
-          @update:model-value="onInput">
+        <ProseMirrorEditor ref="editorRef" v-model="promptText" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
+          @update:model-value="onInput" @click.stop>
           <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
             <Teleport :to="teleportTarget">
               <Transition name="ax-fade-scale">
@@ -338,6 +338,7 @@ function onEditorKeydown(e: KeyboardEvent) {
   justify-content: center;
   flex-direction: column;
   position: relative;
+  min-height: 200px;
 }
 
 /* ── 输入区域 ── */

@@ -1,6 +1,6 @@
 import { ref, computed, onMounted, onUnmounted, watch, type Ref, unref } from "vue";
 import { Schema } from "prosemirror-model";
-import { EditorState, Plugin, PluginKey } from "prosemirror-state";
+import { EditorState, Plugin, PluginKey, Selection } from "prosemirror-state";
 import { EditorView, Decoration, DecorationSet } from "prosemirror-view";
 import { schema as baseSchema } from "prosemirror-schema-basic";
 import { keymap } from "prosemirror-keymap";
@@ -900,6 +900,16 @@ export function useEditor(
     { deep: true },
   );
 
+  function focusEnd() {
+    if (!view) return
+    const { state } = view
+    const selection = Selection.atEnd(state.doc)
+    if (selection) {
+      view.dispatch(state.tr.setSelection(selection))
+    }
+    view.focus()
+  }
+
   return {
     // 菜单
     menuVisible, menuPosition, activeIndex,
@@ -917,5 +927,6 @@ export function useEditor(
     exportText,
     serializeDoc,
     deserializeDoc,
+    focusEnd,
   };
 }
