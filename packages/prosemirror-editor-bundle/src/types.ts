@@ -6,7 +6,7 @@ export interface ResourceItem {
   category: string
   icon?: string
   renderItem?: (item: ResourceItem) => VNode   // MentionMenu 下拉菜单渲染
-  renderEditor?: (item: ResourceItem) => [string, Record<string, any>, ...any[]]  // 输入框内 DOM 渲染（替代 toDOM），返回 DOMOutputSpec
+  renderEditor?: (item: ResourceItem) => [string, Record<string, any>, ...any[]] | HTMLElement  // 输入框内 DOM 渲染；数组=DOMOutputSpec（ProseMirror 创建），HTMLElement=直接返回
   // 编辑器内交互事件（不传 → 无默认行为）
   onClick?: (item: ResourceItem) => void       // 点击资源节点
   onMouseEnter?: (item: ResourceItem) => void  // 鼠标进入资源节点（默认：悬停预览）

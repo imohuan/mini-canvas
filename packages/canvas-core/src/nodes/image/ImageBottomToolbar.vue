@@ -51,21 +51,21 @@ const connectedImages = computed<ResourceItem[]>(() => {
         category: '素材',
         url,
         mediaType: 'image',
-        // renderEditor: (self) => {
-        //   return [
-        //     "span",
-        //     {
-        //       class: "resource-node",
-        //       "data-id": self.id,
-        //       "data-url": self.url || "",
-        //       "data-name": self.name,
-        //       "data-category": self.category,
-        //       style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
-        //     },
-        //     ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
-        //     ["span", { class: "label", style: "font-size: 12px; line-height: 1" }, self.name],
-        //   ]
-        // },
+        renderEditor: (self) => {
+          return [
+            "span",
+            {
+              class: "resource-node",
+              "data-id": self.id,
+              "data-url": self.url || "",
+              "data-name": self.name,
+              "data-category": self.category,
+              style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
+            },
+            ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
+            // ["span", { class: "label", style: "font-size: 12px; line-height: 1" }, self.name],
+          ]
+        },
         onClick: () => {
           // 点击 → 全屏预览已连接节点的图片
           const viewer = document.createElement('div')

@@ -171,7 +171,16 @@ const mySchema = new Schema({
       toDOM: (node) => {
         const item = itemRegistry.get(node.attrs.id)
         if (item?.renderEditor) {
-          return item.renderEditor(item)
+          const result = item.renderEditor(item)
+          if (result instanceof HTMLElement) {
+            result.classList.add("resource-node")
+            result.setAttribute("data-id", node.attrs.id)
+            result.setAttribute("data-url", node.attrs.url || "")
+            result.setAttribute("data-name", node.attrs.name || "")
+            result.setAttribute("data-category", node.attrs.category || "")
+            return result
+          }
+          return result  // DOMOutputSpec 数组，直接透传
         }
         // 默认渲染
         const { id, name, url, thumbnail_url, category } = node.attrs
