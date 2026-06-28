@@ -165,36 +165,21 @@ function renderImageItem(self: ResourceItem) {
   ])
 }
 
-/** 输入框中图片项的渲染（直接返回 HTMLElement） */
-function renderImageEditor(self: ResourceItem): HTMLElement {
-  return defaultToDOM_editor(self)
-}
-
-// 直接用 DOM API 创建，不用 h 桥接
-function defaultToDOM_editor(self: ResourceItem): HTMLElement {
-  const el = document.createElement('span')
-  el.className = 'resource-node'
-  el.setAttribute('data-id', self.id)
-  el.setAttribute('data-url', self.url || '')
-  el.setAttribute('data-name', self.name)
-  el.setAttribute('data-category', self.category)
-  el.style.display = 'inline-flex'
-  el.style.alignItems = 'center'
-  el.style.gap = '4px'
-  el.style.verticalAlign = 'middle'
-  const img = document.createElement('img')
-  img.src = self.url || ''
-  img.style.width = '32px'
-  img.style.height = '32px'
-  img.style.borderRadius = '2px'
-  img.style.objectFit = 'cover'
-  img.draggable = false
-  el.appendChild(img)
-  const span = document.createElement('span')
-  span.style.fontSize = '12px'
-  span.textContent = self.name
-  el.appendChild(span)
-  return el
+/** 输入框中图片项的渲染（返回 DOMOutputSpec 数组） */
+function renderImageEditor(self: ResourceItem): [string, Record<string, any>, ...any[]] {
+  return [
+    "span",
+    {
+      class: "resource-node",
+      "data-id": self.id,
+      "data-url": self.url || "",
+      "data-name": self.name,
+      "data-category": self.category || "",
+      style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: middle",
+    },
+    ["img", { src: self.url || "", draggable: "false", style: "width: 32px; height: 32px; border-radius: 2px; object-fit: cover" }],
+    ["span", { style: "font-size: 12px" }, self.name],
+  ]
 }
 
 // 统一默认资源数据
@@ -216,13 +201,13 @@ const defaultResources: ResourceItem[] = [
   { id: 'r1', name: '示例图片1', category: 'resource',
     url: 'https://picsum.photos/200/300', mediaType: 'image',
     renderItem: renderImageItem,
-    renderEditor: renderImageEditor,
+    // renderEditor: renderImageEditor,
     onClick: showFullscreen,
   },
   { id: 'r2', name: '示例图片2', category: 'resource',
     url: 'https://picsum.photos/300/200', mediaType: 'image',
-    renderItem: renderImageItem,
-    renderEditor: renderImageEditor,
+    // renderItem: renderImageItem,
+    // renderEditor: renderImageEditor,
     onClick: showFullscreen,
   },
   { id: 'r3', name: '示例图片3', category: 'resource',

@@ -171,13 +171,7 @@ const mySchema = new Schema({
       toDOM: (node) => {
         const item = itemRegistry.get(node.attrs.id)
         if (item?.renderEditor) {
-          const el = item.renderEditor(item)
-          el.classList.add("resource-node")
-          el.setAttribute("data-id", node.attrs.id)
-          el.setAttribute("data-url", node.attrs.url || "")
-          el.setAttribute("data-name", node.attrs.name || "")
-          el.setAttribute("data-category", node.attrs.category || "")
-          return el
+          return item.renderEditor(item)
         }
         // 默认渲染
         const { id, name, url, thumbnail_url, category } = node.attrs

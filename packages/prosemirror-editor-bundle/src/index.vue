@@ -87,8 +87,6 @@ defineExpose({
 </script>
 
 <style>
-/* 导入完整样式 */
-@import './style.css';
 
 .prose-mirror-editor {
   width: 100%;

@@ -128,16 +128,15 @@
 }
 
 /* 2. 装饰插件添加的选中样式 */
-.prose-mirror-editor .resource-node-selected {
+.prose-mirror-editor .resource-node.resource-node-selected {
   background-color: #2b6df2 !important;
   color: #ffffff !important;
   outline: none;
-  /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
   align-items: center;
 }
 
-.prose-mirror-editor .resource-node-selected .label {
+.prose-mirror-editor .resource-node.resource-node-selected .label {
   color: #ffffff !important;
 }
 

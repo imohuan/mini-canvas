@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { NodeProps, Edge, Node } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
-import { computed, ref, h } from 'vue'
+import { computed, ref } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
@@ -51,29 +51,21 @@ const connectedImages = computed<ResourceItem[]>(() => {
         category: '素材',
         url,
         mediaType: 'image',
-        renderEditor: (self) => {
-          const el = document.createElement('span')
-          el.style.display = 'inline-flex'
-          el.style.alignItems = 'center'
-          el.style.gap = '4px'
-          el.style.verticalAlign = 'middle'
-          const img = document.createElement('img')
-          img.src = self.url || ''
-          img.style.width = '16px'
-          img.style.height = '16px'
-          img.style.borderRadius = '2px'
-          img.style.objectFit = 'cover'
-          img.draggable = false
-          img.style.pointerEvents = 'none'
-          el.appendChild(img)
-          const label = document.createElement('span')
-          label.style.fontSize = '12px'
-          label.style.lineHeight = '1'
-          label.style.pointerEvents = 'none'
-          label.textContent = self.name
-          el.appendChild(label)
-          return el
-        },
+        // renderEditor: (self) => {
+        //   return [
+        //     "span",
+        //     {
+        //       class: "resource-node",
+        //       "data-id": self.id,
+        //       "data-url": self.url || "",
+        //       "data-name": self.name,
+        //       "data-category": self.category,
+        //       style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
+        //     },
+        //     ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
+        //     ["span", { class: "label", style: "font-size: 12px; line-height: 1" }, self.name],
+        //   ]
+        // },
         onClick: () => {
           // 点击 → 全屏预览已连接节点的图片
           const viewer = document.createElement('div')
@@ -223,31 +215,23 @@ function onEditorKeydown(e: KeyboardEvent) {
           <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
             <Teleport :to="teleportTarget">
               <Transition name="ax-fade-scale">
-                <div v-if="visible" class="mention-menu-custom" :style="{
-                  position: 'fixed',
-                  left: position.left,
-                  top: position.top,
-                  transformOrigin: position.origin || 'top left',
-                  zIndex: 99999,
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 24px rgba(0,0,0,.08)',
-                  minWidth: '180px',
-                  maxHeight: '280px',
-                  overflowY: 'auto',
-                  padding: '4px',
-                }">
+                <div v-if="visible"
+                  style="position:fixed;z-index:99999;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);min-width:180px;max-height:280px;overflow-y:auto;padding:4px"
+                  :style="{ left: position.left, top: position.top, transformOrigin: position.origin || 'top left' }">
                   <template v-for="category in categoryOrder" :key="category">
                     <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
-                      <div style="padding:6px 10px 2px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase">{{ category }}</div>
+                      <div
+                        style="padding:6px 10px 2px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase">
+                        {{ category }}</div>
                       <div v-for="item in groupedItems.get(category)!" :key="item.id"
                         style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:14px;border-radius:6px"
                         :style="{
                           background: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#eff6ff' : 'transparent',
                           color: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#2b6df2' : '#374151',
                         }" @mousedown.prevent="onSelect(item)">
-                        <img v-if="item.url" :src="item.url" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0" draggable="false" />
+                        <img v-if="item.url" :src="item.url"
+                          style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0"
+                          draggable="false" />
                         <span v-else-if="item.icon" v-html="item.icon" />
                         <span>{{ item.name }}</span>
                       </div>
@@ -359,10 +343,23 @@ function onEditorKeydown(e: KeyboardEvent) {
   pointer-events: none;
 }
 
-.ax-fade-scale-enter-active { transition: opacity .15s ease, transform .15s ease; }
-.ax-fade-scale-leave-active { transition: opacity .1s ease, transform .1s ease; }
-.ax-fade-scale-enter-from { opacity: 0; transform: scale(.95); }
-.ax-fade-scale-leave-to { opacity: 0; transform: scale(.95); }
+.ax-fade-scale-enter-active {
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.ax-fade-scale-leave-active {
+  transition: opacity .1s ease, transform .1s ease;
+}
+
+.ax-fade-scale-enter-from {
+  opacity: 0;
+  transform: scale(.95);
+}
+
+.ax-fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(.95);
+}
 
 
 .editor-wrapper :deep(.prose-mirror-editor) {
