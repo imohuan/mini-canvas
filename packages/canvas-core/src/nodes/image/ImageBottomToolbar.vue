@@ -344,7 +344,7 @@ function onEditorKeydown(e: KeyboardEvent) {
   justify-content: center;
   flex-direction: column;
   position: relative;
-  min-height: 200px;
+  height: 200px;
 }
 
 /* ── 输入区域 ── */

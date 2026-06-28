@@ -1,5 +1,5 @@
 <template>
-  <div class="prose-mirror-editor" @keydown.stop>
+  <div class="prose-mirror-editor" @keydown.stop @paste.stop @cut.stop @wheel.stop>
     <div ref="editorRef"></div>
 
     <!-- @ 菜单插槽：调用方完全控制渲染 -->
