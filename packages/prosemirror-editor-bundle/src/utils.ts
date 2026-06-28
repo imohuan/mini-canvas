@@ -1,4 +1,16 @@
 import type { ResourceItem } from "./types";
+import { createApp, type VNode } from "vue";
+
+/**
+ * 将 Vue VNode 挂载到临时 div 上，返回 DOM 元素。
+ * 用于 renderEditor 等需要返回 HTMLElement 但想用 h() 的场景。
+ */
+export function mountVNode(vnode: VNode): HTMLElement {
+  const wrapper = document.createElement("div")
+  const app = createApp({ render: () => vnode })
+  app.mount(wrapper)
+  return wrapper
+}
 
 /**
  * 判断是否为视频URL
@@ -84,7 +96,7 @@ export function loadImageWithThumbnail(
   const triedUrls = new Set<string>();
 
   // 计算预览图 URL
-  const thumbnailUrl = resource.thumbnail_url || getThumbnailUrlFromAssetUrl(resource.url, resource.type);
+  const thumbnailUrl = resource.thumbnail_url || (resource.url ? getThumbnailUrlFromAssetUrl(resource.url, resource.mediaType) : '');
   
   // 要尝试的 URL 列表（按优先级）
   const urlsToTry: string[] = [];
@@ -132,7 +144,7 @@ export function loadImageWithThumbnail(
     if (regenerateOnFail && 
         failedUrl.includes("/thumbnails/") && 
         failedUrl !== resource.url) {
-      const newThumbnailUrl = await requestThumbnailGeneration(resource.url);
+      const newThumbnailUrl = await requestThumbnailGeneration(resource.url || '');
       
       if (isCancelled) return;
 

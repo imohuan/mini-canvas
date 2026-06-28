@@ -1,5 +1,6 @@
 /* ProseMirror 编辑器基础样式 */
 .prose-mirror-editor .ProseMirror {
+  white-space: pre-wrap;
   outline: none !important;
   min-height: 120px;
   font-size: 16px;

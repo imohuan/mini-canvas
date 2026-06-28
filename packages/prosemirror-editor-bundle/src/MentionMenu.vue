@@ -1,162 +1,134 @@
 <template>
-  <div 
-    v-show="visible" 
-    ref="menuRef"
-    class="mention-menu" 
-    :style="dynamicStyle"
-  >
+  <div v-show="visible" ref="menuRef" class="mention-menu" :style="dynamicStyle">
     <div ref="contentRef" class="menu-content">
-      <!-- 变量分类 -->
-      <div v-if="variables.length > 0" class="menu-category">
-        <div class="category-title">变量</div>
-        <div
-          v-for="(item, index) in variables"
-          :key="item.id"
-          :ref="(el) => setMenuItemRef(el as HTMLElement, 'variable', index)"
-          class="menu-item variable-item"
-          :class="{ active: index === activeIndex && menuType === 'variable' }"
-          @mousedown.prevent="selectItem(item, 'variable')"
-        >
-          <span class="variable-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/>
-            </svg>
-          </span>
-          <span class="text-sm">{{ item.name }}</span>
+      <template v-for="category in categoryOrder" :key="category">
+        <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0" class="menu-category">
+          <div class="category-title">{{ category }}</div>
+          <div
+            v-for="item in groupedItems.get(category)!"
+            :key="item.id"
+            :ref="(el) => setItemRef(el as HTMLElement, item)"
+            class="menu-item"
+            :class="{
+              active: getGlobalIndex(item) === activeIndex,
+              hovered: getGlobalIndex(item) === hoveredIndex
+            }"
+            @mousedown.prevent="selectItem(item)"
+            @mouseenter="hoveredIndex = getGlobalIndex(item)"
+            @mouseleave="hoveredIndex = -1"
+          >
+            <component v-if="item.renderItem" :is="() => item.renderItem!(item)" />
+            <template v-else>
+              <span v-if="item.icon" class="item-icon" v-html="item.icon" />
+              <span v-else class="item-icon-default">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                </svg>
+              </span>
+              <span class="text-sm">{{ item.name }}</span>
+            </template>
+          </div>
         </div>
-      </div>
-
-      <!-- 资源分类 -->
-      <div v-if="resources.length > 0" class="menu-category">
-        <div class="category-title">资源</div>
-        <div
-          v-for="(item, index) in resources"
-          :key="item.id"
-          :ref="(el) => setMenuItemRef(el as HTMLElement, 'resource', index)"
-          class="menu-item"
-          :class="{ active: index === activeIndex && menuType === 'resource' }"
-          @mousedown.prevent="selectItem(item, 'resource')"
-        >
-          <img
-            :ref="(el) => setItemRef(el as HTMLImageElement, item)"
-            class="w-6 h-6 rounded object-cover"
-            draggable="false"
-          />
-          <span class="text-sm">{{ item.name }}</span>
-        </div>
-      </div>
-
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onUpdated, watch, nextTick, computed, onMounted } from "vue";
-import type { ResourceItem, VariableItem, MenuPosition } from "./types";
+import { ref, watch, nextTick, computed, onMounted } from "vue";
+import type { ResourceItem, MenuPosition } from "./types";
 import { loadImageWithThumbnail } from "./utils";
 
 const props = defineProps<{
-  visible: boolean;
-  resources: ResourceItem[];
-  variables: VariableItem[];
-  menuType: "resource" | "variable";
-  position: MenuPosition;
-  activeIndex: number;
-}>();
+  visible: boolean
+  items: ResourceItem[]
+  groupedItems: Map<string, ResourceItem[]>
+  categoryOrder: string[]
+  position: MenuPosition
+  activeIndex: number
+}>()
 
 const emit = defineEmits<{
-  select: [item: ResourceItem | VariableItem, type: "resource" | "variable"];
-  hover: [index: number, type: "resource" | "variable"];
-}>();
+  select: [item: ResourceItem]
+}>()
 
 const menuRef = ref<HTMLElement | null>(null);
 const contentRef = ref<HTMLElement | null>(null);
+const hoveredIndex = ref(-1);
 
-// 计算动态样式
 const dynamicStyle = computed(() => ({
   left: props.position.left,
   top: props.position.top,
   transformOrigin: props.position.origin || 'top left',
 }))
 
-// 存储菜单项元素的引用
-const menuItemRefs = new Map<string, HTMLElement>();
+const itemRefs = new Map<string, HTMLElement>()
 
-function setMenuItemRef(el: HTMLElement | null, type: "resource" | "variable", index: number) {
+function setItemRef(el: HTMLElement | null, item: ResourceItem) {
   if (el) {
-    menuItemRefs.set(`${type}-${index}`, el);
-  }
-}
-
-// 滚动到选中的元素，使其居中显示
-function scrollToActiveItem() {
-  if (!contentRef.value) return;
-  
-  const key = `${props.menuType}-${props.activeIndex}`;
-  const activeElement = menuItemRefs.get(key);
-  
-  if (activeElement) {
-    const container = contentRef.value;
-    const containerHeight = container.clientHeight;
-    const elementTop = activeElement.offsetTop;
-    const elementHeight = activeElement.offsetHeight;
-    
-    // 计算使元素居中的滚动位置
-    const scrollPosition = elementTop - (containerHeight / 2) + (elementHeight / 2);
-    
-    container.scrollTo({
-      top: scrollPosition,
-      behavior: 'smooth'
-    });
-  }
-}
-
-// 选择项目
-function selectItem(item: ResourceItem | VariableItem, type: "resource" | "variable") {
-  emit('select', item, type);
-}
-
-// 存储每个图片元素的取消加载函数
-const cleanupMap = new Map<HTMLImageElement, () => void>();
-const itemImgRefs = new Map<string, HTMLImageElement>();
-
-function setItemRef(el: HTMLImageElement | null, item: ResourceItem) {
-  if (el) {
-    itemImgRefs.set(item.id, el);
-    // 清理之前的加载
-    const oldCleanup = cleanupMap.get(el);
-    if (oldCleanup) oldCleanup();
-    
-    // 开始新的加载
-    const cleanup = loadImageWithThumbnail(el, item, true);
-    cleanupMap.set(el, cleanup);
-  }
-}
-
-// 资源列表更新时重新加载图片
-onUpdated(() => {
-  props.resources.forEach((item) => {
-    const img = itemImgRefs.get(item.id);
-    if (img) {
-      // 清理之前的加载
-      const oldCleanup = cleanupMap.get(img);
-      if (oldCleanup) oldCleanup();
-      
-      // 重新加载
-      const cleanup = loadImageWithThumbnail(img, item, true);
-      cleanupMap.set(img, cleanup);
+    itemRefs.set(item.id, el)
+    const img = el.querySelector('img')
+    if (img && item.url) {
+      loadImageWithThumbnail(img, item, true)
     }
-  });
-});
+  }
+}
+
+function getGlobalIndex(item: ResourceItem): number {
+  let count = 0
+  for (const cat of props.categoryOrder) {
+    const catItems = props.groupedItems.get(cat)
+    if (!catItems) continue
+    const idx = catItems.indexOf(item)
+    if (idx !== -1) return count + idx
+    count += catItems.length
+  }
+  return -1
+}
+
+function selectItem(item: ResourceItem) {
+  emit('select', item)
+}
+
+function scrollToActiveItem() {
+  if (!contentRef.value) return
+
+  let globalIdx = 0
+  for (const cat of props.categoryOrder) {
+    const catItems = props.groupedItems.get(cat)
+    if (!catItems) continue
+    for (const item of catItems) {
+      if (globalIdx === props.activeIndex) {
+        const el = itemRefs.get(item.id)
+        if (el && contentRef.value) {
+          const container = contentRef.value
+          const containerHeight = container.clientHeight
+          const elementTop = el.offsetTop
+          const elementHeight = el.offsetHeight
+          const scrollPosition = elementTop - (containerHeight / 2) + (elementHeight / 2)
+          container.scrollTo({ top: scrollPosition, behavior: 'smooth' })
+        }
+        return
+      }
+      globalIdx++
+    }
+  }
+}
+
+// 监听激活索引变化，滚动到选中项
+watch(() => props.activeIndex, () => {
+  nextTick(() => {
+    scrollToActiveItem()
+  })
+})
 
 // 入场动画
 onMounted(() => {
   if (menuRef.value && props.visible) {
-    // 初始状态
     menuRef.value.style.opacity = '0';
     menuRef.value.style.transform = 'scale(0.95)';
-    
-    // 触发动画
+
     requestAnimationFrame(() => {
       if (menuRef.value) {
         menuRef.value.style.transition = 'opacity 0.15s ease, transform 0.15s ease';
@@ -171,7 +143,6 @@ onMounted(() => {
 watch(() => props.visible, (visible) => {
   if (visible) {
     nextTick(() => {
-      // 重置并触发入场动画
       if (menuRef.value) {
         menuRef.value.style.opacity = '0';
         menuRef.value.style.transform = props.position.side === 'bottom' 
@@ -189,13 +160,6 @@ watch(() => props.visible, (visible) => {
       scrollToActiveItem();
     });
   }
-});
-
-// 监听激活索引和类型变化，滚动到选中项
-watch([() => props.activeIndex, () => props.menuType], () => {
-  nextTick(() => {
-    scrollToActiveItem();
-  });
 });
 </script>
 
@@ -220,5 +184,9 @@ watch([() => props.activeIndex, () => props.menuType], () => {
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.menu-item.hovered {
+  background: rgba(0, 0, 0, 0.04);
 }
 </style>

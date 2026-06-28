@@ -5,13 +5,12 @@
     <!-- 资源/变量选择菜单 -->
     <MentionMenu
       :visible="menuVisible"
-      :resources="filteredResources"
-      :variables="filteredVariables"
-      :menu-type="menuType"
+      :items="filteredItems"
+      :grouped-items="groupedItems"
+      :category-order="categoryOrder"
       :position="menuPosition"
       :active-index="activeIndex"
       @select="insertSelectedItem"
-      @hover="handleMenuHover"
     />
 
     <!-- 悬停预览框 -->
@@ -39,35 +38,31 @@ import { useEditor } from './useEditor.ts';
 import MentionMenu from './MentionMenu.vue';
 import PreviewBox from './PreviewBox.vue';
 import FullscreenPreview from './FullscreenPreview.vue';
-import type { ResourceItem, VariableItem } from './types.ts';
+import type { ResourceItem } from './types.ts';
 
 const props = defineProps<{
   modelValue?: string;
   resources?: ResourceItem[];
-  variables?: VariableItem[];
   placeholder?: string;
 }>();
 
 const emit = defineEmits<{
   'update:modelValue': [value: string];
   'resource-insert': [resource: ResourceItem];
-  'variable-insert': [variable: VariableItem];
 }>();
 
 const editorRef = ref<HTMLElement | null>(null);
 const modelValueRef = toRef(props, 'modelValue');
 const resourcesRef = toRef(props, 'resources');
-const variablesRef = toRef(props, 'variables');
 
 const {
   menuVisible,
   menuPosition,
   activeIndex,
-  menuType,
-  filteredResources,
-  filteredVariables,
+  filteredItems,
+  groupedItems,
+  categoryOrder,
   insertSelectedItem,
-  handleMenuHover,
   previewVisible,
   previewUrl,
   previewTitle,
@@ -83,7 +78,6 @@ const {
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   resources: resourcesRef,
-  variables: variablesRef,
 }, emit);
 
 // 暴露导出方法给父组件

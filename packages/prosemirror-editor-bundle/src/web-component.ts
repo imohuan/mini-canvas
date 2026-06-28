@@ -330,7 +330,7 @@ class ProseMirrorEditorElement extends HTMLElement {
     if (!this.view) return;
 
     const { from } = this.view.state.selection;
-    const thumbnailUrl = item.thumbnail_url || getThumbnailUrlFromAssetUrl(item.url, item.type);
+    const thumbnailUrl = item.thumbnail_url || (item.url ? getThumbnailUrlFromAssetUrl(item.url, item.mediaType) : '');
     const resourceNode = mySchema.nodes.resource;
 
     if (!resourceNode) return;

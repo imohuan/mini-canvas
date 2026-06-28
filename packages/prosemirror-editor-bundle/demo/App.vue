@@ -22,9 +22,7 @@
             ref="editorRef"
             v-model="content"
             :resources="resources"
-            :variables="variables"
             @resource-insert="handleResourceInsert"
-            @variable-insert="handleVariableInsert"
           />
         </div>
 
@@ -68,10 +66,10 @@
           </div>
           
           <div class="config-list">
-            <div v-for="(variable, index) in variables" :key="variable.id" class="config-item">
+            <div v-for="(variable, index) in filteredVariables" :key="variable.id" class="config-item">
               <div class="item-header">
                 <span class="item-index">{{ index + 1 }}</span>
-                <button @click="removeVariable(index)" class="btn-remove">删除</button>
+                <button @click="removeVariable(variable.id)" class="btn-remove">删除</button>
               </div>
               <input 
                 v-model="variable.name" 
@@ -97,10 +95,10 @@
           </div>
           
           <div class="config-list">
-            <div v-for="(resource, index) in resources" :key="resource.id" class="config-item">
+            <div v-for="(resource, index) in filteredResources" :key="resource.id" class="config-item">
               <div class="item-header">
                 <span class="item-index">{{ index + 1 }}</span>
-                <button @click="removeResource(index)" class="btn-remove">删除</button>
+                <button @click="removeResource(resource.id)" class="btn-remove">删除</button>
               </div>
               <input 
                 v-model="resource.name" 
@@ -112,7 +110,7 @@
                 placeholder="资源URL" 
                 class="input-field"
               />
-              <select v-model="resource.type" class="input-field">
+              <select v-model="resource.mediaType" class="input-field">
                 <option value="image">图片</option>
                 <option value="video">视频</option>
               </select>
@@ -127,9 +125,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, h, computed } from 'vue';
 import { ProseMirrorEditor } from '../src/index';
-import type { ResourceItem, VariableItem } from '../src/types';
+import type { ResourceItem } from '../src/types';
 
 const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null);
 const content = ref('你好，我是 ，今年 ，来自 ');
@@ -137,57 +135,107 @@ const exportedText = ref('');
 const savedData = ref('');
 const showSavedData = ref(false);
 
-// 默认变量数据
-const defaultVariables: VariableItem[] = [
-  { id: '1', name: '用户名', value: '张三' },
-  { id: '2', name: '年龄', value: '25岁' },
-  { id: '3', name: '城市', value: '北京' },
-  { id: '4', name: '职业', value: '软件工程师' },
-  { id: '5', name: '爱好', value: '编程和阅读' },
-  { id: '6', name: '邮箱', value: 'zhangsan@example.com' },
-];
+// ── 共享渲染函数 ──
 
-// 默认资源数据
+/** 菜单中图片项的渲染（VNode） */
+function renderImageItem(self: ResourceItem) {
+  return h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
+    h('img', { src: self.url, style: { width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }, draggable: false }),
+    h('span', {}, self.name),
+  ])
+}
+
+/** 输入框中图片项的渲染（直接返回 HTMLElement） */
+function renderImageEditor(self: ResourceItem): HTMLElement {
+  return defaultToDOM_editor(self)
+}
+
+// 直接用 DOM API 创建，不用 h 桥接
+function defaultToDOM_editor(self: ResourceItem): HTMLElement {
+  const el = document.createElement('span')
+  el.className = 'resource-node'
+  el.setAttribute('data-id', self.id)
+  el.setAttribute('data-url', self.url || '')
+  el.setAttribute('data-name', self.name)
+  el.setAttribute('data-category', self.category)
+  el.style.display = 'inline-flex'
+  el.style.alignItems = 'center'
+  el.style.gap = '4px'
+  el.style.verticalAlign = 'middle'
+  const img = document.createElement('img')
+  img.src = self.url || ''
+  img.style.width = '32px'
+  img.style.height = '32px'
+  img.style.borderRadius = '2px'
+  img.style.objectFit = 'cover'
+  img.draggable = false
+  el.appendChild(img)
+  const span = document.createElement('span')
+  span.style.fontSize = '12px'
+  span.textContent = self.name
+  el.appendChild(span)
+  return el
+}
+
+// 统一默认资源数据
 const defaultResources: ResourceItem[] = [
-  {
-    id: '1',
-    name: '示例图片1',
-    url: 'https://picsum.photos/200/300',
-    type: 'image',
+  // 变量类
+  { id: 'v1', name: '用户名', category: 'variable', value: '张三',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  { id: 'v2', name: '年龄', category: 'variable', value: '25岁',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  { id: 'v3', name: '城市', category: 'variable', value: '北京',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  { id: 'v4', name: '职业', category: 'variable', value: '软件工程师',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  { id: 'v5', name: '爱好', category: 'variable', value: '编程和阅读',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  { id: 'v6', name: '邮箱', category: 'variable', value: 'zhangsan@example.com',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M8 3C6.34 3 5 4.34 5 6v2c0 1.1-.9 2-2 2v2c1.1 0 2 .9 2 2v2c0 1.66 1.34 3 3 3h1v-2H8c-.55 0-1-.45-1-1v-2c0-1.3-.84-2.4-2-2.82.16-.42 1-1.52 2-2.82V6c0-.55.45-1 1-1h1V3H8zm8 0h-1v2h1c.55 0 1 .45 1 1v2c1.16 1.3 1.84 2.4 2 2.82-1.16.42-2 1.52-2 2.82v2c0 .55-.45 1-1 1h-1v2h1c1.66 0 3-1.34 3-3v-2c0-1.1.9-2 2-2v-2c-1.1 0-2-.9-2-2V6c0-1.66-1.34-3-3-3z"/></svg>' },
+  // 图片资源 — renderItem 给菜单，renderEditor 给输入框
+  { id: 'r1', name: '示例图片1', category: 'resource',
+    url: 'https://picsum.photos/200/300', mediaType: 'image',
+    renderItem: renderImageItem,
+    renderEditor: renderImageEditor,
   },
-  {
-    id: '2',
-    name: '示例图片2',
-    url: 'https://picsum.photos/300/200',
-    type: 'image',
+  { id: 'r2', name: '示例图片2', category: 'resource',
+    url: 'https://picsum.photos/300/200', mediaType: 'image',
+    renderItem: renderImageItem,
+    renderEditor: renderImageEditor,
   },
-  {
-    id: '3',
-    name: '示例图片3',
-    url: 'https://picsum.photos/250/250',
-    type: 'image',
+  { id: 'r3', name: '示例图片3', category: 'resource',
+    url: 'https://picsum.photos/250/250', mediaType: 'image',
+    renderItem: renderImageItem,
+    renderEditor: renderImageEditor,
   },
 ];
 
-const variables = ref<VariableItem[]>(JSON.parse(JSON.stringify(defaultVariables)));
-const resources = ref<ResourceItem[]>(JSON.parse(JSON.stringify(defaultResources)));
+const resources = ref<ResourceItem[]>(defaultResources.map(item => ({ ...item })));
+
+// 按类别过滤的计算属性
+const filteredVariables = computed(() => resources.value.filter(r => r.category === 'variable'));
+const filteredResources = computed(() => resources.value.filter(r => r.category === 'resource'));
 
 // 变量操作
 function addVariable() {
   const newId = String(Date.now());
-  variables.value.push({
+  resources.value.push({
     id: newId,
     name: '',
+    category: 'variable',
     value: '',
   });
 }
 
-function removeVariable(index: number) {
-  variables.value.splice(index, 1);
+function removeVariable(id: string) {
+  const index = resources.value.findIndex(r => r.id === id);
+  if (index !== -1) resources.value.splice(index, 1);
 }
 
 function resetVariables() {
-  variables.value = JSON.parse(JSON.stringify(defaultVariables));
+  const nonVariables = resources.value.filter(r => r.category !== 'variable');
+  const defaultVars = defaultResources.filter(r => r.category === 'variable');
+  resources.value = [...nonVariables, ...defaultVars.map(item => ({ ...item }))];
 }
 
 // 资源操作
@@ -196,17 +244,21 @@ function addResource() {
   resources.value.push({
     id: newId,
     name: '',
+    category: 'resource',
     url: '',
-    type: 'image',
+    mediaType: 'image',
   });
 }
 
-function removeResource(index: number) {
-  resources.value.splice(index, 1);
+function removeResource(id: string) {
+  const index = resources.value.findIndex(r => r.id === id);
+  if (index !== -1) resources.value.splice(index, 1);
 }
 
 function resetResources() {
-  resources.value = JSON.parse(JSON.stringify(defaultResources));
+  const nonResources = resources.value.filter(r => r.category !== 'resource');
+  const defaultRes = defaultResources.filter(r => r.category === 'resource');
+  resources.value = [...nonResources, ...JSON.parse(JSON.stringify(defaultRes))];
 }
 
 // 编辑器操作
@@ -226,8 +278,7 @@ function saveContent() {
   if (!editorRef.value) return;
   
   const data = {
-    doc: editorRef.value.serializeDoc(), // 保存完整的文档结构
-    variables: variables.value,
+    doc: editorRef.value.serializeDoc(),
     resources: resources.value,
     timestamp: new Date().toISOString(),
   };
@@ -243,8 +294,7 @@ function loadContent() {
   try {
     const data = JSON.parse(savedData.value);
     
-    // 先恢复变量和资源配置
-    variables.value = data.variables || [];
+    // 恢复资源配置
     resources.value = data.resources || [];
     
     // 等待下一个 tick 后恢复文档结构
@@ -270,10 +320,6 @@ function copySavedData() {
 
 function handleResourceInsert(resource: ResourceItem) {
   console.log('插入资源:', resource);
-}
-
-function handleVariableInsert(variable: VariableItem) {
-  console.log('插入变量:', variable);
 }
 </script>
 
