@@ -21,14 +21,6 @@
       :type="previewType"
       :position="previewPosition"
     />
-
-    <!-- 全屏预览 -->
-    <FullscreenPreview
-      :visible="fullscreenVisible"
-      :url="fullscreenUrl"
-      :type="fullscreenType"
-      @close="closeFullscreen"
-    />
   </div>
 </template>
 
@@ -37,7 +29,6 @@ import { ref, toRef } from 'vue';
 import { useEditor } from './useEditor.ts';
 import MentionMenu from './MentionMenu.vue';
 import PreviewBox from './PreviewBox.vue';
-import FullscreenPreview from './FullscreenPreview.vue';
 import type { ResourceItem } from './types.ts';
 
 const props = defineProps<{
@@ -68,10 +59,6 @@ const {
   previewTitle,
   previewType,
   previewPosition,
-  fullscreenVisible,
-  fullscreenUrl,
-  fullscreenType,
-  closeFullscreen,
   exportText,
   serializeDoc,
   deserializeDoc,

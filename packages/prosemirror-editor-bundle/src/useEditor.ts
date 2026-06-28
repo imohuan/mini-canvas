@@ -170,7 +170,12 @@ const mySchema = new Schema({
       atom: true,
       toDOM: (node) => {
         const item = itemRegistry.get(node.attrs.id)
-        if (item?.renderEditor) return item.renderEditor(item)
+        if (item?.renderEditor) {
+          const el = item.renderEditor(item)
+          el.classList.add("resource-node")
+          el.setAttribute("data-id", node.attrs.id)
+          return el
+        }
         // 默认渲染
         const { id, name, url, thumbnail_url, category } = node.attrs
         if (url) {
@@ -381,11 +386,6 @@ export function useEditor(
   const previewType = ref<"image" | "video">("image");
   const previewPosition = ref<{ left: string; top: string; transform?: string }>({ left: "0px", top: "0px" });
 
-  // 全屏预览状态
-  const fullscreenVisible = ref(false);
-  const fullscreenUrl = ref("");
-  const fullscreenType = ref<"image" | "video">("image");
-
   // 计时器
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -529,89 +529,53 @@ export function useEditor(
   }
 
   // 处理资源节点鼠标进入
-  function handleResourceMouseEnter(node: HTMLElement) {
-    const isSelected = node.classList.contains("ProseMirror-selectednode") || node.classList.contains("resource-node-selected");
+  function handleResourceMouseEnter(el: HTMLElement) {
+    const isSelected = el.classList.contains("ProseMirror-selectednode") || el.classList.contains("resource-node-selected")
+    if (isSelected) return
+    if (hoverTimer) clearTimeout(hoverTimer)
 
-    if (isSelected) return;
-
-    if (hoverTimer) clearTimeout(hoverTimer);
+    const id = el.getAttribute("data-id")
+    const item = id ? itemRegistry.get(id) : undefined
+    if (item?.onMouseEnter) { item.onMouseEnter(item); return }
 
     hoverTimer = setTimeout(() => {
-      const url = node.getAttribute("data-url") || "";
-      const name = node.getAttribute("data-name") || "";
-
-      if (!url) return;
-
-      const isVideoFile = isVideoUrl(url);
-
-      previewUrl.value = url;
-      // previewTitle.value = `${isVideoFile ? "视频" : "图片"} ${name}`;
-      previewTitle.value = name;
-      previewType.value = isVideoFile ? "video" : "image";
-
-      const rect = node.getBoundingClientRect();
-      const margin = 12;
-      const previewMaxWidth = 400;
-
-      // 水平居中：标签中心点 - 预览框宽度的一半
-      let left = rect.left + rect.width / 2;
-
-      // 默认显示在标签下方
-      let top = rect.bottom + margin;
-
-      // 边缘检测：如果超出视口右边界，调整 left
-      if (left + previewMaxWidth / 2 > window.innerWidth) {
-        left = window.innerWidth - previewMaxWidth / 2 - 10;
-      }
-      // 边缘检测：如果超出视口左边界
-      if (left - previewMaxWidth / 2 < 0) {
-        left = previewMaxWidth / 2 + 10;
-      }
-
-      // 垂直方向：如果下方空间不足，显示在标签上方
-      const spaceBelow = window.innerHeight - rect.bottom;
+      const url = el.getAttribute("data-url") || ""
+      const name = el.getAttribute("data-name") || ""
+      if (!url) return
+      previewUrl.value = url
+      previewTitle.value = name
+      previewType.value = isVideoUrl(url) ? "video" : "image"
+      const rect = el.getBoundingClientRect()
+      const margin = 12; const previewMaxWidth = 400
+      let left = rect.left + rect.width / 2
+      let top = rect.bottom + margin
+      if (left + previewMaxWidth / 2 > window.innerWidth) left = window.innerWidth - previewMaxWidth / 2 - 10
+      if (left - previewMaxWidth / 2 < 0) left = previewMaxWidth / 2 + 10
+      const spaceBelow = window.innerHeight - rect.bottom
       if (spaceBelow < 200) {
-        top = rect.top - margin;
-        // 标记为显示在上方（用于 CSS 调整）
-        previewPosition.value = {
-          left: `${left}px`,
-          top: `${top}px`,
-          transform: "translateX(-50%) translateY(-100%)",
-        };
+        top = rect.top - margin
+        previewPosition.value = { left: `${left}px`, top: `${top}px`, transform: "translateX(-50%) translateY(-100%)" }
       } else {
-        previewPosition.value = {
-          left: `${left}px`,
-          top: `${top}px`,
-          transform: "translateX(-50%)",
-        };
+        previewPosition.value = { left: `${left}px`, top: `${top}px`, transform: "translateX(-50%)" }
       }
-
-      previewVisible.value = true;
-    }, 500);
+      previewVisible.value = true
+    }, 500)
   }
 
   // 处理资源节点鼠标离开
-  function handleResourceMouseLeave() {
-    if (hoverTimer) {
-      clearTimeout(hoverTimer);
-      hoverTimer = null;
-    }
-    previewVisible.value = false;
+  function handleResourceMouseLeave(el: HTMLElement) {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null }
+    const id = el.getAttribute("data-id")
+    const item = id ? itemRegistry.get(id) : undefined
+    if (item?.onMouseLeave) { item.onMouseLeave(item); return }
+    previewVisible.value = false
   }
 
   // 处理资源节点点击
-  function handleResourceClick(node: HTMLElement) {
-    const url = node.getAttribute("data-url") || "";
-    if (!url) return;
-
-    fullscreenUrl.value = url;
-    fullscreenType.value = isVideoUrl(url) ? "video" : "image";
-    fullscreenVisible.value = true;
-  }
-
-  // 关闭全屏预览
-  function closeFullscreen() {
-    fullscreenVisible.value = false;
+  function handleResourceClick(el: HTMLElement) {
+    const id = el.getAttribute("data-id")
+    const item = id ? itemRegistry.get(id) : undefined
+    if (item?.onClick) { item.onClick(item); return }
   }
 
   // 存储资源节点图片的取消加载函数
@@ -627,7 +591,7 @@ export function useEditor(
       const el = node as HTMLElement;
 
       el.onmouseenter = () => handleResourceMouseEnter(el);
-      el.onmouseleave = handleResourceMouseLeave;
+      el.onmouseleave = () => handleResourceMouseLeave(el);
       el.onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -882,11 +846,6 @@ export function useEditor(
     previewTitle,
     previewType,
     previewPosition,
-    // 全屏预览
-    fullscreenVisible,
-    fullscreenUrl,
-    fullscreenType,
-    closeFullscreen,
     // 导出方法
     exportText,
     serializeDoc,
