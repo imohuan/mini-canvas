@@ -353,18 +353,33 @@ function onEditorKeydown(e: KeyboardEvent) {
   padding: 10px 14px 4px;
   flex: 1;
   width: 100%;
-  overflow: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.input-area::-webkit-scrollbar {
-  display: none;
+  overflow: hidden;
 }
 
 .editor-wrapper {
   width: 100%;
+  height: 100%;
   padding-right: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Firefox: thin scrollbar, transparent track, colored thumb */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+/* Webkit 滚动条 (Chrome, Safari, Edge) — 只有色块 */
+.editor-wrapper::-webkit-scrollbar {
+  width: 5px;
+}
+.editor-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-wrapper::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.editor-wrapper::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 
 /* 覆盖 ProseMirror 默认高度 */

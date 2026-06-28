@@ -8,6 +8,9 @@
   color: #111;
 }
 
+/* 编辑器内容区滚动由外部容器控制（如 .editor-wrapper），
+   ProseMirror 自身不做 overflow 滚动 */
+
 .prose-mirror-editor .ProseMirror p {
   padding: 0px;
   margin: 0px;
