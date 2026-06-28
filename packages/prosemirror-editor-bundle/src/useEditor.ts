@@ -366,11 +366,57 @@ function createPasteHandlerPlugin() {
   });
 }
 
+// 将纯文本（含 @name 标记）解析为 ProseMirror content 节点数组
+// 如果提供了 resolver，尝试将 @name 还原为 resource node；否则全当纯文本
+function parsePlainTextToContent(
+  text: string,
+  resolver: ((name: string) => ResourceItem | null) | undefined,
+): any[] {
+  if (!resolver) {
+    return text ? [mySchema.text(text)] : []
+  }
+  const content: any[] = []
+  // 匹配 @xxx，其中 xxx 为非空白字符序列
+  const regex = /@(\S+)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    // match 前的纯文本
+    if (match.index > lastIndex) {
+      content.push(mySchema.text(text.slice(lastIndex, match.index)))
+    }
+    const name = match[1]
+    const item = resolver(name)
+    if (item) {
+      content.push(mySchema.nodes.resource.create({
+        id: item.id,
+        name: item.name,
+        category: item.category || 'resource',
+        url: item.url || '',
+        thumbnail_url: item.thumbnail_url || '',
+        value: item.value || '',
+      }))
+      // 注册到全局 registry，toDOM 需要
+      itemRegistry.set(item.id, item)
+    } else {
+      // 未解析到，保留为纯文本
+      content.push(mySchema.text(`@${name}`))
+    }
+    lastIndex = regex.lastIndex
+  }
+  // 剩余文本
+  if (lastIndex < text.length) {
+    content.push(mySchema.text(text.slice(lastIndex)))
+  }
+  return content
+}
+
 export function useEditor(
   editorRef: Ref<HTMLElement | null>,
   props: {
     modelValue?: Ref<string | undefined>
     resources?: Ref<ResourceItem[] | undefined>
+    resolveResource?: Ref<((name: string) => ResourceItem | null) | undefined>
   },
   emit: {
     (e: "update:modelValue", value: string): void
@@ -692,9 +738,15 @@ export function useEditor(
     });
 
     const initialValue = unref(props.modelValue);
+    const initialContent = initialValue
+      ? parsePlainTextToContent(initialValue, unref(props.resolveResource))
+      : undefined
     const state = EditorState.create({
       schema: mySchema,
-      doc: mySchema.node("doc", null, [mySchema.node("paragraph", null, initialValue ? [mySchema.text(initialValue)] : [])]),
+      doc: mySchema.node(
+        "doc", null,
+        initialContent ? [mySchema.node("paragraph", null, initialContent)] : [mySchema.node("paragraph")],
+      ),
       plugins: [
         history(),
         mentionKeymap,
@@ -813,7 +865,11 @@ export function useEditor(
         const tr = view.state.tr;
         tr.delete(0, view.state.doc.content.size);
         if (newValue) {
-          tr.insert(0, mySchema.text(newValue));
+          const content = parsePlainTextToContent(newValue, unref(props.resolveResource));
+          if (content.length > 0) {
+            const paragraph = mySchema.node("paragraph", null, content);
+            tr.insert(0, paragraph);
+          }
         }
         view.dispatch(tr);
       }

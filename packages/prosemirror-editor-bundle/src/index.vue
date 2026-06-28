@@ -1,5 +1,5 @@
 <template>
-  <div class="prose-mirror-editor">
+  <div class="prose-mirror-editor" @keydown.stop>
     <div ref="editorRef"></div>
 
     <!-- @ 菜单插槽：调用方完全控制渲染 -->
@@ -46,6 +46,7 @@ const props = defineProps<{
   modelValue?: string;
   resources?: ResourceItem[];
   placeholder?: string;
+  resolveResource?: (name: string) => ResourceItem | null;
 }>();
 
 const emit = defineEmits<{
@@ -56,6 +57,7 @@ const emit = defineEmits<{
 const editorRef = ref<HTMLElement | null>(null);
 const modelValueRef = toRef(props, 'modelValue');
 const resourcesRef = toRef(props, 'resources');
+const resolveResourceRef = toRef(props, 'resolveResource');
 
 const {
   menuVisible,
@@ -76,6 +78,7 @@ const {
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   resources: resourcesRef,
+  resolveResource: resolveResourceRef,
 }, emit);
 
 // 暴露导出方法给父组件

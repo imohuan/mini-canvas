@@ -5,7 +5,6 @@ import { computed, ref } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
-import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
 
 export interface ToolbarConfig {
@@ -28,8 +27,6 @@ const emit = defineEmits<{
 }>()
 
 // ── 连接的上游图片节点 → 素材资源 ──
-
-const teleportTarget = useTeleportTarget()
 
 const { getEdges, findNode } = useVueFlow()
 
@@ -92,6 +89,23 @@ const connectedImages = computed<ResourceItem[]>(() => {
   }
   return result
 })
+
+/** 根据名称查找素材，用于纯文本 @name 反序列化回 resource node */
+function resolveResource(name: string): ResourceItem | null {
+  return connectedImages.value.find(item => item.name === name) || null
+}
+
+/** mention-menu 定位：将 ProseMirrorEditor 传来的 viewport 坐标转为 inputArea 容器相对坐标 */
+function getMentionMenuStyle(vpPos: { left: string; top: string; origin?: string }) {
+  const container = inputAreaRef.value
+  if (!container) return { left: vpPos.left, top: vpPos.top }
+  const rect = container.getBoundingClientRect()
+  return {
+    left: `${parseFloat(vpPos.left) - rect.left}px`,
+    top: `${parseFloat(vpPos.top) - rect.top}px`,
+    transformOrigin: vpPos.origin || 'top left',
+  }
+}
 
 /** 计算 ResourceItem 在分组中的全局索引 */
 function getItemGlobalIndex(
@@ -210,36 +224,26 @@ function onEditorKeydown(e: KeyboardEvent) {
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
       <div class="editor-wrapper" @keydown="onEditorKeydown">
-        <ProseMirrorEditor v-model="promptText" :resources="connectedImages" placeholder="描述你想要生成的画面内容，@引用素材"
+        <ProseMirrorEditor v-model="promptText" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
           @update:model-value="onInput">
           <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
-            <Teleport :to="teleportTarget">
-              <Transition name="ax-fade-scale">
-                <div v-if="visible"
-                  style="position:fixed;z-index:99999;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);min-width:180px;max-height:280px;overflow-y:auto;padding:4px"
-                  :style="{ left: position.left, top: position.top, transformOrigin: position.origin || 'top left' }">
-                  <template v-for="category in categoryOrder" :key="category">
-                    <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
-                      <div
-                        style="padding:6px 10px 2px;font-size:12px;font-weight:600;color:#9ca3af;text-transform:uppercase">
-                        {{ category }}</div>
-                      <div v-for="item in groupedItems.get(category)!" :key="item.id"
-                        style="display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;font-size:14px;border-radius:6px"
-                        :style="{
-                          background: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#eff6ff' : 'transparent',
-                          color: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex ? '#2b6df2' : '#374151',
-                        }" @mousedown.prevent="onSelect(item)">
-                        <img v-if="item.url" :src="item.url"
-                          style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0"
-                          draggable="false" />
-                        <span v-else-if="item.icon" v-html="item.icon" />
-                        <span>{{ item.name }}</span>
-                      </div>
+            <Transition name="ax-fade-scale">
+              <div v-if="visible" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
+                <template v-for="category in categoryOrder" :key="category">
+                  <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
+                    <div class="mention-menu-category">{{ category }}</div>
+                    <div v-for="item in groupedItems.get(category)!" :key="item.id"
+                      class="mention-menu-item"
+                      :class="{ active: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex }"
+                      @mousedown.prevent="onSelect(item)">
+                      <img v-if="item.url" :src="item.url" class="mention-menu-thumb" draggable="false" />
+                      <span v-else-if="item.icon" v-html="item.icon" class="mention-menu-icon" />
+                      <span class="mention-menu-name">{{ item.name }}</span>
                     </div>
-                  </template>
-                </div>
-              </Transition>
-            </Teleport>
+                  </div>
+                </template>
+              </div>
+            </Transition>
           </template>
         </ProseMirrorEditor>
       </div>
@@ -341,6 +345,65 @@ function onEditorKeydown(e: KeyboardEvent) {
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+/* ── mention-menu 下拉框 ── */
+
+.mention-menu-dropdown {
+  position: absolute;
+  z-index: 99999;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.mention-menu-category {
+  padding: 6px 10px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.mention-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px;
+  color: #374151;
+  background: transparent;
+  transition: background 0.1s ease;
+}
+
+.mention-menu-item.active {
+  background: #eff6ff;
+  color: #2b6df2;
+}
+
+.mention-menu-item:hover:not(.active) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mention-menu-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mention-menu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ax-fade-scale-enter-active {
