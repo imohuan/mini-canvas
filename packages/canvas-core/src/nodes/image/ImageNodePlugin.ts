@@ -608,7 +608,10 @@ function handleImageDownload(ctx: CommandContext) {
   if (!imageUrl) return
   const a = document.createElement('a')
   a.href = imageUrl
-  a.download = (node.data as any)?.imageName || 'image.png'
+  // imageName 可能被操作后缀污染（如 screenshot.png_expand），清洗后确保 .png 扩展名
+  const rawName = (node.data as any)?.imageName || 'image'
+  const cleanName = rawName.replace(/_(crop|expand|masked)$/, '').replace(/\.(png|jpe?g|gif|webp|bmp|svg)$/i, '')
+  a.download = cleanName + '.png'
   a.click()
 }
 
