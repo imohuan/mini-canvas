@@ -39,10 +39,10 @@ function onExpandUpdate(rect: { x: number; y: number; width: number; height: num
 }
 
 function onExpandCancel() {
-  runtime.commandRegistry.execute('image.expandCancel', { runtime, node: props } as any)
+  runtime.commandRegistry.execute('image.expandCancel', { runtime, node: props, logger: console } as any)
 }
 function onExpandConfirm() {
-  runtime.commandRegistry.execute('image.expandConfirm', { runtime, node: props } as any)
+  runtime.commandRegistry.execute('image.expandConfirm', { runtime, node: props, logger: console } as any)
 }
 
 function onMaskUpdate(blobUrl: string | null) {

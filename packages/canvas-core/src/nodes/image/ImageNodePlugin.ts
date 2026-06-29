@@ -280,13 +280,94 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
   const expandRect = sourceData._overlay?._expandRect as { x: number; y: number; width: number; height: number } | undefined
   if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) return
 
-  // TODO: 实现扩展生成逻辑（Canvas 拼接 + AI 填充）
-  ctx.logger.debug('[Expand] expandRect:', JSON.stringify(expandRect))
-
-  // 退出扩展模式
+  // 1. 退出扩展模式
   const cleanedData = { ...sourceData }
   delete cleanedData._overlay
   vf.updateNode(nodeId, { data: cleanedData })
+
+  // 2. 创建扩展图片（原图 + 扩展区域透明留白）
+  ctx.logger.debug('[Expand] expandRect:', JSON.stringify(expandRect))
+
+  // Step A: fetch 原始图片
+  const response = await fetch(imageUrl)
+  if (!response.ok) { ctx.logger.error('[Expand] fetch 原图失败:', response.status); return }
+  const rawBlob = await response.blob()
+
+  // Step B: createImageBitmap 加载
+  const fullBitmap = await createImageBitmap(rawBlob)
+
+  // Step C: 用实际尺寸计算扩展坐标
+  const scaleX = imageWidth > 0 ? fullBitmap.width / (imageWidth as number) : 1
+  const scaleY = imageHeight > 0 ? fullBitmap.height / (imageHeight as number) : 1
+  const sx = Math.round(expandRect.x * scaleX)
+  const sy = Math.round(expandRect.y * scaleY)
+  const sw = Math.round(expandRect.width * scaleX)
+  const sh = Math.round(expandRect.height * scaleY)
+  ctx.logger.debug('[Expand] scale:', scaleX, scaleY, '→ expand canvas:', sw, 'x', sh, 'origin offset:', -sx, -sy)
+
+  // Step D: 画到扩展 canvas
+  const canvas = document.createElement('canvas')
+  canvas.width = sw
+  canvas.height = sh
+  const c2d = canvas.getContext('2d')!
+  // 原图绘制在扩展画布中的位置：expandRect 的左上角为原点，原图偏移 -sx, -sy
+  c2d.drawImage(fullBitmap, -sx, -sy)
+  fullBitmap.close()
+
+  const testPixel = c2d.getImageData(
+    Math.min(1, canvas.width - 1),
+    Math.min(1, canvas.height - 1),
+    1, 1,
+  )
+  const hasContent = testPixel.data.some((v, i) => i < 3 && v > 0)
+  ctx.logger.debug('[Expand] canvas:', canvas.width, 'x', canvas.height, 'testPixel:', testPixel.data, 'hasContent:', hasContent)
+
+  if (!hasContent) {
+    ctx.logger.warn('[Expand] 扩展画布无内容')
+    return
+  }
+
+  // Step E: 导出 blob URL
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) { ctx.logger.error('[Expand] canvas.toBlob 返回 null'); return }
+  const expandedUrl = URL.createObjectURL(blob)
+
+  // 3. 持久化
+  let assetId: string | undefined
+  const assetManager = runtime.getPluginAPI?.('storage')?.assets
+  if (assetManager && blob) {
+    const name = `${(sourceData.imageName as string) || 'image'}_expand.png`
+    try { assetId = await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png') }
+    catch (err) { ctx.logger.error('保存扩展图片资产失败:', err) }
+  }
+
+  // 4. 计算卡片尺寸
+  const { cardWidth, cardHeight } = fitCardSize(sw, sh)
+
+  // 5. 在源节点右侧创建新图片节点
+  const newNodeId = `image-${Date.now()}`
+  vf.addNodes([{
+    id: newNodeId,
+    type: 'custom',
+    position: {
+      x: node.position.x + (sourceData.cardWidth ?? cardWidth) + 40,
+      y: node.position.y,
+    },
+    data: {
+      label: `${(sourceData.imageName as string) || 'image'}_expand`,
+      nodeType: 'image',
+      assetId,
+      imageUrl: expandedUrl,
+      imageName: `${(sourceData.imageName as string) || 'image'}_expand`,
+      imageType: 'image/png',
+      imageWidth: sw,
+      imageHeight: sh,
+      cardWidth,
+      cardHeight,
+    },
+    sourcePosition: 'right' as any,
+    targetPosition: 'left' as any,
+  }])
 }
 
 function handleImageExpandCancel(ctx: CommandContext) {
@@ -316,7 +397,6 @@ function handleImageMask(ctx: CommandContext) {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
-  debugger
   if (!vf || !nodeId) return
 
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
@@ -345,30 +425,102 @@ async function handleImageMaskConfirm(ctx: CommandContext) {
   if (!node?.data) return
 
   const sourceData = node.data
-  const { imageWidth, imageHeight } = sourceData
-  if (!imageWidth || !imageHeight) return
+  const { imageUrl, imageWidth, imageHeight } = sourceData
+  if (!imageUrl || !imageWidth || !imageHeight) return
 
-  // 获取蒙版 blob（通过 ImageNode 内的 ImageMasker ref，这里走 data 通信路径）
   const maskUrl = sourceData.maskUrl as string | undefined
 
-  // 退出蒙版模式
+  // 1. 退出蒙版模式
   const cleanedData = { ...sourceData }
   delete cleanedData._overlay
-  // 保留 maskUrl（持久化用）
   vf.updateNode(nodeId, { data: cleanedData })
 
-  // 持久化蒙版资产
-  if (maskUrl) {
-    const assetManager = runtime.getPluginAPI?.('storage')?.assets
-    if (assetManager) {
-      try {
-        const response = await fetch(maskUrl)
-        const blob = await response.blob()
-        const name = `${(sourceData.imageName as string) || 'image'}_mask.png`
-        await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png')
-      } catch (err) { ctx.logger.error('保存蒙版资产失败:', err) }
-    }
+  if (!maskUrl) return
+
+  // 2. 合成蒙版图片（原图 + 蒙版叠加）
+  ctx.logger.debug('[Mask] compositing mask onto original image...')
+
+  // Step A: fetch 原始图片
+  const imgResponse = await fetch(imageUrl)
+  if (!imgResponse.ok) { ctx.logger.error('[Mask] fetch 原图失败:', imgResponse.status); return }
+  const imgBlob = await imgResponse.blob()
+
+  // Step B: 用 createImageBitmap 加载（避免 HTMLImageElement 在部分格式下 canvas 为全透明）
+  const imgBitmap = await createImageBitmap(imgBlob)
+  const srcW = imgBitmap.width
+  const srcH = imgBitmap.height
+
+  // Step C: 加载蒙版
+  const maskResponse = await fetch(maskUrl)
+  const maskBlob = await maskResponse.blob()
+  const maskBitmap = await createImageBitmap(maskBlob)
+
+  // Step D: 合成到 canvas
+  const canvas = document.createElement('canvas')
+  canvas.width = srcW
+  canvas.height = srcH
+  const c2d = canvas.getContext('2d')!
+  c2d.drawImage(imgBitmap, 0, 0)
+  c2d.drawImage(maskBitmap, 0, 0, srcW, srcH)
+
+  // 验证画布有内容
+  const testPixel = c2d.getImageData(
+    Math.min(1, canvas.width - 1),
+    Math.min(1, canvas.height - 1),
+    1, 1,
+  )
+  const hasContent = testPixel.data.some((v, i) => i < 3 && v > 0)
+  ctx.logger.debug('[Mask] composited canvas:', srcW, 'x', srcH, 'hasContent:', hasContent)
+
+  imgBitmap.close()
+  maskBitmap.close()
+
+  if (!hasContent) {
+    ctx.logger.warn('[Mask] 合成画布无内容')
+    return
   }
+
+  // Step E: 导出 blob URL
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) { ctx.logger.error('[Mask] canvas.toBlob 返回 null'); return }
+  const maskedUrl = URL.createObjectURL(blob)
+
+  // 3. 持久化
+  let assetId: string | undefined
+  const assetManager = runtime.getPluginAPI?.('storage')?.assets
+  if (assetManager && blob) {
+    const name = `${(sourceData.imageName as string) || 'image'}_masked.png`
+    try { assetId = await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png') }
+    catch (err) { ctx.logger.error('保存蒙版图片资产失败:', err) }
+  }
+
+  // 4. 计算卡片尺寸
+  const { cardWidth, cardHeight } = fitCardSize(srcW, srcH)
+
+  // 5. 在源节点右侧创建新图片节点
+  const newNodeId = `image-${Date.now()}`
+  vf.addNodes([{
+    id: newNodeId,
+    type: 'custom',
+    position: {
+      x: node.position.x + (sourceData.cardWidth ?? cardWidth) + 40,
+      y: node.position.y,
+    },
+    data: {
+      label: `${(sourceData.imageName as string) || 'image'}_masked`,
+      nodeType: 'image',
+      assetId,
+      imageUrl: maskedUrl,
+      imageName: `${(sourceData.imageName as string) || 'image'}_masked`,
+      imageType: 'image/png',
+      imageWidth: srcW,
+      imageHeight: srcH,
+      cardWidth,
+      cardHeight,
+    },
+    sourcePosition: 'right' as any,
+    targetPosition: 'left' as any,
+  }])
 }
 
 function handleImageMaskCancel(ctx: CommandContext) {
