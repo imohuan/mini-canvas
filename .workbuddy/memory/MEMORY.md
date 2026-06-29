@@ -1,5 +1,67 @@
 # Project Memory
 
+## SelectionFrame Toolbar 偏移坐标空间不匹配
+
+### 问题
+
+多选时 BaseToolbar → NodeToolbar 的 toolbar 偏移随画布缩放变化。zoom=0.6 时 gap=+25px，zoom=1.4 时 gap=-1.8px（toolbar 钻进 frame 里）。单节点 NodeToolbar 无此问题（gap 恒定 12px）。
+
+### 根因分析（git diff 唯一实质性修改：`SelectionFrame.vue:276`）
+
+**两套独立的坐标系统：**
+
+1. **SelectionFrame 框架定位**（CSS transform）：
+   ```
+   .selection-frame-wrapper { transform: translate(viewport.x, viewport.y) scale(viewport.zoom); }
+   .selection-frame { left: canvasBounds.x, top: canvasBounds.y }  // canvas 坐标
+   ```
+   canvasBounds.y = rawBounds.y - paddingTop，CSS transform 将 canvas 坐标映射到 screen：
+   ```
+   frameTop(screen) = (rawBounds.y - paddingTop) * zoom + viewport.y
+   ```
+
+2. **NodeToolbar 定位**（`getTransform` 手动计算）：
+   ```js
+   // NodeToolbar.vue — Teleport 到 viewportRef（脱离 SelectionFrame 的 CSS transform）
+   pos[1] = nodeRect.y * zoom + viewport.y - offset   // 手动 canvas→screen 换算
+   ```
+   offset 是 screen 像素值，**不乘 zoom**。toolbar 底部 screen 位置：
+   ```
+   toolbarBottom(screen) = rawBounds.y * zoom + viewport.y - offset
+   ```
+
+**Gap 公式推导：**
+```
+gap = frameTop - toolbarBottom
+    = (rawBounds.y - paddingTop) * zoom - rawBounds.y * zoom + offset
+    = offset - paddingTop * zoom
+```
+
+`offset = topToolbarOffset(12) + extraOffset`
+
+修复前 `extraOffset = paddingTop`：
+```
+gap = 12 + paddingTop - paddingTop * zoom = 12 + paddingTop * (1 - zoom)
+```
+→ gap 随 zoom 线性变化（实测：zoom=0.61→gap=25.2, zoom=0.93→gap=14.5, zoom=1.4→gap=-1.8）✗
+
+修复后 `extraOffset = paddingTop * zoom`：
+```
+gap = 12 + paddingTop * zoom - paddingTop * zoom = 12
+```
+→ gap 恒定 = topToolbarOffset(12px)，与 zoom 无关 ✓
+
+### 为什么之前 3 轮分析失败
+
+纯靠代码阅读推断，从未运行时验证。systematic-debugging 要求"收集证据"——用 playwright 在 3 个 zoom 级别测量 DOM 位置，公式与实测完全吻合后，一次确认根因。
+
+### 关键认知
+
+- `Teleport to="viewportRef"` 使 NodeToolbar 脱离 SelectionFrame 的 CSS transform 坐标空间
+- toolbar 位置由 `getTransform`（手动计算）和 CSS transform（SelectionFrame 框架）**两套独立系统**决定
+- canvas 空间 → screen 空间的值必须在传递给另一套系统前完成换算
+- 此类多坐标系统 bug 必须用浏览器实际测量 DOM 位置来验证，静态代码阅读无法可靠定位
+
 ## Canvas 图片处理规则
 
 - **不要用 `drawImage(HTMLImageElement)` 画 blob URL 图片** — 在部分浏览器/图片格式下 canvas 位图为全透明（testPixel 全 0），即使 `onload` fire、`naturalWidth` 正确

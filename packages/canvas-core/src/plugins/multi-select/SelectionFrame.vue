@@ -260,20 +260,20 @@ onUnmounted(() => {
     transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.zoom})`,
     transformOrigin: '0 0',
   }">
-    <div v-if="canvasBounds" ref="selectionFrameRef" class="selection-frame" :class="{ 'is-dragging': isDragging, 'pass-through': props.disablePointerEvents }"
-      :style="canvasBounds ? {
+    <div v-if="canvasBounds" ref="selectionFrameRef" class="selection-frame"
+      :class="{ 'is-dragging': isDragging, 'pass-through': props.disablePointerEvents }" :style="canvasBounds ? {
         position: 'absolute',
         left: canvasBounds.x + 'px',
         top: canvasBounds.y + 'px',
         width: canvasBounds.width + 'px',
         height: canvasBounds.height + 'px',
         ...inverseViewportScaleStyle,
-      } : undefined"
-      @mouseenter="isFrameHovered = true" @mouseleave="isFrameHovered = false"
+      } : undefined" @mouseenter="isFrameHovered = true" @mouseleave="isFrameHovered = false"
       @mousedown="props.disablePointerEvents ? undefined : handleMouseDown($event)">
       <div v-if="innerBoundsStyle" class="selection-frame-inner-bounds" :style="innerBoundsStyle" />
 
-      <BaseToolbar :node-ids="selectedNodeIds" toolbar-position="top" :extra-offset="canvas.state.core.selectionFramePaddingTop" />
+      <BaseToolbar :node-ids="selectedNodeIds" toolbar-position="top"
+        :extra-offset="canvas.state.core.selectionFramePaddingTop * viewport.zoom" />
 
       <button v-show="showFrameDecorations" class="selection-frame-connect-handle" type="button"
         @mousedown.stop.prevent="handleBatchConnectStart">
@@ -366,7 +366,7 @@ onUnmounted(() => {
 
 .selection-frame.pass-through {
   pointer-events: none !important;
-}  
+}
 
 .selection-frame.is-dragging .selection-frame-inner-bounds {
   border-color: rgba(96, 165, 250, 0.6);
