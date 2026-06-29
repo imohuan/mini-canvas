@@ -124,30 +124,30 @@ function activateEraser() {
 
     <!-- Brush button -->
     <button
-      class="mb-btn"
+      class="mb-btn mb-btn--text"
       :class="{ '-active': !maskConfig.isErasing }"
       type="button"
       @click.stop="activateBrush"
-      title="画笔"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 19l-2 3H5l-3-3" />
         <path d="M14.5 2.5c.8-.8 2-.8 2.8 0l3.2 3.2c.8.8.8 2 0 2.8L9 20H4v-5L14.5 2.5z" />
       </svg>
+      <span class="mb-btn-label">画笔</span>
     </button>
 
     <!-- Eraser button -->
     <button
-      class="mb-btn"
+      class="mb-btn mb-btn--text"
       :class="{ '-active': maskConfig.isErasing }"
       type="button"
       @click.stop="activateEraser"
-      title="橡皮擦"
     >
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14 2.2c.8-.8 2-.8 2.8 0L20 5.2" />
         <line x1="18" y1="12.8" x2="12" y2="18.8" />
       </svg>
+      <span class="mb-btn-label">橡皮擦</span>
     </button>
 
     <!-- Popover: size / opacity / color (NO eraser) -->
@@ -201,6 +201,11 @@ function activateEraser() {
   cursor: pointer;
   transition: background-color 140ms ease, color 140ms ease;
 }
+.mb-btn--text {
+  width: auto; height: auto;
+  padding: 4px 6px; gap: 4px;
+}
+.mb-btn-label { font-size: 12px; line-height: 1; }
 .mb-btn:hover {
   background: var(--canvas-node-panel-surface-hover, rgba(0,0,0,0.06));
   color: var(--canvas-node-text-strong, #111827);
