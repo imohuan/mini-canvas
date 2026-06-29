@@ -90,7 +90,7 @@ function onDropdownItemClick(id: string) {
         'toolbar-button--danger': danger,
         'is-disabled': disabled,
       }"
-      :disabled="disabled" :title="tooltip || title" type="button" @click="onButtonClick">
+      :disabled="disabled" :title="tooltip || title" type="button" @click.stop="onButtonClick">
       <component v-if="typeof icon === 'object' && icon" :is="icon" class="toolbar-button-icon" />
       <span v-else-if="typeof icon === 'string' && icon" class="toolbar-button-icon" v-html="icon" />
       <span v-if="title" class="toolbar-button-label">{{ title }}</span>

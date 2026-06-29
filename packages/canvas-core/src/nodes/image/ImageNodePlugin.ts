@@ -22,7 +22,7 @@ const uploadArrowSvg = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" str
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 // 蒙版图标
 const maskSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4" stroke-width="1.5" opacity="0.5"/></svg>`
-const eraserSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20H7L3 16c-.8-.8-.8-2 0-2.8L14 2.2c.8-.8 2-.8 2.8 0L20 5.2"/><line x1="18" y1="12.8" x2="12" y2="18.8"/></svg>`
+
 
 // ---- helpers ----
 const MAX_PREVIEW_WIDTH = 420
@@ -316,6 +316,7 @@ function handleImageMask(ctx: CommandContext) {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
+  debugger
   if (!vf || !nodeId) return
 
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
@@ -507,11 +508,9 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.toolbars.register('node:image', { id: 'image.expand', source: 'node:image', commandId: 'image.expand', position: 'top', title: '扩展', icon: expandSvg, tooltip: '扩展图片', nodeTypes: ['image'], group: 'default', order: 25 })
     // top: 蒙版入口按钮（default 组）
     context.toolbars.register('node:image', { id: 'image.mask', source: 'node:image', commandId: 'image.mask', position: 'top', title: '蒙版', icon: maskSvg, tooltip: '绘制蒙版', nodeTypes: ['image'], group: 'default', order: 27 })
-    // top: mask 组 — 仅蒙版模式下显示（画笔配置面板在 ImageMasker 内部）
-    // 画笔配置面板（customRender：滑块 + 颜色 + 橡皮擦）
+    // top: mask 组 — 仅蒙版模式下显示
+    // MaskBrushButton 渲染 3 个按钮：菜单配置、画笔、橡皮擦
     context.toolbars.register('node:image', { id: 'image.maskBrushConfig', source: 'node:image', commandId: 'image.maskBrushConfig', position: 'top', title: '', tooltip: '画笔配置', nodeTypes: ['image'], group: 'mask', order: 5, customRender: markRaw(MaskBrushButton), visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true })
-    // 橡皮擦（同时也在面板中）
-    context.toolbars.register('node:image', { id: 'image.maskConfig.eraser', source: 'node:image', commandId: 'image.maskEraser', position: 'top', title: '橡皮擦', icon: eraserSvg, tooltip: '切换橡皮擦', nodeTypes: ['image'], group: 'mask', order: 15, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true })
     // 清除
     context.toolbars.register('node:image', { id: 'image.maskClear', source: 'node:image', commandId: 'image.maskClear', position: 'top', title: '清除', icon: cancelSvg, tooltip: '清除蒙版', nodeTypes: ['image'], group: 'mask', order: 20, visible: (ctx) => ctx.node?.data?._overlay?._maskMode === true, danger: true })
     // 确认 / 取消
