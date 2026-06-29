@@ -195,7 +195,7 @@ const GROUP_ORDER: Record<string, number> = { create: 1, action: 2, delete: 3 }
 interface ResolvedMenuItem {
   id: string; label: string; description?: string; icon?: string | Component; badge?: string
   shortcut?: string; danger?: boolean; disabled?: boolean; group: string; order?: number
-  nodeType?: string
+  nodeType?: string; commandId?: string
 }
 
 function resolveItems(
@@ -230,6 +230,7 @@ function resolveItems(
       icon: item.icon,
       badge: item.badge, shortcut: item.shortcut, danger: item.danger, disabled,
       group: item.group || "action", order: item.order ?? 0,
+      commandId: item.commandId,
     })
   }
 
@@ -401,6 +402,13 @@ export const ContextMenuPlugin: CanvasPlugin = {
     }
 
     async function onMenuSelect(item: CanvasMenuItem) {
+      // 优先处理有 commandId 的菜单项 — 执行已注册的命令
+      if (item.commandId && context.commands.has(item.commandId)) {
+        closeMenu()
+        await context.commands.execute(item.commandId)
+        return
+      }
+
       const ctx = { ...menuCtx }
 
       if (menuState.mode === "connection" && ctx.pendingConnection) {

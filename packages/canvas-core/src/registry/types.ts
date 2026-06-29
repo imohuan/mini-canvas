@@ -150,6 +150,8 @@ export interface CanvasMenuItem {
   icon?: string | Component
   /** 创建节点菜单项的节点类型（如 text, image），非创建类菜单项为空 */
   nodeType?: string
+  /** 指向已注册命令的 ID，点击时执行对应命令 */
+  commandId?: string
 }
 
 export interface CanvasMenuState {

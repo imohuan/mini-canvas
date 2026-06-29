@@ -303,7 +303,7 @@ export const ClipboardPlugin: CanvasPlugin<Record<string, unknown>, ClipboardAPI
     context.registerShortcut('ctrl+c', () => performCopy(), '复制选中节点')
     context.registerShortcut('ctrl+v', () => performPaste(), '粘贴剪切板内容')
     context.registerShortcut('ctrl+x', () => performCut(), '剪切选中节点')
-    context.registerShortcut('ctrl+d', () => { performCopy() && performPaste() }, '复制一份选中节点')
+    context.registerShortcut('ctrl+d', () => performCopy() && performPaste(), '复制一份选中节点')
 
     logger.info(`ClipboardPlugin installed. Shortcuts: Ctrl+C/V/X/D`)
 
