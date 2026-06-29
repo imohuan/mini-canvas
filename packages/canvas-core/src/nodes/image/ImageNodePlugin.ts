@@ -647,6 +647,8 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.commands.register({ id: 'image.rotate', source: 'node:image', title: '旋转', run: handleImageRotate })
     context.commands.register({ id: 'image.download', source: 'node:image', title: '下载', run: handleImageDownload })
 
+    context.menus.register('node:image', { id: 'image:download', source: 'node:image', commandId: 'image.download', title: '下载', icon: downloadSvg, areas: ['node'], nodeTypes: ['image'], order: 40 })
+
     // 注册 toolbar 按钮
     // top: default 组（正常状态下显示，裁剪时 overlay._toolbarGroup='crop' 自动隐藏）
     context.toolbars.register('node:image', { id: 'image.upload', source: 'node:image', commandId: 'image.upload', position: 'top', title: '上传图片', tooltip: '点击上传本地图片', nodeTypes: ['image'], group: 'default', order: 10, customRender: markRaw(ImageUploadButton) })

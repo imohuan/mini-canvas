@@ -404,8 +404,25 @@ export const ContextMenuPlugin: CanvasPlugin = {
     async function onMenuSelect(item: CanvasMenuItem) {
       // 优先处理有 commandId 的菜单项 — 执行已注册的命令
       if (item.commandId && context.commands.has(item.commandId)) {
+        // 先取出 nodeId/nodeType，closeMenu() 会清空 menuCtx
+        const nodeId = menuCtx.nodeId
+        const nodeType = menuCtx.nodeType
         closeMenu()
-        await context.commands.execute(item.commandId)
+        // 构建 CommandContext：工具栏的执行路径会传 node 对象，右键菜单也需要
+        const node = nodeId
+          ? context.actions.getNodes().find(n => n.id === nodeId)
+          : undefined
+        await context.commands.execute(item.commandId, {
+          node: node as any,
+          edge: undefined,
+          nodeType,
+          runtime: null,
+          actions: null,
+          selection: null,
+          viewport: null,
+          store: null,
+          logger: console,
+        })
         return
       }
 
