@@ -163,23 +163,6 @@ function parseColor(hex: string): { r: number; g: number; b: number } {
   return { r: 255, g: 0, b: 0 }
 }
 
-function drawLine(fromX: number, fromY: number, toX: number, toY: number) {
-  const ctx = getDrawCtx()
-  if (!ctx) return
-  const { color, size, composite } = getBrushStyle()
-
-  ctx.globalCompositeOperation = composite
-  ctx.strokeStyle = color
-  ctx.lineWidth = size
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-
-  ctx.beginPath()
-  ctx.moveTo(fromX, fromY)
-  ctx.lineTo(toX, toY)
-  ctx.stroke()
-}
-
 // ==================== Coordinate transform ====================
 function clientToCanvas(clientX: number, clientY: number): { x: number; y: number } {
   const d = display.value
@@ -200,21 +183,18 @@ function onPointerDown(e: PointerEvent) {
   lastPoint.y = pt.y
   isDrawing.value = true
 
-  drawDot(pt.x, pt.y)
-  overlayRef.value?.setPointerCapture(e.pointerId)
-}
-
-function drawDot(x: number, y: number) {
+  // Draw initial dot as a filled circle
   const ctx = getDrawCtx()
-  if (!ctx) return
-  const { color, size, composite } = getBrushStyle()
-
-  ctx.globalCompositeOperation = composite
-  ctx.fillStyle = color
-  ctx.beginPath()
-  ctx.arc(x, y, size / 2, 0, Math.PI * 2)
-  ctx.fill()
-  hasMaskContent.value = true
+  if (ctx) {
+    const { color, size, composite } = getBrushStyle()
+    ctx.globalCompositeOperation = composite
+    ctx.fillStyle = color
+    ctx.beginPath()
+    ctx.arc(pt.x, pt.y, size / 2, 0, Math.PI * 2)
+    ctx.fill()
+    hasMaskContent.value = true
+  }
+  overlayRef.value?.setPointerCapture(e.pointerId)
 }
 
 function onPointerMove(e: PointerEvent) {
@@ -222,23 +202,33 @@ function onPointerMove(e: PointerEvent) {
   e.preventDefault()
 
   const pt = clientToCanvas(e.clientX, e.clientY)
-  // Draw line segment from last point
   const ctx = getDrawCtx()
   if (!ctx) return
   const { color, size, composite } = getBrushStyle()
 
   ctx.globalCompositeOperation = composite
-  ctx.strokeStyle = color
-  ctx.lineWidth = size
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.beginPath()
-  ctx.moveTo(lastPoint.x, lastPoint.y)
-  ctx.lineTo(pt.x, pt.y)
-  ctx.stroke()
+  ctx.fillStyle = color
+
+  // Draw dense overlapping circles along the segment for smooth continuous brush
+  const dx = pt.x - lastPoint.x
+  const dy = pt.y - lastPoint.y
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  const step = Math.max(0.5, size * 0.25) // inter-circle spacing
+  const steps = Math.max(1, Math.ceil(dist / step))
+  const radius = size / 2
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const cx = lastPoint.x + dx * t
+    const cy = lastPoint.y + dy * t
+    ctx.beginPath()
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+    ctx.fill()
+  }
 
   lastPoint.x = pt.x
   lastPoint.y = pt.y
+  hasMaskContent.value = true
 }
 
 function onPointerUp(e: PointerEvent) {
