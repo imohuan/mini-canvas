@@ -1,4 +1,5 @@
 ﻿import type { CanvasPlugin, PluginContext } from '../types'
+import { useCanvasStore } from '../../composables/useCanvasStore'
 
 /**
  * MultiSelectPlugin — 多选/框选/加减选插件 (v0.7.0)
@@ -50,6 +51,7 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
 
   install(context: PluginContext, _options: Record<string, unknown>) {
     const logger = context.logger
+    const canvasStore = useCanvasStore()
 
     // ====== 框选状态 ======
     let selectionBox: HTMLDivElement | null = null
@@ -232,6 +234,7 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       startScreenX = e.clientX
       startScreenY = e.clientY
       isBoxSelecting = true
+      canvasStore.isBoxSelecting = true
       prevBoxNodeIds = []
       boxDragDistance = 0
 
@@ -276,6 +279,7 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       if (!isBoxSelecting) return
 
       isBoxSelecting = false
+      canvasStore.isBoxSelecting = false
       removeSelectionBox()
 
       if (boxDragDistance > DRAG_THRESHOLD) {

@@ -247,6 +247,9 @@ export const useCanvasStore = defineStore('canvasState', () => {
     suppressHandles: false,
   })
 
+  // ==================== 框选状态（不持久化） ====================
+  const isBoxSelecting = ref(false)
+
   // ==================== 选中状态（不持久化） ====================
   const selectionState = ref({
     selectedNodeIds: new Set<string>(),
@@ -351,6 +354,7 @@ export const useCanvasStore = defineStore('canvasState', () => {
     connectionState,
     isConnecting,
     canShowConnectionMenu,
+    isBoxSelecting,
     selectionState,
     setSelectedNodeIds,
     setSelectedEdgeIds,
