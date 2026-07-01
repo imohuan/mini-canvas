@@ -10,7 +10,6 @@ export { default as Canvas } from './Canvas.vue'
 export { TextNodePlugin } from './nodes/text/TextNodePlugin'
 export { ImageNodePlugin } from './nodes/image/ImageNodePlugin'
 export { VideoNodePlugin } from './nodes/Video/VideoNodePlugin'
-export { StageNodePlugin } from './nodes/stage/StageNodePlugin'
 export { PanoramaNodePlugin } from './nodes/panorama/PanoramaNodePlugin'
 export { ImageCompareNodePlugin } from './nodes/image-compare/ImageCompareNodePlugin'
 

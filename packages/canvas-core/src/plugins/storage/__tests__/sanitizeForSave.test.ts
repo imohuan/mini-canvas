@@ -43,7 +43,7 @@ test('sanitizeForSave removes temp nodes and edges', () => {
 })
 
 test('sanitizeForSave removes values._url', () => {
-  const nodes = [{ id: '1', type: 'custom', data: { nodeType: 'stage', values: { a: { _url: 'blob:...', name: 'x' }, b: { name: 'y' } } } }]
+  const nodes = [{ id: '1', type: 'custom', data: { nodeType: 'image', values: { a: { _url: 'blob:...', name: 'x' }, b: { name: 'y' } } } }]
   const result = sanitizeForSave(nodes, [])
   const values = result.nodes[0].data.values
   assert.equal(values.a._url, undefined)

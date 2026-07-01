@@ -5,7 +5,6 @@ import {
   TextNodePlugin,
   ImageNodePlugin,
   VideoNodePlugin,
-  StageNodePlugin,
   PanoramaNodePlugin,
   ImageCompareNodePlugin,
   ContextMenuPlugin,
@@ -56,13 +55,6 @@ const pluginSlots = ref<PluginSlot[]>([
     enabled: true,
     label: '视频节点',
     description: '注册视频节点到 NodeRegistry',
-    usage: '内置节点类型，自动注册',
-  },
-  {
-    plugin: markRaw(StageNodePlugin) as CanvasPlugin,
-    enabled: true,
-    label: '导演台节点',
-    description: '注册导演台节点到 NodeRegistry',
     usage: '内置节点类型，自动注册',
   },
   {

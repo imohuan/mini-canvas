@@ -26,10 +26,10 @@ test("NodeRegistry registers full node definition", () => {
 test("NodeRegistry menu items are derived from registered nodes", () => {
   const registry = new NodeRegistry()
   registry.register({ type: "text", label: "文本", defaultSize: { cardWidth: 300, cardHeight: 320 }, menuItem: { label: "文本", description: "创建文本节点", icon: "text" } })
-  registry.register({ type: "stage", label: "导演台", defaultSize: { cardWidth: 320, cardHeight: 320 }, menuItem: { label: "导演台", description: "创建编排节点", icon: "layers", badge: "NEW" } })
+  registry.register({ type: "panorama", label: "360全景", defaultSize: { cardWidth: 640, cardHeight: 400 }, menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: "pano", badge: "VR" } })
 
-  assert.deepEqual(registry.getMenuItems().map(item => item.id), ["text", "stage"])
-  assert.equal(registry.getMenuItems()[1].badge, "NEW")
+  assert.deepEqual(registry.getMenuItems().map(item => item.id), ["text", "panorama"])
+  assert.equal(registry.getMenuItems()[1].badge, "VR")
 })
 
 test("NodeRegistry fallback for unknown type", () => {

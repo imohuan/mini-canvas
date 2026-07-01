@@ -1,4 +1,4 @@
-export type CanvasNodeKind = 'text' | 'image' | 'video' | 'stage' | 'panorama' | (string & {})
+export type CanvasNodeKind = 'text' | 'image' | 'video' | 'panorama' | (string & {})
 
 /** 裁剪/扩展矩形 */
 export interface Rect {
@@ -70,11 +70,6 @@ export interface TextNodeData extends BaseCanvasNodeData {
   text?: string
 }
 
-export interface StageNodeData extends BaseCanvasNodeData {
-  nodeType: 'stage'
-  values?: Record<string, unknown>
-}
-
 export interface PanoramaNodeData extends BaseCanvasNodeData {
   nodeType: 'panorama'
   assetId?: string
@@ -92,4 +87,4 @@ export interface ImageCompareNodeData extends BaseCanvasNodeData {
   compareMode?: 'slider' | 'side-by-side' | 'overlay' // 对比模式
 }
 
-export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | StageNodeData | PanoramaNodeData | ImageCompareNodeData | BaseCanvasNodeData
+export type CanvasNodeData = TextNodeData | ImageNodeData | VideoNodeData | PanoramaNodeData | ImageCompareNodeData | BaseCanvasNodeData
