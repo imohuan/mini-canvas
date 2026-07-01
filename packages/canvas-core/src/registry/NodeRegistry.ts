@@ -20,6 +20,11 @@ export interface CanvasNodeDefinition {
   menuItem: NodeMenuItemDefinition
   canReceiveInput?: boolean
   canProduceOutput?: boolean
+  /** 允许连接到本节点的输入源 nodeType 列表。
+   *  undefined = 接受全部（向后兼容）
+   *  [] = 不接受任何输入
+   *  ['image'] = 只接受 image 节点 */
+  acceptsInputs?: string[]
   resizable?: boolean
   /** 自定义 top toolbar 组件，不传则使用默认 BaseToolbar */
   topToolbar?: Component
@@ -75,6 +80,10 @@ export class NodeRegistry {
 
   canProduceOutput(type: string): boolean {
     return this.definitions.get(type)?.canProduceOutput ?? true
+  }
+
+  getAcceptsInputs(type: string): string[] | undefined {
+    return this.definitions.get(type)?.acceptsInputs
   }
 
   isResizable(type: string): boolean {

@@ -46,3 +46,26 @@ test("NodeRegistry unregister removes definition", () => {
   registry.unregister("text")
   assert.equal(registry.get("text"), null)
 })
+
+test("NodeRegistry acceptsInputs returns declared types", () => {
+  const registry = new NodeRegistry()
+  registry.register({
+    type: "panorama",
+    label: "360全景",
+    defaultSize: { cardWidth: 640, cardHeight: 400 },
+    menuItem: { label: "360全景" },
+    acceptsInputs: ["image"],
+  })
+  assert.deepEqual(registry.getAcceptsInputs("panorama"), ["image"])
+})
+
+test("NodeRegistry acceptsInputs returns undefined when not declared", () => {
+  const registry = new NodeRegistry()
+  registry.register({
+    type: "image",
+    label: "图片",
+    defaultSize: { cardWidth: 360, cardHeight: 270 },
+    menuItem: { label: "图片" },
+  })
+  assert.equal(registry.getAcceptsInputs("image"), undefined)
+})
