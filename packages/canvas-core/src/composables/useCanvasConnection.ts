@@ -266,6 +266,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   let lastNativeConnectAt = 0
   const batchConnectState = ref<BatchConnectState | null>(null)
 
+  // hoverNode 写入节流：render 阶段（buildConnectionEdgeProps）不能用 nextTick 写 reactive state，
+  // 否则 hoverNode 变化 → BaseNode 重渲染 → connection-line slot 重渲染 → buildConnectionEdgeProps 再次执行 →
+  // 再注册 nextTick → 形成 "Maximum recursive updates exceeded" 死循环。
+  // 用 rAF + 标志位确保每帧最多写一次，rAF 在下一帧执行不会形成同帧循环。
+  let hoverRafId = 0
+  let pendingHover: { nodeId: string; status: 'valid' | 'invalid'; flowPosition: Point; message?: string } | null = null
+
   /** 节点 ID 索引（O(1) 查找）。computed 确保与 getNodes 同步，避免 shallowRef+watch 异步延迟 */
   const nodesById = computed(() => {
     const map = new Map<string, Node>()
@@ -753,9 +760,10 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         ? { source: zone.id, target: sourceId, sourceHandle: 'source', targetHandle: startHandle }
         : { source: sourceId, target: zone.id, sourceHandle: startHandle, targetHandle: 'target' }
 
-      if (getInvalidConnectionReason(candidateConnection)) {
+      const reason = getInvalidConnectionReason(candidateConnection)
+      if (reason) {
         invalidNodeId = zone.id
-        invalidMessage = getInvalidConnectionReason(candidateConnection)
+        invalidMessage = reason
         continue
       }
 
@@ -782,9 +790,10 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       const candidateConnection = isReverseConnection
         ? { source: bodyNodeId, target: sourceId, sourceHandle: 'source', targetHandle: startHandle }
         : { source: sourceId, target: bodyNodeId, sourceHandle: startHandle, targetHandle: 'target' }
-      if (getInvalidConnectionReason(candidateConnection)) {
+      const reason = getInvalidConnectionReason(candidateConnection)
+      if (reason) {
         invalidNodeId = bodyNodeId
-        invalidMessage = getInvalidConnectionReason(candidateConnection)
+        invalidMessage = reason
       } else {
         snappedNodeId = bodyNodeId
       }
@@ -799,8 +808,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       currentHover?.flowPosition?.y !== nextFeedbackPoint?.y
 
     if (hoverChanged) {
-      // 延迟到 nextTick 写入，避免在 render 阶段触发 reactive state 变更
-      // 导致 Vue 递归更新检测（Maximum recursive updates exceeded in <BaseNode>）
+      // 用 rAF 替代 nextTick：rAF 在下一帧执行，不会与当前渲染形成 microtask 循环
       const nextHover = effectiveFeedbackNodeId && nextFeedbackPoint
         ? {
             nodeId: effectiveFeedbackNodeId,
@@ -809,9 +817,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
             message: invalidNodeId ? (invalidMessage || '无法连接') : undefined,
           }
         : null
-      nextTick(() => {
-        canvas.connectionState.hoverNode = nextHover
-      })
+      pendingHover = nextHover
+      if (!hoverRafId) {
+        hoverRafId = requestAnimationFrame(() => {
+          hoverRafId = 0
+          canvas.connectionState.hoverNode = pendingHover
+        })
+      }
     }
 
     return {
