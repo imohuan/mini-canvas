@@ -26,6 +26,7 @@ export const ImageCompareNodePlugin: CanvasPlugin = {
       },
       canReceiveInput: true,
       canProduceOutput: false,
+      acceptsInputs: ['image'],
       resizable: false,
       titleIcon: titleIconSvg,
     })

@@ -177,6 +177,8 @@ export const PanoramaNodePlugin: CanvasPlugin = {
       defaultSize: { cardWidth: 640, cardHeight: 400 },
       menuItem: { label: "360全景", description: "创建360全景图片查看节点", icon: menuIconSvg, badge: "VR" },
       canReceiveInput: true,
+      canProduceOutput: false,
+      acceptsInputs: ["image"],
       titleIcon: titleIconSvg,
     })
 

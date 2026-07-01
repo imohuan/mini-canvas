@@ -627,6 +627,7 @@ export const ImageNodePlugin: CanvasPlugin = {
       menuItem: { label: '图片', description: '创建图片节点', icon: menuIconSvg },
       canReceiveInput: true,
       canProduceOutput: true,
+      acceptsInputs: ['image', 'text'],
       resizable: false,
       selfRender: true,
     })

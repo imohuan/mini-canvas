@@ -25,6 +25,7 @@ export const VideoNodePlugin: CanvasPlugin = {
       defaultSize: { cardWidth: 480, cardHeight: 320 },
       menuItem: { label: '视频', description: '创建视频节点', icon: menuIconSvg },
       canReceiveInput: true, resizable: false,
+      acceptsInputs: ['image', 'text', 'video'],
       titleIcon: titleIconSvg,
     })
 
