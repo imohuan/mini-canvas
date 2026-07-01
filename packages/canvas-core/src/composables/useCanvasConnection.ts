@@ -19,7 +19,7 @@
  *     <CustomEdge v-bind="conn.buildConnectionEdgeProps(props)" />
  *   </template>
  */
-import { ref, shallowRef, watch, nextTick, computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useCanvasStore } from './useCanvasStore'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
@@ -459,6 +459,10 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         return `${tgtLabel}不接受${srcLabel}输入`
       }
     }
+    // 重复连接检查
+    if (findSameConnection(canonical, getEdges.value as Edge[])) {
+      return '已连接'
+    }
     // 确保两端节点有正确的端口
     if (!src.sourcePosition || !tgt.targetPosition) return '无法连接'
     return ''
@@ -488,18 +492,14 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         return false
       }
     }
+    // 重复连接检查
+    if (findSameConnection(canonical, getEdges.value as Edge[])) {
+      return false
+    }
     return true
   }
 
-  /** 修复已存在边的类型和数据 */
-  function repairExistingConnection(edge: Edge, connection: Connection) {
-    edge.type = 'custom'
-    edge.sourceHandle = connection.sourceHandle
-    edge.targetHandle = connection.targetHandle
-    edge.data = { ...makeEdgeData(canvas.state.core), ...(edge.data || {}) }
-  }
-
-  /** 创建新连线：验证 → 去重 → 添加 */
+  /** 创建新连线：验证 → 添加 */
   function createConnection(connection: Connection, _source = 'manual'): boolean {
     const normalized = toCanonicalConnection(connection)
     if (!normalized) {
@@ -514,17 +514,9 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       return false
     }
 
-    const existingEdge = findSameConnection(normalized, getEdges.value as Edge[])
-    if (existingEdge) {
-      debugLog('createConnection: repair existing edge', existingEdge.id)
-      repairExistingConnection(existingEdge, normalized)
-      const renderedEdge = (getEdges.value as Edge[]).find(e => e.id === existingEdge.id)
-      if (!renderedEdge) {
-        addEdges([{ ...existingEdge }])
-        debugLog('createConnection: re-added existing edge')
-        return true
-      }
-      debugLog('createConnection: edge already rendered, skipped')
+    // 重复连接检查（isValidConnection 已拦截，此处防御性二次检查）
+    if (findSameConnection(normalized, getEdges.value as Edge[])) {
+      debugLog('createConnection: connection already exists, rejected')
       return false
     }
 
