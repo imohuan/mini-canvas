@@ -94,6 +94,11 @@ let canvasResizeObserver: ResizeObserver | null = null
 const manager = new PluginManager()
 
 // ========================
+// 节点注册中心（必须在 useCanvasConnection 之前，供 getNodeDefinition 闭包引用）
+// ========================
+const nodeRegistry = new NodeRegistry()
+
+// ========================
 // 连接线 Core Composable
 // ========================
 const conn = useCanvasConnection({
@@ -326,9 +331,7 @@ function syncVueFlowKeymap() {
 // ========================
 // 插件系统生命周期
 // ========================
-// manager 已在上方提前创建（供 useCanvasConnection 使用 eventBus）
-/** 节点类型注册中心：管理可创建的节点类型 */
-const nodeRegistry = new NodeRegistry()
+// manager 已在上方提前创建（供 useCanvasConnection 使用 eventBus），nodeRegistry 同理
 /** 菜单注册中心：管理右键菜单项 */
 const menuRegistry = new MenuRegistry()
 /** 命令注册中心：管理所有可执行命令 */

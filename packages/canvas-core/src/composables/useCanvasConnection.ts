@@ -761,6 +761,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     let endY = connectionLineProps.targetY
     let bestDistance = Number.POSITIVE_INFINITY
     let invalidNodeId: string | null = null
+    let invalidMessage: string | undefined = undefined
     let snappedNodeId: string | null = null
 
     for (const zone of snapZones) {
@@ -778,6 +779,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
 
       if (getInvalidConnectionReason(candidateConnection)) {
         invalidNodeId = zone.id
+        invalidMessage = getInvalidConnectionReason(candidateConnection)
         continue
       }
 
@@ -806,6 +808,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         : { source: sourceId, target: bodyNodeId, sourceHandle: startHandle, targetHandle: 'target' }
       if (getInvalidConnectionReason(candidateConnection)) {
         invalidNodeId = bodyNodeId
+        invalidMessage = getInvalidConnectionReason(candidateConnection)
       } else {
         snappedNodeId = bodyNodeId
       }
@@ -827,7 +830,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
             nodeId: effectiveFeedbackNodeId,
             status: (invalidNodeId ? 'invalid' : 'valid') as 'valid' | 'invalid',
             flowPosition: { x: nextFeedbackPoint.x, y: nextFeedbackPoint.y },
-            message: invalidNodeId ? '无法连接' : undefined,
+            message: invalidNodeId ? (invalidMessage || '无法连接') : undefined,
           }
         : null
       nextTick(() => {
