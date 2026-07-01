@@ -434,40 +434,14 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   /** 返回连线不可创建的原因（拖线时判断） */
   function getInvalidConnectionReason(connection: Connection): string {
     const canonical = toCanonicalConnection(connection)
-    if (!canonical?.source || !canonical.target) {
-      console.log('[ConnDebug] INVALID: canonical', { canonical, raw: connection })
-      return '无法连接'
-    }
-    if (canonical.source === canonical.target) {
-      console.log('[ConnDebug] INVALID: self-connection', { canonical })
-      return '无法连接'
-    }
-    if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) {
-      console.log('[ConnDebug] INVALID: cycle', { canonical })
-      return '无法连接'
-    }
-    // 确保两端节点存在且有正确的端口
+    if (!canonical?.source || !canonical.target) return '无法连接'
+    if (canonical.source === canonical.target) return '无法连接'
+    if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) return '无法连接'
+    // 确保两端节点存在
     const src = nodesById.value.get(canonical.source)
     const tgt = nodesById.value.get(canonical.target)
-    if (!src || !tgt) {
-      console.log('[ConnDebug] INVALID: node not found in nodesById', {
-        canonical,
-        srcId: canonical.source, srcFound: !!src,
-        tgtId: canonical.target, tgtFound: !!tgt,
-        nodesByIdKeys: [...nodesById.value.keys()],
-        getNodesKeys: (getNodes.value as Node[]).map(n => n.id),
-      })
-      return '无法连接'
-    }
-    if (!src.sourcePosition || !tgt.targetPosition) {
-      console.log('[ConnDebug] INVALID: missing port', {
-        canonical,
-        srcId: src.id, srcSourcePos: src.sourcePosition, srcType: (src.data as any)?.nodeType,
-        tgtId: tgt.id, tgtTargetPos: tgt.targetPosition, tgtType: (tgt.data as any)?.nodeType,
-      })
-      return '无法连接'
-    }
-    // 类型兼容性校验
+    if (!src || !tgt) return '无法连接'
+    // 类型兼容性校验（提前到 port 检查之前，避免无端口的节点刷屏日志）
     const srcType = (src.data as any)?.nodeType as string | undefined
     const tgtType = (tgt.data as any)?.nodeType as string | undefined
     if (srcType && tgtType && getNodeDefinition) {
@@ -478,6 +452,8 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         return `${tgtLabel}不接受${srcLabel}输入`
       }
     }
+    // 确保两端节点有正确的端口
+    if (!src.sourcePosition || !tgt.targetPosition) return '无法连接'
     return ''
   }
 
