@@ -59,6 +59,8 @@ export interface UseCanvasConnectionOptions {
   eventBus?: {
     emit: (event: string, payload?: unknown) => void
   }
+  /** 获取节点定义（用于连接类型校验）。返回 CanvasNodeDefinition 或 null */
+  getNodeDefinition?: (type: string) => { acceptsInputs?: string[]; label?: string } | null
 }
 
 // ============================================================================
@@ -252,7 +254,7 @@ function makeEdgeData(canvasCore: any) {
 
 export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   const canvas = useCanvasStore()
-  const { getNodes, getEdges, addNodes, addEdges, removeNodes, removeEdges, updateNode, viewport, eventBus } = options
+  const { getNodes, getEdges, addNodes, addEdges, removeNodes, removeEdges, updateNode, viewport, eventBus, getNodeDefinition } = options
 
   // --- 调试 ---
   const DEBUG_CONNECT = false
@@ -465,6 +467,17 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       })
       return '无法连接'
     }
+    // 类型兼容性校验
+    const srcType = (src.data as any)?.nodeType as string | undefined
+    const tgtType = (tgt.data as any)?.nodeType as string | undefined
+    if (srcType && tgtType && getNodeDefinition) {
+      const tgtDef = getNodeDefinition(tgtType)
+      if (tgtDef?.acceptsInputs && !tgtDef.acceptsInputs.includes(srcType)) {
+        const tgtLabel = tgtDef.label ?? tgtType
+        const srcLabel = getNodeDefinition(srcType)?.label ?? srcType
+        return `${tgtLabel}不接受${srcLabel}输入`
+      }
+    }
     return ''
   }
 
@@ -483,6 +496,15 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     if (!src || !tgt) return false
     if (!src.sourcePosition || !tgt.targetPosition) return false
     if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) return false
+    // 类型兼容性校验
+    const srcType = (src.data as any)?.nodeType as string | undefined
+    const tgtType = (tgt.data as any)?.nodeType as string | undefined
+    if (srcType && tgtType && getNodeDefinition) {
+      const tgtDef = getNodeDefinition(tgtType)
+      if (tgtDef?.acceptsInputs && !tgtDef.acceptsInputs.includes(srcType)) {
+        return false
+      }
+    }
     return true
   }
 

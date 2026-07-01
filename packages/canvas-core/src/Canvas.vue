@@ -106,6 +106,7 @@ const conn = useCanvasConnection({
   updateNode: (id: string, data: Partial<Omit<Node, 'id'>>) => vueFlowInstance.updateNode(id, data),
   viewport: vueFlowInstance.viewport as any,
   eventBus: manager.eventBus,
+  getNodeDefinition: (type: string) => nodeRegistry.get(type),
 })
 
 const performanceEnabled = computed(() => canvas.state.core.performancePanelEnabled)
