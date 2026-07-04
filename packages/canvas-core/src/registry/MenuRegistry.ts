@@ -76,6 +76,8 @@ export interface MenuContext {
   edgeId?: string
   sourceNodeId?: string
   flowPosition?: { x: number; y: number }
+  /** 连线模式：源节点的业务类型（如 'image', 'text'），用于过滤可创建的目标节点 */
+  connectionSourceType?: string
   pendingConnection?: {
     sourceNodeId: string
     sourceHandle: string

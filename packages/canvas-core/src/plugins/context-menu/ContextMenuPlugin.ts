@@ -199,14 +199,41 @@ interface ResolvedMenuItem {
 }
 
 function resolveItems(
-  mode: string, nodeType: string | undefined, context: PluginContext
+  mode: string, nodeType: string | undefined, context: PluginContext,
+  connSourceType?: string, connSourceHandle?: string,
 ): ResolvedMenuItem[] {
   const items: ResolvedMenuItem[] = []
 
   // 创建节点菜单项（pane / connection 模式）
   if (mode === "pane" || mode === "connection") {
     const prefix = mode === "connection" ? "connect:" : "create:"
+    const isReverse = connSourceHandle === 'target'
+
     context.canvasNodes.getMenuItems().forEach((item, index) => {
+      // connection 模式：过滤不可连接的节点类型
+      if (mode === "connection" && connSourceType) {
+        const newDef = context.canvasNodes.get(item.id)
+        if (!newDef) return  // 跳过未注册类型
+
+        if (isReverse) {
+          // 新节点 → 源节点（新节点是输出侧）
+          // 新节点必须能产生输出
+          if (newDef.canProduceOutput === false) return
+          // 源节点的 acceptsInputs 必须包含新节点类型（如果源节点声明了白名单）
+          // undefined = 接受全部；[] = 不接受任何输入
+          const srcAccept = context.canvasNodes.get(connSourceType)?.acceptsInputs
+          if (Array.isArray(srcAccept) && !srcAccept.includes(item.id)) return
+        } else {
+          // 源节点 → 新节点（新节点是输入侧）
+          // 新节点必须能接收输入
+          if (newDef.canReceiveInput === false) return
+          // 新节点的 acceptsInputs 必须包含源节点类型（如果新节点声明了白名单）
+          // undefined = 接受全部；[] = 不接受任何输入
+          const newAccept = newDef.acceptsInputs
+          if (Array.isArray(newAccept) && !newAccept.includes(connSourceType)) return
+        }
+      }
+
       items.push({
         id: prefix + item.id, label: item.label, description: item.description,
         icon: item.icon, badge: item.badge, group: "create", order: 100 - index,
@@ -244,7 +271,7 @@ function resolveItems(
 
 function createNode(
   item: CanvasMenuItem, flowPosition: { x: number; y: number },
-  context: PluginContext, options: { requireTarget?: boolean; requireSource?: boolean } = {}
+  context: PluginContext, options: { requireTarget?: boolean; requireSource?: boolean; align?: 'center' | 'top-left' } = {}
 ) {
   const nodeType = item.nodeType || item.id
   const nodeId = `node-${nodeType}-${Date.now()}`
@@ -252,10 +279,18 @@ function createNode(
   const defaultSize = def?.defaultSize ?? { cardWidth: 256, cardHeight: 256 }
   const canReceiveInput = options.requireTarget ?? def?.canReceiveInput ?? true
   const canProduceOutput = options.requireSource ?? def?.canProduceOutput ?? true
+  const align = options.align ?? 'center'
+
+  const posX = align === 'top-left'
+    ? flowPosition.x
+    : flowPosition.x - defaultSize.cardWidth / 2
+  const posY = align === 'top-left'
+    ? flowPosition.y
+    : flowPosition.y - defaultSize.cardHeight / 2
 
   const node: Node = {
     id: nodeId, type: "custom",
-    position: { x: flowPosition.x - defaultSize.cardWidth / 2, y: flowPosition.y - defaultSize.cardHeight / 2 },
+    position: { x: posX, y: posY },
     data: { label: item.label, nodeType, cardWidth: defaultSize.cardWidth, cardHeight: defaultSize.cardHeight, resizable: def?.resizable ?? false },
     ...(canProduceOutput ? { sourcePosition: Position.Right } : {}),
     ...(canReceiveInput ? { targetPosition: Position.Left } : {}),
@@ -319,6 +354,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
       }
 
       // emit 事件给现有的菜单 UI 流程
+      const sourceNode = context.actions.getNodes().find(n => n.id === sourceNodeId)
       context.emit('connectionContextMenu', {
         clientX: point.x,
         clientY: point.y,
@@ -327,6 +363,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
         tempNodeId,
         tempEdgeId,
         flowPosition,
+        sourceNodeType: (sourceNode?.data as any)?.nodeType,
       })
     }
 
@@ -397,7 +434,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
     function openCreateNodeMenu(pos: { x: number; y: number }, mode: any, title: string, ctx: MenuContext) {
       openMenu({
         mode, title, position: pos,
-        items: resolveItems(mode, ctx.nodeType, context),
+        items: resolveItems(mode, ctx.nodeType, context, ctx.connectionSourceType, ctx.pendingConnection?.sourceHandle),
       }, ctx)
     }
 
@@ -433,7 +470,8 @@ export const ContextMenuPlugin: CanvasPlugin = {
         closeMenu()
         const isReverse = pending.sourceHandle === "target"
         // 只控制输入端口方向，不覆盖输出端口（输出端口由节点类型定义决定）
-        const node = createNode(item, pending.flowPosition, context, { requireTarget: !isReverse })
+        // connection 模式：节点左上角对齐鼠标松开位置
+        const node = createNode(item, pending.flowPosition, context, { requireTarget: !isReverse, align: 'top-left' })
         await nextTick()
         context.actions.addEdges([isReverse ? {
           id: `e-${node.id}-${pending.sourceNodeId}-${Date.now()}`, type: "custom",
@@ -474,6 +512,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
 
     const off5 = context.on("connectionContextMenu", (p: any) => {
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "connection", "引用该节点生成", {
+        connectionSourceType: p.sourceNodeType,
         pendingConnection: {
           sourceNodeId: p.sourceNodeId,
           sourceHandle: p.sourceHandle,
