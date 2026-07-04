@@ -20,7 +20,9 @@
  *   </template>
  */
 import { ref, computed } from 'vue'
-import { useCanvasStore } from './useCanvasStore'
+$1
+import { toFlowPosition } from '../utils/viewportSpace'
+import { DEFAULT_NODE_SIZE } from '../utils/constants'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
 
@@ -67,17 +69,7 @@ export interface UseCanvasConnectionOptions {
 // Helpers
 // ============================================================================
 
-/** 屏幕坐标 → 画布坐标 */
-function toFlowPosition(viewport: { x: number; y: number; zoom: number }, clientX: number, clientY: number): Point {
-  const pane = document.querySelector('.vue-flow')?.getBoundingClientRect()
-  const zoom = viewport.zoom || 1
-  const originX = pane?.left ?? 0
-  const originY = pane?.top ?? 0
-  return {
-    x: (clientX - originX - viewport.x) / zoom,
-    y: (clientY - originY - viewport.y) / zoom,
-  }
-}
+
 
 /** 从 MouseEvent 或 TouchEvent 提取屏幕坐标 */
 function getMousePoint(event?: MouseEvent | TouchEvent): Point | null {
@@ -113,7 +105,6 @@ function isTempEdge(edge: Edge | undefined | null): boolean {
 }
 
 /** 获取节点的实际渲染尺寸 */
-const DEFAULT_NODE_SIZE = 256
 function getNodeSize(node: Node): { width: number; height: number } {
   const anyNode = node as any
   return {
