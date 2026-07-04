@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -17,6 +17,7 @@ import type { CanvasPlugin } from './plugins/types.ts'
 import { PluginManager } from './plugins/PluginManager.ts'
 import { createPluginContext } from './plugins/PluginContext.ts'
 import { ShortcutManager } from './plugins/ShortcutManager'
+import { toFlowPosition } from './utils/viewportSpace'
 import { useCanvasBootstrap } from './composables/useCanvasBootstrap'
 import { useCanvasConnection } from './composables/useCanvasConnection'
 import { CanvasRuntime, CanvasRuntimeProvider } from './runtime'
@@ -249,18 +250,7 @@ function onEdgesChange(changes: EdgeChange[]) {
   }
 }
 
-/** 屏幕坐标 → 画布坐标系坐标（考虑视口偏移和缩放） */
-function toFlowPosition(clientX: number, clientY: number) {
-  const viewport = vueFlowInstance.viewport.value
-  const zoom = viewport.zoom || 1
-  const pane = document.querySelector('.vue-flow')?.getBoundingClientRect()
-  const originX = pane?.left ?? 0
-  const originY = pane?.top ?? 0
-  return {
-    x: (clientX - originX - viewport.x) / zoom,
-    y: (clientY - originY - viewport.y) / zoom,
-  }
-}
+
 
 
 
@@ -282,7 +272,7 @@ function onNodeContextMenu({ event, node }: NodeMouseEvent) {
 /** 画布右键事件：打开"添加节点"菜单 */
 function onPaneContextMenu(event: MouseEvent) {
   event.preventDefault()
-  const flowPosition = toFlowPosition(event.clientX, event.clientY)
+  const flowPosition = toFlowPosition(vueFlowInstance.viewport.value, event.clientX, event.clientY)
   manager.eventBus.emit('paneContextMenu', { clientX: event.clientX, clientY: event.clientY, flowPosition })
   console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
@@ -296,7 +286,7 @@ function onEdgeContextMenu({ event, edge }: EdgeMouseEvent) {
 function onPaneDoubleClick(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge')) return
-  const flowPosition = toFlowPosition(event.clientX, event.clientY)
+  const flowPosition = toFlowPosition(vueFlowInstance.viewport.value, event.clientX, event.clientY)
   manager.eventBus.emit('paneDoubleClick', { clientX: event.clientX, clientY: event.clientY, flowPosition })
   console.log('[双击-画布]', { mouse: { x: event.clientX, y: event.clientY } })
 }
