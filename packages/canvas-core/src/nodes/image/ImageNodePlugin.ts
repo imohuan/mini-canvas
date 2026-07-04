@@ -33,6 +33,72 @@ function fitCardSize(width: number, height: number) {
   return { cardWidth: Math.max(120, Math.round(width * ratio)), cardHeight: Math.max(80, Math.round(height * ratio)) }
 }
 
+
+/**
+ * 将 canvas 导出为 blob 并持久化到 asset store
+ */
+async function saveTransformedAsset(
+  canvas: HTMLCanvasElement,
+  imageName: string,
+  suffix: string,
+  ctx: CommandContext,
+): Promise<{ blob: Blob; url: string; assetId?: string } | null> {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) {
+    ctx.logger.error('[Transform] canvas.toBlob 返回 null')
+    return null
+  }
+  const url = URL.createObjectURL(blob)
+
+  let assetId: string | undefined
+  const runtime = ctx.runtime as any
+  const assetManager = runtime.getPluginAPI?.('storage')?.assets
+  if (assetManager) {
+    const name = `${imageName || 'image'}${suffix}.png`
+    try { assetId = await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png') }
+    catch (err) { ctx.logger.error('保存资产失败:', err) }
+  }
+
+  return { blob, url, assetId }
+}
+
+/**
+ * 在源节点右侧创建变换结果节点（通用）
+ */
+function createResultNode(
+  vf: any,
+  sourceNode: { position: { x: number; y: number }; data: Record<string, unknown> },
+  result: { blob: Blob; url: string; width: number; height: number },
+  suffix: string,
+  assetId?: string,
+): void {
+  const sourceData = sourceNode.data
+  const { cardWidth, cardHeight } = fitCardSize(result.width, result.height)
+
+  const newNodeId = `image-${Date.now()}`
+  vf.addNodes([{
+    id: newNodeId,
+    type: 'custom',
+    position: {
+      x: sourceNode.position.x + ((sourceData.cardWidth as number) ?? cardWidth) + 40,
+      y: sourceNode.position.y,
+    },
+    data: {
+      label: `${(sourceData.imageName as string) || 'image'}${suffix}`,
+      nodeType: 'image',
+      assetId,
+      imageUrl: result.url,
+      imageName: `${(sourceData.imageName as string) || 'image'}${suffix}`,
+      imageType: 'image/png',
+      imageWidth: result.width,
+      imageHeight: result.height,
+      cardWidth,
+      cardHeight,
+    },
+    sourcePosition: 'right' as any,
+    targetPosition: 'left' as any,
+  }])
+}
 function readImageDims(file: File): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
     const image = new Image()
@@ -125,39 +191,24 @@ async function handleImageCropConfirm(ctx: CommandContext) {
   delete cleanedData._overlay
   vf.updateNode(nodeId, { data: cleanedData })
 
-  // 2. Canvas 裁剪图片
-  // drawImage(HTMLImageElement) 对这种格式图片完全无效（浏览器 canvas bug），
-  // 改用 fetch + createImageBitmap 两步解码
-  ctx.logger.debug('[Crop] imageUrl 前80字符:', typeof imageUrl === 'string' ? (imageUrl as string).slice(0, 80) : typeof imageUrl)
-  ctx.logger.debug('[Crop] cropRect raw:', JSON.stringify(cropRect))
-  ctx.logger.debug('[Crop] 源 data 尺寸:', imageWidth, 'x', imageHeight)
-
-  // Step A: fetch 原始数据
-  const response = await fetch(imageUrl)
-  ctx.logger.debug('[Crop] fetch → status:', response.status, 'ok:', response.ok, 'type:', response.type)
-  if (!response.ok) { ctx.logger.error('fetch 失败:', response.status); return }
+  // 2. fetch + 完整 bitmap（算 scale）
+  const response = await fetch(imageUrl as string)
+  if (!response.ok) { ctx.logger.error('[Crop] fetch 失败:', response.status); return }
   const rawBlob = await response.blob()
-  ctx.logger.debug('[Crop] rawBlob → size:', rawBlob.size, 'type:', rawBlob.type)
-
-  // Step B: 创建完整 bitmap，获取实际图片尺寸
   const fullBitmap = await createImageBitmap(rawBlob)
-  ctx.logger.debug('[Crop] fullBitmap →', fullBitmap.width, 'x', fullBitmap.height)
 
-  // Step C: 用实际尺寸计算裁剪坐标
-  const scaleX = imageWidth > 0 ? fullBitmap.width / imageWidth : 1
-  const scaleY = imageHeight > 0 ? fullBitmap.height / imageHeight : 1
+  const scaleX = (imageWidth as number) > 0 ? fullBitmap.width / (imageWidth as number) : 1
+  const scaleY = (imageHeight as number) > 0 ? fullBitmap.height / (imageHeight as number) : 1
   const sx = Math.round(cropRect.x * scaleX)
   const sy = Math.round(cropRect.y * scaleY)
   const sw = Math.round(cropRect.width * scaleX)
   const sh = Math.round(cropRect.height * scaleY)
-  ctx.logger.debug('[Crop] scale:', scaleX, scaleY, '→ crop coords:', sx, sy, sw, sh)
 
-  // Step D: 裁剪 bitmap
+  // 3. 裁剪 bitmap
   const cropBitmap = await createImageBitmap(fullBitmap, sx, sy, sw, sh)
   fullBitmap.close()
-  ctx.logger.debug('[Crop] cropBitmap →', cropBitmap.width, 'x', cropBitmap.height)
 
-  // Step E: 画到 canvas
+  // 4. 画到 canvas
   const canvas = document.createElement('canvas')
   canvas.width = cropBitmap.width
   canvas.height = cropBitmap.height
@@ -165,64 +216,17 @@ async function handleImageCropConfirm(ctx: CommandContext) {
   c2d.drawImage(cropBitmap, 0, 0)
   cropBitmap.close()
 
-  const testPixel = c2d.getImageData(
-    Math.min(1, canvas.width - 1),
-    Math.min(1, canvas.height - 1),
-    1, 1,
-  )
-  const hasContent = testPixel.data.some((v, i) => i < 3 && v > 0)
-  ctx.logger.debug('[Crop] canvas:', canvas.width, 'x', canvas.height, 'testPixel:', testPixel.data, 'hasContent:', hasContent)
-
-  if (!hasContent) {
-    ctx.logger.warn('裁剪画布无内容 — 全部 0')
+  // 5. 验证有内容
+  const testPixel = c2d.getImageData(Math.min(1, canvas.width - 1), Math.min(1, canvas.height - 1), 1, 1)
+  if (!testPixel.data.some((v, i) => i < 3 && v > 0)) {
+    ctx.logger.warn('[Crop] 裁剪画布无内容')
     return
   }
 
-  // 生成裁剪结果 URL：优先使用 Blob URL（与 FileDropPlugin 一致）
-  let croppedUrl: string
-  let blob: Blob | null = null
-  const blobby = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  blob = blobby
-  croppedUrl = blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png')
-
-  // 3. 持久化
-  let assetId: string | undefined
-  const assetManager = runtime.getPluginAPI?.('storage')?.assets
-  if (assetManager && blob) {
-    const name = `${(sourceData.imageName as string) || 'cropped'}_crop.png`
-    try { assetId = await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png') }
-    catch (err) { ctx.logger.error('保存裁剪图片资产失败:', err) }
-  }
-
-  // 4. 计算卡片尺寸（基于裁剪后的真实像素尺寸 sw/sh）
-  const ratio = Math.min(MAX_PREVIEW_WIDTH / sw, MAX_PREVIEW_HEIGHT / sh, 1)
-  const cardWidth = Math.max(80, Math.round(sw * ratio))
-  const cardHeight = Math.max(60, Math.round(sh * ratio))
-
-  // 5. 在源节点右侧添加新图片节点
-  const newNodeId = `image-${Date.now()}`
-  vf.addNodes([{
-    id: newNodeId,
-    type: 'custom',
-    position: {
-      x: node.position.x + (sourceData.cardWidth ?? cardWidth) + 40,
-      y: node.position.y,
-    },
-    data: {
-      label: `${(sourceData.imageName as string) || 'image'}_crop`,
-      nodeType: 'image',
-      assetId,
-      imageUrl: croppedUrl,
-      imageName: `${(sourceData.imageName as string) || 'image'}_crop`,
-      imageType: 'image/png',
-      imageWidth: sw,
-      imageHeight: sh,
-      cardWidth,
-      cardHeight,
-    },
-    sourcePosition: 'right' as any,
-    targetPosition: 'left' as any,
-  }])
+  // 6. 持久化 + 创建新节点
+  const saved = await saveTransformedAsset(canvas, sourceData.imageName as string, '_crop', ctx)
+  if (!saved) return
+  createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: sw, height: sh }, '_crop', saved.assetId)
   } catch (err) {
     ctx.logger.error('[Image] handleImageCropConfirm failed:', err)
   }
