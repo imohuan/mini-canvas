@@ -554,16 +554,19 @@ const nodeLabel = computed(() => {
   border-color: var(--canvas-node-border-selected);
 }
 
-.custom-node-card.is-connection-invalid .custom-node-content-clip {
-  filter: blur(4px) saturate(0.55) brightness(0.72);
-  transition: filter 120ms ease;
+.custom-node-card.is-connection-invalid {
+  border-color: rgba(156, 163, 175, 0.45);
 }
 
-.custom-node-card.is-connection-invalid {
-  border-color: rgba(239, 68, 68, 0.78);
-  box-shadow:
-    0 0 0 2px rgba(239, 68, 68, 0.22),
-    0 18px 44px rgba(0, 0, 0, 0.22);
+.custom-node-card.is-connection-invalid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(1.5px);
+  pointer-events: none;
 }
 
 .invalid-connection-tooltip {
