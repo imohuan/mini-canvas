@@ -6,6 +6,7 @@ import MovingHandle from './MovingHandle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { createCappedStyle, clamp } from '../../utils/viewportSpace'
+import { CONNECT_FEEDBACK } from '../../utils/constants'
 
 const props = defineProps<NodeProps & {
   cardWidth?: number
@@ -242,32 +243,18 @@ const shouldShowTargetZones = computed(() =>
   (canvas.state.core.connectionSnapDebugVisible || showTargetZones.value)
 )
 
-/** 3D 倾斜效果：绕 X 轴旋转的最大角度（度） */
-const CONNECT_FEEDBACK_ROTATE_X = 18
-/** 3D 倾斜效果：绕 Y 轴旋转的最大角度（度） */
-const CONNECT_FEEDBACK_ROTATE_Y = 18
-/** 3D 倾斜效果：透视距离（px），值越小倾斜感越强 */
-const CONNECT_FEEDBACK_PERSPECTIVE = 800
-/** 3D 倾斜效果：hover 时卡片微微放大，增强浮起感 */
-const CONNECT_FEEDBACK_SCALE = 1.018
-
 /**
  * 卡片 3D 倾斜变换 CSS 字符串。
  * 当有合法连接反馈时，根据鼠标位置计算旋转角度，产生"卡片跟着鼠标翘"的效果。
- * 如果是禁止连接状态，不应用任何变换（只用模糊效果）。
- */
-/**
- * 卡片 3D 倾斜变换 CSS 字符串。
- * 当有合法连接反馈时，根据鼠标位置计算旋转角度，产生卡片跟着鼠标翘的效果。
  * 如果是禁止连接状态，不应用任何变换（只用模糊效果）。
  */
 const cardTransform = computed(() => {
   if (isInvalidConnectionTarget.value) return ''
   if (!showConnectFeedback.value) return ''
   const p = feedbackMousePosition.value
-  const rotateX = (p.y - 0.5) * CONNECT_FEEDBACK_ROTATE_X
-  const rotateY = (p.x - 0.5) * -CONNECT_FEEDBACK_ROTATE_Y
-  return `perspective(${CONNECT_FEEDBACK_PERSPECTIVE}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px) scale(${CONNECT_FEEDBACK_SCALE})`
+  const rotateX = (p.y - 0.5) * CONNECT_FEEDBACK.rotateX
+  const rotateY = (p.x - 0.5) * -CONNECT_FEEDBACK.rotateY
+  return `perspective(${CONNECT_FEEDBACK.perspective}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px) scale(${CONNECT_FEEDBACK.scale})`
 })
 
 /**
@@ -385,23 +372,7 @@ const feedbackMousePosition = computed(() => {
   }
 })
 
-/**
- * 数值限制工具函数：把 value 夹在 min 和 max 之间。
- * 用于确保鼠标相对位置不会超出 0~1 范围。
- */
-/**
- * 数值限制工具函数：把 value 夹在 min 和 max 之间。
- * 用于确保鼠标相对位置不会超出 0~1 范围。
- */
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
 
-/**
- * 鼠标在卡片上移动时更新相对位置。
- * 只在有连接反馈或 debug 模式时才计算，避免不必要的性能开销。
- * 计算方式：(鼠标坐标 - 卡片左上角) / 卡片尺寸，结果归一化到 0~1。
- */
 /**
  * 鼠标在卡片上移动时更新相对位置。
  * 只在有连接反馈或 debug 模式时才计算，避免不必要的性能开销。

@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
+import { useImageDisplay } from './useImageDisplay'
 
 const props = defineProps<{
   nodeId: string
@@ -37,21 +38,7 @@ const nodeRect = computed(() => {
 const nodeW = computed(() => nodeRect.value.width * viewport.value.zoom)
 const nodeH = computed(() => nodeRect.value.height * viewport.value.zoom)
 
-const display = computed(() => {
-  const cw = Math.max(nodeW.value, 1)
-  const ch = Math.max(nodeH.value, 1)
-  const iw = props.imageWidth || 1
-  const ih = props.imageHeight || 1
-  const ca = cw / ch
-  const ia = iw / ih
-  let dw: number, dh: number, ox: number, oy: number
-  if (ia > ca) {
-    dw = cw; dh = cw / ia; ox = 0; oy = (ch - dh) / 2
-  } else {
-    dh = ch; dw = ch * ia; ox = (cw - dw) / 2; oy = 0
-  }
-  return { dw, dh, ox, oy, scale: dw / iw }
-})
+const display = useImageDisplay(nodeW, nodeH, props.imageWidth, props.imageHeight)
 
 const zoom = computed(() => viewport.value.zoom)
 const panX = computed(() => viewport.value.x)

@@ -1,16 +1,13 @@
 ﻿<script setup lang="ts">
 import type { NodeProps } from "@vue-flow/core"
-import { useVueFlow } from "@vue-flow/core"
 import { ref, onMounted, onUnmounted, watch, nextTick, computed, inject } from "vue"
 import { NodeIdInjection } from "@vue-flow/core"
-import type { Edge, Node } from "@vue-flow/core"
 import * as THREE from "three"
+import { useUpstreamImages } from "../../composables/useUpstreamImages"
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const nodeId = inject(NodeIdInjection, null) as string | null
-
-const { getEdges, findNode } = useVueFlow()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const fullscreenContainerRef = ref<HTMLDivElement | null>(null)
@@ -19,17 +16,10 @@ const fullscreen = ref(false)
 const editing = computed(() => !!(props.data as any)?._editing)
 const hasImage = ref(false)
 
+const upstreamImages = useUpstreamImages(nodeId)
+
 /** 从上游连接的 image 节点获取 imageUrl（优先级高于自身 data） */
-const connectedImageUrl = computed(() => {
-  if (!nodeId) return ""
-  const edges = getEdges.value as Edge[]
-  const connectedEdge = edges.find(
-    (e) => e.target === nodeId && e.targetHandle === "target"
-  )
-  if (!connectedEdge) return ""
-  const sourceNode = (findNode(connectedEdge.source) as Node | undefined)
-  return (sourceNode?.data as any)?.imageUrl as string || ""
-})
+const connectedImageUrl = computed(() => upstreamImages.value[0]?.url || "")
 
 /** 自身 data 上的 imageUrl（兜底） */
 const ownImageUrl = computed(() =>
@@ -41,7 +31,7 @@ let camera: THREE.PerspectiveCamera | null = null
 let renderer: THREE.WebGLRenderer | null = null
 let sphere: THREE.Mesh | null = null
 let material: THREE.MeshBasicMaterial | null = null
-let textureLoader = new THREE.TextureLoader()
+let textureLoader: THREE.TextureLoader | null = null
 let animFrameId = 0
 let resizeObserver: ResizeObserver | null = null
 let initialized = false
@@ -73,6 +63,8 @@ function initThree() {
   scene.background = new THREE.Color("#f3f4f6")
   camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1100)
 
+  if (!textureLoader) textureLoader = new THREE.TextureLoader()
+
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false })
   renderer.setSize(w, h, false)
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -83,7 +75,7 @@ function initThree() {
   geometry.scale(-1, 1, 1)
 
   const imgUrl = getImageUrl()
-  if (imgUrl) {
+  if (imgUrl && textureLoader) {
     const texture = textureLoader.load(imgUrl, () => { hasImage.value = true })
     material = new THREE.MeshBasicMaterial({ map: texture })
   } else {
@@ -172,7 +164,7 @@ function bindEvents() {
 }
 
 function updateTexture(url: string) {
-  if (!material) return
+  if (!material || !textureLoader) return
   textureLoader.load(url, (tex) => {
     material!.map = tex
     material!.needsUpdate = true
@@ -188,6 +180,7 @@ function destroyThree() {
   if (renderer) { renderer.dispose(); renderer.domElement.remove() }
   sphere?.geometry?.dispose()
   material?.dispose()
+  textureLoader = null
   scene = null; camera = null; renderer = null; sphere = null; material = null
   initialized = false
 }

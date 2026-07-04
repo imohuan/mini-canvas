@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
+import { useImageDisplay } from './useImageDisplay'
 
 // ==================== Props ====================
 const props = defineProps<{
@@ -60,23 +61,7 @@ const wrapperStyle = computed<CSSProperties>(() => {
 })
 
 // ==================== Image display geometry (object-contain within overlay) ====================
-const display = computed(() => {
-  const cw = Math.max(containerW.value, 1)
-  const ch = Math.max(containerH.value, 1)
-  const iw = props.imageWidth || 1
-  const ih = props.imageHeight || 1
-  const ca = cw / ch
-  const ia = iw / ih
-
-  let dw: number, dh: number, ox: number, oy: number
-  if (ia > ca) {
-    dw = cw; dh = cw / ia; ox = 0; oy = (ch - dh) / 2
-  } else {
-    dh = ch; dw = ch * ia; ox = (cw - dw) / 2; oy = 0
-  }
-
-  return { dw, dh, ox, oy, scale: dw / iw }
-})
+const display = useImageDisplay(containerW, containerH, props.imageWidth, props.imageHeight)
 
 // ==================== Crop area (image pixel coords) ====================
 const crop = reactive({ x: 0, y: 0, w: 0, h: 0 })

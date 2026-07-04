@@ -3,12 +3,12 @@ import type { NodeProps } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
 import { ref, computed, inject, watch } from 'vue'
 import { NodeIdInjection } from '@vue-flow/core'
-import type { Edge, Node } from '@vue-flow/core'
+import { useUpstreamImages } from '../../composables/useUpstreamImages'
 
 defineOptions({ inheritAttrs: false })
 const props = defineProps<NodeProps>()
 const nodeId = inject(NodeIdInjection, null) as string | null
-const { getEdges, findNode, updateNode } = useVueFlow()
+const { updateNode } = useVueFlow()
 
 const containerRef = ref<HTMLDivElement | null>(null)
 const dividerPos = ref(50)
@@ -27,24 +27,8 @@ interface ImageInfo {
 }
 
 /** 从左到右按连接顺序取得 2 个上游图片信息 */
-const connectedImages = computed<ImageInfo[]>(() => {
-  if (!nodeId) return []
-  const edges = getEdges.value as Edge[]
-  return edges
-    .filter(e => e.target === nodeId && e.targetHandle === 'target')
-    .map(e => {
-      const sourceNode = findNode(e.source) as Node | undefined
-      const data = sourceNode?.data as any
-      return {
-        url: (data?.imageUrl as string) || '',
-        name: (data?.imageName as string) || (data?.label as string) || '',
-        width: (data?.imageWidth as number) || 0,
-        height: (data?.imageHeight as number) || 0,
-      }
-    })
-    .filter(item => item.url)
-    .slice(0, 2)
-})
+const upstreamImages = useUpstreamImages(nodeId)
+const connectedImages = computed<ImageInfo[]>(() => upstreamImages.value.slice(0, 2))
 
 const leftImage = computed(() => connectedImages.value[0]?.url || '')
 const rightImage = computed(() => connectedImages.value[1]?.url || '')
