@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, type CSSProperties } from 'vue'
+﻿<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, type CSSProperties } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { MaskConfig } from '../../types/CanvasNodeData'
 
@@ -78,6 +78,7 @@ const hasMaskContent = ref(false)
 // ==================== Canvas context ====================
 let drawCtx: CanvasRenderingContext2D | null = null
 
+let currentImage: HTMLImageElement | null = null
 function getDrawCtx(): CanvasRenderingContext2D | null {
   if (!drawCtx && drawCanvasRef.value) {
     drawCtx = drawCanvasRef.value.getContext('2d')
@@ -97,7 +98,13 @@ function restoreDrawCanvas(dataUrl: string | null) {
   if (!dataUrl) return
   const fg = drawCanvasRef.value
   if (!fg) return
+  if (currentImage) {
+    currentImage.onload = null
+    currentImage.src = ''
+    currentImage = null
+  }
   const img = new Image()
+  currentImage = img
   img.onload = () => {
     const ctx = fg.getContext('2d')
     if (ctx) ctx.drawImage(img, 0, 0, fg.width, fg.height)
@@ -301,6 +308,33 @@ watch(() => props.maskDataUrl, (val) => {
     clearMask()
   }
 })
+
+onUnmounted(() => {
+  // 断开 ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  // 释放 canvas context 引用
+  drawCtx = null
+  // 取消待处理的图片加载
+  if (currentImage) {
+    currentImage.onload = null
+    currentImage.src = ''
+    currentImage = null
+  }
+  // 释放 pointer capture
+  if (overlayRef.value) {
+    try { overlayRef.value.releasePointerCapture?.(1) } catch { /* ignore */ }
+  }
+  // 清理 draw canvas 以释放 GPU 内存
+  const fg = drawCanvasRef.value
+  if (fg) {
+    const ctx = fg.getContext('2d')
+    if (ctx) ctx.clearRect(0, 0, fg.width, fg.height)
+  }
+})
+
 </script>
 
 <template>
