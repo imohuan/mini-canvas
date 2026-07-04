@@ -294,30 +294,16 @@ function onPaneDoubleClick(event: MouseEvent) {
 // VueFlow 键位同步
 // ========================
 
-/** 将 ShortcutManager 规范化后的键名还原为 VueFlow 期望的 event.key 格式 */
-function toVueFlowKey(key: string): string {
-  const map: Record<string, string> = {
-    'backspace': 'Backspace',
-    'shift': 'Shift',
-    'ctrl': 'Control',
-    'meta': 'Meta',
-    'alt': 'Alt',
-    'enter': 'Enter',
-    'escape': 'Escape',
-    'space': ' ',
-    'delete': 'Delete',
-    'tab': 'Tab',
-    'arrowup': 'ArrowUp',
-    'arrowdown': 'ArrowDown',
-    'arrowleft': 'ArrowLeft',
-    'arrowright': 'ArrowRight',
-  }
-  return map[key] ?? key
-}
+
 
 /**
  * 将 canvas.state.core.shortcutKeymap 中的 VueFlow 键位映射同步到 VueFlow store
  */
+/** 将 ShortcutManager 规范化后的键名还原为 VueFlow 期望的 event.key 格式 */
+function toVueFlowKey(key: string): string {
+  return ShortcutManager.keyEventMap[key] ?? key
+}
+
 /** 将 canvas.state 中的快捷键映射同步到 VueFlow 内部 refs */
 function syncVueFlowKeymap() {
   const keymap = canvas.state.core.shortcutKeymap || {}

@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 // ShortcutManager — 集中式快捷键管理系统
 // ============================================================================
 
@@ -503,7 +503,7 @@ export class ShortcutManager {
    *
    * 将用户友好的键名（如 'escape'、'arrowup'）映射到 KeyboardEvent.key 值。
    */
-  private static readonly keyEventMap: Record<string, string> = {
+  static readonly keyEventMap: Record<string, string> = {
     ctrl: 'Control',
     shift: 'Shift',
     alt: 'Alt',
