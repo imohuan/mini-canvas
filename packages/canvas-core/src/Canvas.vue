@@ -158,15 +158,6 @@ function updateCanvasContainerSize() {
 }
 
 
-/** 节点 ID 索引（O(1) 查找，消除 findNearestValidTarget/Source 中的 O(n) find） */
-const nodesById = shallowRef(new Map<string, Node>())
-watch(
-  () => getNodes.value,
-  (nodes) => {
-    const map = new Map<string, Node>()
-    for (const n of nodes as Node[]) map.set(n.id, n)
-    nodesById.value = map
-  },
   { immediate: true, deep: false },
 )
 

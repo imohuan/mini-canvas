@@ -1,4 +1,4 @@
-/**
+﻿/**
  * useCanvasConnection — 连接线核心逻辑 Composable
  *
  * 职责：
@@ -122,33 +122,19 @@ function getNodeSize(node: Node): { width: number; height: number } {
   }
 }
 
-/** 获取节点卡片在画布坐标系中的矩形 */
+/** 获取节点卡片在画布坐标系中的矩形（纯数据计算，不查询 DOM） */
 function getNodeCardFlowRect(
   nodeId: string,
   fallbackPosition: Point,
   fallbackSize: { width: number; height: number },
   viewport: { x: number; y: number; zoom: number },
 ): { x: number; y: number; width: number; height: number } {
-  const nodeEl = [...document.querySelectorAll('.vue-flow__node')]
-    .find(el => getNodeIdFromElement(el) === nodeId)
-
-  const cardEl = nodeEl?.querySelector('.custom-node-card') as HTMLElement | null
-  if (!cardEl) {
-    return {
-      x: fallbackPosition.x,
-      y: fallbackPosition.y,
-      width: fallbackSize.width,
-      height: fallbackSize.height,
-    }
-  }
-
-  const rect = cardEl.getBoundingClientRect()
-  const zoom = viewport.zoom || 1
+  // 纯数据计算：直接使用节点位置 + 尺寸，不使用 DOM 查询
   return {
-    x: (rect.left - viewport.x) / zoom,
-    y: (rect.top - viewport.y) / zoom,
-    width: rect.width / zoom,
-    height: rect.height / zoom,
+    x: fallbackPosition.x,
+    y: fallbackPosition.y,
+    width: fallbackSize.width,
+    height: fallbackSize.height,
   }
 }
 
@@ -478,8 +464,8 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     const canonical = toCanonicalConnection(normalized)
     if (!canonical) return false
 
-    const src = (getNodes.value as Node[]).find(n => n.id === canonical.source)
-    const tgt = (getNodes.value as Node[]).find(n => n.id === canonical.target)
+    const src = nodesById.value.get(canonical.source)
+    const tgt = nodesById.value.get(canonical.target)
     if (!src || !tgt) return false
     if (!src.sourcePosition || !tgt.targetPosition) return false
     if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) return false
@@ -696,25 +682,19 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     const snapWidth = snapOuter + snapInner
 
     const liveNodes = (getNodes.value as Node[])
-    const connectableNodes = liveNodes
-      .filter(node => node.id !== sourceId && (isReverseConnection ? node.sourcePosition : node.targetPosition))
-      .map((node) => {
-        const size = getNodeSize(node)
-        const anyNode = node as any
-        const position = anyNode.computedPosition || node.position
-        const cardRect = getNodeCardFlowRect(node.id, position, size, viewport.value)
-        return { node, size: { width: cardRect.width, height: cardRect.height }, position: { x: cardRect.x, y: cardRect.y } }
-      })
+    // 单次遍历：计算所有存活节点的卡片数据
+    const allCardData = liveNodes.map(node => {
+      const rect = getNodeCardFlowRect(node.id, (node as any).computedPosition || node.position, getNodeSize(node), viewport.value)
+      return { node, size: { width: rect.width, height: rect.height }, position: { x: rect.x, y: rect.y } }
+    })
 
-    const feedbackNodes = liveNodes
-      .filter(node => node.id !== sourceId && !isTempNode(node))
-      .map((node) => {
-        const size = getNodeSize(node)
-        const anyNode = node as any
-        const position = anyNode.computedPosition || node.position
-        const cardRect = getNodeCardFlowRect(node.id, position, size, viewport.value)
-        return { node, size: { width: cardRect.width, height: cardRect.height }, position: { x: cardRect.x, y: cardRect.y } }
-      })
+    const connectableNodes = allCardData
+      .filter(({ node }) => node.id !== sourceId && (isReverseConnection ? node.sourcePosition : node.targetPosition))
+      .map(({ node, size, position }) => ({ id: node.id, position, ...size }))
+
+    const feedbackNodes = allCardData
+      .filter(({ node }) => node.id !== sourceId && !isTempNode(node))
+      .map(({ node, size, position }) => ({ id: node.id, position, ...size }))
 
     const snapZones = connectableNodes
       .map(({ node, size, position }) => {
