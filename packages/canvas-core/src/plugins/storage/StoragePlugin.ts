@@ -1,5 +1,5 @@
-import type { CanvasPlugin, PluginContext } from '../types'
-import { sanitizeForSave } from './sanitizeForSave'
+﻿import type { CanvasPlugin, PluginContext } from '../types'
+import { sanitizeForSave, RUNTIME_FIELD_SET } from './sanitizeForSave'
 import { IndexedDBAdapter } from './adapters/IndexedDBAdapter'
 import { FileSystemAdapter } from './adapters/FileSystemAdapter'
 import { AssetManager } from './adapters/AssetManager'
@@ -520,11 +520,9 @@ export const StoragePlugin: CanvasPlugin<StorageOptions, StorageAPI> = {
           // Strip _overlay — 刷新后不应保留裁剪/扩展模式
           for (const node of cached.nodes) {
             if (node.data && typeof node.data === 'object') {
-              delete node.data._overlay
-              delete node.data._cropRect
-              delete node.data._cropMode
-              delete node.data._expandRect
-              delete node.data._expandMode
+              for (const key of RUNTIME_FIELD_SET) {
+                delete (node.data as any)[key]
+              }
             }
           }
           // 为每个有 assetId 的节点恢复 runtime object URL

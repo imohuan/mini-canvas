@@ -1,4 +1,5 @@
-import type { CanvasPlugin, PluginContext } from '../types'
+﻿import type { CanvasPlugin, PluginContext } from '../types'
+import { sanitizeForSave } from '../storage/sanitizeForSave'
 
 export interface AutoSaveOptions {
   interval?: number
@@ -53,6 +54,11 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
         window.dispatchEvent(new CustomEvent('auto-save:saved', { detail: payload }))
       } catch (err) {
         context.logger.error('[AutoSave] Save failed:', err)
+      } finally {
+        // 如果在异步保存期间有新变更，重新调度保存
+        if (dirty) {
+          saveTimer = setTimeout(performSave, interval)
+        }
       }
     }
 
@@ -77,13 +83,7 @@ export const AutoSavePlugin: CanvasPlugin<AutoSaveOptions, AutoSaveAPI> = {
       try {
         const nodes = context.actions.getNodes()
         const edges = context.actions.getEdges()
-        const cleaned = JSON.parse(JSON.stringify({ nodes, edges }))
-        cleaned.nodes = cleaned.nodes.filter((n: any) =>
-          n.type !== 'tempTarget' && !String(n.id ?? '').startsWith('temp-') && !n.data?.isTemp
-        )
-        cleaned.edges = cleaned.edges.filter((e: any) =>
-          !String(e.id ?? '').startsWith('temp-') && !e.data?.isTemp
-        )
+        const cleaned = sanitizeForSave(nodes, edges)
         localStorage.setItem(`canvas-ai:project:${storage.currentProjectId}`, JSON.stringify(cleaned))
         dirty = false
       } catch (_err) { /* 静默失败 */ }
