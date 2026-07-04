@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 /**
  * SelectionFrame — 多选虚线背景框
  *
@@ -246,7 +246,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  selectionFrameRef.value?.removeEventListener('wheel', handleWheel)
   selectionFrameRef.value?.removeEventListener('wheel', handleWheel)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)

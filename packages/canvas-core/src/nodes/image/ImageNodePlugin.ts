@@ -1,4 +1,4 @@
-﻿import { markRaw } from 'vue'
+import { markRaw } from 'vue'
 import type { Node } from '@vue-flow/core'
 import ImageNode from './ImageNode.vue'
 import ImageUploadButton from './ImageUploadButton.vue'
@@ -104,6 +104,7 @@ function handleImageCrop(ctx: CommandContext) {
 }
 
 async function handleImageCropConfirm(ctx: CommandContext) {
+  try {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
@@ -265,6 +266,7 @@ function handleImageExpand(ctx: CommandContext) {
 }
 
 async function handleImageExpandConfirm(ctx: CommandContext) {
+  try {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
@@ -416,6 +418,7 @@ function handleImageMask(ctx: CommandContext) {
 }
 
 async function handleImageMaskConfirm(ctx: CommandContext) {
+  try {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
