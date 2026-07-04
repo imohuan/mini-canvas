@@ -1,4 +1,5 @@
 ﻿import type { Component } from 'vue'
+import { DEFAULT_NODE_SIZE } from '../utils/constants'
 
 export interface NodeMenuItemDefinition {
   label: string
@@ -45,8 +46,6 @@ export interface CanvasNodeMenuItem {
   badge?: string
 }
 
-const FALLBACK_SIZE = { cardWidth: 256, cardHeight: 256 }
-
 export class NodeRegistry {
   private definitions = new Map<string, CanvasNodeDefinition>()
 
@@ -67,7 +66,7 @@ export class NodeRegistry {
   }
 
   getDefaultSize(type: string): { cardWidth: number; cardHeight: number } {
-    return this.definitions.get(type)?.defaultSize ?? FALLBACK_SIZE
+    return this.definitions.get(type)?.defaultSize ?? DEFAULT_NODE_SIZE
   }
 
   getLabel(type: string): string {

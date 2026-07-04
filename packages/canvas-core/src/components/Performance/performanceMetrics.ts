@@ -1,4 +1,4 @@
-export type PerformanceLevel = 'smooth' | 'unstable' | 'slow' | 'jank'
+﻿export type PerformanceLevel = 'smooth' | 'unstable' | 'slow' | 'jank'
 
 export interface PerformanceThresholds {
   smoothFps: number
@@ -59,15 +59,14 @@ export interface PerformanceSummary {
   jankCount: number
 }
 
+import { DEFAULT_PERF_NODE_SIZE } from '../../utils/constants'
+
 export const DEFAULT_PERFORMANCE_THRESHOLDS: PerformanceThresholds = {
   smoothFps: 55,
   unstableFps: 45,
   slowFps: 30,
   jankFrameMs: 100,
 }
-
-const DEFAULT_NODE_WIDTH = 180
-const DEFAULT_NODE_HEIGHT = 120
 
 export function getPerformanceStatus(input: {
   fps: number
@@ -154,8 +153,8 @@ export function getVisibleNodeStats(input: {
     const position = node.computedPosition ?? node.position ?? { x: 0, y: 0 }
     const rawWidth = node.dimensions?.width ?? node.width
     const rawHeight = node.dimensions?.height ?? node.height
-    const width = typeof rawWidth === 'number' && Number.isFinite(rawWidth) ? rawWidth : DEFAULT_NODE_WIDTH
-    const height = typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : DEFAULT_NODE_HEIGHT
+    const width = typeof rawWidth === 'number' && Number.isFinite(rawWidth) ? rawWidth : DEFAULT_PERF_NODE_SIZE.width
+    const height = typeof rawHeight === 'number' && Number.isFinite(rawHeight) ? rawHeight : DEFAULT_PERF_NODE_SIZE.height
     const nodeBounds = {
       left: position.x,
       top: position.y,
