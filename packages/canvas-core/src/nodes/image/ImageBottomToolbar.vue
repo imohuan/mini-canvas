@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import type { NodeProps, Edge, Node } from '@vue-flow/core'
-import { useVueFlow } from '@vue-flow/core'
+import type { NodeProps } from '@vue-flow/core'
 import { computed, ref } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
 import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
+import { useUpstreamImages } from '../../composables/useUpstreamImages'
 
 export interface ToolbarConfig {
   promptText: string
@@ -32,67 +32,43 @@ const emit = defineEmits<{
 
 const teleportTarget = useTeleportTarget()
 
-const { getEdges, findNode } = useVueFlow()
+const upstreamImages = useUpstreamImages(props.id as string | null)
 
-const connectedImages = computed<ResourceItem[]>(() => {
-  const id = props.id as string
-  if (!id) return []
-  const edges = getEdges.value as Edge[]
-  const result = edges
-    .filter(e => e.target === id && e.targetHandle === 'target')
-    .map((e, i) => {
-      const sourceNode = findNode(e.source) as Node | undefined
-      const data = sourceNode?.data as any
-      const url = (data?.imageUrl as string) || ''
-      const name = (data?.imageName as string) || (data?.label as string) || `素材${i + 1}`
-      if (!url) return null
-      const item: ResourceItem = {
-        id: `connected-${e.source}`,
-        name,
-        category: '素材',
-        url,
-        mediaType: 'image',
-        renderEditor: (self) => {
-          return [
-            "span",
-            {
-              class: "resource-node",
-              "data-id": self.id,
-              "data-url": self.url || "",
-              "data-name": self.name,
-              "data-category": self.category,
-              style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
-            },
-            ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
-            // ["span", { class: "label", style: "font-size: 12px; line-height: 1" }, self.name],
-          ]
-        },
-        onClick: () => {
-          // 点击 → 全屏预览已连接节点的图片
-          const viewer = document.createElement('div')
-          viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer'
-          const img = document.createElement('img')
-          img.src = url; img.style.maxWidth = '90vw'; img.style.maxHeight = '90vh'; img.style.objectFit = 'contain'
-          viewer.appendChild(img)
-          viewer.onclick = () => viewer.remove()
-          document.body.appendChild(viewer)
-        },
-      }
-      return item
-    })
-    .filter((x): x is ResourceItem => x !== null)
-  // 确保至少有一项，验证菜单 pipeline
-  if (result.length === 0) {
-    result.push({
-      id: 'test-fallback',
-      name: '测试素材（请连接图片节点）',
+const connectedImages = computed<ResourceItem[]>(() =>
+  upstreamImages.value.map((img, i) => {
+    const item: ResourceItem = {
+      id: `connected-${i}`,
+      name: img.name || `素材${i + 1}`,
       category: '素材',
-      url: '',
+      url: img.url,
       mediaType: 'image',
-    })
-  }
-  return result
-})
+      renderEditor: (self) => {
+        return [
+          "span",
+          {
+            class: "resource-node",
+            "data-id": self.id,
+            "data-url": self.url || "",
+            "data-name": self.name,
+            "data-category": self.category,
+            style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
+          },
+          ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
+        ]
+      },
+      onClick: () => {
+        const viewer = document.createElement('div')
+        viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer'
+        const imgEl = document.createElement('img')
+        imgEl.src = img.url; imgEl.style.maxWidth = '90vw'; imgEl.style.maxHeight = '90vh'; imgEl.style.objectFit = 'contain'
+        viewer.appendChild(imgEl)
+        viewer.onclick = () => viewer.remove()
+        document.body.appendChild(viewer)
+      },
+    }
+    return item
+  })
+)
 
 /** 根据名称查找素材，用于纯文本 @name 反序列化回 resource node */
 function resolveResource(name: string): ResourceItem | null {

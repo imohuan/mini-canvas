@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { clamp } from '../../utils/viewportSpace'
 
 const props = defineProps<{
   id: string
@@ -94,8 +95,6 @@ const buttonStyle = computed(() => {
     // .vue-flow__handle 有一个样式 min-width: 5px; 出现在左侧的时候 需要减去这个值
     style.left = `${buttonX.value + 5}px`
   }
-
-  console.log({ style });
 
   return style
 })

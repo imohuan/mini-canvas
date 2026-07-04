@@ -142,7 +142,11 @@ function onCanvasSetFlag(payload: any) {
   const stateKey = payload.key as keyof typeof canvas.state
   if (stateKey in canvas.state) {
     ;(canvas.state as any)[stateKey] = payload.value
-    console.log(\[Canvas] \u{63D2}\u{4EF6}\u{8BBE}\u{7F6E} flag: \ = \\)
+    console.log(`[Canvas] 插件设置 flag: ${payload.key} = ${
+      typeof payload.value === 'object'
+        ? JSON.stringify(payload.value instanceof Set ? [...payload.value] : payload.value)
+        : payload.value
+    }`)
   }
 }
 

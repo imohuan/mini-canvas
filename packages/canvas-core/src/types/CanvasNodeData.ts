@@ -8,9 +8,6 @@ export interface Rect {
   height: number
 }
 
-/** @deprecated 使用 Rect */
-export type CropRect = Rect
-
 /** 蒙版绘制配置 */
 export interface MaskConfig {
   brushSize: number

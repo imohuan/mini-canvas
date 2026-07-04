@@ -8,6 +8,11 @@ import BaseToolbar from './Toolbar/BaseToolbar.vue'
 import { useCanvasRuntime } from '../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../composables/useCanvasStore'
 
+defineOptions({ inheritAttrs: false })
+defineEmits<{
+  updateNodeInternals: [id: string, internal: boolean]
+}>()
+
 const props = defineProps<NodeProps>()
 const runtime = useCanvasRuntime()
 const canvas = useCanvasStore()
@@ -26,7 +31,7 @@ const BottomToolbarComponent = computed<Component | null>(() => nodeDef.value?.b
 const nodeError = ref<string | null>(null)
 
 onErrorCaptured((err: Error, _instance, info) => {
-  console.error([CustomNode] Error in node :, err, info)
+  console.error('[CustomNode] Error in node 节点:', err, info)
   nodeError.value = err.message
   return false // 阻止传播到父组件
 })
