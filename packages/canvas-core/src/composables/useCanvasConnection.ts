@@ -21,7 +21,6 @@
  */
 import { ref, computed } from 'vue'
 import { useCanvasStore } from './useCanvasStore'
-$1
 import { toFlowPosition } from '../utils/viewportSpace'
 import { DEFAULT_NODE_SIZE } from '../utils/constants'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
@@ -109,8 +108,8 @@ function isTempEdge(edge: Edge | undefined | null): boolean {
 function getNodeSize(node: Node): { width: number; height: number } {
   const anyNode = node as any
   return {
-    width: anyNode.dimensions?.width || anyNode.width || DEFAULT_NODE_SIZE,
-    height: anyNode.dimensions?.height || anyNode.height || DEFAULT_NODE_SIZE,
+    width: anyNode.dimensions?.width || anyNode.width || DEFAULT_NODE_SIZE.width,
+    height: anyNode.dimensions?.height || anyNode.height || DEFAULT_NODE_SIZE.height,
   }
 }
 
@@ -689,19 +688,19 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       .map(({ node, size, position }) => ({ id: node.id, position, ...size }))
 
     const snapZones = connectableNodes
-      .map(({ node, size, position }) => {
-        const centerY = position.y + size.height / 2
-        const anchorX = isReverseConnection ? position.x + size.width : position.x
+      .map(({ id, position, width, height }) => {
+        const centerY = position.y + height / 2
+        const anchorX = isReverseConnection ? position.x + width : position.x
         const snapX = isReverseConnection ? anchorX - snapInner : position.x - snapOuter
         const snapY = centerY - snapHeight / 2
-        return { id: node.id, x: snapX, y: snapY, width: snapWidth, height: snapHeight, anchorX, anchorY: centerY }
+        return { id, x: snapX, y: snapY, width: snapWidth, height: snapHeight, anchorX, anchorY: centerY }
       })
 
-    const feedbackZones: ConnectionFeedbackZone[] = feedbackNodes.map(({ node, size, position }) => ({
-      id: `${node.id}-body`,
-      nodeId: node.id,
+    const feedbackZones: ConnectionFeedbackZone[] = feedbackNodes.map(({ id, position, width, height }) => ({
+      id: `${id}-body`,
+      nodeId: id,
       kind: 'body' as const,
-      x: position.x, y: position.y, width: size.width, height: size.height,
+      x: position.x, y: position.y, width, height,
     }))
 
     let endX = connectionLineProps.targetX

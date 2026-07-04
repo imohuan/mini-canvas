@@ -1,5 +1,7 @@
 ﻿const RUNTIME_FIELDS = ['imageUrl', 'videoUrl', 'thumbUrl', 'maskUrl', 'panoUrl', 'leftImageUrl', 'rightImageUrl', '_overlay', '_cropRect', '_cropMode', '_expandRect', '_expandMode', '_maskMode', '_maskConfig', '_editing'] as const
 
+export const RUNTIME_FIELD_SET = new Set<string>(RUNTIME_FIELDS)
+
 function cloneCanvasData(nodes: unknown[], edges: unknown[]): { nodes: any[]; edges: any[] } {
   return JSON.parse(JSON.stringify({ nodes, edges }))
 }

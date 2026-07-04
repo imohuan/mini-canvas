@@ -280,7 +280,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
       sourceNodeId: string,
       sourceHandle: 'source' | 'target',
     ) {
-      const flowPosition = toFlowPosition(vf.viewport.value, point.x, point.y)
+      const flowPosition = toFlowPosition(point.x, point.y)
       const tempNodeId = `temp-target-${Date.now()}`
       const tempEdgeId = `temp-edge-${sourceNodeId}-${Date.now()}`
       const isReverseConnection = sourceHandle === 'target'
@@ -454,18 +454,18 @@ export const ContextMenuPlugin: CanvasPlugin = {
     }
 
     const off1 = context.on("paneContextMenu", (p: any) => {
-      openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "pane", "添加节点", { flowPosition: toFlowPosition(vf.viewport.value, p.clientX, p.clientY) })
+      openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "pane", "添加节点", { flowPosition: toFlowPosition(p.clientX, p.clientY) })
     })
     const off2 = context.on("paneDoubleClick", (p: any) => {
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "pane", "添加节点", { flowPosition: p.flowPosition })
     })
     const off3 = context.on("nodeContextMenu", (p: any) => {
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "node", `节点菜单`, {
-        nodeId: p.nodeId, nodeType: p.nodeType, flowPosition: toFlowPosition(vf.viewport.value, p.clientX, p.clientY),
+        nodeId: p.nodeId, nodeType: p.nodeType, flowPosition: toFlowPosition(p.clientX, p.clientY),
       })
     })
     const off4 = context.on("edgeContextMenu", (p: any) => {
-      const fp = toFlowPosition(vf.viewport.value, p.clientX, p.clientY)
+      const fp = toFlowPosition(p.clientX, p.clientY)
       openMenu({
         mode: "edge", title: `连线菜单`, position: { x: p.clientX, y: p.clientY },
         items: resolveItems("edge", undefined, context),
