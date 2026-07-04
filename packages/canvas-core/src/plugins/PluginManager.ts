@@ -480,7 +480,7 @@ export class PluginManager {
   ): PluginContext {
     if (!contextFactory) {
       throw new Error(
-        [PluginManager] No contextFactory provided — cannot create context for \"\"`r
+        `[PluginManager] No contextFactory provided — cannot create context for "${pluginName}"`
       )
     }
     return contextFactory(pluginName)

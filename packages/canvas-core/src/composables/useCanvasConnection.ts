@@ -20,6 +20,7 @@
  *   </template>
  */
 import { ref, computed } from 'vue'
+import { useCanvasStore } from './useCanvasStore'
 $1
 import { toFlowPosition } from '../utils/viewportSpace'
 import { DEFAULT_NODE_SIZE } from '../utils/constants'
