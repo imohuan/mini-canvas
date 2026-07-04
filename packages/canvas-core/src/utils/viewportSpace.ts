@@ -85,3 +85,32 @@ export function createCappedStyle(
 
   return style
 }
+
+// ============================================================
+//  通用工具函数
+// ============================================================
+
+/**
+ * 屏幕坐标 → 画布坐标系坐标（考虑视口偏移和缩放）
+ */
+export function toFlowPosition(
+  viewport: { x: number; y: number; zoom: number },
+  clientX: number,
+  clientY: number,
+): { x: number; y: number } {
+  const pane = document.querySelector('.vue-flow')?.getBoundingClientRect()
+  const zoom = viewport.zoom || 1
+  const originX = pane?.left ?? 0
+  const originY = pane?.top ?? 0
+  return {
+    x: (clientX - originX - viewport.x) / zoom,
+    y: (clientY - originY - viewport.y) / zoom,
+  }
+}
+
+/**
+ * 将 value 限制在 [min, max] 范围内
+ */
+export function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
