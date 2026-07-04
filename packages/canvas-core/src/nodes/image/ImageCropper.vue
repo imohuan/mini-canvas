@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
+import { onUnmounted } from 'vue'
 
 // ==================== Props ====================
 const props = defineProps<{
@@ -230,6 +231,18 @@ onMounted(() => {
   initCrop()
   nextTick(() => emitCrop())
 })
+onUnmounted(() => {
+  // 释放 pointer capture
+  if (overlayRef.value) {
+    try { overlayRef.value.releasePointerCapture?.(1) } catch { /* ignore */ }
+  }
+  // 清理计时器
+  if (emitTimer) {
+    clearTimeout(emitTimer)
+    emitTimer = null
+  }
+})
+
 </script>
 
 <template>

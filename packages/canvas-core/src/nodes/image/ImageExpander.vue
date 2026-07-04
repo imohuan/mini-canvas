@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
+import { onUnmounted } from 'vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 const props = defineProps<{
@@ -216,6 +217,16 @@ const actionBarStyle = computed<CSSProperties>(() => {
 })
 
 onMounted(() => { initExpand(); nextTick(() => emitExpand()) })
+onUnmounted(() => {
+  // 清理 drag 事件监听器（防止内存泄漏）
+  cleanupDrag()
+  // 清理计时器
+  if (emitTimer) {
+    clearTimeout(emitTimer)
+    emitTimer = null
+  }
+})
+
 </script>
 
 <template>
