@@ -119,6 +119,36 @@ const performanceEnabled = computed(() => canvas.state.core.performancePanelEnab
 const performanceMonitor = useCanvasPerformance({ enabled: performanceEnabled })
 
 /** 更新画布容器的宽高尺寸，响应窗口大小变化 */
+
+// ====== EventBus cleanup helpers（提取为命名函数以便 .off() 引用）======
+function onSelectionChange(payload: any) {
+  canvas.setSelection({
+    nodeIds: payload?.nodeIds || [],
+    edgeIds: payload?.edgeIds || [],
+  })
+}
+
+function onCanvasSetFlag(payload: any) {
+  if (!payload || !payload.key) return
+  if (payload.key === 'selectedNodeIds') {
+    canvas.setSelectedNodeIds(payload.value || [])
+    return
+  }
+  if (payload.key === 'selectedEdgeIds') {
+    canvas.setSelectedEdgeIds(payload.value || [])
+    return
+  }
+  const stateKey = payload.key as keyof typeof canvas.state
+  if (stateKey in canvas.state) {
+    ;(canvas.state as any)[stateKey] = payload.value
+    console.log(\[Canvas] \u{63D2}\u{4EF6}\u{8BBE}\u{7F6E} flag: \ = \\)
+  }
+}
+
+/**
+ * 收集 EventBus 取消订阅函数，在 onUnmounted 中统一清理
+ */
+const cleanupFns: Array<() => void> = []
 function updateCanvasContainerSize() {
   const rect = canvasContainerRef.value?.getBoundingClientRect()
   canvasContainerSize.value = {
@@ -408,30 +438,11 @@ onMounted(async () => {
 
   // 监听选中变化 → 写入 Pinia store（SelectionFrame 从此读取）
   // 注意：Canvas.vue 的 onNodesChange 也在做相同的事，双重保障
-  manager.eventBus.on('selection:change', (payload: any) => {
-    canvas.setSelection({
-      nodeIds: payload?.nodeIds || [],
-      edgeIds: payload?.edgeIds || [],
-    })
-  })
+  cleanupFns.push(manager.eventBus.on('selection:change', onSelectionChange))
 
   // 监听插件要求修改画布全局 flag
-  manager.eventBus.on('canvas:setFlag', (payload: any) => {
-    if (!payload || !payload.key) return
-    if (payload.key === 'selectedNodeIds') {
-      canvas.setSelectedNodeIds(payload.value || [])
-      return
-    }
-    if (payload.key === 'selectedEdgeIds') {
-      canvas.setSelectedEdgeIds(payload.value || [])
-      return
-    }
-    const stateKey = payload.key as keyof typeof canvas.state
-    if (stateKey in canvas.state) {
-      ; (canvas.state as any)[stateKey] = payload.value
-      console.log(`[Canvas] 插件设置 flag: ${payload.key} = ${typeof payload.value === 'object' ? JSON.stringify(payload.value instanceof Set ? [...payload.value] : payload.value) : payload.value}`)
-    }
-  })
+  cleanupFns.push(manager.eventBus.on('canvas:setFlag', onCanvasSetFlag))
+
 
   try {
     await manager.install({
@@ -461,6 +472,8 @@ onMounted(async () => {
   } catch (err) {
     console.error('[Canvas] 插件安装失败，降级运行:', err)
     installedPluginNames.value = []
+
+  // 清理 EventBus 监听器
   }
 
   // auto-layout 插件配置已通过 panelRegistry 注册
@@ -547,12 +560,12 @@ onMounted(async () => {
   // 初始化画布数据（必须在所有插件注册完 nodeTypes 之后，避免 VueFlow 渲染未注册的节点类型）
 
   // 监听存储插件状态变化
-  manager.eventBus.on('storage:status', () => refreshStorageState())
-  manager.eventBus.on('storage:project-created', () => refreshStorageState())
-  manager.eventBus.on('storage:project-deleted', () => refreshStorageState())
-  manager.eventBus.on('storage:project-switched', () => refreshStorageState())
-  manager.eventBus.on('storage:connected', () => refreshStorageState())
-  manager.eventBus.on('storage:disconnected', () => refreshStorageState())
+  cleanupFns.push(manager.eventBus.on('storage:status', refreshStorageState))
+  cleanupFns.push(manager.eventBus.on('storage:project-created', refreshStorageState))
+  cleanupFns.push(manager.eventBus.on('storage:project-deleted', refreshStorageState))
+  cleanupFns.push(manager.eventBus.on('storage:project-switched', refreshStorageState))
+  cleanupFns.push(manager.eventBus.on('storage:connected', refreshStorageState))
+  cleanupFns.push(manager.eventBus.on('storage:disconnected', refreshStorageState))
   // 初始加载
   nextTick(() => refreshStorageState())
 
@@ -633,6 +646,10 @@ onUnmounted(async () => {
     }
   }
   installedPluginNames.value = []
+
+  // 清理 EventBus 监听器
+  for (const fn of cleanupFns) fn()
+  cleanupFns.length = 0
 })
 </script>
 
