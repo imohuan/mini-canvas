@@ -5,7 +5,7 @@ import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { createCappedStyle } from '../../utils/viewportSpace'
+import { createCappedStyle, clamp } from '../../utils/viewportSpace'
 
 const props = defineProps<NodeProps & {
   cardWidth?: number

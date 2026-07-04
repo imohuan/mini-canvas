@@ -127,10 +127,6 @@ const debugViewBox = computed(() => `0 0 ${radius.value} ${radius.value}`)
 
 resetPosition()
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
 function resetPosition() {
   nextX = direction.value * (restOffset.value - overlap.value)
   nextY = 0

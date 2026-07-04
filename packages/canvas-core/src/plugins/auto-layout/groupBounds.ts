@@ -1,4 +1,4 @@
-import type { GroupBounds } from './types'
+﻿import type { GroupBounds } from './types'
 
 const GROUP_PADDING_X = 30
 const GROUP_PADDING_Y = 30

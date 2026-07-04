@@ -1,4 +1,4 @@
-export interface Bounds {
+﻿export interface Bounds {
   x: number
   y: number
   width: number
