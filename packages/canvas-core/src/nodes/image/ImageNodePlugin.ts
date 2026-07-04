@@ -294,89 +294,39 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
   delete cleanedData._overlay
   vf.updateNode(nodeId, { data: cleanedData })
 
-  // 2. 创建扩展图片（原图 + 扩展区域透明留白）
-  ctx.logger.debug('[Expand] expandRect:', JSON.stringify(expandRect))
-
-  // Step A: fetch 原始图片
-  const response = await fetch(imageUrl)
+  // 2. fetch + bitmap
+  const response = await fetch(imageUrl as string)
   if (!response.ok) { ctx.logger.error('[Expand] fetch 原图失败:', response.status); return }
   const rawBlob = await response.blob()
-
-  // Step B: createImageBitmap 加载
   const fullBitmap = await createImageBitmap(rawBlob)
 
-  // Step C: 用实际尺寸计算扩展坐标
-  const scaleX = imageWidth > 0 ? fullBitmap.width / (imageWidth as number) : 1
-  const scaleY = imageHeight > 0 ? fullBitmap.height / (imageHeight as number) : 1
+  // 3. 计算扩展坐标
+  const scaleX = (imageWidth as number) > 0 ? fullBitmap.width / (imageWidth as number) : 1
+  const scaleY = (imageHeight as number) > 0 ? fullBitmap.height / (imageHeight as number) : 1
   const sx = Math.round(expandRect.x * scaleX)
   const sy = Math.round(expandRect.y * scaleY)
   const sw = Math.round(expandRect.width * scaleX)
   const sh = Math.round(expandRect.height * scaleY)
-  ctx.logger.debug('[Expand] scale:', scaleX, scaleY, '→ expand canvas:', sw, 'x', sh, 'origin offset:', -sx, -sy)
 
-  // Step D: 画到扩展 canvas
+  // 4. 画到 canvas
   const canvas = document.createElement('canvas')
   canvas.width = sw
   canvas.height = sh
   const c2d = canvas.getContext('2d')!
-  // 原图绘制在扩展画布中的位置：expandRect 的左上角为原点，原图偏移 -sx, -sy
   c2d.drawImage(fullBitmap, -sx, -sy)
   fullBitmap.close()
 
-  const testPixel = c2d.getImageData(
-    Math.min(1, canvas.width - 1),
-    Math.min(1, canvas.height - 1),
-    1, 1,
-  )
-  const hasContent = testPixel.data.some((v, i) => i < 3 && v > 0)
-  ctx.logger.debug('[Expand] canvas:', canvas.width, 'x', canvas.height, 'testPixel:', testPixel.data, 'hasContent:', hasContent)
-
-  if (!hasContent) {
+  // 5. 验证有内容
+  const testPixel = c2d.getImageData(Math.min(1, canvas.width - 1), Math.min(1, canvas.height - 1), 1, 1)
+  if (!testPixel.data.some((v, i) => i < 3 && v > 0)) {
     ctx.logger.warn('[Expand] 扩展画布无内容')
     return
   }
 
-  // Step E: 导出 blob URL
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) { ctx.logger.error('[Expand] canvas.toBlob 返回 null'); return }
-  const expandedUrl = URL.createObjectURL(blob)
-
-  // 3. 持久化
-  let assetId: string | undefined
-  const assetManager = runtime.getPluginAPI?.('storage')?.assets
-  if (assetManager && blob) {
-    const name = `${(sourceData.imageName as string) || 'image'}_expand.png`
-    try { assetId = await assetManager.saveAsset(new File([blob], name, { type: 'image/png' }), name, 'image/png') }
-    catch (err) { ctx.logger.error('保存扩展图片资产失败:', err) }
-  }
-
-  // 4. 计算卡片尺寸
-  const { cardWidth, cardHeight } = fitCardSize(sw, sh)
-
-  // 5. 在源节点右侧创建新图片节点
-  const newNodeId = `image-${Date.now()}`
-  vf.addNodes([{
-    id: newNodeId,
-    type: 'custom',
-    position: {
-      x: node.position.x + (sourceData.cardWidth ?? cardWidth) + 40,
-      y: node.position.y,
-    },
-    data: {
-      label: `${(sourceData.imageName as string) || 'image'}_expand`,
-      nodeType: 'image',
-      assetId,
-      imageUrl: expandedUrl,
-      imageName: `${(sourceData.imageName as string) || 'image'}_expand`,
-      imageType: 'image/png',
-      imageWidth: sw,
-      imageHeight: sh,
-      cardWidth,
-      cardHeight,
-    },
-    sourcePosition: 'right' as any,
-    targetPosition: 'left' as any,
-  }])
+  // 6. 持久化 + 创建新节点
+  const saved = await saveTransformedAsset(canvas, sourceData.imageName as string, '_expand', ctx)
+  if (!saved) return
+  createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: sw, height: sh }, '_expand', saved.assetId)
   } catch (err) {
     ctx.logger.error('[Image] handleImageExpandConfirm failed:', err)
   }
