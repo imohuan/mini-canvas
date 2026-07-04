@@ -223,6 +223,9 @@ async function handleImageCropConfirm(ctx: CommandContext) {
     sourcePosition: 'right' as any,
     targetPosition: 'left' as any,
   }])
+  } catch (err) {
+    ctx.logger.error('[Image] handleImageCropConfirm failed:', err)
+  }
 }
 
 function handleImageCropCancel(ctx: CommandContext) {
@@ -370,6 +373,9 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
     sourcePosition: 'right' as any,
     targetPosition: 'left' as any,
   }])
+  } catch (err) {
+    ctx.logger.error('[Image] handleImageExpandConfirm failed:', err)
+  }
 }
 
 function handleImageExpandCancel(ctx: CommandContext) {
@@ -524,6 +530,9 @@ async function handleImageMaskConfirm(ctx: CommandContext) {
     sourcePosition: 'right' as any,
     targetPosition: 'left' as any,
   }])
+  } catch (err) {
+    ctx.logger.error('[Image] handleImageMaskConfirm failed:', err)
+  }
 }
 
 function handleImageMaskCancel(ctx: CommandContext) {

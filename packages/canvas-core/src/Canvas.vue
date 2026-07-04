@@ -157,10 +157,6 @@ function updateCanvasContainerSize() {
   }
 }
 
-
-  { immediate: true, deep: false },
-)
-
 /** 合并硬编码类型 + 插件注册的自定义类型
  *  使用 watchEffect 从 Pinia store 读取，逐项 markRaw 避免组件被响应式化 */
 const mergedNodeTypes = shallowRef<Record<string, any>>({})

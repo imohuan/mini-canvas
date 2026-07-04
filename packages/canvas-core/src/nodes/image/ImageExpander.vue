@@ -2,7 +2,6 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
-import { onUnmounted } from 'vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 const props = defineProps<{
