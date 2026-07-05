@@ -25,6 +25,7 @@ import { toFlowPosition } from '../utils/viewportSpace'
 import { DEFAULT_NODE_SIZE } from '../utils/constants'
 import type { Node, Edge, Connection, OnConnectStartParams } from '@vue-flow/core'
 import type { ConnectionLineProps } from '@vue-flow/core'
+import type { ConnectionReleaseEndpoint, ConnectionReleasePayload, ConnectionReleaseTarget } from '../plugins/types'
 
 // ============================================================================
 // 类型
@@ -40,43 +41,13 @@ export interface BatchConnectState {
   tempEdgeIds: string[]
 }
 
-interface BatchConnectionMenuPayloadInput {
+interface ConnectionReleaseInput {
+  mode: 'single' | 'batch'
+  result: ConnectionReleasePayload['result']
   clientPoint: Point
-  flowPosition: Point
-  sourceNodeIds: string[]
-  sourceHandle: 'source' | 'target'
-  sourceNodeTypes?: Array<string | undefined>
-}
-
-interface BatchConnectionMenuPayload {
-  clientX: number
-  clientY: number
-  sourceNodeId: string
-  sourceNodeIds: string[]
-  sourceHandle: 'source' | 'target'
-  flowPosition: Point
-  sourceNodeType?: string
-  sourceNodeTypes?: Array<string | undefined>
-}
-
-/**
- * 将批量拖线释放动作转换成 context-menu 能消费的统一菜单 payload。
- *
- * 连接模块只描述“从哪些节点、哪个端口、在哪个位置请求菜单”；
- * 临时节点、临时边和最终菜单选择后的建边仍由 context-menu 插件负责。
- */
-function createBatchConnectionMenuPayload(input: BatchConnectionMenuPayloadInput): BatchConnectionMenuPayload {
-  const sourceNodeIds = [...input.sourceNodeIds]
-  return {
-    clientX: input.clientPoint.x,
-    clientY: input.clientPoint.y,
-    sourceNodeId: sourceNodeIds[0] ?? '',
-    sourceNodeIds,
-    sourceHandle: input.sourceHandle,
-    flowPosition: input.flowPosition,
-    sourceNodeType: input.sourceNodeTypes?.[0],
-    sourceNodeTypes: input.sourceNodeTypes ? [...input.sourceNodeTypes] : undefined,
-  }
+  endpoints: ConnectionReleaseEndpoint[]
+  target: ConnectionReleaseTarget
+  createdEdgeIds?: string[]
 }
 
 export interface UseCanvasConnectionOptions {
@@ -300,6 +271,29 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     for (const n of getNodes.value as Node[]) map.set(n.id, n)
     return map
   })
+
+  /** 将节点转换为连接释放端点，避免事件消费者回溯连接核心状态 */
+  function toReleaseEndpoint(node: Node, handle: 'source' | 'target'): ConnectionReleaseEndpoint {
+    const nodeType = (node.data as any)?.nodeType
+    return {
+      nodeId: node.id,
+      handle,
+      ...(typeof nodeType === 'string' ? { nodeType } : {}),
+    }
+  }
+
+  /** 发布中性连接释放事件：只描述释放结果，不包含菜单策略 */
+  function emitConnectionRelease(input: ConnectionReleaseInput) {
+    eventBus?.emit('connectionRelease', {
+      mode: input.mode,
+      result: input.result,
+      clientPoint: { x: input.clientPoint.x, y: input.clientPoint.y },
+      flowPosition: toFlowPosition(viewport.value, input.clientPoint.x, input.clientPoint.y),
+      endpoints: input.endpoints,
+      target: input.target,
+      ...(input.createdEdgeIds ? { createdEdgeIds: input.createdEdgeIds } : {}),
+    } satisfies ConnectionReleasePayload)
+  }
 
   // ==========================================================================
   // 节点查找
@@ -618,6 +612,12 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       }
 
       const { sourceNodeId, sourceHandle } = active
+      const sourceNode = nodesById.value.get(sourceNodeId)
+      if (!sourceNode) {
+        debugLog('onConnectEnd bail: source node missing')
+        return
+      }
+      const endpoint = toReleaseEndpoint(sourceNode, sourceHandle)
 
       // 1. 尝试吸附连接
       const targetNode = findNearestConnectableNode(point.x, point.y, sourceHandle, sourceNodeId)
@@ -636,12 +636,26 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
           debugLog('snap connection INVALID:', reason)
           canvas.connectionState.hoverTarget = { type: 'node', nodeId: targetNode.id }
           canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
+          emitConnectionRelease({
+            mode: 'single',
+            result: 'invalid',
+            clientPoint: point,
+            endpoints: [endpoint],
+            target: { kind: 'node', nodeId: targetNode.id, zone: 'snap', valid: false, reason },
+          })
           return
         }
         const ok = createConnection(connection, 'snap')
         debugLog('snap connection result:', ok, connection)
         canvas.connectionState.snapTarget = { nodeId: targetNode.id, isSnapped: true }
         eventBus?.emit('connect', connection)
+        emitConnectionRelease({
+          mode: 'single',
+          result: ok ? 'created' : 'invalid',
+          clientPoint: point,
+          endpoints: [endpoint],
+          target: { kind: 'node', nodeId: targetNode.id, zone: 'snap', valid: ok },
+        })
         return
       }
 
@@ -658,12 +672,26 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         if (reason) {
           debugLog('body connection INVALID:', reason)
           canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
+          emitConnectionRelease({
+            mode: 'single',
+            result: 'invalid',
+            clientPoint: point,
+            endpoints: [endpoint],
+            target: { kind: 'node', nodeId: bodyNode.id, zone: 'body', valid: false, reason },
+          })
           return
         }
         const ok = createConnection(connection, 'snap')
         debugLog('body connection result:', ok, connection)
         canvas.connectionState.hoverTarget = { type: 'node', nodeId: bodyNode.id }
         eventBus?.emit('connect', connection)
+        emitConnectionRelease({
+          mode: 'single',
+          result: ok ? 'created' : 'invalid',
+          clientPoint: point,
+          endpoints: [endpoint],
+          target: { kind: 'node', nodeId: bodyNode.id, zone: 'body', valid: ok },
+        })
         return
       }
 
@@ -671,6 +699,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       debugLog('released on blank area')
       canvas.connectionState.hoverTarget = { type: 'pane' }
       canvas.connectionState.snapTarget = null
+      emitConnectionRelease({
+        mode: 'single',
+        result: 'blank',
+        clientPoint: point,
+        endpoints: [endpoint],
+        target: { kind: 'pane' },
+      })
     } finally {
       canvas.connectionState.suppressHandles = false
       canvas.connectionState.activeConnection = null
@@ -1029,6 +1064,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         const sourceNodes = (getNodes.value as Node[]).filter(
           node => batch.nodeIds.includes(node.id) && node.sourcePosition,
         )
+        const sourceEndpoints = sourceNodes.map(node => toReleaseEndpoint(node, 'source'))
         const sourceNodeIds = new Set(batch.nodeIds)
 
         // 1. 尝试吸附
@@ -1037,79 +1073,116 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
           : null
 
         if (targetNode) {
+          let createdCount = 0
           for (const sourceNode of sourceNodes) {
-            createConnection({
+            const ok = createConnection({
               source: sourceNode.id, target: targetNode.id,
               sourceHandle: 'source', targetHandle: 'target',
             }, 'selection-batch')
+            if (ok) createdCount += 1
           }
+          emitConnectionRelease({
+            mode: 'batch',
+            result: createdCount > 0 ? 'created' : 'invalid',
+            clientPoint: point,
+            endpoints: sourceEndpoints,
+            target: { kind: 'node', nodeId: targetNode.id, zone: 'snap', valid: createdCount > 0 },
+          })
           return
         }
 
         // 2. 回退：节点主体命中（和单条连接线行为一致）
         const bodyNode = findNodeBodyAtPoint(point.x, point.y, sourceNodeIds)
         if (bodyNode && bodyNode.targetPosition) {
+          let createdCount = 0
           for (const sourceNode of sourceNodes) {
-            createConnection({
+            const ok = createConnection({
               source: sourceNode.id, target: bodyNode.id,
               sourceHandle: 'source', targetHandle: 'target',
             }, 'selection-batch')
+            if (ok) createdCount += 1
           }
+          emitConnectionRelease({
+            mode: 'batch',
+            result: createdCount > 0 ? 'created' : 'invalid',
+            clientPoint: point,
+            endpoints: sourceEndpoints,
+            target: { kind: 'node', nodeId: bodyNode.id, zone: 'body', valid: createdCount > 0 },
+          })
           return
         }
 
-        // 3. 拖到空白区域，触发连接菜单
+        // 3. 拖到空白区域，上报连接释放事实
         canvas.connectionState.hoverTarget = { type: 'pane' }
         canvas.connectionState.snapTarget = null
-        eventBus?.emit('connectionContextMenu', createBatchConnectionMenuPayload({
+        emitConnectionRelease({
+          mode: 'batch',
+          result: 'blank',
           clientPoint: point,
-          flowPosition: toFlowPosition(viewport.value, point.x, point.y),
-          sourceNodeIds: sourceNodes.map(node => node.id),
-          sourceHandle: 'source',
-          sourceNodeTypes: sourceNodes.map(node => (node.data as any)?.nodeType),
-        }))
+          endpoints: sourceEndpoints,
+          target: { kind: 'pane' },
+        })
         return
       }
 
       const targetNodes = (getNodes.value as Node[]).filter(
         node => batch.nodeIds.includes(node.id) && node.targetPosition,
       )
+      const targetEndpoints = targetNodes.map(node => toReleaseEndpoint(node, 'target'))
       const targetNodeIds = new Set(batch.nodeIds)
 
       // 1. 尝试吸附
       const sourceNode = findNearestValidSource(point.x, point.y, new Set(targetNodes.map(n => n.id)))
       if (sourceNode) {
+        let createdCount = 0
         for (const targetNode of targetNodes) {
-          createConnection({
+          const ok = createConnection({
             source: sourceNode.id, target: targetNode.id,
             sourceHandle: 'source', targetHandle: 'target',
           }, 'selection-batch')
+          if (ok) createdCount += 1
         }
+        emitConnectionRelease({
+          mode: 'batch',
+          result: createdCount > 0 ? 'created' : 'invalid',
+          clientPoint: point,
+          endpoints: targetEndpoints,
+          target: { kind: 'node', nodeId: sourceNode.id, zone: 'snap', valid: createdCount > 0 },
+        })
         return
       }
 
       // 2. 回退：节点主体命中
       const bodySource = findNodeBodyAtPoint(point.x, point.y, targetNodeIds)
       if (bodySource && bodySource.sourcePosition) {
+        let createdCount = 0
         for (const targetNode of targetNodes) {
-          createConnection({
+          const ok = createConnection({
             source: bodySource.id, target: targetNode.id,
             sourceHandle: 'source', targetHandle: 'target',
           }, 'selection-batch')
+          if (ok) createdCount += 1
         }
+        emitConnectionRelease({
+          mode: 'batch',
+          result: createdCount > 0 ? 'created' : 'invalid',
+          clientPoint: point,
+          endpoints: targetEndpoints,
+          target: { kind: 'node', nodeId: bodySource.id, zone: 'body', valid: createdCount > 0 },
+        })
         return
       }
 
-      // 3. 拖到空白区域，触发连接菜单
+      // 3. 拖到空白区域，上报连接释放事实
       canvas.connectionState.hoverTarget = { type: 'pane' }
       canvas.connectionState.snapTarget = null
-      eventBus?.emit('connectionContextMenu', createBatchConnectionMenuPayload({
+      emitConnectionRelease({
+        mode: 'batch',
+        result: 'blank',
         clientPoint: point,
-        flowPosition: toFlowPosition(viewport.value, point.x, point.y),
-        sourceNodeIds: targetNodes.map(node => node.id),
-        sourceHandle: 'target',
-        sourceNodeTypes: targetNodes.map(node => (node.data as any)?.nodeType),
-      }))
+        endpoints: targetEndpoints,
+        target: { kind: 'pane' },
+      })
     } finally {
       if (!tempRemoved) removeBatchTempConnection(batch)
       resetBatchConnectState()

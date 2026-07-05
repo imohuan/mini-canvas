@@ -1,6 +1,7 @@
 import { reactive, type Component } from 'vue'
 import type { MenuItemDefinition, MenuRegistryAPI, CommandContext } from './types'
 import type { NodeRegistry } from './NodeRegistry'
+import type { ConnectionReleaseEndpoint } from '../plugins/types'
 
 /**
  * 菜单注册中心
@@ -79,6 +80,7 @@ export interface MenuContext {
   /** 连线模式：源节点的业务类型（如 'image', 'text'），用于过滤可创建的目标节点 */
   connectionSourceType?: string
   pendingConnection?: {
+    endpoints?: ConnectionReleaseEndpoint[]
     sourceNodeId: string
     sourceNodeIds?: string[]
     sourceHandle: string

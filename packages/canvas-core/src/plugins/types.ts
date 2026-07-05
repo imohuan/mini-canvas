@@ -17,6 +17,38 @@ export interface ViewportState extends Point {
   zoom: number
 }
 
+/** 连接释放来源端点：单线是 1 个端点，批量拖线是多个端点 */
+export interface ConnectionReleaseEndpoint {
+  nodeId: string
+  handle: 'source' | 'target'
+  nodeType?: string
+}
+
+/** 连接释放命中的画布目标，只描述事实，不表达菜单策略 */
+export type ConnectionReleaseTarget =
+  | { kind: 'pane' }
+  | { kind: 'node'; nodeId: string; zone: 'snap' | 'body'; valid: boolean; reason?: string }
+  | { kind: 'node-handle'; nodeId: string; handle: 'source' | 'target'; valid: boolean; reason?: string }
+  | { kind: 'edge'; edgeId: string }
+  | { kind: 'overlay' }
+  | { kind: 'none' }
+
+/** 连接释放结果：由连接核心发布，消费者自行决定如何响应 */
+export interface ConnectionReleasePayload {
+  mode: 'single' | 'batch'
+  result: 'created' | 'blank' | 'invalid' | 'ignored'
+  clientPoint: Point
+  flowPosition: Point
+  endpoints: ConnectionReleaseEndpoint[]
+  target: ConnectionReleaseTarget
+  createdEdgeIds?: string[]
+}
+
+/** 插件间连接事件名，避免菜单语义进入连接核心 */
+export const CanvasConnectionEvents = {
+  Release: 'connectionRelease',
+} as const
+
 /** 插件生命周期状态枚举 */
 export const PluginLifecycle = {
   INSTALLING: 'installing',

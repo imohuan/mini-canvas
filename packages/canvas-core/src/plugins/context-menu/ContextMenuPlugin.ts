@@ -1,194 +1,12 @@
 import { createApp, h, reactive, nextTick, type Component } from "vue"
 import type { Node, Edge } from "@vue-flow/core"
 import { Position } from "@vue-flow/core"
-import type { CanvasPlugin, PluginContext } from "../types"
-import type { ConnectionState, Point } from "../types"
+import type { CanvasPlugin, PluginContext, ConnectionReleaseEndpoint, ConnectionReleasePayload } from "../types"
+import type { Point } from "../types"
 import type { MenuContext } from "../../registry/MenuRegistry"
 import type { CanvasMenuItem, CanvasMenuState } from "../../registry/types"
 import CanvasMenu from "../../components/Menu/CanvasMenu.vue"
 import { registerBuiltinMenuItems } from "./builtinMenuItems"
-
-// ==================== 连线拖拽菜单工具函数（从 Canvas.vue 移植） ====================
-
-/** 从 MouseEvent 或 TouchEvent 提取屏幕坐标 */
-function getMousePoint(event?: MouseEvent | TouchEvent): Point | null {
-  if (!event) return null
-  if ('changedTouches' in event && event.changedTouches.length > 0) {
-    const touch = event.changedTouches[0]
-    return { x: touch.clientX, y: touch.clientY }
-  }
-  if ('clientX' in event) {
-    return { x: event.clientX, y: event.clientY }
-  }
-  return null
-}
-
-/** 从 DOM 元素上提取节点 ID */
-function getNodeIdFromElement(el: Element): string {
-  return (
-    el.getAttribute('data-id') ||
-    (el as HTMLElement).dataset?.id ||
-    el.getAttribute('data-nodeid') ||
-    ''
-  )
-}
-
-/** 判断节点是否为临时节点 */
-function isTempNode(node: Node | undefined | null): boolean {
-  return Boolean(node?.type === 'tempTarget' || node?.data?.isTemp)
-}
-
-/** 在屏幕坐标附近查找最近的可连线目标节点（吸附区域版，简化版） */
-function findNearestValidTarget(
-  clientX: number,
-  clientY: number,
-  context: PluginContext,
-  sourceNodeId: string,
-): Node | null {
-  const excludedNodeIds = new Set([sourceNodeId])
-  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
-  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
-  let bestNode: Node | null = null
-  let bestDistance = Number.POSITIVE_INFINITY
-  const SNAP_THRESHOLD = 50
-
-  const nodeEls = document.querySelectorAll('.vue-flow__node')
-  for (const el of nodeEls) {
-    const nodeId = getNodeIdFromElement(el)
-    if (!nodeId || excludedNodeIds.has(nodeId)) continue
-
-    const node = nodeMap.get(nodeId)
-    if (!node || isTempNode(node) || !node.targetPosition) continue
-
-    const rect = el.getBoundingClientRect()
-    const insideSnapArea =
-      clientX >= rect.left - SNAP_THRESHOLD &&
-      clientX <= rect.left + SNAP_THRESHOLD &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-
-    if (!insideSnapArea) continue
-
-    const centerX = rect.left
-    const centerY = rect.top + rect.height / 2
-    const distance = Math.hypot(clientX - centerX, clientY - centerY)
-
-    if (distance < bestDistance) {
-      bestNode = node
-      bestDistance = distance
-    }
-  }
-
-  return bestNode
-}
-
-/** 在屏幕坐标附近查找最近的可连线源节点（右侧吸附，用于反向拖线） */
-function findNearestValidSource(
-  clientX: number,
-  clientY: number,
-  context: PluginContext,
-  targetNodeIds: Set<string>,
-): Node | null {
-  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
-  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
-  let bestNode: Node | null = null
-  let bestDistance = Number.POSITIVE_INFINITY
-  const SNAP_THRESHOLD = 50
-
-  const nodeEls = document.querySelectorAll('.vue-flow__node')
-  for (const el of nodeEls) {
-    const nodeId = getNodeIdFromElement(el)
-    if (!nodeId || targetNodeIds.has(nodeId)) continue
-
-    const node = nodeMap.get(nodeId)
-    if (!node || isTempNode(node) || !node.sourcePosition) continue
-
-    const rect = el.getBoundingClientRect()
-    // 源节点吸附区域在右侧
-    const insideSnapArea =
-      clientX >= rect.right - SNAP_THRESHOLD &&
-      clientX <= rect.right + SNAP_THRESHOLD &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-
-    if (!insideSnapArea) continue
-
-    const centerX = rect.right
-    const centerY = rect.top + rect.height / 2
-    const distance = Math.hypot(clientX - centerX, clientY - centerY)
-
-    if (distance < bestDistance) {
-      bestNode = node
-      bestDistance = distance
-    }
-  }
-
-  return bestNode
-}
-
-/** 判断鼠标是否落在某个节点主体区域内 */
-function findNodeBodyAtPoint(
-  clientX: number,
-  clientY: number,
-  context: PluginContext,
-  excludedNodeIds: Iterable<string> = [],
-): Node | null {
-  const excluded = new Set(excludedNodeIds)
-  // 构建 O(1) 查找索引，避免循环内 O(n) find 导致 O(n²)
-  const nodeMap = new Map(context.actions.getNodes().map(n => [n.id, n]))
-  const nodeEls = document.querySelectorAll('.vue-flow__node')
-
-  for (const el of nodeEls) {
-    const nodeId = getNodeIdFromElement(el)
-    if (!nodeId || excluded.has(nodeId)) continue
-
-    const node = nodeMap.get(nodeId)
-    if (!node || isTempNode(node)) continue
-
-    const rect = el.getBoundingClientRect()
-    const inside =
-      clientX >= rect.left &&
-      clientX <= rect.right &&
-      clientY >= rect.top &&
-      clientY <= rect.bottom
-
-    if (inside) return node
-  }
-
-  return null
-}
-
-/** 判定鼠标下方的目标类型 */
-function resolveHoverTarget(
-  clientX: number,
-  clientY: number,
-  context: PluginContext,
-  sourceNodeId: string,
-): ConnectionState['hoverTarget'] {
-  // 1. 检查节点主体
-  const bodyNode = findNodeBodyAtPoint(clientX, clientY, context, [sourceNodeId])
-  if (bodyNode) {
-    return { type: 'node', nodeId: bodyNode.id }
-  }
-  // 2. 检查端口（通过 DOM 类名）
-  const handleEl = document.elementFromPoint(clientX, clientY)
-  if (handleEl?.classList.contains('vue-flow__handle')) {
-    const nodeEl = handleEl.closest('.vue-flow__node')
-    const nodeId = nodeEl ? getNodeIdFromElement(nodeEl) : ''
-    if (nodeId && nodeId !== sourceNodeId) {
-      const handle = handleEl.classList.contains('source') ? 'source' : 'target'
-      return { type: 'node-handle', nodeId, handle }
-    }
-  }
-  // 3. 检查连线
-  const edgeEl = document.elementFromPoint(clientX, clientY)
-  if (edgeEl?.closest('.vue-flow__edge')) {
-    const edgeId = edgeEl.closest('.vue-flow__edge')?.getAttribute('data-id') || ''
-    if (edgeId) return { type: 'edge', edgeId }
-  }
-  // 4. 默认画布空白
-  return { type: 'pane' }
-}
 
 const GROUP_ORDER: Record<string, number> = { create: 1, action: 2, delete: 3 }
 
@@ -200,37 +18,39 @@ interface ResolvedMenuItem {
 
 function resolveItems(
   mode: string, nodeType: string | undefined, context: PluginContext,
-  connSourceType?: string, connSourceHandle?: string,
+  connSourceType?: string, connSourceHandle?: string, connEndpoints?: ConnectionReleaseEndpoint[],
 ): ResolvedMenuItem[] {
   const items: ResolvedMenuItem[] = []
 
   // 创建节点菜单项（pane / connection 模式）
   if (mode === "pane" || mode === "connection") {
     const prefix = mode === "connection" ? "connect:" : "create:"
-    const isReverse = connSourceHandle === 'target'
 
     context.canvasNodes.getMenuItems().forEach((item, index) => {
-      // connection 模式：过滤不可连接的节点类型
-      if (mode === "connection" && connSourceType) {
+      // connection 模式：过滤不可连接的节点类型；批量连接必须对所有端点都合法
+      if (mode === "connection") {
         const newDef = context.canvasNodes.get(item.id)
         if (!newDef) return  // 跳过未注册类型
 
-        if (isReverse) {
-          // 新节点 → 源节点（新节点是输出侧）
-          // 新节点必须能产生输出
-          if (newDef.canProduceOutput === false) return
-          // 源节点的 acceptsInputs 必须包含新节点类型（如果源节点声明了白名单）
-          // undefined = 接受全部；[] = 不接受任何输入
-          const srcAccept = context.canvasNodes.get(connSourceType)?.acceptsInputs
-          if (Array.isArray(srcAccept) && !srcAccept.includes(item.id)) return
-        } else {
-          // 源节点 → 新节点（新节点是输入侧）
-          // 新节点必须能接收输入
+        const endpoints = connEndpoints?.length
+          ? connEndpoints
+          : connSourceType
+            ? [{ nodeId: '', handle: (connSourceHandle ?? 'source') as 'source' | 'target', nodeType: connSourceType }]
+            : []
+
+        for (const endpoint of endpoints) {
+          if (endpoint.handle === 'target') {
+            // 新节点 → 既有节点：新节点必须能输出，既有节点必须接受新节点类型
+            if (newDef.canProduceOutput === false) return
+            const targetAccept = endpoint.nodeType ? context.canvasNodes.get(endpoint.nodeType)?.acceptsInputs : undefined
+            if (Array.isArray(targetAccept) && !targetAccept.includes(item.id)) return
+            continue
+          }
+
+          // 既有节点 → 新节点：新节点必须能接收，且必须接受既有节点类型
           if (newDef.canReceiveInput === false) return
-          // 新节点的 acceptsInputs 必须包含源节点类型（如果新节点声明了白名单）
-          // undefined = 接受全部；[] = 不接受任何输入
           const newAccept = newDef.acceptsInputs
-          if (Array.isArray(newAccept) && !newAccept.includes(connSourceType)) return
+          if (endpoint.nodeType && Array.isArray(newAccept) && !newAccept.includes(endpoint.nodeType)) return
         }
       }
 
@@ -312,35 +132,35 @@ export const ContextMenuPlugin: CanvasPlugin = {
 
     function createTempConnection(
       point: Point,
-      sourceNodeIds: string[],
-      sourceHandle: 'source' | 'target',
+      endpoints: ConnectionReleaseEndpoint[],
     ) {
       const flowPosition = toFlowPosition(point.x, point.y)
       const tempNodeId = `temp-target-${Date.now()}`
+      const sourceHandle = endpoints[0]?.handle ?? 'source'
       const isReverseConnection = sourceHandle === 'target'
-      const tempEdgeIds = sourceNodeIds.map(sourceNodeId => `temp-edge-${sourceNodeId}-${Date.now()}`)
+      const tempEdgeIds = endpoints.map(endpoint => `temp-edge-${endpoint.nodeId}-${Date.now()}`)
 
       context.actions.addNodes([{
         id: tempNodeId,
         type: 'tempTarget',
         position: flowPosition,
-        data: { isTemp: true },
+        data: { isTemp: true, tempKind: 'connection-menu' },
         sourcePosition: isReverseConnection ? Position.Right : undefined,
         targetPosition: isReverseConnection ? undefined : Position.Left,
         draggable: false,
         selectable: false,
       } as Node])
 
-      context.actions.addEdges(sourceNodeIds.map((sourceNodeId, index) => ({
+      context.actions.addEdges(endpoints.map((endpoint, index) => ({
         id: tempEdgeIds[index],
         type: 'custom',
-        source: isReverseConnection ? tempNodeId : sourceNodeId,
-        target: isReverseConnection ? sourceNodeId : tempNodeId,
-        sourceHandle: isReverseConnection ? 'source' : sourceHandle,
-        targetHandle: isReverseConnection ? sourceHandle : 'target',
+        source: isReverseConnection ? tempNodeId : endpoint.nodeId,
+        target: isReverseConnection ? endpoint.nodeId : tempNodeId,
+        sourceHandle: isReverseConnection ? 'source' : endpoint.handle,
+        targetHandle: isReverseConnection ? endpoint.handle : 'target',
         selectable: false,
         zIndex: 99999,
-        data: { isTemp: true },
+        data: { isTemp: true, tempKind: 'connection-menu' },
       } as Edge)))
 
       const tempEdgeId = tempEdgeIds[0]
@@ -350,62 +170,23 @@ export const ContextMenuPlugin: CanvasPlugin = {
         flowPosition,
       }
 
-      const nodes = context.actions.getNodes()
-      const sourceNodeTypes = sourceNodeIds.map(id => (nodes.find(n => n.id === id)?.data as any)?.nodeType)
-      context.emit('connectionContextMenu', {
+      return {
         clientX: point.x,
         clientY: point.y,
-        sourceNodeId: sourceNodeIds[0],
-        sourceNodeIds,
+        sourceNodeId: endpoints[0]?.nodeId ?? '',
+        sourceNodeIds: endpoints.map(endpoint => endpoint.nodeId),
         sourceHandle,
         tempNodeId,
         tempEdgeId,
         tempEdgeIds,
         flowPosition,
-        sourceNodeType: sourceNodeTypes[0],
-        sourceNodeTypes,
-      })
+        sourceNodeType: endpoints[0]?.nodeType,
+        sourceNodeTypes: endpoints.map(endpoint => endpoint.nodeType),
+        endpoints,
+      }
     }
 
-    // ===== 连线拖拽菜单逻辑（从 Canvas.vue 迁移） =====
-    let lastNativeConnectAt = 0
-    const offConnectStart = context.on('connectStart', () => {
-      lastNativeConnectAt = 0
-    })
-    const offConnect = context.on('connect', () => {
-      lastNativeConnectAt = Date.now()
-    })
-
-    const offConnectEnd = context.on('connectEnd', (event: MouseEvent | TouchEvent | undefined) => {
-      const point = getMousePoint(event)
-      const active = context.connectionState.value.activeConnection
-      if (!point || !active) return
-      // 如果已经精确连到了 Handle，@connect 会先创建边，这里不要再抢着处理
-      if (Date.now() - lastNativeConnectAt < 80) return
-
-      const { sourceNodeId, sourceHandle } = active
-
-      // 判定 hoverTarget
-      const hoverTarget = resolveHoverTarget(point.x, point.y, context, sourceNodeId)
-      context.connectionState.value.hoverTarget = hoverTarget
-
-      // 判定吸附（source 方向查目标节点，target 方向反向查源节点）
-      let snapNode: Node | null = null
-      if (sourceHandle === 'source') {
-        snapNode = findNearestValidTarget(point.x, point.y, context, sourceNodeId)
-      } else if (sourceHandle === 'target') {
-        snapNode = findNearestValidSource(point.x, point.y, context, new Set([sourceNodeId]))
-      }
-      context.connectionState.value.snapTarget = snapNode
-        ? { nodeId: snapNode.id, isSnapped: true }
-        : null
-
-      // 核心：只在 canShowConnectionMenu 为 true 时弹菜单
-      if (!context.canShowConnectionMenu.value) return
-
-      // 创建临时节点 + 边，emit connectionContextMenu
-      createTempConnection(point, [sourceNodeId], sourceHandle)
-    })
+    // 连接核心只发布释放事实；菜单插件在这里决定是否响应。
 
     let appInstance: ReturnType<typeof createApp> | null = null
     let containerEl: HTMLDivElement | null = null
@@ -438,7 +219,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
     function openCreateNodeMenu(pos: { x: number; y: number }, mode: any, title: string, ctx: MenuContext) {
       openMenu({
         mode, title, position: pos,
-        items: resolveItems(mode, ctx.nodeType, context, ctx.connectionSourceType, ctx.pendingConnection?.sourceHandle),
+        items: resolveItems(mode, ctx.nodeType, context, ctx.connectionSourceType, ctx.pendingConnection?.sourceHandle, ctx.pendingConnection?.endpoints),
       }, ctx)
     }
 
@@ -472,16 +253,23 @@ export const ContextMenuPlugin: CanvasPlugin = {
       if (menuState.mode === "connection" && ctx.pendingConnection) {
         const pending = ctx.pendingConnection
         closeMenu()
-        const isReverse = pending.sourceHandle === "target"
-        const node = createNode(item, pending.flowPosition, context, { requireTarget: !isReverse, align: 'top-left' })
+        const endpoints = pending.endpoints ?? (pending.sourceNodeIds ?? [pending.sourceNodeId]).map(nodeId => ({
+          nodeId,
+          handle: pending.sourceHandle as 'source' | 'target',
+        }))
+        const isReverse = endpoints[0]?.handle === "target"
+        const node = createNode(item, pending.flowPosition, context, {
+          requireTarget: !isReverse,
+          ...(isReverse ? { requireSource: true } : {}),
+          align: 'top-left',
+        })
         await nextTick()
-        const sourceNodeIds = pending.sourceNodeIds ?? [pending.sourceNodeId]
-        context.actions.addEdges(sourceNodeIds.map(sourceNodeId => isReverse ? {
-          id: `e-${node.id}-${sourceNodeId}-${Date.now()}`, type: "custom",
-          source: node.id, target: sourceNodeId, sourceHandle: "source", targetHandle: pending.sourceHandle,
+        context.actions.addEdges(endpoints.map(endpoint => endpoint.handle === 'target' ? {
+          id: `e-${node.id}-${endpoint.nodeId}-${Date.now()}`, type: "custom",
+          source: node.id, target: endpoint.nodeId, sourceHandle: "source", targetHandle: endpoint.handle,
         } as Edge : {
-          id: `e-${sourceNodeId}-${node.id}-${Date.now()}`, type: "custom",
-          source: sourceNodeId, target: node.id, sourceHandle: pending.sourceHandle, targetHandle: "target",
+          id: `e-${endpoint.nodeId}-${node.id}-${Date.now()}`, type: "custom",
+          source: endpoint.nodeId, target: node.id, sourceHandle: endpoint.handle, targetHandle: "target",
         } as Edge))
         return
       }
@@ -513,19 +301,17 @@ export const ContextMenuPlugin: CanvasPlugin = {
       }, { edgeId: p.edgeId, flowPosition: fp })
     })
 
-    const off5 = context.on("connectionContextMenu", (p: any) => {
-      if (!p.tempNodeId || !p.tempEdgeId) {
-        createTempConnection(
-          { x: p.clientX, y: p.clientY },
-          p.sourceNodeIds ?? [p.sourceNodeId],
-          p.sourceHandle ?? 'source',
-        )
-        return
-      }
+    const offRelease = context.on("connectionRelease", (release: ConnectionReleasePayload) => {
+      if (release.result !== 'blank') return
+      if (release.target.kind !== 'pane') return
+      if (!context.canShowConnectionMenu.value) return
+      if (release.endpoints.length === 0) return
 
+      const p = createTempConnection(release.clientPoint, release.endpoints)
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "connection", "引用该节点生成", {
         connectionSourceType: p.sourceNodeType,
         pendingConnection: {
+          endpoints: p.endpoints,
           sourceNodeId: p.sourceNodeId,
           sourceNodeIds: p.sourceNodeIds,
           sourceHandle: p.sourceHandle,
@@ -533,6 +319,33 @@ export const ContextMenuPlugin: CanvasPlugin = {
           tempEdgeId: p.tempEdgeId,
           tempEdgeIds: p.tempEdgeIds,
           flowPosition: p.flowPosition,
+        },
+      })
+    })
+
+    const off5 = context.on("connectionContextMenu", (p: any) => {
+      const menuPayload = (!p.tempNodeId || !p.tempEdgeId)
+        ? createTempConnection(
+            { x: p.clientX, y: p.clientY },
+            p.endpoints ?? (p.sourceNodeIds ?? [p.sourceNodeId]).map((nodeId: string, index: number) => ({
+              nodeId,
+              handle: p.sourceHandle ?? 'source',
+              nodeType: p.sourceNodeTypes?.[index] ?? p.sourceNodeType,
+            })),
+          )
+        : p
+
+      openCreateNodeMenu({ x: menuPayload.clientX, y: menuPayload.clientY }, "connection", "引用该节点生成", {
+        connectionSourceType: menuPayload.sourceNodeType,
+        pendingConnection: {
+          endpoints: menuPayload.endpoints,
+          sourceNodeId: menuPayload.sourceNodeId,
+          sourceNodeIds: menuPayload.sourceNodeIds,
+          sourceHandle: menuPayload.sourceHandle,
+          tempNodeId: menuPayload.tempNodeId,
+          tempEdgeId: menuPayload.tempEdgeId,
+          tempEdgeIds: menuPayload.tempEdgeIds,
+          flowPosition: menuPayload.flowPosition,
         },
       })
     })
@@ -544,8 +357,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
     return {
       uninstall() {
         context.menus.unregisterSource("context-menu")
-        off1(); off2(); off3(); off4(); off5()
-        offConnectStart(); offConnect(); offConnectEnd()
+        off1(); off2(); off3(); off4(); off5(); offRelease()
         if (appInstance) { appInstance.unmount(); appInstance = null }
         if (containerEl) { containerEl.remove(); containerEl = null }
       },
