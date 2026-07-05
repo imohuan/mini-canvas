@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import { DEFAULT_NODE_SIZE } from '../utils/constants'
 
 export interface NodeMenuItemDefinition {
@@ -66,7 +66,8 @@ export class NodeRegistry {
   }
 
   getDefaultSize(type: string): { cardWidth: number; cardHeight: number } {
-    return this.definitions.get(type)?.defaultSize ?? DEFAULT_NODE_SIZE
+    const defaultSize = this.definitions.get(type)?.defaultSize
+    return defaultSize ?? { cardWidth: DEFAULT_NODE_SIZE.width, cardHeight: DEFAULT_NODE_SIZE.height }
   }
 
   getLabel(type: string): string {

@@ -1,9 +1,7 @@
 import { markRaw } from 'vue'
-import type { Node, Edge } from '@vue-flow/core'
-import { Position } from '@vue-flow/core'
+import type { Node } from '@vue-flow/core'
 import { ImageCompareNode } from './index'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import type { CommandContext } from '../../registry/types'
 
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/><line x1="9" y1="12" x2="15" y2="12" stroke-width="1"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg>`
 const titleIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="18" rx="1"/><rect x="13" y="3" width="8" height="18" rx="1"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>`

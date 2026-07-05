@@ -186,12 +186,6 @@ const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
 
 const hasOverlay = computed(() => !!props.data?._overlay)
 
-const imageData = computed(() => ({
-  width: (props.data?.imageWidth as number) || 0,
-  height: (props.data?.imageHeight as number) || 0,
-  name: (props.data?.imageName as string) || 'image',
-}))
-
 // ── 事件 ──
 
 function onInput() {
@@ -233,7 +227,7 @@ function onEditorKeydown(e: KeyboardEvent) {
       <div class="editor-wrapper" @keydown="onEditorKeydown">
         <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
           @update:model-value="onInput" @click.stop>
-          <template #mention-menu="{ visible, items, groupedItems, categoryOrder, position, activeIndex, onSelect }">
+          <template #mention-menu="{ visible, groupedItems, categoryOrder, position, activeIndex, onSelect }">
             <Teleport :to="teleportTarget">
               <Transition name="ax-fade-scale">
                 <div v-if="visible" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">

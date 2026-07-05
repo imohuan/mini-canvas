@@ -16,8 +16,6 @@ const confirmSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" str
 const cancelSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
 // 扩展图标（向外箭头）
 const expandSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>`
-// 上传/生成箭头（底部工具栏用）
-const uploadArrowSvg = `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`
 // 菜单图标（CanvasMenu 使用）— 无 class，由 CSS 控制 16x16
 const menuIconSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>`
 // 蒙版图标
@@ -67,12 +65,12 @@ async function saveTransformedAsset(
  */
 function createResultNode(
   vf: any,
-  sourceNode: { position: { x: number; y: number }; data: Record<string, unknown> },
+  sourceNode: Node,
   result: { blob: Blob; url: string; width: number; height: number },
   suffix: string,
   assetId?: string,
 ): void {
-  const sourceData = sourceNode.data
+  const sourceData = (sourceNode.data || {}) as Record<string, unknown>
   const { cardWidth, cardHeight } = fitCardSize(result.width, result.height)
 
   const newNodeId = `image-${Date.now()}`

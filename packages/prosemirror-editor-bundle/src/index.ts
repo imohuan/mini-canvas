@@ -1,4 +1,4 @@
-import { App } from 'vue';
+import type { App } from 'vue';
 import ProseMirrorEditorComponent from './index.vue';
 
 export { default as ProseMirrorEditor } from './index.vue';

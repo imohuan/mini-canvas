@@ -1102,26 +1102,26 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
             }, 'selection-batch')
             if (ok) createdCount += 1
           }
-          emitConnectionRelease({
-            mode: 'batch',
-            result: createdCount > 0 ? 'created' : 'invalid',
-            clientPoint: point,
-            endpoints: sourceEndpoints,
-            target: { kind: 'node', nodeId: bodyNode.id, zone: 'body', valid: createdCount > 0 },
-          })
-          return
-        }
-
-        // 3. 拖到空白区域，上报连接释放事实
-        canvas.connectionState.hoverTarget = { type: 'pane' }
-        canvas.connectionState.snapTarget = null
         emitConnectionRelease({
           mode: 'batch',
-          result: 'blank',
+          result: createdCount > 0 ? 'created' : 'invalid',
           clientPoint: point,
           endpoints: sourceEndpoints,
-          target: { kind: 'pane' },
+          target: { kind: 'node', nodeId: bodyNode.id, zone: 'body', valid: createdCount > 0 },
         })
+        return
+      }
+
+      // 3. 拖到空白区域，上报连接释放事实
+      canvas.connectionState.hoverTarget = { type: 'pane' }
+      canvas.connectionState.snapTarget = null
+      emitConnectionRelease({
+        mode: 'batch',
+        result: 'blank',
+        clientPoint: point,
+        endpoints: sourceEndpoints,
+        target: { kind: 'pane' },
+      })
         return
       }
 

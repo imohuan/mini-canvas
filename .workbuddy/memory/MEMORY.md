@@ -162,3 +162,33 @@ _overlay: {
 - 从上游 image 节点读取 `imageUrl`，不依赖自身 data 存储图片
 - `leftImageUrl`/`rightImageUrl` 是 runtime-only blob URL，已加入 `RUNTIME_FIELDS`
 - `dividerPosition`/`compareMode` 是持久化配置字段
+
+## Canvas-Core 稳定性审计 (2026-07-04)
+
+### 审计方式
+
+CodeGraph 索引 → 4 个子代理并行复查（Canvas.vue 生命周期、useCanvasConnection 性能、存储系统、插件/Image 节点），交叉验证确认。
+
+### 审计结果（30+ 问题）
+
+| 级别 | 数量 | 典型问题 |
+|------|------|---------|
+| P0 | 6 | EventBus 泄漏 ×8、buildConnectionEdgeProps DOM 查询瓶颈、ImageMasker/Cropper/Expander 缺 onUnmounted、beforeunload 绕过 sanitizeForSave、panoUrl 未加入 RUNTIME_FIELDS |
+| P1 | 10 | connectableNodes/feedbackNodes 重复计算、Canvas.vue nodesById 死代码、isValidConnection O(n)、wouldCreateCycle O(V*E)、performSave 竞态等 |
+| P2 | 15+ | 错误边界、command try/catch、重复 viewport 计算等 |
+
+### 核心卡顿根因
+
+`useCanvasConnection.ts:buildConnectionEdgeProps` 每 mousemove 帧对所有节点做 2N 次 `document.querySelectorAll('.vue-flow__node')` + `getBoundingClientRect()`（强制 layout reflow）。200 节点画布 → 每帧 400 次 DOM 重排。
+
+### 实现计划
+
+计划文档：`docs/plans/2026-07-04-canvas-core-stability.md`
+分支：`fix/canvas-core-stability`（worktree: `.worktrees/fix-canvas-core-stability`）
+16 个任务，按 P0 → P1 → P2 优先级排列。
+
+### 测试命令
+
+```bash
+node --import tsx --test packages/canvas-core/src/**/*.test.ts
+```

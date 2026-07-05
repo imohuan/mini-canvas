@@ -660,7 +660,7 @@ export function useEditor(
 
       el.onmouseenter = () => handleResourceMouseEnter(el);
       el.onmouseleave = () => handleResourceMouseLeave(el);
-      el.onclick = (e) => {
+      el.onclick = () => {
         handleResourceClick(el);
       };
 

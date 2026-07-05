@@ -1,4 +1,4 @@
-﻿import type { Component } from 'vue'
+import type { Component } from 'vue'
 import type { Node, Edge } from '@vue-flow/core'
 
 /** 命令执行时的上下文 */
@@ -78,6 +78,7 @@ export interface ToolbarButtonDefinition extends BaseRegistryItem {
   tooltip?: string
   dropdown?: ToolbarDropdownItem[]
   customRender?: Component
+  danger?: boolean
 }
 
 export interface PanelSettingDefinition extends BaseRegistryItem {
@@ -85,7 +86,7 @@ export interface PanelSettingDefinition extends BaseRegistryItem {
   description?: string
   type: 'text' | 'number' | 'boolean' | 'select' | 'color' | 'slider'
   defaultValue?: unknown
-  options?: Array<{ title: string; value: unknown }>
+  options?: Array<{ title: string; value: string | number }>
   min?: number
   max?: number
   step?: number

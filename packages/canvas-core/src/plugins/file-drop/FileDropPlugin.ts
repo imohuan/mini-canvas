@@ -412,7 +412,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             extra.videoDuration = Math.round(meta.duration)
           }
           nodes.push(buildNode('video', extra, pos))
-          logger.info(`粘贴视频到画布${dims ? ` (${dims.width}×${dims.height})` : ''}`)
+          logger.info(`粘贴视频到画布${meta ? ` (${meta.width}×${meta.height})` : ''}`)
         } else if (pi.kind === 'text') {
           const text = pi.text
           if (!text.trim()) continue
