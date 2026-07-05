@@ -118,10 +118,17 @@ function onDividerPointerUp(_e: PointerEvent) {
 
     <!-- 两张图：分割对比 -->
     <template v-if="hasTwoImages">
-      <!-- 右图（底层） -->
-      <img :src="rightImage" class="compare-img-full" draggable="false" />
-      <!-- 左图（上层，clip 到分割线左侧） -->
-      <img :src="leftImage" class="compare-img-full" :style="{ clipPath: `inset(0 ${100 - dividerPos}% 0 0)` }" draggable="false" />
+      <!-- 右侧图层（底层） -->
+      <div class="compare-layer compare-layer-right">
+        <img :src="rightImage" class="compare-img-full" draggable="false" />
+        <div class="compare-label compare-label-right">{{ rightName || '右' }}</div>
+      </div>
+
+      <!-- 左侧图层（上层，整体 clip 到分割线左侧） -->
+      <div class="compare-layer compare-layer-left" :style="{ clipPath: `inset(0 ${100 - dividerPos}% 0 0)` }">
+        <img :src="leftImage" class="compare-img-full" draggable="false" />
+        <div class="compare-label compare-label-left">{{ leftName || '左' }}</div>
+      </div>
 
       <!-- 分割线 + 手柄 -->
       <div class="compare-divider" :style="{ left: `${dividerPos}%` }"
@@ -137,10 +144,6 @@ function onDividerPointerUp(_e: PointerEvent) {
           </svg>
         </div>
       </div>
-
-      <!-- 左右标签 -->
-      <div class="compare-label compare-label-left">{{ leftName || '左' }}</div>
-      <div class="compare-label compare-label-right">{{ rightName || '右' }}</div>
     </template>
   </div>
 </template>
@@ -174,6 +177,19 @@ function onDividerPointerUp(_e: PointerEvent) {
 .compare-empty-text {
   font-size: 12px;
   color: #9ca3af;
+}
+
+/* 对比图层 */
+.compare-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.compare-layer-right {
+  z-index: 1;
+}
+.compare-layer-left {
+  z-index: 2;
 }
 
 /* 全图显示 */
