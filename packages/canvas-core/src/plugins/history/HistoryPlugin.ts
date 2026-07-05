@@ -1,3 +1,4 @@
+import type { Edge } from '@vue-flow/core'
 import type { CanvasPlugin, PluginContext } from '../types'
 
 /** 历史记录条目 */
@@ -89,6 +90,19 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
     let isRestoring = false
     let currentBatch: HistoryRecord[] | null = null
     let dragStartPositions: Map<string, { x: number; y: number }> | null = null
+    const edgeSnapshots = new Map<string, Edge>()
+    const ignoredEdgeAddIds = new Set<string>()
+    const ignoredEdgeRemoveIds = new Set<string>()
+
+    function cloneEdge(edge: Edge): Edge {
+      return JSON.parse(JSON.stringify(edge)) as Edge
+    }
+
+    function rememberEdges(edges: Edge[]) {
+      for (const edge of edges) {
+        edgeSnapshots.set(edge.id, cloneEdge(edge))
+      }
+    }
 
     /** 发射状态变化事件 */
     function emitState() {
@@ -307,31 +321,58 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
     })
 
     // ====================================================================
-    // 自动记录：连线
+    // 自动记录：连接线新增 / 删除
     // ====================================================================
-    const offConnect = context.on('connect', () => {
-      if (isRestoring) return
+    rememberEdges(context.actions.getEdges())
 
-      const edges = context.actions.getEdges()
-      const addedEdge = edges[edges.length - 1]
-      if (!addedEdge) return
+    const offEdgesChange = context.on('edgesChange', (changes: any[]) => {
+      for (const change of changes) {
+        if (change.type === 'add' && change.item) {
+          const savedEdge = cloneEdge(change.item as Edge)
+          edgeSnapshots.set(savedEdge.id, savedEdge)
+          if (ignoredEdgeAddIds.delete(savedEdge.id) || isRestoring) continue
 
-      const edgeId = addedEdge.id
-      const savedEdge = { ...addedEdge }
-      savedEdge.data = JSON.parse(JSON.stringify(addedEdge.data || {}))
+          api.record({
+            type: 'addEdges',
+            description: `新增连接线 ${savedEdge.source} → ${savedEdge.target}`,
+            undo: () => {
+              ignoredEdgeRemoveIds.add(savedEdge.id)
+              context.actions.removeEdges([savedEdge.id])
+              logger.debug(`  undo addEdge: remove ${savedEdge.id}`)
+            },
+            redo: () => {
+              ignoredEdgeAddIds.add(savedEdge.id)
+              context.actions.addEdges([cloneEdge(savedEdge)])
+              logger.debug(`  redo addEdge: add ${savedEdge.id}`)
+            },
+          })
+        }
 
-      api.record({
-        type: 'addEdges',
-        description: `连线 ${savedEdge.source} → ${savedEdge.target}`,
-        undo: () => {
-          context.actions.removeEdges([edgeId])
-          logger.debug(`  undo connect: remove ${edgeId}`)
-        },
-        redo: () => {
-          context.actions.addEdges([savedEdge])
-          logger.debug(`  redo connect: add ${edgeId}`)
-        },
-      })
+        if (change.type === 'remove') {
+          const edgeId = change.id as string
+          if (ignoredEdgeRemoveIds.delete(edgeId) || isRestoring) continue
+
+          const savedEdge = edgeSnapshots.get(edgeId)
+          if (!savedEdge) continue
+
+          api.record({
+            type: 'removeEdges',
+            description: `删除连接线 ${savedEdge.source} → ${savedEdge.target}`,
+            undo: () => {
+              ignoredEdgeAddIds.add(edgeId)
+              context.actions.addEdges([cloneEdge(savedEdge)])
+              logger.debug(`  undo removeEdge: restore ${edgeId}`)
+            },
+            redo: () => {
+              ignoredEdgeRemoveIds.add(edgeId)
+              context.actions.removeEdges([edgeId])
+              logger.debug(`  redo removeEdge: remove ${edgeId}`)
+            },
+          })
+        }
+      }
+
+      rememberEdges(context.actions.getEdges())
     })
 
     // ====================================================================
@@ -349,6 +390,7 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
       const allEdges = context.actions.getEdges()
       const ns = new Set(nodeIds)
       const connectedEdges = allEdges.filter((e) => ns.has(e.source) || ns.has(e.target))
+      const connectedEdgeIds = connectedEdges.map((e: any) => e.id)
       const deletedEdges = JSON.parse(JSON.stringify(connectedEdges))
 
       logger.info(`Delete: ${nodeIds.length} nodes + ${deletedEdges.length} edges`)
@@ -368,7 +410,8 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
       })
 
       context.actions.removeNodes(nodeIds)
-      context.actions.removeEdges(connectedEdges.map((e: any) => e.id))
+      for (const edgeId of connectedEdgeIds) ignoredEdgeRemoveIds.add(edgeId)
+      context.actions.removeEdges(connectedEdgeIds)
     }
 
     context.registerShortcut('delete', deleteHandler, '删除选中节点')
@@ -388,7 +431,7 @@ export const HistoryPlugin: CanvasPlugin<HistoryOptions, HistoryAPI> = {
         offRedo()
         offNodeDragStart()
         offNodeDragStop()
-        offConnect()
+        offEdgesChange()
         logger.info('HistoryPlugin cleaned up')
       },
     }
