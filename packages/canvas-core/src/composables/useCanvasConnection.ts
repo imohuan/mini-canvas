@@ -1,4 +1,4 @@
-﻿/**
+/**
  * useCanvasConnection — 连接线核心逻辑 Composable
  *
  * 职责：
@@ -991,7 +991,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
               sourceHandle: 'source', targetHandle: 'target',
             }, 'selection-batch')
           }
+          return
         }
+
+        // 3. 拖到空白区域，触发连接菜单（和单条连线行为一致）
+        canvas.connectionState.hoverTarget = { type: 'pane' }
+        canvas.connectionState.snapTarget = null
+        eventBus?.emit('connectEnd', event)
         return
       }
 
@@ -1021,7 +1027,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
             sourceHandle: 'source', targetHandle: 'target',
           }, 'selection-batch')
         }
+        return
       }
+
+      // 3. 拖到空白区域，触发连接菜单（和单条连线行为一致）
+      canvas.connectionState.hoverTarget = { type: 'pane' }
+      canvas.connectionState.snapTarget = null
+      eventBus?.emit('connectEnd', event)
     } finally {
       if (!tempRemoved) removeBatchTempConnection(batch)
       resetBatchConnectState()
