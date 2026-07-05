@@ -1,4 +1,4 @@
-﻿import { createApp, h, reactive, nextTick, type Component } from "vue"
+import { createApp, h, reactive, nextTick, type Component } from "vue"
 import type { Node, Edge } from "@vue-flow/core"
 import { Position } from "@vue-flow/core"
 import type { CanvasPlugin, PluginContext } from "../types"
@@ -312,13 +312,13 @@ export const ContextMenuPlugin: CanvasPlugin = {
 
     function createTempConnection(
       point: Point,
-      sourceNodeId: string,
+      sourceNodeIds: string[],
       sourceHandle: 'source' | 'target',
     ) {
       const flowPosition = toFlowPosition(point.x, point.y)
       const tempNodeId = `temp-target-${Date.now()}`
-      const tempEdgeId = `temp-edge-${sourceNodeId}-${Date.now()}`
       const isReverseConnection = sourceHandle === 'target'
+      const tempEdgeIds = sourceNodeIds.map(sourceNodeId => `temp-edge-${sourceNodeId}-${Date.now()}`)
 
       context.actions.addNodes([{
         id: tempNodeId,
@@ -331,8 +331,8 @@ export const ContextMenuPlugin: CanvasPlugin = {
         selectable: false,
       } as Node])
 
-      context.actions.addEdges([{
-        id: tempEdgeId,
+      context.actions.addEdges(sourceNodeIds.map((sourceNodeId, index) => ({
+        id: tempEdgeIds[index],
         type: 'custom',
         source: isReverseConnection ? tempNodeId : sourceNodeId,
         target: isReverseConnection ? sourceNodeId : tempNodeId,
@@ -340,30 +340,30 @@ export const ContextMenuPlugin: CanvasPlugin = {
         targetHandle: isReverseConnection ? sourceHandle : 'target',
         selectable: false,
         zIndex: 99999,
-        // CustomEdge.vue 不读取 edge.data 中的样式字段（edgeType/edgeLineWidth/edgeColor/edgeDashed），
-        // 而是从 useCanvasStore() 的 canvas.state.core.* 获取并有兜底默认值（如 edgeType 默认 'bezier'）。
-        // 因此临时边只需 { isTemp: true } 即可正确渲染，无需注入 makeEdgeData 字段。
         data: { isTemp: true },
-      } as Edge])
+      } as Edge)))
 
-      // 记录到 connectionState
+      const tempEdgeId = tempEdgeIds[0]
       context.connectionState.value.tempConnection = {
         tempNodeId,
         tempEdgeId,
         flowPosition,
       }
 
-      // emit 事件给现有的菜单 UI 流程
-      const sourceNode = context.actions.getNodes().find(n => n.id === sourceNodeId)
+      const nodes = context.actions.getNodes()
+      const sourceNodeTypes = sourceNodeIds.map(id => (nodes.find(n => n.id === id)?.data as any)?.nodeType)
       context.emit('connectionContextMenu', {
         clientX: point.x,
         clientY: point.y,
-        sourceNodeId,
+        sourceNodeId: sourceNodeIds[0],
+        sourceNodeIds,
         sourceHandle,
         tempNodeId,
         tempEdgeId,
+        tempEdgeIds,
         flowPosition,
-        sourceNodeType: (sourceNode?.data as any)?.nodeType,
+        sourceNodeType: sourceNodeTypes[0],
+        sourceNodeTypes,
       })
     }
 
@@ -404,7 +404,7 @@ export const ContextMenuPlugin: CanvasPlugin = {
       if (!context.canShowConnectionMenu.value) return
 
       // 创建临时节点 + 边，emit connectionContextMenu
-      createTempConnection(point, sourceNodeId, sourceHandle)
+      createTempConnection(point, [sourceNodeId], sourceHandle)
     })
 
     let appInstance: ReturnType<typeof createApp> | null = null
@@ -422,7 +422,11 @@ export const ContextMenuPlugin: CanvasPlugin = {
 
     function closeMenu() {
       const p = menuCtx.pendingConnection
-      if (p) { context.actions.removeEdges([p.tempEdgeId]); context.actions.removeNodes([p.tempNodeId]) }
+      if (p) {
+        const edgeIds = p.tempEdgeIds ?? [p.tempEdgeId]
+        context.actions.removeEdges(edgeIds)
+        context.actions.removeNodes([p.tempNodeId])
+      }
       // 清理 connectionState 中的临时状态
       context.connectionState.value.tempConnection = null
       context.connectionState.value.hoverTarget = null
@@ -469,17 +473,16 @@ export const ContextMenuPlugin: CanvasPlugin = {
         const pending = ctx.pendingConnection
         closeMenu()
         const isReverse = pending.sourceHandle === "target"
-        // 只控制输入端口方向，不覆盖输出端口（输出端口由节点类型定义决定）
-        // connection 模式：节点左上角对齐鼠标松开位置
         const node = createNode(item, pending.flowPosition, context, { requireTarget: !isReverse, align: 'top-left' })
         await nextTick()
-        context.actions.addEdges([isReverse ? {
-          id: `e-${node.id}-${pending.sourceNodeId}-${Date.now()}`, type: "custom",
-          source: node.id, target: pending.sourceNodeId, sourceHandle: "source", targetHandle: pending.sourceHandle,
+        const sourceNodeIds = pending.sourceNodeIds ?? [pending.sourceNodeId]
+        context.actions.addEdges(sourceNodeIds.map(sourceNodeId => isReverse ? {
+          id: `e-${node.id}-${sourceNodeId}-${Date.now()}`, type: "custom",
+          source: node.id, target: sourceNodeId, sourceHandle: "source", targetHandle: pending.sourceHandle,
         } as Edge : {
-          id: `e-${pending.sourceNodeId}-${node.id}-${Date.now()}`, type: "custom",
-          source: pending.sourceNodeId, target: node.id, sourceHandle: pending.sourceHandle, targetHandle: "target",
-        } as Edge])
+          id: `e-${sourceNodeId}-${node.id}-${Date.now()}`, type: "custom",
+          source: sourceNodeId, target: node.id, sourceHandle: pending.sourceHandle, targetHandle: "target",
+        } as Edge))
         return
       }
 
@@ -511,13 +514,24 @@ export const ContextMenuPlugin: CanvasPlugin = {
     })
 
     const off5 = context.on("connectionContextMenu", (p: any) => {
+      if (!p.tempNodeId || !p.tempEdgeId) {
+        createTempConnection(
+          { x: p.clientX, y: p.clientY },
+          p.sourceNodeIds ?? [p.sourceNodeId],
+          p.sourceHandle ?? 'source',
+        )
+        return
+      }
+
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "connection", "引用该节点生成", {
         connectionSourceType: p.sourceNodeType,
         pendingConnection: {
           sourceNodeId: p.sourceNodeId,
+          sourceNodeIds: p.sourceNodeIds,
           sourceHandle: p.sourceHandle,
           tempNodeId: p.tempNodeId,
           tempEdgeId: p.tempEdgeId,
+          tempEdgeIds: p.tempEdgeIds,
           flowPosition: p.flowPosition,
         },
       })

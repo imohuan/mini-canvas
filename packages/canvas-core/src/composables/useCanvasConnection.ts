@@ -40,6 +40,45 @@ export interface BatchConnectState {
   tempEdgeIds: string[]
 }
 
+interface BatchConnectionMenuPayloadInput {
+  clientPoint: Point
+  flowPosition: Point
+  sourceNodeIds: string[]
+  sourceHandle: 'source' | 'target'
+  sourceNodeTypes?: Array<string | undefined>
+}
+
+interface BatchConnectionMenuPayload {
+  clientX: number
+  clientY: number
+  sourceNodeId: string
+  sourceNodeIds: string[]
+  sourceHandle: 'source' | 'target'
+  flowPosition: Point
+  sourceNodeType?: string
+  sourceNodeTypes?: Array<string | undefined>
+}
+
+/**
+ * 将批量拖线释放动作转换成 context-menu 能消费的统一菜单 payload。
+ *
+ * 连接模块只描述“从哪些节点、哪个端口、在哪个位置请求菜单”；
+ * 临时节点、临时边和最终菜单选择后的建边仍由 context-menu 插件负责。
+ */
+function createBatchConnectionMenuPayload(input: BatchConnectionMenuPayloadInput): BatchConnectionMenuPayload {
+  const sourceNodeIds = [...input.sourceNodeIds]
+  return {
+    clientX: input.clientPoint.x,
+    clientY: input.clientPoint.y,
+    sourceNodeId: sourceNodeIds[0] ?? '',
+    sourceNodeIds,
+    sourceHandle: input.sourceHandle,
+    flowPosition: input.flowPosition,
+    sourceNodeType: input.sourceNodeTypes?.[0],
+    sourceNodeTypes: input.sourceNodeTypes ? [...input.sourceNodeTypes] : undefined,
+  }
+}
+
 export interface UseCanvasConnectionOptions {
   /** VueFlow 节点获取 */
   getNodes: { value: Node[] }
@@ -121,6 +160,8 @@ function getNodeCardFlowRect(
   viewport: { x: number; y: number; zoom: number },
 ): { x: number; y: number; width: number; height: number } {
   // 纯数据计算：直接使用节点位置 + 尺寸，不使用 DOM 查询
+  nodeId;
+  viewport;
   return {
     x: fallbackPosition.x,
     y: fallbackPosition.y,
@@ -994,10 +1035,16 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
           return
         }
 
-        // 3. 拖到空白区域，触发连接菜单（和单条连线行为一致）
+        // 3. 拖到空白区域，触发连接菜单
         canvas.connectionState.hoverTarget = { type: 'pane' }
         canvas.connectionState.snapTarget = null
-        eventBus?.emit('connectEnd', event)
+        eventBus?.emit('connectionContextMenu', createBatchConnectionMenuPayload({
+          clientPoint: point,
+          flowPosition: toFlowPosition(viewport.value, point.x, point.y),
+          sourceNodeIds: sourceNodes.map(node => node.id),
+          sourceHandle: 'source',
+          sourceNodeTypes: sourceNodes.map(node => (node.data as any)?.nodeType),
+        }))
         return
       }
 
@@ -1030,10 +1077,16 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         return
       }
 
-      // 3. 拖到空白区域，触发连接菜单（和单条连线行为一致）
+      // 3. 拖到空白区域，触发连接菜单
       canvas.connectionState.hoverTarget = { type: 'pane' }
       canvas.connectionState.snapTarget = null
-      eventBus?.emit('connectEnd', event)
+      eventBus?.emit('connectionContextMenu', createBatchConnectionMenuPayload({
+        clientPoint: point,
+        flowPosition: toFlowPosition(viewport.value, point.x, point.y),
+        sourceNodeIds: targetNodes.map(node => node.id),
+        sourceHandle: 'target',
+        sourceNodeTypes: targetNodes.map(node => (node.data as any)?.nodeType),
+      }))
     } finally {
       if (!tempRemoved) removeBatchTempConnection(batch)
       resetBatchConnectState()

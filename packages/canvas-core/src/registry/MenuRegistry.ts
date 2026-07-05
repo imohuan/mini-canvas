@@ -1,4 +1,4 @@
-﻿import { reactive, type Component } from 'vue'
+import { reactive, type Component } from 'vue'
 import type { MenuItemDefinition, MenuRegistryAPI, CommandContext } from './types'
 import type { NodeRegistry } from './NodeRegistry'
 
@@ -80,9 +80,11 @@ export interface MenuContext {
   connectionSourceType?: string
   pendingConnection?: {
     sourceNodeId: string
+    sourceNodeIds?: string[]
     sourceHandle: string
     tempNodeId: string
     tempEdgeId: string
+    tempEdgeIds?: string[]
     flowPosition: { x: number; y: number }
   }
 }
