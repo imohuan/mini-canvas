@@ -31,6 +31,7 @@ export { AutoLayoutPlugin } from './plugins/auto-layout'
 export { AlignArrangePlugin } from './plugins/align-arrange'
 export { CanvasExportPlugin } from './plugins/canvas-export'
 export { MiniMapPlugin } from './plugins/mini-map'
+export { EdgeCuttingPlugin } from './plugins/edge-cutting'
 
 // ─── Plugin Types ────────────────────────────────────────────────────
 export type { CanvasPlugin, CanvasConfig, PluginManifest, PluginContext } from './plugins/types'

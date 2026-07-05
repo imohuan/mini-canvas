@@ -533,6 +533,7 @@ const arrowPath = computed(() => {
     <!-- 点击热区 -->
     <path
       class="edge-hit-area"
+      :data-edge-id="id"
       :d="edgePath"
       fill="none"
       stroke="transparent"

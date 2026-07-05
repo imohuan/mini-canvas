@@ -24,6 +24,7 @@ import {
   AlignArrangePlugin,
   CanvasExportPlugin,
   MiniMapPlugin,
+  EdgeCuttingPlugin,
   type CanvasPlugin,
 } from '@mini-canvas/canvas-core'
 
@@ -126,6 +127,13 @@ const pluginSlots = ref<PluginSlot[]>([
     label: '多选框选',
     description: '在画布空白处拖拽框选，Shift+点击追加/移除，选中节点蓝色边框',
     usage: '在空白区域按住鼠标拖拽框选 → Ctrl+C 复制 → Ctrl+V 粘贴',
+  },
+  {
+    plugin: markRaw(EdgeCuttingPlugin) as CanvasPlugin,
+    enabled: true,
+    label: '连接线切割',
+    description: '按住 Alt 进入刀光切割模式，拖拽划过连接线后删除命中的连接线',
+    usage: '按住 Alt → 在画布中拖拽刀光 → 松开鼠标删除划过的连接线。Alt 模式下会禁止画布缩放。',
   },
   {
     plugin: markRaw(StoragePlugin) as CanvasPlugin,
