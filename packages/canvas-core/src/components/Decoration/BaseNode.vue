@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
@@ -189,6 +189,18 @@ const shouldShowHandles = computed(() =>
   (isHovered.value || props.selected)
 )
 
+/** 当前节点在连接状态机中的悬停反馈。区别于鼠标物理 hover。 */
+const connectionHover = computed(() =>
+  canvas.isConnecting && canvas.connectionState.hoverNode?.nodeId === props.id
+    ? canvas.connectionState.hoverNode
+    : null
+)
+
+const isConnectionSnapHovered = computed(() => connectionHover.value?.zone === 'snap')
+const isConnectionBodyHovered = computed(() => connectionHover.value?.zone === 'body')
+const isConnectionValidTarget = computed(() => connectionHover.value?.status === 'valid')
+const isConnectionInvalidTarget = computed(() => connectionHover.value?.status === 'invalid')
+
 /**
  * 是否显示"可连接"反馈效果（3D 倾斜 + 高亮边框 + 光晕）。
  * 条件：正在拖线、不是拖线起点、不是禁止连接节点、
@@ -197,23 +209,8 @@ const shouldShowHandles = computed(() =>
 const showConnectFeedback = computed(() =>
   canvas.isConnecting &&
   canvas.connectionState.activeConnection?.sourceNodeId !== props.id &&
-  !isInvalidConnectionTarget.value &&
-  (
-    isHovered.value ||
-    (canvas.connectionState.hoverNode?.nodeId === props.id &&
-     canvas.connectionState.hoverNode?.status === 'valid')
-  )
-)
-
-/**
- * 当前节点是否被标记为"禁止连接"。
- * 触发条件：拖线时鼠标落在某个节点上，但连接会被拦截（重复/循环/方向不对等）。
- * 此时节点会显示模糊禁用效果 + "无法连接"提示气泡。
- */
-const isInvalidConnectionTarget = computed(() =>
-  canvas.isConnecting &&
-  canvas.connectionState.hoverNode?.nodeId === props.id &&
-  canvas.connectionState.hoverNode?.status === 'invalid'
+  !isConnectionInvalidTarget.value &&
+  (isHovered.value || isConnectionValidTarget.value)
 )
 
 /**
@@ -249,7 +246,7 @@ const shouldShowTargetZones = computed(() =>
  * 如果是禁止连接状态，不应用任何变换（只用模糊效果）。
  */
 const cardTransform = computed(() => {
-  if (isInvalidConnectionTarget.value) return ''
+  if (isConnectionInvalidTarget.value) return ''
   if (!showConnectFeedback.value) return ''
   const p = feedbackMousePosition.value
   const rotateX = (p.y - 0.5) * CONNECT_FEEDBACK.rotateX
@@ -313,7 +310,7 @@ const invalidFeedbackPosition = computed(() => {
   const point = canvas.connectionState.hoverNode?.status === 'invalid'
     ? canvas.connectionState.hoverNode.flowPosition
     : null
-  if (!isInvalidConnectionTarget.value || !point) return { x: 0.08, y: 0.5 }
+  if (!isConnectionInvalidTarget.value || !point) return { x: 0.08, y: 0.5 }
 
   const node = (vf.getNodes.value as GraphNode[]).find((item) => item.id === props.id)
   const position = node?.computedPosition || node?.position
@@ -407,7 +404,15 @@ const nodeLabel = computed(() => {
 
 <template>
   <!-- 节点根元素：relative 定位容器，绑定选中/悬停状态，控制 handles 显示/隐藏 -->
-  <div class="custom-node-root relative" :class="{ 'is-selected': showSelectionOutline, 'is-hovered': isHovered }"
+  <div class="custom-node-root relative" :class="{
+    'is-selected': showSelectionOutline,
+    'is-pointer-hovered': isHovered,
+    'is-connection-hovered': Boolean(connectionHover),
+    'is-connection-snap-hovered': isConnectionSnapHovered,
+    'is-connection-body-hovered': isConnectionBodyHovered,
+    'is-connection-valid': isConnectionValidTarget,
+    'is-connection-invalid': isConnectionInvalidTarget,
+  }"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false; if (!canvas.isConnecting) canvas.connectionState.suppressHandles = false">
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
@@ -416,7 +421,7 @@ const nodeLabel = computed(() => {
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <!-- 标题栏也放在卡片内，这样拖线 3D 倾斜效果会同时作用在标题上 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
-      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isInvalidConnectionTarget }"
+      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
       :style="cardInlineStyle"
       @mousemove="updateCardMousePosition">
 
@@ -461,7 +466,7 @@ const nodeLabel = computed(() => {
       </slot>
 
       <div
-        v-if="isInvalidConnectionTarget"
+        v-if="isConnectionInvalidTarget"
         class="invalid-connection-tooltip"
         :style="invalidTooltipStyle"
       >
@@ -627,7 +632,7 @@ const nodeLabel = computed(() => {
 }
 
 .resize-handle:not(.is-resizing):hover,
-.custom-node-root.is-hovered .resize-handle,
+.custom-node-root.is-pointer-hovered .resize-handle,
 .custom-node-root.is-selected .resize-handle {
   opacity: 0.85;
 }
@@ -640,7 +645,7 @@ const nodeLabel = computed(() => {
 }
 
 .resize-handle:not(.is-resizing):hover .resize-handle-icon,
-.custom-node-root.is-hovered .resize-handle .resize-handle-icon,
+.custom-node-root.is-pointer-hovered .resize-handle .resize-handle-icon,
 .custom-node-root.is-selected .resize-handle .resize-handle-icon {
   color: var(--canvas-node-resize-handle-active);
 }

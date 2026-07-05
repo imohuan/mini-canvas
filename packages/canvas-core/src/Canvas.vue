@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import { ref, onMounted, onUnmounted, computed, nextTick, watch, shallowRef, markRaw, provide } from 'vue'
@@ -710,5 +710,10 @@ body {
 
 .vue-flow__edges {
   pointer-events: none;
+}
+
+/* 用于吸附到节点的时候让节点顶置（修复：吸附的时候连接线在节点上面 视觉效果不佳） */
+.vue-flow__node:has(.custom-node-root.is-connection-snap-hovered) {
+  z-index: 2000 !important;
 }
 </style>

@@ -1,4 +1,4 @@
-﻿import type { Component, Ref, ComputedRef } from 'vue'
+import type { Component, Ref, ComputedRef } from 'vue'
 import type { CommandRegistryAPI, ToolbarRegistryAPI, PanelRegistryAPI } from '../registry/types'
 import type { Node, Edge } from '@vue-flow/core'
 import type { CanvasNodeDefinition, CanvasNodeMenuItem } from '../registry/NodeRegistry'
@@ -221,6 +221,7 @@ export type HoverTarget =
 export interface ConnectionHoverNode {
   nodeId: string
   status: 'valid' | 'invalid'
+  zone: 'snap' | 'body'
   flowPosition: Point
   message?: string
 }

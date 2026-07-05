@@ -143,12 +143,15 @@ function isTempEdge(edge: Edge | undefined | null): boolean {
   return Boolean(edge?.data?.isTemp)
 }
 
-/** 获取节点的实际渲染尺寸 */
+/** 获取节点卡片的逻辑尺寸 */
 function getNodeSize(node: Node): { width: number; height: number } {
   const anyNode = node as any
+  const data = (node.data || {}) as Record<string, unknown>
+  const cardWidth = Number(data.cardWidth)
+  const cardHeight = Number(data.cardHeight)
   return {
-    width: anyNode.dimensions?.width || anyNode.width || DEFAULT_NODE_SIZE.width,
-    height: anyNode.dimensions?.height || anyNode.height || DEFAULT_NODE_SIZE.height,
+    width: cardWidth > 0 ? cardWidth : (anyNode.dimensions?.width || anyNode.width || DEFAULT_NODE_SIZE.width),
+    height: cardHeight > 0 ? cardHeight : (anyNode.dimensions?.height || anyNode.height || DEFAULT_NODE_SIZE.height),
   }
 }
 
@@ -289,7 +292,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   // 再注册 nextTick → 形成 "Maximum recursive updates exceeded" 死循环。
   // 用 rAF + 标志位确保每帧最多写一次，rAF 在下一帧执行不会形成同帧循环。
   let hoverRafId = 0
-  let pendingHover: { nodeId: string; status: 'valid' | 'invalid'; flowPosition: Point; message?: string } | null = null
+  let pendingHover: { nodeId: string; status: 'valid' | 'invalid'; zone: 'snap' | 'body'; flowPosition: Point; message?: string } | null = null
 
   /** 节点 ID 索引（O(1) 查找）。computed 确保与 getNodes 同步，避免 shallowRef+watch 异步延迟 */
   const nodesById = computed(() => {
@@ -331,7 +334,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       const node = nodesById.value.get(nodeId)
       if (!node || isTempNode(node) || !node.targetPosition) continue
 
-      const rect = el.getBoundingClientRect()
+      const rect = getNodeCardRectFromNodeElement(el)
       const nodeSize = getNodeSize(node)
       const zoomScale = nodeSize.width > 0 ? rect.width / nodeSize.width : 1
       const snapOuterInScreen = snapOuter * zoomScale
@@ -440,7 +443,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       const node = nodesById.value.get(nodeId)
       if (!node || isTempNode(node)) continue
 
-      const rect = el.getBoundingClientRect()
+      const rect = getNodeCardRectFromNodeElement(el)
       const inside =
         clientX >= rect.left &&
         clientX <= rect.right &&
@@ -564,7 +567,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
   function setInvalidConnectionFeedback(nodeId: string | null, point: Point | null, message = '无法连接') {
     if (!nodeId || !point) { clearInvalidConnectionFeedback(); return }
     canvas.connectionState.hoverNode = {
-      nodeId, status: 'invalid', flowPosition: point, message,
+      nodeId, status: 'invalid', zone: 'body', flowPosition: point, message,
     }
   }
 
@@ -750,6 +753,8 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
     let invalidNodeId: string | null = null
     let invalidMessage: string | undefined = undefined
     let snappedNodeId: string | null = null
+    let feedbackNodeId: string | null = null
+    let feedbackZone: 'snap' | 'body' | null = null
 
     for (const zone of snapZones) {
       const inZone =
@@ -768,6 +773,8 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       if (reason) {
         invalidNodeId = zone.id
         invalidMessage = reason
+        feedbackNodeId = zone.id
+        feedbackZone = 'snap'
         continue
       }
 
@@ -777,6 +784,8 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         endX = zone.anchorX
         endY = zone.anchorY
         snappedNodeId = zone.id
+        feedbackNodeId = zone.id
+        feedbackZone = 'snap'
       }
     }
 
@@ -798,27 +807,34 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       if (reason) {
         invalidNodeId = bodyNodeId
         invalidMessage = reason
-      } else {
-        snappedNodeId = bodyNodeId
       }
+      feedbackNodeId = bodyNodeId
+      feedbackZone = 'body'
     }
 
-    const effectiveFeedbackNodeId = snappedNodeId || bodyNodeId
+    const effectiveFeedbackNodeId = feedbackNodeId
+    const effectiveInvalid = Boolean(invalidNodeId && invalidNodeId === effectiveFeedbackNodeId)
+    const effectiveMessage = effectiveInvalid ? (invalidMessage || '无法连接') : undefined
     const nextFeedbackPoint = effectiveFeedbackNodeId ? { x: connectionLineProps.targetX, y: connectionLineProps.targetY } : null
     const currentHover = canvas.connectionState.hoverNode
+    const nextStatus = effectiveFeedbackNodeId ? (effectiveInvalid ? 'invalid' : 'valid') : null
     const hoverChanged =
       currentHover?.nodeId !== effectiveFeedbackNodeId ||
+      currentHover?.status !== nextStatus ||
+      currentHover?.zone !== feedbackZone ||
+      currentHover?.message !== effectiveMessage ||
       currentHover?.flowPosition?.x !== nextFeedbackPoint?.x ||
       currentHover?.flowPosition?.y !== nextFeedbackPoint?.y
 
     if (hoverChanged) {
       // 用 rAF 替代 nextTick：rAF 在下一帧执行，不会与当前渲染形成 microtask 循环
-      const nextHover = effectiveFeedbackNodeId && nextFeedbackPoint
+      const nextHover = effectiveFeedbackNodeId && nextFeedbackPoint && nextStatus && feedbackZone
         ? {
             nodeId: effectiveFeedbackNodeId,
-            status: (invalidNodeId ? 'invalid' : 'valid') as 'valid' | 'invalid',
+            status: nextStatus as 'valid' | 'invalid',
+            zone: feedbackZone,
             flowPosition: { x: nextFeedbackPoint.x, y: nextFeedbackPoint.y },
-            message: invalidNodeId ? (invalidMessage || '无法连接') : undefined,
+            message: effectiveMessage,
           }
         : null
       pendingHover = nextHover
@@ -935,11 +951,13 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
 
     let feedbackNode: Node | null = null
     let invalidNode: Node | null = null
+    let feedbackZone: 'snap' | 'body' | null = null
 
     if (batch.type === 'source') {
       const sourceNodeIds = new Set(batch.nodeIds)
       feedbackNode = findNearestValidTarget(point.x, point.y, batch.nodeIds[0], sourceNodeIds)
       if (feedbackNode) {
+        feedbackZone = 'snap'
         const sourceNodes = (getNodes.value as Node[]).filter(
           node => batch.nodeIds.includes(node.id) && node.sourcePosition,
         )
@@ -951,12 +969,14 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         const bodyNode = findNodeBodyAtPoint(point.x, point.y, sourceNodeIds)
         if (bodyNode && bodyNode.targetPosition) {
           feedbackNode = bodyNode
+          feedbackZone = 'body'
         }
       }
     } else {
       const targetNodeIds = new Set(batch.nodeIds)
       feedbackNode = findNearestValidSource(point.x, point.y, targetNodeIds)
       if (feedbackNode) {
+        feedbackZone = 'snap'
         const targetNodes = (getNodes.value as Node[]).filter(
           node => batch.nodeIds.includes(node.id) && node.targetPosition,
         )
@@ -968,6 +988,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
         const bodyNode = findNodeBodyAtPoint(point.x, point.y, targetNodeIds)
         if (bodyNode && bodyNode.sourcePosition) {
           feedbackNode = bodyNode
+          feedbackZone = 'body'
         }
       }
     }
@@ -977,6 +998,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       canvas.connectionState.hoverNode = {
         nodeId: invalidNode.id,
         status: 'invalid',
+        zone: feedbackZone || 'body',
         flowPosition: flowPoint || { x: 0, y: 0 },
         message: '无法连接',
       }
@@ -984,6 +1006,7 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
       canvas.connectionState.hoverNode = {
         nodeId: feedbackNode.id,
         status: 'valid',
+        zone: feedbackZone || 'body',
         flowPosition: flowPoint || { x: 0, y: 0 },
       }
     } else {
