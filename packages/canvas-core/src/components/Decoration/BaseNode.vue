@@ -3,6 +3,7 @@ import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
+import BaseTitle from './BaseTitle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { createCappedStyle, clamp } from '../../utils/viewportSpace'
@@ -428,41 +429,25 @@ const nodeLabel = computed(() => {
       <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸）。
            放在卡片内以参与 3D 倾斜效果 -->
       <slot name="title">
-        <!-- 标题容器：绝对定位在卡片上方，pointer-events-none 防止遮挡操作 -->
-        <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
-          :style="titleTransformStyle">
-          <slot name="title-icon">
-            <!-- 图标优先用插件注册的 titleIcon，否则 fallback 到 nodeType 匹配 -->
-            <component v-if="typeof nodeDef?.titleIcon === 'object' && nodeDef?.titleIcon"
-              :is="nodeDef.titleIcon"
-              class="w-3.5 h-3.5 shrink-0" />
-            <span v-else-if="typeof nodeDef?.titleIcon === 'string' && nodeDef?.titleIcon"
-              class="w-3.5 h-3.5 shrink-0 inline-flex items-center"
-              v-html="nodeDef.titleIcon" />
-            <svg v-else-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-              <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="data?.nodeType === 'video'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <polygon points="23 7 16 12 23 17" />
-              <rect x="1" y="5" width="15" height="14" rx="2" />
-            </svg>
-            <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2">
-              <polyline points="4 7 4 4 20 4 20 7" />
-              <line x1="9" y1="20" x2="15" y2="20" />
-              <line x1="12" y1="4" x2="12" y2="20" />
-            </svg>
-          </slot>
-          <slot name="title-label">
-            <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
-            <span class="truncate">{{ nodeLabel }}</span>
-          </slot>
-          <slot name="title-extra" />
-        </div>
+        <BaseTitle
+          :title-style="titleTransformStyle"
+          :node-type="data?.nodeType"
+          :title-icon="nodeDef?.titleIcon"
+          :label="nodeLabel"
+        >
+          <template v-if="$slots['title-icon']" #title-icon>
+            <slot name="title-icon" />
+          </template>
+          <template #title-label>
+            <slot name="title-label">
+              <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
+              <span class="truncate">{{ nodeLabel }}</span>
+            </slot>
+          </template>
+          <template #title-extra>
+            <slot name="title-extra" />
+          </template>
+        </BaseTitle>
       </slot>
 
       <div

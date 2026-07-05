@@ -1,35 +1,61 @@
 <script setup lang="ts">
 import { useVueFlow } from '@vue-flow/core'
-import { onUnmounted, ref } from 'vue'
+import type { CSSProperties } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import BaseTitle from '../../components/Decoration/BaseTitle.vue'
+import BaseToolbar from '../../components/Toolbar/BaseToolbar.vue'
+import { useCanvasStore } from '../../composables/useCanvasStore'
+import { createCappedStyle } from '../../utils/viewportSpace'
+import { normalizeGroupTitle, resolveGroupBackgroundColor } from './model'
 
-/**
- * GroupNode — 分组容器节点 (v0.2.0)
- *
- * 尺寸由 VueFlow NodeWrapper 通过 node.style 管理。
- * GroupNode 自身 width: 100%; height: 100% 占满父容器，
- * 不再自己计算 / 覆盖尺寸。
- *
- * 半透明矩形容器，选中时显示独立边框和四角 resize 控制点。
- * body 区域 pointer-events: none，让事件穿透到子节点。
- */
 type GroupNodeData = {
   label?: string
+  backgroundColor?: string
+  _editingTitle?: boolean
+  nodeType?: string
 }
 
 const props = defineProps<{
   id: string
   data: GroupNodeData
   selected: boolean
+  type?: string
   position?: { x: number; y: number }
   dimensions?: { width: number; height: number }
 }>()
 
 const vf = useVueFlow()
+const canvas = useCanvasStore()
 
 const MIN_WIDTH = 160
 const MIN_HEIGHT = 120
+const GROUP_TITLE_TOP_OFFSET = -28
+const GROUP_TITLE_LEFT_OFFSET = 20
+const GROUP_TITLE_TOOLBAR_GAP = 10
 
 const isResizing = ref(false)
+const draftTitle = ref('')
+const skipNextTitleBlur = ref(false)
+const titleInputRef = ref<HTMLInputElement | null>(null)
+
+const label = computed(() => normalizeGroupTitle(props.data?.label))
+const isEditingTitle = computed(() => props.data?._editingTitle === true)
+const titleVisible = computed(() => isEditingTitle.value || label.value.length > 0)
+const groupBackground = computed(() => resolveGroupBackgroundColor(props.data?.backgroundColor))
+const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
+const groupTitleScreenOffset = computed(() => Math.abs(GROUP_TITLE_TOP_OFFSET) * Math.min(zoom.value, 1))
+const toolbarExtraOffset = computed(() => {
+  if (!titleVisible.value) return 0
+  const desiredOffset = groupTitleScreenOffset.value + GROUP_TITLE_TOOLBAR_GAP
+  return Math.max(0, desiredOffset - canvas.state.core.topToolbarOffset)
+})
+const groupTitleStyle = computed<CSSProperties>(() => ({
+  ...createCappedStyle(zoom.value, {
+    topOffset: GROUP_TITLE_TOP_OFFSET,
+    leftOffset: GROUP_TITLE_LEFT_OFFSET,
+  }),
+  zIndex: 4,
+}))
 
 interface ChildResizePosition {
   id: string
@@ -49,6 +75,43 @@ interface ResizeState {
 }
 
 const resizeState = ref<ResizeState | null>(null)
+
+watch(isEditingTitle, (editing) => {
+  if (!editing) return
+  draftTitle.value = label.value
+  nextTick(() => {
+    titleInputRef.value?.focus()
+    titleInputRef.value?.select()
+  })
+}, { immediate: true })
+
+function updateGroupData(data: Partial<GroupNodeData>) {
+  vf.updateNode(props.id, {
+    data: {
+      ...(props.data ?? {}),
+      ...data,
+      nodeType: 'group',
+    },
+  })
+}
+
+function startTitleEdit() {
+  if (!label.value) return
+  updateGroupData({ _editingTitle: true })
+}
+
+function commitTitleEdit() {
+  if (skipNextTitleBlur.value) {
+    skipNextTitleBlur.value = false
+    return
+  }
+  updateGroupData({ label: normalizeGroupTitle(draftTitle.value), _editingTitle: false })
+}
+
+function cancelTitleEdit() {
+  skipNextTitleBlur.value = true
+  updateGroupData({ _editingTitle: false })
+}
 
 function getCurrentDimensions(): { w: number; h: number } {
   const node = vf.getNodes.value.find((item: any) => item.id === props.id) as any
@@ -162,7 +225,43 @@ onUnmounted(() => {
   <div
     class="group-node"
     :class="{ 'group-node--selected': selected, 'group-node--resizing': isResizing }"
+    :style="{ '--group-node-color': groupBackground }"
   >
+    <BaseToolbar v-if="selected" v-bind="$props" toolbar-position="top" :extra-offset="toolbarExtraOffset" />
+
+    <BaseTitle
+      v-if="titleVisible"
+      class="group-node__title nodrag nopan"
+      :title-style="groupTitleStyle"
+      :interactive="true"
+      :editing="isEditingTitle"
+      node-type="group"
+      :label="label"
+    >
+      <template #title-label>
+        <input
+          v-if="isEditingTitle"
+          ref="titleInputRef"
+          v-model="draftTitle"
+          class="group-node__title-value group-node__title-input"
+          type="text"
+          @keydown.enter.prevent="commitTitleEdit"
+          @keydown.escape.prevent="cancelTitleEdit"
+          @blur="commitTitleEdit"
+          @pointerdown.stop
+          @dblclick.stop
+        >
+        <button
+          v-else
+          class="group-node__title-value group-node__title-text"
+          type="button"
+          @dblclick.stop="startTitleEdit"
+        >
+          {{ label }}
+        </button>
+      </template>
+    </BaseTitle>
+
     <div class="group-node__body" />
 
     <div v-if="selected" class="group-node__selection" aria-hidden="true">
@@ -207,9 +306,9 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   height: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.28);
+  border: 1px solid color-mix(in srgb, var(--group-node-color) 56%, transparent);
   border-radius: 10px;
-  background: rgba(148, 163, 184, 0.05);
+  background: color-mix(in srgb, var(--group-node-color) 14%, transparent);
   overflow: visible;
   display: flex;
   flex-direction: column;
@@ -217,12 +316,48 @@ onUnmounted(() => {
 }
 
 .group-node--selected {
-  border-color: rgba(148, 163, 184, 0.44);
-  background: rgba(148, 163, 184, 0.07);
+  border-color: color-mix(in srgb, var(--group-node-color) 78%, white 22%);
+  background: color-mix(in srgb, var(--group-node-color) 18%, transparent);
 }
 
 .group-node--resizing {
   user-select: none;
+}
+
+.group-node__title {
+  pointer-events: auto;
+}
+
+.group-node__title-value {
+  display: block;
+  appearance: none;
+  min-width: 28px;
+  max-width: 260px;
+  height: 22px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 20px;
+  text-align: left;
+}
+
+.group-node__title-text {
+  display: block;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-node__title-input {
+  width: 180px;
+  border-color: color-mix(in srgb, var(--group-node-color) 74%, white 26%);
+  outline: none;
 }
 
 .group-node__body {

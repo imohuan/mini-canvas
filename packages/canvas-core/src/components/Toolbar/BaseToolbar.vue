@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from "vue"
 import { Position } from "@vue-flow/core"
 import type { NodeProps } from "@vue-flow/core"
@@ -19,7 +19,7 @@ const props = defineProps<
 const runtime = useCanvasRuntime()
 const canvas = useCanvasStore()
 
-const nodeType = computed(() => props.data?.nodeType as string | undefined)
+const nodeType = computed(() => (props.data?.nodeType || props.type) as string | undefined)
 const isMultiSelect = computed(() => !!(props.nodeIds && props.nodeIds.length))
 
 const dataSnapshot = computed(() => props.data)
@@ -40,8 +40,8 @@ const visibleButtons = computed<ToolbarButtonDefinition[]>(() => {
   }
   return all.filter((btn) => {
     if (btn.source === "multi-select") return false
-    if (btn.nodeTypes && btn.nodeTypes.length > 0 && nodeType.value) {
-      if (!btn.nodeTypes.includes(nodeType.value)) return false
+    if (btn.nodeTypes && btn.nodeTypes.length > 0) {
+      if (!nodeType.value || !btn.nodeTypes.includes(nodeType.value)) return false
     }
     // 工具组过滤：标了 group 的按钮，仅在节点设了 _toolbarGroup 且匹配时显示
     // _toolbarGroup 未设（undefined）→ 跳过过滤，全部显示（向后兼容）
@@ -135,6 +135,7 @@ function onDropdownSelect(btn: ToolbarButtonDefinition, itemId: string) {
           :disabled="isDisabled(btn)"
           :dropdown="btn.dropdown"
           :custom-render="btn.customRender"
+          :command-context="buildContext()"
           @action="onButtonAction(btn)"
           @dropdown-select="(id: string) => onDropdownSelect(btn, id)"
         />

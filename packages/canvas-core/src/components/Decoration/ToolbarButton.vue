@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, watch, type Component, nextTick, onBeforeUnmount } from 'vue'
 
 const props = withDefaults(defineProps<{
@@ -13,6 +13,7 @@ const props = withDefaults(defineProps<{
     danger?: boolean; disabled?: boolean | ((ctx: any) => boolean)
   }>
   customRender?: Component
+  commandContext?: unknown
 }>(), { variant: 'default', danger: false, disabled: false })
 
 const emit = defineEmits<{
@@ -83,7 +84,14 @@ function onDropdownItemClick(id: string) {
 
 <template>
   <div class="toolbar-button-wrapper">
-    <component v-if="customRender" :is="customRender" @action="emit('action')" />
+    <component
+      v-if="customRender"
+      :is="customRender"
+      :command-context="commandContext"
+      :disabled="disabled"
+      :title="tooltip || title"
+      @action="emit('action')"
+    />
     <button ref="buttonRef" v-else class="toolbar-button"
       :class="{
         'toolbar-button--primary': variant === 'primary',
