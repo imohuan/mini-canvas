@@ -15,8 +15,8 @@ type NodeLike = {
 }
 
 export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
-  { kind: 'preset', id: 'blue', color: '#0ea5e9', label: '蓝色' },
   { kind: 'preset', id: 'slate', color: '#334155', label: '石板灰' },
+  { kind: 'preset', id: 'blue', color: '#0ea5e9', label: '蓝色' },
   { kind: 'preset', id: 'red', color: '#ef4444', label: '红色' },
   { kind: 'preset', id: 'orange', color: '#f97316', label: '橙色' },
   { kind: 'preset', id: 'yellow', color: '#eab308', label: '黄色' },
@@ -27,7 +27,7 @@ export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
 
 export const DEFAULT_GROUP_BACKGROUND_COLOR = GROUP_COLOR_SWATCHES[0].kind === 'preset'
   ? GROUP_COLOR_SWATCHES[0].color
-  : '#0ea5e9'
+  : '#334155'
 
 export function resolveGroupBackgroundColor(color: unknown): string {
   return typeof color === 'string' && color.trim() ? color : DEFAULT_GROUP_BACKGROUND_COLOR

@@ -7,8 +7,9 @@ import {
   normalizeGroupTitle,
 } from '../model.ts'
 
-test('group color swatches render a 4x2 grid with custom color as the last item', () => {
+test('group color swatches render a 4x2 grid with slate gray as the default and custom color as the last item', () => {
   assert.equal(GROUP_COLOR_SWATCHES.length, 8)
+  assert.deepEqual(GROUP_COLOR_SWATCHES[0], { kind: 'preset', id: 'slate', color: '#334155', label: '石板灰' })
   assert.equal(GROUP_COLOR_SWATCHES.at(-1)?.kind, 'custom')
 })
 
