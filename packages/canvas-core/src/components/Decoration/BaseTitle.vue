@@ -2,14 +2,17 @@
 import type { Component, CSSProperties } from 'vue'
 import { computed } from 'vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   label?: string
   nodeType?: string
   titleIcon?: Component | string | null
   titleStyle?: CSSProperties
   interactive?: boolean
   editing?: boolean
-}>()
+  placement?: 'absolute' | 'flow'
+}>(), {
+  placement: 'absolute',
+})
 
 const componentTitleIcon = computed(() => {
   if (!props.titleIcon) return null
@@ -25,6 +28,8 @@ const htmlTitleIcon = computed(() => {
   <div
     class="base-title"
     :class="{
+      'base-title--absolute': placement === 'absolute',
+      'base-title--flow': placement === 'flow',
       'base-title--interactive': interactive,
       'base-title--editing': editing,
     }"
@@ -88,8 +93,6 @@ const htmlTitleIcon = computed(() => {
 
 <style scoped>
 .base-title {
-  position: absolute;
-  left: 0.25rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -97,6 +100,15 @@ const htmlTitleIcon = computed(() => {
   font-size: 0.75rem;
   line-height: 1rem;
   pointer-events: none;
+}
+
+.base-title--absolute {
+  position: absolute;
+  left: 0.25rem;
+}
+
+.base-title--flow {
+  margin-left: 0.25rem;
 }
 
 .base-title--interactive {

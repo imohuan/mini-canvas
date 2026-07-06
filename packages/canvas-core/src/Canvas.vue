@@ -508,6 +508,10 @@ onMounted(async () => {
   registerCore('topToolbarOffset', { title: '上工具栏偏移', type: 'slider', group: '工具栏', order: 50, defaultValue: core.topToolbarOffset, min: 0, max: 40, step: 1 })
   registerCore('bottomToolbarOffset', { title: '下工具栏偏移', type: 'slider', group: '工具栏', order: 51, defaultValue: core.bottomToolbarOffset, min: 0, max: 40, step: 1 })
 
+  // --- 节点标题 ---
+  registerCore('nodeTitleOffset', { title: '标题偏移', description: '标题底部到节点顶部的固定屏幕间距', type: 'slider', group: '节点', order: 52, defaultValue: core.nodeTitleOffset, min: 0, max: 40, step: 1 })
+  registerCore('nodeTitleScaleMinZoom', { title: '标题缩放阈值', description: '低于该缩放值后，标题跟随画布一起缩小', type: 'slider', group: '节点', order: 53, defaultValue: core.nodeTitleScaleMinZoom, min: 0.1, max: 1, step: 0.05 })
+
   // --- 多选框 ---
   registerCore('selectionFramePaddingX', { title: '选框水平内边距', type: 'slider', group: '选框', order: 60, defaultValue: core.selectionFramePaddingX, min: 0, max: 60, step: 1 })
   registerCore('selectionFramePaddingTop', { title: '选框上内边距', type: 'slider', group: '选框', order: 61, defaultValue: core.selectionFramePaddingTop, min: 0, max: 80, step: 1 })

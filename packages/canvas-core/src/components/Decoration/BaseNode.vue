@@ -4,9 +4,10 @@ import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
+import NodeToolbar from './NodeToolbar.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { createCappedStyle, clamp } from '../../utils/viewportSpace'
+import { clamp } from '../../utils/viewportSpace'
 import { CONNECT_FEEDBACK } from '../../utils/constants'
 
 const props = defineProps<NodeProps & {
@@ -32,15 +33,15 @@ const nodeDef = computed(() => {
  */
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
-/**
- * 标题栏的缩放跟随样式。
- * 标题放在卡片上方绝对定位，zoom 变化时通过 createCappedStyle
- * 同时调整文字大小和上移距离，避免标题和卡片重叠或离太远。
- * zoom=1 时封顶，不再继续放大。
- * width 做"宽度反缩放"：scale 从左上角收缩会让标题只剩 1/zoom 宽，
- * 这里把布局宽度按 1/inv 放大，缩放后视觉宽度重新撑满卡片（去掉了 right-1）。
- */
-const titleTransformStyle = computed(() => createCappedStyle(zoom.value, { topOffset: -20, width: cardWidth.value - 8 }))
+const titleScale = computed(() => {
+  const minZoom = Math.max(canvas.state.core.nodeTitleScaleMinZoom || 0.5, 0.01)
+  return Math.min(1, zoom.value / minZoom)
+})
+
+const titleStyle = computed(() => ({
+  transform: `scale(${titleScale.value})`,
+  transformOrigin: 'left bottom',
+}))
 
 /**
  * 卡片实际宽度（响应式 ref）。
@@ -278,7 +279,7 @@ const cardInlineStyle = shallowRef<Record<string, string>>({
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
   borderWidth: `${1 / zoom.value}px`,
-  borderRadius: `${8 / zoom.value}px`,
+  borderRadius: '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
 })
 watch(
@@ -295,7 +296,7 @@ watch(
       height: h + 'px',
       transform: t,
       borderWidth: `${1 / z}px`,
-      borderRadius: `${8 / z}px`,
+      borderRadius: '8px',
       '--card-outline-width': sel ? `${2 / z}px` : '0px',
     }
   },
@@ -419,18 +420,12 @@ const nodeLabel = computed(() => {
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
-    <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
-    <!-- 标题栏也放在卡片内，这样拖线 3D 倾斜效果会同时作用在标题上 -->
-    <div class="custom-node-card relative flex items-center justify-center overflow-visible"
-      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
-      :style="cardInlineStyle"
-      @mousemove="updateCardMousePosition">
-
-      <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸）。
-           放在卡片内以参与 3D 倾斜效果 -->
+    <!-- 节点标题栏：复用 NodeToolbar 的屏幕坐标定位模型，offset 表示标题底部到节点顶部的固定距离。 -->
+    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="canvas.state.core.nodeTitleOffset" align="start">
       <slot name="title">
         <BaseTitle
-          :title-style="titleTransformStyle"
+          placement="flow"
+          :title-style="titleStyle"
           :node-type="data?.nodeType"
           :title-icon="nodeDef?.titleIcon"
           :label="nodeLabel"
@@ -449,6 +444,13 @@ const nodeLabel = computed(() => {
           </template>
         </BaseTitle>
       </slot>
+    </NodeToolbar>
+
+    <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
+    <div class="custom-node-card relative flex items-center justify-center overflow-visible"
+      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
+      :style="cardInlineStyle"
+      @mousemove="updateCardMousePosition">
 
       <div
         v-if="isConnectionInvalidTarget"
