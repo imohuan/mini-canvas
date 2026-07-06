@@ -16,6 +16,7 @@ interface Props {
   offset?: number
   align?: Align
   alignOffset?: number
+  zIndexOffset?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
   offset: 10,
   align: 'center',
   alignOffset: 0,
+  zIndexOffset: 0,
   isVisible: undefined,
 })
 
@@ -51,7 +53,7 @@ const isActive = computed(() =>
 
 const nodeRect = computed(() => getRectOfNodes(nodes.value))
 
-const zIndex = computed(() => Math.max(...nodes.value.map((node) => (node.computedPosition.z || 1) + 1)))
+const zIndex = computed(() => Math.max(...nodes.value.map((node) => (node.computedPosition.z || 1) + 1)) + props.zIndexOffset)
 
 const wrapperStyle = computed<CSSProperties>(() => ({
   position: 'absolute',

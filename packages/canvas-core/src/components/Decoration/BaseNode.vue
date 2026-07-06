@@ -419,7 +419,7 @@ const nodeLabel = computed(() => {
     <slot name="top-toolbar" />
 
     <!-- 节点标题栏：NodeToolbar 负责屏幕坐标锚点，标题布局协议统一控制缩放后的视觉偏移。 -->
-    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="titleOffset" align="start">
+    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="titleOffset" :z-index-offset="-1" align="start">
       <slot name="title">
         <BaseTitle
           :title-style="titleStyle"

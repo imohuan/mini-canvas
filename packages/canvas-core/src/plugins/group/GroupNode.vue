@@ -233,6 +233,7 @@ onUnmounted(() => {
       :position="Position.Top"
       :offset="titleOffset"
       :align-offset="titleAlignOffset"
+      :z-index-offset="-1"
       align="start"
     >
       <BaseTitle
@@ -338,34 +339,38 @@ onUnmounted(() => {
 }
 
 .group-node__title-value {
-  display: block;
   appearance: none;
-  min-width: 28px;
-  max-width: 260px;
-  height: 22px;
   box-sizing: border-box;
   margin: 0;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
-  line-height: 20px;
   text-align: left;
 }
 
 .group-node__title-text {
   display: block;
+  min-width: 28px;
+  max-width: 260px;
+  padding: 0;
+  border: 0;
   cursor: text;
+  line-height: inherit;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .group-node__title-input {
+  display: block;
+  min-width: 28px;
   width: 180px;
-  border-color: color-mix(in srgb, var(--group-node-color) 74%, white 26%);
+  max-width: 260px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--group-node-color) 74%, white 26%);
+  border-radius: 6px;
+  line-height: 20px;
   outline: none;
 }
 
