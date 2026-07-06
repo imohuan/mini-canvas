@@ -10,7 +10,7 @@ import { useCanvasStore } from '../../composables/useCanvasStore'
 import { formatFileSize } from '../../utils/format'
 import VideoCropper from './VideoCropper.vue'
 import VideoClipToolbar from './VideoClipToolbar.vue'
-import { fitVideoCardSize, formatTime, makeImageNodeFromFrame } from './videoNodeUtils'
+import { downloadVideoFile, fitVideoCardSize, formatTime, makeImageNodeFromFrame } from './videoNodeUtils'
 
 interface RectLike { x: number; y: number; width: number; height: number }
 
@@ -28,6 +28,7 @@ const duration = ref(Number(props.data?.videoDuration) || 0)
 const fullscreen = ref(false)
 const captureBusy = ref(false)
 const cameraMenuOpen = ref(false)
+let restoreMainPlaybackOnClose = false
 let cameraCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const videoUrl = computed(() => (props.data?.videoUrl as string) || '')
@@ -180,11 +181,7 @@ function runCommand(id: string) {
 }
 
 function downloadVideo() {
-  if (!videoUrl.value) return
-  const a = document.createElement('a')
-  a.href = videoUrl.value
-  a.download = (props.data?.videoName as string) || 'video.mp4'
-  a.click()
+  downloadVideoFile(videoUrl.value, props.data?.videoName)
 }
 
 function openCameraMenu() {
@@ -270,9 +267,15 @@ async function captureFrameAt(kind: 'current' | 'start' | 'end') {
     canvas.height = frameHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    if (crop) ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, frameWidth, frameHeight)
-    else ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    let blob: Blob | null = null
+    try {
+      if (crop) ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, frameWidth, frameHeight)
+      else ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    } catch (err) {
+      console.error('视频截图失败:', err)
+      return
+    }
     if (!blob) return
     const url = URL.createObjectURL(blob)
     let assetId: string | undefined
@@ -294,13 +297,15 @@ async function captureFrameAt(kind: 'current' | 'start' | 'end') {
 }
 
 function openFullscreen() {
+  const src = videoRef.value
+  restoreMainPlaybackOnClose = !!src && !src.paused
+  if (restoreMainPlaybackOnClose) src?.pause()
   fullscreen.value = true
   nextTick(() => {
-    const src = videoRef.value
     const target = fullscreenVideoRef.value
     if (src && target) {
       target.currentTime = src.currentTime
-      if (!src.paused) target.play().catch(() => {})
+      if (restoreMainPlaybackOnClose) target.play().catch(() => {})
     }
   })
 }
@@ -308,7 +313,13 @@ function openFullscreen() {
 function closeFullscreen() {
   const src = fullscreenVideoRef.value
   const target = videoRef.value
-  if (src && target) target.currentTime = src.currentTime
+  const shouldResume = !!src && !src.paused
+  src?.pause()
+  if (src && target) {
+    target.currentTime = src.currentTime
+    if (shouldResume) target.play().catch(() => {})
+  }
+  restoreMainPlaybackOnClose = false
   fullscreen.value = false
 }
 

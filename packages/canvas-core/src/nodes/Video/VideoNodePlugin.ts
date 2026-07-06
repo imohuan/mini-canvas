@@ -3,7 +3,7 @@ import type { Node } from '@vue-flow/core'
 import { VideoNode } from './index'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
 import type { CommandContext, PanelSettingDefinition } from '../../registry/types'
-import { makeVideoResultNode } from './videoNodeUtils'
+import { downloadVideoFile, makeVideoResultNode } from './videoNodeUtils'
 
 const clipSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 17h16"/><path d="M8 4v16"/><path d="M16 4v16"/></svg>`
 const cropSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2v14a2 2 0 002 2h14"/><path d="M2 6h14a2 2 0 012 2v14"/></svg>`
@@ -123,12 +123,7 @@ function handleVideoCaptureFrame(ctx: CommandContext) {
 
 function handleVideoDownload(ctx: CommandContext) {
   const node = ctx.node
-  const url = (node?.data as any)?.videoUrl as string | undefined
-  if (!url) return
-  const a = document.createElement('a')
-  a.href = url
-  a.download = ((node?.data as any)?.videoName as string) || 'video.mp4'
-  a.click()
+  downloadVideoFile((node?.data as any)?.videoUrl, (node?.data as any)?.videoName)
 }
 
 export const VideoNodePlugin: CanvasPlugin = {

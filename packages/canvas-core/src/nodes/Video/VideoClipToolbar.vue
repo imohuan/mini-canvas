@@ -24,6 +24,8 @@ const trackRef = ref<HTMLElement | null>(null)
 const thumbnails = ref<string[]>([])
 const dragging = ref<'start' | 'end' | 'move' | null>(null)
 const dragOffset = ref(0)
+let thumbnailJob = 0
+let thumbnailVideo: HTMLVideoElement | null = null
 
 watch(() => [props.start, props.end, props.duration], () => {
   localStart.value = props.start
@@ -115,10 +117,24 @@ function onWindowDown(e: PointerEvent) {
   dragging.value = 'move'
 }
 
+function stopThumbnailVideo() {
+  const video = thumbnailVideo
+  if (!video) return
+  video.onloadedmetadata = null
+  video.onerror = null
+  video.onseeked = null
+  video.removeAttribute('src')
+  video.load()
+  thumbnailVideo = null
+}
+
 async function generateThumbnails() {
+  const job = ++thumbnailJob
+  stopThumbnailVideo()
   thumbnails.value = []
   if (!props.videoUrl) return
   const video = document.createElement('video')
+  thumbnailVideo = video
   video.crossOrigin = 'anonymous'
   video.muted = true
   video.playsInline = true
@@ -126,9 +142,17 @@ async function generateThumbnails() {
   video.src = props.videoUrl
   try {
     await new Promise<void>((resolve, reject) => {
-      video.onloadedmetadata = () => resolve()
-      video.onerror = () => reject(new Error('video thumbnail load failed'))
+      const timer = window.setTimeout(resolve, 3000)
+      video.onloadedmetadata = () => {
+        window.clearTimeout(timer)
+        resolve()
+      }
+      video.onerror = () => {
+        window.clearTimeout(timer)
+        reject(new Error('video thumbnail load failed'))
+      }
     })
+    if (job !== thumbnailJob) return
     const canvas = document.createElement('canvas')
     const ratio = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9
     canvas.width = 96
@@ -136,19 +160,26 @@ async function generateThumbnails() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const count = 12
+    const nextThumbnails: string[] = []
     for (let i = 0; i < count; i++) {
       const time = Math.min(Math.max(video.duration - 0.05, 0), (video.duration || safeDuration.value) * (i / Math.max(1, count - 1)))
       await new Promise<void>((resolve) => {
-        video.onseeked = () => resolve()
+        const timer = window.setTimeout(resolve, 800)
+        video.onseeked = () => {
+          window.clearTimeout(timer)
+          resolve()
+        }
         video.currentTime = time
       })
+      if (job !== thumbnailJob) return
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      thumbnails.value.push(canvas.toDataURL('image/jpeg', 0.72))
+      nextThumbnails.push(canvas.toDataURL('image/jpeg', 0.72))
     }
+    if (job === thumbnailJob) thumbnails.value = nextThumbnails
   } catch {
-    thumbnails.value = []
+    if (job === thumbnailJob) thumbnails.value = []
   } finally {
-    video.src = ''
+    if (thumbnailVideo === video) stopThumbnailVideo()
   }
 }
 
@@ -161,6 +192,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('pointermove', onWindowMove)
   window.removeEventListener('pointerup', onWindowUp)
+  thumbnailJob++
+  stopThumbnailVideo()
 })
 </script>
 

@@ -106,6 +106,30 @@ export function moveClipRange({ start, end, nextStart, duration, minDuration = 0
   return { start: Number(s.toFixed(3)), end: Number((s + length).toFixed(3)) }
 }
 
+function safeVideoFileName(name: unknown) {
+  return String(name || 'video.mp4').replace(/[\\/:*?"<>|]+/g, '_') || 'video.mp4'
+}
+
+export function downloadVideoFile(url: unknown, name?: unknown) {
+  const href = String(url || '')
+  if (!href) return
+  let parsed: URL
+  try {
+    parsed = new URL(href, document.baseURI)
+  } catch {
+    console.warn('已拦截无效的视频下载地址:', href)
+    return
+  }
+  if (!['http:', 'https:', 'blob:'].includes(parsed.protocol) && !(parsed.protocol === 'data:' && href.startsWith('data:video/'))) {
+    console.warn('已拦截不安全的视频下载地址:', href)
+    return
+  }
+  const a = document.createElement('a')
+  a.href = href
+  a.download = safeVideoFileName(name)
+  a.click()
+}
+
 export function makeImageNodeFromFrame(sourceNode: SourceNode, frame: CapturedFrame): Node {
   const sourceData = sourceNode.data || {}
   const size = fitSize(frame.width, frame.height, DEFAULT_IMAGE_SIZE)
