@@ -49,6 +49,15 @@ export const CanvasConnectionEvents = {
   Release: 'connectionRelease',
 } as const
 
+/** 多选插件向分组插件发出的打组请求，只描述意图，不承载具体分组实现。 */
+export interface GroupCreatePayload {
+  nodeIds: string[]
+}
+
+export const CanvasGroupEvents = {
+  Create: 'group:create',
+} as const
+
 /** 插件生命周期状态枚举 */
 export const PluginLifecycle = {
   INSTALLING: 'installing',

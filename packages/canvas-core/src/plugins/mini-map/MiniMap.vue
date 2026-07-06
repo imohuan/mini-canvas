@@ -34,8 +34,13 @@ let dragStartViewport = { x: 0, y: 0, zoom: 1 }
 let dragStartMapState = { scale: 1, minX: 0, minY: 0, offsetX: 0, offsetY: 0 }
 
 const frozenNodes = shallowRef<any[] | null>(null)
+
+function isGroupNode(node: any): boolean {
+  return (node.data?.nodeType || node.type) === 'group'
+}
+
 const renderNodes = computed(() => {
-  return (frozenNodes.value ?? props.nodes).filter((n: any) => !n.hidden)
+  return (frozenNodes.value ?? props.nodes).filter((n: any) => !n.hidden && !isGroupNode(n))
 })
 
 const contentBB = computed(() => {

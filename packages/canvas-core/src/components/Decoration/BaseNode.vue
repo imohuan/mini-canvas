@@ -3,9 +3,11 @@ import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
+import BaseTitle from './BaseTitle.vue'
+import NodeToolbar from './NodeToolbar.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { createCappedStyle, clamp } from '../../utils/viewportSpace'
+import { createNodeTitleLayout, clamp } from '../../utils/viewportSpace'
 import { CONNECT_FEEDBACK } from '../../utils/constants'
 
 const props = defineProps<NodeProps & {
@@ -31,15 +33,13 @@ const nodeDef = computed(() => {
  */
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
-/**
- * 标题栏的缩放跟随样式。
- * 标题放在卡片上方绝对定位，zoom 变化时通过 createCappedStyle
- * 同时调整文字大小和上移距离，避免标题和卡片重叠或离太远。
- * zoom=1 时封顶，不再继续放大。
- * width 做"宽度反缩放"：scale 从左上角收缩会让标题只剩 1/zoom 宽，
- * 这里把布局宽度按 1/inv 放大，缩放后视觉宽度重新撑满卡片（去掉了 right-1）。
- */
-const titleTransformStyle = computed(() => createCappedStyle(zoom.value, { topOffset: -20, width: cardWidth.value - 8 }))
+const titleLayout = computed(() => createNodeTitleLayout(zoom.value, {
+  offset: canvas.state.core.nodeTitleOffset,
+  minZoom: canvas.state.core.nodeTitleScaleMinZoom,
+}))
+
+const titleStyle = computed(() => titleLayout.value.style)
+const titleOffset = computed(() => titleLayout.value.offset)
 
 /**
  * 卡片实际宽度（响应式 ref）。
@@ -277,7 +277,7 @@ const cardInlineStyle = shallowRef<Record<string, string>>({
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
   borderWidth: `${1 / zoom.value}px`,
-  borderRadius: `${8 / zoom.value}px`,
+  borderRadius: '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
 })
 watch(
@@ -294,7 +294,7 @@ watch(
       height: h + 'px',
       transform: t,
       borderWidth: `${1 / z}px`,
-      borderRadius: `${8 / z}px`,
+      borderRadius: '8px',
       '--card-outline-width': sel ? `${2 / z}px` : '0px',
     }
   },
@@ -418,52 +418,35 @@ const nodeLabel = computed(() => {
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
+    <!-- 节点标题栏：NodeToolbar 负责屏幕坐标锚点，标题布局协议统一控制缩放后的视觉偏移。 -->
+    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="titleOffset" :z-index-offset="-1" align="start">
+      <slot name="title">
+        <BaseTitle
+          :title-style="titleStyle"
+          :title-icon="nodeDef?.titleIcon"
+          :label="nodeLabel"
+        >
+          <template v-if="$slots['title-icon']" #title-icon>
+            <slot name="title-icon" />
+          </template>
+          <template #title-label>
+            <slot name="title-label">
+              <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
+              <span class="truncate">{{ nodeLabel }}</span>
+            </slot>
+          </template>
+          <template #title-extra>
+            <slot name="title-extra" />
+          </template>
+        </BaseTitle>
+      </slot>
+    </NodeToolbar>
+
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
-    <!-- 标题栏也放在卡片内，这样拖线 3D 倾斜效果会同时作用在标题上 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
       :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
       :style="cardInlineStyle"
       @mousemove="updateCardMousePosition">
-
-      <!-- 节点标题栏：卡片上方居中显示图标 + 名称 + 额外信息（如尺寸）。
-           放在卡片内以参与 3D 倾斜效果 -->
-      <slot name="title">
-        <!-- 标题容器：绝对定位在卡片上方，pointer-events-none 防止遮挡操作 -->
-        <div class="absolute left-1 flex items-center gap-2 text-xs text-gray-500 pointer-events-none"
-          :style="titleTransformStyle">
-          <slot name="title-icon">
-            <!-- 图标优先用插件注册的 titleIcon，否则 fallback 到 nodeType 匹配 -->
-            <component v-if="typeof nodeDef?.titleIcon === 'object' && nodeDef?.titleIcon"
-              :is="nodeDef.titleIcon"
-              class="w-3.5 h-3.5 shrink-0" />
-            <span v-else-if="typeof nodeDef?.titleIcon === 'string' && nodeDef?.titleIcon"
-              class="w-3.5 h-3.5 shrink-0 inline-flex items-center"
-              v-html="nodeDef.titleIcon" />
-            <svg v-else-if="data?.nodeType === 'image'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-              <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-            <svg v-else-if="data?.nodeType === 'video'" class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2">
-              <polygon points="23 7 16 12 23 17" />
-              <rect x="1" y="5" width="15" height="14" rx="2" />
-            </svg>
-            <svg v-else class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="2">
-              <polyline points="4 7 4 4 20 4 20 7" />
-              <line x1="9" y1="20" x2="15" y2="20" />
-              <line x1="12" y1="4" x2="12" y2="20" />
-            </svg>
-          </slot>
-          <slot name="title-label">
-            <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
-            <span class="truncate">{{ nodeLabel }}</span>
-          </slot>
-          <slot name="title-extra" />
-        </div>
-      </slot>
 
       <div
         v-if="isConnectionInvalidTarget"

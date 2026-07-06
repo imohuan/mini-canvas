@@ -1,4 +1,4 @@
-﻿<script lang="ts" setup>
+<script lang="ts" setup>
 defineOptions({ inheritAttrs: false })
 
 import { computed, inject } from 'vue'
@@ -15,12 +15,16 @@ interface Props {
   position?: Position
   offset?: number
   align?: Align
+  alignOffset?: number
+  zIndexOffset?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   position: Position.Top,
   offset: 10,
   align: 'center',
+  alignOffset: 0,
+  zIndexOffset: 0,
   isVisible: undefined,
 })
 
@@ -49,21 +53,21 @@ const isActive = computed(() =>
 
 const nodeRect = computed(() => getRectOfNodes(nodes.value))
 
-const zIndex = computed(() => Math.max(...nodes.value.map((node) => (node.computedPosition.z || 1) + 1)))
+const zIndex = computed(() => Math.max(...nodes.value.map((node) => (node.computedPosition.z || 1) + 1)) + props.zIndexOffset)
 
 const wrapperStyle = computed<CSSProperties>(() => ({
   position: 'absolute',
-  transform: getTransform(nodeRect.value, viewport.value, props.position, props.offset, props.align),
+  transform: getTransform(nodeRect.value, viewport.value, props.position, props.offset, props.align, props.alignOffset),
   zIndex: zIndex.value,
 }))
 
-function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Position, offset: number, align: Align): string {
+function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Position, offset: number, align: Align, alignOffset: number): string {
   let alignmentOffset = 0.5
   if (align === 'start') alignmentOffset = 0
   else if (align === 'end') alignmentOffset = 1
 
   let pos = [
-    (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x,
+    (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x + alignOffset,
     nodeRect.y * transform.zoom + transform.y - offset,
   ]
   let shift = [-100 * alignmentOffset, -100]
@@ -74,13 +78,13 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
     case Position.Right:
       pos = [
         (nodeRect.x + nodeRect.width) * transform.zoom + transform.x + offset,
-        (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y,
+        (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y + alignOffset,
       ]
       shift = [0, -100 * alignmentOffset]
       break
     case Position.Bottom:
       pos = [
-        (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x,
+        (nodeRect.x + nodeRect.width * alignmentOffset) * transform.zoom + transform.x + alignOffset,
         (nodeRect.y + nodeRect.height) * transform.zoom + transform.y + offset,
       ]
       shift = [-100 * alignmentOffset, 0]
@@ -88,7 +92,7 @@ function getTransform(nodeRect: Rect, transform: ViewportTransform, position: Po
     case Position.Left:
       pos = [
         nodeRect.x * transform.zoom + transform.x - offset,
-        (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y,
+        (nodeRect.y + nodeRect.height * alignmentOffset) * transform.zoom + transform.y + alignOffset,
       ]
       shift = [-100, -100 * alignmentOffset]
       break

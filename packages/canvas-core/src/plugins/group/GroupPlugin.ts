@@ -1,5 +1,10 @@
-import type { CanvasPlugin, PluginContext } from '../types'
+import { markRaw } from 'vue'
+import { CanvasGroupEvents } from '../types'
+import type { CanvasPlugin, GroupCreatePayload, PluginContext } from '../types'
+import type { CommandContext } from '../../registry/types'
 import GroupNode from './GroupNode.vue'
+import GroupColorButton from './GroupColorButton.vue'
+import { DEFAULT_GROUP_BACKGROUND_COLOR, selectDownloadableGroupChildren } from './model'
 
 // ============================================================================
 // Constants
@@ -140,7 +145,7 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
         // 不再需要 template 字段，nodeTypes 由 Canvas.vue 静态提供
         position: { x: groupX, y: groupY },
         style: { width: `${Math.max(groupW, 200)}px`, height: `${Math.max(groupH, 150)}px` },
-        data: { label: '分组' },
+        data: { label: '', nodeType: 'group', backgroundColor: DEFAULT_GROUP_BACKGROUND_COLOR },
         zIndex: 0,
         selectable: true,
         draggable: true,
@@ -174,6 +179,19 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
 
       requestAnimationFrame(reparentChildren)
       return groupId
+    }
+
+    function onCreateGroupEvent(payload: GroupCreatePayload) {
+      const nodeIds = Array.isArray(payload?.nodeIds)
+        ? payload.nodeIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : []
+
+      if (nodeIds.length < 2) {
+        logger.warn('group:create ignored: at least 2 node ids are required')
+        return
+      }
+
+      createGroup(nodeIds)
     }
 
     function ungroup(groupId: string): void {
@@ -334,7 +352,100 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
       }
     }
 
-    context.on('nodesChange', onExternalNodesChange)
+    function getGroupFromCommand(ctx: CommandContext) {
+      const node = ctx.node as any
+      return node?.type === 'group' || node?.data?.nodeType === 'group' ? node : null
+    }
+
+    function startEditingGroupTitle(groupId: string) {
+      const groupNode = context.actions.getNodes().find(n => n.id === groupId && n.type === 'group')
+      if (!groupNode) return
+      context.actions.updateNode(groupId, {
+        data: { ...(groupNode.data as any), nodeType: 'group', _editingTitle: true },
+      })
+    }
+
+    function downloadGroupChildren(groupId: string, runtime: unknown = null) {
+      const allNodes = context.actions.getNodes()
+      const downloadable = selectDownloadableGroupChildren(allNodes as any[], groupId, commandId => context.commands.has(commandId))
+      if (downloadable.length === 0) {
+        logger.warn(`Group ${groupId} has no downloadable child nodes`)
+        return
+      }
+
+      for (const item of downloadable) {
+        void context.commands.execute(item.commandId, {
+          runtime,
+          actions: context.actions,
+          selection: context.selection,
+          viewport: context.viewport,
+          store: context.store,
+          logger,
+          node: item.node as any,
+          nodeType: (item.node as any).data?.nodeType || (item.node as any).type,
+        })
+      }
+    }
+
+    context.commands.register({
+      id: 'group.color',
+      source: 'group',
+      title: '背景颜色',
+      run() {},
+    })
+    context.toolbars.register('group', {
+      id: 'group.color',
+      source: 'group',
+      commandId: 'group.color',
+      position: 'top',
+      title: '背景颜色',
+      nodeTypes: ['group'],
+      order: 10,
+      customRender: markRaw(GroupColorButton),
+    })
+
+    context.commands.register({
+      id: 'group.ungroup',
+      source: 'group',
+      title: '解组',
+      run(ctx) {
+        const group = getGroupFromCommand(ctx)
+        if (group?.id) ungroup(group.id)
+      },
+    })
+    context.toolbars.register('group', {
+      id: 'group.ungroup',
+      source: 'group',
+      commandId: 'group.ungroup',
+      position: 'top',
+      title: '解组',
+      icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h6v6h-6z"/></svg>`,
+      nodeTypes: ['group'],
+      order: 20,
+    })
+
+    context.commands.register({
+      id: 'group.batch-download',
+      source: 'group',
+      title: '批量下载',
+      run(ctx) {
+        const group = getGroupFromCommand(ctx)
+        if (group?.id) downloadGroupChildren(group.id, ctx.runtime)
+      },
+    })
+    context.toolbars.register('group', {
+      id: 'group.batch-download',
+      source: 'group',
+      commandId: 'group.batch-download',
+      position: 'top',
+      title: '批量下载',
+      icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/><path d="M5 7h4M15 7h4"/></svg>`,
+      nodeTypes: ['group'],
+      order: 30,
+    })
+
+    const offCreateGroup = context.on(CanvasGroupEvents.Create, onCreateGroupEvent)
+    const offExternalNodesChange = context.on('nodesChange', onExternalNodesChange)
 
     // ====================================================================
     // Keyboard shortcuts
@@ -362,6 +473,12 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
         }
       }
     }, '解散分组')
+
+    context.registerShortcut('f2', () => {
+      const selectedIds = [...context.selection.getSelectedNodeIds()]
+      if (selectedIds.length !== 1) return
+      startEditingGroupTitle(selectedIds[0])
+    }, '重命名分组')
 
     // ====================================================================
     // recalculateBounds: 根据组内子节点重新计算 GroupNode bounds
@@ -436,12 +553,16 @@ export const GroupPlugin: CanvasPlugin<Record<string, unknown>, GroupAPI> = {
     return {
       api,
       uninstall() {
-        context.off('nodesChange', onExternalNodesChange)
+        offCreateGroup()
+        offExternalNodesChange()
         pointerTarget.removeEventListener('pointerdown', onPointerDown as EventListener)
         document.removeEventListener('pointerup', onPointerUp as EventListener)
         window.removeEventListener('canvas:group:ungroup', onGroupUngroupEvent)
         try { context.unregisterShortcut('ctrl+g') } catch (_e) { /* ignore */ }
         try { context.unregisterShortcut('ctrl+shift+g') } catch (_e) { /* ignore */ }
+        try { context.unregisterShortcut('f2') } catch (_e) { /* ignore */ }
+        context.toolbars.unregisterSource('group')
+        context.commands.unregisterSource('group')
       },
     }
   },

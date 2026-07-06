@@ -1,4 +1,5 @@
-﻿import type { CanvasPlugin, PluginContext } from '../types'
+import { CanvasGroupEvents } from '../types'
+import type { CanvasPlugin, GroupCreatePayload, PluginContext } from '../types'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 
 /**
@@ -352,6 +353,10 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
     const offSelectAll = context.on('selection:selectAll', selectAllNodes)
     const offClear = context.on('selection:clear', escapeHandler)
 
+    function hasGroupPlugin() {
+      return Boolean(context.getPluginAPI('group'))
+    }
+
     // ====== 安装 ======
 
     // ====== 注册"打组"命令和 toolbar 按钮 ======
@@ -363,12 +368,17 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
       nodeTypes: [],
       run(_ctx) {
+        if (!hasGroupPlugin()) {
+          logger.warn('GroupPlugin 未安装，无法打组')
+          return
+        }
         const nodeIds = [...context.selection.getSelectedNodeIds()]
         if (nodeIds.length < 2) {
           logger.warn('打组至少需要选中 2 个节点')
           return
         }
-        context.emit('group:create', { nodeIds })
+        const payload: GroupCreatePayload = { nodeIds }
+        context.emit(CanvasGroupEvents.Create, payload)
       },
     })
 
@@ -378,6 +388,7 @@ export const MultiSelectPlugin: CanvasPlugin<Record<string, unknown>, MultiSelec
       commandId: 'multi-select:group',
       title: '打组',
       position: 'top',
+      disabled: () => !hasGroupPlugin(),
       icon: `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg>`,
       order: 100,
     })
