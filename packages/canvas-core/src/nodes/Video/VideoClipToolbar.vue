@@ -37,13 +37,6 @@ const range = computed(() => clampClipRange({ start: localStart.value, end: loca
 const startPct = computed(() => range.value.start / safeDuration.value * 100)
 const endPct = computed(() => range.value.end / safeDuration.value * 100)
 const widthPct = computed(() => Math.max(0, endPct.value - startPct.value))
-const windowThumbStyle = computed(() => {
-  const width = Math.max(0.001, widthPct.value)
-  return {
-    width: `${10000 / width}%`,
-    transform: `translateX(-${startPct.value}%)`,
-  }
-})
 const lengthLabel = computed(() => `${formatTime(range.value.end - range.value.start)} s`)
 const playheadPct = computed(() => {
   const length = Math.max(0.1, range.value.end - range.value.start)
@@ -186,13 +179,11 @@ onUnmounted(() => {
           <div v-for="(src, i) in thumbnails" :key="i" class="clip-thumb" :style="{ backgroundImage: `url(${src})` }" />
           <div v-if="thumbnails.length === 0" class="clip-thumb-fallback" />
         </div>
+        <div class="clip-mask" :style="{ left: 0, width: startPct + '%' }" />
+        <div class="clip-mask" :style="{ left: endPct + '%', right: 0 }" />
       </div>
       <div class="clip-window" :style="{ left: startPct + '%', width: widthPct + '%' }" @pointerdown.stop="onWindowDown">
         <div class="clip-window-body">
-          <div class="clip-window-thumbs" :style="windowThumbStyle">
-            <div v-for="(src, i) in thumbnails" :key="i" class="clip-thumb" :style="{ backgroundImage: `url(${src})` }" />
-            <div v-if="thumbnails.length === 0" class="clip-thumb-fallback" />
-          </div>
           <span class="clip-playhead" :style="{ left: playheadPct + '%' }" />
         </div>
         <span class="clip-grip clip-grip-left" @pointerdown.stop="onHandleDown('start', $event)">
@@ -230,10 +221,9 @@ onUnmounted(() => {
 .clip-thumbs { position: absolute; inset: 0; display: flex; opacity: 1; filter: none; }
 .clip-thumb { flex: 1; background-size: cover; background-position: center; opacity: 1; filter: none; }
 .clip-thumb-fallback { position: absolute; inset: 0; background: #111827; }
-.clip-rail::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,.52); pointer-events: none; }
+.clip-mask { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,.52); pointer-events: none; }
 .clip-window { position: absolute; top: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: center; }
 .clip-window-body { position: absolute; inset: 0; box-sizing: border-box; border: 2px solid #fff; background: transparent; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
-.clip-window-thumbs { position: absolute; top: 0; bottom: 0; left: 0; display: flex; transform-origin: left center; }
 .clip-playhead { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(17,24,39,.2); pointer-events: none; }
 .clip-window strong { position: relative; z-index: 3; padding: 4px 10px; border-radius: 999px; background: rgba(17,24,39,.82); color: #fff; font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: none; }
 .clip-grip { position: absolute; top: 0; bottom: 0; z-index: 4; width: 22px; display: flex; align-items: center; justify-content: center; color: #111827; background: #fff; cursor: ew-resize; box-shadow: 0 4px 12px rgba(15,23,42,.18); }
