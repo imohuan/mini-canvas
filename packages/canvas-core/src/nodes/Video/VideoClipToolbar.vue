@@ -231,13 +231,13 @@ onUnmounted(() => {
 .clip-thumb { flex: 1; background-size: cover; background-position: center; opacity: 1; filter: none; }
 .clip-thumb-fallback { position: absolute; inset: 0; background: #111827; }
 .clip-rail::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,.52); pointer-events: none; }
-.clip-window { position: absolute; top: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: center; border-radius: 14px; }
-.clip-window-body { position: absolute; inset: 0; box-sizing: border-box; border: 2px solid #fff; border-radius: 14px; background: transparent; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
+.clip-window { position: absolute; top: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: center; }
+.clip-window-body { position: absolute; inset: 0; box-sizing: border-box; border: 2px solid #fff; background: transparent; box-shadow: 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
 .clip-window-thumbs { position: absolute; top: 0; bottom: 0; left: 0; display: flex; transform-origin: left center; }
 .clip-playhead { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(17,24,39,.2); pointer-events: none; }
 .clip-window strong { position: relative; z-index: 3; padding: 4px 10px; border-radius: 999px; background: rgba(17,24,39,.82); color: #fff; font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: none; }
 .clip-grip { position: absolute; top: 0; bottom: 0; z-index: 4; width: 22px; display: flex; align-items: center; justify-content: center; color: #111827; background: #fff; cursor: ew-resize; box-shadow: 0 4px 12px rgba(15,23,42,.18); }
 .clip-grip svg { width: 12px; height: 24px; }
-.clip-grip-left { left: -12px; border-radius: 10px 0 0 10px; }
-.clip-grip-right { right: -12px; border-radius: 0 10px 10px 0; }
+.clip-grip-left { left: -22px; border-radius: 10px 0 0 10px; }
+.clip-grip-right { right: -22px; border-radius: 0 10px 10px 0; }
 </style>
