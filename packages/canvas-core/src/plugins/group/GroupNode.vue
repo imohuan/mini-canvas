@@ -4,7 +4,6 @@ import type { CSSProperties } from 'vue'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import BaseTitle from '../../components/Decoration/BaseTitle.vue'
 import BaseToolbar from '../../components/Toolbar/BaseToolbar.vue'
-import { useCanvasStore } from '../../composables/useCanvasStore'
 import { createCappedStyle } from '../../utils/viewportSpace'
 import { normalizeGroupTitle, resolveGroupBackgroundColor } from './model'
 
@@ -25,13 +24,11 @@ const props = defineProps<{
 }>()
 
 const vf = useVueFlow()
-const canvas = useCanvasStore()
 
 const MIN_WIDTH = 160
 const MIN_HEIGHT = 120
 const GROUP_TITLE_TOP_OFFSET = -28
 const GROUP_TITLE_LEFT_OFFSET = 20
-const GROUP_TITLE_TOOLBAR_GAP = 10
 
 const isResizing = ref(false)
 const draftTitle = ref('')
@@ -43,12 +40,6 @@ const isEditingTitle = computed(() => props.data?._editingTitle === true)
 const titleVisible = computed(() => isEditingTitle.value || label.value.length > 0)
 const groupBackground = computed(() => resolveGroupBackgroundColor(props.data?.backgroundColor))
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
-const groupTitleScreenOffset = computed(() => Math.abs(GROUP_TITLE_TOP_OFFSET) * Math.min(zoom.value, 1))
-const toolbarExtraOffset = computed(() => {
-  if (!titleVisible.value) return 0
-  const desiredOffset = groupTitleScreenOffset.value + GROUP_TITLE_TOOLBAR_GAP
-  return Math.max(0, desiredOffset - canvas.state.core.topToolbarOffset)
-})
 const groupTitleStyle = computed<CSSProperties>(() => ({
   ...createCappedStyle(zoom.value, {
     topOffset: GROUP_TITLE_TOP_OFFSET,
@@ -227,7 +218,7 @@ onUnmounted(() => {
     :class="{ 'group-node--selected': selected, 'group-node--resizing': isResizing }"
     :style="{ '--group-node-color': groupBackground }"
   >
-    <BaseToolbar v-if="selected" v-bind="$props" toolbar-position="top" :extra-offset="toolbarExtraOffset" />
+    <BaseToolbar v-if="selected" v-bind="$props" toolbar-position="top" />
 
     <BaseTitle
       v-if="titleVisible"

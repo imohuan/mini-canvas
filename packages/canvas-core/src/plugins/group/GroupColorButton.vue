@@ -84,24 +84,29 @@ function pickCustomColor(close: () => void) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
+  padding: 4px 8px;
   border: 0;
   border-radius: 6px;
   background: transparent;
+  color: var(--canvas-node-text, #374151);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
 }
 .group-color-trigger:hover:not(:disabled) {
   background: var(--canvas-node-panel-surface-hover, rgba(0, 0, 0, 0.06));
+  color: var(--canvas-node-text-strong, #111827);
 }
 .group-color-trigger:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.4;
 }
 .group-color-trigger__dot {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
   border-radius: 999px;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.42),
