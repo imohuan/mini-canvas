@@ -387,6 +387,12 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
       clearOverlay()
     }
 
+    function resetStaleAltMode(event: Pick<MouseEvent, 'altKey'>): boolean {
+      if (!altDown || event.altKey) return false
+      resetCuttingMode()
+      return true
+    }
+
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key !== 'Alt' || isEditableTarget(event.target) || !enabledRef.value) return
       altDown = true
@@ -401,6 +407,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     }
 
     function onPointerDown(event: PointerEvent): void {
+      if (resetStaleAltMode(event)) return
       if (!enabledRef.value || event.button !== 0 || !event.altKey) return
       if (isEditableTarget(event.target)) return
 
@@ -413,6 +420,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     }
 
     function onPointerMove(event: PointerEvent): void {
+      if (!cutting && resetStaleAltMode(event)) return
       if (!cutting) return
       stopNativeCanvasInput(event)
       points.push({ x: event.clientX, y: event.clientY })
@@ -430,6 +438,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     }
 
     function onWheel(event: WheelEvent): void {
+      if (resetStaleAltMode(event)) return
       if (!enabledRef.value || (!altDown && !cutting)) return
       stopNativeCanvasInput(event)
     }
@@ -451,6 +460,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', resetCuttingMode)
+    window.addEventListener('focus', resetCuttingMode)
     document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('resize', onResize)
     window.addEventListener('wheel', onWheel, { capture: true, passive: false })
@@ -465,6 +475,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
         window.removeEventListener('keydown', onKeyDown, { capture: true })
         window.removeEventListener('keyup', onKeyUp, { capture: true })
         window.removeEventListener('blur', resetCuttingMode)
+        window.removeEventListener('focus', resetCuttingMode)
         document.removeEventListener('visibilitychange', onVisibilityChange)
         window.removeEventListener('resize', onResize)
         window.removeEventListener('wheel', onWheel, { capture: true })

@@ -116,13 +116,14 @@ function installPlugin() {
 }
 
 test('does not start cutting from stale Alt state when the current pointer event has no Alt', () => {
-  const { fakeWindow, pane, uninstall } = installPlugin()
+  const { fakeDocument, fakeWindow, pane, uninstall } = installPlugin()
   fakeWindow.dispatchEvent(new FakeKeyboardEvent('keydown', { key: 'Alt' }))
 
   const pointerDown = new FakePointerEvent('pointerdown', { altKey: false, button: 0 })
   pane.dispatchEvent(pointerDown)
 
   assert.equal(pointerDown.defaultPrevented, false)
+  assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), false)
   uninstall?.()
 })
 
@@ -132,6 +133,28 @@ test('clears Alt cutting mode when the window loses focus', () => {
   assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), true)
 
   fakeWindow.dispatchEvent(new Event('blur'))
+
+  assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), false)
+  uninstall?.()
+})
+
+test('clears stale Alt mode when the window gets focus again', () => {
+  const { fakeDocument, fakeWindow, uninstall } = installPlugin()
+  fakeWindow.dispatchEvent(new FakeKeyboardEvent('keydown', { key: 'Alt' }))
+  assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), true)
+
+  fakeWindow.dispatchEvent(new Event('focus'))
+
+  assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), false)
+  uninstall?.()
+})
+
+test('clears stale Alt mode on pointer movement when Alt is no longer pressed', () => {
+  const { fakeDocument, fakeWindow, uninstall } = installPlugin()
+  fakeWindow.dispatchEvent(new FakeKeyboardEvent('keydown', { key: 'Alt' }))
+  assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), true)
+
+  fakeWindow.dispatchEvent(new FakePointerEvent('pointermove', { altKey: false }))
 
   assert.equal(fakeDocument.body.classList.contains('edge-cutting-active'), false)
   uninstall?.()
