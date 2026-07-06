@@ -379,6 +379,14 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
       clearOverlay()
     }
 
+    function resetCuttingMode(): void {
+      altDown = false
+      cutting = false
+      points = []
+      document.body.classList.remove('edge-cutting-active')
+      clearOverlay()
+    }
+
     function onKeyDown(event: KeyboardEvent): void {
       if (event.key !== 'Alt' || isEditableTarget(event.target) || !enabledRef.value) return
       altDown = true
@@ -393,7 +401,7 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     }
 
     function onPointerDown(event: PointerEvent): void {
-      if (!enabledRef.value || event.button !== 0 || (!altDown && !event.altKey)) return
+      if (!enabledRef.value || event.button !== 0 || !event.altKey) return
       if (isEditableTarget(event.target)) return
 
       stopNativeCanvasInput(event)
@@ -426,6 +434,10 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
       stopNativeCanvasInput(event)
     }
 
+    function onVisibilityChange(): void {
+      if (document.visibilityState === 'hidden') resetCuttingMode()
+    }
+
     const onPointerDownListener: EventListener = (event) => {
       if (event instanceof PointerEvent) onPointerDown(event)
     }
@@ -438,6 +450,8 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
     window.addEventListener('pointerup', onPointerUp, { capture: true })
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
+    window.addEventListener('blur', resetCuttingMode)
+    document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('resize', onResize)
     window.addEventListener('wheel', onWheel, { capture: true, passive: false })
 
@@ -450,6 +464,8 @@ export const EdgeCuttingPlugin: CanvasPlugin<EdgeCuttingOptions> = {
         window.removeEventListener('pointerup', onPointerUp, { capture: true })
         window.removeEventListener('keydown', onKeyDown, { capture: true })
         window.removeEventListener('keyup', onKeyUp, { capture: true })
+        window.removeEventListener('blur', resetCuttingMode)
+        document.removeEventListener('visibilitychange', onVisibilityChange)
         window.removeEventListener('resize', onResize)
         window.removeEventListener('wheel', onWheel, { capture: true })
         document.body.classList.remove('edge-cutting-active')
