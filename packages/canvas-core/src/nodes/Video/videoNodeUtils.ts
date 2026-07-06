@@ -6,6 +6,11 @@ export interface ClipRangeInput {
   start: number
   end: number
   duration: number
+  minDuration?: number
+}
+
+export interface MoveClipRangeInput extends ClipRangeInput {
+  nextStart: number
 }
 
 export interface RectLike {
@@ -33,6 +38,11 @@ export interface VideoResultOptions {
 const DEFAULT_VIDEO_SIZE = { cardWidth: 480, cardHeight: 320 }
 const DEFAULT_IMAGE_SIZE = { cardWidth: 420, cardHeight: 300 }
 
+function finiteOr(value: unknown, fallback: number) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
 export function fitVideoCardSize(width: unknown, height: unknown, max = { cardWidth: 560, cardHeight: 360 }) {
   const w = Number(width) || 0
   const h = Number(height) || 0
@@ -58,13 +68,42 @@ export function formatTime(seconds: number) {
   return `${mins}:${String(secs).padStart(2, '0')}`
 }
 
-export function clampClipRange({ start, end, duration }: ClipRangeInput) {
-  const dur = Math.max(0.1, Number(duration) || 0.1)
-  let s = Math.min(Math.max(0, Number(start) || 0), dur)
-  let e = Math.min(Math.max(0, Number(end) || dur), dur)
+export function clampClipRange({ start, end, duration, minDuration = 0.1 }: ClipRangeInput) {
+  const dur = Math.max(0.1, finiteOr(duration, 0.1))
+  const min = Math.min(Math.max(0.1, finiteOr(minDuration, 0.1)), dur)
+  let s = Math.min(Math.max(0, finiteOr(start, 0)), dur)
+  let e = Math.min(Math.max(0, finiteOr(end, dur)), dur)
   if (s > e) [s, e] = [e, s]
-  if (s === e) e = Math.min(dur, s + 0.1)
+  if (e - s < min) {
+    if (s + min <= dur) e = s + min
+    else s = Math.max(0, e - min)
+  }
   return { start: Number(s.toFixed(3)), end: Number(e.toFixed(3)) }
+}
+
+export function clampClipStart({ start, end, duration, minDuration = 0.1 }: ClipRangeInput) {
+  const dur = Math.max(0.1, finiteOr(duration, 0.1))
+  const min = Math.min(Math.max(0.1, finiteOr(minDuration, 0.1)), dur)
+  const e = Math.min(Math.max(min, finiteOr(end, dur)), dur)
+  const s = Math.min(Math.max(0, finiteOr(start, 0)), Math.max(0, e - min))
+  return { start: Number(s.toFixed(3)), end: Number(e.toFixed(3)) }
+}
+
+export function clampClipEnd({ start, end, duration, minDuration = 0.1 }: ClipRangeInput) {
+  const dur = Math.max(0.1, finiteOr(duration, 0.1))
+  const min = Math.min(Math.max(0.1, finiteOr(minDuration, 0.1)), dur)
+  const s = Math.min(Math.max(0, finiteOr(start, 0)), Math.max(0, dur - min))
+  const e = Math.min(Math.max(s + min, finiteOr(end, dur)), dur)
+  return { start: Number(s.toFixed(3)), end: Number(e.toFixed(3)) }
+}
+
+export function moveClipRange({ start, end, nextStart, duration, minDuration = 0.1 }: MoveClipRangeInput) {
+  const dur = Math.max(0.1, finiteOr(duration, 0.1))
+  const min = Math.min(Math.max(0.1, finiteOr(minDuration, 0.1)), dur)
+  const current = clampClipRange({ start, end, duration: dur })
+  const length = Math.max(min, Math.min(dur, current.end - current.start))
+  const s = Math.min(Math.max(0, finiteOr(nextStart, 0)), Math.max(0, dur - length))
+  return { start: Number(s.toFixed(3)), end: Number((s + length).toFixed(3)) }
 }
 
 export function makeImageNodeFromFrame(sourceNode: SourceNode, frame: CapturedFrame): Node {

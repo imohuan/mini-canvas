@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { clampClipRange, formatTime } from './videoNodeUtils'
+import { clampClipEnd, clampClipRange, clampClipStart, formatTime, moveClipRange } from './videoNodeUtils'
 
 const props = defineProps<{
   videoUrl: string
   duration: number
   start: number
   end: number
+  minDuration?: number
+  currentTime?: number
 }>()
 
 const emit = defineEmits<{
@@ -30,11 +32,17 @@ watch(() => [props.start, props.end, props.duration], () => {
 watch(() => props.videoUrl, () => generateThumbnails(), { immediate: true })
 
 const safeDuration = computed(() => Math.max(0.1, Number(props.duration) || 0.1))
-const range = computed(() => clampClipRange({ start: localStart.value, end: localEnd.value, duration: safeDuration.value }))
+const minClipDuration = computed(() => Math.min(safeDuration.value, Math.max(0.1, Number(props.minDuration) || 1)))
+const range = computed(() => clampClipRange({ start: localStart.value, end: localEnd.value, duration: safeDuration.value, minDuration: minClipDuration.value }))
 const startPct = computed(() => range.value.start / safeDuration.value * 100)
 const endPct = computed(() => range.value.end / safeDuration.value * 100)
 const widthPct = computed(() => Math.max(0, endPct.value - startPct.value))
 const lengthLabel = computed(() => `${formatTime(range.value.end - range.value.start)} s`)
+const playheadPct = computed(() => {
+  const length = Math.max(0.1, range.value.end - range.value.start)
+  const t = Math.min(range.value.end, Math.max(range.value.start, Number(props.currentTime) || range.value.start))
+  return (t - range.value.start) / length * 100
+})
 
 function normalizeTime(value: number) {
   const next = snapToSecond.value ? Math.round(value) : value
@@ -42,7 +50,34 @@ function normalizeTime(value: number) {
 }
 
 function setRange(start: number, end: number) {
-  const next = clampClipRange({ start: normalizeTime(start), end: normalizeTime(end), duration: safeDuration.value })
+  const next = clampClipRange({ start: normalizeTime(start), end: normalizeTime(end), duration: safeDuration.value, minDuration: minClipDuration.value })
+  localStart.value = next.start
+  localEnd.value = next.end
+  emit('update:clip', next)
+}
+
+function setStart(start: number) {
+  const next = clampClipStart({ start: normalizeTime(start), end: localEnd.value, duration: safeDuration.value, minDuration: minClipDuration.value })
+  localStart.value = next.start
+  localEnd.value = next.end
+  emit('update:clip', next)
+}
+
+function setEnd(end: number) {
+  const next = clampClipEnd({ start: localStart.value, end: normalizeTime(end), duration: safeDuration.value, minDuration: minClipDuration.value })
+  localStart.value = next.start
+  localEnd.value = next.end
+  emit('update:clip', next)
+}
+
+function moveRange(nextStart: number) {
+  const next = moveClipRange({
+    start: localStart.value,
+    end: localEnd.value,
+    nextStart: normalizeTime(nextStart),
+    duration: safeDuration.value,
+    minDuration: minClipDuration.value,
+  })
   localStart.value = next.start
   localEnd.value = next.end
   emit('update:clip', next)
@@ -59,15 +94,15 @@ function onHandleDown(which: 'start' | 'end', e: PointerEvent) {
   e.preventDefault()
   e.stopPropagation()
   dragging.value = which
-  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* synthetic pointer event */ }
 }
 
 function onWindowMove(e: PointerEvent) {
   if (!dragging.value) return
   const t = clientToTime(e.clientX)
-  if (dragging.value === 'start') setRange(t, localEnd.value)
-  else if (dragging.value === 'end') setRange(localStart.value, t)
-  else setRange(t - dragOffset.value, t - dragOffset.value + (range.value.end - range.value.start))
+  if (dragging.value === 'start') setStart(t)
+  else if (dragging.value === 'end') setEnd(t)
+  else moveRange(t - dragOffset.value)
 }
 
 function onWindowUp() { dragging.value = null }
@@ -139,11 +174,16 @@ onUnmounted(() => {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h.01M11 9h.01M15 9h.01M8 13h8"/></svg>
     </button>
     <div ref="trackRef" class="clip-track" @pointerdown="onWindowDown">
-      <div class="clip-thumbs">
-        <div v-for="(src, i) in thumbnails" :key="i" class="clip-thumb" :style="{ backgroundImage: `url(${src})` }" />
-        <div v-if="thumbnails.length === 0" class="clip-thumb-fallback" />
+      <div class="clip-rail">
+        <div class="clip-thumbs">
+          <div v-for="(src, i) in thumbnails" :key="i" class="clip-thumb" :style="{ backgroundImage: `url(${src})` }" />
+          <div v-if="thumbnails.length === 0" class="clip-thumb-fallback" />
+        </div>
       </div>
       <div class="clip-window" :style="{ left: startPct + '%', width: widthPct + '%' }" @pointerdown.stop="onWindowDown">
+        <div class="clip-window-body">
+          <span class="clip-playhead" :style="{ left: playheadPct + '%' }" />
+        </div>
         <span class="clip-grip clip-grip-left" @pointerdown.stop="onHandleDown('start', $event)">
           <svg viewBox="0 0 12 24" fill="none"><path d="M8 6L4 12l4 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
@@ -166,23 +206,26 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.video-clip-toolbar { display: flex; align-items: center; gap: 12px; width: min(900px, 84vw); padding: 10px 12px; border-radius: 18px; background: rgba(34,34,34,.96); color: white; box-shadow: 0 12px 34px rgba(0,0,0,.28); pointer-events: auto; }
-.clip-icon-button, .clip-side-button, .clip-confirm-button { width: 38px; height: 38px; border: 0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: white; background: rgba(255,255,255,.08); cursor: pointer; }
-.clip-icon-button:hover, .clip-side-button:hover { background: rgba(255,255,255,.16); }
-.clip-icon-button.active { color: #111; background: #fff; }
-.clip-confirm-button { width: 52px; border-radius: 14px; color: #111; background: #fff; }
+.video-clip-toolbar { display: flex; align-items: center; gap: 12px; width: min(900px, 84vw); padding: 10px 12px; border-radius: 18px; background: var(--canvas-node-panel-surface, #fff); color: var(--canvas-node-text, #111827); box-shadow: 0 14px 36px var(--canvas-node-shadow-panel, rgba(15,23,42,.12)); border: 1px solid var(--canvas-node-border, #e5e7eb); pointer-events: auto; }
+.clip-icon-button, .clip-side-button, .clip-confirm-button { width: 38px; height: 38px; border: 0; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; color: #4b5563; background: var(--canvas-node-panel-surface-hover, #f3f4f6); cursor: pointer; }
+.clip-icon-button:hover, .clip-side-button:hover { background: var(--canvas-node-panel-surface-active, #e5e7eb); color: #111827; }
+.clip-icon-button.active { color: #111827; background: #e5e7eb; box-shadow: inset 0 0 0 1px rgba(17,24,39,.12); }
+.clip-confirm-button { width: 52px; border-radius: 14px; color: #fff; background: #111827; }
 .clip-icon-button svg, .clip-side-button svg, .clip-confirm-button svg { width: 20px; height: 20px; }
-.clip-divider { width: 1px; height: 30px; background: rgba(255,255,255,.12); }
-.clip-track { position: relative; flex: 1; min-width: 320px; height: 54px; border-radius: 14px; overflow: hidden; background: #111; cursor: grab; }
+.clip-divider { width: 1px; height: 30px; background: #e5e7eb; }
+.clip-track { position: relative; flex: 1; min-width: 320px; height: 54px; overflow: visible; cursor: grab; }
 .clip-track:active { cursor: grabbing; }
-.clip-thumbs { position: absolute; inset: 0; display: flex; opacity: .82; }
+.clip-rail { position: absolute; inset: 0; border-radius: 14px; overflow: hidden; background: #f3f4f6; box-shadow: inset 0 0 0 1px rgba(17,24,39,.08); }
+.clip-thumbs { position: absolute; inset: 0; display: flex; opacity: .92; }
 .clip-thumb { flex: 1; background-size: cover; background-position: center; }
-.clip-thumb-fallback { position: absolute; inset: 0; background: linear-gradient(90deg, #1f2937, #111827 45%, #374151); }
-.clip-track::after { content: ''; position: absolute; inset: 0; background: rgba(0,0,0,.42); pointer-events: none; }
-.clip-window { position: absolute; top: 4px; bottom: 4px; z-index: 2; min-width: 72px; display: flex; align-items: center; justify-content: center; border: 2px solid #fff; border-radius: 12px; background: rgba(255,255,255,.14); box-shadow: 0 0 0 999px rgba(0,0,0,.34); }
-.clip-window strong { padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.72); font-size: 12px; line-height: 1; }
-.clip-grip { position: absolute; top: 0; bottom: 0; width: 20px; display: flex; align-items: center; justify-content: center; color: #111; background: #fff; cursor: ew-resize; }
+.clip-thumb-fallback { position: absolute; inset: 0; background: linear-gradient(90deg, #e5e7eb, #f9fafb 45%, #d1d5db); }
+.clip-rail::after { content: ''; position: absolute; inset: 0; background: rgba(255,255,255,.38); pointer-events: none; }
+.clip-window { position: absolute; top: 4px; bottom: 4px; z-index: 2; display: flex; align-items: center; justify-content: center; border-radius: 12px; }
+.clip-window-body { position: absolute; inset: 0; border: 2px solid #fff; border-radius: 12px; background: rgba(255,255,255,.16); box-shadow: 0 0 0 999px rgba(255,255,255,.56), 0 4px 14px rgba(15,23,42,.18); overflow: hidden; }
+.clip-playhead { position: absolute; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); background: rgba(255,255,255,.95); box-shadow: 0 0 0 1px rgba(17,24,39,.2); pointer-events: none; }
+.clip-window strong { position: relative; z-index: 3; padding: 4px 10px; border-radius: 999px; background: rgba(17,24,39,.82); color: #fff; font-size: 12px; line-height: 1; white-space: nowrap; pointer-events: none; }
+.clip-grip { position: absolute; top: 0; bottom: 0; z-index: 4; width: 22px; display: flex; align-items: center; justify-content: center; color: #111827; background: #fff; cursor: ew-resize; box-shadow: 0 4px 12px rgba(15,23,42,.18); }
 .clip-grip svg { width: 12px; height: 24px; }
-.clip-grip-left { left: 0; border-radius: 10px 0 0 10px; }
-.clip-grip-right { right: 0; border-radius: 0 10px 10px 0; }
+.clip-grip-left { left: -12px; border-radius: 10px 0 0 10px; }
+.clip-grip-right { right: -12px; border-radius: 0 10px 10px 0; }
 </style>

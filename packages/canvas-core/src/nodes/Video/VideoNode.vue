@@ -27,6 +27,8 @@ const currentTime = ref(0)
 const duration = ref(Number(props.data?.videoDuration) || 0)
 const fullscreen = ref(false)
 const captureBusy = ref(false)
+const cameraMenuOpen = ref(false)
+let cameraCloseTimer: ReturnType<typeof setTimeout> | null = null
 
 const videoUrl = computed(() => (props.data?.videoUrl as string) || '')
 const isCropping = computed(() => props.data?._overlay?._cropMode === true)
@@ -39,12 +41,15 @@ const savedClipStart = computed(() => Number(props.data?.clipStart) || 0)
 const savedClipEnd = computed(() => Number(props.data?.clipEnd) || duration.value || Number(props.data?.videoDuration) || 0)
 const playStart = computed(() => isClipping.value ? clipRange.value.start : savedClipStart.value)
 const playEnd = computed(() => isClipping.value ? clipRange.value.end : savedClipEnd.value)
-const playableDuration = computed(() => Math.max(0.1, playEnd.value - playStart.value || duration.value || 0.1))
-const displayCurrent = computed(() => Math.max(0, currentTime.value - playStart.value))
+const controlStart = computed(() => isClipping.value ? 0 : playStart.value)
+const controlEnd = computed(() => isClipping.value ? duration.value : playEnd.value)
+const playableDuration = computed(() => Math.max(0.1, controlEnd.value - controlStart.value || duration.value || 0.1))
+const displayCurrent = computed(() => Math.max(0, currentTime.value - controlStart.value))
 const displayDuration = computed(() => props.data?.clipStart !== undefined || props.data?.clipEnd !== undefined
   ? Math.max(0.1, savedClipEnd.value - savedClipStart.value)
   : duration.value)
 const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
+const minClipDuration = computed(() => Math.max(0.1, Number(canvas.state.plugins?.['node:video']?.minClipDuration) || 1))
 const nodeLabel = computed(() => (props.data?.label as string) || (props.data?.videoName as string) || '视频')
 const dims = computed(() => {
   const parts: string[] = []
@@ -140,15 +145,20 @@ function onTimeUpdate(e: Event) {
   currentTime.value = video.currentTime
   isPlaying.value = !video.paused
   if (video.currentTime >= playEnd.value && playEnd.value > playStart.value) {
-    video.pause()
-    video.currentTime = playEnd.value
+    if (isClipping.value) {
+      video.currentTime = playStart.value
+      if (!video.paused) video.play().catch(() => {})
+    } else {
+      video.pause()
+      video.currentTime = playEnd.value
+    }
   }
 }
 
 function seekToDisplayTime(value: number) {
   const video = getMainVideo()
   if (!video) return
-  video.currentTime = playStart.value + Number(value)
+  video.currentTime = controlStart.value + Number(value)
   currentTime.value = video.currentTime
 }
 
@@ -158,7 +168,11 @@ function onCropUpdate(rect: RectLike) {
 
 function onClipUpdate(range: { start: number; end: number }) {
   vf.updateNode(props.id, { data: { ...props.data, _overlay: { ...props.data._overlay, _clipRange: range } } })
-  seekToDisplayTime(0)
+  const video = getMainVideo()
+  if (video && (video.currentTime < range.start || video.currentTime > range.end)) {
+    video.currentTime = range.start
+    currentTime.value = range.start
+  }
 }
 
 function runCommand(id: string) {
@@ -173,37 +187,97 @@ function downloadVideo() {
   a.click()
 }
 
-function waitForSeek(video: HTMLVideoElement, time: number) {
+function openCameraMenu() {
+  if (cameraCloseTimer) clearTimeout(cameraCloseTimer)
+  cameraMenuOpen.value = true
+}
+
+function scheduleCloseCameraMenu() {
+  if (cameraCloseTimer) clearTimeout(cameraCloseTimer)
+  cameraCloseTimer = setTimeout(() => { cameraMenuOpen.value = false }, 1000)
+}
+
+function waitForDecodedFrame(video: HTMLVideoElement) {
   return new Promise<void>((resolve) => {
-    if (Math.abs(video.currentTime - time) < 0.03) { resolve(); return }
-    const done = () => { video.removeEventListener('seeked', done); resolve() }
-    video.addEventListener('seeked', done, { once: true })
-    video.currentTime = time
+    const requestFrame = video.requestVideoFrameCallback?.bind(video)
+    if (!requestFrame) {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve())
+      else resolve()
+      return
+    }
+    const timer = window.setTimeout(resolve, 500)
+    requestFrame(() => {
+      window.clearTimeout(timer)
+      resolve()
+    })
   })
 }
 
-async function captureFrameAt(kind: 'start' | 'end') {
-  const video = getMainVideo()
-  if (!video || !video.videoWidth || !video.videoHeight || captureBusy.value) return
+function waitForSeek(video: HTMLVideoElement, time: number) {
+  return new Promise<void>((resolve) => {
+    if (Math.abs(video.currentTime - time) < 0.03 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+      waitForDecodedFrame(video).then(resolve)
+      return
+    }
+    let settled = false
+    let timer: ReturnType<typeof window.setTimeout> | null = null
+    const cleanup = () => {
+      video.removeEventListener('seeked', done)
+      video.removeEventListener('loadeddata', done)
+      video.removeEventListener('canplay', done)
+      if (timer) window.clearTimeout(timer)
+    }
+    const done = () => {
+      if (settled) return
+      settled = true
+      cleanup()
+      waitForDecodedFrame(video).then(resolve)
+    }
+    video.addEventListener('seeked', done, { once: true })
+    video.addEventListener('loadeddata', done, { once: true })
+    video.addEventListener('canplay', done, { once: true })
+    timer = window.setTimeout(done, 2000)
+    if (Math.abs(video.currentTime - time) >= 0.03) video.currentTime = time
+  })
+}
+
+async function captureFrameAt(kind: 'current' | 'start' | 'end') {
+  if (!videoUrl.value || captureBusy.value) return
   captureBusy.value = true
-  const wasPaused = video.paused
-  const oldTime = video.currentTime
-  const targetTime = kind === 'start' ? playStart.value : Math.max(playStart.value, playEnd.value - 0.05)
+  const video = document.createElement('video')
+  video.src = videoUrl.value
+  video.muted = true
+  video.playsInline = true
+  video.preload = 'auto'
   try {
-    video.pause()
-    await waitForSeek(video, targetTime)
+    await new Promise<void>((resolve, reject) => {
+      video.onloadedmetadata = () => resolve()
+      video.onerror = () => reject(new Error('video capture load failed'))
+    })
+    if (!video.videoWidth || !video.videoHeight) return
+    const targetTime = kind === 'current'
+      ? (videoRef.value?.currentTime ?? currentTime.value)
+      : kind === 'start'
+        ? playStart.value
+        : Math.max(playStart.value, playEnd.value - 0.05)
+    const safeTime = Math.min(Math.max(0, targetTime), Math.max(0, video.duration - 0.05))
+    await waitForSeek(video, safeTime)
+    const crop = props.data?.cropRect as RectLike | undefined
+    const frameWidth = crop?.width || video.videoWidth
+    const frameHeight = crop?.height || video.videoHeight
     const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    canvas.width = frameWidth
+    canvas.height = frameHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    if (crop) ctx.drawImage(video, crop.x, crop.y, crop.width, crop.height, 0, 0, frameWidth, frameHeight)
+    else ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
     if (!blob) return
     const url = URL.createObjectURL(blob)
     let assetId: string | undefined
     const assetManager = (runtime as any).getPluginAPI?.('storage')?.assets
-    const suffix = kind === 'start' ? 'first' : 'last'
+    const suffix = kind === 'current' ? 'current' : kind === 'start' ? 'first' : 'last'
     if (assetManager) {
       const fileName = `${String(props.data?.videoName || 'video').replace(/\.[^.]+$/, '')}_${suffix}_frame.png`
       try { assetId = await assetManager.saveAsset(new File([blob], fileName, { type: 'image/png' }), fileName, 'image/png') }
@@ -211,10 +285,10 @@ async function captureFrameAt(kind: 'start' | 'end') {
     }
     const sourceNode = vf.getNodes.value.find((n) => n.id === props.id)
     if (!sourceNode) return
-    vf.addNodes([makeImageNodeFromFrame(sourceNode, { url, width: canvas.width, height: canvas.height, assetId, at: targetTime })])
+    vf.addNodes([makeImageNodeFromFrame(sourceNode, { url, width: canvas.width, height: canvas.height, assetId, at: safeTime })])
   } finally {
-    await waitForSeek(video, oldTime).catch(() => {})
-    if (!wasPaused) video.play().catch(() => {})
+    video.removeAttribute('src')
+    video.load()
     captureBusy.value = false
   }
 }
@@ -248,7 +322,7 @@ function onFullscreenEvent(e: Event) {
 }
 function onCaptureEvent(e: Event) {
   const detail = (e as CustomEvent).detail
-  if (detail?.nodeId === props.id) captureFrameAt('start')
+  if (detail?.nodeId === props.id) captureFrameAt('current')
 }
 
 watch(videoUrl, () => {
@@ -265,6 +339,7 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('video:fullscreen', onFullscreenEvent)
   window.removeEventListener('video:capture-frame', onCaptureEvent)
+  if (cameraCloseTimer) clearTimeout(cameraCloseTimer)
 })
 </script>
 
@@ -276,7 +351,7 @@ onUnmounted(() => {
     <template #top-toolbar><BaseToolbar v-bind="$props" toolbar-position="top" /></template>
 
     <template #content>
-      <div class="video-node" :class="{ 'is-editing': isCropping || isClipping }">
+      <div class="video-node" :class="{ 'is-cropping': isCropping, 'is-clipping': isClipping }">
         <template v-if="videoUrl">
           <div class="video-stage" :class="{ 'has-crop': data?.cropRect }">
             <video
@@ -294,11 +369,11 @@ onUnmounted(() => {
             />
           </div>
 
-          <button class="video-corner-button video-download" title="下载" @click.stop="downloadVideo">
+          <button v-if="!isCropping" class="video-corner-button video-download" title="下载" @click.stop="downloadVideo">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
 
-          <div class="video-controls nodrag nopan" @dblclick.stop>
+          <div v-if="!isCropping" class="video-controls nodrag nopan" @dblclick.stop>
             <button class="video-play-button" title="播放/暂停" @click.stop="togglePlay">
               <svg v-if="!isPlaying" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg>
               <svg v-else viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
@@ -309,19 +384,15 @@ onUnmounted(() => {
               <span class="video-progress-fill" :style="{ width: (displayCurrent / playableDuration * 100) + '%' }" />
             </label>
             <span class="video-time">{{ formatTime(playableDuration) }}</span>
-            <div class="video-camera-menu" :class="{ 'is-busy': captureBusy }">
+            <div class="video-camera-menu" :class="{ 'is-busy': captureBusy }" @mouseenter="openCameraMenu" @mouseleave="scheduleCloseCameraMenu">
               <button class="video-camera-button" :disabled="captureBusy" title="截图" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </button>
-              <div class="video-camera-popover">
+              <div v-show="cameraMenuOpen" class="video-camera-popover">
                 <button @click.stop="captureFrameAt('start')">截首帧图</button>
                 <button @click.stop="captureFrameAt('end')">截尾帧图</button>
               </div>
             </div>
-          </div>
-
-          <div v-if="!isPlaying" class="video-center-play" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8,5 19,12 8,19" /></svg>
           </div>
 
           <VideoCropper v-if="isCropping" :node-id="id" :video-width="(data?.videoWidth as number) || 1" :video-height="(data?.videoHeight as number) || 1" @update:crop="onCropUpdate" />
@@ -340,6 +411,8 @@ onUnmounted(() => {
           :duration="duration || (data?.videoDuration as number) || 0.1"
           :start="clipRange.start"
           :end="clipRange.end"
+          :min-duration="minClipDuration"
+          :current-time="currentTime"
           @update:clip="onClipUpdate"
           @cancel="runCommand('video.clipCancel')"
           @confirm="runCommand('video.clipConfirm')"
@@ -383,8 +456,7 @@ onUnmounted(() => {
 
 <style scoped>
 .video-node { position: relative; width: 100%; height: 100%; background: #050505; color: white; overflow: hidden; }
-.video-node.is-editing { background: radial-gradient(circle at center, #1f2937 0%, #050505 72%); }
-.video-node.is-editing .video-media { opacity: .38; filter: saturate(.8) contrast(.92); }
+.video-node.is-cropping, .video-node.is-clipping { background: radial-gradient(circle at center, #1f2937 0%, #050505 72%); }
 .video-stage { position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .video-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #050505; }
 .video-media--cropped { inset: auto; object-fit: fill; max-width: none; max-height: none; }
@@ -400,13 +472,10 @@ onUnmounted(() => {
 .video-progress::before { content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 4px; border-radius: 99px; background: rgba(255,255,255,.38); }
 .video-progress-fill { position: absolute; left: 0; top: 4px; height: 4px; border-radius: 99px; background: #fff; pointer-events: none; }
 .video-progress input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.video-center-play { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; color: rgba(255,255,255,.95); pointer-events: none; }
-.video-center-play svg { width: 46px; height: 46px; filter: drop-shadow(0 2px 8px rgba(0,0,0,.35)); }
 .video-camera-menu { position: relative; display: inline-flex; }
-.video-camera-popover { position: absolute; right: 0; bottom: 34px; display: none; min-width: 92px; padding: 5px; border-radius: 10px; background: rgba(20,20,20,.94); box-shadow: 0 10px 24px rgba(0,0,0,.28); }
-.video-camera-menu:hover .video-camera-popover { display: grid; gap: 3px; }
-.video-camera-popover button { border: 0; border-radius: 7px; padding: 7px 8px; background: transparent; color: #fff; font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
-.video-camera-popover button:hover { background: rgba(255,255,255,.12); }
+.video-camera-popover { position: absolute; right: 0; bottom: 34px; display: grid; gap: 3px; min-width: 92px; padding: 5px; border-radius: 10px; background: var(--canvas-node-panel-surface, #fff); box-shadow: 0 10px 24px rgba(15,23,42,.16); border: 1px solid var(--canvas-node-border, #e5e7eb); }
+.video-camera-popover button { border: 0; border-radius: 7px; padding: 7px 8px; background: transparent; color: #111827; font-size: 12px; white-space: nowrap; cursor: pointer; text-align: left; }
+.video-camera-popover button:hover { background: var(--canvas-node-panel-surface-hover, #f3f4f6); }
 .video-empty { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: #111827; color: rgba(255,255,255,.55); font-size: 13px; }
 .video-empty svg { width: 48px; height: 48px; color: rgba(255,255,255,.28); }
 .video-fullscreen { position: fixed; inset: 0; z-index: 99999; background: #000; display: flex; align-items: center; justify-content: center; }

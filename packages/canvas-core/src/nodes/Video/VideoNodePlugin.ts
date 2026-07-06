@@ -2,7 +2,7 @@ import { markRaw } from 'vue'
 import type { Node } from '@vue-flow/core'
 import { VideoNode } from './index'
 import type { CanvasPlugin, PluginContext } from '../../plugins/types'
-import type { CommandContext } from '../../registry/types'
+import type { CommandContext, PanelSettingDefinition } from '../../registry/types'
 import { makeVideoResultNode } from './videoNodeUtils'
 
 const clipSvg = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M4 17h16"/><path d="M8 4v16"/><path d="M16 4v16"/></svg>`
@@ -148,6 +148,19 @@ export const VideoNodePlugin: CanvasPlugin = {
       selfRender: true,
     })
 
+    context.panels.registerSetting('node:video', {
+      id: 'node:video.minClipDuration',
+      title: '剪辑最短时长',
+      description: '拖拽剪辑端点时保留的最短秒数',
+      type: 'slider',
+      group: '视频 video',
+      order: 10,
+      defaultValue: 1,
+      min: 0.1,
+      max: 10,
+      step: 0.1,
+    } as PanelSettingDefinition)
+
     context.commands.register({ id: 'video.crop', source: 'node:video', title: '裁剪', run: handleVideoCrop })
     context.commands.register({ id: 'video.cropConfirm', source: 'node:video', title: '确认裁剪', run: handleVideoCropConfirm })
     context.commands.register({ id: 'video.cropCancel', source: 'node:video', title: '取消裁剪', run: handleVideoCropCancel })
@@ -176,6 +189,7 @@ export const VideoNodePlugin: CanvasPlugin = {
         context.canvasNodes.unregister('video')
         context.toolbars.unregisterSource('node:video')
         context.commands.unregisterSource('node:video')
+        context.panels.unregisterSource('node:video')
       },
     }
   },

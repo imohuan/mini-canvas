@@ -5,6 +5,9 @@ import {
   makeImageNodeFromFrame,
   makeVideoResultNode,
   fitVideoCardSize,
+  clampClipStart,
+  clampClipEnd,
+  moveClipRange,
 } from './videoNodeUtils.ts'
 
 assert.equal(formatTime(0), '0:00')
@@ -17,6 +20,11 @@ assert.deepEqual(fitVideoCardSize(0, 0), { cardWidth: 480, cardHeight: 320 })
 assert.deepEqual(clampClipRange({ start: -2, end: 99, duration: 38 }), { start: 0, end: 38 })
 assert.deepEqual(clampClipRange({ start: 20, end: 10, duration: 38 }), { start: 10, end: 20 })
 assert.deepEqual(clampClipRange({ start: 12, end: 12, duration: 38 }), { start: 12, end: 12.1 })
+assert.deepEqual(clampClipStart({ start: 9.8, end: 10, duration: 38, minDuration: 1 }), { start: 9, end: 10 })
+assert.deepEqual(clampClipEnd({ start: 5, end: 5.2, duration: 38, minDuration: 1 }), { start: 5, end: 6 })
+assert.deepEqual(clampClipEnd({ start: 0, end: 0, duration: 38, minDuration: 1 }), { start: 0, end: 1 })
+assert.deepEqual(moveClipRange({ start: 5, end: 15, nextStart: -6, duration: 38, minDuration: 1 }), { start: 0, end: 10 })
+assert.deepEqual(moveClipRange({ start: 5, end: 15, nextStart: 34, duration: 38, minDuration: 1 }), { start: 28, end: 38 })
 
 const sourceNode = {
   id: 'video-1',
