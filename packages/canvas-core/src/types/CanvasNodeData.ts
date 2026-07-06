@@ -26,6 +26,8 @@ export interface CanvasNodeOverlay {
   _cropRect?: Rect
   _expandRect?: Rect
   _maskConfig?: MaskConfig
+  _clipMode?: boolean
+  _clipRange?: { start: number; end: number }
 }
 
 export interface BaseCanvasNodeData {
@@ -60,6 +62,11 @@ export interface VideoNodeData extends BaseCanvasNodeData {
   videoDuration?: number // 时长（秒）
   videoUrl?: string // runtime only, 保存前删除
   thumbUrl?: string // runtime only, 保存前删除
+  cropRect?: Rect
+  cropSourceWidth?: number
+  cropSourceHeight?: number
+  clipStart?: number
+  clipEnd?: number
 }
 
 export interface TextNodeData extends BaseCanvasNodeData {

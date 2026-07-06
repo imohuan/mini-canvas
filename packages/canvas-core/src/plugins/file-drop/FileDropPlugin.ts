@@ -2,6 +2,7 @@ import type { CanvasPlugin, PluginContext, Point } from '../types'
 import type { Node } from '@vue-flow/core'
 import { Position } from '@vue-flow/core'
 import type { StorageAPI } from '../storage/StoragePlugin'
+import { fitVideoCardSize } from '../../nodes/Video/videoNodeUtils'
 
 // ============================================================================
 // Types
@@ -249,6 +250,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             }
           }
 
+          const videoSize = meta ? fitVideoCardSize(meta.width, meta.height) : NODE_SIZES.video
           const extra: Record<string, unknown> = {
             label: file.name,
             assetId,
@@ -256,6 +258,8 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             videoName: file.name,
             videoType: file.type,
             videoSize: file.size,
+            cardWidth: videoSize.cardWidth,
+            cardHeight: videoSize.cardHeight,
           }
           if (meta) {
             extra.videoWidth = meta.width
@@ -398,6 +402,7 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             }
           }
 
+          const videoSize = meta ? fitVideoCardSize(meta.width, meta.height) : NODE_SIZES.video
           const extra: Record<string, unknown> = {
             label: '粘贴的视频',
             assetId,
@@ -405,6 +410,8 @@ export const FileDropPlugin: CanvasPlugin<FileDropOptions> = {
             videoName: 'pasted-video',
             videoType: blob.type,
             videoSize: blob.size,
+            cardWidth: videoSize.cardWidth,
+            cardHeight: videoSize.cardHeight,
           }
           if (meta) {
             extra.videoWidth = meta.width

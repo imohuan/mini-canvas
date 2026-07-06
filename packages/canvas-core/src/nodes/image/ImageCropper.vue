@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
@@ -282,20 +282,20 @@ onUnmounted(() => {
 
 .crop-letterbox {
   position: absolute;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.68);
   pointer-events: none;
 }
 
 .crop-shade {
   position: absolute;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.52);
   pointer-events: none;
 }
 
 .crop-frame {
   position: absolute;
   cursor: move;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 12px 36px rgba(0, 0, 0, 0.28);
 }
 
 .crop-grid {
@@ -317,13 +317,13 @@ onUnmounted(() => {
   height: 10px;
   background: #fff;
   border: 1.5px solid rgba(0, 0, 0, 0.5);
-  border-radius: 2px;
+  border-radius: 999px;
   z-index: 5;
 }
-.nw { top: -5px; left: -5px; cursor: nw-resize; }
-.ne { top: -5px; right: -5px; cursor: ne-resize; }
-.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
-.se { bottom: -5px; right: -5px; cursor: se-resize; }
+.nw { top: -7px; left: -7px; cursor: nw-resize; }
+.ne { top: -7px; right: -7px; cursor: ne-resize; }
+.sw { bottom: -7px; left: -7px; cursor: sw-resize; }
+.se { bottom: -7px; right: -7px; cursor: se-resize; }
 .n  { top: -5px; left: 50%; margin-left: -5px; cursor: n-resize; }
 .s  { bottom: -5px; left: 50%; margin-left: -5px; cursor: s-resize; }
 .w  { top: 50%; left: -5px; margin-top: -5px; cursor: w-resize; }
