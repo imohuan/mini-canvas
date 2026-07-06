@@ -87,6 +87,34 @@ export function createCappedStyle(
 }
 
 // ============================================================
+//  节点标题 — 屏幕空间缩放阈值
+// ============================================================
+
+export interface NodeTitleLayoutOptions {
+  offset?: number
+  minZoom?: number
+}
+
+export function createNodeTitleLayout(
+  zoom: number,
+  options: NodeTitleLayoutOptions = {},
+): { scale: number; offset: number; style: Record<string, string> } {
+  const safeZoom = Math.max(zoom || 1, 0.01)
+  const minZoom = Math.max(options.minZoom || 0.5, 0.01)
+  const baseOffset = Math.max(options.offset || 0, 0)
+  const scale = Math.min(1, safeZoom / minZoom)
+
+  return {
+    scale,
+    offset: baseOffset * scale,
+    style: {
+      transform: `scale(${scale})`,
+      transformOrigin: 'left bottom',
+    },
+  }
+}
+
+// ============================================================
 //  通用工具函数
 // ============================================================
 

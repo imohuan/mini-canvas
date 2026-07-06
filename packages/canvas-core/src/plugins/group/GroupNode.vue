@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { useVueFlow } from '@vue-flow/core'
-import type { CSSProperties } from 'vue'
+import { Position, useVueFlow } from '@vue-flow/core'
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import BaseTitle from '../../components/Decoration/BaseTitle.vue'
+import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
 import BaseToolbar from '../../components/Toolbar/BaseToolbar.vue'
-import { createCappedStyle } from '../../utils/viewportSpace'
+import { useCanvasStore } from '../../composables/useCanvasStore'
+import { createNodeTitleLayout } from '../../utils/viewportSpace'
 import { normalizeGroupTitle, resolveGroupBackgroundColor } from './model'
 
 type GroupNodeData = {
@@ -24,11 +25,12 @@ const props = defineProps<{
 }>()
 
 const vf = useVueFlow()
+const canvas = useCanvasStore()
 
 const MIN_WIDTH = 160
 const MIN_HEIGHT = 120
-const GROUP_TITLE_TOP_OFFSET = -28
-const GROUP_TITLE_LEFT_OFFSET = 20
+const RESIZE_HANDLE_SIZE = 12
+const TITLE_HANDLE_GAP = 6
 
 const isResizing = ref(false)
 const draftTitle = ref('')
@@ -40,13 +42,17 @@ const isEditingTitle = computed(() => props.data?._editingTitle === true)
 const titleVisible = computed(() => isEditingTitle.value || label.value.length > 0)
 const groupBackground = computed(() => resolveGroupBackgroundColor(props.data?.backgroundColor))
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
-const groupTitleStyle = computed<CSSProperties>(() => ({
-  ...createCappedStyle(zoom.value, {
-    topOffset: GROUP_TITLE_TOP_OFFSET,
-    leftOffset: GROUP_TITLE_LEFT_OFFSET,
-  }),
-  zIndex: 4,
+const titleLayout = computed(() => createNodeTitleLayout(zoom.value, {
+  offset: canvas.state.core.nodeTitleOffset,
+  minZoom: canvas.state.core.nodeTitleScaleMinZoom,
 }))
+const titleStyle = computed(() => titleLayout.value.style)
+const controlHandleClearance = computed(() => {
+  if (!props.selected) return 0
+  return (RESIZE_HANDLE_SIZE * zoom.value) / 2 + TITLE_HANDLE_GAP * titleLayout.value.scale
+})
+const titleOffset = computed(() => titleLayout.value.offset)
+const titleAlignOffset = computed(() => controlHandleClearance.value)
 
 interface ChildResizePosition {
   id: string
@@ -220,38 +226,50 @@ onUnmounted(() => {
   >
     <BaseToolbar v-if="selected" v-bind="$props" toolbar-position="top" />
 
-    <BaseTitle
+    <NodeToolbar
       v-if="titleVisible"
-      class="group-node__title nodrag nopan"
-      :title-style="groupTitleStyle"
-      :interactive="true"
-      :editing="isEditingTitle"
-      node-type="group"
-      :label="label"
+      :node-id="id"
+      :is-visible="true"
+      :position="Position.Top"
+      :offset="titleOffset"
+      :align-offset="titleAlignOffset"
+      align="start"
     >
-      <template #title-label>
-        <input
-          v-if="isEditingTitle"
-          ref="titleInputRef"
-          v-model="draftTitle"
-          class="group-node__title-value group-node__title-input"
-          type="text"
-          @keydown.enter.prevent="commitTitleEdit"
-          @keydown.escape.prevent="cancelTitleEdit"
-          @blur="commitTitleEdit"
-          @pointerdown.stop
-          @dblclick.stop
-        >
-        <button
-          v-else
-          class="group-node__title-value group-node__title-text"
-          type="button"
-          @dblclick.stop="startTitleEdit"
-        >
-          {{ label }}
-        </button>
-      </template>
-    </BaseTitle>
+      <BaseTitle
+        class="group-node__title"
+        :interactive="true"
+        :editing="isEditingTitle"
+        :title-style="titleStyle"
+        :title-icon="false"
+        :label="label"
+      >
+        <template v-if="$slots['title-icon']" #title-icon>
+          <slot name="title-icon" />
+        </template>
+        <template #title-label>
+          <input
+            v-if="isEditingTitle"
+            ref="titleInputRef"
+            v-model="draftTitle"
+            class="group-node__title-value group-node__title-input"
+            type="text"
+            @keydown.enter.prevent="commitTitleEdit"
+            @keydown.escape.prevent="cancelTitleEdit"
+            @blur="commitTitleEdit"
+            @pointerdown.stop
+            @dblclick.stop
+          >
+          <button
+            v-else
+            class="group-node__title-value group-node__title-text"
+            type="button"
+            @dblclick.stop="startTitleEdit"
+          >
+            {{ label }}
+          </button>
+        </template>
+      </BaseTitle>
+    </NodeToolbar>
 
     <div class="group-node__body" />
 

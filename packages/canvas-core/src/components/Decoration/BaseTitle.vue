@@ -2,24 +2,25 @@
 import type { Component, CSSProperties } from 'vue'
 import { computed } from 'vue'
 
-const props = withDefaults(defineProps<{
+type TitleIcon = Component | string | null | false
+
+const props = defineProps<{
   label?: string
-  nodeType?: string
-  titleIcon?: Component | string | null
+  titleIcon?: TitleIcon
   titleStyle?: CSSProperties
   interactive?: boolean
   editing?: boolean
-  placement?: 'absolute' | 'flow'
-}>(), {
-  placement: 'absolute',
-})
+}>()
+
+const shouldRenderIcon = computed(() => props.titleIcon !== null && props.titleIcon !== false)
 
 const componentTitleIcon = computed(() => {
-  if (!props.titleIcon) return null
+  if (!shouldRenderIcon.value || !props.titleIcon) return null
   return typeof props.titleIcon === 'string' ? null : props.titleIcon
 })
 
 const htmlTitleIcon = computed(() => {
+  if (!shouldRenderIcon.value) return ''
   return typeof props.titleIcon === 'string' ? props.titleIcon : ''
 })
 </script>
@@ -28,14 +29,12 @@ const htmlTitleIcon = computed(() => {
   <div
     class="base-title"
     :class="{
-      'base-title--absolute': placement === 'absolute',
-      'base-title--flow': placement === 'flow',
       'base-title--interactive': interactive,
       'base-title--editing': editing,
     }"
     :style="titleStyle"
   >
-    <slot name="title-icon">
+    <slot v-if="shouldRenderIcon" name="title-icon">
       <component
         v-if="componentTitleIcon"
         :is="componentTitleIcon"
@@ -46,29 +45,6 @@ const htmlTitleIcon = computed(() => {
         class="base-title__icon base-title__icon--html"
         v-html="htmlTitleIcon"
       />
-      <svg
-        v-else-if="nodeType === 'image'"
-        class="base-title__icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
-        <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
-      </svg>
-      <svg
-        v-else-if="nodeType === 'video'"
-        class="base-title__icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <polygon points="23 7 16 12 23 17" />
-        <rect x="1" y="5" width="15" height="14" rx="2" />
-      </svg>
       <svg
         v-else
         class="base-title__icon"
@@ -102,14 +78,6 @@ const htmlTitleIcon = computed(() => {
   pointer-events: none;
 }
 
-.base-title--absolute {
-  position: absolute;
-  left: 0.25rem;
-}
-
-.base-title--flow {
-  margin-left: 0.25rem;
-}
 
 .base-title--interactive {
   pointer-events: auto;

@@ -7,7 +7,7 @@ import BaseTitle from './BaseTitle.vue'
 import NodeToolbar from './NodeToolbar.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { clamp } from '../../utils/viewportSpace'
+import { createNodeTitleLayout, clamp } from '../../utils/viewportSpace'
 import { CONNECT_FEEDBACK } from '../../utils/constants'
 
 const props = defineProps<NodeProps & {
@@ -33,15 +33,13 @@ const nodeDef = computed(() => {
  */
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
-const titleScale = computed(() => {
-  const minZoom = Math.max(canvas.state.core.nodeTitleScaleMinZoom || 0.5, 0.01)
-  return Math.min(1, zoom.value / minZoom)
-})
-
-const titleStyle = computed(() => ({
-  transform: `scale(${titleScale.value})`,
-  transformOrigin: 'left bottom',
+const titleLayout = computed(() => createNodeTitleLayout(zoom.value, {
+  offset: canvas.state.core.nodeTitleOffset,
+  minZoom: canvas.state.core.nodeTitleScaleMinZoom,
 }))
+
+const titleStyle = computed(() => titleLayout.value.style)
+const titleOffset = computed(() => titleLayout.value.offset)
 
 /**
  * 卡片实际宽度（响应式 ref）。
@@ -420,13 +418,11 @@ const nodeLabel = computed(() => {
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
-    <!-- 节点标题栏：复用 NodeToolbar 的屏幕坐标定位模型，offset 表示标题底部到节点顶部的固定距离。 -->
-    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="canvas.state.core.nodeTitleOffset" align="start">
+    <!-- 节点标题栏：NodeToolbar 负责屏幕坐标锚点，标题布局协议统一控制缩放后的视觉偏移。 -->
+    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="titleOffset" align="start">
       <slot name="title">
         <BaseTitle
-          placement="flow"
           :title-style="titleStyle"
-          :node-type="data?.nodeType"
           :title-icon="nodeDef?.titleIcon"
           :label="nodeLabel"
         >
