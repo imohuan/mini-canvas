@@ -181,6 +181,15 @@ function handleMouseDown(event: MouseEvent) {
   document.addEventListener('mouseup', handleMouseUp)
 }
 
+/** 检查节点的祖先链中是否有节点也在选中集里 */
+function hasSelectedAncestor(node: any, selIds: Set<string>, allNodes: any[]): boolean {
+  if (!node.parentNode) return false
+  if (selIds.has(node.parentNode)) return true
+  const parent = allNodes.find((n: any) => n.id === node.parentNode)
+  if (!parent) return false
+  return hasSelectedAncestor(parent, selIds, allNodes)
+}
+
 function handleMouseMove(event: MouseEvent) {
   if (!isDragging.value) return
   const dx = event.clientX - dragStartPos.value.x
@@ -191,6 +200,10 @@ function handleMouseMove(event: MouseEvent) {
   const nodes = getLiveNodes()
   const selIds = getSelectedIdSet(nodes)
   for (const node of nodes) {
+    // 如果该节点的祖先（parentNode 链）也在选中集里，跳过——
+    // VueFlow 会在父节点移动时自动更新子节点的 computedPosition，
+    // 再手动改子节点 position 会造成双重偏移。
+    if (hasSelectedAncestor(node, selIds, nodes)) continue
     if (!selIds.has(node.id)) continue
     const startPos = nodeStartPositions.value.get(node.id)
     if (startPos) {
