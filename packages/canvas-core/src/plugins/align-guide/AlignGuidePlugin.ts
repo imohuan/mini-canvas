@@ -325,6 +325,11 @@ export const AlignGuidePlugin: CanvasPlugin = {
     const offNodeDragStop = context.on('nodeDragStop', () => {
       draggingNodeId = null
       dragDimensions = null
+      latestDragNode = null
+      if (dragRafId !== null) {
+        cancelAnimationFrame(dragRafId)
+        dragRafId = null
+      }
       clearLines()
       context.emit('align-guide:update', { guides: [] })
     })
