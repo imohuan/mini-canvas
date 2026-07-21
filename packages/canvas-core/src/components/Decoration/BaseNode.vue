@@ -4,7 +4,6 @@ import type { NodeProps, GraphNode } from '@vue-flow/core'
 import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
-import NodeToolbar from './NodeToolbar.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { createNodeTitleLayout, clamp } from '../../utils/viewportSpace'
@@ -38,8 +37,12 @@ const titleLayout = computed(() => createNodeTitleLayout(zoom.value, {
   minZoom: canvas.state.core.nodeTitleScaleMinZoom,
 }))
 
-const titleStyle = computed(() => titleLayout.value.style)
 const titleOffset = computed(() => titleLayout.value.offset)
+const cardBorderWidth = computed(() => Math.max(1 / zoom.value, 1))
+const titlePositionStyle = computed(() => ({
+  ...titleLayout.value.style,
+  bottom: `calc(100% + ${titleOffset.value + cardBorderWidth.value}px)`,
+}))
 
 /**
  * 卡片实际宽度（响应式 ref）。
@@ -276,7 +279,7 @@ const cardInlineStyle = shallowRef<Record<string, string>>({
   width: cardWidth.value + 'px',
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
-  borderWidth: `${1 / zoom.value}px`,
+  borderWidth: `${cardBorderWidth.value}px`,
   borderRadius: '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
 })
@@ -293,7 +296,7 @@ watch(
       width: w + 'px',
       height: h + 'px',
       transform: t,
-      borderWidth: `${1 / z}px`,
+      borderWidth: `${Math.max(1 / z, 1)}px`,
       borderRadius: '8px',
       '--card-outline-width': sel ? `${2 / z}px` : '0px',
     }
@@ -418,35 +421,38 @@ const nodeLabel = computed(() => {
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
 
-    <!-- 节点标题栏：NodeToolbar 负责屏幕坐标锚点，标题布局协议统一控制缩放后的视觉偏移。 -->
-    <NodeToolbar :node-id="id" :is-visible="true" :position="Position.Top" :offset="titleOffset" :z-index-offset="-1" align="start">
-      <slot name="title">
-        <BaseTitle
-          :title-style="titleStyle"
-          :title-icon="nodeDef?.titleIcon"
-          :label="nodeLabel"
-        >
-          <template v-if="$slots['title-icon']" #title-icon>
-            <slot name="title-icon" />
-          </template>
-          <template #title-label>
-            <slot name="title-label">
-              <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
-              <span class="truncate">{{ nodeLabel }}</span>
-            </slot>
-          </template>
-          <template #title-extra>
-            <slot name="title-extra" />
-          </template>
-        </BaseTitle>
-      </slot>
-    </NodeToolbar>
-
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
       :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
       :style="cardInlineStyle"
       @mousemove="updateCardMousePosition">
+
+      <!-- 标题放在卡片内部，继承卡片 3D transform；反向缩放保持原来的屏幕尺寸。 -->
+      <div
+        class="custom-node-title select-none nodrag nopan"
+        :style="titlePositionStyle"
+        @dblclick.stop
+      >
+        <slot name="title">
+          <BaseTitle
+            :title-icon="nodeDef?.titleIcon"
+            :label="nodeLabel"
+          >
+            <template v-if="$slots['title-icon']" #title-icon>
+              <slot name="title-icon" />
+            </template>
+            <template #title-label>
+              <slot name="title-label">
+                <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
+                <span class="truncate">{{ nodeLabel }}</span>
+              </slot>
+            </template>
+            <template #title-extra>
+              <slot name="title-extra" />
+            </template>
+          </BaseTitle>
+        </slot>
+      </div>
 
       <div
         v-if="isConnectionInvalidTarget"
@@ -518,6 +524,12 @@ const nodeLabel = computed(() => {
   transition:
     border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.custom-node-title {
+  position: absolute;
+  left: 0;
+  z-index: 1;
 }
 
 /* selected — outline 叠加在 border 外侧，不挤压内容 */

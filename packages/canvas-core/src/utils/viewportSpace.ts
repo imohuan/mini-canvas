@@ -102,7 +102,7 @@ export function createNodeTitleLayout(
   const safeZoom = Math.max(zoom || 1, 0.01)
   const minZoom = Math.max(options.minZoom || 0.5, 0.01)
   const baseOffset = Math.max(options.offset || 0, 0)
-  const scale = Math.min(1, safeZoom / minZoom)
+  const scale = 1 / Math.max(safeZoom, minZoom)
 
   return {
     scale,
