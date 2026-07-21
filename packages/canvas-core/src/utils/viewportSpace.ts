@@ -102,6 +102,25 @@ export function createNodeTitleLayout(
   const safeZoom = Math.max(zoom || 1, 0.01)
   const minZoom = Math.max(options.minZoom || 0.5, 0.01)
   const baseOffset = Math.max(options.offset || 0, 0)
+  const scale = Math.min(1, safeZoom / minZoom)
+
+  return {
+    scale,
+    offset: baseOffset * scale,
+    style: {
+      transform: `scale(${scale})`,
+      transformOrigin: 'left bottom',
+    },
+  }
+}
+
+export function createNodeTitleLocalLayout(
+  zoom: number,
+  options: NodeTitleLayoutOptions = {},
+): { scale: number; offset: number; style: Record<string, string> } {
+  const safeZoom = Math.max(zoom || 1, 0.01)
+  const minZoom = Math.max(options.minZoom || 0.5, 0.01)
+  const baseOffset = Math.max(options.offset || 0, 0)
   const scale = 1 / Math.max(safeZoom, minZoom)
 
   return {

@@ -6,7 +6,7 @@ import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
-import { createNodeTitleLayout, clamp } from '../../utils/viewportSpace'
+import { createNodeTitleLocalLayout, clamp } from '../../utils/viewportSpace'
 import { CONNECT_FEEDBACK } from '../../utils/constants'
 
 const props = defineProps<NodeProps & {
@@ -32,16 +32,17 @@ const nodeDef = computed(() => {
  */
 const zoom = computed(() => Math.max(vf.viewport.value.zoom || 1, 0.01))
 
-const titleLayout = computed(() => createNodeTitleLayout(zoom.value, {
+const titleLayout = computed(() => createNodeTitleLocalLayout(zoom.value, {
   offset: canvas.state.core.nodeTitleOffset,
   minZoom: canvas.state.core.nodeTitleScaleMinZoom,
 }))
 
 const titleOffset = computed(() => titleLayout.value.offset)
-const cardBorderWidth = computed(() => Math.max(1 / zoom.value, 1))
+const cardBorderCompensation = computed(() => Math.max(1 / zoom.value, 1))
 const titlePositionStyle = computed(() => ({
   ...titleLayout.value.style,
-  bottom: `calc(100% + ${titleOffset.value + cardBorderWidth.value}px)`,
+  left: `${-cardBorderCompensation.value}px`,
+  bottom: `calc(100% + ${titleOffset.value + cardBorderCompensation.value}px)`,
 }))
 
 /**
@@ -279,7 +280,7 @@ const cardInlineStyle = shallowRef<Record<string, string>>({
   width: cardWidth.value + 'px',
   height: cardHeight.value + 'px',
   transform: cardTransform.value,
-  borderWidth: `${cardBorderWidth.value}px`,
+  borderWidth: `${1 / zoom.value}px`,
   borderRadius: '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
 })
@@ -296,7 +297,7 @@ watch(
       width: w + 'px',
       height: h + 'px',
       transform: t,
-      borderWidth: `${Math.max(1 / z, 1)}px`,
+      borderWidth: `${1 / z}px`,
       borderRadius: '8px',
       '--card-outline-width': sel ? `${2 / z}px` : '0px',
     }
@@ -431,6 +432,12 @@ const nodeLabel = computed(() => {
       <div
         class="custom-node-title select-none nodrag nopan"
         :style="titlePositionStyle"
+        @mouseenter="isHovered = false"
+        @mouseleave="isHovered = true"
+        @mousemove.stop
+        @pointerdown.stop
+        @pointerup.stop
+        @click.stop
         @dblclick.stop
       >
         <slot name="title">
@@ -528,7 +535,6 @@ const nodeLabel = computed(() => {
 
 .custom-node-title {
   position: absolute;
-  left: 0;
   z-index: 1;
 }
 

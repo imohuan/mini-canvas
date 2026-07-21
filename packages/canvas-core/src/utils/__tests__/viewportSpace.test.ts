@@ -1,9 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createNodeTitleLayout } from '../viewportSpace'
+import { createNodeTitleLayout, createNodeTitleLocalLayout } from '../viewportSpace'
+
+test('viewport title keeps its existing screen-space layout', () => {
+  const large = createNodeTitleLayout(2, { offset: 12, minZoom: 0.5 })
+  const small = createNodeTitleLayout(0.25, { offset: 12, minZoom: 0.5 })
+
+  assert.equal(large.scale, 1)
+  assert.equal(large.offset, 12)
+  assert.equal(small.scale, 0.5)
+  assert.equal(small.offset, 6)
+})
 
 test('node title keeps its screen size and offset above min zoom', () => {
-  const layout = createNodeTitleLayout(2, { offset: 12, minZoom: 0.5 })
+  const layout = createNodeTitleLocalLayout(2, { offset: 12, minZoom: 0.5 })
 
   assert.equal(layout.scale, 0.5)
   assert.equal(layout.offset, 6)
@@ -12,7 +22,7 @@ test('node title keeps its screen size and offset above min zoom', () => {
 })
 
 test('node title shrinks with the canvas below min zoom', () => {
-  const layout = createNodeTitleLayout(0.25, { offset: 12, minZoom: 0.5 })
+  const layout = createNodeTitleLocalLayout(0.25, { offset: 12, minZoom: 0.5 })
 
   assert.equal(layout.scale, 2)
   assert.equal(layout.offset, 24)
@@ -21,7 +31,7 @@ test('node title shrinks with the canvas below min zoom', () => {
 })
 
 test('node title layout stays finite for an invalid zoom', () => {
-  const layout = createNodeTitleLayout(0, { offset: 12, minZoom: 0.5 })
+  const layout = createNodeTitleLocalLayout(0, { offset: 12, minZoom: 0.5 })
 
   assert.equal(Number.isFinite(layout.scale), true)
   assert.equal(Number.isFinite(layout.offset), true)
