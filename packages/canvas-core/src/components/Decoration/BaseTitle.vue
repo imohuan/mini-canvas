@@ -23,45 +23,29 @@ const htmlTitleIcon = computed(() => {
   if (!shouldRenderIcon.value) return ''
   return typeof props.titleIcon === 'string' ? props.titleIcon : ''
 })
+
 </script>
 
 <template>
-  <div
-    class="base-title"
-    :class="{
-      'base-title--interactive': interactive,
-      'base-title--editing': editing,
-    }"
-    :style="titleStyle"
-  >
+  <div class="base-title" :class="{
+    'base-title--interactive': interactive,
+    'base-title--editing': editing,
+  }" :style="titleStyle">
     <slot v-if="shouldRenderIcon" name="title-icon">
-      <component
-        v-if="componentTitleIcon"
-        :is="componentTitleIcon"
-        class="base-title__icon"
-      />
-      <span
-        v-else-if="htmlTitleIcon"
-        class="base-title__icon base-title__icon--html"
-        v-html="htmlTitleIcon"
-      />
-      <svg
-        v-else
-        class="base-title__icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
+      <component v-if="componentTitleIcon" :is="componentTitleIcon" class="base-title__icon" />
+      <span v-else-if="htmlTitleIcon" class="base-title__icon base-title__icon--html" v-html="htmlTitleIcon" />
+      <svg v-else class="base-title__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="4 7 4 4 20 4 20 7" />
         <line x1="9" y1="20" x2="15" y2="20" />
         <line x1="12" y1="4" x2="12" y2="20" />
       </svg>
     </slot>
 
-    <slot name="title-label">
-      <span class="base-title__label">{{ label }}</span>
-    </slot>
+    <div class="base-title-label">
+      <slot name="title-label">
+        <span class="base-title__label">{{ label }}</span>
+      </slot>
+    </div>
 
     <div class="base-title__extra">
       <slot name="title-extra" />
@@ -71,6 +55,8 @@ const htmlTitleIcon = computed(() => {
 
 <style scoped>
 .base-title {
+  position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -93,12 +79,29 @@ const htmlTitleIcon = computed(() => {
   flex-shrink: 0;
 }
 
+.base-title-label {
+  flex: 0 0 80%;
+  width: 80%;
+  min-width: 0;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .base-title__extra {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 20%;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  max-width: 50%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.base-title__extra > :deep(span) {
+  flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -110,11 +113,4 @@ const htmlTitleIcon = computed(() => {
   align-items: center;
 }
 
-.base-title__label {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 </style>
