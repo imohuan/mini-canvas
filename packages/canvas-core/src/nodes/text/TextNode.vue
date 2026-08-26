@@ -91,6 +91,7 @@ onUnmounted(() => {
       @pointerup="stopInputPropagation"
       @mousedown="stopInputPropagation"
       @click="stopInputPropagation"
+      @dblclick="stopInputPropagation"
       autofocus />
 
     <!-- 只读展示：随画布自然缩放，不做反向 scale -->
@@ -98,7 +99,7 @@ onUnmounted(() => {
       v-else
       class="text-node-content w-full h-full text-gray-700 leading-relaxed whitespace-pre-wrap overflow-hidden cursor-text"
       :class="{ 'is-condensed': lod === 'condensed' }"
-      @dblclick="startEdit">
+      @dblclick.stop="startEdit">
       {{ text }}
     </div>
   </div>
