@@ -45,10 +45,16 @@ const lowDetail = computed(() => zoom.value < (canvas.state.core.nodeLodLowDetai
 
 const titleOffset = computed(() => titleLayout.value.offset)
 const cardBorderCompensation = computed(() => Math.max(1 / zoom.value, 1))
+// 标题在画布坐标系下的 DOM 宽度。设计意图：让标题反缩放后屏幕宽度 == 卡片屏幕宽度。
+// 推导：标题屏幕宽 = (DOM 宽 * zoom) / max(zoom, minZoom) = 卡片屏幕宽 = cardWidth * zoom
+// 解得 DOM 宽 = cardWidth * max(zoom, minZoom)。
+const titleMinZoom = computed(() => canvas.state.core.nodeTitleScaleMinZoom || 0.5)
+const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, titleMinZoom.value))
 const titlePositionStyle = computed(() => ({
   ...titleLayout.value.style,
   left: `${-cardBorderCompensation.value}px`,
   bottom: `calc(100% + ${titleOffset.value + cardBorderCompensation.value}px)`,
+  width: `${titleCanvasWidth.value}px`,
 }))
 
 /**
@@ -550,6 +556,7 @@ const nodeLabel = computed(() => {
 .custom-node-title {
   position: absolute;
   z-index: 1;
+  display: flex;
 }
 
 /* selected — outline 叠加在 border 外侧，不挤压内容 */
