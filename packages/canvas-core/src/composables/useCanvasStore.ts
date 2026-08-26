@@ -73,6 +73,8 @@ const serializer = {
         bottomToolbarOffset: numberOr(core.bottomToolbarOffset, 12),
         nodeTitleOffset: numberOr(core.nodeTitleOffset, 12),
         nodeTitleScaleMinZoom: numberOr(core.nodeTitleScaleMinZoom, 0.5),
+        textLodIconZoom: numberOr(core.textLodIconZoom, 0.18),
+        nodeLodLowDetailZoom: numberOr(core.nodeLodLowDetailZoom, 0.4),
         nodesDraggable: core.nodesDraggable ?? true,
         nodesConnectable: core.nodesConnectable ?? true,
         elementsSelectable: core.elementsSelectable ?? true,
@@ -153,6 +155,10 @@ export const useCanvasStore = defineStore('canvasState', () => {
       // ==================== 节点标题 ====================
       nodeTitleOffset: 12,
       nodeTitleScaleMinZoom: 0.5,
+
+      // ==================== 节点缩放分级 (LOD) ====================
+      textLodIconZoom: 0.18,
+      nodeLodLowDetailZoom: 0.4,
 
       // ==================== 自定义端口 ====================
       handleDebug: false,

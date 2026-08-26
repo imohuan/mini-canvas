@@ -37,6 +37,12 @@ const titleLayout = computed(() => createNodeTitleLocalLayout(zoom.value, {
   minZoom: canvas.state.core.nodeTitleScaleMinZoom,
 }))
 
+/**
+ * 低细节模式（LOD）：缩放低于阈值时整体简化节点渲染，减少缩放/平移时的重绘成本。
+ * 关闭 3D 连接反馈、隐藏连接点/工具栏、去掉卡片阴影过渡，让浏览器只做纯 transform 合成。
+ */
+const lowDetail = computed(() => zoom.value < (canvas.state.core.nodeLodLowDetailZoom ?? 0.4))
+
 const titleOffset = computed(() => titleLayout.value.offset)
 const cardBorderCompensation = computed(() => Math.max(1 / zoom.value, 1))
 const titlePositionStyle = computed(() => ({
@@ -188,6 +194,7 @@ const isCurrentConnectingNode = computed(() =>
  * 条件：未被抑制 && 不是拖线起点 && （鼠标悬停 或 节点被选中）。
  */
 const shouldShowHandles = computed(() =>
+  !lowDetail.value &&
   !canvas.connectionState.suppressHandles &&
   !isCurrentConnectingNode.value &&
   (isHovered.value || props.selected)
@@ -214,6 +221,7 @@ const showConnectFeedback = computed(() =>
   canvas.isConnecting &&
   canvas.connectionState.activeConnection?.sourceNodeId !== props.id &&
   !isConnectionInvalidTarget.value &&
+  !lowDetail.value &&
   (isHovered.value || isConnectionValidTarget.value)
 )
 
@@ -424,7 +432,7 @@ const nodeLabel = computed(() => {
 
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
-      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget }"
+      :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget, 'is-low-detail': lowDetail }"
       :style="cardInlineStyle"
       @mousemove="updateCardMousePosition">
 
@@ -531,6 +539,12 @@ const nodeLabel = computed(() => {
   transition:
     border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 低细节（缩略）模式：去掉阴影/过渡，避免缩放、平移时对每张卡片做昂贵重绘 */
+.custom-node-card.is-low-detail {
+  transition: none;
+  box-shadow: none !important;
 }
 
 .custom-node-title {

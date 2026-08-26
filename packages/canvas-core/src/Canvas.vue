@@ -511,6 +511,8 @@ onMounted(async () => {
   // --- 节点标题 ---
   registerCore('nodeTitleOffset', { title: '标题基础偏移', description: '标题底部到节点顶部的基础屏幕间距；低于标题缩放阈值后会随标题一起缩小', type: 'slider', group: '节点', order: 52, defaultValue: core.nodeTitleOffset, min: 0, max: 40, step: 1 })
   registerCore('nodeTitleScaleMinZoom', { title: '标题缩放阈值', description: '低于该缩放值后，标题跟随画布一起缩小', type: 'slider', group: '节点', order: 53, defaultValue: core.nodeTitleScaleMinZoom, min: 0.1, max: 1, step: 0.05 })
+  registerCore('textLodIconZoom', { title: '文本缩略阈值', description: '低于该缩放值，文本节点只显示缩略标识符（之间则只显示首行截断）', type: 'slider', group: '节点', order: 55, defaultValue: core.textLodIconZoom, min: 0.05, max: 1, step: 0.05 })
+  registerCore('nodeLodLowDetailZoom', { title: '节点低细节阈值', description: '低于该缩放值，所有节点进入低细节模式（隐藏端口/工具栏、去阴影）', type: 'slider', group: '节点', order: 56, defaultValue: core.nodeLodLowDetailZoom, min: 0.1, max: 1, step: 0.05 })
 
   // --- 多选框 ---
   registerCore('selectionFramePaddingX', { title: '选框水平内边距', type: 'slider', group: '选框', order: 60, defaultValue: core.selectionFramePaddingX, min: 0, max: 60, step: 1 })
