@@ -37,6 +37,18 @@ const rightName = computed(() => connectedImages.value[1]?.name || '')
 const hasTwoImages = computed(() => !!leftImage.value && !!rightImage.value)
 const hasOneImage = computed(() => !!leftImage.value && !rightImage.value)
 
+/** 名称最多显示 10 个字符，超过则在中间用 ... 代替 */
+function truncateName(name, maxLen = 10) {
+  const chars = Array.from(name);
+  if (chars.length <= maxLen) return name;
+  const keep = maxLen - 1;
+  const head = Math.ceil(keep / 2);
+  const tail = keep - head;
+  return chars.slice(0, head).join('') + '...' + chars.slice(chars.length - tail).join('');
+}
+const leftLabel = computed(() => truncateName(leftName.value || '左'));
+const rightLabel = computed(() => truncateName(rightName.value || '右'));
+
 /** 根据连接图片的原始尺寸计算卡片宽高：取两张图的最大宽和最大高，按宽高比缩放到 MAX 范围内 */
 function calcCardSize(images: ImageInfo[]): { w: number; h: number } {
   if (images.length === 0) return { w: 500, h: 350 }
@@ -121,13 +133,13 @@ function onDividerPointerUp(_e: PointerEvent) {
       <!-- 右侧图层（底层） -->
       <div class="compare-layer compare-layer-right">
         <img :src="rightImage" class="compare-img-full" draggable="false" />
-        <div class="compare-label compare-label-right">{{ rightName || '右' }}</div>
+        <div class="compare-label compare-label-right">{{ rightLabel }}</div>
       </div>
 
       <!-- 左侧图层（上层，整体 clip 到分割线左侧） -->
       <div class="compare-layer compare-layer-left" :style="{ clipPath: `inset(0 ${100 - dividerPos}% 0 0)` }">
         <img :src="leftImage" class="compare-img-full" draggable="false" />
-        <div class="compare-label compare-label-left">{{ leftName || '左' }}</div>
+        <div class="compare-label compare-label-left">{{ leftLabel }}</div>
       </div>
 
       <!-- 分割线 + 手柄 -->
@@ -271,12 +283,16 @@ function onDividerPointerUp(_e: PointerEvent) {
 .compare-label {
   position: absolute;
   top: 6px;
+  max-width: 50%;
   font-size: 10px;
   color: #fff;
   background: rgba(0, 0, 0, 0.45);
   padding: 1px 6px;
   border-radius: 3px;
   pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .compare-label-left {
   left: 6px;
