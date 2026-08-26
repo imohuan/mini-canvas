@@ -103,7 +103,7 @@ const htmlTitleIcon = computed(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  z-index: -1;
+  z-index: 0;
   white-space: nowrap;
 }
 
@@ -113,6 +113,8 @@ const htmlTitleIcon = computed(() => {
 }
 
 .base-title__label {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
