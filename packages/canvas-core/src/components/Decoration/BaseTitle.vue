@@ -63,12 +63,16 @@ const htmlTitleIcon = computed(() => {
       <span class="base-title__label">{{ label }}</span>
     </slot>
 
-    <slot name="title-extra" />
+    <div class="base-title__extra">
+      <slot name="title-extra" />
+    </div>
   </div>
 </template>
 
 <style scoped>
 .base-title {
+  position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -76,6 +80,8 @@ const htmlTitleIcon = computed(() => {
   font-size: 0.75rem;
   line-height: 1rem;
   pointer-events: none;
+  width: 100%;
+  overflow: hidden;
 }
 
 
@@ -87,6 +93,18 @@ const htmlTitleIcon = computed(() => {
   width: 0.875rem;
   height: 0.875rem;
   flex-shrink: 0;
+}
+
+.base-title__extra {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: -1;
+  white-space: nowrap;
 }
 
 .base-title__icon--html {
