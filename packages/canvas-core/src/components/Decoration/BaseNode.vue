@@ -430,8 +430,7 @@ const nodeLabel = computed(() => {
     'is-connection-body-hovered': isConnectionBodyHovered,
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
-  }"
-    @mouseenter="isHovered = true"
+  }" @mouseenter="isHovered = true"
     @mouseleave="isHovered = false; if (!canvas.isConnecting) canvas.connectionState.suppressHandles = false">
     <!-- 顶部工具栏（各节点类型自定义，如图片裁剪、视频控制等） -->
     <slot name="top-toolbar" />
@@ -439,26 +438,14 @@ const nodeLabel = computed(() => {
     <!-- 卡片主体：响应式尺寸，支持连接悬停 3D 倾斜反馈 -->
     <div class="custom-node-card relative flex items-center justify-center overflow-visible"
       :class="{ 'is-connecting-hover': showConnectFeedback, 'is-connection-invalid': isConnectionInvalidTarget, 'is-low-detail': lowDetail }"
-      :style="cardInlineStyle"
-      @mousemove="updateCardMousePosition">
+      :style="cardInlineStyle" @mousemove="updateCardMousePosition">
 
       <!-- 标题放在卡片内部，继承卡片 3D transform；反向缩放保持原来的屏幕尺寸。 -->
-      <div
-        class="custom-node-title select-none nodrag nopan"
-        :style="titlePositionStyle"
-        @mouseenter="isHovered = false"
-        @mouseleave="isHovered = true"
-        @mousemove.stop
-        @pointerdown.stop
-        @pointerup.stop
-        @click.stop
-        @dblclick.stop
-      >
+      <div class="custom-node-title select-none nodrag nopan " :style="titlePositionStyle"
+        @mouseenter="isHovered = false" @mouseleave="isHovered = true" @mousemove.stop @pointerdown.stop @pointerup.stop
+        @click.stop @dblclick.stop>
         <slot name="title">
-          <BaseTitle
-            :title-icon="nodeDef?.titleIcon"
-            :label="nodeLabel"
-          >
+          <BaseTitle :title-icon="nodeDef?.titleIcon" :label="nodeLabel">
             <template v-if="$slots['title-icon']" #title-icon>
               <slot name="title-icon" />
             </template>
@@ -475,11 +462,7 @@ const nodeLabel = computed(() => {
         </slot>
       </div>
 
-      <div
-        v-if="isConnectionInvalidTarget"
-        class="invalid-connection-tooltip"
-        :style="invalidTooltipStyle"
-      >
+      <div v-if="isConnectionInvalidTarget" class="invalid-connection-tooltip" :style="invalidTooltipStyle">
         {{ canvas.connectionState.hoverNode?.message || '无法连接' }}
       </div>
 
@@ -498,14 +481,13 @@ const nodeLabel = computed(() => {
       <MovingHandle v-if="targetPosition" id="target" type="target" :position="Position.Left"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
         :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
-        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap" :node-size="cardWidth"
-        :debug="debugHandle" @hover="isHovered = $event" />
+        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap"
+        :node-size="cardWidth" :debug="debugHandle" @hover="isHovered = $event" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="custom-node-content-clip">
         <slot name="content">
-          <svg class="w-12 h-12 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.5">
+          <svg class="w-12 h-12 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
             <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round" />
@@ -526,8 +508,8 @@ const nodeLabel = computed(() => {
       <MovingHandle v-if="sourcePosition" id="source" type="source" :position="Position.Right"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
         :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
-        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap" :node-size="cardWidth"
-        :debug="debugHandle" @hover="isHovered = $event" />
+        :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap"
+        :node-size="cardWidth" :debug="debugHandle" @hover="isHovered = $event" />
     </div>
 
     <!-- 底部工具栏（各节点类型自定义，如文本编辑、格式控制等） -->
@@ -672,4 +654,3 @@ const nodeLabel = computed(() => {
   color: var(--canvas-node-resize-handle-active);
 }
 </style>
-
