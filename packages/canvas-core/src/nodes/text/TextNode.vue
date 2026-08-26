@@ -139,7 +139,7 @@ onUnmounted(() => {
   width: 45%;
   background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.65) 50%, transparent 100%);
   transform: skewX(-18deg);
-  animation: text-node-shimmer 1.3s infinite ease-in-out;
+  /* animation: text-node-shimmer 1.3s infinite ease-in-out; */
   will-change: left, transform;
 }
 @keyframes text-node-shimmer {
@@ -147,4 +147,3 @@ onUnmounted(() => {
   60%, 100% { left: 140%; }
 }
 </style>
-(file uses CRLF line endings)
