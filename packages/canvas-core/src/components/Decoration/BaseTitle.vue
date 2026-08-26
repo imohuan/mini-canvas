@@ -71,8 +71,6 @@ const htmlTitleIcon = computed(() => {
 
 <style scoped>
 .base-title {
-  position: relative;
-  z-index: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -96,14 +94,14 @@ const htmlTitleIcon = computed(() => {
 }
 
 .base-title__extra {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  z-index: 0;
+  max-width: 50%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -113,10 +111,8 @@ const htmlTitleIcon = computed(() => {
 }
 
 .base-title__label {
-  position: relative;
-  z-index: 1;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
