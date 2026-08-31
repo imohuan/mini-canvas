@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import CanvasView from '../views/CanvasView.vue'
+import McpCanvasView from '../views/McpCanvasView.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -8,6 +9,11 @@ const router = createRouter({
       path: '/',
       name: 'canvas',
       component: CanvasView,
+    },
+    {
+      path: '/mcp',
+      name: 'mcp-canvas',
+      component: McpCanvasView,
     },
     {
       path: '/ui-test',
