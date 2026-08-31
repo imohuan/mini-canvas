@@ -264,10 +264,6 @@ function onInput() {
   emit('action', 'input', promptText.value)
 }
 
-function onSettings() {
-  emit('action', 'settings')
-}
-
 function onMore() {
   emit('action', 'more')
 }
@@ -277,6 +273,19 @@ function onInputAreaClick() {
 }
 
 function onAi() {
+  // ── 收集并打印当前节点的全部相关数据 ──
+  console.log('[AI 按钮] ==== 输入框内容 (promptText) ====')
+  console.log(promptText.value)
+
+  console.log('[AI 按钮] ==== 输入框文档结构 (promptDoc, 含资源节点) ====')
+  console.log(promptDoc.value)
+
+  console.log('[AI 按钮] ==== 资源列表 (connectedImages) ====')
+  console.log(connectedImages.value)
+
+  console.log('[AI 按钮] ==== 下拉框值 ====')
+  console.log({ selectedStyle: selectedStyle.value, selectedModel: selectedModel.value, selectedSize: selectedSize.value })
+
   emit('action', 'ai', promptText.value)
 }
 
@@ -343,9 +352,8 @@ function onEditorKeydown(e: KeyboardEvent) {
         <input ref="fileInputRef" type="file" accept="image/*" class="source-file-input" @change="onAddFileChange" />
         <AxButton variant="ghost" size="icon" icon="add" title="添加素材" @click="onAdd" />
 
-        <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" />
-
-        <div class="toolbar-divider" />
+        <!-- <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" /> -->
+        <!-- <div class="toolbar-divider" /> -->
 
         <AxSelect v-model="selectedStyle" :options="STYLE_OPTIONS" size="sm" placeholder="选择风格" trigger-width="110px" />
 
@@ -356,7 +364,7 @@ function onEditorKeydown(e: KeyboardEvent) {
 
       <!-- 右侧 -->
       <div class="toolbar-right">
-        <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" />
+        <!-- <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" /> -->
 
         <button class="btn-ai" @click="onAi">
           <svg class="ai-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
