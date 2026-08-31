@@ -1,13 +1,14 @@
 /**
  * MCP 后台服务组装入口
  *
- * 组装 GraphModel + NodeStorage + MCP SDK server，按 transport 连接。
+ * 组装 GraphModel + NodeStorage + MCP SDK server + SSE 推送，按 transport 启动。
  */
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { ServerConfig } from './types'
 import { GraphModel } from './graph/GraphModel'
 import { NodeStorage } from './storage/NodeStorage'
 import { createMcpServer } from './mcp/server'
+import { SseServer } from './sse/SseServer'
 
 /**
  * 启动 MCP 后台服务
@@ -18,19 +19,21 @@ export async function startServer(config: ServerConfig): Promise<void> {
   console.log(`  port      : ${config.port}`)
   console.log(`  workdir   : ${config.dir}`)
 
-  // 初始化存储与图模型
+  // 初始化存储与图模型（全局共享一份，MCP 与 SSE 操作同一数据）
   const storage = new NodeStorage(config.dir)
   await storage.init()
   const model = new GraphModel()
-  const server = createMcpServer(model, storage)
+
+  // 启动 SSE 推送通道（实时变化广播给前端/客户端）
+  const sse = new SseServer({ model, port: config.port })
+  await sse.start()
 
   if (config.transport === 'stdio') {
     console.log(`[mini-canvas] 连接 stdio transport（等待 MCP 客户端...）`)
+    const server = createMcpServer(model, storage)
     const transport = new StdioServerTransport()
     await server.connect(transport)
   } else if (config.transport === 'sse') {
-    console.log(`[mini-canvas] SSE 模式待实现 (Phase 4)，当前暂回退 stdio`)
-    const transport = new StdioServerTransport()
-    await server.connect(transport)
+    console.log(`[mini-canvas] SSE 模式：HTTP + SSE 已就绪，MCP 命令通道待接入`)
   }
 }
