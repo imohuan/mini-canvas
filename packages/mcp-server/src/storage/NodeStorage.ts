@@ -1,0 +1,127 @@
+/**
+ * NodeStorage — Node 版画布存储（fs/promises）
+ *
+ * 接口对齐前端 StorageAPI 的多项目/多画布模型，但**按 taskId 参数化**（支持多画布并行）。
+ * 落盘格式与前端共用：`./workspace/project-{taskId}/canvas.json`，
+ * 复用 sanitizeForSave 保证前后端同构 JSON 互读。
+ */
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { sanitizeForSave } from './sanitize'
+
+/** 项目元数据（与前端 ProjectMeta 同构） */
+export interface ProjectMeta {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** 画布数据（与前端 CanvasData 同构） */
+export interface CanvasData {
+  nodes: any[]
+  edges: any[]
+}
+
+const PROJECT_INDEX_FILE = 'canvas-ai-project-index.json'
+const CANVAS_FILE = 'canvas.json'
+
+export class NodeStorage {
+  private rootDir: string
+  private projectIndex: ProjectMeta[] = []
+
+  constructor(rootDir: string) {
+    this.rootDir = path.resolve(rootDir)
+  }
+
+  /** 初始化：确保工作目录存在，加载项目索引 */
+  async init(): Promise<void> {
+    await fs.mkdir(this.rootDir, { recursive: true })
+    this.projectIndex = await this.readIndex()
+  }
+
+  // ==================== 内部辅助 ====================
+
+  private projectDir(taskId: string): string {
+    return path.join(this.rootDir, `project-${taskId}`)
+  }
+
+  private canvasFilePath(taskId: string): string {
+    return path.join(this.projectDir(taskId), CANVAS_FILE)
+  }
+
+  private async readIndex(): Promise<ProjectMeta[]> {
+    try {
+      const raw = await fs.readFile(path.join(this.rootDir, PROJECT_INDEX_FILE), 'utf-8')
+      return JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+
+  private async writeIndex(): Promise<void> {
+    await fs.writeFile(
+      path.join(this.rootDir, PROJECT_INDEX_FILE),
+      JSON.stringify(this.projectIndex, null, 2),
+      'utf-8',
+    )
+  }
+
+  // ==================== 项目(画布) 管理 ====================
+
+  /** 创建项目（taskId 即画布 id；未传则自动生成） */
+  async createProject(name: string, taskId?: string): Promise<ProjectMeta> {
+    const id = taskId ?? randomUUID()
+    const now = Date.now()
+    const meta: ProjectMeta = { id, name, createdAt: now, updatedAt: now }
+    if (!this.projectIndex.find((p) => p.id === id)) {
+      this.projectIndex.push(meta)
+      await this.writeIndex()
+    }
+    await fs.mkdir(this.projectDir(id), { recursive: true })
+    return meta
+  }
+
+  /** 删除项目 */
+  async deleteProject(id: string): Promise<void> {
+    this.projectIndex = this.projectIndex.filter((p) => p.id !== id)
+    await this.writeIndex()
+    await fs.rm(this.projectDir(id), { recursive: true, force: true })
+  }
+
+  /** 列出所有项目 */
+  listProjects(): ProjectMeta[] {
+    return [...this.projectIndex]
+  }
+
+  /** 获取项目是否存在 */
+  hasProject(id: string): boolean {
+    return this.projectIndex.some((p) => p.id === id)
+  }
+
+  // ==================== 画布读写 ====================
+
+  /** 保存画布（taskId 指定画布，不依赖 currentProjectId） */
+  async saveCanvas(taskId: string, nodes: any[], edges: any[]): Promise<void> {
+    const meta = this.projectIndex.find((p) => p.id === taskId)
+    if (!meta) throw new Error(`[NodeStorage] 项目不存在: ${taskId}`)
+    const cleaned = sanitizeForSave(nodes, edges)
+    const data: CanvasData = { nodes: cleaned.nodes, edges: cleaned.edges }
+    await fs.mkdir(this.projectDir(taskId), { recursive: true })
+    await fs.writeFile(this.canvasFilePath(taskId), JSON.stringify(data, null, 2), 'utf-8')
+    meta.updatedAt = Date.now()
+    await this.writeIndex()
+  }
+
+  /** 加载画布 */
+  async loadCanvas(taskId: string): Promise<CanvasData> {
+    try {
+      const raw = await fs.readFile(this.canvasFilePath(taskId), 'utf-8')
+      const data = JSON.parse(raw)
+      return { nodes: data.nodes ?? [], edges: data.edges ?? [] }
+    } catch {
+      return { nodes: [], edges: [] }
+    }
+  }
+}
