@@ -1,5 +1,6 @@
-/** 节点类型 */
+/** 节点类型（语义类型；'custom' 是前端 VueFlow 的统一渲染类型） */
 export type CanvasNodeType =
+  | 'custom'
   | 'image'
   | 'video'
   | 'audio'
@@ -17,6 +18,8 @@ export interface CanvasNode {
   position: { x: number; y: number }
   data: {
     label?: string
+    /** 语义节点类型（前端插件注册的类型，如 image/text/video） */
+    nodeType?: string
     status?: CanvasNodeStatus
     progress?: number
     src?: string

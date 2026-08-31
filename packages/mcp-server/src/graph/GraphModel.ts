@@ -108,14 +108,31 @@ export class GraphModel {
 
   // ==================== 节点 CRUD ====================
 
-  /** 创建节点 */
+  /**
+   * 前端插件注册的语义节点类型（映射到 VueFlow type='custom' + data.nodeType）
+   */
+  private static SEMANTIC_NODE_TYPES = new Set([
+    'image', 'video', 'text', 'panorama', 'image-compare',
+  ])
+
+  /**
+   * 创建节点
+   *
+   * 兼容两种 type 语义：
+   * - 语义类型（image/video/text/...）：自动转成前端可渲染的
+   *   `type:'custom'` + `data.nodeType`，这样画布能渲染成插件节点。
+   * - 直接传 VueFlow 格式（type='custom' 且 data.nodeType 已设）：原样保留。
+   */
   createNode(taskId: string, input: CreateNodeInput): CanvasNode {
     const canvas = this.getCanvas(taskId)
+    const isSemantic = GraphModel.SEMANTIC_NODE_TYPES.has(input.type)
     const node: CanvasNode = {
       id: input.id ?? randomUUID(),
-      type: input.type,
+      type: isSemantic ? 'custom' : input.type,
       position: input.position ?? { x: 0, y: 0 },
-      data: { ...(input.data ?? {}) },
+      data: isSemantic
+        ? { ...(input.data ?? {}), nodeType: input.type }
+        : { ...(input.data ?? {}) },
     }
     canvas.nodes.set(node.id, node)
     this.bump(canvas)

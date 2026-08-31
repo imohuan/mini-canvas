@@ -39,7 +39,21 @@ describe('GraphModel', () => {
       const n2 = model.createNode('t', { type: 'image' })
       expect(n1.id).toBeTruthy()
       expect(n1.id).not.toBe(n2.id)
-      expect(n1.data).toEqual({})
+    })
+
+    it('语义类型节点自动转成 VueFlow 格式（type=custom + data.nodeType）', () => {
+      model.createCanvas('t')
+      const n = model.createNode('t', { type: 'image', data: { label: '图' } })
+      expect(n.type).toBe('custom')
+      expect(n.data.nodeType).toBe('image')
+      expect(n.data.label).toBe('图')
+    })
+
+    it('直接传 VueFlow 格式的节点原样保留', () => {
+      model.createCanvas('t')
+      const n = model.createNode('t', { type: 'custom', data: { nodeType: 'image', label: '图' } })
+      expect(n.type).toBe('custom')
+      expect(n.data.nodeType).toBe('image')
     })
 
     it('更新节点合并字段', () => {
