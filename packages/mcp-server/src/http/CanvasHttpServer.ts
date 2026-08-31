@@ -11,6 +11,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve, type ServerType } from '@hono/node-server'
 import { streamSSE } from 'hono/streaming'
+import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { GraphModel } from '../graph/GraphModel'
 import type { GraphEvent } from '../graph/types'
 import type { NodeStorage } from '../storage/NodeStorage'
@@ -171,6 +173,23 @@ export class CanvasHttpServer {
 
     // 健康检查
     this.app.get('/health', (c) => c.json({ ok: true, clients: this.clients.size }))
+  }
+
+  /**
+   * 挂载 MCP Streamable HTTP 端点 `/mcp`，供外部 MCP 客户端（Claude Code / Desktop 等）连接。
+   * stateless 模式：每个请求新建一个独立 transport + server 实例，避免 server.connect 重复绑定。
+   */
+  mountMcp(createServer: () => McpServer): void {
+    this.app.all('/mcp', async (c) => {
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      })
+      const server = createServer()
+      await server.connect(transport)
+      const response = await transport.handleRequest(c.req.raw)
+      return new Response(response.body, response)
+    })
+    console.log('[mini-canvas] MCP Streamable HTTP 端点已挂载: /mcp')
   }
 
   /** 启动 HTTP 服务器 */

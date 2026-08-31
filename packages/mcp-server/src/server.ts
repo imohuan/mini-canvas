@@ -44,6 +44,10 @@ export async function startServer(config: ServerConfig): Promise<void> {
     const transport = new StdioServerTransport()
     await server.connect(transport)
   } else if (config.transport === 'sse') {
+    // sse 模式：HTTP(REST) + SSE 服务前端，同时把同一套 MCP 工具挂到 /mcp 端点，
+    // 供外部 MCP 客户端（Claude Code / Desktop / 自定义客户端）通过 streamable HTTP 连接。
+    http.mountMcp(() => createMcpServer(model, storage, taskManager))
     console.log(`[mini-canvas] sse 模式：HTTP(REST) + SSE 已就绪，等待前端/客户端接入`)
+    console.log(`[mini-canvas] MCP 客户端连接地址: http://localhost:${config.port}/mcp`)
   }
 }
