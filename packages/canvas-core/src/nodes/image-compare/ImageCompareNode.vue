@@ -38,7 +38,7 @@ const hasTwoImages = computed(() => !!leftImage.value && !!rightImage.value)
 const hasOneImage = computed(() => !!leftImage.value && !rightImage.value)
 
 /** 名称最多显示 10 个字符，超过则在中间用 ... 代替 */
-function truncateName(name, maxLen = 10) {
+function truncateName(name: string, maxLen = 10) {
   const chars = Array.from(name);
   if (chars.length <= maxLen) return name;
   const keep = maxLen - 1;

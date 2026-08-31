@@ -290,24 +290,21 @@ function handleImageExpand(ctx: CommandContext) {
 }
 
 async function handleImageExpandConfirm(ctx: CommandContext) {
-  console.log('[ExpandDBG] enter', { nodeId: ctx.node?.id, hasVf: !!(ctx.runtime?.vueFlowInstance) })
   try {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
-  if (!vf || !nodeId) { console.log('[ExpandDBG] no vf/nodeId'); return }
+  if (!vf || !nodeId) return
 
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
-  if (!node?.data) { console.log('[ExpandDBG] no node.data'); return }
+  if (!node?.data) return
 
   const sourceData = node.data
   const { imageUrl, imageWidth, imageHeight } = sourceData
-  console.log('[ExpandDBG] src', { imageUrl: !!imageUrl, imageWidth, imageHeight, overlay: sourceData._overlay })
-  if (!imageUrl || !imageWidth || !imageHeight) { console.log('[ExpandDBG] missing src fields'); return }
+  if (!imageUrl || !imageWidth || !imageHeight) return
 
   const expandRect = sourceData._overlay?._expandRect as { x: number; y: number; width: number; height: number } | undefined
-  console.log('[ExpandDBG] expandRect', expandRect)
-  if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) { console.log('[ExpandDBG] bad expandRect'); return }
+  if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) return
 
   // 1. 退出扩展模式
   const cleanedData = { ...sourceData }
@@ -345,11 +342,8 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
   // 6. 持久化 + 创建新节点
   const saved = await saveTransformedAsset(canvas, sourceData.imageName as string, '_expand', ctx)
   if (!saved) return
-  console.log('[ExpandDBG] creating result node', { sw, sh, assetId: saved.assetId })
   createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: sw, height: sh }, '_expand', saved.assetId)
-  console.log('[ExpandDBG] done')
   } catch (err) {
-    console.log('[ExpandDBG] caught', err)
     ctx.logger.error('[Image] handleImageExpandConfirm failed:', err)
   }
 }

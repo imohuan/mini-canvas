@@ -99,13 +99,14 @@ function restoreDrawCanvas(dataUrl: string | null) {
 }
 
 function setupCanvases(saveSnapshot = false) {
-  const d = display.value
   const bg = bgCanvasRef.value
   const fg = drawCanvasRef.value
   if (!bg || !fg) return
 
-  const w = Math.round(d.dw)
-  const h = Math.round(d.dh)
+  // 画布使用「原图分辨率」作为像素尺寸，与裁剪/扩展确认逻辑对齐：
+  // 蒙版 blob 即原图分辨率，确认合成时 1:1 叠加，宽高正确、不拉伸不模糊。
+  const w = Math.round(props.imageWidth)
+  const h = Math.round(props.imageHeight)
 
   // Save drawing content before resize (zoom changes clear the canvas)
   const snapshot = saveSnapshot ? snapshotDrawCanvas() : null
@@ -135,17 +136,20 @@ function setupCanvases(saveSnapshot = false) {
 // ==================== Brush rendering ====================
 function getBrushStyle(): { color: string; size: number; composite: GlobalCompositeOperation } {
   const cfg = props.maskConfig
+  // 画布像素尺寸 = 原图分辨率，而 brushSize 是屏幕显示像素，
+  // 需除以 scale（scale = dw/iw < 1）换算回原图像素坐标，保证屏幕上看同样粗细。
+  const size = cfg.brushSize / display.value.scale
   if (cfg.isErasing) {
     return {
       color: 'rgba(0,0,0,1)',
-      size: cfg.brushSize,
+      size,
       composite: 'destination-out',
     }
   }
   const { r, g, b } = parseColor(cfg.brushColor)
   return {
     color: `rgba(${r},${g},${b},${cfg.brushOpacity})`,
-    size: cfg.brushSize,
+    size,
     composite: 'source-over',
   }
 }
@@ -161,9 +165,11 @@ function clientToCanvas(clientX: number, clientY: number): { x: number; y: numbe
   const d = display.value
   const rect = overlayRef.value?.getBoundingClientRect()
   if (!rect) return { x: 0, y: 0 }
+  // 画布像素尺寸 = 原图分辨率，屏幕显示尺寸 = d.dw/d.dh，
+  // 因此显示坐标需除以 scale（scale = dw/iw）换算回原图像素坐标。
   return {
-    x: clientX - rect.left - d.ox,
-    y: clientY - rect.top - d.oy,
+    x: (clientX - rect.left - d.ox) / d.scale,
+    y: (clientY - rect.top - d.oy) / d.scale,
   }
 }
 
