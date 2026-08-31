@@ -16,8 +16,11 @@
     "mini-canvas": "./src/cli.ts"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts",
-    "start": "tsx src/cli.ts",
+    "start": "tsx src/cli.ts mcp start --transport stdio --port 8765 --dir ./workspace",
+    "start:sse": "tsx src/cli.ts mcp start --transport sse --port 8765 --dir ./workspace",
+    "start:stdio": "tsx src/cli.ts mcp start --transport stdio --port 8765 --dir ./workspace",
+    "dev": "tsx src/cli.ts mcp start --transport sse --port 8765 --dir ./workspace",
+    "list-tools": "tsx src/cli.ts mcp list-tools",
     "test": "vitest run",
     "test:e2e": "tsx e2e/stdio-e2e.ts",
     "test:sse": "tsx e2e/sse-e2e.ts",
