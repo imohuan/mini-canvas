@@ -87,7 +87,7 @@ export function installConsoleInterceptor() {
       const caller = parseCaller(new Error().stack, level)
       const location = `[${caller.file}:${caller.line}:${caller.column}]`
       const fn = caller.fn ? ` [${caller.fn}]` : ''
-      original(`${location}${fn}`, ...args.map(stringifyArg))
+      original(`${location}${fn}`, ...args.map(stringifyArg), [...args])
     }
   }
 
