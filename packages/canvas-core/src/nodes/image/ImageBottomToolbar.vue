@@ -7,6 +7,7 @@ import { AxSelect, AxButton } from '../../components/Ui'
 import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
 import { useUpstreamResources } from '../../composables/useUpstreamResources'
+import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 
 export interface ToolbarConfig {
   promptText: string
@@ -31,6 +32,31 @@ const emit = defineEmits<{
 // ── 连接的上游节点资源（图片 + 文本）→ 素材资源 ──
 
 const teleportTarget = useTeleportTarget()
+const runtime = useCanvasRuntime()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function onAdd() {
+  fileInputRef.value?.click()
+}
+
+/** 选择图片后创建新图片节点并连接到当前节点输入端口 */
+async function onAddFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !props.id) return
+
+  try {
+    const node = (runtime.vueFlowInstance.getNodes.value as any[]).find((n: any) => n.id === props.id)
+    await runtime.commandRegistry.execute('image.addSource', {
+      runtime, actions: null, selection: null, viewport: null, store: null,
+      logger: console, node, nodeType: 'image',
+    }, { file })
+  } catch (err) {
+    console.error('[ImageBottomToolbar] 添加素材失败:', err)
+  }
+}
 
 const upstreamResources = useUpstreamResources(props.id as string | null)
 
@@ -238,10 +264,6 @@ function onInput() {
   emit('action', 'input', promptText.value)
 }
 
-function onAdd() {
-  emit('action', 'add')
-}
-
 function onSettings() {
   emit('action', 'settings')
 }
@@ -318,7 +340,8 @@ function onEditorKeydown(e: KeyboardEvent) {
     <div class="toolbar-row">
       <!-- 左侧 -->
       <div class="toolbar-left">
-        <AxButton variant="ghost" size="icon" icon="add" title="添加" @click="onAdd" />
+        <input ref="fileInputRef" type="file" accept="image/*" class="source-file-input" @change="onAddFileChange" />
+        <AxButton variant="ghost" size="icon" icon="add" title="添加素材" @click="onAdd" />
 
         <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" />
 
@@ -543,6 +566,11 @@ function onEditorKeydown(e: KeyboardEvent) {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+
+/* 隐藏的原生文件选择框（onAdd 点击触发） */
+.source-file-input {
+  display: none;
 }
 
 .toolbar-right {

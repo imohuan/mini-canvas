@@ -126,6 +126,72 @@ function readImageDims(file: File): Promise<{ width: number; height: number } | 
   })
 }
 
+/**
+ * 从本地文件创建一个新的图片节点，并链接到当前节点的输入端口（target handle）。
+ * 新节点作为上游 source，放在当前节点左侧，边为 source → target。
+ */
+async function handleImageAddSource(ctx: CommandContext, args?: unknown) {
+  const file = (args as { file?: File })?.file
+  if (!file) return
+
+  const runtime = ctx.runtime as any
+  const vf = runtime?.vueFlowInstance
+  const nodeId = ctx.node?.id
+  if (!vf || !nodeId) return
+
+  const imageUrl = URL.createObjectURL(file)
+  const dims = await readImageDims(file)
+  const nextSize = dims ? fitCardSize(dims.width, dims.height) : { cardWidth: 360, cardHeight: 270 }
+
+  // 当前节点（target）的位置与尺寸
+  const targetNode = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
+  const targetPos = targetNode?.position ?? { x: 0, y: 0 }
+  const targetCardHeight = (targetNode?.data as any)?.cardHeight ?? nextSize.cardHeight
+
+  // 新图片节点放在当前节点左侧（作为上游），垂直居中
+  const newNodeId = `image-${nodeId}-source-${Date.now()}`
+  vf.addNodes([{
+    id: newNodeId,
+    type: 'custom',
+    position: {
+      x: targetPos.x - nextSize.cardWidth - 60,
+      y: targetPos.y + (targetCardHeight - nextSize.cardHeight) / 2,
+    },
+    data: {
+      label: file.name,
+      nodeType: 'image',
+      imageUrl,
+      imageName: file.name,
+      imageType: file.type,
+      imageSize: file.size,
+      imageWidth: dims?.width,
+      imageHeight: dims?.height,
+      cardWidth: nextSize.cardWidth,
+      cardHeight: nextSize.cardHeight,
+    },
+    sourcePosition: 'right' as any,
+    targetPosition: 'left' as any,
+  }])
+
+  // 连线：新图片节点 → 当前节点（target handle 输入）
+  await new Promise(r => setTimeout(r, 0)) // 等节点挂载
+  vf.addEdges([{
+    id: `e-${newNodeId}-${nodeId}-${Date.now()}`,
+    type: 'custom',
+    source: newNodeId,
+    target: nodeId,
+    sourceHandle: 'source',
+    targetHandle: 'target',
+  }])
+
+  // 持久化资产
+  const assetManager = runtime.getPluginAPI?.('storage')?.assets
+  if (assetManager) {
+    try { await assetManager.saveAsset(file, file.name, file.type) }
+    catch (err) { ctx.logger.error('保存图片资产失败:', err) }
+  }
+}
+
 // ---- command implementations ----
 
 async function handleImageUpload(ctx: CommandContext, args?: unknown) {
@@ -575,6 +641,7 @@ export const ImageNodePlugin: CanvasPlugin = {
 
     // 注册命令
     context.commands.register({ id: 'image.upload', source: 'node:image', title: '上传图片', run: handleImageUpload })
+    context.commands.register({ id: 'image.addSource', source: 'node:image', title: '添加素材并连接到输入端口', run: handleImageAddSource })
     context.commands.register({ id: 'image.crop', source: 'node:image', title: '裁剪', run: handleImageCrop })
     context.commands.register({ id: 'image.cropConfirm', source: 'node:image', title: '确认裁剪', run: handleImageCropConfirm })
     context.commands.register({ id: 'image.cropCancel', source: 'node:image', title: '取消裁剪', run: handleImageCropCancel })
