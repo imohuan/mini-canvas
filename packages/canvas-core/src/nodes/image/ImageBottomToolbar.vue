@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
-import { computed, ref } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
@@ -124,7 +124,8 @@ function getMentionMenuStyle(vpPos: { left: string; top: string; origin?: string
 
   // 边界检测（同 useEditor.ts showMenu 逻辑）
   const menuWidth = 200
-  const menuMaxHeight = 280
+  // 用实际渲染高度做翻转判定：资源项少时菜单很矮，用固定 280 会误判「放不下」而错误翻到上方
+  const menuMaxHeight = menuActualHeight.value
   const gap = 8
   const minMargin = 8
 
@@ -215,6 +216,19 @@ const selectedSize = computed({
 
 const inputAreaRef = ref<HTMLElement | null>(null)
 const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
+const mentionMenuRef = ref<HTMLElement | null>(null)
+
+/** @ 菜单的实际渲染高度（px）。菜单显示后测量，用于翻转判定，避免用固定 280 误判翻转 */
+const menuActualHeight = ref(280)
+
+// 菜单显示后测量真实高度，更新翻转判定依据
+watch(mentionMenuRef, async (el) => {
+  if (el) {
+    await nextTick()
+    const h = el.offsetHeight
+    if (h > 0) menuActualHeight.value = h
+  }
+})
 
 const hasOverlay = computed(() => !!props.data?._overlay)
 
@@ -262,7 +276,7 @@ function onEditorKeydown(e: KeyboardEvent) {
           <template #mention-menu="{ visible, groupedItems, categoryOrder, position, activeIndex, onSelect }">
             <Teleport :to="teleportTarget">
               <Transition name="ax-fade-scale">
-                <div v-if="visible" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
+                <div v-if="visible" ref="mentionMenuRef" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
                   <template v-for="category in categoryOrder" :key="category">
                     <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
                       <div class="mention-menu-category">{{ category }}</div>

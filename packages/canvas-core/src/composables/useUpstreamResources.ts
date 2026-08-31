@@ -59,13 +59,13 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
         continue
       }
 
-      // 文本类（text 节点）
-      const text = (data.text as string) || ''
-      if (nodeType === 'text' && text) {
+      // 文本类（text 节点）：只要节点类型是 text 就纳入（内容可暂为空，@ 时用名称占位）
+      if (nodeType === 'text') {
+        const text = (data.text as string) || ''
         seen.add(edge.source)
         resources.push({
           kind: 'text',
-          name: label || '文本',
+          name: (data.label as string) || '文本',
           url: '',
           value: text,
           connected: true,
