@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:e2e": "tsx e2e/stdio-e2e.ts",
     "test:sse": "tsx e2e/sse-e2e.ts",
+    "test:task": "tsx e2e/task-e2e.ts",
     "typecheck": "tsc --noEmit"
   },
   "vitest": {

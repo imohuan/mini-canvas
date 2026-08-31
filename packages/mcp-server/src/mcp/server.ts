@@ -8,6 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { GraphModel } from '../graph/GraphModel'
 import type { NodeStorage } from '../storage/NodeStorage'
+import type { TaskManager } from '../tasks/TaskManager'
 
 /** MCP 工具定义（给 list-tools 用，与 SDK 注册保持一致） */
 export interface McpTool {
@@ -32,6 +33,8 @@ const TOOL_LIST: McpTool[] = [
   { name: 'canvas.save', description: '保存画布到本地 JSON（后台落盘）' },
   { name: 'canvas.load', description: '从本地 JSON 加载画布' },
   { name: 'canvas.export_json', description: '导出画布 JSON' },
+  { name: 'task.create', description: '创建异步任务，立即返回 task_id，后台自动处理' },
+  { name: 'task.status', description: '查询任务状态' },
 ]
 
 /** 列出所有工具（list-tools CLI 用） */
@@ -42,7 +45,11 @@ export function listTools(): McpTool[] {
 /**
  * 创建并配置 MCP server
  */
-export function createMcpServer(model: GraphModel, storage: NodeStorage): McpServer {
+export function createMcpServer(
+  model: GraphModel,
+  storage: NodeStorage,
+  taskManager: TaskManager,
+): McpServer {
   const server = new McpServer({
     name: 'mini-canvas',
     version: '0.0.0',
@@ -245,6 +252,39 @@ export function createMcpServer(model: GraphModel, storage: NodeStorage): McpSer
     { taskId: z.string() },
     async ({ taskId }) => {
       return toText({ json: model.toJSON(taskId) })
+    },
+  )
+
+  // ==================== 异步任务（后台接管） ====================
+
+  server.tool(
+    'task.create',
+    '创建异步任务，立即返回 task_id，后台自动处理（图片/视频/音频生成）',
+    {
+      kind: z.enum(['image', 'video', 'audio', 'text']),
+      canvasId: z.string().describe('关联画布 id（taskId）'),
+      targetNodeId: z.string().describe('结果写回的目标节点 id'),
+      payload: z.record(z.unknown()).optional().describe('任务参数，如 { prompt }'),
+    },
+    async ({ kind, canvasId, targetNodeId, payload }) => {
+      try {
+        const task = taskManager.createTask(kind, canvasId, targetNodeId, payload ?? {})
+        return toText({ ok: true, taskId: task.id, status: task.status })
+      } catch (err) {
+        return toText({ ok: false, error: (err as Error).message })
+      }
+    },
+  )
+
+  server.tool(
+    'task.status',
+    '查询任务状态（含进度/结果）',
+    { taskId: z.string() },
+    async ({ taskId }) => {
+      const task = taskManager.getTaskStatus(taskId)
+      return task
+        ? toText({ ok: true, task })
+        : toText({ ok: false, error: '任务不存在' })
     },
   )
 

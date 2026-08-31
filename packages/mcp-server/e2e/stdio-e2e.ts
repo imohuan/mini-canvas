@@ -41,7 +41,7 @@ async function main() {
 
   console.log('== 列出工具 ==')
   const { tools } = await client.listTools()
-  assert(tools.length === 16, `工具数量 = ${tools.length}`)
+  assert(tools.length === 18, `工具数量 = ${tools.length}`)
 
   console.log('== 创建画布 ==')
   const c1 = await client.callTool({ name: 'canvas.create_canvas', arguments: { taskId: 't1', name: '任务一' } })

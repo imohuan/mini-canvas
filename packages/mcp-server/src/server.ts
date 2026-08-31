@@ -9,6 +9,7 @@ import { GraphModel } from './graph/GraphModel'
 import { NodeStorage } from './storage/NodeStorage'
 import { createMcpServer } from './mcp/server'
 import { SseServer } from './sse/SseServer'
+import { TaskManager } from './tasks/TaskManager'
 
 /**
  * 启动 MCP 后台服务
@@ -24,13 +25,16 @@ export async function startServer(config: ServerConfig): Promise<void> {
   await storage.init()
   const model = new GraphModel()
 
+  // 异步任务后台（可插拔 runner，真实生成服务接入时替换）
+  const taskManager = new TaskManager(model)
+
   // 启动 SSE 推送通道（实时变化广播给前端/客户端）
   const sse = new SseServer({ model, port: config.port })
   await sse.start()
 
   if (config.transport === 'stdio') {
     console.log(`[mini-canvas] 连接 stdio transport（等待 MCP 客户端...）`)
-    const server = createMcpServer(model, storage)
+    const server = createMcpServer(model, storage, taskManager)
     const transport = new StdioServerTransport()
     await server.connect(transport)
   } else if (config.transport === 'sse') {
