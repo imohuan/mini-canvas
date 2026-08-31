@@ -116,8 +116,11 @@ function getMentionMenuStyle(vpPos: { left: string; top: string; origin?: string
 
   const range = sel.getRangeAt(0).cloneRange()
   range.collapse(true)
-  const rect = range.getClientRects()[0]
-  if (!rect || rect.width === 0) return fallback
+  // 用 getBoundingClientRect 而非 getClientRects()[0]：零宽光标（行末/空行）getClientRects
+  // 返回的 width=0，但 getBoundingClientRect 仍返回有效位置。避免触发 fallback 走 vpPos
+  // （vpPos 来自 ProseMirror coordsAtPos，在外层 transform 缩放下会失真）。
+  const rect = range.getBoundingClientRect()
+  if (!rect) return fallback
 
   // 边界检测（同 useEditor.ts showMenu 逻辑）
   const menuWidth = 200
