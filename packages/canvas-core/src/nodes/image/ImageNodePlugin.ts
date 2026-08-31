@@ -31,6 +31,25 @@ function fitCardSize(width: number, height: number) {
   return { cardWidth: Math.max(120, Math.round(width * ratio)), cardHeight: Math.max(80, Math.round(height * ratio)) }
 }
 
+/**
+ * 检查 canvas 是否存在非透明内容（在多个采样点探测）。
+ * 扩展框会向四周添加透明留白边，只检查左上角会被留白误判为空画布。
+ */
+function hasCanvasContent(c2d: CanvasRenderingContext2D, w: number, h: number): boolean {
+  const pts = [
+    [Math.min(1, w - 1), Math.min(1, h - 1)],
+    [Math.max(0, w - 2), Math.max(0, h - 2)],
+    [Math.floor(w / 2), Math.floor(h / 2)],
+    [Math.floor(w / 2), Math.min(1, h - 1)],
+    [Math.min(1, w - 1), Math.floor(h / 2)],
+  ]
+  for (const [x, y] of pts) {
+    const px = c2d.getImageData(x, y, 1, 1).data
+    if (px.some((v, i) => i < 3 && v > 0)) return true
+  }
+  return false
+}
+
 
 /**
  * 将 canvas 导出为 blob 并持久化到 asset store
@@ -271,21 +290,24 @@ function handleImageExpand(ctx: CommandContext) {
 }
 
 async function handleImageExpandConfirm(ctx: CommandContext) {
+  console.log('[ExpandDBG] enter', { nodeId: ctx.node?.id, hasVf: !!(ctx.runtime?.vueFlowInstance) })
   try {
   const runtime = ctx.runtime as any
   const vf = runtime?.vueFlowInstance
   const nodeId = ctx.node?.id
-  if (!vf || !nodeId) return
+  if (!vf || !nodeId) { console.log('[ExpandDBG] no vf/nodeId'); return }
 
   const node = (vf.getNodes.value as Node[]).find((n: Node) => n.id === nodeId)
-  if (!node?.data) return
+  if (!node?.data) { console.log('[ExpandDBG] no node.data'); return }
 
   const sourceData = node.data
   const { imageUrl, imageWidth, imageHeight } = sourceData
-  if (!imageUrl || !imageWidth || !imageHeight) return
+  console.log('[ExpandDBG] src', { imageUrl: !!imageUrl, imageWidth, imageHeight, overlay: sourceData._overlay })
+  if (!imageUrl || !imageWidth || !imageHeight) { console.log('[ExpandDBG] missing src fields'); return }
 
   const expandRect = sourceData._overlay?._expandRect as { x: number; y: number; width: number; height: number } | undefined
-  if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) return
+  console.log('[ExpandDBG] expandRect', expandRect)
+  if (!expandRect || expandRect.width <= 0 || expandRect.height <= 0) { console.log('[ExpandDBG] bad expandRect'); return }
 
   // 1. 退出扩展模式
   const cleanedData = { ...sourceData }
@@ -315,8 +337,7 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
   fullBitmap.close()
 
   // 5. 验证有内容
-  const testPixel = c2d.getImageData(Math.min(1, canvas.width - 1), Math.min(1, canvas.height - 1), 1, 1)
-  if (!testPixel.data.some((v, i) => i < 3 && v > 0)) {
+  if (!hasCanvasContent(c2d, canvas.width, canvas.height)) {
     ctx.logger.warn('[Expand] 扩展画布无内容')
     return
   }
@@ -324,8 +345,11 @@ async function handleImageExpandConfirm(ctx: CommandContext) {
   // 6. 持久化 + 创建新节点
   const saved = await saveTransformedAsset(canvas, sourceData.imageName as string, '_expand', ctx)
   if (!saved) return
+  console.log('[ExpandDBG] creating result node', { sw, sh, assetId: saved.assetId })
   createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: sw, height: sh }, '_expand', saved.assetId)
+  console.log('[ExpandDBG] done')
   } catch (err) {
+    console.log('[ExpandDBG] caught', err)
     ctx.logger.error('[Image] handleImageExpandConfirm failed:', err)
   }
 }
@@ -577,8 +601,8 @@ export const ImageNodePlugin: CanvasPlugin = {
     context.toolbars.register('node:image', { id: 'image.crop', source: 'node:image', commandId: 'image.crop', position: 'top', title: '裁剪', icon: cropSvg, tooltip: '裁剪图片', nodeTypes: ['image'], group: 'default', order: 20 })
     context.toolbars.register('node:image', { id: 'image.filter', source: 'node:image', commandId: 'image.filter', position: 'top', title: '滤镜', icon: filterSvg, nodeTypes: ['image'], group: 'default', order: 30, dropdown: [{ id: 'none', title: '无滤镜' }, { id: 'grayscale', title: '黑白' }, { id: 'sepia', title: '复古' }] })
     // top: crop 组（仅裁剪模式 overlay._toolbarGroup='crop' 时显示）
-    context.toolbars.register('node:image', { id: 'image.cropConfirm', source: 'node:image', commandId: 'image.cropConfirm', position: 'top', title: '确认', icon: confirmSvg, tooltip: '确认裁剪', nodeTypes: ['image'], group: 'crop', order: 10, visible: (ctx) => ctx.node?.data?._overlay?._cropMode === true })
-    context.toolbars.register('node:image', { id: 'image.cropCancel', source: 'node:image', commandId: 'image.cropCancel', position: 'top', title: '取消', icon: cancelSvg, tooltip: '取消裁剪', nodeTypes: ['image'], group: 'crop', order: 20, visible: (ctx) => ctx.node?.data?._overlay?._cropMode === true })
+    // 注：裁剪模式下的「确认 / 取消」由 ImageCropper 内部浮动操作条（.crop-action-bar）提供，
+    // 顶部工具栏不再重复注册，避免出现两套操作条（统一和扩展框对齐）。
 
     // top: 扩展按钮（default 组，正常状态显示）
     context.toolbars.register('node:image', { id: 'image.expand', source: 'node:image', commandId: 'image.expand', position: 'top', title: '扩展', icon: expandSvg, tooltip: '扩展图片', nodeTypes: ['image'], group: 'default', order: 25 })

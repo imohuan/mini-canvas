@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { NodeProps } from '@vue-flow/core'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useVueFlow, Position } from '@vue-flow/core'
 import BaseNode from '../../components/Decoration/BaseNode.vue'
 import NodeToolbar from '../../components/Decoration/NodeToolbar.vue'
@@ -45,9 +45,34 @@ function onExpandConfirm() {
   runtime.commandRegistry.execute('image.expandConfirm', { runtime, node: props, logger: console } as any)
 }
 
+function onCropCancel() {
+  runtime.commandRegistry.execute('image.cropCancel', { runtime, node: props, logger: console } as any)
+}
+function onCropConfirm() {
+  runtime.commandRegistry.execute('image.cropConfirm', { runtime, node: props, logger: console } as any)
+}
+
 function onMaskUpdate(blobUrl: string | null) {
   updateNode(props.id, { data: { ...props.data, maskUrl: blobUrl } })
 }
+
+// ---- ESC 退出编辑模式（裁剪/扩展/蒙版）----
+function onKeydown(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  const overlay = props.data?._overlay
+  if (!overlay) return
+  const ctx = { runtime, node: props, logger: console } as any
+  if (overlay._cropMode === true) {
+    runtime.commandRegistry.execute('image.cropCancel', ctx)
+  } else if (overlay._expandMode === true) {
+    runtime.commandRegistry.execute('image.expandCancel', ctx)
+  } else if (overlay._maskMode === true) {
+    runtime.commandRegistry.execute('image.maskCancel', ctx)
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
 watch(
   () => props.data?.imageUrl,
@@ -114,13 +139,12 @@ function onToolbarAction(action: string) {
 
     <!-- 图片内容 -->
     <template #content>
-      <div class="w-full h-full relative" :class="{ 'image-editing-surface': isCropping || isExpanding || isMasking }">
+      <div class="w-full h-full relative">
         <img
           v-if="data?.imageUrl && !error"
           :src="data.imageUrl"
           :alt="data?.label || '图片'"
           class="w-full h-full object-cover bg-gray-50 pointer-events-none"
-          :class="{ 'opacity-45 saturate-75 contrast-90': isCropping || isExpanding || isMasking }"
           @error="error = true"
         />
         <div v-else class="w-full h-full flex items-center justify-center bg-gray-100">
@@ -138,6 +162,8 @@ function onToolbarAction(action: string) {
           :image-width="(data.imageWidth as number) || 0"
           :image-height="(data.imageHeight as number) || 0"
           @update:crop="onCropUpdate"
+          @cancel="onCropCancel"
+          @confirm="onCropConfirm"
         />
 
         <ImageExpander
@@ -185,10 +211,6 @@ function onToolbarAction(action: string) {
 </template>
 
 <style>
-.image-editing-surface {
-  background: radial-gradient(circle at center, #1f2937 0%, #030712 74%);
-}
-
 .expand-dialog-overlay {
   position: fixed;
   inset: 0;

@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
 import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
+import ResizeHandle from '../../components/Decoration/ResizeHandle.vue'
 import { useImageDisplay } from './useImageDisplay'
 
 const props = defineProps<{
@@ -103,14 +104,14 @@ function handleStyle(dir: Handle): CSSProperties {
   const w = expand.w * d.scale
   const h = expand.h * d.scale
   switch (dir) {
-    case 'nw': return { left: `${l - 5}px`, top: `${t - 5}px`, cursor: 'nw-resize' }
-    case 'ne': return { left: `${l + w - 5}px`, top: `${t - 5}px`, cursor: 'ne-resize' }
-    case 'sw': return { left: `${l - 5}px`, top: `${t + h - 5}px`, cursor: 'sw-resize' }
-    case 'se': return { left: `${l + w - 5}px`, top: `${t + h - 5}px`, cursor: 'se-resize' }
-    case 'n':  return { left: `${l + w / 2 - 5}px`, top: `${t - 5}px`, cursor: 'n-resize' }
-    case 's':  return { left: `${l + w / 2 - 5}px`, top: `${t + h - 5}px`, cursor: 's-resize' }
-    case 'w':  return { left: `${l - 5}px`, top: `${t + h / 2 - 5}px`, cursor: 'w-resize' }
-    case 'e':  return { left: `${l + w - 5}px`, top: `${t + h / 2 - 5}px`, cursor: 'e-resize' }
+    case 'nw': return { position: 'fixed', left: `${l - 5}px`, top: `${t - 5}px` }
+    case 'ne': return { position: 'fixed', left: `${l + w - 5}px`, top: `${t - 5}px` }
+    case 'sw': return { position: 'fixed', left: `${l - 5}px`, top: `${t + h - 5}px` }
+    case 'se': return { position: 'fixed', left: `${l + w - 5}px`, top: `${t + h - 5}px` }
+    case 'n':  return { position: 'fixed', left: `${l + w / 2 - 5}px`, top: `${t - 5}px` }
+    case 's':  return { position: 'fixed', left: `${l + w / 2 - 5}px`, top: `${t + h - 5}px` }
+    case 'w':  return { position: 'fixed', left: `${l - 5}px`, top: `${t + h / 2 - 5}px` }
+    case 'e':  return { position: 'fixed', left: `${l + w - 5}px`, top: `${t + h / 2 - 5}px` }
   }
   return {}
 }
@@ -256,14 +257,14 @@ onUnmounted(() => {
       </div>
 
       <!-- Resize handles (positioned at frame edges) -->
-      <div class="expand-handle" :style="handleStyle('nw')" @pointerdown="onResizeStart($event, 'nw')" />
-      <div class="expand-handle" :style="handleStyle('ne')" @pointerdown="onResizeStart($event, 'ne')" />
-      <div class="expand-handle" :style="handleStyle('sw')" @pointerdown="onResizeStart($event, 'sw')" />
-      <div class="expand-handle" :style="handleStyle('se')" @pointerdown="onResizeStart($event, 'se')" />
-      <div class="expand-handle" :style="handleStyle('n')"  @pointerdown="onResizeStart($event, 'n')" />
-      <div class="expand-handle" :style="handleStyle('s')"  @pointerdown="onResizeStart($event, 's')" />
-      <div class="expand-handle" :style="handleStyle('w')"  @pointerdown="onResizeStart($event, 'w')" />
-      <div class="expand-handle" :style="handleStyle('e')"  @pointerdown="onResizeStart($event, 'e')" />
+      <ResizeHandle dir="nw" :style="handleStyle('nw')" @pointerdown="onResizeStart($event, 'nw')" />
+      <ResizeHandle dir="ne" :style="handleStyle('ne')" @pointerdown="onResizeStart($event, 'ne')" />
+      <ResizeHandle dir="sw" :style="handleStyle('sw')" @pointerdown="onResizeStart($event, 'sw')" />
+      <ResizeHandle dir="se" :style="handleStyle('se')" @pointerdown="onResizeStart($event, 'se')" />
+      <ResizeHandle dir="n" :style="handleStyle('n')" @pointerdown="onResizeStart($event, 'n')" />
+      <ResizeHandle dir="s" :style="handleStyle('s')" @pointerdown="onResizeStart($event, 's')" />
+      <ResizeHandle dir="w" :style="handleStyle('w')" @pointerdown="onResizeStart($event, 'w')" />
+      <ResizeHandle dir="e" :style="handleStyle('e')" @pointerdown="onResizeStart($event, 'e')" />
 
       <!-- Action toolbar -->
       <div class="expand-action-bar" :style="{ ...actionBarStyle, zIndex: 20 }">
@@ -302,15 +303,6 @@ onUnmounted(() => {
 .frame-move-area {
   position: absolute; inset: 0;
   cursor: move; touch-action: none;
-  pointer-events: auto;
-}
-
-.expand-handle {
-  position: fixed;
-  width: 10px; height: 10px;
-  background: #fff; border: 1.5px solid rgba(0, 0, 0, 0.5);
-  border-radius: 2px;
-  z-index: 15;
   pointer-events: auto;
 }
 

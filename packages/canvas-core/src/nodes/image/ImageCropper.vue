@@ -3,6 +3,8 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from
 import { useVueFlow, getRectOfNodes } from '@vue-flow/core'
 import type { CSSProperties } from 'vue'
 import { useImageDisplay } from './useImageDisplay'
+import ResizeHandle from '../../components/Decoration/ResizeHandle.vue'
+import ToolbarButton from '../../components/Decoration/ToolbarButton.vue'
 
 // ==================== Props ====================
 const props = defineProps<{
@@ -14,12 +16,18 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:crop', rect: { x: number; y: number; width: number; height: number }): void
+  (e: 'cancel'): void
+  (e: 'confirm'): void
 }>()
 
 const { viewport, findNode } = useVueFlow()
 
 // ==================== Constants ====================
 const MIN_CROP = 20
+
+// SVG icons for ToolbarButton
+const cancelIcon = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+const confirmIcon = '<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'
 
 // ==================== Container tracking ====================
 // 独立 computed：直接依赖 nodeRect 和 zoom，和 wrapperStyle 并行计算
@@ -92,6 +100,20 @@ const frameStyle = computed(() => {
     top: `${d.oy + crop.y * d.scale}px`,
     width: `${crop.w * d.scale}px`,
     height: `${crop.h * d.scale}px`,
+  }
+})
+
+// ==================== Action bar ====================
+// 位置跟随裁剪框底边居中（同扩展框的 action bar 风格）
+const actionBarStyle = computed<CSSProperties>(() => {
+  const d = display.value
+  const fb = d.oy + (crop.y + crop.h) * d.scale
+  const fcx = d.ox + (crop.x + crop.w / 2) * d.scale
+  return {
+    position: 'absolute',
+    left: `${fcx}px`, top: `${fb + 14}px`,
+    transform: 'translateX(-50%)',
+    pointerEvents: 'auto',
   }
 })
 
@@ -260,14 +282,20 @@ onUnmounted(() => {
           <div class="grid-line grid-v" style="left:33.333%" />
           <div class="grid-line grid-v" style="left:66.666%" />
         </div>
-        <div class="crop-handle nw" @pointerdown.stop="onPointerDown($event, 'nw')" />
-        <div class="crop-handle ne" @pointerdown.stop="onPointerDown($event, 'ne')" />
-        <div class="crop-handle sw" @pointerdown.stop="onPointerDown($event, 'sw')" />
-        <div class="crop-handle se" @pointerdown.stop="onPointerDown($event, 'se')" />
-        <div class="crop-handle n" @pointerdown.stop="onPointerDown($event, 'n')" />
-        <div class="crop-handle s" @pointerdown.stop="onPointerDown($event, 's')" />
-        <div class="crop-handle w" @pointerdown.stop="onPointerDown($event, 'w')" />
-        <div class="crop-handle e" @pointerdown.stop="onPointerDown($event, 'e')" />
+        <ResizeHandle dir="nw" class="nw" @pointerdown="onPointerDown($event, 'nw')" />
+        <ResizeHandle dir="ne" class="ne" @pointerdown="onPointerDown($event, 'ne')" />
+        <ResizeHandle dir="sw" class="sw" @pointerdown="onPointerDown($event, 'sw')" />
+        <ResizeHandle dir="se" class="se" @pointerdown="onPointerDown($event, 'se')" />
+        <ResizeHandle dir="n" class="n" @pointerdown="onPointerDown($event, 'n')" />
+        <ResizeHandle dir="s" class="s" @pointerdown="onPointerDown($event, 's')" />
+        <ResizeHandle dir="w" class="w" @pointerdown="onPointerDown($event, 'w')" />
+        <ResizeHandle dir="e" class="e" @pointerdown="onPointerDown($event, 'e')" />
+      </div>
+
+      <!-- Action toolbar（同扩展框风格） -->
+      <div class="crop-action-bar" :style="{ ...actionBarStyle, zIndex: 20 }" @pointerdown.stop>
+        <ToolbarButton :icon="cancelIcon" title="取消" danger @action="$emit('cancel')" />
+        <ToolbarButton :icon="confirmIcon" title="确认裁剪" variant="primary" @action="$emit('confirm')" />
       </div>
     </div>
   </Teleport>
@@ -311,21 +339,25 @@ onUnmounted(() => {
 .grid-h { left: 0; right: 0; height: 1px; }
 .grid-v { top: 0; bottom: 0; width: 1px; }
 
-.crop-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border: 1.5px solid rgba(0, 0, 0, 0.5);
-  border-radius: 999px;
-  z-index: 5;
+/* 控制柄统一由 ResizeHandle 渲染（正方形、白底黑边、2px 圆角）。
+   方向定位通过透传 class + :deep 作用到 ResizeHandle 根元素。 */
+.crop-frame :deep(.nw) { top: -5px; left: -5px; }
+.crop-frame :deep(.ne) { top: -5px; right: -5px; }
+.crop-frame :deep(.sw) { bottom: -5px; left: -5px; }
+.crop-frame :deep(.se) { bottom: -5px; right: -5px; }
+.crop-frame :deep(.n)  { top: -5px; left: 50%; margin-left: -5px; }
+.crop-frame :deep(.s)  { bottom: -5px; left: 50%; margin-left: -5px; }
+.crop-frame :deep(.w)  { top: 50%; left: -5px; margin-top: -5px; }
+.crop-frame :deep(.e)  { top: 50%; right: -5px; margin-top: -5px; }
+
+/* 裁剪框 action bar：样式与扩展框的 .expand-action-bar 保持一致 */
+.crop-action-bar {
+  display: flex; align-items: center; gap: 2px;
+  padding: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
-.nw { top: -7px; left: -7px; cursor: nw-resize; }
-.ne { top: -7px; right: -7px; cursor: ne-resize; }
-.sw { bottom: -7px; left: -7px; cursor: sw-resize; }
-.se { bottom: -7px; right: -7px; cursor: se-resize; }
-.n  { top: -5px; left: 50%; margin-left: -5px; cursor: n-resize; }
-.s  { bottom: -5px; left: 50%; margin-left: -5px; cursor: s-resize; }
-.w  { top: 50%; left: -5px; margin-top: -5px; cursor: w-resize; }
-.e  { top: 50%; right: -5px; margin-top: -5px; cursor: e-resize; }
 </style>
