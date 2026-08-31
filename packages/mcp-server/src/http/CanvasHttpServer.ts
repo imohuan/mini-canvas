@@ -8,6 +8,7 @@
  * 命令既走 MCP stdio（AI），也走 HTTP REST（前端），二者操作同一 GraphModel。
  */
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { serve, type ServerType } from '@hono/node-server'
 import { streamSSE } from 'hono/streaming'
 import type { GraphModel } from '../graph/GraphModel'
@@ -46,6 +47,9 @@ export class CanvasHttpServer {
     this.storage = options.storage
     this.taskManager = options.taskManager
     this.port = options.port
+
+    // 允许前端跨域访问（前端 dev server 与后台不同端口）
+    this.app.use('*', cors())
 
     // 订阅 GraphModel 所有图事件
     this.unsubscribe = this.model.on((event) => this.broadcast(event))
@@ -159,7 +163,8 @@ export class CanvasHttpServer {
         while (!client.closed) {
           const event = await this.next(client)
           if (!event) break
-          await stream.writeSSE({ event: event.type, data: JSON.stringify(event) })
+          // 用统一的 message 事件推送，事件类型放 data.type 中（便于 EventSource 通配接收）
+          await stream.writeSSE({ data: JSON.stringify(event) })
         }
       })
     })

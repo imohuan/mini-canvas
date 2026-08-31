@@ -10,7 +10,7 @@
  *   await mcp.switchCanvas(id)   // 切换并加载画布到 VueFlow
  *   await mcp.save()             // 保存到后台
  */
-import { ref, shallowRef, onUnmounted } from 'vue'
+import { ref, shallowRef, onUnmounted, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 export interface McpCanvasInfo {
@@ -51,9 +51,12 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
     const url = `${baseUrl}/events?canvasId=${canvasId}`
     eventSource = new EventSource(url)
     eventSource.onmessage = (e) => {
-      const evt = JSON.parse(e.data)
-      // 本画布发生变化 → 重新加载，保持前端与后台一致
-      if (evt.canvasId === currentCanvasId.value) void loadIntoFlow(canvasId)
+      try {
+        const evt = JSON.parse(e.data)
+        if (evt.canvasId === currentCanvasId.value) void loadIntoFlow(canvasId)
+      } catch {
+        // 忽略无法解析的 SSE 消息
+      }
     }
     eventSource.onerror = () => {
       // 断线自动重连（EventSource 内置）
@@ -64,6 +67,7 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
   async function loadIntoFlow(canvasId: string): Promise<void> {
     const data = await request<{ nodes: any[]; edges: any[] }>(`/api/canvases/${canvasId}`)
     vf.fromObject({ nodes: data.nodes, edges: data.edges })
+    await nextTick()
   }
 
   /** 连接服务，拉取画布列表 */
@@ -82,8 +86,13 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
   /** 切换画布：加载到画布并订阅 SSE */
   async function switchCanvas(canvasId: string): Promise<void> {
     currentCanvasId.value = canvasId
-    await loadIntoFlow(canvasId)
+    // 先建立 SSE 订阅（独立于 load，确保实时通道一定建立）
     connectSse(canvasId)
+    try {
+      await loadIntoFlow(canvasId)
+    } catch (err) {
+      error.value = `加载画布失败: ${(err as Error).message}`
+    }
   }
 
   /** 保存当前画布到后台（数据权威在后台，保存动作归后台） */

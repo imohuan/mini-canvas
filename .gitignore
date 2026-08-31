@@ -26,3 +26,6 @@ dist-ssr
 .npm-cache
 # Worktrees
 .worktrees/
+# MCP 服务工作目录（画布 JSON 落盘，不入库）
+workspace
+packages/mcp-server/workspace
