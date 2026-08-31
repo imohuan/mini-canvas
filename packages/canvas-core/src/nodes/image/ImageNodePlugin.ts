@@ -433,10 +433,15 @@ async function handleImageMaskConfirm(ctx: CommandContext) {
     createImageBitmap(maskBlob),
   ])
 
+  // 在 close 之前提取尺寸：ImageBitmap.close() 后 width/height 归零，
+  // 若 close 后再传给 createResultNode，新节点 imageWidth/imageHeight 会变 0。
+  const resultWidth = imgBitmap.width
+  const resultHeight = imgBitmap.height
+
   // 3. 合成到 canvas
   const canvas = document.createElement('canvas')
-  canvas.width = imgBitmap.width
-  canvas.height = imgBitmap.height
+  canvas.width = resultWidth
+  canvas.height = resultHeight
   const c2d = canvas.getContext('2d')!
   c2d.drawImage(imgBitmap, 0, 0)
   c2d.drawImage(maskBitmap, 0, 0, canvas.width, canvas.height)
@@ -453,7 +458,7 @@ async function handleImageMaskConfirm(ctx: CommandContext) {
   // 5. 持久化 + 创建新节点
   const saved = await saveTransformedAsset(canvas, sourceData.imageName as string, '_masked', ctx)
   if (!saved) return
-  createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: imgBitmap.width, height: imgBitmap.height }, '_masked', saved.assetId)
+  createResultNode(vf, node, { blob: saved.blob, url: saved.url, width: resultWidth, height: resultHeight }, '_masked', saved.assetId)
   } catch (err) {
     ctx.logger.error('[Image] handleImageMaskConfirm failed:', err)
   }
