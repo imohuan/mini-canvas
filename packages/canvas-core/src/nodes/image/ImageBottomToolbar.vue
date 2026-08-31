@@ -6,7 +6,7 @@ import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { AxSelect, AxButton } from '../../components/Ui'
 import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
-import { useUpstreamImages } from '../../composables/useUpstreamImages'
+import { useUpstreamResources } from '../../composables/useUpstreamResources'
 
 export interface ToolbarConfig {
   promptText: string
@@ -28,19 +28,48 @@ const emit = defineEmits<{
   (e: 'action', action: string, value?: string): void
 }>()
 
-// ── 连接的上游图片节点 → 素材资源 ──
+// ── 连接的上游节点资源（图片 + 文本）→ 素材资源 ──
 
 const teleportTarget = useTeleportTarget()
 
-const upstreamImages = useUpstreamImages(props.id as string | null)
+const upstreamResources = useUpstreamResources(props.id as string | null)
 
 const connectedImages = computed<ResourceItem[]>(() =>
-  upstreamImages.value.map((img, i) => {
-    const item: ResourceItem = {
+  upstreamResources.value.map((res, i) => {
+    const base = {
       id: `connected-${i}`,
-      name: img.name || `素材${i + 1}`,
+      name: res.name || `素材${i + 1}`,
       category: '素材',
-      url: img.url,
+    }
+
+    // 文本类资源：无 url，走 editor 的文本资源分支（@name + data-value）
+    if (res.kind === 'text') {
+      const item: ResourceItem = {
+        ...base,
+        value: res.value,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>`,
+        renderEditor: (self) => {
+          return [
+            "span",
+            {
+              class: "resource-node resource-node-text",
+              "data-id": self.id,
+              "data-name": self.name,
+              "data-value": self.value || "",
+              "data-category": self.category,
+            },
+            ["span", { class: "label" }, `@${self.name}`],
+          ]
+        },
+      }
+      return item
+    }
+
+    // 图片类资源：缩略图 + 点击预览
+    const img = { url: res.url, name: res.name }
+    const item: ResourceItem = {
+      ...base,
+      url: res.url,
       mediaType: 'image',
       renderEditor: (self) => {
         return [

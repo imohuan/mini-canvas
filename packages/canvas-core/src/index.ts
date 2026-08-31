@@ -50,6 +50,7 @@ export { useCanvasPanelState } from './composables/useCanvasPanelState'
 export { useTheme } from './composables/useTheme'
 export { usePluginSystem } from './composables/usePluginSystem'
 export { useUpstreamImages } from './composables/useUpstreamImages'
+export { useUpstreamResources } from './composables/useUpstreamResources'
 
 // ─── Registry ────────────────────────────────────────────────────────
 export { NodeRegistry } from './registry/NodeRegistry'
