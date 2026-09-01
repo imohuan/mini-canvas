@@ -26,6 +26,7 @@ export interface CanvasData {
 
 const PROJECT_INDEX_FILE = 'canvas-ai-project-index.json'
 const CANVAS_FILE = 'canvas.json'
+const UPLOADS_DIR = 'uploads'
 
 export class NodeStorage {
   private rootDir: string
@@ -122,6 +123,33 @@ export class NodeStorage {
       return { nodes: data.nodes ?? [], edges: data.edges ?? [] }
     } catch {
       return { nodes: [], edges: [] }
+    }
+  }
+
+  // ==================== 上传文件 / 静态托管 ====================
+
+  /** uploads 目录绝对路径 */
+  uploadsDir(): string {
+    return path.join(this.rootDir, UPLOADS_DIR)
+  }
+
+  /** 保存上传文件（返回相对文件名，可直接用于 /api/files/:name） */
+  async saveUpload(filename: string, data: Buffer | Uint8Array): Promise<string> {
+    const dir = this.uploadsDir()
+    await fs.mkdir(dir, { recursive: true })
+    const safe = path.basename(filename).replace(/[^\w.\-]/g, '_') || 'file'
+    const stored = `${Date.now()}-${safe}`
+    await fs.writeFile(path.join(dir, stored), data)
+    return stored
+  }
+
+  /** 读取上传文件（不存在返回 null） */
+  async readUpload(storedName: string): Promise<Buffer | null> {
+    const file = path.join(this.uploadsDir(), path.basename(storedName))
+    try {
+      return await fs.readFile(file)
+    } catch {
+      return null
     }
   }
 }

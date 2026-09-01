@@ -11,6 +11,8 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serve, type ServerType } from '@hono/node-server'
 import { streamSSE } from 'hono/streaming'
+import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { GraphModel } from '../graph/GraphModel'
@@ -123,6 +125,56 @@ export class CanvasHttpServer {
       const json = this.model.toJSON(id)
       await this.storage.saveCanvas(id, json.nodes, json.edges)
       return c.json({ ok: true, canvasId: id })
+    })
+
+    // ==================== REST：上传 / 图片中转 ====================
+
+    /** 上传图片（multipart 字段 file），返回可访问 URL */
+    this.app.post('/api/upload', async (c) => {
+      try {
+        const body = await c.req.parseBody()
+        const file = body.file
+        if (!file || typeof file === 'string') {
+          return c.json({ ok: false, error: '缺少文件字段 file（multipart/form-data）' }, 400)
+        }
+        const buf = Buffer.from(await file.arrayBuffer())
+        const stored = await this.storage.saveUpload(file.name, buf)
+        return c.json({ ok: true, url: `/api/files/${stored}`, name: file.name, stored })
+      } catch (err) {
+        return c.json({ ok: false, error: (err as Error).message }, 500)
+      }
+    })
+
+    /** 读取已上传文件（图片静态托管） */
+    this.app.get('/api/files/:name', async (c) => {
+      const buf = await this.storage.readUpload(c.req.param('name'))
+      if (!buf) return c.json({ ok: false, error: '文件不存在' }, 404)
+      const ext = path.extname(c.req.param('name')).toLowerCase()
+      const mime: Record<string, string> = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+      }
+      return c.body(new Uint8Array(buf), 200, { 'content-type': mime[ext] ?? 'application/octet-stream', 'cache-control': 'public, max-age=3600' })
+    })
+
+    /** 中转本地绝对路径图片：GET /api/proxy-image?path=/abs/path.jpg 或 file:/// 形式 */
+    this.app.get('/api/proxy-image', async (c) => {
+      const raw = c.req.query('path') ?? ''
+      let filePath = raw
+      // 支持 file:///C:/... 形式
+      if (/^file:\/\/\//i.test(filePath)) filePath = filePath.replace(/^file:\/\/\//i, '')
+      if (!filePath) return c.json({ ok: false, error: '缺少 path 参数（本地图片绝对路径）' }, 400)
+      try {
+        const buf = await fs.readFile(filePath)
+        const ext = path.extname(filePath).toLowerCase()
+        const mime: Record<string, string> = {
+          '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+          '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+        }
+        return c.body(new Uint8Array(buf), 200, { 'content-type': mime[ext] ?? 'application/octet-stream' })
+      } catch {
+        return c.json({ ok: false, error: `无法读取本地文件: ${filePath}` }, 404)
+      }
     })
 
     // ==================== REST：任务 ====================
