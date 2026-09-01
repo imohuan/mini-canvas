@@ -665,7 +665,7 @@ export const ImageNodePlugin: CanvasPlugin = {
     // top: default 组（正常状态下显示，裁剪时 overlay._toolbarGroup='crop' 自动隐藏）
     context.toolbars.register('node:image', { id: 'image.upload', source: 'node:image', commandId: 'image.upload', position: 'top', title: '上传图片', tooltip: '点击上传本地图片', nodeTypes: ['image'], group: 'default', order: 10, customRender: markRaw(ImageUploadButton) })
     context.toolbars.register('node:image', { id: 'image.crop', source: 'node:image', commandId: 'image.crop', position: 'top', title: '裁剪', icon: cropSvg, tooltip: '裁剪图片', nodeTypes: ['image'], group: 'default', order: 20 })
-    context.toolbars.register('node:image', { id: 'image.filter', source: 'node:image', commandId: 'image.filter', position: 'top', title: '滤镜', icon: filterSvg, nodeTypes: ['image'], group: 'default', order: 30, dropdown: [{ id: 'none', title: '无滤镜' }, { id: 'grayscale', title: '黑白' }, { id: 'sepia', title: '复古' }] })
+    // context.toolbars.register('node:image', { id: 'image.filter', source: 'node:image', commandId: 'image.filter', position: 'top', title: '滤镜', icon: filterSvg, nodeTypes: ['image'], group: 'default', order: 30, dropdown: [{ id: 'none', title: '无滤镜' }, { id: 'grayscale', title: '黑白' }, { id: 'sepia', title: '复古' }] })
     // top: crop 组（仅裁剪模式 overlay._toolbarGroup='crop' 时显示）
     // 注：裁剪模式下的「确认 / 取消」由 ImageCropper 内部浮动操作条（.crop-action-bar）提供，
     // 顶部工具栏不再重复注册，避免出现两套操作条（统一和扩展框对齐）。

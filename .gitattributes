@@ -1,10 +1,13 @@
-* text=auto
+# 统一所有文本文件换行符为 LF
+* text=auto eol=lf
 
 # 源码与文档统一 LF
 *.vue   text eol=lf
 *.ts    text eol=lf
 *.js    text eol=lf
 *.mjs   text eol=lf
+*.mts   text eol=lf
+*.cts   text eol=lf
 *.json  text eol=lf
 *.md    text eol=lf
 *.html  text eol=lf
@@ -12,8 +15,13 @@
 *.yaml  text eol=lf
 *.yml   text eol=lf
 *.txt   text eol=lf
-*.mts   text eol=lf
-*.cts   text eol=lf
+*.svg   text eol=lf
+
+# 配置文件统一 LF
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
+.npmrc          text eol=lf
+.editorconfig   text eol=lf
 
 # 二进制文件不转
 *.png   binary
@@ -23,3 +31,8 @@
 *.webp  binary
 *.ico   binary
 *.db    binary
+*.woff  binary
+*.woff2 binary
+*.eot   binary
+*.ttf   binary
+*.otf   binary
