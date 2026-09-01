@@ -14,6 +14,15 @@ import { streamSSE } from 'hono/streaming'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
+
+/** 按扩展名返回媒体 MIME（图片 + 音视频），用于上传文件托管与本地路径中转 */
+const EXT_MIME: Record<string, string> = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime',
+  '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska', '.m4v': 'video/mp4',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
+}
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { GraphModel } from '../graph/GraphModel'
 import type { GraphEvent } from '../graph/types'
@@ -145,33 +154,40 @@ export class CanvasHttpServer {
       }
     })
 
-    /** 读取已上传文件（图片静态托管） */
+    /** 读取已上传文件（图片/音视频静态托管） */
     this.app.get('/api/files/:name', async (c) => {
       const buf = await this.storage.readUpload(c.req.param('name'))
       if (!buf) return c.json({ ok: false, error: '文件不存在' }, 404)
       const ext = path.extname(c.req.param('name')).toLowerCase()
-      const mime: Record<string, string> = {
-        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
-      }
-      return c.body(new Uint8Array(buf), 200, { 'content-type': mime[ext] ?? 'application/octet-stream', 'cache-control': 'public, max-age=3600' })
+      return c.body(new Uint8Array(buf), 200, { 'content-type': EXT_MIME[ext] ?? 'application/octet-stream', 'cache-control': 'public, max-age=3600' })
     })
 
-    /** 中转本地绝对路径图片：GET /api/proxy-image?path=/abs/path.jpg 或 file:/// 形式 */
-    this.app.get('/api/proxy-image', async (c) => {
+    /** 中转本地绝对路径媒体（图片/视频/音频）：GET /api/proxy-media?path=/abs/x.mp4 或 file:/// 形式 */
+    this.app.get('/api/proxy-media', async (c) => {
       const raw = c.req.query('path') ?? ''
       let filePath = raw
       // 支持 file:///C:/... 形式
       if (/^file:\/\/\//i.test(filePath)) filePath = filePath.replace(/^file:\/\/\//i, '')
-      if (!filePath) return c.json({ ok: false, error: '缺少 path 参数（本地图片绝对路径）' }, 400)
+      if (!filePath) return c.json({ ok: false, error: '缺少 path 参数（本地媒体绝对路径）' }, 400)
       try {
         const buf = await fs.readFile(filePath)
         const ext = path.extname(filePath).toLowerCase()
-        const mime: Record<string, string> = {
-          '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
-          '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
-        }
-        return c.body(new Uint8Array(buf), 200, { 'content-type': mime[ext] ?? 'application/octet-stream' })
+        return c.body(new Uint8Array(buf), 200, { 'content-type': EXT_MIME[ext] ?? 'application/octet-stream' })
+      } catch {
+        return c.json({ ok: false, error: `无法读取本地文件: ${filePath}` }, 404)
+      }
+    })
+
+    /** 兼容旧接口名：/api/proxy-image 等价 /api/proxy-media */
+    this.app.get('/api/proxy-image', async (c) => {
+      const raw = c.req.query('path') ?? ''
+      let filePath = raw
+      if (/^file:\/\/\//i.test(filePath)) filePath = filePath.replace(/^file:\/\/\//i, '')
+      if (!filePath) return c.json({ ok: false, error: '缺少 path 参数（本地媒体绝对路径）' }, 400)
+      try {
+        const buf = await fs.readFile(filePath)
+        const ext = path.extname(filePath).toLowerCase()
+        return c.body(new Uint8Array(buf), 200, { 'content-type': EXT_MIME[ext] ?? 'application/octet-stream' })
       } catch {
         return c.json({ ok: false, error: `无法读取本地文件: ${filePath}` }, 404)
       }
