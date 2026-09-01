@@ -32,3 +32,35 @@
 1. **MCP 端**：创建/更新图片节点时，data 用前端期望的字段 `imageUrl`（而非 `src`），并尽量补全 `imageName/imageType/imageWidth/imageHeight`。
 2. **后端加静态资源服务**：在 CanvasHttpServer 增加 `GET /api/files/:id` 之类的端点托管图片，MCP 传该 URL 作为 imageUrl；或支持 base64 data URL。
 3. 若只是临时验证，可用公网图片 URL 或 blob。
+
+---
+
+## 后续：刷新后数据丢失 + 刷新后空白缩放才出现（已修复）
+
+### 现象
+1. 页面/服务刷新后画布数据不见（图片视频显示不出来）。
+2. 刷新后页面空白，缩放后才出现内容。
+
+### 根因
+**A. `sanitizeForSave` 一刀切删除 mediaUrl**
+- `packages/mcp-server/src/storage/sanitize.ts` 把 `imageUrl/videoUrl` 等当运行时字段，保存时一律从 data 删除。
+- 前端本地 blob:/data: 临时 URL 不该保存（正确），但 MCP 设置的 `http://localhost:8765/api/proxy-media?...` 持久 URL 也被删了 → 落盘后 mediaUrl 丢失 → 刷新后图片视频显示不出。
+- **修复**：`removeRuntimeData` 对 media URL 字段仅删除 `blob:`/`data:` 临时值，保留 `http(s)` 持久 URL。
+
+**B. 后端服务重启后内存画布清空**
+- `GraphModel` 是纯内存态，服务重启后画布丢失（即使磁盘有数据）。
+- **修复**：`server.ts` 启动时遍历 `storage.listProjects()`，`loadCanvas` + `createCanvas` + `fromJSON` 自动恢复所有画布。
+
+**C. 前端刷新后不自动恢复画布 + 加载时序竞争**
+- `McpCanvasView` 刷新后只 `connect()`，不自动加载上次画布。
+- Canvas 组件 `onMounted` 里 `loadInitialCanvas()` 会从前端 StoragePlugin 加载默认节点，与 `useMcpClient.setNodes`（后端数据）竞争，导致后端数据被默认节点覆盖（mediaUrl 丢失的假象）。
+- 刷新后没有 `fitView`，节点在视口外 → "空白，缩放才出现"。
+- **修复**：
+  - `useMcpClient`：记住上次画布 id 到 localStorage（`mcp-canvas-current-id`），新增 `restoreLastCanvas()`，`connect()` 后自动恢复；`loadIntoFlow` 改用 `setNodes/setEdges` + `fitView`。
+  - `Canvas.vue` 新增 `skipDefaultLoad` prop，MCP 模式跳过默认节点加载，避免覆盖后端数据。
+  - `McpCanvasView` 传 `:skip-default-load="true"`，onMounted 后 `restoreLastCanvas()`。
+
+### 验证（实测通过）
+- 后端重启自动恢复画布，节点 data 完整保留 `imageUrl/videoUrl`。
+- 前端刷新自动选中上次画布，图片（1184×880）与视频（readyState=4, 10.08s）直接显示，无需缩放。
+

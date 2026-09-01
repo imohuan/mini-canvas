@@ -31,6 +31,16 @@ export async function startServer(config: ServerConfig): Promise<void> {
   await storage.init()
   const model = new GraphModel()
 
+  // 从磁盘自动恢复所有已保存的画布（服务重启后数据不丢）
+  for (const project of storage.listProjects()) {
+    const data = await storage.loadCanvas(project.id)
+    if (!model.hasCanvas(project.id)) model.createCanvas(project.id, project.name)
+    model.fromJSON(project.id, data)
+  }
+  if (storage.listProjects().length > 0) {
+    console.log(`[mini-canvas] 已从磁盘恢复 ${storage.listProjects().length} 个画布项目`)
+  }
+
   // 异步任务后台（可插拔 runner，真实生成服务接入时替换）
   const taskManager = new TaskManager(model)
 

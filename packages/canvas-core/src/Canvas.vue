@@ -35,6 +35,8 @@ const props = defineProps<{
   plugins?: CanvasPlugin[]
   /** 插件配置映射（name → options），支持响应式 */
   pluginConfigs?: Record<string, Record<string, unknown>>
+  /** 跳过默认画布数据加载（本地 StoragePlugin / 默认节点）。MCP 等外部数据源模式开启，避免覆盖后端数据 */
+  skipDefaultLoad?: boolean
 }>()
 
 // --- Pinia 画布状态 ---
@@ -445,7 +447,10 @@ onMounted(async () => {
 
   // auto-layout 插件配置已通过 panelRegistry 注册
   // 从 StoragePlugin 加载画布数据（或创建默认数据）
-  await bootstrap.loadInitialCanvas()
+  // MCP 等外部数据源模式：跳过默认加载，避免覆盖外部注入的节点/边
+  if (!props.skipDefaultLoad) {
+    await bootstrap.loadInitialCanvas()
+  }
 
   // 注册通用设置项到面板（通过 PanelRegistry → DynamicSettingsPanel 自动渲染）
   const core = canvas.state.core

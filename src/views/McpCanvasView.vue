@@ -63,9 +63,10 @@ async function onSave() {
   await mcp.save()
 }
 
-// 启动时自动连接后台
+// 启动时自动连接后台，并恢复上次打开的画布
 onMounted(async () => {
   await mcp.connect()
+  await mcp.restoreLastCanvas()
 })
 </script>
 
@@ -100,7 +101,7 @@ onMounted(async () => {
 
     <!-- 画布 -->
     <div class="mcp-canvas-wrap">
-      <Canvas :plugins="plugins" />
+      <Canvas :plugins="plugins" :skip-default-load="true" />
     </div>
   </div>
 </template>

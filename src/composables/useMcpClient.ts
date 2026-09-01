@@ -24,6 +24,8 @@ export interface UseMcpClientOptions {
   baseUrl?: string
 }
 
+const LS_CANVAS_ID = 'mcp-canvas-current-id'
+
 export function useMcpClient(options: UseMcpClientOptions = {}) {
   const baseUrl = options.baseUrl ?? 'http://localhost:8765'
   const vf = useVueFlow('main-canvas')
@@ -66,8 +68,28 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
   /** 把后台画布数据加载进 VueFlow */
   async function loadIntoFlow(canvasId: string): Promise<void> {
     const data = await request<{ nodes: any[]; edges: any[] }>(`/api/canvases/${canvasId}`)
-    vf.fromObject({ nodes: data.nodes, edges: data.edges })
+    vf.setNodes(data.nodes)
+    vf.setEdges(data.edges)
     await nextTick()
+    // fitView 把节点适配到视口：避免“画布空白的、缩放才出现”的显示问题
+    try {
+      await vf.fitView({ padding: 0.2, duration: 200 })
+    } catch {
+      // fitView 在节点尚未初始化完成时可能失败，忽略即可
+    }
+  }
+
+  /** 切换画布：加载到画布并订阅 SSE */
+  async function switchCanvas(canvasId: string): Promise<void> {
+    currentCanvasId.value = canvasId
+    localStorage.setItem(LS_CANVAS_ID, canvasId)
+    // 先建立 SSE 订阅（独立于 load，确保实时通道一定建立）
+    connectSse(canvasId)
+    try {
+      await loadIntoFlow(canvasId)
+    } catch (err) {
+      error.value = `加载画布失败: ${(err as Error).message}`
+    }
   }
 
   /** 连接服务，拉取画布列表 */
@@ -83,15 +105,11 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
     }
   }
 
-  /** 切换画布：加载到画布并订阅 SSE */
-  async function switchCanvas(canvasId: string): Promise<void> {
-    currentCanvasId.value = canvasId
-    // 先建立 SSE 订阅（独立于 load，确保实时通道一定建立）
-    connectSse(canvasId)
-    try {
-      await loadIntoFlow(canvasId)
-    } catch (err) {
-      error.value = `加载画布失败: ${(err as Error).message}`
+  /** 自动恢复上次打开的画布（刷新后无需手动选择） */
+  async function restoreLastCanvas(): Promise<void> {
+    const lastId = localStorage.getItem(LS_CANVAS_ID)
+    if (lastId && canvases.value.some((c) => c.id === lastId)) {
+      await switchCanvas(lastId)
     }
   }
 
@@ -139,6 +157,7 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
     saving,
     connect,
     switchCanvas,
+    restoreLastCanvas,
     save,
     createNode,
     createTask,
