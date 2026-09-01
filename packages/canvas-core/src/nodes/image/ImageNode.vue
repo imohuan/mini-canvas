@@ -113,6 +113,14 @@ function defaultToolbarConfig(): ToolbarConfig {
 /** 底部工具栏配置（v-model）— 统一存为节点 data.options，实现持久化 */
 const toolbarConfig = ref<ToolbarConfig>(defaultToolbarConfig())
 
+/** 序列化比较当前 toolbarConfig 与 data.options 是否一致（用于打破双向 watch 循环） */
+function sameAsToolbar(opts: unknown): boolean {
+  if (!opts || typeof opts !== 'object') return false
+  const a = JSON.stringify({ ...defaultToolbarConfig(), ...opts })
+  const b = JSON.stringify({ ...defaultToolbarConfig(), ...toolbarConfig.value })
+  return a === b
+}
+
 /** 从节点 data.options 载入配置（合并默认值，保证字段齐全） */
 function initToolbarFromData() {
   const opts = props.data?.options as Partial<ToolbarConfig> | undefined
@@ -122,10 +130,14 @@ function initToolbarFromData() {
 }
 initToolbarFromData()
 
-// 外部（如 MCP）设置 data.options → 同步到本地（监听引用变化，避免深层循环）
+// 外部（如 MCP）设置 data.options → 同步到本地（值一致时说明是本组件回写，跳过避免循环）
 watch(
   () => props.data?.options,
-  () => initToolbarFromData(),
+  (opts) => {
+    if (!opts || typeof opts !== 'object') return
+    if (sameAsToolbar(opts)) return
+    initToolbarFromData()
+  },
 )
 
 // 本地编辑 → 回写 data.options（用完整配置，避免字段丢失；持久化，刷新后恢复）
