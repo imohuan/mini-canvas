@@ -98,15 +98,20 @@ export function createMcpServer(
 
   server.tool(
     'canvas.create_node',
-    '创建节点（image/video/audio/text/panorama/image-compare）',
+    '创建节点（image/video/audio/text/panorama/image-compare）。options 为该节点的持久化配置（图片节点：promptText/promptDoc/selectedStyle/selectedModel/selectedSize），会合并进 data.options',
     {
       taskId: z.string(),
       type: z.enum(['image', 'video', 'audio', 'text', 'panorama', 'image-compare']),
       position: z.object({ x: z.number(), y: z.number() }).optional(),
       data: z.record(z.unknown()).optional(),
+      options: z.record(z.unknown()).optional().describe('节点持久化配置，合并进 data.options（如 promptText、selectedStyle 等）'),
     },
-    async ({ taskId, type, position, data }) => {
-      const node = model.createNode(taskId, { type, position, data })
+    async ({ taskId, type, position, data, options }) => {
+      const mergedData = {
+        ...(data ?? {}),
+        ...(options ? { options: { ...(data?.options as Record<string, unknown> | undefined), ...options } } : {}),
+      }
+      const node = model.createNode(taskId, { type, position, data: mergedData })
       return toText({ ok: true, node })
     },
   )
@@ -132,7 +137,7 @@ export function createMcpServer(
 
   server.tool(
     'canvas.update_node',
-    '更新节点（data 内字段可更新 status/progress 等）',
+    '更新节点（data 内字段可更新 status/progress/options/taskId 等；taskId 为节点运行任务的 id）',
     {
       taskId: z.string(),
       nodeId: z.string(),

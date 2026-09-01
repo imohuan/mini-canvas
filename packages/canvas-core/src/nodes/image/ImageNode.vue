@@ -99,14 +99,40 @@ const bottomOffset = computed(() => canvas.state.core.bottomToolbarOffset)
 /** 全屏 Dialog 状态 */
 const showExpandDialog = ref(false)
 
-/** 底部工具栏配置（v-model） */
-const toolbarConfig = ref<ToolbarConfig>({
-  promptText: '',
-  promptDoc: null,
-  selectedStyle: 'hollywood-retro',
-  selectedModel: 'anycook',
-  selectedSize: '9:16-3k',
-})
+/** 底部工具栏默认配置 */
+function defaultToolbarConfig(): ToolbarConfig {
+  return {
+    promptText: '',
+    promptDoc: null,
+    selectedStyle: 'hollywood-retro',
+    selectedModel: 'anycook',
+    selectedSize: '9:16-3k',
+  }
+}
+
+/** 底部工具栏配置（v-model）— 统一存为节点 data.options，实现持久化 */
+const toolbarConfig = ref<ToolbarConfig>(defaultToolbarConfig())
+
+/** 从节点 data.options 载入配置（合并默认值，保证字段齐全） */
+function initToolbarFromData() {
+  const opts = props.data?.options as Partial<ToolbarConfig> | undefined
+  if (opts && typeof opts === 'object') {
+    toolbarConfig.value = { ...defaultToolbarConfig(), ...opts }
+  }
+}
+initToolbarFromData()
+
+// 外部（如 MCP）设置 data.options → 同步到本地（监听引用变化，避免深层循环）
+watch(
+  () => props.data?.options,
+  () => initToolbarFromData(),
+)
+
+// 本地编辑 → 回写 data.options（用完整配置，避免字段丢失；持久化，刷新后恢复）
+watch(toolbarConfig, (val) => {
+  const full = { ...defaultToolbarConfig(), ...val }
+  updateNode(props.id, { data: { ...props.data, options: full } })
+}, { deep: true })
 
 function onToolbarAction(action: string) {
   if (action === 'more') {

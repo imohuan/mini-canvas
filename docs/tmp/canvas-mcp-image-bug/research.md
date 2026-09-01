@@ -85,4 +85,34 @@
 - 端口：图片/视频节点各显示 target+source 2 个端口（共 4 个）。
 - 保存：把图片节点移到 (300,400) → 点保存 → 刷新页面 → 位置保持 (300,400)。
 
+---
+
+## 功能：图片节点持久化配置 options + 运行任务 id（已实现）
+
+### 需求
+- `ImageBottomToolbar.vue` 里的可持久化内容（promptText 文本、selectedStyle/selectedModel/selectedSize 下拉等）统一作为 `options` 保存到节点配置。
+- 节点的运行任务 id 放节点属性（`taskId`），用于后续通过任务 id 获取最新状态。
+- 这些配置在**创建节点的 MCP** 中即可设置。
+
+### 实现
+**前端（`ImageNode.vue`）**
+- `toolbarConfig` 初始值从 `props.data.options` 载入（合并默认值，字段齐全）。
+- 本地编辑 → deep watch 回写 `data.options`（完整配置，不丢字段）。
+- 外部（MCP）设置 `data.options` → 监听引用变化同步到本地。
+- 之前双向 watch 会互相覆盖导致字段丢失，已改为「外部引用变化同步 + 回写完整配置」。
+
+**MCP（`mcp/server.ts`）**
+- `canvas.create_node` 新增可选 `options` 参数，自动合并进 `data.options`。
+- `canvas.update_node` 说明支持 data 内更新 `options`/`taskId`。
+
+### 数据约定
+- 节点 `data.options`：`{ promptText, promptDoc, selectedStyle, selectedModel, selectedSize }`
+- 节点 `data.taskId`：运行任务 id
+
+### 验证（实测通过）
+- MCP 创建节点带 `data.options` + `taskId`，节点 data 正确携带。
+- 磁盘 canvas.json 完整保存 options（含 selectedModel/selectedSize，不丢字段）。
+- 后端重启后 options/taskId 完整恢复。
+- 前端 store 从 options 正确初始化 toolbarConfig。
+
 
