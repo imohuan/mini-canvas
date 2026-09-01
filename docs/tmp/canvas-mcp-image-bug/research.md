@@ -64,3 +64,25 @@
 - 后端重启自动恢复画布，节点 data 完整保留 `imageUrl/videoUrl`。
 - 前端刷新自动选中上次画布，图片（1184×880）与视频（readyState=4, 10.08s）直接显示，无需缩放。
 
+---
+
+## 后续：节点无输入输出端口 + 页面编辑画布无法保存（已修复）
+
+### 问题 1：创建的节点没有输入输出端口
+**根因**：`BaseNode.vue` 用 `props.targetPosition` / `props.sourcePosition`（VueFlow 节点数据）决定是否渲染端口。MCP 创建节点时 data 没带这两个字段 → 端口不显示。
+**正确语义**：端口应根据**节点类型定义**（`canReceiveInput` / `canProduceOutput`）动态决定。
+**修复**（`BaseNode.vue`）：
+- 新增 `showTargetHandle` / `showSourceHandle` computed：优先用节点数据显式设置的 `targetPosition`/`sourcePosition`；未设置时按 `nodeDef.canReceiveInput/canProduceOutput` 决定。
+- 模板 `v-if` 及 `showTargetZones`/`shouldShowTargetZones` 改用这两个 computed。
+
+### 问题 2：页面编辑画布（如移动节点）保存后刷新回到原位
+**根因**：前端拖拽移动节点后，最新位置只存在前端 VueFlow 里，后端 `GraphModel` 内存仍是最旧数据。后端 `POST /api/canvases/:id/save` 只用 `model.toJSON()`（内存旧位置）落盘，前端位置没同步进来。
+**修复**：
+- `useMcpClient.save()`：把前端当前节点/边（含最新位置）用 `vf.toObject()` POST 给后端。
+- 后端 `/save`：解析 body 的 nodes/edges，`model.fromJSON()` 覆盖内存后再 `saveCanvas()` 落盘。
+
+### 验证（实测通过）
+- 端口：图片/视频节点各显示 target+source 2 个端口（共 4 个）。
+- 保存：把图片节点移到 (300,400) → 点保存 → 刷新页面 → 位置保持 (300,400)。
+
+

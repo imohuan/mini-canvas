@@ -26,6 +26,21 @@ const nodeDef = computed(() => {
 })
 
 /**
+ * 输入端口（左侧 target handle）是否显示。
+ * 优先用节点数据里显式设置的 targetPosition；未设置时根据节点类型定义
+ * （canReceiveInput）动态决定——端口由“节点类型是否有输入能力”决定，
+ * 而不是由创建节点时附带的数据决定。
+ */
+const showTargetHandle = computed(() =>
+  props.targetPosition !== undefined ? Boolean(props.targetPosition) : (nodeDef.value?.canReceiveInput ?? true)
+)
+
+/** 输出端口（右侧 source handle）是否显示。逻辑同 showTargetHandle。 */
+const showSourceHandle = computed(() =>
+  props.sourcePosition !== undefined ? Boolean(props.sourcePosition) : (nodeDef.value?.canProduceOutput ?? true)
+)
+
+/**
  * 画布当前的缩放比例。
  * 所有节点的"反向缩放"（counter-scale）都依赖这个值。
  * 最小保证 0.01，防止除零或负缩放导致节点消失。
@@ -242,7 +257,7 @@ const showConnectFeedback = computed(() =>
 const showTargetZones = computed(() =>
   canvas.isConnecting &&
   canvas.connectionState.activeConnection?.sourceNodeId !== props.id &&
-  Boolean(props.targetPosition)
+  showTargetHandle.value
 )
 
 /**
@@ -254,7 +269,7 @@ const showTargetZones = computed(() =>
  * 需要同时满足：节点有输入端口 && (debug 开关打开 或 正在拖线)。
  */
 const shouldShowTargetZones = computed(() =>
-  Boolean(props.targetPosition) &&
+  showTargetHandle.value &&
   (canvas.state.core.connectionSnapDebugVisible || showTargetZones.value)
 )
 
@@ -478,7 +493,7 @@ const nodeLabel = computed(() => {
       </template>
 
       <!-- 左侧连接点（target handle）：悬停/选中时显示，用于接收连线 -->
-      <MovingHandle v-if="targetPosition" id="target" type="target" :position="Position.Left"
+      <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
         :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
         :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap"
@@ -505,7 +520,7 @@ const nodeLabel = computed(() => {
       </div>
 
       <!-- 右侧连接点（source handle）：悬停/选中时显示，用于拖出连线 -->
-      <MovingHandle v-if="sourcePosition" id="source" type="source" :position="Position.Right"
+      <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :radius="canvas.state.core.handleRadius"
         :rest-offset="canvas.state.core.handleRestOffset" :cursor-gap="canvas.state.core.handleCursorGap"
         :button-size="canvas.state.core.handleButtonSize" :overlap="canvas.state.core.handleOverlap"

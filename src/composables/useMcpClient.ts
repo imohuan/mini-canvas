@@ -118,8 +118,13 @@ export function useMcpClient(options: UseMcpClientOptions = {}) {
     if (!currentCanvasId.value) return
     saving.value = true
     try {
-      // 先把前端当前节点/边状态同步给后台（用 VueFlow 当前数据）
-      await request(`/api/canvases/${currentCanvasId.value}/save`, { method: 'POST' })
+      // 把前端当前节点/边状态（含拖拽后的最新位置）同步给后台并落盘
+      const { nodes, edges } = vf.toObject()
+      await request(`/api/canvases/${currentCanvasId.value}/save`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ nodes, edges }),
+      })
     } finally {
       saving.value = false
     }

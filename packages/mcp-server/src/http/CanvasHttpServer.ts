@@ -131,6 +131,14 @@ export class CanvasHttpServer {
     // ==================== REST：持久化 ====================
     this.app.post('/api/canvases/:id/save', async (c) => {
       const id = c.req.param('id')
+      const body = await c.req.json().catch(() => null)
+      // 前端可传入当前画布的 nodes/edges（含拖拽后的最新位置），覆盖后端内存后再落盘；
+      // 未传则用后端内存数据直接保存。
+      if (body && Array.isArray(body.nodes)) {
+        const data = { nodes: body.nodes, edges: Array.isArray(body.edges) ? body.edges : [] }
+        if (!this.model.hasCanvas(id)) this.model.createCanvas(id)
+        this.model.fromJSON(id, data)
+      }
       const json = this.model.toJSON(id)
       await this.storage.saveCanvas(id, json.nodes, json.edges)
       return c.json({ ok: true, canvasId: id })
