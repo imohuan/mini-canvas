@@ -60,6 +60,38 @@ async function onAddFileChange(event: Event) {
 
 const upstreamResources = useUpstreamResources(props.id as string | null)
 
+// ── 输入端口连接的媒体资源（仅图片/视频），在输入区顶部以正方形小卡片展示 ──
+const connectedMediaCards = computed(() =>
+  upstreamResources.value
+    .filter(res => res.kind === 'image' || res.kind === 'video')
+    .map(res => ({
+      kind: res.kind as 'image' | 'video',
+      url: res.url,
+      name: res.name,
+    })),
+)
+
+/** 点击媒体卡片：全屏预览（图片看图 / 视频播放） */
+function previewMedia(kind: 'image' | 'video', url: string) {
+  const viewer = document.createElement('div')
+  viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer'
+  if (kind === 'video') {
+    const vEl = document.createElement('video')
+    vEl.src = url
+    vEl.controls = true
+    vEl.autoplay = true
+    vEl.style.cssText = 'max-width:92vw;max-height:90vh;object-fit:contain;background:#000'
+    viewer.appendChild(vEl)
+  } else {
+    const imgEl = document.createElement('img')
+    imgEl.src = url
+    imgEl.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain'
+    viewer.appendChild(imgEl)
+  }
+  viewer.onclick = () => viewer.remove()
+  document.body.appendChild(viewer)
+}
+
 const connectedImages = computed<ResourceItem[]>(() =>
   upstreamResources.value.map((res, i) => {
     const base = {
@@ -87,6 +119,32 @@ const connectedImages = computed<ResourceItem[]>(() =>
             ["span", { class: "label" }, `@${self.name}`],
           ]
         },
+      }
+      return item
+    }
+
+    // 视频类资源：视频缩略图标 + 点击全屏播放
+    if (res.kind === 'video') {
+      const item: ResourceItem = {
+        ...base,
+        url: res.url,
+        mediaType: 'video',
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><polygon points="23 7 16 12 23 17" fill="currentColor"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
+        renderEditor: (self) => {
+          return [
+            "span",
+            {
+              class: "resource-node resource-node-video",
+              "data-id": self.id,
+              "data-url": self.url || "",
+              "data-name": self.name,
+              "data-category": self.category,
+              style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom; color:#7c3aed",
+            },
+            ["span", { class: "label" }, `@${self.name}`],
+          ]
+        },
+        onClick: () => previewMedia('video', item.url || ''),
       }
       return item
     }
@@ -301,6 +359,22 @@ function onEditorKeydown(e: KeyboardEvent) {
   <div v-if="!hasOverlay" class="image-bottom-panel">
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
+      <!-- 输入端口连接的媒体资源（图片/视频）→ 正方形小卡片展示，点击全屏预览 -->
+      <div v-if="connectedMediaCards.length" class="media-cards-row">
+        <div
+          v-for="card in connectedMediaCards"
+          :key="card.url + card.name"
+          class="media-card"
+          :title="card.name"
+          @click.stop="previewMedia(card.kind, card.url)"
+        >
+          <video v-if="card.kind === 'video'" :src="card.url" muted preload="metadata" class="media-card-thumb" />
+          <img v-else :src="card.url" class="media-card-thumb" draggable="false" alt="" />
+          <span v-if="card.kind === 'video'" class="media-card-play">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 5 19 12 8 19 8 5" /></svg>
+          </span>
+        </div>
+      </div>
       <div class="editor-wrapper" @keydown="onEditorKeydown">
         <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
           @update:model-value="onInput" @click.stop>
@@ -401,11 +475,81 @@ function onEditorKeydown(e: KeyboardEvent) {
   flex: 1;
   width: 100%;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 输入端口连接的媒体资源卡片行 ── */
+
+.media-cards-row {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  height: 30px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  /* 细滚动条，仅在卡片很多时出现 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.media-cards-row::-webkit-scrollbar {
+  height: 4px;
+}
+.media-cards-row::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+.media-cards-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 正方形卡片 */
+.media-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.media-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.media-card-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+/* 视频播放角标 */
+.media-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+}
+.media-card-play svg {
+  width: 14px;
+  height: 14px;
 }
 
 .editor-wrapper {
   width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding-right: 24px;
   overflow-y: auto;
   overflow-x: hidden;
