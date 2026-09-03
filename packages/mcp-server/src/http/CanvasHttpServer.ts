@@ -128,6 +128,39 @@ export class CanvasHttpServer {
       }
     })
 
+    // ==================== REST：批量 CRUD（合并执行） ====================
+    /** 节点批量：POST /api/canvases/:id/batch-nodes  { add:[], delete:[], update:[] } */
+    this.app.post('/api/canvases/:id/batch-nodes', async (c) => {
+      const id = c.req.param('id')
+      const body = await c.req.json().catch(() => ({}))
+      const normAdds = (body.add ?? []).map((a: any) => {
+        const data: Record<string, unknown> = a.data ? { ...a.data } : {}
+        if (a.options) data.options = { ...((a.data?.options as Record<string, unknown>) ?? {}), ...a.options }
+        return { type: a.type, id: a.id, position: a.position, data }
+      })
+      const result = this.model.applyBatchNodes(id, {
+        add: normAdds,
+        delete: body.delete,
+        update: (body.update ?? []).map((u: any) => ({ id: u.id, patch: { position: u.position, data: u.data } })),
+      })
+      return c.json(result)
+    })
+
+    /** 连线批量：POST /api/canvases/:id/batch-edges */
+    this.app.post('/api/canvases/:id/batch-edges', async (c) => {
+      const id = c.req.param('id')
+      const body = await c.req.json().catch(() => ({}))
+      const result = this.model.applyBatchEdges(id, {
+        add: body.add ?? [],
+        delete: body.delete,
+        update: (body.update ?? []).map((u: any) => {
+          const { id: _id, ...rest } = u
+          return { id: _id, patch: rest }
+        }),
+      })
+      return c.json(result)
+    })
+
     // ==================== REST：持久化 ====================
     this.app.post('/api/canvases/:id/save', async (c) => {
       const id = c.req.param('id')

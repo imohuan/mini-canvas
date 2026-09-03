@@ -157,4 +157,89 @@ describe('GraphModel', () => {
       expect(model2.getViewport('t')).toEqual({ x: 1, y: 2, zoom: 3 })
     })
   })
+
+  describe('批量 CRUD（applyBatch）', () => {
+    it('node.batch 合并 add/update/delete 一次执行，顺序 delete→add→update', () => {
+      model.createCanvas('t')
+      const keep = model.createNode('t', { type: 'text', data: { label: 'keep' } })
+      const gone = model.createNode('t', { type: 'text' })
+      const r = model.applyBatchNodes('t', {
+        add: [{ type: 'image', data: { label: 'new' }, id: 'explicit-add' }],
+        update: [{ id: keep.id, patch: { data: { label: 'updated' } } }],
+        delete: [gone.id],
+      })
+      expect(r.ok).toBe(true)
+      expect(r.added).toEqual(['explicit-add'])
+      expect(r.deleted).toEqual([gone.id])
+      expect(r.updated).toEqual([keep.id])
+      // gone 已删、新增存在、keep 已更新
+      expect(model.getNode('t', gone.id)).toBeNull()
+      expect(model.getNode('t', 'explicit-add')!.data.nodeType).toBe('image')
+      expect(model.getNode('t', keep.id)!.data.label).toBe('updated')
+    })
+
+    it('node.batch add 显式 id 与存量冲突 → 整批拒绝、不做任何变更', () => {
+      model.createCanvas('t')
+      const a = model.createNode('t', { type: 'text', data: { label: 'a' } })
+      const before = model.listNodes('t').length
+      const r = model.applyBatchNodes('t', {
+        add: [{ type: 'image', id: a.id }], // 与 a 撞 id
+        delete: [a.id],                      // 另一条合法
+      })
+      expect(r.ok).toBe(false)
+      expect(r.errors.length).toBeGreaterThan(0)
+      // 整批未执行：a 仍在、数量未变
+      expect(model.getNode('t', a.id)).not.toBeNull()
+      expect(model.listNodes('t').length).toBe(before)
+    })
+
+    it('node.batch update 引用同批新增 id（合法组合）', () => {
+      model.createCanvas('t')
+      const r = model.applyBatchNodes('t', {
+        add: [{ type: 'text', id: 'x' }],
+        update: [{ id: 'x', patch: { data: { label: 'after' } } }],
+      })
+      expect(r.ok).toBe(true)
+      expect(model.getNode('t', 'x')!.data.label).toBe('after')
+    })
+
+    it('edge.batch 合并 add/delete；add 端点不存在则整批拒绝', () => {
+      model.createCanvas('t')
+      const a = model.createNode('t', { type: 'image', id: 'a' })
+      const b = model.createNode('t', { type: 'text', id: 'b' })
+      const e = model.createEdge('t', { source: a.id, target: b.id })
+      const r = model.applyBatchEdges('t', {
+        add: [{ source: b.id, target: a.id }],
+        delete: [e.id],
+      })
+      expect(r.ok).toBe(true)
+      expect(r.added).toHaveLength(1)
+      expect(model.listEdges('t').length).toBe(1) // 删 1 增 1
+      // add 引用幽灵节点 → 拒绝
+      const bad = model.applyBatchEdges('t', { add: [{ source: a.id, target: 'ghost' }] })
+      expect(bad.ok).toBe(false)
+    })
+
+    it('node:updated 事件携带合并后的完整 node', () => {
+      model.createCanvas('t')
+      const n = model.createNode('t', { type: 'image', data: { label: 'L', options: { model: 'm' } } })
+      let evt: any = null
+      model.on((e) => { if (e.type === 'node:updated') evt = e })
+      model.updateNode('t', n.id, { data: { progress: 50 } })
+      expect(evt).not.toBeNull()
+      expect(evt.node.data.label).toBe('L')
+      expect(evt.node.data.options.model).toBe('m')
+      expect(evt.node.data.progress).toBe(50)
+    })
+
+    it('applyBatch 末尾派发 batch:done 事件', () => {
+      model.createCanvas('t')
+      let done: any = null
+      model.on((e) => { if (e.type === 'batch:done') done = e })
+      model.applyBatchNodes('t', { add: [{ type: 'text' }] })
+      expect(done).not.toBeNull()
+      expect(done.resource).toBe('node')
+      expect(done.addedCount).toBe(1)
+    })
+  })
 })

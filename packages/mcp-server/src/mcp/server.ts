@@ -20,6 +20,9 @@ const TOOL_LIST: McpTool[] = [
   { name: 'canvas.create_canvas', description: '创建画布（taskId 即画布 id）' },
   { name: 'canvas.list_canvases', description: '列出所有画布' },
   { name: 'canvas.delete_canvas', description: '删除画布' },
+  { name: 'canvas.batch', description: '画布批量增删' },
+  { name: 'canvas.batch_nodes', description: '画布节点批量增删改查（add/delete/update 合并）' },
+  { name: 'canvas.batch_edges', description: '画布连线批量增删改查（add/delete/update 合并）' },
   { name: 'canvas.create_node', description: '创建节点（图片/视频/音频/文本等）' },
   { name: 'canvas.list_nodes', description: '列出画布下所有节点' },
   { name: 'canvas.get_node', description: '获取单个节点' },
@@ -223,6 +226,104 @@ export function createMcpServer(
     async ({ taskId, x, y, zoom }) => {
       model.setViewport(taskId, { x, y, zoom })
       return toText({ ok: true, viewport: model.getViewport(taskId) })
+    },
+  )
+
+  // ==================== 批量 CRUD（合并执行） ====================
+
+  server.tool(
+    'canvas.batch_nodes',
+    '画布节点批量增删改查，合并一次执行：{ add:[{type,position?,data?,options?,id?}], delete:[nodeId,...], update:[{id, patch?}] }。add 支持语义 type(image/video/audio/text/...) 自动转前端可渲染格式；update.patch.data/options 为浅合并。返回 added/deleted/updated ids',
+    {
+      canvasId: z.string().describe('画布 id（taskId）'),
+      add: z.array(z.object({
+        type: z.string().describe('语义类型 image/video/audio/text/panorama/image-compare 或 custom'),
+        id: z.string().optional(),
+        position: z.object({ x: z.number(), y: z.number() }).optional(),
+        data: z.record(z.unknown()).optional(),
+        options: z.record(z.unknown()).optional().describe('持久化配置，合并进 data.options'),
+      })).optional(),
+      delete: z.array(z.string()).optional(),
+      update: z.array(z.object({
+        id: z.string(),
+        position: z.object({ x: z.number(), y: z.number() }).optional(),
+        data: z.record(z.unknown()).optional(),
+      })).optional(),
+    },
+    async ({ canvasId, add, delete: del, update }) => {
+      const normAdds: import('../graph/GraphModel').CreateNodeInput[] = (add ?? []).map((a) => {
+        const baseData: Record<string, unknown> = a.data ? { ...a.data } : {}
+        if (a.options) baseData.options = { ...(a.data?.options as Record<string, unknown> | undefined), ...a.options }
+        return { type: a.type as any, id: a.id, position: a.position, data: baseData }
+      })
+      const result = model.applyBatchNodes(canvasId, {
+        add: normAdds,
+        delete: del,
+        update: (update ?? []).map((u) => ({ id: u.id, patch: { position: u.position, data: u.data } })),
+      })
+      return toText(result)
+    },
+  )
+
+  server.tool(
+    'canvas.batch_edges',
+    '画布连线批量增删改查，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?,id?}], delete:[edgeId,...], update:[{id, patch?}] }。返回 added/deleted/updated ids',
+    {
+      canvasId: z.string(),
+      add: z.array(z.object({
+        source: z.string(),
+        target: z.string(),
+        sourceHandle: z.string().optional(),
+        targetHandle: z.string().optional(),
+        id: z.string().optional(),
+      })).optional(),
+      delete: z.array(z.string()).optional(),
+      update: z.array(z.object({
+        id: z.string(),
+        source: z.string().optional(),
+        target: z.string().optional(),
+        sourceHandle: z.string().optional(),
+        targetHandle: z.string().optional(),
+        data: z.record(z.unknown()).optional(),
+      })).optional(),
+    },
+    async ({ canvasId, add, delete: del, update }) => {
+      const result = model.applyBatchEdges(canvasId, {
+        add: add ?? [],
+        delete: del,
+        update: (update ?? []).map((u) => {
+          const { id, ...rest } = u
+          return { id, patch: rest as any }
+        }),
+      })
+      return toText(result)
+    },
+  )
+
+  server.tool(
+    'canvas.batch',
+    '画布批量增删：{ add:[{id(taskId), name?}], delete:[canvasId,...] }。返回 added/deleted',
+    {
+      add: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
+      delete: z.array(z.string()).optional(),
+    },
+    async ({ add, delete: del }) => {
+      const added: string[] = []
+      for (const c of add ?? []) {
+        if (!model.hasCanvas(c.id)) {
+          model.createCanvas(c.id, c.name)
+          await storage.createProject(c.name ?? c.id, c.id)
+        }
+        added.push(c.id)
+      }
+      const deleted: string[] = []
+      for (const id of del ?? []) {
+        if (model.deleteCanvas(id)) {
+          await storage.deleteProject(id)
+          deleted.push(id)
+        }
+      }
+      return toText({ ok: true, added, deleted })
     },
   )
 

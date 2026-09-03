@@ -24,6 +24,15 @@ export interface CanvasNode {
     progress?: number
     src?: string
     url?: string
+    /**
+     * 后台任务运行态（单对象，便于整补与比对；由 TaskManager 写回）。
+     * 语义：{ status, progress?, message?, taskId?, imageUrl?, error? }
+     */
+    runState?: Record<string, unknown>
+    /** 图片节点展示图（前端 <img> 只认此字段） */
+    imageUrl?: string
+    /** 参考图/预览节点的原始绝对路径（仅后台去重用，非渲染字段） */
+    sourcePath?: string
     [key: string]: unknown
   }
   [key: string]: unknown
@@ -51,8 +60,9 @@ export interface CanvasViewport {
 export type GraphEvent =
   | { type: 'node:added'; canvasId: string; node: CanvasNode }
   | { type: 'node:removed'; canvasId: string; nodeId: string }
-  | { type: 'node:updated'; canvasId: string; nodeId: string; patch: Partial<CanvasNode> }
+  | { type: 'node:updated'; canvasId: string; nodeId: string; patch: Partial<CanvasNode>; node: CanvasNode }
   | { type: 'edge:added'; canvasId: string; edge: CanvasEdge }
   | { type: 'edge:removed'; canvasId: string; edgeId: string }
   | { type: 'graph:changed'; canvasId: string; graphVersion: number }
   | { type: 'graph:saved'; canvasId: string }
+  | { type: 'batch:done'; canvasId: string; resource: string; addedCount: number; deletedCount: number; updatedCount: number }
