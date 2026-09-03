@@ -51,7 +51,8 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
         seen.add(edge.source)
         resources.push({
           kind: 'image',
-          name: (data.imageName as string) || label || '素材',
+          // 优先用节点标题 label（用户可重命名），未设置时才回退到文件名
+          name: label || (data.imageName as string) || '素材',
           url,
           value: '',
           connected: true,
@@ -65,7 +66,8 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
         seen.add(edge.source)
         resources.push({
           kind: 'video',
-          name: (data.videoName as string) || label || '视频',
+          // 优先用节点标题 label（用户可重命名），未设置时才回退到文件名
+          name: label || (data.videoName as string) || '视频',
           url: videoUrl,
           value: '',
           connected: true,
