@@ -495,7 +495,11 @@ export function useCanvasConnection(options: UseCanvasConnectionOptions) {
 
     const src = nodesById.value.get(canonical.source)
     const tgt = nodesById.value.get(canonical.target)
-    if (!src || !tgt) return false
+    // 载入持久化边时，isValidConnection 会在节点尚未全部进入本节点索引的瞬间被 VueFlow 调用。
+    // 此时 VueFlow 已用其内部节点表确认过两端节点存在（节点缺失会先报 SOURCE/TARGET_MISSING，
+    // 根本走不到这里），所以这里查不到只说明本地索引还没同步，不能据此把合法历史边误判为非法而丢弃。
+    // 因此节点暂不可见时直接放行，避免“刷新后连接线消失”；手动拖线时两端节点必已在索引中，不受影响。
+    if (!src || !tgt) return true
     if (!src.sourcePosition || !tgt.targetPosition) return false
     if (wouldCreateCycle(canonical.source, canonical.target, getEdges.value as Edge[])) return false
     // 类型兼容性校验
