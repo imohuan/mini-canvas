@@ -27,6 +27,12 @@ export function useCanvasBootstrap(vueFlowInstance: any, getStorageApiFn: () => 
       if (data.nodes.length > 0 || data.edges.length > 0) {
         vueFlowInstance.fromObject({ nodes: data.nodes, edges: data.edges })
         await nextTick()
+        // fitView 把视口适配到已保存节点，避免节点位于视口外导致"刷新后空白、需滚动/缩放才显示"
+        try {
+          await vueFlowInstance.fitView({ padding: 0.2, duration: 0 })
+        } catch {
+          // fitView 在节点初始化未完成时可能失败，忽略即可
+        }
         return
       }
     }
