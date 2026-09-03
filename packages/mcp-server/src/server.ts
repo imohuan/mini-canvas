@@ -16,6 +16,21 @@ import { NodeStorage } from './storage/NodeStorage'
 import { createMcpServer } from './mcp/server'
 import { CanvasHttpServer } from './http/CanvasHttpServer'
 import { TaskManager } from './tasks/TaskManager'
+import { getModelRegistry } from './models/ModelRegistry'
+import { Web2apiRunner } from './models/executors/web2apiRunner'
+import { getWeb2apiClient } from './client/web2apiClient'
+
+/** 按配置装配真实生成 runner：配置了 web2api 则连接并覆盖注册表默认 runner */
+function setupGeneration(config: ServerConfig): void {
+  const registry = getModelRegistry()
+  const client = getWeb2apiClient(config.web2api)
+  if (client) {
+    registry.registerRunner('web2api', new Web2apiRunner(client))
+    console.log(`[mini-canvas] 生成后台: 已配置 web2api ${config.web2api}（任务将转发真实生成）`)
+  } else {
+    console.log(`[mini-canvas] 生成后台: 未配置 --web2api，生成任务将返回明确错误（可用 --web2api http://localhost:8033/mcp 接入）`)
+  }
+}
 
 /**
  * 启动 MCP 后台服务
@@ -41,7 +56,8 @@ export async function startServer(config: ServerConfig): Promise<void> {
     console.log(`[mini-canvas] 已从磁盘恢复 ${storage.listProjects().length} 个画布项目`)
   }
 
-  // 异步任务后台（可插拔 runner，真实生成服务接入时替换）
+  // 异步任务后台（真实生成 runner：配置 web2api 则转发，否则明确错误）
+  setupGeneration(config)
   const taskManager = new TaskManager(model)
 
   // 启动 HTTP + REST + SSE 服务（前端画布经此读写与实时刷新）

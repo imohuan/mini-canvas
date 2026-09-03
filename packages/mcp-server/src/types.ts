@@ -9,4 +9,6 @@ export interface ServerConfig {
   port: number
   /** 工作目录，画布 JSON 落盘位置 */
   dir: string
+  /** 真实生成后台 web2api 的 MCP 端点（如 http://localhost:8033/mcp）；不配则生成任务返回明确错误 */
+  web2api?: string
 }

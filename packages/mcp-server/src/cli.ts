@@ -24,11 +24,13 @@ mcp
   .option('-t, --transport <type>', '传输通道: stdio | sse', 'stdio')
   .option('-p, --port <number>', 'HTTP 端口 (sse 模式使用)', '8765')
   .option('-d, --dir <path>', '工作目录 (画布 JSON 落盘位置)', './workspace')
+  .option('-w, --web2api <url>', '真实生成后台 web2api 的 MCP 端点(如 http://localhost:8033/mcp)；不配则生成返回明确错误')
   .action(async (opts) => {
     const config = {
       transport: opts.transport as 'stdio' | 'sse',
       port: parseInt(opts.port, 10),
       dir: opts.dir as string,
+      web2api: (opts.web2api as string | undefined) || undefined,
     }
     await startServer(config)
   })
