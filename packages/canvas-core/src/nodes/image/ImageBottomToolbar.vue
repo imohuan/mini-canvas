@@ -330,21 +330,21 @@ function onInputAreaClick() {
   editorRef.value?.focusEnd()
 }
 
-function onAi() {
-  // ── 收集并打印当前节点的全部相关数据 ──
-  console.log('[AI 按钮] ==== 输入框内容 (promptText) ====')
+function onSend() {
+  // ── 收集并打印当前节点的全部相关数据（发送前自检） ──
+  console.log('[发送] ==== 输入框内容 (promptText) ====')
   console.log(promptText.value)
 
-  console.log('[AI 按钮] ==== 输入框文档结构 (promptDoc, 含资源节点) ====')
+  console.log('[发送] ==== 输入框文档结构 (promptDoc, 含资源节点) ====')
   console.log(promptDoc.value)
 
-  console.log('[AI 按钮] ==== 资源列表 (connectedImages) ====')
+  console.log('[发送] ==== 资源列表 (connectedImages) ====')
   console.log(connectedImages.value)
 
-  console.log('[AI 按钮] ==== 下拉框值 ====')
+  console.log('[发送] ==== 下拉框值 ====')
   console.log({ selectedStyle: selectedStyle.value, selectedModel: selectedModel.value, selectedSize: selectedSize.value })
 
-  emit('action', 'ai', promptText.value)
+  emit('action', 'send', promptText.value)
 }
 
 /** 拦截 Delete/Backspace 键，防止 VueFlow 删除当前节点 */
@@ -445,11 +445,12 @@ function onEditorKeydown(e: KeyboardEvent) {
       <div class="toolbar-right">
         <!-- <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" /> -->
 
-        <button class="btn-ai" @click="onAi">
-          <svg class="ai-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        <button class="btn-send" title="发送" @click="onSend">
+          <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
-          <span class="ai-badge">1</span>
+          <span>发送</span>
         </button>
       </div>
     </div>
@@ -775,9 +776,9 @@ function onEditorKeydown(e: KeyboardEvent) {
   flex-shrink: 0;
 }
 
-/* ── AI 按钮 ── */
+/* ── 发送按钮 ── */
 
-.btn-ai {
+.btn-send {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -785,35 +786,22 @@ function onEditorKeydown(e: KeyboardEvent) {
   padding: 6px 10px 6px 8px;
   border: none;
   border-radius: 14px;
-  background: rgba(124, 58, 237, 0.08);
-  color: #7c3aed;
+  background: #2b6df2;
+  color: #fff;
   font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
-.btn-ai:hover {
-  background: rgba(124, 58, 237, 0.15);
+.btn-send:hover {
+  background: #1f57d4;
 }
 
-.ai-icon {
+.send-icon {
   width: 14px;
   height: 14px;
-}
-
-.ai-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  background: #7c3aed;
-  color: white;
-  font-size: 10px;
-  font-weight: 600;
-  border-radius: 8px;
 }
 </style>
