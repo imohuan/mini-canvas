@@ -12,6 +12,11 @@ export type { DropdownTrigger } from './AxDropdown.vue'
 export { default as AxSelect } from './AxSelect.vue'
 export { default as AxSwitch } from './AxSwitch.vue'
 export { default as AxSlider } from './AxSlider.vue'
+export { default as AxNotify } from './AxNotify.vue'
+
+// Notify（全局通用）
+export { notify, notifyQueue, dismissNotify, clearNotifies, notifySuccess, notifyError, notifyInfo, notifyWarning } from './notify'
+export type { AxNotifyItem, AxNotifyOptions } from './notify'
 
 // Hooks
 export { useFloating } from './hooks/useFloating'

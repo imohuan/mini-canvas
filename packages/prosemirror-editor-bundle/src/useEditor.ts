@@ -961,6 +961,24 @@ export function useEditor(
     view.focus()
   }
 
+  /**
+   * 用纯文本整体覆盖编辑器内容（覆盖式，非追加）。
+   * 供「模板选择」等外部场景直接替换输入框文字使用；
+   * 会同步 @ 资源节点解析与 update:modelValue。
+   */
+  function setText(text: string) {
+    if (!view) return
+    const trimmed = text ?? ''
+    const paragraphs = trimmed.split('\n').map((line) => {
+      const content = parsePlainTextToContent(line, unref(props.resolveResource))
+      return mySchema.node('paragraph', null, content.length > 0 ? content : undefined)
+    })
+    const doc = mySchema.node('doc', null, paragraphs.length > 0 ? paragraphs : [mySchema.node('paragraph')])
+    view.dispatch(view.state.tr.replaceWith(0, view.state.doc.content.size, doc.content))
+    emit('update:modelValue', getPlainText())
+    emit('update:promptDoc', doc.toJSON())
+  }
+
   return {
     // 菜单
     menuVisible, menuPosition, activeIndex,
@@ -979,5 +997,6 @@ export function useEditor(
     serializeDoc,
     deserializeDoc,
     focusEnd,
+    setText,
   };
 }

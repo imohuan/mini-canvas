@@ -10,7 +10,7 @@ const props = defineProps<{
   getValue: (id: string) => Ref<unknown>
 }>()
 
-const collapsed = ref(false)
+const collapsed = ref(true)
 </script>
 
 <template>

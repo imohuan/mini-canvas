@@ -10,8 +10,12 @@ import ImageExpander from './ImageExpander.vue'
 import ImageMasker from './ImageMasker.vue'
 import ImageBottomToolbar from './ImageBottomToolbar.vue'
 import type { ToolbarConfig } from './ImageBottomToolbar.vue'
+import ImageRunIndicator from './ImageRunIndicator.vue'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
 import { useCanvasStore } from '../../composables/useCanvasStore'
+import { getModel, executeRun } from './imageModels'
+import type { GenerationPayload, GenerationResult, RunProgress } from './imageModels'
+import { notifyError, notifySuccess } from '../../components/Ui'
 import { formatFileSize } from '../../utils/format'
 import type { MaskConfig } from '../../types/CanvasNodeData'
 
@@ -104,14 +108,18 @@ function defaultToolbarConfig(): ToolbarConfig {
   return {
     promptText: '',
     promptDoc: null,
-    selectedStyle: 'hollywood-retro',
-    selectedModel: 'anycook',
-    selectedSize: '9:16-3k',
+    selectedModel: 'chatgpt-gpt-image-2',
+    selectedRatio: '1:1',
+    selectedResolution: '',
+    selectedTemplate: '',
   }
 }
 
 /** 底部工具栏配置（v-model）— 统一存为节点 data.options，实现持久化 */
 const toolbarConfig = ref<ToolbarConfig>(defaultToolbarConfig())
+
+/** 本地编辑正在回写 data.options 的标志：覆盖 updateNode 的异步窗口，避免被 props 回读误回收 */
+let applyingLocal = false
 
 /** 序列化比较当前 toolbarConfig 与 data.options 是否一致（用于打破双向 watch 循环） */
 function sameAsToolbar(opts: unknown): boolean {
@@ -124,17 +132,26 @@ function sameAsToolbar(opts: unknown): boolean {
 /** 从节点 data.options 载入配置（合并默认值，保证字段齐全） */
 function initToolbarFromData() {
   const opts = props.data?.options as Partial<ToolbarConfig> | undefined
-  if (opts && typeof opts === 'object') {
-    toolbarConfig.value = { ...defaultToolbarConfig(), ...opts }
+  const merged = { ...defaultToolbarConfig(), ...opts }
+  // 迁移兜底：持久化的模型已不在注册表（如删除了的 anycook）→ 回落到默认有效模型，
+  // 避免工具栏卡在无法切换的失效值上
+  if (!getModel(merged.selectedModel)) {
+    merged.selectedModel = defaultToolbarConfig().selectedModel
+    merged.selectedRatio = defaultToolbarConfig().selectedRatio ?? merged.selectedRatio
+    merged.selectedResolution = defaultToolbarConfig().selectedResolution ?? ''
+    merged.selectedTemplate = defaultToolbarConfig().selectedTemplate ?? ''
   }
+  toolbarConfig.value = merged
 }
 initToolbarFromData()
 
-// 外部（如 MCP）设置 data.options → 同步到本地（值一致时说明是本组件回写，跳过避免循环）
+// 外部（如 MCP）设置 data.options → 同步到本地。
+// 值一致说明是本组件自己的回写回读，跳过；正在本地回写期间也跳过（覆盖异步窗口），避免覆盖刚改的值。
 watch(
   () => props.data?.options,
   (opts) => {
     if (!opts || typeof opts !== 'object') return
+    if (applyingLocal) return
     if (sameAsToolbar(opts)) return
     initToolbarFromData()
   },
@@ -143,11 +160,87 @@ watch(
 // 本地编辑 → 回写 data.options（用完整配置，避免字段丢失；持久化，刷新后恢复）
 watch(toolbarConfig, (val) => {
   const full = { ...defaultToolbarConfig(), ...val }
+  applyingLocal = true
   updateNode(props.id, { data: { ...props.data, options: full } })
+  // 稍后清标志：让 updateNode 的回读不被跳过处理（外部真正的改动此时应已能通过 sameAsToolbar 正确区分）
+  setTimeout(() => { applyingLocal = false }, 0)
 }, { deep: true })
 
-function onToolbarAction(action: string) {
-  if (action === 'more') {
+// ================= 生成运行态（由节点持有，节点常驻显示进度；成功/失败走全局 notify） =================
+
+export type ImageRunStatus = 'idle' | 'running' | 'success' | 'error'
+
+const runStatus = ref<ImageRunStatus>('idle')
+/** 运行中最新进度快照 */
+const runProgress = ref<RunProgress>({})
+/** 失败态错误信息（用于节点上常驻的失败提示） */
+const runError = ref('')
+/** 自增运行号：防止上一轮晚到的回调覆盖新一轮状态 */
+let runSeq = 0
+
+const isRunning = computed(() => runStatus.value === 'running')
+/** 进度条宽度（0-100）；后台只给阶段时回落为不确定动画 */
+const progressPercent = computed(() => {
+  const p = runProgress.value.progress
+  if (p === undefined || p === null || Number.isNaN(p)) return null
+  return Math.max(0, Math.min(100, p))
+})
+/** 是否需要在节点上常驻显示运行浮层（加载中 or 失败） */
+const showRunIndicator = computed(() => runStatus.value === 'running' || runStatus.value === 'error')
+
+/** 复位运行态（成功自动复位；失败由用户点「重试/关闭」触发） */
+function resetRun() {
+  runSeq += 1
+  runStatus.value = 'idle'
+  runProgress.value = {}
+  runError.value = ''
+}
+
+/** 执行一次生成（由工具栏点「发送」触发；执行/状态均在节点层，工具栏解耦） */
+async function runGeneration(payload: GenerationPayload) {
+  if (isRunning.value) return
+  const seq = ++runSeq
+  runStatus.value = 'running'
+  runProgress.value = {}
+  runError.value = ''
+
+  try {
+    const result: GenerationResult = await executeRun(payload, {
+      interval: 650,
+      timeoutMs: 120_000,
+      onProgress: (p) => {
+        if (seq !== runSeq) return
+        runProgress.value = p
+      },
+    })
+    if (seq !== runSeq) return
+
+    if (result.ok) {
+      runStatus.value = 'idle'
+      if (result.urls?.length) {
+        notifySuccess('已生成 1 张画面', { images: result.urls })
+      } else {
+        notifySuccess('生成完成')
+      }
+    } else {
+      runStatus.value = 'error'
+      runError.value = result.error || '生成失败，请重试'
+      notifyError(runError.value)
+      console.error('[ImageNode] 生成失败', payload.model, result.error)
+    }
+  } catch (err) {
+    if (seq !== runSeq) return
+    runStatus.value = 'error'
+    runError.value = err instanceof Error ? err.message : String(err) || '生成过程出现异常'
+    notifyError(runError.value)
+    console.error('[ImageNode] 生成异常', payload.model, err)
+  }
+}
+
+function onToolbarAction(action: string, value?: unknown) {
+  if (action === 'send') {
+    runGeneration(value as GenerationPayload)
+  } else if (action === 'more') {
     showExpandDialog.value = !showExpandDialog.value
   }
 }
@@ -228,10 +321,19 @@ function onToolbarAction(action: string) {
       </div>
     </template>
 
-    <!-- 底部工具栏：旋转/下载 -->
+    <!-- 底部工具栏 + 常驻运行进度浮层 -->
     <template #bottom-toolbar>
+      <!-- 生成运行进度/失败浮层：跟随节点顶部常驻显示（NodeToolbar 定位但不依赖选中，仅运行/失败可见） -->
+      <NodeToolbar v-if="showRunIndicator && !showExpandDialog" :node-id="id" :position="Position.Top" :offset="bottomOffset" :is-visible="showRunIndicator">
+        <ImageRunIndicator :running="isRunning" :progress="runProgress" :error="runError" :percent="progressPercent">
+          <template #actions>
+            <button class="run-indicator-btn" @click="resetRun">关闭</button>
+          </template>
+        </ImageRunIndicator>
+      </NodeToolbar>
+
       <NodeToolbar v-if="!showExpandDialog" :node-id="id" :position="Position.Bottom" :offset="bottomOffset">
-        <ImageBottomToolbar v-bind="$props" v-model="toolbarConfig" @action="onToolbarAction" />
+        <ImageBottomToolbar v-bind="$props" :config="toolbarConfig" :is-running="isRunning" @update:config="toolbarConfig = $event" @action="onToolbarAction" />
       </NodeToolbar>
     </template>
   </BaseNode>
@@ -241,7 +343,7 @@ function onToolbarAction(action: string) {
     <div v-if="showExpandDialog" class="expand-dialog-overlay" @click.self="showExpandDialog = false">
       <div class="expand-dialog">
         <div class="expand-dialog-body">
-          <ImageBottomToolbar v-bind="$props" v-model="toolbarConfig" :is-fullscreen="true" @action="onToolbarAction" />
+          <ImageBottomToolbar v-bind="$props" :config="toolbarConfig" :is-running="isRunning" :is-fullscreen="true" @update:config="toolbarConfig = $event" @action="onToolbarAction" />
         </div>
       </div>
     </div>
@@ -287,5 +389,20 @@ function onToolbarAction(action: string) {
 
 .expand-dialog-body .ProseMirror {
   min-height: 200px !important;
+}
+
+.run-indicator-btn {
+  flex-shrink: 0;
+  border: none;
+  background: rgba(220, 38, 38, 0.12);
+  color: #b91c1c;
+  font-size: 11px;
+  padding: 2px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.run-indicator-btn:hover {
+  background: rgba(220, 38, 38, 0.2);
 }
 </style>

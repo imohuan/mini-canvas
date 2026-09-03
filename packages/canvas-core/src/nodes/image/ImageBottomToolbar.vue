@@ -3,31 +3,53 @@ import type { NodeProps } from '@vue-flow/core'
 import { computed, ref, watch, nextTick } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
-import { AxSelect, AxButton } from '../../components/Ui'
+import { AxSelect } from '../../components/Ui'
 import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
 import type { SelectOption } from '../../components/Ui'
 import { useUpstreamResources } from '../../composables/useUpstreamResources'
 import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
+import {
+  type GenerationInputType,
+  type GenerationPayload,
+  getModel,
+  listModelOptions,
+  modelAcceptsInput,
+  ratioOptions,
+  resolutionOptions,
+  templatesForModel,
+} from './imageModels'
 
 export interface ToolbarConfig {
   promptText: string
   promptDoc?: any
-  selectedStyle: string
   selectedModel: string
-  selectedSize: string
+  /** 选中模型后使用的画面比例（仅模型声明 ratio 时存在） */
+  selectedRatio?: string
+  /** 选中模型后使用的分辨率档位（仅模型声明 resolution 时存在） */
+  selectedResolution?: string
+  /** 选中的模板 id（可选） */
+  selectedTemplate?: string
 }
 
 interface Props extends NodeProps {
   isFullscreen?: boolean
+  /** 工具栏完整配置（显式 model 绑定，避免 defineModel 在 VueFlow 渲染边界下的写回失效） */
+  config: ToolbarConfig
+  /** 是否正在生成（父节点持有运行态；true 时禁用下拉与发送并显示「生成中」） */
+  isRunning?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), { isFullscreen: false })
-
-const config = defineModel<ToolbarConfig>({ required: true })
+const props = withDefaults(defineProps<Props>(), { isFullscreen: false, isRunning: false })
 
 const emit = defineEmits<{
-  (e: 'action', action: string, value?: string): void
+  (e: 'action', action: string, value?: unknown): void
+  (e: 'update:config', value: ToolbarConfig): void
 }>()
+
+/** 统一的配置写入口：始终以「新对象」替换 config prop 并向上 emit（父组件持有真正状态） */
+function setConfig(patch: Partial<ToolbarConfig>): void {
+  emit('update:config', { ...props.config, ...patch })
+}
 
 // ── 连接的上游节点资源（图片 + 文本）→ 素材资源 ──
 
@@ -93,7 +115,10 @@ function previewMedia(kind: 'image' | 'video', url: string) {
 }
 
 const connectedImages = computed<ResourceItem[]>(() =>
-  upstreamResources.value.map((res, i) => {
+  upstreamResources.value
+    // 6A：@ 引用菜单按当前模型可接受资源类型过滤
+    .filter((res) => supportsKind(res.kind))
+    .map((res, i) => {
     // id 用上游节点唯一 id：@ 引用/序列化的稳定身份；name 只是 @ 下拉显示的文案
     const base = {
       id: res.id,
@@ -244,59 +269,66 @@ function getItemGlobalIndex(
   return -1
 }
 
-// ── 下拉选项 ──
+// ── 模型驱动下拉（中转逻辑）──
 
-const STYLE_OPTIONS: SelectOption[] = [
-  { label: '美式复古好莱坞', value: 'hollywood-retro' },
-  { label: '赛博朋克', value: 'cyberpunk' },
-  { label: '水墨画风', value: 'ink-wash' },
-  { label: '3D 渲染', value: '3d-render' },
-  { label: '日系动漫', value: 'anime' },
-  { label: '油画质感', value: 'oil-painting' },
-]
+/** 当前选中模型配置 */
+const currentModel = computed(() => getModel(props.config.selectedModel))
 
-const MODEL_OPTIONS: SelectOption[] = [
-  { label: '小云雀 AnyCook', value: 'anycook' },
-  { label: 'Stable Diffusion XL', value: 'sdxl' },
-  { label: 'Midjourney v6', value: 'mj6' },
-  { label: 'DALL·E 3', value: 'dalle3' },
-  { label: 'Flux.1 Pro', value: 'flux-pro' },
-]
+/** 模型下拉选项（来自 provider，永远渲染） */
+const modelOptions = computed<SelectOption[]>(() => listModelOptions())
 
-const SIZE_OPTIONS: SelectOption[] = [
-  { label: '9:16 · 3K', value: '9:16-3k' },
-  { label: '16:9 · 4K', value: '16:9-4k' },
-  { label: '1:1 · 2K', value: '1:1-2k' },
-  { label: '4:3 · 2K', value: '4:3-2k' },
-  { label: '3:2 · 3K', value: '3:2-3k' },
-  { label: '21:9 · 5K', value: '21:9-5k' },
-]
+/** 比例下拉选项（当前模型声明 ratio 才非空 → UI 才渲染） */
+const ratioDropdownOptions = computed<SelectOption[]>(() => ratioOptions(currentModel.value))
 
-// ── v-model 双向绑定字段 ──
+/** 分辨率下拉选项（当前模型声明 resolution 才非空 → UI 才渲染） */
+const resolutionDropdownOptions = computed<SelectOption[]>(() => resolutionOptions(currentModel.value))
+
+/** 模板下拉选项（全局共享，可按模型收窄） */
+const templateDropdownOptions = computed<SelectOption[]>(() =>
+  templatesForModel(props.config.selectedModel).map((t) => ({ label: t.name, value: t.id })),
+)
+
+/** 模型是否支持某资源类型（供 @ 引用候选过滤） */
+const supportsKind = (kind: GenerationInputType | 'text') => modelAcceptsInput(currentModel.value, kind)
+
+// ── 显式 v-model 双向字段（读 props.config / 写 setConfig → 父组件持有真状态）──
 
 const promptText = computed({
-  get: () => config.value.promptText,
-  set: (val: string) => { config.value = { ...config.value, promptText: val } },
+  get: () => props.config.promptText,
+  set: (val: string) => { setConfig({ promptText: val }) },
 })
 
 const promptDoc = computed({
-  get: () => config.value.promptDoc,
-  set: (val: any) => { config.value = { ...config.value, promptDoc: val } },
-})
-
-const selectedStyle = computed({
-  get: () => config.value.selectedStyle,
-  set: (val: string) => { config.value = { ...config.value, selectedStyle: val } },
+  get: () => props.config.promptDoc,
+  set: (val: any) => { setConfig({ promptDoc: val }) },
 })
 
 const selectedModel = computed({
-  get: () => config.value.selectedModel,
-  set: (val: string) => { config.value = { ...config.value, selectedModel: val } },
+  get: () => props.config.selectedModel,
+  set: (val: string) => {
+    // 原子更新：切模型同时清理该模型不声明的 ratio/resolution（3B 消失逻辑）。
+    // 必须用「本次选中的 val」判断而非 onModelChange 读 props（props 尚未刷新，读到旧模型会回写旧值覆盖本次切换）。
+    const m = getModel(val)
+    const patch: Partial<ToolbarConfig> = { selectedModel: val }
+    if (!m?.ratio?.length) patch.selectedRatio = ''
+    if (!m?.resolution?.length) patch.selectedResolution = ''
+    setConfig(patch)
+  },
 })
 
-const selectedSize = computed({
-  get: () => config.value.selectedSize,
-  set: (val: string) => { config.value = { ...config.value, selectedSize: val } },
+const selectedRatio = computed({
+  get: () => props.config.selectedRatio || '',
+  set: (val: string) => { setConfig({ selectedRatio: val }) },
+})
+
+const selectedResolution = computed({
+  get: () => props.config.selectedResolution || '',
+  set: (val: string) => { setConfig({ selectedResolution: val }) },
+})
+
+const selectedTemplate = computed({
+  get: () => props.config.selectedTemplate || '',
+  set: (val: string) => { setConfig({ selectedTemplate: val }) },
 })
 
 const inputAreaRef = ref<HTMLElement | null>(null)
@@ -327,25 +359,57 @@ function onMore() {
   emit('action', 'more')
 }
 
-function onInputAreaClick() {
-  editorRef.value?.focusEnd()
+/** 模板选择后：把该模板的提示词整体覆盖到输入框 */
+function onTemplateChange(val: string | number | (string | number)[]) {
+  const id = String(val)
+  setConfig({ selectedTemplate: id })
+  const tpl = templatesForModel(props.config.selectedModel).find((t) => t.id === id)
+  if (!tpl) return
+  setConfig({ promptText: tpl.prompt })
+  // 覆盖 ProseMirror 文档（富文本内容），编辑器暴露了 setText
+  editorRef.value?.setText(tpl.prompt)
+  emit('action', 'template-apply', tpl.prompt)
 }
 
+/** 切模型后的 ratio/resolution 清理已在 selectedModel setter 内原子完成（见上），此处不再单独处理 */
+
+// ================= 生成触发 =================
+// 运行态（进度显示 / 成功 / 失败 notify）由父节点 ImageNode 持有并驱动：
+//   - 工具栏把「点发送」组装成 payload 后 emit('action','send', payload)
+//   - ImageNode 执行 executeRun 并维护 runStatus/runProgress，
+//     且无论节点是否选中，都在节点上常驻渲染运行进度浮层（加载中/失败可见）
+// 工具栏只依赖 props.isRunning 禁用下拉与发送按钮。
+
+/** 发送：组装 payload 并交给父节点执行 */
 function onSend() {
-  // ── 收集并打印当前节点的全部相关数据（发送前自检） ──
-  console.log('[发送] ==== 输入框内容 (promptText) ====')
-  console.log(promptText.value)
+  if (props.isRunning) return
+  const payload: GenerationPayload = {
+    promptText: promptText.value,
+    promptDoc: promptDoc.value,
+    resources: connectedMediaResources.value,
+    model: props.config.selectedModel,
+    ratio: selectedRatio.value || undefined,
+    resolution: selectedResolution.value || undefined,
+    template: selectedTemplate.value || undefined,
+  }
+  emit('action', 'send', payload)
+}
 
-  console.log('[发送] ==== 输入框文档结构 (promptDoc, 含资源节点) ====')
-  console.log(promptDoc.value)
+/** 发送时随行的资源（已连接 + 当前模型接受），转为 GenerationResource */
+const connectedMediaResources = computed(() =>
+  upstreamResources.value
+    .filter((res) => modelAcceptsInput(currentModel.value, res.kind))
+    .map((res) => ({
+      id: res.id,
+      kind: res.kind as GenerationInputType | 'text',
+      name: res.name,
+      url: res.url || undefined,
+      value: res.value || undefined,
+    })),
+)
 
-  console.log('[发送] ==== 资源列表 (connectedImages) ====')
-  console.log(connectedImages.value)
-
-  console.log('[发送] ==== 下拉框值 ====')
-  console.log({ selectedStyle: selectedStyle.value, selectedModel: selectedModel.value, selectedSize: selectedSize.value })
-
-  emit('action', 'send', promptText.value)
+function onInputAreaClick() {
+  editorRef.value?.focusEnd()
 }
 
 /** 拦截 Delete/Backspace 键，防止 VueFlow 删除当前节点 */
@@ -424,7 +488,7 @@ function onEditorKeydown(e: KeyboardEvent) {
       </button>
     </div>
 
-    <!-- 底部工具栏 -->
+    <!-- 底部工具栏（运行进度在节点浮层 ImageNode 常驻显示，见 ImageNode / ImageRunIndicator） -->
     <div class="toolbar-row">
       <!-- 左侧 -->
       <div class="toolbar-left">
@@ -435,23 +499,30 @@ function onEditorKeydown(e: KeyboardEvent) {
         <!-- <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" /> -->
         <!-- <div class="toolbar-divider" /> -->
 
-        <AxSelect v-model="selectedStyle" :options="STYLE_OPTIONS" size="sm" placeholder="选择风格" trigger-width="110px" />
+        <!-- 模型选择：来自模型注册表，永远渲染；切模型时的 ratio/resolution 清理在 selectedModel setter 原子完成 -->
+        <AxSelect v-model="selectedModel" :options="modelOptions" size="sm" placeholder="选择模型" trigger-width="120px" :disabled="isRunning" />
 
-        <AxSelect v-model="selectedModel" :options="MODEL_OPTIONS" size="sm" placeholder="选择模型" trigger-width="130px" />
+        <!-- 比例选择：仅当当前模型声明 ratio 时渲染（否则整块消失） -->
+        <AxSelect v-if="ratioDropdownOptions.length > 0" v-model="selectedRatio" :options="ratioDropdownOptions" size="sm" placeholder="比例" trigger-width="80px" :disabled="isRunning" />
 
-        <AxSelect v-model="selectedSize" :options="SIZE_OPTIONS" size="sm" placeholder="选择尺寸" trigger-width="95px" />
+        <!-- 分辨率选择：仅当当前模型声明 resolution 时渲染（否则整块消失） -->
+        <AxSelect v-if="resolutionDropdownOptions.length > 0" v-model="selectedResolution" :options="resolutionDropdownOptions" size="sm" placeholder="分辨率" trigger-width="80px" :disabled="isRunning" />
+
+        <!-- 模板选择：全局共享；选中后把模板提示词覆盖到输入框 -->
+        <AxSelect v-model="selectedTemplate" :options="templateDropdownOptions" size="sm" placeholder="模板" trigger-width="90px" @change="onTemplateChange" :disabled="isRunning" />
       </div>
 
       <!-- 右侧 -->
       <div class="toolbar-right">
         <!-- <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" /> -->
 
-        <button class="btn-send" title="发送" @click="onSend">
-          <svg class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn-send" :class="{ running: isRunning }" :disabled="isRunning" title="发送" @click="onSend">
+          <span v-if="isRunning" class="btn-send-spinner" aria-hidden="true" />
+          <svg v-else class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="22" y1="2" x2="11" y2="13" />
             <polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
-          <span>发送</span>
+          <span>{{ isRunning ? '生成中' : '发送' }}</span>
         </button>
       </div>
     </div>
@@ -804,9 +875,36 @@ function onEditorKeydown(e: KeyboardEvent) {
   background: rgba(43, 109, 242, 0.18);
 }
 
+.btn-send:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-send.running {
+  background: rgba(43, 109, 242, 0.08);
+  color: #2b6df2;
+  gap: 5px;
+}
+
 .send-icon {
   width: 12px;
   height: 12px;
   flex-shrink: 0;
+}
+
+.btn-send-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(43, 109, 242, 0.25);
+  border-top-color: #2b6df2;
+  border-radius: 50%;
+  animation: gen-spin 0.7s linear infinite;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+@keyframes gen-spin {
+  to { transform: rotate(360deg); }
 }
 </style>
