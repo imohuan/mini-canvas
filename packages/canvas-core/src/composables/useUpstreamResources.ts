@@ -2,15 +2,15 @@ import { computed, type ComputedRef } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { Edge } from '@vue-flow/core'
 
-/** 上游资源的统一描述（图片 / 文本等），供 @ 菜单引用 */
+/** 上游资源的统一描述（图片 / 视频 / 文本等），供 @ 菜单引用 */
 export interface UpstreamResource {
-  /** 资源类型：image=有 url 的图片类；text=文本节点内容 */
-  kind: 'image' | 'text'
+  /** 资源类型：image=有 url 的图片类；video=视频节点；text=文本节点内容 */
+  kind: 'image' | 'video' | 'text'
   /** 显示名称（@ 时插入/反序列化的 key） */
   name: string
-  /** 图片类资源的 url；文本类为空字符串 */
+  /** 图片/视频类资源的 url；文本类为空字符串 */
   url: string
-  /** 文本类资源的文本内容；图片类为空字符串 */
+  /** 文本类资源的文本内容；图片/视频类为空字符串 */
   value: string
   /** 是否被连接进当前节点输入端口 */
   connected: true
@@ -53,6 +53,20 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
           kind: 'image',
           name: (data.imageName as string) || label || '素材',
           url,
+          value: '',
+          connected: true,
+        })
+        continue
+      }
+
+      // 视频类（video 节点：有 videoUrl）
+      const videoUrl = (data.videoUrl as string) || ''
+      if (videoUrl) {
+        seen.add(edge.source)
+        resources.push({
+          kind: 'video',
+          name: (data.videoName as string) || label || '视频',
+          url: videoUrl,
           value: '',
           connected: true,
         })
