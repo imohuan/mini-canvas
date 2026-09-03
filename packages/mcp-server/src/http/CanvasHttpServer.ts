@@ -28,6 +28,7 @@ import type { GraphModel } from '../graph/GraphModel'
 import type { GraphEvent } from '../graph/types'
 import type { NodeStorage } from '../storage/NodeStorage'
 import type { TaskManager } from '../tasks/TaskManager'
+import { createSemanticNode } from '../graph/semanticNodes'
 
 /** 单个 SSE 连接的待发送事件队列 */
 interface SseClient {
@@ -157,6 +158,19 @@ export class CanvasHttpServer {
           const { id: _id, ...rest } = u
           return { id: _id, patch: rest }
         }),
+      })
+      return c.json(result)
+    })
+
+    /** 语义化创建节点：POST /api/canvases/:id/create-node  { type, args, position? } */
+    this.app.post('/api/canvases/:id/create-node', async (c) => {
+      const id = c.req.param('id')
+      const body = await c.req.json().catch(() => ({}))
+      const result = createSemanticNode(this.model, this.taskManager, {
+        canvasId: id,
+        type: body.type,
+        args: body.args ?? {},
+        position: body.position,
       })
       return c.json(result)
     })

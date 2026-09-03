@@ -10,6 +10,7 @@ import type { GraphModel } from '../graph/GraphModel'
 import type { NodeStorage } from '../storage/NodeStorage'
 import type { TaskManager } from '../tasks/TaskManager'
 import { listGenerationModels } from '../models/ModelRegistry'
+import { createSemanticNode } from '../graph/semanticNodes'
 
 /** MCP 工具定义（给 list-tools 用，与 SDK 注册保持一致） */
 export interface McpTool {
@@ -24,6 +25,7 @@ const TOOL_LIST: McpTool[] = [
   { name: 'canvas.batch', description: '画布批量增删' },
   { name: 'canvas.batch_nodes', description: '画布节点批量增删改查（add/delete/update 合并）' },
   { name: 'canvas.batch_edges', description: '画布连线批量增删改查（add/delete/update 合并）' },
+  { name: 'create_node', description: '语义化创建节点（预览或生成任务）' },
   { name: 'canvas.create_node', description: '创建节点（图片/视频/音频/文本等）' },
   { name: 'canvas.list_nodes', description: '列出画布下所有节点' },
   { name: 'canvas.get_node', description: '获取单个节点' },
@@ -97,6 +99,34 @@ export function createMcpServer(
       const removed = model.deleteCanvas(taskId)
       await storage.deleteProject(taskId)
       return toText({ ok: removed, canvasId: taskId })
+    },
+  )
+
+  // ==================== 语义化创建（create_node） ====================
+
+  server.tool(
+    'create_node',
+    '语义化创建节点并（生成模式）提交后台任务。type=image/video/audio/text。' +
+      '用法一(预览/展示资源)：{ type:"image", args:{ path:"绝对路径" } } → 自动复用/新建展示节点，返回 nodeId。' +
+      '用法二(生成任务)：{ type:"image", args:{ prompt, model?, ratio?, resolution?, referenceImages?:[绝对路径...] } } → 后台按 referenceImages 自动复用/新建预览节点并连线到生成节点，然后提交生成任务。返回生成节点 nodeId + taskId。' +
+      '返回的 nodeId 可用 node.status / task.status 查询任务进度',
+    {
+      canvasId: z.string().describe('画布 id'),
+      type: z.enum(['image', 'video', 'audio', 'text']),
+      args: z.object({
+        path: z.string().optional().describe('预览/展示的本地媒体绝对路径'),
+        prompt: z.string().optional().describe('生成提示词'),
+        model: z.string().optional().describe('生成模型 id，如 doubao-seedream-45 / apimart-gpt-image-2'),
+        ratio: z.string().optional(),
+        resolution: z.string().optional(),
+        referenceImages: z.array(z.string()).optional().describe('生成模式的参考图绝对路径列表'),
+        label: z.string().optional().describe('节点标题'),
+      }),
+      position: z.object({ x: z.number(), y: z.number() }).optional(),
+    },
+    async ({ canvasId, type, args, position }) => {
+      const result = createSemanticNode(model, taskManager, { canvasId, type, args, position })
+      return toText(result)
     },
   )
 
