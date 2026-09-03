@@ -747,7 +747,7 @@ function onEditorKeydown(e: KeyboardEvent) {
   gap: 4px;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
+  /* overflow: hidden; */
 }
 
 /* 隐藏的原生文件选择框（onAdd 点击触发） */
