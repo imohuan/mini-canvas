@@ -656,6 +656,8 @@ function cancelTitleEdit() {
   font: inherit;
   line-height: 1.5;
   text-align: left;
+  user-select: text;
+  -webkit-user-select: text;
   color: var(--canvas-node-title, inherit);
   background: #fff;
   border: 1px solid var(--canvas-node-border-selected, rgba(59, 130, 246, 0.8));
