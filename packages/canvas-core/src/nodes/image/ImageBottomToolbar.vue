@@ -782,14 +782,17 @@ function onEditorKeydown(e: KeyboardEvent) {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px 6px 8px;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  box-sizing: border-box;
   border: none;
-  border-radius: 14px;
-  background: #2b6df2;
-  color: #fff;
-  font-size: 12px;
+  border-radius: 10px;
+  background: rgba(43, 109, 242, 0.1);
+  color: #2b6df2;
+  font-size: 11px;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -797,11 +800,12 @@ function onEditorKeydown(e: KeyboardEvent) {
 }
 
 .btn-send:hover {
-  background: #1f57d4;
+  background: rgba(43, 109, 242, 0.18);
 }
 
 .send-icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 </style>
