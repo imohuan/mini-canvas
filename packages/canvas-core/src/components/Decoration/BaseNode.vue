@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Position, useVueFlow } from '@vue-flow/core'
 import type { NodeProps, GraphNode } from '@vue-flow/core'
-import { computed, ref, shallowRef, watch, onUnmounted } from 'vue'
+import { computed, nextTick, ref, shallowRef, watch, onUnmounted } from 'vue'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import { useCanvasStore } from '../../composables/useCanvasStore'
@@ -433,6 +433,82 @@ const nodeLabel = computed(() => {
   return label || nt || '节点'
 })
 
+// ============ 标题就地重命名 ============
+
+/** 是否处于标题编辑态 */
+const isEditingTitle = ref(false)
+/** 标题编辑草稿（失焦/回车提交时才写回 data.label） */
+const draftTitle = ref('')
+/** 标题编辑输入框引用 */
+const titleInputRef = ref<HTMLInputElement | null>(null)
+
+/** 与 props.selected 同步：只在选中时挂/收 document 键盘监听，用于 F2 进入编辑 */
+watch(
+  () => props.selected,
+  (selected) => {
+    if (selected) document.addEventListener('keydown', onTitleEditKeydown)
+    else document.removeEventListener('keydown', onTitleEditKeydown)
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onTitleEditKeydown)
+})
+
+/**
+ * 全局 F2 键盘处理：当前节点被选中（无输入框等可编辑元素聚焦）时进入标题编辑。
+ */
+function onTitleEditKeydown(e: KeyboardEvent) {
+  if (e.key !== 'F2' || isEditingTitle.value) return
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  const tag = target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+  startTitleEdit()
+}
+
+/**
+ * 开启标题编辑：记录当前标题文字，下一帧聚焦并全选文字。
+ */
+function startTitleEdit() {
+  if (isEditingTitle.value) return
+  draftTitle.value = nodeLabel.value
+  isEditingTitle.value = true
+  nextTick(() => {
+    titleInputRef.value?.focus()
+    titleInputRef.value?.select()
+  })
+}
+
+/**
+ * 提交标题：去掉首尾空白；为空则删掉 data.label（让显示回落到类型/默认名）。
+ * 取消编辑时靠 skipBlurCommit 标志避免 blur 又触发一次提交。
+ */
+const skipBlurCommit = ref(false)
+
+function commitTitleEdit() {
+  if (skipBlurCommit.value) {
+    skipBlurCommit.value = false
+    return
+  }
+  const value = draftTitle.value.trim()
+  const next = value || undefined
+  vf.updateNode(props.id, {
+    data: {
+      ...props.data,
+      ...(next === undefined ? { label: undefined as unknown as string } : { label: next }),
+    },
+  })
+  isEditingTitle.value = false
+}
+
+/** 取消编辑：只关掉编辑态，不改写 label。 */
+function cancelTitleEdit() {
+  skipBlurCommit.value = true
+  isEditingTitle.value = false
+}
+
 </script>
 
 <template>
@@ -458,14 +534,26 @@ const nodeLabel = computed(() => {
       <!-- 标题放在卡片内部，继承卡片 3D transform；反向缩放保持原来的屏幕尺寸。 -->
       <div class="custom-node-title select-none nodrag nopan " :style="titlePositionStyle"
         @mouseenter="isHovered = false" @mouseleave="isHovered = true" @mousemove.stop @pointerdown.stop @pointerup.stop
-        @click.stop @dblclick.stop>
+        @click.stop @dblclick.stop="startTitleEdit">
         <slot name="title">
-          <BaseTitle :title-icon="nodeDef?.titleIcon" :label="nodeLabel">
+          <BaseTitle :interactive="true" :editing="isEditingTitle" :title-icon="nodeDef?.titleIcon" :label="nodeLabel">
             <template v-if="$slots['title-icon']" #title-icon>
               <slot name="title-icon" />
             </template>
             <template #title-label>
-              <slot name="title-label">
+              <input
+                v-if="isEditingTitle"
+                ref="titleInputRef"
+                v-model="draftTitle"
+                class="custom-node-title-input"
+                type="text"
+                @keydown.enter.prevent="commitTitleEdit"
+                @keydown.escape.prevent="cancelTitleEdit"
+                @blur="commitTitleEdit"
+                @pointerdown.stop
+                @dblclick.stop
+              >
+              <slot v-else name="title-label">
                 <!-- 节点名称：从 data.label 或 nodeType 自动生成 -->
                 <span class="truncate">{{ nodeLabel }}</span>
               </slot>
@@ -554,6 +642,26 @@ const nodeLabel = computed(() => {
   position: absolute;
   z-index: 1;
   display: flex;
+}
+
+/* 标题就地重命名输入框：悬在标题 label 位置，宽度随标题容器走，不超出节点 */
+.custom-node-title-input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 40px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 6px;
+  font: inherit;
+  line-height: 1.5;
+  text-align: left;
+  color: var(--canvas-node-title, inherit);
+  background: #fff;
+  border: 1px solid var(--canvas-node-border-selected, rgba(59, 130, 246, 0.8));
+  border-radius: 5px;
+  outline: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 /* selected — outline 叠加在 border 外侧，不挤压内容 */
