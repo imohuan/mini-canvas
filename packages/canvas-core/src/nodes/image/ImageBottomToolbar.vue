@@ -359,8 +359,8 @@ function onEditorKeydown(e: KeyboardEvent) {
   <div v-if="!hasOverlay" class="image-bottom-panel">
     <!-- 输入区域 — ProseMirrorEditor -->
     <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
-      <!-- 输入端口连接的媒体资源（图片/视频）→ 正方形小卡片展示，点击全屏预览 -->
-      <div v-if="connectedMediaCards.length" class="media-cards-row">
+      <!-- 输入端口连接的媒体资源（图片/视频）→ 正方形小卡片展示，点击全屏预览；末尾一个无意义的占位框 -->
+      <div class="media-cards-row">
         <div
           v-for="card in connectedMediaCards"
           :key="card.url + card.name"
@@ -374,6 +374,8 @@ function onEditorKeydown(e: KeyboardEvent) {
             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 5 19 12 8 19 8 5" /></svg>
           </span>
         </div>
+        <!-- 无任何意义的占位框 -->
+        <div class="media-card-placeholder"></div>
       </div>
       <div class="editor-wrapper" @keydown="onEditorKeydown">
         <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
@@ -544,6 +546,15 @@ function onEditorKeydown(e: KeyboardEvent) {
 .media-card-play svg {
   width: 14px;
   height: 14px;
+}
+
+/* 无意义的占位框（跟在卡片末尾） */
+.media-card-placeholder {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
 }
 
 .editor-wrapper {
