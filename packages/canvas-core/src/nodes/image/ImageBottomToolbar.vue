@@ -94,8 +94,9 @@ function previewMedia(kind: 'image' | 'video', url: string) {
 
 const connectedImages = computed<ResourceItem[]>(() =>
   upstreamResources.value.map((res, i) => {
+    // id 用上游节点唯一 id：@ 引用/序列化的稳定身份；name 只是 @ 下拉显示的文案
     const base = {
-      id: `connected-${i}`,
+      id: res.id,
       name: res.name || `素材${i + 1}`,
       category: '素材',
     }
@@ -183,9 +184,9 @@ const connectedImages = computed<ResourceItem[]>(() =>
   })
 )
 
-/** 根据名称查找素材，用于纯文本 @name 反序列化回 resource node */
-function resolveResource(name: string): ResourceItem | null {
-  return connectedImages.value.find(item => item.name === name) || null
+/** 纯文本里的 @token 即节点唯一 id，据此回查回 resource node */
+function resolveResource(token: string): ResourceItem | null {
+  return connectedImages.value.find(item => item.id === token) || null
 }
 
 /** mention-menu 定位：从 DOM selection 获取实际光标位置，修正 ProseMirror coordsAtPos 在 transform 容器下的偏差 */

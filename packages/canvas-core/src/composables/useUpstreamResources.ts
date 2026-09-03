@@ -4,9 +4,11 @@ import type { Edge } from '@vue-flow/core'
 
 /** 上游资源的统一描述（图片 / 视频 / 文本等），供 @ 菜单引用 */
 export interface UpstreamResource {
+  /** 上游图节点唯一 id（edge.source）。@ 引用/序列化的稳定身份 key。 */
+  id: string
   /** 资源类型：image=有 url 的图片类；video=视频节点；text=文本节点内容 */
   kind: 'image' | 'video' | 'text'
-  /** 显示名称（@ 时插入/反序列化的 key） */
+  /** 显示名称（@ 下拉菜单显示的 key）；只用于 UI，不参与身份判定 */
   name: string
   /** 图片/视频类资源的 url；文本类为空字符串 */
   url: string
@@ -50,6 +52,7 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
       if (url) {
         seen.add(edge.source)
         resources.push({
+          id: edge.source,
           kind: 'image',
           // 优先用节点标题 label（用户可重命名），未设置时才回退到文件名
           name: label || (data.imageName as string) || '素材',
@@ -65,6 +68,7 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
       if (videoUrl) {
         seen.add(edge.source)
         resources.push({
+          id: edge.source,
           kind: 'video',
           // 优先用节点标题 label（用户可重命名），未设置时才回退到文件名
           name: label || (data.videoName as string) || '视频',
@@ -80,6 +84,7 @@ export function useUpstreamResources(nodeId: string | null): ComputedRef<Upstrea
         const text = (data.text as string) || ''
         seen.add(edge.source)
         resources.push({
+          id: edge.source,
           kind: 'text',
           name: (data.label as string) || '文本',
           url: '',

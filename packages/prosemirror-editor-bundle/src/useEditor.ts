@@ -380,17 +380,17 @@ function createPasteHandlerPlugin(
   });
 }
 
-// 将纯文本（含 @name 标记）解析为 ProseMirror content 节点数组
-// 如果提供了 resolver，尝试将 @name 还原为 resource node；否则全当纯文本
+// 将纯文本（含 @id 标记）解析为 ProseMirror content 节点数组
+// 如果提供了 resolver，尝试将 @id 还原为 resource node；否则全当纯文本
 function parsePlainTextToContent(
   text: string,
-  resolver: ((name: string) => ResourceItem | null) | undefined,
+  resolver: ((token: string) => ResourceItem | null) | undefined,
 ): any[] {
   if (!resolver) {
     return text ? [mySchema.text(text)] : []
   }
   const content: any[] = []
-  // 匹配 @xxx，其中 xxx 为非空白字符序列
+  // 匹配 @xxx，其中 xxx 为资源节点唯一 id（非空白字符序列）
   const regex = /@(\S+)/g
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -399,8 +399,8 @@ function parsePlainTextToContent(
     if (match.index > lastIndex) {
       content.push(mySchema.text(text.slice(lastIndex, match.index)))
     }
-    const name = match[1]
-    const item = resolver(name)
+    const token = match[1]
+    const item = resolver(token)
     if (item) {
       content.push(mySchema.nodes.resource.create({
         id: item.id,
@@ -414,7 +414,7 @@ function parsePlainTextToContent(
       itemRegistry.set(item.id, item)
     } else {
       // 未解析到，保留为纯文本
-      content.push(mySchema.text(`@${name}`))
+      content.push(mySchema.text(`@${token}`))
     }
     lastIndex = regex.lastIndex
   }
@@ -431,7 +431,7 @@ export function useEditor(
     modelValue?: Ref<string | undefined>
     promptDoc?: Ref<any | undefined>
     resources?: Ref<ResourceItem[] | undefined>
-    resolveResource?: Ref<((name: string) => ResourceItem | null) | undefined>
+    resolveResource?: Ref<((token: string) => ResourceItem | null) | undefined>
   },
   emit: {
     (e: "update:modelValue", value: string): void
@@ -478,7 +478,8 @@ export function useEditor(
     let text = "";
     view.state.doc.descendants((node) => {
       if (node.type.name === "resource") {
-        text += `@${node.attrs.name} `;
+        // 纯文本 token 用节点唯一 id（改名稳定）；可读 name 只在文档/下拉展示
+        text += `@${node.attrs.id} `;
       } else if (node.isText) {
         // 过滤掉零宽空格（用于修复光标问题）
         text += node.text?.replace(/\u200B/g, "") || "";
@@ -495,7 +496,8 @@ export function useEditor(
     let text = "";
     view.state.doc.descendants((node) => {
       if (node.type.name === "resource") {
-        text += node.attrs.value ? node.attrs.value : `@${node.attrs.name} `;
+        // 文本资源导出其正文；图片/视频导出节点 id token
+        text += node.attrs.value ? node.attrs.value : `@${node.attrs.id} `;
       } else if (node.isText) {
         text += node.text?.replace(/\u200B/g, "") || "";
       } else if (node.isBlock && text.length > 0) {
@@ -858,7 +860,7 @@ export function useEditor(
         function collect(fragment: any) {
           fragment.forEach((node: any) => {
             if (node.type.name === "resource") {
-              text += `@${node.attrs.name} `;
+              text += `@${node.attrs.id} `;
             } else if (node.isText) {
               // 过滤掉零宽空格
               text += node.text?.replace(/\u200B/g, "") || "";
