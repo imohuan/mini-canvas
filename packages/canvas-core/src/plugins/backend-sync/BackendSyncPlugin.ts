@@ -1,5 +1,6 @@
 import type { CanvasPlugin, PluginContext, CanvasActions } from '../types'
 import type { Node, Edge } from '@vue-flow/core'
+import { Position } from '@vue-flow/core'
 import { BackendRest, withAbsolutizedUrls } from './rest'
 import { BackendSse } from './sse'
 
@@ -65,6 +66,10 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
     let sse: BackendSse | null = null
     let applyingRemote = false
     let flushTimer: ReturnType<typeof setTimeout> | null = null
+    // 去重：同画布重复 connect 会造成 replaceAll 二次全量清空重放（节点先删后加、边被延后丢弃）。
+    // 已有 target 且已连接/连接中时，后续同 target 的 connect 直接复用，避免并发双 load。
+    let loadedCanvas: string | null = null
+    let connectInFlight: Promise<void> | null = null
 
     const externalListeners = new Map<string, Set<(...args: any[]) => void>>()
 
@@ -83,10 +88,28 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
       for (const h of externalListeners.get(event) ?? []) h(payload)
     }
 
-    // ===== 节点字段 URL 补全 =====
+    // ===== 节点字段 URL 补全 + handle 位置 =====
+    // 后端不持久化 VueFlow 的 sourcePosition/targetPosition；而 isValidConnection 依赖节点这两个
+    // 字段（由 Handle 挂载后测得，但对自渲染自定义节点 VueFlow 不会回写到节点顶层）。若不补，
+    // 后端拉回/新建的节点无法连边（“An edge needs a source and a target”）。
+    // 对齐应用内约定（见 useCanvasBootstrap / panorama 插件）：输入节点目标在左、输出源在右。
+    function nodeHandlePositions(n: Node): { sourcePosition?: Position; targetPosition?: Position } {
+      const type = (n.data as any)?.nodeType ?? (n.type as string)
+      switch (type) {
+        case 'image':
+        case 'video':
+        case 'panorama':
+        case 'image-compare':
+          return { sourcePosition: Position.Right, targetPosition: Position.Left }
+        default:
+          // text 等无连接口，返回空即可
+          return {}
+      }
+    }
     function absolutizeNode(n: Node): Node {
       if (!n.data) return n
-      return { ...n, data: withAbsolutizedUrls(baseUrl, n.data) }
+      const extra = nodeHandlePositions(n)
+      return { ...n, data: withAbsolutizedUrls(baseUrl, n.data), ...extra }
     }
 
     // ===== 全量替换 =====
@@ -98,10 +121,45 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
         if (curNodes.length) actions.removeNodes(curNodes)
         if (curEdges.length) actions.removeEdges(curEdges)
         if (nodes.length) actions.addNodes(nodes.map(absolutizeNode))
-        if (edges.length) actions.addEdges(edges)
+        if (edges.length) addEdgesWhenReady(edges)
       } finally {
         applyingRemote = false
       }
+    }
+
+    // ===== 边延迟添加（兜底） =====
+    // 正常路径里节点已带 sourcePosition/targetPosition（见 absolutizeNode），边可立即加入。
+    // 此处仅当两端节点尚未被前端索引到（例如边先于其源/目标节点到达）时，稍后重试，避免漏连。
+    const edgeRetryState = new Map<string, number>()
+    const edgeRetryTimers = new Set<ReturnType<typeof setTimeout>>()
+    function edgeEndpointsReady(e: Edge): boolean {
+      const src = actions.getNodes().find((n: Node) => n.id === e.source)
+      const tgt = actions.getNodes().find((n: Node) => n.id === e.target)
+      return !!src && !!tgt && !!src.sourcePosition && !!tgt.targetPosition
+    }
+    function addEdgesWhenReady(edges: Edge[]): void {
+      const ready: Edge[] = []
+      const pending: Edge[] = []
+      for (const e of edges) {
+        if (edgeEndpointsReady(e)) ready.push(e)
+        else pending.push(e)
+      }
+      if (ready.length) actions.addEdges(ready)
+      for (const e of pending) {
+        const attempt = (edgeRetryState.get(e.id) ?? 0) + 1
+        edgeRetryState.set(e.id, attempt)
+        if (attempt > 40) { edgeRetryState.delete(e.id); continue }
+        const t = setTimeout(() => {
+          edgeRetryTimers.delete(t)
+          addEdgesWhenReady([e])
+        }, 60)
+        edgeRetryTimers.add(t)
+      }
+    }
+    function clearEdgeRetries(): void {
+      for (const t of edgeRetryTimers) clearTimeout(t)
+      edgeRetryTimers.clear()
+      edgeRetryState.clear()
     }
 
     // ===== 下行：SSE 增量应用到本地（无损：只针对目标节点/边，不整 reload） =====
@@ -136,7 +194,7 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
           }
           case 'edge:added': {
             if (evt.edge && !actions.getEdges().some((e: Edge) => e.id === evt.edge.id)) {
-              actions.addEdges([evt.edge])
+              addEdgesWhenReady([evt.edge])
             }
             break
           }
@@ -207,7 +265,13 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
       if (applyingRemote || !connected) return
       let changed = false
       for (const c of changes ?? []) {
-        if (c.type === 'add') { changed = true }
+        if (c.type === 'add') {
+          // nodesChange 的 add change 只带 id，需从当前节点表取整对象用于上传
+          const item = (c as any).item
+          const nodeObj = (item as Node) ?? actions.getNodes().find((n: Node) => n.id === (c as any).id)
+          if (nodeObj && !pending.nodeAdd.has(nodeObj.id)) pending.nodeAdd.set(nodeObj.id, nodeObj)
+          changed = true
+        }
         else if (c.type === 'remove') { pending.nodeRemove.add(c.id); changed = true }
         else if (c.type === 'position' && !c.dragging) {
           // 非拖拽程序化位移（少见）；由 nodeDragStop 处理最终拖拽位置
@@ -267,32 +331,45 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
     }
 
     async function connect(cid?: string): Promise<void> {
-      syncLoading(true)
-      try {
-        const cvs = await rest.listCanvases()
-        canvases = cvs.canvases
-        syncControl()
-        let target = cid ?? canvasId
-        if (!target || !canvases.some((c) => c.id === target)) {
-          target = canvases[0]?.id ?? null
-        }
-        if (!target) {
+      // 串行化并发 connect：同画布重复触发（插件自动连接 + 视图手动连接）只真正加载一次
+      const run = async (): Promise<void> => {
+        syncLoading(true)
+        try {
+          const cvs = await rest.listCanvases()
+          canvases = cvs.canvases
+          syncControl()
+          let target = cid ?? canvasId
+          if (!target || !canvases.some((c) => c.id === target)) {
+            target = canvases[0]?.id ?? null
+          }
+          if (!target) {
+            connected = false
+            syncControl({ connected: false, error: '后台没有画布，请先 create_canvas' })
+            emitBus('backend-sync:state', { connected: false, error: '后台没有画布，请先 create_canvas' })
+            return
+          }
+          // 已加载过同一画布：只刷新画布列表，不整画布重放（避免节点先删后加、边被延后丢弃）
+          if (connected && loadedCanvas === target && sse) {
+            syncControl({ error: null })
+            emitBus('backend-sync:state', { connected: true, canvasId: target })
+            return
+          }
+          connected = true
+          await loadCanvas(target)
+          loadedCanvas = target
+          syncControl({ error: null })
+          emitBus('backend-sync:state', { connected: true, canvasId: target })
+        } catch (err) {
           connected = false
-          syncControl({ connected: false, error: '后台没有画布，请先 create_canvas' })
-          emitBus('backend-sync:state', { connected: false, error: '后台没有画布，请先 create_canvas' })
-          return
+          syncControl({ connected: false, error: (err as Error).message })
+          context.logger.error('[backend-sync] connect 失败:', err)
+        } finally {
+          syncLoading(false)
         }
-        connected = true
-        await loadCanvas(target)
-        syncControl({ error: null })
-        emitBus('backend-sync:state', { connected: true, canvasId: target })
-      } catch (err) {
-        connected = false
-        syncControl({ connected: false, error: (err as Error).message })
-        context.logger.error('[backend-sync] connect 失败:', err)
-      } finally {
-        syncLoading(false)
       }
+      const prev = connectInFlight
+      connectInFlight = (prev ? prev.then(run, run) : run())
+      await connectInFlight
     }
 
     async function switchCanvas(cid: string): Promise<void> {
@@ -300,6 +377,7 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
       try {
         connected = true
         await loadCanvas(cid)
+        loadedCanvas = cid
         syncControl({ error: null })
         emitBus('backend-sync:state', { connected: true, canvasId: cid })
       } catch (err) {
@@ -312,8 +390,10 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
 
     function disconnect(): void {
       if (flushTimer) clearTimeout(flushTimer)
+      clearEdgeRetries()
       sse?.close(); sse = null
       connected = false
+      loadedCanvas = null
       syncControl()
     }
 
@@ -335,12 +415,16 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
       },
     }
 
+    // 立即发布 control.api（含未连接状态），让视图侧随时能调 connect()
+    syncControl()
+
     // install 结束时：若给了默认 canvasId 且标记自动连接，则异步连接（不阻塞 install）
     if (options.canvasId || canvasId) {
       void connect(options.canvasId).catch((err) => context.logger.error('[backend-sync] 自动连接失败:', err))
     } else {
       // 无目标画布：仅标记可用，等待外部调 connect()
       connected = false
+      syncControl()
     }
 
     return {
