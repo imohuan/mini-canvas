@@ -653,8 +653,10 @@ function cancelTitleEdit() {
   max-width: 100%;
   margin: 0;
   padding: 0 6px;
+  height: 16px;
   font: inherit;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 16px;
   text-align: left;
   user-select: text;
   -webkit-user-select: text;
