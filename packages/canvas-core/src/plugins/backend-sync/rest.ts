@@ -82,5 +82,14 @@ export function withAbsolutizedUrls(baseUrl: string, nodeData: Record<string, un
   for (const k of urlKeys) {
     if (typeof out[k] === 'string') out[k] = absolutizeMedia(baseUrl, out[k])
   }
+  // runState 里的结果 url 也要补全（后台结果落在 runState.urls / runState.imageUrl，
+  // ImageNode 会把首个结果抬升到顶层 data.imageUrl 供 <img> 展示，必须已是绝对可访问 URL）
+  const rs = out.runState
+  if (rs && typeof rs === 'object') {
+    const rso: Record<string, unknown> = { ...(rs as Record<string, unknown>) }
+    if (typeof rso.imageUrl === 'string') rso.imageUrl = absolutizeMedia(baseUrl, rso.imageUrl)
+    if (Array.isArray(rso.urls)) rso.urls = rso.urls.map((u) => absolutizeMedia(baseUrl, u))
+    out.runState = rso
+  }
   return out
 }

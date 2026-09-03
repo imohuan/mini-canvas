@@ -235,21 +235,59 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
     async function flushNow(): Promise<void> {
       if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
       if (!connected || !canvasId) return
+      // 快照待发分片
       const nAdd = [...pending.nodeAdd.values()].map(normalizeNodeForUp)
+      const nAddIds = nAdd.map((n) => n.id as string)
       const nDel = [...pending.nodeRemove]
       const nUpd: any[] = [...pending.nodePos.entries()].map(([id, pos]) => ({ id, position: pos }))
+      const nUpdIds = nUpd.map((u) => u.id as string)
       const eAdd = [...pending.edgeAdd.values()]
+      const eAddIds = eAdd.map((e) => (e.id ?? `${e.source}__${e.target}`) as string)
       const eDel = [...pending.edgeRemove]
-      pending.nodeAdd.clear(); pending.nodeRemove.clear(); pending.nodePos.clear(); pending.edgeAdd.clear(); pending.edgeRemove.clear()
+      // 只清掉本次已快照的项；flush await 期间新到达的改动保留（由新 timer 再 flush）
+      for (const id of nAddIds) pending.nodeAdd.delete(id)
+      for (const id of nDel) pending.nodeRemove.delete(id)
+      for (const id of nUpdIds) pending.nodePos.delete(id)
+      for (const id of eAddIds) pending.edgeAdd.delete(id)
+      for (const id of eDel) pending.edgeRemove.delete(id)
+      let nodesOk = true
+      let edgesOk = true
       try {
         if (nAdd.length || nDel.length || nUpd.length) {
           await rest.batchNodes(canvasId, { add: nAdd, delete: nDel, update: nUpd })
         }
+      } catch (err) {
+        nodesOk = false
+        // 失败回填，等下一次 flush 重试（不静默丢改动）
+        context.logger.error('[backend-sync] 上行节点保存失败（已回填待重试）:', err)
+      }
+      try {
         if (eAdd.length || eDel.length) {
           await rest.batchEdges(canvasId, { add: eAdd, delete: eDel })
         }
       } catch (err) {
-        context.logger.error('[backend-sync] 上行保存失败（数据仅本地保留，稍后重试）:', err)
+        edgesOk = false
+        context.logger.error('[backend-sync] 上行连线保存失败（已回填待重试）:', err)
+      }
+      // 失败的节点/边改动重新入队（add 需整对象，从当前节点表取）
+      if (!nodesOk) {
+        for (const id of nDel) pending.nodeRemove.add(id)
+        for (const id of nUpdIds) {
+          const pos = pending.nodePos.get(id) ?? (nUpd.find((u) => u.id === id) as any)?.position
+          if (pos) pending.nodePos.set(id, pos)
+        }
+        for (const add of nAdd) {
+          const nodeObj = actions.getNodes().find((n: Node) => n.id === add.id)
+          if (nodeObj) pending.nodeAdd.set(nodeObj.id, nodeObj)
+          else pending.nodeAdd.set(add.id as string, add)
+        }
+      }
+      if (!edgesOk) {
+        for (const id of eDel) pending.edgeRemove.add(id)
+        for (const ed of eAdd) pending.edgeAdd.set(ed.id ?? `${ed.source}__${ed.target}`, ed)
+      }
+      if ((!nodesOk || !edgesOk) && (pending.nodeAdd.size + pending.nodeRemove.size + pending.nodePos.size + pending.edgeAdd.size + pending.edgeRemove.size > 0)) {
+        scheduleFlush()
       }
     }
 
@@ -272,7 +310,13 @@ export const BackendSyncPlugin: CanvasPlugin<BackendSyncOptions, BackendSyncAPI>
           if (nodeObj && !pending.nodeAdd.has(nodeObj.id)) pending.nodeAdd.set(nodeObj.id, nodeObj)
           changed = true
         }
-        else if (c.type === 'remove') { pending.nodeRemove.add(c.id); changed = true }
+        else if (c.type === 'remove') {
+          // 防抖窗口内同节点 add+remove 并发：以删除为准，清掉 add/pos，避免上行 add+delete 交叠产生幽灵节点
+          pending.nodeRemove.add(c.id)
+          pending.nodeAdd.delete(c.id)
+          pending.nodePos.delete(c.id)
+          changed = true
+        }
         else if (c.type === 'position' && !c.dragging) {
           // 非拖拽程序化位移（少见）；由 nodeDragStop 处理最终拖拽位置
           if (c.position) { pending.nodePos.set(c.id, c.position); changed = true }

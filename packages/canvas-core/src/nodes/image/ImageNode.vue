@@ -196,6 +196,11 @@ function resetRun() {
 /** 执行一次生成（由工具栏点「发送」触发；执行/状态均在节点层，工具栏解耦） */
 async function runGeneration(payload: GenerationPayload) {
   if (isRunning.value) return
+  // 本地发送与后台驱动互斥（R6）：若节点挂着外部 runState，先清掉它，让本轮本地运行接管指示器，
+  // 避免外部 error 浮层遮住本地进度、也防止两条驱动并存
+  if (props.data?.runState) {
+    updateNode(props.id, { data: { ...props.data, runState: undefined } })
+  }
   const seq = ++runSeq
   runStatus.value = 'running'
   runProgress.value = {}
@@ -306,6 +311,9 @@ watch(
       })
     }
   },
+  // immediate：后台只落 data.runState，顶层 imageUrl 由这里抬升。刷新/SSE 重连 reconcile 拉回的节点
+  // 首次挂载即已是 done，若不 immediate 则无"done 转变"触发，结果图会空白（违"刷新不丢"）。
+  { immediate: true },
 )
 
 /** 该 url 是否已是当前节点展示图（避免写同值循环回播） */
