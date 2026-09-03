@@ -8,7 +8,6 @@ import {
 import type { Node, Edge, EdgeChange, NodeMouseEvent, EdgeMouseEvent } from '@vue-flow/core'
 import DynamicSettingsPanel from './components/Panel/DynamicSettingsPanel.vue'
 import CanvasPerformancePanel from './components/Performance/CanvasPerformancePanel.vue'
-import { AxNotify } from './components/Ui'
 import SelectionFrame from './plugins/multi-select/SelectionFrame.vue'
 import CustomEdge from './components/CustomEdge.vue'
 import { useCanvasStore } from './composables/useCanvasStore'
@@ -700,9 +699,6 @@ onUnmounted(async () => {
         @pan="(vp: any) => vueFlowInstance.setViewport(vp)" @batch-connect-start="conn.onSelectionBatchConnectStart" />
     </div>
   </CanvasRuntimeProvider>
-
-  <!-- 全局 notify 宿主（右上角 toast 栈，供全应用统一使用） -->
-  <AxNotify />
 </template>
 
 <style scoped>

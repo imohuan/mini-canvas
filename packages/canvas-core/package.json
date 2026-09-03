@@ -21,7 +21,8 @@
     "./*": "./src/*"
   },
   "dependencies": {
-    "prosemirror-editor-bundle": "workspace:*"
+    "prosemirror-editor-bundle": "workspace:*",
+    "vue-sonner": "^2.0.9"
   },
   "peerDependencies": {
     "@dagrejs/dagre": "^3.0.0",

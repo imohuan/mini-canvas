@@ -1,96 +1,82 @@
 /**
- * AxNotify —— 全局通用 notify 控制器（无组件依赖，任意处可直接 import 调用）。
+ * AxNotify —— 基于 vue-sonner 的自定义 toast 控制器。
  *
- * 用法：
- *   import { notify, notifySuccess, notifyError, notifyInfo, notifyWarning } from './notify'
- *   notifySuccess('已保存')
- *   notifyError('保存失败：网络异常')
- *   notifyInfo('正在同步…', { duration: 0 })
- *   notifyWarning('磁盘空间不足')
- *   // 或底层：
- *   notify({ type: 'error', title: '生成失败', text: '...', duration: 5000 })
+ * 底层是 vue-sonner 单例，但**不用** vue-sonner 原生 success/error 样式，
+ * 而是统一通过 `toast.custom(markRaw(AxToast), ...)` 渲染我们自己的 <AxToast />，
+ * 从而让所有通知都保持 AxNotify 的自定义外观（类型图标 + 配色 + 缩略图）。
  *
- * 展示由 <AxNotifyHost /> 完成：宿主组件只需在应用根渲染一次，
- * 它会订阅本模块的响应式队列，把每条通知渲染成右上角浮动 toast。
- * notify() 与宿主解耦 —— 即使宿主尚未挂载，消息也会先入队，挂载后统一补显示。
+ * 展示需在应用根挂载一次 <Toaster />（见 Canvas.vue），并一次性引入 'vue-sonner/style.css'。
+ * 容器/堆叠/进出场动画/滑动关闭/自动关闭(duration) 交给 vue-sonner；
+ * 卡片外观与「消息/说明/缩略图/关闭按钮」由 AxToast 自行渲染（onCloseToast 由 vue-sonner 注入）。
+ *
+ * 用法（既有调用面保持不变）：
+ *   import { notifySuccess, notifyError } from './notify'
+ *   notifySuccess('已生成 1 张画面', { images: urls })
+ *   notifyError('生成失败')
+ *   notifyInfo('正在同步…', { duration: Infinity })
  */
-import type { AlertType } from './types'
-import { reactive } from 'vue'
+import { markRaw } from 'vue'
+import { toast } from 'vue-sonner'
+import type { ExternalToast } from 'vue-sonner'
+import AxToast from './AxToast.vue'
 
-export interface AxNotifyItem {
-  id: number
-  type: Exclude<AlertType, ''> // 'info' | 'success' | 'warning' | 'error'
-  /** 标题（如「生成失败」）；缺省时按 type 给默认标题 */
-  title?: string
-  /** 正文 */
-  text: string
-  /** 可选缩略图/图片列表（如生成结果图），仅用于展示 */
-  images?: string[]
-  /** 停留时长 ms；0 = 不自动关闭 */
-  duration?: number
-}
+/** 通知类型：info/success/warning/error（语义等同 AlertType） */
+export type AxNotifyType = 'info' | 'success' | 'warning' | 'error'
 
 export interface AxNotifyOptions {
-  type?: AxNotifyItem['type']
-  title?: string
-  text: string
+  /** 主文案（必填——由各便捷方法的第一个参数带入） */
+  message?: string
+  /** 次要说明文字（渲染在 message 下方） */
+  description?: string
+  /** 可选缩略图列表（如生成结果图），以图片行展示在正文下方 */
   images?: string[]
+  /** 停留时长 ms；Infinity = 不自动关闭。缺省用 vue-sonner 默认时长 */
   duration?: number
 }
 
-const DEFAULT_DURATION = 4000
-const DEFAULT_TITLES: Record<AxNotifyItem['type'], string> = {
-  info: '提示',
-  success: '成功',
-  warning: '警告',
-  error: '错误',
-}
-
-/** 通知队列（响应式，供 AxNotifyHost 渲染）—— 必须是 reactive Map，否则宿主不会感知新增 */
-export const notifyQueue: Map<number, AxNotifyItem> = reactive(new Map<number, AxNotifyItem>())
-let seq = 0
-
-/** 主动移除一条通知 */
-export function dismissNotify(id: number): void {
-  notifyQueue.delete(id)
-}
-
-/** 清空全部通知 */
-export function clearNotifies(): void {
-  notifyQueue.clear()
-}
-
-/** 核心入口：入队一条通知并返回其 id */
-export function notify(options: AxNotifyOptions): number {
-  const id = ++seq
-  const type = options.type ?? 'info'
-  notifyQueue.set(id, {
-    id,
+/** 组装 toast.custom 所需的 componentProps（AxToast 的入参） */
+function buildComponentProps(
+  message: string,
+  type: AxNotifyType,
+  options?: AxNotifyOptions,
+): ExternalToast['componentProps'] & { type: AxNotifyType; message: string } {
+  return {
     type,
-    title: options.title ?? DEFAULT_TITLES[type],
-    text: options.text,
-    images: options.images,
-    duration: options.duration,
-  })
-
-  // 自动关闭（duration=0 常驻）
-  if (options.duration !== 0) {
-    const ms = options.duration ?? DEFAULT_DURATION
-    window.setTimeout(() => dismissNotify(id), ms)
+    message,
+    description: options?.description,
+    images: options?.images,
   }
-  return id
 }
 
-/** 便捷别名 */
-export function notifySuccess(text: string, opts?: Omit<AxNotifyOptions, 'type' | 'text'>): number {
-  return notify({ ...opts, type: 'success', text })
+/** 核心入口：渲染一条自定义 AxToast 通知并返回其 id */
+export function notify(message: string, options?: AxNotifyOptions & { type?: AxNotifyType }): string | number {
+  const type = (options?.type ?? 'info') as AxNotifyType
+  return toast.custom(markRaw(AxToast), {
+    componentProps: buildComponentProps(message, type, options),
+    duration: options?.duration,
+  })
 }
-export function notifyError(text: string, opts?: Omit<AxNotifyOptions, 'type' | 'text'>): number {
-  return notify({ ...opts, type: 'error', text })
+
+/** 便捷别名（第一个参数为主文案；opts 不含 type） */
+export function notifySuccess(message: string, opts?: AxNotifyOptions): string | number {
+  return notify(message, { ...opts, type: 'success' })
 }
-export function notifyInfo(text: string, opts?: Omit<AxNotifyOptions, 'type' | 'text'>): number {
-  return notify({ ...opts, type: 'info', text })
+export function notifyError(message: string, opts?: AxNotifyOptions): string | number {
+  return notify(message, { ...opts, type: 'error' })
 }
-export function notifyWarning(text: string, opts?: Omit<AxNotifyOptions, 'type' | 'text'>): number {
-  return notify({ ...opts, type: 'warning', text })
+export function notifyInfo(message: string, opts?: AxNotifyOptions): string | number {
+  return notify(message, { ...opts, type: 'info' })
+}
+export function notifyWarning(message: string, opts?: AxNotifyOptions): string | number {
+  return notify(message, { ...opts, type: 'warning' })
+}
+
+/** 主动关闭某条 toast（id 来自 notify 系列或 toast 调用的返回值）；不传 id 则关闭全部 */
+export function dismissNotify(id?: string | number): void {
+  toast.dismiss(id)
+}
+
+/** 清空当前所有 toast */
+export function clearNotifies(): void {
+  toast.dismiss()
 }

@@ -7,6 +7,11 @@ import {
   AxSelect,
   AxSwitch,
   AxSlider,
+  notifySuccess,
+  notifyError,
+  notifyInfo,
+  notifyWarning,
+  clearNotifies,
 } from '@mini-canvas/canvas-core/components/Ui'
 import type { SelectOption } from '@mini-canvas/canvas-core/components/Ui/types'
 
@@ -48,6 +53,45 @@ const menuActionLog = ref<string[]>([])
 const addMenuLog = (action: string) => {
   menuActionLog.value.unshift(`[${new Date().toLocaleTimeString()}] ${action}`)
   if (menuActionLog.value.length > 5) menuActionLog.value.pop()
+}
+
+// ── Notify demo handlers ──
+const demoThumb =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112"><rect width="112" height="112" fill="#dbeafe"/><circle cx="56" cy="56" r="32" fill="#3b82f6"/></svg>',
+  )
+
+const showNotify = (type: 'info' | 'success' | 'warning' | 'error') => {
+  const map = {
+    info: notifyInfo,
+    success: notifySuccess,
+    warning: notifyWarning,
+    error: notifyError,
+  }
+  const titles = {
+    info: '这是一条信息提示',
+    success: '操作成功，已生成 1 张画面',
+    warning: '磁盘空间即将不足，请及时清理',
+    error: '生成失败：服务暂不可用，请稍后重试',
+  }
+  map[type](titles[type])
+}
+
+const showNotifyWithImage = () => {
+  notifySuccess('生成完成，附带缩略图', {
+    images: [demoThumb],
+  })
+}
+
+const showNotifyWithDescription = () => {
+  notifyInfo('任务已提交', {
+    description: '约 30 秒内完成，可在「任务中心」查看进度。',
+  })
+}
+
+const showPersistentNotify = () => {
+  notifyWarning('常驻提示（不自动关闭）', { duration: Infinity })
 }
 </script>
 
@@ -339,6 +383,31 @@ const addMenuLog = (action: string) => {
                 </div>
               </template>
             </AxDropdown>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== AxNotify ==================== -->
+      <section class="mb-12">
+        <h2 class="text-xl font-bold mb-5 pb-2 border-b-2 border-outline-variant">AxNotify（vue-sonner 自定义 toast）</h2>
+
+        <div class="mb-6">
+          <h3 class="text-[13px] font-semibold text-secondary mb-2.5">类型（自动关闭）</h3>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <AxButton variant="outline" size="sm" @click="showNotify('info')">Info</AxButton>
+            <AxButton variant="outline" size="sm" @click="showNotify('success')">Success</AxButton>
+            <AxButton variant="outline" size="sm" @click="showNotify('warning')">Warning</AxButton>
+            <AxButton variant="outline" size="sm" @click="showNotify('error')">Error</AxButton>
+          </div>
+        </div>
+
+        <div class="mb-6">
+          <h3 class="text-[13px] font-semibold text-secondary mb-2.5">能力</h3>
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <AxButton variant="primary" size="sm" icon="image" @click="showNotifyWithImage">附带缩略图</AxButton>
+            <AxButton variant="primary" size="sm" icon="subject" @click="showNotifyWithDescription">带说明文字</AxButton>
+            <AxButton variant="outline" size="sm" icon="timer" @click="showPersistentNotify">常驻（duration=∞）</AxButton>
+            <AxButton variant="ghost" size="sm" icon="close" @click="clearNotifies()">清空全部</AxButton>
           </div>
         </div>
       </section>
