@@ -179,14 +179,6 @@ const runError = ref('')
 let runSeq = 0
 
 const isRunning = computed(() => runStatus.value === 'running')
-/** 进度条宽度（0-100）；后台只给阶段时回落为不确定动画 */
-const progressPercent = computed(() => {
-  const p = runProgress.value.progress
-  if (p === undefined || p === null || Number.isNaN(p)) return null
-  return Math.max(0, Math.min(100, p))
-})
-/** 是否需要在节点上常驻显示运行浮层（加载中 or 失败） */
-const showRunIndicator = computed(() => runStatus.value === 'running' || runStatus.value === 'error')
 
 /** 复位运行态（成功自动复位；失败由用户点「重试/关闭」触发） */
 function resetRun() {
@@ -194,6 +186,11 @@ function resetRun() {
   runStatus.value = 'idle'
   runProgress.value = {}
   runError.value = ''
+  // 若当前显示的是外部后台任务态(error)，一并清掉 data.runState，避免残留失败浮层
+  const rs = props.data?.runState as ExternalRunState | undefined
+  if (rs && (rs.status === 'error' || rs.status === 'done')) {
+    updateNode(props.id, { data: { ...props.data, runState: undefined } })
+  }
 }
 
 /** 执行一次生成（由工具栏点「发送」触发；执行/状态均在节点层，工具栏解耦） */
@@ -244,6 +241,82 @@ function onToolbarAction(action: string, value?: unknown) {
     showExpandDialog.value = !showExpandDialog.value
   }
 }
+
+// ================= 外部后台任务态（R2：data.runState 只读驱动，供 AI/MCP 建节点后显示进度/结果） =================
+
+interface ExternalRunState {
+  status?: 'running' | 'done' | 'error'
+  progress?: number
+  message?: string
+  taskId?: string
+  urls?: string[]
+  imageUrl?: string
+  error?: string
+}
+
+/** 后台写入 data.runState（经 SSE node:updated 就地刷新） */
+const externalRun = computed<ExternalRunState | undefined>(() => {
+  const rs = props.data?.runState
+  return rs && typeof rs === 'object' ? (rs as ExternalRunState) : undefined
+})
+
+/** 是否处于"外部后台任务"驱动态（running / error） */
+const hasExternalRun = computed(() => {
+  const s = externalRun.value?.status
+  return s === 'running' || s === 'error'
+})
+
+/** 对外统一：优先显示外部后台任务态；否则显示本地 executeRun 态 */
+const showRunIndicator = computed(() => isRunning.value || runStatus.value === 'error' || hasExternalRun.value)
+const indicatorIsExternal = computed(() => {
+  if (hasExternalRun.value) return true
+  return false
+})
+const indicatorRunning = computed(() => (indicatorIsExternal.value ? externalRun.value?.status === 'running' : isRunning.value))
+const indicatorProgress = computed<RunProgress>(() => {
+  if (indicatorIsExternal.value) {
+    return {
+      progress: externalRun.value?.progress,
+      message: externalRun.value?.message,
+      taskId: externalRun.value?.taskId,
+    } as RunProgress
+  }
+  return runProgress.value
+})
+const indicatorErrorText = computed(() => {
+  if (indicatorIsExternal.value) return externalRun.value?.error || externalRun.value?.message || ''
+  return runError.value
+})
+const indicatorPercent = computed(() => {
+  const p = indicatorProgress.value.progress
+  if (p === undefined || p === null || Number.isNaN(p)) return null
+  return Math.max(0, Math.min(100, p))
+})
+
+/** 外部任务 done：把结果 url 落到 data.imageUrl（前端 <img> 直接展示），并在 data 记 runState 结果 */
+watch(
+  () => externalRun.value?.status,
+  (status) => {
+    if (status !== 'done') return
+    const rs = externalRun.value
+    const src = rs?.imageUrl || rs?.urls?.[0]
+    if (src && !isExternalImageShown(src)) {
+      updateNode(props.id, {
+        data: { ...props.data, imageUrl: src, runState: { ...rs, imageUrl: src } },
+      })
+    }
+  },
+)
+
+/** 该 url 是否已是当前节点展示图（避免写同值循环回播） */
+function isExternalImageShown(url: string): boolean {
+  const cur = props.data?.imageUrl
+  const curRs = externalRun.value?.imageUrl
+  return cur === url || curRs === url
+}
+
+/** 外部任务 error/running 期间不应允许本地再次发送（简单互斥展示即可，不阻塞底层） */
+
 </script>
 
 <template>
@@ -325,7 +398,7 @@ function onToolbarAction(action: string, value?: unknown) {
     <template #bottom-toolbar>
       <!-- 生成运行进度/失败浮层：跟随节点顶部常驻显示（NodeToolbar 定位但不依赖选中，仅运行/失败可见） -->
       <NodeToolbar v-if="showRunIndicator && !showExpandDialog" :node-id="id" :position="Position.Top" :offset="bottomOffset" :is-visible="showRunIndicator">
-        <ImageRunIndicator :running="isRunning" :progress="runProgress" :error="runError" :percent="progressPercent">
+        <ImageRunIndicator :running="indicatorRunning" :progress="indicatorProgress" :error="indicatorErrorText" :percent="indicatorPercent">
           <template #actions>
             <button class="run-indicator-btn" @click="resetRun">关闭</button>
           </template>
