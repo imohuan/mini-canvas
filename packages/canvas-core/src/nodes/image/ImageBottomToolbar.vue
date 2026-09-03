@@ -374,8 +374,10 @@ function onEditorKeydown(e: KeyboardEvent) {
             <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 5 19 12 8 19 8 5" /></svg>
           </span>
         </div>
-        <!-- 无任何意义的占位框 -->
-        <div class="media-card-placeholder"></div>
+        <!-- 无任何意义的占位框：点击与「添加素材」一致（选择图片文件），功能暂时转移到此 -->
+        <div class="media-card-placeholder" title="添加素材" @click.stop="onAdd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round" /></svg>
+        </div>
       </div>
       <div class="editor-wrapper" @keydown="onEditorKeydown">
         <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
@@ -426,7 +428,8 @@ function onEditorKeydown(e: KeyboardEvent) {
       <!-- 左侧 -->
       <div class="toolbar-left">
         <input ref="fileInputRef" type="file" accept="image/*" class="source-file-input" @change="onAddFileChange" />
-        <AxButton variant="ghost" size="icon" icon="add" title="添加素材" @click="onAdd" />
+        <!-- 添加素材按钮已隐藏：功能移到媒体卡片行末尾的占位框（点击同样触发 onAdd 选图） -->
+        <!-- <AxButton variant="ghost" size="icon" icon="add" title="添加素材" @click="onAdd" /> -->
 
         <!-- <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" /> -->
         <!-- <div class="toolbar-divider" /> -->
@@ -548,13 +551,28 @@ function onEditorKeydown(e: KeyboardEvent) {
   height: 14px;
 }
 
-/* 无意义的占位框（跟在卡片末尾） */
+/* 无意义的占位框（跟在卡片末尾）：中间一个加号，点击同「添加素材」 */
 .media-card-placeholder {
   flex-shrink: 0;
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.media-card-placeholder svg {
+  width: 14px;
+  height: 14px;
+}
+.media-card-placeholder:hover {
+  color: #2b6df2;
+  border-color: #2b6df2;
+  background: rgba(43, 109, 242, 0.06);
 }
 
 .editor-wrapper {
