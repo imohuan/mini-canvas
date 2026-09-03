@@ -9,6 +9,7 @@ import { z } from 'zod'
 import type { GraphModel } from '../graph/GraphModel'
 import type { NodeStorage } from '../storage/NodeStorage'
 import type { TaskManager } from '../tasks/TaskManager'
+import { listGenerationModels } from '../models/ModelRegistry'
 
 /** MCP 工具定义（给 list-tools 用，与 SDK 注册保持一致） */
 export interface McpTool {
@@ -38,6 +39,8 @@ const TOOL_LIST: McpTool[] = [
   { name: 'canvas.export_json', description: '导出画布 JSON' },
   { name: 'task.create', description: '创建异步任务，立即返回 task_id，后台自动处理' },
   { name: 'task.status', description: '查询任务状态' },
+  { name: 'node.status', description: '按节点 id 查询其最近任务状态' },
+  { name: 'models.list', description: '列出后台可用的生成模型与能力' },
 ]
 
 /** 列出所有工具（list-tools CLI 用） */
@@ -365,16 +368,21 @@ export function createMcpServer(
 
   server.tool(
     'task.create',
-    '创建异步任务，立即返回 task_id，后台自动处理（图片/视频/音频生成）',
+    '提交一次生成任务到后台（低层原语；语义化创建请用 create_node）。立即返回 task_id，后台自动处理，进度/结果经 SSE 广播并写回目标节点 data.runState',
     {
-      kind: z.enum(['image', 'video', 'audio', 'text']),
+      kind: z.enum(['image', 'video', 'audio', 'text']).describe('任务类型'),
       canvasId: z.string().describe('关联画布 id（taskId）'),
       targetNodeId: z.string().describe('结果写回的目标节点 id'),
-      payload: z.record(z.unknown()).optional().describe('任务参数，如 { prompt }'),
+      model: z.string().describe('模型 id，如 doubao-seedream-45 / apimart-gpt-image-2'),
+      promptText: z.string().optional().describe('提示词'),
+      ratio: z.string().optional(),
+      resolution: z.string().optional(),
+      resources: z.array(z.object({ id: z.string().optional(), kind: z.string().optional(), name: z.string().optional(), url: z.string().optional() })).optional().describe('参考图/音频等资源，url 为可访问地址'),
     },
-    async ({ kind, canvasId, targetNodeId, payload }) => {
+    async ({ kind, canvasId, targetNodeId, model, promptText, ratio, resolution, resources }) => {
       try {
-        const task = taskManager.createTask(kind, canvasId, targetNodeId, payload ?? {})
+        const payload = { model, promptText: promptText ?? '', ratio, resolution, resources: (resources ?? []).map((r) => ({ ...r, kind: (r.kind as any) ?? 'image' })) }
+        const task = taskManager.createTask(kind, canvasId, targetNodeId, payload)
         return toText({ ok: true, taskId: task.id, status: task.status })
       } catch (err) {
         return toText({ ok: false, error: (err as Error).message })
@@ -391,6 +399,36 @@ export function createMcpServer(
       return task
         ? toText({ ok: true, task })
         : toText({ ok: false, error: '任务不存在' })
+    },
+  )
+
+  server.tool(
+    'node.status',
+    '按节点 id 查询该节点最近一次生成任务的状态（status/progress/message/result/error）',
+    { canvasId: z.string(), nodeId: z.string() },
+    async ({ canvasId, nodeId }) => {
+      const node = model.getNode(canvasId, nodeId)
+      if (!node) return toText({ ok: false, error: '节点不存在' })
+      const task = taskManager.findTaskByNode(canvasId, nodeId)
+      const runState = node.data?.runState
+      return toText({
+        ok: true,
+        nodeId,
+        task: task
+          ? { id: task.id, kind: task.kind, status: task.status, progress: task.progress, message: task.message, result: task.result, error: task.error }
+          : null,
+        runState,
+      })
+    },
+  )
+
+  server.tool(
+    'models.list',
+    '列出后台当前可用的生成模型及其能力（kind/model/label/ratio/resolution/supportsInput/description）',
+    {},
+    async () => {
+      const models = listGenerationModels()
+      return toText({ ok: true, models })
     },
   )
 

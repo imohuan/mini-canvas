@@ -1,14 +1,18 @@
 /**
- * TaskManager — 异步任务后台
+ * TaskManager — 后台任务调度中心（唯一驱动层）
  *
- * 职责：MCP 只负责"创建任务"，返回 task_id 立即响应；
- * 后台自动处理（留底 → 轮询/请求 → 完成后自动写回节点数据 → 推 SSE）。
+ * 职责：接收"创建任务"，立即返回 task_id，随后由本管理器统一驱动一次生成，
+ * 结果/进度写回目标节点的 data.runState，并经 GraphModel 事件（SSE）广播。
  *
- * 任务 = 画布（taskId 即画布 id）。创建任务时关联画布，
- * 任务完成后把结果写回该画布某个节点的 data 字段。
+ * 驱动模型（R3）：runner 契约为 run(task) → RunOutcome（GenerationResult | PollFn），
+ * TaskManager 内部 while 定时调 PollFn 直到 done；不做双时钟。
+ * - runner 返回 GenerationResult（同步）→ 直接 done
+ * - runner 返回 PollFn → 按 interval 轮询，running 的 progress/message 转成节点 runState
  */
 import { randomUUID } from 'node:crypto'
 import type { GraphModel } from '../graph/GraphModel'
+import type { GenerationPayload } from '../models/types'
+import { getModelRegistry, type ModelRegistry } from '../models/ModelRegistry'
 
 /** 任务状态 */
 export type TaskStatus = 'pending' | 'processing' | 'done' | 'error'
@@ -19,61 +23,51 @@ export interface TaskRecord {
   kind: string
   /** 关联的画布 id */
   canvasId: string
-  /** 任务结果写回的目标节点 id */
+  /** 结果写回的目标节点 id */
   targetNodeId: string
-  payload: Record<string, unknown>
+  payload: GenerationPayload
   status: TaskStatus
   progress: number
+  message?: string
   result?: unknown
   error?: string
   createdAt: number
 }
 
-/** 任务处理器（可插拔占位）。由外部接入真实生成服务时实现。 */
-export interface TaskRunner {
-  /** 处理任务，返回结果；可多次回调更新进度 */
-  run(task: TaskRecord, onProgress: (p: number) => void): Promise<unknown>
-}
-
-/**
- * 默认 runner 占位：模拟异步处理（定时递增进度，完成后返回一个占位结果）。
- * 真实生成服务接入时替换。
- */
-export class DefaultTaskRunner implements TaskRunner {
-  constructor(private steps = 5, private delayMs = 500) {}
-
-  async run(task: TaskRecord, onProgress: (p: number) => void): Promise<unknown> {
-    for (let i = 1; i <= this.steps; i++) {
-      await new Promise((r) => setTimeout(r, this.delayMs))
-      onProgress(Math.round((i / this.steps) * 100))
-    }
-    return { ok: true, kind: task.kind, note: '占位处理完成（接入真实生成服务后替换）' }
-  }
+export interface TaskManagerOptions {
+  /** PollFn 轮询间隔 ms（默认 1500） */
+  interval?: number
+  /** 任务最大等待 ms（默认 10 分钟） */
+  timeoutMs?: number
 }
 
 export class TaskManager {
   private model: GraphModel
-  private runner: TaskRunner
+  private registry: ModelRegistry
   private tasks = new Map<string, TaskRecord>()
+  private interval: number
+  private timeoutMs: number
 
-  constructor(model: GraphModel, runner?: TaskRunner) {
+  constructor(model: GraphModel, options: TaskManagerOptions & { registry?: ModelRegistry } = {}) {
     this.model = model
-    this.runner = runner ?? new DefaultTaskRunner()
+    this.registry = options.registry ?? getModelRegistry()
+    this.interval = options.interval ?? 1500
+    this.timeoutMs = options.timeoutMs ?? 600_000
   }
 
   /**
    * 创建任务。立即返回 task_id，后台开始处理。
    *
-   * @param kind 任务类型（image/video/audio 等）
+   * @param kind 任务类型（image/video/audio 等，用于 data.runState.status 区分）
    * @param canvasId 关联画布 id
    * @param targetNodeId 结果写回的目标节点 id
-   * @param payload 任务参数
+   * @param payload 生成载荷（GenerationPayload：model/promptText/ratio/resolution/resources）
    */
   createTask(
     kind: string,
     canvasId: string,
     targetNodeId: string,
-    payload: Record<string, unknown> = {},
+    payload: GenerationPayload = { model: '', promptText: '', resources: [] },
   ): TaskRecord {
     const task: TaskRecord = {
       id: randomUUID(),
@@ -87,12 +81,10 @@ export class TaskManager {
     }
     this.tasks.set(task.id, task)
 
-    // 标记目标节点为渲染中
-    this.model.updateNode(canvasId, targetNodeId, {
-      data: { status: 'rendering', progress: 0 },
-    })
+    // 标记目标节点为排队中
+    this.writeRunState(canvasId, targetNodeId, { status: 'running', progress: 0, message: '任务已提交，等待执行…', taskId: task.id })
 
-    // 异步后台处理（不阻塞返回；用 setTimeout 确保 createTask 先返回 pending 状态）
+    // 异步后台处理（确保 createTask 先返回 pending）
     setTimeout(() => void this.process(task), 0)
     return task
   }
@@ -102,35 +94,56 @@ export class TaskManager {
     return this.tasks.get(taskId) ?? null
   }
 
+  /** 按目标节点 id 反查任务 */
+  findTaskByNode(canvasId: string, nodeId: string): TaskRecord | undefined {
+    return [...this.tasks.values()].find((t) => t.canvasId === canvasId && t.targetNodeId === nodeId)
+  }
+
   /** 列出所有任务 */
   listTasks(): TaskRecord[] {
     return [...this.tasks.values()]
   }
 
+  /** 统一写回节点 data.runState（触发 node:updated(全量) → SSE 广播） */
+  private writeRunState(canvasId: string, nodeId: string, rs: Record<string, unknown>): void {
+    const node = this.model.getNode(canvasId, nodeId)
+    if (!node) return
+    const data = node.data ?? {}
+    this.model.updateNode(canvasId, nodeId, {
+      data: { ...data, runState: { ...((data.runState as Record<string, unknown>) ?? {}), ...rs } },
+    })
+  }
+
   /** 后台处理流程 */
   private async process(task: TaskRecord): Promise<void> {
     task.status = 'processing'
+    const updateNode = (rs: Record<string, unknown>) => this.writeRunState(task.canvasId, task.targetNodeId, rs)
+    const onProgress = (p: { progress?: number; message?: string; taskId?: string }) => {
+      if (typeof p.progress === 'number') task.progress = p.progress
+      if (p.message) task.message = p.message
+      updateNode({ status: 'running', progress: p.progress, message: p.message, taskId: p.taskId ?? task.id })
+    }
     try {
-      const result = await this.runner.run(task, (p) => {
-        task.progress = p
-        // 实时回写节点进度
-        this.model.updateNode(task.canvasId, task.targetNodeId, {
-          data: { status: 'rendering', progress: p },
-        })
+      const result = await this.registry.executeModelRun(task.payload, {
+        interval: this.interval,
+        timeoutMs: this.timeoutMs,
+        onProgress,
       })
       task.status = 'done'
       task.progress = 100
       task.result = result
-      // 完成后回写节点：状态 done + 结果
-      this.model.updateNode(task.canvasId, task.targetNodeId, {
-        data: { status: 'done', progress: 100, result },
-      })
+      if (result.ok) {
+        const urls = result.urls ?? []
+        updateNode({ status: 'done', progress: 100, message: '已完成', taskId: result.taskId ?? task.id, urls })
+      } else {
+        const msg = result.error ?? '生成失败'
+        task.error = msg
+        updateNode({ status: 'error', message: msg, taskId: task.id })
+      }
     } catch (err) {
       task.status = 'error'
       task.error = (err as Error).message
-      this.model.updateNode(task.canvasId, task.targetNodeId, {
-        data: { status: 'error', error: (err as Error).message },
-      })
+      updateNode({ status: 'error', message: (err as Error).message, taskId: task.id })
     }
   }
 }

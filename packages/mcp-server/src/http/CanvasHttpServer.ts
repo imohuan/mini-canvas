@@ -238,12 +238,15 @@ export class CanvasHttpServer {
     this.app.post('/api/tasks', async (c) => {
       const body = await c.req.json().catch(() => ({}))
       try {
-        const task = this.taskManager.createTask(
-          body.kind,
-          body.canvasId,
-          body.targetNodeId,
-          body.payload ?? {},
-        )
+        const payload = {
+          model: body.model ?? '',
+          promptText: body.promptText ?? '',
+          ratio: body.ratio,
+          resolution: body.resolution,
+          resources: (body.resources ?? []).map((r: any) => ({ ...r, kind: r.kind ?? 'image' })),
+          ...(body.payload ?? {}),
+        }
+        const task = this.taskManager.createTask(body.kind, body.canvasId, body.targetNodeId, payload)
         return c.json({ ok: true, taskId: task.id, status: task.status })
       } catch (err) {
         return c.json({ ok: false, error: (err as Error).message })
@@ -252,6 +255,14 @@ export class CanvasHttpServer {
     this.app.get('/api/tasks/:taskId', (c) => {
       const task = this.taskManager.getTaskStatus(c.req.param('taskId'))
       return task ? c.json({ ok: true, task }) : c.json({ ok: false, error: '任务不存在' })
+    })
+    /** 按节点 id 查任务状态 */
+    this.app.get('/api/canvases/:id/nodes/:nodeId/status', (c) => {
+      const { id, nodeId } = c.req.param()
+      const node = this.model.getNode(id, nodeId)
+      if (!node) return c.json({ ok: false, error: '节点不存在' })
+      const task = this.taskManager.findTaskByNode(id, nodeId)
+      return c.json({ ok: true, nodeId, task: task ?? null, runState: node.data?.runState })
     })
 
     // ==================== SSE：实时推送 ====================
