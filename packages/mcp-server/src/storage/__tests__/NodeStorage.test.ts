@@ -92,4 +92,57 @@ describe('NodeStorage', () => {
     const loaded = await storage2.loadCanvas('t1')
     expect(loaded.nodes).toHaveLength(1)
   })
+
+  // ==================== 画布资源（每画布文件夹 + 内容哈希去重） ====================
+
+  it('保存画布资源：写入 project-{canvas}/assets/ 且文件名=sha256+扩展名', async () => {
+    await storage.createProject('t', 'cv1')
+    const buf = Buffer.from('hello-image-bytes')
+    const { assetId, stored } = await storage.saveResource('cv1', 'photo.png', buf)
+    expect(assetId).toHaveLength(64) // sha256 hex
+    expect(stored).toBe(`${assetId}.png`)
+    // 字节确实落在画布 assets 目录
+    const file = path.join(tmpDir, 'project-cv1', 'assets', stored)
+    const onDisk = await fs.readFile(file)
+    expect(onDisk.toString()).toBe('hello-image-bytes')
+  })
+
+  it('内容去重：同字节只存一份，assetId 相同', async () => {
+    await storage.createProject('t', 'cv1')
+    const first = await storage.saveResource('cv1', 'a.png', Buffer.from('same'))
+    const second = await storage.saveResource('cv1', 'b.png', Buffer.from('same'))
+    expect(second.assetId).toBe(first.assetId)
+    const dir = path.join(tmpDir, 'project-cv1', 'assets')
+    const entries = await fs.readdir(dir)
+    expect(entries).toHaveLength(1) // 只存一份
+  })
+
+  it('不同画布资源互不干扰（一画布一文件夹）', async () => {
+    await storage.createProject('t', 'cv1')
+    await storage.createProject('t', 'cv2')
+    const a = await storage.saveResource('cv1', 'x.png', Buffer.from('aaa'))
+    const b = await storage.saveResource('cv2', 'y.png', Buffer.from('aaa'))
+    expect(a.assetId).toBe(b.assetId) // 内容相同
+    const d1 = await fs.readdir(path.join(tmpDir, 'project-cv1', 'assets'))
+    const d2 = await fs.readdir(path.join(tmpDir, 'project-cv2', 'assets'))
+    expect(d1).toHaveLength(1)
+    expect(d2).toHaveLength(1)
+  })
+
+  it('读取资源往返一致，缺失返回 null', async () => {
+    await storage.createProject('t', 'cv1')
+    const { stored } = await storage.saveResource('cv1', 'img.png', Buffer.from('payload'))
+    const buf = await storage.readResource('cv1', stored)
+    expect(buf?.toString()).toBe('payload')
+    const missing = await storage.readResource('cv1', 'nosuchfile.png')
+    expect(missing).toBeNull()
+  })
+
+  it('删除资源', async () => {
+    await storage.createProject('t', 'cv1')
+    const { stored } = await storage.saveResource('cv1', 'a.png', Buffer.from('data'))
+    expect(await storage.deleteResource('cv1', stored)).toBe(true)
+    expect(await storage.readResource('cv1', stored)).toBeNull()
+    expect(await storage.deleteResource('cv1', stored)).toBe(false)
+  })
 })

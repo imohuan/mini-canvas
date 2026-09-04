@@ -225,6 +225,48 @@ export class CanvasHttpServer {
       return c.body(new Uint8Array(buf), 200, { 'content-type': EXT_MIME[ext] ?? 'application/octet-stream', 'cache-control': 'public, max-age=3600' })
     })
 
+    // ==================== 画布资源（每画布一 assets 文件夹 + 内容哈希去重） ====================
+    // 前端图片/视频节点把字节真存后端：POST 上传（返回 assetId/sha256 + url），GET 取字节。
+    // 节点只存 assetId；刷新时前端按 assetId 请求 GET 还原 → 跨会话/跨浏览器不丢。
+    /** 上传画布资源：POST /api/canvases/:id/resources  (multipart 字段 file) */
+    this.app.post('/api/canvases/:id/resources', async (c) => {
+      const id = c.req.param('id')
+      try {
+        const body = await c.req.parseBody()
+        const file = body.file
+        if (!file || typeof file === 'string') {
+          return c.json({ ok: false, error: '缺少文件字段 file（multipart/form-data）' }, 400)
+        }
+        const buf = Buffer.from(await file.arrayBuffer())
+        const { assetId, stored } = await this.storage.saveResource(id, file.name, buf)
+        const ext = path.extname(stored).toLowerCase()
+        return c.json({
+          ok: true,
+          canvasId: id,
+          assetId,
+          stored,
+          url: `/api/canvases/${encodeURIComponent(id)}/resources/${stored}`,
+          name: file.name,
+          type: EXT_MIME[ext] ?? file.type ?? 'application/octet-stream',
+          size: buf.length,
+        })
+      } catch (err) {
+        return c.json({ ok: false, error: (err as Error).message }, 500)
+      }
+    })
+
+    /** 读取画布资源字节：GET /api/canvases/:id/resources/:assetId */
+    this.app.get('/api/canvases/:id/resources/:assetId', async (c) => {
+      const { id, assetId } = c.req.param()
+      const buf = await this.storage.readResource(id, assetId)
+      if (!buf) return c.json({ ok: false, error: '资源不存在' }, 404)
+      const ext = path.extname(assetId).toLowerCase()
+      return c.body(new Uint8Array(buf), 200, {
+        'content-type': EXT_MIME[ext] ?? 'application/octet-stream',
+        'cache-control': 'public, max-age=31536000, immutable', // 内容寻址，可永久缓存
+      })
+    })
+
     /** 中转本地绝对路径媒体（图片/视频/音频）：GET /api/proxy-media?path=/abs/x.mp4 或 file:/// 形式 */
     this.app.get('/api/proxy-media', async (c) => {
       const raw = c.req.query('path') ?? ''

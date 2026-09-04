@@ -7,7 +7,7 @@
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import { sanitizeForSave } from './sanitize'
 
 /** 项目元数据（与前端 ProjectMeta 同构） */
@@ -150,6 +150,64 @@ export class NodeStorage {
       return await fs.readFile(file)
     } catch {
       return null
+    }
+  }
+
+  // ==================== 画布资源（每画布一文件夹 + 内容哈希去重） ====================
+  // 供前端图片/视频等节点把资源字节真正存到后端：一个画布一个 assets 子文件夹，
+  // 以字节 SHA-256 命名，同内容只存一份（去重）。节点只存 assetId(=sha256)，
+  // 刷新时前端按 assetId 从后端取回 → 跨会话/跨浏览器不丢。
+
+  /** 画布资源目录绝对路径 */
+  private assetDir(canvasId: string): string {
+    return path.join(this.projectDir(canvasId), 'assets')
+  }
+
+  /** 把上传名 + 扩展名清洗成纯扩展名片段（防路径穿越，仅取最后一个扩展名） */
+  private extOf(filename: string): string {
+    const base = path.basename(filename || '').replace(/[^\w.\-]/g, '_') || 'file'
+    const ext = path.extname(base).toLowerCase()
+    return ext
+  }
+
+  /**
+   * 保存画布资源字节。按内容 SHA-256 命名去重：已存在则直接返回不重复写盘。
+   * @returns { assetId, stored }  assetId=sha256；stored=磁盘文件名（含扩展名）
+   */
+  async saveResource(canvasId: string, filename: string, data: Buffer | Uint8Array): Promise<{ assetId: string; stored: string }> {
+    const dir = this.assetDir(canvasId)
+    await fs.mkdir(dir, { recursive: true })
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data)
+    const assetId = createHash('sha256').update(buf).digest('hex')
+    const stored = `${assetId}${this.extOf(filename)}`
+    const file = path.join(dir, stored)
+    try {
+      await fs.access(file)
+      // 已存在 → 去重，不重复写盘
+    } catch {
+      await fs.writeFile(file, buf)
+    }
+    return { assetId, stored }
+  }
+
+  /** 读取画布资源字节（assetId 或 stored 名均可；不存在返回 null） */
+  async readResource(canvasId: string, assetId: string): Promise<Buffer | null> {
+    const file = path.join(this.assetDir(canvasId), path.basename(assetId))
+    try {
+      return await fs.readFile(file)
+    } catch {
+      return null
+    }
+  }
+
+  /** 删除画布资源（不存在则静默返回 false） */
+  async deleteResource(canvasId: string, assetId: string): Promise<boolean> {
+    const file = path.join(this.assetDir(canvasId), path.basename(assetId))
+    try {
+      await fs.unlink(file)
+      return true
+    } catch {
+      return false
     }
   }
 }
