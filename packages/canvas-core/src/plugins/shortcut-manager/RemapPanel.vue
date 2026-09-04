@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { ShortcutManager, type ShortcutHelpItem } from '../ShortcutManager'
+import ShortcutKeys from './ShortcutKeys.vue'
 
 const props = defineProps<{ item: ShortcutHelpItem }>()
 const emit = defineEmits<{ close: [] }>()
@@ -146,10 +147,6 @@ onUnmounted(() => {
     document.removeEventListener('keyup', handleKeyUp, true)
   }
 })
-
-function renderKeyParts(keys: string) {
-  return keys.split('+').map(p => p.trim()).filter(Boolean)
-}
 </script>
 
 <template>
@@ -158,11 +155,12 @@ function renderKeyParts(keys: string) {
     <div class="remap-panel-body">
       <div class="remap-panel-row">
         <span class="remap-panel-label">当前</span>
-        <span class="remap-panel-value shortcut-keys">
-          <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="`cur-${pIdx}`">
-            <span class="kbd-chip">{{ part }}</span>
-            <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
-          </template>
+        <span class="remap-panel-value">
+          <ShortcutKeys
+            :keys="item.keys"
+            :id-prefix="`cur-${item.id}`"
+            :wrapper-class="'remap-keys-inline'"
+          />
         </span>
       </div>
 
@@ -178,10 +176,12 @@ function renderKeyParts(keys: string) {
             <span class="listening-dot" />等待按键…
           </template>
           <template v-else-if="newKeys">
-            <template v-for="(part, pIdx) in renderKeyParts(newKeys)" :key="`new-${pIdx}`">
-              <span class="kbd-chip">{{ part }}</span>
-              <span v-if="pIdx < renderKeyParts(newKeys).length - 1" class="kbd-plus">+</span>
-            </template>
+            <ShortcutKeys
+              :keys="newKeys"
+              :id-prefix="`new-${item.id}`"
+              :wrapper-class="'remap-keys-newkey'"
+              size="sm"
+            />
           </template>
           <template v-else>
             点击录制新快捷键
@@ -307,34 +307,13 @@ function renderKeyParts(keys: string) {
   flex: 0 0 8px;
 }
 
-.shortcut-keys {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* 快捷键 chip 与容器均抽离到 ShortcutKeys.vue，本文件仅保留布局微调 */
+.remap-keys-inline {
+  margin-right: 4px;
 }
 
-.kbd-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #374151;
-  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.kbd-plus {
-  color: #9ca3af;
-  font-size: 10px;
-  font-weight: 700;
+.remap-keys-newkey {
+  /* 录制按钮内被压缩 */
 }
 
 /* 底部动作条：左信息 + 右按钮组，space-between 左右分立 */

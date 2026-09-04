@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ShortcutManager, type ShortcutHelpItem, type ShortcutGroup } from '../ShortcutManager'
 import RemapPanel from './RemapPanel.vue'
+import ShortcutKeys from './ShortcutKeys.vue'
 
 defineProps<{ onClose: () => void }>()
 const emit = defineEmits<{ close: [] }>()
@@ -122,12 +123,6 @@ function shortcutIcon(keys: string): string {
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 10h.01"/><path d="M16 14h.01"/></svg>'
   }
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9h6v6H9z"/></svg>'
-}
-
-/** 渲染一段 key 字符串，把 ctrl/cmd/alt/shift 等修饰键单独提出来当 kbd chip */
-function renderKeyParts(keys: string) {
-  // ShortcutManager 统一存 'ctrl+z' 这种小写短串
-  return keys.split('+').map(p => p.trim()).filter(Boolean)
 }
 
 function onSelectRow(item: ShortcutHelpItem) {
@@ -271,12 +266,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                       <span class="canvas-menu-label">{{ item.command }}</span>
                       <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
                     </span>
-                    <span class="shortcut-keys font-mono">
-                      <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
-                        <span class="kbd-chip">{{ part }}</span>
-                        <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
-                      </template>
-                    </span>
+                    <ShortcutKeys :keys="item.keys" :id-prefix="`row-${item.id}`" />
                     <button
                       class="canvas-menu-badge remap-badge"
                       :class="{ 'is-open': remappingId === item.id }"
@@ -631,36 +621,10 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   transform: translateY(0);
 }
 
-/* ============ 快捷键 chip（与 badge 协调） ============ */
-.shortcut-keys {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* kbd-chip / kbd-plus / shortcut-keys 已抽离到 ShortcutKeys.vue
+   行内快捷键 chip 序列与右侧 badge 留 4px 间距 */
+:deep(.shortcut-keys) {
   margin-right: 4px;
-}
-
-.kbd-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-bottom-width: 2px;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #374151;
-  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.kbd-plus {
-  color: #9ca3af;
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .canvas-menu-badge {
