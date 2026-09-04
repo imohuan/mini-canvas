@@ -29,6 +29,7 @@ import type { GraphEvent } from '../graph/types'
 import type { NodeStorage } from '../storage/NodeStorage'
 import type { TaskManager } from '../tasks/TaskManager'
 import { createSemanticNode } from '../graph/semanticNodes'
+import { listGenerationModels } from '../models/ModelRegistry'
 
 /** 单个 SSE 连接的待发送事件队列 */
 interface SseClient {
@@ -83,6 +84,13 @@ export class CanvasHttpServer {
       const removed = this.model.deleteCanvas(id)
       await this.storage.deleteProject(id)
       return c.json({ ok: removed })
+    })
+
+    // ==================== REST：生成模型配置 ====================
+    // 给前端工具栏提供后台模型能力配置（与 MCP models.list 同源 ModelRegistry）。
+    // 前端据此渲染模型下拉 / 比例 / 分辨率 / 可接受输入，不再用本地写死的模型表。
+    this.app.get('/api/models', (c) => {
+      return c.json({ ok: true, models: listGenerationModels() })
     })
 
     // ==================== REST：节点/连线/定位 ====================
