@@ -13,6 +13,7 @@ import MovingHandle from './MovingHandle.vue'
 import { resolveSegment } from '../core/registry/nodeRenderer'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './nodeRegistryKey'
 import type { NodeWrite } from './nodeRegistryKey'
+import { CANVAS_PARAMS_KEY, type CanvasParams } from './canvasParamKey'
 
 const props = defineProps<{ id: string; type: string; data: Record<string, unknown>; selected?: boolean }>()
 // 节点类型都是本组件(VueFlow nodeTypes 全指到 BaseNode)，透传的 selected 等内部 prop 不落到根
@@ -106,14 +107,16 @@ const editable = computed(() => Boolean(nodeWrite))
 // —— hover 状态（控制端口醒目与阴影） ——
 const isHovered = ref(false)
 
-// —— 浮动端口(MovingHandle)尺寸：对齐 core-node-contract §0 默认表 ——
-const HANDLE = {
-  radius: 86,
-  restOffset: 36,
-  cursorGap: 24,
-  buttonSize: 32,
-  overlap: 16,
+// —— 浮动端口(MovingHandle)尺寸：宿主注入(CANVAS_PARAMS_KEY) 可调；缺省回落 contract §0 默认 ——
+const DEFAULT_HANDLE: CanvasParams = {
+  handleRadius: 86,
+  handleRestOffset: 36,
+  handleCursorGap: 24,
+  handleButtonSize: 32,
+  handleOverlap: 16,
 }
+const injectedParams = inject(CANVAS_PARAMS_KEY, null)
+const handleParams = computed<CanvasParams>(() => injectedParams ?? DEFAULT_HANDLE)
 // 端口可见：非低细节 且 (hover 或 选中) → 圆球浮出（真实连接点始终在，mouse 靠近 zone 即可连）
 const shouldShowHandles = computed(() => !lowDetail.value && (isHovered.value || props.selected))
 
@@ -167,11 +170,11 @@ const titleStyle = computed(() => ({
         type="target"
         :position="Position.Left"
         :visible="shouldShowHandles"
-        :radius="HANDLE.radius"
-        :rest-offset="HANDLE.restOffset"
-        :cursor-gap="HANDLE.cursorGap"
-        :button-size="HANDLE.buttonSize"
-        :overlap="HANDLE.overlap"
+        :radius="handleParams.handleRadius"
+        :rest-offset="handleParams.handleRestOffset"
+        :cursor-gap="handleParams.handleCursorGap"
+        :button-size="handleParams.handleButtonSize"
+        :overlap="handleParams.handleOverlap"
         @hover="isHovered = $event"
       />
       <MovingHandle
@@ -179,11 +182,11 @@ const titleStyle = computed(() => ({
         type="source"
         :position="Position.Right"
         :visible="shouldShowHandles"
-        :radius="HANDLE.radius"
-        :rest-offset="HANDLE.restOffset"
-        :cursor-gap="HANDLE.cursorGap"
-        :button-size="HANDLE.buttonSize"
-        :overlap="HANDLE.overlap"
+        :radius="handleParams.handleRadius"
+        :rest-offset="handleParams.handleRestOffset"
+        :cursor-gap="handleParams.handleCursorGap"
+        :button-size="handleParams.handleButtonSize"
+        :overlap="handleParams.handleOverlap"
         @hover="isHovered = $event"
       />
 

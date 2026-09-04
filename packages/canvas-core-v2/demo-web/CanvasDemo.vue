@@ -6,13 +6,15 @@
 //   3. 用 <VueFlow> 渲染 text+image（nodeTypes: 业务 type→内容组件）。
 //   4. 接线：拖拽结束写回 position、连边(禁 self-loop)、删节点(Delete/按钮)。
 // 边界：只做"演示接线"，不发明内核接口；持久化统一走 host.save/nodeStore(内核服务)。
-import { onMounted, provide, ref, shallowRef, onBeforeUnmount } from 'vue'
+import { onMounted, provide, reactive, ref, shallowRef, onBeforeUnmount } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Connection } from '@vue-flow/core'
 import TextContent from './components/TextContent.vue'
 import ImageContent from './components/ImageContent.vue'
+import SettingsPanel from './SettingsPanel.vue'
 import BaseNode from '../src/components/BaseNode.vue'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../src/components/nodeRegistryKey'
+import { CANVAS_PARAMS_KEY } from '../src/components/canvasParamKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
 import { validateConnection, typeConnectionDef } from '../src/services/connection'
 import { HOST_KEY } from './demoInjection'
@@ -71,10 +73,42 @@ const selectedIds = ref<Set<string>>(new Set<string>())
 const nodeTypes = { text: BaseNode, image: BaseNode }
 // 边类型：所有边走 CustomEdge（自定义边，v1 Canvas 里 edgeTypes.custom，金标准 core-node-contract §6）
 const edgeTypes = { custom: CustomEdge }
-// 自定义边外观：默认对齐 contract §0（edgeColor #3b82f6 / bezier / lineWidth 2 / 流光开 / 箭头默认关）
-const edgeVisual: EdgeVisual = {}
+// —— 调试配置面板数据：一个响应式根对象，分 edge/handle 命名空间。
+//    SettingsPanel 直接改写它；分别 provide 给 CustomEdge(EDGE_VISUAL_KEY)/BaseNode+端口(CANVAS_PARAMS_KEY)，
+//    消费方 computed 会实时追踪改动 → 面板即调即见效果。
+//    默认值对齐 contract §0（edgeColor #3b82f6 / bezier / lineWidth 2 / 流光开 / 箭头默认关 / handle 尺寸）。
+const cfg = reactive<{
+  edge: EdgeVisual
+  handle: {
+    handleRadius: number
+    handleRestOffset: number
+    handleCursorGap: number
+    handleButtonSize: number
+    handleOverlap: number
+  }
+}>({
+  edge: {
+    edgeType: 'bezier',
+    edgeLineWidth: 2,
+    edgeColor: '#3b82f6',
+    edgeDashed: false,
+    edgeAnimated: true,
+    edgeMarkerEnd: false,
+    edgeGlowEnabled: true,
+    edgeGlowIntensity: 1,
+  },
+  handle: {
+    handleRadius: 86,
+    handleRestOffset: 36,
+    handleCursorGap: 24,
+    handleButtonSize: 32,
+    handleOverlap: 16,
+  },
+})
+// 自定义边外观 / 浮动端口尺寸：随 cfg 实时注入
+provide(EDGE_VISUAL_KEY, cfg.edge)
+provide(CANVAS_PARAMS_KEY, cfg.handle)
 // 选中集合注入给 CustomEdge：节点被选 → 相连边高亮流光
-provide(EDGE_VISUAL_KEY, edgeVisual)
 const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
 provide(EDGE_SELECTION_KEY, { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel })
 
@@ -277,6 +311,9 @@ onBeforeUnmount(() => {
       <button :disabled="booting || !canRedo" @click="redo">↷ 重做</button>
       <span class="hint">拖节点移动 · 从圆点拖出连线 · 双击文本编辑 · 右键菜单 · Ctrl+Z 撤销 · 刷新不丢</span>
     </div>
+
+    <!-- 右上角调试配置面板（对齐主项目 DynamicSettingsPanel） -->
+    <SettingsPanel :model="cfg" />
 
     <div v-if="booting" class="status">正在启动内核…</div>
     <div v-else-if="bootError" class="status err">启动失败：{{ bootError }}</div>
