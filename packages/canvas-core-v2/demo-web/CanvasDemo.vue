@@ -25,6 +25,8 @@ import type { TextNodeService } from '../src/plugins/nodeText'
 import type { ImageNodeService } from '../src/plugins/nodeImage'
 import { bindBrowserLifecycleFlush } from './browserFlush'
 import type { BrowserFlushHandle } from './browserFlush'
+import CustomEdge from '../src/components/CustomEdge.vue'
+import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../src/components/edgeContext'
 
 /** VueFlow 用的流式节点形状 */
 interface FlowNode {
@@ -50,11 +52,19 @@ provide(NODE_REGISTRY_KEY, registry)
 
 // VueFlow 的响应式节点/边（渲染态）
 const nodes = ref<FlowNode[]>([])
-const edges = ref<Array<{ id: string; source: string; target: string }>>([])
-const selectedIds = ref<Set<string>>(new Set())
+const edges = ref<Array<{ id: string; type?: string; source: string; target: string }>>([])
+const selectedIds = ref<Set<string>>(new Set<string>())
 
 // 业务 type → 壳组件：所有节点都经 BaseNode(壳)渲染，BaseNode 按 node.type 经 NodeRenderer 解析 content
 const nodeTypes = { text: BaseNode, image: BaseNode }
+// 边类型：所有边走 CustomEdge（自定义边，v1 Canvas 里 edgeTypes.custom，金标准 core-node-contract §6）
+const edgeTypes = { custom: CustomEdge }
+// 自定义边外观：默认对齐 contract §0（edgeColor #3b82f6 / bezier / lineWidth 2 / 流光开 / 箭头默认关）
+const edgeVisual: EdgeVisual = {}
+// 选中集合注入给 CustomEdge：节点被选 → 相连边高亮流光
+provide(EDGE_VISUAL_KEY, edgeVisual)
+const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
+provide(EDGE_SELECTION_KEY, { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel })
 
 /** 默认 image seed：内联 SVG（离线可显示） */
 const SAMPLE_IMG =
@@ -190,7 +200,9 @@ function isValidConnection(conn: Connection): boolean {
 function onConnect(conn: Connection): void {
   if (!isValidConnection(conn) || !conn.source || !conn.target) return
   const id = `e-${conn.source}-${conn.target}`
-  edges.value = edges.value.filter((e) => e.id !== id).concat([{ id, source: conn.source, target: conn.target }])
+  edges.value = edges.value
+    .filter((e) => e.id !== id)
+    .concat([{ id, type: 'custom', source: conn.source, target: conn.target }])
   // M5：边仍是 VueFlow 视觉态(未落盘)；校验已走内核 validateConnection
 }
 
@@ -216,12 +228,15 @@ onMounted(async () => {
     // 存储为空(首次) → seed 默认 text+image 并落盘；非空则 bootCanvas 已 restore
     if (h.nodeStore.getNodes().length === 0) {
       const textId = h.ctx.get<TextNodeService>('text').addTextNode({ x: 80, y: 80 })
-      h.ctx.get<ImageNodeService>('image').addImageNode({ x: 500, y: 120 }, SAMPLE_IMG)
+      const imgId = h.ctx.get<ImageNodeService>('image').addImageNode({ x: 500, y: 120 }, SAMPLE_IMG)
       h.nodeStore.updateNodeData(textId, { text: SAMPLE_TEXT })
       await h.save.flush()
+      // 示例边：让首屏即展示 CustomEdge(自定义边)的流光观感（纯视觉态，未落盘）
+      nodes.value = storeToFlow()
+      edges.value = [{ id: `e-${textId}-${imgId}`, type: 'custom', source: textId, target: imgId }]
+    } else {
+      nodes.value = storeToFlow()
     }
-
-    nodes.value = storeToFlow()
     // 页面隐藏/离开时把脏数据落盘（防刷新丢）
     flushHandle.value = bindBrowserLifecycleFlush(h.save)
     window.addEventListener('keydown', onKeydown)
@@ -259,6 +274,7 @@ onBeforeUnmount(() => {
         :nodes="nodes"
         :edges="edges"
         :node-types="nodeTypes"
+        :edge-types="edgeTypes"
         :is-valid-connection="isValidConnection"
         :min-zoom="0.2"
         :max-zoom="2"
