@@ -218,11 +218,12 @@ export class NodeStorage {
     }
   }
 
-  /** 删除画布资源（不存在则静默返回 false） */
+  /** 删除画布资源（assetId 裸 hash 或带扩展 stored 名均可；不存在则返回 false） */
   async deleteResource(canvasId: string, assetId: string): Promise<boolean> {
-    const file = path.join(this.assetDir(canvasId), path.basename(assetId))
+    const name = await this.resolveResourceName(canvasId, assetId)
+    if (!name) return false
     try {
-      await fs.unlink(file)
+      await fs.unlink(path.join(this.assetDir(canvasId), name))
       return true
     } catch {
       return false
