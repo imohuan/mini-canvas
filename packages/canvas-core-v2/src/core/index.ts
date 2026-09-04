@@ -6,6 +6,8 @@ export { EventBus, registerEventName } from './EventBus'
 export { NodeRegistry } from './registry/nodeRegistry'
 export type { NodePresentation, NodeSegment } from './registry/nodeRegistry'
 export { resolveSegment, hasContent, activeSegments } from './registry/nodeRenderer'
+export { registerNodeType } from './registry/registerNodeType'
+export type { NodeTypeDef } from './registry/registerNodeType'
 export {
   Lifecycle,
 } from './types'
