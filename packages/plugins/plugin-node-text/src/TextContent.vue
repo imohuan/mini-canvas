@@ -6,7 +6,7 @@ import { inject, ref, nextTick, onBeforeUnmount } from 'vue'
 import { HOST_KEY } from '@mini-canvas/canvas-core-v2'
 import type { TextNodeService } from './nodeTextPlugin'
 
-defineProps<{ id: string; data: { text?: string } }>()
+const props = defineProps<{ id: string; data: { text?: string } }>()
 
 // 宿主句柄经 HOST_KEY(内核 provide/inject 令牌)获取，再经 host.ctx.get('text') 调插件服务
 const hostRef = inject(HOST_KEY)
