@@ -15,8 +15,8 @@ async function main() {
   const r = await client.callTool({ name: 'canvas.create_canvas', arguments: { taskId: canvasId, name: 'HTTP连接测试' } })
   console.log('create_canvas:', JSON.stringify(r.content))
 
-  const n = await client.callTool({ name: 'canvas.create_node', arguments: { taskId: canvasId, type: 'image', position: { x: 1, y: 2 }, data: { label: '图A' } } })
-  console.log('create_node:', JSON.stringify(n.content))
+  const n = await client.callTool({ name: 'canvas.batch_nodes', arguments: { canvasId, add: [{ type: 'image', position: { x: 1, y: 2 }, data: { label: '图A' } }] } })
+  console.log('batch_nodes:', JSON.stringify(n.content))
 
   await client.close()
   console.log('🎉 MCP Streamable HTTP 连接验证通过')

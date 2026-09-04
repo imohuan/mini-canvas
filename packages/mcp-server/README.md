@@ -51,12 +51,13 @@ node node_modules/tsx/dist/cli.mjs packages/mcp-server/src/cli.ts mcp list-tools
 
 ## MCP 工具
 
-**画布/任务**：`canvas.create_canvas` `canvas.list_canvases` `canvas.delete_canvas`
-**节点**：`canvas.create_node` `canvas.list_nodes` `canvas.get_node` `canvas.update_node` `canvas.delete_node`
-**连线**：`canvas.create_edge` `canvas.list_edges` `canvas.delete_edge`
-**定位**：`canvas.set_node_position` `canvas.set_viewport`
-**持久化**：`canvas.save` `canvas.load` `canvas.export_json`
-**异步任务**：`task.create` `task.status`
+MCP 工具保持精简（共 9 个），节点/连线的单点增删改都收敛到批量工具，一次合并执行：
+
+**画布**：`canvas.create_canvas` `canvas.list_canvases` `canvas.delete_canvas` `canvas.get`（读整张画布全量）
+**节点批量**：`canvas.batch_nodes` `{add:[...], delete:[...], update:[...]}`
+**连线批量**：`canvas.batch_edges` `{add:[...], delete:[...], update:[...]}`
+**语义化创建 + 后台任务**：`create_node`（预览/生成双模式，自动建预览节点并连线并提交任务）→ 返回 nodeId，用 `node.status` 查进度
+**模型**：`models.list`
 
 ## HTTP API（前端用）
 

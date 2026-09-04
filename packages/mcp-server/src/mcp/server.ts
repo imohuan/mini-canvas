@@ -1,8 +1,17 @@
 /**
  * MCP 服务构建
  *
- * 把 GraphModel（headless 画布）+ NodeStorage（落盘）包成 MCP Tool，
- * 用官方 @modelcontextprotocol/sdk 创建 server。
+ * 把 GraphModel（headless 画布）+ NodeStorage（落盘）+ TaskManager（后台生成任务）
+ * 包成一组"简洁"的 MCP Tool，用官方 @modelcontextprotocol/sdk 创建 server。
+ *
+ * 设计原则（AI 视角最小可用面）：
+ * - 画布生命周期：create/list/delete/get（get 返回整张画布供 AI 读上下文）。
+ * - 节点/连线编辑：全部收敛到 canvas.batch_nodes / canvas.batch_edges，
+ *   支持 { add:[...], delete:[...], update:[...] } 一次合并执行，不再暴露单点原语。
+ * - 语义化创建 + 后台任务：create_node（预览/生成双模式，自动建预览节点并连线并提交任务）
+ *   + node.status（按 nodeId 查任务进度）。不再暴露 task.create/task.status。
+ * - 底层 model 方法 / REST（前端插件走 REST + SSE）与 MCP 工具面解耦：
+ *   删工具不影响前端功能，只影响 AI 经 MCP 能看到、能调用的能力。
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
@@ -22,26 +31,11 @@ const TOOL_LIST: McpTool[] = [
   { name: 'canvas.create_canvas', description: '创建画布（taskId 即画布 id）' },
   { name: 'canvas.list_canvases', description: '列出所有画布' },
   { name: 'canvas.delete_canvas', description: '删除画布' },
-  { name: 'canvas.batch', description: '画布批量增删' },
-  { name: 'canvas.batch_nodes', description: '画布节点批量增删改查（add/delete/update 合并）' },
-  { name: 'canvas.batch_edges', description: '画布连线批量增删改查（add/delete/update 合并）' },
-  { name: 'create_node', description: '语义化创建节点（预览或生成任务）' },
-  { name: 'canvas.create_node', description: '创建节点（图片/视频/音频/文本等）' },
-  { name: 'canvas.list_nodes', description: '列出画布下所有节点' },
-  { name: 'canvas.get_node', description: '获取单个节点' },
-  { name: 'canvas.update_node', description: '更新节点' },
-  { name: 'canvas.delete_node', description: '删除节点（含关联连线）' },
-  { name: 'canvas.create_edge', description: '创建连线' },
-  { name: 'canvas.list_edges', description: '列出画布下所有连线' },
-  { name: 'canvas.delete_edge', description: '删除连线' },
-  { name: 'canvas.set_node_position', description: '设置节点位置' },
-  { name: 'canvas.set_viewport', description: '设置视口（缩放/平移）' },
-  { name: 'canvas.save', description: '保存画布到本地 JSON（后台落盘）' },
-  { name: 'canvas.load', description: '从本地 JSON 加载画布' },
-  { name: 'canvas.export_json', description: '导出画布 JSON' },
-  { name: 'task.create', description: '创建异步任务，立即返回 task_id，后台自动处理' },
-  { name: 'task.status', description: '查询任务状态' },
-  { name: 'node.status', description: '按节点 id 查询其最近任务状态' },
+  { name: 'canvas.get', description: '读取整张画布（节点/连线/视口全量）' },
+  { name: 'canvas.batch_nodes', description: '画布节点批量增删改（add/delete/update 合并一次执行）' },
+  { name: 'canvas.batch_edges', description: '画布连线批量增删改（add/delete/update 合并一次执行）' },
+  { name: 'create_node', description: '语义化创建节点（预览或生成任务，自动建参考图预览节点并连线）' },
+  { name: 'node.status', description: '按节点 id 查询该节点最近一次生成任务的状态' },
   { name: 'models.list', description: '列出后台可用的生成模型与能力' },
 ]
 
@@ -66,7 +60,7 @@ export function createMcpServer(
   // MCP tool handler 应返回 CallToolResult：{ content: [{ type:'text', text }] }
   const toText = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] })
 
-  // ==================== 画布/任务 ====================
+  // ==================== 画布生命周期 ====================
 
   server.tool(
     'canvas.create_canvas',
@@ -102,14 +96,25 @@ export function createMcpServer(
     },
   )
 
+  server.tool(
+    'canvas.get',
+    '读取整张画布全量（nodes/edges/viewport），供 AI 掌握画布当前全貌后继续编辑',
+    { canvasId: z.string().describe('画布 id（taskId）') },
+    async ({ canvasId }) => {
+      if (!model.hasCanvas(canvasId)) return toText({ ok: false, error: '画布不存在' })
+      const json = model.toJSON(canvasId)
+      return toText({ ok: true, canvasId, nodeCount: json.nodes.length, edgeCount: json.edges.length, nodes: json.nodes, edges: json.edges, viewport: json.viewport })
+    },
+  )
+
   // ==================== 语义化创建（create_node） ====================
 
   server.tool(
     'create_node',
-    '语义化创建节点并（生成模式）提交后台任务。type=image/video/audio/text。' +
+    '语义化创建节点并（生成模式）自动提交后台任务。type=image/video/audio/text。' +
       '用法一(预览/展示资源)：{ type:"image", args:{ path:"绝对路径" } } → 自动复用/新建展示节点，返回 nodeId。' +
       '用法二(生成任务)：{ type:"image", args:{ prompt, model?, ratio?, resolution?, referenceImages?:[绝对路径...] } } → 后台按 referenceImages 自动复用/新建预览节点并连线到生成节点，然后提交生成任务。返回生成节点 nodeId + taskId。' +
-      '返回的 nodeId 可用 node.status / task.status 查询任务进度',
+      '返回的 nodeId 可用 node.status 查询任务进度',
     {
       canvasId: z.string().describe('画布 id'),
       type: z.enum(['image', 'video', 'audio', 'text']),
@@ -130,143 +135,12 @@ export function createMcpServer(
     },
   )
 
-  // ==================== 节点 ====================
-
-  server.tool(
-    'canvas.create_node',
-    '创建节点（image/video/audio/text/panorama/image-compare）。options 为该节点的持久化配置（图片节点：promptText/promptDoc/selectedModel/selectedRatio/selectedResolution/selectedTemplate），会合并进 data.options',
-    {
-      taskId: z.string(),
-      type: z.enum(['image', 'video', 'audio', 'text', 'panorama', 'image-compare']),
-      position: z.object({ x: z.number(), y: z.number() }).optional(),
-      data: z.record(z.unknown()).optional(),
-      options: z.record(z.unknown()).optional().describe('节点持久化配置，合并进 data.options（如 promptText、selectedModel 等）'),
-    },
-    async ({ taskId, type, position, data, options }) => {
-      const mergedData = {
-        ...(data ?? {}),
-        ...(options ? { options: { ...(data?.options as Record<string, unknown> | undefined), ...options } } : {}),
-      }
-      const node = model.createNode(taskId, { type, position, data: mergedData })
-      return toText({ ok: true, node })
-    },
-  )
-
-  server.tool(
-    'canvas.list_nodes',
-    '列出画布下所有节点',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      return toText({ nodes: model.listNodes(taskId) })
-    },
-  )
-
-  server.tool(
-    'canvas.get_node',
-    '获取单个节点',
-    { taskId: z.string(), nodeId: z.string() },
-    async ({ taskId, nodeId }) => {
-      const node = model.getNode(taskId, nodeId)
-      return toText(node ? { ok: true, node } : { ok: false, error: '节点不存在' })
-    },
-  )
-
-  server.tool(
-    'canvas.update_node',
-    '更新节点（data 内字段可更新 status/progress/options/taskId 等；taskId 为节点运行任务的 id）',
-    {
-      taskId: z.string(),
-      nodeId: z.string(),
-      position: z.object({ x: z.number(), y: z.number() }).optional(),
-      data: z.record(z.unknown()).optional(),
-    },
-    async ({ taskId, nodeId, position, data }) => {
-      const node = model.updateNode(taskId, nodeId, {
-        position: position as any,
-        data: data as any,
-      })
-      return toText(node ? { ok: true, node } : { ok: false, error: '节点不存在' })
-    },
-  )
-
-  server.tool(
-    'canvas.delete_node',
-    '删除节点（含关联连线）',
-    { taskId: z.string(), nodeId: z.string() },
-    async ({ taskId, nodeId }) => {
-      const removed = model.deleteNode(taskId, nodeId)
-      return toText({ ok: removed })
-    },
-  )
-
-  // ==================== 连线 ====================
-
-  server.tool(
-    'canvas.create_edge',
-    '创建连线',
-    {
-      taskId: z.string(),
-      source: z.string(),
-      target: z.string(),
-      sourceHandle: z.string().optional(),
-      targetHandle: z.string().optional(),
-    },
-    async ({ taskId, source, target, sourceHandle, targetHandle }) => {
-      try {
-        const edge = model.createEdge(taskId, { source, target, sourceHandle, targetHandle })
-        return toText({ ok: true, edge })
-      } catch (err) {
-        return toText({ ok: false, error: (err as Error).message })
-      }
-    },
-  )
-
-  server.tool(
-    'canvas.list_edges',
-    '列出画布下所有连线',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      return toText({ edges: model.listEdges(taskId) })
-    },
-  )
-
-  server.tool(
-    'canvas.delete_edge',
-    '删除连线',
-    { taskId: z.string(), edgeId: z.string() },
-    async ({ taskId, edgeId }) => {
-      const removed = model.deleteEdge(taskId, edgeId)
-      return toText({ ok: removed })
-    },
-  )
-
-  // ==================== 定位 ====================
-
-  server.tool(
-    'canvas.set_node_position',
-    '设置节点位置',
-    { taskId: z.string(), nodeId: z.string(), x: z.number(), y: z.number() },
-    async ({ taskId, nodeId, x, y }) => {
-      const node = model.setNodePosition(taskId, nodeId, x, y)
-      return toText(node ? { ok: true, node } : { ok: false, error: '节点不存在' })
-    },
-  )
-
-  server.tool(
-    'canvas.set_viewport',
-    '设置视口（缩放/平移）',
-    { taskId: z.string(), x: z.number(), y: z.number(), zoom: z.number() },
-    async ({ taskId, x, y, zoom }) => {
-      model.setViewport(taskId, { x, y, zoom })
-      return toText({ ok: true, viewport: model.getViewport(taskId) })
-    },
-  )
-
-  // ==================== 批量 CRUD（合并执行） ====================
+  // ==================== 节点批量 CRUD（合并执行） ====================
 
   server.tool(
     'canvas.batch_nodes',
-    '画布节点批量增删改查，合并一次执行：{ add:[{type,position?,data?,options?,id?}], delete:[nodeId,...], update:[{id, patch?}] }。add 支持语义 type(image/video/audio/text/...) 自动转前端可渲染格式；update.patch.data/options 为浅合并。返回 added/deleted/updated ids',
+    '画布节点批量增删改，合并一次执行：{ add:[{type,position?,data?,options?,id?}], delete:[nodeId,...], update:[{id, position?, data?}] }。' +
+      'add 支持语义 type(image/video/audio/text/panorama/image-compare) 自动转前端可渲染格式；options 合并进 data.options；update.data/options 为浅合并。返回 added/deleted/updated ids',
     {
       canvasId: z.string().describe('画布 id（taskId）'),
       add: z.array(z.object({
@@ -298,9 +172,11 @@ export function createMcpServer(
     },
   )
 
+  // ==================== 连线批量 CRUD（合并执行） ====================
+
   server.tool(
     'canvas.batch_edges',
-    '画布连线批量增删改查，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?,id?}], delete:[edgeId,...], update:[{id, patch?}] }。返回 added/deleted/updated ids',
+    '画布连线批量增删改，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?,id?}], delete:[edgeId,...], update:[{id, source?/target?/sourceHandle?/targetHandle?/data?}] }。返回 added/deleted/updated ids',
     {
       canvasId: z.string(),
       add: z.array(z.object({
@@ -333,108 +209,11 @@ export function createMcpServer(
     },
   )
 
-  server.tool(
-    'canvas.batch',
-    '画布批量增删：{ add:[{id(taskId), name?}], delete:[canvasId,...] }。返回 added/deleted',
-    {
-      add: z.array(z.object({ id: z.string(), name: z.string().optional() })).optional(),
-      delete: z.array(z.string()).optional(),
-    },
-    async ({ add, delete: del }) => {
-      const added: string[] = []
-      for (const c of add ?? []) {
-        if (!model.hasCanvas(c.id)) {
-          model.createCanvas(c.id, c.name)
-          await storage.createProject(c.name ?? c.id, c.id)
-        }
-        added.push(c.id)
-      }
-      const deleted: string[] = []
-      for (const id of del ?? []) {
-        if (model.deleteCanvas(id)) {
-          await storage.deleteProject(id)
-          deleted.push(id)
-        }
-      }
-      return toText({ ok: true, added, deleted })
-    },
-  )
-
-  // ==================== 持久化（归后台） ====================
-
-  server.tool(
-    'canvas.save',
-    '保存画布到本地 JSON（由后台落盘）',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      const json = model.toJSON(taskId)
-      await storage.saveCanvas(taskId, json.nodes, json.edges)
-      return toText({ ok: true, canvasId: taskId })
-    },
-  )
-
-  server.tool(
-    'canvas.load',
-    '从本地 JSON 加载画布到内存（由后台读取）',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      const data = await storage.loadCanvas(taskId)
-      if (!model.hasCanvas(taskId)) model.createCanvas(taskId)
-      model.fromJSON(taskId, data)
-      return toText({ ok: true, nodeCount: data.nodes.length, edgeCount: data.edges.length })
-    },
-  )
-
-  server.tool(
-    'canvas.export_json',
-    '导出画布完整 JSON',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      return toText({ json: model.toJSON(taskId) })
-    },
-  )
-
-  // ==================== 异步任务（后台接管） ====================
-
-  server.tool(
-    'task.create',
-    '提交一次生成任务到后台（低层原语；语义化创建请用 create_node）。立即返回 task_id，后台自动处理，进度/结果经 SSE 广播并写回目标节点 data.runState',
-    {
-      kind: z.enum(['image', 'video', 'audio', 'text']).describe('任务类型'),
-      canvasId: z.string().describe('关联画布 id（taskId）'),
-      targetNodeId: z.string().describe('结果写回的目标节点 id'),
-      model: z.string().describe('模型 id，如 doubao-seedream-45 / apimart-gpt-image-2'),
-      promptText: z.string().optional().describe('提示词'),
-      ratio: z.string().optional(),
-      resolution: z.string().optional(),
-      resources: z.array(z.object({ id: z.string().optional(), kind: z.string().optional(), name: z.string().optional(), url: z.string().optional() })).optional().describe('参考图/音频等资源，url 为可访问地址'),
-    },
-    async ({ kind, canvasId, targetNodeId, model, promptText, ratio, resolution, resources }) => {
-      try {
-        const payload = { model, promptText: promptText ?? '', ratio, resolution, resources: (resources ?? []).map((r) => ({ ...r, kind: (r.kind as any) ?? 'image' })) }
-        const task = taskManager.createTask(kind, canvasId, targetNodeId, payload)
-        return toText({ ok: true, taskId: task.id, status: task.status })
-      } catch (err) {
-        return toText({ ok: false, error: (err as Error).message })
-      }
-    },
-  )
-
-  server.tool(
-    'task.status',
-    '查询任务状态（含进度/结果）',
-    { taskId: z.string() },
-    async ({ taskId }) => {
-      const task = taskManager.getTaskStatus(taskId)
-      return task
-        ? toText({ ok: true, task })
-        : toText({ ok: false, error: '任务不存在' })
-    },
-  )
+  // ==================== 任务状态 ====================
 
   server.tool(
     'node.status',
-    '按节点 id 查询该节点最近一次生成任务的状态（status/progress/message/result/error）',
+    '按节点 id 查询该节点最近一次生成任务的状态（status/progress/message/result/error/runState）',
     { canvasId: z.string(), nodeId: z.string() },
     async ({ canvasId, nodeId }) => {
       const node = model.getNode(canvasId, nodeId)
@@ -451,6 +230,8 @@ export function createMcpServer(
       })
     },
   )
+
+  // ==================== 模型 ====================
 
   server.tool(
     'models.list',

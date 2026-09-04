@@ -1,8 +1,12 @@
 /**
- * 异步任务后台 e2e 测试
+ * create_node 生成模式 + node.status 后台任务 e2e 测试
  *
- * 验证：task.create 立即返回 task_id（pending）→ 后台自动处理 →
- * 完成后节点 data 被回写（status=done, progress=100）→ task.status 可查询。
+ * 验证：create_node（生成模式）立即返回 nodeId + taskId（任务入队）→
+ * 后台处理（本 e2e 未接真实 web2api，任务落到终态 error，属预期）→
+ * node.status 能查到该节点最近任务，且节点 data.runState 被后台回写。
+ *
+ * 重点验证 MCP 精简后的链路：语义化创建（自动建预览节点 + 连线 + 提交任务）
+ * + 按 nodeId 查任务，而非依赖已删除的 task.create/task.status/get_node。
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -24,52 +28,56 @@ async function main() {
   const workdir = mkdtempSync(path.join(os.tmpdir(), 'mcp-task-'))
   const transport = new StdioClientTransport({
     command: 'node',
-    args: [TSX, CLI, 'mcp', 'start', '--transport', 'stdio', '--dir', workdir],
+    args: [TSX, CLI, 'mcp', 'start', '--transport', 'stdio', '--port', '18771', '--dir', workdir],
     cwd: PACKAGE_ROOT,
   })
   const client = new Client({ name: 'task-e2e', version: '1.0.0' })
   await client.connect(transport)
 
-  console.log('== 创建画布和节点 ==')
+  console.log('== 创建画布 ==')
   await client.callTool({ name: 'canvas.create_canvas', arguments: { taskId: 't1' } })
-  const n = await client.callTool({ name: 'canvas.create_node', arguments: { taskId: 't1', type: 'image', data: { label: '生成图' } } })
-  const nodeId = text(n).match(/"id":"([^"]+)"/)![1]
 
-  console.log('== task.create 立即返回 task_id ==')
-  const t = await client.callTool({
-    name: 'task.create',
-    arguments: { kind: 'image', canvasId: 't1', targetNodeId: nodeId, payload: { prompt: 'a cat' } },
+  console.log('== create_node 生成模式（带参考图，自动建预览节点+连线+提交任务） ==')
+  const c = await client.callTool({
+    name: 'create_node',
+    arguments: {
+      canvasId: 't1',
+      type: 'image',
+      args: { prompt: '一只猫', model: 'doubao-seedream-45', referenceImages: ['C:/tmp/ref1.png'] },
+    },
   })
-  const tText = text(t)
-  const taskId = tText.match(/"taskId":"([^"]+)"/)![1]
-  console.log(`  task_id = ${taskId}`)
-  if (!tText.includes('"ok":true')) throw new Error('task.create 未返回 ok')
+  const cText = text(c)
+  if (!cText.includes('"ok":true') || !cText.includes('"mode":"generate"')) throw new Error(`create_node 未生成，实际: ${cText}`)
+  const genNodeId = cText.match(/"nodeId":"([^"]+)"/)![1]
+  console.log(`  生成节点 nodeId = ${genNodeId}`)
+  console.log('  ✓ create_node 生成模式返回 nodeId + taskId（自动建预览节点 + 连线）')
 
-  console.log('== 轮询 task.status 直到完成 ==')
-  let done = false
+  console.log('== 轮询 node.status 直到任务进入终态 ==')
+  let runState: string | null = null
+  let terminal = false
   for (let i = 0; i < 30; i++) {
-    const s = await client.callTool({ name: 'task.status', arguments: { taskId } })
+    const s = await client.callTool({ name: 'node.status', arguments: { canvasId: 't1', nodeId: genNodeId } })
     const sText = text(s)
-    if (sText.includes('"status":"done"')) {
-      done = true
-      console.log(`  ✓ 任务完成`)
-      break
+    const parsed = JSON.parse(sText)
+    if (parsed.ok && parsed.runState?.status) {
+      runState = parsed.runState.status
+      if (runState === 'done' || runState === 'error') { terminal = true; break }
     }
     await new Promise((r) => setTimeout(r, 200))
   }
-  if (!done) throw new Error('任务未在预期时间内完成')
+  if (!terminal) throw new Error(`任务未进入终态（未接 web2api 应为 error），runState=${runState}`)
+  console.log(`  ✓ node.status 返回节点 runState.status = ${runState}（无真实后台时预期 error，链路通）`)
 
-  console.log('== 验证节点已被后台回写 status=done ==')
-  const node = await client.callTool({ name: 'canvas.get_node', arguments: { taskId: 't1', nodeId } })
-  const nodeText = text(node)
-  if (!nodeText.includes('"status":"done"') || !nodeText.includes('"progress":100')) {
-    throw new Error(`节点未回写 done，实际: ${nodeText}`)
-  }
-  console.log('  ✓ 节点 data.status=done, progress=100')
+  console.log('== canvas.get 复核生成节点与预览节点已上画布 ==')
+  const g = await client.callTool({ name: 'canvas.get', arguments: { canvasId: 't1' } })
+  const gText = text(g)
+  const parsedG = JSON.parse(gText)
+  if (!parsedG.nodes || parsedG.nodes.length < 2) throw new Error(`canvas.get 未含预览+生成节点，实际: ${gText}`)
+  console.log(`  ✓ canvas.get 返回 ${parsedG.nodes.length} 节点 / ${parsedG.edges.length} 连线（含自动建的预览节点与连线）`)
 
   await client.close()
   rmSync(workdir, { recursive: true, force: true })
-  console.log('\n✅ 异步任务后台 e2e 通过')
+  console.log('\n✅ create_node 生成模式 + node.status e2e 通过')
 }
 
 main().catch((err) => {
