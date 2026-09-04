@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ShortcutManager, type ShortcutHelpItem } from '../ShortcutManager'
 
 const props = defineProps<{ item: ShortcutHelpItem }>()
@@ -114,49 +114,56 @@ function handleKeyUp(e: KeyboardEvent) {
   }
 }
 
-function resetToCurrent() {
-  // 清回未修改
-  newKeys.value = props.item.keys
-  conflict.value = null
-  success.value = false
+/** 重置当前条目到注册时的默认键位 */
+function resetToDefault() {
+  if (listening.value) {
+    // 先停录制
+    listening.value = false
+    heldModifiers.clear()
+    allModifiersPressed.clear()
+  }
+  const result = manager.resetToDefault(props.item.id)
+  if (result.ok && result.keys !== undefined) {
+    newKeys.value = result.keys
+    success.value = true
+    conflict.value = null
+  } else {
+    // 没有默认键位的兜底：清空录制结果
+    newKeys.value = ''
+    conflict.value = null
+    success.value = false
+  }
 }
 
 function collapse() {
   emit('close')
 }
 
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeyDown, true)
-  document.removeEventListener('keyup', handleKeyUp, true)
+onMounted(() => {
+  if (typeof document !== 'undefined') {
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
+  }
 })
 
-// 监听生命周期由父组件控制：组件挂载即开始监听（如果是打开状态）
-if (typeof document !== 'undefined') {
-  document.addEventListener('keydown', handleKeyDown, true)
-  document.addEventListener('keyup', handleKeyUp, true)
-}
+onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.removeEventListener('keydown', handleKeyDown, true)
+    document.removeEventListener('keyup', handleKeyUp, true)
+  }
+})
 
-/** 渲染 newKeys 为 kbd chips（共用父级风格） */
+/** 渲染键位为 kbd chips */
 function renderKeyParts(keys: string) {
   return keys.split('+').map(p => p.trim()).filter(Boolean)
 }
 </script>
 
 <template>
-  <div class="remap-inline" @pointerdown.stop>
-    <div class="remap-inline-head">
-      <span class="remap-inline-eyebrow">重映射</span>
-      <span class="remap-inline-title">{{ item.command }}</span>
-      <button class="remap-collapse-btn" title="收起" @click="collapse">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 9l6 6 6-6"/>
-        </svg>
-      </button>
-    </div>
-
-    <div class="remap-inline-body">
-      <div class="remap-inline-row">
-        <span class="remap-inline-label">当前</span>
+  <div class="remap-panel" @pointerdown.stop>
+    <div class="remap-panel-body">
+      <div class="remap-panel-row">
+        <span class="remap-panel-label">当前</span>
         <span class="shortcut-keys">
           <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="`cur-${pIdx}`">
             <span class="kbd-chip">{{ part }}</span>
@@ -165,8 +172,8 @@ function renderKeyParts(keys: string) {
         </span>
       </div>
 
-      <div class="remap-inline-row">
-        <span class="remap-inline-label">新键位</span>
+      <div class="remap-panel-row">
+        <span class="remap-panel-label">新键位</span>
         <button
           class="remap-listen-btn"
           :class="{ listening: listening, 'has-value': !!newKeys && !listening }"
@@ -188,95 +195,60 @@ function renderKeyParts(keys: string) {
         </button>
       </div>
 
-      <div v-if="conflict" class="remap-conflict">⚠ {{ conflict }}</div>
-      <div v-else-if="success" class="remap-success">✓ 已更新</div>
+      <div v-if="conflict" class="remap-feedback is-conflict">⚠ {{ conflict }}</div>
+      <div v-else-if="success" class="remap-feedback is-success">✓ 已更新</div>
+    </div>
 
-      <div class="remap-inline-actions">
-        <button class="remap-text-btn" @click="resetToCurrent" :disabled="listening">还原当前</button>
-        <button class="remap-text-btn" @click="startListening" :disabled="listening">重新录制</button>
-        <button class="remap-primary-btn" @click="collapse">{{ success ? '完成' : '收起' }}</button>
-      </div>
+    <div class="remap-panel-actions">
+      <button class="remap-text-btn" @click="resetToDefault" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+        </svg>
+        重置默认
+      </button>
+      <button
+        class="remap-text-btn"
+        @click="listening ? null : startListening()"
+        :disabled="listening"
+        type="button"
+      >
+        重新录制
+      </button>
+      <button class="remap-confirm-btn" @click="collapse" type="button">完成</button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.remap-inline {
-  margin: 4px 4px 6px 44px;
-  padding: 10px 12px 12px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.035);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  animation: remap-inline-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.remap-inline-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
-  margin-bottom: 10px;
-}
-
-.remap-inline-eyebrow {
-  font-size: 10px;
-  font-weight: 700;
-  color: #0891b2;
-  background: rgba(8, 145, 178, 0.12);
-  padding: 2px 6px;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
-}
-
-.remap-inline-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #111827;
-  flex: 1;
-}
-
-.remap-collapse-btn {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  background: transparent;
-  border-radius: 6px;
-  color: #6b7280;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.remap-collapse-btn :deep(svg) {
-  width: 14px;
-  height: 14px;
-}
-.remap-collapse-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: #111827;
-}
-
-.remap-inline-body {
+.remap-panel {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  padding: 12px 10px 10px;
+  background: rgba(8, 145, 178, 0.06);
+  border-top: 1px solid rgba(8, 145, 178, 0.14);
+  animation: remap-panel-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.remap-inline-row {
+.remap-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remap-panel-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 28px;
+  gap: 12px;
+  min-height: 30px;
 }
 
-.remap-inline-label {
+.remap-panel-label {
   flex: 0 0 48px;
   font-size: 11px;
   font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
+  color: #0891b2;
   letter-spacing: 0.04em;
 }
 
@@ -284,7 +256,7 @@ function renderKeyParts(keys: string) {
   flex: 1;
   min-height: 36px;
   padding: 6px 12px;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed rgba(8, 145, 178, 0.32);
   border-radius: 8px;
   background: #ffffff;
   color: #6b7280;
@@ -298,15 +270,16 @@ function renderKeyParts(keys: string) {
 }
 
 .remap-listen-btn:hover {
-  border-color: rgba(0, 0, 0, 0.32);
+  border-color: rgba(8, 145, 178, 0.6);
   color: #111827;
+  background: rgba(8, 145, 178, 0.04);
 }
 
 .remap-listen-btn.listening {
   border-style: solid;
   border-color: #0891b2;
   color: #0891b2;
-  background: rgba(8, 145, 178, 0.08);
+  background: rgba(8, 145, 178, 0.1);
   animation: remap-pulse 1.2s ease-in-out infinite;
 }
 
@@ -323,7 +296,6 @@ function renderKeyParts(keys: string) {
   border-radius: 50%;
   background: #0891b2;
   margin-right: 6px;
-  box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.6);
 }
 
 .shortcut-keys {
@@ -356,35 +328,37 @@ function renderKeyParts(keys: string) {
   font-weight: 700;
 }
 
-.remap-conflict {
+.remap-feedback {
   font-size: 11px;
   font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.remap-feedback.is-conflict {
   color: #b45309;
   background: rgba(245, 158, 11, 0.14);
-  padding: 4px 8px;
-  border-radius: 6px;
-  margin-top: 2px;
 }
 
-.remap-success {
-  font-size: 11px;
-  font-weight: 700;
+.remap-feedback.is-success {
   color: #047857;
   background: rgba(16, 185, 129, 0.14);
-  padding: 4px 8px;
-  border-radius: 6px;
-  margin-top: 2px;
 }
 
-.remap-inline-actions {
+.remap-panel-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
-  padding-top: 4px;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(8, 145, 178, 0.16);
 }
 
 .remap-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 6px 10px;
   border: 0;
   background: transparent;
@@ -395,6 +369,10 @@ function renderKeyParts(keys: string) {
   border-radius: 6px;
   transition: background 0.15s ease, color 0.15s ease;
 }
+.remap-text-btn :deep(svg) {
+  width: 12px;
+  height: 12px;
+}
 .remap-text-btn:hover:not(:disabled) {
   background: rgba(0, 0, 0, 0.05);
   color: #111827;
@@ -404,7 +382,7 @@ function renderKeyParts(keys: string) {
   cursor: not-allowed;
 }
 
-.remap-primary-btn {
+.remap-confirm-btn {
   padding: 6px 14px;
   border: 0;
   background: #0891b2;
@@ -415,14 +393,14 @@ function renderKeyParts(keys: string) {
   cursor: pointer;
   transition: background 0.15s ease, transform 0.15s ease;
 }
-.remap-primary-btn:hover {
+.remap-confirm-btn:hover {
   background: #0e7490;
 }
-.remap-primary-btn:active {
+.remap-confirm-btn:active {
   transform: scale(0.97);
 }
 
-@keyframes remap-inline-in {
+@keyframes remap-panel-in {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
@@ -433,9 +411,9 @@ function renderKeyParts(keys: string) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .remap-inline,
+  .remap-panel,
   .remap-listen-btn,
-  .remap-primary-btn {
+  .remap-confirm-btn {
     animation: none !important;
     transition: none !important;
   }

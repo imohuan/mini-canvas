@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ShortcutManager, type ShortcutHelpItem, type ShortcutGroup } from '../ShortcutManager'
-import RemapDialog from './RemapDialog.vue'
+import RemapPanel from './RemapPanel.vue'
 
 defineProps<{ onClose: () => void }>()
 const emit = defineEmits<{ close: [] }>()
@@ -269,7 +269,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                     <span class="canvas-menu-label">{{ item.command }}</span>
                     <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
                   </span>
-                  <span class="shortcut-keys">
+                  <span class="shortcut-keys font-mono">
                     <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
                       <span class="kbd-chip">{{ part }}</span>
                       <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
@@ -286,7 +286,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                 </div>
                 <Transition name="remap-expand">
                   <div v-if="remappingId === item.id" class="remap-slot">
-                    <RemapDialog :item="item" @close="closeRemap" />
+                    <RemapPanel :item="item" @close="closeRemap" />
                   </div>
                 </Transition>
               </template>
@@ -323,7 +323,8 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   padding: 12px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 1);
+  /* background: rgba(255, 255, 255, 0.82); */
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
@@ -646,9 +647,10 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   color: #0e7490;
 }
 
-/* 行下展开槽位 */
+/* 行下展开槽位：占满整行宽度，抵消行自身的 6px 左右内边距
+   但保留列表容器的 4px 左右外侧留白。 */
 .remap-slot {
-  margin: 0 4px;
+  margin: 0 -6px;
   border-bottom-left-radius: 10px;
   border-bottom-right-radius: 10px;
   overflow: hidden;

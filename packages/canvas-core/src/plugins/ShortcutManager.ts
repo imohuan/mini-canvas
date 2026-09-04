@@ -239,6 +239,24 @@ export class ShortcutManager {
     return { ok: true }
   }
 
+  /**
+   * 恢复单个快捷键到注册时的默认键位
+   *
+   * @param id - 快捷键 ID
+   * @returns 操作结果
+   */
+  resetToDefault(id: string): { ok: boolean; keys?: string; notFound?: true } {
+    const entry = this.registry.get(id)
+    if (!entry) return { ok: false, notFound: true }
+    const defaultKey = this.defaultKeys.get(id)
+    if (defaultKey === undefined) return { ok: false, notFound: true }
+
+    this.reverseKeyMap.delete(entry.keys)
+    entry.keys = defaultKey
+    this.reverseKeyMap.set(defaultKey, id)
+    return { ok: true, keys: defaultKey }
+  }
+
   // ================================================================
   // Import / Export
   // ================================================================
