@@ -18,11 +18,12 @@
             :key="node.id"
             class="node-find-item"
             :class="{ 'is-selected': index === selectedIndex }"
+            :style="typeStyle(node.data?.nodeType)"
             @click="focusNode(node.id)"
             @mouseenter="selectedIndex = index"
           >
             <span class="node-find-label">{{ node.data?.label || node.id }}</span>
-            <span class="node-find-type">{{ node.data?.nodeType || 'custom' }}</span>
+            <span class="node-find-type">{{ typeMeta(node.data?.nodeType).label }}</span>
           </div>
           <div v-if="filtered.length === 0 && query" class="no-results">
             无匹配节点
@@ -49,6 +50,31 @@ const emit = defineEmits<{
 const query = ref('')
 const selectedIndex = ref(0)
 const inputEl = ref<HTMLInputElement>()
+
+// 节点类型 → {中文名, 浅色背景, 深色文字}，按视觉区分多种节点
+const TYPE_PRESETS: Record<string, { label: string; bg: string; fg: string }> = {
+  image: { label: '图片', bg: '#ede9fe', fg: '#6d28d9' },        // violet
+  panorama: { label: '全景', bg: '#cffafe', fg: '#0e7490' },    // cyan
+  video: { label: '视频', bg: '#fce7f3', fg: '#be185d' },       // pink
+  'image-compare': { label: '对比图', bg: '#fef3c7', fg: '#b45309' }, // amber
+  group: { label: '分组', bg: '#dbeafe', fg: '#1d4ed8' },       // blue
+  text: { label: '文本', bg: '#dcfce7', fg: '#15803d' },        // green
+  temp: { label: '临时', bg: '#e5e7eb', fg: '#4b5563' },        // gray
+}
+const TYPE_FALLBACK = { label: '自定义', bg: '#f3f4f6', fg: '#6b7280' }
+
+function typeMeta(raw: string | undefined) {
+  const key = String(raw || '').trim()
+  return TYPE_PRESETS[key] ?? TYPE_FALLBACK
+}
+
+function typeStyle(raw: string | undefined) {
+  const m = typeMeta(raw)
+  return {
+    '--type-bg': m.bg,
+    '--type-fg': m.fg,
+  } as Record<string, string>
+}
 
 const filtered = computed(() => {
   // 过滤掉名称以 temp-target- 开头的临时目标节点
@@ -178,8 +204,8 @@ onMounted(async () => {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
-  background: rgba(0, 0, 0, 0.06);
+  color: var(--type-fg, #6b7280);
+  background: var(--type-bg, rgba(0, 0, 0, 0.06));
   padding: 2px 8px;
   border-radius: 6px;
 }
