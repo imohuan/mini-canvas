@@ -1,0 +1,910 @@
+<script setup lang="ts">
+import type { NodeProps } from '@vue-flow/core'
+import { computed, ref, watch, nextTick } from 'vue'
+import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { AxSelect } from '../../components/Ui'
+import { useTeleportTarget } from '../../components/Ui/hooks/useTeleportTarget'
+import type { SelectOption } from '../../components/Ui'
+import { useUpstreamResources } from '../../composables/useUpstreamResources'
+import { useCanvasRuntime } from '../../runtime/useCanvasRuntime'
+import {
+  type GenerationInputType,
+  type GenerationPayload,
+  getModel,
+  listModelOptions,
+  modelAcceptsInput,
+  ratioOptions,
+  resolutionOptions,
+  templatesForModel,
+} from './imageModels'
+
+export interface ToolbarConfig {
+  promptText: string
+  promptDoc?: any
+  selectedModel: string
+  /** 选中模型后使用的画面比例（仅模型声明 ratio 时存在） */
+  selectedRatio?: string
+  /** 选中模型后使用的分辨率档位（仅模型声明 resolution 时存在） */
+  selectedResolution?: string
+  /** 选中的模板 id（可选） */
+  selectedTemplate?: string
+}
+
+interface Props extends NodeProps {
+  isFullscreen?: boolean
+  /** 工具栏完整配置（显式 model 绑定，避免 defineModel 在 VueFlow 渲染边界下的写回失效） */
+  config: ToolbarConfig
+  /** 是否正在生成（父节点持有运行态；true 时禁用下拉与发送并显示「生成中」） */
+  isRunning?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), { isFullscreen: false, isRunning: false })
+
+const emit = defineEmits<{
+  (e: 'action', action: string, value?: unknown): void
+  (e: 'update:config', value: ToolbarConfig): void
+}>()
+
+/** 统一的配置写入口：始终以「新对象」替换 config prop 并向上 emit（父组件持有真正状态） */
+function setConfig(patch: Partial<ToolbarConfig>): void {
+  emit('update:config', { ...props.config, ...patch })
+}
+
+// ── 连接的上游节点资源（图片 + 文本）→ 素材资源 ──
+
+const teleportTarget = useTeleportTarget()
+const runtime = useCanvasRuntime()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function onAdd() {
+  fileInputRef.value?.click()
+}
+
+/** 选择图片后创建新图片节点并连接到当前节点输入端口 */
+async function onAddFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !props.id) return
+
+  try {
+    const node = (runtime.vueFlowInstance.getNodes.value as any[]).find((n: any) => n.id === props.id)
+    await runtime.commandRegistry.execute('image.addSource', {
+      runtime, actions: null, selection: null, viewport: null, store: null,
+      logger: console, node, nodeType: 'image',
+    }, { file })
+  } catch (err) {
+    console.error('[ImageBottomToolbar] 添加素材失败:', err)
+  }
+}
+
+const upstreamResources = useUpstreamResources(props.id as string | null)
+
+// ── 输入端口连接的媒体资源（仅图片/视频），在输入区顶部以正方形小卡片展示 ──
+const connectedMediaCards = computed(() =>
+  upstreamResources.value
+    .filter(res => res.kind === 'image' || res.kind === 'video')
+    .map(res => ({
+      kind: res.kind as 'image' | 'video',
+      url: res.url,
+      name: res.name,
+    })),
+)
+
+/** 点击媒体卡片：全屏预览（图片看图 / 视频播放） */
+function previewMedia(kind: 'image' | 'video', url: string) {
+  const viewer = document.createElement('div')
+  viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer'
+  if (kind === 'video') {
+    const vEl = document.createElement('video')
+    vEl.src = url
+    vEl.controls = true
+    vEl.autoplay = true
+    vEl.style.cssText = 'max-width:92vw;max-height:90vh;object-fit:contain;background:#000'
+    viewer.appendChild(vEl)
+  } else {
+    const imgEl = document.createElement('img')
+    imgEl.src = url
+    imgEl.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain'
+    viewer.appendChild(imgEl)
+  }
+  viewer.onclick = () => viewer.remove()
+  document.body.appendChild(viewer)
+}
+
+const connectedImages = computed<ResourceItem[]>(() =>
+  upstreamResources.value
+    // 6A：@ 引用菜单按当前模型可接受资源类型过滤
+    .filter((res) => supportsKind(res.kind))
+    .map((res, i) => {
+    // id 用上游节点唯一 id：@ 引用/序列化的稳定身份；name 只是 @ 下拉显示的文案
+    const base = {
+      id: res.id,
+      name: res.name || `素材${i + 1}`,
+      category: '素材',
+    }
+
+    // 文本类资源：无 url，走 editor 的文本资源分支（@name + data-value）
+    if (res.kind === 'text') {
+      const item: ResourceItem = {
+        ...base,
+        value: res.value,
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>`,
+        renderEditor: (self) => {
+          return [
+            "span",
+            {
+              class: "resource-node resource-node-text",
+              "data-id": self.id,
+              "data-name": self.name,
+              "data-value": self.value || "",
+              "data-category": self.category,
+            },
+            ["span", { class: "label" }, `@${self.name}`],
+          ]
+        },
+      }
+      return item
+    }
+
+    // 视频类资源：视频缩略图标 + 点击全屏播放
+    if (res.kind === 'video') {
+      const item: ResourceItem = {
+        ...base,
+        url: res.url,
+        mediaType: 'video',
+        icon: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><polygon points="23 7 16 12 23 17" fill="currentColor"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
+        renderEditor: (self) => {
+          return [
+            "span",
+            {
+              class: "resource-node resource-node-video",
+              "data-id": self.id,
+              "data-url": self.url || "",
+              "data-name": self.name,
+              "data-category": self.category,
+              style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom; color:#7c3aed",
+            },
+            ["span", { class: "label" }, `@${self.name}`],
+          ]
+        },
+        onClick: () => previewMedia('video', item.url || ''),
+      }
+      return item
+    }
+
+    // 图片类资源：缩略图 + 点击预览
+    const img = { url: res.url, name: res.name }
+    const item: ResourceItem = {
+      ...base,
+      url: res.url,
+      mediaType: 'image',
+      renderEditor: (self) => {
+        return [
+          "span",
+          {
+            class: "resource-node",
+            "data-id": self.id,
+            "data-url": self.url || "",
+            "data-name": self.name,
+            "data-category": self.category,
+            style: "display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom",
+          },
+          ["img", { src: self.url || "", draggable: "false", style: "width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none" }],
+        ]
+      },
+      onClick: () => {
+        const viewer = document.createElement('div')
+        viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:pointer'
+        const imgEl = document.createElement('img')
+        imgEl.src = img.url; imgEl.style.maxWidth = '90vw'; imgEl.style.maxHeight = '90vh'; imgEl.style.objectFit = 'contain'
+        viewer.appendChild(imgEl)
+        viewer.onclick = () => viewer.remove()
+        document.body.appendChild(viewer)
+      },
+    }
+    return item
+  })
+)
+
+/** 纯文本里的 @token 即节点唯一 id，据此回查回 resource node */
+function resolveResource(token: string): ResourceItem | null {
+  return connectedImages.value.find(item => item.id === token) || null
+}
+
+/** mention-menu 定位：从 DOM selection 获取实际光标位置，修正 ProseMirror coordsAtPos 在 transform 容器下的偏差 */
+function getMentionMenuStyle(vpPos: { left: string; top: string; origin?: string }) {
+  const fallback = { left: vpPos.left, top: vpPos.top, transformOrigin: vpPos.origin || 'top left' }
+  const editorEl = inputAreaRef.value?.querySelector('.ProseMirror') as HTMLElement | null
+  if (!editorEl) return fallback
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return fallback
+  if (!editorEl.contains(sel.anchorNode)) return fallback
+
+  const range = sel.getRangeAt(0).cloneRange()
+  range.collapse(true)
+  // 用 getBoundingClientRect 而非 getClientRects()[0]：零宽光标（行末/空行）getClientRects
+  // 返回的 width=0，但 getBoundingClientRect 仍返回有效位置。避免触发 fallback 走 vpPos
+  // （vpPos 来自 ProseMirror coordsAtPos，在外层 transform 缩放下会失真）。
+  const rect = range.getBoundingClientRect()
+  if (!rect) return fallback
+
+  // 边界检测（同 useEditor.ts showMenu 逻辑）
+  const menuWidth = 200
+  // 用实际渲染高度做翻转判定：资源项少时菜单很矮，用固定 280 会误判「放不下」而错误翻到上方
+  const menuMaxHeight = menuActualHeight.value
+  const gap = 8
+  const minMargin = 8
+
+  let left = rect.left
+  let top = rect.bottom + gap
+
+  if (left + menuWidth > window.innerWidth) left = rect.right - menuWidth
+  if (top + menuMaxHeight > window.innerHeight) top = rect.top - menuMaxHeight - gap
+
+  return {
+    left: `${Math.max(minMargin, left)}px`,
+    top: `${Math.max(minMargin, top)}px`,
+    transformOrigin: vpPos.origin || 'top left',
+  }
+}
+
+/** 计算 ResourceItem 在分组中的全局索引 */
+function getItemGlobalIndex(
+  item: ResourceItem,
+  groupedItems: Map<string, ResourceItem[]>,
+  categoryOrder: string[],
+): number {
+  let count = 0
+  for (const cat of categoryOrder) {
+    const catItems = groupedItems.get(cat)
+    if (!catItems) continue
+    const idx = catItems.indexOf(item)
+    if (idx !== -1) return count + idx
+    count += catItems.length
+  }
+  return -1
+}
+
+// ── 模型驱动下拉（中转逻辑）──
+
+/** 当前选中模型配置 */
+const currentModel = computed(() => getModel(props.config.selectedModel))
+
+/** 模型下拉选项（来自 provider，永远渲染） */
+const modelOptions = computed<SelectOption[]>(() => listModelOptions())
+
+/** 比例下拉选项（当前模型声明 ratio 才非空 → UI 才渲染） */
+const ratioDropdownOptions = computed<SelectOption[]>(() => ratioOptions(currentModel.value))
+
+/** 分辨率下拉选项（当前模型声明 resolution 才非空 → UI 才渲染） */
+const resolutionDropdownOptions = computed<SelectOption[]>(() => resolutionOptions(currentModel.value))
+
+/** 模板下拉选项（全局共享，可按模型收窄） */
+const templateDropdownOptions = computed<SelectOption[]>(() =>
+  templatesForModel(props.config.selectedModel).map((t) => ({ label: t.name, value: t.id })),
+)
+
+/** 模型是否支持某资源类型（供 @ 引用候选过滤） */
+const supportsKind = (kind: GenerationInputType | 'text') => modelAcceptsInput(currentModel.value, kind)
+
+// ── 显式 v-model 双向字段（读 props.config / 写 setConfig → 父组件持有真状态）──
+
+const promptText = computed({
+  get: () => props.config.promptText,
+  set: (val: string) => { setConfig({ promptText: val }) },
+})
+
+const promptDoc = computed({
+  get: () => props.config.promptDoc,
+  set: (val: any) => { setConfig({ promptDoc: val }) },
+})
+
+const selectedModel = computed({
+  get: () => props.config.selectedModel,
+  set: (val: string) => {
+    // 原子更新：切模型同时清理该模型不声明的 ratio/resolution（3B 消失逻辑）。
+    // 必须用「本次选中的 val」判断而非 onModelChange 读 props（props 尚未刷新，读到旧模型会回写旧值覆盖本次切换）。
+    const m = getModel(val)
+    const patch: Partial<ToolbarConfig> = { selectedModel: val }
+    if (!m?.ratio?.length) patch.selectedRatio = ''
+    if (!m?.resolution?.length) patch.selectedResolution = ''
+    setConfig(patch)
+  },
+})
+
+const selectedRatio = computed({
+  get: () => props.config.selectedRatio || '',
+  set: (val: string) => { setConfig({ selectedRatio: val }) },
+})
+
+const selectedResolution = computed({
+  get: () => props.config.selectedResolution || '',
+  set: (val: string) => { setConfig({ selectedResolution: val }) },
+})
+
+const selectedTemplate = computed({
+  get: () => props.config.selectedTemplate || '',
+  set: (val: string) => { setConfig({ selectedTemplate: val }) },
+})
+
+const inputAreaRef = ref<HTMLElement | null>(null)
+const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
+const mentionMenuRef = ref<HTMLElement | null>(null)
+
+/** @ 菜单的实际渲染高度（px）。菜单显示后测量，用于翻转判定，避免用固定 280 误判翻转 */
+const menuActualHeight = ref(280)
+
+// 菜单显示后测量真实高度，更新翻转判定依据
+watch(mentionMenuRef, async (el) => {
+  if (el) {
+    await nextTick()
+    const h = el.offsetHeight
+    if (h > 0) menuActualHeight.value = h
+  }
+})
+
+const hasOverlay = computed(() => !!props.data?._overlay)
+
+// ── 事件 ──
+
+function onInput() {
+  emit('action', 'input', promptText.value)
+}
+
+function onMore() {
+  emit('action', 'more')
+}
+
+/** 模板选择后：把该模板的提示词整体覆盖到输入框 */
+function onTemplateChange(val: string | number | (string | number)[]) {
+  const id = String(val)
+  setConfig({ selectedTemplate: id })
+  const tpl = templatesForModel(props.config.selectedModel).find((t) => t.id === id)
+  if (!tpl) return
+  setConfig({ promptText: tpl.prompt })
+  // 覆盖 ProseMirror 文档（富文本内容），编辑器暴露了 setText
+  editorRef.value?.setText(tpl.prompt)
+  emit('action', 'template-apply', tpl.prompt)
+}
+
+/** 切模型后的 ratio/resolution 清理已在 selectedModel setter 内原子完成（见上），此处不再单独处理 */
+
+// ================= 生成触发 =================
+// 运行态（进度显示 / 成功 / 失败 notify）由父节点 ImageNode 持有并驱动：
+//   - 工具栏把「点发送」组装成 payload 后 emit('action','send', payload)
+//   - ImageNode 执行 executeRun 并维护 runStatus/runProgress，
+//     且无论节点是否选中，都在节点上常驻渲染运行进度浮层（加载中/失败可见）
+// 工具栏只依赖 props.isRunning 禁用下拉与发送按钮。
+
+/** 发送：组装 payload 并交给父节点执行 */
+function onSend() {
+  if (props.isRunning) return
+  const payload: GenerationPayload = {
+    promptText: promptText.value,
+    promptDoc: promptDoc.value,
+    resources: connectedMediaResources.value,
+    model: props.config.selectedModel,
+    ratio: selectedRatio.value || undefined,
+    resolution: selectedResolution.value || undefined,
+    template: selectedTemplate.value || undefined,
+  }
+  emit('action', 'send', payload)
+}
+
+/** 发送时随行的资源（已连接 + 当前模型接受），转为 GenerationResource */
+const connectedMediaResources = computed(() =>
+  upstreamResources.value
+    .filter((res) => modelAcceptsInput(currentModel.value, res.kind))
+    .map((res) => ({
+      id: res.id,
+      kind: res.kind as GenerationInputType | 'text',
+      name: res.name,
+      url: res.url || undefined,
+      value: res.value || undefined,
+    })),
+)
+
+function onInputAreaClick() {
+  editorRef.value?.focusEnd()
+}
+
+/** 拦截 Delete/Backspace 键，防止 VueFlow 删除当前节点 */
+function onEditorKeydown(e: KeyboardEvent) {
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.stopPropagation()
+  }
+}
+</script>
+
+<template>
+  <div v-if="!hasOverlay" class="image-bottom-panel">
+    <!-- 输入区域 — ProseMirrorEditor -->
+    <div ref="inputAreaRef" class="input-area" @click="onInputAreaClick">
+      <!-- 输入端口连接的媒体资源（图片/视频）→ 正方形小卡片展示，点击全屏预览；末尾一个无意义的占位框 -->
+      <div class="media-cards-row">
+        <div
+          v-for="card in connectedMediaCards"
+          :key="card.url + card.name"
+          class="media-card"
+          :title="card.name"
+          @click.stop="previewMedia(card.kind, card.url)"
+        >
+          <video v-if="card.kind === 'video'" :src="card.url" muted preload="metadata" class="media-card-thumb" />
+          <img v-else :src="card.url" class="media-card-thumb" draggable="false" alt="" />
+          <span v-if="card.kind === 'video'" class="media-card-play">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="8 5 19 12 8 19 8 5" /></svg>
+          </span>
+        </div>
+        <!-- 无任何意义的占位框：点击与「添加素材」一致（选择图片文件），功能暂时转移到此 -->
+        <div class="media-card-placeholder" title="添加素材" @click.stop="onAdd">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round" /></svg>
+        </div>
+      </div>
+      <div class="editor-wrapper" @keydown="onEditorKeydown">
+        <ProseMirrorEditor ref="editorRef" v-model="promptText" v-model:prompt-doc="promptDoc" :resources="connectedImages" :resolve-resource="resolveResource" placeholder="描述你想要生成的画面内容，@引用素材"
+          @update:model-value="onInput" @click.stop>
+          <template #mention-menu="{ visible, groupedItems, categoryOrder, position, activeIndex, onSelect }">
+            <Teleport :to="teleportTarget">
+              <Transition name="ax-fade-scale">
+                <div v-if="visible" ref="mentionMenuRef" class="mention-menu-dropdown" :style="getMentionMenuStyle(position)">
+                  <template v-for="category in categoryOrder" :key="category">
+                    <div v-if="groupedItems.has(category) && groupedItems.get(category)!.length > 0">
+                      <div class="mention-menu-category">{{ category }}</div>
+                      <div v-for="item in groupedItems.get(category)!" :key="item.id"
+                        class="mention-menu-item"
+                        :class="{ active: getItemGlobalIndex(item, groupedItems, categoryOrder) === activeIndex }"
+                        @mousedown.prevent="onSelect(item)">
+                        <img v-if="item.url" :src="item.url" class="mention-menu-thumb" draggable="false" />
+                        <span v-else-if="item.icon" v-html="item.icon" class="mention-menu-icon" />
+                        <span class="mention-menu-name">{{ item.name }}</span>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </Transition>
+            </Teleport>
+          </template>
+        </ProseMirrorEditor>
+      </div>
+      <button class="expand-btn" :title="props.isFullscreen ? '退出全屏' : '全屏显示'" @click="onMore">
+        <!-- 全屏 → 缩小图标 -->
+        <svg v-if="props.isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="21 9 21 3 15 3" />
+          <polyline points="3 15 3 21 9 21" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+        <!-- 非全屏 → 放大图标 -->
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 3 21 3 21 9" />
+          <polyline points="9 21 3 21 3 15" />
+          <line x1="21" y1="3" x2="14" y2="10" />
+          <line x1="3" y1="21" x2="10" y2="14" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- 底部工具栏（运行进度在节点浮层 ImageNode 常驻显示，见 ImageNode / ImageRunIndicator） -->
+    <div class="toolbar-row">
+      <!-- 左侧 -->
+      <div class="toolbar-left">
+        <input ref="fileInputRef" type="file" accept="image/*" class="source-file-input" @change="onAddFileChange" />
+        <!-- 添加素材按钮已隐藏：功能移到媒体卡片行末尾的占位框（点击同样触发 onAdd 选图） -->
+        <!-- <AxButton variant="ghost" size="icon" icon="add" title="添加素材" @click="onAdd" /> -->
+
+        <!-- <AxButton variant="ghost" size="icon" icon="settings" title="设置" @click="onSettings" /> -->
+        <!-- <div class="toolbar-divider" /> -->
+
+        <!-- 模型选择：来自模型注册表，永远渲染；切模型时的 ratio/resolution 清理在 selectedModel setter 原子完成 -->
+        <AxSelect v-model="selectedModel" :options="modelOptions" size="sm" placeholder="选择模型" trigger-width="120px" :disabled="isRunning" />
+
+        <!-- 比例选择：仅当当前模型声明 ratio 时渲染（否则整块消失） -->
+        <AxSelect v-if="ratioDropdownOptions.length > 0" v-model="selectedRatio" :options="ratioDropdownOptions" size="sm" placeholder="比例" trigger-width="80px" :disabled="isRunning" />
+
+        <!-- 分辨率选择：仅当当前模型声明 resolution 时渲染（否则整块消失） -->
+        <AxSelect v-if="resolutionDropdownOptions.length > 0" v-model="selectedResolution" :options="resolutionDropdownOptions" size="sm" placeholder="分辨率" trigger-width="80px" :disabled="isRunning" />
+
+        <!-- 模板选择：全局共享；选中后把模板提示词覆盖到输入框 -->
+        <AxSelect v-model="selectedTemplate" :options="templateDropdownOptions" size="sm" placeholder="模板" trigger-width="90px" @change="onTemplateChange" :disabled="isRunning" />
+      </div>
+
+      <!-- 右侧 -->
+      <div class="toolbar-right">
+        <!-- <AxButton variant="ghost" size="icon" icon="add_circle" title="更多" @click="onMore" /> -->
+
+        <button class="btn-send" :class="{ running: isRunning }" :disabled="isRunning" title="发送" @click="onSend">
+          <span v-if="isRunning" class="btn-send-spinner" aria-hidden="true" />
+          <svg v-else class="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13" />
+            <polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+          <span>{{ isRunning ? '生成中' : '发送' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.image-bottom-panel {
+  width: 650px;
+  background: rgba(245, 245, 245, 0.98);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(12px);
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  position: relative;
+  height: 200px;
+}
+
+/* ── 输入区域 ── */
+
+.input-area {
+  padding: 10px 14px 4px;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 输入端口连接的媒体资源卡片行 ── */
+
+.media-cards-row {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* gap-2 */
+  height: 30px;
+  margin-bottom: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  /* 细滚动条，仅在卡片很多时出现 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+.media-cards-row::-webkit-scrollbar {
+  height: 4px;
+}
+.media-cards-row::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+.media-cards-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 正方形卡片 */
+.media-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.media-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.media-card-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+/* 视频播放角标 */
+.media-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+}
+.media-card-play svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 无意义的占位框（跟在卡片末尾）：中间一个加号，点击同「添加素材」 */
+.media-card-placeholder {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px dashed rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.media-card-placeholder svg {
+  width: 14px;
+  height: 14px;
+}
+.media-card-placeholder:hover {
+  color: #2b6df2;
+  border-color: #2b6df2;
+  background: rgba(43, 109, 242, 0.06);
+}
+
+.editor-wrapper {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  padding-right: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Firefox: thin scrollbar, transparent track, colored thumb */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+}
+
+/* Webkit 滚动条 (Chrome, Safari, Edge) — 只有色块 */
+.editor-wrapper::-webkit-scrollbar {
+  width: 5px;
+}
+.editor-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-wrapper::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.18);
+  border-radius: 3px;
+}
+.editor-wrapper::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+/* 覆盖 ProseMirror 默认高度 */
+.editor-wrapper :deep(.prose-mirror-editor > div:first-child) {
+  min-height: 48px !important;
+}
+
+.editor-wrapper :deep(.ProseMirror) {
+  min-height: 48px !important;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1a1a1a;
+  outline: none !important;
+}
+
+.editor-wrapper :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+  color: #9ca3af;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* ── mention-menu 下拉框 ── */
+
+.mention-menu-dropdown {
+  position: fixed;
+  z-index: 99999;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  min-width: 180px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.mention-menu-category {
+  padding: 6px 10px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+}
+
+.mention-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 6px;
+  color: #374151;
+  background: transparent;
+  transition: background 0.1s ease;
+}
+
+.mention-menu-item.active {
+  background: #eff6ff;
+  color: #2b6df2;
+}
+
+.mention-menu-item:hover:not(.active) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.mention-menu-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.mention-menu-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ax-fade-scale-enter-active {
+  transition: opacity .15s ease, transform .15s ease;
+}
+
+.ax-fade-scale-leave-active {
+  transition: opacity .1s ease, transform .1s ease;
+}
+
+.ax-fade-scale-enter-from {
+  opacity: 0;
+  transform: scale(.95);
+}
+
+.ax-fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(.95);
+}
+
+
+.editor-wrapper :deep(.prose-mirror-editor) {
+  width: 100%;
+}
+
+.expand-btn {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  width: 20px;
+  height: 20px;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.expand-btn:hover {
+  opacity: 1;
+}
+
+.expand-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── 工具栏 ── */
+
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px 10px;
+  gap: 6px;
+  width: 100%;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  /* overflow: hidden; */
+}
+
+/* 隐藏的原生文件选择框（onAdd 点击触发） */
+.source-file-input {
+  display: none;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+/* ── AxSelect 样式微调 ── */
+
+.toolbar-left :deep(.ax-select-trigger) {
+  flex-shrink: 0;
+}
+
+/* ── 发送按钮 ── */
+
+.btn-send {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 20px;
+  padding: 0 8px 0 6px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 10px;
+  background: rgba(43, 109, 242, 0.1);
+  color: #2b6df2;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-send:hover {
+  background: rgba(43, 109, 242, 0.18);
+}
+
+.btn-send:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.btn-send.running {
+  background: rgba(43, 109, 242, 0.08);
+  color: #2b6df2;
+  gap: 5px;
+}
+
+.send-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.btn-send-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(43, 109, 242, 0.25);
+  border-top-color: #2b6df2;
+  border-radius: 50%;
+  animation: gen-spin 0.7s linear infinite;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+@keyframes gen-spin {
+  to { transform: rotate(360deg); }
+}
+</style>
