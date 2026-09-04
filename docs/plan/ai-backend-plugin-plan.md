@@ -323,6 +323,23 @@ batchEdit(resource: 'canvas'|'node'|'edge', taskId, {
 
 ---
 
+## 定稿：精简 MCP 工具面（共 9 个）
+
+用户反馈后台 MCP 工具仍过多（round 4），最终把 node/edge 的单点原语与 task.* 全部删掉，
+收敛成一套"AI 最少要学"的干净工具（见 `packages/mcp-server/src/mcp/server.ts` TOOL_LIST）：
+
+- 画布：`canvas.create_canvas` `canvas.list_canvases` `canvas.delete_canvas` `canvas.get`（读整张画布 nodes+edges+viewport，替代原 list_nodes/get_node/export_json/load 的读面）
+- 节点批量：`canvas.batch_nodes`（add/delete/update 合并）
+- 连线批量：`canvas.batch_edges`（add/delete/update 合并）
+- 语义化创建+后台任务：`create_node`（预览/生成双模式，自动建参考图预览节点并连线并提交任务）→ 返回 nodeId，用 `node.status` 查进度
+- 模型：`models.list`
+
+已删（被 batch/create_node/node.status 覆盖）：`canvas.batch`、`canvas.create_node`、`list_nodes`、`get_node`、`update_node`、`delete_node`、`create_edge`、`list_edges`、`delete_edge`、`set_node_position`、`set_viewport`、`save`、`load`、`export_json`、`task.create`、`task.status`。
+
+注意：底层 model 方法、REST(CanvasHttpServer) 与前端插件不受影响——删的只是 MCP 暴露面。
+
+---
+
 ## 十、范围说明（本轮不做的，后续轮次再扩）
 - 视频/音频的"真实生成"run 先按同构预留（video/audio models 可注册但真实 exec 优先级低于 image）；先打通 image 端到端闭环，再按同一套扩展。
 - 前端完整任务进度面板/列表 UI 做基础版即可；重点是节点内进度与自动同步。
