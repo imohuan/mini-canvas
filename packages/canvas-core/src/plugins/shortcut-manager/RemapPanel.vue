@@ -209,16 +209,18 @@ function renderKeyParts(keys: string) {
 </template>
 
 <style scoped>
-/* 面板：占满整行（外层 remap-slot 做了 margin: 0 -6px），内层纯青色调 */
+/* 面板：一张独立白底圆角卡，嵌在 canvas-menu-item 展开时的圆角盒内 */
 .remap-panel {
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 12px 10px;
-  background: rgba(8, 145, 178, 0.08);
-  border-top: 1px solid rgba(8, 145, 178, 0.18);
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid rgba(8, 145, 178, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
   animation: remap-panel-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -240,7 +242,7 @@ function renderKeyParts(keys: string) {
   flex: 0 0 48px;
   font-size: 11px;
   font-weight: 700;
-  color: #0e7490;
+  color: #6b7280;
   letter-spacing: 0.04em;
 }
 
@@ -251,16 +253,16 @@ function renderKeyParts(keys: string) {
   align-items: center;
 }
 
-/* 录制按钮：不是白底条，跟随青底调和（半透白） */
+/* 录制按钮：在白底卡里做成"凹陷"感（浅灰底 + dashed 边） */
 .remap-listen-btn {
   flex: 1;
   min-width: 0;
   min-height: 32px;
   padding: 6px 12px;
-  border: 1px dashed rgba(8, 145, 178, 0.32);
+  border: 1px dashed rgba(0, 0, 0, 0.18);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.55);
-  color: #0e7490;
+  background: rgba(0, 0, 0, 0.03);
+  color: #6b7280;
   font-size: 12px;
   font-weight: 600;
   text-align: left;
@@ -272,24 +274,24 @@ function renderKeyParts(keys: string) {
 }
 
 .remap-listen-btn:hover {
-  border-color: rgba(8, 145, 178, 0.6);
-  background: rgba(255, 255, 255, 0.75);
-  color: #064e5e;
+  border-color: rgba(8, 145, 178, 0.5);
+  background: rgba(8, 145, 178, 0.06);
+  color: #111827;
 }
 
 .remap-listen-btn.listening {
   border-style: solid;
   border-color: #0891b2;
-  color: #064e5e;
-  background: rgba(255, 255, 255, 0.85);
+  color: #0e7490;
+  background: rgba(8, 145, 178, 0.1);
   animation: remap-pulse 1.2s ease-in-out infinite;
 }
 
 .remap-listen-btn.has-value {
   border-style: solid;
-  border-color: rgba(8, 145, 178, 0.28);
-  color: #064e5e;
-  background: rgba(255, 255, 255, 0.7);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #111827;
+  background: #ffffff;
 }
 
 .listening-dot {
@@ -367,7 +369,7 @@ function renderKeyParts(keys: string) {
   padding: 6px 10px;
   border: 0;
   background: transparent;
-  color: #0e7490;
+  color: #6b7280;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -379,8 +381,8 @@ function renderKeyParts(keys: string) {
   height: 12px;
 }
 .remap-text-btn:hover:not(:disabled) {
-  background: rgba(8, 145, 178, 0.14);
-  color: #064e5e;
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
 }
 .remap-text-btn:disabled {
   opacity: 0.4;

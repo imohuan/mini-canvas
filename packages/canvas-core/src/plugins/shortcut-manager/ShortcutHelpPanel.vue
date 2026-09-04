@@ -256,6 +256,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
             <div class="shortcut-group">
               <h3 class="group-title">{{ groupLabels[group.group] || group.group }}</h3>
               <template v-for="(item, iIdx) in group.items" :key="item.id">
+                <!-- 整体是一个 item：展开时内部追加一段白底卡片，仍处同一圆角内 -->
                 <div
                   class="canvas-menu-item shortcut-row"
                   :class="{ hasDescription: item.description, 'is-remapping-open': remappingId === item.id }"
@@ -264,31 +265,34 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                   :style="{ '--item-index': iIdx }"
                   @click="onSelectRow(item)"
                 >
-                  <span class="canvas-menu-icon" v-html="shortcutIcon(item.keys)" />
-                  <span class="canvas-menu-copy">
-                    <span class="canvas-menu-label">{{ item.command }}</span>
-                    <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
-                  </span>
-                  <span class="shortcut-keys font-mono">
-                    <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
-                      <span class="kbd-chip">{{ part }}</span>
-                      <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
-                    </template>
-                  </span>
-                  <button
-                    class="canvas-menu-badge remap-badge"
-                    :class="{ 'is-open': remappingId === item.id }"
-                    @click.stop="openRemap(item)"
-                    type="button"
-                  >
-                    {{ remappingId === item.id ? '收起' : '重映射' }}
-                  </button>
-                </div>
-                <Transition name="remap-expand">
-                  <div v-if="remappingId === item.id" class="remap-slot">
-                    <RemapPanel :item="item" @close="closeRemap" />
+                  <div class="remap-head">
+                    <span class="canvas-menu-icon" v-html="shortcutIcon(item.keys)" />
+                    <span class="canvas-menu-copy">
+                      <span class="canvas-menu-label">{{ item.command }}</span>
+                      <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
+                    </span>
+                    <span class="shortcut-keys font-mono">
+                      <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
+                        <span class="kbd-chip">{{ part }}</span>
+                        <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
+                      </template>
+                    </span>
+                    <button
+                      class="canvas-menu-badge remap-badge"
+                      :class="{ 'is-open': remappingId === item.id }"
+                      @click.stop="openRemap(item)"
+                      type="button"
+                    >
+                      {{ remappingId === item.id ? '收起' : '重映射' }}
+                    </button>
                   </div>
-                </Transition>
+
+                  <Transition name="remap-expand">
+                    <div v-if="remappingId === item.id" class="remap-slot" @click.stop>
+                      <RemapPanel :item="item" @close="closeRemap" />
+                    </div>
+                  </Transition>
+                </div>
               </template>
             </div>
           </template>
@@ -483,13 +487,52 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   color: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.24s ease;
   animation: menu-item-in 0.2s ease both;
   animation-delay: calc(var(--item-index, 0) * 18ms);
 }
 
+/* 展开态：item 变成列布局且高度自动，内部承载 head + 白底卡片 */
+.canvas-menu-item.is-remapping-open {
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  gap: 0;
+  padding: 6px;
+  background: rgba(8, 145, 178, 0.1);
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+/* head 承载原有横向一行内容 */
+.remap-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 32px; /* 与行默认 44 - 上下 padding 12 = 32 呼应 */
+}
+
+.is-remapping-open .remap-head {
+  cursor: pointer;
+}
+
+/* 展开时 head 只显示单行 label，停用 description 上滑揭示 */
+.is-remapping-open .remap-head .canvas-menu-description {
+  display: none;
+}
+.is-remapping-open .remap-head .canvas-menu-label {
+  top: 50%;
+  transform: translateY(-50%);
+  transition: none;
+}
+
 .canvas-menu-item:hover:not(.is-disabled) {
   background: rgba(0, 0, 0, 0.05);
+}
+
+.canvas-menu-item.is-remapping-open:hover {
+  background: rgba(8, 145, 178, 0.1);
 }
 
 .canvas-menu-item.is-disabled {
@@ -631,25 +674,15 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   font-family: inherit;
 }
 
-/* 重映射行被展开时的样式：与下方 panel 一体化（panel 自身已是青色） */
-.canvas-menu-item.is-remapping-open {
-  background: rgba(8, 145, 178, 0.12);
-}
-
 .remap-badge.is-open {
   background: rgba(8, 145, 178, 0.22);
   color: #0e7490;
 }
 
-/* 行下展开槽位：
-   - 用负 margin 抵消行自身的 6px 左右内边距，让 panel 与行同宽
-   - 顶部一条青色实线做"展开身份"分隔，跟行有自然分隔
-   - 底圆角跟列表 4px 外 padding 区域形成软接续 */
+/* 展开槽位：head 下方的白底卡区。
+   让 RemapPanel 自带圆角与左右内缩，嵌在 item 的圆角盒内 */
 .remap-slot {
-  margin: 0 -6px;
-  border-bottom-left-radius: 10px;
-  border-bottom-right-radius: 10px;
-  overflow: hidden;
+  margin: 6px 0 0;
 }
 
 /* 展开/收起过渡 */
