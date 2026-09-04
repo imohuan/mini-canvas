@@ -134,4 +134,4 @@ pnpm dev                        # 起 vite 目验 text+image 从插件包来
 - **红线**：不碰 `src/`(老版宿主)、不带 M6 复杂件、Do not change the tests、一个文件一个 owner。
 
 ---
-*本计划待用户审核确认后再进入执行。*
+*本计划已执行完成（text+image 最小样板跑通）。执行记录见 `packages/plugins/README.md`、`packages/plugins/` 下两个样板包、`docs/STATUS.md`。*

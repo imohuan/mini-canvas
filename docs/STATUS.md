@@ -14,9 +14,10 @@
 - ✅ **M4：Save 层完整 + key 规范 + 生命周期 flush + 契约测试网** —— keys.ts + browserFlush(visibilitychange/pagehide) + saveContract.test
 - ✅ **M5：连接内核（加固）** —— 原样吸收 v1 normalize/canonical/环检测/去重 + 声明式 inputs/accepts/limit；demo connect 走内核校验；connection.test(15 例) 锁死 v1 规则 —— 83 测试绿
 - ▶️ **M1~M5 已全部达成**（runbook 主闭环完成）。M6(image 复杂件/Video/panorama/云等)= runbook 声明的**另开任务**，红线不并进当前闭环。
+- ✅ **插件抽独立包(dsh 范式) 最小样板**：text/image 节点抽成 `packages/plugins/plugin-node-{text,image}` 独立 workspace 包，UI(content .vue)+逻辑一体、随包注册(`registerNodeType`)，宿主按 `bootCanvas({plugins})` 清单加载、零手 seed —— vite demo 可拖/连/删/编辑/刷新恢复，101 测试全绿。插件开发指南：`packages/plugins/README.md`。
 
 ## 现在立刻该做的一件事
-**主闭环 M1~M5 已完成、83 测试全绿。** 下一步是否拆 M6 由用户定：runbook M6 = image 裁剪/蒙版/backend + 其余节点 + 交互插件 + 云 authority，**另开任务**处理（当前红线不碰）。在此之前：请用户 `cd packages/canvas-core-v2 && pnpm dev` 目验画面（拖/连/删/撤销/右键菜单/编辑/刷新恢复）。
+**主闭环 M1~M5 完成，且插件已抽成独立包(dsh)样板跑通、101 测试全绿。** 下一步是否拆 M6 由用户定：M6 = image 复杂件 + Video/panorama/image-compare 等按 `packages/plugins/README.md` 照样板续建、交互插件、云 authority（**另开任务**，当前红线不碰）。在此之前：请用户 `cd packages/canvas-core-v2 && pnpm dev` 目验画面——text/image 节点来自 `packages/plugins/` 独立包，能拖/连/删/双击编辑/右键菜单/刷新不丢。
 
 ## 验证命令（每次改完跑，测试是唯一裁判）
 ```bash
