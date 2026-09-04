@@ -10,8 +10,8 @@ const manager = ShortcutManager.getInstance()
 const searchQuery = ref('')
 const conflicts = ref(manager.getConflicts())
 const helpList = ref(manager.getHelpList())
-const showRemapDialog = ref(false)
-const remappingItem = ref<ShortcutHelpItem | null>(null)
+/** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
+const remappingId = ref<string | null>(null)
 
 const groupLabels: Record<ShortcutGroup, string> = {
   system: '系统',
@@ -131,19 +131,19 @@ function renderKeyParts(keys: string) {
 }
 
 function onSelectRow(item: ShortcutHelpItem) {
-  openRemap(item)
+  // 行整体可点击切换：再次点击同一行 → 收起
+  remappingId.value = remappingId.value === item.id ? null : item.id
 }
 
 function openRemap(item: ShortcutHelpItem) {
-  remappingItem.value = item
-  showRemapDialog.value = true
+  remappingId.value = item.id
 }
 
-function onRemapDone() {
+function closeRemap() {
+  // 重映射后 manager 内部 binding 已变更，重读一遍列表与冲突
   helpList.value = manager.getHelpList()
   conflicts.value = manager.getConflicts()
-  showRemapDialog.value = false
-  remappingItem.value = null
+  remappingId.value = null
 }
 
 function resetDefaults() {
@@ -255,40 +255,46 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
             <div v-if="gIdx > 0" class="canvas-menu-divider" />
             <div class="shortcut-group">
               <h3 class="group-title">{{ groupLabels[group.group] || group.group }}</h3>
-              <div
-                v-for="(item, iIdx) in group.items"
-                :key="item.id"
-                class="canvas-menu-item shortcut-row"
-                :class="{ hasDescription: item.description }"
-                role="button"
-                tabindex="0"
-                :style="{ '--item-index': iIdx }"
-                @click="onSelectRow(item)"
-              >
-                <span class="canvas-menu-icon" v-html="shortcutIcon(item.keys)" />
-                <span class="canvas-menu-copy">
-                  <span class="canvas-menu-label">{{ item.command }}</span>
-                  <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
-                </span>
-                <span class="shortcut-keys">
-                  <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
-                    <span class="kbd-chip">{{ part }}</span>
-                    <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
-                  </template>
-                </span>
-                <button class="canvas-menu-badge remap-badge" @click.stop="openRemap(item)">重映射</button>
-              </div>
+              <template v-for="(item, iIdx) in group.items" :key="item.id">
+                <div
+                  class="canvas-menu-item shortcut-row"
+                  :class="{ hasDescription: item.description, 'is-remapping-open': remappingId === item.id }"
+                  role="button"
+                  tabindex="0"
+                  :style="{ '--item-index': iIdx }"
+                  @click="onSelectRow(item)"
+                >
+                  <span class="canvas-menu-icon" v-html="shortcutIcon(item.keys)" />
+                  <span class="canvas-menu-copy">
+                    <span class="canvas-menu-label">{{ item.command }}</span>
+                    <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
+                  </span>
+                  <span class="shortcut-keys">
+                    <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="pIdx">
+                      <span class="kbd-chip">{{ part }}</span>
+                      <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
+                    </template>
+                  </span>
+                  <button
+                    class="canvas-menu-badge remap-badge"
+                    :class="{ 'is-open': remappingId === item.id }"
+                    @click.stop="openRemap(item)"
+                    type="button"
+                  >
+                    {{ remappingId === item.id ? '收起' : '重映射' }}
+                  </button>
+                </div>
+                <Transition name="remap-expand">
+                  <div v-if="remappingId === item.id" class="remap-slot">
+                    <RemapDialog :item="item" @close="closeRemap" />
+                  </div>
+                </Transition>
+              </template>
             </div>
           </template>
         </div>
       </div>
     </div>
-
-    <RemapDialog
-      v-if="showRemapDialog && remappingItem"
-      :item="remappingItem"
-      @close="onRemapDone"
-    />
   </Teleport>
 </template>
 
@@ -624,6 +630,51 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   font-family: inherit;
 }
 
+/* 重映射行被展开时的样式：行底色 + 圆角适配下方展开块 */
+.canvas-menu-item.is-remapping-open {
+  background: rgba(8, 145, 178, 0.08);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.canvas-menu-item.is-remapping-open:hover {
+  background: rgba(8, 145, 178, 0.12);
+}
+
+.remap-badge.is-open {
+  background: rgba(8, 145, 178, 0.2);
+  color: #0e7490;
+}
+
+/* 行下展开槽位 */
+.remap-slot {
+  margin: 0 4px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  overflow: hidden;
+}
+
+/* 展开/收起过渡 */
+.remap-expand-enter-active,
+.remap-expand-leave-active {
+  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
+}
+
+.remap-expand-enter-from,
+.remap-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+  max-height: 0;
+}
+
+.remap-expand-enter-to,
+.remap-expand-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 320px;
+}
+
 .no-results {
   text-align: center;
   color: #9ca3af;
@@ -658,7 +709,10 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   .shortcut-help-panel,
   .canvas-menu-item,
   .canvas-menu-label,
-  .canvas-menu-description {
+  .canvas-menu-description,
+  .remap-slot,
+  .remap-expand-enter-active,
+  .remap-expand-leave-active {
     animation: none !important;
     transition: none !important;
   }

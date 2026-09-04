@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { ShortcutManager, type ShortcutHelpItem } from '../ShortcutManager'
 
 const props = defineProps<{ item: ShortcutHelpItem }>()
@@ -34,7 +34,7 @@ let hasNonModifier = false
 function startListening() {
   if (listening.value) return
   listening.value = true
-  newKeys.value = '请按下快捷键...'
+  newKeys.value = ''
   conflict.value = null
   success.value = false
   heldModifiers.clear()
@@ -114,130 +114,330 @@ function handleKeyUp(e: KeyboardEvent) {
   }
 }
 
-function confirmClose() {
-  emit('close')
+function resetToCurrent() {
+  // 清回未修改
+  newKeys.value = props.item.keys
+  conflict.value = null
+  success.value = false
 }
 
-onMounted(() => {
-  document.addEventListener('keydown', handleKeyDown, true)
-  document.addEventListener('keyup', handleKeyUp, true)
-})
+function collapse() {
+  emit('close')
+}
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown, true)
   document.removeEventListener('keyup', handleKeyUp, true)
 })
+
+// 监听生命周期由父组件控制：组件挂载即开始监听（如果是打开状态）
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', handleKeyDown, true)
+  document.addEventListener('keyup', handleKeyUp, true)
+}
+
+/** 渲染 newKeys 为 kbd chips（共用父级风格） */
+function renderKeyParts(keys: string) {
+  return keys.split('+').map(p => p.trim()).filter(Boolean)
+}
 </script>
 
 <template>
-  <div class="remap-backdrop" @click="emit('close')">
-    <div class="remap-dialog" @click.stop>
-      <h3>重映射快捷键</h3>
-      <p class="remap-command">{{ item.command }}</p>
+  <div class="remap-inline" @pointerdown.stop>
+    <div class="remap-inline-head">
+      <span class="remap-inline-eyebrow">重映射</span>
+      <span class="remap-inline-title">{{ item.command }}</span>
+      <button class="remap-collapse-btn" title="收起" @click="collapse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </button>
+    </div>
 
-      <div class="remap-current">
-        <span class="label">当前键位：</span>
-        <span class="keys">{{ item.keys }}</span>
+    <div class="remap-inline-body">
+      <div class="remap-inline-row">
+        <span class="remap-inline-label">当前</span>
+        <span class="shortcut-keys">
+          <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="`cur-${pIdx}`">
+            <span class="kbd-chip">{{ part }}</span>
+            <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
+          </template>
+        </span>
       </div>
 
-      <div class="remap-input-area">
+      <div class="remap-inline-row">
+        <span class="remap-inline-label">新键位</span>
         <button
           class="remap-listen-btn"
+          :class="{ listening: listening, 'has-value': !!newKeys && !listening }"
           @click="startListening"
-          :class="{ listening: listening }"
+          type="button"
         >
-          {{ listening ? '请按键...' : (newKeys || '点击设置新快捷键') }}
+          <template v-if="listening">
+            <span class="listening-dot" />等待按键…
+          </template>
+          <template v-else-if="newKeys">
+            <template v-for="(part, pIdx) in renderKeyParts(newKeys)" :key="`new-${pIdx}`">
+              <span class="kbd-chip">{{ part }}</span>
+              <span v-if="pIdx < renderKeyParts(newKeys).length - 1" class="kbd-plus">+</span>
+            </template>
+          </template>
+          <template v-else>
+            点击录制新快捷键
+          </template>
         </button>
       </div>
 
-      <div v-if="conflict" class="remap-conflict">
-        ⚠ {{ conflict }}
-      </div>
-      <div v-if="success" class="remap-success">
-        ✅ 快捷键已更新为 "{{ newKeys }}"
-      </div>
+      <div v-if="conflict" class="remap-conflict">⚠ {{ conflict }}</div>
+      <div v-else-if="success" class="remap-success">✓ 已更新</div>
 
-      <div class="remap-actions">
-        <button @click="confirmClose">{{ success ? '完成' : '取消' }}</button>
+      <div class="remap-inline-actions">
+        <button class="remap-text-btn" @click="resetToCurrent" :disabled="listening">还原当前</button>
+        <button class="remap-text-btn" @click="startListening" :disabled="listening">重新录制</button>
+        <button class="remap-primary-btn" @click="collapse">{{ success ? '完成' : '收起' }}</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.remap-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 10001;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.remap-dialog {
-  background: #1a1a2e;
-  border: 1px solid #333;
+.remap-inline {
+  margin: 4px 4px 6px 44px;
+  padding: 10px 12px 12px;
   border-radius: 12px;
-  padding: 24px;
-  width: 360px;
-  color: #e0e0e0;
-  font-family: system-ui, -apple-system, sans-serif;
+  background: rgba(0, 0, 0, 0.035);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  animation: remap-inline-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.remap-dialog h3 { margin: 0 0 8px 0; font-size: 16px; }
-.remap-command { color: #888; font-size: 14px; margin-bottom: 16px; }
-
-.remap-current {
+.remap-inline-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
-  font-size: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed rgba(0, 0, 0, 0.08);
+  margin-bottom: 10px;
 }
 
-.remap-current .label { color: #888; }
-.remap-current .keys {
-  font-family: monospace;
-  background: #16213e;
-  border: 1px solid #3b82f6;
-  color: #3b82f6;
-  padding: 2px 8px;
+.remap-inline-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.12);
+  padding: 2px 6px;
   border-radius: 4px;
+  letter-spacing: 0.04em;
 }
 
-.remap-input-area { margin-bottom: 12px; }
+.remap-inline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  flex: 1;
+}
+
+.remap-collapse-btn {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  color: #6b7280;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.remap-collapse-btn :deep(svg) {
+  width: 14px;
+  height: 14px;
+}
+.remap-collapse-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111827;
+}
+
+.remap-inline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.remap-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+}
+
+.remap-inline-label {
+  flex: 0 0 48px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 
 .remap-listen-btn {
-  width: 100%;
-  padding: 10px;
-  border: 2px dashed #555;
+  flex: 1;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px dashed rgba(0, 0, 0, 0.18);
   border-radius: 8px;
-  background: #16213e;
-  color: #888;
+  background: #ffffff;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
-.remap-listen-btn:hover { border-color: #3b82f6; }
+.remap-listen-btn:hover {
+  border-color: rgba(0, 0, 0, 0.32);
+  color: #111827;
+}
+
 .remap-listen-btn.listening {
-  border-color: #3b82f6;
-  color: #3b82f6;
   border-style: solid;
+  border-color: #0891b2;
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.08);
+  animation: remap-pulse 1.2s ease-in-out infinite;
 }
 
-.remap-conflict { color: #f59e0b; font-size: 13px; margin-bottom: 12px; }
-.remap-success { color: #10b981; font-size: 13px; margin-bottom: 12px; }
+.remap-listen-btn.has-value {
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #111827;
+}
 
-.remap-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.remap-actions button {
-  background: #16213e;
-  border: 1px solid #444;
-  color: #ccc;
-  padding: 8px 20px;
+.listening-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0891b2;
+  margin-right: 6px;
+  box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.6);
+}
+
+.shortcut-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.kbd-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom-width: 2px;
   border-radius: 6px;
-  cursor: pointer;
+  background: #ffffff;
+  color: #374151;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
 }
-.remap-actions button:hover { background: #233; color: #fff; }
+
+.kbd-plus {
+  color: #9ca3af;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.remap-conflict {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.remap-success {
+  font-size: 11px;
+  font-weight: 700;
+  color: #047857;
+  background: rgba(16, 185, 129, 0.14);
+  padding: 4px 8px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.remap-inline-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.remap-text-btn {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.remap-text-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #111827;
+}
+.remap-text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.remap-primary-btn {
+  padding: 6px 14px;
+  border: 0;
+  background: #0891b2;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.remap-primary-btn:hover {
+  background: #0e7490;
+}
+.remap-primary-btn:active {
+  transform: scale(0.97);
+}
+
+@keyframes remap-inline-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes remap-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(8, 145, 178, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remap-inline,
+  .remap-listen-btn,
+  .remap-primary-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 </style>
