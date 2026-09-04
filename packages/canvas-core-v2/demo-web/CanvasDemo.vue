@@ -12,7 +12,7 @@ import type { Connection } from '@vue-flow/core'
 import TextContent from './components/TextContent.vue'
 import ImageContent from './components/ImageContent.vue'
 import BaseNode from '../src/components/BaseNode.vue'
-import { NODE_REGISTRY_KEY } from '../src/components/nodeRegistryKey'
+import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../src/components/nodeRegistryKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
 import { validateConnection, typeConnectionDef } from '../src/services/connection'
 import { HOST_KEY } from './demoInjection'
@@ -49,6 +49,18 @@ const registry = new NodeRegistry()
 registry.register('text', { content: TextContent })
 registry.register('image', { content: ImageContent })
 provide(NODE_REGISTRY_KEY, registry)
+// 标题就地重命名写回：改内核 nodeStore data 并落盘；整体替换 nodes 数组触发 VueFlow 更新渲染态
+provide(NODE_WRITE_KEY, (id: string, patch: Record<string, unknown>) => {
+  const h = host.value
+  if (!h) return
+  if (!nodes.value.some((f) => f.id === id)) return
+  nodes.value = nodes.value.map((f) =>
+    f.id === id ? { ...f, data: { ...f.data, ...patch } } : f,
+  )
+  const existing = h.nodeStore.getNode(id)
+  if (existing) h.nodeStore.updateNodeData(id, patch) // updateNodeData 为 patch 语义
+  void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
+})
 
 // VueFlow 的响应式节点/边（渲染态）
 const nodes = ref<FlowNode[]>([])
@@ -346,11 +358,11 @@ onBeforeUnmount(() => {
   position: relative;
 }
 .canvas-wrap :deep(.vue-flow__node) {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  /* 卡片外观由 BaseNode 的 .v2-card 统一负责；这里只保留布局与光标 */
   font-size: 14px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 .ctx-menu {
   position: fixed;
