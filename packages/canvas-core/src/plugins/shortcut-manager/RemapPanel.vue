@@ -7,12 +7,15 @@ const props = defineProps<{ item: ShortcutHelpItem }>()
 const emit = defineEmits<{ close: [] }>()
 
 const manager = ShortcutManager.getInstance()
-const newKeys = ref('')
-const listening = ref(false)
-const conflict = ref<string | null>(null)
-const success = ref(false)
 
-/** 修饰键集合 — 也可能独立成为快捷键（如单用 Shift） */
+/** 录制出的候选键位（尚未写入 manager，须点"完成"才生效） */
+const newKeys = ref('')
+/** 是否正在等待按键 */
+const listening = ref(false)
+/** 候选键位的冲突提示（录制阶段预检得出） */
+const conflict = ref<string | null>(null)
+
+/** 修饰键集合 — 也可能独立成为快捷键（如单用 Alt） */
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
 
 /** 修饰键名 → 快捷键字符串里的简称 */
@@ -26,22 +29,17 @@ const MODIFIER_ALIAS: Record<string, string> = {
 /** 当前按住未松开的修饰键 */
 const heldModifiers = new Set<string>()
 
-/** 本次监听期间按过的所有修饰键（用于纯修饰键捕获） */
+/** 本次监听期间按过的所有修饰键（供纯修饰键收尾用） */
 const allModifiersPressed = new Set<string>()
 
-/** 是否已按下过非修饰键 */
+/** 本次监听期间是否已按下过非修饰键 */
 let hasNonModifier = false
 
-function startListening() {
-  if (listening.value) return
-  listening.value = true
-  newKeys.value = ''
-  conflict.value = null
-  success.value = false
-  heldModifiers.clear()
-  allModifiersPressed.clear()
-  hasNonModifier = false
-}
+/** 纯修饰键长按保底计时器：Windows 单按 Alt 会抢焦点并吞掉 keyup，用它兜底 */
+let modifierTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 候选键位是否与当前键位不同（有实际改动待提交） */
+const dirty = () => newKeys.value !== props.item.keys
 
 /** 修饰键 + 普通键 → 快捷键字符串 */
 function formatShortcut(key: string, modifiers: Set<string>): string {
@@ -54,7 +52,7 @@ function formatShortcut(key: string, modifiers: Set<string>): string {
   return parts.join('+')
 }
 
-/** 纯修饰键 → 快捷键字符串（如 ctrl+shift） */
+/** 纯修饰键 → 快捷键字符串（如 alt+shift） */
 function formatModifiersOnly(modifiers: Set<string>): string {
   const parts: string[] = []
   const order = ['Control', 'Shift', 'Alt', 'Meta']
@@ -64,21 +62,64 @@ function formatModifiersOnly(modifiers: Set<string>): string {
   return parts.join('+')
 }
 
-/** 捕获完成后的统一处理 */
-function captureShortcut(keys: string) {
-  newKeys.value = keys
+/** 清空长按兜底计时器 */
+function clearModifierTimer() {
+  if (modifierTimer !== null) {
+    clearTimeout(modifierTimer)
+    modifierTimer = null
+  }
+}
+
+/** 重置一组本地录制状态 */
+function resetRecordingState() {
   listening.value = false
+  conflict.value = null
   heldModifiers.clear()
   allModifiersPressed.clear()
+  hasNonModifier = false
+  clearModifierTimer()
+}
 
-  const result = manager.remap(props.item.id, keys)
-  if (result.ok) {
-    success.value = true
-    conflict.value = null
-  } else if ('conflict' in result && result.conflict) {
+function startListening() {
+  if (listening.value) return
+  listening.value = true
+  newKeys.value = ''
+  conflict.value = null
+  heldModifiers.clear()
+  allModifiersPressed.clear()
+  hasNonModifier = false
+  clearModifierTimer()
+}
+
+/**
+ * 捕获一段候选键位并做只读冲突预检。
+ * 注意：这里只"录下来"并提示可能冲突，绝不调用 manager.remap ——
+ * 真正的写入要等用户点"完成"按钮，只有那时才算修改成功。
+ */
+function captureCandidate(keys: string) {
+  newKeys.value = keys
+  resetRecordingState()
+
+  const result = manager.checkRemapConflict(props.item.id, keys)
+  if (!result.ok && 'conflict' in result && result.conflict) {
     conflict.value = `与 "${result.conflict.entries[0]?.command || '其他快捷键'}" 冲突`
-    success.value = false
+  } else if (result.ok && keys === props.item.keys) {
+    // 与当前键位一致，无实际改动
+    conflict.value = null
   }
+}
+
+/**
+ * 纯修饰键长按兜底：持续按住修饰键（如 Alt）达到阈值仍未接普通键，
+ * 就按"纯修饰组合"收尾 —— 修复 Windows 系统菜单吞掉 Alt 的 keyup 导致无法捕获的问题。
+ */
+function armModifierFallback() {
+  clearModifierTimer()
+  modifierTimer = setTimeout(() => {
+    if (listening.value && heldModifiers.size > 0 && !hasNonModifier) {
+      captureCandidate(formatModifiersOnly(heldModifiers))
+    }
+  }, 1300)
 }
 
 function handleKeyDown(e: KeyboardEvent) {
@@ -90,14 +131,18 @@ function handleKeyDown(e: KeyboardEvent) {
     heldModifiers.add(keyName)
     allModifiersPressed.add(keyName)
     e.preventDefault()
+    // 到 keyup 之间可能被系统吞掉，先武装一个保底
+    armModifierFallback()
     return
   }
 
+  // 非修饰键：按下即收尾（不依赖 keyup）
+  clearModifierTimer()
   hasNonModifier = true
   e.preventDefault()
   e.stopPropagation()
 
-  captureShortcut(formatShortcut(keyName, heldModifiers))
+  captureCandidate(formatShortcut(keyName, heldModifiers))
 }
 
 function handleKeyUp(e: KeyboardEvent) {
@@ -105,52 +150,66 @@ function handleKeyUp(e: KeyboardEvent) {
 
   if (MODIFIER_KEYS.has(e.key)) {
     heldModifiers.delete(e.key)
+    // 修饰键全部抬起且没按过普通键 → 纯修饰组合收尾
     if (heldModifiers.size === 0 && !hasNonModifier) {
-      captureShortcut(formatModifiersOnly(allModifiersPressed))
+      clearModifierTimer()
+      captureCandidate(formatModifiersOnly(allModifiersPressed))
     }
   }
 }
 
-/** 重置当前条目到系统默认键位 */
-function resetToDefault() {
+/** 录制中失焦（用户点到别处）→ 取消本次等待，避免按钮一直停在"等待按键" */
+function handleWindowBlur() {
   if (listening.value) {
     listening.value = false
+    clearModifierTimer()
     heldModifiers.clear()
     allModifiersPressed.clear()
-  }
-  const result = manager.resetToDefault(props.item.id)
-  if (result.ok && result.keys !== undefined) {
-    newKeys.value = result.keys
-    success.value = true
-    conflict.value = null
-  } else if ('conflict' in result && result.conflict) {
-    // 默认键正被其它快捷键占用：不破坏反向映射，提示冲突
-    conflict.value = `默认键 "${result.conflict.entries[0]?.command || '其他快捷键'}" 正在占用，请先移开`
-    success.value = false
-    newKeys.value = ''
-  } else {
-    // 无默认键记录（理论上 register 后必有），回退到当前键位不改变
-    conflict.value = null
-    success.value = false
-    newKeys.value = ''
+    hasNonModifier = false
   }
 }
 
-function collapse() {
-  emit('close')
+/** 把"重置默认"设成候选（不立即写入），随"完成"一并提交 */
+function resetToDefault() {
+  clearModifierTimer()
+  const defaultKey = manager.getDefaultKey(props.item.id)
+  if (defaultKey !== undefined) {
+    resetRecordingState()
+    captureCandidate(defaultKey)
+  }
+}
+
+/** 点"完成"：此刻才真正写入并算修改成功；有冲突则停留提示 */
+function confirm() {
+  // 无待提交改动 → 直接收起
+  if (!dirty()) {
+    emit('close')
+    return
+  }
+
+  const keys = newKeys.value
+  const result = manager.remap(props.item.id, keys)
+  if (result.ok) {
+    emit('close') // 父组件会刷新列表
+  } else if ('conflict' in result && result.conflict) {
+    conflict.value = `与 "${result.conflict.entries[0]?.command || '其他快捷键'}" 冲突`
+  }
 }
 
 onMounted(() => {
-  if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', handleKeyDown, true)
-    document.addEventListener('keyup', handleKeyUp, true)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('keyup', handleKeyUp, true)
+    window.addEventListener('blur', handleWindowBlur)
   }
 })
 
 onUnmounted(() => {
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('keydown', handleKeyDown, true)
-    document.removeEventListener('keyup', handleKeyUp, true)
+  clearModifierTimer()
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('keydown', handleKeyDown, true)
+    window.removeEventListener('keyup', handleKeyUp, true)
+    window.removeEventListener('blur', handleWindowBlur)
   }
 })
 </script>
@@ -199,7 +258,7 @@ onUnmounted(() => {
     <div class="remap-panel-actions">
       <div class="remap-feedback-slot">
         <span v-if="conflict" class="remap-feedback-inline is-conflict">⚠ {{ conflict }}</span>
-        <span v-else-if="success" class="remap-feedback-inline is-success">✓ 已更新</span>
+        <span v-else-if="newKeys && dirty()" class="remap-feedback-inline is-pending">点「完成」生效</span>
       </div>
       <div class="remap-actions-right">
         <button class="remap-text-btn" @click="resetToDefault" type="button">
@@ -211,7 +270,12 @@ onUnmounted(() => {
         <button class="remap-text-btn" @click="startListening" :disabled="listening" type="button">
           重新录制
         </button>
-        <button class="remap-confirm-btn" @click="collapse" type="button">完成</button>
+        <button
+          class="remap-confirm-btn"
+          @click="confirm"
+          :disabled="listening || !!conflict"
+          type="button"
+        >完成</button>
       </div>
     </div>
   </div>
@@ -355,9 +419,9 @@ onUnmounted(() => {
   background: rgba(245, 158, 11, 0.16);
 }
 
-.remap-feedback-inline.is-success {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.16);
+.remap-feedback-inline.is-pending {
+  color: #0e7490;
+  background: rgba(8, 145, 178, 0.1);
 }
 
 .remap-text-btn {

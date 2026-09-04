@@ -240,6 +240,56 @@ export class ShortcutManager {
   }
 
   /**
+   * 只读预检：把某 id 重映射到 newKeys 是否会冲突（不改变任何映射）
+   *
+   * 与 remap() 的判定逻辑完全一致，但不写入 registry / reverseKeyMap，
+   * 供 UI 在"录制候选键位"阶段提前提示冲突，真正生效仍须调用 remap()。
+   *
+   * @param id - 快捷键 ID
+   * @param newKeys - 拟设置的新键位字符串
+   * @returns 与 remap() 相同的结果结构（ok 表示不会冲突）
+   */
+  checkRemapConflict(id: string, newKeys: string): RemapResult {
+    const entry = this.registry.get(id)
+    if (!entry) {
+      return { ok: false, notFound: true }
+    }
+
+    newKeys = this.normalizeKeys(newKeys)
+
+    // 键位未变化 → 空操作，不冲突
+    if (entry.keys === newKeys) {
+      return { ok: true }
+    }
+
+    // 新 keys 被其他 entry 占用 → 冲突
+    if (this.reverseKeyMap.has(newKeys)) {
+      const existingId = this.reverseKeyMap.get(newKeys)!
+      if (existingId !== id) {
+        const existing = this.registry.get(existingId)!
+        return {
+          ok: false,
+          conflict: this.buildConflict(newKeys, existing, entry),
+        }
+      }
+    }
+
+    return { ok: true }
+  }
+
+  /**
+   * 只读查询：某 id 注册时的系统默认键位（用于 UI 预显"重置默认"后的目标）
+   *
+   * @param id - 快捷键 ID
+   * @returns 默认键位字符串；id 不存在或从未记录默认键时返回 undefined
+   */
+  getDefaultKey(id: string): string | undefined {
+    const defaultKey = this.defaultKeys.get(id)
+    if (defaultKey === undefined) return undefined
+    return defaultKey
+  }
+
+  /**
    * 恢复单个快捷键到"系统默认"键位（注册时记录的原始键位）
    *
    * 行为与全局 resetDefaults() 同源 —— 都取 defaultKeys。
