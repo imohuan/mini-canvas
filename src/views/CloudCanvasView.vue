@@ -12,6 +12,7 @@ import {
   NodeFindPlugin,
   AlignGuidePlugin,
   BackendSyncPlugin,
+  BackendStoragePlugin,
   ClipboardPlugin,
   HistoryPlugin,
   MultiSelectPlugin,
@@ -49,8 +50,10 @@ const plugins = markRaw([
   ClipboardPlugin, HistoryPlugin, MultiSelectPlugin, ShortcutManagerPlugin,
   GroupPlugin, FileDropPlugin, ThemePlugin, AutoLayoutPlugin, AlignArrangePlugin,
   CanvasExportPlugin, MiniMapPlugin, EdgeCuttingPlugin,
-  // backend-sync 取代 storage/auto-save：保存归后台
-  { ...BackendSyncPlugin, options: { baseUrl: 'http://localhost:8765', control: ctrl, autoSave: true } },
+  // backend-sync 取代 storage/auto-save：保存归后台（含每 3s 全量 data 同步）
+  { ...BackendSyncPlugin, options: { baseUrl: 'http://localhost:8765', control: ctrl, autoSave: true, fullSyncMs: 3000 } },
+  // 可插拔的后端资源存储：替换系统默认本地存储——节点上传/拖拽/粘贴的字节经 BackendAssetStore 存后端画布资源文件夹
+  { ...BackendStoragePlugin, options: { baseUrl: 'http://localhost:8765', getCanvasId: () => ctrl.canvasId } },
 ]) as CanvasPlugin[]
 
 async function onConnect() {
