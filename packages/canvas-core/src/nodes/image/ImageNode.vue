@@ -210,6 +210,7 @@ async function runGeneration(payload: GenerationPayload) {
     const result: GenerationResult = await executeRun(payload, {
       interval: 650,
       timeoutMs: 120_000,
+      nodeId: props.id,
       onProgress: (p) => {
         if (seq !== runSeq) return
         runProgress.value = p

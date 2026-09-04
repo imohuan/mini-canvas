@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, markRaw, onMounted, nextTick } from 'vue'
+import { reactive, markRaw, onMounted, nextTick, watch } from 'vue'
 import {
   Canvas,
   TextNodePlugin,
@@ -24,9 +24,15 @@ import {
   CanvasExportPlugin,
   MiniMapPlugin,
   EdgeCuttingPlugin,
+  BackendImageModelProvider,
+  configureImageModels,
   type CanvasPlugin,
   type BackendSyncControl,
 } from '@mini-canvas/canvas-core'
+
+const BACKEND_URL = 'http://localhost:8765'
+/** 后台图片模型 provider：工具栏模型下拉/能力走后端，发送走后台任务 */
+const backendImageModels = new BackendImageModelProvider(BACKEND_URL)
 
 const ctrl = reactive<BackendSyncControl>({
   connected: false,
@@ -56,6 +62,22 @@ async function onSwitch(e: Event) {
   if (!id || !ctrl.api) return
   await ctrl.api.switchCanvas(id)
 }
+
+// 图片工具栏模型数据/发送跟随后台：连上并选定画布 → 切到后台 provider；断连 → 回落本地 mock
+watch(
+  () => [ctrl.connected, ctrl.canvasId] as const,
+  ([connected, canvasId]) => {
+    if (connected && canvasId) {
+      backendImageModels.setCanvasId(canvasId)
+      configureImageModels(backendImageModels)
+      void backendImageModels.warmUp()
+    } else {
+      backendImageModels.setCanvasId(null)
+      configureImageModels(null)
+    }
+  },
+  { immediate: true },
+)
 
 // 等 Canvas 装好插件后，用插件加载后台画布
 onMounted(async () => {

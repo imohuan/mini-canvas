@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, markRaw, onMounted } from 'vue'
+import { ref, computed, markRaw, onMounted, watch } from 'vue'
 import {
   Canvas,
   TextNodePlugin,
@@ -25,11 +25,32 @@ import {
   CanvasExportPlugin,
   MiniMapPlugin,
   EdgeCuttingPlugin,
+  BackendImageModelProvider,
+  configureImageModels,
   type CanvasPlugin,
 } from '@mini-canvas/canvas-core'
 import { useMcpClient } from '../composables/useMcpClient'
 
 const mcp = useMcpClient({ baseUrl: 'http://localhost:8765' })
+
+/** 后台图片模型 provider：工具栏模型下拉/能力走后端，发送走后台任务 */
+const backendImageModels = new BackendImageModelProvider('http://localhost:8765')
+
+// 图片工具栏模型数据/发送跟随后台：连上并选定画布 → 切到后台 provider；断连 → 回落本地 mock
+watch(
+  () => [mcp.connected.value, mcp.currentCanvasId.value] as const,
+  ([connected, canvasId]) => {
+    if (connected && canvasId) {
+      backendImageModels.setCanvasId(canvasId)
+      configureImageModels(backendImageModels)
+      void backendImageModels.warmUp()
+    } else {
+      backendImageModels.setCanvasId(null)
+      configureImageModels(null)
+    }
+  },
+  { immediate: true },
+)
 
 const plugins = markRaw([
   TextNodePlugin, ImageNodePlugin, VideoNodePlugin, PanoramaNodePlugin, ImageCompareNodePlugin,

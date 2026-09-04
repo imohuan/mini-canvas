@@ -109,3 +109,22 @@ export {
 
 // ─── Layout Utilities ────────────────────────────────────────────────
 export { runAutoLayout, calculateGroupBounds, buildClusters } from './plugins/auto-layout'
+
+// ─── Image Generation Models (Provider seam) ─────────────────────────
+export {
+  configureImageModels,
+  getImageModelProvider,
+  listModelOptions,
+  getModel,
+  executeRun,
+  modelAcceptsInput,
+  templatesForModel,
+} from './nodes/image/imageModels'
+export type {
+  ImageModelProvider,
+  ImageModelCapability,
+  GenerationPayload,
+  GenerationResult,
+  GenerationResource,
+} from './nodes/image/imageModels'
+export { BackendImageModelProvider, useBackendImageModels } from './nodes/image/backendImageModels'

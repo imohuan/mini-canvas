@@ -138,8 +138,11 @@ export interface ImageModelProvider {
    *   - 返回/解析到 GenerationResult  → 同步完成
    *   - 返回 PollFn                  → 异步任务，交给 executeRun 轮询直到 done
    * 实现可返回 Promise 包装以上任意一种。
+   *
+   * ctx.nodeId：发起发送的图片节点 id（后台任务写回该节点的 data.runState 需要）。
+   * 本地实现可忽略；后台实现用它 + 自身绑定的 canvasId 调后台任务。
    */
-  run(payload: GenerationPayload): RunOutcome | Promise<RunOutcome>
+  run(payload: GenerationPayload, ctx?: { nodeId?: string }): RunOutcome | Promise<RunOutcome>
 }
 
 // ================= 本地默认 Provider =================
@@ -284,7 +287,7 @@ export const LOCAL_IMAGE_MODEL_PROVIDER: ImageModelProvider = {
       (t) => !t.forModels || t.forModels.length === 0 || (modelId && t.forModels.includes(modelId)),
     ),
   acceptsInput: (modelId, kind) => acceptsInputOf(findLocal(modelId), kind),
-  run: (payload) => {
+  run: (payload, _ctx) => {
     console.log('[model] 生成请求（本地 MOCK 模拟后台）', payload.model, payload.promptText)
 
     // 用提示词决定成败：便于通过真实 UI 触发「失败 notify」测试
@@ -414,10 +417,10 @@ export function resolutionOptions(cap: ImageModelCapability | undefined): Select
  */
 export async function executeRun(
   payload: GenerationPayload,
-  options: { interval?: number; timeoutMs?: number; onProgress?: (p: RunProgress) => void } = {},
+  options: { interval?: number; timeoutMs?: number; onProgress?: (p: RunProgress) => void; nodeId?: string } = {},
 ): Promise<GenerationResult> {
-  const { interval = 2000, timeoutMs = 300_000, onProgress } = options
-  const outcome = await currentProvider.run(payload)
+  const { interval = 2000, timeoutMs = 300_000, onProgress, nodeId } = options
+  const outcome = await currentProvider.run(payload, { nodeId })
 
   // 同步结果：直接返回
   if (typeof outcome !== 'function') return outcome
