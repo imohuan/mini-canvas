@@ -23,6 +23,7 @@ import type { CanvasHostHandle } from '@mini-canvas/canvas-core-v2'
 import { canvasCommandsPlugin } from '../src/plugins/canvasCommands'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import { bindBrowserLifecycleFlush } from './browserFlush'
@@ -81,8 +82,20 @@ function syncNodeTypes(): void {
   nodeTypes.value = map
   nodeEpoch.value += 1
 }
-// 边类型：所有边走 CustomEdge（自定义边，v1 Canvas 里 edgeTypes.custom，金标准 core-node-contract §6）
-const edgeTypes = { custom: CustomEdge }
+/** 读主题插件注册的 edge/background 槽位，装配 VueFlow 渲染（主题没给则回退宿主默认） */
+function applyTheme(): void {
+  const theme = host.value?.themeRegistry
+  if (!theme) return
+  const edge = theme.get('edge')
+  edgeTypes.value = { custom: (edge as unknown) || CustomEdge } // 主题边 or 宿主默认 CustomEdge
+  backgroundComp.value = theme.get('background')
+  nodeEpoch.value += 1 // 换渲染器 → 重挂
+}
+// 边类型：所有边走 CustomEdge(自定义边)。可被主题插件经 themeRegistry 换掉。
+// edgeTypes 是响应式的：boot 后从 themeRegistry 读主题提供的 edge/background 装配。
+// 主题没提供就回退宿主默认(CustomEdge / 无背景)。
+const edgeTypes = ref<Record<string, unknown>>({ custom: CustomEdge })
+const backgroundComp = ref<unknown>(undefined)
 // —— 调试配置面板数据：一个响应式根对象，分 edge/handle 命名空间。
 //    SettingsPanel 直接改写它；分别 provide 给 CustomEdge(EDGE_VISUAL_KEY)/BaseNode+端口(CANVAS_PARAMS_KEY)，
 //    消费方 computed 会实时追踪改动 → 面板即调即见效果。
@@ -282,7 +295,7 @@ onMounted(async () => {
     // 门面把 runtime 暴露到 window.MiniCanvas，源码插件 / 打包 js 插件都经 window.MiniCanvas.installPlugin 安装。
     const { host: h, exposeToWindow } = await createMiniCanvasHost({
       adapter: new LocalStorageAdapter(),
-      coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin], // 内置+业务插件都在此
+      coldPlugins: [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin], // 主题+业务插件都在这
       nodeRegistry: registry, // demo 同步 provide 的展示注册表，插件 setup 往里注册 content
     })
     exposeToWindow('MiniCanvas') // window.MiniCanvas = { installPlugin/uninstallPlugin/reloadPlugin/... }
@@ -301,10 +314,11 @@ onMounted(async () => {
       nodes.value = storeToFlow()
     }
     syncNodeTypes() // 按已注册 type 生成 nodeTypes + bump epoch
+    applyTheme() // 读主题插件的 edge/background 装配 VueFlow
 
-    // 宿主订阅插件装载事件：热装/热卸/热重载插件后重建 nodeTypes + 触发 VueFlow 重挂(改动实时生效)
-    hotSubs.push(h.ctx.on('ctx:plugin-installed', syncNodeTypes))
-    hotSubs.push(h.ctx.on('ctx:plugin-uninstalled', syncNodeTypes))
+    // 宿主订阅插件装载事件：热装/热卸/热重载插件后重建 nodeTypes + 应用主题 + 触发 VueFlow 重挂(改动实时生效)
+    hotSubs.push(h.ctx.on('ctx:plugin-installed', () => { syncNodeTypes(); applyTheme() }))
+    hotSubs.push(h.ctx.on('ctx:plugin-uninstalled', () => { syncNodeTypes(); applyTheme() }))
 
     // 页面隐藏/离开时把脏数据落盘（防刷新丢）
     flushHandle.value = bindBrowserLifecycleFlush(h.save)
@@ -358,7 +372,10 @@ onBeforeUnmount(() => {
         @pane-click="onPaneClick"
         @node-context-menu="onNodeContextMenu"
         @pane-context-menu="onPaneContextMenu"
-      />
+      >
+        <!-- 主题插件提供的画布背景（低层叠加，垫在节点之下；没提供则空） -->
+        <component :is="backgroundComp" v-if="backgroundComp" />
+      </VueFlow>
 
       <!-- 最小右键菜单（M3） -->
       <div v-if="menu.visible" class="ctx-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">

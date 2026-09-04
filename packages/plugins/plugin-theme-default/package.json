@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/canvas-core-v2",
+  "name": "@mini-canvas/plugin-theme-default",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,22 +13,19 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "dev": "vite"
+    "build": "vite build"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@vue-flow/core": "^1.48.2",
-    "pinia": "^3.0.4",
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@mini-canvas/plugin-node-image": "workspace:*",
-    "@mini-canvas/plugin-node-text": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/canvas-core-v2": "workspace:*",
+    "@vue-flow/core": "^1.48.2",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
-    "vitest": "^3.0.0"
+    "vue": "^3.5.34"
   }
 }
