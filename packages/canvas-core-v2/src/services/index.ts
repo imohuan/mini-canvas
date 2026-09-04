@@ -1,6 +1,7 @@
 export { SaveServiceImpl } from './storage/SaveService'
 export { MemoryStorageAdapter } from './storage/memoryAdapter'
 export { LocalStorageAdapter } from './storage/localStorageAdapter'
+export { SAVE_TYPES, normalizeKey, scopedKey } from './storage/keys'
 export { NodeStore } from './nodeStore'
 export type { CanvasNode, CanvasNodeType, NodeStoreService } from './nodeStore'
 export type {

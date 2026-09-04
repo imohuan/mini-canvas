@@ -22,6 +22,8 @@ import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter
 import { nodeImagePlugin } from '../src/plugins/nodeImage'
 import type { TextNodeService } from '../src/plugins/nodeText'
 import type { ImageNodeService } from '../src/plugins/nodeImage'
+import { bindBrowserLifecycleFlush } from './browserFlush'
+import type { BrowserFlushHandle } from './browserFlush'
 
 /** VueFlow 用的流式节点形状 */
 interface FlowNode {
@@ -35,6 +37,7 @@ interface FlowNode {
 const booting = ref(true)
 const bootError = ref('')
 const host = shallowRef<CanvasHost | undefined>()
+const flushHandle = ref<BrowserFlushHandle>()
 // setup 阶段同步 provide 宿主引用（boot 异步完成后填充），内容组件经 inject(HOST_KEY).value 取
 provide(HOST_KEY, host)
 
@@ -211,6 +214,8 @@ onMounted(async () => {
     }
 
     nodes.value = storeToFlow()
+    // 页面隐藏/离开时把脏数据落盘（防刷新丢）
+    flushHandle.value = bindBrowserLifecycleFlush(h.save)
     window.addEventListener('keydown', onKeydown)
   } catch (err) {
     bootError.value = err instanceof Error ? err.message : String(err)
@@ -221,6 +226,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  flushHandle.value?.dispose()
   void host.value?.save.flush()
   host.value?.stop()
 })

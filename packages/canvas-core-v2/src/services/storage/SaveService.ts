@@ -1,5 +1,6 @@
 import type { SaveService, SaveType, StorageAdapter } from './types'
 import { MemoryStorageAdapter } from './memoryAdapter'
+import { scopedKey, SAVE_TYPES } from './keys'
 
 /**
  * SaveServiceImpl —— 统一 key-value 持久化的具体实现（作为 ctx 服务注入）。
@@ -20,24 +21,24 @@ export class SaveServiceImpl implements SaveService {
   /** 默认每 type 用内存 adapter（可被 useAdapter 覆盖为 localStorage/backend） */
   constructor(defaultAdapter?: StorageAdapter) {
     const base = defaultAdapter ?? new MemoryStorageAdapter()
-    for (const t of ['config', 'canvas', 'resource', 'shortcut'] as SaveType[]) {
+    for (const t of SAVE_TYPES) {
       this.adapters.set(t, base)
     }
   }
 
   set(key: string, value: unknown, type: SaveType = 'config'): void {
-    const prefixed = this.prefix(type, key)
+    const prefixed = scopedKey(type, key)
     this.dirty.set(prefixed, { value, type })
     this.scheduleFlush()
   }
 
   async get<T>(key: string, type: SaveType = 'config'): Promise<T | undefined> {
     const adapter = this.adapters.get(type)!
-    return adapter.get<T>(this.prefix(type, key))
+    return adapter.get<T>(scopedKey(type, key))
   }
 
   async remove(key: string, type: SaveType = 'config'): Promise<void> {
-    const prefixed = this.prefix(type, key)
+    const prefixed = scopedKey(type, key)
     this.dirty.delete(prefixed)
     await this.adapters.get(type)!.remove(prefixed)
   }
@@ -59,17 +60,22 @@ export class SaveServiceImpl implements SaveService {
     return this.dirty.size > 0
   }
 
+  /** 切换某 type 的激活 adapter */
   useAdapter(type: SaveType, adapter: StorageAdapter): void {
     this.adapters.set(type, adapter)
   }
 
   /** 所有 type 的 adapter 都切到同一后端（整包迁移场景） */
   useAdapterForAll(adapter: StorageAdapter): void {
-    for (const t of this.adapters.keys()) this.adapters.set(t, adapter)
+    for (const t of SAVE_TYPES) this.adapters.set(t, adapter)
   }
 
-  private prefix(type: SaveType, key: string): string {
-    return `${type}:${key}`
+  /** 释放：清掉未触发的防抖计时器（不再需要自动 flush 时调用） */
+  dispose(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
   }
 
   private scheduleFlush(): void {
