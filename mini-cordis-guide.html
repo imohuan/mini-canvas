@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>最小 Cordis 复刻 · 前后端双插件架构技术方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'PingFang SC', 'Segoe UI', -apple-system, Arial, sans-serif;
+    background: #F4F3EE;
+    color: #1A1B1C;
+    line-height: 1.7;
+    padding: 32px 16px;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #1A1B1C; }
+  .subtitle { font-size: 14px; color: #6B7280; margin-bottom: 32px; }
+  h2 {
+    font-size: 19px; font-weight: 600; margin: 36px 0 14px;
+    padding-left: 12px; border-left: 4px solid #9EACEA;
+  }
+  h3 { font-size: 16px; font-weight: 600; margin: 24px 0 10px; color: #2D3748; }
+  p { margin-bottom: 12px; font-size: 14px; }
+  ul, ol { margin: 8px 0 14px 24px; font-size: 14px; }
+  li { margin-bottom: 6px; }
+  code {
+    background: rgba(158,172,234,0.12); color: #4C51BF;
+    padding: 1px 6px; border-radius: 4px; font-size: 13px;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  }
+  pre {
+    background: #1E1E2E; color: #CDD6F4; border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; margin: 12px 0 18px;
+    font-size: 12.5px; line-height: 1.6;
+    font-family: 'SF Mono', 'Consolas', 'Monaco', monospace;
+  }
+  pre .kw { color: #CBA6F7; }
+  pre .fn { color: #89B4FA; }
+  pre .str { color: #A6E3A1; }
+  pre .cm { color: #6C7086; font-style: italic; }
+  pre .num { color: #FAB387; }
+  .card {
+    background: #fff; border-radius: 12px; padding: 18px 20px;
+    margin: 14px 0; border: 1px solid #E4E3DD;
+  }
+  .card-title { font-weight: 600; font-size: 14px; margin-bottom: 8px; color: #2D3748; }
+  .tag {
+    display: inline-block; padding: 2px 10px; border-radius: 20px;
+    font-size: 11.5px; font-weight: 500; margin-right: 6px;
+  }
+  .tag-blue { background: #EBF0FF; color: #4C51BF; }
+  .tag-green { background: #E8F8EC; color: #2F855A; }
+  .tag-orange { background: #FFF3E8; color: #C05621; }
+  .tag-red { background: #FEECEC; color: #C53030; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 18px;
+    font-size: 13px; background: #fff; border-radius: 8px; overflow: hidden;
+  }
+  th { background: #F0F4FF; text-align: left; padding: 10px 12px; font-weight: 600; color: #2D3748; }
+  td { padding: 9px 12px; border-top: 1px solid #E4E3DD; }
+  .highlight-box {
+    background: linear-gradient(135deg, #EBF0FF 0%, #F0FFF4 100%);
+    border-radius: 12px; padding: 18px 20px; margin: 16px 0;
+    border: 1px solid #C7D2FE;
+  }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%; background: #9EACEA;
+    color: #fff; font-size: 12px; font-weight: 600; margin-right: 8px;
+  }
+  .flow-arrow { text-align: center; color: #9EACEA; font-size: 18px; margin: 4px 0; }
+  .dir-tree {
+    background: #1E1E2E; color: #A6E3A1; border-radius: 10px;
+    padding: 16px 18px; font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12.5px; line-height: 1.7; margin: 12px 0 18px;
+  }
+  .dir-tree .dir { color: #89B4FA; }
+  .dir-tree .file { color: #CDD6F4; }
+  .dir-tree .comment { color: #6C7086; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>最小 Cordis 复刻 · 前后端双插件架构技术方案</h1>
+<p class="subtitle">从 DeepSeek Harness 设计哲学到可运行的最小实现 —— 打包后仍可安装第三方依赖</p>
+
+<!-- ==================== 第一部分 ==================== -->
+<h2>一、DeepSeek Harness 的设计哲学</h2>
+
+<p>DeepSeek Harness（dsh）是基于 Cordis 框架的智能体运行时，它的核心设计哲学可以浓缩为四句话：</p>
+
+<div class="card">
+  <div class="card-title"><span class="tag tag-blue">核心理念</span> 一切皆插件（No Privileged Core）</div>
+  <p>模型适配器、工具注册表、会话日志、甚至 agent loop 本身都是插件。不存在需要打补丁的特权内核——扩展方式是把插件挂载到其他插件旁边，而非侵入式修改核心代码。</p>
+</div>
+
+<div class="card">
+  <div class="card-title"><span class="tag tag-green">时空可组合</span> Spatiotemporal Composability</div>
+  <p><strong>时间维</strong>：插件卸载时，它产生的所有副作用（事件监听、定时器、连接）能被完整逆转。<br>
+  <strong>空间维</strong>：插件间的依赖关系声明式表达，运行时响应式管理——B 依赖 A 时，系统自动保证 B 在 A 后加载、A 停止前卸载。</p>
+</div>
+
+<div class="card">
+  <div class="card-title"><span class="tag tag-orange">组合即数据</span> Composition as Data</div>
+  <p>代码只提供"能力"，而"能力之间怎么组合、按什么顺序、配什么参数"全部外置为 YAML 配置（cordis.yml），可以分层叠加、可以 patch。改产品 = 改配置 + 换插件。</p>
+</div>
+
+<div class="card">
+  <div class="card-title"><span class="tag tag-red">可逆性不变量</span> Reversibility Invariant</div>
+  <p>所有副作用必须返回一个 disposer（清理函数）。框架保证：任何时刻都能完整地撤销任何插件做过的事。热重载、插件禁用、配置热更新全部建立在这个不变量之上。</p>
+</div>
+
+<!-- ==================== 第二部分 ==================== -->
+<h2>二、Cordis 核心机制拆解</h2>
+
+<p>Cordis 核心只有约 2000 行代码，五个核心抽象支撑了整个插件系统：</p>
+
+<table>
+  <tr><th>抽象</th><th>职责</th><th>关键 API</th></tr>
+  <tr><td><strong>Context</strong></td><td>服务容器，Proxy 对象，沿作用域链查找服务</td><td><code>ctx.provide()</code> / <code>ctx.get()</code></td></tr>
+  <tr><td><strong>Service</strong></td><td>命名的上下文键，支持 provide（提供）与 consume（消费）</td><td><code>class X extends Service</code></td></tr>
+  <tr><td><strong>Fiber</strong></td><td>插件实例的状态机，管理生命周期与 disposer 收集</td><td><code>fiber.dispose()</code></td></tr>
+  <tr><td><strong>Effect</strong></td><td>副作用注册与撤销管理，维护副作用栈</td><td><code>ctx.effect(() => { return () => {} })</code></td></tr>
+  <tr><td><strong>Events</strong></td><td>类型化事件系统，五种派发模式</td><td><code>ctx.on()</code> / <code>ctx.emit()</code></td></tr>
+</table>
+
+<h3>2.1 插件的三种形态</h3>
+<p>Cordis 中插件本质归一为三种写法，最终都接收 <code>ctx</code> + <code>config</code>，返回 disposer：</p>
+<pre><span class="cm">// 1. 函数式</span>
+<span class="kw">const</span> <span class="fn">myPlugin</span> = (ctx, config) => {
+  ctx.effect(() => { <span class="cm">/* 副作用 */</span> <span class="kw">return</span> () => {} })
+  <span class="kw">return</span> () => {} <span class="cm">// 插件级 disposer</span>
+}
+
+<span class="cm">// 2. 类式（提供服务）</span>
+<span class="kw">class</span> <span class="fn">Database</span> <span class="kw">extends</span> Service {
+  <span class="kw">constructor</span>(ctx, config) { <span class="kw">super</span>(ctx, <span class="str">'database'</span>) }
+  query() { <span class="cm">/* ... */</span> }
+}
+
+<span class="cm">// 3. 对象式</span>
+<span class="kw">export default</span> {
+  name: <span class="str">'my-plugin'</span>,
+  inject: [<span class="str">'database'</span>],
+  apply(ctx, config) { <span class="cm">/* ... */</span> }
+}</pre>
+
+<h3>2.2 依赖驱动的生命周期（最核心的机制）</h3>
+<div class="highlight-box">
+  <p><strong>加载顺序不由代码决定，由依赖图推导。</strong>插件通过 <code>inject</code> 声明依赖，fiber 创建后检查注入的服务是否"存在且 ACTIVE"，全齐了才执行 <code>apply</code>；缺一个就一直 PENDING。依赖消失自动 UNLOAD，依赖回归自动 RELOAD——没有任何手动 reload 代码。</p>
+</div>
+
+<h3>2.3 五种事件派发模式</h3>
+<table>
+  <tr><th>模式</th><th>是否等待</th><th>顺序</th><th>返回值</th><th>适用场景</th></tr>
+  <tr><td><code>emit</code></td><td>否</td><td>注册顺序</td><td>无</td><td>广播/观察者</td></tr>
+  <tr><td><code>parallel</code></td><td>是</td><td>并发</td><td>无</td><td>并发收集</td></tr>
+  <tr><td><code>serial</code></td><td>是</td><td>注册顺序</td><td>第一个非空短路</td><td>串行处理链</td></tr>
+  <tr><td><code>bail</code></td><td>否</td><td>注册顺序</td><td>第一个非空短路</td><td>竞标/拦截</td></tr>
+  <tr><td><code>waterfall</code></td><td>否</td><td>注册顺序</td><td>中间件链</td><td>数据变换/包装</td></tr>
+</table>
+
+<!-- ==================== 第三部分 ==================== -->
+<h2>三、最小 Cordis 内核实现（可运行）</h2>
+
+<p>以下是一个约 150 行的最小 Cordis 内核，覆盖 Context / Service / Fiber / effect / inject / events 六大核心能力，可以直接跑起来：</p>
+
+<pre><span class="cm">// mini-cordis.js —— 最小 Cordis 内核</span>
+<span class="kw">type</span> <span class="fn">Disposer</span> = () => <span class="kw">void</span>;
+<span class="kw">type</span> <span class="fn">Plugin</span> = (ctx: Context, config?: <span class="kw">any</span>) => Disposer | <span class="kw">void</span>;
+
+<span class="cm">// ─── Fiber：插件实例状态机 ───</span>
+<span class="kw">class</span> <span class="fn">Fiber</span> {
+  state: <span class="str">'pending'</span> | <span class="str">'active'</span> | <span class="str">'disposed'</span> = <span class="str">'pending'</span>;
+  name: string;
+  <span class="kw">private</span> disposers: Disposer[] = [];
+
+  <span class="kw">constructor</span>(name: string) { <span class="kw">this</span>.name = name; }
+
+  addDisposer(d: Disposer) { <span class="kw">this</span>.disposers.push(d); }
+
+  <span class="cm">// 逆序 unwind —— 后注册的先清理</span>
+  dispose() {
+    <span class="kw">for</span> (<span class="kw">let</span> i = <span class="kw">this</span>.disposers.length - <span class="num">1</span>; i >= <span class="num">0</span>; i--) {
+      <span class="kw">try</span> { <span class="kw">this</span>.disposers[i](); } <span class="kw">catch</span>(e) { console.error(e); }
+    }
+    <span class="kw">this</span>.disposers = [];
+    <span class="kw">this</span>.state = <span class="str">'disposed'</span>;
+  }
+}
+
+<span class="cm">// ─── Context：服务容器 + 事件总线 ───</span>
+<span class="kw">class</span> <span class="fn">Context</span> {
+  <span class="kw">private</span> services = <span class="kw">new</span> Map&lt;string, <span class="kw">any</span>&gt;();
+  <span class="kw">private</span> events = <span class="kw">new</span> Map&lt;string, Set&lt;Function&gt;&gt;();
+  <span class="kw">private</span> fibers = <span class="kw">new</span> Set&lt;Fiber&gt;();
+  <span class="kw">private</span> pendingConsumers: { fiber: Fiber; inject: string[]; apply: Function }[] = [];
+  currentFiber: Fiber | <span class="kw">null</span> = <span class="kw">null</span>;
+
+  <span class="cm">// 提供服务，返回 disposer</span>
+  provide(name: string, service: <span class="kw">any</span>): Disposer {
+    <span class="kw">this</span>.services.set(name, service);
+    <span class="kw">this</span>._checkPending(); <span class="cm">// 新服务上线，检查等待中的消费者</span>
+    <span class="kw">const</span> dispose = () => {
+      <span class="kw">this</span>.services.<span class="kw">delete</span>(name);
+      <span class="cm">// 服务下线：依赖它的消费者自动卸载</span>
+    };
+    <span class="kw">if</span> (<span class="kw">this</span>.currentFiber) <span class="kw">this</span>.currentFiber.addDisposer(dispose);
+    <span class="kw">return</span> dispose;
+  }
+
+  <span class="cm">// 消费服务</span>
+  get(name: string) { <span class="kw">return this</span>.services.get(name); }
+
+  <span class="cm">// 可逆副作用 —— Cordis 最核心的 API</span>
+  effect(fn: () => Disposer | <span class="kw">void</span>): Disposer {
+    <span class="kw">const</span> disposer = fn();
+    <span class="kw">if</span> (disposer && <span class="kw">this</span>.currentFiber) {
+      <span class="kw">this</span>.currentFiber.addDisposer(disposer);
+    }
+    <span class="kw">return</span> disposer || (() => {});
+  }
+
+  <span class="cm">// 事件监听（自动享受卸载即清除）</span>
+  on(event: string, handler: Function): Disposer {
+    <span class="kw">if</span> (!<span class="kw">this</span>.events.has(event)) <span class="kw">this</span>.events.set(event, <span class="kw">new</span> Set());
+    <span class="kw">this</span>.events.get(event)!.add(handler);
+    <span class="kw">const</span> dispose = () => <span class="kw">this</span>.events.get(event)?.delete(handler);
+    <span class="kw">if</span> (<span class="kw">this</span>.currentFiber) <span class="kw">this</span>.currentFiber.addDisposer(dispose);
+    <span class="kw">return</span> dispose;
+  }
+
+  emit(event: string, ...args: <span class="kw">any</span>[]) {
+    <span class="kw">this</span>.events.get(event)?.forEach(h => {
+      <span class="kw">try</span> { h(...args); } <span class="kw">catch</span>(e) { console.error(e); }
+    });
+  }
+
+  <span class="cm">// 加载插件（支持 inject 依赖声明）</span>
+  <span class="kw">async</span> plugin(pluginFn: Plugin | { inject?: string[]; apply: Plugin }, config?: <span class="kw">any</span>) {
+    <span class="kw">const</span> name = (pluginFn <span class="kw">as any</span>).name || <span class="str">'anonymous'</span>;
+    <span class="kw">const</span> fiber = <span class="kw">new</span> Fiber(name);
+    <span class="kw">this</span>.fibers.add(fiber);
+
+    <span class="kw">const</span> inject = (pluginFn <span class="kw">as any</span>).inject || [];
+    <span class="kw">const</span> apply = <span class="kw">typeof</span> pluginFn === <span class="str">'function'</span> ? pluginFn : (pluginFn <span class="kw">as any</span>).apply;
+
+    <span class="cm">// 依赖检查：全齐才激活，否则挂起等待</span>
+    <span class="kw">const</span> ready = inject.every((k: string) => <span class="kw">this</span>.services.has(k));
+    <span class="kw">if</span> (!ready) {
+      <span class="kw">this</span>.pendingConsumers.push({ fiber, inject, apply });
+      <span class="kw">return</span> fiber; <span class="cm">// PENDING 状态</span>
+    }
+
+    <span class="kw">this</span>.currentFiber = fiber;
+    <span class="kw">const</span> disposer = <span class="kw">await</span> apply(<span class="kw">this</span>, config);
+    <span class="kw">if</span> (disposer) fiber.addDisposer(disposer);
+    fiber.state = <span class="str">'active'</span>;
+    <span class="kw">this</span>.currentFiber = <span class="kw">null</span>;
+    <span class="kw">return</span> fiber;
+  }
+
+  <span class="cm">// 新服务上线时，检查等待中的消费者</span>
+  <span class="kw">private</span> _checkPending() {
+    <span class="kw">const</span> ready = <span class="kw">this</span>.pendingConsumers.filter(c =>
+      c.inject.every(k => <span class="kw">this</span>.services.has(k))
+    );
+    <span class="kw">this</span>.pendingConsumers = <span class="kw">this</span>.pendingConsumers.filter(c => !ready.includes(c));
+    ready.forEach(({ fiber, apply }) => {
+      <span class="kw">this</span>.currentFiber = fiber;
+      <span class="kw">const</span> d = apply(<span class="kw">this</span>);
+      <span class="kw">if</span> (d) fiber.addDisposer(d);
+      fiber.state = <span class="str">'active'</span>;
+      <span class="kw">this</span>.currentFiber = <span class="kw">null</span>;
+    });
+  }
+}
+
+<span class="kw">export</span> { Context, Fiber };
+<span class="kw">export type</span> { Disposer, Plugin };</pre>
+
+<h3>使用示例</h3>
+<pre><span class="kw">import</span> { Context } <span class="kw">from</span> <span class="str">'./mini-cordis'</span>;
+
+<span class="kw">const</span> ctx = <span class="kw">new</span> Context();
+
+<span class="cm">// 提供者：注册一个数据库服务</span>
+<span class="kw">await</span> ctx.plugin((ctx) => {
+  ctx.provide(<span class="str">'database'</span>, {
+    query: (sql: string) => [<span class="str">'row1'</span>, <span class="str">'row2'</span>]
+  });
+});
+
+<span class="cm">// 消费者：声明依赖 database，自动等待就绪</span>
+<span class="kw">await</span> ctx.plugin({
+  name: <span class="str">'report-generator'</span>,
+  inject: [<span class="str">'database'</span>],
+  apply(ctx) {
+    ctx.effect(() => {
+      <span class="kw">const</span> timer = setInterval(() => {
+        console.log(<span class="str">'report:'</span>, ctx.get(<span class="str">'database'</span>).query(<span class="str">'SELECT *'</span>));
+      }, <span class="num">5000</span>);
+      <span class="kw">return</span> () => clearInterval(timer); <span class="cm">// 卸载时自动清理</span>
+    });
+  }
+});
+
+<span class="cm">// 事件通信</span>
+ctx.on(<span class="str">'user:login'</span>, (user) => console.log(<span class="str">'login:'</span>, user));
+ctx.emit(<span class="str">'user:login'</span>, { id: <span class="num">1</span>, name: <span class="str">'Alice'</span> });</pre>
+
+<!-- ==================== 第四部分 ==================== -->
+<h2>四、你的场景：前后端双插件架构</h2>
+
+<p>你的软件分为前后端，插件可以覆盖两个位置。核心思路是：<strong>一个插件包同时包含 server 端和 web 端代码，后端负责加载 server 部分并 serve web 部分的静态文件，前端通过动态 import 加载 web 部分。</strong></p>
+
+<h3>4.1 插件包目录结构</h3>
+<div class="dir-tree">
+<span class="dir">my-plugin/</span>
+├── <span class="file">manifest.json</span>        <span class="comment"># 插件元数据（名称、版本、入口、权限）</span>
+├── <span class="file">package.json</span>         <span class="comment"># 第三方依赖声明（运行时 npm install）</span>
+├── <span class="dir">server/</span>
+│   └── <span class="file">index.js</span>           <span class="comment"># 后端入口：注册服务/API路由/事件监听</span>
+└── <span class="dir">web/</span>
+    ├── <span class="file">index.js</span>           <span class="comment"># 前端入口（已构建为 ESM bundle）</span>
+    └── <span class="file">style.css</span>          <span class="comment"># 可选：插件样式</span>
+</div>
+
+<h3>4.2 manifest.json 设计</h3>
+<pre>{
+  <span class="str">"id"</span>: <span class="str">"my-plugin"</span>,
+  <span class="str">"name"</span>: <span class="str">"我的插件"</span>,
+  <span class="str">"version"</span>: <span class="str">"1.0.0"</span>,
+  <span class="str">"description"</span>: <span class="str">"示例插件"</span>,
+  <span class="str">"entry"</span>: {
+    <span class="str">"server"</span>: <span class="str">"./server/index.js"</span>,
+    <span class="str">"web"</span>: <span class="str">"./web/index.js"</span>
+  },
+  <span class="str">"permissions"</span>: [<span class="str">"fs.read"</span>, <span class="str">"network"</span>],
+  <span class="str">"extensionPoints"</span>: {
+    <span class="str">"routes"</span>: [<span class="str">"/my-plugin"</span>],
+    <span class="str">"menu"</span>: { <span class="str">"title"</span>: <span class="str">"我的插件"</span>, <span class="str">"icon"</span>: <span class="str">"plugin"</span> }
+  }
+}</pre>
+
+<h3>4.3 后端插件写法（Cordis 风格）</h3>
+<pre><span class="cm">// my-plugin/server/index.js</span>
+<span class="kw">module</span>.exports = {
+  name: <span class="str">'my-plugin'</span>,
+  inject: [<span class="str">'http'</span>, <span class="str">'database'</span>],  <span class="cm">// 声明依赖的核心服务</span>
+
+  apply(ctx, config) {
+    <span class="cm">// 1. 注册 API 路由（effect 自动管理生命周期）</span>
+    ctx.effect(() => {
+      <span class="kw">const</span> app = ctx.get(<span class="str">'http'</span>);
+      app.get(<span class="str">'/api/my-plugin/hello'</span>, (req, res) => {
+        res.json({ message: <span class="str">'Hello from plugin!'</span> });
+      });
+      <span class="kw">return</span> () => {
+        <span class="cm">// 卸载时自动移除路由（express 需手动处理，建议用路由层封装）</span>
+      };
+    });
+
+    <span class="cm">// 2. 注册自定义服务，供其他插件使用</span>
+    ctx.provide(<span class="str">'myService'</span>, {
+      doSomething() { <span class="kw">return</span> <span class="str">'done'</span>; }
+    });
+
+    <span class="cm">// 3. 监听事件</span>
+    ctx.on(<span class="str">'app:ready'</span>, () => {
+      console.log(<span class="str">'[my-plugin] app ready'</span>);
+    });
+
+    <span class="cm">// 4. 插件级清理</span>
+    <span class="kw">return</span> () => console.log(<span class="str">'[my-plugin] unloaded'</span>);
+  }
+};</pre>
+
+<h3>4.4 前端插件写法</h3>
+<pre><span class="cm">// my-plugin/web/index.js —— 构建为 ESM 后由前端动态 import</span>
+<span class="kw">export default</span> {
+  name: <span class="str">'my-plugin'</span>,
+
+  <span class="cm">// register 接收宿主提供的扩展点 API</span>
+  register(api) {
+    <span class="cm">// 注册路由</span>
+    api.addRoute({
+      path: <span class="str">'/my-plugin'</span>,
+      component: () => <span class="kw">import</span>(<span class="str">'./MyPage.vue'</span>)  <span class="cm">// 或 React 组件</span>
+    });
+
+    <span class="cm">// 注册菜单项</span>
+    api.addMenuItem({
+      title: <span class="str">'我的插件'</span>,
+      path: <span class="str">'/my-plugin'</span>,
+      icon: <span class="str">'plugin'</span>
+    });
+
+    <span class="cm">// 注册面板/组件</span>
+    api.addPanel(<span class="str">'settings'</span>, MySettingsPanel);
+
+    <span class="cm">// 调用后端插件 API</span>
+    fetch(<span class="str">'/api/my-plugin/hello'</span>).then(r => r.json());
+  },
+
+  <span class="cm">// 卸载时清理</span>
+  unregister(api) {
+    api.removeRoute(<span class="str">'/my-plugin'</span>);
+    api.removeMenuItem(<span class="str">'/my-plugin'</span>);
+  }
+};</pre>
+
+<!-- ==================== 第五部分 ==================== -->
+<h2>五、打包后如何安装第三方依赖</h2>
+
+<p>这是你最关心的问题。核心原则：<strong>插件放在 userData 目录（可写），每个插件有独立的 node_modules，运行时通过编程方式执行 npm install。</strong></p>
+
+<h3>5.1 为什么不能放在 asar 里</h3>
+<div class="card">
+  <p>Electron 打包后，应用代码在 <code>app.asar</code> 中——这是一个<strong>只读</strong>的归档文件。你无法在运行时往 asar 里 <code>npm install</code>。所以插件和它们的依赖必须放在 <code>app.getPath('userData')</code> 下，这是用户数据目录，始终可写。</p>
+</div>
+
+<h3>5.2 三种运行时安装方案</h3>
+
+<table>
+  <tr><th>方案</th><th>原理</th><th>优点</th><th>缺点</th></tr>
+  <tr>
+    <td><strong>A. 内置 npm</strong></td>
+    <td>把 npm CLI 打进 extraResources，运行时 spawn 子进程执行 <code>npm install</code></td>
+    <td>最稳定，支持所有 npm 特性</td>
+    <td>体积大（~50MB），启动子进程慢</td>
+  </tr>
+  <tr>
+    <td><strong>B. pacote 编程式</strong></td>
+    <td>用 <code>pacote</code> + <code>@npmcli/arborist</code> 库直接下载 tarball 并解析依赖树</td>
+    <td>轻量，无进程开销，可控性强</td>
+    <td>需要处理依赖树解析，原生模块需额外处理</td>
+  </tr>
+  <tr>
+    <td><strong>C. 插件自带依赖</strong></td>
+    <td>插件发布时把 node_modules 一起打包，下载解压即用</td>
+    <td>零安装时间，最简单</td>
+    <td>插件包体积大，跨平台需预编译原生模块</td>
+  </tr>
+</table>
+
+<h3>5.3 方案 A 实现：内置 npm</h3>
+<pre><span class="cm">// electron-builder 配置 —— 把 npm 打进 resources</span>
+<span class="cm">// package.json</span>
+{
+  <span class="str">"build"</span>: {
+    <span class="str">"extraResources"</span>: [
+      { <span class="str">"from"</span>: <span class="str">"node_modules/npm"</span>, <span class="str">"to"</span>: <span class="str">"npm"</span> }
+    ]
+  }
+}
+
+<span class="cm">// 主进程中运行时安装</span>
+<span class="kw">const</span> { spawn } = <span class="kw">require</span>(<span class="str">'child_process'</span>);
+<span class="kw">const</span> path = <span class="kw">require</span>(<span class="str">'path'</span>);
+<span class="kw">const</span> { app } = <span class="kw">require</span>(<span class="str">'electron'</span>);
+
+<span class="kw">async function</span> <span class="fn">installPluginDeps</span>(pluginDir) {
+  <span class="kw">const</span> npmPath = path.join(
+    process.resourcesPath, <span class="str">'npm'</span>, <span class="str">'bin'</span>, <span class="str">'npm-cli.js'</span>
+  );
+
+  <span class="kw">return new</span> Promise((resolve, reject) => {
+    <span class="kw">const</span> child = spawn(process.execPath, [npmPath, <span class="str">'install'</span>, <span class="str">'--omit=dev'</span>], {
+      cwd: pluginDir,
+      env: {
+        ...process.env,
+        <span class="cm">// 关键：让 npm 用 Electron 自带的 Node 运行时</span>
+        npm_config_prefix: path.join(app.getPath(<span class="str">'userData'</span>), <span class="str">'.npm'</span>),
+      },
+      stdio: [<span class="str">'ignore'</span>, <span class="str">'pipe'</span>, <span class="str">'pipe'</span>]
+    });
+
+    child.stdout.on(<span class="str">'data'</span>, d => console.log(d.toString()));
+    child.stderr.on(<span class="str">'data'</span>, d => console.error(d.toString()));
+    child.on(<span class="str">'close'</span>, code =>
+      code === <span class="num">0</span> ? resolve() : reject(<span class="kw">new</span> Error(<span class="str">`npm exit ${code}`</span>))
+    );
+  });
+}</pre>
+
+<h3>5.4 方案 B 实现：pacote 轻量安装（推荐）</h3>
+<pre><span class="kw">const</span> pacote = <span class="kw">require</span>(<span class="str">'pacote'</span>);
+<span class="kw">const</span> { mkdir, writeFile } = <span class="kw">require</span>(<span class="str">'fs/promises'</span>);
+<span class="kw">const</span> path = <span class="kw">require</span>(<span class="str">'path'</span>);
+
+<span class="cm">// 下载单个包到插件的 node_modules</span>
+<span class="kw">async function</span> <span class="fn">installPackage</span>(spec, destDir) {
+  <span class="kw">const</span> manifest = <span class="kw">await</span> pacote.manifest(spec);
+  <span class="kw">const</span> target = path.join(destDir, <span class="str">'node_modules'</span>, manifest.name);
+  <span class="kw">await</span> mkdir(target, { recursive: <span class="kw">true</span> });
+
+  <span class="cm">// 提取 tarball 内容</span>
+  <span class="kw">await</span> pacote.extract(spec, target);
+
+  <span class="cm">// 递归安装依赖（简化版，生产用 @npmcli/arborist）</span>
+  <span class="kw">for</span> (<span class="kw">const</span> [name, range] <span class="kw">of</span> Object.entries(manifest.dependencies || {})) {
+    <span class="kw">await</span> installPackage(<span class="str">`${name}@${range}`</span>, destDir);
+  }
+  <span class="kw">return</span> manifest;
+}</pre>
+
+<div class="highlight-box">
+  <p><strong>原生模块注意事项：</strong>如果第三方依赖包含 C++ 原生模块（如 better-sqlite3、sharp），需要用 <code>@electron/rebuild</code> 针对 Electron 的 Node ABI 版本重新编译。建议在插件安装后自动执行 rebuild，或要求插件使用纯 JS 依赖。</p>
+</div>
+
+<!-- ==================== 第六部分 ==================== -->
+<h2>六、前端已打包后如何接入第三方 JS</h2>
+
+<p>这是第二个核心问题。你的前端 UI 已经打包成静态文件了，怎么在运行时加载插件的前端代码？答案是：<strong>后端 serve 插件的 web 目录，前端用动态 import() 加载 ESM 模块。</strong></p>
+
+<h3>6.1 整体加载流程</h3>
+
+<div class="card">
+  <p><span class="step-num">1</span> 前端启动 → 请求 <code>GET /api/plugins</code> 获取已启用插件清单</p>
+  <p class="flow-arrow">↓</p>
+  <p><span class="step-num">2</span> 后端从 userData/plugins/ 扫描 manifest.json，返回 [{ id, name, webEntry }]</p>
+  <p class="flow-arrow">↓</p>
+  <p><span class="step-num">3</span> 前端对每个插件执行 <code>import(plugin.webEntry)</code> 动态加载 ESM</p>
+  <p class="flow-arrow">↓</p>
+  <p><span class="step-num">4</span> 调用插件的 <code>register(extensionAPI)</code>，传入扩展点 API</p>
+  <p class="flow-arrow">↓</p>
+  <p><span class="step-num">5</span> 插件通过 API 注册路由、菜单、面板——完成 UI 注入</p>
+</div>
+
+<h3>6.2 后端：serve 插件静态文件</h3>
+<pre><span class="kw">const</span> express = <span class="kw">require</span>(<span class="str">'express'</span>);
+<span class="kw">const</span> path = <span class="kw">require</span>(<span class="str">'path'</span>);
+<span class="kw">const</span> { app } = <span class="kw">require</span>(<span class="str">'electron'</span>);
+
+<span class="kw">const</span> PLUGINS_DIR = path.join(app.getPath(<span class="str">'userData'</span>), <span class="str">'plugins'</span>);
+
+<span class="cm">// 静态文件服务：/plugins/:id/web/* → userData/plugins/:id/web/*</span>
+server.use(<span class="str">'/plugins'</span>, express.static(PLUGINS_DIR, {
+  setHeaders(res, filePath) {
+    <span class="kw">if</span> (filePath.endsWith(<span class="str">'.js'</span>)) {
+      res.setHeader(<span class="str">'Content-Type'</span>, <span class="str">'application/javascript; charset=utf-8'</span>);
+    }
+  }
+}));
+
+<span class="cm">// 插件清单 API</span>
+server.get(<span class="str">'/api/plugins'</span>, (req, res) => {
+  <span class="kw">const</span> plugins = scanPlugins(PLUGINS_DIR); <span class="cm">// 读取各目录 manifest.json</span>
+  res.json(plugins.map(p => ({
+    id: p.id,
+    name: p.name,
+    version: p.version,
+    webEntry: <span class="str">`/plugins/${p.id}/web/${p.entry.web}`</span>
+  })));
+});</pre>
+
+<h3>6.3 前端：动态加载插件（核心代码）</h3>
+<pre><span class="cm">// src/plugin-loader.ts —— 前端插件加载器</span>
+<span class="kw">import</span> { router } <span class="kw">from</span> <span class="str">'./router'</span>;
+<span class="kw">import</span> { menuStore } <span class="kw">from</span> <span class="str">'./store/menu'</span>;
+
+<span class="cm">// 扩展点 API —— 暴露给插件的能力</span>
+<span class="kw">const</span> extensionAPI = {
+  addRoute(route: <span class="kw">any</span>) { router.addRoute(route); },
+  removeRoute(path: string) { router.removeRoute(path); },
+  addMenuItem(item: <span class="kw">any</span>) { menuStore.add(item); },
+  removeMenuItem(path: string) { menuStore.remove(path); },
+  addPanel(slot: string, component: <span class="kw">any</span>) {
+    panelRegistry.register(slot, component);
+  },
+  <span class="cm">// 可以继续扩展：addStore、addCommand、addSettingTab...</span>
+};
+
+<span class="kw">const</span> loadedPlugins = <span class="kw">new</span> Map&lt;string, <span class="kw">any</span>&gt;();
+
+<span class="kw">export async function</span> <span class="fn">loadAllPlugins</span>() {
+  <span class="kw">const</span> res = <span class="kw">await</span> fetch(<span class="str">'/api/plugins'</span>);
+  <span class="kw">const</span> plugins = <span class="kw">await</span> res.json();
+
+  <span class="kw">for</span> (<span class="kw">const</span> plugin <span class="kw">of</span> plugins) {
+    <span class="kw">try</span> {
+      <span class="cm">// 关键：动态 import 远程 ESM 模块</span>
+      <span class="cm">// @vite-ignore 告诉 Vite 不要在构建时分析这个 import</span>
+      <span class="kw">const</span> mod = <span class="kw">await</span> import(<span class="cm">/* @vite-ignore */</span> plugin.webEntry);
+      <span class="kw">const</span> pluginModule = mod.default;
+
+      pluginModule.register(extensionAPI);
+      loadedPlugins.set(plugin.id, pluginModule);
+      console.log(<span class="str">`[plugin] ${plugin.id} loaded`</span>);
+    } <span class="kw">catch</span> (err) {
+      console.error(<span class="str">`[plugin] ${plugin.id} failed:`</span>, err);
+    }
+  }
+}
+
+<span class="kw">export function</span> <span class="fn">unloadPlugin</span>(id: string) {
+  <span class="kw">const</span> plugin = loadedPlugins.get(id);
+  <span class="kw">if</span> (plugin?.unregister) plugin.unregister(extensionAPI);
+  loadedPlugins.delete(id);
+}</pre>
+
+<h3>6.4 Vite 构建配置（关键！）</h3>
+<div class="highlight-box">
+  <p>前端打包时必须确保：<strong>插件相关的动态 import 不会被 Vite 打包进 bundle</strong>，且共享依赖（Vue/React 等）不重复加载。</p>
+</div>
+
+<pre><span class="cm">// vite.config.ts</span>
+<span class="kw">import</span> { defineConfig } <span class="kw">from</span> <span class="str">'vite'</span>;
+<span class="kw">import</span> vue <span class="kw">from</span> <span class="str">'@vitejs/plugin-vue'</span>;
+
+<span class="kw">export default</span> defineConfig({
+  plugins: [vue()],
+  build: {
+    rollupOptions: {
+      output: {
+        <span class="cm">// 把共享框架拆成独立 chunk，插件可通过 importmap 复用</span>
+        manualChunks: {
+          vue: [<span class="str">'vue'</span>, <span class="str">'vue-router'</span>],
+        }
+      }
+    }
+  },
+  <span class="cm">// 开发时代理插件请求到后端</span>
+  server: {
+    proxy: {
+      <span class="str">'/plugins'</span>: <span class="str">'http://localhost:3000'</span>,
+      <span class="str">'/api'</span>: <span class="str">'http://localhost:3000'</span>
+    }
+  }
+});</pre>
+
+<h3>6.5 进阶方案：Module Federation</h3>
+<p>如果你的插件需要共享更复杂的依赖（不只是 Vue/React，还有组件库、状态管理等），可以用 <strong>Module Federation</strong>：</p>
+
+<pre><span class="cm">// vite.config.ts —— 主应用作为 host</span>
+<span class="kw">import</span> federation <span class="kw">from</span> <span class="str">'@originjs/vite-plugin-federation'</span>;
+
+<span class="kw">export default</span> defineConfig({
+  plugins: [
+    vue(),
+    federation({
+      name: <span class="str">'host-app'</span>,
+      remotes: {}, <span class="cm">// 运行时动态添加，不在这里写死</span>
+      shared: [<span class="str">'vue'</span>, <span class="str">'vue-router'</span>, <span class="str">'pinia'</span>]
+    })
+  ]
+});
+
+<span class="cm">// 运行时动态添加 remote（插件加载时）</span>
+<span class="kw">import</span> {
+  __federation_method_setRemote,
+  __federation_method_getRemote
+} <span class="kw">from</span> <span class="str">'virtual:__federation__'</span>;
+
+<span class="kw">async function</span> <span class="fn">loadPluginViaMF</span>(pluginId, entryUrl) {
+  __federation_method_setRemote(pluginId, {
+    url: entryUrl,
+    format: <span class="str">'esm'</span>,
+    from: <span class="str">'vite'</span>
+  });
+  <span class="kw">const</span> mod = <span class="kw">await</span> __federation_method_getRemote(pluginId, <span class="str">'./index'</span>);
+  <span class="kw">return</span> mod().default;
+}</pre>
+
+<!-- ==================== 第七部分 ==================== -->
+<h2>七、完整启动流程与后端 Plugin Host</h2>
+
+<h3>7.1 后端 Plugin Host 实现</h3>
+<pre><span class="cm">// plugin-host.js —— 后端插件宿主</span>
+<span class="kw">const</span> { Context } = <span class="kw">require</span>(<span class="str">'./mini-cordis'</span>);
+<span class="kw">const</span> express = <span class="kw">require</span>(<span class="str">'express'</span>);
+<span class="kw">const</span> path = <span class="kw">require</span>(<span class="str">'path'</span>);
+<span class="kw">const</span> { app } = <span class="kw">require</span>(<span class="str">'electron'</span>);
+
+<span class="kw">const</span> PLUGINS_DIR = path.join(app.getPath(<span class="str">'userData'</span>), <span class="str">'plugins'</span>);
+
+<span class="kw">class</span> <span class="fn">PluginHost</span> {
+  ctx = <span class="kw">new</span> Context();
+  server = express();
+  loadedFibers = <span class="kw">new</span> Map();
+
+  <span class="kw">async</span> start() {
+    <span class="cm">// 1. 注册核心服务（HTTP、配置等）</span>
+    <span class="kw">this</span>.ctx.provide(<span class="str">'http'</span>, <span class="kw">this</span>.server);
+    <span class="kw">this</span>.ctx.provide(<span class="str">'config'</span>, { get: (k) => <span class="kw">this</span>.config[k] });
+
+    <span class="cm">// 2. serve 插件前端静态文件</span>
+    <span class="kw">this</span>.server.use(<span class="str">'/plugins'</span>, express.static(PLUGINS_DIR));
+
+    <span class="cm">// 3. 插件清单 API</span>
+    <span class="kw">this</span>.server.get(<span class="str">'/api/plugins'</span>, (req, res) => {
+      res.json(<span class="kw">this</span>.listPlugins());
+    });
+
+    <span class="cm">// 4. 扫描并加载所有已启用插件</span>
+    <span class="kw">const</span> plugins = <span class="kw">this</span>.listPlugins();
+    <span class="kw">for</span> (<span class="kw">const</span> p <span class="kw">of</span> plugins) {
+      <span class="kw">await this</span>.loadPlugin(p.id);
+    }
+
+    <span class="cm">// 5. 启动 HTTP 服务</span>
+    <span class="kw">this</span>.server.listen(<span class="num">3000</span>, () => {
+      console.log(<span class="str">'Plugin host running on :3000'</span>);
+      <span class="kw">this</span>.ctx.emit(<span class="str">'app:ready'</span>);
+    });
+  }
+
+  <span class="kw">async</span> loadPlugin(pluginId) {
+    <span class="kw">const</span> pluginDir = path.join(PLUGINS_DIR, pluginId);
+    <span class="kw">const</span> manifest = <span class="kw">require</span>(path.join(pluginDir, <span class="str">'manifest.json'</span>));
+    <span class="kw">const</span> entry = path.join(pluginDir, manifest.entry.server);
+
+    <span class="cm">// 清除 require 缓存，支持热重载</span>
+    <span class="kw">delete</span> require.cache[require.resolve(entry)];
+
+    <span class="cm">// 关键：从 userData 目录 require 插件代码</span>
+    <span class="cm">// Node 会自动在 pluginDir/node_modules 中查找依赖</span>
+    <span class="kw">const</span> pluginModule = <span class="kw">require</span>(entry);
+    <span class="kw">const</span> fiber = <span class="kw">await this</span>.ctx.plugin(pluginModule);
+    <span class="kw">this</span>.loadedFibers.set(pluginId, fiber);
+  }
+
+  unloadPlugin(pluginId) {
+    <span class="kw">const</span> fiber = <span class="kw">this</span>.loadedFibers.get(pluginId);
+    <span class="kw">if</span> (fiber) {
+      fiber.dispose(); <span class="cm">// 逆序清理所有副作用</span>
+      <span class="kw">this</span>.loadedFibers.delete(pluginId);
+    }
+  }
+
+  listPlugins() {
+    <span class="cm">// 扫描 PLUGINS_DIR，读取每个子目录的 manifest.json</span>
+    <span class="cm">// 返回 [{ id, name, version, webEntry }]</span>
+  }
+}
+
+<span class="kw">module</span>.exports = { PluginHost };</pre>
+
+<h3>7.2 Electron 主进程集成</h3>
+<pre><span class="kw">const</span> { app, BrowserWindow } = <span class="kw">require</span>(<span class="str">'electron'</span>);
+<span class="kw">const</span> { PluginHost } = <span class="kw">require</span>(<span class="str">'./plugin-host'</span>);
+
+<span class="kw">const</span> host = <span class="kw">new</span> PluginHost();
+
+app.whenReady().<span class="kw">then</span>(<span class="kw">async</span>() => {
+  <span class="cm">// 启动后端插件服务</span>
+  <span class="kw">await</span> host.start();
+
+  <span class="cm">// 创建窗口，加载已打包的前端</span>
+  <span class="kw">const</span> win = <span class="kw">new</span> BrowserWindow({
+    width: <span class="num">1200</span>, height: <span class="num">800</span>,
+    webPreferences: { contextIsolation: <span class="kw">true</span> }
+  });
+
+  <span class="kw">if</span> (app.isPackaged) {
+    win.loadFile(path.join(__dirname, <span class="str">'../dist/index.html'</span>));
+  } <span class="kw">else</span> {
+    win.loadURL(<span class="str">'http://localhost:5173'</span>);
+  }
+});</pre>
+
+<!-- ==================== 第八部分 ==================== -->
+<h2>八、关键问题与注意事项</h2>
+
+<h3>8.1 安全沙箱</h3>
+<div class="card">
+  <p>第三方插件代码运行在你的主进程中，拥有 Node.js 全部能力。建议：</p>
+  <ul>
+    <li>插件安装时校验签名/哈希（类似 VS Code 的 marketplace 签名）</li>
+    <li>敏感 API（fs、net）通过权限声明控制，manifest.json 中声明 <code>permissions</code></li>
+    <li>考虑用 <code>utilityProcess</code> 或 <code>vm</code> 模块隔离插件执行环境</li>
+    <li>前端插件通过 CSP 限制可加载的远程脚本来源</li>
+  </ul>
+</div>
+
+<h3>8.2 依赖冲突与共享</h3>
+<table>
+  <tr><th>策略</th><th>做法</th><th>适用场景</th></tr>
+  <tr><td><strong>完全隔离</strong></td><td>每个插件独立 node_modules，互不干扰</td><td>插件少，体积不敏感</td></tr>
+  <tr><td><strong>共享核心依赖</strong></td><td>宿主提供 vue/react/axios 等，插件通过 external 声明不打包</td><td>插件多，需要控制体积</td></tr>
+  <tr><td><strong>Module Federation</strong></td><td>运行时共享 singletons，版本协商</td><td>复杂微前端场景</td></tr>
+</table>
+
+<h3>8.3 路径问题（开发 vs 生产）</h3>
+<pre><span class="cm">// 统一路径解析工具</span>
+<span class="kw">function</span> <span class="fn">getPluginsDir</span>() {
+  <span class="kw">return</span> app.isPackaged
+    ? path.join(app.getPath(<span class="str">'userData'</span>), <span class="str">'plugins'</span>)  <span class="cm">// 生产：用户目录</span>
+    : path.join(process.cwd(), <span class="str">'.plugins'</span>);             <span class="cm">// 开发：项目目录</span>
+}
+
+<span class="cm">// asar 内的前端资源</span>
+<span class="kw">function</span> <span class="fn">getFrontendDir</span>() {
+  <span class="kw">return</span> app.isPackaged
+    ? path.join(process.resourcesPath, <span class="str">'app.asar'</span>, <span class="str">'dist'</span>)
+    : path.join(process.cwd(), <span class="str">'dist'</span>);
+}</pre>
+
+<h3>8.4 热重载（开发体验）</h3>
+<p>开发时可以监听插件目录变化，自动卸载旧 fiber 并重新加载：</p>
+<pre><span class="kw">const</span> chokidar = <span class="kw">require</span>(<span class="str">'chokidar'</span>);
+
+chokidar.watch(PLUGINS_DIR, { ignoreInitial: <span class="kw">true</span> })
+  .on(<span class="str">'change'</span>, <span class="kw">async</span> (filePath) => {
+    <span class="kw">const</span> pluginId = path.relative(PLUGINS_DIR, filePath).split(path.sep)[<span class="num">0</span>];
+    host.unloadPlugin(pluginId);
+    <span class="kw">await</span> host.loadPlugin(pluginId);
+    console.log(<span class="str">`[HMR] ${pluginId} reloaded`</span>);
+  });</pre>
+
+<!-- ==================== 总结 ==================== -->
+<h2>九、总结：最小实现路线图</h2>
+
+<div class="card">
+  <p><span class="step-num">1</span> <strong>实现 mini-cordis 内核</strong>（Context + Fiber + effect + inject + events），约 150 行</p>
+  <p><span class="step-num">2</span> <strong>设计插件包格式</strong>：manifest.json + server/ + web/ + package.json</p>
+  <p><span class="step-num">3</span> <strong>后端 Plugin Host</strong>：扫描插件 → require 加载 → 注册到 Cordis → serve 静态文件</p>
+  <p><span class="step-num">4</span> <strong>前端插件加载器</strong>：fetch 清单 → dynamic import → register(extensionAPI)</p>
+  <p><span class="step-num">5</span> <strong>运行时依赖安装</strong>：内置 npm 或 pacote，安装到 userData/plugins/&lt;id&gt;/node_modules</p>
+  <p><span class="step-num">6</span> <strong>安全与沙箱</strong>：权限声明、签名校验、可选 utilityProcess 隔离</p>
+</div>
+
+<div class="highlight-box">
+  <p><strong>核心洞察：</strong>DeepSeek Harness 的"一切皆插件"不是魔法，它建立在两个简单的不变量之上——<strong>(1) 所有副作用可逆（effect + disposer）</strong>，<strong>(2) 加载顺序由依赖图推导（inject）</strong>。你的最小实现只需要这两个机制，再加上"后端 require + 前端 dynamic import"的双端加载策略，就能实现打包后可扩展的插件系统。</p>
+</div>
+
+</div>
+</body>
+</html>
