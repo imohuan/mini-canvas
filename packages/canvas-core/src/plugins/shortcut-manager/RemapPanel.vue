@@ -188,22 +188,25 @@ function renderKeyParts(keys: string) {
           </template>
         </button>
       </div>
-
-      <div v-if="conflict" class="remap-feedback is-conflict">⚠ {{ conflict }}</div>
-      <div v-else-if="success" class="remap-feedback is-success">✓ 已更新</div>
     </div>
 
     <div class="remap-panel-actions">
-      <button class="remap-text-btn" @click="resetToDefault" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
-        </svg>
-        重置默认
-      </button>
-      <button class="remap-text-btn" @click="startListening" :disabled="listening" type="button">
-        重新录制
-      </button>
-      <button class="remap-confirm-btn" @click="collapse" type="button">完成</button>
+      <div class="remap-feedback-slot">
+        <span v-if="conflict" class="remap-feedback-inline is-conflict">⚠ {{ conflict }}</span>
+        <span v-else-if="success" class="remap-feedback-inline is-success">✓ 已更新</span>
+      </div>
+      <div class="remap-actions-right">
+        <button class="remap-text-btn" @click="resetToDefault" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>
+          </svg>
+          重置默认
+        </button>
+        <button class="remap-text-btn" @click="startListening" :disabled="listening" type="button">
+          重新录制
+        </button>
+        <button class="remap-confirm-btn" @click="collapse" type="button">完成</button>
+      </div>
     </div>
   </div>
 </template>
@@ -334,32 +337,42 @@ function renderKeyParts(keys: string) {
   font-weight: 700;
 }
 
-.remap-feedback {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 4px 8px;
-  border-radius: 6px;
-  margin: 2px 0 0 60px;
+/* 底部动作条：左信息 + 右按钮组，space-between 左右分立 */
+.remap-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 4px;
 }
 
-.remap-feedback.is-conflict {
+.remap-actions-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remap-feedback-slot {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.remap-feedback-inline {
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.remap-feedback-inline.is-conflict {
   color: #b45309;
   background: rgba(245, 158, 11, 0.16);
 }
 
-.remap-feedback.is-success {
+.remap-feedback-inline.is-success {
   color: #047857;
   background: rgba(16, 185, 129, 0.16);
-}
-
-/* 底部动作条：与上方面板同一青色底，但去掉硬分割线，
-   通过微小上下 padding 拉开间距，按钮排右对齐 */
-.remap-panel-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  padding-top: 4px;
 }
 
 .remap-text-btn {
