@@ -1,10 +1,10 @@
-import { createApp, h, reactive, nextTick, type Component } from "vue"
+import { createApp, h, reactive, nextTick, watch, type Component } from "vue"
 import type { Node, Edge } from "@vue-flow/core"
 import { Position } from "@vue-flow/core"
 import type { CanvasPlugin, PluginContext, ConnectionReleaseEndpoint, ConnectionReleasePayload } from "../types"
 import type { Point } from "../types"
 import type { MenuContext } from "../../registry/MenuRegistry"
-import type { CanvasMenuItem, CanvasMenuState } from "../../registry/types"
+import type { CanvasMenuItem, CanvasMenuState, PanelSettingDefinition } from "../../registry/types"
 import CanvasMenu from "../../components/Menu/CanvasMenu.vue"
 import { registerBuiltinMenuItems } from "./builtinMenuItems"
 
@@ -124,6 +124,29 @@ export const ContextMenuPlugin: CanvasPlugin = {
 
   install(context: PluginContext) {
     registerBuiltinMenuItems(context)
+
+    // ---- "右键拖拽平移"配置（本插件自治）：开启后 pane 右键不弹添加节点菜单，
+    //      右键转用于平移画布（通过事件通知 Canvas 并入 VueFlow pan-on-drag），
+    //      添加节点改由快捷键 shift+a 呼出 ----
+    const rightDragPanRef = context.store.toRef<boolean>("panOnRightDrag", false)
+    context.panels.registerSetting("context-menu", {
+      id: "context-menu.panOnRightDrag",
+      title: "右键拖拽平移",
+      description: "开启后画布空白处左右键均可拖拽平移，右键不再弹出\"添加节点\"菜单（改用快捷键 shift+a 呼出）",
+      type: "boolean",
+      group: "右键菜单",
+      order: 10,
+      defaultValue: false,
+    } as PanelSettingDefinition)
+    // 最近一次鼠标屏幕坐标（供快捷键在光标处呼出菜单）
+    let lastMouse = { x: 0, y: 0 }
+    const offPointerMove = context.dom.onWindow("pointermove", (e: PointerEvent) => {
+      lastMouse = { x: e.clientX, y: e.clientY }
+    })
+    // 开关变化 → 广播给 Canvas 合进 VueFlow pan-on-drag
+    const stopRightDragWatch = watch(rightDragPanRef, (on) => {
+      context.emit("canvas:rightDragPanChanged", on)
+    })
 
     // ===== 连线拖拽菜单辅助函数（闭包，访问 context） =====
     function toFlowPosition(clientX: number, clientY: number): Point {
@@ -283,6 +306,8 @@ export const ContextMenuPlugin: CanvasPlugin = {
     }
 
     const off1 = context.on("paneContextMenu", (p: any) => {
+      // 右键拖拽平移开启 → pane 右键专用于平移，不弹添加节点菜单（用 shift+a 呼出）
+      if (rightDragPanRef.value) return
       openCreateNodeMenu({ x: p.clientX, y: p.clientY }, "pane", "添加节点", { flowPosition: toFlowPosition(p.clientX, p.clientY) })
     })
     const off2 = context.on("paneDoubleClick", (p: any) => {
@@ -349,6 +374,18 @@ export const ContextMenuPlugin: CanvasPlugin = {
         },
       })
     })
+    // 添加节点快捷键（始终生效；在光标处呼出/关闭 pane 添加节点菜单）
+    context.registerShortcut("shift+a", () => {
+      if (menuState.visible) {
+        closeMenu()
+      } else {
+        const { x, y } = lastMouse
+        openCreateNodeMenu({ x, y }, "pane", "添加节点", { flowPosition: toFlowPosition(x, y) })
+      }
+    }, "添加节点")
+    // 把初始开关状态同步给 Canvas（确保插件加载完成后 pan 行为正确）
+    context.emit("canvas:rightDragPanChanged", rightDragPanRef.value)
+
     containerEl = document.createElement("div")
     document.body.appendChild(containerEl)
     appInstance = createApp({ setup: () => () => h(CanvasMenu, { menu: menuState, onSelect: onMenuSelect, onClose: closeMenu }) })
@@ -357,7 +394,11 @@ export const ContextMenuPlugin: CanvasPlugin = {
     return {
       uninstall() {
         context.menus.unregisterSource("context-menu")
+        context.panels.unregisterSource("context-menu")
         off1(); off2(); off3(); off4(); off5(); offRelease()
+        offPointerMove()
+        stopRightDragWatch()
+        context.unregisterShortcut("shift+a")
         if (appInstance) { appInstance.unmount(); appInstance = null }
         if (containerEl) { containerEl.remove(); containerEl = null }
       },

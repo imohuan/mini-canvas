@@ -122,22 +122,30 @@ const performanceEnabled = computed(() => canvas.state.core.performancePanelEnab
 const performanceMonitor = useCanvasPerformance({ enabled: performanceEnabled })
 
 /**
- * VueFlow pan-on-drag 响应式绑定。
+ * 右键拖拽平移开关（true=context-menu 插件开启，右键也用于平移、不弹添加节点菜单）。
+ * 由 context-menu 插件通过事件通知，Canvas 负责把它合进 VueFlow 的 pan-on-drag。
+ */
+const rightDragPanEnabled = ref(false)
+
+/**
+ * VueFlow pan-on-drag 响应式绑定：
  * - panOnDrag 关闭 → false（不平移）
- * - panOnRightDrag 开启 → 并入右键(2)，左右键均可拖拽平移：[0,2] 或纯右键 [2]
+ * - 右键拖拽开启 → 并入右键(2)，左右键均可拖拽平移：[0,2] 或纯右键 [2]
  * - 否则 → 沿用 core.panOnDrag 布尔值（左键平移，现状）
  */
 const panOnDragBinding = computed<boolean | number[]>(() => {
   const core = canvas.state.core
-  const right = !!core.panOnRightDrag
+  const right = rightDragPanEnabled.value
   const left = !!core.panOnDrag
   if (right && left) return [0, 2]
   if (right) return [2]
   return left
 })
 
-/** 最近一次鼠标的屏幕坐标（供快捷键在光标位置呼出"添加节点"菜单） */
-const lastPointerScreen = ref({ x: 0, y: 0 })
+/** 更新右键拖拽平移状态（context-menu 插件广播） */
+function onRightDragPanChanged(on: boolean) {
+  rightDragPanEnabled.value = on
+}
 
 /** 更新画布容器的宽高尺寸，响应窗口大小变化 */
 
@@ -174,10 +182,6 @@ function onCanvasSetFlag(payload: any) {
  * 收集 EventBus 取消订阅函数，在 onUnmounted 中统一清理
  */
 const cleanupFns: Array<() => void> = []
-/** 记录最近一次鼠标屏幕坐标：供 shift+a 在光标处呼出"添加节点"菜单 */
-function onDocPointerMove(e: PointerEvent) {
-  lastPointerScreen.value = { x: e.clientX, y: e.clientY }
-}
 function updateCanvasContainerSize() {
   const rect = canvasContainerRef.value?.getBoundingClientRect()
   canvasContainerSize.value = {
@@ -297,11 +301,9 @@ function onNodeContextMenu({ event, node }: NodeMouseEvent) {
   manager.eventBus.emit("nodeContextMenu", { clientX: e.clientX, clientY: e.clientY, nodeId: node.id, nodeType: node.data?.nodeType ?? node.type })
   console.log("[右键-节点]", { mouse: { x: e.clientX, y: e.clientY }, node: { id: node.id, type: node.type, position: node.position, data: node.data } })
 }
-/** 画布右键事件：默认打开"添加节点"菜单；开启右键拖拽平移后改为纯拖拽，不弹菜单（用快捷键呼出） */
+/** 画布右键事件：打开"添加节点"菜单（是否弹出由 context-menu 插件按配置决定） */
 function onPaneContextMenu(event: MouseEvent) {
   event.preventDefault()
-  // 右键拖拽平移开启 → 右键专用于平移，不弹出添加节点菜单
-  if (canvas.state.core.panOnRightDrag) return
   const flowPosition = toFlowPosition(vueFlowInstance.viewport.value, event.clientX, event.clientY)
   manager.eventBus.emit('paneContextMenu', { clientX: event.clientX, clientY: event.clientY, flowPosition })
   console.log('[右键-画布]', { mouse: { x: event.clientX, y: event.clientY } })
@@ -436,6 +438,9 @@ onMounted(async () => {
   // 监听插件要求修改画布全局 flag
   cleanupFns.push(manager.eventBus.on('canvas:setFlag', onCanvasSetFlag))
 
+  // 监听 context-menu 插件的"右键拖拽平移"开关 → 合进 VueFlow pan-on-drag
+  cleanupFns.push(manager.eventBus.on('canvas:rightDragPanChanged', onRightDragPanChanged))
+
 
   try {
     await manager.install({
@@ -497,7 +502,6 @@ onMounted(async () => {
   registerCore('zoomOnScroll', { title: '滚轮缩放', type: 'boolean', group: '视口', order: 20, defaultValue: core.zoomOnScroll })
   registerCore('panOnScroll', { title: '滚轮平移', type: 'boolean', group: '视口', order: 21, defaultValue: core.panOnScroll })
   registerCore('panOnDrag', { title: '拖拽平移', type: 'boolean', group: '视口', order: 22, defaultValue: core.panOnDrag })
-  registerCore('panOnRightDrag', { title: '右键拖拽平移', description: '开启后，画布空白处左右键均可拖拽平移，右键不再弹出"添加节点"菜单（改用快捷键 shift+a 呼出）', type: 'boolean', group: '视口', order: 22.5, defaultValue: core.panOnRightDrag })
   registerCore('connectOnClick', { title: '点击连线', type: 'boolean', group: '视口', order: 23, defaultValue: core.connectOnClick })
   registerCore('zoomOnDoubleClick', { title: '双击缩放', type: 'boolean', group: '视口', order: 24, defaultValue: core.zoomOnDoubleClick })
   registerCore('onlyRenderVisibleElements', { title: '只渲染可见', type: 'boolean', group: '视口', order: 25, defaultValue: core.onlyRenderVisibleElements })
@@ -601,25 +605,6 @@ onMounted(async () => {
     })
   }
 
-  // 跟踪最近一次鼠标屏幕坐标：供 shift+a 在光标处呼出"添加节点"菜单
-  window.addEventListener('pointermove', onDocPointerMove, { passive: true })
-
-  // 注册"添加节点"快捷键（始终生效，默认 shift+a；可在快捷键面板重映射）
-  mgr.register({
-    id: 'canvas.add-node',
-    command: '添加节点',
-    keys: canvas.state.core.shortcutKeymap?.['canvas.add-node'] ?? 'shift+a',
-    handler: () => {
-      const { x, y } = lastPointerScreen.value
-      const flowPosition = toFlowPosition(vueFlowInstance.viewport.value, x, y)
-      manager.eventBus.emit('paneContextMenu', { clientX: x, clientY: y, flowPosition })
-      return true
-    },
-    priority: 20,
-    pluginId: 'canvas-core',
-    group: 'canvas',
-  })
-
   // 从持久化存储加载用户自定义的快捷键映射
   const keymap = canvas.state.core.shortcutKeymap || {}
   ShortcutManager.getInstance().loadKeymap(keymap)
@@ -650,7 +635,6 @@ onMounted(async () => {
 
 onUnmounted(async () => {
   window.removeEventListener('resize', updateCanvasContainerSize)
-  window.removeEventListener('pointermove', onDocPointerMove)
   canvasResizeObserver?.disconnect()
   canvasResizeObserver = null
   conn.cancelBatchConnect()
