@@ -210,7 +210,7 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(async () => {
   try {
-    const h = await bootCanvas(new LocalStorageAdapter(), { plugins: [nodeImagePlugin] })
+    const h = await bootCanvas({ adapter: new LocalStorageAdapter(), plugins: [nodeImagePlugin] })
     host.value = h
 
     // 存储为空(首次) → seed 默认 text+image 并落盘；非空则 bootCanvas 已 restore
