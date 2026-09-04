@@ -1,16 +1,13 @@
 <script setup lang="ts">
-// TextContent —— text 节点内容组件（demo 视觉层）
+// TextContent —— text 节点 content 组件（经 BaseNode 壳的 content 段渲染）
 // 职责：展示文本；双击进入编辑，失焦/回车把改动经 ctx.get('text').editText 写回内核并落盘。
-// 边界：不做内核逻辑，只接线（写回走 text 插件服务，不直接改 nodeStore.data）。
+// 连接点 Handle 由 BaseNode 壳统一提供，这里不再自带。
 import { inject, ref, nextTick, onBeforeUnmount } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
 import { HOST_KEY } from '../demoInjection'
 import type { TextNodeService } from '../../src/plugins/nodeText'
 import type { CanvasHost } from '../../src/demo/host'
 
 const props = defineProps<{ id: string; data: { text?: string } }>()
-// VueFlow 会透传一堆内部 props(selected/dragging/type…)给节点组件；不落到根元素避免脏属性
-defineOptions({ inheritAttrs: false })
 
 const hostRef = inject(HOST_KEY)
 function host(): CanvasHost {
@@ -25,8 +22,6 @@ const inputEl = ref<HTMLTextAreaElement | null>(null)
 // 本地展示值：init 自 props.data，编辑后本地回显（内核节点与 VueFlow 节点是两份拷贝，
 // 直接读 props.data.text 在写回内核后不会自动刷新，故用本地值兜底回显）
 const shown = ref(props.data.text ?? '')
-// 供 <template> 直接用 Position，避免模板内引用枚举报未定义
-const pos = Position
 
 function textService(): TextNodeService {
   return host().ctx.get<TextNodeService>('text')
@@ -75,7 +70,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="text-node">
-    <Handle :type="'target'" :position="pos.Left" />
     <div class="body" @dblclick.stop="startEdit" :title="'双击编辑'">
       <textarea
         v-if="editing"
@@ -89,7 +83,6 @@ onBeforeUnmount(() => {
       ></textarea>
       <div v-else class="preview">{{ shown || '（空）' }}</div>
     </div>
-    <Handle :type="'source'" :position="pos.Right" />
   </div>
 </template>
 

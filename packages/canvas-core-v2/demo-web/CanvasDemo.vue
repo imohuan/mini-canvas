@@ -11,6 +11,9 @@ import { VueFlow } from '@vue-flow/core'
 import type { Connection } from '@vue-flow/core'
 import TextContent from './components/TextContent.vue'
 import ImageContent from './components/ImageContent.vue'
+import BaseNode from '../src/components/BaseNode.vue'
+import { NODE_REGISTRY_KEY } from '../src/components/nodeRegistryKey'
+import { NodeRegistry } from '../src/core/registry/nodeRegistry'
 import { HOST_KEY } from './demoInjection'
 import type { CanvasHost } from '../src/demo/host'
 import type { CanvasNode } from '../src/services/nodeStore'
@@ -35,13 +38,19 @@ const host = shallowRef<CanvasHost | undefined>()
 // setup 阶段同步 provide 宿主引用（boot 异步完成后填充），内容组件经 inject(HOST_KEY).value 取
 provide(HOST_KEY, host)
 
+// 节点展示注册表：把各业务 type 的 content 组件注册进去（NodeRenderer/BaseNode 消费），setup 同步 provide
+const registry = new NodeRegistry()
+registry.register('text', { content: TextContent })
+registry.register('image', { content: ImageContent })
+provide(NODE_REGISTRY_KEY, registry)
+
 // VueFlow 的响应式节点/边（渲染态）
 const nodes = ref<FlowNode[]>([])
 const edges = ref<Array<{ id: string; source: string; target: string }>>([])
 const selectedIds = ref<Set<string>>(new Set())
 
-// 业务 type → 内容组件（VueFlow 用 node.type 当 key 找渲染器）
-const nodeTypes = { text: TextContent, image: ImageContent }
+// 业务 type → 壳组件：所有节点都经 BaseNode(壳)渲染，BaseNode 按 node.type 经 NodeRenderer 解析 content
+const nodeTypes = { text: BaseNode, image: BaseNode }
 
 /** 默认 image seed：内联 SVG（离线可显示） */
 const SAMPLE_IMG =
