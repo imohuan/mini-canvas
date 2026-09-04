@@ -34,6 +34,8 @@ export const nodeImagePlugin: PluginModule = {
       defaultSize: { w: 320, h: 240 },
       segments: { content: ImageContent },
     })
+    // 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
+    ctx.inject('image-meta', { v: 1 })
 
     const nodeStore = ctx.get<NodeStoreService>('nodeStore')
     const factory = ctx.get<NodeFactoryService>('nodeFactory')

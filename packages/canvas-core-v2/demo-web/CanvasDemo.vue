@@ -16,10 +16,12 @@ import { CANVAS_PARAMS_KEY } from '../src/components/canvasParamKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
 import { validateConnection, typeConnectionDef } from '../src/services/connection'
 import { HOST_KEY } from '@mini-canvas/canvas-core-v2'
-import type { CanvasHost } from '../src/demo/host'
 import type { CanvasNode } from '../src/services/nodeStore'
-import { bootCanvas } from '../src/demo/host'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
+import { createMiniCanvasHost } from '@mini-canvas/canvas-core-v2'
+import type { CanvasHostHandle } from '@mini-canvas/canvas-core-v2'
+import { canvasCommandsPlugin } from '../src/plugins/canvasCommands'
+import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
@@ -39,8 +41,9 @@ interface FlowNode {
 // —— 运行状态 ——
 const booting = ref(true)
 const bootError = ref('')
-const host = shallowRef<CanvasHost | undefined>()
+const host = shallowRef<CanvasHostHandle | undefined>()
 const flushHandle = ref<BrowserFlushHandle>()
+const hotSubs: Array<{ dispose(): void }> = [] // 插件装载事件订阅(卸载时清理)
 // setup 阶段同步 provide 宿主引用（boot 异步完成后填充），内容组件经 inject(HOST_KEY).value 取
 provide(HOST_KEY, host)
 
@@ -66,8 +69,18 @@ const nodes = ref<FlowNode[]>([])
 const edges = ref<Array<{ id: string; type?: string; source: string; target: string }>>([])
 const selectedIds = ref<Set<string>>(new Set<string>())
 
-// 业务 type → 壳组件：所有节点都经 BaseNode(壳)渲染，BaseNode 按 node.type 经 NodeRenderer 解析 content
-const nodeTypes = { text: BaseNode, image: BaseNode }
+// 业务 type → 壳组件：所有节点都经 BaseNode(壳)渲染，BaseNode 按 node.type 经 NodeRenderer 解析 content。
+// nodeTypes 是响应式的：从内核 nodeStore 已注册 type 动态生成，热装/热卸插件新增/移除类型后自动增减，
+// 新增类型无需改这段代码(宿主零硬编码)。
+const nodeTypes = ref<Record<string, unknown>>({})
+const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂，让 content 解析用最新注册表
+/** 按 nodeStore 已注册 type 重建 nodeTypes + 触发重挂（宿主新增/热卸插件后调用） */
+function syncNodeTypes(): void {
+  const map: Record<string, unknown> = {}
+  for (const t of host.value?.nodeStore.types.keys() ?? []) map[t] = BaseNode
+  nodeTypes.value = map
+  nodeEpoch.value += 1
+}
 // 边类型：所有边走 CustomEdge（自定义边，v1 Canvas 里 edgeTypes.custom，金标准 core-node-contract §6）
 const edgeTypes = { custom: CustomEdge }
 // —— 调试配置面板数据：一个响应式根对象，分 edge/handle 命名空间。
@@ -265,14 +278,17 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(async () => {
   try {
-    const h = await bootCanvas({
+    // 用可复用门面建宿主：冷启动插件在 coldPlugins 里给全(顺序即装载序)，宿主不手 seed content。
+    // 门面把 runtime 暴露到 window.MiniCanvas，源码插件 / 打包 js 插件都经 window.MiniCanvas.installPlugin 安装。
+    const { host: h, exposeToWindow } = await createMiniCanvasHost({
       adapter: new LocalStorageAdapter(),
-      plugins: [nodeImagePlugin], // text 插件已由 bootCanvas 内置装载（host 装配点）
-      nodeRegistry: registry, // 把 demo 同步 provide 的注册表交给内核，插件 apply 往里注册 content
+      coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin], // 内置+业务插件都在此
+      nodeRegistry: registry, // demo 同步 provide 的展示注册表，插件 setup 往里注册 content
     })
+    exposeToWindow('MiniCanvas') // window.MiniCanvas = { installPlugin/uninstallPlugin/reloadPlugin/... }
     host.value = h
 
-    // 存储为空(首次) → seed 默认 text+image 并落盘；非空则 bootCanvas 已 restore
+    // 存储为空(首次) → seed 默认 text+image 并落盘；非空则门面已 restore
     if (h.nodeStore.getNodes().length === 0) {
       const textId = h.ctx.get<TextNodeService>('text').addTextNode({ x: 80, y: 80 })
       const imgId = h.ctx.get<ImageNodeService>('image').addImageNode({ x: 500, y: 120 }, SAMPLE_IMG)
@@ -284,6 +300,12 @@ onMounted(async () => {
     } else {
       nodes.value = storeToFlow()
     }
+    syncNodeTypes() // 按已注册 type 生成 nodeTypes + bump epoch
+
+    // 宿主订阅插件装载事件：热装/热卸/热重载插件后重建 nodeTypes + 触发 VueFlow 重挂(改动实时生效)
+    hotSubs.push(h.ctx.on('ctx:plugin-installed', syncNodeTypes))
+    hotSubs.push(h.ctx.on('ctx:plugin-uninstalled', syncNodeTypes))
+
     // 页面隐藏/离开时把脏数据落盘（防刷新丢）
     flushHandle.value = bindBrowserLifecycleFlush(h.save)
     window.addEventListener('keydown', onKeydown)
@@ -296,6 +318,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  for (const s of hotSubs) s.dispose()
   flushHandle.value?.dispose()
   void host.value?.save.flush()
   host.value?.stop()
@@ -321,6 +344,7 @@ onBeforeUnmount(() => {
 
     <div v-else class="canvas-wrap">
       <VueFlow
+        :key="nodeEpoch"
         :nodes="nodes"
         :edges="edges"
         :node-types="nodeTypes"
