@@ -15,6 +15,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "vite",
+    "dev:hmr": "vite --config vite.dev.config.ts",
     "build": "vite build"
   },
   "dependencies": {
