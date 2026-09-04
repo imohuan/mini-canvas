@@ -8,7 +8,8 @@
 //   5. LOD：zoom < nodeLodLowDetailZoom(0.4) 时简化渲染（去阴影/标题），降低缩放重绘成本。
 // 与 v1 差异：读 canvas.state.core.* 的配置改为 props/默认值；连接 3D 反馈/浮动端口(MovingHandle)留批次 C。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useVueFlow, Handle, Position } from '@vue-flow/core'
+import { useVueFlow, Position } from '@vue-flow/core'
+import MovingHandle from './MovingHandle.vue'
 import { resolveSegment } from '../core/registry/nodeRenderer'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './nodeRegistryKey'
 import type { NodeWrite } from './nodeRegistryKey'
@@ -105,6 +106,17 @@ const editable = computed(() => Boolean(nodeWrite))
 // —— hover 状态（控制端口醒目与阴影） ——
 const isHovered = ref(false)
 
+// —— 浮动端口(MovingHandle)尺寸：对齐 core-node-contract §0 默认表 ——
+const HANDLE = {
+  radius: 86,
+  restOffset: 36,
+  cursorGap: 24,
+  buttonSize: 32,
+  overlap: 16,
+}
+// 端口可见：非低细节 且 (hover 或 选中) → 圆球浮出（真实连接点始终在，mouse 靠近 zone 即可连）
+const shouldShowHandles = computed(() => !lowDetail.value && (isHovered.value || props.selected))
+
 // —— 卡片实测宽度（画布坐标）→ 标题反缩宽度 ——
 const cardEl = ref<HTMLElement | null>(null)
 const cardClientW = ref(0)
@@ -149,9 +161,31 @@ const titleStyle = computed(() => ({
     </div>
 
     <div ref="cardEl" class="v2-card">
-      <!-- 端口：左 target / 右 source（原生 Handle，hover/选中醒目由 CSS 控制） -->
-      <Handle class="v2-handle v2-handle--target" :type="'target'" :position="Position.Left" />
-      <Handle class="v2-handle v2-handle--source" :type="'source'" :position="Position.Right" />
+      <!-- 浮动端口：MovingHandle(圆球随鼠标浮出)。target 左 / source 右 -->
+      <MovingHandle
+        id="target"
+        type="target"
+        :position="Position.Left"
+        :visible="shouldShowHandles"
+        :radius="HANDLE.radius"
+        :rest-offset="HANDLE.restOffset"
+        :cursor-gap="HANDLE.cursorGap"
+        :button-size="HANDLE.buttonSize"
+        :overlap="HANDLE.overlap"
+        @hover="isHovered = $event"
+      />
+      <MovingHandle
+        id="source"
+        type="source"
+        :position="Position.Right"
+        :visible="shouldShowHandles"
+        :radius="HANDLE.radius"
+        :rest-offset="HANDLE.restOffset"
+        :cursor-gap="HANDLE.cursorGap"
+        :button-size="HANDLE.buttonSize"
+        :overlap="HANDLE.overlap"
+        @hover="isHovered = $event"
+      />
 
       <!-- 反向缩放标题条（双击/F2 就地重命名，need writeback；自定义 title 段优先） -->
       <div
@@ -230,28 +264,7 @@ const titleStyle = computed(() => ({
     0 2px 10px rgba(59, 130, 246, 0.15);
 }
 
-/* —— 端口（原生 Handle 小圆点；默认淡、hover/选中时醒目） —— */
-:deep(.v2-handle) {
-  width: 8px;
-  height: 8px;
-  min-width: 8px;
-  min-height: 8px;
-  background: #d1d5db;
-  border: 1px solid #fff;
-  opacity: 0.9;
-  transition: background 160ms ease, transform 160ms ease;
-}
-.v2-node.is-pointer-hovered :deep(.v2-handle),
-.v2-node.is-selected :deep(.v2-handle) {
-  background: #3b82f6;
-  transform: scale(1.3);
-}
-:deep(.v2-handle--target) {
-  left: -4px;
-}
-:deep(.v2-handle--source) {
-  right: -4px;
-}
+/* —— 端口：浮动圆球由 MovingHandle 自管（锚点 1px 常驻 + 半圆 zone + 圆球） —— */
 
 /* —— 标题条：绝对定位在卡片上缘外，反向缩放 —— */
 .v2-title {
