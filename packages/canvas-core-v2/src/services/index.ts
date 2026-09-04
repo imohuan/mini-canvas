@@ -18,3 +18,24 @@ export { CommandRegistry } from './command'
 export type { CommandDef, CommandService } from './command'
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'
+export {
+  normalizeConnection,
+  toCanonicalConnection,
+  getCanonicalEndpoints,
+  wouldCreateCycle,
+  isSameConnection,
+  findDuplicate,
+  validateConnection,
+  typeConnectionDef,
+} from './connection'
+export type {
+  ConnectionInput,
+  ExistingEdge,
+  NormalizedConnection,
+  CanonicalEndpoints,
+  PortDef,
+  NodeConnectionDef,
+  ValidateContext,
+  InvalidReason,
+  ValidationResult,
+} from './connection'

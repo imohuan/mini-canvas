@@ -15,11 +15,14 @@ export interface CanvasNode {
   data: Record<string, unknown>
 }
 
-/** 一个节点类型定义（M4 只关心 content 组件 + 默认尺寸；完整 schema 见 M3） */
+/** 节点类型定义（M4 只关心 content 组件 + 默认尺寸；完整 schema 见 M3） */
 export interface CanvasNodeType {
   type: string
   label: string
   defaultSize: { w: number; h: number }
+  /** 声明式连接约束（M5，api.md §四）：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
+  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
+  outputs?: Array<{ port?: string }>
 }
 
 /** NodeStore 作为 ctx 服务暴露的接口 */

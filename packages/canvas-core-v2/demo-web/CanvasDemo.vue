@@ -14,6 +14,7 @@ import ImageContent from './components/ImageContent.vue'
 import BaseNode from '../src/components/BaseNode.vue'
 import { NODE_REGISTRY_KEY } from '../src/components/nodeRegistryKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
+import { validateConnection, typeConnectionDef } from '../src/services/connection'
 import { HOST_KEY } from './demoInjection'
 import type { CanvasHost } from '../src/demo/host'
 import type { CanvasNode } from '../src/services/nodeStore'
@@ -174,16 +175,23 @@ function onPaneContextMenu(e: MouseEvent): void {
   openMenuAt(e.clientX, e.clientY)
 }
 
-// —— 连一条边：禁 self-loop ——
+// —— 连一条边：经内核连接服务(M5)校验(自连/环/重复/朝向/类型) ——
 function isValidConnection(conn: Connection): boolean {
-  return conn.source !== conn.target
+  const h = host.value
+  if (!h || !conn.source || !conn.target) return false
+  const nodes = new Map(h.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
+  const res = validateConnection(
+    { source: conn.source, sourceHandle: conn.sourceHandle ?? undefined, target: conn.target, targetHandle: conn.targetHandle ?? undefined },
+    { nodes, edges: edges.value, getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
+  )
+  return res.ok
 }
 
 function onConnect(conn: Connection): void {
   if (!isValidConnection(conn) || !conn.source || !conn.target) return
   const id = `e-${conn.source}-${conn.target}`
   edges.value = edges.value.filter((e) => e.id !== id).concat([{ id, source: conn.source, target: conn.target }])
-  // M1：边只是 VueFlow 视觉态（内核尚无 edge store，M5 才接入连接内核），不落盘
+  // M5：边仍是 VueFlow 视觉态(未落盘)；校验已走内核 validateConnection
 }
 
 function onKeydown(e: KeyboardEvent): void {
