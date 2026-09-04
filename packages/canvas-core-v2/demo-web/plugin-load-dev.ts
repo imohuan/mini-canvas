@@ -1,0 +1,137 @@
+// plugin-load-dev.ts —— 宿主跨端口热拉"插件 dev server 源码模块"的控制器。
+//
+// 证明：插件在它自己的 vite dev server 上开发(不改文件不用打包)，宿主(5199)经
+// fileChangeFeed SSE 端点监听其 src 变更 → 重拉模块 → reloadPlugin，改动实时生效(不刷新)。
+//
+// 拓扑：plugin-node-text 独立 dev server :5311 (pnpm dev:hmr)；
+//      宿主 EventSource 连 http://localhost:5311/__plugin_changed。
+//      theme(nodeShell/edge/background) 走源码插件(宿主同 server)——本页聚焦 text 跨端口热更。
+//
+// vue 单例：宿主与插件都 resolve vue 到 pnpm 同一真实路径，.vue 的 import 'vue' 拿到同一份。
+import { createMiniCanvasHost, NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import type { PluginModule } from '@mini-canvas/canvas-core-v2'
+import { createApp, ref } from 'vue'
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import DevHmrCanvas from './plugin-load-dev-app.vue'
+
+// —— 页面日志 ——
+const logEl = document.getElementById('log') as HTMLElement | null
+const bootEl = document.getElementById('boot') as HTMLElement | null
+const resultEl = document.getElementById('result') as HTMLElement | null
+export function log(msg: string) {
+  if (logEl) logEl.textContent = (logEl.textContent ?? '') + msg + '\n'
+  if (bootEl) bootEl.textContent = msg
+  console.log('[dev-hmr]', msg)
+}
+export function setResult(msg: string, ok = true) {
+  if (resultEl) {
+    resultEl.textContent = msg
+    resultEl.style.color = ok ? '#15803d' : '#b91c1c'
+  }
+}
+
+const TEXT_DEV_ORIGIN = 'http://localhost:5311'
+const textModuleUrl = `${TEXT_DEV_ORIGIN}/src/index.ts`
+
+// —— 跨文件共享运行状态(控制器与 DevHmrCanvas 读写) ——
+export type MiniCanvasApiLike = {
+  installPlugin(m: unknown): string
+  reloadPlugin(n: string, m?: unknown): void
+  listPlugins(): string[]
+  getRegistry(): { types(): string[] }
+  getNodeStore(): {
+    getNodes(): Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>
+    removeNode(id: string): void
+  }
+  getContext(): { get<T>(n: string): T }
+}
+export const state: {
+  api: MiniCanvasApiLike
+  host: {
+    themeRegistry: { get(s: string): unknown }
+    nodeRegistry: { get(t: string): { segments: Record<string, unknown> } | undefined }
+    ctx: { get<T>(n: string): T }
+  }
+  /** 经 HOST_KEY provide 给 content 组件的宿主引用 */
+  hostRef: { value: unknown }
+  /** 每次"该重画了"(首装/热更后)自增 → DevHmrCanvas 据此重建节点并重挂。
+   *  用 ref 包装以便 .vue 的 watch 能感知变更(state 本身是普通对象，非 reactive)。 */
+  epoch: ReturnType<typeof ref<number>>
+  reloadCount: number
+} = {
+  api: null as unknown as MiniCanvasApiLike,
+  host: null as unknown as typeof state.host,
+  hostRef: { value: null },
+  epoch: ref(0),
+  reloadCount: 0,
+}
+
+async function loadDevModule<T>(url: string): Promise<T> {
+  return import(/* @vite-ignore */ `${url}?t=${Date.now()}`) as Promise<T>
+}
+
+async function main() {
+  const registry = new NodeRegistry()
+  const { host, exposeToWindow } = await createMiniCanvasHost({
+    coldPlugins: [], // text 稍后跨端口首装；theme 源码同 server
+    nodeRegistry: registry,
+  })
+  exposeToWindow('MiniCanvas')
+  const api = window.MiniCanvas as unknown as MiniCanvasApiLike
+  state.api = api
+  state.host = host
+  state.hostRef.value = host
+
+  // 挂 theme(源码) → 提供 nodeShell/edge/background
+  api.installPlugin(themeDefaultPlugin)
+  log(`宿主就绪；已装 theme(${api.listPlugins().join(',')})，待跨端口装 text…`)
+
+  // 首次跨端口拉 text dev 模块并装
+  await installText()
+  log(`✅ text 已从 ${TEXT_DEV_ORIGIN} dev 模块装上，类型=${JSON.stringify(api.getRegistry().types())}`)
+
+  // 挂画布(渲染 text 节点)
+  createApp(DevHmrCanvas).mount('#app')
+  state.epoch.value++ // .vue 据此重建一个 text 节点并渲染
+  setResult('✅ text 插件 dev 模块已装上并渲染。现在改 plugin-node-text 源码试试！')
+
+  // —— 热更通道：插件 dev server 的原生 HMR ——
+  // 关键：宿主跨端口 import 插件 dev 模块(index.ts)时，该模块会带上 5311 的 /@vite/client
+  // (token 随模块注入)，于是宿主页面自动成了 5311 的 HMR 客户端；插件 src/index.ts 里的
+  // import.meta.hot.accept(['./nodeTextPlugin']) 会收原生 HMR 通知并调 window.MiniCanvas.reloadPlugin
+  // —— 那已经是"重拉新模块 + reloadPlugin"的完整链路(vite 原生能力，能正确处理 .ts 与 .vue)。
+  // 我们只需把 reloadPlugin 包一层：计数 + 让画布重建节点以展示新实现，并记日志。
+  const rawReload = api.reloadPlugin.bind(api)
+  api.reloadPlugin = ((name: string, mod?: unknown) => {
+    const r = rawReload(name, mod)
+    state.reloadCount++
+    state.epoch.value++ // 触发 .vue 重建 text 节点 → 内容来自 reloadPlugin 后的新实现
+    log(`🔥 热更 #${state.reloadCount}：reloadPlugin('${name}') 已执行`)
+    setResult(`🔥 已热更 #${state.reloadCount}——插件新代码已生效，页面没刷新！`)
+    return r
+  }) as MiniCanvasApiLike['reloadPlugin']
+  window.MiniCanvas = api // 让插件 HMR accept 调的是包装后的 reloadPlugin
+
+  // —— 补充信号：fileChangeFeed SSE 只做"文件变了"的人肉可读提示，不做重拉(重拉走原生 HMR) ——
+  const es = new EventSource(`${TEXT_DEV_ORIGIN}/__plugin_changed`)
+  es.addEventListener('changed', (e) => {
+    const { file } = JSON.parse((e as MessageEvent).data) as { file: string }
+    log(`[SSE] 检测到插件文件变更: ${file} → 等 vite HMR 热更`)
+  })
+  es.onerror = () => log('[SSE] 连接断开/重试(确认 text dev server 在 5311 运行)')
+  log(`[SSE] 已连 ${TEXT_DEV_ORIGIN}/__plugin_changed`)
+  log('🟢 等插件源码变更…(改 nodeTextPlugin.ts 或 TextContent.vue 试试)')
+}
+
+async function installText() {
+  const mod = await loadDevModule<{ nodeTextPlugin: PluginModule }>(textModuleUrl)
+  state.api.installPlugin(mod.nodeTextPlugin)
+}
+
+void main().catch((err) => {
+  const msg = err instanceof Error ? err.message : String(err)
+  log('❌ 启动失败: ' + msg)
+  setResult('❌ ' + msg, false)
+})

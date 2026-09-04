@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plugin Dev HMR — 宿主跨端口热拉插件 dev 模块</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #app { height: 100%; font-family: system-ui, sans-serif; }
+      #boot { position: fixed; left: 12px; top: 12px; font-size: 13px; color: #fff;
+              background: #0f172a; border-radius: 8px; padding: 8px 12px; z-index: 50; }
+      #result { position: fixed; left: 12px; top: 60px; font-size: 13px; color: #15803d;
+                background: rgba(240,253,244,.9); border: 1px solid #bbf7d0; border-radius: 8px;
+                padding: 8px 12px; z-index: 50; max-width: 70%; }
+      #log { position: fixed; left: 12px; bottom: 12px; font-size: 12px; color: #334155;
+             background: rgba(255,255,255,.88); border: 1px solid #e2e8f0; border-radius: 8px;
+             padding: 8px 12px; max-width: 70%; z-index: 50; white-space: pre-wrap;
+             max-height: 40%; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="boot">连接插件 dev server…</div>
+      <div id="result"></div>
+    </div>
+    <div id="log"></div>
+    <script type="module" src="/plugin-load-dev.ts"></script>
+  </body>
+</html>
