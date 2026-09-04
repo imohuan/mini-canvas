@@ -1,44 +1,41 @@
-# 插件跨端口 dev 热重载 —— 落地实测结论(最终修正版)
+# 插件跨端口 dev 热重载 —— 最终方案(纯 vite 官方 HMR API)
 
-> 日期 2026-09-04，`plugin-load-dev` 演示上端到端跑通。修正了上一版"原生 HMR 就能干、SSE 不可靠"的部分结论。
+> 日期 2026-09-04。`plugin-load-dev` 演示端到端跑通。**完全用 vite 自带 HMR(import.meta.hot.accept + handleHotUpdate)实现，没有自建 SSE/轮询/手写 ?t= 重拉。**
 
 ## 一句话
-**让宿主自己重拉插件主模块 + reloadPlugin 是最可靠的热更通道**；但**重拉哪个 URL 是成败关键**。
+宿主跨端口 import 插件 dev 模块时，vite 自动让宿主页面成为该 dev server 的 HMR 客户端；
+插件用 `import.meta.hot.accept` 收通知 → `window.MiniCanvas.reloadPlugin` 就完成热更。只差一环：让**改 .vue 深层组件也能冒泡到插件入口的 accept**，用 dev 端的 `handleHotUpdate` 补上。
 
-## 铁证(Chrome 实测)
-改 `TextContent.vue`(组件)或 `nodeTextPlugin.ts`(逻辑)，画布节点都实时更新，**页面不刷新**。
-- 触发链：fileChangeFeed SSE(`/__plugin_changed`) → 宿主 `import('http://localhost:5311/src/nodeTextPlugin.ts?t=时间戳')` → `window.MiniCanvas.reloadPlugin('text',新模块)` → epoch++ → `.vue` 重建节点。
-
-## 踩的坑
-
-### 坑1(决定成败)：重拉【插件主模块】而非【入口 index.ts】
-浏览器 ES 模块 map 按 URL 缓存：宿主首次 import 入口 index.ts 后，它的依赖 `nodeTextPlugin.ts`、`TextContent.vue` 各自只剩一份缓存记录。
-- 改代码后 `import('/src/index.ts?t=123')`：index 是新 URL → 重拉，但它内部 `import "./nodeTextPlugin"` 仍命中模块 map 里**旧** nodeTextPlugin → 拿到旧实现。**入口重拉不可靠**。
-- 改代码后 `import('/src/nodeTextPlugin.ts?t=123')`：nodeTextPlugin 是新 URL → 重拉重执行 → 它的 `import './TextContent.vue'` 取到的是**已被 vite HMR 更新过**的 TextContent 模块 → 组件与逻辑都新鲜。
-**结论：重拉插件主模块(nodeTextPlugin.ts)直接 ?t= 重拉，.ts 和 .vue 都能热更。** 演示已这样实现。
-
-### 坑2：跨端口双 vue / 双内核
-- **vue：单份**(宿主与插件都 resolve 到 pnpm 同一真实路径 → 浏览器模块 map 同一 URL)。已证，控制台无"双 Vue"。
-- **内核 provide/inject 令牌：跨端口 serve 的组件会"找不到"**。TextContent(5311 serve) import 的 HOST_KEY 从 5311 的 core 拿，宿主(5199) provide 的从 5199 的 core 拿 → 两个 core → 两个 Symbol → inject 失败。
-  → 只影响跨端口 content 组件里 `inject(HOST_KEY)` 的交互(节点内编辑)，**不影响渲染与热更**。
-
-### 坑3：`.vue` 单独改 靠 vite 原生 HMR 不冒泡到插件
-@vitejs/plugin-vue 给 .vue 注入自 HMR，TextContent.vue 一改 vite 只原地 update 它，**不冒泡到 index 的 accept** → 原生 HMR 路径下 reloadPlugin 不触发。所以才让宿主自己经 SSE 重拉主模块(坑1方案)覆盖 .vue。
-
-## 两个 Vue 告警的处理
-- `Vue received a Component made reactive`：壳/内容组件不能放进 ref/reactive，装配时用 `markRaw(...)` 包住即消除。已修。
-- `injection Symbol(canvas-v2-host) not found`：坑2 的内生现象，只影响节点内编辑写回。
-
-## 最终拓扑(可跑，text 插件示例)
+## 机制(三段全官方 API)
 ```
-[插件 dev:5311]  pnpm dev:hmr  (vite --config vite.dev.config.ts)
-  vue() + fileChangeFeed: server.watcher → SSE /__plugin_changed(推文件绝对路径)
-[宿主 demo:5199]  /plugin-load-dev.html
-  ① import('http://localhost:5311/src/index.ts') 首装 text(跨端口, 单 vue)
-  ② EventSource('http://localhost:5311/__plugin_changed')：插件 src 任一支票变 → 重拉
-     'http://localhost:5311/src/nodeTextPlugin.ts?t=时间戳' → reloadPlugin('text',新模块)
-  ③ reloadPlugin 包一层: 计数 + epoch++ → .vue 重建节点 → 画布实时更新(ts/vue 都行), 不刷新
+① 宿主页面  import('http://localhost:5311/src/index.ts')
+   → vite 给该模块注入 5311 的 /@vite/client(token 随模块注入) → 宿主页面成为 5311 的 HMR 客户端
+② 插件 src/index.ts  import.meta.hot.accept(self)   // 客户端收原生 HMR
+   → 收到通知后调 window.MiniCanvas.reloadPlugin('text', 新模块)  // 重卸旧装新
+③ dev server 端(handleHotUpdate)   // 补最后一环
+   插件 src 任一支票变更时，把入口 index.ts 模块塞进本次热更受影响集合 → 必触发 ② 的 accept
+   → 改 .ts(逻辑) 或 .vue(组件) 都让插件整树热更
 ```
+
+## 为什么需要 handleHotUpdate(关键坑)
+@vitejs/plugin-vue 给每个 .vue 注入了**自己的 self-accept**。当只改 TextContent.vue(深层组件)时，
+vite 在该 .vue 就地热更、**不再向上冒泡**到插件 index.ts 的 accept → 若不处理，改 .vue 插件不会 reload。
+→ 在 dev 配置里用官方 `handleHotUpdate(ctx)`：检测到插件 src 变更时，把入口模块也 push 进
+  `ctx.modules`(受影响集合)，强制 index 本轮也被更新 → 它的 accept 必触发。实测改 .vue/.ts 都热更。
+
+## 实现位置
+- `packages/plugins/plugin-node-text/vite.dev.config.ts`：`forcePluginEntryHotUpdate()`(handleHotUpdate)。
+- `packages/plugins/plugin-node-text/src/index.ts`：`import.meta.hot.accept((mod)=>reloadPlugin)`。
+- `packages/canvas-core-v2/demo-web/plugin-load-dev.{ts,html}` + `-app.vue`：宿主演示。
+
+## 已验证(Chrome，控制台连续=页面没刷新)
+- 改 `TextContent.vue`(组件)：`hot updated /src/TextContent.vue` → `reloadPlugin` → 画布实时变。
+- 改 `nodeTextPlugin.ts`(逻辑)：同上生效。
+
+## 仍存在的独立问题(非热更，另记)
+- `injection Symbol(canvas-v2-host) not found`：跨端口 serve 的 content 组件 import 的 HOST_KEY
+  来自插件侧 core，宿主 provide 的来自宿主侧 core → 两个不同 Symbol 匹配不上。**只影响节点内编辑
+  写回，不影响渲染与热更。** 跨端口不同源无法靠模块 URL 去重，属该模型内生限制。
 
 ## 验证命令
 - 插件 dev：`cd packages/plugins/plugin-node-text && node ../../canvas-core-v2/node_modules/vite/bin/vite.js --config vite.dev.config.ts`(5311)
