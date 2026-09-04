@@ -85,7 +85,6 @@ function handleKeyDown(e: KeyboardEvent) {
 
   const keyName = e.key
 
-  // 修饰键：记录但不立即捕获
   if (MODIFIER_KEYS.has(keyName)) {
     heldModifiers.add(keyName)
     allModifiersPressed.add(keyName)
@@ -93,7 +92,6 @@ function handleKeyDown(e: KeyboardEvent) {
     return
   }
 
-  // 非修饰键 → 立即捕获为组合键
   hasNonModifier = true
   e.preventDefault()
   e.stopPropagation()
@@ -106,8 +104,6 @@ function handleKeyUp(e: KeyboardEvent) {
 
   if (MODIFIER_KEYS.has(e.key)) {
     heldModifiers.delete(e.key)
-
-    // 所有修饰键都松开了，且没按过任何普通键 → 捕获为纯修饰键快捷键
     if (heldModifiers.size === 0 && !hasNonModifier) {
       captureShortcut(formatModifiersOnly(allModifiersPressed))
     }
@@ -117,7 +113,6 @@ function handleKeyUp(e: KeyboardEvent) {
 /** 重置当前条目到注册时的默认键位 */
 function resetToDefault() {
   if (listening.value) {
-    // 先停录制
     listening.value = false
     heldModifiers.clear()
     allModifiersPressed.clear()
@@ -128,7 +123,6 @@ function resetToDefault() {
     success.value = true
     conflict.value = null
   } else {
-    // 没有默认键位的兜底：清空录制结果
     newKeys.value = ''
     conflict.value = null
     success.value = false
@@ -153,18 +147,18 @@ onUnmounted(() => {
   }
 })
 
-/** 渲染键位为 kbd chips */
 function renderKeyParts(keys: string) {
   return keys.split('+').map(p => p.trim()).filter(Boolean)
 }
 </script>
 
 <template>
+  <!-- 面板占满整行；内层统一青色调，无白条 -->
   <div class="remap-panel" @pointerdown.stop>
     <div class="remap-panel-body">
       <div class="remap-panel-row">
         <span class="remap-panel-label">当前</span>
-        <span class="shortcut-keys">
+        <span class="remap-panel-value shortcut-keys">
           <template v-for="(part, pIdx) in renderKeyParts(item.keys)" :key="`cur-${pIdx}`">
             <span class="kbd-chip">{{ part }}</span>
             <span v-if="pIdx < renderKeyParts(item.keys).length - 1" class="kbd-plus">+</span>
@@ -206,12 +200,7 @@ function renderKeyParts(keys: string) {
         </svg>
         重置默认
       </button>
-      <button
-        class="remap-text-btn"
-        @click="listening ? null : startListening()"
-        :disabled="listening"
-        type="button"
-      >
+      <button class="remap-text-btn" @click="startListening" :disabled="listening" type="button">
         重新录制
       </button>
       <button class="remap-confirm-btn" @click="collapse" type="button">完成</button>
@@ -220,14 +209,16 @@ function renderKeyParts(keys: string) {
 </template>
 
 <style scoped>
+/* 面板：占满整行（外层 remap-slot 做了 margin: 0 -6px），内层纯青色调 */
 .remap-panel {
   width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 10px 10px;
-  background: rgba(8, 145, 178, 0.06);
-  border-top: 1px solid rgba(8, 145, 178, 0.14);
+  padding: 12px 12px 10px;
+  background: rgba(8, 145, 178, 0.08);
+  border-top: 1px solid rgba(8, 145, 178, 0.18);
   animation: remap-panel-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -241,27 +232,38 @@ function renderKeyParts(keys: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 30px;
+  min-height: 28px;
 }
 
+/* 左右两行严格对齐：label 固定 48px，value 自适应延伸 */
 .remap-panel-label {
   flex: 0 0 48px;
   font-size: 11px;
   font-weight: 700;
-  color: #0891b2;
+  color: #0e7490;
   letter-spacing: 0.04em;
 }
 
+.remap-panel-value {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 录制按钮：不是白底条，跟随青底调和（半透白） */
 .remap-listen-btn {
   flex: 1;
-  min-height: 36px;
+  min-width: 0;
+  min-height: 32px;
   padding: 6px 12px;
   border: 1px dashed rgba(8, 145, 178, 0.32);
   border-radius: 8px;
-  background: #ffffff;
-  color: #6b7280;
+  background: rgba(255, 255, 255, 0.55);
+  color: #0e7490;
   font-size: 12px;
   font-weight: 600;
+  text-align: left;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -271,22 +273,23 @@ function renderKeyParts(keys: string) {
 
 .remap-listen-btn:hover {
   border-color: rgba(8, 145, 178, 0.6);
-  color: #111827;
-  background: rgba(8, 145, 178, 0.04);
+  background: rgba(255, 255, 255, 0.75);
+  color: #064e5e;
 }
 
 .remap-listen-btn.listening {
   border-style: solid;
   border-color: #0891b2;
-  color: #0891b2;
-  background: rgba(8, 145, 178, 0.1);
+  color: #064e5e;
+  background: rgba(255, 255, 255, 0.85);
   animation: remap-pulse 1.2s ease-in-out infinite;
 }
 
 .remap-listen-btn.has-value {
   border-style: solid;
-  border-color: rgba(0, 0, 0, 0.08);
-  color: #111827;
+  border-color: rgba(8, 145, 178, 0.28);
+  color: #064e5e;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .listening-dot {
@@ -296,6 +299,7 @@ function renderKeyParts(keys: string) {
   border-radius: 50%;
   background: #0891b2;
   margin-right: 6px;
+  flex: 0 0 8px;
 }
 
 .shortcut-keys {
@@ -333,26 +337,27 @@ function renderKeyParts(keys: string) {
   font-weight: 700;
   padding: 4px 8px;
   border-radius: 6px;
-  margin-top: 2px;
+  margin: 2px 0 0 60px;
 }
 
 .remap-feedback.is-conflict {
   color: #b45309;
-  background: rgba(245, 158, 11, 0.14);
+  background: rgba(245, 158, 11, 0.16);
 }
 
 .remap-feedback.is-success {
   color: #047857;
-  background: rgba(16, 185, 129, 0.14);
+  background: rgba(16, 185, 129, 0.16);
 }
 
+/* 底部动作条：与上方面板同一青色底，但去掉硬分割线，
+   通过微小上下 padding 拉开间距，按钮排右对齐 */
 .remap-panel-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  padding-top: 6px;
-  border-top: 1px dashed rgba(8, 145, 178, 0.16);
+  padding-top: 4px;
 }
 
 .remap-text-btn {
@@ -362,7 +367,7 @@ function renderKeyParts(keys: string) {
   padding: 6px 10px;
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: #0e7490;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -374,8 +379,8 @@ function renderKeyParts(keys: string) {
   height: 12px;
 }
 .remap-text-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: #111827;
+  background: rgba(8, 145, 178, 0.14);
+  color: #064e5e;
 }
 .remap-text-btn:disabled {
   opacity: 0.4;

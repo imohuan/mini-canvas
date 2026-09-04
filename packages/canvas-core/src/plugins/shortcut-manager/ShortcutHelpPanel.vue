@@ -631,24 +631,20 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   font-family: inherit;
 }
 
-/* 重映射行被展开时的样式：行底色 + 圆角适配下方展开块 */
+/* 重映射行被展开时的样式：与下方 panel 一体化（panel 自身已是青色） */
 .canvas-menu-item.is-remapping-open {
-  background: rgba(8, 145, 178, 0.08);
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.canvas-menu-item.is-remapping-open:hover {
   background: rgba(8, 145, 178, 0.12);
 }
 
 .remap-badge.is-open {
-  background: rgba(8, 145, 178, 0.2);
+  background: rgba(8, 145, 178, 0.22);
   color: #0e7490;
 }
 
-/* 行下展开槽位：占满整行宽度，抵消行自身的 6px 左右内边距
-   但保留列表容器的 4px 左右外侧留白。 */
+/* 行下展开槽位：
+   - 用负 margin 抵消行自身的 6px 左右内边距，让 panel 与行同宽
+   - 顶部一条青色实线做"展开身份"分隔，跟行有自然分隔
+   - 底圆角跟列表 4px 外 padding 区域形成软接续 */
 .remap-slot {
   margin: 0 -6px;
   border-bottom-left-radius: 10px;
