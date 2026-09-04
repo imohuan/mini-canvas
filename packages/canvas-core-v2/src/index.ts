@@ -8,6 +8,8 @@ export * from './core'
 export * from './services'
 // content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo-web）
 export { HOST_KEY } from './components/contentBridge'
+export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './components/nodeRegistryKey'
+export type { NodeWrite } from './components/nodeRegistryKey'
 export { canvasCommandsPlugin } from './plugins/canvasCommands'
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'

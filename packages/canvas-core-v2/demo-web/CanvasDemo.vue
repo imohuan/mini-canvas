@@ -75,21 +75,24 @@ const selectedIds = ref<Set<string>>(new Set<string>())
 // 新增类型无需改这段代码(宿主零硬编码)。
 const nodeTypes = ref<Record<string, unknown>>({})
 const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂，让 content 解析用最新注册表
+// 当前用的"节点外壳组件"：宿主默认 BaseNode；主题插件注册了 nodeShell 则用它（applyTheme 设置）。
+const nodeShell = ref<unknown>(BaseNode)
 /** 按 nodeStore 已注册 type 重建 nodeTypes + 触发重挂（宿主新增/热卸插件后调用） */
 function syncNodeTypes(): void {
   const map: Record<string, unknown> = {}
-  for (const t of host.value?.nodeStore.types.keys() ?? []) map[t] = BaseNode
+  for (const t of host.value?.nodeStore.types.keys() ?? []) map[t] = nodeShell.value
   nodeTypes.value = map
   nodeEpoch.value += 1
 }
-/** 读主题插件注册的 edge/background 槽位，装配 VueFlow 渲染（主题没给则回退宿主默认） */
+/** 读主题插件注册的 nodeShell/edge/background 槽位，装配 VueFlow 渲染（主题没给则回退宿主默认） */
 function applyTheme(): void {
   const theme = host.value?.themeRegistry
   if (!theme) return
+  const shell = theme.get('nodeShell')
+  if (shell) nodeShell.value = shell // 主题外壳替换 BaseNode
   const edge = theme.get('edge')
   edgeTypes.value = { custom: (edge as unknown) || CustomEdge } // 主题边 or 宿主默认 CustomEdge
   backgroundComp.value = theme.get('background')
-  nodeEpoch.value += 1 // 换渲染器 → 重挂
 }
 // 边类型：所有边走 CustomEdge(自定义边)。可被主题插件经 themeRegistry 换掉。
 // edgeTypes 是响应式的：boot 后从 themeRegistry 读主题提供的 edge/background 装配。
@@ -313,12 +316,12 @@ onMounted(async () => {
     } else {
       nodes.value = storeToFlow()
     }
-    syncNodeTypes() // 按已注册 type 生成 nodeTypes + bump epoch
-    applyTheme() // 读主题插件的 edge/background 装配 VueFlow
+    applyTheme() // 先读主题插件注册的 nodeShell/edge/background
+    syncNodeTypes() // 再按 nodeStore type + 当前 nodeShell 生成 nodeTypes + bump epoch
 
-    // 宿主订阅插件装载事件：热装/热卸/热重载插件后重建 nodeTypes + 应用主题 + 触发 VueFlow 重挂(改动实时生效)
-    hotSubs.push(h.ctx.on('ctx:plugin-installed', () => { syncNodeTypes(); applyTheme() }))
-    hotSubs.push(h.ctx.on('ctx:plugin-uninstalled', () => { syncNodeTypes(); applyTheme() }))
+    // 宿主订阅插件装载事件：热装/热卸/热重载插件后应用主题 + 重建 nodeTypes + 触发 VueFlow 重挂(改动实时生效)
+    hotSubs.push(h.ctx.on('ctx:plugin-installed', () => { applyTheme(); syncNodeTypes() }))
+    hotSubs.push(h.ctx.on('ctx:plugin-uninstalled', () => { applyTheme(); syncNodeTypes() }))
 
     // 页面隐藏/离开时把脏数据落盘（防刷新丢）
     flushHandle.value = bindBrowserLifecycleFlush(h.save)

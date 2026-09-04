@@ -8,10 +8,12 @@ import { registerThemeSlot } from '@mini-canvas/canvas-core-v2'
 import type { PluginModule } from '@mini-canvas/canvas-core-v2'
 import DefaultEdge from './DefaultEdge.vue'
 import DefaultBackground from './DefaultBackground.vue'
+import ThemeShell from './ThemeShell.vue'
 
 export const themeDefaultPlugin: PluginModule = {
   name: 'theme-default',
   setup(ctx) {
+    registerThemeSlot(ctx, 'nodeShell', ThemeShell) // 用主题外壳替换宿主默认 BaseNode 壳
     registerThemeSlot(ctx, 'edge', DefaultEdge) // 用插件自己的连线组件替换宿主默认
     registerThemeSlot(ctx, 'background', DefaultBackground) // 插件自己的画布背景
     registerThemeSlot(ctx, 'edgeDefaultType', 'custom')
