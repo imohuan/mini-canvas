@@ -29,3 +29,6 @@ dist-ssr
 # MCP 服务工作目录（画布 JSON 落盘，不入库）
 workspace
 packages/mcp-server/workspace
+
+# 由插件 pnpm build 生成后复制到此，供 plugin-load demo 加载（勿手改）
+packages/canvas-core-v2/demo-web/plugins/

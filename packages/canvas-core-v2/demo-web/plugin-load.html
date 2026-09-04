@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plugin-Load Demo — 宿主运行时加载打包好的 js 插件</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #app { height: 100%; font-family: system-ui, sans-serif; }
+      #log { position: fixed; left: 12px; bottom: 12px; font-size: 12px; color: #334155;
+             background: rgba(255,255,255,.85); border: 1px solid #e2e8f0; border-radius: 8px;
+             padding: 8px 12px; max-width: 60%; z-index: 50; white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="boot">正在加载宿主 + 插件…</div>
+      <div id="result"></div>
+    </div>
+    <div id="log"></div>
+    <script type="module" src="/plugin-load.ts"></script>
+  </body>
+</html>
