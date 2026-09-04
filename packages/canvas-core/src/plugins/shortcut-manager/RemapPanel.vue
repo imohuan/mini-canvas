@@ -111,7 +111,7 @@ function handleKeyUp(e: KeyboardEvent) {
   }
 }
 
-/** 重置当前条目到注册时的默认键位 */
+/** 重置当前条目到系统默认键位 */
 function resetToDefault() {
   if (listening.value) {
     listening.value = false
@@ -123,10 +123,16 @@ function resetToDefault() {
     newKeys.value = result.keys
     success.value = true
     conflict.value = null
-  } else {
+  } else if ('conflict' in result && result.conflict) {
+    // 默认键正被其它快捷键占用：不破坏反向映射，提示冲突
+    conflict.value = `默认键 "${result.conflict.entries[0]?.command || '其他快捷键'}" 正在占用，请先移开`
+    success.value = false
     newKeys.value = ''
+  } else {
+    // 无默认键记录（理论上 register 后必有），回退到当前键位不改变
     conflict.value = null
     success.value = false
+    newKeys.value = ''
   }
 }
 

@@ -240,17 +240,41 @@ export class ShortcutManager {
   }
 
   /**
-   * 恢复单个快捷键到注册时的默认键位
+   * 恢复单个快捷键到"系统默认"键位（注册时记录的原始键位）
+   *
+   * 行为与全局 resetDefaults() 同源 —— 都取 defaultKeys。
+   * 仅作用于指定 id，不触碰其它条目。
+   *
+   * 冲突处理与 remap 一致：若默认键已被其它 entry 占用，
+   * 不破坏反向映射，直接返回冲突。
    *
    * @param id - 快捷键 ID
    * @returns 操作结果
    */
-  resetToDefault(id: string): { ok: boolean; keys?: string; notFound?: true } {
+  resetToDefault(id: string): RemapResult & { keys?: string } {
     const entry = this.registry.get(id)
     if (!entry) return { ok: false, notFound: true }
     const defaultKey = this.defaultKeys.get(id)
     if (defaultKey === undefined) return { ok: false, notFound: true }
 
+    // 键位未变化 → 空操作
+    if (entry.keys === defaultKey) {
+      return { ok: true, keys: defaultKey }
+    }
+
+    // 默认键被其它 entry 占用 → 冲突，不做破坏性覆盖
+    if (this.reverseKeyMap.has(defaultKey)) {
+      const existingId = this.reverseKeyMap.get(defaultKey)!
+      if (existingId !== id) {
+        const existing = this.registry.get(existingId)!
+        return {
+          ok: false,
+          conflict: this.buildConflict(defaultKey, existing, entry),
+        }
+      }
+    }
+
+    // 无冲突 → 恢复
     this.reverseKeyMap.delete(entry.keys)
     entry.keys = defaultKey
     this.reverseKeyMap.set(defaultKey, id)
