@@ -2,7 +2,7 @@
 // plugin-load-dev-app.vue —— 把宿主 nodeStore 里节点渲染成 VueFlow 画布(theme 壳)。
 // 纯展示：宿主/插件状态都来自 ./plugin-load-dev.ts 导出的 state。
 // 每次 state.epoch 变(首装/热更后)：清掉旧 text 节点 → 用当前插件实现重建一个 → 渲染。
-import { onMounted, provide, ref, watch } from 'vue'
+import { markRaw, onMounted, provide, ref, watch } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Edge, Node } from '@vue-flow/core'
 import { HOST_KEY, NODE_REGISTRY_KEY } from '@mini-canvas/canvas-core-v2'
@@ -35,9 +35,10 @@ function sync() {
   const bg = theme.get('background')
   const store = state.api.getNodeStore()
   nodeTypes.value = {}
-  for (const n of store.getNodes()) nodeTypes.value[n.type] = shell
-  edgeTypes.value = { custom: edge }
-  backgroundComp.value = bg
+  // 壳/内容组件不能放进 ref/reactive，否则 Vue 告警"Component made reactive"→ 用 markRaw 包住。
+  for (const n of store.getNodes()) nodeTypes.value[n.type] = markRaw(shell)
+  edgeTypes.value = { custom: markRaw(edge) }
+  backgroundComp.value = markRaw(bg)
   nodes.value = store.getNodes().map((n) => ({
     id: n.id,
     type: n.type,

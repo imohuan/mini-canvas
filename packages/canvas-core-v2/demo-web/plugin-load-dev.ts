@@ -95,14 +95,14 @@ async function main() {
   // 挂画布(渲染 text 节点)
   createApp(DevHmrCanvas).mount('#app')
   state.epoch.value++ // .vue 据此重建一个 text 节点并渲染
-  setResult('✅ text 插件 dev 模块已装上并渲染。现在改 plugin-node-text 源码试试！')
+  setResult('✅ text 插件 dev 模块已装上并渲染。现在改 text 插件源码试试！')
 
-  // —— 热更通道：插件 dev server 的原生 HMR ——
-  // 关键：宿主跨端口 import 插件 dev 模块(index.ts)时，该模块会带上 5311 的 /@vite/client
-  // (token 随模块注入)，于是宿主页面自动成了 5311 的 HMR 客户端；插件 src/index.ts 里的
-  // import.meta.hot.accept(自 accept) 会收原生 HMR 通知并调 window.MiniCanvas.reloadPlugin
-  // —— 那已经是"重拉新模块 + reloadPlugin"的完整链路(vite 原生能力)。
-  // 我们只需把 reloadPlugin 包一层：计数 + 让画布重建节点以展示新实现，并记日志。
+  // —— 热更通道：fileChangeFeed SSE → 宿主重拉插件模块并 reloadPlugin ——
+  // 关键(实测, 见 docs/tmp/plugin-dev-hmr/findings.md 坑1)：
+  //   * 必须重拉【插件主模块 nodeTextPlugin.ts】而不是入口 index.ts —— 入口的依赖会被浏览器
+  //     ES 模块 map 缓存成旧的；主模块直接 ?t= 重拉会连带重取最新的 .vue 组件(两者都新鲜)。
+  //   * 因此改 nodeTextPlugin.ts(逻辑) 或 TextContent.vue(组件) 都能热更。
+  //   * 另把 reloadPlugin 包一层：计数 + epoch++ 让画布重建节点展示新实现。
   const rawReload = api.reloadPlugin.bind(api)
   api.reloadPlugin = ((name: string, mod?: unknown) => {
     const r = rawReload(name, mod)
@@ -112,22 +112,42 @@ async function main() {
     setResult(`🔥 已热更 #${state.reloadCount}——插件新代码已生效，页面没刷新！`)
     return r
   }) as MiniCanvasApiLike['reloadPlugin']
-  window.MiniCanvas = api // 让插件 HMR accept 调的是包装后的 reloadPlugin
+  window.MiniCanvas = api
 
-  // —— 补充信号：fileChangeFeed SSE 只做"文件变了"的人肉可读提示，不做重拉(重拉走原生 HMR) ——
+  // SSE：插件任意文件(ts/vue)一改 → 重拉主模块 → reloadPlugin。
+  // 用 debounce：编辑器原子保存会连发 .tmp + 真文件多个事件，收拢成一次热更。
   const es = new EventSource(`${TEXT_DEV_ORIGIN}/__plugin_changed`)
+  let debounce: ReturnType<typeof setTimeout> | undefined
   es.addEventListener('changed', (e) => {
     const { file } = JSON.parse((e as MessageEvent).data) as { file: string }
-    log(`[SSE] 检测到插件文件变更: ${file} → 等 vite HMR 热更`)
+    if (!file.includes('plugin-node-text') || !file.includes('\\src\\') && !file.includes('/src/')) return
+    log(`[SSE] 插件文件变更: ${file.split(/[\\/]/).pop()} → 重拉主模块热更`)
+    if (debounce) clearTimeout(debounce)
+    debounce = setTimeout(() => void reloadTextPlugin(), 150)
   })
   es.onerror = () => log('[SSE] 连接断开/重试(确认 text dev server 在 5311 运行)')
   log(`[SSE] 已连 ${TEXT_DEV_ORIGIN}/__plugin_changed`)
-  log('🟢 等插件源码变更…(改 nodeTextPlugin.ts 或 TextContent.vue 试试)')
+  log('🟢 改 plugin-node-text 的 .ts 或 .vue 试试，画布会实时更新')
 }
 
 async function installText() {
   const mod = await loadDevModule<{ nodeTextPlugin: PluginModule }>(textModuleUrl)
   state.api.installPlugin(mod.nodeTextPlugin)
+}
+
+// 插件主模块 URL(非入口 index.ts)：重拉它 ?t= 才会连带取到最新 .vue(入口的依赖会被模块 map 缓存)
+const textPluginModUrl = `${TEXT_DEV_ORIGIN}/src/nodeTextPlugin.ts`
+
+/** 重拉主模块 → reloadPlugin(浏览器模块缓存经 ?t= 绕过，主模块连带取最新 .vue) */
+async function reloadTextPlugin() {
+  try {
+    const mod = await loadDevModule<{ nodeTextPlugin: PluginModule }>(textPluginModUrl)
+    state.api.reloadPlugin('text', mod.nodeTextPlugin)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log('❌ 热更失败: ' + msg)
+    setResult('❌ 热更失败: ' + msg, false)
+  }
 }
 
 void main().catch((err) => {
