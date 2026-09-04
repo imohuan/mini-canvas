@@ -1,6 +1,7 @@
 import type { PluginModule } from '../core'
 import type { NodeStoreService } from '../services/nodeStore'
 import type { SaveService } from '../services/storage/types'
+import type { NodeFactoryService } from '../services/nodeFactory'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用） */
 export interface TextNodeService {
@@ -11,33 +12,36 @@ export interface TextNodeService {
 }
 
 /**
- * text 插件 —— M4 最小节点插件，验证"插件经 ctx.get 用服务"。
+ * text 插件 —— text 节点插件（M1/M3）。
  *
  * 职责：
- * - 注册 'text' 节点类型（业务 type，非 v1 的 'custom'）。
- * - 经 ctx.get('nodeStore') 建/改节点；经 ctx.get('save') 把画布图落盘。
- * - 一段式 setup，无 uninstall —— 卸载自动回收（M1 内核保证）。
+ * - 注册 'text' 节点类型（业务 type，非 v1 'custom'）。
+ * - 经 nodeFactory.register('text', creator) 提供**一份**建节点能力（命令/菜单/宿主都走它，不各自抄）；
+ *   同时暴露 ctx.get('text') 的 addTextNode/editText 给内容组件(M1 兼容)。
+ * - 编辑写回走 nodeStore + save 落盘。
  */
 export const nodeTextPlugin: PluginModule = {
   name: 'text',
-  deps: [], // 不静态依赖别的插件（服务经 ctx.get，运行期缺失会抛）
+  deps: [],
   setup(ctx) {
-    // 1. 注册节点类型
     const nodeStore = ctx.get<NodeStoreService>('nodeStore')
-    nodeStore.registerType({
-      type: 'text',
-      label: '文本',
-      defaultSize: { w: 300, h: 200 },
-    })
+    const factory = ctx.get<NodeFactoryService>('nodeFactory')
 
-    // 2. 提供一个"在画布上放一个文本节点"的服务（可被外部/命令调用）
+    // 1. 注册节点类型
+    nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } })
+
+    // 2. 建节点的单一实现：建 + 写默认 text
+    function createText(position: { x: number; y: number }): string {
+      const id = nodeStore.addNode('text', position)
+      nodeStore.updateNodeData(id, { text: '双击编辑' })
+      return id
+    }
+    factory.register('text', createText)
+
+    // 3. 暴露给内容组件/老调用方的服务
     ctx.inject('text', {
-      addTextNode(position: { x: number; y: number }): string {
-        const id = nodeStore.addNode('text', position)
-        nodeStore.updateNodeData(id, { text: '双击编辑' })
-        return id
-      },
-      /** 内容组件编辑完调用：改 text 并立即落盘(经 save) */
+      addTextNode: createText,
+      /** 编辑完写回并落盘 */
       editText(id: string, text: string): void {
         nodeStore.updateNodeData(id, { text })
         ctx.get<SaveService>('save').set('graph', nodeStore.getNodes(), 'canvas')

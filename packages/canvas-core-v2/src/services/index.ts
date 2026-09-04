@@ -9,3 +9,11 @@ export type {
   StorageAdapter,
   StorageAdapterCapability,
 } from './storage/types'
+export { Selection } from './selection'
+export type { SelectionService } from './selection'
+export { History } from './history'
+export type { HistoryService, HistorySnapshot } from './history'
+export { CommandRegistry } from './command'
+export type { CommandDef, CommandService } from './command'
+export { NodeFactory } from './nodeFactory'
+export type { NodeCreator, NodeFactoryService } from './nodeFactory'

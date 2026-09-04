@@ -136,3 +136,60 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
     )
   })
 })
+
+describe('M3 命令/删除/创建/撤销（host 集成）', () => {
+  it('command:create-node 经 nodeFactory 建节点、command:undo 可还原', async () => {
+    const host = await bootCanvas({ plugins: [nodeImagePlugin] })
+    const id = host.command.execute('command:create-node', {
+      type: 'text',
+      position: { x: 10, y: 10 },
+    }) as string
+    expect(host.nodeStore.getNode(id)).toBeDefined()
+    expect(host.nodeStore.getNode(id)!.type).toBe('text')
+
+    // 撤销 → 节点没了
+    host.command.execute('command:undo')
+    expect(host.nodeStore.getNode(id)).toBeUndefined()
+    // 重做 → 又回来
+    host.command.execute('command:redo')
+    expect(host.nodeStore.getNode(id)).toBeDefined()
+    host.stop()
+  })
+
+  it('command:delete 删"选中"（多选经统一命令），一次删除进一条历史', async () => {
+    const storage = new MemoryStorageAdapter()
+    const host = await bootCanvas({ adapter: storage, plugins: [nodeImagePlugin] })
+    const id1 = host.nodeFactory.create('text', { x: 0, y: 0 })
+    const id2 = host.nodeFactory.create('image', { x: 50, y: 50 }, 'url')
+    await host.save.flush()
+    expect(host.nodeStore.getNodes()).toHaveLength(2)
+
+    // 多选两个，经统一 command:delete 一次删光
+    host.selection.set([id1, id2])
+    host.command.execute('command:delete')
+    await host.save.flush()
+    expect(host.nodeStore.getNodes()).toHaveLength(0)
+    expect(host.selection.size).toBe(0)
+
+    // 落盘同步少两个
+    const saved = await storage.get<CanvasNode[]>('canvas:graph')
+    expect(saved).toHaveLength(0)
+
+    // 一次删除 = 一条历史，undo 全回来
+    expect(host.history.canUndo()).toBe(true)
+    host.command.execute('command:undo')
+    expect(host.nodeStore.getNodes()).toHaveLength(2)
+    host.stop()
+  })
+
+  it('command:delete 无选中时 no-op 且不产生历史', async () => {
+    const host = await bootCanvas()
+    host.nodeFactory.create('text', { x: 0, y: 0 })
+    host.selection.clear()
+    const before = host.history.undoDepth
+    host.command.execute('command:delete')
+    expect(host.nodeStore.getNodes()).toHaveLength(1)
+    expect(host.history.undoDepth).toBe(before)
+    host.stop()
+  })
+})

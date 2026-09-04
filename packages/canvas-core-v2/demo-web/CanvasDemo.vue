@@ -60,7 +60,7 @@ const SAMPLE_IMG =
   )
 const SAMPLE_TEXT = '双击我输入内容\n\n· 从左右圆点可拖出连线\n· 拖动节点可移动\n· 点节点再按 Delete 删除'
 
-// —— 把 nodeStore 当前节点灌成 VueFlow 渲染态（boot 后 / restore 后调用） ——
+// —— 把 nodeStore 当前节点灌成 VueFlow 渲染态（boot/命令后调用），并清掉已删节点的边 ——
 function storeToFlow(): FlowNode[] {
   return host.value!.nodeStore.getNodes().map((n) => ({
     id: n.id,
@@ -69,8 +69,18 @@ function storeToFlow(): FlowNode[] {
     data: { ...(n.data as Record<string, unknown>) },
   }))
 }
+function syncFromStore(): void {
+  const store = host.value!.nodeStore
+  nodes.value = storeToFlow()
+  const alive = new Set(nodes.value.map((f) => f.id))
+  edges.value = edges.value.filter((e) => alive.has(e.source) && alive.has(e.target))
+  canUndo.value = host.value!.history.canUndo()
+  canRedo.value = host.value!.history.canRedo()
+}
+const canUndo = ref(false)
+const canRedo = ref(false)
 
-/** 用最新渲染态覆盖 nodeStore 并落盘 */
+/** 用最新渲染态覆盖 nodeStore 并落盘（拖拽/数据已改到 VueFlow 侧时用） */
 function persistNodes(): void {
   const store = host.value!.nodeStore
   const graph: CanvasNode[] = nodes.value.map((f) => {
@@ -86,32 +96,32 @@ function persistNodes(): void {
   host.value!.save.set('graph', store.getNodes(), 'canvas')
 }
 
-function addTextNode(): void {
-  const svc = host.value!.ctx.get<TextNodeService>('text')
-  const id = svc.addTextNode({ x: 60 + nodes.value.length * 40, y: 60 })
-  const n = host.value!.nodeStore.getNode(id)!
-  nodes.value.push({ id: n.id, type: n.type, position: { ...n.position }, data: { ...(n.data as object) } })
-  persistNodes()
+// —— 统一经内核命令建/删/撤销/重做；改完从 nodeStore 重灌渲染态 ——
+function createNode(type: string): void {
+  const pos = { x: 60 + nodes.value.length * 40, y: 60 + nodes.value.length * 40 }
+  const payload: { type: string; position: { x: number; y: number }; imageUrl?: string } = { type, position: pos }
+  if (type === 'image') payload.imageUrl = SAMPLE_IMG // image creator 经 extra 收 imageUrl
+  host.value!.command.execute('command:create-node', payload)
+  syncFromStore()
 }
 
-function addImageNode(): void {
-  const svc = host.value!.ctx.get<ImageNodeService>('image')
-  const id = svc.addImageNode({ x: 60 + nodes.value.length * 60, y: 180 }, SAMPLE_IMG)
-  const n = host.value!.nodeStore.getNode(id)!
-  nodes.value.push({ id: n.id, type: n.type, position: { ...n.position }, data: { ...(n.data as object) } })
-  persistNodes()
+function deleteSelected(): void {
+  if (selectedIds.value.size === 0) return
+  host.value!.selection.set(selectedIds.value) // 把 UI 选中同步给内核，命令读它删
+  host.value!.command.execute('command:delete')
+  selectedIds.value = new Set()
+  syncFromStore()
 }
 
-function removeNode(id: string): void {
-  host.value!.nodeStore.removeNode(id)
-  nodes.value = nodes.value.filter((f) => f.id !== id)
-  edges.value = edges.value.filter((e) => e.source !== id && e.target !== id)
-  selectedIds.value.delete(id)
-  persistNodes()
+function undo(): void {
+  host.value!.command.execute('command:undo')
+  selectedIds.value = new Set()
+  syncFromStore()
 }
 
-function removeSelected(): void {
-  for (const id of [...selectedIds.value]) removeNode(id)
+function redo(): void {
+  host.value!.command.execute('command:redo')
+  syncFromStore()
 }
 
 // —— 拖拽结束：把最终 position 写回 nodeStore 并落盘 ——
@@ -123,13 +133,42 @@ function onNodeDragStop(e: { node: { id: string; position: { x: number; y: numbe
   }
 }
 
-// —— 点节点 = 选中（供 Delete 键删除） ——
+// —— 点节点 = 选中（供 Delete 键 / 命令删除），并同步内核 selection ——
 function onNodeClick(e: { node: { id: string } }): void {
   selectedIds.value = new Set([e.node.id])
+  host.value!.selection.set(selectedIds.value)
 }
 
 function onPaneClick(): void {
   selectedIds.value = new Set()
+  host.value!.selection.clear()
+  closeMenu()
+}
+
+// —— 右键菜单：建 text/image / 删除选中 / 撤销 ——
+const menu = ref<{ visible: boolean; x: number; y: number }>({ visible: false, x: 0, y: 0 })
+function openMenuAt(x: number, y: number): void {
+  menu.value = { visible: true, x, y }
+}
+function closeMenu(): void {
+  menu.value.visible = false
+}
+/** 右键菜单里选一个类型去新建 */
+function pick(type: string): void {
+  closeMenu()
+  createNode(type)
+}
+function menuAct(fn: () => void): void {
+  closeMenu()
+  fn()
+}
+function onNodeContextMenu(e: { event: MouseEvent }): void {
+  e.event.preventDefault()
+  openMenuAt(e.event.clientX, e.event.clientY)
+}
+function onPaneContextMenu(e: MouseEvent): void {
+  e.preventDefault()
+  openMenuAt(e.clientX, e.clientY)
 }
 
 // —— 连一条边：禁 self-loop ——
@@ -148,9 +187,13 @@ function onKeydown(e: KeyboardEvent): void {
   const t = e.target as HTMLElement | null
   // 正在输入(文本编辑)时把 Delete 留给输入框，别删节点
   if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
-  if (e.key === 'Delete' && selectedIds.value.size > 0) {
+  if (e.key === 'Delete') {
     e.preventDefault()
-    removeSelected()
+    deleteSelected()
+  } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+    e.preventDefault()
+    if (e.shiftKey) redo()
+    else undo()
   }
 }
 
@@ -186,10 +229,12 @@ onBeforeUnmount(() => {
 <template>
   <div class="demo-root">
     <div class="toolbar">
-      <button :disabled="booting" @click="addTextNode">+ 文本</button>
-      <button :disabled="booting" @click="addImageNode">+ 图片</button>
-      <button :disabled="selectedIds.size === 0" @click="removeSelected">删除选中 (Delete)</button>
-      <span class="hint">拖节点移动 · 从圆点拖出连线 · 双击文本编辑 · 刷新不丢</span>
+      <button :disabled="booting" @click="createNode('text')">+ 文本</button>
+      <button :disabled="booting" @click="createNode('image')">+ 图片</button>
+      <button :disabled="selectedIds.size === 0" @click="deleteSelected">删除选中 (Delete)</button>
+      <button :disabled="booting || !canUndo" @click="undo">↶ 撤销</button>
+      <button :disabled="booting || !canRedo" @click="redo">↷ 重做</button>
+      <span class="hint">拖节点移动 · 从圆点拖出连线 · 双击文本编辑 · 右键菜单 · Ctrl+Z 撤销 · 刷新不丢</span>
     </div>
 
     <div v-if="booting" class="status">正在启动内核…</div>
@@ -207,7 +252,18 @@ onBeforeUnmount(() => {
         @node-click="onNodeClick"
         @node-drag-stop="onNodeDragStop"
         @pane-click="onPaneClick"
+        @node-context-menu="onNodeContextMenu"
+        @pane-context-menu="onPaneContextMenu"
       />
+
+      <!-- 最小右键菜单（M3） -->
+      <div v-if="menu.visible" class="ctx-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+        <div class="ctx-item" @click="pick('text')">+ 文本节点</div>
+        <div class="ctx-item" @click="pick('image')">+ 图片节点</div>
+        <div class="ctx-sep"></div>
+        <div class="ctx-item" @click="menuAct(deleteSelected)">删除选中</div>
+        <div class="ctx-item" @click="menuAct(undo)">撤销</div>
+      </div>
     </div>
   </div>
 </template>
@@ -265,5 +321,29 @@ onBeforeUnmount(() => {
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   font-size: 14px;
+}
+.ctx-menu {
+  position: fixed;
+  min-width: 140px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  z-index: 100;
+  font-size: 13px;
+}
+.ctx-item {
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.ctx-item:hover {
+  background: #f3f4f6;
+}
+.ctx-sep {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 6px;
 }
 </style>
