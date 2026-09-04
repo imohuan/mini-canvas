@@ -9,7 +9,7 @@ import { Selection } from '../services/selection'
 import { History } from '../services/history'
 import { CommandRegistry } from '../services/command'
 import { NodeFactory } from '../services/nodeFactory'
-import { nodeTextPlugin } from '../plugins/nodeText'
+import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { canvasCommandsPlugin } from '../plugins/canvasCommands'
 import type { SelectionService } from '../services/selection'
 import type { HistoryService } from '../services/history'
@@ -46,6 +46,12 @@ export interface BootOptions {
   adapter?: StorageAdapter
   /** 额外插件（在 text/image 等内置插件之后按序装载）。 */
   plugins?: PluginModule[]
+  /**
+   * 节点展示注册表实例。宿主若需在 boot 前就 provide 给 Vue(同步渲染壳消费)，
+   * 可自建一个传入；不传则 bootCanvas 内部新建并暴露在 host.nodeRegistry。
+   * 插件 apply 时经 ctx.get('nodeRegistry') 注册 content/toolbar 段组件。
+   */
+  nodeRegistry?: NodeRegistry
   /** 首次启动(存储为空)时生成默认画布；返回的节点会被 replaceAll。 */
   seedDefault?: () => CanvasNode[]
 }
@@ -74,7 +80,7 @@ export async function bootCanvas(adapterOrOpts?: StorageAdapter | BootOptions): 
   const nodeStore = new NodeStore()
   ctx.inject('nodeStore', nodeStore)
 
-  const nodeRegistry = new NodeRegistry()
+  const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
   ctx.inject('nodeRegistry', nodeRegistry)
 
   const selection = new Selection()

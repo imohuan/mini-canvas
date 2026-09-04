@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { bootCanvas } from '../host'
 import { MemoryStorageAdapter } from '../../services/storage/memoryAdapter'
-import { nodeImagePlugin } from '../../plugins/nodeImage'
-import type { ImageNodeService } from '../../plugins/nodeImage'
-import type { TextNodeService } from '../../plugins/nodeText'
+import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
+import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import type { CanvasNode } from '../../services/nodeStore'
 import { NodeStore } from '../../services/nodeStore'
 

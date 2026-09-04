@@ -6,6 +6,6 @@
 
 export * from './core'
 export * from './services'
-export { nodeTextPlugin } from './plugins/nodeText'
-export { nodeImagePlugin } from './plugins/nodeImage'
+// content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo-web）
+export { HOST_KEY } from './components/contentBridge'
 export { canvasCommandsPlugin } from './plugins/canvasCommands'

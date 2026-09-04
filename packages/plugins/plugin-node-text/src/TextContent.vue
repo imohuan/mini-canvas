@@ -1,31 +1,27 @@
 <script setup lang="ts">
-// TextContent —— text 节点 content 组件（经 BaseNode 壳的 content 段渲染）
+// TextContent —— text 节点 content 组件（随 plugin-node-text 插件包发布，经 BaseNode 壳的 content 段渲染）
 // 职责：展示文本；双击进入编辑，失焦/回车把改动经 ctx.get('text').editText 写回内核并落盘。
-// 连接点 Handle 由 BaseNode 壳统一提供，这里不再自带。
+// 依赖方向：只 import 内核的 HOST_KEY 令牌(已上收到内核 components 层)，不反向依赖 demo-web。
 import { inject, ref, nextTick, onBeforeUnmount } from 'vue'
-import { HOST_KEY } from '../demoInjection'
-import type { TextNodeService } from '../../src/plugins/nodeText'
-import type { CanvasHost } from '../../src/demo/host'
+import { HOST_KEY } from '@mini-canvas/canvas-core-v2'
+import type { TextNodeService } from './nodeTextPlugin'
 
-const props = defineProps<{ id: string; data: { text?: string } }>()
+defineProps<{ id: string; data: { text?: string } }>()
 
+// 宿主句柄经 HOST_KEY(内核 provide/inject 令牌)获取，再经 host.ctx.get('text') 调插件服务
 const hostRef = inject(HOST_KEY)
-function host(): CanvasHost {
-  const h = hostRef?.value
+function textService(): TextNodeService {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const h = hostRef?.value as any
   if (!h) throw new Error('[TextContent] 宿主未就绪（boot 未完成）')
-  return h
+  return h.ctx.get<TextNodeService>('text')
 }
 
 const editing = ref(false)
 const draft = ref('')
 const inputEl = ref<HTMLTextAreaElement | null>(null)
-// 本地展示值：init 自 props.data，编辑后本地回显（内核节点与 VueFlow 节点是两份拷贝，
-// 直接读 props.data.text 在写回内核后不会自动刷新，故用本地值兜底回显）
+// 本地展示值：init 自 props.data，编辑后本地回显
 const shown = ref(props.data.text ?? '')
-
-function textService(): TextNodeService {
-  return host().ctx.get<TextNodeService>('text')
-}
 
 function startEdit(): void {
   draft.value = shown.value
@@ -39,13 +35,11 @@ function commit(): void {
   const next = draft.value
   if (next !== shown.value) {
     shown.value = next
-    // 写回内核 + 落盘（只在真变时）
     textService().editText(props.id, next)
   }
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  // Enter 提交，Shift+Enter 换行，Esc 取消
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     commit()
@@ -55,11 +49,9 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 function stop(e: MouseEvent): void {
-  // 双击进入编辑时不要把这次双击再当成节点选中拖动的起点
   e.stopPropagation()
 }
 onBeforeUnmount(() => {
-  // 组件被删/卸载时若还在编辑，强制落一次盘，避免丢最后一行
   if (editing.value) {
     editing.value = false
     const next = draft.value

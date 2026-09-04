@@ -9,22 +9,20 @@
 import { onMounted, provide, reactive, ref, shallowRef, onBeforeUnmount } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Connection } from '@vue-flow/core'
-import TextContent from './components/TextContent.vue'
-import ImageContent from './components/ImageContent.vue'
 import SettingsPanel from './SettingsPanel.vue'
 import BaseNode from '../src/components/BaseNode.vue'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../src/components/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY } from '../src/components/canvasParamKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
 import { validateConnection, typeConnectionDef } from '../src/services/connection'
-import { HOST_KEY } from './demoInjection'
+import { HOST_KEY } from '@mini-canvas/canvas-core-v2'
 import type { CanvasHost } from '../src/demo/host'
 import type { CanvasNode } from '../src/services/nodeStore'
 import { bootCanvas } from '../src/demo/host'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
-import { nodeImagePlugin } from '../src/plugins/nodeImage'
-import type { TextNodeService } from '../src/plugins/nodeText'
-import type { ImageNodeService } from '../src/plugins/nodeImage'
+import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import type { TextNodeService } from '@mini-canvas/plugin-node-text'
+import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import { bindBrowserLifecycleFlush } from './browserFlush'
 import type { BrowserFlushHandle } from './browserFlush'
 import CustomEdge from '../src/components/CustomEdge.vue'
@@ -46,10 +44,9 @@ const flushHandle = ref<BrowserFlushHandle>()
 // setup 阶段同步 provide 宿主引用（boot 异步完成后填充），内容组件经 inject(HOST_KEY).value 取
 provide(HOST_KEY, host)
 
-// 节点展示注册表：把各业务 type 的 content 组件注册进去（NodeRenderer/BaseNode 消费），setup 同步 provide
+// 节点展示注册表：demo 自建一个并同步 provide，同时传入 bootCanvas → 插件 apply 经
+// ctx.get('nodeRegistry') 把 content 组件注册进来（宿主零手 seed）。BaseNode 壳经本表解析 content。
 const registry = new NodeRegistry()
-registry.register('text', { content: TextContent })
-registry.register('image', { content: ImageContent })
 provide(NODE_REGISTRY_KEY, registry)
 // 标题就地重命名写回：改内核 nodeStore data 并落盘；整体替换 nodes 数组触发 VueFlow 更新渲染态
 provide(NODE_WRITE_KEY, (id: string, patch: Record<string, unknown>) => {
@@ -268,7 +265,11 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(async () => {
   try {
-    const h = await bootCanvas({ adapter: new LocalStorageAdapter(), plugins: [nodeImagePlugin] })
+    const h = await bootCanvas({
+      adapter: new LocalStorageAdapter(),
+      plugins: [nodeImagePlugin], // text 插件已由 bootCanvas 内置装载（host 装配点）
+      nodeRegistry: registry, // 把 demo 同步 provide 的注册表交给内核，插件 apply 往里注册 content
+    })
     host.value = h
 
     // 存储为空(首次) → seed 默认 text+image 并落盘；非空则 bootCanvas 已 restore
