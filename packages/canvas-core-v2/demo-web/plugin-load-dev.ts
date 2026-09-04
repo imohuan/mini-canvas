@@ -100,8 +100,8 @@ async function main() {
   // —— 热更通道：插件 dev server 的原生 HMR ——
   // 关键：宿主跨端口 import 插件 dev 模块(index.ts)时，该模块会带上 5311 的 /@vite/client
   // (token 随模块注入)，于是宿主页面自动成了 5311 的 HMR 客户端；插件 src/index.ts 里的
-  // import.meta.hot.accept(['./nodeTextPlugin']) 会收原生 HMR 通知并调 window.MiniCanvas.reloadPlugin
-  // —— 那已经是"重拉新模块 + reloadPlugin"的完整链路(vite 原生能力，能正确处理 .ts 与 .vue)。
+  // import.meta.hot.accept(自 accept) 会收原生 HMR 通知并调 window.MiniCanvas.reloadPlugin
+  // —— 那已经是"重拉新模块 + reloadPlugin"的完整链路(vite 原生能力)。
   // 我们只需把 reloadPlugin 包一层：计数 + 让画布重建节点以展示新实现，并记日志。
   const rawReload = api.reloadPlugin.bind(api)
   api.reloadPlugin = ((name: string, mod?: unknown) => {
