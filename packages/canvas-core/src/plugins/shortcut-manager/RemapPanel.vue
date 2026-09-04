@@ -425,4 +425,17 @@ function renderKeyParts(keys: string) {
     transition: none !important;
   }
 }
+
+/* 可交互元素聚焦时去掉浏览器默认黑框，改用贴合主题的青色 ring */
+.remap-listen-btn,
+.remap-text-btn,
+.remap-confirm-btn {
+  outline: none;
+}
+.remap-listen-btn:focus-visible,
+.remap-text-btn:focus-visible,
+.remap-confirm-btn:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: 1px;
+}
 </style>

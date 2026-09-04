@@ -513,6 +513,16 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   height: 32px; /* 与行默认 44 - 上下 padding 12 = 32 呼应 */
 }
 
+/* tabindex 可聚焦：去掉浏览器默认黑边，改用贴合主题的青色 ring */
+.remap-head {
+  outline: none;
+}
+.remap-head:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+
 .is-remapping-open .remap-head {
   cursor: pointer;
 }
