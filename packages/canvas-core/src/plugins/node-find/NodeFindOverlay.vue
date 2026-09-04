@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="node-find-overlay" @click.self="$emit('close')">
-      <div class="node-find-panel" @click.stop>
+    <div class="node-find-overlay" @pointerdown.self="$emit('close')">
+      <div class="node-find-panel" @pointerdown.stop>
         <input
           ref="inputEl"
           v-model="query"
@@ -24,7 +24,7 @@
             <span class="node-find-label">{{ node.data?.label || node.id }}</span>
             <span class="node-find-type">{{ node.data?.nodeType || 'custom' }}</span>
           </div>
-          <div v-if="filtered.length === 0 && query" class="node-find-empty">
+          <div v-if="filtered.length === 0 && query" class="no-results">
             无匹配节点
           </div>
         </div>
@@ -51,9 +51,11 @@ const selectedIndex = ref(0)
 const inputEl = ref<HTMLInputElement>()
 
 const filtered = computed(() => {
-  if (!query.value) return props.nodes.slice(0, 20)
+  // 过滤掉名称以 temp-target- 开头的临时目标节点
+  const hidden = props.nodes.filter(n => !String(n.data?.label || n.id).startsWith('temp-target-'))
+  if (!query.value) return hidden.slice(0, 20)
   const q = query.value.toLowerCase()
-  return props.nodes.filter(n => {
+  return hidden.filter(n => {
     const label = String(n.data?.label || '').toLowerCase()
     const nodeType = String(n.data?.nodeType || '').toLowerCase()
     return label.includes(q) || n.id.toLowerCase().includes(q) || nodeType.includes(q)
@@ -82,6 +84,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ============ 外层浮层 ============ */
 .node-find-overlay {
   position: fixed;
   inset: 0;
@@ -90,71 +93,101 @@ onMounted(async () => {
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  background: rgb(0 0 0 / 0.35);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.2));
 }
 
+/* ============ 面板 ============ */
 .node-find-panel {
-  width: 420px;
-  max-height: 60vh;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 18px;
-  background: rgb(24 24 27 / 0.96);
-  box-shadow: 0 22px 70px rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(18px);
+  width: min(440px, calc(100vw - 64px));
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
+/* ============ 输入框 ============ */
 .node-find-input {
   width: 100%;
   padding: 16px 20px;
   border: 0;
+  outline: 0;
   background: transparent;
-  color: #f4f4f5;
+  color: #111827;
   font-size: 16px;
-  outline: none;
+  font-weight: 500;
 }
-
 .node-find-input::placeholder {
-  color: #71717a;
+  color: #9ca3af;
 }
 
+/* ============ 列表 ============ */
 .node-find-results {
-  max-height: calc(60vh - 60px);
+  max-height: calc(70vh - 62px);
   overflow-y: auto;
   padding: 4px 10px 10px;
+}
+.node-find-results::-webkit-scrollbar {
+  width: 8px;
+}
+.node-find-results::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.node-find-results::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .node-find-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;
+  transition: background 0.18s ease;
 }
-
+.node-find-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
 .node-find-item.is-selected {
-  background: rgb(255 255 255 / 0.1);
+  background: rgba(0, 0, 0, 0.08);
+}
+.node-find-item.is-selected:hover {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .node-find-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 14px;
   font-weight: 600;
-  color: #f4f4f5;
+  color: #111827;
 }
 
 .node-find-type {
+  flex: 0 0 auto;
   font-size: 11px;
-  color: #a1a1aa;
-  background: rgb(255 255 255 / 0.08);
+  font-weight: 600;
+  color: #6b7280;
+  background: rgba(0, 0, 0, 0.06);
   padding: 2px 8px;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
-.node-find-empty {
+.no-results {
   padding: 24px;
   text-align: center;
-  color: #71717a;
+  color: #9ca3af;
   font-size: 14px;
 }
 </style>
