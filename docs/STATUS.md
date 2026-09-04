@@ -6,13 +6,14 @@
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 
 ## 当前进度（哪个里程碑）
-- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 31 测试绿
+- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 40 测试绿
 - ✅ runbook 修订 + 核心节点件行为契约金标准已产出(见下方契约锚点)
-- ▶️ **下一步 = M1：起 vite + 最简 text/image 两节点 + 拖拽/连一条边/删除 + 刷新恢复**（还没做）
-- ⏳ M2~M5(后续) / M6(另开任务)
+- ✅ **M1(浏览器)最小闭环骨架**：vite + localStorageAdapter + image 插件 + NodeStore.removeNode + CanvasDemo(text+image 能拖能连能删、双击编辑、刷新恢复) —— 40 测试绿，SFC 经 vite 编译/import 复检通过
+- ▶️ **下一步 = M2：NodeRenderer + 最小 BaseNode 壳 + node:{type}:* slot**（runbook 第二刀；只搬够 text/image 渲染的最小壳，不吞 1714 行 BaseNode）
+- ⏳ M3~M5(后续) / M6(另开任务)
 
 ## 现在立刻该做的一件事
-**做 M1**：在 `packages/canvas-core-v2/` 起 vite（装 vue/vue-flow/vite），加最简 image 节点插件 + NodeStore.removeNode + 最简 isValidConnection + localStorage 落盘，让浏览器能看到 text+image、能拖能连能删、刷新不丢。
+**做 M2**：按 `docs/plan/canvas-core-v2-runbook.md` M2 段——`core/registry/` 节点注册 + `core/NodeRenderer` + 最小 `components/BaseNode.vue`(壳=标题+content+可拖拽)，实现 `node:{type}:content/...` slot 最小路由；**明确不做** MovingHandle 吸附/ResizeHandle 高级 resize/_toolbarGroup 六插槽(等 M6 image 真进来再逐段移植)。`.vue` 渲染断言涉及 happy-dom 才配环境，否则把解析抽纯函数测试。
 
 ## 验证命令（每次改完跑，测试是唯一裁判）
 ```bash
