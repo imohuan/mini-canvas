@@ -108,6 +108,71 @@ export class Context implements PluginScope {
     return this.state
   }
 
+  // ==================== 动态装载（运行中热装/热卸/热重载） ====================
+
+  /** 是否已处于运行中（started）且可接受动态装/卸 */
+  get running(): boolean {
+    return this.state === 'started'
+  }
+
+  /**
+   * 运行中热装一个插件（start 之后调用）：为它建子 Scope → 跑 setup → 记录。
+   * 成功后立即可见（注册的服务/UI/命令都生效），等价于冷启动时 plugin()。
+   *
+   * @throws 未 start / 插件名重复 / setup 抛错（半成品副作用已回收）
+   * @returns 插件名
+   */
+  installPlugin(mod: PluginModule): string {
+    this.assertState('started', 'installPlugin')
+    if (this.plugins.has(mod.name)) {
+      throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
+    }
+    // 登记进模块表（与冷启动共用），供诊断/list
+    this.plugins.set(mod.name, mod)
+
+    // 单插件建子 Scope + setup（与 start 内逐插件的逻辑一致）
+    const scope = this.rootScope.child()
+    this.pluginScopes.set(mod.name, scope)
+    this.setLifecycle(mod.name, Lifecycle.INSTALLING)
+    this.setLifecycle(mod.name, Lifecycle.ACTIVATING)
+    const scopeCtx = this.deriveScope(scope)
+    try {
+      const cleanup = mod.setup(scopeCtx)
+      if (cleanup) scope.effect(() => cleanup)
+    } catch (err) {
+      this.pluginScopes.delete(mod.name)
+      this.plugins.delete(mod.name)
+      scope.dispose() // 半成品副作用也清掉
+      this.setLifecycle(mod.name, Lifecycle.ERROR)
+      throw err
+    }
+    this.setLifecycle(mod.name, Lifecycle.ACTIVE)
+    this.bus.emit('ctx:plugin-installed', { name: mod.name })
+    return mod.name
+  }
+
+  /**
+   * 运行中热卸一个插件：dispose 它的 Scope → 全部副作用/注册/UI 自动回收。
+   * @returns 是否真卸到（未装/已卸返回 false）
+   */
+  uninstallPlugin(name: string): boolean {
+    if (this.state !== 'started') return false
+    const scope = this.pluginScopes.get(name)
+    if (!scope) return false
+    this.setLifecycle(name, Lifecycle.UNINSTALLING)
+    scope.dispose()
+    this.pluginScopes.delete(name)
+    this.plugins.delete(name)
+    this.lifecycles.delete(name)
+    this.bus.emit('ctx:plugin-uninstalled', { name })
+    return true
+  }
+
+  /** 已装载(含动态)的插件名 */
+  listPlugins(): string[] {
+    return [...this.plugins.keys()]
+  }
+
   // ==================== 服务注入 ====================
 
   /** 提供服务；返回撤销（撤销自动登记进当前调用方 scope，若在 setup 内经插件 scope）。 */

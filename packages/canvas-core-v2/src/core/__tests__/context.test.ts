@@ -138,4 +138,85 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(ready).toHaveBeenCalledTimes(1)
     expect(ready.mock.calls[0][0]).toMatchObject({ plugins: ['a'] })
   })
+
+  it('installPlugin：运行中热装插件立即可用（服务注入 + 副作用登记）', async () => {
+    const ctx = new Context()
+    await ctx.start() // 空内核直接 start，之后再动态装
+    expect(ctx.running).toBe(true)
+
+    ctx.installPlugin(mkPlugin('hot', [], (c) => {
+      c.inject('hotSvc', { ping: () => 'pong' })
+      c.effect(() => vi.fn()) // 一个应被回收的副作用
+    }))
+
+    expect(ctx.get<{ ping(): string }>('hotSvc').ping()).toBe('pong')
+    expect(ctx.listPlugins()).toContain('hot')
+  })
+
+  it('installPlugin 未 start 时抛错', () => {
+    const ctx = new Context()
+    expect(() => ctx.installPlugin(mkPlugin('x'))).toThrow(/start/)
+  })
+
+  it('installPlugin 重名抛错（不覆盖已有插件）', async () => {
+    const ctx = new Context()
+    ctx.plugin(mkPlugin('a'))
+    await ctx.start()
+    expect(() => ctx.installPlugin(mkPlugin('a'))).toThrow(/Duplicate plugin name/)
+    expect(ctx.listPlugins().filter((n) => n === 'a')).toHaveLength(1)
+  })
+
+  it('installPlugin setup 抛错 → 半成品副作用回收 + 不残留 + 抛错', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    expect(() =>
+      ctx.installPlugin(
+        mkPlugin('bad', [], (c) => {
+          c.inject('shouldRollback', {}) // 先注入，后抛 → 应被回滚
+          throw new Error('setup boom')
+        }),
+      ),
+    ).toThrow(/setup boom/)
+    expect(ctx.listPlugins()).not.toContain('bad')
+    expect(() => ctx.get('shouldRollback')).toThrow(/not injected/)
+  })
+
+  it('uninstallPlugin：dispose 回收该插件全部副作用 + 服务摘除 + 不再 list', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const cleanup = vi.fn()
+    ctx.installPlugin(
+      mkPlugin('p', [], (c) => {
+        c.inject('svc', {})
+        c.effect(() => cleanup)
+      }),
+    )
+    expect(ctx.uninstallPlugin('p')).toBe(true)
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(() => ctx.get('svc')).toThrow(/not injected/)
+    expect(ctx.listPlugins()).not.toContain('p')
+  })
+
+  it('uninstallPlugin 未装/重复卸返回 false，不抛', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    expect(ctx.uninstallPlugin('ghost')).toBe(false)
+    ctx.installPlugin(mkPlugin('p'))
+    expect(ctx.uninstallPlugin('p')).toBe(true)
+    expect(ctx.uninstallPlugin('p')).toBe(false)
+  })
+
+  it('reload 语义：先卸后装，同名插件可重新安装新实现', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.installPlugin(mkPlugin('p', [], (c) => c.inject('v', { n: 1 })))
+    expect(ctx.get<{ n: number }>('v').n).toBe(1)
+
+    // 模拟"插件代码改了"：卸掉旧实现，装新实现（同 name 不同值）
+    ctx.uninstallPlugin('p')
+    expect(() => ctx.get('v')).toThrow(/not injected/)
+    ctx.installPlugin(mkPlugin('p', [], (c) => c.inject('v', { n: 2 })))
+    expect(ctx.get<{ n: number }>('v').n).toBe(2)
+    expect(ctx.listPlugins()).toContain('p')
+  })
 })

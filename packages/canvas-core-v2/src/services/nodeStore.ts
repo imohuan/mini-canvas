@@ -31,6 +31,8 @@ export interface NodeStoreService {
   readonly types: ReadonlyMap<string, CanvasNodeType>
   /** 注册一个节点类型 */
   registerType(def: CanvasNodeType): void
+  /** 注销一个节点类型（热卸插件时回收；不存在则 no-op） */
+  unregisterType(type: string): void
   /** 所有节点 */
   getNodes(): CanvasNode[]
   /** 按 type 在指定坐标建一个节点，返回短 id（如 '1'） */
@@ -56,6 +58,10 @@ export class NodeStore implements NodeStoreService {
       throw new Error(`[nodeStore] node type "${def.type}" already registered`)
     }
     this.types.set(def.type, def)
+  }
+
+  unregisterType(type: string): void {
+    this.types.delete(type)
   }
 
   getNodes(): CanvasNode[] {

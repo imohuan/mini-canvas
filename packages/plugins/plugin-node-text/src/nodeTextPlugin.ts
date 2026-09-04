@@ -43,13 +43,14 @@ export const nodeTextPlugin: PluginModule = {
     const nodeStore = ctx.get<NodeStoreService>('nodeStore')
     const factory = ctx.get<NodeFactoryService>('nodeFactory')
 
-    // 2. 建节点的单一实现：建 + 写默认 text
+    // 2. 建节点的单一实现：建 + 写默认 text（creator 随插件 scope 自动回收，支持热卸/热重载）
     function createText(position: { x: number; y: number }): string {
       const id = nodeStore.addNode('text', position)
       nodeStore.updateNodeData(id, { text: '双击编辑' })
       return id
     }
     factory.register('text', createText)
+    ctx.effect(() => () => factory.unregister('text'))
 
     // 3. 暴露给 content 组件/宿主
     ctx.inject('text', {

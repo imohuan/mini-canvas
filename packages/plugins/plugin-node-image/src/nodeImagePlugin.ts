@@ -48,6 +48,7 @@ export const nodeImagePlugin: PluginModule = {
       return id
     }
     factory.register('image', createImage)
+    ctx.effect(() => () => factory.unregister('image'))
 
     ctx.inject('image', {
       addImageNode: (position: { x: number; y: number }, imageUrl: string): string =>

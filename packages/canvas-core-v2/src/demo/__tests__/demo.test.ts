@@ -135,6 +135,31 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
       /already registered/i,
     )
   })
+
+  it('热重载 image 插件：卸载后类型/creator/content 回收，重装同名插件恢复', async () => {
+    const host = await bootCanvas({ plugins: [nodeImagePlugin] })
+    // 初始：image 类型可建、有 creator
+    expect(host.nodeStore.types.has('image')).toBe(true)
+    expect(host.nodeFactory.creatableTypes()).toContain('image')
+    expect(host.nodeRegistry.has('image')).toBe(true)
+
+    // 热卸：全部注册回收（type / creator / content / image 服务）
+    expect(host.ctx.uninstallPlugin('image')).toBe(true)
+    expect(host.nodeStore.types.has('image')).toBe(false)
+    expect(host.nodeFactory.creatableTypes()).not.toContain('image')
+    expect(host.nodeRegistry.has('image')).toBe(false)
+    expect(() => host.ctx.get('image')).toThrow(/not injected/)
+
+    // 热装同名（模拟"插件改了重新装"）：同一份 plugin 对象重装，不应报重复、应恢复能力
+    host.ctx.installPlugin(nodeImagePlugin)
+    expect(host.nodeStore.types.has('image')).toBe(true)
+    expect(host.nodeFactory.creatableTypes()).toContain('image')
+    expect(host.nodeRegistry.has('image')).toBe(true)
+    const img = host.ctx.get<ImageNodeService>('image')
+    const id = img.addImageNode({ x: 0, y: 0 }, 'http://reloaded.png')
+    expect(host.nodeStore.getNode(id)?.data.imageUrl).toBe('http://reloaded.png')
+    host.stop()
+  })
 })
 
 describe('M3 命令/删除/创建/撤销（host 集成）', () => {

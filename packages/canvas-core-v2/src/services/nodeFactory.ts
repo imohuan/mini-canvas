@@ -13,6 +13,8 @@ export interface NodeCreator {
 export interface NodeFactoryService {
   /** 注册某 type 的 creator。type 重复注册抛错。 */
   register(type: string, creator: NodeCreator): void
+  /** 注销某 type 的 creator（热卸插件时回收；不存在则 no-op） */
+  unregister(type: string): void
   /** 按 type 建节点；type 未注册 creator → 抛错（别静默） */
   create(type: string, position: { x: number; y: number }, extra?: unknown): string
   /** 已注册可创建的 type 列表（供"从菜单建 text/image"枚举） */
@@ -27,6 +29,10 @@ export class NodeFactory implements NodeFactoryService {
       throw new Error(`[nodeFactory] creator for node type "${type}" already registered`)
     }
     this.creators.set(type, creator)
+  }
+
+  unregister(type: string): void {
+    this.creators.delete(type)
   }
 
   create(type: string, position: { x: number; y: number }, extra?: unknown): string {

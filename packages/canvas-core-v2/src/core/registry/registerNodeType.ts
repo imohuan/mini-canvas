@@ -36,26 +36,39 @@ export interface NodeTypeDef {
 /**
  * 插件里一次注册一个节点类型（数据 + 展示同时落表）。
  *
+ * 返回的 revoke 会自动登记进当前插件 Scope：插件被 uninstallPlugin/stop 时，
+ * nodeStore 的 type 与 nodeRegistry 的 content 一并注销 → 支持"同名插件重装"(热重载)。
+ *
  * @param ctx 插件 apply/setup 拿到的 ctx（真会 ctx.get('nodeStore'/'nodeRegistry')）
  * @param def 节点类型完整定义
  */
-export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): void {
+export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void {
+  const nodeStore = ctx.get<NodeStoreService>('nodeStore')
   // ① 数据侧：type/label/defaultSize/连接约束
-  ctx.get<NodeStoreService>('nodeStore').registerType({
+  nodeStore.registerType({
     type: def.type,
     label: def.label,
     defaultSize: def.defaultSize,
     inputs: def.inputs,
     outputs: def.outputs,
   })
+  const revokers: Array<() => void> = [() => nodeStore.unregisterType(def.type)]
+
   // ② 展示侧：content/title/toolbar 段组件（opaque 句柄）
   //    宿主经 bootCanvas 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
   const segs = def.segments ?? {}
-  if (Object.keys(segs).length === 0) return
   const nodeRegistry = safeGet<NodeRegistry>(ctx, 'nodeRegistry')
-  if (nodeRegistry) {
+  if (nodeRegistry && Object.keys(segs).length > 0) {
     nodeRegistry.register(def.type, segs)
+    revokers.push(() => nodeRegistry.unregister(def.type))
   }
+
+  // 把 revoke 挂到当前插件 scope：scope.dispose（uninstallPlugin/stop）时自动注销
+  const revoke = () => {
+    for (const r of revokers) r()
+  }
+  ctx.effect(() => revoke)
+  return revoke
 }
 
 /** 尽力取一个 ctx 服务：取不到返回 undefined（不抛）。 */

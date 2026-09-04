@@ -40,6 +40,11 @@ export class NodeRegistry {
     return this.byType.get(type)
   }
 
+  /** 注销某 type 的展示定义（热卸插件时回收；不存在则 no-op） */
+  unregister(type: string): void {
+    this.byType.delete(type)
+  }
+
   /** 是否已注册 */
   has(type: string): boolean {
     return this.byType.has(type)
