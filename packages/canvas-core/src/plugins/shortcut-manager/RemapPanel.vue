@@ -41,16 +41,16 @@ let modifierTimer: ReturnType<typeof setTimeout> | null = null
 /** 候选键位是否与当前键位不同（有实际改动待提交） */
 const dirty = () => newKeys.value !== props.item.keys
 
-/** 修饰键 + 普通键 → 快捷键字符串 */
-function formatShortcut(key: string, modifiers: Set<string>): string {
-  const parts: string[] = []
-  const order = ['Control', 'Shift', 'Alt', 'Meta']
-  for (const m of order) {
-    if (modifiers.has(m)) parts.push(MODIFIER_ALIAS[m])
-  }
-  parts.push(key.toLowerCase())
-  return parts.join('+')
-}
+/**
+ * 修饰键判断顺序：ctrl → shift → alt → meta。
+ * 顺序固定，保证与 manager.parseShortcut 拆解出的顺序一致，展示稳定。
+ */
+const MOD_FLAGS: Array<[key: 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey', alias: string]> = [
+  ['ctrlKey', 'ctrl'],
+  ['shiftKey', 'shift'],
+  ['altKey', 'alt'],
+  ['metaKey', 'meta'],
+]
 
 /** 纯修饰键 → 快捷键字符串（如 alt+shift） */
 function formatModifiersOnly(modifiers: Set<string>): string {
@@ -59,6 +59,23 @@ function formatModifiersOnly(modifiers: Set<string>): string {
   for (const m of order) {
     if (modifiers.has(m)) parts.push(MODIFIER_ALIAS[m])
   }
+  return parts.join('+')
+}
+
+/**
+ * 由一次键盘事件组装快捷键字符串。
+ *
+ * 关键：修饰键以事件标志位（e.altKey 等）为准，而不是收集独立的修饰键 keydown。
+ * 因为真实浏览器在按下组合键（如 Alt+A）时，往往只派发带 altKey=true 的
+ * 普通键 keydown，根本不派发独立的 "Alt" keydown —— 只收集修饰键 keydown
+ * 会永远漏掉 Alt，导致录成单键 "a"。
+ */
+function formatShortcutFromEvent(e: KeyboardEvent, key: string): string {
+  const parts: string[] = []
+  for (const [flag, alias] of MOD_FLAGS) {
+    if (e[flag]) parts.push(alias)
+  }
+  parts.push(key.toLowerCase())
   return parts.join('+')
 }
 
@@ -136,13 +153,15 @@ function handleKeyDown(e: KeyboardEvent) {
     return
   }
 
-  // 非修饰键：按下即收尾（不依赖 keyup）
+  // 非修饰键：用事件标志位（e.altKey 等）拼出完整组合键，按下即收尾。
+  // 注意不能依赖"先前是否收到修饰键的 keydown"——真实浏览器在 Alt+A 等
+  // 组合键里常不派发独立的 Alt keydown，只让 A 的 keydown 带 altKey=true。
   clearModifierTimer()
   hasNonModifier = true
   e.preventDefault()
   e.stopPropagation()
 
-  captureCandidate(formatShortcut(keyName, heldModifiers))
+  captureCandidate(formatShortcutFromEvent(e, keyName))
 }
 
 function handleKeyUp(e: KeyboardEvent) {
