@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { splitShortcutKeys } from './shortcutKeys'
 
 const props = defineProps<{
   /** 快捷键字符串，如 "ctrl+shift+z" */
@@ -15,6 +14,19 @@ const props = defineProps<{
   placeholder?: string
 }>()
 
+/**
+ * 把快捷键字符串拆成片段数组。
+ * 示例：splitShortcutKeys('ctrl+shift+z') // ['ctrl', 'shift', 'z']
+ * 拆分规则：以 `+` 分割并去除空白，空段自动丢弃。
+ */
+function splitShortcutKeys(keys: string): string[] {
+  if (!keys) return []
+  return keys
+    .split('+')
+    .map(p => p.trim())
+    .filter(Boolean)
+}
+
 const parts = computed(() => splitShortcutKeys(props.keys))
 
 function uid(idx: number) {
@@ -28,7 +40,7 @@ function uid(idx: number) {
   >
     <template v-if="parts.length > 0">
       <template v-for="(part, pIdx) in parts" :key="uid(pIdx)">
-        <span class="kbd-chip">{{ part }}</span>
+        <span class="kbd-chip font-mono">{{ part }}</span>
         <span v-if="pIdx < parts.length - 1" class="kbd-plus">+</span>
       </template>
     </template>
@@ -57,7 +69,6 @@ function uid(idx: number) {
   border-radius: 6px;
   background: #ffffff;
   color: #374151;
-  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
