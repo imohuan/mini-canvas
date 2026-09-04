@@ -1,0 +1,2 @@
+a7dfcbc fix(backend-sync): 云画布自动连接 + 后端节点连线渲染
+c77767e feat(canvas-core): BackendSyncPlugin 非侵入云同步插件 + ImageNode 支持后台 data.runState 渲染
