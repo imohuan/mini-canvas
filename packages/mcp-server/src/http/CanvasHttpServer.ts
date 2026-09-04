@@ -269,6 +269,13 @@ export class CanvasHttpServer {
       })
     })
 
+    /** 删除画布资源：DELETE /api/canvases/:id/resources/:assetId */
+    this.app.delete('/api/canvases/:id/resources/:assetId', async (c) => {
+      const { id, assetId } = c.req.param()
+      const removed = await this.storage.deleteResource(id, assetId)
+      return c.json({ ok: removed })
+    })
+
     /** 中转本地绝对路径媒体（图片/视频/音频）：GET /api/proxy-media?path=/abs/x.mp4 或 file:/// 形式 */
     this.app.get('/api/proxy-media', async (c) => {
       const raw = c.req.query('path') ?? ''
