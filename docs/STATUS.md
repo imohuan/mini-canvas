@@ -6,16 +6,17 @@
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 
 ## 当前进度（哪个里程碑）
-- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 59 测试绿
+- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 68 测试绿
 - ✅ runbook 修订 + 核心节点件行为契约金标准已产出(见下方契约锚点)
 - ✅ **M1(浏览器)最小闭环骨架**：vite + localStorageAdapter + image 插件 + NodeStore.removeNode + CanvasDemo
 - ✅ **M2：NodeRenderer + 最小 BaseNode 壳 + node:{type}:* slot** —— core/registry(NodeRegistry 纯逻辑无 Vue) + nodeRenderer 解析 + components/BaseNode.vue
-- ✅ **M3：命令/删除收敛** —— Selection/History/CommandRegistry/NodeFactory(纯逻辑无 Vue) + command:delete(删选中记历史)/create-node/undo/redo + CanvasDemo 删除/新建全走命令 + 最小右键菜单 —— 59 测试绿
-- ▶️ **下一步 = M4：Save 层完整 + 行为契约**（runbook 第四刀）—— 四类 type(config/canvas/resource/shortcut) 全走 ctx.save；flush 时机(hidden/pagehide)；key 规范 + 契约测试网
-- ⏳ M5(后续) / M6(另开任务)
+- ✅ **M3：命令/删除收敛** —— Selection/History/CommandRegistry/NodeFactory + command:delete/create-node/undo/redo + CanvasDemo 全走命令 + 最小右键菜单
+- ✅ **M4：Save 层完整 + key 规范 + 生命周期 flush + 契约测试网** —— keys.ts(SAVE_TYPES/scopedKey) + browserFlush(visibilitychange/pagehide) + saveContract.test(9 例四类互不干扰/切 adapter/落盘边界) —— 68 测试绿
+- ▶️ **下一步 = M5：连接内核（加固）**（runbook 第五刀 ★）—— 把 v1 useCanvasConnection(1300行)+ConnectionValidator 的拖线校验/环检测/去重/吸附**原样吸收**成 v2 连接服务 + 声明式 inputs/accepts/limit；用 test-only 可连节点验收，normalizeConnection 契约测试锁死
+- ⏳ M6(另开任务)
 
 ## 现在立刻该做的一件事
-**做 M4**：按 `docs/plan/canvas-core-v2-runbook.md` M4 段——把 SaveService 对齐 api.md §三(3.1)：四类 type 分桶 + flush 时机(hidden/pagehide) + key 规范 + 契约测试网(用 mock localStorage)。**验收**：四类数据互不干扰、可分别切 adapter；契约测试覆盖 save 边界；tsc + vitest 绿。
+**做 M5**：先读 `docs/plan/canvas-core-v2-api.md` §四(声明式 inputs/accepts/limit) + ADR-0001 行动项 3 + v1 `packages/canvas-core/src/composables/useCanvasConnection.ts`(1300 行)与 ConnectionValidator 的 canonical 逻辑，把严格校验**原样吸收**成 v2 连接服务(normalizeConnection 环检测/去重/吸附)，再写**契约测试**锁死 v1 规则。验收：连接测试全绿；用 test-only 可连节点验证声明式约束，不拿未迁 image/panorama 验收。
 
 ## 验证命令（每次改完跑，测试是唯一裁判）
 ```bash
