@@ -14,6 +14,7 @@
 import { Context } from '../core'
 import type { PluginModule } from '../core'
 import { NodeRegistry } from '../core/registry/nodeRegistry'
+import { ThemeRegistry } from '../core/registry/themeRegistry'
 import { SaveServiceImpl } from '../services/storage/SaveService'
 import { NodeStore } from '../services/nodeStore'
 import type { CanvasNode } from '../services/nodeStore'
@@ -35,6 +36,8 @@ export interface MiniCanvasOptions {
   coldPlugins?: PluginModule[]
   /** 节点展示注册表实例。宿主若需在 boot 前就 provide 给 Vue，可自建传入。 */
   nodeRegistry?: NodeRegistry
+  /** 主题/外观注册表实例（宿主提供默认 UI 用）。缺省内部新建。 */
+  themeRegistry?: ThemeRegistry
   /** 首次启动(存储为空)时生成默认画布；返回的节点会被 replaceAll。 */
   seedDefault?: () => CanvasNode[]
 }
@@ -46,6 +49,8 @@ export interface CanvasHostHandle {
   nodeStore: NodeStore
   /** 展示注册表：type→content/toolbar 段组件（供 Vue 层 provide/渲染） */
   nodeRegistry: NodeRegistry
+  /** 主题/外观注册表：slot→渲染器组件（edge/background/nodeShell 等），供 Vue 层装配 */
+  themeRegistry: ThemeRegistry
   selection: SelectionService
   command: CommandService
   history: HistoryService
@@ -93,6 +98,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
   ctx.inject('nodeRegistry', nodeRegistry)
 
+  const themeRegistry = opts.themeRegistry ?? new ThemeRegistry()
+  ctx.inject('themeRegistry', themeRegistry)
+
   const selection = new Selection()
   ctx.inject('selection', selection)
 
@@ -127,6 +135,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     save,
     nodeStore,
     nodeRegistry,
+    themeRegistry,
     selection,
     command,
     history,

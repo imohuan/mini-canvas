@@ -8,6 +8,9 @@ export type { NodePresentation, NodeSegment } from './registry/nodeRegistry'
 export { resolveSegment, hasContent, activeSegments } from './registry/nodeRenderer'
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'
+export { ThemeRegistry } from './registry/themeRegistry'
+export type { ThemeSlot, ThemePresentation } from './registry/themeRegistry'
+export { registerThemeSlot } from './registry/registerThemeSlot'
 export {
   Lifecycle,
 } from './types'

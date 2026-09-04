@@ -1,6 +1,7 @@
 import { Context } from '../core'
 import type { PluginModule } from '../core'
 import { NodeRegistry } from '../core/registry/nodeRegistry'
+import { ThemeRegistry } from '../core/registry/themeRegistry'
 import { SaveServiceImpl } from '../services/storage/SaveService'
 import { NodeStore } from '../services/nodeStore'
 import type { CanvasNode } from '../services/nodeStore'
@@ -25,6 +26,8 @@ export interface CanvasHost {
   nodeStore: NodeStore
   /** ctx.get('nodeRegistry') 的快捷访问（展示注册表：type→content/toolbar 段组件） */
   nodeRegistry: NodeRegistry
+  /** ctx.get('themeRegistry') 的快捷访问（主题槽位：edge/background/nodeShell 渲染器） */
+  themeRegistry: ThemeRegistry
   /** ctx.get('selection') 的快捷访问 */
   selection: SelectionService
   /** ctx.get('command') 的快捷访问 */
@@ -83,6 +86,9 @@ export async function bootCanvas(adapterOrOpts?: StorageAdapter | BootOptions): 
   const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
   ctx.inject('nodeRegistry', nodeRegistry)
 
+  const themeRegistry = new ThemeRegistry()
+  ctx.inject('themeRegistry', themeRegistry)
+
   const selection = new Selection()
   ctx.inject('selection', selection)
 
@@ -121,6 +127,7 @@ export async function bootCanvas(adapterOrOpts?: StorageAdapter | BootOptions): 
     save,
     nodeStore,
     nodeRegistry,
+    themeRegistry,
     selection,
     command,
     history,
