@@ -22,6 +22,52 @@ const groupLabels: Record<ShortcutGroup, string> = {
   plugin: '插件',
 }
 
+/**
+ * 系统/浏览器强保留键集合。
+ *
+ * 这些键通常由操作系统或浏览器原生占用（标签页管理、查找、打印、窗口导航等），
+ * 页面里的 JS 大多拦不住或会与原生行为并存。把画布快捷键绑到这些键上会跟系统冲突，
+ * 因此在这些条目旁显示黄色软提醒。格式为已规范化的小写、无空格键位串。
+ *
+ * 注：ctrl+f 已包含在内（会与浏览器页内查找并存冲突）。
+ */
+const SYSTEM_RESERVED_KEYS = new Set<string>([
+  // 浏览器标签页 / 窗口管理（JS 基本拦不住）
+  'ctrl+t',
+  'ctrl+w',
+  'ctrl+shift+t',
+  'ctrl+shift+w',
+  'ctrl+tab',
+  'ctrl+shift+tab',
+  'ctrl+1',
+  'ctrl+2',
+  'ctrl+3',
+  'ctrl+4',
+  'ctrl+5',
+  'ctrl+6',
+  'ctrl+7',
+  'ctrl+8',
+  'ctrl+9',
+  'ctrl+n',
+  'ctrl+shift+n',
+  // 浏览器页内查找 / 打印 / 保存（多数浏览器会与页面并存或优先响应）
+  'ctrl+f',
+  'ctrl+p',
+  'ctrl+s',
+  'ctrl+shift+s',
+  // 通用系统级导航
+  'ctrl+l',
+  'ctrl+r',
+  'ctrl+shift+r',
+])
+
+/** 判断一个快捷键键位是否命中了系统/浏览器强保留键 */
+function isSystemReservedKey(keys: string): boolean {
+  if (!keys) return false
+  const normalized = keys.toLowerCase().replace(/\s+/g, '')
+  return SYSTEM_RESERVED_KEYS.has(normalized)
+}
+
 /** 内置快捷键的副标题 — 与右键菜单的 description 文案风格一致 */
 const commandDescriptions: Record<string, string> = {
   '快捷键帮助': '查看与重映射所有快捷键',
@@ -78,6 +124,7 @@ function decorateItem(it: ShortcutHelpItem) {
   return {
     ...it,
     description: commandDescriptions[it.command] || '',
+    systemReserved: isSystemReservedKey(it.keys),
   }
 }
 
@@ -267,6 +314,11 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                       <span v-if="item.description" class="canvas-menu-description">{{ item.description }}</span>
                     </span>
                     <ShortcutKeys :keys="item.keys" :id-prefix="`row-${item.id}`" />
+                    <span
+                      v-if="item.systemReserved"
+                      class="canvas-menu-badge sys-reserved-badge"
+                      title="该键位与系统/浏览器快捷键冲突（如 ctrl+f 会同时触发浏览器查找），按此键可能无效或触发原生行为"
+                    >⚠ 系统冲突</span>
                     <button
                       class="canvas-menu-badge remap-badge"
                       :class="{ 'is-open': remappingId === item.id }"
@@ -277,11 +329,9 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
                     </button>
                   </div>
 
-                  <Transition name="remap-expand">
-                    <div v-if="remappingId === item.id" class="remap-slot" @click.stop>
+                  <div v-if="remappingId === item.id" class="remap-slot" @click.stop>
                       <RemapPanel :item="item" @close="closeRemap" />
                     </div>
-                  </Transition>
                 </div>
               </template>
             </div>
@@ -653,31 +703,39 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
   color: #0e7490;
 }
 
-/* 展开槽位：head 下方的白底卡区。
-   让 RemapPanel 自带圆角与左右内缩，嵌在 item 的圆角盒内 */
+/* 系统/浏览器保留键的黄色软提醒徽章（参照 remap-badge 胶囊样式，改警示配色） */
+.sys-reserved-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  cursor: default;
+}
+.sys-reserved-badge:hover {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+/* 展开槽位：head 下方的白底卡区（占位） */
 .remap-slot {
   margin: 6px 0 0;
 }
 
-/* 展开/收起过渡 */
+/* 展开/收起过渡：基于 transform/opacity 淡入淡出 */
 .remap-expand-enter-active,
 .remap-expand-leave-active {
   transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
   overflow: hidden;
 }
 
-.remap-expand-enter-from,
+.remap-expand-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .remap-expand-leave-to {
   opacity: 0;
   transform: translateY(-4px);
-  max-height: 0;
-}
-
-.remap-expand-enter-to,
-.remap-expand-leave-from {
-  opacity: 1;
-  transform: translateY(0);
-  max-height: 320px;
 }
 
 .no-results {
