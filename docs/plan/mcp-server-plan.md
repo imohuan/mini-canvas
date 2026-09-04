@@ -236,7 +236,12 @@ packages/canvas-core/           # 小改（前端侧）
 
 ---
 
-## 十、MCP Tool 清单（草案）
+## 十、MCP Tool 清单（草案，已废弃 — 最终收敛见 ai-backend-plugin-plan.md「定稿」与 README）
+
+> ⚠️ 本节为早期草案，已被开发后期「精简 MCP 工具面」决策取代。实际交付只有 9 个工具：
+> `canvas.create_canvas/list_canvases/delete_canvas/get` + `canvas.batch_nodes` + `canvas.batch_edges`
+> + `create_node`（预览/生成双模式）+ `node.status` + `models.list`。
+> 节点/连线的单点增删改、task.create/task.status、定位(set_viewport)、持久化(save/load/export_json)等均未按此草案交付。
 
 **画布/任务**：`canvas.create_canvas(taskId,name?)`、`canvas.list_canvases()`、`canvas.get_canvas(taskId)`、`canvas.delete_canvas(taskId)`
 **节点**：`canvas.create_node`、`canvas.list_nodes`、`canvas.get_node`、`canvas.update_node`、`canvas.delete_node`
