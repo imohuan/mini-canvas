@@ -6,15 +6,16 @@
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 
 ## 当前进度（哪个里程碑）
-- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 47 测试绿
+- ✅ M0：M1 内核(Scope/Context/topo) + tracer bullet 全链 demo —— 59 测试绿
 - ✅ runbook 修订 + 核心节点件行为契约金标准已产出(见下方契约锚点)
-- ✅ **M1(浏览器)最小闭环骨架**：vite + localStorageAdapter + image 插件 + NodeStore.removeNode + CanvasDemo(text+image 能拖能连能删、双击编辑、刷新恢复)
-- ✅ **M2：NodeRenderer + 最小 BaseNode 壳 + node:{type}:* slot** —— core/registry(NodeRegistry 纯逻辑无 Vue) + nodeRenderer 解析 + components/BaseNode.vue(连接点+content/title/top/bottom 段路由)，text/image 改走壳渲染 —— 47 测试绿
-- ▶️ **下一步 = M3：右键菜单/命令/删除收敛**（runbook 第三刀）—— command:delete(删选中+记历史最小版) + createNodeAt(type,pos) 工厂 + 菜单/命令注册最小集
-- ⏳ M4~M5(后续) / M6(另开任务)
+- ✅ **M1(浏览器)最小闭环骨架**：vite + localStorageAdapter + image 插件 + NodeStore.removeNode + CanvasDemo
+- ✅ **M2：NodeRenderer + 最小 BaseNode 壳 + node:{type}:* slot** —— core/registry(NodeRegistry 纯逻辑无 Vue) + nodeRenderer 解析 + components/BaseNode.vue
+- ✅ **M3：命令/删除收敛** —— Selection/History/CommandRegistry/NodeFactory(纯逻辑无 Vue) + command:delete(删选中记历史)/create-node/undo/redo + CanvasDemo 删除/新建全走命令 + 最小右键菜单 —— 59 测试绿
+- ▶️ **下一步 = M4：Save 层完整 + 行为契约**（runbook 第四刀）—— 四类 type(config/canvas/resource/shortcut) 全走 ctx.save；flush 时机(hidden/pagehide)；key 规范 + 契约测试网
+- ⏳ M5(后续) / M6(另开任务)
 
 ## 现在立刻该做的一件事
-**做 M3**：按 `docs/plan/canvas-core-v2-runbook.md` M3 段——内核 `command:delete`(删选中+记历史最小版)、`createNodeAt(type,pos)` 工厂、菜单/命令注册最小集(能在画布上从菜单建 text/image)。**验收**：多选删除经统一命令；v1 死代码(MenuRegistry.resolveMenuItems 等)不引入；tsc + vitest 绿。
+**做 M4**：按 `docs/plan/canvas-core-v2-runbook.md` M4 段——把 SaveService 对齐 api.md §三(3.1)：四类 type 分桶 + flush 时机(hidden/pagehide) + key 规范 + 契约测试网(用 mock localStorage)。**验收**：四类数据互不干扰、可分别切 adapter；契约测试覆盖 save 边界；tsc + vitest 绿。
 
 ## 验证命令（每次改完跑，测试是唯一裁判）
 ```bash
