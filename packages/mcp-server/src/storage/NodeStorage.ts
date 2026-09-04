@@ -190,11 +190,29 @@ export class NodeStorage {
     return { assetId, stored }
   }
 
-  /** 读取画布资源字节（assetId 或 stored 名均可；不存在返回 null） */
-  async readResource(canvasId: string, assetId: string): Promise<Buffer | null> {
-    const file = path.join(this.assetDir(canvasId), path.basename(assetId))
+  /** 把 assetId（裸 hash 或带扩展 stored 名）解析成磁盘上的真实文件名；不存在返回 null */
+  async resolveResourceName(canvasId: string, assetId: string): Promise<string | null> {
+    const dir = this.assetDir(canvasId)
+    const clean = path.basename(assetId)
     try {
-      return await fs.readFile(file)
+      const entries = await fs.readdir(dir)
+      // 先按 hash 前缀（内容寻址，扩展名在文件名里）
+      const hit = entries.find((f) => f.startsWith(clean) && !f.startsWith(clean + '-'))
+      if (hit) return hit
+      // 带扩展名的精确文件名
+      if (entries.includes(clean)) return clean
+      return null
+    } catch {
+      return null
+    }
+  }
+
+  /** 读取画布资源字节（assetId 裸 hash 或带扩展 stored 名均可；不存在返回 null） */
+  async readResource(canvasId: string, assetId: string): Promise<Buffer | null> {
+    const name = await this.resolveResourceName(canvasId, assetId)
+    if (!name) return null
+    try {
+      return await fs.readFile(path.join(this.assetDir(canvasId), name))
     } catch {
       return null
     }

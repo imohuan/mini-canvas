@@ -255,12 +255,14 @@ export class CanvasHttpServer {
       }
     })
 
-    /** 读取画布资源字节：GET /api/canvases/:id/resources/:assetId */
+    /** 读取画布资源字节：GET /api/canvases/:id/resources/:assetId  (assetId 可裸 hash 或带扩展名) */
     this.app.get('/api/canvases/:id/resources/:assetId', async (c) => {
       const { id, assetId } = c.req.param()
-      const buf = await this.storage.readResource(id, assetId)
+      const name = await this.storage.resolveResourceName(id, assetId)
+      if (!name) return c.json({ ok: false, error: '资源不存在' }, 404)
+      const buf = await this.storage.readResource(id, name)
       if (!buf) return c.json({ ok: false, error: '资源不存在' }, 404)
-      const ext = path.extname(assetId).toLowerCase()
+      const ext = path.extname(name).toLowerCase()
       return c.body(new Uint8Array(buf), 200, {
         'content-type': EXT_MIME[ext] ?? 'application/octet-stream',
         'cache-control': 'public, max-age=31536000, immutable', // 内容寻址，可永久缓存
