@@ -36,6 +36,8 @@ export interface NodeStoreService {
   updateNodeData(id: string, data: Record<string, unknown>): void
   /** 取某节点 */
   getNode(id: string): CanvasNode | undefined
+  /** 删除某节点（返回是否删到） */
+  removeNode(id: string): boolean
   /** 用持久化数据整体回填（刷新恢复） */
   replaceAll(nodes: CanvasNode[]): void
 }
@@ -80,6 +82,10 @@ export class NodeStore implements NodeStoreService {
 
   getNode(id: string): CanvasNode | undefined {
     return this.nodes.get(id)
+  }
+
+  removeNode(id: string): boolean {
+    return this.nodes.delete(id)
   }
 
   replaceAll(nodes: CanvasNode[]): void {

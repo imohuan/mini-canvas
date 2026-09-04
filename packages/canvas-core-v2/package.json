@@ -14,16 +14,18 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "vite"
   },
-  "dependencies": {},
-  "devDependencies": {
-    "typescript": "~6.0.2",
-    "vitest": "^3.0.0"
-  },
-  "peerDependencies": {
+  "dependencies": {
+    "@vue-flow/core": "^1.48.2",
     "pinia": "^3.0.4",
-    "vue": "^3.5.34",
-    "@vue-flow/core": "^1.48.2"
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^3.0.0"
   }
 }

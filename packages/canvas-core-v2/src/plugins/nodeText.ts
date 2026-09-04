@@ -2,6 +2,14 @@ import type { PluginModule } from '../core'
 import type { NodeStoreService } from '../services/nodeStore'
 import type { SaveService } from '../services/storage/types'
 
+/** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用） */
+export interface TextNodeService {
+  /** 在画布上放一个文本节点，返回短 id */
+  addTextNode(position: { x: number; y: number }): string
+  /** 内容组件编辑完调用：改 text 并立即落盘(经 save) */
+  editText(id: string, text: string): void
+}
+
 /**
  * text 插件 —— M4 最小节点插件，验证"插件经 ctx.get 用服务"。
  *
@@ -34,6 +42,6 @@ export const nodeTextPlugin: PluginModule = {
         nodeStore.updateNodeData(id, { text })
         ctx.get<SaveService>('save').set('graph', nodeStore.getNodes(), 'canvas')
       },
-    })
+    } satisfies TextNodeService)
   },
 }
