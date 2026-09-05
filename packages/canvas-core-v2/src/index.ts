@@ -16,7 +16,6 @@ export * from './vueFlowBridge'
 export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
 export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
-export { canvasCommandsPlugin } from './plugins/canvasCommands'
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
 export type {

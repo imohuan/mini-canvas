@@ -1,19 +1,24 @@
 /**
- * canvasCommands —— 画布级最小命令集（内核命令插件，无 Vue，可单测）。
+ * plugin-canvas-commands —— 画布级最小命令集插件（dsh 范式：name/setup 一段式，纯逻辑无 Vue）。
+ *
+ * 原内核内置插件，抽成独立插件包(见 docs/plan/canvas-host-component-plan.md 方向 A)：与 text/image/theme
+ * 等业务插件一致，由宿主在 createMiniCanvasHost/CanvasHost 的 plugins 里显式装配。
  *
  * 收敛（runbook M3 + api.md §3.2/3.3）：
- * - 删除：统一 `command:delete`（读 selection 删选中，包进 history 记历史），取代散落的 onNodeClick 删/Delete 键各写一套。
+ * - 删除：统一 `command:delete`（读 selection 删选中，包进 history 记历史），取代散落的各处手写删除。
  * - 创建：统一 `command:create-node`（经 nodeFactory.create），取代各处各自 add* 建节点。
  * - 撤销/重做：`command:undo` / `command:redo`（调 history）。
  * 缺服务(selection/history/nodeStore/save/nodeFactory/command) 时 setup 抛错（契约：不静默）。
  */
-import type { PluginModule } from '../core'
-import type { NodeStoreService } from '../services/nodeStore'
-import type { SaveService } from '../services/storage/types'
-import type { NodeFactoryService } from '../services/nodeFactory'
-import type { SelectionService } from '../services/selection'
-import type { HistoryService } from '../services/history'
-import type { CommandService } from '../services/command'
+import type {
+  PluginModule,
+  NodeStoreService,
+  SaveService,
+  NodeFactoryService,
+  SelectionService,
+  HistoryService,
+  CommandService,
+} from '@mini-canvas/canvas-core-v2'
 
 export const canvasCommandsPlugin: PluginModule = {
   name: 'commands',

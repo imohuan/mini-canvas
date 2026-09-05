@@ -15,7 +15,7 @@ import CanvasHost from '../src/host/CanvasHost.vue'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '../src/plugins/canvasCommands'
+import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { DEFAULT_EDGE_VISUAL, DEFAULT_HANDLE_VISUAL } from '../src/host/canvasHostCore'
 import SettingsPanel from './SettingsPanel.vue'
 

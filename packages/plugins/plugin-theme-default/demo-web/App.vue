@@ -8,7 +8,7 @@ import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
 import { themeDefaultPlugin } from '../src/index'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/canvas-core-v2'
+import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 const sampleImg = () =>
   'data:image/svg+xml;utf8,' +
