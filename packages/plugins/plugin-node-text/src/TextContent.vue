@@ -1,20 +1,21 @@
 <script setup lang="ts">
 // TextContent —— text 节点 content 组件（随 plugin-node-text 插件包发布，经 BaseNode 壳的 content 段渲染）
-// 职责：展示文本；双击进入编辑，失焦/回车把改动经 ctx.get('text').editText 写回内核并落盘。
+// 职责：展示文本；双击进入编辑，失焦/回车把改动经 ctx.text.editText 写回内核并落盘。
 // 依赖方向：只 import 渲染层的 HOST_KEY 令牌(渲染宿主 provide/inject)，不反向依赖 demo-web。
 import { inject, ref, nextTick, onBeforeUnmount } from 'vue'
 import { HOST_KEY } from '@mini-canvas/canvas-render'
-import type { TextNodeService } from './nodeTextPlugin'
+import type { Context } from '@mini-canvas/canvas-base'
 
 const props = defineProps<{ id: string; data: { text?: string } }>()
 
-// 宿主句柄经 HOST_KEY(渲染宿主 provide/inject 令牌)获取，再经 host.ctx.get('text') 调插件服务
+// 宿主句柄经 HOST_KEY(渲染宿主 provide/inject 令牌)获取，再经 host.ctx.text 直访插件服务。
+// ctx.text 的类型来自本插件对 Context 的 declare module 增强(nodeTextPlugin.ts)，无需手写 TextNodeService 桥。
 const hostRef = inject(HOST_KEY)
-function textService(): TextNodeService {
+function textService() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const h = hostRef?.value as any
+  const h = hostRef?.value as { ctx: Context } | undefined
   if (!h) throw new Error('[TextContent] 宿主未就绪（boot 未完成）')
-  return h.ctx.get<TextNodeService>('text')
+  return h.ctx.text
 }
 
 const editing = ref(false)

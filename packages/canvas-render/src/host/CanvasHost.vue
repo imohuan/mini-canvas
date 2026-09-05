@@ -185,14 +185,14 @@ const uiOverlay = ref<Array<{ id: string; order: number; component: unknown }>>(
 function syncUiOverlay(): void {
   const h = hostRef.value
   if (!h) return
-  let list: Array<{ id: string; order: number; value: unknown }> = []
+  // 走 ctx.slots 能力收口（occupants 已返回 {id,order,component}），不经手抄 get('slots').list 再 map
+  let list: Array<{ id: string; order: number; component: unknown }> = []
   try {
-    const slots = h.ctx.get<{ list(slot: string): Array<{ id: string; order: number; value: unknown }> }>('slots')
-    list = slots.list(overlaySlotName)
+    list = h.ctx.slots.occupants(overlaySlotName) as Array<{ id: string; order: number; component: unknown }>
   } catch {
     list = []
   }
-  uiOverlay.value = list.map((e) => ({ id: e.id, order: e.order, component: markRaw(e.value as object) }))
+  uiOverlay.value = list.map((e) => ({ id: e.id, order: e.order, component: markRaw(e.component as object) }))
 }
 
 // 订阅 nodeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
