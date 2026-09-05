@@ -66,6 +66,30 @@ let disposeSettingsBind: (() => void) | undefined
 function onReady(): void {
   booted.value = true
   bindThemeSettings()
+  bindManagerDemo()
+}
+
+// —— 目标 D 演示：把统一安装句柄 manager 挂到 window + 页面角标显示已装插件(整链可操作) ——
+const demoPlugins = ref<string[]>([])
+function bindManagerDemo(): void {
+  const m = hostEl.value?.manager
+  if (!m) return
+  // 挂到 window.MiniCanvasManager，浏览器 console 可手动装/卸/重载验证整链
+  const w = globalThis as Record<string, unknown>
+  w['MiniCanvasManager'] = m
+  refreshManagerList()
+}
+function refreshManagerList(): void {
+  demoPlugins.value = (hostEl.value?.manager?.list() ?? []).map((p) => p.name)
+}
+async function demoUninstall(name: string): Promise<void> {
+  await hostEl.value?.manager?.uninstall(name)
+  refreshManagerList()
+}
+async function demoReloadTheme(): Promise<void> {
+  // 演示换版本：theme-default 重载(用同模块) → manager.reload 卸旧装新
+  await hostEl.value?.manager?.reload('theme-default', themeDefaultPlugin)
+  refreshManagerList()
 }
 
 /**
@@ -154,6 +178,19 @@ onBeforeUnmount(unbindThemeSettings)
          固定浮层，叠在右下角(与左上 debug 面板区分) -->
     <div v-if="settingsStore" class="theme-settings-dock">
       <PluginSettingsPanel :settings="settingsStore" />
+    </div>
+
+    <!-- 目标 D 演示：插件管理器 dock(列出已装 + 卸载/重载 theme-default 换版本) -->
+    <div v-if="booted && demoPlugins.length" class="pm-dock">
+      <div class="pm-hd">插件管理器 (manager)</div>
+      <div v-for="n in demoPlugins" :key="n" class="pm-row">
+        <span class="pm-name">{{ n }}</span>
+        <button class="pm-btn" @click="demoUninstall(n)">卸</button>
+      </div>
+      <div class="pm-actions">
+        <button class="pm-btn" @click="demoReloadTheme">重载 theme-default(换版本)</button>
+      </div>
+      <div class="pm-hint">window.MiniCanvasManager 亦可在控制台装/卸/重载</div>
     </div>
 
     <div class="canvas-wrap">
@@ -264,5 +301,64 @@ onBeforeUnmount(unbindThemeSettings)
 }
 .theme-settings-dock:empty {
   display: none;
+}
+.pm-dock {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  width: 250px;
+  background: rgba(17, 24, 39, 0.92);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 10px 12px;
+  z-index: 890;
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+  font-size: 12px;
+}
+.pm-hd {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #fff;
+}
+.pm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+}
+.pm-name {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pm-btn {
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid #4b5563;
+  border-radius: 5px;
+  background: #374151;
+  color: #e5e7eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pm-btn:hover {
+  background: #4b5563;
+}
+.pm-actions {
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 6px;
+}
+.pm-hint {
+  margin-top: 6px;
+  color: #9ca3af;
+  font-size: 11px;
 }
 </style>
