@@ -1,9 +1,11 @@
 # 🎯 目标文档 · mini-canvas 插件系统 Cordis 化（目标驱动文档）
 
 > ## ✅ 完成态（2026-09-05）
-> P1–P8 全部落地，末尾"验收总清单"已全勾。终审（PASS 有保留，无必须修缺口）报告在 `docs/tmp/plugin-system-review/review-v3-final.md`。
+> P1–P8 全部落地，末尾"验收总清单"已全勾。终审（独立 run_subagent 严格审核，PASS 有保留、无必须修缺口）已通过；
+> 红线零违规（内核/render/base/plugins 无 @deepseek-ai/schemastery/cosmokit/standard-schema/vendor-cordis import，内核零 Vue）。
 > 全量验证：内核 vitest 196、渲染 37 全绿；内核 tsc EXIT=0；canvas-base/render/4 插件 typecheck 全 PASS；demo vite build 零错。
 > 浏览器端到端人工点验受环境限制未做（demo build + 运行时链路源码核验已覆盖）——需补时在能起浏览器的环境跑 demo :5199 人工点验即可。
+> 注：终审过程报告原在 docs/tmp/plugin-system-review/，已随 docs/tmp 中间文档按用户要求清理。
 
 > 工作区：`D:/Code/Git/mini-canvas`。分支：feat/cordis-plugin-system（原地 commit，禁切/建分支，LF，只动本目标文件，不碰仓库根 src/）。
 > 开工说明：每次开工把本文件读给/贴给 AI。照它做，别自己发挥，直到末尾"验收总清单"全勾才结束。
