@@ -9,11 +9,10 @@ import { resolveConfig, optionValues, selectOptionEntry } from './configSchema'
 import type { ConfigSchema, ConfigField } from './configSchema'
 import type { SettingSchema } from './settingsStore'
 import type {
-  CanvasEventMap,
   Disposable,
   EffectFn,
-  EventListener,
-  EventName,
+  EventArgsFor,
+  EventHandlerFor,
   PluginCapabilities,
   PluginModule,
   PluginScope,
@@ -85,7 +84,13 @@ function toSettingSchema(field: ConfigField): SettingSchema {
  * - 服务注入：inject / get
  * - 类型化事件：on / once / emit（单源）
  * - 作用域副作用：effect
+ *
+ * 类型增强缝（cordis ch3 声明合并）：作者 declare module '@mini-canvas/canvas-core-v2'
+ * { interface Context { greeter: GreeterService } } 与下方 class Context 同名 interface 合并，
+ * 使 `ctx.greeter` 在本文件声明的 Context 类型上也可见（运行时靠服务解析 Proxy / ctx.get 提供）。
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface Context {}
 export class Context implements PluginScope {
   readonly bus: EventBus
   private readonly rootScope = new Scope()
@@ -462,37 +467,46 @@ export class Context implements PluginScope {
   }
 
   // ==================== 事件 ====================
+  // 类型化：事件名在 Events/CanvasEventMap 里则 on/emit 参数有类型（作者 declare module 扩展 Events 即得
+  // 多参类型提示）；否则松类型。实现统一 rest-arg 走 EventBus（单 payload 也当多参的第一参传给 on/emit）。
 
+  on<K extends string>(name: K, handler: EventHandlerFor<K>): Disposable
   on(name: string, handler: (...args: any[]) => any): Disposable {
     const off = this.bus.on(name, handler)
     return { dispose: off }
   }
 
+  once<K extends string>(name: K, handler: EventHandlerFor<K>): Disposable
   once(name: string, handler: (...args: any[]) => any): Disposable {
     const off = this.bus.once(name, handler)
     return { dispose: off }
   }
 
+  emit<K extends string>(name: K, ...args: EventArgsFor<K>): void
   emit(name: string, ...args: any[]): void {
     this.bus.emit(name, ...args)
   }
 
   /** 并发跑所有监听并一同等待 */
+  parallel<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<void>
   parallel(name: string, ...args: any[]): Promise<void> {
     return this.bus.parallel(name, ...args)
   }
 
   /** 顺序 await，第一个 bail 值胜出并停止 */
+  serial<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<any>
   serial(name: string, ...args: any[]): Promise<any> {
     return this.bus.serial(name, ...args)
   }
 
   /** serial 的同步版（同步短路） */
+  bail<K extends string>(name: K, ...args: EventArgsFor<K>): any
   bail(name: string, ...args: any[]): any {
     return this.bus.bail(name, ...args)
   }
 
   /** 环绕中间件 */
+  waterfall<K extends string>(name: K, ...args: EventArgsFor<K>): any
   waterfall(name: string, ...args: any[]): any {
     return this.bus.waterfall(name, ...args)
   }

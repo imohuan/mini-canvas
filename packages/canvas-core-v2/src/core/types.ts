@@ -41,6 +41,29 @@ export interface CanvasEventMap {
 export type EventName = keyof CanvasEventMap & string
 
 /**
+ * 全局"事件表"（cordis ch4 声明合并缝）：作者 declare module 扩展：
+ * ```ts
+ * declare module '@mini-canvas/canvas-core-v2' {
+ *   interface Events { 'stats/report'(name: string, count: number): void }
+ * }
+ * ```
+ * 每个键=事件名，其值=监听函数签名（参数即事件参数）。内置内核事件也在此列出
+ * （与 CanvasEventMap 同键，监听签名=单 payload 形态），保证 `keyof Events` 非空——
+ * ctx.on/once/emit/parallel/serial/bail/waterfall 据此做 K extends keyof Events 的类型化重载；
+ * 声明合并补的条目（如 'stats/report'）自动获得参数类型提示。
+ */
+export interface Events {
+  /** 内核就绪（所有插件激活完毕） */
+  'ctx:ready'(payload: { plugins: string[] }): void
+  /** 插件安装完成 */
+  'ctx:plugin-installed'(payload: { name: string }): void
+  /** 插件卸载完成 */
+  'ctx:plugin-uninstalled'(payload: { name: string }): void
+  /** 生命周期状态变化 */
+  'ctx:lifecycle-change'(payload: { name: string; lifecycle: Lifecycle }): void
+}
+
+/**
  * 服务注册表类型：插件可 declare module 扩展 `interface Services { ... }`
  * 以便 ctx.get<Services['foo']>('foo') 拿到类型。
  */
@@ -109,17 +132,39 @@ export interface PluginCapabilities {
  * - get/emit 是读操作 / 广播，不登记。
  * - nodes/theme/commands/slots 是注册收口（见 PluginCapabilities）。
  */
+/**
+ * 事件监听回调按事件名解析：
+ * - K 在 `interface Events` 里（含内置与作者 declare module 扩展）→ Events[K]（监听函数签名，参数即事件参数）
+ * - K 仅在 CanvasEventMap（单 payload 对象事件，向后兼容）→ EventListener<K>
+ * - 否则（未登记任意事件名）→ 松 (...args) => any
+ */
+export type EventHandlerFor<K extends string> = K extends keyof Events
+  ? Events[K]
+  : K extends EventName
+    ? EventListener<K & EventName>
+    : (...args: any[]) => any
+
+/** 事件分发参数按事件名解析（emit/parallel/serial/bail/waterfall 的 rest 参） */
+export type EventArgsFor<K extends string> = K extends keyof Events
+  ? Parameters<Events[K]>
+  : K extends EventName
+    ? [payload: CanvasEventMap[K & EventName]]
+    : any[]
+
+/**
+ * PluginScope —— 单个插件在 setup(ctx) 里拿到的"能力视图"。
+ *
+ * 它把根 Context 的能力暴露给插件，但**所有副作用自动登记进本插件自己的 Scope**：
+ * - on/effect/inject 登记进本插件 scope → 插件卸载(scope.dispose)即自动清光。
+ * - get/emit 是读操作 / 广播，不登记。
+ * - nodes/theme/commands/slots 是注册收口（见 PluginCapabilities）。
+ */
 export interface PluginScope extends PluginCapabilities {
-  /** 订阅事件（自动回收）——CanvasEventMap 事件 */
-  on<K extends EventName>(name: K, handler: EventListener<K>): Disposable
-  /** 订阅扩展事件（cordis 多参事件名，非 CanvasEventMap） */
-  on(name: string, handler: (...args: any[]) => any): Disposable
-  once<K extends EventName>(name: K, handler: EventListener<K>): Disposable
-  once(name: string, handler: (...args: any[]) => any): Disposable
-  /** 广播事件（单源，不碰 window）；cordis 多参事件经扩展事件名注册 */
-  emit<K extends EventName>(name: K, payload: CanvasEventMap[K]): void
-  /** 广播扩展事件（cordis 多参事件名，非 CanvasEventMap） */
-  emit(name: string, ...args: any[]): void
+  /** 订阅事件（自动回收）。事件名在 Events/CanvasEventMap 里则监听参数有类型；否则松类型。 */
+  on<K extends string>(name: K, handler: EventHandlerFor<K>): Disposable
+  once<K extends string>(name: K, handler: EventHandlerFor<K>): Disposable
+  /** 广播事件（单源，不碰 window）。多参/单 payload 视事件表形态而定。 */
+  emit<K extends string>(name: K, ...args: EventArgsFor<K>): void
   /** 副作用（包 timer/watch/DOM，返回 cleanup 自动回收） */
   effect(fn: EffectFn): Disposable
   /** 提供服务（上架）；撤销自动登记进本插件 scope */
@@ -137,13 +182,13 @@ export interface PluginScope extends PluginCapabilities {
 
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */
-  parallel<K extends string>(name: K, ...args: any[]): Promise<void>
+  parallel<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<void>
   /** 顺序 await，第一个 bail 值胜出并停止 */
-  serial<K extends string>(name: K, ...args: any[]): Promise<any>
+  serial<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<any>
   /** serial 的同步版（同步短路） */
-  bail<K extends string>(name: K, ...args: any[]): any
+  bail<K extends string>(name: K, ...args: EventArgsFor<K>): any
   /** 环绕中间件：监听器可转写 next() 返回值或短路 */
-  waterfall<K extends string>(name: K, ...args: any[]): any
+  waterfall<K extends string>(name: K, ...args: EventArgsFor<K>): any
 }
 
 /**
