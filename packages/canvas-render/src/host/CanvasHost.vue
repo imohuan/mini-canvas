@@ -141,10 +141,18 @@ provide(EDGE_VISUAL_KEY, edgeVisualToProvide)
 provide(CANVAS_PARAMS_KEY, handleToProvide)
 
 // 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
-// 以 ReadonlySet 形状暴露（消费方只读）；内部整体替换新集合以触发响应式。
+// 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
+// 点击/清空/删除/撤销只写内核 selection，此处经订阅 onChange 整体替换新集合以触发响应式。
 const selectedIds = ref<ReadonlySet<string>>(new Set())
 const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
 provide(EDGE_SELECTION_KEY, { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel })
+
+/** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
+function syncSelected(): void {
+  const h = hostRef.value
+  if (!h) return
+  selectedIds.value = new Set(h.selection.ids)
+}
 
 // ==================== 渲染态（VueFlow 消费）====================
 
@@ -205,6 +213,7 @@ function syncUiOverlay(): void {
 
 // 订阅 nodeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
 let unsubStore: (() => void) | undefined
+let unsubSel: (() => void) | undefined
 
 function syncFromStore(): void {
   const h = hostRef.value
@@ -232,14 +241,12 @@ function onNodeDragStop(e: NodeDragEvent): void {
 }
 
 function onNodeClick(e: NodeMouseEvent): void {
-  const h = hostRef.value
-  selectedIds.value = new Set([e.node.id])
-  h?.selection.set(selectedIds.value)
+  // 只写内核 Selection(单源)；selectedIds 经订阅自动跟随，不再手工成对更新
+  hostRef.value?.selection.set(new Set([e.node.id]))
 }
 
 function onPaneClick(): void {
-  selectedIds.value = new Set()
-  hostRef.value?.selection.clear()
+  hostRef.value?.selection.clear() // 订阅自动清 selectedIds
 }
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
@@ -271,17 +278,15 @@ function onKeydown(e: KeyboardEvent): void {
   if (!h) return
   if (e.key === 'Delete') {
     e.preventDefault()
-    const ids = selectedIds.value
+    const ids = h.selection.ids // 内核 Selection 单源(点击/清空已写它)
     if (ids.size > 0) {
-      h.selection.set(ids)
-      h.command.execute('command:delete')
-      selectedIds.value = new Set()
+      h.command.execute('command:delete') // 内部清内核 selection → 订阅自动清 selectedIds 高亮
       syncFromStore()
     }
   } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
     e.preventDefault()
     h.command.execute(e.shiftKey ? 'command:redo' : 'command:undo')
-    selectedIds.value = new Set()
+    h.selection.clear() // 撤销后取消选中(订阅自动清 selectedIds)
     syncFromStore()
   }
 }
@@ -319,6 +324,10 @@ onMounted(async () => {
 
     // 订阅 store 变化自动刷渲染态
     unsubStore = host.nodeStore.subscribe(syncFromStore)
+
+    // 订阅内核 Selection(选中单源)：点击/删除/撤销等只写内核，这里投影给 CustomEdge 高亮
+    unsubSel = host.selection.onChange(syncSelected)
+    syncSelected() // 初始同步一次(seed 恢复不触发 onChange)
 
     // 主题 + nodeTypes 装配
     applyTheme()
@@ -395,6 +404,7 @@ defineExpose({
 
 onBeforeUnmount(() => {
   unsubStore?.()
+  unsubSel?.()
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('visibilitychange', onVisibilityChange)

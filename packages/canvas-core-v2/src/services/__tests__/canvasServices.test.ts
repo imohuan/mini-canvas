@@ -19,6 +19,30 @@ describe('Selection（选中集服务）', () => {
     expect(s.size).toBe(0)
     expect([...s.ids]).toEqual([])
   })
+
+  it('onChange 订阅在 set/add/remove/clear 后触发；取消订阅后不再触发', () => {
+    const s = new Selection()
+    let calls = 0
+    const off = s.onChange(() => (calls += 1))
+    s.set(['1']) // +1
+    s.add('2') // +1
+    s.remove('1') // +1
+    s.clear() // +1
+    expect(calls).toBe(4)
+    off()
+    s.set(['9'])
+    expect(calls).toBe(4) // 取消后不再触发
+  })
+
+  it('onChange 触发时 ids 已是最新(供派生 ref 读快照)', () => {
+    const s = new Selection()
+    let seen: ReadonlySet<string> | null = null
+    s.onChange(() => (seen = s.ids))
+    s.set(['a', 'b'])
+    expect(seen && [...seen].sort()).toEqual(['a', 'b'])
+    s.clear()
+    expect(seen && seen.size).toBe(0)
+  })
 })
 
 /** 用可写数组当"被记录状态"，验证 history 快照语义（独立于 nodeStore） */
