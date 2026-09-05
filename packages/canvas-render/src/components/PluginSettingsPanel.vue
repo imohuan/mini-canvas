@@ -10,6 +10,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { SettingSchema } from './settingsPanelTypes'
 import type { SettingsPanelSource } from './settingsPanelTypes'
 import type { SettingEntry } from '@mini-canvas/canvas-core-v2'
+import { createCoalescer } from '../utils/coalesce'
 
 /** 面板消费的最小 settings 接口（与内核 SettingsStore / ctx.settings 能力对齐） */
 export type { SettingsPanelSource } from './settingsPanelTypes'
@@ -27,8 +28,15 @@ onMounted(() => {
   unsub = props.settings.onChange(() => void (tick.value += 1))
 })
 
+// 高频控件(颜色/滑块)的连续拖动 → 合帧成一帧一次 set(目标 B2 性能约束③)；文本/下拉一次即提交无需合帧
+const coalescer = createCoalescer((pairs) => {
+  for (const [key, v] of pairs) props.settings.set(key, v as string | number | boolean)
+})
+onBeforeUnmount(() => coalescer.dispose())
+
 function set(key: string, v: string | number | boolean): void {
-  props.settings.set(key, v)
+  // 连续高频(同一帧多次)只取最后一次；settings.set 在帧尾统一执行并只 notify 一次
+  coalescer.push(key, v)
 }
 function valueOf(e: SettingEntry): string | number | boolean {
   return e.value

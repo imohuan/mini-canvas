@@ -50,3 +50,6 @@ export type {
   PluginManifestEntry,
   InstalledPluginInfo,
 } from './host/pluginManager'
+// 高频值合帧工具(目标 B2 性能约束③)
+export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce'
+export type { CoalesceScheduler } from './utils/coalesce'
