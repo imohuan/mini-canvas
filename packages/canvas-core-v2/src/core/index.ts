@@ -1,5 +1,5 @@
 export { Context, runPlugin } from './Context'
-export type { ContextState } from './Context'
+export type { ContextState, PluginRuntimeStatus } from './Context'
 export { Scope } from './Scope'
 export { Fiber } from './fiber'
 export type { FiberInit, FiberDisposer, FiberTransition } from './fiber'

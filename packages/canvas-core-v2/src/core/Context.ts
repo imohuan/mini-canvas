@@ -27,6 +27,23 @@ import { Lifecycle } from './types'
 /** Context 生命周期状态 */
 export type ContextState = 'created' | 'started' | 'stopped'
 
+/** 单个插件的运行时态快照（P5：宿主/管理器/console 做 fiber 状态可查与 PENDING 诊断的只读视图） */
+export interface PluginRuntimeStatus {
+  /** 插件唯一名 */
+  name: string
+  /** fiber 状态名（pending/loading/active/failed/unloading/disposed，字符串便于展示/比较） */
+  state: string
+  /** 该插件 deps 中此刻仍未满足的依赖（仅当 state!=='active' 才可能非空；对齐 depSatisfied 判定） */
+  missingDeps: string[]
+  /** FAILED 时的错误信息（message 字符串，便于面板/console 展示）；非 FAILED 缺省 */
+  error?: string
+}
+
+/** 把错误归一成可展示的 message（Error 取 message，其余 String 兜底） */
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /**
  * 跑一个插件的注册函数：Cordis 式用 apply(收校验后 config)，旧式用 setup，apply 优先。
  * 返回值（cleanup/Disposable）由调用方登记进插件 scope，卸载即清。
@@ -340,6 +357,29 @@ export class Context implements PluginScope {
   /** 已装载(含动态)的插件名 */
   listPlugins(): string[] {
     return [...this.plugins.keys()]
+  }
+
+  /**
+   * P5 只读查询：每个"已装/仍在 runtime"插件的运行时态快照，供宿主/管理器/console 诊断。
+   *
+   * 覆盖两类条目：
+   * - `plugins` 表里的插件（ACTIVE / PENDING…）；
+   * - 已从 `plugins` 表移出但 fiber 仍保留的 **FAILED** 插件（config/setup 抛错后保留供诊断，可重装复用）。
+   * `missingDeps` = 该插件 deps 中此刻未满足的项（判定对齐私有 depSatisfied：既非内置 slots/settings、也非已注入
+   * 服务名、也非"已登记且 ACTIVE"的插件名）。state!=='active' 时据此回答"到底缺哪个依赖"。
+   * 纯只读，不改动装载/编排/激活逻辑。
+   */
+  inspectPlugins(): PluginRuntimeStatus[] {
+    const names = new Set<string>([...this.plugins.keys(), ...this.fibers.keys()])
+    return [...names].map((name): PluginRuntimeStatus => {
+      const fiber = this.fibers.get(name)
+      const state = fiber?.stateName ?? 'pending'
+      const deps = fiber?.deps ?? depsOf(this.plugins.get(name) ?? {}) ?? []
+      const missingDeps = state === 'active' ? [] : deps.filter((d) => !this.depSatisfied(d))
+      const base: PluginRuntimeStatus = { name, state, missingDeps }
+      if (state === 'failed' && fiber?.error !== undefined) base.error = errorMessage(fiber.error)
+      return base
+    })
   }
 
   // ==================== 服务注入 ====================

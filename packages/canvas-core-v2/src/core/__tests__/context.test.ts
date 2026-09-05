@@ -498,3 +498,48 @@ describe('P3 事件分发（cordis ch4：多参事件 + parallel/serial/bail/wat
     expect(fired).toEqual(['b']) // a 的监听已随卸载移除
   })
 })
+
+describe('P5 inspectPlugins：fiber 状态可查 + PENDING 缺依赖诊断（只读视图）', () => {
+  it('正常冷启动后：ACTIVE 插件全部上报，state=active 且 missingDeps 空', async () => {
+    const ctx = new Context()
+    ctx.inject('nodeStore', {} as never)
+    ctx.plugin({ name: 'a', inject: ['nodeStore'], apply: () => {} })
+    ctx.plugin({ name: 'b', apply: () => {} })
+    await ctx.start()
+    const byName = new Map(ctx.inspectPlugins().map((s) => [s.name, s]))
+    expect(byName.get('a')).toMatchObject({ state: 'active', missingDeps: [] })
+    expect(byName.get('b')).toMatchObject({ state: 'active', missingDeps: [] })
+  })
+
+  it('靠 inject 引用缺提供方的服务 → 停留 PENDING 且 missingDeps 报出缺的服务名', async () => {
+    const ctx = new Context()
+    ctx.plugin({ name: 'consumer', inject: ['missing-svc'], apply: () => {} })
+    await ctx.start()
+    const s = ctx.inspectPlugins().find((x) => x.name === 'consumer')
+    expect(s).toMatchObject({ state: 'pending', missingDeps: ['missing-svc'] })
+  })
+
+  it('区分"缺服务"与"等插件(依赖它、它自身 PENDING)"两种 PENDING', async () => {
+    const ctx = new Context()
+    // consumer 依赖插件 provider；provider 自身缺服务 → 停留 PENDING
+    ctx.plugin({ name: 'consumer', inject: ['provider'], apply: () => {} })
+    ctx.plugin({ name: 'provider', inject: ['missing-svc'], apply: () => {} })
+    await ctx.start()
+    const byName = new Map(ctx.inspectPlugins().map((s) => [s.name, s]))
+    // consumer：缺的是"provider"（已登记但未 ACTIVE → 不满足），而非不存在的服务
+    expect(byName.get('consumer')).toMatchObject({ state: 'pending', missingDeps: ['provider'] })
+    // provider：缺的是真正未上架的服务
+    expect(byName.get('provider')).toMatchObject({ state: 'pending', missingDeps: ['missing-svc'] })
+  })
+
+  it('FAILED(apply 抛错) 插件：从 plugins 表移出但仍上报，带 error message', async () => {
+    const ctx = new Context()
+    ctx.plugin({ name: 'bad', apply() { throw new Error('boom-config') } })
+    await expect(ctx.start()).rejects.toThrow(/boom-config/)
+    // 已不在可装载表
+    expect(ctx.listPlugins()).not.toContain('bad')
+    // 但 inspectPlugins 仍能看到 FAILED + error
+    const s = ctx.inspectPlugins().find((x) => x.name === 'bad')
+    expect(s).toMatchObject({ state: 'failed', error: 'boom-config' })
+  })
+})
