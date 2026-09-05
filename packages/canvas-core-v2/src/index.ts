@@ -6,18 +6,3 @@
 
 export * from './core'
 export * from './services'
-// 边几何纯算法（渲染层 CustomEdge 经本包子路径 import；留内核，见 docs/plan/canvas-render-layer-plan.md）。
-export {
-  Position,
-  normalizePosition,
-  getSourcePosition,
-  getTargetPosition,
-  buildEdgePath,
-  sampleEdgePath,
-  findClosestPointOnPath,
-} from './contracts/edgeGeometry'
-export type {
-  EdgeType,
-  XYPosition,
-  EdgeAppearance,
-} from './contracts/edgeGeometry'

@@ -16,7 +16,7 @@ import {
   findClosestPointOnPath,
   type EdgeType,
   type EdgeAppearance,
-} from '@mini-canvas/canvas-core-v2/contracts/edgeGeometry'
+} from './edgeGeometry'
 import {
   EDGE_VISUAL_KEY,
   EDGE_SELECTION_KEY,

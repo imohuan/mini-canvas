@@ -7,8 +7,8 @@
 //   render 注入令牌（CanvasHost provide、渲染插件 content/壳/边 消费）。
 // 依赖方向：本包 runtime 依赖内核；渲染插件(theme-default/node-text)依赖本包拿 vue-flow 原语 + 令牌。
 //
-// 注：edgeGeometry(边几何纯算法)留在内核 @mini-canvas/canvas-core-v2/contracts/edgeGeometry，
-//     CustomEdge 继续从内核子路径 import —— 本包不重复提供。
+// 注：edgeGeometry(边几何纯算法)已随实现插件迁到 plugin-theme-default/src/edgeGeometry.ts，
+//     由 CustomEdge 本地 import —— 本包与内核均不再提供。
 
 // content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo）
 export { HOST_KEY } from './contracts/contentBridge'
