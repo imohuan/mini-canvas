@@ -10,6 +10,11 @@ import type { SaveType } from './types'
 /** 四类 type 常量（枚举用，避免散写字符串） */
 export const SAVE_TYPES: readonly SaveType[] = ['config', 'canvas', 'resource', 'shortcut']
 
+/** 画布"节点图"持久化裸 key（type='canvas'）。值为 CanvasNode[]（历史遗留）或 { nodes, edges } 信封(边下沉后用) */
+export const GRAPH_KEY = 'graph'
+/** 画布"边集"独立持久化裸 key（type='canvas'）。值 = CanvasEdge[]；与 GRAPH_KEY 分存以兼容旧节点图数组 */
+export const GRAPH_EDGES_KEY = 'graph-edges'
+
 /** 把任意裸 key 规范成"小写化 + 去首尾空白"（调用方请直接传 kebab-case key；本函数不转分隔符） */
 export function normalizeKey(key: string): string {
   const k = key.trim().toLowerCase()

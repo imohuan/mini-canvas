@@ -1,9 +1,18 @@
 export { SaveServiceImpl } from './storage/SaveService'
 export { MemoryStorageAdapter } from './storage/memoryAdapter'
 export { LocalStorageAdapter } from './storage/localStorageAdapter'
-export { SAVE_TYPES, normalizeKey, scopedKey } from './storage/keys'
+export { SAVE_TYPES, normalizeKey, scopedKey, GRAPH_KEY, GRAPH_EDGES_KEY } from './storage/keys'
 export { NodeStore } from './nodeStore'
 export type { CanvasNode, CanvasNodeType, NodeStoreService, NodeStoreListener, NodeStoreChangeReason } from './nodeStore'
+export { EdgeStore, edgeStoreId } from './edgeStore'
+export type {
+  CanvasEdge,
+  AddEdgeRequest,
+  StoredEdgeInput,
+  EdgeStoreService,
+  EdgeStoreListener,
+  EdgeStoreChangeReason,
+} from './edgeStore'
 export type {
   SaveService,
   SaveType,

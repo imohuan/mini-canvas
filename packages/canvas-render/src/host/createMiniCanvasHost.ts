@@ -21,11 +21,14 @@ import {
   SaveServiceImpl,
   NodeStore,
   type CanvasNode,
+  type CanvasEdge,
   type StorageAdapter,
   Selection,
   History,
   CommandRegistry,
   NodeFactory,
+  EdgeStore,
+  type EdgeStoreService,
   type SelectionService,
   type HistoryService,
   type CommandService,
@@ -61,6 +64,8 @@ export interface CanvasHostHandle {
   ctx: Context
   save: SaveServiceImpl
   nodeStore: NodeStore
+  /** 边数据服务(边下沉内核后)：建边/删边/删节点清边都写它；渲染层读它画边 */
+  edgeStore: EdgeStoreService
   /** 展示注册表：type→content/toolbar 段组件（供 Vue 层 provide/渲染） */
   nodeRegistry: NodeRegistry
   /** 主题/外观注册表：slot→渲染器组件（edge/background/nodeShell 等），供 Vue 层装配 */
@@ -71,6 +76,12 @@ export interface CanvasHostHandle {
   nodeFactory: NodeFactoryService
   /** 停止并回收全部插件副作用 */
   stop(): void
+}
+
+/** 图数据存储信封：节点 + 边（持久化与 history 快照共用）。兼容旧"仅节点数组"存储 */
+export interface GraphEnvelope {
+  nodes: CanvasNode[]
+  edges: CanvasEdge[]
 }
 
 /** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
@@ -88,6 +99,7 @@ export interface MiniCanvasApi {
   getContext(): Context
   getRegistry(): NodeRegistry
   getNodeStore(): NodeStore
+  getEdgeStore(): EdgeStoreService
   getHost(): CanvasHostHandle
 }
 
@@ -112,6 +124,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const nodeStore = new NodeStore()
   ctx.inject('nodeStore', nodeStore)
 
+  const edgeStore = new EdgeStore()
+  ctx.inject('edgeStore', edgeStore)
+
   const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
   ctx.inject('nodeRegistry', nodeRegistry)
 
@@ -121,9 +136,18 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const selection = new Selection()
   ctx.inject('selection', selection)
 
+  // 全图快照(节点+边)：undo/redo 回退整个图，边随节点一起记录(边下沉后删除/撤销对边生效)。
+  // 注入的 snapshot/restore 只负责"读/写两份 store"，深度拷贝交给调用处；restore 同时回填 nodeStore+edgeStore。
   const history = new History({
-    snapshot: () => JSON.parse(JSON.stringify(nodeStore.getNodes())),
-    restore: (nodes) => nodeStore.replaceAll(nodes as CanvasNode[]),
+    snapshot: (): GraphEnvelope => ({
+      nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())) as CanvasNode[],
+      edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) as CanvasEdge[],
+    }),
+    restore: (g) => {
+      const env = (g as GraphEnvelope) ?? { nodes: [], edges: [] }
+      nodeStore.replaceAll(env.nodes ?? [])
+      edgeStore.replaceAll(env.edges ?? [])
+    },
   })
   ctx.inject('history', history)
 
@@ -148,18 +172,34 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
 
-  // 恢复上次画布；首次(空)则跑 seedDefault（若有）
-  const saved = await save.get<CanvasNode[]>('graph', 'canvas')
-  if (saved && saved.length > 0) {
-    nodeStore.replaceAll(saved)
+  // 恢复上次画布；首次(空)则跑 seedDefault（若有）。
+  // 节点存 'graph'(历史遗留为 CanvasNode[]，边下沉后可能为 {nodes,edges})；边独立存 'graph-edges'(CanvasEdge[])。
+  const saved = await save.get<CanvasNode[] | GraphEnvelope>('graph', 'canvas')
+  const savedEdges = await save.get<CanvasEdge[]>('graph-edges', 'canvas')
+  // 兼容三种形态：旧数组(仅节点) / 新信封(含 edges) / 空；边独立存的 graph-edges 一律并入恢复
+  let restoreNodes: CanvasNode[] | null = null
+  let restoreEdges: CanvasEdge[] | null = savedEdges ?? []
+  if (Array.isArray(saved)) {
+    restoreNodes = saved
+  } else if (saved && Array.isArray(saved.nodes)) {
+    restoreNodes = saved.nodes
+    // 信封内若自带 edges(未来单 key)且未单独存，则以信封内为准
+    restoreEdges = (saved.edges ?? []) as CanvasEdge[]
+  }
+  if (restoreNodes && restoreNodes.length > 0) {
+    nodeStore.replaceAll(restoreNodes)
+    edgeStore.replaceAll(restoreEdges ?? [])
   } else if (opts.seedDefault) {
-    nodeStore.replaceAll(opts.seedDefault())
+    const seeded = opts.seedDefault()
+    nodeStore.replaceAll(seeded)
+    edgeStore.replaceAll(restoreEdges ?? [])
   }
 
   const host: CanvasHostHandle = {
     ctx,
     save,
     nodeStore,
+    edgeStore,
     nodeRegistry,
     themeRegistry,
     selection,
@@ -186,6 +226,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     getContext: () => ctx,
     getRegistry: () => nodeRegistry,
     getNodeStore: () => nodeStore,
+    getEdgeStore: () => edgeStore,
     getHost: () => host,
   }
 

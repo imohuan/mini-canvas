@@ -30,6 +30,9 @@ import {
   type StorageAdapter,
   MemoryStorageAdapter,
   type CanvasNode,
+  type CanvasEdge,
+  type EdgeStoreService,
+  GRAPH_EDGES_KEY,
   validateConnection,
   typeConnectionDef,
 } from '@mini-canvas/canvas-core-v2'
@@ -46,9 +49,7 @@ import type { EdgeVisual } from '../contracts/edgeContext'
 import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
-  edgeId,
   nodesFromStore,
-  pruneDanglingEdges,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
 } from './canvasHostCore'
@@ -188,15 +189,20 @@ function applyTheme(): void {
 // 渲染交给内层 CanvasSurface 里的 <SlotHost slot="overlay" />（SlotHost 自动读 ctx.slots.occupants 并按序渲染）。
 // 这里不再维护 uiOverlay/syncUiOverlay——那段"读槽+markRaw+渲染"已抽成可复用组件 SlotHost。
 
-// 订阅 nodeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
+// 订阅 nodeStore / edgeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
 let unsubStore: (() => void) | undefined
+let unsubEdge: (() => void) | undefined
 let unsubSel: (() => void) | undefined
 
 function syncFromStore(): void {
   const h = hostRef.value
   if (!h) return
   const alive = new Set(h.nodeStore.getNodes().map((n) => n.id))
-  edges.value = pruneDanglingEdges(edges.value, alive)
+  // 边数据源 = 内核 edgeStore（边下沉后唯一数据源）；渲染态取 source/target 仍存活的边(删除路径已在 edgeStore 清边,此处兜底过滤)。
+  edges.value = h.edgeStore
+    .getEdges()
+    .filter((e) => alive.has(e.source) && alive.has(e.target))
+    .map((e) => ({ id: e.id, type: e.type ?? 'custom', source: e.source, target: e.target }))
   nodes.value = nodesFromStore(h.nodeStore)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
@@ -240,11 +246,18 @@ function isValidConnection(conn: Connection): boolean {
 
 function onConnect(conn: Connection): void {
   if (!isValidConnection(conn) || !conn.source || !conn.target) return
-  const id = edgeId(conn.source, conn.target)
-  edges.value = edges.value
-    .filter((e) => e.id !== id)
-    .concat([{ id, type: edgeDefaultType.value, source: conn.source, target: conn.target }])
-  // 边目前是 VueFlow 视觉态(未落盘)——内核尚无 edge store。删除/撤销经 onKeydown 清相关边。
+  const h = hostRef.value
+  if (!h) return
+  // 边写进内核 edgeStore(唯一数据源)：addEdge 已按 source/target 生成稳定 id 去重，edgeStore.subscribe 自动刷新渲染态。
+  h.edgeStore.addEdge({
+    source: conn.source,
+    target: conn.target,
+    type: edgeDefaultType.value,
+    sourceHandle: conn.sourceHandle ?? undefined,
+    targetHandle: conn.targetHandle ?? undefined,
+  })
+  // 边下沉后持久化：节点改动也顺带把边落盘(graph-edges 与 graph 分存)
+  void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
@@ -299,8 +312,9 @@ onMounted(async () => {
     managerRef.value = manager
     if (props.windowKey) exposeToWindow(props.windowKey)
 
-    // 订阅 store 变化自动刷渲染态
+    // 订阅 store 变化自动刷渲染态（nodeStore 与 edgeStore 任一变化都触发整图重刷）
     unsubStore = host.nodeStore.subscribe(syncFromStore)
+    unsubEdge = host.edgeStore.subscribe(syncFromStore)
 
     // 订阅内核 Selection(选中单源)：点击/删除/撤销等只写内核，这里投影给 CustomEdge 高亮
     unsubSel = host.selection.onChange(syncSelected)
@@ -379,6 +393,7 @@ defineExpose({
 
 onBeforeUnmount(() => {
   unsubStore?.()
+  unsubEdge?.()
   unsubSel?.()
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)

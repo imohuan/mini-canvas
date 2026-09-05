@@ -14,6 +14,8 @@ import {
   type CanvasNode,
   NodeStore,
   type PluginModule,
+  type CanvasEdge,
+  GRAPH_EDGES_KEY,
 } from '@mini-canvas/canvas-core-v2'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
@@ -243,6 +245,84 @@ describe('M3 命令/删除/创建/撤销（host 集成）', () => {
     host.command.execute('command:delete')
     expect(host.nodeStore.getNodes()).toHaveLength(1)
     expect(host.history.undoDepth).toBe(before)
+    host.stop()
+  })
+})
+
+describe('边下沉内核：edgeStore 增删 + 撤销 + 持久化往返', () => {
+  it('建边写 edgeStore；command:delete 删节点连带清边；undo 恢复节点与边', async () => {
+    const host = await boot()
+    const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+    const a = text.addTextNode({ x: 0, y: 0 }) // '1'
+    const b = text.addTextNode({ x: 10, y: 10 }) // '2'
+    host.edgeStore.addEdge({ source: a, target: b, type: 'custom' })
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+
+    // 删一个端点节点 → 边连带清掉
+    host.selection.set([a])
+    host.command.execute('command:delete')
+    expect(host.nodeStore.getNode(a)).toBeUndefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+
+    // undo → 节点回来、边也回来（快照含边）
+    host.command.execute('command:undo')
+    expect(host.nodeStore.getNode(a)).toBeDefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+    host.stop()
+  })
+
+  it('删除无边的节点仍单历史(不误记)、redo 后节点带边回来', async () => {
+    const host = await boot()
+    const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+    const a = text.addTextNode({ x: 0, y: 0 })
+    const b = text.addTextNode({ x: 5, y: 5 })
+    host.edgeStore.addEdge({ source: a, target: b })
+    host.selection.set([a])
+    host.command.execute('command:delete')
+    host.command.execute('command:undo')
+    host.command.execute('command:redo') // 重做 → 节点 a 及其边又被删
+    expect(host.nodeStore.getNode(a)).toBeUndefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+    host.stop()
+  })
+
+  it('边随节点图一起落盘(graph 与 graph-edges 分存)，刷新恢复后边还在', async () => {
+    const storage = new MemoryStorageAdapter()
+    // 第一次会话：两节点 + 一边，落盘后卸载
+    {
+      const host = await boot({ adapter: storage })
+      const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+      const a = text.addTextNode({ x: 0, y: 0 })
+      const b = text.addTextNode({ x: 20, y: 20 })
+      host.edgeStore.addEdge({ source: a, target: b, type: 'custom' })
+      // 模拟宿主落盘：节点存 graph，边独立存 graph-edges(与 CanvasHost/commands 一致)
+      host.save.set('graph', host.nodeStore.getNodes(), 'canvas')
+      host.save.set(GRAPH_EDGES_KEY, host.edgeStore.getEdges(), 'canvas')
+      await host.save.flush()
+      host.stop()
+    }
+    // 物理键：边存在 graph-edges，节点在 graph
+    const edgesSaved = await storage.get<CanvasEdge[]>('canvas:' + GRAPH_EDGES_KEY)
+    expect(edgesSaved).toHaveLength(1)
+    // 第二次会话：同一存储刷新 → edgeStore 恢复该边
+    {
+      const host = await boot({ adapter: storage })
+      const es = host.edgeStore.getEdges()
+      expect(es).toHaveLength(1)
+      expect(es[0].type).toBe('custom')
+      // 渲染层形状：CanvasHost.syncFromStore 会映射成 {id,type,source,target}
+      expect(es[0]).toMatchObject({ id: expect.stringMatching(/^e-1-2$/), source: '1', target: '2' })
+      host.stop()
+    }
+  })
+
+  it('兼容旧存储：graph 只有节点数组(无边)也能正常 boot，edgeStore 为空', async () => {
+    const storage = new MemoryStorageAdapter()
+    // 预写旧格式：graph = CanvasNode[](历史遗留无边信封)
+    await storage.set('canvas:graph', [{ id: '1', type: 'text', position: { x: 0, y: 0 }, data: { text: '旧' } }])
+    const host = await boot({ adapter: storage })
+    expect(host.nodeStore.getNode('1')).toBeDefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
     host.stop()
   })
 })

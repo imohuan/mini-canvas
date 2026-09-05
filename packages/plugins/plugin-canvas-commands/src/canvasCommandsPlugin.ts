@@ -22,9 +22,11 @@ import type {
   NodeFactoryService,
   SelectionService,
   HistoryService,
+  EdgeStoreService,
 } from '@mini-canvas/canvas-core-v2'
+import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'
 
-/** 类型增强缝：宿主"恒在服务"上 ctx.xxx 直访（nodeStore/save/nodeFactory/selection/history 已核与宿主注入名一致） */
+/** 类型增强缝：宿主"恒在服务"上 ctx.xxx 直访（nodeStore/save/nodeFactory/selection/history/edgeStore 已核与宿主注入名一致） */
 declare module '@mini-canvas/canvas-core-v2' {
   interface Context {
     nodeStore: NodeStoreService
@@ -32,22 +34,24 @@ declare module '@mini-canvas/canvas-core-v2' {
     nodeFactory: NodeFactoryService
     selection: SelectionService
     history: HistoryService
+    edgeStore: EdgeStoreService
   }
 }
 
 export const name = 'commands'
-export const inject = ['nodeStore', 'save', 'nodeFactory', 'selection', 'history'] as string[]
+export const inject = ['nodeStore', 'save', 'nodeFactory', 'selection', 'history', 'edgeStore'] as string[]
 
 export function apply(ctx: Context) {
   // inject 硬依赖已保证这些服务在（宿主恒在）；直访(Proxy 解析服务名)，不再手 ctx.get。
-  const { nodeStore, save, nodeFactory, selection, history } = ctx
+  const { nodeStore, save, nodeFactory, selection, history, edgeStore } = ctx
 
-  // —— 落盘当前节点图 ——
+  // —— 落盘当前节点图 + 边（节点存 'graph'，边存 'graph-edges'，分存以兼容旧节点数组） ——
   function persist(): void {
     save.set('graph', nodeStore.getNodes(), 'canvas')
+    save.set(GRAPH_EDGES_KEY, edgeStore.getEdges(), 'canvas')
   }
 
-  // —— 删选中（经 history 记一次） ——
+  // —— 删选中（经 history 记一次；删节点连带清掉与它相连的边，undo/redo 对边也生效） ——
   ctx.commands.register({
     id: 'command:delete',
     title: '删除选中',
@@ -57,6 +61,7 @@ export function apply(ctx: Context) {
         if (ids.length === 0) return
         for (const id of ids) {
           nodeStore.removeNode(id)
+          edgeStore.removeEdgesOfNode(id) // 连带清掉该节点的入边/出边
           selection.remove(id)
         }
         persist()
