@@ -20,7 +20,7 @@
  * 模板结构：本组件占满父容器高度(定位 100%)，内部是 booting/error + canvas-wrap(VueFlow+主题背景)。
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
  */
-import { onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef } from 'vue'
+import { markRaw, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
 import { NodeRegistry } from '../core/registry/nodeRegistry'
@@ -135,13 +135,15 @@ provide(EDGE_SELECTION_KEY, { selectedNodeIds: selectedIds, selectedEdgeIds: emp
 
 const nodes = ref<ReturnType<typeof nodesFromStore>>([])
 const edges = ref<Array<{ id: string; type: string; source: string; target: string }>>([])
-// 组件句柄(opaque，来自 themeRegistry/registry)塞给 VueFlow 的 node-types/edge-types；
-// VueFlow 期望 NodeComponent/EdgeComponent，我们用 any 逃逸类型断言（句柄来自插件注册，运行时才定型）。
+// 组件句柄(opaque，来自 themeRegistry/registry)塞给 VueFlow 的 node-types/edge-types。
+// 必须用 shallowRef：里面存的是 .vue 组件对象，ref 会深代理组件触发 Vue "组件被 reactive 化" 警告，
+// 且我们总是整体替换 .value，浅层响应式就够。
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const nodeTypes = ref<Record<string, any>>({})
+const nodeTypes = shallowRef<Record<string, any>>({})
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const edgeTypes = ref<Record<string, any>>({})
-const backgroundComp = ref<unknown>(undefined)
+const edgeTypes = shallowRef<Record<string, any>>({})
+// 背景也是组件句柄，同样浅层即可。
+const backgroundComp = shallowRef<unknown>(undefined)
 const edgeDefaultType = ref('custom')
 const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂
 
@@ -155,13 +157,15 @@ function applyTheme(): void {
   const h = hostRef.value
   if (!h) return
   const asm = assembleTheme(h.themeRegistry, h.nodeStore.types.keys())
+  // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
   if (asm.nodeShell) {
+    const shell = markRaw(asm.nodeShell)
     nodeTypes.value = {}
-    for (const t of asm.nodeTypes) nodeTypes.value[t] = asm.nodeShell
+    for (const t of asm.nodeTypes) nodeTypes.value[t] = shell
   }
-  if (asm.edge) edgeTypes.value = { custom: asm.edge }
+  if (asm.edge) edgeTypes.value = { custom: markRaw(asm.edge) }
   edgeDefaultType.value = asm.edgeDefaultType
-  backgroundComp.value = asm.background
+  backgroundComp.value = asm.background ? markRaw(asm.background) : undefined
 }
 
 // 订阅 nodeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
@@ -280,6 +284,10 @@ onMounted(async () => {
 
     // 主题 + nodeTypes 装配
     applyTheme()
+
+    // 初始灌入：seed/restore 发生在 subscribe 建立之前(createMiniCanvasHost 内部)，
+    // 不会触发回调，这里主动同步一次把当前 store 节点渲染出来。
+    syncFromStore()
 
     // 订阅插件热装/热卸：重装配主题与 nodeTypes + bump epoch 触发 VueFlow 重挂
     subs.push(
