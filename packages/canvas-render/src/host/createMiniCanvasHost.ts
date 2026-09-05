@@ -28,6 +28,8 @@ import {
   CommandRegistry,
   NodeFactory,
   EdgeStore,
+  GRAPH_KEY,
+  GRAPH_EDGES_KEY,
   type EdgeStoreService,
   type SelectionService,
   type HistoryService,
@@ -173,9 +175,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   command.setContext(ctx)
 
   // 恢复上次画布；首次(空)则跑 seedDefault（若有）。
-  // 节点存 'graph'(历史遗留为 CanvasNode[]，边下沉后可能为 {nodes,edges})；边独立存 'graph-edges'(CanvasEdge[])。
-  const saved = await save.get<CanvasNode[] | GraphEnvelope>('graph', 'canvas')
-  const savedEdges = await save.get<CanvasEdge[]>('graph-edges', 'canvas')
+  // 节点存 GRAPH_KEY(历史遗留为 CanvasNode[]，边下沉后可能为 {nodes,edges})；边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
+  const saved = await save.get<CanvasNode[] | GraphEnvelope>(GRAPH_KEY, 'canvas')
+  const savedEdges = await save.get<CanvasEdge[]>(GRAPH_EDGES_KEY, 'canvas')
   // 兼容三种形态：旧数组(仅节点) / 新信封(含 edges) / 空；边独立存的 graph-edges 一律并入恢复
   let restoreNodes: CanvasNode[] | null = null
   let restoreEdges: CanvasEdge[] | null = savedEdges ?? []

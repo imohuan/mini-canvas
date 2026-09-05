@@ -248,15 +248,18 @@ function onConnect(conn: Connection): void {
   if (!isValidConnection(conn) || !conn.source || !conn.target) return
   const h = hostRef.value
   if (!h) return
-  // 边写进内核 edgeStore(唯一数据源)：addEdge 已按 source/target 生成稳定 id 去重，edgeStore.subscribe 自动刷新渲染态。
-  h.edgeStore.addEdge({
-    source: conn.source,
-    target: conn.target,
-    type: edgeDefaultType.value,
-    sourceHandle: conn.sourceHandle ?? undefined,
-    targetHandle: conn.targetHandle ?? undefined,
+  // 拉边记进历史(undo/redo 对边生效，见 settings-panel-slot-host-plan §三.D)：addEdge 写内核 edgeStore(唯一数据源)，
+  // history.withRecord 在前后各拍全图快照(含边)；边 id 稳定、重复连会被快照差异正确识别。
+  h.history.withRecord(() => {
+    h.edgeStore.addEdge({
+      source: conn.source,
+      target: conn.target,
+      type: edgeDefaultType.value,
+      sourceHandle: conn.sourceHandle ?? undefined,
+      targetHandle: conn.targetHandle ?? undefined,
+    })
   })
-  // 边下沉后持久化：节点改动也顺带把边落盘(graph-edges 与 graph 分存)
+  // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
   void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
 }
 

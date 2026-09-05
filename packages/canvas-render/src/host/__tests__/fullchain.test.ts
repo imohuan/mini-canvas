@@ -326,3 +326,44 @@ describe('边下沉内核：edgeStore 增删 + 撤销 + 持久化往返', () => 
     host.stop()
   })
 })
+
+describe('边撤销：拉边(加边)记进历史可 undo/redo（对应 Must-1 修复）', () => {
+  it('模拟 CanvasHost.onConnect：withRecord 包 addEdge → undo 边消失、redo 边回来', async () => {
+    const host = await boot()
+    const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+    const a = text.addTextNode({ x: 0, y: 0 })
+    const b = text.addTextNode({ x: 8, y: 8 })
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+
+    // 拉边(等价 onConnect)：withRecord 包 addEdge
+    host.history.withRecord(() => {
+      host.edgeStore.addEdge({ source: a, target: b, type: 'custom' })
+    })
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+
+    // undo → 边消失(撤销"拉边"这一动作)
+    host.command.execute('command:undo')
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+    // 节点仍在
+    expect(host.nodeStore.getNode(a)).toBeDefined()
+
+    // redo → 边回来
+    host.command.execute('command:redo')
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+    host.stop()
+  })
+
+  it('重复连同一边(稳定 id)不新增、也不额外记一条历史', async () => {
+    const host = await boot()
+    const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+    const a = text.addTextNode({ x: 0, y: 0 })
+    const b = text.addTextNode({ x: 3, y: 3 })
+    // 第一次拉边 → 记一条历史；再次连同一边(addEdge 去重为同一 id、store 无变化) → 不新增历史
+    host.history.withRecord(() => host.edgeStore.addEdge({ source: a, target: b, type: 'custom' }))
+    const depth1 = host.history.undoDepth
+    host.history.withRecord(() => host.edgeStore.addEdge({ source: a, target: b, type: 'custom' }))
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+    expect(host.history.undoDepth).toBe(depth1) // 无变化不记
+    host.stop()
+  })
+})
