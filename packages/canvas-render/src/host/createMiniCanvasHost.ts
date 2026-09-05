@@ -13,6 +13,7 @@
  */
 import {
   Context,
+  type PluginClassLike,
   type PluginModule,
   type PluginRuntimeStatus,
   NodeRegistry,
@@ -32,12 +33,15 @@ import {
 } from '@mini-canvas/canvas-core-v2'
 import { createPluginManager, type PluginManager } from './pluginManager'
 
+/** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
+export type HostPlugin = PluginModule | PluginClassLike
+
 /** 门面可选项 */
 export interface MiniCanvasOptions {
   /** 存储后端（本地/云端可插拔）。默认内存 adapter。 */
   adapter?: StorageAdapter
-  /** 冷启动要装载的插件（顺序即装载顺序）。宿主负责给全(含内置+业务)。 */
-  coldPlugins?: PluginModule[]
+  /** 冷启动要装载的插件（顺序即装载顺序）。宿主负责给全(含内置+业务)。支持 PluginModule 对象与 Service 类。 */
+  coldPlugins?: HostPlugin[]
   /** 节点展示注册表实例。宿主若需在 boot 前就 provide 给 Vue，可自建传入。 */
   nodeRegistry?: NodeRegistry
   /** 主题/外观注册表实例（宿主提供默认 UI 用）。缺省内部新建。 */
@@ -65,12 +69,12 @@ export interface CanvasHostHandle {
 
 /** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
 export interface MiniCanvasApi {
-  /** 热装一个插件（dsh 式 { name, setup(ctx) }） */
-  installPlugin(mod: PluginModule): string
+  /** 热装一个插件（对象 { name, apply } 或 Service 类） */
+  installPlugin(mod: HostPlugin): string
   /** 热卸一个插件（副作用/注册/UI 自动回收）；返回是否真卸到 */
   uninstallPlugin(name: string): boolean
   /** 热重载一个插件：先卸旧再装新（开发期改插件代码后调用，让改动实时生效） */
-  reloadPlugin(name: string, nextMod?: PluginModule): void
+  reloadPlugin(name: string, nextMod?: HostPlugin): void
   /** 已装载插件名列表 */
   listPlugins(): string[]
   /** P5 只读诊断：每个已装(含 FAILED 保留)插件的 fiber 运行时态 + PENDING 缺依赖(missingDeps/error) */

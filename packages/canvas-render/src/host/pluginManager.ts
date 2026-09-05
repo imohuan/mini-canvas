@@ -12,11 +12,12 @@
  * config 语义（P4）：per-plugin 装配 config，随 ctx.installPlugin(mod, config) 一起经插件 `Config` schema
  * 校验 + 补默认，apply(ctx, config) 收到；不做深度配置合并。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-core-v2'
+import type { Context, PluginClassLike, PluginModule } from '@mini-canvas/canvas-core-v2'
 
-/** 一个插件的来源：源码模块 / 懒加载源码 / 外部 URL / 单文件插件 js 文本 */
+/** 一个插件的来源：源码模块 / Service 类 / 懒加载源码 / 外部 URL / 单文件插件 js 文本 */
 export type PluginEntrySource =
   | PluginModule
+  | PluginClassLike
   | { module: () => PluginModule | Promise<PluginModule> }
   | { url: string }
   | { text: string }

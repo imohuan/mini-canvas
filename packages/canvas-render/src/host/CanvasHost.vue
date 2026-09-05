@@ -25,6 +25,7 @@ import { VueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
 import {
   NodeRegistry,
+  type PluginClassLike,
   type PluginModule,
   type Disposable,
   type StorageAdapter,
@@ -57,8 +58,8 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    /** 冷启动插件（顺序即装载序）。宿主负责给全：主题 + 业务节点插件。 */
-    plugins: PluginModule[]
+    /** 冷启动插件（顺序即装载序）。宿主负责给全：主题 + 业务节点插件。支持 PluginModule 对象与 Service 类。 */
+    plugins: (PluginModule | PluginClassLike)[]
     /** 存储后端。缺省内存 adapter（刷新即丢）。想要持久化传 LocalStorageAdapter。 */
     adapter?: StorageAdapter
     /** 首次(存储为空)生成默认画布；返回的节点会 replaceAll。 */
