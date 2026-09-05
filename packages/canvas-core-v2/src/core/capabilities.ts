@@ -185,6 +185,8 @@ export function buildCapabilities(
     settings: {
       define(req: { group: string; items: Record<string, SettingSchema> }): void {
         settingsStore().define(req.group, req.items, pluginName)
+        // 随插件 scope 自动回收：插件热卸/重载时清掉它声明的配置项(防残留、防重装撞 key)
+        ctx.effect(() => () => settingsStore().removeByScope(pluginName))
       },
       set(key: string, value: string | number | boolean): boolean {
         return settingsStore().set(key, value)

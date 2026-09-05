@@ -117,6 +117,14 @@ export class SettingsStore {
     return this.items.has(key)
   }
 
+  /** 移除某"声明作用域"(插件名)下的全部配置项(热卸/重载插件时随 scope 清理, 防残留与重载撞 key) */
+  removeByScope(scope: string | undefined): void {
+    if (scope === undefined) return
+    for (const [key, item] of this.items) {
+      if (item.scope === scope) this.items.delete(key)
+    }
+  }
+
   /**
    * 订阅配置变化。
    * @param cb(key, value)

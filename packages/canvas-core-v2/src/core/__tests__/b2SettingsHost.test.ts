@@ -88,4 +88,24 @@ describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收�
     ctx.settings.set('mine', '#999') // theme-default 改自己的 → 触发
     expect(themeCalls).toBe(1)
   })
+
+  it('插件热卸/重载会清掉它声明的 settings(防残留与重装撞 key)', async () => {
+    const plug = (n: string): PluginModule => ({
+      name: n,
+      apply(ctx: PluginScope) {
+        ctx.settings.define({ group: 'g', items: { k: { type: 'color', default: '#000' } } })
+      },
+    })
+    const { ctx } = await bootTheme(plug('alpha'))
+    const groups = () => ctx.get<{ groups(): string[] }>('settings').groups()
+    expect(groups()).toEqual(['g'])
+
+    // 热卸 alpha → 其声明的 settings 随 scope 清理
+    expect(ctx.uninstallPlugin('alpha')).toBe(true)
+    expect(groups()).toEqual([])
+
+    // 重载同插件(重装) → 不因残留 key 撞车
+    ctx.installPlugin(plug('alpha'))
+    expect(groups()).toEqual(['g'])
+  })
 })
