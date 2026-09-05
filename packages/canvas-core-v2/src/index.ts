@@ -24,3 +24,7 @@ export type {
   MiniCanvasApi,
   CanvasHostHandle,
 } from './host/createMiniCanvasHost'
+// 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
+// 依赖 @vue-flow/core(浏览器层)，Node 单测不 import 顶层，故不影响纯逻辑测试面。
+export { default as CanvasHost } from './host/CanvasHost.vue'
+export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'
