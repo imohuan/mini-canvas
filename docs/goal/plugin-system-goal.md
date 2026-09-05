@@ -111,20 +111,26 @@ export default defineCanvasPlugin({
 ### 2.5 v1 插件可迁
 - 新系统提供 v1 20 个插件所需的扩展点类别（见 2.3 + 1.4），迁移时每个 v1 插件能对号入座，不用再造新机制。
 
-### 2.6 结构（类比 dsh-base）
-- 抽一个**"插件基础库"**作为单一依赖源（类比 `@deepseek-ai/dsh-base`），把"写插件要 import 的一堆注册函数/类型"
-  收进一个包，让插件作者 `import { defineCanvasPlugin } from '<这个库>'` 一个入口就够，不用知道内核内部怎么拆包。
+### 2.6 结构（自己对照实现一个"作者基础库"，类比 dsh 的 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-base`）
+- **要自己对照实现**一个"插件作者基础库"（建议名 `@mini-canvas/canvas-base`）作为单一依赖源。参照 dsh 的做法
+  （实证：dsh 插件作者一律 `import type { Context } from '@deepseek-ai/cordis'`、工具用 `import { defineTool } from '@deepseek-ai/dsh-tools'`
+  —— 框架 ctx 型别来自基础库 cordis，能力入口是各 define* 助手），我们把它做成：
+  `defineCanvasPlugin(...)` + 类型 `CanvasPlugin/CanvasPluginContext` + 各能力 `define*(...)` 助手（建节点/命令/快捷键/UI slot/主题槽），
+  底层统一转发内核/render/令牌。插件包今后只依赖这一个库（`@mini-canvas/canvas-base`），不直接散 import 内核/渲染。
+- 在这个基础上，插件管理本身也做成**一个可装卸的插件**（见目标 6"插件管理插件"），形成"框架底座 + 万物皆插件（含管理插件本身）"的形态。
 
 ---
 
 ## 三、目标清单（分 Goal，每个 Goal 有独立验收）
 
 ### 🎯 目标 0 · 建立"插件基础库"底座（先做，其余都挂它上面）
-- **结果长啥样**：新增一个 workspace 包（建议 `packages/canvas-base`，名 `@mini-canvas/canvas-base`），
-  `export` 一个作者友好的面：`defineCanvasPlugin(...)` + 类型 `CanvasPlugin/CanvasPluginContext` +
-  底层转发内核/render/令牌的符号。插件包今后只依赖这一个库（`@mini-canvas/canvas-base`），不直接散 import 内核/渲染。
-- **目标**：给插件作者一个单一、好认的 import 源，隐藏"内核在哪个包、渲染在哪个包"的细节。
-- **验收**：示例插件只 import 这一个库就能写出完整可运行插件；`docs` 里新插件脚手架基于它。
+- **结果长啥样**：自己对照 dsh（`@deepseek-ai/cordis` + 各 `define*` 助手）**实现**一个"作者基础库"
+  `packages/canvas-base`（名 `@mini-canvas/canvas-base`）：`export` 作者友好面 `defineCanvasPlugin(...)` +
+  类型 `CanvasPlugin/CanvasPluginContext` + 各能力 `define*(...)`（建节点/命令/快捷键/UI slot/主题槽）+ 底层转发内核/render/令牌。
+  插件包今后只依赖这一个库（`@mini-canvas/canvas-base`），不直接散 import 内核/渲染。
+- **目标**：给插件作者一个单一、好认的 import 源（对标 dsh 作者只认 `@deepseek-ai/cordis` 的 `Context`），
+  隐藏"内核在哪个包、渲染在哪个包"的细节。
+- **验收**：示例插件只 import `@mini-canvas/canvas-base` 这一个库就能写出完整可运行插件；`docs` 里新插件脚手架基于它。
 
 ### 🎯 目标 1 · 插槽系统：单格 → 多 occupant + 排序 + id 增量/替换（本次最核心）
 - **结果长啥样**：把 `themeRegistry/nodeRegistry` 从"单格 map"升级成统一的**槽容器**：
@@ -167,6 +173,22 @@ export default defineCanvasPlugin({
 - **目标**：用户日后要做的"端口/吸附/快速连接"有现成落点，不阻塞。
 - **验收**：一个自定义节点声明"2 输入 1 输出、某输出只接指定类型、limit single"，在 demo 里拖线吸附/松手连接行为符合声明。
 
+### 🎯 目标 6 · "插件管理插件"（管理插件的安装/卸载/热重载，自身也是插件）
+- **背景**：用户想有一个能**可视化管理插件**的东西 —— 列出已装插件、安装新的、卸载、热重载(改代码实时生效)。
+  dsh 的做法（实证）：插件管理走 `ctx.dynamicCordisRunner`(define/run/stop/undefine/reload) + `ctx.cordisInspect`(查询注册/占用)
+  + UI 面板经 slot 挂载；它本身也是宿主里的一层服务，不写死在循环里。**我们据此把它也做成"一个插件"，符合"万物皆插件"。**
+- **结果长啥样**：新做一个插件包（如 `plugin-manager`，放 `packages/plugins/`），它以 `defineCanvasPlugin` 写成、依赖
+  canvas-base 与内核已有的安装机制：
+  - 暴露管理 API 到 ctx（服务）：`ctx.manager.list() / install(mod|url) / uninstall(name) / reload(name, nextMod?)`（把现有
+    `installPlugin/uninstallPlugin/reloadPlugin` 收拢成服务，并加上对"运行时加载外部插件 js/源码 URL"的支持，复用 demo 已有的 UMD/跨端口加载验证）。
+  - 提供**可视化 UI**：一个 dock/侧栏面板（走目标 1 的 slot 系统塞进宿主），列出每个插件的 `{name, state, deps}`、
+    按钮"卸载/重载/安装"，安装失败时显示原因（对接目标 4 的 reportFailure）。
+  - 可查宿主当前已装插件各自填了哪些 slot（接 inspect，见目标 1）。
+- **目标**：让"插件怎么装、怎么卸、怎么热更"从**代码级 API**变成**用户可点的界面 + 一目了然的状态**，
+  且这套管理能力本身可装卸（不需要就卸掉，不留硬耦合）。
+- **验收**：① demo 里能列出 theme-default/node-text/image/commands 及其状态；② 用 UI 卸载某插件其 UI/服务/slot 消失、
+  重装/热重载回来生效（对应 ctx 服务/slot 注册回收）；③ 运行时把一个独立插件(js 或跨端口源码)装进画布并可用；④ 全程零 console 报错。
+
 ---
 
 ## 四、约束与原则（动工前必守）
@@ -193,7 +215,8 @@ export default defineCanvasPlugin({
 - **阶段 P3 · 目标 3**：补宿主服务上 ctx + 语义落点(toolbar/contextmenu/dock/node.actions) + 功能→扩展点 doc。
 - **阶段 P4 · 目标 4**：per-plugin 句柄 + PENDING 依赖编排 + 插件作者教程 doc。
 - **阶段 P5 · 目标 5**：端口/吸附/快速连接能力对齐验证 + 补缺。
-- **阶段 P6 · 收尾**：全量回归（内核+渲染+各插件 typecheck / vitest / vue-tsc / 两个 demo 浏览器端到端零报错），
+- **阶段 P6 · 目标 6**：做"插件管理插件"(plugin-manager) —— 管理 API 服务化 + dock UI 面板(走 slot) + 运行时装外部插件 js/源码。
+- **阶段 P7 · 收尾**：全量回归（内核+渲染+各插件 typecheck / vitest / vue-tsc / 两个 demo 浏览器端到端零报错），
   更新本文档验收勾选，`docs/tmp` 清理征询。
 
 > 每个 Goal 都"先写验收用例 → 再实现 → 浏览器验证 → commit"。一次会话尽量推进多个 Goal，但**目标 1 是核心**，优先做好。
@@ -223,6 +246,7 @@ export default defineCanvasPlugin({
 - [ ] 目标3：ctx 上能 get 命令/快捷键/选中/历史等服务；工具栏/右键菜单/dock/节点操作钮可由插件注入并在 demo 可见；有"功能→扩展点"doc。
 - [ ] 目标4：per-plugin 可诊断句柄 + PENDING 依赖编排单测绿；插件作者教程可照抄跑通一个最小插件。
 - [ ] 目标5：端口/吸附/快速连接能力对齐验证通过（自定义节点连接声明在 demo 行为正确）。
+- [ ] 目标6：`plugin-manager` 插件能列出已装插件状态；用 UI 卸载/重装/热重载生效且 slot/服务正确回收；能运行时把独立插件(js/源码 URL)装进画布并可用。
 - [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；两个 demo 浏览器端到端零 console 报错。
 - [ ] **终审闸门：已用 `run_subagent` 启动严格挑剔的子代理，对齐 `deepseek-harness/docs` 插件实现审核，审核通过；审核报告在 `docs/tmp/plugin-system-review/`。**
 - [ ] 这份文档更新为"完成态"。
