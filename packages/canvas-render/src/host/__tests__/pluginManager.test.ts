@@ -94,6 +94,27 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
     expect(manager.list().map((p) => p.name)).toEqual(['plug-a', 'plug-b'])
   })
 
+  it('applyManifest 跳过 disabled 项(清单保留、关闭不装)，不参与返回/列表', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    const mk = (n: string, svc: string): PluginModule => ({
+      name: n,
+      apply(ctx) {
+        ctx.inject(svc, { on: 1 })
+      },
+    })
+    const names = await manager.applyManifest({
+      plugins: [
+        { id: 'on-a', source: mk('on-a', 'svcOn') },
+        // disabled 项登记但关闭：不装、不进结果列表
+        { id: 'off-b', source: mk('off-b', 'svcOff'), disabled: true },
+      ],
+    })
+    expect(names).toEqual(['on-a'])
+    expect(host.ctx.get('svcOn')).toEqual({ on: 1 })
+    expect(host.ctx.get('svcOff')).toBeUndefined()
+    expect(manager.list().map((p) => p.name)).toEqual(['on-a'])
+  })
+
   it('manager 独立于宿主门面可基于任意已 start Context 创建', async () => {
     const { host } = await createMiniCanvasHost()
     const m = createPluginManager(host.ctx)

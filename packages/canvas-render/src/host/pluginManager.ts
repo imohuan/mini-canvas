@@ -30,6 +30,13 @@ export interface PluginManifestEntry {
   source: PluginEntrySource
   /** 可选 per-plugin 装配 config（经插件 Config schema 校验 + 补默认，apply(ctx,config) 收到） */
   config?: object
+  /**
+   * DSH/cordis Loader 语义：清单里登记但"关闭"的项 → applyManifest 跳过不装。
+   * 常用来整组开关(如 `disabled: true` 的插件保留在清单便于日后打开)或同一 id 多实现里临时停用某版。
+   */
+  disabled?: boolean
+  /** 可选的展示分组名(供宿主 UI 面板分组显示；不影响装载/卸载语义) */
+  group?: string
 }
 
 /** 装配清单：按序装；后装的同 id 覆盖先装的(轻量分层) */
@@ -170,6 +177,8 @@ export function createPluginManager(ctx: Context): PluginManager {
     async applyManifest(manifest) {
       const installed: string[] = []
       for (const entry of manifest.plugins) {
+        // DSH Loader 语义：disabled 项登记但关闭 → 跳过不装(清单里保留、便于日后打开)
+        if (entry.disabled) continue
         // 装配清单的 id 建议 = 插件 name；同 name 后装会覆盖先装(installOne 内处理)
         const name = await installOne(entry.source, entry.config)
         // 被覆盖的旧名若在 installed 里则移除，只保留最新一次
