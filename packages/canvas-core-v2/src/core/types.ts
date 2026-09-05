@@ -182,6 +182,14 @@ export interface PluginScope extends PluginCapabilities {
   get<Service = unknown>(name: string): Service
   /** 嵌套插件（本插件子作用域）。支持类形态（Service 子类）与 PluginModule 对象。 */
   plugin(mod: PluginModule | PluginClassLike): PluginScope
+  /**
+   * 插件注册表只读视图（cordis 06）：可枚举每插件的 fiber（含 PENDING 诊断/await）。
+   * 返回 name → { status, fiber } 的只读 Map；纯只读。
+   */
+  readonly registry: ReadonlyMap<
+    string,
+    { status: { name: string; state: string; missingDeps: string[]; error?: string }; fiber: unknown }
+  >
 
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */

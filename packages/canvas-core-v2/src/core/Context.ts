@@ -439,6 +439,19 @@ export class Context implements PluginScope {
     })
   }
 
+  /**
+   * 插件注册表只读视图（cordis 06：诊断 PENDING / 可枚举每插件 fiber）。
+   * 每次访问现算返回一个 name → { status, fiber } 的只读 Map；fiber 供 await/dispose、
+   * status 供 PENDING 诊断（缺哪个依赖）。纯只读，不改装载/激活。
+   */
+  get registry(): ReadonlyMap<string, { status: PluginRuntimeStatus; fiber: Fiber | undefined }> {
+    const m = new Map<string, { status: PluginRuntimeStatus; fiber: Fiber | undefined }>()
+    for (const status of this.inspectPlugins()) {
+      m.set(status.name, { status, fiber: this.fibers.get(status.name) })
+    }
+    return m
+  }
+
   // ==================== 服务注入 ====================
 
   /** 提供服务（宿主/根层用）；返回撤销函数。注：本根方法不自动登记清理，撤销由调用方持有并执行；插件层请走注入的 PluginScope.provide（撤销随插件 fiber 自动清）。 */
@@ -578,6 +591,9 @@ export class Context implements PluginScope {
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
+      get registry() {
+        return ctx.registry
+      },
       plugin(mod: PluginModule | PluginClassLike): PluginScope {
         // 嵌套插件：插件在 apply 里想再装子插件时，运行态必须是 installPlugin（热装语义），
         // 走根 plugin() 会因 state!=='created' 抛错。扁平并入根服务/插件表，返回自身便于链式。

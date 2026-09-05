@@ -249,6 +249,67 @@ describe('能力② inject 后 ctx.greeter 属性直访运行时可用（cordis 
   })
 })
 
+// ==================== 能力④ ctx.registry：插件注册表只读视图（cordis 06 诊断 PENDING） ====================
+
+describe('能力④ ctx.registry 只读枚举每插件 fiber（诊断 PENDING/await/dispose）', () => {
+  it('冷启动后 registry 枚举所有插件（含 ACTIVE 与 PENDING），fiber 可达', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'provider',
+      apply(c: PluginScope) {
+        c.provide('x', {})
+      },
+    })
+    ctx.plugin({
+      name: 'needy',
+      inject: ['missing-svc'], // 无人提供 → 永远 PENDING
+      apply() {},
+    })
+    await ctx.start()
+    const names = [...ctx.registry.keys()].sort()
+    expect(names).toEqual(['needy', 'provider'])
+    expect(ctx.registry.get('provider')?.fiber?.stateName).toBe('active')
+    expect(ctx.registry.get('needy')?.fiber?.stateName).toBe('pending')
+    // status 带 PENDING 缺哪个依赖（诊断）
+    expect(ctx.registry.get('needy')?.status.missingDeps).toEqual(['missing-svc'])
+  })
+
+  it('插件内 apply 经 ctx.registry 也能枚举其它插件（诊断依赖方）', async () => {
+    const ctx = new Context()
+    let seen: string[] = []
+    ctx.plugin({
+      name: 'probe',
+      apply(c: PluginScope) {
+        c.provide('x', {})
+        seen = [...c.registry.keys()].sort()
+      },
+    })
+    ctx.plugin({
+      name: 'needy',
+      inject: ['x'],
+      apply() {},
+    })
+    await ctx.start()
+    expect(seen).toEqual(['needy', 'probe'])
+    expect(ctx.get('x')).toEqual({})
+  })
+
+  it('registry 纯只读：不因枚举/访问改变装载或激活', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'p',
+      apply(c: PluginScope) {
+        c.provide('s', {})
+      },
+    })
+    await ctx.start()
+    expect(ctx.registry.get('p')?.status.state).toBe('active')
+    // 访问 registry 后插件仍 ACTIVE、服务仍上架
+    expect(ctx.fiber('p')?.stateName).toBe('active')
+    expect(ctx.get('s')).toEqual({})
+  })
+})
+
 // ==================== 能力③：Events 声明合并 + 类型化 on/emit ====================
 
 describe('能力③ declare Events 后 ctx.on/ctx.emit 多参类型化且运行时接线', () => {
