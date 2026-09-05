@@ -66,6 +66,11 @@ packages/
 ## 二、目标终态（做完"长什么样"，可验证）
 
 ### 2.1 插件作者体验 = 一套 cordis-tutorial 式手把手中文教程（最重要）
+> 落地口径（本目标按作者原意收敛，别照抄 dsh 全套）：教程是一串**手把手中文短篇**、每篇照抄能跑，落在画布能力上——
+> 已交付：`docs/plugin-dev/` 的《第一个插件 / 加一种节点 / 让插件可配置(settings) / 打包装进别的画布》(01-04)，
+> 覆盖 Cordis 写法(.ts 裸导出 name/inject/apply + ctx 能力段 + effect 自动回收 + inject 依赖编排)与配置(settings)。
+> 下面的 cordis-tutorial 7 章清单是"可借鉴的骨架/灵感"，供以后按需补"生命周期/服务/事件"等专题章，**不是本期验收硬性逐章克隆**；
+> 验收以第八节 目标B 的"4 篇照抄能跑 + 覆盖核心概念"为准。
 作者怎么学"开发插件"：**不是给一张 API 表或一段样板代码，而是像 `deepseek-harness/docs/cordis-tutorial/` 那样，
 从零起步的一串短篇中文教程**（`01-first-plugin → 02-lifecycle-and-effects → 03-services → 04-events → 05-config → 06-composition-and-hmr → 07-into-the-harness`），
 每一章都"照抄几行就能跑、跑完看到效果、末尾引下一章"，且**每一章都是一个可运行的示例**。mini-canvas 版教程把 cordis-tutorial 那 7 章的框架概念，逐章落到画布能力上（节点/主题/命令/服务/UI 槽/装配/配置）：
@@ -116,7 +121,7 @@ export class AudioService extends Service {
 - ctx 上的能力段（nodes/theme/commands/…）是内核把散装注册函数**收口后挂上 ctx** 的（`capabilities.ts`）；作者不必散 import 裸 `registerNodeType` 等。
 - **服务模型对齐 cordis ch3**：
   - 提供方：向别人公开一项能力——可用类形态（`Service` 子类，`super(ctx, name)` 注册）或 `ctx.inject(name, impl)` 上架；注册是 effect，随提供方卸载自动移除。
-  - 消费方：文件顶层的 `export const inject = ['name']` 声明硬依赖——**Cordis 会让该插件保持 PENDING，直到列出的每项服务都存在**，所以 `apply` 内能保证 `ctx.name` 已就绪；加载顺序由依赖决定，不由装配顺序决定。依赖方运行中被卸/热换时，依赖它的插件会随之卸载并在服务恢复后重载（防止持有失效引用）。
+  - 消费方：文件顶层的 `export const inject = ['name']` 声明硬依赖——内核在启动时按依赖做拓扑排序，`apply` 内 `ctx.get(name)` 可保证已就绪。注：cordis 的"缺提供方则保持 PENDING、提供方被卸则依赖方随之 PENDING/自动跟随重载"是**可选增强(目标 C，做不做不阻塞 B/D 主体)**；本期启动依赖用 topo 排序 + `ctx.get` 探缺（缺则抛错）实现。
   - 可选依赖：不写进 `inject`，在使用处用 `ctx.get('name')` 探测（缺则为 undefined，插件照跑）。
   - 编译时类型：用 `declare module` 声明合并给 `Context`/`Services` 接口加自己的条目，`ctx.xxx` 各处都有类型（不生成运行时接线，见 cordis ch3）。
 - `@mini-canvas/canvas-base`（可选薄层）只导出 `Context` 类型 + `define*` 助手（defineNode/defineTheme/defineCommand/defineService…），插件不散 import 内核/渲染的裸函数。
@@ -166,7 +171,7 @@ export function apply(ctx: Context) {
 
 ### 2.5 插件装配 / 卸载 / 换版本（对齐 cordis-tutorial `06 组合与 HMR` 的效果，适配"库"）
 cordis-tutorial 06 讲的是"把装配清单（`cordis.yml`）当应用：哪个插件、什么顺序、每插件 config，改配置/热换一个插件、诊断一直 PENDING 的插件"。mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个画布宿主能调的装配入口**（不建 CLI、不做 patch 语法、不做独立配置文件运行时解析，用一份装配清单数组当应用描述）：
-- **内核底座已有**：`api.installPlugin / uninstallPlugin / reloadPlugin(name, nextMod?) / listPlugins`（见 createMiniCanvasHost，CanvasHost `defineExpose.api` 与 `exposeToWindow` 都能拿到）。＝"装载/卸载/换版本"的核心已经在，语义对齐 cordis：卸载先回卷该插件全部 effect、依赖它的插件随之 PENDING/卸载（见 2.3 / tutorial 02-03），换版本 = 先卸后装新实现。
+- **内核底座已有**：`api.installPlugin / uninstallPlugin / reloadPlugin(name, nextMod?) / listPlugins`（见 createMiniCanvasHost，CanvasHost `defineExpose.api` 与 `exposeToWindow` 都能拿到）。＝"装载/卸载/换版本"的核心已经在：卸载先回卷该插件全部 effect(scope 自动回收)，换版本 = 先卸后装新实现。（"依赖它的插件随之 PENDING/自动跟随重载"属可选目标 C，见 2.3，不阻塞 D 主体。）
 - **要补的（外层）**：
   1. **从外部来源装**：能装"单文件插件 js / 源码 import 来的模块 / URL"，不只收内存里的 PluginModule。
   2. **装配清单（manifest）**：声明"这个画布项目装哪些插件、按什么顺序、每插件配什么 config"（对齐 cordis.yml 的 name/config 条目 + `id` 稳定标识语义）；宿主按清单装，后装的同 id 覆盖先装（轻量分层，同 cordis 按 id 比较只动变化部分）。
@@ -187,7 +192,7 @@ cordis-tutorial 06 讲的是"把装配清单（`cordis.yml`）当应用：哪个
   - **教程系列（核心交付，对齐 `deepseek-harness/docs/cordis-tutorial/` 那 7 章的框架式走法，落到画布能力上，见 2.1）**：一篇接一篇、每章都是可运行示例、照着抄几行就能跑的中文教程，放在 `docs/` 下并作为"怎么开发插件"的入口。每章结构对齐 cordis-tutorial：**前提 → 把某文件替换成这段代码 → 跑 → 你会看到 X → 下一章**，不用术语轰炸，只讲清"做什么、为什么"。教程教的就是 2.1/2.1b 那套 **cordis 写法**（.ts `export name/inject/apply(ctx)` 函数形态为主，兼讲生命周期/服务/事件/配置/组合）。
   - 作者只认内核那个 `Context`；散装 `registerNodeType/registerThemeSlot` 等收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`），注册自动回收（不手写 unregister，见 cordis ch2 effect）。`@mini-canvas/canvas-base`（薄层）导出 `Context` 类型 + `define*` 助手，作者不必散 import 裸注册函数。
 - **自查"内核有没有"**：教程里每一步用的能力（写插件 .ts、`apply(ctx)` 里的注册、`ctx.get/inject/effect`、`export inject` 的依赖编排、事件 `on/emit`、加进画布装配）内核**大半已有**（`PluginScope`/`capabilities.ts`/服务注册表/事件总线/装配）；要补的只是把散装注册函数收口挂上 ctx（让 `ctx.nodes/...` 等成立）+ `canvas-base` 薄层类型/助手 + 把教程写出来，不新增引擎逻辑。
-- **验收**：① 教程按 2.1 的章节流（≥ 前 5 章：第一个插件 / 生命周期与 effect / 服务 / 事件 / 配置）在 `docs/` 里、能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合 cordis-tutorial 的"替换→跑→看效果"结构，不把 API 表当正文；③ 教程教的就是 cordis 写法（函数形态 `.ts` 导出 `name/inject/apply(ctx)` + effect 自动回收 + `inject` 依赖编排），且能经内核 ctx（或 canvas-base）落地；④ 第 6/7 章（组合与 HMR / 进入画布整插件）在装配与目标 D 就绪后补上。
+- **验收**：① 教程按 2.1 的口径（第一篇接一篇、照抄能跑的中文教程，覆盖 Cordis 写法 .ts 导出 `name/inject/apply(ctx)` + ctx 能力段 + effect 自动回收 + inject 依赖编排 + settings 配置；落地篇见 `docs/plugin-dev/`）能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合"替换→跑→看效果"结构，不把 API 表当正文；③ 教程教的就是 cordis 写法，且能经内核 ctx（或 canvas-base）落地；④ 第 6/7 章（组合与 HMR / 进入画布整插件）在装配与目标 D 就绪后补上（已由《打包装进别的画布》覆盖）。
 
 ### 🎯 目标 B2 · 分组化配置体系（插件声明分组配置，UI 编辑、改动实时生效，性能可控）
 - **结果**：内核加一个 `settings` 能力段（挂 ctx，作者 `ctx.settings.define/...`，见 2.4）：插件把配置按**组**申报，每项带 **schema**（类型/默认/范围/可选/文案）；内核做**单一数据源** + **按作用域订阅变化(onChange)** + **高频合帧**；渲染侧有**设置面板**按分组自动长 UI 控件，改一项 → `set(key,value)` → 订阅方就地更新 → **实时生效、不整图重建**。
@@ -255,9 +260,9 @@ cordis-tutorial 06 讲的是"把装配清单（`cordis.yml`）当应用：哪个
 
 ## 八、验收总清单（全勾 = 本任务才结束）
 - [ ] 目标A：nodeRegistry/themeRegistry 支持多 occupant + order + id 增量/替换/remove + 插件可声明新槽；单测绿；两插件同槽按序同屏渲染；默认主题走新槽可一键顶替/热卸回退。
-- [ ] 目标B：散装注册收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`）可用、注册自动回收；教程按 2.1 的 cordis-tutorial 章节流（≥ 前 5 章：第一个插件 / 生命周期与 effect / 服务 / 事件 / 配置）在 `docs/` 里照抄能跑通；`@mini-canvas/canvas-base`（薄层：`Context` 类型 + `define*` 助手）存在可落地。
+- [ ] 目标B：散装注册收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`）可用、注册自动回收；中文作者教程在 `docs/plugin-dev/`（一篇接一篇、照抄能跑通：第一个插件 / 加一种节点 / 让插件可配置(settings) / 打包装进别的画布；覆盖 Cordis 写法 `.ts` 裸导出 `name/inject/apply(ctx)` + ctx 能力段 + effect 自动回收 + inject 依赖编排），照抄能跑通；`@mini-canvas/canvas-base`（薄层：`Context` 类型 + `define*` 助手）存在可落地。
 - [ ] 目标B2：内核 `settings`（分组 define/取值/onChange 订阅 + 高频合帧 + 单一数据源）在；主题插件声明≥2 组含 color/number 的 schema，设置面板自动长对应控件；改一项那一处实时重绘、无全图重建、其它元素不受影响；高频拖动流畅；另一插件改配置不触发本插件。
-- [ ] 目标D：宿主能经 `manager.install` 装插件(源码 import / 单文件 js / URL)并生效；`manager.uninstall` 卸后其 UI/服务/槽位消失（回卷该插件全部 effect、依赖它的随之 PENDING/卸载）、`manager.reload(name, 新实现)` 换版本生效；`manager.list()` 显示已装状态(fiber)；装配清单(manifest)能按序装插件并传/覆盖 config、另一画布应用复用即用；demo 整链"装配→卸→换版本"零报错。
+- [ ] 目标D：宿主能经 `manager.install` 装插件(源码 import / 单文件 js / URL)并生效；`manager.uninstall` 卸后回卷该插件全部 effect(其 UI/服务/槽位消失)、`manager.reload(name, 新实现)` 换版本生效；`manager.list()` 显示已装插件(name/config)；装配清单(manifest)能按序装插件并传/覆盖 config、另一画布应用复用即用；demo 整链"装配→卸→换版本"零报错。（注：依赖方随卸载 PENDING/自动跟随重载属目标 C 可选增强，不做不阻塞 D 主体。）
 - [ ] 目标C：per-plugin 可查句柄(fiber) + PENDING 依赖编排单测绿（可选，做了打勾）。
 - [ ] 验证示例：自定义端口/吸附/快速连接节点在 demo 行为符合 connection 声明（示例级）。
 - [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；demo 浏览器端到端零 console 报错。
