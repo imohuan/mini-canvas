@@ -12,7 +12,7 @@ import type { StorageAdapter } from '../src/services/storage/types'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
 import type { CanvasNode } from '../src/services/nodeStore'
 import type { SettingsStore } from '@mini-canvas/canvas-core-v2'
-import { CanvasHost, PluginSettingsPanel, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
+import { CanvasHost, PluginSettingsPanel, DEFAULT_HANDLE_VISUAL, type InstalledPluginInfo } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
@@ -70,7 +70,8 @@ function onReady(): void {
 }
 
 // —— 目标 D 演示：把统一安装句柄 manager 挂到 window + 页面角标显示已装插件(整链可操作) ——
-const demoPlugins = ref<string[]>([])
+// P5：每行带 fiber 运行时态(state/missingDeps/error)，dock 直接可诊断卡 PENDING/FAILED 的插件
+const demoPlugins = ref<InstalledPluginInfo[]>([])
 function bindManagerDemo(): void {
   const m = hostEl.value?.manager
   if (!m) return
@@ -80,7 +81,7 @@ function bindManagerDemo(): void {
   refreshManagerList()
 }
 function refreshManagerList(): void {
-  demoPlugins.value = (hostEl.value?.manager?.list() ?? []).map((p) => p.name)
+  demoPlugins.value = hostEl.value?.manager?.list() ?? []
 }
 async function demoUninstall(name: string): Promise<void> {
   await hostEl.value?.manager?.uninstall(name)
@@ -90,6 +91,21 @@ async function demoReloadTheme(): Promise<void> {
   // 演示换版本：theme-default 重载(用同模块) → manager.reload 卸旧装新
   await hostEl.value?.manager?.reload('theme-default', themeDefaultPlugin)
   refreshManagerList()
+}
+// —— P5：fiber state 徽标文案/配色（PENDING 附缺谁、FAILED 附报错） ——
+function pmStateLabel(p: InstalledPluginInfo): string {
+  const s = p.state ?? 'unknown'
+  if (s === 'active') return 'ACTIVE'
+  if (s === 'pending') return `PENDING 缺: ${p.missingDeps?.join(', ') || '未知'}`
+  if (s === 'failed') return `FAILED: ${p.error ?? ''}`
+  return s.toUpperCase()
+}
+function pmStateClass(p: InstalledPluginInfo): string {
+  const s = p.state ?? 'unknown'
+  if (s === 'active') return 'is-active'
+  if (s === 'pending') return 'is-pending'
+  if (s === 'failed') return 'is-failed'
+  return ''
 }
 
 /**
@@ -180,12 +196,14 @@ onBeforeUnmount(unbindThemeSettings)
       <PluginSettingsPanel :settings="settingsStore" />
     </div>
 
-    <!-- 目标 D 演示：插件管理器 dock(列出已装 + 卸载/重载 theme-default 换版本) -->
+    <!-- 目标 D 演示：插件管理器 dock(列出已装 + state/缺失依赖诊断 + 卸载/重载 theme-default 换版本) -->
     <div v-if="booted && demoPlugins.length" class="pm-dock">
       <div class="pm-hd">插件管理器 (manager)</div>
-      <div v-for="n in demoPlugins" :key="n" class="pm-row">
-        <span class="pm-name">{{ n }}</span>
-        <button class="pm-btn" @click="demoUninstall(n)">卸</button>
+      <div v-for="p in demoPlugins" :key="p.name" class="pm-row">
+        <span class="pm-name">{{ p.name }}</span>
+        <!-- fiber state 徽标：ACTIVE 绿 / PENDING 黄(附缺谁) / FAILED 红(附报错) / 其余中性 -->
+        <span class="pm-state" :class="pmStateClass(p)">{{ pmStateLabel(p) }}</span>
+        <button class="pm-btn" @click="demoUninstall(p.name)">卸</button>
       </div>
       <div class="pm-actions">
         <button class="pm-btn" @click="demoReloadTheme">重载 theme-default(换版本)</button>
@@ -332,11 +350,42 @@ onBeforeUnmount(unbindThemeSettings)
   padding: 3px 0;
 }
 .pm-name {
+  flex: 1;
+  min-width: 0;
   font-family: ui-monospace, monospace;
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* P5：fiber state 徽标（ACTIVE 绿 / PENDING 黄 / FAILED 红） */
+.pm-state {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #4b5563;
+  color: #d1d5db;
+}
+.pm-state.is-active {
+  background: rgba(34, 197, 94, 0.18);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.4);
+}
+.pm-state.is-pending {
+  background: rgba(234, 179, 8, 0.18);
+  color: #facc15;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+.pm-state.is-failed {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.45);
 }
 .pm-btn {
   padding: 1px 8px;
