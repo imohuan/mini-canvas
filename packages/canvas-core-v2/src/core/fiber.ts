@@ -209,9 +209,10 @@ export class Fiber {
 
   /**
    * 同步逆序(LIFO)跑完并清空当前已登记的 disposers（不改状态机）。
-   * 供"卸载/回退 PENDING/半成品失败"时同步清副作用；因为不置 DISPOSED，
-   * 所以可随后 markPending → 依赖恢复后 drain 重载复用本 fiber（对齐 cordis 卸载=清清理、重载=重跑 apply）。
-   * 单个 disposer 抛错不阻断其余；若某 disposer 返回 promise（现插件副作用全同步，理论没有），fire-and-forget 执行不 await。
+   * 供"回退 PENDING/半成品失败"这类**还要复用本 fiber** 的路径同步清副作用；
+   * 因为不置 DISPOSED，所以可随后 markPending → 依赖恢复后 drain 重载复用本 fiber。
+   * 仅保证同步 disposer 立即执行；若存在异步 disposer/inflight 异步 effect（现插件副作用全同步，理论没有），
+   * 请改用 dispose() 获得完整结算。
    */
   runDisposers(): void {
     const items = this.cleanups.splice(0).reverse()
@@ -219,7 +220,6 @@ export class Fiber {
       item.done = true
       try {
         const out = item.fn()
-        // 万一返回 thenable：不 await（本方法同步），仅确保它被启动/吞掉拒绝
         if (out && typeof (out as { then?: unknown }).then === 'function') {
           void Promise.resolve(out).catch(() => {})
         }
@@ -230,7 +230,7 @@ export class Fiber {
     this.cleanups = []
   }
 
-  /** 单个清理：跑 fn，吞掉自己的 rejection/异常（单错不阻断） */
+  /** 单个清理：跑 fn，吞掉自己的 rejection/异常（单错不阻断）。供异步 effect 在途 resolve 后执行其清理。 */
   private async safeRun(fn: FiberDisposer): Promise<void> {
     try {
       await fn()
@@ -240,30 +240,31 @@ export class Fiber {
   }
 
   /**
-   * 卸载本 fiber：逆序逐个跑清理（支持异步 disposer，逐项 await、单错不阻断），
-   * 全部结束后置 DISPOSED。幂等：重复调用返回同一完成 promise。
+   * 终结卸载：**同步 disposer 立即执行**（保证调用返回后同步副作用已清，供测试/热卸同步断言），
+   * 异步 disposer 与在途异步 effect 则被收集并在返回的 promise 中 await 完成后，置 DISPOSED。
+   * 幂等：重复调用返回同一完成 promise。
    */
   dispose(): Promise<void> {
     if (this._settled) return this._settled
     this._disposeStarted = true
-    if (this._state !== FiberState.DISPOSED) {
-      this.transition(FiberState.UNLOADING)
+    if (this._state !== FiberState.DISPOSED) this.transition(FiberState.UNLOADING)
+    const wait: Array<Promise<unknown>> = [...this.inflight]
+    const items = this.cleanups.splice(0).reverse()
+    this.cleanups = []
+    for (const item of items) {
+      item.done = true
+      try {
+        const out = item.fn()
+        if (out && typeof (out as { then?: unknown }).then === 'function') {
+          wait.push(Promise.resolve(out)) // 异步 disposer：等待完成
+        }
+      } catch {
+        /* 单错不阻断 */
+      }
     }
     this._settled = (async () => {
-      // 先等齐在途异步 effect 的 setup（其清理登记好），避免卸载时漏跑
-      if (this.inflight.size) {
-        await Promise.allSettled([...this.inflight])
-      }
-      const items = this.cleanups.splice(0).reverse()
-      // 逆序逐个 await，单错不阻断
-      for (const item of items) {
-        item.done = true
-        await this.safeRun(item.fn)
-      }
-      this.cleanups = []
-      if (this._state !== FiberState.DISPOSED) {
-        this.transition(FiberState.DISPOSED)
-      }
+      if (wait.length) await Promise.allSettled(wait)
+      if (this._state !== FiberState.DISPOSED) this.transition(FiberState.DISPOSED)
     })()
     return this._settled
   }

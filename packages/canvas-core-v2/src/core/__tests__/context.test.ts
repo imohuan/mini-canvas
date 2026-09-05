@@ -129,6 +129,21 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(cleanup).toHaveBeenCalledTimes(1)
   })
 
+  it('async disposer：stop() 会触发其执行（不再丢弃），对齐 cordis fiber.dispose', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    ctx.plugin({
+      name: 'p',
+      apply(c: PluginScope) {
+        c.effect(() => async () => { await Promise.resolve(); order.push('clean') })
+      },
+    })
+    await ctx.start()
+    ctx.stop() // 同步返回但已把 async disposer 触发起来
+    await new Promise((r) => setTimeout(r, 0))
+    expect(order).toContain('clean')
+  })
+
   it('ctx:ready 事件在 start 完成后广播', async () => {
     const ctx = new Context()
     const ready = vi.fn()

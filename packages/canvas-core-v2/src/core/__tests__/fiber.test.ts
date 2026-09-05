@@ -118,4 +118,20 @@ describe('Fiber（cordis 语义生命周期状态机 + 副作用容器）', () =
     expect(a).toHaveBeenCalledTimes(1)
     expect(b).toHaveBeenCalledTimes(1)
   })
+
+  it('dispose() 同步 disposer 立即执行、async disposer 被 await 后才 resolve（对齐 cordis）', async () => {
+    const fiber = new Fiber({ name: 'p' })
+    const order: string[] = []
+    fiber.effect(() => () => order.push('clean-sync'))
+    fiber.onDispose(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+      order.push('clean-async')
+    })
+    const p = fiber.dispose()
+    // 同步 disposer 在 dispose() 返回时已跑完
+    expect(order).toContain('clean-sync')
+    await p
+    expect(order).toContain('clean-async') // 异步 disposer 被 await
+    expect(fiber.state).toBe(FiberState.DISPOSED)
+  })
 })

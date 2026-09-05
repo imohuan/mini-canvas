@@ -282,13 +282,13 @@ export class Context implements PluginScope {
     this.drain()
   }
 
-  /** 停止：逆序释放各插件 fiber（含全部副作用），回到 created 可重新 start。 */
+  /** 停止：逆序释放各插件 fiber（含全部副作用，async disposer 也会被触发/等待），回到 created 可重新 start。 */
   stop(): void {
     if (this.state !== 'started') return
-    // 逆序卸载（依赖方先卸）
+    // 逆序卸载（依赖方先卸）；dispose() 同步跑掉同步 disposer、并启动异步 disposer 结算
     for (const name of [...this.fibers.keys()].reverse()) {
       this.setLifecycle(name, Lifecycle.UNINSTALLING)
-      this.fibers.get(name)?.runDisposers() // 同步清该插件全部副作用
+      void this.fibers.get(name)?.dispose()
       this.setLifecycle(name, Lifecycle.UNINSTALLED)
       this.bus.emit('ctx:plugin-uninstalled', { name })
     }
@@ -355,7 +355,7 @@ export class Context implements PluginScope {
     // 守卫按"有无 fiber"：既覆盖已 ACTIVE 插件，也让冷启动 PENDING(缺依赖) / FAILED 遗留 fiber 可被清理（原 scope 守卫会漏）
     if (!fiber) return false
     this.setLifecycle(name, Lifecycle.UNINSTALLING)
-    fiber.runDisposers() // 同步清该插件全部副作用（含撤销它上架的服务/注册）
+    fiber.dispose() // 终结卸载：同步 disposer 立即执行 + 启动 async disposer 结算；fiber 随即移出 map
     this.fibers.delete(name)
     this.plugins.delete(name)
     this.configs.delete(name)
