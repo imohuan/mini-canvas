@@ -1,15 +1,41 @@
+/**
+ * fullchain.test —— 画布宿主装配的全链路集成测试（由原 src/demo/__tests__/demo.test.ts 迁移）。
+ *
+ * 迁移说明：原测试基于早期装配 bootCanvas(src/demo/host.ts)，与现行 createMiniCanvasHost 功能重复；
+ * bootCanvas 已删除，测试改用 createMiniCanvasHost 等价复测。createMiniCanvasHost **不内置**业务插件，
+ * 需把 text/image/canvasCommands 经 coldPlugins 显式传入（行为与原 bootCanvas 内置 text+commands 等价）。
+ *
+ * 覆盖：内核+插件装配、持久化(刷新恢复)、image/text 节点、命令(create/delete/undo/redo)、热装热卸。
+ */
 import { describe, it, expect } from 'vitest'
-import { bootCanvas } from '../host'
+import { createMiniCanvasHost } from '../createMiniCanvasHost'
 import { MemoryStorageAdapter } from '../../services/storage/memoryAdapter'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
+import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import type { CanvasNode } from '../../services/nodeStore'
 import { NodeStore } from '../../services/nodeStore'
+import type { PluginModule } from '../../core'
+
+/** 默认冷启动：text + image + commands（对应原 bootCanvas 内置 text/commands + opts.plugins 加 image） */
+function baseColdPlugins(): PluginModule[] {
+  return [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]
+}
+
+/** 建宿主：可覆盖 adapter / coldPlugins */
+async function boot(opts: { adapter?: MemoryStorageAdapter; plugins?: PluginModule[] } = {}) {
+  const { host } = await createMiniCanvasHost({
+    adapter: opts.adapter ?? new MemoryStorageAdapter(),
+    coldPlugins: opts.plugins ?? baseColdPlugins(),
+  })
+  return host
+}
 
 describe('M4 最小 demo 全链（tracer bullet）', () => {
   it('建内核→装text插件→放节点→编辑→保存', async () => {
-    const host = await bootCanvas()
+    const host = await boot()
 
     // 插件在 setup 里注册了 text 类型，并经 ctx.inject 暴露 'text' 服务
     const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string; editText(id: string, t: string): void }>('text')
@@ -39,7 +65,7 @@ describe('M4 最小 demo 全链（tracer bullet）', () => {
 
     // 第一次会话：建 + 编辑 + 落盘 + 正常卸载
     {
-      const host = await bootCanvas(storage)
+      const host = await boot({ adapter: storage })
       const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string; editText(id: string, t: string): void }>('text')
       text.addTextNode({ x: 0, y: 0 })
       text.editText('1', '刷新后还在')
@@ -49,7 +75,7 @@ describe('M4 最小 demo 全链（tracer bullet）', () => {
 
     // 第二次会话：全新内核（模拟刷新页面），读同一存储 → 自动恢复画布
     {
-      const host = await bootCanvas(storage)
+      const host = await boot({ adapter: storage })
       const node = host.nodeStore.getNode('1')!
       expect(node.type).toBe('text')
       expect(node.data.text).toBe('刷新后还在')
@@ -58,7 +84,7 @@ describe('M4 最小 demo 全链（tracer bullet）', () => {
   })
 
   it('多个节点 id 依次累加、互不撞号', async () => {
-    const host = await bootCanvas()
+    const host = await boot()
     const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
     expect(text.addTextNode({ x: 0, y: 0 })).toBe('1')
     expect(text.addTextNode({ x: 10, y: 10 })).toBe('2')
@@ -69,7 +95,7 @@ describe('M4 最小 demo 全链（tracer bullet）', () => {
 
 describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
   it('image 插件：加一个 image 节点，type=data 正确', async () => {
-    const host = await bootCanvas({ plugins: [nodeImagePlugin] })
+    const host = await boot()
     const img = host.ctx.get<ImageNodeService>('image')
     const id = img.addImageNode({ x: 0, y: 0 }, 'data:image/png;base64,AAA')
     const node = host.nodeStore.getNode(id)!
@@ -80,7 +106,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
 
   it('removeNode：删节点后不在 nodeStore、也落盘（存储里同步少一个）', async () => {
     const storage = new MemoryStorageAdapter()
-    const host = await bootCanvas({ adapter: storage, plugins: [nodeImagePlugin] })
+    const host = await boot({ adapter: storage })
     const img = host.ctx.get<ImageNodeService>('image')
     const text = host.ctx.get<TextNodeService>('text')
     const tid = text.addTextNode({ x: 0, y: 0 })
@@ -104,7 +130,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
     const storage = new MemoryStorageAdapter()
     // 第一次会话：text + image 各一，落盘后卸载
     {
-      const host = await bootCanvas({ adapter: storage, plugins: [nodeImagePlugin] })
+      const host = await boot({ adapter: storage })
       const text = host.ctx.get<TextNodeService>('text')
       const img = host.ctx.get<ImageNodeService>('image')
       text.addTextNode({ x: 0, y: 0 })
@@ -115,7 +141,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
     }
     // 第二次会话：模拟刷新，同一存储恢复两节点
     {
-      const host = await bootCanvas({ adapter: storage, plugins: [nodeImagePlugin] })
+      const host = await boot({ adapter: storage })
       const nodes = host.nodeStore.getNodes()
       expect(nodes).toHaveLength(2)
       const textNode = host.nodeStore.getNode('1')!
@@ -137,7 +163,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
   })
 
   it('热重载 image 插件：卸载后类型/creator/content 回收，重装同名插件恢复', async () => {
-    const host = await bootCanvas({ plugins: [nodeImagePlugin] })
+    const host = await boot()
     // 初始：image 类型可建、有 creator
     expect(host.nodeStore.types.has('image')).toBe(true)
     expect(host.nodeFactory.creatableTypes()).toContain('image')
@@ -164,7 +190,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
 
 describe('M3 命令/删除/创建/撤销（host 集成）', () => {
   it('command:create-node 经 nodeFactory 建节点、command:undo 可还原', async () => {
-    const host = await bootCanvas({ plugins: [nodeImagePlugin] })
+    const host = await boot()
     const id = host.command.execute('command:create-node', {
       type: 'text',
       position: { x: 10, y: 10 },
@@ -183,7 +209,7 @@ describe('M3 命令/删除/创建/撤销（host 集成）', () => {
 
   it('command:delete 删"选中"（多选经统一命令），一次删除进一条历史', async () => {
     const storage = new MemoryStorageAdapter()
-    const host = await bootCanvas({ adapter: storage, plugins: [nodeImagePlugin] })
+    const host = await boot({ adapter: storage })
     const id1 = host.nodeFactory.create('text', { x: 0, y: 0 })
     const id2 = host.nodeFactory.create('image', { x: 50, y: 50 }, 'url')
     await host.save.flush()
@@ -208,7 +234,7 @@ describe('M3 命令/删除/创建/撤销（host 集成）', () => {
   })
 
   it('command:delete 无选中时 no-op 且不产生历史', async () => {
-    const host = await bootCanvas()
+    const host = await boot()
     host.nodeFactory.create('text', { x: 0, y: 0 })
     host.selection.clear()
     const before = host.history.undoDepth

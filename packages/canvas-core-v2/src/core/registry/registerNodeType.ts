@@ -12,7 +12,7 @@
  * 依赖方向：内核→插件为空（内核不 import 插件）；插件/宿主 → 内核（import 本助手）。
  * content 组件句柄 opaque，内核不 import Vue。
  *
- * 生命周期：本注册面向"启动时一次性装载"，宿主在 bootCanvas 里 create NodeRegistry 并注入 ctx
+ * 生命周期：本注册面向"启动时一次性装载"，宿主在 createMiniCanvasHost 里 create NodeRegistry 并注入 ctx
  * ('nodeRegistry')，插件 apply 时调用即完成落表；装载一次不卸载。HMR/热重载的可逆注销
  * 后续再按 dsh effect 语义补。
  */
@@ -55,7 +55,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
   const revokers: Array<() => void> = [() => nodeStore.unregisterType(def.type)]
 
   // ② 展示侧：content/title/toolbar 段组件（opaque 句柄）
-  //    宿主经 bootCanvas 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
+  //    宿主经 createMiniCanvasHost 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
   const segs = def.segments ?? {}
   const nodeRegistry = safeGet<NodeRegistry>(ctx, 'nodeRegistry')
   if (nodeRegistry && Object.keys(segs).length > 0) {
