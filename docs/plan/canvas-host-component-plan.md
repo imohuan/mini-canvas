@@ -1,7 +1,13 @@
 # CanvasHost 渲染宿主组件 —— 收编 VueFlow 装配
 
-日期：2026-09-05 · 状态：**待用户审核后实现**
+日期：2026-09-05 · 状态：**已实现（CanvasHost + 两个 demo 收薄）**
 作者：code-developer
+
+> 更新：CanvasHost.vue / canvasHostCore.ts / NodeStore.subscribe / contracts 改名 / CanvasDemo 与
+> plugin-theme-default demo 收薄均已完成并浏览器端到端验证。后续架构清理：**canvasCommands 已外置**为
+> `@mini-canvas/plugin-canvas-commands` 独立包（见方向 A 记录）。history.ts 留在内核 services 是**对的**
+> —— 它是撤销"机制"（snapshot/restore 注入的通用栈），被所有改图操作横切依赖，非业务插件；真正的
+> 撤销业务（command:undo/redo/delete 等）已随 canvasCommands 外置。
 
 ## 一、需求（用户确认）
 用户三问三答后明确要做：
