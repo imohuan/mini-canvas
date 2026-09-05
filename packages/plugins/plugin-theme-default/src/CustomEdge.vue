@@ -5,8 +5,8 @@
 // 与 v1 差异：v1 读 canvas.state.core.* 与 pinia selectionState；v2 改为 props 显式传入(解耦 store)，
 //       默认值对齐 core-node-contract §0 配置默认表。几何逻辑抽到 ./edgeGeometry.ts(可单测)，此处只做装配。
 import { computed, inject, ref, onMounted, onUnmounted } from 'vue'
-import { useVueFlow } from '@vue-flow/core'
-import type { EdgeProps } from '@vue-flow/core'
+import { useVueFlow } from '@mini-canvas/canvas-core-v2'
+import type { EdgeProps } from '@mini-canvas/canvas-core-v2'
 import {
   Position,
   getSourcePosition,
@@ -16,12 +16,12 @@ import {
   findClosestPointOnPath,
   type EdgeType,
   type EdgeAppearance,
-} from './edgeGeometry'
+} from '@mini-canvas/canvas-core-v2/components/edgeGeometry'
 import {
   EDGE_VISUAL_KEY,
   EDGE_SELECTION_KEY,
   type EdgeVisual,
-} from './edgeContext'
+} from '@mini-canvas/canvas-core-v2'
 
 interface CustomEdgeExtraProps {
   /** 临时拖线/批量临时边 */

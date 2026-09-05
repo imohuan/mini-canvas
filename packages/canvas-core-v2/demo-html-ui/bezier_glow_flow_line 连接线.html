@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>节点连接线 - SVG Path 内部渐变流动</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background-color: #0b0c0e;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 点阵背景 */
+    .grid-bg {
+      background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.2px, transparent 1.2px);
+      background-size: 20px 20px;
+    }
+
+    /* 节点卡片 */
+    .node-card {
+      position: absolute;
+      background: rgba(22, 25, 31, 0.88);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      cursor: move;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      z-index: 10;
+    }
+
+    .node-card:hover {
+      border-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.8);
+    }
+
+    .port {
+      width: 12px;
+      height: 12px;
+      background-color: #ffffff;
+      border: 2px solid #0b0c0e;
+      border-radius: 50%;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+    }
+
+    .port-left { left: -6px; }
+    .port-right { right: -6px; }
+
+    /* SVG 连接线样式定义 */
+    .theme-default-edge .hit {
+      cursor: pointer;
+      pointer-events: stroke;
+    }
+
+    .theme-default-edge .line {
+      stroke: #272a30;
+      stroke-width: 2.5px;
+      stroke-linecap: round;
+    }
+
+    /* 悬浮控制面板 */
+    .control-panel {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 20, 26, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(18px);
+      border-radius: 20px;
+      padding: 12px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 100;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      max-width: 95vw;
+    }
+
+    .ctrl-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #cbd5e1;
+    }
+
+    .ctrl-item label {
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
+    .badge {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #38bdf8;
+      min-width: 36px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      height: 4px;
+      border-radius: 2px;
+      accent-color: #38bdf8;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body class="grid-bg w-screen h-screen relative flex items-center justify-center">
+
+  <!-- SVG 画布容器 -->
+  <svg id="svgCanvas" class="absolute inset-0 w-full h-full pointer-events-none z-0">
+    <defs id="svgDefs">
+      <!-- 动态渐变 stop 将由 JS 实时绑定管理 -->
+    </defs>
+
+    <!-- 您指定的完整边缘结构组 (g.theme-default-edge) -->
+    <g data-v-b5163b8b="" class="theme-default-edge" id="edgeGroup">
+      <!-- 宽透明点击热区（便于选中/双击） -->
+      <path data-v-b5163b8b="" id="hitPath" class="hit" fill="none" stroke="transparent" stroke-width="18"></path>
+      <!-- 可见底线 -->
+      <path data-v-b5163b8b="" id="baseLinePath" class="line" fill="none"></path>
+
+      <!-- 动态注入的流动光斑 SVG path 容器 -->
+      <g id="flowPathsContainer"></g>
+
+      <!-- 箭头 -->
+      <!--v-if-->
+    </g>
+  </svg>
+
+  <!-- 左侧输入节点 -->
+  <div id="nodeLeft" class="node-card w-48 h-32 p-4 flex flex-col justify-between" style="left: calc(50vw - 340px); top: calc(50vh - 120px);">
+    <div class="flex items-center gap-2">
+      <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+      <span class="text-xs font-semibold tracking-wider text-gray-300 uppercase">Input Node</span>
+    </div>
+    <div class="text-xs text-gray-400">基于纯原生 SVG Path 渲染</div>
+    <div class="port port-right" id="portLeft"></div>
+  </div>
+
+  <!-- 右侧输出节点 -->
+  <div id="nodeRight" class="node-card w-48 h-32 p-4 flex flex-col justify-between" style="left: calc(50vw + 140px); top: calc(50vh + 40px);">
+    <div class="flex items-center gap-2">
+      <div class="w-3 h-3 rounded-full bg-indigo-400"></div>
+      <span class="text-xs font-semibold tracking-wider text-gray-300 uppercase">Output Node</span>
+    </div>
+    <div class="text-xs text-gray-400">支持拖拽节点动态切线弯曲</div>
+    <div class="port port-left" id="portRight"></div>
+  </div>
+
+  <!-- 底部多维度交互控制面板 -->
+  <div class="control-panel">
+    <!-- 1. 流动速度 -->
+    <div class="ctrl-item">
+      <label for="speed">流动速度</label>
+      <input type="range" id="speed" min="0.1" max="10.0" step="0.1" value="2.5" class="w-20">
+      <span id="speedVal" class="badge">2.5</span>
+    </div>
+
+    <div class="h-4 w-[1px] bg-gray-700"></div>
+
+    <!-- 2. 色块间隔 -->
+    <div class="ctrl-item">
+      <label for="interval">色块间隔</label>
+      <input type="range" id="interval" min="50" max="800" step="10" value="250" class="w-20">
+      <span id="intervalVal" class="badge">250px</span>
+    </div>
+
+    <div class="h-4 w-[1px] bg-gray-700"></div>
+
+    <!-- 3. 色块长度 -->
+    <div class="ctrl-item">
+      <label for="blockSize">色块长度</label>
+      <input type="range" id="blockSize" min="20" max="300" step="5" value="100" class="w-20">
+      <span id="sizeVal" class="badge">100px</span>
+    </div>
+
+    <div class="h-4 w-[1px] bg-gray-700"></div>
+
+    <!-- 4. 2端渐变百分比 -->
+    <div class="ctrl-item">
+      <label for="fadePercent">渐变占比</label>
+      <input type="range" id="fadePercent" min="5" max="50" step="1" value="35" class="w-20">
+      <span id="fadeVal" class="badge">35%</span>
+    </div>
+
+    <div class="h-4 w-[1px] bg-gray-700"></div>
+
+    <!-- 5. 渐变强度 / Peak Alpha -->
+    <div class="ctrl-item">
+      <label for="intensity">渐变强度</label>
+      <input type="range" id="intensity" min="10" max="100" step="5" value="90" class="w-20">
+      <span id="intensityVal" class="badge">90%</span>
+    </div>
+
+    <div class="h-4 w-[1px] bg-gray-700"></div>
+
+    <!-- 6. 颜色选择器 -->
+    <div class="ctrl-item">
+      <label for="colorPicker">色块颜色</label>
+      <input type="color" id="colorPicker" value="#38bdf8" class="w-6 h-6 bg-transparent border-0 cursor-pointer rounded">
+    </div>
+  </div>
+
+  <script>
+    const nodeLeft = document.getElementById('nodeLeft');
+    const nodeRight = document.getElementById('nodeRight');
+
+    const hitPath = document.getElementById('hitPath');
+    const baseLinePath = document.getElementById('baseLinePath');
+    const flowPathsContainer = document.getElementById('flowPathsContainer');
+    const svgDefs = document.getElementById('svgDefs');
+
+    // 获取控件元素
+    const speedInput = document.getElementById('speed');
+    const intervalInput = document.getElementById('interval');
+    const sizeInput = document.getElementById('blockSize');
+    const fadeInput = document.getElementById('fadePercent');
+    const intensityInput = document.getElementById('intensity');
+    const colorInput = document.getElementById('colorPicker');
+
+    // 数值显示 Badge
+    const speedVal = document.getElementById('speedVal');
+    const intervalVal = document.getElementById('intervalVal');
+    const sizeVal = document.getElementById('sizeVal');
+    const fadeVal = document.getElementById('fadeVal');
+    const intensityVal = document.getElementById('intensityVal');
+
+    // 节点拖拽逻辑
+    function makeDraggable(el) {
+      let isDragging = false;
+      let startX, startY, initialLeft, initialTop;
+
+      el.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        initialLeft = el.offsetLeft;
+        initialTop = el.offsetTop;
+        el.style.zIndex = '20';
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        el.style.left = `${initialLeft + dx}px`;
+        el.style.top = `${initialTop + dy}px`;
+        updateEdgePath();
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          el.style.zIndex = '10';
+        }
+      });
+    }
+
+    makeDraggable(nodeLeft);
+    makeDraggable(nodeRight);
+
+    // 计算并更新主 SVG Path 的 d 属性 (三次贝塞尔曲线)
+    function updateEdgePath() {
+      const leftRect = nodeLeft.getBoundingClientRect();
+      const rightRect = nodeRight.getBoundingClientRect();
+
+      const p0 = { x: leftRect.right, y: leftRect.top + leftRect.height / 2 };
+      const p3 = { x: rightRect.left, y: rightRect.top + rightRect.height / 2 };
+
+      const dx = Math.max(Math.abs(p3.x - p0.x) * 0.5, 60);
+      const p1 = { x: p0.x + dx, y: p0.y };
+      const p2 = { x: p3.x - dx, y: p3.y };
+
+      const dAttr = `M ${p0.x},${p0.y} C ${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`;
+
+      hitPath.setAttribute('d', dAttr);
+      baseLinePath.setAttribute('d', dAttr);
+    }
+
+    updateEdgePath();
+    window.addEventListener('resize', updateEdgePath);
+
+    let animOffset = 0; // 累加流动距离
+
+    // 保持 SVG defs 中的 linearGradient 和 flowPathsContainer 中的 path 数量一致
+    function syncSVGNodes(count, colorHex, fadePct, maxAlpha) {
+      // 1. 同步 linearGradient
+      while (svgDefs.children.length < count) {
+        const idx = svgDefs.children.length;
+        const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+        grad.id = `svg-flow-grad-${idx}`;
+        grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+        svgDefs.appendChild(grad);
+      }
+      while (svgDefs.children.length > count) {
+        svgDefs.removeChild(svgDefs.lastChild);
+      }
+
+      // 2. 同步 Flow Path
+      while (flowPathsContainer.children.length < count) {
+        const idx = flowPathsContainer.children.length;
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.id = `svg-flow-path-${idx}`;
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', `url(#svg-flow-grad-${idx})`);
+        path.setAttribute('stroke-width', '3.5');
+        path.setAttribute('stroke-linecap', 'round');
+        flowPathsContainer.appendChild(path);
+      }
+      while (flowPathsContainer.children.length > count) {
+        flowPathsContainer.removeChild(flowPathsContainer.lastChild);
+      }
+
+      // 3. 更新 Gradient Stop 点的渐变占比与透明度
+      for (let i = 0; i < count; i++) {
+        const grad = document.getElementById(`svg-flow-grad-${i}`);
+        grad.innerHTML = `
+          <stop offset="0%" stop-color="${colorHex}" stop-opacity="0" />
+          <stop offset="${fadePct}%" stop-color="${colorHex}" stop-opacity="${maxAlpha}" />
+          <stop offset="${100 - fadePct}%" stop-color="${colorHex}" stop-opacity="${maxAlpha}" />
+          <stop offset="100%" stop-color="${colorHex}" stop-opacity="0" />
+        `;
+      }
+    }
+
+    // 核心渲染循环
+    function renderFrame() {
+      const totalLen = baseLinePath.getTotalLength();
+
+      if (totalLen <= 0) {
+        requestAnimationFrame(renderFrame);
+        return;
+      }
+
+      // 读取控件参数
+      const speed = parseFloat(speedInput.value);
+      const intervalGap = parseFloat(intervalInput.value);
+      const blockSize = parseFloat(sizeInput.value);
+      const fadePercent = parseFloat(fadeInput.value);
+      const intensity = parseFloat(intensityInput.value) / 100;
+      const colorHex = colorInput.value;
+
+      // 更新 Badge 文案
+      speedVal.textContent = speed.toFixed(1);
+      intervalVal.textContent = `${intervalGap}px`;
+      sizeVal.textContent = `${blockSize}px`;
+      fadeVal.textContent = `${fadePercent}%`;
+      intensityVal.textContent = `${Math.round(intensity * 100)}%`;
+
+      // 周期距离
+      const cycleDist = blockSize + intervalGap;
+
+      // 动画位移递增
+      animOffset = (animOffset + speed) % cycleDist;
+
+      // 计算当前落在线段有效视角内的所有色块起始距离
+      const activeStartDists = [];
+      const startD = animOffset - cycleDist;
+
+      for (let dist = startD; dist < totalLen + cycleDist; dist += cycleDist) {
+        if (dist + blockSize >= 0 && dist <= totalLen) {
+          activeStartDists.push(dist);
+        }
+      }
+
+      // 动态同步 SVG 节点结构
+      syncSVGNodes(activeStartDists.length, colorHex, fadePercent, intensity);
+
+      const dAttr = baseLinePath.getAttribute('d');
+
+      // 更新每个色块的矢量方向与 stroke 描边参数
+      activeStartDists.forEach((startDist, idx) => {
+        const grad = document.getElementById(`svg-flow-grad-${idx}`);
+        const flowPath = document.getElementById(`svg-flow-path-${idx}`);
+
+        if (!grad || !flowPath) return;
+
+        // 截取合法路径范围计算矢量端点，锁定 userSpaceOnUse 线性渐变角度
+        const validStart = Math.max(0, Math.min(totalLen, startDist));
+        const validEnd = Math.max(0, Math.min(totalLen, startDist + blockSize));
+
+        const pStart = baseLinePath.getPointAtLength(validStart);
+        const pEnd = baseLinePath.getPointAtLength(validEnd);
+
+        // 设置渐变在当前 Path 色块两端之间的世界坐标映射
+        grad.setAttribute('x1', pStart.x);
+        grad.setAttribute('y1', pStart.y);
+        grad.setAttribute('x2', pEnd.x);
+        grad.setAttribute('y2', pEnd.y);
+
+        // 利用 stroke-dasharray 和 stroke-dashoffset 原生在 SVG Path 上进行截取和移动
+        flowPath.setAttribute('d', dAttr);
+        flowPath.setAttribute('stroke-dasharray', `${blockSize} ${totalLen * 2}`);
+        flowPath.setAttribute('stroke-dashoffset', `${-startDist}`);
+      });
+
+      requestAnimationFrame(renderFrame);
+    }
+
+    // 启动动画
+    requestAnimationFrame(renderFrame);
+  </script>
+</body>
+</html>

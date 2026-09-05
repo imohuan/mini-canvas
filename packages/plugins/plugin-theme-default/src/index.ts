@@ -1,21 +1,24 @@
-// plugin-theme-default —— 画布"默认主题"插件（示例：插件里用 vue 组件替换连线/背景 UI）。
+// plugin-theme-default —— 画布"默认主题"插件。
 //
-// 职责演示：主题插件经 registerThemeSlot 把自写 vue 组件填进画布槽位，宿主(demo)装配时消费。
-// 本包只演示"替换 UI"，不碰节点内容(那是 node 插件的事)。要换皮就换/加主题插件。
+// 职责：把宿主渲染器收编成主题插件提供的默认皮 ——
+//   nodeShell = BaseNode（完整节点壳：端口/标题就地改名/选中环/LOD/浮动端口）
+//   edge      = CustomEdge（完整自定义边：流光/箭头/双击剪切）
+//   background= DefaultBackground（跟随画布的圆点底）
+// core 只留"槽位 + 令牌"契约，不再硬编码默认 .vue 渲染器；装本插件即有默认皮。
 //
-// 纯逻辑 + vue 组件句柄都经 opaque 传递；依赖 @mini-canvas/canvas-core-v2 的 registerThemeSlot。
+// 经 registerThemeSlot 填进 themeRegistry，宿主(demo/预览)装配时消费；热卸则回退(无皮)。
 import { registerThemeSlot } from '@mini-canvas/canvas-core-v2'
 import type { PluginModule } from '@mini-canvas/canvas-core-v2'
-import DefaultEdge from './DefaultEdge.vue'
+import BaseNode from './BaseNode.vue'
+import CustomEdge from './CustomEdge.vue'
 import DefaultBackground from './DefaultBackground.vue'
-import ThemeShell from './ThemeShell.vue'
 
 export const themeDefaultPlugin: PluginModule = {
   name: 'theme-default',
   setup(ctx) {
-    registerThemeSlot(ctx, 'nodeShell', ThemeShell) // 用主题外壳替换宿主默认 BaseNode 壳
-    registerThemeSlot(ctx, 'edge', DefaultEdge) // 用插件自己的连线组件替换宿主默认
-    registerThemeSlot(ctx, 'background', DefaultBackground) // 插件自己的画布背景
+    registerThemeSlot(ctx, 'nodeShell', BaseNode) // 完整节点壳（收编自 core）
+    registerThemeSlot(ctx, 'edge', CustomEdge) // 完整自定义连线（收编自 core）
+    registerThemeSlot(ctx, 'background', DefaultBackground) // 画布背景
     registerThemeSlot(ctx, 'edgeDefaultType', 'custom')
   },
 }

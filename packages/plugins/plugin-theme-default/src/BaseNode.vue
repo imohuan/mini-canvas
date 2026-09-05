@@ -8,12 +8,16 @@
 //   5. LOD：zoom < nodeLodLowDetailZoom(0.4) 时简化渲染（去阴影/标题），降低缩放重绘成本。
 // 与 v1 差异：读 canvas.state.core.* 的配置改为 props/默认值；连接 3D 反馈/浮动端口(MovingHandle)留批次 C。
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useVueFlow, Position } from '@vue-flow/core'
+import { useVueFlow, Position } from '@mini-canvas/canvas-core-v2'
 import MovingHandle from './MovingHandle.vue'
-import { resolveSegment } from '../core/registry/nodeRenderer'
-import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './nodeRegistryKey'
-import type { NodeWrite } from './nodeRegistryKey'
-import { CANVAS_PARAMS_KEY, type CanvasParams } from './canvasParamKey'
+import {
+  resolveSegment,
+  NODE_REGISTRY_KEY,
+  NODE_WRITE_KEY,
+  CANVAS_PARAMS_KEY,
+} from '@mini-canvas/canvas-core-v2'
+import type { NodeWrite } from '@mini-canvas/canvas-core-v2'
+import type { CanvasParams } from '@mini-canvas/canvas-core-v2'
 
 const props = defineProps<{ id: string; type: string; data: Record<string, unknown>; selected?: boolean }>()
 // 节点类型都是本组件(VueFlow nodeTypes 全指到 BaseNode)，透传的 selected 等内部 prop 不落到根

@@ -6,7 +6,7 @@
 // 与 v1 差异：v1 CSS 走 --canvas-node-* 主题变量；v2 用字面色值(未建 CSS 变量主题)。
 //       无 pinia 依赖（v1 本无 store，纯 props）。几何/状态机逻辑与 v1 逐行一致。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position } from '@mini-canvas/canvas-core-v2'
 
 /** 把 value 限制在 [min,max]（v1 viewportSpace.clamp 移植） */
 function clamp(value: number, min: number, max: number): number {

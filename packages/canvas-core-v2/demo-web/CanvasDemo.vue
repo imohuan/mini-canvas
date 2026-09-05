@@ -10,7 +10,6 @@ import { onMounted, provide, reactive, ref, shallowRef, onBeforeUnmount } from '
 import { VueFlow } from '@vue-flow/core'
 import type { Connection } from '@vue-flow/core'
 import SettingsPanel from './SettingsPanel.vue'
-import BaseNode from '../src/components/BaseNode.vue'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../src/components/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY } from '../src/components/canvasParamKey'
 import { NodeRegistry } from '../src/core/registry/nodeRegistry'
@@ -28,7 +27,6 @@ import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import { bindBrowserLifecycleFlush } from './browserFlush'
 import type { BrowserFlushHandle } from './browserFlush'
-import CustomEdge from '../src/components/CustomEdge.vue'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../src/components/edgeContext'
 
 /** VueFlow 用的流式节点形状 */
@@ -70,13 +68,12 @@ const nodes = ref<FlowNode[]>([])
 const edges = ref<Array<{ id: string; type?: string; source: string; target: string }>>([])
 const selectedIds = ref<Set<string>>(new Set<string>())
 
-// 业务 type → 壳组件：所有节点都经 BaseNode(壳)渲染，BaseNode 按 node.type 经 NodeRenderer 解析 content。
-// nodeTypes 是响应式的：从内核 nodeStore 已注册 type 动态生成，热装/热卸插件新增/移除类型后自动增减，
-// 新增类型无需改这段代码(宿主零硬编码)。
+// 业务 type → 壳组件：所有节点都经 nodeShell(壳)渲染，壳按 node.type 经 NodeRenderer 解析 content。
+// 默认皮(壳)已收编进 plugin-theme-default —— 宿主不再内置 BaseNode，渲染前必须已装主题插件，
+// applyTheme 从 themeRegistry 读 nodeShell 填入；没装主题则无壳(裸内容，符合"无主题无默认皮")。
 const nodeTypes = ref<Record<string, unknown>>({})
 const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂，让 content 解析用最新注册表
-// 当前用的"节点外壳组件"：宿主默认 BaseNode；主题插件注册了 nodeShell 则用它（applyTheme 设置）。
-const nodeShell = ref<unknown>(BaseNode)
+const nodeShell = ref<unknown>(undefined) // 由主题插件的 nodeShell 槽位填充(default-theme = BaseNode)
 /** 按 nodeStore 已注册 type 重建 nodeTypes + 触发重挂（宿主新增/热卸插件后调用） */
 function syncNodeTypes(): void {
   const map: Record<string, unknown> = {}
@@ -84,20 +81,18 @@ function syncNodeTypes(): void {
   nodeTypes.value = map
   nodeEpoch.value += 1
 }
-/** 读主题插件注册的 nodeShell/edge/background 槽位，装配 VueFlow 渲染（主题没给则回退宿主默认） */
+/** 读主题插件注册的 nodeShell/edge/background 槽位，装配 VueFlow 渲染（没装主题则无皮） */
 function applyTheme(): void {
   const theme = host.value?.themeRegistry
   if (!theme) return
   const shell = theme.get('nodeShell')
-  if (shell) nodeShell.value = shell // 主题外壳替换 BaseNode
+  if (shell) nodeShell.value = shell // default-theme 提供 BaseNode
   const edge = theme.get('edge')
-  edgeTypes.value = { custom: (edge as unknown) || CustomEdge } // 主题边 or 宿主默认 CustomEdge
+  if (edge) edgeTypes.value = { custom: edge } // default-theme 提供 CustomEdge
   backgroundComp.value = theme.get('background')
 }
-// 边类型：所有边走 CustomEdge(自定义边)。可被主题插件经 themeRegistry 换掉。
-// edgeTypes 是响应式的：boot 后从 themeRegistry 读主题提供的 edge/background 装配。
-// 主题没提供就回退宿主默认(CustomEdge / 无背景)。
-const edgeTypes = ref<Record<string, unknown>>({ custom: CustomEdge })
+// 边类型：所有边走主题提供的 edge(默认 CustomEdge)。经 themeRegistry 换皮。
+const edgeTypes = ref<Record<string, unknown>>({})
 const backgroundComp = ref<unknown>(undefined)
 // —— 调试配置面板数据：一个响应式根对象，分 edge/handle 命名空间。
 //    SettingsPanel 直接改写它；分别 provide 给 CustomEdge(EDGE_VISUAL_KEY)/BaseNode+端口(CANVAS_PARAMS_KEY)，
