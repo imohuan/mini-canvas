@@ -12,6 +12,9 @@
  */
 export type ConfigPrimitive = string | number | boolean
 
+/** select 的可选项：值字符串，或带展示文案的 { value, label } */
+export type ConfigSelectOption = string | { value: string; label?: string }
+
 /** 一个可配置字段的 schema（type 决定校验与 UI 控件） */
 export interface ConfigField {
   /** 字段类型：string/color/number/boolean/select */
@@ -25,8 +28,8 @@ export interface ConfigField {
   /** number 用：最小/最大（装配 raw 越界 → 校验错 FAILED；运行时面板 set 仍走 store 夹取） */
   min?: number
   max?: number
-  /** select 用：可选枚举值（raw 不在其中 → 校验错） */
-  options?: string[]
+  /** select 用：可选枚举（raw 不在其中 → 校验错） */
+  options?: ConfigSelectOption[]
 }
 
 /** 对象级 config schema：字段名 → 字段 schema */
@@ -55,7 +58,7 @@ export const F = {
   boolean(def = false): ConfigField {
     return { type: 'boolean', default: def }
   },
-  select(def = '', options: string[] = []): ConfigField {
+  select(def = '', options: ConfigSelectOption[] = []): ConfigField {
     return { type: 'select', default: def, options }
   },
 }
@@ -118,7 +121,7 @@ function validateValue(key: string, field: ConfigField, raw: unknown): ConfigPri
       return raw
     }
     case 'select': {
-      const opts = field.options ?? []
+      const opts = optionValues(field.options)
       if (typeof raw !== 'string' || !opts.includes(raw)) {
         throw new ConfigError(`"${key}" expected one of ${opts.join(', ')} but got ${describe(raw)}`)
       }
@@ -132,6 +135,16 @@ function validateValue(key: string, field: ConfigField, raw: unknown): ConfigPri
       return raw
     }
   }
+}
+
+/** 取 select 可选项的值列表（支持 纯字符串 与 {value,label} 混合） */
+export function optionValues(options?: ConfigSelectOption[]): string[] {
+  return (options ?? []).map((o) => (typeof o === 'string' ? o : o.value))
+}
+
+/** 取 select 可选项的展示值（供 UI 面板映射 label；纯字符串则以自身为展示） */
+export function selectOptionEntry(o: ConfigSelectOption): { value: string; label?: string } {
+  return typeof o === 'string' ? { value: o } : { value: o.value, label: o.label }
 }
 
 function describe(v: unknown): string {

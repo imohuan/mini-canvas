@@ -21,11 +21,12 @@ export { buildCapabilities } from './capabilities'
 export type { NodeRegisterDef } from './capabilities'
 export { SettingsStore } from './settingsStore'
 export type { SettingSchema, SettingGroupDef, SettingEntry } from './settingsStore'
-export { resolveConfig, ConfigError, F } from './configSchema'
+export { resolveConfig, ConfigError, F, optionValues, selectOptionEntry } from './configSchema'
 export type {
   ConfigSchema,
   ConfigField,
   ConfigPrimitive,
+  ConfigSelectOption,
   InferConfig,
 } from './configSchema'
 export {

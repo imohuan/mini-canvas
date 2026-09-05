@@ -5,8 +5,8 @@ import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
 import { SettingsStore } from './settingsStore'
 import { Fiber, FiberState } from './fiber'
-import { resolveConfig } from './configSchema'
-import type { ConfigSchema } from './configSchema'
+import { resolveConfig, optionValues, selectOptionEntry } from './configSchema'
+import type { ConfigSchema, ConfigField } from './configSchema'
 import type { SettingSchema } from './settingsStore'
 import type {
   CanvasEventMap,
@@ -42,15 +42,8 @@ export function runPlugin(
 }
 
 /** 把 config schema 字段映射成 SettingsStore 的 SettingSchema（type 收敛：string→text），供面板长控件。 */
-function toSettingSchema(field: {
-  type: string
-  default: string | number | boolean
-  label?: string
-  min?: number
-  max?: number
-  options?: string[]
-}): SettingSchema {
-  const type = field.type === 'string' ? 'text' : field.type as SettingSchema['type']
+function toSettingSchema(field: ConfigField): SettingSchema {
+  const type = field.type === 'string' ? 'text' : field.type
   return {
     type,
     default: field.default,
@@ -58,7 +51,11 @@ function toSettingSchema(field: {
     ...(field.min !== undefined ? { min: field.min } : {}),
     ...(field.max !== undefined ? { max: field.max } : {}),
     ...(field.options
-      ? { options: field.options.map((value) => ({ value })) }
+      ? { options: optionValues(field.options).map((value) => {
+          const entry = field.options!.find((o) => (typeof o === 'string' ? o === value : o.value === value))
+          const withLabel = entry ? selectOptionEntry(entry) : { value }
+          return { value: withLabel.value, label: withLabel.label }
+        }) }
       : {}),
   }
 }

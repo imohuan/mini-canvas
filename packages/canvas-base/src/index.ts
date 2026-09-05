@@ -27,6 +27,12 @@ export type {
   PluginCapabilities,
   NodeRegisterDef,
   Disposable,
+  ConfigSchema,
+  ConfigField,
+  ConfigPrimitive,
+  ConfigSelectOption,
+  InferConfig,
 } from '@mini-canvas/canvas-core-v2'
+export { F, resolveConfig, ConfigError } from '@mini-canvas/canvas-core-v2'
 
 export * from './define'
