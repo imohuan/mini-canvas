@@ -68,9 +68,12 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 `label`（UI 文案）和 `group`（面板分组名，缺省=插件名）可选。
 
 > 想少打字？`@mini-canvas/canvas-base` 提供了 `F` 帮助函数：
-> `import { F } from '@mini-canvas/canvas-base'`，然后
-> `edgeColor: F.color('#3b82f6')`、`lineWidth: F.number(2).min(1).max(6)` 之类。
-> 字段对象写法也行，两者等价。
+> `import { F } from '@mini-canvas/canvas-base'`，它按类型给出默认值：
+> `edgeColor: F.color('#3b82f6')`、`lineWidth: F.number(2)`、`loud: F.boolean(true)`、
+> `type: F.select('bezier', [{ value: 'bezier', label: '贝塞尔' }, …])`。
+> `F.xxx(默认值)` 返回的仍是一个普通字段对象——`min`/`max`/`options` 这类附加约束
+> 不能链式调用，需用对象展开补上：`{ ...F.number(2), min: 1, max: 6 }`。
+> （字段对象完整写法 `{ type:'number', default:2, min:1, max:6 }` 与它等价，随你习惯。）
 
 ## 你怎么在宿主里看到这块面板
 
