@@ -151,7 +151,12 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     command,
     history,
     nodeFactory,
-    stop: () => ctx.stop(),
+    stop: () => {
+      // 停用前先把脏队列捕获进 flush 的批量快照（同步完成），再停内核，避免最后未落盘的写入丢失。
+      // flush 会同步把 dirty 快照进本地 batch，故即使调用方不 await，数据也已进入落盘流程。
+      void save.flush()
+      ctx.stop()
+    },
   }
 
   const api: MiniCanvasApi = {

@@ -578,8 +578,13 @@ export class Context implements PluginScope {
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
       plugin(mod: PluginModule | PluginClassLike): PluginScope {
-        // 嵌套插件：直接并入根（扁平管理），避免 M1 复杂化；可由子类覆盖（返回自身=本插件作用域 ctx）
-        ctx.plugin(mod)
+        // 嵌套插件：插件在 apply 里想再装子插件时，运行态必须是 installPlugin（热装语义），
+        // 走根 plugin() 会因 state!=='created' 抛错。扁平并入根服务/插件表，返回自身便于链式。
+        if (ctx.running) {
+          ctx.installPlugin(mod)
+        } else {
+          ctx.plugin(mod)
+        }
         return self
       },
     } as PluginScope

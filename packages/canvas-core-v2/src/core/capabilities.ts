@@ -96,6 +96,19 @@ export function buildCapabilities(
   }
   const settingsStore = () => ctx.get<SettingsStore>('settings')
 
+  // ctx.theme.register / add 共享的落位逻辑：用闭包函数而非方法内 this，解构调用也不会丢上下文
+  const placeTheme = (
+    slot: ThemeSlot,
+    component: unknown,
+    opts: ThemeOccupantOpts = {},
+  ): void => {
+    const reg = theme()
+    if (!reg) return
+    const id = opts.id ?? pluginName
+    reg.addOccupant(slot, { id, order: opts.order, value: component })
+    ctx.effect(() => () => reg.removeOccupant(slot, id))
+  }
+
   return {
     // ---------- ctx.nodes：注册一个节点类型（数据+展示+可选建节点），自动回收 ----------
     nodes: {
@@ -126,14 +139,10 @@ export function buildCapabilities(
     // ---------- ctx.theme：往主题槽叠/取 occupant，自动回收 ----------
     theme: {
       register(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
-        this.add(slot, component, opts)
+        placeTheme(slot, component, opts)
       },
       add(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
-        const reg = theme()
-        if (!reg) return
-        const id = opts.id ?? pluginName
-        reg.addOccupant(slot, { id, order: opts.order, value: component })
-        ctx.effect(() => () => reg.removeOccupant(slot, id))
+        placeTheme(slot, component, opts)
       },
       remove(slot: ThemeSlot, id: string): void {
         theme()?.removeOccupant(slot, id)

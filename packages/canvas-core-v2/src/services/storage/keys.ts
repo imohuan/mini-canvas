@@ -10,7 +10,7 @@ import type { SaveType } from './types'
 /** 四类 type 常量（枚举用，避免散写字符串） */
 export const SAVE_TYPES: readonly SaveType[] = ['config', 'canvas', 'resource', 'shortcut']
 
-/** 把任意裸 key 规范成"小写 kebab"（允许字母/数字/中划线/点/冒号），去掉首尾空白 */
+/** 把任意裸 key 规范成"小写化 + 去首尾空白"（调用方请直接传 kebab-case key；本函数不转分隔符） */
 export function normalizeKey(key: string): string {
   const k = key.trim().toLowerCase()
   return k

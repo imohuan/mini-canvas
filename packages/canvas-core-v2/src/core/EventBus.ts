@@ -23,6 +23,8 @@ export class EventBus {
 
   /** dev 下是否对"未在 CanvasEventMap 声明"的 emit 给 warn（治漏转发静默失效） */
   private devWhitelistWarn: boolean
+  /** dev warn 已提示过的事件名（每名只 warn 一次，避免刷屏） */
+  private seen = new Set<string>()
 
   constructor(options: { devWhitelistWarn?: boolean } = {}) {
     this.devWhitelistWarn = options.devWhitelistWarn ?? false
@@ -63,6 +65,17 @@ export class EventBus {
 
   /** 派发：同步广播，忽略监听返回值（不等待 promise）。 */
   emit(name: string, ...args: any[]): void {
+    if (this.devWhitelistWarn && !this.seen.has(name)) {
+      this.seen.add(name)
+      if (!hasKnownEvent(name)) {
+        // dev 下对"未登记(声明)的事件名"首次 emit 给一次 warn——治"拼错/漏转发事件名静默失效"。
+        // 插件自定义事件可用 registerEventName(name) 显式预登记以消除该提示。
+        console.warn(
+          `[EventBus:dev] emit 了未声明的事件名 "${name}"。` +
+            '若是有意的新事件，请先调用 registerEventName 登记，或在 Events interface 里 declare。',
+        )
+      }
+    }
     for (const cb of this.hooks(name)) {
       try {
         cb(...args)

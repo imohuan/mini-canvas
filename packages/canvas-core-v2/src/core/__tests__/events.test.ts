@@ -93,6 +93,33 @@ describe('EventBus 分发模式（cordis ch4）', () => {
   })
 })
 
+describe('EventBus devWhitelistWarn（未登记事件名首次 emit 给 warn，每名一次）', () => {
+  it('dev 开启时，首次 emit 未登记名 warn；已登记(内置)名不 warn；同名前已 warn 过不再 warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const bus = new EventBus({ devWhitelistWarn: true })
+    try {
+      bus.emit('ctx:ready', { plugins: [] }) // 内置登记名 → 不 warn
+      bus.emit('some/typo', 1) // 未登记 → warn
+      bus.emit('some/typo', 2) // 同名已 warn 过 → 不重复 warn
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(warn.mock.calls[0][0]).toContain('some/typo')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('dev 关闭时即使未登记也不 warn', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const bus = new EventBus() // devWhitelistWarn 默认 false
+    try {
+      bus.emit('some/typo', 1)
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
 describe('EventBus isBailed', () => {
   it('null/false/undefined 不 bail；其它值 bail', () => {
     expect(isBailed(null)).toBe(false)

@@ -166,6 +166,22 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(ctx.listPlugins().filter((n) => n === 'a')).toHaveLength(1)
   })
 
+  it('插件在 apply 里 ctx.plugin(子插件) 运行期不抛，且子插件可用（C1）', async () => {
+    const ctx = new Context()
+    const subRan = vi.fn()
+    ctx.plugin({
+      name: 'parent',
+      apply(c: PluginScope) {
+        // 运行期(ctx started)里再装一个子插件：应走 installPlugin 热装而非抛错
+        c.plugin({ name: 'child', apply: subRan })
+      },
+    })
+    await ctx.start()
+    expect(ctx.listPlugins()).toContain('child')
+    expect(subRan).toHaveBeenCalledTimes(1)
+    expect(ctx.fiber('child')?.stateName).toBe('active')
+  })
+
   it('installPlugin setup 抛错 → 半成品副作用回收 + 不残留 + 抛错', async () => {
     const ctx = new Context()
     await ctx.start()
