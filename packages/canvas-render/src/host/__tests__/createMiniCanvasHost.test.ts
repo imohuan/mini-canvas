@@ -44,7 +44,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
     const { host, api } = await createMiniCanvasHost()
     api.installPlugin(demoPlugin('v1'))
     expect(api.uninstallPlugin('demo')).toBe(true)
-    expect(() => host.ctx.get('demoSvc')).toThrow(/not injected/)
+    expect(host.ctx.get('demoSvc')).toBeUndefined()
     expect(host.nodeStore.types.has('demo')).toBe(false)
     expect(api.listPlugins()).not.toContain('demo')
     expect(api.uninstallPlugin('demo')).toBe(false)

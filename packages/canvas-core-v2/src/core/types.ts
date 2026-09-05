@@ -126,7 +126,11 @@ export interface PluginScope extends PluginCapabilities {
   inject<Service>(name: string, impl: Service): () => void
   /** 提供服务（cordis 语义，与 inject 等价）；Service 子类 super(ctx,name) 内部调用 */
   provide<Service>(name: string, impl: Service): () => void
-  /** 取服务（缺则抛错，不静默降级） */
+  /**
+   * 取服务（cordis 可选探测语义）：已上架返回实例；'slots'/'settings' 恒为内置实例。
+   * 缺服务返回 undefined（不抛），供可选依赖探测用。硬依赖请在插件里用 `inject` 声明
+   * （缺提供方插件停留 PENDING、到齐自动激活、提供方被卸/换随之 PENDING 再随恢复重载）。
+   */
   get<Service = unknown>(name: string): Service
   /** 嵌套插件（本插件子作用域） */
   plugin(mod: PluginModule): PluginScope

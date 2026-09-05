@@ -45,7 +45,7 @@ describe('Service 类形态（P2a：提供服务）', () => {
     })
     expect(ctx.get<GreeterService>('greeter').greet('x')).toBe('Hello, x!')
     ctx.uninstallPlugin('svc')
-    expect(() => ctx.get('greeter')).toThrow(/not injected/)
+    expect(ctx.get('greeter')).toBeUndefined()
   })
 
   it('Service 用静态 provide 作默认名；缺名抛错', () => {

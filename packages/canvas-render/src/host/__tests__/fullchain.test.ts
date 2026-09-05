@@ -176,7 +176,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
     expect(host.nodeStore.types.has('image')).toBe(false)
     expect(host.nodeFactory.creatableTypes()).not.toContain('image')
     expect(host.nodeRegistry.has('image')).toBe(false)
-    expect(() => host.ctx.get('image')).toThrow(/not injected/)
+    expect(host.ctx.get('image')).toBeUndefined()
 
     // 热装同名（模拟"插件改了重新装"）：同一份 plugin 对象重装，不应报重复、应恢复能力
     host.ctx.installPlugin(nodeImagePlugin)

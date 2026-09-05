@@ -402,15 +402,16 @@ export class Context implements PluginScope {
     return this.inject(name, impl)
   }
 
-  /** 取服务；缺则抛错（定稿：不静默降级）。'slots'/'settings' 恒为内置实例。 */
+  /**
+   * 取服务（cordis 可选探测语义）：已上架返回实例；'slots'/'settings' 恒为内置实例。
+   * 缺服务返回 `undefined`（不抛）——供"可选依赖"探测用。若某依赖是插件必需的，应在插件里用
+   * `export const inject = [...]` 声明为**硬依赖**（缺提供方该插件停留 PENDING、到齐自动 activate；
+   * 提供方被卸/换，依赖方随之 PENDING 再随恢复重载），而非依赖本方法抛错。
+   * 对"恒在"的宿主/内置服务（nodeStore/nodeRegistry/themeRegistry/command/nodeFactory…）仍可放心直读。
+   */
   get<Service = unknown>(name: string): Service {
     if (name === 'slots') return this.builtinSlots as unknown as Service
     if (name === 'settings') return this.builtinSettings as unknown as Service
-    if (!this.services.has(name)) {
-      throw new Error(
-        `[core] Service "${name}" is not injected. If a plugin should provide it, declare it in that plugin's deps and inject it.`,
-      )
-    }
     return this.services.get(name) as Service
   }
 

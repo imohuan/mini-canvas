@@ -50,11 +50,11 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(consumed).toEqual(['hello'])
   })
 
-  it('get 缺服务抛错（定稿：不静默降级）', async () => {
+  it('get 缺服务返 undefined（cordis 可选探测：不抛、插件照跑）', async () => {
     const ctx = new Context()
     ctx.plugin(
       mkPlugin('consumer', [], (c) => {
-        expect(() => c.get('missing-service')).toThrow(/not injected/)
+        expect(c.get('missing-service')).toBeUndefined()
       }),
     )
     await expect(ctx.start()).resolves.toBeUndefined() // setup 内已断言
@@ -178,7 +178,7 @@ describe('Context（Cordis 式内核主类）', () => {
       ),
     ).toThrow(/setup boom/)
     expect(ctx.listPlugins()).not.toContain('bad')
-    expect(() => ctx.get('shouldRollback')).toThrow(/not injected/)
+    expect(ctx.get('shouldRollback')).toBeUndefined()
   })
 
   it('uninstallPlugin：dispose 回收该插件全部副作用 + 服务摘除 + 不再 list', async () => {
@@ -193,7 +193,7 @@ describe('Context（Cordis 式内核主类）', () => {
     )
     expect(ctx.uninstallPlugin('p')).toBe(true)
     expect(cleanup).toHaveBeenCalledTimes(1)
-    expect(() => ctx.get('svc')).toThrow(/not injected/)
+    expect(ctx.get('svc')).toBeUndefined()
     expect(ctx.listPlugins()).not.toContain('p')
   })
 
@@ -214,7 +214,7 @@ describe('Context（Cordis 式内核主类）', () => {
 
     // 模拟"插件代码改了"：卸掉旧实现，装新实现（同 name 不同值）
     ctx.uninstallPlugin('p')
-    expect(() => ctx.get('v')).toThrow(/not injected/)
+    expect(ctx.get('v')).toBeUndefined()
     ctx.installPlugin(mkPlugin('p', [], (c) => c.inject('v', { n: 2 })))
     expect(ctx.get<{ n: number }>('v').n).toBe(2)
     expect(ctx.listPlugins()).toContain('p')

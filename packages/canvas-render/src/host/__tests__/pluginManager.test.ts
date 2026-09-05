@@ -31,7 +31,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
     expect(host.nodeStore.types.has('demo')).toBe(true)
 
     expect(manager.uninstall('demo')).toBe(true)
-    expect(() => host.ctx.get('demoSvc')).toThrow(/not injected/)
+    expect(host.ctx.get('demoSvc')).toBeUndefined()
     expect(host.nodeStore.types.has('demo')).toBe(false)
     expect(manager.list().find((p) => p.name === 'demo')).toBeUndefined()
   })
@@ -88,7 +88,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
     // 按序装；同名 plug-b 的旧(svcB1)已被覆盖卸掉
     expect(host.ctx.get<{ flag: string }>('svcA').flag).toBe('A1')
     expect(host.ctx.get<{ flag: string }>('svcB2').flag).toBe('B2')
-    expect(() => host.ctx.get('svcB1')).toThrow()
+    expect(host.ctx.get('svcB1')).toBeUndefined()
     // 返回实际装上的名字按顺序(a, b 只留最新)
     expect(names).toEqual(['plug-a', 'plug-b'])
     expect(manager.list().map((p) => p.name)).toEqual(['plug-a', 'plug-b'])
