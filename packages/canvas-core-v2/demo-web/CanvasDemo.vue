@@ -12,8 +12,9 @@ import type { StorageAdapter } from '../src/services/storage/types'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
 import type { CanvasNode } from '../src/services/nodeStore'
 import type { SettingsStore } from '@mini-canvas/canvas-core-v2'
-import { CanvasHost, PluginSettingsPanel, DEFAULT_HANDLE_VISUAL, type InstalledPluginInfo } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, DEFAULT_HANDLE_VISUAL, type InstalledPluginInfo } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
+import { settingsPanelPlugin } from '@mini-canvas/plugin-theme-default/settings'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
@@ -32,6 +33,7 @@ const cfg = reactive({
 // 末尾两个 overlayCorner* 是 Goal A"开放 UI 槽同屏按序渲染"的验证插件(同一 'overlay' 槽、order 0/1)
 const plugins: PluginModule[] = [
   themeDefaultPlugin,
+  settingsPanelPlugin, // 默认设置面板皮：注册 PluginSettingsPanel 到 settingsPanel 槽(可被 order 更小的插件替换)
   nodeTextPlugin,
   nodeImagePlugin,
   canvasCommandsPlugin,
@@ -59,8 +61,6 @@ function seedDefault(): CanvasNode[] {
 const hostEl = ref<InstanceType<typeof CanvasHost> | null>(null)
 const booted = ref(false)
 
-// —— 分组配置(主题外观)面板的数据源：boot 后取宿主共享的 settings store(theme-default 已在 apply 申报两组) ——
-const settingsStore = ref<SettingsStore | null>(null)
 let disposeSettingsBind: (() => void) | undefined
 
 function onReady(): void {
@@ -119,7 +119,6 @@ function bindThemeSettings(): void {
   const ctx = hostEl.value?.host?.ctx
   if (!ctx) return
   const store = ctx.get<SettingsStore>('settings')
-  settingsStore.value = store
   // ① 初始同步：theme 声明的各键当前值 → cfg.edge（单一数据源优先）
   for (const k of EDGE_SETTING_KEYS) {
     const v = store.get(k as string)
@@ -189,12 +188,6 @@ onBeforeUnmount(unbindThemeSettings)
 
     <!-- 右上角调试配置面板（实时调边/连接点外观） -->
     <SettingsPanel :model="cfg" />
-    <!-- 插件申报的配置面板：theme-default 导出 Config schema(P4)，内核把其字段声明进 settings 单一数据源(连线/动效两组)，
-         schema 自动长控件；改动经 set→onChange 窄更新到 cfg.edge → 只重绘对应连线、无全图重建。
-         固定浮层，叠在右下角(与左上 debug 面板区分) -->
-    <div v-if="settingsStore" class="theme-settings-dock">
-      <PluginSettingsPanel :settings="settingsStore" />
-    </div>
 
     <!-- 目标 D 演示：插件管理器 dock(列出已装 + state/缺失依赖诊断 + 卸载/重载 theme-default 换版本) -->
     <div v-if="booted && demoPlugins.length" class="pm-dock">
@@ -224,7 +217,16 @@ onBeforeUnmount(unbindThemeSettings)
         window-key="MiniCanvas"
         @ready="onReady"
         @context-menu="onContextMenu"
-      />
+      >
+        <!-- 宿主业务 UI 区(#ui)：可替换设置面板放这里，能经 useCanvasRender 读 ctx。
+             默认由 settingsPanelPlugin 注册的 PluginSettingsPanel 渲染(theme 单赢家槽 settingsPanel, order:0)，
+             以后写个新设置组件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替，热卸自动回退。 -->
+        <template #ui>
+          <div class="theme-settings-dock">
+            <SettingsHost />
+          </div>
+        </template>
+      </CanvasHost>
     </div>
 
     <!-- 最小右键菜单（业务：建节点 / 删除选中 / 撤销） -->

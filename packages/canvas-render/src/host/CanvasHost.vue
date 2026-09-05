@@ -419,6 +419,10 @@ onBeforeUnmount(() => {
         :on-node-context-menu="onNodeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"
       >
+        <!-- 宿主业务 UI 区(#ui)：转发给 CanvasSurface，使宿主放在本组件 <template #ui> 里的 toolbar/设置 dock 等能经 useCanvasRender 读 ctx -->
+        <template #ui>
+          <slot name="ui" />
+        </template>
         <!-- 父级默认插槽透传进 VueFlow（自定义背景/控件） -->
         <slot />
       </CanvasSurface>

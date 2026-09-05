@@ -28,6 +28,10 @@ export { default as CanvasHost } from './host/CanvasHost.vue'
 // 分组化配置的 schema 驱动 UI 面板（读 ctx.settings 组/schema 自动长控件，改即 settings.set）
 export { default as PluginSettingsPanel } from './components/PluginSettingsPanel.vue'
 export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
+// 可替换设置面板宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家，把 ctx.settings 喂给它（见 plugin-theme-default/settings.ts 注册默认皮）
+export { default as SettingsHost } from './components/SettingsHost.vue'
+// 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口
+export { settingsSourceFrom } from './components/settingsSource'
 // 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填
 export { default as SlotHost } from './components/SlotHost.vue'
 export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'

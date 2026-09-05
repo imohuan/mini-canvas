@@ -112,6 +112,10 @@ provide(HOST_KEY, shallowRef(host))
     <div class="csurface-overlay">
       <SlotHost slot="overlay" item-class="csurface-overlay-item" />
     </div>
+
+    <!-- 宿主业务 UI 区(#ui)：宿主把 toolbar/设置 dock/右键菜单等画布之上的 UI 放这里，即可经 useCanvasRender 读 ctx。
+         SlotHost / SettingsHost 在本作用域内任意嵌套可用。CanvasHost 不内置任何业务 UI，只把具名插槽转发到这里。 -->
+    <slot name="ui" />
   </div>
 </template>
 
