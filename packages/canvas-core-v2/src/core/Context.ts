@@ -1,6 +1,6 @@
 import { EventBus } from './EventBus'
 import { Scope } from './Scope'
-import { topoSort } from './topo'
+import { depsOf } from './topo'
 import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
 import { SettingsStore } from './settingsStore'
@@ -57,6 +57,8 @@ export class Context implements PluginScope {
   private fibers = new Map<string, Fiber>()
   private state: ContextState = 'created'
   private dev = false
+  /** 依赖扫描是否进行中（防止 provide 在 drain 内触发 reentrant drain） */
+  private draining = false
   /** 内置通用 UI 槽容器（ctx.slots 写这里，宿主可经 ctx.get('slots') 读同一实例渲染） */
   private readonly builtinSlots = new SlotRegistry()
   /** 内置分组配置单一数据源（ctx.settings 写这里；host 可经 ctx.get('settings') 读） */
@@ -89,41 +91,97 @@ export class Context implements PluginScope {
     return this
   }
 
-  /** 启动：拓扑排序 → 逐个 setup → 全部 ACTIVE → emit ctx:ready。 */
+  /** 启动：按"服务/插件依赖"确定性多轮激活 → 依赖满足的插件逐个 setup → 其余 PENDING → emit ctx:ready。 */
   async start(): Promise<void> {
     this.assertState('created', 'start')
     this.state = 'started'
 
-    const modules = [...this.plugins.values()]
-    // 宿主注入的服务名视为合法依赖（不参与插件排序）
-    const knownServices = new Set(this.services.keys())
-    const order = topoSort(modules, knownServices)
+    // 依赖满足即可激活：无依赖的插件先激活（登记序）；其 provide/inject 的服务与 ACTIVE 插件成为后续依赖的满足来源。
+    const activated = this.drain()
+    this.bus.emit('ctx:ready', { plugins: activated })
+  }
 
-    for (const name of order) {
-      const mod = this.plugins.get(name)!
-      this.setLifecycle(name, Lifecycle.INSTALLING)
-      this.setLifecycle(name, Lifecycle.ACTIVATING)
-      const fiber = this.attachFiber(name, mod)
-      fiber.markLoading()
-      const scope = this.rootScope.child()
-      this.pluginScopes.set(name, scope)
-      const scopeCtx = this.deriveScope(scope, name)
-      let cleanup: void | (() => void) | Disposable
-      try {
-        cleanup = runPlugin(mod, scopeCtx)
-      } catch (err) {
-        this.setLifecycle(name, Lifecycle.ERROR)
-        scope.dispose() // 半成品副作用也清掉
-        fiber.markFailed(err) // 保留 FAILED fiber 供诊断（不置 DISPOSED，可重装复用）
-        throw err
+  /**
+   * 确定性多轮扫描：反复激活"所有 inject 依赖现已满足"的插件，直到无新进展。
+   * 依赖满足判定（每项 d）：
+   *   - 已注入/提供 的服务名（services map，含内置 slots/settings）→ 满足；
+   *   - 或 是已登记插件名且其 fiber 已 ACTIVE → 满足；
+   *   - 否则该插件停留 PENDING（cordis 语义：不抛，等提供方出现后由 wakePending 唤醒）。
+   * 激活顺序 = plugins map 登记序（确定性）。
+   * @returns 本批实际激活(含已 ACTIVE 的计数)的插件名数组
+   */
+  private drain(): string[] {
+    if (this.draining) return [] // 已在扫描中（避免 provide 触发 reentrant drain）
+    this.draining = true
+    const activated: string[] = []
+    try {
+      let progressed = true
+      while (progressed) {
+        progressed = false
+        for (const name of this.listPlugins()) {
+          if (this.fibers.get(name)?.state === 'active') continue // 已激活
+          if (this.plugins.has(name) && this.tryActivate(name)) {
+            activated.push(name)
+            progressed = true
+          }
+        }
       }
-      if (cleanup) scope.effect(() => cleanup)
-      this.setLifecycle(name, Lifecycle.ACTIVE)
-      fiber.markActive()
-      this.bus.emit('ctx:plugin-installed', { name })
+    } finally {
+      this.draining = false
     }
+    return activated
+  }
 
-    this.bus.emit('ctx:ready', { plugins: order })
+  /** 判定某插件 inject 依赖项是否现已满足 */
+  private depSatisfied(d: string): boolean {
+    if (d === 'slots' || d === 'settings') return true // 内置实例恒在
+    if (this.services.has(d)) return true // 已注入/提供的服务
+    // 已登记插件名且 ACTIVE
+    if (this.plugins.has(d)) {
+      const fiber = this.fibers.get(d)
+      if (fiber && fiber.state === 'active') return true
+    }
+    return false
+  }
+
+  /**
+   * 尝试激活一个插件：依赖满足则 setup 并置 ACTIVE，返回 true；依赖不满足则保持 PENDING 返回 false。
+   * setup 抛错：置 FAILED 并抛出（半成品副作用已回收）。
+   */
+  private tryActivate(name: string): boolean {
+    const mod = this.plugins.get(name)!
+    const deps = depsOf(mod)
+    if (deps.some((d) => !this.depSatisfied(d))) return false // PENDING，等依赖
+
+    this.setLifecycle(name, Lifecycle.INSTALLING)
+    this.setLifecycle(name, Lifecycle.ACTIVATING)
+    const fiber = this.attachFiber(name, mod)
+    fiber.markLoading()
+    const scope = this.rootScope.child()
+    this.pluginScopes.set(name, scope)
+    const scopeCtx = this.deriveScope(scope, name)
+    let cleanup: void | (() => void) | Disposable
+    try {
+      cleanup = runPlugin(mod, scopeCtx)
+    } catch (err) {
+      this.pluginScopes.delete(name)
+      this.plugins.delete(name) // 加载失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
+      this.setLifecycle(name, Lifecycle.ERROR)
+      scope.dispose() // 半成品副作用也清掉
+      fiber.markFailed(err) // 保留 FAILED fiber 供诊断（可重装复用）
+      throw err
+    }
+    if (cleanup) scope.effect(() => cleanup)
+    this.setLifecycle(name, Lifecycle.ACTIVE)
+    fiber.markActive()
+    this.bus.emit('ctx:plugin-installed', { name })
+    return true
+  }
+
+  /** 唤醒依赖现已满足但仍在 PENDING 的插件（服务被 provide/插件被激活后调用） */
+  private wakePending(): void {
+    if (this.state !== 'started') return
+    this.drain()
   }
 
   /** 停止：逆序释放各插件 scope（含全部副作用），回到 created 可重新 start。 */
@@ -162,8 +220,8 @@ export class Context implements PluginScope {
   }
 
   /**
-   * 运行中热装一个插件（start 之后调用）：为它建子 Scope → 跑 setup → 记录。
-   * 成功后立即可见（注册的服务/UI/命令都生效），等价于冷启动时 plugin()。
+   * 运行中热装一个插件（start 之后调用）：依赖满足则立即可用；否则保持 PENDING 待提供方出现。
+   * 等价于冷启动时 plugin()。
    *
    * @throws 未 start / 插件名重复 / setup 抛错（半成品副作用已回收）
    * @returns 插件名
@@ -173,31 +231,16 @@ export class Context implements PluginScope {
     if (this.plugins.has(mod.name)) {
       throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
     }
-    // 登记进模块表（与冷启动共用），供诊断/list
     this.plugins.set(mod.name, mod)
-
-    // 单插件建子 Scope + setup（与 start 内逐插件的逻辑一致）
-    const fiber = this.attachFiber(mod.name, mod)
-    fiber.markLoading()
-    const scope = this.rootScope.child()
-    this.pluginScopes.set(mod.name, scope)
-    this.setLifecycle(mod.name, Lifecycle.INSTALLING)
-    this.setLifecycle(mod.name, Lifecycle.ACTIVATING)
-    const scopeCtx = this.deriveScope(scope, mod.name)
+    this.attachFiber(mod.name, mod) // PENDING fiber 句柄
     try {
-      const cleanup = runPlugin(mod, scopeCtx)
-      if (cleanup) scope.effect(() => cleanup)
+      this.tryActivate(mod.name) // 依赖满足→ACTIVE；不满足→保持 PENDING
     } catch (err) {
-      this.pluginScopes.delete(mod.name)
       this.plugins.delete(mod.name)
-      scope.dispose() // 半成品副作用也清掉
-      this.setLifecycle(mod.name, Lifecycle.ERROR)
-      fiber.markFailed(err) // 保留 FAILED fiber 供诊断；插件表已移除，可重装复用
       throw err
     }
-    this.setLifecycle(mod.name, Lifecycle.ACTIVE)
-    fiber.markActive()
-    this.bus.emit('ctx:plugin-installed', { name: mod.name })
+    // 可能因本插件 provide 的服务满足了先前 PENDING 的插件 → 唤醒
+    this.wakePending()
     return mod.name
   }
 
@@ -236,6 +279,8 @@ export class Context implements PluginScope {
       throw new Error(`[core] Service "${name}" is already injected`)
     }
     this.services.set(name, impl)
+    // 服务到位：唤醒依赖它而 PENDING 的插件（running 且非 drain 中才有意义）
+    this.wakePending()
     return () => {
       if (this.services.get(name) === impl) this.services.delete(name)
     }

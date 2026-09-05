@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Context } from '../Context'
-import type { PluginModule } from '../types'
+import type { PluginModule, PluginScope } from '../types'
 
 // 扩展事件表测试插件自定义事件
 declare module '../types' {
@@ -321,5 +321,95 @@ describe('P1 fiber 集成（ctx.fiber 句柄 + 生命周期状态推进）', () 
     expect(ctx.fiber('a')?.stateName).toBe('active')
     ctx.stop()
     expect(ctx.fiber('a')).toBeUndefined()
+  })
+})
+
+describe('P2b inject 服务依赖 PENDING 编排', () => {
+  it('inject 引用"服务名"由同批插件提供：提供方先激活，消费方随后激活（顺序无关）', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    // 故意消费方先登记、提供方后登记，验证不是靠 topo 文件顺序而是依赖满足
+    ctx.plugin({
+      name: 'consumer',
+      inject: ['greeter'],
+      apply(c: PluginScope) {
+        order.push('consumer')
+        expect(c.get<{ greet(x: string): string }>('greeter').greet('world')).toBe('hi world')
+      },
+    })
+    ctx.plugin({
+      name: 'greeter-plugin',
+      apply(c: PluginScope) {
+        order.push('greeter-plugin')
+        c.provide('greeter', { greet: (x: string) => `hi ${x}` })
+      },
+    })
+    await ctx.start()
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(ctx.fiber('greeter-plugin')?.stateName).toBe('active')
+    // 消费方在提供方激活之后才跑
+    expect(order).toEqual(['greeter-plugin', 'consumer'])
+  })
+
+  it('冷启动缺提供方 → 消费方停留 PENDING（不抛），不阻塞 ctx:ready', async () => {
+    const ctx = new Context()
+    const consumerRan = vi.fn()
+    ctx.plugin({
+      name: 'consumer',
+      inject: ['missing-svc'],
+      apply: consumerRan,
+    })
+    await expect(ctx.start()).resolves.toBeUndefined()
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    expect(consumerRan).not.toHaveBeenCalled()
+  })
+
+  it('热装提供方后唤醒 PENDING 消费方', async () => {
+    const ctx = new Context()
+    const consumerRan = vi.fn()
+    ctx.plugin({ name: 'consumer', inject: ['late-svc'], apply: consumerRan })
+    await ctx.start()
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    // 运行中装提供方 → 其 provide 触发 wakePending → consumer 激活
+    ctx.installPlugin({
+      name: 'provider',
+      apply(c: PluginScope) {
+        c.provide('late-svc', {})
+      },
+    })
+    expect(ctx.fiber('provider')?.stateName).toBe('active')
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRan).toHaveBeenCalledTimes(1)
+  })
+
+  it('同批两服务连锁依赖：A 依赖 B 的服务，B 依赖 C 的服务', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    ctx.plugin({
+      name: 'a',
+      inject: ['svc-b'],
+      apply(c: PluginScope) {
+        order.push('a')
+        expect(c.get('svc-b')).toBeDefined()
+      },
+    })
+    ctx.plugin({
+      name: 'b',
+      inject: ['svc-c'],
+      apply(c: PluginScope) {
+        order.push('b')
+        c.provide('svc-b', {})
+      },
+    })
+    ctx.plugin({
+      name: 'c',
+      apply(c: PluginScope) {
+        order.push('c')
+        c.provide('svc-c', {})
+      },
+    })
+    await ctx.start()
+    expect(order).toEqual(['c', 'b', 'a'])
+    expect(ctx.fiber('a')?.stateName).toBe('active')
   })
 })
