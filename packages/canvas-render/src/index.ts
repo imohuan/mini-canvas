@@ -41,3 +41,12 @@ export type {
   MiniCanvasApi,
   CanvasHostHandle,
 } from './host/createMiniCanvasHost'
+// 统一安装句柄 manager + 外部来源加载 + 装配清单(目标 D)
+export { createPluginManager } from './host/pluginManager'
+export type {
+  PluginManager,
+  PluginEntrySource,
+  PluginManifest,
+  PluginManifestEntry,
+  InstalledPluginInfo,
+} from './host/pluginManager'

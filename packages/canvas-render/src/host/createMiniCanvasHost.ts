@@ -29,6 +29,7 @@ import {
   type CommandService,
   type NodeFactoryService,
 } from '@mini-canvas/canvas-core-v2'
+import { createPluginManager, type PluginManager } from './pluginManager'
 
 /** 门面可选项 */
 export interface MiniCanvasOptions {
@@ -79,12 +80,13 @@ export interface MiniCanvasApi {
 
 /**
  * 建一个可复用画布宿主 + 插件门面。
- * 返回 { host, api, exposeToWindow }：宿主(Vue)拿 host 渲染；api 是插件安装入口；
- * exposeToWindow(windowKey) 把 api 挂到 window 上。
+ * 返回 { host, api, manager, exposeToWindow }：宿主(Vue)拿 host 渲染；api/manager 是插件安装入口
+ * (manager 是目标 D 的统一安装句柄, 带外部来源 + manifest)；exposeToWindow(windowKey) 把 api 挂到 window 上。
  */
 export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promise<{
   host: CanvasHostHandle
   api: MiniCanvasApi
+  manager: PluginManager
   exposeToWindow: (key?: string) => void
 }> {
   const ctx = new Context()
@@ -164,5 +166,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     w[key] = api
   }
 
-  return { host, api, exposeToWindow }
+  const manager: PluginManager = createPluginManager(ctx)
+
+  return { host, api, manager, exposeToWindow }
 }
