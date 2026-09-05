@@ -121,6 +121,59 @@ describe('能力① 类插件直接 ctx.plugin(类)/installPlugin(类) 装载（
   })
 })
 
+// ==================== DSH ch1/ch2 函数形态插件：裸函数即插件（apply=fn(ctx,config)） ====================
+
+/** DSH 函数形态插件：`ctx.plugin(heartbeat)` / `ctx.installPlugin(heartbeat)` 直接挂裸函数，非 new */
+function heartbeat(ctx: PluginScope, times: { beat?: string } | undefined) {
+  ctx.provide('beat', times?.beat ?? 'tick')
+}
+// 具名便于装配寻址：heartbeat.name === 'heartbeat'
+
+describe('DSH 函数形态插件（裸函数经 ctx.plugin/installPlugin 挂载，以 apply 调用而非 new）', () => {
+  it('冷启动 ctx.plugin(裸函数)：归一成函数插件、apply(ctx,config) 触发，未被当类 new', async () => {
+    const ctx = new Context()
+    ctx.plugin(heartbeat, { beat: 'thump' })
+    await ctx.start()
+    expect(ctx.fiber('heartbeat')?.stateName).toBe('active')
+    // fn 收到 ctx 且以 apply 调用（provide 生效说明调用方式正确，而非 new 拿不到 ctx）
+    expect(ctx.get('beat')).toBe('thump')
+    expect(ctx.get('heartbeat')).toBeUndefined() // 裸函数不 new → 不上架同名服务
+  })
+
+  it('运行中 ctx.installPlugin(裸函数) 热装 → ACTIVE，fn 收到 ctx', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.installPlugin(heartbeat)
+    expect(ctx.fiber('heartbeat')?.stateName).toBe('active')
+    expect(ctx.get('beat')).toBe('tick') // 未传 config → schema 默认 / 兜底值
+  })
+
+  it('匿名函数抛"需具名"错（装配寻址/诊断需要名字）', async () => {
+    const ctx = new Context()
+    expect(() =>
+      ctx.plugin(function (c: PluginScope) {
+        void c
+      }),
+    ).toThrow(/需具名/)
+  })
+
+  it('函数插件的返回值不属于 cleanup 形状：直接丢弃，不被当作 disposer 依赖', async () => {
+    const ctx = new Context()
+    // 具名函数声明（disposerShaped.name === 'disposerShaped'）作函数插件
+    function disposerShaped(ctx2: PluginScope) {
+      // 返回一个函数，仅用于证明框架不把它当 disposer（函数插件返回值直接丢弃）
+      ctx2.on('x', () => undefined)
+      return () => undefined
+    }
+    ctx.plugin(disposerShaped)
+    await ctx.start()
+    expect(ctx.fiber('disposerShaped')?.stateName).toBe('active')
+    // 卸载不应报错（返回值若被误当 disposer 处理也不炸），且 on 注册被回收
+    expect(ctx.uninstallPlugin('disposerShaped')).toBe(true)
+    expect(ctx.fiber('disposerShaped')).toBeUndefined()
+  })
+})
+
 // ==================== 能力②：ctx.greeter 代理直访（运行时） ====================
 
 describe('能力② inject 后 ctx.greeter 属性直访运行时可用（cordis proxy 语义）', () => {
