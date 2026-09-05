@@ -8,9 +8,9 @@
  *   - 单文件插件 js 文本 / URL(经 ESM data-URL import 加载出 {name,apply,...})
  * 以及一份**装配清单(manifest)**：声明"装哪些、什么顺序、每插件 config"，按序装、同 id 覆盖。
  *
- * 定位：只操作 Context(host.ctx)的公开插件 API + settings，不新增内核逻辑、不依赖具体插件。
- * config 语义：可选的 per-plugin 配置，用作"装配覆盖插件默认配置"——装完某插件后，若某 key 已被该插件
- * ctx.settings.define 声明，则覆写其当前值(单一数据源仍归 settings)。不做深度配置合并。
+ * 定位：只操作 Context(host.ctx)的公开插件 API + 提供 config 装配，不新增内核逻辑、不依赖具体插件。
+ * config 语义（P4）：per-plugin 装配 config，随 ctx.installPlugin(mod, config) 一起经插件 `Config` schema
+ * 校验 + 补默认，apply(ctx, config) 收到；不做深度配置合并。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-core-v2'
 
@@ -27,8 +27,8 @@ export interface PluginManifestEntry {
   id: string
   /** 插件来源 */
   source: PluginEntrySource
-  /** 可选 per-plugin 配置(覆写该插件已声明 settings 的当前值) */
-  config?: Record<string, string | number | boolean>
+  /** 可选 per-plugin 装配 config（经插件 Config schema 校验 + 补默认，apply(ctx,config) 收到） */
+  config?: object
 }
 
 /** 装配清单：按序装；后装的同 id 覆盖先装的(轻量分层) */
@@ -39,7 +39,7 @@ export interface PluginManifest {
 /** list() 返回的已装插件条目 */
 export interface InstalledPluginInfo {
   name: string
-  config?: Record<string, string | number | boolean>
+  config?: object
 }
 
 /**
@@ -88,18 +88,10 @@ export interface PluginManager {
   applyManifest(manifest: PluginManifest): Promise<string[]>
 }
 
-/** 建统一安装句柄。ctx 需已 start；manager 只经 ctx 公开 API + ctx.get('settings') 工作。 */
+/** 建统一安装句柄。ctx 需已 start；manager 只经 ctx 公开插件 API + config 装配通道工作。 */
 export function createPluginManager(ctx: Context): PluginManager {
-  /** 已装插件的装配 config 快照(供 list() 显示；插件卸载即清) */
+  /** 已装插件的装配 config 快照(供 list() 显示与 reload 重放；插件卸载即清) */
   const configs = new Map<string, PluginManifestEntry['config']>()
-
-  function applyConfig(pluginName: string, config?: PluginManifestEntry['config']): void {
-    if (!config) return
-    for (const [key, value] of Object.entries(config)) {
-      const settings = ctx.get<{ has(k: string): boolean; set(k: string, v: unknown): boolean }>('settings')
-      if (settings.has(key)) settings.set(key, value) // 覆写已声明项；未声明项忽略(不做深合并)
-    }
-  }
 
   async function installOne(
     source: PluginEntrySource,
@@ -109,8 +101,8 @@ export function createPluginManager(ctx: Context): PluginManager {
     const name = mod.name
     // 同 name(即同 id)覆盖：若已装过同名旧实现 → 先卸(回收副作用)再装新(轻量分层, 换版本即此)
     if (ctx.listPlugins().includes(name)) ctx.uninstallPlugin(name)
-    ctx.installPlugin(mod)
-    applyConfig(name, config)
+    // P4：装配 config 随 installPlugin 一起经插件 Config schema 校验 + 补默认，apply(ctx,config) 收到
+    ctx.installPlugin(mod, config)
     configs.set(name, config)
     return name
   }
@@ -126,6 +118,8 @@ export function createPluginManager(ctx: Context): PluginManager {
     },
 
     async reload(name, next) {
+      // 换版本：保留上次装配 config 以便新实现同样吃到覆盖(轻量分层语义)
+      const prevConfig = configs.get(name)
       if (!next) {
         configs.delete(name)
         ctx.uninstallPlugin(name)
@@ -133,8 +127,8 @@ export function createPluginManager(ctx: Context): PluginManager {
       }
       const mod = await resolveSource(next)
       ctx.uninstallPlugin(name)
-      ctx.installPlugin(mod)
-      configs.set(name, undefined)
+      ctx.installPlugin(mod, prevConfig)
+      configs.set(name, prevConfig)
     },
 
     list() {
