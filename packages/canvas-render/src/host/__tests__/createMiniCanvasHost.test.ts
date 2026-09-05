@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '../../services/storage/memoryAdapter'
-import type { PluginModule } from '../../core'
+import { MemoryStorageAdapter, type PluginModule } from '@mini-canvas/canvas-core-v2'
 
 /** 一个最简可热装插件：注册一个 node type 'demo' + 一个服务，供装/卸/重载验证 */
 function demoPlugin(flag: string): PluginModule {

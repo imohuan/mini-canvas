@@ -7,8 +7,8 @@
  * 边界：不 import @vue-flow/core，不 import Vue 运行时；类型用最小结构接口避免拉运行时。
  */
 
-import type { NodeStoreService, CanvasNode } from '../services/nodeStore'
-import type { ThemeRegistry } from '../core/registry/themeRegistry'
+import type { NodeStoreService, CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 

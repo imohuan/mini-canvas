@@ -3,8 +3,7 @@
  * 全部零 Vue 依赖，Node 环境直接跑。
  */
 import { describe, expect, it } from 'vitest'
-import { NodeStore } from '../../services/nodeStore'
-import { ThemeRegistry } from '../../core/registry/themeRegistry'
+import { NodeStore, ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import {
   assembleTheme,
   edgeId,

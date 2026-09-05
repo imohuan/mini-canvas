@@ -6,7 +6,7 @@
  * 仅 type 级 import vue，不把 vue 运行时拉进 Node 单测路径。
  */
 import type { InjectionKey } from 'vue'
-import type { NodeRegistry } from '../core/registry/nodeRegistry'
+import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
 
 export const NODE_REGISTRY_KEY: InjectionKey<NodeRegistry> = Symbol('canvas-v2-node-registry')
 

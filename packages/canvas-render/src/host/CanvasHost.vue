@@ -23,22 +23,26 @@
 import { markRaw, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
-import { NodeRegistry } from '../core/registry/nodeRegistry'
-import type { PluginModule, Disposable } from '../core'
+import {
+  NodeRegistry,
+  type PluginModule,
+  type Disposable,
+  type StorageAdapter,
+  MemoryStorageAdapter,
+  type CanvasNode,
+  validateConnection,
+  typeConnectionDef,
+} from '@mini-canvas/canvas-core-v2'
 import {
   createMiniCanvasHost,
   type CanvasHostHandle,
   type MiniCanvasApi,
 } from './createMiniCanvasHost'
-import type { StorageAdapter } from '../services/storage/types'
-import { MemoryStorageAdapter } from '../services/storage/memoryAdapter'
-import type { CanvasNode } from '../services/nodeStore'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
 import { HOST_KEY } from '../contracts/contentBridge'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../contracts/edgeContext'
-import { validateConnection, typeConnectionDef } from '../services/connection'
 import {
   assembleTheme,
   edgeId,

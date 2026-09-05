@@ -6,24 +6,18 @@
 
 export * from './core'
 export * from './services'
-// content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo-web）
-export { HOST_KEY } from './contracts/contentBridge'
-export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './contracts/nodeRegistryKey'
-export type { NodeWrite } from './contracts/nodeRegistryKey'
-// 内核精选的 VueFlow 能力出口（渲染类插件统一从内核 import，不再各自依赖 @vue-flow/core）
-export * from './vueFlowBridge'
-// 共享注入令牌/配置契约（宿主 provide、渲染插件(default-theme) 消费；符号身份必须同源才能注入命中）
-export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
-export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
-export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
-// 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
-export { createMiniCanvasHost } from './host/createMiniCanvasHost'
+// 边几何纯算法（渲染层 CustomEdge 经本包子路径 import；留内核，见 docs/plan/canvas-render-layer-plan.md）。
+export {
+  Position,
+  normalizePosition,
+  getSourcePosition,
+  getTargetPosition,
+  buildEdgePath,
+  sampleEdgePath,
+  findClosestPointOnPath,
+} from './contracts/edgeGeometry'
 export type {
-  MiniCanvasOptions,
-  MiniCanvasApi,
-  CanvasHostHandle,
-} from './host/createMiniCanvasHost'
-// 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
-// 依赖 @vue-flow/core(浏览器层)，Node 单测不 import 顶层，故不影响纯逻辑测试面。
-export { default as CanvasHost } from './host/CanvasHost.vue'
-export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'
+  EdgeType,
+  XYPosition,
+  EdgeAppearance,
+} from './contracts/edgeGeometry'

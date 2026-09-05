@@ -143,6 +143,43 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/canvas-render:
+    dependencies:
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../canvas-core-v2
+    devDependencies:
+      '@mini-canvas/plugin-canvas-commands':
+        specifier: workspace:*
+        version: link:../plugins/plugin-canvas-commands
+      '@mini-canvas/plugin-node-image':
+        specifier: workspace:*
+        version: link:../plugins/plugin-node-image
+      '@mini-canvas/plugin-node-text':
+        specifier: workspace:*
+        version: link:../plugins/plugin-node-text
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
   packages/mcp-server:
     dependencies:
       '@hono/node-server':

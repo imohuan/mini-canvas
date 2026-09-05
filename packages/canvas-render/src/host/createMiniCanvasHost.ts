@@ -11,22 +11,24 @@
  *
  * 依赖方向：宿主(本模块) 只操作 opaque 注册表 + PluginModule，不反向依赖插件实现。
  */
-import { Context } from '../core'
-import type { PluginModule } from '../core'
-import { NodeRegistry } from '../core/registry/nodeRegistry'
-import { ThemeRegistry } from '../core/registry/themeRegistry'
-import { SaveServiceImpl } from '../services/storage/SaveService'
-import { NodeStore } from '../services/nodeStore'
-import type { CanvasNode } from '../services/nodeStore'
-import type { StorageAdapter } from '../services/storage/types'
-import { Selection } from '../services/selection'
-import { History } from '../services/history'
-import { CommandRegistry } from '../services/command'
-import { NodeFactory } from '../services/nodeFactory'
-import type { SelectionService } from '../services/selection'
-import type { HistoryService } from '../services/history'
-import type { CommandService } from '../services/command'
-import type { NodeFactoryService } from '../services/nodeFactory'
+import {
+  Context,
+  type PluginModule,
+  NodeRegistry,
+  ThemeRegistry,
+  SaveServiceImpl,
+  NodeStore,
+  type CanvasNode,
+  type StorageAdapter,
+  Selection,
+  History,
+  CommandRegistry,
+  NodeFactory,
+  type SelectionService,
+  type HistoryService,
+  type CommandService,
+  type NodeFactoryService,
+} from '@mini-canvas/canvas-core-v2'
 
 /** 门面可选项 */
 export interface MiniCanvasOptions {

@@ -9,15 +9,17 @@
  */
 import { describe, it, expect } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '../../services/storage/memoryAdapter'
+import {
+  MemoryStorageAdapter,
+  type CanvasNode,
+  NodeStore,
+  type PluginModule,
+} from '@mini-canvas/canvas-core-v2'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
-import type { CanvasNode } from '../../services/nodeStore'
-import { NodeStore } from '../../services/nodeStore'
-import type { PluginModule } from '../../core'
 
 /** 默认冷启动：text + image + commands（对应原 bootCanvas 内置 text/commands + opts.plugins 加 image） */
 function baseColdPlugins(): PluginModule[] {
