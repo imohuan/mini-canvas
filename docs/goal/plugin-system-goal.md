@@ -200,6 +200,21 @@ export default defineCanvasPlugin({
 
 ---
 
+## 五·五、强制终审闸门（任务结束的硬性前提，违反则不予通过）
+
+**本任务"判定完成"前，主 agent 必须启动一个子代理对本实现的插件系统做终审。** 这是硬性规定：
+- **必须用 `run_subagent` 起一个独立子代理审核**。若主 agent 不通过子代理、而只靠自己（或任何非子代理方式）审核就宣布完成 —— **一律不予通过**，视为未结束。
+- **子代理要非常严格、挑剔**：以 `D:/Code/Git/mini-canvas/deepseek-harness/docs` 里的插件/扩展实现（尤其
+  `docs/cordis-primer*.md`、`docs/cordis-api/*`、`docs/subsystems/slots*.md`、`docs/subsystems/extensions*.md`、
+  `docs/capability-seams*.md`、`docs/cordis-tutorial/*`）为对齐基准，逐条对照本实现。
+- **审核不通过 → 子代理必须说明原因**，主 agent 据此继续修改，改完**再次启动子代理复审**，直到通过为止。
+- 主 agent 给子代理的 prompt 需自报身份（`Caller agent: code-developer`），并明确要求：审核是否"简洁、可对齐 dsh、
+  插件开发体验达标、没有破坏纯逻辑内核/没有推翻渲染层迁移/存量插件没坏"，同时指出**该抄未抄**与**过度设计**之处，
+  输出"通过 / 不通过 + 原因 + 修改清单"。
+- 子代理审核结论与报告放 `docs/tmp/plugin-system-review/`，保留备查。
+
+---
+
 ## 六、验收总清单（全勾 = 本任务才结束）
 
 - [ ] 目标0：`@mini-canvas/canvas-base` 存在，示例插件只 import 它就写全完整插件。
@@ -209,6 +224,7 @@ export default defineCanvasPlugin({
 - [ ] 目标4：per-plugin 可诊断句柄 + PENDING 依赖编排单测绿；插件作者教程可照抄跑通一个最小插件。
 - [ ] 目标5：端口/吸附/快速连接能力对齐验证通过（自定义节点连接声明在 demo 行为正确）。
 - [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；两个 demo 浏览器端到端零 console 报错。
+- [ ] **终审闸门：已用 `run_subagent` 启动严格挑剔的子代理，对齐 `deepseek-harness/docs` 插件实现审核，审核通过；审核报告在 `docs/tmp/plugin-system-review/`。**
 - [ ] 这份文档更新为"完成态"。
 
 ---
