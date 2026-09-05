@@ -5,6 +5,9 @@ import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
 import { SettingsStore } from './settingsStore'
 import { Fiber, FiberState } from './fiber'
+import { resolveConfig } from './configSchema'
+import type { ConfigSchema } from './configSchema'
+import type { SettingSchema } from './settingsStore'
 import type {
   CanvasEventMap,
   Disposable,
@@ -25,16 +28,39 @@ import { Lifecycle } from './types'
 export type ContextState = 'created' | 'started' | 'stopped'
 
 /**
- * 跑一个插件的注册函数：Cordis 式用 apply，旧式用 setup，apply 优先。
+ * 跑一个插件的注册函数：Cordis 式用 apply(收校验后 config)，旧式用 setup，apply 优先。
  * 返回值（cleanup/Disposable）由调用方登记进插件 scope，卸载即清。
  */
 export function runPlugin(
   mod: PluginModule,
   ctx: PluginScope,
+  config?: unknown,
 ): void | (() => void) | Disposable {
-  if (mod.apply) return mod.apply(ctx)
+  if (mod.apply) return mod.apply(ctx, config as never)
   if (mod.setup) return mod.setup(ctx)
   return undefined
+}
+
+/** 把 config schema 字段映射成 SettingsStore 的 SettingSchema（type 收敛：string→text），供面板长控件。 */
+function toSettingSchema(field: {
+  type: string
+  default: string | number | boolean
+  label?: string
+  min?: number
+  max?: number
+  options?: string[]
+}): SettingSchema {
+  const type = field.type === 'string' ? 'text' : field.type as SettingSchema['type']
+  return {
+    type,
+    default: field.default,
+    ...(field.label !== undefined ? { label: field.label } : {}),
+    ...(field.min !== undefined ? { min: field.min } : {}),
+    ...(field.max !== undefined ? { max: field.max } : {}),
+    ...(field.options
+      ? { options: field.options.map((value) => ({ value })) }
+      : {}),
+  }
 }
 
 /**
@@ -55,6 +81,8 @@ export class Context implements PluginScope {
   private lifecycles = new Map<string, Lifecycle>()
   /** 每插件一个 fiber 运行时句柄（P1：状态机 + 可 await/dispose） */
   private fibers = new Map<string, Fiber>()
+  /** 每插件的装配 config（P4：ctx.plugin/installPlugin 第二参存入，激活时经其 Config schema 校验） */
+  private configs = new Map<string, unknown>()
   private state: ContextState = 'created'
   private dev = false
   /** 依赖扫描是否进行中（防止 provide 在 drain 内触发 reentrant drain） */
@@ -80,13 +108,15 @@ export class Context implements PluginScope {
 
   /**
    * 装载一个插件模块（登记；真正 setup 在 start()）。该插件的 fiber 句柄可经 ctx.fiber(name) 取得。
+   * @param config 装配 config（可选）：start 激活时经插件 `Config` schema 校验+补默认，再传给 apply(ctx, config)。
    */
-  plugin(mod: PluginModule): this {
+  plugin(mod: PluginModule, config?: unknown): this {
     this.assertState('created', 'plugin')
     if (this.plugins.has(mod.name)) {
       throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
     }
     this.plugins.set(mod.name, mod)
+    if (config !== undefined) this.configs.set(mod.name, config)
     this.attachFiber(mod.name, mod)
     return this
   }
@@ -146,6 +176,7 @@ export class Context implements PluginScope {
 
   /**
    * 尝试激活一个插件：依赖满足则 setup 并置 ACTIVE，返回 true；依赖不满足则保持 PENDING 返回 false。
+   * 装配 config 经其 `Config` schema 校验（缺默认补齐），失败 → fiber FAILED 并抛出（响亮报错）。
    * setup 抛错：置 FAILED 并抛出（半成品副作用已回收）。
    */
   private tryActivate(name: string): boolean {
@@ -157,15 +188,32 @@ export class Context implements PluginScope {
     this.setLifecycle(name, Lifecycle.ACTIVATING)
     const fiber = this.attachFiber(name, mod)
     fiber.markLoading()
+    // P4：装配 config 经 schema 校验 + 补默认 → 填 fiber.config、声明进 settings 单一数据源、传给 apply
+    let config: object | undefined
+    try {
+      config = resolveConfig(mod.Config, this.configs.get(name))
+    } catch (err) {
+      this.plugins.delete(name) // 校验失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
+      this.configs.delete(name)
+      this.setLifecycle(name, Lifecycle.ERROR)
+      fiber.markFailed(err)
+      throw err
+    }
+    fiber.config = config
     const scope = this.rootScope.child()
     this.pluginScopes.set(name, scope)
+    // config 字段声明进 settings 单一数据源（scope=插件名），并随插件 scope 回收（热卸/重载清）
+    if (mod.Config) {
+      this.declareConfigIntoStore(mod.Config, config as Record<string, unknown>, name, scope)
+    }
     const scopeCtx = this.deriveScope(scope, name)
     let cleanup: void | (() => void) | Disposable
     try {
-      cleanup = runPlugin(mod, scopeCtx)
+      cleanup = runPlugin(mod, scopeCtx, config)
     } catch (err) {
       this.pluginScopes.delete(name)
       this.plugins.delete(name) // 加载失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
+      this.configs.delete(name)
       this.setLifecycle(name, Lifecycle.ERROR)
       scope.dispose() // 半成品副作用也清掉
       fiber.markFailed(err) // 保留 FAILED fiber 供诊断（可重装复用）
@@ -176,6 +224,27 @@ export class Context implements PluginScope {
     fiber.markActive()
     this.bus.emit('ctx:plugin-installed', { name })
     return true
+  }
+
+  /**
+   * 把插件 `Config` schema 的字段登记进内置 settings 单一数据源（scope=声明该 config 的插件）。
+   * 每个字段按它携带的 group 分组（缺省=插件名），初值=装配校验后的 config 值；UI 面板据此长控件并实时 set。
+   */
+  private declareConfigIntoStore(
+    schema: ConfigSchema,
+    config: Record<string, unknown>,
+    pluginName: string,
+    scope: Scope,
+  ): void {
+    const store = this.builtinSettings
+    for (const [key, field] of Object.entries(schema)) {
+      const itemSchema = toSettingSchema(field)
+      if (!store.has(key)) store.define(field.group ?? pluginName, { [key]: itemSchema }, pluginName)
+      // define 初值=itemSchema.default(=schema 默认)；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
+      store.set(key, config[key] as string | number | boolean)
+    }
+    // 随插件 scope 回收：热卸/重载清掉它声明的配置项（防残留与重装撞 key）
+    scope.onDispose(() => store.removeByScope(pluginName))
   }
 
   /** 唤醒依赖现已满足但仍在 PENDING 的插件（服务被 provide/插件被激活后调用） */
@@ -201,6 +270,7 @@ export class Context implements PluginScope {
     this.pluginScopes.clear()
     this.plugins.clear()
     this.fibers.clear()
+    this.configs.clear()
     this.services.clear()
     this.builtinSettings = new SettingsStore() // 分组配置随生命周期重置(重启可重新 define)
     this.lifecycles.clear()
@@ -223,20 +293,23 @@ export class Context implements PluginScope {
    * 运行中热装一个插件（start 之后调用）：依赖满足则立即可用；否则保持 PENDING 待提供方出现。
    * 等价于冷启动时 plugin()。
    *
-   * @throws 未 start / 插件名重复 / setup 抛错（半成品副作用已回收）
+   * @param config 装配 config（可选）：激活时经插件 `Config` schema 校验+补默认再传 apply；校验失败 → fiber FAILED + 抛错。
+   * @throws 未 start / 插件名重复 / config 校验失败 / setup 抛错（半成品副作用已回收）
    * @returns 插件名
    */
-  installPlugin(mod: PluginModule): string {
+  installPlugin(mod: PluginModule, config?: unknown): string {
     this.assertState('started', 'installPlugin')
     if (this.plugins.has(mod.name)) {
       throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
     }
     this.plugins.set(mod.name, mod)
+    if (config !== undefined) this.configs.set(mod.name, config)
     this.attachFiber(mod.name, mod) // PENDING fiber 句柄
     try {
       this.tryActivate(mod.name) // 依赖满足→ACTIVE；不满足→保持 PENDING
     } catch (err) {
       this.plugins.delete(mod.name)
+      this.configs.delete(mod.name)
       throw err
     }
     // 可能因本插件 provide 的服务满足了先前 PENDING 的插件 → 唤醒
@@ -256,6 +329,7 @@ export class Context implements PluginScope {
     scope.dispose()
     this.pluginScopes.delete(name)
     this.plugins.delete(name)
+    this.configs.delete(name)
     this.lifecycles.delete(name)
     const fiber = this.fibers.get(name)
     if (fiber) {

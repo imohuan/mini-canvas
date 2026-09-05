@@ -21,6 +21,13 @@ export { buildCapabilities } from './capabilities'
 export type { NodeRegisterDef } from './capabilities'
 export { SettingsStore } from './settingsStore'
 export type { SettingSchema, SettingGroupDef, SettingEntry } from './settingsStore'
+export { resolveConfig, ConfigError, F } from './configSchema'
+export type {
+  ConfigSchema,
+  ConfigField,
+  ConfigPrimitive,
+  InferConfig,
+} from './configSchema'
 export {
   Lifecycle,
 } from './types'

@@ -16,7 +16,7 @@ import type { NodeStoreService } from '../services/nodeStore'
 import type { NodeFactoryService, NodeCreator } from '../services/nodeFactory'
 import type { CommandDef } from '../services/command'
 import type { SlotRegistry } from './registry/slotRegistry'
-import type { SettingsStore, SettingSchema } from './settingsStore'
+import type { SettingsStore } from './settingsStore'
 
 /** ctx.nodes.register 一次给全的定义（数据+展示+可选建节点实现） */
 export interface NodeRegisterDef {
@@ -74,10 +74,6 @@ export function buildCapabilities(
     occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
   }
   settings: {
-    define(req: {
-      group: string
-      items: Record<string, SettingSchema>
-    }): void
     set(key: string, value: string | number | boolean): boolean
     get(key: string): string | number | boolean
     onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
@@ -181,13 +177,8 @@ export function buildCapabilities(
       },
     },
 
-    // ---------- ctx.settings：分组配置(单一数据源)，define 记本插件 scope → onChange 只收本插件变更 ----------
+    // ---------- ctx.settings：已装配 config 的读 + 订阅（声明改由插件 Config schema 自动完成，无 define 入口） ----------
     settings: {
-      define(req: { group: string; items: Record<string, SettingSchema> }): void {
-        settingsStore().define(req.group, req.items, pluginName)
-        // 随插件 scope 自动回收：插件热卸/重载时清掉它声明的配置项(防残留、防重装撞 key)
-        ctx.effect(() => () => settingsStore().removeByScope(pluginName))
-      },
       set(key: string, value: string | number | boolean): boolean {
         return settingsStore().set(key, value)
       },

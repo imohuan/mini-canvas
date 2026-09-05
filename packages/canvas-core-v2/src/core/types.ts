@@ -4,6 +4,7 @@
  * 设计契约见 docs/plan/canvas-core-v2-api.md（API 契约定稿）。
  * M1 为纯 TypeScript 内核，零 Vue/pinia 依赖，可脱离 DOM 单测。
  */
+import type { ConfigSchema } from './configSchema'
 
 /** 可释放对象：调用即执行清理，幂等安全 */
 export interface Disposable {
@@ -83,30 +84,19 @@ export interface PluginCapabilities {
     remove(slot: string, id: string): boolean
     occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
   }
-  /** 分组化配置（单一数据源 + 按作用域订阅变化）—— 见 2.4 / 目标 B2 */
+  /**
+   * 配置（cordis P4 形态）：插件在模块级导出 `Config` schema，装配处给 config，
+   * 内核校验+补默认后 `apply(ctx, config)` 收到完整 config。此段是"已装配 config"的读 + 订阅
+   * （可监听本插件 config 变化→就地窄更新、实时生效，逻辑同旧 settings.onChange；不再有 define 声明入口）。
+   */
   settings: {
-    /** 申报一组配置（同 key 重复抛错） */
-    define(req: {
-      group: string
-      items: Record<
-        string,
-        {
-          type: 'color' | 'number' | 'select' | 'boolean' | 'text'
-          default: string | number | boolean
-          label?: string
-          min?: number
-          max?: number
-          options?: Array<{ value: string; label?: string }>
-        }
-      >
-    }): void
-    /** 改一项（未知 key 抛错；越界夹取） */
+    /** 改一项已装配 config 的值（未知 key 抛错；number 越界夹取，实时生效） */
     set(key: string, value: string | number | boolean): boolean
-    /** 读一项当前值 */
+    /** 读一项已装配 config 的当前值 */
     get(key: string): string | number | boolean
-    /** 订阅变化：scope 本插件名(默认只收本插件的变更)；可不传 scope 全局 */
+    /** 订阅某作用域(插件)的 config 变化：scope 传本插件名=只收自己的；不传全局 */
     onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
-    /** 已申报的组名（UI 面板用） */
+    /** 已装配(声明)的组名（UI 面板用） */
     groups(): string[]
   }
 }
@@ -155,10 +145,12 @@ export interface PluginScope extends PluginCapabilities {
 /**
  * 插件模块形状（对齐 docs/goal/plugin-system-goal.md 2.1b 的 Cordis 式写法，兼容旧 setup/deps）。
  *
- * Cordis 式（推荐，教程主推）：`.ts` 裸导出三样 `name / inject / apply`——
+ * Cordis 式（推荐，教程主推）：`.ts` 裸导出四样 `name / inject / Config / apply`——
  * - `name`：插件唯一名
  * - `inject`：依赖的服务/插件名数组（没有可省）
- * - `apply(ctx)`：注册函数，ctx 是能力台(ctx.nodes/theme/commands/slots/services)，注册自动回收
+ * - `Config`（可选）：本插件可配置项的 schema（cordis ch5 形态）。装配处给的 config 经它校验、
+ *   默认补齐后，内核以第二个实参 `apply(ctx, config)` 传入；校验失败 → fiber FAILED + 响亮报错。
+ * - `apply(ctx, config)`：注册函数，ctx 是能力台(ctx.nodes/theme/commands/slots/settings)，注册自动回收
  *
  * 旧式（向后兼容）：`setup(ctx)` 同 apply，`deps` 同 inject。二者可混用，apply 优先于 setup、inject 优先于 deps。
  * setup/apply 的返回值（cleanup）或经 ctx 登记的副作用都自动归入本插件的 scope，卸载即清。
@@ -169,11 +161,11 @@ export interface PluginModule<TConfig extends object = object> {
   /** 依赖的插件/服务名（真会 ctx.get 的才写；缺则报错）。Cordis 用 inject，旧式用 deps。 */
   deps?: string[]
   inject?: string[]
-  /** 注册函数：ctx 是能力台。Cordis 用 apply，旧式用 setup，二者至少给一个。 */
+  /** 本插件的 config schema（cordis ch5）。装配 config 经它校验+补默认；apply(ctx,config) 收结果。 */
+  Config?: ConfigSchema
+  /** 注册函数：ctx 是能力台。Cordis 用 apply(收校验后 config)，旧式用 setup，二者至少给一个。 */
   setup?(ctx: PluginScope): void | (() => void) | Disposable
-  apply?(ctx: PluginScope): void | (() => void) | Disposable
-  /** 配置：由 ctx.plugin(mod, config) 传入 */
-  config?: TConfig
+  apply?(ctx: PluginScope, config?: TConfig): void | (() => void) | Disposable
 }
 
 /**

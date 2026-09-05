@@ -125,22 +125,35 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
   })
 })
 
-describe('ctx.settings 分组配置能力段（单一数据源 + 按作用域订阅）', () => {
-  it('两插件各 define 配置，改 A 只触发 A 的 onChange，不误触 B', async () => {
+describe('ctx.settings 配置单一数据源（插件导出 Config schema，apply 收校验后 config，按作用域订阅）', () => {
+  it('两插件各装配 config，改 A 只触发 A 的 onChange，不误触 B；apply 收默认补齐后的完整 config', async () => {
     const seen: Record<string, string[]> = { a: [], b: [] }
+    let aConfig: unknown
+    let bConfig: unknown
     const { ctx } = await boot([
-      mk('theme-a', (c) => {
-        c.settings.define({
-          group: '主题',
-          items: { edgeColor: { type: 'color', default: '#fff', label: '连线色' }, width: { type: 'number', default: 1, min: 0, max: 5 } },
-        })
-        c.settings.onChange('theme-a', (k) => seen.a.push(k))
-      }),
-      mk('theme-b', (c) => {
-        c.settings.define({ group: '背景', items: { dot: { type: 'boolean', default: true, label: '圆点' } } })
-        c.settings.onChange('theme-b', (k) => seen.b.push(k))
-      }),
+      // 模块级 Config schema + apply(ctx, config)：声明入口从 ctx.settings.define 换成 Config 导出
+      {
+        name: 'theme-a',
+        Config: {
+          edgeColor: { type: 'color', default: '#fff', label: '连线色' },
+          width: { type: 'number', default: 1, min: 0, max: 5, label: '线宽' },
+        },
+        apply(c, config) {
+          aConfig = config
+          c.settings.onChange('theme-a', (k) => seen.a.push(k))
+        },
+      },
+      {
+        name: 'theme-b',
+        Config: { dot: { type: 'boolean', default: true, label: '圆点' } },
+        apply(c) {
+          bConfig = c.settings
+          c.settings.onChange('theme-b', (k) => seen.b.push(k))
+        },
+      },
     ])
+    // apply 收到默认补齐的 config
+    expect(aConfig).toEqual({ edgeColor: '#fff', width: 1 })
     // 改 theme-a 的 edgeColor → 只 theme-a 收到；theme-b 不触发
     ctx.settings.set('edgeColor', '#0af')
     expect(seen.a).toEqual(['edgeColor'])
@@ -154,14 +167,23 @@ describe('ctx.settings 分组配置能力段（单一数据源 + 按作用域订
     expect(ctx.settings.get('width')).toBe(5)
   })
 
-  it('settings 单一数据源：plugin 与 ctx(host) 共享同一份值', async () => {
+  it('config 单一数据源：plugin 与 ctx(host) 共享同一份值', async () => {
+    let received: unknown
     const { ctx } = await boot([
-      mk('theme-a', (c) => c.settings.define({ group: 'g', items: { c: { type: 'color', default: '#111' } } })),
+      {
+        name: 'theme-a',
+        Config: { c: { type: 'color', default: '#111' } },
+        apply(c, config) {
+          received = config
+        },
+      },
     ])
+    // 未给装配 config → apply 收默认补齐的 config
+    expect(received).toEqual({ c: '#111' })
     // host 经 ctx.get('settings') 与 ctx.settings 读到同一份
     const raw = ctx.get<{ get(k: string): unknown }>('settings')
     expect(raw.get('c')).toBe('#111')
-    ctx.settings.set('c', '#222')
-    expect(raw.get('c')).toBe('#222')
+    ctx.settings.set('c', '#333')
+    expect(raw.get('c')).toBe('#333')
   })
 })

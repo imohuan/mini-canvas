@@ -5,9 +5,10 @@ import type { PluginScope, PluginModule } from '../types'
 
 /**
  * 目标 B2 验收级宿主测试（无 Vue，纯内核）：
- * 主题插件用 ctx.settings 声明分组配置 + ctx.settings.onChange 按作用域订阅，
- * 改配置只在"对应那一处"做窄更新(改 edgeColor 只刷 edge 主题、不动 nodeShell occupant)，无全图重建；
- * 另一个插件改自己的配置不触发本插件。
+ * 主题插件**导出 Config schema**（P4 替代 ctx.settings.define 的声明入口），内核激活时把 schema 字段
+ * 登记进 settings 单一数据源；插件经 ctx.settings.onChange 按作用域订阅，改配置只在"对应那一处"做窄更新
+ * （改 edgeColor 只刷 edge 样式、不动 nodeShell occupant），无全图重建；
+ * 另一个插件改自己的配置不触发本插件。装配 config 经 schema 校验后 apply(ctx, config) 收到。
  */
 
 const MyEdge = { name: 'MyEdge' }
@@ -23,23 +24,22 @@ async function bootTheme(...plugins: PluginModule[]): Promise<{ ctx: Context; th
   return { ctx, theme }
 }
 
-describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收）', () => {
-  it('主题插件：改 edgeColor 只刷 edge 一处，nodeShell occupant 不受影响(无全图重建)', async () => {
+describe('B2：插件 config 窄更新 + 按作用域订阅（宿主级验收，Config schema 声明）', () => {
+  it('主题插件：改 edgeColor 只刷 edge 一处，nodeShell occupant 不受影响(无全图重建)；apply 收校验后 config', async () => {
     // 模拟"edge 主题占用"就地更新的样式对象(改配置只改它，不重建任何 occupant/节点数据)
     const edgeStyle = { stroke: '#b1b1b7', width: 1 }
+    let appliedConfig: unknown
 
     const themePlugin: PluginModule = {
       name: 'theme-default',
-      apply(ctx: PluginScope) {
-        // ① 申报两组配置(含 color/number schema)
-        ctx.settings.define({
-          group: '连线',
-          items: {
-            edgeColor: { type: 'color', default: '#b1b1b7', label: '连线颜色' },
-            edgeWidth: { type: 'number', default: 1, min: 0, max: 10, label: '线宽' },
-          },
-        })
-        ctx.settings.define({ group: '基础', items: { corner: { type: 'number', default: 8, min: 0, max: 40, label: '圆角' } } })
+      // P4：模块级 Config schema（含 group，保证 settings 单一数据源按组分好；初值=装配 config）
+      Config: {
+        edgeColor: { type: 'color', default: '#b1b1b7', label: '连线颜色', group: '连线' },
+        edgeWidth: { type: 'number', default: 1, min: 0, max: 10, label: '线宽', group: '连线' },
+        corner: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '基础' },
+      },
+      apply(ctx, config) {
+        appliedConfig = config
         // 主题注册 edge 与 nodeShell 两个 occupants
         ctx.theme.register('edge', MyEdge)
         ctx.theme.register('nodeShell', MyShell)
@@ -54,6 +54,10 @@ describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收�
     }
     const { ctx, theme } = await bootTheme(themePlugin)
     expect(theme.occupantIds('nodeShell')).toHaveLength(1)
+    // apply 收到默认补齐(未给装配 config)的完整 config
+    expect(appliedConfig).toEqual({ edgeColor: '#b1b1b7', edgeWidth: 1, corner: 8 })
+    // config 字段按 group 声明进 settings 单一数据源
+    expect(ctx.get<{ groups(): string[] }>('settings').groups()).toEqual(['连线', '基础'])
 
     const edgeId = theme.occupantIds('edge')[0]
     ctx.settings.set('edgeColor', '#ff0000')
@@ -71,15 +75,17 @@ describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收�
     let themeCalls = 0
     const themePlugin: PluginModule = {
       name: 'theme-default',
-      apply(ctx: PluginScope) {
-        ctx.settings.define({ group: 'g', items: { mine: { type: 'color', default: '#000' } } })
+      Config: { mine: { type: 'color', default: '#000' } },
+      apply(ctx) {
         ctx.settings.onChange('theme-default', () => void themeCalls++)
       },
     }
     const otherPlugin: PluginModule = {
       name: 'other',
-      apply(ctx: PluginScope) {
-        ctx.settings.define({ group: 'o', items: { theirs: { type: 'color', default: '#fff' } } })
+      Config: { theirs: { type: 'color', default: '#fff' } },
+      apply(ctx) {
+        // 不再手写 define：声明由 Config schema 自动完成；此处仅订阅自己的变化
+        ctx.settings.onChange('other', () => void 0)
       },
     }
     const { ctx } = await bootTheme(themePlugin, otherPlugin)
@@ -89,16 +95,15 @@ describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收�
     expect(themeCalls).toBe(1)
   })
 
-  it('插件热卸/重载会清掉它声明的 settings(防残留与重装撞 key)', async () => {
+  it('插件热卸/重载会清掉它声明的 config settings(防残留与重装撞 key)', async () => {
     const plug = (n: string): PluginModule => ({
       name: n,
-      apply(ctx: PluginScope) {
-        ctx.settings.define({ group: 'g', items: { k: { type: 'color', default: '#000' } } })
-      },
+      Config: { k: { type: 'color', default: '#000' } },
+      apply() {},
     })
     const { ctx } = await bootTheme(plug('alpha'))
     const groups = () => ctx.get<{ groups(): string[] }>('settings').groups()
-    expect(groups()).toEqual(['g'])
+    expect(groups()).toEqual(['alpha'])
 
     // 热卸 alpha → 其声明的 settings 随 scope 清理
     expect(ctx.uninstallPlugin('alpha')).toBe(true)
@@ -106,6 +111,6 @@ describe('B2：插件 settings 窄更新 + 按作用域订阅（宿主级验收�
 
     // 重载同插件(重装) → 不因残留 key 撞车
     ctx.installPlugin(plug('alpha'))
-    expect(groups()).toEqual(['g'])
+    expect(groups()).toEqual(['alpha'])
   })
 })
