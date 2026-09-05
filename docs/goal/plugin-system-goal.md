@@ -78,19 +78,39 @@ export default defineCanvasPlugin({
 - `defineCanvasPlugin(...)` + 类型 + 各 `define*`/能力声明段，底层转发内核/render/令牌。
 - 插件包只依赖这一个库，不散 import 内核/渲染。
 
+### 2.4 打包 / 分发 / 安装（轻量入口，适配"库"，不照搬 dsh CLI/profile/patch）
+参考 dsh `publish.zh.md`（bundle + profile + `dsh plugin add` + 从 npm/git/tarball 装），但 mini-canvas 是引擎库不是独立 app，
+所以把它收敛成**适配库的两层轻量形态**（不建 CLI、不做 profile 目录、不做整树 patch 语法）：
+- **插件包 = 可复用 bundle**：一个 `@mini-canvas/canvas-base` 写的插件，可 (a) 作为 workspace 包源码直接 import，
+  也可 (b) 打包成**单文件插件 js**（复用 demo 已有的 UMD `plugin-node-text.js` 路径），宿主运行时加载。
+- **装配清单 = 应用组合**：一份简单的有序清单（代码数组或一份 json/yaml）列出"按什么顺序装哪些插件 + 每插件配置"，
+  画布应用(`CanvasHost`/`createMiniCanvasHost`)按它一次性装配。清单里后装的同 id 插件**覆盖**先装的（轻量分层，替代 dsh patch 的"后层胜出"），
+  不做深度配置合并的复杂语法。
+- **分发**：插件可发布为 npm 包、或交付单文件 js / workspace 源码，让别的画布应用 import/install 即用。
+
+作者流程（对齐 dsh basic 教程手感）：① 写个插件（源码）本地注入宿主试跑 → ② 声明配置 → ③ 打包成可分发插件包
+→ ④ 别处通过"装配清单"或"运行时安装"把它用起来。
+
 ---
 
-## 三、目标清单（基础层只留这 3 个；业务能力一律降为"验证示例"）
+## 三、目标清单（基础层：开放插槽 / 开发入口 / 打包分发；可诊断是可选增强；业务能力一律降为"验证示例"）
 
 ### 🎯 目标 A（核心）· 开放插槽 + 渲染
 - **结果**：`SlotRegistry`(已有一半)接进 nodeRegistry/themeRegistry：一个槽多 occupant + order + id + remove；支持插件声明新槽；渲染层按序渲染。
 - **自查"内核有没有"**：容器本身新的，加进来；渲染层本来读 registry，改成读多 occupant 即可。
 - **验收**：单测绿；两个插件往同一槽各塞组件、同屏按序渲染；默认主题走新槽仍可一键顶替 + 热卸回退；demo 零报错。
 
-### 🎯 目标 B · 统一开发入口 `@mini-canvas/canvas-base`
-- **结果**：建包，`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + 转发；注册自动回收（插件不手写 unregister）。
-- **自查"内核有没有"**：内核各 register* 已有，base 只是**收口 + 自动回收**，不新增引擎逻辑。
-- **验收**：示例插件只 import `@mini-canvas/canvas-base` 就写出能跑通的自定义节点+主题+命令插件；脚手架 doc。
+### 🎯 目标 B · 统一开发入口 `@mini-canvas/canvas-base` + 作者教程（对齐 dsh basic 形态）
+- **结果**：建包，`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + **插件可声明 Config(schema+默认值)** + 转发；注册自动回收（插件不手写 unregister）。
+- **自查"内核有没有"**：内核各 register* 已有，base 只是**收口 + 自动回收 + 接配置**，不新增引擎逻辑。
+- **作者教程（对齐 dsh basic/index→config→publish 那套成体系中文教程）**：一篇照着就能跑的文档——① 写第一个插件并本地注入宿主跑起来 → ② 自定义节点/主题/服务/命令 → ③ 插件声明配置 → ④ 打包/分发到别的画布应用。
+- **验收**：示例插件只 import `@mini-canvas/canvas-base` 写出可跑通的自定义节点+主题+命令插件（注册自动回收）；插件能声明并读取配置；脚手架 + 中文作者教程 doc 在、照着能一步步跑通。
+
+### 🎯 目标 D · 打包 / 分发 / 安装（轻量入口，见 2.4）
+- **结果**：支持"插件包 → 单文件插件 js / npm / workspace 源码"三种可分发形态；提供**装配清单**让画布应用按序安装插件 + 传配置；支持运行时把单文件插件装进宿主。
+- **自查"内核有没有"**：安装机制 `installPlugin/uninstallPlugin/reloadPlugin` 已有；demo 已有 UMD 加载(`plugin-load`)验证。要补的只是"把散装安装收成可复用入口 + 单文件打包范式 + 装配清单"。
+- **不做**：CLI、profile 目录、cordis.yml/patch 整树语法、深度配置合并（只做"按序装 + 同名覆盖"的轻量分层）。
+- **验收**：①一个插件可打成单文件 js 并被宿主运行时 install 生效（复用/对齐 demo 现有 UMD 验证）；②装配清单能把 theme-default/node-text/image/commands 按序装配并传配置，另一画布应用 import 该清单即用；③整条"作者打包 → 别处安装"流程在 demo 跑通零报错。
 
 ### 🎯 目标 C（可选增强，帮排错）· 可诊断 + 依赖就绪
 - **结果**：每插件一个可查句柄 `{name,state,deps,config}`；依赖没到进 PENDING、到即跑、卸则待命/卸。
@@ -118,10 +138,11 @@ export default defineCanvasPlugin({
 
 ## 六、实施路径（建议顺序；每步可独立验证）
 - **P1 · 目标 A**：SlotRegistry 接 nodeRegistry/themeRegistry + 开放声明新槽 + 渲染层按序渲染 + 迁移 theme-default/node-text 走新槽 + demo 验证多 occupant。
-- **P2 · 目标 B**：建 `packages/canvas-base`（defineCanvasPlugin + 能力段 + 转发 + 自动回收）+ 脚手架/作者教程 doc。
+- **P2 · 目标 B**：建 `packages/canvas-base`（defineCanvasPlugin + 能力段 + 配置 + 转发 + 自动回收）+ 中文作者教程 doc。
 - **P3 · 目标 C**：per-plugin 句柄 + PENDING 依赖编排 + 单测。
-- **P4 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
-- **P5 · 收尾**：全量回归 + 更新验收勾选 + docs/tmp 清理征询。
+- **P4 · 目标 D**：打包/分发/安装轻量入口 —— 单文件插件打包范式 + 装配清单 + 运行时 install + demo 整链验证。
+- **P5 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
+- **P6 · 收尾**：全量回归 + 更新验收勾选 + docs/tmp 清理征询。
 
 > 每个 Goal"先写验收用例 → 实现 → 浏览器验证 → commit"。目标 A 是核心，优先。
 
@@ -138,7 +159,8 @@ export default defineCanvasPlugin({
 
 ## 八、验收总清单（全勾 = 本任务才结束）
 - [ ] 目标A：nodeRegistry/themeRegistry 支持多 occupant + order + id 增量/替换/remove + 插件可声明新槽；单测绿；两插件同槽按序同屏渲染；默认主题走新槽可一键顶替/热卸回退。
-- [ ] 目标B：`@mini-canvas/canvas-base` 存在；示例插件只 import 它写出可跑通的自定义节点+主题+命令插件（注册自动回收，不手写 unregister）；脚手架/作者 doc 在。
+- [ ] 目标B：`@mini-canvas/canvas-base` 存在；示例插件只 import 它写出可跑通的自定义节点+主题+命令插件（注册自动回收，不手写 unregister）；插件能声明并读取配置；中文作者教程 doc 照着能跑通。
+- [ ] 目标D：插件可打成单文件 js 并被宿主运行时 install 生效；装配清单能把默认插件按序装配并传配置、另一画布应用 import 即用；整条"打包→安装"在 demo 跑通零报错。
 - [ ] 目标C：per-plugin 可查句柄 + PENDING 依赖编排单测绿（可选，做了打勾）。
 - [ ] 验证示例：自定义端口/吸附/快速连接节点在 demo 行为符合 connection 声明（示例级）。
 - [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；demo 浏览器端到端零 console 报错。
