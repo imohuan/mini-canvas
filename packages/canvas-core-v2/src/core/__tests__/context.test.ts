@@ -543,3 +543,123 @@ describe('P5 inspectPlugins：fiber 状态可查 + PENDING 缺依赖诊断（只
     expect(s).toMatchObject({ state: 'failed', error: 'boom-config' })
   })
 })
+
+describe('P6/P2b2 提供方被卸/换，依赖方随之回退 PENDING 并在服务恢复后自动重载（cordis inject 非一次性）', () => {
+  it('① 依赖"服务名"：卸提供方 → 依赖方副作用回收并回退 pending；重装 → 依赖方自动重载(apply 再跑)', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const cleanup = vi.fn()
+    let consumerRuns = 0
+    // consumer 先装（provider 未装 → 因缺 data-svc 停留 PENDING，apply 未跑）
+    ctx.installPlugin({
+      name: 'consumer',
+      inject: ['data-svc'],
+      apply(c: any) {
+        consumerRuns++
+        expect(c.get('data-svc')).toBeDefined()
+        c.effect(() => cleanup)
+      },
+    })
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    expect(consumerRuns).toBe(0)
+    // 装提供方 → wakePending → consumer 激活
+    ctx.installPlugin({ name: 'provider', apply(c: any) { c.provide('data-svc', { n: 1 }) } })
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(1)
+    // 卸提供方 → consumer 副作用回收 + fiber 回退 pending + 服务摘除
+    expect(ctx.uninstallPlugin('provider')).toBe(true)
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    expect(ctx.get('data-svc')).toBeUndefined()
+    // 重装提供方 → wakePending → consumer 自动重载（apply 又跑）
+    ctx.installPlugin({ name: 'provider', apply(c: any) { c.provide('data-svc', { n: 2 }) } })
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(2)
+    expect(ctx.get<{ n: number }>('data-svc').n).toBe(2)
+  })
+
+  it('② 提供方"换版本"(reload = 先卸后装同 name)：依赖方跟下(pending)再跟上(读到新实现)', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    let consumerRuns = 0
+    const mkProvider = (v: number) => ({
+      name: 'prov',
+      apply(c: any) { c.provide('svc', { v }) },
+    })
+    ctx.installPlugin({ name: 'consumer', inject: ['svc'], apply(c: any) { consumerRuns++; expect(c.get('svc')).toBeDefined() } })
+    ctx.installPlugin(mkProvider(1))
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(1)
+    // reload：卸旧版本 → consumer 随之 pending；装新版本 → consumer 自动重载并读到 v=2
+    ctx.uninstallPlugin('prov')
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    expect(ctx.fiber('prov')).toBeUndefined()
+    ctx.installPlugin(mkProvider(2))
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(2)
+    expect(ctx.get<{ v: number }>('svc').v).toBe(2)
+    expect(ctx.listPlugins()).toContain('consumer')
+  })
+
+  it('③ 依赖"插件名"(inject 其名而非服务名)：同样跟随卸载/重装', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    let consumerRuns = 0
+    const mkProvider = () => ({ name: 'dep-plugin', apply() {} })
+    ctx.installPlugin({ name: 'consumer', inject: ['dep-plugin'], apply() { consumerRuns++ } })
+    ctx.installPlugin(mkProvider())
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(1)
+    // 卸依赖的插件本身 → consumer 也回退（其 dep 名从 plugins 表消失）
+    ctx.uninstallPlugin('dep-plugin')
+    expect(ctx.fiber('consumer')?.stateName).toBe('pending')
+    // 重装 → consumer 自动重载
+    ctx.installPlugin(mkProvider())
+    expect(ctx.fiber('consumer')?.stateName).toBe('active')
+    expect(consumerRuns).toBe(2)
+  })
+
+  it('③b 传递链：卸底层提供方 → 依赖方与其下游逐层回退 PENDING；恢复后整链自动重载', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    let midRuns = 0
+    let leafRuns = 0
+    // leaf 依赖 mid 的服务；mid 依赖 base 的服务
+    ctx.installPlugin({ name: 'leaf', inject: ['mid-svc'], apply() { leafRuns++ } })
+    ctx.installPlugin({ name: 'mid', inject: ['base-svc'], apply(c: any) { midRuns++; c.provide('mid-svc', {}) } })
+    ctx.installPlugin({ name: 'base', apply(c: any) { c.provide('base-svc', {}) } })
+    expect(ctx.fiber('leaf')?.stateName).toBe('active')
+    expect(ctx.fiber('mid')?.stateName).toBe('active')
+    expect(midRuns).toBe(1)
+    expect(leafRuns).toBe(1)
+    // 卸 base → mid 回退(连带摘 mid-svc) → 下一轮 leaf 也回退（迭代传递）
+    ctx.uninstallPlugin('base')
+    expect(ctx.fiber('mid')?.stateName).toBe('pending')
+    expect(ctx.fiber('leaf')?.stateName).toBe('pending')
+    // 恢复 base → 整链按依赖序重载
+    ctx.installPlugin({ name: 'base', apply(c: any) { c.provide('base-svc', {}) } })
+    expect(ctx.fiber('mid')?.stateName).toBe('active')
+    expect(ctx.fiber('leaf')?.stateName).toBe('active')
+    expect(midRuns).toBe(2)
+    expect(leafRuns).toBe(2)
+  })
+
+  it('④ ctx.get 可选依赖：无提供方时 get("x") 返 undefined 且插件照常 apply 运行', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const ran = vi.fn()
+    ctx.installPlugin({
+      name: 'optional-user',
+      apply(c: any) {
+        ran()
+        expect(c.get('maybe-svc')).toBeUndefined() // 无提供方 → undefined，不抛
+      },
+    })
+    expect(ran).toHaveBeenCalledTimes(1)
+    expect(ctx.fiber('optional-user')?.stateName).toBe('active')
+    // 之后补上提供方也不影响已激活的可选消费方（它没 inject 硬依赖）
+    ctx.installPlugin({ name: 'opt-provider', apply(c: any) { c.provide('maybe-svc', {}) } })
+    expect(ctx.fiber('optional-user')?.stateName).toBe('active')
+    expect(ran).toHaveBeenCalledTimes(1)
+  })
+})

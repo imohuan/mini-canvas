@@ -191,6 +191,16 @@ export class Fiber {
     this.transition(FiberState.ACTIVE)
   }
 
+  /**
+   * 把 ACTIVE 的插件回退为 PENDING（P6/P2b2 语义：提供方被卸/换，依赖方随之回退等重载）。
+   * 不清副作用清理队列（其副作用由调用方经 scope.dispose 回收），只翻转状态供 drain 重新装载。
+   * 对 DISPOSED 无效（transition 在 DISPOSED 上 no-op）。
+   */
+  markPending(): void {
+    this._error = undefined
+    this.transition(FiberState.PENDING)
+  }
+
   /** apply/config 抛错：LOADING→FAILED */
   markFailed(err: unknown): void {
     this._error = err

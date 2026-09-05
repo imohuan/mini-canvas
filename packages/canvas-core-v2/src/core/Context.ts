@@ -332,7 +332,8 @@ export class Context implements PluginScope {
   }
 
   /**
-   * 运行中热卸一个插件：dispose 它的 Scope → 全部副作用/注册/UI 自动回收。
+   * 运行中热卸一个插件：dispose 它的 Scope → 全部副作用/注册/UI 自动回收；
+   * 随后把「现在因它消失而不满足其声明依赖」的已 ACTIVE 依赖方一并回退 PENDING（等依赖恢复后重载）。
    * @returns 是否真卸到（未装/已卸返回 false）
    */
   uninstallPlugin(name: string): boolean {
@@ -351,7 +352,47 @@ export class Context implements PluginScope {
       void fiber.dispose()
     }
     this.bus.emit('ctx:plugin-uninstalled', { name })
+    // P6/P2b2：提供方被卸，凡依赖它(或其提供的服务名)而仍 ACTIVE 的插件 → 回收副作用并回退 PENDING，
+    // 待服务恢复(重 provide / 插件重装)后经 wakePending→drain 自动重载（cordis：callback 随依赖方卸载/重跑）。
+    this.retractUnsatisfiedActives()
     return true
+  }
+
+  /**
+   * 提供方被卸/换后调用：回收「此刻不再满足其声明依赖」的 ACTIVE 插件并回退 PENDING。
+   * 迭代处理传递链——D 被回退时其 scope 连带摘除它提供的服务，故下一轮 E(依赖 D 的服务)也会被回退。
+   * 被回退插件仍保留在 plugins/fibers/configs 登记（还是已装插件），依赖恢复后由 wakePending→drain 重载。
+   * 判定依据 = depSatisfied(d)（依赖的是插件名或它提供的服务名皆被覆盖：P 的插件名/服务已随 scope.dispose
+   * 与 plugins.delete 从满足集消失）。
+   */
+  private retractUnsatisfiedActives(): void {
+    if (this.state !== 'started') return
+    let progressed = true
+    while (progressed) {
+      progressed = false
+      for (const depName of this.listPlugins()) {
+        const fiber = this.fibers.get(depName)
+        if (!fiber || fiber.state !== 'active') continue // 只回退当前 ACTIVE 者
+        const mod = this.plugins.get(depName)
+        if (!mod) continue
+        const deps = depsOf(mod)
+        if (!deps.some((d) => !this.depSatisfied(d))) continue // 依赖仍全满足，不受影响
+        // 回收副作用 + 摘除它提供的服务 → 回退 PENDING（fiber 保留供 drain 重载）
+        this.retractPlugin(depName)
+        progressed = true
+      }
+    }
+  }
+
+  /** 回收单个 ACTIVE 插件的 scope/副作用并置回 PENDING（保留 plugins/fibers/configs 登记，可重载复用） */
+  private retractPlugin(name: string): void {
+    const scope = this.pluginScopes.get(name)
+    if (scope) {
+      this.setLifecycle(name, Lifecycle.UNINSTALLING)
+      scope.dispose() // 清副作用 + 摘除它提供的服务
+      this.pluginScopes.delete(name)
+    }
+    this.fibers.get(name)?.markPending() // ACTIVE→PENDING
   }
 
   /** 已装载(含动态)的插件名 */
