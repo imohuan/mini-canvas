@@ -83,6 +83,32 @@ export interface PluginCapabilities {
     remove(slot: string, id: string): boolean
     occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
   }
+  /** 分组化配置（单一数据源 + 按作用域订阅变化）—— 见 2.4 / 目标 B2 */
+  settings: {
+    /** 申报一组配置（同 key 重复抛错） */
+    define(req: {
+      group: string
+      items: Record<
+        string,
+        {
+          type: 'color' | 'number' | 'select' | 'boolean' | 'text'
+          default: string | number | boolean
+          label?: string
+          min?: number
+          max?: number
+          options?: Array<{ value: string; label?: string }>
+        }
+      >
+    }): void
+    /** 改一项（未知 key 抛错；越界夹取） */
+    set(key: string, value: string | number | boolean): boolean
+    /** 读一项当前值 */
+    get(key: string): string | number | boolean
+    /** 订阅变化：scope 本插件名(默认只收本插件的变更)；可不传 scope 全局 */
+    onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
+    /** 已申报的组名（UI 面板用） */
+    groups(): string[]
+  }
 }
 
 /**

@@ -3,6 +3,7 @@ import { Scope } from './Scope'
 import { topoSort } from './topo'
 import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
+import { SettingsStore } from './settingsStore'
 import type {
   CanvasEventMap,
   Disposable,
@@ -55,11 +56,14 @@ export class Context implements PluginScope {
   private dev = false
   /** 内置通用 UI 槽容器（ctx.slots 写这里，宿主可经 ctx.get('slots') 读同一实例渲染） */
   private readonly builtinSlots = new SlotRegistry()
-  // 能力段（nodes/theme/commands/slots）在构造里由 buildCapabilities 挂到根 Context（宿主也可经它注册）
+  /** 内置分组配置单一数据源（ctx.settings 写这里；host 可经 ctx.get('settings') 读） */
+  private builtinSettings = new SettingsStore()
+  // 能力段（nodes/theme/commands/slots/settings）在构造里由 buildCapabilities 挂到根 Context（宿主也可经它注册）
   readonly nodes!: PluginCapabilities['nodes']
   readonly theme!: PluginCapabilities['theme']
   readonly commands!: PluginCapabilities['commands']
   readonly slots!: PluginCapabilities['slots']
+  readonly settings!: PluginCapabilities['settings']
 
   constructor(options: { dev?: boolean } = {}) {
     this.dev = options.dev ?? false
@@ -125,6 +129,7 @@ export class Context implements PluginScope {
     this.pluginScopes.clear()
     this.plugins.clear()
     this.services.clear()
+    this.builtinSettings = new SettingsStore() // 分组配置随生命周期重置(重启可重新 define)
     this.lifecycles.clear()
     this.state = 'created'
   }
@@ -212,9 +217,10 @@ export class Context implements PluginScope {
     }
   }
 
-  /** 取服务；缺则抛错（定稿：不静默降级）。'slots' 恒为内置槽容器。 */
+  /** 取服务；缺则抛错（定稿：不静默降级）。'slots'/'settings' 恒为内置实例。 */
   get<Service = unknown>(name: string): Service {
     if (name === 'slots') return this.builtinSlots as unknown as Service
+    if (name === 'settings') return this.builtinSettings as unknown as Service
     if (!this.services.has(name)) {
       throw new Error(
         `[core] Service "${name}" is not injected. If a plugin should provide it, declare it in that plugin's deps and inject it.`,

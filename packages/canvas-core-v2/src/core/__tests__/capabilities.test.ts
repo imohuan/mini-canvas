@@ -124,3 +124,44 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
     expect(theme.occupantIds('canvas.overlay')).toEqual(['b'])
   })
 })
+
+describe('ctx.settings 分组配置能力段（单一数据源 + 按作用域订阅）', () => {
+  it('两插件各 define 配置，改 A 只触发 A 的 onChange，不误触 B', async () => {
+    const seen: Record<string, string[]> = { a: [], b: [] }
+    const { ctx } = await boot([
+      mk('theme-a', (c) => {
+        c.settings.define({
+          group: '主题',
+          items: { edgeColor: { type: 'color', default: '#fff', label: '连线色' }, width: { type: 'number', default: 1, min: 0, max: 5 } },
+        })
+        c.settings.onChange('theme-a', (k) => seen.a.push(k))
+      }),
+      mk('theme-b', (c) => {
+        c.settings.define({ group: '背景', items: { dot: { type: 'boolean', default: true, label: '圆点' } } })
+        c.settings.onChange('theme-b', (k) => seen.b.push(k))
+      }),
+    ])
+    // 改 theme-a 的 edgeColor → 只 theme-a 收到；theme-b 不触发
+    ctx.settings.set('edgeColor', '#0af')
+    expect(seen.a).toEqual(['edgeColor'])
+    expect(seen.b).toEqual([])
+    // 改 theme-b 的 dot → 只 theme-b 收到
+    ctx.settings.set('dot', false)
+    expect(seen.b).toEqual(['dot'])
+    expect(seen.a).toEqual(['edgeColor'])
+    // 越界夹取 + 单数据源(host 与插件读同一份)
+    ctx.settings.set('width', 99)
+    expect(ctx.settings.get('width')).toBe(5)
+  })
+
+  it('settings 单一数据源：plugin 与 ctx(host) 共享同一份值', async () => {
+    const { ctx } = await boot([
+      mk('theme-a', (c) => c.settings.define({ group: 'g', items: { c: { type: 'color', default: '#111' } } })),
+    ])
+    // host 经 ctx.get('settings') 与 ctx.settings 读到同一份
+    const raw = ctx.get<{ get(k: string): unknown }>('settings')
+    expect(raw.get('c')).toBe('#111')
+    ctx.settings.set('c', '#222')
+    expect(raw.get('c')).toBe('#222')
+  })
+})

@@ -15,6 +15,8 @@ export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
 export { buildCapabilities } from './capabilities'
 export type { NodeRegisterDef } from './capabilities'
+export { SettingsStore } from './settingsStore'
+export type { SettingSchema, SettingGroupDef, SettingEntry } from './settingsStore'
 export {
   Lifecycle,
 } from './types'

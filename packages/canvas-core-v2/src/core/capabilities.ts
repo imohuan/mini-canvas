@@ -16,6 +16,7 @@ import type { NodeStoreService } from '../services/nodeStore'
 import type { NodeFactoryService, NodeCreator } from '../services/nodeFactory'
 import type { CommandDef } from '../services/command'
 import type { SlotRegistry } from './registry/slotRegistry'
+import type { SettingsStore, SettingSchema } from './settingsStore'
 
 /** ctx.nodes.register 一次给全的定义（数据+展示+可选建节点实现） */
 export interface NodeRegisterDef {
@@ -72,6 +73,16 @@ export function buildCapabilities(
     remove(slot: string, id: string): boolean
     occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
   }
+  settings: {
+    define(req: {
+      group: string
+      items: Record<string, SettingSchema>
+    }): void
+    set(key: string, value: string | number | boolean): boolean
+    get(key: string): string | number | boolean
+    onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
+    groups(): string[]
+  }
 } {
   const theme = () => {
     try {
@@ -87,6 +98,7 @@ export function buildCapabilities(
       return undefined
     }
   }
+  const settingsStore = () => ctx.get<SettingsStore>('settings')
 
   return {
     // ---------- ctx.nodes：注册一个节点类型（数据+展示+可选建节点），自动回收 ----------
@@ -166,6 +178,25 @@ export function buildCapabilities(
           order: e.order,
           component: e.value,
         }))
+      },
+    },
+
+    // ---------- ctx.settings：分组配置(单一数据源)，define 记本插件 scope → onChange 只收本插件变更 ----------
+    settings: {
+      define(req: { group: string; items: Record<string, SettingSchema> }): void {
+        settingsStore().define(req.group, req.items, pluginName)
+      },
+      set(key: string, value: string | number | boolean): boolean {
+        return settingsStore().set(key, value)
+      },
+      get(key: string): string | number | boolean {
+        return settingsStore().get(key)
+      },
+      onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void } {
+        return settingsStore().onChange(cb, { scope })
+      },
+      groups(): string[] {
+        return settingsStore().groups()
       },
     },
   }
