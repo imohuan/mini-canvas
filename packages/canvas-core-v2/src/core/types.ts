@@ -151,6 +151,9 @@ export type EventArgsFor<K extends string> = K extends keyof Events
     ? [payload: CanvasEventMap[K & EventName]]
     : any[]
 
+/** 类形态插件装载单元（cordis 03）：可 new 的类，通常 extends Service（构造即 super(ctx,name) 上架服务） */
+export type PluginClassLike = new (ctx: PluginScope, config?: any) => unknown
+
 /**
  * PluginScope —— 单个插件在 setup(ctx) 里拿到的"能力视图"。
  *
@@ -177,8 +180,8 @@ export interface PluginScope extends PluginCapabilities {
    * （缺提供方插件停留 PENDING、到齐自动激活、提供方被卸/换随之 PENDING 再随恢复重载）。
    */
   get<Service = unknown>(name: string): Service
-  /** 嵌套插件（本插件子作用域） */
-  plugin(mod: PluginModule): PluginScope
+  /** 嵌套插件（本插件子作用域）。支持类形态（Service 子类）与 PluginModule 对象。 */
+  plugin(mod: PluginModule | PluginClassLike): PluginScope
 
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */

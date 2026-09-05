@@ -14,10 +14,12 @@ import type {
   EventArgsFor,
   EventHandlerFor,
   PluginCapabilities,
+  PluginClassLike,
   PluginModule,
   PluginScope,
 } from './types'
 import { Lifecycle } from './types'
+import { asPluginModule } from './pluginClass'
 
 /**
  * 每个插件在 setup(ctx) 里拿到的"能力视图"见 types.ts 的 PluginScope（Context 实现之）。
@@ -127,16 +129,21 @@ export class Context implements PluginScope {
 
   /**
    * 装载一个插件模块（登记；真正 setup 在 start()）。该插件的 fiber 句柄可经 ctx.fiber(name) 取得。
+   * 支持类形态（cordis 03）：直接传 Service 子类（如 GreeterService），内核归一成 {name, inject, Config, apply:new 类}
+   * 后走与对象插件一致的依赖 PENDING / config 校验 / scope 回收路径。
    * @param config 装配 config（可选）：start 激活时经插件 `Config` schema 校验+补默认，再传给 apply(ctx, config)。
    */
-  plugin(mod: PluginModule, config?: unknown): this {
+  plugin(mod: PluginModule, config?: unknown): this
+  plugin(mod: PluginClassLike, config?: unknown): this
+  plugin(mod: PluginModule | PluginClassLike, config?: unknown): this {
     this.assertState('created', 'plugin')
-    if (this.plugins.has(mod.name)) {
-      throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
+    const m = asPluginModule(mod)
+    if (this.plugins.has(m.name)) {
+      throw new Error(`[core] Duplicate plugin name: "${m.name}"`)
     }
-    this.plugins.set(mod.name, mod)
-    if (config !== undefined) this.configs.set(mod.name, config)
-    this.attachFiber(mod.name, mod)
+    this.plugins.set(m.name, m)
+    if (config !== undefined) this.configs.set(m.name, config)
+    this.attachFiber(m.name, m)
     return this
   }
 
@@ -310,30 +317,33 @@ export class Context implements PluginScope {
 
   /**
    * 运行中热装一个插件（start 之后调用）：依赖满足则立即可用；否则保持 PENDING 待提供方出现。
-   * 等价于冷启动时 plugin()。
+   * 等价于冷启动时 plugin()。支持类形态（Service 子类）与 PluginModule 对象。
    *
    * @param config 装配 config（可选）：激活时经插件 `Config` schema 校验+补默认再传 apply；校验失败 → fiber FAILED + 抛错。
    * @throws 未 start / 插件名重复 / config 校验失败 / setup 抛错（半成品副作用已回收）
    * @returns 插件名
    */
-  installPlugin(mod: PluginModule, config?: unknown): string {
+  installPlugin(mod: PluginModule, config?: unknown): string
+  installPlugin(mod: PluginClassLike, config?: unknown): string
+  installPlugin(mod: PluginModule | PluginClassLike, config?: unknown): string {
     this.assertState('started', 'installPlugin')
-    if (this.plugins.has(mod.name)) {
-      throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
+    const m = asPluginModule(mod)
+    if (this.plugins.has(m.name)) {
+      throw new Error(`[core] Duplicate plugin name: "${m.name}"`)
     }
-    this.plugins.set(mod.name, mod)
-    if (config !== undefined) this.configs.set(mod.name, config)
-    this.attachFiber(mod.name, mod) // PENDING fiber 句柄
+    this.plugins.set(m.name, m)
+    if (config !== undefined) this.configs.set(m.name, config)
+    this.attachFiber(m.name, m) // PENDING fiber 句柄
     try {
-      this.tryActivate(mod.name) // 依赖满足→ACTIVE；不满足→保持 PENDING
+      this.tryActivate(m.name) // 依赖满足→ACTIVE；不满足→保持 PENDING
     } catch (err) {
-      this.plugins.delete(mod.name)
-      this.configs.delete(mod.name)
+      this.plugins.delete(m.name)
+      this.configs.delete(m.name)
       throw err
     }
     // 可能因本插件 provide 的服务满足了先前 PENDING 的插件 → 唤醒
     this.wakePending()
-    return mod.name
+    return m.name
   }
 
   /**
@@ -567,15 +577,26 @@ export class Context implements PluginScope {
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
-      plugin(mod: PluginModule): PluginScope {
-        // 嵌套插件：直接并入根（扁平管理），避免 M1 复杂化；可由子类覆盖
+      plugin(mod: PluginModule | PluginClassLike): PluginScope {
+        // 嵌套插件：直接并入根（扁平管理），避免 M1 复杂化；可由子类覆盖（返回自身=本插件作用域 ctx）
         ctx.plugin(mod)
-        return api
+        return self
       },
     } as PluginScope
     // 挂能力段（nodes/theme/commands/slots）：buildCapabilities 只用 api.get + api.effect(插件 scope 绑定)
     Object.assign(api, buildCapabilities(api, pluginName))
-    return api
+    // 服务解析 Proxy（cordis 语义）：属性读命中"本插件可见服务名"→ 返回该服务实例；否则回退普通字段/undefined。
+    // 这样 `inject:['greeter']` 后 `ctx.greeter` 与 `ctx.get('greeter')` 运行时等价；能力段(真实成员)不受影响。
+    const self: PluginScope = new Proxy(api, {
+      get(target, prop, receiver) {
+        // 真实成员（on/emit/nodes/theme/commands/slots/settings/…）原样返回，不动能力段
+        if (prop in target) return Reflect.get(target, prop, receiver)
+        // 字符串属性名 → 尝试解析为已上架服务（缺返回 undefined，不抛，cordis proxy 语义）
+        if (typeof prop === 'string') return ctx.get(prop as string)
+        return undefined
+      },
+    }) as PluginScope
+    return self
   }
 
   private setLifecycle(name: string, target: Lifecycle): void {

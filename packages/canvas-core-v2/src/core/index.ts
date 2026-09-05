@@ -5,6 +5,11 @@ export { Fiber } from './fiber'
 export type { FiberInit, FiberDisposer, FiberTransition } from './fiber'
 export { FiberState } from './fiber'
 export { Service } from './service'
+export { asPluginModule } from './pluginClass'
+export type { ServiceClass } from './pluginClass'
+export type {
+  PluginClassLike,
+} from './types'
 export { topoSort, depsOf } from './topo'
 export { EventBus, registerEventName } from './EventBus'
 export { NodeRegistry } from './registry/nodeRegistry'
