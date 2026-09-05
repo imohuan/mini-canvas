@@ -34,8 +34,8 @@ packages/
 ### 1.3 真正的缺口（基础层只补这几处）
 1. **开放的插槽**：一个槽能叠多个 occupant、按 order 排序、按 id 增量/替换/remove，**且插件能自己声明新槽**（不只宿主预设那几格）。
    → 容器已做一半：`SlotRegistry`（`src/core/registry/slotRegistry.ts`，10 测试绿）。**待办**：让 nodeRegistry/themeRegistry 走它、开放"声明新槽"、渲染层按序渲染。
-2. **统一的简单开发入口**：作者只 import 一个库、一个 `defineCanvasPlugin` 就够（对标 dsh 的 `@deepseek-ai/cordis`：作者只认 `Context`；各能力是 `define*` 助手）。
-   → 待建 `@mini-canvas/canvas-base`。
+2. **统一的简单开发入口（对齐 Cordis/dsh）**：作者写一个 .ts，只认内核那个 `Context`——裸导出 `name/inject/apply(ctx)`，在 `apply` 里用 `ctx.nodes/theme/commands/services/slots/...` 注册（对标 dsh 的 `@deepseek-ai/cordis`：作者只认 `Context`；各能力是 `define*` 助手）。
+   → 把散装 `registerNodeType/registerThemeSlot` 等收口挂上 ctx；`@mini-canvas/canvas-base`（薄层）导出 `Context` 类型 + `define*` 助手。
 3. **可诊断 + 依赖就绪**（可选增强，帮"开发简单"排错）：每插件一个可查句柄；依赖没到先进 PENDING、到了自动跑。→ 待办（非主体，做了更好）。
 
 ### 1.4 用户的核心判断（写进验收导向）
@@ -59,33 +59,38 @@ packages/
 - **《打包并装进别的画布》**（对齐 `publish.zh.md`）：把插件打包成可分发形态 → 装进画布应用 → 卸载/换版本。
 
 每篇正文**只用最少的词讲清"做什么、为什么"**，主体是"把这文件替换成这段代码 → 这一步跑 → 你会看到 X"。这是判定"插件开发体验好不好"的第一标准。
-（作者最终写插件时确实是"调一个 `defineCanvasPlugin`，挑着填节点/外观/面板/命令"，但那应是读者跟着教程自然学会的**结果**，不是文档一上来砸给他的清单。所以本目标不把 API 表/样板当正文主推，样板只作教程附录。）
+（作者最终写插件时确实是"裸导出 `name/inject/apply(ctx)`，在 `apply` 里用 `ctx.nodes/theme/commands/...` 注册"，但那应是读者跟着教程自然学会的**结果**，不是文档一上来砸给他的清单。所以本目标不把 API 表/样板当正文主推，样板只作教程附录。）
 
 ### 2.1b 理想插件的形态（给教程附录/实现对齐用，非教学正文）
-作者最终写一个插件，是一个自描述对象（示意，细节以各教程为准）：
+作者最终写一个插件，就是一个 `.ts` 文件，**散开裸导出 3 样**：`name`（插件名）、`inject`（依赖的服务，可空）、`apply(ctx)`（注册函数，ctx 是能力台，上面挂着能注册节点/主题/命令/服务/UI 的能力）。示意（细节以各教程为准；`Context`/组件/助手具体从哪导，以教程落地为准）：
 ```ts
-import { defineCanvasPlugin } from '@mini-canvas/canvas-base'
-export default defineCanvasPlugin({
-  name: 'node-audio',
-  deps: [],
-  nodes:   [{ type: 'audio', label: '音频', size: { w: 200, h: 80 }, content: AudioNode }],
-  theme:   [{ slot: 'edge', id: 'neon', component: MyEdge }],
-  services: { 'audio': (ctx) => makeAudio() },
-  commands: [{ id: 'audio.play', label: '播放', run: (ctx) => {} }],
-  ui:      [{ slot: 'canvas.dock', id: 'audioBar', order: 5, component: AudioBar }],
-  config:  { placeholder: { type: 'string', default: '拖个音频进来' } },
-})
+import type { Context } from '@mini-canvas/canvas-core-v2'
+
+export const name = 'node-audio'
+export const inject = ['nodeStore']        // 依赖别的服务/插件，没有可空
+
+export function apply(ctx: Context) {       // ctx 就是能力台
+  // 直接在 ctx 上注册——节点/主题/命令/服务/UI 一样注册，卸载自动回收
+  ctx.nodes.register({ type: 'audio', label: '音频', size: { w: 200, h: 80 }, content: AudioNode })
+  ctx.theme.register('edge', { id: 'neon', component: MyEdge })
+  ctx.commands.register({ id: 'audio.play', label: '播放', run: () => {} })
+  ctx.inject('audio', () => makeAudio())     // 上架服务，别人 ctx.get('audio')
+  ctx.slots.register('canvas.dock', { id: 'audioBar', order: 5, component: AudioBar })
+}
 ```
-不必手写 provide / 逐段注册 / 手写 unregister（自动回收）。
+不必手写 unregister / 手写 effect 包 cleanup（scope 自动回收）。
 
 ### 2.2 开放插槽（能自定义任何 UI/内容）
 - 一个 slot 容纳多个 occupant，order 排序，id 增量/替换/remove；**插件可声明新 slot**。
 - `themeRegistry/nodeRegistry` 都走这套开放槽语义（单格换肤点 = single：order 最小的赢家）。
 - 渲染层(CanvasHost/canvasHostCore)把一个 slot 的所有 occupant 按序 render 出来。
 
-### 2.3 统一开发入口 `@mini-canvas/canvas-base`
-- `defineCanvasPlugin(...)` + 类型 + 各 `define*`/能力声明段，底层转发内核/render/令牌。
-- 插件包只依赖这一个库，不散 import 内核/渲染。
+### 2.3 插件开发入口 = 内核的 Context 即作者 API（对齐 Cordis/dsh）
+- **作者认的就是内核那个 `Context`**（Cordis/dsh 同款）：写一个 .ts，`export const name / export const inject / export function apply(ctx: Context)`，在 `apply` 里 `ctx.nodes/theme/commands/services/slots/...` 注册。
+- ctx 上的能力段（nodes/theme/commands/…）是内核把散装注册函数**收口后挂上 ctx** 的；作者不必散 import 裸 `registerNodeType` 等。
+- `@mini-canvas/canvas-base`（可选薄层）只导出 `Context` 类型 + `define*` 助手（defineNode/defineTheme/defineCommand/defineTool…），插件不散 import 内核/渲染的裸函数。
+- 服务上架 `ctx.inject(name, impl)`、取用 `ctx.get(name)`（缺则抛错，不静默）。
+- 一个插件模块 = 满足上面约定的那个 .ts 的导出（name/inject/apply 三样）。宿主/内核用同一套机制装载（plugin()/start()/热装卸）。
 
 ### 2.4 插件安装 / 卸载 / 换版本（对齐 dsh `publish.zh.md` 的效果，适配"库"）
 参考 dsh `publish.zh.md` 讲的效果——"把插件打成包，一条命令装进你的项目，想卸就卸，还能换版本/换来源(npm/git/tarball)"。
@@ -106,12 +111,12 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 - **自查"内核有没有"**：容器本身新的，加进来；渲染层本来读 registry，改成读多 occupant 即可。
 - **验收**：单测绿；两个插件往同一槽各塞组件、同屏按序渲染；默认主题走新槽仍可一键顶替 + 热卸回退；demo 零报错。
 
-### 🎯 目标 B · 插件开发方式 = 一套 tool.zh.md 式中文教程 + 支撑它的 `canvas-base`
+### 🎯 目标 B · 插件开发方式 = 一套 tool.zh.md 式中文教程 + 内核 Context 即作者 API
 - **结果**：
-  - **教程系列（核心交付，对齐 dsh `basic/` 的 `index/tool/config/publish` 形态）**：一篇接一篇、照着抄几行就能跑的中文教程，放在 `docs/` 下并作为"怎么开发插件"的入口。每篇结构对齐 tool.zh.md：**前提 → 把某文件替换成这段代码 → 跑 → 你会看到 X → 下一步**，不用术语轰炸，只讲清"做什么、为什么"。
-  - 支撑教程成立的基础库 `@mini-canvas/canvas-base`：`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + 插件可声明 Config；注册自动回收（插件不手写 unregister）。
-- **自查"内核有没有"**：教程里每一步用的能力（写插件文件、`registerNodeType`、`ctx.get/inject/effect`、加进 demo `plugins`、命令注册）内核**大半已有**；`canvas-base` 只是把散装注册收成"作者只认一个 define"的友好层，不新增引擎逻辑。
-- **验收**：① 至少前三篇教程（第一个插件 / 加节点 / 可配置）在 `docs/` 里、能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合 tool.zh.md 的"替换→跑→看效果"结构，不把 API 表当正文；③ 教程里用的插件写法可经 `@mini-canvas/canvas-base`（或现内核 API）落地；④ 第四篇(打包安装)在有目标 D 后补上。
+  - **教程系列（核心交付，对齐 dsh `basic/` 的 `index/tool/config/publish` 形态）**：一篇接一篇、照着抄几行就能跑的中文教程，放在 `docs/` 下并作为"怎么开发插件"的入口。每篇结构对齐 tool.zh.md：**前提 → 把某文件替换成这段代码 → 跑 → 你会看到 X → 下一步**，不用术语轰炸，只讲清"做什么、为什么"。教程教的就是上面 2.1b 那种 **Cordis 写法**（.ts 裸导出 `name/inject/apply(ctx)`）。
+  - 作者只认内核那个 `Context`；散装 `registerNodeType/registerThemeSlot` 等收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`），注册自动回收（不手写 unregister）。`@mini-canvas/canvas-base`（薄层）导出 `Context` 类型 + `define*` 助手，作者不必散 import 裸注册函数。
+- **自查"内核有没有"**：教程里每一步用的能力（写插件 .ts、`apply(ctx)` 里的注册、`ctx.get/inject/effect`、加进 demo、命令注册）内核**大半已有**；要补的只是把散装注册函数收口挂上 ctx（让 `ctx.nodes/...` 等成立）+ `canvas-base` 薄层类型/助手，不新增引擎逻辑。
+- **验收**：① 至少前三篇教程（第一个插件 / 加节点 / 可配置）在 `docs/` 里、能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合 tool.zh.md 的"替换→跑→看效果"结构，不把 API 表当正文；③ 教程里教的就是 `export name/inject/apply(ctx)` 的 Cordis 写法、且能经内核 ctx（或 canvas-base）落地；④ 第四篇(打包安装)在有目标 D 后补上。
 
 ### 🎯 目标 D · 插件安装 / 卸载 / 换版本（对齐 dsh publish.zh.md 的效果，见 2.4）
 - **结果**：做一个画布宿主能用的**统一安装句柄** `manager`：`install(来源) / uninstall(name) / reload(name, next?) / list()`；
@@ -130,13 +135,13 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 ## 四、验证示例（做出来证明"能自定义任何内容"，不算框架承诺）
 用以上基础做几个**示例插件**验证，而不是当验收主体：
 - **自定义端口/吸附/快速连接**：一个自定义节点声明"2 输入 1 输出、某输出只接指定 type、limit single"，demo 里拖线吸附/松手连接符合声明（内核 connection 已有，套一层验证）。
-- **插件管理器(plugin-manager)**（作者随口提、非最初核心诉求，作附带）：一个用 `defineCanvasPlugin` 写的插件，dock 面板列出已装插件 state、可卸载/重载/装外部插件 js/源码。能跑即可，做不出也不阻塞验收主体。
+- **插件管理器(plugin-manager)**（作者随口提、非最初核心诉求，作附带）：一个按 2.1b Cordis 写法写的插件（裸导出 name/inject/apply），dock 面板列出已装插件 state、可卸载/重载/装外部插件 js/源码。能跑即可，做不出也不阻塞验收主体。
 
 ---
 
 ## 五、约束与原则（动工前必守）
 1. 内核保持纯逻辑零 Vue、Node 可单测；任何把 .vue/reactive 塞回内核的改动拒绝。
-2. 不推翻已完成的 canvas-render 迁移与依赖方向；`canvas-base` 是上面加的一层作者收口，不是再造第三渲染层。
+2. 不推翻已完成的 canvas-render 迁移与依赖方向；`canvas-base`（薄层）是上面加的"作者只认 Context + define* 助手"的友好收口，不是再造第三渲染层。
 3. **先自查"内核有没有"，有就收口/补开放，不重复造轮子**（1.4 用户判断）。
 4. 兼容存量：theme-default/node-text/image/commands 不能坏；不破坏已绿测试语义。
 5. **宿主不预定义一堆具体语义落点当承诺**；要的是"插件能自定义任意内容"的开放机制，工具栏/右键/dock 只是示例槽。
@@ -147,7 +152,7 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 
 ## 六、实施路径（建议顺序；每步可独立验证）
 - **P1 · 目标 A**：SlotRegistry 接 nodeRegistry/themeRegistry + 开放声明新槽 + 渲染层按序渲染 + 迁移 theme-default/node-text 走新槽 + demo 验证多 occupant。
-- **P2 · 目标 B**：建 `packages/canvas-base`（defineCanvasPlugin + 能力段 + 配置 + 转发 + 自动回收）+ 中文作者教程 doc。
+- **P2 · 目标 B**：把散装注册函数收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`，注册自动回收）+ 建 `packages/canvas-base`（薄层：`Context` 类型 + `define*` 助手）+ 中文作者教程 doc（教 2.1b Cordis 写法）。
 - **P3 · 目标 C**：per-plugin 句柄 + PENDING 依赖编排 + 单测。
 - **P4 · 目标 D**：统一安装句柄 manager + 外部来源加载(单文件 js/源码/URL) + 装配清单 manifest + demo 整链"装→卸→换版本"验证。
 - **P5 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
@@ -168,7 +173,7 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 
 ## 八、验收总清单（全勾 = 本任务才结束）
 - [ ] 目标A：nodeRegistry/themeRegistry 支持多 occupant + order + id 增量/替换/remove + 插件可声明新槽；单测绿；两插件同槽按序同屏渲染；默认主题走新槽可一键顶替/热卸回退。
-- [ ] 目标B：`@mini-canvas/canvas-base` 存在；示例插件只 import 它写出可跑通的自定义节点+主题+命令插件（注册自动回收，不手写 unregister）；插件能声明并读取配置；中文作者教程 doc 照着能跑通。
+- [ ] 目标B：散装注册收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`）可用、注册自动回收；教程教 Cordis 写法（.ts 裸导出 `name/inject/apply(ctx)`）且前三篇在 `docs/` 里照抄能跑通；`@mini-canvas/canvas-base`（薄层：`Context` 类型 + `define*` 助手）存在可落地。
 - [ ] 目标D：宿主能经 `manager.install` 装插件(源码 import / 单文件 js / URL)并生效；`manager.uninstall` 卸后其 UI/服务/槽位消失、`manager.reload(name, 新实现)` 换版本生效；`manager.list()` 显示已装状态；装配清单(manifest)能按序装插件并传 config、另一画布应用复用即用；demo 整链"装→卸→换版本"零报错。
 - [ ] 目标C：per-plugin 可查句柄 + PENDING 依赖编排单测绿（可选，做了打勾）。
 - [ ] 验证示例：自定义端口/吸附/快速连接节点在 demo 行为符合 connection 声明（示例级）。
