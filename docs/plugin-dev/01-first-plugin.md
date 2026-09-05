@@ -130,6 +130,10 @@ export class MyService extends Service {
 }
 ```
 
+> 注意第 3 种"类形态"：`Service` 子类不是直接传给 `ctx.plugin` 的插件模块——它是**一项服务**，
+> 激活方式是在某个函数/对象形态插件的 `apply(ctx)` 里 `new MyService(ctx)`，构造时即上架。
+> 第 3 篇会把这个写清楚。
+
 在需要公开服务之前，一直用函数形态就好。
 
 ## 下一步
