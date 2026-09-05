@@ -45,13 +45,36 @@ export interface NodeStoreService {
   removeNode(id: string): boolean
   /** 用持久化数据整体回填（刷新恢复） */
   replaceAll(nodes: CanvasNode[]): void
+  /**
+   * 订阅节点集变化（add/remove/update/replace 任一触发）。返回取消函数。
+   * 宿主(CanvasHost)据此自动把内核 nodeStore 重灌到渲染态，业务代码无需手动同步。
+   * 纯逻辑、零 Vue：addNode 后立刻回调，供渲染层 flush。
+   */
+  subscribe(listener: NodeStoreListener): () => void
 }
+
+/** 节点集变化原因 */
+export type NodeStoreChangeReason = 'add' | 'remove' | 'update' | 'replace'
+
+/** 订阅回调：reason = 变化类型；nodeId = 本次涉及节点（replace 时为 undefined） */
+export type NodeStoreListener = (reason: NodeStoreChangeReason, nodeId?: string) => void
 
 /** 实现：节点数据 + 每画布自增 id 计数器 */
 export class NodeStore implements NodeStoreService {
   readonly types = new Map<string, CanvasNodeType>()
   private nodes = new Map<string, CanvasNode>()
   private counter = 0
+  private listeners = new Set<NodeStoreListener>()
+
+  subscribe(listener: NodeStoreListener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  /** 广播节点集变化给订阅方 */
+  private notify(reason: NodeStoreChangeReason, nodeId?: string): void {
+    for (const l of this.listeners) l(reason, nodeId)
+  }
 
   registerType(def: CanvasNodeType): void {
     if (this.types.has(def.type)) {
@@ -80,6 +103,7 @@ export class NodeStore implements NodeStoreService {
       position,
       data: {},
     })
+    this.notify('add', id)
     return id
   }
 
@@ -87,6 +111,7 @@ export class NodeStore implements NodeStoreService {
     const node = this.nodes.get(id)
     if (!node) throw new Error(`[nodeStore] no node "${id}"`)
     node.data = { ...node.data, ...data }
+    this.notify('update', id)
   }
 
   getNode(id: string): CanvasNode | undefined {
@@ -94,7 +119,9 @@ export class NodeStore implements NodeStoreService {
   }
 
   removeNode(id: string): boolean {
-    return this.nodes.delete(id)
+    const removed = this.nodes.delete(id)
+    if (removed) this.notify('remove', id)
+    return removed
   }
 
   replaceAll(nodes: CanvasNode[]): void {
@@ -107,6 +134,7 @@ export class NodeStore implements NodeStoreService {
       if (!Number.isNaN(num) && num > max) max = num
     }
     this.counter = max
+    this.notify('replace')
   }
 
   /** 短数字 id：'1' '2' '3' …（画布内唯一） */
