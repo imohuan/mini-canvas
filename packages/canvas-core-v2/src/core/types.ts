@@ -120,11 +120,16 @@ export interface PluginCapabilities {
  * - nodes/theme/commands/slots 是注册收口（见 PluginCapabilities）。
  */
 export interface PluginScope extends PluginCapabilities {
-  /** 订阅事件（自动回收） */
+  /** 订阅事件（自动回收）——CanvasEventMap 事件 */
   on<K extends EventName>(name: K, handler: EventListener<K>): Disposable
+  /** 订阅扩展事件（cordis 多参事件名，非 CanvasEventMap） */
+  on(name: string, handler: (...args: any[]) => any): Disposable
   once<K extends EventName>(name: K, handler: EventListener<K>): Disposable
-  /** 广播事件（单源，不碰 window） */
+  once(name: string, handler: (...args: any[]) => any): Disposable
+  /** 广播事件（单源，不碰 window）；cordis 多参事件经扩展事件名注册 */
   emit<K extends EventName>(name: K, payload: CanvasEventMap[K]): void
+  /** 广播扩展事件（cordis 多参事件名，非 CanvasEventMap） */
+  emit(name: string, ...args: any[]): void
   /** 副作用（包 timer/watch/DOM，返回 cleanup 自动回收） */
   effect(fn: EffectFn): Disposable
   /** 提供服务（上架）；撤销自动登记进本插件 scope */
@@ -135,6 +140,16 @@ export interface PluginScope extends PluginCapabilities {
   get<Service = unknown>(name: string): Service
   /** 嵌套插件（本插件子作用域） */
   plugin(mod: PluginModule): PluginScope
+
+  // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
+  /** 并发跑所有监听并一同等待 */
+  parallel<K extends string>(name: K, ...args: any[]): Promise<void>
+  /** 顺序 await，第一个 bail 值胜出并停止 */
+  serial<K extends string>(name: K, ...args: any[]): Promise<any>
+  /** serial 的同步版（同步短路） */
+  bail<K extends string>(name: K, ...args: any[]): any
+  /** 环绕中间件：监听器可转写 next() 返回值或短路 */
+  waterfall<K extends string>(name: K, ...args: any[]): any
 }
 
 /**

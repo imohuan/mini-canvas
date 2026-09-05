@@ -310,18 +310,38 @@ export class Context implements PluginScope {
 
   // ==================== 事件 ====================
 
-  on<K extends EventName>(name: K, handler: EventListener<K>): Disposable {
+  on(name: string, handler: (...args: any[]) => any): Disposable {
     const off = this.bus.on(name, handler)
     return { dispose: off }
   }
 
-  once<K extends EventName>(name: K, handler: EventListener<K>): Disposable {
+  once(name: string, handler: (...args: any[]) => any): Disposable {
     const off = this.bus.once(name, handler)
     return { dispose: off }
   }
 
-  emit<K extends EventName>(name: K, payload: CanvasEventMap[K]): void {
-    this.bus.emit(name, payload)
+  emit(name: string, ...args: any[]): void {
+    this.bus.emit(name, ...args)
+  }
+
+  /** 并发跑所有监听并一同等待 */
+  parallel(name: string, ...args: any[]): Promise<void> {
+    return this.bus.parallel(name, ...args)
+  }
+
+  /** 顺序 await，第一个 bail 值胜出并停止 */
+  serial(name: string, ...args: any[]): Promise<any> {
+    return this.bus.serial(name, ...args)
+  }
+
+  /** serial 的同步版（同步短路） */
+  bail(name: string, ...args: any[]): any {
+    return this.bus.bail(name, ...args)
+  }
+
+  /** 环绕中间件 */
+  waterfall(name: string, ...args: any[]): any {
+    return this.bus.waterfall(name, ...args)
   }
 
   // ==================== 副作用 ====================
@@ -336,17 +356,21 @@ export class Context implements PluginScope {
   private deriveScope(scope: Scope, pluginName: string): PluginScope {
     const ctx = this
     const api: PluginScope = {
-      on<K extends EventName>(name: K, handler: EventListener<K>): Disposable {
+      on(name: string, handler: (...args: any[]) => any): Disposable {
         const off = ctx.bus.on(name, handler)
         scope.onDispose(off)
         return { dispose: off }
       },
-      once<K extends EventName>(name: K, handler: EventListener<K>): Disposable {
+      once(name: string, handler: (...args: any[]) => any): Disposable {
         const off = ctx.bus.once(name, handler)
         scope.onDispose(off)
         return { dispose: off }
       },
-      emit: (name, payload) => ctx.bus.emit(name, payload),
+      emit: (name: string, ...args: any[]) => ctx.bus.emit(name, ...args),
+      parallel: (name: string, ...args: any[]) => ctx.bus.parallel(name, ...args),
+      serial: (name: string, ...args: any[]) => ctx.bus.serial(name, ...args),
+      bail: (name: string, ...args: any[]) => ctx.bus.bail(name, ...args),
+      waterfall: (name: string, ...args: any[]) => ctx.bus.waterfall(name, ...args),
       effect(fn: EffectFn): Disposable {
         const off = scope.effect(fn)
         return { dispose: off }

@@ -413,3 +413,88 @@ describe('P2b inject 服务依赖 PENDING 编排', () => {
     expect(ctx.fiber('a')?.stateName).toBe('active')
   })
 })
+
+describe('P3 事件分发（cordis ch4：多参事件 + parallel/serial/bail/waterfall + 自动回收）', () => {
+  it('插件用 ctx.on 监听多参事件 + ctx.emit 广播', async () => {
+    const ctx = new Context()
+    const seen: string[] = []
+    ctx.plugin({
+      name: 'reporter',
+      apply(c: PluginScope) {
+        c.on('stats/report', (name: string, count: number) => seen.push(`${name}:${count}`))
+      },
+    })
+    await ctx.start()
+    ctx.emit('stats/report', 'tool', 1)
+    ctx.emit('stats/report', 'tool', 2)
+    expect(seen).toEqual(['tool:1', 'tool:2'])
+  })
+
+  it('ctx.serial：第一个 bail 值胜出并停止', async () => {
+    const ctx = new Context()
+    const calls: string[] = []
+    ctx.plugin({
+      name: 'svc',
+      apply(c: PluginScope) {
+        c.on('approve', () => {
+          calls.push('a')
+          return undefined
+        })
+        c.on('approve', () => {
+          calls.push('b')
+          return 'granted'
+        })
+        c.on('approve', () => calls.push('c'))
+      },
+    })
+    await ctx.start()
+    const result = await ctx.serial('approve')
+    expect(result).toBe('granted')
+    expect(calls).toEqual(['a', 'b'])
+  })
+
+  it('ctx.bail 同步短路', async () => {
+    const ctx = new Context()
+    const calls: string[] = []
+    ctx.plugin({
+      name: 'svc',
+      apply(c: PluginScope) {
+        c.on('pick', () => {
+          calls.push('a')
+          return null
+        })
+        c.on('pick', () => {
+          calls.push('b')
+          return 'second'
+        })
+      },
+    })
+    await ctx.start()
+    expect(ctx.bail('pick')).toBe('second')
+    expect(calls).toEqual(['a', 'b'])
+  })
+
+  it('插件卸载后其 ctx.on 监听自动移除（自动回收）', async () => {
+    const ctx = new Context()
+    const fired: string[] = []
+    ctx.plugin({
+      name: 'listener-a',
+      apply(c: PluginScope) {
+        c.on('ping', () => fired.push('a'))
+      },
+    })
+    ctx.plugin({
+      name: 'listener-b',
+      apply(c: PluginScope) {
+        c.on('ping', () => fired.push('b'))
+      },
+    })
+    await ctx.start()
+    ctx.emit('ping')
+    expect(fired).toEqual(['a', 'b'])
+    fired.length = 0
+    ctx.uninstallPlugin('listener-a')
+    ctx.emit('ping')
+    expect(fired).toEqual(['b']) // a 的监听已随卸载移除
+  })
+})
