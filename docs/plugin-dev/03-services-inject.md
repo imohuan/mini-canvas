@@ -145,6 +145,43 @@ export function apply(ctx: Context) {
 内核自动 `ctx.provide`，撤销也随提供方 scope 自动回收。消费者那边完全一样：
 `export const inject=['greeter']` → `apply` 里 `ctx.get('greeter')`。
 
+## 附：照 cordis 原文"Service 类即插件 + ctx.greeter 直访"（能力①+②）
+
+cordis 03 教程原文：`Service` 子类本身就是插件，**直接 `ctx.plugin(GreeterService)`** 就能把它挂上去
+（不必再包一层 `apply`）。挂载后 `ctx.get('greeter')` 可读到，也可用 **`ctx.greeter` 属性直访**（cordis 的 ctx 是
+服务解析代理：`ctx.greeter` 与 `ctx.get('greeter')` 运行时等价）。
+
+照 cordis 原文逐字抄的提供方：
+
+```ts
+import { Service, type Context } from '@mini-canvas/canvas-base'
+export class GreeterService extends Service {
+  constructor(ctx: Context) { super(ctx, 'greeter') }  // 构造即上架服务 'greeter'
+  greet(who: string) { return `Hello, ${who}!` }
+}
+```
+
+照 cordis 原文逐字抄的消费方（`inject` 声明硬依赖，apply 里 `ctx.greeter` 直访——内核保证等到齐才跑）：
+
+```ts
+import type { Context } from '@mini-canvas/canvas-base'
+declare module '@mini-canvas/canvas-core-v2' {
+  interface Context { greeter: GreeterService }   // 给 ctx.greeter 补类型(声明合并)
+}
+export const name = 'consumer'
+export const inject = ['greeter']
+export function apply(ctx: Context) {
+  console.log(ctx.greeter.greet('world'))   // ctx.greeter 运行时= ctx.get('greeter')
+}
+```
+
+装配（冷启动宿主 `plugins: [GreeterService, consumerPlugin]`，或热装 `manager.install(GreeterService)` /
+`ctx.installPlugin(GreeterService)`）：服务提供方装上、`greeter` 上架那一刻，consumer 从 PENDING 自动激活。
+依赖顺序无关，只由 `inject` 决定。
+
+> `ctx.greeter` 属**运行时**直访（代理解析服务）；**类型**要通，需上方 `declare module` 给 `Context`/`PluginScope`
+> 补该属性。未上架的名字返回 `undefined`（不抛），与 cordis proxy 语义一致。
+
 ## 可选依赖：不加 inject，用 ctx.get 探测
 
 有些能力你有就锦上添花、没有也不影响运行——别用 `inject`（它会让你停在 PENDING），

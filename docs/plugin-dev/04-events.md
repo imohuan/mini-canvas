@@ -73,6 +73,35 @@ window.MiniCanvasManager.install({
 
 > 想监听**只触发一次**就用 `ctx.once(name, h)`——和 `on` 一样自动回收，只是收到一次后自动移除。
 
+## 附：照 cordis 原文"declare module Events"拿到类型化多参（能力③）
+
+cordis 04 教程用 `declare module { interface Events { ... } }` 声明事件名及其监听签名，让 `ctx.emit`/`ctx.on`
+**参数有类型**（不用手标 string）。内核已支持这条合并缝，照抄即可：
+
+```ts
+import { Service, type Context } from '@mini-canvas/canvas-base'
+
+declare module '@mini-canvas/canvas-core-v2' {
+  interface Context { stats: StatsService }
+  interface Events {
+    'stats/report'(name: string, count: number): void   // 事件名 → 监听函数签名(参数即事件参数)
+  }
+}
+
+export class StatsService extends Service {
+  private counts = new Map<string, number>()
+  constructor(ctx: Context) { super(ctx, 'stats') }
+  bump(name: string) {
+    const next = (this.counts.get(name) ?? 0) + 1
+    this.counts.set(name, next)
+    this.ctx.emit('stats/report', name, next)   // emit 两个参，类型由 Events['stats/report'] 推导
+  }
+}
+```
+
+监听方在别的插件里 `ctx.on('stats/report', (name, count) => …)`，`name`/`count` 已自动标好类型
+（`declare module` 是纯类型，不产生运行时代码；运行期照常 `emit`→`on` 广播）。
+
 ## 五种分发模式：什么时候用哪个
 
 `emit` 只是五种之一。选哪种是事件**约定的一部分**——它决定监听器能不能返回值、能不能并发、

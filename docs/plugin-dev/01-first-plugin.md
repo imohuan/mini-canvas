@@ -136,6 +136,34 @@ export class MyService extends Service {
 
 在需要公开服务之前，一直用函数形态就好。
 
+## 附：照 cordis 原文"类形态直接装载"（能力①）
+
+cordis 教程 03 里，`Service` 子类**本身就是一种插件形态**，可以直接 `ctx.plugin(GreeterService)` 装载、
+无需外面再包一层 `apply`。内核已支持这种"照抄 cordis"写法（上面那段"别直接传 ctx.plugin"是更早的内核限制，
+现已被能力①放开）：
+
+```ts
+import { Service, type Context } from '@mini-canvas/canvas-base'
+
+declare module '@mini-canvas/canvas-core-v2' {
+  interface Context { greeter: GreeterService }   // 可选：给 ctx.greeter 补类型(声明合并)
+}
+
+export class GreeterService extends Service {
+  static inject = [] as string[]
+  static Config = { greeting: { type: 'string', default: 'Hi' } }
+  constructor(ctx: Context) { super(ctx, 'greeter') }  // 构造即把实例上架为服务 'greeter'
+  greet(who: string) { return `Hello, ${who}!` }
+}
+```
+
+装配处两种都行：
+- 冷启动：把 `GreeterService` 直接加进宿主 `plugins: [...]`（内核自动归一，构造时上架服务）。
+- 热装：`manager.install(GreeterService)` 或 `ctx.installPlugin(GreeterService)`。
+
+> 要点：内核把"类"归一成 `{ name: 静态provide ?? 类名, inject: 静态inject, Config: 静态Config, apply: () => new 类(ctx, config) }`。
+> 依赖 PENDING、config 校验、卸载回收与对象插件一致。旧写法"在 apply 里 new MyService(ctx)"仍可继续用。
+
 ## 下一步
 
 你的插件"装上并跑起来"了。下一步弄懂它**什么时候被卸掉、注册为什么自动回收**，
