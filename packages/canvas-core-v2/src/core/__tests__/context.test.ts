@@ -271,3 +271,55 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
     expect(ctx.listPlugins()).toContain('audio')
   })
 })
+
+describe('P1 fiber 集成（ctx.fiber 句柄 + 生命周期状态推进）', () => {
+  it('冷启动 plugin() 建 PENDING fiber；start 后置 ACTIVE', async () => {
+    const ctx = new Context()
+    ctx.plugin({ name: 'a', inject: ['nodeStore'], apply: () => {} })
+    ctx.inject('nodeStore', {} as never)
+    expect(ctx.fiber('a')?.stateName).toBe('pending')
+    expect(ctx.fiber('a')?.deps).toEqual(['nodeStore'])
+    await ctx.start()
+    expect(ctx.fiber('a')?.stateName).toBe('active')
+  })
+
+  it('installPlugin 热装后 fiber 置 ACTIVE', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.installPlugin({ name: 'hot', apply: () => {} })
+    expect(ctx.fiber('hot')?.stateName).toBe('active')
+  })
+
+  it('setup 抛错 → fiber 置 FAILED（保留供诊断，可重装复用）', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'bad',
+      apply() {
+        throw new Error('boom')
+      },
+    })
+    await expect(ctx.start()).rejects.toThrow(/boom/)
+    expect(ctx.fiber('bad')?.stateName).toBe('failed')
+    // 重装同 name 复用 fiber：换成功实现后转 ACTIVE
+    ctx.uninstallPlugin('bad')
+    ctx.installPlugin({ name: 'bad', apply: () => {} })
+    expect(ctx.fiber('bad')?.stateName).toBe('active')
+  })
+
+  it('uninstallPlugin 后 fiber 移除；fiber() 返回 undefined', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    ctx.installPlugin({ name: 'p', apply: () => {} })
+    ctx.uninstallPlugin('p')
+    expect(ctx.fiber('p')).toBeUndefined()
+  })
+
+  it('stop 后 fiber 全清（可重 start）', async () => {
+    const ctx = new Context()
+    ctx.plugin({ name: 'a', apply: () => {} })
+    await ctx.start()
+    expect(ctx.fiber('a')?.stateName).toBe('active')
+    ctx.stop()
+    expect(ctx.fiber('a')).toBeUndefined()
+  })
+})

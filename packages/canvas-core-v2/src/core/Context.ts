@@ -4,6 +4,7 @@ import { topoSort } from './topo'
 import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
 import { SettingsStore } from './settingsStore'
+import { Fiber, FiberState } from './fiber'
 import type {
   CanvasEventMap,
   Disposable,
@@ -52,6 +53,8 @@ export class Context implements PluginScope {
   private plugins = new Map<string, PluginModule>()
   private pluginScopes = new Map<string, Scope>()
   private lifecycles = new Map<string, Lifecycle>()
+  /** 每插件一个 fiber 运行时句柄（P1：状态机 + 可 await/dispose） */
+  private fibers = new Map<string, Fiber>()
   private state: ContextState = 'created'
   private dev = false
   /** 内置通用 UI 槽容器（ctx.slots 写这里，宿主可经 ctx.get('slots') 读同一实例渲染） */
@@ -73,13 +76,16 @@ export class Context implements PluginScope {
 
   // ==================== 生命周期 ====================
 
-  /** 装载一个插件模块（仅登记；真正 setup 在 start()）。 */
+  /**
+   * 装载一个插件模块（登记；真正 setup 在 start()）。该插件的 fiber 句柄可经 ctx.fiber(name) 取得。
+   */
   plugin(mod: PluginModule): this {
     this.assertState('created', 'plugin')
     if (this.plugins.has(mod.name)) {
       throw new Error(`[core] Duplicate plugin name: "${mod.name}"`)
     }
     this.plugins.set(mod.name, mod)
+    this.attachFiber(mod.name, mod)
     return this
   }
 
@@ -97,6 +103,8 @@ export class Context implements PluginScope {
       const mod = this.plugins.get(name)!
       this.setLifecycle(name, Lifecycle.INSTALLING)
       this.setLifecycle(name, Lifecycle.ACTIVATING)
+      const fiber = this.attachFiber(name, mod)
+      fiber.markLoading()
       const scope = this.rootScope.child()
       this.pluginScopes.set(name, scope)
       const scopeCtx = this.deriveScope(scope, name)
@@ -106,10 +114,12 @@ export class Context implements PluginScope {
       } catch (err) {
         this.setLifecycle(name, Lifecycle.ERROR)
         scope.dispose() // 半成品副作用也清掉
+        fiber.markFailed(err) // 保留 FAILED fiber 供诊断（不置 DISPOSED，可重装复用）
         throw err
       }
       if (cleanup) scope.effect(() => cleanup)
       this.setLifecycle(name, Lifecycle.ACTIVE)
+      fiber.markActive()
       this.bus.emit('ctx:plugin-installed', { name })
     }
 
@@ -126,8 +136,13 @@ export class Context implements PluginScope {
       this.setLifecycle(name, Lifecycle.UNINSTALLED)
       this.bus.emit('ctx:plugin-uninstalled', { name })
     }
+    // 每插件 fiber 同步置 DISPOSED（复用其空容器即时翻转；副作用已由 scope 回收）
+    for (const fiber of this.fibers.values()) {
+      void fiber.dispose()
+    }
     this.pluginScopes.clear()
     this.plugins.clear()
+    this.fibers.clear()
     this.services.clear()
     this.builtinSettings = new SettingsStore() // 分组配置随生命周期重置(重启可重新 define)
     this.lifecycles.clear()
@@ -162,6 +177,8 @@ export class Context implements PluginScope {
     this.plugins.set(mod.name, mod)
 
     // 单插件建子 Scope + setup（与 start 内逐插件的逻辑一致）
+    const fiber = this.attachFiber(mod.name, mod)
+    fiber.markLoading()
     const scope = this.rootScope.child()
     this.pluginScopes.set(mod.name, scope)
     this.setLifecycle(mod.name, Lifecycle.INSTALLING)
@@ -175,9 +192,11 @@ export class Context implements PluginScope {
       this.plugins.delete(mod.name)
       scope.dispose() // 半成品副作用也清掉
       this.setLifecycle(mod.name, Lifecycle.ERROR)
+      fiber.markFailed(err) // 保留 FAILED fiber 供诊断；插件表已移除，可重装复用
       throw err
     }
     this.setLifecycle(mod.name, Lifecycle.ACTIVE)
+    fiber.markActive()
     this.bus.emit('ctx:plugin-installed', { name: mod.name })
     return mod.name
   }
@@ -195,6 +214,11 @@ export class Context implements PluginScope {
     this.pluginScopes.delete(name)
     this.plugins.delete(name)
     this.lifecycles.delete(name)
+    const fiber = this.fibers.get(name)
+    if (fiber) {
+      this.fibers.delete(name)
+      void fiber.dispose()
+    }
     this.bus.emit('ctx:plugin-uninstalled', { name })
     return true
   }
@@ -304,6 +328,23 @@ export class Context implements PluginScope {
   private setLifecycle(name: string, target: Lifecycle): void {
     this.lifecycles.set(name, target)
     this.bus.emit('ctx:lifecycle-change', { name, lifecycle: target })
+  }
+
+  /**
+   * 取某插件的 fiber 句柄（查状态/await/dispose）。未装/已卸返回 undefined。
+   * @param name 插件名
+   */
+  fiber(name: string): Fiber | undefined {
+    return this.fibers.get(name)
+  }
+
+  /** 建/取某插件的 fiber；deps 以插件 inject 字段初始化。 */
+  private attachFiber(name: string, mod: PluginModule): Fiber {
+    let fiber = this.fibers.get(name)
+    if (fiber) return fiber
+    fiber = new Fiber({ name, deps: mod.inject ?? mod.deps ?? [] })
+    this.fibers.set(name, fiber)
+    return fiber
   }
 
   private assertState(expect: ContextState, op: string): void {
