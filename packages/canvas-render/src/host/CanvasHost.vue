@@ -468,21 +468,4 @@ onBeforeUnmount(() => {
   position: relative;
   min-height: 0;
 }
-.chost-canvas :deep(.vue-flow__node) {
-  /* 节点卡片外观由主题 nodeShell(如 BaseNode 的 .v2-card)统一负责；这里只留布局与光标 */
-  font-size: 14px;
-  background: transparent;
-  border: none;
-  box-shadow: none;
-}
-.chost-overlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none; /* 不挡画布交互；浮层控件自己开 pointer-events 才能点 */
-  z-index: 20;
-  overflow: hidden;
-}
-.chost-overlay-item {
-  pointer-events: auto;
-}
 </style>

@@ -1,10 +1,9 @@
 /**
- * edgeContext —— 自定义边( CustomEdge )的外部上下文注入 key、外观类型、默认值。
+ * edgeContext —— 自定义边( CustomEdge )的外观类型与默认值（消费方经 useCanvasRender().edgeVisual 取，
+ * 不再经 edge 自建注入令牌）。
  *
- * CustomEdge 保持"通用、无 store 耦合"：宿主(demo) 通过 provide 注入：
- *  - 外观配置(静态，对齐 contract §0 默认值)
- *  - 当前选中的节点/边集合(响应式 ref，供"相连节点被选即高亮")
- * 缺省时 CustomEdge 用内置默认值 + 空集合，可直接用于任何 VueFlow 宿主。
+ * CustomEdge 外观取自渲染宿主上下文（CanvasSurface 提供，见 renderContext.ts）。本文件只定义
+ * 外观形状/默认值契约（对齐 contract §0），供宿主构造 edgeVisual 与 CustomEdge 读取。
  */
 import type { InjectionKey, Ref } from 'vue'
 
