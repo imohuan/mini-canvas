@@ -9,6 +9,8 @@
 
 import type { NodeStoreService, CanvasNode } from '../services/nodeStore'
 import type { ThemeRegistry } from '../core/registry/themeRegistry'
+import type { EdgeVisual } from '../contracts/edgeContext'
+import type { CanvasParams } from '../contracts/canvasParamKey'
 
 // ============================================================================
 // store → VueFlow 渲染态
@@ -82,21 +84,10 @@ export function assembleTheme(
 
 // ============================================================================
 // 默认外观参数（host 未显式传参时的回落；对齐 core-node-contract §0）
+// 类型复用 contracts 的 EdgeVisual / CanvasParams（自定义边/端口注入契约），避免重复定义。
 // ============================================================================
 
-/** 自定义边外观默认值（对齐 CanvasDemo cfg.edge / CustomEdge 回落） */
-export interface EdgeVisualDefaults {
-  edgeType?: 'bezier' | 'straight' | 'step' | 'smoothstep'
-  edgeLineWidth?: number
-  edgeColor?: string
-  edgeDashed?: boolean
-  edgeAnimated?: boolean
-  edgeMarkerEnd?: boolean
-  edgeGlowEnabled?: boolean
-  edgeGlowIntensity?: number
-}
-
-export const DEFAULT_EDGE_VISUAL: EdgeVisualDefaults = {
+export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeType: 'bezier',
   edgeLineWidth: 2,
   edgeColor: '#3b82f6',
@@ -108,15 +99,7 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisualDefaults = {
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */
-export interface HandleVisualDefaults {
-  handleRadius: number
-  handleRestOffset: number
-  handleCursorGap: number
-  handleButtonSize: number
-  handleOverlap: number
-}
-
-export const DEFAULT_HANDLE_VISUAL: HandleVisualDefaults = {
+export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleRadius: 86,
   handleRestOffset: 36,
   handleCursorGap: 24,
