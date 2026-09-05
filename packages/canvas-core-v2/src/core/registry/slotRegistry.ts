@@ -99,6 +99,17 @@ export class SlotRegistry {
     return [...this.bySlot.keys()]
   }
 
+  /**
+   * 清空所有"槽名以给定前缀开头"的槽的全部 occupant（例：nodeRegistry 用 `${type}/` 前缀
+   * 归组某 type 各段的叠加槽，注销 type 时一键清空）。无匹配则 no-op。
+   */
+  clearByPrefix(prefix: string): void {
+    if (!prefix) return
+    for (const slot of [...this.bySlot.keys()]) {
+      if (slot.startsWith(prefix)) this.bySlot.delete(slot)
+    }
+  }
+
   /** 清空某槽全部 occupant */
   clear(slot: SlotName): void {
     this.bySlot.delete(slot)

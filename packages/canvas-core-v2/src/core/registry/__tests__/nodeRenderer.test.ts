@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { NodeRegistry } from '../nodeRegistry'
-import { resolveSegment, hasContent, activeSegments } from '../nodeRenderer'
+import { resolveSegment, hasContent, activeSegments, nodeSegmentStack } from '../nodeRenderer'
 
 /** 测试里的组件 stub（内核不 import Vue，组件是 opaque 句柄即可） */
 const TextContentStub = { name: 'TextContent' }
@@ -62,5 +62,57 @@ describe('NodeRenderer（type → 段组件解析，纯逻辑）', () => {
   it('hasContent 区分显式注册 content 与否', () => {
     expect(hasContent(r, 'text')).toBe(true)
     expect(hasContent(r, 'video')).toBe(false)
+  })
+})
+
+describe('nodeRegistry 段级多 occupant（开放叠加槽）', () => {
+  const BadgeA = { name: 'BadgeA' }
+  const BadgeB = { name: 'BadgeB' }
+
+  it('registerContribution 同段叠多个，order 默认排基座之后', () => {
+    const nr = new NodeRegistry()
+    nr.register('text', { content: TextContentStub })
+    nr.registerContribution('text', 'content', { id: 'a', component: BadgeA })
+    nr.registerContribution('text', 'content', { id: 'b', component: BadgeB })
+    // 基座仍单值取回(兼容 resolveSegment)
+    expect(resolveSegment(nr, 'text', 'content')).toBe(TextContentStub)
+    // 完整渲染栈 = 基座 + 两贡献(按 order)
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([TextContentStub, BadgeA, BadgeB])
+    expect(nr.contributionIds('text', 'content')).toEqual(expect.arrayContaining(['a', 'b']))
+  })
+
+  it('显式 order 可控制叠加顺序；同 id 替换该格', () => {
+    const nr = new NodeRegistry()
+    nr.register('text', { content: TextContentStub })
+    nr.registerContribution('text', 'content', { id: 'x', order: 2, component: BadgeA })
+    nr.registerContribution('text', 'content', { id: 'y', order: 1, component: BadgeB })
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([TextContentStub, BadgeB, BadgeA])
+    // 同 id 替换(不新增)
+    nr.registerContribution('text', 'content', { id: 'y', order: 0, component: BadgeA })
+    expect(nr.contributionIds('text', 'content')).toHaveLength(2)
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([TextContentStub, BadgeA, BadgeA])
+  })
+
+  it('unregisterContribution 只抽走该贡献；unregister(type) 清基座+该 type 全部贡献', () => {
+    const nr = new NodeRegistry()
+    nr.register('text', { content: TextContentStub })
+    const cid = nr.registerContribution('text', 'content', { id: 'c', component: BadgeA })
+    nr.registerContribution('text', 'content', { id: 'd', component: BadgeB })
+    expect(nr.unregisterContribution('text', 'content', cid)).toBe(true)
+    expect(nr.unregisterContribution('text', 'content', cid)).toBe(false) // 幂等
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([TextContentStub, BadgeB])
+    // 注销整个 type → 基座与贡献一并清掉
+    nr.unregister('text')
+    expect(nr.has('text')).toBe(false)
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([])
+    expect(nr.contributionIds('text', 'content')).toEqual([])
+  })
+
+  it('无基座也可只靠贡献渲染该段(activeSegments 纳入贡献段)', () => {
+    const nr = new NodeRegistry()
+    nr.register('text', {})
+    nr.registerContribution('text', 'content', { id: 'only-badge', component: BadgeA })
+    expect(activeSegments(nr, 'text')).toEqual(['content'])
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([BadgeA])
   })
 })
