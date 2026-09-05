@@ -50,24 +50,33 @@ packages/
 
 ## 二、目标终态（做完"长什么样"，可验证）
 
-### 2.1 插件作者体验（最重要）
-作者写一个"自定义某种节点/主题/服务/命令"的插件，理想代码（示意）：
-```ts
-// 只 import 这一个库
-import { defineCanvasPlugin } from '@mini-canvas/canvas-base'
+### 2.1 插件作者体验 = 一套 tool.zh.md 式手把手中文教程（最重要）
+作者怎么学"开发插件"：**不是给一张 API 表或一段样板代码，而是像 dsh `basic/` 教程（`index.zh.md → tool.zh.md → config.zh.md → publish.zh.md`）那样，
+从零起步的一串短篇中文教程**，每一篇都"照抄几行就能跑、跑完看到效果、末尾引下一篇"。教程系列（mini-canvas 版）：
+- **《写你的第一个插件》**（对齐 `index.zh.md`）：建一个文件 → 写一个最小插件 → 在 demo 里加一行装配 → 跑起来看到"插件已加载"。
+- **《给画布加一种节点》**（对齐 `tool.zh.md`）：把一个插件文件"替换成"带 `registerNodeType` 的代码 → 加进 demo → 刷新看到新节点能点出来。
+- **《让插件可配置》**（对齐 `config.zh.md`）：给插件声明一个 Config + 默认值 → 装配时传配置 → 生效。
+- **《打包并装进别的画布》**（对齐 `publish.zh.md`）：把插件打包成可分发形态 → 装进画布应用 → 卸载/换版本。
 
+每篇正文**只用最少的词讲清"做什么、为什么"**，主体是"把这文件替换成这段代码 → 这一步跑 → 你会看到 X"。这是判定"插件开发体验好不好"的第一标准。
+（作者最终写插件时确实是"调一个 `defineCanvasPlugin`，挑着填节点/外观/面板/命令"，但那应是读者跟着教程自然学会的**结果**，不是文档一上来砸给他的清单。所以本目标不把 API 表/样板当正文主推，样板只作教程附录。）
+
+### 2.1b 理想插件的形态（给教程附录/实现对齐用，非教学正文）
+作者最终写一个插件，是一个自描述对象（示意，细节以各教程为准）：
+```ts
+import { defineCanvasPlugin } from '@mini-canvas/canvas-base'
 export default defineCanvasPlugin({
-  name: 'my-node',
-  deps: [],                       // 依赖其它插件/服务名（可空）
-  // 可"自定义任何内容"：声明节点、主题槽、服务、命令、UI 槽
-  nodes: [{ type: 'audio', label: '音频', size: { w: 200, h: 80 }, content: AudioContent }],
-  theme: [{ slot: 'edge', id: 'mine', component: MyEdge }],   // 顶替默认连线(主题)
-  services: { 'mySvc': (ctx) => makeMySvc() },
-  commands: [{ id: 'myCmd', label: '…', run: (ctx) => {} }],
-  ui: [{ slot: 'myOwnSlot', id: 'panel', component: Panel }], // 也能塞进任意槽/自带新槽
+  name: 'node-audio',
+  deps: [],
+  nodes:   [{ type: 'audio', label: '音频', size: { w: 200, h: 80 }, content: AudioNode }],
+  theme:   [{ slot: 'edge', id: 'neon', component: MyEdge }],
+  services: { 'audio': (ctx) => makeAudio() },
+  commands: [{ id: 'audio.play', label: '播放', run: (ctx) => {} }],
+  ui:      [{ slot: 'canvas.dock', id: 'audioBar', order: 5, component: AudioBar }],
+  config:  { placeholder: { type: 'string', default: '拖个音频进来' } },
 })
 ```
-不必手写 provide、不必逐段注册、不必手写 unregister（自动回收）。
+不必手写 provide / 逐段注册 / 手写 unregister（自动回收）。
 
 ### 2.2 开放插槽（能自定义任何 UI/内容）
 - 一个 slot 容纳多个 occupant，order 排序，id 增量/替换/remove；**插件可声明新 slot**。
@@ -97,11 +106,12 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 - **自查"内核有没有"**：容器本身新的，加进来；渲染层本来读 registry，改成读多 occupant 即可。
 - **验收**：单测绿；两个插件往同一槽各塞组件、同屏按序渲染；默认主题走新槽仍可一键顶替 + 热卸回退；demo 零报错。
 
-### 🎯 目标 B · 统一开发入口 `@mini-canvas/canvas-base` + 作者教程（对齐 dsh basic 形态）
-- **结果**：建包，`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + **插件可声明 Config(schema+默认值)** + 转发；注册自动回收（插件不手写 unregister）。
-- **自查"内核有没有"**：内核各 register* 已有，base 只是**收口 + 自动回收 + 接配置**，不新增引擎逻辑。
-- **作者教程（对齐 dsh basic/index→config→publish 那套成体系中文教程）**：一篇照着就能跑的文档——① 写第一个插件并本地注入宿主跑起来 → ② 自定义节点/主题/服务/命令 → ③ 插件声明配置 → ④ 打包/分发到别的画布应用。
-- **验收**：示例插件只 import `@mini-canvas/canvas-base` 写出可跑通的自定义节点+主题+命令插件（注册自动回收）；插件能声明并读取配置；脚手架 + 中文作者教程 doc 在、照着能一步步跑通。
+### 🎯 目标 B · 插件开发方式 = 一套 tool.zh.md 式中文教程 + 支撑它的 `canvas-base`
+- **结果**：
+  - **教程系列（核心交付，对齐 dsh `basic/` 的 `index/tool/config/publish` 形态）**：一篇接一篇、照着抄几行就能跑的中文教程，放在 `docs/` 下并作为"怎么开发插件"的入口。每篇结构对齐 tool.zh.md：**前提 → 把某文件替换成这段代码 → 跑 → 你会看到 X → 下一步**，不用术语轰炸，只讲清"做什么、为什么"。
+  - 支撑教程成立的基础库 `@mini-canvas/canvas-base`：`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + 插件可声明 Config；注册自动回收（插件不手写 unregister）。
+- **自查"内核有没有"**：教程里每一步用的能力（写插件文件、`registerNodeType`、`ctx.get/inject/effect`、加进 demo `plugins`、命令注册）内核**大半已有**；`canvas-base` 只是把散装注册收成"作者只认一个 define"的友好层，不新增引擎逻辑。
+- **验收**：① 至少前三篇教程（第一个插件 / 加节点 / 可配置）在 `docs/` 里、能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合 tool.zh.md 的"替换→跑→看效果"结构，不把 API 表当正文；③ 教程里用的插件写法可经 `@mini-canvas/canvas-base`（或现内核 API）落地；④ 第四篇(打包安装)在有目标 D 后补上。
 
 ### 🎯 目标 D · 插件安装 / 卸载 / 换版本（对齐 dsh publish.zh.md 的效果，见 2.4）
 - **结果**：做一个画布宿主能用的**统一安装句柄** `manager`：`install(来源) / uninstall(name) / reload(name, next?) / list()`；
