@@ -6,19 +6,22 @@
 //   background= DefaultBackground（跟随画布的圆点底）
 // core 只留"槽位 + 令牌"契约，不再硬编码默认 .vue 渲染器；装本插件即有默认皮。
 //
-// 经 registerThemeSlot 填进 themeRegistry，宿主(demo/预览)装配时消费；热卸则回退(无皮)。
-import { registerThemeSlot } from '@mini-canvas/canvas-core-v2'
-import type { PluginModule } from '@mini-canvas/canvas-core-v2'
+// 经 apply(ctx) 里的 ctx.theme.register 填进 themeRegistry（多 occupant 开放槽）：
+// 默认皮 = order 0 的 occupants；别的主题插件可用更小 order 一键顶替，热卸则回退到本默认皮。
+import type { PluginModule, Context } from '@mini-canvas/canvas-base'
 import BaseNode from './BaseNode.vue'
 import CustomEdge from './CustomEdge.vue'
 import DefaultBackground from './DefaultBackground.vue'
 
-export const themeDefaultPlugin: PluginModule = {
-  name: 'theme-default',
-  setup(ctx) {
-    registerThemeSlot(ctx, 'nodeShell', BaseNode) // 完整节点壳（收编自 core）
-    registerThemeSlot(ctx, 'edge', CustomEdge) // 完整自定义连线（收编自 core）
-    registerThemeSlot(ctx, 'background', DefaultBackground) // 画布背景
-    registerThemeSlot(ctx, 'edgeDefaultType', 'custom')
-  },
+export const name = 'theme-default'
+export const inject = [] as string[]
+
+export function apply(ctx: Context) {
+  ctx.theme.register('nodeShell', BaseNode) // 完整节点壳（收编自 core）
+  ctx.theme.register('edge', CustomEdge) // 完整自定义连线（收编自 core）
+  ctx.theme.register('background', DefaultBackground) // 画布背景
+  ctx.theme.register('edgeDefaultType', 'custom')
 }
+
+/** 兼容旧装配的 PluginModule 出口 */
+export const themeDefaultPlugin: PluginModule = { name, inject, apply }

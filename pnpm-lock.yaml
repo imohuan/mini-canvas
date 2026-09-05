@@ -223,6 +223,9 @@ importers:
 
   packages/plugins/plugin-canvas-commands:
     dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
@@ -233,6 +236,9 @@ importers:
 
   packages/plugins/plugin-node-image:
     dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
@@ -283,6 +289,9 @@ importers:
 
   packages/plugins/plugin-theme-default:
     devDependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
