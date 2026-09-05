@@ -76,6 +76,16 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
+  packages/canvas-base:
+    dependencies:
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../canvas-core-v2
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+
   packages/canvas-core:
     dependencies:
       '@dagrejs/dagre':
@@ -245,6 +255,9 @@ importers:
 
   packages/plugins/plugin-node-text:
     dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2

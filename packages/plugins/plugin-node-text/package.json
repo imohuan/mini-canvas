@@ -19,6 +19,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-core-v2": "workspace:*"
   },
   "peerDependencies": {
