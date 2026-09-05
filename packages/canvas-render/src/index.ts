@@ -28,6 +28,8 @@ export { default as CanvasHost } from './host/CanvasHost.vue'
 // 分组化配置的 schema 驱动 UI 面板（读 ctx.settings 组/schema 自动长控件，改即 settings.set）
 export { default as PluginSettingsPanel } from './components/PluginSettingsPanel.vue'
 export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
+// 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填
+export { default as SlotHost } from './components/SlotHost.vue'
 export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'
 export {
   nodesFromStore,

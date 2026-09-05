@@ -24,6 +24,7 @@ import type { EdgeVisual, EdgeSelection } from '../contracts/edgeContext'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
+import SlotHost from '../components/SlotHost.vue'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -43,8 +44,6 @@ const props = defineProps<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   edgeTypes: Record<string, any>
   backgroundComp: unknown
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  uiOverlay: Array<{ id: string; order: number; component: any }>
   /** 插件变更后 bump → 给 VueFlow 加 key 强制重挂 */
   nodeEpoch: number
   minZoom: number
@@ -109,16 +108,9 @@ provide(HOST_KEY, shallowRef(host))
       <slot />
     </VueFlow>
 
-    <!-- 通用 UI 槽(overlay)：插件塞的浮层控件按 order 顺序同屏叠在画布之上(Goal A 渲染) -->
-    <div v-if="uiOverlay.length" class="csurface-overlay">
-      <component
-        v-for="oc in uiOverlay"
-        :key="oc.id"
-        :is="oc.component"
-        class="csurface-overlay-item"
-        :data-slot-order="oc.order"
-        :data-slot-id="oc.id"
-      />
+    <!-- 通用 UI 槽(overlay)：渲染层封装成 SlotHost，自动读 ctx.slots.occupants('overlay') 并按序渲染 -->
+    <div class="csurface-overlay">
+      <SlotHost slot="overlay" item-class="csurface-overlay-item" />
     </div>
   </div>
 </template>
@@ -143,7 +135,12 @@ provide(HOST_KEY, shallowRef(host))
   z-index: 20;
   overflow: hidden;
 }
-.csurface-overlay-item {
+</style>
+
+<style>
+/* 浮层里的 occupant(由 SlotHost 渲染)要能点：容器 pointer-events:none，item 恢复 auto。
+   放全局(非 scoped)是因为 item 元素由 SlotHost(子组件)渲染，scoped 选择器够不到。 */
+.csurface-overlay .csurface-overlay-item {
   pointer-events: auto;
 }
 </style>
