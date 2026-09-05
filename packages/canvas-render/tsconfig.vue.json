@@ -7,5 +7,5 @@
   },
   // 类型检查 .vue 渲染宿主组件（CanvasHost 等）专用：主 tsconfig 无 DOM lib、也不处理 .vue。
   // 用法: node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.vue.json
-  "include": ["src/host/*.vue", "src/**/*.d.ts", "src/env.d.ts"]
+  "include": ["src/**/*.vue", "src/**/*.d.ts", "src/env.d.ts"]
 }

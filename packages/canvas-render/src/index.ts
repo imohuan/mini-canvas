@@ -22,6 +22,9 @@ export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
 export { default as CanvasHost } from './host/CanvasHost.vue'
+// 分组化配置的 schema 驱动 UI 面板（读 ctx.settings 组/schema 自动长控件，改即 settings.set）
+export { default as PluginSettingsPanel } from './components/PluginSettingsPanel.vue'
+export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
 export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'
 export {
   nodesFromStore,
