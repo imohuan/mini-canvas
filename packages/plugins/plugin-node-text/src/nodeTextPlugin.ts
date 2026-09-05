@@ -1,20 +1,25 @@
 /**
- * plugin-node-text —— text 节点插件（dsh 范式：Cordis 式 name/inject/apply，UI(content)+逻辑一体）。
+ * plugin-node-text —— text 节点插件（cordis 最新写法：对象插件{name,inject,apply} + Service 子类上架服务）。
  *
- * UI 与逻辑同包：本文件是插件逻辑，TextContent.vue 是同包的 content 组件，二者由
- * apply(ctx) 里的 ctx.nodes.register 在一次调用里同时注册——宿主不再手 seed content。
+ * UI 与逻辑同包：本文件是插件逻辑，TextContent.vue 是同包的 content 组件，二者由 apply(ctx) 里的
+ * ctx.nodes.register 在一次调用里同时注册——宿主不再手 seed content。
  *
- * 作者面只认一个 Context（@mini-canvas/canvas-base 重导出内核），注册走 ctx 能力段(ctx.nodes/ctx.inject)，
- * 卸载由 scope 自动回收，作者不手写 unregister。
+ * 相比旧写法（apply 里手写 ctx.inject('text',{…}) 内联对象）的升级：
+ * - 服务定义收敛成 `TextService extends Service`：构造 `super(ctx,'text')` 即把实例上架为 'text' 服务
+ *   （随插件 scope 自动回收，卸载即移除，无需手写撤销）。
+ * - 方法内**惰性 `this.ctx.get('nodeStore'/'save')` 取现时服务、不缓存**：避免卸载残留/换实例时拿旧引用；
+ *   nodeStore/save 同时写进 `inject` 硬依赖（宿主恒在、start 前注入 → 无 PENDING 风险；缺则让插件
+ *   PENDING 而非 ctx.get 静默返 undefined，更 cordis 规范）。
+ * - `declare module '@mini-canvas/canvas-core-v2'` 给 `ctx.text` 加直访类型（运行靠服务解析 Proxy），
+ *   宿主/作者可 `ctx.text` 直访或 `ctx.get<TextService>('text')` 类型安全消费。
  *
- * 依赖方向：本插件只依赖内核(@mini-canvas/canvas-base / canvas-core-v2)，不反向依赖宿主/其它插件。
- * 对外暴露 ctx.get('text') 服务（addTextNode/editText）给 content 组件与宿主调用。
+ * 依赖方向：只依赖内核(@mini-canvas/canvas-base / canvas-core-v2)，不反向依赖宿主/其它插件。
  */
-import type { PluginModule, Context } from '@mini-canvas/canvas-base'
+import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
 import type { NodeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
 import TextContent from './TextContent.vue'
 
-/** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用） */
+/** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
 export interface TextNodeService {
   /** 在画布上放一个文本节点，返回短 id */
   addTextNode(position: { x: number; y: number }): string
@@ -22,48 +27,61 @@ export interface TextNodeService {
   editText(id: string, text: string): void
 }
 
+/** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.text 直访时类型为 TextService */
+declare module '@mini-canvas/canvas-core-v2' {
+  interface Context {
+    text: TextService
+  }
+}
+
 /**
- * text 节点插件（Cordis 式：name/inject/apply）。
- *
- * 职责：
- * - ctx.nodes.register 一次性注册：数据(type='text'/label/尺寸) + 展示(content=TextContent.vue)
- *   + 建节点实现(create → addNode + 写默认 text)。
- * - 经 ctx.inject('text') 暴露服务给 content 组件；编辑写回走 nodeStore + save 落盘。
+ * text 插件暴露的服务（Service 子类：cordis 服务类形态）。
+ * 构造 `super(ctx,'text')` 即把本实例以 'text' 名上架到 ctx 服务表；方法经 `this.ctx.get` 惰性取现时
+ * nodeStore/save（不缓存，避免卸载残留/换实例脏引用）。节点注册的 create 也委托本服务，单一实现。
  */
+export class TextService extends Service implements TextNodeService {
+  constructor(ctx: Context) {
+    super(ctx, 'text')
+  }
+
+  addTextNode(position: { x: number; y: number }): string {
+    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
+    const id = nodeStore.addNode('text', position)
+    nodeStore.updateNodeData(id, { text: '双击编辑' })
+    return id
+  }
+
+  editText(id: string, text: string): void {
+    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
+    const save = this.ctx.get<SaveService>('save')
+    nodeStore.updateNodeData(id, { text })
+    save.set('graph', nodeStore.getNodes(), 'canvas')
+  }
+}
+
 export const name = 'text'
-export const inject = [] as string[]
+export const inject = ['nodeStore', 'save'] as string[]
 
+/**
+ * text 节点插件（cordis 最新写法：Service 子类暴露服务 + inject 硬依赖）。
+ * apply 里一次自描述注册：数据(type='text') + 展示(content=TextContent.vue) + 建节点(create→TextService.addTextNode)，
+ * 并 new TextService(ctx) 上架 'text' 服务；二者皆随本插件 scope 自动回收。
+ */
 export function apply(ctx: Context) {
-  const nodeStore = ctx.get<NodeStoreService>('nodeStore')
-  const save = ctx.get<SaveService>('save')
+  // 1. 构造即上架 'text' 服务（super(ctx,'text') → ctx.provide，随插件 scope 回收）
+  const text = new TextService(ctx)
 
-  // 1. 一次自描述注册：数据 + UI(content) + 建节点实现（creator 随插件 scope 自动回收）
+  // 2. 注册节点类型：数据/尺寸 + content 组件 + create 委托服务（同一实现，避免散落两处建节点逻辑）
   ctx.nodes.register({
     type: 'text',
     label: '文本',
     size: { w: 300, h: 200 },
     content: TextContent,
     create(position) {
-      const id = nodeStore.addNode('text', position)
-      nodeStore.updateNodeData(id, { text: '双击编辑' })
-      return id
+      return text.addTextNode(position)
     },
   })
-
-  // 2. 暴露给 content 组件/宿主
-  ctx.inject('text', {
-    addTextNode: (position: { x: number; y: number }): string => {
-      const id = nodeStore.addNode('text', position)
-      nodeStore.updateNodeData(id, { text: '双击编辑' })
-      return id
-    },
-    editText(id: string, text: string): void {
-      nodeStore.updateNodeData(id, { text })
-      save.set('graph', nodeStore.getNodes(), 'canvas')
-    },
-  } satisfies TextNodeService)
 }
 
-/** 兼容旧装配的 PluginModule 出口（host 用 :plugins=[...]，与裸 export 等价） */
+/** 兼容旧装配的 PluginModule 出口（host 用 :plugins=[...]，与裸 export 等价；name='text' 供 HMR reload） */
 export const nodeTextPlugin: PluginModule = { name, inject, apply }
-
