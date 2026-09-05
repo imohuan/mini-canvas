@@ -129,6 +129,8 @@ export interface PluginScope extends PluginCapabilities {
   effect(fn: EffectFn): Disposable
   /** 提供服务（上架）；撤销自动登记进本插件 scope */
   inject<Service>(name: string, impl: Service): () => void
+  /** 提供服务（cordis 语义，与 inject 等价）；Service 子类 super(ctx,name) 内部调用 */
+  provide<Service>(name: string, impl: Service): () => void
   /** 取服务（缺则抛错，不静默降级） */
   get<Service = unknown>(name: string): Service
   /** 嵌套插件（本插件子作用域） */

@@ -241,6 +241,11 @@ export class Context implements PluginScope {
     }
   }
 
+  /** 提供服务（cordis 语义，与 inject 等价）；Service 子类 super(ctx,name) 内部调用。 */
+  provide<Service>(name: string, impl: Service): () => void {
+    return this.inject(name, impl)
+  }
+
   /** 取服务；缺则抛错（定稿：不静默降级）。'slots'/'settings' 恒为内置实例。 */
   get<Service = unknown>(name: string): Service {
     if (name === 'slots') return this.builtinSlots as unknown as Service
@@ -303,6 +308,18 @@ export class Context implements PluginScope {
       },
       inject<Service>(name: string, impl: Service): () => void {
         // 经根服务表登记，但撤销挂到本插件 scope（卸载自动清）
+        if (ctx.services.has(name)) {
+          throw new Error(`[core] Service "${name}" is already injected`)
+        }
+        ctx.services.set(name, impl)
+        const cleanup = () => {
+          if (ctx.services.get(name) === impl) ctx.services.delete(name)
+        }
+        scope.onDispose(cleanup)
+        return cleanup
+      },
+      provide<Service>(name: string, impl: Service): () => void {
+        // 与 inject 同义：经根服务表登记、撤销挂本插件 scope
         if (ctx.services.has(name)) {
           throw new Error(`[core] Service "${name}" is already injected`)
         }

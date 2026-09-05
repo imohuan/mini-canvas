@@ -20,7 +20,7 @@
  * ```
  */
 export type { Context } from '@mini-canvas/canvas-core-v2'
-export { runPlugin, depsOf } from '@mini-canvas/canvas-core-v2'
+export { runPlugin, depsOf, Service } from '@mini-canvas/canvas-core-v2'
 export type {
   PluginModule,
   PluginScope,
