@@ -23,6 +23,7 @@
     "vue": "^3.5.34"
   },
   "devDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",

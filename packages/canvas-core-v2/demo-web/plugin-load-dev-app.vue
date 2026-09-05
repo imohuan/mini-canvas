@@ -5,7 +5,7 @@
 import { markRaw, onMounted, provide, ref, watch } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Edge, Node } from '@vue-flow/core'
-import { HOST_KEY, NODE_REGISTRY_KEY } from '@mini-canvas/canvas-core-v2'
+import { HOST_KEY, NODE_REGISTRY_KEY } from '@mini-canvas/canvas-render'
 import { state } from './plugin-load-dev'
 
 const nodes = ref<Node[]>([])

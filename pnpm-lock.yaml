@@ -118,6 +118,9 @@ importers:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../canvas-render
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-commands

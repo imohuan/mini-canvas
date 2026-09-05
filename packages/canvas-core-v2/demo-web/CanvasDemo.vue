@@ -11,12 +11,11 @@ import type { PluginModule } from '../src/core'
 import type { StorageAdapter } from '../src/services/storage/types'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
 import type { CanvasNode } from '../src/services/nodeStore'
-import CanvasHost from '../src/host/CanvasHost.vue'
+import { CanvasHost, DEFAULT_EDGE_VISUAL, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
-import { DEFAULT_EDGE_VISUAL, DEFAULT_HANDLE_VISUAL } from '../src/host/canvasHostCore'
 import SettingsPanel from './SettingsPanel.vue'
 
 // —— demo 外观配置：给 SettingsPanel 实时调(边/连接点)，并传给 CanvasHost 实时生效 ——

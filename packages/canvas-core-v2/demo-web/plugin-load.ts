@@ -3,22 +3,25 @@
 // 证明：第三方已打包(UMD)插件能被一个独立宿主动态加载并生效(不 static import 业务插件)。
 // 关键(vue 单例, docs/tmp/plugin-vite/02)：宿主先把单例运行时喂到 window 全局，
 // UMD 插件 external 掉它们、运行时从这些全局取 → 浏览器只存在一份 vue。
-import { createMiniCanvasHost } from '@mini-canvas/canvas-core-v2'
+import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import type { PluginModule } from '@mini-canvas/canvas-core-v2'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
 // —— 1. 宿主运行时喂到 window 全局(喂给 UMD 插件) ——
-// UMD globals: vue='Vue', @vue-flow/core='VueFlow', @mini-canvas/canvas-core-v2='MiniCanvasCore'
-const [vueNs, flowNs, coreNs] = await Promise.all([
+// UMD globals: vue='Vue', @vue-flow/core='VueFlow',
+//   @mini-canvas/canvas-core-v2='MiniCanvasCore', @mini-canvas/canvas-render='MiniCanvasRender'
+const [vueNs, flowNs, coreNs, renderNs] = await Promise.all([
   import('vue'),
   import('@vue-flow/core'),
   import('@mini-canvas/canvas-core-v2'),
+  import('@mini-canvas/canvas-render'),
 ])
 const w = window as unknown as Record<string, unknown>
 w.Vue = vueNs
 w.VueFlow = flowNs
 w.MiniCanvasCore = coreNs
+w.MiniCanvasRender = renderNs
 
 const logEl = document.getElementById('log') as HTMLElement | null
 const bootEl = document.getElementById('boot') as HTMLElement | null

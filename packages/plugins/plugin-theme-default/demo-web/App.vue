@@ -3,7 +3,7 @@
 // 相比手写装配版：不再自起 VueFlow / provide 令牌 / 从 themeRegistry 取壳边背景 / 同步渲染态——
 // 全部收进 @mini-canvas/canvas-core-v2 的 CanvasHost 组件。这里只 seed 两个示例节点即可。
 import { ref } from 'vue'
-import { CanvasHost } from '@mini-canvas/canvas-core-v2'
+import { CanvasHost } from '@mini-canvas/canvas-render'
 import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
 import { themeDefaultPlugin } from '../src/index'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'

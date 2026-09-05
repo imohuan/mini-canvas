@@ -12,7 +12,8 @@
 //      走源码插件(宿主同 server)——本页聚焦 text 跨端口热更。
 //
 // vue 单例：宿主与插件都 resolve vue 到 pnpm 同一真实路径，.vue 的 import 'vue' 拿到同一份。
-import { createMiniCanvasHost, NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
+import { NodeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { PluginModule } from '@mini-canvas/canvas-core-v2'
 import { createApp, ref } from 'vue'
 import '@vue-flow/core/dist/style.css'
