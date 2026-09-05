@@ -246,6 +246,9 @@ importers:
         specifier: workspace:*
         version: link:../../canvas-core-v2
     devDependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
@@ -267,6 +270,9 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugin-canvas-commands

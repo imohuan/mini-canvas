@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // TextContent —— text 节点 content 组件（随 plugin-node-text 插件包发布，经 BaseNode 壳的 content 段渲染）
 // 职责：展示文本；双击进入编辑，失焦/回车把改动经 ctx.get('text').editText 写回内核并落盘。
-// 依赖方向：只 import 内核的 HOST_KEY 令牌(已上收到内核 components 层)，不反向依赖 demo-web。
+// 依赖方向：只 import 渲染层的 HOST_KEY 令牌(渲染宿主 provide/inject)，不反向依赖 demo-web。
 import { inject, ref, nextTick, onBeforeUnmount } from 'vue'
-import { HOST_KEY } from '@mini-canvas/canvas-core-v2'
+import { HOST_KEY } from '@mini-canvas/canvas-render'
 import type { TextNodeService } from './nodeTextPlugin'
 
 const props = defineProps<{ id: string; data: { text?: string } }>()
 
-// 宿主句柄经 HOST_KEY(内核 provide/inject 令牌)获取，再经 host.ctx.get('text') 调插件服务
+// 宿主句柄经 HOST_KEY(渲染宿主 provide/inject 令牌)获取，再经 host.ctx.get('text') 调插件服务
 const hostRef = inject(HOST_KEY)
 function textService(): TextNodeService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

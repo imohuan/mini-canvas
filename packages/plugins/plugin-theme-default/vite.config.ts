@@ -27,6 +27,7 @@ export default defineConfig(({ command }) => {
           '@mini-canvas/plugin-node-text',
           '@mini-canvas/plugin-node-image',
           '@mini-canvas/canvas-core-v2',
+          '@mini-canvas/canvas-render',
         ],
       },
     }
@@ -43,12 +44,13 @@ export default defineConfig(({ command }) => {
         fileName: () => 'plugin-theme-default.js',
       },
       rollupOptions: {
-        external: ['vue', '@vue-flow/core', '@mini-canvas/canvas-core-v2'],
+        external: ['vue', '@vue-flow/core', '@mini-canvas/canvas-core-v2', '@mini-canvas/canvas-render'],
         output: {
           globals: {
             vue: 'Vue',
             '@vue-flow/core': 'VueFlow',
             '@mini-canvas/canvas-core-v2': 'MiniCanvasCore',
+            '@mini-canvas/canvas-render': 'MiniCanvasRender',
           },
         },
       },

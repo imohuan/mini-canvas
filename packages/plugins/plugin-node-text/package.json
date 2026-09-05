@@ -25,6 +25,7 @@
     "vue": "^3.5.34"
   },
   "devDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

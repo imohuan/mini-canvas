@@ -5,7 +5,7 @@
 // 画法：canvas 尺寸 = 宿主可视区(×DPR)，每帧用 transform 把可视区内的内容系格点直接绘出，
 //       圆点随 viewport(x,y,zoom) 平移缩放，与内容坐标对齐。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useVueFlow } from '@mini-canvas/canvas-core-v2'
+import { useVueFlow } from '@mini-canvas/canvas-render'
 
 const { viewport } = useVueFlow()
 
