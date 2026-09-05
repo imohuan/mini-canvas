@@ -10,7 +10,7 @@
 ## 〇、一句话目标
 
 把插件系统收敛成**作者用起来简单、插件能自定义任意内容（节点/主题/端口/UI/服务/命令）** 的一套**基础能力**。
-能力大半已在内核；缺的是"开放的插槽/注册 + 一个简单开发入口 + 把散装注册函数收成一条 API"，其余（端口吸附、事件拦截、插件管理器）都是**验证示例/附带**，不是验收主体。
+能力大半已在内核；缺的是"开放的插槽/注册 + 一个简单开发入口 + 把散装注册函数收成一条 API + 一套分组化可配置体系"，其余（端口吸附、事件拦截、插件管理器）都是**验证示例/附带**，不是验收主体。
 
 ## 一、现状上下文（开工必读）
 
@@ -36,7 +36,8 @@ packages/
    → 容器已做一半：`SlotRegistry`（`src/core/registry/slotRegistry.ts`，10 测试绿）。**待办**：让 nodeRegistry/themeRegistry 走它、开放"声明新槽"、渲染层按序渲染。
 2. **统一的简单开发入口（对齐 Cordis/dsh）**：作者写一个 .ts，只认内核那个 `Context`——裸导出 `name/inject/apply(ctx)`，在 `apply` 里用 `ctx.nodes/theme/commands/services/slots/...` 注册（对标 dsh 的 `@deepseek-ai/cordis`：作者只认 `Context`；各能力是 `define*` 助手）。
    → 把散装 `registerNodeType/registerThemeSlot` 等收口挂上 ctx；`@mini-canvas/canvas-base`（薄层）导出 `Context` 类型 + `define*` 助手。
-3. **可诊断 + 依赖就绪**（可选增强，帮"开发简单"排错）：每插件一个可查句柄；依赖没到先进 PENDING、到了自动跑。→ 待办（非主体，做了更好）。
+3. **分组化可配置体系**：插件要"可配置"（最典型是主题插件——UI 上调节点/连线样式、改动实时生效）。内核**没有**这套：`PluginModule.config` 只是空字段、装载函数不读、ctx 拿不到。缺的是一个规范的**分组配置服务** `ctx.settings`：插件按组申报 schema、UI 面板按分组长控件、改一项实时生效、性能可控（见 2.4 / 目标 B2）。
+4. **可诊断 + 依赖就绪**（可选增强，帮"开发简单"排错）：每插件一个可查句柄；依赖没到先进 PENDING、到了自动跑。→ 待办（非主体，做了更好）。
 
 ### 1.4 用户的核心判断（写进验收导向）
 - "**也许能力已经包含在核心里面了**" → 任何目标先自查"内核有没有"，有就别再造，只做收口/补开放。
@@ -92,7 +93,48 @@ export function apply(ctx: Context) {       // ctx 就是能力台
 - 服务上架 `ctx.inject(name, impl)`、取用 `ctx.get(name)`（缺则抛错，不静默）。
 - 一个插件模块 = 满足上面约定的那个 .ts 的导出（name/inject/apply 三样）。宿主/内核用同一套机制装载（plugin()/start()/热装卸）。
 
-### 2.4 插件安装 / 卸载 / 换版本（对齐 dsh `publish.zh.md` 的效果，适配"库"）
+### 2.4 分组化可配置体系（插件声明分组配置，UI 按分组编辑、改动实时生效）
+很多插件想要"可配置"——最典型是**主题插件**：作者希望用户在 UI 上调节点底色/圆角、连线颜色/线宽等，改一项画面立刻按新样式重绘。这套配置不是一堆散变量，而是**有规范的、分组的**配置体系：
+- **配置项分组**：插件把自己的配置按"组"申报（如主题的 `基础`/`连线`/`背景` 组），每项带 **schema**（类型/默认值/取值范围/可选下拉项/文案 label）。内核用 schema 自动长 UI 控件、做校验，不用插件手画表单。
+- **插件注册配置**：在 `apply(ctx)` 里 `ctx.settings.define({ group, items })` 申报分组与各项 schema；配置是**单一数据源**（插件不自己另存一份、UI 面板也不另存，都读写内核这份 settings）。
+- **UI 实时生效**：画布侧有设置面板，按"组"列出项；用户改一项 → `ctx.settings.set(key, value)` → 变更推给**订阅该变化的那一方** → 插件拿到新值就地更新它注册的东西（主题重绘连线/壳）→ 实时可见。
+- **内核提供的能力（这是关键，避免"到处监听+全图重建"的性能坑）**：
+  1. **按作用域订阅**：`onChange` 带作用域（插件名/分组），默认只推给"声明了该项的插件"，不搞全局广播风暴、别的插件改配置不误触。
+  2. **窄作用 + 增量更新**：变化只作用到"对应的那一处"（改连线色 → 只更新连线主题占用；改节点底色 → 只更新壳/主题层），**不做全图节点数据重建**。
+  3. **高频项合帧**：滑块/颜色拖拽这类连续值，内核合并到一帧再应用一次（requestAnimationFrame 节流），实时但不每帧重算全图。
+  4. **消费方按需窄订阅**：谁关心什么就订什么，不是每个插件都订阅所有变化去扫全图。
+
+配置在装配时的默认来源：插件自带默认值 + 装配清单(manifest)可覆盖（见目标 D）。作者侧取配置/响应变化的 Cordis 写法示例（教程附录级，非教学正文）：
+```ts
+export const name = 'theme-default'
+export const inject = ['nodeStore']                 // 依赖可空
+
+export function apply(ctx: Context) {
+  // ① 申报两组配置（schema：类型/默认/范围/label）
+  ctx.settings.define({
+    group: '基础',
+    items: { nodeFill: { type: 'color', default: '#ffffff', label: '节点底色' },
+             corner:   { type: 'number', default: 8, min: 0, max: 40, label: '圆角' } },
+  })
+  ctx.settings.define({
+    group: '连线',
+    items: { edgeColor: { type: 'color', default: '#b1b1b7', label: '连线颜色' },
+             edgeWidth: { type: 'number', default: 1, label: '线宽' } },
+  })
+
+  // ② 只订我自己这插件的、且只更新对应那一处（不整图重建）；高频值靠内核合帧
+  ctx.effect(() =>
+    ctx.settings.onChange('theme-default', (key, value) => {
+      if (key === 'edgeColor' || key === 'edgeWidth')
+        ctx.theme.update('edge', { style: { stroke: value.edgeColor, width: value.edgeWidth } }) // 只刷连线主题占用
+      if (key === 'nodeFill')
+        ctx.nodes.refreshShell({ fill: value.nodeFill })   // 只刷壳/主题层，不动节点数据
+    }),
+  )
+}
+```
+
+### 2.5 插件安装 / 卸载 / 换版本（对齐 dsh `publish.zh.md` 的效果，适配"库"）
 参考 dsh `publish.zh.md` 讲的效果——"把插件打成包，一条命令装进你的项目，想卸就卸，还能换版本/换来源(npm/git/tarball)"。
 mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个画布宿主能调的安装入口**（不建 CLI、不做 profile 目录、不做 patch 语法）：
 - **内核底座已有**：`api.installPlugin / uninstallPlugin / reloadPlugin(name, nextMod?) / listPlugins`（见 createMiniCanvasHost，CanvasHost `defineExpose.api` 与 `exposeToWindow` 都能拿到）。＝"装/卸/换版本"的核心已经在。
@@ -104,7 +146,7 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 
 ---
 
-## 三、目标清单（基础层：开放插槽 / 开发入口 / 打包分发；可诊断是可选增强；业务能力一律降为"验证示例"）
+## 三、目标清单（基础层：开放插槽 / 开发入口 / 分组配置 / 打包分发；可诊断是可选增强；业务能力一律降为"验证示例"）
 
 ### 🎯 目标 A（核心）· 开放插槽 + 渲染
 - **结果**：`SlotRegistry`(已有一半)接进 nodeRegistry/themeRegistry：一个槽多 occupant + order + id + remove；支持插件声明新槽；渲染层按序渲染。
@@ -118,7 +160,17 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 - **自查"内核有没有"**：教程里每一步用的能力（写插件 .ts、`apply(ctx)` 里的注册、`ctx.get/inject/effect`、加进 demo、命令注册）内核**大半已有**；要补的只是把散装注册函数收口挂上 ctx（让 `ctx.nodes/...` 等成立）+ `canvas-base` 薄层类型/助手，不新增引擎逻辑。
 - **验收**：① 至少前三篇教程（第一个插件 / 加节点 / 可配置）在 `docs/` 里、能照抄跑通（在 demo 里真看到效果，不是纸面）；② 教程正文短平快、符合 tool.zh.md 的"替换→跑→看效果"结构，不把 API 表当正文；③ 教程里教的就是 `export name/inject/apply(ctx)` 的 Cordis 写法、且能经内核 ctx（或 canvas-base）落地；④ 第四篇(打包安装)在有目标 D 后补上。
 
-### 🎯 目标 D · 插件安装 / 卸载 / 换版本（对齐 dsh publish.zh.md 的效果，见 2.4）
+### 🎯 目标 B2 · 分组化配置体系（插件声明分组配置，UI 编辑、改动实时生效，性能可控）
+- **结果**：内核加一个 `settings` 能力段（挂 ctx，作者 `ctx.settings.define/...`，见 2.4）：插件把配置按**组**申报，每项带 **schema**（类型/默认/范围/可选/文案）；内核做**单一数据源** + **按作用域订阅变化(onChange)** + **高频合帧**；渲染侧有**设置面板**按分组自动长 UI 控件，改一项 → `set(key,value)` → 订阅方就地更新 → **实时生效、不整图重建**。
+- **自查"内核有没有"**：内核**没有**现成 config 体系（`PluginModule.config` 只是留了个空字段，装载函数均不读、ctx 也拿不到）；事件/服务/scope 自动回收机制可复用。**要新写**：settings 注册/取值/订阅服务 + schema 驱动的 UI 面板 + 装配默认值覆盖通道。
+- **性能硬约束（必须守，避免"全监听+全图重建"）**：
+  1. onChange 按作用域（插件/分组）订阅，不全局广播、不改它的不误触；
+  2. 变化只更新"对应那一处"（改连线色不动节点数据、改底色只刷壳/主题层），禁止 `updateAll` 全图重建；
+  3. 滑块/颜色拖拽等高频值由内核合并到一帧应用（rAF 节流）；
+  4. 消费方按需窄订阅，不是每个插件扫全图。
+- **验收**：① 主题插件能用 `ctx.settings.define({group,items})` 声明≥2 组配置（含 color/number schema），schema 驱动出对应 UI 控件；② 在设置面板改一项，主题对应那一处**实时重绘**、其它元素不受影响、无全图重建（有测试/基准佐证）；③ 高频拖动颜色/滑块画面流畅（合帧生效）；④ 另一插件改自己配置不触发本插件；⑤ demo 零报错。
+
+### 🎯 目标 D · 插件安装 / 卸载 / 换版本（对齐 dsh publish.zh.md 的效果，见 2.5）
 - **结果**：做一个画布宿主能用的**统一安装句柄** `manager`：`install(来源) / uninstall(name) / reload(name, next?) / list()`；
   支持"单文件插件 js / 源码模块 / URL"三种来源装进宿主；提供**装配清单(manifest)** 让画布应用声明"装哪些、什么顺序、每插件 config"。
 - **自查"内核有没有"**：装/卸/换版本核心 `api.installPlugin/uninstallPlugin/reloadPlugin/listPlugins` **已在**(createMiniCanvasHost)。
@@ -153,10 +205,11 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 ## 六、实施路径（建议顺序；每步可独立验证）
 - **P1 · 目标 A**：SlotRegistry 接 nodeRegistry/themeRegistry + 开放声明新槽 + 渲染层按序渲染 + 迁移 theme-default/node-text 走新槽 + demo 验证多 occupant。
 - **P2 · 目标 B**：把散装注册函数收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`，注册自动回收）+ 建 `packages/canvas-base`（薄层：`Context` 类型 + `define*` 助手）+ 中文作者教程 doc（教 2.1b Cordis 写法）。
-- **P3 · 目标 C**：per-plugin 句柄 + PENDING 依赖编排 + 单测。
-- **P4 · 目标 D**：统一安装句柄 manager + 外部来源加载(单文件 js/源码/URL) + 装配清单 manifest + demo 整链"装→卸→换版本"验证。
-- **P5 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
-- **P6 · 收尾**：全量回归 + 更新验收勾选 + docs/tmp 清理征询。
+- **P3 · 目标 B2**：内核加 `settings` 能力段（分组 define/取值/onChange 订阅 + 高频合帧 + 单一数据源）+ 设置面板(渲染侧，按分组 schema 长控件) + 主题插件 demo（改颜色/线宽实时重绘、无全图重建）验证性能约束。
+- **P4 · 目标 C**：per-plugin 句柄 + PENDING 依赖编排 + 单测。
+- **P5 · 目标 D**：统一安装句柄 manager + 外部来源加载(单文件 js/源码/URL) + 装配清单 manifest（含"装配覆盖插件默认配置"）+ demo 整链"装→卸→换版本"验证。
+- **P6 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
+- **P7 · 收尾**：全量回归 + 更新验收勾选 + docs/tmp 清理征询。
 
 > 每个 Goal"先写验收用例 → 实现 → 浏览器验证 → commit"。目标 A 是核心，优先。
 
@@ -174,7 +227,8 @@ mini-canvas 是引擎库不是独立 app，所以把这个效果做成**一个�
 ## 八、验收总清单（全勾 = 本任务才结束）
 - [ ] 目标A：nodeRegistry/themeRegistry 支持多 occupant + order + id 增量/替换/remove + 插件可声明新槽；单测绿；两插件同槽按序同屏渲染；默认主题走新槽可一键顶替/热卸回退。
 - [ ] 目标B：散装注册收口挂上 ctx（`ctx.nodes/theme/commands/services/slots/...`）可用、注册自动回收；教程教 Cordis 写法（.ts 裸导出 `name/inject/apply(ctx)`）且前三篇在 `docs/` 里照抄能跑通；`@mini-canvas/canvas-base`（薄层：`Context` 类型 + `define*` 助手）存在可落地。
-- [ ] 目标D：宿主能经 `manager.install` 装插件(源码 import / 单文件 js / URL)并生效；`manager.uninstall` 卸后其 UI/服务/槽位消失、`manager.reload(name, 新实现)` 换版本生效；`manager.list()` 显示已装状态；装配清单(manifest)能按序装插件并传 config、另一画布应用复用即用；demo 整链"装→卸→换版本"零报错。
+- [ ] 目标B2：内核 `settings`（分组 define/取值/onChange 订阅 + 高频合帧 + 单一数据源）在；主题插件声明≥2 组含 color/number 的 schema，设置面板自动长对应控件；改一项那一处实时重绘、无全图重建、其它元素不受影响；高频拖动流畅；另一插件改配置不触发本插件。
+- [ ] 目标D：宿主能经 `manager.install` 装插件(源码 import / 单文件 js / URL)并生效；`manager.uninstall` 卸后其 UI/服务/槽位消失、`manager.reload(name, 新实现)` 换版本生效；`manager.list()` 显示已装状态；装配清单(manifest)能按序装插件并传/覆盖 config、另一画布应用复用即用；demo 整链"装→卸→换版本"零报错。
 - [ ] 目标C：per-plugin 可查句柄 + PENDING 依赖编排单测绿（可选，做了打勾）。
 - [ ] 验证示例：自定义端口/吸附/快速连接节点在 demo 行为符合 connection 声明（示例级）。
 - [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；demo 浏览器端到端零 console 报错。
