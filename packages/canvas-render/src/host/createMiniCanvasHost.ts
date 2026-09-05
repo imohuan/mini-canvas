@@ -14,6 +14,7 @@
 import {
   Context,
   type PluginModule,
+  type PluginRuntimeStatus,
   NodeRegistry,
   ThemeRegistry,
   SaveServiceImpl,
@@ -72,6 +73,8 @@ export interface MiniCanvasApi {
   reloadPlugin(name: string, nextMod?: PluginModule): void
   /** 已装载插件名列表 */
   listPlugins(): string[]
+  /** P5 只读诊断：每个已装(含 FAILED 保留)插件的 fiber 运行时态 + PENDING 缺依赖(missingDeps/error) */
+  inspectPlugins(): PluginRuntimeStatus[]
   getContext(): Context
   getRegistry(): NodeRegistry
   getNodeStore(): NodeStore
@@ -155,6 +158,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
       if (nextMod) ctx.installPlugin(nextMod) // 装新
     },
     listPlugins: () => ctx.listPlugins(),
+    inspectPlugins: () => ctx.inspectPlugins(),
     getContext: () => ctx,
     getRegistry: () => nodeRegistry,
     getNodeStore: () => nodeStore,

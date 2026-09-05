@@ -40,6 +40,12 @@ export interface PluginManifest {
 export interface InstalledPluginInfo {
   name: string
   config?: object
+  /** fiber 运行时态名(pending/loading/active/failed/…)——P5：list 显 state 供宿主/console 诊断 */
+  state?: string
+  /** state!=='active' 时缺哪些依赖（回答"卡 PENDING 缺谁"） */
+  missingDeps?: string[]
+  /** FAILED 时的错误信息 message */
+  error?: string
 }
 
 /**
@@ -82,8 +88,10 @@ export interface PluginManager {
   uninstall(name: string): boolean
   /** 换版本：卸旧装新(同 name 更新实现)。 */
   reload(name: string, next?: PluginEntrySource): Promise<void>
-  /** 已装插件列表(名字 + 可选的装配 config)。 */
+  /** 已装插件列表(名字 + 可选的装配 config + fiber 运行时态 state/missingDeps/error)。 */
   list(): InstalledPluginInfo[]
+  /** 诊断：返回所有 state!=='active' 插件(卡 PENDING 缺谁 / FAILED 报错)，供宿主/console 查异常。 */
+  diagnose(): InstalledPluginInfo[]
   /** 按装配清单按序装(后装同 id 覆盖先装)。返回实际装上的插件名(按顺序)。 */
   applyManifest(manifest: PluginManifest): Promise<string[]>
 }
@@ -105,6 +113,25 @@ export function createPluginManager(ctx: Context): PluginManager {
     ctx.installPlugin(mod, config)
     configs.set(name, config)
     return name
+  }
+
+  /** 逐已装插件，把 ctx 只读查询的 fiber 状态(missingDeps/error)并入每行 → list/diagnose 共用 */
+  function snapshotAll(): InstalledPluginInfo[] {
+    const runtime = new Map(ctx.inspectPlugins().map((s) => [s.name, s]))
+    return ctx.listPlugins().map((name) => {
+      const st = runtime.get(name)
+      return {
+        name,
+        ...(configs.get(name) ? { config: configs.get(name) } : {}),
+        ...(st
+          ? {
+              state: st.state,
+              missingDeps: st.missingDeps,
+              ...(st.error !== undefined ? { error: st.error } : {}),
+            }
+          : {}),
+      }
+    })
   }
 
   return {
@@ -132,10 +159,11 @@ export function createPluginManager(ctx: Context): PluginManager {
     },
 
     list() {
-      return ctx.listPlugins().map((name) => ({
-        name,
-        ...(configs.get(name) ? { config: configs.get(name) } : {}),
-      }))
+      return snapshotAll()
+    },
+
+    diagnose() {
+      return snapshotAll().filter((p) => p.state !== 'active')
     },
 
     async applyManifest(manifest) {

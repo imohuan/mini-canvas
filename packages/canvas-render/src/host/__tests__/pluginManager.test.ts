@@ -43,7 +43,8 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
 
     await manager.reload('demo', demoPlugin('new'))
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('new')
-    expect(manager.list()).toContainEqual({ name: 'demo' })
+    // list 条目含 state 等运行时态字段；此处只校验"demo 仍在列表"这一语义(与新增字段解耦)
+    expect(manager.list().map((p) => p.name)).toContain('demo')
   })
 
   it('外部来源：单文件插件 js 文本(ESM) loadPluginFromText 后能装生效', async () => {
@@ -98,5 +99,35 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
     const m = createPluginManager(host.ctx)
     expect(await m.install(demoPlugin('x'))).toBe('demo')
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('x')
+  })
+})
+
+describe('P5：manager.list/diagnose 暴露 fiber state + PENDING 缺依赖诊断', () => {
+  it('ACTIVE 插件 list 条目带 state=active 与空 missingDeps', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    await manager.install(demoPlugin('v1'))
+    const row = manager.list().find((p) => p.name === 'demo')
+    expect(row).toMatchObject({ name: 'demo', state: 'active', missingDeps: [] })
+  })
+
+  it('卡 PENDING(缺提供方) 插件：list 显 state=pending + missingDeps，diagnose 单列它', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    // 依赖一个不存在的服务 → 停留 PENDING(install 不抛，等提供方)
+    await manager.install({ name: 'waiting', inject: ['ghost-svc'], apply: () => {} })
+    const row = manager.list().find((p) => p.name === 'waiting')
+    expect(row).toMatchObject({ state: 'pending', missingDeps: ['ghost-svc'] })
+    // diagnose = 只列非 active
+    expect(manager.diagnose().map((p) => p.name)).toContain('waiting')
+  })
+
+  it('FAILED 插件：list 不带(已移出可装载表)，但 inspect 能经 ctx 查到带 error', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    await expect(manager.install({ name: 'boom', apply() { throw new Error('bad-plugin') } })).rejects.toThrow(
+      /bad-plugin/,
+    )
+    expect(manager.list().find((p) => p.name === 'boom')).toBeUndefined()
+    // 诊断 FAILED 走 ctx 只读查询(它保留 FAILED fiber 供诊断)
+    const st = host.ctx.inspectPlugins().find((x) => x.name === 'boom')
+    expect(st).toMatchObject({ state: 'failed', error: 'bad-plugin' })
   })
 })
