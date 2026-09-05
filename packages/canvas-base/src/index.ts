@@ -20,9 +20,11 @@
  * ```
  */
 export type { Context } from '@mini-canvas/canvas-core-v2'
-export { runPlugin, depsOf, Service } from '@mini-canvas/canvas-core-v2'
+export { runPlugin, depsOf, Service, asPluginModule } from '@mini-canvas/canvas-core-v2'
 export type {
   PluginModule,
+  PluginClassLike,
+  ServiceClass,
   PluginScope,
   PluginCapabilities,
   NodeRegisterDef,
@@ -32,6 +34,11 @@ export type {
   ConfigPrimitive,
   ConfigSelectOption,
   InferConfig,
+  Events,
+  EventName,
+  EventArgsFor,
+  EventHandlerFor,
+  Services,
 } from '@mini-canvas/canvas-core-v2'
 export { F, resolveConfig, ConfigError } from '@mini-canvas/canvas-core-v2'
 
