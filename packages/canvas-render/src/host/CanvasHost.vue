@@ -38,6 +38,7 @@ import {
   type CanvasHostHandle,
   type MiniCanvasApi,
 } from './createMiniCanvasHost'
+import type { PluginManager } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
@@ -94,6 +95,7 @@ const booting = ref(true)
 const bootError = ref('')
 const hostRef = shallowRef<CanvasHostHandle | undefined>()
 const apiRef = shallowRef<MiniCanvasApi | undefined>()
+const managerRef = shallowRef<PluginManager | undefined>()
 
 // ==================== setup 期同步 provide 的令牌 ====================
 
@@ -293,7 +295,7 @@ let keydownBound = false
 
 onMounted(async () => {
   try {
-    const { host, api, exposeToWindow } = await createMiniCanvasHost({
+    const { host, api, manager, exposeToWindow } = await createMiniCanvasHost({
       adapter: props.adapter ?? new MemoryStorageAdapter(),
       coldPlugins: props.plugins,
       nodeRegistry: registry,
@@ -301,6 +303,7 @@ onMounted(async () => {
     })
     hostRef.value = host
     apiRef.value = api
+    managerRef.value = manager
     if (props.windowKey) exposeToWindow(props.windowKey)
 
     // 订阅 store 变化自动刷渲染态
@@ -361,6 +364,10 @@ defineExpose({
   },
   get api(): MiniCanvasApi | undefined {
     return apiRef.value
+  },
+  /** 目标 D 统一安装句柄(manager.install/uninstall/reload/list/applyManifest) */
+  get manager(): PluginManager | undefined {
+    return managerRef.value
   },
   get ready(): boolean {
     return !booting.value && !bootError.value
