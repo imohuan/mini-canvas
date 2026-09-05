@@ -14,7 +14,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "dev": "vite --config vite.demo.config.ts",
+    "dev": "vite",
     "build": "vite build"
   },
   "peerDependencies": {
