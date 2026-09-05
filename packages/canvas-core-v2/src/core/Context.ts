@@ -47,7 +47,7 @@ function errorMessage(err: unknown): string {
 
 /**
  * 跑一个插件的注册函数：Cordis 式用 apply(收校验后 config)，旧式用 setup，apply 优先。
- * 返回值（cleanup/Disposable）由调用方登记进插件 scope，卸载即清。
+ * 返回值（cleanup/Disposable）由调用方登记进插件 fiber，卸载即清。
  */
 export function runPlugin(
   mod: PluginModule,
@@ -95,12 +95,12 @@ function toSettingSchema(field: ConfigField): SettingSchema {
 export interface Context {}
 export class Context implements PluginScope {
   readonly bus: EventBus
+  /** 根作用域：只服务根 ctx.effect（宿主/非插件的顶层副作用）；插件副作用一律归各自 fiber */
   private readonly rootScope = new Scope()
   private services = new Map<string, unknown>()
   private plugins = new Map<string, PluginModule>()
-  private pluginScopes = new Map<string, Scope>()
   private lifecycles = new Map<string, Lifecycle>()
-  /** 每插件一个 fiber 运行时句柄（P1：状态机 + 可 await/dispose） */
+  /** 每插件一个 fiber 运行时句柄（P1：状态机 + 副作用容器；卸载即 runDisposers/移除） */
   private fibers = new Map<string, Fiber>()
   /** 每插件的装配 config（P4：ctx.plugin/installPlugin 第二参存入，激活时经其 Config schema 校验） */
   private configs = new Map<string, unknown>()
@@ -130,7 +130,7 @@ export class Context implements PluginScope {
   /**
    * 装载一个插件模块（登记；真正 setup 在 start()）。该插件的 fiber 句柄可经 ctx.fiber(name) 取得。
    * 支持类形态（cordis 03）：直接传 Service 子类（如 GreeterService），内核归一成 {name, inject, Config, apply:new 类}
-   * 后走与对象插件一致的依赖 PENDING / config 校验 / scope 回收路径。
+   * 后走与对象插件一致的依赖 PENDING / config 校验 / fiber 回收路径。
    * @param config 装配 config（可选）：start 激活时经插件 `Config` schema 校验+补默认，再传给 apply(ctx, config)。
    */
   plugin(mod: PluginModule, config?: unknown): this
@@ -226,26 +226,29 @@ export class Context implements PluginScope {
       throw err
     }
     fiber.config = config
-    const scope = this.rootScope.child()
-    this.pluginScopes.set(name, scope)
-    // config 字段声明进 settings 单一数据源（scope=插件名），并随插件 scope 回收（热卸/重载清）
+    // config 字段声明进 settings 单一数据源（scope=插件名），并随插件 fiber 回收（热卸/重载清）
     if (mod.Config) {
-      this.declareConfigIntoStore(mod.Config, config as Record<string, unknown>, name, scope)
+      this.declareConfigIntoStore(mod.Config, config as Record<string, unknown>, name, fiber)
     }
-    const scopeCtx = this.deriveScope(scope, name)
+    const scopeCtx = this.deriveScope(fiber, name)
     let cleanup: void | (() => void) | Disposable
     try {
       cleanup = runPlugin(mod, scopeCtx, config)
     } catch (err) {
-      this.pluginScopes.delete(name)
       this.plugins.delete(name) // 加载失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
       this.configs.delete(name)
       this.setLifecycle(name, Lifecycle.ERROR)
-      scope.dispose() // 半成品副作用也清掉
+      fiber.runDisposers() // 半成品副作用也清掉（不置 DISPOSED，fiber 仍可重装）
       fiber.markFailed(err) // 保留 FAILED fiber 供诊断（可重装复用）
       throw err
     }
-    if (cleanup) scope.effect(() => cleanup)
+    if (cleanup) {
+      // runPlugin 返回的 cleanup 一并归入本插件 fiber
+      fiber.onDispose(() => {
+        if (typeof cleanup === 'function') cleanup()
+        else if (cleanup && typeof (cleanup as Disposable).dispose === 'function') (cleanup as Disposable).dispose()
+      })
+    }
     this.setLifecycle(name, Lifecycle.ACTIVE)
     fiber.markActive()
     this.bus.emit('ctx:plugin-installed', { name })
@@ -260,7 +263,7 @@ export class Context implements PluginScope {
     schema: ConfigSchema,
     config: Record<string, unknown>,
     pluginName: string,
-    scope: Scope,
+    fiber: Fiber,
   ): void {
     const store = this.builtinSettings
     for (const [key, field] of Object.entries(schema)) {
@@ -269,8 +272,8 @@ export class Context implements PluginScope {
       // define 初值=itemSchema.default(=schema 默认)；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
       store.set(key, config[key] as string | number | boolean)
     }
-    // 随插件 scope 回收：热卸/重载清掉它声明的配置项（防残留与重装撞 key）
-    scope.onDispose(() => store.removeByScope(pluginName))
+    // 随插件 fiber 回收：热卸/重载清掉它声明的配置项（防残留与重装撞 key）
+    fiber.onDispose(() => store.removeByScope(pluginName))
   }
 
   /** 唤醒依赖现已满足但仍在 PENDING 的插件（服务被 provide/插件被激活后调用） */
@@ -279,21 +282,16 @@ export class Context implements PluginScope {
     this.drain()
   }
 
-  /** 停止：逆序释放各插件 scope（含全部副作用），回到 created 可重新 start。 */
+  /** 停止：逆序释放各插件 fiber（含全部副作用），回到 created 可重新 start。 */
   stop(): void {
     if (this.state !== 'started') return
     // 逆序卸载（依赖方先卸）
-    for (const [name, scope] of [...this.pluginScopes.entries()].reverse()) {
+    for (const name of [...this.fibers.keys()].reverse()) {
       this.setLifecycle(name, Lifecycle.UNINSTALLING)
-      scope.dispose()
+      this.fibers.get(name)?.runDisposers() // 同步清该插件全部副作用
       this.setLifecycle(name, Lifecycle.UNINSTALLED)
       this.bus.emit('ctx:plugin-uninstalled', { name })
     }
-    // 每插件 fiber 同步置 DISPOSED（复用其空容器即时翻转；副作用已由 scope 回收）
-    for (const fiber of this.fibers.values()) {
-      void fiber.dispose()
-    }
-    this.pluginScopes.clear()
     this.plugins.clear()
     this.fibers.clear()
     this.configs.clear()
@@ -353,19 +351,15 @@ export class Context implements PluginScope {
    */
   uninstallPlugin(name: string): boolean {
     if (this.state !== 'started') return false
-    const scope = this.pluginScopes.get(name)
-    if (!scope) return false
+    const fiber = this.fibers.get(name)
+    // 守卫按"有无 fiber"：既覆盖已 ACTIVE 插件，也让冷启动 PENDING(缺依赖) / FAILED 遗留 fiber 可被清理（原 scope 守卫会漏）
+    if (!fiber) return false
     this.setLifecycle(name, Lifecycle.UNINSTALLING)
-    scope.dispose()
-    this.pluginScopes.delete(name)
+    fiber.runDisposers() // 同步清该插件全部副作用（含撤销它上架的服务/注册）
+    this.fibers.delete(name)
     this.plugins.delete(name)
     this.configs.delete(name)
     this.lifecycles.delete(name)
-    const fiber = this.fibers.get(name)
-    if (fiber) {
-      this.fibers.delete(name)
-      void fiber.dispose()
-    }
     this.bus.emit('ctx:plugin-uninstalled', { name })
     // P6/P2b2：提供方被卸，凡依赖它(或其提供的服务名)而仍 ACTIVE 的插件 → 回收副作用并回退 PENDING，
     // 待服务恢复(重 provide / 插件重装)后经 wakePending→drain 自动重载（cordis：callback 随依赖方卸载/重跑）。
@@ -375,9 +369,9 @@ export class Context implements PluginScope {
 
   /**
    * 提供方被卸/换后调用：回收「此刻不再满足其声明依赖」的 ACTIVE 插件并回退 PENDING。
-   * 迭代处理传递链——D 被回退时其 scope 连带摘除它提供的服务，故下一轮 E(依赖 D 的服务)也会被回退。
+   * 迭代处理传递链——D 被回退时其 fiber 连带摘除它提供的服务，故下一轮 E(依赖 D 的服务)也会被回退。
    * 被回退插件仍保留在 plugins/fibers/configs 登记（还是已装插件），依赖恢复后由 wakePending→drain 重载。
-   * 判定依据 = depSatisfied(d)（依赖的是插件名或它提供的服务名皆被覆盖：P 的插件名/服务已随 scope.dispose
+   * 判定依据 = depSatisfied(d)（依赖的是插件名或它提供的服务名皆被覆盖：P 的插件名/服务已随 fiber.runDisposers
    * 与 plugins.delete 从满足集消失）。
    */
   private retractUnsatisfiedActives(): void {
@@ -399,15 +393,14 @@ export class Context implements PluginScope {
     }
   }
 
-  /** 回收单个 ACTIVE 插件的 scope/副作用并置回 PENDING（保留 plugins/fibers/configs 登记，可重载复用） */
+  /** 回收单个 ACTIVE 插件的副作用并置回 PENDING（保留 plugins/fibers/configs 登记，可重载复用） */
   private retractPlugin(name: string): void {
-    const scope = this.pluginScopes.get(name)
-    if (scope) {
+    const fiber = this.fibers.get(name)
+    if (fiber) {
       this.setLifecycle(name, Lifecycle.UNINSTALLING)
-      scope.dispose() // 清副作用 + 摘除它提供的服务
-      this.pluginScopes.delete(name)
+      fiber.runDisposers() // 清副作用 + 摘除它提供的服务（不置 DISPOSED，供重载复用）
+      fiber.markPending() // ACTIVE→PENDING
     }
-    this.fibers.get(name)?.markPending() // ACTIVE→PENDING
   }
 
   /** 已装载(含动态)的插件名 */
@@ -440,7 +433,7 @@ export class Context implements PluginScope {
 
   // ==================== 服务注入 ====================
 
-  /** 提供服务；返回撤销（撤销自动登记进当前调用方 scope，若在 setup 内经插件 scope）。 */
+  /** 提供服务（宿主/根层用）；返回撤销函数。注：本根方法不自动登记清理，撤销由调用方持有并执行；插件层请走注入的 PluginScope.provide（撤销随插件 fiber 自动清）。 */
   inject<Service>(name: string, impl: Service): () => void {
     if (this.services.has(name)) {
       throw new Error(`[core] Service "${name}" is already injected`)
@@ -530,17 +523,17 @@ export class Context implements PluginScope {
 
   // ==================== 内部 ====================
 
-  private deriveScope(scope: Scope, pluginName: string): PluginScope {
+  private deriveScope(fiber: Fiber, pluginName: string): PluginScope {
     const ctx = this
     const api: PluginScope = {
       on(name: string, handler: (...args: any[]) => any): Disposable {
         const off = ctx.bus.on(name, handler)
-        scope.onDispose(off)
+        fiber.onDispose(off)
         return { dispose: off }
       },
       once(name: string, handler: (...args: any[]) => any): Disposable {
         const off = ctx.bus.once(name, handler)
-        scope.onDispose(off)
+        fiber.onDispose(off)
         return { dispose: off }
       },
       emit: (name: string, ...args: any[]) => ctx.bus.emit(name, ...args),
@@ -549,11 +542,11 @@ export class Context implements PluginScope {
       bail: (name: string, ...args: any[]) => ctx.bus.bail(name, ...args),
       waterfall: (name: string, ...args: any[]) => ctx.bus.waterfall(name, ...args),
       effect(fn: EffectFn): Disposable {
-        const off = scope.effect(fn)
+        const off = fiber.effect(fn)
         return { dispose: off }
       },
       inject<Service>(name: string, impl: Service): () => void {
-        // 经根服务表登记，但撤销挂到本插件 scope（卸载自动清）
+        // 经根服务表登记，但撤销挂到本插件 fiber（卸载自动清）
         if (ctx.services.has(name)) {
           throw new Error(`[core] Service "${name}" is already injected`)
         }
@@ -561,11 +554,11 @@ export class Context implements PluginScope {
         const cleanup = () => {
           if (ctx.services.get(name) === impl) ctx.services.delete(name)
         }
-        scope.onDispose(cleanup)
+        fiber.onDispose(cleanup)
         return cleanup
       },
       provide<Service>(name: string, impl: Service): () => void {
-        // 与 inject 同义：经根服务表登记、撤销挂本插件 scope
+        // 与 inject 同义：经根服务表登记、撤销挂本插件 fiber
         if (ctx.services.has(name)) {
           throw new Error(`[core] Service "${name}" is already injected`)
         }
@@ -573,7 +566,7 @@ export class Context implements PluginScope {
         const cleanup = () => {
           if (ctx.services.get(name) === impl) ctx.services.delete(name)
         }
-        scope.onDispose(cleanup)
+        fiber.onDispose(cleanup)
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
@@ -588,7 +581,7 @@ export class Context implements PluginScope {
         return self
       },
     } as PluginScope
-    // 挂能力段（nodes/theme/commands/slots）：buildCapabilities 只用 api.get + api.effect(插件 scope 绑定)
+    // 挂能力段（nodes/theme/commands/slots）：buildCapabilities 只用 api.get + api.effect(插件 fiber 绑定)
     Object.assign(api, buildCapabilities(api, pluginName))
     // 服务解析 Proxy（cordis 语义）：属性读命中"本插件可见服务名"→ 返回该服务实例；否则回退普通字段/undefined。
     // 这样 `inject:['greeter']` 后 `ctx.greeter` 与 `ctx.get('greeter')` 运行时等价；能力段(真实成员)不受影响。

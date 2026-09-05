@@ -193,7 +193,7 @@ export class Fiber {
 
   /**
    * 把 ACTIVE 的插件回退为 PENDING（P6/P2b2 语义：提供方被卸/换，依赖方随之回退等重载）。
-   * 不清副作用清理队列（其副作用由调用方经 scope.dispose 回收），只翻转状态供 drain 重新装载。
+   * 只翻转状态供 drain 重新装载；其副作用由调用方先经 runDisposers() 同步回收。
    * 对 DISPOSED 无效（transition 在 DISPOSED 上 no-op）。
    */
   markPending(): void {
@@ -205,6 +205,29 @@ export class Fiber {
   markFailed(err: unknown): void {
     this._error = err
     this.transition(FiberState.FAILED)
+  }
+
+  /**
+   * 同步逆序(LIFO)跑完并清空当前已登记的 disposers（不改状态机）。
+   * 供"卸载/回退 PENDING/半成品失败"时同步清副作用；因为不置 DISPOSED，
+   * 所以可随后 markPending → 依赖恢复后 drain 重载复用本 fiber（对齐 cordis 卸载=清清理、重载=重跑 apply）。
+   * 单个 disposer 抛错不阻断其余；若某 disposer 返回 promise（现插件副作用全同步，理论没有），fire-and-forget 执行不 await。
+   */
+  runDisposers(): void {
+    const items = this.cleanups.splice(0).reverse()
+    for (const item of items) {
+      item.done = true
+      try {
+        const out = item.fn()
+        // 万一返回 thenable：不 await（本方法同步），仅确保它被启动/吞掉拒绝
+        if (out && typeof (out as { then?: unknown }).then === 'function') {
+          void Promise.resolve(out).catch(() => {})
+        }
+      } catch {
+        /* 单错不阻断 */
+      }
+    }
+    this.cleanups = []
   }
 
   /** 单个清理：跑 fn，吞掉自己的 rejection/异常（单错不阻断） */
