@@ -13,6 +13,8 @@ export type { ThemeSlot, ThemePresentation, ThemeOccupantRequest } from './regis
 export { registerThemeSlot } from './registry/registerThemeSlot'
 export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
+export { buildCapabilities } from './capabilities'
+export type { NodeRegisterDef } from './capabilities'
 export {
   Lifecycle,
 } from './types'

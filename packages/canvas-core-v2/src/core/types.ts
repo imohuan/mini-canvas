@@ -47,13 +47,53 @@ export type EventName = keyof CanvasEventMap & string
 export interface Services {}
 
 /**
+ * 能力段形状：挂在插件 ctx 上的注册收口（ctx.nodes/theme/commands/slots）。
+ * 结构由 core/capabilities.ts 的 buildCapabilities 实现；此处只声明类型供作者侧类型提示。
+ * 每个注册都自动回收（revoke 经插件 scope 的 effect 登记），作者不手写 uninstall。
+ */
+export interface PluginCapabilities {
+  /** 注册一个节点类型（数据+展示+可选建节点），自动回收 */
+  nodes: {
+    register(def: {
+      type: string
+      label: string
+      size: { w: number; h: number }
+      content?: unknown
+      title?: unknown
+      segments?: Partial<Record<'content' | 'title' | 'top-toolbar' | 'bottom-toolbar', unknown>>
+      inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
+      outputs?: Array<{ port?: string }>
+      create?: (position: { x: number; y: number }) => string
+    }): void
+  }
+  /** 往主题槽叠 occupant（order 最小者获胜），自动回收 */
+  theme: {
+    register(slot: string, component: unknown, opts?: { id?: string; order?: number }): void
+    add(slot: string, component: unknown, opts?: { id?: string; order?: number }): void
+    remove(slot: string, id: string): void
+  }
+  /** 注册命令，自动回收 */
+  commands: {
+    register(def: { id: string; title?: string; run(ctx: unknown, ...payload: unknown[]): unknown; keys?: string[]; when?: (ctx: unknown) => boolean }): void
+    has(id: string): boolean
+  }
+  /** 往通用 UI 槽叠 occupant（宿主按序渲染），自动回收 */
+  slots: {
+    register(slot: string, req: { id?: string; order?: number; component: unknown }): string
+    remove(slot: string, id: string): boolean
+    occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
+  }
+}
+
+/**
  * PluginScope —— 单个插件在 setup(ctx) 里拿到的"能力视图"。
  *
  * 它把根 Context 的能力暴露给插件，但**所有副作用自动登记进本插件自己的 Scope**：
  * - on/effect/inject 登记进本插件 scope → 插件卸载(scope.dispose)即自动清光。
  * - get/emit 是读操作 / 广播，不登记。
+ * - nodes/theme/commands/slots 是注册收口（见 PluginCapabilities）。
  */
-export interface PluginScope {
+export interface PluginScope extends PluginCapabilities {
   /** 订阅事件（自动回收） */
   on<K extends EventName>(name: K, handler: EventListener<K>): Disposable
   once<K extends EventName>(name: K, handler: EventListener<K>): Disposable

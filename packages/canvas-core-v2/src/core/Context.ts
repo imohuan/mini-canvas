@@ -1,12 +1,15 @@
 import { EventBus } from './EventBus'
 import { Scope } from './Scope'
 import { topoSort } from './topo'
+import { buildCapabilities } from './capabilities'
+import { SlotRegistry } from './registry/slotRegistry'
 import type {
   CanvasEventMap,
   Disposable,
   EffectFn,
   EventListener,
   EventName,
+  PluginCapabilities,
   PluginModule,
   PluginScope,
 } from './types'
@@ -37,10 +40,18 @@ export class Context implements PluginScope {
   private lifecycles = new Map<string, Lifecycle>()
   private state: ContextState = 'created'
   private dev = false
+  /** 内置通用 UI 槽容器（ctx.slots 写这里，宿主可经 ctx.get('slots') 读同一实例渲染） */
+  private readonly builtinSlots = new SlotRegistry()
+  // 能力段（nodes/theme/commands/slots）在构造里由 buildCapabilities 挂到根 Context（宿主也可经它注册）
+  readonly nodes!: PluginCapabilities['nodes']
+  readonly theme!: PluginCapabilities['theme']
+  readonly commands!: PluginCapabilities['commands']
+  readonly slots!: PluginCapabilities['slots']
 
   constructor(options: { dev?: boolean } = {}) {
     this.dev = options.dev ?? false
     this.bus = new EventBus({ devWhitelistWarn: this.dev })
+    Object.assign(this, buildCapabilities(this, '<host>'))
   }
 
   // ==================== 生命周期 ====================
@@ -69,7 +80,7 @@ export class Context implements PluginScope {
       this.setLifecycle(name, Lifecycle.ACTIVATING)
       const scope = this.rootScope.child()
       this.pluginScopes.set(name, scope)
-      const scopeCtx = this.deriveScope(scope)
+      const scopeCtx = this.deriveScope(scope, name)
       let cleanup: void | (() => void) | Disposable
       try {
         cleanup = mod.setup(scopeCtx)
@@ -135,7 +146,7 @@ export class Context implements PluginScope {
     this.pluginScopes.set(mod.name, scope)
     this.setLifecycle(mod.name, Lifecycle.INSTALLING)
     this.setLifecycle(mod.name, Lifecycle.ACTIVATING)
-    const scopeCtx = this.deriveScope(scope)
+    const scopeCtx = this.deriveScope(scope, mod.name)
     try {
       const cleanup = mod.setup(scopeCtx)
       if (cleanup) scope.effect(() => cleanup)
@@ -186,8 +197,9 @@ export class Context implements PluginScope {
     }
   }
 
-  /** 取服务；缺则抛错（定稿：不静默降级）。 */
+  /** 取服务；缺则抛错（定稿：不静默降级）。'slots' 恒为内置槽容器。 */
   get<Service = unknown>(name: string): Service {
+    if (name === 'slots') return this.builtinSlots as unknown as Service
     if (!this.services.has(name)) {
       throw new Error(
         `[core] Service "${name}" is not injected. If a plugin should provide it, declare it in that plugin's deps and inject it.`,
@@ -226,7 +238,7 @@ export class Context implements PluginScope {
 
   // ==================== 内部 ====================
 
-  private deriveScope(scope: Scope): PluginScope {
+  private deriveScope(scope: Scope, pluginName: string): PluginScope {
     const ctx = this
     const api: PluginScope = {
       on<K extends EventName>(name: K, handler: EventListener<K>): Disposable {
@@ -262,7 +274,9 @@ export class Context implements PluginScope {
         ctx.plugin(mod)
         return api
       },
-    }
+    } as PluginScope
+    // 挂能力段（nodes/theme/commands/slots）：buildCapabilities 只用 api.get + api.effect(插件 scope 绑定)
+    Object.assign(api, buildCapabilities(api, pluginName))
     return api
   }
 
