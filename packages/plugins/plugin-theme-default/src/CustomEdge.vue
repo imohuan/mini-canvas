@@ -4,9 +4,9 @@
 //       提供加宽透明点击热区 + 双击弹剪切钮删除。
 // 与 v1 差异：v1 读 canvas.state.core.* 与 pinia selectionState；v2 改为 props 显式传入(解耦 store)，
 //       默认值对齐 core-node-contract §0 配置默认表。几何逻辑抽到 ./edgeGeometry.ts(可单测)，此处只做装配。
-import { computed, inject, ref, onMounted, onUnmounted } from 'vue'
-import { useVueFlow } from '@mini-canvas/canvas-render'
-import type { EdgeProps } from '@mini-canvas/canvas-render'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useVueFlow, useCanvasRender } from '@mini-canvas/canvas-render'
+import type { EdgeProps, EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   Position,
   getSourcePosition,
@@ -17,11 +17,6 @@ import {
   type EdgeType,
   type EdgeAppearance,
 } from './edgeGeometry'
-import {
-  EDGE_VISUAL_KEY,
-  EDGE_SELECTION_KEY,
-  type EdgeVisual,
-} from '@mini-canvas/canvas-render'
 
 interface CustomEdgeExtraProps {
   /** 临时拖线/批量临时边 */
@@ -37,16 +32,11 @@ interface CustomEdgeExtraProps {
 const props = defineProps<EdgeProps & CustomEdgeExtraProps>()
 const { removeEdges } = useVueFlow()
 
-// 宿主注入：外观(静态) + 选中集合(响应式)。缺省回落内置默认值 + 空集合。
-const injectedVisual = inject(EDGE_VISUAL_KEY, {})
-const injectedSel = inject(EDGE_SELECTION_KEY, {})
-const visual = computed<EdgeVisual>(() => ({ ...injectedVisual, ...(props.visual || {}) }))
-const selectionNodeIds = computed<ReadonlySet<string>>(
-  () => injectedSel.selectedNodeIds?.value ?? new Set<string>(),
-)
-const selectionEdgeIds = computed<ReadonlySet<string>>(
-  () => injectedSel.selectedEdgeIds?.value ?? new Set<string>(),
-)
+// 宿主统一注入上下文：外观(静态) + 选中集合(响应式)。CustomEdge 属 theme 渲染组件，必在 <CanvasHost> 内。
+const { edgeVisual, edgeSelection } = useCanvasRender()
+const visual = computed<EdgeVisual>(() => ({ ...edgeVisual, ...(props.visual || {}) }))
+const selectionNodeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedNodeIds.value)
+const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedEdgeIds.value)
 
 const isTemporaryEdge = computed(() => Boolean(props.temporary || props.data?.isTemp))
 

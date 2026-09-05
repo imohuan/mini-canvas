@@ -18,6 +18,9 @@ export type { NodeWrite } from './contracts/nodeRegistryKey'
 export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
 export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
+// 渲染宿主统一上下文：CanvasHost provide 单令牌，消费方走 useCanvasRender()（新代码首选）
+export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
+export type { CanvasRenderContext } from './contracts/renderContext'
 // 内核精选的 VueFlow 能力出口（渲染类插件统一从本包 import，不再各自依赖 @vue-flow/core）
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。

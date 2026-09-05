@@ -46,6 +46,7 @@ import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
 import { HOST_KEY } from '../contracts/contentBridge'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../contracts/edgeContext'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '../contracts/renderContext'
 import {
   assembleTheme,
   edgeId,
@@ -145,7 +146,20 @@ provide(CANVAS_PARAMS_KEY, handleToProvide)
 // 点击/清空/删除/撤销只写内核 selection，此处经订阅 onChange 整体替换新集合以触发响应式。
 const selectedIds = ref<ReadonlySet<string>>(new Set())
 const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
-provide(EDGE_SELECTION_KEY, { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel })
+const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel }
+provide(EDGE_SELECTION_KEY, edgeSelection)
+
+// —— 渲染宿主统一上下文：把上面分散的令牌收拢成一个对象，provide 一次 ——
+// 新消费方走 useCanvasRender()；旧 *_KEY provide 保留(同引用)以兼容未迁移的外部组件。
+const renderCtx: CanvasRenderContext = {
+  host: hostRef,
+  registry,
+  nodeWrite,
+  handleParams: handleToProvide,
+  edgeVisual: edgeVisualToProvide,
+  edgeSelection,
+}
+provide(RENDER_CONTEXT_KEY, renderCtx)
 
 /** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
 function syncSelected(): void {
