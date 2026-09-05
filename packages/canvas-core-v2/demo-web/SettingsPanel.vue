@@ -28,26 +28,10 @@ interface GroupDef {
   fields: FieldDef[]
 }
 
-// 字段声明（对齐 v1 PanelSettingDefinition 的 type/options/min/max/step 语义）
+// 字段声明（对齐 v1 PanelSettingDefinition 的 type/options/min/max/step 语义）。
+// 连线外观的实时调试已改由 PluginSettingsPanel 走 ctx.settings（theme-default 插件申报，见 demo 装配）；
+// 本面板保留"浮动端口"这一非插件配置项的宿主级调试。
 const groups: GroupDef[] = [
-  {
-    name: '连线',
-    fields: [
-      { id: 'edge.type', title: '线型', section: 'edge', prop: 'edgeType', type: 'select', options: [
-        { title: '贝塞尔', value: 'bezier' },
-        { title: '直线', value: 'straight' },
-        { title: '直角', value: 'step' },
-        { title: '圆角折线', value: 'smoothstep' },
-      ] },
-      { id: 'edge.color', title: '颜色', section: 'edge', prop: 'edgeColor', type: 'color' },
-      { id: 'edge.width', title: '线宽', section: 'edge', prop: 'edgeLineWidth', type: 'slider', min: 1, max: 6, step: 0.5, scale: 10 },
-      { id: 'edge.dashed', title: '虚线', section: 'edge', prop: 'edgeDashed', type: 'boolean' },
-      { id: 'edge.marker', title: '箭头', section: 'edge', prop: 'edgeMarkerEnd', type: 'boolean' },
-      { id: 'edge.animated', title: '流光', section: 'edge', prop: 'edgeAnimated', type: 'boolean' },
-      { id: 'edge.glow', title: '辉光', section: 'edge', prop: 'edgeGlowEnabled', type: 'boolean' },
-      { id: 'edge.glowIntensity', title: '辉光强度', section: 'edge', prop: 'edgeGlowIntensity', type: 'slider', min: 5, max: 40, step: 1, scale: 10 },
-    ],
-  },
   {
     name: '连接点',
     fields: [

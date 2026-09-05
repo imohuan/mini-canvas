@@ -6,21 +6,24 @@
 // 数据改动(建/删/撤销/拖拽/编辑)经 nodeStore.subscribe 在 CanvasHost 内部自动刷渲染态，demo 无需手动同步。
 //
 // 边界：CanvasHost 不内置业务工具栏/菜单(建哪些节点是 app 层的事)，demo 经 CanvasHost 暴露的 host 驱动命令。
-import { reactive, ref } from 'vue'
+import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { PluginModule } from '../src/core'
 import type { StorageAdapter } from '../src/services/storage/types'
 import { LocalStorageAdapter } from '../src/services/storage/localStorageAdapter'
 import type { CanvasNode } from '../src/services/nodeStore'
-import { CanvasHost, DEFAULT_EDGE_VISUAL, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
+import type { SettingsStore } from '@mini-canvas/canvas-core-v2'
+import { CanvasHost, PluginSettingsPanel, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
+import { themeDefaultPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import SettingsPanel from './SettingsPanel.vue'
 
-// —— demo 外观配置：给 SettingsPanel 实时调(边/连接点)，并传给 CanvasHost 实时生效 ——
+// —— demo 外观配置：浮动端口给 SettingsPanel 实时调；连线外观改由 PluginSettingsPanel 走 theme-default 申报的
+//    ctx.settings（单一数据源），见下方 bindThemeSettings ——
 const cfg = reactive({
-  edge: { ...DEFAULT_EDGE_VISUAL },
+  // 连线外观初始值与 theme-default 申报的默认值一致；后续只由设置面板的 set→onChange 窄更新到"对应那一处"。
+  edge: { ...DEFAULT_THEME_EDGE },
   handle: { ...DEFAULT_HANDLE_VISUAL },
 })
 
@@ -46,8 +49,42 @@ function seedDefault(): CanvasNode[] {
 // —— 画布宿主句柄（经 CanvasHost 暴露）——
 const hostEl = ref<InstanceType<typeof CanvasHost> | null>(null)
 const booted = ref(false)
+
+// —— 分组配置(主题外观)面板的数据源：boot 后取宿主共享的 settings store(theme-default 已在 apply 申报两组) ——
+const settingsStore = ref<SettingsStore | null>(null)
+let disposeSettingsBind: (() => void) | undefined
+
 function onReady(): void {
   booted.value = true
+  bindThemeSettings()
+}
+
+/**
+ * 把 theme-default 申报的连线配置绑定到实时外观(cfg.edge)：
+ * - 初始：把 settings 里当前值灌进 cfg.edge（theme 是单一数据源，改过则以改过为准）；
+ * - 订阅：settings.set(key, value) 触发后，只把"声明过的那一项"窄更新到 cfg.edge 对应字段
+ *   （Vue 响应式 → 只重绘受影响连线，无全图重建；也是 B2 性能约束②的 demo 侧落地）。
+ * 仅处理 theme 声明过的 edge 键，避免把外来键误塞进 edge 视觉。
+ */
+function bindThemeSettings(): void {
+  const ctx = hostEl.value?.host?.ctx
+  if (!ctx) return
+  const store = ctx.get<SettingsStore>('settings')
+  settingsStore.value = store
+  // ① 初始同步：theme 声明的各键当前值 → cfg.edge（单一数据源优先）
+  for (const k of EDGE_SETTING_KEYS) {
+    const v = store.get(k as string)
+    if (v !== undefined) (cfg.edge as unknown as Record<string, unknown>)[k] = v
+  }
+  // ② 订阅变更窄更新（不限 scope=全局；但只认 theme 声明的 edge 键 → 天然只动连线那几处）
+  disposeSettingsBind = store.onChange((key, value) => {
+    if (!EDGE_SETTING_KEYS.includes(key as (typeof EDGE_SETTING_KEYS)[number])) return
+    ;(cfg.edge as unknown as Record<string, unknown>)[key] = value
+  }).dispose
+}
+function unbindThemeSettings(): void {
+  disposeSettingsBind?.()
+  disposeSettingsBind = undefined
 }
 
 // 右键菜单状态：由 CanvasHost 透传坐标 + kind
@@ -87,6 +124,7 @@ function menuAct(fn: () => void): void {
   closeMenu()
   fn()
 }
+onBeforeUnmount(unbindThemeSettings)
 </script>
 
 <template>
@@ -102,6 +140,12 @@ function menuAct(fn: () => void): void {
 
     <!-- 右上角调试配置面板（实时调边/连接点外观） -->
     <SettingsPanel :model="cfg" />
+    <!-- 插件申报的分组配置面板：theme-default 在 apply 里 ctx.settings.define 声明了连线外观(连线/动效两组)，
+         schema 自动长控件；改动经 set→onChange 窄更新到 cfg.edge → 只重绘对应连线、无全图重建。
+         固定浮层，叠在右下角(与左上 debug 面板区分) -->
+    <div v-if="settingsStore" class="theme-settings-dock">
+      <PluginSettingsPanel :settings="settingsStore" />
+    </div>
 
     <div class="canvas-wrap">
       <CanvasHost
@@ -191,5 +235,25 @@ function menuAct(fn: () => void): void {
   height: 1px;
   background: #e5e7eb;
   margin: 4px 6px;
+}
+.theme-settings-dock {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 260px;
+  max-height: 46vh;
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 12px 14px;
+  z-index: 900;
+  font-family: system-ui, "Microsoft YaHei", sans-serif;
+}
+.theme-settings-dock:empty {
+  display: none;
 }
 </style>
