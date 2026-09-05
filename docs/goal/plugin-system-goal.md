@@ -1,254 +1,146 @@
-# 目标文档 · @mini-canvas 插件系统完善（插件系统从"空壳"到"有血有肉 + 开发极简"）
+# 目标文档 · @mini-canvas 插件系统基础（插件开发简单 · 插件可自定义任何内容）
 
-> 本文件是**目标导向文档**：每次开工都把这份文件发给 agent，agent 按它工作，直到"验收"清单全勾才结束。
-> 作者希望文档满足：①丰富上下文 ②结果到底长什么样写清楚 ③目标是什么写清楚。
-> 适用工作区：`D:/Code/Git/mini-canvas`（pnpm monorepo）。
-> 关联调查：`docs/tmp/dsh-plugin-survey/survey.md`（deepseek-harness 插件系统解剖）、
-> `docs/tmp/render-layer-migration/*`（渲染层已抽成 canvas-render 包的证据）。
+> **定位（作者原话，最高准则）**：我要的只是一个"插件系统的基础功能"，用来开发插件使用——这些能力**很可能大半已经在我内核里了**。
+> 所以这不是"把系统做得丰富/像 dsh"，而是：**把"让插件开发简单、让插件能自定义任何内容"所需的那一小层基础补齐，并收敛成一个好用的开发入口。**
+> 每次开工把本文件发给 agent，agent 按它做，直到末尾验收全勾才结束。
+> 工作区：`D:/Code/Git/mini-canvas`。参考调查：`docs/tmp/dsh-plugin-survey/survey.md`、`docs/tmp/render-layer-migration/*`。
 
 ---
 
 ## 〇、一句话目标
 
-把 `@mini-canvas` 画布从"内核机制在、插件却像空壳"改成：**插件开发一句话能上手、插件能往宿主塞进可见的 UI 槽（一个槽可叠多个、可排序、可替换），并把 v1 那一大批插件平滑迁进来**。目标是让"以后随便加插件都能有地方做可见的事、还能和别的插件协作"，且加的过程足够简单。
+把插件系统收敛成**作者用起来简单、插件能自定义任意内容（节点/主题/端口/UI/服务/命令）** 的一套**基础能力**。
+能力大半已在内核；缺的是"开放的插槽/注册 + 一个简单开发入口 + 把散装注册函数收成一条 API"，其余（端口吸附、事件拦截、插件管理器）都是**验证示例/附带**，不是验收主体。
 
----
-
-## 一、现状上下文（agent 开工必读，先对齐"现在在哪"）
+## 一、现状上下文（开工必读）
 
 ### 1.1 monorepo 分层（已完成，勿推翻）
 ```
 packages/
-├─ canvas-core-v2       内核（纯逻辑，零 Vue）：core(Scope/Context/registry) + services(nodeStore/command/history/connection/...)+ contracts/edgeGeometry
-├─ canvas-render        渲染宿主层（新，已抽成独立包）：CanvasHost.vue + canvasHostCore + createMiniCanvasHost + vueFlowBridge + 渲染注入令牌
-└─ plugins/
-   ├─ plugin-node-text / plugin-node-image     业务节点插件（content .vue + 逻辑）
-   ├─ plugin-theme-default                     默认主题皮（nodeShell/edge/background，BaseNode/CustomEdge/MovingHandle/DefaultBackground）
-   └─ plugin-canvas-commands                   画布命令插件（create/delete/undo/redo）
-```
-依赖方向（单向、无环，已实证）：
-```
-canvas-core-v2 ← canvas-render ← (theme-default / node-text 拿 vue-flow+令牌+edgeGeometry)
-canvas-core-v2 ← node-image / canvas-commands
+├─ canvas-core-v2     内核（纯逻辑零 Vue）：Scope/Context + services(nodeStore/command/history/connection…) + registry + contracts/edgeGeometry
+├─ canvas-render      渲染宿主层（新独立包）：CanvasHost.vue + canvasHostCore + createMiniCanvasHost + vueFlowBridge + 渲染令牌
+└─ plugins/           plugin-node-text / node-image / theme-default / canvas-commands（已做成独立插件包）
+依赖方向单向无环：canvas-core-v2 ← canvas-render ← theme-default/node-text；canvas-core-v2 ← node-image/commands。
 ```
 
-### 1.2 内核 ctx 现在给插件的能力（`src/core/types.ts` PluginScope）
-- 事件：`on/once/emit`（**只有广播，无 waterfall/bail/serial/parallel**）
-- 服务：`inject(name,impl)`(自动回收) / `get(name)`(缺抛错) / 插件间 `plugin(mod)`
-- 副作用：`effect(fn)`（随 scope 自动回收）
-- 插件模块：`{ name, setup(ctx) }`，`deps?: string[]` 只做 topo 排序 + 启动前校验
-- 生命周期：Lifecycle 枚举 + `ctx:lifecycle-change` 事件（无 per-plugin 可诊断 fiber 句柄）
+### 1.2 内核"基础能力"其实大半已有（别重复造）
+- 插件生命周期：`installPlugin / uninstallPlugin / reloadPlugin` + Lifecycle 状态机 + Scope 作用域自动回收副作用 + `ctx:lifecycle-change` 事件。✅
+- 服务注册/发现：`ctx.inject(name, impl)(自动回收) / ctx.get(name)`；插件间 `ctx.plugin(mod)`。✅
+- 事件：`on/once/emit`。✅（waterfall/bail 属"示例级增强"，非基础必需）
+- 注册机制：`nodeStore.registerType`（数据/尺寸/连接声明）、`nodeRegistry`（type→content/title 组件）、`themeRegistry`（nodeShell/edge/background/edgeDefaultType）、`registerNodeType/registerThemeSlot`。⚠️ 有，但**单格、收散、无统一入口**。
+- 连接声明：`connection.ts` 的 `PortDef(port/accepts/limit)`、`NodeConnectionDef(inputs/outputs)` + `validateConnection`。✅（端口语义的内核底座已在）
+- 渲染宿主：canvas-render 的 CanvasHost + `nodesFromStore` 等。✅
 
-### 1.3 注册表现状（单格、opaque、防覆盖 —— 这是"空壳感"主因之一）
-- `nodeRegistry`：`type → { content/title/top-toolbar/bottom-toolbar 组件句柄 }`，单格、重复抛错。
-- `themeRegistry`：`ThemeSlot(nodeShell/edge/edgeDefaultType/background/connectionLine) → opaque`，单格、重复抛错。
-- **共同缺点**：一个槽只能被填一个组件；没有"一个槽叠多个 + 排序(order) + 按 id 增量/替换"；组件收不到声明好的 props，只能裸 `ctx.get` 全局服务（耦合）。
+### 1.3 真正的缺口（基础层只补这几处）
+1. **开放的插槽**：一个槽能叠多个 occupant、按 order 排序、按 id 增量/替换/remove，**且插件能自己声明新槽**（不只宿主预设那几格）。
+   → 容器已做一半：`SlotRegistry`（`src/core/registry/slotRegistry.ts`，10 测试绿）。**待办**：让 nodeRegistry/themeRegistry 走它、开放"声明新槽"、渲染层按序渲染。
+2. **统一的简单开发入口**：作者只 import 一个库、一个 `defineCanvasPlugin` 就够（对标 dsh 的 `@deepseek-ai/cordis`：作者只认 `Context`；各能力是 `define*` 助手）。
+   → 待建 `@mini-canvas/canvas-base`。
+3. **可诊断 + 依赖就绪**（可选增强，帮"开发简单"排错）：每插件一个可查句柄；依赖没到先进 PENDING、到了自动跑。→ 待办（非主体，做了更好）。
 
-### 1.4 v1 未来要迁的插件（`packages/canvas-core/src/plugins/`，现役 20 个，日后都要进新系统）
-`align-arrange / align-guide / auto-layout / auto-save / backend-sync / canvas-export / clipboard /
-context-menu / custom-handle / edge-cutting / file-drop / group / history / mini-map / multi-select /
-node-find / shortcut-manager / storage / theme`
-→ 新插件系统必须能容纳：**命令、快捷键、右键菜单、对齐/排列、迷你地图、框选、剪贴板、分组、导入导出、自动保存/后端同步** 等五花八门的"功能 + 可见 UI + 交互"，而不是只有"节点/主题/命令"三类。
+### 1.4 用户的核心判断（写进验收导向）
+- "**也许能力已经包含在核心里面了**" → 任何目标先自查"内核有没有"，有就别再造，只做收口/补开放。
+- "**插件可以自定义任何内容**" → 槽/注册/服务必须**开放**：插件能自定义节点、主题(连线/壳/端口样式)、内容组件、服务、命令、UI，且能被宿主同一套机制渲染。宿主**不要**预先规定死一堆具体语义落点（工具栏/右键菜单/dock 是示例，不是框架承诺）。
+- "**开发简单**" → 从"记一堆注册函数 + 手写 effect 包 unregister + 知道内核拆在哪"收敛到"一个库一个 define、自动回收"。
 
-### 1.5 端口/连接语义现状与用户想法
-- 内核 `connection.ts` 已有**声明式端口约束**：`PortDef { port:'source'|'target', accepts?:string[], limit?:'single'|'multi' }`、
-  `NodeConnectionDef { inputs?:PortDef[], outputs?:PortDef[] }`（经 `nodeStore.registerType` 声明）。校验有
-  `validateConnection/typeConnectionDef`：missing-node/self-loop/bad-orientation/no-source-port/no-target-port/
-  type-not-accepted/limit-reached。
-- 用户**未来想法**（要能支撑，不是当下全实现）：一个节点多少个端口、哪些端口能连、拖线到节点某位置**吸附**到端口、
-  松手即**快速连接**。这些大部分依赖内核 connection 已有能力 + 渲染层吸附几何（MovingHandle 已有）。
-
-### 1.6 用户痛点（本轮要根治的）
-1. **插件系统不够完善**：ctx 喂的宿主服务少、插件能挂的可见落点少。
-2. **插件开发有点复杂**：作者希望像 deepseek-harness 那样，"写一个插件 = 一句话 setup + 往 slot 挂组件"就完事，
-   不用理解一大堆注册函数 / 不用手写 effect 包 unregister / 不用纠结该在哪儿加。
-
-### 1.7 参考对象（dsh 的插件体验，出自 survey 报告 H 节）
-- 写插件 = `ctx.plugin({ name, inject, apply(ctx){ 注册命令/服务/slot } })`，一句 setup 搞定。
-- UI 靠**类型化 Slots**：一个 slot 声明 cardinality(single/list/keyed/chain)+order，多个 occupant 可叠可排可换；
-  host 从 `root` 渲染整棵 slot 树；inspect 可查谁填了哪个槽。
-- 注册 API 本身就是 effect → 插件几乎不手写 uninstall。
-- ctx 是"开放服务场"：宿主喂几十个具名服务，插件挑着 `ctx.get`。
+### 1.5 参考（dsh 插件体验，取自 survey 报告）
+写插件 = `ctx.plugin({ name, apply(ctx){ 注册服务/命令/slot } })` 一句 setup；UI 靠类型化 slots（multi + order + id）；注册 API 本身是 effect → 插件几乎不手写 uninstall；ctx 是"宿主 inject 上架、插件 ctx.get 拉取"的开放服务场。
 
 ---
 
-## 二、目标终态（做完后"长什么样"，逐条可验证）
+## 二、目标终态（做完"长什么样"，可验证）
 
-### 2.1 插件开发体验（最想达到的"简洁"）
-未来的插件作者写一个功能插件，理想代码像这样（**目标形态，示意**）：
+### 2.1 插件作者体验（最重要）
+作者写一个"自定义某种节点/主题/服务/命令"的插件，理想代码（示意）：
 ```ts
-// packages/plugins/plugin-mini-map/index.ts
+// 只 import 这一个库
 import { defineCanvasPlugin } from '@mini-canvas/canvas-base'
+
 export default defineCanvasPlugin({
-  name: 'mini-map',
-  // 1. 注册一个可折叠/可拖拽的侧栏浮层（塞进画布 UI 的一个 slot，一槽可多 occupant）
-  ui: [
-    { slot: 'canvas.dock.top', id: 'minimap', order: 10, component: MiniMap, title: '小地图' },
-  ],
-  // 2. 注册命令（进右键菜单 / 快捷键）
-  commands: [
-    { id: 'minimap.toggle', label: '切换小地图', shortcut: 'M', run: (ctx) => toggle() },
-  ],
+  name: 'my-node',
+  deps: [],                       // 依赖其它插件/服务名（可空）
+  // 可"自定义任何内容"：声明节点、主题槽、服务、命令、UI 槽
+  nodes: [{ type: 'audio', label: '音频', size: { w: 200, h: 80 }, content: AudioContent }],
+  theme: [{ slot: 'edge', id: 'mine', component: MyEdge }],   // 顶替默认连线(主题)
+  services: { 'mySvc': (ctx) => makeMySvc() },
+  commands: [{ id: 'myCmd', label: '…', run: (ctx) => {} }],
+  ui: [{ slot: 'myOwnSlot', id: 'panel', component: Panel }], // 也能塞进任意槽/自带新槽
 })
 ```
-即：**插件"想往宿主放可见东西"，只需声明"我挂哪个 slot + 我的组件"，宿主自动排好并渲染；不必手写 provide、不必手写装配、不必逐段注册**。
+不必手写 provide、不必逐段注册、不必手写 unregister（自动回收）。
 
-### 2.2 插槽系统（用户核心诉求，见下"目标 1"）
-- 一个 slot 可以容纳**多个**插件的 occupant，能排序、能按 id 增量加或替换。
-- 别的插件 `往某 slot 塞一个 Vue 组件` → 就显示在宿主对应位置；塞多个 → 按顺序排好。
-- 主题/节点样式类 slot（连线、节点壳、端口）已能用（默认皮已实现），保留并纳入统一 slot 体系。
+### 2.2 开放插槽（能自定义任何 UI/内容）
+- 一个 slot 容纳多个 occupant，order 排序，id 增量/替换/remove；**插件可声明新 slot**。
+- `themeRegistry/nodeRegistry` 都走这套开放槽语义（单格换肤点 = single：order 最小的赢家）。
+- 渲染层(CanvasHost/canvasHostCore)把一个 slot 的所有 occupant 按序 render 出来。
 
-### 2.3 能力面（ctx / 扩展点，"有血有肉"）
-- ctx 上能 `ctx.get` 到一组合插件真会用的宿主服务（命令、快捷键、选中、历史、右键菜单、文件拖放、剪贴板…）。
-- 有一张"画布功能 → 扩展点"对照表（doc + inspect），作者一看就知道某功能该挂哪。
-- 事件支持**协商/拦截**（waterfall/bail），用于 `before:node-create/connect/delete` 等可被插件否决的点。
-
-### 2.4 未来的端口/吸附/快速连接（作为 slot/能力目标的验证场景，能支撑即可）
-- 换节点壳/端口主题 = 换一个 slot 的 occupant（已能，纳入统一 slot）。
-- 一个节点"几个端口、哪些能连、吸附、松手快速连接"的语义由**插件声明的 connection def + 槽组件**共同决定，
-  内核 connection 规则引擎不改。
-
-### 2.5 v1 插件可迁
-- 新系统提供 v1 20 个插件所需的扩展点类别（见 2.3 + 1.4），迁移时每个 v1 插件能对号入座，不用再造新机制。
-
-### 2.6 结构（自己对照实现一个"作者基础库"，类比 dsh 的 `@deepseek-ai/cordis` / `@deepseek-ai/dsh-base`）
-- **要自己对照实现**一个"插件作者基础库"（建议名 `@mini-canvas/canvas-base`）作为单一依赖源。参照 dsh 的做法
-  （实证：dsh 插件作者一律 `import type { Context } from '@deepseek-ai/cordis'`、工具用 `import { defineTool } from '@deepseek-ai/dsh-tools'`
-  —— 框架 ctx 型别来自基础库 cordis，能力入口是各 define* 助手），我们把它做成：
-  `defineCanvasPlugin(...)` + 类型 `CanvasPlugin/CanvasPluginContext` + 各能力 `define*(...)` 助手（建节点/命令/快捷键/UI slot/主题槽），
-  底层统一转发内核/render/令牌。插件包今后只依赖这一个库（`@mini-canvas/canvas-base`），不直接散 import 内核/渲染。
-- 在这个基础上，插件管理本身也做成**一个可装卸的插件**（见目标 6"插件管理插件"），形成"框架底座 + 万物皆插件（含管理插件本身）"的形态。
+### 2.3 统一开发入口 `@mini-canvas/canvas-base`
+- `defineCanvasPlugin(...)` + 类型 + 各 `define*`/能力声明段，底层转发内核/render/令牌。
+- 插件包只依赖这一个库，不散 import 内核/渲染。
 
 ---
 
-## 三、目标清单（分 Goal，每个 Goal 有独立验收）
+## 三、目标清单（基础层只留这 3 个；业务能力一律降为"验证示例"）
 
-### 🎯 目标 0 · 建立"插件基础库"底座（先做，其余都挂它上面）
-- **结果长啥样**：自己对照 dsh（`@deepseek-ai/cordis` + 各 `define*` 助手）**实现**一个"作者基础库"
-  `packages/canvas-base`（名 `@mini-canvas/canvas-base`）：`export` 作者友好面 `defineCanvasPlugin(...)` +
-  类型 `CanvasPlugin/CanvasPluginContext` + 各能力 `define*(...)`（建节点/命令/快捷键/UI slot/主题槽）+ 底层转发内核/render/令牌。
-  插件包今后只依赖这一个库（`@mini-canvas/canvas-base`），不直接散 import 内核/渲染。
-- **目标**：给插件作者一个单一、好认的 import 源（对标 dsh 作者只认 `@deepseek-ai/cordis` 的 `Context`），
-  隐藏"内核在哪个包、渲染在哪个包"的细节。
-- **验收**：示例插件只 import `@mini-canvas/canvas-base` 这一个库就能写出完整可运行插件；`docs` 里新插件脚手架基于它。
+### 🎯 目标 A（核心）· 开放插槽 + 渲染
+- **结果**：`SlotRegistry`(已有一半)接进 nodeRegistry/themeRegistry：一个槽多 occupant + order + id + remove；支持插件声明新槽；渲染层按序渲染。
+- **自查"内核有没有"**：容器本身新的，加进来；渲染层本来读 registry，改成读多 occupant 即可。
+- **验收**：单测绿；两个插件往同一槽各塞组件、同屏按序渲染；默认主题走新槽仍可一键顶替 + 热卸回退；demo 零报错。
 
-### 🎯 目标 1 · 插槽系统：单格 → 多 occupant + 排序 + id 增量/替换（本次最核心）
-- **结果长啥样**：把 `themeRegistry/nodeRegistry` 从"单格 map"升级成统一的**槽容器**：
-  ```ts
-  slot.add({ slot:'canvas.dock.top', id:'minimap', order:10, component:MiniMap }) // 叠加
-  slot.add({ slot:'edge', id:'myEdge', order:0, component:MyEdge })               // 顶替默认(主题)
-  slot.list('canvas.dock.top') // 按 order 排好的一串 occupant
-  slot.remove(slotName, id)    // 移除某一个 occupant（不影响同槽其它）
-  ```
-  一个槽渲染多个 = 宿主把 `slot.list(slotName)` 按序 render；主题/单格类 slot 语义 = `single`（当前 order 最小的赢家）。
-- **目标**：任何 slot 都能"多填 + 排序 + 显式替换"，插件能往别的插件开的槽里塞东西并显示在对应位置。
-- **验收**：①单元测试覆盖 add/list(order 排序)/remove/replace/重复 id 策略；②demo 里两个插件往同一槽各塞一个组件、按序同屏渲染；③默认主题(连线/节点壳/端口)改走该 slot 体系仍能一键顶替与热卸回退。
+### 🎯 目标 B · 统一开发入口 `@mini-canvas/canvas-base`
+- **结果**：建包，`defineCanvasPlugin` 一条 API + 能力段(nodes/theme/services/commands/ui) + 转发；注册自动回收（插件不手写 unregister）。
+- **自查"内核有没有"**：内核各 register* 已有，base 只是**收口 + 自动回收**，不新增引擎逻辑。
+- **验收**：示例插件只 import `@mini-canvas/canvas-base` 就写出能跑通的自定义节点+主题+命令插件；脚手架 doc。
 
-### 🎯 目标 2 · 事件加"可协商/可拦截"分发（waterfall/bail）
-- **结果长啥样**：`EventBus` 增加 `waterfall`（环绕中间件，可包装/短路）与 `bail`（首个拒绝即停）两种分发，
-  并给画布语义点接上：`before:node-create` / `before:connect` / `before:node-delete`（bail：任一插件可否决）、
-  `node:render`（waterfall：让主题/节点包装默认渲染）。
-- **目标**：让"多个插件对一个动作协商/拦截"成为可能，取代 connection 里纯手写策略的部分场景。
-- **验收**：单测覆盖 waterfall 包装/短路、bail 首个拒绝即停；一个插件能通过 `before:connect` 否决某种连接（拦截生效）。
-
-### 🎯 目标 3 · 补"插件真会用的宿主服务 + 语义扩展点"，收敛复杂度
-- **结果长啥样**：ctx 上能 `ctx.get` 到一批服务（至少把 command/shortcuts/selection/history/save 当服务上架），
-  并新增几个**有语义的落点**供插件挂可见 UI/交互（示例，非穷举）：`canvas.toolbar`（工具栏按钮）、
-  `canvas.contextmenu`（右键菜单项）、`canvas.dock.*`（可折叠侧栏/浮层）、`node.actions`（节点卡片上的操作钮）。
-- **目标**：v1 那 20 个插件需要的"类别"都有对号入座的扩展点；作者做新功能不用再造轮子。
-- **验收**：提供"功能 → 扩展点"对照 doc；至少命令/右键菜单/工具栏/dock 四类能由插件注入并在 demo 可见。
-
-### 🎯 目标 4 · 生命周期可诊断 + 依赖就绪（PENDING）+ 插件开发指南
-- **结果长啥样**：
-  - 每插件一个可查句柄：`installPlugin` 返回/记录 `{ name, state, deps, config }`，setup 抛错统一走 `reportFailure`。
-  - 依赖未就绪的插件进"待命"，服务 `inject` 上架的瞬间再执行 setup；服务被卸时依赖它的插件自动卸载/待命。
-  - 一份 `docs` 插件作者教程（形似 dsh cordis-tutorial）：最小 text 插件 → effect/生命周期 → 服务共享 → 事件 → 完整 node+主题+命令插件。
-- **目标**：动态加装互相依赖的插件可用；作者有照抄的教程。
-- **验收**：①单测：先装依赖 A 后装 B 正常；先装 B(依赖 A) 进 PENDING、A 上架后 B 自动跑起来；卸 A 后 B 自动卸/待命；
-  ②教程文档存在、能被照着一步步跑通一个最小插件。
-
-### 🎯 目标 5 · 端口/吸附/快速连接 能力对齐（验证场景，不强推重写）
-- **结果长啥样**：确认内核 connection 声明式约束 + 渲染吸附(主题 MovingHandle)已能支撑"端口数量/谁能连/吸附/松手快速连接"，
-  用 demo/示例节点 + 主题验证一遍；缺的部分补齐（尽量在 slot/连接定义层，不动 connection 规则引擎核心）。
-- **目标**：用户日后要做的"端口/吸附/快速连接"有现成落点，不阻塞。
-- **验收**：一个自定义节点声明"2 输入 1 输出、某输出只接指定类型、limit single"，在 demo 里拖线吸附/松手连接行为符合声明。
-
-### 🎯 目标 6 · "插件管理插件"（管理插件的安装/卸载/热重载，自身也是插件）
-- **背景**：用户想有一个能**可视化管理插件**的东西 —— 列出已装插件、安装新的、卸载、热重载(改代码实时生效)。
-  dsh 的做法（实证）：插件管理走 `ctx.dynamicCordisRunner`(define/run/stop/undefine/reload) + `ctx.cordisInspect`(查询注册/占用)
-  + UI 面板经 slot 挂载；它本身也是宿主里的一层服务，不写死在循环里。**我们据此把它也做成"一个插件"，符合"万物皆插件"。**
-- **结果长啥样**：新做一个插件包（如 `plugin-manager`，放 `packages/plugins/`），它以 `defineCanvasPlugin` 写成、依赖
-  canvas-base 与内核已有的安装机制：
-  - 暴露管理 API 到 ctx（服务）：`ctx.manager.list() / install(mod|url) / uninstall(name) / reload(name, nextMod?)`（把现有
-    `installPlugin/uninstallPlugin/reloadPlugin` 收拢成服务，并加上对"运行时加载外部插件 js/源码 URL"的支持，复用 demo 已有的 UMD/跨端口加载验证）。
-  - 提供**可视化 UI**：一个 dock/侧栏面板（走目标 1 的 slot 系统塞进宿主），列出每个插件的 `{name, state, deps}`、
-    按钮"卸载/重载/安装"，安装失败时显示原因（对接目标 4 的 reportFailure）。
-  - 可查宿主当前已装插件各自填了哪些 slot（接 inspect，见目标 1）。
-- **目标**：让"插件怎么装、怎么卸、怎么热更"从**代码级 API**变成**用户可点的界面 + 一目了然的状态**，
-  且这套管理能力本身可装卸（不需要就卸掉，不留硬耦合）。
-- **验收**：① demo 里能列出 theme-default/node-text/image/commands 及其状态；② 用 UI 卸载某插件其 UI/服务/slot 消失、
-  重装/热重载回来生效（对应 ctx 服务/slot 注册回收）；③ 运行时把一个独立插件(js 或跨端口源码)装进画布并可用；④ 全程零 console 报错。
+### 🎯 目标 C（可选增强，帮排错）· 可诊断 + 依赖就绪
+- **结果**：每插件一个可查句柄 `{name,state,deps,config}`；依赖没到进 PENDING、到即跑、卸则待命/卸。
+- **验收**：单测绿；教程能照抄跑通一个最小插件。
 
 ---
 
-## 四、约束与原则（动工前必守）
-
-1. **内核 canvas-core-v2 保持纯逻辑、零 Vue、Node 可单测** —— 任何把 .vue / reactive 塞回内核的改动一律拒绝。
-2. **不推翻已完成的渲染层迁移**（canvas-render 独立包、依赖方向）。目标 0 的"基础库"是**在其上加一层作者友好收口**，
-   不是重拆包、不是再造第三个渲染层。
-3. **slot 体系放内核（纯逻辑容器）还是渲染层？** 槽的**容器/排序/增删**是纯逻辑 → 内核 `registry`；
-   槽的**渲染**(把 occupant 组件 render 出来)在渲染层 canvas-render / 宿主。两者用现有令牌/服务桥接，不破单向依赖。
-4. **兼容存量**：现有 `registerNodeType/registerThemeSlot/registerThemeSlot` 语义（单格、scope 自动回收、热卸回退）要保留或平滑迁移，
-   不能让 theme-default/node-text/image/commands 现有插件坏掉、不能破坏已绿的 134 个测试语义。
-5. **小步提交**：每个 Goal 拆成原子 commit（feat(canvas-*)/refactor(plugin-*) 前缀 + 中英描述），每步有测试/验证。
-6. **LF 行尾、pnpm workspace、vue-tsc 查 .vue**（按 `docs/tmp/render-layer-migration/monorepo-conventions.md`）。
-7. 中间调查文档落 `docs/tmp/`；任务完成后再问是否清理，不擅自删。
+## 四、验证示例（做出来证明"能自定义任何内容"，不算框架承诺）
+用以上基础做几个**示例插件**验证，而不是当验收主体：
+- **自定义端口/吸附/快速连接**：一个自定义节点声明"2 输入 1 输出、某输出只接指定 type、limit single"，demo 里拖线吸附/松手连接符合声明（内核 connection 已有，套一层验证）。
+- **插件管理器(plugin-manager)**（作者随口提、非最初核心诉求，作附带）：一个用 `defineCanvasPlugin` 写的插件，dock 面板列出已装插件 state、可卸载/重载/装外部插件 js/源码。能跑即可，做不出也不阻塞验收主体。
 
 ---
 
-## 五、实施路径（建议顺序；每步可独立验证）
-
-- **阶段 P0 · 目标 0**：建 `packages/canvas-base`（作者友好面 + 转发），写脚手架 doc。
-- **阶段 P1 · 目标 1**：内核把 registry 升级成"多 occupant 槽容器(slot + order + id + single/list 语义)"；
-  渲染层 CanvasHost 据此渲染；迁移 theme-default / node-text 走新槽；跑 demo 验证多 occupant 同屏。
-- **阶段 P2 · 目标 2**：EventBus 加 waterfall/bail + 画布语义点接线 + 单测。
-- **阶段 P3 · 目标 3**：补宿主服务上 ctx + 语义落点(toolbar/contextmenu/dock/node.actions) + 功能→扩展点 doc。
-- **阶段 P4 · 目标 4**：per-plugin 句柄 + PENDING 依赖编排 + 插件作者教程 doc。
-- **阶段 P5 · 目标 5**：端口/吸附/快速连接能力对齐验证 + 补缺。
-- **阶段 P6 · 目标 6**：做"插件管理插件"(plugin-manager) —— 管理 API 服务化 + dock UI 面板(走 slot) + 运行时装外部插件 js/源码。
-- **阶段 P7 · 收尾**：全量回归（内核+渲染+各插件 typecheck / vitest / vue-tsc / 两个 demo 浏览器端到端零报错），
-  更新本文档验收勾选，`docs/tmp` 清理征询。
-
-> 每个 Goal 都"先写验收用例 → 再实现 → 浏览器验证 → commit"。一次会话尽量推进多个 Goal，但**目标 1 是核心**，优先做好。
+## 五、约束与原则（动工前必守）
+1. 内核保持纯逻辑零 Vue、Node 可单测；任何把 .vue/reactive 塞回内核的改动拒绝。
+2. 不推翻已完成的 canvas-render 迁移与依赖方向；`canvas-base` 是上面加的一层作者收口，不是再造第三渲染层。
+3. **先自查"内核有没有"，有就收口/补开放，不重复造轮子**（1.4 用户判断）。
+4. 兼容存量：theme-default/node-text/image/commands 不能坏；不破坏已绿测试语义。
+5. **宿主不预定义一堆具体语义落点当承诺**；要的是"插件能自定义任意内容"的开放机制，工具栏/右键/dock 只是示例槽。
+6. 小步原子 commit + 测试；LF、pnpm workspace、vue-tsc 查 .vue。
+7. 中间调查文档落 `docs/tmp/`，完成后再问是否清理。
 
 ---
 
-## 五·五、强制终审闸门（任务结束的硬性前提，违反则不予通过）
+## 六、实施路径（建议顺序；每步可独立验证）
+- **P1 · 目标 A**：SlotRegistry 接 nodeRegistry/themeRegistry + 开放声明新槽 + 渲染层按序渲染 + 迁移 theme-default/node-text 走新槽 + demo 验证多 occupant。
+- **P2 · 目标 B**：建 `packages/canvas-base`（defineCanvasPlugin + 能力段 + 转发 + 自动回收）+ 脚手架/作者教程 doc。
+- **P3 · 目标 C**：per-plugin 句柄 + PENDING 依赖编排 + 单测。
+- **P4 · 验证示例**：端口/吸附/快速连接示例节点；可选 plugin-manager。
+- **P5 · 收尾**：全量回归 + 更新验收勾选 + docs/tmp 清理征询。
 
-**本任务"判定完成"前，主 agent 必须启动一个子代理对本实现的插件系统做终审。** 这是硬性规定：
-- **必须用 `run_subagent` 起一个独立子代理审核**。若主 agent 不通过子代理、而只靠自己（或任何非子代理方式）审核就宣布完成 —— **一律不予通过**，视为未结束。
-- **子代理要非常严格、挑剔**：以 `D:/Code/Git/mini-canvas/deepseek-harness/docs` 里的插件/扩展实现（尤其
-  `docs/cordis-primer*.md`、`docs/cordis-api/*`、`docs/subsystems/slots*.md`、`docs/subsystems/extensions*.md`、
-  `docs/capability-seams*.md`、`docs/cordis-tutorial/*`）为对齐基准，逐条对照本实现。
-- **审核不通过 → 子代理必须说明原因**，主 agent 据此继续修改，改完**再次启动子代理复审**，直到通过为止。
-- 主 agent 给子代理的 prompt 需自报身份（`Caller agent: code-developer`），并明确要求：审核是否"简洁、可对齐 dsh、
-  插件开发体验达标、没有破坏纯逻辑内核/没有推翻渲染层迁移/存量插件没坏"，同时指出**该抄未抄**与**过度设计**之处，
-  输出"通过 / 不通过 + 原因 + 修改清单"。
-- 子代理审核结论与报告放 `docs/tmp/plugin-system-review/`，保留备查。
+> 每个 Goal"先写验收用例 → 实现 → 浏览器验证 → commit"。目标 A 是核心，优先。
 
 ---
 
-## 六、验收总清单（全勾 = 本任务才结束）
-
-- [ ] 目标0：`@mini-canvas/canvas-base` 存在，示例插件只 import 它就写全完整插件。
-- [ ] 目标1：注册表支持多 occupant + order 排序 + id 增量/替换 + remove；单测绿；两个插件往同一槽各塞组件同屏按序渲染；默认主题走该体系仍可一键顶替/热卸回退。
-- [ ] 目标2：EventBus 有 waterfall/bail；`before:connect` 等语义点单测 + demo 拦截生效。
-- [ ] 目标3：ctx 上能 get 命令/快捷键/选中/历史等服务；工具栏/右键菜单/dock/节点操作钮可由插件注入并在 demo 可见；有"功能→扩展点"doc。
-- [ ] 目标4：per-plugin 可诊断句柄 + PENDING 依赖编排单测绿；插件作者教程可照抄跑通一个最小插件。
-- [ ] 目标5：端口/吸附/快速连接能力对齐验证通过（自定义节点连接声明在 demo 行为正确）。
-- [ ] 目标6：`plugin-manager` 插件能列出已装插件状态；用 UI 卸载/重装/热重载生效且 slot/服务正确回收；能运行时把独立插件(js/源码 URL)装进画布并可用。
-- [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；两个 demo 浏览器端到端零 console 报错。
-- [ ] **终审闸门：已用 `run_subagent` 启动严格挑剔的子代理，对齐 `deepseek-harness/docs` 插件实现审核，审核通过；审核报告在 `docs/tmp/plugin-system-review/`。**
-- [ ] 这份文档更新为"完成态"。
+## 七、强制终审闸门（结束的硬性前提）
+- **必须用 `run_subagent` 起一个独立子代理终审**；不派子代理只靠自己审核就宣布完成 = 不予通过、视为未结束。
+- 子代理要非常严格挑剔，**以本文件为目标基准 + 对齐 `deepseek-harness/docs` 的插件实现**（cordis-primer/cordis-api/subsystems slots+extensions/capability-seams/cordis-tutorial），逐条对照。
+- 重点核对：是否守住"作者原意"（基础功能、能力多已在内核、开发简单、插件可自定义任何内容、**没有为了丰富而过度设计/没有把业务能力当验收主体**）、是否破坏纯逻辑内核/推翻渲染层迁移/弄坏存量插件。
+- 不通过 → 子代理给原因 + 修改清单 → 主 agent 改完**再次启子代理复审**直到通过；报告落 `docs/tmp/plugin-system-review/`。
+- 主 agent 给子代理 prompt 需自报身份（`Caller agent: code-developer`）。
 
 ---
+
+## 八、验收总清单（全勾 = 本任务才结束）
+- [ ] 目标A：nodeRegistry/themeRegistry 支持多 occupant + order + id 增量/替换/remove + 插件可声明新槽；单测绿；两插件同槽按序同屏渲染；默认主题走新槽可一键顶替/热卸回退。
+- [ ] 目标B：`@mini-canvas/canvas-base` 存在；示例插件只 import 它写出可跑通的自定义节点+主题+命令插件（注册自动回收，不手写 unregister）；脚手架/作者 doc 在。
+- [ ] 目标C：per-plugin 可查句柄 + PENDING 依赖编排单测绿（可选，做了打勾）。
+- [ ] 验证示例：自定义端口/吸附/快速连接节点在 demo 行为符合 connection 声明（示例级）。
+- [ ] 全量：内核+渲染+全部插件 tsc / vue-tsc / vitest 全绿；demo 浏览器端到端零 console 报错。
+- [ ] **终审闸门：已用 run_subagent 起严格子代理按本文件 + deepseek-harness/docs 审核通过，报告在 docs/tmp/plugin-system-review/**。
+- [ ] 本文件更新为"完成态"。
