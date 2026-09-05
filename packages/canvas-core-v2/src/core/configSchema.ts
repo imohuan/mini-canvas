@@ -12,16 +12,30 @@
  */
 export type ConfigPrimitive = string | number | boolean
 
+/** 一个 config 值：原始标量，或 array/object 的嵌套结构（递归）。 */
+export type ConfigValue = ConfigPrimitive | ConfigValue[] | { [key: string]: ConfigValue }
+
 /** select 的可选项：值字符串，或带展示文案的 { value, label } */
 export type ConfigSelectOption = string | { value: string; label?: string }
 
-/** 一个可配置字段的 schema（type 决定校验与 UI 控件） */
+/** 可配置字段的标量类型（settings 面板可长控件、SettingsStore 支持） */
+export type ConfigScalarType = 'string' | 'color' | 'number' | 'boolean' | 'select'
+/** 全部字段类型：标量 + array + object（DSH/Schemastery 的"数组/嵌套对象"子集） */
+export type ConfigFieldType = ConfigScalarType | 'array' | 'object'
+
+/**
+ * 一个可配置字段的 schema（type 决定校验与 UI 控件）。
+ * - 标量(string/color/number/boolean/select)：与旧 SettingSchema 对齐，登记 settings 面板长控件。
+ * - `array`(如"多目标列表")：默认是数组；可配 `item` 描述元素 schema，逐元素递归校验/补默认。
+ * - `object`(嵌套选项)：可配 `fields` 递归子 schema，逐键校验、补默认、丢未知 key。
+ *   array/object 是"给 apply 的结构化配置"，不登记进 settings 单一数据源(面板为标量控件)。
+ */
 export interface ConfigField {
-  /** 字段类型：string/color/number/boolean/select */
-  type: 'string' | 'color' | 'number' | 'boolean' | 'select'
-  /** 默认值（装配未提供时补齐；也作 UI/单一数据源初值） */
-  default: ConfigPrimitive
-  /** UI 显示文案 */
+  /** 字段类型 */
+  type: ConfigFieldType
+  /** 默认值（装配未提供时补齐；标量也作 UI/单一数据源初值） */
+  default: ConfigValue
+  /** UI 显示文案（标量控件用） */
   label?: string
   /** UI 分组名（面板按组展示；缺省 = 插件名） */
   group?: string
@@ -30,6 +44,10 @@ export interface ConfigField {
   max?: number
   /** select 用：可选枚举（raw 不在其中 → 校验错） */
   options?: ConfigSelectOption[]
+  /** array 用：元素 schema（缺省则只做"是数组"检查，元素原样保留） */
+  item?: ConfigField
+  /** object 用：递归子 schema（缺省则只做"是普通对象"检查，内部原样保留） */
+  fields?: ConfigSchema
 }
 
 /** 对象级 config schema：字段名 → 字段 schema */
@@ -37,12 +55,43 @@ export type ConfigSchema = Record<string, ConfigField>
 
 /** 由 schema 推导出的 config 值 TS 类型（供作者给 apply 的 config 形参做类型） */
 export type InferConfig<S extends ConfigSchema> = {
-  [K in keyof S]: S[K]['type'] extends 'number'
-    ? number
-    : S[K]['type'] extends 'boolean'
-      ? boolean
-      : string
+  [K in keyof S]: S[K]['type'] extends 'array'
+    ? S[K] extends { item: infer I }
+      ? I extends ConfigField
+        ? InferValue<I>[]
+        : ConfigValue[]
+      : ConfigValue[]
+    : S[K]['type'] extends 'object'
+      ? S[K] extends { fields: infer F }
+        ? F extends ConfigSchema
+          ? InferConfig<F>
+          : { [key: string]: ConfigValue }
+        : { [key: string]: ConfigValue }
+      : S[K]['type'] extends 'number'
+        ? number
+        : S[K]['type'] extends 'boolean'
+          ? boolean
+          : string
 }
+
+/** 由单个字段 schema 推导其值类型（供 InferConfig 对 array item / 标量复用） */
+type InferValue<F extends ConfigField> = F['type'] extends 'array'
+  ? F extends { item: infer I }
+    ? I extends ConfigField
+      ? InferValue<I>[]
+      : ConfigValue[]
+    : ConfigValue[]
+  : F['type'] extends 'object'
+    ? F extends { fields: infer S }
+      ? S extends ConfigSchema
+        ? InferConfig<S>
+        : { [key: string]: ConfigValue }
+      : { [key: string]: ConfigValue }
+    : F['type'] extends 'number'
+      ? number
+      : F['type'] extends 'boolean'
+        ? boolean
+        : string
 
 /** 便捷构造帮助（返回一个 ConfigField；default 用首参，min/max/options 等用对象展开补充） */
 export const F = {
@@ -60,6 +109,12 @@ export const F = {
   },
   select(def = '', options: ConfigSelectOption[] = []): ConfigField {
     return { type: 'select', default: def, options }
+  },
+  array(def: ConfigValue[] = [], item?: ConfigField): ConfigField {
+    return item ? { type: 'array', default: def, item } : { type: 'array', default: def }
+  },
+  object(def: { [key: string]: ConfigValue } = {}, fields?: ConfigSchema): ConfigField {
+    return fields ? { type: 'object', default: def, fields } : { type: 'object', default: def }
   },
 }
 
@@ -85,7 +140,7 @@ export function resolveConfig(
   if (!schema) return (raw as object | undefined) ?? undefined
   const rawObj =
     raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
-  const out: Record<string, ConfigPrimitive> = {}
+  const out: Record<string, ConfigValue> = {}
   for (const [key, field] of Object.entries(schema)) {
     const present = key in rawObj && rawObj[key] !== undefined
     const input: unknown = present ? rawObj[key] : field.default
@@ -94,8 +149,17 @@ export function resolveConfig(
   return out
 }
 
-function validateValue(key: string, field: ConfigField, raw: unknown): ConfigPrimitive {
+/** 判标量字段（type 在 settings 面板可长控件的 5 型内；array/object 是结构化配置） */
+export function isScalarField(field: ConfigField): boolean {
+  return field.type !== 'array' && field.type !== 'object'
+}
+
+function validateValue(key: string, field: ConfigField, raw: unknown): ConfigValue {
   switch (field.type) {
+    case 'array':
+      return validateArray(key, field, raw)
+    case 'object':
+      return validateObject(key, field, raw)
     case 'number': {
       if (typeof raw !== 'number' || !Number.isFinite(raw)) {
         throw new ConfigError(`"${key}" expected number but got ${describe(raw)}`)
@@ -135,6 +199,32 @@ function validateValue(key: string, field: ConfigField, raw: unknown): ConfigPri
       return raw
     }
   }
+}
+
+/** array 校验：必须是数组；每元素经 item schema 递归（无 item 则原样保留，只查数组形态） */
+function validateArray(key: string, field: ConfigField, raw: unknown): ConfigValue {
+  if (!Array.isArray(raw)) {
+    throw new ConfigError(`"${key}" expected an array but got ${describe(raw)}`)
+  }
+  if (!field.item) return raw
+  const itemField = field.item
+  return raw.map((el, i) => validateValue(`${key}[${i}]`, itemField, el))
+}
+
+/** object 校验：必须是普通对象；逐键按 fields 子 schema 递归补默认/丢未知（无 fields 则原样保留） */
+function validateObject(key: string, field: ConfigField, raw: unknown): ConfigValue {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new ConfigError(`"${key}" expected an object but got ${describe(raw)}`)
+  }
+  const rawObj = raw as Record<string, unknown>
+  if (!field.fields) return rawObj as ConfigValue
+  const out: Record<string, ConfigValue> = {}
+  for (const [subKey, subField] of Object.entries(field.fields)) {
+    const present = subKey in rawObj && rawObj[subKey] !== undefined
+    const input: unknown = present ? rawObj[subKey] : subField.default
+    out[subKey] = validateValue(`${key}.${subKey}`, subField, input)
+  }
+  return out
 }
 
 /** 取 select 可选项的值列表（支持 纯字符串 与 {value,label} 混合） */

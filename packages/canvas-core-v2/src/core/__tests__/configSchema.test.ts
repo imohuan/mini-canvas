@@ -51,6 +51,80 @@ describe('configSchema（轻量对象 schema，自研 cordis ch5）', () => {
   })
 })
 
+describe('configSchema 数组/嵌套对象（DSH/Schemastery 子集）', () => {
+  const schema: ConfigSchema = {
+    targets: F.array([], F.string('')),
+    layout: F.object(
+      { gap: 8, align: 'center' },
+      {
+        gap: { type: 'number', default: 8, min: 0, max: 64 },
+        align: F.select('center', ['start', 'center', 'end']),
+      },
+    ),
+  }
+
+  it('array 逐元素按 item schema 校验/补默认（缺省用 item 默认补齐）', () => {
+    const cfg = resolveConfig(schema, { targets: ['a', 'b'] })
+    expect(cfg).toEqual({ targets: ['a', 'b'], layout: { gap: 8, align: 'center' } })
+  })
+
+  it('array 未给值 → 用默认空数组', () => {
+    const cfg = resolveConfig(schema, undefined) as { targets: string[] }
+    expect(cfg.targets).toEqual([])
+  })
+
+  it('array 元素类型不符 → ConfigError（键名带下标定位）', () => {
+    expect(() => resolveConfig(schema, { targets: ['a', 123] })).toThrow(/"targets\[1\]" expected string/)
+    expect(() => resolveConfig(schema, { targets: 'not-array' })).toThrow(/"targets" expected an array/)
+  })
+
+  it('object 逐键递归补默认/丢未知 key', () => {
+    const cfg = resolveConfig(schema, { layout: { gap: 20 } })
+    expect(cfg).toEqual({
+      targets: [],
+      layout: { gap: 20, align: 'center' }, // 只给 gap → align 补默认；外来 key 不在 schema 内被丢
+    })
+  })
+
+  it('object 内层字段类型不符 → ConfigError（键名带路径 layout.align）', () => {
+    expect(() => resolveConfig(schema, { layout: { align: 'middle' } })).toThrow(
+      /"layout.align" expected one of/,
+    )
+  })
+
+  it('array 无 item / object 无 fields 时只查容器形态，元素/键原样保留', () => {
+    const loose: ConfigSchema = {
+      rawList: F.array([{ id: 1 } as never]),
+      rawBox: F.object({ anything: true }),
+    }
+    expect(resolveConfig(loose)).toEqual({ rawList: [{ id: 1 }], rawBox: { anything: true } })
+  })
+
+  it('嵌套容器值经 apply 到达；settings 单一数据源跳过非标量字段（仅登记标量）', async () => {
+    let received: unknown
+    const ctx = new Context()
+    ctx.plugin(
+      {
+        name: 'cfg-nested',
+        Config: {
+          color: F.color('#fff'),
+          targets: F.array([], F.string('')),
+        },
+        apply(_c: PluginScope, config) {
+          received = config
+        },
+      },
+      { color: '#000', targets: ['x'] },
+    )
+    await ctx.start()
+    expect(received).toEqual({ color: '#000', targets: ['x'] })
+    // array 不登记进 settings 数据源（面板只长标量）；标量 color 仍登记
+    const store = ctx.get<{ has(k: string): boolean }>('settings')
+    expect(store.has('color')).toBe(true)
+    expect(store.has('targets')).toBe(false)
+  })
+})
+
 describe('P4 config 装配校验 + apply(ctx, config)（内核集成）', () => {
   it('apply 收到经 schema 校验、默认补齐的 config（未给装配 config）', async () => {
     let received: unknown

@@ -5,7 +5,7 @@ import { buildCapabilities } from './capabilities'
 import { SlotRegistry } from './registry/slotRegistry'
 import { SettingsStore } from './settingsStore'
 import { Fiber, FiberState } from './fiber'
-import { resolveConfig, optionValues, selectOptionEntry } from './configSchema'
+import { resolveConfig, optionValues, selectOptionEntry, isScalarField } from './configSchema'
 import type { ConfigSchema, ConfigField } from './configSchema'
 import type { SettingSchema } from './settingsStore'
 import type {
@@ -59,12 +59,18 @@ export function runPlugin(
   return undefined
 }
 
-/** 把 config schema 字段映射成 SettingsStore 的 SettingSchema（type 收敛：string→text），供面板长控件。 */
+/** 把 config schema 的标量字段映射成 SettingsStore 的 SettingSchema（type 收敛：string→text），供面板长控件。 */
 function toSettingSchema(field: ConfigField): SettingSchema {
-  const type = field.type === 'string' ? 'text' : field.type
+  // 调用处已用 isScalarField 过滤（仅标量字段进来）；此处断言 field.type 落在 scalar 5 型内
+  const type = (field.type === 'string' ? 'text' : field.type) as
+    | 'text'
+    | 'color'
+    | 'number'
+    | 'select'
+    | 'boolean'
   return {
     type,
-    default: field.default,
+    default: field.default as string | number | boolean,
     ...(field.label !== undefined ? { label: field.label } : {}),
     ...(field.min !== undefined ? { min: field.min } : {}),
     ...(field.max !== undefined ? { max: field.max } : {}),
@@ -267,6 +273,8 @@ export class Context implements PluginScope {
   ): void {
     const store = this.builtinSettings
     for (const [key, field] of Object.entries(schema)) {
+      // array/object 是"给 apply 的结构化配置"，settings 单一数据源只长标量控件 → 跳过登记
+      if (!isScalarField(field)) continue
       const itemSchema = toSettingSchema(field)
       if (!store.has(key)) store.define(field.group ?? pluginName, { [key]: itemSchema }, pluginName)
       // define 初值=itemSchema.default(=schema 默认)；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
