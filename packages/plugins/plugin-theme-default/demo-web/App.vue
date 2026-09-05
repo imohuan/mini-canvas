@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // plugin-theme-default 预览 App —— 自己起个 VueFlow 渲染主题壳/边/背景 + 示例节点。
-import { onMounted, ref } from 'vue'
+import { onMounted, provide, ref } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Node, Edge } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import { createMiniCanvasHost, NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import { createMiniCanvasHost, NodeRegistry, NODE_REGISTRY_KEY } from '@mini-canvas/canvas-core-v2'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-core-v2'
 import { themeDefaultPlugin } from '../src/index'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
@@ -19,6 +19,11 @@ const edgeTypes = ref<Record<string, unknown>>({})
 const backgroundComp = ref<unknown>(undefined)
 const epoch = ref(0)
 
+// 内容段注册表：必须在 setup 期同步 provide（provide 不能放进 onMounted），
+// BaseNode(壳)经 NODE_REGISTRY_KEY 按 type 解析 content 段组件。
+const registry = new NodeRegistry()
+provide(NODE_REGISTRY_KEY, registry)
+
 const sampleImg = () =>
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
@@ -26,7 +31,6 @@ const sampleImg = () =>
   )
 
 onMounted(async () => {
-  const registry = new NodeRegistry()
   const { host: h, exposeToWindow } = await createMiniCanvasHost({
     coldPlugins: [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin],
     nodeRegistry: registry,
