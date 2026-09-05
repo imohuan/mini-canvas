@@ -88,33 +88,33 @@ window.MiniCanvasManager.install({
 
 **serial / bail 的"短路值"**：返回非 `null` / `false` / `undefined` 就胜出并停止后续监听。
 
-### bail：有人认领就停（适合画布）
+### bail：有人给出非空答案就停（同步短路，适合画布）
 
-想表达"这个节点该不该能被删，谁认领了就停"——用 bail。三个监听按序跑，谁先返回 `true`（或任何
-非空值）后面就不跑了：
+想表达"这个样式的颜色交给谁定，谁认领了就停、别再叠加"。bail 按注册序跑监听，
+**第一个返回"非空值"（非 `null`/`false`/`undefined`）的就胜出并停止**；返回空值等于"我不认领，放行给下一个"。
 
 ```js
 window.MiniCanvasManager.install({
   name: 'bail-demo',
   inject: [],
   apply(ctx) {
-    // 监听1：节点 id 是 'locked' 就"认领"并返回 true(短路)
-    ctx.on('node:can-delete', (nodeId) => {
-      if (nodeId === 'locked') return true
-      return undefined            // 不认领 → 放行给下一个
+    // 监听1：primary 风格它认领(返回颜色对象) → 停；其它放行给下一个
+    ctx.on('theme:style', (kind) => {
+      if (kind === 'primary') return { color: '#2563eb', weight: 600 }
+      return undefined                        // 不认领 → 放行
     })
-    // 监听2：默认都能删（只有锁定的被拦住）
-    ctx.on('node:can-delete', () => false)
+    // 监听2：兜底默认(谁都会返回 → 必然停在这)
+    ctx.on('theme:style', () => ({ color: '#6b7280', weight: 400 }))
 
-    // 广播：locked 节点 → 监听1 认领返回 true，停
-    const r1 = ctx.bail('node:can-delete', 'locked')
-    console.log('[bail] locked 能删吗 ->', r1)   // true
-    // 普通节点 → 监听1 不认领，落到监听2 返回 false，停
-    const r2 = ctx.bail('node:can-delete', 'node-42')
-    console.log('[bail] node-42 能删吗 ->', r2)  // false
+    const a = ctx.bail('theme:style', 'primary')   // 监听1 认领 → { color:'#2563eb', weight:600 }
+    const b = ctx.bail('theme:style', 'ghost')     // 监听1 放行 → 落到监听2 → { color:'#6b7280', weight:400 }
+    console.log('[bail]', a, b)
   },
 })
 ```
+
+> 记忆点：`bail`/`serial` 的"胜出值"是**第一个非 `null`/`false`/`undefined` 的返回值**。
+> 想让某监听器"不表态、让后面的决定"，就返回 `undefined` 而不是 `false`（`false` 也是"空值"不会短路）。
 
 ### serial：谁先给答案用谁（异步版 bail）
 

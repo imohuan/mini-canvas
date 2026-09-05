@@ -19,7 +19,6 @@
 | `ctx.nodes.register(...)` | 该节点类型自动注销 |
 | `ctx.commands.register(...)` | 该命令自动移除 |
 | `ctx.inject('svc', impl)` / `ctx.provide(...)` | 该服务自动下架（第 3 篇） |
-| `ctx.plugin(child)` | 子插件随父一起卸 |
 
 看一个真的：`plugin-node-text` 的 `apply` 里用 `ctx.nodes.register({ type:'text', … })` 注册了
 text 节点——它**没有**写任何注销代码。等 text 插件被卸载（第 6 篇热卸试给你看），
