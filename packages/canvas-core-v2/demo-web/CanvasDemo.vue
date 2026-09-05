@@ -18,6 +18,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import SettingsPanel from './SettingsPanel.vue'
+import { overlayCornerAPlugin, overlayCornerBPlugin } from './overlayPlugins'
 
 // —— demo 外观配置：浮动端口给 SettingsPanel 实时调；连线外观改由 PluginSettingsPanel 走 theme-default 申报的
 //    ctx.settings（单一数据源），见下方 bindThemeSettings ——
@@ -28,7 +29,15 @@ const cfg = reactive({
 })
 
 // —— 组装插件 + 存储（CanvasHost 冷启动）——
-const plugins: PluginModule[] = [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]
+// 末尾两个 overlayCorner* 是 Goal A"开放 UI 槽同屏按序渲染"的验证插件(同一 'overlay' 槽、order 0/1)
+const plugins: PluginModule[] = [
+  themeDefaultPlugin,
+  nodeTextPlugin,
+  nodeImagePlugin,
+  canvasCommandsPlugin,
+  overlayCornerAPlugin,
+  overlayCornerBPlugin,
+]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
 const SAMPLE_IMG =
