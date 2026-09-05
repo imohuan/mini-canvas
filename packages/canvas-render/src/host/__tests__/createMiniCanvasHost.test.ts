@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
 import { MemoryStorageAdapter, type PluginModule } from '@mini-canvas/canvas-core-v2'
+import type { PluginManifest } from '../pluginManager'
 
 /** 一个最简可热装插件：注册一个 node type 'demo' + 一个服务，供装/卸/重载验证 */
 function demoPlugin(flag: string): PluginModule {
@@ -92,5 +93,39 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
     const { host: h2 } = await mk()
     expect(h2.nodeStore.getNodes()).toHaveLength(1)
     h2.stop()
+  })
+
+  it('manifest 冷启动：按序装 + disabled 项跳过 + config 覆盖传给 apply', async () => {
+    let seenConfig: unknown
+    const cfgPlugin: PluginModule = {
+      name: 'cfg-consumer',
+      apply(ctx, config?: unknown) {
+        ctx.inject('cfgSeen', { config })
+        seenConfig = config
+      },
+    }
+    const plainPlugin: PluginModule = {
+      name: 'plain',
+      apply(ctx) {
+        ctx.inject('plainSvc', { on: 1 })
+      },
+    }
+    const manifest: PluginManifest = {
+      plugins: [
+        { id: 'plain', source: plainPlugin },
+        // disabled 项：登记但关闭 → 不装、不进列表
+        { id: 'off', source: { name: 'off', apply() {} } as PluginModule, disabled: true },
+        // config 覆盖：无 Config schema → 原样传给 apply
+        { id: 'cfg-consumer', source: cfgPlugin, config: { edgeColor: '#16a34a' } },
+      ],
+    }
+    const { host, manager } = await createMiniCanvasHost({ manifest })
+    expect(manager.list().map((p) => p.name).sort()).toEqual(['cfg-consumer', 'plain'])
+    expect(host.ctx.get('plainSvc')).toEqual({ on: 1 })
+    expect(host.ctx.get('off')).toBeUndefined() // disabled 项确未装
+    expect((host.ctx.get<{ config: unknown }>('cfgSeen') as { config: unknown }).config).toEqual({
+      edgeColor: '#16a34a',
+    })
+    expect(seenConfig).toEqual({ edgeColor: '#16a34a' })
   })
 })

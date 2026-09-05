@@ -32,6 +32,7 @@ import {
   type NodeFactoryService,
 } from '@mini-canvas/canvas-core-v2'
 import { createPluginManager, type PluginManager } from './pluginManager'
+import type { PluginManifest } from './pluginManager'
 
 /** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
 export type HostPlugin = PluginModule | PluginClassLike
@@ -42,6 +43,11 @@ export interface MiniCanvasOptions {
   adapter?: StorageAdapter
   /** 冷启动要装载的插件（顺序即装载顺序）。宿主负责给全(含内置+业务)。支持 PluginModule 对象与 Service 类。 */
   coldPlugins?: HostPlugin[]
+  /**
+   * 装配清单冷启动（目标 D / B5）：给则启动走 `manager.applyManifest(manifest)`（热装语义），
+   * 支持 disabled 项(登记但关闭不装)、per-plugin config 覆盖、同 id 换版本；与 coldPlugins 二选一(manifest 优先)。
+   */
+  manifest?: PluginManifest
   /** 节点展示注册表实例。宿主若需在 boot 前就 provide 给 Vue，可自建传入。 */
   nodeRegistry?: NodeRegistry
   /** 主题/外观注册表实例（宿主提供默认 UI 用）。缺省内部新建。 */
@@ -127,9 +133,18 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const nodeFactory = new NodeFactory()
   ctx.inject('nodeFactory', nodeFactory)
 
-  // —— 冷启动插件（宿主给定，顺序即装载顺序） ——
-  for (const p of opts.coldPlugins ?? []) ctx.plugin(p)
-  await ctx.start()
+  // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
+  const manager: PluginManager = createPluginManager(ctx)
+
+  // —— 冷启动插件：manifest 模式走 applyManifest(disabled/config覆盖/同id换版本)；缺省 coldPlugins(顺序装载) ——
+  if (opts.manifest) {
+    // applyManifest 走 ctx.installPlugin(需 started)：先空 start，再逐项热装
+    await ctx.start()
+    await manager.applyManifest(opts.manifest)
+  } else {
+    for (const p of opts.coldPlugins ?? []) ctx.plugin(p)
+    await ctx.start()
+  }
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
 
@@ -178,8 +193,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     const w = globalThis as Record<string, unknown>
     w[key] = api
   }
-
-  const manager: PluginManager = createPluginManager(ctx)
 
   return { host, api, manager, exposeToWindow }
 }

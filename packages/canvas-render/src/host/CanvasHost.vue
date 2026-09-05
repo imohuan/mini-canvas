@@ -40,6 +40,7 @@ import {
   type MiniCanvasApi,
 } from './createMiniCanvasHost'
 import type { PluginManager } from './pluginManager'
+import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
@@ -60,6 +61,11 @@ const props = withDefaults(
   defineProps<{
     /** 冷启动插件（顺序即装载序）。宿主负责给全：主题 + 业务节点插件。支持 PluginModule 对象与 Service 类。 */
     plugins: (PluginModule | PluginClassLike)[]
+    /**
+     * 装配清单冷启动（与 plugins 二选一，给则优先走 manifest：disabled/config 覆盖/同 id 换版本生效）。
+     * 见 createMiniCanvasHost 的 MiniCanvasOptions.manifest。
+     */
+    manifest?: PluginManifest
     /** 存储后端。缺省内存 adapter（刷新即丢）。想要持久化传 LocalStorageAdapter。 */
     adapter?: StorageAdapter
     /** 首次(存储为空)生成默认画布；返回的节点会 replaceAll。 */
@@ -298,6 +304,8 @@ onMounted(async () => {
   try {
     const { host, api, manager, exposeToWindow } = await createMiniCanvasHost({
       adapter: props.adapter ?? new MemoryStorageAdapter(),
+      // manifest 与 plugins 二选一(createMiniCanvasHost 内 manifest 优先)
+      manifest: props.manifest,
       coldPlugins: props.plugins,
       nodeRegistry: registry,
       seedDefault: props.seed,
