@@ -94,6 +94,8 @@ const emit = defineEmits<{
   /** 宿主就绪 */
   (e: 'ready', host: CanvasHostHandle): void
   (e: 'boot-error', error: Error): void
+  /** 运行期某插件装载失败(经 ctx:lifecycle-change ERROR 事件上报，非轮询) */
+  (e: 'plugin-issue', payload: { name: string; lifecycle: string }): void
 }>()
 
 // ==================== boot 状态 ====================
@@ -337,6 +339,11 @@ onMounted(async () => {
         applyTheme()
         syncUiOverlay()
         nodeEpoch.value += 1
+      }),
+      // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。
+      // 此处只转发 ERROR(装载失败)这一非正常终态，不误报 ACTIVE/卸载等正常跳变。
+      host.ctx.on('ctx:lifecycle-change', ({ name, lifecycle }) => {
+        if (lifecycle === 'error') emit('plugin-issue', { name, lifecycle: String(lifecycle) })
       }),
     )
 
