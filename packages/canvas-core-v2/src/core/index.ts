@@ -1,7 +1,7 @@
-export { Context } from './Context'
+export { Context, runPlugin } from './Context'
 export type { ContextState } from './Context'
 export { Scope } from './Scope'
-export { topoSort } from './topo'
+export { topoSort, depsOf } from './topo'
 export { EventBus, registerEventName } from './EventBus'
 export { NodeRegistry } from './registry/nodeRegistry'
 export type { NodePresentation, NodeSegment, NodeSegmentContribution } from './registry/nodeRegistry'
@@ -26,6 +26,7 @@ export type {
   EventName,
   PluginModule,
   PluginScope,
+  PluginCapabilities,
   Revoke,
   Services,
 } from './types'

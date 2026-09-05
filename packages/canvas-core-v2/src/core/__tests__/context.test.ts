@@ -220,3 +220,54 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(ctx.listPlugins()).toContain('p')
   })
 })
+
+describe('PluginModule Cordis 形态（name/inject/apply）', () => {
+  it('apply 优先于 setup；apply(ctx) 里可注册并自动回收', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    const cleanup = vi.fn()
+    ctx.plugin({
+      name: 'p',
+      apply(c: any) {
+        order.push('apply-ran')
+        c.effect(() => cleanup)
+      },
+      setup() {
+        order.push('setup-ran') // 不该被调(apply 优先)
+      },
+    })
+    await ctx.start()
+    expect(order).toEqual(['apply-ran'])
+    ctx.stop()
+    expect(cleanup).toHaveBeenCalledTimes(1)
+  })
+
+  it('inject 依赖字段参与拓扑排序（inject 优先于 deps）', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    ctx.plugin({ name: 'b', inject: ['a'], apply: () => void order.push('b') })
+    ctx.plugin({ name: 'a', deps: [], apply: () => void order.push('a') })
+    await ctx.start()
+    expect(order).toEqual(['a', 'b'])
+  })
+
+  it('裸 export 三样(name/inject/apply) 经 ctx.plugin 装载并可用 ctx 能力', async () => {
+    // 模拟插件作者只 export name/inject/apply 的模块（依赖已注入才跑）
+    const { NodeStore } = await import('../../services/nodeStore')
+    const { NodeRegistry } = await import('../registry/nodeRegistry')
+    const ctx = new Context()
+    ctx.inject('nodeStore', new NodeStore())
+    ctx.inject('nodeRegistry', new NodeRegistry())
+    const pluginMod: PluginModule = {
+      name: 'audio',
+      inject: ['nodeStore', 'nodeRegistry'],
+      apply(c: any) {
+        c.nodes.register({ type: 'audio', label: '音频', size: { w: 100, h: 60 } })
+      },
+    }
+    ctx.plugin(pluginMod)
+    await ctx.start()
+    expect(ctx.get<{ types: ReadonlyMap<string, unknown> }>('nodeStore').types.has('audio')).toBe(true)
+    expect(ctx.listPlugins()).toContain('audio')
+  })
+})

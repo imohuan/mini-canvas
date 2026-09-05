@@ -23,6 +23,19 @@ import { Lifecycle } from './types'
 export type ContextState = 'created' | 'started' | 'stopped'
 
 /**
+ * 跑一个插件的注册函数：Cordis 式用 apply，旧式用 setup，apply 优先。
+ * 返回值（cleanup/Disposable）由调用方登记进插件 scope，卸载即清。
+ */
+export function runPlugin(
+  mod: PluginModule,
+  ctx: PluginScope,
+): void | (() => void) | Disposable {
+  if (mod.apply) return mod.apply(ctx)
+  if (mod.setup) return mod.setup(ctx)
+  return undefined
+}
+
+/**
  * Context —— 根上下文（宿主创建：createContext()，然后 plugin()×N，最后 start()）。
  *
  * 职责（API 契约定稿）：
@@ -72,7 +85,9 @@ export class Context implements PluginScope {
     this.state = 'started'
 
     const modules = [...this.plugins.values()]
-    const order = topoSort(modules)
+    // 宿主注入的服务名视为合法依赖（不参与插件排序）
+    const knownServices = new Set(this.services.keys())
+    const order = topoSort(modules, knownServices)
 
     for (const name of order) {
       const mod = this.plugins.get(name)!
@@ -83,7 +98,7 @@ export class Context implements PluginScope {
       const scopeCtx = this.deriveScope(scope, name)
       let cleanup: void | (() => void) | Disposable
       try {
-        cleanup = mod.setup(scopeCtx)
+        cleanup = runPlugin(mod, scopeCtx)
       } catch (err) {
         this.setLifecycle(name, Lifecycle.ERROR)
         scope.dispose() // 半成品副作用也清掉
@@ -148,7 +163,7 @@ export class Context implements PluginScope {
     this.setLifecycle(mod.name, Lifecycle.ACTIVATING)
     const scopeCtx = this.deriveScope(scope, mod.name)
     try {
-      const cleanup = mod.setup(scopeCtx)
+      const cleanup = runPlugin(mod, scopeCtx)
       if (cleanup) scope.effect(() => cleanup)
     } catch (err) {
       this.pluginScopes.delete(mod.name)

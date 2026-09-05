@@ -110,19 +110,25 @@ export interface PluginScope extends PluginCapabilities {
 }
 
 /**
- * 插件模块形状：一段式 setup，无 install/uninstall。
- * setup 的返回值或经 ctx 登记的副作用都自动归入本插件的 scope，卸载即清。
+ * 插件模块形状（对齐 docs/goal/plugin-system-goal.md 2.1b 的 Cordis 式写法，兼容旧 setup/deps）。
+ *
+ * Cordis 式（推荐，教程主推）：`.ts` 裸导出三样 `name / inject / apply`——
+ * - `name`：插件唯一名
+ * - `inject`：依赖的服务/插件名数组（没有可省）
+ * - `apply(ctx)`：注册函数，ctx 是能力台(ctx.nodes/theme/commands/slots/services)，注册自动回收
+ *
+ * 旧式（向后兼容）：`setup(ctx)` 同 apply，`deps` 同 inject。二者可混用，apply 优先于 setup、inject 优先于 deps。
+ * setup/apply 的返回值（cleanup）或经 ctx 登记的副作用都自动归入本插件的 scope，卸载即清。
  */
 export interface PluginModule<TConfig extends object = object> {
   /** 插件唯一名 */
   name: string
-  /** 依赖的插件/服务名（真会 ctx.get 的才写；缺则报错） */
+  /** 依赖的插件/服务名（真会 ctx.get 的才写；缺则报错）。Cordis 用 inject，旧式用 deps。 */
   deps?: string[]
-  /**
-   * setup(ctx)：返回一个 cleanup（Disposable 或纯函数）会被登记进本插件 scope，
-   * 也可完全不返回，靠 ctx.on/effect/inject 自动登记。
-   */
-  setup(ctx: PluginScope): void | (() => void) | Disposable
+  inject?: string[]
+  /** 注册函数：ctx 是能力台。Cordis 用 apply，旧式用 setup，二者至少给一个。 */
+  setup?(ctx: PluginScope): void | (() => void) | Disposable
+  apply?(ctx: PluginScope): void | (() => void) | Disposable
   /** 配置：由 ctx.plugin(mod, config) 传入 */
   config?: TConfig
 }

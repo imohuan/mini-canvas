@@ -4,15 +4,20 @@ import type { PluginModule } from './types'
  * topoSort —— 依赖拓扑排序（纯函数，从 v1 PluginManager.resolveOrder 吸收）。
  *
  * 规则（与 v1 一致）：
- * - A 的 deps 含 B ⇒ B 必须先于 A（Kahn，B 的入度先清）。
+ * - A 的依赖(inject/deps) 含 B ⇒ B 必须先于 A（Kahn，B 的入度先清）。
  * - 重复名 / 自依赖 / 缺失依赖 / 循环依赖均抛错，循环给出可读路径。
  *
- * @param plugins 插件列表（含 name + deps）
+ * 依赖字段兼容：Cordis 用 `inject`、旧式用 `deps`，inject 优先。
+ *
+ * @param plugins 插件列表（含 name + deps/inject）
  * @returns 按依赖顺序排列的 name 数组（依赖在前）
  * @throws 非法依赖关系时抛 Error
  */
-export function topoSort(plugins: Array<Pick<PluginModule, 'name' | 'deps'>>): string[] {
-  // ---- 1. 重复名检测 ----
+export function topoSort(
+  plugins: Array<Pick<PluginModule, 'name' | 'deps' | 'inject'>>,
+  knownServices?: ReadonlySet<string>,
+): string[] {
+  const svc = knownServices ?? new Set<string>()
   const seen = new Set<string>()
   for (const p of plugins) {
     if (seen.has(p.name)) {
@@ -33,10 +38,12 @@ export function topoSort(plugins: Array<Pick<PluginModule, 'name' | 'deps'>>): s
   }
 
   for (const p of plugins) {
-    for (const dep of p.deps ?? []) {
+    for (const dep of depsOf(p)) {
       if (dep === p.name) {
         throw new Error(`[core] Plugin "${p.name}" cannot depend on itself`)
       }
+      // 依赖若是宿主注入的服务名（不是插件）→ 不参与插件排序，忽略
+      if (svc.has(dep)) continue
       if (!names.has(dep)) {
         throw new Error(
           `[core] Plugin "${p.name}" depends on "${dep}" which is not registered`,
@@ -74,13 +81,18 @@ export function topoSort(plugins: Array<Pick<PluginModule, 'name' | 'deps'>>): s
   return sorted
 }
 
+/** 插件依赖字段：inject 优先于 deps。 */
+export function depsOf(mod: Pick<PluginModule, 'deps' | 'inject'>): string[] {
+  return mod.inject ?? mod.deps ?? []
+}
+
 /** 构建循环依赖的可读路径（吸收 v1 buildCyclePath）。A 依赖 B ⇒ A → B。 */
 function buildCyclePath(
-  plugins: Array<Pick<PluginModule, 'name' | 'deps'>>,
+  plugins: Array<Pick<PluginModule, 'name' | 'deps' | 'inject'>>,
   remaining: Set<string>,
 ): string {
   const dependsOn = new Map<string, string[]>()
-  for (const p of plugins) dependsOn.set(p.name, p.deps ?? [])
+  for (const p of plugins) dependsOn.set(p.name, depsOf(p))
 
   const visited = new Set<string>()
   const inStack = new Set<string>()
