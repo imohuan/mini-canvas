@@ -10,6 +10,30 @@
 > 工作区：`D:/Code/Git/mini-canvas`。分支：feat/cordis-plugin-system（原地 commit，禁切/建分支，LF，只动本目标文件，不碰仓库根 src/）。
 > 开工说明：每次开工把本文件读给/贴给 AI。照它做，别自己发挥，直到末尾"验收总清单"全勾才结束。
 
+## 〇+、终审后追加「改成最新的方式」（2026-09-05，本小节为当前目标）
+
+终审已 PASS 后用户追加：把 `packages/plugins/` 4 个真实插件再往 **cordis 最新写法**推一档，
+体现路线A已补的内核能力（Service 类、ctx 服务直访、declare module 类型增强）。基线全绿不许破坏。
+
+### 追加目标（每插件按本质定，别硬套）
+- **A/B · plugin-node-text / plugin-node-image**：对象插件 `{name,inject,apply}` 保持（本质=注册节点+顺带暴露服务，非纯 Service），
+  但服务从「apply 里手写 `ctx.inject('text',{…})` 内联对象」升级为 **`class TextService extends Service`**（构造 `super(ctx,'text')` 自动上架，随插件 scope 回收）。
+  - 取舍：方法内**惰性 `this.ctx.get('nodeStore'/'save')` 取现时服务、不缓存**（避免卸载残留/换实例脏引用）；并把 nodeStore/save 写进 `inject` 硬依赖
+    （宿主恒在、start 前注入 → 无 PENDING 风险；缺则让插件 PENDING 而非 ctx.get 静默返 undefined，更 cordis 规范）。
+  - `declare module '@mini-canvas/canvas-core-v2' { interface Context { text: TextService } }` 类型增强 → 宿主/作者 `ctx.text` 直访(Proxy)或 `ctx.get<TextService>('text')` 均类型安全。
+  - 保留 `export interface TextNodeService/ImageNodeService`（形状不变）供 `.vue` 消费端零改动；`nodeTextPlugin/nodeImagePlugin` 出口与 `name='text'/'image'` 不变 → 宿主装配 + HMR reload('text'/'image') 不破。
+- **C · plugin-canvas-commands**：纯消费方、无对外服务 → cordis 正确写法 = 把真用的核心服务写进 `inject` 硬依赖 + `ctx.xxx` 直访(Proxy)。
+  - `inject=['nodeStore','save','nodeFactory','selection','history']`（宿主注入名一致）；apply 里删 `ctx.get`，改 `ctx.nodeStore/save/nodeFactory/selection/history` 直访。
+  - `declare module ... { interface Context { nodeStore: NodeStoreService; save: SaveService; nodeFactory: NodeFactoryService; selection: SelectionService; history: HistoryService } }` 给恒在服务加直访类型。
+  - `canvasCommandsPlugin` 出口与 name='commands' 不变。
+- **D · plugin-theme-default**：已最新(Config+apply)，无对外服务 → 基本不动，跑 typecheck 确认不红即可。
+
+### 追加验收（对应主清单 P6/红线）
+- 4 插件各自 typecheck PASS；内核/render vitest 与 tsc、6 包 typecheck_all、demo vite build 全绿（同"七、验收总清单"基线）。
+- .vue 消费端(TextContent/ImageContent)、宿主装配(CanvasDemo plugins / createMiniCanvasHost coldPlugins)、HMR reload 的 name('text'/'image') 零破坏。
+- 红线零违规：不引第三方、内核零 Vue 不再动、只动 4 插件 src(+本计划文档)。
+- 小步原子 commit，message 前缀 `cordis-plugin`。
+
 ## 〇、一句话目标
 
 把 mini-canvas 的插件系统内核，改成**支持 `deepseek-harness/docs/cordis-tutorial` 那 7 种插件开发方式**，
