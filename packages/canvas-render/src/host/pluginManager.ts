@@ -48,7 +48,8 @@ export interface InstalledPluginInfo {
  * 经 ESM data-URL import 执行(浏览器与 Node 皆可)，无需 eval/new Function。
  */
 export async function loadPluginFromText(text: string): Promise<PluginModule> {
-  const url = `data:text/javascript;base64,${Buffer.from(text, 'utf8').toString('base64')}`
+  // 用 percent-encoded 的 data:text/javascript URL(不依赖 Buffer/base64；中文等任意字符都安全)
+  const url = `data:text/javascript,${encodeURIComponent(text)}`
   const mod = (await import(/* @vite-ignore */ url)) as Record<string, unknown>
   // 支持 named export(name/apply…) 或 default 整体导出两种写法
   const m = (mod.default && typeof mod.default === 'object' ? mod.default : mod) as PluginModule
