@@ -26,7 +26,7 @@
 它同时做到：注册一种节点（有长相、能建）+ 一个 Config + 一项服务 + 一条命令。
 
 ```ts
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, type PropType } from 'vue'
 import type { Context, ConfigSchema } from '@mini-canvas/canvas-base'
 import type { NodeStoreService } from '@mini-canvas/canvas-core-v2'
 
@@ -35,29 +35,32 @@ export const inject = [] as string[]
 
 /** 可配置项：便签的默认文案 */
 export const Config: ConfigSchema = {
-  placeholder: { type: 'string', default: '双击我', label: '占位文案', group: '便签' },
+  placeholder: { type: 'string', default: '便签', label: '占位文案', group: '便签' },
   sticky:      { type: 'boolean', default: true, label: '便签感', group: '便签' },
 }
 
-/** apply 收到的 config 类型（可选：从 schema 推导） */
+/** apply 收到的 config 类型（从 schema 推导，保证与默认值一致） */
 export interface StickerConfig { placeholder: string; sticky: boolean }
 
-export function apply(ctx: Context, config?: Partial<StickerConfig>) {
+export function apply(ctx: Context, config: StickerConfig) {
   const nodeStore = ctx.get<NodeStoreService>('nodeStore') // 宿主上架的节点数据服务
 
   // ① 注册节点：数据(type/label/尺寸) + 展示(content) + 建节点(create)
   //     content 用 defineComponent+h 内联(不必另开 .vue)；节点组件会收到 { id, data } props
   const StickerContent = defineComponent({
-    props: { id: String, data: { type: Object, default: () => ({}) } },
+    props: {
+      id: String,
+      data: { type: Object as PropType<{ text?: string }>, default: () => ({}) },
+    },
     setup(props) {
       return () =>
         h('div', {
           style: {
-            background: config?.sticky === false ? '#fff7ed' : '#fef9c3', // 用 config 控制长相
+            background: config.sticky === false ? '#fff7ed' : '#fef9c3', // 用 config 控制长相
             border: '1px solid #facc15', borderRadius: '4px',
             height: '100%', padding: '8px 10px', fontSize: '14px', color: '#713f12',
           },
-        }, String(props.data?.text ?? config?.placeholder ?? '便签'))
+        }, String(props.data?.text ?? config.placeholder ?? '便签'))
     },
   })
 
