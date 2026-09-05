@@ -29,10 +29,20 @@
 - **D · plugin-theme-default**：已最新(Config+apply)，无对外服务 → 基本不动，跑 typecheck 确认不红即可。
 
 ### 追加验收（对应主清单 P6/红线）
-- 4 插件各自 typecheck PASS；内核/render vitest 与 tsc、6 包 typecheck_all、demo vite build 全绿（同"七、验收总清单"基线）。
-- .vue 消费端(TextContent/ImageContent)、宿主装配(CanvasDemo plugins / createMiniCanvasHost coldPlugins)、HMR reload 的 name('text'/'image') 零破坏。
-- 红线零违规：不引第三方、内核零 Vue 不再动、只动 4 插件 src(+本计划文档)。
-- 小步原子 commit，message 前缀 `cordis-plugin`。
+- [x] A/B/C 三插件已迁移完成（Service 子类 / inject 硬依赖 / declare module 增强），D(theme-default) 已最新、不动源码；详见各插件文件注释与下方"完成说明"。
+- [x] 4 插件各自 typecheck PASS；内核 tsc EXIT=0；6 包 typecheck_all ALL_PASS；内核 vitest 207 + 渲染 37 全绿；demo vite build 零错（BUILD_EXIT=0）。
+- [x] .vue 消费端(TextContent/ImageContent)、宿主装配(CanvasDemo plugins / createMiniCanvasHost coldPlugins)、HMR reload 的 name('text'/'image') 零破坏。
+- [x] 红线零违规：不引第三方、内核零 Vue 不再动、只动 4 插件 src(+本计划文档)。
+- [x] 小步原子 commit，message 前缀 `cordis-plugin`。
+
+> **完成说明（本追加轮，2026-09-05）**
+> - node-text/image：服务从「apply 手写 ctx.inject 内联对象」升级为 `TextService/ImageService extends Service`（构造 `super(ctx,name)` 上架，
+>   随插件 scope 回收）；方法内**惰性 `this.ctx.get` 取现时服务、不缓存**（取舍：避免卸载残留/换实例脏引用，运行时更稳）；nodeStore/save 写入 `inject` 硬依赖（宿主恒在→无 PENDING，缺则 PENDING 而非静默）。
+> - 两者各 `declare module '@mini-canvas/canvas-core-v2' { interface Context { text/image: XService } }` 增强直访类型；
+>   保留 `TextNodeService/ImageNodeService` 接口形状 → TextContent.vue 消费端、nodeTextPlugin/nodeImagePlugin 出口、name('text'/'image') HMR 全零改动。
+> - canvas-commands：纯消费方 → `inject=['nodeStore','save','nodeFactory','selection','history']` + `declare module` 给 5 个恒在服务加直访类型；
+>   apply 删 `ctx.get` 改 `ctx.xxx` 直访(Proxy)；name='commands' 出口不变。
+> - Events 类型化本轮未强行套用：4 插件语义上都不发/不消费自定义事件，硬加属编造，故不引入（能力已在内核 cordisParity 覆盖）。
 
 ## 〇、一句话目标
 
