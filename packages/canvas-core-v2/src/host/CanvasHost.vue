@@ -35,7 +35,7 @@ import { MemoryStorageAdapter } from '../services/storage/memoryAdapter'
 import type { CanvasNode } from '../services/nodeStore'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
-import { CANVAS_PARAMS_KEY } from '../contracts/canvasParamKey'
+import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
 import { HOST_KEY } from '../contracts/contentBridge'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../contracts/edgeContext'
 import { validateConnection, typeConnectionDef } from '../services/connection'
@@ -60,10 +60,10 @@ const props = withDefaults(
     seed?: () => CanvasNode[]
     /** 覆盖默认的标题写回实现（BaseNode 就地重命名用）。缺省：改 store data + 落盘。 */
     nodeWrite?: NodeWrite
-    /** 自定义边外观覆盖（缺省对齐 contract §0）。可传响应式对象实时生效。 */
+    /** 自定义边外观覆盖（缺省对齐 contract §0）。传响应式对象可实时生效。 */
     edgeVisual?: Partial<EdgeVisual>
-    /** 浮动端口尺寸覆盖（缺省对齐 contract §0）。 */
-    handleVisual?: Partial<typeof DEFAULT_HANDLE_VISUAL>
+    /** 浮动端口尺寸覆盖（缺省对齐 contract §0）。BaseNode 读 handle 字段无回落，故需传含全部字段的响应式对象。 */
+    handleVisual?: CanvasParams
     /** VueFlow 缩放范围 */
     minZoom?: number
     maxZoom?: number
@@ -114,14 +114,16 @@ function defaultWrite(id: string, patch: Record<string, unknown>): void {
 const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
 provide(NODE_WRITE_KEY, nodeWrite)
 
-// 外观参数：EDGE_VISUAL(边) / CANVAS_PARAMS(浮动端口)。reactive 供 BaseNode/CustomEdge computed 实时追踪。
-// 父级可传 props.edgeVisual / props.handleVisual 覆盖；缺省用 contract §0 默认值。
-const cfg = reactive({
-  edge: { ...DEFAULT_EDGE_VISUAL, ...(props.edgeVisual ?? {}) } as EdgeVisual,
-  handle: { ...DEFAULT_HANDLE_VISUAL, ...(props.handleVisual ?? {}) },
-})
-provide(EDGE_VISUAL_KEY, cfg.edge)
-provide(CANVAS_PARAMS_KEY, cfg.handle)
+// 外观参数注入：EDGE_VISUAL(边) / CANVAS_PARAMS(浮动端口)。
+// 父级若传 props.edgeVisual / props.handleVisual（应为响应式对象，改属性实时生效），
+// 我们直接 provide 那个引用；未传则用内部 DEFAULT reactive 回落。
+// 注意：BaseNode 读 handle 字段不做默认回落，故 handleVisual 需含全部 5 个字段（通常传一个全字段 reactive）。
+const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
+const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
+const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
+const handleToProvide = props.handleVisual ?? handleDefaultR
+provide(EDGE_VISUAL_KEY, edgeVisualToProvide)
+provide(CANVAS_PARAMS_KEY, handleToProvide)
 
 // 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
 // 以 ReadonlySet 形状暴露（消费方只读）；内部整体替换新集合以触发响应式。
