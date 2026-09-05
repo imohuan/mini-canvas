@@ -1,51 +1,114 @@
 <script setup lang="ts">
-// DefaultBackground —— 主题插件提供的画布背景（示例：跟随画布平移/缩放的圆点网格）。
-// 背景没有 vue-flow 注册口 → 走"低层 child 叠加组件"通用法：宿主把它垫在节点/边之下渲染。
-// 用 useVueFlow() 读 viewport(x,y,zoom) 把网格平移/缩放对齐内容坐标。
-import { computed } from 'vue'
-// 渲染原语经内核精选出口统一 import（不各自依赖 @vue-flow/core，见 vueFlowBridge）
+// DefaultBackground —— 主题插件提供的画布背景（圆点网格）。
+// 用 <canvas> 绘制，取代"生成数千 SVG 圆点 + v-for 全量渲染"的方案，消除高节点数量导致的卡顿。
+// 背景无 vue-flow 注册口 → 走"低层 child 叠加组件"通用法，宿主把它垫在节点/边之下渲染。
+// 画法：canvas 尺寸 = 宿主可视区(×DPR)，每帧用 transform 把可视区内的内容系格点直接绘出，
+//       圆点随 viewport(x,y,zoom) 平移缩放，与内容坐标对齐。
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useVueFlow } from '@mini-canvas/canvas-core-v2'
 
 const { viewport } = useVueFlow()
 
-// 网格间距(内容坐标)，随 zoom 放大避免过密
+const hostEl = ref<HTMLElement | null>(null)
+const canvasEl = ref<HTMLCanvasElement | null>(null)
+
+// 网格间距(内容坐标)；zoom 放大时用屏幕间距下限采样，避免点过密
 const GRID = 24
+const MIN_SCREEN_STEP = 18 // 屏幕像素下限：缩小画布时点距不小于它
+const DOT_R = 1.6 // 圆点半径(内容坐标，会随 zoom 等比缩放)
+const DOT_COLOR = '#cbd5e1'
+const BG_COLOR = '#f8fafc'
+
 const zoom = computed(() => Math.max(viewport.value?.zoom || 1, 0.01))
 const vx = computed(() => viewport.value?.x ?? 0)
 const vy = computed(() => viewport.value?.y ?? 0)
 
-// 屏幕尺寸(近似取整页)；这里用固定大值保证覆盖可视区
-const W = 4000
-const H = 4000
+let width = 0
+let height = 0
+let dpr = 1
+let ro: ResizeObserver | null = null
 
-// 生成该"内容网格"下落在视口的圆点（简化：画一满屏内容坐标点，交给 transform 缩放平移）
-const dots = computed(() => {
+// 宿主可视区尺寸变化/DPR 变化 → 重建 canvas 位图
+function fitCanvas() {
+  const host = hostEl.value
+  if (!host) return
+  width = host.clientWidth
+  height = host.clientHeight
+  dpr = window.devicePixelRatio || 1
+  if (canvasEl.value) {
+    canvasEl.value.width = Math.max(1, Math.round(width * dpr))
+    canvasEl.value.height = Math.max(1, Math.round(height * dpr))
+  }
+}
+
+// 把可视区内的圆点画一帧。只在视口/尺寸变化时触发一次，非持续动画。
+function redraw() {
+  const cv = canvasEl.value
+  const ctx = cv?.getContext('2d')
+  if (!cv || !ctx || !width || !height) return
+
   const z = zoom.value
   const g = GRID
-  const step = Math.max(g * z, 14) // 屏幕间距下限，避免缩放后过密
-  const list: Array<{ cx: number; cy: number }> = []
-  // 屏幕左上/右下对应的内容坐标范围
+
+  // 内容系网格步长：放大足够时=GRID，过密则抬升到满足屏幕间距下限
+  // 屏幕步长 stepScreen = g*z；若它 < 下限，改内容步长 = MIN_SCREEN_STEP / z
+  const stepContent = Math.max(g, MIN_SCREEN_STEP / z)
+
+  // 可视区域的内容坐标范围
   const x0 = -vx.value / z
   const y0 = -vy.value / z
-  const x1 = (W - vx.value) / z
-  const y1 = (H - vy.value) / z
-  for (let x = Math.floor(x0 / g) * g; x <= x1; x += step) {
-    for (let y = Math.floor(y0 / g) * g; y <= y1; y += step) {
-      list.push({ cx: x, cy: y })
+  const x1 = x0 + width / z
+  const y1 = y0 + height / z
+
+  // 从内容系取整格点列/行
+  const colStart = Math.floor(x0 / stepContent) * stepContent
+  const rowStart = Math.floor(y0 / stepContent) * stepContent
+
+  // canvas transform：内容坐标 → 设备像素 = dpr * (z * content + v)
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * vx.value, dpr * vy.value)
+  ctx.fillStyle = BG_COLOR
+  ctx.fillRect(x0, y0, width / z + stepContent, height / z + stepContent)
+  ctx.fillStyle = DOT_COLOR
+  ctx.beginPath()
+  for (let cx = colStart; cx <= x1 + stepContent; cx += stepContent) {
+    for (let cy = rowStart; cy <= y1 + stepContent; cy += stepContent) {
+      ctx.moveTo(cx + DOT_R, cy) // moveTo 预留，让不相邻的点不连成一条线
+      ctx.arc(cx, cy, DOT_R, 0, Math.PI * 2)
     }
   }
-  return list
+  ctx.fill()
+}
+
+function setupResizeObserver() {
+  const host = hostEl.value
+  if (host && typeof ResizeObserver !== 'undefined' && !ro) {
+    ro = new ResizeObserver(() => {
+      fitCanvas()
+      redraw()
+    })
+    ro.observe(host)
+  }
+}
+
+onMounted(() => {
+  fitCanvas()
+  setupResizeObserver()
+  redraw()
 })
+
+onBeforeUnmount(() => {
+  ro?.disconnect()
+  ro = null
+})
+
+// viewport 平移/缩放变化 → 重绘（单帧，无 rAF 循环）
+watch([vx, vy, zoom], redraw)
 </script>
 
 <template>
-  <!-- 铺满、不挡交互；圆点按内容坐标随画布平移/缩放 -->
-  <div class="theme-default-bg">
-    <svg :width="W" :height="H" class="bg-svg">
-      <g :transform="`translate(${vx} ${vy}) scale(${zoom})`">
-        <circle v-for="(d, i) in dots" :key="i" :cx="d.cx" :cy="d.cy" r="1.6" class="dot" />
-      </g>
-    </svg>
+  <!-- 铺满、不挡交互；canvas 只重绘可视区点，跟随画布平移/缩放 -->
+  <div ref="hostEl" class="theme-default-bg">
+    <canvas ref="canvasEl" class="bg-canvas" />
   </div>
 </template>
 
@@ -56,14 +119,10 @@ const dots = computed(() => {
   overflow: hidden;
   pointer-events: none;
   z-index: 0; /* 垫在节点之下：宿主保证层级 */
-  background: #f8fafc;
 }
-.bg-svg {
-  position: absolute;
-  left: 0;
-  top: 0;
-}
-.dot {
-  fill: #cbd5e1;
+.bg-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>
