@@ -1,0 +1,149 @@
+// CanvasSurface —— CanvasHost 的「渲染子树宿主」：boot 完成后才挂载，向子树 provide 裸渲染上下文。
+//
+// 为什么单独一个组件：CanvasHost 自身在 setup 期就要 provide（那时 ctx 还没建好，只能给 Ref 盒子），
+// 导致渲染组件拿 ctx 要 .value + 判空。本组件在 boot 完成(booting=false)后才由 CanvasHost 以 v-else 挂载，
+// 其 setup 执行时 props.host 已就绪 —— 所以它能 provide **裸 ctx / 裸 host**，消费组件直接
+// `useCanvasRender().ctx.get('nodeStore')`，零 value 零判空。
+//
+// 职责边界（只管「渲染 + provide 裸上下文」）：
+// - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
+// - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
+// - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
+<script setup lang="ts">
+import { provide, shallowRef } from 'vue'
+import { VueFlow } from '@vue-flow/core'
+import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
+import type { CanvasHostHandle } from './createMiniCanvasHost'
+import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import type { NodeWrite } from '../contracts/nodeRegistryKey'
+import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
+import type { CanvasParams } from '../contracts/canvasParamKey'
+import { CANVAS_PARAMS_KEY } from '../contracts/canvasParamKey'
+import { HOST_KEY } from '../contracts/contentBridge'
+import type { EdgeVisual, EdgeSelection } from '../contracts/edgeContext'
+import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
+import type { CanvasRenderContext } from '../contracts/renderContext'
+import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
+
+const props = defineProps<{
+  /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
+   *  setup 里空则抛错，实际不会触发。 */
+  host?: CanvasHostHandle | undefined
+  registry: NodeRegistry
+  nodeWrite: NodeWrite
+  handleParams: CanvasParams
+  edgeVisual: Partial<EdgeVisual>
+  edgeSelection: EdgeSelection
+  // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  nodes: any[]
+  edges: Array<{ id: string; type: string; source: string; target: string }>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  nodeTypes: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  edgeTypes: Record<string, any>
+  backgroundComp: unknown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  uiOverlay: Array<{ id: string; order: number; component: any }>
+  /** 插件变更后 bump → 给 VueFlow 加 key 强制重挂 */
+  nodeEpoch: number
+  minZoom: number
+  maxZoom: number
+  // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
+  isValidConnection: (conn: Connection) => boolean
+  onConnect: (conn: Connection) => void
+  onNodeClick: (e: NodeMouseEvent) => void
+  onNodeDragStop: (e: NodeDragEvent) => void
+  onPaneClick: () => void
+  onNodeContextMenu: (e: NodeMouseEvent) => void
+  onPaneContextMenu: (e: MouseEvent) => void
+}>()
+
+// ==================== provide 裸渲染上下文（本组件 boot 后才挂载 → ctx/host 已就绪，全是裸值） ====================
+const host = props.host
+if (!host) {
+  // 父级 v-else 保证 boot 完成才挂载本组件，正常不会走到；防御性报错以免渲染子树拿到空宿主。
+  throw new Error('[CanvasSurface] 宿主未就绪：CanvasSurface 仅应在 boot 完成后挂载')
+}
+const renderCtx: CanvasRenderContext = {
+  ctx: host.ctx,
+  host,
+  registry: props.registry,
+  nodeWrite: props.nodeWrite,
+  handleParams: props.handleParams,
+  edgeVisual: props.edgeVisual,
+  edgeSelection: props.edgeSelection,
+}
+provide(RENDER_CONTEXT_KEY, renderCtx)
+
+// 旧 *_KEY 兼容：仍逐个 provide。HOST_KEY 历史上是 Ref 形态，这里包成稳定 ref 以兼容旧消费方。
+provide(NODE_REGISTRY_KEY, props.registry)
+provide(NODE_WRITE_KEY, props.nodeWrite)
+provide(CANVAS_PARAMS_KEY, props.handleParams)
+provide(EDGE_VISUAL_KEY, props.edgeVisual)
+provide(EDGE_SELECTION_KEY, props.edgeSelection)
+provide(HOST_KEY, shallowRef(host))
+</script>
+
+<template>
+  <div class="csurface">
+    <VueFlow
+      :key="nodeEpoch"
+      :nodes="nodes"
+      :edges="edges"
+      :node-types="nodeTypes"
+      :edge-types="edgeTypes"
+      :is-valid-connection="isValidConnection"
+      :min-zoom="minZoom"
+      :max-zoom="maxZoom"
+      @connect="onConnect"
+      @node-click="onNodeClick"
+      @node-drag-stop="onNodeDragStop"
+      @pane-click="onPaneClick"
+      @node-context-menu="onNodeContextMenu"
+      @pane-context-menu="onPaneContextMenu"
+    >
+      <!-- 主题插件提供的画布背景（垫在节点之下）；未提供则空 -->
+      <component :is="backgroundComp" v-if="backgroundComp" />
+      <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->
+      <slot />
+    </VueFlow>
+
+    <!-- 通用 UI 槽(overlay)：插件塞的浮层控件按 order 顺序同屏叠在画布之上(Goal A 渲染) -->
+    <div v-if="uiOverlay.length" class="csurface-overlay">
+      <component
+        v-for="oc in uiOverlay"
+        :key="oc.id"
+        :is="oc.component"
+        class="csurface-overlay-item"
+        :data-slot-order="oc.order"
+        :data-slot-id="oc.id"
+      />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.csurface {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.csurface :deep(.vue-flow__node) {
+  /* 节点卡片外观由主题 nodeShell(如 BaseNode 的 .v2-card)统一负责；这里只留布局与光标 */
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.csurface-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* 不挡画布交互；浮层控件自己开 pointer-events 才能点 */
+  z-index: 20;
+  overflow: hidden;
+}
+.csurface-overlay-item {
+  pointer-events: auto;
+}
+</style>

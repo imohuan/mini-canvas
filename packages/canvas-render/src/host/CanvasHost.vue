@@ -20,8 +20,7 @@
  * 模板结构：本组件占满父容器高度(定位 100%)，内部是 booting/error + canvas-wrap(VueFlow+主题背景)。
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
  */
-import { markRaw, onBeforeUnmount, onMounted, provide, reactive, ref, shallowRef } from 'vue'
-import { VueFlow } from '@vue-flow/core'
+import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
 import {
   NodeRegistry,
@@ -42,11 +41,9 @@ import {
 import type { PluginManager } from './pluginManager'
 import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
-import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
-import { CANVAS_PARAMS_KEY, type CanvasParams } from '../contracts/canvasParamKey'
-import { HOST_KEY } from '../contracts/contentBridge'
-import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY, type EdgeVisual } from '../contracts/edgeContext'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '../contracts/renderContext'
+import type { CanvasParams } from '../contracts/canvasParamKey'
+import type { EdgeVisual } from '../contracts/edgeContext'
+import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
   edgeId,
@@ -107,15 +104,13 @@ const hostRef = shallowRef<CanvasHostHandle | undefined>()
 const apiRef = shallowRef<MiniCanvasApi | undefined>()
 const managerRef = shallowRef<PluginManager | undefined>()
 
-// ==================== setup 期同步 provide 的令牌 ====================
+// ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
+// provide 点已移到 CanvasSurface（boot 完成后才挂载，故能 provide 裸 ctx/host）：
+// 这里只负责**准备**渲染子树要用的数据与回调，不 provide。
 
-// 节点展示注册表：宿主自建并同步 provide，同时传入 boot(createMiniCanvasHost)。
+// 节点展示注册表：宿主自建，同时传入 boot(createMiniCanvasHost)。
 // 插件 setup 经 ctx.get('nodeRegistry') 把 content 组件注册进来；BaseNode(壳)经此解析 content 段。
 const registry = new NodeRegistry()
-provide(NODE_REGISTRY_KEY, registry)
-
-// 宿主引用：boot 异步完成后填充；content 组件经 inject(HOST_KEY).value.ctx.get(...) 调插件服务。
-provide(HOST_KEY, hostRef)
 
 // 标题就地重命名写回：缺省 = 改内核 nodeStore data 并落盘。nodeStore.subscribe 会自动刷新渲染态，
 // 无需像旧 demo 那样手动 map 改 nodes 数组。
@@ -128,18 +123,15 @@ function defaultWrite(id: string, patch: Record<string, unknown>): void {
   void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
 }
 const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
-provide(NODE_WRITE_KEY, nodeWrite)
 
 // 外观参数注入：EDGE_VISUAL(边) / CANVAS_PARAMS(浮动端口)。
 // 父级若传 props.edgeVisual / props.handleVisual（应为响应式对象，改属性实时生效），
-// 我们直接 provide 那个引用；未传则用内部 DEFAULT reactive 回落。
+// 我们直接传那个引用；未传则用内部 DEFAULT reactive 回落。
 // 注意：BaseNode 读 handle 字段不做默认回落，故 handleVisual 需含全部 5 个字段（通常传一个全字段 reactive）。
 const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
 const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
 const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
 const handleToProvide = props.handleVisual ?? handleDefaultR
-provide(EDGE_VISUAL_KEY, edgeVisualToProvide)
-provide(CANVAS_PARAMS_KEY, handleToProvide)
 
 // 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
 // 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
@@ -147,19 +139,6 @@ provide(CANVAS_PARAMS_KEY, handleToProvide)
 const selectedIds = ref<ReadonlySet<string>>(new Set())
 const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
 const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel }
-provide(EDGE_SELECTION_KEY, edgeSelection)
-
-// —— 渲染宿主统一上下文：把上面分散的令牌收拢成一个对象，provide 一次 ——
-// 新消费方走 useCanvasRender()；旧 *_KEY provide 保留(同引用)以兼容未迁移的外部组件。
-const renderCtx: CanvasRenderContext = {
-  host: hostRef,
-  registry,
-  nodeWrite,
-  handleParams: handleToProvide,
-  edgeVisual: edgeVisualToProvide,
-  edgeSelection,
-}
-provide(RENDER_CONTEXT_KEY, renderCtx)
 
 /** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
 function syncSelected(): void {
@@ -434,39 +413,34 @@ onBeforeUnmount(() => {
     <div v-else-if="bootError" class="chost-status chost-err">启动失败：{{ bootError }}</div>
 
     <div v-else class="chost-canvas">
-      <VueFlow
-        :key="nodeEpoch"
+      <!-- 内层渲染子树宿主：boot 完成后才挂载，向渲染组件 provide 裸 ctx/host（见 CanvasSurface.vue） -->
+      <CanvasSurface
+        :host="hostRef"
+        :registry="registry"
+        :node-write="nodeWrite"
+        :handle-params="handleToProvide"
+        :edge-visual="edgeVisualToProvide"
+        :edge-selection="edgeSelection"
         :nodes="nodes"
         :edges="edges"
         :node-types="nodeTypes"
         :edge-types="edgeTypes"
-        :is-valid-connection="isValidConnection"
+        :background-comp="backgroundComp"
+        :ui-overlay="uiOverlay"
+        :node-epoch="nodeEpoch"
         :min-zoom="props.minZoom"
         :max-zoom="props.maxZoom"
-        @connect="onConnect"
-        @node-click="onNodeClick"
-        @node-drag-stop="onNodeDragStop"
-        @pane-click="onPaneClick"
-        @node-context-menu="onNodeContextMenu"
-        @pane-context-menu="onPaneContextMenu"
+        :is-valid-connection="isValidConnection"
+        :on-connect="onConnect"
+        :on-node-click="onNodeClick"
+        :on-node-drag-stop="onNodeDragStop"
+        :on-pane-click="onPaneClick"
+        :on-node-context-menu="onNodeContextMenu"
+        :on-pane-context-menu="onPaneContextMenu"
       >
-        <!-- 主题插件提供的画布背景（垫在节点之下）；未提供则空 -->
-        <component :is="backgroundComp" v-if="backgroundComp" />
-        <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->
+        <!-- 父级默认插槽透传进 VueFlow（自定义背景/控件） -->
         <slot />
-      </VueFlow>
-
-      <!-- 通用 UI 槽(overlay)：插件塞的浮层控件按 order 顺序同屏叠在画布之上(Goal A 渲染) -->
-      <div v-if="uiOverlay.length" class="chost-overlay">
-        <component
-          v-for="oc in uiOverlay"
-          :key="oc.id"
-          :is="oc.component"
-          class="chost-overlay-item"
-          :data-slot-order="oc.order"
-          :data-slot-id="oc.id"
-        />
-      </div>
+      </CanvasSurface>
     </div>
   </div>
 </template>

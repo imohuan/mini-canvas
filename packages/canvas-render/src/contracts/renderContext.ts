@@ -5,31 +5,39 @@
  * HOST/EDGE_VISUAL/EDGE_SELECTION)收拢成**一个上下文对象** + 一个消费函数 `useCanvasRender()`，
  * 消费方(插件壳/边/content 组件)不必逐个 `inject(某 KEY)!` 再自己处理缺省/报错。
  *
+ * 提供方：CanvasSurface（CanvasHost 的内层渲染子树宿主，boot 完成后才挂载）。因此本上下文里
+ * ctx/host 都是**裸值**（非 Ref、非空）——渲染组件 setup 时宿主已就绪，可直接
+ * `ctx.get('nodeStore')` / `ctx.text.editText(...)`，无需 .value、无需判空。
+ *
  * 用法：
- *   CanvasHost 内（root provider）：provide(RENDER_CONTEXT_KEY, { registry, nodeWrite, host,
- *     handleParams, edgeVisual, edgeSelection })
- *   任意子组件：const { registry, handleParams, edgeVisual } = useCanvasRender()
+ *   渲染子树内任意子组件：const { ctx, registry, handleParams, edgeVisual } = useCanvasRender()
+ *   - ctx：内核 Context（调服务/插件直访）—— content 组件最常用。
+ *   - host：宿主句柄（ctx 的超集，多摊平服务字段 + stop() 落盘语义）—— 需宿主级能力时用。
+ *   - registry / nodeWrite / handleParams / edgeVisual / edgeSelection：展示/外观/选中，给壳/边。
  *
  * 说明：
- * - 字段里凡"宿主注入的响应式对象/ref"(edgeVisual/handleParams/edgeSelection/host) 保持**原引用**，
- *   不包 reactive——消费方 computed 照常追踪，属性改即实时生效。
- * - 旧 6 个 *_KEY 常量仍保留导出(CanvasHost 仍逐个 provide 同引用)以兼容未迁移的外部消费方；
+ * - 字段里凡"宿主注入的响应式对象"(edgeVisual/handleParams) 保持**原引用**，属性改即实时生效。
+ *   edgeSelection.selectedNodeIds/selectedEdgeIds 是 Ref（供"相连被选即高亮"追踪）。
+ * - 旧 6 个 *_KEY 常量仍保留导出(CanvasSurface 仍逐个 provide 同引用)以兼容未迁移的外部消费方；
  *   新代码一律走 useCanvasRender()。
+ * - 仅限 CanvasSurface(渲染子树) 内调用；不在宿主内会抛清晰错误。
  */
-import { inject, type InjectionKey, type Ref } from 'vue'
-import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import { inject, type InjectionKey } from 'vue'
+import type { Context, NodeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
 import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
 
-/** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文 */
+/** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
-  /** 宿主句柄的响应式引用（boot 完成前为空；content 组件交互时读 .value.ctx 调服务） */
-  host: Ref<CanvasHostHandle | undefined>
+  /** 内核上下文：调服务/插件直访（content 组件常用：ctx.get('nodeStore') / ctx.text 等） */
+  ctx: Context
+  /** 宿主句柄（ctx 的超集：save/nodeStore/selection/command/history/nodeRegistry/themeRegistry/stop） */
+  host: CanvasHostHandle
   /** 节点展示注册表（content/toolbar 段组件） */
   registry: NodeRegistry
-  /** 标题就地重命名写回；宿主总给，消费方按需用（缺省判断保留以兼容无宿主环境） */
+  /** 标题就地重命名写回（宿主总给，按需用） */
   nodeWrite: NodeWrite
   /** 浮动端口外观（响应式对象，属性改实时生效） */
   handleParams: CanvasParams
@@ -39,11 +47,11 @@ export interface CanvasRenderContext {
   edgeSelection: EdgeSelection
 }
 
-/** 单令牌：CanvasHost provide、消费方经 useCanvasRender() 取 */
+/** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */
 export const RENDER_CONTEXT_KEY: InjectionKey<CanvasRenderContext> = Symbol('canvas-v2-render-context')
 
 /**
- * 取渲染宿主上下文。必须在 <CanvasHost> 内(其 provide 作用域下)调用；
+ * 取渲染宿主上下文。必须在 <CanvasHost> 的渲染子树内(CanvasSurface provide 作用域下)调用；
  * 不在宿主内会抛清晰错误（这些渲染组件本就依赖宿主能力）。
  */
 export function useCanvasRender(): CanvasRenderContext {

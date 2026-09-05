@@ -7,13 +7,11 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: { text?: string } }>()
 
-// 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；经 ctx.host.value.ctx.text 直访插件服务。
+// 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；ctx 是裸内核上下文(boot 后已就绪，见 CanvasSurface)。
 // ctx.text 的类型来自本插件对 Context 的 declare module 增强(nodeTextPlugin.ts)。
-const { host } = useCanvasRender()
+const { ctx } = useCanvasRender()
 function textService() {
-  const h = host.value
-  if (!h) throw new Error('[TextContent] 宿主未就绪（boot 未完成）')
-  return h.ctx.text
+  return ctx.text
 }
 
 const editing = ref(false)
