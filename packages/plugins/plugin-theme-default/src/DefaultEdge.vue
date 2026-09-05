@@ -6,8 +6,9 @@
 //  - 流光动画：.vue-flow__edge.animated path 的默认动画要覆盖 → 用非 scoped <style> 盖。
 // 用最简单的直/贝塞尔路径画一条可拖连的边 + 箭头 marker。
 import { computed } from 'vue'
-import type { EdgeProps } from '@vue-flow/core'
-import { getBezierPath } from '@vue-flow/core'
+// 渲染原语经内核精选出口统一 import（不各自依赖 @vue-flow/core，见 vueFlowBridge）
+import { getBezierPath } from '@mini-canvas/canvas-core-v2'
+import type { EdgeProps } from '@mini-canvas/canvas-core-v2'
 
 const props = defineProps<EdgeProps>()
 

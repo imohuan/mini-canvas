@@ -3,7 +3,8 @@
 // 背景没有 vue-flow 注册口 → 走"低层 child 叠加组件"通用法：宿主把它垫在节点/边之下渲染。
 // 用 useVueFlow() 读 viewport(x,y,zoom) 把网格平移/缩放对齐内容坐标。
 import { computed } from 'vue'
-import { useVueFlow } from '@vue-flow/core'
+// 渲染原语经内核精选出口统一 import（不各自依赖 @vue-flow/core，见 vueFlowBridge）
+import { useVueFlow } from '@mini-canvas/canvas-core-v2'
 
 const { viewport } = useVueFlow()
 

@@ -10,6 +10,8 @@ export * from './services'
 export { HOST_KEY } from './components/contentBridge'
 export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './components/nodeRegistryKey'
 export type { NodeWrite } from './components/nodeRegistryKey'
+// 内核精选的 VueFlow 能力出口（渲染类插件统一从内核 import，不再各自依赖 @vue-flow/core）
+export * from './vueFlowBridge'
 export { canvasCommandsPlugin } from './plugins/canvasCommands'
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'

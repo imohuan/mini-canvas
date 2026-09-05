@@ -5,8 +5,9 @@
 //  - 选中态 class 是 vue-flow 加在外框 .vue-flow__node，本组件根要用 selected prop 自加样式。
 //  - 中间内容：按 props.type 经注入的 nodeRegistry 解析 content 组件渲染（业务插件注册）。
 import { computed, inject } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
-import type { NodeProps } from '@vue-flow/core'
+// 渲染原语经内核精选出口统一 import（不各自依赖 @vue-flow/core，见 vueFlowBridge）
+import { Handle, Position } from '@mini-canvas/canvas-core-v2'
+import type { NodeProps } from '@mini-canvas/canvas-core-v2'
 import { NODE_REGISTRY_KEY } from '@mini-canvas/canvas-core-v2'
 
 const props = defineProps<NodeProps>()
