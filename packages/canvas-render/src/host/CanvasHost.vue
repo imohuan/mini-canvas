@@ -172,6 +172,26 @@ function applyTheme(): void {
   backgroundComp.value = asm.background ? markRaw(asm.background) : undefined
 }
 
+// ==================== 通用 UI 槽(overlay)：按序渲染插件塞的浮层控件 ====================
+// 插件用 ctx.slots.register('overlay', { component, order }) 往画布叠加 UI(如 dock/浮标)；
+// 宿主在这里读内核 slots 服务，把某槽全部 occupant 按 order 顺序同屏渲染(Goal A 渲染收口)。
+// 注：不放主题(nodeShell/edge/background)那几个语义槽，那些走 themeRegistry 装配；这里是"通用 UI 浮层槽"。
+const overlaySlotName = 'overlay'
+const uiOverlay = ref<Array<{ id: string; order: number; component: unknown }>>([])
+
+function syncUiOverlay(): void {
+  const h = hostRef.value
+  if (!h) return
+  let list: Array<{ id: string; order: number; value: unknown }> = []
+  try {
+    const slots = h.ctx.get<{ list(slot: string): Array<{ id: string; order: number; value: unknown }> }>('slots')
+    list = slots.list(overlaySlotName)
+  } catch {
+    list = []
+  }
+  uiOverlay.value = list.map((e) => ({ id: e.id, order: e.order, component: markRaw(e.value as object) }))
+}
+
 // 订阅 nodeStore：任何增删改(命令/插件 service/拖拽/历史 undo redo)都自动重灌渲染态。
 let unsubStore: (() => void) | undefined
 
@@ -292,15 +312,18 @@ onMounted(async () => {
     // 初始灌入：seed/restore 发生在 subscribe 建立之前(createMiniCanvasHost 内部)，
     // 不会触发回调，这里主动同步一次把当前 store 节点渲染出来。
     syncFromStore()
+    syncUiOverlay()
 
-    // 订阅插件热装/热卸：重装配主题与 nodeTypes + bump epoch 触发 VueFlow 重挂
+    // 订阅插件热装/热卸：重装配主题与 nodeTypes + 重读 overlay 槽 + bump epoch 触发 VueFlow 重挂
     subs.push(
       host.ctx.on('ctx:plugin-installed', () => {
         applyTheme()
+        syncUiOverlay()
         nodeEpoch.value += 1
       }),
       host.ctx.on('ctx:plugin-uninstalled', () => {
         applyTheme()
+        syncUiOverlay()
         nodeEpoch.value += 1
       }),
     )
@@ -385,6 +408,18 @@ onBeforeUnmount(() => {
         <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->
         <slot />
       </VueFlow>
+
+      <!-- 通用 UI 槽(overlay)：插件塞的浮层控件按 order 顺序同屏叠在画布之上(Goal A 渲染) -->
+      <div v-if="uiOverlay.length" class="chost-overlay">
+        <component
+          v-for="oc in uiOverlay"
+          :key="oc.id"
+          :is="oc.component"
+          class="chost-overlay-item"
+          :data-slot-order="oc.order"
+          :data-slot-id="oc.id"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -418,5 +453,15 @@ onBeforeUnmount(() => {
   background: transparent;
   border: none;
   box-shadow: none;
+}
+.chost-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* 不挡画布交互；浮层控件自己开 pointer-events 才能点 */
+  z-index: 20;
+  overflow: hidden;
+}
+.chost-overlay-item {
+  pointer-events: auto;
 }
 </style>
