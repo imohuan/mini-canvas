@@ -173,7 +173,7 @@ onBeforeUnmount(unbindThemeSettings)
 
     <!-- 右上角调试配置面板（实时调边/连接点外观） -->
     <SettingsPanel :model="cfg" />
-    <!-- 插件申报的分组配置面板：theme-default 在 apply 里 ctx.settings.define 声明了连线外观(连线/动效两组)，
+    <!-- 插件申报的配置面板：theme-default 导出 Config schema(P4)，内核把其字段声明进 settings 单一数据源(连线/动效两组)，
          schema 自动长控件；改动经 set→onChange 窄更新到 cfg.edge → 只重绘对应连线、无全图重建。
          固定浮层，叠在右下角(与左上 debug 面板区分) -->
     <div v-if="settingsStore" class="theme-settings-dock">

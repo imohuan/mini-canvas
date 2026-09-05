@@ -7,7 +7,7 @@
  *   const { manager } = await createMiniCanvasHost()
  *   await manager.applyManifest(baseManifest)   // 按序装 theme-default / node-text / image / commands(同 id 覆盖=换版本)
  *
- * 想换某插件的"默认配置"：在对应项加 config(覆写它已 settings.define 声明的 key)。
+ * 想换某插件的"默认配置"：在对应项加 config(经该插件导出的 Config schema 校验 + 补默认，apply(ctx,config) 收到)。
  * 想只装其中几个 / 换顺序 / 覆盖成自己版本：把这数组改成你那份即可(轻量分层)。
  */
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
