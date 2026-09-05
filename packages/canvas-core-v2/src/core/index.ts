@@ -9,7 +9,7 @@ export { resolveSegment, hasContent, activeSegments } from './registry/nodeRende
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'
 export { ThemeRegistry } from './registry/themeRegistry'
-export type { ThemeSlot, ThemePresentation } from './registry/themeRegistry'
+export type { ThemeSlot, ThemePresentation, ThemeOccupantRequest } from './registry/themeRegistry'
 export { registerThemeSlot } from './registry/registerThemeSlot'
 export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
