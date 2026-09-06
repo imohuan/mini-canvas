@@ -1,22 +1,24 @@
 <script setup lang="ts">
 /**
- * PluginSettingsPanel —— 分组化配置的 schema 驱动 UI 面板。
+ * PluginSettingsPanel —— 分组化配置的 schema 驱动 UI 成品面板（@mini-canvas/ui 主要输出之一）。
  *
  * 读 ctx.settings（SettingsStore 同一实例）的已申报组与 schema，自动长控件(改控件=调 settings.set)；
  * 订阅变化刷新取值。宿主/demo 把 boot 后的 ctx.settings 传进来即可，插件不用手画表单。
  * 对齐 docs/goal/plugin-system-goal.md 2.4 / 目标 B2。
  *
+ * 归属：本面板是"成品 UI"，归 @mini-canvas/ui（不再住在渲染抽象层 canvas-render）。
+ * 它消费的数据契约(SettingsPanelSource)、合帧工具(createCoalescer)仍由渲染抽象层 canvas-render 提供——
+ * 依赖方向 @mini-canvas/ui → canvas-render（抽象）→ canvas-core-v2（内核），不反向。
+ *
  * 视觉说明：本面板是"可替换设置面板"的默认皮(settings-panel-slot-host-plan)。schema 驱动逻辑不动，
  * 样式做了分组卡片/字段行/toggle/滑块数值 的观感统一，替换面板只需声明 props.settings 即可换皮。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import type { SettingSchema } from './settingsPanelTypes'
-import type { SettingsPanelSource } from './settingsPanelTypes'
-import type { SettingEntry } from '@mini-canvas/canvas-core-v2'
-import { createCoalescer } from '../utils/coalesce'
+import type { SettingSchema, SettingsPanelSource, SettingEntry } from '@mini-canvas/canvas-render'
+import { createCoalescer } from '@mini-canvas/canvas-render'
 
 /** 面板消费的最小 settings 接口（与内核 SettingsStore / ctx.settings 能力对齐） */
-export type { SettingsPanelSource } from './settingsPanelTypes'
+export type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
 

@@ -25,8 +25,7 @@ export type { CanvasRenderContext } from './contracts/renderContext'
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
 export { default as CanvasHost } from './host/CanvasHost.vue'
-// 分组化配置的 schema 驱动 UI 面板（读 ctx.settings 组/schema 自动长控件，改即 settings.set）
-export { default as PluginSettingsPanel } from './components/PluginSettingsPanel.vue'
+// 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @mini-canvas/ui
 export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
 // 可替换设置面板宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家，把 ctx.settings 喂给它（见 plugin-theme-default/settings.ts 注册默认皮）
 export { default as SettingsHost } from './components/SettingsHost.vue'
