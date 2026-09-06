@@ -16,10 +16,10 @@ import type { PluginModule } from '@mini-canvas/canvas-base'
 // 让 node-text 对 `interface Context { text: TextService }` 的增强在本包编译里可见 → ctx.text 类型安全可用。
 // 纯类型副作用，运行时无 import（text 服务仍由内核依赖编排注入）。
 import type {} from '@mini-canvas/plugin-node-text'
-import BaseNode from './BaseNode.vue'
-import CustomEdge from './CustomEdge.vue'
-import DefaultBackground from './DefaultBackground.vue'
-import PluginSettingsDialog from './components/PluginSettingsDialog.vue'
+import BaseNode from './components/node/BaseNode.vue'
+import CustomEdge from './components/edge/CustomEdge.vue'
+import DefaultBackground from './components/background/DefaultBackground.vue'
+import PluginSettingsDialog from './components/settings/PluginSettingsDialog.vue'
 
 export const name = 'theme-default'
 export const inject = ["text"] as string[]
