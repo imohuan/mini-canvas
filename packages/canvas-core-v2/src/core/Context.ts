@@ -72,6 +72,7 @@ function toSettingSchema(field: ConfigField): SettingSchema {
     type,
     default: field.default as string | number | boolean,
     ...(field.label !== undefined ? { label: field.label } : {}),
+    ...(field.description !== undefined ? { description: field.description } : {}),
     ...(field.min !== undefined ? { min: field.min } : {}),
     ...(field.max !== undefined ? { max: field.max } : {}),
     ...(field.options

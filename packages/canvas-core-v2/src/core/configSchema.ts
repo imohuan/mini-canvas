@@ -37,6 +37,8 @@ export interface ConfigField {
   default: ConfigValue
   /** UI 显示文案（标量控件用） */
   label?: string
+  /** UI 描述/说明（可选，标量控件在控件下方渲染小字；缺省不显示） */
+  description?: string
   /** UI 分组名（面板按组展示；缺省 = 插件名） */
   group?: string
   /** number 用：最小/最大（装配 raw 越界 → 校验错 FAILED；运行时面板 set 仍走 store 夹取） */

@@ -110,6 +110,9 @@ const fieldId = 'sf-' + props.fieldKey
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
       <input :id="fieldId" class="sf-text" type="text" :value="String(entry.value)" @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
     </template>
+
+    <!-- 字段描述（可选，schema.description 有才显示） -->
+    <p v-if="entry.schema.description" class="sf-desc">{{ entry.schema.description }}</p>
   </div>
 </template>
 
@@ -140,6 +143,13 @@ const fieldId = 'sf-' + props.fieldKey
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* field description */
+.sf-desc {
+  margin: 5px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9aa3af;
 }
 
 /* color swatch */
