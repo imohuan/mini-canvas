@@ -109,7 +109,7 @@ describe('resolveFeedback', () => {
     const r = resolveFeedback({ ...base, flowPoint: { x: 470, y: 260 } })
     expect(r.snappedToId).toBe('b')
     expect(r.end).toEqual({ x: 500, y: 264 })
-    expect(r.hover).toEqual({ nodeId: 'b', status: 'valid', zone: 'snap', reason: undefined })
+    expect(r.hover).toEqual({ nodeId: 'b', status: 'valid', zone: 'snap', portSide: 'input', reason: undefined })
   })
 
   it('forward 命中合法口吸附带 → valid snap', () => {

@@ -52,6 +52,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import { resolveFeedback } from '../connection/resolveFeedback'
+import type { HoverDecision } from '../connection/resolveFeedback'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
@@ -369,15 +370,7 @@ function onDragMouseMove(ev: MouseEvent): void {
     dragFlowPoint.value = { x: target.point.x, y: target.point.y }
     // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
     const h = target.hover
-    const nextHover: HoverFeedback | null = h
-      ? {
-          nodeId: h.nodeId,
-          status: h.status,
-          zone: h.zone,
-          flowPosition: target.point,
-          reason: h.reason,
-        }
-      : null
+    const nextHover: HoverFeedback | null = h ? enrichHover(h, dragSourceHandle, dragSourceId, target.point) : null
     // 变化比对（与 v1 思路一致：避免无谓写触发下游重渲）
     const cur = connectionState.hoverNode.value
     const changed =
@@ -472,6 +465,44 @@ function resolveAtClient(
     validate: validateEdgeText,
   })
   return { point: flowPoint, hover: res.hover }
+}
+
+/** 给定 hover 决策 + 源信息，补全成富 HoverFeedback（nodeType/nodeData/nodeEl/willEvict） */
+function enrichHover(
+  h: HoverDecision,
+  sourceHandle: 'source' | 'target',
+  sourceId: string,
+  flowPoint: FlowPoint,
+): HoverFeedback {
+  const host = hostRef.value
+  const node = host?.nodeStore.getNode(h.nodeId)
+  // 新边真正的"输入端接收节点"：forward=悬停节点；reverse(从 input 反拖)=发起反向拖的源节点
+  const receiverId = sourceHandle === 'target' ? sourceId : h.nodeId
+  const tgtNode = host?.nodeStore.getNode(receiverId)
+  const tgtType = tgtNode ? host?.nodeStore.types.get(tgtNode.type) : undefined
+  const inputDef = tgtType?.inputs?.find((i) => !i.port || i.port === 'target')
+  const capacity = inputDef?.capacity
+  const incoming = host ? host.edgeStore.getEdges().filter((e) => e.target === receiverId).length : 0
+  // 输入口已满额(>=capacity>1) → 本次连接将挤最老一条（evict 为 render 默认行为）
+  const willEvict = !!capacity && capacity > 1 && incoming >= capacity
+  let nodeEl: HTMLElement | null = null
+  try {
+    nodeEl = document.querySelector(`.vue-flow__node[data-id="${h.nodeId}"]`)
+  } catch {
+    /* SSR/测试环境无 DOM：忽略 */
+  }
+  return {
+    nodeId: h.nodeId,
+    status: h.status,
+    zone: h.zone,
+    flowPosition: flowPoint,
+    reason: h.reason,
+    portSide: h.portSide,
+    nodeType: node?.type,
+    willEvict,
+    nodeData: node ? { id: node.id, type: node.type, data: node.data } : null,
+    nodeEl,
+  }
 }
 
 /** 把 hover 决策转成规范 (source,target) 候选；空白则 null */

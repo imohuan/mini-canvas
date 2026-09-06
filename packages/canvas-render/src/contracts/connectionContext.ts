@@ -33,6 +33,9 @@ export interface ActiveConnection {
   sourceHandle: 'source' | 'target'
 }
 
+/** 命中端口所在侧（snap 时）或卡片主体（body 时） */
+export type HoverPortSide = 'input' | 'output' | 'body' | null
+
 /** 拖线时悬停到的目标节点反馈（BaseNode 据此做 3D/气泡/吸附带） */
 export interface HoverFeedback {
   nodeId: string
@@ -44,6 +47,16 @@ export interface HoverFeedback {
   flowPosition: FlowPoint
   /** invalid 时给用户看的原因文案（由 InvalidReason 映射成中文，见 connection/reasonText.ts） */
   reason?: string
+  /** 命中端口侧：snap 时按方向=input(拖进目标输入)/output(反向拖到源输出)；body 时为 'body'（可空回落） */
+  portSide?: HoverPortSide
+  /** 命中节点类型 */
+  nodeType?: string
+  /** 输入口已满额且本次连接会挤最老一条（UI 可选提示"将替换"） */
+  willEvict?: boolean
+  /** 命中节点数据（宿主 nodeStore 抽出的最小节点对象，非响应式快照） */
+  nodeData?: { id: string; type: string; data: Record<string, unknown> } | null
+  /** 命中节点对应 DOM 元素（.vue-flow__node，宿主 query；缺省 null） */
+  nodeEl?: HTMLElement | null
 }
 
 /**

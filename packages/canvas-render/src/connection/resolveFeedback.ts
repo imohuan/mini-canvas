@@ -41,6 +41,8 @@ export interface HoverDecision {
   nodeId: string
   status: 'valid' | 'invalid'
   zone: 'snap' | 'body'
+  /** 命中端口侧：snap→target=输入口 / source=输出口；body 时为 null */
+  portSide?: 'input' | 'output' | null
   /** invalid 文案；valid 时 undefined */
   reason?: string
 }
@@ -143,6 +145,9 @@ export function resolveFeedback(input: ResolveFeedbackInput): ResolveResult {
         nodeId: effectiveFeedback,
         status: effectiveInvalid ? 'invalid' : 'valid',
         zone: feedbackZone as 'snap' | 'body',
+        // snap 命中：forward 拖进目标输入口(target=左缘 input)；reverse 拖到源输出口(source=右缘 output)。
+        // body 命中：无确定端口侧。
+        portSide: feedbackZone === 'snap' ? (dir === 'forward' ? 'input' : 'output') : undefined,
         reason: effectiveInvalid ? invalidMessage || '无法连接' : undefined,
       }
     : null
