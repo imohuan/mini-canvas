@@ -54,7 +54,7 @@ import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import { resolveFeedback } from '../connection/resolveFeedback'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
-import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
+import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
@@ -90,6 +90,8 @@ const props = withDefaults(
     handleVisual?: CanvasParams
     /** 调试可视化开关覆盖（缺省对齐 DEFAULT_DEBUG_VISUAL，均关）。传响应式对象可实时开关。 */
     debugVisual?: CanvasDebug
+    /** 吸附带配置覆盖（缺省对齐 DEFAULT_SNAP_ZONE_CONFIG）。传响应式对象可实时调整吸附带。 */
+    snapZoneVisual?: SnapZoneConfig
     /** VueFlow 缩放范围 */
     minZoom?: number
     maxZoom?: number
@@ -153,9 +155,11 @@ const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
 const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
 const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
 const debugDefaultR = reactive({ ...DEFAULT_DEBUG_VISUAL })
+const snapZoneDefaultR = reactive({ ...DEFAULT_SNAP_ZONE_CONFIG })
 const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
 const handleToProvide = props.handleVisual ?? handleDefaultR
 const debugToProvide = props.debugVisual ?? debugDefaultR
+const snapZoneToProvide = props.snapZoneVisual ?? snapZoneDefaultR
 
 // 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
 // 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
@@ -461,7 +465,7 @@ function resolveAtClient(
     nodeRects: rects,
     flowPoint,
     handleRadius: handleToProvide.handleRadius || 86,
-    config: DEFAULT_SNAP_ZONE_CONFIG,
+    config: snapZoneToProvide,
     validate: validateEdgeText,
   })
   return { point: flowPoint, hover: res.hover }
@@ -780,6 +784,7 @@ onBeforeUnmount(() => {
         :handle-params="handleToProvide"
         :edge-visual="edgeVisualToProvide"
         :debug-visual="debugToProvide"
+        :snap-zone="snapZoneToProvide"
         :edge-selection="edgeSelection"
         :nodes="nodes"
         :edges="edges"

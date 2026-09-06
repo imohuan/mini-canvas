@@ -26,6 +26,7 @@ import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
 import type { CanvasDebug } from '../contracts/debugContext'
+import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 
@@ -42,6 +43,8 @@ const props = defineProps<{
   /** Host 端 mousemove 实时写的 flow 坐标（VueFlow lineProps 不可靠时由这里驱动连接线端点）。可空（拖线外时段）。 */
   dragFlowPoint?: { x: number; y: number } | null
   debugVisual: CanvasDebug
+  /** 吸附带配置（响应式对象，属性改实时影响吸附判定 + BaseNode 调试叠加） */
+  snapZone: SnapZoneConfig
   // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: any[]
@@ -85,6 +88,7 @@ const renderCtx: CanvasRenderContext = {
   edgeSelection: props.edgeSelection,
   connectionState: props.connectionState,
   debug: props.debugVisual,
+  snapZone: props.snapZone,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 

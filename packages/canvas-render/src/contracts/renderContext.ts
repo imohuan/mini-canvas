@@ -30,6 +30,7 @@ import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
 import type { ConnectionFeedbackState } from './connectionContext'
 import type { CanvasDebug } from './debugContext'
+import type { SnapZoneConfig } from '../connection/geometry'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -51,6 +52,8 @@ export interface CanvasRenderContext {
   connectionState: ConnectionFeedbackState
   /** 调试可视化开关（端口/吸附调试；响应式对象，属性改实时生效） */
   debug: CanvasDebug
+  /** 吸附带配置（高占节点比例/宽/偏移/形状；属性改实时影响吸附判定与 BaseNode 调试叠加） */
+  snapZone: SnapZoneConfig
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */

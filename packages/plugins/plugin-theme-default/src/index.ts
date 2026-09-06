@@ -59,6 +59,14 @@ export const DEFAULT_THEME_DEBUG = {
   connectionSnapDebugVisible: true,
 } as const
 
+/** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
+export const DEFAULT_THEME_SNAP_ZONE = {
+  heightRatio: 0.8,
+  width: 0, // 0 = 用 handleRadius 兜底
+  offset: 0,
+  shape: 'rect',
+} as const
+
 /** 本插件声明"可配置项 → EDGE_VISUAL 字段"的映射（供宿主/demo 在 UI 改动后按 key 窄更新对应一处，不整图重建） */
 export const EDGE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_EDGE> = Object.keys(
   DEFAULT_THEME_EDGE,
@@ -73,6 +81,11 @@ export const HANDLE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_HANDL
 export const DEBUG_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_DEBUG> = Object.keys(
   DEFAULT_THEME_DEBUG,
 ) as (keyof typeof DEFAULT_THEME_DEBUG)[]
+
+/** 本插件声明"可配置项 → 吸附带配置(SnapZoneConfig)"的映射 */
+export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_SNAP_ZONE> = Object.keys(
+  DEFAULT_THEME_SNAP_ZONE,
+) as (keyof typeof DEFAULT_THEME_SNAP_ZONE)[]
 
 /**
  * 本插件的可配置项 schema（P4：模块级 Config）。
@@ -213,6 +226,44 @@ export const Config: ConfigSchema = {
     label: '覆盖距离',
     group: '端口',
     description: '半圆交互区向节点内侧覆盖后被裁掉的宽度。',
+  },
+  heightRatio: {
+    type: 'number',
+    default: DEFAULT_THEME_SNAP_ZONE.heightRatio,
+    min: 0.2,
+    max: 1,
+    label: '吸附带高度占比',
+    group: '吸附带',
+    description: '吸附带高度占节点高度的 0~1 比例（0.8=占 80%）。',
+  },
+  width: {
+    type: 'number',
+    default: DEFAULT_THEME_SNAP_ZONE.width,
+    min: 0,
+    max: 400,
+    label: '吸附带宽度(px)',
+    group: '吸附带',
+    description: '吸附带的像素宽度。0 = 用端口吸附半径(handleRadius)兜底。',
+  },
+  offset: {
+    type: 'number',
+    default: DEFAULT_THEME_SNAP_ZONE.offset,
+    min: -200,
+    max: 200,
+    label: '吸附带偏移(px)',
+    group: '吸附带',
+    description: '>0 向节点外、<0 向节点内偏移吸附带位置。',
+  },
+  shape: {
+    type: 'select',
+    default: DEFAULT_THEME_SNAP_ZONE.shape,
+    label: '吸附带形状',
+    group: '吸附带',
+    description: '矩形(rect)/半椭圆弧(arc)。命中统一按矩形，仅影响视觉。',
+    options: [
+      { value: 'rect', label: '矩形' },
+      { value: 'arc', label: '半椭圆弧' },
+    ],
   },
   handleDebug: {
     type: 'boolean',

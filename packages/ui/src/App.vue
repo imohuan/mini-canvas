@@ -17,9 +17,11 @@ import {
   DEFAULT_THEME_EDGE,
   DEFAULT_THEME_HANDLE,
   DEFAULT_THEME_DEBUG,
+  DEFAULT_THEME_SNAP_ZONE,
   EDGE_SETTING_KEYS,
   HANDLE_SETTING_KEYS,
   DEBUG_SETTING_KEYS,
+  SNAP_ZONE_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
@@ -36,11 +38,12 @@ const adapter: StorageAdapter = new LocalStorageAdapter()
 
 const log = createV2Logger('config')
 
-// 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge / cfg.handle）
+// 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge / cfg.handle / cfg.snapZone）
 const cfg = reactive({
   edge: { ...DEFAULT_THEME_EDGE },
   handle: { ...DEFAULT_THEME_HANDLE },
   debug: { ...DEFAULT_THEME_DEBUG },
+  snapZone: { ...DEFAULT_THEME_SNAP_ZONE },
 })
 
 // —— 设置面板开关（顶部按钮切换右下 dock 显隐）——
@@ -97,18 +100,37 @@ function bindThemeSettings(): void {
         ? (cfg.handle as unknown as Record<string, unknown>)
         : (DEBUG_SETTING_KEYS as readonly string[]).includes(key)
           ? (cfg.debug as unknown as Record<string, unknown>)
-          : undefined
-  for (const k of [...EDGE_SETTING_KEYS, ...HANDLE_SETTING_KEYS, ...DEBUG_SETTING_KEYS]) {
+          : (SNAP_ZONE_SETTING_KEYS as readonly string[]).includes(key)
+            ? (cfg.snapZone as unknown as Record<string, unknown>)
+            : undefined
+  for (const k of [
+    ...EDGE_SETTING_KEYS,
+    ...HANDLE_SETTING_KEYS,
+    ...DEBUG_SETTING_KEYS,
+    ...SNAP_ZONE_SETTING_KEYS,
+  ]) {
     const v = store.get(k as string)
     const t = targetOf(k as string)
     if (v !== undefined && t) t[k as string] = v
   }
-  log.log('bindThemeSettings 初始灌入', { edge: cfg.edge, handle: cfg.handle, debug: cfg.debug })
+  log.log('bindThemeSettings 初始灌入', {
+    edge: cfg.edge,
+    handle: cfg.handle,
+    debug: cfg.debug,
+    snapZone: cfg.snapZone,
+  })
   disposeSettingsBind = store.onChange((key, value) => {
     const t = targetOf(key)
     if (t) {
       t[key] = value
-      log.log(`settings.set ${key}=${JSON.stringify(value)} → 窄更新到 ${Object.prototype.hasOwnProperty.call(cfg.edge, key) ? 'cfg.edge' : Object.prototype.hasOwnProperty.call(cfg.handle, key) ? 'cfg.handle' : 'cfg.debug'}`)
+      const grp = Object.prototype.hasOwnProperty.call(cfg.edge, key)
+        ? 'cfg.edge'
+        : Object.prototype.hasOwnProperty.call(cfg.handle, key)
+          ? 'cfg.handle'
+          : Object.prototype.hasOwnProperty.call(cfg.snapZone, key)
+            ? 'cfg.snapZone'
+            : 'cfg.debug'
+      log.log(`settings.set ${key}=${JSON.stringify(value)} → 窄更新到 ${grp}`)
     }
   }).dispose
 }
@@ -170,6 +192,7 @@ onBeforeUnmount(() => {
         :edge-visual="cfg.edge"
         :handle-visual="cfg.handle"
         :debug-visual="cfg.debug"
+        :snap-zone-visual="cfg.snapZone"
         :min-zoom="0.2"
         :max-zoom="2"
         window-key="MiniCanvasUI"
