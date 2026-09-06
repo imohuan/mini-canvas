@@ -8,7 +8,7 @@
 //   5. LOD：zoom 低时简化渲染。
 // 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState）+ useVueFlow。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useVueFlow, Position, useCanvasRender } from '@mini-canvas/canvas-render'
+import { useVueFlow, Position, useCanvasRender, createV2Logger } from '@mini-canvas/canvas-render'
 import type { NodeProps } from '@mini-canvas/canvas-render'
 import { resolveSegment } from '@mini-canvas/canvas-core-v2'
 import MovingHandle from './MovingHandle.vue'
@@ -17,6 +17,7 @@ import { useNodeCapability } from '../../composables/useNodeCapability'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
 
+const log = createV2Logger('base-node')
 const props = defineProps<NodeProps>()
 // 节点类型都是本组件(VueFlow nodeTypes 全指到 BaseNode)，透传的 selected 等内部 prop 不落到根
 defineOptions({ inheritAttrs: false })
@@ -221,6 +222,13 @@ const bodyRect = computed(() => ({
   width: cardWidth.value,
   height: cardHeight.value,
 }))
+
+watch(showSnapDebugOverlay, (on) => {
+  log.log(`[${props.id}/${props.type}] 吸附调试叠加 ${on ? '显示' : '隐藏'} handleDebug=${debugHandle.value} isConnecting=${isConnecting.value}`)
+})
+watch(debugHandle, (on) => {
+  log.log(`[${props.id}/${props.type}] 端口调试 ${on ? '开' : '关'}`)
+})
 
 // 3D 倾斜：随鼠标在卡内位置翘
 const cardTransform = computed(() => {

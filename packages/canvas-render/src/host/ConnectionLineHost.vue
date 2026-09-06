@@ -22,6 +22,9 @@ import { resolveFeedback } from '../connection/resolveFeedback'
 import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
 import { hoverWriter } from '../host/connectionState'
+import { createV2Logger } from '../utils/log'
+
+const log = createV2Logger('conn-line')
 
 const props = defineProps<{
   /** VueFlow 经 #connection-line 槽传入的连接线 props（targetX/Y 为每帧 flow 坐标） */
@@ -84,6 +87,9 @@ function scheduleHoverWrite(next: HoverFeedback | null) {
     cur?.reason !== next?.reason ||
     cur?.flowPosition?.x !== next?.flowPosition?.x ||
     cur?.flowPosition?.y !== next?.flowPosition?.y
+  if (changed) {
+    log.log('hover→', next ? `${next.nodeId}/${next.status}/${next.zone}${next.reason ? ' ' + next.reason : ''}` : 'null')
+  }
   if (!changed) return
   pendingHover = next
   if (rafId) return

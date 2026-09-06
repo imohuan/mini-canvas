@@ -11,7 +11,7 @@
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { CanvasNode, SettingsStore, StorageAdapter } from '@mini-canvas/canvas-core-v2'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-core-v2'
-import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, createV2Logger } from '@mini-canvas/canvas-render'
 import {
   themeDefaultPlugin,
   DEFAULT_THEME_EDGE,
@@ -33,6 +33,8 @@ const plugins = [
   canvasCommandsPlugin, // 建/删/撤销命令
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
+
+const log = createV2Logger('config')
 
 // 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge / cfg.handle）
 const cfg = reactive({
@@ -101,9 +103,13 @@ function bindThemeSettings(): void {
     const t = targetOf(k as string)
     if (v !== undefined && t) t[k as string] = v
   }
+  log.log('bindThemeSettings 初始灌入', { edge: cfg.edge, handle: cfg.handle, debug: cfg.debug })
   disposeSettingsBind = store.onChange((key, value) => {
     const t = targetOf(key)
-    if (t) t[key] = value
+    if (t) {
+      t[key] = value
+      log.log(`settings.set ${key}=${JSON.stringify(value)} → 窄更新到 ${Object.prototype.hasOwnProperty.call(cfg.edge, key) ? 'cfg.edge' : Object.prototype.hasOwnProperty.call(cfg.handle, key) ? 'cfg.handle' : 'cfg.debug'}`)
+    }
   }).dispose
 }
 function unbindThemeSettings(): void {

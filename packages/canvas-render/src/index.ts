@@ -84,3 +84,5 @@ export type {
 // 高频值合帧工具(目标 B2 性能约束③)
 export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce'
 export type { CoalesceScheduler } from './utils/coalesce'
+// 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
+export { createV2Logger } from './utils/log'

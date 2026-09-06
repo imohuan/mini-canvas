@@ -51,6 +51,7 @@ import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
+import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
@@ -59,6 +60,8 @@ import {
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
 } from './canvasHostCore'
+
+const log = createV2Logger('canvas-host')
 
 // ==================== props / emits ====================
 
@@ -223,6 +226,7 @@ function syncFromStore(): void {
   nodes.value = nodesFromStore(h.nodeStore)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
+  log.log(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
 }
 
 // ==================== 通用交互事件 ====================
@@ -272,11 +276,16 @@ function checkConnection(
         (sourceHandle === undefined || e.sourceHandle === sourceHandle) &&
         (targetHandle === undefined || e.targetHandle === targetHandle),
     )
-  if (alreadyCommitted) return { ok: true, reason: 'ok' as const }
-  return validateConnection(
+  if (alreadyCommitted) {
+    log.log(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
+    return { ok: true, reason: 'ok' as const }
+  }
+  const res = validateConnection(
     { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
     { nodes: map, edges: edges.value, getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
   )
+  if (!res.ok) log.warn(`checkConnection ${source}→${target} 非法:${res.reason}`)
+  return res
 }
 
 function isValidConnection(conn: Connection): boolean {
@@ -302,6 +311,7 @@ function validateEdgeText(sourceId: string, targetId: string): string {
 function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
   if (!p.nodeId) return
   const handleType = p.handleType ?? (p.handleId as 'source' | 'target') ?? 'source'
+  log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType}`)
   beginConnection(connectionState, {
     sourceNodeId: p.nodeId,
     sourceHandle: handleType === 'target' ? 'target' : 'source',
@@ -309,11 +319,16 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
 }
 
 function onConnectEnd(): void {
+  log.log('connectEnd 清空反馈')
   endConnection(connectionState)
 }
 
 function onConnect(conn: Connection): void {
-  if (!isValidConnection(conn) || !conn.source || !conn.target) return
+  log.log(`connect 事件 ${conn.source}→${conn.target}`, conn)
+  if (!isValidConnection(conn) || !conn.source || !conn.target) {
+    log.warn(`connect 被拒(非法或缺端点) ${conn.source}→${conn.target}`)
+    return
+  }
   const h = hostRef.value
   if (!h) return
   // 拉边记进历史(undo/redo 对边生效，见 settings-panel-slot-host-plan §三.D)：addEdge 写内核 edgeStore(唯一数据源)，
@@ -329,6 +344,7 @@ function onConnect(conn: Connection): void {
   })
   // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
   void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
+  log.log(`connect 建边成功 ${conn.source}→${conn.target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
