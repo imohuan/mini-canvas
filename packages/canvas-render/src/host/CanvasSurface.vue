@@ -22,9 +22,11 @@ import { CANVAS_PARAMS_KEY } from '../contracts/canvasParamKey'
 import { HOST_KEY } from '../contracts/contentBridge'
 import type { EdgeVisual, EdgeSelection } from '../contracts/edgeContext'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
+import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
 import SlotHost from '../components/SlotHost.vue'
+import ConnectionLineHost from './ConnectionLineHost.vue'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -35,6 +37,7 @@ const props = defineProps<{
   handleParams: CanvasParams
   edgeVisual: Partial<EdgeVisual>
   edgeSelection: EdgeSelection
+  connectionState: ConnectionFeedbackState
   // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: any[]
@@ -44,13 +47,18 @@ const props = defineProps<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   edgeTypes: Record<string, any>
   backgroundComp: unknown
+  /** 拖线临时连接线组件（connectionLine 槽赢家；undefined → ConnectionLineHost 回退默认线） */
+  connectionLineComp: unknown
   /** 插件变更后 bump → 给 VueFlow 加 key 强制重挂 */
   nodeEpoch: number
   minZoom: number
   maxZoom: number
   // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
   isValidConnection: (conn: Connection) => boolean
+  validateEdge: (sourceId: string, targetId: string) => string
   onConnect: (conn: Connection) => void
+  onConnectStart: (p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }) => void
+  onConnectEnd: () => void
   onNodeClick: (e: NodeMouseEvent) => void
   onNodeDragStop: (e: NodeDragEvent) => void
   onPaneClick: () => void
@@ -72,6 +80,7 @@ const renderCtx: CanvasRenderContext = {
   handleParams: props.handleParams,
   edgeVisual: props.edgeVisual,
   edgeSelection: props.edgeSelection,
+  connectionState: props.connectionState,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
@@ -96,6 +105,8 @@ provide(HOST_KEY, shallowRef(host))
       :min-zoom="minZoom"
       :max-zoom="maxZoom"
       @connect="onConnect"
+      @connect-start="onConnectStart"
+      @connect-end="onConnectEnd"
       @node-click="onNodeClick"
       @node-drag-stop="onNodeDragStop"
       @pane-click="onPaneClick"
@@ -104,6 +115,16 @@ provide(HOST_KEY, shallowRef(host))
     >
       <!-- 主题插件提供的画布背景（垫在节点之下）；未提供则空 -->
       <component :is="backgroundComp" v-if="backgroundComp" />
+      <!-- 拖线临时连接线：能力层每帧算吸附/反馈并写 connectionState，渲染主题 connectionLine 赢家或回退默认线 -->
+      <template #connection-line="lineProps">
+        <ConnectionLineHost
+          :line-props="lineProps"
+          :connection-line="connectionLineComp"
+          :validate-edge="validateEdge"
+          :handle-radius="handleParams.handleRadius"
+          :state="connectionState"
+        />
+      </template>
       <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->
       <slot />
     </VueFlow>

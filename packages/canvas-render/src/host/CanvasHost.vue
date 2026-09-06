@@ -35,6 +35,7 @@ import {
   GRAPH_EDGES_KEY,
   validateConnection,
   typeConnectionDef,
+  type ValidationResult,
 } from '@mini-canvas/canvas-core-v2'
 import {
   createMiniCanvasHost,
@@ -46,6 +47,9 @@ import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
+import type { ConnectionFeedbackState } from '../contracts/connectionContext'
+import { createConnectionState, beginConnection, endConnection } from './connectionState'
+import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
@@ -141,6 +145,10 @@ const selectedIds = ref<ReadonlySet<string>>(new Set())
 const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
 const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel }
 
+// 拖线连接过程反馈状态（能力层）。onConnectStart/onConnectEnd 写入；每帧 hover 由 ConnectionLineHost 写。
+// 同一引用经 renderContext provide，BaseNode/ConnectionLine 消费。
+const connectionState: ConnectionFeedbackState = createConnectionState()
+
 /** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
 function syncSelected(): void {
   const h = hostRef.value
@@ -161,6 +169,8 @@ const nodeTypes = shallowRef<Record<string, any>>({})
 const edgeTypes = shallowRef<Record<string, any>>({})
 // 背景也是组件句柄，同样浅层即可。
 const backgroundComp = shallowRef<unknown>(undefined)
+// 拖线临时连接线组件（connectionLine 槽赢家；未注册 undefined → ConnectionLineHost 回退默认线）。
+const connectionLineComp = shallowRef<unknown>(undefined)
 const edgeDefaultType = ref('custom')
 const nodeEpoch = ref(0) // 插件变更后 bump → 触发 VueFlow 子树重挂
 
@@ -183,6 +193,7 @@ function applyTheme(): void {
   if (asm.edge) edgeTypes.value = { custom: markRaw(asm.edge) }
   edgeDefaultType.value = asm.edgeDefaultType
   backgroundComp.value = asm.background ? markRaw(asm.background) : undefined
+  connectionLineComp.value = asm.connectionLine ? markRaw(asm.connectionLine) : undefined
 }
 
 // ==================== 通用 UI 槽(overlay) ====================
@@ -233,15 +244,48 @@ function onPaneClick(): void {
 }
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
-function isValidConnection(conn: Connection): boolean {
+// 返回 ValidationResult 的纯校验（供 isValidConnection / 拖线反馈 validateEdge 复用，reason 不丢弃）。
+function checkConnection(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): ValidationResult {
   const h = hostRef.value
-  if (!h || !conn.source || !conn.target) return false
+  if (!h) return { ok: false, reason: 'missing-node' }
   const map = new Map(h.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
-  const res = validateConnection(
-    { source: conn.source, sourceHandle: conn.sourceHandle ?? undefined, target: conn.target, targetHandle: conn.targetHandle ?? undefined },
+  return validateConnection(
+    { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
     { nodes: map, edges: edges.value, getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
   )
-  return res.ok
+}
+
+function isValidConnection(conn: Connection): boolean {
+  if (!conn.source || !conn.target) return false
+  return checkConnection(conn.source, conn.target, conn.sourceHandle, conn.targetHandle).ok
+}
+
+/**
+ * 拖线反馈用的候选校验：给(规范 source,target)返回非法文案(空串=合法)。
+ * 供 ConnectionLineHost 每帧 resolveFeedback 判定 hover valid/invalid 用。
+ */
+function validateEdgeText(sourceId: string, targetId: string): string {
+  const res = checkConnection(sourceId, targetId)
+  return res.ok ? '' : reasonTextFrom(res.reason)
+}
+
+// —— 拖线生命周期：connect-start 记源+压端口；connect-end 清空（反馈状态重置）——
+function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
+  if (!p.nodeId) return
+  const handleType = p.handleType ?? (p.handleId as 'source' | 'target') ?? 'source'
+  beginConnection(connectionState, {
+    sourceNodeId: p.nodeId,
+    sourceHandle: handleType === 'target' ? 'target' : 'source',
+  })
+}
+
+function onConnectEnd(): void {
+  endConnection(connectionState)
 }
 
 function onConnect(conn: Connection): void {
@@ -426,11 +470,16 @@ onBeforeUnmount(() => {
         :node-types="nodeTypes"
         :edge-types="edgeTypes"
         :background-comp="backgroundComp"
+        :connection-line-comp="connectionLineComp"
         :node-epoch="nodeEpoch"
         :min-zoom="props.minZoom"
         :max-zoom="props.maxZoom"
         :is-valid-connection="isValidConnection"
+        :connection-state="connectionState"
         :on-connect="onConnect"
+        :on-connect-start="onConnectStart"
+        :on-connect-end="onConnectEnd"
+        :validate-edge="validateEdgeText"
         :on-node-click="onNodeClick"
         :on-node-drag-stop="onNodeDragStop"
         :on-pane-click="onPaneClick"

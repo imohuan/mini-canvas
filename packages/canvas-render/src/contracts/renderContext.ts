@@ -28,6 +28,7 @@ import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
 import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
+import type { ConnectionFeedbackState } from './connectionContext'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -45,6 +46,8 @@ export interface CanvasRenderContext {
   edgeVisual: Partial<EdgeVisual>
   /** 选中集合（含 ref，供"相连被选即高亮"） */
   edgeSelection: EdgeSelection
+  /** 拖线连接过程反馈（能力层 CanvasHost 维护；BaseNode/ConnectionLine 消费做 3D/气泡/吸附/压端口） */
+  connectionState: ConnectionFeedbackState
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */
