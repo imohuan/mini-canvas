@@ -29,6 +29,7 @@ import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
 import type { ConnectionFeedbackState } from './connectionContext'
+import type { CanvasDebug } from './debugContext'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -48,6 +49,8 @@ export interface CanvasRenderContext {
   edgeSelection: EdgeSelection
   /** 拖线连接过程反馈（能力层 CanvasHost 维护；BaseNode/ConnectionLine 消费做 3D/气泡/吸附/压端口） */
   connectionState: ConnectionFeedbackState
+  /** 调试可视化开关（端口/吸附调试；响应式对象，属性改实时生效） */
+  debug: CanvasDebug
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */

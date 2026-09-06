@@ -18,6 +18,8 @@ export type { NodeWrite } from './contracts/nodeRegistryKey'
 export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
 export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
+// 调试可视化开关令牌（端口调试/吸附调试；宿主 provide、BaseNode/MovingHandle 消费）
+export { DEBUG_KEY, type CanvasDebug } from './contracts/debugContext'
 // 拖线连接过程反馈状态契约（canvas-render 能力层提供、BaseNode/ConnectionLine 消费）
 export type {
   ConnectionFeedbackState,
@@ -61,6 +63,7 @@ export {
   edgeId,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
+  DEFAULT_DEBUG_VISUAL,
 } from './host/canvasHostCore'
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'

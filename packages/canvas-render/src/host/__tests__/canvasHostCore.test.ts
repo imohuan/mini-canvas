@@ -11,6 +11,7 @@ import {
   pruneDanglingEdges,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
+  DEFAULT_DEBUG_VISUAL,
 } from '../canvasHostCore'
 
 function makeStore(): NodeStore {
@@ -89,6 +90,10 @@ describe('默认外观常量', () => {
     expect(DEFAULT_HANDLE_VISUAL.handleRadius).toBe(86)
     expect(DEFAULT_HANDLE_VISUAL.handleButtonSize).toBe(32)
     expect(Object.keys(DEFAULT_HANDLE_VISUAL)).toHaveLength(5)
+  })
+  it('debug 开关默认均关（handleDebug/connectionSnapDebugVisible=false）', () => {
+    expect(DEFAULT_DEBUG_VISUAL.handleDebug).toBe(false)
+    expect(DEFAULT_DEBUG_VISUAL.connectionSnapDebugVisible).toBe(false)
   })
 })
 

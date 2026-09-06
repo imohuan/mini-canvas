@@ -11,6 +11,7 @@ import type { NodeStoreService, CanvasNode } from '@mini-canvas/canvas-core-v2'
 import type { ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
+import type { CanvasDebug } from '../contracts/debugContext'
 
 // ============================================================================
 // store → VueFlow 渲染态
@@ -109,6 +110,12 @@ export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleCursorGap: 24,
   handleButtonSize: 32,
   handleOverlap: 16,
+}
+
+/** 调试可视化开关默认值（均关；host 未显式传参时回落） */
+export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
+  handleDebug: false,
+  connectionSnapDebugVisible: false,
 }
 
 /** 给一条源→目标连接生成稳定边 id */

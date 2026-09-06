@@ -48,6 +48,7 @@ import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState } from '../contracts/connectionContext'
+import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import CanvasSurface from './CanvasSurface.vue'
@@ -56,6 +57,7 @@ import {
   nodesFromStore,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
+  DEFAULT_DEBUG_VISUAL,
 } from './canvasHostCore'
 
 // ==================== props / emits ====================
@@ -79,6 +81,8 @@ const props = withDefaults(
     edgeVisual?: Partial<EdgeVisual>
     /** 浮动端口尺寸覆盖（缺省对齐 contract §0）。BaseNode 读 handle 字段无回落，故需传含全部字段的响应式对象。 */
     handleVisual?: CanvasParams
+    /** 调试可视化开关覆盖（缺省对齐 DEFAULT_DEBUG_VISUAL，均关）。传响应式对象可实时开关。 */
+    debugVisual?: CanvasDebug
     /** VueFlow 缩放范围 */
     minZoom?: number
     maxZoom?: number
@@ -135,8 +139,10 @@ const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
 // 注意：BaseNode 读 handle 字段不做默认回落，故 handleVisual 需含全部 5 个字段（通常传一个全字段 reactive）。
 const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
 const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
+const debugDefaultR = reactive({ ...DEFAULT_DEBUG_VISUAL })
 const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
 const handleToProvide = props.handleVisual ?? handleDefaultR
+const debugToProvide = props.debugVisual ?? debugDefaultR
 
 // 选中集合注入给 CustomEdge：相连节点被选 → 边高亮流光。
 // 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
@@ -482,6 +488,7 @@ onBeforeUnmount(() => {
         :node-write="nodeWrite"
         :handle-params="handleToProvide"
         :edge-visual="edgeVisualToProvide"
+        :debug-visual="debugToProvide"
         :edge-selection="edgeSelection"
         :nodes="nodes"
         :edges="edges"

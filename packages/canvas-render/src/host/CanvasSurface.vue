@@ -25,6 +25,7 @@ import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
+import type { CanvasDebug } from '../contracts/debugContext'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 
@@ -38,6 +39,7 @@ const props = defineProps<{
   edgeVisual: Partial<EdgeVisual>
   edgeSelection: EdgeSelection
   connectionState: ConnectionFeedbackState
+  debugVisual: CanvasDebug
   // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: any[]
@@ -81,6 +83,7 @@ const renderCtx: CanvasRenderContext = {
   edgeVisual: props.edgeVisual,
   edgeSelection: props.edgeSelection,
   connectionState: props.connectionState,
+  debug: props.debugVisual,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
