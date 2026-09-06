@@ -53,6 +53,12 @@ export const DEFAULT_THEME_HANDLE = {
   handleOverlap: 16,
 } as const
 
+/** 调试可视化开关默认值（对齐 canvasHostCore DEFAULT_DEBUG_VISUAL；作为本插件 config 的初始值） */
+export const DEFAULT_THEME_DEBUG = {
+  handleDebug: false,
+  connectionSnapDebugVisible: false,
+} as const
+
 /** 本插件声明"可配置项 → EDGE_VISUAL 字段"的映射（供宿主/demo 在 UI 改动后按 key 窄更新对应一处，不整图重建） */
 export const EDGE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_EDGE> = Object.keys(
   DEFAULT_THEME_EDGE,
@@ -62,6 +68,11 @@ export const EDGE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_EDGE> =
 export const HANDLE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_HANDLE> = Object.keys(
   DEFAULT_THEME_HANDLE,
 ) as (keyof typeof DEFAULT_THEME_HANDLE)[]
+
+/** 本插件声明"可配置项 → 调试可视化开关(CanvasDebug)"的映射 */
+export const DEBUG_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_DEBUG> = Object.keys(
+  DEFAULT_THEME_DEBUG,
+) as (keyof typeof DEFAULT_THEME_DEBUG)[]
 
 /**
  * 本插件的可配置项 schema（P4：模块级 Config）。
@@ -202,6 +213,20 @@ export const Config: ConfigSchema = {
     label: '覆盖距离',
     group: '端口',
     description: '半圆交互区向节点内侧覆盖后被裁掉的宽度。',
+  },
+  handleDebug: {
+    type: 'boolean',
+    default: DEFAULT_THEME_DEBUG.handleDebug,
+    label: '端口调试',
+    group: '调试',
+    description: '打开后，端口上会画出半圆交互区/圆心/归位点/鼠标点辅助线，便于校准端口几何。',
+  },
+  connectionSnapDebugVisible: {
+    type: 'boolean',
+    default: DEFAULT_THEME_DEBUG.connectionSnapDebugVisible,
+    label: '吸附调试',
+    group: '调试',
+    description: '打开后，拖线悬停到某节点时画出它的端口吸附带与卡片接收区，便于校准吸附判定。',
   },
 }
 

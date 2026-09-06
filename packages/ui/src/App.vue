@@ -16,8 +16,10 @@ import {
   themeDefaultPlugin,
   DEFAULT_THEME_EDGE,
   DEFAULT_THEME_HANDLE,
+  DEFAULT_THEME_DEBUG,
   EDGE_SETTING_KEYS,
   HANDLE_SETTING_KEYS,
+  DEBUG_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
@@ -36,6 +38,7 @@ const adapter: StorageAdapter = new LocalStorageAdapter()
 const cfg = reactive({
   edge: { ...DEFAULT_THEME_EDGE },
   handle: { ...DEFAULT_THEME_HANDLE },
+  debug: { ...DEFAULT_THEME_DEBUG },
 })
 
 // —— 设置面板开关（顶部按钮切换右下 dock 显隐）——
@@ -90,8 +93,10 @@ function bindThemeSettings(): void {
       ? (cfg.edge as unknown as Record<string, unknown>)
       : (HANDLE_SETTING_KEYS as readonly string[]).includes(key)
         ? (cfg.handle as unknown as Record<string, unknown>)
-        : undefined
-  for (const k of [...EDGE_SETTING_KEYS, ...HANDLE_SETTING_KEYS]) {
+        : (DEBUG_SETTING_KEYS as readonly string[]).includes(key)
+          ? (cfg.debug as unknown as Record<string, unknown>)
+          : undefined
+  for (const k of [...EDGE_SETTING_KEYS, ...HANDLE_SETTING_KEYS, ...DEBUG_SETTING_KEYS]) {
     const v = store.get(k as string)
     const t = targetOf(k as string)
     if (v !== undefined && t) t[k as string] = v
@@ -158,6 +163,7 @@ onBeforeUnmount(() => {
         :seed="seedDefault"
         :edge-visual="cfg.edge"
         :handle-visual="cfg.handle"
+        :debug-visual="cfg.debug"
         :min-zoom="0.2"
         :max-zoom="2"
         window-key="MiniCanvasUI"
