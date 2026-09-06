@@ -271,6 +271,22 @@ describe('边下沉内核：edgeStore 增删 + 撤销 + 持久化往返', () => 
     host.stop()
   })
 
+  it('选中边 command:delete 删边且保留两端节点（v2 边双集选中）', async () => {
+    const host = await boot()
+    const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
+    const a = text.addTextNode({ x: 0, y: 0 })
+    const b = text.addTextNode({ x: 10, y: 10 })
+    const eid = host.edgeStore.addEdge({ source: a, target: b, type: 'custom' })
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+
+    // 只选边（edgeIds），Delete 应只删边、保留两端节点
+    host.selection.setEdges([eid])
+    host.command.execute('command:delete')
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+    expect(host.nodeStore.getNode(a)).toBeDefined()
+    expect(host.nodeStore.getNode(b)).toBeDefined()
+    host.stop()
+  })
   it('删除无边的节点仍单历史(不误记)、redo 后节点带边回来', async () => {
     const host = await boot()
     const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
@@ -367,3 +383,4 @@ describe('边撤销：拉边(加边)记进历史可 undo/redo（对应 Must-1 �
     host.stop()
   })
 })
+

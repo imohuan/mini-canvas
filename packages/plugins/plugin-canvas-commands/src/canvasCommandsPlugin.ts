@@ -57,11 +57,18 @@ export function apply(ctx: Context) {
     title: '删除选中',
     run() {
       history.withRecord(() => {
+        // 先删选中的边（v2 边双集选中）：只删边、保留两端节点
+        const edgeIds = [...selection.edgeIds]
+        for (const eid of edgeIds) {
+          edgeStore.removeEdge(eid)
+          selection.removeEdge(eid)
+        }
+        // 再删选中的节点（连带清与它相连的边）
         const ids = [...selection.ids]
-        if (ids.length === 0) return
+        if (ids.length === 0 && edgeIds.length === 0) return
         for (const id of ids) {
           nodeStore.removeNode(id)
-          edgeStore.removeEdgesOfNode(id) // 连带清掉该节点的入边/出边
+          edgeStore.removeEdgesOfNode(id)
           selection.remove(id)
         }
         persist()
@@ -91,3 +98,4 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const canvasCommandsPlugin: PluginModule = { name, inject, apply }
+
