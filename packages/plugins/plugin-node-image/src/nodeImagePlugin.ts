@@ -11,9 +11,12 @@
  *
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
-import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
+import { Service, type PluginModule, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
 import type { NodeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
 import ImageContent from './ImageContent.vue'
+// 设置面板 slothost 测试组件（本插件自定义导航/内容插槽填充）
+import DemoSlotNavItem from './settingsDemo/DemoSlotNavItem.vue'
+import DemoSlotContent from './settingsDemo/DemoSlotContent.vue'
 
 /** image 插件暴露给外部的服务形状（content/宿主经 ctx.get('image') 使用；形状不变，.vue 零改动） */
 export interface ImageNodeService {
@@ -57,9 +60,28 @@ export const name = 'image'
 export const inject = ['nodeStore', 'save'] as string[]
 
 /**
- * image 节点插件（cordis 最新写法）。apply 里 new ImageService(ctx) 上架 'image' 服务 + 注册节点
- * (数据/展示/create→ImageService.addImageNode)，并额外 ctx.inject('image-meta',{v}) 供开发期 HMR 演示。
+ * image 插件可配置项 schema（P4：模块级 Config）。
+ * 字段带 group，内核装配时经 Config 校验+补默认并登记进 settings 单一数据源(scope=image)；
+ * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
+ *
+ * 本插件故意给了**多个分组**来验证设置面板 slothost：
+ *   - 「图片」 走默认渲染（无插槽接管）
+ *   - 「边框」 其**导航 tab 被 DemoSlotNavItem 顶替**（settingsNav 插槽，id='边框'）
+ *   - 「高级」 其**右侧内容被 DemoSlotContent 接管**（settingsGroup/高级 插槽）
+ * 与 theme-default 的「连线 / 连线动效与箭头」并存，正好测试"跨插件分组合并"。
  */
+export const Config: ConfigSchema = {
+  // —— 组「图片」：走默认 schema 渲染 ——
+  cornerRadius: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '图片' },
+  showShadow: { type: 'boolean', default: true, label: '阴影', group: '图片' },
+  // —— 组「边框」：导航 tab 被 settingsNav 插槽顶替 ——
+  borderWidth: { type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '边框' },
+  borderColor: { type: 'color', default: '#334155', label: '边框颜色', group: '边框' },
+  // —— 组「高级」：右侧内容被 settingsGroup/高级 插槽接管 ——
+  blurOnLoad: { type: 'boolean', default: false, label: '加载时模糊', group: '高级' },
+  lazyLoad: { type: 'boolean', default: true, label: '懒加载', group: '高级' },
+}
+
 export function apply(ctx: Context) {
   // 1. 构造即上架 'image' 服务（super(ctx,'image') → ctx.provide，随插件 scope 回收）
   const image = new ImageService(ctx)
@@ -75,9 +97,23 @@ export function apply(ctx: Context) {
     },
   })
 
-  // 3. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
+  // 3. 设置面板 slothost 验证：往设置弹窗的插槽塞 occupant（装卸自动回收）
+  //    a) settingsNav：id 命中 config 分组「边框」→ 顶替它的默认导航 tab（注入 group/active/onSelect）
+  ctx.slots.register('settingsNav', {
+    id: '边框',
+    order: 0,
+    component: DemoSlotNavItem,
+  })
+  //    b) settingsGroup/高级：接管「高级」分组的右侧内容区（注入 group/settings），不再走 schema fallback
+  ctx.slots.register('settingsGroup/高级', {
+    id: 'image-advanced-demo',
+    order: 0,
+    component: DemoSlotContent,
+  })
+
+  // 4. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
   ctx.inject('image-meta', { v: 1 })
 }
 
 /** 兼容旧装配的 PluginModule 出口（name='image' 供 HMR reload） */
-export const nodeImagePlugin: PluginModule = { name, inject, apply }
+export const nodeImagePlugin: PluginModule = { name, inject, Config, apply }
