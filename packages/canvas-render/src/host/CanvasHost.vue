@@ -360,9 +360,6 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
   }
 }
 
-/** 最新一次瞄准目标（每次 mousemove 由真实 DOM 命中探出；mouseup 落边时直接读它） */
-let currentAim: Aim | null = null
-
 /** 由 Aim 合成富 HoverFeedback（供 ConnectionLine 着色 / BaseNode 3D 气泡）；无效/空 aim → null */
 function aimToHoverFeedback(
   aim: Aim | null,
@@ -401,7 +398,6 @@ function onDragMouseMove(ev: MouseEvent): void {
     dragFlowPoint.value = flowPoint
     // 吸附命中用**真实 DOM**（MovingHandle zone/卡片 body 就是可点击命中区），render 不再复刻几何带。
     const aim = aimAtClient(x, y, dragSourceId)
-    currentAim = aim
     // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
     const nextHover = aimToHoverFeedback(aim, dragSourceHandle, dragSourceId, flowPoint)
     // 变化比对（与 v1 思路一致：避免无谓写触发下游重渲）
@@ -442,7 +438,6 @@ function onDragMouseUp(ev: MouseEvent): void {
   dragFlowPoint.value = flowPoint
   // 松手点真实 DOM 命中 → 目标节点；不在任何吸附区/卡片上则空白
   const aim = aimAtClient(ev.clientX, ev.clientY, dragSourceId)
-  currentAim = aim
   const drop =
     aim && aimAcceptsSide(aim, dragSourceHandle)
       ? aimToCandidate(aim, dragSourceId, dragSourceHandle)
@@ -458,7 +453,6 @@ function onDragMouseUp(ev: MouseEvent): void {
   // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
   dragSourceId = ''
   dragSourceHandle = 'source'
-  currentAim = null
 }
 
 /** client 坐标 → flow 坐标（用 VueFlow 自带 screenToFlowCoordinate：缩放/平移/zoom 完全可靠，
