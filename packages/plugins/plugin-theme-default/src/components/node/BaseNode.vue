@@ -49,16 +49,18 @@ const nodeLabel = computed(() => {
 })
 
 // ============ 卡片固定尺寸 + resize（useNodeCardSize）============
-const nodeData = computed(() => props.data ?? {})
 const card = useNodeCardSize({
   nodeId: props.id,
-  data: nodeData.value,
+  data: () => props.data ?? {},
   type: props.type,
   writeback: nodeWrite ?? undefined,
   zoom: () => zoom.value,
 })
 const cardWidth = card.cardWidth
 const cardHeight = card.cardHeight
+// 顶层解构：模板里 ref 自动解包，才能让 v-if 拿到布尔值(而非恒真的 ref 对象)。
+const cardResizable = card.resizable
+const cardIsResizing = card.isResizing
 
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
 const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM))
@@ -335,9 +337,9 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 右下角 resize 拖拽句柄（data.resizable === true 时） -->
       <div
-        v-if="card.resizable"
+        v-if="cardResizable"
         class="resize-handle"
-        :class="{ 'is-resizing': card.isResizing }"
+        :class="{ 'is-resizing': cardIsResizing }"
         @pointerdown="card.onResizePointerDown"
         @pointermove="card.onResizePointerMove"
         @pointerup="card.onResizePointerUp"

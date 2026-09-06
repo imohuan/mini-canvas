@@ -15,8 +15,13 @@ import { useNodeCapability } from './useNodeCapability'
 
 export interface NodeCardSizeOptions {
   nodeId: string
-  /** 节点 data（reactive） */
-  data: Record<string, unknown>
+  /**
+   * 节点 data 的惰性取值器，返回当前 data 对象。
+   * 必须传 getter(而非快照)：VueFlow 每次重渲染都替换 props.data 成新对象，
+   * 若在 setup 期捕获对象快照会读到过期引用，导致 resizable/尺寸永远不更新。
+   * 传 `() => props.data` 即可让内部 computed/watch 依赖 props.data 响应式。
+   */
+  data: () => Record<string, unknown>
   type: string
   /** 尺寸写回（CanvasHost nodeWrite → nodeStore + 落盘） */
   writeback?: (id: string, patch: Record<string, unknown>) => void
@@ -29,31 +34,34 @@ export const CARD_MIN_HEIGHT = 80
 
 export function useNodeCardSize(opts: NodeCardSizeOptions) {
   const capability = useNodeCapability(opts.type)
+  /** 当前 data（响应式：依赖 props.data 变化） */
+  const data = computed(() => opts.data() ?? {})
+
   // 初值：data 显式尺寸 ?? 类型 defaultSize
   const cardWidth = ref<number>(
-    (opts.data.cardWidth as number) || capability.defaultSize.value.w,
+    (data.value.cardWidth as number) || capability.defaultSize.value.w,
   )
   const cardHeight = ref<number>(
-    (opts.data.cardHeight as number) || capability.defaultSize.value.h,
+    (data.value.cardHeight as number) || capability.defaultSize.value.h,
   )
 
   // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值
   const isResizing = ref(false)
   watch(
-    () => opts.data?.cardWidth as number | undefined,
+    () => data.value?.cardWidth as number | undefined,
     (w) => {
       if (w !== undefined && !isResizing.value) cardWidth.value = w
     },
   )
   watch(
-    () => opts.data?.cardHeight as number | undefined,
+    () => data.value?.cardHeight as number | undefined,
     (h) => {
       if (h !== undefined && !isResizing.value) cardHeight.value = h
     },
   )
 
   // resizable 只在 data.resizable === true 时显示拖柄
-  const resizable = computed(() => opts.data?.resizable === true)
+  const resizable = computed(() => data.value?.resizable === true)
 
   // —— resize 拖拽状态机 ——
   interface ResizeState {
