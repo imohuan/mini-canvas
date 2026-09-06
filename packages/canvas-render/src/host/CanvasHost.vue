@@ -254,6 +254,19 @@ function checkConnection(
   const h = hostRef.value
   if (!h) return { ok: false, reason: 'missing-node' }
   const map = new Map(h.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
+  // 幂等重校验：这条连接已真实存在于内核 edgeStore(=已提交的历史边)，不是新拖出的候选——
+  // VueFlow 每次 setEdges 全量重喂都会把已存在边再校验一遍，若按"重复"驳回会把已落盘边丢掉(拖线后连线"看不见")。
+  // 已存在的边放行(重复/环判定交给真正的新候选)。内核 edgeStore 天然按端点去重，故不影响数据唯一性。
+  const alreadyCommitted = h.edgeStore
+    .getEdges()
+    .some(
+      (e) =>
+        e.source === source &&
+        e.target === target &&
+        (sourceHandle === undefined || e.sourceHandle === sourceHandle) &&
+        (targetHandle === undefined || e.targetHandle === targetHandle),
+    )
+  if (alreadyCommitted) return { ok: true, reason: 'ok' as const }
   return validateConnection(
     { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
     { nodes: map, edges: edges.value, getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
