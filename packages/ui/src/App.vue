@@ -11,8 +11,14 @@
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { CanvasNode, SettingsStore, StorageAdapter } from '@mini-canvas/canvas-core-v2'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-core-v2'
-import { CanvasHost, SettingsHost, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
+import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
+import {
+  themeDefaultPlugin,
+  DEFAULT_THEME_EDGE,
+  DEFAULT_THEME_HANDLE,
+  EDGE_SETTING_KEYS,
+  HANDLE_SETTING_KEYS,
+} from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
@@ -26,10 +32,10 @@ const plugins = [
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
-// 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge）
+// 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge / cfg.handle）
 const cfg = reactive({
   edge: { ...DEFAULT_THEME_EDGE },
-  handle: { ...DEFAULT_HANDLE_VISUAL },
+  handle: { ...DEFAULT_THEME_HANDLE },
 })
 
 // —— 设置面板开关（顶部按钮切换右下 dock 显隐）——
@@ -69,22 +75,30 @@ function onReady(): void {
 }
 
 /**
- * 把 theme-default 申报的连线配置绑定到实时外观(cfg.edge)：
- * - 初始：把 settings 当前值灌进 cfg.edge（theme 是单一数据源，改过则以改过为准）；
- * - 订阅：settings.set 触发后只把"声明过的 edge 键"窄更新到 cfg.edge（只重绘受影响连线，无整图重建）。
- * 实现"在设置界面改连线颜色/线宽 → 画布上连线实时变"。
+ * 把 theme-default 申报的外观配置绑定到实时外观(cfg.edge / cfg.handle)：
+ * - 初始：把 settings 当前值分别灌进 cfg.edge / cfg.handle（theme 是单一数据源，改过则以改过为准）；
+ * - 订阅：settings.set 触发后把"声明过的 edge/handle 键"窄更新到对应 cfg 分组（只重绘受影响连线/端口，无整图重建）。
+ * 实现"在设置界面改连线颜色/线宽/端口尺寸 → 画布上连线与端口实时变"。
  */
 function bindThemeSettings(): void {
   const ctx = hostEl.value?.host?.ctx
   if (!ctx) return
   const store = ctx.get<SettingsStore>('settings')
-  for (const k of EDGE_SETTING_KEYS) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const targetOf = (key: string): Record<string, unknown> | undefined =>
+    (EDGE_SETTING_KEYS as readonly string[]).includes(key)
+      ? (cfg.edge as unknown as Record<string, unknown>)
+      : (HANDLE_SETTING_KEYS as readonly string[]).includes(key)
+        ? (cfg.handle as unknown as Record<string, unknown>)
+        : undefined
+  for (const k of [...EDGE_SETTING_KEYS, ...HANDLE_SETTING_KEYS]) {
     const v = store.get(k as string)
-    if (v !== undefined) (cfg.edge as unknown as Record<string, unknown>)[k] = v
+    const t = targetOf(k as string)
+    if (v !== undefined && t) t[k as string] = v
   }
   disposeSettingsBind = store.onChange((key, value) => {
-    if (!EDGE_SETTING_KEYS.includes(key as (typeof EDGE_SETTING_KEYS)[number])) return
-    ;(cfg.edge as unknown as Record<string, unknown>)[key] = value
+    const t = targetOf(key)
+    if (t) t[key] = value
   }).dispose
 }
 function unbindThemeSettings(): void {

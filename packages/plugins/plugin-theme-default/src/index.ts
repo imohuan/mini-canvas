@@ -36,13 +36,31 @@ export const DEFAULT_THEME_EDGE = {
   edgeDashed: false,
   edgeAnimated: true,
   edgeMarkerEnd: false,
+  edgeMarkerSize: 8,
   edgeGlowEnabled: true,
+  edgeGlowIntensity: 1,
+  edgeGlowColor: '#3b82f6',
+  edgeVisible: true,
+} as const
+
+/** 浮动端口(half)外观默认值（对齐 canvasHostCore DEFAULT_HANDLE_VISUAL） */
+export const DEFAULT_THEME_HANDLE = {
+  handleRadius: 86,
+  handleRestOffset: 36,
+  handleCursorGap: 24,
+  handleButtonSize: 32,
+  handleOverlap: 16,
 } as const
 
 /** 本插件声明"可配置项 → EDGE_VISUAL 字段"的映射（供宿主/demo 在 UI 改动后按 key 窄更新对应一处，不整图重建） */
 export const EDGE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_EDGE> = Object.keys(
   DEFAULT_THEME_EDGE,
 ) as (keyof typeof DEFAULT_THEME_EDGE)[]
+
+/** 本插件声明"可配置项 → 端口参数(CanvasParams)"的映射 */
+export const HANDLE_SETTING_KEYS: ReadonlyArray<keyof typeof DEFAULT_THEME_HANDLE> = Object.keys(
+  DEFAULT_THEME_HANDLE,
+) as (keyof typeof DEFAULT_THEME_HANDLE)[]
 
 /**
  * 本插件的可配置项 schema（P4：模块级 Config）。
@@ -79,6 +97,38 @@ export const Config: ConfigSchema = {
     group: '连线',
     description: '连线的粗细（像素）。值越大线条越明显。',
   },
+  edgeVisible: {
+    type: 'boolean',
+    default: DEFAULT_THEME_EDGE.edgeVisible,
+    label: '显示连线',
+    group: '连线',
+    description: '关闭后连线整体隐藏（只留交互热区）。',
+  },
+  edgeMarkerSize: {
+    type: 'number',
+    default: DEFAULT_THEME_EDGE.edgeMarkerSize,
+    min: 4,
+    max: 24,
+    label: '箭头大小',
+    group: '连线',
+    description: '目标端箭头的大小（开启箭头后生效）。',
+  },
+  edgeGlowIntensity: {
+    type: 'number',
+    default: DEFAULT_THEME_EDGE.edgeGlowIntensity,
+    min: 0.1,
+    max: 3,
+    label: '辉光强度',
+    group: '连线',
+    description: '选中/相连连线的外圈辉光强度。',
+  },
+  edgeGlowColor: {
+    type: 'color',
+    default: DEFAULT_THEME_EDGE.edgeGlowColor,
+    label: '辉光颜色',
+    group: '连线',
+    description: '辉光/流光高亮使用的颜色（缺省跟随线色）。',
+  },
   edgeAnimated: {
     type: 'boolean',
     default: DEFAULT_THEME_EDGE.edgeAnimated,
@@ -106,6 +156,51 @@ export const Config: ConfigSchema = {
     label: '辉光',
     group: '连线动效与箭头',
     description: '连线外圈的柔光效果，增强视觉层次。',
+  },
+  handleRadius: {
+    type: 'number',
+    default: DEFAULT_THEME_HANDLE.handleRadius,
+    min: 30,
+    max: 200,
+    label: '端口吸附半径',
+    group: '端口',
+    description: '端口半圆形交互区/吸附范围的大小。',
+  },
+  handleRestOffset: {
+    type: 'number',
+    default: DEFAULT_THEME_HANDLE.handleRestOffset,
+    min: 0,
+    max: 100,
+    label: '端口偏移',
+    group: '端口',
+    description: '鼠标离开后圆球回到节点外侧的默认距离。',
+  },
+  handleCursorGap: {
+    type: 'number',
+    default: DEFAULT_THEME_HANDLE.handleCursorGap,
+    min: 0,
+    max: 80,
+    label: '光标间隙',
+    group: '端口',
+    description: '圆球跟随鼠标时与光标的错开距离。',
+  },
+  handleButtonSize: {
+    type: 'number',
+    default: DEFAULT_THEME_HANDLE.handleButtonSize,
+    min: 16,
+    max: 64,
+    label: '按钮大小',
+    group: '端口',
+    description: '浮动端口圆球按钮的直径。',
+  },
+  handleOverlap: {
+    type: 'number',
+    default: DEFAULT_THEME_HANDLE.handleOverlap,
+    min: 0,
+    max: 50,
+    label: '覆盖距离',
+    group: '端口',
+    description: '半圆交互区向节点内侧覆盖后被裁掉的宽度。',
   },
 }
 
