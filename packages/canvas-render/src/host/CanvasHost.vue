@@ -56,7 +56,7 @@ import { aimAtClient } from './domAim'
 import type { Aim } from '../connection/aim'
 import { aimToCandidate, aimAcceptsSide, aimPortSide } from '../connection/aim'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
-import { type SnapZoneConfig } from '../connection/geometry'
+import { DEFAULT_SNAP_ZONE_CONFIG, type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
