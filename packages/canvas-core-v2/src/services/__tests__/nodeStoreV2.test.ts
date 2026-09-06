@@ -34,7 +34,7 @@ describe('NodeStore v2 写 API', () => {
     expect(ids).toEqual(['1', 'a'])
   })
 
-  it('addNodes 广播一次 add（reason 无 nodeId 或带首个？约定：replace 由调用方决定；addNodes 对整批广播一次 replace 语义待定）——本测试锁定：至少触发一次通知且 getNodes 可见', () => {
+  it('addNodes 整批插入后至少触发一次通知且节点可见', () => {
     const s = makeStore()
     let calls = 0
     s.subscribe(() => (calls += 1))
@@ -139,5 +139,4 @@ describe('NodeStore v2 写 API', () => {
     ).toThrow(/no node/)
     expect(s.getNode('a')!.position).toEqual({ x: 0, y: 0 }) // a 未被改
   })
-
 

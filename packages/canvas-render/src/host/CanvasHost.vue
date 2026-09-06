@@ -173,8 +173,8 @@ const snapZoneToProvide = props.snapZoneVisual ?? snapZoneDefaultR
 // 以 ReadonlySet 形状暴露（消费方只读）。内核 Selection 是单源：本 ref 只是它的派生投影——
 // 点击/清空/删除/撤销只写内核 selection，此处经订阅 onChange 整体替换新集合以触发响应式。
 const selectedIds = ref<ReadonlySet<string>>(new Set())
-const emptyEdgeSel = ref<ReadonlySet<string>>(new Set())
-const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdgeSel }
+const selectedEdgeSelRef = ref<ReadonlySet<string>>(new Set())
+const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: selectedEdgeSelRef }
 
 // 拖线连接过程反馈状态（能力层）。onConnectStart/onConnectEnd 写入；每帧 hover 由 ConnectionLineHost 写。
 // 同一引用经 renderContext provide，BaseNode/ConnectionLine 消费。
@@ -192,7 +192,7 @@ function syncSelected(): void {
   const h = hostRef.value
   if (!h) return
   selectedIds.value = new Set(h.selection.ids)
-  emptyEdgeSel.value = new Set(h.selection.edgeIds)
+  selectedEdgeSelRef.value = new Set(h.selection.edgeIds)
   h.ctx.emit(RenderEvents.SelectionChange, {
     nodeIds: [...h.selection.ids],
     edgeIds: [...h.selection.edgeIds],
@@ -850,6 +850,7 @@ defineExpose({
 })
 
 onBeforeUnmount(() => {
+  if (dragEmitRaf) cancelAnimationFrame(dragEmitRaf)
   unsubStore?.()
   unsubEdge?.()
   unsubSel?.()
