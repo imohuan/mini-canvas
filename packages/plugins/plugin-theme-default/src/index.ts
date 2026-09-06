@@ -55,8 +55,8 @@ export const DEFAULT_THEME_HANDLE = {
 
 /** 调试可视化开关默认值（对齐 canvasHostCore DEFAULT_DEBUG_VISUAL；作为本插件 config 的初始值） */
 export const DEFAULT_THEME_DEBUG = {
-  handleDebug: false,
-  connectionSnapDebugVisible: false,
+  handleDebug: true,
+  connectionSnapDebugVisible: true,
 } as const
 
 /** 本插件声明"可配置项 → EDGE_VISUAL 字段"的映射（供宿主/demo 在 UI 改动后按 key 窄更新对应一处，不整图重建） */

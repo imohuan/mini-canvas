@@ -91,9 +91,9 @@ describe('默认外观常量', () => {
     expect(DEFAULT_HANDLE_VISUAL.handleButtonSize).toBe(32)
     expect(Object.keys(DEFAULT_HANDLE_VISUAL)).toHaveLength(5)
   })
-  it('debug 开关默认均关（handleDebug/connectionSnapDebugVisible=false）', () => {
-    expect(DEFAULT_DEBUG_VISUAL.handleDebug).toBe(false)
-    expect(DEFAULT_DEBUG_VISUAL.connectionSnapDebugVisible).toBe(false)
+  it('debug 开关默认均开（handleDebug/connectionSnapDebugVisible=true，开关设计默认给可视化）', () => {
+    expect(DEFAULT_DEBUG_VISUAL.handleDebug).toBe(true)
+    expect(DEFAULT_DEBUG_VISUAL.connectionSnapDebugVisible).toBe(true)
   })
 })
 

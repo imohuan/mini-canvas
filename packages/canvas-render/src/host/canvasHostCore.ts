@@ -112,10 +112,10 @@ export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleOverlap: 16,
 }
 
-/** 调试可视化开关默认值（均关；host 未显式传参时回落） */
+/** 调试可视化开关默认值（**默认开**：端口调试 + 吸附调试都开，方便设计/排错直观看到端口几何 + 吸附范围） */
 export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
-  handleDebug: false,
-  connectionSnapDebugVisible: false,
+  handleDebug: true,
+  connectionSnapDebugVisible: true,
 }
 
 /** 给一条源→目标连接生成稳定边 id */
