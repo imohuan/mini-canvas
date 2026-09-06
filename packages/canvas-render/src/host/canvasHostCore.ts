@@ -54,6 +54,8 @@ export interface ThemeAssembly {
   edge: unknown
   /** 画布背景组件（background 槽位；缺省 undefined） */
   background: unknown
+  /** 拖线临时连接线组件（connectionLine 槽位；缺省 undefined = 宿主回退默认线） */
+  connectionLine: unknown
   /** 所有边默认 type 键（edgeDefaultType 槽位；缺省 'custom'） */
   edgeDefaultType: string
   /** 展示注册表里已注册的业务 type 列表（用于铺 nodeTypes 键） */
@@ -71,12 +73,14 @@ export function assembleTheme(
   const shell = theme?.get('nodeShell')
   const edge = theme?.get('edge')
   const background = theme?.get('background')
+  const connectionLine = theme?.get('connectionLine')
   const edgeDefaultType =
     (theme?.get('edgeDefaultType') as string | undefined) ?? 'custom'
   return {
     nodeShell: shell,
     edge,
     background,
+    connectionLine,
     edgeDefaultType,
     nodeTypes: [...storeTypes],
   }

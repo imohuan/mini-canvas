@@ -55,21 +55,25 @@ describe('assembleTheme', () => {
   it('读各槽位 + edgeDefaultType；无主题/未注册时回落默认', () => {
     const theme = new ThemeRegistry()
     const shell = {}
+    const cl = {}
     theme.register('nodeShell', shell)
+    theme.register('connectionLine', cl)
     theme.register('edgeDefaultType', 'custom2')
     const store = makeStore()
     const out = assembleTheme(theme, store.types.keys())
     expect(out.nodeShell).toBe(shell)
+    expect(out.connectionLine).toBe(cl)
     expect(out.nodeTypes).toEqual(['text', 'image'])
     expect(out.edgeDefaultType).toBe('custom2')
   })
 
-  it('空 registry / 未注册槽位时回落：shell/edge/background undefined、edgeDefaultType=custom', () => {
+  it('空 registry / 未注册槽位时回落：shell/edge/background/connectionLine undefined、edgeDefaultType=custom', () => {
     const store = makeStore()
     const out = assembleTheme(undefined, store.types.keys())
     expect(out.nodeShell).toBeUndefined()
     expect(out.edge).toBeUndefined()
     expect(out.background).toBeUndefined()
+    expect(out.connectionLine).toBeUndefined()
     expect(out.edgeDefaultType).toBe('custom')
     expect(out.nodeTypes).toEqual(['text', 'image'])
   })
