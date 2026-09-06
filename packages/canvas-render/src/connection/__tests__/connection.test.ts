@@ -101,8 +101,8 @@ describe('resolveFeedback', () => {
     expect(r.end).toEqual({ x: 500, y: 264 })
   })
 
-  it('forward 悬在目标卡片 body（非端口精确区）→ body 反馈；非法校验 → invalid + reason', () => {
-    // B body 内偏上(端口吸附带 y 之外但在卡内)
+  it('forward 悬在目标卡片 body（非端口精确区）→ body 反馈；非法校验 → invalid + reason 且不吸', () => {
+    // B body 内偏上(端口吸附带 y 之外但在卡内)；非法 → 线终点仍跟随鼠标
     const r = resolveFeedback({
       ...base,
       flowPoint: { x: 560, y: 210 },
@@ -110,7 +110,36 @@ describe('resolveFeedback', () => {
     })
     expect(r.snappedToId).toBeNull()
     expect(r.hover).toEqual({ nodeId: 'b', status: 'invalid', zone: 'body', reason: '不能连自己' })
-    expect(r.end).toEqual({ x: 560, y: 210 }) // 不吸附
+    expect(r.end).toEqual({ x: 560, y: 210 }) // 非法不吸附
+  })
+
+  it('forward 悬在合法目标卡片 body → body valid 反馈，且 end 对齐 target(左缘)锚点(与 hover 判定落点一致)', () => {
+    // B body 中部(远离 B 左缘吸附带)：hover valid(body)，线终点应吸到 B 左缘锚点 (500,264)
+    const r = resolveFeedback({ ...base, flowPoint: { x: 620, y: 264 } })
+    expect(r.snappedToId).toBeNull()
+    expect(r.hover).toEqual({ nodeId: 'b', status: 'valid', zone: 'body', reason: undefined })
+    expect(r.end).toEqual({ x: 500, y: 264 }) // 对齐 target 端口锚点
+  })
+
+  it('forward 悬在合法 body 但源自身(候选被调用方排除)外、悬空卡片外 → 不吸', () => {
+    const r = resolveFeedback({ ...base, flowPoint: { x: 60, y: 60 } })
+    expect(r.snappedToId).toBeNull()
+    expect(r.hover).toBeNull()
+    expect(r.end).toEqual({ x: 60, y: 60 })
+  })
+
+  it('reverse：悬在目标卡片 body 合法 → end 对齐 source(右缘)锚点', () => {
+    const r = resolveFeedback({
+      sourceId: 'c',
+      sourceHandle: 'target',
+      nodeRects: [A],
+      handleRadius: R,
+      flowPoint: { x: 200, y: 164 }, // A body 中部(远离右缘吸附带)
+      validate: () => '',
+    })
+    expect(r.snappedToId).toBeNull()
+    expect(r.hover).toEqual({ nodeId: 'a', status: 'valid', zone: 'body', reason: undefined })
+    expect(r.end).toEqual({ x: A.x + A.width, y: 164 }) // 右缘(source)锚点
   })
 
   it('forward 命中合法吸附带但校验通过 → 即使 body 内也以 snap valid 优先', () => {

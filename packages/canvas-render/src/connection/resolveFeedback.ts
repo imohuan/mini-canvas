@@ -3,7 +3,7 @@
  *
  * 移植自 v1 useCanvasConnection.buildConnectionEdgeProps 的决策部分：给定源端口方向 + 鼠标 flow 坐标 +
  * 存活节点矩形，判定命中吸附带/卡片 body，得出：
- *   - 连接线终点(end)：命中合法吸附带→对齐端口锚点；否则跟随鼠标。
+ *   - 连接线终点(end)：命中合法吸附带或合法卡片 body → 对齐端口锚点；否则跟随鼠标。
  *   - hover 反馈：悬停到哪个节点、valid/invalid、落在 snap/body、非法文案。
  *
  * 与 Vue/VueFlow 解耦：validate 由调用方注入（封装内核 validateConnection + reasonText），
@@ -14,6 +14,7 @@ import {
   computeSnapZones,
   computeBodyZones,
   hitTest,
+  zoneDirectionAnchor,
   type NodeRect,
   type SnapRatios,
   DEFAULT_SNAP_RATIOS,
@@ -45,7 +46,7 @@ export interface HoverDecision {
 }
 
 export interface ResolveResult {
-  /** 连接线终点：命中合法吸附带→锚点，否则原鼠标点 */
+  /** 连接线终点：命中合法吸附带或合法卡片 body → 对齐该节点端口锚点，否则原鼠标点 */
   end: FlowPoint
   /** 吸附到的节点 id（无则 null） */
   snappedToId: string | null
@@ -103,6 +104,8 @@ export function resolveFeedback(input: ResolveFeedbackInput): ResolveResult {
   }
 
   // 2) 未吸附到合法口时，看是否落在某卡片 body（供 3D/气泡反馈）
+  //    body 合法命中时也把 end 对齐该节点对应端口锚点，使临时拖线与 hover 判定的落点一致
+  //    （否则 3D 已亮、线终点却停在鼠标偏远处，用户会以为线没对准）。
   let bodyNodeId: string | null = null
   for (const z of bodyZones) {
     if (hitTest(z, flowPoint)) {
@@ -118,6 +121,14 @@ export function resolveFeedback(input: ResolveFeedbackInput): ResolveResult {
     if (msg) {
       invalidNodeId = bodyNodeId
       invalidMessage = msg
+    } else {
+      // 合法 body 命中：把线终点吸到本节点端口锚点（forward=target 左缘 / reverse=source 右缘）
+      const { anchorX, anchorY } = zoneDirectionAnchor(
+        nodeRects.find((n) => n.id === bodyNodeId) as NodeRect,
+        dir,
+      )
+      endX = anchorX
+      endY = anchorY
     }
     feedbackNodeId = bodyNodeId
     feedbackZone = 'body'
