@@ -21,8 +21,6 @@ const props = defineProps<{
   lineProps: ConnectionLineProps
   /** themeRegistry connectionLine 赢家组件；未注册 = null → 回退默认线 */
   connectionLine: unknown
-  /** 端口半径（仅类型一致保留，实际几何由 Host 算） */
-  handleRadius: number
   /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致）。ConnectionLineHost 只读不写 */
   state: ConnectionFeedbackState
   /** Host 端 mousemove 实时跟踪的 flow 坐标（拖线外为 null）。优先于 lineProps.targetX/Y 用于连接线端点渲染，

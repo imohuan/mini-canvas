@@ -105,11 +105,9 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */
 export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
-  handleRadius: 86,
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  handleOverlap: 16,
   portZoneWidth: 86,
   portZoneHeightRatio: 0.8,
   portZoneOffset: 0,

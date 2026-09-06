@@ -87,9 +87,10 @@ describe('默认外观常量', () => {
     expect(DEFAULT_EDGE_VISUAL.edgeAnimated).toBe(true)
   })
   it('handle 默认含全部尺寸字段', () => {
-    expect(DEFAULT_HANDLE_VISUAL.handleRadius).toBe(86)
     expect(DEFAULT_HANDLE_VISUAL.handleButtonSize).toBe(32)
-    expect(Object.keys(DEFAULT_HANDLE_VISUAL)).toHaveLength(5)
+    expect(DEFAULT_HANDLE_VISUAL.portZoneWidth).toBe(86)
+    expect(DEFAULT_HANDLE_VISUAL.portZoneArcRatio).toBe(1)
+    expect(Object.keys(DEFAULT_HANDLE_VISUAL)).toHaveLength(8)
   })
   it('debug 开关默认均开（handleDebug/connectionSnapDebugVisible=true，开关设计默认给可视化）', () => {
     expect(DEFAULT_DEBUG_VISUAL.handleDebug).toBe(true)

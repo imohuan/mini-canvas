@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    .node-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 50px;
+    }
+
+    /* 中间节点 */
+    .node-center {
+      width: 300px;
+      height: 160px;
+      background-color: #ffffff;
+      border: 3px solid #D9B44A;
+      box-sizing: border-box;
+      position: relative;
+      z-index: 2;
+    }
+
+    /* 调整画布尺寸并增加 Padding，防止描边被裁剪 */
+    .ear-svg {
+      width: 70px;  /* 增加画布宽度 */
+      height: 76px; /* 增加画布高度 */
+      display: block;
+      z-index: 1;
+      overflow: visible; /* 确保突出的描边不被剪切 */
+    }
+
+    /* 利用负边距将耳朵精准嵌入边框下方 */
+    .ear-left {
+      margin-right: -3px; 
+    }
+    .ear-right {
+      margin-left: -3px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="node-container">
+    <svg class="ear-svg ear-left" viewBox="0 0 70 76">
+        <path d="M 67 3 H 38 A 35 35 0 0 0 38 73 H 67 Z" 
+              fill="#ffffff" 
+              stroke="#D9B44A" 
+              stroke-width="3" 
+              stroke-linejoin="round" />
+      </svg>
+</div>
+
+</body>
+</html>

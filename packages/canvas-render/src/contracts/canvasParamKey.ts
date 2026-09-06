@@ -8,17 +8,13 @@ import type { InjectionKey } from 'vue'
 
 /** BaseNode/端口外观参数（默认值对齐 core-node-contract §0） */
 export interface CanvasParams {
-  /** 浮动端口半径 px（handleRadius=86） */
-  handleRadius: number
   /** 圆球离区归位偏移 px（handleRestOffset=36） */
   handleRestOffset: number
   /** 圆球跟鼠标错开 px（handleCursorGap=24） */
   handleCursorGap: number
   /** 圆球尺寸 px（handleButtonSize=32） */
   handleButtonSize: number
-  /** 半圆向节点内侧裁剪 px（handleOverlap=16） */
-  handleOverlap: number
-  /** 端口区域宽度；缺省沿用 handleRadius。 */
+  /** 端口区域宽度（矩形部分宽）；缺省 86。 */
   portZoneWidth?: number
   /** 端口区域高度占节点高度比例；缺省 0.8。 */
   portZoneHeightRatio?: number

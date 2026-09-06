@@ -15,7 +15,7 @@ import type { PluginModule } from '@mini-canvas/canvas-base'
 // 跨包服务类型声明（cordis 声明合并）：本插件 `inject:['text']` 依赖 text 插件，需显式 import type 该包，
 // 让 node-text 对 `interface Context { text: TextService }` 的增强在本包编译里可见 → ctx.text 类型安全可用。
 // 纯类型副作用，运行时无 import（text 服务仍由内核依赖编排注入）。
-import type {} from '@mini-canvas/plugin-node-text'
+import type { } from '@mini-canvas/plugin-node-text'
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import './styles/node-theme.css'
 import BaseNode from './components/node/BaseNode.vue'
@@ -46,11 +46,9 @@ export const DEFAULT_THEME_EDGE = {
 
 /** 浮动端口(half)外观默认值（对齐 canvasHostCore DEFAULT_HANDLE_VISUAL） */
 export const DEFAULT_THEME_HANDLE = {
-  handleRadius: 86,
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  handleOverlap: 16,
   portZoneWidth: 86,
   portZoneHeightRatio: 0.8,
   portZoneOffset: 0,
@@ -67,7 +65,7 @@ export const DEFAULT_THEME_DEBUG = {
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
 export const DEFAULT_THEME_SNAP_ZONE = {
   heightRatio: 0.8,
-  width: 0, // 0 = 用 handleRadius 兜底
+  width: 0, // 0 = 用吸附带默认带宽兜底（canvasHost 侧回落 86）
   offset: 0,
   shape: 'rect',
 } as const
@@ -189,16 +187,6 @@ export const Config: ConfigSchema = {
     group: '连线动效与箭头',
     description: '连线外圈的柔光效果，增强视觉层次。',
   },
-  handleRadius: {
-    type: 'number',
-    default: DEFAULT_THEME_HANDLE.handleRadius,
-    min: 30,
-    max: 200,
-    step: 1,
-    label: '端口吸附半径',
-    group: '端口',
-    description: '端口半圆形交互区/吸附范围的大小。',
-  },
   handleRestOffset: {
     type: 'number',
     default: DEFAULT_THEME_HANDLE.handleRestOffset,
@@ -229,18 +217,11 @@ export const Config: ConfigSchema = {
     group: '端口',
     description: '浮动端口圆球按钮的直径。',
   },
-  handleOverlap: {
-    type: 'number',
-    default: DEFAULT_THEME_HANDLE.handleOverlap,
-    min: 0,
-    max: 50,
-    step: 1,
-    label: '覆盖距离',
-    group: '端口',
-    description: '半圆交互区向节点内侧覆盖后被裁掉的宽度。',
-  },
   portZoneWidth: {
-    type: 'number', default: DEFAULT_THEME_HANDLE.portZoneWidth, min: 20, max: 400, step: 1, label: '端口区域宽度', group: '端口', description: '端口接收区的横向宽度（默认等于端口吸附半径）。',
+    type: 'number', default: DEFAULT_THEME_HANDLE.portZoneWidth, min: 20, max: 400, step: 1, label: '端口区域宽度', group: '端口', description: '端口接收区矩形的横向宽度（默认 86）。',
+  },
+  portZoneArcRatio: {
+    type: 'number', default: DEFAULT_THEME_HANDLE.portZoneArcRatio, min: 0.2, max: 1, step: 0.05, label: '端口弧饱满度', group: '端口', description: '半椭圆弧的垂直饱满程度：1=半椭圆(与吸附带一致)，越小弧越扁越接近平顶矩形。',
   },
   portZoneHeightRatio: {
     type: 'number', default: DEFAULT_THEME_HANDLE.portZoneHeightRatio, min: 0.2, max: 1, step: 0.05, label: '端口区域高度占比', group: '端口', description: '端口接收区高度占节点高度的比例（0.8=占 80%）。',
@@ -250,9 +231,6 @@ export const Config: ConfigSchema = {
   },
   portZoneShape: {
     type: 'select', default: DEFAULT_THEME_HANDLE.portZoneShape, label: '端口区域形状', group: '端口', description: '端口接收区使用矩形或半椭圆。', options: [{ value: 'arc', label: '半椭圆' }, { value: 'rect', label: '矩形' }],
-  },
-  portZoneArcRatio: {
-    type: 'number', default: DEFAULT_THEME_HANDLE.portZoneArcRatio, min: 0.2, max: 1, step: 0.05, label: '端口弧饱满度', group: '端口', description: '半椭圆弧的垂直饱满程度：1=半椭圆(与吸附带一致)，越小弧越扁越接近平顶矩形。',
   },
   heightRatio: {
     type: 'number',
@@ -272,7 +250,7 @@ export const Config: ConfigSchema = {
     step: 1,
     label: '吸附带宽度(px)',
     group: '吸附带',
-    description: '吸附带的像素宽度。0 = 用端口吸附半径(handleRadius)兜底。',
+    description: '吸附带的像素宽度。0 = 用默认带宽兜底(86)。',
   },
   offset: {
     type: 'number',
@@ -312,7 +290,7 @@ export const Config: ConfigSchema = {
 }
 
 /** apply 收到的 config TS 类型（与 schema 对齐） */
-export interface ThemeConfig extends InferConfig<typeof Config> {}
+export interface ThemeConfig extends InferConfig<typeof Config> { }
 
 export function apply(ctx: Context, config?: ThemeConfig) {
   // P4：config 已经内核经 Config schema 校验 + 补默认；这里无需再手写 settings.define（声明即 Config 导出）。

@@ -464,7 +464,8 @@ function resolveAtClient(
     sourceHandle: dragSourceHandle,
     nodeRects: rects,
     flowPoint,
-    handleRadius: handleToProvide.handleRadius || 86,
+    // 吸附带宽兜底来源：吸附带 SnapZoneConfig.width 未显式给时，用端口区域宽 portZoneWidth
+    handleRadius: handleToProvide.portZoneWidth || 86,
     config: snapZoneToProvide,
     validate: validateEdgeText,
   })

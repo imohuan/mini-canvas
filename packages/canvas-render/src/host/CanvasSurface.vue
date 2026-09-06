@@ -153,7 +153,6 @@ defineExpose({
         <ConnectionLineHost
           :line-props="lineProps"
           :connection-line="connectionLineComp"
-          :handle-radius="handleParams.handleRadius"
           :state="connectionState"
           :drag-flow-point="dragFlowPoint ?? null"
         />

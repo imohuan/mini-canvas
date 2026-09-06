@@ -208,8 +208,8 @@ const showSnapDebugOverlay = computed(
     !lowDetail.value,
 )
 // 吸附带/接收区几何（与 resolveFeedback 同源）
-const handleR = computed(() => Number(handleParams.handleRadius) || 86)
-const portZoneWidth = computed(() => Number(handleParams.portZoneWidth) > 0 ? Number(handleParams.portZoneWidth) : handleR.value)
+// 端口区域宽 portZoneWidth 是端口交互区矩形的主尺寸（吸附带宽未显式给时也用它兜底，与 CanvasHost resolveAtClient 一致）
+const portZoneWidth = computed(() => Number(handleParams.portZoneWidth) > 0 ? Number(handleParams.portZoneWidth) : 86)
 const portZoneHeight = computed(() => cardHeight.value * Math.min(Math.max(Number(handleParams.portZoneHeightRatio) || 0.8, 0), 1))
 const portZoneOffset = computed(() => Number(handleParams.portZoneOffset) || 0)
 const portZoneShape = computed(() => handleParams.portZoneShape ?? 'arc')
@@ -217,7 +217,7 @@ const portZoneArcRatio = computed(() => Math.min(Math.max(Number(handleParams.po
 const debugOverlay = useNodeDebugOverlay({
   cardWidth,
   cardHeight,
-  handleRadius: handleR,
+  handleRadius: portZoneWidth,
   snapZone,
 })
 // SVG viewBox = 卡内坐标 [0..cardWidth] × [0..cardHeight]（吸附带可负 x 溢出，靠 overflow:visible）
@@ -440,11 +440,9 @@ function clamp(value: number, min: number, max: number): number {
         :position="Position.Left"
         :visible="shouldShowHandles"
         :disabled="isCurrentConnectingNode"
-        :radius="handleParams.handleRadius"
         :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
-        :overlap="handleParams.handleOverlap"
         :zone-width="portZoneWidth"
         :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset"
@@ -483,11 +481,9 @@ function clamp(value: number, min: number, max: number): number {
         :position="Position.Right"
         :visible="shouldShowHandles"
         :disabled="isCurrentConnectingNode"
-        :radius="handleParams.handleRadius"
         :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
-        :overlap="handleParams.handleOverlap"
         :zone-width="portZoneWidth"
         :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset"

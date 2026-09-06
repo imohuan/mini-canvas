@@ -19,7 +19,7 @@ const props = defineProps<{
   position: Position
   visible?: boolean
   disabled?: boolean
-  /** 半圆形可移动区域半径 px（主项目 handleRadius=86） */
+  /** 半圆形可移动区域半径 px（缺省 76；仅 zone 尺寸未显式给时兜底） */
   radius?: number
   /** 离开后圆球回到节点外侧默认偏移 px（handleRestOffset=36） */
   restOffset?: number
@@ -27,7 +27,7 @@ const props = defineProps<{
   cursorGap?: number
   /** 圆球尺寸 px（handleButtonSize=32） */
   buttonSize?: number
-  /** 半圆向节点内侧覆盖后被裁掉的宽度 px（handleOverlap=16） */
+  /** 圆球收进卡内的 tuck 距离 px（缺省 buttonSize/2） */
   overlap?: number
   zoneWidth?: number
   zoneHeight?: number
@@ -71,6 +71,19 @@ const zoneHeight = computed(() => props.zoneHeight ?? radius.value)
 const zoneOffset = computed(() => props.zoneOffset ?? 0)
 const zoneShape = computed(() => props.zoneShape ?? 'arc')
 const zoneArcRatio = computed(() => Math.min(Math.max(Number(props.zoneArcRatio ?? 1), 0.2), 1))
+// 端口弧几何（矩形 + 半椭圆，连体一只耳朵 —— 单条闭合 path）：
+//   - 矩形：紧贴 anchor 卡边，宽 = rectWidth（portZoneWidth）、高 = zoneHeight；
+//   - 半椭圆耳朵：圆心 = (rectWidth, h/2)；垂直方向 = ry = h/2 固定（撑满卡边垂直高度），
+//     水平外凸 = rx = (h/2) × portZoneArcRatio，由 portZoneArcRatio 单独控制耳朵的水平丰满度。
+//     ratio=1 → rx=ry=h/2 → 正半圆饱满耳朵；
+//     越小 → rx 越小 → 弧越扁（耳朵水平越短）→ 越接近"平顶矩形"。垂直方向永远撑满卡高。
+// 耳朵端点贴在矩形外缘中央 (rectWidth, h/2±ry) 上；矩形高度 = h = 2×ry。
+// shapeWidth = rectWidth + rx（外凸最远点 = 矩形右端 + rx），随 ratio 变化。
+const rectWidth = computed(() => zoneWidth.value)
+const outerR = computed(() => Math.max((zoneHeight.value / 2) * zoneArcRatio.value, 1))
+const shapeWidth = computed(() =>
+  zoneShape.value === 'rect' ? rectWidth.value : rectWidth.value + outerR.value,
+)
 const isShown = computed(() => !props.disabled && (props.visible || keepVisible.value))
 
 // 连接拖拽会临时禁用源端口：必须同步清本地 hover，否则松开后圆球因残留 keepVisible 再显示
@@ -99,19 +112,21 @@ watch(
 // CSS 变量必须定义在 anchor 根上：zone 与 debug svg 是兄弟元素，各自定位都读同一组变量，
 // 若只写在 zone 的 inline style 上，debug(left: calc(var(...))) 会取不到值而失效错位。
 const anchorStyle = computed(() => ({
-  '--port-zone-width': `${zoneWidth.value}px`,
+  '--port-zone-rect-width': `${rectWidth.value}px`,
+  '--port-zone-outer-r': `${outerR.value}px`,
+  '--port-zone-shape-width': `${shapeWidth.value}px`,
   '--port-zone-offset': `${zoneOffset.value}px`,
   '--moving-handle-overlap': `${overlap.value}px`,
 }))
 
 const zoneStyle = computed(() => ({
-  width: `${zoneWidth.value}px`,
+  width: `${shapeWidth.value}px`,
   height: `${zoneHeight.value}px`,
 }))
 
-/** debug svg 定位：与 zone 同位置同尺寸，完全重叠覆盖（宽高 + left 由锚点根上的 CSS 变量决定） */
+/** debug svg 定位：与 zone 同位置同尺寸，矩形+耳朵 整体覆盖 */
 const debugStyle = computed(() => ({
-  width: `${zoneWidth.value}px`,
+  width: `${shapeWidth.value}px`,
   height: `${zoneHeight.value}px`,
 }))
 
@@ -131,33 +146,56 @@ const buttonStyle = computed(() => {
 })
 
 const debugArcPath = computed(() => {
-  const w = zoneWidth.value
+  const W = shapeWidth.value
   const h = zoneHeight.value
-  if (zoneShape.value === 'rect') return `M 0 0 H ${w} V ${h} H 0 Z`
-  // arc 模式：半椭圆弧，圆心在端口锚点（卡缘中点）、弧朝外侧鼓出（与 BaseNode
-  // v2-debug-overlay / resolveFeedback 的吸附带视觉同源：命中按矩形，shape 只影响视觉）。
-  // zone 盒 = 卡缘向外伸出的一块 (w×h)，本地坐标：
-  //   - source(卡右缘)：盒 x=0 贴卡缘、向外(右)到 x=w；平坦边在卡缘 x=0，
-  //     弧从 (0,0) 扫到 (0,h)、鼓向 +x、最鼓点达 (w, h/2) —— rx=w、ry=h/2 的右半椭圆。
-  //   - target(卡左缘)：盒 x=w 贴卡缘、向外(左)到 x=0；平坦边在卡缘 x=w，
-  //     弧鼓向 -x、最鼓点达 (0, h/2) —— 左半椭圆。
-  // 两点 (0,0)→(0,h) 竖直间距 h=2·ry，恰为椭圆对径，弧即半个椭圆，半圆/弧朝外不畸变。
-  const rx = Math.max(w, 1)
-  const ry = Math.max(h / 2, 1)
-  return isSource.value
-    ? `M 0 0 A ${rx} ${ry} 0 0 1 0 ${h} Z`
-    : `M ${w} 0 A ${rx} ${ry} 0 0 0 ${w} ${h} Z`
+  if (zoneShape.value === 'rect') return `M 0 0 H ${W} V ${h} H 0 Z`
+  // 单条闭合 path = 矩形 + 半椭圆 连体耳朵。
+  // 关键："修改弧度，不修改半径"——垂直方向（卡高方向）半径 ry = h/2 固定不变，
+  // 水平外凸（耳朵最远点到卡边的距离）= rx = (h/2) × zoneArcRatio，由 ratio 单独控制。
+  // ratio=1 时 rx=ry=h/2 → 正半圆饱满端；
+  // ratio<1 时 rx 变小 → 同一垂直高度上的耳朵水平变短 → 越扁越接近平顶矩形（垂直仍撑满）。
+  // 矩形永远满高 h，弧端点贴在矩形外缘中央 (rectWidth, h/2±ry) 上。
+  // 椭圆中心 = (rectWidth, h/2)，两段端点 = (rectWidth, h/2±ry) → 半椭圆天然成立。
+  const cy = h / 2
+  const ry = Math.max(h / 2, 1)                                  // 垂直方向：永远撑满卡高
+  const rx = Math.max(h / 2 * zoneArcRatio.value, 1)             // 水平外凸：唯一受 ratio 控制
+  if (isSource.value) {
+    const Rw = rectWidth.value
+    return (
+      `M 0 0 V ${h} H ${Rw} ` +
+      `V ${cy + ry} ` +
+      `A ${rx} ${ry} 0 0 0 ${Rw} ${cy - ry} ` +
+      `V 0 H 0 Z`
+    )
+  } else {
+    const Rw = W - rectWidth.value
+    return (
+      `M ${W} 0 V ${h} H ${Rw} ` +
+      `V ${cy + ry} ` +
+      `A ${rx} ${ry} 0 0 1 ${Rw} ${cy - ry} ` +
+      `V 0 H ${W} Z`
+    )
+  }
 })
-const debugCenter = computed(() => ({ x: isSource.value ? 0 : zoneWidth.value, y: zoneHeight.value / 2 }))
-const debugRestPoint = computed(() => ({
-  x: isSource.value ? restOffset.value : zoneWidth.value - restOffset.value,
+// 卡边锚点（端口锚点）= source 时 x=0、target 时 x=W（即 svg-local 卡缘处）
+const debugCenter = computed(() => ({
+  x: isSource.value ? 0 : shapeWidth.value,
   y: zoneHeight.value / 2,
 }))
-const debugMousePoint = computed(() => ({
-  x: isSource.value ? mouseX.value : zoneWidth.value - mouseX.value,
-  y: zoneHeight.value / 2 + mouseY.value,
-}))
-const debugViewBox = computed(() => `0 0 ${zoneWidth.value} ${zoneHeight.value}`)
+const debugRestPoint = computed(() => {
+  // restOffset 是"圆球静止位 → 距卡边的距离"；在 svg-local 里：
+  //   source: 卡边 x=0、沿 +x 出去 → restOffset 处
+  //   target: 卡边 x=W、沿 -x 出去 → x = W - restOffset
+  const x = isSource.value ? restOffset.value : shapeWidth.value - restOffset.value
+  return { x, y: zoneHeight.value / 2 }
+})
+const debugMousePoint = computed(() => {
+  // mouseX 是 updatePosition 用局部坐标系给出的"距卡边距离"（已方向规整为正向外）。
+  // 需要按 svg-local 真实 x 映射：source 加 0、target 用 W - mouseX
+  const x = isSource.value ? mouseX.value : shapeWidth.value - mouseX.value
+  return { x, y: zoneHeight.value / 2 + mouseY.value }
+})
+const debugViewBox = computed(() => `0 0 ${shapeWidth.value} ${zoneHeight.value}`)
 
 resetPosition()
 
@@ -199,16 +237,17 @@ function updatePosition(event: MouseEvent) {
   isRestoring.value = false
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const localX = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * zoneWidth.value : 0
+  const localX = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * shapeWidth.value : 0
   const localY =
     rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * zoneHeight.value : zoneHeight.value / 2
-  // 必须用"区域本地坐标"，不能直接用屏幕 px：VueFlow 缩放后 rect 是缩放后尺寸，混算会偏移
-  const outward = isSource.value ? localX : zoneWidth.value - localX
+  // 必须用"区域本地坐标"，不能直接用屏幕 px：VueFlow 缩放后 rect 是缩放后尺寸，混算会偏移。
+  // 总宽 = 矩形 + 耳外凸，鼠标可跨全段；outward 统一为正向"距卡边距离"。
+  const outward = isSource.value ? localX : shapeWidth.value - localX
   const rawY = localY - zoneHeight.value / 2
-  mouseX.value = clamp(outward, 0, zoneWidth.value)
+  mouseX.value = clamp(outward, 0, shapeWidth.value)
   mouseY.value = clamp(rawY, -zoneHeight.value / 2, zoneHeight.value / 2)
 
-  const maxDistance = zoneWidth.value - buttonSize.value / 2
+  const maxDistance = shapeWidth.value - buttonSize.value / 2
   const mouseDistance = Math.hypot(mouseX.value, mouseY.value)
   const mouseAngle = Math.atan2(mouseY.value, mouseX.value || 0.0001)
   const followDistance = clamp(mouseDistance + cursorGap.value, 0, maxDistance)
@@ -343,13 +382,14 @@ onBeforeUnmount(() => {
   backface-visibility: hidden;
 }
 .moving-handle-zone--source {
-  /* 左端贴卡右缘（offset 决定向卡内缩进），右端伸出卡外。透明纯命中区，
-     半椭圆/圆弧等视觉统一由 debug svg（.moving-handle-debug__arc）绘制。 */
+  /* 卡右缘 source: 左端贴 anchor (offset 正向 = 向卡内缩进)；
+     整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
   left: calc(var(--port-zone-offset) * -1);
 }
 .moving-handle-zone--target {
-  /* 右端贴卡左缘（offset 决定向卡内缩进），左端伸出卡外。透明纯命中区。 */
-  left: calc(var(--port-zone-width) * -1 + var(--port-zone-offset));
+  /* 卡左缘 target: 右端贴 anchor (offset 正向 = 向卡内缩进)；
+     整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
+  left: calc(var(--port-zone-shape-width) * -1 + var(--port-zone-offset));
 }
 
 /* 矩形形状：直角矩形接收区（命中与视觉都按矩形） */
@@ -427,8 +467,8 @@ onBeforeUnmount(() => {
 .moving-handle-debug {
   position: absolute;
   /* 与 handle 锚点同位（卡片水平边垂直中点）：
-     anchor 是 1px×1px 容器，绝对定位 target=left:0 / source=right:0 + top:50% translateY(-50%)。
-     debug svg 宽高 = radius px（inline style），用 left/right + top:50% + translate(-50%,-50%) 让 svg 中心对齐 anchor 中心。 */
+     anchor 是 0×0 容器，绝对定位 target=left:0 / source=right:0 + top:50% translateY(-50%)。
+     debug svg 宽高 = shapeWidth × zoneHeight（inline style），用 left + top:50% + translateY(-50%) 让 svg 跨 anchor 对齐。 */
   top: 50%;
   transform: translateY(-50%) translateZ(0);
   pointer-events: none;
@@ -440,7 +480,7 @@ onBeforeUnmount(() => {
   left: calc(var(--port-zone-offset) * -1);
 }
 .moving-handle-anchor--target .moving-handle-debug {
-  left: calc(var(--port-zone-width) * -1 + var(--port-zone-offset));
+  left: calc(var(--port-zone-shape-width) * -1 + var(--port-zone-offset));
 }
 .moving-handle-debug__arc {
   fill: var(--canvas-node-debug-danger-fill);
