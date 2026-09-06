@@ -111,6 +111,12 @@ export function apply(ctx: Context) {
     component: DemoSlotContent,
   })
 
+  ctx.slots.register('settingsGroup/高级', {
+    id: 'image-advanced-demo1',
+    order: 1,
+    component: DemoSlotContent,
+  })
+
   // 4. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
   ctx.inject('image-meta', { v: 1 })
 }

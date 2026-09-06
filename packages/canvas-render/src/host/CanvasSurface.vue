@@ -1,3 +1,4 @@
+<script setup lang="ts">
 // CanvasSurface —— CanvasHost 的「渲染子树宿主」：boot 完成后才挂载，向子树 provide 裸渲染上下文。
 //
 // 为什么单独一个组件：CanvasHost 自身在 setup 期就要 provide（那时 ctx 还没建好，只能给 Ref 盒子），
@@ -9,7 +10,6 @@
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
 // - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
-<script setup lang="ts">
 import { provide, shallowRef } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
