@@ -232,6 +232,16 @@ const outputSnapStyle = computed(() => ({
 function onPortHover(value: boolean): void {
   isHovered.value = value
 }
+/** 命中端口吸附带时，用真实渲染高度 cardHeight 算端口锚点 flow 坐标（保证端点居中，不依赖存储 dimensions）。
+ *  input(target 输入口)=左缘中点；output(source 输出口)=右缘中点。 */
+function snapAnchorFor(side: 'input' | 'output'): { x: number; y: number } | undefined {
+  const node = vf.getNodes.value.find((n) => n.id === props.id)
+  const pos = (node?.computedPosition || node?.position) as { x: number; y: number } | undefined
+  if (!pos) return undefined
+  const y = pos.y + cardHeight.value / 2
+  const x = side === 'input' ? pos.x : pos.x + cardWidth.value
+  return { x, y }
+}
 // 综合前端瞄准信号写进共享 aimedTarget：仅拖线期间、且非源自身时生效
 watch(
   [aimPortSide, aimBody, isConnecting, isCurrentConnectingNode],
@@ -243,8 +253,11 @@ watch(
       return
     }
     let next: AimedTarget | null = null
-    if (aimPortSide.value) next = { nodeId: props.id, side: aimPortSide.value }
-    else if (aimBody.value) next = { nodeId: props.id, side: 'body' }
+    if (aimPortSide.value) {
+      next = { nodeId: props.id, side: aimPortSide.value, anchor: snapAnchorFor(aimPortSide.value) }
+    } else if (aimBody.value) {
+      next = { nodeId: props.id, side: 'body' }
+    }
     if (next) {
       connectionState.aimedTarget.value = next
     } else if (aimed?.nodeId === props.id) {

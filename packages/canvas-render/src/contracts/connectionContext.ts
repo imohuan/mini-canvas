@@ -46,6 +46,11 @@ export interface AimedTarget {
   nodeId: string
   /** 命中区域：input=目标输入口吸附带 / output=目标输出口吸附带 / body=卡片主体 */
   side: 'input' | 'output' | 'body'
+  /**
+   * 命中吸附带(input/output)时，前端上报的端口锚点 flow 坐标（用真实渲染高度 cardHeight 算，保证居中）。
+   * 后端不再拿 dimensions.height 猜，直接用这里给的坐标吸端点。body 命中无需此字段（跟鼠标）。
+   */
+  anchor?: { x: number; y: number }
 }
 
 /** 拖线时悬停到的目标节点反馈（BaseNode 据此做 3D/气泡/吸附带） */

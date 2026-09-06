@@ -474,10 +474,12 @@ function resolveFromAim(
     ? { source: aim.nodeId, target: dragSourceId }
     : { source: dragSourceId, target: aim.nodeId }
   const msg = validateEdgeText(candidate.source, candidate.target)
-  // 端口锚点 = 节点左缘(forward target 输入口) / 右缘(reverse source 输出口) 中点
+  // 端口锚点：优先用前端上报的 anchor（真实渲染高度 cardHeight 算，保证居中）；
+  // 无 anchor 时回落到节点矩形左缘/右缘中点（body 命中跟鼠标，不需锚点）。
   const rect = liveNodeRects().find((r) => r.id === aim.nodeId)
-  const anchorX = rect ? (dir === 'forward' ? rect.x : rect.x + rect.width) : flowPoint.x
-  const anchorY = rect ? rect.y + rect.height / 2 : flowPoint.y
+  const anchorX =
+    aim.anchor?.x ?? (rect ? (dir === 'forward' ? rect.x : rect.x + rect.width) : flowPoint.x)
+  const anchorY = aim.anchor?.y ?? (rect ? rect.y + rect.height / 2 : flowPoint.y)
   const zone: 'snap' | 'body' = aim.side === 'body' ? 'body' : 'snap'
   const hover: HoverDecision = {
     nodeId: aim.nodeId,
