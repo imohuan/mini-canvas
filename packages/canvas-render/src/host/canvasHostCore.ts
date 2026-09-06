@@ -110,6 +110,11 @@ export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleCursorGap: 24,
   handleButtonSize: 32,
   handleOverlap: 16,
+  portZoneWidth: 86,
+  portZoneHeightRatio: 0.8,
+  portZoneOffset: 0,
+  portZoneShape: 'arc',
+  portZoneArcRatio: 1,
 }
 
 /** 调试可视化开关默认值（**默认开**：端口调试 + 吸附调试都开，方便设计/排错直观看到端口几何 + 吸附范围） */

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeSnapZones,
+  computeSideBandRect,
   computeBodyZones,
   hitTest,
   closestZone,
@@ -31,6 +32,25 @@ describe('geometry: zoneDirectionAnchor', () => {
 })
 
 describe('geometry: computeSnapZones (SnapZoneConfig)', () => {
+  it('端口侧带几何左右对称：target 向左、source 向右，offset 同义', () => {
+    const cfg = { heightRatio: 0.75, width: 64, offset: 12, shape: 'arc' as const }
+    const target = computeSideBandRect(A, 'target', R, cfg)
+    const source = computeSideBandRect(A, 'source', R, cfg)
+
+    expect(target).toEqual({
+      x: A.x - (64 - 12),
+      y: A.y + A.height / 2 - (A.height * 0.75) / 2,
+      width: 64,
+      height: A.height * 0.75,
+    })
+    expect(source).toEqual({
+      x: A.x + A.width - 12,
+      y: target.y,
+      width: target.width,
+      height: target.height,
+    })
+  })
+
   it('默认 config：forward 带以 target(左缘)为准，高=节点高×0.8、宽=handleRadius、offset=0', () => {
     const zones = computeSnapZones([A, B], 'forward', R)
     const za = zones.find((z) => z.id === 'a')!

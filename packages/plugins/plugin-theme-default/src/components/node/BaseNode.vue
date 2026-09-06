@@ -209,6 +209,11 @@ const showSnapDebugOverlay = computed(
 )
 // 吸附带/接收区几何（与 resolveFeedback 同源）
 const handleR = computed(() => Number(handleParams.handleRadius) || 86)
+const portZoneWidth = computed(() => Number(handleParams.portZoneWidth) > 0 ? Number(handleParams.portZoneWidth) : handleR.value)
+const portZoneHeight = computed(() => cardHeight.value * Math.min(Math.max(Number(handleParams.portZoneHeightRatio) || 0.8, 0), 1))
+const portZoneOffset = computed(() => Number(handleParams.portZoneOffset) || 0)
+const portZoneShape = computed(() => handleParams.portZoneShape ?? 'arc')
+const portZoneArcRatio = computed(() => Math.min(Math.max(Number(handleParams.portZoneArcRatio) ?? 1, 0.2), 1))
 const debugOverlay = useNodeDebugOverlay({
   cardWidth,
   cardHeight,
@@ -440,6 +445,11 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
         :overlap="handleParams.handleOverlap"
+        :zone-width="portZoneWidth"
+        :zone-height="portZoneHeight"
+        :zone-offset="portZoneOffset"
+        :zone-shape="portZoneShape"
+        :zone-arc-ratio="portZoneArcRatio"
         :debug="debugHandle"
         @hover="isHovered = $event"
       />
@@ -478,6 +488,11 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
         :overlap="handleParams.handleOverlap"
+        :zone-width="portZoneWidth"
+        :zone-height="portZoneHeight"
+        :zone-offset="portZoneOffset"
+        :zone-shape="portZoneShape"
+        :zone-arc-ratio="portZoneArcRatio"
         :debug="debugHandle"
         @hover="isHovered = $event"
       />

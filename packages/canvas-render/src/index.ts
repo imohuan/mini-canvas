@@ -34,6 +34,7 @@ export type { ResolveFeedbackInput, ResolveResult, HoverDecision, ValidateEdge }
 export {
   computeSnapZones,
   computeSnapZoneSides,
+  computeSideBandRect,
   computeBodyZones,
   hitTest,
   closestZone,

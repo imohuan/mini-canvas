@@ -12,7 +12,7 @@
  *   - shape：rect(矩形)/arc(半椭圆弧，圆心在端口锚点)。命中一律按矩形，shape 仅影响视觉。
  */
 import { computed, type Ref } from 'vue'
-import type { SnapZoneConfig, SnapZoneShape } from '@mini-canvas/canvas-render'
+import { computeSideBandRect, type SnapZoneConfig, type SnapZoneShape } from '@mini-canvas/canvas-render'
 
 export interface SnapBandRect {
   x: number
@@ -56,19 +56,16 @@ export function useNodeDebugOverlay(opts: {
   const bandY = computed(() => anchorY.value - bandHeight.value / 2)
 
   /** target(左缘)带：锚点 x=0，向外(左)伸 width → x = -(width-offset) */
-  const leftBand = computed<SnapBandRect>(() => ({
-    x: -(width.value - offset.value),
-    y: bandY.value,
+  const localRect = computed(() => ({ id: '__node__', x: 0, y: 0, width: opts.cardWidth.value, height: opts.cardHeight.value }))
+  const sharedConfig = computed<SnapZoneConfig>(() => ({
+    heightRatio: heightRatio.value,
     width: width.value,
-    height: bandHeight.value,
+    offset: offset.value,
+    shape: shape.value,
   }))
+  const leftBand = computed<SnapBandRect>(() => computeSideBandRect(localRect.value, 'target', opts.handleRadius.value, sharedConfig.value))
   /** source(右缘)带：锚点 x=cardWidth，向外(右)伸 width → x = cardWidth - offset */
-  const rightBand = computed<SnapBandRect>(() => ({
-    x: opts.cardWidth.value - offset.value,
-    y: bandY.value,
-    width: width.value,
-    height: bandHeight.value,
-  }))
+  const rightBand = computed<SnapBandRect>(() => computeSideBandRect(localRect.value, 'source', opts.handleRadius.value, sharedConfig.value))
 
   return { anchorY, shape, leftBand, rightBand }
 }

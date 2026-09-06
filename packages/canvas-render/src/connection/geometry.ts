@@ -9,7 +9,7 @@
  *   - 端口吸附带(snap zone)：以端口锚点(卡片左缘 target 输入口 / 右缘 source 输出口)为中心的一竖带：
  *       高 = min(节点高, 节点高 × heightRatio)（默认 heightRatio=0.8 → 占节点高 80%）
  *       宽 = width（默认 handleRadius）
- *       offset：>0 向节点外移、<0 向节点内移（默认 0，带紧贴锚点向外侧伸 width）
+ *       offset：>0 带整体向节点内移、<0 向节点外移（默认 0，带紧贴锚点向外侧伸 width）
  *       shape：rect | arc（仅视觉，命中一律按矩形）
  *   - body 区：整张卡片矩形。
  *
@@ -122,9 +122,21 @@ function bandRectForSide(
   const height = n.height * heightRatio
   const width = cfg.width && cfg.width > 0 ? cfg.width : handleRadius
   const offset = cfg.offset ?? 0
-  // target(左缘)向外=向左(width-offset)、向节点内=+offset；source(右缘)对称
+  // offset>0 两侧都向节点内收（target x 右移、source x 左移）；offset<0 向节点外伸
   const x = side === 'target' ? anchorX - (width - offset) : anchorX - offset
   return { x, y: anchorY - height / 2, width, height }
+}
+
+/** 计算节点某一侧与端口共用的卡内侧带矩形。 */
+export function computeSideBandRect(
+  n: NodeRect,
+  side: SnapZoneSide,
+  handleRadius: number,
+  cfg: SnapZoneConfig = DEFAULT_SNAP_ZONE_CONFIG,
+): { x: number; y: number; width: number; height: number } {
+  const anchorY = n.y + n.height / 2
+  const anchorX = side === 'target' ? n.x : n.x + n.width
+  return bandRectForSide(n, side, handleRadius, cfg, anchorX, anchorY)
 }
 
 /**

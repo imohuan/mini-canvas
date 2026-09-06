@@ -29,6 +29,12 @@ const props = defineProps<{
   buttonSize?: number
   /** 半圆向节点内侧覆盖后被裁掉的宽度 px（handleOverlap=16） */
   overlap?: number
+  zoneWidth?: number
+  zoneHeight?: number
+  zoneOffset?: number
+  zoneShape?: 'rect' | 'arc'
+  /** 半椭圆弧垂直胖瘦系数 0.2~1（1 = rx=ry 半圆） */
+  zoneArcRatio?: number
   /** 展示模式：只复用外观，不注册 VueFlow 真实连接点 */
   preview?: boolean
   /** 调试模式：画半圆/圆心/rest/mouse 辅助线 */
@@ -60,6 +66,11 @@ const restOffset = computed(() => props.restOffset ?? 36)
 const cursorGap = computed(() => props.cursorGap ?? 22)
 const buttonSize = computed(() => props.buttonSize ?? 32)
 const overlap = computed(() => props.overlap ?? buttonSize.value / 2)
+const zoneWidth = computed(() => props.zoneWidth ?? radius.value)
+const zoneHeight = computed(() => props.zoneHeight ?? radius.value)
+const zoneOffset = computed(() => props.zoneOffset ?? 0)
+const zoneShape = computed(() => props.zoneShape ?? 'arc')
+const zoneArcRatio = computed(() => Math.min(Math.max(Number(props.zoneArcRatio ?? 1), 0.2), 1))
 const isShown = computed(() => !props.disabled && (props.visible || keepVisible.value))
 
 // 连接拖拽会临时禁用源端口：必须同步清本地 hover，否则松开后圆球因残留 keepVisible 再显示
@@ -85,17 +96,23 @@ watch(
   },
 )
 
-const zoneStyle = computed(() => ({
-  width: `${radius.value}px`,
-  height: `${radius.value}px`,
+// CSS 变量必须定义在 anchor 根上：zone 与 debug svg 是兄弟元素，各自定位都读同一组变量，
+// 若只写在 zone 的 inline style 上，debug(left: calc(var(...))) 会取不到值而失效错位。
+const anchorStyle = computed(() => ({
+  '--port-zone-width': `${zoneWidth.value}px`,
+  '--port-zone-offset': `${zoneOffset.value}px`,
   '--moving-handle-overlap': `${overlap.value}px`,
 }))
 
-/** debug svg 定位：覆盖到 zone 容器同位置同尺寸（zone 在 moving-handle-anchor 内，绝对定位） */
+const zoneStyle = computed(() => ({
+  width: `${zoneWidth.value}px`,
+  height: `${zoneHeight.value}px`,
+}))
+
+/** debug svg 定位：与 zone 同位置同尺寸，完全重叠覆盖（宽高 + left 由锚点根上的 CSS 变量决定） */
 const debugStyle = computed(() => ({
-  width: `${radius.value}px`,
-  height: `${radius.value}px`,
-  // source/target 位置对应：zone 已经是 `right:0`/`left:0` 通过 .moving-handle-anchor--source/target 绝对定位
+  width: `${zoneWidth.value}px`,
+  height: `${zoneHeight.value}px`,
 }))
 
 const buttonStyle = computed(() => {
@@ -108,29 +125,39 @@ const buttonStyle = computed(() => {
   if (isSource.value) {
     style.left = `${buttonX.value}px`
   } else {
-    // .vue-flow__handle 自带 min-width:5px，左侧需减掉
-    style.left = `${buttonX.value + 5}px`
+    style.left = `${buttonX.value}px`
   }
   return style
 })
 
 const debugArcPath = computed(() => {
-  const r = radius.value
-  const cy = r / 2
+  const w = zoneWidth.value
+  const h = zoneHeight.value
+  if (zoneShape.value === 'rect') return `M 0 0 H ${w} V ${h} H 0 Z`
+  // arc 模式：半椭圆弧，圆心在端口锚点（卡缘中点）、弧朝外侧鼓出（与 BaseNode
+  // v2-debug-overlay / resolveFeedback 的吸附带视觉同源：命中按矩形，shape 只影响视觉）。
+  // zone 盒 = 卡缘向外伸出的一块 (w×h)，本地坐标：
+  //   - source(卡右缘)：盒 x=0 贴卡缘、向外(右)到 x=w；平坦边在卡缘 x=0，
+  //     弧从 (0,0) 扫到 (0,h)、鼓向 +x、最鼓点达 (w, h/2) —— rx=w、ry=h/2 的右半椭圆。
+  //   - target(卡左缘)：盒 x=w 贴卡缘、向外(左)到 x=0；平坦边在卡缘 x=w，
+  //     弧鼓向 -x、最鼓点达 (0, h/2) —— 左半椭圆。
+  // 两点 (0,0)→(0,h) 竖直间距 h=2·ry，恰为椭圆对径，弧即半个椭圆，半圆/弧朝外不畸变。
+  const rx = Math.max(w, 1)
+  const ry = Math.max(h / 2, 1)
   return isSource.value
-    ? `M 0 0 H ${cy} A ${cy} ${cy} 0 0 1 ${cy} ${r} H 0`
-    : `M ${r} 0 H ${cy} A ${cy} ${cy} 0 0 0 ${cy} ${r} H ${r}`
+    ? `M 0 0 A ${rx} ${ry} 0 0 1 0 ${h} Z`
+    : `M ${w} 0 A ${rx} ${ry} 0 0 0 ${w} ${h} Z`
 })
-const debugCenter = computed(() => ({ x: isSource.value ? 0 : radius.value, y: radius.value / 2 }))
+const debugCenter = computed(() => ({ x: isSource.value ? 0 : zoneWidth.value, y: zoneHeight.value / 2 }))
 const debugRestPoint = computed(() => ({
-  x: isSource.value ? restOffset.value : radius.value - restOffset.value,
-  y: radius.value / 2,
+  x: isSource.value ? restOffset.value : zoneWidth.value - restOffset.value,
+  y: zoneHeight.value / 2,
 }))
 const debugMousePoint = computed(() => ({
-  x: isSource.value ? mouseX.value : radius.value - mouseX.value,
-  y: radius.value / 2 + mouseY.value,
+  x: isSource.value ? mouseX.value : zoneWidth.value - mouseX.value,
+  y: zoneHeight.value / 2 + mouseY.value,
 }))
-const debugViewBox = computed(() => `0 0 ${radius.value} ${radius.value}`)
+const debugViewBox = computed(() => `0 0 ${zoneWidth.value} ${zoneHeight.value}`)
 
 resetPosition()
 
@@ -172,16 +199,16 @@ function updatePosition(event: MouseEvent) {
   isRestoring.value = false
 
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const localX = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * radius.value : 0
+  const localX = rect.width > 0 ? ((event.clientX - rect.left) / rect.width) * zoneWidth.value : 0
   const localY =
-    rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * radius.value : radius.value / 2
+    rect.height > 0 ? ((event.clientY - rect.top) / rect.height) * zoneHeight.value : zoneHeight.value / 2
   // 必须用"区域本地坐标"，不能直接用屏幕 px：VueFlow 缩放后 rect 是缩放后尺寸，混算会偏移
-  const outward = isSource.value ? localX : radius.value - localX
-  const rawY = localY - radius.value / 2
-  mouseX.value = clamp(outward, 0, radius.value)
-  mouseY.value = clamp(rawY, -radius.value / 2, radius.value / 2)
+  const outward = isSource.value ? localX : zoneWidth.value - localX
+  const rawY = localY - zoneHeight.value / 2
+  mouseX.value = clamp(outward, 0, zoneWidth.value)
+  mouseY.value = clamp(rawY, -zoneHeight.value / 2, zoneHeight.value / 2)
 
-  const maxDistance = radius.value - buttonSize.value / 2
+  const maxDistance = zoneWidth.value - buttonSize.value / 2
   const mouseDistance = Math.hypot(mouseX.value, mouseY.value)
   const mouseAngle = Math.atan2(mouseY.value, mouseX.value || 0.0001)
   const followDistance = clamp(mouseDistance + cursorGap.value, 0, maxDistance)
@@ -239,13 +266,15 @@ onBeforeUnmount(() => {
       'is-disabled': disabled,
       'is-preview': preview,
     }"
+    :style="anchorStyle"
   >
     <span
       class="moving-handle-zone"
       :class="{
         'moving-handle-zone--source': isSource,
         'moving-handle-zone--target': !isSource,
-        'is-debug': debug,
+      'is-debug': debug,
+        'moving-handle-zone--rect': zoneShape === 'rect',
       }"
       :style="zoneStyle"
       @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
@@ -276,8 +305,13 @@ onBeforeUnmount(() => {
 <style scoped>
 .moving-handle-anchor {
   position: absolute !important;
-  width: 1px;
-  height: 1px;
+  width: 0;
+  height: 0;
+  /* VueFlow .vue-flow__handle 强制 min-width/min-height: 5px，
+     必须压回 0：source anchor(right:0) 若残留 5px 会占据卡内 [right-5,right]，
+     其 zone(left:0 相对 anchor 左缘) 整体向卡内缩 5px，两侧不对称。 */
+  min-width: 0 !important;
+  min-height: 0 !important;
   top: 50% !important;
   margin: 0 !important;
   padding: 0 !important;
@@ -309,14 +343,18 @@ onBeforeUnmount(() => {
   backface-visibility: hidden;
 }
 .moving-handle-zone--source {
-  left: calc(var(--moving-handle-overlap) * -1);
-  border-radius: 0 9999px 9999px 0;
-  clip-path: inset(0 0 0 var(--moving-handle-overlap));
+  /* 左端贴卡右缘（offset 决定向卡内缩进），右端伸出卡外。透明纯命中区，
+     半椭圆/圆弧等视觉统一由 debug svg（.moving-handle-debug__arc）绘制。 */
+  left: calc(var(--port-zone-offset) * -1);
 }
 .moving-handle-zone--target {
-  right: calc(var(--moving-handle-overlap) * -1);
-  border-radius: 9999px 0 0 9999px;
-  clip-path: inset(0 var(--moving-handle-overlap) 0 0);
+  /* 右端贴卡左缘（offset 决定向卡内缩进），左端伸出卡外。透明纯命中区。 */
+  left: calc(var(--port-zone-width) * -1 + var(--port-zone-offset));
+}
+
+/* 矩形形状：直角矩形接收区（命中与视觉都按矩形） */
+.moving-handle-zone--rect {
+  border-radius: 0;
 }
 
 .moving-handle-button {
@@ -345,12 +383,6 @@ onBeforeUnmount(() => {
     color 160ms ease,
     border-color 160ms ease,
     box-shadow 160ms ease;
-}
-.moving-handle-anchor--target .moving-handle-button {
-  left: 0;
-}
-.moving-handle-anchor--source .moving-handle-button {
-  right: 0;
 }
 .moving-handle-anchor.is-moving .moving-handle-button {
   transition:
@@ -398,17 +430,17 @@ onBeforeUnmount(() => {
      anchor 是 1px×1px 容器，绝对定位 target=left:0 / source=right:0 + top:50% translateY(-50%)。
      debug svg 宽高 = radius px（inline style），用 left/right + top:50% + translate(-50%,-50%) 让 svg 中心对齐 anchor 中心。 */
   top: 50%;
-  transform: translate(-50%, -50%) translateZ(0);
+  transform: translateY(-50%) translateZ(0);
   pointer-events: none;
   overflow: visible;
   z-index: 3; /* 在 button(z=2) 上层，确保 debug 标签不被 button 圆盖住 */
   backface-visibility: hidden;
 }
 .moving-handle-anchor--source .moving-handle-debug {
-  left: calc(var(--moving-handle-overlap) * -1);
+  left: calc(var(--port-zone-offset) * -1);
 }
 .moving-handle-anchor--target .moving-handle-debug {
-  left: calc(var(--moving-handle-overlap) * -1);
+  left: calc(var(--port-zone-width) * -1 + var(--port-zone-offset));
 }
 .moving-handle-debug__arc {
   fill: var(--canvas-node-debug-danger-fill);

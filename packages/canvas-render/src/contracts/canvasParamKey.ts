@@ -18,6 +18,16 @@ export interface CanvasParams {
   handleButtonSize: number
   /** 半圆向节点内侧裁剪 px（handleOverlap=16） */
   handleOverlap: number
+  /** 端口区域宽度；缺省沿用 handleRadius。 */
+  portZoneWidth?: number
+  /** 端口区域高度占节点高度比例；缺省 0.8。 */
+  portZoneHeightRatio?: number
+  /** 端口区域相对锚点偏移；语义与吸附带 offset 一致。 */
+  portZoneOffset?: number
+  /** 端口区域形状；rect 或 arc。 */
+  portZoneShape?: 'rect' | 'arc'
+  /** 端口弧垂直胖瘦系数(0~1)：1=锚点圆心半椭圆(与吸附带同款)，越小越扁接近平顶。缺省 1。 */
+  portZoneArcRatio?: number
 }
 
 export const CANVAS_PARAMS_KEY: InjectionKey<CanvasParams> = Symbol('canvas-v2-canvas-params')
