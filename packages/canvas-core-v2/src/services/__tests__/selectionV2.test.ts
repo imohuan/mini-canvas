@@ -76,3 +76,24 @@ describe('Selection v2（节点 + 边双集）', () => {
     expect(s.edgeIds.size).toBe(0)
   })
 })
+
+  it('脏检查：重复 set 同内容 / add 已存在 / clear 空集不触发 onChange', () => {
+    const s = new Selection()
+    let calls = 0
+    s.onChange(() => (calls += 1))
+    s.set(['a', 'b'])
+    expect(calls).toBe(1)
+    s.set(['a', 'b']) // 同内容 → 不触发
+    expect(calls).toBe(1)
+    s.add('a') // 已存在 → 不触发
+    expect(calls).toBe(1)
+    s.clear()
+    expect(calls).toBe(2)
+    s.clear() // 空集 → 不触发
+    expect(calls).toBe(2)
+    s.clearNodes() // 已空 → 不触发
+    s.clearEdges()
+    expect(calls).toBe(2)
+  })
+
+

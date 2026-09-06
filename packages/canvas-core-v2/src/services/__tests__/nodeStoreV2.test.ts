@@ -113,3 +113,31 @@ describe('NodeStore v2 写 API', () => {
     expect(s.childNodesOf('g').map((x) => x.id).sort()).toEqual(['c1', 'c2'])
   })
 })
+
+  it('addNodes 原子：任一条 type 非法 → 抛错且不插入任何节点', () => {
+    const s = makeStore()
+    expect(() =>
+      s.addNodes([
+        { type: 'text', position: { x: 0, y: 0 }, id: 'ok' },
+        { type: 'nope', position: { x: 1, y: 1 }, id: 'bad' },
+      ]),
+    ).toThrow(/unknown node type/)
+    expect(s.getNodes()).toEqual([]) // 无部分插入
+  })
+
+  it('updateNodes 原子：任一条 id 缺失 → 抛错且任何节点都不改', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'a' },
+      { type: 'text', position: { x: 1, y: 1 }, id: 'b' },
+    ])
+    expect(() =>
+      s.updateNodes([
+        { id: 'a', patch: { position: { x: 99, y: 99 } } },
+        { id: 'missing', patch: { position: { x: 1, y: 1 } } },
+      ]),
+    ).toThrow(/no node/)
+    expect(s.getNode('a')!.position).toEqual({ x: 0, y: 0 }) // a 未被改
+  })
+
+

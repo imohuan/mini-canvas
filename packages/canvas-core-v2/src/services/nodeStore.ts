@@ -159,11 +159,14 @@ export class NodeStore implements NodeStoreService {
   }
 
   addNodes(inputs: AddNodeInput[]): number {
+    if (inputs.length === 0) return 0
+    // 原子：先全量预校验 type 存在，任一非法即抛错且不产生部分插入
     for (const input of inputs) {
-      const def = this.types.get(input.type)
-      if (!def) {
+      if (!this.types.has(input.type)) {
         throw new Error(`[nodeStore] unknown node type "${input.type}". Register it first.`)
       }
+    }
+    for (const input of inputs) {
       const id = input.id ?? this.createNodeId()
       this.nodes.set(id, {
         id,
@@ -174,7 +177,7 @@ export class NodeStore implements NodeStoreService {
         ...(input.size !== undefined ? { size: { ...input.size } } : {}),
       })
     }
-    if (inputs.length > 0) this.notify('add')
+    this.notify('add')
     return inputs.length
   }
 
@@ -191,10 +194,12 @@ export class NodeStore implements NodeStoreService {
 
   updateNodes(entries: NodePatchEntry[]): void {
     if (entries.length === 0) return
+    // 原子：先全量预校验 id 存在，任一缺失即抛错且不产生部分应用
+    for (const { id } of entries) {
+      if (!this.nodes.has(id)) throw new Error(`[nodeStore] no node "${id}"`)
+    }
     for (const { id, patch } of entries) {
-      const node = this.nodes.get(id)
-      if (!node) throw new Error(`[nodeStore] no node "${id}"`)
-      this.applyPatch(node, patch)
+      this.applyPatch(this.nodes.get(id)!, patch)
     }
     this.notify('update')
   }
@@ -263,4 +268,6 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
+
+
 

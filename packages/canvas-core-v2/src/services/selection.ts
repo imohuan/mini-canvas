@@ -59,39 +59,48 @@ export class Selection implements SelectionService {
     return this.selectedEdges.has(id)
   }
   set(ids: Iterable<string>): void {
-    this.selected = new Set(ids)
+    const next = new Set(ids)
+    if (sameSet(this.selected, next)) return
+    this.selected = next
     this.notify()
   }
   setEdges(ids: Iterable<string>): void {
-    this.selectedEdges = new Set(ids)
+    const next = new Set(ids)
+    if (sameSet(this.selectedEdges, next)) return
+    this.selectedEdges = next
     this.notify()
   }
   add(id: string): void {
+    if (this.selected.has(id)) return
     this.selected.add(id)
     this.notify()
   }
   addEdge(id: string): void {
+    if (this.selectedEdges.has(id)) return
     this.selectedEdges.add(id)
     this.notify()
   }
   remove(id: string): void {
-    this.selected.delete(id)
+    if (!this.selected.delete(id)) return
     this.notify()
   }
   removeEdge(id: string): void {
-    this.selectedEdges.delete(id)
+    if (!this.selectedEdges.delete(id)) return
     this.notify()
   }
   clear(): void {
+    if (this.selected.size === 0 && this.selectedEdges.size === 0) return
     this.selected.clear()
     this.selectedEdges.clear()
     this.notify()
   }
   clearNodes(): void {
+    if (this.selected.size === 0) return
     this.selected.clear()
     this.notify()
   }
   clearEdges(): void {
+    if (this.selectedEdges.size === 0) return
     this.selectedEdges.clear()
     this.notify()
   }
@@ -105,5 +114,14 @@ export class Selection implements SelectionService {
   private notify(): void {
     for (const l of this.listeners) l()
   }
+}
+
+/** 两个 Set 内容是否完全相同（顺序无关） */
+function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size !== b.size) return false
+  for (const v of a) {
+    if (!b.has(v)) return false
+  }
+  return true
 }
 
