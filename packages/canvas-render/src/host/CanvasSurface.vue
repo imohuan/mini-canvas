@@ -70,6 +70,7 @@ const props = defineProps<{
   onConnectEnd: () => void
   onNodeClick: (e: NodeMouseEvent) => void
   onEdgeClick: (e: EdgeMouseEvent) => void
+  onNodeDrag: (e: NodeDragEvent) => void
   onNodeDragStart: (e: NodeDragEvent) => void
   onNodeDragStop: (e: NodeDragEvent) => void
   onMoveStart: () => void
@@ -190,6 +191,7 @@ defineExpose({
       @connect-end="onConnectEnd"
       @node-click="onNodeClick"
       @edge-click="onEdgeClick"
+      @node-drag="onNodeDrag"
       @node-drag-start="onNodeDragStart"
       @node-drag-stop="onNodeDragStop"
       @move-start="onMoveStart"
@@ -253,11 +255,4 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
-
-
-
-
-
-
-
 

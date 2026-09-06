@@ -58,6 +58,7 @@ import {
   endViewportMove,
 } from '../contracts/interactionContext'
 import { clickNode, clickEdge, clickPane } from './selectionInteractions'
+import { RenderEvents, toDragPayload } from './renderEvents'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
@@ -192,6 +193,10 @@ function syncSelected(): void {
   if (!h) return
   selectedIds.value = new Set(h.selection.ids)
   emptyEdgeSel.value = new Set(h.selection.edgeIds)
+  h.ctx.emit(RenderEvents.SelectionChange, {
+    nodeIds: [...h.selection.ids],
+    edgeIds: [...h.selection.edgeIds],
+  })
 }
 
 // ==================== 渲染态（VueFlow 消费）====================
@@ -262,6 +267,8 @@ function syncFromStore(): void {
 
 function onNodeDragStart(e: NodeDragEvent): void {
   beginNodeDrag(interaction, e.node.id)
+  const payload = toDragPayload(e)
+  if (payload) hostRef.value?.ctx.emit(RenderEvents.NodeDragStart, payload)
 }
 
 function onNodeDragStop(e: NodeDragEvent): void {
@@ -276,34 +283,61 @@ function onNodeDragStop(e: NodeDragEvent): void {
   })
   h.nodeStore.replaceAll(graph)
   void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
+  const payload = toDragPayload(e)
+  if (payload) h.ctx.emit(RenderEvents.NodeDragEnd, payload)
 }
 
 /** 视图平移/缩放开始（pan 与 wheel/pinch 缩放同源于 VueFlow 同一套 move 事件，A 决策：统一置 paneDragging） */
 function onMoveStart(): void {
   beginViewportMove(interaction)
+  emitMove(RenderEvents.MoveStart)
 }
 
 /** 视图平移/缩放结束：清 paneDragging（与 start 对称，无 wheel/pan 配对残留问题） */
 function onMoveEnd(): void {
   endViewportMove(interaction)
+  emitMove(RenderEvents.MoveEnd)
 }
 
+/** emit 带当前视口的视图事件（host 未就绪则跳过） */
+function emitMove(event: string): void {
+  const h = hostRef.value
+  const surface = surfaceRef.value
+  if (!h) return
+  const vp = surface?.getViewport?.() ?? { x: 0, y: 0, zoom: 1 }
+  h.ctx.emit(event, { viewport: vp })
+}
+
+/** 节点拖动逐帧（rAF 节流后 emit，避免 60Hz 刷屏） */
+let dragEmitRaf = 0
+function onNodeDrag(e: NodeDragEvent): void {
+  if (dragEmitRaf) return
+  dragEmitRaf = requestAnimationFrame(() => {
+    dragEmitRaf = 0
+    const h = hostRef.value
+    const payload = toDragPayload(e)
+    if (h && payload) h.ctx.emit(RenderEvents.NodeDrag, payload)
+  })
+}
 function onNodeClick(e: NodeMouseEvent): void {
   const h = hostRef.value
   if (!h) return
   clickNode(h.selection, e.node.id, { shiftKey: e.event.shiftKey })
+  h.ctx.emit(RenderEvents.NodeClick, { nodeId: e.node.id, shiftKey: e.event.shiftKey })
 }
 
 function onEdgeClick(e: EdgeMouseEvent): void {
   const h = hostRef.value
   if (!h) return
   clickEdge(h.selection, e.edge.id, { shiftKey: e.event.shiftKey })
+  h.ctx.emit(RenderEvents.EdgeClick, { edgeId: e.edge.id, shiftKey: e.event.shiftKey })
 }
 
 function onPaneClick(): void {
   const h = hostRef.value
   if (!h) return
   clickPane(h.selection)
+  h.ctx.emit(RenderEvents.PaneClick, {})
 }
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
@@ -864,6 +898,7 @@ onBeforeUnmount(() => {
         :validate-edge="validateEdgeText"
         :on-node-click="onNodeClick"
         :on-edge-click="onEdgeClick"
+        :on-node-drag="onNodeDrag"
         :on-node-drag-start="onNodeDragStart"
         :on-node-drag-stop="onNodeDragStop"
         :on-move-start="onMoveStart"
@@ -907,6 +942,4 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
-
-
 

@@ -119,6 +119,9 @@ export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } f
 export type { LayoutRect } from './layout/nodeLayout'
 
 export type { SelectionClickOptions } from './host/selectionInteractions'
+// 渲染层事件桥：CanvasHost 广播的画布事件名 + payload 归一化（插件 ctx.on 订阅）
+export { RenderEvents, toDragPayload } from './host/renderEvents'
+export type { DragEventPayload, MoveEventPayload, ClickPayload, SelectionChangePayload } from './host/renderEvents'
 
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
@@ -141,6 +144,4 @@ export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce
 export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
-
-
 
