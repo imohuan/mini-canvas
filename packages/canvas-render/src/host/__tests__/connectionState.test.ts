@@ -53,28 +53,3 @@ describe('createConnectionState', () => {
     expect(w.read()).toEqual(h)
   })
 })
-
-describe('lastDrop 松开落点建边快照', () => {
-  it('初始为 null', () => {
-    const s = createConnectionState()
-    expect(s.lastDrop.value).toBeNull()
-  })
-
-  it('begin 会重置 lastDrop(null)，避免上一次手势残留误触发 connect-end 建边', () => {
-    const s = createConnectionState()
-    s.lastDrop.value = { source: 'a', target: 'b', zone: 'body' }
-    beginConnection(s, { sourceNodeId: 'a', sourceHandle: 'source' })
-    expect(s.lastDrop.value).toBeNull()
-  })
-
-  it('end 不清 lastDrop——CanvasHost.onConnectEnd 需先读 lastDrop 判 body/snap 建边，再由宿主手动置空', () => {
-    const s = createConnectionState()
-    const drop = { source: 'a', target: 'b', zone: 'body' as const }
-    s.lastDrop.value = drop
-    endConnection(s)
-    expect(s.lastDrop.value).toEqual(drop) // endConnection 不得吃掉待决策的落点
-    // 宿主读完置空 → 下一次手势从 null 开始
-    s.lastDrop.value = null
-    expect(s.lastDrop.value).toBeNull()
-  })
-})

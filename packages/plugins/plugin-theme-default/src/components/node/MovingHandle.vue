@@ -91,6 +91,13 @@ const zoneStyle = computed(() => ({
   '--moving-handle-overlap': `${overlap.value}px`,
 }))
 
+/** debug svg 定位：覆盖到 zone 容器同位置同尺寸（zone 在 moving-handle-anchor 内，绝对定位） */
+const debugStyle = computed(() => ({
+  width: `${radius.value}px`,
+  height: `${radius.value}px`,
+  // source/target 位置对应：zone 已经是 `right:0`/`left:0` 通过 .moving-handle-anchor--source/target 绝对定位
+}))
+
 const buttonStyle = computed(() => {
   const style: Record<string, string> = {
     width: `${buttonSize.value}px`,
@@ -244,23 +251,25 @@ onBeforeUnmount(() => {
       @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
       @mouseleave="handleLeave"
       @mousemove="updatePosition"
-    >
-      <svg v-if="debug" class="moving-handle-debug" :viewBox="debugViewBox" preserveAspectRatio="none">
-        <path class="moving-handle-debug__arc" :d="debugArcPath" />
-        <circle class="moving-handle-debug__center" :cx="debugCenter.x" :cy="debugCenter.y" r="3" />
-        <text class="moving-handle-debug__label" :x="debugCenter.x + (isSource ? 6 : -6)" :y="debugCenter.y - 8" :text-anchor="isSource ? 'start' : 'end'">center</text>
-        <circle class="moving-handle-debug__rest" :cx="debugRestPoint.x" :cy="debugRestPoint.y" r="3" />
-        <text class="moving-handle-debug__label" :x="debugRestPoint.x" :y="debugRestPoint.y + 14" text-anchor="middle">rest</text>
-        <circle class="moving-handle-debug__mouse" :cx="debugMousePoint.x" :cy="debugMousePoint.y" r="3" />
-        <text class="moving-handle-debug__label" :x="debugMousePoint.x" :y="debugMousePoint.y + 14" text-anchor="middle">mouse</text>
-      </svg>
-    </span>
+    />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
         <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
     </div>
+
+    <!-- 调试可视化（移到 zone 外：zone 有 clip-path 裁掉 input 视觉边缘，clip 会同时裁掉 debug svg）。
+         用绝对定位覆盖 zone 区域，确保 center/rest/mouse 辅助线全显示不受裁剪影响。 -->
+    <svg v-if="debug" class="moving-handle-debug" :viewBox="debugViewBox" preserveAspectRatio="none" :style="debugStyle">
+      <path class="moving-handle-debug__arc" :d="debugArcPath" />
+      <circle class="moving-handle-debug__center" :cx="debugCenter.x" :cy="debugCenter.y" r="3" />
+      <text class="moving-handle-debug__label" :x="debugCenter.x + (isSource ? 6 : -6)" :y="debugCenter.y - 8" :text-anchor="isSource ? 'start' : 'end'">center</text>
+      <circle class="moving-handle-debug__rest" :cx="debugRestPoint.x" :cy="debugRestPoint.y" r="3" />
+      <text class="moving-handle-debug__label" :x="debugRestPoint.x" :y="debugRestPoint.y + 14" text-anchor="middle">rest</text>
+      <circle class="moving-handle-debug__mouse" :cx="debugMousePoint.x" :cy="debugMousePoint.y" r="3" />
+      <text class="moving-handle-debug__label" :x="debugMousePoint.x" :y="debugMousePoint.y + 14" text-anchor="middle">mouse</text>
+    </svg>
   </component>
 </template>
 
@@ -385,14 +394,20 @@ onBeforeUnmount(() => {
 
 .moving-handle-debug {
   position: absolute;
-  inset: 0;
+  /* 与 .moving-handle-zone 同位：源口向左偏移 overlap、目标口向右偏移 overlap（贴在卡片边） */
   width: 100%;
   height: 100%;
   pointer-events: none;
   overflow: visible;
-  z-index: 0;
+  z-index: 3; /* 在 button(z=2) 上层，确保 debug 标签不被 button 圆盖住 */
   transform: translateZ(0);
   backface-visibility: hidden;
+}
+.moving-handle-anchor--source .moving-handle-debug {
+  left: calc(var(--moving-handle-overlap) * -1);
+}
+.moving-handle-anchor--target .moving-handle-debug {
+  right: calc(var(--moving-handle-overlap) * -1);
 }
 .moving-handle-debug__arc {
   fill: var(--canvas-node-debug-danger-fill);

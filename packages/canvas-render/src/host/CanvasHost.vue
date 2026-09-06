@@ -47,10 +47,12 @@ import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
-import type { ConnectionFeedbackState } from '../contracts/connectionContext'
+import type { ConnectionFeedbackState, FlowPoint } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
+import { resolveFeedback } from '../connection/resolveFeedback'
+import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
@@ -115,6 +117,11 @@ const bootError = ref('')
 const hostRef = shallowRef<CanvasHostHandle | undefined>()
 const apiRef = shallowRef<MiniCanvasApi | undefined>()
 const managerRef = shallowRef<PluginManager | undefined>()
+/** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 viewport+pane 屏幕坐标） */
+const surfaceRef = shallowRef<{
+  getViewport?: () => { x: number; y: number; zoom: number }
+  getPaneRect?: () => DOMRect | null
+} | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
 // provide 点已移到 CanvasSurface（boot 完成后才挂载，故能 provide 裸 ctx/host）：
@@ -157,6 +164,9 @@ const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdge
 // 拖线连接过程反馈状态（能力层）。onConnectStart/onConnectEnd 写入；每帧 hover 由 ConnectionLineHost 写。
 // 同一引用经 renderContext provide，BaseNode/ConnectionLine 消费。
 const connectionState: ConnectionFeedbackState = createConnectionState()
+/** 拖线期间 Host 端实时 mouse 跟踪的 flow 坐标（VueFlow 自身 lineProps 不可靠时由这里兜底）。
+ *  拖线开始时清零、mousemove 更新、connect-end 清零。供 ConnectionLineHost 渲染端点。 */
+const dragFlowPoint = shallowRef<FlowPoint | null>(null)
 
 /** 把内核 Selection 的 ids 投影成新的 ReadonlySet 引用（整体替换以触发 Vue 响应式） */
 function syncSelected(): void {
@@ -307,36 +317,151 @@ function validateEdgeText(sourceId: string, targetId: string): string {
   return res.ok ? '' : reasonTextFrom(res.reason)
 }
 
-// —— 拖线生命周期：connect-start 记源+压端口；connect-end 判 body/吸附带建边 + 清空反馈 ——
-/** 本次拖线手势是否已走 @connect(精确 handle) 建边。connect-end 判 lastDrop 建边时据此避免双建。 */
+// —— 拖线生命周期：connect-start 记源+挂全局 mousemove 日志；connect-end 用 mouseup 自带的 clientX/Y 解析吸附建边 ——
+/** 本次拖线手势是否已走 @connect(精确 handle) 建边。connect-end 判 drop 建边时据此避免双建。 */
 let connectedThisGesture = false
+/** 上一次 mousemove 日志写入时间（throttle 50ms，避免每帧刷屏） */
+let lastDragHoverLogAt = 0
+/** 本次拖线源端快照（onConnectEnd 用） */
+let dragSourceId = ''
+let dragSourceHandle: 'source' | 'target' = 'source'
+/** mousemove/mouseup 是否在拖线期间挂上（用于 onMounted 早期 + boot 顺序保证） */
+let dragListenersBound = false
 
 function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
   if (!p.nodeId) return
   const handleType = p.handleType ?? (p.handleId as 'source' | 'target') ?? 'source'
   connectedThisGesture = false
-  log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType}`)
+  dragSourceId = p.nodeId
+  dragSourceHandle = handleType === 'target' ? 'target' : 'source'
+  dragFlowPoint.value = null
+  log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType} (挂 drag listeners)`)
   beginConnection(connectionState, {
     sourceNodeId: p.nodeId,
-    sourceHandle: handleType === 'target' ? 'target' : 'source',
+    sourceHandle: dragSourceHandle,
+  })
+  // 拖线期间挂全局 mousemove/mouseup（捕获阶段优先于 VueFlow 的事件，确保一定能拿到鼠标坐标）
+  if (!dragListenersBound) {
+    document.addEventListener('mousemove', onDragMouseMove, true)
+    document.addEventListener('mouseup', onDragMouseUp, true)
+    dragListenersBound = true
+  }
+}
+
+/** 拖线 mousemove：throttled 打 hover 状态日志 + 实时更新 dragFlowPoint（让连接线端点跟手） */
+function onDragMouseMove(ev: MouseEvent): void {
+  if (!dragSourceId) return
+  const now = Date.now()
+  if (now - lastDragHoverLogAt < 50) return
+  lastDragHoverLogAt = now
+  const target = resolveAtClient(ev.clientX, ev.clientY)
+  // 实时写 dragFlowPoint（给 ConnectionLineHost 渲染端点用）— VueFlow 自身的 lineProps 在某些路径下不可靠
+  dragFlowPoint.value = { x: target.point.x, y: target.point.y }
+  log.log(
+    `drag hover client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${target.hover ? `→ ${target.hover.nodeId}/${target.hover.status}/${target.hover.zone}${target.hover.reason ? ' ' + target.hover.reason : ''}` : '空'}`,
+  )
+}
+
+/** 拖线 mouseup：用 mouseup 事件自带的 clientX/Y 直接解析吸附（跟 v1 useCanvasConnection.onConnectEnd 同思路） */
+function onDragMouseUp(ev: MouseEvent): void {
+  // 仅在拖线源端快照存在时处理（避免与其它业务 mouseup 冲突）
+  if (!dragSourceId) return
+  const target = resolveAtClient(ev.clientX, ev.clientY)
+  // 同步最后一次 mouseup 坐标到 dragFlowPoint（让 release 那一帧连接线也对齐）
+  dragFlowPoint.value = { x: target.point.x, y: target.point.y }
+  const drop = decideDropFromHover(dragSourceId, dragSourceHandle, target)
+  log.log(
+    `drop resolve client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${drop ? `→ ${drop.source}→${drop.target}/${drop.zone}` : '→ 空白(松空)'}`,
+  )
+  if (drop) {
+    const res = checkConnection(drop.source, drop.target)
+    if (!res.ok) log.warn(`drop ${drop.source}→${drop.target} 非法:${res.reason}`)
+    else commitEdge(drop.source, drop.target)
+  }
+  // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
+  dragSourceId = ''
+  dragSourceHandle = 'source'
+}
+
+/** client 坐标 → 当前 viewport 下的 flow 坐标（从 surfaceRef 拿 viewport 变换与 pane 屏幕矩形） */
+function clientToFlow(clientX: number, clientY: number): { x: number; y: number } {
+  const surface = surfaceRef.value
+  const rect = surface?.getPaneRect?.()
+  const vp = surface?.getViewport?.() ?? { x: 0, y: 0, zoom: 1 }
+  if (!rect) return { x: clientX, y: clientY }
+  // screen → flow：先算相对 pane 的屏幕坐标，再除以 zoom，然后减掉 viewport 平移
+  return {
+    x: (clientX - rect.left) / vp.zoom - vp.x,
+    y: (clientY - rect.top) / vp.zoom - vp.y,
+  }
+}
+
+/** 取 host 内核中存活节点矩形（flow 坐标） */
+function liveNodeRects(): NodeRect[] {
+  const h = hostRef.value
+  if (!h) return []
+  return h.nodeStore.getNodes().map((n) => {
+    const pos = (n as unknown as { position?: { x: number; y: number } }).position ?? { x: 0, y: 0 }
+    const dim = (n as unknown as { dimensions?: { width: number; height: number } }).dimensions
+    return {
+      id: n.id,
+      type: n.type,
+      x: pos.x,
+      y: pos.y,
+      width: dim?.width || 256,
+      height: dim?.height || 128,
+    }
   })
 }
 
+/** 给定 client 坐标解析当前 hover + flow 点（用于 mousemove 日志 / mouseup drop） */
+function resolveAtClient(
+  clientX: number,
+  clientY: number,
+): { point: { x: number; y: number }; hover: ReturnType<typeof resolveFeedback>['hover'] } {
+  const flowPoint = clientToFlow(clientX, clientY)
+  const rects = liveNodeRects().filter((r) => r.id !== dragSourceId)
+  if (!dragSourceId) return { point: flowPoint, hover: null }
+  const res = resolveFeedback({
+    sourceId: dragSourceId,
+    sourceHandle: dragSourceHandle,
+    nodeRects: rects,
+    flowPoint,
+    handleRadius: handleToProvide.handleRadius || 86,
+    ratios: DEFAULT_SNAP_RATIOS,
+    validate: validateEdgeText,
+  })
+  return { point: flowPoint, hover: res.hover }
+}
+
+/** 把 hover 决策转成规范 (source,target) 候选；空白则 null */
+function decideDropFromHover(
+  sourceId: string,
+  sourceHandle: 'source' | 'target',
+  target: { hover: ReturnType<typeof resolveFeedback>['hover'] },
+): { source: string; target: string; zone: 'snap' | 'body' } | null {
+  const h = target.hover
+  if (!h || h.status !== 'valid') return null
+  // reverse 方向（从 target口反向连）需把 source/target 对调
+  return sourceHandle === 'target'
+    ? { source: h.nodeId, target: sourceId, zone: h.zone }
+    : { source: sourceId, target: h.nodeId, zone: h.zone }
+}
+
 function onConnectEnd(): void {
-  // 先取落点快照(ConnectionLineHost 拖线中写入共享 state，不随 endConnection 清)——放最后决策前读，勿放 endConnection 后读。
-  const drop = connectionState.lastDrop.value
-  connectionState.lastDrop.value = null // 读完即清，下次手势重新写
-  // 松开在节点 body/吸附带上(VueFlow @connect 只在精确命中 handle 时发)：未建边则补建。
-  if (!connectedThisGesture && drop && drop.source && drop.target) {
-    const res = checkConnection(drop.source, drop.target)
-    if (!res.ok) {
-      log.warn(`connectEnd drop ${drop.source}→${drop.target} 非法:${res.reason}`)
-    } else {
-      commitEdge(drop.source, drop.target)
-    }
-  }
+  // @connect 与 drag mouseup 都会尝试建边 — 二者任一成功则跳过另一。
+  // 注：VueFlow 顺序：精确命中 handle → @connect(先) → mouseup → @connect-end。@connect 已建则 commitEdge 也会被幂等挡掉。
+  // 这里仅负责清空状态 + 拆监听（拖线 mouseup 在 mousemove 同源时已 commit）。
   endConnection(connectionState)
   connectedThisGesture = false
+  if (dragListenersBound) {
+    document.removeEventListener('mousemove', onDragMouseMove, true)
+    document.removeEventListener('mouseup', onDragMouseUp, true)
+    dragListenersBound = false
+  }
+  dragSourceId = ''
+  dragSourceHandle = 'source'
+  dragFlowPoint.value = null
   log.log('connectEnd 清空反馈')
 }
 
@@ -544,6 +669,7 @@ onBeforeUnmount(() => {
     <div v-else class="chost-canvas">
       <!-- 内层渲染子树宿主：boot 完成后才挂载，向渲染组件 provide 裸 ctx/host（见 CanvasSurface.vue） -->
       <CanvasSurface
+        ref="surfaceRef"
         :host="hostRef"
         :registry="registry"
         :node-write="nodeWrite"
@@ -562,6 +688,7 @@ onBeforeUnmount(() => {
         :max-zoom="props.maxZoom"
         :is-valid-connection="isValidConnection"
         :connection-state="connectionState"
+        :drag-flow-point="dragFlowPoint"
         :on-connect="onConnect"
         :on-connect-start="onConnectStart"
         :on-connect-end="onConnectEnd"

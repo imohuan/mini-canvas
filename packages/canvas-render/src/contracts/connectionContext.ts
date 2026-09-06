@@ -47,19 +47,6 @@ export interface HoverFeedback {
 }
 
 /**
- * 拖线"松开落点"快照：connect-end 时若未走 @connect(精确 handle)建边，凭它做 body/吸附带松开也建边的决策。
- * ConnectionLineHost 每帧(仅当悬停合法时)更新为已归一化的候选 {source,target}；CanvasHost.onConnectEnd 读取后判建边并置空。
- * 不参与 endConnection 清空（需在 connect-end 决策后才手动置空）。
- */
-export interface DropSnapshot {
-  /** 归一化规范边端点（source=输出节点，target=输入节点；已处理反向拖出） */
-  source: string
-  target: string
-  /** 命中区域 */
-  zone: 'snap' | 'body'
-}
-
-/**
  * 能力层对外暴露的"拖线过程"响应式状态（全是 Ref，host 整体替换触发追踪）。
  * 由 CanvasHost 创建并维护、经 CanvasSurface provide、useCanvasRender().connectionState 读。
  */
@@ -72,9 +59,4 @@ export interface ConnectionFeedbackState {
   hoverNode: Ref<HoverFeedback | null>
   /** 拖线期间是否压住（非源节点的）浮动端口按钮（v1 suppressHandles 语义） */
   suppressHandles: Ref<boolean>
-  /**
-   * 拖线合法落点快照（未精确命中 handle 时 connect-end 据此建边）。ConnectionLineHost 写、CanvasHost.onConnectEnd 读后置空。
-   * 独立于 endConnection 的清理（结束决策后才手动清），故单独列字段。
-   */
-  lastDrop: Ref<DropSnapshot | null>
 }

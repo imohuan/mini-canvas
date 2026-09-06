@@ -37,6 +37,9 @@ const props = defineProps<{
   handleRadius: number
   /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致）。lastDrop 由本组件写、CanvasHost.onConnectEnd 读 */
   state: ConnectionFeedbackState
+  /** Host 端 mousemove 实时跟踪的 flow 坐标（拖线外为 null）。优先于 lineProps.targetX/Y 用于连接线端点渲染，
+   *  因为合成事件/某些输入路径下 VueFlow 自身的 lineProps 不更新。 */
+  dragFlowPoint?: { x: number; y: number } | null
 }>()
 
 const vf = useVueFlow()
@@ -106,7 +109,12 @@ const feedback = computed(() => {
   const srcId = sourceId.value
   const sh = sourceHandle.value
   if (!srcId) return null
-  const point: FlowPoint = { x: props.lineProps.targetX, y: props.lineProps.targetY }
+  // 端点优先用 Host 端 mousemove 跟踪的 dragFlowPoint（更实时，覆盖合成事件下 VueFlow lineProps 不更新的场景），
+  // fallback 到 VueFlow lineProps.targetX/Y
+  const point: FlowPoint = props.dragFlowPoint ?? {
+    x: props.lineProps.targetX,
+    y: props.lineProps.targetY,
+  }
   const res = resolveFeedback({
     sourceId: srcId,
     sourceHandle: sh,
@@ -128,23 +136,12 @@ const feedback = computed(() => {
         }
       : null,
   )
-  // 松开落点快照：悬停合法时记归一化 {source,target}，供 CanvasHost.onConnectEnd 做 body/吸附带建边决策。
-  // **同步直写**(不走 rAF)：mouseup → VueFlow 立即发 connect-end，若走 rAF 可能还没落盘就丢了。
-  // lastDrop 不被任何渲染读取，同步写不会引发递归更新(与 hover 不同)。
-  if (res.hover && res.hover.status === 'valid') {
-    const reverse = sh === 'target'
-    props.state.lastDrop.value = reverse
-      ? { source: res.hover.nodeId, target: srcId, zone: res.hover.zone }
-      : { source: srcId, target: res.hover.nodeId, zone: res.hover.zone }
-  } else {
-    props.state.lastDrop.value = null
-  }
   return res
 })
 
 // ---- 绘制数据 ----
 const start = computed(() => ({ x: props.lineProps.sourceX, y: props.lineProps.sourceY }))
-const end = computed(() => feedback.value?.end ?? { x: props.lineProps.targetX, y: props.lineProps.targetY })
+const end = computed(() => feedback.value?.end ?? props.dragFlowPoint ?? { x: props.lineProps.targetX, y: props.lineProps.targetY })
 /** 是否命中某个合法可吸附点（供默认线/主题组件改色） */
 const hasSnap = computed(() => feedback.value?.snappedToId != null)
 

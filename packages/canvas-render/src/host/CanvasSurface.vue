@@ -10,8 +10,8 @@
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
 // - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
-import { provide, shallowRef } from 'vue'
-import { VueFlow } from '@vue-flow/core'
+import { provide, shallowRef, ref, onMounted } from 'vue'
+import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
 import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
@@ -39,6 +39,8 @@ const props = defineProps<{
   edgeVisual: Partial<EdgeVisual>
   edgeSelection: EdgeSelection
   connectionState: ConnectionFeedbackState
+  /** Host 端 mousemove 实时写的 flow 坐标（VueFlow lineProps 不可靠时由这里驱动连接线端点）。可空（拖线外时段）。 */
+  dragFlowPoint?: { x: number; y: number } | null
   debugVisual: CanvasDebug
   // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,6 +96,25 @@ provide(CANVAS_PARAMS_KEY, props.handleParams)
 provide(EDGE_VISUAL_KEY, props.edgeVisual)
 provide(EDGE_SELECTION_KEY, props.edgeSelection)
 provide(HOST_KEY, shallowRef(host))
+
+// ==================== viewport + pane DOM 暴露（供 CanvasHost 拖线 mousemove/mouseup 用 clientToFlow） ====================
+// VueFlow 在本组件内渲染，useVueFlow() 拿实时 viewport（reactively 跟随 zoom/pan）。
+const vfApi = useVueFlow()
+const paneEl = ref<HTMLElement | null>(null)
+onMounted(() => {
+  // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
+  paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
+})
+// expose 给父：父级拖线时直接拿到 viewport transform 和 pane 屏幕矩形（VF 1.48 的 viewport 是 Ref<ViewportTransform>）
+defineExpose({
+  getViewport: () => {
+    const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
+    return vp
+      ? { x: vp.x, y: vp.y, zoom: vp.zoom }
+      : (vfApi.viewport as unknown as { x: number; y: number; zoom: number })
+  },
+  getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
+})
 </script>
 
 <template>
@@ -126,6 +147,7 @@ provide(HOST_KEY, shallowRef(host))
           :validate-edge="validateEdge"
           :handle-radius="handleParams.handleRadius"
           :state="connectionState"
+          :drag-flow-point="dragFlowPoint ?? null"
         />
       </template>
       <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->

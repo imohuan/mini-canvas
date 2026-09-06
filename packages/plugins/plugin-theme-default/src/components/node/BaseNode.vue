@@ -470,6 +470,7 @@ function clamp(value: number, min: number, max: number): number {
   border-color: var(--canvas-node-border, rgb(209 213 219 / 0.95));
   background: var(--canvas-node-surface, #f9fafb);
   box-shadow: 0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06));
+  overflow: visible; /* SVG 吸附调试带可负 x 溢出左缘，必须 visible */
   transition:
     border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
