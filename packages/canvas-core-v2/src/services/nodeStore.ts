@@ -5,6 +5,11 @@
  * - 节点 type 用业务类型（'text'），不再是 v1 的全 'custom'。
  * - 节点 id 短数字累加（createNodeId），废弃 v1 的 `node-{type}-{Date.now()}`。
  * - 内容组件经 updateNodeData 上报改动（治 v1 text 编辑不写回 data）。
+ *
+ * v2 写 API（用户拍板 1A）：
+ * - CanvasNode 增加可选 parentId（组嵌套）+ size（声明尺寸）。两者均向后兼容：老数据无此字段不落盘。
+ * - addNodes 批量带 id/data/size/parentId 插入；updateNode 任意 patch；updateNodes 批量改；removeNodes 批量删。
+ * - 动态实测宽高不属于本包（那是渲染层 nodeLayout 服务的事），size 仅承载声明/落盘的静态尺寸。
  */
 
 /** 画布节点数据的最小可持久化形状 */
@@ -13,6 +18,31 @@ export interface CanvasNode {
   type: string
   position: { x: number; y: number }
   data: Record<string, unknown>
+  /** 父节点 id（组嵌套；可选，向后兼容老数据）。子节点 position 为相对父的局部坐标。 */
+  parentId?: string
+  /** 声明尺寸（可选；供布局/对齐等读静态值。运行时实测宽高走渲染层 nodeLayout）。 */
+  size?: { w: number; h: number }
+}
+
+/** addNodes 的单条输入：除 type/position 外均可选（id 缺省自动分配） */
+export interface AddNodeInput {
+  type: string
+  position: { x: number; y: number }
+  id?: string
+  data?: Record<string, unknown>
+  parentId?: string
+  size?: { w: number; h: number }
+}
+
+/** updateNode/updateNodes 的单条 patch：position/size/parentId/data 任意子集；显式 undefined 表示清该字段 */
+export type NodePatch = Partial<Pick<CanvasNode, 'position' | 'data' | 'size'>> & {
+  parentId?: string | undefined
+}
+
+/** updateNodes 的批量条目：id + 该节点 patch */
+export interface NodePatchEntry {
+  id: string
+  patch: NodePatch
 }
 
 /** 声明式端口约束（缺省 = 人人可 source→target 连） */
@@ -31,12 +61,12 @@ export interface PortDef {
   capacity?: number
 }
 
-/** 节点类型定义（M4 只关心 content 组件 + 默认尺寸；完整 schema 见 M3） */
+/** 节点类型定义 */
 export interface CanvasNodeType {
   type: string
   label: string
   defaultSize: { w: number; h: number }
-  /** 声明式连接约束（M5，api.md §四）：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
+  /** 声明式连接约束：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
   inputs?: PortDef[]
   outputs?: PortDef[]
 }
@@ -53,12 +83,22 @@ export interface NodeStoreService {
   getNodes(): CanvasNode[]
   /** 按 type 在指定坐标建一个节点，返回短 id（如 '1'） */
   addNode(type: string, position: { x: number; y: number }): string
-  /** 改某节点 data（内容组件上报改动入口） */
+  /** 批量插入节点：可指定 id/data/size/parentId；返回实际插入数量。广播一次 add。 */
+  addNodes(inputs: AddNodeInput[]): number
+  /** 改某节点 data（内容组件上报改动入口；等价 updateNode(id,{data})） */
   updateNodeData(id: string, data: Record<string, unknown>): void
+  /** 任意字段更新（position/size/parentId/data；显式 undefined 清字段）。节点不存在抛错。广播一次 update。 */
+  updateNode(id: string, patch: NodePatch): void
+  /** 批量更新：不同节点各自 patch；原子广播一次 update。 */
+  updateNodes(entries: NodePatchEntry[]): void
   /** 取某节点 */
   getNode(id: string): CanvasNode | undefined
   /** 删除某节点（返回是否删到） */
   removeNode(id: string): boolean
+  /** 批量删除；若删到父节点，自动清仍存活子节点的 parentId（防悬挂）。广播一次 remove。 */
+  removeNodes(ids: string[]): number
+  /** 某父节点直属子节点（无则空数组） */
+  childNodesOf(parentId: string): CanvasNode[]
   /** 用持久化数据整体回填（刷新恢复） */
   replaceAll(nodes: CanvasNode[]): void
   /**
@@ -113,21 +153,64 @@ export class NodeStore implements NodeStoreService {
       throw new Error(`[nodeStore] unknown node type "${type}". Register it first.`)
     }
     const id = this.createNodeId()
-    this.nodes.set(id, {
-      id,
-      type,
-      position,
-      data: {},
-    })
+    this.nodes.set(id, { id, type, position, data: {} })
     this.notify('add', id)
     return id
   }
 
+  addNodes(inputs: AddNodeInput[]): number {
+    for (const input of inputs) {
+      const def = this.types.get(input.type)
+      if (!def) {
+        throw new Error(`[nodeStore] unknown node type "${input.type}". Register it first.`)
+      }
+      const id = input.id ?? this.createNodeId()
+      this.nodes.set(id, {
+        id,
+        type: input.type,
+        position: { x: input.position.x, y: input.position.y },
+        data: input.data ? { ...input.data } : {},
+        ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        ...(input.size !== undefined ? { size: { ...input.size } } : {}),
+      })
+    }
+    if (inputs.length > 0) this.notify('add')
+    return inputs.length
+  }
+
   updateNodeData(id: string, data: Record<string, unknown>): void {
+    this.updateNode(id, { data })
+  }
+
+  updateNode(id: string, patch: NodePatch): void {
     const node = this.nodes.get(id)
     if (!node) throw new Error(`[nodeStore] no node "${id}"`)
-    node.data = { ...node.data, ...data }
+    this.applyPatch(node, patch)
     this.notify('update', id)
+  }
+
+  updateNodes(entries: NodePatchEntry[]): void {
+    if (entries.length === 0) return
+    for (const { id, patch } of entries) {
+      const node = this.nodes.get(id)
+      if (!node) throw new Error(`[nodeStore] no node "${id}"`)
+      this.applyPatch(node, patch)
+    }
+    this.notify('update')
+  }
+
+  /** 原地应用 patch；显式 undefined 的字段用 delete 移除（如 parentId: undefined 解除父子） */
+  private applyPatch(node: CanvasNode, patch: NodePatch): void {
+    if (patch.position !== undefined) node.position = { x: patch.position.x, y: patch.position.y }
+    if (patch.data !== undefined) node.data = { ...node.data, ...patch.data }
+    if ('size' in patch) {
+      if (patch.size === undefined) delete node.size
+      else node.size = { w: patch.size.w, h: patch.size.h }
+    }
+    if ('parentId' in patch) {
+      if (patch.parentId === undefined) delete node.parentId
+      else node.parentId = patch.parentId
+    }
   }
 
   getNode(id: string): CanvasNode | undefined {
@@ -138,6 +221,27 @@ export class NodeStore implements NodeStoreService {
     const removed = this.nodes.delete(id)
     if (removed) this.notify('remove', id)
     return removed
+  }
+
+  removeNodes(ids: string[]): number {
+    if (ids.length === 0) return 0
+    const idSet = new Set(ids)
+    let removed = 0
+    for (const id of ids) {
+      if (this.nodes.delete(id)) removed += 1
+    }
+    if (removed > 0) {
+      // 清掉仍存活子节点指向被删父节点的引用（防悬挂）
+      for (const n of this.nodes.values()) {
+        if (n.parentId !== undefined && idSet.has(n.parentId)) delete n.parentId
+      }
+      this.notify('remove')
+    }
+    return removed
+  }
+
+  childNodesOf(parentId: string): CanvasNode[] {
+    return [...this.nodes.values()].filter((n) => n.parentId === parentId)
   }
 
   replaceAll(nodes: CanvasNode[]): void {
@@ -159,3 +263,4 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
+

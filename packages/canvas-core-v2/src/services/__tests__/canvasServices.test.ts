@@ -36,12 +36,12 @@ describe('Selection（选中集服务）', () => {
 
   it('onChange 触发时 ids 已是最新(供派生 ref 读快照)', () => {
     const s = new Selection()
-    let seen: ReadonlySet<string> | null = null
-    s.onChange(() => (seen = s.ids))
+    const seen: Array<ReadonlySet<string>> = []
+    s.onChange(() => seen.push(s.ids))
     s.set(['a', 'b'])
-    expect(seen && [...seen].sort()).toEqual(['a', 'b'])
+    expect([...seen[0]].sort()).toEqual(['a', 'b'])
     s.clear()
-    expect(seen && seen.size).toBe(0)
+    expect(seen[1].size).toBe(0)
   })
 })
 
