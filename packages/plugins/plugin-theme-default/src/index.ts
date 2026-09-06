@@ -21,6 +21,7 @@ import './styles/node-theme.css'
 import BaseNode from './components/node/BaseNode.vue'
 import CustomEdge from './components/edge/CustomEdge.vue'
 import DefaultBackground from './components/background/DefaultBackground.vue'
+import ConnectionLine from './components/edge/ConnectionLine.vue'
 import PluginSettingsDialog from './components/settings/PluginSettingsDialog.vue'
 
 export const name = 'theme-default'
@@ -120,6 +121,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.theme.register('nodeShell', BaseNode) // 完整节点壳（收编自 core）
   ctx.theme.register('edge', CustomEdge) // 完整自定义连线（收编自 core）
   ctx.theme.register('background', DefaultBackground) // 画布背景
+  ctx.theme.register('connectionLine', ConnectionLine) // 拖线临时连接线（canvas-render #connection-line 渲染它）
   ctx.theme.register('edgeDefaultType', 'custom')
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
