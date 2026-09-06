@@ -80,7 +80,7 @@ const fieldId = 'sf-' + props.fieldKey
         type="range"
         :min="entry.schema.min ?? 0"
         :max="entry.schema.max ?? 100"
-        :step="1"
+        :step="entry.schema.step ?? 1"
         :value="numberValue(entry.value, entry.schema)"
         @input="set(entry.key, Number(($event.target as HTMLInputElement).value))"
       />
