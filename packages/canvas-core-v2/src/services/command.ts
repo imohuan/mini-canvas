@@ -18,6 +18,15 @@ export interface CommandDef {
   keys?: string[]
   /** 可选使能条件（false → execute 直接 no-op） */
   when?: (ctx: unknown) => boolean
+  // —— v2 可选 UI 元数据（纯声明，菜单/工具栏插件读；不影响 run 语义）——
+  /** 图标（字符串标识或 svg 路径，UI 插件自行解析） */
+  icon?: string
+  /** 该命令出现在哪些区域（'node' | 'edge' | 'pane' | 'toolbar'…） */
+  areas?: string[]
+  /** 分组（菜单/工具栏分组名） */
+  group?: string
+  /** 排序权重（越小越靠前） */
+  order?: number
 }
 
 export interface CommandService {
@@ -27,6 +36,12 @@ export interface CommandService {
   execute(id: string, ...payload: unknown[]): unknown
   /** 是否存在某命令 */
   has(id: string): boolean
+  /** 按 id 取命令定义（含 UI 元数据；未注册返回 undefined） */
+  get(id: string): CommandDef | undefined
+  /** 枚举全部命令定义 */
+  list(): CommandDef[]
+  /** 按 id 注销（未注册返回 false） */
+  unregister(id: string): boolean
   /** 宿主注入执行上下文（供 run/when 拿 ctx.get 等服务） */
   setContext(ctx: unknown): void
 }
@@ -51,6 +66,20 @@ export class CommandRegistry implements CommandService {
     return this.cmds.has(id)
   }
 
+  get(id: string): CommandDef | undefined {
+    return this.cmds.get(id)
+  }
+
+  list(): CommandDef[] {
+    return [...this.cmds.values()]
+  }
+
+  unregister(id: string): boolean {
+    const existed = this.cmds.has(id)
+    this.cmds.delete(id)
+    return existed
+  }
+
   setContext(ctx: unknown): void {
     this.ctx = ctx
   }
@@ -62,3 +91,5 @@ export class CommandRegistry implements CommandService {
     return cmd.run(this.ctx, ...payload)
   }
 }
+
+
