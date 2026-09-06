@@ -150,7 +150,7 @@ onMounted(() => {
     setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
   })
 })
-  // renderer DOM 就绪后启动节点尺寸观测
+  // renderer DOM 就绪后启动节点尺寸观测（须在 onMounted 内，否则容器未挂载、MutationObserver 永不启动）
   measure.start()
 
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，

@@ -3,7 +3,7 @@ import { Selection } from '../selection'
 
 /**
  * Selection v2 契约 —— 用户拍板 2A：
- *  - ids 保持"节点 id 集"语义原样不动（现有命令/删除零改动）；
+ *  - ids 保持节点 id 集语义原样不动（现有命令/删除零改动）；
  *  - 新增 edgeIds 边 id 集 + 边专属增删；
  *  - onChange 在任一桶变化时触发，且触发时 ids/edgeIds 均为最新快照。
  */
@@ -75,7 +75,6 @@ describe('Selection v2（节点 + 边双集）', () => {
     s.clearEdges()
     expect(s.edgeIds.size).toBe(0)
   })
-})
 
   it('脏检查：重复 set 同内容 / add 已存在 / clear 空集不触发 onChange', () => {
     const s = new Selection()
@@ -95,5 +94,5 @@ describe('Selection v2（节点 + 边双集）', () => {
     s.clearEdges()
     expect(calls).toBe(2)
   })
-
+})
 

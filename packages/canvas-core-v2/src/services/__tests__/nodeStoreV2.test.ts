@@ -112,7 +112,6 @@ describe('NodeStore v2 写 API', () => {
     ])
     expect(s.childNodesOf('g').map((x) => x.id).sort()).toEqual(['c1', 'c2'])
   })
-})
 
   it('addNodes 原子：任一条 type 非法 → 抛错且不插入任何节点', () => {
     const s = makeStore()
@@ -139,4 +138,5 @@ describe('NodeStore v2 写 API', () => {
     ).toThrow(/no node/)
     expect(s.getNode('a')!.position).toEqual({ x: 0, y: 0 }) // a 未被改
   })
+})
 
