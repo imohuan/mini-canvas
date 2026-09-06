@@ -153,3 +153,35 @@ interface ConnectionFeedbackState {
 **验证**：canvas-render 68 测试绿 + vue-tsc 0 错；plugin 14 测试绿 + vue-tsc 0 错；plugin `pnpm build` 32 模块成功。
 **未验证**：拖线反馈的**运行时**行为（#connection-line 插槽每帧触发 + rAF 写 hoverNode）需浏览器目验，
   纯几何已单测、reactive 接线仅类型/编译通过。下一步应起 `pnpm dev` 目验：拖线 3D 倾斜/非法气泡/吸附线/resize/端口显隐。
+
+---
+## 9. 运行时诊断补记（2026-09-06，chrome-devtools 实测 packages/ui @ 5289）
+
+起 ui dev server + 浏览器工具实测，暴露并修复两处**运行时功能 bug**（源码/类型/单测都绿但实机坏）：
+
+### A. 拖线连不上 → 已修（commit 81b3c82，canvas-render/CanvasHost）
+- 症状：拖线 connect 后连线不出现（要刷新才见）；任意 resync（加节点/拖节点）已连的边全部消失。
+- 根因：VueFlow 每次 setEdges 全量重喂都走 `isValidConnection` 再校验一遍**已存在边**，
+  CanvasHost checkConnection 按"重复"驳回（EDGE_INVALID 警告），把已落盘的边丢掉。
+  首次 boot 因校验未激活侥幸存活，后续每次 resync 全灭。
+- 修法：checkConnection 幂等——连接已真实存在于内核 edgeStore(=已提交历史边)则放行；
+  真正的新候选仍走完整重复/环校验。内核天然按端点去重，不影响唯一性。
+- 验证：拖线 connect 后边即时渲染成 CustomEdge（Bézier path 在 DOM）；加节点 resync 边存活；
+  环(2→1 当 1→2 存在)仍判非法。68 测试绿。
+- 注意：副作用=已存在的连接再拖会显示 valid（内核去重 no-op），可接受。
+
+### B. resize 拖柄恒显示且无效 → 已修（commit cd6332d，theme-default/BaseNode+useNodeCardSize）
+- 症状：无 data.resizable 的节点也出拖柄；有 resizable 拖拽也不改尺寸；is-resizing 卡死。
+- 根因①（模板恒真）：`v-if="card.resizable"` 引的是 useNodeCardSize 返回对象里的**嵌套 ref**，
+  模板只解包顶层 ref，嵌套 ref 对象恒真 → 拖柄无条件出 + is-resizing 卡死。
+  修：顶层解包 `cardResizable/cardIsResizing` 再进模板。
+- 根因②（数据过期）：useNodeCardSize 收 data **对象快照**，VueFlow 重渲染换新 props.data → 读到过期引用，
+  resizable/尺寸永不更新。修：改收惰性 getter `() => props.data`，内部 computed 依赖 props.data 响应式。
+- 验证：无 resizable 节点不再出拖柄；设 resizable:true 后拖柄出现，拖拽实时 300x200→400x260 并写回 data.cardWidth/Height。14 测试绿。
+
+### 诊断手段备忘
+- @vue-flow/core Handle 用 `onMousedown`（非 pointerdown）启连；拖线中监 doc `mousemove/mouseup`。
+- VueFlow `createGraphEdges` 对 setEdges 每个边跑 isValidConnection → EDGE_INVALID("An edge needs a source and a target" 易误导)。
+- 合成 pointer/mouse 事件可驱动；`drag` 工具不给真实 mousemove/mouseup，用 document 派发 mousemove/up 补。
+- dev server 久跑后 HMR/模块可能陈旧 → 重启 vite + 新 isolatedContext 页面测最干净。
+- 模板 ref 解包坑：setup 顶层 ref 自动解包，**返回对象内嵌套 ref 不解包**。
