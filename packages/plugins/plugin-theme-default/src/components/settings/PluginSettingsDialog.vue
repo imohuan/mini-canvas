@@ -194,27 +194,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <!-- 左：导航 -->
           <nav class="psd-nav">
             <div v-if="!navEntries.length" class="psd-nav-empty">暂无分组</div>
-            <div
-              v-for="item in navEntries"
-              :key="item.key"
-              class="psd-nav-item"
-              :class="{ active: activeKey === item.key }"
-              role="button"
-              tabindex="0"
-              @click="onSelect(item.key)"
-              @keydown.enter.prevent="onSelect(item.key)"
-            >
+            <div v-for="item in navEntries" :key="item.key" class="psd-nav-item"
+              :class="{ active: activeKey === item.key }" role="button" tabindex="0" @click="onSelect(item.key)"
+              @keydown.enter.prevent="onSelect(item.key)">
               <!-- 分组默认项：直接画文本 -->
               <span v-if="item.kind === 'group'">{{ item.key }}</span>
               <!-- 导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
-              <component
-                v-else
-                :is="item.component"
-                :key="item.key"
-                :group="item.key"
-                :active="activeKey === item.key"
-                :on-select="onSelect"
-              />
+              <component v-else :is="item.component" :key="item.key" :group="item.key" :active="activeKey === item.key"
+                :on-select="onSelect" />
             </div>
           </nav>
 
@@ -227,19 +214,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
             <div class="psd-content-body">
               <!-- 内容区 = 一段 v-for 遍历"有序内容块"(contentBlocks)：field(默认控件) / slot(插槽组件) 就地分支渲染 -->
-              <template v-for="b in contentBlocks" :key="(b as any).kind === 'field' ? 'f-' + (b as any).key : 's-' + (b as any).occ.id">
-                <SettingsSchemaField
-                  v-if="b.kind === 'field'"
-                  :group="activeKey"
-                  :field-key="b.key"
-                  :settings="props.settings"
-                />
-                <component
-                  v-else
-                  :is="b.occ.component"
-                  :group="activeKey"
-                  :settings="props.settings"
-                />
+              <template v-for="b in contentBlocks"
+                :key="(b as any).kind === 'field' ? 'f-' + (b as any).key : 's-' + (b as any).occ.id">
+                <SettingsSchemaField v-if="b.kind === 'field'" :group="activeKey" :field-key="b.key"
+                  :settings="props.settings" />
+                <component v-else :is="b.occ.component" :group="activeKey" :settings="props.settings" />
               </template>
               <!-- 空态 -->
               <div v-if="!contentBlocks.length" class="psd-empty">
@@ -264,6 +243,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   justify-content: center;
   font-family: system-ui, 'Microsoft YaHei', sans-serif;
 }
+
 .psd-dialog {
   width: 720px;
   max-width: calc(100vw - 48px);
@@ -278,6 +258,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 12.5px;
   color: #1f2937;
 }
+
 .psd-head {
   display: flex;
   align-items: center;
@@ -286,10 +267,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border-bottom: 1px solid #eef0f3;
   flex-shrink: 0;
 }
+
 .psd-title {
   font-size: 14px;
   font-weight: 600;
 }
+
 .psd-close {
   border: none;
   background: transparent;
@@ -299,15 +282,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 2px 8px;
   border-radius: 6px;
 }
+
 .psd-close:hover {
   background: #f1f3f5;
   color: #1f2937;
 }
+
 .psd-body {
   flex: 1;
   display: flex;
   min-height: 0;
 }
+
 .psd-nav {
   width: 190px;
   flex-shrink: 0;
@@ -316,12 +302,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   overflow-y: auto;
   background: #fafbfc;
 }
+
 .psd-nav-empty {
   color: #9aa3af;
   font-size: 12px;
   text-align: center;
   padding: 16px 0;
 }
+
 .psd-nav-item {
   display: block;
   width: 100%;
@@ -335,48 +323,57 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: #374151;
   cursor: pointer;
 }
+
 .psd-nav-item:hover {
   background: #eef2ff;
 }
+
 .psd-nav-item.active {
   background: #4f7cff;
   color: #fff;
   font-weight: 600;
 }
+
 .psd-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
+
 .psd-content-head {
   padding: 14px 18px 10px;
   border-bottom: 1px solid #f0f1f3;
   flex-shrink: 0;
 }
+
 .psd-content-title {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
 }
+
 .psd-content-sub {
   display: inline-block;
   margin-top: 4px;
   font-size: 11px;
   color: #9aa3af;
 }
+
 .psd-content-body {
   flex: 1;
   overflow-y: auto;
   padding: 4px 18px 16px;
   min-height: 0;
 }
+
 .psd-empty {
   padding: 24px 10px;
   text-align: center;
   color: #9aa3af;
   font-size: 12px;
 }
+
 .psd-empty p {
   margin: 0;
 }

@@ -62,7 +62,8 @@ const fieldId = 'sf-' + props.fieldKey
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
       <div class="sf-row">
         <span class="sf-swatch">
-          <input :id="fieldId" type="color" :value="String(entry.value)" @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
+          <input :id="fieldId" type="color" :value="String(entry.value)"
+            @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
         </span>
         <span class="sf-mon">{{ entry.value }}</span>
       </div>
@@ -74,16 +75,9 @@ const fieldId = 'sf-' + props.fieldKey
         <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
         <span class="sf-value-bubble">{{ entry.value }}</span>
       </div>
-      <input
-        :id="fieldId"
-        class="sf-range"
-        type="range"
-        :min="entry.schema.min ?? 0"
-        :max="entry.schema.max ?? 100"
-        :step="entry.schema.step ?? 1"
-        :value="numberValue(entry.value, entry.schema)"
-        @input="set(entry.key, Number(($event.target as HTMLInputElement).value))"
-      />
+      <input :id="fieldId" class="sf-range" type="range" :min="entry.schema.min ?? 0" :max="entry.schema.max ?? 100"
+        :step="entry.schema.step ?? 1" :value="numberValue(entry.value, entry.schema)"
+        @input="set(entry.key, Number(($event.target as HTMLInputElement).value))" />
     </template>
 
     <!-- boolean（toggle 开关） -->
@@ -91,7 +85,8 @@ const fieldId = 'sf-' + props.fieldKey
       <label class="sf-switch-row" :for="fieldId">
         <span class="sf-label">{{ entry.schema.label ?? entry.key }}</span>
         <span class="sf-switch">
-          <input :id="fieldId" type="checkbox" :checked="!!entry.value" @change="set(entry.key, ($event.target as HTMLInputElement).checked)" />
+          <input :id="fieldId" type="checkbox" :checked="!!entry.value"
+            @change="set(entry.key, ($event.target as HTMLInputElement).checked)" />
           <span class="sf-slider"></span>
         </span>
       </label>
@@ -100,15 +95,18 @@ const fieldId = 'sf-' + props.fieldKey
     <!-- select -->
     <template v-else-if="entry.schema.type === 'select'">
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
-      <select :id="fieldId" class="sf-select" :value="String(entry.value)" @change="set(entry.key, ($event.target as HTMLSelectElement).value)">
-        <option v-for="o in entry.schema.options ?? []" :key="o.value" :value="o.value">{{ o.label ?? o.value }}</option>
+      <select :id="fieldId" class="sf-select" :value="String(entry.value)"
+        @change="set(entry.key, ($event.target as HTMLSelectElement).value)">
+        <option v-for="o in entry.schema.options ?? []" :key="o.value" :value="o.value">{{ o.label ?? o.value }}
+        </option>
       </select>
     </template>
 
     <!-- text（默认兜底 string/text） -->
     <template v-else>
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
-      <input :id="fieldId" class="sf-text" type="text" :value="String(entry.value)" @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
+      <input :id="fieldId" class="sf-text" type="text" :value="String(entry.value)"
+        @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
     </template>
 
     <!-- 字段描述（可选，schema.description 有才显示） -->
@@ -121,29 +119,35 @@ const fieldId = 'sf-' + props.fieldKey
   padding: 6px 0;
   border-top: 1px dashed #f0f1f3;
 }
+
 .sf-field:first-of-type {
   border-top: none;
 }
+
 .sf-label {
   display: block;
   font-size: 12px;
   font-weight: 500;
   margin-bottom: 5px;
 }
+
 .sf-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
 }
+
 .sf-label-row .sf-label {
   margin-bottom: 0;
 }
+
 .sf-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 /* field description */
 .sf-desc {
   margin: 5px 0 0;
@@ -162,6 +166,7 @@ const fieldId = 'sf-' + props.fieldKey
   border: 1px solid #e6e8eb;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
+
 .sf-swatch input[type='color'] {
   position: absolute;
   inset: -6px;
@@ -182,6 +187,7 @@ const fieldId = 'sf-' + props.fieldKey
   padding: 1px 8px;
   border-radius: 999px;
 }
+
 .sf-range {
   -webkit-appearance: none;
   appearance: none;
@@ -192,6 +198,7 @@ const fieldId = 'sf-' + props.fieldKey
   outline: none;
   cursor: pointer;
 }
+
 .sf-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -211,15 +218,18 @@ const fieldId = 'sf-' + props.fieldKey
   justify-content: space-between;
   cursor: pointer;
 }
+
 .sf-switch-row .sf-label {
   margin-bottom: 0;
 }
+
 .sf-switch {
   position: relative;
   width: 34px;
   height: 19px;
   flex-shrink: 0;
 }
+
 .sf-switch input {
   position: absolute;
   opacity: 0;
@@ -228,6 +238,7 @@ const fieldId = 'sf-' + props.fieldKey
   margin: 0;
   cursor: pointer;
 }
+
 .sf-slider {
   position: absolute;
   inset: 0;
@@ -235,6 +246,7 @@ const fieldId = 'sf-' + props.fieldKey
   background: #d8dce2;
   transition: background 0.18s ease;
 }
+
 .sf-slider::before {
   content: '';
   position: absolute;
@@ -247,10 +259,12 @@ const fieldId = 'sf-' + props.fieldKey
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.25);
   transition: transform 0.18s ease;
 }
-.sf-switch input:checked + .sf-slider {
+
+.sf-switch input:checked+.sf-slider {
   background: #4f7cff;
 }
-.sf-switch input:checked + .sf-slider::before {
+
+.sf-switch input:checked+.sf-slider::before {
   transform: translateX(15px);
 }
 
@@ -268,6 +282,7 @@ const fieldId = 'sf-' + props.fieldKey
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
 .sf-select:focus,
 .sf-text:focus {
   border-color: #4f7cff;

@@ -71,30 +71,10 @@ const stateClass = computed(() => {
 
 <template>
   <g class="theme-conn-line" :class="`is-${stateClass}`">
-    <path
-      class="tcl-base"
-      :d="path"
-      fill="none"
-      stroke-width="2"
-      stroke-linecap="round"
-      pathLength="300"
-    />
-    <path
-      class="tcl-runner"
-      :d="path"
-      fill="none"
-      stroke-width="1.4"
-      stroke-linecap="round"
-      pathLength="300"
-    />
-    <path
-      class="tcl-arrow"
-      :d="arrowPath"
-      fill="none"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+    <path class="tcl-base" :d="path" fill="none" stroke-width="2" stroke-linecap="round" pathLength="300" />
+    <path class="tcl-runner" :d="path" fill="none" stroke-width="1.4" stroke-linecap="round" pathLength="300" />
+    <path class="tcl-arrow" :d="arrowPath" fill="none" stroke-width="2" stroke-linecap="round"
+      stroke-linejoin="round" />
   </g>
 </template>
 
@@ -102,10 +82,12 @@ const stateClass = computed(() => {
 .theme-conn-line {
   pointer-events: none;
 }
+
 .tcl-base {
   opacity: 0.55;
   stroke: #3b82f6;
 }
+
 .tcl-runner {
   opacity: 0.9;
   stroke: #2563eb;
@@ -113,18 +95,22 @@ const stateClass = computed(() => {
   stroke-dashoffset: 0;
   animation: tcl-dash 1.1s linear infinite;
 }
+
 .tcl-arrow {
   stroke: #3b82f6;
   opacity: 0.9;
 }
+
 .theme-conn-line.is-invalid .tcl-base,
 .theme-conn-line.is-invalid .tcl-arrow {
   stroke: #ef4444;
   opacity: 0.8;
 }
+
 .theme-conn-line.is-invalid .tcl-runner {
   display: none;
 }
+
 .theme-conn-line.is-valid .tcl-base {
   stroke: #2563eb;
   filter: drop-shadow(0 0 4px rgba(37, 99, 235, 0.6));

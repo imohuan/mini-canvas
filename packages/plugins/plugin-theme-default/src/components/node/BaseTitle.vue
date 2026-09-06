@@ -27,14 +27,10 @@ const htmlTitleIcon = computed(() => {
 </script>
 
 <template>
-  <div
-    class="base-title"
-    :class="{
-      'base-title--interactive': interactive,
-      'base-title--editing': editing,
-    }"
-    :style="titleStyle"
-  >
+  <div class="base-title" :class="{
+    'base-title--interactive': interactive,
+    'base-title--editing': editing,
+  }" :style="titleStyle">
     <slot v-if="shouldRenderIcon" name="title-icon">
       <component :is="componentTitleIcon" v-if="componentTitleIcon" class="base-title__icon" />
       <span v-else-if="htmlTitleIcon" class="base-title__icon base-title__icon--html" v-html="htmlTitleIcon" />
@@ -71,14 +67,17 @@ const htmlTitleIcon = computed(() => {
   width: 100%;
   overflow: hidden;
 }
+
 .base-title--interactive {
   pointer-events: auto;
 }
+
 .base-title__icon {
   width: 0.875rem;
   height: 0.875rem;
   flex-shrink: 0;
 }
+
 .base-title-label {
   flex: 0 0 80%;
   width: 80%;
@@ -88,6 +87,7 @@ const htmlTitleIcon = computed(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .base-title__extra {
   flex: 1 1 auto;
   min-width: 0;
@@ -98,13 +98,15 @@ const htmlTitleIcon = computed(() => {
   overflow: hidden;
   white-space: nowrap;
 }
-.base-title__extra > :deep(span) {
+
+.base-title__extra> :deep(span) {
   flex-shrink: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .base-title__icon--html {
   display: inline-flex;
   align-items: center;

@@ -299,158 +299,77 @@ function clamp(value: number, min: number, max: number): number {
 </script>
 
 <template>
-  <div
-    class="v2-node"
-    :class="{
-      'is-selected': showSelectionOutline,
-      'is-pointer-hovered': isHovered,
-      'is-low-detail': lowDetail,
-      'is-connection-valid': isConnectionValidTarget,
-      'is-connection-invalid': isConnectionInvalidTarget,
-    }"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
-  >
+  <div class="v2-node" :class="{
+    'is-selected': showSelectionOutline,
+    'is-pointer-hovered': isHovered,
+    'is-low-detail': lowDetail,
+    'is-connection-valid': isConnectionValidTarget,
+    'is-connection-invalid': isConnectionInvalidTarget,
+  }" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
     <!-- 顶部工具栏（注册了才渲染） -->
     <div v-if="topToolbar" class="top-toolbar">
       <component :is="topToolbar" :id="id" :data="data" />
     </div>
 
-    <div
-      class="v2-card"
-      :class="{
-        'is-connecting-hover': showConnectFeedback,
-        'is-connection-invalid': isConnectionInvalidTarget,
-      }"
-      :style="cardInlineStyle"
-      @mousemove="updateCardMousePosition"
-    >
+    <div class="v2-card" :class="{
+      'is-connecting-hover': showConnectFeedback,
+      'is-connection-invalid': isConnectionInvalidTarget,
+    }" :style="cardInlineStyle" @mousemove="updateCardMousePosition">
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
-      <div
-        v-if="!lowDetail"
-        class="v2-title nodrag nopan"
-        :style="titlePositionStyle"
-        @dblclick.stop="editable && startTitleEdit()"
-        @pointerdown.stop
-      >
+      <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
+        @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel">
           <template #title-label>
-            <input
-              v-if="isEditingTitle"
-              ref="titleInputRef"
-              v-model="draftTitle"
-              class="v2-title-input"
-              type="text"
-              @keydown.enter.prevent="commitTitleEdit"
-              @keydown.escape.prevent="cancelTitleEdit"
-              @blur="commitTitleEdit"
-              @pointerdown.stop
-              @dblclick.stop
-            >
+            <input v-if="isEditingTitle" ref="titleInputRef" v-model="draftTitle" class="v2-title-input" type="text"
+              @keydown.enter.prevent="commitTitleEdit" @keydown.escape.prevent="cancelTitleEdit" @blur="commitTitleEdit"
+              @pointerdown.stop @dblclick.stop>
             <span v-else class="v2-title-label">{{ nodeLabel }}</span>
           </template>
         </BaseTitle>
       </div>
 
       <!-- 非法连接气泡 -->
-      <div
-        v-if="isConnectionInvalidTarget"
-        class="invalid-connection-tooltip"
-        :style="invalidTooltipStyle"
-      >
+      <div v-if="isConnectionInvalidTarget" class="invalid-connection-tooltip" :style="invalidTooltipStyle">
         {{ connectionHover?.reason || '无法连接' }}
       </div>
 
       <!-- 输入口满额"将替换最老一条"提示（willEvict；UI 可选渲染，仅当目标输入口将挤掉旧连接时显示） -->
-      <div
-        v-if="isWillEvictTarget"
-        class="will-evict-tooltip"
-        :style="invalidTooltipStyle"
-      >
+      <div v-if="isWillEvictTarget" class="will-evict-tooltip" :style="invalidTooltipStyle">
         <span class="we-dot" />将替换已有连接
       </div>
 
       <!-- 调试叠加：吸附带 + 卡片接收区（吸附调试 connectionSnapDebugVisible，拖线目标态才显示）。
            用 SVG 在卡内坐标画，overflow:visible 让负 x 的吸附带也能画出去（v1 用 clip-path div，效果差）。 -->
-      <svg
-        v-if="showSnapDebugOverlay"
-        class="v2-debug-overlay"
-        :viewBox="debugViewBox"
-      >
+      <svg v-if="showSnapDebugOverlay" class="v2-debug-overlay" :viewBox="debugViewBox">
         <!-- 卡片接收区（body） -->
-        <rect
-          class="v2-debug-body"
-          :x="bodyRect.x"
-          :y="bodyRect.y"
-          :width="bodyRect.width"
-          :height="bodyRect.height"
-          rx="8"
-        />
+        <rect class="v2-debug-body" :x="bodyRect.x" :y="bodyRect.y" :width="bodyRect.width" :height="bodyRect.height"
+          rx="8" />
         <!-- 左侧 target 输入口吸附带：shape=rect 用矩形、arc 用半椭圆弧（圆心在左缘锚点 (0, anchorY)，
              rx=带宽、ry=带高/2，经 overflow:visible 向左画出卡片） -->
-        <rect
-          v-if="debugOverlay.shape.value === 'rect'"
-          class="v2-debug-band"
-          :x="debugOverlay.leftBand.value.x"
-          :y="debugOverlay.leftBand.value.y"
-          :width="debugOverlay.leftBand.value.width"
-          :height="debugOverlay.leftBand.value.height"
-        />
-        <ellipse
-          v-else
-          class="v2-debug-band"
-          :cx="0"
-          :cy="debugOverlay.anchorY.value"
-          :rx="debugOverlay.leftBand.value.width"
-          :ry="debugOverlay.leftBand.value.height / 2"
-        />
+        <rect v-if="debugOverlay.shape.value === 'rect'" class="v2-debug-band" :x="debugOverlay.leftBand.value.x"
+          :y="debugOverlay.leftBand.value.y" :width="debugOverlay.leftBand.value.width"
+          :height="debugOverlay.leftBand.value.height" />
+        <ellipse v-else class="v2-debug-band" :cx="0" :cy="debugOverlay.anchorY.value"
+          :rx="debugOverlay.leftBand.value.width" :ry="debugOverlay.leftBand.value.height / 2" />
         <!-- 右侧 source 输出口吸附带（镜像到右缘，圆心在 (cardWidth, anchorY)） -->
-        <rect
-          v-if="debugOverlay.shape.value === 'rect'"
-          class="v2-debug-band is-source"
-          :x="debugOverlay.rightBand.value.x"
-          :y="debugOverlay.rightBand.value.y"
-          :width="debugOverlay.rightBand.value.width"
-          :height="debugOverlay.rightBand.value.height"
-        />
-        <ellipse
-          v-else
-          class="v2-debug-band is-source"
-          :cx="cardWidth"
-          :cy="debugOverlay.anchorY.value"
-          :rx="debugOverlay.rightBand.value.width"
-          :ry="debugOverlay.rightBand.value.height / 2"
-        />
+        <rect v-if="debugOverlay.shape.value === 'rect'" class="v2-debug-band is-source"
+          :x="debugOverlay.rightBand.value.x" :y="debugOverlay.rightBand.value.y"
+          :width="debugOverlay.rightBand.value.width" :height="debugOverlay.rightBand.value.height" />
+        <ellipse v-else class="v2-debug-band is-source" :cx="cardWidth" :cy="debugOverlay.anchorY.value"
+          :rx="debugOverlay.rightBand.value.width" :ry="debugOverlay.rightBand.value.height / 2" />
         <!-- 目标锚点短线标注 -->
-        <line
-          class="v2-debug-anchor"
-          :x1="0"
-          :y1="debugOverlay.anchorY.value - 6"
-          :x2="0"
-          :y2="debugOverlay.anchorY.value + 6"
-        />
+        <line class="v2-debug-anchor" :x1="0" :y1="debugOverlay.anchorY.value - 6" :x2="0"
+          :y2="debugOverlay.anchorY.value + 6" />
       </svg>
 
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
-      <MovingHandle
-        v-if="showTargetHandle"
-        id="target"
-        type="target"
-        :position="Position.Left"
-        :visible="shouldShowHandles"
-        :disabled="isCurrentConnectingNode"
-        :rest-offset="handleParams.handleRestOffset"
-        :cursor-gap="handleParams.handleCursorGap"
-        :button-size="handleParams.handleButtonSize"
-        :zone-width="portZoneWidth"
-        :zone-height="portZoneHeight"
-        :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape"
-        :zone-arc-ratio="portZoneArcRatio"
-        :debug="debugHandle"
-        @hover="isHovered = $event"
-      />
+      <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
+        :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
+        :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
+        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
+        @hover="isHovered = $event" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
@@ -459,14 +378,9 @@ function clamp(value: number, min: number, max: number): number {
       </div>
 
       <!-- 右下角 resize 拖拽句柄（data.resizable === true 时） -->
-      <div
-        v-if="cardResizable"
-        class="resize-handle"
-        :class="{ 'is-resizing': cardIsResizing }"
-        @pointerdown="card.onResizePointerDown"
-        @pointermove="card.onResizePointerMove"
-        @pointerup="card.onResizePointerUp"
-      >
+      <div v-if="cardResizable" class="resize-handle" :class="{ 'is-resizing': cardIsResizing }"
+        @pointerdown="card.onResizePointerDown" @pointermove="card.onResizePointerMove"
+        @pointerup="card.onResizePointerUp">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
           <path d="M7 5L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -474,24 +388,12 @@ function clamp(value: number, min: number, max: number): number {
       </div>
 
       <!-- 右侧输出口(source) -->
-      <MovingHandle
-        v-if="showSourceHandle"
-        id="source"
-        type="source"
-        :position="Position.Right"
-        :visible="shouldShowHandles"
-        :disabled="isCurrentConnectingNode"
-        :rest-offset="handleParams.handleRestOffset"
-        :cursor-gap="handleParams.handleCursorGap"
-        :button-size="handleParams.handleButtonSize"
-        :zone-width="portZoneWidth"
-        :zone-height="portZoneHeight"
-        :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape"
-        :zone-arc-ratio="portZoneArcRatio"
-        :debug="debugHandle"
-        @hover="isHovered = $event"
-      />
+      <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
+        :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
+        :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
+        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
+        @hover="isHovered = $event" />
     </div>
 
     <!-- 底部工具栏（注册了才渲染） -->
@@ -519,11 +421,13 @@ function clamp(value: number, min: number, max: number): number {
   border-color: var(--canvas-node-border, rgb(209 213 219 / 0.95));
   background: var(--canvas-node-surface, #f9fafb);
   box-shadow: 0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06));
-  overflow: visible; /* SVG 吸附调试带可负 x 溢出左缘，必须 visible */
+  overflow: visible;
+  /* SVG 吸附调试带可负 x 溢出左缘，必须 visible */
   transition:
     border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
     box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
+
 .v2-node.is-low-detail .v2-card {
   transition: none;
   box-shadow: none;
@@ -533,6 +437,7 @@ function clamp(value: number, min: number, max: number): number {
 .v2-node.is-selected .v2-card {
   border-color: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
 }
+
 .v2-node.is-selected .v2-card::after {
   content: '';
   position: absolute;
@@ -551,6 +456,7 @@ function clamp(value: number, min: number, max: number): number {
 .v2-card.is-connection-invalid {
   border-color: rgba(156, 163, 175, 0.45);
 }
+
 .v2-card.is-connection-invalid::after {
   content: '';
   position: absolute;
@@ -598,6 +504,7 @@ function clamp(value: number, min: number, max: number): number {
   pointer-events: none;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
+
 .will-evict-tooltip .we-dot {
   width: 6px;
   height: 6px;
@@ -611,26 +518,31 @@ function clamp(value: number, min: number, max: number): number {
   inset: 0;
   width: 100%;
   height: 100%;
-  overflow: visible; /* 吸附带向左可出卡片 */
+  overflow: visible;
+  /* 吸附带向左可出卡片 */
   pointer-events: none;
   z-index: 22;
 }
+
 .v2-debug-body {
   fill: var(--canvas-node-target-zone-surface, rgba(17, 24, 39, 0.08));
   stroke: var(--canvas-node-target-zone-border, rgba(17, 24, 39, 0.55));
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
+
 .v2-debug-band {
   fill: var(--canvas-node-snap-zone-surface, rgba(17, 24, 39, 0.12));
   stroke: var(--canvas-node-snap-zone-border, rgba(17, 24, 39, 0.9));
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
+
 .v2-debug-band.is-source {
   fill: var(--canvas-node-snap-zone-source-surface, rgba(37, 99, 235, 0.12));
   stroke: var(--canvas-node-snap-zone-source-border, rgba(37, 99, 235, 0.9));
 }
+
 .v2-debug-anchor {
   stroke: var(--canvas-node-snap-zone-highlight, #dc2626);
   stroke-width: 2;
@@ -645,6 +557,7 @@ function clamp(value: number, min: number, max: number): number {
   align-items: center;
   cursor: text;
 }
+
 .v2-title-label {
   display: inline-block;
   max-width: 100%;
@@ -656,6 +569,7 @@ function clamp(value: number, min: number, max: number): number {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .v2-node.is-selected .v2-title-label {
   color: var(--canvas-node-text-strong, #111827);
 }
@@ -694,6 +608,7 @@ function clamp(value: number, min: number, max: number): number {
   justify-content: center;
   overflow: hidden;
 }
+
 .v2-content-missing {
   color: #b45309;
   padding: 8px;
@@ -716,17 +631,20 @@ function clamp(value: number, min: number, max: number): number {
   transition: opacity 140ms ease;
   touch-action: none;
 }
+
 .resize-handle:not(.is-resizing):hover,
 .v2-node.is-pointer-hovered .resize-handle,
 .v2-node.is-selected .resize-handle {
   opacity: 0.85;
 }
+
 .resize-handle-icon {
   width: 8px;
   height: 8px;
   color: var(--canvas-node-resize-handle, #9ca3af);
   pointer-events: none;
 }
+
 .resize-handle:hover .resize-handle-icon,
 .v2-node.is-pointer-hovered .resize-handle .resize-handle-icon,
 .v2-node.is-selected .resize-handle .resize-handle-icon {

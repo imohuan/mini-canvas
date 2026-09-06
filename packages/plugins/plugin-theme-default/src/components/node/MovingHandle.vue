@@ -290,12 +290,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component
-    :is="preview ? 'span' : Handle"
-    :id="id"
-    :type="type"
-    :position="position"
-    class="moving-handle-anchor"
+  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor"
     :class="{
       'moving-handle-anchor--source': isSource,
       'moving-handle-anchor--target': !isSource,
@@ -304,22 +299,14 @@ onBeforeUnmount(() => {
       'is-restoring': isRestoring,
       'is-disabled': disabled,
       'is-preview': preview,
-    }"
-    :style="anchorStyle"
-  >
-    <span
-      class="moving-handle-zone"
-      :class="{
-        'moving-handle-zone--source': isSource,
-        'moving-handle-zone--target': !isSource,
+    }" :style="anchorStyle">
+    <span class="moving-handle-zone" :class="{
+      'moving-handle-zone--source': isSource,
+      'moving-handle-zone--target': !isSource,
       'is-debug': debug,
-        'moving-handle-zone--rect': zoneShape === 'rect',
-      }"
-      :style="zoneStyle"
-      @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
-      @mouseleave="handleLeave"
-      @mousemove="updatePosition"
-    />
+      'moving-handle-zone--rect': zoneShape === 'rect',
+    }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
+      @mouseleave="handleLeave" @mousemove="updatePosition" />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -329,14 +316,18 @@ onBeforeUnmount(() => {
 
     <!-- 调试可视化（移到 zone 外：zone 有 clip-path 裁掉 input 视觉边缘，clip 会同时裁掉 debug svg）。
          用绝对定位覆盖 zone 区域，确保 center/rest/mouse 辅助线全显示不受裁剪影响。 -->
-    <svg v-if="debug" class="moving-handle-debug" :viewBox="debugViewBox" preserveAspectRatio="none" :style="debugStyle">
+    <svg v-if="debug" class="moving-handle-debug" :viewBox="debugViewBox" preserveAspectRatio="none"
+      :style="debugStyle">
       <path class="moving-handle-debug__arc" :d="debugArcPath" />
       <circle class="moving-handle-debug__center" :cx="debugCenter.x" :cy="debugCenter.y" r="3" />
-      <text class="moving-handle-debug__label" :x="debugCenter.x + (isSource ? 6 : -6)" :y="debugCenter.y - 8" :text-anchor="isSource ? 'start' : 'end'">center</text>
+      <text class="moving-handle-debug__label" :x="debugCenter.x + (isSource ? 6 : -6)" :y="debugCenter.y - 8"
+        :text-anchor="isSource ? 'start' : 'end'">center</text>
       <circle class="moving-handle-debug__rest" :cx="debugRestPoint.x" :cy="debugRestPoint.y" r="3" />
-      <text class="moving-handle-debug__label" :x="debugRestPoint.x" :y="debugRestPoint.y + 14" text-anchor="middle">rest</text>
+      <text class="moving-handle-debug__label" :x="debugRestPoint.x" :y="debugRestPoint.y + 14"
+        text-anchor="middle">rest</text>
       <circle class="moving-handle-debug__mouse" :cx="debugMousePoint.x" :cy="debugMousePoint.y" r="3" />
-      <text class="moving-handle-debug__label" :x="debugMousePoint.x" :y="debugMousePoint.y + 14" text-anchor="middle">mouse</text>
+      <text class="moving-handle-debug__label" :x="debugMousePoint.x" :y="debugMousePoint.y + 14"
+        text-anchor="middle">mouse</text>
     </svg>
   </component>
 </template>
@@ -363,12 +354,15 @@ onBeforeUnmount(() => {
   transform: translateY(-50%) !important;
   overflow: visible;
 }
+
 .moving-handle-anchor.is-restoring {
   transition: top 180ms ease-out, left 180ms ease-out, right 180ms ease-out;
 }
+
 .moving-handle-anchor--source {
   right: 0;
 }
+
 .moving-handle-anchor--target {
   left: 0;
 }
@@ -381,11 +375,13 @@ onBeforeUnmount(() => {
   transform: translate3d(0px, -50%, 0);
   backface-visibility: hidden;
 }
+
 .moving-handle-zone--source {
   /* 卡右缘 source: 左端贴 anchor (offset 正向 = 向卡内缩进)；
      整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
   left: calc(var(--port-zone-offset) * -1);
 }
+
 .moving-handle-zone--target {
   /* 卡左缘 target: 右端贴 anchor (offset 正向 = 向卡内缩进)；
      整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
@@ -424,6 +420,7 @@ onBeforeUnmount(() => {
     border-color 160ms ease,
     box-shadow 160ms ease;
 }
+
 .moving-handle-anchor.is-moving .moving-handle-button {
   transition:
     left 180ms cubic-bezier(0.25, 1, 0.5, 1),
@@ -434,6 +431,7 @@ onBeforeUnmount(() => {
     border-color 120ms ease,
     box-shadow 120ms ease;
 }
+
 .moving-handle-anchor.is-restoring .moving-handle-button {
   opacity: 0;
   transition:
@@ -451,13 +449,16 @@ onBeforeUnmount(() => {
 .moving-handle-anchor.is-visible:not(.is-restoring) .moving-handle-button {
   opacity: 1;
 }
+
 .moving-handle-anchor.is-preview .moving-handle-button {
   pointer-events: auto;
 }
+
 .moving-handle-button:hover {
   color: var(--canvas-node-text-strong);
   border-color: var(--canvas-node-border-hover);
 }
+
 .moving-handle-button svg {
   width: 16px;
   height: 16px;
@@ -473,30 +474,38 @@ onBeforeUnmount(() => {
   transform: translateY(-50%) translateZ(0);
   pointer-events: none;
   overflow: visible;
-  z-index: 3; /* 在 button(z=2) 上层，确保 debug 标签不被 button 圆盖住 */
+  z-index: 3;
+  /* 在 button(z=2) 上层，确保 debug 标签不被 button 圆盖住 */
   backface-visibility: hidden;
 }
+
 .moving-handle-anchor--source .moving-handle-debug {
   left: calc(var(--port-zone-offset) * -1);
 }
+
 .moving-handle-anchor--target .moving-handle-debug {
   left: calc(var(--port-zone-shape-width) * -1 + var(--port-zone-offset));
 }
+
 .moving-handle-debug__arc {
   fill: var(--canvas-node-debug-danger-fill);
   stroke: var(--canvas-node-debug-danger);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
+
 .moving-handle-debug__center {
   fill: var(--canvas-node-debug-center);
 }
+
 .moving-handle-debug__rest {
   fill: var(--canvas-node-debug-rest);
 }
+
 .moving-handle-debug__mouse {
   fill: var(--canvas-node-debug-mouse);
 }
+
 .moving-handle-debug__label {
   fill: var(--canvas-node-debug-center);
   font-size: 9px;

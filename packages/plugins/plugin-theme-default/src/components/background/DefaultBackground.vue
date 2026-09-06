@@ -118,8 +118,10 @@ watch([vx, vy, zoom], redraw)
   inset: 0;
   overflow: hidden;
   pointer-events: none;
-  z-index: 0; /* 垫在节点之下：宿主保证层级 */
+  z-index: 0;
+  /* 垫在节点之下：宿主保证层级 */
 }
+
 .bg-canvas {
   display: block;
   width: 100%;

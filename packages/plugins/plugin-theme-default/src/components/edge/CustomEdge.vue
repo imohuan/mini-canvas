@@ -164,114 +164,52 @@ const arrowPath = computed(() => {
 </script>
 
 <template>
-  <g
-    class="custom-edge"
-    :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }"
-    :style="{
-      '--ce-da': dashArray || 'none',
-      '--ce-color': edgeColor,
-      '--ce-linew': lineWidth + 'px',
-      '--ce-arrow-opacity': animateFlow ? 1 : 0.35,
-    }"
-    @dblclick="showCutButtonAtPointer"
-    @mousemove="onMouseMove"
-  >
+  <g class="custom-edge" :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }" :style="{
+    '--ce-da': dashArray || 'none',
+    '--ce-color': edgeColor,
+    '--ce-linew': lineWidth + 'px',
+    '--ce-arrow-opacity': animateFlow ? 1 : 0.35,
+  }" @dblclick="showCutButtonAtPointer" @mousemove="onMouseMove">
     <template v-if="edgeVisible">
       <!-- 默认态：淡灰线 -->
       <template v-if="!animateFlow">
-        <path
-          class="ef-base ef-base--dim"
-          :d="edgePath"
-          fill="none"
-          :stroke="edgeColor"
-          :stroke-width="lineWidth"
-          stroke-linecap="round"
-          :stroke-dasharray="dashArray"
-        />
+        <path class="ef-base ef-base--dim" :d="edgePath" fill="none" :stroke="edgeColor" :stroke-width="lineWidth"
+          stroke-linecap="round" :stroke-dasharray="dashArray" />
       </template>
 
       <!-- 高亮态：原始连接线 + 辉光流光 -->
       <template v-else>
-        <path
-          class="ef-base"
-          :d="edgePath"
-          fill="none"
-          :stroke="edgeColor"
-          :stroke-width="lineWidth"
-          stroke-linecap="round"
-          :stroke-dasharray="dashArray"
-        />
+        <path class="ef-base" :d="edgePath" fill="none" :stroke="edgeColor" :stroke-width="lineWidth"
+          stroke-linecap="round" :stroke-dasharray="dashArray" />
         <template v-if="edgeAnimated && edgeGlowEnabled">
-          <path
-            class="ef-runner ef-runner-glow"
-            :d="edgePath"
-            fill="none"
-            :stroke="edgeGlowColor"
-            :stroke-width="lineWidth"
-            stroke-linecap="round"
-            pathLength="300"
-            :style="{
+          <path class="ef-runner ef-runner-glow" :d="edgePath" fill="none" :stroke="edgeGlowColor"
+            :stroke-width="lineWidth" stroke-linecap="round" pathLength="300" :style="{
               filter: `drop-shadow(0 0 ${5 * edgeGlowIntensity}px ${edgeGlowColor}) drop-shadow(0 0 ${10 * edgeGlowIntensity}px ${edgeGlowColor})`,
-            }"
-          />
-          <path
-            class="ef-runner ef-runner-hot"
-            :d="edgePath"
-            fill="none"
-            :stroke="edgeGlowColor"
-            :stroke-width="Math.max(1, lineWidth * 0.65)"
-            stroke-linecap="round"
-            pathLength="300"
-          />
+            }" />
+          <path class="ef-runner ef-runner-hot" :d="edgePath" fill="none" :stroke="edgeGlowColor"
+            :stroke-width="Math.max(1, lineWidth * 0.65)" stroke-linecap="round" pathLength="300" />
         </template>
         <template v-else-if="edgeAnimated && !edgeGlowEnabled">
-          <path
-            class="ef-runner ef-runner-hot"
-            :d="edgePath"
-            fill="none"
-            :stroke="edgeGlowColor"
-            :stroke-width="Math.max(1, lineWidth * 0.65)"
-            stroke-linecap="round"
-            pathLength="300"
-          />
+          <path class="ef-runner ef-runner-hot" :d="edgePath" fill="none" :stroke="edgeGlowColor"
+            :stroke-width="Math.max(1, lineWidth * 0.65)" stroke-linecap="round" pathLength="300" />
         </template>
       </template>
 
       <!-- 箭头 -->
-      <path
-        v-if="edgeMarkerEnd && edgeVisible"
-        class="ef-arrow"
-        :d="arrowPath"
-        fill="none"
-        :stroke="edgeColor"
-        :stroke-width="lineWidth"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
+      <path v-if="edgeMarkerEnd && edgeVisible" class="ef-arrow" :d="arrowPath" fill="none" :stroke="edgeColor"
+        :stroke-width="lineWidth" stroke-linecap="round" stroke-linejoin="round" />
 
       <!-- 点击热区 -->
-      <path
-        class="edge-hit-area"
-        :data-edge-id="id"
-        :d="edgePath"
-        fill="none"
-        stroke="transparent"
-        :stroke-width="Math.max(12, lineWidth)"
-        stroke-linecap="round"
-      />
+      <path class="edge-hit-area" :data-edge-id="id" :d="edgePath" fill="none" stroke="transparent"
+        :stroke-width="Math.max(12, lineWidth)" stroke-linecap="round" />
 
       <!-- 双击剪切按钮 -->
-      <foreignObject
-        v-if="showCutButton"
-        :x="cutButtonPosition.x - 16"
-        :y="cutButtonPosition.y - 16"
-        width="32"
-        height="32"
-        style="overflow: visible"
-      >
+      <foreignObject v-if="showCutButton" :x="cutButtonPosition.x - 16" :y="cutButtonPosition.y - 16" width="32"
+        height="32" style="overflow: visible">
         <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
-            <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round"
+              stroke-linejoin="round" />
           </svg>
         </button>
       </foreignObject>
@@ -283,9 +221,11 @@ const arrowPath = computed(() => {
 .custom-edge {
   cursor: pointer;
 }
+
 .custom-edge path {
   transition: stroke 0.2s, stroke-width 0.2s;
 }
+
 .edge-hit-area {
   pointer-events: stroke;
 }
@@ -293,6 +233,7 @@ const arrowPath = computed(() => {
 .ef-base {
   opacity: 0.45;
 }
+
 .ef-base--dim {
   opacity: 0.3;
 }
@@ -304,9 +245,11 @@ const arrowPath = computed(() => {
     ef-dash 1.2s linear infinite,
     ef-breathe 1.6s ease-in-out infinite;
 }
+
 .ef-runner-glow {
   opacity: 0.55;
 }
+
 .ef-runner-hot {
   opacity: 0.92;
 }
@@ -322,9 +265,17 @@ const arrowPath = computed(() => {
     stroke-dashoffset: -100;
   }
 }
+
 @keyframes ef-breathe {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 1; }
+
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .cut-btn {
@@ -342,6 +293,7 @@ const arrowPath = computed(() => {
   padding: 0;
   transition: background 0.15s;
 }
+
 .cut-btn:hover {
   background: #ef4444;
   color: #fff;

@@ -10,107 +10,110 @@
  *   :style="{ width: card.cardWidth+'px', height: card.cardHeight+'px', ... }"
  *   <div class="resize-handle" @pointerdown=... @pointermove=... @pointerup=... />
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useNodeCapability } from './useNodeCapability'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useNodeCapability } from "./useNodeCapability";
 
 export interface NodeCardSizeOptions {
-  nodeId: string
+  nodeId: string;
   /**
    * 节点 data 的惰性取值器，返回当前 data 对象。
    * 必须传 getter(而非快照)：VueFlow 每次重渲染都替换 props.data 成新对象，
    * 若在 setup 期捕获对象快照会读到过期引用，导致 resizable/尺寸永远不更新。
    * 传 `() => props.data` 即可让内部 computed/watch 依赖 props.data 响应式。
    */
-  data: () => Record<string, unknown>
-  type: string
+  data: () => Record<string, unknown>;
+  type: string;
   /** 尺寸写回（CanvasHost nodeWrite → nodeStore + 落盘） */
-  writeback?: (id: string, patch: Record<string, unknown>) => void
+  writeback?: (id: string, patch: Record<string, unknown>) => void;
   /** 当前画布缩放（resize 屏幕 delta ÷ zoom 换算） */
-  zoom: () => number
+  zoom: () => number;
 }
 
-export const CARD_MIN_WIDTH = 120
-export const CARD_MIN_HEIGHT = 80
+export const CARD_MIN_WIDTH = 120;
+export const CARD_MIN_HEIGHT = 80;
 
 export function useNodeCardSize(opts: NodeCardSizeOptions) {
-  const capability = useNodeCapability(opts.type)
+  const capability = useNodeCapability(opts.type);
   /** 当前 data（响应式：依赖 props.data 变化） */
-  const data = computed(() => opts.data() ?? {})
+  const data = computed(() => opts.data() ?? {});
 
   // 初值：data 显式尺寸 ?? 类型 defaultSize
   const cardWidth = ref<number>(
     (data.value.cardWidth as number) || capability.defaultSize.value.w,
-  )
+  );
   const cardHeight = ref<number>(
     (data.value.cardHeight as number) || capability.defaultSize.value.h,
-  )
+  );
 
   // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值
-  const isResizing = ref(false)
+  const isResizing = ref(false);
   watch(
     () => data.value?.cardWidth as number | undefined,
     (w) => {
-      if (w !== undefined && !isResizing.value) cardWidth.value = w
+      if (w !== undefined && !isResizing.value) cardWidth.value = w;
     },
-  )
+  );
   watch(
     () => data.value?.cardHeight as number | undefined,
     (h) => {
-      if (h !== undefined && !isResizing.value) cardHeight.value = h
+      if (h !== undefined && !isResizing.value) cardHeight.value = h;
     },
-  )
+  );
 
   // resizable 只在 data.resizable === true 时显示拖柄
-  const resizable = computed(() => data.value?.resizable === true)
+  const resizable = computed(() => data.value?.resizable === true);
 
   // —— resize 拖拽状态机 ——
   interface ResizeState {
-    startScreenX: number
-    startScreenY: number
-    startWidth: number
-    startHeight: number
+    startScreenX: number;
+    startScreenY: number;
+    startWidth: number;
+    startHeight: number;
   }
-  const resizeState = ref<ResizeState | null>(null)
+  const resizeState = ref<ResizeState | null>(null);
 
   function onResizePointerDown(e: PointerEvent) {
-    if (!resizable.value) return
-    e.preventDefault()
-    e.stopPropagation()
-    isResizing.value = true
+    if (!resizable.value) return;
+    e.preventDefault();
+    e.stopPropagation();
+    isResizing.value = true;
     resizeState.value = {
       startScreenX: e.clientX,
       startScreenY: e.clientY,
       startWidth: cardWidth.value,
       startHeight: cardHeight.value,
-    }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function onResizePointerMove(e: PointerEvent) {
-    if (!isResizing.value || !resizeState.value) return
-    const ds = resizeState.value
-    const z = opts.zoom() || 1
-    const dx = (e.clientX - ds.startScreenX) / z
-    const dy = (e.clientY - ds.startScreenY) / z
-    cardWidth.value = Math.max(CARD_MIN_WIDTH, ds.startWidth + dx)
-    cardHeight.value = Math.max(CARD_MIN_HEIGHT, ds.startHeight + dy)
+    if (!isResizing.value || !resizeState.value) return;
+    const ds = resizeState.value;
+    const z = opts.zoom() || 1;
+    const dx = (e.clientX - ds.startScreenX) / z;
+    const dy = (e.clientY - ds.startScreenY) / z;
+    cardWidth.value = Math.max(CARD_MIN_WIDTH, ds.startWidth + dx);
+    cardHeight.value = Math.max(CARD_MIN_HEIGHT, ds.startHeight + dy);
   }
 
   function onResizePointerUp(e: PointerEvent) {
-    if (!isResizing.value || !resizeState.value) return
-    isResizing.value = false
-    resizeState.value = null
-    ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+    if (!isResizing.value || !resizeState.value) return;
+    isResizing.value = false;
+    resizeState.value = null;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
     // 写回 node.data（触发 nodeStore 订阅自动刷新渲染态）
     if (opts.writeback) {
-      opts.writeback(opts.nodeId, { cardWidth: cardWidth.value, cardHeight: cardHeight.value })
+      opts.writeback(opts.nodeId, {
+        cardWidth: cardWidth.value,
+        cardHeight: cardHeight.value,
+      });
     }
   }
 
   onBeforeUnmount(() => {
-    isResizing.value = false
-    resizeState.value = null
-  })
+    isResizing.value = false;
+    resizeState.value = null;
+  });
 
   return {
     cardWidth,
@@ -120,5 +123,5 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     onResizePointerDown,
     onResizePointerMove,
     onResizePointerUp,
-  }
+  };
 }
