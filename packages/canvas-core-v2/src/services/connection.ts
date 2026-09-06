@@ -48,10 +48,17 @@ export interface CanonicalEndpoints {
 export interface PortDef {
   /** 'target'(输入) / 'source'(输出) */
   port?: string
-  /** 该端口接受的源节点类型列表；缺省/空 = 来者不拒 */
+  /** 该端口接受的源节点类型列表；缺省/空 = 来者不拒（旧模型：按源节点 type） */
   accepts?: string[]
   /** 'single' = 该端口只允许一条连接；缺省 = 多条 */
   limit?: 'single' | 'multi'
+  /** 输出口产出/输入口接收的内容类型（image/text/video/audio…，跨节点语义）。
+   *  目标输入口声明 acceptsTypes 时，源的产出 contentType 必须 ∈ 它。缺省不限制。 */
+  contentType?: string
+  /** 输入口接受的内容类型列表；缺省/空 = 不按内容类型限制 */
+  acceptsTypes?: string[]
+  /** 输入口最多接几条入边（缺省 1）；>1 允许多条、满额时由调用方决定挤最老 */
+  capacity?: number
 }
 
 /** 节点类型的连接声明（映射自 nodeStore 类型定义里可选的 inputs/outputs） */
@@ -205,6 +212,18 @@ export function validateConnection(
   // 声明式 accepts：target 的 inputs(port='target').accepts 限定可接受的源类型
   const inputDef = tgtConn?.inputs?.find((i) => !i.port || i.port === 'target')
   if (inputDef?.accepts && inputDef.accepts.length > 0 && !inputDef.accepts.includes(src.type)) {
+    return fail('type-not-accepted')
+  }
+  // 声明式内容类型：源输出口产 contentType，目标输入口声明 acceptsTypes → 源产出必须 ∈ 它。
+  // 只在双方都有内容类型声明时启用（source 无产出类型声明 → 视为不受内容类型约束）。
+  const srcOutputDef = srcConn?.outputs?.find((o) => !o.port || o.port === 'source')
+  const srcContent = srcOutputDef?.contentType
+  if (
+    srcContent &&
+    inputDef?.acceptsTypes &&
+    inputDef.acceptsTypes.length > 0 &&
+    !inputDef.acceptsTypes.includes(srcContent)
+  ) {
     return fail('type-not-accepted')
   }
 

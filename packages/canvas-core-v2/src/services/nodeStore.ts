@@ -15,14 +15,30 @@ export interface CanvasNode {
   data: Record<string, unknown>
 }
 
+/** 声明式端口约束（缺省 = 人人可 source→target 连） */
+export interface PortDef {
+  /** 'target'(输入) / 'source'(输出) */
+  port?: string
+  /** 该端口接受的源节点类型列表；缺省/空 = 来者不拒 */
+  accepts?: string[]
+  /** 'single' = 该端口只允许一条连接；缺省 = 多条 */
+  limit?: 'single' | 'multi'
+  /** 输出口产出/输入口接收的内容类型；目标输入声明 acceptsTypes 时源产出必须 ∈ 它 */
+  contentType?: string
+  /** 输入口接受的内容类型列表 */
+  acceptsTypes?: string[]
+  /** 输入口最多接几条入边（缺省 1）；满额挤出由调用方(render commit)处理 */
+  capacity?: number
+}
+
 /** 节点类型定义（M4 只关心 content 组件 + 默认尺寸；完整 schema 见 M3） */
 export interface CanvasNodeType {
   type: string
   label: string
   defaultSize: { w: number; h: number }
   /** 声明式连接约束（M5，api.md §四）：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
-  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
-  outputs?: Array<{ port?: string }>
+  inputs?: PortDef[]
+  outputs?: PortDef[]
 }
 
 /** NodeStore 作为 ctx 服务暴露的接口 */

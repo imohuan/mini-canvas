@@ -28,8 +28,8 @@ export interface NodeRegisterDef {
   title?: unknown
   segments?: Partial<Record<NodeSegment, unknown>>
   /** 声明式连接约束 */
-  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
-  outputs?: Array<{ port?: string }>
+  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
+  outputs?: Array<{ port?: string; contentType?: string }>
   /** 可选：提供"建一个该 type 节点"的实现（挂 nodeFactory，自动回收） */
   create?: NodeCreator
 }

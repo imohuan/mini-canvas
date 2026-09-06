@@ -153,4 +153,24 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     expect(typeConnectionDef(undefined)).toBeUndefined()
     expect(typeConnectionDef({ inputs: [{ accepts: ['text'] }] })).toBeDefined()
   })
+
+  it('内容类型 acceptsTypes：源输出 contentType 不在目标输入接受列表 → type-not-accepted', () => {
+    // 源 type 'text' 产 contentType:'text'；目标 type 'img' 输入只收 image → text 喂不进
+    const c = ctx({ a: 'text', b: 'img' }, [], {
+      text: { outputs: [{ port: 'source', contentType: 'text' }] },
+      img: { inputs: [{ port: 'target', acceptsTypes: ['image'] }] },
+    })
+    expect(validateConnection(conn('a', 'b'), c).reason).toBe('type-not-accepted')
+    // image 产 image 喂 img(收 image) → 通过
+    const ok = ctx({ a: 'img2', b: 'img' }, [], {
+      img2: { outputs: [{ port: 'source', contentType: 'image' }] },
+      img: { inputs: [{ port: 'target', acceptsTypes: ['image'] }] },
+    })
+    expect(validateConnection(conn('a', 'b'), ok).ok).toBe(true)
+    // 源没声明 contentType → 不受内容类型约束，回落 accepts 语义
+    const untyped = ctx({ a: 't', b: 'img' }, [], {
+      img: { inputs: [{ port: 'target', acceptsTypes: ['image'] }] },
+    })
+    expect(validateConnection(conn('a', 'b'), untyped).ok).toBe(true)
+  })
 })

@@ -29,8 +29,8 @@ export interface NodeTypeDef {
   /** 展示段：content = 内容组件；title/top-toolbar/bottom-toolbar 可选 */
   segments?: Partial<Record<NodeSegment, unknown>>
   /** 声明式连接约束（api.md §四） */
-  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
-  outputs?: Array<{ port?: string }>
+  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
+  outputs?: Array<{ port?: string; contentType?: string }>
 }
 
 /**
