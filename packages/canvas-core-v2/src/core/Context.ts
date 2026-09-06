@@ -75,6 +75,7 @@ function toSettingSchema(field: ConfigField): SettingSchema {
     ...(field.description !== undefined ? { description: field.description } : {}),
     ...(field.min !== undefined ? { min: field.min } : {}),
     ...(field.max !== undefined ? { max: field.max } : {}),
+    ...(field.step !== undefined ? { step: field.step } : {}),
     ...(field.options
       ? { options: optionValues(field.options).map((value) => {
           const entry = field.options!.find((o) => (typeof o === 'string' ? o === value : o.value === value))

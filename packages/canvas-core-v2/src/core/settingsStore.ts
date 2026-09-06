@@ -30,6 +30,8 @@ export interface SettingSchema {
   /** number 用：最小/最大（越界夹取） */
   min?: number
   max?: number
+  /** number 用：滑块步长（UI 用；缺省 1）。小数比例字段须显式给 step（如 0.05） */
+  step?: number
   /** select 用：可选下拉项 */
   options?: Array<{ value: string; label?: string }>
 }

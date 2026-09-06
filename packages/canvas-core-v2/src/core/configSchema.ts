@@ -44,6 +44,8 @@ export interface ConfigField {
   /** number 用：最小/最大（装配 raw 越界 → 校验错 FAILED；运行时面板 set 仍走 store 夹取） */
   min?: number
   max?: number
+  /** number 用：滑块步长（UI 用；缺省 1）。小数比例字段须显式给 step（如 0.05），否则滑块卡死 */
+  step?: number
   /** select 用：可选枚举（raw 不在其中 → 校验错） */
   options?: ConfigSelectOption[]
   /** array 用：元素 schema（缺省则只做"是数组"检查，元素原样保留） */
