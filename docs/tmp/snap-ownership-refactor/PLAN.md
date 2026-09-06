@@ -36,8 +36,10 @@
 
 ## 验证
 - canvas-render typecheck 通过；vitest 98 passed（含新 aim.test.ts 9）。
-- plugin-theme-default typecheck 通过。
-- 运行级手动校验（需浏览器/需 dev server，本机无法跑 UI）：
+- plugin-theme-default typecheck 通过 + 14 tests passed。
+- 运行期已修复：清理 NodeRect 导入时误删 DEFAULT_SNAP_ZONE_CONFIG → ReferenceError，
+  已恢复导入（commit 297fa4f）。canvas-render typecheck/test 复跑全绿。
+- 运行级手动校验（需浏览器/dev server，本机无法跑 UI）：
   - 拖 A.source → B 卡片 body：松手建边（日志 `→ A→B/body`）。
   - 拖 A.source → B 输入半圆吸附区：snap 命中（日志 `→ aim B/input`，松手 `A→B/snap`）。
   - 拖到空白松手：`→ 空白(松空)`。
