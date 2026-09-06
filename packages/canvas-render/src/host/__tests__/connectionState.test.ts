@@ -42,7 +42,13 @@ describe('createConnectionState', () => {
   it('hoverWriter 读写', () => {
     const s = createConnectionState()
     const w = hoverWriter(s)
-    const h = { nodeId: 'b', status: 'invalid', zone: 'snap', flowPosition: { x: 0, y: 0 }, reason: 'x' }
+    const h = {
+      nodeId: 'b',
+      status: 'invalid' as const,
+      zone: 'snap' as const,
+      flowPosition: { x: 0, y: 0 },
+      reason: 'x',
+    }
     w.write(h)
     expect(w.read()).toEqual(h)
   })
