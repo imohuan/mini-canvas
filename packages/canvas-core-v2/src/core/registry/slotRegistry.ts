@@ -22,6 +22,8 @@ export interface SlotEntry {
   id: string
   order: number
   value: unknown
+  /** 可选 occupant 元数据（如设置面板内容槽的 mode: replace/append/prepend）；宿主读取时原样透出 */
+  meta?: unknown
 }
 
 /** 放入同 slot 的请求：若带 id 且已存在 → 替换；否则追加（同 order 按放入先后稳定） */
@@ -29,6 +31,8 @@ export interface SlotAddRequest {
   id?: string
   order?: number
   value: unknown
+  /** 可选 occupant 元数据，随 occupant 一起存入并读回 */
+  meta?: unknown
 }
 
 /** 槽名 = 字符串；主题/节点槽名沿用现有 ThemeSlot / NodeSegment 的语义字符串，不强制枚举 */
@@ -58,7 +62,8 @@ export class SlotRegistry {
     const order = req.order ?? entries.size
     // 复用已占 id → 替换；否则新建
     const existed = entries.get(id)
-    entries.set(id, existed ? { ...existed, order, value: req.value } : { id, order, value: req.value })
+    const meta = req.meta
+    entries.set(id, existed ? { ...existed, order, value: req.value, meta } : { id, order, value: req.value, meta })
     return id
   }
 

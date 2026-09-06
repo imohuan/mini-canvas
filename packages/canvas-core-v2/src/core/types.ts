@@ -103,9 +103,9 @@ export interface PluginCapabilities {
   }
   /** 往通用 UI 槽叠 occupant（宿主按序渲染），自动回收 */
   slots: {
-    register(slot: string, req: { id?: string; order?: number; component: unknown }): string
+    register(slot: string, req: { id?: string; order?: number; component: unknown; meta?: unknown }): string
     remove(slot: string, id: string): boolean
-    occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
+    occupants(slot: string): Array<{ id: string; order: number; component: unknown; meta?: unknown }>
   }
   /**
    * 配置（cordis P4 形态）：插件在模块级导出 `Config` schema，装配处给 config，

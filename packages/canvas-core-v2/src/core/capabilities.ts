@@ -47,6 +47,8 @@ export interface SlotRegisterReq {
   id?: string
   order?: number
   component: unknown
+  /** 可选 occupant 元数据（如设置面板内容槽的 mode: replace/append/prepend）；随 occupant 存入并读回 */
+  meta?: unknown
 }
 
 /**
@@ -71,7 +73,7 @@ export function buildCapabilities(
   slots: {
     register(slot: string, req: SlotRegisterReq): string
     remove(slot: string, id: string): boolean
-    occupants(slot: string): Array<{ id: string; order: number; component: unknown }>
+    occupants(slot: string): Array<{ id: string; order: number; component: unknown; meta?: unknown }>
   }
   settings: {
     set(key: string, value: string | number | boolean): boolean
@@ -170,7 +172,7 @@ export function buildCapabilities(
       register(slot: string, req: SlotRegisterReq): string {
         const reg = uiSlots()
         if (!reg) return ''
-        const id = reg.add(slot, { id: req.id, order: req.order, value: req.component })
+        const id = reg.add(slot, { id: req.id, order: req.order, value: req.component, meta: req.meta })
         ctx.effect(() => () => reg.remove(slot, id))
         return id
       },
@@ -182,6 +184,7 @@ export function buildCapabilities(
           id: e.id,
           order: e.order,
           component: e.value,
+          meta: e.meta,
         }))
       },
     },
