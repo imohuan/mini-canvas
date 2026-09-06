@@ -14,6 +14,7 @@ describe('createConnectionState', () => {
     expect(s.isConnecting.value).toBe(false)
     expect(s.activeConnection.value).toBeNull()
     expect(s.hoverNode.value).toBeNull()
+    expect(s.aimedTarget.value).toBeNull()
     expect(s.suppressHandles.value).toBe(false)
   })
 
@@ -21,20 +22,24 @@ describe('createConnectionState', () => {
     const s = createConnectionState()
     const a: ActiveConnection = { sourceNodeId: 'a', sourceHandle: 'source' }
     s.hoverNode.value = { nodeId: 'x', status: 'valid', zone: 'body', flowPosition: { x: 1, y: 2 } }
+    s.aimedTarget.value = { nodeId: 'x', side: 'body' }
     beginConnection(s, a)
     expect(s.isConnecting.value).toBe(true)
     expect(s.activeConnection.value).toEqual(a)
     expect(s.suppressHandles.value).toBe(true)
     expect(s.hoverNode.value).toBeNull()
+    expect(s.aimedTarget.value).toBeNull()
     expect(getSourceHandle(s)).toBe('source')
   })
 
   it('end 全清空', () => {
     const s = createConnectionState()
     beginConnection(s, { sourceNodeId: 'a', sourceHandle: 'target' })
+    s.aimedTarget.value = { nodeId: 'b', side: 'input' }
     endConnection(s)
     expect(s.isConnecting.value).toBe(false)
     expect(s.activeConnection.value).toBeNull()
+    expect(s.aimedTarget.value).toBeNull()
     expect(s.suppressHandles.value).toBe(false)
     expect(getSourceHandle(s)).toBeNull()
   })

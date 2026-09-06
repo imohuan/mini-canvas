@@ -36,6 +36,18 @@ export interface ActiveConnection {
 /** 命中端口所在侧（snap 时）或卡片主体（body 时） */
 export type HoverPortSide = 'input' | 'output' | 'body' | null
 
+/**
+ * 前端 mouse 事件驱动的"瞄准目标"：拖线时由真实 DOM 的 mouseenter/mouseleave 上报
+ * （.moving-handle-zone → side=input/output；.v2-node 卡片 → side=body），后端据此做校验/吸附/落边，
+ * 不再用几何坐标重算命中。side 即命中区域类型。
+ */
+export interface AimedTarget {
+  /** 被瞄准的节点 id */
+  nodeId: string
+  /** 命中区域：input=目标输入口吸附带 / output=目标输出口吸附带 / body=卡片主体 */
+  side: 'input' | 'output' | 'body'
+}
+
 /** 拖线时悬停到的目标节点反馈（BaseNode 据此做 3D/气泡/吸附带） */
 export interface HoverFeedback {
   nodeId: string
@@ -70,6 +82,9 @@ export interface ConnectionFeedbackState {
   activeConnection: Ref<ActiveConnection | null>
   /** 当前悬停目标反馈；悬空无目标 = null */
   hoverNode: Ref<HoverFeedback | null>
+  /** 前端 mouse 事件上报的当前瞄准目标（拖线时 .moving-handle-zone / 卡片 mouseenter 写入、mouseleave 清空）；
+   *  后端 CanvasHost 据此做校验/吸附/落边，不再几何重算命中。 */
+  aimedTarget: Ref<AimedTarget | null>
   /** 拖线期间是否压住（非源节点的）浮动端口按钮（v1 suppressHandles 语义） */
   suppressHandles: Ref<boolean>
 }

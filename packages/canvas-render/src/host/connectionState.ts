@@ -12,18 +12,21 @@ import type {
   ConnectionFeedbackState,
   ActiveConnection,
   HoverFeedback,
+  AimedTarget,
 } from '../contracts/connectionContext'
 
 /** 建一份可注入的默认连接反馈状态 */
 export function createConnectionState(): ConnectionFeedbackState {
   const activeConnection = ref<ActiveConnection | null>(null)
   const hoverNode = ref<HoverFeedback | null>(null)
+  const aimedTarget = ref<AimedTarget | null>(null)
   const suppressHandles = ref(false)
   const isConnecting = computed(() => activeConnection.value !== null)
   return {
     isConnecting,
     activeConnection,
     hoverNode,
+    aimedTarget,
     suppressHandles,
   }
 }
@@ -36,6 +39,7 @@ export function beginConnection(
   state.activeConnection.value = active
   state.suppressHandles.value = true
   state.hoverNode.value = null
+  state.aimedTarget.value = null
 }
 
 /** 结束拖线（connect-end / connect 兜底）：清空悬停/压端口。 */
@@ -43,6 +47,7 @@ export function endConnection(state: ConnectionFeedbackState): void {
   state.activeConnection.value = null
   state.suppressHandles.value = false
   state.hoverNode.value = null
+  state.aimedTarget.value = null
 }
 
 /** 便捷读当前源 handle（连接线/反馈计算用） */

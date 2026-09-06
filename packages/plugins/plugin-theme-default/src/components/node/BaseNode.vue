@@ -9,7 +9,7 @@
 // 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState）+ useVueFlow。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useVueFlow, Position, useCanvasRender, createV2Logger } from '@mini-canvas/canvas-render'
-import type { NodeProps } from '@mini-canvas/canvas-render'
+import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
 import { resolveSegment } from '@mini-canvas/canvas-core-v2'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
@@ -155,6 +155,11 @@ const showSourceHandle = cap.hasSource
 
 // ============ hover 状态（控制端口醒目与阴影）============
 const isHovered = ref(false)
+// —— 拖线瞄准上报（前端 mouse 事件驱动 aimedTarget，取代后端几何命中）——
+// 端口 zone 瞄准侧：null=无端口 hover；'input'=target 输入口 / 'output'=source 输出口
+const aimPortSide = ref<null | 'input' | 'output'>(null)
+// 卡片 body 瞄准（鼠标在卡片主体、非端口 zone）
+const aimBody = ref(false)
 
 // ============ 连接反馈（消费 connectionState）============
 const isConnecting = computed(() => connectionState.isConnecting.value)
@@ -181,6 +186,47 @@ const showConnectFeedback = computed(
     !isConnectionInvalidTarget.value &&
     !lowDetail.value &&
     (isHovered.value || isConnectionValidTarget.value),
+)
+
+// ============ 拖线瞄准上报：前端 mouse 事件 → connectionState.aimedTarget ============
+// 卡片根 enter/leave：维护物理 hover + body 瞄准
+function onCardMouseEnter(): void {
+  isHovered.value = true
+  aimBody.value = true
+}
+function onCardMouseLeave(): void {
+  isHovered.value = false
+  aimBody.value = false
+}
+// 端口 zone 瞄准（MovingHandle @aim）：即时上报，无 180ms 归位延迟
+function onPortAim(payload: { side: 'input' | 'output'; active: boolean }): void {
+  aimPortSide.value = payload.active ? payload.side : null
+}
+// 端口 hover（MovingHandle @hover）：维持原 isHovered 视觉语义
+function onPortHover(value: boolean): void {
+  isHovered.value = value
+}
+// 综合前端瞄准信号写进共享 aimedTarget：仅拖线期间、且非源自身时生效
+watch(
+  [aimPortSide, aimBody, isConnecting, isCurrentConnectingNode],
+  () => {
+    const aimed = connectionState.aimedTarget.value
+    // 拖线结束 / 我是源自身：若 aimedTarget 还是我则清空（不覆盖别的节点）
+    if (!isConnecting.value || isCurrentConnectingNode.value) {
+      if (aimed?.nodeId === props.id) connectionState.aimedTarget.value = null
+      return
+    }
+    let next: AimedTarget | null = null
+    if (aimPortSide.value) next = { nodeId: props.id, side: aimPortSide.value }
+    else if (aimBody.value) next = { nodeId: props.id, side: 'body' }
+    if (next) {
+      connectionState.aimedTarget.value = next
+    } else if (aimed?.nodeId === props.id) {
+      // 我不再瞄准且 aimedTarget 仍是我 → 清空（离开节点回到空白）
+      connectionState.aimedTarget.value = null
+    }
+  },
+  { immediate: true },
 )
 
 // 端口显示：非低细节 && 非全局压端口 && (非源自身) && (hover 或选中)
@@ -306,7 +352,7 @@ function clamp(value: number, min: number, max: number): number {
     'is-low-detail': lowDetail,
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
-  }" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+  }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
     <!-- 顶部工具栏（注册了才渲染） -->
     <div v-if="topToolbar" class="top-toolbar">
       <component :is="topToolbar" :id="id" :data="data" />
@@ -370,7 +416,7 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
-        @hover="isHovered = $event" />
+        @hover="onPortHover" @aim="onPortAim" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
@@ -394,7 +440,7 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
-        @hover="isHovered = $event" />
+        @hover="onPortHover" @aim="onPortAim" />
     </div>
 
     <!-- 底部工具栏（注册了才渲染） -->

@@ -27,6 +27,7 @@ export type {
   HoverFeedback,
   HoverPortSide,
   FlowPoint,
+  AimedTarget,
 } from './contracts/connectionContext'
 // 拖线反馈纯几何/决策/文案（能力层基座，Node 可测）
 export { resolveFeedback, isReverse } from './connection/resolveFeedback'

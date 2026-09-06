@@ -47,11 +47,10 @@ import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
-import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
+import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
-import { resolveFeedback } from '../connection/resolveFeedback'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
@@ -369,7 +368,9 @@ function onDragMouseMove(ev: MouseEvent): void {
     if (!pendingClient || !dragSourceId) return
     const { x, y } = pendingClient
     pendingClient = null
-    const target = resolveAtClient(x, y)
+    const flowPoint = clientToFlow(x, y)
+    // 命中来源 = 前端 mouse 事件上报的 aimedTarget（不再几何重算）；线端点跟鼠标，命中合法 snap 才吸锚点
+    const target = resolveFromAim(connectionState.aimedTarget.value, flowPoint)
     // 写 dragFlowPoint（给 ConnectionLineHost 渲染端点）
     dragFlowPoint.value = { x: target.point.x, y: target.point.y }
     // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
@@ -408,7 +409,8 @@ function onDragMouseUp(ev: MouseEvent): void {
     dragRafId = 0
     pendingClient = null
   }
-  const target = resolveAtClient(ev.clientX, ev.clientY)
+  const flowPoint = clientToFlow(ev.clientX, ev.clientY)
+  const target = resolveFromAim(connectionState.aimedTarget.value, flowPoint)
   // 同步最后一次 mouseup 坐标到 dragFlowPoint（让 release 那一帧连接线也对齐）
   dragFlowPoint.value = { x: target.point.x, y: target.point.y }
   const drop = decideDropFromHover(dragSourceId, dragSourceHandle, target)
@@ -451,28 +453,42 @@ function liveNodeRects(): NodeRect[] {
   })
 }
 
-/** 给定 client 坐标解析当前 hover + 线端点（用于 mousemove 日志 / mouseup drop）。
- *  point = 连接线临时端点：命中**合法 snap 吸附带**时吸到端口锚点(res.end)；否则(卡片 body/空白)跟鼠标。 */
-function resolveAtClient(
-  clientX: number,
-  clientY: number,
-): { point: { x: number; y: number }; hover: ReturnType<typeof resolveFeedback>['hover'] } {
-  const flowPoint = clientToFlow(clientX, clientY)
-  const rects = liveNodeRects().filter((r) => r.id !== dragSourceId)
-  if (!dragSourceId) return { point: flowPoint, hover: null }
-  const res = resolveFeedback({
-    sourceId: dragSourceId,
-    sourceHandle: dragSourceHandle,
-    nodeRects: rects,
-    flowPoint,
-    // 吸附带宽兜底来源：吸附带 SnapZoneConfig.width 未显式给时，用端口区域宽 portZoneWidth
-    handleRadius: handleToProvide.portZoneWidth || 0,
-    config: snapZoneToProvide,
-    validate: validateEdgeText,
-  })
-  // 仅合法 snap(端口吸附带)把线端吸到端口锚点；body/空白保持跟鼠标（body 松手仍可连）
-  const snapped = res.hover?.zone === 'snap' && res.hover.status === 'valid'
-  return { point: snapped ? res.end : flowPoint, hover: res.hover }
+/** 由前端上报的 aimedTarget（mouse 事件驱动）解析当前 hover + 线端点。
+ *  命中来源是前端 .moving-handle-zone / 卡片的 mouseenter 上报，后端不再几何重算吸附带。
+ *  point = 连接线临时端点：命中**合法 snap 吸附带**时吸到端口锚点；否则(卡片 body/空白/非法)跟鼠标。 */
+function resolveFromAim(
+  aim: AimedTarget | null,
+  flowPoint: { x: number; y: number },
+): { point: { x: number; y: number }; hover: HoverDecision | null } {
+  if (!aim || !dragSourceId) return { point: flowPoint, hover: null }
+  const reverse = dragSourceHandle === 'target'
+  const dir = reverse ? 'reverse' : 'forward'
+  // 方向匹配：forward(拖 source 口)只认对方 input(输入口) 或 body；reverse(拖 target 口)只认 output(输出口) 或 body。
+  // 方向不符的端口侧直接视为空白（与原几何「只生成方向侧吸附带」一致）。
+  if (aim.side !== 'body') {
+    const expectSide = reverse ? 'output' : 'input'
+    if (aim.side !== expectSide) return { point: flowPoint, hover: null }
+  }
+  // 候选边 + 业务校验（类型/容量/方向，与 checkConnection 同源）
+  const candidate = reverse
+    ? { source: aim.nodeId, target: dragSourceId }
+    : { source: dragSourceId, target: aim.nodeId }
+  const msg = validateEdgeText(candidate.source, candidate.target)
+  // 端口锚点 = 节点左缘(forward target 输入口) / 右缘(reverse source 输出口) 中点
+  const rect = liveNodeRects().find((r) => r.id === aim.nodeId)
+  const anchorX = rect ? (dir === 'forward' ? rect.x : rect.x + rect.width) : flowPoint.x
+  const anchorY = rect ? rect.y + rect.height / 2 : flowPoint.y
+  const zone: 'snap' | 'body' = aim.side === 'body' ? 'body' : 'snap'
+  const hover: HoverDecision = {
+    nodeId: aim.nodeId,
+    status: msg ? 'invalid' : 'valid',
+    zone,
+    portSide: zone === 'snap' ? (dir === 'forward' ? 'input' : 'output') : undefined,
+    reason: msg || undefined,
+  }
+  // 仅合法 snap(端口吸附带)把线端吸到端口锚点；body/空白/非法保持跟鼠标（body 松手仍可连）
+  const snapped = !msg && zone === 'snap'
+  return { point: snapped ? { x: anchorX, y: anchorY } : flowPoint, hover }
 }
 
 /** 给定 hover 决策 + 源信息，补全成富 HoverFeedback（nodeType/nodeData/nodeEl/willEvict） */
@@ -517,7 +533,7 @@ function enrichHover(
 function decideDropFromHover(
   sourceId: string,
   sourceHandle: 'source' | 'target',
-  target: { hover: ReturnType<typeof resolveFeedback>['hover'] },
+  target: { hover: HoverDecision | null },
 ): { source: string; target: string; zone: 'snap' | 'body' } | null {
   const h = target.hover
   if (!h || h.status !== 'valid') return null
