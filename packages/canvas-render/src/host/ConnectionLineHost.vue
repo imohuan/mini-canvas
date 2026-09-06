@@ -20,7 +20,7 @@ import type { ConnectionLineProps } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
 import { resolveFeedback } from '../connection/resolveFeedback'
 import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
-import type { ConnectionFeedbackState, FlowPoint } from '../contracts/connectionContext'
+import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
 import { hoverWriter } from '../host/connectionState'
 
 const props = defineProps<{
@@ -72,10 +72,10 @@ const nodeRects = computed<NodeRect[]>(() => {
 // ---- 每帧决策：吸附终点 + hover；rAF 节流写回 hoverNode ----
 const writer = hoverWriter(props.state)
 let rafId = 0
-let pendingHover: ReturnType<typeof resolveFeedback>['hover'] | null = null
+let pendingHover: HoverFeedback | null = null
 
 /** 判定 hover 是否变化（与当前写回值比对，避免无谓重写导致循环） */
-function scheduleHoverWrite(next: ReturnType<typeof resolveFeedback>['hover'] | null) {
+function scheduleHoverWrite(next: HoverFeedback | null) {
   const cur = writer.read()
   const changed =
     cur?.nodeId !== next?.nodeId ||

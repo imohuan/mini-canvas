@@ -262,7 +262,12 @@ function checkConnection(
 
 function isValidConnection(conn: Connection): boolean {
   if (!conn.source || !conn.target) return false
-  return checkConnection(conn.source, conn.target, conn.sourceHandle, conn.targetHandle).ok
+  return checkConnection(
+    conn.source,
+    conn.target,
+    conn.sourceHandle ?? undefined,
+    conn.targetHandle ?? undefined,
+  ).ok
 }
 
 /**
