@@ -20,31 +20,49 @@ const A: NodeRect = { id: 'a', type: 't', x: 100, y: 100, width: 256, height: 12
 const B: NodeRect = { id: 'b', type: 't', x: 500, y: 200, width: 256, height: 128 }
 
 describe('geometry: zoneDirectionAnchor', () => {
-  it('forward → 锚点在左缘中点', () => {
-    expect(zoneDirectionAnchor(A, 'forward')).toEqual({ anchorX: 100, anchorY: 164 })
+  it('forward → 锚点在左缘中点(target 输入口)', () => {
+    const a = zoneDirectionAnchor(A, 'forward')
+    expect(a).toEqual({ anchorX: 100, anchorY: 164, side: 'target' })
   })
-  it('reverse → 锚点在右缘中点', () => {
-    expect(zoneDirectionAnchor(A, 'reverse')).toEqual({ anchorX: 356, anchorY: 164 })
+  it('reverse → 锚点在右缘中点(source 输出口)', () => {
+    const a = zoneDirectionAnchor(A, 'reverse')
+    expect(a).toEqual({ anchorX: 356, anchorY: 164, side: 'source' })
   })
 })
 
-describe('geometry: computeSnapZones', () => {
-  it('forward 吸附带以 target(左缘)为中心：外扩 outer、内扩 inner、高 height×R', () => {
+describe('geometry: computeSnapZones (SnapZoneConfig)', () => {
+  it('默认 config：forward 带以 target(左缘)为准，高=节点高×0.8、宽=handleRadius、offset=0', () => {
     const zones = computeSnapZones([A, B], 'forward', R)
     const za = zones.find((z) => z.id === 'a')!
-    const outer = R * 0.75 // 64.5
-    const inner = R * 0.6 // 51.6
-    expect(za.x).toBeCloseTo(A.x - outer)
-    expect(za.width).toBeCloseTo(outer + inner)
-    expect(za.height).toBeCloseTo(R * 1.35)
-    expect(za.y).toBeCloseTo(A.y + A.height / 2 - (R * 1.35) / 2)
+    // A 高 128 → 带高 102.4；target 锚点左缘 x=100 → 带 x = 100 - (86-0) = 14
+    expect(za.side).toBe('target')
+    expect(za.x).toBeCloseTo(A.x - R)
+    expect(za.width).toBeCloseTo(R)
+    expect(za.height).toBeCloseTo(A.height * 0.8)
+    expect(za.y).toBeCloseTo(A.y + A.height / 2 - (A.height * 0.8) / 2)
     expect(za.anchorX).toBe(A.x)
   })
-  it('reverse 吸附带以 source(右缘)为中心：向内 inner、向外 outer', () => {
+  it('reverse 带以 source(右缘)为准，带从右缘向右侧伸出 width', () => {
     const zones = computeSnapZones([A, B], 'reverse', R)
     const za = zones.find((z) => z.id === 'a')!
-    expect(za.x).toBeCloseTo(A.x + A.width - R * 0.6)
+    expect(za.side).toBe('source')
+    expect(za.x).toBeCloseTo(A.x + A.width)
+    expect(za.width).toBeCloseTo(R)
     expect(za.anchorX).toBe(A.x + A.width)
+  })
+  it('config 覆盖：heightRatio/width/offset 生效，shape 透传', () => {
+    const zones = computeSnapZones([A], 'forward', R, {
+      heightRatio: 1,
+      width: 40,
+      offset: 10,
+      shape: 'arc',
+    })
+    const za = zones[0]
+    // target 左缘 anchorX=100，offset=10>0 向节点内收 → x = 100 - (40-10) = 70
+    expect(za.x).toBeCloseTo(A.x - (40 - 10))
+    expect(za.width).toBeCloseTo(40)
+    expect(za.height).toBeCloseTo(A.height) // heightRatio=1
+    expect(za.shape).toBe('arc')
   })
 })
 
@@ -57,10 +75,10 @@ describe('geometry: hitTest / closestZone', () => {
   })
   it('closestZone 取命中里距锚点最近者', () => {
     const zones = computeSnapZones([A, B], 'forward', R)
-    // A 吸附带中心 (100,164)
-    const nearA = closestZone(zones, { x: 110, y: 164 })
+    // A 带 [14,100] 命中带内点 (90,164)
+    const nearA = closestZone(zones, { x: 90, y: 164 })
     expect(nearA?.id).toBe('a')
-    const nearB = closestZone(zones, { x: 520, y: 280 })
+    const nearB = closestZone(zones, { x: 420, y: 260 })
     expect(nearB?.id).toBe('b')
   })
 })

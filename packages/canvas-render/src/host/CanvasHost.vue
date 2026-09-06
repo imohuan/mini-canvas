@@ -52,7 +52,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import { resolveFeedback } from '../connection/resolveFeedback'
-import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
+import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
@@ -467,7 +467,7 @@ function resolveAtClient(
     nodeRects: rects,
     flowPoint,
     handleRadius: handleToProvide.handleRadius || 86,
-    ratios: DEFAULT_SNAP_RATIOS,
+    config: DEFAULT_SNAP_ZONE_CONFIG,
     validate: validateEdgeText,
   })
   return { point: flowPoint, hover: res.hover }

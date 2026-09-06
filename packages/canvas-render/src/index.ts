@@ -32,13 +32,37 @@ export { resolveFeedback, isReverse } from './connection/resolveFeedback'
 export type { ResolveFeedbackInput, ResolveResult, HoverDecision, ValidateEdge } from './connection/resolveFeedback'
 export {
   computeSnapZones,
+  computeSnapZoneSides,
   computeBodyZones,
   hitTest,
   closestZone,
   zoneDirectionAnchor,
   DEFAULT_SNAP_RATIOS,
+  DEFAULT_SNAP_ZONE_CONFIG,
 } from './connection/geometry'
-export type { SnapRatios, NodeRect, SnapZone, BodyZone, ConnectDirection } from './connection/geometry'
+export type {
+  SnapRatios,
+  NodeRect,
+  SnapZone,
+  SnapZoneSide,
+  SnapZoneShape,
+  SnapZoneConfig,
+  BodyZone,
+  ConnectDirection,
+} from './connection/geometry'
+// 内容类型端口能力 + 容量/挤出判定
+export {
+  contentTypeAccepted,
+  decideCapacity,
+  evaluateContentConnect,
+} from './connection/capability'
+export type {
+  ContentType,
+  PortContentCapability,
+  NodeContentCapability,
+  ContentDecision,
+  ContentConnectResult,
+} from './connection/capability'
 export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'

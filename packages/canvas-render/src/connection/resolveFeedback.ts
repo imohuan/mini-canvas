@@ -16,8 +16,8 @@ import {
   hitTest,
   zoneDirectionAnchor,
   type NodeRect,
-  type SnapRatios,
-  DEFAULT_SNAP_RATIOS,
+  type SnapZoneConfig,
+  DEFAULT_SNAP_ZONE_CONFIG,
 } from './geometry'
 
 /** 候选连接校验回调：给定规范(源,目标)返回非法文案；空串=合法（调用方包 validateConnection+reasonText） */
@@ -33,7 +33,7 @@ export interface ResolveFeedbackInput {
   /** 鼠标当前画布坐标 */
   flowPoint: FlowPoint
   handleRadius: number
-  ratios?: SnapRatios
+  config?: SnapZoneConfig
   validate: ValidateEdge
 }
 
@@ -60,12 +60,12 @@ export function isReverse(sourceHandle: 'source' | 'target'): boolean {
 }
 
 export function resolveFeedback(input: ResolveFeedbackInput): ResolveResult {
-  const { sourceId, sourceHandle, nodeRects, flowPoint, handleRadius, ratios, validate } = input
+  const { sourceId, sourceHandle, nodeRects, flowPoint, handleRadius, config, validate } = input
   const reverse = isReverse(sourceHandle)
   const dir = reverse ? 'reverse' : 'forward'
 
   // —— 吸附带 / body 区 ——
-  const snapZones = computeSnapZones(nodeRects, dir, handleRadius, ratios ?? DEFAULT_SNAP_RATIOS)
+  const snapZones = computeSnapZones(nodeRects, dir, handleRadius, config ?? DEFAULT_SNAP_ZONE_CONFIG)
   const bodyZones = computeBodyZones(nodeRects)
 
   let endX = flowPoint.x
