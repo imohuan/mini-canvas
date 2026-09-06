@@ -197,3 +197,20 @@ interface ConnectionFeedbackState {
 - 验证：connection 单测 18 绿（新增/改写 case：合法 body → end 对齐左缘锚点；非法 body → 不吸）。
 - 边界说明：真实落点是否建边仍取决于 VueFlow 的 handle 吸附（connectionRadius 20px），
   本修复只让"拖线中的视觉终点"与"hover 判定的目标端口"一致，不做 body 落点即建边（那是另一层语义）。
+
+### D. 默认外观对齐目标金标准 → 已修（commit d6ddfe0，theme-default/index + node-theme.css）
+- 目标（用户给出的 目标.png）：连线细、深灰近黑 (#1f2937)、贝塞尔带轻微虚线、无箭头无辉光；
+  节点卡纯白+1px 极浅灰边+极小圆角/投影；标题在卡片上方 top-left 外。
+- 改：
+  - `DEFAULT_THEME_EDGE`：`edgeColor #3b82f6→#1f2937` / `edgeLineWidth 2→1.5` / `edgeDashed true` / `edgeAnimated false` /
+    `edgeGlowEnabled false` / `edgeGlowColor #1f2937`（跟随线色）。仍是 bezier，无箭头（与目标一致）。
+  - `--canvas-node-border`：`rgb(209 213 219 / 0.95) → #e5e7eb`（让卡片边框更浅贴近目标）。
+- 不动：
+  - engine `DEFAULT_EDGE_VISUAL`（金标准合同，canvasHostCore 测试断言保持绿：`#3b82f6` 等）。
+  - `ConnectionLine`（拖线临时线仍按 hover 合法性着色带流光箭头，按既有视觉方案——目标图无拖线态）。
+  - 卡片阴影保持 `0 1px 3px rgba(0,0,0,0.06)`（贴近目标微投影）。
+- 验证：实机 DOM 探查（chrome-devtools）——
+  - `.v2-card` 背景 `rgb(249,250,251)`、边框 `rgb(229,231,235)`、阴影 `0 1px 3px rgba(0,0,0,0.06)`。
+  - `.custom-edge .ef-base` 颜色 `rgb(31,41,55)`、宽度 `1.5px`、dasharray `6px 3px`、animation `none`。
+  - `--canvas-node-border: #e5e7eb`。
+- 测试：canvas-render 71 绿；plugin-theme-default 14 绿；plugin-theme-default vue-tsc 0 错。
