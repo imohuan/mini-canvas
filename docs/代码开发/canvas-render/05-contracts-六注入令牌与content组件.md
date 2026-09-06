@@ -40,6 +40,10 @@ interface CanvasRenderContext {
   handleParams: CanvasParams   // 浮动端口外观（响应式）
   edgeVisual: Partial<EdgeVisual>  // 边外观（响应式）
   edgeSelection: EdgeSelection     // 选中集合
+  connectionState: ConnectionFeedbackState  // 拖线连接过程反馈（hover/合法目标/压端口）——见专档
+  interaction: CanvasInteractionState      // 画布交互状态（拖节点/pan/缩放等活动位）——见 10 号专档
+  debug: CanvasDebug           // 调试可视化开关
+  snapZone: SnapZoneConfig     // 吸附带配置
 }
 
 export function useCanvasRender(): CanvasRenderContext {
@@ -216,7 +220,7 @@ function commit() {
 
 ```ts
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-const { registry, nodeWrite, handleParams } = useCanvasRender()
+const { registry, nodeWrite, handleParams, connectionState, interaction } = useCanvasRender()
 
 const content = computed(() => resolveSegment(registry, props.type, 'content'))
 // 渲染 content 段
@@ -226,7 +230,12 @@ const content = computed(() => resolveSegment(registry, props.type, 'content'))
 if (nodeWrite) nodeWrite(props.id, { label: next })
 
 // 浮动端口尺寸喂给 MovingHandle
-<MovingHandle :radius="handleParams.handleRadius" ... />
+// 端口显隐门：交互进行中（拖节点/pan）压掉加号；拖线期间压制读 connectionState.suppressHandles。
+// 完整说明见 10-interactionState 专档。
+const shouldShowHandles = computed(() =>
+  !lowDetail && !connectionState.suppressHandles && !interaction.isBusyDragging && (isHovered || selected),
+)
+<MovingHandle :radius="handleParams.handleRadius" :visible="shouldShowHandles" :selected="props.selected" ... />
 ```
 
 - `useVueFlow`（来自 vueFlowBridge）拿画布 store 做 LOD（读 zoom）。

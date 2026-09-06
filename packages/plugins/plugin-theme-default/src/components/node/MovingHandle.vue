@@ -29,6 +29,8 @@ const props = defineProps<{
   buttonSize?: number
   /** 圆球收进卡内的 tuck 距离 px（缺省 buttonSize/2） */
   overlap?: number
+  /** 节点被选中（BaseNode props.selected）：选中时端口按钮常显（不依赖 zone hover） */
+  selected?: boolean
   zoneWidth?: number
   zoneHeight?: number
   zoneOffset?: number
@@ -84,7 +86,17 @@ const outerR = computed(() => Math.max((zoneHeight.value / 2) * zoneArcRatio.val
 const shapeWidth = computed(() =>
   zoneShape.value === 'rect' ? rectWidth.value : rectWidth.value + outerR.value,
 )
-const isShown = computed(() => !props.disabled && (props.visible || keepVisible.value))
+/**
+ * 端口按钮显隐：
+ *  - 硬压制：props.disabled（拖线源）/ !props.visible（拖线/拖节点/pan 期间上层压）→ 命中其一永不显示。
+ *  - 软可见：本端口自己的 zone hover（keepVisible，含 180ms 残留淡出）**或**节点选中（selected，常显）。
+ * 关键语义：只亮"鼠标靠近的那个端口"——各 MovingHandle 只看自己的 keepVisible，不因整卡 hover
+ * 而两端口同亮。原先把整卡 hovered 也喂进来的写法会双端口齐亮，已废弃。
+ */
+const isShown = computed(() => {
+  if (props.disabled || !props.visible) return false
+  return Boolean(props.selected) || keepVisible.value
+})
 
 // 连接拖拽会临时禁用源端口：必须同步清本地 hover，否则松开后圆球因残留 keepVisible 再显示
 watch(

@@ -12,7 +12,7 @@
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
 import { provide, shallowRef, ref, onMounted } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
-import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
+import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
 import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
@@ -23,6 +23,7 @@ import { HOST_KEY } from '../contracts/contentBridge'
 import type { EdgeVisual, EdgeSelection } from '../contracts/edgeContext'
 import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState } from '../contracts/connectionContext'
+import type { CanvasInteractionState } from '../contracts/interactionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
 import type { CanvasDebug } from '../contracts/debugContext'
@@ -40,6 +41,8 @@ const props = defineProps<{
   edgeVisual: Partial<EdgeVisual>
   edgeSelection: EdgeSelection
   connectionState: ConnectionFeedbackState
+  /** 画布交互状态（CanvasHost 维护；塞进 renderCtx 供 theme/UI 消费显隐/行为） */
+  interaction: CanvasInteractionState
   /** Host 端 mousemove 实时写的 flow 坐标（VueFlow lineProps 不可靠时由这里驱动连接线端点）。可空（拖线外时段）。 */
   dragFlowPoint?: { x: number; y: number } | null
   debugVisual: CanvasDebug
@@ -66,7 +69,11 @@ const props = defineProps<{
   onConnectStart: (p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }) => void
   onConnectEnd: () => void
   onNodeClick: (e: NodeMouseEvent) => void
+  onEdgeClick: (e: EdgeMouseEvent) => void
+  onNodeDragStart: (e: NodeDragEvent) => void
   onNodeDragStop: (e: NodeDragEvent) => void
+  onMoveStart: () => void
+  onMoveEnd: () => void
   onPaneClick: () => void
   onNodeContextMenu: (e: NodeMouseEvent) => void
   onPaneContextMenu: (e: MouseEvent) => void
@@ -87,6 +94,7 @@ const renderCtx: CanvasRenderContext = {
   edgeVisual: props.edgeVisual,
   edgeSelection: props.edgeSelection,
   connectionState: props.connectionState,
+  interaction: props.interaction,
   debug: props.debugVisual,
   snapZone: props.snapZone,
 }
@@ -107,6 +115,30 @@ const paneEl = ref<HTMLElement | null>(null)
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
   paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
+  // 视口服务接线：把 VueFlow 能力 attach 到 host.viewport（工厂注入的空壳），插件可 ctx.get('viewport')
+  props.host?.viewport.attachBackend({
+    getViewport: () => {
+      const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
+      return vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
+    },
+    screenToFlow: (x: number, y: number) => {
+      const p = vfApi.screenToFlowCoordinate({ x, y }) as { x: number; y: number }
+      return { x: p.x, y: p.y }
+    },
+    flowToScreen: (x: number, y: number) => {
+      const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
+      const v = vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
+      const rect = paneEl.value ? paneEl.value.getBoundingClientRect() : { left: 0, top: 0 }
+      return { x: rect.left + (x - v.x) * v.zoom, y: rect.top + (y - v.y) * v.zoom }
+    },
+    zoomIn: () => vfApi.zoomIn({ duration: 200 }),
+    zoomOut: () => vfApi.zoomOut({ duration: 200 }),
+    zoomTo: (level: number) => vfApi.zoomTo(level, { duration: 200 }),
+    fitView: (padding?: number) => vfApi.fitView({ padding: padding ?? 0.1, duration: 200 }),
+    setCenter: (x: number, y: number, zoom?: number) =>
+      vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
+    setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
+  })
 })
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
@@ -118,11 +150,27 @@ defineExpose({
       : (vfApi.viewport as unknown as { x: number; y: number; zoom: number })
   },
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
-  /** 关键：把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
+  /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
   screenToFlow: (x: number, y: number): { x: number; y: number } => {
     const p = vfApi.screenToFlowCoordinate({ x, y }) as { x: number; y: number }
     return { x: p.x, y: p.y }
   },
+  /** 把 flow 坐标→屏幕 client 坐标（供浮层定位/对齐线画在屏幕层） */
+  flowToScreen: (x: number, y: number): { x: number; y: number } => {
+    const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
+    const v = vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
+    const pane = paneEl.value
+    const rect = pane ? pane.getBoundingClientRect() : { left: 0, top: 0 }
+    return { x: rect.left + (x - v.x) * v.zoom, y: rect.top + (y - v.y) * v.zoom }
+  },
+  // —— 视图控制（viewport 服务 backend 用）——
+  zoomIn: () => vfApi.zoomIn({ duration: 200 }),
+  zoomOut: () => vfApi.zoomOut({ duration: 200 }),
+  zoomTo: (level: number) => vfApi.zoomTo(level, { duration: 200 }),
+  fitView: (padding?: number) => vfApi.fitView({ padding: padding ?? 0.1, duration: 200 }),
+  setCenter: (x: number, y: number, zoom?: number) =>
+    vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
+  setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
 })
 </script>
 
@@ -141,7 +189,11 @@ defineExpose({
       @connect-start="onConnectStart"
       @connect-end="onConnectEnd"
       @node-click="onNodeClick"
+      @edge-click="onEdgeClick"
+      @node-drag-start="onNodeDragStart"
       @node-drag-stop="onNodeDragStop"
+      @move-start="onMoveStart"
+      @move-end="onMoveEnd"
       @pane-click="onPaneClick"
       @node-context-menu="onNodeContextMenu"
       @pane-context-menu="onPaneContextMenu"
@@ -201,3 +253,11 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
+
+
+
+
+
+
+
+

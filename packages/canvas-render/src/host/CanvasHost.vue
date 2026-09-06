@@ -21,7 +21,7 @@
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
  */
 import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
-import type { Connection, NodeMouseEvent, NodeDragEvent } from '@vue-flow/core'
+import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import {
   NodeRegistry,
   type PluginClassLike,
@@ -50,6 +50,14 @@ import type { EdgeVisual } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
+import {
+  createInteractionState,
+  beginNodeDrag,
+  endNodeDrag,
+  beginViewportMove,
+  endViewportMove,
+} from '../contracts/interactionContext'
+import { clickNode, clickEdge, clickPane } from './selectionInteractions'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
@@ -170,6 +178,10 @@ const edgeSelection = { selectedNodeIds: selectedIds, selectedEdgeIds: emptyEdge
 // 拖线连接过程反馈状态（能力层）。onConnectStart/onConnectEnd 写入；每帧 hover 由 ConnectionLineHost 写。
 // 同一引用经 renderContext provide，BaseNode/ConnectionLine 消费。
 const connectionState: ConnectionFeedbackState = createConnectionState()
+/** 画布交互状态（拖节点/pan/缩放等活动位 + 派生 isBusyDragging；CanvasSurface 塞进 renderCtx，theme/UI 消费）。
+ *  A 决策：pan 与 wheel/pinch 缩放走 VueFlow 同一套 move 事件，不拆位——视图在动一律置 paneDragging
+ *  (计入 isBusyDragging，端口被压)。zooming 位保留给未来需要细分"缩放手势"的场景。 */
+const interaction = createInteractionState()
 /** 拖线期间 Host 端实时 mouse 跟踪的 flow 坐标（VueFlow 自身 lineProps 不可靠时由这里兜底）。
  *  拖线开始时清零、mousemove 更新、connect-end 清零。供 ConnectionLineHost 渲染端点。 */
 const dragFlowPoint = shallowRef<FlowPoint | null>(null)
@@ -179,6 +191,7 @@ function syncSelected(): void {
   const h = hostRef.value
   if (!h) return
   selectedIds.value = new Set(h.selection.ids)
+  emptyEdgeSel.value = new Set(h.selection.edgeIds)
 }
 
 // ==================== 渲染态（VueFlow 消费）====================
@@ -247,7 +260,12 @@ function syncFromStore(): void {
 
 // ==================== 通用交互事件 ====================
 
+function onNodeDragStart(e: NodeDragEvent): void {
+  beginNodeDrag(interaction, e.node.id)
+}
+
 function onNodeDragStop(e: NodeDragEvent): void {
+  endNodeDrag(interaction)
   const h = hostRef.value
   if (!h) return
   const pos = e.node.position
@@ -260,13 +278,32 @@ function onNodeDragStop(e: NodeDragEvent): void {
   void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
 }
 
+/** 视图平移/缩放开始（pan 与 wheel/pinch 缩放同源于 VueFlow 同一套 move 事件，A 决策：统一置 paneDragging） */
+function onMoveStart(): void {
+  beginViewportMove(interaction)
+}
+
+/** 视图平移/缩放结束：清 paneDragging（与 start 对称，无 wheel/pan 配对残留问题） */
+function onMoveEnd(): void {
+  endViewportMove(interaction)
+}
+
 function onNodeClick(e: NodeMouseEvent): void {
-  // 只写内核 Selection(单源)；selectedIds 经订阅自动跟随，不再手工成对更新
-  hostRef.value?.selection.set(new Set([e.node.id]))
+  const h = hostRef.value
+  if (!h) return
+  clickNode(h.selection, e.node.id, { shiftKey: e.event.shiftKey })
+}
+
+function onEdgeClick(e: EdgeMouseEvent): void {
+  const h = hostRef.value
+  if (!h) return
+  clickEdge(h.selection, e.edge.id, { shiftKey: e.event.shiftKey })
 }
 
 function onPaneClick(): void {
-  hostRef.value?.selection.clear() // 订阅自动清 selectedIds
+  const h = hostRef.value
+  if (!h) return
+  clickPane(h.selection)
 }
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
@@ -819,13 +856,18 @@ onBeforeUnmount(() => {
         :max-zoom="props.maxZoom"
         :is-valid-connection="isValidConnection"
         :connection-state="connectionState"
+        :interaction="interaction"
         :drag-flow-point="dragFlowPoint"
         :on-connect="onConnect"
         :on-connect-start="onConnectStart"
         :on-connect-end="onConnectEnd"
         :validate-edge="validateEdgeText"
         :on-node-click="onNodeClick"
+        :on-edge-click="onEdgeClick"
+        :on-node-drag-start="onNodeDragStart"
         :on-node-drag-stop="onNodeDragStop"
+        :on-move-start="onMoveStart"
+        :on-move-end="onMoveEnd"
         :on-pane-click="onPaneClick"
         :on-node-context-menu="onNodeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"
@@ -865,3 +907,6 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
+

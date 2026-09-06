@@ -29,6 +29,21 @@ export type {
   FlowPoint,
   AimedTarget,
 } from './contracts/connectionContext'
+// 画布交互状态契约（CanvasHost 维护 createInteractionState、provide 进渲染上下文；theme/UI 消费做显隐/行为）
+export {
+  createInteractionState,
+  updateActivity,
+  clearActivity,
+  emptyActivity,
+  beginNodeDrag,
+  endNodeDrag,
+  beginViewportMove,
+  endViewportMove,
+} from './contracts/interactionContext'
+export type {
+  CanvasInteractionState,
+  InteractionActivity,
+} from './contracts/interactionContext'
 // 拖线反馈纯几何/决策/文案（能力层基座，Node 可测）
 export { resolveFeedback, isReverse } from './connection/resolveFeedback'
 export type { ResolveFeedbackInput, ResolveResult, HoverDecision, ValidateEdge } from './connection/resolveFeedback'
@@ -98,6 +113,9 @@ export {
 export { clickNode, clickEdge, clickPane } from './host/selectionInteractions'
 // 节点布局只读服务（实测尺寸 + 绝对坐标；插件/工具读，宿主注入'nodeLayout'服务）
 export { NodeLayoutService } from './layout/nodeLayout'
+// 视口服务（CanvasHost attach VueFlow backend 后可用；插件读/控视图）
+export { ViewportService } from './viewport/viewportService'
+export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } from './viewport/viewportService'
 export type { LayoutRect } from './layout/nodeLayout'
 
 export type { SelectionClickOptions } from './host/selectionInteractions'
@@ -123,4 +141,6 @@ export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce
 export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
+
+
 

@@ -29,6 +29,7 @@ import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
 import type { ConnectionFeedbackState } from './connectionContext'
+import type { CanvasInteractionState } from './interactionContext'
 import type { CanvasDebug } from './debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 
@@ -50,6 +51,8 @@ export interface CanvasRenderContext {
   edgeSelection: EdgeSelection
   /** 拖线连接过程反馈（能力层 CanvasHost 维护；BaseNode/ConnectionLine 消费做 3D/气泡/吸附/压端口） */
   connectionState: ConnectionFeedbackState
+  /** 画布交互状态（多属性组合：拖节点/pan/缩放/框选等活动位 + 派生 isBusy 等；theme/UI 消费做显隐/行为） */
+  interaction: CanvasInteractionState
   /** 调试可视化开关（端口/吸附调试；响应式对象，属性改实时生效） */
   debug: CanvasDebug
   /** 吸附带配置（高占节点比例/宽/偏移/形状；属性改实时影响吸附判定与 BaseNode 调试叠加） */

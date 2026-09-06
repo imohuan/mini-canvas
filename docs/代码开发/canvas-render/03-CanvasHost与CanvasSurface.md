@@ -62,7 +62,8 @@ c.value.bootErrorText // string
 2. **订阅自动刷渲染态**：`nodeStore.subscribe(syncFromStore)` + `edgeStore.subscribe(syncFromStore)` + `selection.onChange(syncSelected)`。任何增删改（命令/拖拽/历史 undo/redo）都自动重灌 VueFlow，**不需要手动 map**。
 3. **主题 + nodeTypes 装配**（`applyTheme`）：读 `themeRegistry` 的 nodeShell/edge/edgeDefaultType/background，用 `markRaw` 包好（防 Vue reactive 化警告），把 nodeTypes 铺满 nodeStore 已注册的类型。
 4. **通用交互**：
-   - `onNodeDragStop`：把 VueFlow 更新后的最终 position 写回内核 nodeStore + 落盘。
+   - `onNodeDragStart/onNodeDragStop`：拖节点开始/结束——begin/endNodeDrag 驱动交互状态 `interaction`（见 10 号专档）；`onNodeDragStop` 同时把最终 position 写回内核 nodeStore + 落盘。
+   - `onMoveStart/onMoveEnd`：pan/缩放（VueFlow 同一套 move 事件）——begin/endViewportMove 驱动 `interaction.paneDragging`。
    - `onNodeClick`：只写内核 Selection（单源）。
    - `onPaneClick`：`selection.clear()`。
    - `isValidConnection`：走内核 connection 校验（自连/环/重复/朝向/类型）。
@@ -101,6 +102,10 @@ const renderCtx: CanvasRenderContext = {
   handleParams: props.handleParams,
   edgeVisual: props.edgeVisual,
   edgeSelection: props.edgeSelection,
+  connectionState: props.connectionState,  // 拖线连接反馈（hover/合法目标/压端口）
+  interaction: props.interaction,          // 画布交互状态（拖节点/pan/缩放）——见 10 号专档
+  debug: props.debugVisual,                // 调试可视化开关
+  snapZone: props.snapZone,                // 吸附带配置
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
@@ -121,7 +126,7 @@ provide(HOST_KEY, shallowRef(host))
 <VueFlow :key="nodeEpoch" :nodes="nodes" :edges="edges"
           :node-types="nodeTypes" :edge-types="edgeTypes"
           :is-valid-connection="isValidConnection" :min-zoom="minZoom" :max-zoom="maxZoom"
-          @connect @node-click @node-drag-stop @pane-click @node-context-menu @pane-context-menu>
+          @connect @connect-start @connect-end @node-click @node-drag-start @node-drag-stop @move-start @move-end @pane-click @node-context-menu @pane-context-menu>
   <component :is="backgroundComp" v-if="backgroundComp" />   <!-- 主题背景 -->
   <slot />                                                    <!-- 父级塞 VueFlow 内自定义 -->
 </VueFlow>

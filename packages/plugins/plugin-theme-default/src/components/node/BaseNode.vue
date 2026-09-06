@@ -23,7 +23,7 @@ const props = defineProps<NodeProps>()
 defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈
-const { registry, nodeWrite, handleParams, connectionState, debug, snapZone } = useCanvasRender()
+const { registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -268,12 +268,16 @@ watch(
   { immediate: true },
 )
 
-// 端口显示：非低细节 && 非全局压端口 && (非源自身) && (hover 或选中)
+// 端口"允许显示"门（传给 MovingHandle 作上层压制）：非低细节 && 非拖线全局压 && 非源自身 && 非拖拽 busy。
+// 注意：这只是"允许"，按钮最终显隐在 MovingHandle 内部——zone hover(keepVisible) 或 选中(selected) 才真正亮。
+// isHovered 由卡片根 enter 与端口 zone @hover 共同置位：zone hover 时经它把 visible 抬到 true，配合 keepVisible 亮该端口。
+// 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
   () =>
     !lowDetail.value &&
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
+    !interaction.isBusyDragging.value &&
     (isHovered.value || props.selected),
 )
 
@@ -459,7 +463,7 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
       <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
@@ -483,7 +487,7 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 右侧输出口(source) -->
       <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
