@@ -65,19 +65,19 @@ export const inject = ['nodeStore', 'save'] as string[]
  * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
  *
  * 本插件故意给了**多个分组**来验证设置面板 slothost：
- *   - 「图片」 走默认渲染（无插槽接管）
+ *   - 「图片」 其右侧**并存**了自定义组件（settingsGroup/图片 插槽 + mode=append）：默认控件与自绘组件同时显示
  *   - 「边框」 其**导航 tab 被 DemoSlotNavItem 顶替**（settingsNav 插槽，id='边框'）
- *   - 「高级」 其**右侧内容被 DemoSlotContent 接管**（settingsGroup/高级 插槽）
+ *   - 「高级」 走默认渲染（无插槽接管）
  * 与 theme-default 的「连线 / 连线动效与箭头」并存，正好测试"跨插件分组合并"。
  */
 export const Config: ConfigSchema = {
-  // —— 组「图片」：走默认 schema 渲染 ——
+  // —— 组「图片」：默认 schema 渲染，同时 settingsGroup/图片 以 mode=append 追加自定义组件（并存）——
   cornerRadius: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '图片' },
   showShadow: { type: 'boolean', default: true, label: '阴影', group: '图片' },
   // —— 组「边框」：导航 tab 被 settingsNav 插槽顶替 ——
   borderWidth: { type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '边框' },
   borderColor: { type: 'color', default: '#334155', label: '边框颜色', group: '边框' },
-  // —— 组「高级」：右侧内容被 settingsGroup/高级 插槽接管 ——
+  // —— 组「高级」：走默认渲染（无插槽接管）——
   blurOnLoad: { type: 'boolean', default: false, label: '加载时模糊', group: '高级' },
   lazyLoad: { type: 'boolean', default: true, label: '懒加载', group: '高级' },
 }
@@ -101,20 +101,17 @@ export function apply(ctx: Context) {
   //    a) settingsNav：id 命中 config 分组「边框」→ 顶替它的默认导航 tab（注入 group/active/onSelect）
   ctx.slots.register('settingsNav', {
     id: '边框',
-    order: 0,
+    order: -1,
     component: DemoSlotNavItem,
   })
-  //    b) settingsGroup/高级：接管「高级」分组的右侧内容区（注入 group/settings），不再走 schema fallback
-  ctx.slots.register('settingsGroup/高级', {
-    id: 'image-advanced-demo',
+  //    b) settingsGroup/图片 + meta.mode='append'：与「图片」默认 schema 控件并存（不接管），
+  //       右侧先显示该组默认控件、再追加本组件 —— 验证"默认 + 自定义同时存在"。
+  //       若不加 meta（mode 缺省='replace'）则整组接管、隐藏默认控件（向后兼容旧行为）。
+  ctx.slots.register('settingsGroup/图片', {
+    id: 'image-coexist-demo',
     order: 0,
     component: DemoSlotContent,
-  })
-
-  ctx.slots.register('settingsGroup/高级', {
-    id: 'image-advanced-demo1',
-    order: 1,
-    component: DemoSlotContent,
+    meta: { mode: 'append' },
   })
 
   // 4. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化

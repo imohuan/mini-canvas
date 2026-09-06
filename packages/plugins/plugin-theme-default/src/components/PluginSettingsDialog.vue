@@ -27,7 +27,7 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from './SettingsSchemaField.vue'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SlotOcc = { id: string; order: number; component: any }
+type SlotOcc = { id: string; order: number; component: any; meta?: any }
 
 const props = defineProps<{
   settings: SettingsPanelSource
@@ -113,7 +113,12 @@ function contentSlotName(key: string): string {
 function reloadContent(): void {
   contentList.value = ctx.slots
     .occupants(contentSlotName(activeKey.value))
-    .map((e) => ({ id: e.id, order: e.order, component: markRaw(e.component as object) }))
+    .map((e) => ({
+      id: e.id,
+      order: e.order,
+      component: markRaw(e.component as object),
+      meta: e.meta,
+    }))
 }
 watch(activeKey, reloadContent)
 disposers.push(
@@ -123,7 +128,36 @@ disposers.push(
 reloadContent() // 首帧读一次内容插槽
 
 const activeFields = computed(() => props.settings.groupOf(activeKey.value))
-const hasContentSlot = computed(() => contentList.value.length > 0)
+
+// —— 内容区统一渲染成"有序内容块列表"：默认控件(schema) 与 插槽组件都是块，模板就一段 v-for ——
+// 每个内容插槽 occupant 可经 meta.mode 声明摆放：
+//   'prepend' → 与默认控件并存，排在最前
+//   'append'  → 与默认控件并存，排在默认控件之后
+//   其它/缺省 → 'replace'：接管整组（不渲染默认控件，向后兼容旧行为）
+// 规则：只要有 occupant 要求并存(replace 之外的 mode)，就把默认控件块也放进列表；
+//       否则（全 replace 或该组无字段）列表里只有插槽块/默认块。
+function slotMode(oc: SlotOcc): 'replace' | 'prepend' | 'append' {
+  const m = (oc.meta as { mode?: string } | undefined)?.mode
+  return m === 'prepend' ? 'prepend' : m === 'append' ? 'append' : 'replace'
+}
+/** 当前分组的渲染内容块（有序）：[prepend 插槽…] [schema 默认控件…] [append/replace 插槽…] */
+type ContentBlock =
+  | { kind: 'field'; key: string }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  | { kind: 'slot'; occ: SlotOcc }
+const contentBlocks = computed<ContentBlock[]>(() => {
+  const occs = contentList.value
+  // 无插槽 → 纯默认控件
+  if (!occs.length) return activeFields.value.map((e) => ({ kind: 'field' as const, key: e.key }))
+  const coexist = occs.some((o) => slotMode(o) !== 'replace')
+  const sorted = (m: string) => occs.filter((o) => slotMode(o) === m).sort((a, b) => a.order - b.order)
+  const blocks: ContentBlock[] = []
+  blocks.push(...sorted('prepend').map((o) => ({ kind: 'slot' as const, occ: o })))
+  if (coexist) blocks.push(...activeFields.value.map((e) => ({ kind: 'field' as const, key: e.key })))
+  blocks.push(...sorted('replace').map((o) => ({ kind: 'slot' as const, occ: o })))
+  blocks.push(...sorted('append').map((o) => ({ kind: 'slot' as const, occ: o })))
+  return blocks
+})
 
 /** 选中某个导航 key → 切右侧 */
 function onSelect(key: string): void {
@@ -192,28 +226,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             </header>
 
             <div class="psd-content-body">
-              <!-- 内容插槽接管（有人注册 settingsGroup/<key>） -->
-              <template v-if="hasContentSlot">
-                <component
-                  v-for="oc in contentList"
-                  :key="oc.id"
-                  :is="oc.component"
+              <!-- 内容区 = 一段 v-for 遍历"有序内容块"(contentBlocks)：field(默认控件) / slot(插槽组件) 就地分支渲染 -->
+              <template v-for="b in contentBlocks" :key="(b as any).kind === 'field' ? 'f-' + (b as any).key : 's-' + (b as any).occ.id">
+                <SettingsSchemaField
+                  v-if="b.kind === 'field'"
                   :group="activeKey"
+                  :field-key="b.key"
                   :settings="props.settings"
                 />
-              </template>
-              <!-- fallback：schema 渲染该分组全部控件 -->
-              <template v-else-if="activeFields.length">
-                <SettingsSchemaField
-                  v-for="e in activeFields"
-                  :key="e.key"
+                <component
+                  v-else
+                  :is="b.occ.component"
                   :group="activeKey"
-                  :field-key="e.key"
                   :settings="props.settings"
                 />
               </template>
               <!-- 空态 -->
-              <div v-else class="psd-empty">
+              <div v-if="!contentBlocks.length" class="psd-empty">
                 <p>这个分组还没有可配置项</p>
               </div>
             </div>
