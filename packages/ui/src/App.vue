@@ -2,25 +2,24 @@
 // App.vue —— @mini-canvas/ui 成品画布应用：一行 CanvasHost 渲染真实画布，顶部可"打开设置"弹出设置界面。
 //
 // 定位：@mini-canvas/ui 是整棵项目的"成品出口"——已组装好的应用，自带插件功能（画布 + 默认主题 + 设置界面）。
-// index.html 在包根、代码全在 src/。CanvasHost(渲染抽象层) 冷启动一组插件(theme-default 皮 + text/image 节点 +
-// canvas-commands 命令 + theme-default/settings 注册默认设置面板)，画布即得可拖/连/建/删/撤销、刷新不丢的能力。
+// index.html 在包根、代码全在 src/。CanvasHost(渲染抽象层) 冷启动一组插件(theme-default 皮[自带设置面板默认皮]
+// + text/image 节点 + canvas-commands 命令)，画布即得可拖/连/建/删/撤销、刷新不丢的能力。
 //
 // 设置界面：顶部"⚙ 设置"按钮切换右下设置 dock。dock 内 <SettingsHost/> 渲染 settingsPanel 槽赢家
-// (= theme-default/settings 注册的 PluginSettingsPanel 默认皮)，把 ctx.settings 实时喂给它；改动经
+// (= theme-default 内置注册的 PluginSettingsPanel 默认皮)，把 ctx.settings 实时喂给它；改动经
 // bindThemeSettings 窄更新到 cfg.edge → 连线外观实时变化。
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { CanvasNode, SettingsStore, StorageAdapter } from '@mini-canvas/canvas-core-v2'
 import { LocalStorageAdapter } from '@mini-canvas/canvas-core-v2'
 import { CanvasHost, SettingsHost, DEFAULT_HANDLE_VISUAL } from '@mini-canvas/canvas-render'
-import { themeDefaultPlugin, settingsPanelPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
+import { themeDefaultPlugin, DEFAULT_THEME_EDGE, EDGE_SETTING_KEYS } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
-  themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 主题
-  settingsPanelPlugin, // 默认设置面板皮：把 PluginSettingsPanel 注册到 settingsPanel 槽 → SettingsHost 渲染它
+  themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
   canvasCommandsPlugin, // 建/删/撤销命令

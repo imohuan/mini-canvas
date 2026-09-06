@@ -19,6 +19,7 @@ import type {} from '@mini-canvas/plugin-node-text'
 import BaseNode from './BaseNode.vue'
 import CustomEdge from './CustomEdge.vue'
 import DefaultBackground from './DefaultBackground.vue'
+import PluginSettingsPanel from './components/PluginSettingsPanel.vue'
 
 export const name = 'theme-default'
 export const inject = ["text"] as string[]
@@ -79,11 +80,10 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.theme.register('edge', CustomEdge) // 完整自定义连线（收编自 core）
   ctx.theme.register('background', DefaultBackground) // 画布背景
   ctx.theme.register('edgeDefaultType', 'custom')
+  // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
+  // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
+  ctx.theme.register('settingsPanel', PluginSettingsPanel, { id: 'default', order: 0 })
 }
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply }
-
-// 默认设置面板皮：成品应用(如 @mini-canvas/ui)从主入口一并取默认设置面板注册(settingsPanelPlugin)与注册函数。
-// 单独 re-export 避免经 package exports 子路径(./settings)在 TS 下解析不稳。注册逻辑见 ./settings.ts。
-export { settingsPanelPlugin, registerDefaultSettingsPanel } from './settings'
