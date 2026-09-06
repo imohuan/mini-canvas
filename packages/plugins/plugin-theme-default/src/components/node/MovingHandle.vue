@@ -44,8 +44,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   hover: [value: boolean]
   connectStart: [payload: { event: MouseEvent; type: 'source' | 'target' }]
-  /** 拖线瞄准即时上报：鼠标进入/离开端口吸附区时触发（无 180ms 归位延迟，供 BaseNode 写 aimedTarget 用） */
-  aim: [payload: { side: 'input' | 'output'; active: boolean }]
 }>()
 
 const buttonX = ref(0)
@@ -63,8 +61,6 @@ const restoreDuration = 180
 
 const isSource = computed(() => props.type === 'source')
 const direction = computed(() => (isSource.value ? 1 : -1))
-/** 拖线瞄准侧：target=输入口(input)、source=输出口(output) */
-const aimSide = computed<'input' | 'output'>(() => (isSource.value ? 'output' : 'input'))
 const radius = computed(() => props.radius ?? 76)
 const restOffset = computed(() => props.restOffset ?? 36)
 const cursorGap = computed(() => props.cursorGap ?? 22)
@@ -262,8 +258,6 @@ function updatePosition(event: MouseEvent) {
 
 function handleLeave() {
   if (props.disabled) return
-  // 即时上报"离开瞄准"（不等 180ms 归位），避免拖线时 aimedTarget 残留导致误吸附
-  emit('aim', { side: aimSide.value, active: false })
   isMoving.value = false
   isRestoring.value = true
   keepVisible.value = true
@@ -311,7 +305,7 @@ onBeforeUnmount(() => {
       'moving-handle-zone--target': !isSource,
       'is-debug': debug,
       'moving-handle-zone--rect': zoneShape === 'rect',
-    }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true); emit('aim', { side: aimSide, active: true }) }"
+    }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
       @mouseleave="handleLeave" @mousemove="updatePosition" />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">

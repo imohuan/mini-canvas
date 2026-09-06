@@ -199,10 +199,35 @@ function onCardMouseLeave(): void {
   isHovered.value = false
   aimBody.value = false
 }
-// 端口 zone 瞄准（MovingHandle @aim）：即时上报，无 180ms 归位延迟
-function onPortAim(payload: { side: 'input' | 'output'; active: boolean }): void {
-  aimPortSide.value = payload.active ? payload.side : null
+// 吸附带元素（真正触发吸附的区域）：复用 useNodeDebugOverlay 的 SnapZoneConfig 几何定位 ——
+// 左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，各自 mouseenter/leave 上报 aim（input/output）。
+// 只在拖线期间、且非源自身时参与命中（pointer-events 由 CSS 控制），平时不挡卡片 hover。
+function onInputSnapEnter(): void {
+  aimPortSide.value = 'input'
 }
+function onOutputSnapEnter(): void {
+  aimPortSide.value = 'output'
+}
+function onSnapLeave(): void {
+  aimPortSide.value = null
+}
+/** 吸附带是否可命中（拖线期间、非源自身、非低细节） */
+const snapZonesActive = computed(
+  () => isConnecting.value && !isCurrentConnectingNode.value && !lowDetail.value,
+)
+// 吸附带定位（卡内本地坐标，可负 x 溢出卡片，由 overflow:visible 承载）
+const inputSnapStyle = computed(() => ({
+  left: `${debugOverlay.leftBand.value.x}px`,
+  top: `${debugOverlay.leftBand.value.y}px`,
+  width: `${debugOverlay.leftBand.value.width}px`,
+  height: `${debugOverlay.leftBand.value.height}px`,
+}))
+const outputSnapStyle = computed(() => ({
+  left: `${debugOverlay.rightBand.value.x}px`,
+  top: `${debugOverlay.rightBand.value.y}px`,
+  width: `${debugOverlay.rightBand.value.width}px`,
+  height: `${debugOverlay.rightBand.value.height}px`,
+}))
 // 端口 hover（MovingHandle @hover）：维持原 isHovered 视觉语义
 function onPortHover(value: boolean): void {
   isHovered.value = value
@@ -411,13 +436,21 @@ function clamp(value: number, min: number, max: number): number {
           :y2="debugOverlay.anchorY.value + 6" />
       </svg>
 
+      <!-- 吸附带元素（真正触发吸附判定的区域，与端口按钮跟随区分离）：
+           左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
+           mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
+      <div v-if="showTargetHandle" class="v2-snap-zone is-input" :class="{ 'is-active': snapZonesActive }"
+        :style="inputSnapStyle" @mouseenter="onInputSnapEnter" @mouseleave="onSnapLeave" />
+      <div v-if="showSourceHandle" class="v2-snap-zone is-output" :class="{ 'is-active': snapZonesActive }"
+        :style="outputSnapStyle" @mouseenter="onOutputSnapEnter" @mouseleave="onSnapLeave" />
+
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
       <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
-        @hover="onPortHover" @aim="onPortAim" />
+        @hover="onPortHover" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
@@ -441,7 +474,7 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
-        @hover="onPortHover" @aim="onPortAim" />
+        @hover="onPortHover" />
     </div>
 
     <!-- 底部工具栏（注册了才渲染） -->
@@ -595,6 +628,19 @@ function clamp(value: number, min: number, max: number): number {
   stroke: var(--canvas-node-snap-zone-highlight, #dc2626);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
+}
+
+/* —— 吸附带元素（真正触发吸附判定的区域）——
+   绝对定位在卡内，几何与 SnapZoneConfig 吸附带同源（useNodeDebugOverlay）。
+   平时 pointer-events:none 完全不挡卡片 hover/点击；拖线期间(非源自身)才 pointer-events:auto 接收 mouseenter。 */
+.v2-snap-zone {
+  position: absolute;
+  z-index: 21;
+  pointer-events: none;
+}
+
+.v2-snap-zone.is-active {
+  pointer-events: auto;
 }
 
 /* —— 标题条：卡片上缘外、反向缩放 —— */
