@@ -185,3 +185,15 @@ interface ConnectionFeedbackState {
 - 合成 pointer/mouse 事件可驱动；`drag` 工具不给真实 mousemove/mouseup，用 document 派发 mousemove/up 补。
 - dev server 久跑后 HMR/模块可能陈旧 → 重启 vite + 新 isolatedContext 页面测最干净。
 - 模板 ref 解包坑：setup 顶层 ref 自动解包，**返回对象内嵌套 ref 不解包**。
+
+### C. 拖线临时线终点与 hover 判定不一致 → 已修（commit d0d8d08，canvas-render/connection/resolveFeedback）
+- 症状（用户实测截图）：从右侧 image 卡片上方拖线，3D 倾斜动效正常（hover 判 valid），
+  但临时连接线终点没落在 image 的 target handle（左边缘）上、落点偏右，线与 3D 不一致。
+- 根因：ConnectionLineHost 的 `end = feedback?.end ?? 鼠标`，而 resolveFeedback **只在命中"端口吸附带"
+  （snappedToId!=null）时才把 end 对齐锚点**；鼠标落在卡片 body（非吸附带内、但合法 → 触发 3D）时，
+  end 跟随鼠标原位置 → 线终点停在偏远处，看起来没对准。
+- 修法：resolveFeedback 第 2 步——body 合法命中且未吸附时，end 也吸到该节点对应端口锚点
+  （forward=target 左缘 / reverse=source 右缘）；非法 body 仍跟随鼠标。
+- 验证：connection 单测 18 绿（新增/改写 case：合法 body → end 对齐左缘锚点；非法 body → 不吸）。
+- 边界说明：真实落点是否建边仍取决于 VueFlow 的 handle 吸附（connectionRadius 20px），
+  本修复只让"拖线中的视觉终点"与"hover 判定的目标端口"一致，不做 body 落点即建边（那是另一层语义）。
