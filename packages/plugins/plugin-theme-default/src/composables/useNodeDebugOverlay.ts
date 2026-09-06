@@ -1,20 +1,18 @@
 /**
- * useNodeDebugOverlay —— 吸附调试(connectionSnapDebugVisible)的**目标节点吸附带/接收区**几何（纯计算）。
+ * useNodeDebugOverlay —— 吸附调试(connectionSnapDebugVisible)的目标节点**双侧**吸附带几何（纯计算）。
  *
- * v2 复刻 v1 Decoration/BaseNode 的 target zone 调试可视化，但改用 **SVG 在卡内坐标画**（v1 是 clip-path div，
- * 效果差）。数据源与 canvas-render resolveFeedback 完全同源：DEFAULT_SNAP_RATIOS + handleParams.handleRadius，
- * 保证调试画出来的带就是真实吸附判定用的带。
+ * 数据源与 canvas-render resolveFeedback **同源**：统一走 SnapZoneConfig(heightRatio/width/offset/shape) +
+ * handleRadius 兜底宽，保证调试画出来的带就是真实吸附判定用的带。
  *
  * 几何（卡内本地坐标，卡宽=cardWidth、卡高=cardHeight）：
- *   - 端口锚点：target 口 = 卡左缘中点 (0, cardHeight/2)。
- *   - 吸附带竖条：以锚点为中心，x 从 -snapOuter 到 +snapInner（向左外扩 snapOuter、向右内扩 snapInner，
- *     可出卡片负 x，交给 overflow:visible 的 SVG 画），y 高 = handleRadius*heightRatio，居中于锚点 y。
- *   - body 接收区：整张卡。
- *
- * 仅 forward(拖 source→找 target) 有意义时给 target 节点画（调用方用 isConnecting+非源自身+hasTarget 判断）。
+ *   - 端口锚点：target 输入口 = 卡左缘中点 (0, cardHeight/2)；source 输出口 = 卡右缘中点 (cardWidth, cardHeight/2)。
+ *   - 吸附带竖条高 = min(卡高, 卡高×heightRatio)，居中于锚点 y；宽 = width(缺省 handleRadius)；offset>0 向节点外。
+ *   - left(target 左缘)：带从锚点向左侧伸 width，x = -(width-offset)
+ *   - right(source 右缘)：带从锚点向右侧伸 width，x = cardWidth-offset
+ *   - shape：rect(矩形)/arc(半椭圆弧，圆心在端口锚点)。命中一律按矩形，shape 仅影响视觉。
  */
 import { computed, type Ref } from 'vue'
-import { DEFAULT_SNAP_RATIOS } from '@mini-canvas/canvas-render'
+import type { SnapZoneConfig, SnapZoneShape } from '@mini-canvas/canvas-render'
 
 export interface SnapBandRect {
   x: number
@@ -23,31 +21,54 @@ export interface SnapBandRect {
   height: number
 }
 
+/** 端口侧（供模板区分 rect/arc 与左右） */
+export type DebugBandSide = 'target' | 'source'
+
 export interface NodeDebugOverlayGeometry {
-  /** 卡片左缘中点（target 锚点） */
+  /** 端口锚点 y（左右共用，居中于卡高） */
   anchorY: number
-  /** 吸附带矩形（卡内本地坐标，可为负 x） */
-  band: SnapBandRect
+  /** 吸附带形状 */
+  shape: SnapZoneShape
+  /** 左侧 target 输入口吸附带（卡内本地坐标，可为负 x 由 SVG overflow:visible 画出去） */
+  leftBand: SnapBandRect
+  /** 右侧 source 输出口吸附带 */
+  rightBand: SnapBandRect
 }
 
 export function useNodeDebugOverlay(opts: {
   cardWidth: Ref<number>
   cardHeight: Ref<number>
   handleRadius: Ref<number>
+  snapZone: Ref<SnapZoneConfig>
 }) {
-  // 吸附带尺寸：与 canvas-render resolveFeedback 一致（DEFAULT_SNAP_RATIOS.outer/inner/height × handleRadius）
-  const snapOuter = computed(() => opts.handleRadius.value * DEFAULT_SNAP_RATIOS.outer)
-  const snapInner = computed(() => opts.handleRadius.value * DEFAULT_SNAP_RATIOS.inner)
-  const snapHeight = computed(() => opts.handleRadius.value * DEFAULT_SNAP_RATIOS.height)
+  const heightRatio = computed(() =>
+    Math.min(Math.max(opts.snapZone.value.heightRatio || 0.8, 0), 1),
+  )
+  const width = computed(() => {
+    const w = opts.snapZone.value.width
+    return w && w > 0 ? w : opts.handleRadius.value
+  })
+  const offset = computed(() => opts.snapZone.value.offset ?? 0)
+  const shape = computed<SnapZoneShape>(() => opts.snapZone.value.shape ?? 'rect')
 
   const anchorY = computed(() => opts.cardHeight.value / 2)
+  const bandHeight = computed(() => opts.cardHeight.value * heightRatio.value)
+  const bandY = computed(() => anchorY.value - bandHeight.value / 2)
 
-  const band = computed<SnapBandRect>(() => ({
-    x: -snapOuter.value,
-    y: anchorY.value - snapHeight.value / 2,
-    width: snapOuter.value + snapInner.value,
-    height: snapHeight.value,
+  /** target(左缘)带：锚点 x=0，向外(左)伸 width → x = -(width-offset) */
+  const leftBand = computed<SnapBandRect>(() => ({
+    x: -(width.value - offset.value),
+    y: bandY.value,
+    width: width.value,
+    height: bandHeight.value,
+  }))
+  /** source(右缘)带：锚点 x=cardWidth，向外(右)伸 width → x = cardWidth - offset */
+  const rightBand = computed<SnapBandRect>(() => ({
+    x: opts.cardWidth.value - offset.value,
+    y: bandY.value,
+    width: width.value,
+    height: bandHeight.value,
   }))
 
-  return { anchorY, band }
+  return { anchorY, shape, leftBand, rightBand }
 }

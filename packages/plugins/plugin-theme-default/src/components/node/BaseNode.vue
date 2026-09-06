@@ -23,7 +23,7 @@ const props = defineProps<NodeProps>()
 defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈
-const { registry, nodeWrite, handleParams, connectionState, debug } = useCanvasRender()
+const { registry, nodeWrite, handleParams, connectionState, debug, snapZone } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -213,6 +213,7 @@ const debugOverlay = useNodeDebugOverlay({
   cardWidth,
   cardHeight,
   handleRadius: handleR,
+  snapZone,
 })
 // SVG viewBox = 卡内坐标 [0..cardWidth] × [0..cardHeight]（吸附带可负 x 溢出，靠 overflow:visible）
 const debugViewBox = computed(() => `0 0 ${cardWidth.value} ${cardHeight.value}`)
@@ -381,13 +382,40 @@ function clamp(value: number, min: number, max: number): number {
           :height="bodyRect.height"
           rx="8"
         />
-        <!-- 目标端口吸附带（左缘锚点外扩，向左可出卡片） -->
+        <!-- 左侧 target 输入口吸附带：shape=rect 用矩形、arc 用半椭圆弧（圆心在左缘锚点 (0, anchorY)，
+             rx=带宽、ry=带高/2，经 overflow:visible 向左画出卡片） -->
         <rect
+          v-if="debugOverlay.shape.value === 'rect'"
           class="v2-debug-band"
-          :x="debugOverlay.band.value.x"
-          :y="debugOverlay.band.value.y"
-          :width="debugOverlay.band.value.width"
-          :height="debugOverlay.band.value.height"
+          :x="debugOverlay.leftBand.value.x"
+          :y="debugOverlay.leftBand.value.y"
+          :width="debugOverlay.leftBand.value.width"
+          :height="debugOverlay.leftBand.value.height"
+        />
+        <ellipse
+          v-else
+          class="v2-debug-band"
+          :cx="0"
+          :cy="debugOverlay.anchorY.value"
+          :rx="debugOverlay.leftBand.value.width"
+          :ry="debugOverlay.leftBand.value.height / 2"
+        />
+        <!-- 右侧 source 输出口吸附带（镜像到右缘，圆心在 (cardWidth, anchorY)） -->
+        <rect
+          v-if="debugOverlay.shape.value === 'rect'"
+          class="v2-debug-band is-source"
+          :x="debugOverlay.rightBand.value.x"
+          :y="debugOverlay.rightBand.value.y"
+          :width="debugOverlay.rightBand.value.width"
+          :height="debugOverlay.rightBand.value.height"
+        />
+        <ellipse
+          v-else
+          class="v2-debug-band is-source"
+          :cx="cardWidth"
+          :cy="debugOverlay.anchorY.value"
+          :rx="debugOverlay.rightBand.value.width"
+          :ry="debugOverlay.rightBand.value.height / 2"
         />
         <!-- 目标锚点短线标注 -->
         <line
@@ -587,6 +615,10 @@ function clamp(value: number, min: number, max: number): number {
   stroke: var(--canvas-node-snap-zone-border, rgba(17, 24, 39, 0.9));
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+.v2-debug-band.is-source {
+  fill: var(--canvas-node-snap-zone-source-surface, rgba(37, 99, 235, 0.12));
+  stroke: var(--canvas-node-snap-zone-source-border, rgba(37, 99, 235, 0.9));
 }
 .v2-debug-anchor {
   stroke: var(--canvas-node-snap-zone-highlight, #dc2626);
