@@ -451,7 +451,8 @@ function liveNodeRects(): NodeRect[] {
   })
 }
 
-/** 给定 client 坐标解析当前 hover + flow 点（用于 mousemove 日志 / mouseup drop） */
+/** 给定 client 坐标解析当前 hover + 线端点（用于 mousemove 日志 / mouseup drop）。
+ *  point = 连接线临时端点：命中**合法 snap 吸附带**时吸到端口锚点(res.end)；否则(卡片 body/空白)跟鼠标。 */
 function resolveAtClient(
   clientX: number,
   clientY: number,
@@ -469,7 +470,9 @@ function resolveAtClient(
     config: snapZoneToProvide,
     validate: validateEdgeText,
   })
-  return { point: flowPoint, hover: res.hover }
+  // 仅合法 snap(端口吸附带)把线端吸到端口锚点；body/空白保持跟鼠标（body 松手仍可连）
+  const snapped = res.hover?.zone === 'snap' && res.hover.status === 'valid'
+  return { point: snapped ? res.end : flowPoint, hover: res.hover }
 }
 
 /** 给定 hover 决策 + 源信息，补全成富 HoverFeedback（nodeType/nodeData/nodeEl/willEvict） */
