@@ -1,17 +1,16 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
-// @mini-canvas/ui —— 独立演示/开发服务：`pnpm dev` 打开 dev/index.html，
-// 用 CanvasHost + 各插件 + 设置面板 渲染真实画布，自看最终效果（取代被删的 canvas-core-v2/demo-web）。
+// @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
+// 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
 export default defineConfig({
   plugins: [vue()],
-  root: 'dev',
   server: {
-    port: 5288, // 独立端口，避开其它 demo 的 5199/5173/5310
+    port: 5288, // 独立端口，避开其它应用/demo 的端口
     strictPort: false,
     open: true,
   },
-  // 让 dev 能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
+  // 让应用能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
   optimizeDeps: {
     exclude: [
       '@mini-canvas/canvas-core-v2',

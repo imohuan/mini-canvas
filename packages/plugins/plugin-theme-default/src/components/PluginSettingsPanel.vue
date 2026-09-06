@@ -1,17 +1,16 @@
 <script setup lang="ts">
 /**
- * PluginSettingsPanel —— 分组化配置的 schema 驱动 UI 成品面板（@mini-canvas/ui 主要输出之一）。
+ * PluginSettingsPanel —— 分组化配置的 schema 驱动 UI 面板（theme-default 的默认设置皮）。
  *
  * 读 ctx.settings（SettingsStore 同一实例）的已申报组与 schema，自动长控件(改控件=调 settings.set)；
- * 订阅变化刷新取值。宿主/demo 把 boot 后的 ctx.settings 传进来即可，插件不用手画表单。
+ * 订阅变化刷新取值。宿主/成品应用把 boot 后的 ctx.settings 喂给 SettingsHost 渲染本面板即可，插件不用手画表单。
  * 对齐 docs/goal/plugin-system-goal.md 2.4 / 目标 B2。
  *
- * 归属：本面板是"成品 UI"，归 @mini-canvas/ui（不再住在渲染抽象层 canvas-render）。
- * 它消费的数据契约(SettingsPanelSource)、合帧工具(createCoalescer)仍由渲染抽象层 canvas-render 提供——
- * 依赖方向 @mini-canvas/ui → canvas-render（抽象）→ canvas-core-v2（内核），不反向。
+ * 归属：本面板是"可替换设置面板"的默认皮，归 plugin-theme-default（画布默认皮插件，与节点壳/边/背景同职责：
+ * 只渲染不带业务）。canvas-render 提供渲染宿主(SettingsHost)、数据契约(SettingsPanelSource)与合帧工具——
+ * 依赖方向 plugin-theme-default → canvas-render（抽象）→ canvas-core-v2（内核），不反向。
  *
- * 视觉说明：本面板是"可替换设置面板"的默认皮(settings-panel-slot-host-plan)。schema 驱动逻辑不动，
- * 样式做了分组卡片/字段行/toggle/滑块数值 的观感统一，替换面板只需声明 props.settings 即可换皮。
+ * 视觉说明：schema 驱动逻辑不动，样式做了分组卡片/字段行/toggle/滑块数值 的观感统一，替换面板只需声明 props.settings 即可换皮。
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { SettingSchema, SettingsPanelSource, SettingEntry } from '@mini-canvas/canvas-render'

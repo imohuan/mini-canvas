@@ -12,12 +12,16 @@
 // "config 变化→就地窄更新、实时生效"（逻辑同旧 ctx.settings.onChange，不整图重建）。
 import type { Context, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import type { PluginModule } from '@mini-canvas/canvas-base'
+// 跨包服务类型声明（cordis 声明合并）：本插件 `inject:['text']` 依赖 text 插件，需显式 import type 该包，
+// 让 node-text 对 `interface Context { text: TextService }` 的增强在本包编译里可见 → ctx.text 类型安全可用。
+// 纯类型副作用，运行时无 import（text 服务仍由内核依赖编排注入）。
+import type {} from '@mini-canvas/plugin-node-text'
 import BaseNode from './BaseNode.vue'
 import CustomEdge from './CustomEdge.vue'
 import DefaultBackground from './DefaultBackground.vue'
 
 export const name = 'theme-default'
-export const inject = [] as string[]
+export const inject = ["text"] as string[]
 
 // 默认皮对应的连线外观默认值（与 engine DEFAULT_EDGE_VISUAL 对齐；作为本插件 config schema 的默认/单一数据源初始值）。
 // 这样 demo/宿主经 ctx.settings 读到的初始外观 = 引擎默认，不改则有稳定基线。
@@ -79,3 +83,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply }
+
+// 默认设置面板皮：成品应用(如 @mini-canvas/ui)从主入口一并取默认设置面板注册(settingsPanelPlugin)与注册函数。
+// 单独 re-export 避免经 package exports 子路径(./settings)在 TS 下解析不稳。注册逻辑见 ./settings.ts。
+export { settingsPanelPlugin, registerDefaultSettingsPanel } from './settings'

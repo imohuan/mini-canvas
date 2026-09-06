@@ -5,7 +5,7 @@
     "jsx": "preserve",
     "noEmit": true
   },
-  // 类型检查 .vue 成品 UI 组件专用：主 tsconfig 无 DOM lib、也不处理 .vue。
+  // 类型检查 .vue 画布应用组件专用：主 tsconfig 无 DOM lib、也不处理 .vue。
   // 用法: node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.vue.json
-  "include": ["src/**/*.vue", "src/**/*.d.ts", "src/env.d.ts", "dev/**/*.vue", "dev/**/*.ts"]
+  "include": ["src/**/*.vue", "src/**/*.d.ts", "src/env.d.ts", "src/main.ts"]
 }
