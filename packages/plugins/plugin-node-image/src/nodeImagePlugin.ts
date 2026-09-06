@@ -87,10 +87,13 @@ export function apply(ctx: Context) {
   const image = new ImageService(ctx)
 
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
+  //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。
   ctx.nodes.register({
     type: 'image',
     label: '图片',
     size: { w: 320, h: 240 },
+    inputs: [{ port: 'target', acceptsTypes: ['text', 'image'], capacity: 1 }],
+    outputs: [{ port: 'source', contentType: 'image' }],
     content: ImageContent,
     create(position) {
       return image.addImageNode(position, '')

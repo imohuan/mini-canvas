@@ -72,10 +72,13 @@ export function apply(ctx: Context) {
   const text = new TextService(ctx)
 
   // 2. 注册节点类型：数据/尺寸 + content 组件 + create 委托服务（同一实现，避免散落两处建节点逻辑）
+  //    内容类型声明：text 输出产 text；输入口收 text（文本文案只收文本；图片/视频喂不进文本）。
   ctx.nodes.register({
     type: 'text',
     label: '文本',
     size: { w: 300, h: 200 },
+    inputs: [{ port: 'target', acceptsTypes: ['text'], capacity: 1 }],
+    outputs: [{ port: 'source', contentType: 'text' }],
     content: TextContent,
     create(position) {
       return text.addTextNode(position)

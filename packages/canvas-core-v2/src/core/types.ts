@@ -85,8 +85,8 @@ export interface PluginCapabilities {
       content?: unknown
       title?: unknown
       segments?: Partial<Record<'content' | 'title' | 'top-toolbar' | 'bottom-toolbar', unknown>>
-      inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi' }>
-      outputs?: Array<{ port?: string }>
+      inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
+      outputs?: Array<{ port?: string; contentType?: string }>
       create?: (position: { x: number; y: number }) => string
     }): void
   }
