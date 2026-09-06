@@ -3,8 +3,8 @@
 // 职责：端口锚点(1×1px 真实 VueFlow Handle) + 半圆可移动区 + 浮动圆球按钮。
 //       鼠标进入半圆区圆球从节点边缘"跳出"跟随鼠标；离开 180ms 内归位淡出。
 //       非 preview 时底层就是真实 VueFlow <Handle> 连接点(端口 hover/选中才可见但始终可连)。
-// 与 v1 差异：v1 CSS 走 --canvas-node-* 主题变量；v2 用字面色值(未建 CSS 变量主题)。
-//       无 pinia 依赖（v1 本无 store，纯 props）。几何/状态机逻辑与 v1 逐行一致。
+// 与 v1 差异：无 pinia 依赖（v1 本无 store，纯 props）。几何/状态机逻辑与 v1 逐行一致。
+//       CSS 消费本插件自建 --canvas-node-* 主题变量（styles/node-theme.css）。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position } from '@mini-canvas/canvas-render'
 
@@ -314,11 +314,11 @@ onBeforeUnmount(() => {
   position: absolute;
   width: 32px;
   height: 32px;
-  border: 1px solid rgba(31, 41, 55, 0.18);
+  border: 1px solid var(--canvas-node-border-subtle);
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #6b7280;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 8px 18px rgba(0, 0, 0, 0.12);
+  background: var(--canvas-node-panel-surface);
+  color: var(--canvas-node-text-muted);
+  box-shadow: 0 1px 2px var(--canvas-node-shadow-subtle), 0 8px 18px var(--canvas-node-shadow-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -374,8 +374,8 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 .moving-handle-button:hover {
-  color: #2563eb;
-  border-color: #3b82f6;
+  color: var(--canvas-node-text-strong);
+  border-color: var(--canvas-node-border-hover);
 }
 .moving-handle-button svg {
   width: 16px;
@@ -395,26 +395,26 @@ onBeforeUnmount(() => {
   backface-visibility: hidden;
 }
 .moving-handle-debug__arc {
-  fill: rgba(220, 38, 38, 0.08);
-  stroke: #ef4444;
+  fill: var(--canvas-node-debug-danger-fill);
+  stroke: var(--canvas-node-debug-danger);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
 .moving-handle-debug__center {
-  fill: #3b82f6;
+  fill: var(--canvas-node-debug-center);
 }
 .moving-handle-debug__rest {
-  fill: #10b981;
+  fill: var(--canvas-node-debug-rest);
 }
 .moving-handle-debug__mouse {
-  fill: #f59e0b;
+  fill: var(--canvas-node-debug-mouse);
 }
 .moving-handle-debug__label {
-  fill: #3b82f6;
+  fill: var(--canvas-node-debug-center);
   font-size: 9px;
   font-weight: 600;
   paint-order: stroke;
-  stroke: #fff;
+  stroke: var(--canvas-node-debug-label-stroke);
   stroke-width: 3px;
   vector-effect: non-scaling-stroke;
 }
