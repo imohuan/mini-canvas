@@ -108,7 +108,7 @@ export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  portZoneWidth: 86,
+  portZoneWidth: 0,
   portZoneHeightRatio: 0.8,
   portZoneOffset: 0,
   portZoneShape: 'arc',
