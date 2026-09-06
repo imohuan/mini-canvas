@@ -63,6 +63,8 @@ export type {
   ContentDecision,
   ContentConnectResult,
 } from './connection/capability'
+// 输入口容量挤出纯函数
+export { oldestIncomingToEvict } from './connection/edgeCapacity'
 export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'

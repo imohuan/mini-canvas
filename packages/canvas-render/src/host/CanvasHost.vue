@@ -52,6 +52,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import { resolveFeedback } from '../connection/resolveFeedback'
+import { oldestIncomingToEvict } from '../connection/edgeCapacity'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
@@ -549,6 +550,9 @@ function commitEdge(
   // 拉边记进历史(undo/redo 对边生效，见 settings-panel-slot-host-plan §三.D)：addEdge 写内核 edgeStore(唯一数据源)，
   // history.withRecord 在前后各拍全图快照(含边)；边 id 稳定、重复连会被快照差异正确识别。
   h.history.withRecord(() => {
+    // 输入口容量挤出：目标节点输入口声明 capacity 且已满额 → 先挤掉最老一条入边再加新边（同一 undo 记录，原子）。
+    const evicted = tryEvictOldestIncoming(h, source, target)
+    if (evicted) log.log(`commitEdge ${source}→${target} 输入口满额，挤掉最老边 ${evicted}`)
     h.edgeStore.addEdge({
       source,
       target,
@@ -560,6 +564,30 @@ function commitEdge(
   // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
   void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
   log.log(`commitEdge 建边成功 ${source}→${target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
+}
+
+/**
+ * 输入口容量挤出：若目标节点(target)的输入口声明了 capacity 且当前入边已达满额，
+ * 移除最老一条入边，为新边腾位。返回被挤边 id；无需挤返回 null。
+ */
+function tryEvictOldestIncoming(
+  h: CanvasHostHandle,
+  source: string,
+  target: string,
+): string | null {
+  const tgtNode = h.nodeStore.getNode(target)
+  const tgtType = tgtNode ? h.nodeStore.types.get(tgtNode.type) : undefined
+  // 目标输入口容量：取 inputs(port='target') 的 capacity（缺省视为单边/无挤出 → 不走 evict）
+  const inputDef = tgtType?.inputs?.find((i) => !i.port || i.port === 'target')
+  const capacity = inputDef?.capacity
+  if (!capacity || capacity < 2) return null
+  const evictId = oldestIncomingToEvict({
+    edges: h.edgeStore.getEdges(),
+    target,
+    capacity,
+  })
+  if (evictId) h.edgeStore.removeEdge(evictId)
+  return evictId
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
