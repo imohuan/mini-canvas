@@ -394,20 +394,21 @@ onBeforeUnmount(() => {
 
 .moving-handle-debug {
   position: absolute;
-  /* 与 .moving-handle-zone 同位：源口向左偏移 overlap、目标口向右偏移 overlap（贴在卡片边） */
-  width: 100%;
-  height: 100%;
+  /* 与 handle 锚点同位（卡片水平边垂直中点）：
+     anchor 是 1px×1px 容器，绝对定位 target=left:0 / source=right:0 + top:50% translateY(-50%)。
+     debug svg 宽高 = radius px（inline style），用 left/right + top:50% + translate(-50%,-50%) 让 svg 中心对齐 anchor 中心。 */
+  top: 50%;
+  transform: translate(-50%, -50%) translateZ(0);
   pointer-events: none;
   overflow: visible;
   z-index: 3; /* 在 button(z=2) 上层，确保 debug 标签不被 button 圆盖住 */
-  transform: translateZ(0);
   backface-visibility: hidden;
 }
 .moving-handle-anchor--source .moving-handle-debug {
   left: calc(var(--moving-handle-overlap) * -1);
 }
 .moving-handle-anchor--target .moving-handle-debug {
-  right: calc(var(--moving-handle-overlap) * -1);
+  left: calc(var(--moving-handle-overlap) * -1);
 }
 .moving-handle-debug__arc {
   fill: var(--canvas-node-debug-danger-fill);
