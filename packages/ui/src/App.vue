@@ -140,7 +140,7 @@ onBeforeUnmount(unbindThemeSettings)
         @ready="onReady"
       >
         <!-- 宿主业务 UI 区(#ui)：右下设置 dock，由"⚙ 设置"按钮切换显隐。SettingsHost 渲染 settingsPanel 槽赢家
-             (= settingsPanelPlugin 注册的 theme-default PluginSettingsPanel 默认皮) -->
+             (= theme-default apply 内置注册的 PluginSettingsPanel 默认皮) -->
         <template #ui>
           <div v-if="settingsOpen" class="settings-dock">
             <div class="dock-hd">
