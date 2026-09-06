@@ -37,6 +37,7 @@ import {
   type NodeFactoryService,
 } from '@mini-canvas/canvas-core-v2'
 import { createPluginManager, type PluginManager } from './pluginManager'
+import { NodeLayoutService } from '../layout/nodeLayout'
 import type { PluginManifest } from './pluginManager'
 
 /** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
@@ -76,6 +77,8 @@ export interface CanvasHostHandle {
   command: CommandService
   history: HistoryService
   nodeFactory: NodeFactoryService
+  /** 节点布局只读服务（实测尺寸/绝对坐标；渲染层量测注入，插件读） */
+  nodeLayout: NodeLayoutService
   /** 停止并回收全部插件副作用 */
   stop(): void
 }
@@ -125,6 +128,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   const nodeStore = new NodeStore()
   ctx.inject('nodeStore', nodeStore)
+
+  // 节点布局服务：读 nodeStore + 承载渲染层 ResizeObserver 实测尺寸（内存态，不落盘）
+  const nodeLayout = new NodeLayoutService(nodeStore)
+  ctx.inject('nodeLayout', nodeLayout)
 
   const edgeStore = new EdgeStore()
   ctx.inject('edgeStore', edgeStore)
@@ -208,6 +215,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     command,
     history,
     nodeFactory,
+    nodeLayout,
     stop: () => {
       // 停用前先把脏队列捕获进 flush 的批量快照（同步完成），再停内核，避免最后未落盘的写入丢失。
       // flush 会同步把 dirty 快照进本地 batch，故即使调用方不 await，数据也已进入落盘流程。
@@ -239,3 +247,4 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   return { host, api, manager, exposeToWindow }
 }
+

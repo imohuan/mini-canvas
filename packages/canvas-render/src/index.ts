@@ -94,6 +94,14 @@ export {
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
 } from './host/canvasHostCore'
+// 点选/清空选中语义纯函数（宿主与插件共用；Shift 加选/普通单选/点空白清空）
+export { clickNode, clickEdge, clickPane } from './host/selectionInteractions'
+// 节点布局只读服务（实测尺寸 + 绝对坐标；插件/工具读，宿主注入'nodeLayout'服务）
+export { NodeLayoutService } from './layout/nodeLayout'
+export type { LayoutRect } from './layout/nodeLayout'
+
+export type { SelectionClickOptions } from './host/selectionInteractions'
+
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
 export type {
@@ -115,3 +123,4 @@ export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce
 export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
+
