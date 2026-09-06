@@ -54,10 +54,10 @@ export const DEFAULT_THEME_HANDLE = {
   handleCursorGap: 24,
   handleButtonSize: 32,
   portZoneWidth: 0,
-  portZoneHeightRatio: 0.8,
+  portZoneHeightRatio: 0.55,
   portZoneOffset: 0,
   portZoneShape: "arc",
-  portZoneArcRatio: 1,
+  portZoneArcRatio: 0.8,
 } as const;
 
 /** 调试可视化开关默认值（对齐 canvasHostCore DEFAULT_DEBUG_VISUAL；作为本插件 config 的初始值） */
