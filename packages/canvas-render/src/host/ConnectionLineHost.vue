@@ -15,10 +15,10 @@
  * hoverChanged 比对，否则 hoverNode 变→BaseNode 重渲→本组件所在槽重渲→再写→Maximum recursive updates。
  * 本组件模板不读 connectionState.hoverNode（避免把它变成渲染依赖）。
  */
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount } from 'vue'
 import type { ConnectionLineProps } from '@vue-flow/core'
 import { useVueFlow } from '@vue-flow/core'
-import { resolveFeedback, isReverse } from '../connection/resolveFeedback'
+import { resolveFeedback } from '../connection/resolveFeedback'
 import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
 import { hoverWriter } from '../host/connectionState'
@@ -35,13 +35,8 @@ const props = defineProps<{
   validateEdge: (sourceId: string, targetId: string) => string
   /** 端口半径(供吸附带计算)；来自 handleParams.handleRadius，CanvasHost 注入 */
   handleRadius: number
-  /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致） */
+  /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致）。lastDrop 由本组件写、CanvasHost.onConnectEnd 读 */
   state: ConnectionFeedbackState
-  /**
-   * 松开在"节点吸附带/节点 body"（而非精确 handle）时回调，由宿主真正建边。
-   * CanvasHost 内部会幂等去重 + 校验 + 记历史。v1 语义：body/snap 松开也算一次有效连接。
-   */
-  onDropConnect: (sourceId: string, targetId: string) => void
 }>()
 
 const vf = useVueFlow()
@@ -49,11 +44,6 @@ const vf = useVueFlow()
 // ---- 存活节点矩形（flow 坐标，排除拖线源自身）----
 const sourceId = computed(() => props.state.activeConnection.value?.sourceNodeId ?? null)
 const sourceHandle = computed(() => props.state.activeConnection.value?.sourceHandle ?? 'source')
-
-// ---- 拖线现场快照（非响应式 locals）：即便 connect-end 清空 state 后，仍能据此做"松开落点建边"决策 ----
-let activeSrc: string | null = null
-let activeHandle: 'source' | 'target' = 'source'
-let lastPoint: FlowPoint | null = null
 
 // 节点矩形来源：VueFlow 实测 (computedPosition + dimensions)，缺失回落 defaultSize
 const nodeRects = computed<NodeRect[]>(() => {
@@ -82,10 +72,16 @@ const nodeRects = computed<NodeRect[]>(() => {
   return out
 })
 
-// ---- 每帧决策：吸附终点 + hover；rAF 节流写回 hoverNode ----
+// ---- 每帧决策：吸附终点 + hover；rAF 节流写回 hoverNode（lastDrop 同步直写，见下） ----
 const writer = hoverWriter(props.state)
 let rafId = 0
 let pendingHover: HoverFeedback | null = null
+
+/** rAF 内写回 hoverNode（读 hover 的 BaseNode 需要，故节流防递归更新） */
+function flushHover() {
+  rafId = 0
+  writer.write(pendingHover)
+}
 
 /** 判定 hover 是否变化（与当前写回值比对，避免无谓重写导致循环） */
 function scheduleHoverWrite(next: HoverFeedback | null) {
@@ -102,11 +98,7 @@ function scheduleHoverWrite(next: HoverFeedback | null) {
   }
   if (!changed) return
   pendingHover = next
-  if (rafId) return
-  rafId = requestAnimationFrame(() => {
-    rafId = 0
-    writer.write(pendingHover)
-  })
+  if (!rafId) rafId = requestAnimationFrame(flushHover)
 }
 
 // 拖线中：逐帧由 lineProps.targetX/Y 变化触发 → resolveFeedback
@@ -115,10 +107,6 @@ const feedback = computed(() => {
   const sh = sourceHandle.value
   if (!srcId) return null
   const point: FlowPoint = { x: props.lineProps.targetX, y: props.lineProps.targetY }
-  // 快照现场：connect-end 清空 state 后仍保留最后一次有效拖线现场
-  activeSrc = srcId
-  activeHandle = sh
-  lastPoint = point
   const res = resolveFeedback({
     sourceId: srcId,
     sourceHandle: sh,
@@ -140,6 +128,17 @@ const feedback = computed(() => {
         }
       : null,
   )
+  // 松开落点快照：悬停合法时记归一化 {source,target}，供 CanvasHost.onConnectEnd 做 body/吸附带建边决策。
+  // **同步直写**(不走 rAF)：mouseup → VueFlow 立即发 connect-end，若走 rAF 可能还没落盘就丢了。
+  // lastDrop 不被任何渲染读取，同步写不会引发递归更新(与 hover 不同)。
+  if (res.hover && res.hover.status === 'valid') {
+    const reverse = sh === 'target'
+    props.state.lastDrop.value = reverse
+      ? { source: res.hover.nodeId, target: srcId, zone: res.hover.zone }
+      : { source: srcId, target: res.hover.nodeId, zone: res.hover.zone }
+  } else {
+    props.state.lastDrop.value = null
+  }
   return res
 })
 
@@ -161,39 +160,10 @@ const defaultPath = computed(() => {
 
 // props.state 固定同源；无需额外清理 ref
 onBeforeUnmount(() => {
-  if (rafId) cancelAnimationFrame(rafId)
-  document.removeEventListener('mouseup', onDocMouseUp)
-})
-
-// ---- 松开落点建边：VueFlow 的 @connect 只在"精确命中 handle"时触发；落到节点吸附带/body 时 @connect 不会发，
-//     但用户直觉上松开就该建边。这里监听 document mouseup：若当时仍在拖线(activeSrc 有值)且落点命中
-//     某合法目标节点，则回调宿主 onDropConnect 建边。宿主侧会幂等(去重/校验)，避免与 @connect 双建。
-function onDocMouseUp() {
-  if (!activeSrc || !lastPoint) return
-  const src = activeSrc
-  const sh = activeHandle
-  const point = lastPoint
-  // 拖线已松开(activeConnection 已被 VueFlow 清空)：此刻直接以最后一次现场做决策即可
-  const res = resolveFeedback({
-    sourceId: src,
-    sourceHandle: sh,
-    nodeRects: nodeRects.value,
-    flowPoint: point,
-    handleRadius: props.handleRadius || 86,
-    ratios: DEFAULT_SNAP_RATIOS,
-    validate: props.validateEdge,
-  })
-  const hov = res.hover
-  if (!hov || hov.status !== 'valid') return
-  const targetId = hov.nodeId
-  const sourceIdFinal = isReverse(sh) ? targetId : src
-  const targetIdFinal = isReverse(sh) ? src : targetId
-  log.log('dropConnect', `${sourceIdFinal} → ${targetIdFinal} (zone=${hov.zone})`)
-  props.onDropConnect(sourceIdFinal, targetIdFinal)
-}
-
-onMounted(() => {
-  document.addEventListener('mouseup', onDocMouseUp)
+  if (rafId) {
+    cancelAnimationFrame(rafId)
+    rafId = 0
+  }
 })
 </script>
 

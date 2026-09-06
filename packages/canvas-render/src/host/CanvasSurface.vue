@@ -61,7 +61,6 @@ const props = defineProps<{
   onConnect: (conn: Connection) => void
   onConnectStart: (p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }) => void
   onConnectEnd: () => void
-  onDropConnect: (sourceId: string, targetId: string) => void
   onNodeClick: (e: NodeMouseEvent) => void
   onNodeDragStop: (e: NodeDragEvent) => void
   onPaneClick: () => void
@@ -127,7 +126,6 @@ provide(HOST_KEY, shallowRef(host))
           :validate-edge="validateEdge"
           :handle-radius="handleParams.handleRadius"
           :state="connectionState"
-          :on-drop-connect="onDropConnect"
         />
       </template>
       <!-- 父级可经默认插槽往 VueFlow 内塞自定义背景/控件 -->

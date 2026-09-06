@@ -307,10 +307,14 @@ function validateEdgeText(sourceId: string, targetId: string): string {
   return res.ok ? '' : reasonTextFrom(res.reason)
 }
 
-// —— 拖线生命周期：connect-start 记源+压端口；connect-end 清空（反馈状态重置）——
+// —— 拖线生命周期：connect-start 记源+压端口；connect-end 判 body/吸附带建边 + 清空反馈 ——
+/** 本次拖线手势是否已走 @connect(精确 handle) 建边。connect-end 判 lastDrop 建边时据此避免双建。 */
+let connectedThisGesture = false
+
 function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
   if (!p.nodeId) return
   const handleType = p.handleType ?? (p.handleId as 'source' | 'target') ?? 'source'
+  connectedThisGesture = false
   log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType}`)
   beginConnection(connectionState, {
     sourceNodeId: p.nodeId,
@@ -319,13 +323,28 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
 }
 
 function onConnectEnd(): void {
-  log.log('connectEnd 清空反馈')
+  // 先取落点快照(ConnectionLineHost 拖线中写入共享 state，不随 endConnection 清)——放最后决策前读，勿放 endConnection 后读。
+  const drop = connectionState.lastDrop.value
+  connectionState.lastDrop.value = null // 读完即清，下次手势重新写
+  // 松开在节点 body/吸附带上(VueFlow @connect 只在精确命中 handle 时发)：未建边则补建。
+  if (!connectedThisGesture && drop && drop.source && drop.target) {
+    const res = checkConnection(drop.source, drop.target)
+    if (!res.ok) {
+      log.warn(`connectEnd drop ${drop.source}→${drop.target} 非法:${res.reason}`)
+    } else {
+      commitEdge(drop.source, drop.target)
+    }
+  }
   endConnection(connectionState)
+  connectedThisGesture = false
+  log.log('connectEnd 清空反馈')
 }
 
 function onConnect(conn: Connection): void {
   log.log(`connect 事件 ${conn.source}→${conn.target}`, conn)
+  connectedThisGesture = true
   if (!isValidConnection(conn) || !conn.source || !conn.target) {
+    connectedThisGesture = false
     log.warn(`connect 被拒(非法或缺端点) ${conn.source}→${conn.target}`)
     return
   }
@@ -334,7 +353,7 @@ function onConnect(conn: Connection): void {
 
 /**
  * 真正落一条边：幂等去重(已存在同源同目标同 handle 的边则不重复建) + 记历史 + 落盘。
- * @connect(精确命中 handle) 与 onDropConnect(body/snap 松开) 两条路径都走这里，保证不会双建。
+ * @connect(精确命中 handle) 与 connect-end 的 lastDrop(body/snap 松开) 两条路径都走这里，保证不会双建。
  */
 function commitEdge(
   source: string,
@@ -371,21 +390,6 @@ function commitEdge(
   // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
   void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
   log.log(`commitEdge 建边成功 ${source}→${target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
-}
-
-/** body/snap 松开建边回调（ConnectionLineHost 拖线松开时调用，已幂等校验于 onDropConnect 内） */
-function onDropConnect(source: string, target: string): void {
-  log.log(`onDropConnect ${source}→${target}`)
-  if (!source || !target) {
-    log.warn('onDropConnect 缺端点')
-    return
-  }
-  const res = checkConnection(source, target)
-  if (!res.ok) {
-    log.warn(`onDropConnect ${source}→${target} 非法:${res.reason}`)
-    return
-  }
-  commitEdge(source, target)
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
@@ -562,7 +566,6 @@ onBeforeUnmount(() => {
         :on-connect-start="onConnectStart"
         :on-connect-end="onConnectEnd"
         :validate-edge="validateEdgeText"
-        :on-drop-connect="onDropConnect"
         :on-node-click="onNodeClick"
         :on-node-drag-stop="onNodeDragStop"
         :on-pane-click="onPaneClick"
