@@ -53,11 +53,38 @@ syncSelected 同步边集：edgeSelection.selectedEdgeIds 随内核 edgeIds 更�
 - canvas-core-v2: 237 测试全绿 + tsc 干净
 - canvas-render: 101 测试全绿 + vue-tsc 干净
 
-## 六、后续批次（未做）
+## 六、第二批：布局/视口/事件桥（已实现）
 
-- nodeLayout：渲染层量测节点尺寸 + 绝对坐标只读服务
-- 渲染层事件桥：node-drag / nodes-change / edges-change / move 以 ctx 事件广播
-- viewport 服务：读视口 / setCenter / fitView / zoomTo / screen-flow 互转
-- 命令/快捷键元数据扩展
-- 框选完整闭环（VueFlow 多选视觉 ↔ 内核双集双向同步）
+- NodeLayoutService（packages/canvas-render/src/layout/nodeLayout.ts）
+  - 宿主工厂注入 ctx.get('nodeLayout')，CanvasHostHandle.nodeLayout
+  - setMeasuredSize/clearMeasuredSize/reset：渲染层 ResizeObserver 量测注入（内存态不落盘）
+  - nodeSize：实测 > node.size > type.defaultSize 回落
+  - absolutePosition：累加父链得绝对坐标；getNodeRect/getAllRects/childrenOf
+  - 类型 LayoutRect（避开 connection 的 NodeRect 重名）
+
+- ViewportService（packages/canvas-render/src/viewport/viewportService.ts）
+  - 工厂注入空壳 ctx.get('viewport')，CanvasSurface onMounted attach VueFlow backend
+  - getViewport/screenToFlow/flowToScreen/zoomIn/zoomOut/zoomTo/fitView/setCenter/setViewport
+  - backend 最小接口 ViewportBackend 可 fake 单测
+
+- 交互状态（packages/canvas-render/src/contracts/interactionContext.ts）
+  - 拖节点/pan/缩放/框选活动位 + 派生 isBusyDragging/isBusy；CanvasHost 事件接线
+
+- 渲染层事件桥（packages/canvas-render/src/host/renderEvents.ts）
+  - CanvasHost 在 VueFlow 事件回调里 ctx.emit 广播：
+  - canvas:node:drag-start / drag / drag-end（逐帧 rAF 节流）
+  - canvas:viewport:move-start / move-end
+  - canvas:node:click / canvas:edge:click / canvas:pane:click
+  - canvas:selection:change
+
+## 七、第三批：Command 元数据（已实现）
+
+- CommandDef 增加可选 UI 元数据：icon / areas / group / order（纯声明，不影响 run）
+- CommandService 增加 get(id) / list() / unregister(id)
+- 供菜单/工具栏插件读取命令声明渲染，不回内核
+
+## 八、验证（全绿基线）
+
+- canvas-core-v2: 240 测试 + tsc
+- canvas-render: 114 测试 + vue-tsc
 
