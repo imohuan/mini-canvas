@@ -170,6 +170,8 @@ const connectionHover = computed(() => {
 })
 const isConnectionValidTarget = computed(() => connectionHover.value?.status === 'valid')
 const isConnectionInvalidTarget = computed(() => connectionHover.value?.status === 'invalid')
+/** 悬停到我且本连接会使输入口满额挤最老一条（UI 提示"将替换"） */
+const isWillEvictTarget = computed(() => connectionHover.value?.willEvict === true)
 
 /** 是否对我做"可连接"3D 反馈：拖线中、非源自身、非非法、非低细节、且 hover/物理悬停或我已是合法目标 */
 const showConnectFeedback = computed(
@@ -354,6 +356,15 @@ function clamp(value: number, min: number, max: number): number {
         {{ connectionHover?.reason || '无法连接' }}
       </div>
 
+      <!-- 输入口满额"将替换最老一条"提示（willEvict；UI 可选渲染，仅当目标输入口将挤掉旧连接时显示） -->
+      <div
+        v-if="isWillEvictTarget"
+        class="will-evict-tooltip"
+        :style="invalidTooltipStyle"
+      >
+        <span class="we-dot" />将替换已有连接
+      </div>
+
       <!-- 调试叠加：吸附带 + 卡片接收区（吸附调试 connectionSnapDebugVisible，拖线目标态才显示）。
            用 SVG 在卡内坐标画，overflow:visible 让负 x 的吸附带也能画出去（v1 用 clip-path div，效果差）。 -->
       <svg
@@ -527,6 +538,32 @@ function clamp(value: number, min: number, max: number): number {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* 满额"将替换"提示（蓝色系，与红气泡区分） */
+.will-evict-tooltip {
+  position: absolute;
+  z-index: 60;
+  transform: translate(-50%, -50%);
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.95);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+.will-evict-tooltip .we-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #fff;
 }
 
 /* —— 调试叠加（SVG）—— */
