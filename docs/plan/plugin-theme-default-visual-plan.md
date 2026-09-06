@@ -138,3 +138,18 @@ interface ConnectionFeedbackState {
 - resize 尺寸字段沿用 `data.cardWidth/cardHeight/resizable`（v1 同名便于存量迁移），初值回落 nodeStore.types.defaultSize。
 - 卡片从"内容撑开"改"固定尺寸"可能影响 node-text/image content 布局——dev 目验，必要时壳内调整 padding/content 适配。
 - MovingHandle 端口锚点 absolute 于卡侧边，固定尺寸下确认垂直居中。
+
+---
+## 8. 执行完成记录（2026-09-06）
+
+**全部 Phase（能力层 + UI 层）已实现，12 个原子 commit（见 git log）。**
+- canvas-render 能力层：vueFlowBridge 类型/useConnection 导出 → connectionContext 契约 → connection/ 纯几何+决策+文案
+  (15 单测) → assembleTheme 读 connectionLine → connectionState 工厂(4 单测) → renderContext + CanvasHost/Surface 接线
+  + ConnectionLineHost(#connection-line 每帧 resolveFeedback + rAF 写 hoverNode) → isValidConnection reason 不再丢。
+- plugin-theme-default UI 层：目录分层(node/edge/background/settings + composables + styles) → node-theme.css 主题变量
+  → MovingHandle 变量化 → BaseTitle → composables(useNodeCapability/useNodeCardSize) → BaseNode 重构
+  (固定卡+resize+端口按类型能力+连接反馈 3D倾斜/非法气泡/压源口) → ConnectionLine(默认拖线线) 注册 connectionLine 槽。
+
+**验证**：canvas-render 68 测试绿 + vue-tsc 0 错；plugin 14 测试绿 + vue-tsc 0 错；plugin `pnpm build` 32 模块成功。
+**未验证**：拖线反馈的**运行时**行为（#connection-line 插槽每帧触发 + rAF 写 hoverNode）需浏览器目验，
+  纯几何已单测、reactive 接线仅类型/编译通过。下一步应起 `pnpm dev` 目验：拖线 3D 倾斜/非法气泡/吸附线/resize/端口显隐。
