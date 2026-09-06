@@ -10,7 +10,7 @@
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
 // - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
-import { provide, shallowRef, ref, onMounted } from 'vue'
+import { provide, shallowRef, ref, onMounted, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
@@ -30,6 +30,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
+import { useNodeMeasure } from './useNodeMeasure'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -112,6 +113,15 @@ provide(HOST_KEY, shallowRef(host))
 // ==================== viewport + pane DOM 暴露（供 CanvasHost 拖线 mousemove/mouseup 用 clientToFlow） ====================
 // VueFlow 在本组件内渲染，useVueFlow() 拿实时 viewport（reactively 跟随 zoom/pan）。
 const vfApi = useVueFlow()
+
+// 节点实测尺寸注入 nodeLayout（ResizeObserver + MutationObserver）；start 在 onMounted 内（renderer DOM 就绪后）
+const measure = useNodeMeasure({
+  nodeLayout: host.nodeLayout,
+  container: () => document.querySelector('.vue-flow__renderer') as HTMLElement | null,
+})
+onBeforeUnmount(() => {
+  measure.stop()
+})
 const paneEl = ref<HTMLElement | null>(null)
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
@@ -127,10 +137,9 @@ onMounted(() => {
       return { x: p.x, y: p.y }
     },
     flowToScreen: (x: number, y: number) => {
-      const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
-      const v = vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
-      const rect = paneEl.value ? paneEl.value.getBoundingClientRect() : { left: 0, top: 0 }
-      return { x: rect.left + (x - v.x) * v.zoom, y: rect.top + (y - v.y) * v.zoom }
+      // 用 VueFlow 官方 flowToScreenCoordinate（处理 dom 偏移 + viewport transform），避免手算公式出错
+      const p = vfApi.flowToScreenCoordinate({ x, y }) as { x: number; y: number }
+      return { x: p.x, y: p.y }
     },
     zoomIn: () => vfApi.zoomIn({ duration: 200 }),
     zoomOut: () => vfApi.zoomOut({ duration: 200 }),
@@ -141,6 +150,9 @@ onMounted(() => {
     setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
   })
 })
+  // renderer DOM 就绪后启动节点尺寸观测
+  measure.start()
+
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
 defineExpose({
@@ -158,11 +170,8 @@ defineExpose({
   },
   /** 把 flow 坐标→屏幕 client 坐标（供浮层定位/对齐线画在屏幕层） */
   flowToScreen: (x: number, y: number): { x: number; y: number } => {
-    const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
-    const v = vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
-    const pane = paneEl.value
-    const rect = pane ? pane.getBoundingClientRect() : { left: 0, top: 0 }
-    return { x: rect.left + (x - v.x) * v.zoom, y: rect.top + (y - v.y) * v.zoom }
+    const p = vfApi.flowToScreenCoordinate({ x, y }) as { x: number; y: number }
+    return { x: p.x, y: p.y }
   },
   // —— 视图控制（viewport 服务 backend 用）——
   zoomIn: () => vfApi.zoomIn({ duration: 200 }),
