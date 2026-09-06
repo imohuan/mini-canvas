@@ -329,22 +329,63 @@ function onConnect(conn: Connection): void {
     log.warn(`connect 被拒(非法或缺端点) ${conn.source}→${conn.target}`)
     return
   }
+  commitEdge(conn.source, conn.target, conn.sourceHandle ?? undefined, conn.targetHandle ?? undefined)
+}
+
+/**
+ * 真正落一条边：幂等去重(已存在同源同目标同 handle 的边则不重复建) + 记历史 + 落盘。
+ * @connect(精确命中 handle) 与 onDropConnect(body/snap 松开) 两条路径都走这里，保证不会双建。
+ */
+function commitEdge(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): void {
   const h = hostRef.value
   if (!h) return
+  const already = h.edgeStore
+    .getEdges()
+    .some(
+      (e) =>
+        e.source === source &&
+        e.target === target &&
+        (sourceHandle === undefined || e.sourceHandle === sourceHandle) &&
+        (targetHandle === undefined || e.targetHandle === targetHandle),
+    )
+  if (already) {
+    log.log(`commitEdge ${source}→${target} 已存在，跳过(幂等)`)
+    return
+  }
   // 拉边记进历史(undo/redo 对边生效，见 settings-panel-slot-host-plan §三.D)：addEdge 写内核 edgeStore(唯一数据源)，
   // history.withRecord 在前后各拍全图快照(含边)；边 id 稳定、重复连会被快照差异正确识别。
   h.history.withRecord(() => {
     h.edgeStore.addEdge({
-      source: conn.source,
-      target: conn.target,
+      source,
+      target,
       type: edgeDefaultType.value,
-      sourceHandle: conn.sourceHandle ?? undefined,
-      targetHandle: conn.targetHandle ?? undefined,
+      sourceHandle: sourceHandle ?? undefined,
+      targetHandle: targetHandle ?? undefined,
     })
   })
   // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
   void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
-  log.log(`connect 建边成功 ${conn.source}→${conn.target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
+  log.log(`commitEdge 建边成功 ${source}→${target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
+}
+
+/** body/snap 松开建边回调（ConnectionLineHost 拖线松开时调用，已幂等校验于 onDropConnect 内） */
+function onDropConnect(source: string, target: string): void {
+  log.log(`onDropConnect ${source}→${target}`)
+  if (!source || !target) {
+    log.warn('onDropConnect 缺端点')
+    return
+  }
+  const res = checkConnection(source, target)
+  if (!res.ok) {
+    log.warn(`onDropConnect ${source}→${target} 非法:${res.reason}`)
+    return
+  }
+  commitEdge(source, target)
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
@@ -521,6 +562,7 @@ onBeforeUnmount(() => {
         :on-connect-start="onConnectStart"
         :on-connect-end="onConnectEnd"
         :validate-edge="validateEdgeText"
+        :on-drop-connect="onDropConnect"
         :on-node-click="onNodeClick"
         :on-node-drag-stop="onNodeDragStop"
         :on-pane-click="onPaneClick"
