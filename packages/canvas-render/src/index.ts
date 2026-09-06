@@ -25,6 +25,19 @@ export type {
   HoverFeedback,
   FlowPoint,
 } from './contracts/connectionContext'
+// 拖线反馈纯几何/决策/文案（能力层基座，Node 可测）
+export { resolveFeedback, isReverse } from './connection/resolveFeedback'
+export type { ResolveFeedbackInput, ResolveResult, HoverDecision, ValidateEdge } from './connection/resolveFeedback'
+export {
+  computeSnapZones,
+  computeBodyZones,
+  hitTest,
+  closestZone,
+  zoneDirectionAnchor,
+  DEFAULT_SNAP_RATIOS,
+} from './connection/geometry'
+export type { SnapRatios, NodeRect, SnapZone, BodyZone, ConnectDirection } from './connection/geometry'
+export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
