@@ -15,13 +15,14 @@ import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import { useNodeCapability } from '../../composables/useNodeCapability'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
+import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
 
 const props = defineProps<NodeProps>()
 // 节点类型都是本组件(VueFlow nodeTypes 全指到 BaseNode)，透传的 selected 等内部 prop 不落到根
 defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈
-const { registry, nodeWrite, handleParams, connectionState } = useCanvasRender()
+const { registry, nodeWrite, handleParams, connectionState, debug } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -188,6 +189,39 @@ const shouldShowHandles = computed(
     (isHovered.value || props.selected),
 )
 
+// ============ 调试可视化（端口调试 handleDebug / 吸附调试 connectionSnapDebugVisible）============
+/** 端口调试：是否给端口画半圆/圆心/归位/鼠标点辅助线（进 MovingHandle :debug） */
+const debugHandle = computed(() => Boolean(debug.handleDebug))
+/** 是否画本节点"端口半圆接收区"叠加（handleDebug 打开且本节点非拖线源、非低细节时展示端口几何） */
+const showHandleDebugOverlay = computed(
+  () => debugHandle.value && !lowDetail.value && !suppressHandles.value,
+)
+/** 吸附调试：拖线中、非源自身、本节点有 target 口 → 画吸附带 + 卡片接收区 */
+const showSnapDebugOverlay = computed(
+  () =>
+    Boolean(debug.connectionSnapDebugVisible) &&
+    isConnecting.value &&
+    !isCurrentConnectingNode.value &&
+    showTargetHandle.value &&
+    !lowDetail.value,
+)
+// 吸附带/接收区几何（与 resolveFeedback 同源）
+const handleR = computed(() => Number(handleParams.handleRadius) || 86)
+const debugOverlay = useNodeDebugOverlay({
+  cardWidth,
+  cardHeight,
+  handleRadius: handleR,
+})
+// SVG viewBox = 卡内坐标 [0..cardWidth] × [0..cardHeight]（吸附带可负 x 溢出，靠 overflow:visible）
+const debugViewBox = computed(() => `0 0 ${cardWidth.value} ${cardHeight.value}`)
+// 卡片接收区矩形（四舍五入避免小数边）
+const bodyRect = computed(() => ({
+  x: 0,
+  y: 0,
+  width: cardWidth.value,
+  height: cardHeight.value,
+}))
+
 // 3D 倾斜：随鼠标在卡内位置翘
 const cardTransform = computed(() => {
   if (isConnectionInvalidTarget.value) return ''
@@ -313,6 +347,40 @@ function clamp(value: number, min: number, max: number): number {
         {{ connectionHover?.reason || '无法连接' }}
       </div>
 
+      <!-- 调试叠加：吸附带 + 卡片接收区（吸附调试 connectionSnapDebugVisible，拖线目标态才显示）。
+           用 SVG 在卡内坐标画，overflow:visible 让负 x 的吸附带也能画出去（v1 用 clip-path div，效果差）。 -->
+      <svg
+        v-if="showSnapDebugOverlay"
+        class="v2-debug-overlay"
+        :viewBox="debugViewBox"
+      >
+        <!-- 卡片接收区（body） -->
+        <rect
+          class="v2-debug-body"
+          :x="bodyRect.x"
+          :y="bodyRect.y"
+          :width="bodyRect.width"
+          :height="bodyRect.height"
+          rx="8"
+        />
+        <!-- 目标端口吸附带（左缘锚点外扩，向左可出卡片） -->
+        <rect
+          class="v2-debug-band"
+          :x="debugOverlay.band.value.x"
+          :y="debugOverlay.band.value.y"
+          :width="debugOverlay.band.value.width"
+          :height="debugOverlay.band.value.height"
+        />
+        <!-- 目标锚点短线标注 -->
+        <line
+          class="v2-debug-anchor"
+          :x1="0"
+          :y1="debugOverlay.anchorY.value - 6"
+          :x2="0"
+          :y2="debugOverlay.anchorY.value + 6"
+        />
+      </svg>
+
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
       <MovingHandle
         v-if="showTargetHandle"
@@ -326,6 +394,7 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
         :overlap="handleParams.handleOverlap"
+        :debug="debugHandle"
         @hover="isHovered = $event"
       />
 
@@ -363,6 +432,7 @@ function clamp(value: number, min: number, max: number): number {
         :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize"
         :overlap="handleParams.handleOverlap"
+        :debug="debugHandle"
         @hover="isHovered = $event"
       />
     </div>
@@ -449,6 +519,34 @@ function clamp(value: number, min: number, max: number): number {
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+/* —— 调试叠加（SVG）—— */
+.v2-debug-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* 吸附带向左可出卡片 */
+  pointer-events: none;
+  z-index: 22;
+}
+.v2-debug-body {
+  fill: var(--canvas-node-target-zone-surface, rgba(17, 24, 39, 0.08));
+  stroke: var(--canvas-node-target-zone-border, rgba(17, 24, 39, 0.55));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.v2-debug-band {
+  fill: var(--canvas-node-snap-zone-surface, rgba(17, 24, 39, 0.12));
+  stroke: var(--canvas-node-snap-zone-border, rgba(17, 24, 39, 0.9));
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.v2-debug-anchor {
+  stroke: var(--canvas-node-snap-zone-highlight, #dc2626);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
 /* —— 标题条：卡片上缘外、反向缩放 —— */
