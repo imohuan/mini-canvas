@@ -88,3 +88,13 @@ syncSelected 同步边集：edgeSelection.selectedEdgeIds 随内核 edgeIds 更�
 - canvas-core-v2: 240 测试 + tsc
 - canvas-render: 114 测试 + vue-tsc
 
+## 九、已知边界（审查记录，后续批次处理）
+
+- **I2 渲染投影未同步 parentId/size/选中态**：nodesFromStore 目前只映射 id/type/position/data。
+  CanvasNode.parentId/size 暂未投影给 VueFlow(parentNode/style)；内核选中 id 未回流成 VueFlow node.selected。
+  后果：store 里设 parentId 仍按自由节点渲染、多选只有内核态无 UI 高亮/联动拖拽。
+  处理：随 group 插件实现一并做（有 VueFlow 父子验收场景再动投影，避免无验证提前引入父子渲染风险）。
+- **I8 双断言脆弱**：CanvasSurface 内 `as unknown as { value?: ... }` 访问 VueFlow viewport，
+  建议后续用 VueFlow 官方 Viewport 类型收口。
+
+
