@@ -5,8 +5,8 @@
 // index.html 在包根、代码全在 src/。CanvasHost(渲染抽象层) 冷启动一组插件(theme-default 皮[自带设置面板默认皮]
 // + text/image 节点 + canvas-commands 命令)，画布即得可拖/连/建/删/撤销、刷新不丢的能力。
 //
-// 设置界面：顶部"⚙ 设置"按钮切换右下设置 dock。dock 内 <SettingsHost/> 渲染 settingsPanel 槽赢家
-// (= theme-default 内置注册的 PluginSettingsPanel 默认皮)，把 ctx.settings 实时喂给它；改动经
+// 设置界面：顶部"⚙ 设置"按钮切换居中设置弹窗(modal)。弹窗 = <SettingsHost/> 渲染 settingsPanel 槽赢家
+// (= theme-default 内置注册的 PluginSettingsDialog 默认皮)，把 ctx.settings 实时喂给它；改动经
 // bindThemeSettings 窄更新到 cfg.edge → 连线外观实时变化。
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { CanvasNode, SettingsStore, StorageAdapter } from '@mini-canvas/canvas-core-v2'
@@ -55,10 +55,17 @@ const hostEl = ref<InstanceType<typeof CanvasHost> | null>(null)
 const booted = ref(false)
 
 let disposeSettingsBind: (() => void) | undefined
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let closeSub: { dispose(): void } | undefined
 
 function onReady(): void {
   booted.value = true
   bindThemeSettings()
+  // 设置弹窗内 ✕/遮罩/Esc → ctx 'settings:ui-close' → 本层把 settingsOpen 置 false（弹窗卸载）
+  const ctx0 = hostEl.value?.host?.ctx
+  closeSub = ctx0?.on('settings:ui-close', () => {
+    settingsOpen.value = false
+  })
 }
 
 /**
@@ -107,7 +114,10 @@ function redo(): void {
   hostEl.value?.host?.command.execute('command:redo')
 }
 
-onBeforeUnmount(unbindThemeSettings)
+onBeforeUnmount(() => {
+  unbindThemeSettings()
+  closeSub?.dispose()
+})
 </script>
 
 <template>
@@ -139,16 +149,11 @@ onBeforeUnmount(unbindThemeSettings)
         window-key="MiniCanvasUI"
         @ready="onReady"
       >
-        <!-- 宿主业务 UI 区(#ui)：右下设置 dock，由"⚙ 设置"按钮切换显隐。SettingsHost 渲染 settingsPanel 槽赢家
-             (= theme-default apply 内置注册的 PluginSettingsPanel 默认皮) -->
+        <!-- 宿主业务 UI 区(#ui)：右上"⚙ 设置"按钮控制设置弹窗显隐。SettingsHost 渲染 settingsPanel 槽赢家
+             (= theme-default apply 内置注册的 PluginSettingsDialog 默认皮)；弹窗本体自居中，✕/遮罩/Esc
+             经 ctx 'settings:ui-close' 事件通知本层关闭 -->
         <template #ui>
-          <div v-if="settingsOpen" class="settings-dock">
-            <div class="dock-hd">
-              <span>设置</span>
-              <button class="dock-close" @click="settingsOpen = false">✕</button>
-            </div>
-            <SettingsHost />
-          </div>
+          <SettingsHost v-if="settingsOpen" />
         </template>
       </CanvasHost>
     </div>
@@ -212,48 +217,5 @@ onBeforeUnmount(unbindThemeSettings)
   flex: 1;
   position: relative;
   min-height: 0;
-}
-.settings-dock {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  width: 280px;
-  max-height: 60vh;
-  overflow-y: auto;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  padding: 6px 14px 14px;
-  z-index: 900;
-  font-family: system-ui, "Microsoft YaHei", sans-serif;
-}
-.dock-hd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0 6px;
-  font-weight: 600;
-  font-size: 13px;
-  border-bottom: 1px solid #eef0f3;
-  margin-bottom: 4px;
-  position: sticky;
-  top: 0;
-  background: rgba(255, 255, 255, 0.96);
-}
-.dock-close {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  color: #9aa3af;
-  padding: 2px 6px;
-  border-radius: 6px;
-}
-.dock-close:hover {
-  background: #f1f3f5;
-  color: #1f2937;
 }
 </style>
