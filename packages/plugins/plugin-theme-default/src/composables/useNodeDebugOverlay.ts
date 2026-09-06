@@ -39,17 +39,17 @@ export function useNodeDebugOverlay(opts: {
   cardWidth: Ref<number>
   cardHeight: Ref<number>
   handleRadius: Ref<number>
-  snapZone: Ref<SnapZoneConfig>
+  snapZone: SnapZoneConfig
 }) {
   const heightRatio = computed(() =>
-    Math.min(Math.max(opts.snapZone.value.heightRatio || 0.8, 0), 1),
+    Math.min(Math.max(opts.snapZone.heightRatio || 0.8, 0), 1),
   )
   const width = computed(() => {
-    const w = opts.snapZone.value.width
+    const w = opts.snapZone.width
     return w && w > 0 ? w : opts.handleRadius.value
   })
-  const offset = computed(() => opts.snapZone.value.offset ?? 0)
-  const shape = computed<SnapZoneShape>(() => opts.snapZone.value.shape ?? 'rect')
+  const offset = computed(() => opts.snapZone.offset ?? 0)
+  const shape = computed<SnapZoneShape>(() => opts.snapZone.shape ?? 'rect')
 
   const anchorY = computed(() => opts.cardHeight.value / 2)
   const bandHeight = computed(() => opts.cardHeight.value * heightRatio.value)
