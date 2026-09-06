@@ -300,11 +300,11 @@ onBeforeUnmount(() => {
       'is-disabled': disabled,
       'is-preview': preview,
     }" :style="anchorStyle">
-    <span class="moving-handle-zone" :class="{
-      'moving-handle-zone--source': isSource,
-      'moving-handle-zone--target': !isSource,
+    <span class="port-follow-zone" :class="{
+      'port-follow-zone--source': isSource,
+      'port-follow-zone--target': !isSource,
       'is-debug': debug,
-      'moving-handle-zone--rect': zoneShape === 'rect',
+      'port-follow-zone--rect': zoneShape === 'rect',
     }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
       @mouseleave="handleLeave" @mousemove="updatePosition" />
 
@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
   left: 0;
 }
 
-.moving-handle-zone {
+.port-follow-zone {
   position: absolute;
   background: transparent;
   pointer-events: all;
@@ -376,20 +376,20 @@ onBeforeUnmount(() => {
   backface-visibility: hidden;
 }
 
-.moving-handle-zone--source {
+.port-follow-zone--source {
   /* 卡右缘 source: 左端贴 anchor (offset 正向 = 向卡内缩进)；
      整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
   left: calc(var(--port-zone-offset) * -1);
 }
 
-.moving-handle-zone--target {
+.port-follow-zone--target {
   /* 卡左缘 target: 右端贴 anchor (offset 正向 = 向卡内缩进)；
      整体 = 矩形 + 半圆 连体（半圆在矩形外侧、朝外鼓）。 */
   left: calc(var(--port-zone-shape-width) * -1 + var(--port-zone-offset));
 }
 
 /* 矩形形状：直角矩形接收区（命中与视觉都按矩形） */
-.moving-handle-zone--rect {
+.port-follow-zone--rect {
   border-radius: 0;
 }
 

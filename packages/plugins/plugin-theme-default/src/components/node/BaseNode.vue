@@ -449,12 +449,12 @@ function clamp(value: number, min: number, max: number): number {
           :y2="debugOverlay.anchorY.value + 6" />
       </svg>
 
-      <!-- 吸附带元素（真正触发吸附判定的区域，与端口按钮跟随区分离）：
+      <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：
            左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
            mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
-      <div v-if="showTargetHandle" class="v2-snap-zone is-input" :class="{ 'is-active': snapZonesActive }"
+      <div v-if="showTargetHandle" class="snap-band snap-band--input" :class="{ 'is-active': snapZonesActive }"
         :style="inputSnapStyle" @mouseenter="onInputSnapEnter" @mouseleave="onSnapLeave" />
-      <div v-if="showSourceHandle" class="v2-snap-zone is-output" :class="{ 'is-active': snapZonesActive }"
+      <div v-if="showSourceHandle" class="snap-band snap-band--output" :class="{ 'is-active': snapZonesActive }"
         :style="outputSnapStyle" @mouseenter="onOutputSnapEnter" @mouseleave="onSnapLeave" />
 
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
@@ -643,16 +643,16 @@ function clamp(value: number, min: number, max: number): number {
   vector-effect: non-scaling-stroke;
 }
 
-/* —— 吸附带元素（真正触发吸附判定的区域）——
+/* —— 吸附带 .snap-band（真正触发吸附判定的区域）——
    绝对定位在卡内，几何与 SnapZoneConfig 吸附带同源（useNodeDebugOverlay）。
    平时 pointer-events:none 完全不挡卡片 hover/点击；拖线期间(非源自身)才 pointer-events:auto 接收 mouseenter。 */
-.v2-snap-zone {
+.snap-band {
   position: absolute;
   z-index: 21;
   pointer-events: none;
 }
 
-.v2-snap-zone.is-active {
+.snap-band.is-active {
   pointer-events: auto;
 }
 
