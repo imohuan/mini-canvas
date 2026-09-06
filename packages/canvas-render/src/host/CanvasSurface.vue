@@ -59,7 +59,6 @@ const props = defineProps<{
   maxZoom: number
   // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
   isValidConnection: (conn: Connection) => boolean
-  validateEdge: (sourceId: string, targetId: string) => string
   onConnect: (conn: Connection) => void
   onConnectStart: (p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }) => void
   onConnectEnd: () => void
@@ -105,7 +104,8 @@ onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
   paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
 })
-// expose 给父：父级拖线时直接拿到 viewport transform 和 pane 屏幕矩形（VF 1.48 的 viewport 是 Ref<ViewportTransform>）
+// expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
+// 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
 defineExpose({
   getViewport: () => {
     const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
@@ -114,6 +114,11 @@ defineExpose({
       : (vfApi.viewport as unknown as { x: number; y: number; zoom: number })
   },
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
+  /** 关键：把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
+  screenToFlow: (x: number, y: number): { x: number; y: number } => {
+    const p = vfApi.screenToFlowCoordinate({ x, y }) as { x: number; y: number }
+    return { x: p.x, y: p.y }
+  },
 })
 </script>
 
@@ -144,7 +149,6 @@ defineExpose({
         <ConnectionLineHost
           :line-props="lineProps"
           :connection-line="connectionLineComp"
-          :validate-edge="validateEdge"
           :handle-radius="handleParams.handleRadius"
           :state="connectionState"
           :drag-flow-point="dragFlowPoint ?? null"

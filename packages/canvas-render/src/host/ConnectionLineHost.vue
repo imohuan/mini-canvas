@@ -1,149 +1,42 @@
 <script setup lang="ts">
 /**
- * ConnectionLineHost —— canvas-render 能力层内部的"#connection-line"桥接组件。
+ * ConnectionLineHost —— canvas-render 能力层内部的"#connection-line"桥接组件（纯渲染）。
  *
- * 职责（能力，不做视觉美化）：
- *   1. 每帧(拖线中，VueFlow 更新 #connection-line props)算出吸附终点 + hover 反馈(resolveFeedback 纯模块)，
- *      并以 rAF 节流写回 connectionState.hoverNode（供 BaseNode 做 3D/气泡/吸附带）。
- *   2. 渲染 themeRegistry 的 connectionLine 赢家组件作"临时连接线"；未注册时回落一条最简贝塞尔路径
- *      （保证不注册主题也看得出在拖线）。好看与否由主题 connectionLine 组件决定（canvas-render 不烘焙视觉）。
+ * 职责（纯渲染，不做几何判定）：
+ *   1. 渲染 themeRegistry 的 connectionLine 赢家组件作"临时连接线"；未注册时回落一条最简贝塞尔路径。
+ *   2. 端点来源：start=VueFlow lineProps.sourceX/Y（handle 锚点，缩放/平移时 VueFlow 自动跟随），
+ *      end=Host dragFlowPoint（拖线 mousemove 实时写的 flow 坐标；fallback lineProps.targetX/Y），
+ *      hasSnap=state.hoverNode.zone==='snap'（吸附判定由 Host 解析后写共享 state）。
  *
- * 运行环境：CanvasSurface 的 <VueFlow> #connection-line 槽内 → 在 VueFlow 与 renderContext provide 作用域内，
- * 可 useVueFlow() 拿节点实测尺寸、useCanvasRender() 拿 ctx(校验)/connectionState(读写)。
- *
- * 坑（来自 v1 useCanvasConnection 注释）：在 connection-line 渲染函数里写 reactive 状态必须 rAF 节流 +
- * hoverChanged 比对，否则 hoverNode 变→BaseNode 重渲→本组件所在槽重渲→再写→Maximum recursive updates。
- * 本组件模板不读 connectionState.hoverNode（避免把它变成渲染依赖）。
+ * 关键变更：之前本组件在 feedback computed 内自行调 resolveFeedback + rAF 写 hoverNode → 与 Host 端 resolveAtClient
+ * 形成双源重复计算，每次 mousemove 触发两次 resolveFeedback + 两次 ref 写，拖线期间卡顿明显。现拆成：Host 解析
+ * 几何 → 写 dragFlowPoint/hoverNode → ConnectionLineHost 只读，零额外计算，渲染与决策彻底解耦。
  */
-import { computed, onBeforeUnmount } from 'vue'
+import { computed } from 'vue'
 import type { ConnectionLineProps } from '@vue-flow/core'
-import { useVueFlow } from '@vue-flow/core'
-import { resolveFeedback } from '../connection/resolveFeedback'
-import { DEFAULT_SNAP_RATIOS, type NodeRect } from '../connection/geometry'
-import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
-import { hoverWriter } from '../host/connectionState'
-import { createV2Logger } from '../utils/log'
-
-const log = createV2Logger('conn-line')
+import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 
 const props = defineProps<{
   /** VueFlow 经 #connection-line 槽传入的连接线 props（targetX/Y 为每帧 flow 坐标） */
   lineProps: ConnectionLineProps
   /** themeRegistry connectionLine 赢家组件；未注册 = null → 回退默认线 */
   connectionLine: unknown
-  /** 候选连接校验：给定(规范 source,target) 返回非法文案(空串=合法)。由 CanvasHost 封装内核 validateConnection */
-  validateEdge: (sourceId: string, targetId: string) => string
-  /** 端口半径(供吸附带计算)；来自 handleParams.handleRadius，CanvasHost 注入 */
+  /** 端口半径（仅类型一致保留，实际几何由 Host 算） */
   handleRadius: number
-  /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致）。lastDrop 由本组件写、CanvasHost.onConnectEnd 读 */
+  /** 供能力层使用的 connectionState（同一引用，与 useCanvasRender 一致）。ConnectionLineHost 只读不写 */
   state: ConnectionFeedbackState
   /** Host 端 mousemove 实时跟踪的 flow 坐标（拖线外为 null）。优先于 lineProps.targetX/Y 用于连接线端点渲染，
    *  因为合成事件/某些输入路径下 VueFlow 自身的 lineProps 不更新。 */
   dragFlowPoint?: { x: number; y: number } | null
 }>()
 
-const vf = useVueFlow()
-
-// ---- 存活节点矩形（flow 坐标，排除拖线源自身）----
-const sourceId = computed(() => props.state.activeConnection.value?.sourceNodeId ?? null)
-const sourceHandle = computed(() => props.state.activeConnection.value?.sourceHandle ?? 'source')
-
-// 节点矩形来源：VueFlow 实测 (computedPosition + dimensions)，缺失回落 defaultSize
-const nodeRects = computed<NodeRect[]>(() => {
-  const srcId = sourceId.value
-  const flows = vf.getNodes.value as Array<{
-    id: string
-    type: string
-    computedPosition?: { x: number; y: number }
-    position: { x: number; y: number }
-    dimensions?: { width: number; height: number }
-  }>
-  const out: NodeRect[] = []
-  for (const n of flows) {
-    if (n.id === srcId) continue
-    const pos = n.computedPosition || n.position
-    const dim = n.dimensions
-    out.push({
-      id: n.id,
-      type: n.type,
-      x: pos.x,
-      y: pos.y,
-      width: dim?.width || 256,
-      height: dim?.height || 128,
-    })
-  }
-  return out
-})
-
-// ---- 每帧决策：吸附终点 + hover；rAF 节流写回 hoverNode（lastDrop 同步直写，见下） ----
-const writer = hoverWriter(props.state)
-let rafId = 0
-let pendingHover: HoverFeedback | null = null
-
-/** rAF 内写回 hoverNode（读 hover 的 BaseNode 需要，故节流防递归更新） */
-function flushHover() {
-  rafId = 0
-  writer.write(pendingHover)
-}
-
-/** 判定 hover 是否变化（与当前写回值比对，避免无谓重写导致循环） */
-function scheduleHoverWrite(next: HoverFeedback | null) {
-  const cur = writer.read()
-  const changed =
-    cur?.nodeId !== next?.nodeId ||
-    cur?.status !== next?.status ||
-    cur?.zone !== next?.zone ||
-    cur?.reason !== next?.reason ||
-    cur?.flowPosition?.x !== next?.flowPosition?.x ||
-    cur?.flowPosition?.y !== next?.flowPosition?.y
-  if (changed) {
-    log.log('hover→', next ? `${next.nodeId}/${next.status}/${next.zone}${next.reason ? ' ' + next.reason : ''}` : 'null')
-  }
-  if (!changed) return
-  pendingHover = next
-  if (!rafId) rafId = requestAnimationFrame(flushHover)
-}
-
-// 拖线中：逐帧由 lineProps.targetX/Y 变化触发 → resolveFeedback
-const feedback = computed(() => {
-  const srcId = sourceId.value
-  const sh = sourceHandle.value
-  if (!srcId) return null
-  // 端点优先用 Host 端 mousemove 跟踪的 dragFlowPoint（更实时，覆盖合成事件下 VueFlow lineProps 不更新的场景），
-  // fallback 到 VueFlow lineProps.targetX/Y
-  const point: FlowPoint = props.dragFlowPoint ?? {
-    x: props.lineProps.targetX,
-    y: props.lineProps.targetY,
-  }
-  const res = resolveFeedback({
-    sourceId: srcId,
-    sourceHandle: sh,
-    nodeRects: nodeRects.value,
-    flowPoint: point,
-    handleRadius: props.handleRadius || 86,
-    ratios: DEFAULT_SNAP_RATIOS,
-    validate: props.validateEdge,
-  })
-  // 副作用：把 hover 投影成 state 写的 HoverFeedback（含 flowPosition）
-  scheduleHoverWrite(
-    res.hover
-      ? {
-          nodeId: res.hover.nodeId,
-          status: res.hover.status,
-          zone: res.hover.zone,
-          flowPosition: point,
-          reason: res.hover.reason,
-        }
-      : null,
-  )
-  return res
-})
-
-// ---- 绘制数据 ----
+// 拖线中渲染数据来源：
+//   - start 端：VueFlow lineProps.sourceX/Y（handle 锚点，缩放时 VueFlow 自己跟着变 → 准确）
+//   - end 端：CanvasHost dragFlowPoint（拖线 mousemove 实时写的 flow 坐标；fallback 到 lineProps.targetX/Y）
+//   - hasSnap：state.hoverNode.zone==='snap'（吸附判定由 CanvasHost 解析，避免双源重渲卡顿）
 const start = computed(() => ({ x: props.lineProps.sourceX, y: props.lineProps.sourceY }))
-const end = computed(() => feedback.value?.end ?? props.dragFlowPoint ?? { x: props.lineProps.targetX, y: props.lineProps.targetY })
-/** 是否命中某个合法可吸附点（供默认线/主题组件改色） */
-const hasSnap = computed(() => feedback.value?.snappedToId != null)
+const end = computed(() => props.dragFlowPoint ?? { x: props.lineProps.targetX, y: props.lineProps.targetY })
+const hasSnap = computed(() => props.state.hoverNode.value?.zone === 'snap')
 
 // 默认回落线路径（贝塞尔，两点水平控点）
 const defaultPath = computed(() => {
@@ -153,14 +46,6 @@ const defaultPath = computed(() => {
   const ey = end.value.y
   const mx = (sx + ex) / 2
   return `M ${sx} ${sy} C ${mx} ${sy} ${mx} ${ey} ${ex} ${ey}`
-})
-
-// props.state 固定同源；无需额外清理 ref
-onBeforeUnmount(() => {
-  if (rafId) {
-    cancelAnimationFrame(rafId)
-    rafId = 0
-  }
 })
 </script>
 

@@ -197,12 +197,11 @@ const debugHandle = computed(() => Boolean(debug.handleDebug))
 const showHandleDebugOverlay = computed(
   () => debugHandle.value && !lowDetail.value && !suppressHandles.value,
 )
-/** 吸附调试：拖线中、非源自身、本节点有 target 口 → 画吸附带 + 卡片接收区 */
+/** 吸附调试：开关打开后**持续**显示卡片接收区 + 端口吸附带（无需拖线中也显示，
+ *  便于设计/排错时直观知道哪些节点会接收到拖线、snap 带多大范围）。 */
 const showSnapDebugOverlay = computed(
   () =>
     Boolean(debug.connectionSnapDebugVisible) &&
-    isConnecting.value &&
-    !isCurrentConnectingNode.value &&
     showTargetHandle.value &&
     !lowDetail.value,
 )

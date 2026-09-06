@@ -47,7 +47,7 @@ import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
-import type { ConnectionFeedbackState, FlowPoint } from '../contracts/connectionContext'
+import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
@@ -117,10 +117,11 @@ const bootError = ref('')
 const hostRef = shallowRef<CanvasHostHandle | undefined>()
 const apiRef = shallowRef<MiniCanvasApi | undefined>()
 const managerRef = shallowRef<PluginManager | undefined>()
-/** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 viewport+pane 屏幕坐标） */
+/** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 screenToFlow / viewport / pane） */
 const surfaceRef = shallowRef<{
   getViewport?: () => { x: number; y: number; zoom: number }
   getPaneRect?: () => DOMRect | null
+  screenToFlow?: (x: number, y: number) => { x: number; y: number }
 } | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
@@ -327,6 +328,9 @@ let dragSourceId = ''
 let dragSourceHandle: 'source' | 'target' = 'source'
 /** mousemove/mouseup 是否在拖线期间挂上（用于 onMounted 早期 + boot 顺序保证） */
 let dragListenersBound = false
+/** rAF 节流：mousemove 高频，只记最新一次 client 坐标；rAF 内做吸附判定+写 state，避免每帧都跑导致卡顿 */
+let dragRafId = 0
+let pendingClient: { x: number; y: number } | null = null
 
 function onConnectStart(p: { nodeId?: string; handleId: string | null; handleType?: 'source' | 'target' }): void {
   if (!p.nodeId) return
@@ -348,24 +352,64 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
   }
 }
 
-/** 拖线 mousemove：throttled 打 hover 状态日志 + 实时更新 dragFlowPoint（让连接线端点跟手） */
+/** 拖线 mousemove：取最新 client 坐标，**rAF 节流**做吸附判定+写 dragFlowPoint/hoverNode（避免每帧都跑导致卡顿） */
 function onDragMouseMove(ev: MouseEvent): void {
   if (!dragSourceId) return
-  const now = Date.now()
-  if (now - lastDragHoverLogAt < 50) return
-  lastDragHoverLogAt = now
-  const target = resolveAtClient(ev.clientX, ev.clientY)
-  // 实时写 dragFlowPoint（给 ConnectionLineHost 渲染端点用）— VueFlow 自身的 lineProps 在某些路径下不可靠
-  dragFlowPoint.value = { x: target.point.x, y: target.point.y }
-  log.log(
-    `drag hover client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${target.hover ? `→ ${target.hover.nodeId}/${target.hover.status}/${target.hover.zone}${target.hover.reason ? ' ' + target.hover.reason : ''}` : '空'}`,
-  )
+  // 每次 mousemove 只更新最新坐标；具体 resolveFeedback 与写 state 都放到下一帧 rAF 内（合并批次）
+  pendingClient = { x: ev.clientX, y: ev.clientY }
+  if (dragRafId) return
+  dragRafId = requestAnimationFrame(() => {
+    dragRafId = 0
+    if (!pendingClient || !dragSourceId) return
+    const { x, y } = pendingClient
+    pendingClient = null
+    const target = resolveAtClient(x, y)
+    // 写 dragFlowPoint（给 ConnectionLineHost 渲染端点）
+    dragFlowPoint.value = { x: target.point.x, y: target.point.y }
+    // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
+    const h = target.hover
+    const nextHover: HoverFeedback | null = h
+      ? {
+          nodeId: h.nodeId,
+          status: h.status,
+          zone: h.zone,
+          flowPosition: target.point,
+          reason: h.reason,
+        }
+      : null
+    // 变化比对（与 v1 思路一致：避免无谓写触发下游重渲）
+    const cur = connectionState.hoverNode.value
+    const changed =
+      cur?.nodeId !== nextHover?.nodeId ||
+      cur?.status !== nextHover?.status ||
+      cur?.zone !== nextHover?.zone ||
+      cur?.reason !== nextHover?.reason ||
+      cur?.flowPosition?.x !== nextHover?.flowPosition?.x ||
+      cur?.flowPosition?.y !== nextHover?.flowPosition?.y
+    if (changed) {
+      connectionState.hoverNode.value = nextHover
+      // 节流日志（50ms 一次），hover 状态变更时打
+      const now = Date.now()
+      if (now - lastDragHoverLogAt >= 50) {
+        lastDragHoverLogAt = now
+        log.log(
+          `drag hover client=${Math.round(x)},${Math.round(y)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${nextHover ? `→ ${nextHover.nodeId}/${nextHover.status}/${nextHover.zone}${nextHover.reason ? ' ' + nextHover.reason : ''}` : '空'}`,
+        )
+      }
+    }
+  })
 }
 
 /** 拖线 mouseup：用 mouseup 事件自带的 clientX/Y 直接解析吸附（跟 v1 useCanvasConnection.onConnectEnd 同思路） */
 function onDragMouseUp(ev: MouseEvent): void {
   // 仅在拖线源端快照存在时处理（避免与其它业务 mouseup 冲突）
   if (!dragSourceId) return
+  // 取消未触发的 rAF（直接走 mouseup 路径）
+  if (dragRafId) {
+    cancelAnimationFrame(dragRafId)
+    dragRafId = 0
+    pendingClient = null
+  }
   const target = resolveAtClient(ev.clientX, ev.clientY)
   // 同步最后一次 mouseup 坐标到 dragFlowPoint（让 release 那一帧连接线也对齐）
   dragFlowPoint.value = { x: target.point.x, y: target.point.y }
@@ -383,17 +427,12 @@ function onDragMouseUp(ev: MouseEvent): void {
   dragSourceHandle = 'source'
 }
 
-/** client 坐标 → 当前 viewport 下的 flow 坐标（从 surfaceRef 拿 viewport 变换与 pane 屏幕矩形） */
+/** client 坐标 → flow 坐标（用 VueFlow 自带 screenToFlowCoordinate：缩放/平移/zoom 完全可靠，
+ *  比手算 paneRect.left / zoom 准）。boot 前/未挂载时回退 client 当 flow（兜底） */
 function clientToFlow(clientX: number, clientY: number): { x: number; y: number } {
   const surface = surfaceRef.value
-  const rect = surface?.getPaneRect?.()
-  const vp = surface?.getViewport?.() ?? { x: 0, y: 0, zoom: 1 }
-  if (!rect) return { x: clientX, y: clientY }
-  // screen → flow：先算相对 pane 的屏幕坐标，再除以 zoom，然后减掉 viewport 平移
-  return {
-    x: (clientX - rect.left) / vp.zoom - vp.x,
-    y: (clientY - rect.top) / vp.zoom - vp.y,
-  }
+  if (surface?.screenToFlow) return surface.screenToFlow(clientX, clientY)
+  return { x: clientX, y: clientY }
 }
 
 /** 取 host 内核中存活节点矩形（flow 坐标） */
@@ -462,6 +501,12 @@ function onConnectEnd(): void {
   dragSourceId = ''
   dragSourceHandle = 'source'
   dragFlowPoint.value = null
+  // 收尾清 rAF（避免异步 rAF 在手势结束后还写 state）
+  if (dragRafId) {
+    cancelAnimationFrame(dragRafId)
+    dragRafId = 0
+  }
+  pendingClient = null
   log.log('connectEnd 清空反馈')
 }
 
