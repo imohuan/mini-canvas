@@ -11,6 +11,21 @@
  * - 需要完整 VueFlow 的场景（宿主 demo 预览页自 mount <VueFlow>）仍直接 import @vue-flow/core，不走这里。
  */
 // 运行时原语：端口组件 / 方向常量 / 贝塞尔路径 / 实例组合式（拿 store：读选中、缩放、删边、订阅事件）
-export { Handle, Position, getBezierPath, useVueFlow } from '@vue-flow/core'
+// useConnection = 只读"拖线现场"的最轻口（startHandle/endHandle/status/position），供端口/壳做"是否在拖"反馈。
+export { Handle, Position, getBezierPath, useVueFlow, useConnection } from '@vue-flow/core'
 // 类型：自定义节点壳 / 自定义边 收到的引擎 props（起点终点坐标、选中、动画等都在其中）
 export type { EdgeProps, NodeProps } from '@vue-flow/core'
+// —— 连接过程相关类型（能力层 / connection-line 组件 / BaseNode 消费 connectionState 需要）——
+// 精选具名导出，不 `export *` 整库，保持"精选出口"边界。@vue-flow/core 的 Node/Edge 顶层别名与内核
+// CanvasNode 等可能撞名，故这里只挑下面这些确切类型。
+export type {
+  ConnectionLineProps,
+  OnConnectStartParams,
+  Connection,
+  ConnectionMode,
+  ConnectionStatus,
+  ConnectionLineType,
+  HandleElement,
+  ConnectingHandle,
+  ValidConnectionFunc,
+} from '@vue-flow/core'

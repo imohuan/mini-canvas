@@ -18,6 +18,13 @@ export type { NodeWrite } from './contracts/nodeRegistryKey'
 export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
 export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
+// 拖线连接过程反馈状态契约（canvas-render 能力层提供、BaseNode/ConnectionLine 消费）
+export type {
+  ConnectionFeedbackState,
+  ActiveConnection,
+  HoverFeedback,
+  FlowPoint,
+} from './contracts/connectionContext'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
