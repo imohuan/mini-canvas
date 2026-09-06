@@ -29,17 +29,18 @@ export const inject = ["text"] as string[]
 
 // 默认皮对应的连线外观默认值（与 engine DEFAULT_EDGE_VISUAL 对齐；作为本插件 config schema 的默认/单一数据源初始值）。
 // 这样 demo/宿主经 ctx.settings 读到的初始外观 = 引擎默认，不改则有稳定基线。
+// 默认偏向 v1 Decoration 金标准：细线 / 接近黑的深灰 / 轻微虚线 / 无箭头无辉光（看更克制、像工程图连线）。
 export const DEFAULT_THEME_EDGE = {
   edgeType: 'bezier',
-  edgeColor: '#3b82f6',
-  edgeLineWidth: 2,
-  edgeDashed: false,
-  edgeAnimated: true,
+  edgeColor: '#1f2937',
+  edgeLineWidth: 1.5,
+  edgeDashed: true,
+  edgeAnimated: false,
   edgeMarkerEnd: false,
   edgeMarkerSize: 8,
-  edgeGlowEnabled: true,
+  edgeGlowEnabled: false,
   edgeGlowIntensity: 1,
-  edgeGlowColor: '#3b82f6',
+  edgeGlowColor: '#1f2937',
   edgeVisible: true,
 } as const
 
