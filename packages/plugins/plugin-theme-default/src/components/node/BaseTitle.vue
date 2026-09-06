@@ -1,0 +1,112 @@
+<script setup lang="ts">
+// BaseTitle —— 节点标题条（移植自 v1 Decoration/BaseTitle.vue，纯展示组件）。
+// 三段布局：title-icon（组件/HTML/默认 svg）→ title-label（默认文本，占 80% 椭圆省略）→ title-extra（≤20%）。
+// 无外部依赖，纯 props。BaseNode 把它放卡片内部标题容器里。
+import type { Component, CSSProperties } from 'vue'
+import { computed } from 'vue'
+
+type TitleIcon = Component | string | null | false
+
+const props = defineProps<{
+  label?: string
+  titleIcon?: TitleIcon
+  titleStyle?: CSSProperties
+  interactive?: boolean
+  editing?: boolean
+}>()
+
+const shouldRenderIcon = computed(() => props.titleIcon !== null && props.titleIcon !== false)
+const componentTitleIcon = computed(() => {
+  if (!shouldRenderIcon.value || !props.titleIcon) return null
+  return typeof props.titleIcon === 'string' ? null : props.titleIcon
+})
+const htmlTitleIcon = computed(() => {
+  if (!shouldRenderIcon.value) return ''
+  return typeof props.titleIcon === 'string' ? props.titleIcon : ''
+})
+</script>
+
+<template>
+  <div
+    class="base-title"
+    :class="{
+      'base-title--interactive': interactive,
+      'base-title--editing': editing,
+    }"
+    :style="titleStyle"
+  >
+    <slot v-if="shouldRenderIcon" name="title-icon">
+      <component :is="componentTitleIcon" v-if="componentTitleIcon" class="base-title__icon" />
+      <span v-else-if="htmlTitleIcon" class="base-title__icon base-title__icon--html" v-html="htmlTitleIcon" />
+      <svg v-else class="base-title__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="4 7 4 4 20 4 20 7" />
+        <line x1="9" y1="20" x2="15" y2="20" />
+        <line x1="12" y1="4" x2="12" y2="20" />
+      </svg>
+    </slot>
+
+    <div class="base-title-label">
+      <slot name="title-label">
+        <span class="base-title__label">{{ label }}</span>
+      </slot>
+    </div>
+
+    <div class="base-title__extra">
+      <slot name="title-extra" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.base-title {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--canvas-node-text-muted, #6b7280);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  pointer-events: none;
+  width: 100%;
+  overflow: hidden;
+}
+.base-title--interactive {
+  pointer-events: auto;
+}
+.base-title__icon {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+}
+.base-title-label {
+  flex: 0 0 80%;
+  width: 80%;
+  min-width: 0;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.base-title__extra {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 20%;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.base-title__extra > :deep(span) {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.base-title__icon--html {
+  display: inline-flex;
+  align-items: center;
+}
+</style>
