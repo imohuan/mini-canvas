@@ -101,7 +101,7 @@ export function apply(ctx: Context) {
   //    a) settingsNav：id 命中 config 分组「边框」→ 顶替它的默认导航 tab（注入 group/active/onSelect）
   ctx.slots.register('settingsNav', {
     id: '边框',
-    order: -1,
+    order: 1,
     component: DemoSlotNavItem,
   })
   //    b) settingsGroup/图片 + meta.mode='append'：与「图片」默认 schema 控件并存（不接管），
