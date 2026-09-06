@@ -51,10 +51,12 @@ import type { ConnectionFeedbackState, FlowPoint, HoverFeedback } from '../contr
 import type { CanvasDebug } from '../contracts/debugContext'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
-import { resolveFeedback } from '../connection/resolveFeedback'
 import type { HoverDecision } from '../connection/resolveFeedback'
+import { aimAtClient } from './domAim'
+import type { Aim } from '../connection/aim'
+import { aimToCandidate, aimAcceptsSide, aimPortSide } from '../connection/aim'
 import { oldestIncomingToEvict } from '../connection/edgeCapacity'
-import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
+import { type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
@@ -358,10 +360,35 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
   }
 }
 
-/** 拖线 mousemove：取最新 client 坐标，**rAF 节流**做吸附判定+写 dragFlowPoint/hoverNode（避免每帧都跑导致卡顿） */
+/** 最新一次瞄准目标（每次 mousemove 由真实 DOM 命中探出；mouseup 落边时直接读它） */
+let currentAim: Aim | null = null
+
+/** 由 Aim 合成富 HoverFeedback（供 ConnectionLine 着色 / BaseNode 3D 气泡）；无效/空 aim → null */
+function aimToHoverFeedback(
+  aim: Aim | null,
+  sourceHandle: 'source' | 'target',
+  sourceId: string,
+  flowPoint: FlowPoint,
+): HoverFeedback | null {
+  if (!aim) return null
+  // 方向匹配才当作目标：forward 只认 input/body，reverse 只认 output/body
+  if (!aimAcceptsSide(aim, sourceHandle)) return null
+  const candidate = aimToCandidate(aim, sourceId, sourceHandle)
+  const msg = validateEdgeText(candidate.source, candidate.target)
+  const decision: HoverDecision = {
+    nodeId: aim.nodeId,
+    status: msg ? 'invalid' : 'valid',
+    zone: candidate.zone,
+    portSide: aimPortSide(aim, sourceHandle),
+    reason: msg || undefined,
+  }
+  return enrichHover(decision, sourceHandle, sourceId, flowPoint)
+}
+
+/** 拖线 mousemove：取最新 client 坐标，**rAF 节流**做吸附命中+写 dragFlowPoint/hoverNode（避免每帧都跑导致卡顿） */
 function onDragMouseMove(ev: MouseEvent): void {
   if (!dragSourceId) return
-  // 每次 mousemove 只更新最新坐标；具体 resolveFeedback 与写 state 都放到下一帧 rAF 内（合并批次）
+  // 每次 mousemove 只更新最新坐标；具体吸附判定与写 state 都放到下一帧 rAF 内（合并批次）
   pendingClient = { x: ev.clientX, y: ev.clientY }
   if (dragRafId) return
   dragRafId = requestAnimationFrame(() => {
@@ -369,12 +396,14 @@ function onDragMouseMove(ev: MouseEvent): void {
     if (!pendingClient || !dragSourceId) return
     const { x, y } = pendingClient
     pendingClient = null
-    const target = resolveAtClient(x, y)
+    const flowPoint = clientToFlow(x, y)
     // 写 dragFlowPoint（给 ConnectionLineHost 渲染端点）
-    dragFlowPoint.value = { x: target.point.x, y: target.point.y }
+    dragFlowPoint.value = flowPoint
+    // 吸附命中用**真实 DOM**（MovingHandle zone/卡片 body 就是可点击命中区），render 不再复刻几何带。
+    const aim = aimAtClient(x, y, dragSourceId)
+    currentAim = aim
     // 写 hoverNode（给 BaseNode 3D/气泡/吸附带 + ConnectionLineHost hasSnap）。rAF 内合并避免每帧多次写 ref
-    const h = target.hover
-    const nextHover: HoverFeedback | null = h ? enrichHover(h, dragSourceHandle, dragSourceId, target.point) : null
+    const nextHover = aimToHoverFeedback(aim, dragSourceHandle, dragSourceId, flowPoint)
     // 变化比对（与 v1 思路一致：避免无谓写触发下游重渲）
     const cur = connectionState.hoverNode.value
     const changed =
@@ -391,14 +420,14 @@ function onDragMouseMove(ev: MouseEvent): void {
       if (now - lastDragHoverLogAt >= 50) {
         lastDragHoverLogAt = now
         log.log(
-          `drag hover client=${Math.round(x)},${Math.round(y)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${nextHover ? `→ ${nextHover.nodeId}/${nextHover.status}/${nextHover.zone}${nextHover.reason ? ' ' + nextHover.reason : ''}` : '空'}`,
+          `drag hover client=${Math.round(x)},${Math.round(y)} flow=${Math.round(flowPoint.x)},${Math.round(flowPoint.y)} ${aim ? `→ aim ${aim.nodeId}/${aim.side}` : '空'}`,
         )
       }
     }
   })
 }
 
-/** 拖线 mouseup：用 mouseup 事件自带的 clientX/Y 直接解析吸附（跟 v1 useCanvasConnection.onConnectEnd 同思路） */
+/** 拖线 mouseup：在真实松手坐标上用 DOM 命中判断落在哪个吸附目标，规整后校验落边 */
 function onDragMouseUp(ev: MouseEvent): void {
   // 仅在拖线源端快照存在时处理（避免与其它业务 mouseup 冲突）
   if (!dragSourceId) return
@@ -408,12 +437,18 @@ function onDragMouseUp(ev: MouseEvent): void {
     dragRafId = 0
     pendingClient = null
   }
-  const target = resolveAtClient(ev.clientX, ev.clientY)
+  const flowPoint = clientToFlow(ev.clientX, ev.clientY)
   // 同步最后一次 mouseup 坐标到 dragFlowPoint（让 release 那一帧连接线也对齐）
-  dragFlowPoint.value = { x: target.point.x, y: target.point.y }
-  const drop = decideDropFromHover(dragSourceId, dragSourceHandle, target)
+  dragFlowPoint.value = flowPoint
+  // 松手点真实 DOM 命中 → 目标节点；不在任何吸附区/卡片上则空白
+  const aim = aimAtClient(ev.clientX, ev.clientY, dragSourceId)
+  currentAim = aim
+  const drop =
+    aim && aimAcceptsSide(aim, dragSourceHandle)
+      ? aimToCandidate(aim, dragSourceId, dragSourceHandle)
+      : null
   log.log(
-    `drop resolve client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${drop ? `→ ${drop.source}→${drop.target}/${drop.zone}` : '→ 空白(松空)'}`,
+    `drop resolve client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(flowPoint.x)},${Math.round(flowPoint.y)} ${drop ? `→ ${drop.source}→${drop.target}/${drop.zone}` : '→ 空白(松空)'}`,
   )
   if (drop) {
     const res = checkConnection(drop.source, drop.target)
@@ -423,6 +458,7 @@ function onDragMouseUp(ev: MouseEvent): void {
   // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
   dragSourceId = ''
   dragSourceHandle = 'source'
+  currentAim = null
 }
 
 /** client 坐标 → flow 坐标（用 VueFlow 自带 screenToFlowCoordinate：缩放/平移/zoom 完全可靠，
@@ -433,44 +469,6 @@ function clientToFlow(clientX: number, clientY: number): { x: number; y: number 
   return { x: clientX, y: clientY }
 }
 
-/** 取 host 内核中存活节点矩形（flow 坐标） */
-function liveNodeRects(): NodeRect[] {
-  const h = hostRef.value
-  if (!h) return []
-  return h.nodeStore.getNodes().map((n) => {
-    const pos = (n as unknown as { position?: { x: number; y: number } }).position ?? { x: 0, y: 0 }
-    const dim = (n as unknown as { dimensions?: { width: number; height: number } }).dimensions
-    return {
-      id: n.id,
-      type: n.type,
-      x: pos.x,
-      y: pos.y,
-      width: dim?.width || 256,
-      height: dim?.height || 128,
-    }
-  })
-}
-
-/** 给定 client 坐标解析当前 hover + flow 点（用于 mousemove 日志 / mouseup drop） */
-function resolveAtClient(
-  clientX: number,
-  clientY: number,
-): { point: { x: number; y: number }; hover: ReturnType<typeof resolveFeedback>['hover'] } {
-  const flowPoint = clientToFlow(clientX, clientY)
-  const rects = liveNodeRects().filter((r) => r.id !== dragSourceId)
-  if (!dragSourceId) return { point: flowPoint, hover: null }
-  const res = resolveFeedback({
-    sourceId: dragSourceId,
-    sourceHandle: dragSourceHandle,
-    nodeRects: rects,
-    flowPoint,
-    // 吸附带宽兜底来源：吸附带 SnapZoneConfig.width 未显式给时，用端口区域宽 portZoneWidth
-    handleRadius: handleToProvide.portZoneWidth || 0,
-    config: snapZoneToProvide,
-    validate: validateEdgeText,
-  })
-  return { point: flowPoint, hover: res.hover }
-}
 
 /** 给定 hover 决策 + 源信息，补全成富 HoverFeedback（nodeType/nodeData/nodeEl/willEvict） */
 function enrichHover(
@@ -508,20 +506,6 @@ function enrichHover(
     nodeData: node ? { id: node.id, type: node.type, data: node.data } : null,
     nodeEl,
   }
-}
-
-/** 把 hover 决策转成规范 (source,target) 候选；空白则 null */
-function decideDropFromHover(
-  sourceId: string,
-  sourceHandle: 'source' | 'target',
-  target: { hover: ReturnType<typeof resolveFeedback>['hover'] },
-): { source: string; target: string; zone: 'snap' | 'body' } | null {
-  const h = target.hover
-  if (!h || h.status !== 'valid') return null
-  // reverse 方向（从 target口反向连）需把 source/target 对调
-  return sourceHandle === 'target'
-    ? { source: h.nodeId, target: sourceId, zone: h.zone }
-    : { source: sourceId, target: h.nodeId, zone: h.zone }
 }
 
 function onConnectEnd(): void {

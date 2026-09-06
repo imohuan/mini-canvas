@@ -53,7 +53,7 @@ export const DEFAULT_THEME_HANDLE = {
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  portZoneWidth: 0,
+  portZoneWidth: 86, // 端口吸附交互区/半圆耳朵水平外扩，默认 86（对齐 canvasHostCore；0 会让端口区塌成不可命中）
   portZoneHeightRatio: 0.55,
   portZoneOffset: 0,
   portZoneShape: "arc",
