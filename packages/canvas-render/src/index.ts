@@ -28,20 +28,6 @@ export type {
   HoverPortSide,
   FlowPoint,
 } from './contracts/connectionContext'
-// 拖线吸附目标上报判定纯逻辑（前端/DOM 报 Aim → render 规整候选；Node 可测）
-export {
-  aimToCandidate,
-  aimBodyCandidate,
-  aimSnapCandidate,
-  aimOrientation,
-  aimAcceptsSide,
-  aimPortSide,
-  aimToHoverSeed,
-  type Aim,
-  type AimSide,
-  type AimCandidate,
-  type AimHoverSeed,
-} from './connection/aim'
 // 拖线反馈纯几何/决策/文案（能力层基座，Node 可测）
 export { resolveFeedback, isReverse } from './connection/resolveFeedback'
 export type { ResolveFeedbackInput, ResolveResult, HoverDecision, ValidateEdge } from './connection/resolveFeedback'
