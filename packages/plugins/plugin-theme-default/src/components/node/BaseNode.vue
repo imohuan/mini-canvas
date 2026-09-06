@@ -241,17 +241,20 @@ const shouldShowHandles = computed(
 // ============ 调试可视化（端口调试 handleDebug / 吸附调试 connectionSnapDebugVisible）============
 /** 端口调试：是否给端口画半圆/圆心/归位/鼠标点辅助线（进 MovingHandle :debug） */
 const debugHandle = computed(() => Boolean(debug.handleDebug))
-/** 是否画本节点"端口半圆接收区"叠加（handleDebug 打开且本节点非拖线源、非低细节时展示端口几何） */
+/** 是否画本节点"端口半圆接收区"叠加（handleDebug 打开且本节点非拖线中、非低细节时展示端口几何；
+ *  拖线时压住避免与真正吸附区混淆——吸附判定由 .moving-handle-zone 的 mouseenter 负责，不靠 debug svg） */
 const showHandleDebugOverlay = computed(
-  () => debugHandle.value && !lowDetail.value && !suppressHandles.value,
+  () => debugHandle.value && !lowDetail.value && !suppressHandles.value && !isConnecting.value,
 )
 /** 吸附调试：开关打开后**持续**显示卡片接收区 + 端口吸附带（无需拖线中也显示，
- *  便于设计/排错时直观知道哪些节点会接收到拖线、snap 带多大范围）。 */
+ *  便于设计/排错时直观知道哪些节点会接收到拖线、snap 带多大范围）。
+ *  拖线时压住避免与真正吸附区混淆。 */
 const showSnapDebugOverlay = computed(
   () =>
     Boolean(debug.connectionSnapDebugVisible) &&
     showTargetHandle.value &&
-    !lowDetail.value,
+    !lowDetail.value &&
+    !isConnecting.value,
 )
 // 吸附带/接收区几何（与 resolveFeedback 同源）
 // 端口区域宽 portZoneWidth 是端口交互区矩形的主尺寸（吸附带宽未显式给时也用它兜底，与 CanvasHost resolveAtClient 一致）
@@ -415,7 +418,7 @@ function clamp(value: number, min: number, max: number): number {
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
+        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
         @hover="onPortHover" @aim="onPortAim" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
@@ -439,7 +442,7 @@ function clamp(value: number, min: number, max: number): number {
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle"
+        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
         @hover="onPortHover" @aim="onPortAim" />
     </div>
 
