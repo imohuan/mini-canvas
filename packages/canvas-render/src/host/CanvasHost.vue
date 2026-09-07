@@ -57,8 +57,6 @@ import {
   endNodeDrag,
   beginViewportMove,
   endViewportMove,
-  beginSelecting,
-  endSelecting,
 } from '../contracts/interactionContext'
 import { clickNode, clickEdge, clickPane } from './selectionInteractions'
 import { RenderEvents, toDragPayload } from './renderEvents'
@@ -137,8 +135,6 @@ const surfaceRef = shallowRef<{
   getViewport?: () => { x: number; y: number; zoom: number }
   getPaneRect?: () => DOMRect | null
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
-  getSelectedNodeIds?: () => string[]
-  getSelectedEdgeIds?: () => string[]
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
 } | undefined>()
 
@@ -362,20 +358,7 @@ function onPaneClick(): void {
 }
 
 /** 框选/多选手势结束：把 VueFlow 当前选中节点/边写回内核 Selection（单源），触发 onChange → 渲染态高亮一致 */
-function onSelectionStart(): void {
-  beginSelecting(interaction)
-}
 
-function onSelectionEnd(): void {
-  endSelecting(interaction)
-  const h = hostRef.value
-  const surface = surfaceRef.value
-  if (!h || !surface) return
-  const nodeIds = surface.getSelectedNodeIds?.() ?? []
-  const edgeIds = surface.getSelectedEdgeIds?.() ?? []
-  h.selection.set(nodeIds)
-  h.selection.setEdges(edgeIds)
-}
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
 // 返回 ValidationResult 的纯校验（供 isValidConnection / 拖线反馈 validateEdge 复用，reason 不丢弃）。
@@ -936,8 +919,6 @@ onBeforeUnmount(() => {
         :on-move-start="onMoveStart"
         :on-move-end="onMoveEnd"
         :on-pane-click="onPaneClick"
-        :on-selection-start="onSelectionStart"
-        :on-selection-end="onSelectionEnd"
         :on-node-context-menu="onNodeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"
       >
@@ -976,4 +957,6 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
 

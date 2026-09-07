@@ -79,8 +79,6 @@ const props = defineProps<{
   onMoveStart: () => void
   onMoveEnd: () => void
   onPaneClick: () => void
-  onSelectionStart: () => void
-  onSelectionEnd: () => void
   onNodeContextMenu: (e: NodeMouseEvent) => void
   onPaneContextMenu: (e: MouseEvent) => void
 }>()
@@ -115,6 +113,7 @@ watch(
 )
 // pane DOM 矩形：onMounted 后填（见下方 paneEl 捕获）；move 事件经 CanvasHost 已桥，这里 watch viewport 变化时刷新
 const paneRectRef = shallowRef<DOMRect | null>(null)
+const paneEl = ref<HTMLElement | null>(null)
 
 /** 屏幕 client → flow（官方换算，可靠） */
 function screenToFlow(clientX: number, clientY: number): { x: number; y: number } {
@@ -140,6 +139,7 @@ const renderCtx: CanvasRenderContext = {
   debug: props.debugVisual,
   snapZone: props.snapZone,
   viewport: viewportRef,
+  pane: paneEl,
   paneRect: paneRectRef,
   renderNodes: renderNodesRef,
   renderEdges: renderEdgesRef,
@@ -164,7 +164,6 @@ const measure = useNodeMeasure({
 onBeforeUnmount(() => {
   measure.stop()
 })
-const paneEl = ref<HTMLElement | null>(null)
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
   paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
@@ -207,12 +206,10 @@ defineExpose({
   },
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
   /** 当前被 VueFlow 选中的节点 id（框选/多选后读；供宿主回写内核） */
-  getSelectedNodeIds: () => (vfApi.getSelectedNodes.value ?? []).map((n) => n.id),
   /** 当前选中节点的最新位置（多选拖动落盘用：VueFlow 已把位移应用到全部选中节点） */
   getSelectedNodePositions: () =>
     (vfApi.getSelectedNodes.value ?? []).map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
   /** 当前被 VueFlow 选中的边 id */
-  getSelectedEdgeIds: () => (vfApi.getSelectedEdges.value ?? []).map((e) => e.id),
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
   screenToFlow: (x: number, y: number): { x: number; y: number } => {
     const p = vfApi.screenToFlowCoordinate({ x, y }) as { x: number; y: number }
@@ -245,6 +242,8 @@ defineExpose({
       :is-valid-connection="isValidConnection"
       :min-zoom="minZoom"
       :max-zoom="maxZoom"
+      :selection-key-code="null"
+      :multi-selection-key-code="'Shift'"
       @connect="onConnect"
       @connect-start="onConnectStart"
       @connect-end="onConnectEnd"
@@ -256,8 +255,6 @@ defineExpose({
       @move-start="onMoveStart"
       @move-end="onMoveEnd"
       @pane-click="onPaneClick"
-      @selection-start="onSelectionStart"
-      @selection-end="onSelectionEnd"
       @node-context-menu="onNodeContextMenu"
       @pane-context-menu="onPaneContextMenu"
     >

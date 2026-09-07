@@ -64,6 +64,8 @@ export interface CanvasRenderContext {
   viewport: Readonly<Ref<ViewportState>>
   /** 视口 pane 的 DOM 矩形（client 坐标基准；未挂载/无 DOM 时 null） */
   paneRect: Readonly<Ref<DOMRect | null>>
+  /** 画布 pane DOM 元素（插件自绘框选/手势监听挂载点；未挂载时 null） */
+  pane: Readonly<Ref<HTMLElement | null>>
   /** 当前渲染节点只读快照（含选中标记与位置；宿主订阅 store 自动重灌；拖动中为最近一次同步态） */
   renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
   /** 当前渲染边只读快照 */
