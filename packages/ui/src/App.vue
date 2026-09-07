@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
         ⚙ 设置
       </button>
       <span class="brand">@mini-canvas/ui</span>
-      <span class="hint">拖节点移动 · 从圆点拖出连线 · 双击文本编辑 · 右键菜单 · Ctrl+Z 撤销 · 刷新不丢</span>
+      <span class="hint">拖节点移动 · 从圆点拖出连线 · Shift+拖空白框选多选 · Ctrl+A 全选 · Esc 清除 · Delete 删除选中 · 刷新不丢</span>
     </div>
 
     <div class="canvas-wrap">
