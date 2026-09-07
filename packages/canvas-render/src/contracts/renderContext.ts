@@ -74,6 +74,12 @@ export interface CanvasRenderContext {
   screenToFlow(clientX: number, clientY: number): { x: number; y: number }
   /** flow(画布)坐标 → 屏幕 client 坐标（浮层画线/手柄定位/对齐线用） */
   flowToScreen(flowX: number, flowY: number): { x: number; y: number }
+  /**
+   * 拖拽中把某节点的视觉位置写到渲染层（VueFlow 内部节点）——不触发 store/整组替换。
+   * 用途：对齐吸附/参考线等"拖动过程中实时微调被拖节点位置"的插件能力；
+   * 拖拽结束的位置落盘仍由宿主照常处理（nodeDragStop → store）。
+   */
+  updateNodeVisual(id: string, position: { x: number; y: number }): void
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */

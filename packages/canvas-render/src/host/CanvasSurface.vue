@@ -126,6 +126,11 @@ function flowToScreen(flowX: number, flowY: number): { x: number; y: number } {
   return { x: p.x, y: p.y }
 }
 
+/** 拖拽中把单节点视觉位置写到 VueFlow 内部（不触发 store/整组替换）——对齐吸附等插件用 */
+function updateNodeVisual(id: string, position: { x: number; y: number }): void {
+  vfApi.updateNode(id, { position })
+}
+
 const renderCtx: CanvasRenderContext = {
   ctx: host.ctx,
   host,
@@ -145,6 +150,7 @@ const renderCtx: CanvasRenderContext = {
   renderEdges: renderEdgesRef,
   screenToFlow,
   flowToScreen,
+  updateNodeVisual,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
