@@ -27,6 +27,7 @@
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
+    "@mini-canvas/plugin-multi-select": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",
     "typescript": "~6.0.2",
@@ -36,3 +37,5 @@
     "vue-tsc": "^3.2.8"
   }
 }
+
+

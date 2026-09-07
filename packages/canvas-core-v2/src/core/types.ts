@@ -98,7 +98,7 @@ export interface PluginCapabilities {
   }
   /** 注册命令，自动回收 */
   commands: {
-    register(def: { id: string; title?: string; run(ctx: unknown, ...payload: unknown[]): unknown; keys?: string[]; when?: (ctx: unknown) => boolean }): void
+    register(def: { id: string; title?: string; run(ctx: unknown, ...payload: unknown[]): unknown; keys?: string[]; when?: (ctx: unknown) => boolean; icon?: string; areas?: string[]; group?: string; order?: number }): void
     has(id: string): boolean
   }
   /** 往通用 UI 槽叠 occupant（宿主按序渲染），自动回收 */
@@ -242,3 +242,4 @@ export type Revoke = () => void
  * effect 回调：可返回一个清理函数（会被登记进当前 scope）。
  */
 export type EffectFn = () => void | (() => void) | Disposable
+

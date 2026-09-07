@@ -165,6 +165,9 @@ importers:
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-commands
+      '@mini-canvas/plugin-multi-select':
+        specifier: workspace:*
+        version: link:../plugins/plugin-multi-select
       '@mini-canvas/plugin-node-image':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image
@@ -222,6 +225,19 @@ importers:
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   packages/plugins/plugin-canvas-commands:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+
+  packages/plugins/plugin-multi-select:
     dependencies:
       '@mini-canvas/canvas-base':
         specifier: workspace:*
