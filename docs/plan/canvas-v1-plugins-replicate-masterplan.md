@@ -53,6 +53,10 @@
 
 ## 四、进度与结论记录
 
+### 全部 16 个插件复刻完成（2026-09-07）
+已复刻包：node-find/canvas-export/align-arrange/clipboard/align-guide/file-drop/mini-map/edge-cutting/context-menu/group/auto-layout/multi-select/auto-save/custom-handle/history/shortcut-manager。
+跳过（用户指定）：theme/storage/backend-sync。
+
 ### 已完成包（commit）
 - plugin-node-find 2bb4ac4：搜索浮层，mod+f 命令，nodeLayout 聚焦
 - plugin-canvas-export c0fc617：mod+e / mod+shift+e 导出 PNG
@@ -63,17 +67,19 @@
 - plugin-mini-map 442a37c：右下小地图 mod+m，拖拽平移
 - plugin-edge-cutting 9a07680：Alt+拖刀光切割连线
 
-### E 组核对结论（不建包，已被 v2 吸收）
+### E 组策略修订（2026-09-07 复核）：为忠实用户目标复刻全部插件，custom-handle/history/auto-save/shortcut-manager 建薄适配包（以 v2 内核为底座，保留老版 API/行为面）；其中纯被吸收能力(连接校验/端口配置/撤销内核)包内薄封装 + 注释指向 v2 能力
 - custom-handle：老版仅注入端口几何配置(radius/restOffset/...) → v2 由 CanvasHost handleVisual/snapZone props + CanvasParams 覆盖。吸收完成。
 - history：老版 undo/redo/批量/事件 → v2 内核 History(withRecord/undo/redo) + command:undo/redo + CanvasHost 键盘分发。吸收完成。老版 beginBatch/clear/undoCount 若日后需要可补内核 History API，暂不建包。
 - auto-save：老版定时保存/事件 → v2 CanvasHost visibilitychange/pagehide flush + SaveService dirty/flush。吸收完成。老版 interval 定时保存若需要可做轻量插件，暂不建包。
 - shortcut-manager：老版注册中心/重映射/帮助 → v2 command.keys + CanvasHost 统一分发(keyComboMatches/findCommandByKeys)。吸收完成。老版键位重映射 UI/持久化若日后需要可补，暂不建包。
 
 ### 待做
-- plugin-multi-select 补全：自绘框选 + SelectionFrame(群组框/整组拖动)（待做）
+- plugin-multi-select 补全：自绘框选 + SelectionFrame(群组框/整组拖动)a371d52：自绘框选(BoxSelectLayer) + SelectionFrame 群组框/整组拖动/中键 pan（+ 渲染层 84b768d 补关 multi-selection-key-code）
 - plugin-group 2471d49：打组/解组/包围盒/拖拽归组简版(依赖渲染投影 0e58971)
 - plugin-auto-layout（进行中）
 - plugin-context-menu f381588：右键菜单(pane/node/edge ctx 事件)
+- plugin-auto-layout 59dc450：dagre 嵌套分簇自动布局(Ctrl+L/F/R + Config schema)
+- plugin-thin-wrappers(history/custom-handle/auto-save/shortcut-manager)完成：auto-save 2c7d047 / custom-handle 5651c2b / history 224dc91 / shortcut-manager 98d3cbb
 
 ### 渲染层补的 API（插件驱动，commit）
 - 9ad458c CanvasRenderContext.updateNodeVisual（拖拽中单节点视觉写通道）
