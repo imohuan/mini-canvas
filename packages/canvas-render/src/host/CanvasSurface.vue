@@ -149,9 +149,9 @@ onMounted(() => {
       vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
     setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
   })
-})
-  // renderer DOM 就绪后启动节点尺寸观测（须在 onMounted 内，否则容器未挂载、MutationObserver 永不启动）
+  // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
+})
 
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
