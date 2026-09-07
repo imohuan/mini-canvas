@@ -166,6 +166,9 @@ defineExpose({
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
   /** 当前被 VueFlow 选中的节点 id（框选/多选后读；供宿主回写内核） */
   getSelectedNodeIds: () => (vfApi.getSelectedNodes.value ?? []).map((n) => n.id),
+  /** 当前选中节点的最新位置（多选拖动落盘用：VueFlow 已把位移应用到全部选中节点） */
+  getSelectedNodePositions: () =>
+    (vfApi.getSelectedNodes.value ?? []).map((n) => ({ id: n.id, x: n.position.x, y: n.position.y })),
   /** 当前被 VueFlow 选中的边 id */
   getSelectedEdgeIds: () => (vfApi.getSelectedEdges.value ?? []).map((e) => e.id),
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */

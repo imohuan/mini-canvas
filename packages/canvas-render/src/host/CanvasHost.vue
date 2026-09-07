@@ -136,6 +136,7 @@ const surfaceRef = shallowRef<{
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
   getSelectedNodeIds?: () => string[]
   getSelectedEdgeIds?: () => string[]
+  getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
 } | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
@@ -279,13 +280,26 @@ function onNodeDragStop(e: NodeDragEvent): void {
   endNodeDrag(interaction)
   const h = hostRef.value
   if (!h) return
-  const pos = e.node.position
-  // VueFlow 内部已更新自身节点位置；这里把最终 position 写回内核 store（replaceAll 触发订阅自动刷新）。
-  const graph: CanvasNode[] = h.nodeStore.getNodes().map((n) => {
-    const moved = e.node.id === n.id && pos ? { x: pos.x, y: pos.y } : { ...n.position }
-    return { ...n, position: moved }
-  })
-  h.nodeStore.replaceAll(graph)
+  // VueFlow 拖动多选时已把位移应用到全部选中节点：这里把它们的最终位置一起写回内核 store，
+  // 避免只写主节点导致其它被拖节点弹回原位。
+  const surface = surfaceRef.value
+  const moved = surface?.getSelectedNodePositions?.() ?? []
+  if (moved.length > 0) {
+    h.nodeStore.updateNodes(
+      moved.map((p) => ({
+        id: p.id,
+        patch: { position: { x: p.x, y: p.y } },
+      })),
+    )
+  } else {
+    // 兜底：读不到选中节点位置时退回旧行为（只写事件主节点）
+    const pos = e.node.position
+    const graph: CanvasNode[] = h.nodeStore.getNodes().map((n) => {
+      const movedOne = e.node.id === n.id && pos ? { x: pos.x, y: pos.y } : { ...n.position }
+      return { ...n, position: movedOne }
+    })
+    h.nodeStore.replaceAll(graph)
+  }
   void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
   const payload = toDragPayload(e)
   if (payload) h.ctx.emit(RenderEvents.NodeDragEnd, payload)
