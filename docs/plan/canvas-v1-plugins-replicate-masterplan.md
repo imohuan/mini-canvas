@@ -70,8 +70,14 @@
 - shortcut-manager：老版注册中心/重映射/帮助 → v2 command.keys + CanvasHost 统一分发(keyComboMatches/findCommandByKeys)。吸收完成。老版键位重映射 UI/持久化若日后需要可补，暂不建包。
 
 ### 待做
-- plugin-multi-select 补全：自绘框选 + SelectionFrame(群组框/整组拖动/工具栏)
-- plugin-group（依赖渲染投影 parentNode，先补 nodesFromStore 投影再实现）
-- plugin-auto-layout（依赖 group）
-- plugin-context-menu（进行中）
+- plugin-multi-select 补全：自绘框选 + SelectionFrame(群组框/整组拖动)（待做）
+- plugin-group 2471d49：打组/解组/包围盒/拖拽归组简版(依赖渲染投影 0e58971)
+- plugin-auto-layout（进行中）
+- plugin-context-menu f381588：右键菜单(pane/node/edge ctx 事件)
+
+### 渲染层补的 API（插件驱动，commit）
+- 9ad458c CanvasRenderContext.updateNodeVisual（拖拽中单节点视觉写通道）
+- 5bee764 右键 ctx 事件 RenderEvents.ContextMenuPane/Node/Edge + edge 右键接线
+- 074fe3e 导出右键 payload 类型
+- 0e58971 nodesFromStore parentId/size 投影（group 地基）
 
