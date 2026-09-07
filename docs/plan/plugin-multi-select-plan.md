@@ -1,6 +1,6 @@
 # plugin-multi-select 实现计划（多选框选闭环）
 
-> 日期：2026-09-07 · 分支：feat/cordis-plugin-system · 状态：计划
+> 日期：2026-09-07 · 分支：feat/cordis-plugin-system · 状态：已实现（2026-09-07）
 > 目标：做出第一个交互类插件 multi-select 的 v2 复刻，验证交互插件链路（渲染层能力 + 插件包）。
 > 分层：canvas-render 提供框选/选中回流能力；插件做命令/快捷键/Service/UI。
 
@@ -41,4 +41,17 @@
 
 - 不碰 src/ 老版；不改 core 已有公开签名（nodesFromStore 加可选参向后兼容）。
 - UI 归插件；渲染层只补数据/手势到选中集的能力。
+
+## 六、落地记录
+
+- A（渲染层）：nodesFromStore(store, selectedIds?) 支持 selected 标记（7597ba0）；
+  CanvasHost @selection-end 回流内核 + 渲染态统一带选中派生（7597ba0）；
+  nodeDragStop 多选拖动批量写回全部选中节点位置（5389f83）。
+- B（插件包 plugin-multi-select）：Service(selectAll/clearSelection/getSelectedNodes/hasSelection) +
+  Ctrl+A/Escape 快捷键（window keydown，浏览器守卫）+ multi-select:select-all/clear 命令（e5e0b6f）。
+- demo（ui）：App.vue 装配 multiSelectPlugin，可 Shift+拖框选 / Ctrl+A 全选 / Escape 清除（c76f025）。
+
+验证：render 125 绿、core 243 绿、多包 tsc/vue-tsc 干净。
+
+
 
