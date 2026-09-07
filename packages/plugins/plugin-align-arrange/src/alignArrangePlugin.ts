@@ -28,7 +28,7 @@ import {
 } from './arrangeEngine'
 import { computeCompactArrange, type CompactDirection } from './compactArrange'
 
-/** 节点布局服务最小形状（宿主注入 @mini-canvas/canvas-render 的 NodeLayoutService；声明只读避免硬依赖） */
+/** 节点布局服务最小形状（宿主注入 @mini-canvas/canvas-render 的 NodeLayoutService；只读类型不落 declare 避免与渲染层冲突） */
 interface NodeLayoutLike {
   nodeSize(id: string): { w: number; h: number }
 }
@@ -38,7 +38,6 @@ declare module '@mini-canvas/canvas-core-v2' {
     nodeStore: NodeStoreService
     selection: SelectionService
     history: HistoryService
-    nodeLayout?: NodeLayoutLike
   }
 }
 
@@ -53,7 +52,8 @@ const COMPACT_GAP = 20
 
 export function apply(ctx: Context) {
   const { nodeStore, selection, history } = ctx
-  const layout = ctx.nodeLayout
+  // nodeLayout 由渲染层宿主注入；此处经 ctx.get 可选读取（与 group/mini-map 同模式，不 declare 直访类型）
+  const layout = ctx.get<NodeLayoutLike | undefined>('nodeLayout')
 
   /** 取节点矩形：位置用 node.position（相对坐标，与 updateNodes 写入一致）；尺寸走 nodeLayout 实测/声明/默认。 */
   function toRect(n: CanvasNode): ArrangeRect {

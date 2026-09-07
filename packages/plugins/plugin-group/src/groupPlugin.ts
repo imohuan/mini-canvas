@@ -30,6 +30,7 @@ import {
   createGroupId,
   computeGroupBounds,
   toRelativePosition,
+  DEFAULT_GROUP_BACKGROUND_COLOR,
 } from './groupEngine'
 import GroupContent from './GroupContent.vue'
 
@@ -148,6 +149,7 @@ export class GroupService extends Service implements GroupServiceAPI {
           data: {
             label: '',
             nodeType: GROUP_NODE_TYPE,
+            backgroundColor: DEFAULT_GROUP_BACKGROUND_COLOR,
             cardWidth: bounds.w,
             cardHeight: bounds.h,
           },

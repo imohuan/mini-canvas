@@ -148,3 +148,16 @@ export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
 
+// ============================================================================
+// 渲染层注入 ctx 的服务的类型增强（统一声明，插件不必各自 declare 冲突）
+// nodeLayout / viewport 由 createMiniCanvasHost 注入内核 ctx；这里给插件作者类型面。
+// ============================================================================
+declare module '@mini-canvas/canvas-core-v2' {
+  interface Context {
+    /** 节点布局只读服务（实测尺寸/绝对坐标；render 注入，恒在） */
+    nodeLayout: import('./layout/nodeLayout').NodeLayoutService
+    /** 视口服务（render 注入空壳 + CanvasSurface attach 后端；恒在） */
+    viewport: import('./viewport/viewportService').ViewportService
+  }
+}
+

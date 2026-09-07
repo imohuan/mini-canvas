@@ -29,6 +29,13 @@ import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
+import { alignArrangePlugin } from '@mini-canvas/plugin-align-arrange'
+import { contextMenuPlugin } from '@mini-canvas/plugin-context-menu'
+import { clipboardPlugin } from '@mini-canvas/plugin-clipboard'
+import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
+import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
+import { groupPlugin } from '@mini-canvas/plugin-group'
+import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
@@ -39,6 +46,13 @@ const plugins = [
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
   alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
   autoLayoutPlugin, // 自动布局：Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图
+  alignArrangePlugin, // 对齐排列：Ctrl+方向键紧凑排列 / 对齐/等距命令
+  groupPlugin, // 分组：选中≥2 Ctrl+G 打组 / Ctrl+Shift+G 解组
+  contextMenuPlugin, // 右键菜单：空白新建节点 / 节点删除 / 边删除
+  clipboardPlugin, // 复制粘贴：Ctrl/Cmd+C/V/X/D
+  canvasExportPlugin, // 导出：Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中
+  nodeFindPlugin, // 搜索：Ctrl/Cmd+F
+  miniMapPlugin, // 小地图：Ctrl/Cmd+M
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 

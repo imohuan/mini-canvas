@@ -117,6 +117,30 @@ export interface GroupMembershipCandidate {
   currentParentId?: string
 }
 
+/** 分组预设色板（对齐老版 canvas-core/src/plugins/group/model.ts：前 7 个预设 + 1 自定义） */
+export type GroupColorSwatch =
+  | { kind: 'preset'; id: string; color: string; label: string }
+  | { kind: 'custom'; id: 'custom'; label: string }
+
+export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
+  { kind: 'preset', id: 'slate', color: '#334155', label: '石板灰' },
+  { kind: 'preset', id: 'blue', color: '#0ea5e9', label: '蓝色' },
+  { kind: 'preset', id: 'red', color: '#ef4444', label: '红色' },
+  { kind: 'preset', id: 'orange', color: '#f97316', label: '橙色' },
+  { kind: 'preset', id: 'yellow', color: '#eab308', label: '黄色' },
+  { kind: 'preset', id: 'green', color: '#22c55e', label: '绿色' },
+  { kind: 'preset', id: 'violet', color: '#6366f1', label: '紫色' },
+  { kind: 'custom', id: 'custom', label: '自定义' },
+]
+
+export const DEFAULT_GROUP_BACKGROUND_COLOR =
+  GROUP_COLOR_SWATCHES[0].kind === 'preset' ? GROUP_COLOR_SWATCHES[0].color : '#334155'
+
+/** 取分组底色：存了颜色用存的，否则回退默认石板灰（对齐老版 model.ts 语义） */
+export function resolveGroupBackgroundColor(color: unknown): string {
+  return typeof color === 'string' && color.trim() ? color : DEFAULT_GROUP_BACKGROUND_COLOR
+}
+
 /**
  * 拖拽结束后计算每个节点的归组归属：返回需要"加入/移出"分组的动作。
  * - 节点中心/面积落在某分组内 → 加入（返回 { nodeId, joinGroupId }）；

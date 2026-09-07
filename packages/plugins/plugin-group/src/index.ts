@@ -11,8 +11,11 @@ export {
   createGroupId,
   selectDownloadableGroupChildren,
   getNodeType,
+  resolveGroupBackgroundColor,
+  GROUP_COLOR_SWATCHES,
+  DEFAULT_GROUP_BACKGROUND_COLOR,
 } from './groupEngine'
-export type { GroupRect, GroupBounds, GroupMembershipCandidate } from './groupEngine'
+export type { GroupRect, GroupBounds, GroupMembershipCandidate, GroupColorSwatch } from './groupEngine'
 
 // —— 开发期热重载（HMR）：本包任一源码(逻辑 .ts 或组件 .vue)一改，vite 触发本 accept →
 //    经 window.MiniCanvas.reloadPlugin 先卸旧再装新，让改动在运行中的画布里实时生效。
