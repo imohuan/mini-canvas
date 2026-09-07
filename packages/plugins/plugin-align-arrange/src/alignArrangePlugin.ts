@@ -10,6 +10,7 @@
  * 命令：
  * - align-arrange:align-left / align-right / align-top / align-bottom —— 边缘对齐
  * - align-arrange:distribute-h / align-arrange:distribute-v —— 等距分布
+ * - align-arrange:compact-arrowleft/right/up/down —— 老版核心：沿方向紧凑推挤排列（Ctrl+方向键）
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type {
@@ -25,6 +26,7 @@ import {
   type ArrangeRect,
   type DistributeAxis,
 } from './arrangeEngine'
+import { computeCompactArrange, type CompactDirection } from './compactArrange'
 
 /** 节点布局服务最小形状（宿主注入 @mini-canvas/canvas-render 的 NodeLayoutService；声明只读避免硬依赖） */
 interface NodeLayoutLike {
@@ -46,6 +48,8 @@ export const inject = ['nodeStore', 'selection', 'history'] as string[]
 /** 默认尺寸回退：nodeLayout 缺失时的兜底（与老版 200x100 默认一致，实际以 nodeLayout 为准） */
 const FALLBACK_W = 200
 const FALLBACK_H = 100
+/** 紧凑排列间距（老版 DEFAULT_CONFIG.gap = 20） */
+const COMPACT_GAP = 20
 
 export function apply(ctx: Context) {
   const { nodeStore, selection, history } = ctx
@@ -90,6 +94,12 @@ export function apply(ctx: Context) {
     const rects = selectedRects()
     if (rects.length < 3) return
     applyResult(distributeNodes(rects, axis))
+  }
+
+  function runCompact(direction: CompactDirection): void {
+    const rects = selectedRects()
+    if (rects.length < 2) return
+    applyResult(computeCompactArrange(rects, direction, COMPACT_GAP))
   }
 
   ctx.commands.register({
@@ -137,6 +147,38 @@ export function apply(ctx: Context) {
     group: 'align-arrange',
     order: 21,
     run: () => runDistribute('v'),
+  })
+  ctx.commands.register({
+    id: 'align-arrange:compact-arrowleft',
+    title: '向左紧凑排列',
+    keys: ['ctrl+arrowleft'],
+    group: 'align-arrange',
+    order: 30,
+    run: () => runCompact('ArrowLeft'),
+  })
+  ctx.commands.register({
+    id: 'align-arrange:compact-arrowright',
+    title: '向右紧凑排列',
+    keys: ['ctrl+arrowright'],
+    group: 'align-arrange',
+    order: 31,
+    run: () => runCompact('ArrowRight'),
+  })
+  ctx.commands.register({
+    id: 'align-arrange:compact-arrowup',
+    title: '向上紧凑排列',
+    keys: ['ctrl+arrowup'],
+    group: 'align-arrange',
+    order: 32,
+    run: () => runCompact('ArrowUp'),
+  })
+  ctx.commands.register({
+    id: 'align-arrange:compact-arrowdown',
+    title: '向下紧凑排列',
+    keys: ['ctrl+arrowdown'],
+    group: 'align-arrange',
+    order: 33,
+    run: () => runCompact('ArrowDown'),
   })
 }
 
