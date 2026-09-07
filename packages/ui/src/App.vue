@@ -27,6 +27,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
+import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
@@ -35,6 +36,7 @@ const plugins = [
   nodeImagePlugin, // image 节点
   canvasCommandsPlugin, // 建/删/撤销命令
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
+  alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
@@ -182,7 +184,7 @@ onBeforeUnmount(() => {
         ⚙ 设置
       </button>
       <span class="brand">@mini-canvas/ui</span>
-      <span class="hint">拖节点移动 · 从圆点拖出连线 · Shift+拖空白框选多选 · Ctrl+A 全选 · Esc 清除 · Delete 删除选中 · 刷新不丢</span>
+      <span class="hint">拖节点移动(靠近其它节点边缘/中心会吸附并显示蓝线) · 从圆点拖出连线 · Shift+拖空白框选 · Ctrl+A 全选 · Esc 清除 · Delete 删除 · 刷新不丢</span>
     </div>
 
     <div class="canvas-wrap">
@@ -270,4 +272,3 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
-

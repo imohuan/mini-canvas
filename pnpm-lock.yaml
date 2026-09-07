@@ -240,6 +240,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/plugins/plugin-align-guide:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+    devDependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
   packages/plugins/plugin-canvas-commands:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -268,6 +293,25 @@ importers:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+
+  packages/plugins/plugin-clipboard:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+    devDependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   packages/plugins/plugin-multi-select:
     dependencies:
@@ -450,6 +494,9 @@ importers:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../canvas-render
+      '@mini-canvas/plugin-align-guide':
+        specifier: workspace:*
+        version: link:../plugins/plugin-align-guide
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-commands

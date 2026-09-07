@@ -26,6 +26,7 @@
     "@mini-canvas/canvas-core-v2": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
+    "@mini-canvas/plugin-align-guide": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
@@ -41,5 +42,4 @@
     "vue-tsc": "^3.2.8"
   }
 }
-
 
