@@ -115,7 +115,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   /** 右键菜单请求（已在内部 preventDefault）。父级据此弹业务菜单。 */
-  (e: 'context-menu', payload: { kind: 'node' | 'pane'; clientX: number; clientY: number; nodeId?: string }): void
+  (e: 'context-menu', payload: { kind: 'node' | 'pane' | 'edge'; clientX: number; clientY: number; nodeId?: string; edgeId?: string }): void
   /** 宿主就绪 */
   (e: 'ready', host: CanvasHostHandle): void
   (e: 'boot-error', error: Error): void
@@ -758,10 +758,38 @@ function onNodeContextMenu(e: NodeMouseEvent): void {
   const ev = e.event as MouseEvent
   ev.preventDefault()
   emit('context-menu', { kind: 'node', clientX: ev.clientX, clientY: ev.clientY, nodeId: e.node.id })
+  // ctx 广播：插件(context-menu 等)经 ctx.on(RenderEvents.ContextMenuNode) 消费
+  const h = hostRef.value
+  const node = h?.nodeStore.getNode(e.node.id)
+  h?.ctx.emit(RenderEvents.ContextMenuNode, {
+    clientX: ev.clientX,
+    clientY: ev.clientY,
+    flowPosition: clientToFlow(ev.clientX, ev.clientY),
+    nodeId: e.node.id,
+    nodeType: node?.type,
+  })
+}
+function onEdgeContextMenu(e: EdgeMouseEvent): void {
+  const ev = e.event as MouseEvent
+  ev.preventDefault()
+  emit('context-menu', { kind: 'edge', clientX: ev.clientX, clientY: ev.clientY, edgeId: e.edge.id })
+  const h = hostRef.value
+  h?.ctx.emit(RenderEvents.ContextMenuEdge, {
+    clientX: ev.clientX,
+    clientY: ev.clientY,
+    flowPosition: clientToFlow(ev.clientX, ev.clientY),
+    edgeId: e.edge.id,
+  })
 }
 function onPaneContextMenu(e: MouseEvent): void {
   e.preventDefault()
   emit('context-menu', { kind: 'pane', clientX: e.clientX, clientY: e.clientY })
+  const h = hostRef.value
+  h?.ctx.emit(RenderEvents.ContextMenuPane, {
+    clientX: e.clientX,
+    clientY: e.clientY,
+    flowPosition: clientToFlow(e.clientX, e.clientY),
+  })
 }
 
 // ==================== 生命周期 ====================
@@ -920,6 +948,7 @@ onBeforeUnmount(() => {
         :on-move-end="onMoveEnd"
         :on-pane-click="onPaneClick"
         :on-node-context-menu="onNodeContextMenu"
+        :on-edge-context-menu="onEdgeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"
       >
         <!-- 宿主业务 UI 区(#ui)：转发给 CanvasSurface，使宿主放在本组件 <template #ui> 里的 toolbar/设置 dock 等能经 useCanvasRender 读 ctx -->
@@ -957,6 +986,8 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
 
 
 

@@ -29,6 +29,12 @@ export const RenderEvents = {
   PaneClick: 'canvas:pane:click',
   /** 选中变化（节点/边任一桶）：{ nodeIds, edgeIds } */
   SelectionChange: 'canvas:selection:change',
+  /** 右键：画布空白 { clientX, clientY, flowPosition } */
+  ContextMenuPane: 'canvas:context-menu:pane',
+  /** 右键：节点 { clientX, clientY, flowPosition, nodeId, nodeType? } */
+  ContextMenuNode: 'canvas:context-menu:node',
+  /** 右键：边 { clientX, clientY, flowPosition, edgeId } */
+  ContextMenuEdge: 'canvas:context-menu:edge',
 } as const
 
 export interface DragEventPayload {
@@ -44,6 +50,25 @@ export interface ClickPayload {
   nodeId?: string
   edgeId?: string
   shiftKey?: boolean
+}
+
+export interface ContextMenuPanePayload {
+  clientX: number
+  clientY: number
+  flowPosition: { x: number; y: number }
+}
+export interface ContextMenuNodePayload {
+  clientX: number
+  clientY: number
+  flowPosition: { x: number; y: number }
+  nodeId: string
+  nodeType?: string
+}
+export interface ContextMenuEdgePayload {
+  clientX: number
+  clientY: number
+  flowPosition: { x: number; y: number }
+  edgeId: string
 }
 
 export interface SelectionChangePayload {

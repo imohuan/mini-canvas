@@ -80,6 +80,7 @@ const props = defineProps<{
   onMoveEnd: () => void
   onPaneClick: () => void
   onNodeContextMenu: (e: NodeMouseEvent) => void
+  onEdgeContextMenu: (e: EdgeMouseEvent) => void
   onPaneContextMenu: (e: MouseEvent) => void
 }>()
 
@@ -262,6 +263,7 @@ defineExpose({
       @move-end="onMoveEnd"
       @pane-click="onPaneClick"
       @node-context-menu="onNodeContextMenu"
+      @edge-context-menu="onEdgeContextMenu"
       @pane-context-menu="onPaneContextMenu"
     >
       <!-- 主题插件提供的画布背景（垫在节点之下）；未提供则空 -->
