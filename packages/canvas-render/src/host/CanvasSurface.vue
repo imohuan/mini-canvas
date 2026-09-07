@@ -250,7 +250,7 @@ defineExpose({
       :min-zoom="minZoom"
       :max-zoom="maxZoom"
       :selection-key-code="null"
-      :multi-selection-key-code="'Shift'"
+      :multi-selection-key-code="null"
       @connect="onConnect"
       @connect-start="onConnectStart"
       @connect-end="onConnectEnd"
