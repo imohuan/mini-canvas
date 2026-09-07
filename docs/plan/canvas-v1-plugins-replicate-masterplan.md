@@ -73,17 +73,21 @@
 - auto-save：老版定时保存/事件 → v2 CanvasHost visibilitychange/pagehide flush + SaveService dirty/flush。吸收完成。老版 interval 定时保存若需要可做轻量插件，暂不建包。
 - shortcut-manager：老版注册中心/重映射/帮助 → v2 command.keys + CanvasHost 统一分发(keyComboMatches/findCommandByKeys)。吸收完成。老版键位重映射 UI/持久化若日后需要可补，暂不建包。
 
-### 待做
+### 复刻完成明细（历史顺序，均已提交）
 - plugin-multi-select 补全：自绘框选 + SelectionFrame(群组框/整组拖动)a371d52：自绘框选(BoxSelectLayer) + SelectionFrame 群组框/整组拖动/中键 pan（+ 渲染层 84b768d 补关 multi-selection-key-code）
 - plugin-group 2471d49：打组/解组/包围盒/拖拽归组简版(依赖渲染投影 0e58971)
 - plugin-auto-layout（进行中）
 - plugin-context-menu f381588：右键菜单(pane/node/edge ctx 事件)
 - plugin-auto-layout 59dc450：dagre 嵌套分簇自动布局(Ctrl+L/F/R + Config schema)
 - plugin-thin-wrappers(history/custom-handle/auto-save/shortcut-manager)完成：auto-save 2c7d047 / custom-handle 5651c2b / history 224dc91 / shortcut-manager 98d3cbb
+### 装配验收（2026-09-07，最终状态）
+上述 16 包已全部完成并提交（含 multi-select/group/auto-layout/context-menu/thin-wrappers）。
+ui 全插件装配：App.vue 装配 13 个插件，vue-tsc 0 错、vite build 通过、dev server 运行正常。
+测试全绿：canvas-core-v2 250、canvas-render 127、各插件包 tsc/vue-tsc/vitest 通过。
+文档同步：docs/代码开发/00-总览与架构.md 已补插件体系地图 + 渲染层注入服务/CanvasRenderContext/渲染事件表。
 
 ### 渲染层补的 API（插件驱动，commit）
 - 9ad458c CanvasRenderContext.updateNodeVisual（拖拽中单节点视觉写通道）
 - 5bee764 右键 ctx 事件 RenderEvents.ContextMenuPane/Node/Edge + edge 右键接线
 - 074fe3e 导出右键 payload 类型
 - 0e58971 nodesFromStore parentId/size 投影（group 地基）
-
