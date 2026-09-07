@@ -124,6 +124,7 @@ export type { SelectionClickOptions } from './host/selectionInteractions'
 // 渲染层事件桥：CanvasHost 广播的画布事件名 + payload 归一化（插件 ctx.on 订阅）
 export { RenderEvents, toDragPayload } from './host/renderEvents'
 export type { DragEventPayload, MoveEventPayload, ClickPayload, SelectionChangePayload } from './host/renderEvents'
+export type { ContextMenuPanePayload, ContextMenuNodePayload, ContextMenuEdgePayload } from './host/renderEvents'
 
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
