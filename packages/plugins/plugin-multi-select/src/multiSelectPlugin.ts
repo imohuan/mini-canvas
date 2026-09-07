@@ -1,22 +1,25 @@
 /**
- * plugin-multi-select —— 多选/全选/清除 交互插件（v2 复刻老版 multi-select 的核心选中交互）。
+ * plugin-multi-select —— 多选交互插件（v2 复刻老版 canvas-core/src/plugins/multi-select 完整能力）。
  *
- * 分层说明：
- * - 框选视觉与"框选手势→选中集"由渲染层(VueFlow 原生 Shift+拖 框选 + CanvasHost selection-end 回流内核)提供；
- *   本插件不重复造框选。
- * - 本插件负责"选中集"的交互命令与对外服务：
- *   - Ctrl+A 全选画布内全部节点（跳过输入框内）；
- *   - Escape 清空选中；
- *   - 上架 'multi-select' 服务供其它插件读选中态/触发全选清空（对齐 v1 MultiSelectAPI）。
+ * 对齐老版 MultiSelectPlugin（自绘 Shift+拖框选 + SelectionFrame 群组框 + Ctrl+A/Escape）：
+ * - 框选手势：插件自绘蓝色虚线框（CanvasSurface 已禁 VueFlow 原生框选 selectionKeyCode/multiSelectionKeyCode
+ *   = null），Shift+左键拖空白 → screenToFlow 换算 → nodeLayout 绝对矩形碰撞 → 实时写内核 selection 单源。
+ * - SelectionFrame：选中节点数 > 1 时显示群组虚线框（包围盒 = 选中节点绝对矩形并集 + padding），
+ *   框内左键拖动 = 整组移动（逐帧 updateNodeVisual 视觉写 + 松手 history.withRecord 批量落盘），中键=平移。
+ * - 快捷键 Ctrl+A/Escape 走命令 keys（宿主 CanvasHost 统一分发），不自绑 window。
  *
- * 依赖：nodeStore/selection 硬依赖（宿主恒在）；无 UI、无 Vue 组件。
+ * 分层：
+ * - 数据写/选中单源 → 内核 nodeStore/selection/history（宿主恒在注入）。
+ * - 几何/实测尺寸/绝对坐标 → 渲染层 nodeLayout 服务；坐标换算/视口 → useCanvasRender。
+ * - 框选手势 + SelectionFrame UI → 本插件两个 .vue 组件（注册 overlay 槽，宿主 CanvasSurface 渲染）。
+ * - 纯逻辑（碰撞/包围盒/顶层拖动成员）在 multiSelectEngine.ts（零 Vue 可单测）。
+ *
+ * 依赖方向：只依赖内核服务 + canvas-render 只读上下文/服务；不反向依赖宿主 demo / 其它插件。
  */
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type {
-  NodeStoreService,
-  SelectionService,
-  CanvasNode,
-} from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, CanvasNode } from '@mini-canvas/canvas-core-v2'
+import BoxSelectLayer from './BoxSelectLayer.vue'
+import SelectionFrame from './SelectionFrame.vue'
 
 /** multi-select 暴露给外部插件的服务形状 */
 export interface MultiSelectService {
@@ -42,12 +45,6 @@ declare module '@mini-canvas/canvas-core-v2' {
 
 export const name = 'multi-select'
 export const inject = ['nodeStore', 'selection'] as string[]
-
-/** 是否为可编辑目标（input/textarea/contentEditable）：这些场景不劫持快捷键 */
-function isEditableTarget(t: EventTarget | null): boolean {
-  if (!(t instanceof HTMLElement)) return false
-  return Boolean(t.closest('input, textarea, select, [contenteditable="true"]'))
-}
 
 /** 多选快捷键处理（纯逻辑可单测）：Ctrl/Cmd+A 全选、Escape 清空；返回是否已处理（消费事件） */
 export function handleMultiSelectKey(
@@ -108,19 +105,22 @@ export function apply(ctx: Context) {
   // 1. 上架服务（构造即 super(ctx,'multi-select') 上架）
   const svc = new MultiSelectServiceImpl(ctx)
 
-  // 2. 快捷键：Ctrl+A 全选、Escape 清空（window keydown，跳过可编辑目标）
-  // 快捷键绑定仅在浏览器环境执行（node 装配/测试下守卫跳过；副作用经 ctx.effect 自动回收）
-  ctx.effect(() => {
-    if (typeof window === 'undefined') return
-    function onKeydown(e: KeyboardEvent): void {
-      if (isEditableTarget(e.target)) return
-      handleMultiSelectKey(e, svc)
-    }
-    window.addEventListener('keydown', onKeydown)
-    return () => window.removeEventListener('keydown', onKeydown)
+  // 2. 自绘框选浮层 + SelectionFrame 群组框 → overlay 槽（宿主 CanvasSurface 渲染，
+  //    组件内 useCanvasRender 读 pane/viewport/screenToFlow；热卸随插件 scope 自动移除）
+  ctx.slots.register('overlay', {
+    id: 'multi-select-box',
+    order: 30,
+    component: BoxSelectLayer,
+    meta: { title: 'Shift+拖拽框选' },
+  })
+  ctx.slots.register('overlay', {
+    id: 'multi-select-frame',
+    order: 40,
+    component: SelectionFrame,
+    meta: { title: '多选群组框' },
   })
 
-  // 3. 命令：全选 / 清除（带 UI 元数据，供菜单/工具栏渲染）
+  // 3. 命令：全选 / 清除（keys 由宿主 CanvasHost 统一分发；热卸随 scope 自动回收）
   ctx.commands.register({
     id: 'multi-select:select-all',
     title: '全选节点',
@@ -141,4 +141,3 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const multiSelectPlugin: PluginModule = { name, inject, apply }
-

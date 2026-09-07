@@ -13,14 +13,17 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-core-v2": "workspace:*",
+    "vue": "^3.5.0"
   },
   "devDependencies": {
-    "typescript": "~6.0.2"
+    "@mini-canvas/canvas-render": "workspace:*",
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0"
   }
 }
-
