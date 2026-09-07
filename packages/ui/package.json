@@ -28,6 +28,7 @@
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
+    "@mini-canvas/plugin-multi-select": "workspace:*",
     "@mini-canvas/plugin-theme-default": "workspace:*"
   },
   "devDependencies": {
@@ -40,3 +41,5 @@
     "vue-tsc": "^3.2.8"
   }
 }
+
+

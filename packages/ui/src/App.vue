@@ -26,6 +26,7 @@ import {
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
+import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
@@ -33,6 +34,7 @@ const plugins = [
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
   canvasCommandsPlugin, // 建/删/撤销命令
+  multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
@@ -268,3 +270,4 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+

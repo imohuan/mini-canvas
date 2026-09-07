@@ -399,6 +399,9 @@ importers:
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-commands
+      '@mini-canvas/plugin-multi-select':
+        specifier: workspace:*
+        version: link:../plugins/plugin-multi-select
       '@mini-canvas/plugin-node-image':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image
