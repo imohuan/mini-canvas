@@ -134,6 +134,8 @@ const surfaceRef = shallowRef<{
   getViewport?: () => { x: number; y: number; zoom: number }
   getPaneRect?: () => DOMRect | null
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
+  getSelectedNodeIds?: () => string[]
+  getSelectedEdgeIds?: () => string[]
 } | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
@@ -193,6 +195,8 @@ function syncSelected(): void {
   if (!h) return
   selectedIds.value = new Set(h.selection.ids)
   selectedEdgeSelRef.value = new Set(h.selection.edgeIds)
+  // 重建渲染态节点并带 selected 标记：内核选中(单击/框选/Ctrl+A)驱动 VueFlow 节点高亮一致
+  nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   h.ctx.emit(RenderEvents.SelectionChange, {
     nodeIds: [...h.selection.ids],
     edgeIds: [...h.selection.edgeIds],
@@ -257,7 +261,7 @@ function syncFromStore(): void {
     .getEdges()
     .filter((e) => alive.has(e.source) && alive.has(e.target))
     .map((e) => ({ id: e.id, type: e.type ?? 'custom', source: e.source, target: e.target }))
-  nodes.value = nodesFromStore(h.nodeStore)
+  nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
   log.log(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
@@ -338,6 +342,17 @@ function onPaneClick(): void {
   if (!h) return
   clickPane(h.selection)
   h.ctx.emit(RenderEvents.PaneClick, {})
+}
+
+/** 框选/多选手势结束：把 VueFlow 当前选中节点/边写回内核 Selection（单源），触发 onChange → 渲染态高亮一致 */
+function onSelectionEnd(): void {
+  const h = hostRef.value
+  const surface = surfaceRef.value
+  if (!h || !surface) return
+  const nodeIds = surface.getSelectedNodeIds?.() ?? []
+  const edgeIds = surface.getSelectedEdgeIds?.() ?? []
+  h.selection.set(nodeIds)
+  h.selection.setEdges(edgeIds)
 }
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
@@ -905,6 +920,7 @@ onBeforeUnmount(() => {
         :on-move-start="onMoveStart"
         :on-move-end="onMoveEnd"
         :on-pane-click="onPaneClick"
+        :on-selection-end="onSelectionEnd"
         :on-node-context-menu="onNodeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"
       >

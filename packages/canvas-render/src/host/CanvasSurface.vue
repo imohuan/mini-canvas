@@ -77,6 +77,7 @@ const props = defineProps<{
   onMoveStart: () => void
   onMoveEnd: () => void
   onPaneClick: () => void
+  onSelectionEnd: () => void
   onNodeContextMenu: (e: NodeMouseEvent) => void
   onPaneContextMenu: (e: MouseEvent) => void
 }>()
@@ -163,6 +164,10 @@ defineExpose({
       : (vfApi.viewport as unknown as { x: number; y: number; zoom: number })
   },
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
+  /** 当前被 VueFlow 选中的节点 id（框选/多选后读；供宿主回写内核） */
+  getSelectedNodeIds: () => (vfApi.getSelectedNodes.value ?? []).map((n) => n.id),
+  /** 当前被 VueFlow 选中的边 id */
+  getSelectedEdgeIds: () => (vfApi.getSelectedEdges.value ?? []).map((e) => e.id),
   /** 把屏幕坐标(clientX/Y)→flow 坐标，由 VueFlow 自身处理（缩放/平移完全可靠） */
   screenToFlow: (x: number, y: number): { x: number; y: number } => {
     const p = vfApi.screenToFlowCoordinate({ x, y }) as { x: number; y: number }
@@ -206,6 +211,7 @@ defineExpose({
       @move-start="onMoveStart"
       @move-end="onMoveEnd"
       @pane-click="onPaneClick"
+      @selection-end="onSelectionEnd"
       @node-context-menu="onNodeContextMenu"
       @pane-context-menu="onPaneContextMenu"
     >

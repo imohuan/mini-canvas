@@ -1,7 +1,3 @@
-/**
- * canvasHostCore —— 渲染宿主纯逻辑单测（store→flow 映射 / 主题装配 / 默认参数 / 边剪枝）。
- * 全部零 Vue 依赖，Node 环境直接跑。
- */
 import { describe, expect, it } from 'vitest'
 import { NodeStore, ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import {
@@ -37,6 +33,19 @@ describe('nodesFromStore', () => {
     // data 是浅拷贝：改 flow 的 data 不污染内核 store
     flow[0].data.text = 'MUTATED'
     expect(s.getNode(id)!.data.text).toBe('hi')
+  })
+
+  it('传入 selectedIds 时给匹配节点打 selected 标记，未传则不带', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'a' },
+      { type: 'text', position: { x: 10, y: 10 }, id: 'b' },
+    ])
+    const without = nodesFromStore(s)
+    expect('selected' in without[0]).toBe(false)
+    const withSel = nodesFromStore(s, new Set(['a']))
+    expect(withSel.find((n) => n.id === 'a')!.selected).toBe(true)
+    expect(withSel.find((n) => n.id === 'b')!.selected).toBe(false)
   })
 })
 
@@ -103,3 +112,4 @@ describe('edgeId', () => {
     expect(edgeId('1', '2')).toBe('e-1-2')
   })
 })
+

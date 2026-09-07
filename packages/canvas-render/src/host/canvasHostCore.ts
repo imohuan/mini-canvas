@@ -23,15 +23,22 @@ export interface FlowNode {
   type: string
   position: { x: number; y: number }
   data: Record<string, unknown>
+  /** 选中态（来自内核 selection；VueFlow 据此高亮节点） */
+  selected?: boolean
 }
 
-/** 把内核 nodeStore 当前节点灌成 VueFlow 节点数组（data 浅拷贝，避免共享引用被 Vue 改写污染内核） */
-export function nodesFromStore(store: NodeStoreService): FlowNode[] {
+/**
+ * 把内核 nodeStore 当前节点灌成 VueFlow 节点数组（data 浅拷贝，避免共享引用被 Vue 改写污染内核）。
+ * @param selectedIds 内核选中的节点 id 集（可选）：传入则给匹配节点打 selected=true，驱动 VueFlow 高亮；
+ *   不传则不带 selected 字段（向后兼容）。
+ */
+export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySet<string>): FlowNode[] {
   return store.getNodes().map((n: CanvasNode) => ({
     id: n.id,
     type: n.type,
     position: { x: n.position.x, y: n.position.y },
     data: { ...(n.data as Record<string, unknown>) },
+    ...(selectedIds ? { selected: selectedIds.has(n.id) } : {}),
   }))
 }
 
@@ -125,3 +132,4 @@ export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
 export function edgeId(source: string, target: string): string {
   return `e-${source}-${target}`
 }
+
