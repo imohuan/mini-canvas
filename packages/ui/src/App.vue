@@ -28,6 +28,7 @@ import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
+import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
@@ -37,6 +38,7 @@ const plugins = [
   canvasCommandsPlugin, // 建/删/撤销命令
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
   alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
+  autoLayoutPlugin, // 自动布局：Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
