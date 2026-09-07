@@ -224,6 +224,22 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/plugins/plugin-align-arrange:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+
   packages/plugins/plugin-canvas-commands:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -232,6 +248,22 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+
+  packages/plugins/plugin-canvas-export:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+      html-to-image:
+        specifier: ^1.11.13
+        version: 1.11.13
     devDependencies:
       typescript:
         specifier: ~6.0.2
@@ -249,6 +281,28 @@ importers:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+
+  packages/plugins/plugin-node-find:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-core-v2':
+        specifier: workspace:*
+        version: link:../../canvas-core-v2
+    devDependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
   packages/plugins/plugin-node-image:
     dependencies:
@@ -1696,8 +1750,8 @@ packages:
     resolution: {integrity: sha512-CRT1WTyuQoD771GW56XEZFQ/ZoSfWid1alKGDYMmkt2yl8UXrVR4pspqWNEcqKvVIzg6PAltWjxcSSPrboA4iA==}
     engines: {node: '>=18.0.0'}
 
-  expect-type@1.4.0:
-    resolution: {integrity: sha512-KfYbmpRm0VbLjEvVa9yGwCi9GI34xvi7A/HXYWQO65CSD2u3MczUJSuwXKFIxlGsgBQizV9q5J9NHj4VG0n+pA==}
+  expect-type@1.3.0:
+    resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
     engines: {node: '>=12.0.0'}
 
   express-rate-limit@8.7.0:
@@ -3628,7 +3682,7 @@ snapshots:
     dependencies:
       eventsource-parser: 3.1.1
 
-  expect-type@1.4.0: {}
+  expect-type@1.3.0: {}
 
   express-rate-limit@8.7.0(express@5.2.1):
     dependencies:
@@ -4332,7 +4386,7 @@ snapshots:
       '@vitest/utils': 3.2.7
       chai: 5.3.3
       debug: 4.4.3
-      expect-type: 1.4.0
+      expect-type: 1.3.0
       magic-string: 0.30.21
       pathe: 2.0.3
       picomatch: 4.0.4
