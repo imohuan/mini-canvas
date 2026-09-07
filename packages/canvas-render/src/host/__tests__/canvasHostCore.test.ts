@@ -47,6 +47,21 @@ describe('nodesFromStore', () => {
     expect(withSel.find((n) => n.id === 'a')!.selected).toBe(true)
     expect(withSel.find((n) => n.id === 'b')!.selected).toBe(false)
   })
+
+  it('parentId/size 投影：parentId → parentNodeId、size → style', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 100, y: 50 }, id: 'g', size: { w: 300, h: 200 } },
+      { type: 'text', position: { x: 10, y: 10 }, id: 'c', parentId: 'g' },
+    ])
+    const flow = nodesFromStore(s)
+    const g = flow.find((n) => n.id === 'g')!
+    const c = flow.find((n) => n.id === 'c')!
+    expect(g.parentNodeId).toBeUndefined()
+    expect(g.style).toEqual({ width: '300px', height: '200px' })
+    expect(c.parentNodeId).toBe('g')
+    expect(c.style).toBeUndefined()
+  })
 })
 
 describe('pruneDanglingEdges', () => {

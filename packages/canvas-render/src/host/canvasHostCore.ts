@@ -25,6 +25,10 @@ export interface FlowNode {
   data: Record<string, unknown>
   /** 选中态（来自内核 selection；VueFlow 据此高亮节点） */
   selected?: boolean
+  /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 据此做父子嵌套，子 position 为相对父局部坐标） */
+  parentNodeId?: string
+  /** 声明尺寸 → 像素 style（内核 CanvasNode.size 投影） */
+  style?: { width: string; height: string }
 }
 
 /**
@@ -39,6 +43,11 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
     position: { x: n.position.x, y: n.position.y },
     data: { ...(n.data as Record<string, unknown>) },
     ...(selectedIds ? { selected: selectedIds.has(n.id) } : {}),
+    // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
+    // parentNodeId: VueFlow 把子节点 position 视为相对父的局部坐标（与内核约定一致）
+    ...(n.parentId ? { parentNodeId: n.parentId } : {}),
+    // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
+    ...(n.size ? { style: { width: n.size.w + 'px', height: n.size.h + 'px' } } : {}),
   }))
 }
 
