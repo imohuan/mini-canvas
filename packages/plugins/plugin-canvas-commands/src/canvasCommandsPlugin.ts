@@ -55,6 +55,7 @@ export function apply(ctx: Context) {
   ctx.commands.register({
     id: 'command:delete',
     title: '删除选中',
+    keys: ['Delete', 'Backspace'],
     run() {
       history.withRecord(() => {
         // 先删选中的边（v2 边双集选中）：只删边、保留两端节点
@@ -92,8 +93,8 @@ export function apply(ctx: Context) {
   })
 
   // —— 撤销 / 重做 ——
-  ctx.commands.register({ id: 'command:undo', title: '撤销', run: () => history.undo() })
-  ctx.commands.register({ id: 'command:redo', title: '重做', run: () => history.redo() })
+  ctx.commands.register({ id: 'command:undo', title: '撤销', keys: ['mod+z'], run: () => { history.undo(); selection.clear() } })
+  ctx.commands.register({ id: 'command:redo', title: '重做', keys: ['mod+shift+z'], run: () => { history.redo(); selection.clear() } })
 }
 
 /** 兼容旧装配的 PluginModule 出口 */

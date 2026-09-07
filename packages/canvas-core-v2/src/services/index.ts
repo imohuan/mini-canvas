@@ -25,6 +25,8 @@ export { History } from './history'
 export type { HistoryService, HistorySnapshot } from './history'
 export { CommandRegistry } from './command'
 export type { CommandDef, CommandService } from './command'
+export { commandMatchesKeys, keyComboMatches, findCommandByKeys } from './command'
+export type { CommandKeyEvent } from './command'
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'
 export {
@@ -48,3 +50,4 @@ export type {
   InvalidReason,
   ValidationResult,
 } from './connection'
+

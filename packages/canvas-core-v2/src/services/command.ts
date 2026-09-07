@@ -92,4 +92,80 @@ export class CommandRegistry implements CommandService {
   }
 }
 
+// ============================================================================
+// CommandDef.keys → 键盘事件匹配（渲染层绑键用；纯逻辑零 DOM，可单测）
+// ============================================================================
+
+/** 键盘事件最小形状（DOM KeyboardEvent 兼容子集） */
+export interface CommandKeyEvent {
+  key: string
+  ctrlKey?: boolean
+  shiftKey?: boolean
+  altKey?: boolean
+  metaKey?: boolean
+}
+
+/** 友好键名 → KeyboardEvent.key（小写比较基准；其余原样小写） */
+const KEY_ALIAS: Record<string, string> = {
+  escape: 'escape', enter: 'enter', space: ' ', backspace: 'backspace',
+  delete: 'delete', tab: 'tab',
+  arrowup: 'arrowup', arrowdown: 'arrowdown', arrowleft: 'arrowleft', arrowright: 'arrowright',
+  plus: '+', minus: '-', equal: '=', ' ': ' ',
+}
+
+/**
+ * 命令某组 keys（如 'ctrl+a' / 'Delete' / 'mod+shift+z'）是否匹配键盘事件。
+ * 语法：'+' 分隔；修饰键 ctrl/shift/alt/meta/mod(cmd)；mod = ctrl 或 meta 任一（跨平台）。
+ * 主键大小写不敏感；单键名用 KeyboardEvent.key 语义（'Delete'/'Escape'/'ArrowUp'…）。
+ */
+export function keyComboMatches(combo: string, e: CommandKeyEvent): boolean {
+  const parts = combo.toLowerCase().split('+')
+  const isMod = (p: string) => p === 'ctrl' || p === 'shift' || p === 'alt' || p === 'meta' || p === 'mod' || p === 'cmd'
+  const modifiers = parts.filter(isMod)
+  const keyPart = parts.filter((p) => !isMod(p)).join('+') || ''
+
+  const wantCtrl = modifiers.includes('ctrl')
+  const wantShift = modifiers.includes('shift')
+  const wantAlt = modifiers.includes('alt')
+  const wantMetaOrCmd = modifiers.includes('meta') || modifiers.includes('cmd')
+  const wantMod = modifiers.includes('mod')
+
+  // mod = ctrl 或 meta 任一
+  const hasMod = Boolean(e.ctrlKey) || Boolean(e.metaKey)
+  if (wantMod && !hasMod) return false
+  if (!wantMod) {
+    // 精确匹配修饰键（无 mod 时 ctrl/meta 必须与期望一致）
+    if (wantCtrl !== Boolean(e.ctrlKey)) return false
+    if (wantMetaOrCmd !== Boolean(e.metaKey)) return false
+  }
+  if (wantShift !== Boolean(e.shiftKey)) return false
+  if (wantAlt !== Boolean(e.altKey)) return false
+
+  const eventKey = (e.key ?? '').toLowerCase()
+  const wantKey = (KEY_ALIAS[keyPart] ?? keyPart).toLowerCase()
+  return eventKey === wantKey
+}
+
+/**
+ * 命令（CommandDef.keys 数组）是否匹配键盘事件；任一 keys 命中即 true。
+ * 无 keys/空数组 → false。
+ */
+export function commandMatchesKeys(keys: string[] | undefined, e: CommandKeyEvent): boolean {
+  if (!keys || keys.length === 0) return false
+  return keys.some((combo) => keyComboMatches(combo, e))
+}
+
+/**
+ * 在命令列表里找第一个 keys 命中键盘事件的命令（渲染层 keydown 分发用）。
+ * 按列表顺序先到先得；无命中返回 undefined。无 keys 的命令跳过。
+ */
+export function findCommandByKeys<T extends { id: string; keys?: string[] }>(
+  commands: readonly T[],
+  e: CommandKeyEvent,
+): T | undefined {
+  for (const cmd of commands) {
+    if (cmd.keys && cmd.keys.length > 0 && commandMatchesKeys(cmd.keys, e)) return cmd
+  }
+  return undefined
+}
 

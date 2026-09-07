@@ -33,6 +33,7 @@ import {
   type CanvasEdge,
   type EdgeStoreService,
   GRAPH_EDGES_KEY,
+  findCommandByKeys,
   validateConnection,
   typeConnectionDef,
   type ValidationResult,
@@ -760,17 +761,11 @@ function onKeydown(e: KeyboardEvent): void {
   if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
   const h = hostRef.value
   if (!h) return
-  if (e.key === 'Delete') {
+  // 通用快捷键：扫描已注册命令的 keys，命中即 execute（Delete/Ctrl+Z 等命令的 keys 由插件声明）
+  const hit = findCommandByKeys(h.command.list(), e)
+  if (hit) {
     e.preventDefault()
-    const ids = h.selection.ids // 内核 Selection 单源(点击/清空已写它)
-    if (ids.size > 0) {
-      h.command.execute('command:delete') // 内部清内核 selection → 订阅自动清 selectedIds 高亮
-      syncFromStore()
-    }
-  } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
-    e.preventDefault()
-    h.command.execute(e.shiftKey ? 'command:redo' : 'command:undo')
-    h.selection.clear() // 撤销后取消选中(订阅自动清 selectedIds)
+    h.command.execute(hit.id)
     syncFromStore()
   }
 }
