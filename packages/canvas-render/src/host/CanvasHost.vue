@@ -56,6 +56,8 @@ import {
   endNodeDrag,
   beginViewportMove,
   endViewportMove,
+  beginSelecting,
+  endSelecting,
 } from '../contracts/interactionContext'
 import { clickNode, clickEdge, clickPane } from './selectionInteractions'
 import { RenderEvents, toDragPayload } from './renderEvents'
@@ -359,7 +361,12 @@ function onPaneClick(): void {
 }
 
 /** 框选/多选手势结束：把 VueFlow 当前选中节点/边写回内核 Selection（单源），触发 onChange → 渲染态高亮一致 */
+function onSelectionStart(): void {
+  beginSelecting(interaction)
+}
+
 function onSelectionEnd(): void {
+  endSelecting(interaction)
   const h = hostRef.value
   const surface = surfaceRef.value
   if (!h || !surface) return
@@ -934,6 +941,7 @@ onBeforeUnmount(() => {
         :on-move-start="onMoveStart"
         :on-move-end="onMoveEnd"
         :on-pane-click="onPaneClick"
+        :on-selection-start="onSelectionStart"
         :on-selection-end="onSelectionEnd"
         :on-node-context-menu="onNodeContextMenu"
         :on-pane-context-menu="onPaneContextMenu"

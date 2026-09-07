@@ -129,3 +129,14 @@ export function beginViewportMove(state: CanvasInteractionState): void {
 export function endViewportMove(state: CanvasInteractionState): void {
   updateActivity(state, { paneDragging: false })
 }
+
+/** 框选/多选手势开始：亮 selecting（插件自绘框选或 VueFlow 原生框选期间置位）。 */
+export function beginSelecting(state: CanvasInteractionState): void {
+  updateActivity(state, { selecting: true })
+}
+
+/** 框选/多选手势结束：灭 selecting。 */
+export function endSelecting(state: CanvasInteractionState): void {
+  updateActivity(state, { selecting: false })
+}
+

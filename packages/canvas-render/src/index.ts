@@ -39,6 +39,8 @@ export {
   endNodeDrag,
   beginViewportMove,
   endViewportMove,
+  beginSelecting,
+  endSelecting,
 } from './contracts/interactionContext'
 export type {
   CanvasInteractionState,

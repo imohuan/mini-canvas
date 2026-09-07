@@ -22,7 +22,7 @@
  *   新代码一律走 useCanvasRender()。
  * - 仅限 CanvasSurface(渲染子树) 内调用；不在宿主内会抛清晰错误。
  */
-import { inject, type InjectionKey } from 'vue'
+import { inject, type InjectionKey, type Ref } from 'vue'
 import type { Context, NodeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
 import type { NodeWrite } from './nodeRegistryKey'
@@ -32,6 +32,8 @@ import type { ConnectionFeedbackState } from './connectionContext'
 import type { CanvasInteractionState } from './interactionContext'
 import type { CanvasDebug } from './debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
+import type { FlowNode } from '../host/canvasHostCore'
+import type { ViewportState } from '../viewport/viewportService'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -57,6 +59,19 @@ export interface CanvasRenderContext {
   debug: CanvasDebug
   /** 吸附带配置（高占节点比例/宽/偏移/形状；属性改实时影响吸附判定与 BaseNode 调试叠加） */
   snapZone: SnapZoneConfig
+  // ===== v2 完善（2026-09）：只读数据源 + 坐标能力，供插件(多选/浮层/装饰)消费，render 不掺决策 =====
+  /** 当前画布视口变换（响应式，pan/zoom 实时跟；浮层定位/坐标换算用） */
+  viewport: Readonly<Ref<ViewportState>>
+  /** 视口 pane 的 DOM 矩形（client 坐标基准；未挂载/无 DOM 时 null） */
+  paneRect: Readonly<Ref<DOMRect | null>>
+  /** 当前渲染节点只读快照（含选中标记与位置；宿主订阅 store 自动重灌；拖动中为最近一次同步态） */
+  renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
+  /** 当前渲染边只读快照 */
+  renderEdges: Readonly<Ref<ReadonlyArray<{ id: string; type: string; source: string; target: string }>>>
+  /** 屏幕 client 坐标 → flow(画布)坐标（pane 偏移 + 视口逆变换；由 VueFlow 官方换算保证可靠） */
+  screenToFlow(clientX: number, clientY: number): { x: number; y: number }
+  /** flow(画布)坐标 → 屏幕 client 坐标（浮层画线/手柄定位/对齐线用） */
+  flowToScreen(flowX: number, flowY: number): { x: number; y: number }
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */
@@ -73,3 +88,4 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
+

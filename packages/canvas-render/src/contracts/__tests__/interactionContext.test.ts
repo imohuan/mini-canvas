@@ -8,6 +8,8 @@ import {
   endNodeDrag,
   beginViewportMove,
   endViewportMove,
+  beginSelecting,
+  endSelecting,
 } from '../interactionContext'
 
 describe('createInteractionState', () => {
@@ -101,4 +103,18 @@ describe('createInteractionState', () => {
     expect(s.isPanning.value).toBe(false)
     expect(s.isBusyDragging.value).toBe(false)
   })
+
+  it('beginSelecting/endSelecting：驱动 selecting 位 + isSelecting 派生', () => {
+    const s = createInteractionState()
+    expect(s.isSelecting.value).toBe(false)
+    beginSelecting(s)
+    expect(s.activity.value.selecting).toBe(true)
+    expect(s.isSelecting.value).toBe(true)
+    expect(s.isBusyDragging.value).toBe(true) // selecting 计入 isBusyDragging
+    endSelecting(s)
+    expect(s.activity.value.selecting).toBe(false)
+    expect(s.isSelecting.value).toBe(false)
+    expect(s.isBusyDragging.value).toBe(false)
+  })
 })
+

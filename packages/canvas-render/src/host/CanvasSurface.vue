@@ -10,7 +10,7 @@
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
 // - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
-import { provide, shallowRef, ref, onMounted, onBeforeUnmount } from 'vue'
+import { provide, shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
@@ -26,6 +26,8 @@ import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasInteractionState } from '../contracts/interactionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
 import { RENDER_CONTEXT_KEY } from '../contracts/renderContext'
+import type { FlowNode } from './canvasHostCore'
+import type { ViewportState } from '../viewport/viewportService'
 import type { CanvasDebug } from '../contracts/debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
@@ -77,6 +79,7 @@ const props = defineProps<{
   onMoveStart: () => void
   onMoveEnd: () => void
   onPaneClick: () => void
+  onSelectionStart: () => void
   onSelectionEnd: () => void
   onNodeContextMenu: (e: NodeMouseEvent) => void
   onPaneContextMenu: (e: MouseEvent) => void
@@ -88,6 +91,42 @@ if (!host) {
   // 父级 v-else 保证 boot 完成才挂载本组件，正常不会走到；防御性报错以免渲染子树拿到空宿主。
   throw new Error('[CanvasSurface] 宿主未就绪：CanvasSurface 仅应在 boot 完成后挂载')
 }
+// VueFlow 实例（viewport/screen-flow/flow-screen 等视图能力的来源；在 provide renderCtx 前拿到）
+const vfApi = useVueFlow()
+
+// —— 只读数据源 refs（供 renderCtx 暴露给插件；宿主/本组件维护，插件只读）——
+// 渲染态节点/边：随 props.nodes/edges(宿主订阅 store 自动重灌)同步，包成稳定 ref 供上下文消费方响应式读
+const renderNodesRef = shallowRef<ReadonlyArray<FlowNode>>(props.nodes ?? [])
+const renderEdgesRef = shallowRef<ReadonlyArray<{ id: string; type: string; source: string; target: string }>>(props.edges ?? [])
+watch(
+  () => props.nodes,
+  (v) => { renderNodesRef.value = v ?? [] },
+)
+watch(
+  () => props.edges,
+  (v) => { renderEdgesRef.value = v ?? [] },
+)
+// 视口变换：跟随 VueFlow viewport（响应式 computed）
+const viewportRef = shallowRef<ViewportState>({ x: 0, y: 0, zoom: 1 })
+watch(
+  () => (vfApi.viewport as unknown as { value?: ViewportState })?.value,
+  (v) => { if (v) viewportRef.value = { x: v.x, y: v.y, zoom: v.zoom } },
+  { immediate: true },
+)
+// pane DOM 矩形：onMounted 后填（见下方 paneEl 捕获）；move 事件经 CanvasHost 已桥，这里 watch viewport 变化时刷新
+const paneRectRef = shallowRef<DOMRect | null>(null)
+
+/** 屏幕 client → flow（官方换算，可靠） */
+function screenToFlow(clientX: number, clientY: number): { x: number; y: number } {
+  const p = vfApi.screenToFlowCoordinate({ x: clientX, y: clientY }) as { x: number; y: number }
+  return { x: p.x, y: p.y }
+}
+/** flow → 屏幕 client（官方换算） */
+function flowToScreen(flowX: number, flowY: number): { x: number; y: number } {
+  const p = vfApi.flowToScreenCoordinate({ x: flowX, y: flowY }) as { x: number; y: number }
+  return { x: p.x, y: p.y }
+}
+
 const renderCtx: CanvasRenderContext = {
   ctx: host.ctx,
   host,
@@ -100,6 +139,12 @@ const renderCtx: CanvasRenderContext = {
   interaction: props.interaction,
   debug: props.debugVisual,
   snapZone: props.snapZone,
+  viewport: viewportRef,
+  paneRect: paneRectRef,
+  renderNodes: renderNodesRef,
+  renderEdges: renderEdgesRef,
+  screenToFlow,
+  flowToScreen,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
@@ -110,10 +155,6 @@ provide(CANVAS_PARAMS_KEY, props.handleParams)
 provide(EDGE_VISUAL_KEY, props.edgeVisual)
 provide(EDGE_SELECTION_KEY, props.edgeSelection)
 provide(HOST_KEY, shallowRef(host))
-
-// ==================== viewport + pane DOM 暴露（供 CanvasHost 拖线 mousemove/mouseup 用 clientToFlow） ====================
-// VueFlow 在本组件内渲染，useVueFlow() 拿实时 viewport（reactively 跟随 zoom/pan）。
-const vfApi = useVueFlow()
 
 // 节点实测尺寸注入 nodeLayout（ResizeObserver + MutationObserver）；start 在 onMounted 内（renderer DOM 就绪后）
 const measure = useNodeMeasure({
@@ -127,6 +168,7 @@ const paneEl = ref<HTMLElement | null>(null)
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
   paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
+  paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
   // 视口服务接线：把 VueFlow 能力 attach 到 host.viewport（工厂注入的空壳），插件可 ctx.get('viewport')
   props.host?.viewport.attachBackend({
     getViewport: () => {
@@ -214,6 +256,7 @@ defineExpose({
       @move-start="onMoveStart"
       @move-end="onMoveEnd"
       @pane-click="onPaneClick"
+      @selection-start="onSelectionStart"
       @selection-end="onSelectionEnd"
       @node-context-menu="onNodeContextMenu"
       @pane-context-menu="onPaneContextMenu"
