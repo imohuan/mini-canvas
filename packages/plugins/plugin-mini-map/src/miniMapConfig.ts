@@ -10,11 +10,16 @@ import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import type { Context } from '@mini-canvas/canvas-base'
 
 export const Config = {
-  miniMapWidth: { type: 'number', default: 240, min: 120, max: 400, step: 10, label: '宽度', description: '小地图宽度（px）', group: '小地图' },
-  miniMapHeight: { type: 'number', default: 160, min: 80, max: 300, step: 10, label: '高度', description: '小地图高度（px）', group: '小地图' },
-  miniMapSensitivityX: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'X轴灵敏度', description: '拖拽时 X 轴移动倍率', group: '小地图' },
-  miniMapSensitivityY: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'Y轴灵敏度', description: '拖拽时 Y 轴移动倍率', group: '小地图' },
-  miniMapVisible: { type: 'boolean', default: true, label: '显示小地图', description: '切换显示/隐藏', group: '小地图' },
+  miniMapWidth: {
+    type: 'number', default: 240, min: 120, max: 400, step: 10, label: '宽度', description: '小地图面板的宽度（px）。', group: '小地图' },
+  miniMapHeight: {
+    type: 'number', default: 160, min: 80, max: 300, step: 10, label: '高度', description: '小地图面板的高度（px）。', group: '小地图' },
+  miniMapSensitivityX: {
+    type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'X轴灵敏度', description: '在小地图里拖动时，画布水平移动的倍率（1 = 完全跟随，>1 移得更快）。', group: '小地图' },
+  miniMapSensitivityY: {
+    type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'Y轴灵敏度', description: '在小地图里拖动时，画布垂直移动的倍率。', group: '小地图' },
+  miniMapVisible: {
+    type: 'boolean', default: true, label: '显示小地图', description: '是否在画布角落显示小地图。也可用 Ctrl/Cmd + M 快捷切换。', group: '小地图' },
 } satisfies ConfigSchema
 
 export type MiniMapConfig = InferConfig<typeof Config>

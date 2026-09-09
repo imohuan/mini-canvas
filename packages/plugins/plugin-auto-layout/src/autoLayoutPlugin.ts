@@ -58,7 +58,8 @@ export const Config = {
     type: 'select',
     default: 'LR',
     label: '排列方向',
-    description: '节点自动布局的走向',
+    description:
+      '节点自动布局的走向：左→右 / 上→下 / 右→左 / 下→上。决定连线整体朝哪个方向铺开。',
     group: '布局',
     options: [
       { value: 'LR', label: '左→右 (LR)' },
@@ -67,14 +68,38 @@ export const Config = {
       { value: 'BT', label: '下→上 (BT)' },
     ],
   },
-  intraSpacingX: { type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距', group: '布局' },
-  intraSpacingY: { type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距', group: '布局' },
-  interSpacingX: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距', group: '布局' },
-  interSpacingY: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距', group: '布局' },
-  focusHeightRatio: { type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局' },
-  minZoom: { type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局' },
-  maxZoom: { type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局' },
-  debug: { type: 'boolean', default: false, label: '诊断日志', group: '布局' },
+  intraSpacingX: {
+    type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距', group: '布局',
+    description: '同一层级/分组内部，节点之间的水平间隙（px）。调大让组内节点彼此更疏。',
+  },
+  intraSpacingY: {
+    type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距', group: '布局',
+    description: '同一层级/分组内部，节点之间的垂直间隙（px）。',
+  },
+  interSpacingX: {
+    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距', group: '布局',
+    description: '不同分组（/集群）之间的水平间隙（px）。调大让各组之间分得更开、更清晰。',
+  },
+  interSpacingY: {
+    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距', group: '布局',
+    description: '不同分组（/集群）之间的垂直间隙（px）。',
+  },
+  focusHeightRatio: {
+    type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局',
+    description: '按 F 聚焦选中节点时，想让所选内容占画布可视高度的比例（0.5 = 占一半），保证周围留出上下文。',
+  },
+  minZoom: {
+    type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局',
+    description: '聚焦时允许缩到的最小倍率。内容特别多时也不会缩得比它更小。',
+  },
+  maxZoom: {
+    type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局',
+    description: '聚焦时允许放大的最大倍率，避免选中单个小节点时画面放大过头。',
+  },
+  debug: {
+    type: 'boolean', default: false, label: '诊断日志', group: '布局',
+    description: '打开后，每次自动布局会在控制台打印分组/布局决策日志，便于排查布局结果是否符合预期。',
+  },
 } satisfies ConfigSchema
 
 export type AutoLayoutConfigFromSchema = InferConfig<typeof Config>

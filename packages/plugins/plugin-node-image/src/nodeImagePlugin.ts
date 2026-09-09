@@ -65,13 +65,31 @@ export const inject = ['graph'] as string[]
  */
 export const Config: ConfigSchema = {
   // —— 「节点 / 图片节点」：image 节点的外观与加载行为（非颜色）——
-  cornerRadius: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '节点/图片节点' },
-  showShadow: { type: 'boolean', default: true, label: '阴影', group: '节点/图片节点' },
-  borderWidth: { type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '节点/图片节点' },
-  blurOnLoad: { type: 'boolean', default: false, label: '加载时模糊', group: '节点/图片节点' },
-  lazyLoad: { type: 'boolean', default: true, label: '懒加载', group: '节点/图片节点' },
+  cornerRadius: {
+    type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '节点/图片节点',
+    description: '图片四角的圆角半径（px）。0 = 直角，越大越圆润。',
+  },
+  showShadow: {
+    type: 'boolean', default: true, label: '阴影', group: '节点/图片节点',
+    description: '是否给图片节点外圈画一层柔和阴影，让它从画布背景上浮起来。',
+  },
+  borderWidth: {
+    type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '节点/图片节点',
+    description: '图片节点边框的粗细（px）。0 = 不画边框。',
+  },
+  blurOnLoad: {
+    type: 'boolean', default: false, label: '加载时模糊', group: '节点/图片节点',
+    description: '图片还没加载完时先以模糊占位显示，加载完成再变清晰（适合大图，视觉更平滑）。',
+  },
+  lazyLoad: {
+    type: 'boolean', default: true, label: '懒加载', group: '节点/图片节点',
+    description: '开启后图片进入可视区域附近才真正开始加载，滚动到很远处的图不浪费带宽。',
+  },
   // —— 颜色统一归「主题/图片节点」——
-  borderColor: { type: 'color', default: '#334155', label: '边框颜色', group: '主题/图片节点' },
+  borderColor: {
+    type: 'color', default: '#334155', label: '边框颜色', group: '主题/图片节点',
+    description: '图片节点边框的颜色（开了边框后才显示）。',
+  },
 }
 
 export function apply(ctx: Context) {
