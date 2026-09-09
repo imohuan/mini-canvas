@@ -5,6 +5,9 @@
  * ?? nodeStore.types.defaultSize。resize 拖拽用 pointer capture，屏幕 delta ÷ zoom 还原成画布/内容坐标，
  * 结束经 nodeWrite 写回 node.data（触发 nodeStore 订阅 → 渲染态自动刷新，无需手动 updateNode/map）。
  *
+ * 拖柄显示门：**类型级 resizable 能力**(useNodeCapability 读 nodeStore.types[type].resizable) **或** 节点实例 data.resizable === true。
+ * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖；实例级 data.resizable 可单独覆盖/关闭。
+ *
  * 用法（BaseNode）：
  *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, zoom })
  *   :style="{ width: card.cardWidth+'px', height: card.cardHeight+'px', ... }"
@@ -27,6 +30,11 @@ export interface NodeCardSizeOptions {
   writeback?: (id: string, patch: Record<string, unknown>) => void;
   /** 当前画布缩放（resize 屏幕 delta ÷ zoom 换算） */
   zoom: () => number;
+  /**
+   * 类型级 resizable 能力取值器（useNodeCapability().resizable）。缺省返回 false。
+   * 显示拖柄的门 = 类型声明支持 resize **或** 节点实例 data.resizable === true（后者可单独覆盖）。
+   */
+  typeResizable?: () => boolean;
 }
 
 export const CARD_MIN_WIDTH = 120;
@@ -60,8 +68,11 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     },
   );
 
-  // resizable 只在 data.resizable === true 时显示拖柄
-  const resizable = computed(() => data.value?.resizable === true);
+  // 显示拖柄的门：类型声明支持 resize(capability.resizable) **或** 实例 data.resizable === true（后者单独覆盖）。
+  // 类型级优先用调用方传入的 typeResizable 取值器；未传则回退 capability 已读到的类型声明。
+  const resizable = computed(
+    () => (opts.typeResizable ? opts.typeResizable() : capability.resizable.value) || data.value?.resizable === true,
+  );
 
   // —— resize 拖拽状态机 ——
   interface ResizeState {

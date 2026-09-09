@@ -69,6 +69,8 @@ export interface CanvasNodeType {
   /** 声明式连接约束：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
   inputs?: PortDef[]
   outputs?: PortDef[]
+  /** 是否支持 resize（类型级能力，缺省 false = 不可缩放）。渲染层据此显示拖柄；节点实例仍可经 data.resizable 单独覆盖。 */
+  resizable?: boolean
 }
 
 /** NodeStore 作为 ctx 服务暴露的接口 */

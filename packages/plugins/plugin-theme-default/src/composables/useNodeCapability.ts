@@ -39,5 +39,8 @@ export function useNodeCapability(type: string) {
     return s ? { w: s.w, h: s.h } : { w: 256, h: 128 };
   });
 
-  return { hasTarget, hasSource, defaultSize };
+  /** 该 type 是否声明支持 resize（类型级能力；缺省 false）。BaseNode 据此显示拖柄。 */
+  const resizable = computed(() => nodeDef.value?.resizable === true);
+
+  return { hasTarget, hasSource, defaultSize, resizable };
 }

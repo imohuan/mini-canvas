@@ -496,19 +496,21 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：
            左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
            mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
-      <div v-if="showTargetHandle && !blockedTargetPort" class="snap-band snap-band--input" :class="{ 'is-active': snapZonesActive }"
-        :style="inputSnapStyle" @mouseenter="onInputSnapEnter" @mouseleave="onSnapLeave" />
-      <div v-if="showSourceHandle && !blockedSourcePort" class="snap-band snap-band--output" :class="{ 'is-active': snapZonesActive }"
-        :style="outputSnapStyle" @mouseenter="onOutputSnapEnter" @mouseleave="onSnapLeave" />
+      <div v-if="showTargetHandle && !blockedTargetPort" class="snap-band snap-band--input"
+        :class="{ 'is-active': snapZonesActive }" :style="inputSnapStyle" @mouseenter="onInputSnapEnter"
+        @mouseleave="onSnapLeave" />
+      <div v-if="showSourceHandle && !blockedSourcePort" class="snap-band snap-band--output"
+        :class="{ 'is-active': snapZonesActive }" :style="outputSnapStyle" @mouseenter="onOutputSnapEnter"
+        @mouseleave="onSnapLeave" />
 
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示。
            拖线中与源同类型(target)的端口整块从 DOM 摘掉，避免 VueFlow 真实 handle 残影并彻底不让其触发吸附。 -->
       <MovingHandle v-if="showTargetHandle && !blockedTargetPort" id="target" type="target" :position="Position.Left"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
-        :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
-        :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
-        @hover="onPortHover" />
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected"
+        :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
+        :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
+        :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
+        :debug="debugHandle && !isConnecting" @hover="onPortHover" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
@@ -516,7 +518,7 @@ function clamp(value: number, min: number, max: number): number {
         <div v-else class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
-      <!-- 右下角 resize 拖拽句柄（data.resizable === true 时） -->
+      <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门） -->
       <div v-if="cardResizable" class="resize-handle" :class="{ 'is-resizing': cardIsResizing }"
         @pointerdown="card.onResizePointerDown" @pointermove="card.onResizePointerMove"
         @pointerup="card.onResizePointerUp">
@@ -528,11 +530,11 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 右侧输出口(source)：同 target 的处理：拖线中与源同类型(source)的端口整块从 DOM 摘掉。 -->
       <MovingHandle v-if="showSourceHandle && !blockedSourcePort" id="source" type="source" :position="Position.Right"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
-        :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
-        :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
-        :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
-        @hover="onPortHover" />
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected"
+        :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
+        :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
+        :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
+        :debug="debugHandle && !isConnecting" @hover="onPortHover" />
     </div>
 
     <!-- 底部工具栏（注册了才渲染） -->

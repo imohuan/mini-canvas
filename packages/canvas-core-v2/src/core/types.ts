@@ -87,6 +87,8 @@ export interface PluginCapabilities {
       segments?: Partial<Record<'content' | 'title' | 'top-toolbar' | 'bottom-toolbar', unknown>>
       inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
       outputs?: Array<{ port?: string; contentType?: string }>
+      /** 是否支持 resize（类型级能力；缺省 false）。随节点注册进 nodeStore，渲染层据此显示右下拖柄。 */
+      resizable?: boolean
       create?: (position: { x: number; y: number }) => string
     }): void
     /** 往某 type 的某段叠 occupant（多插件同段叠加；自动回收）。返回 occupant id */
