@@ -97,38 +97,39 @@ theme-default 的默认设置面板是 `PluginSettingsDialog.vue`（"居中 moda
 > `settingsNav` / `settingsTab` 的 occupant 组件都会收到 props：
 > `{ group, active, onSelect }`，其中 `onSelect(key)` 用于切换右侧到该 key。**不给它点了就没反应**。
 
-### 4.2 官方示例（直接抄）
+### 4.2 用法示例（在你的插件 apply 里）
 
-`plugin-node-image`（`src/nodeImagePlugin.ts`）把这几套槽都演示了一遍，是最权威的最小用例：
+三套槽都经 `ctx.slots.register(slot, { id, order, component, meta })` 填充，装卸自动回收。
 
 ```ts
-// 一级菜单：id 命中一级名「边框」→ 顶替它（占位组件 DemoSlotNavItem 收到 {group,active,onSelect}）
-ctx.slots.register('settingsNav', { id: '边框', order: 1, component: DemoSlotNavItem })
+// ① 一级菜单：id 命中一级名「外观」→ 顶替那个一级默认项（占位组件自绘整条导航）
+ctx.slots.register('settingsNav', { id: '外观', order: 1, component: MyNavItem })
 
-// 二级页签：id = 二级分组全名「图片/圆角」（一级「图片」下）→ 顶替「图片」里的「圆角」页签
-//（它把 config 拆成 图片/圆角 + 图片/阴影 两个二级分组，于是「图片」下出现「圆角 / 阴影」页签条）
-ctx.slots.register('settingsTab', { id: '图片/圆角', order: 0, component: DemoSlotTab })
+// ② 二级页签：config 里把「外观」拆成 外观/圆角 + 外观/阴影 两个二级分组 → 「外观」下出现页签条；
+//    这里顶替「外观/圆角」那个二级页签（占位组件自绘该页签）
+ctx.slots.register('settingsTab', { id: '外观/圆角', order: 0, component: MyTabItem })
 
-// 正文并存：接管「图片/阴影」的内容区并与默认控件共存（meta.mode='append'）
-ctx.slots.register('settingsGroup/图片/阴影', {
-  id: 'image-coexist-demo',
+// ③ 正文：接管「外观/阴影」的内容区，并让自定义预览与默认 schema 控件并存（meta.mode='append'）
+ctx.slots.register('settingsGroup/外观/阴影', {
+  id: 'my-shadow-preview',
   order: 0,
-  component: DemoSlotContent,
-  meta: { mode: 'append' },
+  component: MyPreviewPanel,   // 一块"改配置实时看效果"的预览UI
+  meta: { mode: 'replace' },   // replace(缺省)=整组接管、隐藏默认控件；prepend/append=与默认控件并存
 })
 ```
 
-配套的占位组件：
+配套占位组件收的 props：
 
 ```ts
-// 一级导航占位：整条由你自绘，点它调注入的 onSelect 切右侧
+// 导航/页签占位：整条由你自绘，点它调注入的 onSelect 切右侧
 defineProps<{ group?: string; active?: boolean; onSelect?: (g: string) => void }>()
 ```
 
 ```ts
-// 内容占位（接管某 key 正文）收 { group, settings }，可自绘并读 settings 改值
+// 内容占位（接管某 key 正文）：收 { group, settings }，可自绘并读 settings 改值
 defineProps<{ group?: string; settings?: SettingsPanelSource }>()
-// settings 非响应式 → 用 settings.onChange(() => tick++) 驱动本地重渲染再取值（见 DemoSlotContent.vue / SettingsSchemaField.vue）
+// settings 非响应式 → 用 settings.onChange(() => tick++) 驱动本地重渲染再取值
+//（SettingsSchemaField / node-image 的 DemoSlotContent 都是这么做的）
 ```
 
 关键几点：
@@ -153,7 +154,7 @@ defineProps<{ group?: string; settings?: SettingsPanelSource }>()
 import { CanvasHost } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'   // 顺带演示 4.2 的插槽
+import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'   // 若你想看 node 类外观设置的分组
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 const plugins = [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]
