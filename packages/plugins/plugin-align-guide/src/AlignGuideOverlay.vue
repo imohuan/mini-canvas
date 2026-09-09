@@ -17,51 +17,38 @@
 /**
  * AlignGuideOverlay -- reference-line floating layer (host CanvasSurface already renders this slot).
  *
- * Bug fix (lines stuck after several snap parallel moves):
- *   1. dragFrameSeq lock: every NodeDrag increments; NodeDragEnd only clears when its seq matches current.
- *      Stops late frames from re-lighting the line, and avoids cross-frame contamination.
- *   2. window-level pointerup / pointercancel / blur safety net: covers any missed NodeDragEnd,
- *      especially during repeated snap-in/out near threshold edge.
- *   3. inactivity timer (150ms): if no new drag frame within window, force-clear.
+ * 显隐生命周期（重做）：不再靠"window pointerup/blur + 无操作 150ms 定时器"猜拖拽何时结束
+ * ——那套既会漏(某些终止被监听不到)，又会在拖拽中鼠标停顿 >150ms 时把线误清。
+ * 改为以渲染层提供的权威拖拽状态 `interaction.isNodeDragging` 为门：
+ *   线在"确实正在拖节点"期间持续存在(鼠标停下也不消失)，`nodeDragStop` 翻转该位→统一清线，
+ *   拖拽结束的判定交给宿主(VueFlow nodeDragStart/nodeDragStop 驱动)，稳定可靠、不会残留。
+ *
+ * 主节点锁定：多选手势里 VueFlow 会为被拖的一组节点都发 NodeDrag 帧；吸附只对
+ * 真正被鼠标抓住的"主节点"计算(NodeDragStart 锁定其 id，NodeDrag 帧 id 不同即忽略)，
+ * 避免整组拖拽时线在成员节点间跳动/串扰。
  */
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
 import { computeAlignGuides } from './alignGuideEngine'
 
-const { ctx, viewport, updateNodeVisual } = useCanvasRender()
+const { ctx, interaction, viewport, updateNodeVisual } = useCanvasRender()
 
 const vGuide = ref<number | null>(null)
 const hGuide = ref<number | null>(null)
 
-let activeId: string | null = null
-let dragFrameSeq = 0
-const INACTIVITY_TIMEOUT_MS = 150
-let inactivityTimer: ReturnType<typeof setTimeout> | null = null
+/** 本次拖拽真正被鼠标抓住的"主节点"id；NodeDragStart 锁定，其它成员的帧忽略 */
+let primaryId: string | null = null
 
 function clearGuides(): void {
-  if (inactivityTimer !== null) {
-    clearTimeout(inactivityTimer)
-    inactivityTimer = null
-  }
-  activeId = null
+  primaryId = null
   vGuide.value = null
   hGuide.value = null
-}
-
-function armInactivityTimeout(): void {
-  if (inactivityTimer !== null) clearTimeout(inactivityTimer)
-  inactivityTimer = setTimeout(() => {
-    inactivityTimer = null
-    if (activeId !== null) clearGuides()
-  }, INACTIVITY_TIMEOUT_MS)
 }
 
 const vScreen = computed(() => (vGuide.value !== null ? vGuide.value * viewport.value.zoom + viewport.value.x : 0))
 const hScreen = computed(() => (hGuide.value !== null ? hGuide.value * viewport.value.zoom + viewport.value.y : 0))
 
 function handleDragFrame(nodeId: string, position: { x: number; y: number }): void {
-  dragFrameSeq += 1
-  armInactivityTimeout()
   const layout = ctx.get<NodeLayoutService>('nodeLayout')
   if (!layout) return
   const size = layout.nodeSize(nodeId)
@@ -74,61 +61,32 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
   }
   const v = guides.find((g) => g.type === 'vertical')
   const h = guides.find((g) => g.type === 'horizontal')
-  activeId = nodeId
   vGuide.value = v ? v.position : null
   hGuide.value = h ? h.position : null
 }
 
-function handleDragEnd(nodeId: string | undefined): void {
-  if (inactivityTimer !== null) {
-    clearTimeout(inactivityTimer)
-    inactivityTimer = null
-  }
-  if (nodeId === undefined || nodeId === activeId) {
-    activeId = null
-    vGuide.value = null
-    hGuide.value = null
-  }
-}
-
-function handlePointerSettle(): void {
-  clearGuides()
-}
-
 const disposers: Array<{ dispose(): void }> = []
 disposers.push(
-  ctx.on(RenderEvents.NodeDragStart, (_payload: { nodeId: string; position: { x: number; y: number } }) => {
+  ctx.on(RenderEvents.NodeDragStart, (payload: { nodeId: string; position: { x: number; y: number } }) => {
     clearGuides()
-    activeId = _payload.nodeId
-    dragFrameSeq = 0
-    armInactivityTimeout()
+    primaryId = payload.nodeId
   }),
   ctx.on(RenderEvents.NodeDrag, (payload: { nodeId: string; position: { x: number; y: number } }) => {
-    handleDragFrame(payload.nodeId, payload.position)
-  }),
-  ctx.on(RenderEvents.NodeDragEnd, (payload: { nodeId: string; position: { x: number; y: number } }) => {
-    handleDragEnd(payload.nodeId)
+    // 只对主节点计算吸附与画线；被一起拖动的其它成员帧一律忽略，防线串扰
+    if (primaryId === null || payload.nodeId !== primaryId) return
+    handleDragFrame(primaryId, payload.position)
   })
 )
 
-onBeforeUnmount(() => {
-  for (const d of disposers) d.dispose()
-  if (inactivityTimer !== null) {
-    clearTimeout(inactivityTimer)
-    inactivityTimer = null
-  }
+// 拖拽结束的权威信号：宿主在 VueFlow nodeDragStop 翻转 isNodeDragging=false → 统一清线。
+// 这比监听 window pointerup/cancel/blur 可靠（后者可能被吞），也比每帧等事件干净。
+watch(interaction.isNodeDragging, (dragging) => {
+  if (!dragging) clearGuides()
 })
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('pointerup', handlePointerSettle, true)
-  window.addEventListener('pointercancel', handlePointerSettle, true)
-  window.addEventListener('blur', handlePointerSettle)
-  onBeforeUnmount(() => {
-    window.removeEventListener('pointerup', handlePointerSettle, true)
-    window.removeEventListener('pointercancel', handlePointerSettle, true)
-    window.removeEventListener('blur', handlePointerSettle)
-  })
-}
+onBeforeUnmount(() => {
+  for (const d of disposers) d.dispose()
+})
 </script>
 
 <style scoped>
