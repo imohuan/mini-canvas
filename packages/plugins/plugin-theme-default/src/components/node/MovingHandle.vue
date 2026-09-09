@@ -203,7 +203,7 @@ const debugRestPoint = computed(() => {
 const debugMousePoint = computed(() => {
   // 真实鼠标位置（mouseX/mouseY，距锚点 outward 与垂直偏移），不是 button 圆心：
   //   - hover 跟随时：球沿 outward 比鼠标再远 cursorGap，鼠标点必须独立显示才能看清间隙。
-  //   - 静止/归位时：mouseX 停在 restOffset，buttonX 因 tuck overlap 更靠近卡边，鼠标点与 button 自然分开。
+  //   - 静止/归位时：mouseX 停在 restOffset，buttonX 也 = restOffset（reset 不再 tuck overlap），鼠标点与 button 重合。
   // svg-local 重映：source anchor.x=0 → x = mouseX + zoneOffset；target anchor.x=shapeWidth → x = shapeWidth - mouseX + zoneOffset
   const x = isSource.value ? mouseX.value + zoneOffset.value : shapeWidth.value - mouseX.value + zoneOffset.value
   return { x, y: zoneHeight.value / 2 + mouseY.value }
@@ -212,8 +212,11 @@ const debugViewBox = computed(() => `0 0 ${shapeWidth.value} ${zoneHeight.value}
 
 resetPosition()
 
+// reset/静止位：球心 = 端口偏移(restOffset) 直接对应距卡边距离，不 tuck overlap。
+//   - config "端口偏移" 改的就是这个 rest 坐标（与 debugRestPoint 一致）。
+//   - hover 时球心 = mouseX + cursorGap，沿 outward 多推 gap。
 function resetPosition() {
-  nextX = direction.value * (restOffset.value - overlap.value)
+  nextX = direction.value * restOffset.value
   nextY = 0
   mouseX.value = restOffset.value
   mouseY.value = 0
@@ -224,7 +227,7 @@ function resetPosition() {
 function restorePosition() {
   mouseX.value = restOffset.value
   mouseY.value = 0
-  commitPosition(direction.value * (restOffset.value - overlap.value), 0)
+  commitPosition(direction.value * restOffset.value, 0)
 }
 function commitPosition(x: number, y: number) {
   nextX = x
