@@ -95,14 +95,20 @@ watch(
   },
   { immediate: true },
 )
+// 拖动中：live 值既更新本地气泡（跟手），也经 coalescer 写 store —— 让绑定的画布配置**实时生效**。
+// 视觉权威仍在 PrecisionSlider 内部 local 值上（不经异步），所以每帧写 store 不会让圆球乱跑；
+// coalescer 一帧合并一次 set，实时又省算力。松手 change 再做最终 commit（补 flush）。
 function onSliderInput(v: number): void {
-  localNumber.value = v // live：气泡跟手
+  localNumber.value = v
+  if (!entry.value) return
+  set(entry.value.key, snapNumber(v, entry.value.schema))
 }
 function onSliderChange(v: number): void {
   if (!entry.value) return
   localNumber.value = v
   const snapped = snapNumber(v, entry.value.schema)
-  set(entry.value.key, snapped) // 松手一次：真正写 store
+  set(entry.value.key, snapped)
+  coalescer.flush() // 松手确保这次值立即落库
 }
 
 const fieldId = 'sf-' + props.fieldKey
