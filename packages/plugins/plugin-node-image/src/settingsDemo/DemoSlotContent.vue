@@ -2,9 +2,9 @@
 /**
  * DemoSlotContent —— 自定义内容区插槽测试组件（plugin-node-image 演示用）。
  *
- * 被注册进 `settingsGroup/图片` 且 meta.mode='append' → 与「图片」分组的**默认 schema 控件并存**：
- *   右侧先渲染该组默认控件（圆角滑块 / 阴影开关），本组件再追加在其下方。
- * 通过 props 收到： group（分组 key）、settings（SettingsPanelSource）。
+ * 被注册进 `settingsGroup/图片/阴影` 且 meta.mode='append' → 与「图片/阴影」二级分组的**默认 schema 控件并存**：
+ *   右侧先渲染该分组的默认控件（阴影开关），本组件再追加在其下方。
+ * 通过 props 收到： group（完整分组 key）、settings（SettingsPanelSource）。
  *
  * 这里刻意**不重复**该组 schema 字段（避免与默认控件撞车），而是渲染一块自定义补充 UI，
  * 用来验证"默认 SettingsSchemaField 与插件自定义组件可以同时存在"。

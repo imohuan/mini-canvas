@@ -1,22 +1,30 @@
 <script setup lang="ts">
 /**
- * PluginSettingsDialog —— theme-default 的默认设置面板皮（Dialog + 左右导航版）。
+ * PluginSettingsDialog —— theme-default 的默认设置面板皮（Dialog + 左右导航 + 可选二级页签版）。
  *
  * 定位：可替换设置面板 settingsPanel 槽的默认赢家，被 <SettingsHost/> 渲染（喂 props.settings）。
- * 从"一列堆叠分组卡片"重构为**居中 modal 弹窗 + 左右布局的标准设置界面**：
- *   - 左 = 分组导航（一项 = 一个 key，默认来自 config 分组；可被"导航插槽"同 key 顶替或追加自定义项）
- *   - 右 = 上下两块：上为当前项标题(分组名)，下为内容区
+ * 从"一列堆叠分组卡片"重构为**居中 modal 弹窗 + 左右布局的标准设置界面**，并支持"分组名带 / 的二级菜单"：
+ *   - 左 = 一级分组导航（一项 = group key 的第一个 `/` 分段；无 `/` 的扁平分组即它自己）
+ *   - 右 = 二级页签条 + 内容：某一级下若**多于一个**二级分组则显示页签(tab)切换；只有一个则直接展示内容、不显示 tab
  * 依赖方向：plugin-theme-default → canvas-render(useCanvasRender 拿 ctx) → canvas-core-v2，不反向。
  *
- * 两套可扩展插槽（用内核 ctx.slots 多 occupant 机制，插件 ctx.slots.register 填充，装卸自动回收）：
- *   1) 左导航插槽  `settingsNav`    — 插件塞自定义导航项 / 顶替某分组 tab。
- *      occupant 注册 id：
- *        - id === 某 config 分组名  → 顶替该分组的默认 tab（左侧该位显示插槽组件，不再渲染默认项）
- *        - id 不命中任何分组        → 作为"纯自定义导航项"追加（右侧需配 content 插槽接管渲染，见下）
- *      occupant 组件通过 props 收到 { key, active, onSelect } —— onSelect(key) 切右侧，不给则点了没反应。
- *   2) 右内容插槽  `settingsGroup/<key>` — 接管某 key 的右侧内容区渲染。
- *      - 有 occupant → 渲染它们（props 给 { key, settings }），接管该 key 内容；
- *      - 无 occupant → fallback：按 schema 渲染该分组全部控件（SettingsSchemaField），分组来自 settings.groupOf(key)。
+ * ## 分组 key 的语义（新增二级菜单）
+ * 每个配置字段声明在某个 `group`（plugin Config schema 里字段的 group / 内核 settings 里申明的组名）。
+ * 这里把 group key 按 `/` 切成两级来组织 UI：
+ *   - key 无 `/`（如 `图片`、`连线`）→ 一级名 = key 本身，下面只有它自己一个"叶子" → 左导航显示它，右侧直接展示其内容（无页签）。
+ *   - key 带 `/`（如 `常规/显示`）→ 一级名 = `常规`，二级名 = `显示` → 左导航按一级名合并显示 `常规`；
+ *     同属 `常规` 的二级分组多于一个时，右侧出现 `显示`/… 的页签条，正文跟随当前页签；只有一个则无页签直接展示。
+ *
+ * ## 三套可扩展插槽（内核 ctx.slots 多 occupant 机制，插件 ctx.slots.register 填充，装卸自动回收）
+ *   1) 左导航插槽  `settingsNav`    — 定制一级导航项（id = 一级名，命中顶替；否则末尾追加自定义一级项）。
+ *   2) 二级页签插槽 `settingsTab`   — 定制二级页签（id 首段 = 当前一级名，见下），与 settingsNav 语义对称。
+ *   3) 右内容插槽  `settingsGroup/<key>` — 接管某个**完整分组 key** 的右侧内容区渲染（key 为带/的叶子全名或扁平分组名）。
+ *
+ *   `settingsNav`/`settingsTab` occupant 都通过 props 收到 { group, active, onSelect }；onSelect(key) 切过去，不给则点了没反应。
+ *   - `settingsNav`：id 命中某一级名 → 顶替该一级导航项；不命中 → 作为"纯自定义一级项"末尾追加（右侧需配 settingsGroup/<id> 接管）。
+ *   - `settingsTab`：id 首段 === 当前一级名 才对本级生效——
+ *     · id 命中该一级下某个完整分组 key → 顶替那个二级页签（正文仍由该 key 的内容插槽/schema 决定）；
+ *     · 不命中 → 追加一个自定义二级页签（需另注册 settingsGroup/<id> 接管其内容）。
  *
  * 打开/关闭：宿主(App.vue)用 v-if="settingsOpen" 控制本面板是否渲染；本面板内部 ✕ / 点遮罩 / Esc
  * 经 ctx.emit('settings:ui-close') 通知宿主关闭（宿主 onReady 里 ctx.on 订阅置 settingsOpen=false）。
@@ -41,6 +49,18 @@ const emit = defineEmits<{
 
 const { ctx } = useCanvasRender()
 
+const SEP = '/'
+
+/** 一级名：group key 的第一个分段。扁平分组(=自己) 与 二级分组(=前段) 在此汇合。 */
+function navOf(key: string): string {
+  return key.split(SEP)[0]
+}
+/** 二级名 / 展示名：带 `/` 的取 `/` 后段，扁平分组取它自己。 */
+function leafLabelOf(key: string): string {
+  const segs = key.split(SEP)
+  return segs.slice(1).join(SEP) || segs[0]
+}
+
 // —— 左导航插槽 occupants（插件塞的导航项），插件装卸/变更时重读 ——
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const navList = ref<SlotOcc[]>([])
@@ -52,10 +72,25 @@ function reloadNav(): void {
   }))
 }
 reloadNav()
+
+// —— 二级页签插槽 occupants（settingsTab）：全局读一次，渲染时按"当前一级名"过滤归并 ——
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const tabList = ref<SlotOcc[]>([])
+function reloadTabs(): void {
+  tabList.value = ctx.slots.occupants('settingsTab').map((e) => ({
+    id: e.id,
+    order: e.order,
+    component: markRaw(e.component as object),
+  }))
+}
+reloadTabs()
+
 const disposers: Array<{ dispose(): void }> = []
 disposers.push(
   ctx.on('ctx:plugin-installed', reloadNav),
   ctx.on('ctx:plugin-uninstalled', reloadNav),
+  ctx.on('ctx:plugin-installed', reloadTabs),
+  ctx.on('ctx:plugin-uninstalled', reloadTabs),
 )
 // P2-1：内核 schema 变更订阅 → 强制刷新分组列表（插件热装卸后新 config 分组立即可见）
 const rawSettings = ctx.get<{ onSchemaChange(cb: () => void): { dispose(): void } }>('settings')
@@ -65,53 +100,108 @@ onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })
 
-// —— 当前激活 key（默认第一个分组）——
+// —— 分组 key → 当前激活 leaf ——
 // P2-1：schema 变化（插件热装卸 define/移除项）经 settings.onSchemaChange 置 refreshTick 强制重算 groups；
 // 不再只依赖 nav/content 间接触发重渲染。
 const refreshTick = ref(0)
 const groups = computed(() => { void refreshTick.value; return props.settings.groups() })
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const activeKey = ref<string>('')
-watch(
-  groups,
-  (g) => {
-    if (!g.length) activeKey.value = ''
-    else if (!g.includes(activeKey.value)) activeKey.value = g[0]
-  },
-  { immediate: true },
-)
+// 一级名 → 其下完整分组 key 列表（保持 groups() 原序）
+const sectionMap = computed<Map<string, string[]>>(() => {
+  const m = new Map<string, string[]>()
+  for (const g of groups.value) {
+    const nav = navOf(g)
+    if (!m.has(nav)) m.set(nav, [])
+    m.get(nav)!.push(g)
+  }
+  return m
+})
 
-/** 合并成左侧导航条目：config 分组(按序) + 导航插槽(同 key 顶替 / 新 key 追加) */
+// 当前激活的**完整分组 key**（二级菜单里是叶子，扁平分组就是它自己；自定义导航项则可能不在任何分组里）
+const activeKey = ref<string>('')
+
 interface NavEntry {
   key: string
-  kind: 'group' | 'nav'
+  kind: 'section' | 'nav'
+  leaves: string[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component?: any
 }
 const navEntries = computed<NavEntry[]>(() => {
-  const gs = groups.value
-  const map = new Map<string, NavEntry>()
-  gs.forEach((k) => map.set(k, { key: k, kind: 'group' }))
-  // 导航插槽：id 命中分组名 → 顶替该位；否则先攒着末尾追加
-  const occs = [...navList.value].sort((a, b) => a.order - b.order)
-  const extra: NavEntry[] = []
-  for (const oc of occs) {
-    if (map.has(oc.id)) map.set(oc.id, { key: oc.id, kind: 'nav', component: oc.component })
-    else if (!oc.id.startsWith('#')) extra.push({ key: oc.id, kind: 'nav', component: oc.component })
-  }
-  // 分组保持 groups() 原顺序（被顶替位即 nav 组件）；纯自定义项追加在末尾
   const out: NavEntry[] = []
-  gs.forEach((k) => {
-    const e = map.get(k)!
-    if (!out.some((o) => o.key === e.key)) out.push(e)
-  })
-  for (const e of extra) {
-    if (!out.some((o) => o.key === e.key)) out.push(e)
+  for (const [nav, leaves] of sectionMap.value) out.push({ key: nav, kind: 'section', leaves })
+  const byKey = new Map<string, NavEntry>(out.map((e) => [e.key, e]))
+  const occs = [...navList.value].sort((a, b) => a.order - b.order)
+  const extras: NavEntry[] = []
+  for (const oc of occs) {
+    if (oc.id.startsWith('#')) continue
+    if (byKey.has(oc.id)) {
+      const e = byKey.get(oc.id)!
+      e.kind = 'nav'
+      e.component = oc.component
+    } else {
+      extras.push({ key: oc.id, kind: 'nav', leaves: [], component: oc.component })
+    }
   }
+  out.push(...extras)
   return out
 })
 
-/** 右内容区插槽 occupants（接管某 key 的内容渲染）；无则走 schema fallback */
+// 分组/导航项变化时，确保 activeKey 仍指向一个存在的 leaf 或一级/自定义项
+watch(
+  [groups, navEntries],
+  () => {
+    const leafSet = new Set(groups.value)
+    const navSet = new Set(navEntries.value.map((e) => e.key))
+    if (!groups.value.length) activeKey.value = ''
+    else if (!leafSet.has(activeKey.value) && !navSet.has(activeKey.value)) activeKey.value = groups.value[0]
+  },
+  { immediate: true },
+)
+
+// —— 二级页签：当前一级下的有序 tabs（默认 leaf + settingsTab 顶替/追加）——
+interface TabEntry {
+  key: string
+  kind: 'leaf' | 'tab'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component?: any
+}
+const tabs = computed<TabEntry[]>(() => {
+  const nav = navOf(activeKey.value)
+  const leaves = sectionMap.value.get(nav) ?? []
+  const occs = [...tabList.value]
+    .sort((a, b) => a.order - b.order)
+    // settingsTab 只对"id 首段 === 当前一级名"的分组/自定义项生效（避免跨一级串扰）
+    .filter((oc) => oc.id.startsWith(nav + SEP))
+  const occByLeaf = new Map<string, SlotOcc>()
+  const customs: SlotOcc[] = []
+  for (const oc of occs) {
+    if (leaves.includes(oc.id)) occByLeaf.set(oc.id, oc)
+    else customs.push(oc)
+  }
+  const out: TabEntry[] = []
+  for (const leaf of leaves) {
+    const occ = occByLeaf.get(leaf)
+    out.push(occ ? { key: leaf, kind: 'tab', component: occ.component } : { key: leaf, kind: 'leaf' })
+  }
+  for (const oc of customs) out.push({ key: oc.id, kind: 'tab', component: oc.component })
+  return out
+})
+/** 当前一级下是否有多于一个二级页签：是才显示 tab 条，否则直接展示正文（需求：只有一个 tab 就不显示） */
+const showTabs = computed(() => tabs.value.length > 1)
+
+// 一级导航项的激活态：当前激活 key 的一级名 === 该项 key
+function isNavActive(key: string): boolean {
+  return !!activeKey.value && navOf(activeKey.value) === key
+}
+
+/** 选中：给一级名 → 取其第一个 leaf；给完整 key/自定义 id → 直接用它。右侧据此切内容。 */
+function select(value: string): void {
+  const leaves = sectionMap.value.get(value)
+  activeKey.value = leaves && leaves.length ? leaves[0] : value
+  reloadContent()
+}
+
+/** 右内容区插槽 occupants（接管某完整 key 的内容渲染）；无则走 schema fallback */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const contentList = ref<SlotOcc[]>([])
 function contentSlotName(key: string): string {
@@ -166,11 +256,8 @@ const contentBlocks = computed<ContentBlock[]>(() => {
   return blocks
 })
 
-/** 选中某个导航 key → 切右侧 */
-function onSelect(key: string): void {
-  activeKey.value = key
-  reloadContent()
-}
+// 右侧头部标题：一级下有多个二级时显示一级名（页签表二级）；否则显示完整 key（保持扁平分组观感）
+const headTitle = computed(() => (showTabs.value ? navOf(activeKey.value) : activeKey.value))
 
 // —— 关闭：✕ / 遮罩 / Esc（closeOnMask 才响应遮罩与 Esc）——
 function close(): void {
@@ -205,14 +292,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
         </div>
 
         <div class="psd-body">
-          <!-- 左：导航 -->
+          <!-- 左：一级导航 -->
           <nav class="psd-nav">
             <div v-if="!navEntries.length" class="psd-nav-empty">暂无分组</div>
             <div v-for="item in navEntries" :key="item.key" class="psd-nav-item"
-              :class="{ active: activeKey === item.key, slot: item.kind === 'nav' }" role="button" tabindex="0" @click="onSelect(item.key)"
-              @keydown.enter.prevent="onSelect(item.key)">
-              <!-- 分组默认项：直接画文本 -->
-              <span v-if="item.kind === 'group'" class="psd-nav-inner">
+              :class="{ active: isNavActive(item.key), slot: item.kind === 'nav' }" role="button" tabindex="0"
+              @click="select(item.key)" @keydown.enter.prevent="select(item.key)">
+              <!-- 默认一级项：直接画文本（nav label = group 第一个 / 分段；扁平分组即它自己） -->
+              <span v-if="item.kind === 'section'" class="psd-nav-inner">
                 <span class="psd-nav-ico">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/>
@@ -221,18 +308,31 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
                 </span>
                 <span class="psd-nav-txt">{{ item.key }}</span>
               </span>
-              <!-- 导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
-              <component v-else :is="item.component" :key="item.key" :group="item.key" :active="activeKey === item.key"
-                :on-select="onSelect" />
+              <!-- 一级导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
+              <component v-else :is="item.component" :group="item.key" :active="isNavActive(item.key)"
+                :on-select="select" />
             </div>
           </nav>
 
-          <!-- 右：标题 + 内容 -->
+          <!-- 右：标题 + (二级页签) + 内容 -->
           <div class="psd-content">
             <header class="psd-content-head">
-              <h3 class="psd-content-title">{{ activeKey }}</h3>
-              <span class="psd-content-sub">{{ activeKey }} 设置</span>
+              <h3 class="psd-content-title">{{ headTitle }}</h3>
+              <span class="psd-content-sub">{{ headTitle }} 设置</span>
             </header>
+
+            <!-- 二级页签条：仅当一级下二级分组多于一个才显示（settingsNav 语义对称） -->
+            <div v-if="showTabs" class="psd-tabs" role="tablist">
+              <template v-for="t in tabs" :key="t.key">
+                <!-- 二级页签插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect } -->
+                <component v-if="t.kind === 'tab'" :is="t.component" :group="t.key"
+                  :active="activeKey === t.key" :on-select="select" class="psd-tab-item" />
+                <!-- 默认二级页签：点它切到该完整分组 key -->
+                <button v-else class="psd-tab-item" :class="{ active: activeKey === t.key }" @click="select(t.key)">
+                  {{ leafLabelOf(t.key) }}
+                </button>
+              </template>
+            </div>
 
             <div class="psd-content-body">
               <!-- 内容区 = 一段 v-for 遍历"有序内容块"(contentBlocks)：field(默认控件) / slot(插槽组件) 就地分支渲染 -->
@@ -463,8 +563,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 10px 10px 12px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 10px 10px 6px 16px;
   flex-shrink: 0;
 }
 
@@ -480,6 +579,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-size: 12px;
   color: #9ca3af;
   font-weight: 500;
+}
+
+/* ===== 二级页签条（仅一级下二级分组多于一个时出现） ===== */
+.psd-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 0 16px 10px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  margin-bottom: 0;
+}
+
+.psd-tab-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.psd-tab-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #374151;
+}
+
+.psd-tab-item.active {
+  background: #0891b2;
+  color: #fff;
 }
 
 .psd-content-body {
