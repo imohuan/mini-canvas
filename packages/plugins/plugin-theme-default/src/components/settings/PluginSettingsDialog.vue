@@ -522,39 +522,55 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding-left: 8px;
 }
 
-/* ===== 二级页签条（仅一级下二级分组多于一个时出现） ===== */
+/* ===== 二级页签条（仅一级下二级分组多于一个时出现）：编辑器式下划线 tab ===== */
 .psd-tabs {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 2px;
   flex-shrink: 0;
-  padding: 0 16px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding: 8px 12px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 0;
 }
 
 .psd-tab-item {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 6px 14px;
-  border: 1px solid transparent;
-  border-radius: 999px;
+  padding: 9px 16px 11px;
+  border: 0;
   background: transparent;
   color: #6b7280;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease;
+  white-space: nowrap;
+  transition: color 0.16s ease;
 }
 
 .psd-tab-item:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #374151;
+  color: #111827;
 }
 
+/* active 态：文字变主题色 + 底部一条 2px 指示线 */
 .psd-tab-item.active {
+  color: #0891b2;
+}
+
+.psd-tab-item.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
   background: #0891b2;
-  color: #fff;
+}
+
+.psd-tab-item:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: -2px;
 }
 
 .psd-content-body {
