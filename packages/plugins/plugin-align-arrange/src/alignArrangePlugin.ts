@@ -14,10 +14,10 @@
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type {
-  NodeStoreService,
-  SelectionService,
-  HistoryService,
-  CanvasNode,
+ NodeStoreService,
+ SelectionService,
+  GraphDocumentService,
+ CanvasNode,
 } from '@mini-canvas/canvas-core-v2'
 import {
   alignNodes,
@@ -37,12 +37,12 @@ declare module '@mini-canvas/canvas-core-v2' {
   interface Context {
     nodeStore: NodeStoreService
     selection: SelectionService
-    history: HistoryService
+    graph: GraphDocumentService
   }
 }
 
 export const name = 'align-arrange'
-export const inject = ['nodeStore', 'selection', 'history'] as string[]
+export const inject = ['nodeStore', 'selection', 'graph'] as string[]
 
 /** 默认尺寸回退：nodeLayout 缺失时的兜底（与老版 200x100 默认一致，实际以 nodeLayout 为准） */
 const FALLBACK_W = 200
@@ -51,7 +51,7 @@ const FALLBACK_H = 100
 const COMPACT_GAP = 20
 
 export function apply(ctx: Context) {
-  const { nodeStore, selection, history } = ctx
+  const { nodeStore, selection, graph } = ctx
   // nodeLayout 由渲染层宿主注入；此处经 ctx.get 可选读取（与 group/mini-map 同模式，不 declare 直访类型）
   const layout = ctx.get<NodeLayoutLike | undefined>('nodeLayout')
 
@@ -78,10 +78,8 @@ export function apply(ctx: Context) {
   /** 原子执行：算目标位置 → withRecord 包一次 → updateNodes 批量写回。 */
   function applyResult(result: Map<string, { x: number; y: number }>): void {
     if (result.size === 0) return
-    const entries = [...result.entries()].map(([id, pos]) => ({ id, patch: { position: pos } }))
-    history.withRecord(() => {
-      nodeStore.updateNodes(entries)
-    })
+   const entries = [...result.entries()].map(([id, pos]) => ({ id, patch: { position: pos } }))
+    graph.updateNodes(entries)
   }
 
   function runAlign(dir: AlignDirection): void {

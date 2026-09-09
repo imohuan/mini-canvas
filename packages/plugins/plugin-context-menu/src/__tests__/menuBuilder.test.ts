@@ -18,10 +18,10 @@ function cmd(partial: Partial<MenuCommandLike> & { id: string }): MenuCommandLik
 }
 
 describe('commandVisibleInMode', () => {
-  it('areas 未声明或空 = 通用命令，所有模式可见', () => {
-    expect(commandVisibleInMode(cmd({ id: 'a' }), 'pane')).toBe(true)
-    expect(commandVisibleInMode(cmd({ id: 'a', areas: [] }), 'node')).toBe(true)
-    expect(commandVisibleInMode(cmd({ id: 'a', areas: [] }), 'edge')).toBe(true)
+  it('areas 未声明或空 = 纯快捷键命令，不进任何模式菜单', () => {
+    expect(commandVisibleInMode(cmd({ id: 'a' }), 'pane')).toBe(false)
+    expect(commandVisibleInMode(cmd({ id: 'a', areas: [] }), 'node')).toBe(false)
+    expect(commandVisibleInMode(cmd({ id: 'a', areas: [] }), 'edge')).toBe(false)
   })
 
   it('areas 声明了 → 仅当包含当前 mode 可见', () => {
@@ -58,9 +58,9 @@ describe('buildMenuItems', () => {
       cmd({ id: 'align-arrange:align-left', title: '左对齐', group: 'align-arrange' }),
     ]
     const items = buildMenuItems('node', commands, nodeTypes)
-    // pane 区命令不显示；无 areas 的通用命令显示；node 区命令显示
+    // pane 区命令不显示；无 areas 命令(纯快捷键)不显示；node 区命令显示
     expect(items.map((i) => i.id)).toContain('context-menu:delete-node')
-    expect(items.map((i) => i.id)).toContain('align-arrange:align-left')
+    expect(items.map((i) => i.id)).not.toContain('align-arrange:align-left')
     expect(items.map((i) => i.id)).not.toContain('clipboard:paste')
     expect(items.some((i) => i.kind === 'create-node')).toBe(false)
   })

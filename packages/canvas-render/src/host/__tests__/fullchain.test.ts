@@ -130,6 +130,34 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
     host.stop()
   })
 
+  it('removeNode：删除带连接边的节点会连带清边、清选中态，边也一并落盘', async () => {
+    const storage = new MemoryStorageAdapter()
+    const host = await boot({ adapter: storage })
+    const img = host.ctx.get<ImageNodeService>('image')
+    const text = host.ctx.get<TextNodeService>('text')
+    const tid = text.addTextNode({ x: 0, y: 0 })
+    const iid = img.addImageNode({ x: 10, y: 10 }, 'url')
+    host.edgeStore.addEdge({ source: tid, target: iid })
+    host.selection.set([tid])
+    await host.save.flush()
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+
+    // 删除带边的节点：连带清边 + 清选中态
+    img.removeNode(tid)
+    await host.save.flush()
+    expect(host.nodeStore.getNode(tid)).toBeUndefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(0)
+    expect(host.selection.size).toBe(0)
+
+    // graph-edges 也同步落盘为空，undo 后节点与边一起回来
+    const savedEdges = await storage.get<CanvasEdge[]>('canvas:' + GRAPH_EDGES_KEY)
+    expect(savedEdges).toEqual([])
+    host.command.execute('command:undo')
+    expect(host.nodeStore.getNode(tid)).toBeDefined()
+    expect(host.edgeStore.getEdges()).toHaveLength(1)
+    host.stop()
+  })
+
   it('两节点(text+image)持久化：第二次 boot 都能恢复', async () => {
     const storage = new MemoryStorageAdapter()
     // 第一次会话：text + image 各一，落盘后卸载
@@ -234,6 +262,10 @@ describe('M3 命令/删除/创建/撤销（host 集成）', () => {
     expect(host.history.canUndo()).toBe(true)
     host.command.execute('command:undo')
     expect(host.nodeStore.getNodes()).toHaveLength(2)
+    // undo 后持久化也要同步恢复后的图（避免“撤销后刷新回到撤销前”）
+    await host.save.flush()
+    const restored = await storage.get<CanvasNode[]>('canvas:graph')
+    expect(restored).toHaveLength(2)
     host.stop()
   })
 
@@ -383,4 +415,35 @@ describe('边撤销：拉边(加边)记进历史可 undo/redo（对应 Must-1 �
     host.stop()
   })
 })
+
+describe('撤销后刷新闭环（P0-2 完整证据）', () => {
+  it('删除→undo→flush→二次 boot：恢复后的图真正持久化（不再是"撤销前"的旧图）', async () => {
+    const storage = new MemoryStorageAdapter()
+    const h1 = await boot({ adapter: storage })
+    const id1 = h1.nodeFactory.create('text', { x: 0, y: 0 })
+    h1.nodeFactory.create('image', { x: 50, y: 50 }, 'u')
+    await h1.save.flush()
+    expect(h1.nodeStore.getNodes()).toHaveLength(2)
+
+    // 多选两个节点一次删除 → flush
+    const all = h1.nodeStore.getNodes().map((n) => n.id)
+    h1.selection.set(all)
+    h1.command.execute('command:delete')
+    await h1.save.flush()
+    expect(h1.nodeStore.getNodes()).toHaveLength(0)
+
+    // undo 一次回到两节点 → flush（撤销后的图落盘）
+    h1.command.execute('command:undo')
+    expect(h1.nodeStore.getNodes()).toHaveLength(2)
+    await h1.save.flush()
+    h1.stop()
+
+    // 二次 boot 同一存储：应恢复撤销后的两节点，而非撤销前的空图
+    const h2 = await boot({ adapter: storage })
+    expect(h2.nodeStore.getNodes()).toHaveLength(2)
+    h2.stop()
+  })
+})
+
+
 

@@ -6,7 +6,7 @@
  * - 包围盒 = 选中节点绝对矩形(nodeLayout)并集 + padding（对齐老版 canvasBounds）。
  * - 定位跟随 viewport（wrapper translate+scale），视觉与节点同步缩放。
  * - 框内左键拖动 = 整组移动：逐帧 updateNodeVisual(渲染层单节点视觉写，不触发 store 重灌)，
- *   松手经 history.withRecord + nodeStore.updateNodes 批量落盘。只移动"顶层且祖先未选"节点
+ *   松手经 graph.updateNodes 批量落盘（唯一写入口：历史 + 提交落盘由 graph 负责）。只移动"顶层且祖先未选"节点
  *   （multiSelectEngine.draggableMembers）：父被选则子随父动，避免双重偏移；带父的孤立选中节点本轮跳过。
  * - 中键拖动 = 平移画布（经 viewport 服务 setViewport，保留 zoom）。
  * - 滚轮转发：老版把框上滚轮事件转发给底层 viewport；v2 本组件根 pointer-events 仅在框体 auto，
@@ -17,7 +17,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
-import type { SelectionService, NodeStoreService, HistoryService } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService, NodeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import {
   computeUnionBounds,
   paddedBounds,
@@ -38,8 +38,8 @@ function layout(): NodeLayoutService | undefined {
 function nodeStore(): NodeStoreService {
   return ctx.get<NodeStoreService>('nodeStore')
 }
-function history(): HistoryService {
-  return ctx.get<HistoryService>('history')
+function graph(): GraphDocumentService {
+  return ctx.get<GraphDocumentService>('graph')
 }
 function viewportSvc(): ViewportService | undefined {
   return ctx.get<ViewportService>('viewport')
@@ -185,7 +185,7 @@ function onDragUp(): void {
     patch: { position: { x: p.x, y: p.y } },
   }))
   if (entries.length > 0) {
-    history().withRecord(() => nodeStore().updateNodes(entries))
+    graph().updateNodes(entries)
   }
   dragStartPositions.value.clear()
   livePositions.value.clear()
@@ -321,3 +321,5 @@ onBeforeUnmount(() => {
   background: rgba(96, 165, 250, 0.07);
 }
 </style>
+
+

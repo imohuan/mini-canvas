@@ -24,7 +24,6 @@
     "@mini-canvas/canvas-render": "workspace:*"
   },
   "devDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
   }

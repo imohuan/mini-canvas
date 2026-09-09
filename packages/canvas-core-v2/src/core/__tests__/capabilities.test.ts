@@ -187,3 +187,36 @@ describe('ctx.settings 配置单一数据源（插件导出 Config schema，appl
     expect(raw.get('c')).toBe('#333')
   })
 })
+
+describe('ctx.nodes.contribute（段级叠加 occupant）', () => {
+  it('叠加 occupant 到某 type 的某段，nodeSegmentStack 返回基座+贡献按序；卸载只抽走贡献', async () => {
+    const { ctx, nodeRegistry } = await boot([
+      mk('text-plugin', (c) =>
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, content: TextContent }),
+      ),
+      mk('badge-a', (c) => c.nodes.contribute('text', 'title', BadgeA, { id: 'a', order: 1 })),
+      mk('badge-b', (c) => c.nodes.contribute('text', 'title', BadgeB, { id: 'b', order: 2 })),
+    ])
+    // title 段：基座未给 → 栈 = [a, b]
+    const stack = (await import('../registry/nodeRenderer')).nodeSegmentStack(nodeRegistry, 'text', 'title')
+    expect(stack).toEqual([BadgeA, BadgeB])
+    expect(nodeRegistry.contributionIds('text', 'title')).toEqual(['a', 'b'])
+    // 卸载 badge-a → 只抽走 a
+    ctx.uninstallPlugin('badge-a')
+    expect(nodeRegistry.contributionIds('text', 'title')).toEqual(['b'])
+  })
+
+  it('卸载宿主全部插件后贡献与基座一并回收', async () => {
+    const { ctx, nodeRegistry } = await boot([
+      mk('text-plugin', (c) =>
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, content: TextContent }),
+      ),
+      mk('badge', (c) => c.nodes.contribute('text', 'content', BadgeA)),
+    ])
+    expect(nodeRegistry.contributionIds('text', 'content')).toHaveLength(1)
+    ctx.stop()
+    expect(nodeRegistry.get('text')).toBeUndefined()
+    expect(nodeRegistry.contributionIds('text', 'content')).toHaveLength(0)
+  })
+})
+

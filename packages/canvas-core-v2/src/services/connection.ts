@@ -109,12 +109,20 @@ export function normalizeConnection(c: ConnectionInput): NormalizedConnection {
   }
 }
 
-/** 翻成统一方向（source=输出端, target=输入端）；非法朝向返回 null */
+/** 翻成统一方向（source=输出端, target=输入端）；非法朝向返回 null。
+ * P0-6 多端口：sourceHandle/targetHandle 为自定义端口名（非 source/target）时无法仅凭字符串判方向——
+ * 按调用侧约定（source 节点=输出端、target 节点=输入端）视为正向，不做翻转；
+ * 端口是否存在由 resolveSourceOutputPort/resolveTargetInputPort 在类型声明里校验。
+ */
 export function toCanonicalConnection(c: ConnectionInput): CanonicalEndpoints | null {
   const n = normalizeConnection(c)
   if (n.sourceHandle === 'source' && n.targetHandle === 'target') return { source: n.source, target: n.target }
   if (n.sourceHandle === 'target' && n.targetHandle === 'source')
     return { source: n.target, target: n.source }
+  // 两端都自定义名（多端口）→ 正向；一端默认一端自定义混用 → 仍按默认 source/target 判定
+  if (n.sourceHandle !== 'source' && n.sourceHandle !== 'target' && n.targetHandle !== 'source' && n.targetHandle !== 'target') {
+    return { source: n.source, target: n.target }
+  }
   return null
 }
 
@@ -204,19 +212,24 @@ export function validateConnection(
   const tgtConn = ctx.getTypeConn(tgt.type)
 
   // 输出/输入端口能力：type 声明 outputs 存在且非空才算有 source 口；未声明默认都有（BaseNode 人人带 source+target）
+  const norm = normalizeConnection(conn)
+  // P0-6 多端口：端口能力与目标口解析统一走 resolve* —— 声明了 inputs/outputs 的类型，
+  // 自定义 handle 必须精确命中声明端口（否则 no-source-port/no-target-port）；缺省 handle/未声明类型兼容旧语义。
+  const srcOutputDef = resolveSourceOutputPort(srcConn, norm.sourceHandle)
+  const inputDef = resolveTargetInputPort(tgtConn, norm.targetHandle)
+  // 未声明 outputs/inputs 或声明非空 → 有口（旧语义）；声明非空时自定义 handle 需命中（srcOutputDef/inputDef 已解析）
   const hasSourcePort = !srcConn?.outputs || srcConn.outputs.length > 0
   if (!hasSourcePort) return fail('no-source-port')
   const hasTargetPort = !tgtConn?.inputs || tgtConn.inputs.length > 0
   if (!hasTargetPort) return fail('no-target-port')
-
-  // 声明式 accepts：target 的 inputs(port='target').accepts 限定可接受的源类型
-  const inputDef = tgtConn?.inputs?.find((i) => !i.port || i.port === 'target')
+  // 自定义 handle 精确匹配失败（类型声明了端口但 handle 不在其中）→ 该端口不存在
+  if (norm.sourceHandle !== 'source' && srcConn?.outputs && srcConn.outputs.length > 0 && !srcOutputDef) return fail('no-source-port')
+  if (norm.targetHandle !== 'target' && tgtConn?.inputs && tgtConn.inputs.length > 0 && !inputDef) return fail('no-target-port')
   if (inputDef?.accepts && inputDef.accepts.length > 0 && !inputDef.accepts.includes(src.type)) {
     return fail('type-not-accepted')
   }
   // 声明式内容类型：源输出口产 contentType，目标输入口声明 acceptsTypes → 源产出必须 ∈ 它。
   // 只在双方都有内容类型声明时启用（source 无产出类型声明 → 视为不受内容类型约束）。
-  const srcOutputDef = srcConn?.outputs?.find((o) => !o.port || o.port === 'source')
   const srcContent = srcOutputDef?.contentType
   if (
     srcContent &&
@@ -233,15 +246,69 @@ export function validateConnection(
   // 去重：同一条 canonical 连接只允许一条
   if (findDuplicate(canonical, ctx.edges)) return fail('duplicate')
 
-  // limit:'single'：该输入端口只允许一条入边
-  if (inputDef?.limit === 'single') {
-    const intoInput = ctx.edges.some(
-      (e) => !isTempEdge(e) && getCanonicalEndpoints(e)?.target === canonical.target,
-    )
-    if (intoInput) return fail('limit-reached')
+  // 目标输入端口容量：只有"显式声明了 inputs"的类型才受容量约束。
+  // 声明条目里 capacity 缺省/<=0 视为 1（与 connection/capability 语义一致），
+  // 因此 capacity:1 与 limit:'single' 等效，都应在提交前把已有入边的候选拦下。
+  // 未声明任何 inputs 的类型保持旧行为：不限制入边条数。
+  if (inputDef) {
+    const capacity = inputDef.capacity === undefined || inputDef.capacity <= 0 ? 1 : inputDef.capacity
+    // 本次连接实际占用的输入口名：具名 handle 用它；默认 handle（含缺省）用 resolveTargetInputPort
+    // 落到的口的 port（缺省口可能为 undefined = 传统默认 target 口）。
+    // 容量只统计"连到同一口"的现有边（C-1：纯具名多口类型各口容量独立，互不挤占）。
+    const effectivePort = inputDef?.port ?? undefined // 传统默认口(无具名)亦为 undefined
+    const intoInput = ctx.edges.filter(
+      (e) =>
+        !isTempEdge(e) &&
+        // 多端口已有边(自定义 handle) canonical 提取失败，直接用 e.target 判目标节点
+        (getCanonicalEndpoints(e)?.target === canonical.target || (!getCanonicalEndpoints(e) && e.target === canonical.target)) &&
+        // 现有边 handle 归一到目标口：无 handle/默认 target 口 视为默认口；否则精确匹配具名口
+        ((effectivePort === undefined ? !e.targetHandle || e.targetHandle === 'target' : e.targetHandle === effectivePort)),
+    ).length
+    if (inputDef.limit === 'single' || capacity === 1 ? intoInput > 0 : intoInput >= capacity) {
+      return fail('limit-reached')
+    }
   }
 
   return { ok: true, canonical, reason: 'ok' }
+}
+
+/**
+ * 解析目标节点的"目标输入口"定义（P0-6 多端口：不再只认第一个/默认口）。
+ * - targetHandle 缺省/null/'target' → 返回默认输入口（port 缺省或 'target' 的条目；多个时取第一个，兼容旧语义）；
+ * - targetHandle 为自定义名 → 在 inputs 里按 port===targetHandle 精确匹配；
+ * - 未命中 → undefined（调用方按 bad-orientation/no-target-port 拒绝）。
+ * 未声明 inputs → undefined。
+ */
+export function resolveTargetInputPort(
+  typeConn: NodeConnectionDef | undefined,
+  targetHandle: string | null | undefined,
+): PortDef | undefined {
+  const inputs = typeConn?.inputs
+  if (!inputs || inputs.length === 0) return undefined
+  if (targetHandle && targetHandle !== 'target') {
+    return inputs.find((i) => i.port === targetHandle)
+  }
+  // 默认口：优先未命名/名为 target 的口；纯具名多端口类型则退回第一个口（默认接第一个输入口）
+  return inputs.find((i) => !i.port || i.port === 'target') ?? inputs[0]
+}
+
+/**
+ * 解析源节点的"源输出口"定义（P0-6 多端口，与 resolveTargetInputPort 对称）。
+ * - sourceHandle 缺省/null/'source' → 默认输出口（port 缺省或 'source'）；
+ * - 自定义名 → 按 port===sourceHandle 精确匹配；未命中 → undefined。
+ * 未声明 outputs → undefined。
+ */
+export function resolveSourceOutputPort(
+  typeConn: NodeConnectionDef | undefined,
+  sourceHandle: string | null | undefined,
+): PortDef | undefined {
+  const outputs = typeConn?.outputs
+  if (!outputs || outputs.length === 0) return undefined
+  if (sourceHandle && sourceHandle !== 'source') {
+    return outputs.find((o) => o.port === sourceHandle)
+  }
+  // 默认口：优先未命名/名为 source 的口；纯具名多端口类型则退回第一个口
+  return outputs.find((o) => !o.port || o.port === 'source') ?? outputs[0]
 }
 
 /** 便捷：从 nodeStore 的类型定义反查连接声明（无 inputs/outputs 返回 undefined） */
@@ -249,3 +316,21 @@ export function typeConnectionDef(def: { inputs?: PortDef[]; outputs?: PortDef[]
   if (!def) return undefined
   return def.inputs || def.outputs ? { inputs: def.inputs, outputs: def.outputs } : undefined
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

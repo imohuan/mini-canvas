@@ -96,3 +96,20 @@ describe('Selection v2（节点 + 边双集）', () => {
   })
 })
 
+describe('Selection ids 副本隔离（P1-10）', () => {
+  it('外部强转修改 getter 返回的集合不污染内部选中态', () => {
+    const sel = new Selection()
+    sel.add('a')
+    let calls = 0
+    sel.onChange(() => { calls += 1 })
+    // 强转修改 getter 返回的 Set
+    const leaked = sel.ids as unknown as Set<string>
+    leaked.add('b')
+    // 内部未被污染：has('b') false，且未触发 onChange
+    expect(sel.has('b')).toBe(false)
+    expect(calls).toBe(0)
+  })
+})
+
+
+

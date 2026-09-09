@@ -104,7 +104,7 @@ export interface Context {}
 export class Context implements PluginScope {
   readonly bus: EventBus
   /** 根作用域：只服务根 ctx.effect（宿主/非插件的顶层副作用）；插件副作用一律归各自 fiber */
-  private readonly rootScope = new Scope()
+  private rootScope = new Scope()
   private services = new Map<string, unknown>()
   private plugins = new Map<string, PluginModule>()
   private lifecycles = new Map<string, Lifecycle>()
@@ -278,9 +278,18 @@ export class Context implements PluginScope {
       // array/object 是"给 apply 的结构化配置"，settings 单一数据源只长标量控件 → 跳过登记
       if (!isScalarField(field)) continue
       const itemSchema = toSettingSchema(field)
-      if (!store.has(key)) store.define(field.group ?? pluginName, { [key]: itemSchema }, pluginName)
-      // define 初值=itemSchema.default(=schema 默认)；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
-      store.set(key, config[key] as string | number | boolean)
+      if (!store.has(key)) {
+        store.define(field.group ?? pluginName, { [key]: itemSchema }, pluginName)
+        // define 初值=itemSchema.default(=schema 默认)；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
+        store.set(key, config[key] as string | number | boolean)
+      } else {
+        // P1-4：该 key 已被其它插件声明 → 不再静默 set 覆盖（数据混乱），先占者保留所有权；
+        // 命名空间迁移(pluginName:key)属破坏性变更，需产品拍板后统一做。此处仅防覆盖并提示。
+        if (this.dev) {
+          // eslint-disable-next-line no-console
+          console.warn(`[settings] config key "${key}" from "${pluginName}" collides with an existing declaration; skipping (keep first owner). Namespacing (pluginName:key) pending migration decision.`)
+        }
+      }
     }
     // 随插件 fiber 回收：热卸/重载清掉它声明的配置项（防残留与重装撞 key）
     fiber.onDispose(() => store.removeByScope(pluginName))
@@ -302,6 +311,9 @@ export class Context implements PluginScope {
       this.setLifecycle(name, Lifecycle.UNINSTALLED)
       this.bus.emit('ctx:plugin-uninstalled', { name })
     }
+    // 释放根作用域（宿主 ctx.effect 注册的顶层副作用随 stop 一起回收，防 restart 泄漏）
+    this.rootScope.dispose()
+    this.rootScope = new Scope()
     this.plugins.clear()
     this.fibers.clear()
     this.configs.clear()
@@ -309,6 +321,23 @@ export class Context implements PluginScope {
     this.builtinSettings = new SettingsStore() // 分组配置随生命周期重置(重启可重新 define)
     this.lifecycles.clear()
     this.state = 'created'
+  }
+
+  /**
+   * 同步停止 + 等待全部插件异步 disposer 结算（P1-3）。
+   * 页面关闭/宿主卸载需确保最后一批异步清理（如异步保存）完成时调用；
+   * 内部先执行与 stop() 相同的同步清理，再 await 各 fiber 的 dispose 结算。
+   */
+  async stopAsync(): Promise<void> {
+    // 先同步触发全部 fiber dispose（disposers 同步项立即跑；异步项进结算），
+    // 收集其 settle promise 供下方等待 —— 顺序与 stop() 一致（逆序卸载）
+    const settling: Array<Promise<unknown>> = []
+    for (const name of [...this.fibers.keys()].reverse()) {
+      const d = this.fibers.get(name)?.dispose()
+      if (d) settling.push(d)
+    }
+    this.stop() // 同步清理 + 重置状态（与现 stop 同语义）
+    if (settling.length) await Promise.allSettled(settling)
   }
 
   /** 当前状态 */
@@ -484,10 +513,25 @@ export class Context implements PluginScope {
   get<Service = unknown>(name: string): Service {
     if (name === 'slots') return this.builtinSlots as unknown as Service
     if (name === 'settings') return this.builtinSettings as unknown as Service
-    return this.services.get(name) as Service
+   return this.services.get(name) as Service
+ }
+
+  /**
+   * 可选探测：缺服务返回 undefined（不抛）。需要严格 get 语义的地方请先 hasService 再取。
+   * 说明：当前 get 对缺失服务同样返回 undefined（与 cordis 可选语义一致），
+   * tryGet 只是把这一意图显式表达出来，供作者区分"硬依赖(应 inject)/可选探测(tryGet)"。
+   */
+  tryGet<Service = unknown>(name: string): Service | undefined {
+    return this.get<Service | undefined>(name)
   }
 
-  /** 已注入的服务名列表（供 dev 诊断） */
+  /** 是否已注入某服务（含内置 slots/settings） */
+  hasService(name: string): boolean {
+    if (name === 'slots' || name === 'settings') return true
+    return this.services.has(name)
+  }
+
+ /** 已注入的服务名列表（供 dev 诊断） */
   injectedServices(): string[] {
     return [...this.services.keys()]
   }
@@ -653,3 +697,7 @@ export class Context implements PluginScope {
     }
   }
 }
+
+
+
+

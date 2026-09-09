@@ -18,7 +18,7 @@
  * 快捷键：不走 DOM 按键，粘贴由命令 keys(mod+v) 统一分发会与剪贴板冲突——见下方说明。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, HistoryService } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, GraphDocumentService, ResourceService } from '@mini-canvas/canvas-core-v2'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   classifyFile,
@@ -58,7 +58,7 @@ declare module '@mini-canvas/canvas-core-v2' {
 }
 
 export const name = 'file-drop'
-export const inject = ['nodeStore', 'selection', 'history'] as string[]
+export const inject = ['nodeStore', 'selection', 'graph'] as string[]
 
 /** 可编辑输入框内不响应粘贴/拖放（对齐宿主 CanvasHost 与 clipboard 同规则） */
 function isEditableTarget(t: EventTarget | null): boolean {
@@ -131,12 +131,12 @@ export class FileDropServiceImpl extends Service implements FileDropService {
   private get nodeStore(): NodeStoreService {
     return this.ctx.get<NodeStoreService>('nodeStore')
   }
-  private get selection(): SelectionService {
-    return this.ctx.get<SelectionService>('selection')
-  }
-  private get history(): HistoryService {
-    return this.ctx.get<HistoryService>('history')
-  }
+ private get selection(): SelectionService {
+   return this.ctx.get<SelectionService>('selection')
+ }
+  private get graph(): GraphDocumentService {
+    return this.ctx.get<GraphDocumentService>('graph')
+ }
   private get viewport(): ViewportService | undefined {
     return this.ctx.get<ViewportService | undefined>('viewport') ?? undefined
   }
@@ -177,10 +177,10 @@ export class FileDropServiceImpl extends Service implements FileDropService {
 
   /** 建节点载荷批量写入（history 一次；选中新节点便于立刻拖动/删除） */
   private commitPayloads(payloads: NodePayload[], description: string): string[] {
-    if (payloads.length === 0) return []
-    const ids = payloads.map(() => this.nextId())
-    this.history.withRecord(() => {
-      this.nodeStore.addNodes(
+   if (payloads.length === 0) return []
+   const ids = payloads.map(() => this.nextId())
+    this.graph.transaction('file-drop-add', (tx) => {
+      tx.addNodes(
         payloads.map((p, i) => ({
           id: ids[i],
           type: p.type,
@@ -190,7 +190,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
         })),
       )
     })
-    this.selection.set(ids)
+   this.selection.set(ids)
     this.selection.clearEdges()
     return ids
   }
@@ -213,7 +213,15 @@ export class FileDropServiceImpl extends Service implements FileDropService {
         if (kind === 'image' && this.typeRegistered('image')) {
           const url = this.readers.createObjectURL(file)
           const dims = await this.readers.readImageDims(file)
-          payloads.push(buildImagePayload(file, url, positions[i], dims))
+          const payload = buildImagePayload(file, url, positions[i], dims)
+          // P1-14：把生成的 object URL 登记进宿主 resources，写 resourceId 供引用扫描回收
+          // PluginScope.get 对缺失服务返回 undefined（可选探测语义）
+          const resources = this.ctx.get<ResourceService | undefined>('resources')
+          if (resources) {
+            const resourceId = resources.register({ kind: 'image', url, resource: file })
+            payload.data.resourceId = resourceId
+          }
+          payloads.push(payload)
         } else if (kind === 'text' && this.typeRegistered('text')) {
           const content = await this.readers.readText(file)
           payloads.push(buildTextPayload(file, clampText(content), positions[i]))
@@ -331,3 +339,7 @@ export function apply(ctx: Context, options: FileDropOptions = {}): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const fileDropPlugin: PluginModule = { name, inject, apply }
+
+
+
+

@@ -44,6 +44,38 @@ export class NodeRegistry {
   private byType = new Map<string, NodePresentation>()
   /** 段级叠加 occupant 容器（slot = `${type}/${segment}`） */
   private contributions = new SlotRegistry()
+  /** 变更订阅（type 基座或段级 occupant 变化任一触发） */
+  private listeners = new Set<() => void>()
+  private unsubContributions: (() => void) | null = null
+
+  /**
+   * 订阅本注册表任意变化（节点 type 基座注册/注销/重设、段级 occupant 增删替换）。
+   * 返回取消订阅函数。供渲染宿主在运行期重装配 nodeTypes，不依赖插件装卸事件。
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    if (!this.unsubContributions) {
+      // 段级 occupant 变化也转发到同一通知
+      this.unsubContributions = this.contributions.subscribe(() => this.notify())
+    }
+    return () => {
+      this.listeners.delete(listener)
+      if (this.listeners.size === 0 && this.unsubContributions) {
+        this.unsubContributions()
+        this.unsubContributions = null
+      }
+    }
+  }
+
+  private notify(): void {
+    for (const l of this.listeners) {
+      try {
+        l()
+      } catch {
+        /* 单个订阅者异常不阻断其它 */
+      }
+    }
+  }
 
   /** 注册某 type 的展示定义。type 重复注册抛错（防覆盖，与 nodeStore.registerType 同语义）。 */
   register(type: string, segments: NodePresentation['segments']): void {
@@ -51,6 +83,7 @@ export class NodeRegistry {
       throw new Error(`[nodeRegistry] presentation for node type "${type}" already registered`)
     }
     this.byType.set(type, { type, segments })
+    this.notify()
   }
 
   /** 取某 type 的展示定义（未注册返回 undefined） */
@@ -61,7 +94,8 @@ export class NodeRegistry {
   /** 注销某 type 的展示定义（热卸插件时回收；不存在则 no-op） */
   unregister(type: string): void {
     this.byType.delete(type)
-    // 一并清掉该 type 的段级叠加 occupant
+    // 一并清掉该 type 的段级叠加 occupant。clearByPrefix 无匹配槽也会广播一次，
+    // 有订阅者时该广播已覆盖本次注销（与 register/set 的 notify 同构），无需重复 notify。
     this.contributions.clearByPrefix(`${type}/`)
   }
 
@@ -78,6 +112,7 @@ export class NodeRegistry {
   /** 覆盖式重设某 type（宿主升级/热更用）；未注册则新建 */
   set(type: string, segments: NodePresentation['segments']): void {
     this.byType.set(type, { type, segments })
+    this.notify()
   }
 
   // ==================== 段级多 occupant（开放叠加槽） ====================
@@ -118,3 +153,5 @@ export class NodeRegistry {
     }))
   }
 }
+
+

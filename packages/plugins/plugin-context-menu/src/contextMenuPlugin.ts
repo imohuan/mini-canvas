@@ -20,28 +20,29 @@ import { createApp, reactive, type Component } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type {
   NodeStoreService,
-  EdgeStoreService,
   SelectionService,
-  HistoryService,
   CommandService,
   NodeFactoryService,
+  GraphDocumentService,
+  MenuService,
 } from '@mini-canvas/canvas-core-v2'
 import { RenderEvents } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
-import { buildMenuItems, type ContextMenuItem, type ContextMenuMode } from './menuBuilder'
+import type { ContextMenuItem, ContextMenuMode } from './menuBuilder'
+import { enrichMenuItems } from './menuEnrich'
 
 declare module '@mini-canvas/canvas-core-v2' {
   interface Context {
     nodeStore: NodeStoreService
-    edgeStore: EdgeStoreService
     selection: SelectionService
-    history: HistoryService
+    graph: GraphDocumentService
     nodeFactory: NodeFactoryService
   }
 }
 
 export const name = 'context-menu'
-export const inject = ['nodeStore', 'edgeStore', 'selection', 'history'] as string[]
+export const inject = ['nodeStore', 'selection', 'graph', 'menu'] as string[]
+
 
 /** 渲染层右键事件 payload（与 canvas-render RenderEvents.ContextMenu* 契约一致；本地声明避免依赖导出遗漏） */
 interface ContextMenuPanePayload {
@@ -67,7 +68,8 @@ interface MenuUiState {
 }
 
 export function apply(ctx: Context): void {
-  const { nodeStore, edgeStore, selection, history } = ctx
+  const { nodeStore, selection, graph } = ctx
+  // 菜单聚合走内核 menu 服务（依赖声明在 inject；ctx.menu 直访由 declare module 类型提供）
 
   // —— 内置命令：右键删除节点 / 删除连线（areas 限定显示区，menuBuilder 据此收进菜单）——
   // 删除右键的节点：连带清掉与它相连的边 + 从选中集移除；history 一次可撤销。
@@ -78,15 +80,11 @@ export function apply(ctx: Context): void {
     group: '节点',
     order: 10,
     run(_c, payload: { nodeId: string }) {
-      const nodeId = payload?.nodeId
-      if (!nodeId) return
-      history.withRecord(() => {
-        nodeStore.removeNode(nodeId)
-        edgeStore.removeEdgesOfNode(nodeId)
-        selection.remove(nodeId)
-      })
-    },
-  })
+     const nodeId = payload?.nodeId
+     if (!nodeId) return
+      graph.removeNodes([nodeId])
+   },
+ })
   // 删除右键的连线（只删边，保留两端节点）
   ctx.commands.register({
     id: 'context-menu:delete-edge',
@@ -95,14 +93,11 @@ export function apply(ctx: Context): void {
     group: '连线',
     order: 10,
     run(_c, payload: { edgeId: string }) {
-      const edgeId = payload?.edgeId
-      if (!edgeId) return
-      history.withRecord(() => {
-        edgeStore.removeEdge(edgeId)
-        selection.removeEdge(edgeId)
-      })
-    },
-  })
+     const edgeId = payload?.edgeId
+     if (!edgeId) return
+      graph.removeEdges([edgeId])
+   },
+ })
 
   // —— 菜单浮层 UI（仅浏览器）——
   if (typeof window === 'undefined') return
@@ -114,13 +109,17 @@ export function apply(ctx: Context): void {
 
   function openMenu(mode: ContextMenuMode, x: number, y: number, flowPosition: { x: number; y: number }, nodeId?: string, edgeId?: string): void {
     current = { nodeId, edgeId, flowPosition }
-    const commands = (ctx.get<CommandService>('command')).list()
     // 新建节点候选 = nodeFactory 可创建类型（只列有 creator 的，避免建出无内容节点）
     const creatable = new Set(ctx.get<NodeFactoryService>('nodeFactory').creatableTypes())
     const nodeTypes = [...nodeStore.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label }))
-    state.items = buildMenuItems(mode, commands, nodeTypes)
+    // G 项：菜单聚合走内核 menu 服务（与未来 toolbar/面板同一数据源），不再插件内自组。
+    // areas 语义 = 开放注册：任何插件命令显式声明 areas 含当前 mode 即自动出现在右键，
+    // 未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
+    const raw = ctx.get<MenuService>('menu').menuFor(mode, nodeTypes)
+    // UI 增强：补图标 + hover 描述（与快捷键面板同款 item 视觉）
+    state.items = enrichMenuItems(raw)
     state.mode = mode
     state.x = x
     state.y = y
@@ -155,6 +154,9 @@ export function apply(ctx: Context): void {
     openMenu('pane', p.clientX, p.clientY, p.flowPosition)
   })
   ctx.on(RenderEvents.ContextMenuNode, (p: ContextMenuNodePayload) => {
+    // 右键节点即把它选为唯一选中（老版语义：右键菜单的复制/复制一份作用于被右键节点）
+    selection.set([p.nodeId])
+    selection.clearEdges()
     openMenu('node', p.clientX, p.clientY, p.flowPosition, p.nodeId, undefined)
   })
   ctx.on(RenderEvents.ContextMenuEdge, (p: ContextMenuEdgePayload) => {

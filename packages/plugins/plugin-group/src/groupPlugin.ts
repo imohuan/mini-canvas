@@ -1,25 +1,24 @@
 /**
  * plugin-group —— 分组插件（v2 复刻老版 canvas-core/src/plugins/group）。
  *
- * 铁律对齐（masterplan §1）：
- * - 只依赖内核(canvas-base/canvas-core-v2) + 渲染层服务/事件（nodeLayout / RenderEvents），
+ * v2 写模型：所有图变更统一走 ctx.graph（GraphDocument 唯一写入口），
+ * 不再手写 history.withRecord + nodeStore 直写。
+ * - 只依赖内核(canvas-base/canvas-core-v2) + 渲染层类型/事件（nodeLayout / NodeDragEnd 常量），
  *   不反向依赖宿主 demo，不直碰 VueFlow 内部，不碰老版 canvas-core/src。
- * - 数据经内核 nodeStore/selection/history；坐标/尺寸经渲染层 nodeLayout（实测尺寸 + 绝对坐标）。
+ * - 数据经内核 graph/nodeStore/selection；坐标/尺寸经渲染层 nodeLayout（实测尺寸 + 绝对坐标）。
  * - UI 由同包 GroupContent.vue 提供（content 段，宿主 BaseNode 壳渲染），不另造节点壳。
  * - 快捷键走命令 keys（ctrl+g / ctrl+shift+g），宿主 CanvasHost 统一分发，不自绑 window。
  *
  * 与老版差异（v2 分层）：
- * - 不提供老版 BaseToolbar / 四角 resize / GroupColorButton 下拉（老版壳能力不足自造 UI；
- *   v2 BaseNode 已带标题条 + 选中环 + F2 改名，group content 只做背景 + 解组钮）。
- *   批量下载等依赖下载命令的按钮，待各节点插件提供后再补，不硬耦合。
+ * - 不提供老版 BaseToolbar / 四角 resize / GroupColorButton 下拉。
  * - 拖动自动归组做简版：只处理顶层节点拖进某组的加入；组内拖出解组 / 组拖动边界重算
- *   依赖 VueFlow 父子拖拽语义，v2 下暂不做，在最终回复说明。
+ *   依赖 VueFlow 父子拖拽语义，v2 下暂不做。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
 import type {
   NodeStoreService,
   SelectionService,
-  HistoryService,
+  GraphDocumentService,
 } from '@mini-canvas/canvas-core-v2'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
@@ -80,8 +79,8 @@ export class GroupService extends Service implements GroupServiceAPI {
   private get selection(): SelectionService {
     return this.ctx.get<SelectionService>('selection')
   }
-  private get history(): HistoryService {
-    return this.ctx.get<HistoryService>('history')
+  private get graph(): GraphDocumentService {
+    return this.ctx.get<GraphDocumentService>('graph')
   }
   private get layout(): NodeLayoutService {
     return this.ctx.get<NodeLayoutService>('nodeLayout')
@@ -112,11 +111,8 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   /** 同步 group 声明尺寸 + BaseNode 卡片尺寸（data.cardWidth/cardHeight 同值，避免视觉框不一致） */
-  private setGroupSize(groupId: string, w: number, h: number): void {
-    this.nodeStore.updateNode(groupId, {
-      size: { w, h },
-      data: { cardWidth: w, cardHeight: h },
-    })
+  private groupSizePatch(w: number, h: number): { size: { w: number; h: number }; data: { cardWidth: number; cardHeight: number } } {
+    return { size: { w, h }, data: { cardWidth: w, cardHeight: h } }
   }
 
   createGroup(nodeIds: string[]): string | null {
@@ -139,8 +135,9 @@ export class GroupService extends Service implements GroupServiceAPI {
     if (!bounds) return null
 
     const groupId = createGroupId()
-    this.history.withRecord(() => {
-      nodeStore.addNodes([
+    // 统一走 graph：一次事务内建组节点 + 子节点改父/相对坐标（历史合并 + 提交落盘）
+    this.graph.transaction('group-create', (tx) => {
+      tx.addNodes([
         {
           id: groupId,
           type: GROUP_NODE_TYPE,
@@ -155,14 +152,14 @@ export class GroupService extends Service implements GroupServiceAPI {
           },
         },
       ])
-      nodeStore.updateNodes(
+      tx.updateNodes(
         rects.map((r) => ({
           id: r.id,
           patch: { position: toRelativePosition(r.x, r.y, bounds), parentId: groupId },
         })),
       )
-      this.selection.set([groupId])
     })
+    this.selection.set([groupId])
     return groupId
   }
 
@@ -171,7 +168,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     const group = nodeStore.getNode(groupId)
     if (!group || group.type !== GROUP_NODE_TYPE) return
     const childIds = nodeStore.childNodesOf(groupId).map((n) => n.id)
-    this.history.withRecord(() => {
+    this.graph.transaction('group-ungroup', (tx) => {
       if (childIds.length > 0) {
         const patches = childIds.map((id) => {
           const node = nodeStore.getNode(id)
@@ -186,10 +183,9 @@ export class GroupService extends Service implements GroupServiceAPI {
             },
           }
         })
-        nodeStore.updateNodes(patches)
+        tx.updateNodes(patches)
       }
-      nodeStore.removeNode(groupId)
-      this.selection.remove(groupId)
+      tx.removeNodes([groupId])
     })
   }
 
@@ -223,17 +219,17 @@ export class GroupService extends Service implements GroupServiceAPI {
     const bounds = computeGroupBounds(childRects)
     if (!bounds) return null
 
-    this.history.withRecord(() => {
-      // 组移到新左上角 + 同步声明尺寸与卡片尺寸
-      nodeStore.updateNode(groupId, {
+    // 统一走 graph：组位置/尺寸与子节点相对坐标一次事务
+    this.graph.transaction('group-recalc', (tx) => {
+      tx.updateNode(groupId, {
         position: { x: bounds.x, y: bounds.y },
+        ...this.groupSizePatch(bounds.w, bounds.h),
       })
-      this.setGroupSize(groupId, bounds.w, bounds.h)
       const patches = childRects.map((r) => ({
         id: r.id,
         patch: { position: toRelativePosition(r.x, r.y, bounds), parentId: groupId },
       }))
-      nodeStore.updateNodes(patches)
+      tx.updateNodes(patches)
     })
     return bounds
   }
@@ -247,7 +243,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     if (!rect || rect.w <= 0 || rect.h <= 0) return
     const hit = this.groupRects().find((g) => this.rectsOverlap(rect, g))
     if (!hit) return
-    nodeStore.updateNode(nodeId, {
+    this.graph.updateNode(nodeId, {
       position: toRelativePosition(rect.x, rect.y, { x: hit.x, y: hit.y, w: hit.w, h: hit.h }),
       parentId: hit.id,
     })
@@ -264,7 +260,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     const gRect = this.rectOf(parent.id)
     if (!rect || rect.w <= 0 || rect.h <= 0 || !gRect) return
     if (this.rectsOverlap(rect, gRect)) return // 仍在组内
-    nodeStore.updateNode(nodeId, {
+    this.graph.updateNode(nodeId, {
       position: { x: rect.x, y: rect.y },
       parentId: undefined,
     })
@@ -284,7 +280,7 @@ export class GroupService extends Service implements GroupServiceAPI {
 }
 
 export const name = 'group'
-export const inject = ['nodeStore', 'selection', 'history', 'nodeLayout'] as string[]
+export const inject = ['nodeStore', 'selection', 'graph', 'nodeLayout'] as string[]
 
 /** 插件主体：注册 group 节点类型 + 上架 group 服务 + 命令 */
 export function apply(ctx: Context) {
@@ -337,3 +333,4 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const groupPlugin: PluginModule = { name, inject, apply }
+

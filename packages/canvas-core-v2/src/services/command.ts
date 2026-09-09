@@ -44,11 +44,21 @@ export interface CommandService {
   unregister(id: string): boolean
   /** 宿主注入执行上下文（供 run/when 拿 ctx.get 等服务） */
   setContext(ctx: unknown): void
+  /** 运行期重映射某命令的快捷键（shortcut-manager remap 的内核基础）。只改 keys，run/元数据不动。 */
+  remapKeys(id: string, keys: string[]): string[]
+  /** 恢复某命令 remap 前的原始快捷键（未 remap 过则 no-op）。返回恢复后的 keys */
+  resetKeys(id: string): string[] | undefined
+  /** 只读：该命令的原始（注册/未 remap）快捷键。remap 过则返回备份，否则返回当前 keys。无此命令返回 undefined。 */
+  originalKeys(id: string): string[] | undefined
+  /** 该命令当前 keys 是否被 remap 过 */
+  isRemapped(id: string): boolean
 }
 
 export class CommandRegistry implements CommandService {
   private cmds = new Map<string, CommandDef>()
   private ctx: unknown = null
+  /** 每命令 remap 前的原始 keys 备份（第一次 remap 时记录；register dispose/unregister 时随命令清理） */
+  private keysBackup = new Map<string, string[]>()
 
   register(def: CommandDef): Disposable {
     if (this.cmds.has(def.id)) {
@@ -57,7 +67,10 @@ export class CommandRegistry implements CommandService {
     this.cmds.set(def.id, def)
     return {
       dispose: () => {
-        if (this.cmds.get(def.id) === def) this.cmds.delete(def.id)
+        if (this.cmds.get(def.id) === def) {
+          this.cmds.delete(def.id)
+          this.keysBackup.delete(def.id)
+        }
       },
     }
   }
@@ -77,11 +90,42 @@ export class CommandRegistry implements CommandService {
   unregister(id: string): boolean {
     const existed = this.cmds.has(id)
     this.cmds.delete(id)
+    this.keysBackup.delete(id)
     return existed
   }
 
   setContext(ctx: unknown): void {
     this.ctx = ctx
+  }
+
+  remapKeys(id: string, keys: string[]): string[] {
+    const cmd = this.cmds.get(id)
+    if (!cmd) throw new Error(`[command] cannot remap unknown command "${id}"`)
+    if (!this.keysBackup.has(id)) this.keysBackup.set(id, cmd.keys ? [...cmd.keys] : [])
+    cmd.keys = [...keys]
+    return cmd.keys
+  }
+
+  resetKeys(id: string): string[] | undefined {
+    const cmd = this.cmds.get(id)
+    if (!cmd) return undefined
+    const backup = this.keysBackup.get(id)
+    if (backup) {
+      cmd.keys = [...backup]
+      this.keysBackup.delete(id)
+    }
+    return cmd.keys
+  }
+
+  originalKeys(id: string): string[] | undefined {
+    const cmd = this.cmds.get(id)
+    if (!cmd) return undefined
+    const backup = this.keysBackup.get(id)
+    return backup ? [...backup] : cmd.keys ? [...cmd.keys] : []
+  }
+
+  isRemapped(id: string): boolean {
+    return this.keysBackup.has(id)
   }
 
   execute(id: string, ...payload: unknown[]): unknown {
@@ -168,4 +212,5 @@ export function findCommandByKeys<T extends { id: string; keys?: string[] }>(
   }
   return undefined
 }
+
 

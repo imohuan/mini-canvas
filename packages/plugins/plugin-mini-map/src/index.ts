@@ -1,5 +1,7 @@
 // plugin-mini-map —— 小地图插件（Ctrl/Cmd+M 切换显隐；右下角缩略 + 视口矩形 + 拖拽平移/点击跳转）。
 export { miniMapPlugin, name, apply } from './miniMapPlugin'
+export { Config } from './miniMapPlugin'
+export type { MiniMapConfig } from './miniMapConfig'
 export {
   type MiniMapRect,
   type MiniMapViewport,

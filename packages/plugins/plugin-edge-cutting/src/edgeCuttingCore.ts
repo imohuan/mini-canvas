@@ -73,10 +73,12 @@ export function edgePathSelectors(edgeId: string): string[] {
   ]
 }
 
-/** 解析某条边当前渲染出的 SVGPathElement（找不到返回 null） */
-export function resolveEdgePath(edgeId: string): SVGPathElement | null {
+/** 解析某条边当前渲染出的 SVGPathElement（找不到返回 null）。
+ *  scopeRoot 传实例根（viewport.getRootEl()）时在该实例内查——多宿主页面不串线；
+ *  不传则退回 document 全局查询（兼容单宿主/测试）。 */
+export function resolveEdgePath(edgeId: string, scopeRoot?: ParentNode | null): SVGPathElement | null {
   for (const selector of edgePathSelectors(edgeId)) {
-    const el = document.querySelector(selector)
+    const el = scopeRoot ? scopeRoot.querySelector(selector) : document.querySelector(selector)
     if (el instanceof SVGPathElement) return el
   }
   return null
@@ -95,3 +97,5 @@ export function samplePathInClientSpace(path: SVGPathElement, stepPx: number): S
     return { x: screenPoint.x, y: screenPoint.y }
   })
 }
+
+

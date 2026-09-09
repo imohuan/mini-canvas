@@ -13,7 +13,8 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
@@ -24,3 +25,5 @@
     "vitest": "^3.0.0"
   }
 }
+
+

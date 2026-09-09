@@ -3,10 +3,11 @@ import { Context } from '@mini-canvas/canvas-core-v2'
 import {
   NodeStore,
   EdgeStore,
-  Selection,
-  History,
-  CommandRegistry,
-  type CanvasEdge,
+ Selection,
+ History,
+ CommandRegistry,
+ type CanvasEdge,
+  GraphDocument,
 } from '@mini-canvas/canvas-core-v2'
 import { clipboardPlugin, type ClipboardService } from '../clipboardPlugin'
 
@@ -37,8 +38,9 @@ function makeCtx() {
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
-  ctx.inject('history', history)
-  const command = new CommandRegistry()
+ ctx.inject('history', history)
+  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+ const command = new CommandRegistry()
   ctx.inject('command', command)
   ctx.plugin(clipboardPlugin)
   return { ctx, nodeStore, edgeStore, selection, history, command }
@@ -181,3 +183,26 @@ describe('clipboard 插件集成（真实内核服务）', () => {
     expect((nodeStore.getNode(a)!.data.nested as { v: number }).v).toBe(1)
   })
 })
+
+describe('clipboard 实例隔离（P2-4）', () => {
+  it('两个画布实例剪贴板互不串：A copy 后 B.hasData 仍为 false', async () => {
+    const a = makeCtx()
+    const b = makeCtx()
+    await a.ctx.start()
+    await b.ctx.start()
+    const id = addNode(a.nodeStore, 'text', 0, 0)
+    a.selection.set([id])
+    const svcA = a.ctx.get<ClipboardService>('clipboard')
+    const svcB = b.ctx.get<ClipboardService>('clipboard')
+    expect(svcA.copy()).toBe(true)
+    // B 实例没有 A 的数据（不再模块级 static 共享）
+    expect(svcB.hasData).toBe(false)
+    expect(svcB.paste()).toBe(false)
+    // A 自己仍可粘贴
+    expect(svcA.hasData).toBe(true)
+    const before = a.nodeStore.getNodes().length
+    expect(svcA.paste()).toBe(true)
+    expect(a.nodeStore.getNodes().length).toBe(before + 1)
+  })
+})
+

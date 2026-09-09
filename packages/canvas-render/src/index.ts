@@ -12,6 +12,12 @@
 
 // content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo）
 export { HOST_KEY } from './contracts/contentBridge'
+export type {
+  SegmentComponent,
+  ContentComponent,
+  SegmentContentProps,
+  SegmentNodeData,
+} from './contracts/contentComponentTypes'
 export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './contracts/nodeRegistryKey'
 export type { NodeWrite } from './contracts/nodeRegistryKey'
 // 画布外观参数 / 边外观与选中 注入令牌（宿主 provide、默认皮消费）
@@ -101,9 +107,9 @@ export { default as SettingsHost } from './components/SettingsHost.vue'
 export { settingsSourceFrom } from './components/settingsSource'
 // 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填
 export { default as SlotHost } from './components/SlotHost.vue'
-export type { FlowNode, ThemeAssembly } from './host/canvasHostCore'
 export {
   nodesFromStore,
+  edgesFromStore,
   pruneDanglingEdges,
   assembleTheme,
   edgeId,
@@ -111,6 +117,7 @@ export {
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
 } from './host/canvasHostCore'
+export type { FlowNode, FlowEdge, ThemeAssembly } from './host/canvasHostCore'
 // 点选/清空选中语义纯函数（宿主与插件共用；Shift 加选/普通单选/点空白清空）
 export { clickNode, clickEdge, clickPane } from './host/selectionInteractions'
 // 节点布局只读服务（实测尺寸 + 绝对坐标；插件/工具读，宿主注入'nodeLayout'服务）
@@ -134,13 +141,14 @@ export type {
   CanvasHostHandle,
 } from './host/createMiniCanvasHost'
 // 统一安装句柄 manager + 外部来源加载 + 装配清单(目标 D)
-export { createPluginManager } from './host/pluginManager'
+export { createPluginManager, sourceKind } from './host/pluginManager'
 export type {
   PluginManager,
   PluginEntrySource,
   PluginManifest,
   PluginManifestEntry,
   InstalledPluginInfo,
+  PluginSourceKind,
 } from './host/pluginManager'
 // 高频值合帧工具(目标 B2 性能约束③)
 export { createCoalescer, rafScheduler, manualScheduler } from './utils/coalesce'
@@ -160,4 +168,12 @@ declare module '@mini-canvas/canvas-core-v2' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
+
+
+
+
+
+
+
+
 

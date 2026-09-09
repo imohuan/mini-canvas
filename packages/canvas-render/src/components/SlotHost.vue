@@ -40,6 +40,11 @@ disposers.push(
   ctx.on('ctx:plugin-installed', reload),
   ctx.on('ctx:plugin-uninstalled', reload),
 )
+// 运行期 slots.remove/slots.register（不经过插件装卸）也会改变 occupant 集合 → 直接订阅底层注册表。
+const slotRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('slots')
+if (slotRegistry && typeof slotRegistry.subscribe === 'function') {
+  disposers.push({ dispose: slotRegistry.subscribe(reload) })
+}
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })

@@ -54,7 +54,7 @@ const props = defineProps<{
   // —— VueFlow 渲染态数据（CanvasHost 订阅 store 持续更新，经 ref 解包成裸数组传入）——
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodes: any[]
-  edges: Array<{ id: string; type: string; source: string; target: string }>
+  edges: Array<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   nodeTypes: Record<string, any>
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -96,7 +96,7 @@ const vfApi = useVueFlow()
 // —— 只读数据源 refs（供 renderCtx 暴露给插件；宿主/本组件维护，插件只读）——
 // 渲染态节点/边：随 props.nodes/edges(宿主订阅 store 自动重灌)同步，包成稳定 ref 供上下文消费方响应式读
 const renderNodesRef = shallowRef<ReadonlyArray<FlowNode>>(props.nodes ?? [])
-const renderEdgesRef = shallowRef<ReadonlyArray<{ id: string; type: string; source: string; target: string }>>(props.edges ?? [])
+const renderEdgesRef = shallowRef<ReadonlyArray<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>>(props.edges ?? [])
 watch(
   () => props.nodes,
   (v) => { renderNodesRef.value = v ?? [] },
@@ -115,6 +115,10 @@ watch(
 // pane DOM 矩形：onMounted 后填（见下方 paneEl 捕获）；move 事件经 CanvasHost 已桥，这里 watch viewport 变化时刷新
 const paneRectRef = shallowRef<DOMRect | null>(null)
 const paneEl = ref<HTMLElement | null>(null)
+/** 本画布实例根 DOM（模板 ref）——实例级锚点，替代 document.querySelector('.vue-flow') */
+const rootEl = ref<HTMLElement | null>(null)
+/** VueFlow renderer DOM（模板 ref 不可达内部渲染层，onMounted 内经 vfApi 容器捕获） */
+const rendererEl = ref<HTMLElement | null>(null)
 
 /** 屏幕 client → flow（官方换算，可靠） */
 function screenToFlow(clientX: number, clientY: number): { x: number; y: number } {
@@ -147,6 +151,8 @@ const renderCtx: CanvasRenderContext = {
   viewport: viewportRef,
   pane: paneEl,
   paneRect: paneRectRef,
+  rootEl,
+  rendererEl,
   renderNodes: renderNodesRef,
   renderEdges: renderEdgesRef,
   screenToFlow,
@@ -166,14 +172,16 @@ provide(HOST_KEY, shallowRef(host))
 // 节点实测尺寸注入 nodeLayout（ResizeObserver + MutationObserver）；start 在 onMounted 内（renderer DOM 就绪后）
 const measure = useNodeMeasure({
   nodeLayout: host.nodeLayout,
-  container: () => document.querySelector('.vue-flow__renderer') as HTMLElement | null,
+  container: () => rendererEl.value,
 })
 onBeforeUnmount(() => {
   measure.stop()
 })
 onMounted(() => {
-  // VueFlow 渲染后 .vue-flow__pane 已在 DOM，捕获以量屏幕坐标
-  paneEl.value = document.querySelector('.vue-flow__pane') as HTMLElement | null
+  // VueFlow 渲染后 .vue-flow__pane 已在 DOM（实例根内查询，多宿主页面不串线），捕获以量屏幕坐标
+  const flowRoot = rootEl.value
+  paneEl.value = flowRoot?.querySelector('.vue-flow__pane') as HTMLElement | null
+  rendererEl.value = (flowRoot?.querySelector('.vue-flow__renderer') as HTMLElement | null) ?? null
   paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
   // 视口服务接线：把 VueFlow 能力 attach 到 host.viewport（工厂注入的空壳），插件可 ctx.get('viewport')
   props.host?.viewport.attachBackend({
@@ -196,7 +204,15 @@ onMounted(() => {
     fitView: (padding?: number) => vfApi.fitView({ padding: padding ?? 0.1, duration: 200 }),
     setCenter: (x: number, y: number, zoom?: number) =>
       vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
-    setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
+    // setViewport = 程序化定位（小地图拖拽/自动布局聚焦/框选平移等"跟手"场景）→ 必须即时生效。
+    // 带 duration 会让每帧拖拽都重启一次 200ms 补间动画，严重卡顿（老版 PluginContext.setViewport 即无动画）。
+    setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v),
+    // —— 实例级 DOM（多宿主页面不串线：一律在本实例根内查询）——
+    getRootEl: () => rootEl.value,
+    getRendererEl: () => rendererEl.value,
+    getPaneEl: () => paneEl.value,
+    queryNodeEl: (nodeId: string) =>
+      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
   })
   // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
@@ -205,6 +221,9 @@ onMounted(() => {
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。
 defineExpose({
+  /** 在**本画布实例**内按 data-id 查节点 DOM（实例级，多宿主不串线；替代全局 document.querySelector） */
+  queryNodeEl: (nodeId: string): HTMLElement | null =>
+    rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
   getViewport: () => {
     const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
     return vp
@@ -234,12 +253,12 @@ defineExpose({
   fitView: (padding?: number) => vfApi.fitView({ padding: padding ?? 0.1, duration: 200 }),
   setCenter: (x: number, y: number, zoom?: number) =>
     vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
-  setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v, { duration: 200 }),
+  setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v),
 })
 </script>
 
 <template>
-  <div class="csurface">
+  <div ref="rootEl" class="csurface">
     <VueFlow
       :key="nodeEpoch"
       :nodes="nodes"
@@ -321,4 +340,11 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
+
+
+
+
+
+
+
 

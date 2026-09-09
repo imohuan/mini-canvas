@@ -12,7 +12,7 @@
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
 import { Service, type PluginModule, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
+import type { GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import ImageContent from './ImageContent.vue'
 // 设置面板 slothost 测试组件（本插件自定义导航/内容插槽填充）
 import DemoSlotNavItem from './settingsDemo/DemoSlotNavItem.vue'
@@ -39,25 +39,23 @@ export class ImageService extends Service implements ImageNodeService {
     super(ctx, 'image')
   }
 
-  /** 加一个 image 节点并写 imageUrl；返回短 id */
+  /** 加一个 image 节点并写 imageUrl；返回短 id（统一走 graph 唯一写入口） */
   addImageNode(position: { x: number; y: number }, imageUrl: string): string {
-    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
-    const id = nodeStore.addNode('image', position)
-    nodeStore.updateNodeData(id, { imageUrl })
-    return id
+    const graph = this.ctx.get<GraphDocumentService>('graph')
+    return graph.transaction('add-image-node', (tx) => tx.createNode('image', position, { imageUrl }))
   }
 
-  /** 删除节点并立即落盘 */
+  /** 删除节点：连带清掉与它相连的边与选中态，包一次历史并落盘（统一走 graph）。
+   * 资源回收说明（P1-14）：object URL 不在此即时 revoke —— 删除后用户可能 undo 恢复节点，
+   * 即时 revoke 会让恢复的图破图。统一由 CanvasHost flushSave 的引用扫描延迟回收
+   * （落盘前已确认该 resourceId 不再被任何存活节点引用才 revoke），与 undo 语义兼容。 */
   removeNode(id: string): void {
-    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
-    const save = this.ctx.get<SaveService>('save')
-    nodeStore.removeNode(id)
-    save.set('graph', nodeStore.getNodes(), 'canvas')
+    this.ctx.get<GraphDocumentService>('graph').removeNodes([id])
   }
 }
 
 export const name = 'image'
-export const inject = ['nodeStore', 'save'] as string[]
+export const inject = ['graph'] as string[]
 
 /**
  * image 插件可配置项 schema（P4：模块级 Config）。
@@ -123,3 +121,9 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口（name='image' 供 HMR reload） */
 export const nodeImagePlugin: PluginModule = { name, inject, Config, apply }
+
+
+
+
+
+

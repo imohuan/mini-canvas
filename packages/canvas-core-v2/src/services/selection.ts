@@ -47,10 +47,11 @@ export class Selection implements SelectionService {
   private listeners = new Set<() => void>()
 
   get ids(): ReadonlySet<string> {
-    return this.selected
+    // P1-10：返回副本（非内部引用）——外部强转修改不会绕过 notify/选中语义
+    return new Set(this.selected)
   }
   get edgeIds(): ReadonlySet<string> {
-    return this.selectedEdges
+    return new Set(this.selectedEdges)
   }
   has(id: string): boolean {
     return this.selected.has(id)
@@ -112,7 +113,10 @@ export class Selection implements SelectionService {
     return () => this.listeners.delete(cb)
   }
   private notify(): void {
-    for (const l of this.listeners) l()
+    // P2-6：坏订阅者异常不阻断其它订阅者/写操作
+    for (const l of this.listeners) {
+      try { l() } catch { /* 忽略单个订阅者异常 */ }
+    }
   }
 }
 
@@ -124,4 +128,8 @@ function sameSet(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   }
   return true
 }
+
+
+
+
 

@@ -38,7 +38,10 @@ import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
 import { typeMeta, nodeLabelText, filterNodes } from './nodeFindFilter'
 
 const props = defineProps<{
-  nodes: CanvasNode[]
+  /** 读取当前节点列表的函数（打开期间每次 refreshKey 变化重读 → 结果不陈旧，P2-3） */
+  getNodes: () => CanvasNode[]
+  /** nodeStore 变化计数（插件订阅 bump；驱动 computed 重算） */
+  refreshKey: number
 }>()
 
 const emit = defineEmits<{
@@ -62,8 +65,12 @@ function labelOf(node: CanvasNode): string {
   return nodeLabelText(node)
 }
 
-const filtered = computed(() => filterNodes(props.nodes, query.value))
-
+// P2-3：显式依赖 refreshKey 使 nodeStore 变化时重算；每次经 getNodes() 取最新节点
+const allNodes = computed(() => {
+  void props.refreshKey // 依赖声明：version 变化即重算
+  return props.getNodes()
+})
+const filtered = computed(() => filterNodes(allNodes.value, query.value))
 function moveSelection(delta: number) {
   const max = filtered.value.length - 1
   selectedIndex.value = Math.max(0, Math.min(max, selectedIndex.value + delta))
@@ -193,3 +200,5 @@ onMounted(async () => {
   font-size: 14px;
 }
 </style>
+
+

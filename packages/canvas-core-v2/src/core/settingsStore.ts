@@ -14,6 +14,9 @@
  *   不传 scope = 全局订阅（显式声明才用）。
  * - 高频合帧：宿主/消费方可选把 set 改成 rAF 节流（见 host 侧设置面板）；本 store 变更即时入库、
  *   通知立即广播（纯同步，Node 可测）。真正"合帧应用"由消费方(主题)按需做，避免每帧全图重建。
+ * - 保存快照（配置持久化桥 settingsPersist 使用）：setSavedSnapshot 注入"用户已保存值"，define 时
+ *   命中快照的 key 以其为初值（优先于 schema.default）；set 同步写回快照；clearSavedKeys 恢复默认。
+ *   热卸插件 removeByScope 删声明后重装 define 仍能恢复用户值。
  */
 import type { Disposable } from './types'
 
@@ -64,6 +67,10 @@ interface DeclaredItem {
 export class SettingsStore {
   private items = new Map<string, DeclaredItem>()
   private listeners = new Set<Listener>()
+  /** schema 变更订阅（define/removeByScope 触发；UI 分组列表刷新用） */
+  private schemaListeners = new Set<() => void>()
+  /** 用户已保存值快照（settingsPersist 桥注入）：define 命中即以快照值为初值；set 同步写回；clearSavedKeys 删除。 */
+  private savedSnapshot: Record<string, string | number | boolean> | null = null
 
   /** 申报一组配置项。同组重复申报抛错（防覆盖）。scope = 申报方插件名(供按作用域订阅) */
   define(group: string, defs: Record<string, SettingSchema>, scope?: string): void {
@@ -71,8 +78,10 @@ export class SettingsStore {
       if (this.items.has(key)) {
         throw new Error(`[settings] setting "${key}" is already defined`)
       }
-      this.items.set(key, { group, schema, value: schema.default, scope })
+      const saved = this.savedSnapshot ? this.savedSnapshot[key] : undefined
+      this.items.set(key, { group, schema, value: saved ?? schema.default, scope })
     }
+    this.notifySchema()
   }
 
   /** 装配覆盖某个默认值（manifest 在插件 apply 前调用）；未定义项可预置 */
@@ -91,6 +100,8 @@ export class SettingsStore {
     const clamped = this.clamp(item.schema, value)
     if (Object.is(item.value, clamped)) return false
     item.value = clamped
+    // 同步进保存快照：热卸插件 removeByScope 后重装 define 时能恢复用户值（而非 schema.default）
+    if (this.savedSnapshot) this.savedSnapshot[key] = clamped
     this.notify(item.scope, key, clamped)
     return true
   }
@@ -127,6 +138,57 @@ export class SettingsStore {
     for (const [key, item] of this.items) {
       if (item.scope === scope) this.items.delete(key)
     }
+    this.notifySchema()
+  }
+
+  // ==================== 保存快照（配置持久化桥 settingsPersist 用） ====================
+
+  /** 注入"用户已保存值"快照（持久化恢复）。随后 define 的新项若 key 命中快照则以其为初值；
+   *  已声明项立即覆盖为快照值。传空对象 = 清除快照（从未保存过）。 */
+  setSavedSnapshot(saved: Record<string, string | number | boolean>): void {
+    this.savedSnapshot = { ...saved }
+    // 已声明项立即应用并通知（供持久化恢复阶段晚于插件声明的场景）
+    for (const [key, value] of Object.entries(saved)) {
+      const item = this.items.get(key)
+      if (item && item.value !== value) {
+        item.value = value
+        this.notify(item.scope, key, value)
+      }
+    }
+  }
+
+  /**
+   * 订阅 schema 变更（define 新增项 / removeByScope 移除项后触发）。
+   * 供设置面板等 UI 在插件热装/热卸后刷新分组列表；返回取消函数。
+   */
+  onSchemaChange(cb: () => void): Disposable {
+    this.schemaListeners.add(cb)
+    return { dispose: () => this.schemaListeners.delete(cb) }
+  }
+
+  /** 当前保存快照（持久化桥导出用；null=从未注入过，空对象=注入过但无保存值） */
+  getSavedSnapshot(): Record<string, string | number | boolean> | null {
+    return this.savedSnapshot ? { ...this.savedSnapshot } : null
+  }
+
+  /** 清除保存快照中的某些 key（用户"恢复默认"时调用；已声明项同步回到 schema.default） */
+  clearSavedKeys(keys: string[]): void {
+    if (!this.savedSnapshot) return
+    for (const key of keys) {
+      delete this.savedSnapshot[key]
+      const item = this.items.get(key)
+      if (item) {
+        item.value = item.schema.default
+        this.notify(item.scope, key, item.value)
+      }
+    }
+  }
+
+  /** 当前全部已声明项（key → 值），供桥把"现网值"导出为保存快照 */
+  entries(): Record<string, string | number | boolean> {
+    const out: Record<string, string | number | boolean> = {}
+    for (const [key, item] of this.items) out[key] = item.value
+    return out
   }
 
   /**
@@ -144,8 +206,17 @@ export class SettingsStore {
     return { dispose: () => this.listeners.delete(listener) }
   }
 
+  private notifySchema(): void {
+    for (const l of this.schemaListeners) {
+      try { l() } catch { /* 忽略单个订阅者异常 */ }
+    }
+  }
+
   private notify(scope: string | undefined, key: string, value: unknown): void {
-    for (const l of this.listeners) l(scope, key, value)
+    // P2-6：坏订阅者异常不阻断其它订阅者/写操作
+    for (const l of this.listeners) {
+      try { l(scope, key, value) } catch { /* 忽略单个订阅者异常 */ }
+    }
   }
 
   private clamp(schema: SettingSchema, value: string | number | boolean): string | number | boolean {
@@ -156,3 +227,8 @@ export class SettingsStore {
     return value
   }
 }
+
+
+
+
+

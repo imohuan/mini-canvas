@@ -72,8 +72,8 @@ export function apply(ctx: Context): void {
   }
   ctx.inject('auto-save', service)
 
-  // 卸载清理
-  ctx.effect(() => {
+  // 卸载清理：effect 的 fn 立即执行、返回值才是清理函数（此前误把清理写进 fn 导致订阅一建即退）
+  ctx.effect(() => () => {
     offNodes()
     offEdges()
     engine.dispose()
@@ -82,3 +82,5 @@ export function apply(ctx: Context): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const autoSavePlugin: PluginModule = { name, inject, apply }
+
+

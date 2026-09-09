@@ -8,9 +8,9 @@
  * - 每个槽(slot)可挂多个 occupant。
  * - occupant 带 { id, order, value }：id 决定"同一槽内唯一身份"，order 决定渲染顺序（小在前）。
  * - 三种放入方式：
- *   - `add`    同槽加一个新的 occupant（默认叠加多个）。
- *   - `replace`同槽内复用已占的 id = 替换该 occupant（显式换皮/升级）。
- *   - `single` 槽语义 = 该槽只保留 order 最小的一个（宿主按需取，用于 nodeShell/edge 这类"单赢家"换肤点）。
+ *   - add    同槽加一个新的 occupant（默认叠加多个）。
+ *   - replace 同槽内复用已占的 id = 替换该 occupant（显式换皮/升级）。
+ *   - single 槽语义 = 该槽只保留 order 最小的一个（宿主按需取，用于 nodeShell/edge 这类"单赢家"换肤点）。
  *   注：是否按 single 只取赢家，由消费方(渲染层)决定；本容器一律可多存，只是暴露 single() 便捷取法。
  * - 移除一个 occupant 不影响同槽其它 occupant（热卸某插件只抽走它填的那份）。
  *
@@ -48,10 +48,31 @@ export type SlotName = string
 export class SlotRegistry {
   /** slot -> Map<id, entry>，保序用数组辅助排序 */
   private bySlot = new Map<SlotName, Map<string, SlotEntry>>()
+  /** 变更订阅（add/remove/replace/clear 任一触发） */
+  private listeners = new Set<() => void>()
+
+  /**
+   * 订阅本注册表任意 occupant 变化（增/删/替换/清空）。
+   * 返回取消订阅函数。供渲染宿主/面板在运行期变更时自动刷新，不再只依赖插件装卸事件。
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private notify(): void {
+    for (const l of this.listeners) {
+      try {
+        l()
+      } catch {
+        /* 单个订阅者异常不阻断其它 */
+      }
+    }
+  }
 
   /**
    * 放入一个 occupant。
-   * - 未给 id：自动分配一个稳定 id（槽内唯一，形如 `${slot}#${n}`）。
+   * - 未给 id：自动分配一个稳定 id（槽内唯一，形如 ${slot}#${n}）。
    * - 给了 id 且槽内已存在：替换该 id 的 occupant（不新增）。
    * - 否则追加。
    * @returns 该 occupant 的 id（供 remove 用）
@@ -64,6 +85,7 @@ export class SlotRegistry {
     const existed = entries.get(id)
     const meta = req.meta
     entries.set(id, existed ? { ...existed, order, value: req.value, meta } : { id, order, value: req.value, meta })
+    this.notify()
     return id
   }
 
@@ -73,6 +95,7 @@ export class SlotRegistry {
     if (!entries) return false
     const ok = entries.delete(id)
     if (entries.size === 0) this.bySlot.delete(slot) // 槽空则回收
+    if (ok) this.notify()
     return ok
   }
 
@@ -105,7 +128,7 @@ export class SlotRegistry {
   }
 
   /**
-   * 清空所有"槽名以给定前缀开头"的槽的全部 occupant（例：nodeRegistry 用 `${type}/` 前缀
+   * 清空所有"槽名以给定前缀开头"的槽的全部 occupant（例：nodeRegistry 用 ${type}/ 前缀
    * 归组某 type 各段的叠加槽，注销 type 时一键清空）。无匹配则 no-op。
    */
   clearByPrefix(prefix: string): void {
@@ -113,11 +136,13 @@ export class SlotRegistry {
     for (const slot of [...this.bySlot.keys()]) {
       if (slot.startsWith(prefix)) this.bySlot.delete(slot)
     }
+    this.notify()
   }
 
   /** 清空某槽全部 occupant */
   clear(slot: SlotName): void {
     this.bySlot.delete(slot)
+    this.notify()
   }
 
   /** 槽内已占 id 集合（诊断/列表用） */
@@ -136,7 +161,7 @@ export class SlotRegistry {
 
   private genId(slot: SlotName): string {
     // 槽内自增序号，保证唯一且稳定（连续 remove/add 不撞）
-    let n = (this.bySlot.get(slot)?.size ?? 0)
+    let n = this.bySlot.get(slot)?.size ?? 0
     let id = `${slot}#${n}`
     while (this.bySlot.get(slot)?.has(id)) {
       n++
@@ -145,3 +170,4 @@ export class SlotRegistry {
     return id
   }
 }
+

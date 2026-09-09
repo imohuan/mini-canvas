@@ -16,7 +16,7 @@
  * 依赖方向：只依赖内核(@mini-canvas/canvas-base / canvas-core-v2)，不反向依赖宿主/其它插件。
  */
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
+import type { GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import TextContent from './TextContent.vue'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
@@ -44,23 +44,25 @@ export class TextService extends Service implements TextNodeService {
     super(ctx, 'text')
   }
 
+  /** 内部统一走 graph 唯一写入口（历史 + 提交落盘），不直接改 nodeStore/save */
+  private graph(): GraphDocumentService {
+    return this.ctx.get<GraphDocumentService>('graph')
+  }
+
   addTextNode(position: { x: number; y: number }): string {
-    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
-    const id = nodeStore.addNode('text', position)
-    nodeStore.updateNodeData(id, { text: '双击编辑' })
-    return id
+    return this.graph().transaction('add-text-node', (tx) => {
+      const id = tx.createNode('text', position, { text: '双击编辑' })
+      return id
+    })
   }
 
   editText(id: string, text: string): void {
-    const nodeStore = this.ctx.get<NodeStoreService>('nodeStore')
-    const save = this.ctx.get<SaveService>('save')
-    nodeStore.updateNodeData(id, { text })
-    save.set('graph', nodeStore.getNodes(), 'canvas')
+    this.graph().updateNode(id, { data: { text } })
   }
 }
 
 export const name = 'text'
-export const inject = ['nodeStore', 'save'] as string[]
+export const inject = ['graph'] as string[]
 
 /**
  * text 节点插件（cordis 最新写法：Service 子类暴露服务 + inject 硬依赖）。

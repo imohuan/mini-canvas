@@ -68,3 +68,32 @@ describe('ViewportService 视口服务', () => {
     expect(s.getViewport()).toEqual({ x: 100, y: 200, zoom: 1.5 })
   })
 
+describe('ViewportService 实例 DOM 访问器（F 项多宿主收口）', () => {
+  it('后端未实现 DOM 访问器时返回 null（不抛）', () => {
+    const b = makeBackend() // 无 getRootEl 等
+    const s = new ViewportService(b)
+    expect(s.getRootEl()).toBeNull()
+    expect(s.getRendererEl()).toBeNull()
+    expect(s.getPaneEl()).toBeNull()
+    expect(s.queryNodeEl('n1')).toBeNull()
+  })
+
+  it('后端实现时透传实例 DOM 与节点查询', () => {
+    const root = { tagName: 'DIV' } as unknown as HTMLElement
+    const renderer = { tagName: 'DIV' } as unknown as HTMLElement
+    const node = { tagName: 'DIV' } as unknown as HTMLElement
+    const backend: ViewportBackend = {
+      ...makeBackend(),
+      getRootEl: () => root,
+      getRendererEl: () => renderer,
+      getPaneEl: () => null,
+      queryNodeEl: (id) => (id === 'n1' ? node : null),
+    }
+    const s = new ViewportService(backend)
+    expect(s.getRootEl()).toBe(root)
+    expect(s.getRendererEl()).toBe(renderer)
+    expect(s.queryNodeEl('n1')).toBe(node)
+    expect(s.queryNodeEl('n2')).toBeNull()
+  })
+})
+

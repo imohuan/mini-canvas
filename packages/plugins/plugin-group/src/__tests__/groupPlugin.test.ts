@@ -4,8 +4,10 @@ import {
   NodeStore,
   Selection,
   History,
-  CommandRegistry,
-  type CanvasNode,
+ CommandRegistry,
+ type CanvasNode,
+  EdgeStore,
+  GraphDocument,
 } from '@mini-canvas/canvas-core-v2'
 import { groupPlugin, GroupService, GROUP_NODE_TYPE } from '../groupPlugin'
 
@@ -27,8 +29,11 @@ function makeCtx() {
     snapshot: () => JSON.parse(JSON.stringify(nodeStore.getNodes())) as CanvasNode[],
     restore: (nodes) => nodeStore.replaceAll((nodes as CanvasNode[]) ?? []),
   })
-  ctx.inject('history', history)
-  const command = new CommandRegistry()
+ ctx.inject('history', history)
+  const edgeStore = new EdgeStore()
+  ctx.inject('edgeStore', edgeStore)
+  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+ const command = new CommandRegistry()
   ctx.inject('command', command)
 
   // nodeLayout stub：按 nodeStore 计算绝对矩形（子节点累加父链）

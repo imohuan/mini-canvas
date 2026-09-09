@@ -51,6 +51,13 @@ const DEFAULT_ORDER = 0
 export class ThemeRegistry {
   private reg = new SlotRegistry()
 
+  /**
+   * 订阅本注册表任意 occupant 变化（增/删/替换/清空）。
+   * 返回取消订阅函数。供渲染宿主在运行期主题槽被改时自动重装配，不依赖插件装卸事件。
+   */
+  subscribe(listener: () => void): () => void {
+    return this.reg.subscribe(listener)
+  }
   /** 当前某槽全部 occupant，按 order 稳定排序（装饰层全量渲染用） */
   occupants(slot: ThemeSlot): SlotEntry[] {
     return this.reg.list(slot)

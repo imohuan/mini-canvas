@@ -4,7 +4,7 @@
  * 对齐老版 ContextMenuPlugin.resolveItems 的语义（v1 canvas-core/plugins/context-menu）：
  * - 模式(mode)：pane(右键空白/双击)/node(右键节点)/edge(右键连线)。
  * - 命令可见性：命令声明 areas 数组（'pane'|'node'|'edge'|'toolbar'...）。
- *     · 未声明 areas → 通用命令，所有右键模式都显示（老版语义：areas 未设不过滤）；
+ *     · 未声明 areas → 纯快捷键命令，不进任何右键模式；
  *     · 声明了 areas → 仅当包含当前 mode 才显示。
  * - 分组排序：group 分组、组内按 order 升序（数字小在前；未设 order 视为 100）。
  *   "新建节点" 区在最前。
@@ -16,6 +16,7 @@ export type ContextMenuMode = 'pane' | 'node' | 'edge'
 export interface MenuCommandLike {
   id: string
   title?: string
+  description?: string
   areas?: string[]
   group?: string
   order?: number
@@ -35,6 +36,8 @@ export interface ContextMenuItem {
   id: string
   /** 展示文案 */
   label: string
+  /** hover 描述（快捷键面板同款：行 hover 时 label 上移、下方浮现小字说明） */
+  description?: string
   /** 分组名（显示层按组插分隔线） */
   group: string
   /** 组内排序（数字小在前） */
@@ -71,12 +74,11 @@ const GROUP_PRIORITY: Record<string, number> = {
 }
 
 /**
- * 命令是否在当前模式显示：
- * - areas 未声明或空 → 通用，显示；
- * - 声明了 → 必须包含当前 mode。
+ * 命令是否在当前模式显示：只有显式声明 areas 且包含当前 mode 才显示
+ * （未声明 areas = 纯快捷键命令，不进右键菜单）。
  */
 export function commandVisibleInMode(cmd: MenuCommandLike, mode: ContextMenuMode): boolean {
-  if (!cmd.areas || cmd.areas.length === 0) return true
+  if (!cmd.areas || cmd.areas.length === 0) return false
   return cmd.areas.includes(mode)
 }
 
@@ -120,6 +122,7 @@ export function buildMenuItems(
     items.push({
       id: cmd.id,
       label: cmd.title || cmd.id,
+      description: cmd.description,
       group,
       order: cmd.order ?? DEFAULT_ORDER,
       kind: 'command',

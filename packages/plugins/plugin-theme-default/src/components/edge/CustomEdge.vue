@@ -5,7 +5,9 @@
 // 与 v1 差异：v1 读 canvas.state.core.* 与 pinia selectionState；v2 改为 props 显式传入(解耦 store)，
 //       默认值对齐 core-node-contract §0 配置默认表。几何逻辑抽到 ./edgeGeometry.ts(可单测)，此处只做装配。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useVueFlow, useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'
+import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
 import type { EdgeProps, EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   Position,
@@ -30,10 +32,9 @@ interface CustomEdgeExtraProps {
 }
 
 const props = defineProps<EdgeProps & CustomEdgeExtraProps>()
-const { removeEdges } = useVueFlow()
 
 // 宿主统一注入上下文：外观(静态) + 选中集合(响应式)。CustomEdge 属 theme 渲染组件，必在 <CanvasHost> 内。
-const { edgeVisual, edgeSelection } = useCanvasRender()
+const { ctx, edgeVisual, edgeSelection } = useCanvasRender()
 const visual = computed<EdgeVisual>(() => ({ ...edgeVisual, ...(props.visual || {}) }))
 const selectionNodeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedNodeIds.value)
 const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedEdgeIds.value)
@@ -130,7 +131,19 @@ function onMouseMove(ev: MouseEvent) {
 
 function cutEdge(ev: MouseEvent) {
   ev.stopPropagation(); ev.preventDefault()
-  removeEdges([props.id])
+  // 数据源在内核 edgeStore：走 command:delete-edge（内核删边+历史+落盘），避免只用
+  // VueFlow removeEdges 改受控渲染态（会被下次 store 同步还原且不可撤销）。
+  // 根 Context 没有服务属性 Proxy，须经 ctx.get('command') 取命令服务。
+  const command = ctx.get<{ has(id: string): boolean; execute(id: string, ...payload: unknown[]): unknown }>('command')
+  if (command?.has('command:delete-edge')) {
+    command.execute('command:delete-edge', { edgeId: props.id })
+  } else {
+    // 宿主未装 canvas-commands 时退化为直接内核删边 + 落盘（保证双击删除始终可用且持久化）。
+    const edgeStore = ctx.get<EdgeStoreService>('edgeStore')
+    const save = ctx.get<SaveService>('save')
+    edgeStore.removeEdge(props.id)
+    save.set(GRAPH_EDGES_KEY, edgeStore.getEdges(), 'canvas')
+  }
   showCutButton.value = false
 }
 

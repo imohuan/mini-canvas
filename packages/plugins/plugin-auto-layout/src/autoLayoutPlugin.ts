@@ -23,11 +23,11 @@
 import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import { resolveConfig } from '@mini-canvas/canvas-base'
 import type {
-  NodeStoreService,
-  EdgeStoreService,
-  SelectionService,
-  HistoryService,
-  CanvasNode,
+ NodeStoreService,
+ EdgeStoreService,
+ SelectionService,
+  GraphDocumentService,
+ CanvasNode,
 } from '@mini-canvas/canvas-core-v2'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { runAutoLayout } from './layoutEngine'
@@ -43,14 +43,14 @@ declare module '@mini-canvas/canvas-core-v2' {
     nodeStore: NodeStoreService
     edgeStore: EdgeStoreService
     selection: SelectionService
-    history: HistoryService
+    graph: GraphDocumentService
     nodeLayout: NodeLayoutService
     viewport: ViewportService
   }
 }
 
 export const name = 'auto-layout'
-export const inject = ['nodeStore', 'edgeStore', 'selection', 'history', 'nodeLayout', 'viewport'] as string[]
+export const inject = ['nodeStore', 'edgeStore', 'selection', 'graph', 'nodeLayout', 'viewport'] as string[]
 
 /** Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认） */
 export const Config = {
@@ -93,7 +93,7 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
 }
 
 export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
-  const { nodeStore, edgeStore, selection, history, nodeLayout, viewport } = ctx
+  const { nodeStore, edgeStore, selection, graph, nodeLayout, viewport } = ctx
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
   const config = toEngineConfig(effectiveConfig)
@@ -167,10 +167,10 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     if (!Number.isFinite(minX) || !Number.isFinite(minY)) return
     const bounds: Bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
     const cur = viewport.getViewport()
-    // 视口尺寸：尽力从 DOM(.vue-flow) 读；无 DOM 环境(node 测试)退化为 1:1 + 仅居中不缩放
-    const flowEl = typeof document !== 'undefined' ? document.querySelector('.vue-flow') : null
-    const vw = flowEl?.clientWidth || 1
-    const vh = flowEl?.clientHeight || 1
+    // 视口尺寸：优先取本画布实例根（viewport.getRootEl，多宿主不串线）；无 DOM 环境(node 测试)退化为 1:1
+    const scopeRoot = viewport.getRootEl?.() ?? (typeof document !== 'undefined' ? document.querySelector('.vue-flow') : null)
+    const vw = scopeRoot?.clientWidth || 1
+    const vh = scopeRoot?.clientHeight || 1
     const zoom = opts.keepZoom
       ? cur.zoom
       : calculateFocusZoom({
@@ -283,15 +283,13 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       entries.push({ id: n.id, patch })
     }
 
-    history.withRecord(() => {
-      // updateNodes 只接受 NodePatchEntry（id + patch）—— patch 需符合 NodePatch（含 data/size/parentId）
-      nodeStore.updateNodes(
-        entries.map((e) => ({
-          id: e.id,
-          patch: e.patch as { position?: { x: number; y: number }; size?: { w: number; h: number }; data?: Record<string, unknown>; parentId?: string | undefined },
-        })),
-      )
-    })
+    // 统一走 graph：一次批量写回位置/尺寸（历史 + 提交落盘）
+    graph.updateNodes(
+      entries.map((e) => ({
+        id: e.id,
+        patch: e.patch as { position?: { x: number; y: number }; size?: { w: number; h: number }; data?: Record<string, unknown>; parentId?: string | undefined },
+      })),
+    )
 
     if (runConfig.debug) {
       console.log('[auto-layout] logs\n' + result.logs.join('\n'))
@@ -312,7 +310,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     id: 'auto-layout:run',
     title: '自动布局',
     keys: ['mod+l'],
-    areas: ['pane'],
     group: 'auto-layout',
     order: 10,
     run: () => run(),
@@ -321,7 +318,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     id: 'auto-layout:focus-selected',
     title: '聚焦选中节点',
     keys: ['f'],
-    areas: ['pane'],
     group: 'auto-layout',
     order: 20,
     run: () => focusSelected(),
@@ -330,7 +326,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     id: 'auto-layout:fit-view',
     title: '适应视图',
     keys: ['r'],
-    areas: ['pane'],
     group: 'auto-layout',
     order: 30,
     run: () => viewport.fitView(),
@@ -339,3 +334,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const autoLayoutPlugin: PluginModule = { name, inject, Config, apply }
+
+
+

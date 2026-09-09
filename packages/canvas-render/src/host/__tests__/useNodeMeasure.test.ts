@@ -72,3 +72,15 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
   })
 })
 
+describe('useNodeMeasure SSR/headless 守卫（P1-13）', () => {
+  it('无 ResizeObserver/MutationObserver 时 start/stop 为 no-op，不抛错', () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    vi.stubGlobal('MutationObserver', undefined)
+    const store = makeStore()
+    const layout = new NodeLayoutService(store)
+    const m = useNodeMeasure({ nodeLayout: layout, container: () => null })
+    expect(() => m.start()).not.toThrow()
+    expect(() => m.stop()).not.toThrow()
+  })
+})
+

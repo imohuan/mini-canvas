@@ -16,6 +16,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { SettingsPanelSource, SettingEntry, SettingSchema } from '@mini-canvas/canvas-render'
 import { createCoalescer } from '@mini-canvas/canvas-render'
+import Select from '../ui/Select.vue'
 
 const props = defineProps<{
   /** 字段所属分组（须等于 settings.groupOf 的组名） */
@@ -92,14 +93,16 @@ const fieldId = 'sf-' + props.fieldKey
       </label>
     </template>
 
-    <!-- select -->
+    <!-- select（自绘下拉，替代原生 <select>） -->
     <template v-else-if="entry.schema.type === 'select'">
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
-      <select :id="fieldId" class="sf-select" :value="String(entry.value)"
-        @change="set(entry.key, ($event.target as HTMLSelectElement).value)">
-        <option v-for="o in entry.schema.options ?? []" :key="o.value" :value="o.value">{{ o.label ?? o.value }}
-        </option>
-      </select>
+      <Select
+        :input-id="fieldId"
+        :model-value="String(entry.value)"
+        :options="(entry.schema.options ?? []).map((o) => ({ value: o.value, label: o.label ?? o.value }))"
+        placeholder="请选择"
+        @update:model-value="set(entry.key, $event)"
+      />
     </template>
 
     <!-- text（默认兜底 string/text） -->
@@ -116,8 +119,8 @@ const fieldId = 'sf-' + props.fieldKey
 
 <style scoped>
 .sf-field {
-  padding: 6px 0;
-  border-top: 1px dashed #f0f1f3;
+  padding: 14px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .sf-field:first-of-type {
@@ -126,16 +129,17 @@ const fieldId = 'sf-' + props.fieldKey
 
 .sf-label {
   display: block;
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
 }
 
 .sf-label-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .sf-label-row .sf-label {
@@ -145,15 +149,15 @@ const fieldId = 'sf-' + props.fieldKey
 .sf-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 /* field description */
 .sf-desc {
-  margin: 5px 0 0;
-  font-size: 11px;
+  margin: 6px 0 0;
+  font-size: 12px;
   line-height: 1.5;
-  color: #9aa3af;
+  color: #9ca3af;
 }
 
 /* color swatch */
@@ -161,17 +165,17 @@ const fieldId = 'sf-' + props.fieldKey
   position: relative;
   width: 30px;
   height: 22px;
-  border-radius: 6px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e6e8eb;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
 
 .sf-swatch input[type='color'] {
   position: absolute;
-  inset: -6px;
-  width: 42px;
-  height: 34px;
+  inset: -8px;
+  width: 46px;
+  height: 38px;
   border: none;
   padding: 0;
   cursor: pointer;
@@ -181,9 +185,9 @@ const fieldId = 'sf-' + props.fieldKey
 /* number slider */
 .sf-value-bubble {
   font-size: 11px;
-  font-weight: 600;
-  color: #4f7cff;
-  background: rgba(79, 124, 255, 0.1);
+  font-weight: 700;
+  color: #0e7490;
+  background: rgba(8, 145, 178, 0.12);
   padding: 1px 8px;
   border-radius: 999px;
 }
@@ -192,9 +196,9 @@ const fieldId = 'sf-' + props.fieldKey
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
+  height: 5px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #4f7cff, #dbe3ff);
+  background: linear-gradient(90deg, #0891b2, rgba(8, 145, 178, 0.25));
   outline: none;
   cursor: pointer;
 }
@@ -202,13 +206,33 @@ const fieldId = 'sf-' + props.fieldKey
 .sf-range::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #fff;
-  border: 2px solid #4f7cff;
-  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.2);
+  border: 2px solid #0891b2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
   cursor: pointer;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.sf-range::-webkit-slider-thumb:hover {
+  border-color: #0e7490;
+  transform: scale(1.05);
+}
+
+.sf-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #0891b2;
+  cursor: pointer;
+}
+
+.sf-range:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: 2px;
 }
 
 /* boolean toggle */
@@ -217,6 +241,7 @@ const fieldId = 'sf-' + props.fieldKey
   align-items: center;
   justify-content: space-between;
   cursor: pointer;
+  gap: 16px;
 }
 
 .sf-switch-row .sf-label {
@@ -225,8 +250,8 @@ const fieldId = 'sf-' + props.fieldKey
 
 .sf-switch {
   position: relative;
-  width: 34px;
-  height: 19px;
+  width: 36px;
+  height: 20px;
   flex-shrink: 0;
 }
 
@@ -243,57 +268,64 @@ const fieldId = 'sf-' + props.fieldKey
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: #d8dce2;
+  background: rgba(0, 0, 0, 0.16);
   transition: background 0.18s ease;
 }
 
 .sf-slider::before {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 2.5px;
+  left: 2.5px;
   width: 15px;
   height: 15px;
   border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.25);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 0.18s ease;
 }
 
 .sf-switch input:checked+.sf-slider {
-  background: #4f7cff;
+  background: #0891b2;
 }
 
 .sf-switch input:checked+.sf-slider::before {
-  transform: translateX(15px);
+  transform: translateX(16px);
 }
 
-/* select / text */
-.sf-select,
+.sf-switch input:focus-visible+.sf-slider {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: 2px;
+}
+
+/* text */
 .sf-text {
   width: 100%;
   box-sizing: border-box;
-  padding: 5px 8px;
-  border: 1px solid #e6e8eb;
-  border-radius: 7px;
-  font-size: 12px;
-  color: #1f2937;
-  background: #fbfcfd;
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  background: rgba(0, 0, 0, 0.03);
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.sf-select:focus,
 .sf-text:focus {
-  border-color: #4f7cff;
-  box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.14);
+  border-color: rgba(8, 145, 178, 0.6);
   background: #fff;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+  outline: none;
 }
 
 /* monospace value text */
 .sf-mon {
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  color: #64748b;
+  color: #6b7280;
+  font-weight: 600;
 }
 </style>

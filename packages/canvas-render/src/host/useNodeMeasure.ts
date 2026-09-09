@@ -23,26 +23,39 @@ export function useNodeMeasure(opts: {
   container: () => HTMLElement | null
 }): NodeMeasureHandle {
   const { nodeLayout, container } = opts
-  const ro = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const el = entry.target as HTMLElement
-      const id = el.dataset?.id
-      if (!id) continue
-      const w = el.offsetWidth
-      const h = el.offsetHeight
-      if (w > 0 && h > 0) nodeLayout.setMeasuredSize(id, w, h)
-    }
-  })
-  const mo = new MutationObserver(() => {
-    sync()
-  })
-
   const observed = new Set<HTMLElement>()
+  // P1-13：SSR/headless 无 ResizeObserver/MutationObserver/DOM → no-op 句柄，不抛错。
+  // 惰性创建：observer 仅 start()（挂载后、容器就绪）时才 new，避免 setup 期即抛。
+  const canObserve =
+    typeof ResizeObserver !== 'undefined' &&
+    typeof MutationObserver !== 'undefined'
+  let ro: ResizeObserver | null = null
+  let mo: MutationObserver | null = null
+
+  function ensureObservers(): boolean {
+    if (!canObserve) return false
+    if (!ro) {
+      ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const el = entry.target as HTMLElement
+          const id = el.dataset?.id
+          if (!id) continue
+          const w = el.offsetWidth
+          const h = el.offsetHeight
+          if (w > 0 && h > 0) nodeLayout.setMeasuredSize(id, w, h)
+        }
+      })
+      mo = new MutationObserver(() => {
+        sync()
+      })
+    }
+    return true
+  }
 
   function observeNode(el: HTMLElement): void {
     if (observed.has(el)) return
     observed.add(el)
-    ro.observe(el)
+    ro?.observe(el)
     // 首次挂载立即上报一次（避免等首帧 ResizeObserver 回调）
     const id = el.dataset?.id
     if (id) {
@@ -65,7 +78,7 @@ export function useNodeMeasure(opts: {
       if (!current.has(el)) {
         const id = el.dataset?.id
         if (id) nodeLayout.clearMeasuredSize(id)
-        ro.unobserve(el)
+        ro?.unobserve(el)
         observed.delete(el)
       }
     }
@@ -74,15 +87,18 @@ export function useNodeMeasure(opts: {
   return {
     start() {
       const root = container()
-      if (root) mo.observe(root, { childList: true, subtree: true })
+      if (!ensureObservers() || !root) return
+      mo?.observe(root, { childList: true, subtree: true })
       sync()
     },
     stop() {
-      mo.disconnect()
-      ro.disconnect()
+      mo?.disconnect()
+      ro?.disconnect()
       observed.clear()
       nodeLayout.reset()
     },
   }
 }
+
+
 

@@ -41,6 +41,8 @@ export type EdgeStoreListener = (reason: EdgeStoreChangeReason, edgeId?: string)
 export interface EdgeStoreService {
   /** 所有边（按加入序） */
   getEdges(): CanvasEdge[]
+  /** 深拷贝快照（P1-10：安全只读，外部改动不污染 store） */
+  getSnapshot(): CanvasEdge[]
   /** 加一条边；id 缺省用 `edgeId(source,target)`，已有同 id 则替换(去重)。返回边 id */
   addEdge(req: AddEdgeRequest): string
   /** 按 id 移除一条边；不存在 no-op。返回是否真移除 */
@@ -57,9 +59,20 @@ export interface EdgeStoreService {
   subscribe(listener: EdgeStoreListener): () => void
 }
 
-/** 稳定边 id：源→目标（与渲染层 canvasHostCore.edgeId 对齐） */
-export function edgeStoreId(source: string, target: string): string {
-  return `e-${source}-${target}`
+/** 稳定边 id：源→目标。带显式端口时纳入 handle 维度（同源同目标不同端口互不覆盖，P0-5）。
+ *  无 handle（或 handle 为默认 'source'/'target'）保持旧格式 e-{s}-{t}，单端口存量零改动。 */
+export function edgeStoreId(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): string {
+  const sh = sourceHandle && sourceHandle !== 'source' ? sourceHandle : ''
+  const th = targetHandle && targetHandle !== 'target' ? targetHandle : ''
+  if (!sh && !th) return `e-${source}-${target}`
+  const srcPart = sh ? `${source}:${sh}` : source
+  const tgtPart = th ? `${target}:${th}` : target
+  return `e-${srcPart}-${tgtPart}`
 }
 
 /** 实现：边数据列表（保序），按 id 索引去重 */
@@ -74,11 +87,18 @@ export class EdgeStore implements EdgeStoreService {
 
   /** 广播边集变化给订阅方 */
   private notify(reason: EdgeStoreChangeReason, edgeId?: string): void {
-    for (const l of this.listeners) l(reason, edgeId)
+    // P2-6：坏订阅者异常不阻断其它订阅者/写操作
+    for (const l of this.listeners) {
+      try { l(reason, edgeId) } catch { /* 忽略单个订阅者异常 */ }
+    }
   }
 
   getEdges(): CanvasEdge[] {
     return [...this.edges.values()]
+  }
+
+  getSnapshot(): CanvasEdge[] {
+    return JSON.parse(JSON.stringify([...this.edges.values()])) as CanvasEdge[]
   }
 
   getEdge(id: string): CanvasEdge | undefined {
@@ -86,7 +106,9 @@ export class EdgeStore implements EdgeStoreService {
   }
 
   addEdge(req: AddEdgeRequest): string {
-    const id = req.source && req.target ? edgeStoreId(req.source, req.target) : `${Date.now()}`
+    const id = req.source && req.target
+      ? edgeStoreId(req.source, req.target, req.sourceHandle, req.targetHandle)
+      : `${Date.now()}`
     this.edges.set(id, {
       id,
       source: req.source,
@@ -132,9 +154,15 @@ export class EdgeStore implements EdgeStoreService {
   replaceAll(edges: StoredEdgeInput[]): void {
     this.edges.clear()
     for (const e of edges) {
-      const id = e.id ?? edgeStoreId(e.source, e.target)
+      const id = e.id ?? edgeStoreId(e.source, e.target, e.sourceHandle, e.targetHandle)
       this.edges.set(id, { ...e, id } as CanvasEdge) // 归一化：无 id 者补齐，让对象上 id 与存储键一致
     }
     this.notify('replace')
   }
 }
+
+
+
+
+
+

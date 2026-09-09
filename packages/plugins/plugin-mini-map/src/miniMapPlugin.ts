@@ -14,6 +14,7 @@
 import { reactive } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import MiniMapOverlay from './MiniMapOverlay.vue'
+import { Config, miniMapConfigFrom } from './miniMapConfig'
 
 export const name = 'mini-map'
 export const inject = ['nodeStore', 'nodeLayout', 'viewport'] as string[]
@@ -24,10 +25,29 @@ export interface MiniMapServiceState {
   visible: boolean
 }
 
+/** mini-map 可配置项（v2 Config schema；默认值/分组对齐老版 panel 设置，登记 ⚙ 设置面板） */
+export { Config }
+export type { MiniMapConfig } from './miniMapConfig'
+
 export function apply(ctx: Context) {
   // 1. 上架 mini-map 服务（响应式显隐状态；命令与 MiniMapOverlay 共享）
-  const state: MiniMapServiceState = reactive({ visible: true })
+  const initial = miniMapConfigFrom(ctx)
+  const state: MiniMapServiceState = reactive({ visible: initial.miniMapVisible })
   ctx.inject('mini-map', state)
+
+  // 1b. settings 面板「显示小地图」开关 ↔ 服务状态双向同步（老版 store.toRef 语义：
+  //     面板改 → 浮层即时变；命令 Ctrl/Cmd+M 改 → 面板开关跟着变）。
+  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined; set(key: string, v: string | number | boolean): boolean; onChange(cb: (key: string, v: unknown) => void): { dispose(): void } }>('settings')
+  if (settings) {
+    const off = settings.onChange((key, v) => {
+      if (key === 'miniMapVisible' && typeof v === 'boolean') state.visible = v
+    })
+    ctx.effect(() => () => off.dispose())
+  }
+  // 命令切换时把显隐写回 settings，保证面板开关状态一致（热卸后重装由 config 持久化恢复）
+  const syncVisibleToSettings = (v: boolean): void => {
+    if (settings && settings.get('miniMapVisible') !== v) settings.set('miniMapVisible', v)
+  }
 
   // 2. 注册小地图浮层到 overlay 槽（宿主已渲染该槽；热卸随插件 scope 自动移除）
   ctx.slots.register('overlay', {
@@ -42,14 +62,14 @@ export function apply(ctx: Context) {
     id: 'mini-map:toggle',
     title: '切换小地图',
     keys: ['mod+m'],
-    areas: ['pane'],
     order: 80,
     icon: 'minimap',
     run: () => {
       state.visible = !state.visible
+      syncVisibleToSettings(state.visible)
     },
   })
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
-export const miniMapPlugin: PluginModule = { name, inject, apply }
+/** 兼容旧装配的 PluginModule 出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */
+export const miniMapPlugin: PluginModule = { name, inject, Config, apply }

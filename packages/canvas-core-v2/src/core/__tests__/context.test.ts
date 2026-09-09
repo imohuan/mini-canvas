@@ -129,6 +129,27 @@ describe('Context（Cordis 式内核主类）', () => {
     expect(cleanup).toHaveBeenCalledTimes(1)
   })
 
+  it('stopAsync 等待全部异步 disposer 结算（P1-3）；await 后清理已完成', async () => {
+    const ctx = new Context()
+    const order: string[] = []
+    ctx.plugin({
+      name: 'p',
+      apply(c: PluginScope) {
+        c.effect(() => async () => {
+          await new Promise((r) => setTimeout(r, 5))
+          order.push('cleaned')
+        })
+      },
+    })
+    await ctx.start()
+    await ctx.stopAsync() // 同步清理 + 等待异步 disposer 完成
+    expect(order).toEqual(['cleaned'])
+    // 已回到 created 可重启
+    expect(ctx.getState()).toBe('created')
+    await ctx.start()
+    expect(ctx.getState()).toBe('started')
+  })
+
   it('async disposer：stop() 会触发其执行（不再丢弃），对齐 cordis fiber.dispose', async () => {
     const ctx = new Context()
     const order: string[] = []
@@ -694,3 +715,65 @@ describe('P6/P2b2 提供方被卸/换，依赖方随之回退 PENDING 并在服�
     expect(ran).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('P1-2：根 Context 的 effect 随 stop 回收（宿主/根层副作用）', () => {
+  it('ctx.effect 登记的清理在 stop 执行；手动 dispose 只退订；restart 后 rootScope 重建', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const cleaned: string[] = []
+    // 宿主/根层（非插件）副作用：ctx.effect 登记到 rootScope
+    const off1 = ctx.effect(() => {
+      cleaned.push('setup-1')
+      return () => cleaned.push('cleanup-1')
+    })
+    ctx.effect(() => {
+      cleaned.push('setup-2')
+      return () => cleaned.push('cleanup-2')
+    })
+    expect(cleaned).toEqual(['setup-1', 'setup-2'])
+    // Scope.onDispose 返回的句柄仅"移除登记"（不立即执行 cleanup）
+    off1.dispose()
+    expect(cleaned).toEqual(['setup-1', 'setup-2'])
+
+    ctx.stop() // 整机 stop → rootScope.dispose → 仍登记的 cleanup-2 执行；已退订的 cleanup-1 不执行
+    expect(cleaned).toEqual(['setup-1', 'setup-2', 'cleanup-2'])
+
+    // restart 后 rootScope 已重建，新 effect 可正常注册与清理
+    await ctx.start()
+    const cleanedAfter: string[] = []
+    ctx.effect(() => {
+      cleanedAfter.push('setup-new')
+      return () => cleanedAfter.push('cleanup-new')
+    })
+    ctx.stop()
+    expect(cleanedAfter).toEqual(['setup-new', 'cleanup-new'])
+    // 旧清理不会重复执行
+    expect(cleaned.filter((x) => x === 'cleanup-2')).toHaveLength(1)
+  })
+})
+
+describe('P1-4 配置 key 冲突保护', () => {
+  it('两插件声明同名 config key：先占者值保留，后者不静默覆盖', async () => {
+    const ctx = new Context()
+    const seen: Record<string, unknown> = {}
+    ctx.plugin({
+      name: 'first',
+      Config: { shared: { type: 'number', default: 1, label: '共享' } },
+      apply(c, config) { seen.first = config },
+    })
+    ctx.plugin({
+      name: 'second',
+      Config: { shared: { type: 'number', default: 99, label: '共享' } },
+      apply(c, config) { seen.second = config },
+    })
+    await ctx.start()
+    // 两个插件各自都收到完整 config（schema 校验独立）
+    expect(seen.first).toEqual({ shared: 1 })
+    expect(seen.second).toEqual({ shared: 99 })
+    // 单一数据源里 shared 保留先占者(first)的值，未被 second 覆盖
+    const store = ctx.get<{ get(k: string): unknown }>('settings')
+    expect(store.get('shared')).toBe(1)
+    ctx.stop()
+  })
+})
+

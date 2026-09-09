@@ -66,10 +66,14 @@ export interface CanvasRenderContext {
   paneRect: Readonly<Ref<DOMRect | null>>
   /** 画布 pane DOM 元素（插件自绘框选/手势监听挂载点；未挂载时 null） */
   pane: Readonly<Ref<HTMLElement | null>>
+  /** 本画布实例的根 DOM（.csurface，即 VueFlow 宿主容器；多宿主页面里区分实例用，未挂载时 null） */
+  rootEl: Readonly<Ref<HTMLElement | null>>
+  /** VueFlow renderer DOM（.vue-flow__renderer，节点层容器；量测/导出的实例级锚点，未挂载时 null） */
+  rendererEl: Readonly<Ref<HTMLElement | null>>
   /** 当前渲染节点只读快照（含选中标记与位置；宿主订阅 store 自动重灌；拖动中为最近一次同步态） */
   renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
   /** 当前渲染边只读快照 */
-  renderEdges: Readonly<Ref<ReadonlyArray<{ id: string; type: string; source: string; target: string }>>>
+  renderEdges: Readonly<Ref<ReadonlyArray<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>>>
   /** 屏幕 client 坐标 → flow(画布)坐标（pane 偏移 + 视口逆变换；由 VueFlow 官方换算保证可靠） */
   screenToFlow(clientX: number, clientY: number): { x: number; y: number }
   /** flow(画布)坐标 → 屏幕 client 坐标（浮层画线/手柄定位/对齐线用） */
@@ -96,4 +100,8 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
+
+
+
+
 

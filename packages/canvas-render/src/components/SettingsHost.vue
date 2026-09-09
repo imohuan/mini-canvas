@@ -46,6 +46,11 @@ disposers.push(
   ctx.on('ctx:plugin-installed', reload),
   ctx.on('ctx:plugin-uninstalled', reload),
 )
+// 运行期 theme occupant 替换（不经过插件装卸）也会改变赢家 → 直接订阅 themeRegistry。
+const themeRegistry = ctx.get<{ subscribe(cb: () => void): () => void }>('themeRegistry')
+if (themeRegistry && typeof themeRegistry.subscribe === 'function') {
+  disposers.push({ dispose: themeRegistry.subscribe(reload) })
+}
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })

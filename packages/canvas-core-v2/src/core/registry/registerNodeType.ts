@@ -59,7 +59,14 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
   const segs = def.segments ?? {}
   const nodeRegistry = safeGet<NodeRegistry>(ctx, 'nodeRegistry')
   if (nodeRegistry && Object.keys(segs).length > 0) {
-    nodeRegistry.register(def.type, segs)
+    try {
+      nodeRegistry.register(def.type, segs)
+    } catch (err) {
+      // P2-9：展示侧注册失败（如 nodeRegistry 里该 type 已被他人占用而 nodeStore 没有）→ 回滚数据侧，
+      // 保证"要么两表都注册、要么都不注册"的原子性，避免留下只落了一半的 type。
+      nodeStore.unregisterType(def.type)
+      throw err
+    }
     revokers.push(() => nodeRegistry.unregister(def.type))
   }
 
@@ -79,3 +86,5 @@ function safeGet<T>(ctx: PluginScope, name: string): T | undefined {
     return undefined
   }
 }
+
+

@@ -76,3 +76,24 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
     ).rejects.toThrow(/already registered/i)
   })
 })
+
+describe('registerNodeType 原子性（P2-9）', () => {
+  it('展示侧注册失败（nodeRegistry 该 type 已被他人占用）→ 回滚已落的数据侧 type', async () => {
+    const ctx = new Context()
+    const nodeStore = new NodeStore()
+    const registry = new NodeRegistry()
+    ctx.inject('nodeStore', nodeStore)
+    ctx.inject('nodeRegistry', registry)
+    // 构造不一致：展示侧已有该 type（来自别的路径），数据侧没有
+    registry.register('dup', { content: TextContentStub })
+    ctx.plugin({
+      name: 'atomic-test',
+      setup: (c) =>
+        registerNodeType(c, { type: 'dup', label: 'D', defaultSize: { w: 1, h: 1 }, segments: { content: TextContentStub } }),
+    })
+    // registerNodeType: nodeStore.registerType 成功 → nodeRegistry.register 抛"already" → 回滚 nodeStore
+    await expect(ctx.start()).rejects.toThrow(/already registered/i)
+    expect(nodeStore.types.has('dup')).toBe(false) // 数据侧已回滚，无半落状态
+  })
+})
+

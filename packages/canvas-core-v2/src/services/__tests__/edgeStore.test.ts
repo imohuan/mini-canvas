@@ -86,3 +86,31 @@ describe('EdgeStore（边数据服务）', () => {
     expect(reasons).toHaveLength(4) // 停收
   })
 })
+
+describe('edgeStoreId 多端口维度（P0-5）', () => {
+  it('无 handle 保持旧格式；带显式 handle 时纳入 id 使同端点不同端口不互相覆盖', () => {
+    expect(edgeStoreId('a', 'b')).toBe('e-a-b')
+    expect(edgeStoreId('a', 'b', 'source', 'target')).toBe('e-a-b') // 默认 handle 不改变格式
+    const out1 = edgeStoreId('a', 'b', 'out1', 'in1')
+    const out2 = edgeStoreId('a', 'b', 'out2', 'in2')
+    expect(out1).not.toBe(out2)
+    expect(out1).toBe('e-a:out1-b:in1')
+    expect(out2).toBe('e-a:out2-b:in2')
+  })
+  it('EdgeStore.addEdge：同源同目标不同 handle 并存（不再互相覆盖）', () => {
+    const es = new EdgeStore()
+    const id1 = es.addEdge({ source: 'a', target: 'b', sourceHandle: 'out1', targetHandle: 'in1' })
+    const id2 = es.addEdge({ source: 'a', target: 'b', sourceHandle: 'out2', targetHandle: 'in2' })
+    expect(id1).not.toBe(id2)
+    expect(es.getEdges()).toHaveLength(2)
+    expect(es.getEdges().map((e) => e.sourceHandle)).toEqual(['out1', 'out2'])
+  })
+  it('单端 handle 缺省时与无 handle 边同 id（同语义去重兼容）', () => {
+    const es = new EdgeStore()
+    const id1 = es.addEdge({ source: 'a', target: 'b' })
+    const id2 = es.addEdge({ source: 'a', target: 'b' })
+    expect(id1).toBe(id2)
+    expect(es.getEdges()).toHaveLength(1)
+  })
+})
+

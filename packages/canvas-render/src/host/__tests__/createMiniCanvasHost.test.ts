@@ -95,6 +95,38 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
     h2.stop()
   })
 
+  it('已保存的空图在刷新后不被 seedDefault 复活', async () => {
+    const storage = new MemoryStorageAdapter()
+    const mk = () =>
+      createMiniCanvasHost({
+        adapter: storage,
+        seedDefault: () => [{ id: '1', type: 'x', position: { x: 0, y: 0 }, data: {} }],
+      })
+    // 第一次 boot：seed 建了一个节点，随后清空并保存空图
+    const { host } = await mk()
+    expect(host.nodeStore.getNodes()).toHaveLength(1)
+    host.nodeStore.replaceAll([])
+    await host.save.set('graph', [], 'canvas')
+    await host.save.flush()
+    host.stop()
+    // 二次 boot：恢复空数组，不再执行 seed
+    const { host: h2 } = await mk()
+    expect(h2.nodeStore.getNodes()).toHaveLength(0)
+    h2.stop()
+  })
+
+  it('从未保存过的首次启动仍执行 seedDefault', async () => {
+    const storage = new MemoryStorageAdapter()
+    const mk = () =>
+      createMiniCanvasHost({
+        adapter: storage,
+        seedDefault: () => [{ id: '1', type: 'x', position: { x: 0, y: 0 }, data: {} }],
+      })
+    const { host: h2 } = await mk()
+    expect(h2.nodeStore.getNodes()).toHaveLength(1)
+    h2.stop()
+  })
+
   it('manifest 冷启动：按序装 + disabled 项跳过 + config 覆盖传给 apply', async () => {
     let seenConfig: unknown
     const cfgPlugin: PluginModule = {
@@ -129,3 +161,28 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
     expect(seenConfig).toEqual({ edgeColor: '#16a34a' })
   })
 })
+
+describe('window API 生命周期清理（P1-16）', () => {
+  it('host.stop 后 exposeToWindow 挂的 API 被移除（防旧画布残留）', async () => {
+    const { api, exposeToWindow, host } = await createMiniCanvasHost()
+    exposeToWindow('MiniCanvasTest')
+    expect((globalThis as Record<string, unknown>)['MiniCanvasTest']).toBe(api)
+    host.stop()
+    expect((globalThis as Record<string, unknown>)['MiniCanvasTest']).toBeUndefined()
+    // afterEach 兜底清理（若断言失败也不留污染）
+    delete (globalThis as Record<string, unknown>)['MiniCanvasTest']
+  })
+  it('未 expose 时 stop 不抛；换 key 重新 expose 后只清最后 key', async () => {
+    const { api, exposeToWindow, host } = await createMiniCanvasHost()
+    host.stop() // 无 expose → no-op 不抛
+    const h2 = await createMiniCanvasHost()
+    h2.exposeToWindow('K1')
+    h2.exposeToWindow('K2')
+    expect((globalThis as Record<string, unknown>)['K2']).toBe(h2.api)
+    h2.host.stop()
+    expect((globalThis as Record<string, unknown>)['K2']).toBeUndefined()
+    delete (globalThis as Record<string, unknown>)['K1']
+    delete (globalThis as Record<string, unknown>)['K2']
+  })
+})
+

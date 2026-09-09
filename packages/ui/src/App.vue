@@ -36,6 +36,7 @@ import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
 import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 import { groupPlugin } from '@mini-canvas/plugin-group'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
+import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
@@ -53,6 +54,7 @@ const plugins = [
   canvasExportPlugin, // 导出：Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中
   nodeFindPlugin, // 搜索：Ctrl/Cmd+F
   miniMapPlugin, // 小地图：Ctrl/Cmd+M
+  shortcutManagerPlugin, // 快捷键帮助：Ctrl/Cmd+/ 打开
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 

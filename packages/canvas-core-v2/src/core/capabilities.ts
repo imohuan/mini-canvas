@@ -60,6 +60,17 @@ export function buildCapabilities(
 ): {
   nodes: {
     register(def: NodeRegisterDef): void
+    /**
+     * 往某 type 的某段叠一个 occupant（多插件同段叠加；content/装饰层/徽标等）。
+     * 自动回收：插件卸载时该 occupant 移除，基座与其它贡献原位保留。
+     * @returns occupant id
+     */
+    contribute(
+      type: string,
+      segment: NodeSegment,
+      component: unknown,
+      opts?: { id?: string; order?: number },
+    ): string
   }
   theme: {
     register(slot: ThemeSlot, component: unknown, opts?: ThemeOccupantOpts): void
@@ -136,6 +147,28 @@ export function buildCapabilities(
           ctx.effect(() => revoke)
         }
       },
+      contribute(
+        type: string,
+        segment: NodeSegment,
+        component: unknown,
+        opts: { id?: string; order?: number } = {},
+      ): string {
+        const registry = ctx.get<{
+          registerContribution(
+            t: string,
+            seg: NodeSegment,
+            req: { id?: string; order?: number; component: unknown },
+          ): string
+          unregisterContribution(t: string, seg: NodeSegment, id: string): boolean
+        }>('nodeRegistry')
+        const id = registry.registerContribution(type, segment, {
+          id: opts.id,
+          order: opts.order,
+          component,
+        })
+        ctx.effect(() => () => registry.unregisterContribution(type, segment, id))
+        return id
+      },
     },
 
     // ---------- ctx.theme：往主题槽叠/取 occupant，自动回收 ----------
@@ -206,3 +239,7 @@ export function buildCapabilities(
     },
   }
 }
+
+
+
+

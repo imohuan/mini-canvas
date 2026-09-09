@@ -57,12 +57,19 @@ disposers.push(
   ctx.on('ctx:plugin-installed', reloadNav),
   ctx.on('ctx:plugin-uninstalled', reloadNav),
 )
+// P2-1：内核 schema 变更订阅 → 强制刷新分组列表（插件热装卸后新 config 分组立即可见）
+const rawSettings = ctx.get<{ onSchemaChange(cb: () => void): { dispose(): void } }>('settings')
+const schemaOff = rawSettings?.onSchemaChange(() => { refreshTick.value += 1 })
+if (schemaOff) disposers.push(schemaOff)
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })
 
 // —— 当前激活 key（默认第一个分组）——
-const groups = computed(() => props.settings.groups())
+// P2-1：schema 变化（插件热装卸 define/移除项）经 settings.onSchemaChange 置 refreshTick 强制重算 groups；
+// 不再只依赖 nav/content 间接触发重渲染。
+const refreshTick = ref(0)
+const groups = computed(() => { void refreshTick.value; return props.settings.groups() })
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const activeKey = ref<string>('')
 watch(
@@ -186,8 +193,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       <div class="psd-dialog" role="dialog" aria-modal="true" @click.stop>
         <!-- 弹窗头 -->
         <div class="psd-head">
-          <span class="psd-title">⚙ 设置</span>
-          <button class="psd-close" aria-label="关闭" @click="close">✕</button>
+          <div class="psd-title-block">
+            <span class="psd-eyebrow">偏好</span>
+            <h2 class="psd-title">设置</h2>
+          </div>
+          <button class="psd-close" aria-label="关闭" title="关闭" @click="close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
+            </svg>
+          </button>
         </div>
 
         <div class="psd-body">
@@ -195,10 +209,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <nav class="psd-nav">
             <div v-if="!navEntries.length" class="psd-nav-empty">暂无分组</div>
             <div v-for="item in navEntries" :key="item.key" class="psd-nav-item"
-              :class="{ active: activeKey === item.key }" role="button" tabindex="0" @click="onSelect(item.key)"
+              :class="{ active: activeKey === item.key, slot: item.kind === 'nav' }" role="button" tabindex="0" @click="onSelect(item.key)"
               @keydown.enter.prevent="onSelect(item.key)">
               <!-- 分组默认项：直接画文本 -->
-              <span v-if="item.kind === 'group'">{{ item.key }}</span>
+              <span v-if="item.kind === 'group'" class="psd-nav-inner">
+                <span class="psd-nav-ico">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/>
+                    <path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>
+                  </svg>
+                </span>
+                <span class="psd-nav-txt">{{ item.key }}</span>
+              </span>
               <!-- 导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
               <component v-else :is="item.component" :key="item.key" :group="item.key" :active="activeKey === item.key"
                 :on-select="onSelect" />
@@ -236,102 +258,197 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .psd-mask {
   position: fixed;
   inset: 0;
-  z-index: 2000;
-  background: rgba(15, 23, 42, 0.45);
+  z-index: 100000;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 32px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18));
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   font-family: system-ui, 'Microsoft YaHei', sans-serif;
 }
 
 .psd-dialog {
-  width: 720px;
-  max-width: calc(100vw - 48px);
-  height: 480px;
-  max-height: calc(100vh - 96px);
-  background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  width: min(920px, 100%);
+  height: min(68vh, 780px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  font-size: 12.5px;
-  color: #1f2937;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  color: #374151;
+  font-size: 13px;
+  animation: psd-pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .psd-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #eef0f3;
+  padding: 2px 6px 12px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
 }
 
+.psd-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px;
+}
+
+.psd-eyebrow {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
 .psd-title {
-  font-size: 14px;
-  font-weight: 600;
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .psd-close {
-  border: none;
-  background: transparent;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  color: #6b7280;
   cursor: pointer;
-  font-size: 15px;
-  color: #9aa3af;
-  padding: 2px 8px;
-  border-radius: 6px;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.psd-close svg {
+  width: 16px;
+  height: 16px;
 }
 
 .psd-close:hover {
-  background: #f1f3f5;
-  color: #1f2937;
+  background: rgba(0, 0, 0, 0.08);
+  color: #ef4444;
 }
 
 .psd-body {
   flex: 1;
   display: flex;
   min-height: 0;
+  padding-top: 8px;
 }
 
 .psd-nav {
-  width: 190px;
+  width: 212px;
   flex-shrink: 0;
-  border-right: 1px solid #eef0f3;
-  padding: 10px 8px;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  padding: 2px 6px 6px 2px;
   overflow-y: auto;
-  background: #fafbfc;
+  scrollbar-width: thin;
 }
 
 .psd-nav-empty {
-  color: #9aa3af;
+  color: #9ca3af;
   font-size: 12px;
   text-align: center;
   padding: 16px 0;
 }
 
 .psd-nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  padding: 8px 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 6px 10px;
   margin-bottom: 2px;
-  border-radius: 8px;
-  font-size: 12.5px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
   color: #374151;
   cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .psd-nav-item:hover {
-  background: #eef2ff;
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .psd-nav-item.active {
-  background: #4f7cff;
-  color: #fff;
+  background: rgba(8, 145, 178, 0.12);
+}
+
+.psd-nav-item:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: -1px;
+}
+
+.psd-nav-item.slot {
+  display: block;
+  padding: 0;
+}
+
+.psd-nav-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.psd-nav-ico {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: #6b7280;
+  background: rgba(0, 0, 0, 0.04);
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.psd-nav-ico svg {
+  width: 16px;
+  height: 16px;
+}
+
+.psd-nav-txt {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 600;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.psd-nav-item:hover .psd-nav-ico {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.psd-nav-item.active .psd-nav-ico {
+  color: #0891b2;
+  background: rgba(8, 145, 178, 0.16);
+}
+
+.psd-nav-item.active .psd-nav-txt {
+  color: #0e7490;
+  font-weight: 700;
 }
 
 .psd-content {
@@ -339,42 +456,81 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding-left: 8px;
 }
 
 .psd-content-head {
-  padding: 14px 18px 10px;
-  border-bottom: 1px solid #f0f1f3;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 10px 12px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
 }
 
 .psd-content-title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
 }
 
 .psd-content-sub {
   display: inline-block;
-  margin-top: 4px;
-  font-size: 11px;
-  color: #9aa3af;
+  font-size: 12px;
+  color: #9ca3af;
+  font-weight: 500;
 }
 
 .psd-content-body {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 18px 16px;
+  padding: 4px 16px 16px 16px;
   min-height: 0;
+  scrollbar-width: thin;
 }
 
 .psd-empty {
   padding: 24px 10px;
   text-align: center;
-  color: #9aa3af;
+  color: #9ca3af;
   font-size: 12px;
 }
 
 .psd-empty p {
   margin: 0;
+}
+
+/* ============ 动画 ============ */
+@keyframes psd-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.psd-content-body::-webkit-scrollbar,
+.psd-nav::-webkit-scrollbar {
+  width: 8px;
+}
+.psd-content-body::-webkit-scrollbar-thumb,
+.psd-nav::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.12);
+}
+.psd-content-body::-webkit-scrollbar-thumb:hover,
+.psd-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .psd-dialog {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 </style>

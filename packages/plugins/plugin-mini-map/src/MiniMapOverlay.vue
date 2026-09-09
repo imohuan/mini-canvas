@@ -1,15 +1,18 @@
 <script setup lang="ts">
 /**
- * MiniMapOverlay —— 小地图浮层（注册进 overlay 槽，宿主 CanvasSurface 已渲染该槽）。
+ * MiniMapOverlay —— 小地图浮层（v2 复刻老版 canvas-core/src/plugins/mini-map/MiniMap.vue）。
  *
- * 行为对齐老版 canvas-core/src/plugins/mini-map/MiniMap.vue：
- * - 右下角固定显示；内容 = 全部非 group 节点的 flow 包围盒 + 当前视口矩形，等比归一化；
- * - 缩略节点用纯色方块（按节点几何，不渲染节点内容）；
- * - 拖拽视口框/空白 → 平移画布（经 viewport 服务 setViewport，保留 zoom）；点击空白 → setCenter 跳转；
- * - 显隐由 mini-map 服务状态（visible）驱动；Ctrl/Cmd+M 切换（见 miniMapPlugin 命令）。
+ * 实现方式与老版完全一致（不是另起炉灶）：
+ * - 数据全走 computed 链：内容节点矩形 → contentBB → unionBB(内容 ∪ 当前视口) → mapState(scale/offset)。
+ *   因地图范围**恒包含当前视口矩形**，蓝框数学上永远落在小地图 padding 内 —— 无需任何钳制/修正；
+ * - 拖拽换算用"按下瞬间的 mapState + 视口"快照（线性跟手），渲染却随最新 viewport 实时重算；
+ * - 按下时冻结内容节点快照（防拖拽中节点包围盒跳动导致地图抖动），松手解冻；
+ * - 拖蓝框或空白 → 平移视口（保留 zoom）；点击空白（无拖动）→ 跳转到该 flow 点（老版 v2 扩展）。
  *
- * 数据全来自渲染层只读源：renderNodes(节点集，宿主随 store 同步) + viewport(响应式视口) +
- * paneRect(画布 pane 尺寸) + nodeLayout(实测矩形)。本组件只做 UI 与手势，不碰内核 store。
+ * v2 接入差异（行为不变）：
+ * - 老版父组件每事件 emit('pan') → setViewport；v2 经 viewport 服务（后端已即时 setViewport 无动画）
+ *   + rAF 合帧（pointer 事件可能快于一帧，只每帧应用一次，避免多余重排）。
+ * - 节点几何源 = renderNodes + nodeLayout（实测/绝对坐标），等价老版 position/computedPosition/dimensions。
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
@@ -27,35 +30,45 @@ import {
   type MiniMapRect,
   type MiniMapMapState,
 } from './miniMapEngine'
+import { miniMapConfigFrom, type MiniMapConfig } from './miniMapConfig'
 
 const { ctx, viewport, paneRect, renderNodes } = useCanvasRender()
 
-// —— 配置（对齐老版默认；如需面板化可后续接 settings）——
-const MAP_WIDTH = 240
-const MAP_HEIGHT = 160
+// —— 配置（⚙ 设置面板：小地图 mini-map 分组；实时订阅，默认 240x160/灵敏度1，对齐老版）——
+const settings = ctx.get<{
+  get(key: string): string | number | boolean | undefined
+  onChange(cb: (key: string, v: unknown) => void): { dispose(): void }
+} | undefined>('settings')
+const cfg = ref<MiniMapConfig>(miniMapConfigFrom(ctx))
+if (settings) {
+  const off = settings.onChange((key) => {
+    if (key.startsWith('miniMap')) cfg.value = miniMapConfigFrom(ctx)
+  })
+  onBeforeUnmount(() => off.dispose())
+}
+
+const width = computed(() => cfg.value.miniMapWidth)
+const height = computed(() => cfg.value.miniMapHeight)
+const sensitivityX = computed(() => cfg.value.miniMapSensitivityX)
+const sensitivityY = computed(() => cfg.value.miniMapSensitivityY)
+
 const PADDING = 8
 const NODE_COLOR = '#cbd5e1'
 const VIEWER_BORDER = '#3b82f6'
 
-/** 可见内容节点（缩略方块的数据源：flow 矩形） */
-interface ContentItem {
-  id: string
-  rect: MiniMapRect
-}
-
-const content = shallowRef<ContentItem[]>([])
-/** 当前地图归一化状态（不随 viewport 实时变——拖动/缩放时冻结防跳变） */
-const mapState = ref<MiniMapMapState | null>(null)
-/** pane 可视尺寸（px）：优先 host paneRect；退化为自量所在全幅 overlay 层；窗口 resize 刷新 */
-const paneSize = shallowRef<{ w: number; h: number }>({ w: 800, h: 600 })
-const rootEl = ref<HTMLElement | null>(null)
-
-// —— 显隐状态：mini-map 服务（插件 apply ctx.inject('mini-map', state)，命令切换同一对象）——
+// —— 显隐状态：mini-map 服务（命令切换与组件读同一对象）——
 interface MiniMapServiceState {
   visible: boolean
 }
 const service = ctx.get<MiniMapServiceState>('mini-map')
 const visible = computed(() => !!service && service.visible)
+
+/** pane 可视尺寸（px）：优先 host paneRect；退化为自量所在全幅 overlay 层；窗口 resize 刷新 */
+const paneSize = shallowRef<{ w: number; h: number }>({ w: 800, h: 600 })
+const rootEl = ref<HTMLElement | null>(null)
+
+/** 内容节点矩形（flow 绝对坐标）；拖拽中为按下瞬间快照，防止节点包围盒变化导致地图抖动 */
+const contentRects = shallowRef<MiniMapRect[]>([])
 
 function measurePane(): void {
   const pr = paneRect.value
@@ -70,89 +83,134 @@ function measurePane(): void {
   }
 }
 
-function viewRectNow(): MiniMapRect {
-  const { w, h } = paneSize.value
-  return viewportRectInFlow(viewport.value, w, h)
-}
-
-/** 从渲染层 renderNodes + nodeLayout 收内容节点矩形（过滤 group 容器节点） */
-function collectContent(): ContentItem[] {
-  const layout = ctx.get<NodeLayoutService>('nodeLayout')
+/** 收内容节点矩形（过滤 group 容器节点；等价老版 renderNodes 过滤 hidden/group） */
+function collectContentRects(): MiniMapRect[] {
+  const layout = ctx.get<NodeLayoutService | undefined>('nodeLayout')
   if (!layout) return []
   const list = renderNodes.value
-  const out: ContentItem[] = []
+  const out: MiniMapRect[] = []
   for (const n of list) {
-    if (n.type === 'group') continue // group 容器本身不画（子节点已含绝对坐标）
+    if (n.type === 'group') continue
     const rect = layout.getNodeRect(n.id)
-    if (rect && rect.w > 0 && rect.h > 0) out.push({ id: n.id, rect })
+    if (rect && rect.w > 0 && rect.h > 0) out.push(rect)
   }
   return out
 }
 
-function rebuild(): void {
-  content.value = collectContent()
-  const cb = computeContentBounds(content.value.map((c) => c.rect))
-  const union = unionRect(cb, viewRectNow())
-  mapState.value = union ? computeMapState(union, MAP_WIDTH, MAP_HEIGHT, PADDING) : null
+// —— computed 链（与老版 MiniMap.vue 逐条对应）——
+
+/** 当前视口在 flow 坐标的可见矩形（实时跟随最新 viewport） */
+const viewBB = computed<MiniMapRect>(() => {
+  const { w, h } = paneSize.value
+  return viewportRectInFlow(viewport.value, w, h)
+})
+
+/** 地图范围 = 内容包围盒 ∪ 当前视口矩形（恒含视口 → 蓝框必然在小地图内） */
+const unionBB = computed<MiniMapRect>(() => {
+  const cb = computeContentBounds(contentRects.value)
+  const union = unionRect(cb, viewBB.value)
+  return union ?? { x: 0, y: 0, w: 1, h: 1 }
+})
+
+/** 归一化到 (width-pad*2 × height-pad*2)：scale + 地图原点 + 已加 padding 的绘制偏移 */
+const mapState = computed<MiniMapMapState>(() =>
+  computeMapState(unionBB.value, width.value, height.value, PADDING),
+)
+
+/** 蓝框样式：随最新 viewport + mapState 现算（拖动时 1:1 跟手） */
+const viewerStyle = computed(() => {
+  const vb = viewBB.value
+  const ms = mapState.value
+  const r = rectToMap(vb, ms)
+  return {
+    left: r.left + 'px',
+    top: r.top + 'px',
+    width: r.width + 'px',
+    height: r.height + 'px',
+    borderColor: VIEWER_BORDER,
+  }
+})
+
+/** 节点方块样式（用当前 mapState 现算） */
+function nodeStyle(rect: MiniMapRect): Record<string, string> | null {
+  const ms = mapState.value
+  if (!ms) return null
+  const r = rectToMap(rect, ms)
+  return {
+    left: r.left + 'px',
+    top: r.top + 'px',
+    width: r.width + 'px',
+    height: r.height + 'px',
+    background: NODE_COLOR,
+  }
 }
 
-// renderNodes（宿主随 store 同步替换）/ paneRect 变化 → 重算内容与归一化
+// renderNodes / paneRect 变化 → 重收内容（非拖拽中）；视口变化由 computed 自动传导，无需手动 watch
+function syncContent(): void {
+  contentRects.value = collectContentRects()
+}
+// renderNodes 是 shallowRef，整体替换才触发 → 用 watch 比较引用
 watch(
   () => renderNodes.value,
   () => {
-    if (!panning.value) rebuild()
+    if (!dragging) syncContent()
   },
 )
 watch(paneRect, measurePane)
-// 视口 pan/zoom：非拖拽中跟随重算（保证视口框始终纳入地图范围）
-watch(
-  () => viewport.value,
-  () => {
-    if (!panning.value) rebuild()
-  },
-)
 
 function onWindowResize(): void {
   measurePane()
-  if (!panning.value) rebuild()
+  if (!dragging) syncContent()
 }
 onMounted(() => {
   measurePane()
   window.addEventListener('resize', onWindowResize)
+  syncContent()
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
+  if (panRaf) cancelAnimationFrame(panRaf)
+  panRaf = 0
   session = null
 })
-measurePane()
-rebuild()
 
-// —— 视口框样式（每次 viewport 变都从最新 mapState + viewport 现算）——
-const viewerStyle = computed(() => {
-  const ms = mapState.value
-  if (!ms) return null
-  return { ...rectToMap(viewRectNow(), ms), borderColor: VIEWER_BORDER }
-})
-
-function itemStyle(item: ContentItem): Record<string, string | number> | null {
-  const ms = mapState.value
-  if (!ms) return null
-  const r = rectToMap(item.rect, ms)
-  return { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', background: NODE_COLOR }
-}
-
-// —— 拖拽平移 / 点击跳转 ——
-const DRAG_THRESHOLD = 4
-interface PanSession {
+// —— 拖拽平移（老版语义：按下瞬间快照做换算；rAF 合帧仅节流写入）——
+const DRAG_THRESHOLD = 0
+interface DragSession {
   startClient: { x: number; y: number }
   startViewport: ViewportState
-  mapState: MiniMapMapState
+  startMapState: MiniMapMapState
   moved: boolean
 }
-const panning = ref(false)
-let session: PanSession | null = null
+let dragging = false
+let session: DragSession | null = null
 let elRect: DOMRect | null = null
 let downOnViewer = false
+let panRaf = 0
+let pendingViewport: ViewportState | null = null
+
+function flushPan(): void {
+  panRaf = 0
+  if (!pendingViewport) return
+  const vp = ctx.get<ViewportService>('viewport')
+  const next = pendingViewport
+  pendingViewport = null
+  if (vp) vp.setViewport(next)
+}
+
+/** 老版 applyMovement：小地图内位移 ÷ 起始 scale → flow 位移，× zoom → 视口移动量（拖右 → 视口向左） */
+function nextViewport(clientX: number, clientY: number): ViewportState {
+  const s = session!
+  const dx = (clientX - s.startClient.x) * sensitivityX.value
+  const dy = (clientY - s.startClient.y) * sensitivityY.value
+  const zoom = s.startViewport.zoom || 1
+  const scale = s.startMapState.scale || 1
+  return {
+    x: s.startViewport.x - (dx / scale) * zoom,
+    y: s.startViewport.y - (dy / scale) * zoom,
+    zoom: s.startViewport.zoom,
+  }
+}
 
 function onPointerDown(e: PointerEvent): void {
   if (e.button !== 0) return
@@ -162,58 +220,64 @@ function onPointerDown(e: PointerEvent): void {
   downOnViewer = !!target?.classList.contains('mini-viewer')
   const el = e.currentTarget as HTMLElement
   elRect = el.getBoundingClientRect()
+  // 老版 startDrag：记起点/起始视口/起始 mapState + 冻结内容节点
   session = {
     startClient: { x: e.clientX, y: e.clientY },
     startViewport: { ...viewport.value },
-    mapState: { ...mapState.value },
+    startMapState: { ...mapState.value },
     moved: false,
   }
-  panning.value = true
+  dragging = true
+  contentRects.value = collectContentRects() // 冻结快照
   el.setPointerCapture(e.pointerId)
   e.preventDefault()
   e.stopPropagation()
 }
 
 function onPointerMove(e: PointerEvent): void {
-  if (!panning.value || !session) return
+  if (!dragging || !session) return
   const dx = e.clientX - session.startClient.x
   const dy = e.clientY - session.startClient.y
   if (!session.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return
   session.moved = true
-  const vp = ctx.get<ViewportService>('viewport')
-  if (!vp) return
-  const next = panViewport(session.startViewport, session.startClient, { x: e.clientX, y: e.clientY }, session.mapState.scale)
-  vp.setViewport({ x: next.x, y: next.y, zoom: session.startViewport.zoom })
+  const next = nextViewport(e.clientX, e.clientY)
+  pendingViewport = next
+  if (!panRaf) panRaf = requestAnimationFrame(flushPan)
 }
 
 function endPointer(e: PointerEvent, jumped: boolean): void {
+  if (panRaf) {
+    cancelAnimationFrame(panRaf)
+    panRaf = 0
+  }
+  pendingViewport = null
   const vp = ctx.get<ViewportService>('viewport')
   if (jumped && session && !session.moved && vp) {
-    // 点击（无拖动）且不是点在视口框/缩略节点上 → 跳转到该 flow 点（保留 zoom）
+    // 点击（无拖动）且不是点在视口框/缩略节点上 → 跳到该 flow 点（保留 zoom）
     const target = e.target as HTMLElement | null
     if (!downOnViewer && !target?.classList.contains('mini-node') && elRect) {
       const px = e.clientX - elRect.left
       const py = e.clientY - elRect.top
-      const pt = mapPointToFlow(px, py, session.mapState)
+      const pt = mapPointToFlow(px, py, mapState.value)
       vp.setCenter(pt.x, pt.y, session.startViewport.zoom)
     }
   }
   session = null
-  panning.value = false
+  dragging = false
   elRect = null
   downOnViewer = false
   const el = e.currentTarget as HTMLElement
   if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId)
-  rebuild()
+  syncContent() // 松手解冻：重收内容
 }
 
 function onPointerUp(e: PointerEvent): void {
-  if (!panning.value) return
+  if (!dragging) return
   endPointer(e, true)
 }
 
 function onPointerCancel(e: PointerEvent): void {
-  if (!panning.value) return
+  if (!dragging) return
   endPointer(e, false)
 }
 </script>
@@ -222,14 +286,19 @@ function onPointerCancel(e: PointerEvent): void {
   <div v-if="visible" ref="rootEl" class="mini-map-overlay">
     <div
       class="mini-map"
-      :style="{ width: MAP_WIDTH + 'px', height: MAP_HEIGHT + 'px' }"
+      :style="{ width: width + 'px', height: height + 'px' }"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
     >
-      <div v-for="item in content" :key="item.id" class="mini-node" :style="itemStyle(item)" />
-      <div v-if="viewerStyle" class="mini-viewer" :style="viewerStyle" />
+      <div
+        v-for="(rect, i) in contentRects"
+        :key="i"
+        class="mini-node"
+        :style="nodeStyle(rect)"
+      />
+      <div class="mini-viewer" :style="viewerStyle" />
     </div>
   </div>
 </template>

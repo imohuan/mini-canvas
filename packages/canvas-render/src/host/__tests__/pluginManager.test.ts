@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { loadPluginFromText, createPluginManager } from '../pluginManager'
+import { loadPluginFromText, createPluginManager, sourceKind } from '../pluginManager'
 import type { PluginModule } from '@mini-canvas/canvas-core-v2'
 
 /** 一个可热装插件：注入服务 + nodeStore type，供装/卸/重载验证 */
@@ -152,3 +152,62 @@ describe('P5：manager.list/diagnose 暴露 fiber state + PENDING 缺依赖诊�
     expect(st).toMatchObject({ state: 'failed', error: 'bad-plugin' })
   })
 })
+
+describe('manifestReport（P1-7：disabled/重复项登记诊断）', () => {
+  it('逐项登记 disabled / will-install / superseded，disabled 不再静默不可见', async () => {
+    const { manager } = await createMiniCanvasHost()
+    const mk = (n: string): PluginModule => ({ name: n, apply: () => {} })
+    const report = manager.manifestReport({
+      plugins: [
+        { id: 'plug-a', source: mk('plug-a') },
+        { id: 'plug-b', source: mk('plug-b') },
+        { id: 'plug-b', source: mk('plug-b'), config: { v: 2 } },
+        { id: 'off-c', source: mk('off-c'), disabled: true },
+      ],
+    })
+    expect(report[0]).toMatchObject({ id: 'plug-a', name: 'plug-a', status: 'will-install' })
+    expect(report[1]).toMatchObject({ id: 'plug-b', name: 'plug-b', status: 'will-install' })
+    // 同名第二次出现 → superseded（将被后者覆盖）
+    expect(report[2]).toMatchObject({ id: 'plug-b', name: 'plug-b', status: 'superseded', config: { v: 2 } })
+    // disabled 项进入报告
+    expect(report[3]).toMatchObject({ id: 'off-c', name: 'off-c', status: 'disabled' })
+  })
+
+  it('懒加载/URL 来源（无同步 name）以 id 作 name 登记', async () => {
+    const { manager } = await createMiniCanvasHost()
+    const report = manager.manifestReport({
+      plugins: [{ id: 'lazy-1', source: { module: () => ({ name: 'lazy-1', apply: () => {} }) } }],
+    })
+    expect(report[0]).toMatchObject({ id: 'lazy-1', name: 'lazy-1', status: 'will-install' })
+  })
+})
+
+describe('manifestReport id 与 source.name 不一致（P1-7 边界）', () => {
+  it('id ≠ source.name 时：report 保留声明 id、name 取 source 实际名；装载按 name', async () => {
+    const { host, manager } = await createMiniCanvasHost()
+    const mk = (n: string): PluginModule => ({ name: n, apply(ctx) { ctx.inject(n + '-svc', { ok: 1 }) } })
+    const report = manager.manifestReport({
+      plugins: [{ id: 'stable-alias', source: mk('real-name') }],
+    })
+    expect(report[0]).toMatchObject({ id: 'stable-alias', name: 'real-name', status: 'will-install' })
+    // applyManifest 实际按 source.name 装载（内核插件名 = name）
+    const names = await manager.applyManifest({ plugins: [{ id: 'stable-alias', source: mk('real-name') }] })
+    expect(names).toEqual(['real-name'])
+    expect(host.ctx.get('real-name-svc')).toEqual({ ok: 1 })
+  })
+})
+
+describe('sourceKind 来源分类（P1-16 信任策略基础设施）', () => {
+  it('分类四种来源：inline/lazy/url/text', () => {
+    expect(sourceKind({ name: 'p', apply: () => {} })).toBe('inline')
+    expect(sourceKind({ module: () => ({ name: 'l', apply: () => {} }) })).toBe('lazy')
+    expect(sourceKind({ url: 'https://example.com/p.js' })).toBe('url')
+    expect(sourceKind({ text: 'export const name="t"' })).toBe('text')
+  })
+  it('Service 类形态归 inline', () => {
+    // eslint-disable-next-line @typescript-eslint/no-extraneous-class
+    class S {}
+    expect(sourceKind(S as never)).toBe('inline')
+  })
+})
+

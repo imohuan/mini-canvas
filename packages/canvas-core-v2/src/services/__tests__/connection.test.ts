@@ -7,6 +7,8 @@ import {
   findDuplicate,
   validateConnection,
   typeConnectionDef,
+  resolveTargetInputPort,
+  resolveSourceOutputPort,
 } from '../connection'
 import type { ConnectionInput, ExistingEdge, ValidateContext, NodeConnectionDef, PortDef } from '../connection'
 
@@ -29,6 +31,9 @@ function singleInput(accepts: string[]): { inputs?: PortDef[] } {
 }
 function anyInput(accepts: string[]): { inputs?: PortDef[] } {
   return { inputs: [{ accepts }] }
+}
+function capacityInput(capacity: number): { inputs?: PortDef[] } {
+  return { inputs: [{ accepts: [], capacity }] }
 }
 function conn(source: string, target: string): ConnectionInput {
   return { source, sourceHandle: 'source', target, targetHandle: 'target' }
@@ -139,6 +144,32 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
   })
 
+  it('capacity=1(缺省语义)与 limit:"single" 等效：满额拒绝', () => {
+    const c = ctx({ a: 't', b: 't', c: 't' }, [{ source: 'a', target: 'b' }], { t: capacityInput(1) })
+    expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
+  })
+
+  it('capacity=2：一条已占时不拒，满两条时第三条拒绝', () => {
+    const empty = ctx({ a: 't', b: 't', c: 't', d: 't' }, [], { t: capacityInput(2) })
+    expect(validateConnection(conn('a', 'b'), empty).ok).toBe(true)
+    const one = ctx({ a: 't', b: 't', c: 't' }, [{ source: 'a', target: 'b' }], { t: capacityInput(2) })
+    expect(validateConnection(conn('c', 'b'), one).ok).toBe(true)
+    const full = ctx({ a: 't', b: 't', c: 't', d: 't' }, [{ source: 'a', target: 'b' }, { source: 'c', target: 'b' }], {
+      t: capacityInput(2),
+    })
+    expect(validateConnection(conn('d', 'b'), full).reason).toBe('limit-reached')
+  })
+
+  it('未声明 inputs 的类型不因 capacity 默认值被误判为只接一条', () => {
+    // 目标类型无任何声明：任何数量的不同源都应可连（未限制）
+    const c = ctx(
+      { a: 't', b: 'u', c: 'v' },
+      [{ source: 'a', target: 'b' }],
+      {},
+    )
+    expect(validateConnection(conn('c', 'b'), c).ok).toBe(true)
+  })
+
   it('缺节点被拒(missing-node)', () => {
     expect(validateConnection(conn('a', 'ghost'), ctx({ a: 'text' })).reason).toBe('missing-node')
   })
@@ -174,3 +205,93 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     expect(validateConnection(conn('a', 'b'), untyped).ok).toBe(true)
   })
 })
+
+describe('P0-6 多端口输入/输出口解析', () => {
+  const multiPortType = (): NodeConnectionDef => ({
+    inputs: [
+      { port: 'in-text', accepts: ['text'] },
+      { port: 'in-image', accepts: ['image'] },
+    ],
+    outputs: [
+      { port: 'out-text', contentType: 'text' },
+      { port: 'out-image', contentType: 'image' },
+    ],
+  })
+
+  it('resolveTargetInputPort：默认 handle 取默认口；自定义 handle 精确匹配；未命中 undefined', () => {
+    const def = multiPortType()
+    expect(resolveTargetInputPort(def, undefined)?.port).toBe('in-text')
+    expect(resolveTargetInputPort(def, 'target')?.port).toBe('in-text')
+    expect(resolveTargetInputPort(def, 'in-image')?.port).toBe('in-image')
+    expect(resolveTargetInputPort(def, 'ghost')).toBeUndefined()
+    expect(resolveTargetInputPort(undefined, 'in-image')).toBeUndefined()
+  })
+
+  it('resolveSourceOutputPort 对称：默认/自定义/未命中', () => {
+    const def = multiPortType()
+    expect(resolveSourceOutputPort(def, undefined)?.port).toBe('out-text')
+    expect(resolveSourceOutputPort(def, 'out-image')?.port).toBe('out-image')
+    expect(resolveSourceOutputPort(def, 'ghost')).toBeUndefined()
+  })
+
+  it('validateConnection：自定义输入口按对应 accepts 校验（in-image 只收 image）', () => {
+    // a:image → b(in-image 收 image) 通过；a:text → b(in-image) 拒
+    const c = ctx(
+      { a: 'image', b: 'mp', t: 'text' },
+      [],
+      { mp: multiPortType() },
+    )
+    const okConn: ConnectionInput = { source: 'a', sourceHandle: 'out-image', target: 'b', targetHandle: 'in-image' }
+    expect(validateConnection(okConn, c).ok).toBe(true)
+    const badConn: ConnectionInput = { source: 't', sourceHandle: 'out-text', target: 'b', targetHandle: 'in-image' }
+    expect(validateConnection(badConn, c).reason).toBe('type-not-accepted')
+  })
+
+  it('validateConnection：未声明端口名被拒（no-target-port / no-source-port）', () => {
+    // looseType 的 in/out 口无 accepts/contentType 约束 → 只验证端口存在性与 handle 匹配
+    const loose: NodeConnectionDef = {
+      inputs: [{ port: 'in-1' }, { port: 'in-2' }],
+      outputs: [{ port: 'out-1' }, { port: 'out-2' }],
+    }
+    const c = ctx({ a: 'loose', b: 'loose' }, [], { loose })
+    // 显式声明端口对（out-1 → in-1）→ 通过
+    expect(validateConnection({ source: 'a', sourceHandle: 'out-1', target: 'b', targetHandle: 'in-1' }, c).ok).toBe(true)
+    // 自定义 handle 未在声明中 → no-target-port
+    const ghostTarget: ConnectionInput = { source: 'a', sourceHandle: 'out-1', target: 'b', targetHandle: 'ghost' }
+    expect(validateConnection(ghostTarget, c).reason).toBe('no-target-port')
+    // 自定义 source handle 未在声明中 → no-source-port
+    const ghostSource: ConnectionInput = { source: 'a', sourceHandle: 'ghost', target: 'b', targetHandle: 'in-text' }
+    expect(validateConnection(ghostSource, c).reason).toBe('no-source-port')
+  })
+})
+
+describe('P0-6 纯具名多口容量独立（C-1）', () => {
+  it('默认 handle 连多口类型第一口时，其它具名口的入边不计入该口容量', () => {
+    // in-1/in-2 各 capacity 1；已有边连 in-2。新连接走默认 handle(落 in-1) → 应可连
+    const named = (): NodeConnectionDef => ({
+      inputs: [
+        { port: 'in-1', capacity: 1 },
+        { port: 'in-2', capacity: 1 },
+      ],
+    })
+    const c = ctx(
+      { a: 'x', b: 'mp' },
+      [{ source: 'a', target: 'b', targetHandle: 'in-2' }], // 已有边占 in-2
+      { mp: named() },
+    )
+    // 默认 handle → resolveTargetInputPort 落 in-1（第一个口），容量独立 → 可连
+    expect(validateConnection({ source: 'a', target: 'b' }, c).ok).toBe(true)
+    // 显式连 in-2 → 已被占 → limit-reached
+    const dup = validateConnection({ source: 'a', sourceHandle: 'x', target: 'b', targetHandle: 'in-2' }, c)
+    expect(dup.reason).toBe('limit-reached')
+  })
+  it('同一具名口满额时默认 handle 连该口应被拒（若默认口即该口）', () => {
+    const single = (): NodeConnectionDef => ({
+      inputs: [{ port: 'only-in', capacity: 1 }],
+    })
+    const c = ctx({ a: 'x', b: 'mp' }, [{ source: 'a', target: 'b', targetHandle: 'only-in' }], { mp: single() })
+    // 默认 handle 落 only-in（唯一口），已有边占满 → limit-reached
+    expect(validateConnection({ source: 'a', target: 'b' }, c).reason).toBe('limit-reached')
+  })
+})
+

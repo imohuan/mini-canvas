@@ -117,16 +117,6 @@ importers:
         version: 2.0.9
 
   packages/canvas-core-v2:
-    dependencies:
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      pinia:
-        specifier: ^3.0.4
-        version: 3.0.4(typescript@6.0.3)(vue@3.5.38(typescript@6.0.3))
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
     devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
@@ -146,6 +136,12 @@ importers:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      pinia:
+        specifier: ^3.0.4
+        version: 3.0.4(typescript@6.0.3)(vue@3.5.38(typescript@6.0.3))
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -155,6 +151,9 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
   packages/canvas-render:
     dependencies:
@@ -248,10 +247,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -276,10 +275,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -318,6 +317,9 @@ importers:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   packages/plugins/plugin-canvas-export:
     dependencies:
@@ -334,6 +336,9 @@ importers:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
   packages/plugins/plugin-clipboard:
     dependencies:
@@ -343,10 +348,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -362,10 +367,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -387,10 +392,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -428,10 +433,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -447,10 +452,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -485,10 +490,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -510,13 +515,13 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
       vue:
         specifier: ^3.5.0
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
-      '@mini-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -532,10 +537,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -567,6 +572,9 @@ importers:
       vite-plugin-css-injected-by-js:
         specifier: ^3.5.2
         version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
@@ -579,10 +587,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
@@ -595,6 +603,9 @@ importers:
       vite-plugin-css-injected-by-js:
         specifier: ^3.5.2
         version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
@@ -607,10 +618,10 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-    devDependencies:
       '@mini-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
+    devDependencies:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -625,6 +636,10 @@ importers:
         version: 3.3.5(typescript@6.0.3)
 
   packages/plugins/plugin-theme-default:
+    dependencies:
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
     devDependencies:
       '@mini-canvas/canvas-base':
         specifier: workspace:*
@@ -632,9 +647,6 @@ importers:
       '@mini-canvas/canvas-core-v2':
         specifier: workspace:*
         version: link:../../canvas-core-v2
-      '@mini-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
       '@mini-canvas/plugin-canvas-commands':
         specifier: workspace:*
         version: link:../plugin-canvas-commands
@@ -756,6 +768,9 @@ importers:
       '@mini-canvas/plugin-node-text':
         specifier: workspace:*
         version: link:../plugins/plugin-node-text
+      '@mini-canvas/plugin-shortcut-manager':
+        specifier: workspace:*
+        version: link:../plugins/plugin-shortcut-manager
       '@mini-canvas/plugin-theme-default':
         specifier: workspace:*
         version: link:../plugins/plugin-theme-default

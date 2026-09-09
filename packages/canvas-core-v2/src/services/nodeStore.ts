@@ -81,6 +81,8 @@ export interface NodeStoreService {
   unregisterType(type: string): void
   /** 所有节点 */
   getNodes(): CanvasNode[]
+  /** 深拷贝快照（P1-10：安全只读——返回与内部引用隔离的副本，外部改动不污染 store） */
+  getSnapshot(): CanvasNode[]
   /** 按 type 在指定坐标建一个节点，返回短 id（如 '1'） */
   addNode(type: string, position: { x: number; y: number }): string
   /** 批量插入节点：可指定 id/data/size/parentId；返回实际插入数量。广播一次 add。 */
@@ -99,6 +101,8 @@ export interface NodeStoreService {
   removeNodes(ids: string[]): number
   /** 某父节点直属子节点（无则空数组） */
   childNodesOf(parentId: string): CanvasNode[]
+  /** 有存量节点但类型已注销的 type 列表（P1-9 orphan policy 感知：插件热卸后存量节点变孤儿） */
+  orphanTypes(): string[]
   /** 用持久化数据整体回填（刷新恢复） */
   replaceAll(nodes: CanvasNode[]): void
   /**
@@ -129,7 +133,10 @@ export class NodeStore implements NodeStoreService {
 
   /** 广播节点集变化给订阅方 */
   private notify(reason: NodeStoreChangeReason, nodeId?: string): void {
-    for (const l of this.listeners) l(reason, nodeId)
+    // P2-6：坏订阅者异常不阻断其它订阅者/写操作（与 EventBus 同语义）
+    for (const l of this.listeners) {
+      try { l(reason, nodeId) } catch { /* 忽略单个订阅者异常 */ }
+    }
   }
 
   registerType(def: CanvasNodeType): void {
@@ -143,8 +150,19 @@ export class NodeStore implements NodeStoreService {
     this.types.delete(type)
   }
 
+  /** 有存量节点但类型定义已注销的 type 列表（插件热卸后遗留节点 = orphan） */
+  orphanTypes(): string[] {
+    const used = new Set<string>()
+    for (const n of this.nodes.values()) used.add(n.type)
+    return [...used].filter((t) => !this.types.has(t))
+  }
+
   getNodes(): CanvasNode[] {
     return [...this.nodes.values()]
+  }
+
+  getSnapshot(): CanvasNode[] {
+    return JSON.parse(JSON.stringify([...this.nodes.values()])) as CanvasNode[]
   }
 
   addNode(type: string, position: { x: number; y: number }): string {
@@ -160,10 +178,19 @@ export class NodeStore implements NodeStoreService {
 
   addNodes(inputs: AddNodeInput[]): number {
     if (inputs.length === 0) return 0
-    // 原子：先全量预校验 type 存在，任一非法即抛错且不产生部分插入
+    // 原子：先全量预校验（type 存在 + 批内/存量 id 不冲突），任一非法即抛错且不产生部分插入
+    const seenIds = new Set<string>()
     for (const input of inputs) {
       if (!this.types.has(input.type)) {
         throw new Error(`[nodeStore] unknown node type "${input.type}". Register it first.`)
+      }
+      const id = input.id ?? undefined
+      if (id !== undefined) {
+        // P1-11：显式 id 与存量节点或批内前序 id 冲突 → 抛错（防静默覆盖已有数据）
+        if (this.nodes.has(id) || seenIds.has(id)) {
+          throw new Error(`[nodeStore] node id "${id}" already exists`)
+        }
+        seenIds.add(id)
       }
     }
     for (const input of inputs) {
@@ -268,6 +295,14 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
+
+
+
+
+
+
+
+
 
 
 

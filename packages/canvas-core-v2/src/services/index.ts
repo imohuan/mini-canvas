@@ -23,6 +23,12 @@ export { Selection } from './selection'
 export type { SelectionService } from './selection'
 export { History } from './history'
 export type { HistoryService, HistorySnapshot } from './history'
+export { GraphDocument } from './graphDocument'
+export type {
+  GraphDocumentService,
+  GraphEnvelope,
+  GraphTransaction,
+} from './graphDocument'
 export { CommandRegistry } from './command'
 export type { CommandDef, CommandService } from './command'
 export { commandMatchesKeys, keyComboMatches, findCommandByKeys } from './command'
@@ -38,6 +44,8 @@ export {
   findDuplicate,
   validateConnection,
   typeConnectionDef,
+  resolveTargetInputPort,
+  resolveSourceOutputPort,
 } from './connection'
 export type {
   ConnectionInput,
@@ -50,4 +58,17 @@ export type {
   InvalidReason,
   ValidationResult,
 } from './connection'
+export { createSettingsPersist, SETTINGS_SAVE_KEY } from './settingsPersist'
+export type { SettingsPersistService } from './settingsPersist'
+export { ResourceStore } from './resourceService'
+export type {
+  ResourceEntry,
+  ResourceService,
+  RegisterResourceInput,
+  ResourceUrlBackend,
+} from './resourceService'
+export { createMenuService } from './menuService'
+export type { MenuService, MenuItem, MenuArea, MenuCreatableType } from './menuService'
+
+
 

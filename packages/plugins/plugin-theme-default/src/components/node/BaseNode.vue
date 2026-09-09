@@ -449,8 +449,8 @@ function clamp(value: number, min: number, max: number): number {
         <ellipse v-else class="v2-debug-band is-source" :cx="cardWidth" :cy="debugOverlay.anchorY.value"
           :rx="debugOverlay.rightBand.value.width" :ry="debugOverlay.rightBand.value.height / 2" />
         <!-- 目标锚点短线标注 -->
-        <line class="v2-debug-anchor" :x1="0" :y1="debugOverlay.anchorY.value - 6" :x2="0"
-          :y2="debugOverlay.anchorY.value + 6" />
+        <!-- <line class="v2-debug-anchor" :x1="0" :y1="debugOverlay.anchorY.value - 6" :x2="0"
+          :y2="debugOverlay.anchorY.value + 6" /> -->
       </svg>
 
       <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：

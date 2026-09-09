@@ -28,6 +28,7 @@ import {
   CommandRegistry,
   NodeFactory,
   EdgeStore,
+  GraphDocument,
   GRAPH_KEY,
   GRAPH_EDGES_KEY,
   type EdgeStoreService,
@@ -35,6 +36,15 @@ import {
   type HistoryService,
   type CommandService,
   type NodeFactoryService,
+  type GraphDocumentService,
+  type GraphEnvelope,
+  SettingsStore,
+  createSettingsPersist,
+  type SettingsPersistService,
+  ResourceStore,
+  type ResourceService,
+  createMenuService,
+  type MenuService,
 } from '@mini-canvas/canvas-core-v2'
 import { createPluginManager, type PluginManager } from './pluginManager'
 import { NodeLayoutService } from '../layout/nodeLayout'
@@ -61,6 +71,12 @@ export interface MiniCanvasOptions {
   themeRegistry?: ThemeRegistry
   /** 首次启动(存储为空)时生成默认画布；返回的节点会被 replaceAll。 */
   seedDefault?: () => CanvasNode[]
+  /**
+   * 是否自动接入配置持久化桥（settingsPersist）：把 ctx.settings(插件 Config 分组配置)的变更
+   * 持久化到 save(config) 域并在启动时恢复。缺省 true（内置；与画布 graph 同走 adapter）。
+   * 多宿主/临时画布不需要配置持久化时可关掉。
+   */
+  persistSettings?: boolean
 }
 
 /** 画布运行时句柄（宿主/Vue 消费：provide、渲染、读服务） */
@@ -76,21 +92,26 @@ export interface CanvasHostHandle {
   themeRegistry: ThemeRegistry
   selection: SelectionService
   command: CommandService
+  /** 菜单聚合服务（从命令表实时组装菜单项） */
+  menu: MenuService
   history: HistoryService
   nodeFactory: NodeFactoryService
+  /** 图唯一写入口：节点/边变更统一走它（含级联、历史、选中维护、提交落盘） */
+  graph: GraphDocumentService
   /** 节点布局只读服务（实测尺寸/绝对坐标；渲染层量测注入，插件读） */
   nodeLayout: NodeLayoutService
   /** 视口服务（CanvasHost 挂载后 attach VueFlow backend；插件读/控制视图） */
   viewport: ViewportService
+  /** 配置持久化桥（ctx.settings ↔ save(config)）；persistSettings=false 时 undefined */
+  settingsPersist?: SettingsPersistService
+  /** 资源生命周期服务（Blob/object URL 登记与回收；file-drop 等写入 object URL 的插件接入） */
+  resources: ResourceService
   /** 停止并回收全部插件副作用 */
   stop(): void
 }
 
-/** 图数据存储信封：节点 + 边（持久化与 history 快照共用）。兼容旧"仅节点数组"存储 */
-export interface GraphEnvelope {
-  nodes: CanvasNode[]
-  edges: CanvasEdge[]
-}
+/** 图数据存储信封：节点 + 边（持久化与 history 快照共用）。类型由 core-v2 graphDocument 提供。 */
+export type { GraphEnvelope } from '@mini-canvas/canvas-core-v2'
 
 /** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
 export interface MiniCanvasApi {
@@ -108,6 +129,7 @@ export interface MiniCanvasApi {
   getRegistry(): NodeRegistry
   getNodeStore(): NodeStore
   getEdgeStore(): EdgeStoreService
+  getGraph(): GraphDocumentService
   getHost(): CanvasHostHandle
 }
 
@@ -143,6 +165,18 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const edgeStore = new EdgeStore()
   ctx.inject('edgeStore', edgeStore)
 
+  // 资源生命周期服务：浏览器环境用真实 URL backend（create/revoke objectURL），
+  // 非浏览器（SSR/Node 测试）用 no-op 占位（只登记不回收，显式 url 仍可登记）。
+  const resources = new ResourceStore(
+    typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+      ? {
+          createUrl: (r) => URL.createObjectURL(r as Blob),
+          revokeUrl: (u) => URL.revokeObjectURL(u),
+        }
+      : undefined,
+  )
+  ctx.inject('resources', resources)
+
   const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
   ctx.inject('nodeRegistry', nodeRegistry)
 
@@ -167,8 +201,20 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   })
   ctx.inject('history', history)
 
+  // 图唯一写入口：统一"节点/边变更 + 历史 + 选中维护 + 提交后落盘"。
+  // commit 回调接收整图信封：宿主把当前节点+边持久化（与 CanvasHost/commands 的 graph/graph-edges 分存一致）。
+  const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (envelope) => {
+    save.set('graph', envelope.nodes, 'canvas')
+    save.set(GRAPH_EDGES_KEY, envelope.edges, 'canvas')
+  })
+  ctx.inject('graph', graph)
+
   const command = new CommandRegistry()
   ctx.inject('command', command)
+
+  // 菜单聚合服务（G 项）：从 command 表实时组装 pane/node/edge/toolbar 菜单项，供右键/工具栏 UI 消费
+  const menu = createMenuService(() => command.list())
+  ctx.inject('menu', menu)
 
   const nodeFactory = new NodeFactory()
   ctx.inject('nodeFactory', nodeFactory)
@@ -188,28 +234,44 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
 
-  // 恢复上次画布；首次(空)则跑 seedDefault（若有）。
+  // 配置持久化桥（P1-5 修复）：默认开启。ctx.settings 是内置分组配置单一数据源；
+  // 桥把用户改动经 save(config) 持久化，启动时 restore 注入（插件 Config 已声明完成）。
+  let settingsPersist: SettingsPersistService | undefined
+  if (opts.persistSettings !== false) {
+    const settingsStore = ctx.get<SettingsStore>('settings')
+    settingsPersist = createSettingsPersist(settingsStore, save)
+    ctx.inject('settingsPersist', settingsPersist)
+    await settingsPersist.restore()
+  }
+
+  // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
+  // 否则用户删光节点后刷新会重新长出默认 seed。
   // 节点存 GRAPH_KEY(历史遗留为 CanvasNode[]，边下沉后可能为 {nodes,edges})；边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
   const saved = await save.get<CanvasNode[] | GraphEnvelope>(GRAPH_KEY, 'canvas')
   const savedEdges = await save.get<CanvasEdge[]>(GRAPH_EDGES_KEY, 'canvas')
-  // 兼容三种形态：旧数组(仅节点) / 新信封(含 edges) / 空；边独立存的 graph-edges 一律并入恢复
+  // 兼容三种形态：旧数组(仅节点) / 新信封(含 edges) / 空；边独立存的 graph-edges 一律并入恢复。
+  // 关键判定：saved === undefined 才是"从未保存"，不应与"保存了空数组"混为一谈。
+  const hasStoredGraph = saved !== undefined
   let restoreNodes: CanvasNode[] | null = null
   let restoreEdges: CanvasEdge[] | null = savedEdges ?? []
   if (Array.isArray(saved)) {
     restoreNodes = saved
-  } else if (saved && Array.isArray(saved.nodes)) {
+  } else if (hasStoredGraph && Array.isArray(saved.nodes)) {
     restoreNodes = saved.nodes
     // 信封内若自带 edges(未来单 key)且未单独存，则以信封内为准
     restoreEdges = (saved.edges ?? []) as CanvasEdge[]
   }
-  if (restoreNodes && restoreNodes.length > 0) {
-    nodeStore.replaceAll(restoreNodes)
+  if (hasStoredGraph) {
+    nodeStore.replaceAll(restoreNodes ?? [])
     edgeStore.replaceAll(restoreEdges ?? [])
   } else if (opts.seedDefault) {
     const seeded = opts.seedDefault()
     nodeStore.replaceAll(seeded)
     edgeStore.replaceAll(restoreEdges ?? [])
   }
+
+  /** exposeToWindow 挂载的 window key（host.stop 时自动清理，防旧 API 残留） */
+  let exposedWindowKey: string | null = null
 
   const host: CanvasHostHandle = {
     ctx,
@@ -220,14 +282,26 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     themeRegistry,
     selection,
     command,
+    menu,
     history,
     nodeFactory,
+    graph,
     nodeLayout,
     viewport,
+    settingsPersist,
+    resources,
     stop: () => {
       // 停用前先把脏队列捕获进 flush 的批量快照（同步完成），再停内核，避免最后未落盘的写入丢失。
       // flush 会同步把 dirty 快照进本地 batch，故即使调用方不 await，数据也已进入落盘流程。
       void save.flush()
+      settingsPersist?.dispose()
+      resources.dispose()
+      // P1-16：停用即清理 window 暴露的 API 句柄（防旧画布残留可被误调）
+      if (exposedWindowKey) {
+        const w = globalThis as Record<string, unknown>
+        if (w[exposedWindowKey] === api) delete w[exposedWindowKey]
+        exposedWindowKey = null
+      }
       ctx.stop()
     },
   }
@@ -245,14 +319,25 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     getRegistry: () => nodeRegistry,
     getNodeStore: () => nodeStore,
     getEdgeStore: () => edgeStore,
+    getGraph: () => graph,
     getHost: () => host,
   }
 
   const exposeToWindow = (key = 'MiniCanvas') => {
     const w = globalThis as Record<string, unknown>
     w[key] = api
+    exposedWindowKey = key // 记录供 stop 清理
   }
 
   return { host, api, manager, exposeToWindow }
 }
+
+
+
+
+
+
+
+
+
 

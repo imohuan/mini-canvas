@@ -140,3 +140,76 @@ describe('NodeStore v2 写 API', () => {
   })
 })
 
+describe('NodeStore listener 异常隔离（P2-6）', () => {
+  it('坏订阅者抛错不阻断其它订阅者，也不让写操作抛错', () => {
+    const s = makeStore()
+    const seen: string[] = []
+    s.subscribe(() => { throw new Error('bad listener') })
+    s.subscribe(() => { seen.push('ok') })
+    expect(() => s.addNode('text', { x: 0, y: 0 })).not.toThrow()
+    expect(seen).toEqual(['ok'])
+    expect(s.getNodes()).toHaveLength(1) // 数据确实写入
+  })
+})
+
+describe('NodeStore orphanTypes（P1-9 orphan policy 感知）', () => {
+  it('类型注销后存量节点 type 出现在 orphanTypes；重注册后消失', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'a' },
+      { type: 'group', position: { x: 10, y: 10 }, id: 'b' },
+    ])
+    expect(s.orphanTypes()).toEqual([])
+    s.unregisterType('group')
+    expect(s.orphanTypes()).toEqual(['group']) // group 有存量节点但类型已注销
+    expect(s.getNodes().length).toBe(2) // 存量节点保留（数据不丢，可恢复）
+    s.registerType({ type: 'group', label: '分组', defaultSize: { w: 200, h: 100 } })
+    expect(s.orphanTypes()).toEqual([]) // 类型恢复 → 不再 orphan
+  })
+})
+
+describe('NodeStore id 冲突校验（P1-11）', () => {
+  it('addNodes 显式 id 与存量节点冲突 → 抛错且无部分插入', () => {
+    const s = makeStore()
+    s.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'a' }])
+    expect(() =>
+      s.addNodes([
+        { type: 'text', position: { x: 1, y: 1 }, id: 'b' },
+        { type: 'text', position: { x: 2, y: 2 }, id: 'a' }, // 与存量 a 冲突
+      ]),
+    ).toThrow(/already exists/)
+    expect(s.getNodes().map((n) => n.id)).toEqual(['a']) // b 未插入
+  })
+  it('addNodes 批内 id 重复 → 抛错', () => {
+    const s = makeStore()
+    expect(() =>
+      s.addNodes([
+        { type: 'text', position: { x: 1, y: 1 }, id: 'x' },
+        { type: 'text', position: { x: 2, y: 2 }, id: 'x' },
+      ]),
+    ).toThrow(/already exists/)
+    expect(s.getNodes()).toEqual([])
+  })
+  it('无显式 id 的批量插入仍自动分配短 id（不冲突）', () => {
+    const s = makeStore()
+    s.addNodes([{ type: 'text', position: { x: 0, y: 0 } }, { type: 'text', position: { x: 1, y: 1 } }])
+    expect(s.getNodes()).toHaveLength(2)
+  })
+})
+
+describe('NodeStore getSnapshot 安全只读（P1-10）', () => {
+  it('快照是深拷贝：外部改动不污染 store；store 后续改动不影响已取快照', () => {
+    const s = makeStore()
+    const id = s.addNode('text', { x: 1, y: 2 })
+    s.updateNodeData(id, { text: 'hi' })
+    const snap = s.getSnapshot()
+    expect(snap).toHaveLength(1)
+    // 改快照对象（含嵌套 data）不污染 store
+    snap[0].data.text = 'MUTATED'
+    expect(s.getNode(id)!.data.text).toBe('hi')
+    // 取快照后 store 新增节点不影响已取快照
+    s.addNode('text', { x: 9, y: 9 })
+    expect(snap).toHaveLength(1)
+  })
+})
+

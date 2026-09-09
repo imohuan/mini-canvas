@@ -125,7 +125,6 @@ export function apply(ctx: Context) {
     id: 'multi-select:select-all',
     title: '全选节点',
     keys: ['mod+a'],
-    areas: ['pane'],
     order: 10,
     run: () => svc.selectAll(),
   })
@@ -133,7 +132,6 @@ export function apply(ctx: Context) {
     id: 'multi-select:clear',
     title: '清除选中',
     keys: ['Escape'],
-    areas: ['pane'],
     order: 20,
     run: () => svc.clearSelection(),
   })

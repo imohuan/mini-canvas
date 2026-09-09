@@ -26,7 +26,6 @@
   "devDependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-core-v2": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",

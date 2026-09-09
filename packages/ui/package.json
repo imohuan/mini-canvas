@@ -13,7 +13,7 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.vue.json",
+    "typecheck": "node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.json",
     "test": "vitest run",
     "dev": "vite"
   },
@@ -38,6 +38,7 @@
     "@mini-canvas/plugin-node-find": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
+    "@mini-canvas/plugin-shortcut-manager": "workspace:*",
     "@mini-canvas/plugin-theme-default": "workspace:*"
   },
   "devDependencies": {
@@ -50,4 +51,5 @@
     "vue-tsc": "^3.2.8"
   }
 }
+
 

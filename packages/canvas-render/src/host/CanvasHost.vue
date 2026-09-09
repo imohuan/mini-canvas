@@ -32,7 +32,6 @@ import {
   type CanvasNode,
   type CanvasEdge,
   type EdgeStoreService,
-  GRAPH_EDGES_KEY,
   findCommandByKeys,
   validateConnection,
   typeConnectionDef,
@@ -69,6 +68,7 @@ import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
   nodesFromStore,
+  edgesFromStore,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
@@ -135,6 +135,7 @@ const surfaceRef = shallowRef<{
   getViewport?: () => { x: number; y: number; zoom: number }
   getPaneRect?: () => DOMRect | null
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
+  queryNodeEl?: (nodeId: string) => HTMLElement | null
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
 } | undefined>()
 
@@ -153,8 +154,8 @@ function defaultWrite(id: string, patch: Record<string, unknown>): void {
   if (!h) return
   const node = h.nodeStore.getNode(id)
   if (!node) return
-  h.nodeStore.updateNodeData(id, patch) // 触发 subscribe → 渲染态自动更新
-  void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
+  // 统一走 graph：历史 + 提交落盘由唯一写入口负责，避免与其它写路径漂移。
+  h.graph.updateNode(id, { data: patch })
 }
 const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
 
@@ -206,7 +207,7 @@ function syncSelected(): void {
 // ==================== 渲染态（VueFlow 消费）====================
 
 const nodes = ref<ReturnType<typeof nodesFromStore>>([])
-const edges = ref<Array<{ id: string; type: string; source: string; target: string }>>([])
+const edges = ref<Array<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>>([])
 // 组件句柄(opaque，来自 themeRegistry/registry)塞给 VueFlow 的 node-types/edge-types。
 // 必须用 shallowRef：里面存的是 .vue 组件对象，ref 会深代理组件触发 Vue "组件被 reactive 化" 警告，
 // 且我们总是整体替换 .value，浅层响应式就够。
@@ -230,11 +231,15 @@ const canRedo = ref(false)
 function applyTheme(): void {
   const h = hostRef.value
   if (!h) return
-  const asm = assembleTheme(h.themeRegistry, h.nodeStore.types.keys())
+  // P1-9：孤儿 type（有存量节点但类型已注销）也映射 BaseNode 壳 → 卸载插件后存量节点仍有占位渲染，
+  // 数据不丢、插件重装后自动恢复（BaseNode 对无 content 的 type 显示占位文本）。
+  const asm = assembleTheme(h.themeRegistry, [...h.nodeStore.types.keys(), ...h.nodeStore.orphanTypes()])
   // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
+  // 每次先完整重置再填充：主题插件被热卸/顶替后不能继续使用已卸载的旧组件句柄。
+  nodeTypes.value = {}
+  edgeTypes.value = {}
   if (asm.nodeShell) {
     const shell = markRaw(asm.nodeShell)
-    nodeTypes.value = {}
     for (const t of asm.nodeTypes) nodeTypes.value[t] = shell
   }
   if (asm.edge) edgeTypes.value = { custom: markRaw(asm.edge) }
@@ -257,10 +262,8 @@ function syncFromStore(): void {
   if (!h) return
   const alive = new Set(h.nodeStore.getNodes().map((n) => n.id))
   // 边数据源 = 内核 edgeStore（边下沉后唯一数据源）；渲染态取 source/target 仍存活的边(删除路径已在 edgeStore 清边,此处兜底过滤)。
-  edges.value = h.edgeStore
-    .getEdges()
-    .filter((e) => alive.has(e.source) && alive.has(e.target))
-    .map((e) => ({ id: e.id, type: e.type ?? 'custom', source: e.source, target: e.target }))
+  // B 项：DTO 保留端口句柄（edgesFromStore 也滤悬挂边，纯逻辑单测覆盖）
+  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive)
   nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
@@ -283,23 +286,13 @@ function onNodeDragStop(e: NodeDragEvent): void {
   // 避免只写主节点导致其它被拖节点弹回原位。
   const surface = surfaceRef.value
   const moved = surface?.getSelectedNodePositions?.() ?? []
-  if (moved.length > 0) {
-    h.nodeStore.updateNodes(
-      moved.map((p) => ({
-        id: p.id,
-        patch: { position: { x: p.x, y: p.y } },
-      })),
-    )
-  } else {
-    // 兜底：读不到选中节点位置时退回旧行为（只写事件主节点）
-    const pos = e.node.position
-    const graph: CanvasNode[] = h.nodeStore.getNodes().map((n) => {
-      const movedOne = e.node.id === n.id && pos ? { x: pos.x, y: pos.y } : { ...n.position }
-      return { ...n, position: movedOne }
-    })
-    h.nodeStore.replaceAll(graph)
+  if (moved.length > 0 || e.node.position) {
+    const patches = moved.length > 0
+      ? moved.map((p) => ({ id: p.id, patch: { position: { x: p.x, y: p.y } } }))
+      : [{ id: e.node.id, patch: { position: { x: e.node.position.x, y: e.node.position.y } } }]
+    // 拖动结束统一走 graph：历史 + 提交落盘由唯一写入口负责；无位移时快照无差异不入历史。
+    h.graph.updateNodes(patches)
   }
-  void h.save.set('graph', h.nodeStore.getNodes(), 'canvas')
   const payload = toDragPayload(e)
   if (payload) h.ctx.emit(RenderEvents.NodeDragEnd, payload)
 }
@@ -604,7 +597,7 @@ function enrichHover(
   const willEvict = !!capacity && capacity > 1 && incoming >= capacity
   let nodeEl: HTMLElement | null = null
   try {
-    nodeEl = document.querySelector(`.vue-flow__node[data-id="${h.nodeId}"]`)
+    nodeEl = surfaceRef.value?.queryNodeEl?.(h.nodeId) ?? null
   } catch {
     /* SSR/测试环境无 DOM：忽略 */
   }
@@ -695,13 +688,12 @@ function commitEdge(
     log.log(`commitEdge ${source}→${target} 已存在，跳过(幂等)`)
     return
   }
-  // 拉边记进历史(undo/redo 对边生效，见 settings-panel-slot-host-plan §三.D)：addEdge 写内核 edgeStore(唯一数据源)，
-  // history.withRecord 在前后各拍全图快照(含边)；边 id 稳定、重复连会被快照差异正确识别。
-  h.history.withRecord(() => {
+  // 走图唯一写入口：graph.transaction 包历史 + 提交落盘。
+  h.graph.transaction('add-edge', (tx) => {
     // 输入口容量挤出：目标节点输入口声明 capacity 且已满额 → 先挤掉最老一条入边再加新边（同一 undo 记录，原子）。
-    const evicted = tryEvictOldestIncoming(h, source, target)
+    const evicted = evictOldestIncoming(h, source, target)
     if (evicted) log.log(`commitEdge ${source}→${target} 输入口满额，挤掉最老边 ${evicted}`)
-    h.edgeStore.addEdge({
+    tx.addEdge({
       source,
       target,
       type: edgeDefaultType.value,
@@ -709,8 +701,6 @@ function commitEdge(
       targetHandle: targetHandle ?? undefined,
     })
   })
-  // 边下沉后持久化：边独立存 graph-edges(与节点 graph 分存)；edgeStore.subscribe 自动刷新渲染态
-  void h.save.set(GRAPH_EDGES_KEY, h.edgeStore.getEdges(), 'canvas')
   log.log(`commitEdge 建边成功 ${source}→${target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
 }
 
@@ -718,7 +708,7 @@ function commitEdge(
  * 输入口容量挤出：若目标节点(target)的输入口声明了 capacity 且当前入边已达满额，
  * 移除最老一条入边，为新边腾位。返回被挤边 id；无需挤返回 null。
  */
-function tryEvictOldestIncoming(
+function evictOldestIncoming(
   h: CanvasHostHandle,
   source: string,
   target: string,
@@ -734,7 +724,7 @@ function tryEvictOldestIncoming(
     target,
     capacity,
   })
-  if (evictId) h.edgeStore.removeEdge(evictId)
+  if (evictId) h.graph.removeEdges([evictId])
   return evictId
 }
 
@@ -838,6 +828,9 @@ onMounted(async () => {
         applyTheme()
         nodeEpoch.value += 1
       }),
+      // 运行期主题槽/节点段 occupant 被改（不经过插件装卸）也要重装配 + 重挂渲染子树
+      { dispose: host.themeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
+      { dispose: host.nodeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
       // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。
       // 此处只转发 ERROR(装载失败)这一非正常终态，不误报 ACTIVE/卸载等正常跳变。
       host.ctx.on('ctx:lifecycle-change', ({ name, lifecycle }) => {
@@ -867,7 +860,18 @@ function onVisibilityChange(): void {
 }
 function flushSave(): void {
   const h = hostRef.value
-  if (h?.save.isDirty()) void h.save.flush()
+  if (!h) return
+  // 资源引用扫描（P1-14）：落盘前回收"不再被任何存活节点引用"的 object URL。
+  // 延迟到 flush 而非删除即时 revoke，保证 undo 恢复节点时 URL 仍有效。
+  if (h.resources) {
+    const alive = new Set<string>()
+    for (const n of h.nodeStore.getNodes()) {
+      const rid = (n.data as { resourceId?: string } | undefined)?.resourceId
+      if (rid) alive.add(rid)
+    }
+    h.resources.disposeUnreferenced(alive)
+  }
+  if (h.save.isDirty()) void h.save.flush()
 }
 
 // 暴露给父级：boot 后拿 host/api 驱动业务(建节点/撤销/读 nodeStore 等)，拿 ready 判断是否可用。
@@ -986,6 +990,11 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
+
+
+
 
 
 

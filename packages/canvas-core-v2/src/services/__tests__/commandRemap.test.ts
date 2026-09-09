@@ -1,0 +1,55 @@
+import { describe, it, expect } from 'vitest'
+import { CommandRegistry, commandMatchesKeys } from '../command'
+
+describe('CommandRegistry 快捷键运行期重映射', () => {
+  it('remapKeys 改 keys、execute/has/get 不受影响；返回新 keys', () => {
+    const c = new CommandRegistry()
+    let ran = 0
+    c.register({ id: 'x.copy', title: '复制', keys: ['mod+c'], run: () => (ran += 1) })
+    const keys = c.remapKeys('x.copy', ['mod+shift+c'])
+    expect(keys).toEqual(['mod+shift+c'])
+    expect(c.get('x.copy')?.keys).toEqual(['mod+shift+c'])
+    c.execute('x.copy')
+    expect(ran).toBe(1)
+    expect(commandMatchesKeys(c.get('x.copy')?.keys, { key: 'c', ctrlKey: true })).toBe(false)
+    expect(commandMatchesKeys(c.get('x.copy')?.keys, { key: 'c', ctrlKey: true, shiftKey: true })).toBe(true)
+  })
+  it('isRemapped：首次 remap 后 true；resetKeys 恢复原始 keys 后 false', () => {
+    const c = new CommandRegistry()
+    c.register({ id: 'x', keys: ['Delete'], run: () => 1 })
+    expect(c.isRemapped('x')).toBe(false)
+    c.remapKeys('x', ['Backspace'])
+    expect(c.isRemapped('x')).toBe(true)
+    const restored = c.resetKeys('x')
+    expect(restored).toEqual(['Delete'])
+    expect(c.isRemapped('x')).toBe(false)
+    expect(c.get('x')?.keys).toEqual(['Delete'])
+  })
+  it('对未注册命令 remap 抛错；dispose 后 remap 状态随之清理', () => {
+    const c = new CommandRegistry()
+    expect(() => c.remapKeys('nope', ['a'])).toThrow(/unknown/)
+    const disp = c.register({ id: 'x', keys: ['1'], run: () => 1 })
+    c.remapKeys('x', ['2'])
+    expect(c.isRemapped('x')).toBe(true)
+    disp.dispose()
+    expect(c.has('x')).toBe(false)
+    c.register({ id: 'x', keys: ['3'], run: () => 1 })
+    expect(c.get('x')?.keys).toEqual(['3'])
+    expect(c.isRemapped('x')).toBe(false)
+  })
+  it('remap 后无原始 keys 的命令也能恢复为空', () => {
+    const c = new CommandRegistry()
+    c.register({ id: 'x', run: () => 1 })
+    c.remapKeys('x', ['mod+k'])
+    expect(c.resetKeys('x')).toEqual([])
+  })
+  it('originalKeys：未 remap 返回当前 keys；remap 后返回注册原始 keys；未注册返回 undefined', () => {
+    const c = new CommandRegistry()
+    c.register({ id: 'x', keys: ['Delete', 'Backspace'], run: () => 1 })
+    expect(c.originalKeys('x')).toEqual(['Delete', 'Backspace'])
+    c.remapKeys('x', ['mod+k'])
+    expect(c.originalKeys('x')).toEqual(['Delete', 'Backspace'])
+    expect(c.resetKeys('x')).toEqual(['Delete', 'Backspace'])
+    expect(c.originalKeys('nope')).toBeUndefined()
+  })
+})

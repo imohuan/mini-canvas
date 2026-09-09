@@ -5,8 +5,9 @@ import {
   EdgeStore,
   Selection,
   History,
-  CommandRegistry,
-  type CanvasEdge,
+ CommandRegistry,
+ type CanvasEdge,
+  GraphDocument,
 } from '@mini-canvas/canvas-core-v2'
 import { fileDropPlugin, FileDropServiceImpl, type FileDropService, type FileDropReaders } from '../fileDropPlugin'
 
@@ -38,8 +39,9 @@ function makeCtx() {
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
-  ctx.inject('history', history)
-  const command = new CommandRegistry()
+ ctx.inject('history', history)
+  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+ const command = new CommandRegistry()
   ctx.inject('command', command)
   return { ctx, nodeStore, edgeStore, selection, history }
 }
@@ -139,6 +141,39 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(nodeStore.getNode(id!)!.position).toEqual({ x: 12, y: 34 })
   })
 
+  it('注入 resources 时图片节点登记 resourceId；无 resources 时保持纯 url', async () => {
+    const { ctx, svc, nodeStore } = makeService()
+    // 给 ctx 注入 ResourceStore（no-op URL backend：register 显式 url 可用）
+    const { ResourceStore } = await import('@mini-canvas/canvas-core-v2')
+    const rs = new ResourceStore({ revokeUrl() {} })
+    ctx.inject('resources', rs)
+    const f = makeFile('pic.png', 'image/png')
+    await svc.addFiles([f], { x: 0, y: 0 })
+    const node = nodeStore.getNodes()[0]
+    expect(node.type).toBe('image')
+    expect(node.data.imageUrl).toBe('blob:mock-url')
+    const rid = node.data.resourceId as string
+    expect(rid).toMatch(/^res-/)
+    expect(rs.url(rid)).toBe('blob:mock-url')
+    expect(rs.alive(rid)).toBe(true)
+  })
+  it('disposeUnreferenced 经 host flush 语义：被引用 resourceId 存活、图内消失的被回收', async () => {
+    const { ctx, svc, nodeStore } = makeService()
+    const { ResourceStore } = await import('@mini-canvas/canvas-core-v2')
+    const rs = new ResourceStore({ revokeUrl() {} })
+    ctx.inject('resources', rs)
+    const f = makeFile('pic.png', 'image/png')
+    await svc.addFiles([f], { x: 0, y: 0 })
+    const node = nodeStore.getNodes()[0]
+    const rid = node.data.resourceId as string
+    // 图内引用存在 → 扫描保留
+    rs.disposeUnreferenced(new Set([rid]))
+    expect(rs.alive(rid)).toBe(true)
+    // 删除节点后引用消失 → 扫描回收
+    nodeStore.removeNode(node.id)
+    rs.disposeUnreferenced(new Set())
+    expect(rs.alive(rid)).toBe(false)
+  })
   it('插件装配（ctx.plugin + start）后服务可经 ctx.get 消费', async () => {
     const { ctx } = makeCtx()
     ctx.plugin(fileDropPlugin)
@@ -149,3 +184,5 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(svc.addPastedText('p', { x: 0, y: 0 })).toBeTruthy()
   })
 })
+
+

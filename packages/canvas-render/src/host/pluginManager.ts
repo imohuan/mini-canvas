@@ -39,9 +39,38 @@ export interface PluginManifestEntry {
   group?: string
 }
 
+/**
+ * 来源分类（P1-16 安全边界的基础设施，供宿主实施自己的信任策略）：
+ * - 'inline'：内存里的 PluginModule / Service 类（可信源码直连）；
+ * - 'lazy'  ：懒加载 module()（源码内部，但延迟取）；
+ * - 'url'   ：外部 URL 拉取（远程代码，风险最高）；
+ * - 'text'  ：单文件插件 js 文本（外部注入代码）。
+ * 宿主可据此决定是否放行（白名单域名/禁远程等），本函数只分类不决策。
+ */
+export type PluginSourceKind = 'inline' | 'lazy' | 'url' | 'text'
+
+export function sourceKind(source: PluginEntrySource): PluginSourceKind {
+  if (typeof (source as { module?: unknown }).module === 'function') return 'lazy'
+  if (typeof (source as { url?: unknown }).url === 'string') return 'url'
+  if (typeof (source as { text?: unknown }).text === 'string') return 'text'
+  return 'inline'
+}
+
 /** 装配清单：按序装；后装的同 id 覆盖先装的(轻量分层) */
 export interface PluginManifest {
   plugins: PluginManifestEntry[]
+}
+
+/** manifestReport 里清单一项的状态 */
+export interface ManifestReportEntry {
+  /** 清单声明的稳定 id */
+  id: string
+  /** 解析出的插件 name（id 缺省同 name） */
+  name: string
+  /** disabled=true → 'disabled'；清单里与已装同名重复(将被后者覆盖) → 'superseded'；否则 'will-install' */
+  status: 'disabled' | 'will-install' | 'superseded'
+  /** 装配 config（如有） */
+  config?: object
 }
 
 /** list() 返回的已装插件条目 */
@@ -102,7 +131,14 @@ export interface PluginManager {
   diagnose(): InstalledPluginInfo[]
   /** 按装配清单按序装(后装同 id 覆盖先装)。返回实际装上的插件名(按顺序)。 */
   applyManifest(manifest: PluginManifest): Promise<string[]>
+  /**
+   * 只读分析一份清单：逐项登记 disabled / 将装(pending) / 同名重复(后覆盖先)，
+   * 供宿主 UI/诊断展示"清单登记状态"（P1-7：disabled 项也可见，不再静默跳过）。
+   * 不改动装载；实际装载请调 applyManifest。
+   */
+  manifestReport(manifest: PluginManifest): ManifestReportEntry[]
 }
+
 
 /** 建统一安装句柄。ctx 需已 start；manager 只经 ctx 公开插件 API + config 装配通道工作。 */
 export function createPluginManager(ctx: Context): PluginManager {
@@ -174,6 +210,26 @@ export function createPluginManager(ctx: Context): PluginManager {
       return snapshotAll().filter((p) => p.state !== 'active')
     },
 
+    manifestReport(manifest) {
+      const report: ManifestReportEntry[] = []
+      for (const entry of manifest.plugins) {
+        // 同步来源(PluginModule/Service 类)能取 name；懒加载/URL/文本来源只能给 id（name 需异步解析）
+        const direct = entry.source as PluginModule
+        const name = typeof direct.name === 'string' ? direct.name : entry.id
+        report.push({
+          id: entry.id,
+          name,
+          status: entry.disabled
+            ? 'disabled'
+            : report.some((r) => r.id === entry.id || r.name === name)
+              ? 'superseded'
+              : 'will-install',
+          ...(entry.config ? { config: entry.config } : {}),
+        })
+      }
+      return report
+    },
+
     async applyManifest(manifest) {
       const installed: string[] = []
       for (const entry of manifest.plugins) {
@@ -190,3 +246,9 @@ export function createPluginManager(ctx: Context): PluginManager {
     },
   }
 }
+
+
+
+
+
+

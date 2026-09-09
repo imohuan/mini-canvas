@@ -26,8 +26,16 @@ export const name = 'canvas-export'
 export const inject = ['selection'] as string[]
 
 /** 取当前画布视口 DOM（VueFlow 渲染约定：整张画布内容在 .vue-flow__viewport 内） */
-function getFlowEl(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('.vue-flow__viewport')
+/** 取本画布实例的视口 DOM：优先经 viewport 服务的实例级 renderer/root 锚点，
+ *  无服务时退回全局查询（非宿主页面/旧用法兼容）。 */
+function getFlowEl(ctx: Context): HTMLElement | null {
+  const vp = ctx.get<{ getRootEl(): HTMLElement | null; getRendererEl(): HTMLElement | null } | undefined>('viewport')
+  // VueFlow 渲染约定：整张画布内容在 .vue-flow__viewport 内，位于实例根之下
+  const root = vp?.getRootEl?.() ?? null
+  const renderer = vp?.getRendererEl?.() ?? null
+  const flowViewport = root?.querySelector<HTMLElement>('.vue-flow__viewport') ?? null
+  if (flowViewport) return flowViewport
+  return renderer ?? null
 }
 
 /** 触发浏览器下载一个 dataURL 为 png 文件 */
@@ -42,12 +50,12 @@ function downloadPng(dataUrl: string, filename: string): void {
  * 把选中的节点真实 DOM 收集并克隆进一个离屏容器（自动按包围盒贴齐）。
  * @returns 离屏容器（已 append 到 body）；无任何可用节点 DOM 时返回 null（调用方 no-op）
  */
-function buildSelectedContainer(selectedIds: ReadonlySet<string>): HTMLElement | null {
+function buildSelectedContainer(selectedIds: ReadonlySet<string>, scopeRoot?: HTMLElement | null): HTMLElement | null {
   const nodeEls: HTMLElement[] = []
   for (const id of selectedIds) {
-    // VueFlow 渲染约定：每个节点元素带 data-id（=内核节点 id）
+    // VueFlow 渲染约定：每个节点元素带 data-id（=内核节点 id）；优先在实例根内查，多宿主不串线
     const selector = '.vue-flow__node[data-id="' + id + '"]'
-    const el = document.querySelector<HTMLElement>(selector)
+    const el = scopeRoot ? scopeRoot.querySelector<HTMLElement>(selector) : document.querySelector<HTMLElement>(selector)
     if (el) nodeEls.push(el)
   }
   if (nodeEls.length === 0) return null
@@ -86,7 +94,7 @@ export function apply(ctx: Context) {
 
   // —— 导出整张画布为 PNG ——
   async function exportFullCanvas(): Promise<void> {
-    const el = getFlowEl()
+    const el = getFlowEl(ctx)
     if (!el) {
       console.warn('[canvas-export] 未找到画布元素 (.vue-flow__viewport)')
       return
@@ -106,7 +114,8 @@ export function apply(ctx: Context) {
       console.warn('[canvas-export] 没有选中节点')
       return
     }
-    const container = buildSelectedContainer(selection.ids)
+    const vp = ctx.get<{ getRootEl(): HTMLElement | null } | undefined>('viewport')
+    const container = buildSelectedContainer(selection.ids, vp?.getRootEl?.())
     if (!container) {
       console.warn('[canvas-export] 未找到选中节点的 DOM 元素')
       return
@@ -126,7 +135,6 @@ export function apply(ctx: Context) {
     id: 'canvas-export:full',
     title: '导出画布',
     keys: ['mod+e'],
-    areas: ['pane'],
     group: 'export',
     order: 10,
     run: () => exportFullCanvas(),
@@ -135,7 +143,6 @@ export function apply(ctx: Context) {
     id: 'canvas-export:selected',
     title: '导出选中节点',
     keys: ['mod+shift+e'],
-    areas: ['pane'],
     group: 'export',
     order: 20,
     run: () => exportSelectedNodes(),
@@ -144,3 +151,4 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const canvasExportPlugin: PluginModule = { name, inject, apply }
+

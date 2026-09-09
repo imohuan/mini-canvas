@@ -115,8 +115,11 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeDashed: false,
   edgeAnimated: true,
   edgeMarkerEnd: false,
+  edgeMarkerSize: 8,
+  edgeVisible: true,
   edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
+  edgeGlowColor: '#3b82f6',
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */
@@ -137,8 +140,55 @@ export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
   connectionSnapDebugVisible: true,
 }
 
-/** 给一条源→目标连接生成稳定边 id */
-export function edgeId(source: string, target: string): string {
-  return `e-${source}-${target}`
+/** 给一条源→目标连接生成稳定边 id（与内核 edgeStoreId 四元组语义对齐；无/默认 handle 保持 e-{s}-{t} 兼容）。
+ *  B 项：带显式端口时纳入 handle，避免同端点不同端口互相覆盖。 */
+export function edgeId(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): string {
+  const sh = sourceHandle && sourceHandle !== 'source' ? sourceHandle : ''
+  const th = targetHandle && targetHandle !== 'target' ? targetHandle : ''
+  if (!sh && !th) return `e-${source}-${target}`
+  const srcPart = sh ? `${source}:${sh}` : source
+  const tgtPart = th ? `${target}:${th}` : target
+  return `e-${srcPart}-${tgtPart}`
 }
+
+/** VueFlow 消费的边最小形状（含端口句柄，B 项：多端口边按 handle 匹配端点） */
+export interface FlowEdge {
+  id: string
+  type: string
+  source: string
+  target: string
+  sourceHandle?: string
+  targetHandle?: string
+}
+
+/**
+ * 把内核 edgeStore 当前边灌成 VueFlow 边数组，并过滤掉 source/target 已不在存活节点集的悬挂边。
+ * B 项：DTO 保留 sourceHandle/targetHandle —— 渲染层能按端口匹配端点，不再丢弃（单端口节点无影响）。
+ */
+export function edgesFromStore(
+  edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>,
+  aliveNodeIds: ReadonlySet<string>,
+): FlowEdge[] {
+  return edges
+    .filter((e) => aliveNodeIds.has(e.source) && aliveNodeIds.has(e.target))
+    .map((e) => ({
+      id: e.id,
+      type: e.type ?? 'custom',
+      source: e.source,
+      target: e.target,
+      sourceHandle: e.sourceHandle,
+      targetHandle: e.targetHandle,
+    }))
+}
+
+
+
+
+
+
 

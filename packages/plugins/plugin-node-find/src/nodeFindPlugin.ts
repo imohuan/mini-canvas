@@ -33,17 +33,21 @@ export const inject = ['nodeStore', 'viewport', 'nodeLayout'] as string[]
 export function apply(ctx: Context) {
   let appInstance: ReturnType<typeof createApp> | null = null
   let containerEl: HTMLDivElement | null = null
+  /** P2-3：浮层打开期间的 nodeStore 订阅（closeOverlay 退订） */
+  let unsubStore: (() => void) | null = null
 
   function openOverlay(): void {
     if (appInstance) return // 已打开：幂等 no-op
     containerEl = document.createElement('div')
     document.body.appendChild(containerEl)
-    // 命令执行时取当前节点快照，交给浮层做本地过滤（不订阅实时变化）
-    const nodes = ctx.nodeStore.getNodes()
+    // P2-3：浮层打开期间订阅 nodeStore 增删/改名 → 每次变化 bump version 触发浮层重算，结果不陈旧
+    const nodesVersion = { value: 0 }
+    unsubStore = ctx.nodeStore.subscribe(() => { nodesVersion.value += 1 })
     appInstance = createApp({
       render() {
         return h(NodeFindOverlay, {
-          nodes,
+          getNodes: () => ctx.nodeStore.getNodes(),
+          refreshKey: nodesVersion.value,
           onFocus(nodeId: string) {
             focusNode(nodeId)
           },
@@ -62,6 +66,11 @@ export function apply(ctx: Context) {
     if (containerEl) {
       containerEl.remove()
       containerEl = null
+    }
+    // P2-3：关闭浮层即退订 nodeStore 变化（防泄漏）
+    if (unsubStore) {
+      unsubStore()
+      unsubStore = null
     }
   }
 
@@ -84,7 +93,6 @@ export function apply(ctx: Context) {
     id: 'node-find:open',
     title: '搜索节点',
     keys: ['mod+f'],
-    areas: ['pane'],
     order: 30,
     run: () => openOverlay(),
   })
@@ -95,3 +103,6 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const nodeFindPlugin: PluginModule = { name, inject, apply }
+
+
+

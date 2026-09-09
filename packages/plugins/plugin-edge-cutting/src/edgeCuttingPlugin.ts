@@ -17,7 +17,7 @@
  *   isPolylineHitByCut 判定折线相交（纯几何，geometry.ts 可单测）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { EdgeStoreService, HistoryService } from '@mini-canvas/canvas-core-v2'
+import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import type { ScreenPoint } from './geometry'
 import {
   DEFAULT_SAMPLE_STEP_PX,
@@ -73,11 +73,11 @@ class EdgeCuttingController {
     })
   }
 
-  private get edgeStore(): EdgeStoreService {
-    return this.ctx.get<EdgeStoreService>('edgeStore')
-  }
-  private get history(): HistoryService {
-    return this.ctx.get<HistoryService>('history')
+ private get edgeStore(): EdgeStoreService {
+   return this.ctx.get<EdgeStoreService>('edgeStore')
+ }
+  private get graph(): GraphDocumentService {
+    return this.ctx.get<GraphDocumentService>('graph')
   }
 
   /** 绑定全部 DOM 监听（ctx.effect 调用；返回清理函数） */
@@ -193,13 +193,16 @@ class EdgeCuttingController {
 
   /** 取当前存活边里"已渲染且与视口重叠"的路径采样条目 */
   private visibleEdgeSamples(): Array<{ id: string; points: ScreenPoint[] }> {
-    const canvasEl = document.querySelector('.vue-flow')
+    // F 项：取本画布实例根（viewport.getRootEl），多宿主不串线；退回全局 .vue-flow
+    const vp = this.ctx.get<{ getRootEl(): HTMLElement | null } | undefined>('viewport')
+    const scopeRoot = vp?.getRootEl?.() ?? null
+    const canvasEl = scopeRoot ?? document.querySelector('.vue-flow')
     const viewportRect = canvasEl?.getBoundingClientRect()
     if (!viewportRect) return []
 
     const samples: Array<{ id: string; points: ScreenPoint[] }> = []
     for (const edge of this.edgeStore.getEdges()) {
-      const path = resolveEdgePath(edge.id)
+      const path = resolveEdgePath(edge.id, scopeRoot)
       if (!path) continue
       const rect = path.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) continue
@@ -219,11 +222,10 @@ class EdgeCuttingController {
     const hitEdgeIds = filterHitEdges(entries, cutPoints, this.tolerancePx)
     if (hitEdgeIds.length === 0) return
 
-    this.history.withRecord(() => {
-      for (const id of hitEdgeIds) this.edgeStore.removeEdge(id)
-    })
-    this.ctx.emit('edge-cutting:cut', { edgeIds: hitEdgeIds })
-  }
+    // 统一走图唯一写入口：批量删边一次历史 + 自动清选中 + 提交落盘
+    this.graph.removeEdges(hitEdgeIds)
+   this.ctx.emit('edge-cutting:cut', { edgeIds: hitEdgeIds })
+ }
 }
 
 export const name = 'edge-cutting'
@@ -236,3 +238,5 @@ export function apply(ctx: Context): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const edgeCuttingPlugin: PluginModule = { name, apply }
+
+

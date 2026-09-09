@@ -30,6 +30,14 @@ export interface ViewportBackend {
   fitView(padding?: number): void
   setCenter(x: number, y: number, zoom?: number): void
   setViewport(v: ViewportState): void
+  /** 本画布实例根 DOM（多宿主不串线；未挂载 null） */
+  getRootEl?(): HTMLElement | null
+  /** VueFlow renderer DOM（节点层容器；导出/量测锚点） */
+  getRendererEl?(): HTMLElement | null
+  /** 视口 pane DOM（浮层挂载/坐标基准） */
+  getPaneEl?(): HTMLElement | null
+  /** 在实例内按 data-id 查节点 DOM */
+  queryNodeEl?(nodeId: string): HTMLElement | null
 }
 
 export class ViewportService {
@@ -83,7 +91,25 @@ export class ViewportService {
   setViewport(v: ViewportState): void {
     this.requireBackend()?.setViewport(v)
   }
+
+  getRootEl(): HTMLElement | null {
+    return this.requireBackend()?.getRootEl?.() ?? null
+  }
+
+  getRendererEl(): HTMLElement | null {
+    return this.requireBackend()?.getRendererEl?.() ?? null
+  }
+
+  getPaneEl(): HTMLElement | null {
+    return this.requireBackend()?.getPaneEl?.() ?? null
+  }
+
+  queryNodeEl(nodeId: string): HTMLElement | null {
+    return this.requireBackend()?.queryNodeEl?.(nodeId) ?? null
+  }
 }
+
+
 
 
 

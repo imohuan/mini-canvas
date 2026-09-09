@@ -89,6 +89,13 @@ export interface PluginCapabilities {
       outputs?: Array<{ port?: string; contentType?: string }>
       create?: (position: { x: number; y: number }) => string
     }): void
+    /** 往某 type 的某段叠 occupant（多插件同段叠加；自动回收）。返回 occupant id */
+    contribute(
+      type: string,
+      segment: 'content' | 'title' | 'top-toolbar' | 'bottom-toolbar',
+      component: unknown,
+      opts?: { id?: string; order?: number },
+    ): string
   }
   /** 往主题槽叠 occupant（order 最小者获胜），自动回收 */
   theme: {
@@ -242,4 +249,6 @@ export type Revoke = () => void
  * effect 回调：可返回一个清理函数（会被登记进当前 scope）。
  */
 export type EffectFn = () => void | (() => void) | Disposable
+
+
 
