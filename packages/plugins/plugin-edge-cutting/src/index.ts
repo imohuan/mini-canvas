@@ -1,6 +1,7 @@
 // plugin-edge-cutting —— 连接线切割插件：按住 Alt 拖拽"刀光"划过连接线即可将其删除（可撤销）。
 export { edgeCuttingPlugin, name, apply } from './edgeCuttingPlugin'
-export type { EdgeCuttingOptions } from './edgeCuttingPlugin'
+export { Config } from './edgeCuttingConfig'
+export type { EdgeCuttingConfig } from './edgeCuttingConfig'
 export {
   isPolylineHitByCut,
   doSegmentsIntersect,

@@ -20,24 +20,17 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import type { ScreenPoint } from './geometry'
 import {
-  DEFAULT_SAMPLE_STEP_PX,
-  DEFAULT_TOLERANCE_PX,
   filterHitEdges,
   rectsOverlap,
   resolveEdgePath,
   samplePathInClientSpace,
 } from './edgeCuttingCore'
-import { EdgeCuttingOverlay, type BladeStyle } from './edgeCuttingOverlay'
+import { EdgeCuttingOverlay } from './edgeCuttingOverlay'
+import { Config, edgeCuttingConfigFrom, type EdgeCuttingConfig } from './edgeCuttingConfig'
 
-/** 插件可调项（与老版 EdgeCuttingOptions 对齐；本轮走默认值，设置面板接线后续按需加） */
-export interface EdgeCuttingOptions extends BladeStyle {
-  /** 总开关 */
-  enabled?: boolean
-  /** 命中容差（屏幕像素） */
-  tolerancePx?: number
-  /** 边路径采样步长（px） */
-  sampleStepPx?: number
-}
+/** 插件可配置项（P4：模块级 Config schema，随插件导出；默认值/分组见 edgeCuttingConfig.ts） */
+export { Config }
+export type { EdgeCuttingConfig } from './edgeCuttingConfig'
 
 /** 可编辑输入框内不启动切割（与宿主/其它插件同规则） */
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -54,23 +47,17 @@ function isInsideCanvas(target: EventTarget | null): boolean {
 /** 实现类：DOM 事件装配 + 切割会话 + overlay（apply 实例化，ctx.effect 回收） */
 class EdgeCuttingController {
   private readonly overlay: EdgeCuttingOverlay
-  private readonly tolerancePx: number
-  private readonly sampleStepPx: number
   private altDown = false
   private cutting = false
   private points: ScreenPoint[] = []
 
-  constructor(
-    private readonly ctx: Context,
-    options: EdgeCuttingOptions,
-  ) {
-    this.tolerancePx = options.tolerancePx ?? DEFAULT_TOLERANCE_PX
-    this.sampleStepPx = options.sampleStepPx ?? DEFAULT_SAMPLE_STEP_PX
-    this.overlay = new EdgeCuttingOverlay({
-      pathColor: options.pathColor,
-      bladeColor: options.bladeColor,
-      showCutPath: options.showCutPath,
-    })
+  constructor(private readonly ctx: Context) {
+    this.overlay = new EdgeCuttingOverlay()
+  }
+
+  /** 实时配置（从 settings 读当前值，不缓存 apply 时的快照 → ⚙ 设置面板改动即生效） */
+  private get cfg(): EdgeCuttingConfig {
+    return edgeCuttingConfigFrom(this.ctx)
   }
 
  private get edgeStore(): EdgeStoreService {
@@ -87,6 +74,7 @@ class EdgeCuttingController {
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Alt' || isEditableTarget(event.target)) return
+      if (!this.cfg.enabled) return // 总开关关闭：不进入切割模式
       this.altDown = true
       this.stopEvent(event)
       this.enterCuttingMode()
@@ -99,6 +87,7 @@ class EdgeCuttingController {
     const onPointerDown = (event: PointerEvent): void => {
       if (this.resetStaleAltMode(event)) return
       if (event.button !== 0 || !event.altKey) return
+      if (!this.cfg.enabled) return // 总开关关闭：不启动切割
       if (isEditableTarget(event.target)) return
       if (!isInsideCanvas(event.target)) return
 
@@ -188,7 +177,9 @@ class EdgeCuttingController {
     return true
   }
   private drawBlade(): void {
-    this.overlay.draw(this.points, { showCutPath: true })
+    // 实时同步主题色（⚙ 设置改动后下一次挥刀即生效），再画一帧
+    this.overlay.updateStyle({ pathColor: this.cfg.pathColor, bladeColor: this.cfg.bladeColor })
+    this.overlay.draw(this.points, { showCutPath: this.cfg.showCutPath })
   }
 
   /** 取当前存活边里"已渲染且与视口重叠"的路径采样条目 */
@@ -207,7 +198,7 @@ class EdgeCuttingController {
       const rect = path.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) continue
       if (!rectsOverlap(rect, viewportRect)) continue
-      samples.push({ id: edge.id, points: samplePathInClientSpace(path, this.sampleStepPx) })
+      samples.push({ id: edge.id, points: samplePathInClientSpace(path, this.cfg.sampleStepPx) })
     }
     return samples
   }
@@ -219,7 +210,7 @@ class EdgeCuttingController {
     if (cutPoints.length < 2) return
     const entries = this.visibleEdgeSamples()
     if (entries.length === 0) return
-    const hitEdgeIds = filterHitEdges(entries, cutPoints, this.tolerancePx)
+    const hitEdgeIds = filterHitEdges(entries, cutPoints, this.cfg.tolerancePx)
     if (hitEdgeIds.length === 0) return
 
     // 统一走图唯一写入口：批量删边一次历史 + 自动清选中 + 提交落盘
@@ -231,12 +222,30 @@ class EdgeCuttingController {
 export const name = 'edge-cutting'
 
 export function apply(ctx: Context): void {
-  const controller = new EdgeCuttingController(ctx, {})
-  // ctx.effect：DOM 绑定与 overlay 全随插件 fiber 自动回收
-  ctx.effect(() => controller.attach())
+  const controller = new EdgeCuttingController(ctx)
+  // 默认装配监听；总开关(enabled)关闭 → 卸载 DOM 绑定与 overlay；重开 → 重装（overlay 惰性重建）。
+  // config 已由内核经 Config schema 校验 + 补默认并登记 settings；这里订阅 onChange 让开关即时生效。
+  let stop: (() => void) | undefined = controller.attach()
+  const settings = ctx.get<{
+    onChange(cb: (key: string, v: unknown) => void): { dispose(): void }
+  } | undefined>('settings')
+  const off = settings?.onChange((key) => {
+    if (key !== 'enabled') return
+    if (edgeCuttingConfigFrom(ctx).enabled) {
+      if (!stop) stop = controller.attach()
+    } else {
+      stop?.()
+      stop = undefined
+    }
+  })
+  // ctx.effect：DOM 绑定/overlay/订阅全随插件 fiber 自动回收
+  ctx.effect(() => () => {
+    off?.dispose()
+    stop?.()
+  })
 }
 
-/** 兼容旧装配的 PluginModule 出口 */
-export const edgeCuttingPlugin: PluginModule = { name, apply }
+/** 兼容旧装配的 PluginModule 出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */
+export const edgeCuttingPlugin: PluginModule = { name, Config, apply }
 
 

@@ -114,8 +114,22 @@ export class EdgeCuttingOverlay {
   private svg: SVGSVGElement | null = null
   private styleEl: HTMLStyleElement | null = null
   private resizeHandler: (() => void) | null = null
+  private style: BladeStyle = {}
 
-  constructor(private readonly style: BladeStyle = {}) {}
+  constructor(style: BladeStyle = {}) {
+    this.style = style
+  }
+
+  /**
+   * 运行时更新主题色（⚙ 设置改动后即时生效）：
+   * - overlay 已建 → 就地改 inline CSS 变量，后续帧直接跟新色；
+   * - 尚未创建 → 存进 this.style，待 ensure() 首建 SVG 时套用最新值。
+   */
+  updateStyle(style: BladeStyle): void {
+    this.style = style
+    if (!this.svg) return
+    for (const [k, v] of Object.entries(themeCssVars(style))) this.svg.style.setProperty(k, v)
+  }
 
   private ensure(): SVGSVGElement {
     if (!this.styleEl) this.styleEl = createStyle()
