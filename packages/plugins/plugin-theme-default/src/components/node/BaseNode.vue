@@ -296,6 +296,31 @@ const blockedSourcePort = computed(
   () => dragSameTypeBlocked.value && activeConnection.value?.sourceHandle === 'source',
 )
 
+// 关键修复：v-if 摘掉 MovingHandle 时，节点尺寸没变，VueFlow 自身的 updateNodeDimensions 不会触发
+//（doUpdate=false → 不重测 handleBounds），导致 node.handleBounds.source/target 残留旧坐标 →
+// VueFlow 原生 useHandle.handlePointerDown → getClosestHandle 用 stale 坐标把线端吸到已不存在的端口上。
+// 修复：blocked 状态变化时主动调 updateNodeInternals([id])，强制 VueFlow 重测 handleBounds；
+// forceUpdate=true 下 handleBounds.source/target 会按当前 DOM 真实 Handle 重算（已 v-if 摘掉的 Handle 不再计入）。
+// 注：VueFlow 原生 Handle mousedown 走 useHandle.ts 链路，全程不经过 CanvasHost.resolveFromAim，
+// 因此我们那条 resolveFromAim 的方向校验挡不住原生吸附；只能从数据源清掉 stale bounds。
+// watched `any` on purpose: `updateNodeInternals` is exposed on the vue-flow store instance; canvas-render
+// doesn't ship a typed wrapper here, the call site is stable across vue-flow versions.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const vfAny = vf as any
+watch(
+  [blockedTargetPort, blockedSourcePort],
+  () => {
+    if (blockedTargetPort.value || blockedSourcePort.value) {
+      // nextTick: 等 v-if 完成 DOM 摘除后再重测，否则 VueFlow 仍会读到旧 DOM
+      nextTick(() => vfAny.updateNodeInternals?.([props.id]))
+    } else {
+      // blocked→false（v-if 恢复渲染）：等 handle 的 onMounted 注册完 handleBounds，再触发一次重测兜底
+      nextTick(() => vfAny.updateNodeInternals?.([props.id]))
+    }
+  },
+  { flush: 'post' },
+)
+
 // ============ 调试可视化（端口调试 handleDebug / 吸附调试 connectionSnapDebugVisible）============
 /** 端口调试：是否给端口画半圆/圆心/归位/鼠标点辅助线（进 MovingHandle :debug） */
 const debugHandle = computed(() => Boolean(debug.handleDebug))
@@ -487,6 +512,7 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
+        {{ showSourceHandle && !blockedSourcePort }}
         <component :is="content" v-if="content" :id="id" :data="data" />
         <div v-else class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
