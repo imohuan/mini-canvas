@@ -108,13 +108,17 @@ export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
  * 本插件的可配置项 schema（P4：模块级 Config）。
  * 字段类型/默认对齐 DEFAULT_THEME_EDGE；group/label/options 供 UI 面板按组分、长控件、显示中文文案。
  * 内核装配时经它校验 + 补默认，apply(ctx, config) 收到的即完整 config。
+ *
+ * 分组命名约定：同属一个主题的字段用 `一级/二级` 归到二级菜单（左侧一级导航、右侧二级页签条）。
+ * 视觉类的颜色控件（连线颜色/辉光颜色）集中到 `连线/颜色` 一类，方便统一调色。
  */
 export const Config: ConfigSchema = {
+  // —— 一级「连线」：左侧一个入口，右侧「样式/颜色/显示/箭头/辉光流动」页签 ——
   edgeType: {
     type: "select",
     default: DEFAULT_THEME_EDGE.edgeType,
     label: "线型",
-    group: "连线",
+    group: "连线/样式",
     description:
       "连线在两节点之间的走线形态，贝塞尔最平滑，直角/折线更贴近工程图。",
     options: [
@@ -124,13 +128,6 @@ export const Config: ConfigSchema = {
       { value: "smoothstep", label: "圆角折线" },
     ],
   },
-  edgeColor: {
-    type: "color",
-    default: DEFAULT_THEME_EDGE.edgeColor,
-    label: "连线颜色",
-    group: "连线",
-    description: "默认连线的颜色，改动后画布上现有连线实时跟随。",
-  },
   edgeLineWidth: {
     type: "number",
     default: DEFAULT_THEME_EDGE.edgeLineWidth,
@@ -138,29 +135,60 @@ export const Config: ConfigSchema = {
     max: 6,
     step: 0.5,
     label: "线宽",
-    group: "连线",
+    group: "连线/样式",
     description: "连线的粗细（像素）。值越大线条越明显。",
   },
+  edgeDashed: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeDashed,
+    label: "虚线",
+    group: "连线/样式",
+    description: '以虚线绘制连线，常用于"可选/临时"关系的表达。',
+  },
+  // —— 颜色归一类：连线本体颜色 + 辉光/流光颜色 ——
+  edgeColor: {
+    type: "color",
+    default: DEFAULT_THEME_EDGE.edgeColor,
+    label: "连线颜色",
+    group: "连线/颜色",
+    description: "默认连线的颜色，改动后画布上现有连线实时跟随。",
+  },
+  edgeGlowColor: {
+    type: "color",
+    default: DEFAULT_THEME_EDGE.edgeGlowColor,
+    label: "辉光颜色",
+    group: "连线/颜色",
+    description: "辉光/流光高亮使用的颜色（缺省跟随线色）。",
+  },
+  // —— 显示 ——
   edgeVisible: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeVisible,
     label: "显示连线",
-    group: "连线",
+    group: "连线/显示",
     description: "关闭后连线整体隐藏（只留交互热区）；临时拖拽线不受影响仍会显示。",
   },
   edgeVisibleOnSelect: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeVisibleOnSelect,
     label: "选中节点时显示相连连线",
-    group: "连线",
+    group: "连线/显示",
     description: "配合“隐藏连线”使用：平时连线隐藏，选中任一相关节点时该连线重新显示。",
   },
   edgeOnTop: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeOnTop,
     label: "连线显示在最上层",
-    group: "连线",
+    group: "连线/显示",
     description: "连线绘制在节点之上（z 置顶），不被节点卡片遮挡。",
+  },
+  // —— 箭头 ——
+  edgeMarkerEnd: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeMarkerEnd,
+    label: "箭头",
+    group: "连线/箭头",
+    description: "在连线目标端显示箭头，标明方向。",
   },
   edgeMarkerSize: {
     type: "number",
@@ -168,8 +196,16 @@ export const Config: ConfigSchema = {
     min: 4,
     max: 24,
     label: "箭头大小",
-    group: "连线",
+    group: "连线/箭头",
     description: "目标端箭头的大小（开启箭头后生效）。",
+  },
+  // —— 辉光 + 流光动效 ——
+  edgeGlowEnabled: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeGlowEnabled,
+    label: "辉光",
+    group: "连线/辉光流动",
+    description: "连线外圈的柔光效果，增强视觉层次。",
   },
   edgeGlowIntensity: {
     type: "number",
@@ -178,49 +214,21 @@ export const Config: ConfigSchema = {
     max: 3,
     step: 0.1,
     label: "辉光强度",
-    group: "连线",
+    group: "连线/辉光流动",
     description: "选中/相连连线的外圈辉光强度。",
-  },
-  edgeGlowColor: {
-    type: "color",
-    default: DEFAULT_THEME_EDGE.edgeGlowColor,
-    label: "辉光颜色",
-    group: "连线",
-    description: "辉光/流光高亮使用的颜色（缺省跟随线色）。",
   },
   edgeAnimated: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeAnimated,
     label: "流动动画",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description: "允许光斑沿连线流动的动画总开关；关闭后连线静止（素淡线/虚线）。",
-  },
-  edgeDashed: {
-    type: "boolean",
-    default: DEFAULT_THEME_EDGE.edgeDashed,
-    label: "虚线",
-    group: "连线动效与箭头",
-    description: '以虚线绘制连线，常用于"可选/临时"关系的表达。',
-  },
-  edgeMarkerEnd: {
-    type: "boolean",
-    default: DEFAULT_THEME_EDGE.edgeMarkerEnd,
-    label: "箭头",
-    group: "连线动效与箭头",
-    description: "在连线目标端显示箭头，标明方向。",
-  },
-  edgeGlowEnabled: {
-    type: "boolean",
-    default: DEFAULT_THEME_EDGE.edgeGlowEnabled,
-    label: "辉光",
-    group: "连线动效与箭头",
-    description: "连线外圈的柔光效果，增强视觉层次。",
   },
   edgeFlowEnabled: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeFlowEnabled,
     label: "色块流动",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description:
       "导轨 + 渐变光斑沿连线流动（参考 demo 视觉）。关闭后回退素淡静态线。",
   },
@@ -231,7 +239,7 @@ export const Config: ConfigSchema = {
     max: 400,
     step: 5,
     label: "色块长度",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description:
       "单个发光色块沿路径的长度（路径长度归一 1000 刻度，默认 90 ≈ 9%）。",
   },
@@ -242,7 +250,7 @@ export const Config: ConfigSchema = {
     max: 800,
     step: 10,
     label: "色块间隔",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description:
       "相邻发光色块之间的间距（归一 1000 刻度，默认 260 ≈ 26%）。",
   },
@@ -253,7 +261,7 @@ export const Config: ConfigSchema = {
     max: 10,
     step: 0.1,
     label: "色块流速",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description: "光斑沿连线的流动速度（px/帧 @60fps，参考 demo 同量纲）。",
   },
   edgeFlowFade: {
@@ -263,7 +271,7 @@ export const Config: ConfigSchema = {
     max: 50,
     step: 1,
     label: "色块渐变占比",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description:
       "每个光斑头尾柔和渐隐的过渡长度占比（%，越大越柔和；参考 demo 35）。",
   },
@@ -274,9 +282,10 @@ export const Config: ConfigSchema = {
     max: 1,
     step: 0.05,
     label: "色块强度",
-    group: "连线动效与箭头",
+    group: "连线/辉光流动",
     description: "发光色块峰值不透明度（越大越亮越实）。",
   },
+  // —— 一级「端口」：右侧「浮动球 / 吸附区域」页签 ——
   handleRestOffset: {
     type: "number",
     default: DEFAULT_THEME_HANDLE.handleRestOffset,
@@ -284,7 +293,7 @@ export const Config: ConfigSchema = {
     max: 100,
     step: 1,
     label: "端口偏移",
-    group: "端口",
+    group: "端口/浮动球",
     description: "鼠标离开后圆球回到节点外侧的默认距离。",
   },
   handleCursorGap: {
@@ -294,7 +303,7 @@ export const Config: ConfigSchema = {
     max: 80,
     step: 1,
     label: "光标间隙",
-    group: "端口",
+    group: "端口/浮动球",
     description: "圆球跟随鼠标时与光标的错开距离。",
   },
   handleButtonSize: {
@@ -304,7 +313,7 @@ export const Config: ConfigSchema = {
     max: 64,
     step: 1,
     label: "按钮大小",
-    group: "端口",
+    group: "端口/浮动球",
     description: "浮动端口圆球按钮的直径。",
   },
   portZoneWidth: {
@@ -314,7 +323,7 @@ export const Config: ConfigSchema = {
     max: 400,
     step: 1,
     label: "端口区域宽度",
-    group: "端口",
+    group: "端口/吸附区域",
     description: "端口接收区矩形的横向宽度（默认 86）。",
   },
   portZoneArcRatio: {
@@ -324,7 +333,7 @@ export const Config: ConfigSchema = {
     max: 1,
     step: 0.05,
     label: "端口弧饱满度",
-    group: "端口",
+    group: "端口/吸附区域",
     description:
       "半椭圆弧的垂直饱满程度：1=半椭圆(与吸附带一致)，越小弧越扁越接近平顶矩形。",
   },
@@ -335,7 +344,7 @@ export const Config: ConfigSchema = {
     max: 1,
     step: 0.05,
     label: "端口区域高度占比",
-    group: "端口",
+    group: "端口/吸附区域",
     description: "端口接收区高度占节点高度的比例（0.8=占 80%）。",
   },
   portZoneOffset: {
@@ -345,20 +354,21 @@ export const Config: ConfigSchema = {
     max: 200,
     step: 1,
     label: "端口区域偏移",
-    group: "端口",
+    group: "端口/吸附区域",
     description: "端口接收区整体横向偏移：>0 向节点内、<0 向节点外。",
   },
   portZoneShape: {
     type: "select",
     default: DEFAULT_THEME_HANDLE.portZoneShape,
     label: "端口区域形状",
-    group: "端口",
+    group: "端口/吸附区域",
     description: "端口接收区使用矩形或半椭圆。",
     options: [
       { value: "arc", label: "半椭圆" },
       { value: "rect", label: "矩形" },
     ],
   },
+  // —— 一级「吸附带」（单一分类，无页签，直接展示正文）——
   heightRatio: {
     type: "number",
     default: DEFAULT_THEME_SNAP_ZONE.heightRatio,
@@ -400,6 +410,7 @@ export const Config: ConfigSchema = {
       { value: "arc", label: "半椭圆弧" },
     ],
   },
+  // —— 一级「调试」（单一分类，无页签）——
   handleDebug: {
     type: "boolean",
     default: DEFAULT_THEME_DEBUG.handleDebug,
