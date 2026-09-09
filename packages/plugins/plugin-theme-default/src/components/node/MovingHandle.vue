@@ -3,7 +3,8 @@
 // 职责：端口锚点(1×1px 真实 VueFlow Handle) + 半圆可移动区 + 浮动圆球按钮。
 //       鼠标进入半圆区圆球从节点边缘"跳出"跟随鼠标；离开 180ms 内归位淡出。
 //       非 preview 时底层就是真实 VueFlow <Handle> 连接点(端口 hover/选中才可见但始终可连)。
-// 与 v1 差异：无 pinia 依赖（v1 本无 store，纯 props）。几何/状态机逻辑与 v1 逐行一致。
+// 与 v1 差异：无 pinia 依赖（v1 本无 store，纯 props）。状态机与 v1 一致；
+//       跟随时球心精确对准鼠标点（中心对齐），静止/归位仍按 restOffset-overlap。
 //       CSS 消费本插件自建 --canvas-node-* 主题变量（styles/node-theme.css）。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position } from '@mini-canvas/canvas-render'
@@ -21,13 +22,13 @@ const props = defineProps<{
   disabled?: boolean
   /** 半圆形可移动区域半径 px（缺省 76；仅 zone 尺寸未显式给时兜底） */
   radius?: number
-  /** 离开后圆球回到节点外侧默认偏移 px（handleRestOffset=36） */
+  /** 离开后圆球停在节点外侧的静止偏移 px：球心距节点边缘的距离（handleRestOffset=36） */
   restOffset?: number
-  /** 圆球跟鼠标错开距离，避免被盖住（handleCursorGap=24） */
+  /** 兼容保留（不再参与位置计算）：旧版让球心与光标错开的距离 */
   cursorGap?: number
   /** 圆球尺寸 px（handleButtonSize=32） */
   buttonSize?: number
-  /** 圆球收进卡内的 tuck 距离 px（缺省 buttonSize/2） */
+  /** 圆球收进卡内的 tuck 距离 px（缺省 buttonSize/2）；仅静止/归位位使用 */
   overlap?: number
   /** 节点被选中（BaseNode props.selected）：选中时端口按钮常显（不依赖 zone hover） */
   selected?: boolean
@@ -65,7 +66,6 @@ const isSource = computed(() => props.type === 'source')
 const direction = computed(() => (isSource.value ? 1 : -1))
 const radius = computed(() => props.radius ?? 76)
 const restOffset = computed(() => props.restOffset ?? 36)
-const cursorGap = computed(() => props.cursorGap ?? 22)
 const buttonSize = computed(() => props.buttonSize ?? 32)
 const overlap = computed(() => props.overlap ?? buttonSize.value / 2)
 const zoneWidth = computed(() => props.zoneWidth ?? radius.value)
@@ -128,7 +128,6 @@ const anchorStyle = computed(() => ({
   '--port-zone-outer-r': `${outerR.value}px`,
   '--port-zone-shape-width': `${shapeWidth.value}px`,
   '--port-zone-offset': `${zoneOffset.value}px`,
-  '--moving-handle-overlap': `${overlap.value}px`,
 }))
 
 const zoneStyle = computed(() => ({
@@ -202,10 +201,15 @@ const debugRestPoint = computed(() => {
   return { x, y: zoneHeight.value / 2 }
 })
 const debugMousePoint = computed(() => {
-  // mouseX 是 updatePosition 用局部坐标系给出的"距卡边距离"（已方向规整为正向外）。
-  // 需要按 svg-local 真实 x 映射：source 加 0、target 用 W - mouseX
-  const x = isSource.value ? mouseX.value : shapeWidth.value - mouseX.value
-  return { x, y: zoneHeight.value / 2 + mouseY.value }
+  // 始终跟踪 button 圆心，而非 mouseX：
+  //   - 默认（无 hover、reset 后）：mouseX 停在 restOffset，但 button 实际 tuck 了 overlap 像素，
+  //     二者天然差 overlap，调试点必须用 buttonX 才能贴上圆心。
+  //   - 拖拽时：mouseX == buttonX 距离，方向 + overlap 间隙已含在 buttonX 里，跟随即可。
+  // buttonX 已是 anchor-local 距离（source 正向、target 负向），需按 svg-local + zoneOffset 重映：
+  //   source: svg-local.x = buttonX + zoneOffset
+  //   target: svg-local.x = shapeWidth - (-buttonX) + zoneOffset = shapeWidth + buttonX + zoneOffset
+  const x = isSource.value ? buttonX.value + zoneOffset.value : shapeWidth.value + buttonX.value + zoneOffset.value
+  return { x, y: zoneHeight.value / 2 + buttonY.value }
 })
 const debugViewBox = computed(() => `0 0 ${shapeWidth.value} ${zoneHeight.value}`)
 
@@ -225,7 +229,6 @@ function restorePosition() {
   mouseY.value = 0
   commitPosition(direction.value * (restOffset.value - overlap.value), 0)
 }
-
 function commitPosition(x: number, y: number) {
   nextX = x
   nextY = y
@@ -259,14 +262,28 @@ function updatePosition(event: MouseEvent) {
   mouseX.value = clamp(outward, 0, shapeWidth.value)
   mouseY.value = clamp(rawY, -zoneHeight.value / 2, zoneHeight.value / 2)
 
-  const maxDistance = shapeWidth.value - buttonSize.value / 2
-  const mouseDistance = Math.hypot(mouseX.value, mouseY.value)
-  const mouseAngle = Math.atan2(mouseY.value, mouseX.value || 0.0001)
-  const followDistance = clamp(mouseDistance + cursorGap.value, 0, maxDistance)
-  const ballX = Math.cos(mouseAngle) * followDistance
-  const ballY = Math.sin(mouseAngle) * followDistance
-  commitPosition(direction.value * (ballX - overlap.value), ballY)
+  // 球心精确落在鼠标点（中心对齐）：x=向外距离、y=垂直偏移（方向符号已含）。
+  commitPosition(direction.value * mouseX.value, mouseY.value)
 }
+
+// 端口外观参数(端口偏移/按钮/区域几何)变化 → 立即把按钮/调试点复位到新静止位，
+// 不再依赖下一次 hover/mousemove/leave 才应用（设置里改完实时生效）。
+watch(
+  [
+    () => props.restOffset,
+    () => props.buttonSize,
+    () => props.overlap,
+    () => props.zoneWidth,
+    () => props.zoneHeight,
+    () => props.zoneOffset,
+    () => props.zoneShape,
+    () => props.zoneArcRatio,
+  ],
+  () => {
+    if (props.disabled) return
+    if (!isMoving.value) resetPosition()
+  },
+)
 
 function handleLeave() {
   if (props.disabled) return

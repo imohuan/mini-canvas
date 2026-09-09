@@ -31,21 +31,28 @@ import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue
 export const name = "theme-default";
 export const inject = ["text"] as string[];
 
-// 默认皮对应的连线外观默认值（与 engine DEFAULT_EDGE_VISUAL 对齐；作为本插件 config schema 的默认/单一数据源初始值）。
-// 这样 demo/宿主经 ctx.settings 读到的初始外观 = 引擎默认，不改则有稳定基线。
-// 默认偏向 v1 Decoration 金标准：细线 / 接近黑的深灰 / 轻微虚线 / 无箭头无辉光（看更克制、像工程图连线）。
+// 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
+// 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）：导轨细线 + 青色渐变光斑沿连线流动，
+// 克制但有科技感。edgeGlowColor 即“光斑色”（默认品牌青 #0891b2），edgeColor 为静态导轨/线色。
 export const DEFAULT_THEME_EDGE = {
   edgeType: "bezier",
   edgeColor: "#1f2937",
-  edgeLineWidth: 1.5,
-  edgeDashed: true,
-  edgeAnimated: false,
+  edgeLineWidth: 2,
+  edgeDashed: false,
+  edgeAnimated: true,
   edgeMarkerEnd: false,
   edgeMarkerSize: 8,
-  edgeGlowEnabled: false,
+  edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
-  edgeGlowColor: "#1f2937",
+  edgeGlowColor: "#0891b2",
   edgeVisible: true,
+  // —— 连线新视觉（导轨 + 色块流动）——
+  edgeFlowEnabled: true,
+  edgeFlowBlockSize: 90,
+  edgeFlowGap: 260,
+  edgeFlowSpeed: 2.5,
+  edgeFlowFade: 35,
+  edgeFlowIntensity: 0.9,
 } as const;
 
 /** 浮动端口(half)外观默认值（对齐 canvasHostCore DEFAULT_HANDLE_VISUAL） */
@@ -168,9 +175,9 @@ export const Config: ConfigSchema = {
   edgeAnimated: {
     type: "boolean",
     default: DEFAULT_THEME_EDGE.edgeAnimated,
-    label: "选中流光",
+    label: "流动动画",
     group: "连线动效与箭头",
-    description: "选中连线时沿路径流动的高亮光效。",
+    description: "允许光斑沿连线流动的动画总开关；关闭后连线静止（素淡线/虚线）。",
   },
   edgeDashed: {
     type: "boolean",
@@ -192,6 +199,67 @@ export const Config: ConfigSchema = {
     label: "辉光",
     group: "连线动效与箭头",
     description: "连线外圈的柔光效果，增强视觉层次。",
+  },
+  edgeFlowEnabled: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeFlowEnabled,
+    label: "色块流动",
+    group: "连线动效与箭头",
+    description:
+      "导轨 + 渐变光斑沿连线流动（参考 demo 视觉）。关闭后回退素淡静态线。",
+  },
+  edgeFlowBlockSize: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeFlowBlockSize,
+    min: 30,
+    max: 400,
+    step: 5,
+    label: "色块长度",
+    group: "连线动效与箭头",
+    description:
+      "单个发光色块沿路径的长度（路径长度归一 1000 刻度，默认 90 ≈ 9%）。",
+  },
+  edgeFlowGap: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeFlowGap,
+    min: 50,
+    max: 800,
+    step: 10,
+    label: "色块间隔",
+    group: "连线动效与箭头",
+    description:
+      "相邻发光色块之间的间距（归一 1000 刻度，默认 260 ≈ 26%）。",
+  },
+  edgeFlowSpeed: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeFlowSpeed,
+    min: 0.2,
+    max: 10,
+    step: 0.1,
+    label: "色块流速",
+    group: "连线动效与箭头",
+    description: "光斑沿连线的流动速度（px/帧 @60fps，参考 demo 同量纲）。",
+  },
+  edgeFlowFade: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeFlowFade,
+    min: 5,
+    max: 50,
+    step: 1,
+    label: "色块渐变占比",
+    group: "连线动效与箭头",
+    description:
+      "每个光斑头尾柔和渐隐的过渡长度占比（%，越大越柔和；参考 demo 35）。",
+  },
+  edgeFlowIntensity: {
+    type: "number",
+    default: DEFAULT_THEME_EDGE.edgeFlowIntensity,
+    min: 0.1,
+    max: 1,
+    step: 0.05,
+    label: "色块强度",
+    group: "连线动效与箭头",
+    description: "发光色块峰值不透明度（越大越亮越实）。",
   },
   handleRestOffset: {
     type: "number",

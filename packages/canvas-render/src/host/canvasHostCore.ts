@@ -120,6 +120,13 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
   edgeGlowColor: '#3b82f6',
+  // —— 连线新视觉默认（导轨 + 光斑流动；与 plugin-theme-default DEFAULT_THEME_EDGE 对齐）——
+  edgeFlowEnabled: true,
+  edgeFlowBlockSize: 90,
+  edgeFlowGap: 260,
+  edgeFlowSpeed: 2.5,
+  edgeFlowFade: 35,
+  edgeFlowIntensity: 0.9,
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */
@@ -185,7 +192,6 @@ export function edgesFromStore(
       targetHandle: e.targetHandle,
     }))
 }
-
 
 
 

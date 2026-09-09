@@ -1,14 +1,18 @@
 <script setup lang="ts">
 // CustomEdge —— v2 自定义边/连接线（移植自 v1 components/CustomEdge.vue，金标准 core-node-contract §6）。
-// 职责：按全局配置渲染边路径(bezier/straight/step/smoothstep)；默认淡线；选中/相连/临时/force 边跑流光(辉光+热斑)+箭头；
-//       提供加宽透明点击热区 + 双击弹剪切钮删除。
-// 与 v1 差异：v1 读 canvas.state.core.* 与 pinia selectionState；v2 改为 props 显式传入(解耦 store)，
-//       默认值对齐 core-node-contract §0 配置默认表。几何逻辑抽到 ./edgeGeometry.ts(可单测)，此处只做装配。
+// 职责：按全局配置渲染边路径(bezier/straight/step/smoothstep)；默认导轨 + 同色光斑沿路径流动；
+//       选中/相连/临时/force 边加亮（drop-shadow 强化）；提供加宽透明点击热区 + 双击弹剪切钮删除。
+// 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）。
+// 动画：纯 CSS keyframes 推进 stroke-dashoffset（不用 SVG <animate> SMIL，根因：vdom patch 把 <animate> 当 path child
+//       反复比较，path 的 d 在多次 patch 后被清空、bbox=0、光斑彻底不可见——浏览器实测结果）。
+// 箭头颜色：与 flowColor 同色（统一连线视觉）。颜色用 :style 内联绑定到 element.style，优先级高于 .vue-flow 全局 CSS
+//       的 var(--ce-color, #3b82f6) 兜底，避免被覆盖为线色（之前就是这个 bug）。
+// 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'
 import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
-import type { EdgeProps, EdgeVisual } from '@mini-canvas/canvas-render'
+import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   Position,
   getSourcePosition,
@@ -20,28 +24,41 @@ import {
   type EdgeAppearance,
 } from './edgeGeometry'
 
-interface CustomEdgeExtraProps {
-  /** 临时拖线/批量临时边 */
+/** Custom edge render component: the minimal prop set it actually consumes (independent from VueFlow EdgeProps full-required shape).
+ *  Normal edges are fed by VueFlow (id/source/target/sourceNode/targetNode/... all present);
+ *  the drag-time temp line is fed by the ConnectionLine shell with the subset below. Both share this one component & one visual. */
+export interface CustomEdgeProps {
+  id?: string
+  source?: string
+  target?: string
+  sourceX?: number
+  sourceY?: number
+  targetX?: number
+  targetY?: number
+  sourcePosition?: string
+  targetPosition?: string
+  sourceHandleId?: string | null
+  targetHandleId?: string | null
+  data?: { isTemp?: boolean } | null
+  selected?: boolean
   temporary?: boolean
-  /** 强制走流光 */
   forceFlow?: boolean
-  /** 显式外观覆盖（优先级高于 provide 的 EDGE_VISUAL_KEY） */
   visual?: EdgeVisual
-  /** 几何参数（曲率/step 偏移等） */
   geometry?: EdgeAppearance
 }
 
-const props = defineProps<EdgeProps & CustomEdgeExtraProps>()
-
-// 宿主统一注入上下文：外观(静态) + 选中集合(响应式)。CustomEdge 属 theme 渲染组件，必在 <CanvasHost> 内。
+const props = withDefaults(defineProps<CustomEdgeProps>(), {
+  sourceX: 0,
+  sourceY: 0,
+  targetX: 0,
+  targetY: 0,
+})
 const { ctx, edgeVisual, edgeSelection } = useCanvasRender()
 const visual = computed<EdgeVisual>(() => ({ ...edgeVisual, ...(props.visual || {}) }))
 const selectionNodeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedNodeIds.value)
 const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedEdgeIds.value)
-
 const isTemporaryEdge = computed(() => Boolean(props.temporary || props.data?.isTemp))
 
-// ---- 外观配置（缺省回落到 contract §0 默认值）----
 const edgeType = computed<EdgeType>(() => (visual.value.edgeType as EdgeType) || 'bezier')
 const lineWidth = computed(() => visual.value.edgeLineWidth ?? 2)
 const edgeColor = computed(() => visual.value.edgeColor ?? '#3b82f6')
@@ -55,18 +72,22 @@ const edgeVisible = computed(() => visual.value.edgeVisible ?? true)
 const edgeGlowEnabled = computed(() => visual.value.edgeGlowEnabled ?? true)
 const edgeGlowIntensity = computed(() => visual.value.edgeGlowIntensity ?? 1)
 const edgeGlowColor = computed(() => visual.value.edgeGlowColor || edgeColor.value)
+const flowEnabled = computed(() => visual.value.edgeFlowEnabled ?? true)
+const flowBlockSize = computed(() => visual.value.edgeFlowBlockSize ?? 90)
+const flowGap = computed(() => visual.value.edgeFlowGap ?? 260)
+const flowSpeed = computed(() => visual.value.edgeFlowSpeed ?? 2.5)
+const flowFade = computed(() => visual.value.edgeFlowFade ?? 35)
+const flowIntensity = computed(() => visual.value.edgeFlowIntensity ?? 0.9)
 const geometry = computed(() => props.geometry)
 
-// ---- 高亮判断：临时恒高亮 / 相连任一节点被选 / 边自身被选 ----
 const isHighlighted = computed(() =>
   isTemporaryEdge.value ||
-  selectionNodeIds.value.has(props.source) ||
-  selectionNodeIds.value.has(props.target) ||
-  selectionEdgeIds.value.has(props.id) ||
+  selectionNodeIds.value.has(props.source ?? '') ||
+  selectionNodeIds.value.has(props.target ?? '') ||
+  selectionEdgeIds.value.has(props.id ?? '') ||
   Boolean((props as { selected?: boolean }).selected),
 )
 
-// ---- 路径 ----
 const sourcePos = computed(() => getSourcePosition(props.sourcePosition, props.sourceHandleId))
 const targetPos = computed(() =>
   isTemporaryEdge.value
@@ -95,7 +116,6 @@ function samplePath(t: number) {
   )
 }
 
-// ---- 剪切按钮 ----
 const showCutButton = ref(false)
 const cutButtonPosition = ref({ x: 0, y: 0 })
 
@@ -123,48 +143,38 @@ function showCutButtonAtPointer(ev: MouseEvent) {
   updateCutButtonPosition(ev)
   showCutButton.value = true
 }
-
-function onMouseMove(ev: MouseEvent) {
-  if (!showCutButton.value) return
-  updateCutButtonPosition(ev)
-}
-
+function onMouseMove(ev: MouseEvent) { if (showCutButton.value) updateCutButtonPosition(ev) }
 function cutEdge(ev: MouseEvent) {
   ev.stopPropagation(); ev.preventDefault()
-  // 数据源在内核 edgeStore：走 command:delete-edge（内核删边+历史+落盘），避免只用
-  // VueFlow removeEdges 改受控渲染态（会被下次 store 同步还原且不可撤销）。
-  // 根 Context 没有服务属性 Proxy，须经 ctx.get('command') 取命令服务。
   const command = ctx.get<{ has(id: string): boolean; execute(id: string, ...payload: unknown[]): unknown }>('command')
   if (command?.has('command:delete-edge')) {
-    command.execute('command:delete-edge', { edgeId: props.id })
+    command.execute('command:delete-edge', { edgeId: props.id ?? '' })
   } else {
-    // 宿主未装 canvas-commands 时退化为直接内核删边 + 落盘（保证双击删除始终可用且持久化）。
     const edgeStore = ctx.get<EdgeStoreService>('edgeStore')
     const save = ctx.get<SaveService>('save')
-    edgeStore.removeEdge(props.id)
+    edgeStore.removeEdge(props.id ?? '')
     save.set(GRAPH_EDGES_KEY, edgeStore.getEdges(), 'canvas')
   }
   showCutButton.value = false
 }
-
-function closeCutButton() {
-  showCutButton.value = false
-}
+function closeCutButton() { showCutButton.value = false }
 onMounted(() => document.addEventListener('click', closeCutButton))
 onUnmounted(() => document.removeEventListener('click', closeCutButton))
 
-// 只有临时连线、被选中的连线，或连接到选中节点的线才走颜色 + 流光
-const animateFlow = computed(() => props.forceFlow || isHighlighted.value)
-
-// ---- 手绘箭头：从路径采样计算角度 ----
+// 箭头：长度 = max(edgeMarkerSize, lineWidth*3.5)，线宽联动；颜色 = flowColor（与光斑同款，视觉一致）。
+// 用 :style 绑到 element.style.strokeInline，优先级高于 .vue-flow 全局 .animated path 的 CSS 兜底。
+const arrowLen = computed(() => Math.max(edgeMarkerSize.value, lineWidth.value * 3.5))
+const arrowStroke = computed(() => Math.max(1, lineWidth.value + 0.5))
+// Arrow color = line color (edgeColor), not flow color. The arrow is structural like the line itself; the flow color is reserved for the moving light blocks along the path.
+const arrowColor = computed(() => edgeColor.value)
 const arrowPath = computed(() => {
-  if (!edgeMarkerEnd.value) return ''
+  if (!edgeMarkerEnd.value) return ""
   const pNear = samplePath(0.92)
   const pEnd = samplePath(1.0)
   const dx = pEnd.x - pNear.x
   const dy = pEnd.y - pNear.y
   const angle = Math.atan2(dy, dx)
-  const len = edgeMarkerSize.value
+  const len = arrowLen.value
   const halfOpen = Math.PI / 6.5
   const tipX = pEnd.x - Math.cos(angle) * len * 0.15
   const tipY = pEnd.y - Math.sin(angle) * len * 0.15
@@ -174,55 +184,122 @@ const arrowPath = computed(() => {
   const w2y = tipY - Math.sin(angle + halfOpen) * len
   return `M ${w1x} ${w1y} L ${tipX} ${tipY} L ${w2x} ${w2y}`
 })
+
+// 流动总开关：edgeFlowEnabled && edgeAnimated。色块一直跑。
+// 颜色：flowColor = edgeGlowColor（设置里"辉光颜色"，缺省跟随线色），箭头/光斑/亮核同色 = 一种效果。
+const flowActive = computed(() => flowEnabled.value && edgeAnimated.value)
+const dashCycle = computed(() => Math.max(20, flowBlockSize.value + flowGap.value))
+const cssDurSec = computed(() => {
+  const pxPerSec = Math.max(8, flowSpeed.value * 60)
+  return Math.max(0.6, dashCycle.value / pxPerSec)
+})
+const railColor = computed(() => edgeColor.value)
+const railWidth = computed(() => Math.max(1, lineWidth.value))
+const flowColor = computed(() => edgeGlowColor.value || edgeColor.value)
+const softWidth = computed(() => Math.max(2, lineWidth.value * 2.4))
+const hotWidth = computed(() => Math.max(1.5, lineWidth.value))
+
+const gStyle = computed(() => ({
+  '--ce-color': edgeColor.value,
+  '--ce-linew': lineWidth.value + 'px',
+  '--ce-flow-color': flowColor.value,
+  '--ce-arrow-opacity': isHighlighted.value ? 1 : 0.55,
+  '--ce-cycle': dashCycle.value + 'px',
+  '--ce-dur': cssDurSec.value + 's',
+  '--ce-block': flowBlockSize.value + 'px',
+  '--ce-gap': flowGap.value + 'px',
+}))
 </script>
 
 <template>
-  <g class="custom-edge" :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }" :style="{
-    '--ce-da': dashArray || 'none',
-    '--ce-color': edgeColor,
-    '--ce-linew': lineWidth + 'px',
-    '--ce-arrow-opacity': animateFlow ? 1 : 0.35,
-  }" @dblclick="showCutButtonAtPointer" @mousemove="onMouseMove">
+  <g
+    class="custom-edge"
+    :class="{ highlight: isHighlighted, 'is-temporary': isTemporaryEdge }"
+    :style="gStyle"
+    @dblclick="showCutButtonAtPointer"
+    @mousemove="onMouseMove"
+  >
     <template v-if="edgeVisible">
-      <!-- 默认态：淡灰线 -->
-      <template v-if="!animateFlow">
-        <path class="ef-base ef-base--dim" :d="edgePath" fill="none" :stroke="edgeColor" :stroke-width="lineWidth"
-          stroke-linecap="round" :stroke-dasharray="dashArray" />
+      <template v-if="!flowActive">
+        <path
+          class="ef-base"
+          :class="isHighlighted ? '' : 'ef-base--dim'"
+          :d="edgePath"
+          fill="none"
+          :stroke="edgeColor"
+          :stroke-width="lineWidth"
+          stroke-linecap="round"
+          :stroke-dasharray="dashArray"
+        />
       </template>
-
-      <!-- 高亮态：原始连接线 + 辉光流光 -->
       <template v-else>
-        <path class="ef-base" :d="edgePath" fill="none" :stroke="edgeColor" :stroke-width="lineWidth"
-          stroke-linecap="round" :stroke-dasharray="dashArray" />
-        <template v-if="edgeAnimated && edgeGlowEnabled">
-          <path class="ef-runner ef-runner-glow" :d="edgePath" fill="none" :stroke="edgeGlowColor"
-            :stroke-width="lineWidth" stroke-linecap="round" pathLength="300" :style="{
-              filter: `drop-shadow(0 0 ${5 * edgeGlowIntensity}px ${edgeGlowColor}) drop-shadow(0 0 ${10 * edgeGlowIntensity}px ${edgeGlowColor})`,
-            }" />
-          <path class="ef-runner ef-runner-hot" :d="edgePath" fill="none" :stroke="edgeGlowColor"
-            :stroke-width="Math.max(1, lineWidth * 0.65)" stroke-linecap="round" pathLength="300" />
-        </template>
-        <template v-else-if="edgeAnimated && !edgeGlowEnabled">
-          <path class="ef-runner ef-runner-hot" :d="edgePath" fill="none" :stroke="edgeGlowColor"
-            :stroke-width="Math.max(1, lineWidth * 0.65)" stroke-linecap="round" pathLength="300" />
-        </template>
+        <path
+          class="ef-rail"
+          :d="edgePath"
+          fill="none"
+          :stroke="railColor"
+          :stroke-width="railWidth"
+          stroke-linecap="round"
+          :stroke-dasharray="dashArray"
+        />
+        <path
+          v-if="edgeGlowEnabled"
+          class="ef-flow ef-flow--soft"
+          :d="edgePath"
+          fill="none"
+          :stroke="flowColor"
+          :stroke-width="softWidth"
+          stroke-linecap="round"
+          :style="{
+            strokeDasharray: `${flowBlockSize}px ${flowGap}px`,
+            opacity: Math.max(0.15, flowIntensity * 0.45),
+            filter: isHighlighted ? `drop-shadow(0 0 ${4 * edgeGlowIntensity}px ${flowColor})` : 'none',
+          }"
+        />
+        <path
+          class="ef-flow ef-flow--hot"
+          :d="edgePath"
+          fill="none"
+          :stroke="flowColor"
+          :stroke-width="hotWidth"
+          stroke-linecap="round"
+          :style="{
+            strokeDasharray: `${flowBlockSize}px ${flowGap}px`,
+            opacity: Math.min(1, flowIntensity + 0.1),
+          }"
+        />
       </template>
-
-      <!-- 箭头 -->
-      <path v-if="edgeMarkerEnd && edgeVisible" class="ef-arrow" :d="arrowPath" fill="none" :stroke="edgeColor"
-        :stroke-width="lineWidth" stroke-linecap="round" stroke-linejoin="round" />
-
-      <!-- 点击热区 -->
-      <path class="edge-hit-area" :data-edge-id="id" :d="edgePath" fill="none" stroke="transparent"
-        :stroke-width="Math.max(12, lineWidth)" stroke-linecap="round" />
-
-      <!-- 双击剪切按钮 -->
-      <foreignObject v-if="showCutButton" :x="cutButtonPosition.x - 16" :y="cutButtonPosition.y - 16" width="32"
-        height="32" style="overflow: visible">
+      <path
+        v-if="edgeMarkerEnd && edgeVisible"
+        class="ef-arrow"
+        :d="arrowPath"
+        fill="none"
+        :stroke="arrowColor"
+        :stroke-width="arrowStroke"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        :style="{ opacity: isHighlighted ? 1 : 0.6 }"
+      />
+      <path
+        class="edge-hit-area"
+        :data-edge-id="id"
+        :d="edgePath"
+        fill="none"
+        stroke="transparent"
+        :stroke-width="Math.max(12, lineWidth)"
+        stroke-linecap="round"
+      />
+      <foreignObject
+        v-if="showCutButton"
+        :x="cutButtonPosition.x - 16"
+        :y="cutButtonPosition.y - 16"
+        width="32"
+        height="32"
+        style="overflow: visible"
+      >
         <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
-            <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round"
-              stroke-linejoin="round" />
+            <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </button>
       </foreignObject>
@@ -231,91 +308,42 @@ const arrowPath = computed(() => {
 </template>
 
 <style scoped>
-.custom-edge {
-  cursor: pointer;
+.custom-edge { cursor: pointer; }
+.custom-edge .ef-base,
+.custom-edge .ef-rail,
+.custom-edge .ef-arrow {
+  transition: stroke 0.2s, stroke-width 0.2s, opacity 0.2s;
 }
-
-.custom-edge path {
-  transition: stroke 0.2s, stroke-width 0.2s;
+.edge-hit-area { pointer-events: stroke; }
+.ef-base { opacity: 0.45; }
+.ef-base--dim { opacity: 0.3; }
+.ef-rail { opacity: 0.65; }
+.ef-flow--soft { pointer-events: none; }
+.ef-flow--hot { pointer-events: none; }
+.ef-flow--soft,
+.ef-flow--hot {
+  animation-name: ce-flow;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  animation-duration: var(--ce-dur, 4s);
+  will-change: stroke-dashoffset;
 }
-
-.edge-hit-area {
-  pointer-events: stroke;
+@keyframes ce-flow {
+  from { stroke-dashoffset: 0; }
+  to   { stroke-dashoffset: calc(0px - var(--ce-cycle, 350px)); }
 }
-
-.ef-base {
-  opacity: 0.45;
-}
-
-.ef-base--dim {
-  opacity: 0.3;
-}
-
-.ef-runner {
-  stroke-dasharray: 24 76;
-  stroke-dashoffset: 0;
-  animation:
-    ef-dash 1.2s linear infinite,
-    ef-breathe 1.6s ease-in-out infinite;
-}
-
-.ef-runner-glow {
-  opacity: 0.55;
-}
-
-.ef-runner-hot {
-  opacity: 0.92;
-}
-
-.ef-arrow {
-  stroke: var(--ce-color, #3b82f6) !important;
-  stroke-width: var(--ce-linew, 2px) !important;
-  opacity: var(--ce-arrow-opacity, 1);
-}
-
-@keyframes ef-dash {
-  to {
-    stroke-dashoffset: -100;
-  }
-}
-
-@keyframes ef-breathe {
-
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
 .cut-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(255, 255, 255, 0.95);
-  color: #374151;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  cursor: pointer;
-  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: rgba(255, 255, 255, 0.95); color: #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); cursor: pointer; padding: 0;
   transition: background 0.15s;
 }
-
-.cut-btn:hover {
-  background: #ef4444;
-  color: #fff;
-}
+.cut-btn:hover { background: #ef4444; color: #fff; }
 </style>
 
 <style>
-/* 覆盖 Vue Flow 的 .animated path { stroke-dasharray: 5 }，改为走 CSS 变量 */
-.vue-flow__edge.animated .custom-edge path {
+.vue-flow__edge.animated .custom-edge path.ef-base {
   stroke-dasharray: var(--ce-da) !important;
 }
 </style>

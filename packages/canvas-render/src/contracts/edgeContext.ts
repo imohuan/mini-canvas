@@ -31,6 +31,19 @@ export interface EdgeVisual {
   edgeGlowIntensity?: number
   /** 辉光色，v1 edgeGlowColor 缺省=线色 */
   edgeGlowColor?: string
+  // ===== 连线新视觉（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line：导轨 + 光斑流动）=====
+  /** 常驻“导轨 + 光斑流动”视觉总开关（默认 true；false = 回退素淡线/虚线） */
+  edgeFlowEnabled?: boolean
+  /** 光斑块长度（路径归一 1000 刻度，默认 90 ≈ 9% 路径长） */
+  edgeFlowBlockSize?: number
+  /** 光斑块之间的间隔（路径归一 1000 刻度，默认 260 ≈ 26% 路径长） */
+  edgeFlowGap?: number
+  /** 流动速度（px/帧 @60fps，与参考 demo 的 speed 同量纲；默认 2.5） */
+  edgeFlowSpeed?: number
+  /** 光斑两端柔光延伸量（占块长 %，模拟头尾渐隐；默认 35） */
+  edgeFlowFade?: number
+  /** 光斑峰值不透明度（默认 0.9） */
+  edgeFlowIntensity?: number
 }
 
 export const EDGE_VISUAL_KEY: InjectionKey<Partial<EdgeVisual>> = Symbol('canvas-edge-visual')
