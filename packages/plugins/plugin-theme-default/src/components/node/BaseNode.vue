@@ -281,6 +281,21 @@ const shouldShowHandles = computed(
     (isHovered.value || props.selected),
 )
 
+// ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
+// 语义：拖线进行中，其它节点上与拖拽源**同类型**的端口被整体禁用/隐藏，只剩反向(可接)端口对用户可见。
+//   - 从 source(输出/右)口拖出 → activeConnection.sourceHandle==='source' → 屏蔽其它节点的 source 口
+//   - 从 target(输入/左)口反向拖出 → sourceHandle==='target' → 屏蔽其它节点的 target 口
+// 源自身节点(isCurrentConnectingNode)的端口另由 disabled 单独压住，此处不重复。
+const dragSameTypeBlocked = computed(
+  () => isConnecting.value && !isCurrentConnectingNode.value,
+)
+const blockedTargetPort = computed(
+  () => dragSameTypeBlocked.value && activeConnection.value?.sourceHandle === 'target',
+)
+const blockedSourcePort = computed(
+  () => dragSameTypeBlocked.value && activeConnection.value?.sourceHandle === 'source',
+)
+
 // ============ 调试可视化（端口调试 handleDebug / 吸附调试 connectionSnapDebugVisible）============
 /** 端口调试：是否给端口画半圆/圆心/归位/鼠标点辅助线（进 MovingHandle :debug） */
 const debugHandle = computed(() => Boolean(debug.handleDebug))
@@ -456,14 +471,14 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：
            左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
            mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
-      <div v-if="showTargetHandle" class="snap-band snap-band--input" :class="{ 'is-active': snapZonesActive }"
+      <div v-if="showTargetHandle" class="snap-band snap-band--input" :class="{ 'is-active': snapZonesActive && !blockedTargetPort }"
         :style="inputSnapStyle" @mouseenter="onInputSnapEnter" @mouseleave="onSnapLeave" />
-      <div v-if="showSourceHandle" class="snap-band snap-band--output" :class="{ 'is-active': snapZonesActive }"
+      <div v-if="showSourceHandle" class="snap-band snap-band--output" :class="{ 'is-active': snapZonesActive && !blockedSourcePort }"
         :style="outputSnapStyle" @mouseenter="onOutputSnapEnter" @mouseleave="onSnapLeave" />
 
       <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示 -->
       <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedTargetPort" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
@@ -487,7 +502,7 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 右侧输出口(source) -->
       <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedSourcePort" :selected="props.selected" :rest-offset="handleParams.handleRestOffset"
         :cursor-gap="handleParams.handleCursorGap" :button-size="handleParams.handleButtonSize"
         :zone-width="portZoneWidth" :zone-height="portZoneHeight" :zone-offset="portZoneOffset"
         :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio" :debug="debugHandle && !isConnecting"
