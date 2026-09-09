@@ -117,6 +117,8 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeMarkerEnd: false,
   edgeMarkerSize: 8,
   edgeVisible: true,
+  edgeVisibleOnSelect: false,
+  edgeOnTop: false,
   edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
   edgeGlowColor: '#3b82f6',

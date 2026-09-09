@@ -23,8 +23,12 @@ export interface EdgeVisual {
   edgeMarkerEnd?: boolean
   /** 箭头尺寸，v1 edgeMarkerSize=8 */
   edgeMarkerSize?: number
-  /** 整体可见，v1 edgeVisible=true */
+  /** 整体可见，v1 edgeVisible=true；关闭则连线隐藏（可配合 edgeVisibleOnSelect 用） */
   edgeVisible?: boolean
+  /** 节点被选中时显示其相连连线（配合 edgeVisible=false：平时隐藏，选中相关节点才浮现） */
+  edgeVisibleOnSelect?: boolean
+  /** 连线绘制在最上层（盖过节点）；false = VueFlow 默认连线在节点下层 */
+  edgeOnTop?: boolean
   /** 辉光开关，v1 edgeGlowEnabled=true */
   edgeGlowEnabled?: boolean
   /** 辉光强度，v1 edgeGlowIntensity=1 */

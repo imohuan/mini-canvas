@@ -68,7 +68,23 @@ const dashArray = computed(() =>
 const edgeAnimated = computed(() => visual.value.edgeAnimated ?? true)
 const edgeMarkerEnd = computed(() => visual.value.edgeMarkerEnd ?? false)
 const edgeMarkerSize = computed(() => visual.value.edgeMarkerSize ?? 8)
-const edgeVisible = computed(() => visual.value.edgeVisible ?? true)
+const edgeVisibleBase = computed(() => visual.value.edgeVisible ?? true)
+// 连线可见性：临时拖线(ConnectionLine 委托渲染)永远显示，不受"隐藏连线"影响；
+// 普通连线 = edgeVisible 且 (edgeVisibleOnSelect 关闭 || 无选中相关节点)。
+const edgeVisibleOnSelect = computed(() => visual.value.edgeVisibleOnSelect ?? false)
+const edgeShowVisual = computed(() => {
+  // 临时拖线：永远显示（隐藏连线不影响拖线预览）
+  if (isTemporaryEdge.value) return true
+  if (!edgeVisibleBase.value) {
+    // 隐藏连线：仅当开启"选中节点显示相连连线"且本边有端点被选中才显示
+    if (!edgeVisibleOnSelect.value) return false
+    return (
+      selectionNodeIds.value.has(props.source ?? '') ||
+      selectionNodeIds.value.has(props.target ?? '')
+    )
+  }
+  return true
+})
 const edgeGlowEnabled = computed(() => visual.value.edgeGlowEnabled ?? true)
 const edgeGlowIntensity = computed(() => visual.value.edgeGlowIntensity ?? 1)
 const edgeGlowColor = computed(() => visual.value.edgeGlowColor || edgeColor.value)
@@ -219,7 +235,7 @@ const gStyle = computed(() => ({
     @dblclick="showCutButtonAtPointer"
     @mousemove="onMouseMove"
   >
-    <template v-if="edgeVisible">
+    <template v-if="edgeShowVisual">
       <template v-if="!flowActive">
         <path
           class="ef-base"
@@ -270,7 +286,7 @@ const gStyle = computed(() => ({
         />
       </template>
       <path
-        v-if="edgeMarkerEnd && edgeVisible"
+        v-if="edgeMarkerEnd"
         class="ef-arrow"
         :d="arrowPath"
         fill="none"
@@ -280,15 +296,7 @@ const gStyle = computed(() => ({
         stroke-linejoin="round"
         :style="{ opacity: isHighlighted ? 1 : 0.6 }"
       />
-      <path
-        class="edge-hit-area"
-        :data-edge-id="id"
-        :d="edgePath"
-        fill="none"
-        stroke="transparent"
-        :stroke-width="Math.max(12, lineWidth)"
-        stroke-linecap="round"
-      />
+
       <foreignObject
         v-if="showCutButton"
         :x="cutButtonPosition.x - 16"
@@ -304,6 +312,18 @@ const gStyle = computed(() => ({
         </button>
       </foreignObject>
     </template>
+
+    <!-- 透明点击热区：独立于可见性 —— 隐藏连线时仍可选中/双击删除；临时拖线不渲染 -->
+    <path
+      v-if="!isTemporaryEdge"
+      class="edge-hit-area"
+      :data-edge-id="id"
+      :d="edgePath"
+      fill="none"
+      stroke="transparent"
+      :stroke-width="Math.max(12, lineWidth)"
+      stroke-linecap="round"
+    />
   </g>
 </template>
 
@@ -315,6 +335,13 @@ const gStyle = computed(() => ({
   transition: stroke 0.2s, stroke-width 0.2s, opacity 0.2s;
 }
 .edge-hit-area { pointer-events: stroke; }
+/* Temporary drag line (rendered inside ConnectionLine) must never capture pointer:
+   otherwise it steals hover/drop from the node/port below and causes flicker. */
+.custom-edge.is-temporary path,
+.custom-edge.is-temporary foreignObject {
+  pointer-events: none;
+}
+.custom-edge.is-temporary { cursor: default; }
 .ef-base { opacity: 0.45; }
 .ef-base--dim { opacity: 0.3; }
 .ef-rail { opacity: 0.65; }

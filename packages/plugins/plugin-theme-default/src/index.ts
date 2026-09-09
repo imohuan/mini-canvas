@@ -46,6 +46,8 @@ export const DEFAULT_THEME_EDGE = {
   edgeGlowIntensity: 1,
   edgeGlowColor: "#0891b2",
   edgeVisible: true,
+  edgeVisibleOnSelect: false,
+  edgeOnTop: false,
   // —— 连线新视觉（导轨 + 色块流动）——
   edgeFlowEnabled: true,
   edgeFlowBlockSize: 90,
@@ -144,7 +146,21 @@ export const Config: ConfigSchema = {
     default: DEFAULT_THEME_EDGE.edgeVisible,
     label: "显示连线",
     group: "连线",
-    description: "关闭后连线整体隐藏（只留交互热区）。",
+    description: "关闭后连线整体隐藏（只留交互热区）；临时拖拽线不受影响仍会显示。",
+  },
+  edgeVisibleOnSelect: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeVisibleOnSelect,
+    label: "选中节点时显示相连连线",
+    group: "连线",
+    description: "配合“隐藏连线”使用：平时连线隐藏，选中任一相关节点时该连线重新显示。",
+  },
+  edgeOnTop: {
+    type: "boolean",
+    default: DEFAULT_THEME_EDGE.edgeOnTop,
+    label: "连线显示在最上层",
+    group: "连线",
+    description: "连线绘制在节点之上（z 置顶），不被节点卡片遮挡。",
   },
   edgeMarkerSize: {
     type: "number",

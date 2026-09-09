@@ -20,7 +20,7 @@
  * 模板结构：本组件占满父容器高度(定位 100%)，内部是 booting/error + canvas-wrap(VueFlow+主题背景)。
  * 父级想加自己的 toolbar/面板，在本组件外层套一层 flex 布局即可。
  */
-import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
+import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import {
   NodeRegistry,
@@ -256,6 +256,7 @@ function applyTheme(): void {
 let unsubStore: (() => void) | undefined
 let unsubEdge: (() => void) | undefined
 let unsubSel: (() => void) | undefined
+let stopEdgeOnTopWatch: (() => void) | undefined
 
 function syncFromStore(): void {
   const h = hostRef.value
@@ -263,7 +264,12 @@ function syncFromStore(): void {
   const alive = new Set(h.nodeStore.getNodes().map((n) => n.id))
   // 边数据源 = 内核 edgeStore（边下沉后唯一数据源）；渲染态取 source/target 仍存活的边(删除路径已在 edgeStore 清边,此处兜底过滤)。
   // B 项：DTO 保留端口句柄（edgesFromStore 也滤悬挂边，纯逻辑单测覆盖）
-  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive)
+  const edgeOnTop = (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop ?? false
+  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
+    // 连线置顶：VueFlow 每边是独立 svg，zIndex 越高越盖过节点层（节点默认 z 0/auto）。
+    // 临时拖线有自己的 connectionline 层(z 1001)，无需参与。
+    edgeOnTop ? { ...e, zIndex: 1001 } : e,
+  )
   nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
@@ -805,6 +811,11 @@ onMounted(async () => {
     // 订阅 store 变化自动刷渲染态（nodeStore 与 edgeStore 任一变化都触发整图重刷）
     unsubStore = host.nodeStore.subscribe(syncFromStore)
     unsubEdge = host.edgeStore.subscribe(syncFromStore)
+    // 连线置顶开关变化 → 重灌渲染态（给 edges 重新算 zIndex）
+    stopEdgeOnTopWatch = watch(
+      () => (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop,
+      () => { if (hostRef.value) syncFromStore() },
+    )
 
     // 订阅内核 Selection(选中单源)：点击/删除/撤销等只写内核，这里投影给 CustomEdge 高亮
     unsubSel = host.selection.onChange(syncSelected)
@@ -900,6 +911,7 @@ onBeforeUnmount(() => {
   unsubStore?.()
   unsubEdge?.()
   unsubSel?.()
+  stopEdgeOnTopWatch?.()
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('visibilitychange', onVisibilityChange)
