@@ -45,6 +45,7 @@ import {
 } from './createMiniCanvasHost'
 import type { PluginManager } from './pluginManager'
 import type { PluginManifest } from './pluginManager'
+import type { ViewportState } from '../viewport/viewportService'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
@@ -140,7 +141,7 @@ const apiRef = shallowRef<MiniCanvasApi | undefined>()
 const managerRef = shallowRef<PluginManager | undefined>()
 /** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 screenToFlow / viewport / pane） */
 const surfaceRef = shallowRef<{
-  getViewport?: () => { x: number; y: number; zoom: number }
+  getViewport?: () => ViewportState
   getPaneRect?: () => DOMRect | null
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
   queryNodeEl?: (nodeId: string) => HTMLElement | null
@@ -297,51 +298,64 @@ function syncFromStore(): void {
 let stopViewportRestore: (() => void) | undefined
 let viewportTimers: ReturnType<typeof setTimeout>[] = []
 /** boot 时读到的存档视口；undefined = 从未存过(首次/无历史)，走 fitView 基线 */
-const savedViewport = shallowRef<{ x: number; y: number; zoom: number } | undefined>()
+const savedViewport = shallowRef<ViewportState | undefined>()
 
 /** 首次/无存档：对所有节点 fitView 一次(带重试等节点量测就绪)，成功后把结果存为基线 */
 function fitViewFirstRun(): void {
   const h = hostRef.value
   if (!h) return
-  const initial = h.viewport.getViewport()
+  // 每次 fitView 的间隔：先紧后松，覆盖 text/image 自适应节点量测(ResizeObserver)完成前的空档。
   const delays = [80, 150, 300, 600, 1000]
   let k = 0
+  // VueFlow fitView 是 200ms 动画，调用后视口并不会立即落到目标值；故每次调用后等动画跑完再对比
+  // 调用前/后的视口，判断这轮 fitView 是否真的把视口移向"包住全部节点"的居中位。以「本轮调用前」为基准
+  // 而非入口一次性快照：量测就绪前用户若手动拖/缩放，拿过期入口位置比对会误判。阈值语义：
+  // 位移 >0.5px 或缩放变化 >1e-4 视为已生效。
   const attempt = (): void => {
     const hh = hostRef.value
     if (!hh) return
+    const before = hh.viewport.getViewport()
     hh.viewport.fitView(0.15)
-    const v = hh.viewport.getViewport()
-    const moved =
-      Math.abs(v.x - initial.x) > 0.5 || Math.abs(v.y - initial.y) > 0.5 || Math.abs(v.zoom - initial.zoom) > 0.0001
-    if (moved) {
-      hh.save.set(GRAPH_VIEWPORT_KEY, v, 'canvas') // 把基线落盘，二次刷新也稳定恢复
-      return
-    }
-    if (k < delays.length) {
-      viewportTimers.push(setTimeout(attempt, delays[k]))
-      k++
-    }
+    viewportTimers.push(
+      setTimeout(() => {
+        const h2 = hostRef.value
+        if (!h2) return
+        const after = h2.viewport.getViewport()
+        const moved =
+          Math.abs(after.x - before.x) > 0.5 ||
+          Math.abs(after.y - before.y) > 0.5 ||
+          Math.abs(after.zoom - before.zoom) > 0.0001
+        if (moved) {
+          h2.save.set(GRAPH_VIEWPORT_KEY, after, 'canvas') // 把基线落盘，二次刷新也稳定恢复
+          return
+        }
+        if (k < delays.length) {
+          viewportTimers.push(setTimeout(attempt, delays[k]))
+          k++
+        }
+      }, 250), // >200ms 动画时长，等动画落定后再判
+    )
   }
   attempt()
 }
 
-/** 移动/缩放结束：把当前 viewport 落盘(与 graph 同走 save，防抖 flush 统一) */
+/** 移动/缩放结束：把当前 viewport 落盘(与 graph 同走 save，防抖 flush 统一；读视口统一走 viewport 服务) */
 function persistViewport(): void {
   const h = hostRef.value
-  const surface = surfaceRef.value
   if (!h) return
-  const vp = surface?.getViewport?.()
-  if (vp) h.save.set(GRAPH_VIEWPORT_KEY, vp, 'canvas')
+  h.save.set(GRAPH_VIEWPORT_KEY, h.viewport.getViewport(), 'canvas')
 }
 
 stopViewportRestore = watch(surfaceRef, (surface) => {
-  if (!surface || !hostRef.value || !props.persistViewport) return
+  // 空 surface(未挂载)/未启持久化 → 本次不恢复；但都提前自我停止，避免 watch 长期空转(只靠 unmount 兜底不干净)
+  if (surface && hostRef.value && props.persistViewport) {
+    const saved = savedViewport.value
+    if (saved) hostRef.value.viewport.setViewport(saved)
+    else fitViewFirstRun()
+  }
   // 只需首帧执行一次；后续 VueFlow 重挂(epoch bump)不应再动视口
   stopViewportRestore?.()
   viewportTimers = []
-  const saved = savedViewport.value
-  if (saved) hostRef.value.viewport.setViewport(saved)
-  else fitViewFirstRun()
 })
 
 // ==================== 通用交互事件 ====================
@@ -942,7 +956,7 @@ onMounted(async () => {
     // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
     // 在 booting=false(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
     if (props.persistViewport) {
-      const vp = await host.save.get<{ x: number; y: number; zoom: number }>(GRAPH_VIEWPORT_KEY, 'canvas')
+      const vp = await host.save.get<ViewportState>(GRAPH_VIEWPORT_KEY, 'canvas')
       savedViewport.value = vp
     }
 
