@@ -34,6 +34,43 @@ export function toPathData(points: ScreenPoint[]): string {
     .join(' ')
 }
 
+/**
+ * 屏幕点数组 → 平滑 SVG path d（Catmull-Rom 转 Bezier：张力 0.5，曲线穿过所有采样点，
+ * 相邻段切线连续，消除折线感——用手指划过画布时轨迹就是圆润的"刀光"）。
+ * 与 toPathData 不同：段间是 cubic Bezier 拼接而非直线，视觉上是真平滑曲线。
+ * - 0 点 → ''
+ * - 1 点 → 'M x y'
+ * - 2 点 → 平滑 Bez 近似直线（首尾 handle 各自取 1/3 / 2/3 处，几何上等同 L）
+ * - ≥3 点 → 均匀 Catmull-Rom（端点 P[-1]=P[0]、P[n+1]=P[n]，曲线闭合在两端）
+ */
+export function toSmoothPathData(points: ScreenPoint[]): string {
+  const n = points.length
+  if (n === 0) return ''
+  if (n === 1) return `M ${points[0].x} ${points[0].y}`
+  if (n === 2) {
+    const a = points[0]
+    const b = points[1]
+    const c1x = a.x + (b.x - a.x) / 3
+    const c1y = a.y + (b.y - a.y) / 3
+    const c2x = a.x + ((b.x - a.x) * 2) / 3
+    const c2y = a.y + ((b.y - a.y) * 2) / 3
+    return `M ${a.x} ${a.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${b.x} ${b.y}`
+  }
+  const segments: string[] = [`M ${points[0].x} ${points[0].y}`]
+  for (let i = 0; i < n - 1; i++) {
+    const p0 = points[i === 0 ? i : i - 1]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[i + 2 < n ? i + 2 : i + 1]
+    const c1x = p1.x + (p2.x - p0.x) / 6
+    const c1y = p1.y + (p2.y - p0.y) / 6
+    const c2x = p2.x - (p3.x - p1.x) / 6
+    const c2y = p2.y - (p3.y - p1.y) / 6
+    segments.push(`C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2.x} ${p2.y}`)
+  }
+  return segments.join(' ')
+}
+
 /** 两个 DOMRect 是否重叠 */
 export function rectsOverlap(a: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>, b: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom'>): boolean {
   return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top

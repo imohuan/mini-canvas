@@ -17,6 +17,7 @@ export {
   bladeOnly,
   rectsOverlap,
   toPathData,
+  toSmoothPathData,
   cssEscape,
   edgePathSelectors,
 } from './edgeCuttingCore'

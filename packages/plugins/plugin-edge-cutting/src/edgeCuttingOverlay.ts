@@ -4,7 +4,7 @@
  * 职责：全屏 fixed SVG 层 + style 标签，画"切割轨迹 + 刀锋尾迹 + 刀尖 + 火花"。
  * 纯自管 DOM（document.body 挂载/移除），与宿主/内核零耦合；插件卸载时 dispose() 清干净。
  */
-import { createSvgElement, toPathData, TRAIL_POINTS, BLADE_POINTS, type ScreenPoint } from './edgeCuttingCore'
+import { createSvgElement, toSmoothPathData, TRAIL_POINTS, BLADE_POINTS, type ScreenPoint } from './edgeCuttingCore'
 
 export interface BladeStyle {
   /** 完整绘制路径颜色 */
@@ -151,15 +151,15 @@ export class EdgeCuttingOverlay {
     svg.replaceChildren()
     if (points.length === 0) return
 
-    if (opts.showCutPath && points.length > 1) this.appendPath('cut-path', toPathData(points))
+    if (opts.showCutPath && points.length > 1) this.appendPath('cut-path', toSmoothPathData(points))
     const trail = points.slice(-TRAIL_POINTS)
     const blade = points.slice(-BLADE_POINTS)
     if (trail.length > 1) {
-      const trailD = toPathData(trail)
+      const trailD = toSmoothPathData(trail)
       this.appendPath('blade-trail blade-trail--wide', trailD)
       this.appendPath('blade-trail blade-trail--mid', trailD)
     }
-    if (blade.length > 1) this.appendPath('blade-edge', toPathData(blade))
+    if (blade.length > 1) this.appendPath('blade-edge', toSmoothPathData(blade))
 
     const last = points[points.length - 1]
     const tip = createSvgElement('circle')
