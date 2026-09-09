@@ -36,6 +36,7 @@ import {
   validateConnection,
   typeConnectionDef,
   type ValidationResult,
+  GRAPH_VIEWPORT_KEY,
 } from '@mini-canvas/canvas-core-v2'
 import {
   createMiniCanvasHost,
@@ -106,10 +107,17 @@ const props = withDefaults(
     maxZoom?: number
     /** 挂到 window 的调试 key；传空则不挂 */
     windowKey?: string
+    /**
+     * 是否持久化画布视口(zoom+平移)并在下次启动恢复(与 nodes/edges 一样落盘，走 save 的 canvas 域)。
+     * 缺省开。首次(无存档)会对所有节点 fitView 一次让图居中；此后记住用户停的位置，刷新不再重置视野。
+     * 宿主想自己管理初始视口(或不要 viewport 落盘)时设 false。
+     */
+    persistViewport?: boolean
   }>(),
   {
     minZoom: 0.2,
     maxZoom: 2,
+    persistViewport: true,
   },
 )
 
@@ -276,6 +284,66 @@ function syncFromStore(): void {
   log.log(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
 }
 
+// ==================== 视口(view)持久化与恢复 ====================
+// 视口与 graph 一样属于"整图画布状态"：nodes/edges 落盘了，视图停在哪(zoom+平移)也该记住，
+// 否则刷新后视野重置(回到 (0,0) 或每次强制 fitView)，用户在别处看的大图又得重新翻回去。
+// 行为：
+//   1) boot 时读存档 viewport(GRAPH_VIEWPORT_KEY)；CanvasSurface 首次挂载(视口 backend 已 attach)后：
+//      - 有存档 → setViewport 恢复到上次停的位置；
+//      - 无存档(首次/无历史) → 对所有节点 fitView 一次让 seed/恢复的图居中，并把结果存为基线。
+//   2) 视图移动/缩放结束(onMoveEnd)把当前 viewport 落盘，后续刷新即可还原。
+//   首次 fitView 依赖节点实测尺寸(text/image 自适应节点首帧 dimensions=0 会算出空包围盒 no-op)，
+//   故带重试调度，直到某次真正改变了视口或尝试用尽。用 persistViewport=false 可整体关掉。
+let stopViewportRestore: (() => void) | undefined
+let viewportTimers: ReturnType<typeof setTimeout>[] = []
+/** boot 时读到的存档视口；undefined = 从未存过(首次/无历史)，走 fitView 基线 */
+const savedViewport = shallowRef<{ x: number; y: number; zoom: number } | undefined>()
+
+/** 首次/无存档：对所有节点 fitView 一次(带重试等节点量测就绪)，成功后把结果存为基线 */
+function fitViewFirstRun(): void {
+  const h = hostRef.value
+  if (!h) return
+  const initial = h.viewport.getViewport()
+  const delays = [80, 150, 300, 600, 1000]
+  let k = 0
+  const attempt = (): void => {
+    const hh = hostRef.value
+    if (!hh) return
+    hh.viewport.fitView(0.15)
+    const v = hh.viewport.getViewport()
+    const moved =
+      Math.abs(v.x - initial.x) > 0.5 || Math.abs(v.y - initial.y) > 0.5 || Math.abs(v.zoom - initial.zoom) > 0.0001
+    if (moved) {
+      hh.save.set(GRAPH_VIEWPORT_KEY, v, 'canvas') // 把基线落盘，二次刷新也稳定恢复
+      return
+    }
+    if (k < delays.length) {
+      viewportTimers.push(setTimeout(attempt, delays[k]))
+      k++
+    }
+  }
+  attempt()
+}
+
+/** 移动/缩放结束：把当前 viewport 落盘(与 graph 同走 save，防抖 flush 统一) */
+function persistViewport(): void {
+  const h = hostRef.value
+  const surface = surfaceRef.value
+  if (!h) return
+  const vp = surface?.getViewport?.()
+  if (vp) h.save.set(GRAPH_VIEWPORT_KEY, vp, 'canvas')
+}
+
+stopViewportRestore = watch(surfaceRef, (surface) => {
+  if (!surface || !hostRef.value || !props.persistViewport) return
+  // 只需首帧执行一次；后续 VueFlow 重挂(epoch bump)不应再动视口
+  stopViewportRestore?.()
+  viewportTimers = []
+  const saved = savedViewport.value
+  if (saved) hostRef.value.viewport.setViewport(saved)
+  else fitViewFirstRun()
+})
+
 // ==================== 通用交互事件 ====================
 
 function onNodeDragStart(e: NodeDragEvent): void {
@@ -309,10 +377,11 @@ function onMoveStart(): void {
   emitMove(RenderEvents.MoveStart)
 }
 
-/** 视图平移/缩放结束：清 paneDragging（与 start 对称，无 wheel/pan 配对残留问题） */
+/** 视图平移/缩放结束：清 paneDragging（与 start 对称，无 wheel/pan 配对残留问题）；并把停的位置落盘 */
 function onMoveEnd(): void {
   endViewportMove(interaction)
   emitMove(RenderEvents.MoveEnd)
+  if (props.persistViewport) persistViewport()
 }
 
 /** emit 带当前视口的视图事件（host 未就绪则跳过） */
@@ -870,6 +939,13 @@ onMounted(async () => {
     window.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', flushSave)
 
+    // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
+    // 在 booting=false(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
+    if (props.persistViewport) {
+      const vp = await host.save.get<{ x: number; y: number; zoom: number }>(GRAPH_VIEWPORT_KEY, 'canvas')
+      savedViewport.value = vp
+    }
+
     booting.value = false
     emit('ready', host)
   } catch (err) {
@@ -925,6 +1001,9 @@ onBeforeUnmount(() => {
   unsubEdge?.()
   unsubSel?.()
   stopEdgeOnTopWatch?.()
+  stopViewportRestore?.()
+  for (const t of viewportTimers) clearTimeout(t)
+  viewportTimers = []
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)
   window.removeEventListener('visibilitychange', onVisibilityChange)
