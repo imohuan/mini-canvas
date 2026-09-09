@@ -86,24 +86,30 @@ function formatByStep(v: string | number | boolean, s: SettingSchema): string {
 }
 
 // —— number 滑块拖动的"灵敏度"控制 ——
-// 把原生"点哪跳哪/固定 step"换成**位移累加式**：按下记录起点值与起点坐标，拖动时按
-// "水平位移 × 缩放比"折算成相对位移加回起点。值始终 snapToGrid 回 schema.step 网格，
-// **绝不产生出格小数**（step=1 就永远是整数，step=0.05 就永远 0.05 的倍数）。
+// 把原生"点哪跳哪/固定 step"换成**位移累加式**：按下时固定一个基准（起点值 + 起点指针），
+// 拖动只按"相对按下点的总位移"折算增量加回起点值，再吸附回 schema.step 网格。
+// 值永远在 step 网格上，绝不产生出格小数（step=1 就整数）。
 //
-// 手感："多少像素算多少进度"由 zoom 决定 ——
-//   NORMAL_ZOOM = 1  ：横跨整个轨道 ≈ 走满 [min,max]（接近原生 range 一整段的手感）
-//   CTRL_ZOOM   = 0.1：位移 ×0.1，按住 Ctrl 时同样拖动只走十分之一，便于精确停到某格
-// 拖动中按/松 Ctrl 实时切换缩放，值不跳变（都以"起点值 + 累计缩放位移"算）。
+// 手感：Ctrl 按住时位移 ×0.1（CTRL_ZOOM），同样拖一段只走十分之一，便于精确停格。
+// 关键：基准在 pointerdown 固定一次，**不要**每帧顺移基准点，否则累加被抵消、缩放失效，
+// 变成滑块 1:1 跟手（早期 bug）。值显示只靠受控 :value，不手动写 el.value（避免闪烁）。
 const NORMAL_ZOOM = 1
 const CTRL_ZOOM = 0.1
 let dragging = false
-let dragStartValue = 0 // 按下时的值（已吸附在 step 网格上）
-let dragStartX = 0 // 按下时指针 clientX
+let startClientX = 0 // 按下时指针 clientX（固定基准）
+let startValue = 0 // 按下时（已吸附在 step 网格上）的值（固定基准）
+let dragZoom = NORMAL_ZOOM // 本次拖动用的缩放（按下时锁定，中途切换 Ctrl 不跳变）
 const rangeEl = ref<HTMLInputElement | null>(null)
 
 /** 该字段的基准步进（schema.step，缺省 1）；小数比例字段须显式给 step */
 function baseStep(): number {
   return (entry.value?.schema as SettingSchema).step ?? 1
+}
+
+/** 量程跨度 max-min */
+function rangeSpan(): number {
+  const s = entry.value?.schema as SettingSchema
+  return (Number(s.max) || 100) - (Number(s.min) || 0)
 }
 
 /** 把 x 吸附到 step 网格（以 0 为基准），并夹在 [min,max] 内，规整浮点尾巴 */
@@ -115,64 +121,53 @@ function snapToGrid(x: number, step: number): number {
   return Math.min(max, Math.max(min, Number(snapped.toFixed(3))))
 }
 
-function rangeSpan(): number {
+/** 当前指针位置对应的"原生直接值"（整段量程内线性） */
+function rawValueAt(el: HTMLInputElement, clientX: number): number {
   const s = entry.value?.schema as SettingSchema
-  return (Number(s.max) || 100) - (Number(s.min) || 0)
-}
-
-/** 相对位移累加 + 吸附 + 落库；返回当前吸附后的值 */
-function applyDelta(el: HTMLInputElement, dx: number, ctrl: boolean): number {
-  const span = rangeSpan()
-  if (span <= 0 || !el.clientWidth) return dragStartValue
-  const zoom = ctrl ? CTRL_ZOOM : NORMAL_ZOOM
-  const step = baseStep()
-  // dx 占轨道宽度的比例 × 整段跨度 × 缩放 = 应增的"值量"，加到起点后吸附到 step 网格
-  const val = snapToGrid(dragStartValue + (dx / el.clientWidth) * span * zoom, step)
-  if (entry.value) set(entry.value.key, val)
-  el.value = String(val)
-  return val
+  const min = Number(s.min) || 0
+  const max = Number(s.max) || 100
+  const rect = el.getBoundingClientRect()
+  if (!rect.width) return 0
+  const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  return min + ratio * (max - min)
 }
 
 function onRangePointerDown(e: PointerEvent): void {
   const target = e.currentTarget as HTMLInputElement
   if (!target) return
   dragging = true
+  dragZoom = e.ctrlKey ? CTRL_ZOOM : NORMAL_ZOOM
   const s = entry.value?.schema as SettingSchema
-  dragStartValue = numberValue(entry.value ? entry.value.value : undefined, s)
-  dragStartX = e.clientX
+  startValue = snapToGrid(rawValueAt(target, e.clientX), baseStep())
+  startClientX = e.clientX
   try {
     target.setPointerCapture(e.pointerId)
   } catch {
     /* noop */
   }
-  // 点按到轨道某处：把起点吸附到该处（原生"点哪到哪"），再从此细拖
-  const rect = target.getBoundingClientRect()
-  if (rect.width && s.min !== undefined && s.max !== undefined) {
-    const ratio = (e.clientX - rect.left) / rect.width
-    const clicked = Number(s.min) + ratio * (Number(s.max) - Number(s.min))
-    dragStartValue = snapToGrid(clicked, baseStep())
-    dragStartX = e.clientX
-    applyDelta(target, 0, e.ctrlKey)
+  // 点按即把值跳到该处（原生"点哪到哪"），作为拖动的起点
+  if (entry.value) {
+    set(entry.value.key, startValue)
+    coalescer.flush()
   }
 }
 
 function onRangePointerMove(e: PointerEvent): void {
-  if (!dragging) return
+  if (!dragging || !entry.value) return
   const el = e.currentTarget as HTMLInputElement
-  const val = applyDelta(el, e.clientX - dragStartX, e.ctrlKey)
-  // 缩放切换时避免跳变：把"基准点"顺移到当前值与位移对齐处（按住/松开 Ctrl 不闪跳）
-  dragStartX = e.clientX
-  dragStartValue = val
+  if (!el.clientWidth) return
+  const span = rangeSpan()
+  if (span <= 0) return
+  // 相对按下点的总位移 × 缩放 = 增量；加到按下起点值再吸附网格
+  const dx = e.clientX - startClientX
+  const val = snapToGrid(startValue + (dx / el.clientWidth) * span * dragZoom, baseStep())
+  set(entry.value.key, val)
 }
 
 function endRangeDrag(): void {
   if (!dragging) return
   dragging = false
-  if (!entry.value) return
-  // 值一路都在 step 网格上；落库并立即冲刷，保证最终值生效
-  const el = rangeEl.value
-  const val = el ? Number(el.value) : numberValue(entry.value.value, entry.value.schema)
-  set(entry.value.key, Number.isFinite(val) ? val : dragStartValue)
+  // 值在 move 时已算好并经受控 :value 显示，这里只冲刷合帧，确保最终值落库
   coalescer.flush()
 }
 
