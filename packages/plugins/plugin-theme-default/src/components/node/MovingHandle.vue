@@ -24,7 +24,7 @@ const props = defineProps<{
   radius?: number
   /** 离开后圆球停在节点外侧的静止偏移 px：球心距节点边缘的距离（handleRestOffset=36） */
   restOffset?: number
-  /** 兼容保留（不再参与位置计算）：旧版让球心与光标错开的距离 */
+  /** hover 跟随时球心与光标错开的距离 px：沿 outward 方向再往外推，避免球盖住鼠标（handleCursorGap=24） */
   cursorGap?: number
   /** 圆球尺寸 px（handleButtonSize=32） */
   buttonSize?: number
@@ -262,8 +262,11 @@ function updatePosition(event: MouseEvent) {
   mouseX.value = clamp(outward, 0, shapeWidth.value)
   mouseY.value = clamp(rawY, -zoneHeight.value / 2, zoneHeight.value / 2)
 
-  // 球心精确落在鼠标点（中心对齐）：x=向外距离、y=垂直偏移（方向符号已含）。
-  commitPosition(direction.value * mouseX.value, mouseY.value)
+  // 球心跟鼠标保持"光标间隙"：沿 outward 方向再多往外推 cursorGap px，避免球把鼠标盖住。
+  // 若鼠标已贴近 zone 外沿则顶到最外端不越界；reset/静止位仍只由 restOffset 决定（见 resetPosition/restorePosition）。
+  const gap = props.cursorGap ?? 22
+  const followOutward = clamp(mouseX.value + gap, 0, shapeWidth.value)
+  commitPosition(direction.value * followOutward, mouseY.value)
 }
 
 // 端口外观参数(端口偏移/按钮/区域几何)变化 → 立即把按钮/调试点复位到新静止位，
