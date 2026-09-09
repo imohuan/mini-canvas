@@ -1,0 +1,1 @@
+{"root":["./src/edgecuttingconfig.ts","./src/edgecuttingcore.ts","./src/edgecuttingoverlay.ts","./src/edgecuttingplugin.ts","./src/env.d.ts","./src/geometry.ts","./src/index.ts","./src/__tests__/edgecuttingcore.test.ts","./src/__tests__/geometry.test.ts"],"version":"6.0.3"}

@@ -512,7 +512,6 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
-        {{ showSourceHandle && !blockedSourcePort }}
         <component :is="content" v-if="content" :id="id" :data="data" />
         <div v-else class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
