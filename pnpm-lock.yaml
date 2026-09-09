@@ -750,6 +750,9 @@ importers:
       '@mini-canvas/plugin-context-menu':
         specifier: workspace:*
         version: link:../plugins/plugin-context-menu
+      '@mini-canvas/plugin-edge-cutting':
+        specifier: workspace:*
+        version: link:../plugins/plugin-edge-cutting
       '@mini-canvas/plugin-group':
         specifier: workspace:*
         version: link:../plugins/plugin-group
