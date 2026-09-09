@@ -85,18 +85,20 @@ function formatByStep(v: string | number | boolean, s: SettingSchema): string {
   return n.toFixed(d)
 }
 
-// —— number 滑块 Ctrl+拖动的精细微调 ——
-// 原生 range 只能按固定 step 吸附，无法临时换成 0.1。这里改用手算：把指针位置换算成
-// [min,max] 内的值。拖动时若"按住 Ctrl"则按 0.1 细步（便于微调），否则按 schema.step；
-// 结束拖动（pointerup/cancel）时把值吸附回 schema.step 网格 —— step=1 的整数字段拖完
-// 不会残留 0.x 小数。
+// —— number 滑块拖动的"灵敏度"控制 ——
+// 把原生"点哪跳哪/固定 step"换成**位移累加式**：按下记录起点值与起点坐标，拖动时按
+// "水平位移 × 缩放比"折算成相对位移加回起点。值始终 snapToGrid 回 schema.step 网格，
+// **绝不产生出格小数**（step=1 就永远是整数，step=0.05 就永远 0.05 的倍数）。
 //
-// 坑：DOM 的 <input type=range step=1> 校验会把 value 钳回 step 网格（写 1.2 实际存 1），
-// 所以细调的小数**不能**靠 el.value 承载/回读，否则松手吸附读到的永远是整数、小数照常入库。
-// 这里用一个局部变量 valueNow 始终记录"意图值"，吸附与落库都以它为准。
-const fineStep = 0.1
+// 手感："多少像素算多少进度"由 zoom 决定 ——
+//   NORMAL_ZOOM = 1  ：横跨整个轨道 ≈ 走满 [min,max]（接近原生 range 一整段的手感）
+//   CTRL_ZOOM   = 0.1：位移 ×0.1，按住 Ctrl 时同样拖动只走十分之一，便于精确停到某格
+// 拖动中按/松 Ctrl 实时切换缩放，值不跳变（都以"起点值 + 累计缩放位移"算）。
+const NORMAL_ZOOM = 1
+const CTRL_ZOOM = 0.1
 let dragging = false
-let valueNow = NaN // 拖动中指针算出的意图值（可含小数）
+let dragStartValue = 0 // 按下时的值（已吸附在 step 网格上）
+let dragStartX = 0 // 按下时指针 clientX
 const rangeEl = ref<HTMLInputElement | null>(null)
 
 /** 该字段的基准步进（schema.step，缺省 1）；小数比例字段须显式给 step */
@@ -113,76 +115,79 @@ function snapToGrid(x: number, step: number): number {
   return Math.min(max, Math.max(min, Number(snapped.toFixed(3))))
 }
 
+function rangeSpan(): number {
+  const s = entry.value?.schema as SettingSchema
+  return (Number(s.max) || 100) - (Number(s.min) || 0)
+}
+
+/** 相对位移累加 + 吸附 + 落库；返回当前吸附后的值 */
+function applyDelta(el: HTMLInputElement, dx: number, ctrl: boolean): number {
+  const span = rangeSpan()
+  if (span <= 0 || !el.clientWidth) return dragStartValue
+  const zoom = ctrl ? CTRL_ZOOM : NORMAL_ZOOM
+  const step = baseStep()
+  // dx 占轨道宽度的比例 × 整段跨度 × 缩放 = 应增的"值量"，加到起点后吸附到 step 网格
+  const val = snapToGrid(dragStartValue + (dx / el.clientWidth) * span * zoom, step)
+  if (entry.value) set(entry.value.key, val)
+  el.value = String(val)
+  return val
+}
+
 function onRangePointerDown(e: PointerEvent): void {
   const target = e.currentTarget as HTMLInputElement
   if (!target) return
   dragging = true
+  const s = entry.value?.schema as SettingSchema
+  dragStartValue = numberValue(entry.value ? entry.value.value : undefined, s)
+  dragStartX = e.clientX
   try {
     target.setPointerCapture(e.pointerId)
   } catch {
     /* noop */
   }
-  applyRangeFromPointer(target, e.clientX)
+  // 点按到轨道某处：把起点吸附到该处（原生"点哪到哪"），再从此细拖
+  const rect = target.getBoundingClientRect()
+  if (rect.width && s.min !== undefined && s.max !== undefined) {
+    const ratio = (e.clientX - rect.left) / rect.width
+    const clicked = Number(s.min) + ratio * (Number(s.max) - Number(s.min))
+    dragStartValue = snapToGrid(clicked, baseStep())
+    dragStartX = e.clientX
+    applyDelta(target, 0, e.ctrlKey)
+  }
 }
 
 function onRangePointerMove(e: PointerEvent): void {
   if (!dragging) return
-  // 拖动中按/松 Ctrl 实时生效：按住 → 0.1 细步
-  applyRangeFromPointer(e.currentTarget as HTMLInputElement, e.clientX, e.ctrlKey)
+  const el = e.currentTarget as HTMLInputElement
+  const val = applyDelta(el, e.clientX - dragStartX, e.ctrlKey)
+  // 缩放切换时避免跳变：把"基准点"顺移到当前值与位移对齐处（按住/松开 Ctrl 不闪跳）
+  dragStartX = e.clientX
+  dragStartValue = val
 }
 
-/** 结束拖动：把意图值吸附回 step 网格并落库，避免残留小数（如 Ctrl 细调出的 0.x） */
 function endRangeDrag(): void {
   if (!dragging) return
   dragging = false
   if (!entry.value) return
-  if (!Number.isFinite(valueNow)) {
-    // 没有细调移动（纯点按）→ 兜底用当前存储值归整
-    valueNow = numberValue(entry.value.value, entry.value.schema)
-  }
-  const val = snapToGrid(valueNow, baseStep())
+  // 值一路都在 step 网格上；落库并立即冲刷，保证最终值生效
   const el = rangeEl.value
-  if (el) {
-    // 回显归整后的整数值（DOM 受 step 钳制，只能显示步进值）
-    el.value = String(val)
-    valueNow = val
-  }
-  // push + 立即 flush：吸附结果成为最终落库值，拖拽期的细调小数不残留
-  set(entry.value.key, val)
+  const val = el ? Number(el.value) : numberValue(entry.value.value, entry.value.schema)
+  set(entry.value.key, Number.isFinite(val) ? val : dragStartValue)
   coalescer.flush()
-}
-
-// 把指针水平位置换算成 [min,max] 内按"当前是否细步"吸附后的值
-function applyRangeFromPointer(el: HTMLInputElement, clientX: number, fine = false): void {
-  const rect = el.getBoundingClientRect()
-  if (!rect.width) return
-  const step = fine ? fineStep : baseStep()
-  const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-  const s = entry.value?.schema as SettingSchema
-  const min = Number(s.min) || 0
-  const max = Number(s.max) || 100
-  const raw = min + ratio * (max - min)
-  const val = snapToGrid(raw, step)
-  valueNow = val
-  // DOM 只能显示步进网格内的值（step=1 时小数会被钳成整数，仅用于视觉，真实值走 valueNow）
-  el.value = String(snapToGrid(val, baseStep()))
-  if (entry.value) set(entry.value.key, val)
 }
 
 function onRangeKeydown(e: KeyboardEvent): void {
-  // 方向键微调：Ctrl+方向 = 0.1 细步，否则按 schema step
-  const fine = e.ctrlKey || e.metaKey
+  // 方向键：每次 ± 一个 step（值保持在网格上，天然不会出格）
   const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
   if (!dir || !entry.value) return
   e.preventDefault()
-  const step = fine ? fineStep : baseStep()
+  const step = baseStep()
   const cur = numberValue(entry.value.value, entry.value.schema)
   const val = snapToGrid(cur + dir * step, step)
-  valueNow = val
   set(entry.value.key, val)
   coalescer.flush()
   const el = rangeEl.value
-  if (el) el.value = String(snapToGrid(val, baseStep()))
+  if (el) el.value = String(val)
 }
 const fieldId = 'sf-' + props.fieldKey
 </script>
