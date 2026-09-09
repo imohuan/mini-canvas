@@ -32,6 +32,7 @@
     "@mini-canvas/plugin-canvas-export": "workspace:*",
     "@mini-canvas/plugin-clipboard": "workspace:*",
     "@mini-canvas/plugin-context-menu": "workspace:*",
+    "@mini-canvas/plugin-edge-cutting": "workspace:*",
     "@mini-canvas/plugin-group": "workspace:*",
     "@mini-canvas/plugin-mini-map": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",

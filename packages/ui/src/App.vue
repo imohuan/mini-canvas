@@ -27,6 +27,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
+import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
 import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
 import { alignArrangePlugin } from '@mini-canvas/plugin-align-arrange'
@@ -43,6 +44,7 @@ const plugins = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
+  edgeCuttingPlugin, // 连接线切割：按住 Alt 拖拽"刀光"划过连线即可删除
   canvasCommandsPlugin, // 建/删/撤销命令
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
   alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
