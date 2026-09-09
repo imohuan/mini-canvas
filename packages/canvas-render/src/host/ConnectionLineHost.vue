@@ -56,6 +56,8 @@ const defaultPath = computed(() => {
     :source-y="start.y"
     :target-x="end.x"
     :target-y="end.y"
+    :source-position="props.lineProps.sourcePosition"
+    :target-position="props.lineProps.targetPosition"
     :has-snap="hasSnap"
     :validate-reason="''"
   />
