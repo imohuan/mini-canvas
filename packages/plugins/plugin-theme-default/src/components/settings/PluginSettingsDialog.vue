@@ -298,14 +298,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <div v-for="item in navEntries" :key="item.key" class="psd-nav-item"
               :class="{ active: isNavActive(item.key), slot: item.kind === 'nav' }" role="button" tabindex="0"
               @click="select(item.key)" @keydown.enter.prevent="select(item.key)">
-              <!-- 默认一级项：直接画文本（nav label = group 第一个 / 分段；扁平分组即它自己） -->
+              <!-- 默认一级项：分组没有图标，直接显示一级名文本（nav label = group 第一个 / 分段；扁平分组即它自己） -->
               <span v-if="item.kind === 'section'" class="psd-nav-inner">
-                <span class="psd-nav-ico">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/>
-                    <path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>
-                  </svg>
-                </span>
                 <span class="psd-nav-txt">{{ item.key }}</span>
               </span>
               <!-- 一级导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
@@ -508,24 +502,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   min-width: 0;
 }
 
-.psd-nav-ico {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  color: #6b7280;
-  background: rgba(0, 0, 0, 0.04);
-  transition: background 0.18s ease, color 0.18s ease;
-}
-
-.psd-nav-ico svg {
-  width: 16px;
-  height: 16px;
-}
-
 .psd-nav-txt {
   flex: 1;
   min-width: 0;
@@ -535,15 +511,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.psd-nav-item:hover .psd-nav-ico {
-  background: rgba(0, 0, 0, 0.08);
-}
-
-.psd-nav-item.active .psd-nav-ico {
-  color: #0891b2;
-  background: rgba(8, 145, 178, 0.16);
 }
 
 .psd-nav-item.active .psd-nav-txt {
