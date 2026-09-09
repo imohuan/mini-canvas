@@ -29,9 +29,9 @@
  * 打开/关闭：宿主(App.vue)用 v-if="settingsOpen" 控制本面板是否渲染；本面板内部 ✕ / 点遮罩 / Esc
  * 经 ctx.emit('settings:ui-close') 通知宿主关闭（宿主 onReady 里 ctx.on 订阅置 settingsOpen=false）。
  */
-import { computed, markRaw, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, markRaw, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from './SettingsSchemaField.vue'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -48,6 +48,10 @@ const emit = defineEmits<{
 }>()
 
 const { ctx } = useCanvasRender()
+
+// —— 下发"标准 schema 字段渲染器"给本面板内的内容插槽组件（settingsGroup/<key> occupant）——
+// 插件自定义组件（预览UI等）经 injectSettingsFieldRenderer() 拿到后，可 <component :is> 直接渲染某字段控件
+provide(SETTINGS_FIELD_RENDERER, SettingsSchemaField)
 
 const SEP = '/'
 
