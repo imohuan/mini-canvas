@@ -14,7 +14,6 @@ import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'
 import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
-  Position,
   getSourcePosition,
   getTargetPosition,
   buildEdgePath,
@@ -105,11 +104,9 @@ const isHighlighted = computed(() =>
 )
 
 const sourcePos = computed(() => getSourcePosition(props.sourcePosition, props.sourceHandleId))
-const targetPos = computed(() =>
-  isTemporaryEdge.value
-    ? (sourcePos.value === Position.Right ? Position.Left : Position.Right)
-    : getTargetPosition(props.targetPosition, props.targetHandleId),
-)
+// 临时拖线：sourcePosition/targetPosition 由 vue-flow 从源端口真实方向透传过来（ConnectionLine 已不再硬编码），
+// 直接复用 getTargetPosition 的默认归一逻辑即可，无需再在组件层做位置翻转。
+const targetPos = computed(() => getTargetPosition(props.targetPosition, props.targetHandleId))
 
 const edgePath = computed(() =>
   buildEdgePath(
