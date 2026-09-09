@@ -58,10 +58,10 @@ export const Config = {
   showCutPath: {
     type: 'boolean',
     default: true,
-    label: '显示完整轨迹',
+    label: '切割范围：完整轨迹',
     group: '连线切割',
     description:
-      '是否画出整条 Alt 拖拽轨迹。关闭后只显示刀锋（光标附近短尾迹）。',
+      '开启：显示完整拖拽轨迹，并按整条轨迹切割（划到哪删到哪）。关闭：只显示刀锋短尾迹，且只按刀锋短路径切割——完整长轨迹扫到、但刀锋没真正碰到的地方不会误删。',
   },
 } satisfies ConfigSchema
 
