@@ -53,6 +53,78 @@ function set(k: string, v: string | number | boolean): void {
 function numberValue(v: string | number | boolean, s: SettingSchema): number {
   return Number(v) || Number(s.default)
 }
+
+// —— number 滑块 Ctrl+拖动的精细微调 ——
+// 原生 range 会按 step 吸附，无法临时改成 0.1 细步。这里改用手算：把指针位置按滑块
+// 几何换算成 [min,max] 内的值，按下 Ctrl 时步进为 0.1，否则回落到 schema.step。
+const ctrlHeld = ref(false)
+let dragging = false
+const rangeEl = ref<HTMLInputElement | null>(null)
+
+function onRangePointerDown(e: PointerEvent): void {
+  const target = e.currentTarget as HTMLInputElement
+  if (!target) return
+  dragging = true
+  ctrlHeld.value = e.ctrlKey
+  try {
+    target.setPointerCapture(e.pointerId)
+  } catch {
+    /* noop */
+  }
+  applyRangeFromPointer(target, e.clientX)
+}
+
+function onRangePointerMove(e: PointerEvent): void {
+  if (!dragging) return
+  // 拖动过程中 Ctrl 按下/松开也实时生效
+  ctrlHeld.value = e.ctrlKey
+  applyRangeFromPointer(e.currentTarget as HTMLInputElement, e.clientX)
+}
+
+function endRangeDrag(): void {
+  dragging = false
+}
+
+function currentStep(): number {
+  // 按住 Ctrl → 精细 0.1 步进；否则用 schema 的 step
+  return ctrlHeld.value ? 0.1 : ((entry.value?.schema as SettingSchema).step ?? 1)
+}
+
+// 把指针水平位置换算成 [min,max] 内按当前步进吸附后的值
+function applyRangeFromPointer(el: HTMLInputElement, clientX: number): void {
+  const rect = el.getBoundingClientRect()
+  if (!rect.width) return
+  const min = Number(el.min) || 0
+  const max = Number(el.max) || 100
+  const step = currentStep()
+  const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  const raw = min + ratio * (max - min)
+  const val = Math.min(max, Math.max(min, Math.round(raw / step) * step))
+  if (entry.value) set(entry.value.key, Number(val.toFixed(3)))
+  el.value = String(val)
+}
+
+function onRangeKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Control') {
+    ctrlHeld.value = true
+    return
+  }
+  // 方向键微调：Ctrl+方向 = 0.1 细步，否则按 schema step
+  const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
+  if (!dir || !entry.value) return
+  e.preventDefault()
+  const min = Number(entry.value.schema.min) || 0
+  const max = Number(entry.value.schema.max) || 100
+  const step = currentStep()
+  const cur = numberValue(entry.value.value, entry.value.schema)
+  const val = Math.min(max, Math.max(min, Math.round((cur + dir * step) / step) * step))
+  set(entry.value.key, Number(val.toFixed(3)))
+  const el = rangeEl.value
+  if (el) el.value = String(val)
+}
+function onRangeKeyup(e: KeyboardEvent): void {
+  if (e.key === 'Control') ctrlHeld.value = false
+}
 const fieldId = 'sf-' + props.fieldKey
 </script>
 
@@ -76,9 +148,13 @@ const fieldId = 'sf-' + props.fieldKey
         <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
         <span class="sf-value-bubble">{{ entry.value }}</span>
       </div>
-      <input :id="fieldId" class="sf-range" type="range" :min="entry.schema.min ?? 0" :max="entry.schema.max ?? 100"
-        :step="entry.schema.step ?? 1" :value="numberValue(entry.value, entry.schema)"
-        @input="set(entry.key, Number(($event.target as HTMLInputElement).value))" />
+      <input ref="rangeEl" :id="fieldId" class="sf-range" type="range" :min="entry.schema.min ?? 0"
+        :max="entry.schema.max ?? 100" :step="entry.schema.step ?? 1"
+        :value="numberValue(entry.value, entry.schema)"
+        @pointerdown="onRangePointerDown" @pointermove="onRangePointerMove"
+        @pointerup="endRangeDrag" @pointercancel="endRangeDrag"
+        @keydown="onRangeKeydown" @keyup="onRangeKeyup"
+        @blur="ctrlHeld = false" />
     </template>
 
     <!-- boolean（toggle 开关） -->
