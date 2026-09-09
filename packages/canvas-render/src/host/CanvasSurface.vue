@@ -11,7 +11,7 @@
 // - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
 import { provide, shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
 import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
@@ -266,6 +266,7 @@ defineExpose({
       :node-types="nodeTypes"
       :edge-types="edgeTypes"
       :is-valid-connection="isValidConnection"
+      :connection-mode="ConnectionMode.Strict"
       :min-zoom="minZoom"
       :max-zoom="maxZoom"
       :selection-key-code="null"
