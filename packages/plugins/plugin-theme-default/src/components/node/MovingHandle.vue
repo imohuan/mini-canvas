@@ -201,15 +201,12 @@ const debugRestPoint = computed(() => {
   return { x, y: zoneHeight.value / 2 }
 })
 const debugMousePoint = computed(() => {
-  // 始终跟踪 button 圆心，而非 mouseX：
-  //   - 默认（无 hover、reset 后）：mouseX 停在 restOffset，但 button 实际 tuck 了 overlap 像素，
-  //     二者天然差 overlap，调试点必须用 buttonX 才能贴上圆心。
-  //   - 拖拽时：mouseX == buttonX 距离，方向 + overlap 间隙已含在 buttonX 里，跟随即可。
-  // buttonX 已是 anchor-local 距离（source 正向、target 负向），需按 svg-local + zoneOffset 重映：
-  //   source: svg-local.x = buttonX + zoneOffset
-  //   target: svg-local.x = shapeWidth - (-buttonX) + zoneOffset = shapeWidth + buttonX + zoneOffset
-  const x = isSource.value ? buttonX.value + zoneOffset.value : shapeWidth.value + buttonX.value + zoneOffset.value
-  return { x, y: zoneHeight.value / 2 + buttonY.value }
+  // 真实鼠标位置（mouseX/mouseY，距锚点 outward 与垂直偏移），不是 button 圆心：
+  //   - hover 跟随时：球沿 outward 比鼠标再远 cursorGap，鼠标点必须独立显示才能看清间隙。
+  //   - 静止/归位时：mouseX 停在 restOffset，buttonX 因 tuck overlap 更靠近卡边，鼠标点与 button 自然分开。
+  // svg-local 重映：source anchor.x=0 → x = mouseX + zoneOffset；target anchor.x=shapeWidth → x = shapeWidth - mouseX + zoneOffset
+  const x = isSource.value ? mouseX.value + zoneOffset.value : shapeWidth.value - mouseX.value + zoneOffset.value
+  return { x, y: zoneHeight.value / 2 + mouseY.value }
 })
 const debugViewBox = computed(() => `0 0 ${shapeWidth.value} ${zoneHeight.value}`)
 
