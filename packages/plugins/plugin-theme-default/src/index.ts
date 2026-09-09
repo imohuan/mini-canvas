@@ -234,6 +234,17 @@ export const Config: ConfigSchema = {
     group: "节点/标题",
     description: "低于该缩放值后标题跟随画布一起反向缩放（防标题无限放大的下限）。",
   },
+  // —— 节点 LOD：低细节阈值（缩放低于此值时节点进入低细节：隐标题条/隐端口/去阴影）——
+  nodeLodLowDetailZoom: {
+    type: "number",
+    default: 0.4,
+    min: 0.1,
+    max: 1,
+    step: 0.05,
+    label: "节点低细节阈值",
+    group: "节点/低细节",
+    description: "低于该缩放值后所有节点进入低细节模式（隐藏端口/标题条、去掉阴影）。",
+  },
   // —— 吸附带：theme-default 的节点吸附带 ——
   heightRatio: {
     type: "number",

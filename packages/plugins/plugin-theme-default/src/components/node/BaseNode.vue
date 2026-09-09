@@ -38,17 +38,30 @@ const CONNECT_FEEDBACK = {
 
 // —— 缩放 / LOD / 标题反缩放（v2 固定卡尺寸，标题宽=cardWidth×max(zoom,minZoom)）——
 const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
-const LOW_DETAIL_ZOOM = 0.4
-// 标题位置偏移 / 缩放阈值：来自本插件 Config（节点/标题），对齐 v1 core 的 nodeTitleOffset / nodeTitleScaleMinZoom。
-// settings 单一数据源非 Vue 响应式，故会话内取一次初值；改配置需刷新/重进生效（方案 A）。
-const numSetting = (key: string, fallback: number): number => {
-  const v = ctx?.settings?.get(key)
+// 节点外观阈值：全部来自本插件 Config（节点/标题、节点/LOD），对齐 v1 core 的 nodeTitleOffset /
+// nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，故这里用 ref +
+// onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
+const settingsStore = () => ctx?.settings
+const numOf = (key: string, fallback: number): number => {
+  const v = settingsStore()?.get(key)
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
-const TITLE_OFFSET = numSetting('titleOffset', 12)
-const TITLE_MIN_ZOOM = numSetting('titleScaleMinZoom', 0.5)
-const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM)
-const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM))
+const TITLE_OFFSET = ref(numOf('titleOffset', 12))
+const TITLE_MIN_ZOOM = ref(numOf('titleScaleMinZoom', 0.5))
+const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
+const applyTitleSetting = (key: string, value: unknown): void => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return
+  if (key === 'titleOffset') TITLE_OFFSET.value = value
+  else if (key === 'titleScaleMinZoom') TITLE_MIN_ZOOM.value = value
+  else if (key === 'nodeLodLowDetailZoom') LOW_DETAIL_ZOOM.value = value
+}
+const titleSettingOff = settingsStore()?.onChange('theme-default', (key, value) => {
+  applyTitleSetting(key, value)
+})
+onBeforeUnmount(() => titleSettingOff?.dispose())
+
+const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM.value)
+const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
 // —— 节点标题（data.label ?? type）——
 const nodeLabel = computed(() => {
@@ -71,14 +84,14 @@ const cardResizable = card.resizable
 const cardIsResizing = card.isResizing
 
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
-const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM))
+const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 // 卡片边框反缩放补偿
 const cardBorderComp = computed(() => Math.max(1 / zoom.value, 1))
 const titlePositionStyle = computed(() => ({
   transform: `scale(${titleScale.value})`,
   transformOrigin: 'left bottom',
   left: `${-cardBorderComp.value}px`,
-  bottom: `calc(100% + ${TITLE_OFFSET * titleScale.value + cardBorderComp.value}px)`,
+  bottom: `calc(100% + ${TITLE_OFFSET.value * titleScale.value + cardBorderComp.value}px)`,
   width: `${titleCanvasWidth.value}px`,
 }))
 
