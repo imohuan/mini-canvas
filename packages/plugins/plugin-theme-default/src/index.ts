@@ -245,6 +245,18 @@ export const Config: ConfigSchema = {
     group: "节点/低细节",
     description: "低于该缩放值后所有节点进入低细节模式（隐藏端口/标题条、去掉阴影）。",
   },
+  // —— 文本 LOD：文本节点内容的三级缩略（full 全文 → condensed 首行 → icon 缩略占位）——
+  textLodIconZoom: {
+    type: "number",
+    default: 0.18,
+    min: 0.05,
+    max: 1,
+    step: 0.05,
+    label: "文本缩略阈值",
+    group: "节点/文本LOD",
+    description:
+      "低于该缩放值，文本节点内容只显示灰色缩略占位（介于本文本LOD阈值与标题缩放阈值之间则只显示首行截断）。",
+  },
   // —— 吸附带：theme-default 的节点吸附带 ——
   heightRatio: {
     type: "number",
