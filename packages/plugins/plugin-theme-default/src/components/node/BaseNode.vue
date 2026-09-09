@@ -22,8 +22,8 @@ const props = defineProps<NodeProps>()
 // 节点类型都是本组件(VueFlow nodeTypes 全指到 BaseNode)，透传的 selected 等内部 prop 不落到根
 defineOptions({ inheritAttrs: false })
 
-// 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈
-const { registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone } = useCanvasRender()
+// 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈/内核上下文
+const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -39,8 +39,14 @@ const CONNECT_FEEDBACK = {
 // —— 缩放 / LOD / 标题反缩放（v2 固定卡尺寸，标题宽=cardWidth×max(zoom,minZoom)）——
 const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
 const LOW_DETAIL_ZOOM = 0.4
-const TITLE_MIN_ZOOM = 0.5
-const TITLE_OFFSET = 12
+// 标题位置偏移 / 缩放阈值：来自本插件 Config（节点/标题），对齐 v1 core 的 nodeTitleOffset / nodeTitleScaleMinZoom。
+// settings 单一数据源非 Vue 响应式，故会话内取一次初值；改配置需刷新/重进生效（方案 A）。
+const numSetting = (key: string, fallback: number): number => {
+  const v = ctx?.settings?.get(key)
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+const TITLE_OFFSET = numSetting('titleOffset', 12)
+const TITLE_MIN_ZOOM = numSetting('titleScaleMinZoom', 0.5)
 const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM)
 const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM))
 

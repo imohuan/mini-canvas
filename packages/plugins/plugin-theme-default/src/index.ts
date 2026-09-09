@@ -75,6 +75,16 @@ export const DEFAULT_THEME_DEBUG = {
   connectionSnapDebugVisible: true,
 } as const;
 
+/**
+ * 节点标题外观默认值（对齐 v1 core 的 nodeTitleOffset / nodeTitleScaleMinZoom，见 useCanvasStore）。
+ * nodeShell BaseNode 的浮标题（卡片上缘外、反向缩放）读这两项；位置偏移 = 标题底部到节点顶部的基础
+ * 屏幕间距，缩放阈值 = 低于该 zoom 后标题与卡片一起反缩放收缩的下限。作为本插件 config 的初始值。
+ */
+export const DEFAULT_THEME_TITLE = {
+  titleOffset: 12,
+  titleScaleMinZoom: 0.5,
+} as const;
+
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
 export const DEFAULT_THEME_SNAP_ZONE = {
   heightRatio: 0.8,
@@ -96,6 +106,11 @@ export const HANDLE_SETTING_KEYS: ReadonlyArray<
 export const DEBUG_SETTING_KEYS: ReadonlyArray<
   keyof typeof DEFAULT_THEME_DEBUG
 > = Object.keys(DEFAULT_THEME_DEBUG) as (keyof typeof DEFAULT_THEME_DEBUG)[];
+
+/** 本插件声明"可配置项 → 节点标题外观"的映射（BaseNode 浮标题读；对齐 v1 nodeTitleOffset/nodeTitleScaleMinZoom） */
+export const TITLE_SETTING_KEYS: ReadonlyArray<
+  keyof typeof DEFAULT_THEME_TITLE
+> = Object.keys(DEFAULT_THEME_TITLE) as (keyof typeof DEFAULT_THEME_TITLE)[];
 
 /** 本插件声明"可配置项 → 吸附带配置(SnapZoneConfig)"的映射 */
 export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
@@ -197,6 +212,27 @@ export const Config: ConfigSchema = {
       { value: "arc", label: "半椭圆" },
       { value: "rect", label: "矩形" },
     ],
+  },
+  // —— 节点标题：BaseNode 卡片上缘外浮标题条的外观（位置偏移 + 缩放阈值；对齐 v1 core 同名项）——
+  titleOffset: {
+    type: "number",
+    default: DEFAULT_THEME_TITLE.titleOffset,
+    min: 0,
+    max: 40,
+    step: 1,
+    label: "标题位置偏移",
+    group: "节点/标题",
+    description: "标题底部到节点顶部的基础屏幕间距；低于缩放阈值后随标题一起缩小。",
+  },
+  titleScaleMinZoom: {
+    type: "number",
+    default: DEFAULT_THEME_TITLE.titleScaleMinZoom,
+    min: 0.1,
+    max: 1,
+    step: 0.05,
+    label: "标题缩放阈值",
+    group: "节点/标题",
+    description: "低于该缩放值后标题跟随画布一起反向缩放（防标题无限放大的下限）。",
   },
   // —— 吸附带：theme-default 的节点吸附带 ——
   heightRatio: {
