@@ -60,7 +60,7 @@ export const inject = ['graph'] as string[]
  * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
  *
  * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象"归类、跨插件聚合。
- * image 节点字段归一级「节点」的 `节点/图片节点`；边框颜色字段归一级「主题」的 `主题/图片节点`（配色集中调）。
+ * image 节点字段归一级「节点」的 `节点/图片节点`；边框颜色字段归一级「常规」的 `常规/主题配色`（配色集中调）。
  * 视觉/外观相关的进阶编排（预览UI、字段渲染器下发）见 docs/代码开发/plugins/plugin-theme-default.md。
  */
 export const Config: ConfigSchema = {
@@ -85,9 +85,9 @@ export const Config: ConfigSchema = {
     type: 'boolean', default: true, label: '懒加载', group: '节点/图片节点',
     description: '开启后图片进入可视区域附近才真正开始加载，滚动到很远处的图不浪费带宽。',
   },
-  // —— 颜色统一归「主题/图片节点」——
+  // —— 颜色统一归「常规/主题配色」——
   borderColor: {
-    type: 'color', default: '#334155', label: '边框颜色', group: '主题/图片节点',
+    type: 'color', default: '#334155', label: '边框颜色', group: '常规/主题配色',
     description: '图片节点边框的颜色（开了边框后才显示）。',
   },
 }

@@ -110,8 +110,8 @@ export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
  * 内核装配时经它校验 + 补默认，apply(ctx, config) 收到的即完整 config。
  *
  * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象/功能"归类、跨插件聚合；
- * 视觉配色字段统一归到 `主题/…`（一个插件内有多个颜色时用第二个分段区分），方便在一处集中调色。
- * 本插件字段分属：节点(端口/吸附带)、边(连线)、主题(连线配色)、调试。
+ * 视觉配色统一收进一级「常规」下的 `常规/主题配色`（各插件颜色集中一处调）；调试开关在 `常规/调试`。
+ * 本插件字段分属：节点(端口/吸附带)、边(连线)、常规(主题配色/调试)。
  */
 export const Config: ConfigSchema = {
   // ===== 一级「节点」：节点自身的手柄端口 / 吸附带 / 节点内容外观（来自多个插件，二级 = 各插件块）=====
@@ -394,27 +394,28 @@ export const Config: ConfigSchema = {
     group: "边/连线",
     description: "发光色块峰值不透明度（越大越亮越实）。",
   },
-  // ===== 一级「主题」：各种插件的配色集中一处统一调（连线色 / 辉光色，后续其它插件颜色并入）=====
+  // ===== 一级「常规」：主题配色 / 调试 / 小地图等跨插件的常规设置收归一处 =====
+  // —— 主题配色：各种插件的颜色集中统一调（本插件 = 连线色/辉光色）——
   edgeColor: {
     type: "color",
     default: DEFAULT_THEME_EDGE.edgeColor,
     label: "连线颜色",
-    group: "主题/连线",
+    group: "常规/主题配色",
     description: "默认连线的颜色，改动后画布上现有连线实时跟随。",
   },
   edgeGlowColor: {
     type: "color",
     default: DEFAULT_THEME_EDGE.edgeGlowColor,
     label: "辉光颜色",
-    group: "主题/连线",
+    group: "常规/主题配色",
     description: "辉光/流光高亮使用的颜色（缺省跟随线色）。",
   },
-  // ===== 一级「调试」：开发校准开关（不进节点/边外观）=====
+  // —— 调试：开发校准开关 ——
   handleDebug: {
     type: "boolean",
     default: DEFAULT_THEME_DEBUG.handleDebug,
     label: "端口调试",
-    group: "调试",
+    group: "常规/调试",
     description:
       "打开后，端口上会画出半圆交互区/圆心/归位点/鼠标点辅助线，便于校准端口几何。",
   },
@@ -422,7 +423,7 @@ export const Config: ConfigSchema = {
     type: "boolean",
     default: DEFAULT_THEME_DEBUG.connectionSnapDebugVisible,
     label: "吸附调试",
-    group: "调试",
+    group: "常规/调试",
     description:
       "打开后，拖线悬停到某节点时画出它的端口吸附带与卡片接收区，便于校准吸附判定。",
   },
