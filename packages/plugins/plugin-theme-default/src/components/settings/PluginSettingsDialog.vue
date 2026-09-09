@@ -260,9 +260,6 @@ const contentBlocks = computed<ContentBlock[]>(() => {
   return blocks
 })
 
-// 右侧头部标题：一级下有多个二级时显示一级名（页签表二级）；否则显示完整 key（保持扁平分组观感）
-const headTitle = computed(() => (showTabs.value ? navOf(activeKey.value) : activeKey.value))
-
 // —— 关闭：✕ / 遮罩 / Esc（closeOnMask 才响应遮罩与 Esc）——
 function close(): void {
   emit('close')
@@ -312,13 +309,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             </div>
           </nav>
 
-          <!-- 右：标题 + (二级页签) + 内容 -->
+          <!-- 右：(二级页签) + 内容；内容区顶部不再重复标题，左导航选中即位置标识 -->
           <div class="psd-content">
-            <header class="psd-content-head">
-              <h3 class="psd-content-title">{{ headTitle }}</h3>
-              <span class="psd-content-sub">{{ headTitle }} 设置</span>
-            </header>
-
             <!-- 二级页签条：仅当一级下二级分组多于一个才显示（settingsNav 语义对称） -->
             <div v-if="showTabs" class="psd-tabs" role="tablist">
               <template v-for="t in tabs" :key="t.key">
@@ -528,28 +520,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   flex-direction: column;
   min-width: 0;
   padding-left: 8px;
-}
-
-.psd-content-head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 10px 10px 6px 16px;
-  flex-shrink: 0;
-}
-
-.psd-content-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.psd-content-sub {
-  display: inline-block;
-  font-size: 12px;
-  color: #9ca3af;
-  font-weight: 500;
 }
 
 /* ===== 二级页签条（仅一级下二级分组多于一个时出现） ===== */
