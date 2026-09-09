@@ -18,6 +18,14 @@ import RemapPanel from './RemapPanel.vue'
 import ShortcutKeys from './ShortcutKeys.vue'
 import { normalizeKeyForPlatform } from './keyLabels'
 
+/**
+ * 本组件根节点是 <Teleport>，Vue 无法把外部传入的 class/data-* 属性自动落到单个真实根元素上，
+ * 会产生 "Extraneous non-props attributes" 警告。SlotHost 会把 overlay occupant 的 class(如
+ * csurface-overlay-item) 与 data-slot-* 透传进来，故这里显式关闭属性继承，并手动把 $attrs
+ * 绑定到 teleport 后真正渲染的浮层根节点上，既消掉警告，也让这些属性语义化地落到实际 DOM。
+ */
+defineOptions({ inheritAttrs: false })
+
 const emit = defineEmits<{ close: [] }>()
 
 const { ctx } = useCanvasRender()
@@ -243,7 +251,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 <template>
   <Teleport to="body">
-    <div v-if="service && service.visible" class="shortcut-help-layer" @pointerdown.self="close" @contextmenu.prevent>
+    <div v-if="service && service.visible" v-bind="$attrs" class="shortcut-help-layer" @pointerdown.self="close" @contextmenu.prevent>
       <div class="shortcut-help-panel" @pointerdown.stop>
         <div class="shortcut-help-header">
           <div class="shortcut-help-title-block">
