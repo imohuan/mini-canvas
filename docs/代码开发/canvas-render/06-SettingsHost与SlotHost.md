@@ -154,8 +154,11 @@ SlotHost **不做定位/pointer-events/容器样式**——那是具体槽（如
 | 槽名 | 谁读 | 插件怎么填（示例） |
 |------|------|------------------|
 | `overlay` | CanvasSurface 里的 `<SlotHost slot="overlay">` | `ctx.slots.register('overlay', { component, order })` |
-| `settingsNav` | PluginSettingsDialog 左导航 | 塞自定义导航项 / 顶替某分组 tab |
-| `settingsGroup/<key>` | PluginSettingsDialog 右内容 | 接管某 key 的内容区（meta.mode: replace/prepend/append） |
+| `settingsNav` | PluginSettingsDialog 左导航 | 塞自定义**一级**导航项 / 顶替某一级 tab（id = 一级名，命中顶替，否则末尾追加自定义一级项） |
+| `settingsTab` | PluginSettingsDialog 二级页签条 | 定制**二级**页签：id 首段 = 当前一级名才生效；id 命中该一级下某完整分组 key → 顶替那个二级页签，否则追加一个自定义二级页签 |
+| `settingsGroup/<key>` | PluginSettingsDialog 右内容 | 接管某**完整 key**（扁平分组名或带 `/` 的二级叶子全名）的内容区（meta.mode: replace/prepend/append） |
+
+> 分组 key 语义：字段 `group` 可用 `/` 表示二级菜单，如 `常规/显示` → 左导航一级=`常规`，右页面签=二级分组。某一级下二级分组**多于一个**才显示页签条；只有一个则无页签直接展示正文。扁平分组（无 `/`）即一级=自己，行为同旧版。
 
 > 更通用的：`slotRegistry`/`SlotRegistry` 允许多 occupant 按 order 叠加；`themeRegistry` 基于它实现（单格换肤=winner，装饰层=occupants 全量）。
 
