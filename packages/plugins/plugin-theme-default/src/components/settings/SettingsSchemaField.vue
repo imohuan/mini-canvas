@@ -32,6 +32,17 @@ let unsub: { dispose(): void } | undefined
 onBeforeUnmount(() => unsub?.dispose())
 onMounted(() => {
   unsub = props.settings.onChange(() => void (tick.value += 1))
+  // 一次性自愈：number 滑块若历史已存了不在 step 网格上的小数（早期 Ctrl 细调 bug 遗留，
+  // 如 step=1 字段存了 60.8），载入时吸附回网格，避免页面上残留 0.x。
+  const e = props.settings.groupOf(props.group).find((x) => x.key === props.fieldKey)
+  if (e && e.schema.type === 'number') {
+    const v = numberValue(e.value, e.schema)
+    const snapped = snapToGrid(v, baseStep())
+    if (snapped !== v && Number.isFinite(v)) {
+      set(e.key, snapped)
+      coalescer.flush()
+    }
+  }
 })
 
 // 现取当前分组下本字段的最新 entry（每次渲染都重算，不缓存陈旧值）
@@ -57,10 +68,15 @@ function numberValue(v: string | number | boolean, s: SettingSchema): number {
 // —— number 滑块 Ctrl+拖动的精细微调 ——
 // 原生 range 只能按固定 step 吸附，无法临时换成 0.1。这里改用手算：把指针位置换算成
 // [min,max] 内的值。拖动时若"按住 Ctrl"则按 0.1 细步（便于微调），否则按 schema.step；
-// 结束拖动（pointerup/cancel）时把值吸附回 schema.step 网格 —— 这样 step=1 的整数字段
-// 拖完不会残留 0.x 小数。
+// 结束拖动（pointerup/cancel）时把值吸附回 schema.step 网格 —— step=1 的整数字段拖完
+// 不会残留 0.x 小数。
+//
+// 坑：DOM 的 <input type=range step=1> 校验会把 value 钳回 step 网格（写 1.2 实际存 1），
+// 所以细调的小数**不能**靠 el.value 承载/回读，否则松手吸附读到的永远是整数、小数照常入库。
+// 这里用一个局部变量 valueNow 始终记录"意图值"，吸附与落库都以它为准。
 const fineStep = 0.1
 let dragging = false
+let valueNow = NaN // 拖动中指针算出的意图值（可含小数）
 const rangeEl = ref<HTMLInputElement | null>(null)
 
 /** 该字段的基准步进（schema.step，缺省 1）；小数比例字段须显式给 step */
@@ -68,7 +84,7 @@ function baseStep(): number {
   return (entry.value?.schema as SettingSchema).step ?? 1
 }
 
-/** 把 x 吸附到 step 的网格上（以 min 为基准），并夹在 [min,max] 内 */
+/** 把 x 吸附到 step 网格（以 0 为基准），并夹在 [min,max] 内，规整浮点尾巴 */
 function snapToGrid(x: number, step: number): number {
   const s = entry.value?.schema as SettingSchema
   const min = Number(s.min) || 0
@@ -95,21 +111,25 @@ function onRangePointerMove(e: PointerEvent): void {
   applyRangeFromPointer(e.currentTarget as HTMLInputElement, e.clientX, e.ctrlKey)
 }
 
-/** 结束拖动：吸附回 step 网格，避免残留小数（如 Ctrl 细调出的 0.x） */
+/** 结束拖动：把意图值吸附回 step 网格并落库，避免残留小数（如 Ctrl 细调出的 0.x） */
 function endRangeDrag(): void {
   if (!dragging) return
   dragging = false
-  // 用 DOM 当前值（拖动中每帧同步写入，不受 coalescer 合帧延迟影响）作吸附基准
-  const el = rangeEl.value
-  if (!entry.value || !el) return
-  const cur = el.valueAsNumber
-  if (!Number.isFinite(cur)) return
-  const val = snapToGrid(cur, baseStep())
-  // 与目标不等才 set（coalescer 会一并冲刷拖拽期的待提交帧）
-  if (Number(val.toFixed(3)) !== Number(cur.toFixed(3))) {
-    set(entry.value.key, val)
-    el.value = String(val)
+  if (!entry.value) return
+  if (!Number.isFinite(valueNow)) {
+    // 没有细调移动（纯点按）→ 兜底用当前存储值归整
+    valueNow = numberValue(entry.value.value, entry.value.schema)
   }
+  const val = snapToGrid(valueNow, baseStep())
+  const el = rangeEl.value
+  if (el) {
+    // 回显归整后的整数值（DOM 受 step 钳制，只能显示步进值）
+    el.value = String(val)
+    valueNow = val
+  }
+  // push + 立即 flush：吸附结果成为最终落库值，拖拽期的细调小数不残留
+  set(entry.value.key, val)
+  coalescer.flush()
 }
 
 // 把指针水平位置换算成 [min,max] 内按"当前是否细步"吸附后的值
@@ -123,8 +143,10 @@ function applyRangeFromPointer(el: HTMLInputElement, clientX: number, fine = fal
   const max = Number(s.max) || 100
   const raw = min + ratio * (max - min)
   const val = snapToGrid(raw, step)
+  valueNow = val
+  // DOM 只能显示步进网格内的值（step=1 时小数会被钳成整数，仅用于视觉，真实值走 valueNow）
+  el.value = String(snapToGrid(val, baseStep()))
   if (entry.value) set(entry.value.key, val)
-  el.value = String(val)
 }
 
 function onRangeKeydown(e: KeyboardEvent): void {
@@ -136,9 +158,11 @@ function onRangeKeydown(e: KeyboardEvent): void {
   const step = fine ? fineStep : baseStep()
   const cur = numberValue(entry.value.value, entry.value.schema)
   const val = snapToGrid(cur + dir * step, step)
+  valueNow = val
   set(entry.value.key, val)
+  coalescer.flush()
   const el = rangeEl.value
-  if (el) el.value = String(val)
+  if (el) el.value = String(snapToGrid(val, baseStep()))
 }
 const fieldId = 'sf-' + props.fieldKey
 </script>
