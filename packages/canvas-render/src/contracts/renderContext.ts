@@ -34,6 +34,8 @@ import type { CanvasDebug } from './debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 import type { FlowNode } from '../host/canvasHostCore'
 import type { ViewportState } from '../viewport/viewportService'
+import type { FlowRect } from '../geometry/visibleArea'
+import type { LayoutRect } from '../layout/nodeLayout'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -74,6 +76,14 @@ export interface CanvasRenderContext {
   renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
   /** 当前渲染边只读快照 */
   renderEdges: Readonly<Ref<ReadonlyArray<{ id: string; type: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>>>
+  /** 当前可视区在 flow(画布)坐标下的矩形（跟随 viewport + pane 尺寸，响应式；未量测 pane 时 null）。 */
+  visibleRect: Readonly<Ref<FlowRect | null>>
+  /**
+   * 当前可视区内(或与可视区外扩 margin 相交)的存活节点矩形列表（flow 绝对坐标 + 实测尺寸）。
+   * 方法式(调用时现算)：调用方决定何时付过滤成本 —— 拖拽/吸附逐帧用最合适，
+   * 避免 pan/缩放每帧都自动重算全量节点。margin 单位为 flow 坐标，默认 0（严格可视区）。
+   */
+  visibleNodes(margin?: number): LayoutRect[]
   /** 屏幕 client 坐标 → flow(画布)坐标（pane 偏移 + 视口逆变换；由 VueFlow 官方换算保证可靠） */
   screenToFlow(clientX: number, clientY: number): { x: number; y: number }
   /** flow(画布)坐标 → 屏幕 client 坐标（浮层画线/手柄定位/对齐线用） */

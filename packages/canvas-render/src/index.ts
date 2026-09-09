@@ -125,6 +125,9 @@ export { NodeLayoutService } from './layout/nodeLayout'
 // 视口服务（CanvasHost attach VueFlow backend 后可用；插件读/控视图）
 export { ViewportService } from './viewport/viewportService'
 export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } from './viewport/viewportService'
+// 可视区纯几何：视口变换 → flow 可视矩形 + 相交判定（align-guide/mini-map 等按可视区裁剪节点）
+export { viewportRectInFlow, rectsOverlap, expandRect } from './geometry/visibleArea'
+export type { FlowRect } from './geometry/visibleArea'
 export type { LayoutRect } from './layout/nodeLayout'
 
 export type { SelectionClickOptions } from './host/selectionInteractions'

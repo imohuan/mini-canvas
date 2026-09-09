@@ -33,6 +33,8 @@ import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure } from './useNodeMeasure'
+import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
+import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -90,6 +92,8 @@ if (!host) {
   // 父级 v-else 保证 boot 完成才挂载本组件，正常不会走到；防御性报错以免渲染子树拿到空宿主。
   throw new Error('[CanvasSurface] 宿主未就绪：CanvasSurface 仅应在 boot 完成后挂载')
 }
+// 闭包安全的非空 ctx（setup 内 throw 收窄不作用于嵌套函数，故先取出给 collectVisibleNodes 等用）
+const hostCtx = host.ctx
 // VueFlow 实例（viewport/screen-flow/flow-screen 等视图能力的来源；在 provide renderCtx 前拿到）
 const vfApi = useVueFlow()
 
@@ -120,6 +124,20 @@ const rootEl = ref<HTMLElement | null>(null)
 /** VueFlow renderer DOM（模板 ref 不可达内部渲染层，onMounted 内经 vfApi 容器捕获） */
 const rendererEl = ref<HTMLElement | null>(null)
 
+// 可视区(flow 坐标矩形)：由 viewport 变换 + pane 像素尺寸现算；响应式，pan/zoom/量测后自动更新。
+const visibleRectRef = shallowRef<FlowRect | null>(null)
+function refreshVisibleRect(): void {
+  const pr = paneRectRef.value
+  if (!pr || pr.width <= 0 || pr.height <= 0 || !viewportRef.value) {
+    visibleRectRef.value = null
+    return
+  }
+  visibleRectRef.value = viewportRectInFlow(viewportRef.value, pr.width, pr.height)
+}
+// viewport / pane 变化时刷新可视矩形；onMounted 量到 pane 后也刷一次
+watch(viewportRef, refreshVisibleRect)
+watch(paneRectRef, refreshVisibleRect)
+
 /** 屏幕 client → flow（官方换算，可靠） */
 function screenToFlow(clientX: number, clientY: number): { x: number; y: number } {
   const p = vfApi.screenToFlowCoordinate({ x: clientX, y: clientY }) as { x: number; y: number }
@@ -134,6 +152,15 @@ function flowToScreen(flowX: number, flowY: number): { x: number; y: number } {
 /** 拖拽中把单节点视觉位置写到 VueFlow 内部（不触发 store/整组替换）——对齐吸附等插件用 */
 function updateNodeVisual(id: string, position: { x: number; y: number }): void {
   vfApi.updateNode(id, { position })
+}
+
+/** 当前可视区内(或外扩 margin)的存活节点矩形列表 —— 供 align-guide 等按可视区裁剪候选，免全量 O(n) 逐帧 */
+function collectVisibleNodes(margin = 0): LayoutRect[] {
+  const vr = visibleRectRef.value
+  if (!vr) return []
+  const area = margin > 0 ? expandRect(vr, margin) : vr
+  const layout = hostCtx.get<NodeLayoutService>('nodeLayout')
+  return layout.getAllRects().filter((r) => rectsOverlap(r, area))
 }
 
 const renderCtx: CanvasRenderContext = {
@@ -155,6 +182,8 @@ const renderCtx: CanvasRenderContext = {
   rendererEl,
   renderNodes: renderNodesRef,
   renderEdges: renderEdgesRef,
+  visibleRect: visibleRectRef,
+  visibleNodes: collectVisibleNodes,
   screenToFlow,
   flowToScreen,
   updateNodeVisual,
