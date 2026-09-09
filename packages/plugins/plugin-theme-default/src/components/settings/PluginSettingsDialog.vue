@@ -29,7 +29,7 @@
  * 打开/关闭：宿主(App.vue)用 v-if="settingsOpen" 控制本面板是否渲染；本面板内部 ✕ / 点遮罩 / Esc
  * 经 ctx.emit('settings:ui-close') 通知宿主关闭（宿主 onReady 里 ctx.on 订阅置 settingsOpen=false）。
  */
-import { computed, markRaw, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from './SettingsSchemaField.vue'
@@ -104,9 +104,8 @@ onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })
 
-// —— 分组 key → 当前激活 leaf ——
+// —— 分组（schema）—— 
 // P2-1：schema 变化（插件热装卸 define/移除项）经 settings.onSchemaChange 置 refreshTick 强制重算 groups；
-// 不再只依赖 nav/content 间接触发重渲染。
 const refreshTick = ref(0)
 const groups = computed(() => { void refreshTick.value; return props.settings.groups() })
 // 一级名 → 其下完整分组 key 列表（保持 groups() 原序）
@@ -120,8 +119,9 @@ const sectionMap = computed<Map<string, string[]>>(() => {
   return m
 })
 
-// 当前激活的**完整分组 key**（二级菜单里是叶子，扁平分组就是它自己；自定义导航项则可能不在任何分组里）
-const activeKey = ref<string>('')
+// —— 当前激活的一级导航（左侧一级名 / 或纯自定义 nav id）——
+// 右侧永远展示"该一级下全部二级块"叠成的长列表，靠滚动浏览；点二级只是滚动定位，不再切内容。
+const activeNav = ref<string>('')
 
 interface NavEntry {
   key: string
@@ -150,31 +150,42 @@ const navEntries = computed<NavEntry[]>(() => {
   return out
 })
 
-// 分组/导航项变化时，确保 activeKey 仍指向一个存在的 leaf 或一级/自定义项
+/** 左侧一级导航项的激活态 */
+function isNavActive(key: string): boolean {
+  return activeNav.value === key
+}
+
+/** 选中一个一级导航：右侧滚动回该一级的第一段顶部 */
+function selectNav(value: string): void {
+  if (activeNav.value === value) return
+  activeNav.value = value
+  void nextTick(scrollToTop)
+}
+
+// 分组/导航变化时，确保 activeNav 仍指向一个存在的导航项（默认第一个一级）
 watch(
   [groups, navEntries],
   () => {
-    const leafSet = new Set(groups.value)
     const navSet = new Set(navEntries.value.map((e) => e.key))
-    if (!groups.value.length) activeKey.value = ''
-    else if (!leafSet.has(activeKey.value) && !navSet.has(activeKey.value)) activeKey.value = groups.value[0]
+    if (navEntries.value.length && !navSet.has(activeNav.value)) activeNav.value = navEntries.value[0].key
   },
   { immediate: true },
 )
 
-// —— 二级页签：当前一级下的有序 tabs（默认 leaf + settingsTab 顶替/追加）——
-interface TabEntry {
+// —— 当前一级下的有序"段"（sections）：每个完整二级/扁平分组占一段，叠成右侧长列表 ——
+interface Section {
   key: string
+  label: string
   kind: 'leaf' | 'tab'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   component?: any
 }
-const tabs = computed<TabEntry[]>(() => {
-  const nav = navOf(activeKey.value)
+const sections = computed<Section[]>(() => {
+  const nav = activeNav.value
   const leaves = sectionMap.value.get(nav) ?? []
   const occs = [...tabList.value]
     .sort((a, b) => a.order - b.order)
-    // settingsTab 只对"id 首段 === 当前一级名"的分组/自定义项生效（避免跨一级串扰）
+    // settingsTab 只对"id 首段 === 当前一级名"的项生效（避免跨一级串扰）
     .filter((oc) => oc.id.startsWith(nav + SEP))
   const occByLeaf = new Map<string, SlotOcc>()
   const customs: SlotOcc[] = []
@@ -182,83 +193,94 @@ const tabs = computed<TabEntry[]>(() => {
     if (leaves.includes(oc.id)) occByLeaf.set(oc.id, oc)
     else customs.push(oc)
   }
-  const out: TabEntry[] = []
+  const out: Section[] = []
   for (const leaf of leaves) {
     const occ = occByLeaf.get(leaf)
-    out.push(occ ? { key: leaf, kind: 'tab', component: occ.component } : { key: leaf, kind: 'leaf' })
+    out.push(
+      occ
+        ? { key: leaf, label: leafLabelOf(leaf), kind: 'tab', component: occ.component }
+        : { key: leaf, label: leafLabelOf(leaf), kind: 'leaf' },
+    )
   }
-  for (const oc of customs) out.push({ key: oc.id, kind: 'tab', component: oc.component })
+  for (const oc of customs) out.push({ key: oc.id, label: leafLabelOf(oc.id), kind: 'tab', component: oc.component })
   return out
 })
-/** 当前一级下是否有多于一个二级页签：是才显示 tab 条，否则直接展示正文（需求：只有一个 tab 就不显示） */
-const showTabs = computed(() => tabs.value.length > 1)
 
-// 一级导航项的激活态：当前激活 key 的一级名 === 该项 key
-function isNavActive(key: string): boolean {
-  return !!activeKey.value && navOf(activeKey.value) === key
+// —— 右侧滚动容器 + 当前"正在视口顶部"的段（scroll-spy，用于高亮对应 tab）——
+const scrollEl = ref<HTMLElement | null>(null)
+const currentSection = ref<string>('')
+function scrollToTop(): void {
+  const cont = scrollEl.value
+  if (cont) cont.scrollTop = 0
+  if (sections.value.length) currentSection.value = sections.value[0].key
+}
+function scrollToSection(key: string): void {
+  const cont = scrollEl.value
+  if (!cont) return
+  const el = cont.querySelector<HTMLElement>(`.psd-section[data-sec="${cssEscape(key)}"]`)
+  if (!el) return
+  const target = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
+  cont.scrollTo({ top: target, behavior: 'smooth' })
+  currentSection.value = key
+}
+function onBodyScroll(): void {
+  const cont = scrollEl.value
+  if (!cont) return
+  const ctop = cont.getBoundingClientRect().top
+  let best = ''
+  for (const s of sections.value) {
+    const el = cont.querySelector<HTMLElement>(`.psd-section[data-sec="${cssEscape(s.key)}"]`)
+    if (el && el.getBoundingClientRect().top <= ctop + 6) best = s.key
+  }
+  if (best) currentSection.value = best
+}
+// 切换一级时，若该一级只有一段也置高亮；否则滚回顶部
+watch(sections, () => { void nextTick(scrollToTop) })
+
+/** CSS.escape 兜底：section key 含 `/`、中文等字符也能安全用于属性选择器 */
+function cssEscape(v: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const es = (globalThis as any).CSS?.escape
+  return typeof es === 'function' ? es(v) : v.replace(/["\\]/g, '')
 }
 
-/** 选中：给一级名 → 取其第一个 leaf；给完整 key/自定义 id → 直接用它。右侧据此切内容。 */
-function select(value: string): void {
-  const leaves = sectionMap.value.get(value)
-  activeKey.value = leaves && leaves.length ? leaves[0] : value
-  reloadContent()
-}
-
-/** 右内容区插槽 occupants（接管某完整 key 的内容渲染）；无则走 schema fallback */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const contentList = ref<SlotOcc[]>([])
-function contentSlotName(key: string): string {
-  return 'settingsGroup/' + key
-}
-function reloadContent(): void {
-  contentList.value = ctx.slots
-    .occupants(contentSlotName(activeKey.value))
-    .map((e) => ({
-      id: e.id,
-      order: e.order,
-      component: markRaw(e.component as object),
-      meta: e.meta,
-    }))
-}
-watch(activeKey, reloadContent)
-disposers.push(
-  ctx.on('ctx:plugin-installed', reloadContent),
-  ctx.on('ctx:plugin-uninstalled', reloadContent),
-)
-reloadContent() // 首帧读一次内容插槽
-
-const activeFields = computed(() => props.settings.groupOf(activeKey.value))
-
-// —— 内容区统一渲染成"有序内容块列表"：默认控件(schema) 与 插槽组件都是块，模板就一段 v-for ——
-// 每个内容插槽 occupant 可经 meta.mode 声明摆放：
-//   'prepend' → 与默认控件并存，排在最前
-//   'append'  → 与默认控件并存，排在默认控件之后
-//   其它/缺省 → 'replace'：接管整组（不渲染默认控件，向后兼容旧行为）
-// 规则：只要有 occupant 要求并存(replace 之外的 mode)，就把默认控件块也放进列表；
-//       否则（全 replace 或该组无字段）列表里只有插槽块/默认块。
+// —— 每个段的正文：默认 schema 控件 + settingsGroup/<key> 内容插槽，统一成"内容块列表" ——
+// 内容插槽 occupant 可经 meta.mode 声明摆放：prepend / append / replace(缺省，接管整组)
 function slotMode(oc: SlotOcc): 'replace' | 'prepend' | 'append' {
   const m = (oc.meta as { mode?: string } | undefined)?.mode
   return m === 'prepend' ? 'prepend' : m === 'append' ? 'append' : 'replace'
 }
-/** 当前分组的渲染内容块（有序）：[prepend 插槽…] [schema 默认控件…] [append/replace 插槽…] */
 type ContentBlock =
   | { kind: 'field'; key: string }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   | { kind: 'slot'; occ: SlotOcc }
-const contentBlocks = computed<ContentBlock[]>(() => {
-  const occs = contentList.value
-  // 无插槽 → 纯默认控件
-  if (!occs.length) return activeFields.value.map((e) => ({ kind: 'field' as const, key: e.key }))
+
+/** 插件装卸/变更 → 递增版本号，让内容插槽 occupants 重读（与 schema/分组刷新解耦但同源触发） */
+const occTick = ref(0)
+function bumpOcc(): void { occTick.value += 1 }
+disposers.push(
+  ctx.on('ctx:plugin-installed', bumpOcc),
+  ctx.on('ctx:plugin-uninstalled', bumpOcc),
+)
+
+/** 取某段自己的渲染内容块（现取，不缓存，靠 occTick/响应式重算） */
+function blocksOf(sectionKey: string): ContentBlock[] {
+  void occTick.value
+  void refreshTick.value
+  const occs = ctx.slots
+    .occupants('settingsGroup/' + sectionKey)
+    .map((e) => ({ id: e.id, order: e.order, component: markRaw(e.component as object), meta: e.meta }))
+  const fields = props.settings.groupOf(sectionKey)
+  if (!occs.length) return fields.map((e) => ({ kind: 'field' as const, key: e.key }))
   const coexist = occs.some((o) => slotMode(o) !== 'replace')
   const sorted = (m: string) => occs.filter((o) => slotMode(o) === m).sort((a, b) => a.order - b.order)
   const blocks: ContentBlock[] = []
   blocks.push(...sorted('prepend').map((o) => ({ kind: 'slot' as const, occ: o })))
-  if (coexist) blocks.push(...activeFields.value.map((e) => ({ kind: 'field' as const, key: e.key })))
+  if (coexist) blocks.push(...fields.map((e) => ({ kind: 'field' as const, key: e.key })))
   blocks.push(...sorted('replace').map((o) => ({ kind: 'slot' as const, occ: o })))
   blocks.push(...sorted('append').map((o) => ({ kind: 'slot' as const, occ: o })))
   return blocks
-})
+}
 
 // —— 关闭：✕ / 遮罩 / Esc（closeOnMask 才响应遮罩与 Esc）——
 function close(): void {
@@ -298,44 +320,49 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             <div v-if="!navEntries.length" class="psd-nav-empty">暂无分组</div>
             <div v-for="item in navEntries" :key="item.key" class="psd-nav-item"
               :class="{ active: isNavActive(item.key), slot: item.kind === 'nav' }" role="button" tabindex="0"
-              @click="select(item.key)" @keydown.enter.prevent="select(item.key)">
+              @click="selectNav(item.key)" @keydown.enter.prevent="selectNav(item.key)">
               <!-- 默认一级项：分组没有图标，直接显示一级名文本（nav label = group 第一个 / 分段；扁平分组即它自己） -->
               <span v-if="item.kind === 'section'" class="psd-nav-inner">
                 <span class="psd-nav-txt">{{ item.key }}</span>
               </span>
               <!-- 一级导航插槽顶替/自定义项：渲染插槽组件，注入 { group, active, onSelect } 能力 -->
               <component v-else :is="item.component" :group="item.key" :active="isNavActive(item.key)"
-                :on-select="select" />
+                :on-select="selectNav" />
             </div>
           </nav>
 
-          <!-- 右：(二级页签) + 内容；内容区顶部不再重复标题，左导航选中即位置标识 -->
+          <!-- 右：该一级下全部二级块叠成"可滚动长列表"；顶部 tab 只做滚动定位（scroll-spy 高亮当前段） -->
           <div class="psd-content">
-            <!-- 二级页签条：仅当一级下二级分组多于一个才显示（settingsNav 语义对称） -->
-            <div v-if="showTabs" class="psd-tabs" role="tablist">
-              <template v-for="t in tabs" :key="t.key">
-                <!-- 二级页签插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect } -->
-                <component v-if="t.kind === 'tab'" :is="t.component" :group="t.key"
-                  :active="activeKey === t.key" :on-select="select" class="psd-tab-item" />
-                <!-- 默认二级页签：点它切到该完整分组 key -->
-                <button v-else class="psd-tab-item" :class="{ active: activeKey === t.key }" @click="select(t.key)">
-                  {{ leafLabelOf(t.key) }}
+            <!-- 目录条：本一级下的各段（仅一段时不显示目录） -->
+            <div v-if="sections.length > 1" class="psd-tabs" role="tablist">
+              <template v-for="s in sections" :key="s.key">
+                <!-- settingsTab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
+                <component v-if="s.kind === 'tab'" :is="s.component" :group="s.key"
+                  :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item" />
+                <!-- 默认目录项：点击滚动到该段 -->
+                <button v-else class="psd-tab-item" :class="{ active: currentSection === s.key }"
+                  @click="scrollToSection(s.key)">
+                  {{ s.label }}
                 </button>
               </template>
             </div>
 
-            <div class="psd-content-body">
-              <!-- 内容区 = 一段 v-for 遍历"有序内容块"(contentBlocks)：field(默认控件) / slot(插槽组件) 就地分支渲染 -->
-              <template v-for="b in contentBlocks"
-                :key="(b as any).kind === 'field' ? 'f-' + (b as any).key : 's-' + (b as any).occ.id">
-                <SettingsSchemaField v-if="b.kind === 'field'" :group="activeKey" :field-key="b.key"
-                  :settings="props.settings" />
-                <component v-else :is="b.occ.component" :group="activeKey" :settings="props.settings" />
-              </template>
-              <!-- 空态 -->
-              <div v-if="!contentBlocks.length" class="psd-empty">
-                <p>这个分组还没有可配置项</p>
-              </div>
+            <div ref="scrollEl" class="psd-content-body" @scroll="onBodyScroll">
+              <div v-if="!sections.length" class="psd-empty"><p>暂无分组</p></div>
+              <section v-for="s in sections" :key="s.key" class="psd-section" :data-sec="s.key">
+                <h4 class="psd-section-title" :class="{ current: currentSection === s.key }">{{ s.label }}</h4>
+                <div class="psd-section-body">
+                  <template v-for="b in blocksOf(s.key)"
+                    :key="(b as any).kind === 'field' ? 'f-' + (b as any).key : 's-' + (b as any).occ.id">
+                    <SettingsSchemaField v-if="b.kind === 'field'" :group="s.key" :field-key="b.key"
+                      :settings="props.settings" />
+                    <component v-else :is="b.occ.component" :group="s.key" :settings="props.settings" />
+                  </template>
+                  <div v-if="!blocksOf(s.key).length" class="psd-empty">
+                    <p>这个分组还没有可配置项</p>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -573,12 +600,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   outline-offset: -2px;
 }
 
+/* ===== 每个二级块一段（右侧长列表里叠排） ===== */
+.psd-section {
+  padding: 4px 0 8px;
+}
+
+/* 段标题：把"当前"段标题高亮成主题色，作为滚动定位的可读反馈 */
+.psd-section-title {
+  margin: 0 0 6px;
+  padding: 10px 0 8px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.psd-section-title.current {
+  color: #0891b2;
+}
+
+.psd-section-body {
+  padding-top: 2px;
+}
+
+/* 段内字段分隔交给 sf-field 自己的 border-top；段之间留白即可 */
+.psd-section + .psd-section {
+  margin-top: 6px;
+}
+
 .psd-content-body {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 16px 16px 16px;
+  padding: 2px 16px 20px 16px;
   min-height: 0;
   scrollbar-width: thin;
+  scroll-behavior: smooth;
 }
 
 .psd-empty {
