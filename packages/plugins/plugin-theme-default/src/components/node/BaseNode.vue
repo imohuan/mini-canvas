@@ -41,7 +41,7 @@ const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
 // 节点外观阈值：全部来自本插件 Config（节点/标题、节点/LOD），对齐 v1 core 的 nodeTitleOffset /
 // nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，故这里用 ref +
 // onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
-const settingsStore = () => ctx?.settings
+const settingsStore = () => ctx?.get<{ get(key: string): unknown }>('settings')
 const numOf = (key: string, fallback: number): number => {
   const v = settingsStore()?.get(key)
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
@@ -55,9 +55,10 @@ const applyTitleSetting = (key: string, value: unknown): void => {
   else if (key === 'titleScaleMinZoom') TITLE_MIN_ZOOM.value = value
   else if (key === 'nodeLodLowDetailZoom') LOW_DETAIL_ZOOM.value = value
 }
-const titleSettingOff = settingsStore()?.onChange('theme-default', (key, value) => {
-  applyTitleSetting(key, value)
-})
+// 全局订阅配置变化，按 key 过滤出本节点关心的 3 项（不按插件 scope 过滤，避免命名/装配差异导致不触发）。
+const titleSettingOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')?.onChange(
+  (key, value) => applyTitleSetting(key, value),
+)
 onBeforeUnmount(() => titleSettingOff?.dispose())
 
 const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM.value)
