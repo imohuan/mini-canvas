@@ -86,22 +86,22 @@ function formatByStep(v: string | number | boolean, s: SettingSchema): string {
 }
 
 // —— number 滑块拖动的"灵敏度"控制 ——
-// 把原生"点哪跳哪/固定 step"换成**位移累加式**：按下时固定一个基准（起点值 + 起点指针），
-// 拖动只按"相对按下点的总位移"折算增量加回起点值，再吸附回 schema.step 网格。
-// 值永远在 step 网格上，绝不产生出格小数（step=1 就整数）。
+// **圆球（thumb）= 视觉跟手**：拖动中圆球 1:1 跟指针走，真实反映你拖到了哪。
+// **store value = 真实落库值**：按 ctrl 缩放后吸附到 schema.step 网格，松手时圆球对齐到该值。
 //
-// 手感：Ctrl 按住时位移 ×0.1（CTRL_ZOOM），同样拖一段只走十分之一，便于精确停格。
-// 关键：基准在 pointerdown 固定一次，**不要**每帧顺移基准点，否则累加被抵消、缩放失效，
-// 变成滑块 1:1 跟手（早期 bug）。值显示只靠受控 :value，不手动写 el.value（避免闪烁）。
+// 这样：拖动时眼睛跟手不会觉得"卡"或"乱套"；松手落库永远是 step 网格上的干净值（整数）。
+// 按住 Ctrl → 位移 ×0.1，圆球跟手不变，但值变化更慢 → 让你能精确停在 step 网格的某个格上。
 const NORMAL_ZOOM = 1
 const CTRL_ZOOM = 0.1
-let dragging = false
+const dragging = ref(false) // 模板需响应（控制 thumbValue vs store value 谁驱动圆球）
 let startClientX = 0 // 按下时指针 clientX（固定基准）
-let startValue = 0 // 按下时（已吸附在 step 网格上）的值（固定基准）
-let dragZoom = NORMAL_ZOOM // 本次拖动用的缩放（按下时锁定，中途切换 Ctrl 不跳变）
+let startValue = 0 // 按下时的 store 值（已吸附 step 网格，固定基准）
+let dragZoom = NORMAL_ZOOM // 本次拖动用的缩放（按下时锁定）
+// 圆球视觉值：与 store 分离的 ref；模板在拖动期间用这个驱动 el.value，松手对齐 store
+const thumbValue = ref<number>(0)
 const rangeEl = ref<HTMLInputElement | null>(null)
 
-/** 该字段的基准步进（schema.step，缺省 1）；小数比例字段须显式给 step */
+/** 该字段的基准步进（schema.step，缺省 1） */
 function baseStep(): number {
   return (entry.value?.schema as SettingSchema).step ?? 1
 }
@@ -121,7 +121,7 @@ function snapToGrid(x: number, step: number): number {
   return Math.min(max, Math.max(min, Number(snapped.toFixed(3))))
 }
 
-/** 当前指针位置对应的"原生直接值"（整段量程内线性） */
+/** 当前指针位置对应的"原生直接值"（整段量程内线性，未缩放） */
 function rawValueAt(el: HTMLInputElement, clientX: number): number {
   const s = entry.value?.schema as SettingSchema
   const min = Number(s.min) || 0
@@ -132,42 +132,54 @@ function rawValueAt(el: HTMLInputElement, clientX: number): number {
   return min + ratio * (max - min)
 }
 
+/** 实时刷新 thumbValue：从 store value 同步（用于拖动外 / 初始化 / 松手对齐） */
+function syncThumbFromStore(): void {
+  if (!entry.value) return
+  thumbValue.value = numberValue(entry.value.value, entry.value.schema)
+}
+
 function onRangePointerDown(e: PointerEvent): void {
   const target = e.currentTarget as HTMLInputElement
   if (!target) return
-  dragging = true
+  dragging.value = true
   dragZoom = e.ctrlKey ? CTRL_ZOOM : NORMAL_ZOOM
+  // 临时放宽 DOM step 校验，让圆球能连续跟手停在任意小数位置（视觉），松手再还原。
+  // schema.step 始终不被持久修改，只改 DOM 元素的临时 step。
+  target.step = 'any'
   const s = entry.value?.schema as SettingSchema
-  startValue = snapToGrid(rawValueAt(target, e.clientX), baseStep())
+  // 基准 = 按下时的真实值（吸附过的），用于后续累加
+  startValue = numberValue(entry.value ? entry.value.value : undefined, s)
   startClientX = e.clientX
+  // 圆球立即跟到指针位置（点哪到哪的视觉）
+  thumbValue.value = rawValueAt(target, e.clientX)
   try {
     target.setPointerCapture(e.pointerId)
   } catch {
     /* noop */
   }
-  // 点按即把值跳到该处（原生"点哪到哪"），作为拖动的起点
-  if (entry.value) {
-    set(entry.value.key, startValue)
-    coalescer.flush()
-  }
 }
 
 function onRangePointerMove(e: PointerEvent): void {
-  if (!dragging || !entry.value) return
+  if (!dragging.value || !entry.value) return
   const el = e.currentTarget as HTMLInputElement
   if (!el.clientWidth) return
   const span = rangeSpan()
-  if (span <= 0) return
-  // 相对按下点的总位移 × 缩放 = 增量；加到按下起点值再吸附网格
+  // 圆球视觉 = 1:1 跟手（不缩放），看着舒服
+  thumbValue.value = rawValueAt(el, e.clientX)
+  // 落库值 = 按 zoom 缩放 + step 网格吸附
   const dx = e.clientX - startClientX
   const val = snapToGrid(startValue + (dx / el.clientWidth) * span * dragZoom, baseStep())
   set(entry.value.key, val)
 }
 
 function endRangeDrag(): void {
-  if (!dragging) return
-  dragging = false
-  // 值在 move 时已算好并经受控 :value 显示，这里只冲刷合帧，确保最终值落库
+  if (!dragging.value) return
+  dragging.value = false
+  // 还原 DOM step 到 schema 原始值（不影响 schema 定义本身）
+  const el = rangeEl.value
+  if (el) el.step = String(baseStep())
+  // 圆球对齐到最后落库的 step 网格值（避免松手圆球停在中间的"连续位置"）
+  if (entry.value) syncThumbFromStore()
   coalescer.flush()
 }
 
@@ -209,7 +221,7 @@ const fieldId = 'sf-' + props.fieldKey
       </div>
       <input ref="rangeEl" :id="fieldId" class="sf-range" type="range" :min="entry.schema.min ?? 0"
         :max="entry.schema.max ?? 100" :step="entry.schema.step ?? 1"
-        :value="numberValue(entry.value, entry.schema)"
+        :value="dragging ? thumbValue : numberValue(entry.value, entry.schema)"
         @pointerdown="onRangePointerDown" @pointermove="onRangePointerMove"
         @pointerup="endRangeDrag" @pointercancel="endRangeDrag"
         @keydown="onRangeKeydown" />
