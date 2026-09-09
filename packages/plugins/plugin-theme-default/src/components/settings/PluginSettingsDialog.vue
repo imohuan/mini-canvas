@@ -209,9 +209,43 @@ const sections = computed<Section[]>(() => {
 // —— 右侧滚动容器 + 当前"正在视口顶部"的段（scroll-spy，用于高亮对应 tab）——
 const scrollEl = ref<HTMLElement | null>(null)
 const currentSection = ref<string>('')
+
+/**
+ * 程序化滚动锁：smooth 滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
+ * 会把高亮在途经的段之间闪来闪去。故点 tab / 切一级触发的滚动会先上一把锁，
+ * 锁未解前 scroll-spy 不重算高亮，保证落点高亮即所选段。
+ * 解锁时机：容器触发 scrollend（浏览器判定动画结束），或兜底超时。
+ */
+let scrollLocked = false
+let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
+const SCROLL_LOCK_MAX_MS = 1200
+
+function releaseScrollLock(): void {
+  scrollLocked = false
+  if (scrollLockTimer !== null) {
+    clearTimeout(scrollLockTimer)
+    scrollLockTimer = null
+  }
+}
+function lockScrollUntilSettles(el: HTMLElement): void {
+  scrollLocked = true
+  // 兜底：即便浏览器不支持/不触发 scrollend，也在一段时间后解锁（避免一直锁死）
+  if (scrollLockTimer !== null) clearTimeout(scrollLockTimer)
+  scrollLockTimer = setTimeout(releaseScrollLock, SCROLL_LOCK_MAX_MS)
+  // 现代浏览器：smooth 动画真正结束时解锁（远跳比固定时长更准）
+  const onEnd = () => {
+    el.removeEventListener('scrollend', onEnd)
+    releaseScrollLock()
+  }
+  el.addEventListener('scrollend', onEnd)
+}
+
 function scrollToTop(): void {
   const cont = scrollEl.value
-  if (cont) cont.scrollTop = 0
+  if (cont) {
+    cont.scrollTo({ top: 0, behavior: 'smooth' })
+    lockScrollUntilSettles(cont)
+  }
   if (sections.value.length) currentSection.value = sections.value[0].key
 }
 function scrollToSection(key: string): void {
@@ -221,9 +255,13 @@ function scrollToSection(key: string): void {
   if (!el) return
   const target = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
   cont.scrollTo({ top: target, behavior: 'smooth' })
+  // 锁定期间不让 scroll-spy 覆盖，保证落点即所选段
+  lockScrollUntilSettles(cont)
   currentSection.value = key
 }
 function onBodyScroll(): void {
+  // 程序化滚动动画进行中：不重算高亮，避免途经段来回闪
+  if (scrollLocked) return
   const cont = scrollEl.value
   if (!cont) return
   const ctop = cont.getBoundingClientRect().top
