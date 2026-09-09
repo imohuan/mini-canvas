@@ -10,11 +10,11 @@ import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import type { Context } from '@mini-canvas/canvas-base'
 
 export const Config = {
-  miniMapWidth: { type: 'number', default: 240, min: 120, max: 400, step: 10, label: '宽度', description: '小地图宽度（px）', group: '小地图 mini-map' },
-  miniMapHeight: { type: 'number', default: 160, min: 80, max: 300, step: 10, label: '高度', description: '小地图高度（px）', group: '小地图 mini-map' },
-  miniMapSensitivityX: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'X轴灵敏度', description: '拖拽时 X 轴移动倍率', group: '小地图 mini-map' },
-  miniMapSensitivityY: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'Y轴灵敏度', description: '拖拽时 Y 轴移动倍率', group: '小地图 mini-map' },
-  miniMapVisible: { type: 'boolean', default: true, label: '显示小地图', description: '切换显示/隐藏', group: '小地图 mini-map' },
+  miniMapWidth: { type: 'number', default: 240, min: 120, max: 400, step: 10, label: '宽度', description: '小地图宽度（px）', group: '小地图' },
+  miniMapHeight: { type: 'number', default: 160, min: 80, max: 300, step: 10, label: '高度', description: '小地图高度（px）', group: '小地图' },
+  miniMapSensitivityX: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'X轴灵敏度', description: '拖拽时 X 轴移动倍率', group: '小地图' },
+  miniMapSensitivityY: { type: 'number', default: 1, min: 0.1, max: 3, step: 0.1, label: 'Y轴灵敏度', description: '拖拽时 Y 轴移动倍率', group: '小地图' },
+  miniMapVisible: { type: 'boolean', default: true, label: '显示小地图', description: '切换显示/隐藏', group: '小地图' },
 } satisfies ConfigSchema
 
 export type MiniMapConfig = InferConfig<typeof Config>

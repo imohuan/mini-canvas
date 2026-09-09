@@ -3,7 +3,8 @@
  *
  * 对齐 v1 EdgeCuttingOptions / 现有 EdgeCuttingOptions 的可调项：
  *   总开关 / 命中容差 / 路径采样步长 / 轨迹色 / 刀锋色 / 是否显示完整拖拽轨迹。
- * 分组统一走「连线切割」；标量字段经内核 SettingsStore（settings 单一数据源）登记进 ⚙ 设置面板，
+ * 分组：非颜色的开关/数值归一级「边」的 `边/连线切割`；轨迹色/刀锋色两个颜色归一级「主题」的
+ * `主题/连线切割`（配色集中调）。标量字段经内核 SettingsStore（settings 单一数据源）登记进 ⚙ 设置面板，
  * 改动实时生效（切割会话/绘制点读到本函数，不缓存 apply 时 config）。
  * 独立成文件避免 edgeCuttingPlugin ↔ edgeCuttingOverlay 循环 import。
  */
@@ -15,7 +16,7 @@ export const Config = {
     type: 'boolean',
     default: true,
     label: '启用连线切割',
-    group: '连线切割',
+    group: '边/连线切割',
     description:
       '总开关。关闭后 Alt+拖拽刀光不再装配/生效；重开即恢复，无需重载画布。',
   },
@@ -26,7 +27,7 @@ export const Config = {
     max: 32,
     step: 1,
     label: '命中容差',
-    group: '连线切割',
+    group: '边/连线切割',
     description:
       '刀光与连线路径的命中容差（屏幕像素）。越大越容易切中（也更可能误切邻近线）。',
   },
@@ -37,31 +38,32 @@ export const Config = {
     max: 24,
     step: 1,
     label: '路径采样步长',
-    group: '连线切割',
+    group: '边/连线切割',
     description:
       '对每条连线路径按此步长均匀采样为折线后做相交判定（px）。越小越精确、开销略高。',
   },
+  showCutPath: {
+    type: 'boolean',
+    default: true,
+    label: '切割范围：完整轨迹',
+    group: '边/连线切割',
+    description:
+      '开启：显示完整拖拽轨迹，并按整条轨迹切割（划到哪删到哪）。关闭：只显示刀锋短尾迹，且只按刀锋短路径切割——完整长轨迹扫到、但刀锋没真正碰到的地方不会误删。',
+  },
+  // —— 颜色统一归「主题/连线切割」——
   pathColor: {
     type: 'color',
     default: '#38bdf8',
     label: '切割轨迹颜色',
-    group: '连线切割',
+    group: '主题/连线切割',
     description: 'Alt 拖拽时画出的完整轨迹线的颜色（半透明发光线条）。',
   },
   bladeColor: {
     type: 'color',
     default: '#38bdf8',
     label: '刀锋颜色',
-    group: '连线切割',
+    group: '主题/连线切割',
     description: '刀锋尾迹/刀尖的主题色（发光描边颜色）。',
-  },
-  showCutPath: {
-    type: 'boolean',
-    default: true,
-    label: '切割范围：完整轨迹',
-    group: '连线切割',
-    description:
-      '开启：显示完整拖拽轨迹，并按整条轨迹切割（划到哪删到哪）。关闭：只显示刀锋短尾迹，且只按刀锋短路径切割——完整长轨迹扫到、但刀锋没真正碰到的地方不会误删。',
   },
 } satisfies ConfigSchema
 

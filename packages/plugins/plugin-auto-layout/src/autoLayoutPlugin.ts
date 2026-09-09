@@ -54,13 +54,12 @@ export const inject = ['nodeStore', 'edgeStore', 'selection', 'graph', 'nodeLayo
 
 /** Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认） */
 export const Config = {
-  // —— 「布局」分二级：方向 / 间距 / 诊断 ——
   direction: {
     type: 'select',
     default: 'LR',
     label: '排列方向',
     description: '节点自动布局的走向',
-    group: '布局/方向',
+    group: '布局',
     options: [
       { value: 'LR', label: '左→右 (LR)' },
       { value: 'TB', label: '上→下 (TB)' },
@@ -68,15 +67,14 @@ export const Config = {
       { value: 'BT', label: '下→上 (BT)' },
     ],
   },
-  intraSpacingX: { type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距', group: '布局/间距' },
-  intraSpacingY: { type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距', group: '布局/间距' },
-  interSpacingX: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距', group: '布局/间距' },
-  interSpacingY: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距', group: '布局/间距' },
-  debug: { type: 'boolean', default: false, label: '诊断日志', group: '布局/诊断' },
-  // —— 「聚焦」（单一分类，无二级页签）——
-  focusHeightRatio: { type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '聚焦' },
-  minZoom: { type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '聚焦' },
-  maxZoom: { type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '聚焦' },
+  intraSpacingX: { type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距', group: '布局' },
+  intraSpacingY: { type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距', group: '布局' },
+  interSpacingX: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距', group: '布局' },
+  interSpacingY: { type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距', group: '布局' },
+  focusHeightRatio: { type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局' },
+  minZoom: { type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局' },
+  maxZoom: { type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局' },
+  debug: { type: 'boolean', default: false, label: '诊断日志', group: '布局' },
 } satisfies ConfigSchema
 
 export type AutoLayoutConfigFromSchema = InferConfig<typeof Config>

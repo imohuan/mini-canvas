@@ -63,15 +63,14 @@ export const inject = ['graph'] as string[]
  * 视觉/外观相关的进阶编排（预览UI、字段渲染器下发）见 docs/代码开发/plugins/plugin-theme-default.md。
  */
 export const Config: ConfigSchema = {
-  // —— 「图片」外观 ——
-  cornerRadius: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '图片' },
-  showShadow: { type: 'boolean', default: true, label: '阴影', group: '图片' },
-  // —— 「边框」外观 ——
-  borderWidth: { type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '边框' },
-  borderColor: { type: 'color', default: '#334155', label: '边框颜色', group: '边框' },
-  // —— 「高级」加载行为 ——
-  blurOnLoad: { type: 'boolean', default: false, label: '加载时模糊', group: '高级' },
-  lazyLoad: { type: 'boolean', default: true, label: '懒加载', group: '高级' },
+  // —— 「节点 / 图片节点」：image 节点的外观与加载行为（非颜色）——
+  cornerRadius: { type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '节点/图片节点' },
+  showShadow: { type: 'boolean', default: true, label: '阴影', group: '节点/图片节点' },
+  borderWidth: { type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '节点/图片节点' },
+  blurOnLoad: { type: 'boolean', default: false, label: '加载时模糊', group: '节点/图片节点' },
+  lazyLoad: { type: 'boolean', default: true, label: '懒加载', group: '节点/图片节点' },
+  // —— 颜色统一归「主题/图片节点」——
+  borderColor: { type: 'color', default: '#334155', label: '边框颜色', group: '主题/图片节点' },
 }
 
 export function apply(ctx: Context) {
