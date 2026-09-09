@@ -59,7 +59,8 @@ export const inject = ['graph'] as string[]
  * 字段带 group，内核装配时经 Config 校验+补默认并登记进 settings 单一数据源(scope=image)；
  * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
  *
- * 分组命名约定：同属一个主题的字段用 `一级/二级`（如 `图片/圆角`）表达二级菜单；只有一个分类的用扁平分组。
+ * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象"归类、跨插件聚合。
+ * image 节点字段归一级「节点」的 `节点/图片节点`；边框颜色字段归一级「主题」的 `主题/图片节点`（配色集中调）。
  * 视觉/外观相关的进阶编排（预览UI、字段渲染器下发）见 docs/代码开发/plugins/plugin-theme-default.md。
  */
 export const Config: ConfigSchema = {

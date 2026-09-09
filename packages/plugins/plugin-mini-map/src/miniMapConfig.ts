@@ -2,7 +2,7 @@
  * miniMapConfig —— mini-map 插件可配置项（纯逻辑：schema + 从 settings 读当前值）。
  *
  * 对齐老版 MiniMapPlugin 的 5 个 panel 设置项（宽度/高度/X轴灵敏度/Y轴灵敏度/显示小地图），
- * 分组沿用老版「小地图 mini-map」；标量字段经内核 SettingsStore（settings 单一数据源）
+ * 分组为独立一级「小地图」；标量字段经内核 SettingsStore（settings 单一数据源）
  * 登记进 ⚙ 设置面板，改动实时生效（浮层订阅 onChange 后重读本函数）。
  * 独立成文件避免 miniMapPlugin ↔ MiniMapOverlay 循环 import。
  */
