@@ -65,6 +65,26 @@ function numberValue(v: string | number | boolean, s: SettingSchema): number {
   return Number(v) || Number(s.default)
 }
 
+/** 按 step 决定保留几位小数：step>=1 取整；step<1 取 step 小数位数（去尾零，至少 0） */
+function decimalsOfStep(step: number): number {
+  if (!Number.isFinite(step) || step >= 1) return 0
+  // 把 step 转成小数字符串数位数（处理 0.05 -> "0.05" -> 2；0.1 -> 1）
+  const s = String(step).split('.')[1] ?? ''
+  let n = 0
+  for (const ch of s) {
+    if (ch === '0') n++
+    else { n++; break }
+  }
+  return n
+}
+/** 按 schema.step 格式化显示值：截掉超出 step 精度的小数位（只动展示，不动存储） */
+function formatByStep(v: string | number | boolean, s: SettingSchema): string {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return String(v)
+  const d = decimalsOfStep((s.step ?? 1) as number)
+  return n.toFixed(d)
+}
+
 // —— number 滑块 Ctrl+拖动的精细微调 ——
 // 原生 range 只能按固定 step 吸附，无法临时换成 0.1。这里改用手算：把指针位置换算成
 // [min,max] 内的值。拖动时若"按住 Ctrl"则按 0.1 细步（便于微调），否则按 schema.step；
@@ -185,7 +205,7 @@ const fieldId = 'sf-' + props.fieldKey
     <template v-else-if="entry.schema.type === 'number'">
       <div class="sf-label-row">
         <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
-        <span class="sf-value-bubble">{{ entry.value }}</span>
+        <span class="sf-value-bubble">{{ formatByStep(entry.value, entry.schema) }}</span>
       </div>
       <input ref="rangeEl" :id="fieldId" class="sf-range" type="range" :min="entry.schema.min ?? 0"
         :max="entry.schema.max ?? 100" :step="entry.schema.step ?? 1"
