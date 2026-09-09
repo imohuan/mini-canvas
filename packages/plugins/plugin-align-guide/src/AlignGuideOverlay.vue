@@ -29,9 +29,9 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
-import { computeAlignGuides } from './alignGuideEngine'
+import { computeAlignGuides, SNAP_THRESHOLD } from './alignGuideEngine'
 
-const { ctx, interaction, viewport, updateNodeVisual } = useCanvasRender()
+const { ctx, interaction, viewport, visibleNodes, updateNodeVisual } = useCanvasRender()
 
 const vGuide = ref<number | null>(null)
 const hGuide = ref<number | null>(null)
@@ -54,7 +54,9 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
   const size = layout.nodeSize(nodeId)
   if (size.w <= 0 || size.h <= 0) return
   const dragged = { id: nodeId, x: position.x, y: position.y, w: size.w, h: size.h }
-  const others = layout.getAllRects().filter((r) => r.id !== nodeId)
+  // 候选裁剪到当前可视区(外扩 SNAP_THRESHOLD 边距)：大画布上千节点时，远端节点不可能命中，
+  // 逐帧只比可视区那几个，避免对全量节点做 O(n) 遍历。
+  const others = visibleNodes(SNAP_THRESHOLD).filter((r) => r.id !== nodeId)
   const { deltaX, deltaY, guides } = computeAlignGuides(dragged, others)
   if (deltaX !== 0 || deltaY !== 0) {
     updateNodeVisual(nodeId, { x: position.x + deltaX, y: position.y + deltaY })
