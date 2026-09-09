@@ -81,6 +81,14 @@ export function bladeOnly(points: ScreenPoint[]): ScreenPoint[] {
   return points.slice(-BLADE_POINTS)
 }
 
+/** 仅取当前"刀锋/短时路径"尾迹（尾部 TRAIL_POINTS）——与 overlay 在关闭完整轨迹时实际绘制的
+ *  发光尾迹范围完全一致（overlay.draw 的 trail = points.slice(-TRAIL_POINTS)）。
+ *  用于"只显示刀锋短路径"模式下的命中判定，保证**所见即所得**：用户看得到的那段尾迹才参与删边，
+ *  完整长轨迹扫到但刀锋尾迹没真正碰到的不删。 */
+export function cutTrailOnly(points: ScreenPoint[]): ScreenPoint[] {
+  return points.slice(-TRAIL_POINTS)
+}
+
 /**
  * 从全部命中候选里筛出被切割轨迹命中的边 id（纯函数；hit 判定几何见 geometry.isPolylineHitByCut）。
  * @param cutPoints 参与裁剪的轨迹（调用方已决定全长 or bladeOnly；默认整条拖拽轨迹参与）

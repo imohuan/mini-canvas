@@ -20,6 +20,7 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
 import type { ScreenPoint } from './geometry'
 import {
+  cutTrailOnly,
   filterHitEdges,
   rectsOverlap,
   resolveEdgePath,
@@ -205,8 +206,11 @@ class EdgeCuttingController {
 
   /** 松手结算：命中检测 → 原子删边(一次历史) → 广播事件 */
   private commitCut(): void {
-    // 本轮未暴露 bladeOnlyCut：整条拖拽轨迹参与命中（与老版默认 bladeOnlyCut=false 一致）
-    const cutPoints = this.points
+    // 命中轨迹跟随「显示完整轨迹」开关，保证所见即所得：
+    //  - 开启(显示完整轨迹) → 整条拖拽轨迹参与命中；
+    //  - 关闭(只显示刀锋短尾迹) → 仅用当前刀锋短路径参与命中，完整长轨迹扫到但刀锋没碰到的不删
+    //    （否则会出现：画了很长一段、最后落笔在空白，却因整条长线扫到而误删远处连线）。
+    const cutPoints = this.cfg.showCutPath ? this.points : cutTrailOnly(this.points)
     if (cutPoints.length < 2) return
     const entries = this.visibleEdgeSamples()
     if (entries.length === 0) return
