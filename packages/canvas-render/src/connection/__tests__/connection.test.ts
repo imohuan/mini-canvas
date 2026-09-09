@@ -217,4 +217,40 @@ describe('reasonText', () => {
     // 未知给兜底
     expect(reasonText('anything-else' as never)).toBe(DEFAULT_REASON_TEXT)
   })
+  it('limit-reached → "已达连接上限"（用于"已存在入边禁止再建第二条"提示）', () => {
+    expect(reasonText('limit-reached')).toBe('已达连接上限')
+  })
+})
+
+describe('resolveFeedback：已有入边场景（连边防重复）', () => {
+  /** 模拟「目标节点输入口 capacity=1 且已有一条入边」时 hover 反馈必须是 invalid，
+   * 防止 drop 时未拦截建第二条边（commitEdge 兜底也以此为最终硬拦截）。 */
+  it('目标节点输入口已满 → validate 返回 "已达连接上限"，hover 标 invalid（不放行）', () => {
+    // a → b 已存在（b 输入口已满），从 c 再连到 b
+    const r = resolveFeedback({
+      sourceId: 'c',
+      sourceHandle: 'source',
+      nodeRects: [A, B],
+      handleRadius: R,
+      flowPoint: { x: 470, y: 264 }, // 命中 B 左缘吸附带
+      validate: (_s, t) => (t === 'b' ? '已达连接上限' : ''),
+    })
+    expect(r.snappedToId).toBeNull() // 非法不吸附
+    expect(r.hover?.status).toBe('invalid')
+    expect(r.hover?.nodeId).toBe('b')
+    expect(r.hover?.reason).toBe('已达连接上限')
+    expect(r.end).toEqual({ x: 470, y: 264 }) // 线端点不吸，跟鼠标
+  })
+
+  it('目标节点输入口已满 + body 内（非吸附带）→ hover invalid 仍走，reason 透传给气泡文案', () => {
+    const r = resolveFeedback({
+      sourceId: 'c',
+      sourceHandle: 'source',
+      nodeRects: [A, B],
+      handleRadius: R,
+      flowPoint: { x: 620, y: 264 }, // B body 中部
+      validate: (_s, t) => (t === 'b' ? '已达连接上限' : ''),
+    })
+    expect(r.hover).toEqual({ nodeId: 'b', status: 'invalid', zone: 'body', reason: '已达连接上限', portSide: undefined })
+  })
 })

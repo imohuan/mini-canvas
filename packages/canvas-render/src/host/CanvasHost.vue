@@ -508,6 +508,9 @@ function onDragMouseUp(ev: MouseEvent): void {
     `drop resolve client=${Math.round(ev.clientX)},${Math.round(ev.clientY)} flow=${Math.round(target.point.x)},${Math.round(target.point.y)} ${drop ? `→ ${drop.source}→${drop.target}/${drop.zone}` : '→ 空白(松空)'}`,
   )
   if (drop) {
+    // checkConnection 兜底：drop 来源于 aimedTarget(前端 mouse 上报)的 hover 状态，hover 在合法→非法
+    // 之间可能滞后一帧，此处再跑一次内核校验保证 capacity/类型/环/重等规则硬拦截——例如目标节点
+    // 输入口 capacity 已满(已有入边)时直接拒，不进入 commitEdge。
     const res = checkConnection(drop.source, drop.target)
     if (!res.ok) log.warn(`drop ${drop.source}→${drop.target} 非法:${res.reason}`)
     else commitEdge(drop.source, drop.target)
@@ -670,8 +673,12 @@ function onConnect(conn: Connection): void {
 }
 
 /**
- * 真正落一条边：幂等去重(已存在同源同目标同 handle 的边则不重复建) + 记历史 + 落盘。
+ * 真正落一条边：内核校验硬兜底 + 幂等去重(已存在同源同目标同 handle 的边则不重复建) + 记历史 + 落盘。
  * @connect(精确命中 handle) 与 connect-end 的 lastDrop(body/snap 松开) 两条路径都走这里，保证不会双建。
+ *
+ * 内核校验：所有提交路径(@connect、drop)都已经过 isValidConnection / checkConnection，但落一道兜底
+ * 防止未来新路径漏校验——比如目标节点输入口 capacity 已满(已有入边)时禁止再建（同源节点多次连向
+ * 同一目标会被内核返回 limit-reached 而拒；本函数不再 evict 第一条，由 evictOldestIncoming 单独控）。
  */
 function commitEdge(
   source: string,
@@ -681,6 +688,12 @@ function commitEdge(
 ): void {
   const h = hostRef.value
   if (!h) return
+  // 兜底：任何进 commitEdge 的边先过内核校验，非 ok 直接拒（防御未来新入口绕过校验）。
+  const guard = checkConnection(source, target, sourceHandle, targetHandle)
+  if (!guard.ok) {
+    log.warn(`commitEdge ${source}→${target} 被内核拒:${guard.reason}`)
+    return
+  }
   const already = h.edgeStore
     .getEdges()
     .some(
