@@ -3,8 +3,10 @@
 // 职责：按全局配置渲染边路径(bezier/straight/step/smoothstep)；默认导轨 + 同色光斑沿路径流动；
 //       选中/相连/临时/force 边加亮（drop-shadow 强化）；提供加宽透明点击热区 + 双击弹剪切钮删除。
 // 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）。
-// 动画：纯 CSS keyframes 推进 stroke-dashoffset（不用 SVG <animate> SMIL，根因：vdom patch 把 <animate> 当 path child
-//       反复比较，path 的 d 在多次 patch 后被清空、bbox=0、光斑彻底不可见——浏览器实测结果）。
+// 流动动画：不用 SVG <animate> SMIL（根因：vdom patch 把 <animate> 当 path child 反复比较，
+//       path 的 d 在多次 patch 后被清空、bbox=0、光斑不可见——浏览器实测）；也不用纯 CSS stroke-dashoffset
+//       keyframes（那样光斑是"等不透明度硬块"，两端没有 demo 的渐隐）。两段渐隐靠 JS rAF + 每块一个
+//       linearGradient 钉在块两端实现（见文件底部"胶囊渐变"渲染器）。
 // 箭头颜色：与 flowColor 同色（统一连线视觉）。颜色用 :style 内联绑定到 element.style，优先级高于 .vue-flow 全局 CSS
 //       的 var(--ce-color, #3b82f6) 兜底，避免被覆盖为线色（之前就是这个 bug）。
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
@@ -209,8 +211,6 @@ const cssDurSec = computed(() => {
 const railColor = computed(() => edgeColor.value)
 const railWidth = computed(() => Math.max(1, lineWidth.value))
 const flowColor = computed(() => edgeGlowColor.value || edgeColor.value)
-const softWidth = computed(() => Math.max(2, lineWidth.value * 2.4))
-const hotWidth = computed(() => Math.max(1.5, lineWidth.value))
 
 const gStyle = computed(() => ({
   '--ce-color': edgeColor.value,
@@ -222,6 +222,234 @@ const gStyle = computed(() => ({
   '--ce-block': flowBlockSize.value + 'px',
   '--ce-gap': flowGap.value + 'px',
 }))
+
+// ============================================================================
+// 光斑"胶囊渐变"渲染器（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）
+// ----------------------------------------------------------------------------
+// 需求：当前流光块是整段等不透明度的"硬块"（软辉光层+亮芯层，stroke-dashoffset 硬切），
+//       缺少 demo 里每个色斑"头尾两端渐隐"的胶囊感（flowFade 配置项长期闲置未生效）。
+//
+// 为什么不能沿用纯 CSS 的 stroke-dashoffset 动画实现两端渐隐：
+//   块在路径上由 dashoffset 平移，而 alpha 渐变要么是"世界坐标固定"(gradientUnits=userSpaceOnUse，
+//   块移动后渐变的淡出点不再跟着块走)，要么是对象包围盒(非路径长度向)。要让"随块移动的两端渐隐"
+//   必须 JS 驱动：每个可见块一个 path + 一个 linearGradient，逐帧把渐变坐标钉在块的两端世界坐标上。
+//
+// 为什么用"直接 DOM 写入"(非响应式 v-for)：
+//   本仓库踩过 vdom patch 反复比较 SVG 子元素把 path 的 d 清空的坑，故这里全部走
+//   createElementNS + setAttribute 手工管理，块的数量/属性不进 Vue 响应式，杜绝 patch 干扰。
+//
+// 逐帧成本：O(可见块数) 次 setAttribute(渐变 4 坐标 + path 偏移)，块每 ~(block+gap)px 一个，
+//   仅在 flowActive && 有几何长度时跑，空闲直接 return(几乎零开销)。配置/几何变化走签名比对。
+// ============================================================================
+
+// 供渐变 unique id 使用：跨实例、跨重挂载保证全局唯一
+let _edgeFxUid = 0
+const _fxIdBase = `efx_${(Date.now() & 0xffffff).toString(36)}_${_edgeFxUid++}`
+const _svgNS = 'http://www.w3.org/2000/svg'
+
+// 流动层容器与可测长的导轨（同一条 path d，rails 负责"测长 + 采样点"，胶囊块负责"画"）
+const capsuleHostEl = ref<SVGGElement | null>(null)
+const railEl = ref<SVGPathElement | null>(null)
+
+// 胶囊块池（每块 = 软辉光 path + 亮芯 path + 各自 linearGradient），全部非响应式
+let _capSoftGrads: SVGLinearGradientElement[] = []
+let _capHotGrads: SVGLinearGradientElement[] = []
+let _capSoftPaths: SVGPathElement[] = []
+let _capHotPaths: SVGPathElement[] = []
+let _capRaf = 0
+let _capPrevTs = 0
+let _capAnimDist = 0
+let _capConfigSig = ''
+let _capOwnHost: SVGGElement | null = null
+
+// 合并可见层所需常量（随配置实时算）
+function _capsuleLayerConst() {
+  const glow = edgeGlowEnabled.value
+  const softA = glow ? Math.max(0.15, flowIntensity.value * 0.45) : 0
+  const hotA = Math.min(1, flowIntensity.value + 0.1)
+  return {
+    softW: Math.max(2, lineWidth.value * 2.4),
+    hotW: Math.max(1.5, lineWidth.value),
+    softA,
+    hotA,
+    color: flowColor.value,
+    fade: Math.max(1, Math.min(50, flowFade.value)),
+    softOn: glow,
+  }
+}
+
+function _setGradStops(g: SVGLinearGradientElement, maxAlpha: number, color: string, fade: number) {
+  g.innerHTML = ''
+  const mk = (off: number, op: number) => {
+    const s = document.createElementNS(_svgNS, 'stop')
+    s.setAttribute('offset', `${off}%`)
+    s.setAttribute('stop-color', color)
+    s.setAttribute('stop-opacity', String(op))
+    g.appendChild(s)
+  }
+  mk(0, 0)
+  mk(fade, maxAlpha)
+  mk(100 - fade, maxAlpha)
+  mk(100, 0)
+}
+
+function _makeGrad(host: SVGGElement, id: string, maxAlpha: number, color: string, fade: number): SVGLinearGradientElement {
+  const g = document.createElementNS(_svgNS, 'linearGradient')
+  g.id = id
+  g.setAttribute('gradientUnits', 'userSpaceOnUse')
+  host.appendChild(g)
+  _setGradStops(g, maxAlpha, color, fade)
+  return g
+}
+
+function _makeFlowPath(host: SVGGElement, gradId: string, width: number): SVGPathElement {
+  const p = document.createElementNS(_svgNS, 'path')
+  p.setAttribute('fill', 'none')
+  p.setAttribute('stroke', `url(#${gradId})`)
+  p.setAttribute('stroke-width', String(width))
+  p.setAttribute('stroke-linecap', 'round')
+  p.setAttribute('pointer-events', 'none')
+  host.appendChild(p)
+  return p
+}
+
+/** 配置/高亮变化（不含逐帧几何）→ 整体重建池子，保证新块按最新配置取色
+ *  注意：isHighlighted / edgeGlowIntensity 只作用于容器 drop-shadow，逐帧直接改 style.filter，不纳入重建签名。 */
+function _syncCapsuleConfig(host: SVGGElement) {
+  const c = _capsuleLayerConst()
+  const sig = [
+    c.softOn, c.softA, c.hotA, c.color, c.fade, c.softW, c.hotW,
+  ].join('|')
+  if (sig === _capConfigSig) return
+  _capConfigSig = sig
+  // 清空重建（配置改动罕见）
+  host.innerHTML = ''
+  _capSoftGrads = []
+  _capHotGrads = []
+  _capSoftPaths = []
+  _capHotPaths = []
+}
+
+function _appendCapsuleBlock(host: SVGGElement, color: string, fade: number, softW: number, hotW: number, softA: number, hotA: number) {
+  const i = _capSoftGrads.length
+  const sg = _makeGrad(host, `${_fxIdBase}_sg_${i}`, softA, color, fade)
+  const hg = _makeGrad(host, `${_fxIdBase}_hg_${i}`, hotA, color, fade)
+  const sp = _makeFlowPath(host, sg.id, softW)
+  const hp = _makeFlowPath(host, hg.id, hotW)
+  _capSoftGrads.push(sg)
+  _capHotGrads.push(hg)
+  _capSoftPaths.push(sp)
+  _capHotPaths.push(hp)
+}
+
+function _dropCapsuleBlock(host: SVGGElement) {
+  const take = (arr: SVGElement[]) => arr.pop()!
+  const sg = take(_capSoftGrads)
+  const hg = take(_capHotGrads)
+  const sp = take(_capSoftPaths)
+  const hp = take(_capHotPaths)
+  for (const el of [sg, hg, sp, hp]) host.removeChild(el)
+}
+
+/** 逐帧：把每个可见块的渐变坐标钉到块两端、dash 揭示该段 */
+function _renderFlowFrame(ts: number) {
+  _capRaf = requestAnimationFrame(_renderFlowFrame)
+  const rail = railEl.value
+  const host = capsuleHostEl.value
+  const active =
+    flowActive.value && edgeShowVisual.value && Boolean(rail) && Boolean(host)
+  if (!active) {
+    _capPrevTs = 0
+    return
+  }
+  // 时间归一流速（px/frame @60fps）
+  const cycle = Math.max(1, flowBlockSize.value + flowGap.value)
+  if (_capPrevTs) {
+    const dt = ts - _capPrevTs
+    const adv = flowSpeed.value * (dt / (1000 / 60))
+    _capAnimDist = ((_capAnimDist + adv) % cycle + cycle) % cycle
+  }
+  _capPrevTs = ts
+
+  const railNode = rail!
+  const hostNode = host!
+  let totalLen = 0
+  try {
+    totalLen = railNode.getTotalLength()
+  } catch {
+    /* 几何尚未就绪 */
+  }
+  if (!(totalLen > 0)) {
+    hostNode.style.display = 'none'
+    return
+  }
+  hostNode.style.display = ''
+  // 宿主重挂载(flowActive 开关/v-show 重建)时池子里是旧的已卸载节点 → 归零重建，避免对无关宿主 removeChild
+  if (hostNode !== _capOwnHost) {
+    _capOwnHost = hostNode
+    _capSoftGrads = []
+    _capHotGrads = []
+    _capSoftPaths = []
+    _capHotPaths = []
+    _capConfigSig = ''
+  }
+  const c = _capsuleLayerConst()
+  _syncCapsuleConfig(hostNode)
+
+  // 遍历当前应可见的所有块起点
+  const starts: number[] = []
+  const startD = _capAnimDist - cycle
+  for (let dist = startD; dist < totalLen + cycle; dist += cycle) {
+    if (dist + flowBlockSize.value >= 0 && dist <= totalLen) starts.push(dist)
+  }
+  // 增删池子到匹配
+  while (_capSoftGrads.length < starts.length) {
+    _appendCapsuleBlock(hostNode, c.color, c.fade, c.softW, c.hotW, c.softA, c.hotA)
+  }
+  while (_capSoftGrads.length > starts.length) {
+    _dropCapsuleBlock(hostNode)
+  }
+
+  const dAttr = railNode.getAttribute('d') || ''
+  const dashGap = Math.max(totalLen * 2, 1)
+  const block = flowBlockSize.value
+  const clampN = (n: number) => Math.max(0, Math.min(totalLen, n))
+  for (let i = 0; i < starts.length; i++) {
+    const s = starts[i]
+    const e = s + block
+    const vs = clampN(s)
+    const ve = clampN(e)
+    if (ve - vs <= 0) continue
+    const ps = railNode.getPointAtLength(vs)
+    const pe = railNode.getPointAtLength(ve)
+    const sg = _capSoftGrads[i]
+    const hg = _capHotGrads[i]
+    const sp = _capSoftPaths[i]
+    const hp = _capHotPaths[i]
+    sg.setAttribute('x1', String(ps.x)); sg.setAttribute('y1', String(ps.y))
+    sg.setAttribute('x2', String(pe.x)); sg.setAttribute('y2', String(pe.y))
+    hg.setAttribute('x1', String(ps.x)); hg.setAttribute('y1', String(ps.y))
+    hg.setAttribute('x2', String(pe.x)); hg.setAttribute('y2', String(pe.y))
+    sp.setAttribute('d', dAttr)
+    sp.setAttribute('stroke-dasharray', `${block} ${dashGap}`)
+    sp.setAttribute('stroke-dashoffset', String(-s))
+    hp.setAttribute('d', dAttr)
+    hp.setAttribute('stroke-dasharray', `${block} ${dashGap}`)
+    hp.setAttribute('stroke-dashoffset', String(-s))
+  }
+  // 高亮光晕：整组 drop-shadow，跟随所有胶囊块一起移动
+  hostNode.style.filter = isHighlighted.value
+    ? `drop-shadow(0 0 ${4 * edgeGlowIntensity.value}px ${c.color})`
+    : 'none'
+}
+
+onMounted(() => {
+  _capRaf = requestAnimationFrame(_renderFlowFrame)
+})
+onUnmounted(() => {
+  cancelAnimationFrame(_capRaf)
+  _capRaf = 0
+})
 </script>
 
 <template>
@@ -247,6 +475,7 @@ const gStyle = computed(() => ({
       </template>
       <template v-else>
         <path
+          ref="railEl"
           class="ef-rail"
           :d="edgePath"
           fill="none"
@@ -255,32 +484,9 @@ const gStyle = computed(() => ({
           stroke-linecap="round"
           :stroke-dasharray="dashArray"
         />
-        <path
-          v-if="edgeGlowEnabled"
-          class="ef-flow ef-flow--soft"
-          :d="edgePath"
-          fill="none"
-          :stroke="flowColor"
-          :stroke-width="softWidth"
-          stroke-linecap="round"
-          :style="{
-            strokeDasharray: `${flowBlockSize}px ${flowGap}px`,
-            opacity: Math.max(0.15, flowIntensity * 0.45),
-            filter: isHighlighted ? `drop-shadow(0 0 ${4 * edgeGlowIntensity}px ${flowColor})` : 'none',
-          }"
-        />
-        <path
-          class="ef-flow ef-flow--hot"
-          :d="edgePath"
-          fill="none"
-          :stroke="flowColor"
-          :stroke-width="hotWidth"
-          stroke-linecap="round"
-          :style="{
-            strokeDasharray: `${flowBlockSize}px ${flowGap}px`,
-            opacity: Math.min(1, flowIntensity + 0.1),
-          }"
-        />
+        <!-- 胶囊渐变光斑容器：子节点(每块 soft/hot path + 各自 linearGradient)由 JS 逐帧直接 DOM 写入，
+             不进 Vue 响应式(规避 vdom patch 清空 d 的坑)。railEl 与胶囊块共享同一 d，负责测长/采样点。 -->
+        <g ref="capsuleHostEl" class="ef-capsules"></g>
       </template>
       <path
         v-if="edgeMarkerEnd"
@@ -342,20 +548,8 @@ const gStyle = computed(() => ({
 .ef-base { opacity: 0.45; }
 .ef-base--dim { opacity: 0.3; }
 .ef-rail { opacity: 0.65; }
-.ef-flow--soft { pointer-events: none; }
-.ef-flow--hot { pointer-events: none; }
-.ef-flow--soft,
-.ef-flow--hot {
-  animation-name: ce-flow;
-  animation-iteration-count: infinite;
-  animation-timing-function: linear;
-  animation-duration: var(--ce-dur, 4s);
-  will-change: stroke-dashoffset;
-}
-@keyframes ce-flow {
-  from { stroke-dashoffset: 0; }
-  to   { stroke-dashoffset: calc(0px - var(--ce-cycle, 350px)); }
-}
+/* 胶囊渐变光斑容器：子 path 均为 pointer-events:none（由 _makeFlowPath 内联设置），容器再兜底一次 */
+.ef-capsules { pointer-events: none; }
 .cut-btn {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%; border: none;
