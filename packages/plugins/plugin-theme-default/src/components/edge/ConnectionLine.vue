@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CustomEdge from './CustomEdge.vue'
 // ConnectionLine - thin shell for the drag-time temporary connection line.
 // Rendering is FULLY delegated to CustomEdge (same component used by existing edges), so the
 // temp line shares the exact same visual: rail / light blocks / arrow / config / animation.
