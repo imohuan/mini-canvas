@@ -55,17 +55,32 @@ function numberValue(v: string | number | boolean, s: SettingSchema): number {
 }
 
 // —— number 滑块 Ctrl+拖动的精细微调 ——
-// 原生 range 会按 step 吸附，无法临时改成 0.1 细步。这里改用手算：把指针位置按滑块
-// 几何换算成 [min,max] 内的值，按下 Ctrl 时步进为 0.1，否则回落到 schema.step。
-const ctrlHeld = ref(false)
+// 原生 range 只能按固定 step 吸附，无法临时换成 0.1。这里改用手算：把指针位置换算成
+// [min,max] 内的值。拖动时若"按住 Ctrl"则按 0.1 细步（便于微调），否则按 schema.step；
+// 结束拖动（pointerup/cancel）时把值吸附回 schema.step 网格 —— 这样 step=1 的整数字段
+// 拖完不会残留 0.x 小数。
+const fineStep = 0.1
 let dragging = false
 const rangeEl = ref<HTMLInputElement | null>(null)
+
+/** 该字段的基准步进（schema.step，缺省 1）；小数比例字段须显式给 step */
+function baseStep(): number {
+  return (entry.value?.schema as SettingSchema).step ?? 1
+}
+
+/** 把 x 吸附到 step 的网格上（以 min 为基准），并夹在 [min,max] 内 */
+function snapToGrid(x: number, step: number): number {
+  const s = entry.value?.schema as SettingSchema
+  const min = Number(s.min) || 0
+  const max = Number(s.max) || 100
+  const snapped = Math.round(x / step) * step
+  return Math.min(max, Math.max(min, Number(snapped.toFixed(3))))
+}
 
 function onRangePointerDown(e: PointerEvent): void {
   const target = e.currentTarget as HTMLInputElement
   if (!target) return
   dragging = true
-  ctrlHeld.value = e.ctrlKey
   try {
     target.setPointerCapture(e.pointerId)
   } catch {
@@ -76,54 +91,54 @@ function onRangePointerDown(e: PointerEvent): void {
 
 function onRangePointerMove(e: PointerEvent): void {
   if (!dragging) return
-  // 拖动过程中 Ctrl 按下/松开也实时生效
-  ctrlHeld.value = e.ctrlKey
-  applyRangeFromPointer(e.currentTarget as HTMLInputElement, e.clientX)
+  // 拖动中按/松 Ctrl 实时生效：按住 → 0.1 细步
+  applyRangeFromPointer(e.currentTarget as HTMLInputElement, e.clientX, e.ctrlKey)
 }
 
+/** 结束拖动：吸附回 step 网格，避免残留小数（如 Ctrl 细调出的 0.x） */
 function endRangeDrag(): void {
+  if (!dragging) return
   dragging = false
+  // 用 DOM 当前值（拖动中每帧同步写入，不受 coalescer 合帧延迟影响）作吸附基准
+  const el = rangeEl.value
+  if (!entry.value || !el) return
+  const cur = el.valueAsNumber
+  if (!Number.isFinite(cur)) return
+  const val = snapToGrid(cur, baseStep())
+  // 与目标不等才 set（coalescer 会一并冲刷拖拽期的待提交帧）
+  if (Number(val.toFixed(3)) !== Number(cur.toFixed(3))) {
+    set(entry.value.key, val)
+    el.value = String(val)
+  }
 }
 
-function currentStep(): number {
-  // 按住 Ctrl → 精细 0.1 步进；否则用 schema 的 step
-  return ctrlHeld.value ? 0.1 : ((entry.value?.schema as SettingSchema).step ?? 1)
-}
-
-// 把指针水平位置换算成 [min,max] 内按当前步进吸附后的值
-function applyRangeFromPointer(el: HTMLInputElement, clientX: number): void {
+// 把指针水平位置换算成 [min,max] 内按"当前是否细步"吸附后的值
+function applyRangeFromPointer(el: HTMLInputElement, clientX: number, fine = false): void {
   const rect = el.getBoundingClientRect()
   if (!rect.width) return
-  const min = Number(el.min) || 0
-  const max = Number(el.max) || 100
-  const step = currentStep()
+  const step = fine ? fineStep : baseStep()
   const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  const s = entry.value?.schema as SettingSchema
+  const min = Number(s.min) || 0
+  const max = Number(s.max) || 100
   const raw = min + ratio * (max - min)
-  const val = Math.min(max, Math.max(min, Math.round(raw / step) * step))
-  if (entry.value) set(entry.value.key, Number(val.toFixed(3)))
+  const val = snapToGrid(raw, step)
+  if (entry.value) set(entry.value.key, val)
   el.value = String(val)
 }
 
 function onRangeKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Control') {
-    ctrlHeld.value = true
-    return
-  }
   // 方向键微调：Ctrl+方向 = 0.1 细步，否则按 schema step
+  const fine = e.ctrlKey || e.metaKey
   const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
   if (!dir || !entry.value) return
   e.preventDefault()
-  const min = Number(entry.value.schema.min) || 0
-  const max = Number(entry.value.schema.max) || 100
-  const step = currentStep()
+  const step = fine ? fineStep : baseStep()
   const cur = numberValue(entry.value.value, entry.value.schema)
-  const val = Math.min(max, Math.max(min, Math.round((cur + dir * step) / step) * step))
-  set(entry.value.key, Number(val.toFixed(3)))
+  const val = snapToGrid(cur + dir * step, step)
+  set(entry.value.key, val)
   const el = rangeEl.value
   if (el) el.value = String(val)
-}
-function onRangeKeyup(e: KeyboardEvent): void {
-  if (e.key === 'Control') ctrlHeld.value = false
 }
 const fieldId = 'sf-' + props.fieldKey
 </script>
@@ -153,8 +168,7 @@ const fieldId = 'sf-' + props.fieldKey
         :value="numberValue(entry.value, entry.schema)"
         @pointerdown="onRangePointerDown" @pointermove="onRangePointerMove"
         @pointerup="endRangeDrag" @pointercancel="endRangeDrag"
-        @keydown="onRangeKeydown" @keyup="onRangeKeyup"
-        @blur="ctrlHeld = false" />
+        @keydown="onRangeKeydown" />
     </template>
 
     <!-- boolean（toggle 开关） -->
