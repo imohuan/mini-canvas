@@ -190,8 +190,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 注入的 snapshot/restore 只负责"读/写两份 store"，深度拷贝交给调用处；restore 同时回填 nodeStore+edgeStore。
   const history = new History({
     snapshot: (): GraphEnvelope => ({
-      nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())) as CanvasNode[],
-      edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) as CanvasEdge[],
+      // 临时脚手架（data.isTemp：拖线落空白的菜单节点 + 占位连线）**不进历史**：
+      // 它是交互中间态，不该出现在撤销栈里，也不该被 undo 恢复出来。
+      nodes: JSON.parse(JSON.stringify(nodeStore.getNodes().filter((n) => !n.data?.isTemp))) as CanvasNode[],
+      edges: JSON.parse(JSON.stringify(edgeStore.getEdges().filter((e) => !e.data?.isTemp))) as CanvasEdge[],
     }),
     restore: (g) => {
       const env = (g as GraphEnvelope) ?? { nodes: [], edges: [] }
@@ -204,8 +206,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 图唯一写入口：统一"节点/边变更 + 历史 + 选中维护 + 提交后落盘"。
   // commit 回调接收整图信封：宿主把当前节点+边持久化（与 CanvasHost/commands 的 graph/graph-edges 分存一致）。
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (envelope) => {
-    save.set('graph', envelope.nodes, 'canvas')
-    save.set(GRAPH_EDGES_KEY, envelope.edges, 'canvas')
+    // 落盘同样滤掉临时脚手架：临时菜单节点/占位连线是交互中间态，刷新后不该复活。
+    save.set('graph', envelope.nodes.filter((n) => !n.data?.isTemp), 'canvas')
+    save.set(GRAPH_EDGES_KEY, envelope.edges.filter((e) => !e.data?.isTemp), 'canvas')
   })
   ctx.inject('graph', graph)
 
@@ -331,8 +334,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   return { host, api, manager, exposeToWindow }
 }
-
-
 
 
 

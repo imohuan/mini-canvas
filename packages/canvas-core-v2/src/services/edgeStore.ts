@@ -17,6 +17,8 @@ export interface CanvasEdge {
   /** 多端口节点预留：源/目标端口（现单进单出可省略） */
   sourceHandle?: string
   targetHandle?: string
+  /** 附加数据（渲染层透传给边组件）。临时脚手架边用 data.isTemp=true 标记，不参与落盘/历史/去重。 */
+  data?: Record<string, unknown>
 }
 
 /** 新建一条边的请求（id 可不给，由本 store 用 source/target 生成稳定 id） */
@@ -26,6 +28,7 @@ export interface AddEdgeRequest {
   type?: string
   sourceHandle?: string
   targetHandle?: string
+  data?: Record<string, unknown>
 }
 
 /** 回填(整体替换)可接受的边：id 可选(缺省按 source/target 生成)，其余同 CanvasEdge */
@@ -116,6 +119,7 @@ export class EdgeStore implements EdgeStoreService {
       type: req.type ?? 'custom',
       sourceHandle: req.sourceHandle,
       targetHandle: req.targetHandle,
+      ...(req.data !== undefined ? { data: { ...req.data } } : {}),
     })
     this.notify('add', id)
     return id
@@ -160,7 +164,6 @@ export class EdgeStore implements EdgeStoreService {
     this.notify('replace')
   }
 }
-
 
 
 

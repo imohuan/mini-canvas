@@ -29,6 +29,11 @@ export interface FlowNode {
   parentNodeId?: string
   /** 声明尺寸 → 像素 style（内核 CanvasNode.size 投影） */
   style?: { width: string; height: string }
+  /** 临时脚手架节点（拖线落空白的菜单节点）：在 VueFlow 维度关闭交互 */
+  draggable?: boolean
+  selectable?: boolean
+  deletable?: boolean
+  focusable?: boolean
 }
 
 /**
@@ -37,18 +42,30 @@ export interface FlowNode {
  *   不传则不带 selected 字段（向后兼容）。
  */
 export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySet<string>): FlowNode[] {
-  return store.getNodes().map((n: CanvasNode) => ({
-    id: n.id,
-    type: n.type,
-    position: { x: n.position.x, y: n.position.y },
-    data: { ...(n.data as Record<string, unknown>) },
-    ...(selectedIds ? { selected: selectedIds.has(n.id) } : {}),
+  return store.getNodes().map((n: CanvasNode) => {
+    const out: Record<string, unknown> = {
+      id: n.id,
+      type: n.type,
+      position: { x: n.position.x, y: n.position.y },
+      data: { ...(n.data as Record<string, unknown>) },
+    }
+    if (selectedIds) out.selected = selectedIds.has(n.id)
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNodeId: VueFlow 把子节点 position 视为相对父的局部坐标（与内核约定一致）
-    ...(n.parentId ? { parentNodeId: n.parentId } : {}),
+    if (n.parentId) out.parentNodeId = n.parentId
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
-    ...(n.size ? { style: { width: n.size.w + 'px', height: n.size.h + 'px' } } : {}),
-  }))
+    if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
+    // 临时节点（拖线落空白时占位）—— 必须在 VueFlow 维度把它隔离：
+    //   draggable/selectable/deletable 全部关 → pane click 的 removeSelectedElements 摸不到它、
+    //   不会拖动、不会进 VueFlow 内部选中集。视觉由它自己的 type=connection-menu + BaseNode 的 isTemp 分支渲染。
+    if (n.data?.isTemp) {
+      out.draggable = false
+      out.selectable = false
+      out.deletable = false
+      out.focusable = false
+    }
+    return out as unknown as FlowNode
+  })
 }
 
 /** 现有边保留(宿主内维护)；当节点被删时清掉悬挂边 */
@@ -173,6 +190,13 @@ export interface FlowEdge {
   target: string
   sourceHandle?: string
   targetHandle?: string
+  /** 附加数据（透传给边组件；临时边靠 data.isTemp 让 CustomEdge 走临时视觉） */
+  data?: Record<string, unknown>
+  /** 临时脚手架边：不可选中/不可删除（VueFlow 侧隔离） */
+  selectable?: boolean
+  focusable?: boolean
+  deletable?: boolean
+  zIndex?: number
 }
 
 /**
@@ -180,7 +204,7 @@ export interface FlowEdge {
  * B 项：DTO 保留 sourceHandle/targetHandle —— 渲染层能按端口匹配端点，不再丢弃（单端口节点无影响）。
  */
 export function edgesFromStore(
-  edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }>,
+  edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: { isTemp?: boolean } }>,
   aliveNodeIds: ReadonlySet<string>,
 ): FlowEdge[] {
   return edges
@@ -192,11 +216,11 @@ export function edgesFromStore(
       target: e.target,
       sourceHandle: e.sourceHandle,
       targetHandle: e.targetHandle,
+      ...(e.data ? { data: e.data } : {}),
+      // 临时边（拖线占位）—— 同样在 VueFlow 维度隔离：不可选中/不可键盘删除，与正式边视觉共存但语义隔离。
+      ...(e.data?.isTemp
+        ? { selectable: false, focusable: false, deletable: false, zIndex: 1000 }
+        : {}),
     }))
 }
-
-
-
-
-
 

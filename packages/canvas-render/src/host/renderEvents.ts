@@ -76,6 +76,12 @@ export interface ConnectionDropPayload {
   sourceNodeId: string
   /** 拖线起点端口：'source' = 从输出口拖出；'target' = 从输入口反向拖出（线要从新节点往左画） */
   sourceHandle: 'source' | 'target'
+  /**
+   * 本次拖线从按下到松手的位移（屏幕 px）。
+   * 供消费方区分"真拖线"与"在端口上点了一下"（阈值由消费方按自己的配置判定）。
+   * 拿不到按下点时（异常路径）为 0。
+   */
+  dragDistance: number
 }
 export interface ContextMenuNodePayload {
   clientX: number
@@ -104,4 +110,3 @@ export function toDragPayload(e: {
   const p = e.node.position
   return { nodeId: e.node.id, position: p ? { x: p.x, y: p.y } : { x: 0, y: 0 } }
 }
-

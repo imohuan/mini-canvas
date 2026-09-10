@@ -16,6 +16,7 @@ import BaseTitle from './BaseTitle.vue'
 import { useNodeCapability } from '../../composables/useNodeCapability'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
+import { tempMenuCardStyle } from '../../composables/tempMenuCardTransform'
 
 const log = createV2Logger('base-node')
 const props = defineProps<NodeProps>()
@@ -84,6 +85,13 @@ const cardHeight = card.cardHeight
 const cardResizable = card.resizable
 const cardIsResizing = card.isResizing
 
+/**
+ * 临时菜单节点（拖线落空白时放的占位菜单卡）：它只是"菜单的载体"，
+ * 外观完全由它自己的 content 段（ConnectionMenuContent）画成右键菜单卡片。
+ * 所以壳这边把标题条藏掉、卡片自身底色/边框/阴影清掉，避免与菜单卡片双重描边。
+ */
+const isTempMenu = computed(() => Boolean(props.data?.isTemp))
+
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
 const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 // 卡片边框反缩放补偿
@@ -102,8 +110,24 @@ const cardInlineStyle = computed<Record<string, string>>(() => ({
   height: `${cardHeight.value}px`,
   transform: cardTransform.value,
   borderWidth: `${1 / zoom.value}px`,
-  borderRadius: '8px',
+  // 临时菜单卡用右键菜单同款圆角（16px），普通节点保持 8px
+  borderRadius: isTempMenu.value ? '16px' : '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
+  // 临时菜单卡：边框/底色/阴影交给 content 段（右键菜单同款），壳这边清掉；
+  // 并叠加**反缩放**（屏幕尺寸恒定，不随画布 zoom 变化）—— 放最后，覆盖上面的
+  // transform / borderWidth / --card-outline-width。普通节点完全不受影响。
+  ...(isTempMenu.value
+    ? {
+        borderColor: 'transparent',
+        background: 'transparent',
+        boxShadow: 'none',
+        ...tempMenuCardStyle({
+          zoom: zoom.value,
+          side: tempPortSide.value,
+          selected: showSelectionOutline.value,
+        }),
+      }
+    : {}),
 }))
 
 // ============ 就地重命名 ============
@@ -170,8 +194,16 @@ const editable = computed(() => Boolean(nodeWrite))
 
 // ============ 端口能力显隐（按 type）============
 const cap = useNodeCapability(props.type)
-const showTargetHandle = cap.hasTarget
-const showSourceHandle = cap.hasSource
+/** 临时菜单节点只保留"落线那一侧"的端口（data.portSide 由插件在建临时节点时写入）：
+ *  从输出口拖出 → 新节点用输入口(左)；从输入口反向拖出 → 新节点用输出口(右)。
+ *  这样临时卡片只显示一个端口，与"松手点 = 端口位置"的语义一致。 */
+const tempPortSide = computed<'left' | 'right' | null>(() => {
+  if (!isTempMenu.value) return null
+  const side = (props.data as { portSide?: unknown })?.portSide
+  return side === 'left' || side === 'right' ? side : null
+})
+const showTargetHandle = computed(() => cap.hasTarget.value && tempPortSide.value !== 'right')
+const showSourceHandle = computed(() => cap.hasSource.value && tempPortSide.value !== 'left')
 
 // ============ hover 状态（控制端口醒目与阴影）============
 const isHovered = ref(false)
@@ -294,11 +326,12 @@ watch(
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
   () =>
-    !lowDetail.value &&
+    // 临时菜单节点的端口要常显（它就是"松手点=端口位置"的可视锚点）
+    (isTempMenu.value || !lowDetail.value) &&
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
     !interaction.isBusyDragging.value &&
-    (isHovered.value || props.selected),
+    (isTempMenu.value || isHovered.value || props.selected),
 )
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
@@ -326,17 +359,14 @@ const blockedSourcePort = computed(
 // watched `any` on purpose: `updateNodeInternals` is exposed on the vue-flow store instance; canvas-render
 // doesn't ship a typed wrapper here, the call site is stable across vue-flow versions.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const vfAny = vf as any
+// 注：本节点不再因为 blockedXxxPort 切 MovingHandle 的 v-if（DOM 永远保留 → handleBounds 稳定 →
+// 不会被 VueFlow 原生吸到错位置），所以这里不再调用 updateNodeInternals，逻辑也整体删掉。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 watch(
   [blockedTargetPort, blockedSourcePort],
   () => {
-    if (blockedTargetPort.value || blockedSourcePort.value) {
-      // nextTick: 等 v-if 完成 DOM 摘除后再重测，否则 VueFlow 仍会读到旧 DOM
-      nextTick(() => vfAny.updateNodeInternals?.([props.id]))
-    } else {
-      // blocked→false（v-if 恢复渲染）：等 handle 的 onMounted 注册完 handleBounds，再触发一次重测兜底
-      nextTick(() => vfAny.updateNodeInternals?.([props.id]))
-    }
+    // no-op：DOM 不变，handleBounds 不变
   },
   { flush: 'post' },
 )
@@ -466,7 +496,7 @@ function clamp(value: number, min: number, max: number): number {
       'is-connection-invalid': isConnectionInvalidTarget,
     }" :style="cardInlineStyle" @mousemove="updateCardMousePosition">
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
-      <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
+      <div v-if="!lowDetail && !isTempMenu" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel">
@@ -516,17 +546,18 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：
            左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
            mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
-      <div v-if="showTargetHandle && !blockedTargetPort" class="snap-band snap-band--input"
+      <div v-if="showTargetHandle" class="snap-band snap-band--input"
         :class="{ 'is-active': snapZonesActive }" :style="inputSnapStyle" @mouseenter="onInputSnapEnter"
         @mouseleave="onSnapLeave" />
-      <div v-if="showSourceHandle && !blockedSourcePort" class="snap-band snap-band--output"
+      <div v-if="showSourceHandle" class="snap-band snap-band--output"
         :class="{ 'is-active': snapZonesActive }" :style="outputSnapStyle" @mouseenter="onOutputSnapEnter"
         @mouseleave="onSnapLeave" />
 
-      <!-- 左侧输入口(target)：有输入能力才渲染；悬停/选中显示。
-           拖线中与源同类型(target)的端口整块从 DOM 摘掉，避免 VueFlow 真实 handle 残影并彻底不让其触发吸附。 -->
-      <MovingHandle v-if="showTargetHandle && !blockedTargetPort" id="target" type="target" :position="Position.Left"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected"
+      <!-- 左侧输入口(target)：有输入能力才渲染。
+           拖线中"同类型(target)端口"只传 :disabled（DOM 一直保留 → VueFlow handleBounds 稳定），
+           加上 Strict 模式 isValidHandle 类型校验，行为门是双保险。 -->
+      <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedTargetPort" :selected="props.selected"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
@@ -548,9 +579,9 @@ function clamp(value: number, min: number, max: number): number {
         </svg>
       </div>
 
-      <!-- 右侧输出口(source)：同 target 的处理：拖线中与源同类型(source)的端口整块从 DOM 摘掉。 -->
-      <MovingHandle v-if="showSourceHandle && !blockedSourcePort" id="source" type="source" :position="Position.Right"
-        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode" :selected="props.selected"
+      <!-- 右侧输出口(source)：同 target。 -->
+      <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
+        :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedSourcePort" :selected="props.selected"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"

@@ -1,4 +1,4 @@
-export { contextMenuPlugin, name, apply } from './contextMenuPlugin'
+export { contextMenuPlugin, name, apply, Config } from './contextMenuPlugin'
 export {
   buildMenuItems,
   sortMenuItems,
@@ -9,3 +9,24 @@ export {
   type MenuCommandLike,
   type MenuNodeTypeLike,
 } from './menuBuilder'
+export {
+  CARD_BORDER,
+  CARD_PADDING_Y,
+  CARD_WIDTH,
+  CONNECTION_MENU_CANCEL_EVENT,
+  CONNECTION_MENU_PICK_EVENT,
+  CONNECTION_MENU_TYPE,
+  ITEM_HEIGHT,
+  buildConnectionMenuItems,
+  connectionMenuCardSize,
+  filterConnectableTypes,
+  isTempEdge,
+  isTempNode,
+  placeByPortAnchor,
+  portSideOf,
+  resolveEdgeEndpoints,
+  type ConnectionDropFact,
+  type EdgeEndpoints,
+  type Point,
+  type Size,
+} from './connectionMenu'

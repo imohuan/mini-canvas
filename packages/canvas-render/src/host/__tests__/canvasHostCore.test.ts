@@ -63,6 +63,20 @@ describe('nodesFromStore', () => {
     expect(c.parentNodeId).toBe('g')
     expect(c.style).toBeUndefined()
   })
+  it('data.isTemp 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {
+    const s = new NodeStore()
+    s.registerType({ type: 'connection-menu', label: 'ConnectionMenu', defaultSize: { w: 264, h: 100 } })
+    s.addNode('connection-menu', { x: 0, y: 0 })
+    s.updateNodeData(s.getNodes()[0]!.id, { isTemp: true })
+    const flow = nodesFromStore(s)
+    expect(flow[0]).toMatchObject({
+      type: 'connection-menu',
+      draggable: false,
+      selectable: false,
+      deletable: false,
+      focusable: false,
+    })
+  })
 })
 
 describe('pruneDanglingEdges', () => {
@@ -157,6 +171,25 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
     )
     expect(out[0]).toEqual({ id: 'e1', type: 'custom', source: 'a', target: 'b', sourceHandle: undefined, targetHandle: undefined })
   })
+  it('data.isTemp 边：在渲染 DTO 上关掉 selectable/focusable/deletable 并置顶', () => {
+    const out = edgesFromStore(
+      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { isTemp: true } }],
+      new Set(['a', 'b']),
+    )
+    expect(out[0]).toEqual({
+      id: 'temp',
+      type: 'custom',
+      source: 'a',
+      target: 'b',
+      sourceHandle: undefined,
+      targetHandle: undefined,
+      data: { isTemp: true },
+      selectable: false,
+      focusable: false,
+      deletable: false,
+      zIndex: 1000,
+    })
+  })
 })
 
 describe('默认外观常量字段完整（P2-8 防漂移）', () => {
@@ -186,4 +219,3 @@ describe('edgeId 四元组（B 项，与内核 edgeStoreId 对齐）', () => {
     expect(edgeId('a', 'b', 'out1', 'in1')).not.toBe(edgeId('a', 'b', 'out2', 'in2'))
   })
 })
-

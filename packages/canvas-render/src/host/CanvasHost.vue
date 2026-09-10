@@ -504,6 +504,13 @@ let lastDragHoverLogAt = 0
 /** 本次拖线源端快照（onConnectEnd 用） */
 let dragSourceId = ''
 let dragSourceHandle: 'source' | 'target' = 'source'
+/** 本次拖线的按下点（屏幕坐标）：用于算"拖了多远"，供消费方按阈值区分拖线/点一下 */
+let dragStartClient: { x: number; y: number } | null = null
+/** 最近一次全局按下点（capture 阶段记录；拖线开始时作为起点快照） */
+let lastPointerDownClient: { x: number; y: number } | null = null
+function onGlobalPointerDown(e: MouseEvent): void {
+  lastPointerDownClient = { x: e.clientX, y: e.clientY }
+}
 /** mousemove/mouseup 是否在拖线期间挂上（用于 onMounted 早期 + boot 顺序保证） */
 let dragListenersBound = false
 /** rAF 节流：mousemove 高频，只记最新一次 client 坐标；rAF 内做吸附判定+写 state，避免每帧都跑导致卡顿 */
@@ -516,6 +523,8 @@ function onConnectStart(p: { nodeId?: string; handleId: string | null; handleTyp
   connectedThisGesture = false
   dragSourceId = p.nodeId
   dragSourceHandle = handleType === 'target' ? 'target' : 'source'
+  // 按下点快照：VueFlow 的 connectStart 不带鼠标坐标，这里记全局 pointerdown 位置兜底（见 onDragMouseMove 首帧回填）
+  dragStartClient = lastPointerDownClient
   dragFlowPoint.value = null
   log.log(`connectStart node=${p.nodeId} handle=${p.handleId} type=${handleType} (挂 drag listeners)`)
   beginConnection(connectionState, {
@@ -606,6 +615,10 @@ function onDragMouseUp(ev: MouseEvent): void {
       flowPosition: { x: target.point.x, y: target.point.y },
       sourceNodeId: dragSourceId,
       sourceHandle: dragSourceHandle,
+      // 本次拖线位移（屏幕 px）：消费方据此区分"真拖线"与"在端口上点一下"
+      dragDistance: dragStartClient
+        ? Math.hypot(ev.clientX - dragStartClient.x, ev.clientY - dragStartClient.y)
+        : 0,
     })
   }
   // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
@@ -958,6 +971,8 @@ onMounted(async () => {
     // 键盘
     window.addEventListener('keydown', onKeydown)
     keydownBound = true
+    // 全局按下点（capture）：拖线开始时作为"拖拽起点"，用于算拖了多远
+    document.addEventListener('mousedown', onGlobalPointerDown, true)
 
     // 页面隐藏/离开落盘
     window.addEventListener('visibilitychange', onVisibilityChange)
@@ -1030,6 +1045,7 @@ onBeforeUnmount(() => {
   viewportTimers = []
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)
+  document.removeEventListener('mousedown', onGlobalPointerDown, true)
   window.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('pagehide', flushSave)
   void hostRef.value?.save.flush()
@@ -1118,12 +1134,6 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
-
-
-
-
-
-
 
 
 
