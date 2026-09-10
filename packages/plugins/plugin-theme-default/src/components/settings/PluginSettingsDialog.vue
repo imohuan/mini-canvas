@@ -362,6 +362,35 @@ function onKeydown(e: KeyboardEvent): void {
 // —— 浮动窗口模式：脱离遮罩，居中→绝对坐标，顶部可拖，右下可 resize，限制不出屏与最小尺寸 ——
 const floating = ref(false)
 
+// —— 最小化成悬浮球：只做"视觉缩小"动画，逻辑宽高始终钉在最小尺寸，故内容永不重排/变形 ——
+/** 压缩动画时长（与 .psd-dialog-ball 的 transition 一致） */
+const BALL_ANIM_MS = 240
+/** 悬浮球直径 */
+const BALL_SIZE = 56
+/** 吸附后贴边的"长方形"尺寸 */
+const BALL_SNAP_W = 8
+const BALL_SNAP_H = 46
+/** 悬浮球拖拽/吸附边缘的触发距离 */
+const BALL_DRAG_THRESHOLD = 4
+const BALL_SNAP_MARGIN = 18
+
+const minimized = ref(false)
+/** 压缩动画进行中（用于禁用过渡、避免动画期间被再次操作打断） */
+const ballAnimating = ref(false)
+/** 悬浮球当前是"吸附贴边"态（长方形）还是"自由浮动"态（圆形） */
+const ballDocked = ref(false)
+/** 吸附到哪一侧：-1 左 / 1 右 / 0 未吸附 */
+const ballSide = ref<-1 | 0 | 1>(0)
+const ballGeom = ref({ left: 0, top: 0 })
+
+/** 压缩动画期间窗口尺寸冻结在最小尺寸（保证文本不换行、布局不重排）*/
+const animGeom = ref({ width: 0, height: 0 })
+let ballAnimTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 最小尺寸：压缩动画的起点与终点都锁在这里 */
+const animW = computed(() => (animGeom.value.width || MIN_W))
+const animH = computed(() => (animGeom.value.height || MIN_H))
+
 const MIN_W = 520
 const MIN_H = 360
 const DEFAULT_W = typeof window !== 'undefined' ? Math.min(920, window.innerWidth - 64) : 920
@@ -404,6 +433,135 @@ function exitFloating(): void {
 function toggleFloating(): void {
   if (floating.value) exitFloating()
   else enterFloating()
+}
+
+// —— 最小化 / 复原：压缩成悬浮球 ——
+/** 把球放到当前窗口中心（自由浮动态） */
+function ballCenterOf(g: WinGeom): { left: number; top: number } {
+  return {
+    left: g.left + g.width / 2 - BALL_SIZE / 2,
+    top: g.top + g.height / 2 - BALL_SIZE / 2,
+  }
+}
+
+function minimizeToBall(): void {
+  if (minimized.value || ballAnimating.value) return
+  if (!floating.value) enterFloating() // 弹窗态点最小化：先转浮动窗口再压缩
+  // 动画期间把宽度冻结在最小尺寸：起点=当前尺寸，终点=最小尺寸，只缩尺寸不改布局
+  animGeom.value = { width: MIN_W, height: MIN_H }
+  ballGeom.value = ballCenterOf(winGeom.value)
+  ballDocked.value = false
+  ballSide.value = 0
+  ballAnimating.value = true
+  minimized.value = true
+  // 窗口逻辑几何同时切到最小尺寸 + 球心位置，保证动画结束后无需二次跳变
+  winGeom.value = {
+    left: ballGeom.value.left,
+    top: ballGeom.value.top,
+    width: MIN_W,
+    height: MIN_H,
+  }
+  if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
+  ballAnimTimer = setTimeout(() => {
+    ballAnimTimer = null
+    ballAnimating.value = false
+    // 落在边缘附近则直接吸附贴边
+    maybeDock()
+  }, BALL_ANIM_MS)
+}
+
+function restoreFromBall(): void {
+  if (!minimized.value || ballAnimating.value) return
+  const size = animGeom.value.width ? animGeom.value : { width: MIN_W, height: MIN_H }
+  ballAnimating.value = true
+  animGeom.value = { ...size }
+  minimized.value = false
+  // 复原动画里球位置不再吸附，按原自由位置展开
+  ballDocked.value = false
+  ballSide.value = 0
+  if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
+  ballAnimTimer = setTimeout(() => {
+    ballAnimTimer = null
+    ballAnimating.value = false
+    animGeom.value = { width: 0, height: 0 }
+  }, BALL_ANIM_MS)
+  winGeom.value = clampGeom({
+    left: winGeom.value.left,
+    top: winGeom.value.top,
+    width: size.width,
+    height: size.height,
+  })
+}
+
+/** 松手后判断是否贴边：靠近左右边缘则吸附成竖长条 */
+function maybeDock(): void {
+  if (!minimized.value) return
+  const vw = window.innerWidth
+  const cx = ballGeom.value.left + BALL_SIZE / 2
+  if (cx <= BALL_SNAP_MARGIN) {
+    ballSide.value = -1
+    ballDocked.value = true
+  } else if (cx >= vw - BALL_SNAP_MARGIN) {
+    ballSide.value = 1
+    ballDocked.value = true
+  } else {
+    ballSide.value = 0
+    ballDocked.value = false
+  }
+  applyBallGeom()
+}
+
+/** 把 ballGeom 同步到窗口几何（吸附态用长方形尺寸，自由态用方形） */
+function applyBallGeom(): void {
+  const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
+  const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let left = ballGeom.value.left
+  if (ballSide.value === -1) left = 0
+  else if (ballSide.value === 1) left = vw - w
+  // 竖直方向夹在视口内（拖动越界时按中心偏移收回）
+  const top = Math.min(Math.max(0, ballGeom.value.top), Math.max(0, vh - h))
+  ballGeom.value = { left, top }
+  // 窗口逻辑尺寸恒为最小尺寸，视觉尺寸由 .psd-dialog-ball 的缩放决定
+  winGeom.value = { left, top, width: MIN_W, height: MIN_H }
+}
+
+// 悬浮球拖拽：按下 → 超过阈值才进入拖拽（否则算点击=复原）→ 松手判断吸附
+let ballDragging = false
+let ballDragMoved = false
+let ballDragOffX = 0
+let ballDragOffY = 0
+function onBallMouseDown(e: MouseEvent): void {
+  if (!minimized.value || ballAnimating.value) return
+  ballDragging = true
+  ballDragMoved = false
+  ballDragOffX = e.clientX - ballGeom.value.left
+  ballDragOffY = e.clientY - ballGeom.value.top
+  e.preventDefault()
+}
+function onBallMouseMove(e: MouseEvent): void {
+  if (!ballDragging) return
+  const nx = e.clientX - ballDragOffX
+  const ny = e.clientY - ballDragOffY
+  if (!ballDragMoved) {
+    if (Math.abs(e.clientX - (ballGeom.value.left + ballDragOffX)) + Math.abs(e.clientY - (ballGeom.value.top + ballDragOffY)) < BALL_DRAG_THRESHOLD) return
+    ballDragMoved = true
+    // 开始拖动即脱离吸附态（恢复成圆球跟随鼠标）
+    ballDocked.value = false
+    ballSide.value = 0
+  }
+  ballGeom.value = { left: nx, top: ny }
+  applyBallGeom()
+}
+function onBallMouseUp(): void {
+  if (!ballDragging) return
+  ballDragging = false
+  if (!ballDragMoved) {
+    restoreFromBall() // 没移动 = 点击 → 复原窗口
+    return
+  }
+  maybeDock()
 }
 
 // 拖拽：仅头部，按下鼠标 → 记偏移 → mousemove 更新 left/top，mouseup 解绑
@@ -535,14 +693,28 @@ watch(
 const dialogStyle = computed<Record<string, string>>(() => {
   if (!floating.value) return {}
   const g = winGeom.value
-  return {
+  // 压缩动画期间：宽高锁在最小尺寸，视觉上再叠加一个缩放 transform（球）——
+  // 宽高是"最小宽度"，所以文字永远不会因为过窄而换行，布局全程不变形。
+  const animating = ballAnimating.value
+  const w = animating ? animW.value : g.width
+  const h = animating ? animH.value : g.height
+  const style: Record<string, string> = {
     position: 'fixed',
     left: g.left + 'px',
     top: g.top + 'px',
-    width: g.width + 'px',
-    height: g.height + 'px',
+    width: w + 'px',
+    height: h + 'px',
     animation: 'none',
   }
+  if (animating) {
+    // 以左上角为原点缩到球的大小（球几何 = 左上角 + 视觉尺寸）
+    const scaleX = (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / w
+    const scaleY = (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / h
+    style.transformOrigin = '0 0'
+    style.transform = `scale(${scaleX}, ${scaleY})`
+    style.borderRadius = '999px'
+  }
+  return style
 })
 
 onMounted(() => {
@@ -551,6 +723,8 @@ onMounted(() => {
   window.addEventListener('mouseup', onDocMouseUp)
   window.addEventListener('mousemove', onResizeMouseMove)
   window.addEventListener('mouseup', onResizeMouseUp)
+  window.addEventListener('mousemove', onBallMouseMove)
+  window.addEventListener('mouseup', onBallMouseUp)
   window.addEventListener('resize', onWindowResize)
 })
 onBeforeUnmount(() => {
@@ -559,7 +733,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('mouseup', onDocMouseUp)
   window.removeEventListener('mousemove', onResizeMouseMove)
   window.removeEventListener('mouseup', onResizeMouseUp)
+  window.removeEventListener('mousemove', onBallMouseMove)
+  window.removeEventListener('mouseup', onBallMouseUp)
   window.removeEventListener('resize', onWindowResize)
+  if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
 })
 </script>
 
@@ -573,7 +750,11 @@ onBeforeUnmount(() => {
       <div
         ref="dialogEl"
         class="psd-dialog"
-        :class="{ 'psd-dialog-floating': floating, 'psd-dialog-resizing': resizing }"
+        :class="{
+          'psd-dialog-floating': floating,
+          'psd-dialog-resizing': resizing,
+          'psd-dialog-ball': minimized,
+        }"
         role="dialog"
         aria-modal="true"
         :style="dialogStyle"
@@ -586,6 +767,16 @@ onBeforeUnmount(() => {
             <h2 class="psd-title">设置</h2>
           </div>
           <div class="psd-head-actions">
+            <button
+              class="psd-icon-btn"
+              aria-label="最小化为悬浮球"
+              title="最小化为悬浮球"
+              @click="minimizeToBall"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 12h12"/>
+              </svg>
+            </button>
             <button
               class="psd-icon-btn"
               :aria-label="floating ? '回到弹窗' : '转为悬浮窗口'"
@@ -609,6 +800,19 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+
+        <!-- 悬浮球：仅最小化态显示，压在窗口之上承接点击/拖拽（点击复原、拖拽移动、靠边吸附） -->
+        <div
+          v-if="minimized"
+          class="psd-ball-surface"
+          :class="{ 'is-docked': ballDocked }"
+          role="button"
+          tabindex="0"
+          :aria-label="'展开设置窗口'"
+          title="展开设置窗口（拖动可移动）"
+          @mousedown="onBallMouseDown"
+          @keydown.enter.prevent="restoreFromBall"
+        ></div>
 
         <div class="psd-body">
           <!-- 左：一级导航 -->
@@ -759,11 +963,58 @@ onBeforeUnmount(() => {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
 }
 
+/* 压缩/复原动画：只让 transform 走过渡（width/height 在同一帧瞬时切换，不参与动画）——
+   这样动画过程中不存在"中间宽度"，文字绝不会因为过窄而换行，UI 不会变形 */
+.psd-dialog {
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.24s ease;
+}
+
+/* 悬浮球表面：覆盖整个窗口，仅最小化态出现，点击=复原、拖拽=移动 */
+.psd-ball-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: 999px;
+  cursor: grab;
+  /* 拖拽时不要选中文字 */
+  user-select: none;
+}
+
+.psd-ball-surface:active {
+  cursor: grabbing;
+}
+
+/* 吸附成贴边竖长条 */
+.psd-ball-surface.is-docked {
+  border-radius: 4px;
+}
+
+.psd-ball-surface:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.9);
+  outline-offset: -3px;
+}
+
 /* resize 进行中禁用文本选中，鼠标全局呈现 nwse-resize */
 .psd-dialog-resizing,
 .psd-dialog-resizing * {
   cursor: nwse-resize !important;
   user-select: none;
+}
+
+/* 最小化（悬浮球）态：窗口本体变成一颗主题色圆球——内容整体淡出，不留任何残影/变形 */
+.psd-dialog-ball {
+  background: linear-gradient(145deg, #22b8d4, #0891b2);
+  border-color: rgba(8, 145, 178, 0.5);
+  box-shadow: 0 10px 26px rgba(8, 145, 178, 0.4);
+  overflow: hidden;
+}
+
+.psd-dialog-ball .psd-head,
+.psd-dialog-ball .psd-body,
+.psd-dialog-ball .psd-resize-handle {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
 }
 
 .psd-head {
