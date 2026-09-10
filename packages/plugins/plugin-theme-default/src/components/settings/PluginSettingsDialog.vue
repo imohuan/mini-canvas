@@ -447,14 +447,13 @@ function ballCenterOf(g: WinGeom): { left: number; top: number } {
 function minimizeToBall(): void {
   if (minimized.value || ballAnimating.value) return
   if (!floating.value) enterFloating() // 弹窗态点最小化：先转浮动窗口再压缩
-  // 动画期间把宽度冻结在最小尺寸：起点=当前尺寸，终点=最小尺寸，只缩尺寸不改布局
-  animGeom.value = { width: MIN_W, height: MIN_H }
   ballGeom.value = ballCenterOf(winGeom.value)
   ballDocked.value = false
   ballSide.value = 0
-  ballAnimating.value = true
+  // 最小化态：窗口立刻切到"最小尺寸 + 球位置"，由 dialogStyle 持续施加缩放；
+  // transition 会把这次的 scale 从 1 补间到球的大小，动画期间布局尺寸始终不变。
   minimized.value = true
-  // 窗口逻辑几何同时切到最小尺寸 + 球心位置，保证动画结束后无需二次跳变
+  ballAnimating.value = true
   winGeom.value = {
     left: ballGeom.value.left,
     top: ballGeom.value.top,
@@ -472,25 +471,16 @@ function minimizeToBall(): void {
 
 function restoreFromBall(): void {
   if (!minimized.value || ballAnimating.value) return
-  const size = animGeom.value.width ? animGeom.value : { width: MIN_W, height: MIN_H }
-  ballAnimating.value = true
-  animGeom.value = { ...size }
+  // 先解除最小化：dialogStyle 不再施加缩放，transition 自动把 scale 从球补间回 1
   minimized.value = false
-  // 复原动画里球位置不再吸附，按原自由位置展开
   ballDocked.value = false
   ballSide.value = 0
+  ballAnimating.value = true
   if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
   ballAnimTimer = setTimeout(() => {
     ballAnimTimer = null
     ballAnimating.value = false
-    animGeom.value = { width: 0, height: 0 }
   }, BALL_ANIM_MS)
-  winGeom.value = clampGeom({
-    left: winGeom.value.left,
-    top: winGeom.value.top,
-    width: size.width,
-    height: size.height,
-  })
 }
 
 /** 松手后判断是否贴边：靠近左右边缘则吸附成竖长条 */
@@ -693,26 +683,24 @@ watch(
 const dialogStyle = computed<Record<string, string>>(() => {
   if (!floating.value) return {}
   const g = winGeom.value
-  // 压缩动画期间：宽高锁在最小尺寸，视觉上再叠加一个缩放 transform（球）——
-  // 宽高是"最小宽度"，所以文字永远不会因为过窄而换行，布局全程不变形。
-  const animating = ballAnimating.value
-  const w = animating ? animW.value : g.width
-  const h = animating ? animH.value : g.height
+  // 最小化态：窗口逻辑尺寸恒为最小尺寸，视觉上整体缩放成球（球 = 左上角 + 视觉尺寸）。
+  // 宽高始终是"最小宽度"，所以文字永远不会因为过窄而折行，布局全程不变形。
+  // 注意：缩放必须在"最小化期间一直生效"，不能只在动画那 240ms 里 —— 否则动画一结束
+  // transform 被撤掉，520×360 的窗口就会原样露出来（就是"变成一个大长方体"的原因）。
+  const scaleX = minimized.value ? (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / MIN_W : 1
+  const scaleY = minimized.value ? (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / MIN_H : 1
   const style: Record<string, string> = {
     position: 'fixed',
     left: g.left + 'px',
     top: g.top + 'px',
-    width: w + 'px',
-    height: h + 'px',
+    width: MIN_W + 'px',
+    height: MIN_H + 'px',
     animation: 'none',
   }
-  if (animating) {
-    // 以左上角为原点缩到球的大小（球几何 = 左上角 + 视觉尺寸）
-    const scaleX = (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / w
-    const scaleY = (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / h
+  if (minimized.value) {
     style.transformOrigin = '0 0'
     style.transform = `scale(${scaleX}, ${scaleY})`
-    style.borderRadius = '999px'
+    style.borderRadius = ballDocked.value ? '4px' : '999px'
   }
   return style
 })
