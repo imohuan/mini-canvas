@@ -597,6 +597,16 @@ function onDragMouseUp(ev: MouseEvent): void {
     const res = checkConnection(drop.source, drop.target)
     if (!res.ok) log.warn(`drop ${drop.source}→${drop.target} 非法:${res.reason}`)
     else commitEdge(drop.source, drop.target)
+  } else {
+    // 空白松手：只广播事实（谁、从哪个口、落在哪），不决定 UI —— 消费方(plugin-context-menu 等)
+    // 可据此放临时节点/弹菜单。hostRef 可能尚未就绪（boot 早期），则跳过广播。
+    hostRef.value?.ctx.emit(RenderEvents.ConnectionDropBlank, {
+      clientX: ev.clientX,
+      clientY: ev.clientY,
+      flowPosition: { x: target.point.x, y: target.point.y },
+      sourceNodeId: dragSourceId,
+      sourceHandle: dragSourceHandle,
+    })
   }
   // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
   dragSourceId = ''

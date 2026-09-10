@@ -138,6 +138,7 @@ export type { SelectionClickOptions } from './host/selectionInteractions'
 export { RenderEvents, toDragPayload } from './host/renderEvents'
 export type { DragEventPayload, MoveEventPayload, ClickPayload, SelectionChangePayload } from './host/renderEvents'
 export type { ContextMenuPanePayload, ContextMenuNodePayload, ContextMenuEdgePayload } from './host/renderEvents'
+export type { ConnectionDropPayload } from './host/renderEvents'
 
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'

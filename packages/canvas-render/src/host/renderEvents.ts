@@ -29,6 +29,14 @@ export const RenderEvents = {
   PaneClick: 'canvas:pane:click',
   /** 选中变化（节点/边任一桶）：{ nodeIds, edgeIds } */
   SelectionChange: 'canvas:selection:change',
+  /**
+   * 拖线在**空白处**松手（未命中任何节点/端口）：
+   * { clientX, clientY, flowPosition, sourceNodeId, sourceHandle }
+   *
+   * 与右键事件同源：宿主 mouseup 时已算完吸附/命中，结果只描述事实（"落在空白"），
+   * 是否就此弹菜单/放临时节点由消费方（如 plugin-context-menu）自行决定 —— 渲染层不掺业务。
+   */
+  ConnectionDropBlank: 'canvas:connection:drop-blank',
   /** 右键：画布空白 { clientX, clientY, flowPosition } */
   ContextMenuPane: 'canvas:context-menu:pane',
   /** 右键：节点 { clientX, clientY, flowPosition, nodeId, nodeType? } */
@@ -56,6 +64,18 @@ export interface ContextMenuPanePayload {
   clientX: number
   clientY: number
   flowPosition: { x: number; y: number }
+}
+
+/** 拖线在空白处松手的 payload（RenderEvents.ConnectionDropBlank） */
+export interface ConnectionDropPayload {
+  clientX: number
+  clientY: number
+  /** 松手点的画布(flow)坐标 —— 消费方据此在松手位置放临时节点 */
+  flowPosition: { x: number; y: number }
+  /** 拖线源节点 id */
+  sourceNodeId: string
+  /** 拖线起点端口：'source' = 从输出口拖出；'target' = 从输入口反向拖出（线要从新节点往左画） */
+  sourceHandle: 'source' | 'target'
 }
 export interface ContextMenuNodePayload {
   clientX: number
