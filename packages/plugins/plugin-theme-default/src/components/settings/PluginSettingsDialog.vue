@@ -438,6 +438,73 @@ function onWindowResize(): void {
   if (floating.value) winGeom.value = clampGeom(winGeom.value)
 }
 
+// —— 二级页签条：溢出时用左右箭头按钮平移 + 区域内滚轮横向滚动（不占竖向空间）——
+const tabsEl = ref<HTMLElement | null>(null)
+const tabsOverflow = ref(false)
+const tabsAtStart = ref(true)
+const tabsAtEnd = ref(true)
+
+const TAB_SCROLL_STEP = 160
+
+function updateTabsOverflow(): void {
+  const el = tabsEl.value
+  if (!el) {
+    tabsOverflow.value = false
+    tabsAtStart.value = true
+    tabsAtEnd.value = true
+    return
+  }
+  const max = el.scrollWidth - el.clientWidth
+  tabsOverflow.value = max > 1
+  tabsAtStart.value = el.scrollLeft <= 1
+  tabsAtEnd.value = el.scrollLeft >= max - 1
+}
+
+function scrollTabs(dir: -1 | 1): void {
+  const el = tabsEl.value
+  if (!el) return
+  el.scrollBy({ left: dir * TAB_SCROLL_STEP, behavior: 'smooth' })
+}
+
+/** 区域内滚轮 → 横向滚动：只有真能滚（内容溢出且有方向余量）才拦，否则放行给外层 */
+function onTabsWheel(e: WheelEvent): void {
+  const el = tabsEl.value
+  if (!el) return
+  const max = el.scrollWidth - el.clientWidth
+  if (max <= 1) return
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+  if (delta === 0) return
+  const next = Math.min(Math.max(0, el.scrollLeft + delta), max)
+  if (next === el.scrollLeft) return
+  el.scrollLeft = next
+  e.preventDefault()
+}
+
+/** 页签更替（切一级/插件装卸/resize）后重算溢出态；ResizeObserver 兜住容器宽度变化 */
+let tabsObserver: ResizeObserver | null = null
+watch(
+  tabsEl,
+  (el, _old, onCleanup) => {
+    tabsObserver?.disconnect()
+    tabsObserver = null
+    if (!el || typeof ResizeObserver === 'undefined') return
+    tabsObserver = new ResizeObserver(updateTabsOverflow)
+    tabsObserver.observe(el)
+    onCleanup(() => {
+      tabsObserver?.disconnect()
+      tabsObserver = null
+    })
+  },
+  { flush: 'post' },
+)
+watch(sections, () => void nextTick(updateTabsOverflow), { flush: 'post' })
+/** 弹窗尺寸变化（浮动窗 resize / 浏览器窗口 resize）会让页签条可用宽跟着变 */
+watch(
+  () => [floating.value, winGeom.value.width] as const,
+  () => void nextTick(updateTabsOverflow),
+  { flush: 'post' },
+)
+
 const dialogStyle = computed<Record<string, string>>(() => {
   if (!floating.value) return {}
   const g = winGeom.value
@@ -535,18 +602,46 @@ onBeforeUnmount(() => {
 
           <!-- 右：该一级下全部二级块叠成"可滚动长列表"；顶部 tab 只做滚动定位（scroll-spy 高亮当前段） -->
           <div class="psd-content">
-            <!-- 目录条：本一级下的各段（仅一段时不显示目录） -->
-            <div v-if="sections.length > 1" class="psd-tabs" role="tablist">
-              <template v-for="s in sections" :key="s.key">
-                <!-- settingsTab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
-                <component v-if="s.kind === 'tab'" :is="s.component" :group="s.key"
-                  :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item" />
-                <!-- 默认目录项：点击滚动到该段 -->
-                <button v-else class="psd-tab-item" :class="{ active: currentSection === s.key }"
-                  @click="scrollToSection(s.key)">
-                  {{ s.label }}
-                </button>
-              </template>
+            <!-- 目录条：本一级下的各段（仅一段时不显示目录）；溢出时两侧出箭头按钮 -->
+            <div v-if="sections.length > 1" class="psd-tabbar">
+              <button
+                v-if="tabsOverflow"
+                class="psd-tab-arrow"
+                :disabled="tabsAtStart"
+                aria-label="向左滚动页签"
+                title="向左滚动页签"
+                @click="scrollTabs(-1)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+
+              <div ref="tabsEl" class="psd-tabs" role="tablist" @scroll="updateTabsOverflow" @wheel="onTabsWheel">
+                <template v-for="s in sections" :key="s.key">
+                  <!-- settingsTab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
+                  <component v-if="s.kind === 'tab'" :is="s.component" :group="s.key"
+                    :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item" />
+                  <!-- 默认目录项：点击滚动到该段 -->
+                  <button v-else class="psd-tab-item" :class="{ active: currentSection === s.key }"
+                    @click="scrollToSection(s.key)">
+                    {{ s.label }}
+                  </button>
+                </template>
+              </div>
+
+              <button
+                v-if="tabsOverflow"
+                class="psd-tab-arrow"
+                :disabled="tabsAtEnd"
+                aria-label="向右滚动页签"
+                title="向右滚动页签"
+                @click="scrollTabs(1)"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 6l6 6-6 6"/>
+                </svg>
+              </button>
             </div>
 
             <div ref="scrollEl" class="psd-content-body" @scroll="onBodyScroll">
@@ -868,19 +963,65 @@ onBeforeUnmount(() => {
 }
 
 /* ===== 二级页签条（仅一级下二级分组多于一个时出现）：编辑器式下划线 tab ===== */
+/* 外框：页签条 + 溢出时两侧箭头按钮，底部分隔线挂在它身上（箭头也压在这条线上） */
+.psd-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
 .psd-tabs {
   display: flex;
   align-items: stretch;
   gap: 2px;
-  flex-shrink: 0;
+  flex: 1;
+  min-width: 0;
   padding: 8px 12px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 0;
-  /* 页签多到放不下时横向滚动，不换行、不撑破容器 */
+  /* 页签多到放不下时横向滚动（滚动条隐藏，改用两侧箭头 + 滚轮），不换行、不撑破容器 */
   overflow-x: auto;
   overflow-y: hidden;
-  /* 滚动时让最后一项能完整滚出（左右各补一段留白），首尾不被裁 */
-  scroll-padding: 0 12px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.psd-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* 溢出时才出现的左右箭头按钮：细窄，不挤占页签高度 */
+.psd-tab-arrow {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+
+.psd-tab-arrow svg {
+  width: 15px;
+  height: 15px;
+}
+
+.psd-tab-arrow:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: #111827;
+}
+
+.psd-tab-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .psd-tab-item {
@@ -907,12 +1048,13 @@ onBeforeUnmount(() => {
   color: #0891b2;
 }
 
+/* 指示线贴在页签条底边（页签条左右各有 12px 内边距，故线随内边距内缩） */
 .psd-tab-item.active::after {
   content: '';
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: -1px;
+  bottom: 0;
   height: 2px;
   border-radius: 2px;
   background: #0891b2;
@@ -983,19 +1125,7 @@ onBeforeUnmount(() => {
   }
 }
 
-/* 横向滚动条：细一点，和左侧导航滚动条同款 */
-.psd-tabs::-webkit-scrollbar {
-  height: 6px;
-}
-
-.psd-tabs::-webkit-scrollbar-thumb {
-  border-radius: 3px;
-  background: rgba(0, 0, 0, 0.12);
-}
-
-.psd-tabs::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
+/* 横向滚动条已隐藏（改用两侧箭头 + 滚轮），此处不再定义 .psd-tabs 的滚动条样式 */
 
 .psd-content-body::-webkit-scrollbar,
 .psd-nav::-webkit-scrollbar {
