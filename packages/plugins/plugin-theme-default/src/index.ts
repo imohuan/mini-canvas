@@ -37,7 +37,7 @@ export const inject = ["text"] as string[];
 export const DEFAULT_THEME_EDGE = {
   edgeType: "bezier",
   edgeColor: "#1f2937",
-  edgeLineWidth: 2,
+  edgeLineWidth: 1.5,
   edgeDashed: false,
   edgeAnimated: true,
   edgeMarkerEnd: false,
@@ -62,7 +62,7 @@ export const DEFAULT_THEME_HANDLE = {
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  portZoneWidth: 86, // 端口吸附交互区/半圆耳朵水平外扩，默认 86（对齐 canvasHostCore；0 会让端口区塌成不可命中）
+  portZoneWidth: 10, // 端口吸附交互区/半圆耳朵水平外扩，默认 86（对齐 canvasHostCore；0 会让端口区塌成不可命中）
   portZoneHeightRatio: 0.55,
   portZoneOffset: 0,
   portZoneShape: "arc",
@@ -88,7 +88,7 @@ export const DEFAULT_THEME_TITLE = {
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
 export const DEFAULT_THEME_SNAP_ZONE = {
   heightRatio: 0.8,
-  width: 0, // 0 = 用吸附带默认带宽兜底（canvasHost 侧回落 86）
+  width: 0, // 0 就是 0（带塌成 0 宽，不做兜底）；想用默认带宽就往这里填具体值
   offset: 0,
   shape: "rect",
 } as const;
@@ -276,7 +276,7 @@ export const Config: ConfigSchema = {
     step: 1,
     label: "吸附带宽度(px)",
     group: "节点/吸附带",
-    description: "吸附带的像素宽度。0 = 用默认带宽兜底(86)。",
+    description: "吸附带的像素宽度。0 就是 0（带塌成 0 宽，不做兜底）。",
   },
   offset: {
     type: "number",

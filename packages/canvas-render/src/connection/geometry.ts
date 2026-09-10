@@ -42,7 +42,7 @@ export type SnapZoneShape = 'rect' | 'arc'
 export interface SnapZoneConfig {
   /** 带高 = 节点高 × heightRatio（0~1，默认 0.8） */
   heightRatio: number
-  /** 带宽 px（默认 handleRadius；缺省用 handleRadius 兜底） */
+  /** 带宽 px（缺省 = handleRadius；显式给 0 就是 0，不做兜底） */
   width?: number
   /** 锚点横向偏移：>0 向节点外、<0 向节点内（默认 0） */
   offset?: number
@@ -120,7 +120,8 @@ function bandRectForSide(
 ): { x: number; y: number; width: number; height: number } {
   const heightRatio = Math.min(Math.max(cfg.heightRatio || 0.8, 0), 1)
   const height = n.height * heightRatio
-  const width = cfg.width && cfg.width > 0 ? cfg.width : handleRadius
+  // width 显式给了就用给的（0 也是合法值 = 带塌成 0 宽，不做兜底）；只有缺省才用 handleRadius
+  const width = cfg.width ?? handleRadius
   const offset = cfg.offset ?? 0
   // offset>0 两侧都向节点内收（target x 右移、source x 左移）；offset<0 向节点外伸
   const x = side === 'target' ? anchorX - (width - offset) : anchorX - offset
