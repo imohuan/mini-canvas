@@ -974,11 +974,13 @@ onBeforeUnmount(() => {
 
 .psd-tabs {
   display: flex;
-  align-items: stretch;
+  /* 整条页签在条内垂直居中，页签本身不再被拉伸 */
+  align-items: center;
   gap: 2px;
   flex: 1;
   min-width: 0;
-  padding: 8px 12px 0;
+  /* 上下等距：文字与两侧箭头按钮在同一水平中线上，底部留出 2px 指示线空间 */
+  padding: 9px 12px;
   margin-bottom: 0;
   /* 页签多到放不下时横向滚动（滚动条隐藏，改用两侧箭头 + 滚轮），不换行、不撑破容器 */
   overflow-x: auto;
@@ -1028,12 +1030,15 @@ onBeforeUnmount(() => {
   position: relative;
   display: inline-flex;
   align-items: center;
-  padding: 9px 16px 11px;
+  justify-content: center;
+  /* 上下等距 padding，文字正好落在页签竖直中线上 */
+  padding: 7px 16px;
   border: 0;
   background: transparent;
   color: #6b7280;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.4;
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.16s ease;
