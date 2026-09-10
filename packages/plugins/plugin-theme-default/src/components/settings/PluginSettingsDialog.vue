@@ -403,16 +403,23 @@ const winGeom = ref<WinGeom>({ left: 0, top: 0, width: DEFAULT_W, height: DEFAUL
 let restoreSize: { width: number; height: number } | null = null
 const dialogEl = ref<HTMLElement | null>(null)
 
+/** 浮动窗口与屏幕四边保留的呼吸空隙 */
+const VIEWPORT_PADDING = 10
+
 function clampGeom(g: WinGeom): WinGeom {
   const vw = window.innerWidth
   const vh = window.innerHeight
-  const w = Math.max(MIN_W, Math.min(g.width, vw))
-  const h = Math.max(MIN_H, Math.min(g.height, vh))
-  const maxL = vw - w
-  const maxT = vh - h
+  // 可用区域 = 视口去掉四周 padding；窗口不超出这块区域，四边就总留 10px
+  const availW = Math.max(MIN_W, vw - VIEWPORT_PADDING * 2)
+  const availH = Math.max(MIN_H, vh - VIEWPORT_PADDING * 2)
+  const w = Math.max(MIN_W, Math.min(g.width, availW))
+  const h = Math.max(MIN_H, Math.min(g.height, availH))
+  const maxL = vw - w - VIEWPORT_PADDING
+  const maxT = vh - h - VIEWPORT_PADDING
   return {
-    left: Math.min(Math.max(0, g.left), Math.max(0, maxL)),
-    top: Math.min(Math.max(0, g.top), Math.max(0, maxT)),
+    // 下界同样收紧到 padding，窗口贴边时也是留 10px 而不是贴着 0
+    left: Math.min(Math.max(VIEWPORT_PADDING, g.left), Math.max(VIEWPORT_PADDING, maxL)),
+    top: Math.min(Math.max(VIEWPORT_PADDING, g.top), Math.max(VIEWPORT_PADDING, maxT)),
     width: w,
     height: h,
   }
