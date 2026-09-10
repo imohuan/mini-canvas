@@ -395,6 +395,12 @@ const DEFAULT_H = typeof window !== 'undefined' ? Math.min(Math.floor(0.68 * win
 interface WinGeom { left: number; top: number; width: number; height: number }
 /** 进入浮动模式时一次性拍下当前居中几何（用 dialog 当时的实际渲染尺寸） */
 const winGeom = ref<WinGeom>({ left: 0, top: 0, width: DEFAULT_W, height: DEFAULT_H })
+/**
+ * 最小化前用户自己定下的窗口宽高（拖右下角改过的）。
+ * 最小化期间窗口逻辑尺寸必须钉死在 MIN_W×MIN_H（缩放动画靠它算比例），
+ * 所以"用户尺寸"只能单独存一份，点球展开时用它还原——而不是永远回到 MIN。
+ */
+let restoreSize: { width: number; height: number } | null = null
 const dialogEl = ref<HTMLElement | null>(null)
 
 function clampGeom(g: WinGeom): WinGeom {
@@ -443,6 +449,8 @@ function ballCenterOf(g: WinGeom): { left: number; top: number } {
 function minimizeToBall(): void {
   if (minimized.value || ballAnimating.value) return
   if (!floating.value) enterFloating() // 弹窗态点最小化：先转浮动窗口再压缩
+  // 拍下"用户此刻的窗口宽高"：全部收起前它是 winGeom 里的真实值（窗口模式所见即所得）
+  restoreSize = { width: winGeom.value.width, height: winGeom.value.height }
   ballGeom.value = ballCenterOf(winGeom.value)
   ballDocked.value = false
   ballSide.value = 0
@@ -467,6 +475,15 @@ function minimizeToBall(): void {
 
 function restoreFromBall(): void {
   if (!minimized.value || ballAnimating.value) return
+  // 尺寸还原：用最小化前拍下的用户宽高（拖过右下角就是拖完的值），
+  // 而不是永远弹回 MIN——最小化期间 winGeom 被钉在 MIN 只是缩放动画需要。
+  const size = restoreSize
+  winGeom.value = clampGeom({
+    left: winGeom.value.left,
+    top: winGeom.value.top,
+    width: size ? size.width : winGeom.value.width,
+    height: size ? size.height : winGeom.value.height,
+  })
   // 复原：窗口从球的位置/大小起步展开（补间由 .psd-dialog 的 transition 完成）。
   // 起点位置拍下来存进 animFromGeom，动画结束后再清掉、并把窗口摆回自己的正常几何。
   animFromGeom.value = { left: ballGeom.value.left, top: ballGeom.value.top }
@@ -516,11 +533,17 @@ function applyBallGeom(): void {
   winGeom.value = { left, top, width: MIN_W, height: MIN_H }
 }
 
-// 悬浮球拖拽：按下 → 超过阈值才进入拖拽（否则算点击=复原）→ 松手判断吸附
+// 悬浮球拖拽：按下 → 超过阈值才进入拖拽（否则算点击=复原）→ 松手只做吸附，不展开
 // 监听挂在 window 上（球很小，鼠标很容易跑出球外），并在 onMounted 一次性注册，
 // 不能挂在 mousedown 里——真实点击（CDP/自动化）不一定补发 mouseup 给新注册的监听。
 let ballDragging = false
 let ballDragMoved = false
+/**
+ * 刚拖完这一次的标记：鼠标在球上按下、拖动、松手，浏览器会在 mouseup 之后再补一个 click。
+ * 那个 click 是"拖拽的收尾"，不是用户想展开；靠它把随后的 click 吞掉一次，
+ * 否则拖完球会自己弹开。
+ */
+let ballDragJustEnded = false
 let ballDragOffX = 0
 let ballDragOffY = 0
 let ballPressX = 0
@@ -556,14 +579,18 @@ function onBallMouseUp(): void {
     restoreFromBall() // 没移动 = 点击 → 复原窗口
     return
   }
+  // 拖动结束：只落位/吸附，绝不展开；并吞掉紧随其后的那次 click
+  ballDragJustEnded = true
+  setTimeout(() => { ballDragJustEnded = false }, 0)
   maybeDock()
 }
 /**
- * 兜底的"点击复原"：真实点击若没走到 mouseup（自动化/某些设备），
- * click 事件仍会到达，这里补一次；已复原则被 restoreFromBall 的守卫挡掉，不会重复触发。
+ * 唯一的"点击展开"入口。mouseup 已经处理过普通点击（那次不会再走到这里的前提不成立，
+ * 所以两处都要防重），这里主要兜住"真实点击没有 mouseup"的情况。
  */
 function onBallClick(): void {
   if (ballDragging) return
+  if (ballDragJustEnded) return // 这次 click 是拖拽收尾，不展开
   restoreFromBall()
 }
 
@@ -705,23 +732,25 @@ const dialogStyle = computed<Record<string, string>>(() => {
     position: 'fixed',
     left: (start ? start.left : g.left) + 'px',
     top: (start ? start.top : g.top) + 'px',
-    width: MIN_W + 'px',
-    height: MIN_H + 'px',
+    width: (minimized.value ? MIN_W : g.width) + 'px',
+    height: (minimized.value ? MIN_H : g.height) + 'px',
     animation: 'none',
   }
   if (minimized.value) {
-    const scaleX = (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / MIN_W
-    const scaleY = (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / MIN_H
+    const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
+    const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
     style.transformOrigin = '0 0'
-    style.transform = `scale(${scaleX}, ${scaleY})`
+    style.transform = `scale(${w / MIN_W}, ${h / MIN_H})`
     style.borderRadius = ballDocked.value ? '4px' : '999px'
     // 压缩动画结束后窗口本体彻底隐去，露出下面的圆球
     if (!ballAnimating.value) style.opacity = '0'
   } else if (start) {
-    // 复原第一帧：窗口还停在球的位置、缩到球的大小；下一帧 transition 把它补间回正常尺寸
+    // 复原第一帧：窗口已切到还原后的宽高，但视觉上仍停在球的大小；
+    // 下一帧 transition 把它补间回 1:1（此时球被盖在下面，观感就是从球里长出来）
+    const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
+    const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
     style.transformOrigin = '0 0'
-    style.transform = `scale(${BALL_SIZE / MIN_W}, ${BALL_SIZE / MIN_H})`
-    // 首帧隐藏（球还盖在上面），让"窗口从球的位置长出来"观感连续
+    style.transform = `scale(${w / g.width}, ${h / g.height})`
     style.opacity = '0'
   }
   return style
