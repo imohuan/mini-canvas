@@ -366,10 +366,10 @@ const floating = ref(false)
 /** 压缩动画时长（与 .psd-dialog-ball 的 transition 一致） */
 const BALL_ANIM_MS = 240
 /** 悬浮球直径 */
-const BALL_SIZE = 56
+const BALL_SIZE = 40
 /** 吸附后贴边的"长方形"尺寸 */
-const BALL_SNAP_W = 8
-const BALL_SNAP_H = 46
+const BALL_SNAP_W = 7
+const BALL_SNAP_H = 34
 /** 悬浮球拖拽/吸附边缘的触发距离 */
 const BALL_DRAG_THRESHOLD = 4
 const BALL_SNAP_MARGIN = 18
@@ -517,30 +517,36 @@ function applyBallGeom(): void {
 }
 
 // 悬浮球拖拽：按下 → 超过阈值才进入拖拽（否则算点击=复原）→ 松手判断吸附
+// 监听挂在 window 上（球很小，鼠标很容易跑出球外），并在 onMounted 一次性注册，
+// 不能挂在 mousedown 里——真实点击（CDP/自动化）不一定补发 mouseup 给新注册的监听。
 let ballDragging = false
 let ballDragMoved = false
 let ballDragOffX = 0
 let ballDragOffY = 0
+let ballPressX = 0
+let ballPressY = 0
 function onBallMouseDown(e: MouseEvent): void {
   if (!minimized.value || ballAnimating.value) return
   ballDragging = true
   ballDragMoved = false
+  ballPressX = e.clientX
+  ballPressY = e.clientY
   ballDragOffX = e.clientX - ballGeom.value.left
   ballDragOffY = e.clientY - ballGeom.value.top
   e.preventDefault()
 }
 function onBallMouseMove(e: MouseEvent): void {
   if (!ballDragging) return
-  const nx = e.clientX - ballDragOffX
-  const ny = e.clientY - ballDragOffY
   if (!ballDragMoved) {
-    if (Math.abs(e.clientX - (ballGeom.value.left + ballDragOffX)) + Math.abs(e.clientY - (ballGeom.value.top + ballDragOffY)) < BALL_DRAG_THRESHOLD) return
+    // 阈值相对"按下那一点"算，不能用每帧都在变的 ballGeom
+    const moved = Math.abs(e.clientX - ballPressX) + Math.abs(e.clientY - ballPressY)
+    if (moved < BALL_DRAG_THRESHOLD) return
     ballDragMoved = true
     // 开始拖动即脱离吸附态（恢复成圆球跟随鼠标）
     ballDocked.value = false
     ballSide.value = 0
   }
-  ballGeom.value = { left: nx, top: ny }
+  ballGeom.value = { left: e.clientX - ballDragOffX, top: e.clientY - ballDragOffY }
   applyBallGeom()
 }
 function onBallMouseUp(): void {
@@ -551,6 +557,14 @@ function onBallMouseUp(): void {
     return
   }
   maybeDock()
+}
+/**
+ * 兜底的"点击复原"：真实点击若没走到 mouseup（自动化/某些设备），
+ * click 事件仍会到达，这里补一次；已复原则被 restoreFromBall 的守卫挡掉，不会重复触发。
+ */
+function onBallClick(): void {
+  if (ballDragging) return
+  restoreFromBall()
 }
 
 // 拖拽：仅头部，按下鼠标 → 记偏移 → mousemove 更新 left/top，mouseup 解绑
@@ -921,6 +935,7 @@ onBeforeUnmount(() => {
       :title="ballDocked ? '展开设置窗口' : '点击展开设置窗口，拖动可移动'"
       :style="ballStyle"
       @mousedown="onBallMouseDown"
+      @click="onBallClick"
       @keydown.enter.prevent="restoreFromBall"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -992,7 +1007,8 @@ onBeforeUnmount(() => {
 /* 悬浮球：一颗真圆球（独立元素，尺寸即视觉尺寸，不靠缩放），带齿轮图标 */
 .psd-ball {
   position: fixed;
-  z-index: 7;
+  /* 必须高于 .psd-mask(100000)，否则被最小化时残留的 dialog 层盖住点不到 */
+  z-index: 100001;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1011,10 +1027,13 @@ onBeforeUnmount(() => {
 }
 
 .psd-ball svg {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   flex: 0 0 auto;
-  transition: width 0.2s ease, height 0.2s ease;
+  /* 图标不参与命中测试：否则鼠标压在齿轮上时 target 是 svg，
+     父级的 mousedown 虽然还能冒泡，但光标/拖拽手感会不统一 */
+  pointer-events: none;
+  transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
 }
 
 /* 吸附成贴边竖长条：椭圆的球变窄，图标转 90° 并缩小，居中贴合长条 */
@@ -1025,8 +1044,8 @@ onBeforeUnmount(() => {
 }
 
 .psd-ball.is-docked svg {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   opacity: 0;
   transform: rotate(90deg);
 }
@@ -1062,13 +1081,15 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-/* 最小化（悬浮球）态：窗口本体只是压缩动画的一层皮 —— 圆角、无内边距，
-   动画播完由内联 opacity:0 隐去，真正露出的球是独立的 .psd-ball */
+/* 最小化（悬浮球）态：窗口本体只是压缩动画的一层皮 —— 动画播完由内联 opacity:0 隐去，
+   真正露出的球是独立的 .psd-ball。这里必须关掉指针事件：
+   否则这块"隐形的 520×360 大块"会盖在球上面，把所有点击/拖拽全吃掉。 */
 .psd-dialog-ball {
   background: linear-gradient(145deg, #22b8d4, #0891b2);
   border-color: rgba(8, 145, 178, 0.5);
   box-shadow: 0 10px 26px rgba(8, 145, 178, 0.4);
   overflow: hidden;
+  pointer-events: none;
 }
 
 .psd-dialog-ball .psd-head,
