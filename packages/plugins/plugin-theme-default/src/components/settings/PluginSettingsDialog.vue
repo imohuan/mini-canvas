@@ -383,13 +383,9 @@ const ballDocked = ref(false)
 const ballSide = ref<-1 | 0 | 1>(0)
 const ballGeom = ref({ left: 0, top: 0 })
 
-/** 压缩动画期间窗口尺寸冻结在最小尺寸（保证文本不换行、布局不重排）*/
-const animGeom = ref({ width: 0, height: 0 })
+/** 复原动画的起点（球的位置）：窗口从球的位置/大小展开回自己 */
+const animFromGeom = ref<{ left: number; top: number } | null>(null)
 let ballAnimTimer: ReturnType<typeof setTimeout> | null = null
-
-/** 最小尺寸：压缩动画的起点与终点都锁在这里 */
-const animW = computed(() => (animGeom.value.width || MIN_W))
-const animH = computed(() => (animGeom.value.height || MIN_H))
 
 const MIN_W = 520
 const MIN_H = 360
@@ -471,15 +467,18 @@ function minimizeToBall(): void {
 
 function restoreFromBall(): void {
   if (!minimized.value || ballAnimating.value) return
-  // 先解除最小化：dialogStyle 不再施加缩放，transition 自动把 scale 从球补间回 1
-  minimized.value = false
-  ballDocked.value = false
-  ballSide.value = 0
+  // 复原：窗口从球的位置/大小起步展开（补间由 .psd-dialog 的 transition 完成）。
+  // 起点位置拍下来存进 animFromGeom，动画结束后再清掉、并把窗口摆回自己的正常几何。
+  animFromGeom.value = { left: ballGeom.value.left, top: ballGeom.value.top }
   ballAnimating.value = true
+  minimized.value = false
   if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
   ballAnimTimer = setTimeout(() => {
     ballAnimTimer = null
     ballAnimating.value = false
+    animFromGeom.value = null
+    ballDocked.value = false
+    ballSide.value = 0
   }, BALL_ANIM_MS)
 }
 
@@ -683,26 +682,47 @@ watch(
 const dialogStyle = computed<Record<string, string>>(() => {
   if (!floating.value) return {}
   const g = winGeom.value
-  // 最小化态：窗口逻辑尺寸恒为最小尺寸，视觉上整体缩放成球（球 = 左上角 + 视觉尺寸）。
-  // 宽高始终是"最小宽度"，所以文字永远不会因为过窄而折行，布局全程不变形。
-  // 注意：缩放必须在"最小化期间一直生效"，不能只在动画那 240ms 里 —— 否则动画一结束
-  // transform 被撤掉，520×360 的窗口就会原样露出来（就是"变成一个大长方体"的原因）。
-  const scaleX = minimized.value ? (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / MIN_W : 1
-  const scaleY = minimized.value ? (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / MIN_H : 1
+  // 窗口本体的两份职责：
+  //  1) 最小化态 = "压缩动画的一层皮"：缩放成球的大小做补间，动画播完整块隐去
+  //     （真正代表球的是独立的 .psd-ball，形状和图标都更准）。
+  //  2) 复原态   = 从球的位置/尺寸起步，由 transition 补间回正常运行尺寸。
+  const start = animFromGeom.value
   const style: Record<string, string> = {
     position: 'fixed',
-    left: g.left + 'px',
-    top: g.top + 'px',
+    left: (start ? start.left : g.left) + 'px',
+    top: (start ? start.top : g.top) + 'px',
     width: MIN_W + 'px',
     height: MIN_H + 'px',
     animation: 'none',
   }
   if (minimized.value) {
+    const scaleX = (ballDocked.value ? BALL_SNAP_W : BALL_SIZE) / MIN_W
+    const scaleY = (ballDocked.value ? BALL_SNAP_H : BALL_SIZE) / MIN_H
     style.transformOrigin = '0 0'
     style.transform = `scale(${scaleX}, ${scaleY})`
     style.borderRadius = ballDocked.value ? '4px' : '999px'
+    // 压缩动画结束后窗口本体彻底隐去，露出下面的圆球
+    if (!ballAnimating.value) style.opacity = '0'
+  } else if (start) {
+    // 复原第一帧：窗口还停在球的位置、缩到球的大小；下一帧 transition 把它补间回正常尺寸
+    style.transformOrigin = '0 0'
+    style.transform = `scale(${BALL_SIZE / MIN_W}, ${BALL_SIZE / MIN_H})`
+    // 首帧隐藏（球还盖在上面），让"窗口从球的位置长出来"观感连续
+    style.opacity = '0'
   }
   return style
+})
+
+/** 悬浮球定位：直接以视觉尺寸（圆球/贴边条）摆放，不再依赖窗口缩放 */
+const ballStyle = computed<Record<string, string>>(() => {
+  const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
+  const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
+  return {
+    left: ballGeom.value.left + 'px',
+    top: ballGeom.value.top + 'px',
+    width: w + 'px',
+    height: h + 'px',
+  }
 })
 
 onMounted(() => {
@@ -789,19 +809,8 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <!-- 悬浮球：仅最小化态显示，压在窗口之上承接点击/拖拽（点击复原、拖拽移动、靠边吸附） -->
-        <div
-          v-if="minimized"
-          class="psd-ball-surface"
-          :class="{ 'is-docked': ballDocked }"
-          role="button"
-          tabindex="0"
-          :aria-label="'展开设置窗口'"
-          title="展开设置窗口（拖动可移动）"
-          @mousedown="onBallMouseDown"
-          @keydown.enter.prevent="restoreFromBall"
-        ></div>
-
+        <!-- 悬浮球放在 dialog 之外（见下方 Teleport）：若留在 dialog 内部，会跟着
+             dialog 的缩小 transform 一起被缩放，永远量不出 56px 的真实尺寸 -->
         <div class="psd-body">
           <!-- 左：一级导航 -->
           <nav class="psd-nav">
@@ -898,6 +907,29 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </Teleport>
+
+  <!-- 悬浮球：独立挂在 body 上（不在 dialog 内），才能是一颗尺寸准确的圆球 + 图标；
+       承担点击展开、拖拽移动、靠边吸附 -->
+  <Teleport to="body">
+    <div
+      v-if="minimized || (ballAnimating && animFromGeom)"
+      class="psd-ball"
+      :class="{ 'is-docked': ballDocked, 'is-leaving': !minimized }"
+      role="button"
+      tabindex="0"
+      aria-label="展开设置窗口"
+      :title="ballDocked ? '展开设置窗口' : '点击展开设置窗口，拖动可移动'"
+      :style="ballStyle"
+      @mousedown="onBallMouseDown"
+      @keydown.enter.prevent="restoreFromBall"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3.2"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -957,29 +989,70 @@ onBeforeUnmount(() => {
   transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.24s ease;
 }
 
-/* 悬浮球表面：覆盖整个窗口，仅最小化态出现，点击=复原、拖拽=移动 */
-.psd-ball-surface {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  border-radius: 999px;
+/* 悬浮球：一颗真圆球（独立元素，尺寸即视觉尺寸，不靠缩放），带齿轮图标 */
+.psd-ball {
+  position: fixed;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #22b8d4, #0891b2);
+  box-shadow: 0 10px 26px rgba(8, 145, 178, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  color: #fff;
   cursor: grab;
-  /* 拖拽时不要选中文字 */
   user-select: none;
+  /* 出现/消失的淡入淡出（尺寸由 transform 之外的 width/height 决定，不参与动画） */
+  animation: psd-ball-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.psd-ball-surface:active {
+.psd-ball:active {
   cursor: grabbing;
 }
 
-/* 吸附成贴边竖长条 */
-.psd-ball-surface.is-docked {
-  border-radius: 4px;
+.psd-ball svg {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  transition: width 0.2s ease, height 0.2s ease;
 }
 
-.psd-ball-surface:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.9);
-  outline-offset: -3px;
+/* 吸附成贴边竖长条：椭圆的球变窄，图标转 90° 并缩小，居中贴合长条 */
+.psd-ball.is-docked {
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(8, 145, 178, 0.35);
+  animation: none;
+}
+
+.psd-ball.is-docked svg {
+  width: 6px;
+  height: 6px;
+  opacity: 0;
+  transform: rotate(90deg);
+}
+
+/* 复原时球要"溶解"进正在展开的窗口：淡出 + 放大，盖住交接的瞬间 */
+.psd-ball.is-leaving {
+  opacity: 0;
+  transform: scale(1.6);
+  pointer-events: none;
+  transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+.psd-ball:focus-visible {
+  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline-offset: 2px;
+}
+
+@keyframes psd-ball-in {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 /* resize 进行中禁用文本选中，鼠标全局呈现 nwse-resize */
@@ -989,7 +1062,8 @@ onBeforeUnmount(() => {
   user-select: none;
 }
 
-/* 最小化（悬浮球）态：窗口本体变成一颗主题色圆球——内容整体淡出，不留任何残影/变形 */
+/* 最小化（悬浮球）态：窗口本体只是压缩动画的一层皮 —— 圆角、无内边距，
+   动画播完由内联 opacity:0 隐去，真正露出的球是独立的 .psd-ball */
 .psd-dialog-ball {
   background: linear-gradient(145deg, #22b8d4, #0891b2);
   border-color: rgba(8, 145, 178, 0.5);
