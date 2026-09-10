@@ -48,6 +48,26 @@ theme-default → canvas-render → canvas-core-v2，插件不反向 import。�
 ### C. 预览UI + 自定义内容插槽
 现有 `settingsGroup/<key>` 已能"接管某组正文 = 放你自己的预览组件"，改值走 settings.set → 预览用 settings.onChange 自刷新。所以预览场景 = 插件给某组注册 settingsGroup 内容组件（replace/prepend/append），不必新增槽。缺的是把"字段控件渲染器"下发（见 D）和决定哪个组用预览。
 
+### 定稿（2026-09-09，用户拍板）：一级按"画布对象/功能"跨插件聚合，颜色集中进「主题」
+用户纠正"别把单插件拆太碎（二级=不同插件块）"且明确新增「节点/边」及「主题(收各种插件颜色)/常规」一级。
+落点 = 各插件 Config 的 `group` 首段即一级、跨插件聚合；**颜色字段一律归 `主题/<插件或元素>`**。
+已实现（分支 feat/cordis-plugin-system，commit 1f48cd4 + 34a27c8）：
+
+| 一级 | 二级（来自哪些插件） |
+|---|---|
+| 节点 | 端口、吸附带(theme-default) / 图片节点(node-image) |
+| 边 | 连线(theme-default) / 连线切割(edge-cutting) |
+| 主题(颜色集中) | 连线(theme-default: edgeColor/edgeGlowColor) / 图片节点(node-image: borderColor) / 连线切割(edge-cutting: pathColor/bladeColor) |
+| 布局 | auto-layout（方向/间距/聚焦/诊断 平铺，不拆 tab） |
+| 小地图 | mini-map |
+| 导出 | canvas-export |
+| 调试 | theme-default |
+
+字段源码留各自插件，面板只按 group 前缀归类；settings 读写 key 驱动，改 group 不影响取值。
+依赖方向 / 面板二级页签语义不变（一级下 >1 个二级才出 tab 条）。「常规 general」尚无现成字段可归，未建。
+
+---
+
 ### D. 把 SettingsSchemaField 下发，让注册的组件能直接渲染某字段控件
 目标：插件的自定义组件（如预览/自定义页签正文）能直接摆出该组的标准 schema 控件，省得自己重画滑块/开关。
 候选机制（需选型）：
