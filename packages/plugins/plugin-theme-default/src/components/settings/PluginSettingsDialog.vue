@@ -385,6 +385,11 @@ const ballGeom = ref({ left: 0, top: 0 })
 
 /** 复原动画的起点（球的位置）：窗口从球的位置/大小展开回自己 */
 const animFromGeom = ref<{ left: number; top: number } | null>(null)
+/**
+ * 压缩动画期间，窗口这层"皮"停靠的矩形 = 最小化前那一刻的窗口矩形。
+ * 动画只走 transform，皮的布局尺寸全程不变，所以从"用户看到的窗口"一帧不跳地缩成球。
+ */
+const ballFromBox = ref<WinGeom | null>(null)
 let ballAnimTimer: ReturnType<typeof setTimeout> | null = null
 
 const MIN_W = 520
@@ -445,12 +450,9 @@ function toggleFloating(): void {
 }
 
 // —— 最小化 / 复原：压缩成悬浮球 ——
-/** 把球放到当前窗口中心（自由浮动态） */
-function ballCenterOf(g: WinGeom): { left: number; top: number } {
-  return {
-    left: g.left + g.width / 2 - BALL_SIZE / 2,
-    top: g.top + g.height / 2 - BALL_SIZE / 2,
-  }
+/** 球心落在窗口左上角：锚点固定为左上角，不动球时反复最小化/展开，窗口位置才保持一致 */
+function ballAtCorner(g: WinGeom): { left: number; top: number } {
+  return { left: g.left - BALL_SIZE / 2, top: g.top - BALL_SIZE / 2 }
 }
 
 function minimizeToBall(): void {
@@ -458,7 +460,8 @@ function minimizeToBall(): void {
   if (!floating.value) enterFloating() // 弹窗态点最小化：先转浮动窗口再压缩
   // 拍下"用户此刻的窗口宽高"：全部收起前它是 winGeom 里的真实值（窗口模式所见即所得）
   restoreSize = { width: winGeom.value.width, height: winGeom.value.height }
-  ballGeom.value = ballCenterOf(winGeom.value)
+  ballFromBox.value = { ...winGeom.value }
+  ballGeom.value = ballAtCorner(winGeom.value)
   ballDocked.value = false
   ballSide.value = 0
   // 最小化态：窗口立刻切到"最小尺寸 + 球位置"，由 dialogStyle 持续施加缩放；
@@ -466,8 +469,9 @@ function minimizeToBall(): void {
   minimized.value = true
   ballAnimating.value = true
   winGeom.value = {
-    left: ballGeom.value.left,
-    top: ballGeom.value.top,
+    // 与 restoreFromBall 用同一套锚点，保证"最小化 → 原位展开"严格可逆
+    left: ballGeom.value.left + ballAnchorOf().x,
+    top: ballGeom.value.top + ballAnchorOf().y,
     width: MIN_W,
     height: MIN_H,
   }
@@ -475,6 +479,7 @@ function minimizeToBall(): void {
   ballAnimTimer = setTimeout(() => {
     ballAnimTimer = null
     ballAnimating.value = false
+    ballFromBox.value = null
     // 落在边缘附近则直接吸附贴边
     maybeDock()
   }, BALL_ANIM_MS)
@@ -482,18 +487,23 @@ function minimizeToBall(): void {
 
 function restoreFromBall(): void {
   if (!minimized.value || ballAnimating.value) return
+  ballFromBox.value = null
   // 尺寸还原：用最小化前拍下的用户宽高（拖过右下角就是拖完的值），
   // 而不是永远弹回 MIN——最小化期间 winGeom 被钉在 MIN 只是缩放动画需要。
   const size = restoreSize
   winGeom.value = clampGeom({
-    left: winGeom.value.left,
-    top: winGeom.value.top,
+    // 锚点反推：最小化时窗口左上角被钉在"球左上角 + 锚点偏移"处，
+    // 展开就按同一套偏移把左上角取回来，球没被拖过 ⇒ 窗口原地不动。
+    left: ballGeom.value.left + ballAnchorOf().x,
+    top: ballGeom.value.top + ballAnchorOf().y,
     width: size ? size.width : winGeom.value.width,
     height: size ? size.height : winGeom.value.height,
   })
   // 复原：窗口从球的位置/大小起步展开（补间由 .psd-dialog 的 transition 完成）。
   // 起点位置拍下来存进 animFromGeom，动画结束后再清掉、并把窗口摆回自己的正常几何。
-  animFromGeom.value = { left: ballGeom.value.left, top: ballGeom.value.top }
+  // 起点位置就取"展开后的最终位置"：视觉上的"从球里长出来"由 scale 的
+  // transformOrigin（见 dialogStyle）保证，位置本身不动，展开完就没有跳变。
+  animFromGeom.value = { left: winGeom.value.left, top: winGeom.value.top }
   ballAnimating.value = true
   minimized.value = false
   if (ballAnimTimer !== null) clearTimeout(ballAnimTimer)
@@ -524,6 +534,27 @@ function maybeDock(): void {
   applyBallGeom()
 }
 
+/**
+ * 锚点 = 球的视觉矩形中心相对其左上角的偏移（圆球是 20/20，贴边条是 3.5/17）。
+ * 最小化与展开都取同一个锚点当作"窗口左上角所在处"，两边才严格可逆。
+ */
+function ballAnchorOf(): { x: number; y: number } {
+  const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
+  const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
+  return { x: w / 2, y: h / 2 }
+}
+
+/**
+ * 压缩/展开缩放的不动点（相对窗口盒子左上角），a = 球矩形中心偏移，s = "球大小那一端"的缩放比。
+ * 窗口盒子停在球的锚点上，而球矩形是在锚点左上方伸出去的，故不动点要落到盒子外。
+ * 推导：视觉矩形左边缘 = 盒子左边缘 + o·(1-s)，令它在 s 处正好等于球左边缘 → o = -a/(1-s)。
+ */
+function ballScaleOrigin(a: { x: number; y: number }, sx: number, sy: number): string {
+  const ox = sx >= 0.999 ? 0 : -a.x / (1 - sx)
+  const oy = sy >= 0.999 ? 0 : -a.y / (1 - sy)
+  return ox + 'px ' + oy + 'px'
+}
+
 /** 把 ballGeom 同步到窗口几何（吸附态用长方形尺寸，自由态用方形） */
 function applyBallGeom(): void {
   const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
@@ -536,8 +567,15 @@ function applyBallGeom(): void {
   // 竖直方向夹在视口内（拖动越界时按中心偏移收回）
   const top = Math.min(Math.max(0, ballGeom.value.top), Math.max(0, vh - h))
   ballGeom.value = { left, top }
-  // 窗口逻辑尺寸恒为最小尺寸，视觉尺寸由 .psd-dialog-ball 的缩放决定
-  winGeom.value = { left, top, width: MIN_W, height: MIN_H }
+  // 吸附把球水平钳到边缘后，锚点变成"贴边后的那条分界线"，
+  // 所以这里要按同一套偏移重钉窗口左上角，否则展开时窗口会偏回吸附前的位置。
+  // 窗口逻辑尺寸恒为最小尺寸，视觉尺寸由 .psd-dialog 的缩放决定。
+  winGeom.value = {
+    left: left + ballAnchorOf().x,
+    top: top + ballAnchorOf().y,
+    width: MIN_W,
+    height: MIN_H,
+  }
 }
 
 // 悬浮球拖拽：按下 → 超过阈值才进入拖拽（否则算点击=复原）→ 松手只做吸附，不展开
@@ -746,8 +784,16 @@ const dialogStyle = computed<Record<string, string>>(() => {
   if (minimized.value) {
     const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
     const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
-    style.transformOrigin = '0 0'
-    style.transform = `scale(${w / MIN_W}, ${h / MIN_H})`
+    // 压缩动画期间，这层皮就是"最小化前那一刻的窗口矩形"，动画结束（已隐去）再切回最小尺寸。
+    const src = ballAnimating.value && ballFromBox.value ? ballFromBox.value : { left: g.left, top: g.top, width: MIN_W, height: MIN_H }
+    style.left = src.left + 'px'
+    style.top = src.top + 'px'
+    style.width = src.width + 'px'
+    style.height = src.height + 'px'
+    const sx = w / src.width
+    const sy = h / src.height
+    style.transformOrigin = ballScaleOrigin(ballAnchorOf(), sx, sy)
+    style.transform = `scale(${sx}, ${sy})`
     style.borderRadius = ballDocked.value ? '4px' : '999px'
     // 压缩动画结束后窗口本体彻底隐去，露出下面的圆球
     if (!ballAnimating.value) style.opacity = '0'
@@ -756,8 +802,12 @@ const dialogStyle = computed<Record<string, string>>(() => {
     // 下一帧 transition 把它补间回 1:1（此时球被盖在下面，观感就是从球里长出来）
     const w = ballDocked.value ? BALL_SNAP_W : BALL_SIZE
     const h = ballDocked.value ? BALL_SNAP_H : BALL_SIZE
-    style.transformOrigin = '0 0'
-    style.transform = `scale(${w / g.width}, ${h / g.height})`
+    const sx = w / g.width
+    const sy = h / g.height
+    // left/top 已经是"展开后的最终位置"，首帧视觉矩形正好压在球上，
+    // 随后一路长成完整窗口，全程无位移。
+    style.transformOrigin = ballScaleOrigin(ballAnchorOf(), sx, sy)
+    style.transform = `scale(${sx}, ${sy})`
     style.opacity = '0'
   }
   return style
