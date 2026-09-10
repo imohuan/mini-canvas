@@ -331,25 +331,189 @@ function onMaskClick(): void {
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.closeOnMask !== false) close()
 }
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+
+// —— 浮动窗口模式：脱离遮罩，居中→绝对坐标，顶部可拖，右下可 resize，限制不出屏与最小尺寸 ——
+const floating = ref(false)
+
+const MIN_W = 520
+const MIN_H = 360
+const DEFAULT_W = typeof window !== 'undefined' ? Math.min(920, window.innerWidth - 64) : 920
+const DEFAULT_H = typeof window !== 'undefined' ? Math.min(Math.floor(0.68 * window.innerHeight), 780) : 780
+
+interface WinGeom { left: number; top: number; width: number; height: number }
+/** 进入浮动模式时一次性拍下当前居中几何（用 dialog 当时的实际渲染尺寸） */
+const winGeom = ref<WinGeom>({ left: 0, top: 0, width: DEFAULT_W, height: DEFAULT_H })
+const dialogEl = ref<HTMLElement | null>(null)
+
+function clampGeom(g: WinGeom): WinGeom {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  const w = Math.max(MIN_W, Math.min(g.width, vw))
+  const h = Math.max(MIN_H, Math.min(g.height, vh))
+  const maxL = vw - w
+  const maxT = vh - h
+  return {
+    left: Math.min(Math.max(0, g.left), Math.max(0, maxL)),
+    top: Math.min(Math.max(0, g.top), Math.max(0, maxT)),
+    width: w,
+    height: h,
+  }
+}
+
+function captureCurrentGeom(): WinGeom {
+  const el = dialogEl.value
+  if (!el) return winGeom.value
+  const r = el.getBoundingClientRect()
+  return { left: r.left, top: r.top, width: r.width, height: r.height }
+}
+
+function enterFloating(): void {
+  winGeom.value = clampGeom(captureCurrentGeom())
+  floating.value = true
+}
+function exitFloating(): void {
+  floating.value = false
+}
+function toggleFloating(): void {
+  if (floating.value) exitFloating()
+  else enterFloating()
+}
+
+// 拖拽：仅头部，按下鼠标 → 记偏移 → mousemove 更新 left/top，mouseup 解绑
+let dragging = false
+let dragOffX = 0
+let dragOffY = 0
+function onHeadMouseDown(e: MouseEvent): void {
+  if (!floating.value) return
+  // 拖手柄只允许"非按钮"区域触发：点到头部内的 button / interactive 不开始拖
+  const t = e.target as HTMLElement | null
+  if (t && t.closest('button, a, input, textarea, select, [role="button"]')) return
+  dragging = true
+  dragOffX = e.clientX - winGeom.value.left
+  dragOffY = e.clientY - winGeom.value.top
+  e.preventDefault()
+}
+function onDocMouseMove(e: MouseEvent): void {
+  if (!dragging) return
+  winGeom.value = clampGeom({
+    ...winGeom.value,
+    left: e.clientX - dragOffX,
+    top: e.clientY - dragOffY,
+  })
+}
+function onDocMouseUp(): void {
+  dragging = false
+}
+
+// resize：右下角手柄，按下 → 记初始几何 → mousemove 改 width/height，mouseup 解绑
+let resizing = false
+let resizeStartX = 0
+let resizeStartY = 0
+let resizeStartGeom: WinGeom = { left: 0, top: 0, width: MIN_W, height: MIN_H }
+function onResizeMouseDown(e: MouseEvent): void {
+  if (!floating.value) return
+  resizing = true
+  resizeStartX = e.clientX
+  resizeStartY = e.clientY
+  resizeStartGeom = { ...winGeom.value }
+  e.preventDefault()
+  e.stopPropagation()
+}
+function onResizeMouseMove(e: MouseEvent): void {
+  if (!resizing) return
+  const dx = e.clientX - resizeStartX
+  const dy = e.clientY - resizeStartY
+  winGeom.value = clampGeom({
+    ...resizeStartGeom,
+    width: resizeStartGeom.width + dx,
+    height: resizeStartGeom.height + dy,
+  })
+}
+function onResizeMouseUp(): void {
+  resizing = false
+}
+
+// 浏览器窗口尺寸变化时把浮动窗拽回可视区
+function onWindowResize(): void {
+  if (floating.value) winGeom.value = clampGeom(winGeom.value)
+}
+
+const dialogStyle = computed<Record<string, string>>(() => {
+  if (!floating.value) return {}
+  const g = winGeom.value
+  return {
+    position: 'fixed',
+    left: g.left + 'px',
+    top: g.top + 'px',
+    width: g.width + 'px',
+    height: g.height + 'px',
+    animation: 'none',
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  window.addEventListener('mousemove', onDocMouseMove)
+  window.addEventListener('mouseup', onDocMouseUp)
+  window.addEventListener('mousemove', onResizeMouseMove)
+  window.addEventListener('mouseup', onResizeMouseUp)
+  window.addEventListener('resize', onWindowResize)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('mousemove', onDocMouseMove)
+  window.removeEventListener('mouseup', onDocMouseUp)
+  window.removeEventListener('mousemove', onResizeMouseMove)
+  window.removeEventListener('mouseup', onResizeMouseUp)
+  window.removeEventListener('resize', onWindowResize)
+})
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="psd-mask" @click="onMaskClick">
-      <div class="psd-dialog" role="dialog" aria-modal="true" @click.stop>
-        <!-- 弹窗头 -->
-        <div class="psd-head">
+    <div
+      class="psd-mask"
+      :class="{ 'psd-mask-hidden': floating }"
+      @click="onMaskClick"
+    >
+      <div
+        ref="dialogEl"
+        class="psd-dialog"
+        :class="{ 'psd-dialog-floating': floating, 'psd-dialog-resizing': resizing }"
+        role="dialog"
+        aria-modal="true"
+        :style="dialogStyle"
+        @click.stop
+      >
+        <!-- 弹窗头：浮动模式下整条可拖（点到按钮除外） -->
+        <div class="psd-head" :class="{ 'psd-head-draggable': floating }" @mousedown="onHeadMouseDown">
           <div class="psd-title-block">
             <span class="psd-eyebrow">偏好</span>
             <h2 class="psd-title">设置</h2>
           </div>
-          <button class="psd-close" aria-label="关闭" title="关闭" @click="close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
-            </svg>
-          </button>
+          <div class="psd-head-actions">
+            <button
+              class="psd-icon-btn"
+              :aria-label="floating ? '回到弹窗' : '转为悬浮窗口'"
+              :title="floating ? '回到弹窗' : '转为悬浮窗口'"
+              @click="toggleFloating"
+            >
+              <!-- 浮动模式：显示"两个对向箭头 / 收回"图标；弹窗模式：显示"外向箭头"图标 -->
+              <svg v-if="floating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3v6H3"/><path d="M3 9l6-6"/>
+                <path d="M15 21v-6h6"/><path d="M21 15l-6 6"/>
+              </svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h6v6"/><path d="M9 21H3v-6"/>
+                <path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+              </svg>
+            </button>
+            <button class="psd-close" aria-label="关闭" title="关闭" @click="close">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 6l12 12"/><path d="M18 6L6 18"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="psd-body">
@@ -404,6 +568,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
             </div>
           </div>
         </div>
+
+        <!-- 右下角 resize 把手：仅浮动模式显示，命中区域扩大到一个 16x16 隐形方块 -->
+        <div
+          v-if="floating"
+          class="psd-resize-handle"
+          aria-hidden="true"
+          @mousedown="onResizeMouseDown"
+        >
+          <svg viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M3 13l10-10"/><path d="M7 13l6-6"/><path d="M11 13l2-2"/>
+          </svg>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -424,6 +600,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-family: system-ui, 'Microsoft YaHei', sans-serif;
 }
 
+/* 浮动模式下：蒙版透明、不可点击、不拦截事件，dialog 自己 fixed 定位 */
+.psd-mask-hidden {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  pointer-events: none;
+}
+.psd-mask-hidden > * {
+  pointer-events: auto;
+}
+
 .psd-dialog {
   width: min(920px, 100%);
   height: min(68vh, 780px);
@@ -438,6 +625,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: #374151;
   font-size: 13px;
   animation: psd-pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 给右下角 resize 把手提供定位上下文；浮动模式由内联 style 覆盖为 fixed */
+  position: relative;
+}
+
+/* 浮动模式：dialog 由内联 style 给 left/top/width/height，自身不再走 flex 居中 */
+.psd-dialog-floating {
+  animation: none;
+  border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
+/* resize 进行中禁用文本选中，鼠标全局呈现 nwse-resize */
+.psd-dialog-resizing,
+.psd-dialog-resizing * {
+  cursor: nwse-resize !important;
+  user-select: none;
 }
 
 .psd-head {
@@ -447,6 +650,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 2px 6px 12px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   flex-shrink: 0;
+}
+
+/* 浮动模式：整条头部都是拖手柄；点按钮时由 @mousedown 内做目标检测放过点击 */
+.psd-head-draggable {
+  cursor: move;
+  user-select: none;
+}
+
+.psd-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .psd-title-block {
@@ -496,6 +711,55 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   color: #ef4444;
 }
 
+/* 头部"转浮动/回弹窗"图标按钮：与关闭按钮同尺寸、同底色，仅 hover 色不同 */
+.psd-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.psd-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.psd-icon-btn:hover {
+  background: rgba(8, 145, 178, 0.12);
+  color: #0891b2;
+}
+
+/* 右下角 resize 把手：贴角放一个 16x16 图标 + 隐形放大命中区 */
+.psd-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  color: #9ca3af;
+  cursor: nwse-resize;
+  /* 命中区向右下扩展到 18px，方便抓 */
+  box-sizing: content-box;
+  margin: 0;
+  z-index: 2;
+}
+
+.psd-resize-handle:hover {
+  color: #0891b2;
+}
+
 .psd-body {
   flex: 1;
   display: flex;
@@ -504,12 +768,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 }
 
 .psd-nav {
-  width: 212px;
-  flex-shrink: 0;
+  /* 小屏模式优化：用百分比 + min/max 三重约束，按 dialog 自身宽度自适应，
+     避免 212px 固定宽度在窄屏（弹窗默认 920px 被 flex 居中压成 600px 时）显得过分占位。 */
+  flex: 0 0 auto;
+  width: clamp(96px, 22%, 180px);
   border-right: 1px solid rgba(0, 0, 0, 0.06);
-  padding: 2px 6px 6px 2px;
+  padding: 2px 4px 6px 2px;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+
+/* 极窄屏（视口 ≤ 480px，整 dialog 已几乎压扁）：左侧进一步收窄到 ~88px */
+@media (max-width: 480px) {
+  .psd-nav {
+    width: clamp(80px, 22%, 110px);
+  }
+  .psd-nav-item {
+    padding: 6px 6px;
+    min-height: 38px;
+  }
+  .psd-nav-txt {
+    font-size: 12px;
+  }
 }
 
 .psd-nav-empty {
@@ -596,6 +876,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   padding: 8px 12px 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 0;
+  /* 页签多到放不下时横向滚动，不换行、不撑破容器 */
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* 滚动时让最后一项能完整滚出（左右各补一段留白），首尾不被裁 */
+  scroll-padding: 0 12px;
 }
 
 .psd-tab-item {
@@ -696,6 +981,20 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* 横向滚动条：细一点，和左侧导航滚动条同款 */
+.psd-tabs::-webkit-scrollbar {
+  height: 6px;
+}
+
+.psd-tabs::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.psd-tabs::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .psd-content-body::-webkit-scrollbar,
