@@ -210,6 +210,12 @@ const sections = computed<Section[]>(() => {
 const scrollEl = ref<HTMLElement | null>(null)
 const currentSection = ref<string>('')
 
+/** 高亮段变化（内容区滚动 / 点 tab / 切一级）→ 让页签条跟上，始终露出当前页签 */
+watch(currentSection, (key) => {
+  if (!key) return
+  void nextTick(() => ensureTabVisible(key))
+})
+
 /**
  * 程序化滚动锁：smooth 滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
  * 会把高亮在途经的段之间闪来闪去。故点 tab / 切一级触发的滚动会先上一把锁，
@@ -274,6 +280,27 @@ function onBodyScroll(): void {
 }
 // 切换一级时，若该一级只有一段也置高亮；否则滚回顶部
 watch(sections, () => { void nextTick(scrollToTop) })
+
+/**
+ * 滚动联动页签条：内容区滚动带出的当前段若在页签条可视区之外，
+ * 把页签条横向滚到"露出该页签"，保证高亮那个始终看得见。
+ * 只在真的被裁掉时才滚（留 12px 余量），并把该页签尽量居中。
+ */
+function ensureTabVisible(key: string): void {
+  const strip = tabsEl.value
+  if (!strip) return
+  const item = strip.querySelector<HTMLElement>(`[data-tab="${cssEscape(key)}"]`)
+  if (!item) return
+  const stripRect = strip.getBoundingClientRect()
+  const itemRect = item.getBoundingClientRect()
+  const margin = 12
+  const fullyVisible =
+    itemRect.left >= stripRect.left + margin && itemRect.right <= stripRect.right - margin
+  if (fullyVisible) return
+  const itemCenter = itemRect.left - stripRect.left + strip.scrollLeft + itemRect.width / 2
+  const target = Math.max(0, itemCenter - stripRect.width / 2)
+  strip.scrollTo({ left: target, behavior: 'smooth' })
+}
 
 /** CSS.escape 兜底：section key 含 `/`、中文等字符也能安全用于属性选择器 */
 function cssEscape(v: string): string {
@@ -621,10 +648,11 @@ onBeforeUnmount(() => {
                 <template v-for="s in sections" :key="s.key">
                   <!-- settingsTab 插槽（顶替/追加）：渲染插槽组件注入 { group, active, onSelect }；active 由滚动定位高亮 -->
                   <component v-if="s.kind === 'tab'" :is="s.component" :group="s.key"
-                    :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item" />
+                    :active="currentSection === s.key" :on-select="scrollToSection" class="psd-tab-item"
+                    :data-tab="s.key" />
                   <!-- 默认目录项：点击滚动到该段 -->
                   <button v-else class="psd-tab-item" :class="{ active: currentSection === s.key }"
-                    @click="scrollToSection(s.key)">
+                    :data-tab="s.key" @click="scrollToSection(s.key)">
                     {{ s.label }}
                   </button>
                 </template>
