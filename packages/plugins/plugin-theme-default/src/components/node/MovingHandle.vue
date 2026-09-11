@@ -7,7 +7,10 @@
 //       跟随时球心精确对准鼠标点（中心对齐），静止/归位仍按 restOffset-overlap。
 //       CSS 消费本插件自建 --canvas-node-* 主题变量（styles/node-theme.css）。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Handle, Position } from '@mini-canvas/canvas-render'
+import { Handle, Position, createV2Logger } from '@mini-canvas/canvas-render'
+
+// 诊断日志 scope 约定见 canvas-render/utils/log.ts（'moving-handle'）。
+const log = createV2Logger('moving-handle')
 
 /** 把 value 限制在 [min,max]（v1 viewportSpace.clamp 移植） */
 function clamp(value: number, min: number, max: number): number {
@@ -240,6 +243,28 @@ function commitPosition(x: number, y: number) {
   })
 }
 
+/**
+ * 鼠标进入半圆区：只做"点亮"——置 keepVisible（本次 hover 期间按钮可见 + 本端口独占高亮）
+ * 并向上冒泡 hover=true。**不重置按钮坐标**：球此刻还停在静止位，等第一条 mousemove
+ * 由 updatePosition 才跳到鼠标旁，避免 enter 瞬间闪一下。
+ */
+function handleEnter() {
+  log.log(`[${props.id}] zone enter`, {
+    type: props.type,
+    disabled: props.disabled,
+    visible: props.visible,
+    keepVisible: keepVisible.value,
+    buttonX: buttonX.value,
+    buttonY: buttonY.value,
+  })
+  if (props.disabled) {
+    log.log(`[${props.id}] zone enter 被跳过（disabled）`)
+    return
+  }
+  keepVisible.value = true
+  emit('hover', true)
+}
+
 function updatePosition(event: MouseEvent) {
   if (props.disabled) return
   if (hideTimer) {
@@ -290,6 +315,13 @@ watch(
 
 function handleLeave() {
   if (props.disabled) return
+  log.log(`[${props.id}] zone leave → ${restoreDuration}ms 后归位淡出`, {
+    type: props.type,
+    buttonX: buttonX.value,
+    buttonY: buttonY.value,
+    mouseX: mouseX.value,
+    mouseY: mouseY.value,
+  })
   isMoving.value = false
   isRestoring.value = true
   keepVisible.value = true
@@ -337,8 +369,8 @@ onBeforeUnmount(() => {
       'port-follow-zone--target': !isSource,
       'is-debug': debug,
       'port-follow-zone--rect': zoneShape === 'rect',
-    }" :style="zoneStyle" @mouseenter="if (!disabled) { keepVisible = true; emit('hover', true) }"
-      @mouseleave="handleLeave" @mousemove="updatePosition" />
+    }" :style="zoneStyle" @mouseenter="handleEnter" @mouseleave="handleLeave"
+      @mousemove="updatePosition" />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
