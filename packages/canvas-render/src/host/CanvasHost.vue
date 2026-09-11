@@ -69,6 +69,8 @@ import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
+  nodeShellSlot,
+  hitNodeIdAt,
   nodesFromStore,
   edgesFromStore,
   DEFAULT_EDGE_VISUAL,
@@ -247,9 +249,11 @@ function applyTheme(): void {
   // 每次先完整重置再填充：主题插件被热卸/顶替后不能继续使用已卸载的旧组件句柄。
   nodeTypes.value = {}
   edgeTypes.value = {}
-  if (asm.nodeShell) {
-    const shell = markRaw(asm.nodeShell)
-    for (const t of asm.nodeTypes) nodeTypes.value[t] = shell
+  // 每 type 用解析出的壳（自带外壳优先，否则全局默认壳）：特殊形态节点由自己的插件决定长相，
+  // 默认壳不必认识它。markRaw 防组件句柄被 VueFlow/响应式系统 proxy。
+  for (const t of asm.nodeTypes) {
+    const shell = asm.nodeShells[t]
+    if (shell !== undefined && shell !== null) nodeTypes.value[t] = markRaw(shell)
   }
   if (asm.edge) edgeTypes.value = { custom: markRaw(asm.edge) }
   edgeDefaultType.value = asm.edgeDefaultType
@@ -607,9 +611,19 @@ function onDragMouseUp(ev: MouseEvent): void {
     if (!res.ok) log.warn(`drop ${drop.source}→${drop.target} 非法:${res.reason}`)
     else commitEdge(drop.source, drop.target)
   } else {
-    // 空白松手：只广播事实（谁、从哪个口、落在哪），不决定 UI —— 消费方(plugin-context-menu 等)
-    // 可据此放临时节点/弹菜单。hostRef 可能尚未就绪（boot 早期），则跳过广播。
-    hostRef.value?.ctx.emit(RenderEvents.ConnectionDropBlank, {
+    // 没建成边有三种情况，只有"真落在空白"才广播 —— 落在节点卡片上（连接不成立/方向不符）
+    // 不该冒出"在此处新建节点"的菜单。用几何命中判定：拖线期间画布挂着 .connecting 覆盖层，
+    // elementFromPoint 会命中覆盖元素而非卡片（已踩过这个坑）。
+    const landedOnNode = hitNodeIdAt(
+      target.point,
+      liveNodeRects().map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.width, h: r.height })),
+    )
+    if (landedOnNode) {
+      log.log(`drop 落在节点 ${landedOnNode} 上但连接不成立（非法/方向不符），不广播空白`)
+    } else {
+      // 空白松手：只广播事实（谁、从哪个口、落在哪），不决定 UI —— 消费方(plugin-context-menu 等)
+      // 可据此放临时节点/弹菜单。hostRef 可能尚未就绪（boot 早期），则跳过广播。
+      hostRef.value?.ctx.emit(RenderEvents.ConnectionDropBlank, {
       clientX: ev.clientX,
       clientY: ev.clientY,
       flowPosition: { x: target.point.x, y: target.point.y },
@@ -619,7 +633,8 @@ function onDragMouseUp(ev: MouseEvent): void {
       dragDistance: dragStartClient
         ? Math.hypot(ev.clientX - dragStartClient.x, ev.clientY - dragStartClient.y)
         : 0,
-    })
+      })
+    }
   }
   // 清源快照（避免后续普通 mouseup 误触发），监听本身留给 onConnectEnd 拆
   dragSourceId = ''
@@ -634,20 +649,23 @@ function clientToFlow(clientX: number, clientY: number): { x: number; y: number 
   return { x: clientX, y: clientY }
 }
 
-/** 取 host 内核中存活节点矩形（flow 坐标） */
+/** 取 host 内核中存活节点矩形（flow 坐标）。
+ *  尺寸优先用 nodeLayout 的**实测值**（ResizeObserver 量到的真实渲染尺寸），
+ *  退而用内核声明的 size，最后才是兜底 —— 否则卡片实际高度与兜底值不同，命中判定会偏。 */
 function liveNodeRects(): NodeRect[] {
   const h = hostRef.value
   if (!h) return []
+  const layout = h.nodeLayout
   return h.nodeStore.getNodes().map((n) => {
-    const pos = (n as unknown as { position?: { x: number; y: number } }).position ?? { x: 0, y: 0 }
-    const dim = (n as unknown as { dimensions?: { width: number; height: number } }).dimensions
+    const abs = layout?.absolutePosition ? layout.absolutePosition(n.id) : (n.position ?? { x: 0, y: 0 })
+    const size = layout?.nodeSize ? layout.nodeSize(n.id) : { w: n.size?.w ?? 256, h: n.size?.h ?? 128 }
     return {
       id: n.id,
       type: n.type,
-      x: pos.x,
-      y: pos.y,
-      width: dim?.width || 256,
-      height: dim?.height || 128,
+      x: abs.x,
+      y: abs.y,
+      width: size.w || 256,
+      height: size.h || 128,
     }
   })
 }
@@ -1134,7 +1152,3 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
-
-
-
-

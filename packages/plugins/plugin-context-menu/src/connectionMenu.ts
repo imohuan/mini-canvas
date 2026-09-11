@@ -3,9 +3,9 @@
  *
  * 定位：临时菜单节点是**真节点**（进 nodeStore/edgeStore，经 VueFlow 渲染），不是自绘浮层。
  * 于是缩放/平移天然对齐，端点和正式连线走同一套渲染。
- * 靠 data.isTemp 把它与正式图隔离：
+ * 靠内核通用契约标 `transient` 把它与正式图隔离：
  *   - 渲染层：draggable/selectable/deletable 全关（canvasHostCore.nodesFromStore/edgesFromStore）；
- *   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤掉 isTemp（交互中间态不入撤销栈、刷新不复活）。
+ *   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
  *
  * 核心不变量（用户明确要求）：**鼠标松手点 = 新节点连接端口的位置**。
  *   - 从输出口拖出（新节点是 target）→ 新节点**输入口在左缘**，卡片左缘中点落在松手点；
@@ -13,6 +13,7 @@
  * 临时卡片与创建出的真节点用**同一个** placeByPortAnchor，所以点菜单项时端口不跳位。
  */
 import {
+  isTransient,
   validateConnection,
   type ExistingEdge,
   type NodeConnectionDef,
@@ -63,14 +64,18 @@ export interface EdgeEndpoints {
   targetHandle: string
 }
 
-/** 是否临时脚手架节点（拖线落空白的菜单节点） */
+/**
+ * 是否临时脚手架节点（拖线落空白的菜单节点）。
+ *
+ * 判定走内核通用契约 `isTransient`（不落盘/不进历史/不可交互），本插件不自己发明标记。
+ */
 export function isTempNode(node: { data?: Record<string, unknown> } | undefined): boolean {
-  return Boolean(node?.data?.isTemp)
+  return isTransient(node)
 }
 
-/** 是否临时脚手架边（占位连线） */
+/** 是否临时脚手架边（占位连线）。判定同上，走内核通用契约。 */
 export function isTempEdge(edge: { data?: Record<string, unknown> } | undefined): boolean {
-  return Boolean(edge?.data?.isTemp)
+  return isTransient(edge)
 }
 
 /** 屏幕点 */

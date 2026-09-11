@@ -10,6 +10,12 @@ export {
   type MenuNodeTypeLike,
 } from './menuBuilder'
 export {
+  inverseScaleForZoom,
+  inverseScaleOrigin,
+  normalizePortSide,
+  type PortSide,
+} from './cardInverseScale'
+export {
   CARD_BORDER,
   CARD_PADDING_Y,
   CARD_WIDTH,

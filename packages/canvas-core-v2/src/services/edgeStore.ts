@@ -17,7 +17,7 @@ export interface CanvasEdge {
   /** 多端口节点预留：源/目标端口（现单进单出可省略） */
   sourceHandle?: string
   targetHandle?: string
-  /** 附加数据（渲染层透传给边组件）。临时脚手架边用 data.isTemp=true 标记，不参与落盘/历史/去重。 */
+  /** 附加数据（渲染层透传给边组件；中间态标记见 services/transient.ts）。 */
   data?: Record<string, unknown>
 }
 
@@ -164,8 +164,6 @@ export class EdgeStore implements EdgeStoreService {
     this.notify('replace')
   }
 }
-
-
 
 
 

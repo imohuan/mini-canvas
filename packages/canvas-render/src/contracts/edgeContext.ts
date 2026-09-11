@@ -17,8 +17,6 @@ export interface EdgeVisual {
   edgeColor?: string
   /** 虚线，v1 edgeDashed=false */
   edgeDashed?: boolean
-  /** 流光动画开关，v1 edgeAnimated=true */
-  edgeAnimated?: boolean
   /** 箭头开关，v1 edgeMarkerEnd=false */
   edgeMarkerEnd?: boolean
   /** 箭头尺寸，v1 edgeMarkerSize=8 */
@@ -36,15 +34,17 @@ export interface EdgeVisual {
   /** 辉光色，v1 edgeGlowColor 缺省=线色 */
   edgeGlowColor?: string
   // ===== 连线新视觉（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line：导轨 + 光斑流动）=====
-  /** 常驻“导轨 + 光斑流动”视觉总开关（默认 true；false = 回退素淡线/虚线） */
+  /** “导轨 + 光斑流动”视觉总开关（默认 true；false = 回退素淡线/虚线）。
+   *  注意：光斑只在"这条边被激活"（选中两端任一节点 / 选中本边 / 拖线临时线）时显示并流动。 */
   edgeFlowEnabled?: boolean
-  /** 光斑块长度（路径归一 1000 刻度，默认 90 ≈ 9% 路径长） */
-  edgeFlowBlockSize?: number
-  /** 光斑块之间的间隔（路径归一 1000 刻度，默认 260 ≈ 26% 路径长） */
-  edgeFlowGap?: number
-  /** 流动速度（px/帧 @60fps，与参考 demo 的 speed 同量纲；默认 2.5） */
+  /** 光斑数量：一条边固定这么多个色块（默认 3）。短线不会只剩一个、长线也不会铺出一堆 ——
+   *  整条路径先均分成这么多份，每份里放一个色块。 */
+  edgeFlowCount?: number
+  /** 光斑占比(%)：色块占“自己那一份”长度的百分比（默认 20）。线越长色块越大（按比例，不是固定 px）。 */
+  edgeFlowRatio?: number
+  /** 流动速度**倍数**（1 = 2 秒走完整条；与线长无关，长/短线同时到达；默认 1） */
   edgeFlowSpeed?: number
-  /** 光斑两端柔光延伸量（占块长 %，模拟头尾渐隐；默认 35） */
+  /** 光斑两端柔光延伸量（占该光斑长度 %，头尾渐隐；默认 35） */
   edgeFlowFade?: number
   /** 光斑峰值不透明度（默认 0.9） */
   edgeFlowIntensity?: number

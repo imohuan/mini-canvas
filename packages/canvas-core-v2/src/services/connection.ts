@@ -5,13 +5,14 @@
  * 吸收的 v1 规则（见 docs/adr/0001 行动项 3 + api.md §七）：
  * - normalizeConnection：缺 handle 归一成 'source'/'target'
  * - toCanonicalConnection：只允许 source→target 或 target→source(反向自动翻正)，其它朝向非法
- * - wouldCreateCycle：DFS 环检测（忽略 isTemp 边）
- * - 重复边检测（同一条 canonical 连接只允许一条，忽略 isTemp）
+ * - wouldCreateCycle：DFS 环检测（忽略中间态边）
+ * - 重复边检测（同一条 canonical 连接只允许一条，忽略中间态边）
  * - 声明式 inputs/accepts/limit（api.md §四）：target 的 inputs[].accepts 限定能接哪些源类型；
  *   limit:'single' 限定某输入端口只接一条
  *
  * 注意：canonical 语义 = 输出端 handle 'source' 在 source 节点、输入端 handle 'target' 在 target 节点。
  */
+import { isTransient } from './transient'
 
 /** 一条待校验/新建的连接（与 VueFlow Connection 同构） */
 export interface ConnectionInput {
@@ -71,7 +72,7 @@ export interface NodeConnectionDef {
 export interface ValidateContext {
   /** 当前存在的节点（id → type） */
   nodes: Map<string, { id: string; type: string }>
-  /** 已存在边（含 isTemp 标记） */
+  /** 已存在边（含中间态标记） */
   edges: ExistingEdge[]
   /** 由 nodeStore.types 反查某 type 的连接声明 */
   getTypeConn: (type: string) => NodeConnectionDef | undefined
@@ -135,11 +136,6 @@ export function getCanonicalEndpoints(e: ExistingEdge): CanonicalEndpoints | nul
   return null
 }
 
-/** 该边是否 isTemp */
-function isTempEdge(e: ExistingEdge): boolean {
-  return Boolean(e.data?.isTemp)
-}
-
 /**
  * 判断"加一条 source→target"是否会成环（v1 wouldCreateCycle 原样）：
  * 已有边若存在"target →…→ source"的正向路径，则补上 source→target 就成环。
@@ -147,7 +143,7 @@ function isTempEdge(e: ExistingEdge): boolean {
  */
 export function wouldCreateCycle(source: string, target: string, edges: ExistingEdge[]): boolean {
   if (source === target) return true
-  const real = edges.filter((e) => !isTempEdge(e))
+  const real = edges.filter((e) => !isTransient(e))
   // 正向邻接：from -> [tos]
   const adj = new Map<string, string[]>()
   for (const e of real) {
@@ -172,12 +168,12 @@ export function wouldCreateCycle(source: string, target: string, edges: Existing
 
 /** 一条已有边是否与 canonical 端点相同（跨 handle 归一比较） */
 export function isSameConnection(edge: ExistingEdge, canonical: CanonicalEndpoints): boolean {
-  if (isTempEdge(edge)) return false
+  if (isTransient(edge)) return false
   const ep = getCanonicalEndpoints(edge)
   return !!ep && ep.source === canonical.source && ep.target === canonical.target
 }
 
-/** 找已存在的同一条连接（去重用，忽略 isTemp） */
+/** 找已存在的同一条连接（去重用，忽略中间态边） */
 export function findDuplicate(canonical: CanonicalEndpoints, edges: ExistingEdge[]): ExistingEdge | undefined {
   return edges.find((e) => isSameConnection(e, canonical))
 }
@@ -258,7 +254,7 @@ export function validateConnection(
     const effectivePort = inputDef?.port ?? undefined // 传统默认口(无具名)亦为 undefined
     const intoInput = ctx.edges.filter(
       (e) =>
-        !isTempEdge(e) &&
+        !isTransient(e) &&
         // 多端口已有边(自定义 handle) canonical 提取失败，直接用 e.target 判目标节点
         (getCanonicalEndpoints(e)?.target === canonical.target || (!getCanonicalEndpoints(e) && e.target === canonical.target)) &&
         // 现有边 handle 归一到目标口：无 handle/默认 target 口 视为默认口；否则精确匹配具名口
@@ -316,9 +312,6 @@ export function typeConnectionDef(def: { inputs?: PortDef[]; outputs?: PortDef[]
   if (!def) return undefined
   return def.inputs || def.outputs ? { inputs: def.inputs, outputs: def.outputs } : undefined
 }
-
-
-
 
 
 

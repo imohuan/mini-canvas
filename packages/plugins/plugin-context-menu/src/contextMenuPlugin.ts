@@ -28,9 +28,10 @@ import type {
   EdgeStoreService,
 } from '@mini-canvas/canvas-core-v2'
 import { typeConnectionDef } from '@mini-canvas/canvas-core-v2'
-import { RenderEvents, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
+import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
+import ConnectionMenuNode from './ConnectionMenuNode.vue'
 import type { ContextMenuItem, ContextMenuMode } from './menuBuilder'
 import { enrichMenuItems } from './menuEnrich'
 import {
@@ -42,6 +43,7 @@ import {
   connectionMenuCardSize,
   DEFAULT_DRAG_THRESHOLD,
   filterConnectableTypes,
+  isTempEdge,
   placeByPortAnchor,
   portSideOf,
   resolveEdgeEndpoints,
@@ -115,6 +117,10 @@ export function apply(ctx: Context): void {
     size: connectionMenuCardSize(1),
     content: ConnectionMenuContent,
   })
+  // 专属外壳：这张卡整体就是一张菜单（无标题条、菜单自绘边框底色、单侧端口、反缩放），
+  // 与"标题+内容"的通用卡片形态不同 → 由本插件自己画，主题默认壳不必为它开特判。
+  // 渲染层按 `nodeShell:<type>` 解析（见 canvas-render 的 nodeShellSlot）。
+  ctx.theme.register(nodeShellSlot(CONNECTION_MENU_TYPE), ConnectionMenuNode)
 
   // —— 内置命令：右键删除节点 / 删除连线（areas 限定显示区，menuBuilder 据此收进菜单）——
   // 删除右键的节点：连带清掉与它相连的边 + 从选中集移除；history 一次可撤销。
@@ -176,10 +182,11 @@ export function apply(ctx: Context): void {
   }
 
   // ==================== 拖线落空白 → 临时菜单卡片 ====================
-  // 临时卡片是**真节点**（进 nodeStore），临时连线是**真边**（进 edgeStore），都带 data.isTemp：
+  // 临时卡片是**真节点**（进 nodeStore），临时连线是**真边**（进 edgeStore），都标 `transient`：
   //   - 渲染：VueFlow 正常画 → 缩放平移天然对齐（不再自绘坐标）；
-  //   - 交互：渲染层对 isTemp 关掉 draggable/selectable/deletable（点空白不会误删、不会连另一端一起没）；
-  //   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤 isTemp（中间态不入撤销栈、刷新不复活）。
+  //   - 交互：渲染层对中间态关掉 draggable/selectable/deletable（点空白不会误删、不会连另一端一起没）；
+  //   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
+  // 判定由内核通用契约 isTransient 提供，本插件不自造标记。
   /** 当前临时节点 id / 临时边 id（同一时刻只允许一个临时菜单） */
   let tempNodeId: string | null = null
   let tempEdgeId: string | null = null
@@ -228,7 +235,7 @@ export function apply(ctx: Context): void {
     })
   }
 
-  /** 取消临时态：删掉临时节点与临时边（走 graph，但 isTemp 不进历史/不落盘） */
+  /** 取消临时态：删掉临时节点与临时边（走 graph，但中间态不进历史/不落盘） */
   function clearTempConnection(): void {
     const edgeId = tempEdgeId
     const nodeId = tempNodeId
@@ -259,8 +266,8 @@ export function apply(ctx: Context): void {
       fact,
       sourceNodeType,
       types: creatableNodeTypes(),
-      // 容量/重复判定只看正式边：临时边（isTemp）不参与，否则自己的占位边会把候选全滤掉
-      edges: ctx.get<EdgeStoreService>('edgeStore').getEdges().filter((e) => !e.data?.isTemp),
+      // 容量/重复判定只看正式边：中间态边（占位连线）不参与，否则自己的占位边会把候选全滤掉
+      edges: ctx.get<EdgeStoreService>('edgeStore').getEdges().filter((e) => !isTempEdge(e)),
       getTypeConn: (type) => typeConnectionDef(nodeStore.types.get(type)),
     })
     const items = enrichMenuItems(buildConnectionMenuItems(candidates))
@@ -272,22 +279,19 @@ export function apply(ctx: Context): void {
     const size = connectionMenuCardSize(items.length)
     const position = placeByPortAnchor(fact.flowPosition, size, portSideOf(fact))
     const nodeId = `temp-menu-${Date.now()}`
-    // ① 先放临时节点（进 nodeStore → VueFlow 渲染）。isTemp → 不进历史/不落盘。
-    //    cardWidth/cardHeight 是节点壳的尺寸来源（useNodeCardSize 读它），必须与 node.size 一致，
-    //    否则卡片实际高度与声明盒子不同，端口就不在"边缘竖直中点"了。
+    // ① 先放临时节点（进 nodeStore → VueFlow 渲染）。transient → 不进历史/不落盘。
+    //    卡片尺寸由本插件的外壳按 items 自行计算（与 node.size 同源），无需再往 data 里塞尺寸。
     graph.addNodes([
       {
         id: nodeId,
         type: CONNECTION_MENU_TYPE,
         position,
         size,
-        // portSide：告诉节点壳只显示"落线那一侧"的端口（左=新节点输入口 / 右=新节点输出口）
+        // portSide：告诉本插件的外壳只显示"落线那一侧"的端口（左=新节点输入口 / 右=新节点输出口）
         data: {
-          isTemp: true,
+          transient: true,
           items,
           portSide: portSideOf(fact),
-          cardWidth: size.w,
-          cardHeight: size.h,
         },
       },
     ])
@@ -309,7 +313,7 @@ export function apply(ctx: Context): void {
           target: ep.target,
           sourceHandle: ep.sourceHandle,
           targetHandle: ep.targetHandle,
-          data: { isTemp: true },
+          data: { transient: true },
         })
         return tempEdgeId
       },

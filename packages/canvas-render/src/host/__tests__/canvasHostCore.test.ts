@@ -3,6 +3,8 @@ import { NodeStore, ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import {
   assembleTheme,
   edgeId,
+  hitNodeIdAt,
+  nodeShellSlot,
   nodesFromStore,
   edgesFromStore,
   pruneDanglingEdges,
@@ -91,6 +93,31 @@ describe('pruneDanglingEdges', () => {
   })
 })
 
+describe('hitNodeIdAt（松手落点命中判定：区分"落空白"与"落节点上"）', () => {
+  const rects = [
+    { id: 'a', x: 0, y: 0, w: 100, h: 50 },
+    { id: 'b', x: 200, y: 100, w: 100, h: 50 },
+  ]
+
+  it('点在卡片内部 → 命中该节点（含边界）', () => {
+    expect(hitNodeIdAt({ x: 50, y: 25 }, rects)).toBe('a')
+    expect(hitNodeIdAt({ x: 250, y: 125 }, rects)).toBe('b')
+    // 边界算命中（左/上/右/下四条边）
+    expect(hitNodeIdAt({ x: 0, y: 0 }, rects)).toBe('a')
+    expect(hitNodeIdAt({ x: 100, y: 50 }, rects)).toBe('a')
+  })
+
+  it('点在所有卡片之外 → null（= 真空白，才该放临时节点）', () => {
+    expect(hitNodeIdAt({ x: 150, y: 25 }, rects)).toBeNull()
+    expect(hitNodeIdAt({ x: -1, y: 0 }, rects)).toBeNull()
+    expect(hitNodeIdAt({ x: 101, y: 51 }, rects)).toBeNull()
+  })
+
+  it('无节点 / 空矩形表 → null', () => {
+    expect(hitNodeIdAt({ x: 0, y: 0 }, [])).toBeNull()
+  })
+})
+
 describe('assembleTheme', () => {
   it('读各槽位 + edgeDefaultType；无主题/未注册时回落默认', () => {
     const theme = new ThemeRegistry()
@@ -117,13 +144,38 @@ describe('assembleTheme', () => {
     expect(out.edgeDefaultType).toBe('custom')
     expect(out.nodeTypes).toEqual(['text', 'image'])
   })
+
+  it('nodeShells：每 type 解析外壳 —— 注册了 nodeShell:<type> 就用它，否则回落全局 nodeShell', () => {
+    const theme = new ThemeRegistry()
+    const defaultShell = {}
+    const ownShell = {}
+    theme.register('nodeShell', defaultShell)
+    theme.register(nodeShellSlot('connection-menu'), ownShell)
+    const store = makeStore()
+    store.registerType({ type: 'connection-menu', label: '菜单', defaultSize: { w: 264, h: 100 } })
+    const out = assembleTheme(theme, store.types.keys())
+    expect(out.nodeShells['connection-menu']).toBe(ownShell)
+    expect(out.nodeShells.text).toBe(defaultShell)
+    expect(out.nodeShells.image).toBe(defaultShell)
+  })
+
+  it('nodeShells：无全局壳时只有自带外壳的 type 有壳，其余不带（裸内容渲染）', () => {
+    const theme = new ThemeRegistry()
+    const ownShell = {}
+    theme.register(nodeShellSlot('special'), ownShell)
+    const store = makeStore()
+    store.registerType({ type: 'special', label: '特殊', defaultSize: { w: 100, h: 100 } })
+    const out = assembleTheme(theme, store.types.keys())
+    expect(out.nodeShells.special).toBe(ownShell)
+    expect(out.nodeShells.text).toBeUndefined()
+    expect(out.nodeShell).toBeUndefined()
+  })
 })
 
 describe('默认外观常量', () => {
-  it('edge 默认对齐 contract（bezier/#3b82f6/animated 开）', () => {
+  it('edge 默认对齐 contract（bezier/#3b82f6）', () => {
     expect(DEFAULT_EDGE_VISUAL.edgeType).toBe('bezier')
     expect(DEFAULT_EDGE_VISUAL.edgeColor).toBe('#3b82f6')
-    expect(DEFAULT_EDGE_VISUAL.edgeAnimated).toBe(true)
   })
   it('handle 默认含全部尺寸字段', () => {
     expect(DEFAULT_HANDLE_VISUAL.handleButtonSize).toBe(32)
@@ -195,7 +247,8 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
 describe('默认外观常量字段完整（P2-8 防漂移）', () => {
   it('DEFAULT_EDGE_VISUAL 覆盖 EdgeVisual 全部字段（结构完整，CustomEdge 读不到 undefined）', () => {
     const expected = [
-      'edgeType', 'edgeLineWidth', 'edgeColor', 'edgeDashed', 'edgeAnimated',
+      // edgeAnimated 已并入 edgeFlowEnabled（连线动效合并为单一总闸），契约不再有该字段
+      'edgeType', 'edgeLineWidth', 'edgeColor', 'edgeDashed',
       'edgeMarkerEnd', 'edgeMarkerSize', 'edgeVisible', 'edgeGlowEnabled',
       'edgeGlowIntensity', 'edgeGlowColor',
     ]

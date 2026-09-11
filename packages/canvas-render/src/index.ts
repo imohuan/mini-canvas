@@ -115,6 +115,7 @@ export {
   edgesFromStore,
   pruneDanglingEdges,
   assembleTheme,
+  nodeShellSlot,
   edgeId,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
@@ -175,7 +176,6 @@ declare module '@mini-canvas/canvas-core-v2' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
-
 
 
 

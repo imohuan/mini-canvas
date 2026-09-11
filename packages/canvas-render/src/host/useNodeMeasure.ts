@@ -17,6 +17,30 @@ export interface NodeMeasureHandle {
   stop(): void
 }
 
+/**
+ * 解析「节点 DOM 所在的容器」—— 量测与导出共用的实例级锚点。
+ *
+ * 历史坑（线上 bug）：原实现写死 `root.querySelector('.vue-flow__renderer')`，但 **Vue Flow 1.48 起
+ * DOM 里没有这个类名**（其 dist 只产出 viewport / transformationpane / pane / nodes / edges）。
+ * querySelector 恒为 null → 量测容器为空、从不 observe → NodeLayoutService 收不到实测尺寸，
+ * nodeSize() 永远回落到 node.size ?? type.defaultSize，表现为「resize 过节点，自动布局仍按默认尺寸算」。
+ *
+ * 这里按「含 .vue-flow__node 的最内层节点容器」逐级兜底，不绑死某一个类名：
+ *   .vue-flow__nodes（节点层）→ .vue-flow__viewport → .vue-flow__pane → 传入的 root 本身。
+ * 传 null（未挂载 / SSR）返回 null，调用方按"无容器"安全 no-op。
+ */
+export function resolveMeasureContainer(root: HTMLElement | null | undefined): HTMLElement | null {
+  if (!root) return null
+  const candidate = root.querySelector<HTMLElement>('.vue-flow__nodes')
+  if (candidate) return candidate
+  // 兜底：任一层能查到节点元素即认它（兼容将来 VueFlow 改类名）
+  for (const sel of ['.vue-flow__viewport', '.vue-flow__pane']) {
+    const el = root.querySelector<HTMLElement>(sel)
+    if (el && el.querySelector('.vue-flow__node')) return el
+  }
+  return root
+}
+
 export function useNodeMeasure(opts: {
   nodeLayout: NodeLayoutService
   /** 容器元素（VueFlow renderer 内层；应包含 .vue-flow__node 子元素） */
@@ -99,6 +123,5 @@ export function useNodeMeasure(opts: {
     },
   }
 }
-
 
 

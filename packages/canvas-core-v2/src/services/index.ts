@@ -4,6 +4,9 @@ export { LocalStorageAdapter } from './storage/localStorageAdapter'
 export { SAVE_TYPES, normalizeKey, scopedKey, GRAPH_KEY, GRAPH_EDGES_KEY, GRAPH_VIEWPORT_KEY } from './storage/keys'
 export { NodeStore } from './nodeStore'
 export type { CanvasNode, CanvasNodeType, NodeStoreService, NodeStoreListener, NodeStoreChangeReason } from './nodeStore'
+// 中间态元素通用契约（不落盘/不进历史/不可交互）：内核、渲染层、插件共用同一判定
+export { isTransient } from './transient'
+export type { TransientLike } from './transient'
 export { EdgeStore, edgeStoreId } from './edgeStore'
 export type {
   CanvasEdge,
@@ -69,6 +72,5 @@ export type {
 } from './resourceService'
 export { createMenuService } from './menuService'
 export type { MenuService, MenuItem, MenuArea, MenuCreatableType } from './menuService'
-
 
 

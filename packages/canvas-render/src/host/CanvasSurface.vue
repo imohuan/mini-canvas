@@ -32,7 +32,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
-import { useNodeMeasure } from './useNodeMeasure'
+import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 
@@ -121,7 +121,7 @@ const paneRectRef = shallowRef<DOMRect | null>(null)
 const paneEl = ref<HTMLElement | null>(null)
 /** 本画布实例根 DOM（模板 ref）——实例级锚点，替代 document.querySelector('.vue-flow') */
 const rootEl = ref<HTMLElement | null>(null)
-/** VueFlow renderer DOM（模板 ref 不可达内部渲染层，onMounted 内经 vfApi 容器捕获） */
+/** 节点层 DOM（含 .vue-flow__node 的最内层容器；模板 ref 不可达内部渲染层，onMounted 内解析） */
 const rendererEl = ref<HTMLElement | null>(null)
 
 // 可视区(flow 坐标矩形)：由 viewport 变换 + pane 像素尺寸现算；响应式，pan/zoom/量测后自动更新。
@@ -210,7 +210,9 @@ onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM（实例根内查询，多宿主页面不串线），捕获以量屏幕坐标
   const flowRoot = rootEl.value
   paneEl.value = flowRoot?.querySelector('.vue-flow__pane') as HTMLElement | null
-  rendererEl.value = (flowRoot?.querySelector('.vue-flow__renderer') as HTMLElement | null) ?? null
+  // 节点层容器：按"含 .vue-flow__node 的最内层节点容器"解析（Vue Flow 1.48 无 .vue-flow__renderer，
+  // 旧写法恒为 null 会让节点实测尺寸永不注入 → 自动布局按默认尺寸错算）
+  rendererEl.value = resolveMeasureContainer(flowRoot)
   paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
   // 视口服务接线：把 VueFlow 能力 attach 到 host.viewport（工厂注入的空壳），插件可 ctx.get('viewport')
   props.host?.viewport.attachBackend({
@@ -370,8 +372,6 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
-
-
 
 
 

@@ -7,7 +7,7 @@
  * 边界：不 import @vue-flow/core，不 import Vue 运行时；类型用最小结构接口避免拉运行时。
  */
 
-import type { NodeStoreService, CanvasNode } from '@mini-canvas/canvas-core-v2'
+import { isTransient, type NodeStoreService, type CanvasNode } from '@mini-canvas/canvas-core-v2'
 import type { ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
@@ -55,10 +55,10 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
     if (n.parentId) out.parentNodeId = n.parentId
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
     if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
-    // 临时节点（拖线落空白时占位）—— 必须在 VueFlow 维度把它隔离：
-    //   draggable/selectable/deletable 全部关 → pane click 的 removeSelectedElements 摸不到它、
-    //   不会拖动、不会进 VueFlow 内部选中集。视觉由它自己的 type=connection-menu + BaseNode 的 isTemp 分支渲染。
-    if (n.data?.isTemp) {
+    // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：
+    //   draggable/selectable/deletable 全关 → pane click 的 removeSelectedElements 摸不到它、
+    //   不会拖动、不会进 VueFlow 内部选中集。判定读内核通用契约，不认识具体插件。
+    if (isTransient(n)) {
       out.draggable = false
       out.selectable = false
       out.deletable = false
@@ -76,6 +76,43 @@ export function pruneDanglingEdges<T extends { source: string; target: string }>
   return edges.filter((e) => aliveNodeIds.has(e.source) && aliveNodeIds.has(e.target))
 }
 
+/** 命中检测用的节点矩形（flow 绝对坐标；由 nodeLayout 实测尺寸给出） */
+export interface NodeRectLike {
+  id: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * 松手点是否落在某个节点卡片上（用于区分"落空白"与"落节点上"）。
+ *
+ * 为什么需要它：拖线松手时"没建成边"有**三种**原因，只有第一种是真空白 ——
+ *   ① 落在空白处（真该放临时节点/弹菜单）；
+ *   ② 落在节点上但连接不成立（类型不符 / 输入口已满 / 成环 / 重复）；
+ *   ③ 落在节点上但方向不符（如从输出口拖到另一个输出口）。
+ * 后两种"没建成边"只说明这条连接不合法，落点明明在卡片上，不该冒出"在此处新建节点"的菜单。
+ *
+ * 为什么用几何命中而不是 elementFromPoint：拖线期间画布挂着 `.connecting` 端口覆盖层，
+ * elementFromPoint 命中的是覆盖元素而不是节点卡片（本项目已踩过这个坑）。
+ *
+ * @param point 松手点（flow 坐标）
+ * @param rects 存活节点矩形
+ * @returns 命中的节点 id；未命中返回 null（= 真空白）
+ */
+export function hitNodeIdAt(
+  point: { x: number; y: number },
+  rects: readonly NodeRectLike[],
+): string | null {
+  for (const r of rects) {
+    if (point.x >= r.x && point.x <= r.x + r.w && point.y >= r.y && point.y <= r.y + r.h) {
+      return r.id
+    }
+  }
+  return null
+}
+
 // ============================================================================
 // themeRegistry 装配
 // ============================================================================
@@ -84,6 +121,12 @@ export function pruneDanglingEdges<T extends { source: string; target: string }>
 export interface ThemeAssembly {
   /** 节点壳组件（nodeShell 槽位；缺省 undefined = 无壳/裸内容） */
   nodeShell: unknown
+  /**
+   * 每个业务 type 最终用的节点壳（type → 组件）。
+   * 解析顺序：`nodeShell:<type>`（该类型自带外壳）→ `nodeShell`（全局默认壳）。
+   * 于是某插件想完全自定义自己节点的外观时，注册 `nodeShell:<type>` 即可，不必让默认壳去认识它。
+   */
+  nodeShells: Record<string, unknown>
   /** 边渲染组件（edge 槽位，放 edgeTypes.custom） */
   edge: unknown
   /** 画布背景组件（background 槽位；缺省 undefined） */
@@ -94,6 +137,17 @@ export interface ThemeAssembly {
   edgeDefaultType: string
   /** 展示注册表里已注册的业务 type 列表（用于铺 nodeTypes 键） */
   nodeTypes: string[]
+}
+
+/**
+ * 某业务 type 的"专属节点壳"槽名（插件注册它即接管该 type 的整体外观）。
+ *
+ * 为什么需要：默认壳（如 theme-default 的 BaseNode）提供的是通用卡片外观；
+ * 某些节点类型形态特殊（不是"标题+内容"那种卡片），由它自己决定怎么画最合适。
+ * 与其让默认壳去猜/认识每个特殊类型，不如让特殊类型自带外壳 —— 默认壳保持通用、零特判。
+ */
+export function nodeShellSlot(type: string): string {
+  return `nodeShell:${type}`
 }
 
 /**
@@ -110,13 +164,23 @@ export function assembleTheme(
   const connectionLine = theme?.get('connectionLine')
   const edgeDefaultType =
     (theme?.get('edgeDefaultType') as string | undefined) ?? 'custom'
+  const nodeTypes = [...storeTypes]
+  // 每 type 解析外壳：自带外壳优先，否则回落到全局默认壳。
+  // 这样"特殊形态的节点"由它自己的插件负责长相，默认壳不需要任何针对它的分支。
+  const nodeShells: Record<string, unknown> = {}
+  for (const t of nodeTypes) {
+    const own = theme?.get(nodeShellSlot(t))
+    if (own !== undefined) nodeShells[t] = own
+    else if (shell !== undefined) nodeShells[t] = shell
+  }
   return {
     nodeShell: shell,
+    nodeShells,
     edge,
     background,
     connectionLine,
     edgeDefaultType,
-    nodeTypes: [...storeTypes],
+    nodeTypes,
   }
 }
 
@@ -130,7 +194,6 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeLineWidth: 2,
   edgeColor: '#3b82f6',
   edgeDashed: false,
-  edgeAnimated: true,
   edgeMarkerEnd: false,
   edgeMarkerSize: 8,
   edgeVisible: true,
@@ -141,9 +204,9 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
   edgeGlowColor: '#3b82f6',
   // —— 连线新视觉默认（导轨 + 光斑流动；与 plugin-theme-default DEFAULT_THEME_EDGE 对齐）——
   edgeFlowEnabled: true,
-  edgeFlowBlockSize: 90,
-  edgeFlowGap: 260,
-  edgeFlowSpeed: 2.5,
+  edgeFlowCount: 3,
+  edgeFlowRatio: 20,
+  edgeFlowSpeed: 1,
   edgeFlowFade: 35,
   edgeFlowIntensity: 0.9,
 }
@@ -190,9 +253,9 @@ export interface FlowEdge {
   target: string
   sourceHandle?: string
   targetHandle?: string
-  /** 附加数据（透传给边组件；临时边靠 data.isTemp 让 CustomEdge 走临时视觉） */
+  /** 附加数据（透传给边组件；中间态标记见内核 services/transient.ts） */
   data?: Record<string, unknown>
-  /** 临时脚手架边：不可选中/不可删除（VueFlow 侧隔离） */
+  /** 中间态边：不可选中/不可删除（VueFlow 侧隔离） */
   selectable?: boolean
   focusable?: boolean
   deletable?: boolean
@@ -204,7 +267,7 @@ export interface FlowEdge {
  * B 项：DTO 保留 sourceHandle/targetHandle —— 渲染层能按端口匹配端点，不再丢弃（单端口节点无影响）。
  */
 export function edgesFromStore(
-  edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: { isTemp?: boolean } }>,
+  edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }>,
   aliveNodeIds: ReadonlySet<string>,
 ): FlowEdge[] {
   return edges
@@ -217,10 +280,10 @@ export function edgesFromStore(
       sourceHandle: e.sourceHandle,
       targetHandle: e.targetHandle,
       ...(e.data ? { data: e.data } : {}),
-      // 临时边（拖线占位）—— 同样在 VueFlow 维度隔离：不可选中/不可键盘删除，与正式边视觉共存但语义隔离。
-      ...(e.data?.isTemp
+      // 中间态边（拖线占位）—— 同样在 VueFlow 维度隔离：不可选中/不可键盘删除，与正式边视觉共存但语义隔离。
+      // 判定读内核通用契约，不认识具体插件。
+      ...(isTransient(e)
         ? { selectable: false, focusable: false, deletable: false, zIndex: 1000 }
         : {}),
     }))
 }
-

@@ -70,7 +70,7 @@ export interface CanvasRenderContext {
   pane: Readonly<Ref<HTMLElement | null>>
   /** 本画布实例的根 DOM（.csurface，即 VueFlow 宿主容器；多宿主页面里区分实例用，未挂载时 null） */
   rootEl: Readonly<Ref<HTMLElement | null>>
-  /** VueFlow renderer DOM（.vue-flow__renderer，节点层容器；量测/导出的实例级锚点，未挂载时 null） */
+  /** 节点层 DOM（含 .vue-flow__node 的最内层容器，如 .vue-flow__nodes；量测/导出的实例级锚点，未挂载时 null） */
   rendererEl: Readonly<Ref<HTMLElement | null>>
   /** 当前渲染节点只读快照（含选中标记与位置；宿主订阅 store 自动重灌；拖动中为最近一次同步态） */
   renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
@@ -110,7 +110,6 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
-
 
 
 
