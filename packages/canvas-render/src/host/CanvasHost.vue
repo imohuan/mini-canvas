@@ -46,7 +46,7 @@ import {
 import type { PluginManager } from './pluginManager'
 import type { PluginManifest } from './pluginManager'
 import type { ViewportState } from '../viewport/viewportService'
-import type { NodeWrite } from '../contracts/nodeRegistryKey'
+import type { NodeWrite, NodeWritePatch } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
@@ -73,6 +73,7 @@ import {
   hitNodeIdAt,
   nodesFromStore,
   edgesFromStore,
+  splitNodeWritePatch,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
@@ -158,15 +159,19 @@ const surfaceRef = shallowRef<{
 // 插件 setup 经 ctx.get('nodeRegistry') 把 content 组件注册进来；BaseNode(壳)经此解析 content 段。
 const registry = new NodeRegistry()
 
-// 标题就地重命名写回：缺省 = 改内核 nodeStore data 并落盘。nodeStore.subscribe 会自动刷新渲染态，
-// 无需像旧 demo 那样手动 map 改 nodes 数组。
-function defaultWrite(id: string, patch: Record<string, unknown>): void {
+// 节点写回（标题就地重命名 / 卡片 resize 尺寸）：缺省 = 改内核 nodeStore 并落盘。
+// nodeStore.subscribe 会自动刷新渲染态，无需像旧 demo 那样手动 map 改 nodes 数组。
+//
+// 保留 key `size`：写进正式尺寸字段 node.size（而非 data），与 data.cardWidth/cardHeight 同一个 patch
+// 原子提交 —— 这样 resize 一次只产生一条撤销记录，且 node.size 不再恒空（布局回退链可与数据字段一致）。
+function defaultWrite(id: string, patch: NodeWritePatch): void {
   const h = hostRef.value
   if (!h) return
   const node = h.nodeStore.getNode(id)
   if (!node) return
+  const { data, size } = splitNodeWritePatch(patch)
   // 统一走 graph：历史 + 提交落盘由唯一写入口负责，避免与其它写路径漂移。
-  h.graph.updateNode(id, { data: patch })
+  h.graph.updateNode(id, size !== undefined ? { data, size } : { data })
 }
 const nodeWrite: NodeWrite = props.nodeWrite ?? defaultWrite
 

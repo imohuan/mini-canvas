@@ -12,6 +12,33 @@ import type { ThemeRegistry } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { CanvasDebug } from '../contracts/debugContext'
+import type { NodeWritePatch } from '../contracts/nodeRegistryKey'
+
+// ============================================================================
+// 节点写回 patch 拆分
+// ============================================================================
+
+/** 节点写回 patch 的归一结果：data 部分 + 可选正式尺寸 */
+export interface NodeWriteSplit {
+  /** 写进 node.data 的字段（标题/文本内容/cardWidth…） */
+  data: Record<string, unknown>
+  /** 保留 key `size` → node.size 正式尺寸字段；patch 未带该 key 时为 undefined */
+  size?: { w: number; h: number }
+}
+
+/**
+ * 把 BaseNode 经 nodeWrite 回传的 patch 拆成 { data, size } 两路。
+ *
+ * 保留 key `size`：卡片 resize 要把尺寸写进内核的**正式尺寸字段** node.size，而不是塞进 data。
+ * 拆出来交给同一次 graph.updateNode 提交，保证「data.cardWidth 与 node.size 同帧、同一条历史」——
+ * 否则一次 resize 会记两条撤销记录，且两份尺寸可能不一致。
+ *
+ * patch 未带 size（如标题就地重命名）→ size 为 undefined，调用方只写 data。
+ */
+export function splitNodeWritePatch(patch: NodeWritePatch): NodeWriteSplit {
+  const { size, ...data } = patch
+  return size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }
+}
 
 // ============================================================================
 // store → VueFlow 渲染态

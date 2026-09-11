@@ -52,15 +52,23 @@ declare module '@mini-canvas/canvas-core-v2' {
 export const name = 'auto-layout'
 export const inject = ['nodeStore', 'edgeStore', 'selection', 'graph', 'nodeLayout', 'viewport'] as string[]
 
-/** Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认） */
+/**
+ * Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认）。
+ *
+ * 分组命名：`一级/二级`（设置面板左侧一级导航、右侧二级页签条）。
+ * 一级统一「布局」；二级带功能名前缀。plugin-align-arrange（Ctrl+方向键）的间距项也登记在
+ * 「布局/自动布局方向」同一格里（用户指定），故字段 label/description 必须写明各自归属，
+ * 否则用户分不清哪个是 Ctrl/Cmd+L、哪个是 Ctrl+方向键。
+ */
 export const Config = {
+  // —— 布局 / 自动布局方向 ——
   direction: {
     type: 'select',
     default: 'LR',
-    label: '排列方向',
+    label: '布局方向',
     description:
-      '节点自动布局的走向：左→右 / 上→下 / 右→左 / 下→上。决定连线整体朝哪个方向铺开。',
-    group: '布局',
+      '【Ctrl/Cmd+L 自动布局】节点自动布局的走向：左→右 / 上→下 / 右→左 / 下→上。决定连线整体朝哪个方向铺开。',
+    group: '布局/自动布局方向',
     options: [
       { value: 'LR', label: '左→右 (LR)' },
       { value: 'TB', label: '上→下 (TB)' },
@@ -68,36 +76,42 @@ export const Config = {
       { value: 'BT', label: '下→上 (BT)' },
     ],
   },
+  // —— 布局 / 自动布局间距 ——
   intraSpacingX: {
-    type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距', group: '布局',
-    description: '同一层级/分组内部，节点之间的水平间隙（px）。调大让组内节点彼此更疏。',
+    type: 'number', default: 60, min: 20, max: 300, step: 10, label: '组内水平间距（左右）', group: '布局/自动布局间距',
+    description:
+      '【Ctrl/Cmd+L 自动布局】同一层级/分组内部，节点之间的左右间隙（px）。对应画布 X 轴方向。调大让组内节点彼此更疏。',
   },
   intraSpacingY: {
-    type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距', group: '布局',
-    description: '同一层级/分组内部，节点之间的垂直间隙（px）。',
+    type: 'number', default: 80, min: 20, max: 300, step: 10, label: '组内垂直间距（上下）', group: '布局/自动布局间距',
+    description: '【Ctrl/Cmd+L 自动布局】同一层级/分组内部，节点之间的上下间隙（px）。对应画布 Y 轴方向。',
   },
   interSpacingX: {
-    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距', group: '布局',
-    description: '不同分组（/集群）之间的水平间隙（px）。调大让各组之间分得更开、更清晰。',
+    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间水平间距（左右）', group: '布局/自动布局间距',
+    description:
+      '【Ctrl/Cmd+L 自动布局】不同分组（/集群）之间的左右间隙（px）。对应画布 X 轴方向。调大让各组左右分得更开。',
   },
   interSpacingY: {
-    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距', group: '布局',
-    description: '不同分组（/集群）之间的垂直间隙（px）。',
+    type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距（上下）', group: '布局/自动布局间距',
+    description: '【Ctrl/Cmd+L 自动布局】不同分组（/集群）之间的上下间隙（px）。对应画布 Y 轴方向。',
   },
+  // —— 布局 / 自动布局聚焦（F 键聚焦选中节点时的取景）——
   focusHeightRatio: {
-    type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局',
-    description: '按 F 聚焦选中节点时，想让所选内容占画布可视高度的比例（0.5 = 占一半），保证周围留出上下文。',
+    type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局/自动布局聚焦',
+    description:
+      '【F 聚焦选中节点】想让所选内容占画布可视高度的比例（0.5 = 占一半），保证周围留出上下文。',
   },
   minZoom: {
-    type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局',
-    description: '聚焦时允许缩到的最小倍率。内容特别多时也不会缩得比它更小。',
+    type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局/自动布局聚焦',
+    description: '【F 聚焦选中节点】聚焦时允许缩到的最小倍率。内容特别多时也不会缩得比它更小。',
   },
   maxZoom: {
-    type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局',
-    description: '聚焦时允许放大的最大倍率，避免选中单个小节点时画面放大过头。',
+    type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局/自动布局聚焦',
+    description: '【F 聚焦选中节点】聚焦时允许放大的最大倍率，避免选中单个小节点时画面放大过头。',
   },
+  // —— 布局 / 诊断（两个布局插件的诊断开关同住一格，字段名各自写明归属）——
   debug: {
-    type: 'boolean', default: false, label: '诊断日志', group: '布局',
+    type: 'boolean', default: false, label: '自动布局诊断日志', group: '布局/诊断',
     description: '打开后，每次自动布局会在控制台打印分组/布局决策日志，便于排查布局结果是否符合预期。',
   },
 } satisfies ConfigSchema
@@ -121,7 +135,33 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   const { nodeStore, edgeStore, selection, graph, nodeLayout, viewport } = ctx
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
-  const config = toEngineConfig(effectiveConfig)
+
+  // 设置面板单一数据源（内置恒在）。每次执行命令时**实时**读它 —— 面板改过立刻生效。
+  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined } | undefined>('settings')
+
+  /**
+   * 取当前生效配置：settings 现值优先，未声明/服务缺失回落 schema 默认。
+   *
+   * 关键：不能把 apply 时的 config 冻结成闭包常量——那样设置面板改了值，命令仍用旧值，
+   * 表现为"改了配置不生效"。故布局/聚焦每次执行都经本函数现读一次。
+   */
+  function currentConfig(): AutoLayoutConfig {
+    const read = <T extends string | number | boolean>(key: string, fallback: T): T => {
+      const v = settings?.get(key)
+      return (v === undefined || v === null ? fallback : v) as T
+    }
+    return toEngineConfig({
+      direction: read('direction', effectiveConfig.direction),
+      intraSpacingX: read('intraSpacingX', effectiveConfig.intraSpacingX),
+      intraSpacingY: read('intraSpacingY', effectiveConfig.intraSpacingY),
+      interSpacingX: read('interSpacingX', effectiveConfig.interSpacingX),
+      interSpacingY: read('interSpacingY', effectiveConfig.interSpacingY),
+      focusHeightRatio: read('focusHeightRatio', effectiveConfig.focusHeightRatio),
+      minZoom: read('minZoom', effectiveConfig.minZoom),
+      maxZoom: read('maxZoom', effectiveConfig.maxZoom),
+      debug: read('debug', effectiveConfig.debug),
+    })
+  }
 
   /** 节点绝对矩形快照（nodeLayout 实测/绝对；无服务退化为声明数据兜底） */
   function absoluteRectOf(n: CanvasNode): { x: number; y: number; w: number; h: number } {
@@ -190,6 +230,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       maxY = Math.max(maxY, abs.y + abs.h)
     }
     if (!Number.isFinite(minX) || !Number.isFinite(minY)) return
+    const cfg = currentConfig()
     const bounds: Bounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
     const cur = viewport.getViewport()
     // 视口尺寸：优先取本画布实例根（viewport.getRootEl，多宿主不串线）；无 DOM 环境(node 测试)退化为 1:1
@@ -201,9 +242,9 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       : calculateFocusZoom({
           boundsHeight: bounds.height,
           viewportHeight: vh,
-          heightRatio: config.focusHeightRatio,
-          minZoom: config.minZoom,
-          maxZoom: config.maxZoom,
+          heightRatio: cfg.focusHeightRatio,
+          minZoom: cfg.minZoom,
+          maxZoom: cfg.maxZoom,
         })
     viewport.setViewport(
       centerViewportOnBounds({ bounds, viewportWidth: vw, viewportHeight: vh, zoom }),
@@ -274,7 +315,8 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     const { layoutNodes, edges, groups } = buildLayoutInput()
     if (layoutNodes.length === 0) return false
 
-    const runConfig = config
+    // 每次执行现读面板现值：改了方向/间距立刻反映到本次布局结果
+    const runConfig = currentConfig()
     if (runConfig.debug) {
       console.log('[auto-layout] input', {
         nodes: layoutNodes.map((n) => ({ id: n.id, type: n.type, size: n.size })),
@@ -359,6 +401,3 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const autoLayoutPlugin: PluginModule = { name, inject, Config, apply }
-
-
-

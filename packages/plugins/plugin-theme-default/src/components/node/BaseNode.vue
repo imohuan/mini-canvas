@@ -16,7 +16,6 @@ import BaseTitle from './BaseTitle.vue'
 import { useNodeCapability } from '../../composables/useNodeCapability'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
-import { tempMenuCardStyle } from '../../composables/tempMenuCardTransform'
 
 const log = createV2Logger('base-node')
 const props = defineProps<NodeProps>()
@@ -85,13 +84,6 @@ const cardHeight = card.cardHeight
 const cardResizable = card.resizable
 const cardIsResizing = card.isResizing
 
-/**
- * 临时菜单节点（拖线落空白时放的占位菜单卡）：它只是"菜单的载体"，
- * 外观完全由它自己的 content 段（ConnectionMenuContent）画成右键菜单卡片。
- * 所以壳这边把标题条藏掉、卡片自身底色/边框/阴影清掉，避免与菜单卡片双重描边。
- */
-const isTempMenu = computed(() => Boolean(props.data?.isTemp))
-
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
 const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 // 卡片边框反缩放补偿
@@ -110,24 +102,8 @@ const cardInlineStyle = computed<Record<string, string>>(() => ({
   height: `${cardHeight.value}px`,
   transform: cardTransform.value,
   borderWidth: `${1 / zoom.value}px`,
-  // 临时菜单卡用右键菜单同款圆角（16px），普通节点保持 8px
-  borderRadius: isTempMenu.value ? '16px' : '8px',
+  borderRadius: '8px',
   '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
-  // 临时菜单卡：边框/底色/阴影交给 content 段（右键菜单同款），壳这边清掉；
-  // 并叠加**反缩放**（屏幕尺寸恒定，不随画布 zoom 变化）—— 放最后，覆盖上面的
-  // transform / borderWidth / --card-outline-width。普通节点完全不受影响。
-  ...(isTempMenu.value
-    ? {
-        borderColor: 'transparent',
-        background: 'transparent',
-        boxShadow: 'none',
-        ...tempMenuCardStyle({
-          zoom: zoom.value,
-          side: tempPortSide.value,
-          selected: showSelectionOutline.value,
-        }),
-      }
-    : {}),
 }))
 
 // ============ 就地重命名 ============
@@ -194,16 +170,8 @@ const editable = computed(() => Boolean(nodeWrite))
 
 // ============ 端口能力显隐（按 type）============
 const cap = useNodeCapability(props.type)
-/** 临时菜单节点只保留"落线那一侧"的端口（data.portSide 由插件在建临时节点时写入）：
- *  从输出口拖出 → 新节点用输入口(左)；从输入口反向拖出 → 新节点用输出口(右)。
- *  这样临时卡片只显示一个端口，与"松手点 = 端口位置"的语义一致。 */
-const tempPortSide = computed<'left' | 'right' | null>(() => {
-  if (!isTempMenu.value) return null
-  const side = (props.data as { portSide?: unknown })?.portSide
-  return side === 'left' || side === 'right' ? side : null
-})
-const showTargetHandle = computed(() => cap.hasTarget.value && tempPortSide.value !== 'right')
-const showSourceHandle = computed(() => cap.hasSource.value && tempPortSide.value !== 'left')
+const showTargetHandle = cap.hasTarget
+const showSourceHandle = cap.hasSource
 
 // ============ hover 状态（控制端口醒目与阴影）============
 const isHovered = ref(false)
@@ -326,12 +294,11 @@ watch(
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
   () =>
-    // 临时菜单节点的端口要常显（它就是"松手点=端口位置"的可视锚点）
-    (isTempMenu.value || !lowDetail.value) &&
+    !lowDetail.value &&
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
     !interaction.isBusyDragging.value &&
-    (isTempMenu.value || isHovered.value || props.selected),
+    (isHovered.value || props.selected),
 )
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
@@ -387,8 +354,8 @@ const showSnapDebugOverlay = computed(
     !lowDetail.value,
 )
 // 吸附带/接收区几何（与 resolveFeedback 同源）
-// 端口区域宽 portZoneWidth 是端口交互区矩形的主尺寸（吸附带宽未显式给时也用它兜底，与 CanvasHost resolveAtClient 一致）
-// 设 0 等于"清零"（不兜底，由上游决定）；默认值由 DEFAULT_THEME_HANDLE.portZoneWidth = 86 提供。
+// 端口区域宽 portZoneWidth 是端口交互区矩形的主尺寸；吸附带宽未显式给(缺省)时才用它兜底。
+// 设 0 等于"清零"（不兜底，带塌成 0 宽）；默认值由 DEFAULT_THEME_HANDLE.portZoneWidth = 86 提供。
 const portZoneWidth = computed(() => Number(handleParams.portZoneWidth) || 0)
 const portZoneHeight = computed(() => cardHeight.value * Math.min(Math.max(Number(handleParams.portZoneHeightRatio) || 0.8, 0), 1))
 const portZoneOffset = computed(() => Number(handleParams.portZoneOffset) || 0)
@@ -496,7 +463,7 @@ function clamp(value: number, min: number, max: number): number {
       'is-connection-invalid': isConnectionInvalidTarget,
     }" :style="cardInlineStyle" @mousemove="updateCardMousePosition">
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
-      <div v-if="!lowDetail && !isTempMenu" class="v2-title nodrag nopan" :style="titlePositionStyle"
+      <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel">
@@ -546,12 +513,10 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 吸附带（真正触发吸附判定的区域，与端口按钮跟随区 .port-follow-zone 分离）：
            左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，几何与 SnapZoneConfig 吸附带同源。
            mouseenter/leave 上报 aim(input/output)，后端据此吸到端口锚点 + 判边；平时 pointer-events:none 不挡卡片。 -->
-      <div v-if="showTargetHandle" class="snap-band snap-band--input"
-        :class="{ 'is-active': snapZonesActive }" :style="inputSnapStyle" @mouseenter="onInputSnapEnter"
-        @mouseleave="onSnapLeave" />
-      <div v-if="showSourceHandle" class="snap-band snap-band--output"
-        :class="{ 'is-active': snapZonesActive }" :style="outputSnapStyle" @mouseenter="onOutputSnapEnter"
-        @mouseleave="onSnapLeave" />
+      <div v-if="showTargetHandle" class="snap-band snap-band--input" :class="{ 'is-active': snapZonesActive }"
+        :style="inputSnapStyle" @mouseenter="onInputSnapEnter" @mouseleave="onSnapLeave" />
+      <div v-if="showSourceHandle" class="snap-band snap-band--output" :class="{ 'is-active': snapZonesActive }"
+        :style="outputSnapStyle" @mouseenter="onOutputSnapEnter" @mouseleave="onSnapLeave" />
 
       <!-- 左侧输入口(target)：有输入能力才渲染。
            拖线中"同类型(target)端口"只传 :disabled（DOM 一直保留 → VueFlow handleBounds 稳定），
@@ -850,9 +815,13 @@ function clamp(value: number, min: number, max: number): number {
   pointer-events: none;
 }
 
-.resize-handle:hover .resize-handle-icon,
+/**.resize-handle:hover .resize-handle-icon,
 .v2-node.is-pointer-hovered .resize-handle .resize-handle-icon,
 .v2-node.is-selected .resize-handle .resize-handle-icon {
+  color: var(--canvas-node-resize-handle-active, #111827);
+} */
+
+.resize-handle:hover .resize-handle-icon {
   color: var(--canvas-node-resize-handle-active, #111827);
 }
 

@@ -19,7 +19,7 @@ export type {
   SegmentNodeData,
 } from './contracts/contentComponentTypes'
 export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './contracts/nodeRegistryKey'
-export type { NodeWrite } from './contracts/nodeRegistryKey'
+export type { NodeWrite, NodeWritePatch } from './contracts/nodeRegistryKey'
 // 画布外观参数 / 边外观与选中 注入令牌（宿主 provide、默认皮消费）
 export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
 export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
@@ -176,7 +176,6 @@ declare module '@mini-canvas/canvas-core-v2' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
-
 
 
 

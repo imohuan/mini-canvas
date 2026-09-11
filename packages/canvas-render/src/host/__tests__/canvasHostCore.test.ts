@@ -8,6 +8,7 @@ import {
   nodesFromStore,
   edgesFromStore,
   pruneDanglingEdges,
+  splitNodeWritePatch,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
@@ -270,5 +271,31 @@ describe('edgeId 四元组（B 项，与内核 edgeStoreId 对齐）', () => {
     expect(edgeId('a', 'b', 'source', 'target')).toBe('e-a-b')
     expect(edgeId('a', 'b', 'out1', 'in1')).toBe('e-a:out1-b:in1')
     expect(edgeId('a', 'b', 'out1', 'in1')).not.toBe(edgeId('a', 'b', 'out2', 'in2'))
+  })
+})
+
+describe('splitNodeWritePatch（resize 一份 patch 写全 data + node.size）', () => {
+  it('带 size：size 单独拆出来，其余字段进 data（不把 size 塞进 data）', () => {
+    const r = splitNodeWritePatch({
+      cardWidth: 700,
+      cardHeight: 300,
+      size: { w: 700, h: 300 },
+    })
+    expect(r.size).toEqual({ w: 700, h: 300 })
+    expect(r.data).toEqual({ cardWidth: 700, cardHeight: 300 })
+    expect('size' in r.data).toBe(false)
+  })
+
+  it('不带 size（标题重命名等）：只返回 data，size 为 undefined', () => {
+    const r = splitNodeWritePatch({ label: '新标题' })
+    expect(r.size).toBeUndefined()
+    expect(r.data).toEqual({ label: '新标题' })
+  })
+
+  it('size 拷贝值（不与入参共享引用）', () => {
+    const size = { w: 10, h: 20 }
+    const r = splitNodeWritePatch({ size })
+    expect(r.size).toEqual(size)
+    expect(r.size).not.toBe(size)
   })
 })

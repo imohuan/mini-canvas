@@ -20,12 +20,32 @@ export interface CompactRect {
   h: number
 }
 
+/**
+ * 紧凑排列间距（按轴给值）。
+ *
+ * 为什么要分轴：排列是**沿一个方向推挤**的 —— 左右排列沿 X 轴推开节点，上下排列沿 Y 轴推开。
+ * 两个方向需要的间隙不是一回事，故拆成两个值，由本引擎按 direction 取用：
+ * - 左右排列（ArrowLeft / ArrowRight）→ 用 {@link CompactSpacing.x}；
+ * - 上下排列（ArrowUp / ArrowDown）→ 用 {@link CompactSpacing.y}。
+ *
+ * 与自动布局插件的「组内水平/垂直间距」是同一套心智模型（水平只管左右、垂直只管上下）。
+ */
+export interface CompactSpacing {
+  /** 水平间隔：左右排列时，节点之间沿 X 轴的间隙（px） */
+  x: number
+  /** 垂直间隔：上下排列时，节点之间沿 Y 轴的间隙（px） */
+  y: number
+}
+
 export function computeCompactArrange(
   nodes: CompactRect[],
   direction: CompactDirection,
-  gap: number,
+  spacing: CompactSpacing,
 ): Map<string, { x: number; y: number }> {
   if (nodes.length <= 1) return new Map()
+  // 按排列方向选轴：左右推挤用水平间隔，上下推挤用垂直间隔。
+  const horizontal = direction === 'ArrowLeft' || direction === 'ArrowRight'
+  const gap = horizontal ? spacing.x : spacing.y
   const result = new Map<string, { x: number; y: number }>()
 
   const minX = Math.min(...nodes.map(n => n.x))

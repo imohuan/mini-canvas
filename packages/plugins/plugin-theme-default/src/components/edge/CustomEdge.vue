@@ -2,6 +2,11 @@
 // CustomEdge —— v2 自定义边/连接线（移植自 v1 components/CustomEdge.vue，金标准 core-node-contract §6）。
 // 职责：按全局配置渲染边路径(bezier/straight/step/smoothstep)；默认导轨 + 同色光斑沿路径流动；
 //       选中/相连/临时/force 边加亮（drop-shadow 强化）；提供加宽透明点击热区 + 双击弹剪切钮删除。
+// 光斑何时出现：只有"这条边被激活"时才显示并流动 —— 选中它两端任一节点 / 选中这条边本身 / 拖线中的临时线；
+//       其余时候连线是一条静止的导轨线（不再无条件一直跑）。
+// 光斑怎么分布：一条边固定 N 个（edgeFlowCount）—— 整条路径先均分成 N 份、每份里放一个色块；
+//       色块长度 = 该份长度 × 占比%(edgeFlowRatio)。与线长无关：短线不会只剩一个、长线也不会铺出一堆
+//       （采样/几何口径见 edgeFlow.ts，纯逻辑可单测）。
 // 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）。
 // 流动动画：不用 SVG <animate> SMIL（根因：vdom patch 把 <animate> 当 path child 反复比较，
 //       path 的 d 在多次 patch 后被清空、bbox=0、光斑不可见——浏览器实测）；也不用纯 CSS stroke-dashoffset
@@ -12,7 +17,7 @@
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'
+import { GRAPH_EDGES_KEY, isTransient } from '@mini-canvas/canvas-core-v2'
 import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
@@ -24,6 +29,8 @@ import {
   type EdgeType,
   type EdgeAppearance,
 } from './edgeGeometry'
+import { computeFlowBlocks } from './edgeFlow'
+import { computeFlowAdvance, FLOW_BASE_SECONDS } from './edgeFlow'
 
 /** Custom edge render component: the minimal prop set it actually consumes (independent from VueFlow EdgeProps full-required shape).
  *  Normal edges are fed by VueFlow (id/source/target/sourceNode/targetNode/... all present);
@@ -40,7 +47,7 @@ export interface CustomEdgeProps {
   targetPosition?: string
   sourceHandleId?: string | null
   targetHandleId?: string | null
-  data?: { isTemp?: boolean } | null
+  data?: Record<string, unknown> | null
   selected?: boolean
   temporary?: boolean
   forceFlow?: boolean
@@ -58,7 +65,9 @@ const { ctx, edgeVisual, edgeSelection } = useCanvasRender()
 const visual = computed<EdgeVisual>(() => ({ ...edgeVisual, ...(props.visual || {}) }))
 const selectionNodeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedNodeIds.value)
 const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedEdgeIds.value)
-const isTemporaryEdge = computed(() => Boolean(props.temporary || props.data?.isTemp))
+// 临时拖线（ConnectionLine 委托渲染，props.temporary）**或**中间态边（内核通用契约 data.transient）。
+// 两者都按"临时线"处理：永不被"隐藏连线"遮住、不参与高亮/剪切、不渲染点击热区。
+const isTemporaryEdge = computed(() => Boolean(props.temporary) || isTransient({ data: props.data ?? undefined }))
 
 const edgeType = computed<EdgeType>(() => (visual.value.edgeType as EdgeType) || 'bezier')
 const lineWidth = computed(() => visual.value.edgeLineWidth ?? 2)
@@ -66,7 +75,6 @@ const edgeColor = computed(() => visual.value.edgeColor ?? '#3b82f6')
 const dashArray = computed(() =>
   visual.value.edgeDashed ? `${lineWidth.value * 4} ${lineWidth.value * 2}` : undefined,
 )
-const edgeAnimated = computed(() => visual.value.edgeAnimated ?? true)
 const edgeMarkerEnd = computed(() => visual.value.edgeMarkerEnd ?? false)
 const edgeMarkerSize = computed(() => visual.value.edgeMarkerSize ?? 8)
 const edgeVisibleBase = computed(() => visual.value.edgeVisible ?? true)
@@ -90,8 +98,9 @@ const edgeGlowEnabled = computed(() => visual.value.edgeGlowEnabled ?? true)
 const edgeGlowIntensity = computed(() => visual.value.edgeGlowIntensity ?? 1)
 const edgeGlowColor = computed(() => visual.value.edgeGlowColor || edgeColor.value)
 const flowEnabled = computed(() => visual.value.edgeFlowEnabled ?? true)
-const flowBlockSize = computed(() => visual.value.edgeFlowBlockSize ?? 90)
-const flowGap = computed(() => visual.value.edgeFlowGap ?? 260)
+// 固定数量（一条边就是这么多块）+ 每份占比（色块占它那一份长度的百分比）。见 edgeFlow.ts。
+const flowCount = computed(() => visual.value.edgeFlowCount ?? 3)
+const flowRatio = computed(() => visual.value.edgeFlowRatio ?? 20)
 const flowSpeed = computed(() => visual.value.edgeFlowSpeed ?? 2.5)
 const flowFade = computed(() => visual.value.edgeFlowFade ?? 35)
 const flowIntensity = computed(() => visual.value.edgeFlowIntensity ?? 0.9)
@@ -200,14 +209,11 @@ const arrowPath = computed(() => {
   return `M ${w1x} ${w1y} L ${tipX} ${tipY} L ${w2x} ${w2y}`
 })
 
-// 流动总开关：edgeFlowEnabled && edgeAnimated。色块一直跑。
+// 流动总开关：edgeFlowEnabled（唯一总闸，已合并原 edgeAnimated）&& "这条边被激活"
+// （选中两端任一节点 / 选中本边 / 临时拖线）。
+// 未激活 → 只画静止导轨线，不显示光斑也不跑逐帧（每帧回调开头直接 return，几乎零开销）。
 // 颜色：flowColor = edgeGlowColor（设置里"辉光颜色"，缺省跟随线色），箭头/光斑/亮核同色 = 一种效果。
-const flowActive = computed(() => flowEnabled.value && edgeAnimated.value)
-const dashCycle = computed(() => Math.max(20, flowBlockSize.value + flowGap.value))
-const cssDurSec = computed(() => {
-  const pxPerSec = Math.max(8, flowSpeed.value * 60)
-  return Math.max(0.6, dashCycle.value / pxPerSec)
-})
+const flowActive = computed(() => flowEnabled.value && isHighlighted.value)
 const railColor = computed(() => edgeColor.value)
 const railWidth = computed(() => Math.max(1, lineWidth.value))
 const flowColor = computed(() => edgeGlowColor.value || edgeColor.value)
@@ -217,29 +223,33 @@ const gStyle = computed(() => ({
   '--ce-linew': lineWidth.value + 'px',
   '--ce-flow-color': flowColor.value,
   '--ce-arrow-opacity': isHighlighted.value ? 1 : 0.55,
-  '--ce-cycle': dashCycle.value + 'px',
-  '--ce-dur': cssDurSec.value + 's',
-  '--ce-block': flowBlockSize.value + 'px',
-  '--ce-gap': flowGap.value + 'px',
 }))
 
 // ============================================================================
 // 光斑"胶囊渐变"渲染器（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）
 // ----------------------------------------------------------------------------
-// 需求：当前流光块是整段等不透明度的"硬块"（软辉光层+亮芯层，stroke-dashoffset 硬切），
-//       缺少 demo 里每个色斑"头尾两端渐隐"的胶囊感（flowFade 配置项长期闲置未生效）。
+// 需求：色块要有 demo 里"头尾两端渐隐"的胶囊感（flowFade 控制渐隐占比）——
+//       整段等不透明度、stroke-dashoffset 硬切的"硬块"没有这个感觉。
 //
 // 为什么不能沿用纯 CSS 的 stroke-dashoffset 动画实现两端渐隐：
 //   块在路径上由 dashoffset 平移，而 alpha 渐变要么是"世界坐标固定"(gradientUnits=userSpaceOnUse，
 //   块移动后渐变的淡出点不再跟着块走)，要么是对象包围盒(非路径长度向)。要让"随块移动的两端渐隐"
 //   必须 JS 驱动：每个可见块一个 path + 一个 linearGradient，逐帧把渐变坐标钉在块的两端世界坐标上。
 //
+// 每块画 2 条 path（软辉光层 + 亮芯层），各配一条钉在块两端的 linearGradient 做"头尾渐隐"（flowFade 控渐隐占比）。
+//   块的当前位置由它那一支"块位滑块" <g transform="translate(块起点)"> 精确平移，故块内形状/渐变只写局部坐标。
+// 为什么给每块一支"隐形导轨"(stroke:none + stroke-width:0.001)：SVG 不能直接对一条 path 取"长度区间子路径"，
+//   而 getPointAtLength 只认"一段自 M 起的连续路径"。把每块那一份拆成一支隐形路径，就能在浏览器里拿到
+//   "块在自己那一份里"的真实弧长坐标系，再由滑块平移到当前相位 —— 不用手写弧长近似，也没有累积误差。
+// 块长不做 linecap round 兜底 —— 圆帽会把块两端各外扩半个线宽、让实际块长比配置值大；改用渐变自然收细。
+//
 // 为什么用"直接 DOM 写入"(非响应式 v-for)：
 //   本仓库踩过 vdom patch 反复比较 SVG 子元素把 path 的 d 清空的坑，故这里全部走
 //   createElementNS + setAttribute 手工管理，块的数量/属性不进 Vue 响应式，杜绝 patch 干扰。
 //
-// 逐帧成本：O(可见块数) 次 setAttribute(渐变 4 坐标 + path 偏移)，块每 ~(block+gap)px 一个，
-//   仅在 flowActive && 有几何长度时跑，空闲直接 return(几乎零开销)。配置/几何变化走签名比对。
+// 逐帧成本：每块 1 次 transform + 2 条 path 的 d + 1 对渐变坐标；块数固定为 edgeFlowCount(默认 3，
+//   不随线长变化)。仅在 flowActive(被选中) && 有几何长度时跑，空闲直接 return(几乎零开销)；
+//   配置变化走签名比对整体重建，高亮/强度变化才逐帧改 style。
 // ============================================================================
 
 // 供渐变 unique id 使用：跨实例、跨重挂载保证全局唯一
@@ -247,11 +257,18 @@ let _edgeFxUid = 0
 const _fxIdBase = `efx_${(Date.now() & 0xffffff).toString(36)}_${_edgeFxUid++}`
 const _svgNS = 'http://www.w3.org/2000/svg'
 
-// 流动层容器与可测长的导轨（同一条 path d，rails 负责"测长 + 采样点"，胶囊块负责"画"）
+// 流动层：外层组(导轨容器 + 块位容器) —— 导轨与"块位滑块"按块数渲染，块内容全由 JS 直接写进对应滑块。
+const railHostEl = ref<SVGGElement | null>(null)
 const capsuleHostEl = ref<SVGGElement | null>(null)
-const railEl = ref<SVGPathElement | null>(null)
+// 块位容器：里面每个 <g class="ef-block-trans"> 是一个块位，JS 把该块的渐变/路径写进它（随它的 translate 整体移动）。
+const slotsHostEl = ref<SVGGElement | null>(null)
+/** 块位数量 = 色块数 + 1：多备一位，接住"尾端正滑出路径"的那一块（保证流动是无缝循环而非跳变） */
+const flowRailCount = computed(() => {
+  const n = Math.max(1, Math.min(63, Math.floor(flowCount.value) || 1))
+  return n + 1
+})
 
-// 胶囊块池（每块 = 软辉光 path + 亮芯 path + 各自 linearGradient），全部非响应式
+// 块池（按块位下标存放：每块 = 软辉光 path + 亮芯 path + 各自一条 linearGradient），全部非响应式
 let _capSoftGrads: SVGLinearGradientElement[] = []
 let _capHotGrads: SVGLinearGradientElement[] = []
 let _capSoftPaths: SVGPathElement[] = []
@@ -261,6 +278,27 @@ let _capPrevTs = 0
 let _capAnimDist = 0
 let _capConfigSig = ''
 let _capOwnHost: SVGGElement | null = null
+
+/** 点划线端点格式：负值/无 NaN 时回退 0（SVG 属性一律给合法坐标，防浏览器静默丢整条 path） */
+const _ptAttr = (v: number) => (Number.isFinite(v) ? String(v) : '0')
+
+/**
+ * 沿路径取 [a,b] 的子路径 d（SVG 无法直接裁 path，只能重画：折线近似，10px 一点）。
+ * 坐标写成"相对 origin(即块起点 p0)"的局部坐标 —— 块位滑块会做 translate(p0) 把它们搬回世界位置，
+ * 于是块内形状与渐变可以整帧复用、不随画布位置变化。
+ */
+function _dSliceOf(rail: SVGPathElement, a: number, b: number, totalLen: number, ox: number, oy: number): string {
+  const lo = Math.max(0, Math.min(totalLen, a))
+  const hi = Math.max(0, Math.min(totalLen, b))
+  if (hi - lo <= 0.01) return ''
+  const steps = Math.max(1, Math.min(64, Math.round((hi - lo) / 10)))
+  let d = ''
+  for (let s = 0; s <= steps; s++) {
+    const p = rail.getPointAtLength(lo + ((hi - lo) * s) / steps)
+    d += `${s === 0 ? 'M' : 'L'} ${_ptAttr(p.x - ox)} ${_ptAttr(p.y - oy)} `
+  }
+  return d
+}
 
 // 合并可见层所需常量（随配置实时算）
 function _capsuleLayerConst() {
@@ -278,27 +316,30 @@ function _capsuleLayerConst() {
   }
 }
 
-function _setGradStops(g: SVGLinearGradientElement, maxAlpha: number, color: string, fade: number) {
-  g.innerHTML = ''
-  const mk = (off: number, op: number) => {
+/**
+ * 建一条 linearGradient（块内两端渐隐）：渐变被钉在【整块】的两端，offset 0→f 淡入、100-f→100 淡出，
+ * 即"两端各占块长的 f% 渐隐、中间 100-2f% 是亮核"（与参考 demo 的 4 个 stop 同口径）。
+ */
+function _makeGrad(host: SVGGElement, id: string, maxAlpha: number, color: string, fade: number): SVGLinearGradientElement {
+  const g = document.createElementNS(_svgNS, 'linearGradient')
+  g.id = id
+  g.setAttribute('gradientUnits', 'userSpaceOnUse')
+  host.appendChild(g)
+  // f = 渐隐占块长的百分比；夹到 1~50（太小看不出柔边、50 = 两端各占一半、没有亮核）
+  const f = Math.max(1, Math.min(50, fade))
+  const stops: Array<[number, number]> = [
+    [0, 0],
+    [f, maxAlpha],
+    [100 - f, maxAlpha],
+    [100, 0],
+  ]
+  for (const [off, op] of stops) {
     const s = document.createElementNS(_svgNS, 'stop')
     s.setAttribute('offset', `${off}%`)
     s.setAttribute('stop-color', color)
     s.setAttribute('stop-opacity', String(op))
     g.appendChild(s)
   }
-  mk(0, 0)
-  mk(fade, maxAlpha)
-  mk(100 - fade, maxAlpha)
-  mk(100, 0)
-}
-
-function _makeGrad(host: SVGGElement, id: string, maxAlpha: number, color: string, fade: number): SVGLinearGradientElement {
-  const g = document.createElementNS(_svgNS, 'linearGradient')
-  g.id = id
-  g.setAttribute('gradientUnits', 'userSpaceOnUse')
-  host.appendChild(g)
-  _setGradStops(g, maxAlpha, color, fade)
   return g
 }
 
@@ -313,134 +354,178 @@ function _makeFlowPath(host: SVGGElement, gradId: string, width: number): SVGPat
   return p
 }
 
-/** 配置/高亮变化（不含逐帧几何）→ 整体重建池子，保证新块按最新配置取色
- *  注意：isHighlighted / edgeGlowIntensity 只作用于容器 drop-shadow，逐帧直接改 style.filter，不纳入重建签名。 */
-function _syncCapsuleConfig(host: SVGGElement) {
+/** 配置（不含逐帧几何）→ 整体重建池子，保证新块按最新配置取色/取色块数。
+ *  注意：isHighlighted / edgeGlowIntensity 只作用于容器 drop-shadow，逐帧直接改 style.filter，不纳入重建签名。
+ *  路径几何(edgePath)要进签名：端点/线型一变，缓存的"块子路径"必须作废，否则块会画在旧位置上。 */
+function _syncCapsuleConfig() {
   const c = _capsuleLayerConst()
   const sig = [
-    c.softOn, c.softA, c.hotA, c.color, c.fade, c.softW, c.hotW,
+    c.softOn, c.softA, c.hotA, c.color, c.fade, c.softW, c.hotW, flowCount.value,
+    edgePath.value,
   ].join('|')
   if (sig === _capConfigSig) return
   _capConfigSig = sig
-  // 清空重建（配置改动罕见）
-  host.innerHTML = ''
+  // 清空重建（配置改动罕见）：块都在各自块位的 <g> 里，逐位清空 + 池子归零
+  for (const slot of _blockTrans(slotsHostEl.value)) slot.innerHTML = ''
   _capSoftGrads = []
   _capHotGrads = []
   _capSoftPaths = []
   _capHotPaths = []
+  _sliceCache = new WeakMap()
 }
 
-function _appendCapsuleBlock(host: SVGGElement, color: string, fade: number, softW: number, hotW: number, softA: number, hotA: number) {
-  const i = _capSoftGrads.length
-  const sg = _makeGrad(host, `${_fxIdBase}_sg_${i}`, softA, color, fade)
-  const hg = _makeGrad(host, `${_fxIdBase}_hg_${i}`, hotA, color, fade)
-  const sp = _makeFlowPath(host, sg.id, softW)
-  const hp = _makeFlowPath(host, hg.id, hotW)
-  _capSoftGrads.push(sg)
-  _capHotGrads.push(hg)
-  _capSoftPaths.push(sp)
-  _capHotPaths.push(hp)
+/** 给第 i 个块位补出"块 = 软辉光 path + 亮芯 path + 各自渐变"（缺哪个补哪个；多出来的由调用方清） */
+function _ensureCapsuleBlock(slot: SVGGElement, i: number, color: string, fade: number, softW: number, hotW: number, softA: number, hotA: number) {
+  if (_capSoftGrads[i]) return
+  // 软辉光层：辉光关掉时 alpha=0（此时它不参与可见，但保留结构省去分支）
+  const sg = _makeGrad(slot, `${_fxIdBase}_sl${i}`, softA, color, fade)
+  const hg = _makeGrad(slot, `${_fxIdBase}_hl${i}`, hotA, color, fade)
+  _capSoftPaths[i] = _makeFlowPath(slot, sg.id, softW)
+  _capHotPaths[i] = _makeFlowPath(slot, hg.id, hotW)
+  _capSoftGrads[i] = sg
+  _capHotGrads[i] = hg
 }
 
-function _dropCapsuleBlock(host: SVGGElement) {
-  const take = (arr: SVGElement[]) => arr.pop()!
-  const sg = take(_capSoftGrads)
-  const hg = take(_capHotGrads)
-  const sp = take(_capSoftPaths)
-  const hp = take(_capHotPaths)
-  for (const el of [sg, hg, sp, hp]) host.removeChild(el)
+/** 子路径 d 缓存：按"导轨元素 → (起, 止)"记账 —— 块只是整体平移、形状不变，故每块每段只需算一次；
+ *  以元素为键（而非序号）可避免首帧导轨还没渲染齐时"回落到主导轨"算出的 d 被后续帧误命中。 */
+let _sliceCache = new WeakMap<SVGPathElement, Map<string, string>>()
+function _slicedD(rail: SVGPathElement, a: number, b: number, totalLen: number, ox: number, oy: number): string {
+  const key = `${Math.round(a)}|${Math.round(b)}|${Math.round(totalLen)}|${Math.round(ox)}|${Math.round(oy)}`
+  let byKey = _sliceCache.get(rail)
+  if (!byKey) {
+    byKey = new Map<string, string>()
+    _sliceCache.set(rail, byKey)
+  }
+  let d = byKey.get(key)
+  if (d === undefined) {
+    d = _dSliceOf(rail, a, b, totalLen, ox, oy)
+    byKey.set(key, d)
+  }
+  return d
 }
 
-/** 逐帧：把每个可见块的渐变坐标钉到块两端、dash 揭示该段 */
+/** 导轨容器里的全部 path（首条 = 整条路径的连续导轨，其余按块位序 = 各块的"隐形导轨"） */
+function _railEls(railRoot: SVGGElement | null): SVGPathElement[] {
+  if (!railRoot) return []
+  return Array.from(railRoot.children).filter(
+    (el): el is SVGPathElement => el instanceof SVGPathElement,
+  )
+}
+
+/** 块位滑块（按块位序；只做整体平移，块内容由 JS 写在它里面） */
+function _blockTrans(wrap: SVGGElement | null): SVGGElement[] {
+  if (!wrap) return []
+  return Array.from(wrap.children).filter(
+    (el): el is SVGGElement =>
+      el instanceof SVGGElement && el.classList.contains('ef-block-trans'),
+  )
+}
+
+/**
+ * 逐帧：按"固定 N 块 + 每份占比"把每块的 (子路径, 渐变两端) 写到 DOM，并整体推进相位。
+ * 块 = 2 层（软辉光 / 亮芯）；每层一条 path（该块的子路径）+ 一条钉在块两端的渐变。
+ */
 function _renderFlowFrame(ts: number) {
   _capRaf = requestAnimationFrame(_renderFlowFrame)
-  const rail = railEl.value
   const host = capsuleHostEl.value
-  const active =
-    flowActive.value && edgeShowVisual.value && Boolean(rail) && Boolean(host)
-  if (!active) {
+  const holder = railHostEl.value
+  const slotsHost = slotsHostEl.value
+  // 未激活（没选中相关节点/本边）→ 直接返回：不显示光斑也不推进相位（逐帧开销≈0）
+  if (!flowActive.value || !edgeShowVisual.value || !host || !holder || !slotsHost) {
     _capPrevTs = 0
     return
   }
-  // 时间归一流速（px/frame @60fps）
-  const cycle = Math.max(1, flowBlockSize.value + flowGap.value)
-  if (_capPrevTs) {
-    const dt = ts - _capPrevTs
-    const adv = flowSpeed.value * (dt / (1000 / 60))
-    _capAnimDist = ((_capAnimDist + adv) % cycle + cycle) % cycle
-  }
-  _capPrevTs = ts
-
-  const railNode = rail!
-  const hostNode = host!
+  const rails = _railEls(holder)
+  const trans = _blockTrans(slotsHost)
+  const railNode = rails[0]
+  if (!railNode) return
   let totalLen = 0
   try {
     totalLen = railNode.getTotalLength()
   } catch {
     /* 几何尚未就绪 */
   }
-  if (!(totalLen > 0)) {
-    hostNode.style.display = 'none'
-    return
-  }
-  hostNode.style.display = ''
-  // 宿主重挂载(flowActive 开关/v-show 重建)时池子里是旧的已卸载节点 → 归零重建，避免对无关宿主 removeChild
-  if (hostNode !== _capOwnHost) {
-    _capOwnHost = hostNode
+  if (!(totalLen > 0)) return
+  // 宿主重挂载(flowActive 开关导致 v-if 重建)时池子里是旧的已卸载节点 → 归零重建，避免对无关宿主 removeChild
+  if (host !== _capOwnHost) {
+    _capOwnHost = host
     _capSoftGrads = []
     _capHotGrads = []
     _capSoftPaths = []
     _capHotPaths = []
     _capConfigSig = ''
+    _sliceCache = new WeakMap()
+    _capAnimDist = 0
   }
   const c = _capsuleLayerConst()
-  _syncCapsuleConfig(hostNode)
+  // 配置签名变化 → 清空各块位（导轨/块位滑块本身留给 Vue 管，不动它们）
+  _syncCapsuleConfig()
 
-  // 遍历当前应可见的所有块起点
-  const starts: number[] = []
-  const startD = _capAnimDist - cycle
-  for (let dist = startD; dist < totalLen + cycle; dist += cycle) {
-    if (dist + flowBlockSize.value >= 0 && dist <= totalLen) starts.push(dist)
-  }
-  // 增删池子到匹配
-  while (_capSoftGrads.length < starts.length) {
-    _appendCapsuleBlock(hostNode, c.color, c.fade, c.softW, c.hotW, c.softA, c.hotA)
-  }
-  while (_capSoftGrads.length > starts.length) {
-    _dropCapsuleBlock(hostNode)
-  }
+  const n = Math.max(1, Math.floor(Number.isFinite(flowCount.value) ? flowCount.value : 1))
+  const ratio = Math.max(0, Math.min(100, Number.isFinite(flowRatio.value) ? flowRatio.value : 0))
+  const seg = totalLen / n // 每份长度 = 相位循环周期（totalLen>0 且 n>=1，必为正）
 
-  const dAttr = railNode.getAttribute('d') || ''
-  const dashGap = Math.max(totalLen * 2, 1)
-  const block = flowBlockSize.value
-  const clampN = (n: number) => Math.max(0, Math.min(totalLen, n))
-  for (let i = 0; i < starts.length; i++) {
-    const s = starts[i]
-    const e = s + block
-    const vs = clampN(s)
-    const ve = clampN(e)
-    if (ve - vs <= 0) continue
-    const ps = railNode.getPointAtLength(vs)
-    const pe = railNode.getPointAtLength(ve)
-    const sg = _capSoftGrads[i]
-    const hg = _capHotGrads[i]
-    const sp = _capSoftPaths[i]
-    const hp = _capHotPaths[i]
-    sg.setAttribute('x1', String(ps.x)); sg.setAttribute('y1', String(ps.y))
-    sg.setAttribute('x2', String(pe.x)); sg.setAttribute('y2', String(pe.y))
-    hg.setAttribute('x1', String(ps.x)); hg.setAttribute('y1', String(ps.y))
-    hg.setAttribute('x2', String(pe.x)); hg.setAttribute('y2', String(pe.y))
-    sp.setAttribute('d', dAttr)
-    sp.setAttribute('stroke-dasharray', `${block} ${dashGap}`)
-    sp.setAttribute('stroke-dashoffset', String(-s))
-    hp.setAttribute('d', dAttr)
-    hp.setAttribute('stroke-dasharray', `${block} ${dashGap}`)
-    hp.setAttribute('stroke-dashoffset', String(-s))
+  const blocks = computeFlowBlocks({
+    totalLength: totalLen,
+    count: n,
+    ratioPercent: ratio,
+    animDist: _capAnimDist,
+  })
+  if (blocks.length === 0) {
+    // 不出块（例如占比 0）：清空各块位即可，导轨照常显示
+    for (const slot of trans) slot.innerHTML = ''
+  } else {
+    // 用不到的块位（配多了/块数变少了）清空，避免旧块残留
+    for (let k = blocks.length; k < trans.length; k++) trans[k].innerHTML = ''
+    const clampN = (v: number) => Math.max(0, Math.min(totalLen, v))
+    for (let i = 0; i < blocks.length; i++) {
+      const rail = rails[i]
+      const transEl = trans[i]
+      // 首帧可能只有主导轨/还没渲染出块位滑块 → 这一块本帧先不画，下一帧自然补齐
+      if (!rail || !transEl) continue
+      _ensureCapsuleBlock(transEl, i, c.color, c.fade, c.softW, c.hotW, c.softA, c.hotA)
+      const b = blocks[i]
+      // 每块整体挪到"块起点"所在位置（SVG 精确平移）；块内的路径形状/渐变坐标一律用局部坐标写，
+      // 省去逐帧对每个点做世界坐标转换（也避免大偏移下的浮点误差）。
+      const p0 = railNode.getPointAtLength(clampN(b.start))
+      const ox = p0.x
+      const oy = p0.y
+      transEl.setAttribute('transform', `translate(${_ptAttr(p0.x)} ${_ptAttr(p0.y)})`)
+      // 该块的子路径（越界的块由 _dSliceOf 按路径自然裁剪 → 头端滑入、尾端滑出）
+      const dBlock = _slicedD(rail, b.start, b.end, totalLen, ox, oy)
+      _capSoftPaths[i]?.setAttribute('d', dBlock)
+      _capHotPaths[i]?.setAttribute('d', dBlock)
+      // 渐变钉在该块两端（局部坐标）：软辉光/亮芯共用同一套坐标
+      const p1 = rail.getPointAtLength(clampN(b.start))
+      const p2 = rail.getPointAtLength(clampN(b.end))
+      for (const g of [_capSoftGrads[i], _capHotGrads[i]]) {
+        if (!g) continue
+        g.setAttribute('x1', _ptAttr(p1.x - ox))
+        g.setAttribute('y1', _ptAttr(p1.y - oy))
+        g.setAttribute('x2', _ptAttr(p2.x - ox))
+        g.setAttribute('y2', _ptAttr(p2.y - oy))
+      }
+    }
   }
-  // 高亮光晕：整组 drop-shadow，跟随所有胶囊块一起移动
-  hostNode.style.filter = isHighlighted.value
-    ? `drop-shadow(0 0 ${4 * edgeGlowIntensity.value}px ${c.color})`
-    : 'none'
+  // 相位推进：速度是"倍数"、不是 px/帧 —— 走完整条路径的时间固定（基准秒数 ÷ 倍数），
+  // 与线长无关，因此短线和长线同时出发、同时到达（口径见 edgeFlow.ts 的 computeFlowAdvance）。
+  // 只在帧间隔合理时累加：速度 0 / 切页签回来时帧差极大 → 不推进，避免动画凭空跳一大段。
+  const dt = _capPrevTs ? ts - _capPrevTs : 0
+  if (dt > 0 && dt < 100) {
+    const advance = computeFlowAdvance({
+      totalLength: totalLen,
+      speedMultiplier: flowSpeed.value,
+      deltaMs: dt,
+      baseSeconds: FLOW_BASE_SECONDS,
+    })
+    _capAnimDist = (_capAnimDist + advance) % seg
+  }
+  _capPrevTs = ts
+  // 高亮光晕：整组 drop-shadow。辉光强度只在开启辉光后才生效（关辉光一律 none）。
+  host.style.filter =
+    edgeGlowEnabled.value && isHighlighted.value
+      ? `drop-shadow(0 0 ${4 * edgeGlowIntensity.value}px ${c.color})`
+      : 'none'
 }
 
 onMounted(() => {
@@ -474,19 +559,36 @@ onUnmounted(() => {
         />
       </template>
       <template v-else>
-        <path
-          ref="railEl"
-          class="ef-rail"
-          :d="edgePath"
-          fill="none"
-          :stroke="railColor"
-          :stroke-width="railWidth"
-          stroke-linecap="round"
-          :stroke-dasharray="dashArray"
-        />
-        <!-- 胶囊渐变光斑容器：子节点(每块 soft/hot path + 各自 linearGradient)由 JS 逐帧直接 DOM 写入，
-             不进 Vue 响应式(规避 vdom patch 清空 d 的坑)。railEl 与胶囊块共享同一 d，负责测长/采样点。 -->
-        <g ref="capsuleHostEl" class="ef-capsules"></g>
+        <g ref="capsuleHostEl">
+          <g ref="railHostEl">
+            <!-- 覆盖整条路径的连续导轨：流动时它保证"线始终连通"（色块浮在它上面）。
+                 它同时是本层第 1 条路径 = 测长/取点的主参考（getTotalLength / getPointAtLength）。 -->
+            <path
+              class="ef-rail"
+              :d="edgePath"
+              fill="none"
+              :stroke="railColor"
+              :stroke-width="railWidth"
+              stroke-linecap="round"
+              :stroke-dasharray="dashArray"
+            />
+            <!-- 每个块位一支"隐形导轨"（整条路径、不描边，仅用于按块位截取子路径弧长）： -->
+            <path
+              v-for="i in flowRailCount"
+              :key="'rail' + i"
+              class="ef-rail-clip"
+              :d="edgePath"
+              fill="none"
+              stroke="none"
+              stroke-width="0.001"
+            />
+          </g>
+          <!-- 块位滑块：每个块位一个 <g>，JS 把该块的 path + linearGradient 写进来；它只负责"平移到当前块起点"。
+               内容不进 Vue 响应式(规避 vdom patch 清空 d 的坑)，由 JS 逐帧直接 DOM 写入。 -->
+          <g ref="slotsHostEl" class="ef-capsules">
+            <g v-for="i in flowRailCount" :key="'slot' + i" class="ef-block-trans"></g>
+          </g>
+        </g>
       </template>
       <path
         v-if="edgeMarkerEnd"
@@ -548,6 +650,10 @@ onUnmounted(() => {
 .ef-base { opacity: 0.45; }
 .ef-base--dim { opacity: 0.3; }
 .ef-rail { opacity: 0.65; }
+/* 块的"隐形导轨"：不描边、只保留可测长的几何（stroke:none 但仍能 getTotalLength/getPointAtLength） */
+.ef-rail-clip { opacity: 0; }
+/* 块的平移滑块：只负责把块搬到当前相位，本身不描边、不挡点击 */
+.ef-block-trans { pointer-events: none; }
 /* 胶囊渐变光斑容器：子 path 均为 pointer-events:none（由 _makeFlowPath 内联设置），容器再兜底一次 */
 .ef-capsules { pointer-events: none; }
 .cut-btn {

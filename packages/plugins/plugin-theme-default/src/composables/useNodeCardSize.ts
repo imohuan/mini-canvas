@@ -26,7 +26,11 @@ export interface NodeCardSizeOptions {
    */
   data: () => Record<string, unknown>;
   type: string;
-  /** 尺寸写回（CanvasHost nodeWrite → nodeStore + 落盘） */
+  /**
+   * 尺寸写回（CanvasHost nodeWrite → nodeStore + 落盘）。
+   * patch 同时携带 data.cardWidth/cardHeight（卡片渲染读）与保留 key `size`（内核正式尺寸字段）——
+   * 两者一个 patch 原子提交，保证 resize 一次只记一条历史，且两份尺寸不再各说各话。
+   */
   writeback?: (id: string, patch: Record<string, unknown>) => void;
   /** 当前画布缩放（resize 屏幕 delta ÷ zoom 换算） */
   zoom: () => number;
@@ -112,11 +116,14 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     isResizing.value = false;
     resizeState.value = null;
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    // 写回 node.data（触发 nodeStore 订阅自动刷新渲染态）
+    // 一次写回两份尺寸（触发 nodeStore 订阅自动刷新渲染态）：
+    //   data.cardWidth/cardHeight → 卡片渲染读它决定多大
+    //   size                      → 宿主写进 node.size（正式尺寸字段，布局回退链的中间一环）
     if (opts.writeback) {
       opts.writeback(opts.nodeId, {
         cardWidth: cardWidth.value,
         cardHeight: cardHeight.value,
+        size: { w: cardWidth.value, h: cardHeight.value },
       });
     }
   }

@@ -1,4 +1,5 @@
-export { alignArrangePlugin } from './alignArrangePlugin'
+export { alignArrangePlugin, name, Config } from './alignArrangePlugin'
+export type { AlignArrangeConfigFromSchema } from './alignArrangePlugin'
 export type { AlignDirection, DistributeAxis, ArrangeRect, ArrangeResult } from './arrangeEngine'
 export { computeCompactArrange } from './compactArrange'
-export type { CompactDirection, CompactRect } from './compactArrange'
+export type { CompactDirection, CompactRect, CompactSpacing } from './compactArrange'

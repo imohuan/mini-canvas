@@ -33,6 +33,29 @@ function getNodeDim(node: LayoutNode): { w: number; h: number } {
   }
 }
 
+/**
+ * 把「水平/垂直间距」翻译成 dagre 的 nodesep / ranksep。
+ *
+ * dagre 这两个参数的**含义随流向翻转**（很容易接反）：
+ * - `ranksep` = 相邻「层」（rank）之间的距离 —— 即沿流向那一维；
+ * - `nodesep` = 同一层内「节点与节点」之间的距离 —— 即垂直于流向那一维。
+ *
+ * 于是：
+ * - 横向流（LR/RL）：ranksep = 水平间距，nodesep = 垂直间距；
+ * - 纵向流（TB/BT）：nodesep = 水平间距，ranksep = 垂直间距。
+ *
+ * 调用方一律用 { x: 水平, y: 垂直 } 表达，经本函数转换，避免按方向手写而接反。
+ */
+function toDagreSpacing(
+  direction: AutoLayoutConfig['direction'],
+  spacing: { x: number; y: number },
+): { nodesep: number; ranksep: number } {
+  const horizontalFlow = direction === 'LR' || direction === 'RL'
+  return horizontalFlow
+    ? { nodesep: spacing.y, ranksep: spacing.x }
+    : { nodesep: spacing.x, ranksep: spacing.y }
+}
+
 export interface ClusterResult {
   clusters: LayoutCluster[]
   logs: string[]
@@ -186,10 +209,11 @@ function layoutWithDagre(
   config: AutoLayoutConfig,
 ): GroupBounds {
   const g = new dagre.graphlib.Graph()
+  const intra = toDagreSpacing(config.direction, config.intraSpacing)
   g.setGraph({
     rankdir: config.direction,
-    nodesep: config.intraSpacing.x,
-    ranksep: config.intraSpacing.y,
+    nodesep: intra.nodesep,
+    ranksep: intra.ranksep,
     marginx: 0,
     marginy: 0,
   })
@@ -251,10 +275,11 @@ export function layoutClusterRecursive(
     }
 
     const subG = new dagre.graphlib.Graph()
+    const inter = toDagreSpacing(config.direction, config.interSpacing)
     subG.setGraph({
       rankdir: config.direction,
-      nodesep: config.interSpacing.x,
-      ranksep: config.interSpacing.y,
+      nodesep: inter.nodesep,
+      ranksep: inter.ranksep,
       marginx: 0,
       marginy: 0,
     })
@@ -333,10 +358,11 @@ export function layoutGlobalClusters(
   }
 
   const globalG = new dagre.graphlib.Graph()
+  const inter = toDagreSpacing(config.direction, config.interSpacing)
   globalG.setGraph({
     rankdir: config.direction,
-    nodesep: config.interSpacing.x,
-    ranksep: config.interSpacing.y,
+    nodesep: inter.nodesep,
+    ranksep: inter.ranksep,
     marginx: 60,
     marginy: 60,
   })
