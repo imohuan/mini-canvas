@@ -407,6 +407,18 @@ function onMoveEnd(): void {
   if (props.persistViewport) persistViewport()
 }
 
+/**
+ * paneDragging 兜底复位（自愈）：正常由 onMoveEnd 配对清除，但若 VueFlow 漏发 moveEnd
+ * （或 host 重挂载丢了 end），paneDragging 会永久卡在 true —— isBusyDragging 随之恒真，
+ * 消费它的显隐门（如端口按钮）就会被永久压死。这里在"任何指针抬起 / 窗口失焦"时无条件清一次：
+ * 只要没有按键按住，视图移动就不可能还在进行，清掉一定安全（清了再动也有 onMoveStart 重新置位）。
+ */
+function resetViewportMoveIfIdle(): void {
+  if (!interaction.activity.value.paneDragging) return
+  log.log('paneDragging 兜底复位（未收到配对 moveEnd，疑似漏发）')
+  endViewportMove(interaction)
+}
+
 /** emit 带当前视口的视图事件（host 未就绪则跳过） */
 function emitMove(event: string): void {
   const h = hostRef.value
@@ -1001,6 +1013,13 @@ onMounted(async () => {
     window.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', flushSave)
 
+    // paneDragging 兜底自愈：指针抬起 / 窗口失焦 / 页面隐藏时，若还残留 paneDragging 就清掉
+    // （正常路径已由 onMoveEnd 清；这里防漏发 moveEnd 导致永久卡 true 把端口等显隐门压死）。
+    window.addEventListener('pointerup', resetViewportMoveIfIdle, true)
+    window.addEventListener('pointercancel', resetViewportMoveIfIdle, true)
+    window.addEventListener('blur', resetViewportMoveIfIdle)
+    window.addEventListener('visibilitychange', resetViewportMoveIfIdle)
+
     // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
     // 在 booting=false(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
     if (props.persistViewport) {
@@ -1071,6 +1090,10 @@ onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onGlobalPointerDown, true)
   window.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('pagehide', flushSave)
+  window.removeEventListener('pointerup', resetViewportMoveIfIdle, true)
+  window.removeEventListener('pointercancel', resetViewportMoveIfIdle, true)
+  window.removeEventListener('blur', resetViewportMoveIfIdle)
+  window.removeEventListener('visibilitychange', resetViewportMoveIfIdle)
   void hostRef.value?.save.flush()
   hostRef.value?.stop()
 })

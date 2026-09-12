@@ -218,10 +218,12 @@ const showConnectFeedback = computed(
 // ============ 拖线瞄准上报：前端 mouse 事件 → connectionState.aimedTarget ============
 // 卡片根 enter/leave：维护物理 hover + body 瞄准
 function onCardMouseEnter(): void {
+  log.log(`[${props.id}] card mouseenter → isHovered=true`)
   isHovered.value = true
   aimBody.value = true
 }
 function onCardMouseLeave(): void {
+  log.log(`[${props.id}] card mouseleave → isHovered=false`)
   isHovered.value = false
   aimBody.value = false
 }
@@ -260,6 +262,7 @@ const outputSnapStyle = computed(() => ({
 // 的缝隙里，zone 的 mouseleave 与卡片的 mouseenter 会互相覆写，谁后到听谁的 → 端口按钮随机显隐。
 // 现在各自独立：卡片 hover 归 isHovered，端口 hover 归 portHovered，显示条件取"或"。
 function onPortHover(value: boolean): void {
+  log.log(`[${props.id}] onPortHover ← MovingHandle emit`, { value, before: portHovered.value })
   portHovered.value = value
 }
 /** 命中端口吸附带时，用真实渲染高度 cardHeight 算端口锚点 flow 坐标（保证端点居中，不依赖存储 dimensions）。
@@ -298,13 +301,21 @@ watch(
   { immediate: true },
 )
 
-// 端口"允许显示"门（传给 MovingHandle 作上层压制）：非低细节 && 非拖线全局压 && 非源自身 && 非拖拽 busy
+// 端口"允许显示"门（传给 MovingHandle 作上层压制）：非低细节 && 非拖线全局压 && 非源自身 && 非真拖拽
 // && (鼠标在卡片上 || 鼠标在端口 zone 上 || 选中)。
 // 前 4 项是"暂时不该显示"的压制门；第 5 项是"该显示"的激励门，三个来源取或、各自独立：
 //   isHovered  —— 卡片根 hover（鼠标在卡上，让端口有机会被点亮）
 //   portHovered—— 端口 zone hover（鼠标已在端口上，必须在 180ms 淡出窗口内立刻续上，不允许被卡片事件打断）
 //   selected   —— 节点选中，常显
 // 三者分开写、不做互相覆写，避免缝隙处 enter/leave 顺序竞争导致随机显隐。
+//
+// 【为什么不用 interaction.isBusyDragging】：它把 paneDragging 也算进去，而 paneDragging 由
+// CanvasHost.onMoveStart 写入、**滚轮缩放与 pan 共用同一套 VueFlow move 事件**（见 CanvasHost.vue:397 注释）。
+// 于是"滚一下滚轮缩放"就会把 isBusyDragging 抬成 true；若 start/end 事件不配对（漏发 moveEnd、
+// 或 host 重挂载丢了 end），它会**永久卡在 true**，把所有端口永久压死 —— 表现为"hover 上去端口死活不出现"。
+// 端口的语义只是"拖节点/拖线时别干扰"，滚轮缩放不该压端口，故这里只认 nodeDragging，
+// 不再吃 paneDragging/zooming。真拖拽期间仍由 disabled(拖线源) 与 suppressHandles(拖线) 负责压制。
+//
 // 注意：这只是"允许"，按钮最终显隐在 MovingHandle 内部——zone hover(keepVisible) 或 选中(selected) 才真正亮。
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
@@ -312,9 +323,44 @@ const shouldShowHandles = computed(
     !lowDetail.value &&
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
-    !interaction.isBusyDragging.value &&
+    !interaction.isNodeDragging.value &&
     (isHovered.value || portHovered.value || props.selected),
 )
+
+// —— 临时诊断：端口按钮"不显示"时，一眼看出是 5 个门里哪一个卡住了 ——
+// 排查完请删除（连同下面 watch 里那行）。
+watch(
+  shouldShowHandles,
+  (on, was) => {
+    log.log(`[${props.id}] shouldShowHandles 变化 ${was} → ${on}`, {
+      lowDetail: lowDetail.value,
+      suppressHandles: suppressHandles.value,
+      isCurrentConnectingNode: isCurrentConnectingNode.value,
+      isBusyDragging: interaction.isBusyDragging.value,
+      isHovered: isHovered.value,
+      portHovered: portHovered.value,
+      selected: Boolean(props.selected),
+      zoom: vf.viewport.value?.zoom,
+    })
+  },
+)
+
+// 每帧 mouseover 都打一次当前可见门状态（高频，仅排查期用，看完删）：
+// 挂在 .v2-node 上见模板 @mouseover="logVisibleGate"。
+function logVisibleGate(): void {
+  log.log(`[${props.id}] gate 快照`, {
+    visible: shouldShowHandles.value,
+    lowDetail: lowDetail.value,
+    suppressHandles: suppressHandles.value,
+    isCurrentConnectingNode: isCurrentConnectingNode.value,
+    isBusyDragging: interaction.isBusyDragging.value,
+    isHovered: isHovered.value,
+    portHovered: portHovered.value,
+    selected: Boolean(props.selected),
+    showSourceHandle: showSourceHandle.value,
+    showTargetHandle: showTargetHandle.value,
+  })
+}
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
 // 语义：拖线进行中，其它节点上与拖拽源**同类型**的端口被整体禁用/隐藏，只剩反向(可接)端口对用户可见。
@@ -449,7 +495,7 @@ function clamp(value: number, min: number, max: number): number {
     'is-low-detail': lowDetail,
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
-  }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
+  }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave" @mouseover="logVisibleGate">
     <!-- 顶部工具栏（注册了才渲染） -->
     <div v-if="topToolbar" class="top-toolbar">
       <component :is="topToolbar" :id="id" :data="data" />
