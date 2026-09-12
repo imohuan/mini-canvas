@@ -13,6 +13,8 @@ import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
 import { resolveSegment } from '@mini-canvas/canvas-core-v2'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
+import TitleLabel from './TitleLabel.vue'
+import { isRectFullyVisible } from './titleEdit'
 import { useNodeCapability } from '../../composables/useNodeCapability'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
@@ -23,7 +25,8 @@ const props = defineProps<NodeProps>()
 defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈/内核上下文
-const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize } = useCanvasRender()
+// visibleRect = 当前可视区（flow 坐标）：进编辑时判断要不要挪视图；未挂载为 null，判定自动跳过
+const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize, visibleRect } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -111,9 +114,6 @@ const cardInlineStyle = computed<Record<string, string>>(() => ({
 
 // ============ 就地重命名 ============
 const isEditingTitle = ref(false)
-const draftTitle = ref('')
-const titleInputRef = ref<HTMLInputElement | null>(null)
-const skipBlurCommit = ref(false)
 
 watch(
   () => props.selected,
@@ -139,27 +139,43 @@ function onTitleEditKeydown(e: KeyboardEvent) {
 
 function startTitleEdit() {
   if (isEditingTitle.value) return
-  draftTitle.value = nodeLabel.value
   isEditingTitle.value = true
-  nextTick(() => {
-    titleInputRef.value?.focus()
-    titleInputRef.value?.select()
-  })
+  // "适当聚焦"：只在该节点没完整露在视野里时才把视图挪过去 —— 每次改名都强制滚动画布会很烦。
+  // 标题浮在卡片上方，所以判定矩形要把标题自身的高度也算进去（PAD）。
+  focusNodeIfNeeded()
 }
 
-function commitTitleEdit() {
-  if (skipBlurCommit.value) {
-    skipBlurCommit.value = false
+/**
+ * 编辑前确保节点可见：不在视野内才 setCenter 挪过去（保留当前缩放，不打断用户视野）。
+ * 拿不到 nodeLayout/visibleRect（未挂载/无 DOM 的测试环境）时静默跳过，不影响编辑本身。
+ */
+function focusNodeIfNeeded(): void {
+  const layout = ctx?.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
+  const rect = layout?.getNodeRect(props.id)
+  const view = visibleRect?.value
+  if (!rect || !view) return
+  // 标题条在卡片上方：把判定范围向上扩 PAD，避免"节点刚好看得见、标题却被裁掉"
+  const withTitle = { x: rect.x, y: rect.y - TITLE_FOCUS_PAD, w: rect.w, h: rect.h + TITLE_FOCUS_PAD }
+  if (isRectFullyVisible(withTitle, view)) return
+  ctx?.get<{ setCenter(x: number, y: number, zoom?: number): void } | undefined>('viewport')
+    ?.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom.value)
+}
+
+/** 标题空间余量（flow 坐标）：判定聚焦时向上多留这么多，保证标题不被视口裁掉 */
+const TITLE_FOCUS_PAD = 32
+
+function commitTitleEdit(value: string): void {
+  const next = value || undefined
+  if (nodeWrite) {
+    // 先结束编辑态再写回：写回会让 label 变化，此时组件已是"非编辑态"，插值能正常刷新成归一化结果
+    isEditingTitle.value = false
+    nodeWrite(props.id, next === undefined ? { label: undefined } : { label: next })
     return
   }
-  const value = draftTitle.value.trim()
-  const next = value || undefined
-  if (nodeWrite) nodeWrite(props.id, next === undefined ? { label: undefined } : { label: next })
   isEditingTitle.value = false
 }
 
 function cancelTitleEdit() {
-  skipBlurCommit.value = true
   isEditingTitle.value = false
 }
 onBeforeUnmount(() => document.removeEventListener('keydown', onTitleEditKeydown))
@@ -473,12 +489,11 @@ function clamp(value: number, min: number, max: number): number {
       <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
-        <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel" :title-icon="titleIcon">
+        <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :title-icon="titleIcon">
           <template #title-label>
-            <input v-if="isEditingTitle" ref="titleInputRef" v-model="draftTitle" class="v2-title-input" type="text"
-              @keydown.enter.prevent="commitTitleEdit" @keydown.escape.prevent="cancelTitleEdit" @blur="commitTitleEdit"
-              @pointerdown.stop @dblclick.stop>
-            <span v-else class="v2-title-label">{{ nodeLabel }}</span>
+            <!-- 编辑用 contenteditable（同一元素切换属性），不换 <input>：换元素会改行高把标题条撑变形 -->
+            <TitleLabel :label="nodeLabel" :editing="isEditingTitle" @commit="commitTitleEdit"
+              @cancel="cancelTitleEdit" />
           </template>
         </BaseTitle>
       </div>
@@ -735,44 +750,9 @@ function clamp(value: number, min: number, max: number): number {
   cursor: text;
 }
 
-.v2-title-label {
-  display: inline-block;
-  max-width: 100%;
-  padding: 0 2px;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--canvas-node-text-muted, #6b7280);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.v2-node.is-selected .v2-title-label {
+/* 选中态标题加深（文案元素在 TitleLabel 子组件内，需 :deep 穿透 scoped） */
+.v2-node.is-selected :deep(.title-label) {
   color: var(--canvas-node-text-strong, #111827);
-}
-
-/* 就地改名输入框 */
-.v2-title-input {
-  box-sizing: border-box;
-  display: block;
-  width: 100%;
-  min-width: 40px;
-  max-width: 100%;
-  height: 16px;
-  margin: 0;
-  padding: 0 6px;
-  font: inherit;
-  font-size: 12px;
-  line-height: 16px;
-  text-align: left;
-  user-select: text;
-  -webkit-user-select: text;
-  color: var(--canvas-node-text, #4b5563);
-  background: #fff;
-  border: 1px solid var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
-  border-radius: 5px;
-  outline: none;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
 /* —— content 裁剪层 —— */

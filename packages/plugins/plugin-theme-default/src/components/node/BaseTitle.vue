@@ -85,6 +85,12 @@ const componentIcon = computed<Component | null>(() =>
 }
 
 .base-title-label {
+  /* 块级居中 + 行内块基线修正：
+     flex 的 align-items:center 只管到"块"，块内部的行内盒仍按基线对齐，
+     会在文字下方多留一段（实测 descender 空隙约 4px，导致文字整体偏上、不居中）。
+     display:flex + align-items:center 把行内盒也真正压到中线。 */
+  display: flex;
+  align-items: center;
   flex: 0 0 80%;
   width: 80%;
   min-width: 0;
