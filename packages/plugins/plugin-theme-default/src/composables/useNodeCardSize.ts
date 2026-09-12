@@ -2,8 +2,12 @@
  * useNodeCardSize —— 卡片固定尺寸 + 右下角拖拽 resize（移植自 v1 Decoration/BaseNode 的内置 resize 逻辑）。
  *
  * v2 卡片从"内容自适应"改为"固定可改尺寸框"。尺寸来源：node.data.cardWidth/cardHeight（与 v1 同名，便于存量迁移）
- * ?? nodeStore.types.defaultSize。resize 拖拽用 pointer capture，屏幕 delta ÷ zoom 还原成画布/内容坐标，
- * 结束经 nodeWrite 写回 node.data（触发 nodeStore 订阅 → 渲染态自动刷新，无需手动 updateNode/map）。
+ * ?? nodeStore.types.defaultSize。resize 拖拽屏幕 delta ÷ zoom 还原成画布/内容坐标，
+ * 结束经 nodeWrite 写回（触发 nodeStore 订阅 → 渲染态自动刷新，无需手动 updateNode/map）。
+ *
+ * 拖拽监听（修复）：move/up **绑到全局 document**，而不是手柄元素自己身上。
+ * 原实现绑元素 + 依赖 setPointerCapture，但捕获不总成立（实测 hasPointerCapture 恒 false），
+ * 指针一离开手柄元素就收不到 move → "拖一半断掉"。会话逻辑见 resizeDragSession.ts（可单测）。
  *
  * 拖柄显示门：**类型级 resizable 能力**(useNodeCapability 读 nodeStore.types[type].resizable) **或** 节点实例 data.resizable === true。
  * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖；实例级 data.resizable 可单独覆盖/关闭。
@@ -11,10 +15,11 @@
  * 用法（BaseNode）：
  *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, zoom })
  *   :style="{ width: card.cardWidth+'px', height: card.cardHeight+'px', ... }"
- *   <div class="resize-handle" @pointerdown=... @pointermove=... @pointerup=... />
+ *   <div class="resize-handle" @pointerdown="card.onResizePointerDown" />
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
+import { createResizeDragSession, type PointerEventTargetLike } from "./resizeDragSession";
 
 export interface NodeCardSizeOptions {
   nodeId: string;
@@ -32,6 +37,11 @@ export interface NodeCardSizeOptions {
    * 两者一个 patch 原子提交，保证 resize 一次只记一条历史，且两份尺寸不再各说各话。
    */
   writeback?: (id: string, patch: Record<string, unknown>) => void;
+  /**
+   * 拖拽中把"当前视觉尺寸"同步给渲染层的回调（VueFlow 内部重算端口位置/相连边端点）。
+   * 不传则只有卡片自身跟着变、端口与边会停在旧尺寸。
+   */
+  onVisualSize?: (w: number, h: number) => void;
   /** 当前画布缩放（resize 屏幕 delta ÷ zoom 换算） */
   zoom: () => number;
   /**
@@ -78,59 +88,44 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     () => (opts.typeResizable ? opts.typeResizable() : capability.resizable.value) || data.value?.resizable === true,
   );
 
-  // —— resize 拖拽状态机 ——
-  interface ResizeState {
-    startScreenX: number;
-    startScreenY: number;
-    startWidth: number;
-    startHeight: number;
-  }
-  const resizeState = ref<ResizeState | null>(null);
+  // —— resize 拖拽会话（move/up 绑全局 document，不绑手柄元素）——
+  // 关键修复：绑元素 + 依赖 setPointerCapture 时，捕获不成立（实测 hasPointerCapture 恒 false）
+  // 就会"鼠标一离开手柄就断"；绑全局后指针走到哪都能继续拖。
+  const session = createResizeDragSession({
+    minW: CARD_MIN_WIDTH,
+    minH: CARD_MIN_HEIGHT,
+    zoom: () => opts.zoom() || 1,
+    onLive(w, h) {
+      cardWidth.value = w;
+      cardHeight.value = h;
+    },
+    // 拖拽中同步给渲染层：VueFlow 内部重算端口位置与相连边端点（否则停在旧尺寸）
+    onVisualSize: opts.onVisualSize,
+    onCommit(w, h) {
+      isResizing.value = false;
+      // 一次写回两份尺寸（触发 nodeStore 订阅自动刷新渲染态）：
+      //   data.cardWidth/cardHeight → 卡片渲染读它决定多大
+      //   size                      → 宿主写进 node.size（正式尺寸字段，布局回退链的中间一环）
+      if (opts.writeback) {
+        opts.writeback(opts.nodeId, {
+          cardWidth: w,
+          cardHeight: h,
+          size: { w, h },
+        });
+      }
+    },
+    eventTarget: () => (typeof document !== 'undefined' ? (document as unknown as PointerEventTargetLike) : null),
+  });
 
   function onResizePointerDown(e: PointerEvent) {
     if (!resizable.value) return;
-    e.preventDefault();
-    e.stopPropagation();
     isResizing.value = true;
-    resizeState.value = {
-      startScreenX: e.clientX,
-      startScreenY: e.clientY,
-      startWidth: cardWidth.value,
-      startHeight: cardHeight.value,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onResizePointerMove(e: PointerEvent) {
-    if (!isResizing.value || !resizeState.value) return;
-    const ds = resizeState.value;
-    const z = opts.zoom() || 1;
-    const dx = (e.clientX - ds.startScreenX) / z;
-    const dy = (e.clientY - ds.startScreenY) / z;
-    cardWidth.value = Math.max(CARD_MIN_WIDTH, ds.startWidth + dx);
-    cardHeight.value = Math.max(CARD_MIN_HEIGHT, ds.startHeight + dy);
-  }
-
-  function onResizePointerUp(e: PointerEvent) {
-    if (!isResizing.value || !resizeState.value) return;
-    isResizing.value = false;
-    resizeState.value = null;
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-    // 一次写回两份尺寸（触发 nodeStore 订阅自动刷新渲染态）：
-    //   data.cardWidth/cardHeight → 卡片渲染读它决定多大
-    //   size                      → 宿主写进 node.size（正式尺寸字段，布局回退链的中间一环）
-    if (opts.writeback) {
-      opts.writeback(opts.nodeId, {
-        cardWidth: cardWidth.value,
-        cardHeight: cardHeight.value,
-        size: { w: cardWidth.value, h: cardHeight.value },
-      });
-    }
+    session.start(e, cardWidth.value, cardHeight.value);
   }
 
   onBeforeUnmount(() => {
     isResizing.value = false;
-    resizeState.value = null;
+    session.dispose();
   });
 
   return {
@@ -139,7 +134,5 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     resizable,
     isResizing,
     onResizePointerDown,
-    onResizePointerMove,
-    onResizePointerUp,
   };
 }

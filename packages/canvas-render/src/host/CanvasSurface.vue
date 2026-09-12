@@ -33,6 +33,7 @@ import type { SnapZoneConfig } from '../connection/geometry'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
+import { applyNodeVisualSize, type NodeVisualSyncApi } from './nodeVisualSync'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 
@@ -154,6 +155,15 @@ function updateNodeVisual(id: string, position: { x: number; y: number }): void 
   vfApi.updateNode(id, { position })
 }
 
+/**
+ * 拖拽中把单节点**视觉尺寸**同步进 VueFlow 并强制重算内部（端口位置 / 相连边端点）。
+ * resize 拖拽绕过 store 直接改卡片尺寸，VueFlow 内部尺寸不跟就会导致"端口/边停在旧位置"。
+ * 两步：先写尺寸（外层盒子来源）、再 updateNodeInternals 让 VueFlow 重算 handle / 边。
+ */
+function updateNodeVisualSize(id: string, w: number, h: number): void {
+  applyNodeVisualSize(vfApi as unknown as NodeVisualSyncApi, id, w, h)
+}
+
 /** 当前可视区内(或外扩 margin)的存活节点矩形列表 —— 供 align-guide 等按可视区裁剪候选，免全量 O(n) 逐帧 */
 function collectVisibleNodes(margin = 0): LayoutRect[] {
   const vr = visibleRectRef.value
@@ -187,6 +197,7 @@ const renderCtx: CanvasRenderContext = {
   screenToFlow,
   flowToScreen,
   updateNodeVisual,
+  updateNodeVisualSize,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
@@ -372,8 +383,6 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
-
-
 
 
 

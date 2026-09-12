@@ -94,6 +94,15 @@ export interface CanvasRenderContext {
    * 拖拽结束的位置落盘仍由宿主照常处理（nodeDragStop → store）。
    */
   updateNodeVisual(id: string, position: { x: number; y: number }): void
+  /**
+   * 拖拽中把某节点的**视觉尺寸**同步给 VueFlow 并强制重算内部（端口位置 / 相连边端点）。
+   *
+   * 为什么需要：resize 拖拽绕过 store 直接改卡片内联尺寸，VueFlow 内部记的节点尺寸不会自己变，
+   * 导致端口位置、节点外层尺寸、相连边端点全停在旧尺寸（实测确认）。本方法一次做两件事：
+   * 写新尺寸进 VueFlow + updateNodeInternals 重算 handle/边。
+   * 松手提交走 store 重渲染即可，不必再调。
+   */
+  updateNodeVisualSize(id: string, w: number, h: number): void
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */
@@ -110,7 +119,6 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
-
 
 
 
