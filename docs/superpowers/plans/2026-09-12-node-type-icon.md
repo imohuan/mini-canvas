@@ -638,6 +638,33 @@ git commit -m "feat(theme-default): 节点标题左侧显示类型图标"
 - Modify: `packages/plugins/plugin-node-image/src/nodeImagePlugin.ts`
 - Modify: `docs/plan/canvas-core-v2-api.md`
 
+---
+
+## 执行结果（2026-09-12 完成）
+
+分支 `codex/node-type-icon`（worktree `.worktrees/node-type-icon`），已变基到 `main`。
+
+**测试（全绿）：**
+
+| 包 | 结果 |
+|---|---|
+| canvas-core-v2 | 326 |
+| plugin-context-menu | 51 |
+| plugin-theme-default | 35（新增 baseTitleIcon 5 例：SSR 渲染断言"无图标不显示 / svg 与组件两形态"） |
+| canvas-render | 184（新增 nodeTypeIcon 2 例：真实插件装配的整链断言） |
+| plugin-node-text / plugin-node-image | 各 1 |
+| mcp-server | 47 |
+
+额外做了变异校验：把 `iconRenderMode` 的 none 分支改坏后，baseTitleIcon 有 2 例失败，证明这几条测试确实能抓到回归。
+
+**类型检查：** canvas-core-v2 / plugin-context-menu / canvas-render / node-text / node-image / 其余 15 个插件包 + ui 均干净。
+仅 `plugin-theme-default` 报 4 个错误，全部指向 `BaseNode.vue` 的 `updateNodeVisualSize` / `onVisualSize` ——
+已用独立基线 worktree 在 `main` 原点上复现，属**改动前就存在**（相关声明改动尚未提交进 main），与本次无关。
+
+**顺带改动：**
+- `plugin-theme-default/vitest.config.ts` 启用 `@vitejs/plugin-vue`（原先没装，无法测任何 `.vue` 组件）。
+- 新增 devDependency `@vue/server-renderer`（供 SSR 渲染断言用）。
+
 - [ ] **Step 1: text 插件声明图标**
 
 `nodeTextPlugin.ts` 顶部加常量（沿用原菜单里那张文本 svg）：
