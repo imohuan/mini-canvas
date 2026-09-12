@@ -11,6 +11,7 @@
  * 点击 props.onSelect(item)；点外部/按 Esc/滚动关闭由宿主插件负责监听。
  */
 import { computed } from 'vue'
+import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
 import type { ContextMenuItem } from './menuBuilder'
 import { splitComboChips } from './shortcutText'
 
@@ -63,6 +64,11 @@ function hasDesc(item: ContextMenuItem): boolean {
 function chipsOf(item: ContextMenuItem): Array<{ combo: string[] }> {
   return splitComboChips(item.shortcut)
 }
+
+/** 图标形态：html=svg 字符串（v-html）/ component=Vue 组件（<component :is>）/ none=走默认占位 svg */
+function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
+  return iconRenderMode(item.icon)
+}
 </script>
 
 <template>
@@ -88,7 +94,8 @@ function chipsOf(item: ContextMenuItem): Array<{ combo: string[] }> {
           >
             <!-- 图标托：恒渲染（无 icon 时给默认占位），与快捷键面板/CanvasMenu 一致 -->
             <span class="ctx-menu-icon">
-              <span v-if="item.icon" class="ctx-menu-icon-raw" v-html="item.icon" />
+              <span v-if="iconMode(item) === 'html'" class="ctx-menu-icon-raw" v-html="item.icon" />
+              <component v-else-if="iconMode(item) === 'component'" :is="item.icon" class="ctx-menu-icon-raw" />
               <svg
                 v-else
                 viewBox="0 0 24 24"

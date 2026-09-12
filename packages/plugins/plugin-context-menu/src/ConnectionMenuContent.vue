@@ -9,6 +9,7 @@
  */
 import { computed } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
 import type { ContextMenuItem } from './menuBuilder'
 import { CONNECTION_MENU_PICK_EVENT } from './connectionMenu'
 
@@ -17,6 +18,11 @@ const props = defineProps<{ id: string; data: { items?: ContextMenuItem[] } }>()
 const { ctx } = useCanvasRender()
 
 const items = computed<ContextMenuItem[]>(() => (Array.isArray(props.data?.items) ? props.data.items : []))
+
+/** 图标形态：html=svg 字符串（v-html）/ component=Vue 组件（<component :is>）/ none=不渲染 */
+function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
+  return iconRenderMode(item.icon)
+}
 
 /** 按 group 连续分块（与右键菜单同款：不同组之间插分隔线） */
 const groups = computed(() => {
@@ -52,7 +58,8 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
         @click="onPick(item, $event)"
       >
         <span class="conn-menu-icon">
-          <span v-if="item.icon" class="conn-menu-icon-raw" v-html="item.icon" />
+          <span v-if="iconMode(item) === 'html'" class="conn-menu-icon-raw" v-html="item.icon" />
+          <component v-else-if="iconMode(item) === 'component'" :is="item.icon" class="conn-menu-icon-raw" />
         </span>
         <span class="conn-menu-copy">
           <span class="conn-menu-label">{{ item.label }}</span>
