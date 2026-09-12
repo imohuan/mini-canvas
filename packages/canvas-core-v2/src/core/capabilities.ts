@@ -30,6 +30,8 @@ export interface NodeRegisterDef {
   /** 声明式连接约束 */
   inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
   outputs?: Array<{ port?: string; contentType?: string }>
+  /** 类型图标（opaque 句柄：SVG 字符串或 Vue 组件；透传进 nodeStore） */
+  icon?: unknown
   /** 是否支持 resize（类型级能力；缺省 false）。随节点数据注册进 nodeStore，渲染层据此显示拖柄。 */
   resizable?: boolean
   /** 可选：提供"建一个该 type 节点"的实现（挂 nodeFactory，自动回收） */
@@ -133,6 +135,7 @@ export function buildCapabilities(
           type: def.type,
           label: def.label,
           defaultSize: def.size,
+          icon: def.icon,
           inputs: def.inputs,
           outputs: def.outputs,
           resizable: def.resizable,
@@ -242,7 +245,5 @@ export function buildCapabilities(
     },
   }
 }
-
-
 
 

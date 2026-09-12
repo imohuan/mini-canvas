@@ -31,6 +31,8 @@ export interface NodeTypeDef {
   /** 声明式连接约束（api.md §四） */
   inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
   outputs?: Array<{ port?: string; contentType?: string }>
+  /** 类型图标（opaque 句柄，同 content 语义；缺省 = 不显示图标） */
+  icon?: unknown
   /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */
   resizable?: boolean
 }
@@ -46,11 +48,12 @@ export interface NodeTypeDef {
  */
 export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void {
   const nodeStore = ctx.get<NodeStoreService>('nodeStore')
-  // ① 数据侧：type/label/defaultSize/连接约束
+  // ① 数据侧：type/label/defaultSize/图标/连接约束
   nodeStore.registerType({
     type: def.type,
     label: def.label,
     defaultSize: def.defaultSize,
+    icon: def.icon,
     inputs: def.inputs,
     outputs: def.outputs,
     resizable: def.resizable,
@@ -89,5 +92,4 @@ function safeGet<T>(ctx: PluginScope, name: string): T | undefined {
     return undefined
   }
 }
-
 

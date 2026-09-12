@@ -75,6 +75,35 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
       }),
     ).rejects.toThrow(/already registered/i)
   })
+
+  it('icon 随类型注册落入 nodeStore（字符串与组件句柄原样透传）', async () => {
+    const SvgIcon = '<svg viewBox="0 0 24 24"><path d="M4 7h16"/></svg>'
+    const CompIcon = { name: 'FakeIcon', render: () => null }
+    const { nodeStore } = await bootWithSetup((ctx) => {
+      registerNodeType(ctx, {
+        type: 'with-icon',
+        label: '带图标',
+        defaultSize: { w: 10, h: 10 },
+        icon: SvgIcon,
+        segments: { content: TextContentStub },
+      })
+      registerNodeType(ctx, {
+        type: 'comp-icon',
+        label: '组件图标',
+        defaultSize: { w: 10, h: 10 },
+        icon: CompIcon,
+      })
+    })
+    expect(nodeStore.types.get('with-icon')?.icon).toBe(SvgIcon)
+    expect(nodeStore.types.get('comp-icon')?.icon).toBe(CompIcon)
+  })
+
+  it('未声明 icon 时字段为 undefined（标题侧据此不渲染图标）', async () => {
+    const { nodeStore } = await bootWithSetup((ctx) => {
+      registerNodeType(ctx, { type: 'no-icon', label: '无图标', defaultSize: { w: 1, h: 1 } })
+    })
+    expect(nodeStore.types.get('no-icon')?.icon).toBeUndefined()
+  })
 })
 
 describe('registerNodeType 原子性（P2-9）', () => {
@@ -96,4 +125,3 @@ describe('registerNodeType 原子性（P2-9）', () => {
     expect(nodeStore.types.has('dup')).toBe(false) // 数据侧已回滚，无半落状态
   })
 })
-

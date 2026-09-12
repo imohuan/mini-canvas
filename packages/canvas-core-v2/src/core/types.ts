@@ -87,6 +87,8 @@ export interface PluginCapabilities {
       segments?: Partial<Record<'content' | 'title' | 'top-toolbar' | 'bottom-toolbar', unknown>>
       inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
       outputs?: Array<{ port?: string; contentType?: string }>
+      /** 类型图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省不显示） */
+      icon?: unknown
       /** 是否支持 resize（类型级能力；缺省 false）。随节点注册进 nodeStore，渲染层据此显示右下拖柄。 */
       resizable?: boolean
       create?: (position: { x: number; y: number }) => string
@@ -251,6 +253,5 @@ export type Revoke = () => void
  * effect 回调：可返回一个清理函数（会被登记进当前 scope）。
  */
 export type EffectFn = () => void | (() => void) | Disposable
-
 
 
