@@ -218,12 +218,10 @@ const showConnectFeedback = computed(
 // ============ 拖线瞄准上报：前端 mouse 事件 → connectionState.aimedTarget ============
 // 卡片根 enter/leave：维护物理 hover + body 瞄准
 function onCardMouseEnter(): void {
-  log.log(`[${props.id}] card mouseenter → isHovered=true`)
   isHovered.value = true
   aimBody.value = true
 }
 function onCardMouseLeave(): void {
-  log.log(`[${props.id}] card mouseleave → isHovered=false`)
   isHovered.value = false
   aimBody.value = false
 }
@@ -262,7 +260,6 @@ const outputSnapStyle = computed(() => ({
 // 的缝隙里，zone 的 mouseleave 与卡片的 mouseenter 会互相覆写，谁后到听谁的 → 端口按钮随机显隐。
 // 现在各自独立：卡片 hover 归 isHovered，端口 hover 归 portHovered，显示条件取"或"。
 function onPortHover(value: boolean): void {
-  log.log(`[${props.id}] onPortHover ← MovingHandle emit`, { value, before: portHovered.value })
   portHovered.value = value
 }
 /** 命中端口吸附带时，用真实渲染高度 cardHeight 算端口锚点 flow 坐标（保证端点居中，不依赖存储 dimensions）。
@@ -326,41 +323,6 @@ const shouldShowHandles = computed(
     !interaction.isNodeDragging.value &&
     (isHovered.value || portHovered.value || props.selected),
 )
-
-// —— 临时诊断：端口按钮"不显示"时，一眼看出是 5 个门里哪一个卡住了 ——
-// 排查完请删除（连同下面 watch 里那行）。
-watch(
-  shouldShowHandles,
-  (on, was) => {
-    log.log(`[${props.id}] shouldShowHandles 变化 ${was} → ${on}`, {
-      lowDetail: lowDetail.value,
-      suppressHandles: suppressHandles.value,
-      isCurrentConnectingNode: isCurrentConnectingNode.value,
-      isBusyDragging: interaction.isBusyDragging.value,
-      isHovered: isHovered.value,
-      portHovered: portHovered.value,
-      selected: Boolean(props.selected),
-      zoom: vf.viewport.value?.zoom,
-    })
-  },
-)
-
-// 每帧 mouseover 都打一次当前可见门状态（高频，仅排查期用，看完删）：
-// 挂在 .v2-node 上见模板 @mouseover="logVisibleGate"。
-function logVisibleGate(): void {
-  log.log(`[${props.id}] gate 快照`, {
-    visible: shouldShowHandles.value,
-    lowDetail: lowDetail.value,
-    suppressHandles: suppressHandles.value,
-    isCurrentConnectingNode: isCurrentConnectingNode.value,
-    isBusyDragging: interaction.isBusyDragging.value,
-    isHovered: isHovered.value,
-    portHovered: portHovered.value,
-    selected: Boolean(props.selected),
-    showSourceHandle: showSourceHandle.value,
-    showTargetHandle: showTargetHandle.value,
-  })
-}
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
 // 语义：拖线进行中，其它节点上与拖拽源**同类型**的端口被整体禁用/隐藏，只剩反向(可接)端口对用户可见。
@@ -495,7 +457,7 @@ function clamp(value: number, min: number, max: number): number {
     'is-low-detail': lowDetail,
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
-  }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave" @mouseover="logVisibleGate">
+  }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
     <!-- 顶部工具栏（注册了才渲染） -->
     <div v-if="topToolbar" class="top-toolbar">
       <component :is="topToolbar" :id="id" :data="data" />
