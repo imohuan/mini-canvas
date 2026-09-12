@@ -60,6 +60,19 @@ describe('MenuService 内核菜单聚合（G 项）', () => {
     ])
     expect(svc2.menuFor('node', []).map((i) => i.id)).toEqual(['copy', 'del'])
   })
-})
 
+  it('pane 新建节点项带上该类型的 icon（字符串与组件都原样透传）', () => {
+    const svc = createMenuService(() => [])
+    const SvgIcon = '<svg viewBox="0 0 24 24"></svg>'
+    const CompIcon = { name: 'FakeIcon', render: () => null }
+    const items = svc.menuFor('pane', [
+      { type: 'text', label: '文本', icon: SvgIcon },
+      { type: 'custom', label: '自定义', icon: CompIcon },
+      { type: 'plain', label: '无图标' },
+    ])
+    expect(items[0].icon).toBe(SvgIcon)
+    expect(items[1].icon).toBe(CompIcon)
+    expect(items[2].icon).toBeUndefined()
+  })
+})
 

@@ -38,13 +38,16 @@ export interface MenuItem {
   danger?: boolean
   /** 快捷键展示（keys 原文，UI 自格式化） */
   shortcut?: string[]
-  icon?: string
+  /** 图标（opaque 句柄：SVG 字符串或 Vue 组件，原样传显示层） */
+  icon?: unknown
 }
 
 /** 可创建节点类型（供 pane 菜单"新建节点"区） */
 export interface MenuCreatableType {
   type: string
   label: string
+  /** 该类型声明的图标（opaque 句柄；缺省不传） */
+  icon?: unknown
 }
 
 /** 菜单聚合服务接口（ctx.get('menu')） */
@@ -87,7 +90,15 @@ export function createMenuService(listCommands: () => Array<{ id: string; title?
       // pane 区：新建节点子区在最前
       if (area === 'pane') {
         creatableTypes.forEach((t, index) => {
-          items.push({ id: 'create-node:' + t.type, label: t.label, group: 'create', order: index, kind: 'create-node', nodeType: t.type })
+          items.push({
+            id: 'create-node:' + t.type,
+            label: t.label,
+            group: 'create',
+            order: index,
+            kind: 'create-node',
+            nodeType: t.type,
+            ...(t.icon !== undefined ? { icon: t.icon } : {}),
+          })
         })
       }
       // 命令区：过滤可见 → 归一化
