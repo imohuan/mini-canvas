@@ -72,5 +72,6 @@ export type {
 } from './resourceService'
 export { createMenuService } from './menuService'
 export type { MenuService, MenuItem, MenuArea, MenuCreatableType } from './menuService'
-
+export { iconRenderMode } from './iconKind'
+export type { IconRenderMode } from './iconKind'
 
