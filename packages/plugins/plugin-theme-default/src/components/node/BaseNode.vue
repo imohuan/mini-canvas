@@ -234,7 +234,10 @@ const showConnectFeedback = computed(
 )
 
 // ============ 拖线瞄准上报：前端 mouse 事件 → connectionState.aimedTarget ============
-// 卡片根 enter/leave：维护物理 hover + body 瞄准
+// 卡片根 enter/leave：维护物理 hover + body 瞄准；同时给两个端口做"从卡片方向离场"的兜底归位
+// （鼠标从卡内往卡内更深处走、永远不越过 zone 外沿时，端口球会卡在卡内一侧，这里把它拉回静止位）。
+const targetHandleRef = ref<InstanceType<typeof MovingHandle> | null>(null)
+const sourceHandleRef = ref<InstanceType<typeof MovingHandle> | null>(null)
 function onCardMouseEnter(): void {
   isHovered.value = true
   aimBody.value = true
@@ -242,6 +245,8 @@ function onCardMouseEnter(): void {
 function onCardMouseLeave(): void {
   isHovered.value = false
   aimBody.value = false
+  targetHandleRef.value?.handleCardLeave(true)
+  sourceHandleRef.value?.handleCardLeave(true)
 }
 // 吸附带元素（真正触发吸附的区域）：复用 useNodeDebugOverlay 的 SnapZoneConfig 几何定位 ——
 // 左侧 target 输入口吸附带 / 右侧 source 输出口吸附带，各自 mouseenter/leave 上报 aim（input/output）。
@@ -543,7 +548,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 左侧输入口(target)：有输入能力才渲染。
            拖线中"同类型(target)端口"只传 :disabled（DOM 一直保留 → VueFlow handleBounds 稳定），
            加上 Strict 模式 isValidHandle 类型校验，行为门是双保险。 -->
-      <MovingHandle v-if="showTargetHandle" id="target" type="target" :position="Position.Left"
+      <MovingHandle v-if="showTargetHandle" ref="targetHandleRef" id="target" type="target" :position="Position.Left"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedTargetPort" :selected="props.selected"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
@@ -567,7 +572,7 @@ function clamp(value: number, min: number, max: number): number {
       </div>
 
       <!-- 右侧输出口(source)：同 target。 -->
-      <MovingHandle v-if="showSourceHandle" id="source" type="source" :position="Position.Right"
+      <MovingHandle v-if="showSourceHandle" ref="sourceHandleRef" id="source" type="source" :position="Position.Right"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedSourcePort" :selected="props.selected"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"

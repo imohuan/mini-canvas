@@ -8,6 +8,7 @@
 //       CSS 消费本插件自建 --canvas-node-* 主题变量（styles/node-theme.css）。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Handle, Position, createV2Logger } from '@mini-canvas/canvas-render'
+import { followTarget, needsMoreFrames, stepFollow } from './handleFollow'
 
 // 诊断日志 scope 约定见 canvas-render/utils/log.ts（'moving-handle'）。
 const log = createV2Logger('moving-handle')
@@ -27,7 +28,7 @@ const props = defineProps<{
   radius?: number
   /** 离开后圆球停在节点外侧的静止偏移 px：球心距节点边缘的距离（handleRestOffset=36） */
   restOffset?: number
-  /** hover 跟随时球心与光标错开的距离 px：沿 outward 方向再往外推，避免球盖住鼠标（handleCursorGap=24） */
+  /** 球心与鼠标之间保留的"终点间隙" px：球停在鼠标外侧这么远处（handleCursorGap=24） */
   cursorGap?: number
   /** 圆球尺寸 px（handleButtonSize=32） */
   buttonSize?: number
@@ -64,11 +65,23 @@ let nextX = 0
 let nextY = 0
 let hideTimer: ReturnType<typeof setTimeout> | null = null
 const restoreDuration = 180
+/**
+ * 跟随动画：球的当前位置(cur)每帧按 followEase 比例靠近终点(tgt)，而不是瞬移到终点。
+ * 鼠标一直动 → 球一直"追着终点跑"，于是有"带滞回的跟随"手感（v1/v2 原本都是一步到位，显得死板）。
+ * 坐标系：直接就是 anchor-local（source 为正、target 为负），与 buttonX/buttonY 同源。
+ */
+let curX = 0
+let curY = 0
+let targetX = 0
+let targetY = 0
+const followEase = 0.18
 
 const isSource = computed(() => props.type === 'source')
 const direction = computed(() => (isSource.value ? 1 : -1))
 const radius = computed(() => props.radius ?? 76)
 const restOffset = computed(() => props.restOffset ?? 36)
+/** 球心与光标之间保留的间隙 px（终点 = 鼠标沿 outward 外推这么多） */
+const cursorGap = computed(() => props.cursorGap ?? 24)
 const buttonSize = computed(() => props.buttonSize ?? 32)
 const overlap = computed(() => props.overlap ?? buttonSize.value / 2)
 const zoneWidth = computed(() => props.zoneWidth ?? radius.value)
@@ -217,12 +230,20 @@ resetPosition()
 
 // reset/静止位：球心 = 端口偏移(restOffset) 直接对应距卡边距离，不 tuck overlap。
 //   - config "端口偏移" 改的就是这个 rest 坐标（与 debugRestPoint 一致）。
-//   - hover 时球心 = mouseX + cursorGap，沿 outward 多推 gap。
+//   - hover 时球心 = 鼠标沿 outward 外推 cursorGap（见 updatePosition）。
+function restX(): number {
+  return direction.value * restOffset.value
+}
+
 function resetPosition() {
-  nextX = direction.value * restOffset.value
+  nextX = restX()
   nextY = 0
   mouseX.value = restOffset.value
   mouseY.value = 0
+  curX = nextX
+  curY = 0
+  targetX = nextX
+  targetY = 0
   buttonX.value = nextX
   buttonY.value = nextY
 }
@@ -230,17 +251,48 @@ function resetPosition() {
 function restorePosition() {
   mouseX.value = restOffset.value
   mouseY.value = 0
-  commitPosition(direction.value * restOffset.value, 0)
+  // 归位也走同一套追赶动画：终点设为静止位，球从当前位置滑回去（CSS 再叠一层过渡收尾）。
+  setTarget(restX(), 0)
 }
-function commitPosition(x: number, y: number) {
+
+/**
+ * 每帧朝终点逼近一截（不是一步到位），实现"球追着鼠标终点跑"的滞回感。
+ * 到位即停，避免空转 rAF；终点中途变化会自动继续追。
+ */
+function tickFollow() {
+  frameId = 0
+  const next = stepFollow({ out: curX, y: curY }, { out: targetX, y: targetY }, followEase)
+  curX = next.out
+  curY = next.y
+  buttonX.value = curX
+  buttonY.value = curY
+  if (needsMoreFrames({ out: curX, y: curY }, { out: targetX, y: targetY })) {
+    frameId = requestAnimationFrame(tickFollow)
+  }
+}
+
+function setTarget(x: number, y: number) {
+  targetX = x
+  targetY = y
   nextX = x
   nextY = y
-  if (frameId) return
-  frameId = requestAnimationFrame(() => {
-    buttonX.value = nextX
-    buttonY.value = nextY
+  if (!frameId) frameId = requestAnimationFrame(tickFollow)
+}
+
+/** 瞬移（复位/参数变更）：清掉动画，直接落到目标位 */
+function commitPosition(x: number, y: number) {
+  if (frameId) {
+    cancelAnimationFrame(frameId)
     frameId = 0
-  })
+  }
+  nextX = x
+  nextY = y
+  targetX = x
+  targetY = y
+  curX = x
+  curY = y
+  buttonX.value = x
+  buttonY.value = y
 }
 
 /**
@@ -287,11 +339,16 @@ function updatePosition(event: MouseEvent) {
   mouseX.value = clamp(outward, 0, shapeWidth.value)
   mouseY.value = clamp(rawY, -zoneHeight.value / 2, zoneHeight.value / 2)
 
-  // 球心跟鼠标保持"光标间隙"：沿 outward 方向再多往外推 cursorGap px，避免球把鼠标盖住。
-  // 若鼠标已贴近 zone 外沿则顶到最外端不越界；reset/静止位仍只由 restOffset 决定（见 resetPosition/restorePosition）。
-  const gap = props.cursorGap ?? 22
-  const followOutward = clamp(mouseX.value + gap, 0, shapeWidth.value)
-  commitPosition(direction.value * followOutward, mouseY.value)
+  // 球心跟鼠标保持"光标间隙"：以锚点为原点、沿"锚点→鼠标"的方向再多推 cursorGap px。
+  // 距离上封顶在区域最外沿（球心不越出可移动区），方向始终跟鼠标——所以鼠标靠里时球贴着卡边、
+  // 鼠标往外走球就跟着往外走，不会再出现"球固定贴在某一侧"的死板感。
+  // 终点只是"要去的地方"，真正的位移由 setTarget 的逐帧逼近产生（见 tickFollow）。
+  const target = followTarget(
+    { out: mouseX.value, y: mouseY.value },
+    cursorGap.value,
+    shapeWidth.value - buttonSize.value / 2,
+  )
+  setTarget(direction.value * target.out, target.y)
 }
 
 // 端口外观参数(端口偏移/按钮/区域几何)变化 → 立即把按钮/调试点复位到新静止位，
@@ -329,7 +386,7 @@ function handleLeave() {
     cancelAnimationFrame(frameId)
     frameId = 0
   }
-  // 先从当前位置跟随方向快速归位，动画完成后再隐藏
+  // 从当前位置滑回静止位，动画完成后再隐藏
   restorePosition()
   if (hideTimer) clearTimeout(hideTimer)
   hideTimer = setTimeout(() => {
@@ -340,12 +397,29 @@ function handleLeave() {
   }, restoreDuration)
 }
 
+/**
+ * 鼠标从卡片一侧离开时的兜底归位（父层 BaseNode 卡片根 mouseleave 调用）。
+ * 为什么需要：起点在卡内、往卡内更深处走的鼠标，出不去"mouseleave zone"那条边（它从 zone 最内端起就在
+ * zone 内），只靠 zone 的 leave 会把球永远留在卡内一侧。这里补一道门：只要球已经停在卡内（越过锚点），
+ * 就按离开处理，把球拉回静止位。
+ * @param fromInside 指针最终落在卡片内部（相对该端口的内侧）——由父层按几何判定
+ */
+function handleCardLeave(fromInside: boolean): void {
+  if (props.disabled || !keepVisible.value || isRestoring.value) return
+  if (!fromInside) return
+  log.log(`[${props.id}] 卡片方向离场 → 归位`)
+  handleLeave()
+}
+
 function handlePreviewMouseDown(event: MouseEvent) {
   if (!props.preview || props.disabled || event.button !== 0) return
   event.stopPropagation()
   event.preventDefault()
   emit('connectStart', { event, type: props.type })
 }
+
+// 供父层（BaseNode 卡片根 mouseleave）调用，做"从卡片方向离场"的兜底归位
+defineExpose({ handleCardLeave })
 
 onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId)
@@ -369,8 +443,7 @@ onBeforeUnmount(() => {
       'port-follow-zone--target': !isSource,
       'is-debug': debug,
       'port-follow-zone--rect': zoneShape === 'rect',
-    }" :style="zoneStyle" @mouseenter="handleEnter" @mouseleave="handleLeave"
-      @mousemove="updatePosition" />
+    }" :style="zoneStyle" @mouseenter="handleEnter" @mouseleave="handleLeave" @mousemove="updatePosition" />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -438,6 +511,11 @@ onBeforeUnmount(() => {
   overflow: visible;
   transform: translate3d(0px, -50%, 0);
   backface-visibility: hidden;
+  /* 必须显式抬层：anchor 是 z-index:10 的定位元素，但它宽高为 0，
+     真正有面积的 zone 不写 z-index 就只按 DOM 顺序参与层叠，
+     会被后来的 VueFlow pane 盖住 → elementFromPoint 命中 pane、mouseenter 永远不触发。
+     写 z-index:11（> anchor 的 10）让 zone 稳定压在 pane 之上。 */
+  z-index: 11;
 }
 
 .port-follow-zone--source {
