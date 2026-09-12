@@ -23,7 +23,7 @@ const props = defineProps<NodeProps>()
 defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈/内核上下文
-const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone } = useCanvasRender()
+const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize } = useCanvasRender()
 const vf = useVueFlow()
 
 const type = computed(() => props.type)
@@ -77,6 +77,9 @@ const card = useNodeCardSize({
   type: props.type,
   writeback: nodeWrite ?? undefined,
   zoom: () => zoom.value,
+  // 拖拽实时把新尺寸同步进 VueFlow 内部并重算：否则端口位置/相连边端点会停在旧尺寸
+  // （渲染层 updateNodeVisualSize = updateNode(style) + updateNodeInternals）
+  onVisualSize: (w, h) => updateNodeVisualSize(props.id, w, h),
 })
 const cardWidth = card.cardWidth
 const cardHeight = card.cardHeight
@@ -174,7 +177,10 @@ const showTargetHandle = cap.hasTarget
 const showSourceHandle = cap.hasSource
 
 // ============ hover 状态（控制端口醒目与阴影）============
+/** 鼠标在卡片上（卡片根 enter/leave 单一权威，勿被端口 zone 覆写） */
 const isHovered = ref(false)
+/** 鼠标在本节点的某个端口 zone 上（MovingHandle @hover 写入，与 isHovered 互不干扰） */
+const portHovered = ref(false)
 // —— 拖线瞄准上报（前端 mouse 事件驱动 aimedTarget，取代后端几何命中）——
 // 端口 zone 瞄准侧：null=无端口 hover；'input'=target 输入口 / 'output'=source 输出口
 const aimPortSide = ref<null | 'input' | 'output'>(null)
@@ -248,9 +254,13 @@ const outputSnapStyle = computed(() => ({
   width: `${debugOverlay.rightBand.value.width}px`,
   height: `${debugOverlay.rightBand.value.height}px`,
 }))
-// 端口 hover（MovingHandle @hover）：维持原 isHovered 视觉语义
+// 端口 hover（MovingHandle @hover）。
+// 关键：**不能**写进 isHovered —— isHovered 是"鼠标在卡片上"（卡片根 enter/leave 的单一权威），
+// 而本回调是"鼠标在这个端口 zone 上"，两者语义不同。之前合并成一个 ref 时，鼠标从卡片移向端口
+// 的缝隙里，zone 的 mouseleave 与卡片的 mouseenter 会互相覆写，谁后到听谁的 → 端口按钮随机显隐。
+// 现在各自独立：卡片 hover 归 isHovered，端口 hover 归 portHovered，显示条件取"或"。
 function onPortHover(value: boolean): void {
-  isHovered.value = value
+  portHovered.value = value
 }
 /** 命中端口吸附带时，用真实渲染高度 cardHeight 算端口锚点 flow 坐标（保证端点居中，不依赖存储 dimensions）。
  *  input(target 输入口)=左缘中点；output(source 输出口)=右缘中点。 */
@@ -288,9 +298,14 @@ watch(
   { immediate: true },
 )
 
-// 端口"允许显示"门（传给 MovingHandle 作上层压制）：非低细节 && 非拖线全局压 && 非源自身 && 非拖拽 busy。
+// 端口"允许显示"门（传给 MovingHandle 作上层压制）：非低细节 && 非拖线全局压 && 非源自身 && 非拖拽 busy
+// && (鼠标在卡片上 || 鼠标在端口 zone 上 || 选中)。
+// 前 4 项是"暂时不该显示"的压制门；第 5 项是"该显示"的激励门，三个来源取或、各自独立：
+//   isHovered  —— 卡片根 hover（鼠标在卡上，让端口有机会被点亮）
+//   portHovered—— 端口 zone hover（鼠标已在端口上，必须在 180ms 淡出窗口内立刻续上，不允许被卡片事件打断）
+//   selected   —— 节点选中，常显
+// 三者分开写、不做互相覆写，避免缝隙处 enter/leave 顺序竞争导致随机显隐。
 // 注意：这只是"允许"，按钮最终显隐在 MovingHandle 内部——zone hover(keepVisible) 或 选中(selected) 才真正亮。
-// isHovered 由卡片根 enter 与端口 zone @hover 共同置位：zone hover 时经它把 visible 抬到 true，配合 keepVisible 亮该端口。
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
   () =>
@@ -298,7 +313,7 @@ const shouldShowHandles = computed(
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
     !interaction.isBusyDragging.value &&
-    (isHovered.value || props.selected),
+    (isHovered.value || portHovered.value || props.selected),
 )
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
@@ -316,28 +331,10 @@ const blockedSourcePort = computed(
   () => dragSameTypeBlocked.value && activeConnection.value?.sourceHandle === 'source',
 )
 
-// 关键修复：v-if 摘掉 MovingHandle 时，节点尺寸没变，VueFlow 自身的 updateNodeDimensions 不会触发
-//（doUpdate=false → 不重测 handleBounds），导致 node.handleBounds.source/target 残留旧坐标 →
-// VueFlow 原生 useHandle.handlePointerDown → getClosestHandle 用 stale 坐标把线端吸到已不存在的端口上。
-// 修复：blocked 状态变化时主动调 updateNodeInternals([id])，强制 VueFlow 重测 handleBounds；
-// forceUpdate=true 下 handleBounds.source/target 会按当前 DOM 真实 Handle 重算（已 v-if 摘掉的 Handle 不再计入）。
-// 注：VueFlow 原生 Handle mousedown 走 useHandle.ts 链路，全程不经过 CanvasHost.resolveFromAim，
-// 因此我们那条 resolveFromAim 的方向校验挡不住原生吸附；只能从数据源清掉 stale bounds。
-// watched `any` on purpose: `updateNodeInternals` is exposed on the vue-flow store instance; canvas-render
-// doesn't ship a typed wrapper here, the call site is stable across vue-flow versions.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-// 注：本节点不再因为 blockedXxxPort 切 MovingHandle 的 v-if（DOM 永远保留 → handleBounds 稳定 →
-// 不会被 VueFlow 原生吸到错位置），所以这里不再调用 updateNodeInternals，逻辑也整体删掉。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-
-watch(
-  [blockedTargetPort, blockedSourcePort],
-  () => {
-    // no-op：DOM 不变，handleBounds 不变
-  },
-  { flush: 'post' },
-)
-
+// 注：这里曾有"blocked 状态变化 → updateNodeInternals 重测 handleBounds"的兜底，现已移除。
+// 原因：MovingHandle 不再按 blockedXxxPort 切 v-if（DOM 始终保留 → handleBounds 稳定），
+// 端口的方向性筛选改由 :disabled 表达，不存在 stale bounds 把线吸到错位置的问题。
+// blockedXxxPort 仍被下方 MovingHandle 的 :disabled 消费，见模板 target/source 两处。
 // ============ 调试可视化（端口调试 handleDebug / 吸附调试 connectionSnapDebugVisible）============
 /** 端口调试：是否给端口画半圆/圆心/归位/鼠标点辅助线（进 MovingHandle :debug） */
 const debugHandle = computed(() => Boolean(debug.handleDebug))
@@ -534,10 +531,10 @@ function clamp(value: number, min: number, max: number): number {
         <div v-else class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
-      <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门） -->
+      <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
+           只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
       <div v-if="cardResizable" class="resize-handle" :class="{ 'is-resizing': cardIsResizing }"
-        @pointerdown="card.onResizePointerDown" @pointermove="card.onResizePointerMove"
-        @pointerup="card.onResizePointerUp">
+        @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
           <path d="M7 5L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
