@@ -55,6 +55,13 @@ export const name = 'image'
 export const inject = ['graph'] as string[]
 
 /**
+ * 节点类型图标（标题左侧与右键"新建节点"共用；opaque 句柄：SVG 字符串或 Vue 组件）。
+ * 单一来源 = 本类型注册时声明，无需菜单/标题各自配置。
+ */
+const NODE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>'
+
+/**
  * image 插件可配置项 schema（P4：模块级 Config）。
  * 字段带 group，内核装配时经 Config 校验+补默认并登记进 settings 单一数据源(scope=image)；
  * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
@@ -101,6 +108,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: 'image',
     label: '图片',
+    icon: NODE_ICON,
     size: { w: 320, h: 240 },
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image'], capacity: 1 }],
     outputs: [{ port: 'source', contentType: 'image' }],
@@ -116,8 +124,6 @@ export function apply(ctx: Context) {
 
 /** 兼容旧装配的 PluginModule 出口（name='image' 供 HMR reload） */
 export const nodeImagePlugin: PluginModule = { name, inject, Config, apply }
-
-
 
 
 

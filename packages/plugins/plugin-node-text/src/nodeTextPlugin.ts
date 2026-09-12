@@ -65,6 +65,13 @@ export const name = 'text'
 export const inject = ['graph'] as string[]
 
 /**
+ * 节点类型图标（标题左侧与右键"新建节点"共用；opaque 句柄：SVG 字符串或 Vue 组件）。
+ * 单一来源 = 本类型注册时声明，无需菜单/标题各自配置。
+ */
+const NODE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>'
+
+/**
  * text 节点插件（cordis 最新写法：Service 子类暴露服务 + inject 硬依赖）。
  * apply 里一次自描述注册：数据(type='text') + 展示(content=TextContent.vue) + 建节点(create→TextService.addTextNode)，
  * 并 new TextService(ctx) 上架 'text' 服务；二者皆随本插件 scope 自动回收。
@@ -78,6 +85,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: 'text',
     label: '文本',
+    icon: NODE_ICON,
     size: { w: 300, h: 200 },
     inputs: [{ port: 'target', acceptsTypes: ['text'], capacity: 1 }],
     outputs: [{ port: 'source', contentType: 'text' }],

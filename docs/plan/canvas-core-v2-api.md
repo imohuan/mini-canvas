@@ -184,7 +184,7 @@ ctx.node.register('text', {
   defaultSize: { w: 300, h: 200 },
   resizable: true,
   content: TextContent,               // 纯内容组件，经注入 ctx 拿 nodeId/updateData/事件
-  title: { icon: '…' },               // 只声明图标，label 由内核管
+  icon: '…',                          // 类型图标（opaque：SVG 字符串或 Vue 组件）；菜单新建项 + 节点标题共用
   // 连接约束声明式（不再插件手写 connect 监听删边）：
   inputs: [{ port: 'target', accepts: ['image'], limit: 'single' }],
   outputs: [{ port: 'source' }],
@@ -195,6 +195,8 @@ ctx.node.register('text', {
 - **`node:{type}:{segment}` slot**：content / title / top-toolbar / bottom-toolbar / overlay:{mode}，第三方可注入/替换已有节点任一段（治"BaseNode 插槽只对内部开放"）。
 - toolbar 走 `toolbar:{context}` provider，不再用 source='multi-select'/nodeTypes 猜。
 - 内容组件拿 nodeId/zoom/LOD 靠注入 ctx（治越级读全局 store）。
+- **图标单一来源**：节点类型注册时声明 `icon`（SVG 字符串或 Vue 组件，内核不解析，同 `content` 的 opaque 语义），
+  右键菜单"新建节点"与节点标题左侧读同一处；未声明则不显示图标（不再顶默认占位图标）。
 
 ### 全局 id 生成器（新加入，回应"节点 id 太长"）
 ```ts
