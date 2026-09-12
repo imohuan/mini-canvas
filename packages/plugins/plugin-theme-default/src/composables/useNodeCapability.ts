@@ -42,5 +42,8 @@ export function useNodeCapability(type: string) {
   /** 该 type 是否声明支持 resize（类型级能力；缺省 false）。BaseNode 据此显示拖柄。 */
   const resizable = computed(() => nodeDef.value?.resizable === true);
 
-  return { hasTarget, hasSource, defaultSize, resizable };
+  /** 该 type 声明的图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省 undefined = 标题不显示图标） */
+  const icon = computed(() => nodeDef.value?.icon);
+
+  return { hasTarget, hasSource, defaultSize, resizable, icon };
 }

@@ -175,6 +175,8 @@ const editable = computed(() => Boolean(nodeWrite))
 const cap = useNodeCapability(props.type)
 const showTargetHandle = cap.hasTarget
 const showSourceHandle = cap.hasSource
+// 标题左侧图标 = 类型注册时声明的 icon（opaque 句柄；未声明则为 undefined，BaseTitle 不渲染图标位）
+const titleIcon = cap.icon
 
 // ============ hover 状态（控制端口醒目与阴影）============
 /** 鼠标在卡片上（卡片根 enter/leave 单一权威，勿被端口 zone 覆写） */
@@ -471,7 +473,7 @@ function clamp(value: number, min: number, max: number): number {
       <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
-        <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel">
+        <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :label="nodeLabel" :title-icon="titleIcon">
           <template #title-label>
             <input v-if="isEditingTitle" ref="titleInputRef" v-model="draftTitle" class="v2-title-input" type="text"
               @keydown.enter.prevent="commitTitleEdit" @keydown.escape.prevent="cancelTitleEdit" @blur="commitTitleEdit"

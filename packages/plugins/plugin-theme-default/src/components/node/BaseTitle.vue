@@ -1,11 +1,16 @@
 <script setup lang="ts">
 // BaseTitle —— 节点标题条（移植自 v1 Decoration/BaseTitle.vue，纯展示组件）。
-// 三段布局：title-icon（组件/HTML/默认 svg）→ title-label（默认文本，占 80% 椭圆省略）→ title-extra（≤20%）。
+// 三段布局：title-icon（SVG 字符串或 Vue 组件；未声明则不渲染）→ title-label（默认文本，占 80% 椭圆省略）→ title-extra（≤20%）。
 // 无外部依赖，纯 props。BaseNode 把它放卡片内部标题容器里。
 import type { Component, CSSProperties } from 'vue'
 import { computed } from 'vue'
+import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
 
-type TitleIcon = Component | string | null | false
+/**
+ * 图标句柄：SVG 字符串或 Vue 组件（opaque，与节点类型注册的 icon 同源）。
+ * 声明为 unknown 是因为来源是内核的 opaque 句柄；渲染前经 iconRenderMode 收窄。
+ */
+type TitleIcon = unknown
 
 const props = defineProps<{
   label?: string
@@ -15,15 +20,14 @@ const props = defineProps<{
   editing?: boolean
 }>()
 
-const shouldRenderIcon = computed(() => props.titleIcon !== null && props.titleIcon !== false)
-const componentTitleIcon = computed(() => {
-  if (!shouldRenderIcon.value || !props.titleIcon) return null
-  return typeof props.titleIcon === 'string' ? null : props.titleIcon
-})
-const htmlTitleIcon = computed(() => {
-  if (!shouldRenderIcon.value) return ''
-  return typeof props.titleIcon === 'string' ? props.titleIcon : ''
-})
+/** 图标形态：'html' 走 v-html、'component' 走 <component :is>、'none' 完全不渲染图标位（不再顶兜底图标） */
+const iconMode = computed(() => iconRenderMode(props.titleIcon))
+/** 收窄后的 HTML 图标串（iconMode==='html' 时才非空） */
+const htmlIcon = computed(() => (iconMode.value === 'html' ? String(props.titleIcon) : ''))
+/** 收窄后的组件图标（iconMode==='component' 时才非 null） */
+const componentIcon = computed<Component | null>(() =>
+  iconMode.value === 'component' ? (props.titleIcon as Component) : null,
+)
 </script>
 
 <template>
@@ -31,14 +35,9 @@ const htmlTitleIcon = computed(() => {
     'base-title--interactive': interactive,
     'base-title--editing': editing,
   }" :style="titleStyle">
-    <slot v-if="shouldRenderIcon" name="title-icon">
-      <component :is="componentTitleIcon" v-if="componentTitleIcon" class="base-title__icon" />
-      <span v-else-if="htmlTitleIcon" class="base-title__icon base-title__icon--html" v-html="htmlTitleIcon" />
-      <svg v-else class="base-title__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="4 7 4 4 20 4 20 7" />
-        <line x1="9" y1="20" x2="15" y2="20" />
-        <line x1="12" y1="4" x2="12" y2="20" />
-      </svg>
+    <slot v-if="iconMode !== 'none'" name="title-icon">
+      <span v-if="iconMode === 'html'" class="base-title__icon base-title__icon--html" v-html="htmlIcon" />
+      <component v-else :is="componentIcon" class="base-title__icon" />
     </slot>
 
     <div class="base-title-label">
@@ -76,6 +75,13 @@ const htmlTitleIcon = computed(() => {
   width: 0.875rem;
   height: 0.875rem;
   flex-shrink: 0;
+}
+
+/* 组件图标：作者给的组件不必自带尺寸，外层统一约束到图标槽大小 */
+.base-title__icon > :deep(svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .base-title-label {
