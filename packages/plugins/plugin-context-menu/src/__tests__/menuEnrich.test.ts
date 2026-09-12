@@ -12,7 +12,7 @@ function item(partial: Partial<ContextMenuItem> & { id: string; label: string })
 }
 
 describe('enrichMenuItems（图标 + hover 描述补齐）', () => {
-  it('create-node:text 给文本图标与描述', () => {
+  it('create-node 项未注册图标时保底有图标，描述按 nodeType 走', () => {
     const [it] = enrichMenuItems([
       item({ id: 'create-node:text', label: '文本', kind: 'create-node', nodeType: 'text' }),
     ])
@@ -39,5 +39,29 @@ describe('enrichMenuItems（图标 + hover 描述补齐）', () => {
     const [it] = enrichMenuItems([item({ id: 'x:y', label: '未知', commandId: 'x:y' })])
     expect(it.icon).toContain('<svg')
     expect(it.description).toBe('')
+  })
+
+  it('注册的图标优先于插件内置猜测', () => {
+    const SvgIcon = '<svg viewBox="0 0 24 24" data-custom="1"></svg>'
+    const [it] = enrichMenuItems([
+      item({ id: 'create-node:text', label: '文本', kind: 'create-node', nodeType: 'text', icon: SvgIcon }),
+    ])
+    expect(it.icon).toBe(SvgIcon)
+  })
+
+  it('组件图标原样透传（不被替换成内置 svg）', () => {
+    const CompIcon = { name: 'FakeIcon', render: () => null }
+    const [it] = enrichMenuItems([
+      item({ id: 'create-node:weird', label: '怪节点', kind: 'create-node', nodeType: 'weird', icon: CompIcon }),
+    ])
+    expect(it.icon).toBe(CompIcon)
+  })
+
+  it('未注册图标的节点类型给 default 占位（图标列恒在，不按名字猜）', () => {
+    const [it] = enrichMenuItems([
+      item({ id: 'create-node:text', label: '文本', kind: 'create-node', nodeType: 'text' }),
+    ])
+    expect(it.icon).toContain('<svg')
+    expect(it.icon).not.toContain('M4 7V5h16v2')
   })
 })

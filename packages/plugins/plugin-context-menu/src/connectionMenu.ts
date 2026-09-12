@@ -194,6 +194,7 @@ export function buildConnectionMenuItems(types: readonly MenuNodeTypeLike[]): Co
     order: index,
     kind: 'create-node' as const,
     nodeType: t.type,
+    ...(t.icon !== undefined ? { icon: t.icon } : {}),
   }))
 }
 

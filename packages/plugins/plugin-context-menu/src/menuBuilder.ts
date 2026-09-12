@@ -28,6 +28,8 @@ export interface MenuCommandLike {
 export interface MenuNodeTypeLike {
   type: string
   label: string
+  /** 该类型声明的图标（opaque 句柄：SVG 字符串或 Vue 组件，原样透传） */
+  icon?: unknown
 }
 
 /** 一个右键菜单项 */
@@ -52,8 +54,8 @@ export interface ContextMenuItem {
   danger?: boolean
   /** 快捷键展示（命令 keys 数组原文，UI 自己格式化） */
   shortcut?: string[]
-  /** 图标（svg 字符串，原样传显示层） */
-  icon?: string
+  /** 图标（opaque 句柄：svg 字符串或 Vue 组件，原样传显示层） */
+  icon?: unknown
 }
 
 /** 组内默认 order（命令未声明 order 时的回退，排在声明了 order 的后面） */
@@ -111,6 +113,7 @@ export function buildMenuItems(
         order: index,
         kind: 'create-node',
         nodeType: t.type,
+        ...(t.icon !== undefined ? { icon: t.icon } : {}),
       })
     })
   }

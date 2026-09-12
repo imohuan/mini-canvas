@@ -33,6 +33,16 @@ describe('commandVisibleInMode', () => {
 })
 
 describe('buildMenuItems', () => {
+  it('create-node 项透传节点类型声明的 icon', () => {
+    const SvgIcon = '<svg viewBox="0 0 24 24"></svg>'
+    const items = buildMenuItems('pane', [], [
+      { type: 'text', label: '文本', icon: SvgIcon },
+      { type: 'plain', label: '无图标' },
+    ])
+    expect(items[0].icon).toBe(SvgIcon)
+    expect(items[1].icon).toBeUndefined()
+  })
+
   it('pane 模式：新建节点区在前，再排 pane/通用命令', () => {
     const commands = [
       cmd({ id: 'multi-select:select-all', title: '全选', areas: ['pane'], order: 10 }),

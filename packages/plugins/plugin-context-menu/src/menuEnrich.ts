@@ -6,6 +6,7 @@
  * - 图标：按 命令 id 关键字/新建节点类型 给线性 SVG（无命中给通用默认图标，保证图标列恒在）；
  * - 描述：按 命令 id/标题 映射一句 hover 说明（同快捷键面板 commandDescriptions 思路）。
  */
+import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
 import type { ContextMenuItem } from './menuBuilder'
 
 /** 通用描边图标路径集（viewBox 0 0 24 24, stroke=currentColor, 2px） */
@@ -18,21 +19,17 @@ const ICONS: Record<string, string> = {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M16 5v-1a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 1 1.7"/></svg>',
   paste:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>',
-  text:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>',
-  image:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>',
   default:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/></svg>',
 }
 
-/** 命令 id 特征 → 图标键 */
+/**
+ * 兜底图标键：
+ * - create-node：图标来自节点类型注册（menuBuilder 已带上）；这里只在未注册时给 default 占位，不按 type 名字猜。
+ * - command：命令只声明 id/title（不背 UI 装饰），按 id 关键字给语义图标。
+ */
 function iconKeyOf(item: ContextMenuItem): string {
-  if (item.kind === 'create-node') {
-    if (item.nodeType === 'text') return 'text'
-    if (item.nodeType === 'image') return 'image'
-    return 'default'
-  }
+  if (item.kind === 'create-node') return 'default'
   const id = item.commandId ?? ''
   if (/delete|remove/i.test(id)) return 'trash'
   if (/duplicate/i.test(id)) return 'duplicate'
@@ -61,7 +58,7 @@ export function enrichMenuItems(items: readonly ContextMenuItem[]): ContextMenuI
         : (it.commandId ?? it.id)
     return {
       ...it,
-      icon: it.icon || ICONS[iconKeyOf(it)],
+      icon: iconRenderMode(it.icon) === 'none' ? ICONS[iconKeyOf(it)] : it.icon,
       description: it.description || DESCRIPTIONS[descKey] || '',
     }
   })
