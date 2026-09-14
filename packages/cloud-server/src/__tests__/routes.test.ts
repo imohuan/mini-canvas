@@ -257,6 +257,29 @@ describe('插件清单与产物', () => {
       await fs.rm(pluginsDir, { recursive: true, force: true })
     }
   })
+
+  it('把某插件的 dist 删掉后，它从清单里消失（清单是每次都扫盘，不是启动时快照）', async () => {
+    const pluginsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dyn-plugins-'))
+    await fs.mkdir(path.join(pluginsDir, 'plugin-x', 'dist'), { recursive: true })
+    await fs.writeFile(path.join(pluginsDir, 'plugin-x', 'dist', 'plugin-x.js'), 'const n="x";export{n as name};')
+
+    const s = await createCloudServer({ dir, pluginsDir })
+    try {
+      const first = (await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()) as any
+      expect(first.plugins.map((p: { id: string }) => p.id)).toEqual(['plugin-x'])
+
+      // 删掉产物 → 再问一次应该就没有了（不需要重启服务）
+      await fs.rm(path.join(pluginsDir, 'plugin-x', 'dist'), { recursive: true, force: true })
+      const second = (await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()) as any
+      expect(second.plugins).toEqual([])
+
+      // 产物也没了 → 直接取它应当是 404（而不是拿到陈旧内容）
+      expect((await s.app.fetch(new Request('http://localhost/plugins/plugin-x/plugin-x.js'))).status).toBe(404)
+    } finally {
+      s.stop()
+      await fs.rm(pluginsDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('ui / 插件目录探测顺序', () => {
