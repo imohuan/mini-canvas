@@ -3,7 +3,10 @@
  *
  * 迁移说明：原测试基于早期装配 bootCanvas(src/demo/host.ts)，与现行 createMiniCanvasHost 功能重复；
  * bootCanvas 已删除，测试改用 createMiniCanvasHost 等价复测。createMiniCanvasHost **不内置**业务插件，
- * 需把 text/image/canvasCommands 经 coldPlugins 显式传入（行为与原 bootCanvas 内置 text+commands 等价）。
+ * 需把 text/image 经 coldPlugins 显式传入。
+ *
+ * 注：画布通用命令（建节点/删选中/撤销/重做）现由数据层自带、宿主 boot 时默认注册
+ * （见 registerCanvasCommands），**不再**作为插件传入 —— 再传会重复注册抛错。
  *
  * 覆盖：内核+插件装配、持久化(刷新恢复)、image/text 节点、命令(create/delete/undo/redo)、热装热卸。
  */
@@ -15,11 +18,10 @@ import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
-/** 默认冷启动：text + image + commands（对应原 bootCanvas 内置 text/commands + opts.plugins 加 image） */
+/** 默认冷启动：text + image（命令由宿主自带，见文件头说明） */
 function baseColdPlugins(): PluginModule[] {
-  return [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]
+  return [nodeTextPlugin, nodeImagePlugin]
 }
 
 /** 建宿主：可覆盖 adapter / coldPlugins */
@@ -438,6 +440,5 @@ describe('撤销后刷新闭环（P0-2 完整证据）', () => {
     h2.stop()
   })
 })
-
 
 

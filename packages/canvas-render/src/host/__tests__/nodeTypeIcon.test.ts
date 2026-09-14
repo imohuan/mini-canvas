@@ -12,13 +12,12 @@ import { iconRenderMode } from '@mini-canvas/kernel'
 import { type MenuService } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 describe('节点类型图标整链（插件注册 → 类型表 → 菜单）', () => {
   it('text/image 插件声明的 icon 落到 nodeStore 并被菜单新建节点项带上', async () => {
     const { host } = await createMiniCanvasHost({
       adapter: new MemoryStorageAdapter(),
-      coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin],
+      coldPlugins: [nodeTextPlugin, nodeImagePlugin],
     })
 
     // ① 插件注册 → nodeStore 类型表（声明的是 SVG 字符串 = opaque 句柄）
@@ -45,7 +44,7 @@ describe('节点类型图标整链（插件注册 → 类型表 → 菜单）', 
   it('未声明图标的节点类型：类型表字段为空，标题侧据此不渲染图标位', async () => {
     const { host } = await createMiniCanvasHost({
       adapter: new MemoryStorageAdapter(),
-      coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin],
+      coldPlugins: [nodeTextPlugin, nodeImagePlugin],
     })
     const menu = host.ctx.get<MenuService>('menu')
     // 传一个无 icon 的类型：菜单项不应带 icon 字段（由显示层给占位）

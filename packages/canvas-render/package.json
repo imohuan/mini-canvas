@@ -25,7 +25,6 @@
     "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
-    "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",

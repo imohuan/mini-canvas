@@ -51,5 +51,9 @@ export type {
 export { createMenuService } from './menuService'
 export type { MenuService, MenuItem, MenuArea, MenuCreatableType } from './menuService'
 
+// 画布通用命令（建节点/删选中/撤销/重做）——宿主 boot 时经 registerCanvasCommands 注册
+export { registerCanvasCommands, CANVAS_COMMAND } from './canvasCommands'
+export type { CanvasCommandServices } from './canvasCommands'
+
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'

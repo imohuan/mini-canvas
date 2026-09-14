@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",

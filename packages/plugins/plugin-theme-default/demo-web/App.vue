@@ -8,7 +8,6 @@ import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '../src/index'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 const sampleImg = () =>
   'data:image/svg+xml;utf8,' +
@@ -32,7 +31,7 @@ const ready = ref(false)
     <div v-if="ready" class="bar">plugin-theme-default 独立预览（壳+端口 / 连线 / 背景全来自本插件 · 装配逻辑全在 CanvasHost）</div>
     <CanvasHost
       class="canvas-area"
-      :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]"
+      :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin]"
       :seed="seedDefault"
       window-key="MiniCanvasThemePreview"
       @ready="ready = true"

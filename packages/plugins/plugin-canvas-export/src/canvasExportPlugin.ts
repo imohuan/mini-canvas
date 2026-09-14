@@ -76,7 +76,7 @@ import {
   type Rect,
 } from './exportGeometry'
 
-/** 类型增强缝：宿主「恒在服务」上 ctx.selection 直访（与 plugin-canvas-commands 同款写法） */
+/** 类型增强缝：宿主「恒在服务」上 ctx.selection 直访（插件直访宿主服务的通用写法） */
 declare module '@mini-canvas/canvas-data' {
   interface Context {
     selection: SelectionService

@@ -16,7 +16,7 @@ import { Context } from '@mini-canvas/canvas-data'
 import { SaveServiceImpl, NodeStore, type CanvasNode, type CanvasEdge, type StorageAdapter, Selection, History, EdgeStore, GraphDocument, GRAPH_KEY, GRAPH_EDGES_KEY, isTransient, type EdgeStoreService, type SelectionService, type HistoryService, type GraphDocumentService, type GraphEnvelope, createSettingsPersist, type SettingsPersistService, ResourceStore, type ResourceService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
-import { NodeRegistry, ThemeRegistry, NodeFactory, type NodeFactoryService, createMenuService, type MenuService } from '@mini-canvas/canvas-data'
+import { NodeRegistry, ThemeRegistry, NodeFactory, type NodeFactoryService, createMenuService, type MenuService, registerCanvasCommands } from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
@@ -212,6 +212,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
 
+  // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，宿主默认注册 ——
+  // 不必再装一个插件才有 Delete / Ctrl+Z。用 ctx.effect 登记撤销：随 ctx.stop 回收（重启不重复注册）。
+  ctx.effect(() => registerCanvasCommands({ command, graph, selection, nodeFactory }))
+
   // 配置持久化桥（P1-5 修复）：默认开启。ctx.settings 是内置分组配置单一数据源；
   // 桥把用户改动经 save(config) 持久化，启动时 restore 注入（插件 Config 已声明完成）。
   let settingsPersist: SettingsPersistService | undefined
@@ -309,7 +313,5 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   return { host, api, manager, exposeToWindow }
 }
-
-
 
 

@@ -13,13 +13,13 @@ import { createMiniCanvasHost } from '../createMiniCanvasHost'
 import { MemoryStorageAdapter, type CanvasNode } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { splitNodeWritePatch } from '../canvasHostCore'
 
 async function boot(adapter = new MemoryStorageAdapter()) {
   const { host } = await createMiniCanvasHost({
     adapter,
-    coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin],
+    // 命令由宿主自带（registerCanvasCommands），插件只装节点类型
+    coldPlugins: [nodeTextPlugin, nodeImagePlugin],
   })
   return { host, adapter }
 }

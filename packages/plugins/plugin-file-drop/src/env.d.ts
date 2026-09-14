@@ -1,5 +1,5 @@
 // 本包编译跟随 @mini-canvas/canvas-data 的 index.ts（其 re-export CanvasHost.vue）时，
-// tsc 会跟随解析 .vue，故需一份 *.vue 模块 shim 兜底（与 plugin-canvas-commands env.d.ts 同源）。
+// tsc 会跟随解析 .vue，故需一份 *.vue 模块 shim 兜底（与其它插件包 env.d.ts 同源）。
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
