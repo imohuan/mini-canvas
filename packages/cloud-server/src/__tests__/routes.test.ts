@@ -10,6 +10,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer, type CloudServer } from '../server'
+import { resolvePluginsDir, resolveUiDist } from '../static'
 
 let dir: string
 let srv: CloudServer
@@ -255,5 +256,22 @@ describe('插件清单与产物', () => {
       s.stop()
       await fs.rm(pluginsDir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('ui / 插件目录探测顺序', () => {
+  it('仓库内路径优先于随包 assets（改了 ui 就该看到新产物，不被旧副本挡住）', async () => {
+    // 本仓库里 packages/ui/dist 是存在的（构建过），探测应命中它而不是包内 assets
+    const ui = await resolveUiDist()
+    expect(ui).toBeTruthy()
+    expect(ui!.replace(/\\/g, '/')).not.toContain('/assets/ui')
+
+    const plugins = await resolvePluginsDir()
+    expect(plugins!.replace(/\\/g, '/')).not.toContain('/assets/plugins')
+  })
+
+  it('显式给了目录就用它；目录不存在时响亮报错（不静默回落）', async () => {
+    await expect(resolveUiDist('D:/definitely/not/here/xyz')).rejects.toThrow('--ui 指定的目录不存在')
+    await expect(resolvePluginsDir('D:/definitely/not/here/xyz')).rejects.toThrow('--plugins 指定的目录不存在')
   })
 })

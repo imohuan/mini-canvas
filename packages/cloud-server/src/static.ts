@@ -10,7 +10,14 @@
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
+
+/**
+ * 本包自己的根目录（用于找随包发布的 assets/）。
+ * static.js 编译进 dist/，故上一级就是包根；源码直跑（tsx）时也在 src/ 的上一级。
+ */
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /** 扩展名 → MIME（静态托管只涉及这几类） */
 const MIME_BY_EXT: Record<string, string> = {
@@ -57,7 +64,12 @@ async function exists(p: string): Promise<boolean> {
 
 /**
  * 找 ui 构建产物目录：显式给了就用它（不存在则报错），否则按候选顺序探测。
- * 候选覆盖两种启动姿势：仓库根启动、包目录内启动、以及装在 node_modules 里的独立包。
+ *
+ * 候选顺序：**仓库内的路径优先**，随包 assets 兜底。
+ * 理由是两种场景各取所需：
+ * - 在仓库里跑（改 ui / 跑 e2e）：走 packages/ui/dist，看到的是刚构建的新产物；
+ * - `npx mini-canvas-cloud serve`（空目录）：仓库路径都不存在，落到随包 assets/ui，开箱即用。
+ * 反过来（assets 优先）会让仓库里改了 ui 却一直看到 assets 里那份旧副本，很难查。
  */
 export async function resolveUiDist(explicit?: string): Promise<string | undefined> {
   if (explicit) {
@@ -68,6 +80,7 @@ export async function resolveUiDist(explicit?: string): Promise<string | undefin
     path.resolve('packages/ui/dist'),
     path.resolve('../ui/dist'),
     path.resolve('ui-dist'),
+    path.join(PACKAGE_ROOT, 'assets/ui'),
   ]
   for (const c of candidates) {
     if (await isDir(c)) return c
@@ -75,7 +88,7 @@ export async function resolveUiDist(explicit?: string): Promise<string | undefin
   return undefined
 }
 
-/** 找插件目录（含 dist 的插件包所在目录）：显式给了就用它，否则按候选顺序探测 */
+/** 找插件目录（含 dist 的插件包所在目录）：显式给了就用它，否则按候选顺序探测（仓库优先，随包兜底） */
 export async function resolvePluginsDir(explicit?: string): Promise<string | undefined> {
   if (explicit) {
     if (!(await isDir(explicit))) throw new Error(`--plugins 指定的目录不存在: ${explicit}`)
@@ -85,6 +98,7 @@ export async function resolvePluginsDir(explicit?: string): Promise<string | und
     path.resolve('packages/plugins'),
     path.resolve('../plugins'),
     path.resolve('plugins'),
+    path.join(PACKAGE_ROOT, 'assets/plugins'),
   ]
   for (const c of candidates) {
     if (await isDir(c)) return c

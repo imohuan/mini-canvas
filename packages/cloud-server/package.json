@@ -7,7 +7,8 @@
     "mini-canvas-cloud": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "assets"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,9 +21,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:assets": "pnpm --filter @mini-canvas/ui build && pnpm --filter @mini-canvas/plugin-cloud-save build && node scripts/bundle-assets.mjs",
+    "prepack": "node scripts/bundle-assets.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "serve": "node ./dist/cli.js serve"
+    "serve": "node ./dist/cli.js serve",
+    "e2e": "tsx e2e/cloud-e2e.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -30,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.12.3",
+    "tsx": "^4.22.4",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
   }
