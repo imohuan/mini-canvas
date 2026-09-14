@@ -1,0 +1,36 @@
+{
+  "name": "@mini-canvas/cloud-server",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "mini-canvas-cloud": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "serve": "node ./dist/cli.js serve"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.1",
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.3",
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0"
+  }
+}
