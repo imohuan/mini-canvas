@@ -20,6 +20,7 @@ import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-ba
 import type { NodeStoreService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
+import { Config } from './multiSelectConfig'
 
 /** multi-select 暴露给外部插件的服务形状 */
 export interface MultiSelectService {
@@ -45,6 +46,9 @@ declare module '@mini-canvas/canvas-data' {
 
 export const name = 'multi-select'
 export const inject = ['nodeStore', 'selection'] as string[]
+
+/** 插件可配置项（P4：模块级 Config schema；群组框的内外双框几何 + 样式，分组「布局/多选」） */
+export { Config }
 
 /** 多选快捷键处理（纯逻辑可单测）：Ctrl/Cmd+A 全选、Escape 清空；返回是否已处理（消费事件） */
 export function handleMultiSelectKey(
@@ -138,4 +142,4 @@ export function apply(ctx: Context) {
 }
 
 /** 兼容旧装配的 PluginModule 出口 */
-export const multiSelectPlugin: PluginModule = { name, inject, apply }
+export const multiSelectPlugin: PluginModule = { name, inject, Config, apply }

@@ -92,6 +92,36 @@ export function paddedBounds(
   }
 }
 
+/**
+ * 群组框的内外两框几何（都是 flow 绝对坐标）。
+ * - `outer`（大框）= 节点并集 + padding，整组拖动的把手，也是内框的定位容器。
+ * - `inner`（小框）= **节点并集原样**（紧贴节点、不含标题），尺寸不掺 padding。
+ * 两者的关系恒为 `inner - outer === padding`（小框就是被 padding 从大框里推出来的那一个）。
+ *
+ * 为什么内框尺寸单列而不是"外框减两倍 padding"：那是把几何绕一圈又算回来，
+ * padding 与节点实测尺寸一旦对不上就会算出比外框还大的内框（两框交叉）。
+ * 这里直接给，内框永远等于用户真正看到的节点范围。
+ */
+export interface SelectionFrameGeometry {
+  outer: MultiSelectRect
+  inner: MultiSelectRect
+}
+
+/**
+ * 由选中节点矩形并集 + padding 算出内外两框。空集或尺寸非法返回 null（不画框）。
+ */
+export function computeSelectionFrameGeometry(
+  rects: ReadonlyArray<MultiSelectRect>,
+  padding: SelectionFramePadding,
+): SelectionFrameGeometry | null {
+  const union = computeUnionBounds(rects)
+  if (!union) return null
+  return {
+    outer: paddedBounds(union, padding),
+    inner: { ...union },
+  }
+}
+
 /** 某节点是否在 allNodes 中有"也被选中"的祖先（父链递归）。 */
 export function hasSelectedAncestor(
   nodeId: string,

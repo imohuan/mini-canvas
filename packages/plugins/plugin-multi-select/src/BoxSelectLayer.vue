@@ -9,6 +9,9 @@
  *   （局部相交，含 group 子节点绝对坐标）→ 实时写内核 selection.set(命中 ids) 单源；
  * - 蓝色虚线视觉框以 position:fixed 直接定位屏幕坐标，不受视口缩放影响（老版同款策略）；
  * - 拖动超过 DRAG_THRESHOLD(4px) 才算框选；pointerup 结束移除框。
+ * - **松手后要吞掉紧随其后的那一次 pane click**（boxSelectGuard）：框选把选中写进内核后，浏览器还会
+ *   补一个 click 事件，宿主的 onPaneClick 会把它当成"点空白"清空选中 —— 结果框选白做
+ *   （只有 Ctrl 逐个加选看起来有效）。判定与老版 MultiSelectPlugin 同源：落点在画布空白才算误点击。
  *
  * 只读渲染上下文（useCanvasRender）拿 pane/screenToFlow；数据写走内核 ctx.get('selection')。
  * 纯碰撞逻辑在 multiSelectEngine（hitTestRects），本组件只做 DOM 手势与换算。
@@ -18,6 +21,7 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { SelectionService } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
+import { BoxSelectClickGuard } from './boxSelectGuard'
 
 const { pane, screenToFlow, ctx } = useCanvasRender()
 
@@ -28,6 +32,9 @@ let isBoxSelecting = false
 let startX = 0
 let startY = 0
 let dragDistance = 0
+
+/** 框选结束后的误点击守卫（纯逻辑，见 boxSelectGuard.ts） */
+const clickGuard = new BoxSelectClickGuard()
 
 function clearBox(): void {
   if (boxEl && boxEl.parentNode) boxEl.parentNode.removeChild(boxEl)
@@ -105,8 +112,23 @@ function onPointerMove(e: PointerEvent): void {
 
 function onPointerUp(): void {
   if (!isBoxSelecting) return
+  const dragged = dragDistance > DRAG_THRESHOLD
   isBoxSelecting = false
   clearBox()
+  clickGuard.markGestureDone(dragged)
+}
+
+/** 新的指针按下：作废上一次没被消费的待命标记（防误吞下一次真实点击） */
+function onDocumentPointerDown(): void {
+  clickGuard.reset()
+}
+
+/** 框选结束后的那次 pane click：在捕获阶段吞掉，免得宿主 clickPane 清掉刚选中的结果 */
+function onPaneClickCapture(e: MouseEvent): void {
+  if (!clickGuard.shouldSwallow(isPaneBlank(e.target))) return
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+  e.preventDefault()
 }
 
 let paneEl: HTMLElement | null = null
@@ -116,6 +138,9 @@ function attach(): void {
   if (!el || paneEl === el) return
   paneEl = el
   paneEl.addEventListener('pointerdown', onPanePointerDown, { capture: true })
+  paneEl.addEventListener('click', onPaneClickCapture, { capture: true })
+  // 兜底清标记挂 document：任何一个指针按下都意味着"上一轮手势已过去"
+  document.addEventListener('pointerdown', onDocumentPointerDown, { capture: true })
   document.addEventListener('pointermove', onPointerMove, { capture: true })
   document.addEventListener('pointerup', onPointerUp, { capture: true })
 }
@@ -123,10 +148,13 @@ function attach(): void {
 function detach(): void {
   if (paneEl) {
     paneEl.removeEventListener('pointerdown', onPanePointerDown, { capture: true })
+    paneEl.removeEventListener('click', onPaneClickCapture, { capture: true })
     paneEl = null
   }
+  document.removeEventListener('pointerdown', onDocumentPointerDown, { capture: true })
   document.removeEventListener('pointermove', onPointerMove, { capture: true })
   document.removeEventListener('pointerup', onPointerUp, { capture: true })
+  clickGuard.reset()
   clearBox()
 }
 
