@@ -30,7 +30,6 @@ import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
 import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
@@ -54,7 +53,6 @@ const plugins = [
   pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用
   pluginTextGenerationTools, // 文本生成工具：同上，产出文本（工具注册独立成插件，节点零硬编码）
   edgeCuttingPlugin, // 连接线切割：按住 Alt 拖拽"刀光"划过连线即可删除
-  canvasCommandsPlugin, // 建/删/撤销命令
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
   alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
   autoLayoutPlugin, // 自动布局：Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图
@@ -105,7 +103,49 @@ let disposeSettingsBind: (() => void) | undefined
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let closeSub: { dispose(): void } | undefined
 
-function onReady(): void {
+/** 外部插件清单里的一项（cloud-server 的 /plugin-manifest.json 形状） */
+interface ManifestEntry {
+  id: string
+  url: string
+  disabled?: boolean
+}
+
+/**
+ * 从外部清单装插件。
+ *
+ * 这份 ui 是"成品出口"：它自己带一批源码插件（上面的 plugins 数组）。
+ * 除此之外，还允许运行环境把额外插件挂进来——由 cloud-server 扫描它本地的
+ * 插件产物目录生成 /plugin-manifest.json，本函数读它并逐个装上。
+ *
+ * 于是"云端保存"这类能力不必写进 ui：起个 cloud-server、把插件放进它的插件目录，
+ * 画布打开时自己就装上了。`pnpm dev`（没有后台）时这份清单拿不到，静默跳过，不影响画布。
+ */
+async function installExternalPlugins(): Promise<void> {
+  const manager = hostEl.value?.manager
+  if (!manager) return
+  const manifest = await fetch('/plugin-manifest.json')
+    .then((r) => (r.ok ? r.json() : { plugins: [] }))
+    .catch(() => ({ plugins: [] }))
+  const entries: ManifestEntry[] = Array.isArray(manifest?.plugins) ? manifest.plugins : []
+  // 开发期 ui 与后台往往不同源（ui dev 在 5288、cloud-server 在 8865）：
+  // 用 VITE_CLOUD_BASE_URL 告诉云端保存插件去哪儿读写，省得每次手填设置。
+  const cloudBase = (import.meta.env?.VITE_CLOUD_BASE_URL as string | undefined) ?? ''
+  for (const entry of entries) {
+    if (entry.disabled) continue
+    try {
+      // 只给云端保存插件塞地址（别的插件各有自己的 Config，不替它们做决定）
+      const config =
+        cloudBase && entry.id.includes('cloud-save') ? { cloudSaveBaseUrl: cloudBase } : undefined
+      await manager.install({ url: entry.url }, config ? { config } : undefined)
+      log.log(`外部插件已装载: ${entry.id}`)
+    } catch (err) {
+      // 单个外部插件坏掉不该拖垮画布：记一条告警继续装下一个
+      console.warn(`[ui] 外部插件装载失败: ${entry.id}`, err)
+    }
+  }
+}
+
+async function onReady(): Promise<void> {
   booted.value = true
   bindThemeSettings()
   // 设置弹窗内 ✕/遮罩/Esc → ctx 'settings:ui-close' → 本层把 settingsOpen 置 false（弹窗卸载）
@@ -113,6 +153,7 @@ function onReady(): void {
   closeSub = ctx0?.on('settings:ui-close', () => {
     settingsOpen.value = false
   })
+  await installExternalPlugins()
 }
 
 /**

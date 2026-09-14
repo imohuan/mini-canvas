@@ -24,7 +24,6 @@ export default defineConfig({
       '@mini-canvas/plugin-tool-text-generation',
       // 编辑器组件包：workspace 源码（内部用带 .ts 后缀的相对导入），与其它源码包一样交给 vite 转换
       'prosemirror-editor-bundle',
-      '@mini-canvas/plugin-canvas-commands',
     ],
   },
 })

@@ -15,7 +15,9 @@
   "scripts": {
     "typecheck": "node ../../node_modules/vue-tsc/bin/vue-tsc.js --noEmit -p tsconfig.json",
     "test": "vitest run",
-    "dev": "vite"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",
@@ -29,7 +31,6 @@
     "@mini-canvas/plugin-align-arrange": "workspace:*",
     "@mini-canvas/plugin-align-guide": "workspace:*",
     "@mini-canvas/plugin-auto-layout": "workspace:*",
-    "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-canvas-export": "workspace:*",
     "@mini-canvas/plugin-clipboard": "workspace:*",
     "@mini-canvas/plugin-context-menu": "workspace:*",
