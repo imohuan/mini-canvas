@@ -134,6 +134,43 @@ interface CommandService {
 ```
 > 反推要点：快捷键 = 命令上的一个可选 `keys` 字段，不再有独立的 ShortcutManager 注册通道与命令各走一套。
 
+### 3.2b `tools`（AI / 外部能力调用 —— 新增，2026-09-12）
+
+v1 把"调第三方图片生成 API"写死在图片节点里（`imageModels.ts` + `backendImageModels.ts`），
+换模型/换服务商要改节点代码。v2 把它抽象成**工具**：节点不认识模型名、不认识 HTTP，
+只做"列出可用工具 → 用户选一个 → 带上画布上下文调用"。
+
+```ts
+interface ToolService {
+  register(def: ToolDef): Disposable            // 随插件 scope 自动回收；同名重复抛错
+  has(name: string): boolean
+  get(name: string): ToolDef | undefined
+  /** 按分组 / 产出类型 / 可接受输入筛选（节点据此挑"能给我出图的工具"） */
+  list(filter?: { group?: string; produces?: ToolResourceKind; accepts?: ToolResourceKind }): ToolDef[]
+  /** 调用并归一化同步与轮询两种返回形态；进度经 onProgress 转发；异常/超时收敛成 { ok:false, error } */
+  invoke(name: string, input: ToolInput, options?: ToolInvokeOptions): Promise<ToolResult>
+}
+
+interface ToolDef {
+  name: string                   // 唯一名，如 'image.generate:apimart-gpt-image-2'
+  title?: string                 // UI 显示名（模型下拉显示它）
+  group?: string                 // 如 '图片生成'
+  produces?: ToolResourceKind    // 产出什么（'image' | 'text' | ...）
+  accepts?: ToolResourceKind[]   // 吃哪些输入（缺省 / 空数组 = 不挑食）
+  params?: ToolParamDef[]        // 声明式参数 → 节点 UI 自动渲染控件
+  run(input: ToolInput, ctx: ToolRunContext): ToolOutcome | Promise<ToolOutcome>
+}
+```
+
+要点：
+- **ToolOutcome = ToolResult | ToolPollFn**：同步 HTTP 直接返回结果；提交任务型 API 返回轮询函数，
+  由 `invoke` 按 interval 驱动到 done —— 节点 UI 只需处理一种返回形态。
+- `params` 是声明式的（select/string/number/boolean）：**加一个"风格"参数不用改任何节点代码**。
+- 工具注册表是内核**内置单实例**（与 slots/settings 同款；`ctx.get('tools')` 与 `ctx.tools` 同源）。
+- 加一个新模型 = 装一个注册了新工具的插件，内核与节点零改动。
+- 实现：`packages/kernel/src/toolRegistry.ts`（工具注册表已归 kernel 自带能力）；
+  消费方参考 `plugin-node-image`（底部生成面板），提供方参考 `plugin-tool-image-generation`。
+
 ### 3.3 `history`（v1 靠各插件手写 history:record、谁记得谁才有撤销 → 反推）
 ```ts
 interface HistoryService {
