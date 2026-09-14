@@ -7,7 +7,7 @@
  * 本模块只做"该挤哪条"的纯决策，不碰 DOM/state；CanvasHost commitEdge 调用它后在同一个
  * history 记录里先 remove 再 addEdge，保证原子、可 undo。
  */
-import type { CanvasEdge } from '@mini-canvas/canvas-core-v2'
+import type { CanvasEdge } from '@mini-canvas/canvas-data'
 
 /**
  * 给定现有边 + 目标节点 + 输入容量，决定要挤掉哪条最老入边。

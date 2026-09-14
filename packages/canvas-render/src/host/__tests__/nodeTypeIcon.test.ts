@@ -3,11 +3,13 @@
  *
  * 覆盖"注册 → 消费"这条链上单包测不到的部分：
  *   插件 ctx.nodes.register({ icon }) → nodeStore 类型表 → 内核菜单服务 menuFor('pane') 的新建节点项。
- * 单点判定（字符串/组件/none）由 canvas-core-v2 的 iconKind.test.ts 负责，此处不重复。
+ * 单点判定（字符串/组件/none）由 canvas-data 的 iconKind.test.ts 负责，此处不重复。
  */
 import { describe, it, expect } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter, iconRenderMode, type MenuService } from '@mini-canvas/canvas-core-v2'
+import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { iconRenderMode } from '@mini-canvas/kernel'
+import { type MenuService } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'

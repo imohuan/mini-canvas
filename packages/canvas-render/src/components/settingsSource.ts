@@ -7,7 +7,7 @@
  *
  * SettingsStore 变更非响应式（plain class），面板侧用 onChange 订阅 + 版本号驱动刷新（见 SettingsHost/PluginSettingsPanel）。
  */
-import type { Context } from '@mini-canvas/canvas-core-v2'
+import type { Context } from '@mini-canvas/canvas-data'
 import type { SettingsPanelSource } from './settingsPanelTypes'
 
 /** 从内核 ctx 取设置数据源（ctx.get('settings') 恒为内置 SettingsStore 实例，见 Context）。 */

@@ -16,7 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2"

@@ -1,7 +1,7 @@
-// canvas-render —— 渲染宿主层（内核 canvas-core-v2 之外的浏览器装配/渲染面）
+// canvas-render —— 渲染宿主层（内核 canvas-data 之外的浏览器装配/渲染面）
 //
 // 与内核的关系：
-// - 内核 @mini-canvas/canvas-core-v2 只定义纯逻辑核心（core + services + 注册机制，零 Vue/vue-flow）。
+// - 内核 @mini-canvas/canvas-data 只定义纯逻辑核心（core + services + 注册机制，零 Vue/vue-flow）。
 // - 本包承载"渲染宿主"：CanvasHost(官方 VueFlow 宿主组件)、canvasHostCore(store→flow 映射/主题装配纯逻辑)、
 //   createMiniCanvasHost(建宿主 + window.MiniCanvas 装配门面)、vueFlowBridge(vue-flow 精选 re-export)、
 //   render 注入令牌（CanvasHost provide、渲染插件 content/壳/边 消费）。
@@ -95,6 +95,21 @@ export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
+// 节点"外壳几何"类配置读取（控制栏贴边距离）：节点插件统一从这里取，避免三处各读一遍
+export {
+  useToolbarOffsets,
+  toolbarOffsetStyle,
+  resolveToolbarOffsets,
+  applyOffsetChange,
+  useGenPanelMetrics,
+  resolveGenPanelMetrics,
+  applyGenPanelMetricChange,
+  DEFAULT_TOOLBAR_OFFSETS,
+  DEFAULT_GEN_PANEL_METRICS,
+} from './contracts/nodeLayoutSettings'
+export type { NodeToolbarOffsets, GenPanelMetrics } from './contracts/nodeLayoutSettings'
+// 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
+export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'
 // 内核精选的 VueFlow 能力出口（渲染类插件统一从本包 import，不再各自依赖 @vue-flow/core）
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。
@@ -168,7 +183,7 @@ export { createV2Logger } from './utils/log'
 // 渲染层注入 ctx 的服务的类型增强（统一声明，插件不必各自 declare 冲突）
 // nodeLayout / viewport 由 createMiniCanvasHost 注入内核 ctx；这里给插件作者类型面。
 // ============================================================================
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     /** 节点布局只读服务（实测尺寸/绝对坐标；render 注入，恒在） */
     nodeLayout: import('./layout/nodeLayout').NodeLayoutService
@@ -176,10 +191,5 @@ declare module '@mini-canvas/canvas-core-v2' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
-
-
-
-
-
 
 

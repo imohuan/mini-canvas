@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NodeLayoutService } from '../../layout/nodeLayout'
-import { NodeStore } from '@mini-canvas/canvas-core-v2'
+import { NodeStore } from '@mini-canvas/canvas-data'
 import { useNodeMeasure } from '../useNodeMeasure'
 
 class FakeRO {

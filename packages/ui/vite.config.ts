@@ -13,11 +13,17 @@ export default defineConfig({
   // 让应用能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
   optimizeDeps: {
     exclude: [
-      '@mini-canvas/canvas-core-v2',
+      '@mini-canvas/canvas-data',
       '@mini-canvas/canvas-render',
       '@mini-canvas/plugin-theme-default',
       '@mini-canvas/plugin-node-text',
       '@mini-canvas/plugin-node-image',
+      '@mini-canvas/plugin-node-3d-preview',
+      '@mini-canvas/plugin-node-image-compare',
+      '@mini-canvas/plugin-tool-image-generation',
+      '@mini-canvas/plugin-tool-text-generation',
+      // 编辑器组件包：workspace 源码（内部用带 .ts 后缀的相对导入），与其它源码包一样交给 vite 转换
+      'prosemirror-editor-bundle',
       '@mini-canvas/plugin-canvas-commands',
     ],
   },

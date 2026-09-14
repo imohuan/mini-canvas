@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-core-v2'
+import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import type { MultiSelectService } from '@mini-canvas/plugin-multi-select'
 import { multiSelectPlugin, handleMultiSelectKey } from '@mini-canvas/plugin-multi-select'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'

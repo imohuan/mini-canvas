@@ -6,9 +6,10 @@ export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
     environment: 'node',
-    // ui 包是 demo 装配壳（App.vue + main.ts，无纯逻辑单测目标）；空测试集视为通过
+    // ui 包以"装配壳"身份存在：唯一测试目标是 src/__tests__/nodePluginsAssembly.test.ts
+    // （多插件同时装载的整装仲裁，内核包不能反向依赖插件，只能在这一层验）。保留 passWithNoTests
+    // 以便清空该目录时仍可按装配壳对待。
     passWithNoTests: true,
   },
 })
-
 

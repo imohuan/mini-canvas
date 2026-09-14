@@ -11,42 +11,12 @@
  *
  * 依赖方向：宿主(本模块) 只操作 opaque 注册表 + PluginModule，不反向依赖插件实现。
  */
-import {
-  Context,
-  type PluginClassLike,
-  type PluginModule,
-  type PluginRuntimeStatus,
-  NodeRegistry,
-  ThemeRegistry,
-  SaveServiceImpl,
-  NodeStore,
-  type CanvasNode,
-  type CanvasEdge,
-  type StorageAdapter,
-  Selection,
-  History,
-  CommandRegistry,
-  NodeFactory,
-  EdgeStore,
-  GraphDocument,
-  GRAPH_KEY,
-  GRAPH_EDGES_KEY,
-  isTransient,
-  type EdgeStoreService,
-  type SelectionService,
-  type HistoryService,
-  type CommandService,
-  type NodeFactoryService,
-  type GraphDocumentService,
-  type GraphEnvelope,
-  SettingsStore,
-  createSettingsPersist,
-  type SettingsPersistService,
-  ResourceStore,
-  type ResourceService,
-  createMenuService,
-  type MenuService,
-} from '@mini-canvas/canvas-core-v2'
+import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, SettingsStore } from '@mini-canvas/kernel'
+import { Context } from '@mini-canvas/canvas-data'
+import { SaveServiceImpl, NodeStore, type CanvasNode, type CanvasEdge, type StorageAdapter, Selection, History, EdgeStore, GraphDocument, GRAPH_KEY, GRAPH_EDGES_KEY, isTransient, type EdgeStoreService, type SelectionService, type HistoryService, type GraphDocumentService, type GraphEnvelope, createSettingsPersist, type SettingsPersistService, ResourceStore, type ResourceService } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@mini-canvas/kernel'
+import type { CommandService } from '@mini-canvas/kernel'
+import { NodeRegistry, ThemeRegistry, NodeFactory, type NodeFactoryService, createMenuService, type MenuService } from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
@@ -112,7 +82,7 @@ export interface CanvasHostHandle {
 }
 
 /** 图数据存储信封：节点 + 边（持久化与 history 快照共用）。类型由 core-v2 graphDocument 提供。 */
-export type { GraphEnvelope } from '@mini-canvas/canvas-core-v2'
+export type { GraphEnvelope } from '@mini-canvas/canvas-data'
 
 /** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
 export interface MiniCanvasApi {
@@ -223,6 +193,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   const nodeFactory = new NodeFactory()
   ctx.inject('nodeFactory', nodeFactory)
+
+  // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
+  // 宿主不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
 
   // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
   const manager: PluginManager = createPluginManager(ctx)
@@ -336,8 +309,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   return { host, api, manager, exposeToWindow }
 }
-
-
 
 
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
 import { loadPluginFromText, createPluginManager, sourceKind } from '../pluginManager'
-import type { PluginModule } from '@mini-canvas/canvas-core-v2'
+import type { PluginModule } from '@mini-canvas/kernel'
 
 /** 一个可热装插件：注入服务 + nodeStore type，供装/卸/重载验证 */
 function demoPlugin(flag: string): PluginModule {

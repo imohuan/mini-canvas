@@ -6,7 +6,7 @@
  *
  * 矩形坐标一律 flow 绝对坐标：子节点 position 相对父，逐级累加父链得绝对坐标。
  */
-import type { NodeStoreService } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService } from '@mini-canvas/canvas-data'
 
 export interface LayoutRect {
   id: string

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter, SettingsStore, type PluginModule } from '@mini-canvas/canvas-core-v2'
+import { SettingsStore, type PluginModule } from '@mini-canvas/kernel'
+import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 
 const cfgPlugin: PluginModule = {
   name: 'cfg-host-demo',

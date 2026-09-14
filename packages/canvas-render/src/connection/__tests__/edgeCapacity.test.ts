@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { oldestIncomingToEvict } from '../edgeCapacity'
-import type { CanvasEdge } from '@mini-canvas/canvas-core-v2'
+import type { CanvasEdge } from '@mini-canvas/canvas-data'
 
 const e = (source: string, target: string, id?: string): CanvasEdge => ({
   id: id ?? `e-${source}-${target}`,

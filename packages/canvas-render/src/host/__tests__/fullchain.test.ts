@@ -9,14 +9,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import {
-  MemoryStorageAdapter,
-  type CanvasNode,
-  NodeStore,
-  type PluginModule,
-  type CanvasEdge,
-  GRAPH_EDGES_KEY,
-} from '@mini-canvas/canvas-core-v2'
+import { type PluginModule } from '@mini-canvas/kernel'
+import { MemoryStorageAdapter, type CanvasNode, NodeStore, type CanvasEdge, GRAPH_EDGES_KEY } from '@mini-canvas/canvas-data'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'

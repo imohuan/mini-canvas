@@ -8,7 +8,8 @@
  * export default defineNode({ type:'audio', label:'音频', size:{w:200,h:80}, content: AudioNode, create })
  * ```
  */
-import type { Context, NodeRegisterDef } from '@mini-canvas/canvas-core-v2'
+import type { Context } from '@mini-canvas/canvas-base'
+import type { NodeRegisterDef } from '@mini-canvas/canvas-base'
 
 /** ctx.nodes.register 的一次给全定义 */
 export interface DefineNodeDef extends Omit<NodeRegisterDef, 'segments'> {

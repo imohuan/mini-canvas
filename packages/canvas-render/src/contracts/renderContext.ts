@@ -23,7 +23,8 @@
  * - 仅限 CanvasSurface(渲染子树) 内调用；不在宿主内会抛清晰错误。
  */
 import { inject, type InjectionKey, type Ref } from 'vue'
-import type { Context, NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import type { Context } from '@mini-canvas/canvas-data'
+import type { NodeRegistry } from '@mini-canvas/canvas-data'
 import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
 import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
@@ -119,6 +120,5 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
-
 
 

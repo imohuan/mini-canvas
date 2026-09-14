@@ -14,7 +14,7 @@ import { provide, shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
-import type { NodeRegistry } from '@mini-canvas/canvas-core-v2'
+import type { NodeRegistry } from '@mini-canvas/canvas-data'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'

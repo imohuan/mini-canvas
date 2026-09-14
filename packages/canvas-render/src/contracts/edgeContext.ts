@@ -33,7 +33,7 @@ export interface EdgeVisual {
   edgeGlowIntensity?: number
   /** 辉光色，v1 edgeGlowColor 缺省=线色 */
   edgeGlowColor?: string
-  // ===== 连线新视觉（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line：导轨 + 光斑流动）=====
+  // ===== 连线新视觉（参考 docs/reference/bezier-glow-flow-line：导轨 + 光斑流动）=====
   /** “导轨 + 光斑流动”视觉总开关（默认 true；false = 回退素淡线/虚线）。
    *  注意：光斑只在"这条边被激活"（选中两端任一节点 / 选中本边 / 拖线临时线）时显示并流动。 */
   edgeFlowEnabled?: boolean

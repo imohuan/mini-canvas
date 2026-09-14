@@ -23,8 +23,9 @@
     "vue": "^3.5.34"
   },
   "dependencies": {
-    "@mini-canvas/canvas-core-v2": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*",
     "@mini-canvas/plugin-align-arrange": "workspace:*",
     "@mini-canvas/plugin-align-guide": "workspace:*",
     "@mini-canvas/plugin-auto-layout": "workspace:*",
@@ -36,11 +37,15 @@
     "@mini-canvas/plugin-group": "workspace:*",
     "@mini-canvas/plugin-mini-map": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
+    "@mini-canvas/plugin-node-3d-preview": "workspace:*",
     "@mini-canvas/plugin-node-find": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
+    "@mini-canvas/plugin-node-image-compare": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
     "@mini-canvas/plugin-shortcut-manager": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*"
+    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/plugin-tool-image-generation": "workspace:*",
+    "@mini-canvas/plugin-tool-text-generation": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
@@ -52,5 +57,3 @@
     "vue-tsc": "^3.2.8"
   }
 }
-
-

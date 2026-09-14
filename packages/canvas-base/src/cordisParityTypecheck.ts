@@ -2,14 +2,14 @@
  * cordis 原文逐字抄 · 编译期证明（能力①②③ 的作者侧合并缝）。
  *
  * 本文件不被运行/不导出运行逻辑，只为了被 canvas-base 包的 tsc 全量编译，证明作者照 cordis 教程：
- *   declare module '@mini-canvas/canvas-core-v2' { interface Context/interface Events }
+ *   declare module '@mini-canvas/kernel' { interface Context/interface Events }
  * 后 `ctx.greeter` 与类型化 `ctx.on/ctx.emit` 都能编译通过（合并缝真实生效）。
  */
 import { Service } from './index'
 import type { Context } from './index'
-import type {} from '@mini-canvas/canvas-core-v2'
 
-declare module '@mini-canvas/canvas-core-v2' {
+
+declare module '@mini-canvas/kernel' {
   interface Context {
     greeter: GreeterService
   }

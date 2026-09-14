@@ -7,7 +7,7 @@
  * v1 对应：useCanvasConnection.getInvalidConnectionReason 返回中文；v2 内核给了结构化 reason，
  * 这里做"枚举 → 文案"映射。
  */
-import type { InvalidReason } from '@mini-canvas/canvas-core-v2'
+import type { InvalidReason } from '@mini-canvas/canvas-data'
 
 const REASON_TEXT: Record<InvalidReason, string> = {
   'missing-node': '目标不存在',

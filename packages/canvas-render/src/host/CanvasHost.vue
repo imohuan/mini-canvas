@@ -22,22 +22,10 @@
  */
 import { markRaw, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
-import {
-  NodeRegistry,
-  type PluginClassLike,
-  type PluginModule,
-  type Disposable,
-  type StorageAdapter,
-  MemoryStorageAdapter,
-  type CanvasNode,
-  type CanvasEdge,
-  type EdgeStoreService,
-  findCommandByKeys,
-  validateConnection,
-  typeConnectionDef,
-  type ValidationResult,
-  GRAPH_VIEWPORT_KEY,
-} from '@mini-canvas/canvas-core-v2'
+import { type PluginClassLike, type PluginModule, type Disposable } from '@mini-canvas/kernel'
+import { type StorageAdapter, MemoryStorageAdapter, type CanvasNode, type CanvasEdge, type EdgeStoreService, GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
+import { findCommandByKeys } from '@mini-canvas/kernel'
+import { NodeRegistry, validateConnection, typeConnectionDef, type ValidationResult } from '@mini-canvas/canvas-data'
 import {
   createMiniCanvasHost,
   type CanvasHostHandle,
@@ -895,7 +883,9 @@ function onKeydown(e: KeyboardEvent): void {
   const h = hostRef.value
   if (!h) return
   // 通用快捷键：扫描已注册命令的 keys，命中即 execute（Delete/Ctrl+Z 等命令的 keys 由插件声明）
-  const hit = findCommandByKeys(h.command.list(), e)
+  // 传内核 ctx 作为执行上下文：命令的 when 不满足时**让位**给同键的其它命令（如选中 3D 节点时
+  // f/r 归节点用，没选中时仍走画布的聚焦/适应视图），同键多个可用命令按 order 定优先级。
+  const hit = findCommandByKeys(h.command.list(), e, h.ctx)
   if (hit) {
     e.preventDefault()
     h.command.execute(hit.id)

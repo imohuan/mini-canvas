@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Selection } from '@mini-canvas/canvas-core-v2'
+import { Selection } from '@mini-canvas/canvas-data'
 import { clickNode, clickEdge, clickPane } from '../selectionInteractions'
 
 function makeSel() {

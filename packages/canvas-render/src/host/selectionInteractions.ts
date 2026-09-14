@@ -11,7 +11,7 @@
  *  - Shift+点选边：切换该边选中（加/减），节点选中不动
  *  - 点画布空白：节点与边一起清空
  */
-import type { SelectionService } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService } from '@mini-canvas/canvas-data'
 
 export interface SelectionClickOptions {
   /** 是否按住 Shift（多选修饰键） */

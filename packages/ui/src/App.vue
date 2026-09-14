@@ -9,8 +9,9 @@
 // (= theme-default 内置注册的 PluginSettingsDialog 默认皮)，把 ctx.settings 实时喂给它；改动经
 // bindThemeSettings 窄更新到 cfg.edge → 连线外观实时变化。
 import { onBeforeUnmount, reactive, ref } from 'vue'
-import type { CanvasNode, SettingsStore, StorageAdapter } from '@mini-canvas/canvas-core-v2'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-core-v2'
+import type { SettingsStore } from '@mini-canvas/kernel'
+import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
+import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 import { CanvasHost, SettingsHost, createV2Logger } from '@mini-canvas/canvas-render'
 import {
   themeDefaultPlugin,
@@ -25,6 +26,10 @@ import {
 } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
+import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
+import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
+import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
 import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
@@ -44,6 +49,10 @@ const plugins = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
+  node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
+  nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）
+  pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用
+  pluginTextGenerationTools, // 文本生成工具：同上，产出文本（工具注册独立成插件，节点零硬编码）
   edgeCuttingPlugin, // 连接线切割：按住 Alt 拖拽"刀光"划过连线即可删除
   canvasCommandsPlugin, // 建/删/撤销命令
   multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除

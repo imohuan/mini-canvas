@@ -5,7 +5,8 @@
  * groups/groupOf/set/onChange 一致可用、值读回一致、变更能订阅到。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, SettingsStore } from '@mini-canvas/canvas-core-v2'
+import { SettingsStore } from '@mini-canvas/kernel'
+import { Context } from '@mini-canvas/canvas-data'
 import { settingsSourceFrom } from '../settingsSource'
 
 /** 造一个 ctx 并在其内置 settings 里声明一组配置(scope='theme')，模拟插件 Config 自动登记后的状态 */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { NodeStore, ThemeRegistry } from '@mini-canvas/canvas-core-v2'
+import { NodeStore } from '@mini-canvas/canvas-data'
+import { ThemeRegistry } from '@mini-canvas/canvas-data'
 import {
   assembleTheme,
   edgeId,
