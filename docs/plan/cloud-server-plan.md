@@ -346,9 +346,11 @@ cd packages/cloud-server; node ./dist/cli.js serve --port 8865
 
 ### 验收证据（真实环境）
 
-单元测试 **71 条**（cloud-server 38 + plugin-cloud-save 33），另全仓 **1591 条**全绿。
+单元测试 **74 条**（cloud-server 41 + plugin-cloud-save 33），另全仓 **1659 条**全绿（29 个包）。
 
-真 Chrome（headless + CDP）端到端，全部通过：
+端到端不靠手跑：`cd packages/cloud-server && pnpm e2e`（`e2e/cloud-e2e.ts`，自己起服务、
+自己开真 Chrome、跑完自清理）。它跑四轮 —— 前两轮验数据链路与跨机恢复，后两轮用
+**真鼠标手势**验拖/连/删（计划 §五 M3 要求"与 pnpm dev 行为一致"）。当前全部通过：
 
 | 判据 | 结果 |
 |---|---|
@@ -357,7 +359,12 @@ cd packages/cloud-server; node ./dist/cli.js serve --port 8865
 | 建节点 → 服务器 json 随之变化 | 磁盘出现 `canvas%3Agraph.json`，节点数/边数一致 |
 | **换浏览器 profile（=换机器）打开 → 画布完整恢复** | 5 个节点 id 与连线逐一吻合 |
 | 上传大图 → 搬到服务器，刷新仍在 | 节点 `imageUrl` → `/uploads/<hash>.png`，URL 可取回 46KB 真字节 |
-| 控制台零报错 | 第一/二轮均无 error，无 4xx 请求 |
+| **真鼠标拖动节点** | 目标节点坐标真的变了（按 data-id 核对） |
+| **真鼠标从端口拖出连线** | 边数 +1（特意挑一对"还没连过"的节点，否则去重后不变） |
+| **真点选 + 真 Delete** | 选中的那个节点真的被删（按 id 核对） |
+| **手工操作的结果也过云** | 第四台机器看到的正是手工操作后的状态（删的没复活、连的线还在） |
+| 控制台零报错 | 四轮均无 error、无 4xx 请求 |
 
 另：`npm i <tarball>` 到干净目录后 `npx mini-canvas-cloud serve` 可独立启动，
-API 全部可用；未装 ui 产物时给人话提示页而不是白屏。
+**打开就是画布**（`prepack` 把 ui 与插件的已构建产物收进包内 `assets/`，随包发布），
+建节点后数据落在该目录的 `.mini-canvas/kv/`。未装产物时给人话提示页而不是白屏。
