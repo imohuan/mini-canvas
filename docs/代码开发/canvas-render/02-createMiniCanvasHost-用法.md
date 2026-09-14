@@ -72,12 +72,11 @@ import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 async function boot() {
   const { host, api } = await createMiniCanvasHost({
-    // 冷启动插件 = 主题?不，主题是外观；这里先装业务节点 + 命令
-    coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin],
+    // 冷启动插件 = 业务节点。画布通用命令（建/删/撤销/重做）由数据层自带，宿主 boot 时默认注册
+    coldPlugins: [nodeTextPlugin, nodeImagePlugin],
   })
   return { host, api }
 }
@@ -99,6 +98,8 @@ host.stop()                // 卸载全部副作用
 ```
 
 > 这里的插件 `apply` 会在启动时把 `text`/`image` 节点类型注册进 nodeStore、把 content 组件注册进 nodeRegistry、并 `ctx.provide` 出 `text`/`image` 服务。`nodeFactory` 会拿到各 type 的 `create` 实现，所以 `command:create-node` 能用。
+> 画布通用命令（`command:create-node` / `command:delete` / `command:undo` / `command:redo`）由
+> `@mini-canvas/canvas-data` 的 `registerCanvasCommands` 提供，`createMiniCanvasHost` 已默认注册，无需装插件。
 
 ---
 
@@ -109,7 +110,7 @@ import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'  // 边独立持�
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 
 const { host } = await createMiniCanvasHost({
-  coldPlugins: [nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin],
+  coldPlugins: [nodeTextPlugin, nodeImagePlugin],
 })
 const text = host.ctx.get<TextNodeService>('text')   // 取 text 插件上架的服务
 

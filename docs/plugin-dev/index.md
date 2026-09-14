@@ -49,7 +49,7 @@ export function apply(ctx: Context, config: { /* 已校验、默认补齐 */ }) 
   关键是把它的导出加进 demo 的装配（第 1 篇教）。
 - 仓库里已有一批**生产级插件**可当样板直接读：
   `packages/plugins/plugin-node-text`（节点 + 服务）、`plugin-node-image`、
-  `plugin-theme-default`（主题 + 配置）、`plugin-canvas-commands`（命令）。
+  `plugin-theme-default`（主题 + 配置）、`plugin-mini-map`（命令 + 插槽 UI）。
 
 ## 认识「能力台」ctx
 

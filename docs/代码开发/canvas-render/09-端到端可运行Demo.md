@@ -49,7 +49,6 @@ import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
 // 首次(存储空)的默认画布：一个文本节点 + 一个图片节点，方便你立刻看到"壳/内容/连线"三件套
 const sampleImg = () =>
@@ -89,7 +88,7 @@ function onContextMenu(ev: { kind: 'node' | 'pane'; clientX: number; clientY: nu
     <CanvasHost
       ref="canvasEl"
       class="canvas-area"
-      :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]"
+      :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin]"
       :seed="seedDefault"
       window-key="MiniCanvasDemo"
       @ready="ready = true"
@@ -152,7 +151,7 @@ function addText() {
 再在 App 里放进 `#ui`（`plugins` 数组沿用第 2 节那几个已装配的插件即可；`notePlugin` 是下面第 4 节才新增的，这里先用已有的）：
 ```vue
 <template>
-  <CanvasHost :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]">
+  <CanvasHost :plugins="[themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin]">
     <template #ui>
       <AddButton />   <!-- 这里渲染 → useCanvasRender 可用 -->
     </template>
@@ -228,7 +227,7 @@ export const notePlugin: PluginModule = { name, inject, apply }
 
 **4.3 加进 CanvasHost**
 ```ts
-:plugins="[themeDefaultPlugin, notePlugin, nodeTextPlugin, canvasCommandsPlugin]"
+:plugins="[themeDefaultPlugin, notePlugin, nodeTextPlugin]"
 ```
 节点 type 会出现在 nodeStore 注册表；nodeShell（BaseNode）会把 `NoteContent` 渲染进卡片；建节点可用 `ctx.command.execute('command:create-node', { type:'note', position })` 或直接 `host.ctx.get('note').add(...)`。
 

@@ -35,14 +35,13 @@ console.table(window.MiniCanvasManager.list())   // name / state / missingDeps /
 ## 装配清单 manifest：让别的画布"照单全装"
 
 真正要分发的是**一份清单**，而不是一个个手动 install。仓库里
-`packages/canvas-core-v2/demo-web/baseManifest.ts` 就是真样板——它声明装 4 个生产插件，按序装：
+`packages/canvas-core-v2/demo-web/baseManifest.ts` 就是真样板——它声明装 3 个生产插件，按序装：
 
 ```ts
 // baseManifest.ts (真实现)
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 import type { PluginManifest } from '@mini-canvas/canvas-render'
 
 export const baseManifest: PluginManifest = {
@@ -50,7 +49,6 @@ export const baseManifest: PluginManifest = {
     { id: 'theme-default', source: themeDefaultPlugin },   // 主题(提供 nodeShell/edge/background)
     { id: 'node-text',     source: nodeTextPlugin },        // text 节点 + text 服务
     { id: 'node-image',    source: nodeImagePlugin },       // image 节点 + image 服务
-    { id: 'canvas-commands', source: canvasCommandsPlugin },// 命令(删/建/撤销/重做)
     // 想覆写某插件默认 config，就在项上加 config(经其 Config schema 校验+补默认)：
     // { id: 'theme-default', source: themeDefaultPlugin, config: { edgeColor: '#16a34a', edgeLineWidth: 3 } },
   ],

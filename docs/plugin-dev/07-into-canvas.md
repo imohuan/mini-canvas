@@ -16,7 +16,7 @@
 - `plugin-node-text`：节点（`ctx.nodes.register`，带 `content: TextContent.vue` + `create`）+
   服务（`ctx.inject('text', …)`）。节点内容组件用 `ctx.get('text')` 调服务写回并落盘。
 - `plugin-theme-default`：`Config` schema（第 5 篇）+ 顶替三块主题皮（`nodeShell/edge/background`）。
-- `plugin-canvas-commands`：一组命令（删/建/撤销/重做），`ctx.get` 用宿主服务。
+- `plugin-mini-map`：一条命令（`mod+m` 切换显隐）+ 一个 overlay 槽浮层 + 一项服务，`ctx.get` 用宿主服务。
 
 你的插件就是把这几样**混在一个文件里**。下面写一个全新的"便签 sticker"节点插件示范怎么混。
 
@@ -106,13 +106,13 @@ import { stickerPlugin } from './stickerPlugin'      // ← 加这行
 // …
 const plugins: PluginModule[] = [
   stickerPlugin,        // ← 加进数组（放 theme-default 之后即可，顺序无所谓）
-  themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin,
+  themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin,
 ]
 ```
 
 保存，vite 热更自动刷新。你会看到、能操作三件事：
 
-**① 能点出来一种节点** —— 想让画布出现便签，最简单是复用 commands 插件的统一建节点命令
+**① 能点出来一种节点** —— 想让画布出现便签，最简单是复用统一建节点命令 `command:create-node`
 （经 nodeFactory 走到我们注册的 `create`），浏览器控制台跑：
 
 ```js

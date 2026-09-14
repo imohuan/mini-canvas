@@ -130,7 +130,9 @@ interface CommandService {
   execute(id: string, ...args): void        // 菜单/工具栏/快捷键都走它
   // keys 自动绑快捷键（统一入口，取代 ShortcutManager 单独注册），卸载自动解绑
 }
-// 内核 pre-register：'command:delete'（删选中+记历史统一处理，吸收三条删除路径）
+// 画布级通用命令由数据层提供：canvas-data 的 registerCanvasCommands() 注册
+// 'command:delete' / 'command:create-node' / 'command:undo' / 'command:redo'
+// （删选中+记历史统一处理，吸收三条删除路径），宿主 boot 时默认注册，无需装插件。
 ```
 > 反推要点：快捷键 = 命令上的一个可选 `keys` 字段，不再有独立的 ShortcutManager 注册通道与命令各走一套。
 

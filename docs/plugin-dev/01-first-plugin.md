@@ -15,26 +15,31 @@
 
 ### 第 1 步：认识一个现成的最小插件
 
-仓库里 `packages/plugins/plugin-canvas-commands/src/canvasCommandsPlugin.ts` 就是最标准的样子
-（它注册了几条命令：删除 / 建节点 / 撤销 / 重做）。它长这样，**三个散开的命名导出**：
+仓库里 `packages/plugins/plugin-mini-map/src/miniMapPlugin.ts` 就是最标准的样子
+（它注册了一条命令 `mini-map:toggle`：Ctrl/Cmd+M 切换小地图显隐）。它长这样，**三个散开的命名导出**：
 
 ```ts
 import type { Context } from '@mini-canvas/canvas-base'
 
-export const name = 'commands'        // 插件唯一名
-export const inject = [] as string[]  // 依赖的服务/插件名，没有就空数组
+export const name = 'mini-map'                    // 插件唯一名
+export const inject = ['nodeStore', 'nodeLayout', 'viewport'] as string[]  // 依赖的服务
 
 export function apply(ctx: Context) {
   // ctx.commands.register 注册一条命令；注册随插件卸载自动回收
   ctx.commands.register({
-    id: 'command:delete',
-    title: '删除选中',
+    id: 'mini-map:toggle',
+    title: '切换小地图',
+    keys: ['mod+m'],                              // 快捷键：宿主统一分发，插件不自己绑 window
     run() {
-      /* … 读选中、删节点、落盘 … */
+      /* … 切换小地图显隐 … */
     },
   })
 }
 ```
+
+> 画布级通用命令（`command:delete` / `command:create-node` / `command:undo` / `command:redo`）
+> 由数据层自带（`@mini-canvas/canvas-data` 的 `registerCanvasCommands`），宿主 boot 时默认注册，
+> **不是插件**，写自己的插件时不必关心它们。
 
 ### 第 2 步：你自己写一个最小插件（只加一条命令）
 
@@ -74,7 +79,7 @@ import { helloPlugin } from './helloPlugin'          // ← 加这行
 // …
 const plugins: PluginModule[] = [
   helloPlugin,            // ← 加进数组开头
-  themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin,
+  themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin,
 ]
 ```
 

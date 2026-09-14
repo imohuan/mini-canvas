@@ -155,9 +155,9 @@ import { CanvasHost } from '@mini-canvas/canvas-render'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'   // 若你想看 node 类外观设置的分组
-import { canvasCommandsPlugin } from '@mini-canvas/plugin-canvas-commands'
 
-const plugins = [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin, canvasCommandsPlugin]
+// 画布通用命令（建/删/撤销/重做）由数据层自带、宿主 boot 时默认注册，不必列进 plugins
+const plugins = [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin]
 // 顶部放一个 <SettingsHost/>（v-if 控制显隐）即可弹出设置
 ```
 

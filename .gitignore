@@ -36,6 +36,10 @@ deepseek-harness
 workspace
 packages/mcp-server/workspace
 
+# cloud-server 的数据目录（画布数据 + 上传资源，运行时生成，不入库）
+# 注：dist/ 与 *.tgz 已在上面被忽略，这里不重复列
+.mini-canvas/
+
 # 由插件 pnpm build 生成后复制到此，供 plugin-load demo 加载（勿手改）
 packages/canvas-core-v2/demo-web/plugins/
 
