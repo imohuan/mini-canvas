@@ -13,13 +13,13 @@
  */
 import { createApp, h } from 'vue'
 import type { PluginModule, Context } from '@mini-canvas/canvas-base'
-import type { NodeStoreService } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import NodeFindOverlay from './NodeFindOverlay.vue'
 
 /** 类型增强缝：宿主恒在服务上 ctx 直访（nodeStore/viewport/nodeLayout 与 createMiniCanvasHost 注入名一致） */
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     nodeStore: NodeStoreService
     viewport: ViewportService

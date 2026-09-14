@@ -18,7 +18,7 @@
  * 快捷键：不走 DOM 按键，粘贴由命令 keys(mod+v) 统一分发会与剪贴板冲突——见下方说明。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, GraphDocumentService, ResourceService } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, GraphDocumentService, ResourceService } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   classifyFile,
@@ -51,7 +51,7 @@ export interface FileDropService {
   canHandle(file: { name: string; type: string }): boolean
 }
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     fileDrop: FileDropService
   }

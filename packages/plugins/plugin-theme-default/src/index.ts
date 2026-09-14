@@ -32,7 +32,7 @@ export const name = "theme-default";
 export const inject = ["text"] as string[];
 
 // 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
-// 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）：导轨细线 + 青色渐变光斑沿连线流动，
+// 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动，
 // 克制但有科技感。edgeGlowColor 即“光斑色”（默认品牌青 #0891b2），edgeColor 为静态导轨/线色。
 export const DEFAULT_THEME_EDGE = {
   edgeType: "bezier",
@@ -84,6 +84,31 @@ export const DEFAULT_THEME_TITLE = {
   titleScaleMinZoom: 0.5,
 } as const;
 
+/**
+ * 控制栏（节点顶部/底部浮出的操作栏与状态栏）的贴边距离默认值。
+ *
+ * 节点插件把"上控制栏 / 下控制栏"绝对定位在卡片外侧（不参与卡片的固定尺寸框），
+ * 这两项就是它们离卡片边的基础距离（px）：调大 = 离节点更远，调小 = 更贴近。
+ * 之所以收在本插件（而不是各节点各声明一份）：settings 的 key 是全局同一张表、
+ * 先声明者独占，且"浮层离卡片多远"本就是节点外壳的几何属性 —— 与 titleOffset 同类。
+ * 收在这里，日后新增视频等节点类型无需重新声明即可共享同一套观感。
+ */
+export const DEFAULT_THEME_LAYOUT = {
+  toolbarTopOffset: 6,
+  toolbarBottomOffset: 6,
+} as const;
+
+/**
+ * 生成控制栏（节点底部"输入框 + 下拉 + 发送"那一栏）的尺寸默认值。
+ * 与 DEFAULT_THEME_LAYOUT 同属「布局/控制栏」：贴边距离管"离节点多远"，这里管"多大"。
+ */
+export const DEFAULT_THEME_PANEL = {
+  panelImageWidth: 650,
+  panelTextWidth: 520,
+  panelEditorMinHeight: 64,
+  panelEditorMaxHeight: 220,
+} as const;
+
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
 export const DEFAULT_THEME_SNAP_ZONE = {
   heightRatio: 0.8,
@@ -110,6 +135,16 @@ export const DEBUG_SETTING_KEYS: ReadonlyArray<
 export const TITLE_SETTING_KEYS: ReadonlyArray<
   keyof typeof DEFAULT_THEME_TITLE
 > = Object.keys(DEFAULT_THEME_TITLE) as (keyof typeof DEFAULT_THEME_TITLE)[];
+
+/** 本插件声明"可配置项 → 控制栏贴边距离"的映射（节点顶部/底部控制栏读） */
+export const LAYOUT_SETTING_KEYS: ReadonlyArray<
+  keyof typeof DEFAULT_THEME_LAYOUT
+> = Object.keys(DEFAULT_THEME_LAYOUT) as (keyof typeof DEFAULT_THEME_LAYOUT)[];
+
+/** 本插件声明"可配置项 → 生成控制栏尺寸"的映射（图片/文本生成面板读） */
+export const PANEL_SETTING_KEYS: ReadonlyArray<
+  keyof typeof DEFAULT_THEME_PANEL
+> = Object.keys(DEFAULT_THEME_PANEL) as (keyof typeof DEFAULT_THEME_PANEL)[];
 
 /** 本插件声明"可配置项 → 吸附带配置(SnapZoneConfig)"的映射 */
 export const SNAP_ZONE_SETTING_KEYS: ReadonlyArray<
@@ -243,6 +278,73 @@ export const Config: ConfigSchema = {
     label: "节点低细节阈值",
     group: "节点/低细节",
     description: "低于该缩放值后所有节点进入低细节模式（隐藏端口/标题条、去掉阴影）。",
+  },
+  // —— 布局：控制栏贴边距离（节点顶部/底部浮出的操作栏与状态栏离卡片边多远）——
+  toolbarTopOffset: {
+    type: "number",
+    default: DEFAULT_THEME_LAYOUT.toolbarTopOffset,
+    min: 0,
+    max: 40,
+    step: 1,
+    label: "上控制栏偏移",
+    group: "布局/控制栏",
+    description:
+      "节点顶部操作栏离卡片上边的距离（px）。调大=往外挪得更远，调小=更贴近节点。",
+  },
+  toolbarBottomOffset: {
+    type: "number",
+    default: DEFAULT_THEME_LAYOUT.toolbarBottomOffset,
+    min: 0,
+    max: 40,
+    step: 1,
+    label: "下控制栏偏移",
+    group: "布局/控制栏",
+    description:
+      "节点底部控制栏离卡片下边的距离（px）。调大=往外挪得更远，调小=更贴近节点。",
+  },
+  // —— 布局：生成控制栏的尺寸（宽度 / 输入框高度）——
+  panelImageWidth: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelImageWidth,
+    min: 320,
+    max: 1200,
+    step: 10,
+    label: "图片生成栏宽度",
+    group: "布局/控制栏",
+    description:
+      "图片节点底部生成控制栏的宽度（px）。里面是输入框 + 模型/参数/模板下拉 + 发送按钮。",
+  },
+  panelTextWidth: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelTextWidth,
+    min: 280,
+    max: 1200,
+    step: 10,
+    label: "文本生成栏宽度",
+    group: "布局/控制栏",
+    description: "文本节点底部生成控制栏的宽度（px）。版式与图片同款，只是默认窄一些。",
+  },
+  panelEditorMinHeight: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelEditorMinHeight,
+    min: 32,
+    max: 400,
+    step: 2,
+    label: "生成栏输入框最小高",
+    group: "布局/控制栏",
+    description:
+      "生成控制栏里那个大输入框的最小高度（px）。内容少时也不至于扁成一条线。",
+  },
+  panelEditorMaxHeight: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelEditorMaxHeight,
+    min: 64,
+    max: 800,
+    step: 4,
+    label: "生成栏输入框最大高",
+    group: "布局/控制栏",
+    description:
+      "生成控制栏输入框的最大高度（px）。写长了在框内滚动，不会把面板撑得很大。",
   },
   // —— 文本 LOD：文本节点内容的三级缩略（full 全文 → condensed 首行 → icon 缩略占位）——
   textLodIconZoom: {
@@ -505,3 +607,13 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
+
+/**
+ * 通用 UI 组件出口（供其它插件复用，避免各节点面板自绘一套近似的下拉/浮层）。
+ *
+ * 为什么由本插件提供：Select/Dropdown 是"默认皮"的一部分，视觉与交互都按项目 UI 规范实现，
+ * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
+ * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
+ */
+export { Dropdown, Select, PrecisionSlider, ToolParamField } from "./components/ui";
+export type { DropdownTrigger, SelectOption } from "./components/ui";

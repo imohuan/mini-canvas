@@ -12,8 +12,15 @@
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
 import { Service, type PluginModule, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
-import type { GraphDocumentService } from '@mini-canvas/canvas-core-v2'
+import type { GraphDocumentService } from '@mini-canvas/canvas-data'
+import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import ImageContent from './ImageContent.vue'
+import ImageTopToolbar from './ImageTopToolbar.vue'
+import ImageGeneratePanel from './ImageGeneratePanel.vue'
+import { beginCrop, endCrop } from './cropSession'
+import { createImageOps, cropImage, downloadImageNode, rotateImage, uploadImage } from './imageOps'
+import { pickImageFile } from './imageTransform'
+import type { Rect } from './cropGeometry'
 
 /** image 插件暴露给外部的服务形状（content/宿主经 ctx.get('image') 使用；形状不变，.vue 零改动） */
 export interface ImageNodeService {
@@ -24,7 +31,7 @@ export interface ImageNodeService {
 }
 
 /** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.image 直访时类型为 ImageService */
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     image: ImageService
   }
@@ -67,35 +74,27 @@ const NODE_ICON =
  * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
  *
  * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象"归类、跨插件聚合。
- * image 节点字段归一级「节点」的 `节点/图片节点`；边框颜色字段归一级「常规」的 `常规/主题配色`（配色集中调）。
- * 视觉/外观相关的进阶编排（预览UI、字段渲染器下发）见 docs/代码开发/plugins/plugin-theme-default.md。
+ * 本包只声明真正读得到的项（图片尺寸上限，归一级「布局」）。
+ *
+ * 已删除（曾声明但**全仓无人读取**，等于设置界面里改了不生效的死配置）：
+ * cornerRadius / showShadow / borderWidth / borderColor / blurOnLoad / lazyLoad。
+ * 其中边框那几项尤其误导 —— 实测问"为什么图片会长出边框"时才发现，边框其实来自**共享外壳**
+ * （BaseNode），图片插件只是声明了一个没人读的调节项。真要支持"图片可调边框/圆角"时再加，
+ * 那时一次性把实现与测试一起补上；现在留着只会让人以为能调。
  */
 export const Config: ConfigSchema = {
-  // —— 「节点 / 图片节点」：image 节点的外观与加载行为（非颜色）——
-  cornerRadius: {
-    type: 'number', default: 8, min: 0, max: 40, label: '圆角', group: '节点/图片节点',
-    description: '图片四角的圆角半径（px）。0 = 直角，越大越圆润。',
+  // —— 「布局 / 图片节点尺寸」：换图后卡片跟着图片等比缩放时的封顶 ——
+  // 键名必须带本包前缀：内核 settings 是全局同一张表、先声明者独占，
+  // 叫 "maxWidth" 这种通用名会和其他插件抢同一个键。
+  imageFitMaxWidth: {
+    type: 'number', default: DEFAULT_IMAGE_FIT_LIMITS.maxWidth, min: 120, max: 2000, step: 10,
+    label: '图片预览上限宽', group: '布局/图片节点尺寸',
+    description: '上传/换图后，图片节点卡片的最大宽度（px）。图片比这个宽就等比缩小，不会放大。',
   },
-  showShadow: {
-    type: 'boolean', default: true, label: '阴影', group: '节点/图片节点',
-    description: '是否给图片节点外圈画一层柔和阴影，让它从画布背景上浮起来。',
-  },
-  borderWidth: {
-    type: 'number', default: 1, min: 0, max: 8, label: '边框粗细', group: '节点/图片节点',
-    description: '图片节点边框的粗细（px）。0 = 不画边框。',
-  },
-  blurOnLoad: {
-    type: 'boolean', default: false, label: '加载时模糊', group: '节点/图片节点',
-    description: '图片还没加载完时先以模糊占位显示，加载完成再变清晰（适合大图，视觉更平滑）。',
-  },
-  lazyLoad: {
-    type: 'boolean', default: true, label: '懒加载', group: '节点/图片节点',
-    description: '开启后图片进入可视区域附近才真正开始加载，滚动到很远处的图不浪费带宽。',
-  },
-  // —— 颜色统一归「常规/主题配色」——
-  borderColor: {
-    type: 'color', default: '#334155', label: '边框颜色', group: '常规/主题配色',
-    description: '图片节点边框的颜色（开了边框后才显示）。',
+  imageFitMaxHeight: {
+    type: 'number', default: DEFAULT_IMAGE_FIT_LIMITS.maxHeight, min: 120, max: 2000, step: 10,
+    label: '图片预览上限高', group: '布局/图片节点尺寸',
+    description: '上传/换图后，图片节点卡片的最大高度（px）。图片比这个高就等比缩小，不会放大。',
   },
 }
 
@@ -105,6 +104,13 @@ export function apply(ctx: Context) {
 
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
   //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。
+  //    segments：除 content 外再挂"顶部操作条 / 底部生成面板"两段 —— 壳（BaseNode）注册了段才渲染，
+  //    段组件只收到 { id, data }，选中态由组件自己订阅内核 selection（useSoleNodeSelected：
+  //    仅"恰好选中一个且是我"时显示，多选时上下控制栏一起收起）。
+  //    底部面板承担两件事：① 生成控制栏（选模型/参数/写提示词 → 调 ctx.tools 出图）；
+  //    ② 图片本身的加工（旋转/下载）。既有能力与生成共存，不互相挡路。
+  //    注意：面板**不注册任何工具**（模型提供方由独立工具插件经 ctx.tools.register 提供），
+  //    本包只消费 ctx.tools —— 加一个模型不用改本包。
   ctx.nodes.register({
     type: 'image',
     label: '图片',
@@ -112,19 +118,89 @@ export function apply(ctx: Context) {
     size: { w: 320, h: 240 },
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image'], capacity: 1 }],
     outputs: [{ port: 'source', contentType: 'image' }],
+    // 无卡片边框：图片是**内容铺满整张卡**的，外壳那圈 1px 边框对它没有分层价值，
+    // 只会变成内容边缘多余的一圈缝（用户实测报的"图片边上还有一像素边距"就是它）。
+    // 选中环不受影响：环是 ::after 的 box-shadow，与边框互相独立。
+    frameless: true,
     content: ImageContent,
+    segments: {
+      'top-toolbar': ImageTopToolbar,
+      'bottom-toolbar': ImageGeneratePanel,
+    },
     create(position) {
       return image.addImageNode(position, '')
     },
   })
 
-  // 3. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
+  // 3. 命令：界面按钮与命令走**同一批实现**（uploadImage/cropImage/rotateImage/downloadImageNode）——
+  //    按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
+  //    payload 约定：{ nodeId: string }（节点级操作）；裁剪确认额外给 rect（图片像素矩形）。
+  const ops = createImageOps(ctx)
+  ctx.commands.register({
+    id: 'image.upload',
+    title: '上传图片',
+    run: async (_c, payload) => {
+      const { nodeId, file } = (payload ?? {}) as { nodeId?: string; file?: Blob }
+      if (!nodeId) return false
+      if (file) return uploadImage(ops, nodeId, file)
+      // 无文件（快捷键/菜单触发）：开系统选图框，选中后复用同一上传实现
+      const picked = await pickImageFile()
+      return picked ? uploadImage(ops, nodeId, picked) : false
+    },
+  })
+  ctx.commands.register({
+    id: 'image.crop',
+    title: '裁剪图片',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      beginCrop(nodeId)
+      return true
+    },
+  })
+  ctx.commands.register({
+    id: 'image.cropConfirm',
+    title: '确认裁剪',
+    run: async (_c, payload) => {
+      const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
+      if (!nodeId || !rect) return false
+      const ok = await cropImage(ops, nodeId, rect)
+      endCrop(nodeId)
+      return ok
+    },
+  })
+  ctx.commands.register({
+    id: 'image.cropCancel',
+    title: '取消裁剪',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      endCrop(nodeId)
+      return true
+    },
+  })
+  ctx.commands.register({
+    id: 'image.rotate',
+    title: '旋转图片',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      return rotateImage(ops, nodeId)
+    },
+  })
+  ctx.commands.register({
+    id: 'image.download',
+    title: '下载图片',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      return downloadImageNode(ops, nodeId)
+    },
+  })
+
+  // 4. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
   ctx.inject('image-meta', { v: 1 })
 }
 
 /** 兼容旧装配的 PluginModule 出口（name='image' 供 HMR reload） */
 export const nodeImagePlugin: PluginModule = { name, inject, Config, apply }
-
-
-
-

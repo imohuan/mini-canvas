@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",

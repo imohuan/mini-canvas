@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { filterNodes, nodeLabelText, typeMeta } from '../nodeFindFilter'
 
 const NL = String.fromCharCode(10)

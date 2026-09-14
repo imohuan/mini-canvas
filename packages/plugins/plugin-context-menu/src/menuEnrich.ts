@@ -6,7 +6,7 @@
  * - 图标：按 命令 id 关键字/新建节点类型 给线性 SVG（无命中给通用默认图标，保证图标列恒在）；
  * - 描述：按 命令 id/标题 映射一句 hover 说明（同快捷键面板 commandDescriptions 思路）。
  */
-import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
+import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 
 /** 通用描边图标路径集（viewBox 0 0 24 24, stroke=currentColor, 2px） */

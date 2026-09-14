@@ -3,7 +3,8 @@
  * auto-save 周期性 flush → 数据落盘（P0-1 修复后链路完整，本测试补证据）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter } from '@mini-canvas/canvas-core-v2'
+import { Context } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import { autoSavePlugin } from '../autoSavePlugin'
 import type { AutoSaveService } from '../autoSavePlugin'
 

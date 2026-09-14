@@ -18,8 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-base": "workspace:*"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",

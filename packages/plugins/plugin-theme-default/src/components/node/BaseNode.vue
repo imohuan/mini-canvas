@@ -10,12 +10,13 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useVueFlow, Position, useCanvasRender, createV2Logger } from '@mini-canvas/canvas-render'
 import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
-import { resolveSegment } from '@mini-canvas/canvas-core-v2'
+import { resolveSegment } from '@mini-canvas/canvas-data'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import TitleLabel from './TitleLabel.vue'
 import { isRectFullyVisible } from './titleEdit'
 import { useNodeCapability } from '../../composables/useNodeCapability'
+import { resolveCardFrame } from './cardFrame'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
 
@@ -92,8 +93,9 @@ const cardIsResizing = card.isResizing
 
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
 const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM.value))
-// 卡片边框反缩放补偿
-const cardBorderComp = computed(() => Math.max(1 / zoom.value, 1))
+// 卡片边框反缩放补偿：标题要对齐到"卡片外缘"，所以得把边框那点宽度算回来。
+// frameless 的类型没有边框（边框宽度为 0），补偿量就是 0 —— 否则标题会莫名偏出去 1px。
+const cardBorderComp = computed(() => (cap.frameless.value ? 0 : Math.max(1 / zoom.value, 1)))
 const titlePositionStyle = computed(() => ({
   transform: `scale(${titleScale.value})`,
   transformOrigin: 'left bottom',
@@ -102,14 +104,25 @@ const titlePositionStyle = computed(() => ({
   width: `${titleCanvasWidth.value}px`,
 }))
 
+// 卡片外观（边框/圆角/选中环）统一由 cardFrame 决策：普通类型画 1px 边框，
+// 声明 frameless 的类型（如图片：内容铺满整张卡）不画 —— 那一圈边框对它只是多余的缝。
+// 选中环与边框独立，去掉边框后选中照样看得见（见 cardFrame 的契约测试）。
+const cardFrame = computed(() =>
+  resolveCardFrame({
+    zoom: zoom.value,
+    frameless: cap.frameless.value,
+    selected: showSelectionOutline.value,
+  }),
+)
+
 // 卡片行内样式：尺寸 + 3D 连接倾斜 transform + 反缩放边框
 const cardInlineStyle = computed<Record<string, string>>(() => ({
   width: `${cardWidth.value}px`,
   height: `${cardHeight.value}px`,
   transform: cardTransform.value,
-  borderWidth: `${1 / zoom.value}px`,
-  borderRadius: '8px',
-  '--card-outline-width': showSelectionOutline.value ? `${2 / zoom.value}px` : '0px',
+  borderWidth: cardFrame.value.borderWidth,
+  borderRadius: cardFrame.value.borderRadius,
+  '--card-outline-width': cardFrame.value.outlineWidth,
 }))
 
 // ============ 就地重命名 ============

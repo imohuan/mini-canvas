@@ -4,7 +4,7 @@
 // 无外部依赖，纯 props。BaseNode 把它放卡片内部标题容器里。
 import type { Component, CSSProperties } from 'vue'
 import { computed } from 'vue'
-import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
+import { iconRenderMode } from '@mini-canvas/kernel'
 
 /**
  * 图标句柄：SVG 字符串或 Vue 组件（opaque，与节点类型注册的 icon 同源）。

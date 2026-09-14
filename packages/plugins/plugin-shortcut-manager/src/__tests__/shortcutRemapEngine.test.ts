@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CommandRegistry } from '@mini-canvas/canvas-core-v2'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import { createShortcutRemapEngine, SHORTCUT_SAVE_KEY } from '../shortcutRemapEngine'
 
 /** 内存 save mock（只实现 get/set；set 同步入内存供 get 读） */

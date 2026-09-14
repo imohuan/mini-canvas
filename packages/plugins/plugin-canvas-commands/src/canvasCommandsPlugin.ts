@@ -10,10 +10,11 @@
  * - command:undo/redo：graph.undo/redo。
  */
 import type { PluginModule, Context } from '@mini-canvas/canvas-base'
-import type { NodeFactoryService, SelectionService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { NodeFactoryService } from '@mini-canvas/canvas-data'
 
 /** 类型增强缝：宿主"恒在服务"上 ctx.xxx 直访（nodeFactory/selection/graph 与宿主注入名一致） */
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     nodeFactory: NodeFactoryService
     selection: SelectionService

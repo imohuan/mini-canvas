@@ -9,7 +9,7 @@
  */
 import { computed } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
+import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 import { CONNECTION_MENU_PICK_EVENT } from './connectionMenu'
 

@@ -22,13 +22,7 @@
 
 import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import { resolveConfig } from '@mini-canvas/canvas-base'
-import type {
- NodeStoreService,
- EdgeStoreService,
- SelectionService,
-  GraphDocumentService,
- CanvasNode,
-} from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, EdgeStoreService, SelectionService, GraphDocumentService, CanvasNode } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { runAutoLayout } from './layoutEngine'
 import type { LayoutNode, LayoutEdge, LayoutDirection, AutoLayoutConfig } from './types'
@@ -38,7 +32,7 @@ import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focus
 /** 组节点类型名（与 plugin-group 约定一致） */
 export const GROUP_NODE_TYPE = 'group'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     nodeStore: NodeStoreService
     edgeStore: EdgeStoreService

@@ -18,16 +18,10 @@
  */
 import { createApp, nextTick, reactive, type Component } from 'vue'
 import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-base'
-import type {
-  NodeStoreService,
-  SelectionService,
-  CommandService,
-  NodeFactoryService,
-  GraphDocumentService,
-  MenuService,
-  EdgeStoreService,
-} from '@mini-canvas/canvas-core-v2'
-import { typeConnectionDef } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, GraphDocumentService, EdgeStoreService } from '@mini-canvas/canvas-data'
+import type { CommandService } from '@mini-canvas/kernel'
+import type { NodeFactoryService, MenuService } from '@mini-canvas/canvas-data'
+import { typeConnectionDef } from '@mini-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
@@ -50,7 +44,7 @@ import {
   type ConnectionDropFact,
 } from './connectionMenu'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     nodeStore: NodeStoreService
     selection: SelectionService

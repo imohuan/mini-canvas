@@ -6,7 +6,7 @@
  * 从"一列堆叠分组卡片"重构为**居中 modal 弹窗 + 左右布局的标准设置界面**，并支持"分组名带 / 的二级菜单"：
  *   - 左 = 一级分组导航（一项 = group key 的第一个 `/` 分段；无 `/` 的扁平分组即它自己）
  *   - 右 = 二级页签条 + 内容：某一级下若**多于一个**二级分组则显示页签(tab)切换；只有一个则直接展示内容、不显示 tab
- * 依赖方向：plugin-theme-default → canvas-render(useCanvasRender 拿 ctx) → canvas-core-v2，不反向。
+ * 依赖方向：plugin-theme-default → canvas-render(useCanvasRender 拿 ctx) → canvas-data，不反向。
  *
  * ## 分组 key 的语义（新增二级菜单）
  * 每个配置字段声明在某个 `group`（plugin Config schema 里字段的 group / 内核 settings 里申明的组名）。

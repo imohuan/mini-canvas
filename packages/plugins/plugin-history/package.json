@@ -18,13 +18,10 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
-  },
-  "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
   }

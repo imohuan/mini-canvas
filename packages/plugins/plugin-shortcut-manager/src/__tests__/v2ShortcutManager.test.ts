@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CommandRegistry } from '@mini-canvas/canvas-core-v2'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import {
   buildV2HelpList,
   groupV2HelpList,

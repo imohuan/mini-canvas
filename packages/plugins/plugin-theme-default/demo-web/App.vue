@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // plugin-theme-default 独立预览 —— 用官方 CanvasHost 一行渲染"默认主题"壳/边/背景 + 示例节点。
 // 相比手写装配版：不再自起 VueFlow / provide 令牌 / 从 themeRegistry 取壳边背景 / 同步渲染态——
-// 全部收进 @mini-canvas/canvas-core-v2 的 CanvasHost 组件。这里只 seed 两个示例节点即可。
+// 全部收进 @mini-canvas/canvas-data 的 CanvasHost 组件。这里只 seed 两个示例节点即可。
 import { ref } from 'vue'
 import { CanvasHost } from '@mini-canvas/canvas-render'
-import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '../src/index'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'

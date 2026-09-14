@@ -5,7 +5,7 @@
  * 展示文本分散在各节点 data（text 节点 data.text / image 节点 data.imageUrl / 自定义 data.label）。
  * 这里统一收口成"按 type 取中文名/颜色 + 按节点取展示首行文本"，供浮层与单测共用。
  */
-import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { CanvasNode } from '@mini-canvas/canvas-data'
 
 /** 节点类型 → {中文名, 浅色背景, 深色文字}（对齐老版 TYPE_PRESETS，key 改为 node.type） */
 export const TYPE_PRESETS: Record<string, { label: string; bg: string; fg: string }> = {

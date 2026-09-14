@@ -17,7 +17,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
-import type { SelectionService, NodeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService, NodeStoreService, GraphDocumentService } from '@mini-canvas/canvas-data'
 import {
   computeUnionBounds,
   paddedBounds,

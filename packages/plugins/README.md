@@ -10,7 +10,7 @@
 ```
 packages/plugins/plugin-node-<你的类型>/
   package.json            # name:@mini-canvas/plugin-node-xxx
-                          #   dependencies: @mini-canvas/canvas-core-v2: workspace:*
+                          #   dependencies: @mini-canvas/kernel + canvas-data + canvas-core-v2: workspace:*
                           #   peerDependencies: vue ^3.5
   tsconfig.json           # moduleResolution: Bundler + DOM lib + src 下放 env.d.ts(*.vue shim)
   src/
@@ -24,8 +24,8 @@ packages/plugins/plugin-node-<你的类型>/
 
 ```ts
 // nodeTextPlugin.ts —— 样板（plugin-node-text 实况）
-import type { PluginModule } from '@mini-canvas/canvas-core-v2'
-import { registerNodeType } from '@mini-canvas/canvas-core-v2'
+import type { PluginModule } from '@mini-canvas/kernel'
+import { registerNodeType } from '@mini-canvas/canvas-data'
 import TextContent from './TextContent.vue'   // UI 在同包，一次 registerNodeType 一起注册
 
 export const nodeTextPlugin: PluginModule = {

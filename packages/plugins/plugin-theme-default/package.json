@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*",
     "@mini-canvas/plugin-canvas-commands": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-text": "workspace:*",
@@ -37,5 +36,9 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
   }
 }

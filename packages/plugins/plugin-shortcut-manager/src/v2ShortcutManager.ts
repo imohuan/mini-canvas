@@ -10,7 +10,7 @@
  *
  * 纯逻辑、零 Vue（.vue 面板经 ctx.get('shortcut-manager') 拿到本实例调用）；可单测。
  */
-import type { CommandService } from '@mini-canvas/canvas-core-v2'
+import type { CommandService } from '@mini-canvas/kernel'
 
 /** 帮助列表一条（v1 ShortcutHelpItem 形状：command/keys/group/priority；多 keys 命令拆成多条） */
 export interface V2ShortcutHelpItem {

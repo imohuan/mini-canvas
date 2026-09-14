@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-core-v2'
-import {
-  NodeStore,
-  Selection,
-  History,
- CommandRegistry,
- type CanvasNode,
-  EdgeStore,
-  GraphDocument,
-} from '@mini-canvas/canvas-core-v2'
+import { Context } from '@mini-canvas/canvas-data'
+import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import { groupPlugin, GroupService, GROUP_NODE_TYPE } from '../groupPlugin'
 
 /** 最小 nodeLayout stub（对齐渲染层 NodeLayoutService 接口中本插件用到的三个方法） */

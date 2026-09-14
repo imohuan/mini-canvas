@@ -16,12 +16,22 @@ export default defineConfig({
       fileName: () => 'plugin-node-text.js',
     },
     rollupOptions: {
-      external: ['vue', '@mini-canvas/canvas-core-v2', '@mini-canvas/canvas-render'],
+      // plugin-theme-default（通用 UI 组件）与 prosemirror-editor-bundle（富文本编辑器）都是
+      // "宿主只允许一份"的共享运行时：打进插件会造成两份组件/编辑器实例，故与 vue/内核同列 external。
+      external: [
+        'vue',
+        '@mini-canvas/canvas-data',
+        '@mini-canvas/canvas-render',
+        '@mini-canvas/plugin-theme-default',
+        'prosemirror-editor-bundle',
+      ],
       output: {
         globals: {
           vue: 'Vue',
-          '@mini-canvas/canvas-core-v2': 'MiniCanvasCore',
+          '@mini-canvas/canvas-data': 'MiniCanvasCore',
           '@mini-canvas/canvas-render': 'MiniCanvasRender',
+          '@mini-canvas/plugin-theme-default': 'MiniCanvasPluginThemeDefault',
+          'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
         },
       },
     },

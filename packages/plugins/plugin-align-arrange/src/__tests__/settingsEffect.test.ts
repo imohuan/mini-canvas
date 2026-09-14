@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  Context,
-  NodeStore,
-  EdgeStore,
-  Selection,
-  History,
-  CommandRegistry,
-  GraphDocument,
-  type CanvasNode,
-} from '@mini-canvas/canvas-core-v2'
+import { Context } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, type CanvasNode } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import { alignArrangePlugin } from '../alignArrangePlugin'
 
 /** 最小 nodeLayout stub（本插件只用 nodeSize） */

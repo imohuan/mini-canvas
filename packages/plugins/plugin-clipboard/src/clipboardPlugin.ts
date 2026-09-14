@@ -12,18 +12,11 @@
  * 快捷键：不用插件自绑 window，命令 keys 字段由渲染层 CanvasHost 统一分发（masterplan 铁律 7）。
  * 类型缝：declare module 给 ctx.clipboard 直访（对齐 multi-select 的 'multi-select' 服务写法）。
  *
- * 依赖注入：nodeStore/edgeStore/selection/history 为宿主恒在硬依赖（canvas-core-v2 包注入）;
+ * 依赖注入：nodeStore/edgeStore/selection/history 为宿主恒在硬依赖（canvas-data 包注入）;
  * viewport 由 canvas-render 宿主注入、本插件只做"可选读取"（复制时把最近鼠标屏幕坐标经它换成 flow 锚点）。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type {
-  NodeStoreService,
-  SelectionService,
-  HistoryService,
-  EdgeStoreService,
-  CanvasNode,
-  GraphDocumentService,
-} from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, HistoryService, EdgeStoreService, CanvasNode, GraphDocumentService } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   makeSnapshot,
@@ -51,7 +44,7 @@ export interface ClipboardService {
   readonly hasData: boolean
 }
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     clipboard: ClipboardService
   }

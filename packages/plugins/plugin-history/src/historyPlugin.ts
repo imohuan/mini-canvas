@@ -14,9 +14,9 @@
  * 独立可装配的撤销/重做命令入口 + 只读查询服务，并把内核缺口显式列出。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { HistoryService } from '@mini-canvas/canvas-core-v2'
+import type { HistoryService } from '@mini-canvas/canvas-data'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     history: HistoryService
   }

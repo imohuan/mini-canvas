@@ -18,12 +18,11 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
   }
 }
-
-

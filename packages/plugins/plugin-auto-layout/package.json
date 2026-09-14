@@ -19,7 +19,8 @@
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
     "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*"

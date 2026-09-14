@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-core-v2'
-import {
-  NodeStore,
-  EdgeStore,
- Selection,
- History,
- CommandRegistry,
- type CanvasEdge,
-  GraphDocument,
-} from '@mini-canvas/canvas-core-v2'
+import { Context } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import { clipboardPlugin, type ClipboardService } from '../clipboardPlugin'
 
 /** 测试本地信封形状（与渲染层宿主 GraphEnvelope 同构；避免插件测试依赖 canvas-render） */

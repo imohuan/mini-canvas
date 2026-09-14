@@ -17,12 +17,13 @@
  */
 import { reactive } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { CommandService, SaveService } from '@mini-canvas/canvas-core-v2'
+import type { SaveService } from '@mini-canvas/canvas-data'
+import type { CommandService } from '@mini-canvas/kernel'
 import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     command: CommandService
   }

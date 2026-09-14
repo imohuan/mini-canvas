@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { typeMeta, nodeLabelText, filterNodes } from './nodeFindFilter'
 
 const props = defineProps<{

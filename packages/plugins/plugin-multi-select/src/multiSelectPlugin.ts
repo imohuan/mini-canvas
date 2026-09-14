@@ -17,7 +17,7 @@
  * 依赖方向：只依赖内核服务 + canvas-render 只读上下文/服务；不反向依赖宿主 demo / 其它插件。
  */
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
 
@@ -37,7 +37,7 @@ export interface MultiSelectService {
   clearSelection(): void
 }
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     'multi-select': MultiSelectService
   }

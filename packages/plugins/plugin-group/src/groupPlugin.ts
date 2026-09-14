@@ -3,7 +3,7 @@
  *
  * v2 写模型：所有图变更统一走 ctx.graph（GraphDocument 唯一写入口），
  * 不再手写 history.withRecord + nodeStore 直写。
- * - 只依赖内核(canvas-base/canvas-core-v2) + 渲染层类型/事件（nodeLayout / NodeDragEnd 常量），
+ * - 只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件（nodeLayout / NodeDragEnd 常量），
  *   不反向依赖宿主 demo，不直碰 VueFlow 内部，不碰老版 canvas-core/src。
  * - 数据经内核 graph/nodeStore/selection；坐标/尺寸经渲染层 nodeLayout（实测尺寸 + 绝对坐标）。
  * - UI 由同包 GroupContent.vue 提供（content 段，宿主 BaseNode 壳渲染），不另造节点壳。
@@ -15,11 +15,7 @@
  *   依赖 VueFlow 父子拖拽语义，v2 下暂不做。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type {
-  NodeStoreService,
-  SelectionService,
-  GraphDocumentService,
-} from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, GraphDocumentService } from '@mini-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
@@ -57,7 +53,7 @@ export interface GroupServiceAPI {
 }
 
 /** 类型增强缝：宿主/插件可 ctx.group 直访 */
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     group: GroupServiceAPI
   }

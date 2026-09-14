@@ -12,7 +12,7 @@
 
 export type ContextMenuMode = 'pane' | 'node' | 'edge'
 
-/** 命令最小形状（canvas-core-v2 CommandDef 的只读子集，避免强依赖具体实现） */
+/** 命令最小形状（canvas-data CommandDef 的只读子集，避免强依赖具体实现） */
 export interface MenuCommandLike {
   id: string
   title?: string

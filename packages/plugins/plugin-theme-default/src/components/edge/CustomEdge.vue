@@ -7,7 +7,7 @@
 // 光斑怎么分布：一条边固定 N 个（edgeFlowCount）—— 整条路径先均分成 N 份、每份里放一个色块；
 //       色块长度 = 该份长度 × 占比%(edgeFlowRatio)。与线长无关：短线不会只剩一个、长线也不会铺出一堆
 //       （采样/几何口径见 edgeFlow.ts，纯逻辑可单测）。
-// 视觉语言（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）。
+// 视觉语言（参考 docs/reference/bezier-glow-flow-line）。
 // 流动动画：不用 SVG <animate> SMIL（根因：vdom patch 把 <animate> 当 path child 反复比较，
 //       path 的 d 在多次 patch 后被清空、bbox=0、光斑不可见——浏览器实测）；也不用纯 CSS stroke-dashoffset
 //       keyframes（那样光斑是"等不透明度硬块"，两端没有 demo 的渐隐）。两段渐隐靠 JS rAF + 每块一个
@@ -17,8 +17,8 @@
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { GRAPH_EDGES_KEY, isTransient } from '@mini-canvas/canvas-core-v2'
-import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
+import { GRAPH_EDGES_KEY, isTransient } from '@mini-canvas/canvas-data'
+import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-data'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   getSourcePosition,
@@ -226,7 +226,7 @@ const gStyle = computed(() => ({
 }))
 
 // ============================================================================
-// 光斑"胶囊渐变"渲染器（参考 canvas-core-v2/demo-html-ui/bezier_glow_flow_line）
+// 光斑"胶囊渐变"渲染器（参考 docs/reference/bezier-glow-flow-line）
 // ----------------------------------------------------------------------------
 // 需求：色块要有 demo 里"头尾两端渐隐"的胶囊感（flowFade 控制渐隐占比）——
 //       整段等不透明度、stroke-dashoffset 硬切的"硬块"没有这个感觉。

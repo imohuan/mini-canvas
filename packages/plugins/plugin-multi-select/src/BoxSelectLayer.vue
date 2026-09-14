@@ -15,7 +15,7 @@
  */
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import type { SelectionService } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
 

@@ -13,7 +13,7 @@
  *   v-if="cap.hasTarget" 渲染 target 口、v-if="cap.hasSource" 渲染 source 口。
  */
 import { computed } from "vue";
-import type { NodeStoreService } from "@mini-canvas/canvas-core-v2";
+import type { NodeStoreService } from "@mini-canvas/canvas-data";
 import { useCanvasRender } from "@mini-canvas/canvas-render";
 
 export function useNodeCapability(type: string) {
@@ -42,8 +42,14 @@ export function useNodeCapability(type: string) {
   /** 该 type 是否声明支持 resize（类型级能力；缺省 false）。BaseNode 据此显示拖柄。 */
   const resizable = computed(() => nodeDef.value?.resizable === true);
 
+  /**
+   * 该 type 是否声明"不要卡片边框"（缺省 false = 用外壳的默认边框）。
+   * 给内容铺满整张卡的类型（图片）用：外壳的 1px 边框对它们只是内容边缘多余的一圈缝。
+   */
+  const frameless = computed(() => nodeDef.value?.frameless === true);
+
   /** 该 type 声明的图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省 undefined = 标题不显示图标） */
   const icon = computed(() => nodeDef.value?.icon);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon };
+  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless };
 }

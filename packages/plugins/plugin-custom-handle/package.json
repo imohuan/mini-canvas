@@ -16,10 +16,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-core-v2": "workspace:*"
-  },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*"
   },

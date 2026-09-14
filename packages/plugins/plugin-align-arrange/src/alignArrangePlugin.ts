@@ -13,12 +13,7 @@
  * - align-arrange:compact-arrowleft/right/up/down —— 老版核心：沿方向紧凑推挤排列（Ctrl+方向键）
  */
 import type { ConfigSchema, Context, InferConfig, PluginModule } from '@mini-canvas/canvas-base'
-import type {
- NodeStoreService,
- SelectionService,
-  GraphDocumentService,
- CanvasNode,
-} from '@mini-canvas/canvas-core-v2'
+import type { NodeStoreService, SelectionService, GraphDocumentService, CanvasNode } from '@mini-canvas/canvas-data'
 import {
   alignNodes,
   distributeNodes,
@@ -33,7 +28,7 @@ interface NodeLayoutLike {
   nodeSize(id: string): { w: number; h: number }
 }
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     nodeStore: NodeStoreService
     selection: SelectionService

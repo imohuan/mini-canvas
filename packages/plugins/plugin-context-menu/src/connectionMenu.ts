@@ -12,12 +12,8 @@
  *   - 从输入口反向拖出（新节点是 source）→ 新节点输出口在右缘，卡片右缘中点落在松手点。
  * 临时卡片与创建出的真节点用**同一个** placeByPortAnchor，所以点菜单项时端口不跳位。
  */
-import {
-  isTransient,
-  validateConnection,
-  type ExistingEdge,
-  type NodeConnectionDef,
-} from '@mini-canvas/canvas-core-v2'
+import { isTransient } from '@mini-canvas/canvas-data'
+import { validateConnection, type ExistingEdge, type NodeConnectionDef } from '@mini-canvas/canvas-data'
 import type { ContextMenuItem, MenuNodeTypeLike } from './menuBuilder'
 
 /** 临时菜单节点的节点类型名（本插件经 ctx.nodes.register 注册，带菜单卡片 content） */

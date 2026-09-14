@@ -13,14 +13,10 @@
  * 依赖：save（内核）、nodeStore/edgeStore（内核；订阅数据变化置脏）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type {
-  SaveService,
-  NodeStoreService,
-  EdgeStoreService,
-} from '@mini-canvas/canvas-core-v2'
+import type { SaveService, NodeStoreService, EdgeStoreService } from '@mini-canvas/canvas-data'
 import { createAutoSaveEngine, type AutoSaveEngine } from './autoSaveEngine'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     save: SaveService
     nodeStore: NodeStoreService

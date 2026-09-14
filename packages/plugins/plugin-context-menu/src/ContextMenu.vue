@@ -11,7 +11,7 @@
  * 点击 props.onSelect(item)；点外部/按 Esc/滚动关闭由宿主插件负责监听。
  */
 import { computed } from 'vue'
-import { iconRenderMode } from '@mini-canvas/canvas-core-v2'
+import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 import { splitComboChips } from './shortcutText'
 

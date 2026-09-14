@@ -50,8 +50,8 @@ import type {
   ConfigSchema,
   InferConfig,
 } from '@mini-canvas/canvas-base'
-import type { SelectionService } from '@mini-canvas/canvas-core-v2'
-import { isTransient } from '@mini-canvas/canvas-core-v2'
+import type { SelectionService } from '@mini-canvas/canvas-data'
+import { isTransient } from '@mini-canvas/canvas-data'
 import { getFontEmbedCSS, toCanvas } from 'html-to-image'
 import {
   EXPORT_SCALE_DEFAULT,
@@ -77,7 +77,7 @@ import {
 } from './exportGeometry'
 
 /** 类型增强缝：宿主「恒在服务」上 ctx.selection 直访（与 plugin-canvas-commands 同款写法） */
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context {
     selection: SelectionService
   }

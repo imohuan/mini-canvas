@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CommandRegistry, Context, History, type HistorySnapshot } from '@mini-canvas/canvas-core-v2'
+import { Context } from '@mini-canvas/canvas-data'
+import { History, type HistorySnapshot } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@mini-canvas/kernel'
 import { historyPlugin, name } from '../historyPlugin'
 
 /** 极简快照存储：外部 state 引用 + 深拷贝桥 */

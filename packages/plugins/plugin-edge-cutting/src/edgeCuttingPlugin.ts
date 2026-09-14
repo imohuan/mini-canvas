@@ -17,7 +17,7 @@
  *   isPolylineHitByCut 判定折线相交（纯几何，geometry.ts 可单测）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-core-v2'
+import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-data'
 import type { ScreenPoint } from './geometry'
 import {
   cutTrailOnly,
