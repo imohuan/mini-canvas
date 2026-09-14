@@ -90,27 +90,27 @@ describe('SelectionFrame 渲染（两个框不能重合）', () => {
     // 并集 x:100..700 y:200..460 → 600×260
     expect(inner).toContain('width:600px')
     expect(inner).toContain('height:260px')
-    // 旧 bug 的形态：内框被写成外框尺寸（632×312）→ 明确断言"不是它"
+    // 旧 bug 的形态：内框被写成外框尺寸（632×310）→ 明确断言"不是它"
     expect(inner).not.toContain('632px')
-    expect(inner).not.toContain('312px')
+    expect(inner).not.toContain('310px')
   })
 
-  it('外框尺寸 = 节点并集 + padding（左右各 16、上 36、下 16）', async () => {
+  it('外框尺寸 = 节点并集 + padding（左右各 16、上 34、下 16 —— 对齐 v1 默认值）', async () => {
     const html = await render()
     const outer = styleOf(html, 'selection-frame-outer')
     expect(outer).toContain('width:632px')
-    expect(outer).toContain('height:312px')
+    expect(outer).toContain('height:310px')
     expect(outer).toContain('left:84px')
-    expect(outer).toContain('top:164px')
+    expect(outer).toContain('top:166px')
   })
 
   it('内框落在外框内侧：外框左上角 + padding = 内框左上角（不与外框错位）', async () => {
     const html = await render()
     const inner = styleOf(html, 'selection-frame-inner')
     const outer = styleOf(html, 'selection-frame-outer')
-    // 外框 (84,164) + padding (16,36) = 内框 (100,200) = 节点并集左上角
+    // 外框 (84,166) + padding (16,34) = 内框 (100,200) = 节点并集左上角
     expect(outer).toContain('left:84px')
-    expect(outer).toContain('top:164px')
+    expect(outer).toContain('top:166px')
     expect(inner).toContain('left:100px')
     expect(inner).toContain('top:200px')
   })

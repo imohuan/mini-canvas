@@ -60,9 +60,9 @@ describe('Config schema（这些项必须出现在设置页面里）', () => {
       .toEqual(['solid', 'dashed', 'dotted'])
   })
 
-  it('默认值对齐老版观感：左右 16 / 上 36 / 下 16，外框灰虚线、内框浅蓝实线', () => {
+  it('默认值对齐老版（v1 selectionFramePadding*）：左右 16 / 上 34 / 下 16，外框灰虚线、内框浅蓝实线', () => {
     expect(DEFAULT_MULTI_SELECT_FRAME.paddingX).toBe(16)
-    expect(DEFAULT_MULTI_SELECT_FRAME.paddingTop).toBe(36)
+    expect(DEFAULT_MULTI_SELECT_FRAME.paddingTop).toBe(34)
     expect(DEFAULT_MULTI_SELECT_FRAME.paddingBottom).toBe(16)
     expect(DEFAULT_MULTI_SELECT_FRAME.outer).toEqual({
       color: '#94a3b8',
@@ -181,4 +181,3 @@ describe('frameStrokeCss / hexToRgba（生成出的样式就是配置的直接�
     expect(hexToRgba('#ffffff', 5)).toBe('rgba(255, 255, 255, 1)')
   })
 })
-

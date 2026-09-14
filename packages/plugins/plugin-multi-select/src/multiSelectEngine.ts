@@ -39,7 +39,7 @@ export interface SelectionFramePadding {
 
 export const DEFAULT_SELECTION_FRAME_PADDING: SelectionFramePadding = {
   paddingX: 16,
-  paddingTop: 36,
+  paddingTop: 34,
   paddingBottom: 16,
 }
 

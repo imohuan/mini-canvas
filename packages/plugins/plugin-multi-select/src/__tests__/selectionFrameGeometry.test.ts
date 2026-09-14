@@ -21,7 +21,7 @@ function r(id: string, x: number, y: number, w = 100, h = 80): MultiSelectRect {
   return { id, x, y, w, h }
 }
 
-const PAD = { paddingX: 16, paddingTop: 36, paddingBottom: 16 }
+const PAD = { paddingX: 16, paddingTop: 34, paddingBottom: 16 }
 
 describe('computeSelectionFrameGeometry（内外双框）', () => {
   it('小框 = 选中节点的最小并集（尺寸不掺 padding）', () => {
@@ -35,7 +35,7 @@ describe('computeSelectionFrameGeometry（内外双框）', () => {
     const union = computeUnionBounds([r('a', 100, 200, 300, 120)])!
     const g = computeSelectionFrameGeometry([r('a', 100, 200, 300, 120)], PAD)!
     expect(g.outer).toEqual(paddedBounds(union, PAD))
-    expect(g.outer).toEqual({ id: '', x: 84, y: 164, w: 332, h: 172 })
+    expect(g.outer).toEqual({ id: '', x: 84, y: 166, w: 332, h: 170 })
   })
 
   it('小框落在大框内 = 左/上各内缩 padding（小框完整套在大框里，绝不交叉）', () => {
@@ -53,7 +53,7 @@ describe('computeSelectionFrameGeometry（内外双框）', () => {
     expect(g.outer.y + g.outer.h).toBeGreaterThanOrEqual(g.inner.y + g.inner.h)
   })
 
-  it('默认 padding 与老版一致（左右 16 / 上 36 / 下 16）', () => {
+  it('默认 padding 与老版 v1 一致（左右 16 / 上 34 / 下 16）', () => {
     expect(DEFAULT_SELECTION_FRAME_PADDING).toEqual(PAD)
   })
 

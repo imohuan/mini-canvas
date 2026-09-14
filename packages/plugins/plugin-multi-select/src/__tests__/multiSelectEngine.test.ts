@@ -52,7 +52,7 @@ describe('computeUnionBounds / paddedBounds', () => {
   it('padding 向外扩（X 左右各扩，Top 向上扩，Bottom 向下扩）', () => {
     const b = computeUnionBounds([r('a', 0, 0, 100, 80)])!
     const p = paddedBounds(b, DEFAULT_SELECTION_FRAME_PADDING)
-    expect(p).toEqual({ id: '', x: -16, y: -36, w: 100 + 32, h: 80 + 36 + 16 })
+    expect(p).toEqual({ id: '', x: -16, y: -34, w: 100 + 32, h: 80 + 34 + 16 })
   })
   it('空输入返回 null', () => {
     expect(computeUnionBounds([])).toBeNull()
