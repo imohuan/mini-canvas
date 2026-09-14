@@ -1,6 +1,6 @@
 # 计划：cloud-server 服务端 + 云端保存插件
 
-日期：2026-09-14 · 分支：当前分支 · 状态：**待开工**
+日期：2026-09-14 · 分支：当前分支 · 状态：**已完成**（M1~M6 全部达成，见文末验收记录）
 
 > 用户诉求（原话要点）：
 > 1. **不扩展 `packages/mcp-server`**，另起一套 `packages/cloud-server`
@@ -310,3 +310,54 @@ cd packages/cloud-server; node ./dist/cli.js serve --port 8865
    （建议先 `canvas` + `resource`；`config` 上云会让设置面板也跟着走云端，可能不是你想要的）
 4. **风险 3 的取舍**：插件打成 UMD（要 ui 暴露全局）还是 ESM（ui 用动态 import，无需全局）？
    我倾向 **ESM**——ui 本身就是 ESM，`manager.install({ url })` 内部走 `import()`，天然兼容。
+
+---
+
+## 十、实施记录（2026-09-15 完成）
+
+上面 §九 的四个待确认项，按计划默认值推进，其中两处按实情偏离：
+
+1. **端口** 8865（照计划）。
+2. **数据目录** `.mini-canvas/`（照计划，支持 `--dir`）。
+3. **上云域** 默认 `canvas` + `resource`；`config` 做成开关 `cloudSaveIncludeConfig`，默认关
+   （设置留在本地，多机器共享设置往往不是用户想要的）。
+4. **插件打包** ESM（照倾向）。**§七-3 那个"最可能翻车的地方"确实是真的**，实测确认：
+   仓库里多数插件打的是 UMD，而宿主加载路径是 fetch 文本 → `import(data:text/javascript,...)`，
+   data: URL 里裸模块名解析不了、UMD 又去找全局变量，**两条都会在浏览器里直接抛错**。
+
+   于是插件做成**自包含 ESM（单文件、零 import）**：不用 Vue、所有常量就地内联，产物里
+   没有任何 import。常量与数据层的一致性由 `keys.test.ts` 与 canvas-data 的导出逐字比对守住。
+
+   连带修正：`/plugin-manifest.json` 改为**只列 ESM 产物**（判据=文件里有顶层 export）。
+   一开始把 6 个 UMD 插件都列了进去，画布每次开都在 console 刷一串加载失败告警却什么也没装上。
+
+### 与计划的其它偏离
+
+- **§一 的时序方案照做**（插件自带"云端优先恢复"），但额外发现一个坑：`sync()` 不能顺带
+  "重新拉云端"——手动同步发生在用户已经改过本地之后，拉回来会把刚做的改动抹掉。
+  故 `sync()` 只做上行；重新以云端为准 = 重新装载插件（install 那一次才拉）。
+- **同步串行化**：安装同步 / 节点变化触发 / 手动 sync 可能同时在飞，放任并发会把同一张图
+  上传两次。排成一条 promise 链后，后一趟看到的是已写回的 URL。
+- **批量读接口**：恢复要读 graph / graph-edges / graph-viewport 三个 key，逐个 GET 时未保存的
+  会各回一个 404，浏览器控制台记"加载资源失败"（语义没错但看着像坏了）。
+  新增 `GET /api/kv/:type?values=1` 一次拿齐，控制台彻底干净。单项 GET 的 404 语义不变。
+- **CLI 命令名**用 `mini-canvas-cloud` 而非 `mini-canvas`：mcp-server 的 bin 已经叫 `mini-canvas`，
+  两个包同名会互相静默覆盖。
+
+### 验收证据（真实环境）
+
+单元测试 **71 条**（cloud-server 38 + plugin-cloud-save 33），另全仓 **1591 条**全绿。
+
+真 Chrome（headless + CDP）端到端，全部通过：
+
+| 判据 | 结果 |
+|---|---|
+| 打开 `http://127.0.0.1:8899/` 看到真画布 | VueFlow 挂载、seed 2 节点 |
+| 外部插件清单被读到并装上 | `cloud-save` 进 `listPlugins()`，服务可查 |
+| 建节点 → 服务器 json 随之变化 | 磁盘出现 `canvas%3Agraph.json`，节点数/边数一致 |
+| **换浏览器 profile（=换机器）打开 → 画布完整恢复** | 5 个节点 id 与连线逐一吻合 |
+| 上传大图 → 搬到服务器，刷新仍在 | 节点 `imageUrl` → `/uploads/<hash>.png`，URL 可取回 46KB 真字节 |
+| 控制台零报错 | 第一/二轮均无 error，无 4xx 请求 |
+
+另：`npm i <tarball>` 到干净目录后 `npx mini-canvas-cloud serve` 可独立启动，
+API 全部可用；未装 ui 产物时给人话提示页而不是白屏。
