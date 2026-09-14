@@ -88,6 +88,75 @@ export class CdpPage {
     await this.send('Page.navigate', { url })
   }
 
+  /**
+   * 真鼠标手势（按下 → 逐步移动 → 抬起）。
+   *
+   * 为什么必须走 CDP 的原生输入事件而不是页面里的 `dispatchEvent`：
+   * 我们要验的正是"用户真的能拖/能连"，而合成事件绕过了浏览器的命中测试与
+   * pointer 事件链，测过了也说明不了问题。分步移动是因为 VueFlow 的拖拽有移动阈值，
+   * 一步跳过去会被判成点击。
+   */
+  async dragMouse(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    steps = 12,
+  ): Promise<void> {
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: from.x,
+      y: from.y,
+      button: 'none',
+      buttons: 0,
+    })
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: from.x,
+      y: from.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+    })
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps
+      await this.send('Input.dispatchMouseEvent', {
+        type: 'mouseMoved',
+        x: Math.round(from.x + (to.x - from.x) * t),
+        y: Math.round(from.y + (to.y - from.y) * t),
+        button: 'left',
+        buttons: 1,
+      })
+      await sleep(16)
+    }
+    await this.send('Input.dispatchMouseEvent', {
+      type: 'mouseReleased',
+      x: to.x,
+      y: to.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+    })
+  }
+
+  /** 真键盘按键（如 Delete） */
+  async pressKey(key: string): Promise<void> {
+    const code = key === 'Delete' ? 'Delete' : key
+    const keyCode = key === 'Delete' ? 46 : 0
+    await this.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+      nativeVirtualKeyCode: keyCode,
+    })
+    await this.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key,
+      code,
+      windowsVirtualKeyCode: keyCode,
+      nativeVirtualKeyCode: keyCode,
+    })
+  }
+
   close(): void {
     this.ws.close()
   }
