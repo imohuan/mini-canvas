@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "build:assets": "pnpm --filter @mini-canvas/ui build && pnpm --filter @mini-canvas/plugin-cloud-save build && node scripts/bundle-assets.mjs",
-    "prepack": "node scripts/bundle-assets.mjs",
+    "prepack": "pnpm run build && node scripts/bundle-assets.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "serve": "node ./dist/cli.js serve",
