@@ -18,6 +18,9 @@ import { FileStore } from './store/fileStore.js'
 import { kvRoutes } from './routes/kv.js'
 import { fileRoutes } from './routes/files.js'
 import { pluginRoutes, resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
+import { mcpRoutes } from './routes/mcp.js'
+import { CanvasDocument } from './mcp/canvasDoc.js'
+import { TOOL_LIST } from './mcp/server.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
 export const DEFAULT_PORT = 8865
@@ -36,6 +39,12 @@ export interface CloudServerOptions {
   uiDist?: string
   /** 插件目录（含各插件的 dist）；不传则自动探测 packages/plugins */
   pluginsDir?: string
+  /**
+   * 是否同时提供 MCP 接口（`/mcp`）。缺省 **开**：
+   * AI 与网页画布共用同一个服务、同一份数据，是这个服务的主要用法。
+   * 只想当静态托管 + KV 接口用时可关掉。
+   */
+  mcp?: boolean
 }
 
 export interface CloudServer {
@@ -47,6 +56,10 @@ export interface CloudServer {
   stop(): void
   /** 解析后的实际路径（启动时用于打印，便于确认数据落在哪） */
   paths: { data: string; kv: string; uploads: string; ui?: string; plugins?: string }
+  /** MCP 是否开着 */
+  mcpEnabled: boolean
+  /** 开放的 MCP 工具清单（关闭时为空数组） */
+  tools: readonly { name: string; description: string }[]
 }
 
 export async function createCloudServer(opts: CloudServerOptions = {}): Promise<CloudServer> {
@@ -57,6 +70,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   const kvStore = new KvStore(dataDir)
   const fileStore = new FileStore(dataDir)
+  // MCP 与网页界面共用同一个存储根 → 两边看到的是同一张画布
+  const doc = new CanvasDocument(kvStore)
 
   const app = new Hono()
   // 允许跨域：画布可能在 ui dev server(5288) 跑，数据想指到本服务
@@ -65,6 +80,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 挂载顺序即匹配优先级：接口在前，最后的 ui 通配（含 SPA 回落）兜底
   app.route('/', kvRoutes(kvStore))
   app.route('/', fileRoutes(fileStore))
+  // MCP 服务挂同一端口（缺省开）。放在静态托管之前，避免被 SPA 回落吞掉。
+  const mcpEnabled = opts.mcp !== false
+  if (mcpEnabled) app.route('/', mcpRoutes(doc))
   app.route('/', pluginRoutes(pluginsDir))
   app.route('/', uiRoutes(uiDist))
 
@@ -80,6 +98,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       ...(uiDist ? { ui: uiDist } : {}),
       ...(pluginsDir ? { plugins: pluginsDir } : {}),
     },
+    mcpEnabled,
+    tools: mcpEnabled ? TOOL_LIST : [],
     start() {
       return new Promise((resolve, reject) => {
         let listening = false

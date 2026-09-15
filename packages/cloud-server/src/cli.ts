@@ -23,12 +23,15 @@ interface CliOptions {
   ui?: string
   plugins?: string
   open: boolean
+  /** 是否提供 MCP 接口（缺省开） */
+  mcp: boolean
 }
 
 const HELP = `mini-canvas-cloud —— 自托管画布服务
 
 用法:
   mini-canvas-cloud serve [选项]      起服务（默认子命令）
+  mini-canvas-cloud list-tools        列出 MCP 暴露的工具
   mini-canvas-cloud --help            看这份帮助
   mini-canvas-cloud --version         看版本
 
@@ -38,11 +41,13 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
       --host <地址>   监听地址（默认 127.0.0.1，只本机可访问）
       --ui <目录>     画布界面产物目录（默认自动探测 packages/ui/dist）
       --plugins <目录> 插件目录（默认自动探测 packages/plugins）
+      --no-mcp        不提供 MCP 接口（默认提供）
       --open          启动后自动打开浏览器（默认开）
       --no-open       不自动打开浏览器
 
-启动后:
+启动后（网页与 MCP 共用一个服务、一份数据）:
   http://127.0.0.1:<端口>/            画布界面
+  http://127.0.0.1:<端口>/mcp          MCP 接口（Streamable HTTP，配置给 AI 客户端）
   GET|PUT|DELETE /api/kv/:type/:key   画布数据读写
   POST /api/files · GET /uploads/*    资源上传与回读
   GET /plugin-manifest.json           外部插件清单
@@ -57,6 +62,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     dir: DEFAULT_DATA_DIR,
     hostname: '127.0.0.1',
     open: true,
+    mcp: true,
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -77,6 +83,8 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--host' || a === '--hostname') opts.hostname = takeValue(a)
     else if (a === '--ui') opts.ui = takeValue(a)
     else if (a === '--plugins') opts.plugins = takeValue(a)
+    else if (a === '--mcp') opts.mcp = true
+    else if (a === '--no-mcp') opts.mcp = false
     else if (a === '--open') opts.open = true
     else if (a === '--no-open') opts.open = false
     else if (a === '-h' || a === '--help') {
@@ -84,6 +92,12 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
       process.exit(0)
     } else if (a === '-v' || a === '--version') {
       console.log(await readVersion())
+      process.exit(0)
+    } else if (a === 'list-tools') {
+      // 打印 MCP 工具面（不启服务）—— 配 AI 客户端前先看它能干什么
+      const { listTools } = await import('./mcp/server.js')
+      console.log('MCP 暴露的工具:')
+      for (const t of listTools()) console.log(`  - ${t.name}: ${t.description}`)
       process.exit(0)
     } else {
       throw new Error(`未知参数: ${a}（--help 看用法）`)
@@ -119,6 +133,7 @@ async function startWithPortFallback(opts: CliOptions) {
       hostname: opts.hostname,
       ...(opts.ui ? { uiDist: opts.ui } : {}),
       ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
+      mcp: opts.mcp,
     })
     try {
       const info = await srv.start()
@@ -150,6 +165,13 @@ async function main(): Promise<void> {
   console.log(`  界面   ${srv.paths.ui ?? '未找到 packages/ui/dist —— 先执行 cd packages/ui && pnpm build'}`)
   console.log(`  插件   ${srv.paths.plugins ?? '(未找到插件目录)'} · 清单里 ${manifest.length} 个`)
   for (const p of manifest) console.log(`         - ${p.id}  → ${p.url}`)
+  if (srv.mcpEnabled) {
+    // MCP 地址一定要显眼：用户是拿这行去配 AI 客户端的
+    console.log('')
+    console.log(`  MCP    ${info.url}/mcp`)
+    console.log(`         工具 ${srv.tools.map((t) => t.name).join(' · ')}`)
+    console.log('         （Streamable HTTP；AI 与网页画布共用同一份数据）')
+  }
   console.log('')
   console.log('  按 Ctrl+C 停止')
   console.log('')

@@ -23,3 +23,17 @@ export {
 export type { ManifestPluginEntry } from './static.js'
 export { kvRoutes } from './routes/kv.js'
 export { fileRoutes } from './routes/files.js'
+export { mcpRoutes } from './routes/mcp.js'
+export { CanvasDocument, GRAPH_KEY, GRAPH_EDGES_KEY, GRAPH_VIEWPORT_KEY, edgeIdOf } from './mcp/canvasDoc.js'
+export type {
+  CanvasNode,
+  CanvasEdge,
+  CanvasSnapshot,
+  BatchResult,
+  AddNodeInput,
+  AddEdgeInput,
+  NodeBatchInput,
+  EdgeBatchInput,
+} from './mcp/canvasDoc.js'
+export { createCanvasMcpServer, listTools, TOOL_LIST } from './mcp/server.js'
+export type { McpTool } from './mcp/server.js'

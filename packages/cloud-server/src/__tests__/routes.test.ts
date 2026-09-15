@@ -298,3 +298,50 @@ describe('ui / 插件目录探测顺序', () => {
     await expect(resolvePluginsDir('D:/definitely/not/here/xyz')).rejects.toThrow('--plugins 指定的目录不存在')
   })
 })
+
+describe('MCP 与网页共用一个服务', () => {
+  it('缺省就带 MCP 端点（POST 一次 initialize 能拿到服务端信息）', async () => {
+    const res = await srv.app.fetch(
+      new Request('http://localhost/mcp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } },
+        }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const text = await res.text()
+    expect(text).toContain('mini-canvas-cloud')
+  })
+
+  it('服务里报告了 MCP 开着、并列出工具', () => {
+    expect(srv.mcpEnabled).toBe(true)
+    expect(srv.tools.map((t) => t.name)).toContain('canvas.batch_nodes')
+  })
+
+  it('--no-mcp（opts.mcp=false）时端点不存在，但网页与 KV 接口照常', async () => {
+    const s = await createCloudServer({ dir, mcp: false })
+    try {
+      expect(s.mcpEnabled).toBe(false)
+      expect(s.tools).toEqual([])
+      const mcp = await s.app.fetch(
+        new Request('http://localhost/mcp', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }),
+        }),
+      )
+      // 没有 MCP 路由时，请求会落到静态兜底（SPA 回落给 index.html），不会是 JSON-RPC 响应
+      const text = await mcp.text()
+      expect(text).not.toContain('mini-canvas-cloud')
+      // KV 接口不受影响
+      expect((await s.app.fetch(new Request('http://localhost/health'))).status).toBe(200)
+    } finally {
+      s.stop()
+    }
+  })
+})
