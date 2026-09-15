@@ -139,6 +139,17 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
   const out: ManifestPluginEntry[] = []
   for (const name of names.sort()) {
     if (name.startsWith('_') || name.startsWith('.')) continue
+
+    // —— 形态一：目录下直接放的单个 .js 文件 ——
+    // 这是给"手写个小插件试一下"准备的：扔一个 js 进来就行，不用搭 <包名>/dist/ 那套目录。
+    // 前提同样是它得是 ESM（有顶层 export），否则浏览器那边加载会炸。
+    if (name.endsWith('.js') && !name.endsWith('.min.js')) {
+      if (!(await looksLikeEsm(path.join(pluginsDir, name)))) continue
+      out.push({ id: name.slice(0, -'.js'.length), url: `/plugins/${name}` })
+      continue
+    }
+
+    // —— 形态二：<包名>/dist/<产物>.js （vite 打包出来的插件包） ——
     const dist = path.join(pluginsDir, name, 'dist')
     if (!(await isDir(dist))) continue
     const files = (await fs.readdir(dist)).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))
@@ -153,17 +164,92 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
 /**
  * 判断一个打包产物能不能当 URL 模块加载（即是不是 ES 模块）。
  *
- * 判据用"有顶层 export 语句"：vite 的 es 产物结尾是 `export{a as b,...}`；
- * UMD 产物整个包在 `(function(){...})()` 里、没有顶层 export，于是被排除。
- * 只看前 4KB + 全文扫 export 两处，够用且不用完整解析 JS。
+ * 判据是"有顶层 export 语句"。UMD 产物整个包在 `(function(){...})()` 里、没有任何顶层
+ * export，于是被排除；ESM 一定有 export。
+ *
+ * 要把 ESM 的各种写法都认出来 —— 最初只认 `export {` 和 `export default`，害得**手写的
+ * 单文件插件**（最常见就是 `export const name = ...` 开头）被当成 UMD 拒之门外，用户把
+ * 文件丢进插件目录却怎么刷都不出现。这些形式都得认：
+ *   export const/let/var/function/class/async      命名声明导出
+ *   export { a, b as c }                           导出列表
+ *   export default ...                             默认导出
+ *   export * from '...'                            再导出
+ *
+ * 实现上先剥掉注释与字符串再扫，避免"注释里写了 export"造成误判；
+ * 不做完整 JS 解析（没必要，也省一个依赖）。
  */
 async function looksLikeEsm(file: string): Promise<boolean> {
   try {
     const text = await fs.readFile(file, 'utf8')
-    return /(^|[\n;])\s*export\s*[{*]/.test(text) || /\n\s*export\s+default\b/.test(text)
+    return hasTopLevelExport(text)
   } catch {
     return false
   }
+}
+
+/** 是否存在顶层 `export` 语句（词法扫描，跳过注释与字符串） */
+export function hasTopLevelExport(source: string): boolean {
+  const code = stripCommentsAndStrings(source)
+  return /(^|[\n;{}(])\s*export\b/.test(code)
+}
+
+/**
+ * 把注释与字符串字面量替换成等长空白（保留换行，行号/位置关系不被打乱）。
+ * 目的是不让注释或字符串里出现的 `export` 造成误判。
+ */
+function stripCommentsAndStrings(src: string): string {
+  let out = ''
+  let i = 0
+  const n = src.length
+  while (i < n) {
+    const c = src[i]
+    const next = src[i + 1]
+    // 行注释
+    if (c === '/' && next === '/') {
+      while (i < n && src[i] !== '\n') {
+        out += ' '
+        i++
+      }
+      continue
+    }
+    // 块注释
+    if (c === '/' && next === '*') {
+      out += '  '
+      i += 2
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) {
+        out += src[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < n) {
+        out += '  '
+        i += 2
+      }
+      continue
+    }
+    // 字符串字面量（' " ` 三种引号；模板串里的 ${} 也一并当字符串处理，足够用）
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c
+      out += ' '
+      i++
+      while (i < n && src[i] !== quote) {
+        if (src[i] === '\\') {
+          out += '  '
+          i += 2
+          continue
+        }
+        out += src[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      if (i < n) {
+        out += ' '
+        i++
+      }
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
 }
 
 /** 插件 id：优先 package.json 的 name（去掉 @mini-canvas/ 作用域，稳定且人可读），否则用目录名 */
@@ -250,6 +336,22 @@ export function pluginRoutes(pluginsDir: string | undefined): Hono {
     return c.body(bytes, 200, {
       'content-type': MIME_BY_EXT['.js'],
       // 开发期别缓存插件：改完刷新就要生效
+      'cache-control': 'no-cache',
+    })
+  })
+
+  // 扁平形态：插件目录下直接放的单个 js（`/plugins/my-plugin.js`）。
+  // 注册在上面那条带目录的路由之后，避免把 `/plugins/pkg/file.js` 抢走。
+  app.get('/plugins/:file', async (c) => {
+    const file = c.req.param('file')
+    if (!pluginsDir) return c.json({ ok: false, error: '未配置插件目录' }, 404)
+    if (!/^[\w.-]+\.js$/.test(file) || file.includes('..')) {
+      return c.json({ ok: false, error: '非法路径' }, 400)
+    }
+    const bytes = await readWithin(pluginsDir, file)
+    if (!bytes) return c.json({ ok: false, error: '插件文件不存在' }, 404)
+    return c.body(bytes, 200, {
+      'content-type': MIME_BY_EXT['.js'],
       'cache-control': 'no-cache',
     })
   })

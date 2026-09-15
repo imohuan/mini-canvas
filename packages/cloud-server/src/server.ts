@@ -71,7 +71,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const kvStore = new KvStore(dataDir)
   const fileStore = new FileStore(dataDir)
   // MCP 与网页界面共用同一个存储根 → 两边看到的是同一张画布
-  const doc = new CanvasDocument(kvStore)
+  // 资源也共用同一个 FileStore：MCP 传的图和网页端上传的图落在同一处、同内容还会去重
+  const doc = new CanvasDocument(kvStore, fileStore)
 
   const app = new Hono()
   // 允许跨域：画布可能在 ui dev server(5288) 跑，数据想指到本服务

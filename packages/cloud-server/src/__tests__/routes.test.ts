@@ -10,7 +10,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer, type CloudServer } from '../server'
-import { resolvePluginsDir, resolveUiDist } from '../static'
+import { hasTopLevelExport, resolvePluginsDir, resolveUiDist } from '../static'
 
 let dir: string
 let srv: CloudServer
@@ -283,6 +283,72 @@ describe('插件清单与产物', () => {
 })
 
 describe('ui / 插件目录探测顺序', () => {
+  it('手写的单文件插件（export const name）也要被认出来', async () => {
+    const pluginsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'drop-plugins-'))
+    // 这是最常见的"手写小插件"开头。早先的检测只认 `export {` / `export default`，
+    // 把这种漏掉了 —— 用户把 js 丢进插件目录却怎么刷都不出现。
+    await fs.writeFile(
+      path.join(pluginsDir, 'my-plugin.js'),
+      "export const name = 'my-plugin'\nexport function apply(ctx) {}",
+    )
+    const s = await createCloudServer({ dir, pluginsDir })
+    try {
+      const json: any = await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()
+      expect(json.plugins).toEqual([{ id: 'my-plugin', url: '/plugins/my-plugin.js' }])
+      // 产物也要取得到
+      const js = await s.app.fetch(new Request('http://localhost/plugins/my-plugin.js'))
+      expect(js.status).toBe(200)
+      expect(await js.text()).toContain("name = 'my-plugin'")
+    } finally {
+      s.stop()
+      await fs.rm(pluginsDir, { recursive: true, force: true })
+    }
+  })
+
+  it('目录下直接放的 js 与 <包>/dist 两种形态可以共存', async () => {
+    const pluginsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'both-plugins-'))
+    await fs.writeFile(path.join(pluginsDir, 'flat.js'), 'export const name = "flat"')
+    await fs.mkdir(path.join(pluginsDir, 'packed', 'dist'), { recursive: true })
+    await fs.writeFile(path.join(pluginsDir, 'packed', 'dist', 'packed.js'), 'const n="p";export{n as name};')
+    const s = await createCloudServer({ dir, pluginsDir })
+    try {
+      const json: any = await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()
+      expect(json.plugins.map((p: { id: string }) => p.id).sort()).toEqual(['flat', 'packed'])
+    } finally {
+      s.stop()
+      await fs.rm(pluginsDir, { recursive: true, force: true })
+    }
+  })
+
+  it('UMD 产物仍然被拒（它走 data: URL 加载会炸）', async () => {
+    const pluginsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'umd-plugins-'))
+    await fs.writeFile(path.join(pluginsDir, 'umd.js'), '(function(){window.X={name:"u"}})();')
+    const s = await createCloudServer({ dir, pluginsDir })
+    try {
+      const json: any = await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()
+      expect(json.plugins).toEqual([])
+    } finally {
+      s.stop()
+      await fs.rm(pluginsDir, { recursive: true, force: true })
+    }
+  })
+
+  it('hasTopLevelExport 认得各种 ESM 写法，且不被注释/字符串骗过', () => {
+    // 该认的
+    expect(hasTopLevelExport("export const name = 'x'")).toBe(true)
+    expect(hasTopLevelExport('export function apply() {}')).toBe(true)
+    expect(hasTopLevelExport('export default { name: "x" }')).toBe(true)
+    expect(hasTopLevelExport('const a = 1; export { a };')).toBe(true)
+    expect(hasTopLevelExport('export * from "./x"')).toBe(true)
+    expect(hasTopLevelExport('export class P {}')).toBe(true)
+    expect(hasTopLevelExport('export async function a() {}')).toBe(true)
+    // 不该认的
+    expect(hasTopLevelExport('(function(){ window.X = {} })();')).toBe(false)
+    expect(hasTopLevelExport('// export const name = "x"')).toBe(false)
+    expect(hasTopLevelExport('const s = "export const name"')).toBe(false)
+    expect(hasTopLevelExport('/* export default 1 */')).toBe(false)
+  })
+
   it('仓库内路径优先于随包 assets（改了 ui 就该看到新产物，不被旧副本挡住）', async () => {
     // 本仓库里 packages/ui/dist 是存在的（构建过），探测应命中它而不是包内 assets
     const ui = await resolveUiDist()

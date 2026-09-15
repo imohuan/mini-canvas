@@ -21,6 +21,7 @@
  */
 import { randomUUID } from 'node:crypto'
 import type { KvStore } from '../store/kvStore.js'
+import { extFromMime, safeExt, type FileStore } from '../store/fileStore.js'
 
 /** 画布节点图的持久化 key（type='canvas'）。值 = CanvasNode[] 或 {nodes,edges} 信封 */
 export const GRAPH_KEY = 'graph'
@@ -116,7 +117,35 @@ function clone<T>(v: T): T {
 }
 
 export class CanvasDocument {
-  constructor(private readonly kv: KvStore) {}
+  /**
+   * @param kv    画布数据（与网页界面同一份）
+   * @param files 资源存储（与网页端 `POST /api/files` 同一个 FileStore）
+   */
+  constructor(
+    private readonly kv: KvStore,
+    private readonly files?: FileStore,
+  ) {}
+
+  /**
+   * 存一个资源（图片/视频等字节），返回**同源稳定 URL**。
+   *
+   * 为什么 MCP 需要这个：AI 要往画布里放图，得先把字节交给服务器 —— 否则节点里只能写
+   * 一个外链（可能挂、可能跨域、用户换机器就取不到）。落盘后拿到 `/uploads/<hash>.png`，
+   * 与网页端上传走的是**同一个 FileStore**（同内容会去重成同一个 url）。
+   */
+  async saveResource(bytes: Uint8Array, opts: { fileName?: string; mime?: string } = {}) {
+    if (!this.files) throw new Error('[mcp] 未配置资源存储，无法保存资源')
+    if (bytes.byteLength === 0) throw new Error('[mcp] 资源内容为空')
+    // 扩展名来源：文件名 → MIME 反查。白名单外（含 .html/.js）回落空扩展名，
+    // 与网页端同规则（同源托管下这些会造成 XSS 面）。
+    const ext = safeExt(opts.fileName ?? '') || extFromMime(opts.mime ?? '')
+    return this.files.save(bytes, ext)
+  }
+
+  /** 列出已存资源的 id（AI 排查"我传的图在不在"用） */
+  async listResources(): Promise<string[]> {
+    return this.files ? this.files.ids() : []
+  }
 
   /** 读整张画布。从未保存过 = 空画布（不是错误） */
   async read(): Promise<CanvasSnapshot> {

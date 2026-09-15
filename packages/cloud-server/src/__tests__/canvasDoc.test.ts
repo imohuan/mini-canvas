@@ -11,6 +11,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { KvStore } from '../store/kvStore'
+import { FileStore } from '../store/fileStore'
 import { CanvasDocument, GRAPH_KEY, GRAPH_EDGES_KEY, edgeIdOf } from '../mcp/canvasDoc'
 
 let dir: string
@@ -20,7 +21,7 @@ let doc: CanvasDocument
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'canvas-doc-'))
   kv = new KvStore(dir)
-  doc = new CanvasDocument(kv)
+  doc = new CanvasDocument(kv, new FileStore(dir))
 })
 
 afterEach(async () => {
@@ -65,6 +66,33 @@ describe('读画布', () => {
 })
 
 describe('与网页界面共用同一份存储', () => {
+  it('MCP 存的资源落在网页端同一个 uploads 目录（同内容去重成同一个 url）', async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3])
+    const a = await doc.saveResource(bytes, { fileName: 'x.png' })
+    expect(a.url).toMatch(/^\/uploads\/[0-9a-f]{16}\.png$/)
+    expect(a.mime).toBe('image/png')
+
+    // 同一份字节再来一次 → 同一个 URL（不存两份）
+    const b = await doc.saveResource(bytes, { fileName: 'y.png' })
+    expect(b.url).toBe(a.url)
+
+    // 网页端的 FileStore 读得到同一份（同一个存储根）
+    expect(await doc.listResources()).toEqual([a.id])
+    // 直接读服务器文件核对字节
+    const back = await fs.readFile(path.join(dir, 'uploads', a.id))
+    expect(new Uint8Array(back)).toEqual(bytes)
+  })
+
+  it('存资源时扩展名走白名单（.html/.js 不按原名存，防同源 XSS）', async () => {
+    const r = await doc.saveResource(new Uint8Array([60, 104, 49, 62]), { fileName: 'evil.html' })
+    expect(r.id).not.toMatch(/\.html$/)
+    expect(r.mime).toBe('application/octet-stream')
+  })
+
+  it('空内容被拒', async () => {
+    await expect(doc.saveResource(new Uint8Array([]))).rejects.toThrow('为空')
+  })
+
   it('写入后，网页端按 canvas:graph / canvas:graph-edges 能读到同一份数据', async () => {
     await doc.batchNodes({ add: [{ type: 'text', id: 'n1', data: { text: '你好' } }] })
     await doc.batchEdges({ add: [{ source: 'n1', target: 'n1' }] }).catch(() => {})

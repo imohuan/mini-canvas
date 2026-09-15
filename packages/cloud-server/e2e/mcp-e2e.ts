@@ -14,7 +14,7 @@
  * （需要先构建 ui：cd packages/ui && pnpm build）
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { promises as fs } from 'node:fs'
+import { promises as fs, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -66,6 +66,11 @@ async function main(): Promise<void> {
     ['canvas.batch_edges', 'canvas.batch_nodes', 'canvas.get', 'canvas.overview'].every((n) => toolNames.includes(n)),
     toolNames,
   )
+  check(
+    '工具面里有资源上传（AI 要往画布放图，不能只能建空节点）',
+    ['resource.upload', 'resource.list', 'canvas.add_image'].every((n) => toolNames.includes(n)),
+    toolNames,
+  )
 
   // ==================== AI 经 MCP 改画布 ====================
   console.log('\n--- AI 经 MCP 建节点 + 连线 ---')
@@ -99,9 +104,53 @@ async function main(): Promise<void> {
     edgeCount: got.edgeCount,
   })
 
+  // ==================== AI 往画布放一张真图（资源上传）====================
+  console.log('\n--- AI 经 MCP 放一张真图（走资源上传）---')
+  // 造一张真 PNG 写到临时文件（当作"AI 手里有个本地文件"）
+  const pngBytes = makeTinyPng()
+  const pngPath = path.join(dataDir, 'ai-source.png')
+  writeFileSync(pngPath, pngBytes)
+
+  const uploadRes = parseToolResult(
+    await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }),
+  )
+  check('resource.upload 从本地路径存下资源，返回同源 URL', uploadRes.ok === true && String(uploadRes.url).startsWith('/uploads/'), uploadRes)
+  check('返回的 mime 按扩展名识别正确', uploadRes.mime === 'image/png', { mime: uploadRes.mime })
+
+  // 同一个文件再传一次 → 同一个 URL（内容去重）
+  const again = parseToolResult(await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }))
+  check('同内容重复上传返回同一个 URL（去重）', again.url === uploadRes.url, { first: uploadRes.url, second: again.url })
+
+  // 服务器上真能取回这张图
+  const fetched = await fetch(url + uploadRes.url)
+  const fetchedBytes = new Uint8Array(await fetched.arrayBuffer())
+  check('按返回的 URL 能取回原始字节', fetched.status === 200 && fetchedBytes.byteLength === pngBytes.byteLength, {
+    status: fetched.status,
+    size: fetchedBytes.byteLength,
+    want: pngBytes.byteLength,
+  })
+
+  // add_image：一步上传 + 建节点
+  const addImage = parseToolResult(
+    await client.callTool({
+      name: 'canvas.add_image',
+      arguments: { path: pngPath, position: { x: 900, y: 80 }, label: 'AI 放的图' },
+    }),
+  )
+  check('canvas.add_image 一步上传并建节点', addImage.ok === true && typeof addImage.nodeId === 'string', addImage)
+  const withImage = parseToolResult(await client.callTool({ name: 'canvas.get', arguments: {} }))
+  const imgNode = withImage.nodes.find((n: { id: string }) => n.id === addImage.nodeId)
+  check('新节点是 image 类型且指向服务器资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.url, {
+    type: imgNode?.type,
+    imageUrl: imgNode?.data?.imageUrl,
+  })
+
+  const resList = parseToolResult(await client.callTool({ name: 'resource.list', arguments: {} }))
+  check('resource.list 列出了已存资源', resList.count >= 1 && resList.resources[0].url.startsWith('/uploads/'), resList)
+
   // 磁盘上确实落了（不是只在内存里）
   const disk = diskState(dataDir)
-  check('AI 的改动落到了服务器磁盘', disk.nodes?.length === 2 && disk.edges?.length === 1, {
+  check('AI 的改动落到了服务器磁盘', disk.nodes?.length === 3 && disk.edges?.length === 1, {
     nodes: disk.nodes?.length,
     edges: disk.edges?.length,
   })
@@ -124,9 +173,24 @@ async function main(): Promise<void> {
        }
      })()`,
   )
-  check('★ 浏览器里看到 AI 建的 2 个节点', seen.nodes.length === 2 && seen.nodes.includes('ai-a') && seen.nodes.includes('ai-b'), seen)
+  check(
+    '★ 浏览器里看到 AI 建的 3 个节点（含 AI 上传的那张图）',
+    seen.nodes.length === 3 && seen.nodes.includes('ai-a') && seen.nodes.includes('ai-b') && seen.nodes.includes(addImage.nodeId),
+    seen,
+  )
   check('★ 浏览器里看到 AI 连的那条线', seen.edges === 1, { edges: seen.edges })
   check('★ 节点内容正是 AI 写的那两段文字', seen.texts.includes('AI 写的第一段') && seen.texts.includes('AI 写的第二段'), seen.texts)
+
+  // 图在浏览器里真的能显示（src 指向服务器资源且取得到）
+  const imgOk = await page.ev<{ src: string; naturalWidth: number } | null>(
+    `(() => {
+       const node = document.querySelector('.vue-flow__node[data-id="' + ${JSON.stringify(addImage.nodeId)} + '"]')
+       const el = node && node.querySelector('img')
+       if (!el) return null
+       return { src: el.getAttribute('src'), naturalWidth: el.naturalWidth }
+     })()`,
+  )
+  check('★ AI 上传的图在浏览器里真的渲染出来（不是坏图）', imgOk !== null && imgOk.src === addImage.url, imgOk)
 
   // ==================== 反向：浏览器改 → MCP 读得到 ====================
   console.log('\n--- 反向：浏览器建节点 → MCP 读得到 ---')
@@ -142,7 +206,7 @@ async function main(): Promise<void> {
   await sleep(2500) // 等网页端的防抖落盘 + 云端同步
 
   const afterWeb = parseToolResult(await client.callTool({ name: 'canvas.overview', arguments: {} }))
-  check('★ MCP 读得到浏览器刚建的那个节点（同一份数据）', afterWeb.nodeCount === 3, afterWeb)
+  check('★ MCP 读得到浏览器刚建的那个节点（同一份数据）', afterWeb.nodeCount === 4, afterWeb)
 
   const errs = page.consoleErrors.filter((e) => !/favicon/i.test(e))
   check('网页端零控制台报错', errs.length === 0, errs)
@@ -158,13 +222,24 @@ async function main(): Promise<void> {
   const client2 = new Client({ name: 'cloud-e2e-2', version: '1.0.0' })
   await client2.connect(new StreamableHTTPClientTransport(new URL(`${url2}/mcp`)))
   const afterRestart = parseToolResult(await client2.callTool({ name: 'canvas.overview', arguments: {} }))
-  check('★ 重启后画布还在（AI 的改动真的落了盘）', afterRestart.nodeCount === 3, afterRestart)
+  check('★ 重启后画布还在（AI 的改动真的落了盘）', afterRestart.nodeCount === 4, afterRestart)
   await client2.close()
   srv2.stop()
 
   await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
   console.log('\n' + (failures === 0 ? '*** 全部通过 ***' : `${failures} 项失败`))
   process.exit(failures === 0 ? 0 : 1)
+}
+
+/**
+ * 造一张**最小的合法 PNG**（1×1 真图，带正确 CRC）。
+ * 为什么不随便写几个字节冒充图片：浏览器会按真图去解码，假字节渲染不出来，
+ * 而这条用例恰恰要证明"AI 传的图在画布上真的显示出来了"。
+ */
+function makeTinyPng(): Uint8Array {
+  const b64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  return new Uint8Array(Buffer.from(b64, 'base64'))
 }
 
 /** 读服务器磁盘上的 kv 文件 */
