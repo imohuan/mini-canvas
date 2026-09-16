@@ -48,6 +48,21 @@ connectOnClick/onlyRenderVisibleElements）。本轮：
 4. 测试：canvas-render **241**（+16：schema/resolve/apply 12 条 + 宿主声明/持久化 2 条 + 原有全绿）、
    ui **23** 全绿、theme-default 118 / canvas-data 274 抽查全绿；canvas-render `tsc` 0 错、ui `vue-tsc` 0 错。
 
+**修复（2026-09-16 同日）：auto-layout 的 minZoom/maxZoom 与宿主「常规/画布」撞 key 导致 boot 失败**。
+settings 的 key 全局平面命名、define 重复 key 会抛错 —— auto-layout 的「聚焦最小/最大缩放」用了裸
+minZoom/maxZoom，与宿主声明的画布缩放范围冲突（宿主先声明，插件装配即炸）。按本仓约定
+（multi-select 的 multiSelectFrame*、align-arrange 的 alignArrange* 同例）改成 autoLayoutMinZoom /
+autoLayoutMaxZoom，引擎内部字段名（AutoLayoutConfig.minZoom/maxZoom）不变。教训：新增设置 key
+必须带语义前缀；裸通用词属于全局公共命名空间。
+
+**修复（2026-09-16 同日二）：「常规/画布」改动不实时生效（用户实测反馈）**。
+根因：CanvasHost 订阅回调里调用的 `applyCanvasInteractionChange` 是纯函数（返回新对象），
+回调**丢弃了返回值**、没写回响应式 interactionSettings —— 链路断在最后一步，VueFlow 绑定永远拿旧值。
+此前 12 条单测全测纯函数本身，恰好没盖住"回调把结果写回响应式对象"这一步（教训：接线层的
+in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新增 `applyCanvasInteractionChangeInto`
+（原地 Object.assign 写回、引用不变、无变化不触发、返回是否真改），回调改用它；+5 条测试
+锁原地写回/无变化短路/不认识键短路/非法回落/snapGrid 元组联动。canvas-render **246** 全绿。
+
 ## 当前主线（2026-09-04，历史）：canvas-core-v2 重构 · 开发测试期最小闭环
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 

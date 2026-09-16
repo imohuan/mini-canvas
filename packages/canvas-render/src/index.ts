@@ -126,6 +126,7 @@ export {
   CANVAS_INTERACTION_DEFAULTS,
   resolveCanvasInteraction,
   applyCanvasInteractionChange,
+  applyCanvasInteractionChangeInto,
 } from './contracts/canvasInteractionSettings'
 export type {
   CanvasInteractionSettings,

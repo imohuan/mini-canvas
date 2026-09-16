@@ -200,3 +200,24 @@ export function applyCanvasInteractionChange(
   )
   return next
 }
+
+/**
+ * 应用"某一项配置被改动"并**原地写回**目标对象（订阅回调里的正确用法）。
+ *
+ * 为什么需要它：CanvasHost 的 settingsStore.onChange 回调拿到的是 reactive 的 interactionSettings，
+ * 若用 applyCanvasInteractionChange（返回新对象）而回调忘记把返回值写回，改动会静默丢失 ——
+ * 画布表现为"改了设置没有任何反应"。本函数保证：认识的键 → 原地写入（引用不变，Vue 响应式可感知）、
+ * 返回 true；不认识的键 / 新旧值相同 → 不写、返回 false（避免无谓触发）。
+ */
+export function applyCanvasInteractionChangeInto(
+  target: CanvasInteractionSettings,
+  key: string,
+  value: unknown,
+): boolean {
+  if (!(key in CANVAS_INTERACTION_SCHEMA)) return false
+  const next = applyCanvasInteractionChange(target, key, value)
+  // 新旧值完全相同（无变化）→ 不写，避免无谓触发响应式
+  if (JSON.stringify(next) === JSON.stringify(target)) return false
+  Object.assign(target, next)
+  return true
+}

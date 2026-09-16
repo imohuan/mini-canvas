@@ -13,6 +13,7 @@ import {
   CANVAS_INTERACTION_SCHEMA,
   resolveCanvasInteraction,
   applyCanvasInteractionChange,
+  applyCanvasInteractionChangeInto,
   type CanvasInteractionSettings,
 } from '../canvasInteractionSettings'
 
@@ -135,5 +136,43 @@ describe('类型收口', () => {
   it('CanvasInteractionSettings 的键 = 默认值的键', () => {
     const sample: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS }
     expect(Object.keys(sample).sort()).toEqual(Object.keys(CANVAS_INTERACTION_DEFAULTS).sort())
+  })
+})
+
+describe('applyCanvasInteractionChangeInto（原地写回，订阅回调用）', () => {
+  it('认识的键：原地写入目标对象（不改引用，响应式消费方可感知）、返回 true', () => {
+    const target: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS }
+    const changed = applyCanvasInteractionChangeInto(target, 'panOnDrag', false)
+    expect(changed).toBe(true)
+    expect(target.panOnDrag).toBe(false)
+    // 其余字段保持
+    expect(target.zoomOnScroll).toBe(true)
+  })
+
+  it('新值与当前值相同：不写、返回 false（避免无谓触发响应式）', () => {
+    const target: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS }
+    expect(applyCanvasInteractionChangeInto(target, 'panOnDrag', true)).toBe(false)
+    expect(target.panOnDrag).toBe(true)
+  })
+
+  it('不认识的键：不写、返回 false', () => {
+    const target: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS }
+    expect(applyCanvasInteractionChangeInto(target, 'toolbarTopOffset', 3)).toBe(false)
+    expect(target).toEqual(CANVAS_INTERACTION_DEFAULTS)
+  })
+
+  it('非法值：写回落默认值', () => {
+    const target: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS, minZoom: 0.5 }
+    expect(applyCanvasInteractionChangeInto(target, 'minZoom', 'oops')).toBe(true)
+    expect(target.minZoom).toBe(0.2)
+  })
+
+  it('snapGridX/Y：写网格轴的同时更新 snapGrid 元组', () => {
+    const target: CanvasInteractionSettings = { ...CANVAS_INTERACTION_DEFAULTS }
+    expect(applyCanvasInteractionChangeInto(target, 'snapGridX', 50)).toBe(true)
+    expect(target.snapGridX).toBe(50)
+    expect(target.snapGrid).toEqual([50, 15])
+    expect(applyCanvasInteractionChangeInto(target, 'snapGridY', 25)).toBe(true)
+    expect(target.snapGrid).toEqual([50, 25])
   })
 })

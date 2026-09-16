@@ -42,7 +42,7 @@ import type { CanvasDebug } from '../contracts/debugContext'
 import {
   CANVAS_INTERACTION_SCHEMA,
   resolveCanvasInteraction,
-  applyCanvasInteractionChange,
+  applyCanvasInteractionChangeInto,
   type CanvasInteractionSettings,
 } from '../contracts/canvasInteractionSettings'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
@@ -922,7 +922,8 @@ onMounted(async () => {
     Object.assign(interactionSettings, resolveCanvasInteraction((key) => settingsStore.get(key)))
     subs.push(
       settingsStore.onChange((key, value) => {
-        applyCanvasInteractionChange(interactionSettings, key, value)
+        // 原地写回（引用不变，Vue 响应式可感知 → VueFlow 绑定实时跟随）
+        applyCanvasInteractionChangeInto(interactionSettings, key, value)
       }),
     )
 
