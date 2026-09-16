@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { computeFlowBlocks } from '../edgeFlow'
 import { computeFlowAdvance } from '../edgeFlow'
+import { flowAllowedDuringDrag } from '../edgeFlow'
 
 const starts = (blocks: { start: number; end: number }[]) => blocks.map((b) => b.start)
 const lengths = (blocks: { start: number; end: number }[]) => blocks.map((b) => b.end - b.start)
@@ -127,5 +128,23 @@ describe('computeFlowAdvance —— 走完整条线的时间固定（与线长�
     expect(computeFlowAdvance({ totalLength: 400, speedMultiplier: 1, deltaMs: 0 })).toBe(0)
     expect(computeFlowAdvance({ totalLength: 400, speedMultiplier: 1, deltaMs: -5 })).toBe(0)
     expect(computeFlowAdvance({ totalLength: 400, speedMultiplier: 1, deltaMs: 16, baseSeconds: 0 })).toBe(0)
+  })
+})
+/**
+ * 拖线期间的流光压制（用户需求：拖拽连接线时其余连线不要流光动画）。
+ *
+ * 场景：多选批量连线时，选中集覆盖一大片边 —— 旧逻辑里"两端节点被选中就流光"，
+ * 于是全画布的线一起流（用户截图报的正是这个）。新口径：拖线手势进行中，
+ * 只有用户正在拖的那条临时线流，其余全部静止。
+ */
+describe('flowAllowedDuringDrag —— 拖线时压制非临时边的流光', () => {
+  it('没在拖线 → 一切照旧（允许流）', () => {
+    expect(flowAllowedDuringDrag({ isDraggingConnection: false, isTemporary: false })).toBe(true)
+    expect(flowAllowedDuringDrag({ isDraggingConnection: false, isTemporary: true })).toBe(true)
+  })
+
+  it('拖线中：临时拖线本身流，其余边静止', () => {
+    expect(flowAllowedDuringDrag({ isDraggingConnection: true, isTemporary: true })).toBe(true)
+    expect(flowAllowedDuringDrag({ isDraggingConnection: true, isTemporary: false })).toBe(false)
   })
 })

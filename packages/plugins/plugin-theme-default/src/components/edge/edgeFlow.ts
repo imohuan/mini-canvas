@@ -66,6 +66,29 @@ export function computeFlowBlocks(input: FlowBlockInput): FlowBlock[] {
 /** 走完整条路径的基准时长（秒）：所有连线共用，保证长短线「同时出发、同时到达」。 */
 export const FLOW_BASE_SECONDS = 2
 
+/**
+ * 拖线期间要不要跑这条边的流光。
+ *
+ * 口径（用户需求）：拖拽连接线时，**其余已有连线不要流光动画** —— 全画布的线一起流动
+ * 既吵又误导（看上去像"每条线都在被连接"）。
+ *
+ * 规则：
+ * - 临时拖线本身（isTemporary）永远流：它是用户正在拖的那条，必须有反馈；
+ * - 其余边只有"因选中而高亮"的才流；**正在拖线时这个高亮不算数** —— 多选批量连线时
+ *   选中集覆盖一大片，任其判定会把整片边都点亮（用户截图报的正是这个）；
+ * - 没在拖线时行为不变（选中照常流光）。
+ *
+ * @param isDraggingConnection 当前是否处于拖线手势中（渲染层 connectionState.isConnecting）
+ * @param isTemporary          本边是否临时拖线（props.temporary / data.transient）
+ */
+export function flowAllowedDuringDrag(input: {
+  isDraggingConnection: boolean
+  isTemporary: boolean
+}): boolean {
+  if (!input.isDraggingConnection) return true
+  return input.isTemporary
+}
+
 export interface FlowAdvanceInput {
   /** 路径总长（px） */
   totalLength: number

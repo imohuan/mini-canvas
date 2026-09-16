@@ -29,7 +29,7 @@ import {
   type EdgeType,
   type EdgeAppearance,
 } from './edgeGeometry'
-import { computeFlowBlocks } from './edgeFlow'
+import { computeFlowBlocks, flowAllowedDuringDrag } from './edgeFlow'
 import { computeFlowAdvance, FLOW_BASE_SECONDS } from './edgeFlow'
 
 /** Custom edge render component: the minimal prop set it actually consumes (independent from VueFlow EdgeProps full-required shape).
@@ -62,6 +62,7 @@ const props = withDefaults(defineProps<CustomEdgeProps>(), {
   targetY: 0,
 })
 const { ctx, edgeVisual, edgeSelection } = useCanvasRender()
+const { connectionState } = useCanvasRender()
 const visual = computed<EdgeVisual>(() => ({ ...edgeVisual, ...(props.visual || {}) }))
 const selectionNodeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedNodeIds.value)
 const selectionEdgeIds = computed<ReadonlySet<string>>(() => edgeSelection.selectedEdgeIds.value)
@@ -213,7 +214,17 @@ const arrowPath = computed(() => {
 // （选中两端任一节点 / 选中本边 / 临时拖线）。
 // 未激活 → 只画静止导轨线，不显示光斑也不跑逐帧（每帧回调开头直接 return，几乎零开销）。
 // 颜色：flowColor = edgeGlowColor（设置里"辉光颜色"，缺省跟随线色），箭头/光斑/亮核同色 = 一种效果。
-const flowActive = computed(() => flowEnabled.value && isHighlighted.value)
+// 拖线手势进行中：只允许用户正在拖的那条临时线流光，其余边（含"因选中而高亮"的）全部静止 ——
+ // 全画布的线一起流既吵又误导（用户截图报的正是多选批量连线时整片线都在流）。
+const flowActive = computed(
+  () =>
+    flowEnabled.value &&
+    isHighlighted.value &&
+    flowAllowedDuringDrag({
+      isDraggingConnection: connectionState.isConnecting.value,
+      isTemporary: isTemporaryEdge.value,
+    }),
+)
 const railColor = computed(() => edgeColor.value)
 const railWidth = computed(() => Math.max(1, lineWidth.value))
 const flowColor = computed(() => edgeGlowColor.value || edgeColor.value)
