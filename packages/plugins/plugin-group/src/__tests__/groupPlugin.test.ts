@@ -9,6 +9,7 @@ import { DEFAULT_GROUP_PADDING } from '../groupEngine'
 interface LayoutStub {
   getAllRects(): Array<{ id: string; x: number; y: number; w: number; h: number }>
   getNodeRect(id: string): { id: string; x: number; y: number; w: number; h: number } | null
+  absolutePosition(id: string): { x: number; y: number }
 }
 
 function makeCtx() {
@@ -49,6 +50,10 @@ function makeCtx() {
     },
     getAllRects() {
       return nodeStore.getNodes().map((n) => this.getNodeRect(n.id)!).filter(Boolean)
+    },
+    absolutePosition(id) {
+      const r = this.getNodeRect(id)
+      return r ? { x: r.x, y: r.y } : { x: 0, y: 0 }
     },
   }
   ctx.inject('nodeLayout', layout as never)
@@ -256,12 +261,13 @@ describe('group 插件集成（真实内核服务）', () => {
       ctx: ReturnType<typeof makeCtx>['ctx']
       nodeStore: ReturnType<typeof makeCtx>['nodeStore']
       svc: GroupService
+      layout: ReturnType<typeof makeCtx>['layout']
       gB: string
       gA: string
       gC: string
       x: string
     }> {
-      const { ctx, nodeStore } = makeCtx()
+      const { ctx, nodeStore, layout } = makeCtx()
       const a1 = addNode(nodeStore, 'text', 30, 40, { w: 100, h: 80 })
       const a2 = addNode(nodeStore, 'image', 400, 100, { w: 200, h: 150 })
       await ctx.start()
@@ -282,27 +288,28 @@ describe('group 插件集成（真实内核服务）', () => {
       const c1 = addNode(nodeStore, 'text', 1800, 100, { w: 100, h: 80 })
       const c2 = addNode(nodeStore, 'image', 2100, 200, { w: 200, h: 150 })
       const gC = svc.createGroup([c1, c2])!
-      return { ctx, nodeStore, svc, gB, gA, gC, x }
+      return { ctx, nodeStore, svc, layout, gB, gA, gC, x }
     }
 
     it('第二层组内节点拖到外层组（组B）内 → join 后相对坐标正确', async () => {
-      const { nodeStore, svc, gB, x } = await makeNested()
+      const { nodeStore, svc, layout, gB, x } = await makeNested()
       const absB = svc.getGroupBounds(gB)!
-      // x 拖到组B 内 (绝对 200,200)
-      nodeStore.updateNode(x, { position: { x: 200 - nodeStore.getNode(gB)!.position.x - 100, y: 200 - nodeStore.getNode(gB)!.position.y - 40 } })
-      // ↑ 上一行把 x 的 store 坐标改到"绝对≈(200,200)"对应位置（x 此时的父是内层组A）
+      // x 拖到组B 内、内层组A 外的绝对位置：store 坐标按当前绝对值平移
+      const absBefore = layout.absolutePosition(x)
+      const target = { x: absB.x + 30, y: absB.y + absB.h - 30 } // 组B 内、组A 外（组A 在组B 上半部）
+      const delta = { x: target.x - absBefore.x, y: target.y - absBefore.y }
+      nodeStore.updateNode(x, { position: { x: nodeStore.getNode(x)!.position.x + delta.x, y: nodeStore.getNode(x)!.position.y + delta.y } })
       svc.applyDragMembership(x)
       const nx = nodeStore.getNode(x)!
       expect(nx.parentId).toBe(gB)
       // 相对组B = 绝对(200,200) - 组B frame 左上
-      expect(nx.position).toEqual({ x: 200 - absB.x, y: 200 - absB.y })
+      expect(nx.position).toEqual({ x: target.x - absB.x, y: target.y - absB.y })
     })
 
     it('第二层组内节点拖到最外层空白 → 解父后绝对坐标正确（不再少加一层）', async () => {
-      const { ctx, nodeStore, svc, x } = await makeNested()
+      const { ctx, nodeStore, svc, layout, x } = await makeNested()
       // x 当前的绝对坐标（挂在内层组A 下，父链两层）
-      const layoutSvc = ctx.get('nodeLayout')
-      const realAbs = layoutSvc.absolutePosition(x)
+      const realAbs = layout.absolutePosition(x)
       // 把 x 拖出内层组A 范围（远离）→ leave → 位置必须等于 realAbs
       const delta = { x: 3000, y: 3000 }
       nodeStore.updateNode(x, { position: { x: nodeStore.getNode(x)!.position.x + delta.x, y: nodeStore.getNode(x)!.position.y + delta.y } })

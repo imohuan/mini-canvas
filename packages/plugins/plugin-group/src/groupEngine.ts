@@ -19,6 +19,8 @@ export interface GroupRect {
   y: number
   w: number
   h: number
+  /** 组嵌套深度（0=顶层组，1=嵌套一层）。命中决策用：深度深 = 渲染 z 高 = 视觉在上层，优先命中 */
+  depth?: number
 }
 
 /** 分组包围盒结果：左上角 + 宽高 */
@@ -190,17 +192,44 @@ export function resolveGroupChanges(
   if (groups.length === 0) return []
   const changes: Array<{ nodeId: string; joinGroupId?: string; leaveGroupId?: string }> = []
   for (const n of nodes) {
-    // 已属于某组：检查是否完全离开
+    // 命中决策：与候选组全部求交，取"面积最小"的组 —— 嵌套场景下内层组面积更小、视觉上在最上层，
+    // 鼠标落在内层组卡片上时应该命中内层组（外层组只是"背景容器"）。
+    const bestHit = (excludeId?: string): GroupRect | undefined => {
+      let best: GroupRect | undefined
+      for (const g of groups) {
+        if (g.id === n.id || g.id === excludeId) continue
+        if (!rectIntersectsGroup(n.rect, g)) continue
+        if (!best) { best = g; continue }
+        // 优先深度深的组（渲染 z 更高、视觉在上层）；深度相同取面积小的（同类组之间内层更"具体"）
+        const gDepth = g.depth ?? 0
+        const bDepth = best.depth ?? 0
+        if (gDepth > bDepth || (gDepth === bDepth && g.w * g.h < best.w * best.h)) best = g
+      }
+      return best
+    }
+    // 已属于某组：先判是否完全离开父组
     if (n.currentParentId) {
       const parent = groups.find((g) => g.id === n.currentParentId)
       if (parent && !rectIntersectsGroup(n.rect, parent)) {
         changes.push({ nodeId: n.id, leaveGroupId: parent.id })
+        // 离开父组后：如果同时落在另一个组里 → 一起给出 join（转组一次完成）
+        const next = bestHit(parent.id)
+        if (next) changes.push({ nodeId: n.id, joinGroupId: next.id })
+      }
+      // 仍在父组内 → 默认无动作。但若命中了"更深"的组（父的子组，深度 > 父）→ 转入该子组：
+      // 用户场景：外层组 ⊃ 第一层组，外层组的成员拖到第一层组上应加入它（它渲染 z 更高、视觉在最上）。
+      // 注意 exclude 父本身；只接受 depth > 父 depth 的命中（命中同级/更浅的组说明只是路过外层组区域）。
+      const deeper = bestHit(n.currentParentId)
+      const parentDepth = parent?.depth ?? 0
+      if (deeper && (deeper.depth ?? 0) > parentDepth) {
+        changes.push({ nodeId: n.id, joinGroupId: deeper.id })
       }
       continue
     }
-    // 无父：找第一个相交的分组加入（一次只归一个组）
-    const hit = groups.find((g) => g.id !== n.id && rectIntersectsGroup(n.rect, g))
-    if (hit) changes.push({ nodeId: n.id, joinGroupId: hit.id })
+    // join 决策：有父时排除当前父（离开后允许加入别的组 —— 组内节点拖到另一个组 = 转组）；
+    // 无父时在全部相交组中取最内层。
+    const join = bestHit(n.currentParentId)
+    if (join) changes.push({ nodeId: n.id, joinGroupId: join.id })
   }
   return changes
 }

@@ -104,6 +104,60 @@ describe('resolveGroupChanges 拖拽归组决策', () => {
   it('无分组时无动作', () => {
     expect(resolveGroupChanges([{ id: 'n1', rect: { id: 'n1', x: 0, y: 0, w: 10, h: 10 } }], [])).toEqual([])
   })
+
+  it('嵌套命中：节点与外层组、内层组都相交 → 命中内层组（深度深 = 渲染 z 高），即使内层面积更大', () => {
+    // 外层组 gOut（depth0，小面积）与 内层组 gIn（depth1，大面积）几何都含 n1
+    const nested = [
+      { id: 'gOut', x: 0, y: 0, w: 300, h: 300, depth: 0 },
+      { id: 'gIn', x: -100, y: -100, w: 900, h: 900, depth: 1 },
+    ]
+    const changes = resolveGroupChanges(
+      [{ id: 'n1', rect: { id: 'n1', x: 50, y: 50, w: 40, h: 40 } }],
+      nested,
+    )
+    expect(changes).toEqual([{ nodeId: 'n1', joinGroupId: 'gIn' }])
+  })
+
+  it('转组：父内节点拖出父、落到另一顶层组 → leave 父 + join 新组', () => {
+    const nested = [
+      { id: 'parent', x: 0, y: 0, w: 400, h: 400, depth: 0 },
+      { id: 'other', x: 500, y: 0, w: 300, h: 300, depth: 0 },
+    ]
+    const changes = resolveGroupChanges(
+      [{ id: 'n1', rect: { id: 'n1', x: 550, y: 100, w: 40, h: 40 }, currentParentId: 'parent' }],
+      nested,
+    )
+    expect(changes).toEqual([
+      { nodeId: 'n1', leaveGroupId: 'parent' },
+      { nodeId: 'n1', joinGroupId: 'other' },
+    ])
+  })
+
+  it('转入子组：外层组成员拖到外层组内的第一层组（depth1）上 → 直接转入该组（不 leave 外层）', () => {
+    // 用户实测场景：外层组 ⊃ 第一层组(depth1)，外层组的成员拖到第一层组上应加入它
+    const nested = [
+      { id: 'outer', x: 0, y: 0, w: 800, h: 600, depth: 0 },
+      { id: 'inner', x: 300, y: 100, w: 400, h: 200, depth: 1 },
+    ]
+    const changes = resolveGroupChanges(
+      [{ id: 'n1', rect: { id: 'n1', x: 400, y: 150, w: 60, h: 60 }, currentParentId: 'outer' }],
+      nested,
+    )
+    // n1 仍在 outer 内（不 leave），但命中 depth1 的 inner（depth 1 > 父 0）→ 转入 inner
+    expect(changes).toEqual([{ nodeId: 'n1', joinGroupId: 'inner' }])
+  })
+
+  it('外层组成员在外层组内移动（不碰任何子组）→ 无动作', () => {
+    const nested = [
+      { id: 'outer', x: 0, y: 0, w: 800, h: 600, depth: 0 },
+      { id: 'inner', x: 300, y: 100, w: 400, h: 200, depth: 1 },
+    ]
+    const changes = resolveGroupChanges(
+      [{ id: 'n1', rect: { id: 'n1', x: 50, y: 50, w: 60, h: 60 }, currentParentId: 'outer' }],
+      nested,
+    )
+    expect(changes).toEqual([])
+  })
 })
 
 describe('createGroupId', () => {

@@ -320,8 +320,12 @@ export class GroupService extends Service implements GroupServiceAPI {
   /** 全部 group 节点矩形 */
   private groupRects(): GroupRect[] {
     return this.getGroupNodeIds()
-      .map((id) => this.rectOf(id))
-      .filter((r): r is GroupRect => r !== null)
+      .map((id) => {
+        const rect = this.rectOf(id)
+        // 嵌套深度参与命中决策：深度深 = 渲染 z 高 = 视觉在上层 → 优先命中（用户实测：内层组被外层拦截的 bug）
+        return rect ? { ...rect, depth: this.getGroupDepth(id) } : null
+      })
+      .filter((r): r is GroupRect & { depth: number } => r !== null)
   }
 
   /**
@@ -341,13 +345,9 @@ export class GroupService extends Service implements GroupServiceAPI {
     )
     for (const change of changes) {
       if (change.leaveGroupId) {
-        const node0 = this.nodeStore.getNode(nodeId)
-        const group0 = node0?.parentId ? this.nodeStore.getNode(node0.parentId) : undefined
-        if (!node0 || !group0) continue
-        const abs = toAbsolutePosition(node0.position.x, node0.position.y, {
-          x: group0.position.x,
-          y: group0.position.y,
-        })
+        // leave 的绝对坐标 = 节点当前真实绝对位置（父链完整累加 —— 嵌套时直接父的 store pos 是相对外层的，
+        // 只加一层会少加，用户实测"第二层出来位置错"就是这个）。node 此刻仍挂着父链，absolutePosition 正确。
+        const abs = this.layout.absolutePosition(nodeId)
         this.graph.updateNode(nodeId, { position: abs, parentId: undefined })
       }
       if (change.joinGroupId) {
@@ -359,7 +359,9 @@ export class GroupService extends Service implements GroupServiceAPI {
         if (node.type === GROUP_NODE_TYPE && this.getGroupDepth(change.joinGroupId) + 1 > GroupService.MAX_GROUP_DEPTH) {
           continue
         }
-        const rel = toRelativePosition(rect.x, rect.y, { x: group0.position.x, y: group0.position.y, w: group0.size?.w ?? 0, h: group0.size?.h ?? 0 })
+        // 目标组的 store position 在嵌套时是相对外层的 —— 相对坐标必须以"目标组真实绝对左上"为基准
+        const targetAbs = this.layout.absolutePosition(change.joinGroupId)
+        const rel = toRelativePosition(rect.x, rect.y, { x: targetAbs.x, y: targetAbs.y, w: group0.size?.w ?? 0, h: group0.size?.h ?? 0 })
         this.graph.updateNode(nodeId, { position: rel, parentId: group0.id })
       }
     }
