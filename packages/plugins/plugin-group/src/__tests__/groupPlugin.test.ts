@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
-import { groupPlugin, GroupService, GROUP_NODE_TYPE } from '../groupPlugin'
+import { groupPlugin, GroupService, GROUP_NODE_TYPE, resolveGroupPadding, GROUP_PADDING_KEYS } from '../groupPlugin'
+import { DEFAULT_GROUP_PADDING } from '../groupEngine'
 
 /** 最小 nodeLayout stub（对齐渲染层 NodeLayoutService 接口中本插件用到的三个方法） */
 interface LayoutStub {
@@ -149,11 +150,11 @@ describe('group 插件集成（真实内核服务）', () => {
     const svc = ctx.get<GroupService>('group')
     const gid = svc.createGroup([a, b])!
     const c = addNode(nodeStore, 'text', 100, 100, { w: 50, h: 50 }) // 落在组内
-    svc.reparentIfInside(c)
+    svc.applyDragMembership(c)
     expect(nodeStore.getNode(c)?.parentId).toBe(gid)
   })
 
-  it('ungroupIfLeft：子节点移出组外 → 解父还原绝对坐标', async () => {
+  it('applyDragMembership：子节点移出组外 → 解父还原绝对坐标', async () => {
     const { ctx, nodeStore } = makeCtx()
     const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
     const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
@@ -162,7 +163,7 @@ describe('group 插件集成（真实内核服务）', () => {
     const gid = svc.createGroup([a, b])!
     // b 在组内：相对坐标改到远离组包围盒（组 70,60 380x230 → 绝对右下 450,290）
     nodeStore.updateNode(b, { position: { x: 2000, y: 2000 } })
-    svc.ungroupIfLeft(b)
+    svc.applyDragMembership(b)
     const nb = nodeStore.getNode(b)!
     expect(nb.parentId).toBeUndefined()
     // 还原绝对坐标 = 组左上 + 相对
@@ -175,5 +176,73 @@ describe('group 插件集成（真实内核服务）', () => {
     await ctx.start()
     expect(command.has('group:create')).toBe(true)
     expect(command.has('group:ungroup')).toBe(true)
+  })
+})
+
+describe('resolveGroupPadding padding 配置解析（纯函数）', () => {
+  it('全部读不到 → 默认值', () => {
+    expect(resolveGroupPadding(() => undefined)).toEqual(DEFAULT_GROUP_PADDING)
+  })
+  it('读到合法值 → 逐项生效', () => {
+    const values: Record<string, number> = {
+      [GROUP_PADDING_KEYS.left]: 10,
+      [GROUP_PADDING_KEYS.right]: 20,
+      [GROUP_PADDING_KEYS.top]: 5,
+      [GROUP_PADDING_KEYS.bottom]: 15,
+    }
+    expect(resolveGroupPadding((k) => values[k])).toEqual({ left: 10, right: 20, top: 5, bottom: 15 })
+  })
+  it('非法值（负数/非数值/NaN）逐项回落默认，0 是合法值', () => {
+    const values: Record<string, unknown> = {
+      [GROUP_PADDING_KEYS.left]: -5,
+      [GROUP_PADDING_KEYS.right]: 'x',
+      [GROUP_PADDING_KEYS.top]: NaN,
+      [GROUP_PADDING_KEYS.bottom]: 0,
+    }
+    expect(resolveGroupPadding((k) => values[k])).toEqual({ left: 30, right: 30, top: 40, bottom: 0 })
+  })
+})
+
+describe('分组 padding 配置（settings 单一数据源）', () => {
+  it('settings 改 padding → createGroup 实时按新值算包围盒 + 子节点相对坐标跟随', async () => {
+    const { ctx, nodeStore, selection } = makeCtx()
+    const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+    const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+    selection.set([a, b])
+    await ctx.start()
+    // Config schema 默认声明过这些 key（插件激活时登记），直接改值
+    ctx.settings.set(GROUP_PADDING_KEYS.left, 10)
+    ctx.settings.set(GROUP_PADDING_KEYS.right, 20)
+    ctx.settings.set(GROUP_PADDING_KEYS.top, 5)
+    ctx.settings.set(GROUP_PADDING_KEYS.bottom, 15)
+    const svc = ctx.get<GroupService>('group')
+    const gid = svc.createGroup([a, b])!
+    const group = nodeStore.getNode(gid)!
+    // 内容包围盒 (100,100)-(420,260)：left10/top5 → 左上 (90,95)；宽 320+10+20=350；高 160+5+15=180
+    expect(group.position).toEqual({ x: 90, y: 95 })
+    expect(group.size).toEqual({ w: 350, h: 180 })
+    // 子节点相对坐标 = 绝对 - 新组左上
+    expect(nodeStore.getNode(a)!.position).toEqual({ x: 10, y: 5 })
+    expect(nodeStore.getNode(b)!.position).toEqual({ x: 210, y: 105 })
+  })
+
+  it('拖拽归组与建组共用同一套 membership 决策（applyDragMembership）', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+    const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+    await ctx.start()
+    const svc = ctx.get<GroupService>('group')
+    const gid = svc.createGroup([a, b])!
+    // 顶层节点落进组内
+    const c = addNode(nodeStore, 'text', 120, 120, { w: 50, h: 50 })
+    svc.applyDragMembership(c)
+    expect(nodeStore.getNode(c)?.parentId).toBe(gid)
+    // 组内节点拖出组外 → 解父还原绝对坐标
+    nodeStore.updateNode(c, { position: { x: 2000, y: 2000 } })
+    svc.applyDragMembership(c)
+    const nc = nodeStore.getNode(c)!
+    expect(nc.parentId).toBeUndefined()
+    const g = nodeStore.getNode(gid)!
+    expect(nc.position).toEqual({ x: g.position.x + 2000, y: g.position.y + 2000 })
   })
 })

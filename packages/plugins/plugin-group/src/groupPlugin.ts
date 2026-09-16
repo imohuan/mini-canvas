@@ -1,31 +1,32 @@
 /**
- * plugin-group —— 分组插件（v2 复刻老版 canvas-core/src/plugins/group）。
+ * plugin-group —— 分组插件。
  *
- * v2 写模型：所有图变更统一走 ctx.graph（GraphDocument 唯一写入口），
- * 不再手写 history.withRecord + nodeStore 直写。
- * - 只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件（nodeLayout / NodeDragEnd 常量），
- *   不反向依赖宿主 demo，不直碰 VueFlow 内部，不碰老版 canvas-core/src。
- * - 数据经内核 graph/nodeStore/selection；坐标/尺寸经渲染层 nodeLayout（实测尺寸 + 绝对坐标）。
- * - UI 由同包 GroupContent.vue 提供（content 段，宿主 BaseNode 壳渲染），不另造节点壳。
- * - 快捷键走命令 keys（ctrl+g / ctrl+shift+g），宿主 CanvasHost 统一分发，不自绑 window。
+ * 核心模型（对齐用户拍板的分组语义）：
+ * - 快捷键建组：选中 ≥2 顶层节点 Ctrl+G → 按选中节点包围盒 + 四边 padding（settings 可配）
+ *   建 group 节点，子节点**绝对→相对**坐标修复后挂 parentId（组内以分组左上角为 0,0）。
+ * - 拖拽归组：节点拖拽结束 → 引擎 resolveGroupChanges 决策（相交进组/离开出组），
+ *   进组 = 绝对→相对 + 挂父；出组 = 相对→绝对 + 解父。坐标换算全走引擎
+ *   toRelativePosition / toAbsolutePosition 一对函数（建组/解组/重算/拖拽共用）。
+ * - 解组 Ctrl+Shift+G：子节点还原绝对坐标、删组节点，一条 graph 事务可撤销。
  *
- * 与老版差异（v2 分层）：
- * - 不提供老版 BaseToolbar / 四角 resize / GroupColorButton 下拉。
- * - 拖动自动归组做简版：只处理顶层节点拖进某组的加入；组内拖出解组 / 组拖动边界重算
- *   依赖 VueFlow 父子拖拽语义，v2 下暂不做。
+ * 写模型：所有图变更统一走 ctx.graph（GraphDocument 唯一写入口，历史 + 落盘自动）。
+ * 分层：只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件，不直碰 VueFlow，不碰老版 src/。
  */
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@mini-canvas/canvas-base'
 import type { NodeStoreService, SelectionService, GraphDocumentService } from '@mini-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
-import type { GroupRect, GroupBounds } from './groupEngine'
+import type { GroupRect, GroupBounds, GroupPadding } from './groupEngine'
 import {
   createGroupId,
   computeGroupBounds,
   toRelativePosition,
+  toAbsolutePosition,
+  resolveGroupChanges,
   DEFAULT_GROUP_BACKGROUND_COLOR,
+  DEFAULT_GROUP_PADDING,
 } from './groupEngine'
 import GroupContent from './GroupContent.vue'
 
@@ -34,6 +35,59 @@ export const GROUP_NODE_TYPE = 'group'
 export const GROUP_DEFAULT_SIZE = { w: 200, h: 100 }
 /** 渲染层事件名（对齐 canvas-render RenderEvents.NodeDragEnd；本地复制避免 runtime 依赖渲染层） */
 const NODE_DRAG_END = 'canvas:node:drag-end'
+
+// ==================== 分组 padding 配置（settings 单一数据源） ====================
+
+/** 设置面板 key 前缀（分组留白）：同仓约定带语义前缀防撞全局命名空间 */
+export const GROUP_PADDING_KEYS = {
+  left: 'groupPaddingLeft',
+  right: 'groupPaddingRight',
+  top: 'groupPaddingTop',
+  bottom: 'groupPaddingBottom',
+} as const
+
+/** Config schema（标量登记 settings 面板「布局/分组留白」；apply 收到已校验 + 补默认） */
+export const Config = {
+  [GROUP_PADDING_KEYS.left]: {
+    type: 'number', default: DEFAULT_GROUP_PADDING.left, min: 0, max: 300, step: 5,
+    label: '左边距（px）', group: '布局/分组留白',
+    description: '选中节点打组（Ctrl+G）或拖节点进组时，节点内容到分组左边框的距离。',
+  },
+  [GROUP_PADDING_KEYS.right]: {
+    type: 'number', default: DEFAULT_GROUP_PADDING.right, min: 0, max: 300, step: 5,
+    label: '右边距（px）', group: '布局/分组留白',
+    description: '分组边框到内容右侧的留白距离。',
+  },
+  [GROUP_PADDING_KEYS.top]: {
+    type: 'number', default: DEFAULT_GROUP_PADDING.top, min: 0, max: 300, step: 5,
+    label: '顶部边距（px）', group: '布局/分组留白',
+    description: '默认比其它边大：给分组标题条留位置。',
+  },
+  [GROUP_PADDING_KEYS.bottom]: {
+    type: 'number', default: DEFAULT_GROUP_PADDING.bottom, min: 0, max: 300, step: 5,
+    label: '底部边距（px）', group: '布局/分组留白',
+    description: '分组边框到内容下侧的留白距离。',
+  },
+} as const satisfies ConfigSchema
+
+export type GroupPluginConfig = InferConfig<typeof Config>
+
+/**
+ * 从 settings 读当前分组 padding（逐项校验：非有限正数回落默认）。
+ * settings 的值经内核 set 夹取已合法，这里兜底防御旧存档/外部写入。
+ */
+export function resolveGroupPadding(get: (key: string) => unknown): GroupPadding {
+  const pick = (key: string, fallback: number): number => {
+    const v = get(key)
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback
+  }
+  return {
+    left: pick(GROUP_PADDING_KEYS.left, DEFAULT_GROUP_PADDING.left),
+    right: pick(GROUP_PADDING_KEYS.right, DEFAULT_GROUP_PADDING.right),
+    top: pick(GROUP_PADDING_KEYS.top, DEFAULT_GROUP_PADDING.top),
+    bottom: pick(GROUP_PADDING_KEYS.bottom, DEFAULT_GROUP_PADDING.bottom),
+  }
+}
 
 /** group 服务暴露给外部插件（auto-layout / multi-select 打组调用）的 API */
 export interface GroupServiceAPI {
@@ -82,6 +136,19 @@ export class GroupService extends Service implements GroupServiceAPI {
     return this.ctx.get<NodeLayoutService>('nodeLayout')
   }
 
+  /** 惰性读 settings（测试裸内核可能没注入 settings，不炸） */
+  private currentPaddingOf(): GroupPadding {
+    try {
+      const settings = this.ctx.get<{ get(key: string): unknown }>('settings')
+      if (settings && typeof settings.get === 'function') {
+        return resolveGroupPadding((key) => settings.get(key))
+      }
+    } catch {
+      /* 无 settings 服务 → 回落默认 */
+    }
+    return { ...DEFAULT_GROUP_PADDING }
+  }
+
   /** 某节点绝对矩形（优先 nodeLayout 实测/绝对；缺服务退化为声明数据兜底） */
   private rectOf(nodeId: string): GroupRect | null {
     const layout = this.layout
@@ -127,7 +194,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     if (eligible.length < 2) return null
 
     const rects = eligible.map((id) => byId.get(id)!)
-    const bounds = computeGroupBounds(rects)
+    const bounds = computeGroupBounds(rects, { padding: this.currentPaddingOf() })
     if (!bounds) return null
 
     const groupId = createGroupId()
@@ -212,7 +279,7 @@ export class GroupService extends Service implements GroupServiceAPI {
       .map((n) => this.rectOf(n.id))
       .filter((r): r is GroupRect => r !== null && r.w > 0 && r.h > 0)
     if (childRects.length === 0) return this.getGroupBounds(groupId)
-    const bounds = computeGroupBounds(childRects)
+    const bounds = computeGroupBounds(childRects, { padding: this.currentPaddingOf() })
     if (!bounds) return null
 
     // 统一走 graph：组位置/尺寸与子节点相对坐标一次事务
@@ -230,38 +297,6 @@ export class GroupService extends Service implements GroupServiceAPI {
     return bounds
   }
 
-  /** 顶层节点（无父）拖拽后落点与某 group 相交 → 移进该组（相对坐标 + 挂父） */
-  reparentIfInside(nodeId: string): void {
-    const nodeStore = this.nodeStore
-    const node = nodeStore.getNode(nodeId)
-    if (!node || node.type === GROUP_NODE_TYPE || node.parentId) return
-    const rect = this.rectOf(nodeId)
-    if (!rect || rect.w <= 0 || rect.h <= 0) return
-    const hit = this.groupRects().find((g) => this.rectsOverlap(rect, g))
-    if (!hit) return
-    this.graph.updateNode(nodeId, {
-      position: toRelativePosition(rect.x, rect.y, { x: hit.x, y: hit.y, w: hit.w, h: hit.h }),
-      parentId: hit.id,
-    })
-  }
-
-  /** 组内子节点拖拽后绝对矩形已完全离开其父组 → 移出（还原绝对坐标 + 解父） */
-  ungroupIfLeft(nodeId: string): void {
-    const nodeStore = this.nodeStore
-    const node = nodeStore.getNode(nodeId)
-    if (!node || node.type === GROUP_NODE_TYPE || !node.parentId) return
-    const parent = nodeStore.getNode(node.parentId)
-    if (!parent || parent.type !== GROUP_NODE_TYPE) return
-    const rect = this.rectOf(nodeId)
-    const gRect = this.rectOf(parent.id)
-    if (!rect || rect.w <= 0 || rect.h <= 0 || !gRect) return
-    if (this.rectsOverlap(rect, gRect)) return // 仍在组内
-    this.graph.updateNode(nodeId, {
-      position: { x: rect.x, y: rect.y },
-      parentId: undefined,
-    })
-  }
-
   /** 全部 group 节点矩形 */
   private groupRects(): GroupRect[] {
     return this.getGroupNodeIds()
@@ -269,16 +304,46 @@ export class GroupService extends Service implements GroupServiceAPI {
       .filter((r): r is GroupRect => r !== null)
   }
 
-  /** 两矩形是否相交（边缘相接不算） */
-  private rectsOverlap(a: GroupRect, b: GroupRect): boolean {
-    return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  /**
+   * 拖拽结束后的归组归属判定（唯一入口）：走引擎 resolveGroupChanges 纯函数决策，
+   * join → 挂父 + 绝对转相对；leave → 解父 + 相对还原绝对。每次只处理一个节点
+   * （宿主按 drag-end 逐节点调用）。
+   */
+  applyDragMembership(nodeId: string): void {
+    const node = this.nodeStore.getNode(nodeId)
+    if (!node || node.type === GROUP_NODE_TYPE) return
+    const rect = this.rectOf(nodeId)
+    if (!rect || rect.w <= 0 || rect.h <= 0) return
+    const changes = resolveGroupChanges(
+      [{ id: nodeId, rect, currentParentId: node.parentId }],
+      this.groupRects(),
+    )
+    for (const change of changes) {
+      if (change.leaveGroupId) {
+        const node0 = this.nodeStore.getNode(nodeId)
+        const group0 = node0?.parentId ? this.nodeStore.getNode(node0.parentId) : undefined
+        if (!node0 || !group0) continue
+        const abs = toAbsolutePosition(node0.position.x, node0.position.y, {
+          x: group0.position.x,
+          y: group0.position.y,
+        })
+        this.graph.updateNode(nodeId, { position: abs, parentId: undefined })
+      }
+      if (change.joinGroupId) {
+        const group0 = this.nodeStore.getNode(change.joinGroupId)
+        if (!group0) continue
+        const rel = toRelativePosition(rect.x, rect.y, { x: group0.position.x, y: group0.position.y, w: group0.size?.w ?? 0, h: group0.size?.h ?? 0 })
+        this.graph.updateNode(nodeId, { position: rel, parentId: group0.id })
+      }
+    }
   }
 }
 
 export const name = 'group'
 export const inject = ['nodeStore', 'selection', 'graph', 'nodeLayout'] as string[]
 
-/** 插件主体：注册 group 节点类型 + 上架 group 服务 + 命令 */
+/** 插件主体：注册 group 节点类型 + 上架 group 服务 + 命令。
+ *  config（padding 等）不落地缓存 —— 服务每次操作惰性读 settings 单一数据源，天然实时生效。 */
 export function apply(ctx: Context) {
   const group = new GroupService(ctx)
 
@@ -320,13 +385,11 @@ export function apply(ctx: Context) {
   const offDrag = ctx.on(
     NODE_DRAG_END,
     (payload: { nodeId: string; position: { x: number; y: number } }) => {
-      group.ungroupIfLeft?.(payload.nodeId)
-      group.reparentIfInside(payload.nodeId)
+      group.applyDragMembership(payload.nodeId)
     },
   )
   ctx.effect(() => () => offDrag.dispose())
 }
 
 /** 兼容旧装配的 PluginModule 出口 */
-export const groupPlugin: PluginModule = { name, inject, apply }
-
+export const groupPlugin: PluginModule<GroupPluginConfig> = { name, inject, Config, apply }

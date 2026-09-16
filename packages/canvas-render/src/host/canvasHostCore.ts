@@ -52,8 +52,9 @@ export interface FlowNode {
   data: Record<string, unknown>
   /** 选中态（来自内核 selection；VueFlow 据此高亮节点） */
   selected?: boolean
-  /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 据此做父子嵌套，子 position 为相对父局部坐标） */
-  parentNodeId?: string
+  /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 父子嵌套字段名是 parentNode，
+   *  子 position 视为相对父的局部坐标，渲染层级自动排在父之上） */
+  parentNode?: string
   /** 声明尺寸 → 像素 style（内核 CanvasNode.size 投影） */
   style?: { width: string; height: string }
   /** 临时脚手架节点（拖线落空白的菜单节点）：在 VueFlow 维度关闭交互 */
@@ -78,8 +79,9 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
     }
     if (selectedIds) out.selected = selectedIds.has(n.id)
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
-    // parentNodeId: VueFlow 把子节点 position 视为相对父的局部坐标（与内核约定一致）
-    if (n.parentId) out.parentNodeId = n.parentId
+    // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
+    // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。
+    if (n.parentId) out.parentNode = n.parentId
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
     if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
     // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：

@@ -26,7 +26,7 @@ import type { NodeStoreService, EdgeStoreService, SelectionService, GraphDocumen
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { runAutoLayout } from './layoutEngine'
 import type { LayoutNode, LayoutEdge, LayoutDirection, AutoLayoutConfig } from './types'
-import { calculateGroupFrameFromAbsoluteChildren } from './groupBounds'
+import { calculateGroupFrameFromAbsoluteChildren, resolveGroupPadding } from './groupBounds'
 import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focusViewport'
 
 /** 组节点类型名（与 plugin-group 约定一致） */
@@ -269,6 +269,8 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     byId: Map<string, CanvasNode>,
   ): Array<{ id: string; patch: Record<string, unknown> }> {
     const entries: Array<{ id: string; patch: Record<string, unknown> }> = []
+    // 分组留白与 plugin-group 共用同一份 settings 配置（布局收拢不能覆盖用户在面板里配的 padding）
+    const padding = resolveGroupPadding((key) => settings?.get(key))
     // 用引擎算出的绝对坐标构造子节点快照（避免读 store 旧相对坐标）
     const childrenAbs = childNodes
       .map((c) => {
@@ -278,7 +280,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
         return { id: c.id, position: pos, size: { w: size.w, h: size.h } }
       })
       .filter((c): c is NonNullable<typeof c> => Boolean(c))
-    const frame = calculateGroupFrameFromAbsoluteChildren(childrenAbs)
+    const frame = calculateGroupFrameFromAbsoluteChildren(childrenAbs, padding)
     if (!frame) return entries
 
     // 组本身若有父链（多层分组）：引擎只在顶层平铺，故组 frame 也是"绝对"，若组有父需转相对。

@@ -7,7 +7,11 @@ import {
   resolveGroupChanges,
   createGroupId,
   selectDownloadableGroupChildren,
+  type GroupPadding,
 } from '../groupEngine'
+
+/** 默认 padding（对齐实现常量；测试锁"改 padding 不能悄悄改视觉"） */
+const DEFAULT_PADDING: GroupPadding = { left: 30, right: 30, top: 40, bottom: 30 }
 
 describe('computeGroupBounds 包围盒', () => {
   it('两个节点求最小包围盒 + padding', () => {
@@ -16,15 +20,38 @@ describe('computeGroupBounds 包围盒', () => {
         { id: 'a', x: 100, y: 100, w: 100, h: 80 },
         { id: 'b', x: 300, y: 200, w: 120, h: 60 },
       ],
-      { padding: 30, paddingTop: 10, minW: 200, minH: 150 },
+      { padding: DEFAULT_PADDING, minW: 200, minH: 150 },
     )
     expect(b).toEqual({ x: 70, y: 60, w: 380, h: 230 })
   })
 
   it('过小内容受最小尺寸约束', () => {
-    const b = computeGroupBounds([{ id: 'a', x: 0, y: 0, w: 20, h: 20 }], { padding: 30, paddingTop: 10, minW: 200, minH: 150 })
+    const b = computeGroupBounds([{ id: 'a', x: 0, y: 0, w: 20, h: 20 }], { padding: DEFAULT_PADDING, minW: 200, minH: 150 })
     expect(b!.w).toBe(200)
     expect(b!.h).toBe(150)
+  })
+
+  it('非对称 padding：各边独立收放', () => {
+    // 内容包围盒 = (100,100)-(420,260)。left 10 / top 5 → 组左上 (90,95)；
+    // right 20 → 宽 = 内容宽 320 + 10 + 20 = 350；bottom 15 → 高 = 内容高 160 + 5 + 15 = 180。
+    const b = computeGroupBounds(
+      [
+        { id: 'a', x: 100, y: 100, w: 100, h: 80 },
+        { id: 'b', x: 300, y: 200, w: 120, h: 60 },
+      ],
+      { padding: { left: 10, right: 20, top: 5, bottom: 15 } },
+    )
+    expect(b).toEqual({ x: 90, y: 95, w: 350, h: 180 })
+  })
+
+  it('负数/非法 padding 逐边回落默认', () => {
+    const b = computeGroupBounds(
+      [{ id: 'a', x: 0, y: 0, w: 100, h: 100 }],
+      { padding: { left: -5, right: NaN, top: Infinity, bottom: -3 } },
+    )
+    // left/right/top/bottom 全部非法 → 逐边回落默认 30/30/40/30。
+    // 内容 100x100 + padding 60x70 = 160x170，但宽被 minW=200 抬底。
+    expect(b).toEqual({ x: -30, y: -40, w: 200, h: 170 })
   })
 
   it('空输入返回 null', () => {

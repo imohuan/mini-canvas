@@ -1,12 +1,14 @@
 /**
- * groupEngine —— 分组纯函数引擎（v2 复刻老版 canvas-core/src/plugins/group）。
+ * groupEngine —— 分组纯函数引擎。
  *
- * 职责边界：本文件只做"几何/换算/选择"的纯计算，不碰任何服务/Vue/存储，
+ * 职责边界：本文件只做"几何/换算/归属决策"的纯计算，不碰任何服务/Vue/存储，
  * 全部可 node 单测。服务编排（createGroup/ungroup/recalculateBounds 落到 nodeStore）
  * 在 groupPlugin.ts 里完成。
  *
- * 坐标约定（对齐 v2 内核）：
- * - 节点位置统一用 flow 绝对坐标（LayoutRect.x/y）；无父链概念由调用方负责拍平。
+ * 坐标约定（对齐 v2 内核与 VueFlow 父子语义）：
+ * - 顶层节点 position = flow 绝对坐标；组内子节点 position = 相对父组的局部坐标，
+ *   绝对位置 = 子 position 逐级累加父链。绝对 ↔ 相对的换算只走本文件
+ *   toRelativePosition / toAbsolutePosition 一对函数（建组/解组/重算/拖拽归组共用）。
  * - 尺寸 w/h 由调用方给（渲染层 nodeLayout 实测/声明，引擎不关心来源）。
  */
 
@@ -27,6 +29,21 @@ export interface GroupBounds {
   h: number
 }
 
+/**
+ * 分组四周留白（px）。子节点内容到分组边框的距离，四边独立可配：
+ * - top 通常比其它边大一点，给 BaseNode 标题条留位置（历史默认：top=40，其余 30）。
+ * - 快捷键建组与拖拽自动归组共用同一份配置（插件 Config 登记进设置面板）。
+ */
+export interface GroupPadding {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+/** 分组默认 padding（对齐老版视觉：四周 30，顶部额外 10 给标题条 → 40） */
+export const DEFAULT_GROUP_PADDING: GroupPadding = { left: 30, right: 30, top: 40, bottom: 30 }
+
 /** 生成一个分组节点 id（老版同款，避免与数字 id 撞车，肉眼可辨） */
 export function createGroupId(now = Date.now()): string {
   return 'group-' + now
@@ -34,13 +51,14 @@ export function createGroupId(now = Date.now()): string {
 
 /**
  * 计算一组节点包围盒（考虑 padding）。
- * 老版：横向左右各 GROUP_PADDING，纵向顶部多 GROUP_PADDING_TOP 留给标题条。
+ * padding 四边独立：组左上角 = 内容包围盒左上 - (left, top)；
+ * 宽高 = 内容包围盒 + left + right / top + bottom。小于 minW/minH 时抬到最小尺寸。
  */
 export function computeGroupBounds(
   rects: GroupRect[],
-  opts: { padding?: number; paddingTop?: number; minW?: number; minH?: number } = {},
+  opts: { padding?: Partial<GroupPadding>; minW?: number; minH?: number } = {},
 ): GroupBounds | null {
-  const { padding = 30, paddingTop = 10, minW = 200, minH = 150 } = opts
+  const { padding, minW = 200, minH = 150 } = opts
   if (rects.length === 0) return null
 
   let minX = Infinity
@@ -57,11 +75,23 @@ export function computeGroupBounds(
   // 全部矩形尺寸非法（不存在可视成员）
   if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null
 
-  const w = Math.max(maxX - minX + padding * 2, minW)
-  const h = Math.max(maxY - minY + padding * 2 + paddingTop, minH)
+  // 逐边解析：缺省/非法（负数/NaN/Infinity/非数值）回落该边默认
+  const pickEdge = (edge: number | undefined, fallback: number): number => {
+    if (typeof edge !== 'number' || !Number.isFinite(edge) || edge < 0) return fallback
+    return edge
+  }
+  const pad = {
+    left: pickEdge(padding?.left, DEFAULT_GROUP_PADDING.left),
+    right: pickEdge(padding?.right, DEFAULT_GROUP_PADDING.right),
+    top: pickEdge(padding?.top, DEFAULT_GROUP_PADDING.top),
+    bottom: pickEdge(padding?.bottom, DEFAULT_GROUP_PADDING.bottom),
+  }
+
+  const w = Math.max(maxX - minX + pad.left + pad.right, minW)
+  const h = Math.max(maxY - minY + pad.top + pad.bottom, minH)
   return {
-    x: minX - padding,
-    y: minY - padding - paddingTop,
+    x: minX - pad.left,
+    y: minY - pad.top,
     w,
     h,
   }
