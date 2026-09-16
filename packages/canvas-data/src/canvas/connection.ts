@@ -230,26 +230,41 @@ export function validateConnection(
   // 去重：同一条 canonical 连接只允许一条
   if (findDuplicate(canonical, ctx.edges)) return fail('duplicate')
 
-  // 目标输入端口容量：只有"显式声明了 inputs"的类型才受容量约束。
-  // 声明条目里 capacity 缺省/<=0 视为 1（与 connection/capability 语义一致），
-  // 因此 capacity:1 与 limit:'single' 等效，都应在提交前把已有入边的候选拦下。
-  // 未声明任何 inputs 的类型保持旧行为：不限制入边条数。
+  // 目标输入端口容量。
+  //
+  // 语义（用户拍板，别再改回去）：
+  // - **不声明 capacity = 不限条数**（旧实现把"不声明"当 1 用，于是 image/text 这些本该接多个
+  //   上游的节点接不了第二条 —— 用户实测报的"图片输入端口分明可以添加多条连接线"就是它）；
+  // - 声明了 capacity 且满额 → **默认挤老边**：这里放行，由渲染层在 commit 时挤掉最老一条
+  //   （见 CanvasHost 的 evictOldestIncoming）。内核只做纯校验，不碰"删哪条"的决策；
+  // - 只有显式 evictOnFull:false 才满额直接拒（limit-reached）。
+  //
+  // 为什么不在这里 return 一个 willEvict 标记：调用方(CanvasHost.commitEdge)本来就要先校验再落边，
+  // 它落边时顺手挤出即可；内核多吐一个标记反而要多一条状态路径。
   if (inputDef) {
-    const capacity = inputDef.capacity === undefined || inputDef.capacity <= 0 ? 1 : inputDef.capacity
-    // 本次连接实际占用的输入口名：具名 handle 用它；默认 handle（含缺省）用 resolveTargetInputPort
-    // 落到的口的 port（缺省口可能为 undefined = 传统默认 target 口）。
-    // 容量只统计"连到同一口"的现有边（C-1：纯具名多口类型各口容量独立，互不挤占）。
-    const effectivePort = inputDef?.port ?? undefined // 传统默认口(无具名)亦为 undefined
-    const intoInput = ctx.edges.filter(
-      (e) =>
-        !isTransient(e) &&
-        // 多端口已有边(自定义 handle) canonical 提取失败，直接用 e.target 判目标节点
-        (getCanonicalEndpoints(e)?.target === canonical.target || (!getCanonicalEndpoints(e) && e.target === canonical.target)) &&
-        // 现有边 handle 归一到目标口：无 handle/默认 target 口 视为默认口；否则精确匹配具名口
-        ((effectivePort === undefined ? !e.targetHandle || e.targetHandle === 'target' : e.targetHandle === effectivePort)),
-    ).length
-    if (inputDef.limit === 'single' || capacity === 1 ? intoInput > 0 : intoInput >= capacity) {
-      return fail('limit-reached')
+    const cap = inputDef.capacity
+    // limit:'single' 是 capacity=1 的等价写法（保留兼容）
+    const isSingle = inputDef.limit === 'single'
+    const capacity = isSingle ? 1 : cap && cap > 0 ? cap : undefined
+    if (capacity !== undefined) {
+      // 本次连接实际占用的输入口名：具名 handle 用它；默认 handle（含缺省）用 resolveTargetInputPort
+      // 落到的口的 port（缺省口可能为 undefined = 传统默认 target 口）。
+      // 容量只统计"连到同一口"的现有边（C-1：纯具名多口类型各口容量独立，互不挤占）。
+      // 传统默认口(无具名)归一为 "target"；具名声明的 "target" 与"默认 target 口"是**同一个口**。
+      const effectivePort = inputDef.port ?? 'target'
+      const intoInput = ctx.edges.filter(
+        (e) =>
+          !isTransient(e) &&
+          // 多端口已有边(自定义 handle) canonical 提取失败，直接用 e.target 判目标节点
+          (getCanonicalEndpoints(e)?.target === canonical.target || (!getCanonicalEndpoints(e) && e.target === canonical.target)) &&
+          // 现有边 handle 归一到目标口：**无 handle = 默认 target 口**（edgeStore 不存默认 handle，
+          // 真实拖拽建出的边 targetHandle 是 null —— 用户实测报的"3d 预览限制一条连接线没有效果"就是它）。
+          // 具名口精确匹配；其它具名口之间互不影响。
+          ((e.targetHandle ?? 'target') === effectivePort),
+      ).length
+      const full = intoInput >= capacity
+      // 满额且明确要求"不挤" → 才拒。缺省 evictOnFull = true（挤老边，放行）。
+      if (full && inputDef.evictOnFull === false) return fail('limit-reached')
     }
   }
 
@@ -301,12 +316,60 @@ export function typeConnectionDef(def: { inputs?: PortDef[]; outputs?: PortDef[]
   return def.inputs || def.outputs ? { inputs: def.inputs, outputs: def.outputs } : undefined
 }
 
+/** 带 id 的边（"挤出哪条"的决策必须有 id 才能落地） */
+export interface EvictableEdge extends ExistingEdge {
+  id: string
+}
 
+/** 解析目标输入口定义：具名 handle 精确匹配；默认 handle → 默认口（缺省取第一个） */
+function resolveInputDefForEvict(
+  typeConn: NodeConnectionDef | undefined,
+  targetHandle: string | null | undefined,
+): PortDef | undefined {
+  const inputs = typeConn?.inputs
+  if (!inputs || inputs.length === 0) return undefined
+  if (targetHandle && targetHandle !== 'target') return inputs.find((i) => i.port === targetHandle)
+  return inputs.find((i) => !i.port || i.port === 'target') ?? inputs[0]
+}
 
-
-
-
-
+/**
+ * 满额挤出决策（纯函数）：为新边腾位该挤掉哪一条入边。
+ *
+ * 语义（与 validateConnection 的容量段严格对齐，**唯一的实现**，别在别处再抄一份）：
+ * - 目标输入口**没声明 capacity** = 不限条数 → 永远不用挤，返回 null；
+ * - 声明了 capacity 且**没满** → 不用挤；
+ * - 满了：evictOnFull !== false（缺省就是挤）→ 返回最老一条入边的 id（FIFO，按 edges 数组序）；
+ *   evictOnFull === false → 返回 null（由校验直接拒，轮不到这里）；
+ * - 只统计"同一个输入口"的入边（纯具名多口类型各口容量独立，互不挤占）。
+ *
+ * 为什么抽成共享函数：这条决策以前在 canvas-render 的 CanvasHost 里有一份、
+ * 插件里还各写了一份（image-compare 甚至专门声明"上限+1 缓冲位"来绕开内核）。
+ * 判定分散 = 行为漂移，这正是"同一条边拖过去能连、框选批量连却被拒"的根因。
+ */
+export function pickOverflowEvict(input: {
+  typeConn: NodeConnectionDef | undefined
+  edges: ReadonlyArray<EvictableEdge>
+  target: string
+  targetHandle?: string | null
+}): string | null {
+  const inputDef = resolveInputDefForEvict(input.typeConn, input.targetHandle)
+  if (!inputDef) return null
+  // 明确要求"不挤"的口不在这里处理（validateConnection 会直接拒）
+  if (inputDef.evictOnFull === false) return null
+  const capacity = inputDef.limit === 'single' ? 1 : inputDef.capacity
+  if (!capacity || capacity <= 0) return null
+  // 传统默认口(无具名)归一为 "target"；具名声明的 "target" 与"默认 target 口"是**同一个口**。
+  // 真实拖拽建出的边 targetHandle 是 null（edgeStore 不存默认 handle）→ 归一为 "target"。
+  const effectivePort = inputDef.port ?? 'target'
+  const incoming = input.edges.filter(
+    (e) =>
+      !isTransient(e) &&
+      e.target === input.target &&
+      (e.targetHandle ?? 'target') === effectivePort,
+  )
+  if (incoming.length < capacity) return null
+  return incoming[0]?.id ?? null
+}
 
 
 

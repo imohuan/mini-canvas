@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeAlignGuides, SNAP_THRESHOLD } from '../alignGuideEngine'
+import { computeAlignGuides, shouldAlignOnDrag, SNAP_THRESHOLD } from '../alignGuideEngine'
 import type { AlignRect } from '../alignGuideEngine'
 
 /**
@@ -9,6 +9,18 @@ import type { AlignRect } from '../alignGuideEngine'
 function drag(x: number, y: number): AlignRect {
   return { id: 'a', x, y, w: 40, h: 40 }
 }
+
+describe('shouldAlignOnDrag —— 多选时禁止对齐（用户要求）', () => {
+  it('没选中 / 单选 → 参与对齐', () => {
+    expect(shouldAlignOnDrag(0)).toBe(true)
+    expect(shouldAlignOnDrag(1)).toBe(true)
+  })
+
+  it('多选（>=2）→ 不参与对齐（吸附只动一个节点，会把整组相对位置弄乱）', () => {
+    expect(shouldAlignOnDrag(2)).toBe(false)
+    expect(shouldAlignOnDrag(5)).toBe(false)
+  })
+})
 
 /** 垂直参考目标：左缘 300、中心 350、右缘 400（高 60 与 x 正交无关） */
 const vTarget: AlignRect = { id: 'b', x: 300, y: 0, w: 100, h: 60 }

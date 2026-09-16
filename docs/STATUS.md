@@ -30,6 +30,24 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 **已知遗留（与本次无关）**：`plugin-theme-default` 的 `typecheck` 脚本用 raw `tsc` 处理 `.vue`，
 报 `export type { X } from './X.vue'` 找不到导出（HEAD 里就存在）；其余 29 个包 typecheck 通过。
 
+**本轮变更（2026-09-16）：画布交互配置收进「常规/画布」（对齐 v1 VueFlow 交互开关）**。
+v2 渲染宿主此前只绑 minZoom/maxZoom（组件写死 0.2/2），其余 VueFlow 交互一律吃库默认值 ——
+既不能配，且 5 处与 v1 行为不一致（edgesUpdatable/selectNodesOnDrag/zoomOnDoubleClick/
+connectOnClick/onlyRenderVisibleElements）。本轮：
+1. 新增 `canvas-render/src/contracts/canvasInteractionSettings.ts`（纯逻辑可单测）：18 项 schema
+   （17 个开关 + 网格间距 X/Y）、默认值逐项对齐 v1 core、resolve/apply 纯函数（缺项/非法逐项回落默认）。
+2. `createMiniCanvasHost` 在插件装载后、持久化桥 restore 前 `settings.define(常规/画布, …, 'canvas-render')`
+   —— 宿主级声明不随插件热卸回收；用户已保存值命中快照作初值；设置面板自动长出这组配置，
+   改动经 settingsPersist 跨刷新恢复。
+3. `CanvasHost` boot 后把 settings 读成响应式 interactionSettings 并订阅 onChange 实时更新；
+   `CanvasSurface` 全部绑到 `<VueFlow>`（nodesDraggable/nodesConnectable/elementsSelectable/edgesUpdatable/
+   selectNodesOnDrag/snapToGrid/snapGrid/zoomOnScroll/zoomOnPinch/panOnScroll/panOnDrag/zoomOnDoubleClick/
+   connectOnClick/onlyRenderVisibleElements/preventScrolling/minZoom/maxZoom）。行为对齐 v1：
+   边可重连、拖节点不再顺手选中、双击不再缩放、点击不再连线、只渲染可见元素默认开。
+   `CanvasHost` 的 minZoom/maxZoom props 兼容保留但不再生效（settings 单源）；ui demo 删除写死的传参。
+4. 测试：canvas-render **241**（+16：schema/resolve/apply 12 条 + 宿主声明/持久化 2 条 + 原有全绿）、
+   ui **23** 全绿、theme-default 118 / canvas-data 274 抽查全绿；canvas-render `tsc` 0 错、ui `vue-tsc` 0 错。
+
 ## 当前主线（2026-09-04，历史）：canvas-core-v2 重构 · 开发测试期最小闭环
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 
@@ -92,7 +110,330 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
   - 测试：相关包共 **1051 条**全绿（内核 354 / 渲染 215 / 主题 83 / text 64 / image 142 / 3d 45 / compare 46 / 图片工具 54 / 文本工具 31 / ui 17）；text / 3d / compare / image 四包 `tsc` + ui `vue-tsc` + 三包与 ui `vite build` 全通过。本轮新增 7 个测试文件、60 条，其中三个是**渲染契约**（SSR 拿真 HTML 断言）：`textContentRender` 锁编辑态有没有 `nowheel` 与滚动条、`panoramaContentRender` 锁预览模式画面有没有真的 `pointer-events:none`（只看画面容器，不看模板注释）、`imageCompareWidthRender` 用记录型假 graph 锁"连上图之后确实写回宽度"。
 
 ## 现在立刻该做的一件事
-### 本轮：多选插件的框选失效与群组框双框错位（用户指定，2026-09-14）
+### 本轮：connectEdge 统一建线入口 + handle 匹配真 bug（用户指定，2026-09-16）
+- 用户指出（原话）：「我觉得你这个逻辑依然存在 BUG。我的很多操作都会创建新的连接线，不管是多选批量创建还是拖拽到空白处创建节点的时候（自动创建连接线，这是右键菜单插件的逻辑）还有普通拖拽建立连接线，或者历史记录什么的。我认为你应该做一个添加连接线的函数，在这个地方解决 evictOnFull / capability 两个属性，还有验证连接线是否有效的地方，只有全部通过之后才创建」。
+
+#### ① 真_bug：3d-preview 的"只接一条"完全失效（用户实测报的）
+- **根因**：具名口容量统计写成 `e.targetHandle === effectivePort`，而声明里的 `port` 是 `'target'`、**真实拖拽建出的边 targetHandle 是 null**（edgeStore 不存默认 handle）→ `null === 'target'` 永远为假 → 容量统计恒为 0 → 永远不挤。
+- **修法**：`validateConnection` 与 `pickOverflowEvict` 两处统一改为 `e.targetHandle ?? 'target' === effectivePort` —— 具名声明的 target 口与"默认 target 口"是**同一个口**，无 handle 的边必须算进去。补 2 条测试锁死（含多具名口场景：无 handle 边只算进它真正落到的那个口）。
+
+#### ② connectEdge —— 全路径统一建线入口（按用户要求的架构）
+- **背景**：画布里建线至少有 5 条路径（普通拖线 / 右键菜单拖到空白自动建节点 / 生成面板加素材 / 多选批量连线 / 云端合并与粘贴），以前每条路径各自决定"要不要校验、满了怎么办"，这是容量 bug 反复出没的土壤。
+- **改法**：`graph.connectEdge(input)` 一个函数管完：**校验 → 满额挤出 → 落边**，返回结构化结果 `{ edgeId, status: ok|rejected|duplicate, reason?, evictedEdgeId? }`（空串丢原因的老问题一并解决）。`addEdge` 保留为薄包装（老调用方零改动），事务句柄同样暴露 `tx.connectEdge`。
+- **迁移**：普通拖线（CanvasHost.commitEdge，删掉自查 + 手写幂等）、右键菜单真边、生成面板加素材（删掉自算挤出与 `oldestIncomingToEvict` import）、多选批量连线、云端合并、剪贴板粘贴 —— **全部走 connectEdge，没有旁路**。唯一例外仍是 `data.transient` 临时脚手架边（跳过校验/挤出）。
+- `imageOps` 的 `inputCapacity` / `evictEdgeId` 参数一并删除（接口瘦了，插件作者不用再理解这些）。
+
+#### 验证
+- 浏览器实测（真实拖拽）：**3d-preview 拖第二条线 → 第一条被挤掉**，始终只有一条（修前两条并存，用户截图报的正是这个）。
+- 全量回归：canvas-data **274**（新增 7 条：connectEdge 五条 + handle 匹配两条）/ canvas-render 227 / node-image 148（含改 2 条旧语义断言）/ node-text 65 / image-compare 46 / 3d-preview 71 / context-menu 51 / clipboard 23 / cloud-save 90 / theme-default 118 / multi-select 126 / ui 23 全绿；7 个包 tsc 干净。
+
+### 上一轮：连接容量的正确语义 + 加边守门人（用户指定，2026-09-16）
+- 用户纠正（原话）：「你一直在强调图片的 capacity 是1，但是我这里图片输入端口分明是可以添加多条连接线的」「最初提出这个 capacity 是因为我有一个 图片diff 节点…只有它只能连接2条连接线，其他的节点都没有限制」「这里默认就是挤，当前没有任何一个节点为拒」「你这里添加连接线的时候 绝对不能绕过这个规则检验」。
+- **用户是对的，V2 迁移时把容量语义弄窄了。** 查 V1（packages/canvas-core/src/nodes/*）：image/text 只声明 acceptsInputs（**只限类型、不限条数**），全靠 image-compare 自己手写「超了挤最老」。V2 给所有节点都加了 capacity:1，行为随之变窄。
+
+#### ① 容量的三条语义（改前 / 改后）
+- **改前**：capacity 未声明 = 当 1 用（只接一条）；满额一律 limit-reached 拒。→ 图片/文本节点接不了第二个上游；而「挤老边」因为 `if (capacity < 2) return null` 这道门槛**从未生效过**。
+- **改后**：
+  - **不声明 capacity = 不限条数**（image / text 现在都不声明，回归 V1 语义）；
+  - 声明了且满额 → **默认挤老边**（evictOnFull 缺省 true），落边时先删最老一条再加新的，同一条历史记录；
+  - 只有显式 evictOnFull:false 才满额直接拒（当前**没有任何节点**用这个，与用户要求一致）。
+- capacity 现在只有两处声明：3d-preview = 1（换图）、image-compare = 2（保留最老两条）。
+- image-compare 顺带从「上限 2 + 1 个缓冲位 = 3」改回**如实的 2** —— 那个缓冲位是「内核不会挤」时代的 workaround，现在不需要了。
+
+#### ② 挤出决策收口成唯一实现
+- 新增内核纯函数 pickOverflowEvict()（canvas-data/canvas/connection.ts），与 validateConnection 的容量段**同源**。
+- 以前这条决策散在三处：CanvasHost.evictOldestIncoming（还带着 capacity < 2 的死门槛）、plugin-node-image 的 imageOps 自己算一遍、image-compare 又用「缓冲位 + 边变化订阅」绕过一遍。**判定分散 = 行为漂移**，这正是「同一条边拖线能连、批量连却被拒」的根因。现在只有一份。
+
+#### ③ 加边守门人：任何入口都不能绕过校验
+- **漏洞**：graph.addEdge 是「图唯一写入口」，但**完全没有校验** —— 插件 / 云端合并 / 测试脚本都能把自连、成环、重复、类型不符的边直接塞进图。我上一轮就是误用这个后门「验证」图片能连多条，得出的是假结论。
+- **改法**：graphDocument.addEdge 落闸（addEdgeGuarded）—— 规则不过就不落边（返回空串）。挤出也一并在这里做，同事务原子。
+- **例外**：data.transient 的临时脚手架边不校验（拖线途中的占位边端点可能还没进 store），也不参与挤出。
+- 新增 5 条测试锁死：自连 / 重复 / 成环 / 类型不符全部拦下；transient 边正常放行。**浏览器实测**同样四类非法边全部被拦（返回空串、一条没落）。
+- 顺带把 registerNodeType 里**手抄的 inputs 字段列表**换成复用 PortDef —— 正因为抄了一份，新增 evictOnFull 时插件写了会被类型误拦。
+
+#### 验证
+- 浏览器实测（真实拖拽）：两个图片源拖到同一图片目标 → **两条都连上**（修前第二条被拒）。
+- 浏览器实测：image-compare 连第 3 条 → 自动挤掉最老一条（保留最新两条）。
+- 全量回归：canvas-data **267** / canvas-render 227 / node-image 148 / node-text 65 / image-compare 46 / 3d-preview 71 / context-menu 51 / clipboard 23 / cloud-save 90 / theme-default 118 / group 21 / multi-select 126 / ui 23 全绿；五个包 tsc 干净。
+- 更新了 7 条断言旧语义的测试（canvas-data 连接内核 5 条 + context-menu 1 条 + image-compare / 3d-preview 各 1 条）：它们锁的正是被改掉的旧行为，按新规则重写而非删除。
+
+### 上一轮：批量连线的"部分支持"语义（用户指定，2026-09-16）
+- 用户原话：「多个节点 可以拖是拖拽一条连接线 你的目标节点应该如何判断是否可以链接？比如只要部分连接线支持就可以链接（链接的时候也只允许支持的连接线进行连接）不能一股脑的直接建立连接线」。
+- **先查清了"一股脑"到底发生在哪**（三个场景浏览器实测）：落边本身**一直是逐条校验**的（类型不符、容量已满、类型级部分支持三种都只落了合法的那几条），所以"全建进去"并不存在。真正的三处问题在别处：
+
+#### ① 容量不在批内累计 —— 这是真正会"多建一条"的漏洞
+- 内核 `validateConnection` 判容量看的是"目标输入口**现有**入边数"。批量落边时每条边各自查一次图，**兄弟边互相看不见**：目标口 capacity=1 时，3 个合法源会各自都判合法、3 条一起落进只装得下 1 条的口。
+- 改法：新增纯函数 `planBatchApply(specs, { isDuplicate, canConnect })`，其中 `canConnect(spec, **alreadyPlanned**)` 第二个入参就是"这一批里已经决定要建的边"。组件的 `validateBatchEdge` 把已计划的边并进"现有边"一起喂给内核校验。顺序即优先级（先到先得），与单条拖线"先连上的占住口"一致。
+- 实测：两个合法文本源拖到容量 1 的文本目标 → 只落第一条（修前会落两条）。
+
+#### ② 目标可连性被"某个源不合法"整体判死
+- 原来用 `resolveFeedback` 按**单个源**跑，某一个源不合法就把整个目标画成"不可连"——哪怕别的源明明连得上。
+- 改法：几何命中与合法性**解耦**。resolveFeedback 只负责回答"aim 到哪个节点"（validate 恒返回空串），合法性改用整批结论：`plan.build.length > 0` 即"至少有一条能连"→ 目标亮"可连"；一条都连不上才按非法处理，并把真实原因（如"类型不匹配"）透到气泡。
+- 注意"已存在"**不算非法**：那条边本来就在，按可连显示。
+
+#### ③ 预览与落边是两套独立判断（迟早漂移）
+- 改法：预览与落边**共用同一份** `batchPlan`（computed），做不到"所见非所得"。
+- 临时线新增 `willConnect` 位：连不上的那条加 `is-rejected` 压暗（opacity 0.28 + grayscale），用户在**松手前**就看得见"这一拖只有几条会成"。不用虚线是因为线型来自用户可配的主题，再叠一层 dash 会与配置打架。
+- 实测：text 源 + image 源一起拖到 text 目标 → 一条线正常、一条压暗到 0.28、目标显示可连；松手只建 `text→text` 那条（`image→text` 被内核以 type-not-accepted 拒）。
+
+#### 顺手抓到并修掉一个我自己引入的严重 bug
+- `onBatchUp` 里先执行了 `batchSide.value = null`，之后才读 `batchPlan.value` —— 而 batchPlan 是依赖 batchSide 的 computed，于是**恒为 null，一条边都建不出来**（表现为"预览两条线都对、松手什么都没有"）。改为**先取计划、再清状态**，并在注释里标明顺序不可调换。
+
+#### 测试与回归
+- multi-select **126 条**（新增 10 条：`planBatchApply` 六条 —— 含"容量 1、两个源各自合法只落第一条"这条回归；`markGuideLines` 四条 —— source/target 两侧对号入座、duplicate 也算会连上、不改动其它字段）。
+- 回归全绿：canvas-render 227 / canvas-data 258 / theme-default 118 / ui 23；`vue-tsc` 对本轮改动文件零报错。
+
+### 上一轮：多选框"缩放后 padding"bug + 父子级方案取舍（用户指定，2026-09-16）
+- 用户反馈（原话）：「你的这个多选框缩放之后的 padding 存在 BUG 你这里框选的话 你认为是做成一个节点 给框选的节点设置 父子级？？还是目前这种让框选直接跟随画布的缩放，那个好一些？？」
+
+#### ① 缩放后 padding 的 bug：间距与线宽不在同一个空间
+- **实测数据**（间距配 24 / 外框线宽 4 / 内框线宽 2；"重叠"= 两条线各半宽之和 > 屏幕上间距）：
+
+  | zoom | 屏幕上间距 | 外框线宽 | 结果 |
+  |---|---|---|---|
+  | 2 | 48px | 2px | 正常 |
+  | 1 | 24px | 4px | 正常 |
+  | 0.5 | 12px | 8px | 临界 |
+  | 0.3 | 7.2px | 13px | 重叠 2.3px |
+  | 0.2 | 4.8px | 20px | **重叠 10.2px** |
+- **根因**：两框**线宽**按 1/zoom 反缩放（屏幕恒定粗细），而 **padding 是 flow 常量**（屏幕上 = 配置 × zoom）。缩得越小线越粗、间距越窄，两条线最终糊成一条。
+- **改法**：新增纯函数 `scaleFramePaddings(pads, zoom)`，把间距也除以 zoom —— 让"间距"与"线宽"用**同一套空间约定**：配置值恒等于"你在屏幕上量到的值"。zoom 非法/≤0 回落 1（绝不产生 Infinity 把几何算炸）。
+- **同时补上另一半**：`refreshFrame` 的 watch 依赖里加了 `viewport.zoom`。少了这一项，缩放画布后间距会**停在旧缩放算出来的值**上，与线宽对不上 —— 单改 scaleFramePaddings 是不够的。
+- **实测结果**：修后屏幕上间距在 2 / 1 / 0.5 / 0.3 / 0.2 五档缩放里**恒定 24px**，再无重叠（修前 0.2 时重叠 10px）。
+
+#### ② 父子级 vs 跟随画布缩放：建议继续用现在这套
+- **结论：不改成父子级。** 理由是项目里已经有真正的父子级分组（`plugin-group`，走 `parentId` + `toRelativePosition`），两者职责重叠，硬把框选也做成父子级会直接打架。
+- 跟随缩放这套（浮层 + 自己贴 viewport 变换）的**实际优势**：① 不写数据、不进历史，框选不该污染文档；② 不参与图结构，不会影响连接校验/导出/后端；③ 跨顶层节点本来就是常态，而父子级要求所有节点归到同一个父下，语义反而拧巴；④ 已是当前架构，改造成本为零。
+- **父子级唯一真正占优的地方**：节点很多、缩放很小时，浮层要按虚拟化只画可视区（`visibleRect` / `visibleNodes`）—— 这一条是性能问题，不是正确性问题，等真出现几千节点再说。
+- **要让观感与线宽同空间**这件事，父子级并不自动解决（它解决的是"拖动时要不要重算"），仍要像本轮这样把间距按 zoom 换算。所以换方案并不能省掉这个 bug 的修法。
+- 唯一与本方案有关的小麻烦：拖动中用"快照 + 位移"跟手（不能每帧重算并集），这是已解决的历史坑（见 dragFollow 的注释与回归测试）。
+
+#### 测试
+- multi-select **116 条**（新增 6 条：`scaleFramePaddings` 的 zoom=1 原样 / zoom=0.5 翻倍 / 非法值回落 / zoom=0.2 间距不被线宽吃掉；渲染契约两项 —— 间距随缩放换算、缩小时两框不糊在一起）。
+- `vue-tsc` 对本轮改动的文件零报错。
+
+### 上一轮：批量连线的"端口直接用 MovingHandle / 3D 反馈 / 多源"三问（用户指定，2026-09-16）
+- 用户反馈（原话）：「你的多选框左右的 2 个 movinghandler 效果不对，有没有办法直接使用 MovingHandle.vue？有没有办法直接讲他导出，然后在我的这个多选插件中导入他 并且使用？？其次就是拖拽到目标节点上的时候没有那种 3d 动效 之前你的这个判断写在了什么地方？？ canvas-render 还是 plugin-theme-default 判断连接线是否可以链接，这里之前判断的是只有单个连接线，现在可能需要让他支持多个？？」
+- **三个问题各自的根因都定位到了（实测 + 读代码得出，不是猜的）**：
+
+#### ① 端口"效果不对"：不是没复用 MovingHandle，而是拿 !important 去改它的定位
+- 现状：多选框上**本来就是**主题的 MovingHandle（preview 模式，上一轮已导出并导入）。但外面套了个 **0×0 定位点**，再用 !important 把 top/transform 压回 0，去绕开组件自带的 top:50% !important。
+- **改法**：删掉那两条 !important 覆盖，改成**顺着组件的契约走** —— 给定位盒一个**真实高度**（= 跟随区高），它自己的 top:50% + translateY(-50%) 就自然落在盒子垂直中点上、跟随区上下各露一半，与节点端口同一套几何。以后改跟随区高度也不用再动定位代码。
+- 顺带修了跟随区高度的算法：原先写成 (portZoneHeightRatio ?? 0.8) * 100（把一个 0~1 的**比例**硬乘 100 当 px），跟节点那边"节点高 × ratio"完全不是一回事。现在基准 = **选中集里最高的那个节点的高度** × ratio，并留 72px 下限。实测跟随区从 22.5×60 变成 **45×120**，与节点端口逐字一致。
+- 还修了"端口拖不动"：圆球永远画在跟随区**里面**、跟随区 z-index 更高，所以按下命中的是跟随区、圆球收不到 mousedown（preview 模式下没有 VueFlow Handle 那层兜底）。改为**两条入口都接**（connect-start + 定位盒的 mousedown），函数内做幂等判重，不会装两套监听。
+
+#### ② 拖到目标上没有 3D 动效：喂给反馈几何的矩形**字段名写错了**
+- **判断写在哪里**：连接**规则本身**在 packages/canvas-data/src/canvas/connection.ts（validateConnection：自连 / 成环 / 重复 / 类型 acceptsTypes / 容量 capacity），**不在** plugin-theme-default —— plugin-theme-default 只管"长什么样"（CustomEdge / MovingHandle / BaseNode）。
+- **真因**：nodeLayout 给的是 { x, y, w, h }，而渲染层 resolveFeedback 要的是 { x, y, width, height }。少了这一步转换 → width/height 恒为 undefined → 吸附带 / body 命中全算成 NaN → hover 永远 null → hoverNode 永远写不进去 → BaseNode 的 3D 条件（showConnectFeedback → isConnectionValidTarget）永假。
+- **改法**：新增纯函数 toNodeRects(rects)（nodeLayout 形 → NodeRect 形）并在组件里走它；同时把命中用的吸附带配置从写死的 DEFAULT_SNAP_ZONE_CONFIG 换成渲染上下文里的 snapZone（宽 42 / 高占比 0.8），与"从节点端口拖线"**同一份配置**（原先宽 undefined → 吸附带塌成 0 宽，永远吸不到端口）。
+- **浏览器实测**：拖到干净目标 → 卡片 .v2-card.is-connecting-hover + transform: perspective(800px) rotateX(...) rotateY(...) scale(1.018)（3D 回来了）；拖到已有入边的节点 → is-connection-invalid + 气泡"已存在同一条连线"；松手落边 68-77 成功（69-77 因目标容量 1 被内核正确拒绝）。
+
+#### ③ "之前判断的是只有单个连接线，现在需要支持多个"
+- **改法**：ActiveConnection 增加可选 sourceNodeIds?: string[]（**缺省 = 单源语义，逐字不变**），并新增渲染层共用判定 isConnectionSource(active, nodeId)（单源比 sourceNodeId、多源查集合）。BaseNode 的 isCurrentConnectingNode 改为走它 —— 这是"我算不算拖线源"的唯一维护点，散在各处必然漏掉多源那一路。
+- 多选插件起手时把**整个选中集**写进 sourceNodeIds。**实测**：拖线中两个源节点的左右端口都变 is-disabled（修前只有第一个）。
+
+#### 测试与回归
+- multi-select **110 条**（新增 6 条：toNodeRects 三项 —— 含"拿真实 resolveFeedback 断言转换后能命中 / 不转换则永远命中不了"的对照；端口定位不得再用 !important；跟随区高度算法两项）；canvas-render **227 条**（新增 4 条 isConnectionSource 单源 / 多源 / 空数组回落）。
+- 全量回归：canvas-data 258 / theme-default 118 / ui 23 全绿；canvas-render tsc 干净。
+- 浏览器实测：整组拖动、端口跟随鼠标（球随鼠标 943→958）、Shift 加选、批量落边均正常。
+- **已知既有问题（非本轮引入，未修）**：plugin-multi-select / plugin-theme-default 的 typecheck 脚本用**裸 tsc**，处理不了 .vue，于是 SelectionFrame.vue 的 script setup 里**类型错误不会被 CI 拦住**（本轮 ① 的猜数错误就是这么漏进来的）。本次改用 vue-tsc 复核：这两个包我的改动无报错，剩余报错来自 prosemirror-editor-bundle 与三个既有测试文件。
+
+### 上一轮：批量连线补齐"N 条线 + 目标反馈"（用户指定，2026-09-15）
+- 用户反馈（原话）：「我要的连接线是 从多选中每一个节点 对饮端口创建一条连接线到鼠标位置 / 你没有get到这一点而且当前 他移动到目标节点上的时候 没有任何效果？？ 比如这里的3d 动效，什么模糊（失败检测什么的）你这里都没有实现」。
+- **确认了两处缺失**：① 上一轮只画了**一条**线（从多选框边缘出发），不是"每个选中节点各一条"；② 完全没写渲染层的连接反馈状态，所以目标节点上没有 3D 倾斜 / 模糊 / 气泡。
+
+#### ① N 条临时线（每个选中节点各一条）
+- 新增纯函数 `buildBatchGuideLines(side, selectedIds, rects, cursor, snap?)`：每个选中节点**从他自己的外侧端口锚点**连到鼠标（或吸附点）。右侧拖出从各节点右缘中点出、左侧反之；吸附时所有线都指向目标端口锚点。拿不到矩形的节点跳过（不瞎猜位置）。
+- 组件里把单条 `guideLine` 换成 `guideLines` 数组，模板 v-for 渲染，每条都用主题 `ConnectionLine`（内部委托 `CustomEdge`）→ **与正式边同款**。
+- 浏览器实测：拖动中 `.conn-line-shell` 数量 = 2（选中 2 个节点各一条），截图可见两条线汇聚到鼠标。
+
+#### ② 目标节点连接反馈（3D / 模糊 / 气泡）
+- **根因（对宿主连接机制读完后确认）**：目标节点的 3D 倾斜、非法模糊、气泡都由渲染层的 `connectionState` 驱动（`isConnecting`/`activeConnection`/`hoverNode`/`suppressHandles`），BaseNode 只消费它。我上一轮完全没写这些状态，所以拖到目标上"什么效果都没有"。
+- **改法**：批量连线开始/结束时写同一份 `connectionState`（开始：`activeConnection` + `suppressHandles`；结束：全部清空）——**与宿主 `beginConnection`/`endConnection` 同语义**；每帧拖动用渲染层现成的 **`resolveFeedback` 纯函数**（吸附带/body 几何命中 + 内核 `validateConnection` 校验 + `reasonText` 文案）算出 hover 并写 `hoverNode`。这样目标节点的反馈与"从节点端口拖线"**同一套逻辑、同一套观感**，不是我另做一份。
+- **两个实测踩出来的坑**：
+  1. **`isConnecting` 是 computed（派生自 `activeConnection`），不能直接赋值** —— 直接写无效且不报错，反馈静默失效。只能写 `activeConnection`。
+  2. **flow 坐标换算必须用渲染层官方的 `screenToFlow`** —— 手写公式（`(client - pane - vp) / zoom`）实测算出错误 flow 坐标导致 hover 永远 null；官方换算后坐标正确、命中正常。
+- **浏览器实测**：拖到 67（image 类型）上 → 卡片出现 `is-connecting-hover`（3D 倾斜 + 蓝色高亮），截图可见；松手落边 `68->67`（`69->67` 因容量 1 被 `limit-reached` 正确拒绝）。
+
+#### 测试与回归
+- multi-select **104 条**（新增 5 条：`buildBatchGuideLines` 的方向/吸附终点/跳过无矩形/空选集），`tsc` 干净。
+- 全量回归：canvas-render 223 / canvas-data 258 / theme-default 118 / ui 23 / node-text 65 / node-image 148 全部通过。
+
+### 上一轮：拖未选中节点时框乱动 + 多选框端口拖不动（用户指定，2026-09-15）
+- 用户反馈（原话）：「1, 我拖拽未选中的节点的时候你的这个选框也在移动 2. 你的多选框 的 movinghandler 无法进行拖拽 建议你可以观察一下 vender/vueflow的源码？使用codegraph」。
+- **按建议读了 `vendor/vueflow` 源码**（`packages/core/src/components/Handle/Handle.vue` + `composables/useHandle.ts`、`useVueFlow.ts`）：
+  - `Handle` 的按下走 `@mousedown="onPointerDown"` → `useHandle.handlePointerDown`，且**必须能 `findNode(nodeId)`**（`if (!fromHandleInternal) return`）—— 即真实连接点必须挂在某个节点上；这印证了"多选框上的端口不能用真 `Handle`、只能用 `MovingHandle` 的 `preview` 模式自己 emit"是正确路线。
+  - 也确认了 d3-zoom 的平移挂在 `.vue-flow__viewport` 的 `mousedown`（前几轮已实测过），与本次两个 bug 无关但一起复核了。
+
+#### ① 拖未选中的节点时选框跟着动
+- **复现（量化）**：多选 68+69，按住**未选中**的节点 70 拖 6 帧 → 框逐帧 `368→382→396→410→424→438`（与 70 完全同步），节点位移 140、选中集没变。
+- **根因**：`RenderEvents.NodeDragStart` 里我**无条件**记下"拖动锚点"，于是拖任何节点框都会跟随。框代表的是**选中集**的包围盒，没被拖的成员不在选中集里就不该理它。
+- **改法**：抽出纯函数 `shouldFrameFollowDrag(draggedNodeId, selectedIds)`（= 被拖节点在选中集里才跟随），在 `NodeDragStart` 用它判定；不在选集内就把锚点置空、整段拖动都不跟随。
+- **浏览器决定性验证**：把未选中的 70 移到不重叠处后拖它 → 拖动中框**恒定不动**（327→327），70 正常移动（829→899），拖后框 Δ0 / 节点 Δ200 / 选中集不变；探针确认走的是 `skip` 分支。
+
+#### ② 多选框上的端口无法拖拽
+- **根因**：`onPaneCaptureDown`（挂在 `.csurface` 捕获阶段、判断"框内空白 = 整组平移"）**把端口上的按下也接管了** —— 端口球就画在多选框边缘**内侧**，几何判定把它算成"框内空白"，于是这次按下被抢走、`MovingHandle(preview)` 的 `connectStart` 收不到事件。
+- **改法**：抽出纯函数 `isHitOwnBatchPort({batchSlot, movingHandle})`，在接管判定里排除"命中本插件端口/端口槽"的落点，让给端口自己处理。
+- **浏览器验证**：多选后按下右侧端口球 → **引导线立刻出现**（修复前完全没有反应）；端到端拖到目标节点上成功落边 `68->70`。
+- 顺带说明：这轮排查中我发现过一次"按点落在 69 却以为在按 70"的假象（两节点屏幕重叠）—— 用元素命中反查所属节点后确认判定一直是对的，避免了一次误修。
+
+#### 测试与回归
+- multi-select **99 条**（新增 5 条：`shouldFrameFollowDrag` 的"选中成员跟随 / 未选中不跟随 / 空选集"三条 + `isHitOwnBatchPort` 的两条），`tsc` 干净。
+- 全量回归：theme-default 118 / canvas-render 223 / canvas-data 258 / ui 23 / node-text 65 / node-image 148 全部通过。
+
+### 上一轮：批量连线端口改用主题 MovingHandle + 临时线用 CustomEdge（用户指定，2026-09-15）
+- 用户反馈（原话）：「你这里的UI 样式和效果 都存在问题 / 我要的是 和 当前 MovingHanlde 一样的效果， 拖拽的时候也是使用 ConnectionLine / CustomEdge 这个组件 / 你的这个给我整笑了」。
+- **我上一轮做错的地方**：批量连线端口我自己手画了一个白底圆片按钮（`border-radius` + 内联 SVG 加号），拖拽时画的是一条 `stroke-dasharray` 的虚线。用户要的是**和节点端口、和正式边完全一致**的观感 —— 我这是另造了一套，必然漂移。
+- **改法一：端口复用 `MovingHandle`（preview 模式）**。它本来就内置了 `preview` 语义 —— 渲染成 `span` 而非 VueFlow 的 `<Handle>`（不注册真实连接点）、并 emit `connectStart`，正是为"挂在自己浮层上的临时端口"准备的。现在多选框左右两侧各挂一个，`rest-offset`/`cursor-gap`/`button-size`/`zone-*` 全部取自同一份 `handleParams`，所以**外观、半圆跟随区、圆球跟随动画、180ms 归位淡出、显隐规则全部与节点端口同源**。
+- **改法二：拖拽临时线复用 `ConnectionLine`**。该组件内部把渲染**完全委托**给 `CustomEdge`，所以拖出来的临时线与落成的正式边**长得一模一样**（导轨/流光/箭头/配置/动画）。并按它的注释要求把 `sourcePosition/targetPosition` 正确设为 right/left（硬编码方向会把贝塞尔控制点翻到内侧、曲线往反方向弯）。
+- **为此把两个渲染件从 theme-default 导出**（`MovingHandle` / `ConnectionLine` / `CustomEdge`），并把 `@mini-canvas/plugin-theme-default` 加进多选插件的依赖 —— 否则就是"各自手绘一套"的老路。
+- **两个实测踩出来的坑**：
+  1. **MovingHandle 的锚点 CSS 有 `top:50% !important`**，直接给它内联 top 会被覆盖（实测端口渲染到 y=-1182，跑到画布外）。解法：外面套一个**零尺寸定位点** `selection-frame-batch-slot`，由它决定锚点落在大框左/右缘的垂直中点。
+  2. **引导线起点不能读端口球的位置** —— 球会跟着鼠标跑（它就是跟随区），读它会得到抖动/错位的端点。改为读**定位点**的位置（稳定不动）。
+- **测试**：本包 **94 条**（新增 1 条渲染契约：端口确实是主题的 `moving-handle-anchor` + `is-preview` + `port-follow-zone`，左右各一个 → 锁"复用同一组件、不各画一套"）；`tsc` 干净。
+- **浏览器实测**：多选后左右两侧各出现一个与节点端口同款的白色圆球（带 + 号）；按住圆球拖出 → 临时线由 `ConnectionLine`/`CustomEdge` 渲染（DOM 实测 `conn-line-shell` + 13 个 path，与正式边同款）；松手落在节点上 → 按类型/容量规则落边（实测新增 `68->70`；`69->70` 因目标输入口容量为 1 被内核 `limit-reached` 正确拒绝）。
+- **副作用说明**：为让 vite 解析新依赖，重启了 5288 的开发服务器（新依赖需要重新预构建）；源文件未受影响。
+
+### 上一轮：多选时禁止对齐吸附（用户指定，2026-09-15）
+- 用户反馈（原话）：「这里多选的时候 应该禁止 我的对齐节点（对齐插件 - 拖拽的时候那个参考线）」。另问：「你的这个多选框是如何实现的？？ 使用的是父节点还是其他的方式？」
+- **架构答复（多选框不是父节点）**：`SelectionFrame` 是**独立浮层组件**，注册进 `overlay` 槽，与 VueFlow 的节点层是**兄弟关系**（不是父子）。它自己贴一层与 VueFlow viewport **完全相同的 transform**（`translate(x,y) scale(zoom)`）把框定位在 flow 坐标系；几何取自 `nodeLayout` 的矩形并集；整组拖动由它自己算（逐帧视觉写 + 松手经 graph 落盘）。好处：不碰 VueFlow 内部结构、不依赖节点父子关系，普通节点与 group 子节点一视同仁。
+- **根因**：对齐插件的吸附实现是 `updateNodeVisual(被抓住的那个节点, 吸附后位置)` —— 它只动**一个**节点。多选整组拖动时，这一下会把组里被抓住的那一个单独吸到对齐位、其余成员留在位移后的位置，**整组的相对位置被弄乱**。实测：参考线出现 1 条、且整组位移被吸住（预期 140 只走了 130）。
+- **改法**：新增纯函数 `shouldAlignOnDrag(selectedCount)` —— 选中 <= 1 才对齐，多选一律让位。`AlignGuideOverlay` 在每帧拖动里读当前选中数，多选时**不吸附也不画线**（用 `hideGuides()` 只清参考线、保留 `primaryId`，因为拖动还没结束、主节点不能丢）。
+- **单一职责**：判定放在对齐插件自己的引擎里（"要不要对齐"是它的事），多选插件不反向依赖它，两插件仍互不认识。
+- 测试：本包 **28 条**（新增 2 条：单选/未选中参与对齐、多选不参与），`tsc` 干净。
+- **浏览器实测（含对照，证明没把单选对齐弄坏）**：单选拖动 → 参考线最大 **1 条**（`align-guide-hline`，对齐仍生效）；多选拖动 → 参考线最大 **0 条**（已禁止）。验证时打开的对齐开关已按用户原状态恢复为**关闭**。
+- 全量回归：multi-select 81 / theme-default 118 / canvas-render 223 / canvas-data 258 / ui 23 / node-text 65 / node-image 148 全部通过。
+
+### 上一轮：第二次拖框清空选中 + 拖节点时框漂移（用户指定，2026-09-15）
+- 用户反馈（原话）：「第一次拖拽多选框（空白区域）可以进行拖拽，拖拽之后 选框没有消失 / 但是第二次不管我是拖拽节点还是 多选框 他的多选中黄台都会消失 / 图2 是第二个问题，拖拽里面节点的时候 你的多选框位置错误， 你看看你拖拽结束之后 是如何设置 多选框位置的， 拖拽结束之后的多选框位置是正确的」。
+
+#### ① 第二次拖拽后选中被清空
+- **复现**：第一次拖框 → 选中保住（正常）；**第二次**拖框（或拖节点）→ 松手后选中变空。
+- **根因（探针实测的守卫状态）**：两次拖拽的事件链对比 —— 第一次 `click → swallowed:true`（守卫生效）；第二次 `pointerdown 时 armed:true`。
+  即：`groupDragArmed`（上一轮为"抵消紧随的 mousedown"加的标记）**从未被消费**（因为我们在 `pointerdown` 上做了 `preventDefault`，浏览器就不再补发 `mousedown`），于是第二次按下时它还是 true → 处理函数走进"抵消 mousedown"分支直接 return：**既没开始新的拖动、标记又被清掉**，最后补发的 click 穿过去把选中清空。
+- **改法**：把"这次 mousedown 要不要抵消"改由 `isDragging`（真的在拖）判断，**不再用这个易失灵的标记**：
+  - `isDragging === true && e.type === 'mousedown'` → 抵消（d3-zoom 的入口）；
+  - `e.type === 'pointerdown'`（新手势开始）→ 作废上一次遗留的吞 click 标记。
+  删掉 `groupDragArmed` 这个中间状态（它同时兼任两个语义，是这次 bug 的来源）。
+- 浏览器实测：**连做三次拖框，选中每次都保住**（`["68","69"]` ×3）；随后再点真正空白 → `[]`（清空回归正常）。
+
+#### ② 拖动节点时框位置漂移（松手才跳回正确位置）
+- **复现（量化）**：拖节点 68 时逐帧测"框相对选中节点并集的外扩量"，从 `(-7, -9)` 一路漂到 `(-7, -21)`，**松手后又跳回** `(-7, -9)`。
+- **根因**：上一轮我把拖动跟随实现成"每帧用**实时位置 + 其余节点的 store 位置**重算并集"。但 VueFlow 原生拖动**只在松手时落盘**，所以拖动中途 store 里被拖节点的位置还是旧的 —— 于是并集把"新位置"和"旧位置"混在一起，框越算越偏。用户观察到的"松手后才正确"正是因为这个：松手落盘后 store 变新，重算就对了。
+- **改法**：与整组拖动**统一成同一种算法** —— 用"框快照 + 位移量"移动框（`followFrame`）。拖动时记下框快照与"抓着的那个节点的起始位置"，每帧只算该节点的位移量再平移框。这样框与节点走同一个 delta，相对偏移天然恒定，不需要读 store、也不受落盘时机影响。
+  - 只认"抓着的主节点"的帧：多选拖动时 VueFlow 会给每个成员各发一帧，用同一节点算位移才严格同步。
+- 浏览器实测：拖动中逐帧外扩量**恒定 `(-17, -23.5)`**（修前漂到 -21），松手后一致，选中同时保住。
+
+#### 测试与回归
+- multi-select **81 条**（新增 4 条：连续三次手势各自吞掉自己的 click / 漏掉"新按下作废"会让标记失效这个坑本身 / 逐帧位移量推进偏移恒定 / **对照**"重算并集会漂移"的修前错误形态）。
+- 全量回归：theme-default 118 / canvas-render 223 / canvas-data 258 / ui 23 / node-text 65 / node-image 148 / align-guide 26 全部通过；multi-select `tsc` 干净。
+
+### 上一轮：拖动后选中被清空 + 单选圈改自绘 SVG（用户指定，2026-09-15）
+- 用户反馈（原话）：「当前选框可以拖拽了，但是拖拽之后我的 选中状态也会被情空 / 还有你的多选UI 效果 节点内部左上角的那个单选样式 请使用自定义svg 把，你的这个ui效果很难评 直接使用svg替代把」。
+
+#### ① 拖动结束后选中被清空（复现 + 根因 + 修法）
+- **复现**：选中 68/69 → 在框内按住拖动 → 松手 → 选中变空（拖动**期间**选中还在，只有松手那一下被清）。
+- **根因（事件探针实测的事件序列）**：`pointerdown@window → pointerup@window → pointerup@pane → click@window → click@pane` —— 松手后浏览器**补发了一个 `click`**，VueFlow 的 pane click 语义是"点空白 = 清空选中"，于是刚拖完的选中被这一下清掉。
+- 这与我早先修的"Shift 框选后选中被清空"是**同一个病**，当时已经写了状态机 `boxSelectGuard.ts`（`BoxSelectClickGuard`）。本轮直接**复用它**：整组拖动结束时 `markGestureDone(true)` → 紧随的那次空白 click 在**实例根捕获阶段**被吞掉；并在每次新的 `pointerdown` 时 `reset()` 作废未消费的标记（松手点若落在节点上、浏览器不补发 click，标记不能留到下一次误吞真实点击）。
+- 浏览器实测：拖动前 `["68","69"]` → 拖动后 `["68","69"]`（**保住**），节点 Δ133；随后**再点一次真正空白** → `[]`（清空回归正常，守卫没有误吞正常点击）。
+
+#### ② 单选圈改为自绘 SVG（用户要求）
+- 原实现是 CSS 画的圆（`border-radius` + 边框 + 中心伪元素），用户认为效果不佳。改为**内联 SVG**：`viewBox 0 0 20 20`，两个 `<circle>` —— 外圈（白底 + 2px 主题色描边）+ 中心实心点（选中态）。
+- 好处：矢量、任意缩放下都清晰；颜色统一走 `currentColor` / `var(--canvas-node-border-selected)`，**跟随主题**而不是写死色值。
+- 尺寸：容器 26×26、距卡片左上各 8px，仍按 `1/max(zoom, titleScaleMinZoom)` 反缩放（屏幕上大小恒定）。纯指示不接事件（`aria-hidden` + `pointer-events:none`），点击行为仍归卡片（Shift+点节点 = 取消该节点选中）。
+
+#### 测试与回归
+- theme-default **118 条**（新增 1 条：标记确实是 `<svg>` + 两个 `<circle>` + 有 `viewBox`，锁"用自绘 SVG 而非 CSS 画圆"）；multi-select **77 条**、`tsc` 干净。
+- 全量回归：canvas-render 223 / canvas-data 258 / ui 23 / node-text 65 / node-image 148 / align-guide 26 全部通过。
+- 三项行为最终浏览器实测：①框内拖动 → 选中保住、节点 Δ133、画布 Δ0；②拖动后再点空白 → 正常清空；③框内滚轮 → zoom 0.450→0.682（穿透缩放照旧）。
+
+### 上一轮：多选框三处交互修正（用户指定，2026-09-15）
+- 用户反馈（原话）：「你这里的选框 有问题，我只说了 鼠标滚轮可以透传，鼠标左键平移节点你给我弄错了 / 拖拽这个多选框是平移这个多选框和选中的这些节点 / 还有就是多选之后 在节点的左上角（内容区域）添加一个单选框的这个圆形单选UI（用来区分当前节点是否选中）需要写入到 baseNode 中（default-theme 插件中）/ 其次就是我拖拽节点的时候 你的多选框没有实时生效，移动节点之后当我鼠标松开的时候它才触发这里的多选框位置重置」。
+
+#### ① 左键拖框 = 平移框 + 选中节点（修正上一轮做错的地方）
+- **上一轮的错误**：为让节点可点，我把框内部设成事件穿透，于是左键落在框内空白被 VueFlow 当成"拖空白 = 平移画布"。实测确认：节点 Δ0、画布 Δ75。
+- **这一轮的做法**：框**整体**不接事件（节点完整可点），改在**画布层按几何判断**该不该接管 —— 落点在框内、且不在任何节点上 → 这次手势归"整组平移"；落在节点上则原样放过（节点选中/拖动照旧）。
+- **三个坑（全部实测定位，非猜）**：
+  1. **监听必须挂在 `.vue-flow` 的祖先（实例根 `.csurface`）的捕获阶段**：d3-zoom 的平移挂在 **`.vue-flow__viewport` 的 `mousedown`** 上（深度调试实测查到的），拦 pane 拦不住；
+  2. **`pointerdown` 与 `mousedown` 是两个独立事件，必须都拦**：前者是 VueFlow 的入口、后者才是 d3-zoom 的入口。只拦前者 → 画布仍被拖走（实测节点在动、画布也在平移）；用 `groupDragArmed` 标记把同一物理动作的第二个事件一并拦掉；
+  3. **`preventDefault` 会抑制该 pointer 的兼容鼠标事件**：一旦在 `pointerdown` 上 preventDefault（抑制原生拖拽/选中文字），后续 `mousemove` 就不再来 —— 拖动必须用 **`pointermove`/`pointerup`** 驱动（踩过：监听 mousemove 导致拖动全程收不到事件）。
+- 浏览器实测：框与节点**逐帧同步**平移（框 525→589 / 节点 541→605），两个节点各移 178，**画布 Δ0**；最终回归：节点 Δ160、画布 Δ0。
+
+#### ② 节点左上角的多选圆形单选标记（写入 BaseNode）
+- 在 theme-default 的 **BaseNode** 内容区左上角加 `v2-multi-radio`：白底圆环 + 中心实心点，**只在多选（选中 >=2）时出现**（单选时卡片已有选中环，再叠一个圆点反而多余）。
+- **纯指示、不接事件**（`pointer-events:none` + `aria-hidden`）：点击行为仍归卡片本身，这样 Shift+点节点 = 从选中集里去掉它，逻辑不被装饰层挡掉。
+- 圆圈按 `1/max(zoom, titleScaleMinZoom)` **反缩放**，与标题同一套语义：屏幕上大小恒定，缩到 0.2x 时不会小成一个点。
+
+#### ③ 拖动节点时框实时跟随（原先只在松手后跳一下）
+- **根因**：VueFlow 原生拖动**逐帧只改渲染层**（`updateNode` 内部状态），位置要**松手才落盘**；而框只订阅了 `nodeStore`，所以整个拖动过程中框定在原地、松手那一瞬才"跳"过去（正是用户截图看到的现象）。
+- **改法**：订阅渲染层逐帧广播的 `RenderEvents.NodeDragStart/NodeDrag/NodeDragEnd`（宿主已有这套事件），按"拖动中的实时位置 + 其余选中节点的 store 位置"重算并集。
+- 关键细节：**不能只记一个节点的位置** —— 多选拖动时 VueFlow 会给每个被拖成员各发一帧，必须把它们的实时位置都存下来（`liveNodePos` Map），否则框会按"一个动了、其它还在原地"的并集抖动。
+- 浏览器实测：拖动节点时逐帧 `[框 left, 节点 left]` = 589/605 → 607/623 → 625/641 → 643/659 → 661/677，**差值恒定 15px**（框与节点完全同步，不再松手才跳）。
+
+#### 测试与回归
+- multi-select **77 条**（更新 2 条：原"四条拖动把手"的断言改成"框整体不接事件且没有把手元素"，与新设计一致）；theme-default **117 条**（新增 4 条：多选出现圆点 / 单选不出现 / 未选中不出现 / 圆点是纯指示不接事件）。
+- 全量回归：canvas-render 223 / canvas-data 258 / ui 23 / node-text 65 / node-image 148 / align-guide 26 全部通过；multi-select `tsc` 干净。
+- 说明：验证期间发现 **5288 的开发服务器已停止**（端口无监听），已重新拉起（`packages/ui` 的 `pnpm dev`）以便继续端到端验证。
+
+### 上一轮：多选四项体验问题（用户指定，2026-09-15）
+- 用户反馈（原话）：「1. 多选的时候 可以设置是否显示标题（config配置开关 这里的padding计算看是否需要更新）2. 使用shift框选的时候禁止出现节点的上下控制栏（NodeToolbar）3. 使用浏览器检查，你可以发现多选的时候他们的z-index 存在问题，我希望的是节点在最上面 因为这样我就可以加减选了，（当前我多选之后无法操作节点，不能做到单独取消某个选择）4. 在多选区域这个位置让他支持 鼠标滚轮穿透（也就是这里的 缩放画布）」。
+
+#### ③ 节点在框之上、可加减选（最关键的一项）
+- **根因不是框的 z-index，而是整个 overlay 层压在节点之上**：CDP 实测节点 `.vue-flow__node` 是 `z-index:1000`，而框所在的 `.csurface-overlay` 是 `z-index:20` —— 但节点在 `.vue-flow__viewport`(z:4) 这个**堆叠上下文**内部，它的 1000 只在里面生效；overlay 是 viewport 的**兄弟**且 z=20 > 4，于是**整个浮层盖在整棵 VueFlow 之上**。再叠加框的容器是"铺满、`pointer-events:auto`"的矩形，结果就是节点中心 `elementFromPoint` 命中 `selection-frame-outer` —— 点不到节点，自然没法单独取消某个选中。
+- **改法（浮层内部让出事件，不动框架层级）**：大框拆成两层 —— `selection-frame-outer` 只做**视觉**（`pointer-events:none`），另加 `selection-frame-grips` 沿大框边框铺**四条薄把手**（`pointer-events:auto`）承接整组拖动。框内部彻底留空 → 事件落到节点上。
+- 为何不改 overlay 的 z-index：节点有**动态选中环**（::after box-shadow）与浮动端口，一旦把节点抬到浮层之上，这些会被盖住，代价更大；而在浮层内部让出事件既解决问题又不碰既有层级契约。
+- 浏览器实测：节点中心命中回到节点内容（`preview`）；**Shift+点节点可单独取消选中**（`["68","69"]` → 点 68 → `["69"]`）；框内空白命中 `vue-flow__pane`（穿透到画布）；四条把手到位。
+
+#### ④ 多选区域滚轮穿透缩放
+- **根因**：VueFlow 的 wheel 监听挂在它的 canvas 容器上，而框在 `.csurface-overlay`（另一个分支、且铺满）—— 滚轮事件到不了画布，`preventDefault` 也没人做。
+- **改法**：浮层上加 `wheel` 监听（`passive:false`），把事件**转发**给 `.vue-flow__viewport` 元素。为何是转发而不是自己算 zoom：VueFlow 的缩放中心要按鼠标在画布内的位置算，自己调 zoomTo 会变成"以画布中心缩放"，手感不对；转发一个真实 wheel 给它，缩放中心/增量/动画与直接在空白处滚完全一致。
+- 浏览器实测：框内空白 -300 → zoom 0.300→0.455、+300 → 0.455→0.300；**左/上/右三条拖动把手上**滚轮同样生效（0.12→0.209→0.364→0.209），且缩放中心跟随鼠标（x/y 同步变化）。
+
+#### ② 框选期间不出现上下控制栏（NodeToolbar）
+- **改法**：框选手势开始时把渲染层已有的 `interaction.selecting` 置位（`beginSelecting`，对齐老版 `canvasStore.isBoxSelecting`），BaseNode 据此把上/下插槽整层不渲染；松手或组件卸载时复位（`endSelecting`，含 detach 兜底，防止热卸把位卡在 true）。
+- 浏览器实测：单选 image 节点时插槽容器在（`上插槽:在/0`、`下插槽:在/1`）→ 框选中两个都**从 DOM 移除** → 松开后恢复。
+- 顺带：多选（>=2）时同样收起（面板语义本就是"恰好选中一个"），与既有压制条件合并到同一个 `hideToolbars`。
+
+#### ① 多选时是否显示标题（config 开关）
+- **改法**：新增配置 `multiSelectHideTitles`（「多选时隐藏节点标题」，默认关）。BaseNode 按"开着 + 处于多选"两条同时成立才隐藏标题条。开关放在 multi-select 插件（它才是"多选"这件事的语义归属，把多选框的配置集中在一处；settings key 是全局平面命名，theme-default 按名字读）。
+- **关于用户提到的 padding**：默认关掉隐藏时，`两框间距（上）` 的语义与数值都不变，**不需要联动改**；只有用户**主动开启**隐藏后才可能想调小它，故在 description 里写明"关掉隐藏后若想让大框仍兜住标题，把两框间距（上）适当调大"，不引入隐式的自动改值（自动改会覆盖用户设定）。
+- 另外补了 `multiSelectFrameEnabled` 总开关（默认开）：关掉即不画两个框，多选本身照常可用。
+- 浏览器实测：开关打开后单选 70 → 标题显示；多选 70+67 → **标题隐藏**；回到单选 → 恢复显示。
+
+#### 测试与回归
+- multi-select **78 条**（新增 7 条：总开关不画框、框选中不画框、面板指针穿透（外观层不接事件 + 把手恰好四条 + 把手只铺边框的尺寸）、两个开关的 schema 与脏值回落）；theme-default **113 条**（新增 6 条：框选中插槽整层不渲染、多选插槽不渲染、单选照常渲染、hideTitles 多选隐藏/单选不隐藏/默认不隐藏）。
+- 全量回归：canvas-render 223 / canvas-data 257 / ui 23 / node-text 64 / node-image 147 / align-guide 26 全部通过；multi-select `tsc` 干净。
+
+#### ⚠️ 并行改动的处理说明
+- 本轮工作期间**同一工作区存在另一个进程在改代码**（`plugin-node-image/ImageTopToolbar.vue`、`plugin-theme-default/components/ui/*`、`canvas-render/nodeLayoutSettings.ts` 等并非本轮改动的文件也在变，并新增了 `NodeToolbarButton.vue`、`baseNodeSlotsRender.test.ts` 等文件；期间出现过一次 HMR 编译错误与一次写文件被占用）。
+- 我的改动与之**没有冲突**：对方把 BaseNode 的上下控制栏从"单个段组件"重构成"可叠多个 occupant 的上/下插槽（`topSlots`/`bottomSlots` → `.v2-slot--top/--bottom`）"，而我加的 `hideToolbars` / `showTitle` 两个压制条件被**完整保留并接进了新的插槽模板**（两处 `v-if` 都带 `!hideToolbars`）。验证时已按**重构成后的新类名**重新取证。
+
+### 上一轮：小框（内框）也能设圆角与 padding（用户指定，2026-09-15）
+- 用户反馈（原话）：「框选之后 你这里内部的这个最小 rect 框 我也希望可以设置圆角 和 padding」。
+- **圆角本来就能设**：上一轮已把「内框圆角」的默认值改成 0（直角），配置项一直在设置里。本轮再确认了它能改（设 14 → 屏幕上 28px，按 1/zoom 反缩放），并补了测试锁住"不是写死直角"。
+- **新增「小框外扩」（本轮的主要工作）**：以前只有"两框间距"一个 padding，它管的是大框离小框多远，**小框自己没有任何可调的外扩**（永远紧贴节点并集）。现补三项 —— `小框左右外扩` / `小框上方外扩` / `小框下方外扩`（key `multiSelectFrameInnerPadding{X,Top,Bottom}`），默认全 0。
+- **几何改成逐层往外算**：`节点并集 → 内框(+小框外扩) → 外框(+两框间距)`。原先 `ComputeSelectionFrameGeometry(rects, padding)` 只有一层，现在签名扩成 `(rects, gap, innerPadding)`；两个 padding 的默认值各自独立（小框 0/0/0、间距 16/34/16），故**默认观感与之前逐像素一致**。三条几何不变量用测试钉死：小框 = 并集 + 小框外扩、大框 = 小框 + 间距、大框永远包住小框（不管小框扩多大都不交叉）。
+- **顺带把设置项名字说清楚**：原先那三项 label 叫「群组框左右/上方/下方内缩」，容易跟新的"小框外扩"混起来（都带"内缩/外扩"字样却管不同东西）。改名为 `两框间距（左右/上/下）`，description 同步重写为"大框（外）与小框（内）之间留多少"，与新三项形成"大框↔小框 间距 / 小框↔节点 外扩"的清晰对照。
+- **配置 → 几何的转换收口成 `framePaddingsOf(cfg)`**：把一份外观配置拆成 `{ inner, gap }` 两组 padding，组件不再手抄六个字段（抄错一个就静默错位）。
+- 测试：本包 **71 条**全绿（新增 10 条：几何 4 条锁逐层语义与大框包小框、配置 4 条锁三项默认 0 与 `framePaddingsOf` 拆解、渲染契约 2 条锁"配了值内框真的变胖且大框跟着外推"与"不配时仍严格等于节点并集"），tsc 干净；canvas-render 215 / canvas-data 257 / ui 23 / 主题 91 / text 64 / image 148 / 对齐辅助线 26 全部不受影响。
+- **浏览器实测**（真 dev server）：默认态小框相对并集四边均为 0、两框间距 16/34/16；设 12/24/8 后小框四边精确外扩 12/24/8 而两框间距仍是 16/34/16（说明间距是相对小框算的）；内框圆角设 14 → 计算样式 28px（= 14/0.5 反缩放）；设置面板「布局 → 多选」列出「两框间距（左右/上/下）」+「小框左右/上方/下方外扩」+「内框圆角」；验证后把配置恢复为默认（持久化里只剩显式写入的 0 值，与默认一致）。
+
+### 上一轮：内框去掉圆角（用户指定，2026-09-15）
+- 用户反馈（原话）：「你的内部框有一个 圆弧，我不希望有这个 圆角效果」。
+- **现象确认**：默认配置下内框圆角是 12px（按 1/zoom 反缩放后屏幕上 17.14px），四个角明显是圆的 —— 选中框要"紧贴选中节点的并集"，而节点并集是个正矩形，圆角会让四条边在角上提前弯掉、看起来没贴住。外框的圆角（6px 虚线大框）保留不动。
+- **改法**：`DEFAULT_MULTI_SELECT_FRAME.inner.radius` 12 → **0**（直角）。该配置项本身保留（`内框圆角` 仍可在设置里调，想回圆角就调大），只改默认值 —— 不是把圆角写死成 0。
+- 测试：本包 **61 条**全绿（新增 3 条：配置默认为 0、默认渲染出的内框 `border-radius:0px` 且外框仍是 6px、圆角设 10 时能出 10px 证明没写死），tsc 干净；canvas-render 215 / canvas-data 257 / ui 23 / 主题 91 / text 64 / image 148 / 对齐辅助线 26 全部不受影响。
+- **浏览器实测**：内框计算样式 `border-radius: 0px`、外框仍 `8.57143px`（= 6/0.7 反缩放）；放大到内框左上角目视四个角均为直角；设置面板「布局 → 多选」显示「内框圆角 = 0」。
+
+### 上一轮：多选群组框「拖动时框位置错误」（用户指定，2026-09-15）
+- 用户反馈（原话）：「拖拽的时候 选框位置错误」。
+- **根因（浏览器实测量化定位）**：拖动整组节点时节点跟手是准的，但**框越跑越快**。埋点逐帧测量：鼠标拖 20/40/60/80/100px，框跑了 **20/60/120/200/300px**，漂移量 0/20/60/120/200 —— 正是三角数，说明每帧都拿"当前框位置"当基准又加了一次"从按下算起的累计位移"，位移被重复计入，第 n 帧偏差 = n 倍位移。
+- **这是上一轮的自身回归**：清理冗余字段（innerOffset）时顺手把 `dragOuterBounds`（按下瞬间的框快照）删掉了，导致拖动跟随从"快照 + 位移"的绝对定位退化成"当前值 + 累计位移"的累加。修法即恢复快照语义。
+- **抽成纯逻辑 `dragFollow.ts`**：`followFrame(按下时快照, 累计位移) → 两框新位置`。为什么值得单列 —— 这条几何最容易在清理重构时被顺手改错（本 bug 就是），抽出来才能直接断言"多帧推进后位移**恰好**等于累计位移"，并顺手把这个坑本身写进测试（同一文件里对比"误把当前值当快照 = 200px"与"正确 = 80px"两种写法）。
+- 测试：本包 **58 条**全绿（新增 `dragFollow` 6 条），tsc 干净；canvas-render 215 / canvas-data 257 / ui 23 / 主题 91 / text 64 / image 148 全部不受影响。
+- **浏览器实测**（真鼠标手势，逐帧测量）：修复后拖 20/40/60/80/100px 框与节点**逐帧零漂移**；斜向/反向/纯横/纯纵四种方向拖动**以及松手落盘后**漂移均为 0.0px；zoom = 0.4 / 1.0 / 1.8 三档下同样零漂移（位移按 zoom 换算正确）；框内拖动、拖动中截图目视两框均紧贴节点。
+
+### 上一轮：多选插件的框选失效与群组框双框错位（用户指定，2026-09-14）
 - 用户报的两个缺陷（原话）：
   ① 「shift + 左键 在画布中框选的时候 框选完成之后并没有真实的框选，也就是操作完成之后没有任何选中状况，只有通过 Ctrl 一个一个加选才有效」；
   ② 「框选之后你的UI 存在异常，2个框竟然有重合」，并给出两框的定义 —— 「小框 就是根据选中节点计算的最小 rect 框（不包含标题）；大框 是根据一个固定的padding 进行的（这个请写在插件的config配置中）；你的小框和大框颜色和样式（比如使用实现还是虚线， 线框宽度，颜色等）写在config 配置中」。

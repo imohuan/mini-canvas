@@ -57,8 +57,21 @@ export interface PortDef {
   contentType?: string
   /** 输入口接受的内容类型列表 */
   acceptsTypes?: string[]
-  /** 输入口最多接几条入边（缺省 1）；满额挤出由调用方(render commit)处理 */
+  /**
+   * 输入口最多接几条入边。**不声明 = 不限条数**（可以接任意多条上游）。
+   *
+   * 只有确实需要限制的端口才写它（如 3d-preview 只接一张图、image-compare 只接两张）。
+   * 满额时怎么处理由 evictOnFull 决定。
+   */
   capacity?: number
+  /**
+   * 容量满时是否允许"先挤掉最老一条再加新边"。**缺省 true**（默认就是挤）。
+   *
+   * 为什么默认挤而不是拒：这是画布一贯的行为（image-compare 老版就是"超了挤最老"），
+   * 也是用户拖一根线过来时最符合直觉的反馈 —— 线落下了、最旧的那条让位。
+   * 设 false 才"满额直接拒"（拖过去连不上，报 limit-reached）。
+   */
+  evictOnFull?: boolean
 }
 
 /** 节点类型定义 */
@@ -306,7 +319,6 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
-
 
 
 

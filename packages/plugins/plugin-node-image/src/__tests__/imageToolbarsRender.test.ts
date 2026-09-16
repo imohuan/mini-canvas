@@ -135,23 +135,17 @@ describe('图片节点顶部操作条', () => {
     expect(withoutImage).toContain('aria-label="上传图片"')
   })
 
-  it('贴边距离来自配置：读到 20 就用 20，读不到回落 6（用户可在设置里调）', async () => {
-    const custom = await render(ImageTopToolbar as Component, 'i1', {}, true, [], {
+  it('定位不再由本组件负责（贴边/居中/反缩放都在壳的上插槽定位层）', async () => {
+    // 用户要求："定位交给 BaseNode 而不是单独的组件"。
+    // 这里锁"插件组件里没有 position/transform" —— 定位一旦被抄回插件就会互相漂移，
+    // 正是这次要根治的问题。壳那一侧的取值由 baseNodeSlotsRender.test.ts 与
+    // canvas-render 的 resolveNodeSlotStyle 单测负责。
+    const html = await render(ImageTopToolbar as Component, 'i1', {}, true, [], {
       get: (k) => (k === 'toolbarTopOffset' ? 20 : undefined),
     })
-    expect(custom).toContain('calc(100% + 20px)')
-    expect(custom).not.toContain('calc(100% + 6px)')
-
-    const fallback = await render(ImageTopToolbar as Component, 'i1', {}, true)
-    expect(fallback).toContain('calc(100% + 6px)')
-  })
-
-  it('偏移只改位置，不覆盖反缩放 transform（缩放时按钮不会被压扁）', async () => {
-    const html = await render(ImageTopToolbar as Component, 'i1', {}, true, [], {
-      get: (k) => (k === 'toolbarTopOffset' ? 14 : undefined),
-    })
-    expect(html).toContain('scale(1)')
-    expect(html).toMatch(/transform:[^"]*scale/)
+    expect(html).not.toContain('transform:')
+    expect(html).not.toContain('calc(100%')
+    expect(html).toContain('it-root')
   })
 })
 
@@ -218,6 +212,13 @@ describe('图片节点底部生成面板', () => {
     expect(html).toContain('disabled')
   })
 
+  it('图标按钮走通用 NodeToolbarButton（不再各自抄一份 .ig-icon-btn）', async () => {
+    // 用户要求"实现一个通用的按钮"：三处自绘拷贝必须收成一份，否则数值迟早漂移。
+    const html = await render(ImageGeneratePanel as Component, 'i1', {}, true, [DEMO_TOOL])
+    expect(html).toContain('ntb-btn')
+    expect(html).not.toContain('ig-icon-btn')
+  })
+
   it('有图时下载按钮的提示里带文件名与尺寸（元信息不至于丢掉）', async () => {
     const html = await render(
       ImageGeneratePanel as Component,
@@ -230,14 +231,14 @@ describe('图片节点底部生成面板', () => {
     expect(html).toContain('1920×1080')
   })
 
-  it('贴边距离来自配置：下控制栏偏移读到 24 就用 24，读不到回落 6', async () => {
+  it('宽度来自配置（读到 800 就用 800），定位仍不在本组件（贴边/居中/反缩放归壳）', async () => {
     const custom = await render(ImageGeneratePanel as Component, 'i1', {}, true, [DEMO_TOOL], {
-      get: (k) => (k === 'toolbarBottomOffset' ? 24 : undefined),
+      get: (k) => (k === 'panelImageWidth' ? 800 : undefined),
     })
-    expect(custom).toContain('calc(100% + 24px)')
-    expect(custom).not.toContain('calc(100% + 6px)')
-
-    const fallback = await render(ImageGeneratePanel as Component, 'i1', {}, true, [DEMO_TOOL])
-    expect(fallback).toContain('calc(100% + 6px)')
+    expect(custom).toContain('width:800px')
+    // 定位一旦被抄回插件就会与壳漂移 —— 这正是本次要根治的，故反向锁住
+    // （只查定位层那几个声明；面板内部元素自身的 translateX 居中不在此列）
+    expect(custom).not.toContain('calc(100%')
+    expect(custom).not.toMatch(/class="ig-root[^"]*"[^>]*style="[^"]*(translateX\(-50%\)|scale\()/)
   })
 })

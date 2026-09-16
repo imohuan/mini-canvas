@@ -77,6 +77,19 @@ describe('KvStore 作用域隔离与列举', () => {
 });
 
 describe('KvStore 健壮性', () => {
+  it('set/remove 后通知订阅者（MCP 与网页共用同一个 store，谁写都要通知）', async () => {
+    const seen: Array<{ type: string; key: string }> = []
+    store.onChange((e) => seen.push(e))
+
+    await store.set('canvas', 'graph', [1])
+    await store.remove('canvas', 'graph')
+
+    expect(seen).toEqual([
+      { type: 'canvas', key: 'graph' },
+      { type: 'canvas', key: 'graph' },
+    ])
+  })
+
   it('文件内容坏掉（非法 JSON）→ 当缺失处理，不抛', async () => {
     await fs.mkdir(path.join(dir, 'kv'), { recursive: true });
     await fs.writeFile(path.join(dir, 'kv', 'canvas%3Abad.json'), '{not json', 'utf8');
@@ -98,3 +111,55 @@ describe('KvStore 健壮性', () => {
   });
 });
 
+describe('KvStore 并发写：同一个 key 不能互相撞', () => {
+  /**
+   * 这条锁的是一个真实故障：`set` 是「写临时文件 → rename 到目标」两步，两个并发写同一个 key 时
+   * **撞的是目标文件**（Windows 上两个 rename 打同一个目标会 EPERM）。
+   * 实测（400 轮 ×3 并发）：不按 key 串行约 31% 失败；串行后 0 失败。
+   *
+   * 所以这里不是「顺便测一下并发」—— 它是这个存储层能不能用的底线。
+   */
+  it('同一 key 上多轮并发写：一次都不能失败', async () => {
+    const rounds = 120
+    const concurrency = 4
+    for (let i = 0; i < rounds; i++) {
+      const results = await Promise.allSettled(
+        Array.from({ length: concurrency }, (_, j) => store.set('canvas', 'graph', [{ id: 'n' + i + '-' + j }])),
+      )
+      const failed = results.filter((r) => r.status === 'rejected')
+      if (failed.length > 0) {
+        throw new Error(
+          `第 ${i} 轮有 ${failed.length} 个并发写失败：` +
+            (failed[0] as PromiseRejectedResult).reason,
+        )
+      }
+    }
+    // 最终值必然是其中某一次写进去的（不是半截 JSON）
+    const got = await store.get<{ id: string }[]>('canvas', 'graph')
+    expect(Array.isArray(got)).toBe(true)
+    expect(got!.length).toBe(1)
+  })
+
+  it('不同的 key 互不排队（各自独立成链，不会互相拖住）', async () => {
+    await Promise.all([
+      store.set('canvas', 'graph', [1]),
+      store.set('config', 'theme', 'dark'),
+      store.set('canvas', 'graph-viewport', { x: 0, y: 0, zoom: 1 }),
+    ])
+    expect(await store.get('canvas', 'graph')).toEqual([1])
+    expect(await store.get('config', 'theme')).toBe('dark')
+  })
+
+  it('链上一个任务失败，不会把后面排队的一起带崩', async () => {
+    // 排一个必然失败的任务（值里有循环引用 → stringify 抛错）
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    const bad = store.set('canvas', 'bad', circular).catch(() => 'failed')
+    const good = store.set('canvas', 'bad', [1])
+    const [badResult, goodResult] = await Promise.all([bad, good])
+    expect(badResult).toBe('failed')
+    // 后面那个照常写成
+    expect(await goodResult).toBeUndefined()
+    expect(await store.get('canvas', 'bad')).toEqual([1])
+  })
+})

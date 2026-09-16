@@ -133,18 +133,28 @@ describe('文本生成控制栏的内容', () => {
     expect(html).toContain('aria-label="复制节点"')
     expect(html).toContain('aria-label="删除节点"')
   })
+
+  it('复制/删除走通用 NodeToolbarButton（不再各自抄一份 .tg-icon-btn）', async () => {
+    // 用户要求"实现一个通用的按钮"：三处自绘拷贝必须收成一份。
+    const html = await render(['n1'])
+    expect(html).toContain('ntb-btn')
+    expect(html).not.toContain('tg-icon-btn')
+  })
 })
 
-describe('贴边距离来自配置', () => {
-  it('下控制栏偏移读到 24 就用 24', async () => {
+describe('定位归壳、内容尺寸归面板', () => {
+  it('宽度来自配置（读到 400 就用 400）', async () => {
     const html = await render(['n1'], {}, [DEMO_TOOL], {
-      get: (k) => (k === 'toolbarBottomOffset' ? 24 : undefined),
+      get: (k) => (k === 'panelTextWidth' ? 400 : undefined),
     })
-    expect(html).toContain('calc(100% + 24px)')
-    expect(html).not.toContain('calc(100% + 6px)')
+    expect(html).toContain('width:400px')
   })
 
-  it('读不到回落 6px（不会产生坏 CSS）', async () => {
-    expect(await render(['n1'])).toContain('calc(100% + 6px)')
+  it('定位不在本组件里（贴边/居中/反缩放都由壳的下插槽定位层算，用户要求"定位交给 BaseNode"）', async () => {
+    const html = await render(['n1'])
+    // 反向锁：定位一旦被抄回插件就会与壳漂移，这正是本次要根治的
+    //（只查定位层声明；编辑器内部的 translateX 居中不在此列）
+    expect(html).not.toContain('calc(100%')
+    expect(html).not.toMatch(/class="tg-root[^"]*"[^>]*style="[^"]*(translateX\(-50%\)|scale\()/)
   })
 })

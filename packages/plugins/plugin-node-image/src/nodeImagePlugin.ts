@@ -116,7 +116,10 @@ export function apply(ctx: Context) {
     label: '图片',
     icon: NODE_ICON,
     size: { w: 320, h: 240 },
-    inputs: [{ port: 'target', acceptsTypes: ['text', 'image'], capacity: 1 }],
+    // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考），
+    // 底部生成面板的素材行本就是按「所有连进来的上游」渲染的（见 panelSource 的 collectUpstreamMaterials）。
+    // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
+    inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
     // 无卡片边框：图片是**内容铺满整张卡**的，外壳那圈 1px 边框对它没有分层价值，
     // 只会变成内容边缘多余的一圈缝（用户实测报的"图片边上还有一像素边距"就是它）。

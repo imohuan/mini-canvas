@@ -25,15 +25,19 @@ function ctx(
     getTypeConn: (t) => typeConnectionDef(typeConn[t]),
   }
 }
-/** 便捷构造带 limit 的 inputs（PortDef 强类型） */
-function singleInput(accepts: string[]): { inputs?: PortDef[] } {
-  return { inputs: [{ accepts, limit: 'single' as const }] }
+/** 便捷构造带 limit 的 inputs（PortDef 强类型）；evictOnFull 可指定，缺省 = 挤 */
+function singleInput(accepts: string[], evictOnFull?: boolean): { inputs?: PortDef[] } {
+  return { inputs: [{ accepts, limit: 'single' as const, evictOnFull }] }
 }
 function anyInput(accepts: string[]): { inputs?: PortDef[] } {
   return { inputs: [{ accepts }] }
 }
 function capacityInput(capacity: number): { inputs?: PortDef[] } {
   return { inputs: [{ accepts: [], capacity }] }
+}
+/** 声明容量 + 满额策略（evictOnFull）的输入口 */
+function capacityInputWithPolicy(capacity: number, evictOnFull: boolean): { inputs?: PortDef[] } {
+  return { inputs: [{ accepts: [], capacity, evictOnFull }] }
 }
 function conn(source: string, target: string): ConnectionInput {
   return { source, sourceHandle: 'source', target, targetHandle: 'target' }
@@ -138,26 +142,39 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
     expect(validateConnection(conn('a', 'b'), ctx({ a: 'image', b: 't' })).ok).toBe(true)
   })
 
-  it('limit:"single"：输入端口只允许一条入边(limit-reached)', () => {
-    const c = ctx({ a: 't', b: 't', c: 't' }, [{ source: 'a', target: 'b' }], { t: singleInput(['t']) })
-    // b 已有一条入边(a->b)，再连 c->b 被拒
-    expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
+  it('limit:"single" 满额时：默认挤老边（放行），显式 evictOnFull:false 才拒', () => {
+    const edges = [{ source: 'a', target: 'b' }]
+    const nodes = { a: 't', b: 't', c: 't' }
+    // 默认（挤）：b 已有一条入边，再连 c->b 仍放行 —— 由渲染层在 commit 时挤掉最老那条
+    const soft = ctx(nodes, edges, { t: singleInput(['t']) })
+    expect(validateConnection(conn('c', 'b'), soft).ok).toBe(true)
+    // 明确不挤：满额直接拒
+    const hard = ctx(nodes, edges, { t: singleInput(['t'], false) })
+    expect(validateConnection(conn('c', 'b'), hard).reason).toBe('limit-reached')
   })
 
-  it('capacity=1(缺省语义)与 limit:"single" 等效：满额拒绝', () => {
-    const c = ctx({ a: 't', b: 't', c: 't' }, [{ source: 'a', target: 'b' }], { t: capacityInput(1) })
-    expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
+  it('capacity=1 与 limit:"single" 等效：满额默认挤（放行），false 才拒', () => {
+    const edges = [{ source: 'a', target: 'b' }]
+    const nodes = { a: 't', b: 't', c: 't' }
+    expect(validateConnection(conn('c', 'b'), ctx(nodes, edges, { t: capacityInput(1) })).ok).toBe(true)
+    expect(
+      validateConnection(conn('c', 'b'), ctx(nodes, edges, { t: capacityInputWithPolicy(1, false) })).reason,
+    ).toBe('limit-reached')
   })
 
-  it('capacity=2：一条已占时不拒，满两条时第三条拒绝', () => {
-    const empty = ctx({ a: 't', b: 't', c: 't', d: 't' }, [], { t: capacityInput(2) })
+  it('capacity=2：未满放行；满额默认放行（挤）；evictOnFull:false 时拒', () => {
+    const nodes = { a: 't', b: 't', c: 't', d: 't' }
+    const empty = ctx(nodes, [], { t: capacityInput(2) })
     expect(validateConnection(conn('a', 'b'), empty).ok).toBe(true)
-    const one = ctx({ a: 't', b: 't', c: 't' }, [{ source: 'a', target: 'b' }], { t: capacityInput(2) })
+    const one = ctx(nodes, [{ source: 'a', target: 'b' }], { t: capacityInput(2) })
     expect(validateConnection(conn('c', 'b'), one).ok).toBe(true)
-    const full = ctx({ a: 't', b: 't', c: 't', d: 't' }, [{ source: 'a', target: 'b' }, { source: 'c', target: 'b' }], {
-      t: capacityInput(2),
-    })
-    expect(validateConnection(conn('d', 'b'), full).reason).toBe('limit-reached')
+    const full = [{ source: 'a', target: 'b' }, { source: 'c', target: 'b' }]
+    // 默认挤 → 放行
+    expect(validateConnection(conn('d', 'b'), ctx(nodes, full, { t: capacityInput(2) })).ok).toBe(true)
+    // 不挤 → 拒
+    expect(
+      validateConnection(conn('d', 'b'), ctx(nodes, full, { t: capacityInputWithPolicy(2, false) })).reason,
+    ).toBe('limit-reached')
   })
 
   it('未声明 inputs 的类型不因 capacity 默认值被误判为只接一条', () => {
@@ -168,6 +185,86 @@ describe('M5 连接校验 validateConnection —— 锁 v1 严格规则 + 声明
       {},
     )
     expect(validateConnection(conn('c', 'b'), c).ok).toBe(true)
+  })
+
+  /**
+   * 容量语义（用户拍板）：
+   * - **不声明 capacity = 不限条数**（不是"当 1 用"）；
+   * - 声明了 capacity 且满额 → **默认挤老边**（放行，由渲染层在 commit 时挤掉最老一条）；
+   * - 只有显式 evictOnFull:false 才"满额直接拒"（limit-reached）。
+   *
+   * 之所以要这组断言：以前"不声明"被当成"只能接 1 条"，于是 image/text 这些本该接多个上游的
+   * 节点接不了第二条（用户实测报的"图片输入端口分明可以添加多条连接线"）。
+   * 而"满额默认拒"又让 image-compare 不得不声明 capacity=3（上限+1 缓冲位）自己手写挤出，
+   * 因为内核不会挤。两条一起改，插件才能老实写真实容量。
+   */
+  it('未声明 capacity = 不限条数（接多少条都放行）', () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ source: `s${i}`, target: 'b' }))
+    const nodes: Record<string, string> = { b: 't', extra: 't' }
+    for (const e of many) nodes[e.source] = 't'
+    const c = ctx(nodes, many, { t: { inputs: [{ port: 'target' }] } })
+    // 已有 6 条入边，第 7 条仍然放行
+    expect(validateConnection(conn('extra', 'b'), c).ok).toBe(true)
+  })
+
+  it('声明 capacity=2 且已满 → 默认"可挤"，放行（不再 limit-reached）', () => {
+    const d = ctx(
+      { a: 't', b: 't', c: 't', d: 't' },
+      [{ source: 'a', target: 'b' }, { source: 'c', target: 'b' }],
+      { t: capacityInput(2) },
+    )
+    expect(validateConnection(conn('d', 'b'), d).ok).toBe(true)
+  })
+
+  it('声明 capacity=2 且 evictOnFull:false → 满额直接拒（limit-reached）', () => {
+    const c = ctx(
+      { a: 't', b: 't', c: 't', d: 't' },
+      [{ source: 'a', target: 'b' }, { source: 'c', target: 'b' }],
+      { t: capacityInputWithPolicy(2, false) },
+    )
+    expect(validateConnection(conn('d', 'b'), c).reason).toBe('limit-reached')
+  })
+
+  it('capacity=1 + evictOnFull:false → 满额拒（"只接一条且不替换"的语义）', () => {
+    const c = ctx(
+      { a: 't', b: 't', c: 't' },
+      [{ source: 'a', target: 'b' }],
+      { t: capacityInputWithPolicy(1, false) },
+    )
+    expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
+  })
+
+  /**
+   * 回归（真 bug，用户实测报的"3d预览节点限制一条连接线没有效果"）：
+   * 声明里的 port 是具名 "target"，而**真实拖拽建出来的边 targetHandle 是 null**
+   * （edgeStore 不存默认 handle）。匹配写成 `e.targetHandle === effectivePort` 时，
+   * null === "target" 永远为假 → 容量统计数出 0 条 → 容量限制彻底失效。
+   *
+   * 正确语义：具名口 "target" 与"默认 target 口"是同一个口，无 handle 的边也要算进去。
+   */
+  it('无 handle 的已有边要计入 capacity：具名 target 口与默认口是同一个口', () => {
+    const nodes = { a: 't', b: 't', c: 't' }
+    // 声明 port:'target' + evictOnFull:false（严格只接一条）
+    const strict: NodeConnectionDef = { inputs: [{ port: 'target', capacity: 1, evictOnFull: false }] }
+    // 已有边的 targetHandle 是 undefined（真实拖拽就是这样）
+    const c = ctx(nodes, [{ source: 'a', target: 'b' }], { t: strict })
+    expect(validateConnection(conn('c', 'b'), c).reason).toBe('limit-reached')
+    // 显式写 'target' 的也算同一条（两种写法等价，不能一边算一边不算）
+    const c2 = ctx(nodes, [{ source: 'a', target: 'b', targetHandle: 'target' }], { t: strict })
+    expect(validateConnection(conn('c', 'b'), c2).reason).toBe('limit-reached')
+  })
+
+  it('多个具名口时，无 handle 的边只算进它真正落到的那个口', () => {
+    const two: NodeConnectionDef = { inputs: [{ port: 'in-1', capacity: 1, evictOnFull: false }, { port: 'in-2', capacity: 1, evictOnFull: false }] }
+    const nodes = { a: 'x', b: 'mp', c: 'x' }
+    // 已有边连 in-2（具名）→ 走默认 handle 应落第一个口 in-1，不该被 in-2 的占用影响。
+    // 注意 conn() 给的 sourceHandle 是 'source'（规范朝向），别用裸 { source, target }（会被判 bad-orientation）。
+    const c = ctx(nodes, [{ source: 'a', target: 'b', targetHandle: 'in-2' }], { mp: two })
+    expect(validateConnection({ source: 'c', target: 'b' }, c).ok).toBe(true)
+    // 走默认 handle（缺省口 = in-1，空闲）→ 可连（sourceHandle 只能是 source/缺省，写 x 会判朝向非法）
+    expect(validateConnection({ source: 'c', sourceHandle: 'source', target: 'b' }, c).ok).toBe(true)
+    const dupIn2 = validateConnection({ source: 'c', sourceHandle: 'x', target: 'b', targetHandle: 'in-2' }, c)
+    expect(dupIn2.reason).toBe('limit-reached')
   })
 
   it('缺节点被拒(missing-node)', () => {
@@ -281,17 +378,20 @@ describe('P0-6 纯具名多口容量独立（C-1）', () => {
     )
     // 默认 handle → resolveTargetInputPort 落 in-1（第一个口），容量独立 → 可连
     expect(validateConnection({ source: 'a', target: 'b' }, c).ok).toBe(true)
-    // 显式连 in-2 → 已被占 → limit-reached
+    // 显式连 in-2 → 已被占，但默认「挤」→ 仍放行（容量门槛由渲染层 commit 时执行）
     const dup = validateConnection({ source: 'a', sourceHandle: 'x', target: 'b', targetHandle: 'in-2' }, c)
-    expect(dup.reason).toBe('limit-reached')
+    expect(dup.ok).toBe(true)
   })
-  it('同一具名口满额时默认 handle 连该口应被拒（若默认口即该口）', () => {
-    const single = (): NodeConnectionDef => ({
-      inputs: [{ port: 'only-in', capacity: 1 }],
-    })
-    const c = ctx({ a: 'x', b: 'mp' }, [{ source: 'a', target: 'b', targetHandle: 'only-in' }], { mp: single() })
-    // 默认 handle 落 only-in（唯一口），已有边占满 → limit-reached
-    expect(validateConnection({ source: 'a', target: 'b' }, c).reason).toBe('limit-reached')
+  it('同一具名口满额时：默认挤（放行）；evictOnFull:false 才拒', () => {
+    const evicting = (): NodeConnectionDef => ({ inputs: [{ port: 'only-in', capacity: 1 }] })
+    const refusing = (): NodeConnectionDef => ({ inputs: [{ port: 'only-in', capacity: 1, evictOnFull: false }] })
+    const edges = [{ source: 'a', target: 'b', targetHandle: 'only-in' }]
+    const nodes = { a: 'x', b: 'mp' }
+    // 默认 handle 落 only-in（唯一口），已满；默认挤 → 放行
+    expect(validateConnection({ source: 'a', target: 'b' }, ctx(nodes, edges, { mp: evicting() })).ok).toBe(true)
+    // 明确不挤 → 拒
+    expect(validateConnection({ source: 'a', target: 'b' }, ctx(nodes, edges, { mp: refusing() })).reason).toBe(
+      'limit-reached',
+    )
   })
 })
-

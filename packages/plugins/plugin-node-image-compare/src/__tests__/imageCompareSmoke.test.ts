@@ -72,7 +72,7 @@ describe('image-compare 装配 smoke', () => {
     const def = nodeStore.types.get('image-compare')!
     expect(def.label).toBe('图片对比')
     expect(def.resizable).toBe(true)
-    expect(def.inputs).toEqual([{ port: 'target', acceptsTypes: ['image'], capacity: 3 }])
+    expect(def.inputs).toEqual([{ port: 'target', acceptsTypes: ['image'], capacity: 2 }])
     expect(def.outputs).toEqual([])
     ctx.stop()
   })

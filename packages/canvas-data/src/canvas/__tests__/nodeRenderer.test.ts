@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { NodeRegistry } from '../registry/nodeRegistry'
-import { resolveSegment, hasContent, activeSegments, nodeSegmentStack } from '../registry/nodeRenderer'
+import {
+  resolveSegment,
+  hasContent,
+  activeSegments,
+  nodeSegmentStack,
+  nodeSegmentStackEntries,
+} from '../registry/nodeRenderer'
 
 /** 测试里的组件 stub（内核不 import Vue，组件是 opaque 句柄即可） */
 const TextContentStub = { name: 'TextContent' }
@@ -115,6 +121,23 @@ describe('nodeRegistry 段级多 occupant（开放叠加槽）', () => {
     expect(activeSegments(nr, 'text')).toEqual(['content'])
     expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([BadgeA])
   })
-})
 
+  it('nodeSegmentStackEntries 给每项稳定 id（基座=base、occupant=注册 id），供渲染层当 key', () => {
+    // 为什么需要：渲染层用下标当 key 时，插件热装卸（occupant 增删）会让 Vue 复用错实例。
+    const nr = new NodeRegistry()
+    nr.register('text', { content: TextContentStub })
+    nr.registerContribution('text', 'content', { id: 'badge-a', component: BadgeA })
+    nr.registerContribution('text', 'content', { id: 'badge-b', component: BadgeB })
+    expect(nodeSegmentStackEntries(nr, 'text', 'content')).toEqual([
+      { id: 'base', component: TextContentStub },
+      { id: 'badge-a', component: BadgeA },
+      { id: 'badge-b', component: BadgeB },
+    ])
+    // 抽走一个后，剩下的 id 不变（下标会变，id 不会）
+    nr.unregisterContribution('text', 'content', 'badge-a')
+    expect(nodeSegmentStackEntries(nr, 'text', 'content').map((e) => e.id)).toEqual(['base', 'badge-b'])
+    // 与 nodeSegmentStack 同序同源（两函数不会各说各话）
+    expect(nodeSegmentStack(nr, 'text', 'content')).toEqual([TextContentStub, BadgeB])
+  })
+})
 

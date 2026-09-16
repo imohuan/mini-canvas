@@ -26,12 +26,28 @@
  * 主节点锁定：多选手势里 VueFlow 会为被拖的一组节点都发 NodeDrag 帧；吸附只对
  * 真正被鼠标抓住的"主节点"计算(NodeDragStart 锁定其 id，NodeDrag 帧 id 不同即忽略)，
  * 避免整组拖拽时线在成员节点间跳动/串扰。
+ *
+ * 多选不对齐（用户要求）：真·多选整组拖动时**完全不参与** —— 不吸附、不画线。
+ * 原因是吸附只写"被抓的那一个节点"，会把整组节点之间的相对位置弄乱（见 shouldAlignOnDrag）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
-import { computeAlignGuides, SNAP_THRESHOLD } from './alignGuideEngine'
+import { computeAlignGuides, SNAP_THRESHOLD, shouldAlignOnDrag } from './alignGuideEngine'
 
 const { ctx, interaction, viewport, visibleNodes, updateNodeVisual } = useCanvasRender()
+
+/** 当前选中节点数：多选（>=2）时本插件整体让位（不吸附、不画线） */
+const selTick = ref(0)
+type SelectionLike = { ids: ReadonlySet<string>; onChange(cb: () => void): () => void }
+const selection = ctx.get<SelectionLike | undefined>('selection')
+const selOff = selection?.onChange?.(() => void (selTick.value += 1))
+onBeforeUnmount(() => selOff?.())
+const selectedCount = computed(() => {
+  void selTick.value
+  return selection ? selection.ids.size : 0
+})
+/** 本次拖动的节点是否属于"多选整组"：是则本插件让位 */
+const multiDrag = computed(() => !shouldAlignOnDrag(selectedCount.value))
 
 const vGuide = ref<number | null>(null)
 const hGuide = ref<number | null>(null)
@@ -45,10 +61,21 @@ function clearGuides(): void {
   hGuide.value = null
 }
 
+/** 只清参考线、保留 primaryId（多选让位时用：拖动还没结束，主节点不能丢） */
+function hideGuides(): void {
+  vGuide.value = null
+  hGuide.value = null
+}
+
 const vScreen = computed(() => (vGuide.value !== null ? vGuide.value * viewport.value.zoom + viewport.value.x : 0))
 const hScreen = computed(() => (hGuide.value !== null ? hGuide.value * viewport.value.zoom + viewport.value.y : 0))
 
 function handleDragFrame(nodeId: string, position: { x: number; y: number }): void {
+  // 多选整组拖动：不对齐、不画线（吸附只动一个节点，会把整组相对位置弄乱）
+  if (multiDrag.value) {
+    hideGuides()
+    return
+  }
   const layout = ctx.get<NodeLayoutService>('nodeLayout')
   if (!layout) return
   const size = layout.nodeSize(nodeId)

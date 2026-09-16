@@ -55,6 +55,26 @@ export function getSourceHandle(state: ConnectionFeedbackState): 'source' | 'tar
   return state.activeConnection.value?.sourceHandle ?? null
 }
 
+/**
+ * 某节点是不是"本次拖线的源"（谁在拖线时，用它判断自己该不该被压端口 / 该不该亮 3D）。
+ *
+ * 兼容单源与多源：给了 sourceNodeIds（批量连线：选中集里每个节点都是源）就按集合判；
+ * 只给 sourceNodeId（从节点端口拖线）就按那一个 id 判 —— 旧行为逐字不变。
+ *
+ * 之所以抽成函数：这段"我是不是源"的判断散在 UI 层（BaseNode 的 isCurrentConnectingNode、
+ * 端口压制、3D 反馈）好几处，各写一遍必然漏掉多源那一路 —— 抽出来就只有一个地方要维护。
+ */
+export function isConnectionSource(
+  active: ActiveConnection | null | undefined,
+  nodeId: string,
+): boolean {
+  if (!active) return false
+  if (active.sourceNodeIds && active.sourceNodeIds.length > 0) {
+    return active.sourceNodeIds.includes(nodeId)
+  }
+  return active.sourceNodeId === nodeId
+}
+
 // 供内部 rAF 节流写 hoverNode 使用的最小读写句柄（ConnectionLineHost 用）
 export interface HoverWriter {
   read(): HoverFeedback | null

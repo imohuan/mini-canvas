@@ -22,10 +22,8 @@ import {
   useCanvasRender,
   useGenPanelMetrics,
   useSoleNodeSelected,
-  useToolbarOffsets,
-  toolbarOffsetStyle,
 } from '@mini-canvas/canvas-render'
-import { Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
+import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
 import type { SelectOption } from '@mini-canvas/plugin-theme-default'
 import type { ToolDef, ToolParamDef, ToolProgress, ToolResult, ToolService } from '@mini-canvas/kernel'
 import {
@@ -49,24 +47,17 @@ import type { TextNodeService } from './nodeTextPlugin'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx, renderEdges, renderNodes, viewport } = useCanvasRender()
+const { ctx, renderEdges, renderNodes } = useCanvasRender()
 // 单选才显示：多选时所有控制栏（上下）都收起，避免多份面板互相叠
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value)
 
-/** 下控制栏贴边距离（设置面板可调；改完立即生效） */
-const offsets = useToolbarOffsets()
 /** 面板尺寸类配置（宽度 / 输入框高度；与贴边距离同属「布局/控制栏」） */
 const metrics = useGenPanelMetrics()
-const zoom = computed(() => Math.max(viewport.value?.zoom || 1, 0.01))
+/** 面板内容尺寸；位置与反缩放由壳的下插槽定位层给（用户要求"定位交给 BaseNode"），本组件不再算 */
 const panelStyle = computed<Record<string, string>>(() => ({
-  // 对象展开合并：不能把下面的反缩放 transform 覆盖掉
-  ...toolbarOffsetStyle('bottom', offsets.value.bottom),
   // 宽度来自配置（布局/控制栏 → 文本生成栏宽度），不再写死在 CSS 里
   width: metrics.value.textWidth + 'px',
-  // 水平居中 + 反缩放合并在同一个 transform 里（样式表里只写其一都会把另一个顶掉）
-  transform: 'translateX(-50%) scale(' + (1 / zoom.value) + ')',
-  transformOrigin: 'center top',
 }))
 
 /** 输入框高度区间（配置驱动；用 CSS 变量喂给 scoped 样式，避免逐处硬编码） */
@@ -194,6 +185,12 @@ const doneHint = ref('')
 
 /** 字数/行数（保留原状态栏信息） */
 const summary = computed(() => summarizeText(props.data?.text))
+
+/* 动作图标（内联 SVG 常量放脚本里，模板保持可读） */
+const ICON_DUPLICATE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>'
+const ICON_DELETE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18" /><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" /><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" /></svg>'
 
 function service(): TextNodeService {
   return ctx.get<TextNodeService>('text')
@@ -348,20 +345,9 @@ function onDelete(): void {
           <span class="tg-unit">行</span>
         </span>
 
-        <button class="tg-icon-btn" type="button" title="复制节点" aria-label="复制节点" @click.stop="onDuplicate">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="9" y="9" width="12" height="12" rx="2" />
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-          </svg>
-        </button>
+        <NodeToolbarButton title="复制节点" :icon="ICON_DUPLICATE" @click="onDuplicate" />
 
-        <button class="tg-icon-btn is-danger" type="button" title="删除节点" aria-label="删除节点" @click.stop="onDelete">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M3 6h18" />
-            <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
-          </svg>
-        </button>
+        <NodeToolbarButton title="删除节点" variant="danger" :icon="ICON_DELETE" @click="onDelete" />
 
         <button class="tg-send" :class="{ 'is-running': running }" type="button" :disabled="!canSend" title="发送" @click.stop="onSend">
           <span v-if="running" class="tg-spinner" aria-hidden="true" />
@@ -386,11 +372,8 @@ function onDelete(): void {
 </template>
 
 <style scoped>
-/* 浮在卡片下方：绝对定位不撑高节点；水平居中由 left:50% + translateX 合成在 panelStyle 里给出 */
+/* 只管面板自身的材质与内部排版；位置（贴边/居中/反缩放）由壳的下插槽定位层给。 */
 .tg-root {
-  position: absolute;
-  left: 50%;
-  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -512,42 +495,7 @@ function onDelete(): void {
   background: var(--text-faint, #9ca3af);
 }
 
-/* 图标按钮 28×28 / 圆角 8 */
-.tg-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
-  color: var(--text-muted, #6b7280);
-  cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
-    color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.tg-icon-btn:hover {
-  background: var(--fill-active, rgba(0, 0, 0, 0.06));
-  color: var(--text-strong, #111827);
-}
-.tg-icon-btn:active {
-  transform: scale(0.97);
-}
-.tg-icon-btn:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
-  outline-offset: 1px;
-}
-.tg-icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
-.tg-icon-btn.is-danger:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
+/* 复制/删除两个图标按钮改用通用 NodeToolbarButton（尺寸/hover/focus/禁用都在那一边） */
 
 /* 主按钮（全界面同一时刻只允许一个实心主按钮 → 只有「发送」是实心青底白字） */
 .tg-send {
@@ -628,13 +576,11 @@ function onDelete(): void {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tg-icon-btn,
   .tg-send,
   .tg-editor,
   .tg-progress-bar {
     transition: none !important;
   }
-  .tg-icon-btn:active,
   .tg-send:active:not(:disabled) {
     transform: none;
   }

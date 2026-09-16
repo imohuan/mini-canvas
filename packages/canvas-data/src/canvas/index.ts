@@ -17,7 +17,14 @@ export { Context, canvasCapabilityLayer } from './context'
 
 export { NodeRegistry } from './registry/nodeRegistry'
 export type { NodePresentation, NodeSegment, NodeSegmentContribution } from './registry/nodeRegistry'
-export { resolveSegment, hasContent, activeSegments, nodeSegmentStack } from './registry/nodeRenderer'
+export {
+  resolveSegment,
+  hasContent,
+  activeSegments,
+  nodeSegmentStack,
+  nodeSegmentStackEntries,
+} from './registry/nodeRenderer'
+export type { NodeSegmentEntry } from './registry/nodeRenderer'
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'
 export { ThemeRegistry } from './registry/themeRegistry'

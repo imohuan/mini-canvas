@@ -219,10 +219,12 @@ describe('filterConnectableTypes', () => {
     const out = filterConnectableTypes({ fact: fact('target'), sourceNodeType: 'text', types: candidates, edges: noEdges, getTypeConn })
     expect(out.map((t) => t.type)).toEqual(['text'])
   })
-  it('反向拖出且目标输入口已满额（capacity=1 已有入边）→ 全部滤掉', () => {
+  it('反向拖出且目标输入口已满额（capacity=1 已有入边）→ 仍可作为候选（满额是挤老边，不是拒）', () => {
+    // 语义（2026-09 定）：capacity 满额时内核默认「挤掉最老一条」再落新边（evictOnFull 缺省 true），
+    // 所以菜单仍应把类型合得来的节点列为候选 —— 以前这里按「满了就不可连」滤掉，是旧语义。
     const edges: ExistingEdge[] = [{ source: 'node-x', target: src, targetHandle: 'target' }]
     const out = filterConnectableTypes({ fact: fact('target'), sourceNodeType: 'text', types: candidates, edges, getTypeConn })
-    expect(out).toEqual([])
+    expect(out.map((t) => t.type)).toEqual(['text'])
   })
   it('源节点类型未知：退化为只看新节点侧声明，不炸', () => {
     const out = filterConnectableTypes({ fact: fact('source'), sourceNodeType: undefined, types: candidates, edges: noEdges, getTypeConn })

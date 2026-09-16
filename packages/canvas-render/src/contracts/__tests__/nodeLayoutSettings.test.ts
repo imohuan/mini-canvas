@@ -17,6 +17,7 @@ import {
   applyGenPanelMetricChange,
   applyOffsetChange,
   resolveGenPanelMetrics,
+  resolveNodeSlotStyle,
   resolveToolbarOffsets,
   toolbarOffsetStyle,
 } from '../nodeLayoutSettings'
@@ -102,6 +103,56 @@ describe('toolbarOffsetStyle（拼 CSS）', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, -5, undefined as unknown as number]) {
       expect(toolbarOffsetStyle('top', bad)).toEqual({ bottom: 'calc(100% + 0px)' })
     }
+  })
+})
+
+/**
+ * resolveNodeSlotStyle —— 节点上/下插槽浮层的**整份定位样式**（纯函数）。
+ *
+ * 用户要求："定位交给 BaseNode 而不是单独的组件"。此前三个段组件各写一遍
+ * "left:50% + translateX(-50%) + scale(1/zoom) + transformOrigin + calc(100% + Npx)"，
+ * 抄三遍必然漂移。这里把它收成一个纯函数：壳拿到就能贴到插槽定位层上，插件不再碰定位。
+ */
+describe('resolveNodeSlotStyle（插槽定位层整份样式）', () => {
+  it('上插槽：浮在卡片上方，锚在底边（bottom: calc(100% + 偏移)）', () => {
+    const s = resolveNodeSlotStyle({ side: 'top', offset: 6, zoom: 1 })
+    expect(s.left).toBe('50%')
+    expect(s.bottom).toBe('calc(100% + 6px)')
+    expect(s.top).toBeUndefined()
+  })
+
+  it('下插槽：浮在卡片下方，锚在顶边（top: calc(100% + 偏移)）', () => {
+    const s = resolveNodeSlotStyle({ side: 'bottom', offset: 6, zoom: 1 })
+    expect(s.top).toBe('calc(100% + 6px)')
+    expect(s.bottom).toBeUndefined()
+  })
+
+  it('水平居中与反缩放合并在同一个 transform 里（分写会互相顶掉）', () => {
+    const s = resolveNodeSlotStyle({ side: 'top', offset: 6, zoom: 1 })
+    expect(s.transform).toBe('translateX(-50%) scale(1)')
+  })
+
+  it('反缩放锚点朝卡片：上插槽 center bottom、下插槽 center top（大小变化时贴边不跑）', () => {
+    expect(resolveNodeSlotStyle({ side: 'top', offset: 6, zoom: 1 }).transformOrigin).toBe('center bottom')
+    expect(resolveNodeSlotStyle({ side: 'bottom', offset: 6, zoom: 1 }).transformOrigin).toBe('center top')
+  })
+
+  it('缩放 0.5 → scale(2)：屏幕尺寸恒定，缩小时按钮不会被压成一条缝', () => {
+    expect(resolveNodeSlotStyle({ side: 'top', offset: 6, zoom: 0.5 }).transform).toContain('scale(2)')
+  })
+
+  it('zoom 非法（0/NaN/负数）按 1 算，不产出 Infinity 让整条 transform 失效', () => {
+    for (const bad of [0, Number.NaN, -2, Number.POSITIVE_INFINITY]) {
+      expect(resolveNodeSlotStyle({ side: 'top', offset: 6, zoom: bad }).transform).toBe('translateX(-50%) scale(1)')
+    }
+  })
+
+  it('偏移 0 是合法值（贴紧卡片），不是"没配置"', () => {
+    expect(resolveNodeSlotStyle({ side: 'top', offset: 0, zoom: 1 }).bottom).toBe('calc(100% + 0px)')
+  })
+
+  it('偏移非法 → 收敛成 0（宁可贴紧，也不产出 NaN 让整条声明失效）', () => {
+    expect(resolveNodeSlotStyle({ side: 'top', offset: Number.NaN, zoom: 1 }).bottom).toBe('calc(100% + 0px)')
   })
 })
 

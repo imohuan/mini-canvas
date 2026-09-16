@@ -95,11 +95,11 @@ export const Config = {
     description:
       '【F 聚焦选中节点】想让所选内容占画布可视高度的比例（0.5 = 占一半），保证周围留出上下文。',
   },
-  minZoom: {
+  autoLayoutMinZoom: {
     type: 'number', default: 0.1, min: 0.05, max: 1, step: 0.05, label: '聚焦最小缩放', group: '布局/自动布局聚焦',
     description: '【F 聚焦选中节点】聚焦时允许缩到的最小倍率。内容特别多时也不会缩得比它更小。',
   },
-  maxZoom: {
+  autoLayoutMaxZoom: {
     type: 'number', default: 4, min: 1, max: 8, step: 0.5, label: '聚焦最大缩放', group: '布局/自动布局聚焦',
     description: '【F 聚焦选中节点】聚焦时允许放大的最大倍率，避免选中单个小节点时画面放大过头。',
   },
@@ -119,8 +119,8 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
     intraSpacing: { x: c.intraSpacingX, y: c.intraSpacingY },
     interSpacing: { x: c.interSpacingX, y: c.interSpacingY },
     focusHeightRatio: c.focusHeightRatio,
-    minZoom: c.minZoom,
-    maxZoom: c.maxZoom,
+    minZoom: c.autoLayoutMinZoom,
+    maxZoom: c.autoLayoutMaxZoom,
     debug: c.debug,
   }
 }
@@ -151,8 +151,8 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       interSpacingX: read('interSpacingX', effectiveConfig.interSpacingX),
       interSpacingY: read('interSpacingY', effectiveConfig.interSpacingY),
       focusHeightRatio: read('focusHeightRatio', effectiveConfig.focusHeightRatio),
-      minZoom: read('minZoom', effectiveConfig.minZoom),
-      maxZoom: read('maxZoom', effectiveConfig.maxZoom),
+      autoLayoutMinZoom: read('autoLayoutMinZoom', effectiveConfig.autoLayoutMinZoom),
+      autoLayoutMaxZoom: read('autoLayoutMaxZoom', effectiveConfig.autoLayoutMaxZoom),
       debug: read('debug', effectiveConfig.debug),
     })
   }

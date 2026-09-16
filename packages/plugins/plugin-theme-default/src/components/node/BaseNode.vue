@@ -8,9 +8,17 @@
 //   5. LOD：zoom 低时简化渲染。
 // 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState）+ useVueFlow。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useVueFlow, Position, useCanvasRender, createV2Logger } from '@mini-canvas/canvas-render'
+import {
+  useVueFlow,
+  Position,
+  useCanvasRender,
+  createV2Logger,
+  useToolbarOffsets,
+  resolveNodeSlotStyle,
+  isConnectionSource,
+} from '@mini-canvas/canvas-render'
 import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
-import { resolveSegment } from '@mini-canvas/canvas-data'
+import { resolveSegment, nodeSegmentStackEntries } from '@mini-canvas/canvas-data'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import TitleLabel from './TitleLabel.vue'
@@ -53,7 +61,15 @@ const numOf = (key: string, fallback: number): number => {
 const TITLE_OFFSET = ref(numOf('titleOffset', 12))
 const TITLE_MIN_ZOOM = ref(numOf('titleScaleMinZoom', 0.5))
 const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
+/** 多选时是否隐藏标题条（配置在 multi-select 插件，key 全局平面命名，这里按名字读） */
+const HIDE_TITLES_ON_MULTI = ref(
+  settingsStore()?.get('multiSelectHideTitles') === true,
+)
 const applyTitleSetting = (key: string, value: unknown): void => {
+  if (key === 'multiSelectHideTitles') {
+    HIDE_TITLES_ON_MULTI.value = value === true
+    return
+  }
   if (typeof value !== 'number' || !Number.isFinite(value)) return
   if (key === 'titleOffset') TITLE_OFFSET.value = value
   else if (key === 'titleScaleMinZoom') TITLE_MIN_ZOOM.value = value
@@ -67,6 +83,39 @@ onBeforeUnmount(() => titleSettingOff?.dispose())
 
 const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM.value)
 const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
+
+// ============ 多选相关显隐（配置由 multi-select 插件声明）============
+/** 多选（选中 >=2）时是否隐藏标题条：列表更干净，也不再和大框的"上方间距"打架 */
+const hideTitleOnMulti = computed(
+  () => HIDE_TITLES_ON_MULTI.value && isSelected.value && selectedCount.value > 1,
+)
+/** 标题条可见性：低细节不显示；开了"多选隐藏标题"且处于多选时也不显示 */
+const showTitle = computed(() => !lowDetail.value && !hideTitleOnMulti.value)
+
+/**
+ * 是否隐藏上下控制栏（NodeToolbar）。两部分：
+ * - 框选手势进行中：那一排操作条/状态栏会被一起框进来、也挡视线 → 无条件收起。
+ * - 多选（>=2）时：多选下这些栏没有意义（面板都是"恰好选中一个"的语义）→ 收起。
+ * 单选时的显隐仍由各段组件自己的 useSoleNodeSelected 决定，这里只做"不该出现"的压制。
+ */
+const hideToolbars = computed(
+  () => interaction?.isSelecting?.value === true || (isSelected.value && selectedCount.value > 1),
+)
+
+/** 多选（选中 >=2）且本节点在其中：此时压掉自身端口，改用多选框上的批量连线端口 */
+const isMultiSelected = computed(() => isSelected.value && selectedCount.value > 1)
+
+/**
+ * 多选态（选中 >=2）：在节点内容区左上角显示一个圆形单选标记，用来"一眼看出这个节点在不在选中集里"。
+ * 只在多选时才出现 —— 单选时卡片本身已有选中环，再叠一个圆点反而多余。
+ */
+const showMultiRadio = computed(() => isSelected.value && selectedCount.value > 1)
+
+/**
+ * 圆圈的反缩放（与标题同一套语义）：保持"屏幕上的大小恒定"，
+ * 否则缩到 0.2x 时它会小成一个点、完全起不到指示作用。
+ */
+const radioScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
 // —— 节点标题（data.label ?? type）——
 const nodeLabel = computed(() => {
@@ -194,11 +243,50 @@ function cancelTitleEdit() {
 onBeforeUnmount(() => document.removeEventListener('keydown', onTitleEditKeydown))
 
 // ============ 段组件路由（未注册段 = 不渲染/默认）============
+// —— 选中态读取：多选相关显隐要用；走内核 selection（选中单源），不依赖 VueFlow 内部态 ——
+interface SelectionPeek {
+  readonly ids: ReadonlySet<string>
+  onChange(cb: () => void): () => void
+}
+const selTick = ref(0)
+const selectionPeek = ctx?.get<SelectionPeek | undefined>('selection')
+const selOff = selectionPeek?.onChange(() => void (selTick.value += 1))
+onBeforeUnmount(() => selOff?.())
+/** 我是否在选中集里 */
+const isSelected = computed(() => {
+  void selTick.value
+  return selectionPeek ? selectionPeek.ids.has(props.id) : Boolean(props.selected)
+})
+/** 当前选中节点数 */
+const selectedCount = computed(() => {
+  void selTick.value
+  return selectionPeek ? selectionPeek.ids.size : (props.selected ? 1 : 0)
+})
+
 const content = computed(() => resolveSegment(registry, props.type, 'content'))
 const customTitle = computed(() => resolveSegment(registry, props.type, 'title'))
-const topToolbar = computed(() => resolveSegment(registry, props.type, 'top-toolbar'))
-const bottomToolbar = computed(() => resolveSegment(registry, props.type, 'bottom-toolbar'))
+// 上/下两个插槽：**可叠加** —— 基座段组件 + 其它插件经 ctx.nodes.contribute 叠上来的 occupant，
+// 按 order 依次渲染（数据层的 nodeSegmentStack 早已支持，壳这里把它真的画出来，
+// 以前只取基座，第三方挂上来的按钮到不了 DOM）。
+// 取带稳定 id 的版本：列表 key 用注册时那个 id（基座='base'），插件热装卸时不会错位复用组件实例。
+const topSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'top-toolbar'))
+const bottomSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'bottom-toolbar'))
 const editable = computed(() => Boolean(nodeWrite))
+
+// ============ 上/下插槽的定位（由壳统一负责，插件只管内容）============
+// 用户要求："定位交给 BaseNode 而不是单独的组件 —— 基础节点已经把位置算出来了，
+// 然后把插槽留给对应的插件实现（插件只把按钮组件放进来即可）"。
+// 于是"贴边距离 + 水平居中 + 反缩放"三件事都在壳这一层算：此前三个段组件各抄一遍，
+// 而"居中"与"反缩放"必须合进同一个 transform（分开写会互相顶掉，图片面板当初因此错位过）。
+const slotOffsets = useToolbarOffsets()
+/** 浮层贴在卡片上缘之外：绝对定位，不参与节点 flex 布局，所以不会把节点撑高 */
+const topSlotsStyle = computed(() =>
+  resolveNodeSlotStyle({ side: 'top', offset: slotOffsets.value.top, zoom: zoom.value }),
+)
+/** 浮层贴在卡片下缘之外，同上 */
+const bottomSlotsStyle = computed(() =>
+  resolveNodeSlotStyle({ side: 'bottom', offset: slotOffsets.value.bottom, zoom: zoom.value }),
+)
 
 // ============ 端口能力显隐（按 type）============
 const cap = useNodeCapability(props.type)
@@ -221,8 +309,16 @@ const aimBody = ref(false)
 // ============ 连接反馈（消费 connectionState）============
 const isConnecting = computed(() => connectionState.isConnecting.value)
 const activeConnection = computed(() => connectionState.activeConnection.value)
-/** 拖线源是否是我自己（拖线时压住自己端口 + 禁止对自己 3D） */
-const isCurrentConnectingNode = computed(() => isConnecting.value && activeConnection.value?.sourceNodeId === props.id)
+/**
+ * 拖线源是否是我自己（拖线时压住自己端口 + 禁止对自己 3D）。
+ *
+ * 走渲染层的 isConnectionSource（不是直接比 sourceNodeId）：多选批量连线是"一次拖出、多个源"，
+ * 只认一个 sourceNodeId 的话，选中集里除第一个之外的节点都不算源 —— 它们的端口不会压住，
+ * 自己还会被当成可连目标亮起 3D。用户报的"判断的是只有单个连接线"就是这里。
+ */
+const isCurrentConnectingNode = computed(
+  () => isConnecting.value && isConnectionSource(activeConnection.value, props.id),
+)
 /** 拖线时是否全局压端口（源口之外也隐藏其余端口，避免干扰） */
 const suppressHandles = computed(() => connectionState.suppressHandles.value)
 
@@ -357,6 +453,9 @@ const shouldShowHandles = computed(
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
     !interaction.isNodeDragging.value &&
+    // 多选时压掉自身端口：十几个节点的圆球会和多选框上的"批量连线端口"混在一起，
+    // 分不清该拖哪个（用户要求：多选时节点的 MouseHandle 全不显示）。
+    !isMultiSelected.value &&
     (isHovered.value || portHovered.value || props.selected),
 )
 
@@ -494,17 +593,38 @@ function clamp(value: number, min: number, max: number): number {
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
   }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
-    <!-- 顶部工具栏（注册了才渲染） -->
-    <div v-if="topToolbar" class="top-toolbar">
-      <component :is="topToolbar" :id="id" :data="data" />
+    <!-- 上插槽：可叠多个 occupant，位置（贴边 + 居中 + 反缩放）由壳这一层算好，插件只管往里放内容。
+         压制条件沿用既有语义：框选中整排收起、多选收起（见 hideToolbars）。 -->
+    <div
+      v-if="topSlots.length > 0 && !hideToolbars"
+      class="v2-slot v2-slot--top nodrag nopan"
+      :style="topSlotsStyle"
+    >
+      <component v-for="seg in topSlots" :key="'top-' + seg.id" :is="seg.component" :id="id" :data="data" />
     </div>
 
     <div class="v2-card" :class="{
       'is-connecting-hover': showConnectFeedback,
       'is-connection-invalid': isConnectionInvalidTarget,
     }" :style="cardInlineStyle" @mousemove="updateCardMousePosition">
+      <!-- 多选标记：内容区左上角的圆形单选点（只在多选时出现，反缩放保持屏幕上大小恒定）。
+           纯指示，不接事件 —— 点击行为交给卡片本身（Shift+点节点 = 从选中集里去掉它）。 -->
+      <div
+        v-if="showMultiRadio && !lowDetail"
+        class="v2-multi-radio nodrag nopan"
+        :style="{ transform: `scale(${radioScale})` }"
+        role="presentation"
+        aria-hidden="true"
+      >
+        <!-- 自绘 SVG（不用 CSS 画圆）：矢量、跟主题色走 currentColor、任意缩放下都清晰。
+             选中态 = 外圈 + 中心实心点（"这个节点在选中集里"）。 -->
+        <svg class="v2-multi-radio-icon" viewBox="0 0 20 20" aria-hidden="true">
+          <circle class="v2-multi-radio-ring" cx="10" cy="10" r="8.25" />
+          <circle class="v2-multi-radio-dot" cx="10" cy="10" r="4.25" />
+        </svg>
+      </div>
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
-      <div v-if="!lowDetail" class="v2-title nodrag nopan" :style="titlePositionStyle"
+      <div v-if="showTitle" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
         <component :is="customTitle" v-if="customTitle" :id="id" :data="data" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :title-icon="titleIcon">
@@ -593,9 +713,13 @@ function clamp(value: number, min: number, max: number): number {
         :debug="debugHandle && !isConnecting" @hover="onPortHover" />
     </div>
 
-    <!-- 底部工具栏（注册了才渲染） -->
-    <div v-if="bottomToolbar" class="bottom-toolbar">
-      <component :is="bottomToolbar" :id="id" :data="data" />
+    <!-- 下插槽：同上方，定位由壳统一给出 -->
+    <div
+      v-if="bottomSlots.length > 0 && !hideToolbars"
+      class="v2-slot v2-slot--bottom nodrag nopan"
+      :style="bottomSlotsStyle"
+    >
+      <component v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
     </div>
   </div>
 </template>
@@ -607,6 +731,19 @@ function clamp(value: number, min: number, max: number): number {
   display: flex;
   flex-direction: column;
   font-family: system-ui, sans-serif;
+}
+
+/* —— 上/下插槽定位层（位置由壳给，插件只放内容）——
+   浮在卡片外侧：绝对定位、不占布局高度（节点不会被撑高）。
+   贴边距离 / 水平居中 / 反缩放全在 :style 里（resolveNodeSlotStyle）；这里只给"排一行"的默认排版：
+   插槽里可能只放一个插件组件，也可能叠了好几个 occupant 并排。 */
+.v2-slot {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 /* —— 卡片 —— */
@@ -759,6 +896,44 @@ function clamp(value: number, min: number, max: number): number {
   pointer-events: auto;
 }
 
+/* —— 多选标记：内容区左上角的圆形单选点（自绘 SVG）—— */
+.v2-multi-radio {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 26;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: left top;
+  pointer-events: none;
+}
+
+.v2-multi-radio-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  /* 圆环与圆点都吃主题的"选中色"，浅色/深色主题下都跟随 */
+  color: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
+  /* 白底圆：让标记在任何节点内容上都看得清（SVG 里画白底而不是靠 CSS 底色） */
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
+}
+
+/* 外圈：白底 + 主题色描边（用描边而不是实心，视觉更轻、不压内容） */
+.v2-multi-radio-ring {
+  fill: #ffffff;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+/* 中心实心点：选中态 */
+.v2-multi-radio-dot {
+  fill: currentColor;
+}
+
 /* —— 标题条：卡片上缘外、反向缩放 —— */
 .v2-title {
   position: absolute;
@@ -782,6 +957,7 @@ function clamp(value: number, min: number, max: number): number {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  background: #eee;
 }
 
 .v2-content-missing {

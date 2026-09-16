@@ -615,5 +615,17 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
-export { Dropdown, Select, PrecisionSlider, ToolParamField } from "./components/ui";
+export { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
+
+/**
+ * 渲染件出口（供其它插件复用同一套外观，避免各自手绘一份必然漂移）。
+ *
+ * - `MovingHandle`：节点浮动端口。支持 `preview` 模式 —— 只复用外观、不注册 VueFlow 真实连接点，
+ *   并 emit `connectStart`，正好给"挂在自己浮层上的临时端口"用（如多选框的批量连线端口）。
+ * - `ConnectionLine` / `CustomEdge`：拖线临时线与正式边。`ConnectionLine` 内部把渲染完全委托给
+ *   `CustomEdge`，所以拖出来的临时线和落成的正式边**长得一模一样**（含流光/箭头/配置/动画）。
+ */
+export { default as MovingHandle } from "./components/node/MovingHandle.vue";
+export { default as ConnectionLine } from "./components/edge/ConnectionLine.vue";
+export { default as CustomEdge } from "./components/edge/CustomEdge.vue";

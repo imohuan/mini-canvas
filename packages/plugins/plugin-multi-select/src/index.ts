@@ -7,6 +7,7 @@ export {
   computeUnionBounds,
   paddedBounds,
   computeSelectionFrameGeometry,
+  DEFAULT_SELECTION_FRAME_INNER_PADDING,
   draggableMembers,
   rectsOverlap,
   hasSelectedAncestor,
@@ -23,6 +24,7 @@ export type {
 // 群组框外观配置（内外双框的间距 + 样式；零 Vue 可单测）
 export {
   applyMultiSelectFrameChange,
+  framePaddingsOf,
   frameStrokeCss,
   hexToRgba,
   resolveMultiSelectFrameConfig,
@@ -33,6 +35,7 @@ export {
 export type {
   MultiSelectConfig,
   MultiSelectFrameConfig,
+  FramePaddings,
   FrameStrokeStyle,
   FrameLineStyle,
   ConfigGetter,

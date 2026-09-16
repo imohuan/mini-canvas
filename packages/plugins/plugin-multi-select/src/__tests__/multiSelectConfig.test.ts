@@ -18,6 +18,8 @@ import {
   applyMultiSelectFrameChange,
   frameStrokeCss,
   hexToRgba,
+  framePaddingsOf,
+  scaleFramePaddings,
   resolveMultiSelectFrameConfig,
 } from '../multiSelectConfig'
 
@@ -75,9 +77,42 @@ describe('Config schema（这些项必须出现在设置页面里）', () => {
       color: '#60a5fa',
       lineStyle: 'solid',
       lineWidth: 1,
-      radius: 12,
+      radius: 0,
       fillOpacity: 0.05,
     })
+  })
+
+  it('内框默认直角（radius 0）—— 用户明确要求去掉内框的圆角效果', () => {
+    expect(DEFAULT_MULTI_SELECT_FRAME.inner.radius).toBe(0)
+    expect(Config[MULTI_SELECT_FRAME_KEYS.innerRadius].default).toBe(0)
+    // 默认配置生成出的内框样式必须是不圆角的
+    const css = frameStrokeCss(DEFAULT_MULTI_SELECT_FRAME.inner)
+    expect(css.borderRadius).toBe('0px')
+  })
+
+  it('小框 padding 三个项都在设置里（左右/上/下），默认全 0 = 紧贴节点', () => {
+    for (const key of [
+      MULTI_SELECT_FRAME_KEYS.innerPaddingX,
+      MULTI_SELECT_FRAME_KEYS.innerPaddingTop,
+      MULTI_SELECT_FRAME_KEYS.innerPaddingBottom,
+    ]) {
+      expect(Config[key]).toBeDefined()
+      expect(Config[key].type).toBe('number')
+      expect(Config[key].group).toBe('布局/多选')
+      expect(Config[key].default).toBe(0)
+    }
+    expect(DEFAULT_MULTI_SELECT_FRAME.innerPaddingX).toBe(0)
+    expect(DEFAULT_MULTI_SELECT_FRAME.innerPaddingTop).toBe(0)
+    expect(DEFAULT_MULTI_SELECT_FRAME.innerPaddingBottom).toBe(0)
+  })
+
+  it('群组框总开关 与 多选时隐藏标题 两个开关都在设置里（默认：画框 + 不隐藏标题）', () => {
+    expect(Config[MULTI_SELECT_FRAME_KEYS.enabled].type).toBe('boolean')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.enabled].group).toBe('布局/多选')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.enabled].default).toBe(true)
+    expect(Config[MULTI_SELECT_FRAME_KEYS.hideTitles].type).toBe('boolean')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.hideTitles].group).toBe('布局/多选')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.hideTitles].default).toBe(false)
   })
 })
 
@@ -150,6 +185,107 @@ describe('applyMultiSelectFrameChange（设置改动实时生效）', () => {
   it('不认识的 key 原样返回同一引用（别的插件的配置改动不该引起本插件重渲染）', () => {
     const before = { ...DEFAULT_MULTI_SELECT_FRAME }
     expect(applyMultiSelectFrameChange(before, 'edgeColor', '#000000')).toBe(before)
+  })
+
+  it('改小框 padding 只动那一项，两框间距不受影响', () => {
+    const after = applyMultiSelectFrameChange(
+      DEFAULT_MULTI_SELECT_FRAME,
+      MULTI_SELECT_FRAME_KEYS.innerPaddingTop,
+      12,
+    )
+    expect(after.innerPaddingTop).toBe(12)
+    expect(after.paddingTop).toBe(DEFAULT_MULTI_SELECT_FRAME.paddingTop)
+    expect(after.innerPaddingX).toBe(0)
+  })
+
+  it('改两个开关也只动那一项（开关与几何参数互不干扰）', () => {
+    const off = applyMultiSelectFrameChange(DEFAULT_MULTI_SELECT_FRAME, MULTI_SELECT_FRAME_KEYS.enabled, false)
+    expect(off.enabled).toBe(false)
+    expect(off.paddingX).toBe(DEFAULT_MULTI_SELECT_FRAME.paddingX)
+    expect(off.inner).toEqual(DEFAULT_MULTI_SELECT_FRAME.inner)
+    const hide = applyMultiSelectFrameChange(DEFAULT_MULTI_SELECT_FRAME, MULTI_SELECT_FRAME_KEYS.hideTitles, true)
+    expect(hide.hideTitles).toBe(true)
+    expect(hide.enabled).toBe(true)
+  })
+
+  it('开关传入非布尔脏值 → 回落默认（不会把开关误判成 false）', () => {
+    const cfg = resolveMultiSelectFrameConfig((k) =>
+      k === MULTI_SELECT_FRAME_KEYS.enabled ? 'yes' : undefined,
+    )
+    expect(cfg.enabled).toBe(true)
+  })
+})
+
+describe('framePaddingsOf（配置 → 几何用的两组 padding）', () => {
+  it('拆出"小框外扩"与"两框间距"两组，值一一对应', () => {
+    const pads = framePaddingsOf({
+      ...DEFAULT_MULTI_SELECT_FRAME,
+      paddingX: 20,
+      paddingTop: 40,
+      paddingBottom: 30,
+      innerPaddingX: 5,
+      innerPaddingTop: 6,
+      innerPaddingBottom: 7,
+    })
+    expect(pads.gap).toEqual({ paddingX: 20, paddingTop: 40, paddingBottom: 30 })
+    expect(pads.inner).toEqual({ paddingX: 5, paddingTop: 6, paddingBottom: 7 })
+  })
+
+  it('默认配置 → 小框全 0（紧贴节点）、间距为 16/34/16', () => {
+    const pads = framePaddingsOf(DEFAULT_MULTI_SELECT_FRAME)
+    expect(pads.inner).toEqual({ paddingX: 0, paddingTop: 0, paddingBottom: 0 })
+    expect(pads.gap).toEqual({ paddingX: 16, paddingTop: 34, paddingBottom: 16 })
+  })
+})
+
+/**
+ * 缩放后两框间距（用户报的缺陷："你的这个多选框缩放之后的 padding 存在 BUG"）。
+ *
+ * 根因：两框线宽按 1/zoom 反缩放（屏幕上恒定粗细，线宽 4 在 zoom=0.2 时撑到 20px），
+ * 而 padding 是 flow 常量（屏幕上只剩 24×0.2 = 4.8px）。于是缩得越小、线越粗、间距越窄，
+ * 两条线最终糊成一条 —— 实测 zoom=0.3 起重叠、zoom=0.2 重叠 10px。
+ *
+ * 修法：padding 与线宽用**同一套空间约定** —— 都除以 zoom。这样"间距"这个配置项的含义
+ * 恒等于"你在屏幕上量到的两框间隙"，缩放画布时观感不变。
+ */
+describe('scaleFramePaddings —— 间距必须与线宽同空间（1/zoom 反缩放）', () => {
+  const PADS = framePaddingsOf({
+    ...DEFAULT_MULTI_SELECT_FRAME,
+    paddingX: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+    innerPaddingX: 10,
+    innerPaddingTop: 23,
+    innerPaddingBottom: 12,
+  })
+
+  it('zoom=1 原样返回（屏幕上量到的就是配置值）', () => {
+    const s = scaleFramePaddings(PADS, 1)
+    expect(s.gap).toEqual(PADS.gap)
+    expect(s.inner).toEqual(PADS.inner)
+  })
+
+  it('zoom=0.5 → 间距翻倍（flow 值变大，屏幕上才还是 24px）', () => {
+    const s = scaleFramePaddings(PADS, 0.5)
+    expect(s.gap).toEqual({ paddingX: 48, paddingTop: 48, paddingBottom: 48 })
+    expect(s.inner).toEqual({ paddingX: 20, paddingTop: 46, paddingBottom: 24 })
+  })
+
+  it('zoom 非法 / 为 0 → 回落到 1（绝不产生 Infinity 把几何算炸）', () => {
+    for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const s = scaleFramePaddings(PADS, bad)
+      expect(s.gap).toEqual(PADS.gap)
+    }
+  })
+
+  it('回归：zoom=0.2 时间距不再被线宽吃掉（修前 gap=4.8 < 线宽需求 15 → 糊成一条）', () => {
+    const s = scaleFramePaddings(PADS, 0.2)
+    const outerLineScreen = 4 // 外框线宽配置（frameStrokeCss 里 ×1/zoom 后屏幕上仍是 4px）
+    const innerLineScreen = 2
+    const gapOnScreen = s.gap.paddingX * 0.2
+    expect(gapOnScreen).toBeCloseTo(24, 5)
+    // 两条线各自半宽之和必须小于间距，否则视觉重叠
+    expect(gapOnScreen).toBeGreaterThan(outerLineScreen / 2 + innerLineScreen / 2)
   })
 })
 

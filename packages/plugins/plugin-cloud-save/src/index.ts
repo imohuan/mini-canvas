@@ -8,6 +8,17 @@ export type { CloudSavePluginConfig, CloudSaveService, CloudSaveStatus } from '.
 export { HttpAdapter, joinUrl } from './httpAdapter'
 export type { HttpAdapterOptions } from './httpAdapter'
 
+// 增量适配器与差集算法（画布两个写方不互相覆盖的关键，见各自文件头）
+export { GraphDeltaAdapter } from './graphDeltaAdapter'
+export { diffGraph, isEmptyOps } from './graphDiff'
+export type { GraphOps } from './graphDiff'
+
+// 实时通道 + 远端合并（供别的插件/宿主复用这套「AI 改完本地跟着变」的机制）
+export { createRemoteSync, eventsUrl, toSnapshot } from './remoteSync'
+export type { RemoteSync, RemoteSyncOptions, RemoteGraphHandlers, EventSourceLike } from './remoteSync'
+export { planRemoteMerge, isPlanEmpty } from './remoteMerge'
+export type { CanvasGraphSnapshot, MergeNode, MergeEdge, RemoteMergePlan } from './remoteMerge'
+
 export {
   parseDataUrl,
   isUploadableDataUrl,

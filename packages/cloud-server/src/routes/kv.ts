@@ -13,11 +13,24 @@
  */
 import { Hono, type Context } from 'hono'
 import { isKvType, type KvStore } from '../store/kvStore.js'
+import { CanvasDocument } from '../mcp/canvasDoc.js'
 
 /** key 长度上限：挡住把巨大字符串当 key 塞进来的意外用法（正常 key 都是 kebab-case 短名） */
 const MAX_KEY_LENGTH = 512
 
-export function kvRoutes(store: KvStore): Hono {
+/**
+ * 把「写不下去」的原因翻成人话。
+ *
+ * 只有确属输入问题的两类才当成 400（调用方自己写错了 value）：序列化不了（循环引用、嵌套过深）。
+ * 其它（磁盘满、权限）是服务端自己的故障，应当以 5xx 收场 —— 不该让调用方以为是自己的错。
+ */
+function describeWriteError(err: unknown): string {
+  if (err instanceof TypeError) return 'value 无法序列化成 JSON（例如有循环引用）'
+  if (err instanceof RangeError) return 'value 嵌套过深，无法序列化成 JSON'
+  return err instanceof Error ? err.message : String(err)
+}
+
+export function kvRoutes(store: KvStore, doc?: CanvasDocument): Hono {
   const app = new Hono()
 
   /** 校验 :type 合法 + :key 非空且不过长；不合法返回错误文案，合法返回 null */
@@ -77,7 +90,22 @@ export function kvRoutes(store: KvStore): Hono {
     if (!body || typeof body !== 'object' || !('value' in body)) {
       return c.json({ ok: false, error: 'body 缺少 value 字段（应为 { value }）' }, 400)
     }
-    await store.set(type, key, (body as { value: unknown }).value)
+    // 画布图数据（canvas:graph / canvas:graph-edges）走 doc：它对这两个 key 有一把串行锁，
+    // 免得「网页端整包保存」与「AI 增量写」并发时互相覆盖。其它 key（视口/配置等）不必排队。
+    if (doc && type === 'canvas' && CanvasDocument.isGraphKey(key)) {
+      try {
+        await doc.writeKey(key, (body as { value: unknown }).value)
+      } catch (err) {
+        // 坏输入（循环引用、嵌套过深）应当是 400 而不是 500：调用方看得懂
+        return c.json({ ok: false, error: describeWriteError(err) }, 400)
+      }
+    } else {
+      try {
+        await store.set(type, key, (body as { value: unknown }).value)
+      } catch (err) {
+        return c.json({ ok: false, error: describeWriteError(err) }, 400)
+      }
+    }
     return c.json({ ok: true })
   })
 
@@ -85,7 +113,8 @@ export function kvRoutes(store: KvStore): Hono {
     const { type, key } = c.req.param()
     const bad = validate(type, key)
     if (bad) return c.json({ ok: false, error: bad }, 400)
-    const removed = await store.remove(type, key)
+    const removed =
+      doc && type === 'canvas' && CanvasDocument.isGraphKey(key) ? await doc.removeKey(key) : await store.remove(type, key)
     // 删不存在的直接报 ok:false 但仍是 200：DELETE 幂等，客户端不关心是否真删到
     return c.json({ ok: true, removed })
   })

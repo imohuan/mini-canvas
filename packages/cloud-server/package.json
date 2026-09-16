@@ -27,7 +27,8 @@
     "typecheck": "tsc --noEmit",
     "serve": "node ./dist/cli.js serve",
     "e2e": "tsx e2e/cloud-e2e.ts",
-    "e2e:mcp": "tsx e2e/mcp-e2e.ts"
+    "e2e:mcp": "tsx e2e/mcp-e2e.ts",
+    "e2e:realtime": "tsx e2e/realtime-e2e.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

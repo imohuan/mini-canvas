@@ -84,6 +84,8 @@ export interface AddEdgeInput {
   source: string
   target: string
   id?: string
+  /** 边的类型；缺省与数据层一致取 'custom'（不写会导致云端与本地对同一条边判定不一致） */
+  type?: string
   sourceHandle?: string
   targetHandle?: string
   data?: Record<string, unknown>
@@ -93,13 +95,45 @@ export interface AddEdgeInput {
 export interface NodeBatchInput {
   add?: AddNodeInput[]
   delete?: string[]
-  update?: { id: string; position?: { x: number; y: number }; data?: Record<string, unknown> }[]
+  /**
+   * 新增时若 id 已存在：当成更新（而不是整批拒绝）。
+   *
+   * 给**同步口**用（网页端提交增量）：AI 刚加的节点会被实时通道合进网页端，
+   * 于是网页端下一次提交里就带上了「新增这个已在云端的节点」。对 AI 来说这种说法确实是错的，
+   * 但对同步口来说它是**正常时序** —— 若照旧整批拒绝，用户那次真正的改动会被连带丢掉。
+   *
+   * 不给（缺省 false）= MCP 工具的严格语义：AI 说自己要建一个新 id，那它就该是新的。
+   */
+  upsert?: boolean
+  /**
+   * 删除/更新一个**不存在**的目标时：静默跳过，而不是整批拒绝。
+   *
+   * 同样只给同步口用，理由与 upsert 一样：网页端提交的是「我这份与上一份的差集」，
+   * 而「我这边看起来还在、云端已经被 AI 删掉」是并发下的正常时序。
+   * 若照旧整批拒绝，用户那次真实的改动会被一个过时的删除请求连带丢掉。
+   *
+   * 注意这不会掩盖真错误：AI 自己（MCP）仍然走严格语义，写错 id 会明确报出来。
+   */
+  lenient?: boolean
+  update?: {
+    id: string
+    position?: { x: number; y: number }
+    data?: Record<string, unknown>
+    /** 尺寸（网页端「图片跟随尺寸」这类改动会写它；增量写不能漏这个字段） */
+    size?: { w: number; h: number }
+    /** 父节点（分组嵌套）；显式 null 表示解除父子 */
+    parentId?: string | null
+  }[]
 }
 
 /** 连线批量入参（三段都可省略） */
 export interface EdgeBatchInput {
   add?: AddEdgeInput[]
   delete?: string[]
+  /** 新增一个已存在的边 id → 当成更新（同步口用；理由同 NodeBatchInput.upsert） */
+  upsert?: boolean
+  /** 删除/更新不存在的东西 → 静默跳过而不是整批拒绝（同步口用；理由同 NodeBatchInput.lenient） */
+  lenient?: boolean
   update?: { id: string; source?: string; target?: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }[]
 }
 
@@ -125,6 +159,30 @@ export class CanvasDocument {
     private readonly kv: KvStore,
     private readonly files?: FileStore,
   ) {}
+
+  /**
+   * 写操作串行链（见 runExclusive 的说明）。
+   *
+   * 只对「写」串行，读不加锁 —— 读不会让数据变坏，没必要跟着排队。
+   */
+  private lock: Promise<unknown> = Promise.resolve()
+
+  /**
+   * 把一次写操作排进串行链，返回它自己的结果。
+   *
+   * 为什么必须有：本对象的写都是「读全量 → 改 → 写全量」。两个写方（AI 与网页端）
+   * 若同时进来，会各自读到同一份旧数据、再各自写回只有自己那点改动的结果，**后写的把先写的整个盖掉**
+   * （AI 刚加的节点凭空消失）。排成一条链后，后一个跑在「前一个的结果」上，两边都在。
+   *
+   * 注意：本锁只在**同一个进程**内有效。这是自托管单进程服务（AI 与网页共用一个服务），
+   * 够用；若将来要跑多进程，得换成文件锁或真正的数据库事务。
+   */
+  private runExclusive<T>(job: () => Promise<T>): Promise<T> {
+    // 前一个失败不能卡死整条链：用 catch 吞掉错误状态，但把错误本身交给它自己的调用方
+    const next = this.lock.then(job, job)
+    this.lock = next.catch(() => undefined)
+    return next
+  }
 
   /**
    * 存一个资源（图片/视频等字节），返回**同源稳定 URL**。
@@ -179,6 +237,39 @@ export class CanvasDocument {
   }
 
   /**
+  * 「以这份为准」整体重写（网页端的整包保存走这条）。
+  *
+  * 与 batchNodes 的区别：batch 是「在现有画布上增删改」，这条是「整个换成我这份」。
+  * 用户删光节点、恢复历史、导入画布这类操作必须用它 —— 用 batch 表达不出「删掉你没提到的那些」。
+  *
+  * 同样进串行链：否则它与 AI 的增量写并发时，一方会把另一方整个盖掉。
+  */
+  /**
+   * 单个画布 key 的改写（网页端 `PUT /api/kv/canvas/graph` 这类整包保存走这条）。
+   *
+   * 为什么必须收进本对象、而不是让路由直接调 `kv.set`：整包保存是「读全量 → 改 → 写全量」的兄弟形态，
+   * 它与 AI 的增量写并发时同样会互相覆盖。只有把**所有对画布 key 的写**都排进同一把锁，
+   * 「谁后写谁覆盖」这件事才真正消失。
+   *
+   * `key` 用裸 key（`graph` / `graph-edges`），与路由的 URL 段一致。
+   */
+  async writeKey(key: string, value: unknown): Promise<void> {
+    return this.runExclusive(async () => {
+      await this.kv.set('canvas', key, value)
+    })
+  }
+
+  /** 单键删除（同样要过锁：它在语义上也是一次画布写） */
+  async removeKey(key: string): Promise<boolean> {
+    return this.runExclusive(async () => this.kv.remove('canvas', key))
+  }
+
+  /** 这个 key 是否属于「画布图数据」（决定要不要收进上面那把锁） */
+  static isGraphKey(key: string): boolean {
+    return key === GRAPH_KEY || key === GRAPH_EDGES_KEY
+  }
+
+  /**
    * 给新增节点挑一个"不压在别人身上"的位置（没显式给 position 时用）。
    * 规则：摆在现有节点右侧一段距离，纵向对齐最上面那个。让 AI 建出来的节点一眼能看见。
    */
@@ -205,6 +296,11 @@ export class CanvasDocument {
    * 预校验不过就整批拒绝、一个都不动 —— 半成品最难查（AI 以为改成功了，画布却是错的）。
    */
   async batchNodes(input: NodeBatchInput): Promise<BatchResult> {
+    return this.runExclusive(() => this.batchNodesLocked(input))
+  }
+
+  /** batchNodes 的实际实现（已持锁：内部读写都看同一份缓存，不受并发干扰） */
+  private async batchNodesLocked(input: NodeBatchInput): Promise<BatchResult> {
     const snap = await this.read()
     const result: BatchResult = { ok: true, added: [], deleted: [], updated: [], errors: [] }
     const adds = input.add ?? []
@@ -214,19 +310,27 @@ export class CanvasDocument {
 
     const existing = new Set(snap.nodes.map((n) => n.id))
     const willAdd = new Set<string>()
+    /** upsert 模式下，「新增一个已存在的 id」转成对它的更新（不报错，也不算新增） */
+    const upsertedInto = new Set<string>()
     for (let i = 0; i < adds.length; i++) {
       const a = adds[i]
       if (!a.type || typeof a.type !== 'string') error('add', i, '缺少节点 type')
       if (a.id !== undefined) {
-        if (existing.has(a.id) || willAdd.has(a.id)) error('add', i, `节点 id 重复: ${a.id}`)
+        // 同一个 id 既在 delete 又在 add 里：意图矛盾（到底要它还是不要它），必须响亮报错。
+        // 不报的话下面按「删完之后的列表」去找它会找不到 —— 那是 TypeError（500），不是人话。
+        if (input.upsert && dels.includes(a.id) && existing.has(a.id)) {
+          error('add', i, `同一批里既要删又要加同一个 id: ${a.id}`)
+        } else if (input.upsert && existing.has(a.id)) upsertedInto.add(a.id)
+        else if (existing.has(a.id) || willAdd.has(a.id)) error('add', i, `节点 id 重复: ${a.id}`)
         else willAdd.add(a.id)
       }
     }
     for (const id of dels) {
-      if (!existing.has(id) && !willAdd.has(id)) error('delete', 0, `要删除的节点不存在: ${id}`)
+      // lenient（同步口）：删一个「云端已经没有」的东西 = 目的已达成，跳过而不是拒绝整批
+      if (!existing.has(id) && !willAdd.has(id) && !input.lenient) error('delete', 0, `要删除的节点不存在: ${id}`)
     }
     for (const u of ups) {
-      if (!existing.has(u.id) && !willAdd.has(u.id)) error('update', 0, `要更新的节点不存在: ${u.id}`)
+      if (!existing.has(u.id) && !willAdd.has(u.id) && !input.lenient) error('update', 0, `要更新的节点不存在: ${u.id}`)
     }
     if (result.errors.length > 0) {
       result.ok = false
@@ -247,6 +351,20 @@ export class CanvasDocument {
     for (const a of adds) {
       const id = a.id ?? this.newNodeId(taken)
       taken.add(id)
+      // upsert：这个 id 云端已经有了 → 把它当成一次更新（保留原 type，不重复入 added）
+      if (id !== undefined && upsertedInto.has(id)) {
+        // 预校验已挡住「同一批既删又加」，所以这里必然找得到；仍做存在性判断，
+        // 不靠 `!` 断言把潜在崩溃藏进类型系统里。
+        const node = kept.find((n) => n.id === id)
+        if (node) {
+          if (a.position) node.position = { x: a.position.x, y: a.position.y }
+          if (a.data) node.data = { ...node.data, ...a.data }
+          if (a.size) node.size = { w: a.size.w, h: a.size.h }
+          if (a.parentId) node.parentId = a.parentId
+          result.updated.push(id)
+        }
+        continue
+      }
       kept.push({
         id,
         type: a.type,
@@ -264,6 +382,11 @@ export class CanvasDocument {
       if (!node) continue
       if (u.position) node.position = { x: u.position.x, y: u.position.y }
       if (u.data) node.data = { ...node.data, ...u.data }
+      // 尺寸：给了就写（nil 之外的形状由 schema 保证）；没给就保持原样
+      if (u.size) node.size = { w: u.size.w, h: u.size.h }
+      // 父节点：null 是「解除父子」的显式表达，undefined 才是「没提这个字段」
+      if (u.parentId === null) delete node.parentId
+      else if (u.parentId !== undefined) node.parentId = u.parentId
       result.updated.push(u.id)
     }
 
@@ -277,6 +400,11 @@ export class CanvasDocument {
    * 新增时会校验两端节点存在，且不允许自连 —— 不然画出一堆孤儿边，渲染层还得兜。
    */
   async batchEdges(input: EdgeBatchInput): Promise<BatchResult> {
+    return this.runExclusive(() => this.batchEdgesLocked(input))
+  }
+
+  /** batchEdges 的实际实现（已持锁） */
+  private async batchEdgesLocked(input: EdgeBatchInput): Promise<BatchResult> {
     const snap = await this.read()
     const result: BatchResult = { ok: true, added: [], deleted: [], updated: [], errors: [] }
     const adds = input.add ?? []
@@ -291,13 +419,14 @@ export class CanvasDocument {
       if (!nodeIds.has(a.source)) error('add', i, `源节点不存在: ${a.source}`)
       if (!nodeIds.has(a.target)) error('add', i, `目标节点不存在: ${a.target}`)
       if (a.source === a.target) error('add', i, '连线两端不能是同一节点')
-      if (a.id !== undefined && existing.has(a.id)) error('add', i, `连线 id 重复: ${a.id}`)
+      // 同 id 已存在：同步口（upsert）当成更新，MCP 口保持严格（对 AI 来说说重复了就该报错）
+      if (a.id !== undefined && existing.has(a.id) && !input.upsert) error('add', i, `连线 id 重复: ${a.id}`)
     }
     for (const id of dels) {
-      if (!existing.has(id)) error('delete', 0, `要删除的连线不存在: ${id}`)
+      if (!existing.has(id) && !input.lenient) error('delete', 0, `要删除的连线不存在: ${id}`)
     }
     for (const u of ups) {
-      if (!existing.has(u.id)) error('update', 0, `要更新的连线不存在: ${u.id}`)
+      if (!existing.has(u.id) && !input.lenient) error('update', 0, `要更新的连线不存在: ${u.id}`)
     }
     if (result.errors.length > 0) {
       result.ok = false
@@ -312,6 +441,15 @@ export class CanvasDocument {
       // 同 id 视为同一条（与数据层 addEdge 的去重语义一致）
       const dup = edges.find((e) => e.id === id)
       if (dup) {
+        // upsert：已存在就按新内容更新它（端点/端口/data/type 都跟上）
+        if (input.upsert) {
+          dup.source = a.source
+          dup.target = a.target
+          dup.type = a.type ?? dup.type ?? 'custom'
+          if (a.sourceHandle !== undefined) dup.sourceHandle = a.sourceHandle
+          if (a.targetHandle !== undefined) dup.targetHandle = a.targetHandle
+          if (a.data) dup.data = { ...(dup.data ?? {}), ...a.data }
+        }
         result.updated.push(id)
         continue
       }
@@ -319,6 +457,9 @@ export class CanvasDocument {
         id,
         source: a.source,
         target: a.target,
+        // type 必须落盘：数据层会给边补 'custom'，云端若留空，两边对同一条边的判定就不一致 ——
+        // 表现为「AI 改了边本地看不到」与「AI 删了边本地删不掉」（本地把它当成「我改过的边」而保留）。
+        type: a.type ?? 'custom',
         ...(a.sourceHandle ? { sourceHandle: a.sourceHandle } : {}),
         ...(a.targetHandle ? { targetHandle: a.targetHandle } : {}),
         ...(a.data ? { data: { ...a.data } } : {}),

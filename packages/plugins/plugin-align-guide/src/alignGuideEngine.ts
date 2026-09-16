@@ -12,6 +12,21 @@
 /** 吸附阈值（px，flow 单位下的视觉容忍距离）—— 老版 SNAP_THRESHOLD = 8 */
 export const SNAP_THRESHOLD = 8
 
+/**
+ * 这次拖动要不要算对齐吸附。
+ *
+ * 用户要求：「多选的时候 应该禁止 我的对齐节点（对齐插件 - 拖拽的时候那个参考线）」。
+ * 为什么必须禁：吸附的实现是 `updateNodeVisual(被拖的那个节点, 吸附后的位置)` —— 它只动**一个**节点。
+ * 多选整组拖动时，这一下会把整组里被抓住的那一个单独吸到对齐位、其余成员不动，
+ * 整组的相对位置直接被弄乱（实测：本该位移 140 的整组拖动只走了 130，就是被吸住了）。
+ *
+ * @param selectedCount 当前选中节点数
+ * @returns 单选（或没选）才对齐；多选一律不对齐
+ */
+export function shouldAlignOnDrag(selectedCount: number): boolean {
+  return selectedCount <= 1
+}
+
 /** 参考线类型：垂直参考线定位 x，水平参考线定位 y */
 export type GuideLine = { type: 'vertical' | 'horizontal'; position: number }
 

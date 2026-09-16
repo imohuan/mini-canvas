@@ -43,6 +43,13 @@ export const DEFAULT_SELECTION_FRAME_PADDING: SelectionFramePadding = {
   paddingBottom: 16,
 }
 
+/** 内框（小框）相对节点并集的外扩量；全 0 = 紧贴节点并集（默认，与老版一致） */
+export const DEFAULT_SELECTION_FRAME_INNER_PADDING: SelectionFramePadding = {
+  paddingX: 0,
+  paddingTop: 0,
+  paddingBottom: 0,
+}
+
 /** 两矩形是否局部相交（边缘恰好相接不算相交，与老版 isNodeInRect 一致） */
 export function rectsOverlap(a: MultiSelectRect | FlowBox, b: MultiSelectRect | FlowBox): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
@@ -94,13 +101,13 @@ export function paddedBounds(
 
 /**
  * 群组框的内外两框几何（都是 flow 绝对坐标）。
- * - `outer`（大框）= 节点并集 + padding，整组拖动的把手，也是内框的定位容器。
- * - `inner`（小框）= **节点并集原样**（紧贴节点、不含标题），尺寸不掺 padding。
- * 两者的关系恒为 `inner - outer === padding`（小框就是被 padding 从大框里推出来的那一个）。
+ * - `inner`（小框）= 节点并集 + innerPadding（默认 outer 侧的 padding 为 0，即紧贴节点并集）。
+ * - `outer`（大框）= 内框 + gap，整组拖动的把手。
+ * 两者的关系恒为 `outer - inner === gap`（大框就是被间距从内框外推出去的那一个）。
  *
- * 为什么内框尺寸单列而不是"外框减两倍 padding"：那是把几何绕一圈又算回来，
- * padding 与节点实测尺寸一旦对不上就会算出比外框还大的内框（两框交叉）。
- * 这里直接给，内框永远等于用户真正看到的节点范围。
+ * 为什么逐层算而不是"外框减两倍 padding 反推内框"：那是把几何绕一圈又算回来，
+ * 两边的 padding 一旦对不上就会算出比外框还大的内框（两框交叉错位）。
+ * 这里从节点并集出发逐层往外加，每层都等于用户真正看到的那一圈。
  */
 export interface SelectionFrameGeometry {
   outer: MultiSelectRect
@@ -108,17 +115,22 @@ export interface SelectionFrameGeometry {
 }
 
 /**
- * 由选中节点矩形并集 + padding 算出内外两框。空集或尺寸非法返回 null（不画框）。
+ * 由选中节点矩形并集算出内外两框。空集或尺寸非法返回 null（不画框）。
+ *
+ * 三层几何：节点并集 → 内框(+innerPadding) → 外框(+gap)。
+ * innerPadding 缺省为全 0 = 内框就是节点并集本身（默认观感；此时与老版、与本插件早先版本完全一致）。
  */
 export function computeSelectionFrameGeometry(
   rects: ReadonlyArray<MultiSelectRect>,
-  padding: SelectionFramePadding,
+  gap: SelectionFramePadding,
+  innerPadding: SelectionFramePadding = DEFAULT_SELECTION_FRAME_INNER_PADDING,
 ): SelectionFrameGeometry | null {
   const union = computeUnionBounds(rects)
   if (!union) return null
+  const inner = paddedBounds(union, innerPadding)
   return {
-    outer: paddedBounds(union, padding),
-    inner: { ...union },
+    inner,
+    outer: paddedBounds(inner, gap),
   }
 }
 

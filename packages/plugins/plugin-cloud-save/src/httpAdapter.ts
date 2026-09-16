@@ -29,9 +29,10 @@ export class HttpAdapter implements StorageAdapter {
   readonly id = 'http'
   readonly capability = { list: true, transactional: false, offline: false }
 
-  private readonly baseUrl: string
-  private readonly type: SaveType
-  private readonly fetchImpl: typeof fetch
+  // protected 而非 private：画布域的子类要用它们拼 URL / 发请求（见 graphDeltaAdapter.ts）
+  protected readonly baseUrl: string
+  protected readonly type: SaveType
+  protected readonly fetchImpl: typeof fetch
 
   constructor(opts: HttpAdapterOptions) {
     this.baseUrl = opts.baseUrl ?? ''

@@ -9,9 +9,9 @@
  * 面板只做三件事 —— 列出工具、让用户选参数、带上画布上下文调用。所以"加一个模型"= 装一个工具插件，
  * 本文件一行都不用改（比例/分辨率下拉也是照工具声明的 params 自动长出来的，不是写死的两个下拉）。
  *
- * 定位：浮在卡片下缘之外（绝对定位，不参与节点 flex 布局 → 不会把节点撑高），
- * 自己按 1/zoom 反缩放，屏幕尺寸恒定；离卡片下边多远由设置面板的
- * 「布局/控制栏 → 下控制栏偏移」决定（useToolbarOffsets 读配置并订阅变化，改完立刻生效）。
+ * 定位：**不在这里**。面板浮在卡片下缘之外（贴边距离 / 水平居中 / 反缩放）由节点壳 BaseNode
+ * 的下插槽定位层统一负责（用户要求"定位交给 BaseNode 而不是单独的组件"），
+ * 本组件只是一段普通流式内容：宽度这类"内容尺寸"仍归本组件（由配置驱动）。
  *
  * 视觉照 docs/design/ui-style-guide.md：四档灰阶 / 发丝边 / 8-10px 圆角 / 32px 交互目标 /
  * 青色主按钮 / focus-visible 青环 / 动效 150-240ms 且带 prefers-reduced-motion 降级。
@@ -23,8 +23,6 @@ import {
   useCanvasRender,
   useGenPanelMetrics,
   useSoleNodeSelected,
-  useToolbarOffsets,
-  toolbarOffsetStyle,
 } from '@mini-canvas/canvas-render'
 import type { ToolDef, ToolParamDef, ToolProgress, ToolService } from '@mini-canvas/kernel'
 import { addSourceNode, createImageOps, downloadImageNode, readImageSummary, rotateImage } from './imageOps'
@@ -49,34 +47,25 @@ import {
   type MaterialCard,
   type UpstreamMaterial,
 } from './panelSource'
-import { Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
+import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
 import type { SelectOption } from '@mini-canvas/plugin-theme-default'
 
 /** 可见时能让外部传的只有 id/data（段组件契约），与顶部条一致 */
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx, renderEdges, renderNodes, viewport } = useCanvasRender()
+const { ctx, renderEdges, renderNodes } = useCanvasRender()
 // 单选才显示：多选时若每个节点都弹一份面板会互相叠（对齐 v1 NodeToolbar 的"恰好选中一个"语义）
 const selected = useSoleNodeSelected(props.id)
 
 const visible = computed(() => selected.value)
 
-/** 下控制栏离卡片下边的距离（设置面板可调；改完立即生效，卸载自动退订） */
-const offsets = useToolbarOffsets()
-
 /** 面板尺寸类配置（宽度等；与贴边距离同属「布局/控制栏」，改完立即生效） */
 const metrics = useGenPanelMetrics()
 
-/** 反缩放：抵住画布缩放，让面板在屏幕上大小恒定（与顶部条/底部条同一套做法） */
-const zoom = computed(() => Math.max(viewport.value?.zoom || 1, 0.01))
+/** 面板内容尺寸（宽度来自配置）；位置与反缩放由壳的下插槽定位层给，这里不再算 */
 const panelStyle = computed<Record<string, string>>(() => ({
-  // 贴边距离来自配置（对象展开合并：不能把下面的反缩放 transform 覆盖掉）
-  ...toolbarOffsetStyle('bottom', offsets.value.bottom),
   // 宽度也来自配置（布局/控制栏 → 图片生成栏宽度），不再写死在 CSS 里
   width: metrics.value.imageWidth + 'px',
-  // 水平居中 + 反缩放合并在同一个 transform 里：样式表里只写其中一个都会把另一个顶掉
-  transform: 'translateX(-50%) scale(' + (1 / zoom.value) + ')',
-  transformOrigin: 'center top',
 }))
 
 /** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
@@ -352,6 +341,12 @@ const busy = ref(false)
 const hasImage = computed(() => typeof props.data?.imageUrl === 'string' && props.data.imageUrl !== '')
 const summary = computed(() => readImageSummary(props.data))
 
+/* 既有加工按钮的图标（内联 SVG 常量放脚本里，模板保持可读） */
+const ICON_ROTATE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>'
+const ICON_DOWNLOAD =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>'
+
 /**
  * 下载按钮的悬停说明：把文件名与「宽×高 · 大小」挂在这里。
  * 生成面板的版式按 v1 走（没有专门的元信息行），但文件名/尺寸是用户会问的东西，
@@ -479,34 +474,9 @@ function onDownload(): void {
       <div class="ig-actions">
         <span v-if="status.text" class="ig-status" :class="'is-' + status.tone" role="status">{{ status.text }}</span>
 
-        <button
-          class="ig-icon-btn"
-          type="button"
-          title="顺时针旋转 90°"
-          aria-label="顺时针旋转 90°"
-          :disabled="busy || !hasImage"
-          @click.stop="onRotate"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="23 4 23 10 17 10" />
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-          </svg>
-        </button>
+        <NodeToolbarButton title="顺时针旋转 90°" :icon="ICON_ROTATE" :disabled="busy || !hasImage" @click="onRotate" />
 
-        <button
-          class="ig-icon-btn"
-          type="button"
-          :title="downloadTitle"
-          aria-label="下载图片"
-          :disabled="!hasImage"
-          @click.stop="onDownload"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-        </button>
+        <NodeToolbarButton title="下载图片" :aria-label="downloadTitle" :icon="ICON_DOWNLOAD" :disabled="!hasImage" @click="onDownload" />
 
         <button class="ig-send" :class="{ 'is-running': running }" type="button" :disabled="!canSend" title="发送" @click.stop="onSend">
           <span v-if="running" class="ig-spinner" aria-hidden="true" />
@@ -531,14 +501,9 @@ function onDownload(): void {
 </template>
 
 <style scoped>
-/* 浮在卡片下缘之外：绝对定位不参与节点布局 → 不撑高节点。
-   贴边距离与宽度由内联 style 覆盖（配置驱动），这里只保留读不到配置时的兜底值。
-   居中用 translateX(-50%) 而不是固定负 margin —— 宽度可配后，写死的 -(宽/2) 必然错位。 */
+/* 只管面板自身的材质与内部排版；位置（贴边/居中/反缩放）由壳的下插槽定位层给。
+   宽度由内联 style 覆盖（配置驱动），这里只保留读不到配置时的兜底值。 */
 .ig-root {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 6px);
-  transform: translateX(-50%);
   width: 650px;
   box-sizing: border-box;
   display: flex;
@@ -550,7 +515,6 @@ function onDownload(): void {
   /* 与设置面板同材质的纯白浮层（此前是浅灰底，与设置界面不一致） */
   background: var(--canvas-node-panel-surface, #fff);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  z-index: 30;
 }
 
 .ig-file {
@@ -750,41 +714,7 @@ function onDownload(): void {
   background: rgba(239, 68, 68, 0.1);
 }
 
-/* 图标按钮 28×28 / 圆角 8 */
-.ig-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--text-muted, #6b7280);
-  cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.ig-icon-btn svg {
-  width: 16px;
-  height: 16px;
-}
-.ig-icon-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--text-strong, #111827);
-}
-.ig-icon-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.ig-icon-btn:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
-  outline-offset: 1px;
-}
-.ig-icon-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* 旋转/下载两个图标按钮改用通用 NodeToolbarButton（尺寸/hover/focus/禁用都在那一边） */
 
 /* 主按钮（全界面同一时刻只允许一个实心主按钮 → 只有「发送」是实心青底白字） */
 .ig-send {
@@ -870,14 +800,12 @@ function onDownload(): void {
 
 @media (prefers-reduced-motion: reduce) {
   .ig-card,
-  .ig-icon-btn,
   .ig-send,
   .ig-editor,
   .ig-progress-bar {
     transition: none !important;
   }
   .ig-card:hover,
-  .ig-icon-btn:active:not(:disabled),
   .ig-send:active:not(:disabled) {
     transform: none;
   }

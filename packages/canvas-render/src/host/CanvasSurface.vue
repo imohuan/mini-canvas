@@ -30,6 +30,7 @@ import type { FlowNode } from './canvasHostCore'
 import type { ViewportState } from '../viewport/viewportService'
 import type { CanvasDebug } from '../contracts/debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
+import type { CanvasInteractionSettings } from '../contracts/canvasInteractionSettings'
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
@@ -67,8 +68,8 @@ const props = defineProps<{
   connectionLineComp: unknown
   /** 插件变更后 bump → 给 VueFlow 加 key 强制重挂 */
   nodeEpoch: number
-  minZoom: number
-  maxZoom: number
+  /** 画布交互配置（「常规/画布」；CanvasHost 从 settings 读成响应式对象，改值实时生效） */
+  interactionSettings: CanvasInteractionSettings
   // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
   isValidConnection: (conn: Connection) => boolean
   onConnect: (conn: Connection) => void
@@ -309,8 +310,23 @@ defineExpose({
       :edge-types="edgeTypes"
       :is-valid-connection="isValidConnection"
       :connection-mode="ConnectionMode.Strict"
-      :min-zoom="minZoom"
-      :max-zoom="maxZoom"
+      :nodes-draggable="interactionSettings.nodesDraggable"
+      :nodes-connectable="interactionSettings.nodesConnectable"
+      :elements-selectable="interactionSettings.elementsSelectable"
+      :edges-updatable="interactionSettings.edgesUpdatable"
+      :select-nodes-on-drag="interactionSettings.selectNodesOnDrag"
+      :snap-to-grid="interactionSettings.snapToGrid"
+      :snap-grid="interactionSettings.snapGrid"
+      :zoom-on-scroll="interactionSettings.zoomOnScroll"
+      :zoom-on-pinch="interactionSettings.zoomOnPinch"
+      :pan-on-scroll="interactionSettings.panOnScroll"
+      :pan-on-drag="interactionSettings.panOnDrag"
+      :zoom-on-double-click="interactionSettings.zoomOnDoubleClick"
+      :connect-on-click="interactionSettings.connectOnClick"
+      :only-render-visible-elements="interactionSettings.onlyRenderVisibleElements"
+      :prevent-scrolling="interactionSettings.preventScrolling"
+      :min-zoom="interactionSettings.minZoom"
+      :max-zoom="interactionSettings.maxZoom"
       :selection-key-code="null"
       :multi-selection-key-code="null"
       @connect="onConnect"
@@ -383,7 +399,4 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
-
-
-
 

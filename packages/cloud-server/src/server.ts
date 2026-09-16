@@ -16,6 +16,8 @@ import { serve, type ServerType } from '@hono/node-server'
 import { KvStore } from './store/kvStore.js'
 import { FileStore } from './store/fileStore.js'
 import { kvRoutes } from './routes/kv.js'
+import { eventsRoutes } from './routes/events.js'
+import { canvasOpsRoutes } from './routes/canvasOps.js'
 import { fileRoutes } from './routes/files.js'
 import { pluginRoutes, resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
 import { mcpRoutes } from './routes/mcp.js'
@@ -79,7 +81,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   app.use('*', cors())
   app.get('/health', (c) => c.json({ ok: true }))
   // 挂载顺序即匹配优先级：接口在前，最后的 ui 通配（含 SPA 回落）兜底
-  app.route('/', kvRoutes(kvStore))
+  // events 必须排在 kvRoutes 之前：`/api/kv/events` 与 `/api/kv/:type` 路径形状相同，
+  // 先注册的通配会把 SSE 端点当成「作用域名叫 events」的列举请求（400）。
+  app.route('/', eventsRoutes(kvStore))
+  app.route('/', kvRoutes(kvStore, doc))
+  // 增量写：网页端不再整包覆盖（AI 刚加的节点会被盖掉，见 canvasOps.ts 的说明）
+  app.route('/', canvasOpsRoutes(doc))
   app.route('/', fileRoutes(fileStore))
   // MCP 服务挂同一端口（缺省开）。放在静态托管之前，避免被 SPA 回落吞掉。
   const mcpEnabled = opts.mcp !== false

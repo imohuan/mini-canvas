@@ -3,9 +3,9 @@
  *
  * 对照老版 packages/canvas-core/src/nodes/panorama/PanoramaNodePlugin.ts + PanoramaNode.vue：
  * - 类型声明对齐老版：label「3D 预览」、可接收图片输入、不产出输出、可 resize；
- * - 老版靠 `context.on('connect')` 监听 + 手删 edge 来限制"只接一条输入"——v2 内核已内建声明式容量，
- *   本插件只声明 `inputs[{ port:'target', acceptsTypes:['image'], capacity:1 }]`，满额由内核拒（limit-reached），
- *   不再手写监听与清理，代码量与出 bug 面都小一截。
+ * - 老版靠 `context.on('connect')` 监听 + 手删 edge 来限制"只接一条输入"；v2 内核已内建声明式容量：
+ *   本插件只声明 capacity:1，满额时**内核自动挤掉原先那张图**（缺省 evictOnFull=true）——
+ *   即"再连一张 = 换掉当前全景"，与老版手删的行为一致，但不用自己写监听。
  *
  * UI 与逻辑同包：PanoramaContent.vue 是 content 组件，二者在 apply(ctx) 里一次注册（宿主零硬编码）。
  *

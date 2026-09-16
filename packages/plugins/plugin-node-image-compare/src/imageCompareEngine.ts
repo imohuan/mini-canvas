@@ -6,21 +6,18 @@
  * 2. 分割线位置的夹取；
  * 3. 超过上限时该挤掉哪几条（FIFO，先连的先挤）。
  *
- * FIFO 为什么要写成纯函数 + 由插件自己挤（重要，与老版有区别）：
- * v1 的 image-compare 靠 `context.on('connect')` 在连完之后删最老一条，校验层不设容量。
- * v2 内核的容量语义是"到顶就拒"（validateConnection 满额返回 limit-reached），没有"满了就挤最老"的选项，
- * 而落边口 commitEdge 会先用内核校验拦一道——所以"满了自动挤"这条在 v2 不会自己发生。
- * 本插件因此**不指望内核挤**：把容量声明为"可见上限 + 1 个缓冲位"，让第 3 条能落下来，
- * 再由插件订阅边变化把它挤掉，行为与老版一致。
+ * 容量语义（2026-09 改）：内核已支持"满额挤老边"（PortDef.capacity + 缺省 evictOnFull=true，
+ * 见 canvas-data 的 validateConnection / pickOverflowEvict），所以本插件**如实声明上限 2 即可**，
+ * 不必再让第 3 条落下来自己删 —— 那是内核不会挤时的 workaround，现在删掉了。
+ * planOverflowTrim 保留：用于"刷新恢复/云端合并一次性写入多条"这类绕过落边口的历史数据自愈。
  */
 
 /** 真正显示的上限：左右各一张 */
 export const MAX_COMPARE_IMAGES = 2
-/**
- * 向内核声明的输入容量。= 可见上限 + 1 个缓冲位：
- * 留这一位，第 3 条连接才落得下来，插件才有机会"挤掉最老一条"（见文件头说明）。
+/** 向内核声明的输入容量 = 真实上限（内核会在满额时挤掉最老一条，见文件头说明）。
+ *  保留这个导出名是为了兼容既有 import；数值语义已从"上限+1 缓冲位"变成"真实上限"。
  */
-export const INPUT_CAPACITY = MAX_COMPARE_IMAGES + 1
+export const INPUT_CAPACITY = MAX_COMPARE_IMAGES
 /** 分割线位置范围（百分比） */
 export const DIVIDER_MIN = 0
 export const DIVIDER_MAX = 100

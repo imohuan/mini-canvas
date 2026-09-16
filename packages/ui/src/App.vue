@@ -267,8 +267,6 @@ onBeforeUnmount(() => {
         :handle-visual="cfg.handle"
         :debug-visual="cfg.debug"
         :snap-zone-visual="cfg.snapZone"
-        :min-zoom="0.2"
-        :max-zoom="2"
         window-key="MiniCanvasUI"
         @ready="onReady"
       >

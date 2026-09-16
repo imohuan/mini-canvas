@@ -338,12 +338,15 @@ export function apply(ctx: Context): void {
       isAlive: () => Boolean(nodeStore.getNode(nodeId)), // 期间被撤销/删掉则不补
       addEdge: () => {
         const ep = resolveEdgeEndpoints(fact, nodeId)
-        return graph.addEdge({
+        // 统一入口：校验（类型不符时这条真边不该建）+ 满额挤出。失败的边静默不建 ——
+        // 节点已经建出来了，菜单的"可连"过滤在多数场景已挡掉，这里是最后一道闸。
+        const res = graph.connectEdge({
           source: ep.source,
           target: ep.target,
           sourceHandle: ep.sourceHandle,
           targetHandle: ep.targetHandle,
         })
+        return res.edgeId
       },
     })
   }

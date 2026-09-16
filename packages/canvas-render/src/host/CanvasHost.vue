@@ -39,6 +39,12 @@ import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState, FlowPoint, HoverFeedback, AimedTarget } from '../contracts/connectionContext'
 import type { CanvasDebug } from '../contracts/debugContext'
+import {
+  CANVAS_INTERACTION_SCHEMA,
+  resolveCanvasInteraction,
+  applyCanvasInteractionChange,
+  type CanvasInteractionSettings,
+} from '../contracts/canvasInteractionSettings'
 import { createConnectionState, beginConnection, endConnection } from './connectionState'
 import {
   createInteractionState,
@@ -51,7 +57,6 @@ import { clickNode, clickEdge, clickPane } from './selectionInteractions'
 import { RenderEvents, toDragPayload } from './renderEvents'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
-import { oldestIncomingToEvict } from '../connection/edgeCapacity'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
 import CanvasSurface from './CanvasSurface.vue'
@@ -94,7 +99,7 @@ const props = withDefaults(
     debugVisual?: CanvasDebug
     /** 吸附带配置覆盖（缺省对齐 DEFAULT_SNAP_ZONE_CONFIG）。传响应式对象可实时调整吸附带。 */
     snapZoneVisual?: SnapZoneConfig
-    /** VueFlow 缩放范围 */
+    /** VueFlow 缩放范围（「常规/画布」的 minZoom/maxZoom 已由 settings 接管，此 props 兼容保留但不生效） */
     minZoom?: number
     maxZoom?: number
     /** 挂到 window 的调试 key；传空则不挂 */
@@ -171,6 +176,9 @@ const edgeDefaultR = reactive({ ...DEFAULT_EDGE_VISUAL })
 const handleDefaultR = reactive({ ...DEFAULT_HANDLE_VISUAL })
 const debugDefaultR = reactive({ ...DEFAULT_DEBUG_VISUAL })
 const snapZoneDefaultR = reactive({ ...DEFAULT_SNAP_ZONE_CONFIG })
+// 画布交互配置（「常规/画布」）：boot 后从 settings 读初值 + 订阅实时更新（见 onMounted）。
+// boot 前给默认值占位（CanvasSurface boot 完成才挂载，模板绑定时实际值已就绪）。
+const interactionSettings = reactive<CanvasInteractionSettings>(resolveCanvasInteraction(() => undefined))
 const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
 const handleToProvide = props.handleVisual ?? handleDefaultR
 const debugToProvide = props.debugVisual ?? debugDefaultR
@@ -817,63 +825,20 @@ function commitEdge(
 ): void {
   const h = hostRef.value
   if (!h) return
-  // 兜底：任何进 commitEdge 的边先过内核校验，非 ok 直接拒（防御未来新入口绕过校验）。
-  const guard = checkConnection(source, target, sourceHandle, targetHandle)
-  if (!guard.ok) {
-    log.warn(`commitEdge ${source}→${target} 被内核拒:${guard.reason}`)
-    return
-  }
-  const already = h.edgeStore
-    .getEdges()
-    .some(
-      (e) =>
-        e.source === source &&
-        e.target === target &&
-        (sourceHandle === undefined || e.sourceHandle === sourceHandle) &&
-        (targetHandle === undefined || e.targetHandle === targetHandle),
-    )
-  if (already) {
-    log.log(`commitEdge ${source}→${target} 已存在，跳过(幂等)`)
-    return
-  }
-  // 走图唯一写入口：graph.transaction 包历史 + 提交落盘。
-  h.graph.transaction('add-edge', (tx) => {
-    // 输入口容量挤出：目标节点输入口声明 capacity 且已满额 → 先挤掉最老一条入边再加新边（同一 undo 记录，原子）。
-    const evicted = evictOldestIncoming(h, source, target)
-    if (evicted) log.log(`commitEdge ${source}→${target} 输入口满额，挤掉最老边 ${evicted}`)
-    tx.addEdge({
-      source,
-      target,
-      type: edgeDefaultType.value,
-      sourceHandle: sourceHandle ?? undefined,
-      targetHandle: targetHandle ?? undefined,
-    })
-  })
-  log.log(`commitEdge 建边成功 ${source}→${target}，edgeStore 边数=${h.edgeStore.getEdges().length}`)
-}
-
-/**
- * 输入口容量挤出：若目标节点(target)的输入口声明了 capacity 且当前入边已达满额，
- * 移除最老一条入边，为新边腾位。返回被挤边 id；无需挤返回 null。
- */
-function evictOldestIncoming(
-  h: CanvasHostHandle,
-  source: string,
-  target: string,
-): string | null {
-  const tgtNode = h.nodeStore.getNode(target)
-  const tgtType = tgtNode ? h.nodeStore.types.get(tgtNode.type) : undefined
-  // 目标输入口容量：取 inputs(port='target') 的 capacity（缺省视为单边/无挤出 → 不走 evict）
-  const inputDef = tgtType?.inputs?.find((i) => !i.port || i.port === 'target')
-  const capacity = inputDef?.capacity
-  if (!capacity || capacity < 2) return null
-  const evictId = oldestIncomingToEvict({
-    edges: h.edgeStore.getEdges(),
+  // 全路径统一入口：校验（自连/环/重/类型/朝向）+ 满额挤出（capacity/evictOnFull）+ 落边，
+  // 全在 graph.connectEdge 一处。渲染层不再自查一遍 —— 以前"拖线能连、批量连被拒"就是
+  // 两套判定漂移造成的。edge type（边外观类型）仍由本层补上（那是渲染层才知道的默认皮）。
+  const res = h.graph.connectEdge({
+    source,
     target,
-    capacity,
+    type: edgeDefaultType.value,
+    sourceHandle: sourceHandle ?? undefined,
+    targetHandle: targetHandle ?? undefined,
   })
-  if (evictId) h.graph.removeEdges([evictId])
-  return evictId
+  if (res.status === 'rejected') log.warn(`commitEdge ${source}→${target} 被拒:${res.reason}`)
+  else if (res.status === 'duplicate') log.log(`commitEdge ${source}→${target} 已存在，幂等跳过`)
+  else if (res.evictedEdgeId) log.log(`commitEdge ${source}→${target} 成功，满额挤出最老边 ${res.evictedEdgeId}`)
+  else log.log(`commitEdge 建边成功 ${source}→${target}`)
 }
 
 // —— 键盘：Delete 删选中、Ctrl/Cmd+Z 撤销/重做（编辑输入框内不劫持）——
@@ -951,6 +916,15 @@ onMounted(async () => {
     apiRef.value = api
     managerRef.value = manager
     if (props.windowKey) exposeToWindow(props.windowKey)
+
+    // 画布交互配置：读当前值 + 订阅设置面板改动实时生效（unmount 随 subs 统一回收）
+    const settingsStore = host.ctx.get<{ get(key: string): unknown; onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
+    Object.assign(interactionSettings, resolveCanvasInteraction((key) => settingsStore.get(key)))
+    subs.push(
+      settingsStore.onChange((key, value) => {
+        applyCanvasInteractionChange(interactionSettings, key, value)
+      }),
+    )
 
     // 订阅 store 变化自动刷渲染态（nodeStore 与 edgeStore 任一变化都触发整图重刷）
     unsubStore = host.nodeStore.subscribe(syncFromStore)
@@ -1113,8 +1087,7 @@ onBeforeUnmount(() => {
         :background-comp="backgroundComp"
         :connection-line-comp="connectionLineComp"
         :node-epoch="nodeEpoch"
-        :min-zoom="props.minZoom"
-        :max-zoom="props.maxZoom"
+        :interaction-settings="interactionSettings"
         :is-valid-connection="isValidConnection"
         :connection-state="connectionState"
         :interaction="interaction"

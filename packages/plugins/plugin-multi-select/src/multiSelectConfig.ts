@@ -38,12 +38,22 @@ export interface FrameStrokeStyle {
 
 /** 群组框的完整外观：内框/外框各自的 padding 与样式 */
 export interface MultiSelectFrameConfig {
-  /** 左右内缩（px）：内框离外框左右各收多少 */
+  /** 是否显示群组框（总开关；关掉 = 多选时不画这两个框） */
+  enabled: boolean
+  /** 多选时是否隐藏被选中节点的标题条（标题常显会与群组框的"上方间距"互相打架） */
+  hideTitles: boolean
+  /** 两框间距：外框内缘到内框外缘的左右距离（px） */
   paddingX: number
-  /** 上内缩（px）：给卡片上方的标题条留出的空间 */
+  /** 两框间距：上方（多留一点给卡片上方的标题条） */
   paddingTop: number
-  /** 下内缩（px） */
+  /** 两框间距：下方 */
   paddingBottom: number
+  /** 内框相对「选中节点并集」的外扩量：左右（px）。默认 0 = 紧贴节点 */
+  innerPaddingX: number
+  /** 内框相对节点并集的外扩量：上（px） */
+  innerPaddingTop: number
+  /** 内框相对节点并集的外扩量：下（px） */
+  innerPaddingBottom: number
   /** 外框（大框）样式：整组拖动的把手 */
   outer: FrameStrokeStyle
   /** 内框（小框）样式：紧贴节点并集 */
@@ -57,9 +67,14 @@ export interface MultiSelectFrameConfig {
  * 故一律加 `multiSelectFrame` 前缀 —— 不要用裸 `paddingX`/`color` 这类通用词。
  */
 export const MULTI_SELECT_FRAME_KEYS = {
+  enabled: 'multiSelectFrameEnabled',
+  hideTitles: 'multiSelectHideTitles',
   paddingX: 'multiSelectFramePaddingX',
   paddingTop: 'multiSelectFramePaddingTop',
   paddingBottom: 'multiSelectFramePaddingBottom',
+  innerPaddingX: 'multiSelectFrameInnerPaddingX',
+  innerPaddingTop: 'multiSelectFrameInnerPaddingTop',
+  innerPaddingBottom: 'multiSelectFrameInnerPaddingBottom',
   outerColor: 'multiSelectFrameOuterColor',
   outerStyle: 'multiSelectFrameOuterStyle',
   outerWidth: 'multiSelectFrameOuterWidth',
@@ -81,24 +96,47 @@ export const FRAME_LINE_STYLE_OPTIONS = [
 
 /** 默认值（对齐老版 multi-select 的视觉：外框灰虚线、内框浅蓝实线） */
 export const DEFAULT_MULTI_SELECT_FRAME: MultiSelectFrameConfig = {
+  enabled: true,
+  hideTitles: false,
   paddingX: 16,
   paddingTop: 34,
   paddingBottom: 16,
+  // 内框默认紧贴节点并集（全 0）：与老版、与本插件早先版本一致，改成别的值即"内框向外扩"
+  innerPaddingX: 0,
+  innerPaddingTop: 0,
+  innerPaddingBottom: 0,
   outer: { color: '#94a3b8', lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 },
-  inner: { color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 12, fillOpacity: 0.05 },
+  // 内框默认 0 = 直角：它要"紧贴选中节点的并集"，而节点并集是个正矩形，
+  // 给它加圆角只会让四条边在角上提前弯掉、看起来没贴住（用户明确要求去掉这个圆角）。
+  inner: { color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 },
 }
 
 /** 插件可配置项 schema（模块级 Config，随插件导出 → 内核校验 + 补默认 + 登记设置页面） */
 export const Config: ConfigSchema = {
+  [MULTI_SELECT_FRAME_KEYS.enabled]: {
+    type: 'boolean',
+    default: DEFAULT_MULTI_SELECT_FRAME.enabled,
+    label: '显示群组框',
+    group: '布局/多选',
+    description: '多选时是否画出那两个框（大框 + 小框）。关掉只是不画框，多选本身照常可用。',
+  },
+  [MULTI_SELECT_FRAME_KEYS.hideTitles]: {
+    type: 'boolean',
+    default: DEFAULT_MULTI_SELECT_FRAME.hideTitles,
+    label: '多选时隐藏节点标题',
+    group: '布局/多选',
+    description:
+      '多选时把被选中节点的标题条藏起来（列表更干净；关掉则标题常显）。关掉后若想让大框仍兜住标题，把「两框间距（上）」适当调大。',
+  },
   [MULTI_SELECT_FRAME_KEYS.paddingX]: {
     type: 'number',
     default: DEFAULT_MULTI_SELECT_FRAME.paddingX,
     min: 0,
     max: 200,
     step: 1,
-    label: '群组框左右内缩',
+    label: '两框间距（左右）',
     group: '布局/多选',
-    description: '多选时那个"大框"比"小框"左右各宽多少像素。调大＝大框离节点更远。',
+    description: '大框（外）与小框（内）之间左右各留多少像素。调大＝两框离得更开。',
   },
   [MULTI_SELECT_FRAME_KEYS.paddingTop]: {
     type: 'number',
@@ -106,9 +144,9 @@ export const Config: ConfigSchema = {
     min: 0,
     max: 200,
     step: 1,
-    label: '群组框上方内缩',
+    label: '两框间距（上）',
     group: '布局/多选',
-    description: '大框比小框往上多留多少像素，专门给节点上方的标题条让位置（默认 34，与老版一致）。',
+    description: '大框比小框往上多留多少像素。默认 34（与老版一致），正好把卡片上方的标题条兜进大框。',
   },
   [MULTI_SELECT_FRAME_KEYS.paddingBottom]: {
     type: 'number',
@@ -116,9 +154,41 @@ export const Config: ConfigSchema = {
     min: 0,
     max: 200,
     step: 1,
-    label: '群组框下方内缩',
+    label: '两框间距（下）',
     group: '布局/多选',
     description: '大框比小框往下多留多少像素。',
+  },
+  // —— 小框（内框）相对「选中节点并集」的外扩量：默认 0 = 紧贴节点 ——
+  [MULTI_SELECT_FRAME_KEYS.innerPaddingX]: {
+    type: 'number',
+    default: DEFAULT_MULTI_SELECT_FRAME.innerPaddingX,
+    min: 0,
+    max: 200,
+    step: 1,
+    label: '小框左右外扩',
+    group: '布局/多选',
+    description:
+      '小框比"选中节点的最外沿"左右各向外扩多少像素。默认 0 = 严丝合缝贴住节点。',
+  },
+  [MULTI_SELECT_FRAME_KEYS.innerPaddingTop]: {
+    type: 'number',
+    default: DEFAULT_MULTI_SELECT_FRAME.innerPaddingTop,
+    min: 0,
+    max: 200,
+    step: 1,
+    label: '小框上方外扩',
+    group: '布局/多选',
+    description: '小框比节点上沿再往上扩多少像素。默认 0（不含标题）。',
+  },
+  [MULTI_SELECT_FRAME_KEYS.innerPaddingBottom]: {
+    type: 'number',
+    default: DEFAULT_MULTI_SELECT_FRAME.innerPaddingBottom,
+    min: 0,
+    max: 200,
+    step: 1,
+    label: '小框下方外扩',
+    group: '布局/多选',
+    description: '小框比节点下沿再往下扩多少像素。默认 0。',
   },
   [MULTI_SELECT_FRAME_KEYS.outerColor]: {
     type: 'color',
@@ -198,7 +268,7 @@ export const Config: ConfigSchema = {
     step: 1,
     label: '内框圆角',
     group: '布局/多选',
-    description: '内框四个角的圆角大小（px）。',
+    description: '内框四个角的圆角大小（px）。默认 0 = 直角，让框严丝合缝贴住节点并集。',
   },
   [MULTI_SELECT_FRAME_KEYS.innerFill]: {
     type: 'number',
@@ -235,6 +305,11 @@ function toLineStyle(value: unknown, fallback: FrameLineStyle): FrameLineStyle {
   return value === 'solid' || value === 'dashed' || value === 'dotted' ? value : fallback
 }
 
+/** 布尔取值（非布尔回落默认，避免半套脏值把开关误判成 false） */
+function toBool(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
 /** hex 颜色校验（不合法回落默认，避免把 CSS 写坏） */
 function toColor(value: unknown, fallback: string): string {
   return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
@@ -246,9 +321,14 @@ function toColor(value: unknown, fallback: string): string {
 export function resolveMultiSelectFrameConfig(get: ConfigGetter): MultiSelectFrameConfig {
   const d = DEFAULT_MULTI_SELECT_FRAME
   return {
+    enabled: toBool(get(MULTI_SELECT_FRAME_KEYS.enabled), d.enabled),
+    hideTitles: toBool(get(MULTI_SELECT_FRAME_KEYS.hideTitles), d.hideTitles),
     paddingX: toNumber(get(MULTI_SELECT_FRAME_KEYS.paddingX), d.paddingX),
     paddingTop: toNumber(get(MULTI_SELECT_FRAME_KEYS.paddingTop), d.paddingTop),
     paddingBottom: toNumber(get(MULTI_SELECT_FRAME_KEYS.paddingBottom), d.paddingBottom),
+    innerPaddingX: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerPaddingX), d.innerPaddingX),
+    innerPaddingTop: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerPaddingTop), d.innerPaddingTop),
+    innerPaddingBottom: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerPaddingBottom), d.innerPaddingBottom),
     outer: {
       color: toColor(get(MULTI_SELECT_FRAME_KEYS.outerColor), d.outer.color),
       lineStyle: toLineStyle(get(MULTI_SELECT_FRAME_KEYS.outerStyle), d.outer.lineStyle),
@@ -276,12 +356,22 @@ export function applyMultiSelectFrameChange(
   value: unknown,
 ): MultiSelectFrameConfig {
   switch (key) {
+    case MULTI_SELECT_FRAME_KEYS.enabled:
+      return { ...current, enabled: toBool(value, DEFAULT_MULTI_SELECT_FRAME.enabled) }
+    case MULTI_SELECT_FRAME_KEYS.hideTitles:
+      return { ...current, hideTitles: toBool(value, DEFAULT_MULTI_SELECT_FRAME.hideTitles) }
     case MULTI_SELECT_FRAME_KEYS.paddingX:
       return { ...current, paddingX: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.paddingX) }
     case MULTI_SELECT_FRAME_KEYS.paddingTop:
       return { ...current, paddingTop: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.paddingTop) }
     case MULTI_SELECT_FRAME_KEYS.paddingBottom:
       return { ...current, paddingBottom: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.paddingBottom) }
+    case MULTI_SELECT_FRAME_KEYS.innerPaddingX:
+      return { ...current, innerPaddingX: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.innerPaddingX) }
+    case MULTI_SELECT_FRAME_KEYS.innerPaddingTop:
+      return { ...current, innerPaddingTop: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.innerPaddingTop) }
+    case MULTI_SELECT_FRAME_KEYS.innerPaddingBottom:
+      return { ...current, innerPaddingBottom: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.innerPaddingBottom) }
     case MULTI_SELECT_FRAME_KEYS.outerColor:
       return { ...current, outer: { ...current.outer, color: toColor(value, current.outer.color) } }
     case MULTI_SELECT_FRAME_KEYS.outerStyle:
@@ -310,6 +400,64 @@ export function applyMultiSelectFrameChange(
 // ============================================================================
 // CSS 生成（纯函数，Node 可单测）
 // ============================================================================
+
+/** 两框各自的 padding 取值（交给 engine 的几何函数用） */
+export interface FramePaddings {
+  /** 内框相对节点并集的外扩量 */
+  inner: { paddingX: number; paddingTop: number; paddingBottom: number }
+  /** 外框相对内框的间距 */
+  gap: { paddingX: number; paddingTop: number; paddingBottom: number }
+}
+
+/**
+ * 把一份外观配置拆成几何用的两组 padding。
+ * 组件只调这一个函数，免得在模板/计算里手抄六个字段（抄错一个就静默错位）。
+ */
+export function framePaddingsOf(cfg: MultiSelectFrameConfig): FramePaddings {
+  return {
+    inner: {
+      paddingX: cfg.innerPaddingX,
+      paddingTop: cfg.innerPaddingTop,
+      paddingBottom: cfg.innerPaddingBottom,
+    },
+    gap: {
+      paddingX: cfg.paddingX,
+      paddingTop: cfg.paddingTop,
+      paddingBottom: cfg.paddingBottom,
+    },
+  }
+}
+
+/**
+ * 把间距换算到"与线宽同一套空间"。
+ *
+ * 为什么需要：两框的**线宽**在 frameStrokeCss 里按 1/zoom 反缩放（屏幕上恒定粗细），
+ * 而间距原本是 flow 常量 —— 于是缩得越小、线越粗、间距越窄，两条线最终糊成一条。
+ * 实测（间距配 24、外框线宽 4、内框线宽 2）：
+ *
+ *   zoom   屏幕间距   外框线宽   是否重叠
+ *   2      48px       2px        否
+ *   1      24px       4px        否
+ *   0.5    12px       8px        临界
+ *   0.3    7.2px      13px       重叠 2.3px
+ *   0.2    4.8px      20px       重叠 10.2px
+ *
+ * 除以 zoom 之后，"间距"这个配置项的含义恒等于"你在屏幕上量到的两框间隙" ——
+ * 与线宽那一项（含义恒为"屏幕上看到的粗细"）完全对齐，缩放画布时观感不再变。
+ *
+ * @param zoom 当前缩放；非法值或 ≤0 一律回落到 1（绝不产生 Infinity 把几何算炸）
+ */
+export function scaleFramePaddings(pads: FramePaddings, zoom: number): FramePaddings {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+  if (z === 1) return pads
+  const inv = 1 / z
+  const up = (p: { paddingX: number; paddingTop: number; paddingBottom: number }) => ({
+    paddingX: p.paddingX * inv,
+    paddingTop: p.paddingTop * inv,
+    paddingBottom: p.paddingBottom * inv,
+  })
+  return { inner: up(pads.inner), gap: up(pads.gap) }
+}
 
 /** hex(#rgb / #rrggbb) → rgba()；解析不出来时回落成"透明"，绝不写出坏值 */
 export function hexToRgba(hex: string, alpha: number): string {

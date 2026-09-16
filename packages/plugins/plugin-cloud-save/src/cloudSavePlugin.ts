@@ -25,12 +25,15 @@ import type { ConfigSchema, Context, InferConfig, PluginModule } from '@mini-can
 import type {
   CanvasEdge,
   CanvasNode,
+  AddEdgeRequest,
   GraphDocumentService,
   GraphEnvelope,
   SaveService,
   SaveType,
 } from '@mini-canvas/canvas-data'
 import { HttpAdapter } from './httpAdapter'
+import { GraphDeltaAdapter } from './graphDeltaAdapter'
+import { createRemoteSync } from './remoteSync'
 import { collectUploadableFields, uploadFields, DEFAULT_MIN_UPLOAD_BYTES } from './resourceUpload'
 import { GRAPH_EDGES_KEY, GRAPH_KEY, GRAPH_VIEWPORT_KEY } from './keys'
 
@@ -71,6 +74,14 @@ export const Config = {
     group: '常规/云端保存',
     description: '小于这个大小的图片留在画布里（搬一趟的网络开销比省下的字节还贵）。',
   },
+  cloudSaveRealtime: {
+    type: 'boolean',
+    default: true,
+    label: '实时跟随 AI 改动',
+    group: '常规/云端保存',
+    description:
+      'AI（MCP 工具）在后台改画布时，不用刷新浏览器，画面自动跟着变。关掉之后只有手动操作会保存、AI 的改动要刷新才看得见。',
+  },
 } satisfies ConfigSchema
 
 export type CloudSavePluginConfig = InferConfig<typeof Config>
@@ -87,6 +98,14 @@ export interface CloudSaveStatus {
   uploadedResources: number
   /** 失败信息（phase='error' 时） */
   error?: string
+  /** 实时通道是否订阅中（AI 改画布能不能立刻看到） */
+  realtime: boolean
+  /** 实时同步已应用过几轮（诊断用：AI 改完到底有没有落到本地） */
+  appliedRounds: number
+  /** 因服务端拒绝而被跳过的保存次数（>0 说明有东西一直没能同步上去，需要查） */
+  skippedSaves: number
+  /** 最近一次被跳过的原因（诊断用） */
+  lastSkip?: string
 }
 
 /** cloud-save 服务（ctx.get('cloud-save')）：状态查询 + 手动触发 */
@@ -105,6 +124,8 @@ interface Deps {
   save: SaveService
   graph?: GraphDocumentService
   nodeStore?: { getNodes(): CanvasNode[]; updateNode(id: string, patch: { data: Record<string, unknown> }): void }
+  /** 已注册的节点类型（判断云端来的节点本地认不认识；缺失则一律认） */
+  knownTypes?: ReadonlyMap<string, unknown>
   /** 视口服务（渲染层注入）；只用到 setViewport，故按结构取，不 import 渲染层类型 */
   viewport?: { setViewport(v: { x: number; y: number; zoom: number }): void }
   /** 本插件挂上的 canvas 域 adapter（有它就能走批量读取口，省掉无意义的 404） */
@@ -200,6 +221,7 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
     nodeStore:
       ctx.get<Deps['nodeStore'] | undefined>('nodeStore') ?? undefined,
     viewport: ctx.get<Deps['viewport'] | undefined>('viewport') ?? undefined,
+    knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('nodeStore')?.types,
   }
 
   const status: CloudSaveStatus = {
@@ -207,6 +229,9 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
     phase: 'loading',
     restoredNodes: 0,
     uploadedResources: 0,
+    realtime: false,
+    appliedRounds: 0,
+    skippedSaves: 0,
   }
 
   // ① 换 adapter —— 必须最先做，后面所有读写才走网络。
@@ -215,7 +240,21 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
     ? ['canvas', 'resource', 'config']
     : ['canvas', 'resource']
   for (const type of domains) {
-    const adapter = new HttpAdapter({ baseUrl, type })
+    // 画布域用「增量适配器」：宿主每次交来整张画布，若原样 PUT 会把 AI 在两
+    // 次提交之间做的改动整个盖掉（AI 刚加的节点凭空消失）。它只把差异发出去。
+    const adapter =
+      type === 'canvas'
+        ? new GraphDeltaAdapter({
+            baseUrl,
+            type,
+            // 有项目因服务端拒绝而被跳过时记一笔：让「某个东西一直存不上」这件事可见，
+            // 否则它会以「画布看着正常、只是那处改动永远不同步」的形式静默存在。
+            onSkipped: ({ key, messages }) => {
+              status.skippedSaves += 1
+              status.lastSkip = `${key}: ${messages.join('; ')}`
+            },
+          })
+        : new HttpAdapter({ baseUrl, type })
     deps.save.useAdapter(type, adapter)
     // 记下 canvas 域那个：恢复时走它的批量读取口（逐个 GET 会在控制台刷 404）
     if (type === 'canvas') deps.canvasAdapter = adapter
@@ -262,6 +301,85 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
       })
     : undefined
 
+  // ==================== 实时跟随：AI（MCP）改完画布，本地自动跟着变 ====================
+  //
+  // 没有这一段，用户让 AI 加个节点，屏幕上不会动 —— 得手动刷新浏览器才看得到。
+  // 通道是 cloud-server 的 SSE（/api/kv/events），落到本地时走三方合并（见 remoteSync）。
+  //
+  // 没有 graph 就不订阅：合并出来的结果只能经 graph 落地（有历史、能落盘），
+  // 订阅了也应用不了 —— 那会让状态谎报「已在实时同步」，比不订阅更误导。
+  const realtime =
+    config?.cloudSaveRealtime === false || !deps.graph
+      ? null
+      : createRemoteSync({
+          baseUrl,
+          readCloud: (type, key) => deps.save.get(key, type as SaveType),
+          graph: {
+            getNodes: () => (deps.graph?.getNodes() ?? deps.nodeStore?.getNodes() ?? []) as never,
+            getEdges: () => (deps.graph?.getEdges() ?? []) as never,
+            // 整批包进一个事务：AI 的一次改动，在用户那里就是一条撤销记录
+            applyPlan: (plan) => {
+              const g = deps.graph
+              // 没有 graph（老宿主）就没法落地：静默返回，并**不**让 onApplied 记成已应用
+              if (!g) return
+              g.transaction('云端/AI 改动', () => {
+                g.removeEdges(plan.removeEdgeIds)
+                g.removeNodes(plan.removeNodeIds)
+                // 「认不认识这个类型」的过滤已在合并层做过（见 remoteSync 的 knownType）
+                if (plan.addNodes.length > 0) {
+                  g.addNodes(
+                    plan.addNodes.map((n) => ({
+                      id: n.id,
+                      type: n.type,
+                      position: n.position,
+                      data: n.data,
+                      ...(n.parentId !== undefined ? { parentId: n.parentId } : {}),
+                      ...(n.size !== undefined ? { size: n.size } : {}),
+                    })),
+                  )
+                }
+                for (const n of plan.updateNodes) {
+                  if (!g.getNode(n.id)) continue
+                  // 合并层算出来的是「这个节点最终该长什么样」，所以 position/data/size/parentId
+                  // 一并交出去。数据层的 data 是浅合并语义，但合并结果本就包含本地原有的 key，
+                  // 合出来就是这份结果（MCP 侧同样只做合并，不会删掉单个 data 字段）。
+                  g.updateNode(n.id, {
+                    position: n.position,
+                    data: { ...n.data },
+                    ...(n.size !== undefined ? { size: { ...n.size } } : {}),
+                    ...(n.parentId !== undefined ? { parentId: n.parentId } : {}),
+                  })
+                }
+                for (const e of plan.updateEdges) {
+                  g.removeEdges([e.id])
+                  // 远端合并的边也过守门人：远端图同样不该出现自连/成环/类型不符的脏边。
+                  // 注意 update 场景刚 remove 过同 id，connectEdge 的 duplicate 判定不会误伤。
+                  g.connectEdge(toEdgeRequest(e))
+                }
+                for (const e of plan.addEdges) g.connectEdge(toEdgeRequest(e))
+              })
+            },
+          },
+          knownType: (type) => isKnownType(deps, type),
+          onApplied: () => {
+            status.appliedRounds += 1
+          },
+        })
+
+  // 订阅要等安装时那次「云端恢复」跑完：否则会拿空基准比一次，
+  // 把云端已有的节点全当成新增、又往本地插一遍。
+  void ready.then(async () => {
+    if (!realtime || disposed) return
+    try {
+      await realtime.refreshBase()
+      realtime.start()
+      status.realtime = realtime.isRunning()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn('[cloud-save] 实时通道建立失败（画布照常可用）：' + msg)
+    }
+  })
+
   // 上架状态服务：宿主/console 可查"同步到哪一步了"，也能手动再同步一次
   const service: CloudSaveService = {
     status: () => ({ ...status }),
@@ -278,6 +396,7 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
     disposed = true
     if (timer) clearTimeout(timer)
     offNodes?.()
+    realtime?.stop()
   })
 }
 
@@ -289,6 +408,39 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
 function subscribeNodeStore(ctx: Context, cb: () => void): (() => void) | undefined {
   const store = ctx.get<{ subscribe?(l: () => void): () => void } | undefined>('nodeStore')
   return store?.subscribe?.(cb)
+}
+
+/**
+ * 本地认不认识某个节点类型。
+ *
+ * 不认识就别往画布里塞（插件没装、类型已注销）：渲染层没有对应组件，
+ * 加进去只会得到一片空白/报错，比「没同步过来」更难排查。
+ * 取不到类型表（宿主没按结构暴露）时一律认，与既有行为对齐。
+ */
+function isKnownType(deps: Deps, type: string): boolean {
+  const types = deps.knownTypes
+  if (!types) return true
+  return types.has(type)
+}
+
+/** 合并层的边 → 数据层 addEdge 入参（只映射两边都认的字段） */
+function toEdgeRequest(e: {
+  id: string
+  source: string
+  target: string
+  sourceHandle?: string
+  targetHandle?: string
+  type?: string
+  data?: Record<string, unknown>
+}): AddEdgeRequest {
+  return {
+    source: e.source,
+    target: e.target,
+    ...(e.type !== undefined ? { type: e.type } : {}),
+    ...(e.sourceHandle !== undefined ? { sourceHandle: e.sourceHandle } : {}),
+    ...(e.targetHandle !== undefined ? { targetHandle: e.targetHandle } : {}),
+    ...(e.data !== undefined ? { data: { ...e.data } } : {}),
+  }
 }
 
 /** 兼容旧装配的 PluginModule 出口 */

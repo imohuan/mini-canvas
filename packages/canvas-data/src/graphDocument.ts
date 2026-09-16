@@ -22,11 +22,33 @@ import type { EdgeStoreService } from './edgeStore'
 import type { CanvasEdge, AddEdgeRequest, StoredEdgeInput } from './edgeStore'
 import type { HistoryService } from './history'
 import type { SelectionService } from './selection'
+// 连接规则（自连/成环/重复/朝向/类型/容量）的唯一来源：加边守门人在这里落闸，
+// 任何走 graph 的加边都必须过它，插件/宿主/云端都不能另辟蹊径。
+import { validateConnection, typeConnectionDef, pickOverflowEvict } from './canvas/connection'
+import type { InvalidReason } from './canvas/connection'
+import { isTransient } from './transient'
 
 /** 节点 + 边的统一存储信封（历史快照 / 落盘共用） */
 export interface GraphEnvelope {
   nodes: CanvasNode[]
   edges: CanvasEdge[]
+}
+
+/**
+ * 加一条连接线的完整结果（connectEdge 的返回值）。
+ *
+ * 为什么不是"成功给 id / 失败给空串"：批量连线、右键菜单、生成面板都要知道
+ * "这条边到底建了没有、没建是因为什么"—— 空串丢掉了原因，调用方只能靠猜。
+ */
+export interface ConnectEdgeResult {
+  /** 建成的边 id；没建成 = 空串 */
+  edgeId: string
+  /** ok = 建成；rejected = 校验没过；duplicate = 已存在（幂等，不算错误） */
+  status: 'ok' | 'rejected' | 'duplicate'
+  /** rejected 时给原因（内核 InvalidReason），ok/duplicate 时为 undefined */
+  reason?: InvalidReason
+  /** 满额挤出时：被挤掉的那条边 id（调用方可用于 UI 提示"替换了 XX"）；没挤 = undefined */
+  evictedEdgeId?: string
 }
 
 /** 一次图事务里可用的写句柄（在事务提交前所有写都进历史，作为一条记录） */
@@ -42,6 +64,18 @@ export interface GraphTransaction {
   removeNodes(ids: string[]): number
   /** 新增一条边（端点必须存在；去重语义沿用 edgeStore） */
   addEdge(input: AddEdgeRequest): string
+  /**
+   * 加一条连接线（**全路径统一入口**）：校验 → 满额挤出 → 落边，一个函数管完。
+   *
+   * 为什么要有它：加边在画布里至少有 5 条路径 —— 普通拖线、右键菜单拖到空白自动建节点、
+   * 生成面板"加素材"、多选批量连线、云端合并/粘贴。以前每条路径各自决定"要不要校验、
+   * 满了怎么办"，这正是容量 bug 反复出没的土壤。现在全部收敛到这里：
+   * - 规则不过 → 不落边，返回 rejected + 原因（自连/成环/重复/类型/朝向/容量）；
+   * - 目标输入口声明了 capacity 且满额 → 默认**挤掉最老一条**（PortDef.evictOnFull 缺省 true），
+   *   结果里带 evictedEdgeId；只有显式 false 才拒；
+   * - data.transient 的临时脚手架边跳过校验/挤出（拖线占位，端点可能还没进 store）。
+   */
+  connectEdge(input: AddEdgeRequest): ConnectEdgeResult
   /** 删除边（清选中态） */
   removeEdges(ids: string[]): number
 }
@@ -196,9 +230,82 @@ export class GraphDocument implements GraphDocumentService {
   }
 
   addEdge(input: AddEdgeRequest): string {
-    const id = this.history.withRecord(() => this.edgeStore.addEdge(input))
+    return this.addEdgeGuarded(input)
+  }
+
+  /**
+   * 全路径统一的加边入口（详见接口注释）。挤出与落边同一条历史记录（撤销一次全退）。
+   */
+  connectEdge(input: AddEdgeRequest): ConnectEdgeResult {
+    const transient = isTransient({ data: input.data })
+    if (!transient) {
+      const check = this.validateEdge(input)
+      if (!check.ok) {
+        // duplicate 单列：已存在不算错误（幂等语义），批量连线和云端合并据此跳过而不告警
+        return check.reason === 'duplicate'
+          ? { edgeId: '', status: 'duplicate' }
+          : { edgeId: '', status: 'rejected', reason: check.reason }
+      }
+    }
+    let evicted: string | undefined
+    const id = this.history.withRecord(() => {
+      if (!transient) {
+        // 满额且该口默认可挤 → 先删最老一条再落新边（决策纯函数 pickOverflowEvict，与校验同源）
+        evicted = this.pickEvict(input) ?? undefined
+        if (evicted) this.edgeStore.removeEdge(evicted)
+      }
+      return this.edgeStore.addEdge(input)
+    })
     this.scheduleCommit()
-    return id
+    return { edgeId: id, status: 'ok', evictedEdgeId: evicted }
+  }
+
+  /**
+   * 加边的**唯一守门人**：规则校验不通过就不落边（返回空串）。
+   *
+   * 为什么必须在这里落闸（用户明确要求）：graph.addEdge 是"图唯一写入口"，但它以前**一点校验
+   * 都不做**，于是插件、云端合并、测试脚本都能绕开自连/成环/重复/类型/容量把非法边塞进图 ——
+   * 规则形同虚设（我上一轮就误用这个后门得出过错误结论）。
+   *
+   * 例外：**临时脚手架边**（data.transient，拖线途中的占位边）不校验 —— 它的端点可能还没进 store
+   * （context-menu 先建临时节点再补边），校验必然失败；这类边不参与持久化、随手势结束即销毁。
+   */
+  private addEdgeGuarded(input: AddEdgeRequest): string {
+    return this.connectEdge(input).edgeId
+  }
+
+  /** 该不该为这条新边挤掉一条旧入边（语义见 pickOverflowEvict） */
+  private pickEvict(input: AddEdgeRequest): string | null {
+    if (isTransient({ data: input.data })) return null
+    const tgt = this.nodeStore.getNode(input.target)
+    const typeConn = tgt ? typeConnectionDef(this.nodeStore.types.get(tgt.type)) : undefined
+    return pickOverflowEvict({
+      typeConn,
+      edges: this.edgeStore.getEdges(),
+      target: input.target,
+      targetHandle: input.targetHandle,
+    })
+  }
+
+  /** 用当前图状态校验一条候选边（规则纯函数在 canvas/connection，不在这里重写一遍） */
+  private validateEdge(input: AddEdgeRequest): { ok: boolean; reason?: InvalidReason } {
+    const nodes = new Map(this.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
+    const types = this.nodeStore.types
+    const res = validateConnection(
+      {
+        source: input.source,
+        sourceHandle: input.sourceHandle,
+        target: input.target,
+        targetHandle: input.targetHandle,
+      },
+      {
+        nodes,
+        edges: this.edgeStore.getEdges(),
+        getTypeConn: (t) => typeConnectionDef(types.get(t)),
+      },
+    )
+    // ValidationResult.reason 的类型含 'ok'，失败分支里它必然是真正的 InvalidReason（排除 'ok' 以便类型收窄）
+    return res.ok ? { ok: true } : { ok: false, reason: res.reason === 'ok' ? undefined : res.reason }
   }
 
   removeEdges(ids: string[]): number {
@@ -274,6 +381,7 @@ export class GraphDocument implements GraphDocumentService {
       updateNodes: (entries) => this.updateNodes(entries),
       removeNodes: (ids) => this.removeNodes(ids),
       addEdge: (input) => this.addEdge(input),
+      connectEdge: (input) => this.connectEdge(input),
       removeEdges: (ids) => this.removeEdges(ids),
     }
   }
@@ -308,4 +416,3 @@ export class GraphDocument implements GraphDocumentService {
     this.pendingCommit = false
   }
 }
-

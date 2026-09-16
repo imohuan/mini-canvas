@@ -4,6 +4,7 @@ export { alignGuideConfigFrom } from './alignGuideConfig'
 export { bindAlignGuideToggle } from './alignGuideToggle'
 export {
   computeAlignGuides,
+  shouldAlignOnDrag,
   SNAP_THRESHOLD,
   type AlignRect,
   type AlignResult,

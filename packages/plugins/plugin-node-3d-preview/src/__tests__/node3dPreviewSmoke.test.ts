@@ -100,6 +100,8 @@ describe('node-3d-preview 装配 smoke', () => {
   })
 
   it('连接约束对内核生效：非图片源被拒、只接一条', async () => {
+    // 语义（2026-09 定）：3d-preview 声明 capacity:1 → 满额时内核「挤掉原先那张」（换图），
+    // 不是「拒」。所以这里断言第二条能被校验放行；落边时的替换由内核加边守门人执行。
     const { ctx, nodeStore } = boot()
     await ctx.start()
     nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 10, h: 10 }, outputs: [{ port: 'source', contentType: 'text' }] })
@@ -123,7 +125,7 @@ describe('node-3d-preview 装配 smoke', () => {
     const base = { nodes, edges: [], getTypeConn }
     expect(validateConnection({ source: txtId, target: panoId, targetHandle: 'target' }, base).reason).toBe('type-not-accepted')
     expect(validateConnection({ source: imgId, target: panoId, targetHandle: 'target' }, base).ok).toBe(true)
-    // 已有一条入边后，第二条被容量拒
+    // 已有一条入边后，第二条：capacity:1 且默认可挤 → 校验放行（由内核在加边时挤掉原先那张）
     const imgId2 = nodeStore.addNode('img', { x: 0, y: 0 })
     const nodes2 = new Map(nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
     const occupied = {
@@ -131,7 +133,7 @@ describe('node-3d-preview 装配 smoke', () => {
       edges: [{ source: imgId, target: panoId, targetHandle: 'target' }],
       getTypeConn,
     }
-    expect(validateConnection({ source: imgId2, target: panoId, targetHandle: 'target' }, occupied).reason).toBe('limit-reached')
+    expect(validateConnection({ source: imgId2, target: panoId, targetHandle: 'target' }, occupied).ok).toBe(true)
     ctx.stop()
   })
 })

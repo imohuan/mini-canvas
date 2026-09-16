@@ -142,7 +142,9 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
       for (const n of nodes) added.push(n.id)
       // 边按新 id 重连（edgeStore 语义不变，graph 内 addEdge 提交去重）
       for (const e of edges) {
-        tx.addEdge({
+        // 粘贴也过守门人：剪贴板里的旧数据可能带着当前图上已非法的连接（类型改过/容量改过）。
+        // 挤出语义照常：目标口满额就挤最老 —— 与其它所有建线路径一致。
+        tx.connectEdge({
           source: e.source,
           target: e.target,
           ...(e.type !== undefined ? { type: e.type } : {}),
@@ -274,5 +276,4 @@ export function apply(ctx: Context): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const clipboardPlugin: PluginModule = { name, inject, apply }
-
 

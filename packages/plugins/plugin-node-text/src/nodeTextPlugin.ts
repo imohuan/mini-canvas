@@ -111,7 +111,8 @@ export function apply(ctx: Context) {
     label: '文本',
     icon: NODE_ICON,
     size: { w: 300, h: 200 },
-    inputs: [{ port: 'target', acceptsTypes: ['text'], capacity: 1 }],
+    // 不声明 capacity = 不限条数：文本节点同样可以接多个上游素材（见 panelSource 的 collectUpstreamMaterials）。
+    inputs: [{ port: 'target', acceptsTypes: ['text'] }],
     outputs: [{ port: 'source', contentType: 'text' }],
     // 声明支持 resize：BaseNode 据类型能力显示右下拖柄（尺寸写回 node.data.cardWidth/Height）。
     resizable: true,

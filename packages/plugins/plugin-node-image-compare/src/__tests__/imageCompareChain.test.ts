@@ -71,7 +71,7 @@ describe('image-compare 全链（真实宿主装配）', () => {
     }
     const ctxOf = (edges: Array<{ source: string; target: string; targetHandle?: string }>) => ({ nodes, edges, getTypeConn })
     for (const src of [a, b, c]) {
-      // 第 3 条在"已有 2 条"的状态下也必须被放行（容量缓冲位的作用）
+      // 第 3 条在「已有 2 条」的状态下也放行：capacity:2 满额时内核默认「挤老边」（evictOnFull 缺省 true）
       const existing = host.edgeStore
         .getEdges()
         .filter((e) => e.target === cmp)
@@ -85,7 +85,7 @@ describe('image-compare 全链（真实宿主装配）', () => {
     host.graph.addEdge({ source: b, target: cmp, targetHandle: 'target' })
     expect(host.edgeStore.getEdges()).toHaveLength(2)
 
-    // 第 3 条：容量缓冲位放行 → 落边 → 插件订阅把最早的 a 挤掉
+    // 第 3 条：graph 的加边守门人发现满额 → 先挤掉最老的 a 再落 c（同一事务，一次撤销全退）
     host.graph.addEdge({ source: c, target: cmp, targetHandle: 'target' })
     const kept = host.edgeStore.getEdges().filter((e) => e.target === cmp).map((e) => e.source)
     expect(kept).toEqual([b, c])

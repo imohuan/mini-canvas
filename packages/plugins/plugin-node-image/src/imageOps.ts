@@ -24,9 +24,6 @@ import {
 import { describeImageMeta, downloadFileName } from './imageNodeData'
 import { toCropPixels, type Rect } from './cropGeometry'
 import { cardSizePatch, readImageFitLimits, type ImageFitLimits } from './imageFit'
-// 输入口满额时"该挤掉哪条边"与宿主拖线连接是**同一条**规则（FIFO 挤最老）。
-// 复用渲染层的纯函数而不是在本包再写一遍：两处各写一份，迟早会在"谁算最老"上分叉。
-import { oldestIncomingToEvict } from '@mini-canvas/canvas-render'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface ImageOpsContext {
@@ -46,23 +43,16 @@ export interface ImageOpsContext {
   /** 当前全部节点（找"把它摆在谁左边"时用）；未注入返回 [] */
   listNodes?(): Array<{ id: string; type: string; position: { x: number; y: number } }>
   /** 当前全部边（"加素材"要按输入口容量挤最老一条时需要）；未注入返回 [] */
-  listEdges?(): Array<{ id: string; source: string; target: string }>
-  /**
-   * 本节点输入口最多能接几条入边（节点类型声明里的 capacity；未声明/查不到按 1）。
-   * "加素材"要跟拖线连接守同一条规矩：超了就把最老的一条挤掉，而不是无限往上加。
-   */
-  inputCapacity?(nodeId: string): number
   /**
    * 在一个事务里同时建节点 + 连边（"加素材"必须原子：只能一次 undo）。
-   * @param evictEdgeId 若给了，同一事务里先删这条旧边再连新边（输入口容量满时挤最老一条）
    * 未注入时返回 null（调用方据此判断"这个宿主不具备加素材能力"）。
+   * 容量/挤出/校验由统一入口 tx.connectEdge 处理（本接口不再单独传 evictEdgeId）。
    */
   createNodeWithEdge?(
     type: string,
     position: { x: number; y: number },
     data: Record<string, unknown>,
     target: string,
-    evictEdgeId?: string,
   ): string | null
 }
 
@@ -121,6 +111,8 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
   interface TxLike {
     createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
     addEdge(input: { source: string; target: string }): string
+    /** 统一入口：校验 + 满额挤出 + 落边（与 graph.connectEdge 同一实现） */
+    connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
     removeEdges(ids: string[]): number
   }
   const store = () =>
@@ -153,23 +145,14 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
       graph()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
     fitLimits: () => readImageFitLimits(svc),
     listNodes: () => (store()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position })),
-    listEdges: () => edgeStore()?.getEdges() ?? [],
-    inputCapacity: (nodeId) => {
-      const node = store()?.getNode(nodeId)
-      const def = node ? store()?.types.get(node.type) : undefined
-      const input = def?.inputs?.find((i) => !i.port || i.port === 'target') ?? def?.inputs?.[0]
-      // 与内核"缺省即 1"一致：节点没声明容量就按 1 条算
-      return input?.capacity && input.capacity > 0 ? input.capacity : 1
-    },
-    createNodeWithEdge: (type, position, data, target, evictEdgeId) => {
+    createNodeWithEdge: (type, position, data, target) => {
       const g = graph()
       if (!g) return null
       try {
         return g.transaction('add-image-source', (tx) => {
           const id = tx.createNode(type, position, data)
-          // 输入口满了：先挤掉最老一条（与拖线连接同一套 FIFO 语义），再连新的
-          if (evictEdgeId) tx.removeEdges([evictEdgeId])
-          tx.addEdge({ source: id, target })
+          // 挤出/校验统一走 connectEdge（节点先建，再连边——满额会自动挤掉最老一条）
+          tx.connectEdge({ source: id, target, sourceHandle: 'source', targetHandle: 'target' })
           return id
         })
       } catch {
@@ -391,10 +374,7 @@ export async function addSourceNode(
     y: (target?.position.y ?? 0) + SOURCE_NODE_OFFSET.y,
   }
 
-  // 输入口容量约束：满了就挤最老一条（与拖线连接同一套 FIFO 语义），否则会连出超过声明的入边数
-  const capacity = ctx.inputCapacity?.(targetId) ?? 1
-  const incoming = (ctx.listEdges?.() ?? []).filter((e) => e.target === targetId)
-  const evictEdgeId = oldestIncomingToEvict({ edges: incoming, target: targetId, capacity }) ?? undefined
-
-  return ctx.createNodeWithEdge('image', position, data, targetId, evictEdgeId)
+  // 容量/挤出/校验**不在这里算**：统一入口 graph.connectEdge 已经做了（校验 → 满额挤老边 → 落边）。
+  // 这里以前自己调 oldestIncomingToEvict 算一遍，跟内核的判定漂移过（handle 匹配 bug）。
+  return ctx.createNodeWithEdge('image', position, data, targetId)
 }

@@ -21,6 +21,9 @@
  */
 import type { PluginScope } from '@mini-canvas/kernel'
 import type { NodeStoreService } from '../../nodeStore'
+// PortDef 是端口约束的**单一来源**（nodeStore 定义、connection 消费）。
+// 这里以前手抄了一份字段列表，于是新增字段（evictOnFull）时插件写了会被类型拦下 —— 直接复用，不再重复。
+import type { PortDef } from '../../nodeStore'
 import type { NodeSegment } from './nodeRegistry'
 import type { NodeRegistry } from './nodeRegistry'
 
@@ -32,8 +35,8 @@ export interface NodeTypeDef {
   /** 展示段：content = 内容组件；title/top-toolbar/bottom-toolbar 可选 */
   segments?: Partial<Record<NodeSegment, unknown>>
   /** 声明式连接约束（api.md §四） */
-  inputs?: Array<{ port?: string; accepts?: string[]; limit?: 'single' | 'multi'; contentType?: string; acceptsTypes?: string[]; capacity?: number }>
-  outputs?: Array<{ port?: string; contentType?: string }>
+  inputs?: PortDef[]
+  outputs?: PortDef[]
   /** 类型图标（opaque 句柄，同 content 语义；缺省 = 不显示图标） */
   icon?: unknown
   /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */

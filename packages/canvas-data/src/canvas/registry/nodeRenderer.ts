@@ -27,10 +27,34 @@ export function resolveSegment(registry: NodeRegistry, type: string, segment: No
  * 供可叠加段(装饰层/徽标等)由宿主按序全量渲染；若只想要单值请用 resolveSegment。
  */
 export function nodeSegmentStack(registry: NodeRegistry, type: string, segment: NodeSegment): unknown[] {
+  return nodeSegmentStackEntries(registry, type, segment).map((e) => e.component)
+}
+
+/** 栈里的一项：稳定 id（渲染层列表 key 用）+ 组件句柄 */
+export interface NodeSegmentEntry {
+  /** 基座固定为 base，叠加 occupant 用它注册时的 occupant id */
+  id: string
+  component: unknown
+}
+
+/**
+ * 同 nodeSegmentStack，但每项带**稳定 id**。
+ *
+ * 为什么要这个：渲染层把栈铺成循环渲染时需要 key。用下标会在 occupant 增删
+ * （插件热装卸）时让 Vue 复用错的组件实例（状态串到邻居身上）；基座与 occupant
+ * 各自的身份在注册时就有，直接用它们当 key 才是对的。
+ */
+export function nodeSegmentStackEntries(
+  registry: NodeRegistry,
+  type: string,
+  segment: NodeSegment,
+): NodeSegmentEntry[] {
   const base = registry.get(type)?.segments[segment]
-  const stack: unknown[] = base !== undefined ? [base] : []
-  for (const occ of registry.contributionOccupants(type, segment)) stack.push(occ.component)
-  return stack
+  const entries: NodeSegmentEntry[] = base !== undefined ? [{ id: 'base', component: base }] : []
+  for (const occ of registry.contributionOccupants(type, segment)) {
+    entries.push({ id: occ.id, component: occ.component })
+  }
+  return entries
 }
 
 /** content 段是否显式注册（没有就应渲染缺省内容） */
@@ -48,4 +72,3 @@ export function activeSegments(registry: NodeRegistry, type: string): NodeSegmen
     (s) => (def && !!def.segments[s]) || registry.contributionOccupants(type, s).length > 0,
   )
 }
-

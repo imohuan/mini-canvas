@@ -35,6 +35,16 @@ export type {
   FlowPoint,
   AimedTarget,
 } from './contracts/connectionContext'
+// 拖线反馈状态的生命周期/读取助手（含"我是不是本次拖线的源"——单源与批量多源统一走它）
+export {
+  createConnectionState,
+  beginConnection,
+  endConnection,
+  getSourceHandle,
+  hoverWriter,
+  isConnectionSource,
+} from './host/connectionState'
+export type { HoverWriter } from './host/connectionState'
 // 画布交互状态契约（CanvasHost 维护 createInteractionState、provide 进渲染上下文；theme/UI 消费做显隐/行为）
 export {
   createInteractionState,
@@ -106,8 +116,21 @@ export {
   applyGenPanelMetricChange,
   DEFAULT_TOOLBAR_OFFSETS,
   DEFAULT_GEN_PANEL_METRICS,
+  resolveNodeSlotStyle,
 } from './contracts/nodeLayoutSettings'
-export type { NodeToolbarOffsets, GenPanelMetrics } from './contracts/nodeLayoutSettings'
+export type { NodeToolbarOffsets, GenPanelMetrics, NodeSlotStyleInput } from './contracts/nodeLayoutSettings'
+// 画布交互配置（「常规/画布」）：v1 的 VueFlow 交互开关收编（宿主声明 + 设置面板可调 + 实时生效）
+export {
+  CANVAS_INTERACTION_GROUP,
+  CANVAS_INTERACTION_SCHEMA,
+  CANVAS_INTERACTION_DEFAULTS,
+  resolveCanvasInteraction,
+  applyCanvasInteractionChange,
+} from './contracts/canvasInteractionSettings'
+export type {
+  CanvasInteractionSettings,
+  CanvasInteractionSettingSchema,
+} from './contracts/canvasInteractionSettings'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
 export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'
 // 内核精选的 VueFlow 能力出口（渲染类插件统一从本包 import，不再各自依赖 @vue-flow/core）
@@ -191,5 +214,3 @@ declare module '@mini-canvas/canvas-data' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
-
-

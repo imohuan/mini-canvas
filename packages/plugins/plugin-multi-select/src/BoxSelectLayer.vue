@@ -17,13 +17,13 @@
  * 纯碰撞逻辑在 multiSelectEngine（hitTestRects），本组件只做 DOM 手势与换算。
  */
 import { onBeforeUnmount, onMounted, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, beginSelecting, endSelecting } from '@mini-canvas/canvas-render'
 import type { SelectionService } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 
-const { pane, screenToFlow, ctx } = useCanvasRender()
+const { pane, screenToFlow, ctx, interaction } = useCanvasRender()
 
 const DRAG_THRESHOLD = 4
 
@@ -82,6 +82,9 @@ function onPanePointerDown(e: PointerEvent): void {
   startY = e.clientY
   dragDistance = 0
   isBoxSelecting = true
+  // 广播"正在框选"：节点壳(BaseNode)据此把上下控制栏收起来 —— 框选时那一排操作条/状态栏
+  // 既挡视线又会跟着框一起被框进去，用户明确要求框选期间不出现。
+  beginSelecting(interaction)
 }
 
 function onPointerMove(e: PointerEvent): void {
@@ -115,6 +118,7 @@ function onPointerUp(): void {
   const dragged = dragDistance > DRAG_THRESHOLD
   isBoxSelecting = false
   clearBox()
+  endSelecting(interaction)
   clickGuard.markGestureDone(dragged)
 }
 
@@ -155,6 +159,7 @@ function detach(): void {
   document.removeEventListener('pointermove', onPointerMove, { capture: true })
   document.removeEventListener('pointerup', onPointerUp, { capture: true })
   clickGuard.reset()
+  endSelecting(interaction) // 拖动中途被卸载（热卸/重挂）：别把"框选中"这个位留在 true
   clearBox()
 }
 

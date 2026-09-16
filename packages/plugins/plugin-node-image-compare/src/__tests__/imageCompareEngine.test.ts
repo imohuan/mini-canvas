@@ -19,9 +19,9 @@ const getData = (id: string): Record<string, unknown> | undefined =>
   })[id]
 
 describe('容量常量', () => {
-  it('可见上限 2，给内核声明的容量留 1 个缓冲位让第 3 条能落下来', () => {
+  it('向内核声明的容量 = 真实上限 2（满额由内核挤老边，不再需要缓冲位）', () => {
     expect(MAX_COMPARE_IMAGES).toBe(2)
-    expect(INPUT_CAPACITY).toBe(3)
+    expect(INPUT_CAPACITY).toBe(2)
   })
 })
 

@@ -29,6 +29,17 @@ export interface FlowPoint {
 export interface ActiveConnection {
   /** 源节点 id */
   sourceNodeId: string
+  /**
+   * 本次拖线的**全部**源节点 id（可选）。
+   *
+   * 为什么会有多个：从节点端口拖线时永远只有一个源；但"多选后批量连线"（多选框左右的端口）
+   * 是**一次拖出、给每个选中节点各连一条边**，此时选中集里的每个节点都是源。不把这件事告诉
+   * UI 层的话，只有 sourceNodeId 那一个节点会被认成"当前拖线源"—— 其余源节点的端口不会被压住、
+   * 还可能在拖线中被当成可连目标（用户报的"这里之前判断的是只有单个连接线"，指的就是它）。
+   *
+   * 缺省/空数组 = 单源语义，按 sourceNodeId 判断（与从前完全一致，不影响节点端口拖线）。
+   */
+  sourceNodeIds?: string[]
   /** 从哪个 handle 拖出：source=输出口(向右连)，target=输入口(反向向左连) */
   sourceHandle: 'source' | 'target'
 }

@@ -182,3 +182,36 @@ export function toolbarOffsetStyle(side: 'top' | 'bottom', offset: number): Reco
   const px = toOffset(offset, 0)
   return side === 'top' ? { bottom: `calc(100% + ${px}px)` } : { top: `calc(100% + ${px}px)` }
 }
+
+/** 插槽定位层的输入（壳 BaseNode 消费） */
+export interface NodeSlotStyleInput {
+  /** 哪个插槽：'top' 浮在卡片上方、'bottom' 浮在卡片下方 */
+  side: 'top' | 'bottom'
+  /** 离卡片边的距离（px；来自「布局/控制栏」的两个偏移配置） */
+  offset: number
+  /** 当前画布缩放（用于反缩放，让插槽内容在屏幕上大小恒定） */
+  zoom: number
+}
+
+/**
+ * 算出节点上/下插槽定位层的**整份内联样式**：贴边 + 水平居中 + 反缩放，一次算全。
+ *
+ * 为什么收在这里（用户要求："定位交给 BaseNode 而不是单独的组件"）：
+ * 这段样式此前在三个段组件里各抄一遍（顶部操作条 / 图片生成栏 / 文本生成栏），
+ * 其中"居中"与"反缩放"必须合进同一个 transform（分写在样式表与内联里会互相顶掉，
+ * 图片面板当初因此错位过）。收成纯函数后，壳贴一份、插件不再碰定位，也不可能再漏掉其中一项。
+ *
+ * 两个"贴边不跑"的细节：
+ * - transformOrigin 朝卡片一侧（上插槽 center bottom、下插槽 center top），
+ *   否则反缩放时元素围绕自己中心缩，离卡片的距离会跟着变；
+ * - 居中用 translateX(-50%) 而不是固定负 margin —— 插槽内容宽度是插件自由决定的。
+ */
+export function resolveNodeSlotStyle(input: NodeSlotStyleInput): Record<string, string> {
+  const zoom = typeof input.zoom === 'number' && Number.isFinite(input.zoom) && input.zoom > 0 ? input.zoom : 1
+  return {
+    left: '50%',
+    ...toolbarOffsetStyle(input.side, input.offset),
+    transform: `translateX(-50%) scale(${1 / zoom})`,
+    transformOrigin: input.side === 'top' ? 'center bottom' : 'center top',
+  }
+}

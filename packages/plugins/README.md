@@ -81,3 +81,42 @@ const host = await bootCanvas({
 - 不碰 `src/`(老版宿主)；不把 M6 复杂件(裁剪/蒙版/backend)带进当前节点。
 - 内核公开接口(registerNodeType/ctx)按 `docs/plan/canvas-core-v2-api.md` + ADR 走；要改先改文档。
 - 依赖方向恒 插件→内核，禁止内核反向 import 插件。
+
+## 六、给节点加上/下控制栏（插槽怎么写）
+
+节点的上/下控制栏是**壳提供的插槽**，位置由壳算，插件只管内容：
+
+```ts
+ctx.nodes.register({
+  type: 'image', label: '图片', size: { w: 320, h: 240 },
+  content: ImageContent,
+  segments: {
+    'top-toolbar': ImageTopToolbar,      // 浮在卡片上缘之外
+    'bottom-toolbar': ImageGeneratePanel, // 浮在卡片下缘之外
+  },
+})
+```
+
+三条约定（照做就不会踩坑）：
+
+1. **段组件里不要写定位**。贴边距离（设置面板「布局/控制栏」的两项偏移）、水平居中、
+   `scale(1/zoom)` 反缩放全部由壳 `BaseNode` 的定位层（`.v2-slot--top/--bottom`）负责。
+   插件组件写成普通流式内容（只排自己的内部布局 + 自己的材质/宽度）。
+2. **同一段可以叠多个**。别的插件可以往任意 type 的任意段挂东西，不必改那个插件：
+   `ctx.nodes.contribute('image', 'top-toolbar', MyButton)`（带 `id`/`order`，卸载自动摘除）。
+3. **按钮用现成的**。`NodeToolbarButton`（从 `@mini-canvas/plugin-theme-default` 导出）已按
+   UI 规范做好图标按钮的尺寸/hover/focus/禁用/激活态；纯图标时 `title` 即无障碍名称。
+   自己画也行，但按钮数值请照 `docs/design/ui-style-guide.md` §3.3。
+
+段组件只收到 `{ id, data }`；"我该不该出现"由段组件自己判断
+（通常用 `useSoleNodeSelected(id)` —— 恰好选中一个且是我才显示，多选时全部收起；
+壳另外会在框选手势进行中整体压掉上/下插槽）。
+
+最小例子（一个只注册段、不注册 type 的插件）：
+
+```ts
+export const name = 'image-extra-actions'
+export function apply(ctx: Context) {
+  ctx.nodes.contribute('image', 'top-toolbar', MyButton, { order: 5 })
+}
+```

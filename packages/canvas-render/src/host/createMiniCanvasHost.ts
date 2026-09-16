@@ -11,7 +11,7 @@
  *
  * 依赖方向：宿主(本模块) 只操作 opaque 注册表 + PluginModule，不反向依赖插件实现。
  */
-import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, SettingsStore } from '@mini-canvas/kernel'
+import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
 import { Context } from '@mini-canvas/canvas-data'
 import { SaveServiceImpl, NodeStore, type CanvasNode, type CanvasEdge, type StorageAdapter, Selection, History, EdgeStore, GraphDocument, GRAPH_KEY, GRAPH_EDGES_KEY, isTransient, type EdgeStoreService, type SelectionService, type HistoryService, type GraphDocumentService, type GraphEnvelope, createSettingsPersist, type SettingsPersistService, ResourceStore, type ResourceService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
@@ -20,6 +20,10 @@ import { NodeRegistry, ThemeRegistry, NodeFactory, type NodeFactoryService, crea
 import { createPluginManager, type PluginManager } from './pluginManager'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
+import {
+  CANVAS_INTERACTION_GROUP,
+  CANVAS_INTERACTION_SCHEMA,
+} from '../contracts/canvasInteractionSettings'
 import type { PluginManifest } from './pluginManager'
 
 /** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
@@ -212,6 +216,19 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 给命令注入执行上下文（命令内部如需 ctx.get 用服务）
   command.setContext(ctx)
 
+  // —— 画布交互配置（「常规/画布」）：渲染宿主级声明（对齐 v1 的 VueFlow 交互开关）——
+  // 在插件装载完成后、持久化桥 restore 之前 define：用户保存过的值（settingsPersist.setSavedSnapshot
+  // 注入的快照）能在 define 时命中为初值；scope='canvas-render' 表明这是宿主自己的配置，
+  // 与插件生命周期解耦（热卸任何插件都不回收这组声明）。
+  const interactionSettings = ctx.get<SettingsStore>('settings')
+  if (!interactionSettings.has('nodesDraggable')) {
+    interactionSettings.define(
+      CANVAS_INTERACTION_GROUP,
+      CANVAS_INTERACTION_SCHEMA as unknown as Record<string, SettingSchema>,
+      'canvas-render',
+    )
+  }
+
   // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，宿主默认注册 ——
   // 不必再装一个插件才有 Delete / Ctrl+Z。用 ctx.effect 登记撤销：随 ctx.stop 回收（重启不重复注册）。
   ctx.effect(() => registerCanvasCommands({ command, graph, selection, nodeFactory }))
@@ -313,5 +330,3 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   return { host, api, manager, exposeToWindow }
 }
-
-

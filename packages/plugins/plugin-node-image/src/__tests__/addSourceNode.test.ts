@@ -100,7 +100,9 @@ describe('addSourceNode：加素材 = 建上游图片节点 + 连进来', () => 
     expect(edgeStore.getEdges()).toHaveLength(0)
   })
 
-  it('输入口容量=1：再加一个素材会挤掉最老的那条边（不违反节点声明的容量）', async () => {
+  it('图片节点未声明 capacity = 不限条数：两个素材都保留（2026-09 新语义）', async () => {
+    // 旧断言"挤掉最老的只剩一条"基于旧内核语义（未声明 capacity 按 1 算）。
+    // 新语义：未声明 = 不限条数 —— 图片节点的生成面板本来就支持多素材行，两条都该留着。
     const { edgeStore, ops, target } = boot()
     const first = await addSourceNode(ops, target, new File(['x'], 'a.png'), { x: 0, y: 0 }, fakeTransform())
     const second = await addSourceNode(ops, target, new File(['x'], 'b.png'), { x: 0, y: 0 }, fakeTransform())
@@ -108,19 +110,18 @@ describe('addSourceNode：加素材 = 建上游图片节点 + 连进来', () => 
     expect(second).toBeTruthy()
 
     const edges = edgeStore.getEdges()
-    // 仍然只有一条入边，且连的是最新加的那个素材（FIFO 挤最老）
-    expect(edges).toHaveLength(1)
-    expect(edges[0].source).toBe(second)
+    expect(edges).toHaveLength(2)
+    expect(edges.map((e) => e.source).sort()).toEqual([first, second].sort())
   })
 
-  it('挤掉旧边与建新边是**一条**撤销记录（undo 不会留下半截状态）', async () => {
+  it('加素材（建节点+连边）是**一条**撤销记录：undo 一次回到只有目标节点', async () => {
     const { edgeStore, history, ops, target } = boot()
     await addSourceNode(ops, target, new File(['x'], 'a.png'), { x: 0, y: 0 }, fakeTransform())
     const depth = history.undoDepth
     await addSourceNode(ops, target, new File(['x'], 'b.png'), { x: 0, y: 0 }, fakeTransform())
     expect(history.undoDepth).toBe(depth + 1)
     history.undo()
-    // 撤回第二步 → 回到"只有第一个素材连着"
+    // 撤回第二步 → 第一个素材（节点+边）一起消失
     const edges = edgeStore.getEdges()
     expect(edges).toHaveLength(1)
   })
