@@ -77,9 +77,9 @@ describe('draggableMembers / hasSelectedAncestor', () => {
     const out = draggableMembers(sel, nodes)
     expect(out.sort()).toEqual(['a', 'g'])
   })
-  it('选中孤立子节点（父未选）：本轮简版跳过带父节点', () => {
+  it('选中孤立子节点（父未选）：参与拖动（落盘后由成员归属插件重算 parent 与坐标）', () => {
     const sel = new Set(['child'])
-    expect(draggableMembers(sel, nodes)).toEqual([])
+    expect(draggableMembers(sel, nodes)).toEqual(['child'])
   })
   it('hasSelectedAncestor：父链上任意祖先被选即为真', () => {
     expect(hasSelectedAncestor('grand', new Set(['g2']), nodes)).toBe(true)

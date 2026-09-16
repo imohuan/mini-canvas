@@ -154,10 +154,10 @@ export function hasSelectedAncestor(
 
 /**
  * 整组拖动应移动的节点 id：
- * 选中集里"无祖先被选"的顶层节点（父被选时子随父移动，不单独位移避免双重偏移）。
- * 额外排除 parentId 存在但父未被选的孤立子节点？—— 不：若其父未选但该子被选，该子可独立移动，
- * 但它的 position 是相对父的局部坐标，改绝对坐标需换算；此场景先跳过（返回不含带父的节点），
- * 由 SelectionFrame 组件把带父节点排除在拖动外（v2 简版只支持顶层无父节点整组拖动）。
+ * 选中集里"无祖先被选"的全部节点（父被选时子随父移动，不单独位移避免双重偏移）。
+ * 带父节点（父未被选）也参与：位移按"绝对坐标"视觉移动 + 落盘写绝对坐标，
+ * 松手后逐节点广播 NodeDragEnd，由成员归属插件（plugin-group）按新位置重算 join/leave
+ * 并把 store 坐标纠正成正确的相对/绝对（脱离原组 → 绝对；仍在组内 → 相对）。
  */
 export function draggableMembers(
   selectedIds: ReadonlySet<string>,
@@ -166,7 +166,6 @@ export function draggableMembers(
   const out: string[] = []
   for (const n of allNodes) {
     if (!selectedIds.has(n.id)) continue
-    if (n.parentId !== undefined) continue // 带父节点的位置是局部坐标：本轮简版不参与（见上方说明）
     if (hasSelectedAncestor(n.id, selectedIds, allNodes)) continue
     out.push(n.id)
   }

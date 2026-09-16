@@ -95,6 +95,8 @@ describe('nodesFromStore', () => {
       selectable: false,
       deletable: false,
       focusable: false,
+      // 临时菜单卡恒在最上层：嵌套组内的子节点 z=1+，不提升会被压住（用户实测截图）
+      zIndex: 1001,
     })
   })
 })

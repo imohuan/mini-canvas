@@ -113,6 +113,9 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
       out.selectable = false
       out.deletable = false
       out.focusable = false
+      // 临时菜单卡（拖线落空白的选类型卡）恒在最上层：嵌套组内的子节点 z=1+，不提升会被压在下面
+      //（用户实测截图：菜单卡被嵌套组内的 image 节点盖住）
+      out.zIndex = 1001
     }
     return out as unknown as FlowNode
   })

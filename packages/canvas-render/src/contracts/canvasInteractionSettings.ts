@@ -71,7 +71,10 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   zoomOnDoubleClick: false, // v1 关（VueFlow 库默认开）
   minZoom: 0.2,
   maxZoom: 2,
-  onlyRenderVisibleElements: true, // v1 开（VueFlow 库默认关；大画布性能）
+  // v1 开过（大画布性能），但 VueFlow 1.48 的视口剔除对 parentNode 子节点用"相对坐标"判定可见性
+  //（getNodesInside 未合并父 computedPosition）→ 嵌套组的子节点会被误判视口外而"消失"。
+  // VueFlow 库默认关 —— 嵌套组支持依赖它关闭，改回库默认。
+  onlyRenderVisibleElements: false,
   preventScrolling: true,
   snapGrid: [15, 15] as [number, number],
 })
@@ -123,11 +126,6 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
   zoomOnDoubleClick: bool('zoomOnDoubleClick', '双击缩放', '开启后双击空白处放大画布。'),
   minZoom: num('minZoom', '最小缩放', 0.05, 2, 0.05, '画布能缩小到的下限（0.2 = 缩到 20%）。'),
   maxZoom: num('maxZoom', '最大缩放', 1, 8, 0.5, '画布能放大到的上限（2 = 放大到 200%）。'),
-  onlyRenderVisibleElements: bool(
-    'onlyRenderVisibleElements',
-    '只渲染可见元素',
-    '开启后视口外的节点/边不渲染，大画布更流畅。',
-  ),
   preventScrolling: bool(
     'preventScrolling',
     '阻止页面滚动',

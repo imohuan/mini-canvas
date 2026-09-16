@@ -682,13 +682,19 @@ function startGroupDrag(clientX: number, clientY: number): void {
   const nodes = nodeStore().getNodes()
   const movable = draggableMembers(sel().ids, nodes)
   const l = layout()
-  const startMap = new Map<string, { x: number; y: number }>()
+  const ns = nodeStore()
+  // 每节点拖动基准：
+  //   abs  = 拖动起始的**绝对**坐标（flow，供 membership 判定与事件 payload）
+  //   base = 该节点**写回坐标系**的起始基准（无父 = 绝对；带父 = 相对父），父不随动故拖动期间恒定
+  const startMap = new Map<string, { abs: { x: number; y: number }; base: { x: number; y: number } }>()
   const liveMap = new Map<string, { x: number; y: number }>()
   for (const id of movable) {
     const rect = l?.getNodeRect(id)
     if (rect) {
-      startMap.set(id, { x: rect.x, y: rect.y })
-      liveMap.set(id, { x: rect.x, y: rect.y })
+      const n = ns.getNode(id)
+      const parentAbs = n?.parentId ? (l.absolutePosition(n.parentId) ?? { x: 0, y: 0 }) : { x: 0, y: 0 }
+      startMap.set(id, { abs: { x: rect.x, y: rect.y }, base: { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y } })
+      liveMap.set(id, { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y })
     }
   }
   dragStartPositions.value = startMap
@@ -707,7 +713,7 @@ function onDragMove(e: MouseEvent): void {
   // 整组节点视觉移动（渲染层单节点视觉写，不触发 store 重灌）
   const nextLive = new Map<string, { x: number; y: number }>()
   for (const [id, start] of dragStartPositions.value) {
-    const p = { x: start.x + canvasDx, y: start.y + canvasDy }
+    const p = { x: start.base.x + canvasDx, y: start.base.y + canvasDy }
     nextLive.set(id, p)
     updateNodeVisual(id, p)
   }
@@ -733,11 +739,20 @@ function onDragUp(): void {
   groupDragClickGuard.markGestureDone(true)
 
   // 有实际位移 → 批量落盘（原子 + 一条历史记录）
-  const entries = [...livePositions.value].map(([id, p]) => ({
-    id,
-    patch: { position: { x: p.x, y: p.y } },
-  }))
+  const entries = [...dragStartPositions.value].map(([id, start]) => {
+    const write = livePositions.value.get(id) ?? { x: start.base.x, y: start.base.y }
+    return { id, patch: { position: write } }
+  })
   if (entries.length > 0) graph().updateNodes(entries)
+  // 批量落盘后逐节点广播 drag-end：plugin-group 等成员归属插件按"新位置"重算 join/leave。
+  // （此前只广播被拖的主节点 —— 多选拖出组时其它成员的脱离/归组没人处理，用户实测：组跟着跑但没脱离。）
+  for (const [id, start] of dragStartPositions.value) {
+    ;(ctx as unknown as { emit(name: string, payload: unknown): void }).emit(
+      RenderEvents.NodeDragEnd,
+      // payload.position = 绝对坐标（与 CanvasHost 单节点拖拽的 payload 语义一致）
+      { nodeId: id, position: start.abs },
+    )
+  }
 
   dragStartPositions.value.clear()
   livePositions.value.clear()

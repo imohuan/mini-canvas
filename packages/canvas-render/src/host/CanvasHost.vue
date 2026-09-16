@@ -395,8 +395,16 @@ function onNodeDragStop(e: NodeDragEvent): void {
     // 拖动结束统一走 graph：历史 + 提交落盘由唯一写入口负责；无位移时快照无差异不入历史。
     h.graph.updateNodes(patches)
   }
-  const payload = toDragPayload(e)
-  if (payload) h.ctx.emit(RenderEvents.NodeDragEnd, payload)
+  // 逐个成员广播 drag-end：成员归属插件（plugin-group）按各自新位置重算 join/leave。
+  // 曾经只广播主节点 —— 多选整组拖动时其它成员的脱离/归组没人处理
+  //（用户实测："多选拖拽只计算了单个节点的脱离，第一个节点依然跟随它的父节点移动"）。
+  const movedIds =
+    moved.length > 0
+      ? moved
+      : [{ id: e.node.id, x: e.node.position.x, y: e.node.position.y }]
+  for (const m of movedIds) {
+    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: { x: m.x, y: m.y } })
+  }
 }
 
 /** 视图平移/缩放开始（pan 与 wheel/pinch 缩放同源于 VueFlow 同一套 move 事件，A 决策：统一置 paneDragging） */
