@@ -986,8 +986,8 @@ function clamp(value: number, min: number, max: number): number {
   position: absolute;
   right: 2px;
   bottom: 2px;
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   cursor: nwse-resize;
   z-index: 30;
   display: flex;
@@ -1007,8 +1007,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 .resize-handle-icon {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   color: var(--canvas-node-resize-handle, #9ca3af);
   pointer-events: none;
 }
