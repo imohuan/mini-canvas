@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Selection } from '@mini-canvas/canvas-data'
 import { clickNode, clickEdge, clickPane } from '../selectionInteractions'
+import { dragSelectNode } from '../selectionInteractions'
 
 function makeSel() {
   const s = new Selection()
@@ -52,3 +53,28 @@ describe('selectionInteractions 点选语义', () => {
   })
 })
 
+describe('dragSelectNode 拖拽选中（onNodeDragStart 用）', () => {
+  it('开关关 → 不动、返回 false', () => {
+    const s = makeSel()
+    expect(dragSelectNode(s, 'n9', { enabled: false, selectable: true })).toBe(false)
+    expect(s.has('n9')).toBe(false)
+  })
+
+  it('元素不可选中 → 不动', () => {
+    const s = makeSel()
+    expect(dragSelectNode(s, 'n9', { enabled: true, selectable: false })).toBe(false)
+    expect(s.has('n9')).toBe(false)
+  })
+
+  it('开关开 + 未选中 → 单选该节点（替换原选中）', () => {
+    const s = makeSel()
+    expect(dragSelectNode(s, 'n9', { enabled: true, selectable: true })).toBe(true)
+    expect([...s.ids]).toEqual(['n9'])
+  })
+
+  it('节点已在选中集（多选拖整组）→ 保持现状不动（不缩成单选）', () => {
+    const s = makeSel()
+    expect(dragSelectNode(s, 'n1', { enabled: true, selectable: true })).toBe(false)
+    expect([...s.ids].sort()).toEqual(['n1', 'n2'])
+  })
+})

@@ -63,6 +63,21 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
 （原地 Object.assign 写回、引用不变、无变化不触发、返回是否真改），回调改用它；+5 条测试
 锁原地写回/无变化短路/不认识键短路/非法回落/snapGrid 元组联动。canvas-render **246** 全绿。
 
+**调整（2026-09-16 同日三，用户指定）：「常规/画布」删除 2 项 + 描述去 v1 字样 + selectNodesOnDrag 说明修正**。
+- 删除「点击连线」(connectOnClick)与「边可重连」(edgesUpdatable)：宿主没有重连落边链路、点击连线在
+  v2 的连线校验语义下易误触，均不该作为可配项暴露（VueFlow 端回落库默认，行为与 v2 现状一致）。
+  「常规/画布」18 → 16 项。
+- 全部 description 改为直接介绍功能，不再出现"v1 默认关/开"字样。
+- 「拖拽选中」(selectNodesOnDrag) 用户反馈开了没效果：VueFlow 1.48 该开关在节点按下时才生效
+  （useDrag.startDrag 里 handleNodeClick），宿主渲染态节点每次 syncFromStore 都带 selected 投影 +
+  内核 selection 单源（onNodeClick 走内核 clickNode），按下即拖的场景下两边时序使"顺手选中"被
+  随后的投影覆盖/无从体现 —— 该项在 v2 架构下无实际效果，先保留声明（不删 key 防旧配置残留报错），
+  后续如确认无用再随设置清理任务移除。
+- **「拖拽选中」真修复（同日四）**：根因 = v2 选中单源在内核 Selection，VueFlow 内部
+  select-on-drag 不回写内核 → 内部选中瞬间被渲染投影覆盖。修复：宿主 onNodeDragStart 显式调
+  新纯函数 `dragSelectNode(selection, id, {enabled, selectable})`（开关关/不可选中不动、
+  已在选中集保持整组、否则单选替换）把"顺手选中"写进内核。+4 条测试；canvas-render **250** 全绿。
+
 ## 当前主线（2026-09-04，历史）：canvas-core-v2 重构 · 开发测试期最小闭环
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**
 

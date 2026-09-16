@@ -53,7 +53,7 @@ import {
   beginViewportMove,
   endViewportMove,
 } from '../contracts/interactionContext'
-import { clickNode, clickEdge, clickPane } from './selectionInteractions'
+import { clickNode, clickEdge, clickPane, dragSelectNode } from './selectionInteractions'
 import { RenderEvents, toDragPayload } from './renderEvents'
 import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
@@ -367,6 +367,15 @@ stopViewportRestore = watch(surfaceRef, (surface) => {
 
 function onNodeDragStart(e: NodeDragEvent): void {
   beginNodeDrag(interaction, e.node.id)
+  // 「拖拽选中」：拖动未选中节点时顺手选中它（写进内核 selection 单源；VueFlow 内部
+  // select-on-drag 不回写内核，会被渲染投影覆盖 —— 必须在这里显式写）。
+  const h0 = hostRef.value
+  if (h0) {
+    dragSelectNode(h0.selection, e.node.id, {
+      enabled: interactionSettings.selectNodesOnDrag,
+      selectable: interactionSettings.elementsSelectable,
+    })
+  }
   const payload = toDragPayload(e)
   if (payload) hostRef.value?.ctx.emit(RenderEvents.NodeDragStart, payload)
 }

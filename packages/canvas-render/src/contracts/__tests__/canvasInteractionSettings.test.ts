@@ -2,7 +2,7 @@
  * canvasInteractionSettings.test —— 画布交互配置（「常规/画布」）的纯逻辑单测。
  *
  * 覆盖（对齐 v1 core 的 VueFlow 交互开关，全收进一组）：
- * - schema 声明：18 项（17 个开关 + 网格间距 X/Y 两项）、分组恒为「常规/画布」、类型正确；
+ * - schema 声明：16 项（14 个开关 + 网格间距 X/Y 两项）、分组恒为「常规/画布」、类型正确；
  * - resolve：从任意取值器解析出完整值对象（缺项/非法回落默认，一项坏不连坐）；
  * - apply：单项变更只动认识的键，无关键原样返回同一引用（不触发无谓重渲染）。
  */
@@ -18,19 +18,18 @@ import {
 } from '../canvasInteractionSettings'
 
 describe('canvasInteractionSettings schema 声明', () => {
-  it('18 项配置、分组恒为「常规/画布」', () => {
+  it('16 项配置、分组恒为「常规/画布」', () => {
     const keys = Object.keys(CANVAS_INTERACTION_SCHEMA)
-    expect(keys).toHaveLength(18)
+    expect(keys).toHaveLength(16)
     for (const key of keys) {
       expect(CANVAS_INTERACTION_SCHEMA[key].group).toBe(CANVAS_INTERACTION_GROUP)
     }
   })
 
-  it('默认值对齐 v1：edgesUpdatable 开 / selectNodesOnDrag 关 / zoomOnDoubleClick 关 / connectOnClick 关 / onlyRenderVisibleElements 开', () => {
+  it('默认值对齐 v1：selectNodesOnDrag 关 / zoomOnDoubleClick 关 / onlyRenderVisibleElements 开', () => {
     expect(CANVAS_INTERACTION_DEFAULTS.nodesDraggable).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.nodesConnectable).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.elementsSelectable).toBe(true)
-    expect(CANVAS_INTERACTION_DEFAULTS.edgesUpdatable).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.selectNodesOnDrag).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.snapToGrid).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.snapGridX).toBe(15)
@@ -40,7 +39,6 @@ describe('canvasInteractionSettings schema 声明', () => {
     expect(CANVAS_INTERACTION_DEFAULTS.panOnScroll).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.panOnDrag).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.zoomOnDoubleClick).toBe(false)
-    expect(CANVAS_INTERACTION_DEFAULTS.connectOnClick).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.minZoom).toBe(0.2)
     expect(CANVAS_INTERACTION_DEFAULTS.maxZoom).toBe(2)
     expect(CANVAS_INTERACTION_DEFAULTS.onlyRenderVisibleElements).toBe(true)

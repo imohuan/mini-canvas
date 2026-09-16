@@ -57,3 +57,26 @@ export function clickPane(sel: SelectionService): boolean {
   return had
 }
 
+/**
+ * 拖拽起点的「拖拽选中」：拖动一个未选中的节点时顺手选中它（对齐 VueFlow selectNodesOnDrag 语义）。
+ *
+ * 为什么需要显式这一步：v2 选中单源在内核 Selection，VueFlow 内部的 select-on-drag 不回写内核，
+ * 渲染高亮由内核投影驱动 → 内部选中会被随后的投影覆盖，表现为"开了也没效果"。
+ * 宿主在 onNodeDragStart 调本函数把选中写进内核。
+ *
+ * 语义（对齐 VueFlow handleNodeClick 非多选分支）：
+ * - 开关关 / 元素不可选中 → 不动；
+ * - 节点已在选中集（含多选拖动整组）→ 保持现状（不动，避免把整组缩成单选）；
+ * - 否则 → 单选该节点（替换原选中）。
+ * 返回是否发生了选中变化。
+ */
+export function dragSelectNode(
+  sel: SelectionService,
+  nodeId: string,
+  opts: { enabled: boolean; selectable: boolean },
+): boolean {
+  if (!opts.enabled || !opts.selectable) return false
+  if (sel.has(nodeId)) return false
+  sel.set(new Set([nodeId]))
+  return true
+}

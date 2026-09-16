@@ -313,7 +313,6 @@ defineExpose({
       :nodes-draggable="interactionSettings.nodesDraggable"
       :nodes-connectable="interactionSettings.nodesConnectable"
       :elements-selectable="interactionSettings.elementsSelectable"
-      :edges-updatable="interactionSettings.edgesUpdatable"
       :select-nodes-on-drag="interactionSettings.selectNodesOnDrag"
       :snap-to-grid="interactionSettings.snapToGrid"
       :snap-grid="interactionSettings.snapGrid"
@@ -322,7 +321,6 @@ defineExpose({
       :pan-on-scroll="interactionSettings.panOnScroll"
       :pan-on-drag="interactionSettings.panOnDrag"
       :zoom-on-double-click="interactionSettings.zoomOnDoubleClick"
-      :connect-on-click="interactionSettings.connectOnClick"
       :only-render-visible-elements="interactionSettings.onlyRenderVisibleElements"
       :prevent-scrolling="interactionSettings.preventScrolling"
       :min-zoom="interactionSettings.minZoom"
@@ -399,4 +397,3 @@ defineExpose({
   pointer-events: auto;
 }
 </style>
-

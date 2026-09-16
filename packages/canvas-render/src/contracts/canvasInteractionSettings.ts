@@ -3,8 +3,8 @@
  *
  * 背景：v1（packages/canvas-core）把 VueFlow 交互开关（可拖拽/可选中/网格吸附/滚轮缩放/框选判定…）
  * 全暴露在设置面板；v2 渲染宿主 CanvasSurface 此前只绑 minZoom/maxZoom，其余一律用 VueFlow 库默认值 ——
- * 既不能配，还有几处与 v1 行为不一致（edgesUpdatable/selectNodesOnDrag/zoomOnDoubleClick/
- * connectOnClick/onlyRenderVisibleElements）。本模块把这批开关收进一个分组，对齐 v1 默认。
+ * 既不能配，还有几处与 v1 行为不一致（selectNodesOnDrag/zoomOnDoubleClick/
+ * onlyRenderVisibleElements）。本模块把这批开关收进一个分组，对齐 v1 默认。
  *
  * 职责与同目录 nodeLayoutSettings.ts 同一套语义：
  * - 声明：CANVAS_INTERACTION_SCHEMA（SettingsStore 的 SettingSchema 形状，宿主 define 用）；
@@ -38,7 +38,6 @@ export interface CanvasInteractionSettings {
   nodesDraggable: boolean
   nodesConnectable: boolean
   elementsSelectable: boolean
-  edgesUpdatable: boolean
   selectNodesOnDrag: boolean
   snapToGrid: boolean
   snapGridX: number
@@ -48,7 +47,6 @@ export interface CanvasInteractionSettings {
   panOnScroll: boolean
   panOnDrag: boolean
   zoomOnDoubleClick: boolean
-  connectOnClick: boolean
   minZoom: number
   maxZoom: number
   onlyRenderVisibleElements: boolean
@@ -62,7 +60,6 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   nodesDraggable: true,
   nodesConnectable: true,
   elementsSelectable: true,
-  edgesUpdatable: true, // v1 开（VueFlow 库默认关）
   selectNodesOnDrag: false, // v1 关（VueFlow 库默认开：拖节点顺手选中）
   snapToGrid: false,
   snapGridX: 15,
@@ -72,7 +69,6 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   panOnScroll: false,
   panOnDrag: true,
   zoomOnDoubleClick: false, // v1 关（VueFlow 库默认开）
-  connectOnClick: false, // v1 关（VueFlow 库默认开）
   minZoom: 0.2,
   maxZoom: 2,
   onlyRenderVisibleElements: true, // v1 开（VueFlow 库默认关；大画布性能）
@@ -116,8 +112,7 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
   nodesDraggable: bool('nodesDraggable', '节点可拖拽', '关闭后节点不能拖动（画布只读平移时常用）。'),
   nodesConnectable: bool('nodesConnectable', '节点可连线', '关闭后不能从端口拖出连线。'),
   elementsSelectable: bool('elementsSelectable', '元素可选中', '关闭后节点/边不能被点选与框选。'),
-  edgesUpdatable: bool('edgesUpdatable', '边可重连', '开启后可以拖动已连线的端点改接到别的端口。'),
-  selectNodesOnDrag: bool('selectNodesOnDrag', '拖拽选中', '开启后拖动未选中的节点会顺手选中它（v1 默认关）。'),
+  selectNodesOnDrag: bool('selectNodesOnDrag', '拖拽选中', '开启后拖动未选中的节点会顺手选中它。'),
   snapToGrid: bool('snapToGrid', '网格吸附', '开启后节点移动时吸附到网格，位置按网格间距取整。'),
   snapGridX: num('snapGridX', '网格间距 X', 5, 200, 1, '网格吸附的水平间距（px）；关闭吸附时不生效。'),
   snapGridY: num('snapGridY', '网格间距 Y', 5, 200, 1, '网格吸附的垂直间距（px）；关闭吸附时不生效。'),
@@ -125,14 +120,13 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
   zoomOnPinch: bool('zoomOnPinch', '双指缩放', '开启后触控板捏合/双指滑动缩放画布。'),
   panOnScroll: bool('panOnScroll', '滚轮平移', '开启后滚轮平移画布（与滚轮缩放互斥使用更合理，同开以缩放优先）。'),
   panOnDrag: bool('panOnDrag', '拖拽平移', '开启后按住空白处拖动平移画布。'),
-  zoomOnDoubleClick: bool('zoomOnDoubleClick', '双击缩放', '开启后双击空白处放大画布（v1 默认关）。'),
-  connectOnClick: bool('connectOnClick', '点击连线', '开启后依次点击两个端口即可连线（v1 默认关，拖拽连线不受影响）。'),
+  zoomOnDoubleClick: bool('zoomOnDoubleClick', '双击缩放', '开启后双击空白处放大画布。'),
   minZoom: num('minZoom', '最小缩放', 0.05, 2, 0.05, '画布能缩小到的下限（0.2 = 缩到 20%）。'),
   maxZoom: num('maxZoom', '最大缩放', 1, 8, 0.5, '画布能放大到的上限（2 = 放大到 200%）。'),
   onlyRenderVisibleElements: bool(
     'onlyRenderVisibleElements',
     '只渲染可见元素',
-    '开启后视口外的节点/边不渲染（大画布更流畅；v1 默认开）。',
+    '开启后视口外的节点/边不渲染，大画布更流畅。',
   ),
   preventScrolling: bool(
     'preventScrolling',
