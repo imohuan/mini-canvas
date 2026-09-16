@@ -142,6 +142,7 @@ export function buildCapabilities(
           outputs: def.outputs,
           resizable: def.resizable,
           frameless: def.frameless,
+          transparent: def.transparent,
           segments: def.content || def.title ? { content: def.content, title: def.title, ...(def.segments ?? {}) } : def.segments,
         })
         // ② 可选建节点实现 → nodeFactory.register + effect 回收

@@ -117,6 +117,12 @@ const showMultiRadio = computed(() => isSelected.value && selectedCount.value > 
  */
 const radioScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
+/**
+ * resize 拖柄的反缩放（与标题/多选圆点同一套语义）：保持"屏幕上的大小恒定"，
+ * 否则缩到 0.2x 时拖柄会小成一个点，很难点到。
+ */
+const resizeHandleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
+
 // —— 节点标题（data.label ?? type）——
 const nodeLabel = computed(() => {
   const label = props.data?.label as string | undefined
@@ -160,6 +166,7 @@ const cardFrame = computed(() =>
   resolveCardFrame({
     zoom: zoom.value,
     frameless: cap.frameless.value,
+    transparent: cap.transparent.value,
     selected: showSelectionOutline.value,
   }),
 )
@@ -172,6 +179,10 @@ const cardInlineStyle = computed<Record<string, string>>(() => ({
   borderWidth: cardFrame.value.borderWidth,
   borderRadius: cardFrame.value.borderRadius,
   '--card-outline-width': cardFrame.value.outlineWidth,
+  // 表面/投影由类型能力决定（transparent 容器型类型：底透明 + 无投影 → 连接线透出卡片区域）
+  '--card-surface': cardFrame.value.surface,
+  '--card-shadow': cardFrame.value.shadow,
+  '--card-content-surface': cardFrame.value.contentSurface,
 }))
 
 // ============ 就地重命名 ============
@@ -415,9 +426,12 @@ watch(
       return
     }
     let next: AimedTarget | null = null
-    if (aimPortSide.value) {
+    // 容器型/无端口类型（inputs 与 outputs 全空，如分组）：拖线瞄准直接忽略 ——
+    // 它没有输入口/输出口，body 命中只会产生"目标节点没有输入口"这类无意义提示（用户实测反馈）。
+    const connectable = cap.hasTarget.value || cap.hasSource.value
+    if (aimPortSide.value && connectable) {
       next = { nodeId: props.id, side: aimPortSide.value, anchor: snapAnchorFor(aimPortSide.value) }
-    } else if (aimBody.value) {
+    } else if (aimBody.value && connectable) {
       next = { nodeId: props.id, side: 'body' }
     }
     if (next) {
@@ -695,9 +709,10 @@ function clamp(value: number, min: number, max: number): number {
       </div>
 
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
+           反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
       <div v-if="cardResizable" class="resize-handle" :class="{ 'is-resizing': cardIsResizing }"
-        @pointerdown="card.onResizePointerDown">
+        :style="{ transform: `scale(${resizeHandleScale})` }" @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
           <path d="M7 5L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -753,8 +768,8 @@ function clamp(value: number, min: number, max: number): number {
   transform-origin: center;
   border-style: solid;
   border-color: var(--canvas-node-border, rgb(209 213 219 / 0.95));
-  background: var(--canvas-node-surface, #f9fafb);
-  box-shadow: 0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06));
+  background: var(--card-surface, var(--canvas-node-surface, #f9fafb));
+  box-shadow: var(--card-shadow, 0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06)));
   overflow: visible;
   /* SVG 吸附调试带可负 x 溢出左缘，必须 visible */
   transition:
@@ -957,7 +972,7 @@ function clamp(value: number, min: number, max: number): number {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: #eee;
+  background: var(--card-content-surface, #eee);
 }
 
 .v2-content-missing {
@@ -981,6 +996,8 @@ function clamp(value: number, min: number, max: number): number {
   opacity: 0.4;
   transition: opacity 140ms ease;
   touch-action: none;
+  /* 反缩放时钉在卡片右下角（跟标题 left bottom 原点同一套语义） */
+  transform-origin: 100% 100%;
 }
 
 .resize-handle:not(.is-resizing):hover,

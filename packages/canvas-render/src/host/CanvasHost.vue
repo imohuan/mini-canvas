@@ -470,11 +470,15 @@ function onPaneClick(): void {
 
 // 连边校验走内核 connection 服务(自连/环/重复/朝向/类型声明)。
 // 返回 ValidationResult 的纯校验（供 isValidConnection / 拖线反馈 validateEdge 复用，reason 不丢弃）。
+// allowCommitted（默认 false）：是否把"端点相同的已提交边"放行为 ok ——
+// 只有 VueFlow 全量重喂已存边的重校验路径(isValidConnection)传 true；
+// 拖线 hover/drop 校验的新候选必须保持 false，让重复连线报 duplicate（"已存在同一条连线"气泡）。
 function checkConnection(
   source: string,
   target: string,
   sourceHandle?: string,
   targetHandle?: string,
+  allowCommitted = false,
 ): ValidationResult {
   const h = hostRef.value
   if (!h) return { ok: false, reason: 'missing-node' }
@@ -492,8 +496,12 @@ function checkConnection(
         (targetHandle === undefined || e.targetHandle === targetHandle),
     )
   if (alreadyCommitted) {
-    log.log(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
-    return { ok: true, reason: 'ok' as const }
+    if (allowCommitted) {
+      log.log(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
+      return { ok: true, reason: 'ok' as const }
+    }
+    // 新候选语义：端点完全相同的边已存在 → duplicate（"已存在同一条连线"气泡）
+    return { ok: false, reason: 'duplicate' }
   }
   const res = validateConnection(
     { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
@@ -510,6 +518,7 @@ function isValidConnection(conn: Connection): boolean {
     conn.target,
     conn.sourceHandle ?? undefined,
     conn.targetHandle ?? undefined,
+    true,
   ).ok
 }
 
@@ -638,7 +647,7 @@ function onDragMouseUp(ev: MouseEvent): void {
     // elementFromPoint 会命中覆盖元素而非卡片（已踩过这个坑）。
     const landedOnNode = hitNodeIdAt(
       target.point,
-      liveNodeRects().map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.width, h: r.height })),
+      connectableNodeRects().map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.width, h: r.height })),
     )
     if (landedOnNode) {
       log.log(`drop 落在节点 ${landedOnNode} 上但连接不成立（非法/方向不符），不广播空白`)
@@ -690,6 +699,18 @@ function liveNodeRects(): NodeRect[] {
       height: size.h || 128,
     }
   })
+}
+
+/** 可参与拖线命中的节点矩形：排除"无端口"类型（inputs/outputs 均声明为空，如分组容器）。
+ *  容器不参与连接 —— 拖线悬停不产生 hover 反馈，松手按空白处理（可弹新建菜单）。 */
+function connectableNodeRects(): NodeRect[] {
+  const h = hostRef.value
+  if (!h) return []
+  const portless = (type: string): boolean => {
+    const def = h.nodeStore.types.get(type)
+    return !def || (def.inputs?.length === 0 && def.outputs?.length === 0)
+  }
+  return liveNodeRects().filter((r) => !portless(r.type))
 }
 
 /** 由前端上报的 aimedTarget（mouse 事件驱动）解析当前 hover + 线端点。

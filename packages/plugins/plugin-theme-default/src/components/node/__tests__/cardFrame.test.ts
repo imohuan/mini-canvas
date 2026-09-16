@@ -26,6 +26,30 @@ describe('普通类型：保留卡片边框', () => {
   it('圆角仍是 8px（本次只动边框，圆角不变）', () => {
     expect(resolveCardFrame({ zoom: 1, frameless: false, selected: false }).borderRadius).toBe('8px')
   })
+
+  it('不透明类型：表面 = 外壳默认色，投影保留（连接线从卡片后穿过被挡 = 预期行为）', () => {
+    const f = resolveCardFrame({ zoom: 1, frameless: false, selected: false })
+    expect(f.surface).toContain('--canvas-node-surface')
+    expect(f.shadow).toContain('--canvas-node-shadow-subtle')
+    expect(f.contentSurface).toBe('#eee')
+  })
+})
+
+describe('transparent 类型（分组）：卡片表面透明', () => {
+  it('表面 transparent + 无投影（连接线从卡片区域透出来）', () => {
+    const f = resolveCardFrame({ zoom: 1, frameless: false, transparent: true, selected: false })
+    expect(f.surface).toBe('transparent')
+    expect(f.shadow).toBe('none')
+    // 内容裁剪层（#eee 兜底底）也要透明 —— 否则选中态 z 提升后照样遮住连线
+    expect(f.contentSurface).toBe('transparent')
+    // 分组仍要边框（视觉上是"容器"的一圈轮廓）
+    expect(f.borderWidth).toBe('1px')
+  })
+
+  it('选中环不受影响（与 frameless 同一条契约：环独立于边框/底色）', () => {
+    const f = resolveCardFrame({ zoom: 1, frameless: false, transparent: true, selected: true })
+    expect(f.outlineWidth).toBe('2px')
+  })
 })
 
 describe('frameless 类型（图片）：没有边框', () => {

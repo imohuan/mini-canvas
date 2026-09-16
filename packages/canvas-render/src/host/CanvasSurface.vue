@@ -310,6 +310,7 @@ defineExpose({
       :edge-types="edgeTypes"
       :is-valid-connection="isValidConnection"
       :connection-mode="ConnectionMode.Strict"
+      :elevate-nodes-on-select="false"
       :nodes-draggable="interactionSettings.nodesDraggable"
       :nodes-connectable="interactionSettings.nodesConnectable"
       :elements-selectable="interactionSettings.elementsSelectable"

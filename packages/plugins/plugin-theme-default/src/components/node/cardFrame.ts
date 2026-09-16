@@ -17,6 +17,8 @@ export interface CardFrameInput {
   zoom: number
   /** 该类型是否声明了"不要卡片边框"（nodeStore.types[type].frameless） */
   frameless: boolean
+  /** 该类型是否声明了"卡片表面透明"（nodeStore.types[type].transparent；容器型类型如分组） */
+  transparent?: boolean
   /** 当前是否选中（选中才画外圈环） */
   selected: boolean
 }
@@ -27,6 +29,12 @@ export interface CardFrame {
   borderRadius: string
   /** 选中环宽度（走 --card-outline-width，由 .v2-card::after 消费） */
   outlineWidth: string
+  /** 卡片底色变量值（transparent 类型给 transparent，让连接线透出卡片区域） */
+  surface: string
+  /** 卡片投影变量值（transparent 类型给 none；半透明色块上投影会脏） */
+  shadow: string
+  /** 内容裁剪层底色变量值（transparent 类型给 transparent —— 否则 content-clip 的 #eee 兜底底色照样遮线） */
+  contentSurface: string
 }
 
 /** 卡片圆角：固定 8px（与 ui-style-guide 的圆角阶梯一致） */
@@ -58,5 +66,8 @@ export function resolveCardFrame(input: CardFrameInput): CardFrame {
     borderWidth: input.frameless ? '0px' : screenPx(BORDER_PX, input.zoom),
     borderRadius: CARD_RADIUS,
     outlineWidth: input.selected ? screenPx(OUTLINE_PX, input.zoom) : '0px',
+    surface: input.transparent ? 'transparent' : 'var(--canvas-node-surface, #f9fafb)',
+    shadow: input.transparent ? 'none' : '0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06))',
+    contentSurface: input.transparent ? 'transparent' : '#eee',
   }
 }

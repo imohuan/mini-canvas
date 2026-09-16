@@ -67,6 +67,22 @@ describe('nodesFromStore', () => {
     expect(c.parentNode).toBe('g')
     expect(c.style).toBeUndefined()
   })
+
+  it('transparent 类型（容器/分组）z 按嵌套深度分层：外层组-3、内层组-2（VueFlow computed 后 -1，仍在边之下）', () => {
+    const s = makeStore()
+    s.registerType({ type: 'group', label: '分组', defaultSize: { w: 300, h: 200 }, transparent: true })
+    const g = s.addNode('group', { x: 0, y: 0 })
+    // 内层组：parentId 指向外层组
+    const g2 = s.addNodes([{ type: 'group', position: { x: 10, y: 10 }, size: { w: 100, h: 80 }, id: 'inner', parentId: g }])
+    const flow = nodesFromStore(s)
+    // 外层组 depth0 → -2（垫底）；内层组 depth1 → -1（盖在外层组上，仍在边之下）
+    expect(flow.find((n) => n.id === g)!.zIndex).toBe(-3)
+    expect(flow.find((n) => n.id === 'inner')!.zIndex).toBe(-2)
+    // 普通类型无 zIndex（走 VueFlow 默认 0）
+    const textId = s.addNode('text', { x: 10, y: 10 })
+    expect(nodesFromStore(s).find((n) => n.id === textId)!.zIndex).toBeUndefined()
+    void g2
+  })
   it('data.isTemp 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {
     const s = new NodeStore()
     s.registerType({ type: 'connection-menu', label: 'ConnectionMenu', defaultSize: { w: 264, h: 100 } })

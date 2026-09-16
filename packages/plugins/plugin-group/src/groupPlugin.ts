@@ -136,6 +136,25 @@ export class GroupService extends Service implements GroupServiceAPI {
     return this.ctx.get<NodeLayoutService>('nodeLayout')
   }
 
+  /** 组嵌套深度（不支持嵌套的画布上恒 0；B 方案允许一层 → 最大 1） */
+  getGroupDepth(groupId: string): number {
+    let depth = 0
+    let cur = this.nodeStore.getNode(groupId)
+    const seen = new Set<string>([groupId])
+    while (cur?.parentId) {
+      if (seen.has(cur.parentId)) break // 环保护
+      seen.add(cur.parentId)
+      const parent = this.nodeStore.getNode(cur.parentId)
+      if (!parent || parent.type !== GROUP_NODE_TYPE) break
+      depth += 1
+      cur = parent
+    }
+    return depth
+  }
+
+  /** 组嵌套上限（B 方案：允许一层 —— 外层组 > 内层组；内层组里不能再放组） */
+  static readonly MAX_GROUP_DEPTH = 1
+
   /** 惰性读 settings（测试裸内核可能没注入 settings，不炸） */
   private currentPaddingOf(): GroupPadding {
     try {
@@ -186,8 +205,9 @@ export class GroupService extends Service implements GroupServiceAPI {
     const eligible = nodeIds.filter((id) => {
       const node = nodeStore.getNode(id)
       if (!node) return false
-      if (node.type === GROUP_NODE_TYPE) return false
       if (node.parentId) return false
+      // 组嵌套上限一层（B 方案）：已是内层组（depth>=1）的不能再被包进新组（否则深度 2 违规）
+      if (node.type === GROUP_NODE_TYPE && this.getGroupDepth(id) >= GroupService.MAX_GROUP_DEPTH) return false
       const rect = byId.get(id)
       return Boolean(rect && rect.w > 0 && rect.h > 0)
     })
@@ -311,7 +331,8 @@ export class GroupService extends Service implements GroupServiceAPI {
    */
   applyDragMembership(nodeId: string): void {
     const node = this.nodeStore.getNode(nodeId)
-    if (!node || node.type === GROUP_NODE_TYPE) return
+    // 组节点参与归组（B 方案：允许嵌套一层）。组内子节点（含拖到其它组范围）正常 join/leave。
+    if (!node) return
     const rect = this.rectOf(nodeId)
     if (!rect || rect.w <= 0 || rect.h <= 0) return
     const changes = resolveGroupChanges(
@@ -332,6 +353,12 @@ export class GroupService extends Service implements GroupServiceAPI {
       if (change.joinGroupId) {
         const group0 = this.nodeStore.getNode(change.joinGroupId)
         if (!group0) continue
+        // 防环：不能 join 自己；也不能 join 自己的后代（后代深度必然 >=1，已被上限拦，这里显式兜底）
+        if (change.joinGroupId === nodeId) continue
+        // 深度上限：组成员挂到目标组后深度 = 目标深度 + 1，超过上限（1）则拒绝
+        if (node.type === GROUP_NODE_TYPE && this.getGroupDepth(change.joinGroupId) + 1 > GroupService.MAX_GROUP_DEPTH) {
+          continue
+        }
         const rel = toRelativePosition(rect.x, rect.y, { x: group0.position.x, y: group0.position.y, w: group0.size?.w ?? 0, h: group0.size?.h ?? 0 })
         this.graph.updateNode(nodeId, { position: rel, parentId: group0.id })
       }
@@ -352,6 +379,14 @@ export function apply(ctx: Context) {
     label: '分组',
     size: GROUP_DEFAULT_SIZE,
     content: GroupContent,
+    // 容器型节点能力：
+    // - resizable：右下角拖柄改 size/cardWidth/cardHeight（一条历史，与 recalculateBounds 同字段）
+    // - transparent：外壳卡片底透明（边框保留），GroupContent 铺半透明色 → 连接线透出卡片区域
+    // - 空 inputs/outputs：容器不参与连线（类型级"显式声明为空 = 无端口"语义 → BaseNode 不渲染浮动端口）
+    inputs: [],
+    outputs: [],
+    resizable: true,
+    transparent: true,
   })
 
   ctx.commands.register({
@@ -363,7 +398,8 @@ export function apply(ctx: Context) {
       const selection = ctx.get<SelectionService>('selection')
       const ids = [...selection.ids].filter((id) => {
         const node = nodeStore.getNode(id)
-        return node && node.type !== GROUP_NODE_TYPE && !node.parentId
+        // 顶层成员（无父）参与打组；组节点允许（嵌套一层），深度超限的由 createGroup 内部过滤
+        return node && !node.parentId
       })
       if (ids.length >= 2) group.createGroup(ids)
     },

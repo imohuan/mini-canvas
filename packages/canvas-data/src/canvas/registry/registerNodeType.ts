@@ -43,6 +43,8 @@ export interface NodeTypeDef {
   resizable?: boolean
   /** 无边框（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 内容铺满整张卡的类型用它去掉多余的一圈缝。 */
   frameless?: boolean
+  /** 表面透明（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 容器型类型（分组）用它让连接线透出卡片区域。 */
+  transparent?: boolean
 }
 
 /**
@@ -66,6 +68,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     outputs: def.outputs,
     resizable: def.resizable,
     frameless: def.frameless,
+    transparent: def.transparent,
   })
   const revokers: Array<() => void> = [() => nodeStore.unregisterType(def.type)]
 

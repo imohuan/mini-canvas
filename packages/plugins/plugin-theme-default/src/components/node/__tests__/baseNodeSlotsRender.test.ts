@@ -262,3 +262,20 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
     expect(html).not.toContain('v2-multi-radio-dot nodrag')
   })
 })
+
+describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () => {
+  it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(r, { resizable: true })
+    expect(html).toContain('resize-handle')
+    expect(html).toMatch(/class="resize-handle"[^>]*style="[^"]*transform:scale/)
+  })
+
+  it('不可 resize → 不渲染拖柄（不挡卡片内容）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(r)
+    expect(html).not.toContain('resize-handle')
+  })
+})

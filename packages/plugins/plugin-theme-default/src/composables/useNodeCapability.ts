@@ -48,8 +48,14 @@ export function useNodeCapability(type: string) {
    */
   const frameless = computed(() => nodeDef.value?.frameless === true);
 
+  /**
+   * 该 type 是否声明"卡片表面透明"（缺省 false = 不透明卡片底）。
+   * 容器型类型（分组）用：外壳不画底色/投影，连接线能从卡片区域透出来。
+   */
+  const transparent = computed(() => nodeDef.value?.transparent === true);
+
   /** 该 type 声明的图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省 undefined = 标题不显示图标） */
   const icon = computed(() => nodeDef.value?.icon);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless };
+  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent };
 }

@@ -89,7 +89,7 @@ describe('group 插件集成（真实内核服务）', () => {
     expect([...selection.ids]).toEqual([gid])
   })
 
-  it('createGroup：成员<2 / 含组节点 / 已分组节点 → null 或过滤', async () => {
+  it('createGroup：成员<2 / 已分组节点过滤 / 组节点允许嵌套一层', async () => {
     const { ctx, nodeStore, selection } = makeCtx()
     const a = addNode(nodeStore, 'text', 0, 0)
     await ctx.start()
@@ -100,9 +100,11 @@ describe('group 插件集成（真实内核服务）', () => {
     const b = addNode(nodeStore, 'text', 200, 0)
     const gid = svc.createGroup([a, b])!
     expect(gid).toBeTruthy()
-    // 含组节点再次打组 → 该组被过滤，只剩不到 2 个 → null
+    // B 方案：组节点允许打组（嵌套一层）→ 新组包住旧组
     const c = addNode(nodeStore, 'text', 500, 0)
-    expect(svc.createGroup([gid, c])).toBeNull()
+    const nested = svc.createGroup([gid, c])
+    expect(nested).toBeTruthy()
+    expect(nodeStore.getNode(gid)?.parentId).toBe(nested)
   })
 
   it('ungroup：子节点还原绝对坐标 + 删除组节点', async () => {
@@ -177,7 +179,139 @@ describe('group 插件集成（真实内核服务）', () => {
     expect(command.has('group:create')).toBe(true)
     expect(command.has('group:ungroup')).toBe(true)
   })
-})
+
+  it('类型能力：resizable + transparent（容器型节点：可拖尺寸、卡片底透明让连接线透出）', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    await ctx.start()
+    const def = nodeStore.types.get(GROUP_NODE_TYPE)
+    expect(def?.resizable).toBe(true)
+    expect(def?.transparent).toBe(true)
+    // 容器不参与连线：显式空 inputs/outputs → 外壳不渲染浮动端口
+    expect(def?.inputs).toEqual([])
+    expect(def?.outputs).toEqual([])
+  })
+
+  it('组嵌套一层（B 方案）：拖组A到组B上 → 组A挂 parent 到组B + 坐标转相对', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+    const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+    await ctx.start()
+    const svc = ctx.get<GroupService>('group')
+    const gidA = svc.createGroup([a, b])!
+    const c = addNode(nodeStore, 'text', 1200, 100, { w: 100, h: 80 })
+    const d = addNode(nodeStore, 'text', 1400, 200, { w: 120, h: 60 })
+    const gidB = svc.createGroup([c, d])!
+    // 把组A拖到组B的包围盒内（模拟拖拽结束位置）→ 组A join 组B（B depth=0 → A 新深度 1 合法）
+    const gbAbs = { x: nodeStore.getNode(gidB)!.position.x, y: nodeStore.getNode(gidB)!.position.y }
+    nodeStore.updateNode(gidA, { position: { x: gbAbs.x + 200, y: gbAbs.y + 100 } })
+    svc.applyDragMembership(gidA)
+    const na = nodeStore.getNode(gidA)!
+    expect(na.parentId).toBe(gidB)
+    // 坐标已转相对组B
+    expect(na.position).toEqual({ x: 200, y: 100 })
+  })
+
+  it('组嵌套一层：打组允许组节点（组+节点混合 → 新组包住旧组）', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    const a = addNode(nodeStore, 'text', 100, 100)
+    const b = addNode(nodeStore, 'text', 300, 200)
+    await ctx.start()
+    const svc = ctx.get<GroupService>('group')
+    const gidA = svc.createGroup([a, b])!
+    const c = addNode(nodeStore, 'text', 800, 100)
+    // 选中 [组A, c] 打组 → 新组包住旧组（A 变 depth1）
+    const nested = svc.createGroup([gidA, c])
+    expect(nested).toBeTruthy()
+    expect(nodeStore.getNode(gidA)?.parentId).toBe(nested)
+  })
+
+  it('组嵌套上限：内层组不能再被包进新组（拖拽与打组两条路径都拒绝）', async () => {
+    const { ctx, nodeStore } = makeCtx()
+    const a = addNode(nodeStore, 'text', 100, 100)
+    const b = addNode(nodeStore, 'text', 300, 200)
+    await ctx.start()
+    const svc = ctx.get<GroupService>('group')
+    const gidA = svc.createGroup([a, b])!
+    const c = addNode(nodeStore, 'text', 800, 100)
+    // 第一层嵌套：混合打组 → 外层组C 包住 组A（A 变 depth1）
+    const gidC = svc.createGroup([gidA, c])!
+    expect(nodeStore.getNode(gidA)?.parentId).toBe(gidC)
+    // 再建顶层组B
+    const d = addNode(nodeStore, 'text', 1600, 100)
+    const d2 = addNode(nodeStore, 'text', 1800, 200)
+    const gidB = svc.createGroup([d, d2])!
+    // ① 打组路径：选中 [内层组A(depth1), 组B(depth0)] 打组 → A depth>=1 被过滤，只剩 B → null
+    expect(svc.createGroup([gidA, gidB])).toBeNull()
+    // ② 拖拽路径：把组B(depth0) 拖进 内层组A(depth1) → 新深度 2 > 上限 → 拒绝
+    const absA = svc.getGroupBounds(gidA)!
+    nodeStore.updateNode(gidB, { position: { x: absA.x + 20, y: absA.y + 20 } })
+    svc.applyDragMembership(gidB)
+    expect(nodeStore.getNode(gidB)?.parentId).toBeUndefined()
+  })
+  })
+
+  describe('嵌套跨层移动的坐标换算（用户实测 bug）', () => {
+    /** 场景：外层组B(depth0) ⊃ 内层组A(depth1) ⊃ 节点x；另有组C(depth0)、顶层空白。 */
+    async function makeNested(): Promise<{
+      ctx: ReturnType<typeof makeCtx>['ctx']
+      nodeStore: ReturnType<typeof makeCtx>['nodeStore']
+      svc: GroupService
+      gB: string
+      gA: string
+      gC: string
+      x: string
+    }> {
+      const { ctx, nodeStore } = makeCtx()
+      const a1 = addNode(nodeStore, 'text', 30, 40, { w: 100, h: 80 })
+      const a2 = addNode(nodeStore, 'image', 400, 100, { w: 200, h: 150 })
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const gB = svc.createGroup([a1, a2])!
+      const b1 = addNode(nodeStore, 'text', 1300, 300, { w: 100, h: 80 })
+      const b2 = addNode(nodeStore, 'image', 1500, 400, { w: 200, h: 150 })
+      const gA = svc.createGroup([b1, b2])!
+      // 组A 建在绝对 (1300,300) 附近 —— 把它挪进组B 范围内并嵌套
+      nodeStore.updateNode(gA, { position: { x: 100, y: 50 } })
+      svc.applyDragMembership(gA)
+      expect(nodeStore.getNode(gA)?.parentId).toBe(gB)
+      // 节点 x 挪进组A 范围 → join 组A（此时组A depth1）
+      const x = addNode(nodeStore, 'text', 500, 500, { w: 60, h: 60 })
+      nodeStore.updateNode(x, { position: { x: 150, y: 120 } })
+      svc.applyDragMembership(x)
+      expect(nodeStore.getNode(x)?.parentId).toBe(gA)
+      const c1 = addNode(nodeStore, 'text', 1800, 100, { w: 100, h: 80 })
+      const c2 = addNode(nodeStore, 'image', 2100, 200, { w: 200, h: 150 })
+      const gC = svc.createGroup([c1, c2])!
+      return { ctx, nodeStore, svc, gB, gA, gC, x }
+    }
+
+    it('第二层组内节点拖到外层组（组B）内 → join 后相对坐标正确', async () => {
+      const { nodeStore, svc, gB, x } = await makeNested()
+      const absB = svc.getGroupBounds(gB)!
+      // x 拖到组B 内 (绝对 200,200)
+      nodeStore.updateNode(x, { position: { x: 200 - nodeStore.getNode(gB)!.position.x - 100, y: 200 - nodeStore.getNode(gB)!.position.y - 40 } })
+      // ↑ 上一行把 x 的 store 坐标改到"绝对≈(200,200)"对应位置（x 此时的父是内层组A）
+      svc.applyDragMembership(x)
+      const nx = nodeStore.getNode(x)!
+      expect(nx.parentId).toBe(gB)
+      // 相对组B = 绝对(200,200) - 组B frame 左上
+      expect(nx.position).toEqual({ x: 200 - absB.x, y: 200 - absB.y })
+    })
+
+    it('第二层组内节点拖到最外层空白 → 解父后绝对坐标正确（不再少加一层）', async () => {
+      const { ctx, nodeStore, svc, x } = await makeNested()
+      // x 当前的绝对坐标（挂在内层组A 下，父链两层）
+      const layoutSvc = ctx.get('nodeLayout')
+      const realAbs = layoutSvc.absolutePosition(x)
+      // 把 x 拖出内层组A 范围（远离）→ leave → 位置必须等于 realAbs
+      const delta = { x: 3000, y: 3000 }
+      nodeStore.updateNode(x, { position: { x: nodeStore.getNode(x)!.position.x + delta.x, y: nodeStore.getNode(x)!.position.y + delta.y } })
+      svc.applyDragMembership(x)
+      const nx = nodeStore.getNode(x)!
+      expect(nx.parentId).toBeUndefined()
+      expect(nx.position).toEqual({ x: realAbs.x + delta.x, y: realAbs.y + delta.y })
+    })
+  })
 
 describe('resolveGroupPadding padding 配置解析（纯函数）', () => {
   it('全部读不到 → 默认值', () => {

@@ -24,9 +24,8 @@ import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-can
 import { resolveConfig } from '@mini-canvas/canvas-base'
 import type { NodeStoreService, EdgeStoreService, SelectionService, GraphDocumentService, CanvasNode } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
-import { runAutoLayout } from './layoutEngine'
-import type { LayoutNode, LayoutEdge, LayoutDirection, AutoLayoutConfig } from './types'
-import { calculateGroupFrameFromAbsoluteChildren, resolveGroupPadding } from './groupBounds'
+import { layoutHierarchy } from './groupHierarchy'
+import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
 import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focusViewport'
 
 /** 组节点类型名（与 plugin-group 约定一致） */
@@ -170,46 +169,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   }
 
   /** 组：{ groupNode, 直接子节点(仅第一层、非 group) } */
-  function collectGroups() {
-    const nodes = nodeStore.getNodes()
-    const groupNodes = nodes.filter((n) => n.type === GROUP_NODE_TYPE)
-    const groups: Array<{ groupNode: CanvasNode; children: CanvasNode[] }> = []
-    for (const g of groupNodes) {
-      const children = nodeStore.childNodesOf(g.id).filter((c) => c.type !== GROUP_NODE_TYPE)
-      groups.push({ groupNode: g, children })
-    }
-    return { nodes, groups }
-  }
-
-  /** 引擎输入：全部"参与布局"节点（组节点本身不参与；子节点转绝对坐标快照）。 */
-  function buildLayoutInput() {
-    const { nodes, groups } = collectGroups()
-    const groupNodeIds = new Set(nodes.filter((n) => n.type === GROUP_NODE_TYPE).map((n) => n.id))
-    const layoutNodes: LayoutNode[] = []
-    for (const n of nodes) {
-      if (groupNodeIds.has(n.id)) continue
-      const abs = absoluteRectOf(n)
-      // 注意：喂给引擎的 position 是绝对坐标（布局期间平铺所有子节点）
-      layoutNodes.push({
-        id: n.id,
-        type: n.type,
-        position: { x: abs.x, y: abs.y },
-        data: n.data,
-        size: { w: abs.w, h: abs.h },
-      })
-    }
-    const edges: LayoutEdge[] = edgeStore
-      .getEdges()
-      .map((e) => ({ id: e.id, source: e.source, target: e.target }))
-    return {
-      layoutNodes,
-      edges,
-      groups: groups
-        .filter((g) => g.children.length > 0)
-        .map((g) => ({ id: g.groupNode.id, nodeIds: new Set(g.children.map((c) => c.id)) })),
-    }
-  }
-
   function focusBounds(nodes: CanvasNode[], opts: { keepZoom: boolean }): void {
     if (nodes.length === 0) return
     let minX = Infinity
@@ -261,89 +220,54 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     return true
   }
 
-  /** 布局后收拢一个组：子节点绝对坐标 → 组 frame → 更新组 + 子相对坐标(挂回) */
-  function updateGroupAfterLayout(
-    groupNode: CanvasNode,
-    childNodes: CanvasNode[],
-    resultPos: Map<string, { x: number; y: number }>,
-    byId: Map<string, CanvasNode>,
-  ): Array<{ id: string; patch: Record<string, unknown> }> {
-    const entries: Array<{ id: string; patch: Record<string, unknown> }> = []
-    // 分组留白与 plugin-group 共用同一份 settings 配置（布局收拢不能覆盖用户在面板里配的 padding）
-    const padding = resolveGroupPadding((key) => settings?.get(key))
-    // 用引擎算出的绝对坐标构造子节点快照（避免读 store 旧相对坐标）
-    const childrenAbs = childNodes
-      .map((c) => {
-        const pos = resultPos.get(c.id)
-        const size = absoluteRectOf(c)
-        if (!pos) return null
-        return { id: c.id, position: pos, size: { w: size.w, h: size.h } }
-      })
-      .filter((c): c is NonNullable<typeof c> => Boolean(c))
-    const frame = calculateGroupFrameFromAbsoluteChildren(childrenAbs, padding)
-    if (!frame) return entries
-
-    // 组本身若有父链（多层分组）：引擎只在顶层平铺，故组 frame 也是"绝对"，若组有父需转相对。
-    // v2 plugin-group 只建顶层组，组无父是常态；此处若发现组有父，转相对父坐标。
-    let gx = frame.x
-    let gy = frame.y
-    if (groupNode.parentId) {
-      const parentAbs = absoluteRectOf(groupNode)
-      // 无法单独定位父，保守：仍按绝对写（保持向后一致）—— plugin-group 不产生嵌套，此分支为防御。
-    }
-    entries.push({
-      id: groupNode.id,
-      patch: {
-        position: { x: gx, y: gy },
-        size: { w: frame.w, h: frame.h },
-        data: { ...groupNode.data, cardWidth: frame.w, cardHeight: frame.h },
-      },
-    })
-    for (const c of childrenAbs) {
-      const rel = { x: c.position.x - gx, y: c.position.y - gy }
-      entries.push({ id: c.id, patch: { position: rel, parentId: groupNode.id } })
-    }
-    return entries
-  }
-
-  /** 执行自动布局（一次原子历史） */
+/** 执行自动布局（一次原子历史）。
+ *  组语义（用户拍板）：主节点（组）在其所在层作为一个节点参与布局；组内部是"子画布"独立布局。
+ *  平铺 → 树（支持组嵌套组）→ 从最深层组开始布局 → 布局完重算组 rect → 组作为占位参与上层 → 逐层向上。 */
   function run(): boolean {
-    const { layoutNodes, edges, groups } = buildLayoutInput()
-    if (layoutNodes.length === 0) return false
+    // 全部节点（含组）转绝对坐标快照：组内子节点累加父链（nodeLayout 已实现）
+    const all = nodeStore.getNodes()
+    if (all.length === 0) return false
+    const hierarchyNodes: LayoutNode[] = all.map((n) => {
+      const abs = absoluteRectOf(n)
+      return {
+        id: n.id,
+        type: n.type,
+        position: { x: abs.x, y: abs.y },
+        data: n.data,
+        size: { w: abs.w, h: abs.h },
+        parentId: n.parentId,
+      }
+    })
+    const edges = edgeStore.getEdges().map((e) => ({ id: e.id, source: e.source, target: e.target }))
 
     // 每次执行现读面板现值：改了方向/间距立刻反映到本次布局结果
     const runConfig = currentConfig()
     if (runConfig.debug) {
       console.log('[auto-layout] input', {
-        nodes: layoutNodes.map((n) => ({ id: n.id, type: n.type, size: n.size })),
-        groups: groups.map((g) => ({ id: g.id, nodeIds: [...g.nodeIds] })),
+        nodes: hierarchyNodes.map((n) => ({ id: n.id, type: n.type, parent: n.parentId, size: n.size })),
       })
     }
 
-    const result = runAutoLayout({ nodes: layoutNodes, edges, groups, config: runConfig })
+    const result = layoutHierarchy(hierarchyNodes, edges, runConfig)
 
-    // 结果绝对坐标表
-    const resultPos = new Map<string, { x: number; y: number }>()
-    for (const n of result.nodes) resultPos.set(n.id, { ...n.position })
-
-    // 组装写回 entries
+    // 组装写回 entries：
+    //  - 组节点：frame（绝对 position + size + cardWidth/cardHeight）
+    //  - 组内子节点：相对父组坐标（result.positions 已按"相对父组左上"输出）
+    //  - 顶层自由节点：绝对坐标
     const byId = new Map(nodeStore.getNodes().map((n) => [n.id, n]))
     const entries: Array<{ id: string; patch: Record<string, unknown> }> = []
-    const groupChildIds = new Set<string>()
-    const { groups: groupList } = collectGroups()
-    for (const g of groupList) {
-      const pos = resultPos.get(g.groupNode.id)
-      if (g.children.length > 0 && pos) {
-        entries.push(...updateGroupAfterLayout(g.groupNode, g.children, resultPos, byId))
-        for (const c of g.children) groupChildIds.add(c.id)
-      }
+    for (const [gid, frame] of result.groupFrames) {
+      entries.push({
+        id: gid,
+        patch: {
+          position: { x: frame.x, y: frame.y },
+          size: { w: frame.w, h: frame.h },
+          data: { ...(byId.get(gid)?.data ?? {}), cardWidth: frame.w, cardHeight: frame.h },
+        },
+      })
     }
-    // 自由节点（非组、非组内子）：绝对坐标写回
-    for (const n of result.nodes) {
-      if (byId.get(n.id)?.type === GROUP_NODE_TYPE) continue
-      if (groupChildIds.has(n.id)) continue
-      const patch: Record<string, unknown> = { position: { ...n.position } }
-      entries.push({ id: n.id, patch })
+    for (const [id, pos] of result.positions) {
+      entries.push({ id, patch: { position: { ...pos } } })
     }
 
     // 统一走 graph：一次批量写回位置/尺寸（历史 + 提交落盘）
@@ -358,12 +282,19 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       console.log('[auto-layout] logs\n' + result.logs.join('\n'))
     }
 
-    // 布局后居中视口到结果中心（保留 zoom，对齐老版 keepZoom 行为）
-    const centerNodes = result.nodes
-      .map((n) => byId.get(n.id))
-      .filter((n): n is CanvasNode => Boolean(n))
-    if (centerNodes.length > 0) {
-      focusBounds(centerNodes, { keepZoom: true })
+    // 布局后居中视口到结果中心（保留 zoom，对齐老版 keepZoom 行为）。
+    // 覆盖范围 = 顶层自由节点绝对坐标 ∪ 各组 frame（组内子节点不必单独算，frame 已包住）。
+    const boundsNodes: CanvasNode[] = []
+    for (const [id, pos] of result.positions) {
+      const n = byId.get(id)
+      if (n && !n.parentId) boundsNodes.push({ ...n, position: pos })
+    }
+    for (const [gid, frame] of result.groupFrames) {
+      const n = byId.get(gid)
+      if (n) boundsNodes.push({ ...n, position: { x: frame.x, y: frame.y }, size: { w: frame.w, h: frame.h } })
+    }
+    if (boundsNodes.length > 0) {
+      focusBounds(boundsNodes, { keepZoom: true })
     }
     return true
   }

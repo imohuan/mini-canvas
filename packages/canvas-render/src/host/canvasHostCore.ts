@@ -55,6 +55,8 @@ export interface FlowNode {
   /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 父子嵌套字段名是 parentNode，
    *  子 position 视为相对父的局部坐标，渲染层级自动排在父之上） */
   parentNode?: string
+  /** 渲染层级（容器型 transparent 类型投影为 -1，垫到边层之下） */
+  zIndex?: number
   /** 声明尺寸 → 像素 style（内核 CanvasNode.size 投影） */
   style?: { width: string; height: string }
   /** 临时脚手架节点（拖线落空白的菜单节点）：在 VueFlow 维度关闭交互 */
@@ -82,6 +84,25 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
     // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。
     if (n.parentId) out.parentNode = n.parentId
+    // 容器型类型（transparent，如分组）z 按嵌套深度分层：外层组 -3、内层组 -2。
+    // 注意 VueFlow getXYZPos：有父节点的 computed z = max(父z, 自身z) + 1 ——
+    //   内层组(-2) 挂在外层组(-3) 下 → computed = max(-3,-2)+1 = -1，仍在边(0)之下 ✓；
+    //   全部普通子节点 = max(父z, 0)+1 = 1，在最上 ✓；连线(0) 夹在组与子节点之间 ✓。
+    //   选中提升已全局关闭(elevate-nodes-on-select=false)，层级恒定不随选中变化。
+    if (store.types.get(n.type)?.transparent === true) {
+      let depth = 0
+      let cur = n
+      const seen = new Set<string>([n.id])
+      while (cur.parentId) {
+        if (seen.has(cur.parentId)) break
+        seen.add(cur.parentId)
+        const p = store.getNode(cur.parentId)
+        if (!p || p.type !== 'group') break
+        depth += 1
+        cur = p
+      }
+      out.zIndex = depth === 0 ? -3 : -2
+    }
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
     if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
     // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：

@@ -93,6 +93,14 @@ export interface CanvasNodeType {
    * 只会变成内容边缘一圈多余的缝。由类型自己声明，渲染层读，不让外壳猜节点类型。
    */
   frameless?: boolean
+  /**
+   * 表面透明（类型级能力，缺省 false = 外壳默认不透明卡片底）。
+   *
+   * 给"容器型"类型（分组）用：卡片底是不透明色块会盖住穿过容器区域的连接线
+   * （VueFlow 边层 z 恒低于节点层）。声明 transparent = 外壳不画卡片底色/投影，
+   * 由 content 自己铺半透明色 → 连接线透出来，视觉对齐"容器"语义。
+   */
+  transparent?: boolean
 }
 
 /** NodeStore 作为 ctx 服务暴露的接口 */
@@ -319,7 +327,6 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
-
 
 
 

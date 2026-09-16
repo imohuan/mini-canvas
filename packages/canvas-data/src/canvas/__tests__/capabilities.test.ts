@@ -66,15 +66,16 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
    * 插件实际走的是后者，于是单测全绿、浏览器里边框照旧。
    * 透传清单是手写枚举，漏字段不会自己报错，只能靠测试钉住。
    */
-  it('ctx.nodes.register 把类型级能力（resizable / frameless）逐字段透传进 nodeStore', async () => {
+  it('ctx.nodes.register 把类型级能力（resizable / frameless / transparent）逐字段透传进 nodeStore', async () => {
     const { nodeStore } = await boot([
       mk('cap-plugin', (c) => {
-        c.nodes.register({ type: 'cap', label: '能力', size: { w: 10, h: 10 }, resizable: true, frameless: true })
+        c.nodes.register({ type: 'cap', label: '能力', size: { w: 10, h: 10 }, resizable: true, frameless: true, transparent: true })
       }),
     ])
     const def = nodeStore.types.get('cap')
     expect(def?.resizable).toBe(true)
     expect(def?.frameless).toBe(true)
+    expect(def?.transparent).toBe(true)
   })
 
   it('ctx.theme.register 叠主题槽 occupant；order 更小的顶替', async () => {

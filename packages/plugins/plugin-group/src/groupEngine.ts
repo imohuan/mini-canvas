@@ -44,9 +44,13 @@ export interface GroupPadding {
 /** 分组默认 padding（对齐老版视觉：四周 30，顶部额外 10 给标题条 → 40） */
 export const DEFAULT_GROUP_PADDING: GroupPadding = { left: 30, right: 30, top: 40, bottom: 30 }
 
-/** 生成一个分组节点 id（老版同款，避免与数字 id 撞车，肉眼可辨） */
+let groupSeq = 0
+
+/** 生成一个分组节点 id（老版同款，避免与数字 id 撞车，肉眼可辨）。
+ *  时间戳 + 序号 + 随机尾：同一毫秒内连续打组也不会撞 id（Node/浏览器实测踩过）。 */
 export function createGroupId(now = Date.now()): string {
-  return 'group-' + now
+  groupSeq += 1
+  return 'group-' + now + '-' + groupSeq
 }
 
 /**

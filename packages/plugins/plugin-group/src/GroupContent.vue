@@ -54,7 +54,8 @@ function onUngroup(): void {
   border-radius: 6px;
   background: color-mix(in srgb, var(--group-color, #334155) 16%, transparent);
   border: 1px solid color-mix(in srgb, var(--group-color, #334155) 42%, transparent);
-  pointer-events: auto;
+  /* 容器空白区不吃指针（拖组/框选穿透到画布），交互全靠壳与子节点（对齐 v1 group-node__body） */
+  pointer-events: none;
 }
 .group-content__ungroup {
   position: absolute;
@@ -72,6 +73,7 @@ function onUngroup(): void {
   color: color-mix(in srgb, var(--group-color, #334155) 74%, black 10%);
   cursor: pointer;
   opacity: 0;
+  pointer-events: auto;
   transition: opacity 120ms ease, background-color 120ms ease;
   pointer-events: auto;
 }
