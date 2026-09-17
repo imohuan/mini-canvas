@@ -55,9 +55,19 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-步骤 3（`BaseNode.vue` 按区域遍历，前置契约已就绪）→ 步骤 4（基础插件收编 15 行装配，
+步骤 4（基础插件收编 15 行装配，
 用 `core: true` 标识）→ 步骤 5（服务合并 doc）→ 步骤 6（工具缺口）→ 步骤 7（拆插件循环依赖）
 → 步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
+
+### 步骤 3 已完成（2026-09-17）
+
+- `ctx.nodes.attach(type, req)` 一等 API（区域进键，落 `node/region` 场）。
+- 老五段映射层（content→in / title→title / top-toolbar→out:top / bottom-toolbar→out:bottom /
+  overlay→over:inset），读写两条路径同场、同 id 去重、基座优先。
+- `BaseNode.vue` 改按区域遍历渲染，新增 out:left / out:right / on:top / on:bottom / over:outset
+  五个渲染位（挂 LOD 门）；金标准 §1.4 的 22 条不变量逐条自查未破坏。
+- 测试：canvas-data 281 → **295**（region 7 + attach 7）、theme-default 158 → **167**（十区域 SSR + LOD 9）；
+  kernel 163 / canvas-render 322 / ui 26 全绿，既有测试一条未删未改。
 
 ## 二、验证命令（每次改完跑，测试是唯一裁判）
 
