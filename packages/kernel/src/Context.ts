@@ -25,7 +25,10 @@ import type {
   PluginScope,
 } from './types'
 import { Lifecycle } from './types'
+import type { State } from './types'
 import { asPluginModule } from './pluginClass'
+import { RegistryImpl } from './registry/registry'
+import type { Registry } from './registry/registry'
 
 /**
  * 每个插件在 setup(ctx) 里拿到的"能力视图"见 types.ts 的 PluginScope（Context 实现之）。
@@ -147,8 +150,19 @@ export class Context implements PluginScope {
   private fibers = new Map<string, Fiber>()
   /** 每插件的装配 config（P4：ctx.plugin/installPlugin 第二参存入，激活时经其 Config schema 校验） */
   private configs = new Map<string, unknown>()
-  private state: ContextState = 'created'
+  /**
+   * 生命周期状态。
+   * 字段名带下划线：新原语 ctx.state() 要占这个成员名（设计文档 §二），字段与方法是两回事，别撞。
+   */
+  private _state: ContextState = 'created'
   private dev = false
+  /**
+   * 注册场表：kind → 场实例。
+   *
+   * 为什么按 kind 各一份而不是一个大表：键空间彼此独立（'node/shell' 与 'theme' 的键不共享），
+   * 而 keys() 这类枚举天然该只看本 kind——分开存最省事，也避免不同 kind 同名键互相干扰。
+   */
+  private registries = new Map<string, RegistryImpl<unknown>>()
   /** 依赖扫描是否进行中（防止 provide 在 drain 内触发 reentrant drain） */
   private draining = false
   /**
@@ -203,7 +217,7 @@ export class Context implements PluginScope {
   /** 启动：按"服务/插件依赖"确定性多轮激活 → 依赖满足的插件逐个 setup → 其余 PENDING → emit ctx:ready。 */
   async start(): Promise<void> {
     this.assertState('created', 'start')
-    this.state = 'started'
+    this._state = 'started'
 
     // 依赖满足即可激活：无依赖的插件先激活（登记序）；其 provide/inject 的服务与 ACTIVE 插件成为后续依赖的满足来源。
     const activated = this.drain()
@@ -316,13 +330,13 @@ export class Context implements PluginScope {
 
   /** 唤醒依赖现已满足但仍在 PENDING 的插件（服务被 provide/插件被激活后调用） */
   private wakePending(): void {
-    if (this.state !== 'started') return
+    if (this._state !== 'started') return
     this.drain()
   }
 
   /** 停止：逆序释放各插件 fiber（含全部副作用，async disposer 也会被触发/等待），回到 created 可重新 start。 */
   stop(): void {
-    if (this.state !== 'started') return
+    if (this._state !== 'started') return
     // 逆序卸载（依赖方先卸）；dispose() 同步跑掉同步 disposer、并启动异步 disposer 结算
     for (const name of [...this.fibers.keys()].reverse()) {
       this.setLifecycle(name, Lifecycle.UNINSTALLING)
@@ -338,9 +352,10 @@ export class Context implements PluginScope {
     this.configs.clear()
     this.services.clear()
     this.builtinTools = new ToolRegistry() // 内核自带工具表随生命周期重置（插件工具已随 fiber 注销，这里清残留）
+    this.registries.clear() // 注册场随生命周期重置（插件注册已随 fiber 回收，这里清宿主残留）
     this.capabilityLayer?.reset() // 能力层内置服务随生命周期重置（由能力层决定重建什么）
     this.lifecycles.clear()
-    this.state = 'created'
+    this._state = 'created'
   }
 
   /**
@@ -362,14 +377,14 @@ export class Context implements PluginScope {
 
   /** 当前状态 */
   getState(): ContextState {
-    return this.state
+    return this._state
   }
 
   // ==================== 动态装载（运行中热装/热卸/热重载） ====================
 
   /** 是否已处于运行中（started）且可接受动态装/卸 */
   get running(): boolean {
-    return this.state === 'started'
+    return this._state === 'started'
   }
 
   /**
@@ -409,7 +424,7 @@ export class Context implements PluginScope {
    * @returns 是否真卸到（未装/已卸返回 false）
    */
   uninstallPlugin(name: string): boolean {
-    if (this.state !== 'started') return false
+    if (this._state !== 'started') return false
     const fiber = this.fibers.get(name)
     // 守卫按"有无 fiber"：既覆盖已 ACTIVE 插件，也让冷启动 PENDING(缺依赖) / FAILED 遗留 fiber 可被清理（原 scope 守卫会漏）
     if (!fiber) return false
@@ -434,7 +449,7 @@ export class Context implements PluginScope {
    * 与 plugins.delete 从满足集消失）。
    */
   private retractUnsatisfiedActives(): void {
-    if (this.state !== 'started') return
+    if (this._state !== 'started') return
     let progressed = true
     while (progressed) {
       progressed = false
@@ -564,6 +579,44 @@ export class Context implements PluginScope {
     return [...this.services.keys()]
   }
 
+  // ==================== 注册场（§2.1）与状态 ====================
+
+  /**
+   * 取某 kind 的注册场（设计文档 §2.1 / 决策 6）。入口叫 registryOf ——
+   * ctx.registry 已被插件运行态诊断占用，不要动它。
+   *
+   * 同一 kind 各处拿到的是**同一张表**（插件之间互相看得见，这正是注册场的意义）；
+   * 视图只决定两件事：add/wrap/subscribe 是否随本作用域自动回收、add/wrap 写进 entry.source（谁放的）。
+   * 宿主（根 ctx）用：source 记作 '<host>'，返回的句柄由调用方自己持有（不自动回收）。
+   */
+  registryOf<T>(kind: string): Registry<T> {
+    return this.registryTable(kind).bind('<host>') as unknown as Registry<T>
+  }
+
+  /**
+   * 插件私有状态（§二 原语 ⑥）：内核只存值、不做响应式（响应式由渲染层决定）。
+   * 不占服务名——它是插件自己的数据，不是"别人按名取的能力"（规则 7）。
+   * 插件作用域上的 state 随插件 scope 自动回收（见 deriveScope）。
+   */
+  state<T>(initial: T): State<T> {
+    return { value: initial }
+  }
+
+  /** 是否开发态（原 private dev 公开化：插件与消费者都要能读） */
+  get isDev(): boolean {
+    return this.dev
+  }
+
+  /** kind → 场实例（没有则建一份；整张表随 stop 清空） */
+  private registryTable(kind: string): RegistryImpl<unknown> {
+    let t = this.registries.get(kind)
+    if (!t) {
+      t = new RegistryImpl<unknown>()
+      this.registries.set(kind, t)
+    }
+    return t
+  }
+
   // ==================== 事件 ====================
   // 类型化：事件名在 Events/EventMap 里则 on/emit 参数有类型（作者 declare module 扩展 Events 即得
   // 多参类型提示）；否则松类型。实现统一 rest-arg 走 EventBus（单 payload 也当多参的第一参传给 on/emit）。
@@ -665,8 +718,26 @@ export class Context implements PluginScope {
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
+      registryOf<T>(kind: string): Registry<T> {
+        // 插件视图：同一 kind 全插件共享一张表；source 记作本插件名，
+        // 放置（add/wrap）随本插件 fiber 自动回收——热卸时它放的东西一条不留。
+        return ctx.registryTable(kind).bind(pluginName, (fn) => {
+          fiber.onDispose(fn)
+        }) as unknown as Registry<T>
+      },
+      state<T>(initial: T): State<T> {
+        // 私有状态随本插件 scope 回收（ctx.effect）：卸载后 value 清空 = 不再可达。
+        const st: State<T> = { value: initial }
+        fiber.effect(() => () => {
+          st.value = undefined as unknown as T
+        })
+        return st
+      },
       get registry() {
         return ctx.registry
+      },
+      get isDev() {
+        return ctx.dev
       },
       plugin(mod: PluginModule | PluginClassLike): PluginScope {
         // 嵌套插件：插件在 apply 里想再装子插件时，运行态必须是 installPlugin（热装语义），
@@ -722,9 +793,9 @@ export class Context implements PluginScope {
   }
 
   private assertState(expect: ContextState, op: string): void {
-    if (this.state !== expect) {
+    if (this._state !== expect) {
       throw new Error(
-        `[core] Cannot ${op} when state is "${this.state}" (expected "${expect}"). Call start() first.`,
+        `[core] Cannot ${op} when state is "${this._state}" (expected "${expect}"). Call start() first.`,
       )
     }
   }

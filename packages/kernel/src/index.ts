@@ -19,6 +19,9 @@ export { EventBus, registerEventName, isBailed, hasKnownEvent } from './EventBus
 export type { DispatchMode } from './EventBus'
 export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
+// 通用注册场（ctx.registryOf 的地基）：设计文档 §2.1 的 Registry/Entry 契约与默认实现
+export { RegistryImpl } from './registry/registry'
+export type { Registry, Entry, RegistryWrapper, RegistryImplOptions } from './registry/registry'
 // 内核自带能力：工具注册表（ctx.tools）——"注册一个外部能力、别人按名调用"，通用、与画布无关
 export {
   ToolRegistry,
@@ -89,6 +92,7 @@ export type {
   PluginModule,
   PluginScope,
   PluginCapabilities,
+  State,
   Revoke,
   Services,
 } from './types'

@@ -13,10 +13,21 @@ import type {
   ToolInvokeOptions,
   ToolResult,
 } from './toolRegistry'
+import type { Registry } from './registry/registry'
 
 /** 可释放对象：调用即执行清理，幂等安全 */
 export interface Disposable {
   dispose(): void
+}
+
+/**
+ * 插件私有状态（ctx.state）：内核只存值、不做响应式。
+ *
+ * 为什么不占服务名：它是插件自己的数据，不是"别人按名取的能力"（设计文档规则 7）。
+ * 响应式由渲染层决定（要响应式的消费方把这个对象塞进 reactive/ref 里）。
+ */
+export interface State<T> {
+  value: T
 }
 
 /** 生命周期状态（裁掉 v1 无调用路径的 deactivate/inactive 三态） */
@@ -177,6 +188,25 @@ export interface PluginScope extends PluginCapabilities {
     { status: { name: string; state: string; missingDeps: string[]; error?: string }; fiber: unknown }
   >
 
+  /**
+   * 取某 kind 的注册场（设计文档 §2.1 / 决策 6）。
+   *
+   * 同一 kind 各插件拿到的是同一张表（互相看得见，这正是"别人放的东西我能继续包"的前提）；
+   * 本插件视图只多两件事：写进条目的 source = 本插件名（谁放的，可诊断），
+   * 以及本插件放置（add/wrap）的条目随本插件卸载自动回收。
+   *
+   * 注意：ctx.registry 是插件运行态诊断（cordis 06），与本方法无关，名字也不要改。
+   */
+  registryOf<T>(kind: string): Registry<T>
+  /**
+   * 插件私有状态（§二 原语 ⑥）：内核只存值、不做响应式（响应式由渲染层决定）。
+   * 不占服务名——它是插件自己的数据，不是"别人按名取的能力"（规则 7）。
+   * 随本插件 scope 自动回收：卸载后 value 清空，状态不再可达。
+   */
+  state<T>(initial: T): State<T>
+  /** 是否开发态（内核构造时的 dev 选项；原来只是 private 字段，插件读不到） */
+  readonly isDev: boolean
+
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */
   parallel<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<void>
@@ -233,4 +263,3 @@ export type Revoke = () => void
  * effect 回调：可返回一个清理函数（会被登记进当前 scope）。
  */
 export type EffectFn = () => void | (() => void) | Disposable
-

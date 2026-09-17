@@ -654,7 +654,8 @@ ctx.nodes.attach(type: string | '*', req: {
 
 **步骤 3 · `BaseNode.vue` 改成按区域遍历。**
 - 十个区域词全部落地；现有五个段（content/title/top-toolbar/bottom-toolbar/overlay）映射到 `in`/`title`/`out:top`/`out:bottom`/`over:inset`。
-- 新增 `out:left`/`out:right`/`on:top`/`on:bottom`/`over` 五个区域的渲染位。
+- 新增 `out:left`/`out:right`/`on:top`/`on:bottom`/`over:outset` 五个区域的渲染位
+  （五个老段 = `in`/`title`/`out:top`/`out:bottom`/`over:inset`，五个新区域合计十个区域词）。
 - **完成标准**：① 五个老段全部映射后，既有节点外观与行为**目视一致**（截图留档对比，不要求逐像素自动比对——仓库无此设施）；② 十个区域各有一个最小挂件渲染成功；③ 既有测试一条不删、全绿。
 
 ### 第二组：搬窝（价值最高，风险最高）
