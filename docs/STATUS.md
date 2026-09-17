@@ -44,14 +44,28 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 - 架构分层调查 → `docs/tmp/architecture-layer-audit/report.md`（只读，未改代码）。
 - 设计文档 v2 成稿并过一轮独立审核（两个子代理：设计审核 + 事实核验，29 条问题已修）。
 - `AGENTS.md` 按现状重写（原内容指向已删除的 `packages/canvas-core-v2` 与丢失的契约文档）。
+- **注册场改造步骤 1、2 已完成**（分支 `codex/registry-refactor`）：
+  - 步骤 1：kernel 新增 `Registry<T>`（`registryOf` / `state` / `isDev`），+38 测试（125 → 163）。
+  - 步骤 2：五个能力段（nodes/theme/commands/slots/settings）糖底改走注册场，行为零变化，
+    canvas-data +6 条落点测试（275 → 281）。
+  - 契约金标准 `docs/tmp/canvas-core-v2-survey/core-node-contract.md` 已重建（593 行，
+    六件 66 条不变量 / 27 条易碎点）——AGENTS.md 的「待重建」标记即指它，已可解除。
+  - 实测基线：kernel **163** / canvas-data **281** / canvas-render **322** / ui **26** 全绿。
+  - 勘误记录：theme「同槽重复抛错」实为「同 occupant id 重复抛错」（不同 id 走 addOccupant 叠加）。
+
+### 下一步（未开始）
+
+步骤 3（`BaseNode.vue` 按区域遍历，前置契约已就绪）→ 步骤 4（基础插件收编 15 行装配，
+用 `core: true` 标识）→ 步骤 5（服务合并 doc）→ 步骤 6（工具缺口）→ 步骤 7（拆插件循环依赖）
+→ 步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
 
 ## 二、验证命令（每次改完跑，测试是唯一裁判）
 
 根目录**没有**统一 test 脚本，各包各自跑：
 
 ```bash
-pnpm -C packages/kernel test           # 125
-pnpm -C packages/canvas-data test      # 275
+pnpm -C packages/kernel test           # 163（步骤 1 后）
+pnpm -C packages/canvas-data test      # 281（步骤 2 后）
 pnpm -C packages/canvas-render test    # 322
 pnpm -C packages/ui test               # 26（整装 / 设置覆盖 / 插件装配）
 pnpm -C packages/plugins/<插件名> test   # 单个插件，如 plugin-theme-default（158）
@@ -72,7 +86,7 @@ pnpm -C packages/ui dev                     # 起画布应用看画面（:5288�
 - 节点交互区域与拖线规范：`docs/规则/节点区域与连接线拖拽规范.md`
 - 插件系统目标与验收：`docs/goal/plugin-system-goal.md`
 - 架构决策记录：`docs/adr/0001-canvas-core-v2-plugin-kernel.md`
-- ⚠️ **已失效**（文档随目录被删，待重建）：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`
+- 核心节点件行为契约金标准（2026-09-17 重建）：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`
 
 **v1 老版（只读参考，不碰）**：`packages/canvas-core/`、根 `src/`。
 

@@ -28,15 +28,16 @@ packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
 2. **核心节点件禁止改坏**：`packages/plugins/plugin-theme-default/src/components/` 下的
    `node/BaseNode.vue`、`node/MovingHandle.vue`、`node/BaseTitle.vue`、`edge/CustomEdge.vue`、
    `edge/ConnectionLine.vue`、`background/DefaultBackground.vue`。
-   ⚠️ 它们的**行为契约金标准 `docs/tmp/canvas-core-v2-survey/core-node-contract.md` 已随目录删除、尚未重建**；
-   在重建之前不要改这些文件（重建是 `docs/design/core-layers-and-registry.md` 步骤 3 的前置条件）。
+   改动前先读行为契约金标准：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`
+   （2026-09-17 已重建，六件 66 条不变量 / 27 条易碎点，全部带 file:line 锚点；
+   其中 §9「端口区默认值双源漂移 86 vs 10」动端口几何前必须先对齐）。
    相关的现行规范见 `docs/规则/节点区域与连接线拖拽规范.md`。
 
 ## 验证命令（每个包各自跑；根目录没有统一 test 脚本）
 
 ```bash
-pnpm -C packages/kernel test          # 125
-pnpm -C packages/canvas-data test     # 275
+pnpm -C packages/kernel test          # 163（步骤 1 后）
+pnpm -C packages/canvas-data test     # 281（步骤 2 后）
 pnpm -C packages/canvas-render test   # 322
 pnpm -C packages/ui test              # 26（整装/设置覆盖/插件装配）
 pnpm -C packages/plugins/<插件名> test  # 单个插件
