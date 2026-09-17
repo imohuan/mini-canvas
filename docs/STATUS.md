@@ -1,31 +1,108 @@
 # mini-canvas 项目指挥入口（每次开工先读这里）
 
-> **我是项目的"当前该干什么"入口。任何 AI / 会话在本项目干活前，先读本文件确认进度与下一步，再读 `docs/plan/canvas-core-v2-runbook.md` 拿执行剧本。**
+> **我是项目的"当前该干什么"入口。** 读法：先看下面【一、现在该做什么】，再按需查【二、验证命令】
+> 【三、契约锚点】。历史记录在【四】之后，**只供追溯，不代表现状**。
 
-## 当前主线（2026-09-14 更新）：三层包结构 —— kernel / canvas-data / canvas-render
+## 一、现在该做什么（2026-09-17）
+
+### 包结构（现行，已定型）
 
 `packages/canvas-core-v2` **已删除**（实现与测试分别迁入 kernel 与 canvas-data）。
 
 ```
-@mini-canvas/kernel         纯插件框架 + 通用能力（tools / command / iconKind / SettingsStore / SlotRegistry），零画布概念、零 Vue
-@mini-canvas/canvas-data    数据层 + 画布语义层（nodeStore/edgeStore/graph/save/history/selection + canvas/ 下节点主题注册表、能力段、连接校验、菜单聚合、建节点、画布 Context）
-@mini-canvas/canvas-render  渲染层（VueFlow/DOM/令牌 + nodeLayout/viewport）
-packages/plugins/*          插件库（22 个，全部按层导入；画布通用命令已收进 canvas-data）
+@mini-canvas/kernel         纯插件框架（装载/依赖/事件/作用域回收/注册表 + tools），零画布概念、零 Vue
+@mini-canvas/canvas-data    数据层 + 画布语义（nodeStore/edgeStore/graph/save/history/selection
+                            + canvas/ 下节点/主题注册表、能力段、连接校验、菜单聚合、建节点、画布 Context）
+@mini-canvas/canvas-render  渲染层（CanvasHost/CanvasSurface/令牌 + nodeLayout/viewport）
+@mini-canvas/canvas-base    插件作者薄入口（重导出 kernel + canvas-data 类型 + define* 助手）
+@mini-canvas/ui             成品应用出口（一行 CanvasHost 出画布；App.vue 装配 21 个插件）
+packages/plugins/*          插件库（**24 个**）
+packages/cloud-server       自托管云端（KV + 资源 + 静态托管 + MCP 控制画布）
+packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
 ```
 
-**依赖方向（已核对单向）**：kernel ← canvas-data ← canvas-render ← plugins。
+**依赖方向（已核对单向）**：`kernel ← canvas-data ← canvas-render ← plugins`。
 kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
-**验证基线（全绿，2026-09-14 实测）**：kernel **125** / canvas-data **257** / canvas-render **215** / ui **23**；
-22 个插件包全通过（**872** 条）；另 mcp-server **47** / cloud-server **36**；累计 **1575** 条。
-核心包 `tsc` 全 0 错、ui `vue-tsc` 0 错、ui 生产构建通过、
-浏览器端到端实测（建节点/撤销重做/刷新恢复/设置面板）零控制台报错。
+### 下一阶段主线：注册场改造（等用户批准决策）
 
-**本轮变更（2026-09-14）**：画布通用命令（建节点/删选中/撤销/重做）从独立插件包
-`plugin-canvas-commands` **收进 `canvas-data`**（新 `src/canvas/canvasCommands.ts` 的 `registerCanvasCommands`，
-宿主 `createMiniCanvasHost` boot 时默认注册，命令 id/keys 逐字不变 → 调用方零改动）；
-同时删除死代码包 `plugin-custom-handle`（全仓无人 import，其端口几何常量与真正生效的
-`plugin-theme-default` 数值不一致）。插件库 24 → 22 个。
+设计文档：`docs/design/core-layers-and-registry.md`（v2，已过一轮独立审核）。
+
+解决的问题（用户原话）："功能全是堆砌上去……很多功能都需要其他的地方支持，这就又需要我提供新的 api 功能"。
+两条根因：**位置是数出来的**（给节点加东西只有 5 个写死位置，加进度条要改 `BaseNode.vue`）、
+**新功能只能靠加服务**（没有通用"放东西"机制，菜单就是这么来的）。
+
+终态：三根轴（装载 / 服务 / 注册）+ 七个原语 + 一张服务归属表 **18 → 7**。
+
+**卡在等用户批准 9 条决策**（清单见设计文档开头）。批准后从步骤 1 开始（纯新增、行为零变化）。
+
+⚠️ **动手前置**：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`（核心节点件行为契约金标准）
+**已随目录删除、尚未重建**。步骤 3 要改 `BaseNode.vue`，重建它之前不要动核心节点件。
+
+### 最近一轮已完成（2026-09-17）
+
+- 架构分层调查 → `docs/tmp/architecture-layer-audit/report.md`（只读，未改代码）。
+- 设计文档 v2 成稿并过一轮独立审核（两个子代理：设计审核 + 事实核验，29 条问题已修）。
+- `AGENTS.md` 按现状重写（原内容指向已删除的 `packages/canvas-core-v2` 与丢失的契约文档）。
+
+## 二、验证命令（每次改完跑，测试是唯一裁判）
+
+根目录**没有**统一 test 脚本，各包各自跑：
+
+```bash
+pnpm -C packages/kernel test           # 125
+pnpm -C packages/canvas-data test      # 275
+pnpm -C packages/canvas-render test    # 322
+pnpm -C packages/ui test               # 26（整装 / 设置覆盖 / 插件装配）
+pnpm -C packages/plugins/<插件名> test   # 单个插件，如 plugin-theme-default（158）
+
+pnpm -C packages/canvas-render typecheck    # tsc --noEmit
+pnpm -C packages/ui typecheck               # vue-tsc
+
+pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
+```
+
+> 数字为 **2026-09-17 实测**；会随开发变动，以本文件"最近一轮"记录为准。
+
+## 三、关键契约锚点（动手前读对应文档，不许自己发明接口）
+
+- 架构与分层设计（终态 + 迁移步骤 + 决策记录）：`docs/design/core-layers-and-registry.md`
+- 插件作者教程（7 篇，照抄能跑）：`docs/plugin-dev/`
+- 内核/渲染各 API 手册：`docs/代码开发/00-总览与架构.md`（及其 `canvas-core-v2/`、`canvas-render/` 子目录）
+- 节点交互区域与拖线规范：`docs/规则/节点区域与连接线拖拽规范.md`
+- 插件系统目标与验收：`docs/goal/plugin-system-goal.md`
+- 架构决策记录：`docs/adr/0001-canvas-core-v2-plugin-kernel.md`
+- ⚠️ **已失效**（文档随目录被删，待重建）：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`
+
+**v1 老版（只读参考，不碰）**：`packages/canvas-core/`、根 `src/`。
+
+## 四、铁律（每条都要守）
+
+1. **测试是唯一裁判**（亲眼见 runner 全绿）；浏览器画面只是演示，能跑/能恢复必须有无头测试兜底。
+2. **契约不自己发明**（只按上面锚点实现/消费；要改契约先改文档）。
+3. **不碰 v1**：根 `src/` 与 `packages/canvas-core`。
+4. **核心节点件禁止改坏**（`plugin-theme-default/src/components/` 下的 node/edge/background 组件）。
+5. **不改测试**（除非本任务明确要求先改测试）。
+6. 卡住就停下（同一改法失败 >2 次 → 用新信息重写该步 spec 或上报），不脑补不无限重试。
+7. 每步绿了就原子 commit，suite 全绿才进下一步。
+8. 高危模块（内核 / save / 连接 / 核心节点件）动前先确认测试网在且绿。
+9. 架构决策 / 接口契约 / 依赖排序 / 集成验证 / 评审关卡留在主 agent，不下发给并行子代理。
+
+---
+
+# 五、历史记录（按时间倒序，只供追溯）
+
+> 以下是逐轮开发记录，保留原貌便于追溯"当时为什么这么改"。**不代表当前状态**，
+> 其中的路径（`packages/canvas-core-v2` 等）与测试数字都是当时的快照。
+
+## 变更记录（2026-09-14 ~ 09-17）
+
+**本轮变更（2026-09-14）：三层包结构定型 —— kernel / canvas-data / canvas-render**。
+`packages/canvas-core-v2` 删除（实现与测试分别迁入 kernel 与 canvas-data）；
+画布通用命令（建节点/删选中/撤销/重做）从独立插件包 `plugin-canvas-commands` **收进 `canvas-data`**
+（`src/canvas/canvasCommands.ts` 的 `registerCanvasCommands`，宿主 boot 时默认注册，命令 id/keys 逐字不变）；
+同时删除死代码包 `plugin-custom-handle`（全仓无人 import）。插件库 24 → 22 个。
+当时验证基线：kernel 125 / canvas-data 257 / canvas-render 215 / ui 23，22 个插件包共 872 条。
 
 **已知遗留（与本次无关）**：`plugin-theme-default` 的 `typecheck` 脚本用 raw `tsc` 处理 `.vue`，
 报 `export type { X } from './X.vue'` 找不到导出（HEAD 里就存在）；其余 29 个包 typecheck 通过。
@@ -161,7 +238,10 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
   - **图片对比节点宽度跟随第一条连线**（用户原话："他的宽度应该跟第一个连接线连接的图片的宽度一致"）：新增纯函数 `compareFit.ts` —— 只认**第一条连线**（两张图宽度不同就以先连的为准）、宽度取上游图片节点的**显示宽度** `data.cardWidth`（即用户实际看到的那个宽度，不是原始像素）、**拿不到就不猜**（保持原宽度，猜错比不跟随更糟）、**幂等**（算出来等于当前就一次都不写，否则监听自己触发自己转死循环 —— 与 imageFit 同一教训）。只跟宽度不动高度（高度留给用户拖）；`cardWidth` 与内核 `size` 同一次写回（只改一个会让相连边端点停在旧宽度）。
   - 测试：相关包共 **1051 条**全绿（内核 354 / 渲染 215 / 主题 83 / text 64 / image 142 / 3d 45 / compare 46 / 图片工具 54 / 文本工具 31 / ui 17）；text / 3d / compare / image 四包 `tsc` + ui `vue-tsc` + 三包与 ui `vite build` 全通过。本轮新增 7 个测试文件、60 条，其中三个是**渲染契约**（SSR 拿真 HTML 断言）：`textContentRender` 锁编辑态有没有 `nowheel` 与滚动条、`panoramaContentRender` 锁预览模式画面有没有真的 `pointer-events:none`（只看画面容器，不看模板注释）、`imageCompareWidthRender` 用记录型假 graph 锁"连上图之后确实写回宽度"。
 
-## 现在立刻该做的一件事
+## 现在立刻该做的一件事（2026-09-16 记录）
+
+> 注：本节以下的每次"现在立刻该做的一件事"是当时的快照标题，逐轮累加后重复出现，已就地保留（见【五、历史记录】小节说明）。
+
 ### 本轮：拖线时压住其它连线的流光（用户指定，2026-09-16）
 - 用户需求（原话）：「在拖拽连接线的情况下 其余连接线不要光斑动画效果（流光效果动画）」。
 - **根因**：CustomEdge 的 `isHighlighted` 含「两端任一节点被选中」→ 多选批量连线时选中集覆盖一大片边，它们的流光全亮（用户截图：整片线都在流）。
@@ -524,8 +604,9 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
   - 测试：相关包共 **1084 条**全绿（内核 361 / 渲染 215 / 主题 83 / text 64 / image 142 / 3d 71 / compare 46 / 图片工具 54 / 文本工具 31 / ui 17）；core-v2 / render / 3d 三包 `tsc` + ui `vue-tsc` + 3d `vite build` 全通过。本轮新增 4 个测试文件、26 条：内核 `commandDispatchPriority`（when 让位 + order 优先）、3d 的 `node3dCommands`（目标判定）、`node3dShortcuts`（真内核 + 真分发的整链优先级）、以及扩展后的 `panoramaMode`/`panoramaSession`/`panoramaContentRender`（全屏、Esc 分层、画面上不再有按钮提示）。
   - **浏览器实测**（内置浏览器 + 本地 dev server，用真键盘事件，不只跑测试）：f 进全屏（全屏层 canvas 实测 1280×720 铺满）、拖拽转视角后 r 回到初始朝向、Esc 逐层退出（fullscreen→interactive→preview）、以及优先级两种情形 —— 没选中时执行的是 `auto-layout:focus-selected`、选中 3D 节点时执行的是 `3d-preview:fullscreen`。
 
-## 现在立刻该做的一件事
-- ✅ **图片节点显示修复：铺满不留空隙 + 卡片尺寸跟上**（2026-09-13 第九轮，用户指定）：
+### （2026-09-13 第九轮）图片节点显示修复：铺满不留空隙 + 卡片尺寸跟上
+
+- ✅ 用户指定：
   - 用户报的缺陷（原话）：&quot;你的图片节点显示有些问题，横屏图片 宽度大了几像素，竖屏高度大了几像素&quot;。用内置浏览器实测复现并量到确切数字：横屏图卡片外框 420×236 而图片只画到 416×234（左右各留 2px）、竖屏图卡片 169×300 而图片只画到 167×296.9（上下各留约 1.6px）。
   - **根因一：填充方式**。卡片是 `border-box` 且带 1px 边框，边框先从声明尺寸里扣掉，于是**内容区**比&quot;按图片比例算出的卡片尺寸&quot;矮胖了一点（差 2px）；`object-fit: contain` 在比例不吻合的框里必然在某一侧留白，所以&quot;节点比图片大几像素&quot;用 contain 消不掉。改为平时**铺满**（`cover`，与老版 ImageNode 的 `object-cover` 一致）。
   - **但裁剪时必须切回 contain**：裁剪覆盖层的遮罩与裁剪框都按 object-contain 几何计算（ImageCropper 的 `computeFit`），它底下就是这张图片；此时若仍铺满，遮罩会盖错、裁剪框指向错误的像素区域，裁出来不是用户框选的那块。故加 `is-fill-cover` / `is-fill-contain` 两态，随裁剪开关切换。
@@ -533,43 +614,23 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
   - **浏览器实测**（内置浏览器 + 真 dev server）：横屏 420×236（比例 1.78 ≈ 图片 1.778）、竖屏 169×300（0.563 = 0.563）、正方形 300×300，全部&quot;卡片尺寸 = data 尺寸&quot;且图片铺满无空隙；8 个不同比例节点复测 7/7 正常跟随（第 8 个是 400×1200 的极细长图，宽度被设计下限 120px 抬起，属既有规则非缺陷）；裁剪模式切回 contain 且遮罩对齐、退出后恢复铺满。
   - 测试：相关包共 **1011 条**全绿（内核 361 / 渲染 215 / 主题 83 / text 64 / image 148 / 3d 71 / compare 46 / ui 23）；image / render / core-v2 / 3d 四包 `tsc` + ui `vue-tsc` + image 与 ui `vite build` 全通过。本轮新增 `imageContentRender`（SSR 真 HTML 锁&quot;平时铺满 / 裁剪时完整可见&quot;两态）。
 
-## 现在立刻该做的一件事
-- ✅ **图片节点去边框 + 清掉死配置 + 节点注册字段收成单一来源**（2026-09-13 第十轮，用户指定）：
+### （2026-09-13 第十轮）图片节点去边框 + 清掉死配置 + 节点注册字段收成单一来源
+
+- ✅ 用户指定：
   - 用户追问（原话）："我不明白 为什么图片插件会有边框?? 什么地方需要他？"。查明：边框**不是图片插件的**，它来自**共享外壳**（theme-default 的 BaseNode `.v2-card`，`borderWidth: 1px/zoom` + `border-style: solid`），本意是让卡片从画布背景上浮起来 + 承载选中态/非法连接的边框高亮 —— 所有节点类型共用，v1 也是同一个壳（`custom-node-card` 同样带 1px 边框），所以这 1px 是从 v1 继承来的，不是本轮重构引入。
   - **图片节点去掉边框**：图片是**内容铺满整张卡**的类型，那圈边框对它没有分层价值、只会变成内容边缘多余的一圈缝（用户一路在追的"图片边上还有一像素边距"就是它）。新增**类型级能力 `frameless`**（与 resizable/icon 同层，由类型自己声明，不让外壳猜节点类型），图片类型声明 `frameless: true`。**选中环不受影响**：环是 `.v2-card::after` 的 box-shadow，与边框互相独立 —— 这条是删边框最容易漏的回归，已单独写进契约测试。浏览器实测：图片节点边框 `0px`、3D 预览与图片对比仍 `1px`，图片四边间隙全部为 0（彻底贴边），选中环照常显示。
   - **删掉 6 个死配置**：`cornerRadius` / `showShadow` / `borderWidth` / `borderColor` / `blurOnLoad` / `lazyLoad` 在图片插件里声明过但**全仓无人读取** —— 设置界面里能看到、改了却毫无反应（比没有更糟：让设置面板显得可信，实际在骗人）。已整体删除，浏览器实测这 6 个 key 均读不到了。真要支持"图片可调边框/圆角"时再加，那时一次性把实现与测试一起补上。
   - **顺手修掉一个结构性隐患（本轮最重要的发现）**：给类型加字段时发现**同一份字段清单散落三处** —— `registerNodeType.ts` 的 `NodeTypeDef`、`capabilities.ts` 的 `NodeRegisterDef`、`types.ts` 里内联的 `register(def: {...})`。插件实际走 `ctx.nodes.register`（第二条路），而漏改 `types.ts` 那份会导致**类型检查报错、或字段被静默丢掉**。这次就真实踩到：`capabilities.ts` 的透传清单漏了 `frameless`，**单测全绿、浏览器里边框照旧**（测试覆盖了 `registerNodeType` 那条路，插件用的却是另一条）。已把 `types.ts` 的内联定义收成引用 `NodeRegisterDef`（单一来源），并在 `capabilities.test` 加"类型级能力逐字段透传"的测试钉住这条缝。
   - 测试：相关包共 **1106 条**全绿（内核 363 / 渲染 215 / 主题 91 / text 64 / image 148 / 3d 71 / compare 46 / 图片工具 54 / 文本工具 31 / ui 23）；core-v2 / render / theme / image / text / 3d / compare 七包 `tsc` + ui `vue-tsc` 全通过。本轮新增 2 个测试文件 + 2 条用例：`cardFrame`（边框/圆角/选中环的取值规则，含"删边框别把选中环删没了"）、`capabilities.test` 的透传契约、`registerNodeType.test` 的 frameless 透传。
 
-## 现在立刻该做的一件事
-**四个节点的双态、尺寸行为、3D 快捷键与图片去边框已按用户第七~十轮要求落地，测试与类型检查全绿。** 下一步等用户目验后再定：目验入口 `cd packages/ui && pnpm dev`（text/image/3d-preview/image-compare 四个包都在装配清单里）。
-本轮目验重点：① 文本节点默认看不到滚动条、双击进编辑后内容长了能滚且滚轮不缩放画布；② 3D 预览默认按住画面能拖节点、双击后能转视角、选中后 f 全屏 / r 重置 / Esc 逐层退出，且画面上不再有提醒与重置按钮；③ 连一张图后图片对比节点的宽度变得和那张图一样宽。
-目验重点：选中节点时上下状态栏是否浮出且不撑高节点；图片上传后刷新是否还在；裁剪确认后是否原地替换并可撤销；文本加粗/字号/对齐是否生效且可撤销；3D 预览连一张图后能否拖拽转向；图片对比连两张图后分割线能否拖动。
+## 早期里程碑（2026-09-13 及以前，历史）
 
-## 验证命令（每次改完跑，测试是唯一裁判）
-```bash
-cd packages/canvas-core-v2
-node ./node_modules/vitest/vitest.mjs run            # 测试全绿才前进
-node ../../node_modules/typescript/bin/tsc --noEmit   # 类型干净
-pnpm dev                                               # 起 vite 看画面
-```
+### 四个节点双态 / 尺寸行为 / 3D 快捷键 / 图片去边框（用户第七~十轮）
+已落地，测试与类型检查全绿。当时目验入口 `cd packages/ui && pnpm dev`。
+当时目验重点：① 文本节点默认无滚动条、双击进编辑后内容长了能滚且滚轮不缩放画布；② 3D 预览默认按住画面能拖节点、双击后能转视角、选中后 f 全屏 / r 重置 / Esc 逐层退出，画面上不再有提醒与重置按钮；③ 连一张图后图片对比节点宽度跟随该图。
 
-## 关键契约锚点（动手前读对应文档，不许自己发明接口）
-- 执行剧本/里程碑/验收：`docs/plan/canvas-core-v2-runbook.md`
-- ctx 内核 API 契约(定稿)：`docs/plan/canvas-core-v2-api.md`
-- **核心节点件行为契约金标准(CustomNode/BaseNode/MovingHandle/NodeToolbar/ResizeHandle/CustomEdge,禁止改坏)**：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`
-- 架构：`docs/plan/canvas-core-v2-architecture.md` / 依赖图 owner：`canvas-core-v2-depmap.md`
-- 决策记录：`docs/adr/0001-canvas-core-v2-plugin-kernel.md`
-
-## 铁律(每条都要守)
-1. 测试是唯一裁判(亲眼看 runner 全绿)；浏览器画面只是演示，能跑/能恢复必须有无头测试兜底。
-2. 契约不自己发明(只按上面锚点实现/消费；要改契约先改文档)。
-3. 一个文件只归一个 owner；没列进当前闭环的东西(见红线)不做。
-4. Do not change the tests(除非明确要先改测试)。
-5. 卡住就停下(改法>2 次失败 → 用新信息重写该步 spec 或上报)，不脑补不无限重试。
-6. 每步绿了就原子 commit，suite 全绿才进下一步。
-7. 高危模块(内核/save/连接/核心节点件)动前先确认测试网在且绿。
-8. 架构决策/接口契约/依赖排序/集成验证/评审关卡留在主 agent，不下发给并行子代理。
+### 更早：M0~M6 里程碑
+见下方"当前进度（哪个里程碑）"一节（该节为 2026-09-04~09-12 的历史记录）。
 
 ---
-*本文件由主 agent 维护。里程碑推进时更新"当前进度/下一步"两节。*
+*本文件由主 agent 维护：开工前更新【一、现在该做什么】，其余各节按需追补。*

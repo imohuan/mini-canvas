@@ -1,10 +1,63 @@
 # AGENTS.md — mini-canvas 项目开工入口
 
-> 在本项目里做任何事之前，**先读 `docs/STATUS.md`**。它是项目的指挥中心：当前主线、进度、**现在该做什么**、验证命令、契约锚点。
-> 要动手实现时再读 `docs/plan/canvas-core-v2-runbook.md`（执行剧本）。
+> 在本项目里做任何事之前，**先读 `docs/STATUS.md`**（项目指挥中心：进度、验证命令、契约锚点）。
+> 要动架构/分层/注册机制/加扩展点时，读 `docs/design/core-layers-and-registry.md`（终态设计与迁移步骤）。
 
-快速要点：
-- 当前主线 = canvas-core-v2 重构(开发测试期最小闭环)。**红线：不碰 `src/`(老版宿主)**。
-- 核心节点件(CustomEdge/BaseNode/MovingHandle/NodeToolbar/ResizeHandle/CustomNode)**禁止改坏**，先读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md`。
-- 测试是唯一裁判：改完跑 `cd packages/canvas-core-v2 && node ./node_modules/vitest/vitest.mjs run`，全绿才前进。
-- 写任何浮层/菜单/面板/弹窗等 UI 前，先读并遵循 `docs/design/ui-style-guide.md`（设计 token、组件数值、动效、a11y 硬性规则），不自造颜色/圆角/字号数值。
+## 当前主线
+
+**三层包结构**（v2 现行架构，`packages/canvas-core-v2` 已删除）：
+
+```
+@mini-canvas/kernel         纯插件框架（装载/依赖/事件/作用域回收/注册表），零画布概念、零 Vue
+@mini-canvas/canvas-data    数据层 + 画布语义（nodeStore/edgeStore/graph/save/history/selection + 注册表/连接校验/建节点）
+@mini-canvas/canvas-render  渲染层（VueFlow/DOM/令牌 + nodeLayout/viewport）
+@mini-canvas/canvas-base    插件作者的薄入口（重导出 kernel + canvas-data 类型）
+@mini-canvas/ui             成品应用出口（一行 CanvasHost 出画布）
+packages/plugins/*          插件库（24 个）
+packages/cloud-server       自托管云端（KV + 资源 + 静态托管 + MCP 控制画布）
+packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
+```
+
+依赖方向单向：`kernel ← canvas-data ← canvas-render ← plugins`。kernel 不依赖任何 @mini-canvas 包。
+
+下一阶段主线见 `docs/design/core-layers-and-registry.md`：把「加新功能必须加服务」改成「往注册场里注册」。
+
+## 红线
+
+1. **不碰 v1**：根 `src/` 与 `packages/canvas-core`（老版宿主与老版内核）。
+2. **核心节点件禁止改坏**：`packages/plugins/plugin-theme-default/src/components/` 下的
+   `node/BaseNode.vue`、`node/MovingHandle.vue`、`node/BaseTitle.vue`、`edge/CustomEdge.vue`、
+   `edge/ConnectionLine.vue`、`background/DefaultBackground.vue`。
+   ⚠️ 它们的**行为契约金标准 `docs/tmp/canvas-core-v2-survey/core-node-contract.md` 已随目录删除、尚未重建**；
+   在重建之前不要改这些文件（重建是 `docs/design/core-layers-and-registry.md` 步骤 3 的前置条件）。
+   相关的现行规范见 `docs/规则/节点区域与连接线拖拽规范.md`。
+
+## 验证命令（每个包各自跑；根目录没有统一 test 脚本）
+
+```bash
+pnpm -C packages/kernel test          # 125
+pnpm -C packages/canvas-data test     # 275
+pnpm -C packages/canvas-render test   # 322
+pnpm -C packages/ui test              # 26（整装/设置覆盖/插件装配）
+pnpm -C packages/plugins/<插件名> test  # 单个插件
+
+pnpm -C packages/canvas-render typecheck   # tsc --noEmit
+pnpm -C packages/ui typecheck              # vue-tsc
+
+pnpm -C packages/ui dev                    # 起画布应用看画面（:5288）
+```
+
+**测试是唯一裁判**：全绿才前进。（数字为 2026-09-17 实测基线，会随开发变动；以 `docs/STATUS.md` 为准。）
+
+## 写 UI 前必读
+
+任何浮层/菜单/面板/弹窗，先读 `docs/design/ui-style-guide.md`（设计 token、组件数值、动效、a11y 硬性规则），不自造颜色/圆角/字号数值。
+
+## 找文档
+
+- 项目进度 / 当前该做什么：`docs/STATUS.md`
+- 架构与分层设计（终态 + 迁移步骤 + 决策记录）：`docs/design/core-layers-and-registry.md`
+- 插件作者教程（7 篇，照抄能跑）：`docs/plugin-dev/`
+- 内核/渲染各 API 手册：`docs/代码开发/00-总览与架构.md` 及其子目录
+- 插件系统目标与验收：`docs/goal/plugin-system-goal.md`
+- 架构决策记录：`docs/adr/`
