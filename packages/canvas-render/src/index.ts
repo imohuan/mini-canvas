@@ -160,6 +160,23 @@ export {
 } from './crop/mediaFit'
 export type { Rect as MediaRect, FitGeometry, HandleDir } from './crop/mediaFit'
 export type { Rect } from './crop/mediaFit'
+export { resolveScreenPerCss } from './crop/mediaFit'
+export {
+  CROP_RATIO_OPTIONS,
+  DEFAULT_CROP_RATIO_VALUE,
+  ratioOf,
+  applyRatio,
+} from './crop/cropRatio'
+export type { CropRatioOption } from './crop/cropRatio'
+export {
+  resolveEditingViewport,
+  shouldFitEditingViewport,
+  DEFAULT_EDITING_MARGIN,
+  DEFAULT_EDITING_MIN_ZOOM,
+  DEFAULT_EDITING_MAX_ZOOM,
+} from './crop/editingViewport'
+export type { EditingViewport, EditingViewportInput } from './crop/editingViewport'
+export { fitEditingNodeIntoView } from './crop/fitEditingNode'
 export { default as MediaFrameOverlay } from './crop/MediaFrameOverlay.vue'
 // 内核精选的 VueFlow 能力出口（渲染类插件统一从本包 import，不再各自依赖 @vue-flow/core）
 export * from './vueFlowBridge'

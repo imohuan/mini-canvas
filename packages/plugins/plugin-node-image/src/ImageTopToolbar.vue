@@ -11,7 +11,9 @@
 import { computed, ref } from 'vue'
 import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
 import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
-import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding } from './cropSession'
+import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
+import { Select } from '@mini-canvas/plugin-theme-default'
+import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -32,6 +34,18 @@ const visible = computed(() => selected.value)
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
+
+/** 比例下拉的选项与当前值（值存在会话草稿里：换比例只改草稿，确认时才落库） */
+const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label })))
+const ratioValue = computed(() => (editDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
+
+/**
+ * 改比例：只把选择记进会话草稿，**框的调整交给浮层**（它持有当前框）。
+ * 这样同一套比例数学只有一份实现（浮层里），不会在控制栏再抄一遍而漂移。
+ */
+function onRatioChange(value: string | number): void {
+  setEditDraft(props.id, { ...editDraft(props.id), _ratioValue: String(value) })
+}
 
 /* 图标内联 SVG（与节点类型注册的 icon 同源写法；作为常量放脚本里比塞进属性里可读） */
 const ICON_UPLOAD =
@@ -96,9 +110,20 @@ function cancelEdit(): void {
     <input ref="fileInput" class="it-file" type="file" accept="image/*" @change="onFileChange" />
 
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
-         取消在前、确认在后，与全项目「左侧取消、右侧青色确认」的顺序一致。 -->
+         布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
     <template v-if="editing">
       <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
+      <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。扩展不锁比例（它是往外扩画布）。 -->
+      <Select
+        v-if="cropping"
+        class="it-ratio"
+        :model-value="ratioValue"
+        :options="ratioOptions"
+        dropdown-width="match"
+        placeholder="自由"
+        input-id="image-crop-ratio"
+        @update:model-value="onRatioChange"
+      />
       <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
         确认
       </NodeToolbarButton>

@@ -60,6 +60,14 @@ const props = withDefaults(
     ratioOptions?: CropRatioOption[]
     /** 当前比例键（受控，由调用方持有；缺省视为默认值） */
     ratioValue?: string
+    /**
+     * 把节点拉进视野的回调（进入编辑态时调一次）。
+     *
+     * 为什么要这个：扩展/裁剪的框会往外长，节点若贴在视口边缘，长出来的控制点会落到屏幕外
+     * —— 用户实测报的"控制点错位、拖不动"其实是它被推到视口外了（elementFromPoint 返回 null）。
+     * 由调用方注入(它能拿到宿主/视口)，这里只负责"什么时候该拉"这个判断。
+     */
+    fitIntoView?: () => void
   }>(),
   {
     mode: 'crop',
@@ -82,36 +90,6 @@ const emit = defineEmits<{
   /** 比例被改（用户选了下拉里的一项）；浮层已按新比例调过框，这里只是把选择同步出去 */
   (e: 'update:ratioValue', value: string): void
 }>()
-
-/** 可显示的比例下拉（只有裁剪模式 + 调用方给了选项才出现） */
-const showRatio = computed(() => props.mode === 'crop' && (props.ratioOptions?.length ?? 0) > 0)
-
-/**
- * 换比例：把当前框调成新比例（中心不动），并把结果作为新草稿发出去。
- * 顺序很重要 —— 先算框、再上报选择；否则调用方拿到选择却看到旧框，视觉上"点了没反应"。
- */
-function selectRatio(value: string): void {
-  const ratio = ratioOf(value)
-  const next = applyRatio(rect.value, ratio, constrain)
-  rect.value = next
-  emit('update:draft', next)
-  emit('update:ratioValue', value)
-}
-
-/** 比例下拉是否展开 */
-const ratioOpen = ref(false)
-
-/** 当前比例的显示名（找不到就回落到第一项，避免按钮上出现空白） */
-const ratioLabel = computed(() => {
-  const opts = props.ratioOptions ?? []
-  const hit = opts.find((o) => o.value === props.ratioValue)
-  return (hit ?? opts[0])?.label ?? ''
-})
-
-function pickRatio(value: string): void {
-  ratioOpen.value = false
-  selectRatio(value)
-}
 
 const rootEl = ref<HTMLElement | null>(null)
 const boxW = ref(1)
@@ -154,6 +132,28 @@ function seedRect(): Rect {
     ? defaultExpandRect(mediaW.value, mediaH.value)
     : defaultCropRect(mediaW.value, mediaH.value, fit.value.scale)
 }
+
+/**
+ * 比例变化时把框调成新比例（中心不动）。
+ *
+ * 比例下拉本身在**上下控制栏**（用户要求，与 liblib 一致：× | 原比例 | 确认），
+ * 所以这里只负责"收到新比例后把框改对"，UI 不在这里。用 watch 而不是让父组件调方法：
+ * 浮层的 rect 是组件内部状态（拖拽中高频变化），外部不该持有它。
+ */
+watch(
+  () => props.ratioValue,
+  (value) => {
+    if (props.mode !== 'crop') return
+    // 边界就是整幅画面：比例调整只用于裁剪（扩展不锁比例）
+    const next = applyRatio(rect.value, ratioOf(value), {
+      width: mediaW.value,
+      height: mediaH.value,
+      minEdge: minEdge.value,
+    })
+    rect.value = next
+    emit('update:draft', next)
+  },
+)
 
 type Session =
   | { kind: 'move'; startX: number; startY: number; from: Rect }
@@ -231,10 +231,24 @@ function onKeydown(ev: KeyboardEvent): void {
   emit('cancel')
 }
 
+/**
+ * 把本节点拉进视野（只在"含编辑余量的范围装不下"时才动，见 shouldFitEditingViewport）。
+ *
+ * 这里只负责"什么时候该拉"：几何交给调用方（它手上有 flow 坐标与视口服务，
+ * 不必在本组件里再反推一遍缩放与 pane 偏移 —— 多一处算式就多一处出错）。
+ */
+function fitNodeIntoView(): void {
+  if (!props.fitIntoView) return
+  props.fitIntoView()
+}
+
 onMounted(() => {
   measure()
   rect.value = seedRect()
   emit('update:draft', rect.value)
+  // 进入编辑态先确保节点完整可见：框会往外长，贴在视口边缘时控制点会跑到屏幕外点不到
+  // （用户实测报的"控制点错位/拖不动"就是它）。拿不到视口信息时不瞎跳。
+  fitNodeIntoView()
   window.addEventListener('keydown', onKeydown)
   // 卡片尺寸会变（换媒体 / 用户拖过尺寸 / 画布缩放引起重排），浮层必须跟着重新量测，
   // 否则框与画面会错位。ResizeObserver 比 watch(cardWidth) 可靠：它量的是真实渲染尺寸。
@@ -262,18 +276,18 @@ const frame = computed(() => rectToDisplay(rect.value, fit.value))
 const frameStyle = computed<Record<string, string>>(() => ({
   left: px(frame.value.x),
   top: px(frame.value.y),
-  width: px(frame.value.width),
-  height: px(frame.value.height),
+  width: size(frame.value.width),
+  height: size(frame.value.height),
 }))
 
 /** 框外遮罩：四条（跟着框实时变）。裁剪时压暗框外，扩展时框外是要新增的区域、同样压暗以突出原图 */
 const shadeStyles = computed<Array<Record<string, string>>>(() => {
   const f = frame.value
   return [
-    { top: px(0), left: px(0), width: px(boxW.value), height: px(f.y) },
-    { top: px(f.y + f.height), left: px(0), width: px(boxW.value), height: px(Math.max(boxH.value - f.y - f.height, 0)) },
-    { top: px(f.y), left: px(0), width: px(f.x), height: px(f.height) },
-    { top: px(f.y), left: px(f.x + f.width), width: px(Math.max(boxW.value - f.x - f.width, 0)), height: px(f.height) },
+    { top: px(0), left: px(0), width: size(boxW.value), height: size(f.y) },
+    { top: px(f.y + f.height), left: px(0), width: size(boxW.value), height: size(Math.max(boxH.value - f.y - f.height, 0)) },
+    { top: px(f.y), left: px(0), width: size(f.x), height: size(f.height) },
+    { top: px(f.y), left: px(f.x + f.width), width: size(Math.max(boxW.value - f.x - f.width, 0)), height: size(f.height) },
   ]
 })
 
@@ -281,16 +295,34 @@ const shadeStyles = computed<Array<Record<string, string>>>(() => {
 const letterboxStyles = computed<Array<Record<string, string>>>(() => {
   const d = fit.value
   return [
-    { top: px(0), left: px(0), width: px(boxW.value), height: px(d.oy) },
-    { top: px(d.oy + d.dh), left: px(0), width: px(boxW.value), height: px(Math.max(boxH.value - d.oy - d.dh, 0)) },
-    { top: px(d.oy), left: px(0), width: px(d.ox), height: px(d.dh) },
-    { top: px(d.oy), left: px(d.ox + d.dw), width: px(Math.max(boxW.value - d.ox - d.dw, 0)), height: px(d.dh) },
+    { top: px(0), left: px(0), width: size(boxW.value), height: size(d.oy) },
+    { top: px(d.oy + d.dh), left: px(0), width: size(boxW.value), height: size(Math.max(boxH.value - d.oy - d.dh, 0)) },
+    { top: px(d.oy), left: px(0), width: size(d.ox), height: size(d.dh) },
+    { top: px(d.oy), left: px(d.ox + d.dw), width: size(Math.max(boxW.value - d.ox - d.dw, 0)), height: size(d.dh) },
   ]
 })
 
-/** 像素值 → CSS 长度（负数与非法值都收敛成 0，避免 NaN 让整条声明失效） */
+/**
+ * 像素值 → CSS 长度（用于 **位置**：left/top）。
+ *
+ * 只挡非有限值（NaN / Infinity 会让整条 CSS 声明失效），**负数必须原样保留** ——
+ * 扩展（outpaint）的框本来就要往外扩，左边/上边为负正是它的正常形态。
+ *
+ * 实测踩过的坑（用户报的"扩展全是 BUG"）：早先这里把负数夹成 0，于是往外拖西/北手柄时
+ * 框的 left/top 被钉死在 0、只有宽高在长 —— 表现成"边框往右长、左边纹丝不动"，
+ * 与"从左边往外扩"的预期正好相反。
+ */
 function px(n: number): string {
-  return String(n >= 0 && Number.isFinite(n) ? n : 0) + 'px'
+  return String(Number.isFinite(n) ? n : 0) + 'px'
+}
+
+/**
+ * 像素值 → CSS 长度（用于 **尺寸**：width/height）。
+ * 这里必须夹到非负：负宽高会让浏览器忽略整条声明（连位置一起失效），
+ * 而尺寸为负只可能是中间态算错，不该渲染出来。
+ */
+function size(n: number): string {
+  return String(Number.isFinite(n) && n > 0 ? n : 0) + 'px'
 }
 
 /** 框尺寸文案（媒体像素） */

@@ -26,6 +26,7 @@ import {
   resizeCropRect,
   resizeExpandRect,
   screenDeltaToMedia,
+  resolveScreenPerCss,
   toPixelRect,
 } from '../mediaFit'
 
@@ -202,6 +203,46 @@ describe('坐标换算', () => {
   it('screenDeltaToMedia：屏幕位移换算成媒体像素位移（除零守卫）', () => {
     expect(screenDeltaToMedia(100, 50, 0.5)).toEqual({ dx: 200, dy: 100 })
     expect(screenDeltaToMedia(100, 50, 0)).toEqual({ dx: 100, dy: 50 })
+  })
+
+  it('screenDeltaToMedia：**画布缩放后要跟手**（用户实测报的缺陷）', () => {
+    // 场景：画布缩到 0.5，浮层里的 1 CSS px 在屏幕上只有 0.5 px。
+    // fit.scale = 0.25（媒体像素 → 浮层 CSS px）。
+    // 鼠标在屏幕上移 100px → 浮层 CSS 位移 = 100/0.5 = 200 → 媒体像素 = 200/0.25 = 800。
+    // 少了 screenPerCss（=0.5）那一项，就会算成 400 —— 框只走一半，用户看到"不跟手"。
+    expect(screenDeltaToMedia(100, 0, 0.25, 0.5)).toEqual({ dx: 800, dy: 0 })
+    // zoom = 1 时系数为 1，与旧行为完全一致（回归保护）
+    expect(screenDeltaToMedia(100, 0, 0.25, 1)).toEqual({ dx: 400, dy: 0 })
+  })
+
+  it('screenDeltaToMedia：screenPerCss 非法（0/NaN）时回落到 1，不产生 Infinity', () => {
+    const a = screenDeltaToMedia(100, 50, 0.5, 0)
+    const b = screenDeltaToMedia(100, 50, 0.5, Number.NaN)
+    expect(Number.isFinite(a.dx)).toBe(true)
+    expect(Number.isFinite(b.dx)).toBe(true)
+    expect(a).toEqual({ dx: 200, dy: 100 })
+  })
+})
+
+describe('resolveScreenPerCss：屏幕上 1 CSS px = 几个屏幕像素', () => {
+  it('画布缩到 0.5 → 比值 0.5', () => {
+    // 布局宽 400（clientWidth），屏幕宽 200（getBoundingClientRect）
+    expect(resolveScreenPerCss(200, 400)).toBe(0.5)
+  })
+
+  it('放大 2 倍 → 比值 2', () => {
+    expect(resolveScreenPerCss(800, 400)).toBe(2)
+  })
+
+  it('没缩放 → 1', () => {
+    expect(resolveScreenPerCss(400, 400)).toBe(1)
+  })
+
+  it('拿不到尺寸（0 / NaN）→ 回落 1，不产生 Infinity 把框拖飞', () => {
+    expect(resolveScreenPerCss(0, 400)).toBe(1)
+    expect(resolveScreenPerCss(400, 0)).toBe(1)
+    expect(resolveScreenPerCss(Number.NaN, Number.NaN)).toBe(1)
+    expect(Number.isFinite(resolveScreenPerCss(0, 0))).toBe(true)
   })
 
   it('toPixelRect：取整、宽高至少 1px', () => {

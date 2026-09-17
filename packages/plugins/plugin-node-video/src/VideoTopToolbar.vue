@@ -14,7 +14,9 @@
 import { computed, ref } from 'vue'
 import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
 import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
-import { beginOverlay, endOverlay, isCropping, isClipping, overlayDraft } from './videoSession'
+import { beginOverlay, endOverlay, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
+import { Select } from '@mini-canvas/plugin-theme-default'
+import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createVideoOps, uploadVideo } from './videoOps'
 import type { Rect } from './videoCrop'
 
@@ -32,6 +34,24 @@ const visible = computed(() => selected.value && !clipping.value)
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
+
+/** 比例下拉的选项（value/label 即 UI 的选中值与显示名） */
+const ratioOptions = computed(() => CROP_RATIO_OPTIONS.map((o) => ({ value: o.value, label: o.label })))
+/** 当前比例（会话态：换比例只改草稿，确认时才落库） */
+const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
+
+/**
+ * 改比例：只把选择记进会话草稿，**框的调整交给浮层**。
+ *
+ * 分工的理由（避免同一套比例数学写两遍、必然漂移）：
+ * - 控制栏负责 UI：下拉在**控制栏**（用户要求，与 liblib 的 `× | 原比例 | 确认` 一致）；
+ * - 浮层负责几何：它持有当前框（拖拽中是高频变化的内存态），收到比例变化就把框调对。
+ * 两边只通过会话态通信，互不反向依赖。值也一起记进草稿，二次打开下拉能显示当前选择。
+ */
+function onRatioChange(value: string | number): void {
+  const key = String(value)
+  setOverlayDraft(props.id, { ...overlayDraft(props.id), _ratioValue: key })
+}
 
 /* 图标内联 SVG（viewBox 24、线性、currentColor；尺寸由按钮决定） */
 const ICON_UPLOAD =
@@ -104,9 +124,21 @@ function cancelEdit(): void {
     <input ref="fileInput" class="vt-file" type="file" accept="video/*" @change="onFileChange" />
 
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
-         取消在前、确认在后，与全项目「左侧取消、右侧青色确认」的顺序一致。 -->
+         布局对齐 liblib 的 `× | 原比例 | 确认`：取消在最左、比例下拉居中、确认在最右。 -->
     <template v-if="editing">
       <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
+      <!-- 比例下拉：选中后裁剪框会按该比例调整（中心不动）。
+           只在裁剪态给（剪辑是时间轴，没有画面比例这回事）。 -->
+      <Select
+        v-if="editing"
+        class="vt-ratio"
+        :model-value="ratioValue"
+        :options="ratioOptions"
+        dropdown-width="match"
+        placeholder="自由"
+        input-id="video-crop-ratio"
+        @update:model-value="onRatioChange"
+      />
       <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
         确认
       </NodeToolbarButton>
@@ -145,5 +177,11 @@ function cancelEdit(): void {
 
 .vt-file {
   display: none;
+}
+
+/* 比例下拉：定一个固定宽度，免得"自由"与"16:9"切换时工具栏宽度跳动 */
+.vt-ratio {
+  width: 96px;
+  flex: none;
 }
 </style>

@@ -11,10 +11,11 @@
  * 本组件只管画框：确认/取消按钮在上下控制栏（用户要求），所以这里不出现任何按钮。
  */
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, fitEditingNodeIntoView } from '@mini-canvas/canvas-render'
 import type { Rect } from '@mini-canvas/canvas-render'
 import { MediaFrameOverlay } from '@mini-canvas/canvas-render'
 import { editDraft, endEdit, isCropping, isExpanding, setEditDraft } from './cropSession'
+import { DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -46,6 +47,11 @@ function onDraft(rect: Rect): void {
   setEditDraft(props.id, { ...editDraft(props.id), [key]: rect })
 }
 
+/** 当前比例（控制栏的下拉写进会话；浮层据此调整框）。扩展不锁比例，故只在裁剪时给。 */
+const ratioValue = computed(() =>
+  cropping.value ? ((editDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE) : undefined,
+)
+
 /** 确认：交给命令（与顶部条/快捷键同一实现），命令负责写回并退出编辑态 */
 function onConfirm(rect: Rect): void {
   const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
@@ -54,6 +60,17 @@ function onConfirm(rect: Rect): void {
 
 function onCancel(): void {
   endEdit(props.id)
+}
+
+/**
+ * 进入编辑态时把本节点拉进视野。
+ *
+ * 用户实测报的"扩展控制点错位/拖不动"，根因是节点贴在视口边缘时框往外长、
+ * 控制点被推到屏幕外（elementFromPoint 返回 null）。进编辑态先把它摆进视野。
+ * 装得下时不动视口（别把用户刚调好的视角拽走）。
+ */
+function fitIntoView(): void {
+  fitEditingNodeIntoView(ctx, props.id)
 }
 </script>
 
@@ -65,9 +82,10 @@ function onCancel(): void {
     :media-height="imageHeight"
     :initial-rect="savedRect"
     :draft-rect="draftRect"
+    :ratio-value="ratioValue"
+    :fit-into-view="fitIntoView"
     @update:draft="onDraft"
     @confirm="onConfirm"
     @cancel="onCancel"
   />
 </template>
-

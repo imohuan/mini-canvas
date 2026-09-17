@@ -13,6 +13,7 @@
  *    画面中央那块内容上，锚在中心最不容易"我框的东西跑掉了"。改完再按边界收敛，
  *    保证永远不越界、也不小于最小边。
  */
+import type { Rect } from './mediaFit'
 
 /** 比例选项：value 是稳定的字符串键，ratio 是宽/高（null = 自由） */
 export interface CropRatioOption {
@@ -49,40 +50,55 @@ export function ratioOf(value: string | undefined): number | null {
 }
 
 /**
- * 把框调成指定比例（**中心不动**），再收进合法范围。
+ * 把框调成指定比例（**中心不动**）。
  *
- * 采用「保持面积量级」的做法：先取框的短边作为基准，算出另一条边，而不是简单地把宽定死 ——
- * 否则从 16:9 切到 9:16 时宽度不变、高度暴涨，框会瞬间盖住整幅画面。
+ * 三条必须同时成立（每条都有对应的实测/推理依据）：
+ * 1. **结果的比例精确等于所选比例**。这是最易错的一条：不能"算好尺寸再交给通用夹取函数" ——
+ *    夹取是逐边独立的，宽度被画面边界挡住时高度不会跟着缩，比例当场就破了
+ *    （实测：选 16:9 却得到 800×480 = 1.67）。所以尺寸超界时必须**等比缩小**。
+ * 2. **中心不动**。用户的注意力在画面中央那块内容上，锚在中心才不容易"我框的东西跑掉了"。
+ * 3. 结果仍然不小于最小边（不然切极端比例会塌成一条线）。
  *
- * @param rect    当前裁剪框（媒体像素）
- * @param ratio   目标宽/高；null = 自由（原样返回，不做任何改动）
- * @param fit     收敛函数（crop 用 clampCropRect、expand 用 clampExpandRect）
+ * 基准取现有框的**短边**（不是长边）：保证换比例后不会突然"膨胀"把整幅画面盖住。
+ *
+ * @param rect     当前裁剪框（媒体像素）
+ * @param ratio    目标宽/高；null = 自由（原样返回，不做任何改动）
+ * @param bounds   画面尺寸与最小边（媒体像素）—— 比例调整只用于裁剪，边界就是整幅画面
  * @returns 新框；ratio 为 null 或非法时返回原框
  */
 export function applyRatio(
   rect: Rect,
   ratio: number | null,
-  fit: (r: Rect) => Rect,
+  bounds: { width: number; height: number; minEdge?: number },
 ): Rect {
   if (ratio === null || !Number.isFinite(ratio) || ratio <= 0) return rect
   if (!(rect.width > 0) || !(rect.height > 0)) return rect
 
+  const maxW = bounds.width > 0 ? bounds.width : rect.width
+  const maxH = bounds.height > 0 ? bounds.height : rect.height
+  const minEdge = bounds.minEdge && bounds.minEdge > 0 ? bounds.minEdge : 1
+
+  // ① 以短边为基准算出目标尺寸
+  const shortSide = Math.min(rect.width, rect.height)
+  let width = ratio >= 1 ? shortSide * ratio : shortSide
+  let height = ratio >= 1 ? shortSide : shortSide / ratio
+
+  // ② 超界就**等比**缩到装得下（这一步是"比例精确正确"的关键，见上面第 1 条）
+  const fitScale = Math.min(1, maxW / width, maxH / height)
+  width *= fitScale
+  height *= fitScale
+
+  // ③ 不小于最小边（同样等比放大，保持比例）
+  const minScale = Math.max(1, minEdge / width, minEdge / height)
+  if (minScale > 1) {
+    width *= minScale
+    height *= minScale
+  }
+
+  // ④ 中心不动，再把位置夹回画面内（尺寸已合法，夹位置不会破坏比例）
   const cx = rect.x + rect.width / 2
   const cy = rect.y + rect.height / 2
-  // 基准取短边的"半对角线"思路：先按现有框的较小边定短边，长边按比例推出。
-  // 用 min 而不是 max，保证换比例后框不会比原来更"膨胀"（用户的框不会突然盖满画面）。
-  const shortSide = Math.min(rect.width, rect.height)
-  let width: number
-  let height: number
-  if (ratio >= 1) {
-    // 宽 >= 高：高为短边
-    height = shortSide
-    width = height * ratio
-  } else {
-    width = shortSide
-    height = width / ratio
-  }
-  const next: Rect = { x: cx - width / 2, y: cy - height / 2, width, height }
-  return fit(next)
+  const x = Math.min(Math.max(cx - width / 2, 0), Math.max(0, maxW - width))
+  const y = Math.min(Math.max(cy - height / 2, 0), Math.max(0, maxH - height))
+  return { x, y, width, height }
 }
-

@@ -28,6 +28,8 @@ const props = defineProps<{
   initialRect?: Rect
   /** 会话草稿（拖拽中的临时框，优先于 initialRect） */
   draftRect?: Rect
+  /** 当前比例键（来自控制栏的下拉；浮层据此把框调成对应比例） */
+  ratioValue?: string
 }>()
 
 const emit = defineEmits<{
@@ -44,6 +46,7 @@ const emit = defineEmits<{
     :media-height="props.videoHeight"
     :initial-rect="props.initialRect"
     :draft-rect="props.draftRect"
+    :ratio-value="props.ratioValue"
     @update:draft="emit('update:draft', $event)"
     @confirm="emit('confirm', $event)"
     @cancel="emit('cancel')"

@@ -10,10 +10,11 @@
  * 本组件只管画框：确认/取消按钮在上下控制栏（用户要求），所以这里不出现任何按钮。
  */
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, fitEditingNodeIntoView } from '@mini-canvas/canvas-render'
 import VideoCropper from './VideoCropper.vue'
 import type { Rect } from './videoCrop'
 import { endOverlay, isCropping, overlayDraft, setOverlayDraft } from './videoSession'
+import { DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -39,6 +40,9 @@ function onDraft(rect: Rect): void {
   setOverlayDraft(props.id, { ...overlayDraft(props.id), _cropRect: rect })
 }
 
+/** 当前比例（控制栏的下拉写进会话；浮层据此调整框） */
+const ratioValue = computed(() => (overlayDraft(props.id)._ratioValue as string) ?? DEFAULT_CROP_RATIO_VALUE)
+
 /** 确认：交给命令（与顶部条/快捷键同一实现），命令负责写回并退出编辑态 */
 function onConfirm(rect: Rect): void {
   ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command').execute('video.cropConfirm', {
@@ -50,6 +54,20 @@ function onConfirm(rect: Rect): void {
 function onCancel(): void {
   endOverlay(props.id)
 }
+
+/**
+ * 进入编辑态时把本节点拉进视野（用户实测报的"控制点错位/拖不动"）。
+ *
+ * 实测根因：节点停在画布靠下的位置，扩展框往四周长大之后卡片底部跑到视口之外
+ * （卡片底 899px、视口只有 720px），此时下侧三个控制点在做命中测试时返回 null —— 根本点不到。
+ * 解法与 v1 一致：进编辑态先把该节点（连同外扩余量）摆进视野。
+ *
+ * 坐标一律走内核服务：nodeLayout 给 flow 绝对矩形、viewport 给当前缩放与可视区，
+ * 不自己反推屏幕↔画布换算。
+ */
+function fitIntoView(): void {
+  fitEditingNodeIntoView(ctx, props.id)
+}
 </script>
 
 <template>
@@ -60,9 +78,10 @@ function onCancel(): void {
     :video-height="videoHeight"
     :initial-rect="savedRect"
     :draft-rect="draftRect"
+    :ratio-value="ratioValue"
+    :fit-into-view="fitIntoView"
     @update:draft="onDraft"
     @confirm="onConfirm"
     @cancel="onCancel"
   />
 </template>
-
