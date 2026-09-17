@@ -7,8 +7,8 @@
  *
  * 只要本文件被加载（canvas-pack 入口会 import 它），合并即生效。
  */
-import type { CommandDef } from '@mini-canvas/kernel'
-import type { NodeRegisterDef } from './capabilities'
+import type { CommandDef, Disposable } from '@mini-canvas/kernel'
+import type { NodeRegisterDef, SettingDefineItem } from './capabilities'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
 
@@ -33,7 +33,8 @@ declare module '@mini-canvas/kernel' {
     }
     /** 注册命令，自动回收（CommandDef 定义在 kernel.command，与命令注册表同源） */
     commands: {
-      register(def: CommandDef): void
+      /** 注册；返回可手动撤销的句柄（不接返回值即"纯声明+自动回收"，行为不变） */
+      register(def: CommandDef): Disposable
       has(id: string): boolean
     }
     /** 往通用 UI 槽叠 occupant（宿主按序渲染），自动回收 */
@@ -47,6 +48,13 @@ declare module '@mini-canvas/kernel' {
      * 框架校验+补默认后 `apply(ctx, config)` 收到完整 config。此段是"已装配 config"的读 + 订阅。
      */
     settings: {
+      /**
+       * 声明一组配置项（settings 单一数据源的申报糖，§8.2 落点 = setting 场）。
+       * 两种形状：(group, items) 平铺式；或 (items, group?)（组名缺省 = 本插件名）。
+       * 已有同 key 声明会抛错（SettingsStore 语义）。
+       */
+      define(group: string, items: Record<string, SettingDefineItem>): void
+      define(items: Record<string, SettingDefineItem>, group?: string): void
       /** 改一项已装配 config 的值（未知 key 抛错；number 越界夹取，实时生效） */
       set(key: string, value: string | number | boolean): boolean
       /** 读一项已装配 config 的当前值 */

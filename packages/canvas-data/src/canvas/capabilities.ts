@@ -13,7 +13,7 @@
  * 零 Vue。组件句柄 opaque；节点数据/展示走 nodeStore/nodeRegistry(宿主已注入服务)，
  * 通用 UI 槽(slots)走 ctx 自带的 SlotRegistry 服务('slots')，宿主按需渲染。
  */
-import type { PluginScope, SlotRegistry, SettingsStore } from '@mini-canvas/kernel'
+import type { PluginScope, Registry, SlotRegistry, SettingsStore } from '@mini-canvas/kernel'
 import { registerNodeType } from './registry/registerNodeType'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
@@ -57,6 +57,20 @@ export interface SlotRegisterReq {
   meta?: unknown
 }
 
+/** ctx.settings.define 的单项 schema（与内核 SettingSchema 对齐；作者不必 import kernel 类型） */
+export type SettingDefineItem = Parameters<SettingsStore['define']>['1'][string]
+
+/** ctx.settings.define 的一次申报：group + 各项 schema */
+export interface SettingGroupDefSugar {
+  group: string
+  items: Record<string, SettingDefineItem>
+}
+
+/** ctx.settings.define 的允许形状：分组式或 (group, items) 平铺式 */
+export type SettingDefineArgs =
+  | [defs: Record<string, SettingDefineItem>]
+  | [group: string, items: Record<string, SettingDefineItem>]
+
 /**
  * 能力段收口。给定一个插件 scope ctx（含 get/effect），返回 ctx 上挂的 nodes/theme/commands/slots。
  */
@@ -84,7 +98,7 @@ export function buildCapabilities(
     remove(slot: ThemeSlot, id: string): void
   }
   commands: {
-    register(def: CommandDef): void
+    register(def: CommandDef): { dispose(): void }
     has(id: string): boolean
   }
   slots: {
@@ -93,6 +107,7 @@ export function buildCapabilities(
     occupants(slot: string): Array<{ id: string; order: number; component: unknown; meta?: unknown }>
   }
   settings: {
+    define(...args: SettingDefineArgs): void
     set(key: string, value: string | number | boolean): boolean
     get(key: string): string | number | boolean
     onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
@@ -101,7 +116,11 @@ export function buildCapabilities(
 } {
   const theme = () => {
     try {
-      return ctx.get<{ addOccupant(s: string, r: { id?: string; order?: number; value: unknown }): string; removeOccupant(s: string, id: string): boolean }>('themeRegistry')
+      return ctx.get<{
+        addOccupant(s: string, r: { id?: string; order?: number; value: unknown }): string
+        removeOccupant(s: string, id: string): boolean
+        occupantIds(s: string): string[]
+      }>('themeRegistry')
     } catch {
       return undefined
     }
@@ -114,6 +133,23 @@ export function buildCapabilities(
     }
   }
   const settingsStore = () => ctx.get<SettingsStore>('settings')
+
+  // 场取用：ctx.registryOf(kind) 拿到的即"糖的落点场"（§8.2）；放一条 = 同 id 替换，
+  // 订阅随本插件 scope 自动回收（bind 视图的 keep 语义）。取不到 registryOf 的宿主
+  // （非 Context 的最小 PluginScope mock）退化为不落场，行为与今天"缺服务不抛"一致。
+  const land = <T>(kind: string): Registry<T> | undefined => {
+    const fn = (ctx as { registryOf?: (kind: string) => Registry<T> }).registryOf
+    return typeof fn === 'function' ? fn.call(ctx, kind) : undefined
+  }
+
+  // 取 nodeRegistry（缺服务不抛，纯数据 ctx 不装它）：contribute 的基座判断要用
+  const nodeRegistry = (): { get(t: string): { segments?: Partial<Record<NodeSegment, unknown>> } | undefined } | undefined => {
+    try {
+      return ctx.get<{ get(t: string): { segments?: Partial<Record<NodeSegment, unknown>> } | undefined }>('nodeRegistry')
+    } catch {
+      return undefined
+    }
+  }
 
   // ctx.theme.register / add 共享的落位逻辑：用闭包函数而非方法内 this，解构调用也不会丢上下文
   const placeTheme = (
@@ -132,6 +168,15 @@ export function buildCapabilities(
     // ---------- ctx.nodes：注册一个节点类型（数据+展示+可选建节点），自动回收 ----------
     nodes: {
       register(def: NodeRegisterDef): void {
+        // ⓪ 场落点（§8.2）：node/type/<type>（声明摘要）+ node/shell/<type>（展示定义）。
+        // 糖保留 void 返回；既有 nodeStore/nodeRegistry 行为原样不动。
+        const typeField = land<{ type: string; label: string }>('node/type')
+        const shellField = land<unknown>('node/shell')
+        typeField?.add(def.type, { type: def.type, label: def.label })
+        const segRecord = def.content || def.title
+          ? { content: def.content, title: def.title, ...(def.segments ?? {}) }
+          : (def.segments ?? {})
+        shellField?.add(def.type, { type: def.type, segments: segRecord })
         // ① 数据 + 展示(经 registerNodeType，内部已 ctx.effect 回收)
         const revoke = registerNodeType(ctx, {
           type: def.type,
@@ -144,10 +189,11 @@ export function buildCapabilities(
           resizable: def.resizable,
           frameless: def.frameless,
           transparent: def.transparent,
-          segments: def.content || def.title ? { content: def.content, title: def.title, ...(def.segments ?? {}) } : def.segments,
+          segments: segRecord,
         })
         // ② 可选建节点实现 → nodeFactory.register + effect 回收
         if (def.create) {
+          land<NodeCreator>('node/creator')?.add(def.type, def.create)
           const factory = ctx.get<NodeFactoryService>('nodeFactory')
           factory.register(def.type, def.create)
           ctx.effect(() => () => {
@@ -164,6 +210,24 @@ export function buildCapabilities(
         component: unknown,
         opts: { id?: string; order?: number } = {},
       ): string {
+        // 场落点（§8.2）：node/region/<type>/<seg>。缺省 order 沿用 nodeRegistry 语义 =
+        // 首条在基座之后(1)，其后 = 已有最大 + 1；糖内补回该语义（场缺省 order 是 0）。
+        const regionField = land<unknown>('node/region')
+        if (regionField) {
+          const regionKey = `${type}/${segment}`
+          const existing = regionField.list(regionKey)
+          // 基座判断用 nodeRegistry 展示定义（与 NodeRegistry.registerContribution 的
+          // "首条排在基座之后"语义对齐：基座 content → order 1 起）
+          let order: number
+          if (existing.length === 0) {
+            const base = nodeRegistry()
+            const baseSeg = base?.get(type)?.segments?.[segment]
+            order = baseSeg !== undefined ? 1 : 0
+          } else {
+            order = Math.max(...existing.map((e) => e.order)) + 1
+          }
+          regionField.add(regionKey, component, { id: opts.id, order })
+        }
         const registry = ctx.get<{
           registerContribution(
             t: string,
@@ -185,7 +249,16 @@ export function buildCapabilities(
     // ---------- ctx.theme：往主题槽叠/取 occupant，自动回收 ----------
     theme: {
       register(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
+        // 场落点（§8.2）：theme/<slot>。糖保留"同槽重复 register 抛错"（themeRegistry 语义）：
+        // 场的 add 是同 id 替换，抛错校验必须在转发前做（对齐 themeRegistry 抛错文案）。
+        // 抛错判定以 ThemeRegistry（同 id 判定）为准，场只做"该槽已有任意条目"的提示性查询。
+        const themeField = land<unknown>('theme')
+        const reg = theme()
+        if (reg && themeField && reg.occupantIds(slot).includes(opts.id ?? pluginName)) {
+          throw new Error(`[themeRegistry] theme slot "${slot}" already registered`)
+        }
         placeTheme(slot, component, opts)
+        themeField?.add(slot, component, { id: opts.id ?? pluginName, order: opts.order })
       },
       add(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
         placeTheme(slot, component, opts)
@@ -197,10 +270,34 @@ export function buildCapabilities(
 
     // ---------- ctx.commands：注册命令，自动回收 ----------
     commands: {
-      register(def: CommandDef): void {
-        const cmd = ctx.get<{ register(d: CommandDef): { dispose(): void }; has(id: string): boolean }>('command')
-        const handle = cmd.register(def)
-        ctx.effect(() => () => handle.dispose())
+      register(def: CommandDef): { dispose(): void } {
+        // 场落点（§8.2）：command/<id>。糖保留"重复 id 抛错"：同 kind 各插件共享一张场表，
+        // 先放的插件留下的条目在场里可见；先查场再走 CommandRegistry 抛错路径，值 = { def }。
+        // 返回句柄语义：register 今天返回 void；这里返回 handle（有 .dispose() 的 Disposable），
+        // 对想手动 dispose 的调用方可用；既有调用方不接返回值，行为不变。
+        const commandField = land<{ def: CommandDef }>('command')
+        if (commandField?.has(def.id)) {
+          throw new Error(`[command] command "${def.id}" already registered`)
+        }
+        try {
+          const cmd = ctx.get<{ register(d: CommandDef): { dispose(): void }; has(id: string): boolean }>('command')
+          const handle = cmd.register(def)
+          const placed = commandField?.add(def.id, { def })
+          ctx.effect(() => () => {
+            handle.dispose()
+            placed?.dispose()
+          })
+          return {
+            dispose: () => {
+              handle.dispose()
+              placed?.dispose()
+            },
+          }
+        } catch (err) {
+          // CommandRegistry 重复 id 抛错 → 场里也不能留这条（同一次失败的注册不落半截）
+          commandField?.remove(def.id, def.id)
+          throw err
+        }
       },
       has(id: string): boolean {
         try {
@@ -215,9 +312,21 @@ export function buildCapabilities(
     slots: {
       register(slot: string, req: SlotRegisterReq): string {
         const reg = uiSlots()
-        if (!reg) return ''
-        const id = reg.add(slot, { id: req.id, order: req.order, value: req.component, meta: req.meta })
-        ctx.effect(() => () => reg.remove(slot, id))
+        // 场落点（§8.2）：slot/<slot>。返回 id（string）的既有契约不变；
+        // 缺 'slots' 服务的宿主今天返回 ''，现仍能在场里落位（id 同形生成）。
+        const slotField = land<unknown>('slot')
+        if (!reg && !slotField) return ''
+        const id = req.id ?? `slot/${slot}#${slotField?.ids(slot).length ?? 0}`
+        if (slotField) slotField.add(slot, req.component, { id, order: req.order })
+        if (!reg) return id
+        const compatId = reg.add(slot, { id: req.id, order: req.order, value: req.component, meta: req.meta })
+        if (compatId !== id) {
+          // 兼容容器对自动 id 的取舍与场不同 → 场内条目对齐到兼容 id（返回值单一事实）
+          slotField?.remove(slot, id)
+          slotField?.add(slot, req.component, { id: compatId, order: req.order })
+        }
+        ctx.effect(() => () => reg.remove(slot, compatId))
+        ctx.effect(() => () => slotField?.remove(slot, compatId))
         return id
       },
       remove(slot: string, id: string): boolean {
@@ -235,8 +344,40 @@ export function buildCapabilities(
 
     // ---------- ctx.settings：已装配 config 的读 + 订阅（声明改由插件 Config schema 自动完成，无 define 入口） ----------
     settings: {
+      define(...args: SettingDefineArgs): void {
+        // 声明糖（§8.2 settings 落点 = setting 场）：两组件共享的"申报"路径。
+        // store 仍是值的单一数据源；场里落 { group, schema, current } 摘要，store 值变化时刷新。
+        const store = settingsStore()
+        if (!store) return
+        const isGrouped = typeof args[0] === 'string'
+        const group = isGrouped ? (args[0] as string) : (args[1] as string | undefined)
+        const items = (isGrouped ? args[1] : args[0]) as Record<string, SettingDefineItem>
+        const scopeGroup = group ?? pluginName
+        store.define(scopeGroup, items, pluginName)
+        const settingField = land<{
+          group: string
+          schema: SettingDefineItem
+          current: string | number | boolean
+        }>('setting')
+        for (const [key, schema] of Object.entries(items)) {
+          settingField?.add(key, { group: scopeGroup, schema, current: store.get(key) })
+        }
+      },
       set(key: string, value: string | number | boolean): boolean {
-        return settingsStore().set(key, value)
+        const store = settingsStore()
+        const changed = store.set(key, value)
+        // 场里的 current 摘要跟随 store 值（该 key 若在场里）；
+        // 场里没有这条摘要时按缺省 group 顺手补齐（store 值变化 = 有人在用这条配置）。
+        const settingField = land<{
+          group: string
+          schema: SettingDefineItem
+          current: string | number | boolean
+        }>('setting')
+        const entry = settingField?.get(key, key)?.value
+        if (settingField && entry) {
+          settingField.add(key, { ...entry, current: store.get(key) }, { id: key })
+        }
+        return changed
       },
       get(key: string): string | number | boolean {
         return settingsStore().get(key)
