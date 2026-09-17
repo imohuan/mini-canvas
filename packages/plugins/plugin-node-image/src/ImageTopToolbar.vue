@@ -11,7 +11,7 @@
 import { computed, ref } from 'vue'
 import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
 import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
-import { beginCrop, isCropping } from './cropSession'
+import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding } from './cropSession'
 import { createImageOps, uploadImage } from './imageOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -25,7 +25,10 @@ const selected = useSoleNodeSelected(props.id)
 const hasImage = computed(() => typeof props.data?.imageUrl === 'string' && props.data.imageUrl !== '')
 /** 裁剪中：入口按钮隐藏，避免重复进入 */
 const cropping = computed(() => isCropping(props.id))
-const visible = computed(() => selected.value && !cropping.value)
+const expanding = computed(() => isExpanding(props.id))
+/** 编辑态（裁剪或扩展）：顶栏换成确认/取消，其余入口全部让位（避免一边调框一边误点下载） */
+const editing = computed(() => isEditing(props.id))
+const visible = computed(() => selected.value)
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
@@ -35,6 +38,12 @@ const ICON_UPLOAD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>'
 const ICON_CROP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg>'
+const ICON_EXPAND =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+const ICON_CONFIRM =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+const ICON_CANCEL =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
 
 /** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘）；与命令侧同一份接线 */
 const ops = createImageOps(ctx)
@@ -60,12 +69,42 @@ async function onFileChange(e: Event): Promise<void> {
 function onCrop(): void {
   beginCrop(props.id)
 }
+
+function onExpand(): void {
+  beginExpand(props.id)
+}
+
+/** 确认编辑：把会话里的草稿交给命令（命令负责写回 + 退出编辑态） */
+function confirmEdit(): void {
+  const draft = editDraft(props.id)
+  const rect = (expanding.value ? draft._expandRect : draft._cropRect) as
+    | { x: number; y: number; width: number; height: number }
+    | undefined
+  if (!rect) return
+  ctx
+    .get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+    .execute(expanding.value ? 'image.expandConfirm' : 'image.cropConfirm', { nodeId: props.id, rect })
+}
+
+function cancelEdit(): void {
+  endEdit(props.id)
+}
 </script>
 
 <template>
   <div v-if="visible" class="it-root nodrag nopan">
     <input ref="fileInput" class="it-file" type="file" accept="image/*" @change="onFileChange" />
 
+    <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。
+         取消在前、确认在后，与全项目「左侧取消、右侧青色确认」的顺序一致。 -->
+    <template v-if="editing">
+      <NodeToolbarButton title="取消编辑" aria-label="取消编辑" variant="danger" :icon="ICON_CANCEL" @click="cancelEdit" />
+      <NodeToolbarButton title="确认编辑" aria-label="确认编辑" variant="primary" :icon="ICON_CONFIRM" @click="confirmEdit">
+        确认
+      </NodeToolbarButton>
+    </template>
+
+    <template v-else>
     <NodeToolbarButton
       title="上传图片"
       :icon="ICON_UPLOAD"
@@ -79,6 +118,13 @@ function onCrop(): void {
       :icon="ICON_CROP"
       @click="onCrop"
     />
+    <NodeToolbarButton
+      v-if="hasImage"
+      title="扩展图片"
+      :icon="ICON_EXPAND"
+      @click="onExpand"
+    />
+    </template>
   </div>
 </template>
 

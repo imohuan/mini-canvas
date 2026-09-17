@@ -30,6 +30,7 @@ export function defineNode(def: DefineNodeDef) {
         type: def.type,
         label: def.label,
         size: def.size,
+        description: def.description,
         content: def.content,
         title: def.title,
         inputs: def.inputs,

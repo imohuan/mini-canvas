@@ -43,6 +43,15 @@ describe('buildMenuItems', () => {
     expect(items[1].icon).toBeUndefined()
   })
 
+  it('create-node 项透传节点类型声明的 description（hover 小字由类型自己带）', () => {
+    const items = buildMenuItems('pane', [], [
+      { type: 'text', label: '文本', description: '在画布中添加一个文本节点' },
+      { type: 'plain', label: '无描述' },
+    ])
+    expect(items[0].description).toBe('在画布中添加一个文本节点')
+    expect(items[1].description).toBeUndefined()
+  })
+
   it('pane 模式：新建节点区在前，再排 pane/通用命令', () => {
     const commands = [
       cmd({ id: 'multi-select:select-all', title: '全选', areas: ['pane'], order: 10 }),

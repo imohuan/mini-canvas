@@ -89,6 +89,19 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
+  it('多选标记的大小 / 颜色 / 低缩放开关出现在「节点」分类下', async () => {
+    const ctx = await bootWithSettings()
+    const settings = ctx.get<SettingsLike>('settings')
+    expect(settings.groups()).toContain('节点/多选标记')
+    expect(settings.get('nodeMultiRadioSize')).toBe(18)
+    expect(String(settings.get('nodeMultiRadioColor')).startsWith('#')).toBe(true)
+    expect(settings.get('nodeMultiRadioShowInLowDetail')).toBe(false)
+    // 改一下能读回来（设置面板可调、且会跨刷新持久化）
+    ctx.settings.set('nodeMultiRadioSize', 24)
+    expect(settings.get('nodeMultiRadioSize')).toBe(24)
+    ctx.stop()
+  })
+
   it('生成后台三项出现在设置里（地址 / 超时 / 是否用后台模型表）', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')

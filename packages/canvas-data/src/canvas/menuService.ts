@@ -40,6 +40,8 @@ export interface MenuItem {
   shortcut?: string[]
   /** 图标（opaque 句柄：SVG 字符串或 Vue 组件，原样传显示层） */
   icon?: unknown
+  /** hover 描述（新建节点项取自节点类型声明的 description；命令项由 UI 层补齐） */
+  description?: string
 }
 
 /** 可创建节点类型（供 pane 菜单"新建节点"区） */
@@ -48,6 +50,8 @@ export interface MenuCreatableType {
   label: string
   /** 该类型声明的图标（opaque 句柄；缺省不传） */
   icon?: unknown
+  /** 该类型声明的一句话说明（缺省不传）；菜单项 hover 小字读它 */
+  description?: string
 }
 
 /** 菜单聚合服务接口（ctx.get('menu')） */
@@ -98,6 +102,7 @@ export function createMenuService(listCommands: () => Array<{ id: string; title?
             kind: 'create-node',
             nodeType: t.type,
             ...(t.icon !== undefined ? { icon: t.icon } : {}),
+            ...(t.description ? { description: t.description } : {}),
           })
         })
       }

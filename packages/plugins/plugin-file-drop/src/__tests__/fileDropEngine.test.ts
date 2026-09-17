@@ -3,10 +3,13 @@ import {
   classifyFile,
   clampText,
   fitImageSize,
+  fitVideoSize,
   spreadPositions,
   buildImagePayload,
+  buildVideoPayload,
   buildTextPayload,
   buildPastedTextPayload,
+  DEFAULT_VIDEO_SIZE,
   MAX_TEXT_LENGTH,
 } from '../fileDropEngine'
 
@@ -29,10 +32,18 @@ describe('classifyFile（ext/mime → 类型）', () => {
     expect(classifyFile(file('c.MARKDOWN', 'text/x-markdown'))).toBe('text')
   })
 
-  it('视频/未知 → unsupported（v2 无 video 节点）', () => {
-    expect(classifyFile(file('v.mp4', 'video/mp4'))).toBe('unsupported')
+  it('video：按 mime（video/*）与扩展名（mp4/webm/ogg/mov/avi/mkv/wmv）', () => {
+    expect(classifyFile(file('v.mp4', 'video/mp4'))).toBe('video')
+    expect(classifyFile(file('v.webm'))).toBe('video')
+    expect(classifyFile(file('v.MOV', 'video/quicktime'))).toBe('video')
+    expect(classifyFile(file('v.mkv'))).toBe('video')
+  })
+
+  it('未知 → unsupported', () => {
     expect(classifyFile(file('x.bin', 'application/octet-stream'))).toBe('unsupported')
     expect(classifyFile(file('noext'))).toBe('unsupported')
+    // 音频不是视频：v2 没有音频节点，不给它建节点
+    expect(classifyFile(file('a.mp3', 'audio/mpeg'))).toBe('unsupported')
   })
 })
 
@@ -121,5 +132,61 @@ describe('payload 构建', () => {
   it('buildPastedTextPayload：粘贴文本 data.text', () => {
     const p = buildPastedTextPayload('clip', { x: 3, y: 4 })
     expect(p.data).toEqual({ text: 'clip', label: '粘贴的文本' })
+  })
+})
+
+describe('fitVideoSize（视频卡片适配）', () => {
+  it('大视频等比缩到 560×360 内，不超上限、不低于下限', () => {
+    // 1280×720: min(560/1280, 360/720, 1) = 0.4375 → 560×315
+    expect(fitVideoSize({ width: 1280, height: 720 })).toEqual({ w: 560, h: 315 })
+  })
+
+  it('小视频不放大（ratio 上限 1）', () => {
+    expect(fitVideoSize({ width: 320, height: 240 })).toEqual({ w: 320, h: 240 })
+  })
+
+  it('非法尺寸退回默认卡片', () => {
+    expect(fitVideoSize({ width: 0, height: 0 })).toEqual({ w: 560, h: 360 })
+  })
+
+  it('封顶与 plugin-node-video 的 560×360 一致（拖进来与在节点里上传必须同尺寸）', () => {
+    expect(DEFAULT_VIDEO_SIZE).toEqual({ cardWidth: 560, cardHeight: 360 })
+  })
+})
+
+describe('buildVideoPayload', () => {
+  it('带 objectURL 与元数据（宽高时长 + 适配 size）', () => {
+    const p = buildVideoPayload(file('clip.mp4', 'video/mp4'), 'blob:vid1', { x: 7, y: 8 }, {
+      width: 1280,
+      height: 720,
+      duration: 12.4,
+    })
+    expect(p.type).toBe('video')
+    expect(p.position).toEqual({ x: 7, y: 8 })
+    expect(p.data.videoUrl).toBe('blob:vid1')
+    expect(p.data.videoName).toBe('clip.mp4')
+    expect(p.data.videoType).toBe('video/mp4')
+    expect(p.data.videoWidth).toBe(1280)
+    expect(p.data.videoHeight).toBe(720)
+    // 时长取整到秒（与老版 Math.round 一致）
+    expect(p.data.videoDuration).toBe(12)
+    expect(p.data.cardWidth).toBe(560)
+    expect(p.data.cardHeight).toBe(315)
+    expect(p.size).toEqual({ w: 560, h: 315 })
+  })
+
+  it('读不到元数据 → 默认卡片尺寸且不写尺寸字段（不猜）', () => {
+    const p = buildVideoPayload(file('clip.mp4'), 'blob:vid1', { x: 0, y: 0 }, null)
+    expect(p.size).toEqual({ w: 560, h: 360 })
+    expect(p.data.cardWidth).toBe(560)
+    expect(p.data.videoWidth).toBeUndefined()
+    expect(p.data.videoDuration).toBeUndefined()
+  })
+
+  it('字段名与 plugin-node-video 的 data 约定逐字一致（否则状态栏/裁剪读不到值）', () => {
+    const p = buildVideoPayload(file('clip.mp4'), 'blob:vid1', { x: 0, y: 0 }, null)
+    for (const key of ['videoUrl', 'videoName', 'cardWidth', 'cardHeight']) {
+      expect(Object.prototype.hasOwnProperty.call(p.data, key)).toBe(true)
+    }
   })
 })

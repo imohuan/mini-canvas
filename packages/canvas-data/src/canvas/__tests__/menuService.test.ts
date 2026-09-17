@@ -74,5 +74,15 @@ describe('MenuService 内核菜单聚合（G 项）', () => {
     expect(items[1].icon).toBe(CompIcon)
     expect(items[2].icon).toBeUndefined()
   })
+
+  it('pane 新建节点项带上该类型声明的 description（菜单 hover 小字，与 icon 同链）', () => {
+    const svc = createMenuService(() => [])
+    const items = svc.menuFor('pane', [
+      { type: 'text', label: '文本', description: '在画布中添加一个文本节点' },
+      { type: 'plain', label: '无描述' },
+    ])
+    expect(items[0].description).toBe('在画布中添加一个文本节点')
+    expect(items[1].description).toBeUndefined()
+  })
 })
 

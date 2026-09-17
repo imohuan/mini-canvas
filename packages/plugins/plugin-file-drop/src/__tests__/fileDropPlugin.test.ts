@@ -16,6 +16,7 @@ function makeCtx() {
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
+  nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
   ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
   ctx.inject('edgeStore', edgeStore)
@@ -48,6 +49,7 @@ function fakeReaders(over: Partial<FileDropReaders> = {}): FileDropReaders {
   return {
     readText: async (f) => f.text(),
     readImageDims: async () => ({ width: 2000, height: 1000 }),
+    readVideoMeta: async () => ({ width: 1280, height: 720, duration: 12 }),
     createObjectURL: () => 'blob:mock-url',
     ...over,
   }
@@ -104,10 +106,39 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(nodes[1].position.y - nodes[0].position.y).toBe(40)
   })
 
-  it('不支持/未注册类型不建节点并返回 0', async () => {
+  it('addFiles 视频文件 → 建 video 节点带 objectURL / 元数据 / 适配 size', async () => {
     const { svc, nodeStore } = makeService()
+    const f = makeFile('clip.mp4', 'video/mp4')
+    const count = await svc.addFiles([f], { x: 30, y: 40 })
+    expect(count).toBe(1)
+    const node = nodeStore.getNodes()[0]
+    expect(node.type).toBe('video')
+    expect(node.position).toEqual({ x: 30, y: 40 })
+    expect(node.data.videoUrl).toBe('blob:mock-url')
+    expect(node.data.videoName).toBe('clip.mp4')
+    expect(node.data.videoWidth).toBe(1280)
+    expect(node.data.videoHeight).toBe(720)
+    // 1280×720 → 560×315（fitVideoSize）
+    expect(node.size).toEqual({ w: 560, h: 315 })
+  })
+
+  it('视频元数据读不出来 → 仍建节点，用默认卡片尺寸（不因读不到就丢弃用户拖进来的文件）', async () => {
+    const { svc, nodeStore } = makeService({ readVideoMeta: async () => null })
+    expect(await svc.addFiles([makeFile('clip.mp4', 'video/mp4')], { x: 0, y: 0 })).toBe(1)
+    const node = nodeStore.getNodes()[0]
+    expect(node.type).toBe('video')
+    expect(node.size).toEqual({ w: 560, h: 360 })
+    expect(node.data.videoWidth).toBeUndefined()
+  })
+
+  it('视频类型没注册（video 插件没装）→ 跳过不建；未知类型同样跳过', async () => {
+    const { ctx, svc, nodeStore } = makeService()
+    nodeStore.unregisterType('video')
+    void ctx
     const before = nodeStore.getNodes().length
     expect(await svc.addFiles([makeFile('v.mp4', 'video/mp4')], { x: 0, y: 0 })).toBe(0)
+    expect(nodeStore.getNodes().length).toBe(before)
+    expect(await svc.addFiles([makeFile('x.bin', 'application/octet-stream')], { x: 0, y: 0 })).toBe(0)
     expect(nodeStore.getNodes().length).toBe(before)
   })
 
@@ -125,7 +156,16 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     const { svc } = makeService()
     expect(svc.canHandle({ name: 'a.png', type: 'image/png' })).toBe(true)
     expect(svc.canHandle({ name: 'a.md', type: '' })).toBe(true)
+    expect(svc.canHandle({ name: 'a.mp4', type: 'video/mp4' })).toBe(true)
+    expect(svc.canHandle({ name: 'a.bin', type: 'application/octet-stream' })).toBe(false)
+  })
+
+  it('canHandle：类型没注册时对该类别说不（插件可独立装配）', async () => {
+    const { nodeStore, svc } = makeService()
+    nodeStore.unregisterType('video')
     expect(svc.canHandle({ name: 'a.mp4', type: 'video/mp4' })).toBe(false)
+    // 图片类型还在，不受影响
+    expect(svc.canHandle({ name: 'a.png', type: 'image/png' })).toBe(true)
   })
 
   it('无 viewport 服务时以显式 flow 坐标建节点（锚点直接生效）', async () => {
@@ -177,5 +217,3 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(svc.addPastedText('p', { x: 0, y: 0 })).toBeTruthy()
   })
 })
-
-

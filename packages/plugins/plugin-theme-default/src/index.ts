@@ -23,6 +23,12 @@ import type {} from "@mini-canvas/plugin-node-text";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
 import BaseNode from "./components/node/BaseNode.vue";
+import {
+  MULTI_RADIO_KEYS,
+  MULTI_RADIO_SIZE_MAX,
+  MULTI_RADIO_SIZE_MIN,
+  DEFAULT_MULTI_RADIO,
+} from "./components/node/multiRadio";
 import CustomEdge from "./components/edge/CustomEdge.vue";
 import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
@@ -83,6 +89,15 @@ export const DEFAULT_THEME_TITLE = {
   titleOffset: 12,
   titleScaleMinZoom: 0.5,
 } as const;
+
+/**
+ * 多选标记（节点左上角那个圆圈，多选时出现）的外观默认值。
+ *
+ * 三项各自独立：大小（屏幕量到的直径 px）/ 颜色 / 低缩放下是否显示。
+ * 真值定义在 components/node/multiRadio.ts（读取与样式的单一出处），这里只转出，
+ * 不让 schema 的 default 与组件里的回落值各写一遍 —— 两份必然漂移。
+ */
+export const DEFAULT_THEME_MULTI_RADIO = DEFAULT_MULTI_RADIO;
 
 /**
  * 控制栏（节点顶部/底部浮出的操作栏与状态栏）的贴边距离默认值。
@@ -278,6 +293,33 @@ export const Config: ConfigSchema = {
     label: "节点低细节阈值",
     group: "节点/低细节",
     description: "低于该缩放值后所有节点进入低细节模式（隐藏端口/标题条、去掉阴影）。",
+  },
+  // —— 多选标记：多选时节点内容区左上角那个圆圈（大小 / 颜色 / 低缩放是否显示）——
+  [MULTI_RADIO_KEYS.size]: {
+    type: "number",
+    default: DEFAULT_MULTI_RADIO.size,
+    min: MULTI_RADIO_SIZE_MIN,
+    max: MULTI_RADIO_SIZE_MAX,
+    step: 1,
+    label: "多选标记大小",
+    group: "节点/多选标记",
+    description:
+      "多选时节点左上角那个圆圈的直径（px，屏幕上量到的大小）。缩放不低于「标题缩放阈值」时屏幕大小不变，再小则随画布一起缩小。",
+  },
+  [MULTI_RADIO_KEYS.color]: {
+    type: "color",
+    default: DEFAULT_MULTI_RADIO.color,
+    label: "多选标记颜色",
+    group: "节点/多选标记",
+    description: "那个圆圈的圆环与中心点的颜色。默认深灰，与节点选中色一致。",
+  },
+  [MULTI_RADIO_KEYS.showInLowDetail]: {
+    type: "boolean",
+    default: DEFAULT_MULTI_RADIO.showInLowDetail,
+    label: "多选标记低缩放显示",
+    group: "节点/多选标记",
+    description:
+      "画布缩得很小时（低于「节点低细节阈值」）节点会简化渲染，那个圆圈默认跟着不显示；打开这个开关就让它一直在。",
   },
   // —— 布局：控制栏贴边距离（节点顶部/底部浮出的操作栏与状态栏离卡片边多远）——
   toolbarTopOffset: {

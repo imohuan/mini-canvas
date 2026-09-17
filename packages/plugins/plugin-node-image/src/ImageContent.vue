@@ -1,10 +1,12 @@
 <script setup lang="ts">
 /**
- * ImageContent —— image 节点的内容段：展示图片 + 承载裁剪覆盖层。
+ * ImageContent —— image 节点的内容段：只负责展示图片（与两种空态）。
  *
  * 职责边界：
  * - 只画图片与两种空态；端口/标题由 BaseNode 壳负责，这里不碰；
- * - 裁剪覆盖层（ImageCropper）挂在本组件内：它需要"内容区"的坐标盒子，而本组件正是那个盒子；
+ * - **编辑浮层（裁剪/扩展）不在这里**：它由 overlay 段（ImageFrameOverlay）画在卡片外面。
+ *   本组件住在 .v2-content-clip（overflow:hidden）里，浮层挂这儿会被卡片边界裁掉
+ *   —— 用户实测报的"裁剪区域被节点切掉"就是这个原因；
  * - 兜底把卡片尺寸对齐到图片（见下方「卡片尺寸兜底」）：每个 image 节点都渲染本组件，
  *   所以"没经我们手"进来的图（旧数据 / 后台 / MCP 建的节点）也能补上正确尺寸；
  * - 加载失败与"正在裁剪"都经同包共享态广播给底部状态栏（不写进 data —— 避免落盘后刷新误报，
@@ -12,12 +14,10 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import ImageCropper from './ImageCropper.vue'
-import { endCrop, isCropping } from './cropSession'
+import { endEdit, isEditing } from './cropSession'
 import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
-import { createImageOps, cropImage } from './imageOps'
+import { createImageOps } from './imageOps'
 import { followedCardSizePatch, missingCardSizePatch, type CardSizePatch } from './imageFit'
-import type { Rect } from './cropGeometry'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -29,7 +29,14 @@ const imageWidth = computed(() => (typeof props.data?.imageWidth === 'number' ? 
 const imageHeight = computed(() => (typeof props.data?.imageHeight === 'number' ? props.data.imageHeight : 0))
 
 const broken = computed(() => isImageBroken(props.id))
-const cropping = computed(() => isCropping(props.id))
+/**
+ * 编辑态（裁剪或扩展）：此时图片必须**完整可见**（contain）。
+ *
+ * 浮层是按 object-contain 几何算框的（见 mediaFit.computeMediaFit），它底下就是这张图；
+ * 若此时仍用平时那套铺满（cover），遮罩会盖错位置、框也会指向错误的像素区域 ——
+ * 用户框的这一块与实际算出来的那一块不是同一个地方。
+ */
+const editing = computed(() => isEditing(props.id))
 
 /** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createImageOps(ctx)
@@ -82,19 +89,8 @@ onMounted(() => {
 })
 watch(imageUrl, () => syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.())))
 
-/** 确认裁剪：按图片像素矩形裁出新图并原地替换（写回走 graph） */
-async function onCropConfirm(rect: Rect): Promise<void> {
-  await cropImage(ops, props.id, rect)
-  endCrop(props.id)
-}
-
-/** 取消裁剪（也覆盖 Esc：由 ImageCropper 冒泡上来） */
-function onCropCancel(): void {
-  endCrop(props.id)
-}
-
-// 节点被删/卸载时清掉"正在裁剪"，避免共享态留下幽灵 id
-onBeforeUnmount(() => endCrop(props.id))
+// 节点被删/卸载时清掉编辑态，避免共享态留下幽灵 id
+onBeforeUnmount(() => endEdit(props.id))
 </script>
 
 <template>
@@ -105,7 +101,7 @@ onBeforeUnmount(() => endCrop(props.id))
         :src="imageUrl"
         alt="节点图片"
         class="img"
-        :class="cropping ? 'is-fill-contain' : 'is-fill-cover'"
+        :class="editing ? 'is-fill-contain' : 'is-fill-cover'"
         draggable="false"
         @error="onImgError"
         @load="onImgLoad"
@@ -113,16 +109,6 @@ onBeforeUnmount(() => endCrop(props.id))
       <div v-else-if="broken" class="empty is-broken">图片已失效（会话级 URL 刷新后不可恢复）</div>
       <div v-else class="empty">（无图片）</div>
 
-      <!-- 裁剪覆盖层：挂在这里因为本组件就是"内容区"这个坐标盒子 -->
-      <ImageCropper
-        v-if="cropping && imageUrl"
-        :node-id="props.id"
-        :image-url="imageUrl"
-        :image-width="imageWidth"
-        :image-height="imageHeight"
-        @confirm="onCropConfirm"
-        @cancel="onCropCancel"
-      />
     </div>
   </div>
 </template>

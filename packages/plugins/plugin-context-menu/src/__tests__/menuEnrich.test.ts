@@ -12,12 +12,26 @@ function item(partial: Partial<ContextMenuItem> & { id: string; label: string })
 }
 
 describe('enrichMenuItems（图标 + hover 描述补齐）', () => {
-  it('create-node 项未注册图标时保底有图标，描述按 nodeType 走', () => {
+  it('create-node 项未注册图标时保底有图标（描述不在这里猜，由节点类型声明）', () => {
     const [it] = enrichMenuItems([
       item({ id: 'create-node:text', label: '文本', kind: 'create-node', nodeType: 'text' }),
     ])
     expect(it.icon).toContain('<svg')
-    expect(it.description).toContain('文本')
+    // 本层不再有 "type 名字 → 文案" 对照表；声明缺失时给空（行保持单行高）
+    expect(it.description).toBe('')
+  })
+
+  it('create-node 项的描述原样保留（来自节点类型注册声明）', () => {
+    const [it] = enrichMenuItems([
+      item({
+        id: 'create-node:3d-preview',
+        label: '3D 预览',
+        kind: 'create-node',
+        nodeType: '3d-preview',
+        description: '在画布中添加一个 3D 全景节点',
+      }),
+    ])
+    expect(it.description).toBe('在画布中添加一个 3D 全景节点')
   })
   it('delete 命令给垃圾桶图标与红危险态', () => {
     const [it] = enrichMenuItems([

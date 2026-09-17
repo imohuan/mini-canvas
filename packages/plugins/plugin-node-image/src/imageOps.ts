@@ -10,7 +10,8 @@
  * - 命令侧：同一对服务，只是从命令的 ctx 上取。
  * 两边都用内核**唯一写入口 graph** → 写回自动进历史、自动落盘、可撤销。
  *
- * 本模块只依赖纯工具（imageTransform / cropGeometry / imageNodeData），不 import Vue，
+ * 本模块只依赖纯工具（imageTransform / imageNodeData / imageExpand）与渲染层的通用几何
+ * （@mini-canvas/canvas-render 的 crop/mediaFit），不 import Vue，
  * node 环境下所有图片操作安全地返回 false（环境不支持），不会抛。
  */
 import {
@@ -21,9 +22,11 @@ import {
   readImageSize,
   rotateToDataUrl,
 } from './imageTransform'
+import { loadDrawableSource, paintCanvas, releaseDrawable } from './imageBitmap'
 import { describeImageMeta, downloadFileName } from './imageNodeData'
-import { toCropPixels, type Rect } from './cropGeometry'
+import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, type ImageFitLimits } from './imageFit'
+import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface ImageOpsContext {
@@ -84,6 +87,13 @@ export const defaultTransform: ImageTransform = {
   rotateToDataUrl,
   downloadImage,
   pickImageFile,
+}
+
+/** 扩展的生产实现：取图 → 画到更大画布 → 释放（见 imageBitmap） */
+export const defaultExpandIO: ExpandBitmapIO = {
+  load: (url) => loadDrawableSource(url),
+  paint: (bounds, draw, source) => paintCanvas(bounds.width, bounds.height, (c2d) => draw(c2d, source)),
+  release: (source) => releaseDrawable(source),
 }
 
 /** 只要"按名字取服务"这一件事的宿主形状（内核 Context 与渲染上下文都满足） */
@@ -261,7 +271,7 @@ export async function cropImage(
 ): Promise<boolean> {
   const data = asImageData(ctx.read(nodeId))
   if (!data.imageUrl) return false
-  const pixels = toCropPixels(rect)
+  const pixels = toPixelRect(rect)
   if (pixels.width <= 0 || pixels.height <= 0) return false
   const result = await transform.cropToDataUrl(data.imageUrl, pixels, data.imageWidth ?? 0, data.imageHeight ?? 0)
   if (!result) return false
@@ -326,6 +336,47 @@ export function readImageSummary(data: Record<string, unknown> | undefined): { n
 
 /** 「加素材」时新节点相对本节点的偏移（与 v1 一致：摆在左边同一水平线上） */
 export const SOURCE_NODE_OFFSET = { x: -260, y: 0 }
+
+/**
+ * 确认扩展：把画面往外扩出一圈透明画布，**原地替换** imageUrl（与裁剪同一套语义）。
+ *
+ * 为什么原地替换而不是新建节点（与 v1 不同）：用户的心智是「把这张图改一下」而不是「多出一张图」，
+ * 与裁剪保持一致也让撤销栈干净。真想要一份新的，复制节点即可。
+ *
+ * 两点刻意的不做：
+ * - **扩展没实际变大就不写库**（用户把框又拖回去了）：写一条空历史只是噪音；
+ * - 尺寸与 data **同一次写回**：否则一次扩展记两条撤销记录，用户按一次撤销只退半步。
+ *
+ * @returns 是否写成功（节点不存在 / 没有图 / 环境不支持 / 没实际扩大 → false）
+ */
+export async function expandImageNode(
+  ctx: ImageOpsContext,
+  nodeId: string,
+  rect: Rect,
+  io: ExpandBitmapIO = defaultExpandIO,
+): Promise<boolean> {
+  const data = asImageData(ctx.read(nodeId))
+  if (!data.imageUrl || !data.imageWidth || !data.imageHeight) return false
+  // 没实际扩大（框仍包着原图尺寸）→ 不写库，避免一条什么都没改的历史
+  if (!isExpandEffective(rect, data.imageWidth, data.imageHeight)) return false
+  const result = await expandImage(data.imageUrl, rect, data.imageWidth, data.imageHeight, io)
+  if (!result) return false
+  // 扩出来的图是**新位图**：原图的字节数/文件名不再代表它，清掉避免状态栏显示过期信息
+  writeImageData(
+    ctx,
+    nodeId,
+    {
+      ...ctx.read(nodeId),
+      imageUrl: result.dataUrl,
+      imageWidth: result.width,
+      imageHeight: result.height,
+      imageSize: undefined,
+    },
+    result.width,
+    result.height,
+  )
+  return true
+}
 
 /**
  * 加素材：把一张本地图片变成"连进本节点的上游素材"。

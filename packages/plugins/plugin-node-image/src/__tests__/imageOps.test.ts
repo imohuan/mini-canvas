@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter, type GraphEnvelope } from '@mini-canvas/canvas-data'
 import { createImageOps, cropImage, downloadImageNode, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
-import type { Rect } from '../cropGeometry'
+import type { Rect } from '@mini-canvas/canvas-render'
 
 /** 假图片加工：不碰 FileReader/canvas，只回可控结果 */
 function fakeTransform(overrides: Partial<ImageTransform> = {}): ImageTransform {

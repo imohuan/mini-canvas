@@ -4,6 +4,7 @@ import {
   computeUnionBounds,
   paddedBounds,
   draggableMembers,
+  resolveBatchHandleVisible,
   rectsOverlap,
   hasSelectedAncestor,
   DEFAULT_SELECTION_FRAME_PADDING,
@@ -96,5 +97,29 @@ describe('draggableMembers / hasSelectedAncestor', () => {
     expect(hasSelectedAncestor('x', new Set(['y']), cyc)).toBe(true)
     // 环上无被选祖先（只有自身被选不算祖先）→ false，不死循环
     expect(hasSelectedAncestor('x', new Set(['x']), cyc)).toBe(false)
+  })
+})
+
+describe('resolveBatchHandleVisible（批量连线端口显隐门）', () => {
+  const base = { visible: true, pressed: false, groupDragging: false, nodeDragging: false }
+
+  it('空闲（有选中、没按、没拖）→ 显示', () => {
+    expect(resolveBatchHandleVisible(base)).toBe(true)
+  })
+
+  it('指针按下中 → 隐藏（主门：任何拖拽必经第一步，实测宿主拖拽事件不广播）', () => {
+    expect(resolveBatchHandleVisible({ ...base, pressed: true })).toBe(false)
+  })
+
+  it('整组平移进行中 → 隐藏', () => {
+    expect(resolveBatchHandleVisible({ ...base, groupDragging: true })).toBe(false)
+  })
+
+  it('宿主上报的节点拖动中 → 隐藏', () => {
+    expect(resolveBatchHandleVisible({ ...base, nodeDragging: true })).toBe(false)
+  })
+
+  it('多选框不可见（无选中/正在框选）→ 隐藏', () => {
+    expect(resolveBatchHandleVisible({ ...base, visible: false })).toBe(false)
   })
 })

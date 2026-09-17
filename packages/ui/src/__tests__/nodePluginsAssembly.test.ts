@@ -18,6 +18,8 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
+import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
+import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import type { ToolService } from '@mini-canvas/kernel'
@@ -50,9 +52,11 @@ async function bootAll() {
   ctx.inject('nodeRegistry', nodeRegistry)
   ctx.inject('themeRegistry', new ThemeRegistry())
 
-  for (const plugin of [nodeTextPlugin, nodeImagePlugin, node3dPreviewPlugin, nodeImageComparePlugin]) {
+  for (const plugin of [nodeTextPlugin, nodeImagePlugin, nodeVideoPlugin, node3dPreviewPlugin, nodeImageComparePlugin]) {
     ctx.plugin(plugin)
   }
+  // 文件拖入/粘贴也照宿主清单装载：它是"把外部素材变成节点"的唯一入口，漏装就等于拖拽完全没反应。
+  ctx.plugin(fileDropPlugin)
   // 工具提供方也照宿主清单装载：图片节点的"生成"能力来自它，不是自己写死 HTTP。
   ctx.plugin(pluginImageGenerationTools)
   ctx.plugin(pluginTextGenerationTools)
@@ -61,19 +65,21 @@ async function bootAll() {
 }
 
 /**
- * 四个节点类型各自的预期段（壳 BaseNode 实际会读的槽位）。
+ * 各节点类型各自的预期段（壳 BaseNode 实际会读的槽位）。
  * 注意：text 只有底部状态栏 —— 顶部的加粗/字号/颜色/对齐对文本节点无语义，已按用户要求删除；
+ * video 是上下都要：上面是"上传/剪辑/裁剪/截图/下载"操作条，下面是剪辑时间轴。
  * 以后若要给某类型加回顶部栏，必须同步改这里，否则这条测试会拦住（这正是它的用处）。
  */
 const EXPECTED = [
   { type: 'text', extraSegments: ['bottom-toolbar'] },
-  { type: 'image', extraSegments: ['top-toolbar', 'bottom-toolbar'] },
+  { type: 'image', extraSegments: ['top-toolbar', 'bottom-toolbar', 'overlay'] },
+  { type: 'video', extraSegments: ['top-toolbar', 'bottom-toolbar', 'overlay'] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const
 
-describe('四个节点插件整装', () => {
-  it('四个节点类型全部注册，没有重名冲突', async () => {
+describe('节点插件整装', () => {
+  it('全部节点类型都注册，没有重名冲突', async () => {
     const { ctx, nodeStore } = await bootAll()
     const types = [...nodeStore.types.keys()]
     for (const { type } of EXPECTED) {
@@ -82,7 +88,7 @@ describe('四个节点插件整装', () => {
     ctx.stop()
   })
 
-  it('每个类型都注册了 content 段（壳缺 content 会渲染"未注册"提示）；text/image 另有上下工具栏段', async () => {
+  it('每个类型都注册了 content 段（壳缺 content 会渲染"未注册"提示）；带控制栏的类型另有其段', async () => {
     const { ctx, nodeRegistry } = await bootAll()
     for (const { type, extraSegments } of EXPECTED) {
       const segments = nodeRegistry.get(type)?.segments ?? {}
@@ -94,7 +100,15 @@ describe('四个节点插件整装', () => {
     ctx.stop()
   })
 
-  it('四个类型都能真建出节点并落进 graph（服务名互不打架）', async () => {
+  it('每个节点类型都声明了 description（右键"新建节点"菜单的 hover 小字来源；漏一个就红）', async () => {
+    const { ctx, nodeStore } = await bootAll()
+    for (const { type } of EXPECTED) {
+      expect(nodeStore.types.get(type)?.description, type + ' 未声明 description').toBeTruthy()
+    }
+    ctx.stop()
+  })
+
+  it('所有类型都能真建出节点并落进 graph（服务名互不打架）', async () => {
     const { ctx } = await bootAll()
     const factory = ctx.get<{ create(t: string, p: { x: number; y: number }, data?: Record<string, unknown>): string }>(
       'nodeFactory',
@@ -110,11 +124,32 @@ describe('四个节点插件整装', () => {
     ctx.stop()
   })
 
-  it('四个插件的服务名都能取到（text / image / panorama3d / imageCompare）', async () => {
+  it('各插件的服务名都能取到（text / image / video / panorama3d / imageCompare）', async () => {
     const { ctx } = await bootAll()
-    for (const service of ['text', 'image', 'panorama3d', 'imageCompare']) {
+    for (const service of ['text', 'image', 'video', 'panorama3d', 'imageCompare']) {
       expect(ctx.get(service), `服务 ${service} 未上架`).toBeTruthy()
     }
+    ctx.stop()
+  })
+
+  it('文件拖入插件真的装上了，并且能拖图片/视频/文本（用户的"拖进去没反应"就是漏装）', async () => {
+    const { ctx, nodeStore } = await bootAll()
+    const svc = ctx.get<{
+      canHandle(f: { name: string; type: string }): boolean
+      addFiles(files: File[], at: { x: number; y: number } | null): Promise<number>
+    }>('file-drop')
+    expect(svc, 'file-drop 服务没上架 = 拖拽/粘贴完全没有监听').toBeTruthy()
+
+    // 三类素材都能被接住（对应的节点类型都已注册）
+    expect(svc.canHandle({ name: 'a.png', type: 'image/png' })).toBe(true)
+    expect(svc.canHandle({ name: 'a.mp4', type: 'video/mp4' })).toBe(true)
+    expect(svc.canHandle({ name: 'a.md', type: 'text/markdown' })).toBe(true)
+    expect(svc.canHandle({ name: 'a.bin', type: '' })).toBe(false)
+
+    // 文本这条不碰浏览器 IO（FileReader 走 File.text()），能在 node 里真跑一遍
+    const count = await svc.addFiles([new File(['hello'], 'note.md', { type: 'text/markdown' })], { x: 10, y: 20 })
+    expect(count).toBe(1)
+    expect(nodeStore.getNodes().some((n) => n.type === 'text')).toBe(true)
     ctx.stop()
   })
 

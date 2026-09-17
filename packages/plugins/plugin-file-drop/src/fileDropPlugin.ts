@@ -2,13 +2,14 @@
  * plugin-file-drop —— 文件拖入 & 粘贴插件（v2 复刻老版 canvas-core/src/plugins/file-drop）。
  *
  * 数据流（v2 铁律：只经内核服务读写，不碰 VueFlow/宿主内部；建节点原子进 history 一次撤销）：
- * - 拖文件到画布 / 粘贴图片或文本 → 读 File → 图片用 URL.createObjectURL 生成 data.imageUrl、
- *   文本读成 data.text → 在 drop/粘贴位置建 image/text 节点。
+ * - 拖文件到画布 / 粘贴图片、视频或文本 → 读 File → 图片与视频用 URL.createObjectURL 生成
+ *   data.imageUrl / data.videoUrl、文本读成 data.text → 在 drop/粘贴位置建对应节点。
  *
- * v2 简化边界（对齐老版能做而 v2 无的类型/服务）：
- * - 只建 image/text 节点：v2 无 video 节点类型；视频/未知文件归 unsupported（忽略 + console.warn）。
- * - 不做 StoragePlugin 上传（backend-sync 不在本次复刻范围）；图片只留 objectURL 本地会话可见。
- * - 建节点前检测 nodeStore.types 是否注册了 image/text（node-image/node-text 插件装配才有）；
+ * 边界：
+ * - 建 image / video / text 三类节点；未知文件归 unsupported（忽略 + console.warn）。
+ * - 不做 StoragePlugin 上传（backend-sync 不在本次复刻范围）；媒体只留 objectURL 本地会话可见，
+ *   并登记进宿主 resources 供删除后回收。
+ * - 建节点前检测 nodeStore.types 是否注册了对应类型（node-image / node-video / node-text 装配才有）；
  *   缺类型则该文件类别跳过（console.warn）——插件可与节点插件独立装配，不硬耦合（masterplan 铁律 8）。
  *
  * 事件挂载：window 级 dragover/drop + paste 监听，ctx.effect 绑定 → 随插件 scope 自动回收；
@@ -25,6 +26,7 @@ import {
   clampText,
   spreadPositions,
   buildImagePayload,
+  buildVideoPayload,
   buildTextPayload,
   buildPastedTextPayload,
   MAX_TEXT_LENGTH,
@@ -43,11 +45,11 @@ export interface FileDropOptions extends Record<string, unknown> {
 
 /** file-drop 对外服务形状（其它插件/UI 程序化触发拖入/粘贴；形状与老版行为对齐） */
 export interface FileDropService {
-  /** 处理一批拖入/粘贴的 File（图片/文本），在 flow 坐标处建节点；返回实际创建数。 */
+  /** 处理一批拖入/粘贴的 File（图片/视频/文本），在 flow 坐标处建节点；返回实际创建数。 */
   addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
   /** 粘贴纯文本 → 文本节点（客户端直接给字符串的入口） */
   addPastedText(text: string, atFlow: { x: number; y: number } | null): string | null
-  /** 判断文件是否可处理（image/text） */
+  /** 判断文件是否可处理（image/video/text，且对应节点类型已注册） */
   canHandle(file: { name: string; type: string }): boolean
 }
 
@@ -66,8 +68,16 @@ function isEditableTarget(t: EventTarget | null): boolean {
   return Boolean(t.closest('input, textarea, select, [contenteditable="true"]'))
 }
 
-/** 浏览器环境：读 File 为文本（老版 FileReader 同款；node 测试不触碰） */
+/**
+ * 读 File 为文本。
+ *
+ * 优先用 `Blob.text()`（现代浏览器都有，node 也有）而不是老版的 FileReader：
+ * 这条路径没有回调、异常直接冒泡，也不必依赖浏览器专有构造函数 ——
+ * 于是"读文本"这件纯数据的事在无头环境里也能真跑一遍（装配测试因此能覆盖它）。
+ * 老环境缺 .text() 时回落 FileReader，行为对用户完全一致。
+ */
 function readAsText(file: File): Promise<string> {
+  if (typeof file.text === 'function') return file.text()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as string)
@@ -93,20 +103,69 @@ function readImageDims(blob: Blob): Promise<{ width: number; height: number } | 
   })
 }
 
+/**
+ * 浏览器环境：读视频元数据（宽/高/时长）。
+ *
+ * 为什么不复用图片那套 `new Image()`：视频没有 naturalWidth，必须用 `<video>` 元素并等
+ * loadedmetadata —— 只有那个事件保证 videoWidth / videoHeight / duration 可用。
+ * 读不到（格式不被支持 / 解码失败）返回 null，调用方退回默认卡片尺寸，绝不猜一个数字。
+ */
+function readVideoMeta(blob: Blob): Promise<VideoMeta | null> {
+  return new Promise((resolve) => {
+    if (typeof document === 'undefined') {
+      resolve(null)
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.muted = true
+    const finish = (value: VideoMeta | null): void => {
+      video.removeAttribute('src')
+      video.load()
+      URL.revokeObjectURL(url)
+      resolve(value)
+    }
+    video.onloadedmetadata = () => {
+      if (!video.videoWidth || !video.videoHeight) {
+        finish(null)
+        return
+      }
+      finish({
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: Number.isFinite(video.duration) ? video.duration : 0,
+      })
+    }
+    video.onerror = () => finish(null)
+    video.src = url
+  })
+}
+
 /** 浏览器专属 IO 的依赖注入点：生产用真实实现；node 单测注入假实现（不触碰 DOM/FileReader/Image） */
 export interface FileDropReaders {
   /** 读 File 文本内容 */
   readText(file: File): Promise<string>
   /** 读图片真实宽高；失败返回 null → 默认卡片尺寸 */
   readImageDims(blob: Blob): Promise<ImageDims | null>
+  /** 读视频元数据（宽/高/时长）；失败返回 null → 默认卡片尺寸 */
+  readVideoMeta(blob: Blob): Promise<VideoMeta | null>
   /** 生成图片 objectURL（node 无此 API，测试注入 mock） */
   createObjectURL(blob: Blob): string
+}
+
+/** 视频元数据（宽高 + 时长秒） */
+export interface VideoMeta {
+  width: number
+  height: number
+  duration: number
 }
 
 /** 默认浏览器实现（生产）；File 来自 FileReader / Image / URL.createObjectURL */
 const defaultReaders: FileDropReaders = {
   readText: (f) => readAsText(f),
   readImageDims: (b) => readImageDims(b),
+  readVideoMeta: (b) => readVideoMeta(b),
   createObjectURL: (b) => URL.createObjectURL(b),
 }
 
@@ -141,8 +200,8 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     return this.ctx.get<ViewportService | undefined>('viewport') ?? undefined
   }
 
-  /** 类型是否已注册（node-image/node-text 插件装配才 true；缺则跳过该类文件） */
-  private typeRegistered(type: 'image' | 'text'): boolean {
+  /** 类型是否已注册（node-image / node-video / node-text 插件装配才 true；缺则跳过该类文件） */
+  private typeRegistered(type: 'image' | 'video' | 'text'): boolean {
     return this.nodeStore.types.has(type)
   }
 
@@ -197,8 +256,13 @@ export class FileDropServiceImpl extends Service implements FileDropService {
 
   /**
    * 处理一批文件（drop 或粘贴图片 File）。返回实际创建节点数。
-   * 图片：读 objectURL → 读真实尺寸 → 建 image（带适配尺寸）；文本：读内容截断 → 建 text。
-   * 视频/未知/未注册类型：跳过并 console.warn（不崩、不半建）。
+   * 图片：读 objectURL → 读真实尺寸 → 建 image（带适配尺寸）；
+   * 视频：读 objectURL → 读元数据（宽高时长）→ 建 video（带适配尺寸）；
+   * 文本：读内容截断 → 建 text。
+   * 未知/未注册类型：跳过并 console.warn（不崩、不半建）。
+   *
+   * 三类素材都登记进宿主 resources（写 resourceId）—— objectURL 是会话级的，
+   * 删除节点后由宿主的引用扫描延迟回收（撤销恢复节点时不会破图，与图片节点同语义）。
    */
   async addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number> {
     const list = files.filter((f) => this.canHandle(f))
@@ -219,6 +283,16 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const resources = this.ctx.get<ResourceService | undefined>('resources')
           if (resources) {
             const resourceId = resources.register({ kind: 'image', url, resource: file })
+            payload.data.resourceId = resourceId
+          }
+          payloads.push(payload)
+        } else if (kind === 'video' && this.typeRegistered('video')) {
+          const url = this.readers.createObjectURL(file)
+          const meta = await this.readers.readVideoMeta(file)
+          const payload = buildVideoPayload(file, url, positions[i], meta)
+          const resources = this.ctx.get<ResourceService | undefined>('resources')
+          if (resources) {
+            const resourceId = resources.register({ kind: 'video', url, resource: file })
             payload.data.resourceId = resourceId
           }
           payloads.push(payload)
@@ -339,7 +413,3 @@ export function apply(ctx: Context, options: FileDropOptions = {}): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const fileDropPlugin: PluginModule = { name, inject, apply }
-
-
-
-

@@ -17,10 +17,11 @@ import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageGeneratePanel from './ImageGeneratePanel.vue'
-import { beginCrop, endCrop } from './cropSession'
-import { createImageOps, cropImage, downloadImageNode, rotateImage, uploadImage } from './imageOps'
+import ImageFrameOverlay from './ImageFrameOverlay.vue'
+import { beginCrop, beginExpand, endEdit } from './cropSession'
+import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
-import type { Rect } from './cropGeometry'
+import type { Rect } from '@mini-canvas/canvas-render'
 
 /** image 插件暴露给外部的服务形状（content/宿主经 ctx.get('image') 使用；形状不变，.vue 零改动） */
 export interface ImageNodeService {
@@ -114,6 +115,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: 'image',
     label: '图片',
+    description: '在画布中添加一张图片',
     icon: NODE_ICON,
     size: { w: 320, h: 240 },
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考），
@@ -129,6 +131,10 @@ export function apply(ctx: Context) {
     segments: {
       'top-toolbar': ImageTopToolbar,
       'bottom-toolbar': ImageGeneratePanel,
+      // 编辑浮层（裁剪框/扩展框）画在**卡片外面**：内容段住在 overflow:hidden 的裁剪层里，
+      // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
+      // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
+      overlay: ImageFrameOverlay,
     },
     create(position) {
       return image.addImageNode(position, '')
@@ -168,7 +174,7 @@ export function apply(ctx: Context) {
       const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
       if (!nodeId || !rect) return false
       const ok = await cropImage(ops, nodeId, rect)
-      endCrop(nodeId)
+      endEdit(nodeId)
       return ok
     },
   })
@@ -178,7 +184,39 @@ export function apply(ctx: Context) {
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
-      endCrop(nodeId)
+      endEdit(nodeId)
+      return true
+    },
+  })
+  // —— 图片扩展（Outpaint）：把画面往外扩出一圈透明画布，等着交给生成模型填内容 ——
+  ctx.commands.register({
+    id: 'image.expand',
+    title: '扩展图片',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      beginExpand(nodeId)
+      return true
+    },
+  })
+  ctx.commands.register({
+    id: 'image.expandConfirm',
+    title: '确认扩展',
+    run: async (_c, payload) => {
+      const { nodeId, rect } = (payload ?? {}) as { nodeId?: string; rect?: Rect }
+      if (!nodeId || !rect) return false
+      const ok = await expandImageNode(ops, nodeId, rect)
+      endEdit(nodeId)
+      return ok
+    },
+  })
+  ctx.commands.register({
+    id: 'image.expandCancel',
+    title: '取消扩展',
+    run: (_c, payload) => {
+      const { nodeId } = (payload ?? {}) as { nodeId?: string }
+      if (!nodeId) return false
+      endEdit(nodeId)
       return true
     },
   })

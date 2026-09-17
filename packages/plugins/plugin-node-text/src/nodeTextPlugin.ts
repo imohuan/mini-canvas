@@ -109,6 +109,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: 'text',
     label: '文本',
+    description: '在画布中添加一个文本节点',
     icon: NODE_ICON,
     size: { w: 300, h: 200 },
     // 不声明 capacity = 不限条数：文本节点同样可以接多个上游素材（见 panelSource 的 collectUpstreamMaterials）。

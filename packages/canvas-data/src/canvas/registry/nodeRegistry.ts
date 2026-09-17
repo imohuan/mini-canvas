@@ -19,8 +19,15 @@
  */
 import { SlotRegistry } from '@mini-canvas/kernel'
 
-/** 一段式节点展示可能有的段。M2 只路由这四段，top/bottom 缺省为空。 */
-export type NodeSegment = 'content' | 'title' | 'top-toolbar' | 'bottom-toolbar'
+/**
+ * 一段式节点展示可能有的段。top/bottom/overlay 缺省为空。
+ *
+ * 为什么需要 overlay（第五段）：编辑类浮层（裁剪框 / 扩展框 / 蒙版笔刷）必须画在**卡片之外**。
+ * content 段住在 .v2-content-clip（overflow:hidden）里，覆盖层挂那里会被卡片边界裁掉 ——
+ * 用户实测报的"裁剪区域被节点切掉"就是这个原因。overlay 与 content 平级挂在卡片**外面**
+ * （与上/下控制栏同级），overflow 可见，于是框可以画到卡片边缘甚至略微出界（扩展框必须能出界）。
+ */
+export type NodeSegment = 'content' | 'title' | 'top-toolbar' | 'bottom-toolbar' | 'overlay'
 
 /** 节点展示定义：每段一个组件句柄(opaque)，没给就不渲染该段。 */
 export interface NodePresentation {
@@ -156,4 +163,3 @@ export class NodeRegistry {
     }))
   }
 }
-

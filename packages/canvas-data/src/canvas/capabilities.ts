@@ -138,6 +138,7 @@ export function buildCapabilities(
           label: def.label,
           defaultSize: def.size,
           icon: def.icon,
+          description: def.description,
           inputs: def.inputs,
           outputs: def.outputs,
           resizable: def.resizable,

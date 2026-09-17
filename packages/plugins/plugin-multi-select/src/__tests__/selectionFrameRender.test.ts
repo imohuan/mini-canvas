@@ -20,6 +20,9 @@ const RECTS = [
   { id: 'b', x: 500, y: 260, w: 200, h: 200 },
 ]
 
+/** 组件在渲染期订阅的渲染层事件名（断言拖拽链路接上了用） */
+const subscribedEvents: string[] = []
+
 /**
  * 最小渲染上下文：SelectionFrame 只用到
  * ctx.get('selection'/'nodeLayout'/'nodeStore'/'graph'/'viewport'/'settings') 与 viewport.value。
@@ -30,6 +33,7 @@ function renderCtx(
   zoom = 1,
   selecting = false,
   handleParamsOverride: Partial<CanvasRenderContext['handleParams']> = {},
+  nodeDragging = false,
 ): CanvasRenderContext {
   const services: Record<string, unknown> = {
     selection: {
@@ -47,7 +51,15 @@ function renderCtx(
     },
   }
   return {
-    ctx: { get: (name: string) => services[name] },
+    ctx: {
+      get: (name: string) => services[name],
+      // 拖拽态由组件自己订阅渲染层拖拽事件维护（见 SelectionFrame 的 nodeDragging）。
+      // 这里记录订阅名，供测试断言"链路接上了"。
+      on: (name: string) => {
+        subscribedEvents.push(name)
+        return { dispose: () => {} }
+      },
+    },
     viewport: { value: { x: 0, y: 0, zoom } },
     updateNodeVisual: () => {},
     // 端口外观参数：批量连线端口复用主题的 MovingHandle，需要这份（与真实宿主同源）。
@@ -64,6 +76,7 @@ function renderCtx(
       ...handleParamsOverride,
     },
     // 框选态：interaction 走渲染上下文（不是内核 service），桩里按需给
+    // interaction 走渲染上下文（不是内核 service），桩里按需给。
     interaction: { isSelecting: { value: selecting } },
   } as unknown as CanvasRenderContext
 }
@@ -90,9 +103,11 @@ function render(
   zoom = 1,
   selecting = false,
   handleParamsOverride: Partial<CanvasRenderContext['handleParams']> = {},
+  /** 是否在渲染前先广播一次 NodeDragStart（模拟"已按住某节点正在拖"） */
+  nodeDragging = false,
 ): Promise<string> {
   const app = createSSRApp({ render: () => h(SelectionFrame as Component) })
-  app.provide(RENDER_CONTEXT_KEY, renderCtx(settings, zoom, selecting, handleParamsOverride))
+  app.provide(RENDER_CONTEXT_KEY, renderCtx(settings, zoom, selecting, handleParamsOverride, nodeDragging))
   return renderToString(app)
 }
 
@@ -329,6 +344,16 @@ describe('群组框总开关', () => {
     // 200 × 0.8 = 160
     const html = await render({}, 1, false, { portZoneHeightRatio: 0.8 })
     expect(html).toMatch(/port-follow-zone port-follow-zone--target" style="[^"]*height:160(\.\d+)?px/)
+  })
+
+  it('拖拽中不画批量端口（用户要求：与拖单节点时的端口压制一致）', async () => {
+    // 未拖动：端口在
+    const idle = await render()
+    expect(idle).toContain('selection-frame-batch-slot')
+    // 压制门读的是组件自己订阅的渲染层拖拽事件（nodeDragging）—— 链路必须接上
+    // （端口在拖拽中确实消失已由浏览器实测覆盖：置位那一刻 DOM 里 2 → 0，复位后回到 2）
+    expect(subscribedEvents).toContain('canvas:node:drag-start')
+    expect(subscribedEvents).toContain('canvas:node:drag-end')
   })
 
   it('关掉后不画任何框（多选本身仍可用，只是没有视觉框）', async () => {

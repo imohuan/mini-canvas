@@ -25,6 +25,12 @@ import TitleLabel from './TitleLabel.vue'
 import { isRectFullyVisible } from './titleEdit'
 import { useNodeCapability } from '../../composables/useNodeCapability'
 import { resolveCardFrame } from './cardFrame'
+import {
+  resolveMultiRadio,
+  applyMultiRadioChange,
+  multiRadioStyle,
+  MULTI_RADIO_KEY_SET,
+} from './multiRadio'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
 
@@ -50,9 +56,9 @@ const CONNECT_FEEDBACK = {
 
 // —— 缩放 / LOD / 标题反缩放（v2 固定卡尺寸，标题宽=cardWidth×max(zoom,minZoom)）——
 const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
-// 节点外观阈值：全部来自本插件 Config（节点/标题、节点/LOD），对齐 v1 core 的 nodeTitleOffset /
-// nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，故这里用 ref +
-// onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
+// 节点外观：全部来自本插件 Config（节点/标题、节点/低细节、节点/多选标记），对齐 v1 core 的
+// nodeTitleOffset / nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，
+// 故这里用 ref + onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
 const settingsStore = () => ctx?.get<{ get(key: string): unknown }>('settings')
 const numOf = (key: string, fallback: number): number => {
   const v = settingsStore()?.get(key)
@@ -61,6 +67,11 @@ const numOf = (key: string, fallback: number): number => {
 const TITLE_OFFSET = ref(numOf('titleOffset', 12))
 const TITLE_MIN_ZOOM = ref(numOf('titleScaleMinZoom', 0.5))
 const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
+/**
+ * 多选标记的外观（大小 / 颜色 / 低缩放是否显示）。
+ * 配置来自本插件 Config 的「节点/多选标记」一组；这里读一次做初值，之后靠 onChange 窄更新。
+ */
+const MULTI_RADIO = ref(resolveMultiRadio((key) => settingsStore()?.get(key)))
 /** 多选时是否隐藏标题条（配置在 multi-select 插件，key 全局平面命名，这里按名字读） */
 const HIDE_TITLES_ON_MULTI = ref(
   settingsStore()?.get('multiSelectHideTitles') === true,
@@ -70,12 +81,17 @@ const applyTitleSetting = (key: string, value: unknown): void => {
     HIDE_TITLES_ON_MULTI.value = value === true
     return
   }
+  // 多选标记的三项：只认识自己的键才动，别的键照旧往下走（互不干扰）
+  if (MULTI_RADIO_KEY_SET.has(key)) {
+    MULTI_RADIO.value = applyMultiRadioChange(MULTI_RADIO.value, key, value)
+    return
+  }
   if (typeof value !== 'number' || !Number.isFinite(value)) return
   if (key === 'titleOffset') TITLE_OFFSET.value = value
   else if (key === 'titleScaleMinZoom') TITLE_MIN_ZOOM.value = value
   else if (key === 'nodeLodLowDetailZoom') LOW_DETAIL_ZOOM.value = value
 }
-// 全局订阅配置变化，按 key 过滤出本节点关心的 3 项（不按插件 scope 过滤，避免命名/装配差异导致不触发）。
+// 全局订阅配置变化，按 key 过滤出本节点关心的几项（不按插件 scope 过滤，避免命名/装配差异导致不触发）。
 const titleSettingOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')?.onChange(
   (key, value) => applyTitleSetting(key, value),
 )
@@ -108,14 +124,28 @@ const isMultiSelected = computed(() => isSelected.value && selectedCount.value >
 /**
  * 多选态（选中 >=2）：在节点内容区左上角显示一个圆形单选标记，用来"一眼看出这个节点在不在选中集里"。
  * 只在多选时才出现 —— 单选时卡片本身已有选中环，再叠一个圆点反而多余。
+ * 低缩放（进入 LOD）时默认不画：那时整个节点都在简化渲染，再叠一个标记只会更糊；
+ * 想让它一直在，把「多选标记低缩放显示」开关打开（配置 nodeMultiRadioShowInLowDetail）。
  */
-const showMultiRadio = computed(() => isSelected.value && selectedCount.value > 1)
+const showMultiRadio = computed(
+  () =>
+    isSelected.value &&
+    selectedCount.value > 1 &&
+    (!lowDetail.value || MULTI_RADIO.value.showInLowDetail),
+)
 
 /**
- * 圆圈的反缩放（与标题同一套语义）：保持"屏幕上的大小恒定"，
- * 否则缩到 0.2x 时它会小成一个点、完全起不到指示作用。
+ * 圆圈的大小 + 反缩放 + 颜色（与标题同一套语义）：保持"屏幕上的大小恒定"，
+ * 否则缩到 0.2x 时它会小成一个点、完全起不到指示作用。三个值都来自本插件 Config。
  */
-const radioScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
+const radioStyle = computed(() =>
+  multiRadioStyle({
+    size: MULTI_RADIO.value.size,
+    color: MULTI_RADIO.value.color,
+    zoom: zoom.value,
+    minZoom: TITLE_MIN_ZOOM.value,
+  }),
+)
 
 /**
  * resize 拖柄的反缩放（与标题/多选圆点同一套语义）：保持"屏幕上的大小恒定"，
@@ -282,6 +312,18 @@ const customTitle = computed(() => resolveSegment(registry, props.type, 'title')
 // 取带稳定 id 的版本：列表 key 用注册时那个 id（基座='base'），插件热装卸时不会错位复用组件实例。
 const topSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'top-toolbar'))
 const bottomSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'bottom-toolbar'))
+/**
+ * overlay 段：编辑类浮层（裁剪框 / 扩展框）。
+ *
+ * **与 content 分开、且画在卡片外面**（用户要求"放在和上下操控栏同级位置"）：
+ * content 住在 .v2-content-clip（overflow:hidden），浮层挂那里会被卡片边界裁掉 ——
+ * 用户实测报的"裁剪区域被节点切掉"就是这个原因。overlay 与上/下控制栏同级，
+ * 覆盖整张卡片且 overflow 可见，于是框能贴到卡片边缘（扩展框还要能画到卡片之外）。
+ *
+ * 它自带定位（跟随卡片尺寸），所以不走 resolveNodeSlotStyle 那套"贴边+居中+反缩放"——
+ * 浮层的坐标必须与卡片内容严格对齐，一旦反缩放就会与底下的画面错位。
+ */
+const overlaySlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'overlay'))
 const editable = computed(() => Boolean(nodeWrite))
 
 // ============ 上/下插槽的定位（由壳统一负责，插件只管内容）============
@@ -298,6 +340,18 @@ const topSlotsStyle = computed(() =>
 const bottomSlotsStyle = computed(() =>
   resolveNodeSlotStyle({ side: 'bottom', offset: slotOffsets.value.bottom, zoom: zoom.value }),
 )
+
+/**
+ * 编辑浮层的定位：**与卡片完全重合**（同宽同高、无偏移、不反缩放）。
+ *
+ * 为什么不像上/下控制栏那样反缩放：裁剪框的坐标必须与底下的画面像素严格对齐，
+ * 一旦按 1/zoom 反缩放，框与画面就会错位（用户拖到的位置与框显示的位置不一致）。
+ * 所以这里只做"贴在卡片上"这一件事。
+ */
+const overlayLayerStyle = computed<Record<string, string>>(() => ({
+  width: `${cardWidth.value}px`,
+  height: `${cardHeight.value}px`,
+}))
 
 // ============ 端口能力显隐（按 type）============
 const cap = useNodeCapability(props.type)
@@ -621,16 +675,16 @@ function clamp(value: number, min: number, max: number): number {
       'is-connecting-hover': showConnectFeedback,
       'is-connection-invalid': isConnectionInvalidTarget,
     }" :style="cardInlineStyle" @mousemove="updateCardMousePosition">
-      <!-- 多选标记：内容区左上角的圆形单选点（只在多选时出现，反缩放保持屏幕上大小恒定）。
+      <!-- 多选标记：内容区左上角的圆形单选点（只在多选时出现；大小/颜色/缩放都来自本插件 Config）。
            纯指示，不接事件 —— 点击行为交给卡片本身（Shift+点节点 = 从选中集里去掉它）。 -->
       <div
-        v-if="showMultiRadio && !lowDetail"
+        v-if="showMultiRadio"
         class="v2-multi-radio nodrag nopan"
-        :style="{ transform: `scale(${radioScale})` }"
+        :style="radioStyle"
         role="presentation"
         aria-hidden="true"
       >
-        <!-- 自绘 SVG（不用 CSS 画圆）：矢量、跟主题色走 currentColor、任意缩放下都清晰。
+        <!-- 自绘 SVG（不用 CSS 画圆）：矢量、走当前颜色 currentColor（= 配置里的标记颜色）、任意缩放都清晰。
              选中态 = 外圈 + 中心实心点（"这个节点在选中集里"）。 -->
         <svg class="v2-multi-radio-icon" viewBox="0 0 20 20" aria-hidden="true">
           <circle class="v2-multi-radio-ring" cx="10" cy="10" r="8.25" />
@@ -735,6 +789,17 @@ function clamp(value: number, min: number, max: number): number {
       :style="bottomSlotsStyle"
     >
       <component v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+
+    <!-- 编辑浮层（裁剪框/扩展框）：与卡片**同级**、画在卡片外面，所以不会被内容层的 overflow:hidden 裁掉。
+         尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
+         z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
+    <div
+      v-if="overlaySlots.length > 0 && !hideToolbars"
+      class="v2-overlay nodrag nopan"
+      :style="overlayLayerStyle"
+    >
+      <component v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :is="seg.component" :id="id" :data="data" />
     </div>
   </div>
 </template>
@@ -917,12 +982,10 @@ function clamp(value: number, min: number, max: number): number {
   top: 8px;
   left: 8px;
   z-index: 26;
-  width: 26px;
-  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transform-origin: left top;
+  /* 尺寸 / 反缩放 / 颜色由 multiRadioStyle() 内联给（配置驱动），这里只管定位与不接事件 */
   pointer-events: none;
 }
 
@@ -931,8 +994,8 @@ function clamp(value: number, min: number, max: number): number {
   height: 100%;
   display: block;
   overflow: visible;
-  /* 圆环与圆点都吃主题的"选中色"，浅色/深色主题下都跟随 */
-  color: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
+  /* 圆环与圆点都吃父元素给的色（= 配置里那一项，默认值是主题的"选中色"变量，浅色/深色主题下都跟随） */
+  color: inherit;
   /* 白底圆：让标记在任何节点内容上都看得清（SVG 里画白底而不是靠 CSS 底色） */
   filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
 }
@@ -961,6 +1024,20 @@ function clamp(value: number, min: number, max: number): number {
 /* 选中态标题加深（文案元素在 TitleLabel 子组件内，需 :deep 穿透 scoped） */
 .v2-node.is-selected :deep(.title-label) {
   color: var(--canvas-node-text-strong, #111827);
+}
+
+/* —— 编辑浮层（裁剪/扩展框）——
+   与卡片同级、画在卡片外面：不受内容层 overflow:hidden 裁剪（用户报的"裁剪区域被节点切掉"）。
+   绝对定位到卡片左上角，尺寸由内联样式给（= 卡片尺寸），所以浮层与底下的画面严格对齐。
+   z-index 取 25：高过卡片内容与端口，低过 30 的上/下控制栏 ——
+   编辑框盖住画面，但"确认/取消"按钮永远在最上层可点。 */
+.v2-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 25;
+  overflow: visible;
+  pointer-events: none;
 }
 
 /* —— content 裁剪层 —— */

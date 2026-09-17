@@ -178,3 +178,30 @@ export function toRects(
 ): MultiSelectRect[] {
   return nodes.map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }))
 }
+
+/**
+ * 批量连线端口（多选框左右两个 + 球）该不该显示 —— 纯函数，便于单测这条门。
+ *
+ * 压制规则（任一成立即隐藏）：
+ * - pressed：指针按下中（**主门**）。真实拖拽时宿主的 node:drag-start 事件不广播、
+ *   interaction.isNodeDragging 恒 false（实测），靠它们压不住；"按下"是任何拖拽必经的第一步。
+ * - groupDragging：本插件自己的"框内拖动整组平移"手势进行中。
+ * - nodeDragging：宿主拖拽事件上报的"正在拖节点"（有则用，没有也不影响，pressed 已兜住）。
+ *
+ * visible=false（没多选/正在框选）时本来就不显示。
+ */
+export interface BatchHandleVisibilityInput {
+  /** 多选框是否处于可见态（有选中集且不在框选） */
+  visible: boolean
+  /** 指针按下中 */
+  pressed: boolean
+  /** 整组平移（框内拖动）进行中 */
+  groupDragging: boolean
+  /** 宿主上报的"正在拖动某个节点" */
+  nodeDragging: boolean
+}
+
+/** 批量连线端口是否显示 */
+export function resolveBatchHandleVisible(input: BatchHandleVisibilityInput): boolean {
+  return input.visible && !input.pressed && !input.groupDragging && !input.nodeDragging
+}

@@ -134,6 +134,33 @@ export type {
 } from './contracts/canvasInteractionSettings'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
 export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'
+// 媒体编辑浮层（裁剪 / 扩展）：图片与视频节点共用的通用件
+// —— 几何（纯函数，Node 可测）与组件（BaseNode 的 overlay 段消费）
+export {
+  computeMediaFit,
+  minFrameEdge,
+  defaultCropRect,
+  defaultExpandRect,
+  clampCropRect,
+  clampExpandRect,
+  moveCropRect,
+  moveExpandRect,
+  resizeCropRect,
+  resizeExpandRect,
+  rectToDisplay,
+  screenDeltaToMedia,
+  toPixelRect,
+  isUsableRect,
+  framedMediaStyle,
+  CORNER_DIRS,
+  ALL_DIRS,
+  MIN_FRAME_MEDIA,
+  MIN_FRAME_DISPLAY_EDGE,
+  DEFAULT_CROP_RATIO,
+} from './crop/mediaFit'
+export type { Rect as MediaRect, FitGeometry, HandleDir } from './crop/mediaFit'
+export type { Rect } from './crop/mediaFit'
+export { default as MediaFrameOverlay } from './crop/MediaFrameOverlay.vue'
 // 内核精选的 VueFlow 能力出口（渲染类插件统一从本包 import，不再各自依赖 @vue-flow/core）
 export * from './vueFlowBridge'
 // 官方渲染宿主组件：把 VueFlow 装配/令牌 provide/数据同步收进内部，调用方一行渲染。

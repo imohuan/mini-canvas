@@ -7,7 +7,7 @@
  * 为什么上传一律转 dataURL：objectURL 只在当前文档生命周期有效，刷新即失效。dataURL 写进
  * 节点 data 后能直接落盘、刷新照常显示（代价是 localStorage 体积变大，属已知取舍）。
  */
-import { toCropPixels, type Rect } from './cropGeometry'
+import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 
 /** 加工结果：新的图片地址与它自己的像素尺寸 */
 export interface TransformResult {
@@ -108,7 +108,7 @@ export async function cropToDataUrl(
   try {
     const scaleX = baseWidth > 0 ? loaded.width / baseWidth : 1
     const scaleY = baseHeight > 0 ? loaded.height / baseHeight : 1
-    const px = toCropPixels({
+    const px = toPixelRect({
       x: rect.x * scaleX,
       y: rect.y * scaleY,
       width: rect.width * scaleX,

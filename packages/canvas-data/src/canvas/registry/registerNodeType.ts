@@ -39,6 +39,8 @@ export interface NodeTypeDef {
   outputs?: PortDef[]
   /** 类型图标（opaque 句柄，同 content 语义；缺省 = 不显示图标） */
   icon?: unknown
+  /** 一句话说明（可选）：菜单"新建节点"项 hover 小字；与 icon 同链，由类型自己声明 */
+  description?: string
   /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */
   resizable?: boolean
   /** 无边框（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 内容铺满整张卡的类型用它去掉多余的一圈缝。 */
@@ -64,6 +66,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     label: def.label,
     defaultSize: def.defaultSize,
     icon: def.icon,
+    description: def.description,
     inputs: def.inputs,
     outputs: def.outputs,
     resizable: def.resizable,

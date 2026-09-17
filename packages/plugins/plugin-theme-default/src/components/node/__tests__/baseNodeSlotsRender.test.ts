@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 const ContentStub = defineComponent({ name: 'ContentStub', render: () => h('div', { class: 'probe-content' }) })
@@ -33,6 +33,7 @@ const ContentStub = defineComponent({ name: 'ContentStub', render: () => h('div'
 const TopA = defineComponent({ name: 'TopA', render: () => h('button', { class: 'probe-top-a' }) })
 const TopB = defineComponent({ name: 'TopB', render: () => h('button', { class: 'probe-top-b' }) })
 const BottomA = defineComponent({ name: 'BottomA', render: () => h('div', { class: 'probe-bottom-a' }) })
+const OverlayStub = defineComponent({ name: 'OverlayStub', render: () => h('div', { class: 'probe-overlay' }) })
 
 /**
  * 最小渲染上下文：只桩出 BaseNode 真正读到的几项。
@@ -41,7 +42,7 @@ const BottomA = defineComponent({ name: 'BottomA', render: () => h('div', { clas
 function renderCtx(
   registry: NodeRegistry,
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean } = {},
+  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number } = {},
 ): CanvasRenderContext {
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(opts.selectedIds ?? [])
@@ -78,21 +79,31 @@ function renderCtx(
     interaction: { isNodeDragging: refOf(false), isSelecting: refOf(opts.selecting === true) },
     debug: { handleDebug: false, connectionSnapDebugVisible: false },
     snapZone: {},
-    viewport: refOf({ zoom: 1, x: 0, y: 0 }),
+    viewport: refOf({ zoom: opts.zoom ?? 1, x: 0, y: 0 }),
     visibleRect: refOf(null),
     updateNodeVisualSize: () => {},
   } as unknown as CanvasRenderContext
 }
 
-/** 渲染一个 image 节点；registry 由测试自行填段 */
+/**
+ * 渲染一个 image 节点；registry 由测试自行填段。
+ *
+ * `opts.zoom` 必须经 VueFlow 自己的 store 喂进去 —— BaseNode 的缩放读的是
+ * `useVueFlow().viewport`（节点壳本就由 VueFlow 渲染，缩放对它理应从引擎来）。
+ * 外层包装组件先在 setup 里 useVueFlow() 建/取实例、写好 viewport，再往下渲染 BaseNode，
+ * 它 inject 到的就是同一个实例（provide 对子组件生效）。
+ */
 function renderNode(
   registry: NodeRegistry,
   data: Record<string, unknown> = {},
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean } = {},
+  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number } = {},
 ): Promise<string> {
   const app = createSSRApp({
-    render: () => h(BaseNode, { id: 'n1', type: 'image', data, selected: false }),
+    setup() {
+      useVueFlow().viewport.value = { x: 0, y: 0, zoom: opts.zoom ?? 1 }
+      return () => h(BaseNode, { id: 'n1', type: 'image', data, selected: false })
+    },
   })
   app.provide(RENDER_CONTEXT_KEY, renderCtx(registry, settings, opts))
   return renderToString(app)
@@ -127,7 +138,61 @@ describe('BaseNode 上/下插槽：定位由壳负责', () => {
   })
 })
 
+describe('BaseNode overlay 段：编辑浮层画在卡片外面（用户要求：和上下操控栏同级）', () => {
+  it('注册了 overlay 段 → 壳在卡片**外面**画出浮层容器', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    const html = await renderNode(r)
+    expect(html).toContain('probe-overlay')
+    expect(html).toMatch(/class="v2-overlay nodrag nopan"/)
+  })
+
+  it('浮层**不在**内容裁剪层里 —— 放里面会被卡片的 overflow:hidden 切掉', async () => {
+    // 这是用户报的缺陷：裁剪区域被节点切掉，因为浮层当初挂在 .v2-content-clip 内部。
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    const html = await renderNode(r)
+    const overlayAt = html.indexOf('probe-overlay')
+    const clipAt = html.indexOf('v2-content-clip')
+    expect(clipAt).toBeGreaterThan(-1)
+    expect(overlayAt).toBeGreaterThan(clipAt)
+    // 内容层内部只有 content：浮层没被塞进它的子树里
+    const contentAt = html.indexOf('probe-content')
+    const clipRegion = html.slice(clipAt, overlayAt)
+    expect(clipRegion).toContain('probe-content')
+    expect(clipRegion).not.toContain('probe-overlay')
+    expect(contentAt).toBeGreaterThan(clipAt)
+  })
+
+  it('浮层尺寸 = 卡片尺寸（不反缩放：必须与底下的画面像素严格对齐）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    const html = await renderNode(r, { cardWidth: 420, cardHeight: 236 })
+    const overlayTag = html.match(/<div class="v2-overlay[^>]*>/)?.[0] ?? ''
+    // Vue 渲染内联样式时不带空格（width:420px），故按无空格断言
+    expect(overlayTag).toContain('width:420px')
+    expect(overlayTag).toContain('height:236px')
+    // 关键：没有 scale() 反缩放（反缩放会让框与画面错位）
+    expect(overlayTag).not.toContain('scale(')
+  })
+
+  it('没注册 overlay 段 → 不出现浮层容器（不留空壳）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(r)
+    expect(html).not.toContain('v2-overlay')
+  })
+
+  it('多选时（选中 >=2）浮层跟着收起，避免多个编辑框同时出现', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
+    expect(html).not.toContain('v2-overlay')
+  })
+})
+
 describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
+
   it('同段叠两个 occupant → 两个都渲染（数据层早有的能力，壳要真的用上）', async () => {
     const r = new NodeRegistry()
     r.register('image', { content: ContentStub, 'top-toolbar': TopA })
@@ -260,6 +325,87 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('role="presentation"')
     expect(html).not.toContain('v2-multi-radio-dot nodrag')
+  })
+})
+
+describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变小一些 + 可配色 + 可配 size + 低缩放也显示的开关）', () => {
+  it('读不到配置 → 默认就比原先小（18px，此前写死 26px）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
+    expect(html).toMatch(/class="v2-multi-radio[^"]*"[^>]*style="[^"]*width:18px/)
+  })
+
+  it('大小配置读到 32 → 元素宽高就是 32px（配置驱动，不是写死）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(
+      r,
+      {},
+      { nodeMultiRadioSize: 32 },
+      { selectedIds: ['n1', 'n2'] },
+    )
+    expect(html).toContain('width:32px')
+    expect(html).toContain('height:32px')
+  })
+
+  it('颜色配置读到 hex → 标记元素带上该颜色（圆环/圆点走 currentColor）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(
+      r,
+      {},
+      { nodeMultiRadioColor: '#ff0000' },
+      { selectedIds: ['n1', 'n2'] },
+    )
+    expect(html).toContain('color:#ff0000')
+  })
+
+  it('低缩放（zoom 低于低细节阈值）默认不显示标记', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'], zoom: 0.2 })
+    expect(html).not.toContain('v2-multi-radio')
+  })
+
+  it('开了"低缩放也显示"的开关 → 低缩放下标记照样出现（用户要的就是这个开关）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(
+      r,
+      {},
+      { nodeMultiRadioShowInLowDetail: true },
+      { selectedIds: ['n1', 'n2'], zoom: 0.2 },
+    )
+    expect(html).toContain('v2-multi-radio')
+    // 低缩放时反缩放已封顶（阈值 0.5）→ 屏幕上仍是 18px
+    expect(html).toContain('transform:scale(2)')
+  })
+
+  it('开了开关但没在多选 → 依然不显示（开关只管低缩放，不改变"只在多选时出现"）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(
+      r,
+      {},
+      { nodeMultiRadioShowInLowDetail: true },
+      { selectedIds: ['n1'], zoom: 0.2 },
+    )
+    expect(html).not.toContain('v2-multi-radio')
+  })
+})
+
+describe('多选标记的大小与缩放阈值同源（titleScaleMinZoom 改了标记也跟着改）', () => {
+  it('阈值配 0.25 → 缩到 0.2 时反缩放 4 倍（跟随配置，不写死 0.5）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { content: ContentStub })
+    const html = await renderNode(
+      r,
+      {},
+      { nodeMultiRadioShowInLowDetail: true, titleScaleMinZoom: 0.25 },
+      { selectedIds: ['n1', 'n2'], zoom: 0.2 },
+    )
+    expect(html).toContain('transform:scale(4)')
   })
 })
 

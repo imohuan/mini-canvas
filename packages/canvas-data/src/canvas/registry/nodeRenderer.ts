@@ -67,7 +67,7 @@ export function hasContent(registry: NodeRegistry, type: string): boolean {
  */
 export function activeSegments(registry: NodeRegistry, type: string): NodeSegment[] {
   const def = registry.get(type)
-  const all: NodeSegment[] = ['content', 'title', 'top-toolbar', 'bottom-toolbar']
+  const all: NodeSegment[] = ['content', 'title', 'top-toolbar', 'bottom-toolbar', 'overlay']
   return all.filter(
     (s) => (def && !!def.segments[s]) || registry.contributionOccupants(type, s).length > 0,
   )

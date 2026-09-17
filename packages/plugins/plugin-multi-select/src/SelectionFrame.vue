@@ -54,6 +54,7 @@ import {
 import {
   computeSelectionFrameGeometry,
   draggableMembers,
+  resolveBatchHandleVisible,
   type MultiSelectRect,
   type SelectionFrameGeometry,
 } from './multiSelectEngine'
@@ -66,6 +67,7 @@ import {
   type MultiSelectFrameConfig,
 } from './multiSelectConfig'
 import { followFrame } from './dragFollow'
+import { pointerDown, POINTER_DOWN_CLASS, bindPointerPressWatchers } from './pointerPress'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 
 const { viewport, ctx, updateNodeVisual, pane, interaction, rootEl, handleParams, connectionState, screenToFlow, snapZone } = useCanvasRender()
@@ -506,6 +508,8 @@ const ctxOn = (ctx as unknown as EventCtx).on?.bind(ctx)
 if (ctxOn) {
   dragDisposers.push(
     ctxOn(RenderEvents.NodeDragStart, (p: { nodeId: string; position: { x: number; y: number } }) => {
+      // 拖拽中压住批量端口（含拖未选中节点：多选框若还在显示，端口也不该冒出来干扰）
+      nodeDragging.value = true
       // 只有"拖的节点属于当前选中集"时才让框跟随。
       // 否则拖一个未选中的节点，框也会跟着一起动（用户报的 bug：拖未选中节点时选框也在移动）——
       // 框代表的是选中集，没被选中就不该理它。
@@ -528,6 +532,7 @@ if (ctxOn) {
       followFrameByDelta({ x: p.position.x - a.anchorStart.x, y: p.position.y - a.anchorStart.y })
     }),
     ctxOn(RenderEvents.NodeDragEnd, () => {
+      nodeDragging.value = false
       nodeDragFrameAnchor = null
       refreshFrame()
     }),
@@ -545,7 +550,17 @@ watch([() => sel().ids, frameConfig, () => viewport.value.zoom], () => refreshFr
 
 // ====== 整组拖动 ======
 const isDragging = ref(false)
-const dragStartClient = ref({ x: 0, y: 0 })
+/**
+ * 正在拖动某个节点（含捏住选中成员卡片拖动）—— 批量连线端口的压制门。
+ *
+ * 为什么不用 interaction.isNodeDragging：实测它在真实拖拽全程恒为 false（宿主没点亮该位），
+ * 靠它压不住端口（用户截图：拖动中 + 球还在）。这里改成由本组件自己订阅的渲染层拖拽事件维护，
+ * 与下方 NodeDragStart/NodeDragEnd 订阅同源，链路已经验证过是真会触发的。
+ */
+const nodeDragging = ref(false)
+
+/**
+ * 指针是否按下中 —— 批量连线端口的**主压制门**。
 /** 拖动起始时各可动节点的绝对位置（flow） */
 const dragStartPositions = ref<Map<string, { x: number; y: number }>>(new Map())
 /** 拖动中最新视觉位置（松手落盘用） */
@@ -820,7 +835,25 @@ const isVisible = computed(() => frame.value !== null && !isSelecting.value)
  * **拖动中必须继续渲染**：引导线的起点要读它的 DOM 位置；用 `visibility:hidden` 藏起来
  * 而不是 `v-if` 摘掉（摘了就读不到位置，线画不出来）。
  */
-const showBatchHandles = computed(() => isVisible.value && !isDragging.value)
+// 拖拽中一律不显示（用户要求：与拖拽单节点时的端口压制语义一致）：
+// - isDragging = 本插件自己的整组平移手势；
+// - nodeDragging = 正在拖动某个节点（由本组件订阅的渲染层拖拽事件维护，见该 ref 的说明）；
+// - pointerPressed = 指针按下中（**主门**，任何拖拽都必经，不依赖宿主状态位）；
+// 刻意**不用** interaction.isBusyDragging：它把 paneDragging 也算进去（滚轮缩放与 pan 共用 VueFlow
+// move 事件），会误压且可能永久卡 true —— 与 BaseNode 的端口压制门同一教训。
+// 模块级共享状态（见 pointerPress.ts）：指针按下就压住批量端口，组件重挂载也不丢。
+const pointerPressed = pointerDown
+bindPointerPressWatchers()
+
+const showBatchHandles = computed(
+  () =>
+    resolveBatchHandleVisible({
+      visible: isVisible.value,
+      pressed: pointerPressed.value,
+      groupDragging: isDragging.value,
+      nodeDragging: nodeDragging.value,
+    }),
+)
 
 /**
  * 端口位置：贴在大框左右两侧的垂直中点。
@@ -981,10 +1014,17 @@ onBeforeUnmount(() => {
   unsubSel?.()
   unsubStore?.()
 })
+
 </script>
 
 <template>
-  <div v-if="isVisible" ref="wrapperRef" class="selection-frame-wrapper" :style="wrapperStyle">
+  <div
+    v-if="isVisible"
+    ref="wrapperRef"
+    class="selection-frame-wrapper"
+    :class="{ 'is-node-dragging': nodeDragging || isDragging || pointerPressed }"
+    :style="wrapperStyle"
+  >
     <!-- 大框：纯视觉，整体不接事件（节点才点得到、可单独取消选中）。
          "在框内按住拖动 = 整组平移"由 pane 上的几何判断接管（见 onPaneCaptureDown）。 -->
     <div class="selection-frame-outer" :style="outerStyle" role="presentation" />
@@ -1007,7 +1047,11 @@ onBeforeUnmount(() => {
       :style="batchStyle('left')"
       @mousedown="onBatchConnectStart($event, 'target')"
     >
+      <!-- v-if 放在 MovingHandle **自身**（不只外层 slot div）：外层 div 的 v-if 一旦因任何原因
+           还留着（例如状态位时序/别的路径），MovingHandle 就会照常渲染出圆球 —— 用户实测截图
+           里"拖动中 + 球还在"就是这么来的。这里逐组件再挡一道，双保险。 -->
       <MovingHandle
+        v-if="showBatchHandles"
         id="multi-select-batch-left"
         type="target"
         :position="Position.Left"
@@ -1034,6 +1078,7 @@ onBeforeUnmount(() => {
       @mousedown="onBatchConnectStart($event, 'source')"
     >
       <MovingHandle
+        v-if="showBatchHandles"
         id="multi-select-batch-right"
         type="source"
         :position="Position.Right"
@@ -1121,6 +1166,25 @@ onBeforeUnmount(() => {
   pointer-events: none;
   z-index: 2;
   overflow: visible;
+}
+
+/* 拖拽中（拖节点 / 整组平移）批量端口一律不显示。
+   除了 v-if 那两道，CSS 这里再兜一道：在移动端/极端时序下也保证端口不浮在节点上碍眼。 */
+.selection-frame-wrapper.is-node-dragging .selection-frame-batch-slot {
+  display: none !important;
+}
+
+/* 终极兜底：只看 DOM 事实 —— VueFlow 拖节点时会给该节点加 .dragging 类（纯 DOM 行为，不依赖任何插件状态位）。
+   前几轮教训：宿主事件/交互状态在真实拖拽里并不总被点亮，接在它们上面的门会失效；这条选择器与画面永远一致。 */
+/* 指针按下（含任何拖拽）期间，批量端口一律不显示。
+   这条不依赖 Vue 响应式的时序：body 上的类名由 document 捕获阶段直接打，
+   即使组件重挂载/状态来不及更新，画面也已经压住（用户连续多轮反馈的"拖拽中 + 球还在"）。 */
+body.mc-pointer-down .selection-frame-batch-slot {
+  display: none !important;
+}
+
+.vue-flow:has(.vue-flow__node.dragging) .selection-frame-batch-slot {
+  display: none !important;
 }
 
 /* —— 拖动中的临时线（屏幕层；svg 铺满视口，线由 ConnectionLine 画）—— */

@@ -75,8 +75,30 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
   后续如确认无用再随设置清理任务移除。
 - **「拖拽选中」真修复（同日四）**：根因 = v2 选中单源在内核 Selection，VueFlow 内部
   select-on-drag 不回写内核 → 内部选中瞬间被渲染投影覆盖。修复：宿主 onNodeDragStart 显式调
-  新纯函数 `dragSelectNode(selection, id, {enabled, selectable})`（开关关/不可选中不动、
-  已在选中集保持整组、否则单选替换）把"顺手选中"写进内核。+4 条测试；canvas-render **250** 全绿。
+新纯函数 `dragSelectNode(selection, id, {enabled, selectable})`（开关关/不可选中不动、
+已在选中集保持整组、否则单选替换）把"顺手选中"写进内核。+4 条测试；canvas-render **250** 全绿。
+
+**新增（2026-09-17，用户指定）：多选标记可配（大小 / 颜色 / 低缩放显示开关）**。
+用户原话：「这个多选标识变小一些，并且支持改变颜色，在这个插件的 Config 中提供对应配置，
+同时支持大小 size；并且支持一个开关 —— 当前在低缩放下不显示，我希望你支持一个开关支持显示」。
+1. 新增纯逻辑模块 `plugin-theme-default/src/components/node/multiRadio.ts`：默认值（18px / #111827 /
+   低缩放不显示）+ 三个配置键（`nodeMultiRadioSize` / `nodeMultiRadioColor` /
+   `nodeMultiRadioShowInLowDetail`，带语义前缀防撞别的插件）+ `resolveMultiRadio`（逐项非法回落）+
+   `applyMultiRadioChange`（不认识的键**原样返回同一引用**，不触发无谓重渲染）+
+   `multiRadioStyle`（大小写在元素上、再乘 `1/max(zoom, titleScaleMinZoom)` 反缩放）。
+2. `Config` 新增「节点/多选标记」一组三项（number 滑块 12–48 / color / boolean），设置面板自动长出，
+   改动经 settings.onChange 窄更新到 `BaseNode` 的 `MULTI_RADIO` ref → 实时生效、不整图重建。
+3. `BaseNode.vue`：标记的显隐改为 `showMultiRadio`（多选 && （非低细节 || 开了开关）），
+   内联样式改走 `multiRadioStyle()`；CSS 里写死的 `width/height: 26px` 与 `transform-origin` 删除、
+   颜色由 `currentColor` 承接（`.v2-multi-radio-icon` 改 `color: inherit`）→ 原来"变小一些"的诉求
+   默认即生效（26 → 18px），颜色/大小/开关三项都在设置里可调。
+4. 测试：multiRadio 纯函数 **15** 条 + Config 声明 **6** 条（对齐 multi-select 的 config 测法）+
+   BaseNode 渲染 **7** 条（默认更小 / 配置驱动大小 / 配置驱动颜色 / 低缩放默认不显示 / 开开关后显示 /
+   开关不改变"只在多选时出现" / 阈值同源），ui 设置覆盖度 +**1** 条（"节点/多选标记"出现在真实
+   设置页面且可改可读）。theme-default **153** 全绿、ui **26** 全绿，canvas-render 251 /
+   canvas-data 275 / multi-select 127 / node-text 65 / node-image 148 回归全通过；theme-default
+   仅剩**既有**的 raw tsc 对 `.vue` 再导出报错（STATUS 早先已记录），本次新增文件无报错。
+   说明：本次改动全部落在 `plugin-theme-default`（不改内核/渲染层），多选框几何与 multi-select 插件不受影响。
 
 ## 当前主线（2026-09-04，历史）：canvas-core-v2 重构 · 开发测试期最小闭环
 目标：把旧画布(180 文件, `packages/canvas-core/src`)收敛成自研 Cordis 内核(`packages/canvas-core-v2`)，先做出"text + 最简 image 两节点、能拖能连能删、起 vite 看到、刷新不丢"的最小闭环。**红线：不碰 `src/`(老版宿主)，不把 M6 复杂件(image 裁剪/蒙版/25个交互插件/云)带进当前闭环。**

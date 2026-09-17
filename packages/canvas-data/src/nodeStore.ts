@@ -84,6 +84,13 @@ export interface CanvasNodeType {
   outputs?: PortDef[]
   /** 节点类型图标（opaque 句柄：SVG 字符串或 Vue 组件；内核不解析）。菜单"新建节点"与节点标题共用。 */
   icon?: unknown
+  /**
+   * 一句话说明这个节点是干什么的（可选）。菜单"新建节点"项的 hover 小字读它。
+   *
+   * 与 icon 同一条链、同一个理由：类型自己最清楚自己是什么，声明在本处即免去
+   * 菜单层维护"type 名字 → 文案"对照表（那种表每加一个节点类型都得回去补，必漏）。
+   */
+  description?: string
   /** 是否支持 resize（类型级能力，缺省 false = 不可缩放）。渲染层据此显示拖柄；节点实例仍可经 data.resizable 单独覆盖。 */
   resizable?: boolean
   /**

@@ -4,7 +4,9 @@
  * 与快捷键帮助面板同一套 item 视觉：左侧图标托 + 名称(hover 浮现描述) + 右侧快捷键。
  * 命令本身只声明 id/title/keys（不背 UI 装饰），菜单在此层补齐：
  * - 图标：按 命令 id 关键字/新建节点类型 给线性 SVG（无命中给通用默认图标，保证图标列恒在）；
- * - 描述：按 命令 id/标题 映射一句 hover 说明（同快捷键面板 commandDescriptions 思路）。
+ * - 描述：命令类按 id 关键字在这里补；**新建节点类取自节点类型注册时声明的 description**
+ *   （与 icon 同一条链：插件 ctx.nodes.register → nodeStore 类型表 → 菜单项），
+ *   本层不再按 type 名字维护对照表 —— 那样每加一个节点类型都要回来改这里，必漏。
  */
 import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
@@ -40,8 +42,6 @@ function iconKeyOf(item: ContextMenuItem): string {
 
 /** 菜单项描述（hover 浮现小字）；未命中给空（行保持单行高） */
 const DESCRIPTIONS: Record<string, string> = {
-  'create-node:text': '在画布中添加一个文本节点',
-  'create-node:image': '在画布中添加一张图片',
   'clipboard:paste': '在鼠标位置粘贴剪贴板内容',
   'clipboard:copy': '复制当前选中的节点',
   'clipboard:duplicate': '原位复制一份当前选中节点',
@@ -49,13 +49,14 @@ const DESCRIPTIONS: Record<string, string> = {
   'context-menu:delete-edge': '移除该连线（保留两端节点）',
 }
 
-/** 给菜单项补 icon/description（保持入参顺序；create-node 描述按 nodeType 走） */
+/**
+ * 给菜单项补 icon/description（保持入参顺序）。
+ * create-node 项的 description 已由节点类型声明带下来（menuService/menuBuilder 透传），此处原样保留；
+ * 只有命令项才按 id 查上面的表。两处都不命中就给空串 —— 行保持单行高。
+ */
 export function enrichMenuItems(items: readonly ContextMenuItem[]): ContextMenuItem[] {
   return items.map((it) => {
-    const descKey =
-      it.kind === 'create-node' && it.nodeType
-        ? 'create-node:' + it.nodeType
-        : (it.commandId ?? it.id)
+    const descKey = it.commandId ?? it.id
     return {
       ...it,
       icon: iconRenderMode(it.icon) === 'none' ? ICONS[iconKeyOf(it)] : it.icon,

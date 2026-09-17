@@ -160,24 +160,28 @@ const componentIcon = computed<Component | null>(() =>
   cursor: not-allowed;
 }
 
-/* —— 主按钮档：同一时刻全界面只允许一个实心主按钮（§2.1），primary 要谨慎使用 —— */
-.ntb-btn--primary {
-  width: auto;
-  padding: 0 14px;
-  border-radius: 8px;
-  background: #0891b2;
-  color: #fff;
-}
-.ntb-btn--primary:hover:not(:disabled) {
-  background: #0e7490;
-  color: #fff;
-}
+/* —— 主按钮档：同一时刻全界面只允许一个实心主按钮（§2.1），primary 要谨慎使用 ——
+   选择器写成 .ntb-btn.ntb-btn--primary（而不是单个 .ntb-btn--primary）是有原因的（实测缺陷）：
+   带文案的按钮会命中上面的 `.ntb-btn:not(.is-icon-only)`（特异度 0,2,0）把它设成透明底，
+   而单类选择器 `.ntb-btn--primary`（0,1,0）特异度更低 —— 于是"确认"变成白字透明底，
+   放在白色工具栏上完全看不见。抬到同等特异度、且排在后面，才能稳定压住那条通用规则。 */
+  .ntb-btn.ntb-btn--primary {
+    width: auto;
+    padding: 0 14px;
+    border-radius: 8px;
+    background: #0891b2;
+    color: #fff;
+  }
+  .ntb-btn.ntb-btn--primary:hover:not(:disabled) {
+    background: #0e7490;
+    color: #fff;
+  }
 
-/* 危险档：平时与 ghost 同，悬停才转红 */
-.ntb-btn--danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
+  /* 危险档：平时与 ghost 同，悬停才转红。同上抬特异度，保证带文案时也能压住通用规则。 */
+  .ntb-btn.ntb-btn--danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+  }
 
 /* 激活（开关打开）：浅青底 + 青字，表示"当前生效" */
 .ntb-btn.is-active {

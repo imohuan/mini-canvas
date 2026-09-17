@@ -28,6 +28,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
+import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
@@ -42,12 +43,14 @@ import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 import { groupPlugin } from '@mini-canvas/plugin-group'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
+import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
 const plugins = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
+  nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏
   node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
   nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）
   pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用
@@ -64,6 +67,7 @@ const plugins = [
   nodeFindPlugin, // 搜索：Ctrl/Cmd+F
   miniMapPlugin, // 小地图：Ctrl/Cmd+M
   shortcutManagerPlugin, // 快捷键帮助：Ctrl/Cmd+/ 打开
+  fileDropPlugin, // 文件拖入 & 粘贴：把图片/视频/文本拖到画布或粘贴进来即建节点
 ]
 const adapter: StorageAdapter = new LocalStorageAdapter()
 
@@ -214,7 +218,7 @@ function unbindThemeSettings(): void {
 }
 
 // —— 业务命令（经 CanvasHost 的 host 驱动）——
-function createNode(type: 'text' | 'image'): void {
+function createNode(type: 'text' | 'image' | 'video'): void {
   const host = hostEl.value?.host
   if (!host) return
   const count = host.nodeStore.getNodes().length
@@ -246,6 +250,7 @@ onBeforeUnmount(() => {
     <div class="toolbar">
       <button :disabled="!booted" @click="createNode('text')">+ 文本</button>
       <button :disabled="!booted" @click="createNode('image')">+ 图片</button>
+      <button :disabled="!booted" @click="createNode('video')">+ 视频</button>
       <button :disabled="!booted" @click="deleteSelected">删除选中 (Delete)</button>
       <button :disabled="!booted" @click="undo">↶ 撤销</button>
       <button :disabled="!booted" @click="redo">↷ 重做</button>
@@ -254,7 +259,7 @@ onBeforeUnmount(() => {
         ⚙ 设置
       </button>
       <span class="brand">@mini-canvas/ui</span>
-      <span class="hint">拖节点移动(靠近其它节点边缘/中心会吸附并显示蓝线) · 从圆点拖出连线 · Shift+拖空白框选 · Ctrl+A 全选 · Esc 清除 · Delete 删除 · 刷新不丢</span>
+      <span class="hint">把图片/视频/文本文件直接拖到画布上，或 Ctrl+V 粘贴 → 自动建节点 · 拖节点移动(靠近其它节点边缘/中心会吸附并显示蓝线) · 从圆点拖出连线 · Shift+拖空白框选 · Ctrl+A 全选 · Esc 清除 · Delete 删除 · 刷新不丢</span>
     </div>
 
     <div class="canvas-wrap">

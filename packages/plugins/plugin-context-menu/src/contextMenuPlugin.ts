@@ -158,7 +158,7 @@ export function apply(ctx: Context): void {
     const creatable = new Set(ctx.get<NodeFactoryService>('nodeFactory').creatableTypes())
     const nodeTypes = [...nodeStore.types.values()]
       .filter((t) => creatable.has(t.type))
-      .map((t) => ({ type: t.type, label: t.label, icon: t.icon }))
+      .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
     // G 项：菜单聚合走内核 menu 服务（与未来 toolbar/面板同一数据源），不再插件内自组。
     // areas 语义 = 开放注册：任何插件命令显式声明 areas 含当前 mode 即自动出现在右键，
     // 未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
@@ -188,11 +188,11 @@ export function apply(ctx: Context): void {
   let pendingFact: ConnectionDropFact | null = null
 
   /** 可建类型候选 = nodeFactory.creatableTypes() ∩ nodeStore.types（只列真能建出内容的） */
-  function creatableNodeTypes(): Array<{ type: string; label: string; icon?: unknown }> {
+  function creatableNodeTypes(): Array<{ type: string; label: string; icon?: unknown; description?: string }> {
     const creatable = new Set(ctx.get<NodeFactoryService>('nodeFactory').creatableTypes())
     return [...nodeStore.types.values()]
       .filter((t) => creatable.has(t.type))
-      .map((t) => ({ type: t.type, label: t.label, icon: t.icon }))
+      .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
   }
 
   /**

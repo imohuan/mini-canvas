@@ -30,6 +30,8 @@ export interface MenuNodeTypeLike {
   label: string
   /** 该类型声明的图标（opaque 句柄：SVG 字符串或 Vue 组件，原样透传） */
   icon?: unknown
+  /** 该类型声明的一句话说明（原样透传给菜单项作 hover 小字） */
+  description?: string
 }
 
 /** 一个右键菜单项 */
@@ -114,6 +116,7 @@ export function buildMenuItems(
         kind: 'create-node',
         nodeType: t.type,
         ...(t.icon !== undefined ? { icon: t.icon } : {}),
+        ...(t.description ? { description: t.description } : {}),
       })
     })
   }
