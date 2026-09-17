@@ -13,7 +13,7 @@
  * 零 Vue。组件句柄 opaque；节点数据/展示走 nodeStore/nodeRegistry(宿主已注入服务)，
  * 通用 UI 槽(slots)走 ctx 自带的 SlotRegistry 服务('slots')，宿主按需渲染。
  */
-import type { PluginScope, Registry, SlotRegistry, SettingsStore } from '@mini-canvas/kernel'
+import type { PluginScope, Registry, SlotRegistry, SettingsStore, Disposable } from '@mini-canvas/kernel'
 import { registerNodeType } from './registry/registerNodeType'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
@@ -21,6 +21,8 @@ import type { NodeTypeDef } from './registry/registerNodeType'
 import type { NodeStoreService } from '../nodeStore'
 import type { NodeFactoryService, NodeCreator } from './nodeFactory'
 import type { CommandDef } from '@mini-canvas/kernel'
+import type { NodeRegion, NodeRegionAttachment } from './region'
+import { normalizeRegionKey } from './region'
 
 /**
  * ctx.nodes.register 一次给全的定义（数据 + 展示 + 可选建节点实现）。
@@ -71,6 +73,16 @@ export type SettingDefineArgs =
   | [defs: Record<string, SettingDefineItem>]
   | [group: string, items: Record<string, SettingDefineItem>]
 
+/** ctx.nodes.attach 的请求（§8.3）：region 是十个区域词之一；needs/props 是条目自己的数据 */
+export interface NodeAttachReq {
+  region: NodeRegion
+  id?: string
+  order?: number
+  component: unknown
+  needs?: string[]
+  props?: Record<string, unknown>
+}
+
 /**
  * 能力段收口。给定一个插件 scope ctx（含 get/effect），返回 ctx 上挂的 nodes/theme/commands/slots。
  */
@@ -91,6 +103,13 @@ export function buildCapabilities(
       component: unknown,
       opts?: { id?: string; order?: number },
     ): string
+    /**
+     * 往某节点类型的某区域挂一个组件（§8.3 一等 API；十个区域词见 canvas/region.ts）。
+     * 落 node/region 场，键 = `${type}/${region}`；type 传 '*' = 通配所有节点类型。
+     * 自动回收：随所属插件 scope 卸载自动摘除。
+     * @returns Disposable（dispose 手动撤销；不接返回值即"纯声明+自动回收"）
+     */
+    attach(type: string | '*', req: NodeAttachReq): Disposable
   }
   theme: {
     register(slot: ThemeSlot, component: unknown, opts?: ThemeOccupantOpts): void
@@ -243,6 +262,26 @@ export function buildCapabilities(
         })
         ctx.effect(() => () => registry.unregisterContribution(type, segment, id))
         return id
+      },
+      attach(type: string | '*', req: NodeAttachReq): Disposable {
+        // 场落点（§8.3）：node/region/<type>/<region>，位置进键不进值；
+        // needs/props 进 value（条目自己的数据）。老段词容错归一到区域词（读写同一场）。
+        const region = normalizeRegionKey(String(req.region))
+        const regionField = land<NodeRegionAttachment>('node/region')
+        const value: NodeRegionAttachment = {
+          component: req.component,
+          needs: req.needs,
+          props: req.props,
+        }
+        // 缺省 id = 当前插件名（§8.3：同插件重装即替换该格），而不是场的自动 id
+        const placed = regionField?.add(`${type}/${region}`, value, {
+          id: req.id ?? pluginName,
+          order: req.order,
+        })
+        if (placed) ctx.effect(() => () => placed.dispose())
+        return {
+          dispose: () => placed?.dispose(),
+        }
       },
     },
 

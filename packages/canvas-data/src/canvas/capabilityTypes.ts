@@ -8,7 +8,7 @@
  * 只要本文件被加载（canvas-pack 入口会 import 它），合并即生效。
  */
 import type { CommandDef, Disposable } from '@mini-canvas/kernel'
-import type { NodeRegisterDef, SettingDefineItem } from './capabilities'
+import type { NodeRegisterDef, SettingDefineItem, NodeAttachReq } from './capabilities'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
 
@@ -24,6 +24,8 @@ declare module '@mini-canvas/kernel' {
         component: unknown,
         opts?: { id?: string; order?: number },
       ): string
+      /** 往某节点类型的某区域挂组件（§8.3；十个区域词见 canvas/region.ts），自动回收 */
+      attach(type: string | '*', req: NodeAttachReq): Disposable
     }
     /** 往主题槽叠 occupant（order 最小者获胜），自动回收 */
     theme: {

@@ -18,7 +18,7 @@ import {
   isConnectionSource,
 } from '@mini-canvas/canvas-render'
 import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
-import { resolveSegment, nodeSegmentStackEntries } from '@mini-canvas/canvas-data'
+import { nodeRegionStackEntries } from '@mini-canvas/canvas-data'
 import MovingHandle from './MovingHandle.vue'
 import BaseTitle from './BaseTitle.vue'
 import TitleLabel from './TitleLabel.vue'
@@ -304,16 +304,29 @@ const selectedCount = computed(() => {
   return selectionPeek ? selectionPeek.ids.size : (props.selected ? 1 : 0)
 })
 
-const content = computed(() => resolveSegment(registry, props.type, 'content'))
-const customTitle = computed(() => resolveSegment(registry, props.type, 'title'))
-// 上/下两个插槽：**可叠加** —— 基座段组件 + 其它插件经 ctx.nodes.contribute 叠上来的 occupant，
-// 按 order 依次渲染（数据层的 nodeSegmentStack 早已支持，壳这里把它真的画出来，
-// 以前只取基座，第三方挂上来的按钮到不了 DOM）。
-// 取带稳定 id 的版本：列表 key 用注册时那个 id（基座='base'），插件热装卸时不会错位复用组件实例。
-const topSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'top-toolbar'))
-const bottomSlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'bottom-toolbar'))
-/**
- * overlay 段：编辑类浮层（裁剪框 / 扩展框）。
+// ============ 段组件路由 → 区域遍历（步骤 3：十个区域词见 canvas-data canvas/region.ts）============
+// 老五段（content/title/top-toolbar/bottom-toolbar/overlay）改经区域映射层读：NodeRegistry 兼容层
+// （基座 + 段级贡献）与 node/region 注册场（ctx.nodes.attach 落点，含 type='*' 通配）合成同一摞，
+// 渲染结果与老路径等价（条目按 order 升序、同 id 去重、基座 id 固定 'base'）。
+// 列表 key 用注册 id，插件热装卸时不会错位复用组件实例（契约 §1.4-20）。
+const regionField = (() => {
+  try {
+    return ctx?.registryOf?.('node/region')
+  } catch {
+    return undefined
+  }
+})()
+const regionEntries = (region: string) =>
+  nodeRegionStackEntries(registry, regionField as never, props.type, region)
+/** in 区域（老 content 段）：卡片内容，可叠多层 */
+const contentStack = computed(() => regionEntries('in'))
+/** title 区域（老 title 段）：单格换肤点，取最外一条（基座优先）替换默认标题条 */
+const titleStack = computed(() => regionEntries('title'))
+const customTitle = computed(() => titleStack.value[0]?.component)
+/** out:top / out:bottom（老 top/bottom-toolbar 段）：可叠加插槽 */
+const topSlots = computed(() => regionEntries('out:top'))
+const bottomSlots = computed(() => regionEntries('out:bottom'))
+/** over:inset（老 overlay 段）：编辑类浮层（裁剪框 / 扩展框）。
  *
  * **与 content 分开、且画在卡片外面**（用户要求"放在和上下操控栏同级位置"）：
  * content 住在 .v2-content-clip（overflow:hidden），浮层挂那里会被卡片边界裁掉 ——
@@ -323,7 +336,16 @@ const bottomSlots = computed(() => nodeSegmentStackEntries(registry, props.type,
  * 它自带定位（跟随卡片尺寸），所以不走 resolveNodeSlotStyle 那套"贴边+居中+反缩放"——
  * 浮层的坐标必须与卡片内容严格对齐，一旦反缩放就会与底下的画面错位。
  */
-const overlaySlots = computed(() => nodeSegmentStackEntries(registry, props.type, 'overlay'))
+const overlaySlots = computed(() => regionEntries('over:inset'))
+// —— 新增五个区域渲染位（此前没有；容器只管"有没有"，默认给基础定位，组件可自带样式覆盖）——
+/** out:left / out:right：卡片左右外侧（侧挂按钮、折叠把手） */
+const leftRegions = computed(() => regionEntries('out:left'))
+const rightRegions = computed(() => regionEntries('out:right'))
+/** on:top / on:bottom：贴在卡片边框线上（进度条） */
+const onTopRegions = computed(() => regionEntries('on:top'))
+const onBottomRegions = computed(() => regionEntries('on:bottom'))
+/** over:outset：盖住整张卡且允许超出卡片边界（拖拽手柄、悬停放大）——与 over:inset 同级但不受卡片裁剪 */
+const outsetRegions = computed(() => regionEntries('over:outset'))
 const editable = computed(() => Boolean(nodeWrite))
 
 // ============ 上/下插槽的定位（由壳统一负责，插件只管内容）============
@@ -758,8 +780,9 @@ function clamp(value: number, min: number, max: number): number {
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
-        <component :is="content" v-if="content" :id="id" :data="data" />
-        <div v-else class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
+        <!-- in 区域（老 content 段）：基座 + attach 场条目按 order 同摞渲染 -->
+        <component v-for="seg in contentStack" :key="'in-' + seg.id" :is="seg.component" :id="id" :data="data" />
+        <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
@@ -791,6 +814,22 @@ function clamp(value: number, min: number, max: number): number {
       <component v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
     </div>
 
+    <!-- out:left / out:right（新增区域）：左右外侧，垂直居中；不参与卡片布局、不撑高节点 -->
+    <div v-if="leftRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-left nodrag nopan">
+      <component v-for="seg in leftRegions" :key="'out-left-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+    <div v-if="rightRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-right nodrag nopan">
+      <component v-for="seg in rightRegions" :key="'out-right-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+
+    <!-- on:top / on:bottom（新增区域）：贴在卡片边框线上（骑线居中，如进度条） -->
+    <div v-if="onTopRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-top nodrag nopan">
+      <component v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+    <div v-if="onBottomRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-bottom nodrag nopan">
+      <component v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+
     <!-- 编辑浮层（裁剪框/扩展框）：与卡片**同级**、画在卡片外面，所以不会被内容层的 overflow:hidden 裁掉。
          尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
          z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
@@ -800,6 +839,12 @@ function clamp(value: number, min: number, max: number): number {
       :style="overlayLayerStyle"
     >
       <component v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :is="seg.component" :id="id" :data="data" />
+    </div>
+
+    <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
+         overflow 交给组件自带样式（拖拽手柄/悬停放大会出界）。 -->
+    <div v-if="outsetRegions.length > 0 && !lowDetail" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
+      <component v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :is="seg.component" :id="id" :data="data" />
     </div>
   </div>
 </template>
@@ -1050,6 +1095,49 @@ function clamp(value: number, min: number, max: number): number {
   justify-content: center;
   overflow: hidden;
   background: var(--card-content-surface, #eee);
+}
+
+/* —— 新增区域容器（out:left / out:right / on:top / on:bottom / over:outset）——
+   绝对定位、不占布局高度（节点不被撑高）、不接画布交互（nodrag/nopan 由 class 声明，
+   pointer-events 交给子组件自己开）。位置是默认值，组件可自带样式/transform 覆盖。 */
+.v2-region {
+  position: absolute;
+  z-index: 26;
+  display: flex;
+  align-items: center;
+}
+
+/* 左右外侧：垂直居中，left/right 贴卡缘（负偏移让容器悬在卡外） */
+.v2-region--out-left {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.v2-region--out-right {
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* 贴边框线：水平居中、骑在上下缘上（translateY(-50%) 让组件垂直骑线） */
+.v2-region--on-top {
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -50%);
+}
+
+.v2-region--on-bottom {
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, -50%);
+}
+
+/* over:outset：与卡片重合（不反缩放），overflow 可见允许出界 */
+.v2-region--over-outset {
+  left: 0;
+  top: 0;
+  overflow: visible;
 }
 
 .v2-content-missing {

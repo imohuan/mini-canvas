@@ -25,6 +25,16 @@ export {
   nodeSegmentStackEntries,
 } from './registry/nodeRenderer'
 export type { NodeSegmentEntry } from './registry/nodeRenderer'
+export {
+  NODE_REGIONS,
+  regionOfSegment,
+  isLegacyRegion,
+  regionKey,
+  legacySegmentKey,
+  normalizeRegionKey,
+  nodeRegionStackEntries,
+} from './region'
+export type { NodeRegion, NodeRegionAttachment } from './region'
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'
 export { ThemeRegistry } from './registry/themeRegistry'
