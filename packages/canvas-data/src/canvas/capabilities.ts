@@ -305,14 +305,13 @@ export function buildCapabilities(
     // ---------- ctx.theme：往主题槽叠/取 occupant，自动回收 ----------
     theme: {
       register(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
-        // 场落点（§8.2）：theme/<slot>。糖保留"同槽重复 register 抛错"（themeRegistry 语义）：
-        // 场的 add 是同 id 替换，抛错校验必须在转发前做（对齐 themeRegistry 抛错文案）。
-        // 抛错判定以 ThemeRegistry（同 id 判定）为准，场只做"该槽已有任意条目"的提示性查询。
+        // 场落点（§8.2）：theme/<slot>。
+        // 行为语义 = main 的"register = 放 id=调用方的 occupant，同 id 顶替、不同 id 叠加"
+        //（严格审查 H3：步骤 2 曾把同 id 重复 register 改成抛错，属未申报的行为变化，本笔回退）。
+        // 唯一保留的抛错 = ThemeRegistry.register 的既有语义：default occupant 已存在时抛
+        //（见 themeRegistry.ts register()，有既有测试锁）——但那由 placeTheme 内部走容器判定，
+        // 糖不重复造判定（旧实现"reg && themeField && …"在场存在而容器缺席时漏抛）。
         const themeField = land<unknown>('theme')
-        const reg = theme()
-        if (reg && themeField && reg.occupantIds(slot).includes(opts.id ?? pluginName)) {
-          throw new Error(`[themeRegistry] theme slot "${slot}" already registered`)
-        }
         placeTheme(slot, component, opts)
         themeField?.add(slot, component, { id: opts.id ?? pluginName, order: opts.order })
       },

@@ -170,9 +170,9 @@ export function createPluginManager(
   function assertUninstallable(name: string, action: string): void {
     const verdict = ctx.canUninstall(name)
     if (verdict.ok) return
-    if (verdict.reason === 'core') {
-      throw new Error(`[pluginManager] core plugin cannot be uninstalled: "${name}" (${action})`)
-    }
+    // 决策 1：manager 层不做静默失败 —— canUninstall 的三种失败态（core/not-found/not-started）
+    // 都要带着原因抛出来，调用方才能区分「没装」与「装着但不可卸」（严格审查 H2）。
+    throw new Error(`[pluginManager] cannot uninstall plugin "${name}" (${verdict.reason}) during ${action}`)
   }
 
   async function installOne(
@@ -291,5 +291,4 @@ export function createPluginManager(
     },
   }
 }
-
 

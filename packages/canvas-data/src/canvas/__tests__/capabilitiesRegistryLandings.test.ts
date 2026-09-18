@@ -71,20 +71,26 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
     expect(entries[1].order).toBe(entries[0].order + 1)
   })
 
-  it('ctx.theme.register 落 theme/<slot>；同槽重复抛错；winner = order 最小者', async () => {
-    const ctx = await boot([
-      mk('theme-a', (c) => c.theme.register('edge', MyEdge)),
-      mk('theme-b', (c) => {
-        c.theme.register('edge', MyEdge, { id: 'neon', order: -1 })
-        // 同 id 重复（默认 id = 插件名）→ 抛错（themeRegistry 语义：同 occupant id 重复 register 防覆盖）
-        expect(() => c.theme.register('edge', MyEdge, { id: 'neon' })).toThrow(
-          /already registered/,
-        )
+  it('ctx.theme.register 落 theme/<slot>；同 id 顶替（main 语义，审查 H3 回退）；winner = order 最小者', async () => {
+   const ctx = await boot([
+     mk('theme-a', (c) => c.theme.register('edge', MyEdge)),
+     mk('theme-b', (c) => {
+       c.theme.register('edge', MyEdge, { id: 'neon', order: -1 })
+        // 同 id 重复 register = 顶替该 id 那格（main 语义：register 走 placeTheme/addOccupant，
+        // 只有 default occupant 已存在时才由 ThemeRegistry.register 抛错）。
+       expect(() => c.theme.register('edge', MyEdge, { id: 'neon' })).not.toThrow();
+       // 不同 id 的 occupant 各自独立共存（theme-a 与 theme-b 的两条都在，可回退）
       }),
     ])
-    const entries = ctx.registryOf('theme').list('edge')
-    expect(entries.map((e) => e.id)).toContain('neon')
-    expect(entries[0].id).toBe('neon') // order 最小者在最前
+  const entries = ctx.registryOf('theme').list('edge')
+    // 落点：两个插件各一条 —— 默认 id = 插件名（theme-a），显式 id = 'neon'（theme-b）。
+    expect(ctx.registryOf('theme').ids('edge').sort()).toEqual(['neon', 'theme-a'])
+    // 同 id 顶替：neon 注册两次仍只有一条（同 id 替换，不叠加）—— 与 main 的 addOccupant 同义。
+    expect(ctx.registryOf('theme').ids('edge').filter((x) => x === 'neon')).toHaveLength(1)
+    // 栈序 = order 升序从外到里；重复 register 未带 order → 该条回到缺省 0，
+    // 与同为 0 的 theme-a 按插入序稳定排列（第一版断言写成 neon 恒在最前，是错的）。
+    expect(entries.map((e) => e.order)).toEqual([0, 0])
+    expect(entries.map((e) => e.id)).toEqual(['theme-a', 'neon'])
   })
 
   it('ctx.commands.register 落 command/<id>，重复 id 抛错，返回可 dispose 句柄', async () => {

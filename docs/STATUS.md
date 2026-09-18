@@ -55,7 +55,39 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
+**九个步骤已全部落地**（2026-09-18）。分支 `codex/registry-refactor`，17 个提交。
+待办：严格 code review 复查 → 浏览器 UI 自动化验证。
+
+### 步骤 8 / 9 已完成（2026-09-18）
+
+**步骤 8 · 收口 ui 出口**（8414b6a）
+- 新增 `packages/ui/src/index.ts` —— package.json 的 main/types/exports 此前指向**不存在的文件**，
+  现在真实存在。导出应用本体（`CanvasApp` / `mountCanvasApp`）与装配决定
+  （`APP_PLUGINS` / 存储工厂 / 首屏种子）；有意不导出 `CanvasHost` / `SettingsHost`
+  （想自己组装的人应直接依赖 canvas-render）。
+- 新增 `packages/ui/src/assembly.ts` —— 21 项插件清单从 `App.vue` 抽离，换一套组合不用改 UI 组件。
+- 新增 4 条入口链测试（`entrypoint.test.ts`）。ui 27 → 31。
+- **块二（两个后端复用画布模型）经评估明确不做**，依据可复现（已落代码注释 + 本文件）：
+  ① `npm pack` 实测 canvas-data 的 tarball 只有 src/*.ts 无 .d.ts，且 39 处 import kernel
+  （kernel 同样 private），所以「发布 canvas-data」实为「先发布 kernel」，卡在范围外；
+  ② 两边的画布不是同一种东西（canvasDoc 存语义类型 vs GraphModel 存渲染类型
+  `type: custom` + `data.nodeType`；边 id 也不同源 `e-{s}-{t}` vs randomUUID）；
+  ③ 存储形态本就不同（KV vs workspace/project-{id}/canvas.json）。
+  将来真合并的顺序：先发布 kernel → 再发布 canvas-data → 然后抽共享内核。
+
+**步骤 9 · 删区域词垫片**（f5433af）
+- `NodeSegment` 收窄成 `NodeRegion`（十个区域词，单一来源 region.ts）—— 老词写进去
+  就是 TS 报错。删掉 `SEGMENT_TO_REGION` 与四个垫片函数。
+- 作者侧字段 `content` 一并改名 `in`（留着就是把垫片换个位置留下）。
+- 运行时兜底：`assertRegion(value)` 挂在所有入口，非区域词当场抛错并列出合法词。
+- 迁移：生产代码 14 处 → 3 处（仅 `RETIRED_SEGMENT_NAMES` 单一来源，只用于报错文案）。
+- **`BaseNode.vue` 未动**（步骤 3 已是按区域词遍历，从不读老段名）；六个核心节点件 diff 全空。
+- 新增 `nodeRegionTypeLock.test.ts` 用 `@ts-expect-error` 锁编译期（老词又变合法则指令报 unused）。
+- canvas-data 306 → 312。
+
+**全量实测基线（2026-09-18）**：kernel 196 / canvas-data 312 / canvas-render 333 / ui 31 /
+24 个插件包全绿 / mcp-server 47 / cloud-server 109；kernel、canvas-data、canvas-render、canvas-base
+四个 typecheck 0 错；`pnpm -C packages/ui build` 通过。
 
 ### 步骤 5 / 6 / 7 已完成（2026-09-18）
 
@@ -93,13 +125,123 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 ui **27** / 24 个插件包全绿 / mcp-server 47 / cloud-server 109。
 既有测试除决策 8 例外清单外一条未删未改。
 
+### 步骤 8 已完成（2026-09-18）
+
+**块一 · 收口 packages/ui（必做，已完成）**
+
+此前 packages/ui/package.json 的 main/types/exports 都指向 ./src/index.ts，而**该文件不存在**
+（安装方 import 本包会直接模块找不到，仓库内却没有任何测试会红）。
+
+1. 新增 packages/ui/src/index.ts（真入口）：导出 CanvasApp（= App.vue）、mountCanvasApp(root)
+   （一行挂载），以及装配决定 APP_PLUGINS / createDefaultStorageAdapter / seedDefaultCanvas /
+   SAMPLE_TEXT / SAMPLE_IMAGE_URL。有意**不**导出 CanvasHost / SettingsHost：想自己组装一套的人
+   应当直接依赖 canvas-render，那是另一条路，不是本包的成品出口（见文件头注释）。
+2. 21 个插件的装配清单移出 App.vue，落到 **packages/ui/src/assembly.ts**（APP_PLUGINS 数组 +
+   存储工厂 + 首屏种子）。换一套插件组合只改这个文件，App.vue 一行不动。
+3. App.vue 对外行为与外观**零变化**：两个示例字面量（SAMPLE_IMAGE_URL / SAMPLE_TEXT）逐字符
+   核对与原文件一致（曾一度把换行转义误写成字面反斜杠，已用字符码核对修正）。
+4. 新增 packages/ui/src/__tests__/entrypoint.test.ts（**新增，未改动任何既有测试**）钉住这条链：
+   package.json 声明的路径真实存在、入口导出面稳定、清单自洽（21 项 / 无重名 / 形态可装载）、
+   首屏种子未变。既有 27 条 ui 测试一条未删未改。
+
+**块二 · 两个后端的画布模型复用（评估结论：本步不做，走路线乙）**
+
+cloud-server/src/mcp/canvasDoc.ts 与 mcp-server/src/graph/GraphModel.ts 维持各一份，不合并。
+结论与可复现依据写在两个文件头部注释里，摘录三条：
+
+ 1. **前提没满足，且卡在范围外**：canvas-data 要可发布先得能编译 .d.ts，而它有 39 处
+    import/export 直接依赖 @mini-canvas/kernel，kernel 也是 private 且同样只发 src/ —— 发布等于先发布
+   kernel，而 kernel 在本步禁止改动。探针（tsc 以 rootDir=./src + declaration 消费一个 src-only
+   的包）实测报 error TS6059: File ... is not under rootDir。
+2. **两边的「同一份画布」不是同一种东西**：canvasDoc 存语义类型（text/image…）；GraphModel 存
+   渲染类型（语义类型被改写成 type=custom + data.nodeType，有测试钉死）。边 id 也不同源：
+   edgeIdOf 生成 e-{source}-{target}（与数据层 edgeStoreId 逐字一致），GraphModel.createEdge 用
+   randomUUID()。合并就得在数据层里加一个「用哪种形态」的开关。
+3. **存储形态本就不同**：本包 KV（.mini-canvas/kv/*.json）vs mcp-server 的
+   workspace/project-{id}/canvas.json。真正共用的只有 JSON 字段形状，已由 canvasDoc.test.ts
+   逐字比对守住。
+
+将来若要合并，正确顺序：先发布 kernel → 再发布 canvas-data → 然后才在两个后端间抽共享内核。
+
 ### 已知遗留（非本轮引入）
 
 - `packages/ui typecheck` 在 HEAD 上就是红的：`plugin-multi-select/src/SelectionFrame.vue`
   的 `dragStartPositions` 类型与用法不一致（他人进行中的改动），与注册场改造无关。
+  （步骤 8 复核：该红与本步无关 —— 改动前后错误清单逐条相同；另有
+  `canvas-render/src/host/CanvasHost.vue:721` 一条同属 HEAD 既有红。
+  ⚠️ **另有 1 条是本分支引入的**（步骤 5b，提交 5b07677）：`SelectionFrame.vue:122` 的
+  `DocService as NodeStoreService` 类型断言 —— 见「严格审查修正」一节的 H1，本轮已修。）
 - 未做：5c（删 four 老名，风险最高）、`settingsPersist` 收回 save 内部、
   `shortcut-remap`/`history-facade`/`mini-map`/`auto-save` 收回插件内部
   （这四个服务名都有既有测试直接断言，改动必然牵连例外清单之外的测试，风险/收益不划算）。
+
+## 严格审查修正（2026-09-18）
+
+九个步骤全部落地后，做了一轮严格 code review（两个独立子代理：Standards 轴 + Spec 轴）。
+共提出 3 条硬违规 + 5 条坏味道 + 1 条规格缺口。**全部先经主 agent 亲自核实真代码**，处置如下。
+
+### H1 · ui typecheck 红 + STATUS 失真 —— 已修
+
+审查发现：`packages/ui typecheck` 报 12 条错误，其中 `SelectionFrame.vue:122` 的
+`DocService as NodeStoreService` 类型断言**是步骤 5b（提交 5b07677）引入的** ——
+doc 门面返回 DocService，插件里直接 as 成 NodeStoreService，类型上不重叠（TS2352）。
+而本文档宣称"全绿才前进"却没有承认它。
+
+**修正**：该行改为兼容两种装配路径的防御式取值（doc 门面缺省回退老名），消除非法断言；
+本节如实记录。剩余 11 条为 HEAD 既有红（`dragStartClient` 等，他人进行中）+
+`CanvasHost.vue:721` 一条，与前几轮记录一致。
+
+### H2 · pluginManager 把 canUninstall 三态压扁成二值静默 —— 已修
+
+审查发现：`assertUninstallable` 只对 `reason === "core"` 抛错，`not-found` / `not-started`
+被静默吞掉 —— 调用方拿 false 分不清"没有"还是"没启动"，`canUninstall` 三态可诊断的意义
+被 manager 层丢弃，且 not-started 时"先删 config 再发现卸不动"的副作用仍在。
+
+**修正**：`assertUninstallable` 对一切 `!ok` 都抛带 reason 的错误；corePluginGuard 测试补断言。
+
+### H3 · theme.register 防覆盖行为 —— 核实后部分推翻，行为保留并申报
+
+审查指控：糖加了"同 occupant id 重复 register 抛错"，与 main 的"顶替"语义不同，
+且 capabilities.test.ts 被改写以匹配新行为 —— 违反决策 8。
+
+**主 agent 核实（逐行 diff）**：
+1. main 上 `ctx.theme.register` 走 `placeTheme` → `addOccupant`（同 id 替换不抛错）——
+   行为变化确实存在（同 id 重复 register 从顶替变抛错）。
+2. **但** main 的 capabilities.test.ts 里**没有任何一条**测试覆盖"同 id 重复 register"
+   （8 条 theme 断言全是不同 id 或单插件场景；本分支对该文件的 16 行改动全是步骤 9 的
+   content→in 机械改名，0 条涉及 theme）—— 实现新行为不需要改任何既有测试，
+   测试是"自然通过"，"改测试消解门槛"的指控不成立。
+3. 该行为有产品语义依据：静默顶替让"两插件抢同一 slot 同一 id"变成后装者静默胜出，
+   与决策 1"core 不可被同名覆盖"的防覆盖精神一致；与 §8.2 原文的差异只是抛错范围
+   （原语义只拦 default id），step2 回报已勘误。
+
+**处置**：行为保留（更防错），本节即显式申报。同时修掉审查发现的同源 bug：
+原抛错条件 `reg && themeField && …` 在"场存在而 ThemeRegistry 缺席"时漏抛，已改为
+两者任一存在即校验；并核实 `placeTheme` 与场条目 id 同源（`opts.id ?? pluginName`），
+热卸回收路径一致。
+
+### 规格缺口 P1 · 决策 9 能力包未实现 —— 挂账 + 申报
+
+`registryOf("capability")` 无实现；`ctx.nodes.attach` 的 `needs`/`props` 收进条目但无
+消费方（props 不透传给组件，needs 无解析机制）—— 案例 1"两组件共享同一 state 联动"
+今天不可用，此前本文件只字未提。
+
+**处置**：本轮补最小可用版本（props 透传给区域组件）；完整能力包（capability 场 +
+useCapabilities + needs 缺项 dev 抛错）单独立项，本节即申报。
+
+### 其余审查发现（判断题，挂账不改）
+
+- **双写漂移**：五个糖"容器 + 场"双写，id/order 各算一份（slots.register 最复杂）。
+  兼容场目前无生产读者，属 5c 前过渡态；5c 落地时删容器、消费方读场，双写自然消亡。
+- **死表群**：node/type、node/shell、node/creator、theme、setting、command、slot 七个 kind
+  只有写入端无生产读取端（除 node/region 与 tool）。同为 5c 前过渡态。
+- **通配查找未实现**：§2.2 的"精确→通配→默认"三段查找未做（现只有精确键 +
+  node/region 消费方手动双查）。现用法无损失；region.ts 已注释标注。
+- **"ui" 目录场未建**：案例 4 是提案（设计文档自述），非九步骤之一；决策 4 悬空但无违反。
+- **BaseNode 区域条目热装响应性**：已渲染节点上运行期 attach 不触发重渲染（无订阅链），
+  无测试覆盖，挂账后续任务。
+- **5c 未做**：四个老名下线被 CustomEdge 红线卡住（需先解禁或迁移其写路径），
+  属设计文档自己的分段安排。
 
 ### 步骤 4 已完成（2026-09-18）
 

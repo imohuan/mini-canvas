@@ -130,9 +130,11 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
 })
 
 describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
-  it('manager.uninstall(core) 明确抛 "core plugin cannot be uninstalled"，且不动配置快照', async () => {
+  it('manager.uninstall(core) 明确抛错（含 not-found/not-started 也抛），且不动配置快照', async () => {
     const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
-    expect(() => manager.uninstall(CANVAS_BASE_PLUGIN_NAME)).toThrow(/core plugin cannot be uninstalled/)
+    expect(() => manager.uninstall(CANVAS_BASE_PLUGIN_NAME)).toThrow(/\(core\) during uninstall/)
+    // not-found 也必须带原因抛（严格审查 H2：三态不压扁成二值静默）
+    expect(() => manager.uninstall('ghost-plugin')).toThrow(/\(not-found\) during uninstall/)
     // 没产出副作用：插件仍 active、服务仍在
     expect(host.ctx.fiber(CANVAS_BASE_PLUGIN_NAME)?.stateName).toBe('active')
     expect(host.ctx.hasService('graph')).toBe(true)
@@ -141,7 +143,7 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
 
   it('manager.reload(core) 无 next：抛错而不是静默删配置', async () => {
     const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
-    await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME)).rejects.toThrow(/core plugin cannot be uninstalled/)
+    await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME)).rejects.toThrow(/\(core\) during reload/)
     expect(host.ctx.fiber(CANVAS_BASE_PLUGIN_NAME)?.stateName).toBe('active')
     host.stop()
   })
@@ -149,9 +151,7 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
   it('manager.reload(core, next)：抛"核心插件不可热替换"，不是重名错误（旧硬 bug）', async () => {
     const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
     const next: PluginModule = { name: CANVAS_BASE_PLUGIN_NAME, apply() {} }
-    await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME, next)).rejects.toThrow(
-      /core plugin cannot be uninstalled/,
-    )
+    await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME, next)).rejects.toThrow(/\(core\) during reload/)
     // 旧实现会"卸失败后继续 installPlugin" → 抛 [core] Duplicate plugin name；此处必须不是它
     await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME, next)).rejects.not.toThrow(/Duplicate plugin name/)
     // 旧实现（真插件）仍在，没被半卸
