@@ -238,9 +238,6 @@ export function apply(ctx: Context) {
       return downloadImageNode(ops, nodeId)
     },
   })
-
-  // 4. 供开发期 HMR 验证：改本文件内 v 数值后保存，画布内 ctx.get('image-meta').v 实时变化
-  ctx.inject('image-meta', { v: 1 })
 }
 
 /** 兼容旧装配的 PluginModule 出口（name='image' 供 HMR reload） */
