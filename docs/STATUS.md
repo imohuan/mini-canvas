@@ -55,8 +55,24 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-**九个步骤已全部落地**（2026-09-18）。分支 `codex/registry-refactor`，17 个提交。
-待办：严格 code review 复查 → 浏览器 UI 自动化验证。
+**九个步骤已全部落地 + 严格审查修正 + UI 自动化验证通过**（2026-09-18）。
+分支 `codex/registry-refactor`，19 个提交。
+
+已完成的三件交付（目标定义的三条）：
+1. **完整功能**：设计文档 §九 九个步骤全部落地（每步独立提交、可单独回退）。
+2. **严格 code review**：两个独立子代理（Standards 轴 + Spec 轴）复查；
+   3 条硬违规（H1/H2/H3）逐条核实后已修，5 条坏味道 + 1 条规格缺口已申报。
+3. **UI 自动化测试**：`packages/ui/e2e/canvas-e2e.mjs`（真实 Chromium 跑 :5288），
+   **18/18 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+
+**遗留（已申报，非阻塞）**：
+- **5c 未做**（四个老名下线的最后一步，被 CustomEdge 红线卡住）；
+- **决策 9 能力包**未实现（本轮只补了它最小的一环：`attach` 的 props 透传；
+  `registryOf('capability')` + `useCapabilities` + `needs` 缺项行为单独立项）；
+- `settingsPersist` 收回 save 内部、四个插件服务收回内部（都有既有测试直接断言，风险/收益不划算）；
+- 七个 kind 的场目前无生产读取端（5c 前过渡态）、§2.2 通配查找未实现、
+  "ui" 目录场未建、BaseNode 区域条目的热装响应性无订阅链；
+- **端口默认值双源漂移**（契约金标准 §9，86 vs 10）—— 动端口几何前必须先对齐。
 
 ### 步骤 8 / 9 已完成（2026-09-18）
 
@@ -151,8 +167,8 @@ cloud-server/src/mcp/canvasDoc.ts 与 mcp-server/src/graph/GraphModel.ts 维持�
 
  1. **前提没满足，且卡在范围外**：canvas-data 要可发布先得能编译 .d.ts，而它有 39 处
     import/export 直接依赖 @mini-canvas/kernel，kernel 也是 private 且同样只发 src/ —— 发布等于先发布
-   kernel，而 kernel 在本步禁止改动。探针（tsc 以 rootDir=./src + declaration 消费一个 src-only
-   的包）实测报 error TS6059: File ... is not under rootDir。
+    kernel，而 kernel 在本步禁止改动。探针（tsc 以 rootDir=./src + declaration 消费一个 src-only
+    的包）实测报 error TS6059: File ... is not under rootDir。
 2. **两边的「同一份画布」不是同一种东西**：canvasDoc 存语义类型（text/image…）；GraphModel 存
    渲染类型（语义类型被改写成 type=custom + data.nodeType，有测试钉死）。边 id 也不同源：
    edgeIdOf 生成 e-{source}-{target}（与数据层 edgeStoreId 逐字一致），GraphModel.createEdge 用
@@ -163,9 +179,6 @@ cloud-server/src/mcp/canvasDoc.ts 与 mcp-server/src/graph/GraphModel.ts 维持�
 
 将来若要合并，正确顺序：先发布 kernel → 再发布 canvas-data → 然后才在两个后端间抽共享内核。
 
-### 已知遗留（非本轮引入）
-
-- `packages/ui typecheck` 在 HEAD 上就是红的：`plugin-multi-select/src/SelectionFrame.vue`
   的 `dragStartPositions` 类型与用法不一致（他人进行中的改动），与注册场改造无关。
   （步骤 8 复核：该红与本步无关 —— 改动前后错误清单逐条相同；另有
   `canvas-render/src/host/CanvasHost.vue:721` 一条同属 HEAD 既有红。
