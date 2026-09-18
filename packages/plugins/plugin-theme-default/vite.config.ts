@@ -21,11 +21,11 @@ export default defineConfig(({ command }) => {
         strictPort: true,
         open: true,
       },
-      // 让 demo 能 import 同 workspace 的其他源码插件(text/image)
+      // 让 demo 能 import 同 workspace 的源码包（canvas-data / canvas-render）。
+      // 注：demo 不再 import 节点插件（步骤 7 断环：本包 devDeps 里不再有 node-text/node-image，
+      // 预览改用 demo-web 自带的示例节点类型，见 demo-web/demoNodePlugin.ts）。
       optimizeDeps: {
         exclude: [
-          '@mini-canvas/plugin-node-text',
-          '@mini-canvas/plugin-node-image',
           '@mini-canvas/canvas-data',
           '@mini-canvas/canvas-render',
         ],

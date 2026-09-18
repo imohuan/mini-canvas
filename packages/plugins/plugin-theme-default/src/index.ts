@@ -16,10 +16,6 @@ import type {
   InferConfig,
 } from "@mini-canvas/canvas-base";
 import type { PluginModule } from "@mini-canvas/canvas-base";
-// 跨包服务类型声明（cordis 声明合并）：本插件 `inject:['text']` 依赖 text 插件，需显式 import type 该包，
-// 让 node-text 对 `interface Context { text: TextService }` 的增强在本包编译里可见 → ctx.text 类型安全可用。
-// 纯类型副作用，运行时无 import（text 服务仍由内核依赖编排注入）。
-import type {} from "@mini-canvas/plugin-node-text";
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），壳/端口/边组件 CSS 消费。
 import "./styles/node-theme.css";
 import BaseNode from "./components/node/BaseNode.vue";
@@ -35,7 +31,13 @@ import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue";
 
 export const name = "theme-default";
-export const inject = ["text"] as string[];
+// 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。
+//
+// 步骤 7（拆插件循环依赖）删掉了历史上的 inject:['text'] + `import type {} from "@mini-canvas/plugin-node-text"`：
+// 那条声明是"为了读 node-text 的类型增强"，但本插件从不读 ctx.text（全仓 rg 无消费点），是提前写的死声明。
+// 代价是包级循环——theme-default devDeps→node-text，node-text→theme-default（复用本插件 MovingHandle/Select），
+// 双向即成环。删除后本插件不依赖任何节点插件，环消失且无行为损失（皮肤不再因缺 text 插件而 PENDING）。
+export const inject = [] as string[];
 
 // 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
 // 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动，
