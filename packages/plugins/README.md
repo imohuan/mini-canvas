@@ -1,22 +1,22 @@
 # 插件开发指南 —— mini-canvas v2（dsh 范式）
 
 > 本指南讲"新增一个节点插件"怎么走。它证明了一条已跑通的架构链路：
-> **插件 = 一个独立 workspace 包（放在 `packages/plugins/`），UI(content .vue) 和逻辑(setup) 放一起，
+> **插件 = 一个独立 workspace 包（放在 `packages/plugins/`），UI(.vue 区域组件) 和逻辑(apply) 放一起，
 > 宿主按清单加载、零硬编码。**
-> 样板：`packages/plugins/plugin-node-text`、`plugin-node-image`（vite demo 直接可见、可拖可连可删可编辑、刷新不丢）。
+> 样板：`packages/plugins/plugin-node-text`、`plugin-node-image`（`packages/ui` 里直接可见、可拖可连可删可编辑、刷新不丢）。
 
 ## 一、插件包的骨架长什么样
 
 ```
 packages/plugins/plugin-node-<你的类型>/
   package.json            # name:@mini-canvas/plugin-node-xxx
-                          #   dependencies: @mini-canvas/kernel + canvas-data + canvas-core-v2: workspace:*
+                          #   dependencies: @mini-canvas/canvas-base: workspace:*（= kernel + canvas-data 的薄入口）
                           #   peerDependencies: vue ^3.5
   tsconfig.json           # moduleResolution: Bundler + DOM lib + src 下放 env.d.ts(*.vue shim)
   src/
     index.ts              # export { nodeXxxPlugin } ...
-    nodeXxxPlugin.ts      # ★插件主体：name/inject/setup 一段式 + registerNodeType 注册(逻辑+UI 一体)
-    XxxContent.vue        # ★UI：content 组件，随插件包走，不再放宿主 demo
+    nodeXxxPlugin.ts      # ★插件主体：name/inject/apply 一段式 + ctx.nodes.register(逻辑+UI 一体)
+    XxxContent.vue        # ★UI：in 区域组件，随插件包走，不再放宿主
     env.d.ts              # declare module '*.vue'
 ```
 
@@ -46,11 +46,12 @@ export const nodeTextPlugin: PluginModule = {
 ```
 
 要点：
-- **内核不 import 插件、不 import 任何 content .vue**；content 是 opaque 句柄，由插件经
+- **内核不 import 插件、不 import 任何 .vue**；组件是 opaque 句柄，由插件经
   `registerNodeType` 交出去，内核渲染壳(BaseNode)只负责槽位。依赖方向恒为 插件→内核。
-- `registerNodeType` 一次写两处：`nodeStore`(数据) + `nodeRegistry`(展示)，宿主不再手 seed 段组件。
+- `registerNodeType` 一次写两处：`doc`(数据；5c 起旧的 `nodeStore` 服务名已下线) +
+  `nodeRegistry`(展示)，宿主不再手 seed 段组件。
 - 段组件要调插件服务，经内核注入令牌 `HOST_KEY` 拿宿主句柄再 `host.ctx.get('text')`，
-  **不反向依赖 demo-web**（令牌已上收到内核 `components/contentBridge.ts`）。
+  **不反向依赖宿主**（令牌已上收到渲染层 `contracts/contentBridge.ts`）。
 
 > **位置名只有十个区域词**（设计文档 §五）：`in` / `title` / `out:top` / `out:bottom` /
 > `out:left` / `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset`。
@@ -59,15 +60,17 @@ export const nodeTextPlugin: PluginModule = {
 
 ## 三、宿主怎么加载（manifest 即 plugins 数组）
 
-宿主(demo-web / 任何消费方)把想启用的插件列进 `bootCanvas({ plugins })`：
+宿主(任何消费方)把想启用的插件列进 `<CanvasHost :plugins="…">` 的数组（或
+`createMiniCanvasHost({ coldPlugins })` / 给一份 `manifest`，见 `packages/ui/src/assembly.ts`）：
 ```ts
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'   // 或由内核装配点内置
+import { CanvasHost } from '@mini-canvas/canvas-render'
+import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
+import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-const host = await bootCanvas({
-  adapter: new LocalStorageAdapter(),
-  plugins: [nodeImagePlugin, /* 更多… */],
-  nodeRegistry: registry,   // 宿主同步 provide 的展示注册表，插件往里注册 content
-})
+import { APP_PLUGINS } from './assembly'
+```
+```html
+<CanvasHost :plugins="APP_PLUGINS" :adapter="new LocalStorageAdapter()" />
 ```
 宿主零硬编码某个具体插件的 UI 组件；加/减插件只改这份数组。渲染时 `nodeTypes` 统一指到 BaseNode 壳，
 壳经 `nodeRegistry` 按 type 解析各区域组件——插件自带的 UI 就这样出现在画布上。
@@ -77,14 +80,14 @@ const host = await bootCanvas({
 1. 复制 `plugin-node-text` 目录为 `plugin-node-<type>`，改 `package.json` 的 name。
 2. 写 `<Type>Content.vue`（展示/编辑该类型内容；需要服务就 `inject(HOST_KEY)` 后 `ctx.get('你的服务')`）。
 3. 写 `<Type>NodePlugin.ts`：`registerNodeType` 注册 + 可选 `ctx.inject('<type>', service)` + 建节点逻辑。
-4. 宿主 demo 的 `plugins` 数组里加它（若想 demo 里看到）。
-5. `pnpm install` 认到新包；`pnpm -r run typecheck` 干净。
-6. 跑 `cd packages/canvas-core-v2 && node ./node_modules/vitest/vitest.mjs run` 全绿；
-   起 `pnpm dev` 目验能看到、能操作。
+4. 宿主 `packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 数组里加它（若想在成品应用里看到）。
+5. `pnpm install` 认到新包；`pnpm -C packages/plugins/<你的包> typecheck` 干净。
+6. `pnpm -C packages/plugins/<你的包> test` 全绿；
+   起 `pnpm -C packages/ui dev` 目验能看到、能操作。
 
 ## 五、红线 / 契约
 - 不碰 `src/`(老版宿主)；不把 M6 复杂件(裁剪/蒙版/backend)带进当前节点。
-- 内核公开接口(registerNodeType/ctx)按 `docs/plan/canvas-core-v2-api.md` + ADR 走；要改先改文档。
+- 内核公开接口(registerNodeType/ctx)按 `docs/design/core-layers-and-registry.md` + ADR 走；要改先改文档。
 - 依赖方向恒 插件→内核，禁止内核反向 import 插件。
 
 ## 六、给节点加上/下控制栏（插槽怎么写）

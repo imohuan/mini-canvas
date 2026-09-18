@@ -106,31 +106,29 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
     transaction<T>(reason: string, fn: (tx: { createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
   }
-  const store = (): VideoDocPort | undefined =>
-    svc.get<VideoDocPort | undefined>('doc') ?? undefined
-  const graph = (): VideoDocPort | undefined =>
-    svc.get<VideoDocPort | undefined>('doc') ?? undefined
+  /** doc 门面（5c 起数据唯一来源）；缺 doc 则安全降级（读 undefined、写 no-op） */
+  const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
   const layout = () =>
     svc.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
 
   return {
-    read: (nodeId) => store()?.getNode(nodeId)?.data,
+    read: (nodeId) => doc()?.getNode(nodeId)?.data,
     // size 与 data 在**同一次** updateNode 里提交：内核按 patch 记一条历史 → 一次撤销退干净
     write: (nodeId, data, size) =>
-      graph()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
+      doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
     // 上限解析只有一份实现（videoFit.readVideoFitLimits）：不在这里再抄一遍"读配置 + 回落"的兜底
     fitLimits: () => readVideoFitLimits(svc),
-    hasType: (type) => (store() ? store()!.types.has(type) : true),
-    nodePosition: (nodeId) => store()?.getNode(nodeId)?.position ?? null,
+    hasType: (type) => (doc() ? doc()!.types.has(type) : true),
+    nodePosition: (nodeId) => doc()?.getNode(nodeId)?.position ?? null,
     nodeWidth: (nodeId) => {
       const rect = layout()?.getNodeRect(nodeId)
       if (rect && rect.w > 0) return rect.w
-      const node = store()?.getNode(nodeId)
+      const node = doc()?.getNode(nodeId)
       const w = Number(node?.data?.cardWidth) || node?.size?.w || 0
       return w > 0 ? w : null
     },
     createNode: (type, position, data) => {
-      const g = graph()
+      const g = doc()
       if (!g) return null
       try {
         return g.transaction('video-create-node', (tx) => tx.createNode(type, position, data))

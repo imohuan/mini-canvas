@@ -33,8 +33,8 @@
 
 ```ts
 interface CanvasRenderContext {
-  ctx: Context                 // 内核上下文：ctx.get('nodeStore') / ctx.text 直访
-  host: CanvasHostHandle       // ctx 的超集：save/nodeStore/selection/command/history/... + stop()
+  ctx: Context                 // 内核上下文：ctx.get('doc') / ctx.text 直访
+  host: CanvasHostHandle       // ctx 的超集：save/doc/selection/command/... + stop()
   registry: NodeRegistry       // 节点展示注册表
   nodeWrite: NodeWrite         // 标题重命名写回
   handleParams: CanvasParams   // 浮动端口外观（响应式）
@@ -59,7 +59,8 @@ export function useCanvasRender(): CanvasRenderContext {
 ```ts
 const { ctx, host, registry, nodeWrite, handleParams, edgeVisual } = useCanvasRender()
 ```
-- 取服务：`ctx.get('nodeStore')`（content 组件最常用）。
+- 取服务：`ctx.get('doc')`（content 组件改节点数据最常用；节点 + 边 + 事务/撤销一个门面）。
+  > ⚠️ 老名 `nodeStore`/`edgeStore`/`graph`/`history` **已在步骤 5c 下线**，`ctx.get` 取不到。
 - 需要在 CanvasHost 渲染子树之外调用会抛清晰错误——这些渲染组件本就依赖宿主能力。
 
 ---
@@ -74,7 +75,7 @@ export const HOST_KEY: InjectionKey<Ref<any | undefined>> = Symbol('canvas-v2-ho
 
 - 类型是 `Ref<CanvasHostHandle | undefined>`，即一个**可能为空的宿主引用**（内核异步 boot，provide 的是引用，boot 完成后填充）。
 - **CanvasSurface 用 `provide(HOST_KEY, shallowRef(host))` 提供**（同引用）。
-- 消费：content 组件 `const host = inject(HOST_KEY)`，然后 `host.value.ctx.get('nodeStore')`。因为要 `.value` + 判空，新组件改用 `useCanvasRender().ctx`。
+- 消费：content 组件 `const host = inject(HOST_KEY)`，然后 `host.value.ctx.get('doc')`。因为要 `.value` + 判空，新组件改用 `useCanvasRender().ctx`。
 
 > 想要 host 的**裸 ctx**（`.ctx` 直取服务），走 `useCanvasRender()` 最省事。
 
@@ -208,7 +209,7 @@ function commit() {
 
 关键点：
 1. **props = `{ id, data }`**（有的还带 `type`）。这是 BaseNode 渲染 content 段时传的固定形状。
-2. **拿 ctx 用 `useCanvasRender()`**，取服务走 `ctx.get('服务名')` 或 `ctx.服务名`（后者靠插件 `declare module` 增强类型）。TextContent 里 `ctx.text.editText(props.id, next)` 把编辑写回内核并落盘（editText 内部 `nodeStore.updateNodeData` + `save.set('graph',...)`）。
+2. **拿 ctx 用 `useCanvasRender()`**，取服务走 `ctx.get('服务名')` 或 `ctx.服务名`（后者靠插件 `declare module` 增强类型）。TextContent 里 `ctx.text.editText(props.id, next)` 把编辑写回内核并落盘（editText 内部走 `doc.updateNode`，自动进历史 + 调度落盘）。
 3. **连接点 Handle 由 BaseNode（nodeShell）统一提供**，content 不画 Handle、不管端口。
 4. 外层点击事件记得 `.stop`（`.stop` 阻止冒泡到画布的 pane 事件），双击进入编辑用 `.stop`。
 
@@ -248,4 +249,4 @@ const shouldShowHandles = computed(() =>
 1. **新代码别 inject 6 个旧 KEY 了**：它们还在（CanvasSurface 仍 provide），但取到的 HOST 是 Ref、其它也可能要判空。统一 `useCanvasRender()` 最干净。
 2. **useCanvasRender 必须在 CanvasHost 子树内**：在 CanvasHost 之外（比如你 App 根组件直接调）会抛错。要读内核上下文，把代码放到 `<CanvasHost #ui>` 插槽、或你自己的内容/壳组件里。
 3. **content 别反向依赖宿主**：content .vue 只 import `@mini-canvas/canvas-render`（拿 useCanvasRender / 令牌），不 import demo-web、不 import 其它插件。这样它才能被任何宿主复用。
-4. **类型增强要 `declare module`**：想让 `ctx.text` 直访有类型，在插件逻辑里 `declare module '@mini-canvas/canvas-core-v2' { interface Context { text: TextService } }`。依赖方若要用到，得 import type 那个插件包（见 theme-default 顶部 `import type {} from '@mini-canvas/plugin-node-text'`）。
+4. **类型增强要 `declare module`**：想让 `ctx.text` 直访有类型，在插件逻辑里 `declare module '@mini-canvas/canvas-data' { interface Context { text: TextService } }`（`canvas-core-v2` 包已删除，`Context` 现由 `canvas-data` 导出）。依赖方若要用到，得 import type 那个插件包（见 theme-default 顶部 `import type {} from '@mini-canvas/plugin-node-text'`）。

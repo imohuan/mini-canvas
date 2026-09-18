@@ -97,7 +97,7 @@ await host.save.flush()    // 确保落盘
 host.stop()                // 卸载全部副作用
 ```
 
-> 这里的插件 `apply` 会在启动时把 `text`/`image` 节点类型注册进 nodeStore、把 content 组件注册进 nodeRegistry、并 `ctx.provide` 出 `text`/`image` 服务。`nodeFactory` 会拿到各 type 的 `create` 实现，所以 `command:create-node` 能用。
+> 这里的插件 `apply` 会在启动时把 `text`/`image` 节点类型注册进 `doc` 的类型表、把 `in` 区域组件注册进 nodeRegistry、并 `ctx.provide` 出 `text`/`image` 服务。`nodeFactory` 会拿到各 type 的 `create` 实现，所以 `command:create-node` 能用。
 > 画布通用命令（`command:create-node` / `command:delete` / `command:undo` / `command:redo`）由
 > `@mini-canvas/canvas-data` 的 `registerCanvasCommands` 提供，`createMiniCanvasHost` 已默认注册，无需装插件。
 
@@ -106,7 +106,7 @@ host.stop()                // 卸载全部副作用
 ## 建图 + 命令 + 撤销/重做 + 落盘（全链路）
 
 ```ts
-import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-core-v2'  // 边独立持久化的裸 key
+import { GRAPH_EDGES_KEY } from '@mini-canvas/canvas-data'  // 边独立持久化的裸 key
 import type { TextNodeService } from '@mini-canvas/plugin-node-text'
 
 const { host } = await createMiniCanvasHost({
@@ -119,7 +119,7 @@ const createdId = host.command.execute('command:create-node', {
   type: 'text', position: { x: 10, y: 10 },
 }) as string            // '1'
 
-// 拉一条边（写 edgeStore，包进历史 → 可 undo/redo）
+// 拉一条边（写 edgeStore 实例，包进历史 → 可 undo/redo）
 const a = text.addTextNode({ x: 0, y: 0 })   // '2'
 const b = text.addTextNode({ x: 30, y: 30 }) // '3'
 host.history.withRecord(() => {

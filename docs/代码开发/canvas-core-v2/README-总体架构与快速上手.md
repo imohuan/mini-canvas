@@ -160,14 +160,21 @@ ctx.on('ctx:ready', ({ plugins }) => console.log('就绪，已激活插件：', 
 
 ## 7. 装"宿主/内核服务"是怎么来的
 
-上面例子里的 `ctx.nodes.register` 会真的去调用 `nodeStore`（存节点数据）和 `nodeRegistry`（存展示组件）。这些服务**由谁提供**？两种来源：
+上面例子里的 `ctx.nodes.register` 会真的去调用 `doc`（存节点类型数据）和 `nodeRegistry`（存展示组件）。这些服务**由谁提供**？两种来源：
 
-- **宿主在 start 之前用 `ctx.inject(name, 实例)` 注入**（例如 `ctx.inject('nodeStore', new NodeStore())`）。
+- **装配方在 start 之前用 `ctx.inject(name, 实例)` 注入**（例如现行基础插件 `ctx.inject('doc', doc)`）。
 - **内核自带两个内置实例**：`slots` 和 `settings`（不用注入，永远在）。
 
 `ctx.get(name)` 取服务；缺服务返回 `undefined`（不抛），适合做"可选依赖探测"。
 
-> 想完整知道"内核有哪些服务名约定"（nodeStore/nodeRegistry/themeRegistry/command/nodeFactory/edgeStore/selection/history/save…），看《数据服务与存储篇》和《service / get / provide 篇》。注意：**内核本身不把 NodeStore 等自动注入**，需要在装配处手动 `inject`（宿主负责；纯逻辑测试里也是手动注入的）。
+> 想完整知道"内核有哪些服务名约定"（`doc`/`nodeRegistry`/`themeRegistry`/`command`/`nodeFactory`/`selection`/`save`…），
+> 看《数据服务与存储篇》和《service / get / provide 篇》。注意：**内核本身不把这些自动注入**，
+> 需要在装配处手动 `inject`（现行由 `canvasBasePlugin` 负责；纯逻辑测试里也是手动注入的）。
+>
+> ⚠️ **步骤 5c 起 `nodeStore`/`edgeStore`/`graph`/`history` 四个老服务名已下线**（`ctx.get` 返回 `undefined`）；
+> 它们合并成 **`doc`** 一个门面（节点 + 边 + 事务/撤销/快照/订阅），见
+> `packages/canvas-data/src/docService.ts`。写 `inject: ['nodeStore']` 会让插件**永久 PENDING**
+> （没人提供该服务名）——这是最容易踩的坑。
 
 ---
 

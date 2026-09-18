@@ -1,12 +1,17 @@
 # 数据服务：nodeStore（节点数据）、edgeStore（边数据）、nodeFactory（建节点）
 
 > 来源：packages/canvas-core-v2/src/services/nodeStore.ts、edgeStore.ts、nodeFactory.ts、services/index.ts
+>
+> ⚠️ **时效提醒（步骤 5c，2026-09-18）**：本文讲的 `nodeStore` / `edgeStore` 仍是**底层对象**（源码里还在、
+> 可单测），但它们**不再是 ctx 服务名**——`ctx.get('nodeStore')` / `ctx.get('edgeStore')` 现在返回
+> `undefined`。消费方统一改认 **`ctx.get('doc')`**（节点 + 边 + 事务/撤销一个门面，见
+> `packages/canvas-data/src/docService.ts`）。想继续读下面细节当"底层实现说明"可以，但**别照抄 `inject`**。
 
 画布最核心的两份数据——**节点**和**边**——都收进内核的纯逻辑服务（零 Vue、可单测）。渲染层只读数据 + 订阅，变更/历史/落盘全在内核。
 
 ---
 
-## 1. nodeStore —— 节点数据服务（ctx.get('nodeStore')）
+## 1. nodeStore —— 节点数据服务（底层对象；服务名已下线，消费方用 `doc`）
 
 ### 1.1 节点类型注册（registerType / unregisterType）
 
@@ -60,7 +65,7 @@ off()   // 取消
 
 ---
 
-## 2. edgeStore —— 边数据服务（ctx.get('edgeStore')）
+## 2. edgeStore —— 边数据服务（底层对象；服务名已下线，消费方用 `doc` 的 getEdges/getEdge/removeEdges）
 
 把"边（连线）"的数据/增删/订阅也收进内核，与 nodeStore 同构。
 
@@ -118,7 +123,7 @@ const factory = ctx.get('nodeFactory')
 // 注册 creator（type 重复注册抛错）
 factory.register('text', (pos, extra) => {
   // 内部写默认 data，返回新节点 id
-  return nodeStore.addNode('text', pos)
+  return ctx.get('doc').createNode('text', pos, { /* 初始 data */ })
 })
 
 const id = factory.create('text', { x: 0, y: 0 }, extra)  // 调 creator
@@ -134,26 +139,33 @@ factory.creatableTypes()      // 可创建的 type 列表（菜单枚举用）
 
 ## 4. 三服务如何拿到 / 注入
 
-这些是"内核约定名"服务，**需要宿主在 start 前 `ctx.inject` 注入**（内核不自动注）：
+> ⚠️ **步骤 5c 起，下面这段 `ctx.inject('nodeStore'/'edgeStore')` 已不是现行装配**（老名下线）。
+> 现行装配由 `createCanvasBasePlugin` 负责：它把四个底层实例交给 `doc` 门面，只注入 `doc`
+> （见 `canvas-data/src/canvas/canvasBasePlugin.ts`）。保留下段仅为说明"这几个实例从哪来"。
 
 ```ts
 const ctx = new Context()
 const nodeStore = new NodeStore()
 const edgeStore = new EdgeStore()
 const factory = new NodeFactory()
-ctx.inject('nodeStore', nodeStore)
-ctx.inject('edgeStore', edgeStore)
+ctx.inject('nodeStore', nodeStore)      // 已过时：现行由 canvasBasePlugin 收进 doc 门面
+ctx.inject('edgeStore', edgeStore)      // 已过时：同上
 ctx.inject('nodeFactory', factory)
 await ctx.start()
 ```
 
-插件里 `const ns = ctx.get('nodeStore')` 即可（若声明了 `inject: ['nodeStore']`，则硬依赖，保证就绪后插件才跑）。
+插件里改成 `const doc = ctx.get('doc')`（声明 `inject: ['doc']` 即硬依赖，保证就绪后插件才跑）；
+读节点走 `doc.getNodes()/getNode(id)/childNodesOf(id)/types`，读边走 `doc.getEdges()/getEdge(id)`，
+写节点走 `doc.createNode/addNodes/updateNode/updateNodeData/removeNodes`，写边走 `doc.addEdge/connectEdge/removeEdges`。
+**没有 `addNode`（单数）** —— 建节点用 `createNode(type, position, data?)`（返回 id）或 `addNodes([...])`。
 
 ---
 
 ## 5. 坑与速记
 
-1. `nodeStore`/`edgeStore`/`nodeFactory` 都要宿主手动注入；内核只自动提供 `slots`/`settings`。
+1. 上面的 `ctx.inject('nodeStore', …)` 写法**已过时**（步骤 5c 起这四个老名下线）：`canvasBasePlugin`
+   会在装配时把 `nodeStore/edgeStore/graph/history` 四个实例交给 `doc` 门面并 `ctx.inject('doc', …)`。
+   消费方只认 `doc`（含 `nodeFactory` 等仍是正常服务名）。
 2. **addNode 前必须 registerType**，否则抛错；edgeStore.addEdge 会自动生成 `e-<s>-<t>` 稳定 id 并去重。
 3. 删节点后记得 `edgeStore.removeEdgesOfNode`；整体替换后想清悬挂边用 `pruneDanglingEdges`。
 4. 节点 id 是短数字自增；`replaceAll` 重建计数器防撞。边 id 靠 source/target 生成。

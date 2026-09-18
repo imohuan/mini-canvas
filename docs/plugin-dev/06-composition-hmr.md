@@ -12,58 +12,65 @@
 
 ## manager：装 / 卸 / 换版本 / 列清单
 
-demo 已把 manager 挂到 `window.MiniCanvasManager`。最常用四个动作：
+控制台里直接用 `window.MiniCanvasUI`（`packages/ui` 挂的宿主 API）就能装卸与诊断；
+更全的 `manager`（同 id 自动覆盖、外部来源、`applyManifest`）是宿主侧句柄（见下一节）：
 
 ```js
-// 1. 装一个插件（源码模块/对象都行）——已装同名会先卸旧再装新(=换版本)
-window.MiniCanvasManager.install({ name: 'hello', inject: [], apply(ctx) { /* … */ } })
+// 1. 装一个插件（对象/Service 类；同名已装会抛错，想覆盖用第 3 条）
+window.MiniCanvasUI.installPlugin({ name: 'hello', inject: [], apply(ctx) { /* … */ } })
 
 // 2. 卸一个插件——副作用/注册/UI 自动回收(第 2 篇的 effect 回卷)
-window.MiniCanvasManager.uninstall('hello')
+window.MiniCanvasUI.uninstallPlugin('hello')
 
 // 3. 换版本——卸旧装新(用新实现覆盖同名)
-window.MiniCanvasManager.reload('hello', { name: 'hello', inject: [], apply(ctx) { /* 新实现 */ } })
+window.MiniCanvasUI.reloadPlugin('hello', { name: 'hello', inject: [], apply(ctx) { /* 新实现 */ } })
 
 // 4. 看装了什么 + 每插件状态
-console.table(window.MiniCanvasManager.list())   // name / state / missingDeps / error
+console.table(window.MiniCanvasUI.inspectPlugins())   // name / state / missingDeps / error / core
 ```
 
-> 想让插件"装完能一路被操作到"？demo 画布左下角那块 **「插件管理器」** 面板就是 list() 的 UI：
-> 每行列插件名 + fiber 状态徽标（ACTIVE 绿 / PENDING 黄附缺谁 / FAILED 红附报错），
-> 每行带"卸"按钮，底部还有"重载 theme-default(换版本)"——跑 demo 点两下就能看到热卸/换版本的真效果。
+> `manager` 是宿主侧的统一安装句柄（`PluginManager`）：比上面四个多出"同 id 后装覆盖先装"、
+> 从 URL / 单文件文本装、`diagnose()` 只列非 ACTIVE、以及 `applyManifest`。装卸都会 `await`。
 
 ## 装配清单 manifest：让别的画布"照单全装"
 
 真正要分发的是**一份清单**，而不是一个个手动 install。仓库里
-`packages/canvas-core-v2/demo-web/baseManifest.ts` 就是真样板——它声明装 3 个生产插件，按序装：
+`packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 就是真样板——`<CanvasHost :plugins="APP_PLUGINS">`
+的数组顺序即装载顺序：
 
 ```ts
-// baseManifest.ts (真实现)
+// packages/ui/src/assembly.ts (真实现，节选)
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import type { PluginManifest } from '@mini-canvas/canvas-render'
 
-export const baseManifest: PluginManifest = {
-  plugins: [
-    { id: 'theme-default', source: themeDefaultPlugin },   // 主题(提供 nodeShell/edge/background)
-    { id: 'node-text',     source: nodeTextPlugin },        // text 节点 + text 服务
-    { id: 'node-image',    source: nodeImagePlugin },       // image 节点 + image 服务
-    // 想覆写某插件默认 config，就在项上加 config(经其 Config schema 校验+补默认)：
-    // { id: 'theme-default', source: themeDefaultPlugin, config: { edgeColor: '#16a34a', edgeLineWidth: 3 } },
-  ],
-}
+/** 数组顺序即装载顺序 */
+export const APP_PLUGINS = [
+  themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板
+  nodeTextPlugin,     // text 节点 + text 服务
+  nodeImagePlugin,    // image 节点 + image 服务
+  // …另有 18 个源码插件
+]
 ```
 
-另一画布宿主拿到清单，**一行装完**：
+想让"装哪些、每插件什么 config"由**数据清单**声明（而不是写在源码数组里），用 `manager` 的
+`PluginManifest`——每项 `{ id, source, config?, disabled?, group? }`，`config` 经插件的
+`Config` schema 校验 + 补默认后传给 `apply(ctx, config)`：
 
 ```ts
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { baseManifest } from './baseManifest'
+import { createMiniCanvasHost, type PluginManifest } from '@mini-canvas/canvas-render'
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 
-const { manager } = await createMiniCanvasHost()
-const installed = await manager.applyManifest(baseManifest)
-console.log('已装:', installed)   // ['theme-default','node-text','node-image','canvas-commands']
+const manifest: PluginManifest = {
+  plugins: [
+    // 想覆写某插件默认 config，就在项上加 config(经其 Config schema 校验+补默认)
+    { id: 'theme-default', source: themeDefaultPlugin, config: { edgeColor: '#16a34a' } },
+  ],
+}
+
+const { manager } = await createMiniCanvasHost({ manifest })
+const installed = await manager.applyManifest(manifest)
+console.log('已装:', installed)   // ['theme-default', …]
 ```
 
 ### manifest 的 id 与"同 id 覆盖"
@@ -74,18 +81,22 @@ console.log('已装:', installed)   // ['theme-default','node-text','node-image'
 
 > 想只装其中几个 / 换顺序 / 覆盖成自己版本？把 `plugins` 数组改成你那份就行——这就是"分层"。
 
-### 单文件插件 / 远程 URL 也能装
+### 单文件插件 / 远程 URL 也能装（走 manager）
 
-manager 不只收内存里的模块，还能从**外部来源**装：
+`manager.install(source)` 不只收内存里的模块，还能从**外部来源**装（`installPlugin` 只收模块，
+所以这两条要走 `manager`）：
 
-```js
+```ts
 // 一段单文件插件文本(ESM，导出 name/apply 即可)
-window.MiniCanvasManager.install({
+await manager.install({
   text: "export const name='ext'; export function apply(ctx){ ctx.slots.register('overlay', { id:'ext', order:9, component:{ /* … */ } }) }",
 })
 // 或远程 URL(浏览器会 fetch 下来再执行)
-window.MiniCanvasManager.install({ url: 'https://…/my-plugin.js' })
+await manager.install({ url: 'https://…/my-plugin.js' })
 ```
+
+`manager` 从哪来：宿主代码里 `createPluginManager(ctx)`，或在 `<CanvasHost>` 组件 ref 上取
+`.manager`（`packages/ui/src/App.vue` 装外部插件就是这么用的）。
 
 （这就是"把插件打包成可分发的东西装进任意画布"——它只要满足 `{ name, apply }` 形态就能装。）
 
@@ -113,34 +124,34 @@ window.MiniCanvasManager.install({ url: 'https://…/my-plugin.js' })
 怎么查？看 fiber 状态 + `missingDeps`（告诉你缺哪个依赖）：
 
 ```js
-// ① 一眼看全部：谁 ACTIVE、谁 PENDING(缺谁)、谁 FAILED(报啥错)
-console.table(window.MiniCanvasManager.list())
+// ① 内核只读诊断，字段最全：谁 ACTIVE、谁 PENDING(缺谁)、谁 FAILED(报啥错)
+console.table(window.MiniCanvasUI.getContext().inspectPlugins())
 
-// ② manager.diagnose() 只列"非 ACTIVE"的(卡 PENDING / FAILED)——专门找问题
-console.table(window.MiniCanvasManager.diagnose())
+// ② 同上（宿主 API 直出）
+console.table(window.MiniCanvasUI.inspectPlugins())
 
-// ③ 内核只读诊断，字段最全
-console.table(window.MiniCanvas.getContext().inspectPlugins())
+// ③ manager.diagnose() 只列"非 ACTIVE"的(卡 PENDING / FAILED)——宿主代码里用（见下）
+//    console.table(manager.diagnose())
 ```
 
 造一个"卡 PENDING"给你看（第 3 篇那个例子）：装一个 `inject:['greeter']` 的插件，但没人提供
 `greeter` 服务——它不报错也不跑 `apply`，安静卡住：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'needs-greeter',
   inject: ['greeter'],          // 没人提供 greeter → 卡 PENDING
   apply(ctx) { console.log('[needs-greeter] 这条不会打印') },
 })
 // 诊断：看它到底缺谁
-console.table(window.MiniCanvasManager.diagnose())
+console.table(window.MiniCanvasUI.inspectPlugins())
 // → needs-greeter  state: pending  missingDeps: ['greeter']
 ```
 
 然后把提供方补上，它会**自动从 PENDING 变 ACTIVE** 重跑 `apply`：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'greeter-provider',
   inject: [],
   apply(ctx) { ctx.provide('greeter', { greet: (w) => `Hi ${w}` }) },
@@ -149,7 +160,7 @@ window.MiniCanvasManager.install({
 ```
 
 > **诊断纪律**：插件既不干活也不报错时，第一件事查它的 fiber 状态——
-> 卡 PENDING = 缺依赖（看 missingDeps），FAILED = 看 error 报错。demo 左下角面板把这两样都标出来了。
+> 卡 PENDING = 缺依赖（看 missingDeps），FAILED = 看 error 报错。
 
 ## 这背后发生了什么（一句话）
 

@@ -637,7 +637,10 @@ export class Context implements PluginScope {
     // 服务到位：唤醒依赖它而 PENDING 的插件（running 且非 drain 中才有意义）
     this.wakePending()
     return () => {
-      if (this.services.get(name) === impl) this.services.delete(name)
+      if (this.services.get(name) === impl) {
+        this.services.delete(name)
+        this.serviceSources.delete(name) // 与插件路径对称：撤销时 source 也清（审查 B4）
+      }
     }
   }
 
@@ -757,7 +760,15 @@ export class Context implements PluginScope {
       for (const key of commandTable.keys()) {
         for (const e of commandTable.list(key)) {
           const raw = e.value as { def?: unknown; id?: unknown } | undefined;
-          const def = (raw?.def ?? raw) as { id?: string } | undefined;
+          const def = (raw?.def ?? raw) as { id?: string; title?: string } | undefined;
+          if (!def?.id) {
+            // 自省 API 最忌静默漏报（"少了什么"正是它要回答的）：形状不认识时响亮提示，
+            // 但仍把这条以最小形状列出来，别让调用方以为场上没有它（严格审查 B3）。
+            console.warn(`[surface] command 场条目形状不认识（期望 { def } 或 CommandDef），已按最小形状列出: ${key}`);
+            commands.push({ id: key, source: e.source, origin: 'field' });
+            seenCommandIds.add(key);
+            continue;
+          }
           pushCommand(def as never, e.source, 'field');
         }
       }
@@ -812,7 +823,7 @@ export class Context implements PluginScope {
         for (const e of toolTable.list(key)) {
           const spec = e.value as { description?: string; parameters?: unknown; output?: { schema?: unknown } } | undefined;
           if (!spec) continue;
-          modelTools.push({ name: key, description: spec.description ?? '', parameters: spec.parameters ?? {}, outputSchema: spec.output?.schema ?? {}, source: e.source });
+          modelTools.push({ name: key, description: spec.description ?? '', parameters: spec.parameters ?? {}, ...(spec.output?.schema !== undefined ? { outputSchema: spec.output.schema } : {}), source: e.source });
         }
       }
     }

@@ -13,7 +13,7 @@
 
 ## 先看仓库里"生产级"的端到端插件长啥样
 
-- `plugin-node-text`：节点（`ctx.nodes.register`，带 `content: TextContent.vue` + `create`）+
+- `plugin-node-text`：节点（`ctx.nodes.register`，带 `in: TextContent.vue` + `create`）+
   服务（`ctx.inject('text', …)`）。节点内容组件用 `ctx.get('text')` 调服务写回并落盘。
 - `plugin-theme-default`：`Config` schema（第 5 篇）+ 顶替三块主题皮（`nodeShell/edge/background`）。
 - `plugin-mini-map`：一条命令（`mod+m` 切换显隐）+ 一个 overlay 槽浮层 + 一项服务，`ctx.get` 用宿主服务。
@@ -22,16 +22,16 @@
 
 ## 写一个端到端画布插件：便签节点
 
-新建 `packages/canvas-core-v2/demo-web/stickerPlugin.ts`，**照抄成这段**。
+新建 `packages/ui/src/stickerPlugin.ts`，**照抄成这段**。
 它同时做到：注册一种节点（有长相、能建）+ 一个 Config + 一项服务 + 一条命令。
 
 ```ts
 import { defineComponent, h, type PropType } from 'vue'
 import type { Context, ConfigSchema } from '@mini-canvas/canvas-base'
-import type { NodeStoreService } from '@mini-canvas/canvas-core-v2'
+import type { DocService } from '@mini-canvas/canvas-data'
 
 export const name = 'sticker'
-export const inject = [] as string[]
+export const inject = ['doc'] as string[]      // 用节点数据就走 doc 门面，声明硬依赖
 
 /** 可配置项：便签的默认文案 */
 export const Config: ConfigSchema = {
@@ -43,10 +43,10 @@ export const Config: ConfigSchema = {
 export interface StickerConfig { placeholder: string; sticky: boolean }
 
 export function apply(ctx: Context, config: StickerConfig) {
-  const nodeStore = ctx.get<NodeStoreService>('nodeStore') // 宿主上架的节点数据服务
+  const doc = ctx.get<DocService>('doc') // 宿主上架的文档门面：节点 + 边 + 事务/撤销
 
-  // ① 注册节点：数据(type/label/尺寸) + 展示(content) + 建节点(create)
-  //     content 用 defineComponent+h 内联(不必另开 .vue)；节点组件会收到 { id, data } props
+  // ① 注册节点：数据(type/label/尺寸) + 展示(in 区域) + 建节点(create)
+  //     in 组件用 defineComponent+h 内联(不必另开 .vue)；节点组件会收到 { id, data } props
   const StickerContent = defineComponent({
     props: {
       id: String,
@@ -68,18 +68,17 @@ export function apply(ctx: Context, config: StickerConfig) {
     type: 'sticker',
     label: '便签',
     size: { w: 180, h: 100 },
-    content: StickerContent,
+    in: StickerContent,          // 区域词 in = 卡片内部；老字段 content 已下线（改用它是报错）
     create(position) {
-      const id = nodeStore.addNode('sticker', position)
-      nodeStore.updateNodeData(id, { text: config?.placeholder ?? '便签' })
-      return id
+      // createNode(type, position, data) 直接返回 id（建节点 + 写初始 data 一条历史）
+      return doc.createNode('sticker', position, { text: config?.placeholder ?? '便签' })
     },
   })
 
   // ② 上服务：给节点内容/别的插件用（第 3 篇）；放个便签=调 addSticker
   ctx.inject('sticker', {
     addSticker: (position: { x: number; y: number }): string =>
-      nodeStore.addNode('sticker', position),
+      doc.createNode('sticker', position, { text: config?.placeholder ?? '便签' }),
   })
 
   // ③ 加命令：一键放一个便签（第 1/4 篇的 ctx.commands.register）
@@ -87,8 +86,8 @@ export function apply(ctx: Context, config: StickerConfig) {
     id: 'sticker:add',
     title: '加一个便签',
     run() {
-      const count = nodeStore.getNodes().length
-      nodeStore.addNode('sticker', { x: 60 + count * 40, y: 60 + count * 40 })
+      const count = doc.getNodes().length
+      doc.createNode('sticker', { x: 60 + count * 40, y: 60 + count * 40 }, { text: config?.placeholder ?? '便签' })
     },
   })
 }
@@ -99,12 +98,13 @@ export const stickerPlugin = { name, inject, Config, apply }
 
 ## 把它装进画布宿主，端到端看效果
 
-打开 demo 装配文件 `packages/canvas-core-v2/demo-web/CanvasDemo.vue`，import 并加进 `plugins` 数组：
+打开成品应用的装配清单 `packages/ui/src/assembly.ts`，import 并加进 `APP_PLUGINS` 数组
+（`packages/ui` 就是能跑的真宿主，命令 `pnpm -C packages/ui dev`，浏览器开 :5288）：
 
 ```ts
 import { stickerPlugin } from './stickerPlugin'      // ← 加这行
 // …
-const plugins: PluginModule[] = [
+export const APP_PLUGINS = [
   stickerPlugin,        // ← 加进数组（放 theme-default 之后即可，顺序无所谓）
   themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin,
 ]
@@ -116,7 +116,7 @@ const plugins: PluginModule[] = [
 （经 nodeFactory 走到我们注册的 `create`），浏览器控制台跑：
 
 ```js
-window.MiniCanvas.getHost().command.execute('command:create-node', { type: 'sticker', position: { x: 220, y: 220 } })
+window.MiniCanvasUI.getHost().command.execute('command:create-node', { type: 'sticker', position: { x: 220, y: 220 } })
 ```
 
 画布上立刻多出一张黄底"便签"节点——能拖动、能和别节点连边，行为与 text/image 一致。
@@ -127,7 +127,7 @@ window.MiniCanvas.getHost().command.execute('command:create-node', { type: 'stic
 控制台改便签开关，观察已放便签的长相跟着变：
 
 ```js
-const store = window.MiniCanvas.getContext().get('settings')
+const store = window.MiniCanvasUI.getContext().get('settings')
 store.set('sticky', false)   // 便签由黄变橙(橙调) —— 走 settings 单一数据源
 store.get('placeholder')     // 读当前值
 ```
@@ -141,7 +141,7 @@ store.get('placeholder')     // 读当前值
 ## 你能从这套组合读懂整仓库
 
 `packages/plugins/plugin-node-text`、`plugin-node-image` 就是比上面"便签"更完整的同类：
-它们额外用 .vue 做更精致的 content、把编辑写回 + 落盘也做掉。你现在已经能读懂它们的
+它们额外用 .vue 做更精致的 `in` 区域组件、把编辑写回 + 落盘也做掉。你现在已经能读懂它们的
 `name / inject / Config / apply` 四件套和内部对 `ctx` 的使用——mini-canvas 的插件系统，
 你掌握的这套写法就是全部了。
 
@@ -154,8 +154,9 @@ store.get('placeholder')     // 读当前值
 
 - **想把自己的插件装进任意宿主**：用第 6 篇的 `manager`/manifest —— 只要你的文件满足
   `{ name, inject?, Config?, apply }` 就能被 `manager.install` 或 `applyManifest` 装进任何画布。
-- **看真实可复用样板**：`packages/plugins/` 下 text / image / theme-default / commands 四个包。
-- **想给节点做精致 UI**：用 .vue 写 content，参照 `plugin-node-text/src/TextContent.vue`；
-  节点组件会收到 `{ id, data }` props，需要调服务就 `inject(HOST_KEY)` 后 `host.ctx.get('…')`。
+- **看真实可复用样板**：`packages/plugins/` 下 text / image / theme-default / mini-map 等包。
+- **想给节点做精致 UI**：用 .vue 写 `in` 区域组件，参照 `plugin-node-text/src/TextContent.vue`；
+  节点组件会收到 `{ id, data }` props，需要调服务就 `inject(HOST_KEY)` 后 `host.value.ctx.get('…')`
+  （新组件用 `useCanvasRender().ctx`，见 `docs/代码开发/canvas-render/05-*`）。
 
 祝你写出自己的画布插件 🎉。

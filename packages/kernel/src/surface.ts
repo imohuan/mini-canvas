@@ -5,7 +5,18 @@
  * 「往里放」的 API，但「往里放了哪些、我能调哪些、参数长什么样」此前要翻源码才知道。
  * `ctx.surface()` 把三根轴一次性读出来，供诊断面板 / 文档生成 / AI 探查使用。
  * 只读、零副作用：不注册任何东西、不触发事件，随时可调（created/started 皆可）。
+ *
+ * 类型策略：能复用既有导出类型就复用（ToolParamDef / ToolParamOption / ContextState），
+ * 不把字面量联合退化成 string —— 那会让自省结果失去编译期价值（严格审查 B2）。
  */
+import type { ContextState } from './Context'
+import type { ToolParamDef } from './toolRegistry'
+
+/** 自省报告里的参数形状 = ToolParamDef 去掉不透明句柄后的可读投影 */
+export type ToolParamSurface = Omit<ToolParamDef, 'component' | 'componentProps'> & {
+  /** 该参数是否自带自定义渲染组件（句柄本身 opaque，不外泄） */
+  hasCustomComponent?: boolean
+}
 /** 服务条目：一个按名可取的能手 */
 export interface ServiceSurface {
   name: string
@@ -66,22 +77,8 @@ export interface ToolSurface {
   group?: string
   produces?: string
   accepts?: string[]
-  /** 声明式参数（UI 自动渲染下拉/开关用）；字段与 ToolParamDef 对齐 */
-  params?: Array<{
-    key: string
-    label?: string
-    description?: string
-    type?: string
-    options?: Array<{ label: string; value: string }>
-    default?: string | number | boolean
-    min?: number
-    max?: number
-    step?: number
-    placeholder?: string
-    span?: number
-    /** 该参数是否自带自定义渲染组件（句柄本身 opaque，不外泄） */
-    hasCustomComponent?: boolean
-  }>
+  /** 声明式参数（UI 自动渲染下拉/开关用）；形状直接复用 ToolParamDef，不手抄字段 */
+  params?: ToolParamSurface[]
   /** 预设提示词模板（含正文与适用范围） */
   templates?: Array<{ id: string; name: string; prompt: string; description?: string; forTools?: string[] }>
 }
@@ -91,13 +88,14 @@ export interface ModelToolSurface {
   name: string
   description: string
   parameters: unknown
-  outputSchema: unknown
+  /** 产物 schema；工具未声明 output 时为 undefined（不用 {} 冒充 —— 审查 B2） */
+  outputSchema?: unknown
   source: string
 }
 
 /** 一次 surface() 的完整快照 */
 export interface SurfaceReport {
-  state: string
+  state: ContextState
   services: ServiceSurface[]
   registries: RegistryKindSurface[]
   registryEntries: RegistryEntrySurface[]

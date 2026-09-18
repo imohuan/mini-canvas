@@ -168,6 +168,7 @@ const surf = await page.evaluate(() => {
   return {
     services: s.services.map((x) => x.name),
     docSource: (s.services.find((x) => x.name === 'doc') || {}).source,
+    docMethods: (s.services.find((x) => x.name === 'doc') || {}).methods || [],
     kinds: s.registries.map((r) => r.kind),
     commandCount: s.commands.length,
     commandIdsOk: s.commands.every((c) => typeof c.id === 'string'),
@@ -177,6 +178,7 @@ const surf = await page.evaluate(() => {
   };
 });
 check('surface().services 列出 doc 等服务且带 source（谁注入的）', surf.services.includes('doc') && typeof surf.docSource === 'string', 'services=' + surf.services.length + ', doc.source=' + surf.docSource);
+check('surface().services 带方法清单（用户要的"支持哪些函数"）', ['getNodes', 'createNode', 'removeNodes', 'transaction'].every((m) => surf.docMethods.includes(m)), 'doc.methods=' + surf.docMethods.length + ' 个');
 check('surface().registries 覆盖 node/region、command 等场', ['node/region', 'command'].every((k) => surf.kinds.includes(k)), 'kinds=' + surf.kinds.join(','));
 check('surface().commands 列出已注册命令（含 id/keys/areas）', surf.commandCount > 0 && surf.commandIdsOk, surf.commandCount + ' 条');
 check('surface().tools 列出生成工具且 params 形状合法', surf.toolCount > 0 && surf.toolParamsOk, surf.toolCount + ' 个');

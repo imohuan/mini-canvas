@@ -22,7 +22,7 @@
 import type { Context } from '@mini-canvas/canvas-base'
 
 export const name = 'mini-map'                    // 插件唯一名
-export const inject = ['nodeStore', 'nodeLayout', 'viewport'] as string[]  // 依赖的服务
+export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]  // 依赖的服务
 
 export function apply(ctx: Context) {
   // ctx.commands.register 注册一条命令；注册随插件卸载自动回收
@@ -43,7 +43,8 @@ export function apply(ctx: Context) {
 
 ### 第 2 步：你自己写一个最小插件（只加一条命令）
 
-新建 `packages/canvas-core-v2/demo-web/helloPlugin.ts`，照抄成这段
+新建 `packages/ui/src/helloPlugin.ts`，照抄成这段（先把 `@mini-canvas/canvas-base` 加进该包依赖，
+或把文件放进 `packages/plugins/` 下的插件包——见入口《index》"先备好环境"）
 （和上面的真实插件同一个写法，只是命令更简单）：
 
 ```ts
@@ -70,24 +71,23 @@ export const helloPlugin = { name, inject, apply }
 
 ### 第 3 步：把它装进宿主（两种方式任选其一）
 
-**方式 A · 冷启动装配进 demo**（推荐，最直观）：打开 demo 装配文件
-`packages/canvas-core-v2/demo-web/CanvasDemo.vue`，在顶部 import 你的插件，
-并把它加进 `plugins` 数组开头：
+**方式 A · 冷启动装配进宿主**（推荐，最直观）：打开成品应用的装配清单
+`packages/ui/src/assembly.ts`，在顶部 import 你的插件，并把它加进 `APP_PLUGINS` 数组开头：
 
 ```ts
 import { helloPlugin } from './helloPlugin'          // ← 加这行
 // …
-const plugins: PluginModule[] = [
+export const APP_PLUGINS = [
   helloPlugin,            // ← 加进数组开头
   themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin,
 ]
 ```
 
-**方式 B · 运行中热装**：demo 已经把统一安装句柄挂到了 `window.MiniCanvasManager`，
-不用改任何源文件，直接开浏览器控制台粘贴（源码 / 控制台都能 `ctx`，效果一样）：
+**方式 B · 运行中热装**：`packages/ui` 把宿主 API 挂到了 **`window.MiniCanvasUI`**，
+不用改任何源文件，直接开浏览器控制台粘贴：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'hello',
   inject: [],
   apply(ctx) {
@@ -100,6 +100,8 @@ window.MiniCanvasManager.install({
 })
 ```
 
+> `window.MiniCanvasUI` 的 API 面：`installPlugin(模块, 配置?)` / `uninstallPlugin(名)` /
+> `reloadPlugin(名, 新模块?)` / `listPlugins()` / `inspectPlugins()` / `getContext()` / `getHost()`。
 > 想用 `.ts` 新建文件 + 方式 A 那种"改装配数组"的正式做法，就按第 2 步写文件、第 3 步方式 A 装配。
 > 想最快看到"热装"效果就方式 B。两条路结果一样：命令被注册、可被工具栏执行。
 
@@ -107,9 +109,9 @@ window.MiniCanvasManager.install({
 
 - 方式 A：保存后 vite 热更自动刷新，hello 插件随宿主一起装载，控制台无报错。
 - 方式 B：粘贴回车即装好，插件**没刷新页面**就生效了（热装）。
-- 想验证命令真在？模仿 demo 工具栏那样执行它：控制台
-  `window.MiniCanvas.getHost().command.execute('hello.say')`（demo 把宿主 API 挂到了 `window.MiniCanvas`），
-  或读 `ctx.commands.has('hello.say')` 看是否已注册。
+- 想验证命令真在？模仿宿主工具栏那样执行它：控制台
+  `window.MiniCanvasUI.getHost().command.execute('hello.say')`，或
+  `window.MiniCanvasUI.getContext().commands.has('hello.say')` 看是否已注册。
 
 ## 这背后发生了什么（一句话）
 
@@ -150,7 +152,7 @@ cordis 教程 03 里，`Service` 子类**本身就是一种插件形态**，可�
 ```ts
 import { Service, type Context } from '@mini-canvas/canvas-base'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context { greeter: GreeterService }   // 可选：给 ctx.greeter 补类型(声明合并)
 }
 

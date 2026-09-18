@@ -162,4 +162,46 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     expect(s.commands.some((c) => c.id === 'command:undo')).toBe(true);
     ctx.stop()
   })
+
+  it('params 逐字段透传、无虚构 required 字段、options 是副本（审查 B/C4）', async () => {
+    const ctx = new Context()
+    const opts = [{ label: '1:1', value: '1:1' }];
+    ctx.plugin(
+      mk('gen', (c) => {
+        c.tools.register({
+          name: 'gen.image',
+          produces: 'image',
+          params: [
+            {
+              key: 'ratio',
+              label: '比例',
+              description: '画幅比例',
+              type: 'select',
+              options: opts,
+              default: '1:1',
+              span: 2,
+            },
+            { key: 'seed', type: 'number', min: 0, max: 100, step: 1, placeholder: '随机' },
+          ],
+          templates: [{ id: 'hd', name: '高清', prompt: '高清写实', description: '写实风', forTools: ['gen.image'] }],
+          run: () => ({ ok: true }),
+        })
+      }),
+    )
+    await ctx.start()
+    const t = ctx.surface().tools.find((x) => x.name === 'gen.image')!;
+    const p0 = t.params![0];
+    expect(p0.label).toBe('比例');
+    expect(p0.description).toBe('画幅比例');
+    expect(p0.default).toBe('1:1');
+    expect(p0.span).toBe(2);
+    expect('required' in p0).toBe(false); // 虚构字段已删
+    expect(t.params![1].min).toBe(0);
+    expect(t.params![1].placeholder).toBe('随机');
+    expect(t.templates![0].prompt).toBe('高清写实');
+    // 副本：往快照里 push 不该污染注册表里的原始声明
+    p0.options!.push({ label: 'X', value: 'x' });
+    expect(opts).toHaveLength(1);
+    ctx.stop()
+  })
 })

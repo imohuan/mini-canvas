@@ -5,8 +5,8 @@
 
 ## 一句话
 
-画布里的东西大多是**服务**：`nodeStore`（节点数据）、`save`（落盘）、`command`（命令）、
-`themeRegistry`…都是宿主上架的、插件能 `ctx.get('nodeStore')` 取到并消费的具名能力。
+画布里的东西大多是**服务**：`doc`（节点 + 边 + 事务/撤销，一个门面）、`save`（落盘）、`command`（命令）、
+`themeRegistry`…都是宿主上架的、插件能 `ctx.get('doc')` 取到并消费的具名能力。
 你也可以**自己上一项服务**给别人用。服务分两种依赖：
 
 - **硬依赖**：`export const inject = ['某服务']` —— 缺提供方时你的插件停在 **PENDING**，到齐自动激活。
@@ -40,11 +40,11 @@ export function apply(ctx: Context) {
 你现在想写一个插件，它在装载后**自动往画布放一个文本节点**——它需要 text 节点插件提供的
 `text` 服务。用 `inject` 声明，内核会保证：**等服务到齐了才跑你的 `apply`**。
 
-在浏览器控制台热装（demo 已装好 text/image 插件，服务都在）：
+在浏览器控制台热装（`packages/ui` 已装好 text/image 插件，服务都在）：
 
 ```js
 // 消费者：声明硬依赖 'text'（= node-text 插件提供的服务）
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'auto-text',
   inject: ['text'],                 // ← 硬依赖：text 服务不在就停 PENDING，等它
   apply(ctx) {
@@ -60,14 +60,14 @@ window.MiniCanvasManager.install({
 
 - 粘贴回车后，画布上**多出一个文本节点**（300,300 附近）——这是你插件借 `text` 服务放上去的，
   节点能双击编辑、和手动点出来的完全一样。
-- `window.MiniCanvasManager.list()` 里 `auto-text` 显示 **ACTIVE**。
+- `window.MiniCanvasUI.inspectPlugins()` 里 `auto-text` 显示 **ACTIVE**。
 
 ## 缺提供方时：停在 PENDING（这就是诊断常客）
 
 把依赖名改成仓库里**没人提供**的服务，比如 `'greeter'`，再看会发生什么：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'auto-text',
   inject: ['greeter'],               // 没人提供 greeter 服务
   apply(ctx) {
@@ -77,7 +77,8 @@ window.MiniCanvasManager.install({
 ```
 
 - 这次画布**什么都没发生**，也没报错——因为 `apply` 压根没被调用。
-- `manager.list()`（或左下角面板）里 `auto-text` 显示 **PENDING 缺: greeter**。
+- `window.MiniCanvasUI.inspectPlugins()` 里 `auto-text` 显示 **PENDING** +
+  `missingDeps: ['greeter']`。
 - PENDING 不是错误，是合法状态：提供方可能稍后才装。**"某插件没输出？先查它的 fiber 状态是不是 PENDING"**
   就是第 6 篇要教的诊断习惯。
 
@@ -87,7 +88,7 @@ window.MiniCanvasManager.install({
 
 ```js
 // 提供方：上架 greeter 服务（ctx.provide 与 ctx.inject 同义）
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'greeter',
   inject: [],
   apply(ctx) {
@@ -108,7 +109,7 @@ window.MiniCanvasManager.install({
 服务依赖是**运行期持续跟踪**的，不是一次性启动检查。把 `greeter` 卸掉：
 
 ```js
-window.MiniCanvasManager.uninstall('greeter')
+window.MiniCanvasUI.uninstallPlugin('greeter')
 ```
 
 - 因为 `greeter` 提供的服务消失了，依赖它的 `auto-text` 会**回收自己的副作用并回退 PENDING**；
@@ -120,12 +121,12 @@ window.MiniCanvasManager.uninstall('greeter')
 
 对象 `ctx.provide('greeter', {...})` 最省事；想表达"这是一项正式能力"时，可以用 **Service 子类**。
 它和对象形式等价，只是把实现收进类里（`super(ctx, name)` 构造时就把实例上架了）。
-仓库里还没有这种插件，写一个给你当样板（放 `demo-web/` 或独立包都行）：
+仓库里还没有这种插件，写一个给你当样板（放 `packages/ui/src/` 或独立插件包都行）：
 
 ```ts
 import { Service, type Context } from '@mini-canvas/canvas-base'
 
-declare module '@mini-canvas/canvas-base' {
+declare module '@mini-canvas/kernel' {
   interface PluginScope { greeter: GreeterService }   // 可选：给 ctx.greeter 补类型(声明合并)
 }
 
@@ -165,7 +166,7 @@ export class GreeterService extends Service {
 
 ```ts
 import type { Context } from '@mini-canvas/canvas-base'
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context { greeter: GreeterService }   // 给 ctx.greeter 补类型(声明合并)
 }
 export const name = 'consumer'
@@ -195,7 +196,7 @@ export function apply(ctx: Context) {
 }
 ```
 
-内核的服务是扁平命名空间（`nodeStore`/`save`/`text`/`image`/`greeter` 都平铺在一个池子里）。
+内核的服务是扁平命名空间（`doc`/`save`/`text`/`image`/`greeter` 都平铺在一个池子里）。
 给自己的服务起**有辨识度的名字**（如 `node-text` 用 `text`、`node-image` 用 `image`），避免撞名。
 
 ## 这背后发生了什么（一句话）

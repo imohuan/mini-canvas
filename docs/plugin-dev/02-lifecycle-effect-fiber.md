@@ -28,7 +28,7 @@ text 节点——它**没有**写任何注销代码。等 text 插件被卸载�
 
 举个例子，你希望每次插件装载后起一个心跳，每 1 秒往控制台打一拍；插件卸载时把定时器清掉。
 
-新建 `packages/canvas-core-v2/demo-web/heartbeatPlugin.ts`，照抄：
+新建 `packages/ui/src/heartbeatPlugin.ts`，照抄：
 
 ```ts
 import type { Context } from '@mini-canvas/canvas-base'
@@ -60,11 +60,11 @@ export function apply(ctx: Context) {
 export const heartbeatPlugin = { name, inject, apply }
 ```
 
-把它装进 demo 有两条路（同第 1 篇方式 A / B），或直接在控制台热装：
+把它装进宿主有两条路（同第 1 篇方式 A / B），或直接在控制台热装：
 
 ```js
-// 浏览器控制台（demo 已暴露 window.MiniCanvasManager）
-window.MiniCanvasManager.install({
+// 浏览器控制台（packages/ui 已暴露 window.MiniCanvasUI）
+window.MiniCanvasUI.installPlugin({
   name: 'heartbeat',
   inject: [],
   apply(ctx) {
@@ -75,13 +75,13 @@ window.MiniCanvasManager.install({
   },
 })
 // 停掉它（等价于卸载插件 → 上面那个清理函数被调用，timer 被清）
-window.MiniCanvasManager.uninstall('heartbeat')
+window.MiniCanvasUI.uninstallPlugin('heartbeat')
 ```
 
 ## 你会看到
 
 - 装上后每 1 秒打一拍 `[heartbeat] tick`。
-- 执行 `uninstall('heartbeat')` 后：先打 `[heartbeat] 已清理 timer ✓`，然后 **tick 不再出现**——
+- 执行 `uninstallPlugin('heartbeat')` 后：先打 `[heartbeat] 已清理 timer ✓`，然后 **tick 不再出现**——
   证明定时器被自动清掉了，没泄漏。
 
 ## 每个插件身上有个 fiber 句柄
@@ -99,16 +99,15 @@ PENDING → LOADING → ACTIVE → UNLOADING → DISPOSED
 - **UNLOADING / DISPOSED**：清理中 / 一切已拆除。
 
 你一般不用手拿 fiber 去操作它——宿主和工具会替你管。**想查看状态**（尤其"某个插件是不是卡着没起来"），
-demo 已给了现成入口：
+现成入口在控制台：
 
-- 画布左下角那块 **「插件管理器」** 面板，每行显示该插件的 fiber 状态徽标：
-  `ACTIVE`（绿）/ `PENDING 缺: xxx`（黄）/ `FAILED: 报错`（红）。
-- 浏览器控制台 `window.MiniCanvasManager.list()`——每行带 `state` / `missingDeps` / `error`；
-  或 `window.MiniCanvas.getContext().inspectPlugins()` 拿内核只读诊断。
+- `window.MiniCanvasUI.inspectPlugins()` —— 每个已装插件的 fiber 状态（含 `state` /
+  `missingDeps` / `error` / `core`）；`window.MiniCanvasUI.listPlugins()` 只看名字。
+- 也可以拿内核的只读诊断：`window.MiniCanvasUI.getContext().inspectPlugins()`。
 
 ```js
 // 看所有插件的 fiber 状态（谁 ACTIVE、谁 PENDING、谁 FAILED）
-console.table(window.MiniCanvas.getContext().inspectPlugins())
+console.table(window.MiniCanvasUI.getContext().inspectPlugins())
 ```
 
 ## 这背后发生了什么（一句话）

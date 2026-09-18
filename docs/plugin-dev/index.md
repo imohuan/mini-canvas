@@ -43,10 +43,15 @@ export function apply(ctx: Context, config: { /* 已校验、默认补齐 */ }) 
 
 ## 先备好环境
 
-- 画布宿主 demo 跑在 `packages/canvas-core-v2`：命令 `cd packages/canvas-core-v2 && pnpm dev`，
-  浏览器开 **http://localhost:5199**。
-- 你新建的插件文件放哪都行（演示最省事是放到 `packages/canvas-core-v2/demo-web/` 下），
-  关键是把它的导出加进 demo 的装配（第 1 篇教）。
+- 画布应用（真宿主）跑在 `packages/ui`：命令 `pnpm -C packages/ui dev`，浏览器开 **http://localhost:5288**。
+  它把宿主 API 挂到 **`window.MiniCanvasUI`**（`getContext()` 拿 ctx、`getHost()` 拿宿主句柄、
+  `installPlugin/uninstallPlugin/reloadPlugin/listPlugins/inspectPlugins` 装卸与诊断）。
+- 你新建的插件文件放哪都行（演示最省事是放到 `packages/ui/src/` 下），
+  关键是把它的导出加进装配清单 `packages/ui/src/assembly.ts` 的 `APP_PLUGINS`（第 1 篇教）。
+  > 教程示例统一 `import type { Context } from '@mini-canvas/canvas-base'`（作者入口）。
+  > `packages/ui` 默认没装这个包：放进去前先给该包加依赖
+  > （`pnpm -C packages/ui add @mini-canvas/canvas-base`），或把插件文件建在
+  > `packages/plugins/` 下的独立插件包里（那里已依赖 `canvas-base`，见 `packages/plugins/README.md`）。
 - 仓库里已有一批**生产级插件**可当样板直接读：
   `packages/plugins/plugin-node-text`（节点 + 服务）、`plugin-node-image`、
   `plugin-theme-default`（主题 + 配置）、`plugin-mini-map`（命令 + 插槽 UI）。
@@ -57,13 +62,16 @@ export function apply(ctx: Context, config: { /* 已校验、默认补齐 */ }) 
 
 | 想干什么 | 写法 |
 |---|---|
-| 加一种节点（数据+UI） | `ctx.nodes.register({ type, label, size, content, create })` |
+| 加一种节点（数据+UI） | `ctx.nodes.register({ type, label, size, in, create })` |
 | 顶替/叠加一块主题 UI | `ctx.theme.register('nodeShell' \| 'edge' \| ..., MyComponent, { order })` |
 | 加一条命令 | `ctx.commands.register({ id, title, run })` |
 | 往某 UI 槽塞个组件 | `ctx.slots.register('overlay', { id, order, component })` |
+| 往某节点的某个区域挂个组件 | `ctx.nodes.attach(type \| '*', { region, component, order?, needs?, props? })` |
 | 上一项服务给别人用 | `ctx.inject('mySvc', { ... })`（或 `new MyService(ctx)`） |
 | 声明本插件可配置项 | 模块级导出 `Config`（第 5 篇） |
-| 取服务 | `ctx.get('nodeStore')` |
+| 取服务 | `ctx.get('doc')`（节点 + 边 + 事务/撤销一个门面） |
 | 订阅事件 / 收注册 | `ctx.on(name, h)` / `ctx.effect(cleanup)` |
+| 存本插件私有状态（不占服务名） | `const s = ctx.state(0)` → `s.value` |
+| 看"这台画布注册了什么" | `ctx.surface()`（一次列出服务 / 注册场 / 命令 / 工具及其参数，只读） |
 
 组件引用是 opaque 的（.vue 组件直接传进去），作者 import 自己的 .vue 即可，不用管内核。

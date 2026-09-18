@@ -47,14 +47,13 @@ function renderCtx(
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(opts.selectedIds ?? [])
  const services: Record<string, unknown> = {
-   nodeStore: { types: new Map(), getNode: () => undefined },
-    doc: { types: new Map(), getNode: () => undefined },
-   settings: {
+    // 5c 起数据只有 doc 一个名字（nodeStore/graph 老名已下线，不再留死桩）
+    doc: { types: new Map(), getNode: () => undefined, updateNode: () => {} },
+  settings: {
       get: (key: string) => settings[key],
       onChange: () => ({ dispose: () => {} }),
     },
     selection: { ids: selectedIds, has: (id: string) => selectedIds.has(id), onChange: () => () => {} },
-    graph: { updateNode: () => {} },
   }
   return {
     ctx: { get: (name: string) => services[name] },

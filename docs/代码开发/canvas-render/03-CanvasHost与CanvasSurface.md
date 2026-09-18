@@ -78,10 +78,10 @@ c.value.bootErrorText // string
 | 注册 | 谁提供 | 作用 |
 |------|--------|------|
 | `nodeShell`（节点壳组件，如 BaseNode） | theme 插件 `ctx.theme.register('nodeShell', BaseNode)` | 卡片外观、标题、连接 Handle、就地重命名 |
-| 业务 type 注册（数据 + content） | 节点插件 `ctx.nodes.register({ type, size, content })` | nodeStore 有该 type，nodeRegistry 有该 type 的 content 组件 |
-| `nodeTypes` 铺底 | CanvasHost.applyTheme | 把 nodeShell 铺满 nodeStore 里每个已注册 type 作 VueFlow 的 `node-types` |
+| 业务 type 注册（数据 + `in` 区域组件） | 节点插件 `ctx.nodes.register({ type, size, in })` | `doc` 的类型表有该 type，nodeRegistry 有该 type 的 `in` 区域组件 |
+| `nodeTypes` 铺底 | CanvasHost.applyTheme | 把 nodeShell 铺满 `doc` 类型表里每个已注册 type 作 VueFlow 的 `node-types` |
 
-渲染一个节点的链路：VueFlow 见节点 `type:'text'` → 查 `node-types` 找到 BaseNode（nodeShell）→ BaseNode 内 `resolveSegment(registry, type, 'content')` 解析出该 type 的 `TextContent.vue` → `<component :is="content" :id :data">` 渲染。
+渲染一个节点的链路：VueFlow 见节点 `type:'text'` → 查 `node-types` 找到 BaseNode（nodeShell）→ BaseNode 内按区域词 `resolveSegment(registry, type, 'in')` 解析出该 type 的 `TextContent.vue` → `<component :is="content" :id :data">` 渲染。
 
 ---
 
@@ -118,7 +118,8 @@ provide(EDGE_SELECTION_KEY, props.edgeSelection)
 provide(HOST_KEY, shallowRef(host))
 ```
 
-> 关键：`RENDER_CONTEXT_KEY` 里 ctx/host 是**裸值**（非 Ref 非空），渲染组件 setup 里直接 `ctx.get('nodeStore')` 或 `ctx.text.editText(...)`，**零 `.value` 零判空**。这是推荐入口。
+> 关键：`RENDER_CONTEXT_KEY` 里 ctx/host 是**裸值**（非 Ref 非空），渲染组件 setup 里直接 `ctx.get('doc')` 或 `ctx.text.editText(...)`，**零 `.value` 零判空**。这是推荐入口。
+> （`nodeStore` 等四个老服务名已在步骤 5c 下线，改用 `doc`。）
 
 ### 渲染了什么
 

@@ -176,8 +176,8 @@ typeConnectionDef({})                                    // undefined（默认�
 
 ```ts
 // 例子：image 类型的输入口只接 'image' 源、且 single
-// 在注册类型时声明：
-nodeStore.registerType({
+// 在注册类型时声明（现行经 doc 的类型表写口；ctx.nodes.register 已自动落表）：
+ctx.get('doc').registerType({
   type: 'mask', label: '遮罩', defaultSize: { w: 100, h: 100 },
   inputs: [{ port: 'target', accepts: ['image'], limit: 'single' }],
 })

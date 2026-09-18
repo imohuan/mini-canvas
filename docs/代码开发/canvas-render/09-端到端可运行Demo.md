@@ -45,7 +45,7 @@ createApp(App).mount('#app')
 import { ref } from 'vue'
 import { CanvasHost } from '@mini-canvas/canvas-render'
 import type { CanvasHostHandle } from '@mini-canvas/canvas-render' // CanvasHostHandle 由 canvas-render 导出
-import type { CanvasNode } from '@mini-canvas/canvas-core-v2'
+import type { CanvasNode } from '@mini-canvas/canvas-data'
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
@@ -192,33 +192,30 @@ function commit(e: FocusEvent) {
 **4.2 插件逻辑 `notePlugin.ts`**
 ```ts
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SaveService } from '@mini-canvas/canvas-core-v2'
+import type { DocService } from '@mini-canvas/canvas-data'
 import NoteContent from './NoteContent.vue'
 
-declare module '@mini-canvas/canvas-core-v2' {
+declare module '@mini-canvas/canvas-data' {
   interface Context { note: NoteService }
 }
 export class NoteService extends Service {
   constructor(ctx: Context) { super(ctx, 'note') }
+  /** 内部统一走 doc 门面（唯一写入口：进历史 + 调度落盘），不直改 nodeStore/save */
+  private doc(): DocService { return this.ctx.get<DocService>('doc') }
   add(position: { x: number; y: number }): string {
-    const ns = this.ctx.get<NodeStoreService>('nodeStore')
-    const id = ns.addNode('note', position)
-    ns.updateNodeData(id, { text: '新便签' })
-    return id
+    return this.doc().createNode('note', position, { text: '新便签' })
   }
   edit(id: string, text: string): void {
-    const ns = this.ctx.get<NodeStoreService>('nodeStore')
-    this.ctx.get<SaveService>('save').set('graph', ns.getNodes(), 'canvas')
-    ns.updateNodeData(id, { text })
+    this.doc().updateNode(id, { data: { text } })   // 改节点自动进历史 + 调度落盘
   }
 }
 export const name = 'note'
-export const inject = ['nodeStore', 'save'] as string[]
+export const inject = ['doc'] as string[]   // 5c 起 nodeStore 服务名已下线，数据走 doc
 export function apply(ctx: Context) {
   const s = new NoteService(ctx)          // 构造即上架 'note' 服务
   ctx.nodes.register({                    // 数据 + 展示同时注册（自动回收）
     type: 'note', label: '便签', size: { w: 240, h: 160 },
-    content: NoteContent,
+    in: NoteContent,                      // 区域词 in = 卡片内部（老字段 content 已下线，写它是报错）
     create: (pos) => s.add(pos),
   })
 }
@@ -229,7 +226,9 @@ export const notePlugin: PluginModule = { name, inject, apply }
 ```ts
 :plugins="[themeDefaultPlugin, notePlugin, nodeTextPlugin]"
 ```
-节点 type 会出现在 nodeStore 注册表；nodeShell（BaseNode）会把 `NoteContent` 渲染进卡片；建节点可用 `ctx.command.execute('command:create-node', { type:'note', position })` 或直接 `host.ctx.get('note').add(...)`。
+节点 type 会出现在 `doc` 的类型表里（`ctx.get('doc').types`）；nodeShell（BaseNode）会把
+`NoteContent` 渲染进卡片；建节点可用 `ctx.command.execute('command:create-node', { type:'note', position })`
+或直接 `host.ctx.get('note').add(...)`。
 
 ---
 
@@ -239,12 +238,12 @@ CanvasHost 缺省 `adapter` 是内存（刷新即丢）。传 `LocalStorageAdapt
 
 ```ts
 import { CanvasHost } from '@mini-canvas/canvas-render'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-core-v2'
+import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 
 <CanvasHost :plugins="[...]" :adapter="new LocalStorageAdapter()" :seed="seedDefault" />
 ```
 
-> `LocalStorageAdapter` 从内核 `@mini-canvas/canvas-core-v2` 导出（见 services/storage/localStorageAdapter）。存图 key：节点 `graph`、边独立 `graph-edges`（GRAPH_EDGES_KEY），作用域 `canvas`。
+> `LocalStorageAdapter` 从 `@mini-canvas/canvas-data` 导出（见 storage/localStorageAdapter）。存图 key：节点 `graph`、边独立 `graph-edges`（GRAPH_EDGES_KEY），作用域 `canvas`。
 
 ---
 
@@ -275,7 +274,9 @@ const settingsOpen = ref(false)
 ## 常见问题速查
 
 - **画布空白 / 节点无卡片**：多半漏了 VueFlow 两个 css，或 `plugins` 里没 themeDefaultPlugin。
-- **改 data 画布不刷新**：别手动改 nodes 数组；改内核 `nodeStore`（CanvasHost 已订阅自动重灌）。
+- **改 data 画布不刷新**：别手动改 nodes 数组；经 `ctx.get('doc')` 改节点（唯一写入口，CanvasHost 已订阅自动重灌）。
 - **节点没连接 Handle / 没标题**：那是 nodeShell（BaseNode）提供的，确保 theme-default 在最前且被装载。
-- **想要更多节点/边数据操作**：看 `host` 上的 `nodeStore/edgeStore/selection/history/command/nodeFactory`（CanvasHost `@ready` / ref 的 `.host`，或 `createMiniCanvasHost` 返回）。
+- **想要更多节点/边数据操作**：看 `host` 上的 `doc`（节点 + 边 + 事务/撤销一个门面）与
+  `selection/command/nodeFactory`（CanvasHost `@ready` / ref 的 `.host`，或 `createMiniCanvasHost` 返回）。
+  4 个老服务名 `nodeStore/edgeStore/graph/history` **已在步骤 5c 下线**（`ctx.get` 取不到），改用 `doc`。
 - **组件 `useCanvasRender()` 报错"缺少渲染上下文"**：把它放进 CanvasHost 的 `#ui`/内容槽内，别放 CanvasHost 顶层同级。

@@ -1,6 +1,10 @@
 # 选择 selection、历史 history、命令 command 服务
 
 > 来源：packages/canvas-core-v2/src/services/selection.ts、history.ts、command.ts
+>
+> ⚠️ **时效提醒（步骤 5c）**：`history` **已不再是 ctx 服务名**（`ctx.get('history')` 返回 `undefined`）
+> ——撤销/重做并进 **`ctx.get('doc')`** 门面的 `undo/redo/canUndo/canRedo/undoDepth`（一次 undo 覆盖
+> 节点 + 边）。`selection` 与 `command` 仍是正常服务名。历史类底层对象仍在源码里（可单测）。
 
 三类"编辑器状态"服务，都纯逻辑、可单测，需宿主注入。
 
@@ -30,7 +34,7 @@ off()                // 取消
 
 ---
 
-## 2. History —— 撤销 / 重做服务（ctx.get('history')）
+## 2. History —— 撤销 / 重做（底层对象；服务名已下线，消费方用 `doc` 的事务/撤销 API）
 
 最小版"撤销/重做"：对"节点图整体快照"做差异栈。**不依赖具体 nodeStore**——构造时注入一对 `snapshot()/restore(s)` 能力（内存/深拷贝交给调用方），因此可独立单测。
 
@@ -116,15 +120,16 @@ cmd.execute('zoom-in')
 
 ## 4. 如何注入
 
-三者都是"内核约定名"服务，需宿主手动注入：
+三者都是"内核约定名"服务，由基础插件/宿主在装配时注入：
 
 ```ts
 ctx.inject('selection', new Selection())
-ctx.inject('history', new History({ snapshot, restore }))
+ctx.inject('history', new History({ snapshot, restore }))   // 已过时：步骤 5c 起 history 不再是服务名
 ctx.inject('command', new CommandRegistry())
 ```
 
-插件里用 `inject: ['selection','history','command']` 声明硬依赖，或 `ctx.get(...)` 可选探测。
+插件里用 `inject: ['selection','command','doc']` 声明硬依赖（撤销改走 `doc.undo/redo`），
+或 `ctx.get(...)` 可选探测。
 
 ---
 
@@ -135,4 +140,5 @@ ctx.inject('command', new CommandRegistry())
 3. history `undo`/`redo` 内部也会自动把当前态 push 到反方向栈（撤销时把当前态存 redo）。
 4. `Selection.ids` 返回的是内部 Set 的**引用**（`ReadonlySet`），别直接改它——用 `set/add/remove/clear`。
 5. command `execute` 对不满足 when / 未注册命令静默 no-op，不抛。
-6. 都要宿主注入：`selection` / `history` / `command` 不是内核恒在服务。
+6. 装配时注入：`selection` / `command` 仍是正常服务名（`history` 已下线，撤销改走 `doc.undo/redo`）；
+   这仨都不是内核恒在服务（恒在的只有 `slots` / `settings`）。

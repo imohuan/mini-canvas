@@ -26,7 +26,7 @@
 
 ```js
 // 监听内置事件：谁装插件都会在这里被看到
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'plugin-watcher',
   inject: [],
   apply(ctx) {
@@ -51,7 +51,7 @@ watcher 完全不知道 `hello` 是谁，是事件把它们连起来的。
 一个最小自洽例子（发起 + 监听在同一插件里，先看机制；真用是两个插件）：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'event-demo',
   inject: [],
   apply(ctx) {
@@ -81,11 +81,13 @@ cordis 04 教程用 `declare module { interface Events { ... } }` 声明事件�
 ```ts
 import { Service, type Context } from '@mini-canvas/canvas-base'
 
-declare module '@mini-canvas/canvas-core-v2' {
-  interface Context { stats: StatsService }
+declare module '@mini-canvas/kernel' {
   interface Events {
     'stats/report'(name: string, count: number): void   // 事件名 → 监听函数签名(参数即事件参数)
   }
+}
+declare module '@mini-canvas/canvas-data' {
+  interface Context { stats: StatsService }
 }
 
 export class StatsService extends Service {
@@ -123,7 +125,7 @@ export class StatsService extends Service {
 **第一个返回"非空值"（非 `null`/`false`/`undefined`）的就胜出并停止**；返回空值等于"我不认领，放行给下一个"。
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'bail-demo',
   inject: [],
   apply(ctx) {
@@ -150,7 +152,7 @@ window.MiniCanvasManager.install({
 监听器可返回 Promise，`await ctx.serial` 会等第一个给答案的：
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'serial-demo',
   inject: [],
   apply(ctx) {
@@ -179,7 +181,7 @@ waterfall 适合"拦截"。每个监听器收到参数和一个 `next()`；可�
 也可以**不调 next 直接返回**来短路（相当于否决下游）。
 
 ```js
-window.MiniCanvasManager.install({
+window.MiniCanvasUI.installPlugin({
   name: 'waterfall-demo',
   inject: [],
   apply(ctx) {

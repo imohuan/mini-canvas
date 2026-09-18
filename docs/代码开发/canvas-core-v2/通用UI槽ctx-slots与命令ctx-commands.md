@@ -127,13 +127,15 @@ cmd.execute('command:delete')   // 触发删除选中
 
 | ctx 能力段 | 底层服务（ctx.get 名） | 说明 |
 | --- | --- | --- |
-| `nodes.register` | `nodeStore` + `nodeRegistry` | 存节点数据 + 存展示组件 |
+| `nodes.register` | `doc`（类型表写口）+ `nodeRegistry` | 存节点类型数据 + 存展示组件（老名 `nodeStore` 已于 5c 下线） |
 | `theme.register/add/remove` | `themeRegistry` | 主题槽 occupant |
 | `commands.register/has` | `command` | 命令注册表 |
 | `slots.register/remove/occupants` | `slots`（恒在，内核自带） | 通用 UI 槽 |
 | `settings` | `settings`（恒在，内核自带） | 装配配置单一数据源 |
 
-> `slots` 与 `settings` 内核构造时自建，`ctx.get` 恒有；`nodeStore/nodeRegistry/themeRegistry/command/nodeFactory` 等需宿主 `ctx.inject` 注入。
+> `slots` 与 `settings` 内核构造时自建，`ctx.get` 恒有；`doc/nodeRegistry/themeRegistry/command/nodeFactory` 等
+> 由基础插件/宿主 `ctx.inject` 注入。注：`nodeStore/edgeStore/graph/history` 四个老名已在步骤 5c 下线，
+> 数据统一走 `doc`。
 
 ---
 

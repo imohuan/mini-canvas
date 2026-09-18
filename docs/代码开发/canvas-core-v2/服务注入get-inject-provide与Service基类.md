@@ -69,7 +69,12 @@ const slots = ctx.get('slots')      // 永远在（SlotRegistry）
 const settings = ctx.get('settings')  // 永远在（SettingsStore）
 ```
 
-其它内核约定名（nodeStore/nodeRegistry/themeRegistry/command/nodeFactory/edgeStore/selection/history/save…）**需要宿主在装配时用 `ctx.inject` 手动注入**——内核本身不自动注这些。这也解释了为什么前面例子要自己 `ctx.inject('nodeStore', new NodeStore())`。
+其它约定名服务（`doc`/`nodeRegistry`/`themeRegistry`/`command`/`nodeFactory`/`selection`/`save`…）
+**由基础插件（或宿主）在装配时用 `ctx.inject` 注入**——内核本身不自动注这些。
+
+> ⚠️ **步骤 5c 起 `nodeStore`/`edgeStore`/`graph`/`history` 四个老服务名已下线**
+> （`ctx.get` 取不到，返回 `undefined`）；它们合并成 **`doc`** 一个门面。
+> 下图这类 `ctx.inject('nodeStore', new NodeStore())` 是老装配写法，现行由 `canvasBasePlugin` 收编。
 
 ---
 
@@ -166,6 +171,9 @@ ctx.inject('nodeStore', new NodeStore())
 ctx.inject('themeRegistry', new ThemeRegistry())
 await ctx.start()
 ```
+
+> ⚠️ 上面这行 `nodeStore` 已过时：现行装配里数据侧只 `ctx.inject('doc', …)`
+> （门面内部持有 nodeStore/edgeStore/graph/history 四个实例）。
 
 > **区别**：根 `Context.inject` 的撤销由调用方持有并手动执行（**不自动登记清理**）；插件 ctx（PluginScope）的 `inject`/`provide` 撤销**自动挂插件 fiber**。要用插件自动回收，请用插件 ctx 上的那套。
 

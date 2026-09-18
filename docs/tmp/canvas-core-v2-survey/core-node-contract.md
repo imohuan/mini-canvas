@@ -381,7 +381,11 @@ index.ts:673 直接导出。
 
 13. 热区：加宽透明 stroke（max(12, lineWidth)）独立于可见性——隐藏连线时仍可选中/双击删除（:632-642）。
 14. 双击剪切钮：定位 = findClosestPointOnPath（SVG CTM 换算，:147-163）；剪切优先走 ctx 命令
-    `command:delete-edge`，缺省回落 edgeStore.removeEdge + save.set（:172-184）。
+    `command:delete-edge`，缺省回落 `doc.removeEdges`（:172-184）。
+    ⚠️ **2026-09-19 更新（步骤 5c）**：回落路径原为 `edgeStore.removeEdge + save.set(GRAPH_EDGES_KEY)`；
+    四个老服务名（nodeStore/edgeStore/graph/history）下线后改为 `doc.removeEdges`。属**行为变化**（是修好，但要知情）：
+    旧路不进历史、不清选中、直接写边域；新路经唯一图写入口 → **进撤销栈、清选中、整图信封落盘**（双击剪切现在可撤销）。
+    另：`command:delete-edge` **全仓无注册点**（实际注册的是 `command:delete`），故这条「回落」是当前唯一生效路径。
 15. 全局 click 关闭剪切钮（document 级，onMounted/onUnmounted 成对，:186-187）。
 
 **遗留全局样式（改动前先读 §9-3）**
@@ -510,6 +514,9 @@ index.ts:673 直接导出。
 | settings 服务（BaseNode：titleOffset/titleScaleMinZoom/nodeLodLowDetailZoom/多选标记三键/multiSelectHideTitles；键全局平面、先声明者独占） | 无（只订阅） |
 | nodeLayout / viewport 服务（BaseNode 改名聚焦） | viewport.setCenter（聚焦时） |
 | edgeStore / save（CustomEdge 剪切回落路径） | removeEdge + save.set(GRAPH_EDGES_KEY, "canvas") |
+**（2026-09-19 步骤 5c 后）** 上表这项已变：CustomEdge 的剪切回落路径改走 `doc.removeEdges`；
+`edgeStore` / `save` / `nodeStore` / `graph` / `history` 五个名字中，前四个**已从 ctx 服务表下线**，
+数据统一经 `ctx.get('doc')`。同时 BaseNode 的 `nodeStore.types` 读取改走 `doc.types`（同一份只读投影）。
 | command 服务（CustomEdge 剪切优先路径 command:delete-edge） | execute |
 | connectionState / interaction / debug / snapZone / handleParams / edgeVisual（渲染上下文只读对象） | connectionState.aimedTarget（BaseNode 是唯一写入方之一，见三区域规范 §四） |
 

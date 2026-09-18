@@ -88,7 +88,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
 ## 装配处给 config：apply(ctx, config) 收到校验后的
 
 宿主/清单装配插件时可给它一份 `config`（per-plugin 覆盖）。内核校验 + 补默认后传给 `apply` 第二参。
-以清单为例（`packages/canvas-core-v2/demo-web/baseManifest.ts` 里有注释示例）：
+以清单为例（`packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 就是同一形状的"装配决定"）：
 
 ```ts
 import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
@@ -103,11 +103,12 @@ const manifest = {
 // manager.applyManifest(manifest)
 ```
 
-浏览器控制台也能直接装带 config 的插件，验证"默认补齐 + 覆写"：
+浏览器控制台也能直接装带 config 的插件，验证"默认补齐 + 覆写"。
+带 config 的安装走 `ctx.installPlugin(模块, config)`（`window.MiniCanvasUI.installPlugin` 只收模块）：
 
 ```js
-// 用 theme-default 的 Config 补默认：只给 color，其它项自动用 schema 默认
-window.MiniCanvasManager.install({
+// 只给 color，其它项自动用 schema 默认补齐
+window.MiniCanvasUI.getContext().installPlugin({
   name: 'my-config-plugin',
   inject: [],
   Config: {
@@ -127,20 +128,21 @@ window.MiniCanvasManager.install({
 装配给的 config 若不合 schema（类型错 / 越界 / select 不在枚举 / color 非法），插件**加载失败**：
 
 ```js
-// 装配处带非法 config（manager.install 第二参 opts.config 是装配 config）
-window.MiniCanvasManager.install(
+// ctx.installPlugin 第二参就是这份插件的装配 config
+window.MiniCanvasUI.getContext().installPlugin(
   {
     name: 'bad-config',
     inject: [],
     Config: { accent: { type: 'color', default: '#3b82f6', label: '强调色' } },
     apply(ctx, config) { console.log(config) },
   },
-  { config: { accent: 'red' } },   // ← 'red' 不是合法 hex 颜色
+  { accent: 'red' },   // ← 'red' 不是合法 hex 颜色
 )
 ```
 
 会抛 `[config] invalid config: "accent" expected hex color but got "red"`，插件 fiber 进 **FAILED**；
-`manager.list()`（或左下角面板）里能看到 `bad-config` 标 FAILED + 报错。绝不带着残缺 config 启动。
+`window.MiniCanvasUI.inspectPlugins()` 里能看到 `bad-config` 标 FAILED + 报错。
+绝不带着残缺 config 启动。
 
 ## 监听"我这份 config 的变化"→ 就地窄更新、实时生效（机制要会）
 
@@ -148,11 +150,11 @@ window.MiniCanvasManager.install(
 内核会广播 `key → value` 的变化。你**订阅自己这份 config**（scope 传本插件名 = 只收自己的，不误触别人），
 拿到变化就**只更新对应那一处**，实现"实时生效、不整图重建"。
 
-demo 的 `CanvasDemo.vue` 里 `bindThemeSettings()` 就是这条链路的真身（宿主侧把 settings 变化窄更新到
+成品应用 `packages/ui/src/App.vue` 里 `bindThemeSettings()` 就是这条链路的真身（宿主侧把 settings 变化窄更新到
 edge 视觉对象 → Vue 只重绘那几条边）：
 
 ```ts
-// CanvasDemo.vue bindThemeSettings() (真实代码的精简)
+// packages/ui/src/App.vue bindThemeSettings() (真实代码的精简)
 const ctx = host.ctx
 const store = ctx.get('settings')          // 取 settings 单一数据源
 for (const k of EDGE_SETTING_KEYS) {       // ① 初始把当前值灌进外观
