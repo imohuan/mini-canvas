@@ -15,6 +15,7 @@ import type {
 } from './toolRegistry'
 import type { Registry } from './registry/registry'
 import type { ToolCallResult, ToolExecView, ToolSpec } from './modelTool'
+import type { SurfaceReport } from './surface'
 
 /** 可释放对象：调用即执行清理，幂等安全 */
 export interface Disposable {
@@ -244,10 +245,15 @@ export interface PluginScope extends PluginCapabilities {
    * 能否动态卸载某插件（决策 1：调用方"先问再动"）。
    *
    * `ctx.uninstallPlugin(name)` 把"核心插件拒卸"与"插件不存在"同值成 `false`（沿用既有契约），
-   * 本方法给出原因，供调用方（pluginManager / 宿主 UI）在动手前分流，从根上避免
-   * "先删了配置才发现卸不动"这类副作用。
-   */
+  * 本方法给出原因，供调用方（pluginManager / 宿主 UI）在动手前分流，从根上避免
+  * "先删了配置才发现卸不动"这类副作用。
+  */
   canUninstall(name: string): CanUninstallResult
+  /**
+   * 自省快照：一次列出三根轴（服务 / 注册场 / 命令与工具）上「注册了什么、各自支持什么」。
+   * 只读、零副作用，随时可调。诊断面板 / 文档生成 / AI 探查用。
+   */
+  surface(): SurfaceReport
 
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */

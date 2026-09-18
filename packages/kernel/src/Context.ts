@@ -30,6 +30,15 @@ import type { State } from './types'
 import { asPluginModule } from './pluginClass'
 import { RegistryImpl } from './registry/registry'
 import type { Registry } from './registry/registry'
+import type {
+  SurfaceReport,
+  ServiceSurface,
+  RegistryKindSurface,
+  RegistryEntrySurface,
+  CommandSurface,
+  ToolSurface,
+  ModelToolSurface,
+} from './surface'
 import { toolFieldOptions } from './modelTool'
 
 /**
@@ -151,6 +160,8 @@ export class Context implements PluginScope {
   /** 根作用域：只服务根 ctx.effect（宿主/非插件的顶层副作用）；插件副作用一律归各自 fiber */
   private rootScope = new Scope()
   private services = new Map<string, unknown>()
+  /** 每个服务名 → 谁注入的（插件名 / '<host>'）；surface() 用它回答"谁放的" */
+  private serviceSources = new Map<string, string>()
   private plugins = new Map<string, PluginModule>()
   private lifecycles = new Map<string, Lifecycle>()
   /** 每插件一个 fiber 运行时句柄（P1：状态机 + 副作用容器；卸载即 runDisposers/移除） */
@@ -369,6 +380,7 @@ export class Context implements PluginScope {
     this.configs.clear()
     this.corePlugins.clear() // 核心标识随生命周期重置（stop 不拦：整体终结不是动态卸载）
     this.services.clear()
+    this.serviceSources.clear()
     this.builtinTools = new ToolRegistry() // 内核自带工具表随生命周期重置（插件工具已随 fiber 注销，这里清残留）
     this.registries.clear() // 注册场随生命周期重置（插件注册已随 fiber 回收，这里清宿主残留）
     this.capabilityLayer?.reset() // 能力层内置服务随生命周期重置（由能力层决定重建什么）
@@ -593,6 +605,7 @@ export class Context implements PluginScope {
       throw new Error(`[core] Service "${name}" is already injected`)
     }
     this.services.set(name, impl)
+    this.serviceSources.set(name, '<host>')
     // 服务到位：唤醒依赖它而 PENDING 的插件（running 且非 drain 中才有意义）
     this.wakePending()
     return () => {
@@ -655,9 +668,82 @@ export class Context implements PluginScope {
    * 同一 kind 各处拿到的是**同一张表**（插件之间互相看得见，这正是注册场的意义）；
    * 视图只决定两件事：add/wrap/subscribe 是否随本作用域自动回收、add/wrap 写进 entry.source（谁放的）。
    * 宿主（根 ctx）用：source 记作 '<host>'，返回的句柄由调用方自己持有（不自动回收）。
-   */
+  */
   registryOf<T>(kind: string): Registry<T> {
     return this.registryTable(kind).bind('<host>') as unknown as Registry<T>
+  }
+
+  /**
+   * 自省快照（§新原语：surface）：一次列出三根轴上「注册了什么、各自支持什么」。
+   * - 服务轴：services 表（含插件 provide 的）；
+   * - 注册轴：registries 表全部 kind + 键 + 条目数 + 明细（source 可诊断）；
+   * - 语义视图：command 场 → 命令（含 keys/areas/group）；tool 场 → 模型可调用工具
+   *   （含 parameters/outputSchema）；ctx.tools → 生成工具（含声明式 params）。
+   *
+   * 只读、零副作用、不触发事件，created/started 皆可调。诊断面板 / 文档 / AI 探查用。
+   */
+  surface(): SurfaceReport {
+    // —— 服务轴 ——
+    const services: ServiceSurface[] = [...this.services.keys()].map((name) => ({ name, source: this.serviceSources.get(name) ?? '<host>' }));
+
+    // —— 注册轴：每个 kind 一行汇总 + 全部条目明细 ——
+    const registries: RegistryKindSurface[] = [];
+    const registryEntries: RegistryEntrySurface[] = [];
+    for (const [kind, table] of this.registries) {
+      const keys = table.keys().sort();
+      registries.push({ kind, keys, entries: keys.map((k) => table.ids(k).length) });
+      for (const key of keys) {
+        for (const e of table.list(key)) {
+          registryEntries.push({ kind, key, id: e.id, order: e.order, source: e.source });
+        }
+      }
+    }
+
+    // —— 语义视图：命令 ——
+    const commands: CommandSurface[] = [];
+    const commandTable = this.registries.get('command');
+    if (commandTable) {
+      for (const key of commandTable.keys()) {
+        for (const e of commandTable.list(key)) {
+          const def = (e.value as { def?: { id: string; title?: string; keys?: string[]; areas?: string[]; group?: string; order?: number } }).def;
+          if (!def) continue;
+          commands.push({ id: def.id, title: def.title, keys: def.keys, areas: def.areas, group: def.group, order: def.order, source: e.source });
+        }
+      }
+    }
+
+    // —— 语义视图：生成工具（ctx.tools）——
+    const tools: ToolSurface[] = this.builtinTools.list().map((def) => ({
+      name: def.name,
+      title: def.title,
+      description: def.description,
+      group: def.group,
+      produces: def.produces,
+      accepts: def.accepts,
+      params: def.params?.map((p) => ({
+        key: p.key,
+        label: p.label,
+        type: p.type,
+        required: false,
+        options: p.options,
+      })),
+      templates: def.templates?.map((t) => ({ id: t.id, name: t.name })),
+    }));
+
+    // —— 语义视图：模型可调用工具（tool 场）——
+    const modelTools: ModelToolSurface[] = [];
+    const toolTable = this.registries.get('tool');
+    if (toolTable) {
+      for (const key of toolTable.keys()) {
+        for (const e of toolTable.list(key)) {
+          const spec = e.value as { description?: string; parameters?: unknown; output?: { schema?: unknown } } | undefined;
+          if (!spec) continue;
+          modelTools.push({ name: key, description: spec.description ?? '', parameters: spec.parameters ?? {}, outputSchema: spec.output?.schema ?? {}, source: e.source });
+        }
+      }
+    }
+
+    return { state: this._state, services, registries, registryEntries, commands, tools, modelTools };
   }
 
   /**
@@ -767,8 +853,10 @@ export class Context implements PluginScope {
           throw new Error(`[core] Service "${name}" is already injected`)
         }
         ctx.services.set(name, impl)
+        ctx.serviceSources.set(name, pluginName)
         const cleanup = () => {
           if (ctx.services.get(name) === impl) ctx.services.delete(name)
+          ctx.serviceSources.delete(name)
         }
         fiber.onDispose(cleanup)
         return cleanup
@@ -779,14 +867,17 @@ export class Context implements PluginScope {
           throw new Error(`[core] Service "${name}" is already injected`)
         }
         ctx.services.set(name, impl)
+        ctx.serviceSources.set(name, pluginName)
         const cleanup = () => {
           if (ctx.services.get(name) === impl) ctx.services.delete(name)
+          ctx.serviceSources.delete(name)
         }
         fiber.onDispose(cleanup)
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
       canUninstall: (name: string): CanUninstallResult => ctx.canUninstall(name),
+      surface: (): SurfaceReport => ctx.surface(),
       registryOf<T>(kind: string): Registry<T> {
         // 插件视图：同一 kind 全插件共享一张表；source 记作本插件名，
         // 放置（add/wrap）随本插件 fiber 自动回收——热卸时它放的东西一条不留。

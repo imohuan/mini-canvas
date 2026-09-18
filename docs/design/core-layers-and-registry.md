@@ -959,6 +959,29 @@ export class DocService extends Service {
 
 ---
 
+## 十一·补：自省 API `ctx.surface()`（列出注册了什么）
+
+用户需求原话："很多工具有 get、register……希望你提供一个可以列出注册的列表，最好提供它们支持的参数函数"。
+
+三根轴各有一个"往里放"的 API，但此前没有统一的"读出来"。新增 `ctx.surface()`（kernel，步骤 1 原语的自然延伸）：
+
+```ts
+const s = ctx.surface();   // 只读快照，零副作用，created/started 皆可调
+s.state;                   // ctx 状态
+s.services;                // 服务轴：[{ name, source }] —— 按名可取的全部服务 + 谁注入的
+s.registries;              // 注册轴：[{ kind, keys, entries }] —— 每个场有哪些键、几条
+s.registryEntries;         // 明细：[{ kind, key, id, order, source }] —— 每条谁放的
+s.commands;                // 命令语义视图：[{ id, title, keys, areas, group, order, source }]
+s.tools;                   // 生成工具：[{ name, title, params, produces, accepts, ... }]
+s.modelTools;              // 模型可调用工具：[{ name, description, parameters, outputSchema, source }]
+```
+
+要点：
+1. services 含插件 provide 的（source = 插件名）；`tools` 是内核内置服务，不在 services 列表而在 `s.tools`。
+2. `commands` / `modelTools` 是**语义视图**：从 `command` / `tool` 两个场把值拆成可读字段，不是独立存储。
+3. `ctx` 与插件 scope 上都可用（deriveScope 显式挂载，防 Proxy 漏挂静默 undefined）。
+4. 典型用途：诊断面板树、`console.table(ctx.surface().commands)`、AI 探查"现在有哪些工具可调"。
+
 ## 十二、术语表（防止再次混淆）
 
 | 词 | 定义 | 反例 |

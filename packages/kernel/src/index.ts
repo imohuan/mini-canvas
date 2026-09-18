@@ -22,6 +22,15 @@ export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistr
 // 通用注册场（ctx.registryOf 的地基）：设计文档 §2.1 的 Registry/Entry 契约与默认实现
 export { RegistryImpl } from './registry/registry'
 export type { Registry, Entry, RegistryWrapper, RegistryChange, RegistryImplOptions } from './registry/registry'
+export type {
+  SurfaceReport,
+  ServiceSurface,
+  RegistryKindSurface,
+  RegistryEntrySurface,
+  CommandSurface,
+  ToolSurface,
+  ModelToolSurface,
+} from './surface'
 // 模型可调用工具（function calling）：落点是注册场 ctx.registryOf('tool')，**不是** ctx.tools 服务。
 // 四个缺口（事件 / defineTool / callId+signal / output.schema+render）都在这里补（设计文档 §7.2 / §7.3）。
 export { defineTool, runToolCall, toolParamsToJsonSchema, validateToolValue, toolFieldOptions, TOOL_KIND, isJsonValue } from './modelTool'
