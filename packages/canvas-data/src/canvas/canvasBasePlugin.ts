@@ -63,7 +63,12 @@ export interface CanvasBaseOptions {
 }
 
 /**
- * 基础插件建出来的 12 件服务（宿主 CanvasHostHandle 的字段来源）。
+ * 基础插件建出来的零件（宿主 CanvasHostHandle 的字段来源）共 12 件：
+ * - 进 ctx 服务表的 8 件：save / doc / resources / nodeRegistry / themeRegistry /
+ *   selection / command / nodeFactory；
+ * - 仅由 services 直接持有、**不再是服务名**的 4 件（5c 下线）：nodeStore / edgeStore /
+ *   graph / history（数据统一经 doc 取用）；
+ * - 另有 settingsPersist 条件注入（persistSettings 为真且 ctx 有 settings 时才上架）。
  *
  * 类型给的是具体类（不是接口）—— 宿主需要类上的额外方法（如 SaveServiceImpl.flush、ResourceStore.dispose）。
  */

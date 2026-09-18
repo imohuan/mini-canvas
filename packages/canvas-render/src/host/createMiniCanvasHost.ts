@@ -149,7 +149,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const ctx = new Context()
 
   // —— 基础插件：画布基础服务（save/doc/resources/nodeRegistry/themeRegistry/selection/command/
-  // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有）
+  // nodeFactory 七个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、
+  // 已不再是 ctx 服务名（5c 下线），数据统一经 doc）
   // + 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入（§4.1：数据那一格只有 doc）。
   // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
   const base = createCanvasBasePlugin({

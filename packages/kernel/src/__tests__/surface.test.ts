@@ -60,8 +60,7 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     await ctx.start()
     const s = ctx.surface()
     const demo = s.registries.find((r) => r.kind === 'demo')!;
-    expect(demo.keys).toEqual(['demo/a'])
-    expect(demo.entries).toEqual([2])
+    expect(demo.keys).toEqual([{ key: 'demo/a', count: 2 }])
     expect(s.registryEntries.filter((e) => e.kind === 'demo').map((e) => e.source)).toEqual(['reg', 'reg'])
     ctx.stop()
   })

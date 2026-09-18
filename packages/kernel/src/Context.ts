@@ -736,7 +736,7 @@ export class Context implements PluginScope {
     const registryEntries: RegistryEntrySurface[] = [];
     for (const [kind, table] of this.registries) {
       const keys = table.keys().sort();
-      registries.push({ kind, keys, entries: keys.map((k) => table.ids(k).length) });
+      registries.push({ kind, keys: keys.map((k) => ({ key: k, count: table.ids(k).length })) });
       for (const key of keys) {
         for (const e of table.list(key)) {
           registryEntries.push({ kind, key, id: e.id, order: e.order, source: e.source });

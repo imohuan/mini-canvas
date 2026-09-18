@@ -43,10 +43,8 @@ export interface RegistryEntrySurface {
 /** 注册场汇总：一个 kind + 它下面全部键 */
 export interface RegistryKindSurface {
   kind: string
-  /** 该 kind 的键列表（升序） */
-  keys: string[]
-  /** 每键条目数（与 keys 平行） */
-  entries: number[]
+  /** 该 kind 下每个键及其条目数（升序；不用两个平行数组靠下标对齐 —— 审查 B5） */
+  keys: Array<{ key: string; count: number }>
 }
 
 /** 命令条目（CommandDef 的自省形状） */
