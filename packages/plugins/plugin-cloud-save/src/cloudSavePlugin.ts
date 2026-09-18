@@ -217,11 +217,11 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
 
   const deps: Deps = {
     save: ctx.get<SaveService>('save'),
-    graph: ctx.get<GraphDocumentService | undefined>('graph') ?? undefined,
-    nodeStore:
-      ctx.get<Deps['nodeStore'] | undefined>('nodeStore') ?? undefined,
+    // 数据读写统一走 doc 门面（§4.1）；viewport 不是 doc 的一部分，仍单独取
+    graph: ctx.get<GraphDocumentService | undefined>('doc') ?? undefined,
+    nodeStore: ctx.get<Deps['nodeStore'] | undefined>('doc') ?? undefined,
     viewport: ctx.get<Deps['viewport'] | undefined>('viewport') ?? undefined,
-    knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('nodeStore')?.types,
+    knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('doc')?.types,
   }
 
   const status: CloudSaveStatus = {
@@ -401,12 +401,12 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
 }
 
 /**
- * 订阅 nodeStore 变化。
- * nodeStore 的 subscribe 是数据层的老 API（不经 ctx 事件），故单独包一层取；
+ * 订阅文档变化（doc.subscribe 一次覆盖节点 + 边两桶）。
+ * doc 的 subscribe 是数据层 API（不经 ctx 事件），故单独包一层取；
  * 取不到就退化成"只在安装时扫一次"，不报错。
  */
 function subscribeNodeStore(ctx: Context, cb: () => void): (() => void) | undefined {
-  const store = ctx.get<{ subscribe?(l: () => void): () => void } | undefined>('nodeStore')
+  const store = ctx.get<{ subscribe?(l: () => void): () => void } | undefined>('doc')
   return store?.subscribe?.(cb)
 }
 

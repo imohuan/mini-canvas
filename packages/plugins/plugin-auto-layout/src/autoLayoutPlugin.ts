@@ -22,7 +22,7 @@
 
 import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import { resolveConfig } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, EdgeStoreService, SelectionService, GraphDocumentService, CanvasNode } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { layoutHierarchy } from './groupHierarchy'
 import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
@@ -31,19 +31,8 @@ import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focus
 /** 组节点类型名（与 plugin-group 约定一致） */
 export const GROUP_NODE_TYPE = 'group'
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    nodeStore: NodeStoreService
-    edgeStore: EdgeStoreService
-    selection: SelectionService
-    graph: GraphDocumentService
-    nodeLayout: NodeLayoutService
-    viewport: ViewportService
-  }
-}
-
 export const name = 'auto-layout'
-export const inject = ['nodeStore', 'edgeStore', 'selection', 'graph', 'nodeLayout', 'viewport'] as string[]
+export const inject = ['doc', 'selection', 'nodeLayout', 'viewport'] as string[]
 
 /**
  * Config schema（标量字段登记 settings 面板；apply 收到的 config 已校验 + 补默认）。
@@ -125,7 +114,8 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
 }
 
 export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
-  const { nodeStore, edgeStore, selection, graph, nodeLayout, viewport } = ctx
+  const doc = ctx.get<DocService>('doc')
+  const { selection, nodeLayout, viewport } = ctx
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
 
@@ -206,7 +196,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
 
   function focusSelected(): boolean {
     const selected = [...selection.ids]
-      .map((id) => nodeStore.getNode(id))
+      .map((id) => doc.getNode(id))
       .filter((n): n is CanvasNode => Boolean(n))
     if (selected.length === 0) return false
     focusBounds(selected, { keepZoom: false })
@@ -214,7 +204,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   }
 
   function focusNode(nodeId: string): boolean {
-    const n = nodeStore.getNode(nodeId)
+    const n = doc.getNode(nodeId)
     if (!n) return false
     focusBounds([n], { keepZoom: false })
     return true
@@ -225,7 +215,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
  *  平铺 → 树（支持组嵌套组）→ 从最深层组开始布局 → 布局完重算组 rect → 组作为占位参与上层 → 逐层向上。 */
   function run(): boolean {
     // 全部节点（含组）转绝对坐标快照：组内子节点累加父链（nodeLayout 已实现）
-    const all = nodeStore.getNodes()
+    const all = doc.getNodes()
     if (all.length === 0) return false
     const hierarchyNodes: LayoutNode[] = all.map((n) => {
       const abs = absoluteRectOf(n)
@@ -238,7 +228,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
         parentId: n.parentId,
       }
     })
-    const edges = edgeStore.getEdges().map((e) => ({ id: e.id, source: e.source, target: e.target }))
+    const edges = doc.getEdges().map((e) => ({ id: e.id, source: e.source, target: e.target }))
 
     // 每次执行现读面板现值：改了方向/间距立刻反映到本次布局结果
     const runConfig = currentConfig()
@@ -254,7 +244,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     //  - 组节点：frame（绝对 position + size + cardWidth/cardHeight）
     //  - 组内子节点：相对父组坐标（result.positions 已按"相对父组左上"输出）
     //  - 顶层自由节点：绝对坐标
-    const byId = new Map(nodeStore.getNodes().map((n) => [n.id, n]))
+    const byId = new Map(doc.getNodes().map((n) => [n.id, n]))
     const entries: Array<{ id: string; patch: Record<string, unknown> }> = []
     for (const [gid, frame] of result.groupFrames) {
       entries.push({
@@ -271,7 +261,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     }
 
     // 统一走 graph：一次批量写回位置/尺寸（历史 + 提交落盘）
-    graph.updateNodes(
+    doc.updateNodes(
       entries.map((e) => ({
         id: e.id,
         patch: e.patch as { position?: { x: number; y: number }; size?: { w: number; h: number }; data?: Record<string, unknown>; parentId?: string | undefined },

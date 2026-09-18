@@ -9,11 +9,11 @@
  *   toRelativePosition / toAbsolutePosition 一对函数（建组/解组/重算/拖拽共用）。
  * - 解组 Ctrl+Shift+G：子节点还原绝对坐标、删组节点，一条 graph 事务可撤销。
  *
- * 写模型：所有图变更统一走 ctx.graph（GraphDocument 唯一写入口，历史 + 落盘自动）。
+ * 写模型：所有图变更统一走 ctx.get('doc')（唯一写入口，历史 + 落盘自动）。
  * 分层：只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件，不直碰 VueFlow，不碰老版 src/。
  */
 import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
@@ -123,14 +123,11 @@ export class GroupService extends Service implements GroupServiceAPI {
     super(ctx, 'group')
   }
 
-  private get nodeStore(): NodeStoreService {
-    return this.ctx.get<NodeStoreService>('nodeStore')
-  }
   private get selection(): SelectionService {
     return this.ctx.get<SelectionService>('selection')
   }
-  private get graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private get doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
   private get layout(): NodeLayoutService {
     return this.ctx.get<NodeLayoutService>('nodeLayout')
@@ -139,12 +136,12 @@ export class GroupService extends Service implements GroupServiceAPI {
   /** 组嵌套深度（不支持嵌套的画布上恒 0；B 方案允许一层 → 最大 1） */
   getGroupDepth(groupId: string): number {
     let depth = 0
-    let cur = this.nodeStore.getNode(groupId)
+    let cur = this.doc.getNode(groupId)
     const seen = new Set<string>([groupId])
     while (cur?.parentId) {
       if (seen.has(cur.parentId)) break // 环保护
       seen.add(cur.parentId)
-      const parent = this.nodeStore.getNode(cur.parentId)
+      const parent = this.doc.getNode(cur.parentId)
       if (!parent || parent.type !== GROUP_NODE_TYPE) break
       depth += 1
       cur = parent
@@ -175,7 +172,7 @@ export class GroupService extends Service implements GroupServiceAPI {
       const rect = layout.getNodeRect(nodeId)
       if (rect) return rect as GroupRect
     }
-    const node = this.nodeStore.getNode(nodeId)
+    const node = this.doc.getNode(nodeId)
     if (!node) return null
     return { id: nodeId, x: node.position.x, y: node.position.y, w: node.size?.w ?? 0, h: node.size?.h ?? 0 }
   }
@@ -187,7 +184,7 @@ export class GroupService extends Service implements GroupServiceAPI {
       const rects = layout.getAllRects()
       if (rects && rects.length > 0) return rects as GroupRect[]
     }
-    return this.nodeStore
+    return this.doc
       .getNodes()
       .map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, w: n.size?.w ?? 0, h: n.size?.h ?? 0 }))
   }
@@ -198,12 +195,11 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   createGroup(nodeIds: string[]): string | null {
-    const nodeStore = this.nodeStore
     const byId = new Map(this.allRects().map((r) => [r.id, r]))
 
     // 过滤：存在、非 group、未在其它组（顶层节点）
     const eligible = nodeIds.filter((id) => {
-      const node = nodeStore.getNode(id)
+      const node = this.doc.getNode(id)
       if (!node) return false
       if (node.parentId) return false
       // 组嵌套上限一层（B 方案）：已是内层组（depth>=1）的不能再被包进新组（否则深度 2 违规）
@@ -219,7 +215,7 @@ export class GroupService extends Service implements GroupServiceAPI {
 
     const groupId = createGroupId()
     // 统一走 graph：一次事务内建组节点 + 子节点改父/相对坐标（历史合并 + 提交落盘）
-    this.graph.transaction('group-create', (tx) => {
+    this.doc.transaction('group-create', (tx) => {
       tx.addNodes([
         {
           id: groupId,
@@ -247,14 +243,13 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   ungroup(groupId: string): void {
-    const nodeStore = this.nodeStore
-    const group = nodeStore.getNode(groupId)
+    const group = this.doc.getNode(groupId)
     if (!group || group.type !== GROUP_NODE_TYPE) return
-    const childIds = nodeStore.childNodesOf(groupId).map((n) => n.id)
-    this.graph.transaction('group-ungroup', (tx) => {
+    const childIds = this.doc.childNodesOf(groupId).map((n) => n.id)
+    this.doc.transaction('group-ungroup', (tx) => {
       if (childIds.length > 0) {
         const patches = childIds.map((id) => {
-          const node = nodeStore.getNode(id)
+          const node = this.doc.getNode(id)
           if (!node) return { id, patch: {} }
           const abs = this.rectOf(id)
           if (abs) return { id, patch: { position: { x: abs.x, y: abs.y }, parentId: undefined } }
@@ -273,11 +268,11 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   getGroupNodeIds(): string[] {
-    return this.nodeStore.getNodes().filter((n) => n.type === GROUP_NODE_TYPE).map((n) => n.id)
+    return this.doc.getNodes().filter((n) => n.type === GROUP_NODE_TYPE).map((n) => n.id)
   }
 
   getGroupBounds(groupId: string): GroupBounds | null {
-    const node = this.nodeStore.getNode(groupId)
+    const node = this.doc.getNode(groupId)
     if (!node || node.type !== GROUP_NODE_TYPE) return null
     const abs = this.rectOf(groupId)
     return {
@@ -289,10 +284,9 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   recalculateBounds(groupId: string): GroupBounds | null {
-    const nodeStore = this.nodeStore
-    const group = nodeStore.getNode(groupId)
+    const group = this.doc.getNode(groupId)
     if (!group || group.type !== GROUP_NODE_TYPE) return null
-    const children = nodeStore.childNodesOf(groupId)
+    const children = this.doc.childNodesOf(groupId)
     if (children.length === 0) return this.getGroupBounds(groupId)
 
     const childRects = children
@@ -303,7 +297,7 @@ export class GroupService extends Service implements GroupServiceAPI {
     if (!bounds) return null
 
     // 统一走 graph：组位置/尺寸与子节点相对坐标一次事务
-    this.graph.transaction('group-recalc', (tx) => {
+    this.doc.transaction('group-recalc', (tx) => {
       tx.updateNode(groupId, {
         position: { x: bounds.x, y: bounds.y },
         ...this.groupSizePatch(bounds.w, bounds.h),
@@ -334,7 +328,7 @@ export class GroupService extends Service implements GroupServiceAPI {
    * （宿主按 drag-end 逐节点调用）。
    */
   applyDragMembership(nodeId: string): void {
-    const node = this.nodeStore.getNode(nodeId)
+    const node = this.doc.getNode(nodeId)
     // 组节点参与归组（B 方案：允许嵌套一层）。组内子节点（含拖到其它组范围）正常 join/leave。
     if (!node) return
     const rect = this.rectOf(nodeId)
@@ -348,10 +342,10 @@ export class GroupService extends Service implements GroupServiceAPI {
         // leave 的绝对坐标 = 节点当前真实绝对位置（父链完整累加 —— 嵌套时直接父的 store pos 是相对外层的，
         // 只加一层会少加，用户实测"第二层出来位置错"就是这个）。node 此刻仍挂着父链，absolutePosition 正确。
         const abs = this.layout.absolutePosition(nodeId)
-        this.graph.updateNode(nodeId, { position: abs, parentId: undefined })
+        this.doc.updateNode(nodeId, { position: abs, parentId: undefined })
       }
       if (change.joinGroupId) {
-        const group0 = this.nodeStore.getNode(change.joinGroupId)
+        const group0 = this.doc.getNode(change.joinGroupId)
         if (!group0) continue
         // 防环：不能 join 自己；也不能 join 自己的后代（后代深度必然 >=1，已被上限拦，这里显式兜底）
         if (change.joinGroupId === nodeId) continue
@@ -362,14 +356,14 @@ export class GroupService extends Service implements GroupServiceAPI {
         // 目标组的 store position 在嵌套时是相对外层的 —— 相对坐标必须以"目标组真实绝对左上"为基准
         const targetAbs = this.layout.absolutePosition(change.joinGroupId)
         const rel = toRelativePosition(rect.x, rect.y, { x: targetAbs.x, y: targetAbs.y, w: group0.size?.w ?? 0, h: group0.size?.h ?? 0 })
-        this.graph.updateNode(nodeId, { position: rel, parentId: group0.id })
+        this.doc.updateNode(nodeId, { position: rel, parentId: group0.id })
       }
     }
   }
 }
 
 export const name = 'group'
-export const inject = ['nodeStore', 'selection', 'graph', 'nodeLayout'] as string[]
+export const inject = ['doc', 'selection', 'nodeLayout'] as string[]
 
 /** 插件主体：注册 group 节点类型 + 上架 group 服务 + 命令。
  *  config（padding 等）不落地缓存 —— 服务每次操作惰性读 settings 单一数据源，天然实时生效。 */
@@ -396,10 +390,10 @@ export function apply(ctx: Context) {
     title: '创建分组',
     keys: ['ctrl+g'],
     run() {
-      const nodeStore = ctx.get<NodeStoreService>('nodeStore')
       const selection = ctx.get<SelectionService>('selection')
+      const doc = ctx.get<DocService>('doc')
       const ids = [...selection.ids].filter((id) => {
-        const node = nodeStore.getNode(id)
+        const node = doc.getNode(id)
         // 顶层成员（无父）参与打组；组节点允许（嵌套一层），深度超限的由 createGroup 内部过滤
         return node && !node.parentId
       })
@@ -411,10 +405,10 @@ export function apply(ctx: Context) {
     title: '解散分组',
     keys: ['ctrl+shift+g'],
     run() {
-      const nodeStore = ctx.get<NodeStoreService>('nodeStore')
       const selection = ctx.get<SelectionService>('selection')
+      const doc = ctx.get<DocService>('doc')
       for (const id of [...selection.ids]) {
-        const node = nodeStore.getNode(id)
+        const node = doc.getNode(id)
         if (node && node.type === GROUP_NODE_TYPE) group.ungroup(id)
       }
     },

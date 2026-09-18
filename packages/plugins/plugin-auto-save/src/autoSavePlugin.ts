@@ -13,19 +13,17 @@
  * 依赖：save（内核）、nodeStore/edgeStore（内核；订阅数据变化置脏）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { SaveService, NodeStoreService, EdgeStoreService } from '@mini-canvas/canvas-data'
+import type { SaveService, DocService } from '@mini-canvas/canvas-data'
 import { createAutoSaveEngine, type AutoSaveEngine } from './autoSaveEngine'
 
 declare module '@mini-canvas/canvas-data' {
   interface Context {
     save: SaveService
-    nodeStore: NodeStoreService
-    edgeStore: EdgeStoreService
   }
 }
 
 export const name = 'auto-save'
-export const inject = ['save', 'nodeStore', 'edgeStore'] as string[]
+export const inject = ['save', 'doc'] as string[]
 
 /** auto-save 服务 API（对齐老版 AutoSaveAPI 里 v2 有意义的子集） */
 export interface AutoSaveService {
@@ -42,7 +40,8 @@ export interface AutoSaveService {
 }
 
 export function apply(ctx: Context): void {
-  const { save, nodeStore, edgeStore } = ctx
+  const save = ctx.get<SaveService>('save')
+  const doc = ctx.get<DocService>('doc')
   const interval = 1000
 
   const engine: AutoSaveEngine = createAutoSaveEngine({
@@ -52,9 +51,9 @@ export function apply(ctx: Context): void {
     isDirty: () => save.isDirty(),
   })
 
-  // 画布数据变化 → 置脏（供下个周期落盘）。订阅 store（内核事件源，非 VueFlow）
-  const offNodes = nodeStore.subscribe(() => engine.markDirty())
-  const offEdges = edgeStore.subscribe(() => engine.markDirty())
+  // 画布数据变化 → 置脏（供下个周期落盘）。订阅 doc（一次覆盖节点 + 边两桶；内核事件源，非 VueFlow）
+  // doc.subscribe 一次订阅覆盖节点 + 边两桶（与分别订 nodeStore/edgeStore 等价）
+  const offDirty = doc.subscribe(() => engine.markDirty())
 
   // 上架服务（插件 ctx.effect 自动回收；独立名不撞宿主 save）
   const service: AutoSaveService = {
@@ -70,13 +69,10 @@ export function apply(ctx: Context): void {
 
   // 卸载清理：effect 的 fn 立即执行、返回值才是清理函数（此前误把清理写进 fn 导致订阅一建即退）
   ctx.effect(() => () => {
-    offNodes()
-    offEdges()
+    offDirty()
     engine.dispose()
   })
 }
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const autoSavePlugin: PluginModule = { name, inject, apply }
-
-

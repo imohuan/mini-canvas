@@ -12,7 +12,7 @@
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层类型(useCanvasRender)，不反向依赖宿主/demo。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import PanoramaContent from './PanoramaContent.vue'
 import {
   PANORAMA_FULLSCREEN_COMMAND,
@@ -47,27 +47,27 @@ export class Panorama3DService extends Service implements Panorama3DNodeService 
     super(ctx, 'panorama3d')
   }
 
-  private graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   addPreviewNode(position: { x: number; y: number }, imageUrl = ''): string {
-    return this.graph().transaction('add-3d-preview-node', (tx) =>
+    return this.doc().transaction('add-3d-preview-node', (tx) =>
       tx.createNode(PANORAMA_NODE_TYPE, position, imageUrl ? { imageUrl } : {}),
     )
   }
 
   setImageUrl(id: string, imageUrl: string): void {
-    this.graph().updateNode(id, { data: { imageUrl } })
+    this.doc().updateNode(id, { data: { imageUrl } })
   }
 
   removeNode(id: string): void {
-    this.graph().removeNodes([id])
+    this.doc().removeNodes([id])
   }
 }
 
 export const name = '3d-preview'
-export const inject = ['graph'] as string[]
+export const inject = ['doc'] as string[]
 
 /**
  * 节点快捷键在"同键竞争"里的优先级。
@@ -114,7 +114,7 @@ export function apply(ctx: Context) {
   // when 读 selection 现算（不缓存）：选中集是随时变的，缓存会判过期。
   const commandTarget = (): string => {
     const selection = ctx.get<{ ids: ReadonlySet<string> }>('selection')
-    const nodeStore = ctx.get<{ getNode(id: string): { type: string } | undefined }>('nodeStore')
+    const nodeStore = ctx.get<{ getNode(id: string): { type: string } | undefined }>('doc')
     return resolveCommandTarget([...(selection?.ids ?? [])], (id) => nodeStore?.getNode(id)?.type)
   }
 

@@ -12,7 +12,7 @@
  * 依赖方向：只依赖内核 + 渲染层类型，不反向依赖宿主。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import ImageCompareContent from './ImageCompareContent.vue'
 import {
   INPUT_CAPACITY,
@@ -53,31 +53,31 @@ export class ImageCompareService extends Service implements ImageCompareNodeServ
     super(ctx, 'imageCompare')
   }
 
-  private graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   addCompareNode(position: { x: number; y: number }): string {
-    return this.graph().transaction('add-image-compare-node', (tx) =>
+    return this.doc().transaction('add-image-compare-node', (tx) =>
       tx.createNode(IMAGE_COMPARE_NODE_TYPE, position, { dividerPosition: DIVIDER_DEFAULT }),
     )
   }
 
   setDividerPosition(id: string, pct: number): void {
-    const node = this.graph().getNode(id)
+    const node = this.doc().getNode(id)
     if (!node) return
     const next = clampDivider(pct)
     if (node.data.dividerPosition === next) return
     // updateNode 的 data 是浅合并，只给要改的键即可（不会抹掉节点上的其它字段）
-    this.graph().updateNode(id, { data: { dividerPosition: next } })
+    this.doc().updateNode(id, { data: { dividerPosition: next } })
   }
 
   getDividerPosition(id: string): number {
-    return clampDivider(Number(this.graph().getNode(id)?.data.dividerPosition))
+    return clampDivider(Number(this.doc().getNode(id)?.data.dividerPosition))
   }
 
   removeNode(id: string): void {
-    this.graph().removeNodes([id])
+    this.doc().removeNodes([id])
   }
 
   /**
@@ -85,18 +85,18 @@ export class ImageCompareService extends Service implements ImageCompareNodeServ
    * 只在超限时删边，且删边走 graph.removeEdges（可撤销、触发落盘）。
    */
   trimOverflow(targetId: string): string[] {
-    const graph = this.graph()
-    const edges = graph.getEdges()
-    const getData = (nodeId: string) => graph.getNode(nodeId)?.data
+    const doc = this.doc()
+    const edges = doc.getEdges()
+    const getData = (nodeId: string) => doc.getNode(nodeId)?.data
     const incoming = incomingImageEdgeIds(edges, targetId, getData)
     const doomed = planOverflowTrim(incoming)
-    if (doomed.length > 0) graph.removeEdges(doomed)
+    if (doomed.length > 0) doc.removeEdges(doomed)
     return doomed
   }
 }
 
 export const name = 'image-compare'
-export const inject = ['graph', 'edgeStore'] as string[]
+export const inject = ['doc'] as string[]
 
 /** 节点类型图标（标题左侧与"新建节点"菜单共用） */
 const NODE_ICON =
@@ -127,16 +127,15 @@ export function apply(ctx: Context) {
   // 边一有变化就看一眼各对比节点是否超限（新边连入 → 挤掉最老一条）。
   // 放在边集订阅里而不是 connect 回调里：这样"哪条算最老"永远按 edgeStore 的真实顺序判断，
   // 撤销/重做/刷新恢复也能自动收敛，不必依赖某一次事件参数。
-  const edgeStore = ctx.get<EdgeStoreService>('edgeStore')
+  const doc = ctx.get<DocService>('doc')
   // 挤边本身会再触发一次边变化（remove 广播）→ 用标志挡住重入，避免无谓的层层套娃；
   // 即便不挡也会自然收敛（第二次进来已不超限），这里只是把行为说得更明确。
   let trimming = false
-  const off = edgeStore.subscribe(() => {
+  const off = doc.subscribe(() => {
     if (trimming) return
     trimming = true
     try {
-    const graph = ctx.get<GraphDocumentService>('graph')
-    for (const node of graph.getNodes()) {
+    for (const node of doc.getNodes()) {
       if (node.type !== IMAGE_COMPARE_NODE_TYPE) continue
       service.trimOverflow(node.id)
     }

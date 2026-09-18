@@ -12,7 +12,7 @@
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
 import { Service, type PluginModule, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
-import type { GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
@@ -46,8 +46,8 @@ export class ImageService extends Service implements ImageNodeService {
 
   /** 加一个 image 节点并写 imageUrl；返回短 id（统一走 graph 唯一写入口） */
   addImageNode(position: { x: number; y: number }, imageUrl: string): string {
-    const graph = this.ctx.get<GraphDocumentService>('graph')
-    return graph.transaction('add-image-node', (tx) => tx.createNode('image', position, { imageUrl }))
+    const doc = this.ctx.get<DocService>('doc')
+    return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, { imageUrl }))
   }
 
   /** 删除节点：连带清掉与它相连的边与选中态，包一次历史并落盘（统一走 graph）。
@@ -55,7 +55,7 @@ export class ImageService extends Service implements ImageNodeService {
    * 即时 revoke 会让恢复的图破图。统一由 CanvasHost flushSave 的引用扫描延迟回收
    * （落盘前已确认该 resourceId 不再被任何存活节点引用才 revoke），与 undo 语义兼容。 */
   removeNode(id: string): void {
-    this.ctx.get<GraphDocumentService>('graph').removeNodes([id])
+    this.ctx.get<DocService>('doc').removeNodes([id])
   }
 }
 

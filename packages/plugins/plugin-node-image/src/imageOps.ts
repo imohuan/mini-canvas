@@ -125,38 +125,31 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { edgeId: string; status: string }
     removeEdges(ids: string[]): number
   }
-  const store = () =>
-    svc.get<
-      | {
-          getNode(id: string): NodeLike | undefined
-          getNodes(): NodeLike[]
-          types: ReadonlyMap<string, { inputs?: Array<{ port?: string; capacity?: number }> }>
-        }
-      | undefined
-    >('nodeStore')
-  const edgeStore = () =>
-    svc.get<{ getEdges(): Array<{ id: string; source: string; target: string }> } | undefined>('edgeStore')
-  const graph = () =>
-    svc.get<
-      | {
-          updateNode(
-            id: string,
-            patch: { data: Record<string, unknown>; size?: { w: number; h: number } },
-          ): void
-          transaction<T>(reason: string, fn: (tx: TxLike) => T): T
-        }
-      | undefined
-    >('graph')
+  /**
+   * 读/写统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字）。
+   * 迁移期兜底：极简宿主/单测桩可能只按老名注入 graph（无 doc）——这时退回老名，行为不变。
+   * 两者都缺（纯逻辑测试未注入图服务）时读写都安全降级：读返回 undefined、写 no-op。
+   */
+  type ImageDocPort = {
+    getNode(id: string): NodeLike | undefined
+    getNodes(): NodeLike[]
+    types: ReadonlyMap<string, { inputs?: Array<{ port?: string; capacity?: number }> }>
+    getEdges(): Array<{ id: string; source: string; target: string }>
+    updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
+    transaction<T>(reason: string, fn: (tx: TxLike) => T): T
+  }
+  const doc = (): ImageDocPort | undefined =>
+    svc.get<ImageDocPort | undefined>('doc') ?? svc.get<ImageDocPort | undefined>('graph') ?? undefined
 
   return {
-    read: (nodeId) => store()?.getNode(nodeId)?.data,
+    read: (nodeId) => doc()?.getNode(nodeId)?.data,
     // size 与 data 在**同一次** updateNode 里提交：内核按 patch 记一条历史 → 一次撤销退干净
     write: (nodeId, data, size) =>
-      graph()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
+      doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
     fitLimits: () => readImageFitLimits(svc),
-    listNodes: () => (store()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position })),
+    listNodes: () => (doc()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position })),
     createNodeWithEdge: (type, position, data, target) => {
-      const g = graph()
+      const g = doc()
       if (!g) return null
       try {
         return g.transaction('add-image-source', (tx) => {

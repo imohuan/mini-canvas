@@ -39,7 +39,7 @@ import {
 import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { validateConnection, typeConnectionDef } from '@mini-canvas/canvas-data'
-import type { SelectionService, NodeStoreService, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { SelectionService, NodeStoreService, GraphDocumentService, DocService } from '@mini-canvas/canvas-data'
 import {
   planBatchEdges,
   planBatchApply,
@@ -109,6 +109,9 @@ const portZoneArcRatio = computed(() => handleParams.portZoneArcRatio ?? 0.8)
 const isSelecting = computed(() => interaction?.isSelecting?.value === true)
 
 // —— 服务（懒取，宿主恒在）——
+//
+// 数据服务统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字）。
+// 迁移期兜底：只按老名装配的极简宿主/渲染桩仍能用 —— 取不到 doc 就退回同名老服务，行为不变。
 function sel(): SelectionService {
   return ctx.get<SelectionService>('selection')
 }
@@ -116,16 +119,16 @@ function layout(): NodeLayoutService | undefined {
   return ctx.get<NodeLayoutService>('nodeLayout')
 }
 function nodeStore(): NodeStoreService {
-  return ctx.get<NodeStoreService>('nodeStore')
+  return (ctx.get<DocService>('doc') ?? ctx.get<NodeStoreService>('nodeStore')) as NodeStoreService
 }
 function graph(): GraphDocumentService {
-  return ctx.get<GraphDocumentService>('graph')
+  return (ctx.get<DocService>('doc') ?? ctx.get<GraphDocumentService>('graph')) as GraphDocumentService
 }
 function viewportSvc(): ViewportService | undefined {
   return ctx.get<ViewportService>('viewport')
 }
 function edgeStore(): { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined {
-  return ctx.get('edgeStore') as never
+  return (ctx.get<DocService>('doc') ?? ctx.get('edgeStore')) as never
 }
 // ====== 批量连线（复刻 v1 的 onSelectionBatchConnectStart/End）======
 /**

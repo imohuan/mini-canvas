@@ -9,7 +9,7 @@
  * - 快捷键 Ctrl+A/Escape 走命令 keys（宿主 CanvasHost 统一分发），不自绑 window。
  *
  * 分层：
- * - 数据写/选中单源 → 内核 nodeStore/selection/history（宿主恒在注入）。
+ * - 数据写/选中单源 → 内核 doc/selection（宿主恒在注入）。
  * - 几何/实测尺寸/绝对坐标 → 渲染层 nodeLayout 服务；坐标换算/视口 → useCanvasRender。
  * - 框选手势 + SelectionFrame UI → 本插件两个 .vue 组件（注册 overlay 槽，宿主 CanvasSurface 渲染）。
  * - 纯逻辑（碰撞/包围盒/顶层拖动成员）在 multiSelectEngine.ts（零 Vue 可单测）。
@@ -17,7 +17,7 @@
  * 依赖方向：只依赖内核服务 + canvas-render 只读上下文/服务；不反向依赖宿主 demo / 其它插件。
  */
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
 import { Config } from './multiSelectConfig'
@@ -45,7 +45,7 @@ declare module '@mini-canvas/canvas-data' {
 }
 
 export const name = 'multi-select'
-export const inject = ['nodeStore', 'selection'] as string[]
+export const inject = ['doc', 'selection'] as string[]
 
 /** 插件可配置项（P4：模块级 Config schema；群组框的内外双框几何 + 样式，分组「布局/多选」） */
 export { Config }
@@ -78,8 +78,8 @@ class MultiSelectServiceImpl extends Service implements MultiSelectService {
   private get selection(): SelectionService {
     return this.ctx.get<SelectionService>('selection')
   }
-  private get nodeStore(): NodeStoreService {
-    return this.ctx.get<NodeStoreService>('nodeStore')
+  private get doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   getSelectedNodeIds(): ReadonlySet<string> {
@@ -88,7 +88,7 @@ class MultiSelectServiceImpl extends Service implements MultiSelectService {
   getSelectedNodes(): CanvasNode[] {
     const ids = this.selection.ids
     if (ids.size === 0) return []
-    return this.nodeStore.getNodes().filter((n) => ids.has(n.id))
+    return this.doc.getNodes().filter((n) => ids.has(n.id))
   }
   hasSelectedEdges(): boolean {
     return this.selection.edgeIds.size > 0
@@ -97,7 +97,7 @@ class MultiSelectServiceImpl extends Service implements MultiSelectService {
     return this.selection.size > 0
   }
   selectAll(): void {
-    const all = this.nodeStore.getNodes().map((n) => n.id)
+    const all = this.doc.getNodes().map((n) => n.id)
     this.selection.set(all)
   }
   clearSelection(): void {

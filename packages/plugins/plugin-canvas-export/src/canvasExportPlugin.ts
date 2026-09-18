@@ -154,11 +154,9 @@ interface NodeLayoutPort {
   getAllRects(): NodeRect[]
 }
 
-interface NodeStorePort {
+/** 读侧端口：ctx.get('doc') 的形状子集（节点/边列表 + 中间态标记） */
+interface DocServicePort {
   getNodes(): Array<{ id: string; data?: Record<string, unknown> }>
-}
-
-interface EdgeStorePort {
   getEdges(): Array<{ id: string; source: string; target: string; data?: Record<string, unknown> }>
 }
 
@@ -394,17 +392,17 @@ export function apply(ctx: Context) {
   /** 收集可导出的节点矩形：丢掉中间态节点（拖线落空白的临时菜单卡不是用户作品，不该进导出图） */
   function collectNodeRects(): NodeRect[] {
     const layout = ctx.get<NodeLayoutPort | undefined>('nodeLayout')
-    const store = ctx.get<NodeStorePort | undefined>('nodeStore')
+    const doc = ctx.get<DocServicePort | undefined>('doc')
     const rects = layout?.getAllRects?.() ?? []
-    if (!store) return rects
-    const byId = new Map(store.getNodes().map((n) => [n.id, n]))
+    if (!doc) return rects
+    const byId = new Map(doc.getNodes().map((n) => [n.id, n]))
     return rects.filter((r) => !isTransient(byId.get(r.id)))
   }
 
   /** 收集可导出的连线：同样丢掉中间态边（占位连线） */
   function collectEdges(): Array<{ id: string; source: string; target: string }> {
-    const store = ctx.get<EdgeStorePort | undefined>('edgeStore')
-    const edges = store?.getEdges?.() ?? []
+    const doc = ctx.get<DocServicePort | undefined>('doc')
+    const edges = doc?.getEdges?.() ?? []
     return edges.filter((e) => !isTransient(e)).map((e) => ({ id: e.id, source: e.source, target: e.target }))
   }
 

@@ -4,7 +4,7 @@
  * 与老版差异（v2 铁律）：
  * - 不读 context.store.toRef / context.dom.getPane / context.actions.getEdges：
  *   画布区域判定用 VueFlow 渲染约定 `.vue-flow`（与 plugin-clipboard 同源）；边数据经 edgeStore。
- * - 删除经 ctx.edgeStore.removeEdge(id)，可撤销由插件层 history.withRecord 包一次。
+ * - 删除经 ctx.get('doc').removeEdges（唯一写入口，自动进历史）。
  * - 本文件只做"取边路径 DOM → 采样屏幕点 → 命中判定"；事件装配/回收在 edgeCuttingPlugin.ts。
  */
 import { isPolylineHitByCut, type ScreenPoint } from './geometry'
@@ -142,5 +142,4 @@ export function samplePathInClientSpace(path: SVGPathElement, stepPx: number): S
     return { x: screenPoint.x, y: screenPoint.y }
   })
 }
-
 

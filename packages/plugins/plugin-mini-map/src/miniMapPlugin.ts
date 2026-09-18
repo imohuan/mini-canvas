@@ -8,7 +8,7 @@
  *   渲染层 CanvasHost 统一分发键盘，插件不自己绑 window。
  * - 显隐状态 = 本插件注入的 mini-map 服务（{ visible } 响应式）：命令切换与组件读取同一对象。
  *
- * 依赖方向：只依赖内核服务（nodeStore/nodeLayout/viewport 宿主恒在注入）+ canvas-render 只读上下文；
+ * 依赖方向：只依赖内核服务（doc/nodeLayout/viewport 宿主恒在注入）+ canvas-render 只读上下文；
  * 不反向依赖宿主 demo / 其它插件。数据/几何纯逻辑在 miniMapEngine.ts（零 Vue 可单测）。
  */
 import { reactive } from 'vue'
@@ -17,7 +17,7 @@ import MiniMapOverlay from './MiniMapOverlay.vue'
 import { Config, miniMapConfigFrom } from './miniMapConfig'
 
 export const name = 'mini-map'
-export const inject = ['nodeStore', 'nodeLayout', 'viewport'] as string[]
+export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]
 
 /** mini-map 服务状态（命令与浮层共享同一响应式对象；热卸随服务注入自动回收） */
 export interface MiniMapServiceState {

@@ -2,21 +2,21 @@
  * plugin-clipboard —— 复制/粘贴/剪切/复制一份（v2 复刻老版 canvas-core/src/plugins/clipboard）。
  *
  * 数据流（v2 铁律：只经内核服务读写，不碰 VueFlow/宿主内部；整段原子进 history 一次撤销）：
- * - 复制：读 ctx.selection.ids(节点桶) → nodeStore 取节点深拷贝 + edgeStore 取"两端都在选中集"的边
+ * - 复制：读 ctx.selection.ids(节点桶) → doc 取节点 + "两端都在选中集"的边
  *         → 存本画布实例的剪贴板快照（P2-4：按 Context 隔离，不再模块级 static 跨画布串数据）；
  * - 粘贴：克隆快照 → 新 id 重映射(节点 + 边 source/target) → 偏移(有鼠标锚点居中/无则级联 +20)
- *         → nodeStore.addNodes + edgeStore.addEdge → 选中切到新粘贴节点；
+ *         → doc.transaction（唯一写入口）→ 选中切到新粘贴节点；
  * - 剪切：复制 + 删选中(节点 + 触碰边)，整段 history 一次；
  * - 复制一份：copy + paste 组合（快捷键 mod+d）。
  *
  * 快捷键：不用插件自绑 window，命令 keys 字段由渲染层 CanvasHost 统一分发（masterplan 铁律 7）。
  * 类型缝：declare module 给 ctx.clipboard 直访（对齐 multi-select 的 'multi-select' 服务写法）。
  *
- * 依赖注入：nodeStore/edgeStore/selection/history 为宿主恒在硬依赖（canvas-data 包注入）;
+ * 依赖注入：doc/selection 为宿主恒在硬依赖（canvas-data 能力层内置 + 宿主注入）;
  * viewport 由 canvas-render 宿主注入、本插件只做"可选读取"（复制时把最近鼠标屏幕坐标经它换成 flow 锚点）。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, HistoryService, EdgeStoreService, CanvasNode, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   makeSnapshot,
@@ -51,7 +51,7 @@ declare module '@mini-canvas/canvas-data' {
 }
 
 export const name = 'clipboard'
-export const inject = ['nodeStore', 'edgeStore', 'selection', 'history', 'graph'] as string[]
+export const inject = ['doc', 'selection'] as string[]
 
 /** 可编辑输入框内不响应粘贴快捷键（与宿主 CanvasHost keydown 同规则；复制 ctrl+c 也避开） */
 function isEditableTarget(t: EventTarget | null): boolean {
@@ -72,20 +72,11 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     super(ctx, 'clipboard')
   }
 
-  private get nodeStore(): NodeStoreService {
-    return this.ctx.get<NodeStoreService>('nodeStore')
-  }
-  private get edgeStore(): EdgeStoreService {
-    return this.ctx.get<EdgeStoreService>('edgeStore')
-  }
   private get selection(): SelectionService {
     return this.ctx.get<SelectionService>('selection')
   }
- private get history(): HistoryService {
-   return this.ctx.get<HistoryService>('history')
- }
-  private get graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private get doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
   /** 可选：canvas-render 宿主注入的视口服务；无则 null（粘贴退级联偏移） */
   private get viewport(): ViewportService | undefined {
@@ -100,14 +91,14 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
   private selectedNodes(): CanvasNode[] {
     const ids = this.selection.ids
     if (ids.size === 0) return []
-    return this.nodeStore.getNodes().filter((n) => ids.has(n.id))
+    return this.doc.getNodes().filter((n) => ids.has(n.id))
   }
 
   /** 复制选中节点(+两端都在选的内连边)到共享剪贴板 */
   copy(): boolean {
     const nodes = this.selectedNodes()
     if (nodes.length === 0) return false
-    const edges = internalEdgesOf(this.edgeStore.getEdges(), this.selection.ids)
+    const edges = internalEdgesOf(this.doc.getEdges(), this.selection.ids)
     this.shared = makeSnapshot(
       toClipboardNodes(nodes),
       toClipboardEdges(edges),
@@ -128,7 +119,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
 
    const added: string[] = []
     // 一次原子批量插入克隆节点 + 重连边，统一走 graph（历史 + 提交落盘）。
-    this.graph.transaction('clipboard-paste', (tx) => {
+    this.doc.transaction('clipboard-paste', (tx) => {
       tx.addNodes(
         nodes.map((n) => ({
           id: n.id,
@@ -169,7 +160,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
   cut(): boolean {
     const nodes = this.selectedNodes()
     if (nodes.length === 0) return false
-    const allEdges = this.edgeStore.getEdges()
+    const allEdges = this.doc.getEdges()
     const internalEdges = internalEdgesOf(allEdges, this.selection.ids)
     this.shared = makeSnapshot(
       toClipboardNodes(nodes),
@@ -180,7 +171,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
  const touching = touchingEdgesOf(allEdges, nodeIds)
   // 一次原子事务内删边+删节点（graph 内层 withRecord 会合并成一条历史），
   // 避免 removeEdges/removeNodes 各自成记录导致一次 undo 只能恢复一半。
-  this.graph.transaction('clipboard-cut', (tx) => {
+  this.doc.transaction('clipboard-cut', (tx) => {
     tx.removeEdges(touching.map((e) => e.id))
     tx.removeNodes(nodeIds)
   })
@@ -276,4 +267,3 @@ export function apply(ctx: Context): void {
 
 /** 兼容旧装配的 PluginModule 出口 */
 export const clipboardPlugin: PluginModule = { name, inject, apply }
-

@@ -305,7 +305,7 @@ async function onSend(): Promise<void> {
       // 工具调用的运行上下文：把本节点 id 透传出去（异步任务/进度写回要用）
       invokeTool: (name, input, opts) => svc.invoke(name, input, { ctx: { nodeId: opts.nodeId }, onProgress: opts.onProgress }),
       readData: (nodeId) =>
-        ctx.get<{ getNode(id: string): { data: Record<string, unknown> } | undefined } | undefined>('nodeStore')
+        ctx.get<{ getNode(id: string): { data: Record<string, unknown> } | undefined } | undefined>('doc')
           ?.getNode(nodeId)?.data ?? props.data,
       // 第三个参数是"本次写回要同步的卡片尺寸"（由 imageRun 算好传入）。
       // 它必须和 data 进同一个 patch：内核按一次 updateNode 记一条历史，
@@ -320,7 +320,7 @@ async function onSend(): Promise<void> {
                 ): void
               }
             | undefined
-          >('graph')
+          >('doc')
           ?.updateNode(nodeId, size ? { data, size } : { data }),
       // 出图后卡片尺寸也按同一套上限（配置改完下一次生成即生效）
       fitLimits: () => readImageFitLimits(ctx),

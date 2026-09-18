@@ -2,8 +2,8 @@
  * plugin-align-arrange —— 选中节点对齐/等距排列（独立插件，v2 API）。
  *
  * 复刻老版 canvas-core/src/plugins/align-arrange，但遵循 v2 铁律：
- * - 不直碰 VueFlow/宿主内部：数据经 ctx.nodeStore / ctx.selection，尺寸经 ctx.nodeLayout（宿主恒在注入），
- *   写回经 ctx.history.withRecord 一次原子记录 + nodeStore.updateNodes 批量写。
+ * - 不直碰 VueFlow/宿主内部：数据经 ctx.get('doc')，选中经 ctx.selection，尺寸经 ctx.nodeLayout
+ *   （宿主恒在注入），写回 doc.updateNodes 一次原子（历史 + 提交落盘由唯一写入口负责）。
  * - 快捷键用命令 keys（渲染层 CanvasHost 统一分发），不自绑 window。
  * - 纯算法在 arrangeEngine.ts，可独立单测。
  *
@@ -13,7 +13,7 @@
  * - align-arrange:compact-arrowleft/right/up/down —— 老版核心：沿方向紧凑推挤排列（Ctrl+方向键）
  */
 import type { ConfigSchema, Context, InferConfig, PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, GraphDocumentService, CanvasNode } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import {
   alignNodes,
   distributeNodes,
@@ -28,16 +28,8 @@ interface NodeLayoutLike {
   nodeSize(id: string): { w: number; h: number }
 }
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    nodeStore: NodeStoreService
-    selection: SelectionService
-    graph: GraphDocumentService
-  }
-}
-
 export const name = 'align-arrange'
-export const inject = ['nodeStore', 'selection', 'graph'] as string[]
+export const inject = ['doc', 'selection'] as string[]
 
 /** 默认尺寸回退：nodeLayout 缺失时的兜底（与老版 200x100 默认一致，实际以 nodeLayout 为准） */
 const FALLBACK_W = 200
@@ -93,7 +85,8 @@ export const Config = {
 export type AlignArrangeConfigFromSchema = InferConfig<typeof Config>
 
 export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSchema>) {
-  const { nodeStore, selection, graph } = ctx
+  const doc = ctx.get<DocService>('doc')
+  const selection = ctx.get<SelectionService>('selection')
   // nodeLayout 由渲染层宿主注入；此处经 ctx.get 可选读取（与 group/mini-map 同模式，不 declare 直访类型）
   const layout = ctx.get<NodeLayoutLike | undefined>('nodeLayout')
 
@@ -130,7 +123,7 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
     if (ids.length < 2) return []
     const rects: ArrangeRect[] = []
     for (const id of ids) {
-      const n = nodeStore.getNode(id)
+      const n = doc.getNode(id)
       if (n) rects.push(toRect(n))
     }
     return rects
@@ -140,7 +133,7 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
   function applyResult(result: Map<string, { x: number; y: number }>): void {
     if (result.size === 0) return
    const entries = [...result.entries()].map(([id, pos]) => ({ id, patch: { position: pos } }))
-    graph.updateNodes(entries)
+    doc.updateNodes(entries)
   }
 
   function runAlign(dir: AlignDirection): void {

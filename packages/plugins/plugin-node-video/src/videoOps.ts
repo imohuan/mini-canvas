@@ -7,7 +7,7 @@
  * 两边都只是"备好读/写句柄再调它"。
  *
  * 读/写句柄（VideoOpsContext）由调用方注入：
- * - 组件侧：ctx.get('nodeStore').getNode(id).data 读；ctx.get('graph').updateNode 写。
+ * - 组件侧：ctx.get('doc').getNode(id).data 读；ctx.get('doc').updateNode 写。
  * - 命令侧：同一对服务，只是从命令的 ctx 上取。
  * 两边都用内核**唯一写入口 graph** → 写回自动进历史、自动落盘、可撤销。
  *
@@ -95,23 +95,21 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     data: Record<string, unknown>
     size?: { w: number; h: number }
   }
-  const store = () =>
-    svc.get<
-      | {
-          getNode(id: string): NodeLike | undefined
-          getNodes(): NodeLike[]
-          types: ReadonlyMap<string, unknown>
-        }
-      | undefined
-    >('nodeStore')
-  const graph = () =>
-    svc.get<
-      | {
-          updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
-          transaction<T>(reason: string, fn: (tx: { createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
-        }
-      | undefined
-    >('graph')
+  /**
+   * 读/写统一走 doc 门面（设计文档 §4.1）。迁移期兜底：极简宿主/单测桩可能只按老名注入
+   * nodeStore/graph ——这时退回老名，行为不变；两者都缺则安全降级（读 undefined、写 no-op）。
+   */
+  type VideoDocPort = {
+    getNode(id: string): NodeLike | undefined
+    getNodes(): NodeLike[]
+    types: ReadonlyMap<string, unknown>
+    updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
+    transaction<T>(reason: string, fn: (tx: { createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
+  }
+  const store = (): VideoDocPort | undefined =>
+    svc.get<VideoDocPort | undefined>('doc') ?? svc.get<VideoDocPort | undefined>('nodeStore') ?? undefined
+  const graph = (): VideoDocPort | undefined =>
+    svc.get<VideoDocPort | undefined>('doc') ?? svc.get<VideoDocPort | undefined>('graph') ?? undefined
   const layout = () =>
     svc.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
 

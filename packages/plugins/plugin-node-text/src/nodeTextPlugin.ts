@@ -16,7 +16,7 @@
  * 依赖方向：只依赖内核(@mini-canvas/canvas-base / canvas-data)，不反向依赖宿主/其它插件。
  */
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import TextContent from './TextContent.vue'
 import TextGeneratePanel from './TextGeneratePanel.vue'
 
@@ -48,12 +48,12 @@ export class TextService extends Service implements TextNodeService {
   }
 
   /** 内部统一走 graph 唯一写入口（历史 + 提交落盘），不直接改 nodeStore/save */
-  private graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   addTextNode(position: { x: number; y: number }): string {
-    return this.graph().transaction('add-text-node', (tx) => {
+    return this.doc().transaction('add-text-node', (tx) => {
       // 建节点只写内容字段。用户明确表示字号/加粗/颜色/对齐这些"样式"概念对文本节点没有意义，
       // 整条样式链路（顶部操作条 + patchTextData + 样式字段）已删除，data 不再有样式残留。
       const id = tx.createNode('text', position, { text: '双击编辑' })
@@ -62,7 +62,7 @@ export class TextService extends Service implements TextNodeService {
   }
 
   editText(id: string, text: string): void {
-    this.graph().updateNode(id, { data: { text } })
+    this.doc().updateNode(id, { data: { text } })
   }
 
   /**
@@ -70,17 +70,17 @@ export class TextService extends Service implements TextNodeService {
    * 只带 text 一个业务字段（不整包拷 data，避免把 _overlay 之类的会话态一起复制过去）。
    */
   duplicateTextNode(id: string): string {
-    const graph = this.graph()
-    const source = graph.getNode(id)
+    const doc = this.doc()
+    const source = doc.getNode(id)
     if (!source) return ''
     const data: Record<string, unknown> = { text: source.data.text }
     const position = { x: source.position.x + 24, y: source.position.y + 24 }
-    return graph.transaction('duplicate-text-node', (tx) => tx.createNode('text', position, data))
+    return doc.transaction('duplicate-text-node', (tx) => tx.createNode('text', position, data))
   }
 }
 
 export const name = 'text'
-export const inject = ['graph'] as string[]
+export const inject = ['doc'] as string[]
 
 /**
  * 节点类型图标（标题左侧与右键"新建节点"共用；opaque 句柄：SVG 字符串或 Vue 组件）。
@@ -144,7 +144,7 @@ export function apply(ctx: Context) {
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
-      ctx.get<GraphDocumentService>('graph').removeNodes([nodeId])
+      ctx.get<DocService>('doc').removeNodes([nodeId])
       return true
     },
   })

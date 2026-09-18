@@ -19,7 +19,7 @@
  * 快捷键：不走 DOM 按键，粘贴由命令 keys(mod+v) 统一分发会与剪贴板冲突——见下方说明。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, GraphDocumentService, ResourceService } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   classifyFile,
@@ -60,7 +60,7 @@ declare module '@mini-canvas/canvas-data' {
 }
 
 export const name = 'file-drop'
-export const inject = ['nodeStore', 'selection', 'graph'] as string[]
+export const inject = ['doc', 'selection'] as string[]
 
 /** 可编辑输入框内不响应粘贴/拖放（对齐宿主 CanvasHost 与 clipboard 同规则） */
 function isEditableTarget(t: EventTarget | null): boolean {
@@ -187,22 +187,19 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     this.readers = readers
   }
 
-  private get nodeStore(): NodeStoreService {
-    return this.ctx.get<NodeStoreService>('nodeStore')
-  }
  private get selection(): SelectionService {
    return this.ctx.get<SelectionService>('selection')
  }
-  private get graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
- }
+  private get doc(): DocService {
+    return this.ctx.get<DocService>('doc')
+}
   private get viewport(): ViewportService | undefined {
     return this.ctx.get<ViewportService | undefined>('viewport') ?? undefined
   }
 
   /** 类型是否已注册（node-image / node-video / node-text 插件装配才 true；缺则跳过该类文件） */
   private typeRegistered(type: 'image' | 'video' | 'text'): boolean {
-    return this.nodeStore.types.has(type)
+    return this.doc.types.has(type)
   }
 
   canHandle(file: { name: string; type: string }): boolean {
@@ -238,7 +235,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
   private commitPayloads(payloads: NodePayload[], description: string): string[] {
    if (payloads.length === 0) return []
    const ids = payloads.map(() => this.nextId())
-    this.graph.transaction('file-drop-add', (tx) => {
+    this.doc.transaction('file-drop-add', (tx) => {
       tx.addNodes(
         payloads.map((p, i) => ({
           id: ids[i],

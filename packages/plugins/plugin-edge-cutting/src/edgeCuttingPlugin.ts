@@ -5,7 +5,7 @@
  *
  * v2 铁律落地：
  * - 不 import canvas-core/src、不反向依赖宿主 demo、不碰 VueFlow 内部/宿主内部 ref。
- * - 数据删除只经 ctx.edgeStore（removeEdge）→ 宿主订阅自动刷渲染态；一次切割批量删包进
+ * - 数据删除只经 ctx.get('doc').removeEdges（唯一写入口）→ 宿主订阅自动刷渲染态；一次切割批量删包进
  *   ctx.history.withRecord → 整体可撤销。
  * - DOM/UI 自管：全屏 SVG overlay（刀光）由本包 EdgeCuttingOverlay 创建/清理；事件绑定在
  *   window/document/pane(整个 .vue-flow 画布)，ctx.effect 回收。
@@ -17,7 +17,7 @@
  *   isPolylineHitByCut 判定折线相交（纯几何，geometry.ts 可单测）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { EdgeStoreService, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import type { ScreenPoint } from './geometry'
 import {
   cutTrailOnly,
@@ -61,11 +61,8 @@ class EdgeCuttingController {
     return edgeCuttingConfigFrom(this.ctx)
   }
 
- private get edgeStore(): EdgeStoreService {
-   return this.ctx.get<EdgeStoreService>('edgeStore')
- }
-  private get graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private get doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   /** 绑定全部 DOM 监听（ctx.effect 调用；返回清理函数） */
@@ -193,7 +190,7 @@ class EdgeCuttingController {
     if (!viewportRect) return []
 
     const samples: Array<{ id: string; points: ScreenPoint[] }> = []
-    for (const edge of this.edgeStore.getEdges()) {
+    for (const edge of this.doc.getEdges()) {
       const path = resolveEdgePath(edge.id, scopeRoot)
       if (!path) continue
       const rect = path.getBoundingClientRect()
@@ -218,7 +215,7 @@ class EdgeCuttingController {
     if (hitEdgeIds.length === 0) return
 
     // 统一走图唯一写入口：批量删边一次历史 + 自动清选中 + 提交落盘
-    this.graph.removeEdges(hitEdgeIds)
+    this.doc.removeEdges(hitEdgeIds)
    this.ctx.emit('edge-cutting:cut', { edgeIds: hitEdgeIds })
  }
 }
@@ -251,5 +248,3 @@ export function apply(ctx: Context): void {
 
 /** 兼容旧装配的 PluginModule 出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */
 export const edgeCuttingPlugin: PluginModule = { name, Config, apply }
-
-
