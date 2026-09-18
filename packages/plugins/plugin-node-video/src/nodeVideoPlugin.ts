@@ -18,7 +18,7 @@
  * 不反向依赖宿主/其它节点插件。
  */
 import { Service, type Context, type ConfigSchema, type PluginModule } from '@mini-canvas/canvas-base'
-import type { GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_VIDEO_FIT_LIMITS } from './videoFit'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
@@ -63,28 +63,28 @@ export class VideoService extends Service implements VideoNodeService {
     super(ctx, 'video')
   }
 
-  private graph(): GraphDocumentService {
-    return this.ctx.get<GraphDocumentService>('graph')
+  private doc(): DocService {
+    return this.ctx.get<DocService>('doc')
   }
 
   addVideoNode(position: { x: number; y: number }, videoUrl = ''): string {
-    return this.graph().transaction('add-video-node', (tx) =>
+    return this.doc().transaction('add-video-node', (tx) =>
       tx.createNode(VIDEO_NODE_TYPE, position, videoUrl ? { videoUrl } : {}),
     )
   }
 
   /** 换视频：清掉旧尺寸（新视频元数据还没量，留着旧尺寸会让卡片比例对不上） */
   setVideoUrl(id: string, videoUrl: string): void {
-    this.graph().updateNode(id, { data: { videoUrl, cardWidth: undefined, cardHeight: undefined } })
+    this.doc().updateNode(id, { data: { videoUrl, cardWidth: undefined, cardHeight: undefined } })
   }
 
   removeNode(id: string): void {
-    this.graph().removeNodes([id])
+    this.doc().removeNodes([id])
   }
 }
 
 export const name = 'video'
-export const inject = ['graph'] as string[]
+export const inject = ['doc'] as string[]
 
 /** 节点类型图标（标题左侧与右键"新建节点"共用；单一来源 = 本类型注册时声明） */
 const NODE_ICON =

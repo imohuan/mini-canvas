@@ -6,7 +6,7 @@
  * 自己的 apply(ctx)：谁装它，谁就得到一整套画布基础服务（数据层 + 画布语义层）。宿主于是只剩
  * 「建 ctx → 装基础插件 → 装业务插件 → start」。
  *
- * 为什么声明 core: true（决策 1）：这 12 个服务是画布的命脉 —— 一旦被热卸，所有依赖它们的业务插件
+ * 为什么声明 core: true（决策 1）：这些服务是画布的命脉 —— 一旦被热卸，所有依赖它们的业务插件
  * 会被连带回退 PENDING，画布直接瘫。core 标识让它拒绝动态卸载（ctx.stop() 不拦：整体生命周期
  * 终结不是动态卸载，页面关闭时它也必须正常回收）。
  *
@@ -39,8 +39,6 @@ import type { StorageAdapter } from '../storage/types'
 import { NodeRegistry } from './registry/nodeRegistry'
 import { ThemeRegistry } from './registry/themeRegistry'
 import { NodeFactory } from './nodeFactory'
-import { createMenuService } from './menuService'
-import type { MenuService } from './menuService'
 import { registerCanvasCommands } from './canvasCommands'
 
 /** 基础插件名（宿主门面据此识别「这是宿主自己的装配，不是业务插件」） */
@@ -63,7 +61,7 @@ export interface CanvasBaseOptions {
 }
 
 /**
- * 基础插件建出来的 12 件服务（宿主 CanvasHostHandle 的字段来源）。
+ * 基础插件建出来的 11 件服务（宿主 CanvasHostHandle 的字段来源）。
  *
  * 类型给的是具体类（不是接口）—— 宿主需要类上的额外方法（如 SaveServiceImpl.flush、ResourceStore.dispose）。
  */
@@ -78,7 +76,6 @@ export interface CanvasBaseServices {
   history: History
   graph: GraphDocument
   command: CommandService
-  menu: MenuService
   nodeFactory: NodeFactory
   /** 配置持久化桥；persistSettings: false（或 ctx 无 settings 段）时缺席 */
   settingsPersist?: SettingsPersistService
@@ -95,7 +92,7 @@ export interface CanvasBaseAssembly {
 }
 
 /**
- * 建一个画布基础插件（含它要注入的 12 件服务实例）。
+ * 建一个画布基础插件（含它要注入的基础服务实例）。
  *
  * 用法（宿主）：
  *   const base = createCanvasBasePlugin({ adapter, nodeRegistry })
@@ -157,9 +154,6 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
 
   const command = new CommandRegistry()
 
-  // 菜单聚合服务（G 项）：从 command 表实时组装 pane/node/edge/toolbar 菜单项，供右键/工具栏 UI 消费
-  const menu = createMenuService(() => command.list())
-
   const nodeFactory = new NodeFactory()
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 tools，
@@ -176,7 +170,6 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
     history,
     graph,
     command,
-    menu,
     nodeFactory,
   }
 
@@ -186,7 +179,7 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
     core: true,
     inject: [],
     apply(ctx: PluginScope) {
-      // —— 12 件基础服务：装完即全画布可用，随本插件 fiber 回收 ——
+      // —— 基础服务：装完即全画布可用，随本插件 fiber 回收 ——
       ctx.inject('save', save)
       ctx.inject('nodeStore', nodeStore)
       ctx.inject('edgeStore', edgeStore)
@@ -197,7 +190,6 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
       ctx.inject('history', history)
       ctx.inject('graph', graph)
       ctx.inject('command', command)
-      ctx.inject('menu', menu)
       ctx.inject('nodeFactory', nodeFactory)
 
       // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，基础插件默认注册 ——

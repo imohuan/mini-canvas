@@ -8,7 +8,7 @@
 //
 // 真实产品里 text/image 节点请装 @mini-canvas/plugin-node-text、@mini-canvas/plugin-node-image。
 import { defineComponent, h } from 'vue'
-import type { Context, GraphDocumentService } from '@mini-canvas/canvas-data'
+import type { Context, DocService } from '@mini-canvas/canvas-data'
 import type { PluginModule } from '@mini-canvas/kernel'
 
 /** 示例文本内容：只把 data.text 画出来（真实文本节点有编辑态/LOD，见 plugin-node-text）。 */
@@ -56,7 +56,7 @@ export function apply(ctx: Context) {
   // 建节点走数据层唯一写入口（与真实节点插件同一条路径：可撤销 + 自动落盘），
   // 这样预览页右键"新建节点"也能用。
   const create = (type: string, data?: Record<string, unknown>) => (position: { x: number; y: number }) =>
-    ctx.get<GraphDocumentService>('graph').transaction('demo-add-node', (tx) => tx.createNode(type, position, data))
+    ctx.get<DocService>('doc').transaction('demo-add-node', (tx) => tx.createNode(type, position, data))
 
   ctx.nodes.register({
     type: 'text',

@@ -60,7 +60,7 @@ export class ImageService extends Service implements ImageNodeService {
 }
 
 export const name = 'image'
-export const inject = ['graph'] as string[]
+export const inject = ['doc'] as string[]
 
 /**
  * 节点类型图标（标题左侧与右键"新建节点"共用；opaque 句柄：SVG 字符串或 Vue 组件）。

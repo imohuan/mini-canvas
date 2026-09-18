@@ -22,7 +22,6 @@ import type {
   GraphDocumentService,
   GraphEnvelope,
   HistoryService,
-  MenuService,
   NodeFactoryService,
   NodeRegistry,
   NodeStore,
@@ -83,8 +82,6 @@ export interface CanvasHostHandle {
   themeRegistry: ThemeRegistry
   selection: SelectionService
   command: CommandService
-  /** 菜单聚合服务（从命令表实时组装菜单项） */
-  menu: MenuService
   history: HistoryService
   nodeFactory: NodeFactoryService
   /** 图唯一写入口：节点/边变更统一走它（含级联、历史、选中维护、提交落盘） */
@@ -145,7 +142,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const ctx = new Context()
 
   // —— 基础插件：12 件画布基础服务（save/nodeStore/edgeStore/resources/nodeRegistry/themeRegistry/
-  // selection/history/graph/command/menu/nodeFactory）+ 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入。
+  // selection/history/graph/command/nodeFactory）+ 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入。
   // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
   const base = createCanvasBasePlugin({
     adapter: opts.adapter,
@@ -153,7 +150,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     themeRegistry: opts.themeRegistry,
     persistSettings: opts.persistSettings,
   })
-  const { save, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, menu, nodeFactory } =
+  const { save, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, nodeFactory } =
     base.services
 
   // —— 宿主补渲染层两件（真需要 DOM / 后端 attach，数据层给不了）——
@@ -248,7 +245,6 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     themeRegistry,
     selection,
     command,
-    menu,
     history,
     nodeFactory,
     graph,

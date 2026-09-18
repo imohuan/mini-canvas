@@ -45,7 +45,6 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤2', () 
       'history',
       'graph',
       'command',
-      'menu',
       'nodeFactory',
       'settingsPersist',
       // 宿主自己补的两件
@@ -105,7 +104,6 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
       'themeRegistry',
       'selection',
       'command',
-      'menu',
       'history',
       'nodeFactory',
       'graph',

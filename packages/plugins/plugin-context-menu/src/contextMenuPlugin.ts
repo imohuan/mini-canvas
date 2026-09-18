@@ -18,15 +18,15 @@
  */
 import { createApp, nextTick, reactive, type Component } from 'vue'
 import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { NodeStoreService, SelectionService, GraphDocumentService, EdgeStoreService } from '@mini-canvas/canvas-data'
+import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 import type { CommandService } from '@mini-canvas/kernel'
-import type { NodeFactoryService, MenuService } from '@mini-canvas/canvas-data'
+import type { NodeFactoryService } from '@mini-canvas/canvas-data'
 import { typeConnectionDef } from '@mini-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
 import ConnectionMenuNode from './ConnectionMenuNode.vue'
-import type { ContextMenuItem, ContextMenuMode } from './menuBuilder'
+import { buildMenuItems, type ContextMenuItem, type ContextMenuMode } from './menuBuilder'
 import { enrichMenuItems } from './menuEnrich'
 import {
   CONNECTION_MENU_CANCEL_EVENT,
@@ -44,17 +44,8 @@ import {
   type ConnectionDropFact,
 } from './connectionMenu'
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    nodeStore: NodeStoreService
-    selection: SelectionService
-    graph: GraphDocumentService
-    nodeFactory: NodeFactoryService
-  }
-}
-
 export const name = 'context-menu'
-export const inject = ['nodeStore', 'selection', 'graph', 'menu', 'nodeFactory', 'edgeStore'] as string[]
+export const inject = ['doc', 'selection', 'nodeFactory'] as string[]
 
 /**
  * 本插件可配置项（模块级 Config：内核装配时校验 + 补默认 + 登记进 ⚙ 设置面板）。
@@ -99,8 +90,10 @@ interface MenuUiState {
 }
 
 export function apply(ctx: Context): void {
-  const { nodeStore, selection, graph } = ctx
-  // 菜单聚合走内核 menu 服务（依赖声明在 inject；ctx.menu 直访由 declare module 类型提供）
+  // 数据读写统一走 doc 门面（§4.1）；菜单聚合走本插件自己的 menuBuilder（决策 10）
+  const doc = ctx.get<DocService>('doc')
+  const selection = ctx.get<SelectionService>('selection')
+  const graph = doc
 
   // —— 临时菜单节点类型（拖线落空白时放的占位菜单卡）——
   // 它就是一个**真节点**：经 nodeStore → VueFlow 渲染，所以位置/尺寸/缩放全部由画布负责。
@@ -156,13 +149,15 @@ export function apply(ctx: Context): void {
     current = { nodeId, edgeId, flowPosition }
     // 新建节点候选 = nodeFactory 可创建类型（只列有 creator 的，避免建出无内容节点）
     const creatable = new Set(ctx.get<NodeFactoryService>('nodeFactory').creatableTypes())
-    const nodeTypes = [...nodeStore.types.values()]
+    const nodeTypes = [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
-    // G 项：菜单聚合走内核 menu 服务（与未来 toolbar/面板同一数据源），不再插件内自组。
-    // areas 语义 = 开放注册：任何插件命令显式声明 areas 含当前 mode 即自动出现在右键，
-    // 未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
-    const raw = ctx.get<MenuService>('menu').menuFor(mode, nodeTypes)
+    // 菜单聚合：本插件自己的纯逻辑 buildMenuItems（决策 10 —— menu 服务已删，实现"合回"
+    // 到它唯一的消费者这里，不再占基础服务名）。数据源仍是那条单一链：
+    // 命令表（现取，注册即生效）+ 节点类型表。areas 语义 = 开放注册：命令声明 areas 含当前
+    // mode 即自动出现在右键；未声明 areas 的命令（纯快捷键）不进菜单 —— 无需本插件白名单。
+    // 命令表经服务取（能力段 ctx.commands 只有 register/has；list 在 CommandService 上）
+    const raw = buildMenuItems(mode, ctx.get<CommandService>('command').list(), nodeTypes)
     // UI 增强：补图标 + hover 描述（与快捷键面板同款 item 视觉）
     state.items = enrichMenuItems(raw)
     state.mode = mode
@@ -187,10 +182,10 @@ export function apply(ctx: Context): void {
   /** 松手事实快照（点菜单项时据此建真节点真边） */
   let pendingFact: ConnectionDropFact | null = null
 
-  /** 可建类型候选 = nodeFactory.creatableTypes() ∩ nodeStore.types（只列真能建出内容的） */
+  /** 可建类型候选 = nodeFactory.creatableTypes() ∩ doc.types（只列真能建出内容的） */
   function creatableNodeTypes(): Array<{ type: string; label: string; icon?: unknown; description?: string }> {
     const creatable = new Set(ctx.get<NodeFactoryService>('nodeFactory').creatableTypes())
-    return [...nodeStore.types.values()]
+    return [...doc.types.values()]
       .filter((t) => creatable.has(t.type))
       .map((t) => ({ type: t.type, label: t.label, icon: t.icon, description: t.description }))
   }
@@ -255,14 +250,14 @@ export function apply(ctx: Context): void {
       sourceHandle: payload.sourceHandle,
       flowPosition: { x: payload.flowPosition.x, y: payload.flowPosition.y },
     }
-    const sourceNodeType = nodeStore.getNode(fact.sourceNodeId)?.type
+    const sourceNodeType = doc.getNode(fact.sourceNodeId)?.type
     const candidates = filterConnectableTypes({
       fact,
       sourceNodeType,
       types: creatableNodeTypes(),
       // 容量/重复判定只看正式边：中间态边（占位连线）不参与，否则自己的占位边会把候选全滤掉
-      edges: ctx.get<EdgeStoreService>('edgeStore').getEdges().filter((e) => !isTempEdge(e)),
-      getTypeConn: (type) => typeConnectionDef(nodeStore.types.get(type)),
+      edges: doc.getEdges().filter((e) => !isTempEdge(e)),
+      getTypeConn: (type) => typeConnectionDef(doc.types.get(type)),
     })
     const items = enrichMenuItems(buildConnectionMenuItems(candidates))
     // 上一次的临时态先清掉（重复拖线不会堆叠）
@@ -323,7 +318,7 @@ export function apply(ctx: Context): void {
     const nodeType = item.nodeType
     // 关键：真节点的位置由**同一个** placeByPortAnchor 算出（端口锚点 = 松手点，尺寸取该类型默认尺寸），
     // 于是"临时卡片 → 真节点"切换时端口不跳位 —— 用户要求"与我创建节点输入端口的位置重合且保持不变"。
-    const defaultSize = nodeStore.types.get(nodeType)?.defaultSize ?? { w: 256, h: 128 }
+    const defaultSize = doc.types.get(nodeType)?.defaultSize ?? { w: 256, h: 128 }
     const position = placeByPortAnchor(fact.flowPosition, defaultSize, portSideOf(fact))
     // 建节点走 nodeFactory（而不是 tx.createNode）：各节点插件注册的 creator 才知道自己的默认内容
     // （text 的"双击编辑"等）。
@@ -335,7 +330,7 @@ export function apply(ctx: Context): void {
     void addEdgeWhenNodeReady({
       waitTick: () => waitFrame(),
       isNodeReady: () => true, // node already in nodeStore; v-if never removes its handle
-      isAlive: () => Boolean(nodeStore.getNode(nodeId)), // 期间被撤销/删掉则不补
+      isAlive: () => Boolean(doc.getNode(nodeId)), // 期间被撤销/删掉则不补
       addEdge: () => {
         const ep = resolveEdgeEndpoints(fact, nodeId)
         // 统一入口：校验（类型不符时这条真边不该建）+ 满额挤出。失败的边静默不建 ——

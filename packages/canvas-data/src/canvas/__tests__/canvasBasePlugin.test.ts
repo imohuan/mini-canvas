@@ -3,7 +3,7 @@
  *
  * 锁三件事：
  * 1. **它声明了核心身份**：core: true，且真被内核记下（uninstallPlugin 返回 false、服务仍可用）；
- * 2. **它注入的 12 件服务件件到位**，且宿主不再需要手写 ctx.inject；
+ * 2. **它注入的服务件件到位**，且宿主不再需要手写 ctx.inject；
  * 3. **换一个宿主（headless）能跑通建节点 / 撤销 / 落盘全链** —— 不依赖浏览器，
  *    这就是"步骤 4 完成标准③"的证据：画布能力不再绑死在 createMiniCanvasHost 里。
  */
@@ -37,7 +37,7 @@ async function bootHeadless(adapter?: MemoryStorageAdapter) {
   return { ctx, base, services: base.services }
 }
 
-describe('canvasBasePlugin —— 建出来的 12 件服务', () => {
+describe('canvasBasePlugin —— 建出来的基础服务', () => {
   it('每件服务都经基础插件注入内核，ctx.get 全部取得到', async () => {
     const { ctx, services } = await bootHeadless()
     const names = [
@@ -51,7 +51,6 @@ describe('canvasBasePlugin —— 建出来的 12 件服务', () => {
       'history',
       'graph',
       'command',
-      'menu',
       'nodeFactory',
     ] as const
     for (const n of names) {
