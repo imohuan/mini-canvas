@@ -18,6 +18,28 @@
  * - 类型定义就地写（不 import @mini-canvas/canvas-data）：本包要能独立 `npx` 跑，
  *   而 canvas-data 是 private 的工作区包，装不到用户机器上。字段形状由测试与
  *   canvas-data 的导出逐字比对守住（见 __tests__/canvasDoc.test.ts）。
+ *
+ * 步骤 8 的结论：这一处「就地重写」是有意保留，不与 mcp-server 合并（设计文档 §九 步骤 8 的路线乙）。
+ * 理由是实测出来的，不是口味问题：
+ *
+ * 1. 前提没满足，且卡在本次范围外。canvas-data 要能发布，先得能编译出 .d.ts；
+ *    而它有 39 处 import/export 直接依赖 @mini-canvas/kernel，kernel 也是 private 且同样只发 src/。
+ *    也就是说「把 canvas-data 做成可发布」实际等于「先发布 kernel」——kernel 在本次步骤里禁止改动。
+ *    探针（用 tsc 模拟本包 rootDir=./src + declaration，去消费一个 src-only 的包）实测：
+ *    error TS6059: File ... is not under rootDir。
+ * 2. 两边的「同一份画布」不是同一种东西，合并不省事反而危险。
+ *    本文件的 CanvasNode.type 存的是语义类型（text/image…，与网页端 GraphDocument 同款）；
+ *    mcp-server 的 GraphModel 存的是渲染类型：语义类型会被改写成 type=custom + data.nodeType
+ *    （见 GraphModel.test.ts 的「语义类型节点自动转成 VueFlow 格式」）。
+ *    边 id 也不同源：本文件 edgeIdOf 生成 e-{source}-{target}（与 canvas-data 的 edgeStoreId 逐字一致，
+ *    canvasDoc.test.ts 里钉死了 e-a-b），而 GraphModel.createEdge 用 randomUUID()。
+ *    把两套塞进同一个类，等于要在数据层里加一个「你那边用哪种形态」的开关——那才是真风险。
+ * 3. 两个后端的存储形态本就不同：本包是 KV（.mini-canvas/kv/*.json），
+ *    mcp-server 是 workspace/project-{id}/canvas.json（NodeStorage）。
+ *    共用的只有「JSON 字段形状」，而那一层已经由 canvasDoc.test.ts 与本文件的类型逐字比对守住。
+ *
+ * 因此本步只做不加依赖、不动独立性的动作：把结论写在这里，免得下一个人重新评估一遍。
+ * 若将来真要合并，正确顺序是：先发布 kernel → 再发布 canvas-data → 然后才是在两个后端之间抽共享内核。
  */
 import { randomUUID } from 'node:crypto'
 import type { KvStore } from '../store/kvStore.js'
@@ -238,10 +260,10 @@ export class CanvasDocument {
 
   /**
   * 「以这份为准」整体重写（网页端的整包保存走这条）。
-  *
+ *
   * 与 batchNodes 的区别：batch 是「在现有画布上增删改」，这条是「整个换成我这份」。
   * 用户删光节点、恢复历史、导入画布这类操作必须用它 —— 用 batch 表达不出「删掉你没提到的那些」。
-  *
+ *
   * 同样进串行链：否则它与 AI 的增量写并发时，一方会把另一方整个盖掉。
   */
   /**

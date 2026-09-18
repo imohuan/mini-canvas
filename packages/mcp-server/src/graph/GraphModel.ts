@@ -3,6 +3,13 @@
  *
  * 持有所有画布，一个画布 = 一个 taskId（任务 ID 即画布 ID）。
  * 每次变更递增 graphVersion，并派发事件，供 MCP Tool 与 SSE 订阅使用。
+ *
+ * 与 cloud-server 那份模型（src/mcp/canvasDoc.ts）的关系：**有意各留一份，不合并**。
+ * 设计文档 §九 步骤 8 的路线乙；完整实测依据写在 canvasDoc.ts 头部，摘要：
+ * - 本模型存的是渲染类型（语义类型 → type=custom + data.nodeType），那边存语义类型；
+ * - 本模型 createEdge 用 randomUUID()，那边用 e-{source}-{target}（与数据层 edgeStoreId 一致）；
+ * - 本模型落盘 workspace/project-{id}/canvas.json，那边是 KV。
+ * 两边真正共用的只有 JSON 字段形状，已由各自测试对比守住。要合并得先发布 kernel 与 canvas-data。
  */
 import { randomUUID } from 'node:crypto'
 import type {

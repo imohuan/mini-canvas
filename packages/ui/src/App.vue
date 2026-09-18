@@ -10,11 +10,8 @@
 // bindThemeSettings 窄更新到 cfg.edge → 连线外观实时变化。
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import type { SettingsStore } from '@mini-canvas/kernel'
-import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
 import { CanvasHost, SettingsHost, createV2Logger } from '@mini-canvas/canvas-render'
 import {
-  themeDefaultPlugin,
   DEFAULT_THEME_EDGE,
   DEFAULT_THEME_HANDLE,
   DEFAULT_THEME_DEBUG,
@@ -24,52 +21,12 @@ import {
   DEBUG_SETTING_KEYS,
   SNAP_ZONE_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
-import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
-import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
-import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
-import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
-import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
-import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
-import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
-import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
-import { alignArrangePlugin } from '@mini-canvas/plugin-align-arrange'
-import { contextMenuPlugin } from '@mini-canvas/plugin-context-menu'
-import { clipboardPlugin } from '@mini-canvas/plugin-clipboard'
-import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
-import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
-import { groupPlugin } from '@mini-canvas/plugin-group'
-import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
-import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
-import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
+// 插件清单与存储后端住在 ./assembly.ts：本组件只管"页面长什么样"，换一套插件组合不用改这里。
+import { APP_PLUGINS, SAMPLE_IMAGE_URL, createDefaultStorageAdapter, seedDefaultCanvas } from './assembly'
 
 // —— 装配插件 + 存储（CanvasHost 冷启动）——
-const plugins = [
-  themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
-  nodeTextPlugin, // text 节点
-  nodeImagePlugin, // image 节点
-  nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏
-  node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
-  nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）
-  pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用
-  pluginTextGenerationTools, // 文本生成工具：同上，产出文本（工具注册独立成插件，节点零硬编码）
-  edgeCuttingPlugin, // 连接线切割：按住 Alt 拖拽"刀光"划过连线即可删除
-  multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
-  alignGuidePlugin, // 对齐辅助线：拖节点时吸附其它节点边缘/中心并显示蓝线
-  autoLayoutPlugin, // 自动布局：Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图
-  alignArrangePlugin, // 对齐排列：Ctrl+方向键紧凑排列 / 对齐/等距命令
-  groupPlugin, // 分组：选中≥2 Ctrl+G 打组 / Ctrl+Shift+G 解组
-  contextMenuPlugin, // 右键菜单：空白新建节点 / 节点删除 / 边删除
-  clipboardPlugin, // 复制粘贴：Ctrl/Cmd+C/V/X/D
-  canvasExportPlugin, // 导出：Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中
-  nodeFindPlugin, // 搜索：Ctrl/Cmd+F
-  miniMapPlugin, // 小地图：Ctrl/Cmd+M
-  shortcutManagerPlugin, // 快捷键帮助：Ctrl/Cmd+/ 打开
-  fileDropPlugin, // 文件拖入 & 粘贴：把图片/视频/文本拖到画布或粘贴进来即建节点
-]
-const adapter: StorageAdapter = new LocalStorageAdapter()
+const plugins = APP_PLUGINS
+const adapter = createDefaultStorageAdapter()
 
 const log = createV2Logger('config')
 
@@ -84,20 +41,8 @@ const cfg = reactive({
 // —— 设置面板开关（顶部按钮切换右下 dock 显隐）——
 const settingsOpen = ref(false)
 
-const SAMPLE_IMG =
-  'data:image/svg+xml;utf8,' +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#dbeafe"/><text x="160" y="118" font-family="sans-serif" font-size="20" fill="#1d4ed8" text-anchor="middle">v2 image 节点</text><text x="160" y="142" font-family="sans-serif" font-size="13" fill="#64748b" text-anchor="middle">data.imageUrl</text></svg>`,
-  )
-const SAMPLE_TEXT = '双击我输入内容\n\n· 从左右圆点可拖出连线\n· 拖动节点可移动\n· 点节点再按 Delete 删除'
-
-// 首次(存储空)默认图
-function seedDefault(): CanvasNode[] {
-  return [
-    { id: '1', type: 'text', position: { x: 120, y: 120 }, data: { text: SAMPLE_TEXT } },
-    { id: '2', type: 'image', position: { x: 560, y: 160 }, data: { imageUrl: SAMPLE_IMG } },
-  ]
-}
+// 首次(存储空)默认图 = assembly.ts 的 seedDefaultCanvas()（示例图/文本也住在那里）
+const seedDefault = seedDefaultCanvas
 
 // —— 画布宿主句柄（经 CanvasHost 暴露）——
 const hostEl = ref<InstanceType<typeof CanvasHost> | null>(null)
@@ -226,7 +171,7 @@ function createNode(type: 'text' | 'image' | 'video'): void {
     type,
     position: { x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 60 },
   }
-  if (type === 'image') payload.imageUrl = SAMPLE_IMG
+  if (type === 'image') payload.imageUrl = SAMPLE_IMAGE_URL
   host.command.execute('command:create-node', payload)
 }
 function deleteSelected(): void {

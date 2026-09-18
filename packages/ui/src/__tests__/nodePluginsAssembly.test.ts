@@ -4,7 +4,7 @@
  * 为什么放在 ui 包：内核包不能反向依赖插件（依赖方向恒 插件→内核），而"多插件同时装载"这件事
  * 只有装配层能验。锁三件事：
  * 1. 四个节点类型都注册进 nodeStore（无遗漏、无重名冲突）；
- * 2. 每个类型的段（content + 顶部/底部条）都落到 nodeRegistry（壳才渲染得出来）；
+ * 2. 每个类型的段（in + 顶部/底部条）都落到 nodeRegistry（壳才渲染得出来）；
  * 3. 每个类型都能经 nodeFactory 真建出节点、且写进 graph（服务名不互相打架）。
  *
  * 这一条测试不碰浏览器/WebGL：three 的球体只在组件 mount 时才会创建，这里只验装配与写模型。
@@ -71,9 +71,9 @@ async function bootAll() {
  * 以后若要给某类型加回顶部栏，必须同步改这里，否则这条测试会拦住（这正是它的用处）。
  */
 const EXPECTED = [
-  { type: 'text', extraSegments: ['bottom-toolbar'] },
-  { type: 'image', extraSegments: ['top-toolbar', 'bottom-toolbar', 'overlay'] },
-  { type: 'video', extraSegments: ['top-toolbar', 'bottom-toolbar', 'overlay'] },
+  { type: 'text', extraSegments: ['out:bottom'] },
+  { type: 'image', extraSegments: ['out:top', 'out:bottom', 'over:inset'] },
+  { type: 'video', extraSegments: ['out:top', 'out:bottom', 'over:inset'] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const
@@ -88,11 +88,11 @@ describe('节点插件整装', () => {
     ctx.stop()
   })
 
-  it('每个类型都注册了 content 段（壳缺 content 会渲染"未注册"提示）；带控制栏的类型另有其段', async () => {
+  it('每个类型都注册了 in 段（壳缺 in 会渲染"未注册"提示）；带控制栏的类型另有其段', async () => {
     const { ctx, nodeRegistry } = await bootAll()
     for (const { type, extraSegments } of EXPECTED) {
       const segments = nodeRegistry.get(type)?.segments ?? {}
-      expect(segments.content, `${type} 缺 content 段`).toBeTruthy()
+      expect(segments.in, `${type} 缺 in 段`).toBeTruthy()
       for (const seg of extraSegments) {
         expect(segments[seg], `${type} 缺 ${seg} 段`).toBeTruthy()
       }
