@@ -187,6 +187,9 @@ export type { SettingsPanelSource, SettingSchema, SettingEntry } from './compone
 // 设置面板「标准字段控件渲染器」下发令牌（provide/inject）：默认设置面板 provide，
 // 插件自定义 settingsGroup/<key> 内容组件 inject 后直接渲染某字段控件（无需反向依赖 theme-default）
 export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contracts/settingsField'
+// 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
+export { useUiComponent, uiComponent, uiNames, UI_NAMES } from './contracts/uiCatalog'
+export type { UiComponentHandle, UiName } from './contracts/uiCatalog'
 // 可替换设置面板宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家，把 ctx.settings 喂给它（见 plugin-theme-default/settings.ts 注册默认皮）
 export { default as SettingsHost } from './components/SettingsHost.vue'
 // 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口

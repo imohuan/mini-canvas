@@ -29,6 +29,13 @@ import CustomEdge from "./components/edge/CustomEdge.vue";
 import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue";
+import {
+  Dropdown,
+  Select,
+  PrecisionSlider,
+  ToolParamField,
+  NodeToolbarButton,
+} from "./components/ui";
 
 export const name = "theme-default";
 // 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。
@@ -641,6 +648,16 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.theme.register("background", DefaultBackground); // 画布背景
   ctx.theme.register("connectionLine", ConnectionLine); // 拖线临时连接线（canvas-render #connection-line 渲染它）
   ctx.theme.register("edgeDefaultType", "custom");
+
+  // 设计系统组件目录（设计文档 §4.5 / 案例 4 / 决策 4）：把"希望被主题整体换掉"的
+  // 通用件按名字登记进 ui 场 —— 别的插件按名取用，换一套主题时它们一起变、业务插件零改动。
+  // 只收设计系统件（按钮/下拉/滑块/参数控件）；插件内部自用的小组件照旧 import（决策 4 的边界）。
+  const ui = ctx.registryOf<unknown>("ui");
+  ui.add("button", NodeToolbarButton, { id: "default" });
+  ui.add("dropdown", Dropdown, { id: "default" });
+  ui.add("select", Select, { id: "default" });
+  ui.add("slider", PrecisionSlider, { id: "default" });
+  ui.add("toolParamField", ToolParamField, { id: "default" });
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
   ctx.theme.register("settingsPanel", PluginSettingsDialog, {

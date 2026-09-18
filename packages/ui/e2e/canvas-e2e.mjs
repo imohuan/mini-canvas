@@ -202,6 +202,23 @@ const live = await page.evaluate(() => {
 check('surface 是活快照：运行时注册的模型工具立刻可见、注销后消失', live.midDesc === 'e2e 探针' && live.midParams === 'object' && !live.after.includes('e2e-probe'), JSON.stringify(live));
 
 // ⑩ 控制台：零 error（favicon 404 不算）
+// 9d. ui 目录场（设计文档 §4.5 / 案例 4）：主题登记的设计系统件按名可取
+const uiDir = await page.evaluate(() => {
+  const ctx = window.MiniCanvasUI.getContext();
+  const f = ctx.registryOf('ui');
+  const before = f.keys().sort();
+  const btn = f.top('button')?.value;
+  const src = f.top('button')?.source;
+  // 换主题 = 叠一层（order 更小者赢），原值仍可查
+  const Probe = { name: 'ProbeButton' };
+  const h = f.add('button', Probe, { id: 'e2e', order: -10 });
+  const afterTop = f.top('button')?.value;
+  const all = f.list('button').map((e) => e.id);
+  h.dispose();
+  return { before, hasButton: btn !== undefined, src, afterTopIsProbe: afterTop === Probe, all };
+});
+check('ui 目录场有主题登记的设计系统件（button 等）', uiDir.hasButton && typeof uiDir.src === 'string', 'keys=' + uiDir.before.join(','));
+check('ui 目录支持换主题（叠层：order 小者赢，原值仍在）', uiDir.afterTopIsProbe && uiDir.all.includes('default'), 'ids=' + uiDir.all.join(','));
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));
