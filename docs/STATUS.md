@@ -305,8 +305,8 @@ ui 26 / theme-default 170 全绿（既有测试一条未删未改）。
 根目录**没有**统一 test 脚本，各包各自跑：
 
 ```bash
-pnpm -C packages/kernel test           # 177（步骤 4 后）
-pnpm -C packages/canvas-data test      # 303（步骤 4 后）
+pnpm -C packages/kernel test           # 202（surface 自省后）
+pnpm -C packages/canvas-data test      # 314（步骤 5c 后）
 pnpm -C packages/canvas-render test    # 333（步骤 4 后）
 pnpm -C packages/ui test               # 26（整装 / 设置覆盖 / 插件装配）
 pnpm -C packages/plugins/<插件名> test   # 单个插件，如 plugin-theme-default（170）
@@ -318,6 +318,9 @@ pnpm -C packages/ui typecheck               # vue-tsc
 
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
+
+UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **18/18**（或 `pnpm -C packages/ui e2e`）。
+自省：`ctx.surface()` 一次列出服务 / 注册场 / 命令 / 工具及其参数（见设计文档「十一·补」）。
 
 > 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。
 >
