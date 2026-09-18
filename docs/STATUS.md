@@ -56,14 +56,29 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 ### 下一步（未开始）
 
 **九个步骤已全部落地 + 严格审查修正 + UI 自动化验证通过**（2026-09-18）。
-分支 `codex/registry-refactor`，19 个提交。
+分支 `codex/registry-refactor`，29 个提交（2026-09-19 更新）。
 
 已完成的三件交付（目标定义的三条）：
 1. **完整功能**：设计文档 §九 九个步骤全部落地（每步独立提交、可单独回退）。
 2. **严格 code review**：两个独立子代理（Standards 轴 + Spec 轴）复查；
    3 条硬违规（H1/H2/H3）逐条核实后已修，5 条坏味道 + 1 条规格缺口已申报。
 3. **UI 自动化测试**：`packages/ui/e2e/canvas-e2e.mjs`（真实 Chromium 跑 :5288），
-   **18/18 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+   **24/24 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+
+**新增交付（2026-09-19）：自省 API `ctx.surface()`**（用户需求：列出注册的列表 + 它们支持的参数）
+
+```ts
+const s = ctx.surface();
+s.services;   // [{ name, source, methods }] —— 按名可取的服务 + 谁注入的 + 方法清单
+s.registries; // [{ kind, keys: [{ key, count }] }] —— 每个场有哪些键、几条
+s.commands;   // id/title/keys/areas/group/icon + origin: field|service
+s.tools;      // 生成工具声明式参数（key/label/type/options/default/min/max/step…）
+s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outputSchema）
+```
+
+要点：只读、零副作用、created/started 皆可调。`origin:'service'` 标出「走 command 服务直注册」
+的命令（建节点/删除/撤销/重做 4 条不进注册场，只读场会漏报）；`methods` 用 descriptor 反射取
+方法名、**不执行 getter**，属 best-effort 诊断字段。
 
 **遗留（已申报，非阻塞）**：
 - ~~5c 未做~~ → **已完成**（四个老名 nodeStore/edgeStore/graph/history 已下线，
@@ -320,7 +335,7 @@ pnpm -C packages/ui typecheck               # vue-tsc
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
 
-UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **18/18**（或 `pnpm -C packages/ui e2e`）。
+UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **24/24**（或 `pnpm -C packages/ui e2e`）。
 自省：`ctx.surface()` 一次列出服务 / 注册场 / 命令 / 工具及其参数（见设计文档「十一·补」）。
 
 > 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。
