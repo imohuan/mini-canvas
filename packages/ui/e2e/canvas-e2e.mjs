@@ -162,6 +162,43 @@ const core = await page.evaluate(() => {
 });
 check('真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下线', core.returned === false && core.state === 'active' && core.graph === true && core.oldGraphGone === true, JSON.stringify(core));
 
+// 9b. ctx.surface() 自省：真实宿主上一次列出服务 / 注册场 / 命令 / 工具（新原语）
+const surf = await page.evaluate(() => {
+  const s = window.MiniCanvasUI.getContext().surface();
+  return {
+    services: s.services.map((x) => x.name),
+    docSource: (s.services.find((x) => x.name === 'doc') || {}).source,
+    kinds: s.registries.map((r) => r.kind),
+    commandCount: s.commands.length,
+    commandIdsOk: s.commands.every((c) => typeof c.id === 'string'),
+    toolCount: s.tools.length,
+    toolParamsOk: s.tools.every((t) => t.params === undefined || Array.isArray(t.params)),
+    modelToolNames: s.modelTools.map((t) => t.name),
+  };
+});
+check('surface().services 列出 doc 等服务且带 source（谁注入的）', surf.services.includes('doc') && typeof surf.docSource === 'string', 'services=' + surf.services.length + ', doc.source=' + surf.docSource);
+check('surface().registries 覆盖 node/region、command 等场', ['node/region', 'command'].every((k) => surf.kinds.includes(k)), 'kinds=' + surf.kinds.join(','));
+check('surface().commands 列出已注册命令（含 id/keys/areas）', surf.commandCount > 0 && surf.commandIdsOk, surf.commandCount + ' 条');
+check('surface().tools 列出生成工具且 params 形状合法', surf.toolCount > 0 && surf.toolParamsOk, surf.toolCount + ' 个');
+console.log('surface 快照: services=' + surf.services.length + ' kinds=[' + surf.kinds.join(',') + '] commands=' + surf.commandCount + ' tools=' + surf.toolCount + ' modelTools=[' + surf.modelToolNames.join(',') + ']');
+
+// 9c. surface 是活快照：运行时往 tool 场注册一条，再读一次必须能看见（证明不是启动时缓存）
+const live = await page.evaluate(() => {
+  const ctx = window.MiniCanvasUI.getContext();
+  const before = ctx.surface().modelTools.map((t) => t.name);
+  const h = ctx.registryOf('tool').add('e2e-probe', {
+    description: 'e2e 探针',
+    parameters: { type: 'object', properties: { x: { type: 'string' } } },
+    output: { schema: { type: 'string' }, render: () => [{ type: 'text', text: '' }] },
+    execute: () => 'ok',
+  });
+  const mid = ctx.surface().modelTools.find((t) => t.name === 'e2e-probe');
+  h.dispose();
+  const after = ctx.surface().modelTools.map((t) => t.name);
+  return { before, midDesc: mid ? mid.description : null, midParams: mid ? typeof mid.parameters : null, after };
+});
+check('surface 是活快照：运行时注册的模型工具立刻可见、注销后消失', live.midDesc === 'e2e 探针' && live.midParams === 'object' && !live.after.includes('e2e-probe'), JSON.stringify(live));
+
 // ⑩ 控制台：零 error（favicon 404 不算）
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
