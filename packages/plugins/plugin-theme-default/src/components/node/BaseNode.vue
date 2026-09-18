@@ -690,7 +690,7 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-slot v2-slot--top nodrag nopan"
       :style="topSlotsStyle"
     >
-      <component v-for="seg in topSlots" :key="'top-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in topSlots" :key="'top-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
 
     <div class="v2-card" :class="{
@@ -781,7 +781,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
         <!-- in 区域（老 content 段）：基座 + attach 场条目按 order 同摞渲染 -->
-        <component v-for="seg in contentStack" :key="'in-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in contentStack" :key="'in-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
         <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
@@ -811,23 +811,23 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-slot v2-slot--bottom nodrag nopan"
       :style="bottomSlotsStyle"
     >
-      <component v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
 
     <!-- out:left / out:right（新增区域）：左右外侧，垂直居中；不参与卡片布局、不撑高节点 -->
     <div v-if="leftRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-left nodrag nopan">
-      <component v-for="seg in leftRegions" :key="'out-left-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in leftRegions" :key="'out-left-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
     <div v-if="rightRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-right nodrag nopan">
-      <component v-for="seg in rightRegions" :key="'out-right-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in rightRegions" :key="'out-right-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
 
     <!-- on:top / on:bottom（新增区域）：贴在卡片边框线上（骑线居中，如进度条） -->
     <div v-if="onTopRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-top nodrag nopan">
-      <component v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
     <div v-if="onBottomRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-bottom nodrag nopan">
-      <component v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
 
     <!-- 编辑浮层（裁剪框/扩展框）：与卡片**同级**、画在卡片外面，所以不会被内容层的 overflow:hidden 裁掉。
@@ -838,13 +838,13 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >
-      <component v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
 
     <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
          overflow 交给组件自带样式（拖拽手柄/悬停放大会出界）。 -->
     <div v-if="outsetRegions.length > 0 && !lowDetail" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
-      <component v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :is="seg.component" :id="id" :data="data" />
+      <component v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :is="seg.component" :id="id" :data="data" v-bind="seg.props" />
     </div>
   </div>
 </template>

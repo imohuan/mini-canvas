@@ -38,6 +38,11 @@ export interface NodeSegmentEntry {
   /** 基座固定为 base，叠加 occupant 用它注册时的 occupant id */
   id: string
   component: unknown
+  /**
+  * 注册时声明的组件专属数据（`attach` 的 `props`）。**数据走 props、能力走上下文**（规则 3）。
+  * 基座与 contribute 糖没有 props（undefined）；只有 attach 落场条目会带。
+  */
+  props?: Record<string, unknown>
 }
 
 /**

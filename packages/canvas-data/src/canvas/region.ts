@@ -139,10 +139,10 @@ export function nodeRegionStackEntries(
   const reg = assertRegion(region)
   const entries: NodeSegmentEntry[] = []
   const seen = new Set<string>()
-  const push = (id: string, component: unknown): void => {
+  const push = (id: string, component: unknown, props?: Record<string, unknown>): void => {
     if (seen.has(id)) return
     seen.add(id)
-    entries.push({ id, component })
+    entries.push(props ? { id, component, props } : { id, component })
   }
 
   // ① NodeRegistry：基座固定 id='base'，随后区域级贡献按 order
@@ -161,7 +161,9 @@ export function nodeRegionStackEntries(
     for (const key of keys) {
       for (const e of regionField.list(key)) {
         const value = (e as RegionFieldEntry).value as NodeRegionAttachment
-        push(e.id, value?.component)
+        // props 透传给组件（规则 3：专属数据走 props；此前只取 component，props 是哑字段 ——
+        // 严格审查 P1 指出「注册时传的共享状态到不了组件」，即此处断链）。
+        push(e.id, value?.component, value?.props)
       }
     }
   }

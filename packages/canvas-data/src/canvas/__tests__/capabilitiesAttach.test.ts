@@ -6,7 +6,7 @@ import { ThemeRegistry } from '../registry/themeRegistry'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
 import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
-import type { NodeRegion } from '../region'
+import { nodeRegionStackEntries, type NodeRegion } from '../region'
 
 const Comp = { name: 'RegionComp' }
 const Probe = { name: 'Probe' }
@@ -106,6 +106,28 @@ describe('ctx.nodes.attach（§8.3 一等 API）', () => {
     expect(value.component).toBe(Comp)
     expect(value.needs).toEqual(['node', 'zoom'])
     expect(value.props).toEqual({ 展开: true })
+  })
+
+  it('props 经区域栈透传给渲染层（严格审查 P1：此前 props 是哑字段，到不了组件）', async () => {
+    const ctx = await boot([
+      mk('p', (c) => {
+        c.nodes.attach('image', { region: 'out:right', id: 'x', component: Comp, props: { 展开: true } })
+      }),
+    ])
+    const stack = nodeRegionStackEntries(
+      ctx.get<NodeRegistry>('nodeRegistry'),
+      ctx.registryOf('node/region') as never,
+      'image',
+      'out:right',
+    )
+    const entry = stack.find((e) => e.id === 'x')
+    expect(entry).toBeDefined()
+    // props 必须随条目一起到达渲染层（BaseNode 用 v-bind="seg.props" 绑给组件）
+    expect(entry?.props).toEqual({ 展开: true })
+    // 没有 props 的条目保持 undefined（不凭空造空对象，避免给组件多传一个 prop）
+    const ctx2 = await boot([mk('q', (c) => c.nodes.attach('image', { region: 'out:right', id: 'y', component: Comp }))])
+    const stack2 = nodeRegionStackEntries(ctx2.get<NodeRegistry>('nodeRegistry'), ctx2.registryOf('node/region') as never, 'image', 'out:right')
+    expect(stack2.find((e) => e.id === 'y')?.props).toBeUndefined()
   })
 
   it('插件卸载自动回收 attach 条目', async () => {
