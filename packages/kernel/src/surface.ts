@@ -9,8 +9,14 @@
 /** 服务条目：一个按名可取的能手 */
 export interface ServiceSurface {
   name: string
-  /** 注册方：插件名 / '<host>' / '<anonymous>' */
+  /** 注册方：插件名 / '<host>' / '<anonymous>' / '<builtin>'（内核或能力层内置） */
   source: string
+  /**
+   * 该服务暴露的方法名（**best-effort 诊断信息**，不是稳定契约）。
+   * descriptor 反射取：只读 value 为函数的自有属性 + 原型链，**不执行 getter**。
+   * 压缩/混淆后可能失真；Vue 代理实例可能只暴露自有属性。缺省 = 拿不到。
+   */
+  methods?: string[]
 }
 
 /** 注册场条目：某 kind 场里的一条 */
@@ -40,7 +46,16 @@ export interface CommandSurface {
   areas?: string[]
   group?: string
   order?: number
+  /** 图标（字符串标识或 svg 路径；UI 按它渲染） */
+  icon?: string
   source: string
+  /**
+   * 这条命令从哪读到的：
+   * - 'field'：注册场（`ctx.commands.register` 糖的落点，含插件注册的命令）；
+   * - 'service'：command 服务直注册（数据层自带的建节点/删除/撤销/重做走这条）。
+   * 两处都要读才完整 —— 只读场会漏掉核心命令。
+   */
+  origin: 'field' | 'service'
 }
 
 /** 生成工具（ctx.tools）条目 */
@@ -51,8 +66,24 @@ export interface ToolSurface {
   group?: string
   produces?: string
   accepts?: string[]
-  params?: Array<{ key: string; label?: string; type?: string; required?: boolean; options?: Array<{ label: string; value: string | number | boolean }> }>
-  templates?: Array<{ id: string; name: string }>
+  /** 声明式参数（UI 自动渲染下拉/开关用）；字段与 ToolParamDef 对齐 */
+  params?: Array<{
+    key: string
+    label?: string
+    description?: string
+    type?: string
+    options?: Array<{ label: string; value: string }>
+    default?: string | number | boolean
+    min?: number
+    max?: number
+    step?: number
+    placeholder?: string
+    span?: number
+    /** 该参数是否自带自定义渲染组件（句柄本身 opaque，不外泄） */
+    hasCustomComponent?: boolean
+  }>
+  /** 预设提示词模板（含正文与适用范围） */
+  templates?: Array<{ id: string; name: string; prompt: string; description?: string; forTools?: string[] }>
 }
 
 /** 模型可调用工具（registryOf('tool')）条目 */

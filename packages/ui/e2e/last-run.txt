@@ -15,11 +15,11 @@ PASS  注册场运行时放/取/回收（node/region）  -- {"before":0,"after":
 PASS  场条目带 source（谁放的）  -- source=<host>
 PASS  wrap/resolve（叠层可合成）
 PASS  真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下线  -- {"returned":false,"state":"active","graph":true,"oldGraphGone":true}
-PASS  surface().services 列出 doc 等服务且带 source（谁注入的）  -- services=23, doc.source=canvas-base
+PASS  surface().services 列出 doc 等服务且带 source（谁注入的）  -- services=26, doc.source=canvas-base
 PASS  surface().registries 覆盖 node/region、command 等场  -- kinds=theme,node/type,node/shell,node/creator,command,slot,node/region
-PASS  surface().commands 列出已注册命令（含 id/keys/areas）  -- 51 条
+PASS  surface().commands 列出已注册命令（含 id/keys/areas）  -- 55 条
 PASS  surface().tools 列出生成工具且 params 形状合法  -- 8 个
-surface 快照: services=23 kinds=[theme,node/type,node/shell,node/creator,command,slot,node/region] commands=51 tools=8 modelTools=[]
+surface 快照: services=26 kinds=[theme,node/type,node/shell,node/creator,command,slot,node/region] commands=55 tools=8 modelTools=[]
 PASS  surface 是活快照：运行时注册的模型工具立刻可见、注销后消失  -- {"before":[],"midDesc":"e2e 探针","midParams":"object","after":[]}
 PASS  零 error（favicon 404 除外）
 

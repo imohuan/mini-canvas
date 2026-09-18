@@ -71,6 +71,34 @@ function errorMessage(err: unknown): string {
 }
 
 /**
+ * best-effort 方法名清单：一个服务实例上"能调哪些函数"（surface() 的服务轴用）。
+ *
+ * 只用 descriptor 反射 —— **绝不用 `obj[k]` 取值**，否则会真的执行 getter
+ * （如 selection.ids 这类访问器会被跑一次，产生副作用）。
+ * 走自有属性 + 原型链；拿不到（null/原始值）返回 undefined。
+ * 名字压缩/混淆后可能失真，故 surface 把它标成可选诊断字段、不写进稳定契约。
+ */
+function describeMethods(target: unknown): string[] | undefined {
+  if (target === null || target === undefined) return undefined;
+  if (typeof target !== 'object' && typeof target !== 'function') return undefined;
+  const names = new Set<string>();
+  let obj: object | null = target as object;
+  while (obj && obj !== Object.prototype) {
+    for (const key of Object.getOwnPropertyNames(obj)) {
+      if (key === 'constructor' || names.has(key)) continue;
+      try {
+        const d = Object.getOwnPropertyDescriptor(obj, key);
+        if (d && typeof d.value === 'function') names.add(key);
+      } catch {
+        /* 某些宿主对象的 descriptor 不可读：跳过该键，不中断枚举 */
+      }
+    }
+    obj = Object.getPrototypeOf(obj) as object | null;
+  }
+  return names.size > 0 ? [...names].sort() : undefined;
+}
+
+/**
  * 跑一个插件的注册函数：Cordis 式用 apply(收校验后 config)，旧式用 setup，apply 优先。
  * 返回值（cleanup/Disposable）由调用方登记进插件 fiber，卸载即清。
  */
@@ -684,7 +712,21 @@ export class Context implements PluginScope {
    */
   surface(): SurfaceReport {
     // —— 服务轴 ——
-    const services: ServiceSurface[] = [...this.services.keys()].map((name) => ({ name, source: this.serviceSources.get(name) ?? '<host>' }));
+    // 内置服务（tools / 能力层的 slots/settings）不在 services 表里但 ctx.get 拿得到 —— 一并列出，
+    // 让「我能 ctx.get 什么」有唯一答案（源标 '<builtin>'）。
+    const services: ServiceSurface[] = [...this.services.keys()].map((name) => {
+      const methods = describeMethods(this.services.get(name));
+      return { name, source: this.serviceSources.get(name) ?? '<host>', ...(methods ? { methods } : {}) };
+    });
+    for (const name of Object.keys(this.capabilityLayer?.builtins() ?? {})) {
+      if (services.some((s) => s.name === name)) continue;
+      const methods = describeMethods((this.capabilityLayer?.builtins() ?? {})[name]);
+      services.push({ name, source: '<builtin>', ...(methods ? { methods } : {}) });
+    }
+    if (!services.some((s) => s.name === 'tools')) {
+      const methods = describeMethods(this.builtinTools);
+      services.push({ name: 'tools', source: '<builtin>', ...(methods ? { methods } : {}) });
+    }
 
     // —— 注册轴：每个 kind 一行汇总 + 全部条目明细 ——
     const registries: RegistryKindSurface[] = [];
@@ -701,14 +743,31 @@ export class Context implements PluginScope {
 
     // —— 语义视图：命令 ——
     const commands: CommandSurface[] = [];
+    const seenCommandIds = new Set<string>();
+    const pushCommand = (def: { id?: string; title?: string; keys?: string[]; areas?: string[]; group?: string; order?: number; icon?: string }, source: string, origin: 'field' | 'service'): void => {
+      if (!def?.id || seenCommandIds.has(def.id)) return
+      seenCommandIds.add(def.id);
+      commands.push({ id: def.id, title: def.title, keys: def.keys, areas: def.areas, group: def.group, order: def.order, icon: def.icon, source, origin });
+    };
+    // ① 注册场：ctx.commands.register 糖的落点（值形 = { def }）。
+    //    读取处同时接受裸 CommandDef —— 设计文档 §4.5 把该场的值定义为 CommandDef 本身，
+    //    两种写法都不该静默漏报（严格审查 C1）。
     const commandTable = this.registries.get('command');
     if (commandTable) {
       for (const key of commandTable.keys()) {
         for (const e of commandTable.list(key)) {
-          const def = (e.value as { def?: { id: string; title?: string; keys?: string[]; areas?: string[]; group?: string; order?: number } }).def;
-          if (!def) continue;
-          commands.push({ id: def.id, title: def.title, keys: def.keys, areas: def.areas, group: def.group, order: def.order, source: e.source });
+          const raw = e.value as { def?: unknown; id?: unknown } | undefined;
+          const def = (raw?.def ?? raw) as { id?: string } | undefined;
+          pushCommand(def as never, e.source, 'field');
         }
+      }
+    }
+    // ② command 服务：数据层自带的建节点/删除/撤销/重做走服务直注册、不进注册场。
+    //    只读场会漏掉这批最常被问到的核心命令（严格审查 C1）。
+    const commandService = this.get<{ list?: () => Array<{ id: string }> } | undefined>('command');
+    if (typeof commandService?.list === 'function') {
+      for (const def of commandService.list()) {
+        pushCommand(def as never, '<service>', 'service');
       }
     }
 
@@ -720,14 +779,29 @@ export class Context implements PluginScope {
       group: def.group,
       produces: def.produces,
       accepts: def.accepts,
+      // 参数逐字段透传（严格审查 B：此前只给 4 个字段、还带一个虚构的 required:false）。
+      // options 做浅拷贝 —— 快照必须只读，直传引用会让外部改动污染注册表（审查 C4）。
       params: def.params?.map((p) => ({
         key: p.key,
         label: p.label,
+        description: p.description,
         type: p.type,
-        required: false,
-        options: p.options,
+        options: p.options?.map((o) => ({ label: o.label, value: o.value })),
+        default: p.default,
+        min: p.min,
+        max: p.max,
+        step: p.step,
+        placeholder: p.placeholder,
+        span: p.span,
+        ...(p.component !== undefined ? { hasCustomComponent: true } : {}),
       })),
-      templates: def.templates?.map((t) => ({ id: t.id, name: t.name })),
+      templates: def.templates?.map((t) => ({
+        id: t.id,
+        name: t.name,
+        prompt: t.prompt,
+        description: t.description,
+        forTools: t.forTools ? [...t.forTools] : undefined,
+      })),
     }));
 
     // —— 语义视图：模型可调用工具（tool 场）——

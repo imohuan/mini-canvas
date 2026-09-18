@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '../Context'
+import { CommandRegistry } from '../command'
 import type { PluginModule, PluginScope } from '../types'
 
 const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
@@ -15,6 +16,36 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     expect(s.services.find((x) => x.name === 'doc')).toBeDefined()
     const docEntry = s.services.find((x) => x.name === 'doc')!;
     expect(docEntry.source).toBe('host-svc')
+    ctx.stop()
+  })
+
+  it('服务轴：内置服务（tools/slots/settings）也列出，标 source=<builtin>（审查 C3）', async () => {
+    const ctx = new Context()
+    await ctx.start()
+    const s = ctx.surface()
+    const toolsEntry = s.services.find((x) => x.name === 'tools')!;
+    expect(toolsEntry).toBeDefined();
+    expect(toolsEntry.source).toBe('<builtin>');
+    // tools 是 ToolRegistry 实例：方法清单应列出 register/list/invoke 等（审查 A3）
+    expect(toolsEntry.methods).toContain('register');
+    expect(toolsEntry.methods).toContain('list');
+    expect(toolsEntry.methods).toContain('invoke');
+    ctx.stop()
+  })
+
+  it('describeMethods 不执行 getter（只用 descriptor 反射）', async () => {
+    const ctx = new Context()
+    let getterRuns = 0;
+    const svc = {
+      doThing() { return 1 },
+      get dangerous() { getterRuns += 1; return 'should-not-run' },
+    };
+    ctx.plugin(mk('svc', (c) => c.provide('probe-svc', svc)))
+    await ctx.start()
+    const entry = ctx.surface().services.find((x) => x.name === 'probe-svc')!;
+    expect(entry.methods).toContain('doThing');
+    expect(entry.methods).not.toContain('dangerous');
+    expect(getterRuns).toBe(0);
     ctx.stop()
   })
 
@@ -109,7 +140,26 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     await ctx.start()
     ctx.stop()
     const s = ctx.surface()
-    expect(s.services).toEqual([])
+    // 插件注入的服务没了；内核/能力层内置服务（tools 等）恒在，标 <builtin>
+    expect(s.services.some((x) => x.source === 'reg')).toBe(false);
+    expect(s.services.every((x) => x.source === '<builtin>')).toBe(true);
     expect(s.registries).toEqual([])
+  })
+
+  it('命令轴兼读 command 服务：服务直注册的命令也能列出（审查 C1）', async () => {
+    const ctx = new Context()
+    const command = new CommandRegistry()
+    ctx.inject('command', command)
+    await ctx.start()
+    // 模拟数据层自带命令的注册路径（不经 ctx.commands.register 糖 → 不进注册场）
+    command.register({ id: 'command:delete', title: '删除', keys: ['Delete'], run: () => 1 })
+    command.register({ id: 'command:undo', title: '撤销', keys: ['mod+z'], run: () => 1 })
+    const s = ctx.surface()
+    const del = s.commands.find((c) => c.id === 'command:delete')!;
+    expect(del).toBeDefined();
+    expect(del.origin).toBe('service');
+    expect(del.keys).toEqual(['Delete']);
+    expect(s.commands.some((c) => c.id === 'command:undo')).toBe(true);
+    ctx.stop()
   })
 })
