@@ -13,6 +13,12 @@ import type { CapabilityLayer } from '@mini-canvas/kernel'
 import { SettingsStore, SlotRegistry, isScalarField, optionValues, selectOptionEntry } from '@mini-canvas/kernel'
 import type { ConfigField, ConfigSchema, PluginScope, SettingSchema } from '@mini-canvas/kernel'
 import { buildCapabilities } from './capabilities'
+import { createDocService } from '../docService'
+import type { DocService } from '../docService'
+import type { NodeStoreService } from '../nodeStore'
+import type { EdgeStoreService } from '../edgeStore'
+import type { GraphDocumentService } from '../graphDocument'
+import type { HistoryService } from '../history'
 
 /** 把 config schema 的标量字段映射成 SettingsStore 的 SettingSchema（string→text），供面板长控件。 */
 function toSettingSchema(field: ConfigField): SettingSchema {
@@ -50,7 +56,31 @@ function toSettingSchema(field: ConfigField): SettingSchema {
 export function createCanvasCapabilityLayer(): CapabilityLayer {
   const slots = new SlotRegistry()
   let settings = new SettingsStore()
+  /** 根 ctx（首次 buildSegments 时捕获）—— doc 门面按名解析底层服务要靠它 */
+  let rootCtx: PluginScope | undefined
   const builtins: Record<string, unknown> = { slots, settings }
+
+  /**
+   * doc 文档门面（§4.1：nodeStore + edgeStore + graph + history 合并成一个名字）。
+   *
+   * 为什么放在能力层内置服务（与 slots/settings 同类）而不是 canvas-base 注入：
+   * ① 它是"画布数据那一格"的正式名字，任何带画布能力层的 ctx 都该有；
+   * ② 迁移期（步骤 5a/5b）新老并存 —— 门面按名解析底层服务，于是"生产宿主（canvas-base 注入四个老名）"
+   *    与"手工注入老名的最小 ctx（遍布插件包测试）"两种装配都能用同一个 doc，零测试改动。
+   * 门面是惰性视图、零状态：底层服务后来被换掉也不会用到旧实例（见 docService.ts）。
+   */
+  function ensureDoc(): DocService {
+    if (builtins.doc) return builtins.doc as DocService
+    const resolve = () => ({
+      nodeStore: rootCtx?.get<NodeStoreService | undefined>('nodeStore') ?? undefined,
+      edgeStore: rootCtx?.get<EdgeStoreService | undefined>('edgeStore') ?? undefined,
+      graph: rootCtx?.get<GraphDocumentService | undefined>('graph') ?? undefined,
+      history: rootCtx?.get<HistoryService | undefined>('history') ?? undefined,
+    })
+    const doc = createDocService(resolve)
+    builtins.doc = doc
+    return doc
+  }
 
   return {
     /**
@@ -58,12 +88,16 @@ export function createCanvasCapabilityLayer(): CapabilityLayer {
      * 这里剥掉 tools —— 它已由框架自带（ctx.tools 恒在），避免两处各建一份。
      */
     buildSegments(ctx: PluginScope, scopeName: string): Record<string, unknown> {
+      // 根 ctx 只在这里出现一次（构造末尾）；捕获它，doc 门面才有地方按名解析服务。
+      if (!rootCtx) rootCtx = ctx
+      ensureDoc()
       const segs = buildCapabilities(ctx, scopeName) as unknown as Record<string, unknown>
       delete segs.tools
       return segs
     },
-    /** 画布层提供的内置服务：slots / settings（tools 由框架自带，不在这里） */
+    /** 画布层提供的内置服务：slots / settings / doc（tools 由框架自带，不在这里） */
     builtins(): Record<string, unknown> {
+      ensureDoc()
       return builtins
     },
     /** 生命周期重置：分组配置随 stop 重建（重启可重新声明）；slots 跨 stop 保留（宿主容器） */
@@ -102,4 +136,3 @@ export function createCanvasCapabilityLayer(): CapabilityLayer {
     },
   }
 }
-
