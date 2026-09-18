@@ -2,7 +2,8 @@
  * createMiniCanvasHost —— 可复用画布宿主门面（window.MiniCanvas 的唯一装配点）。
  *
  * 定位：
- * - 一个工厂：建 Context + 注入全部内核服务 + 建展示注册表 + 冷启动插件。
+ * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 12 件画布基础服务）→ 注入渲染层两件
+ *   （nodeLayout / viewport）→ 冷启动业务插件 → start。
  * - **不 import 任何具体插件**：冷启动要装哪些由调用方(宿主/demo)经 `coldPlugins` 传入，
  *   顺序即装载顺序。这样本模块可被真宿主复用，不绑 demo、不绑任何 node 插件。
  * - 暴露给 window 的 API 面：installPlugin / uninstallPlugin / reloadPlugin / listPlugins /
@@ -12,11 +13,26 @@
  * 依赖方向：宿主(本模块) 只操作 opaque 注册表 + PluginModule，不反向依赖插件实现。
  */
 import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
-import { Context } from '@mini-canvas/canvas-data'
-import { SaveServiceImpl, NodeStore, type CanvasNode, type CanvasEdge, type StorageAdapter, Selection, History, EdgeStore, GraphDocument, GRAPH_KEY, GRAPH_EDGES_KEY, isTransient, type EdgeStoreService, type SelectionService, type HistoryService, type GraphDocumentService, type GraphEnvelope, createSettingsPersist, type SettingsPersistService, ResourceStore, type ResourceService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
-import { NodeRegistry, ThemeRegistry, NodeFactory, type NodeFactoryService, createMenuService, type MenuService, registerCanvasCommands } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, GRAPH_EDGES_KEY, GRAPH_KEY } from '@mini-canvas/canvas-data'
+import type {
+  CanvasEdge,
+  CanvasNode,
+  EdgeStoreService,
+  GraphDocumentService,
+  GraphEnvelope,
+  HistoryService,
+  MenuService,
+  NodeFactoryService,
+  NodeRegistry,
+  NodeStore,
+  ResourceService,
+  SaveServiceImpl,
+  SelectionService,
+  SettingsPersistService,
+  StorageAdapter,
+  ThemeRegistry,
+} from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
@@ -112,6 +128,13 @@ export interface MiniCanvasApi {
  * 建一个可复用画布宿主 + 插件门面。
  * 返回 { host, api, manager, exposeToWindow }：宿主(Vue)拿 host 渲染；api/manager 是插件安装入口
  * (manager 是目标 D 的统一安装句柄, 带外部来源 + manifest)；exposeToWindow(windowKey) 把 api 挂到 window 上。
+ *
+ * 装配形状（步骤 4「搬窝」后）：**建 ctx → 装基础插件 → 装业务插件 → start**。
+ * 原来写在这里的 15 行 `ctx.inject(...)` 已收进 `canvasBasePlugin`（core: true，拒绝热卸）；
+ * 宿主这里只剩两处 `ctx.inject`，留给**真属于渲染层、必须由宿主在挂载时注入**的两个：
+ * `nodeLayout`（要 ResizeObserver 量 DOM）与 `viewport`（要 attach VueFlow 后端）。
+ * 注意时序：这两个在 `ctx.plugin(basePlugin)` **之前**注入 —— 基础插件之后装的业务插件一 start 就能
+ * `ctx.get('nodeLayout'/'viewport')` 拿到（否则从「注入即可达」退化成「PENDING」，属行为变化）。
  */
 export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promise<{
   host: CanvasHostHandle
@@ -121,14 +144,19 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 }> {
   const ctx = new Context()
 
-  // —— 注入内核服务（宿主负责，插件只 ctx.get） ——
-  const save = new SaveServiceImpl()
-  if (opts.adapter) save.useAdapterForAll(opts.adapter)
-  ctx.inject('save', save)
+  // —— 基础插件：12 件画布基础服务（save/nodeStore/edgeStore/resources/nodeRegistry/themeRegistry/
+  // selection/history/graph/command/menu/nodeFactory）+ 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入。
+  // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
+  const base = createCanvasBasePlugin({
+    adapter: opts.adapter,
+    nodeRegistry: opts.nodeRegistry,
+    themeRegistry: opts.themeRegistry,
+    persistSettings: opts.persistSettings,
+  })
+  const { save, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, menu, nodeFactory } =
+    base.services
 
-  const nodeStore = new NodeStore()
-  ctx.inject('nodeStore', nodeStore)
-
+  // —— 宿主补渲染层两件（真需要 DOM / 后端 attach，数据层给不了）——
   // 节点布局服务：读 nodeStore + 承载渲染层 ResizeObserver 实测尺寸（内存态，不落盘）
   const nodeLayout = new NodeLayoutService(nodeStore)
   ctx.inject('nodeLayout', nodeLayout)
@@ -137,72 +165,16 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const viewport = new ViewportService()
   ctx.inject('viewport', viewport)
 
-  const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
-
-  // 资源生命周期服务：浏览器环境用真实 URL backend（create/revoke objectURL），
-  // 非浏览器（SSR/Node 测试）用 no-op 占位（只登记不回收，显式 url 仍可登记）。
-  const resources = new ResourceStore(
-    typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
-      ? {
-          createUrl: (r) => URL.createObjectURL(r as Blob),
-          revokeUrl: (u) => URL.revokeObjectURL(u),
-        }
-      : undefined,
-  )
-  ctx.inject('resources', resources)
-
-  const nodeRegistry = opts.nodeRegistry ?? new NodeRegistry()
-  ctx.inject('nodeRegistry', nodeRegistry)
-
-  const themeRegistry = opts.themeRegistry ?? new ThemeRegistry()
-  ctx.inject('themeRegistry', themeRegistry)
-
-  const selection = new Selection()
-  ctx.inject('selection', selection)
-
-  // 全图快照(节点+边)：undo/redo 回退整个图，边随节点一起记录(边下沉后删除/撤销对边生效)。
-  // 注入的 snapshot/restore 只负责"读/写两份 store"，深度拷贝交给调用处；restore 同时回填 nodeStore+edgeStore。
-  const history = new History({
-    snapshot: (): GraphEnvelope => ({
-      // 中间态元素（如拖线落空白的菜单节点 + 占位连线）**不进历史**：
-      // 它是交互中间态，不该出现在撤销栈里，也不该被 undo 恢复出来。
-      // 判定读内核通用契约（isTransient），不认识具体插件。
-      nodes: JSON.parse(JSON.stringify(nodeStore.getNodes().filter((n) => !isTransient(n)))) as CanvasNode[],
-      edges: JSON.parse(JSON.stringify(edgeStore.getEdges().filter((e) => !isTransient(e)))) as CanvasEdge[],
-    }),
-    restore: (g) => {
-      const env = (g as GraphEnvelope) ?? { nodes: [], edges: [] }
-      nodeStore.replaceAll(env.nodes ?? [])
-      edgeStore.replaceAll(env.edges ?? [])
-    },
-  })
-  ctx.inject('history', history)
-
-  // 图唯一写入口：统一"节点/边变更 + 历史 + 选中维护 + 提交后落盘"。
-  // commit 回调接收整图信封：宿主把当前节点+边持久化（与 CanvasHost/commands 的 graph/graph-edges 分存一致）。
-  const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (envelope) => {
-    // 落盘同样滤掉中间态：交互中间态刷新后不该复活。
-    save.set('graph', envelope.nodes.filter((n) => !isTransient(n)), 'canvas')
-    save.set(GRAPH_EDGES_KEY, envelope.edges.filter((e) => !isTransient(e)), 'canvas')
-  })
-  ctx.inject('graph', graph)
-
-  const command = new CommandRegistry()
-  ctx.inject('command', command)
-
-  // 菜单聚合服务（G 项）：从 command 表实时组装 pane/node/edge/toolbar 菜单项，供右键/工具栏 UI 消费
-  const menu = createMenuService(() => command.list())
-  ctx.inject('menu', menu)
-
-  const nodeFactory = new NodeFactory()
-  ctx.inject('nodeFactory', nodeFactory)
-
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
-  // 宿主不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
+  // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
+
+  // —— 装基础插件（core: true：拒绝动态热卸，见决策 1）——
+  ctx.plugin(base.plugin)
 
   // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
-  const manager: PluginManager = createPluginManager(ctx)
+  // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），
+  // 从 manager.list()/diagnose() 隐去 —— 画布基础服务对应用层是"环境"，不是"清单项"。
+  const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name] })
 
   // —— 冷启动插件：manifest 模式走 applyManifest(disabled/config覆盖/同id换版本)；缺省 coldPlugins(顺序装载) ——
   if (opts.manifest) {
@@ -229,19 +201,14 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     )
   }
 
-  // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）由数据层自带，宿主默认注册 ——
-  // 不必再装一个插件才有 Delete / Ctrl+Z。用 ctx.effect 登记撤销：随 ctx.stop 回收（重启不重复注册）。
-  ctx.effect(() => registerCanvasCommands({ command, graph, selection, nodeFactory }))
+  // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）已收进基础插件（canvasBasePlugin.apply 里的
+  // ctx.effect → registerCanvasCommands），宿主不再重复注册 —— 再注册会撞命令 id 抛错。
 
-  // 配置持久化桥（P1-5 修复）：默认开启。ctx.settings 是内置分组配置单一数据源；
-  // 桥把用户改动经 save(config) 持久化，启动时 restore 注入（插件 Config 已声明完成）。
-  let settingsPersist: SettingsPersistService | undefined
-  if (opts.persistSettings !== false) {
-    const settingsStore = ctx.get<SettingsStore>('settings')
-    settingsPersist = createSettingsPersist(settingsStore, save)
-    ctx.inject('settingsPersist', settingsPersist)
-    await settingsPersist.restore()
-  }
+  // 配置持久化桥（P1-5 修复）：由基础插件建好并注入 ctx（见 canvasBasePlugin.apply，缺省开启）。
+  // 宿主这里只负责"插件装载完成之后"的那一次 restore：插件 Config 已声明完成，
+  // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
+  const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
+  if (settingsPersist) await settingsPersist.restore()
 
   // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
   // 否则用户删光节点后刷新会重新长出默认 seed。
@@ -309,10 +276,21 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     installPlugin: (mod) => ctx.installPlugin(mod),
     uninstallPlugin: (name) => ctx.uninstallPlugin(name),
     reloadPlugin(name, nextMod) {
+      // 核心插件不可热替换（决策 1，与 manager.reload 同一处理）：卸不动就**明确抛错并停下**。
+      // 旧写法是"卸（被拦、静默 false）→ 继续装新"，旧插件还在时继续装只会抛一句
+      // "[core] Duplicate plugin name" —— 错误信息指向别处，最难查。HMR 走的就是这个入口。
+      const verdict = ctx.canUninstall(name)
+      if (!verdict.ok && verdict.reason === 'core') {
+        throw new Error(
+          `[host] core plugin cannot be uninstalled: "${name}" (reloadPlugin)`,
+        )
+      }
       ctx.uninstallPlugin(name) // 卸旧（回收副作用/注册）
       if (nextMod) ctx.installPlugin(nextMod) // 装新
     },
-    listPlugins: () => ctx.listPlugins(),
+    // 对外插件清单 = 业务插件。宿主自有装配（canvas-base）是"环境"不是"清单项"，
+    // 从门面隐去 —— 与本文件原先的对外契约（默认空清单）逐字一致。
+    listPlugins: () => ctx.listPlugins().filter((n) => n !== base.name),
     inspectPlugins: () => ctx.inspectPlugins(),
     getContext: () => ctx,
     getRegistry: () => nodeRegistry,

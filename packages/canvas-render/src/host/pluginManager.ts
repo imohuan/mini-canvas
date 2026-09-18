@@ -122,9 +122,18 @@ export async function resolveSource(source: PluginEntrySource): Promise<PluginMo
 export interface PluginManager {
   /** 装一个来源(PluginModule / 懒加载 / URL / 单文件文本)。返回插件名。 */
   install(source: PluginEntrySource, opts?: { config?: PluginManifestEntry['config'] }): Promise<string>
-  /** 卸一个插件(副作用/注册/UI 自动回收)。返回是否真卸到。 */
+  /**
+   * 卸一个插件(副作用/注册/UI 自动回收)。返回是否真卸到。
+   *
+   * 核心插件（决策 1，`core: true`）不接受静默失败：明确抛错（消息含
+   * `core plugin cannot be uninstalled`），且**不动该插件的配置快照**。
+   */
   uninstall(name: string): boolean
-  /** 换版本：卸旧装新(同 name 更新实现)。 */
+  /**
+   * 换版本：卸旧装新(同 name 更新实现)。
+   *
+   * 核心插件不可热替换：卸不动就明确抛错，**绝不继续 installPlugin**（旧插件还在时继续装会撞重名）。
+   */
   reload(name: string, next?: PluginEntrySource): Promise<void>
   /** 已装插件列表(名字 + 可选的装配 config + fiber 运行时态 state/missingDeps/error)。 */
   list(): InstalledPluginInfo[]
@@ -141,10 +150,30 @@ export interface PluginManager {
 }
 
 
-/** 建统一安装句柄。ctx 需已 start；manager 只经 ctx 公开插件 API + config 装配通道工作。 */
-export function createPluginManager(ctx: Context): PluginManager {
+/**
+ * 建统一安装句柄。ctx 需已 start；manager 只经 ctx 公开插件 API + config 装配通道工作。
+ *
+ * @param opts.hiddenPlugins 宿主**自有装配**（如 canvas-base）的插件名：它们不是"应用可装卸的业务插件"，
+ *   从 `list()` / `diagnose()` 里隐去（内核里它们照常是插件，`ctx.listPlugins()` 仍看得见）。
+ *   不传 = 不隐（独立用 manager 的老调用方行为不变）。
+ */
+export function createPluginManager(
+  ctx: Context,
+  opts: { hiddenPlugins?: readonly string[] } = {},
+): PluginManager {
   /** 已装插件的装配 config 快照(供 list() 显示与 reload 重放；插件卸载即清) */
   const configs = new Map<string, PluginManifestEntry['config']>()
+  /** 宿主自有装配的插件名（不属业务插件清单，从 list/diagnose 隐去） */
+  const hidden = new Set(opts.hiddenPlugins ?? [])
+
+  /** 能否动态卸载；不能时按 manager 语义**明确抛错**（应用层友好句柄不做静默失败） */
+  function assertUninstallable(name: string, action: string): void {
+    const verdict = ctx.canUninstall(name)
+    if (verdict.ok) return
+    if (verdict.reason === 'core') {
+      throw new Error(`[pluginManager] core plugin cannot be uninstalled: "${name}" (${action})`)
+    }
+  }
 
   async function installOne(
     source: PluginEntrySource,
@@ -152,8 +181,17 @@ export function createPluginManager(ctx: Context): PluginManager {
   ): Promise<string> {
     const mod = await resolveSource(source)
     const name = mod.name
-    // 同 name(即同 id)覆盖：若已装过同名旧实现 → 先卸(回收副作用)再装新(轻量分层, 换版本即此)
-    if (ctx.listPlugins().includes(name)) ctx.uninstallPlugin(name)
+    // 同 name(即同 id)覆盖：若已装过同名旧实现 → 先卸(回收副作用)再装新(轻量分层, 换版本即此)。
+    // 核心插件例外（决策 1）：卸不动就**明确抛错**，而不是继续 installPlugin —— 旧插件还在，
+    // 继续装只会抛一个更难懂的 "[core] Duplicate plugin name"。
+    if (ctx.listPlugins().includes(name)) {
+      if (!ctx.canUninstall(name).ok) {
+        throw new Error(
+          `[pluginManager] core plugin cannot be replaced by another implementation of the same name: "${name}"`,
+        )
+      }
+      ctx.uninstallPlugin(name)
+    }
     // P4：装配 config 随 installPlugin 一起经插件 Config schema 校验 + 补默认，apply(ctx,config) 收到
     ctx.installPlugin(mod, config)
     configs.set(name, config)
@@ -163,7 +201,7 @@ export function createPluginManager(ctx: Context): PluginManager {
   /** 逐已装插件，把 ctx 只读查询的 fiber 状态(missingDeps/error)并入每行 → list/diagnose 共用 */
   function snapshotAll(): InstalledPluginInfo[] {
     const runtime = new Map(ctx.inspectPlugins().map((s) => [s.name, s]))
-    return ctx.listPlugins().map((name) => {
+    return ctx.listPlugins().filter((name) => !hidden.has(name)).map((name) => {
       const st = runtime.get(name)
       return {
         name,
@@ -185,6 +223,9 @@ export function createPluginManager(ctx: Context): PluginManager {
     },
 
     uninstall(name) {
+      // 先问再动（决策 1）：核心插件抛错，且**不动 configs**（旧实现是"先删 config 再转调"，
+      // 被拦后 config 已丢 = 副作用）。其余情况照旧：删 config 再卸。
+      assertUninstallable(name, 'uninstall')
       configs.delete(name)
       return ctx.uninstallPlugin(name)
     },
@@ -192,6 +233,9 @@ export function createPluginManager(ctx: Context): PluginManager {
     async reload(name, next) {
       // 换版本：保留上次装配 config 以便新实现同样吃到覆盖(轻量分层语义)
       const prevConfig = configs.get(name)
+      // 核心插件不可热替换（决策 1）：卸不动就抛，**绝不继续 installPlugin**
+      // （旧实现有硬 bug：uninstallPlugin 被拦返回 false 后仍继续装 → 重名抛错，错误信息还指向别处）
+      assertUninstallable(name, next ? 'reload' : 'reload(no next)')
       if (!next) {
         configs.delete(name)
         ctx.uninstallPlugin(name)
@@ -247,8 +291,5 @@ export function createPluginManager(ctx: Context): PluginManager {
     },
   }
 }
-
-
-
 
 

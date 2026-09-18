@@ -81,6 +81,7 @@ export {
   Lifecycle,
 } from './types'
 export type {
+  CanUninstallResult,
   EventMap,
   Disposable,
   EffectFn,

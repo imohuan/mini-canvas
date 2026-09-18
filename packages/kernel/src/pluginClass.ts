@@ -45,6 +45,10 @@ function isServiceSubclass(v: unknown): v is Function {
  *   (构造即 super(ctx,name) 上架服务,依赖/卸载随 fiber)。
  * - 其它函数(DSH 函数形态,如 `ctx.plugin(heartbeat)`):name=函数名;apply=(ctx,config)=> fn(ctx,config)。
  * 传入的若不是函数(已是 PluginModule 对象)则原样返回,交给上层处理。
+ *
+ * core 标识（决策 1）两形态都透传：对象形态原样返回（字段本就在对象上）；类形态取静态
+ * `Ctor.core`——今天新建对象时只拷 name/inject/Config/apply，`static core` 会被丢掉，
+ * 于是类形态的核心插件会被当成普通插件卸掉。这里一起带上。
  */
 export function asPluginModule(input: PluginModule | PluginClassLike): PluginModule {
   if (typeof input !== 'function') {
@@ -56,6 +60,7 @@ export function asPluginModule(input: PluginModule | PluginClassLike): PluginMod
       provide?: string | string[]
       inject?: string[]
       Config?: ConfigSchema
+      core?: boolean
     }
     const provide = Array.isArray(Ctor.provide) ? Ctor.provide[0] : Ctor.provide
     const name = typeof provide === 'string' && provide ? provide : Ctor.name
@@ -63,6 +68,7 @@ export function asPluginModule(input: PluginModule | PluginClassLike): PluginMod
       name,
       inject: Ctor.inject ?? [],
       Config: Ctor.Config,
+      ...(Ctor.core === true ? { core: true } : {}),
       apply(ctx: PluginScope, config?: object) {
         // 类形态装载：new 类(ctx, config)——构造即 super(ctx,name) 把实例上架为服务（随本插件 fiber 回收）
         // eslint-disable-next-line new-cap

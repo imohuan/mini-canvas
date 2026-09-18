@@ -72,5 +72,9 @@ export type { MenuService, MenuItem, MenuArea, MenuCreatableType } from './menuS
 export { registerCanvasCommands, CANVAS_COMMAND } from './canvasCommands'
 export type { CanvasCommandServices } from './canvasCommands'
 
+// 画布基础装配插件（步骤 4：把 15 行 ctx.inject 收进一个 core 插件；宿主只负责"建 ctx → 装它 → 装业务插件"）
+export { createCanvasBasePlugin, CANVAS_BASE_PLUGIN_NAME } from './canvasBasePlugin'
+export type { CanvasBaseAssembly, CanvasBaseOptions, CanvasBaseServices } from './canvasBasePlugin'
+
 export { NodeFactory } from './nodeFactory'
 export type { NodeCreator, NodeFactoryService } from './nodeFactory'

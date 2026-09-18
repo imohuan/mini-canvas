@@ -15,6 +15,7 @@ import { Fiber, FiberState } from './fiber'
 import { resolveConfig } from './configSchema'
 import type { ConfigSchema } from './configSchema'
 import type {
+  CanUninstallResult,
   Disposable,
   EffectFn,
   EventArgsFor,
@@ -47,6 +48,11 @@ export interface PluginRuntimeStatus {
   missingDeps: string[]
   /** FAILED 时的错误信息（message 字符串，便于面板/console 展示）；非 FAILED 缺省 */
   error?: string
+  /**
+   * 是否核心插件（决策 1：拒绝动态热卸）。宿主 UI 据此**禁用卸载按钮**，
+   * 而不是等用户点了才被拒（可诊断 > 事后报错）。非核心插件不带本字段。
+   */
+  core?: boolean
 }
 
 /** 把错误归一成可展示的 message（Error 取 message，其余 String 兜底） */
@@ -151,6 +157,13 @@ export class Context implements PluginScope {
   /** 每插件的装配 config（P4：ctx.plugin/installPlugin 第二参存入，激活时经其 Config schema 校验） */
   private configs = new Map<string, unknown>()
   /**
+   * 声明了核心标识的插件名（决策 1：拒绝动态热卸）。
+   *
+   * 为什么不现查 plugins map：FAILED 插件会被移出 plugins 表（fiber 保留供诊断），
+   * 现查会丢掉核心身份。装载归一时刻记一份，卸载随卸载清除、stop 随生命周期清空。
+   */
+  private corePlugins = new Set<string>()
+  /**
    * 生命周期状态。
    * 字段名带下划线：新原语 ctx.state() 要占这个成员名（设计文档 §二），字段与方法是两回事，别撞。
    */
@@ -209,6 +222,7 @@ export class Context implements PluginScope {
       throw new Error(`[core] Duplicate plugin name: "${m.name}"`)
     }
     this.plugins.set(m.name, m)
+    if (m.core === true) this.corePlugins.add(m.name)
     if (config !== undefined) this.configs.set(m.name, config)
     this.attachFiber(m.name, m)
     return this
@@ -288,6 +302,7 @@ export class Context implements PluginScope {
     } catch (err) {
       this.plugins.delete(name) // 校验失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
       this.configs.delete(name)
+      this.corePlugins.delete(name) // 校验失败＝已不在 runtime，核心身份一并撤（可重装）
       this.setLifecycle(name, Lifecycle.ERROR)
       fiber.markFailed(err)
       throw err
@@ -310,6 +325,7 @@ export class Context implements PluginScope {
     } catch (err) {
       this.plugins.delete(name) // 加载失败：移出插件表（可重装），fiber 保留 FAILED 供诊断
       this.configs.delete(name)
+      this.corePlugins.delete(name) // 同上：装载失败不留核心身份，允许重装/清理
       this.setLifecycle(name, Lifecycle.ERROR)
       fiber.runDisposers() // 半成品副作用也清掉（不置 DISPOSED，fiber 仍可重装）
       fiber.markFailed(err) // 保留 FAILED fiber 供诊断（可重装复用）
@@ -350,6 +366,7 @@ export class Context implements PluginScope {
     this.plugins.clear()
     this.fibers.clear()
     this.configs.clear()
+    this.corePlugins.clear() // 核心标识随生命周期重置（stop 不拦：整体终结不是动态卸载）
     this.services.clear()
     this.builtinTools = new ToolRegistry() // 内核自带工具表随生命周期重置（插件工具已随 fiber 注销，这里清残留）
     this.registries.clear() // 注册场随生命周期重置（插件注册已随 fiber 回收，这里清宿主残留）
@@ -404,6 +421,7 @@ export class Context implements PluginScope {
       throw new Error(`[core] Duplicate plugin name: "${m.name}"`)
     }
     this.plugins.set(m.name, m)
+    if (m.core === true) this.corePlugins.add(m.name)
     if (config !== undefined) this.configs.set(m.name, config)
     this.attachFiber(m.name, m) // PENDING fiber 句柄
     try {
@@ -411,6 +429,9 @@ export class Context implements PluginScope {
     } catch (err) {
       this.plugins.delete(m.name)
       this.configs.delete(m.name)
+      // 装载失败（config 校验/setup 抛错）：核心身份一并撤销——它已不在 runtime，
+      // 不该再以"核心"身份占着 canUninstall 的 core 判定（否则重装成普通插件会被误拦）。
+      this.corePlugins.delete(m.name)
       throw err
     }
     // 可能因本插件 provide 的服务满足了先前 PENDING 的插件 → 唤醒
@@ -421,10 +442,20 @@ export class Context implements PluginScope {
   /**
    * 运行中热卸一个插件：dispose 它的 Scope → 全部副作用/注册/UI 自动回收；
    * 随后把「现在因它消失而不满足其声明依赖」的已 ACTIVE 依赖方一并回退 PENDING（等依赖恢复后重载）。
-   * @returns 是否真卸到（未装/已卸返回 false）
+   *
+   * **核心插件拒卸（决策 1）**：插件声明了 `core: true` 则本方法直接返回 `false`，
+   * 且**不 dispose fiber、不发 `ctx:plugin-uninstalled`、不触发 `retractUnsatisfiedActives`**
+   * ——一次真副作用都不产生（依赖方不会被连带回退 PENDING）。想区分"被拦"与"不存在"，
+   * 用 `ctx.canUninstall(name)` 先问。
+   *
+   * 注意：`stop()` / `stopAsync()` 不走本守卫——整体生命周期终结不是动态卸载，
+   * 页面关闭时核心插件也必须正常回收。
+   * @returns 是否真卸到（未装/已卸/**核心插件**返回 false）
    */
   uninstallPlugin(name: string): boolean {
     if (this._state !== 'started') return false
+    // 决策 1 守卫：核心插件拒绝动态卸载，且不产生任何副作用（唯一权威拦截点）。
+    if (this.isCorePlugin(name)) return false
     const fiber = this.fibers.get(name)
     // 守卫按"有无 fiber"：既覆盖已 ACTIVE 插件，也让冷启动 PENDING(缺依赖) / FAILED 遗留 fiber 可被清理（原 scope 守卫会漏）
     if (!fiber) return false
@@ -434,11 +465,44 @@ export class Context implements PluginScope {
     this.plugins.delete(name)
     this.configs.delete(name)
     this.lifecycles.delete(name)
+    this.corePlugins.delete(name)
     this.bus.emit('ctx:plugin-uninstalled', { name })
     // P6/P2b2：提供方被卸，凡依赖它(或其提供的服务名)而仍 ACTIVE 的插件 → 回收副作用并回退 PENDING，
     // 待服务恢复(重 provide / 插件重装)后经 wakePending→drain 自动重载（cordis：callback 随依赖方卸载/重跑）。
     this.retractUnsatisfiedActives()
     return true
+  }
+
+  /**
+   * 能否动态卸载某插件（决策 1："先问再动"）。
+   *
+   * `uninstallPlugin` 把"核心插件拒卸"与"插件不存在"同值成 `false`（沿用既有契约），
+   * 但调用方（pluginManager / 宿主 UI）常常**在卸载前有副作用要做**（例如先删配置），
+   * 或者要在被拦时抛一个说明白的错误。本方法把原因给出来：
+   *
+   * - `{ ok: true }`：可卸；
+   * - `{ ok: false, reason: 'core' }`：核心插件（声明了 `core: true`）；
+   * - `{ ok: false, reason: 'not-found' }`：没装过 / 已卸；
+   * - `{ ok: false, reason: 'not-started' }`：内核还没 start（此时任何动态卸载都不生效）。
+   *
+   * 纯只读，不改任何状态。
+   */
+  canUninstall(name: string): CanUninstallResult {
+    if (this._state !== 'started') return { ok: false, reason: 'not-started' }
+    if (this.corePlugins.has(name)) return { ok: false, reason: 'core' }
+    if (!this.fibers.has(name)) return { ok: false, reason: 'not-found' }
+    return { ok: true }
+  }
+
+  /**
+   * 该插件是否声明了核心标识（决策 1）。
+   *
+   * 判定只认"`PluginModule.core === true`"，在 plugin()/installPlugin() 归一时刻记进本表 ——
+   * 不现查 `plugins` map：FAILED 插件会被移出 plugins 表（fiber 保留供诊断），若现查就会
+   * 丢掉它的核心身份。
+   */
+  private isCorePlugin(name: string): boolean {
+    return this.corePlugins.has(name)
   }
 
   /**
@@ -501,6 +565,8 @@ export class Context implements PluginScope {
       const missingDeps = state === 'active' ? [] : deps.filter((d) => !this.depSatisfied(d))
       const base: PluginRuntimeStatus = { name, state, missingDeps }
       if (state === 'failed' && fiber?.error !== undefined) base.error = errorMessage(fiber.error)
+      // 决策 1：核心标识随快照下发，宿主 UI 据此禁用卸载按钮（而不是等用户点了才拒绝）
+      if (this.corePlugins.has(name)) base.core = true
       return base
     })
   }
@@ -718,6 +784,7 @@ export class Context implements PluginScope {
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
+      canUninstall: (name: string): CanUninstallResult => ctx.canUninstall(name),
       registryOf<T>(kind: string): Registry<T> {
         // 插件视图：同一 kind 全插件共享一张表；source 记作本插件名，
         // 放置（add/wrap）随本插件 fiber 自动回收——热卸时它放的东西一条不留。

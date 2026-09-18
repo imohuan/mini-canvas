@@ -21,6 +21,16 @@ export interface Disposable {
 }
 
 /**
+ * `ctx.canUninstall(name)` 的判定结果（决策 1：调用方"先问再动"）。
+ *
+ * 为什么要这个三态而不是布尔：`uninstallPlugin` 沿用既有契约返回 `false`，但 `false` 既可能是
+ * "核心插件不让卸"也可能是"根本没这个插件"——不区分原因就会写出"先删了配置才发现卸不动"的副作用。
+ */
+export type CanUninstallResult =
+  | { ok: true }
+  | { ok: false; reason: 'core' | 'not-found' | 'not-started' }
+
+/**
  * 插件私有状态（ctx.state）：内核只存值、不做响应式。
  *
  * 为什么不占服务名：它是插件自己的数据，不是"别人按名取的能力"（设计文档规则 7）。
@@ -146,7 +156,12 @@ export type EventArgsFor<K extends string> = K extends keyof Events
     ? [payload: EventMap[K & EventName]]
     : any[]
 
-/** 类形态插件装载单元（cordis 03）：可 new 的类，通常 extends Service（构造即 super(ctx,name) 上架服务） */
+/**
+ * 类形态插件装载单元（cordis 03）：可 new 的类，通常 extends Service（构造即 super(ctx,name) 上架服务）。
+ *
+ * 核心插件标识也走静态字段：`static core = true` → `asPluginModule` 归一后透传进
+ * PluginModule.core（决策 1）。类型上不强制声明（静态字段不在实例类型里）。
+ */
 export type PluginClassLike = new (ctx: PluginScope, config?: any) => unknown
 
 /**
@@ -207,6 +222,15 @@ export interface PluginScope extends PluginCapabilities {
   /** 是否开发态（内核构造时的 dev 选项；原来只是 private 字段，插件读不到） */
   readonly isDev: boolean
 
+  /**
+   * 能否动态卸载某插件（决策 1：调用方"先问再动"）。
+   *
+   * `ctx.uninstallPlugin(name)` 把"核心插件拒卸"与"插件不存在"同值成 `false`（沿用既有契约），
+   * 本方法给出原因，供调用方（pluginManager / 宿主 UI）在动手前分流，从根上避免
+   * "先删了配置才发现卸不动"这类副作用。
+   */
+  canUninstall(name: string): CanUninstallResult
+
   // ====== 事件分发模式（cordis ch4）——扩展事件名走 declare module Events 类型化 ======
   /** 并发跑所有监听并一同等待 */
   parallel<K extends string>(name: K, ...args: EventArgsFor<K>): Promise<void>
@@ -234,6 +258,19 @@ export interface PluginScope extends PluginCapabilities {
 export interface PluginModule<TConfig extends object = object> {
   /** 插件唯一名 */
   name: string
+  /**
+   * 核心插件标识（决策 1）：`true` = 拒绝动态热卸（`ctx.uninstallPlugin` 返回 `false`，
+   * 且不 dispose fiber、不发 `ctx:plugin-uninstalled`、不连带回退依赖方）。
+   *
+   * 为什么必须：提供方一卸，依赖它的插件全部回退 PENDING。若画布基础服务由普通插件提供，
+   * 它一被卸画布直接瘫——所以"谁能被卸"必须有答案。
+   *
+   * 只挡"动态卸载"：整体生命周期终结（`ctx.stop()` / `stopAsync()`）不拦，页面关闭时核心插件
+   * 也要正常回收。
+   *
+   * 两种形态都给得出来：对象形态 `{ name, core: true, apply }`；类形态 `static core = true`。
+   */
+  core?: boolean
   /**
    * 依赖的服务/插件名（**硬依赖**）：缺失则该插件停在 PENDING、不加载。
    * 首选写法是模块顶层 `export const inject = ['tools']`（框架保证 apply 时就绪）。
