@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { fileDropPlugin, FileDropServiceImpl, type FileDropService, type FileDropReaders } from '../fileDropPlugin'
 
@@ -17,9 +17,7 @@ function makeCtx() {
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
@@ -33,8 +31,8 @@ function makeCtx() {
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
- ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
  const command = new CommandRegistry()
   ctx.inject('command', command)
   return { ctx, nodeStore, edgeStore, selection, history }

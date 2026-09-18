@@ -7,18 +7,19 @@
  * 一处搞错就数据漂移）。设计文档的目标服务数是 7，其中数据那一格就叫 `doc`：
  * **节点 + 边 + 事务 + 撤销 + 快照**合成一个名字，消费方只认它。
  *
- * 实现方式：**门面 + 按名惰性解析**（不是把四个实例抓进闭包）。
+ * 实例来源（步骤 5c 起）：**装配方直接交给门面**。canvasBasePlugin 建好四个实例后
+ * `createDocService({ nodeStore, edgeStore, graph, history })` 并 `ctx.inject('doc', …)`。
+ * 门面**不再按名解析** —— 5c 已把四个老服务名下线（`ctx.get('nodeStore')` 取不到）。
  *
- * 为什么惰性解析（三条理由，都在这套代码里已有先例）：
- * 1. 与 cordis 规范一致："方法内惰性取现时服务，不缓存"（见 plugin-group 的 GroupService 注释）——
- *    服务被热换（重装基础插件 / 换存储实现）后，抓死的闭包会继续用旧实例，惰性解析不会。
- * 2. 迁移期必须"新老并存"（§九 步骤 5a）：老名字还在，`doc` 只是它们的一层视图；
- *    视图按名解析即可同时服务"经 canvasBasePlugin 装配的生产宿主"与"手工注入老名的最小 ctx"
- *    （后者遍布插件包测试）——两边零改动。
- * 3. 门面自己零状态：不需要在 `ctx.stop()` 时重建，也不会持有已回收的实例。
+ * 为什么是"交实例"而不是"按名解析"（5a/5b 期的做法）：
+ * 1. 5a 期按名解析是为了"新老并存、两边零改动"；5c 的目标就是删名，解析路径随之作废
+ *    （老名没了，再解析只会得到 undefined）。
+ * 2. 交实例更贴合 cordis 规范：解析器不再替门面缓存/查找，装配方给什么就用什么；
+ *    服务被热换（重装基础插件）时随装配重新建门面，同样不会用到旧实例。
+ * 3. 门面自己零状态：不需要在 `ctx.stop()` 时重建。
  *
- * 归属：`doc` 是画布能力层的**内置服务**（与 `slots`/`settings` 同类：恒可取到、依赖判定恒满足），
- * 见 canvas/capabilityLayer.ts 的 `builtins()`。底层四个服务仍由 canvasBasePlugin 注入。
+ * 归属：`doc` 现在与 block 里另外六个基础服务一样，是**由基础插件注入的真服务**（不是能力层内置）。
+ * 底层四个实例仍是 nodeStore/edgeStore/graph/history 这些**对象**（名字不再是 ctx 服务名）。
  *
  * 边界：纯转发（读/写/事务/撤销/快照/订阅），**不含任何画布语义**（连接校验在 graph、匿名收敛在
  * nodeStore，门面不重复实现）。零 Vue、零 DOM，Node 可单测。
@@ -34,10 +35,10 @@ import type {
 import type { HistoryService } from './history'
 
 /**
- * 门面背后的四个底层服务（**可能缺席**：测试/纯内核只要一部分）。
+ * 门面背后的四个底层实现（**可能缺席**：单元测试只要一部分）。
  *
- * 为什么允许 undefined 而不是在构造时强制给全：门面是能力层内置服务，任何 `new Context()` 都有它；
- * 但"这个 ctx 到底注入了哪几个底层服务"由装配方决定（生产宿主给全，最小测试给一部分）。
+ * 为什么允许 undefined 而不是在构造时强制给全：门面是"那四个东西"的统一视图，
+ * 但"装配方手上到底有哪几个"由装配决定（生产宿主给全，只测读路径的单元测试给一部分）。
  * 门面因此**按需报错**：用到哪个缺席哪个才抛（消息写明缺谁、为什么需要它），不静默返回空数据。
  */
 export interface DocSources {
@@ -47,7 +48,12 @@ export interface DocSources {
   history?: HistoryService | undefined
 }
 
-/** 现取四个底层服务（每次调用都重新解析，不缓存） */
+/**
+ * 现取四个底层实现（每次调用都重新解析，不缓存）。
+ *
+ * 生产装配不用它（canvasBasePlugin 直接交实例）；留它是为了表达"来源会变"的装配，
+ * 也让既有单测的 `createDocService(() => ({ ... }))` 写法不必改。
+ */
 export type DocSourceResolver = () => DocSources
 
 /** 一次文档变化（节点桶或边桶；两桶的 reason 词表取其并集） */
@@ -81,6 +87,19 @@ export interface DocService {
   childNodesOf(parentId: string): CanvasNode[]
   /** 已注册的节点类型表（**只读投影**；注册/注销类型请走 `ctx.nodes.register`） */
   readonly types: ReadonlyMap<string, CanvasNodeType>
+
+  // ==================== 节点类型表（数据侧写口） ====================
+  /**
+   * 注册一个节点类型的数据部分（type/label/尺寸/连接约束/类型级能力）。
+   *
+   * 为什么在这里：5c 起节点类型表就是 doc 的一部分（nodeStore 不再是服务名），而
+   * `registerNodeType(ctx, def)` 这个底层助手需要写它 —— 助手自己没有实例，唯一持有者就是 doc。
+   * **作者侧正式入口仍是 `ctx.nodes.register`**（一次把数据 + 展示两处都落表）；
+   * 这里是"只落数据侧"的低层口，供 registerNodeType 与能力层复用，不是给作者的第二条路。
+   */
+  registerType(def: CanvasNodeType): void
+  /** 注销某节点类型（热卸插件时回收；不存在则 no-op）。语义与 registerType 对称。 */
+  unregisterType(type: string): void
   /** 当前全部边（只读快照；与 edgeStore 同源） */
   getEdges(): CanvasEdge[]
   /** 取某条边 */
@@ -135,9 +154,14 @@ export interface DocService {
 
 /**
  * 建一个文档门面。
- * @param resolve 现取四个底层服务（每次调用都调用它，不缓存结果）
+ *
+ * @param sources 四个底层实现。**生产装配传实例对象**（canvasBasePlugin 建好后直接交）；
+ *   传函数时按"现取"语义每次调用都重新求值（不缓存）—— 两条路都允许，便于单测只装配一部分。
  */
-export function createDocService(resolve: DocSourceResolver): DocService {
+export function createDocService(sources: DocSources | DocSourceResolver): DocService {
+  /** 归一成"现取"函数：交实例 = 每次返回同一份；交解析器 = 每次重新调用它 */
+  const resolve: DocSourceResolver = typeof sources === 'function' ? sources : () => sources
+
   /** 取底层服务；缺席即抛（消息写明缺谁 —— 装配缺件要响亮，不静默返回空数据） */
   function need<K extends keyof DocSources>(key: K): NonNullable<DocSources[K]> {
     const impl = resolve()[key]
@@ -158,6 +182,8 @@ export function createDocService(resolve: DocSourceResolver): DocService {
     get types() {
       return need('nodeStore').types
     },
+    registerType: (def) => need('nodeStore').registerType(def),
+    unregisterType: (type) => need('nodeStore').unregisterType(type),
     getEdges: () => need('edgeStore').getEdges(),
     getEdge: (id) => need('edgeStore').getEdge(id),
 

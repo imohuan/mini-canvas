@@ -13,6 +13,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   Context,
+  createDocService,
   EdgeStore,
   GraphDocument,
   History,
@@ -160,10 +161,7 @@ async function boot(local: { nodes: unknown[]; edges?: unknown[] } = { nodes: []
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'image', label: '图', defaultSize: { w: 100, h: 100 } })
   nodeStore.registerType({ type: 'text', label: '文', defaultSize: { w: 100, h: 100 } })
-  ctx.inject('nodeStore', nodeStore)
-
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   ctx.inject('selection', new Selection())
 
   const history = new History({
@@ -177,13 +175,12 @@ async function boot(local: { nodes: unknown[]; edges?: unknown[] } = { nodes: []
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
-  ctx.inject('history', history)
-
   const graph = new GraphDocument(nodeStore, edgeStore, ctx.get('selection'), history, (env) => {
     save.set(GRAPH_KEY, env.nodes, 'canvas')
     save.set(GRAPH_EDGES_KEY, env.edges, 'canvas')
   })
-  ctx.inject('graph', graph)
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
 
   nodeStore.replaceAll(local.nodes as never)
   edgeStore.replaceAll((local.edges ?? []) as never)

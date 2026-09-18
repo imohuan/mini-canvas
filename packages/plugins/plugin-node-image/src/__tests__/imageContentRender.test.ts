@@ -28,12 +28,11 @@ import { beginCrop, endCrop } from '../cropSession'
 
 const IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"/>')
 
-/** 最小渲染上下文：ImageContent 还要用 ctx.get('image')/('nodeStore')/('graph') 与 settings */
+/** 最小渲染上下文：ImageContent 还要用 ctx.get('image')/('doc') 与 settings（5c 起数据只有 doc） */
 function renderCtx(): CanvasRenderContext {
   const services: Record<string, unknown> = {
     image: {},
-    nodeStore: { getNode: () => undefined },
-    graph: { updateNode: () => {} },
+    doc: { getNode: () => undefined, updateNode: () => {}, updateNodeData: () => {} },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {

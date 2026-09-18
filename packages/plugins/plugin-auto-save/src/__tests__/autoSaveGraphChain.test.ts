@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter, createDocService } from '@mini-canvas/canvas-data'
 import { autoSavePlugin } from '../autoSavePlugin'
 import type { AutoSaveService } from '../autoSavePlugin'
 
@@ -14,20 +14,19 @@ function boot() {
   ctx.inject('save', save)
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
     snapshot: () => ({ nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())), edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) }),
     restore: (g: { nodes: unknown[]; edges: unknown[] }) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
   })
-  ctx.inject('history', history)
   // graph commit 回调：把整图写进 save 脏队列（宿主 createMiniCanvasHost 同款）
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history, (env) => {
+  const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (env) => {
     save.set('graph', env.nodes, 'canvas')
-  }))
+  })
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.plugin(autoSavePlugin)
   return { ctx, save, nodeStore }
 }
@@ -36,8 +35,8 @@ describe('auto-save + graph 链路（P0-1 完整闭环）', () => {
   it('graph 建节点 → 脏队列有图 → auto-save.saveNow 落盘 graph', async () => {
     const { ctx, save, nodeStore } = boot()
     await ctx.start()
-    const graph = ctx.get<{ createNode(t: string, p: { x: number; y: number }): string }>('graph')
-    graph.createNode('text', { x: 3, y: 4 })
+    const doc = ctx.get<{ createNode(t: string, p: { x: number; y: number }): string }>('doc')
+    doc.createNode('text', { x: 3, y: 4 })
     // graph commit 已把节点写进 save 脏队列（不依赖 auto-save 自己 set 图）
     expect(save.isDirty()).toBe(true)
     const svc = ctx.get<AutoSaveService>('auto-save')
@@ -57,4 +56,3 @@ describe('auto-save + graph 链路（P0-1 完整闭环）', () => {
     ctx.stop()
   })
 })
-

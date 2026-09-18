@@ -36,6 +36,8 @@ import { isTransient } from '../transient'
 import { SaveServiceImpl } from '../storage/SaveService'
 import { GRAPH_EDGES_KEY, GRAPH_KEY } from '../storage/keys'
 import type { StorageAdapter } from '../storage/types'
+import { createDocService } from '../docService'
+import type { DocService } from '../docService'
 import { NodeRegistry } from './registry/nodeRegistry'
 import { ThemeRegistry } from './registry/themeRegistry'
 import { NodeFactory } from './nodeFactory'
@@ -61,12 +63,14 @@ export interface CanvasBaseOptions {
 }
 
 /**
- * 基础插件建出来的 11 件服务（宿主 CanvasHostHandle 的字段来源）。
+ * 基础插件建出来的 12 件服务（宿主 CanvasHostHandle 的字段来源）。
  *
  * 类型给的是具体类（不是接口）—— 宿主需要类上的额外方法（如 SaveServiceImpl.flush、ResourceStore.dispose）。
  */
 export interface CanvasBaseServices {
   save: SaveServiceImpl
+  /** 文档门面（§4.1）：nodeStore/edgeStore/graph/history 合并后的正式名字（5c 起四个老名下线） */
+  doc: DocService
   nodeStore: NodeStore
   edgeStore: EdgeStore
   resources: ResourceStore
@@ -156,11 +160,16 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
 
   const nodeFactory = new NodeFactory()
 
+  // 文档门面（§4.1）：把上面四个实例**直接交给它**（不再按名解析 —— 5c 已删四个老服务名）。
+  // 门面是纯转发视图、零状态：底层实例随本插件 fiber 回收，门面随之作废。
+  const doc = createDocService({ nodeStore, edgeStore, graph, history })
+
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 tools，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get(tools) 共享）。
 
   const services: CanvasBaseServices = {
     save,
+    doc,
     nodeStore,
     edgeStore,
     resources,
@@ -181,14 +190,13 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
     apply(ctx: PluginScope) {
       // —— 基础服务：装完即全画布可用，随本插件 fiber 回收 ——
       ctx.inject('save', save)
-      ctx.inject('nodeStore', nodeStore)
-      ctx.inject('edgeStore', edgeStore)
+      // 数据那一格只有一个名字：doc（5c 删掉 nodeStore/edgeStore/graph/history 四个老服务名）。
+      // 四个实例仍在 base.services 上（宿主/渲染层拿它们订阅、量尺寸），但**不再是按名可取的服务**。
+      ctx.inject('doc', doc)
       ctx.inject('resources', resources)
       ctx.inject('nodeRegistry', nodeRegistry)
       ctx.inject('themeRegistry', themeRegistry)
       ctx.inject('selection', selection)
-      ctx.inject('history', history)
-      ctx.inject('graph', graph)
       ctx.inject('command', command)
       ctx.inject('nodeFactory', nodeFactory)
 

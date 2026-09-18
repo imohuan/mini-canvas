@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { groupPlugin, GroupService, GROUP_NODE_TYPE, resolveGroupPadding, GROUP_PADDING_KEYS } from '../groupPlugin'
 import { DEFAULT_GROUP_PADDING } from '../groupEngine'
@@ -17,17 +17,15 @@ function makeCtx() {
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 200, h: 100 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 240, h: 160 } })
-  ctx.inject('nodeStore', nodeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
     snapshot: () => JSON.parse(JSON.stringify(nodeStore.getNodes())) as CanvasNode[],
     restore: (nodes) => nodeStore.replaceAll((nodes as CanvasNode[]) ?? []),
   })
- ctx.inject('history', history)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
  const command = new CommandRegistry()
   ctx.inject('command', command)
 

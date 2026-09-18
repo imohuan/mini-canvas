@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { clipboardPlugin, type ClipboardService } from '../clipboardPlugin'
 
@@ -15,9 +15,7 @@ function makeCtx() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 200, h: 100 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
@@ -31,8 +29,8 @@ function makeCtx() {
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
- ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
  const command = new CommandRegistry()
   ctx.inject('command', command)
   ctx.plugin(clipboardPlugin)
@@ -198,4 +196,3 @@ describe('clipboard 实例隔离（P2-4）', () => {
     expect(a.nodeStore.getNodes().length).toBe(before + 1)
   })
 })
-

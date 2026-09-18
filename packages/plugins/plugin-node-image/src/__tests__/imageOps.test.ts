@@ -47,7 +47,8 @@ function boot(adapter = new MemoryStorageAdapter()) {
   })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
   const ops = createImageOps({
-    get: (name: string) => (name === 'nodeStore' ? nodeStore : name === 'graph' ? graph : undefined),
+    // 5c：读写都走 doc（老名 nodeStore/graph 已下线）
+    get: (name: string) => (name === 'doc' ? graph : undefined),
   } as never)
   const id = graph.createNode('image', { x: 0, y: 0 }, { imageUrl: '' })
   return { nodeStore, graph, history, save, adapter, ops, id }
@@ -137,13 +138,11 @@ describe('uploadImage：上传写回', () => {
     // 走真实接线（createImageOps + 注入 settings 服务）：验证"读配置"这条链路本身，而不是只测纯函数
     const opsWithSettings = createImageOps({
       get: (name: string) =>
-        name === 'nodeStore'
-          ? nodeStore
-          : name === 'graph'
-            ? graph
-            : name === 'settings'
-              ? { get: (k: string) => (k === 'imageFitMaxWidth' || k === 'imageFitMaxHeight' ? 200 : undefined) }
-              : undefined,
+        name === 'doc'
+          ? graph
+          : name === 'settings'
+            ? { get: (k: string) => (k === 'imageFitMaxWidth' || k === 'imageFitMaxHeight' ? 200 : undefined) }
+            : undefined,
     } as never)
     await uploadImage(opsWithSettings, id, new File(['x'], 'p.png'), fakeTransform())
     // 上限 200×200、图 1000×800 → ratio=0.2 → 200×160

@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type DocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '../nodeTextPlugin'
@@ -17,9 +17,7 @@ import type { TextNodeService } from '../nodeTextPlugin'
 function boot() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   ctx.inject('selection', new Selection())
   const history = new History({
     snapshot: () => ({
@@ -31,8 +29,8 @@ function boot() {
       edgeStore.replaceAll(g.edges as never)
     },
   })
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, ctx.get('selection'), history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, ctx.get('selection'), history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())
@@ -47,7 +45,7 @@ describe('text 节点写回', () => {
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
     const id = text.addTextNode({ x: 0, y: 0 })
-    const graph = ctx.get<GraphDocument>('graph')
+    const graph = ctx.get<DocService>('doc')
 
     text.editText(id, '改过的内容')
     expect(graph.getNode(id)?.data.text).toBe('改过的内容')
@@ -64,7 +62,7 @@ describe('text 节点写回', () => {
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
     const id = text.addTextNode({ x: 0, y: 0 })
-    const data = ctx.get<GraphDocument>('graph').getNode(id)?.data ?? {}
+    const data = ctx.get<DocService>('doc').getNode(id)?.data ?? {}
     expect(data.text).toBe('双击编辑')
     for (const key of ['fontWeight', 'fontSize', 'textColor', 'textAlign']) {
       expect(data[key]).toBeUndefined()
@@ -76,7 +74,7 @@ describe('text 节点写回', () => {
     const ctx = boot()
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<GraphDocument>('graph')
+    const graph = ctx.get<DocService>('doc')
     const id = text.addTextNode({ x: 100, y: 50 })
     text.editText(id, '原文')
 
@@ -95,7 +93,7 @@ describe('text 节点写回', () => {
     const ctx = boot()
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<GraphDocument>('graph')
+    const graph = ctx.get<DocService>('doc')
     const id = text.addTextNode({ x: 0, y: 0 })
     // 会话态字段由别处（如 AI 工具）写进 data，复制时不该被带走
     graph.updateNode(id, { data: { _overlay: { crop: true } } })
@@ -109,7 +107,7 @@ describe('text 节点写回', () => {
     const ctx = boot()
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<GraphDocument>('graph')
+    const graph = ctx.get<DocService>('doc')
     const id = text.addTextNode({ x: 0, y: 0 })
 
     const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
@@ -125,7 +123,7 @@ describe('text 节点写回', () => {
     const ctx = boot()
     await ctx.start()
     const text = ctx.get<TextNodeService>('text')
-    const graph = ctx.get<GraphDocument>('graph')
+    const graph = ctx.get<DocService>('doc')
     const cmd = ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command')
     const id = text.addTextNode({ x: 0, y: 0 })
 

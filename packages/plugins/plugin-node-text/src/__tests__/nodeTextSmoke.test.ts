@@ -3,7 +3,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type DocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '../nodeTextPlugin'
@@ -11,17 +11,15 @@ import { nodeTextPlugin } from '../nodeTextPlugin'
 function boot() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
     snapshot: () => ({ nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())), edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) }),
     restore: (g: { nodes: unknown[]; edges: unknown[] }) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
   })
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())
@@ -35,7 +33,7 @@ describe('node-text 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     expect(ctx.get('text')).toBeTruthy()
-    expect(ctx.get<{ types: Map<string, unknown> }>('nodeStore').types.has('text')).toBe(true)
+    expect(ctx.get<DocService>('doc').types.has('text')).toBe(true)
     const factory = ctx.get<{ create(t: string, p: { x: number; y: number }): string }>('nodeFactory')
     const id = factory.create('text', { x: 1, y: 2 })
     expect(id).toBeTruthy()

@@ -29,21 +29,19 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤2', () 
     expect(src).toContain("ctx.inject('viewport'")
   })
 
-  it('其余 13 件服务由基础插件的 apply 注入（业务插件 ctx.get 照样取得到）', async () => {
+  it('其余服务由基础插件的 apply 注入（业务插件 ctx.get 照样取得到）', async () => {
     const { host } = await createMiniCanvasHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [nodeTextPlugin],
     })
     for (const name of [
       'save',
-      'nodeStore',
-      'edgeStore',
+      // 5c：数据那一格只有 doc（nodeStore/edgeStore/graph/history 四个老名已下线）
+      'doc',
       'resources',
       'nodeRegistry',
       'themeRegistry',
       'selection',
-      'history',
-      'graph',
       'command',
       'nodeFactory',
       'settingsPersist',
@@ -137,7 +135,11 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
     expect(() => manager.uninstall('ghost-plugin')).toThrow(/\(not-found\) during uninstall/)
     // 没产出副作用：插件仍 active、服务仍在
     expect(host.ctx.fiber(CANVAS_BASE_PLUGIN_NAME)?.stateName).toBe('active')
-    expect(host.ctx.hasService('graph')).toBe(true)
+    expect(host.ctx.hasService('doc')).toBe(true)
+    // 四个老服务名确已下线（5c 目标）
+    for (const legacy of ['nodeStore', 'edgeStore', 'graph', 'history']) {
+      expect(host.ctx.hasService(legacy), legacy + ' 不该再是服务名').toBe(false)
+    }
     host.stop()
   })
 
@@ -155,7 +157,7 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
     // 旧实现会"卸失败后继续 installPlugin" → 抛 [core] Duplicate plugin name；此处必须不是它
     await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME, next)).rejects.not.toThrow(/Duplicate plugin name/)
     // 旧实现（真插件）仍在，没被半卸
-    expect(host.ctx.get('graph')).toBe(host.graph)
+    expect(host.ctx.get('doc')).toBe(host.doc)
     expect(host.ctx.fiber(CANVAS_BASE_PLUGIN_NAME)?.stateName).toBe('active')
     host.stop()
   })

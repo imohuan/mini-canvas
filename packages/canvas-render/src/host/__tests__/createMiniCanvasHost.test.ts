@@ -10,13 +10,13 @@ function demoPlugin(flag: string): PluginModule {
     name: 'demo',
     setup(ctx) {
       ctx.inject('demoSvc', { flag })
-      // 手动在 nodeStore 注册类型演示热卸回收
-      ctx.get<{ registerType(d: unknown): void }>('nodeStore').registerType({
+      // 手动在 doc 上注册类型演示热卸回收（5c：节点类型表随 doc 提供，nodeStore 不再是服务名）
+      ctx.get<{ registerType(d: unknown): void }>('doc').registerType({
         type: 'demo',
         label: 'Demo',
         defaultSize: { w: 120, h: 80 },
       })
-      ctx.effect(() => () => ctx.get<{ unregisterType(t: string): void }>('nodeStore').unregisterType('demo'))
+      ctx.effect(() => () => ctx.get<{ unregisterType(t: string): void }>('doc').unregisterType('demo'))
     },
   }
 }
@@ -186,4 +186,3 @@ describe('window API 生命周期清理（P1-16）', () => {
     delete (globalThis as Record<string, unknown>)['K2']
   })
 })
-

@@ -96,8 +96,8 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     size?: { w: number; h: number }
   }
   /**
-   * 读/写统一走 doc 门面（设计文档 §4.1）。迁移期兜底：极简宿主/单测桩可能只按老名注入
-   * nodeStore/graph ——这时退回老名，行为不变；两者都缺则安全降级（读 undefined、写 no-op）。
+   * 读/写统一走 doc 门面（设计文档 §4.1）。5c 起 nodeStore/graph 两个老名已下线，
+   * doc 是唯一来源；缺 doc（纯逻辑测试未注入图服务）则安全降级（读 undefined、写 no-op）。
    */
   type VideoDocPort = {
     getNode(id: string): NodeLike | undefined
@@ -107,9 +107,9 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     transaction<T>(reason: string, fn: (tx: { createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string }) => T): T
   }
   const store = (): VideoDocPort | undefined =>
-    svc.get<VideoDocPort | undefined>('doc') ?? svc.get<VideoDocPort | undefined>('nodeStore') ?? undefined
+    svc.get<VideoDocPort | undefined>('doc') ?? undefined
   const graph = (): VideoDocPort | undefined =>
-    svc.get<VideoDocPort | undefined>('doc') ?? svc.get<VideoDocPort | undefined>('graph') ?? undefined
+    svc.get<VideoDocPort | undefined>('doc') ?? undefined
   const layout = () =>
     svc.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
 

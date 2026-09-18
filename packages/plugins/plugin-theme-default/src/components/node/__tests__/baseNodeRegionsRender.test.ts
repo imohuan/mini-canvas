@@ -44,9 +44,10 @@ function renderCtx(
 ): CanvasRenderContext {
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(opts.selectedIds ?? [])
-  const services: Record<string, unknown> = {
-    nodeStore: { types: new Map(), getNode: () => undefined },
-    settings: { get: (key: string) => settings[key], onChange: () => ({ dispose: () => {} }) },
+ const services: Record<string, unknown> = {
+   nodeStore: { types: new Map(), getNode: () => undefined },
+    doc: { types: new Map(), getNode: () => undefined },
+   settings: { get: (key: string) => settings[key], onChange: () => ({ dispose: () => {} }) },
     selection: { ids: selectedIds, has: (id: string) => selectedIds.has(id), onChange: () => () => {} },
     graph: { updateNode: () => {} },
   }

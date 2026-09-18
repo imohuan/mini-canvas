@@ -45,7 +45,7 @@ const DEMO_TOOL: ToolDef = {
 }
 
 /**
- * 最小渲染上下文：组件用到的只有 ctx.get('selection'/'nodeStore'/'graph')、ctx.tools 与 viewport
+ * 最小渲染上下文：组件用到的只有 ctx.get('selection'/'doc')、ctx.tools 与 viewport
  * 以及只读的 renderNodes/renderEdges（算上游素材）。完整 CanvasRenderContext 有 20+ 个字段
  * （宿主级能力），测试里只桩出被用到的几个，故显式断言类型——这是"最小桩"的刻意取舍，不是漏写。
  */
@@ -63,8 +63,8 @@ function renderCtx(
       has: (id: string) => selected.has(id),
       onChange: () => () => {},
     },
-    nodeStore: { getNode: () => undefined },
-    graph: { updateNode: () => {} },
+    // 5c：读/写都走 doc（老名 nodeStore/graph 已下线）
+    doc: { getNode: () => undefined, updateNode: () => {} },
     ...(settings ? { settings: { ...settings, onChange: () => ({ dispose: () => {} }) } } : {}),
   }
   return {

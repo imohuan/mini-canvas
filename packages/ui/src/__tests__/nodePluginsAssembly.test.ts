@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
@@ -42,11 +42,12 @@ async function bootAll() {
   })
   const nodeRegistry = new NodeRegistry()
 
-  ctx.inject('nodeStore', nodeStore)
-  ctx.inject('edgeStore', edgeStore)
+  // 5c：数据那一格只有 doc 一个名字（nodeStore/edgeStore/graph/history 四个老服务名已下线）
   ctx.inject('selection', selection)
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  ctx.inject(
+    'doc',
+    createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }),
+  )
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', nodeRegistry)
@@ -113,7 +114,7 @@ describe('节点插件整装', () => {
     const factory = ctx.get<{ create(t: string, p: { x: number; y: number }, data?: Record<string, unknown>): string }>(
       'nodeFactory',
     )
-    const graph = ctx.get<{ getNode(id: string): { type: string } | undefined; getNodes(): unknown[] }>('graph')
+    const graph = ctx.get<{ getNode(id: string): { type: string } | undefined; getNodes(): unknown[] }>('doc')
 
     const ids = EXPECTED.map(({ type }, i) => factory.create(type, { x: i * 40, y: i * 40 }))
     for (const id of ids) expect(id).toBeTruthy()

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore } from '@mini-canvas/canvas-data'
+import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { resolveSegment } from '../registry/nodeRenderer'
 import { ThemeRegistry } from '../registry/themeRegistry'
@@ -31,8 +32,9 @@ async function boot(plugins: PluginModule[]): Promise<{
   const theme = new ThemeRegistry()
   const command = new CommandRegistry()
   const factory = new NodeFactory()
+  // 5c：节点类型表随 doc 提供（ctx.nodes.register 的下游 registerNodeType 经 ctx.get('doc') 落表）
   for (const [name, impl] of [
-    ['nodeStore', nodeStore],
+    ['doc', createDocService({ nodeStore })],
     ['nodeRegistry', nodeRegistry],
     ['themeRegistry', theme],
     ['command', command],

@@ -16,15 +16,14 @@ import { GraphDocument } from '../../graphDocument'
 import { NodeFactory } from '../nodeFactory'
 import { registerCanvasCommands, CANVAS_COMMAND } from '../canvasCommands'
 import { CommandRegistry } from '@mini-canvas/kernel'
+import { createDocService } from '../../docService'
 
 /** 真内核服务最小装配（与宿主 boot 一致：command/graph/selection/nodeFactory 齐全） */
 function boot() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
@@ -37,9 +36,9 @@ function boot() {
       edgeStore.replaceAll(g.edges as never)
     },
   })
-  ctx.inject('history', history)
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history)
-  ctx.inject('graph', graph)
+  // 步骤 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   const command = new CommandRegistry()
   ctx.inject('command', command)
   const nodeFactory = new NodeFactory()

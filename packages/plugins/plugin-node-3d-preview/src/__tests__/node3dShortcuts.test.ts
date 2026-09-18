@@ -10,7 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry, findCommandByKeys } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { node3dPreviewPlugin, PANORAMA_NODE_TYPE } from '../node3dPreviewPlugin'
@@ -34,11 +34,9 @@ async function boot() {
       edgeStore.replaceAll(g.edges as never)
     },
   })
-  ctx.inject('nodeStore', nodeStore)
-  ctx.inject('edgeStore', edgeStore)
   ctx.inject('selection', selection)
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())

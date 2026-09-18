@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore } from '@mini-canvas/canvas-data'
+import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { registerNodeType } from '../registry/registerNodeType'
 import { resolveSegment } from '../registry/nodeRenderer'
@@ -18,7 +19,8 @@ async function bootWithSetup(setup: (ctx: PluginScope) => void): Promise<{
   const ctx = new Context()
   const nodeStore = new NodeStore()
   const registry = new NodeRegistry()
-  ctx.inject('nodeStore', nodeStore)
+  // 5c：节点类型表由 doc 承载（registerNodeType 经 ctx.get('doc') 落数据侧）
+  ctx.inject('doc', createDocService({ nodeStore }))
   ctx.inject('nodeRegistry', registry)
   ctx.plugin({ name: 'under-test', setup })
   await ctx.start()
@@ -57,7 +59,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   it('缺 nodeRegistry 服务（纯数据 ctx）时只落数据、不抛', async () => {
     const ctx = new Context()
     const nodeStore = new NodeStore()
-    ctx.inject('nodeStore', nodeStore)
+    ctx.inject('doc', createDocService({ nodeStore }))
     ctx.plugin({
       name: 'no-registry',
       setup: (c) =>
@@ -129,7 +131,7 @@ describe('registerNodeType 原子性（P2-9）', () => {
     const ctx = new Context()
     const nodeStore = new NodeStore()
     const registry = new NodeRegistry()
-    ctx.inject('nodeStore', nodeStore)
+    ctx.inject('doc', createDocService({ nodeStore }))
     ctx.inject('nodeRegistry', registry)
     // 构造不一致：展示侧已有该 type（来自别的路径），数据侧没有
     registry.register('dup', { in: TextContentStub })
@@ -143,4 +145,3 @@ describe('registerNodeType 原子性（P2-9）', () => {
     expect(nodeStore.types.has('dup')).toBe(false) // 数据侧已回滚，无半落状态
   })
 })
-

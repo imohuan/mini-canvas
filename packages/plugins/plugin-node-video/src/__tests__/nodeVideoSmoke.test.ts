@@ -5,7 +5,7 @@
  * —— 壳（BaseNode）只渲染已注册的段，所以"段在不在"直接决定按钮会不会出现。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@mini-canvas/canvas-data'
 import { nodeVideoPlugin, VIDEO_NODE_TYPE } from '../nodeVideoPlugin'
@@ -14,9 +14,7 @@ import { isClipping, isCropping } from '../videoSession'
 function boot() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
@@ -29,8 +27,8 @@ function boot() {
       edgeStore.replaceAll(g.edges as never)
     },
   })
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())

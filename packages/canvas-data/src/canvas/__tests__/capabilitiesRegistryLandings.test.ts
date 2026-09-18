@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
 import { NodeStore } from '@mini-canvas/canvas-data'
+import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { ThemeRegistry } from '../registry/themeRegistry'
 import { CommandRegistry } from '@mini-canvas/kernel'
@@ -21,7 +22,8 @@ const Slide = { name: 'Slide' }
 
 async function boot(plugins: PluginModule[]): Promise<Context> {
   const ctx = new Context()
-  ctx.inject('nodeStore', new NodeStore())
+  // 5c：节点类型表随 doc 提供
+  ctx.inject('doc', createDocService({ nodeStore: new NodeStore() }))
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
   ctx.inject('command', new CommandRegistry())

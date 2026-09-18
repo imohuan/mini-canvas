@@ -10,6 +10,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context, NodeStore, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { createDocService } from '../../docService'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
 import { resolveSegment, nodeSegmentStack } from '../registry/nodeRenderer'
@@ -20,7 +21,8 @@ const Comp = { name: 'Comp' }
 /** 造一个带全套服务的最小 ctx（与 capabilities.test.ts 同一形态） */
 async function boot(plugins: PluginModule[]): Promise<Context> {
   const ctx = new Context()
-  ctx.inject('nodeStore', new NodeStore())
+  // 5c：节点类型表随 doc 提供
+  ctx.inject('doc', createDocService({ nodeStore: new NodeStore() }))
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
   ctx.inject('command', new CommandRegistry())
@@ -104,4 +106,3 @@ describe('步骤 9 类型锁：老段名不再是合法入参', () => {
     ).rejects.toThrow(/不是合法区域词/)
   })
 })
-

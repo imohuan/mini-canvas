@@ -5,7 +5,7 @@
  * 自动记录拖拽/连线/删除、Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 快捷键、history:state-change 事件。
  *
  * v2 分工（薄适配包，不重复造、零耦合）：
- * - 撤销/重做本体：内核 History 服务（ctx.history，宿主已注入；快照式 withRecord/undo/redo）。
+ * - 撤销/重做本体：画布文档门面 doc（ctx.get('doc')；内部就是 History 的快照式 withRecord/undo/redo）。
  * - 自动记录：内核命令/操作经 withRecord 自动入历史；拖拽/连线由渲染层 CanvasHost 处理。
  * - 快捷键：canvas-commands 插件已注册 command:undo(mod+z) / command:redo(mod+shift+z)，
  *   渲染层统一分发 → 本包**不再注册带 keys 的撤销/重做命令**，避免键位/命令冲突。
@@ -14,16 +14,18 @@
  * 独立可装配的撤销/重做命令入口 + 只读查询服务，并把内核缺口显式列出。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { HistoryService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 
 declare module '@mini-canvas/canvas-data' {
   interface Context {
-    history: HistoryService
+    doc: DocService
   }
 }
 
 export const name = 'history'
-export const inject = ['history'] as string[]
+// 5c 起撤销栈不再是独立服务名（并进 doc）；本包薄适配的那个名字也随之改到 doc。
+// 本包存在的价值不变：给「只想要老版 history 命令名、并自带只读查询服务」的宿主一个独立入口。
+export const inject = ['doc'] as string[]
 
 /** history 兼容服务（老版 HistoryAPI 里 v2 有意义的只读子集；状态查询 + 命令执行） */
 export interface HistoryFacadeService {
@@ -35,31 +37,31 @@ export interface HistoryFacadeService {
 }
 
 export function apply(ctx: Context): void {
-  const { history } = ctx
+  const doc = ctx.get<DocService>('doc')
 
   // —— 撤销 / 重做命令（无 keys：键位由 canvas-commands 的 command:undo/redo 负责，避免冲突） ——
   ctx.commands.register({
     id: 'history:undo',
     title: '撤销',
     order: 5,
-    run: () => history.undo(),
+    run: () => doc.undo(),
   })
   ctx.commands.register({
     id: 'history:redo',
     title: '重做',
     order: 6,
-    run: () => history.redo(),
+    run: () => doc.redo(),
   })
 
   // —— 只读查询服务（菜单/按钮使能态用；独立名不撞宿主 history） ——
   const facade: HistoryFacadeService = {
-    canUndo: () => history.canUndo(),
-    canRedo: () => history.canRedo(),
+    canUndo: () => doc.canUndo(),
+    canRedo: () => doc.canRedo(),
     get undoCount() {
-      return history.undoDepth
+      return doc.undoDepth
     },
-    undo: () => history.undo(),
-    redo: () => history.redo(),
+    undo: () => doc.undo(),
+    redo: () => doc.redo(),
   }
   ctx.inject('history-facade', facade)
 

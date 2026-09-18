@@ -20,12 +20,20 @@
  * 后续再按 dsh effect 语义补。
  */
 import type { PluginScope } from '@mini-canvas/kernel'
-import type { NodeStoreService } from '../../nodeStore'
 // PortDef 是端口约束的**单一来源**（nodeStore 定义、connection 消费）。
 // 这里以前手抄了一份字段列表，于是新增字段（evictOnFull）时插件写了会被类型拦下 —— 直接复用，不再重复。
-import type { PortDef } from '../../nodeStore'
+import type { PortDef, CanvasNodeType } from '../../nodeStore'
 import type { NodeSegment } from './nodeRegistry'
 import type { NodeRegistry } from './nodeRegistry'
+
+/**
+ * doc 门面里"节点类型表写口"的那一小块（本助手只用得到它）。
+ * 只声明用到的两个方法，避免本文件与 docService 互相 import。
+ */
+interface NodeTypeStore {
+  registerType(def: CanvasNodeType): void
+  unregisterType(type: string): void
+}
 
 /** 节点类型注册的完整定义：数据字段 + 展示段（作者一次给全） */
 export interface NodeTypeDef {
@@ -55,14 +63,14 @@ export interface NodeTypeDef {
  * 返回的 revoke 会自动登记进当前插件 Scope：插件被 uninstallPlugin/stop 时，
  * nodeStore 的 type 与 nodeRegistry 的 content 一并注销 → 支持"同名插件重装"(热重载)。
  *
- * @param ctx 插件 apply/setup 拿到的 ctx（真会 ctx.get('nodeStore'/'nodeRegistry')）；
- *   类型表的注册/注销走 nodeStore（doc 门面的 types 是只读投影，注册口仍在此）。
+ * @param ctx 插件 apply/setup 拿到的 ctx（真会 ctx.get('doc'/'nodeRegistry')）；
+ *   类型表的注册/注销走 doc 的写口（doc.registerType/unregisterType —— 5c 起 nodeStore 不再是服务名）。
  * @param def 节点类型完整定义
  */
 export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void {
-  const nodeStore = ctx.get<NodeStoreService>('nodeStore')
+  const doc = ctx.get<NodeTypeStore>('doc')
   // ① 数据侧：type/label/defaultSize/图标/连接约束
-  nodeStore.registerType({
+  doc.registerType({
     type: def.type,
     label: def.label,
     defaultSize: def.defaultSize,
@@ -74,7 +82,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     frameless: def.frameless,
     transparent: def.transparent,
   })
-  const revokers: Array<() => void> = [() => nodeStore.unregisterType(def.type)]
+  const revokers: Array<() => void> = [() => doc.unregisterType(def.type)]
 
   // ② 展示侧：各区域组件（opaque 句柄；区域词见 canvas/region.ts）
   //    宿主经 createMiniCanvasHost 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
@@ -86,7 +94,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     } catch (err) {
       // P2-9：展示侧注册失败（如 nodeRegistry 里该 type 已被他人占用而 nodeStore 没有）→ 回滚数据侧，
       // 保证"要么两表都注册、要么都不注册"的原子性，避免留下只落了一半的 type。
-      nodeStore.unregisterType(def.type)
+      doc.unregisterType(def.type)
       throw err
     }
     revokers.push(() => nodeRegistry.unregister(def.type))

@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   Context,
+  createDocService,
   EdgeStore,
   GraphDocument,
   History,
@@ -44,9 +45,7 @@ function makeCtx() {
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
@@ -59,9 +58,9 @@ function makeCtx() {
       edgeStore.replaceAll(g.edges as never)
     },
   })
-  ctx.inject('history', history)
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history)
-  ctx.inject('graph', graph)
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('settings', { get: () => undefined })
   return { ctx, nodeStore, edgeStore, history, graph }

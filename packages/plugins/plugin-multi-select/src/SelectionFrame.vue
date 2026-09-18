@@ -39,7 +39,7 @@ import {
 import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { validateConnection, typeConnectionDef } from '@mini-canvas/canvas-data'
-import type { SelectionService, NodeStoreService, GraphDocumentService, DocService, DocChange, NodeStoreListener, CanvasNode, CanvasNodeType, NodePatchEntry, AddEdgeRequest } from '@mini-canvas/canvas-data'
+import type { SelectionService, DocService, CanvasNode, CanvasNodeType, NodePatchEntry, AddEdgeRequest } from '@mini-canvas/canvas-data'
 import {
   planBatchEdges,
   planBatchApply,
@@ -111,7 +111,7 @@ const isSelecting = computed(() => interaction?.isSelecting?.value === true)
 // —— 服务（懒取，宿主恒在）——
 //
 // 数据服务统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字）。
-// 迁移期兜底：只按老名装配的极简宿主/渲染桩仍能用 —— 取不到 doc 就退回同名老服务，行为不变。
+// 5c 起四个老名已下线，宿主恒装配 doc（canvas-base 注入）。
 function sel(): SelectionService {
   return ctx.get<SelectionService>('selection')
 }
@@ -119,16 +119,12 @@ function layout(): NodeLayoutService | undefined {
   return ctx.get<NodeLayoutService>('nodeLayout')
 }
 /**
- * 数据读写统一走 doc 门面；迁移期兜底 = 只按老名装配的极简宿主/渲染桩。
- * 读形状取交集（getNodes/subscribe 等 doc 与 nodeStore 同名同签名的方法），
- * 写一律走 doc（graph 的唯一写入口），不做跨类型断言（审查 H1：DocService as
- * NodeStoreService 类型不重叠，TS2352）。
- */
-/**
- * 数据读写统一走 doc 门面；迁移期兜底 = 只按老名装配的极简宿主/渲染桩。
- * 「数据读形状」取 doc 与 nodeStore 的同名同签名交集（getNodes/getNode/types/subscribe），
- * 由调用方传入实例避免跨类型断言（审查 H1：DocService as NodeStoreService 不重叠，TS2352）。
- * 写一律走 doc（graph 的唯一写入口）；兜底宿主不支持批量写就抛清晰错误（不静默降级）。
+ * 数据读写统一走 doc 门面（5c 起唯一来源：老名已下线）。
+ *
+ * 「数据读形状」用 NodeReader 这一最小结构接口，取 doc 的同名方法（getNodes/getNode/types/subscribe）
+ * 并适配 subscribe 的 DocChange 形状 —— 调用方（unsubStore = subscribe(...)）与 doc 同构。
+ * 写一律走 BatchWriter（doc 的 updateNodes/transaction = graph 唯一写入口）。
+ * 缺 doc 就抛清晰错误（宿主未装配画布数据层），不静默降级。
  */
 interface NodeReader {
   getNodes(): CanvasNode[]
@@ -142,35 +138,26 @@ interface BatchWriter {
 }
 function nodeStore(): NodeReader {
   const doc = ctx.get<DocService>('doc')
-  if (doc) {
-    // doc 的 subscribe 签名是 (change: DocChange)；适配成 NodeStoreListener 形状，
-    // 让「doc 装配」与「老名兜底」两条路径对调用方（unsubStore = subscribe(...)）同构。
-    return {
-      getNodes: () => doc.getNodes(),
-      getNode: (id) => doc.getNode(id),
-      types: doc.types,
-      subscribe: (listener) => doc.subscribe((c) => listener(c.reason, c.id)),
-    };
-  }
-  const legacy = ctx.get<NodeStoreService>('nodeStore')
-  if (!legacy) throw new Error("[multi-select] 需要 doc 或 nodeStore 服务（宿主未装配画布数据层）")
-  return legacy;
+  if (!doc) throw new Error("[multi-select] 需要 doc 服务（宿主未装配画布数据层）")
+  // doc 的 subscribe 签名是 (change: DocChange)；适配成 NodeStoreListener 形状，
+  // 让调用方（unsubStore = subscribe(...)）的写法不变。
+  return {
+    getNodes: () => doc.getNodes(),
+    getNode: (id) => doc.getNode(id),
+    types: doc.types,
+    subscribe: (listener) => doc.subscribe((c) => listener(c.reason, c.id)),
+  };
 }
 function graph(): BatchWriter {
   const doc = ctx.get<DocService>('doc')
-  if (doc) return doc;
-  const legacy = ctx.get<GraphDocumentService>('graph')
-  if (!legacy) throw new Error("[multi-select] 需要 doc 或 graph 服务（宿主未装配画布数据层）")
-  return {
-    updateNodes: (entries) => legacy.updateNodes(entries),
-    transaction: (reason, fn) => legacy.transaction(reason, fn),
-  };
+  if (!doc) throw new Error("[multi-select] 需要 doc 服务（宿主未装配画布数据层）")
+  return doc;
 }
 function viewportSvc(): ViewportService | undefined {
   return ctx.get<ViewportService>('viewport')
 }
 function edgeStore(): { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined {
-  return (ctx.get<DocService>('doc') ?? ctx.get('edgeStore')) as never
+  return ctx.get<DocService>('doc')
 }
 // ====== 批量连线（复刻 v1 的 onSelectionBatchConnectStart/End）======
 /**

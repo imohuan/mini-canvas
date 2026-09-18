@@ -2,7 +2,7 @@
  * createMiniCanvasHost —— 可复用画布宿主门面（window.MiniCanvas 的唯一装配点）。
  *
  * 定位：
- * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 12 件画布基础服务）→ 注入渲染层两件
+ * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 11 件画布基础服务）→ 注入渲染层两件
  *   （nodeLayout / viewport）→ 冷启动业务插件 → start。
  * - **不 import 任何具体插件**：冷启动要装哪些由调用方(宿主/demo)经 `coldPlugins` 传入，
  *   顺序即装载顺序。这样本模块可被真宿主复用，不绑 demo、不绑任何 node 插件。
@@ -18,6 +18,7 @@ import { Context, createCanvasBasePlugin, GRAPH_EDGES_KEY, GRAPH_KEY } from '@mi
 import type {
   CanvasEdge,
   CanvasNode,
+  DocService,
   EdgeStoreService,
   GraphDocumentService,
   GraphEnvelope,
@@ -73,6 +74,12 @@ export interface MiniCanvasOptions {
 export interface CanvasHostHandle {
   ctx: Context
   save: SaveServiceImpl
+  /**
+   * 文档门面（§4.1）：节点 + 边 + 事务 + 撤销 + 快照 + 订阅合成的一个名字。
+   * 5c 起数据那一格只有它可按名取（nodeStore/edgeStore/graph/history 四个服务名已下线）；
+   * 下面那四个字段仍是**实例**（渲染层要 subscribe / 量尺寸，插件要窄接口），不是服务名。
+   */
+  doc: DocService
   nodeStore: NodeStore
   /** 边数据服务(边下沉内核后)：建边/删边/删节点清边都写它；渲染层读它画边 */
   edgeStore: EdgeStoreService
@@ -141,8 +148,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 }> {
   const ctx = new Context()
 
-  // —— 基础插件：12 件画布基础服务（save/nodeStore/edgeStore/resources/nodeRegistry/themeRegistry/
-  // selection/history/graph/command/nodeFactory）+ 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入。
+  // —— 基础插件：画布基础服务（save/doc/resources/nodeRegistry/themeRegistry/selection/command/
+  // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有）
+  // + 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入（§4.1：数据那一格只有 doc）。
   // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
   const base = createCanvasBasePlugin({
     adapter: opts.adapter,
@@ -150,7 +158,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     themeRegistry: opts.themeRegistry,
     persistSettings: opts.persistSettings,
   })
-  const { save, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, nodeFactory } =
+  const { save, doc, nodeStore, edgeStore, resources, nodeRegistry, themeRegistry, selection, history, graph, command, nodeFactory } =
     base.services
 
   // —— 宿主补渲染层两件（真需要 DOM / 后端 attach，数据层给不了）——
@@ -239,6 +247,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const host: CanvasHostHandle = {
     ctx,
     save,
+    doc,
     nodeStore,
     edgeStore,
     nodeRegistry,

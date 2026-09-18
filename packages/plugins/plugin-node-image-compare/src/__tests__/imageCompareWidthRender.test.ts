@@ -29,7 +29,8 @@ function renderCtx(): CanvasRenderContext {
   return {
     ctx: {
       get: (name: string) =>
-        name === 'graph' ? { updateNode: (id: string, patch: never) => writes.push({ id, patch }) } : undefined,
+        // 5c：写回走 doc（老名 graph 已下线）
+        name === 'doc' ? { updateNode: (id: string, patch: never) => writes.push({ id, patch }) } : undefined,
     },
     viewport: { value: { zoom: 1 } },
     renderNodes: { value: nodes },

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { History, type HistorySnapshot } from '@mini-canvas/canvas-data'
+import { Context, GraphDocument, Selection } from '@mini-canvas/canvas-data'
+import { History, createDocService, type HistorySnapshot } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { historyPlugin, name } from '../historyPlugin'
 
@@ -28,13 +28,19 @@ function makeHistory(): { history: History; set: (v: string) => void; get: () =>
 describe('plugin-history', () => {
   it('插件名/依赖正确', () => {
     expect(name).toBe('history')
-    expect(historyPlugin.inject).toContain('history')
+    // 5c：撤销栈并进 doc，本包的适配依赖名随之从 'history' 改到 'doc'
+    expect(historyPlugin.inject).toContain('doc')
   })
 
   it('apply 注册 history:undo/redo 命令并上架 history-facade 服务', async () => {
     const ctx = new Context()
     const { history, set, get } = makeHistory()
-    ctx.inject('history', history)
+    // 5c：撤销栈并进 doc（老名 history 已下线）。门面转发的 undo/redo 走 graph，故给全 graph。
+    const selection = new Selection()
+    ctx.inject(
+      'doc',
+      createDocService({ history, graph: new GraphDocument({ getNodes: () => [], getNode: () => undefined, types: new Map() } as never, { getEdges: () => [], getEdge: () => undefined } as never, selection, history) }),
+    )
     const command = new CommandRegistry()
     ctx.inject('command', command)
     await ctx.start()
@@ -66,7 +72,7 @@ describe('plugin-history', () => {
   it('热卸后命令与 facade 回收', async () => {
     const ctx = new Context()
     const { history } = makeHistory()
-    ctx.inject('history', history)
+    ctx.inject('doc', createDocService({ history }))
     const command = new CommandRegistry()
     ctx.inject('command', command)
     await ctx.start()

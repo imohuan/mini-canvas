@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type DocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@mini-canvas/canvas-data'
 import { nodeImagePlugin } from '../nodeImagePlugin'
@@ -15,17 +15,15 @@ import { isCropping } from '../cropSession'
 function boot() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
     snapshot: () => ({ nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())), edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) }),
     restore: (g: { nodes: unknown[]; edges: unknown[] }) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
   })
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())
@@ -39,12 +37,12 @@ describe('node-image 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     expect(ctx.get('image')).toBeTruthy()
-    expect(ctx.get<{ types: Map<string, unknown> }>('nodeStore').types.has('image')).toBe(true)
+    expect(ctx.get<DocService>('doc').types.has('image')).toBe(true)
     // 建一个 image 节点（create 委托 image 服务走 graph）
     const factory = ctx.get<{ create(t: string, p: { x: number; y: number }): string }>('nodeFactory')
     const id = factory.create('image', { x: 5, y: 6 })
     expect(id).toBeTruthy()
-    expect(ctx.get<{ getNodes(): Array<{ id: string; type: string }> }>('nodeStore').getNodes()).toHaveLength(1)
+    expect(ctx.get<DocService>('doc').getNodes()).toHaveLength(1)
     ctx.stop()
   })
 

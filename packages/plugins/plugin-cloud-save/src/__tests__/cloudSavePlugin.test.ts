@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   Context,
+  createDocService,
   EdgeStore,
   GraphDocument,
   History,
@@ -104,11 +105,7 @@ async function bootWithLocal(localNodes: unknown[], localEdges: unknown[] = []) 
 
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'image', label: '图', defaultSize: { w: 100, h: 100 } })
-  ctx.inject('nodeStore', nodeStore)
-
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
-
   const selection = new Selection()
   ctx.inject('selection', selection)
 
@@ -123,13 +120,12 @@ async function bootWithLocal(localNodes: unknown[], localEdges: unknown[] = []) 
       edgeStore.replaceAll(env.edges ?? [])
     },
   })
-  ctx.inject('history', history)
-
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (env) => {
     save.set(GRAPH_KEY, env.nodes, 'canvas')
     save.set(GRAPH_EDGES_KEY, env.edges, 'canvas')
   })
-  ctx.inject('graph', graph)
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
 
   // 宿主恢复本地存档（真实顺序：这一步发生在插件装载之前）
   nodeStore.replaceAll(localNodes as never)

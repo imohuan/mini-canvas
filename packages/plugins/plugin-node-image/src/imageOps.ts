@@ -126,9 +126,9 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     removeEdges(ids: string[]): number
   }
   /**
-   * 读/写统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字）。
-   * 迁移期兜底：极简宿主/单测桩可能只按老名注入 graph（无 doc）——这时退回老名，行为不变。
-   * 两者都缺（纯逻辑测试未注入图服务）时读写都安全降级：读返回 undefined、写 no-op。
+   * 读/写统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字；
+   * 5c 起那四个老名已下线，doc 是唯一来源）。
+   * 缺 doc（纯逻辑测试未注入图服务）时读写都安全降级：读返回 undefined、写 no-op。
    */
   type ImageDocPort = {
     getNode(id: string): NodeLike | undefined
@@ -139,7 +139,7 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     transaction<T>(reason: string, fn: (tx: TxLike) => T): T
   }
   const doc = (): ImageDocPort | undefined =>
-    svc.get<ImageDocPort | undefined>('doc') ?? svc.get<ImageDocPort | undefined>('graph') ?? undefined
+    svc.get<ImageDocPort | undefined>('doc') ?? undefined
 
   return {
     read: (nodeId) => doc()?.getNode(nodeId)?.data,

@@ -307,20 +307,23 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
   it('裸 export 三样(name/inject/apply) 经 ctx.plugin 装载并可用 ctx 能力', async () => {
     // 模拟插件作者只 export name/inject/apply 的模块（依赖已注入才跑）
     const { NodeStore } = await import('@mini-canvas/canvas-data')
+    const { createDocService } = await import('../../docService')
     const { NodeRegistry } = await import('../registry/nodeRegistry')
     const ctx = new Context()
-    ctx.inject('nodeStore', new NodeStore())
+    // 5c：节点类型表由 doc 承载（本用例验「能力段 register 落表」→ 装配 doc 而非老名 nodeStore）
+    const nodeStore = new NodeStore()
+    ctx.inject('doc', createDocService({ nodeStore }))
     ctx.inject('nodeRegistry', new NodeRegistry())
     const pluginMod: PluginModule = {
       name: 'audio',
-      inject: ['nodeStore', 'nodeRegistry'],
+      inject: ['doc', 'nodeRegistry'],
       apply(c: any) {
         c.nodes.register({ type: 'audio', label: '音频', size: { w: 100, h: 60 } })
       },
     }
     ctx.plugin(pluginMod)
     await ctx.start()
-    expect(ctx.get<{ types: ReadonlyMap<string, unknown> }>('nodeStore').types.has('audio')).toBe(true)
+    expect(nodeStore.types.has('audio')).toBe(true)
     expect(ctx.listPlugins()).toContain('audio')
   })
 })
@@ -328,10 +331,11 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
 describe('P1 fiber 集成（ctx.fiber 句柄 + 生命周期状态推进）', () => {
   it('冷启动 plugin() 建 PENDING fiber；start 后置 ACTIVE', async () => {
     const ctx = new Context()
-    ctx.plugin({ name: 'a', inject: ['nodeStore'], apply: () => {} })
-    ctx.inject('nodeStore', {} as never)
+    // 用一个中立服务名（本用例只验 fiber 的 PENDING→ACTIVE 机制；5c 起 nodeStore 已不是服务名）
+    ctx.plugin({ name: 'a', inject: ['dataStore'], apply: () => {} })
+    ctx.inject('dataStore', {} as never)
     expect(ctx.fiber('a')?.stateName).toBe('pending')
-    expect(ctx.fiber('a')?.deps).toEqual(['nodeStore'])
+    expect(ctx.fiber('a')?.deps).toEqual(['dataStore'])
     await ctx.start()
     expect(ctx.fiber('a')?.stateName).toBe('active')
   })
@@ -555,8 +559,9 @@ describe('P3 事件分发（cordis ch4：多参事件 + parallel/serial/bail/wat
 describe('P5 inspectPlugins：fiber 状态可查 + PENDING 缺依赖诊断（只读视图）', () => {
   it('正常冷启动后：ACTIVE 插件全部上报，state=active 且 missingDeps 空', async () => {
     const ctx = new Context()
-    ctx.inject('nodeStore', {} as never)
-    ctx.plugin({ name: 'a', inject: ['nodeStore'], apply: () => {} })
+    // 中立服务名（只验诊断视图；5c 起 nodeStore 已不是服务名）
+    ctx.inject('dataStore', {} as never)
+    ctx.plugin({ name: 'a', inject: ['dataStore'], apply: () => {} })
     ctx.plugin({ name: 'b', apply: () => {} })
     await ctx.start()
     const byName = new Map(ctx.inspectPlugins().map((s) => [s.name, s]))
@@ -777,4 +782,3 @@ describe('P1-4 配置 key 冲突保护', () => {
     ctx.stop()
   })
 })
-

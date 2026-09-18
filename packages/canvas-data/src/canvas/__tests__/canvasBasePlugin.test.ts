@@ -40,22 +40,31 @@ async function bootHeadless(adapter?: MemoryStorageAdapter) {
 describe('canvasBasePlugin —— 建出来的基础服务', () => {
   it('每件服务都经基础插件注入内核，ctx.get 全部取得到', async () => {
     const { ctx, services } = await bootHeadless()
+    // 步骤 5c：数据那一格只有一个名字 doc（nodeStore/edgeStore/graph/history 四个老名已下线）
     const names = [
       'save',
-      'nodeStore',
-      'edgeStore',
+      'doc',
       'resources',
       'nodeRegistry',
       'themeRegistry',
       'selection',
-      'history',
-      'graph',
       'command',
       'nodeFactory',
     ] as const
     for (const n of names) {
       expect(ctx.get(n), n + ' 未注入').toBe(services[n as keyof typeof services])
     }
+    // 四个老服务名确已下线（这正是 5c 的目标）
+    for (const legacy of ['nodeStore', 'edgeStore', 'graph', 'history']) {
+      expect(ctx.get(legacy), legacy + ' 不该再是服务名').toBeUndefined()
+    }
+    // 底层四个实例本身仍在 base.services 上（宿主/渲染层直接持有）
+    expect(services.nodeStore).toBeDefined()
+    expect(services.edgeStore).toBeDefined()
+    expect(services.graph).toBeDefined()
+    expect(services.history).toBeDefined()
+    // doc 是同一批数据的视图（指向同一实例）
+    expect(services.doc.getNodes()).toEqual(services.nodeStore.getNodes())
     // 配置持久化桥（缺省开启）
     expect(ctx.get('settingsPersist')).toBe(services.settingsPersist)
     ctx.stop()
@@ -100,7 +109,7 @@ describe('canvasBasePlugin —— 核心身份（决策 1）', () => {
 
     expect(ctx.uninstallPlugin('canvas-base')).toBe(false)
     // 画布功能不受影响：服务实例仍可取到，仍能用
-    expect(ctx.get('graph')).toBe(services.graph)
+    expect(ctx.get('doc')).toBe(services.doc)
     expect(ctx.get('nodeFactory')).toBe(services.nodeFactory)
     expect(ctx.fiber('canvas-base')?.stateName).toBe('active')
     ctx.stop()
@@ -111,7 +120,7 @@ describe('canvasBasePlugin —— 核心身份（决策 1）', () => {
     ctx.stop()
     expect(ctx.getState()).toBe('created')
     expect(ctx.listPlugins()).toEqual([])
-    expect(ctx.get('graph')).toBeUndefined()
+    expect(ctx.get('doc')).toBeUndefined()
   })
 })
 
@@ -122,7 +131,7 @@ describe('canvasBasePlugin —— 依赖它的消费方不被连带回退（决�
     ctx.plugin(base.plugin)
     ctx.plugin({
       name: 'biz',
-      inject: ['graph', 'nodeStore'],
+      inject: ['doc'],
       apply(c) {
         c.effect(() => () => void 0)
       },

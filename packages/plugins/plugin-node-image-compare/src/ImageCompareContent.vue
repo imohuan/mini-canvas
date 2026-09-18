@@ -65,7 +65,7 @@ function syncFollowWidth(): void {
   if (!patch) return
   ctx
     .get<{ updateNode(id: string, patch: { data: Record<string, unknown>; size: { w: number; h: number } }): void }>(
-      'graph',
+      'doc',
     )
     .updateNode(props.id, {
       data: { ...(props.data ?? {}), cardWidth: patch.cardWidth },

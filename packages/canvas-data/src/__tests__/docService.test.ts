@@ -37,13 +37,11 @@ function boot() {
     },
   })
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history)
-  ctx.inject('nodeStore', nodeStore)
-  ctx.inject('edgeStore', edgeStore)
+  // 步骤 5c：四个老服务名已下线；门面由装配方交实例（与 canvasBasePlugin 同一形状）。
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('selection', selection)
-  ctx.inject('history', history)
-  ctx.inject('graph', graph)
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 200, h: 100 } })
-  return { ctx, nodeStore, edgeStore, selection, history, graph }
+  return { ctx, nodeStore, edgeStore, selection, history, graph, doc: ctx.get<DocService>('doc') }
 }
 
 describe('doc 门面 —— 覆盖四个老服务的对外方法', () => {
@@ -178,29 +176,40 @@ describe('doc 门面 —— 写路径统一走唯一写入口（历史 + 提交�
   })
 })
 
-describe('doc 门面 —— 老服务名并存（5a 不做删名）', () => {
-  it('同一 ctx 上 doc 与四个老名同时可用，且指向同一批数据', () => {
-    const { ctx, nodeStore, edgeStore, history, graph } = boot()
+describe('doc 门面 —— 四个老服务名已下线（步骤 5c）', () => {
+  it('数据那一格只有 doc 一个名字：老名取不到，且 doc 指向同一批数据', () => {
+    const { ctx, nodeStore, edgeStore, history, graph, doc } = boot()
 
-    // ctx.get('doc') 是画布能力层的**内置服务**（canvas/capabilityLayer.ts），按名解析上面四个。
-    // 内置优先于 inject：所以这里不预先注入 doc，直接取内建那一个 —— 它才是全画布的正式实例。
-    const doc = ctx.get<DocService>('doc')
+    // doc 是基础插件注入的**真服务**（5c 起不再由能力层按名解析内置）
     expect(doc).toBeDefined()
     expect(ctx.hasService('doc')).toBe(true)
 
-    // 老名一个不少（5a 是新老并存；删名属 5c）
-    expect(ctx.get('nodeStore')).toBe(nodeStore)
-    expect(ctx.get('edgeStore')).toBe(edgeStore)
-    expect(ctx.get('graph')).toBe(graph)
-    expect(ctx.get('history')).toBe(history)
+    // 5c 的目标：nodeStore/edgeStore/graph/history 四个名字下线（取不到）
+    expect(ctx.get('nodeStore')).toBeUndefined()
+    expect(ctx.get('edgeStore')).toBeUndefined()
+    expect(ctx.get('graph')).toBeUndefined()
+    expect(ctx.get('history')).toBeUndefined()
+    // 底层实例本身当然还在（宿主/渲染层直接持有），只是不再按名可取
+    expect(nodeStore.getNodes()).toEqual([])
+    expect(edgeStore.getEdges()).toEqual([])
+    expect(graph.getNodes()).toEqual([])
+    expect(history.undoDepth).toBe(0)
 
-    // 门面与老名指向同一批数据
+    // 门面与底层实例指向同一批数据（同一批对象，不是拷贝）
     const id = doc.createNode('text', { x: 0, y: 0 })
     expect(nodeStore.getNode(id)).toBeDefined()
     expect(graph.getNodes()).toHaveLength(1)
     expect(doc.getNodes()).toHaveLength(1)
     // 同一个实例（多次 get 拿到的门面是同一个；用户数据只有一份）
     expect(ctx.get('doc')).toBe(doc)
+  })
+
+  it('doc 也能落节点类型（registerNodeType 助手的数据侧写口）', () => {
+    const { doc } = boot()
+    doc.registerType({ type: 'extra', label: '额外', defaultSize: { w: 10, h: 10 } })
+    expect(doc.types.has('extra')).toBe(true)
+    doc.unregisterType('extra')
+    expect(doc.types.has('extra')).toBe(false)
   })
 
   it('能力层未装时 ctx 无 doc（纯内核不带画布服务）', () => {

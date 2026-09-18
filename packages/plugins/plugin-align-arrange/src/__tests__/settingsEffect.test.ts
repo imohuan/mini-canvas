@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, type CanvasNode } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { alignArrangePlugin } from '../alignArrangePlugin'
 
@@ -18,17 +18,15 @@ function makeCtx() {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 200, h: 100 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   const selection = new Selection()
   ctx.inject('selection', selection)
   const history = new History({
     snapshot: () => JSON.parse(JSON.stringify(nodeStore.getNodes())) as CanvasNode[],
     restore: (nodes) => nodeStore.replaceAll((nodes as CanvasNode[]) ?? []),
   })
-  ctx.inject('history', history)
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, selection, history))
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
   const command = new CommandRegistry()
   ctx.inject('command', command)
   ctx.inject('nodeLayout', makeLayout(nodeStore) as never)

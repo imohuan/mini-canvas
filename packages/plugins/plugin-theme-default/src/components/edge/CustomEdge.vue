@@ -17,8 +17,8 @@
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { GRAPH_EDGES_KEY, isTransient } from '@mini-canvas/canvas-data'
-import type { EdgeStoreService, SaveService } from '@mini-canvas/canvas-data'
+import { isTransient } from '@mini-canvas/canvas-data'
+import type { DocService } from '@mini-canvas/canvas-data'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   getSourcePosition,
@@ -175,10 +175,9 @@ function cutEdge(ev: MouseEvent) {
   if (command?.has('command:delete-edge')) {
     command.execute('command:delete-edge', { edgeId: props.id ?? '' })
   } else {
-    const edgeStore = ctx.get<EdgeStoreService>('edgeStore')
-    const save = ctx.get<SaveService>('save')
-    edgeStore.removeEdge(props.id ?? '')
-    save.set(GRAPH_EDGES_KEY, edgeStore.getEdges(), 'canvas')
+    // 回落路径：没有命令服务时直接走 doc 的写入口 —— 自带历史 + 落盘调度（旧写法是
+    // edgeStore.removeEdge + save.set(GRAPH_EDGES_KEY, …)，5c 删老名后统一收口到 doc）。
+    ctx.get<DocService>('doc').removeEdges([props.id ?? ''])
   }
   showCutButton.value = false
 }

@@ -49,8 +49,9 @@ const DemoImageContent = defineComponent({
 })
 
 export const name = 'demo-nodes'
-// 与真实节点插件同形：建节点的 create 走 graph 写入口，故声明硬依赖（缺则 PENDING，而非调用时静默拿不到）。
-export const inject = ['graph'] as string[]
+// 与真实节点插件同形：建节点的 create 走 doc 写入口，故声明硬依赖（缺则 PENDING，而非调用时静默拿不到）。
+// （5c 起数据那一格只有 doc 一个名字，graph 老名已下线。）
+export const inject = ['doc'] as string[]
 
 export function apply(ctx: Context) {
   // 建节点走数据层唯一写入口（与真实节点插件同一条路径：可撤销 + 自动落盘），

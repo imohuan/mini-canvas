@@ -1,0 +1,21 @@
+PASS  画布渲染出节点 DOM  -- node 元素 = 2
+PASS  宿主句柄可读（window.MiniCanvasUI）
+PASS  seed 生效（2 个默认节点）  -- 实际 2: text,image
+PASS  doc 门面已装配（步骤 5a）
+PASS  canvas-base 不可卸载（决策 1 core）  -- {"ok":false,"reason":"core"}
+PASS  canvas-base 不在对外清单（环境而非插件项）  -- 21 个业务插件
+PASS  点「+ 文本」建出节点  -- 2 -> 3
+PASS  拖动节点位置真的变了  -- 几何={"x":180.74737548828125,"y":192.5263214111328,"w":480.7894287109375,"h":320.52630615234375} {"x":176,"y":80} -> {"x":260,"y":136.78160919540227}
+PASS  撤销按钮回退了上一步（拖动）  -- 节点数 3 -> 3（拖动撤销不改变节点数）
+PASS  再撤销回退了建节点  -- 3 -> 2（期望 2）
+PASS  重做恢复节点  -- 2 -> 3
+PASS  刷新后节点数恢复（落盘链路）  -- 重新加载 3
+PASS  设置面板能打开且长出分组
+PASS  注册场运行时放/取/回收（node/region）  -- {"before":0,"after":1,"src":"<host>","hasResolve":true,"afterDispose":0}
+PASS  场条目带 source（谁放的）  -- source=<host>
+PASS  wrap/resolve（叠层可合成）
+PASS  真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下线  -- {"returned":false,"state":"active","graph":true,"oldGraphGone":true}
+PASS  零 error（favicon 404 除外）
+
+===== UI 自动化：18/18 通过 =====
+warn 3 条（首条：[Vue warn]: Extraneous non-props attributes (class, data-slot-order, data-slot-id) were pa...）

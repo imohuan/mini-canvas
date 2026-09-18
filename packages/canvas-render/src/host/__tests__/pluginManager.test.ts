@@ -9,12 +9,13 @@ function demoPlugin(flag: string): PluginModule {
     name: 'demo',
     setup(ctx) {
       ctx.inject('demoSvc', { flag })
-      ctx.get<{ registerType(d: unknown): void }>('nodeStore').registerType({
+      // 5c：节点类型表随 doc 提供（nodeStore 不再是服务名）
+      ctx.get<{ registerType(d: unknown): void }>('doc').registerType({
         type: 'demo',
         label: 'Demo',
         defaultSize: { w: 120, h: 80 },
       })
-      ctx.effect(() => () => ctx.get<{ unregisterType(t: string): void }>('nodeStore').unregisterType('demo'))
+      ctx.effect(() => () => ctx.get<{ unregisterType(t: string): void }>('doc').unregisterType('demo'))
     },
   }
 }
@@ -210,4 +211,3 @@ describe('sourceKind 来源分类（P1-16 信任策略基础设施）', () => {
     expect(sourceKind(S as never)).toBe('inline')
   })
 })
-

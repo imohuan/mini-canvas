@@ -9,7 +9,7 @@
  * 只把「浏览器图片能力」换成假实现，其余走真内核（graph 唯一写入口 → 进历史 → 落盘）。
  */
 import { describe, it, expect } from 'vitest'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter, type GraphEnvelope } from '@mini-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter, createDocService, type GraphEnvelope } from '@mini-canvas/canvas-data'
 import { addSourceNode, createImageOps, type ImageTransform } from '../imageOps'
 
 /** 假图片加工：不碰 FileReader/canvas，只回可控结果 */
@@ -47,8 +47,9 @@ function boot() {
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
   const ops = createImageOps({
     // 与真实宿主同形的服务表：加素材要按输入口容量挤最老一条，就得能读到边与节点类型声明
+    // 5c：读写都走 doc（老名 nodeStore/edgeStore/graph 已下线）
     get: (name: string) =>
-      name === 'nodeStore' ? nodeStore : name === 'edgeStore' ? edgeStore : name === 'graph' ? graph : undefined,
+      name === 'doc' ? createDocService({ nodeStore, edgeStore, graph, history }) : undefined,
   } as never)
   const target = graph.createNode('image', { x: 400, y: 0 }, { imageUrl: 'data:image/png;base64,OLD' })
   return { nodeStore, edgeStore, graph, history, ops, target }

@@ -66,6 +66,10 @@ const posOf = (id) => page.evaluate((nid) => {
 await boot();
 
 // ① 画布渲染
+// 等 VueFlow 真把节点渲染出来（首次冷启动 vite 预构建可能慢，轮询而不是死等固定秒数）
+await page
+  .waitForSelector('.vue-flow__node', { timeout: 30000 })
+  .catch(() => null);
 check('画布渲染出节点 DOM', (await page.locator('.vue-flow__node').count()) >= 2, `node 元素 = ${await page.locator('.vue-flow__node').count()}`);
 
 // ② 宿主/服务/插件
@@ -153,9 +157,10 @@ const core = await page.evaluate(() => {
   const api = window.MiniCanvasUI;
   const ctx = api.getContext();
   const r = api.uninstallPlugin('canvas-base');
-  return { returned: r, state: ctx.inspectPlugins().find((p) => p.name === 'canvas-base')?.state, graph: !!ctx.get('graph') };
+  // 5c 起老名 graph 下线；数据统一走 doc 门面（get('graph') 应为 undefined）
+  return { returned: r, state: ctx.inspectPlugins().find((p) => p.name === 'canvas-base')?.state, graph: !!ctx.get('doc'), oldGraphGone: ctx.get('graph') === undefined };
 });
-check('真实宿主上 canvas-base 卸不掉且功能仍在', core.returned === false && core.state === 'active' && core.graph === true, JSON.stringify(core));
+check('真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下线', core.returned === false && core.state === 'active' && core.graph === true && core.oldGraphGone === true, JSON.stringify(core));
 
 // ⑩ 控制台：零 error（favicon 404 不算）
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
@@ -168,4 +173,3 @@ const failed = results.filter((r) => !r.ok);
 console.log(`\n===== UI 自动化：${results.length - failed.length}/${results.length} 通过 =====`);
 if (warns.length) console.log(`warn ${warns.length} 条（首条：${warns[0].slice(0, 90)}...）`);
 process.exit(failed.length ? 1 : 0);
-

@@ -11,7 +11,7 @@
  * 假 window 只需覆盖本插件真正用到的那几个 API，不引入 jsdom（少一个依赖，也更快）。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { fileDropPlugin } from '../fileDropPlugin'
@@ -25,24 +25,20 @@ function boot() {
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
-  ctx.inject('nodeStore', nodeStore)
   const edgeStore = new EdgeStore()
-  ctx.inject('edgeStore', edgeStore)
   ctx.inject('selection', new Selection())
-  ctx.inject(
-    'history',
-    new History({
-      snapshot: () => ({
-        nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())),
-        edges: JSON.parse(JSON.stringify(edgeStore.getEdges())),
-      }),
-      restore: (g: { nodes: unknown[]; edges: unknown[] }) => {
-        nodeStore.replaceAll(g.nodes as never)
-        edgeStore.replaceAll(g.edges as never)
-      },
+  const history = new History({
+    snapshot: () => ({
+      nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())),
+      edges: JSON.parse(JSON.stringify(edgeStore.getEdges())),
     }),
-  )
-  ctx.inject('graph', new GraphDocument(nodeStore, edgeStore, ctx.get('selection'), ctx.get('history')))
+    restore: (g: { nodes: unknown[]; edges: unknown[] }) => {
+      nodeStore.replaceAll(g.nodes as never)
+      edgeStore.replaceAll(g.edges as never)
+    },
+  })
+  // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
+  ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, ctx.get('selection'), history), history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('nodeFactory', new NodeFactory())
   ctx.inject('nodeRegistry', new NodeRegistry())
