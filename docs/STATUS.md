@@ -899,3 +899,12 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
 
 ---
 *本文件由主 agent 维护：开工前更新【一、现在该做什么】，其余各节按需追补。*
+### 步骤 5c 完成（2026-09-18，88cf307）
+
+- 四个老服务名 `nodeStore` / `edgeStore` / `graph` / `history` 已下线（`ctx.get` 取不到）；
+- 数据服务统一为 `ctx.get('doc')` 门面（直接持有四个底层实例，不再按名解析）；
+- `CustomEdge.vue` 剪切回落路径改走 `doc.removeEdges`（优先路径 `command:delete-edge` 不变）；
+- 全仓 `rg "ctx.inject('(nodeStore|edgeStore|graph|history)')"` → **0 处**；
+- 基础服务现状实测：save / doc / resources / nodeRegistry / themeRegistry / selection /
+  command / nodeFactory / nodeLayout / viewport / settingsPersist = **11 个**
+  （§4.2 六个"表型服务"的退场属后续清理；slots/settings 为能力层内置）
