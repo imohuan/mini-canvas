@@ -55,7 +55,8 @@ export interface NodeTypeDef {
  * 返回的 revoke 会自动登记进当前插件 Scope：插件被 uninstallPlugin/stop 时，
  * nodeStore 的 type 与 nodeRegistry 的 content 一并注销 → 支持"同名插件重装"(热重载)。
  *
- * @param ctx 插件 apply/setup 拿到的 ctx（真会 ctx.get('nodeStore'/'nodeRegistry')）
+ * @param ctx 插件 apply/setup 拿到的 ctx（真会 ctx.get('nodeStore'/'nodeRegistry')）；
+ *   类型表的注册/注销走 nodeStore（doc 门面的 types 是只读投影，注册口仍在此）。
  * @param def 节点类型完整定义
  */
 export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void {

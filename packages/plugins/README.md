@@ -40,7 +40,7 @@ export const nodeTextPlugin: PluginModule = {
       segments: { content: TextContent },       // content 是 .vue 组件句柄(opaque)
       // inputs: [{ accepts: ['image'], limit: 'single' }],   // 声明式连接约束(可选)
     })
-    // ……其余插件逻辑：ctx.get('nodeStore')/ctx.inject('text', service) 等
+    // ……其余插件逻辑：ctx.get('doc')/ctx.inject('text', service) 等
   },
 }
 ```

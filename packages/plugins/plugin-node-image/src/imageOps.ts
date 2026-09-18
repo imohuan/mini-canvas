@@ -6,7 +6,7 @@
  * 两处各写一遍必然漂移，所以这里把实现收敛成纯异步函数，两边都只是"备好读/写句柄再调它"。
  *
  * 读/写句柄（`ImageOpsContext`）由调用方注入：
- * - 组件侧：ctx.get('nodeStore').getNode(id).data 读；ctx.get('graph').updateNode 写。
+ * - 组件侧：ctx.get('doc').getNode(id).data 读；ctx.get('doc').updateNode 写。
  * - 命令侧：同一对服务，只是从命令的 ctx 上取。
  * 两边都用内核**唯一写入口 graph** → 写回自动进历史、自动落盘、可撤销。
  *

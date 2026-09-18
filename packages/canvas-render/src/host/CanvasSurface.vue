@@ -4,7 +4,7 @@
 // 为什么单独一个组件：CanvasHost 自身在 setup 期就要 provide（那时 ctx 还没建好，只能给 Ref 盒子），
 // 导致渲染组件拿 ctx 要 .value + 判空。本组件在 boot 完成(booting=false)后才由 CanvasHost 以 v-else 挂载，
 // 其 setup 执行时 props.host 已就绪 —— 所以它能 provide **裸 ctx / 裸 host**，消费组件直接
-// `useCanvasRender().ctx.get('nodeStore')`，零 value 零判空。
+// `useCanvasRender().ctx.get('doc')`，零 value 零判空。
 //
 // 职责边界（只管「渲染 + provide 裸上下文」）：
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。

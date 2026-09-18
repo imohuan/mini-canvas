@@ -115,6 +115,8 @@ export interface DocService {
   redo(): void
   canUndo(): boolean
   canRedo(): boolean
+  /** 撤销栈深度（测试/诊断；plugin-history 的只读 facade 用它） */
+  readonly undoDepth: number
 
   // ==================== 快照 / 整体替换 / 落盘 ====================
   /** 深拷贝快照（节点 + 边；与内部引用隔离） */
@@ -176,6 +178,9 @@ export function createDocService(resolve: DocSourceResolver): DocService {
     redo: () => need('graph').redo(),
     canUndo: () => need('graph').canUndo(),
     canRedo: () => need('graph').canRedo(),
+    get undoDepth() {
+      return need('history').undoDepth
+    },
 
     // —— 快照 / 整体替换 / 落盘 ——
     snapshot: () => need('graph').snapshot(),

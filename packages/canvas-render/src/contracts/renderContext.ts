@@ -7,7 +7,7 @@
  *
  * 提供方：CanvasSurface（CanvasHost 的内层渲染子树宿主，boot 完成后才挂载）。因此本上下文里
  * ctx/host 都是**裸值**（非 Ref、非空）——渲染组件 setup 时宿主已就绪，可直接
- * `ctx.get('nodeStore')` / `ctx.text.editText(...)`，无需 .value、无需判空。
+ * `ctx.get('doc')` / `ctx.text.editText(...)`，无需 .value、无需判空。
  *
  * 用法：
  *   渲染子树内任意子组件：const { ctx, registry, handleParams, edgeVisual } = useCanvasRender()
@@ -40,7 +40,7 @@ import type { LayoutRect } from '../layout/nodeLayout'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
-  /** 内核上下文：调服务/插件直访（content 组件常用：ctx.get('nodeStore') / ctx.text 等） */
+  /** 内核上下文：调服务/插件直访（content 组件常用：ctx.get('doc') / ctx.text 等） */
   ctx: Context
   /** 宿主句柄（ctx 的超集：save/nodeStore/selection/command/history/nodeRegistry/themeRegistry/stop） */
   host: CanvasHostHandle
@@ -120,5 +120,4 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
-
 
