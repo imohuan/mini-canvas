@@ -24,7 +24,7 @@ packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
 **依赖方向（已核对单向）**：`kernel ← canvas-data ← canvas-render ← plugins`。
 kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
-### 下一阶段主线：注册场改造（等用户批准决策）
+### 当前主线：注册场改造（执行中）
 
 设计文档：`docs/design/core-layers-and-registry.md`（v2，已过一轮独立审核）。
 
@@ -34,10 +34,10 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 终态：三根轴（装载 / 服务 / 注册）+ 七个原语 + 一张服务归属表 **18 → 7**。
 
-**卡在等用户批准 9 条决策**（清单见设计文档开头）。批准后从步骤 1 开始（纯新增、行为零变化）。
+9 条决策已批准，步骤 1–3 已落地（见下）；继续执行步骤 4–9，每步独立提交、可单独回退。
 
-⚠️ **动手前置**：`docs/tmp/canvas-core-v2-survey/core-node-contract.md`（核心节点件行为契约金标准）
-**已随目录删除、尚未重建**。步骤 3 要改 `BaseNode.vue`，重建它之前不要动核心节点件。
+⚠️ **端口默认值双源漂移**（契约金标准 §9）：宿主回落 `portZoneWidth=86` vs 主题插件 Config `10`，
+差 8.6 倍。**动端口几何前必须先对齐这两处**（属行为变更，需单独拍板；步骤 1–3 未触碰）。
 
 ### 最近一轮已完成（2026-09-17）
 
@@ -55,9 +55,42 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-步骤 4（基础插件收编 15 行装配，
-用 `core: true` 标识）→ 步骤 5（服务合并 doc）→ 步骤 6（工具缺口）→ 步骤 7（拆插件循环依赖）
+步骤 5（服务合并 doc）→ 步骤 6（工具缺口）→ 步骤 7（拆插件循环依赖）
 → 步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
+
+### 步骤 4 已完成（2026-09-18）
+
+**A. 决策 1 的 `core: true` 标识（三处改动 + 两个新面）**
+
+- `kernel/types.ts`：`PluginModule.core?: boolean` + `CanUninstallResult` 类型。
+- `kernel/pluginClass.ts`：类形态分支透传 `static core`（原只拷 name/inject/Config/apply，会被丢掉）；
+  对象形态原样返回（字段本就在）。
+- `kernel/Context.ts`：`uninstallPlugin` 唯一权威守卫（core → 返回 `false`，**不 dispose fiber、
+  不发 `ctx:plugin-uninstalled`、不触发 `retractUnsatisfiedActives`**）；`corePlugins` 表在
+  plugin/installPlugin 归一时刻登记、装载失败与 stop 时清除；`inspectPlugins()` 每项带 `core?: boolean`；
+  新增 `canUninstall(name)`（`ok:true` / `not-started` / `not-found` / `core` 四态，含插件作用域）。
+  `stop()` / `stopAsync()` **不拦**（整体生命周期终结，不是动态卸载）。
+- `canvas-render/pluginManager.ts` 四条路径各自处理被拦：`uninstall`（**先问再动**，不再先删 config；
+  core 抛 `core plugin cannot be uninstalled`）、`reload(name)`、`reload(name,next)`（修掉"卸失败仍继续装
+  → 重名抛错"的硬 bug）、`installOne` 同名覆盖。
+- `createMiniCanvasHost` 的 `api.reloadPlugin` 同一条虫也一并修（HMR 走的就是它）。
+
+**B. 步骤 4：`canvasBasePlugin` 收编 15 行装配**
+
+- 新增 `canvas-data/src/canvas/canvasBasePlugin.ts`：`createCanvasBasePlugin(opts)` 返回
+  `{ name, plugin, services }`；`apply(ctx)` 注入 12 件基础服务（save/nodeStore/edgeStore/resources/
+  nodeRegistry/themeRegistry/selection/history/graph/command/menu/nodeFactory）+ 注册画布通用命令 +
+  建配置持久化桥；`plugin.core = true`。
+- `createMiniCanvasHost` 缩成"建 ctx → 装基础插件 → 装业务插件 → start"；`ctx.inject` 15 → **2**
+  （只留 `nodeLayout`/`viewport`：真属渲染层、必须挂载时注入）。对外契约零变化，
+  `canvas-base` 从 `api.listPlugins()` / `manager.list()` 隐去（对应用层是"环境"不是"清单项"）。
+
+**测试**：kernel 163 → **177**（corePluginGuard 14）、canvas-data 295 → **303**（canvasBasePlugin 8）、
+canvas-render 322 → **333**（canvasBaseHost 11，含"ctx.inject ≤ 2"源码断言与 manager 四路径）；
+ui 26 / theme-default 170 全绿（既有测试一条未删未改）。
+
+> 与文档不符处：设计文档说 `uninstallPlugin` 返回 `false` 与"插件不存在"同值，歧义"由下一步解决"——
+> 本步按 §决策 1「返回值定案」实现为新增 `ctx.canUninstall(name)`，与原契约并存。
 
 ### 步骤 3 已完成（2026-09-17）
 
@@ -74,19 +107,25 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 根目录**没有**统一 test 脚本，各包各自跑：
 
 ```bash
-pnpm -C packages/kernel test           # 163（步骤 1 后）
-pnpm -C packages/canvas-data test      # 281（步骤 2 后）
-pnpm -C packages/canvas-render test    # 322
+pnpm -C packages/kernel test           # 177（步骤 4 后）
+pnpm -C packages/canvas-data test      # 303（步骤 4 后）
+pnpm -C packages/canvas-render test    # 333（步骤 4 后）
 pnpm -C packages/ui test               # 26（整装 / 设置覆盖 / 插件装配）
-pnpm -C packages/plugins/<插件名> test   # 单个插件，如 plugin-theme-default（158）
+pnpm -C packages/plugins/<插件名> test   # 单个插件，如 plugin-theme-default（170）
 
+pnpm -C packages/kernel typecheck           # tsc --noEmit
+pnpm -C packages/canvas-data typecheck      # tsc --noEmit
 pnpm -C packages/canvas-render typecheck    # tsc --noEmit
 pnpm -C packages/ui typecheck               # vue-tsc
 
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
 
-> 数字为 **2026-09-17 实测**；会随开发变动，以本文件"最近一轮"记录为准。
+> 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。
+>
+> ⚠️ `packages/ui typecheck` 当前**在 HEAD 上就是红的**（`plugin-multi-select/src/SelectionFrame.vue`
+> 里 `dragStartPositions` 的类型与用法不一致，属他人进行中的改动），与步骤 4 无关；
+> 步骤 4 落地后 kernel / canvas-data / canvas-render 三个 typecheck 均绿。
 
 ## 三、关键契约锚点（动手前读对应文档，不许自己发明接口）
 
