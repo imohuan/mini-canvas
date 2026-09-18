@@ -55,8 +55,51 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-步骤 5（服务合并 doc）→ 步骤 6（工具缺口）→ 步骤 7（拆插件循环依赖）
-→ 步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
+步骤 8（收口 ui 与两个后端）→ 步骤 9（删垫片）。每步独立提交、可单独回退。
+
+### 步骤 5 / 6 / 7 已完成（2026-09-18）
+
+**步骤 5 · 服务合并（5a/5b）+ menu 删除**（5 个提交 483e3fd…465d3e7）
+- **5a**：新增 `canvas-data/src/docService.ts` —— `doc` 门面（门面 + 按名惰性解析，
+  与 cordis 规范一致，服务热换后不会用到旧实例）。进 `doc` 的：读（getNodes/getNode/
+  childNodesOf/types 只读投影/getEdges/getEdge）、写（createNode/addNodes/updateNode/
+  updateNodes/updateNodeData/removeNodes/addEdge/connectEdge/removeEdges）、事务与撤销
+  （transaction/undo/redo/canUndo/canRedo/undoDepth）、快照落盘（snapshot/replaceAll/
+  onCommit/hasPendingCommit）、subscribe。**留内部**：registerType/orphanTypes 等（类型注册
+  正式入口是 `ctx.nodes.register`，避免第二条注册路径）、prune/orphan 内部维护动作。
+- **5b**：21 个插件包的 `inject` 改到 `doc`（老名保留）。剩下用老名的都是有意保留：
+  `canvasBasePlugin`（门面数据来源，5c 才下线）、`docService`/`capabilityLayer` 内部解析、
+  `CustomEdge.vue`（核心节点件红线禁改，其 edgeStore 写路径是契约 §4.3-15 记录的回退路径）、
+  `plugin-history`（职责就是薄适配老名）、3 处迁移期兜底。
+- **menu 删除**：删 `menuService.ts` + 导出 + `ctx.inject('menu')` + `CanvasHostHandle.menu`；
+  `buildMenuItems` **复活为生产代码**；类型保留（5 个文件在用）。改的测试严格限决策 8
+  例外清单（另加删 `menuService.test.ts`，6/8 条在 plugin-context-menu 有等价覆盖）。
+- `image-meta` 探针已删（决策 4.3）。
+
+**步骤 6 · 工具四缺口**（fe3f7bd）
+- 新增 `kernel/modelTool.ts`：事件（`tools/registered|unregistered|result`，
+  **同时 registerEventName** 解决 dev warn；挂点在场本身，因为同 id 顶替只有表知道）、
+  `defineTool`（parameters→JSON Schema，复用 ToolParamDef、零依赖）、
+  `callId`/`signal`（可关联可取消）、`output.schema`+`render`（产物规范化 + text/json 可持久化块）。
+- 验收硬指标跑通：教程第 7 章的 tool-logger 观察者插件输出与教程逐字一致，已固化成测试。
+- `ctx.tools`（画布生成工具目录）**原样未动**，两套工具不混。
+
+**步骤 7 · 拆插件循环依赖**（d7a90b6）
+- 路线乙：只断 theme-default → 节点插件（那条腿是纯死声明：全仓零 `ctx.text` 消费点）。
+- 红绿双验证"只断一头足够"（环是闭合路径，零出边即不可穿越）。
+- 复用件导出形态未变（契约 §10 约束）；新增 3 条断环守卫测试（做了红测）。
+
+**实测基线（2026-09-18）**：kernel **196** / canvas-data **306** / canvas-render **333** /
+ui **27** / 24 个插件包全绿 / mcp-server 47 / cloud-server 109。
+既有测试除决策 8 例外清单外一条未删未改。
+
+### 已知遗留（非本轮引入）
+
+- `packages/ui typecheck` 在 HEAD 上就是红的：`plugin-multi-select/src/SelectionFrame.vue`
+  的 `dragStartPositions` 类型与用法不一致（他人进行中的改动），与注册场改造无关。
+- 未做：5c（删 four 老名，风险最高）、`settingsPersist` 收回 save 内部、
+  `shortcut-remap`/`history-facade`/`mini-map`/`auto-save` 收回插件内部
+  （这四个服务名都有既有测试直接断言，改动必然牵连例外清单之外的测试，风险/收益不划算）。
 
 ### 步骤 4 已完成（2026-09-18）
 

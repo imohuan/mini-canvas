@@ -36,10 +36,10 @@ packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
 ## 验证命令（每个包各自跑；根目录没有统一 test 脚本）
 
 ```bash
-pnpm -C packages/kernel test          # 163（步骤 1 后）
-pnpm -C packages/canvas-data test     # 281（步骤 2 后）
-pnpm -C packages/canvas-render test   # 322
-pnpm -C packages/ui test              # 26（整装/设置覆盖/插件装配）
+pnpm -C packages/kernel test          # 196（步骤 6 后）
+pnpm -C packages/canvas-data test     # 306（步骤 5 后）
+pnpm -C packages/canvas-render test   # 333（步骤 4 后）
+pnpm -C packages/ui test              # 27（整装/设置覆盖/插件装配）
 pnpm -C packages/plugins/<插件名> test  # 单个插件
 
 pnpm -C packages/canvas-render typecheck   # tsc --noEmit
