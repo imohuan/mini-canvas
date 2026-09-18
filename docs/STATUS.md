@@ -66,7 +66,8 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
    **18/18 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
 
 **遗留（已申报，非阻塞）**：
-- **5c 未做**（四个老名下线的最后一步，被 CustomEdge 红线卡住）；
+- ~~5c 未做~~ → **已完成**（四个老名 nodeStore/edgeStore/graph/history 已下线，
+  数据服务统一为 doc；见提交 88cf307）；
 - **决策 9 能力包**未实现（本轮只补了它最小的一环：`attach` 的 props 透传；
   `registryOf('capability')` + `useCapabilities` + `needs` 缺项行为单独立项）；
 - `settingsPersist` 收回 save 内部、四个插件服务收回内部（都有既有测试直接断言，风险/收益不划算）；
