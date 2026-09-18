@@ -90,13 +90,32 @@ interface Slot<T> {
   wrapper?: RegistryWrapper<T>
 }
 
+/**
+ * 场的一次变化（**可选**订阅口，给"表本身"接事件的实现用，如模型可调用工具场的 tools/* 事件）。
+ *
+ * 为什么在 impl 这一层而不是在 bind 视图：注册/撤销可能来自任何插件（也可能被同 id 顶替），
+ * 只有表本身知道每一次进出；接在这里才能保证观察者不漏事件。
+ * 与 subscribe() 的分工：subscribe = "变了通知我重绘"（粗粒度）；onChange = "谁进谁出"（带明细）。
+ */
+export interface RegistryChange<T> {
+  /** 'added' = 一条进表（同 id 顶替时先 removed 后 added）；'removed' = 一条离表 */
+  type: 'added' | 'removed'
+  key: string
+  /** 本次变化涉及的那条 */
+  entry: Entry<T>
+  /** type='added' 且是同 id 顶替时，被顶替掉的旧条 */
+  previous?: Entry<T>
+}
+
 /** RegistryImpl 构造项 */
-export interface RegistryImplOptions {
+export interface RegistryImplOptions<T = unknown> {
   /**
    * 取"当前放置方"的名字，写进 Entry.source。
    * Context 经 bind() 给每个插件盖 source，不需要这个构造项；不传时一律 '<anonymous>'。
    */
   source?: () => string
+  /** 每条进出都回调一次（带明细）。缺省不回调——多数场不需要知道谁进谁出 */
+  onChange?: (change: RegistryChange<T>) => void
 }
 
 /**
@@ -111,9 +130,12 @@ export class RegistryImpl<T> implements Registry<T> {
   private listeners = new Set<() => void>()
   /** 当前放置方（bind 出来的视图各自盖住它） */
   private sourceResolver: () => string
+  /** 变化回调（可选）：每条进出一次，带明细 */
+  private onChange?: (change: RegistryChange<T>) => void
 
-  constructor(opts: RegistryImplOptions = {}) {
+  constructor(opts: RegistryImplOptions<T> = {}) {
     this.sourceResolver = opts.source ?? (() => '<anonymous>')
+    this.onChange = opts.onChange
   }
 
   // ==================== 写 ====================
@@ -137,14 +159,22 @@ export class RegistryImpl<T> implements Registry<T> {
   remove(key: string, id: string): boolean {
     const slots = this.byKey.get(key)
     if (!slots) return false
+    const removed = slots.get(id)?.entry
     const ok = slots.delete(id)
     if (slots.size === 0) this.byKey.delete(key) // 键空则回收
-    if (ok) this.notify() // no-op 不广播（订阅方不必为没发生的事重绘）
+    if (ok) {
+      this.emitChange({ type: 'removed', key, entry: removed! })
+      this.notify() // no-op 不广播（订阅方不必为没发生的事重绘）
+    }
     return ok
   }
 
   clear(key: string): void {
-    if (!this.byKey.delete(key)) return
+    const slots = this.byKey.get(key)
+    if (!slots) return
+    const gone = [...slots.values()].map((s) => s.entry)
+    this.byKey.delete(key)
+    for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
     this.notify()
   }
 
@@ -153,7 +183,9 @@ export class RegistryImpl<T> implements Registry<T> {
     let changed = false
     for (const key of [...this.byKey.keys()]) {
       if (key.startsWith(prefix)) {
+        const gone = [...this.byKey.get(key)!.values()].map((s) => s.entry)
         this.byKey.delete(key)
+        for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
         changed = true
       }
     }
@@ -276,8 +308,12 @@ export class RegistryImpl<T> implements Registry<T> {
   ): { id: string; dispose(): void } {
     const id = opts.id ?? this.genId(key)
     const order = opts.order ?? DEFAULT_ORDER
+    const previous = this.byKey.get(key)?.get(id)?.entry
     // 同 id 再放 = 替换该条（连同它原来的 wrapper 身份一起丢掉：它现在是一条普通值）
-    this.ensure(key).set(id, { entry: { id, value, order, source } })
+    const entry: Entry<T> = { id, value, order, source }
+    this.ensure(key).set(id, { entry })
+    if (previous) this.emitChange({ type: 'removed', key, entry: previous })
+    this.emitChange({ type: 'added', key, entry, ...(previous ? { previous } : {}) })
     this.notify()
     return { id, dispose: this.disposer(key, id) }
   }
@@ -293,7 +329,10 @@ export class RegistryImpl<T> implements Registry<T> {
     // 缺省放在最外：取当前最小 order 再减一（空键则 0）
     const order = opts.order ?? this.outermostOrder(key)
     const entry: Entry<T> = { id, value: fn as unknown as T, order, source }
+    const previous = this.byKey.get(key)?.get(id)?.entry
     this.ensure(key).set(id, { entry, wrapper: fn })
+    if (previous) this.emitChange({ type: 'removed', key, entry: previous })
+    this.emitChange({ type: 'added', key, entry, ...(previous ? { previous } : {}) })
     this.notify()
     return { dispose: this.disposer(key, id) }
   }
@@ -341,6 +380,16 @@ export class RegistryImpl<T> implements Registry<T> {
       } catch {
         /* 单个订阅者异常不阻断其它 */
       }
+    }
+  }
+
+  /** 变化回调：与 notify 同一条原则——单个观察者异常不阻断注册本身 */
+  private emitChange(change: RegistryChange<T>): void {
+    if (!this.onChange) return
+    try {
+      this.onChange(change)
+    } catch {
+      /* 观察者抛错不影响表的状态 */
     }
   }
 }

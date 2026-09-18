@@ -14,6 +14,7 @@ import type {
   ToolResult,
 } from './toolRegistry'
 import type { Registry } from './registry/registry'
+import type { ToolCallResult, ToolExecView, ToolSpec } from './modelTool'
 
 /** 可释放对象：调用即执行清理，幂等安全 */
 export interface Disposable {
@@ -90,6 +91,23 @@ export interface Events {
   'ctx:plugin-uninstalled'(payload: { name: string }): void
   /** 生命周期状态变化 */
   'ctx:lifecycle-change'(payload: { name: string; lifecycle: Lifecycle }): void
+  /**
+   * 模型可调用工具进表（设计文档 §7.2 缺口①）。
+   *
+   * 参数：工具名（= \`registryOf('tool')\` 里的键）、工具定义、谁放的（插件名）。
+   * 同 id 顶替时也会发（此前先发一条 \`tools/unregistered\`）。
+   * 事件名已在 modelTool 模块加载时 registerEventName 登记（否则 dev 下会 warn，§7.4）。
+   */
+  'tools/registered'(name: string, tool: ToolSpec, source: string): void
+  /** 模型可调用工具离表（显式撤销 / 清空 / 被同 id 顶替）。参数：工具名、此前谁放的 */
+  'tools/unregistered'(name: string, source: string): void
+  /**
+   * 一次模型可调用工具调用的**权威结果**（结果物化时发，先于调用方 promise 兑现）。
+   *
+   * 观察者插件靠它就能记录每次调用，且它**不需要 inject 任何服务**——
+   * 这就是"今天根本写不出来"的那条缝（教程第 7 章的 tool-logger）。
+   */
+  'tools/result'(exec: ToolExecView, result: ToolCallResult): void
 }
 
 /**

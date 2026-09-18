@@ -21,7 +21,24 @@ export { SlotRegistry } from './registry/slotRegistry'
 export type { SlotEntry, SlotAddRequest, SlotName } from './registry/slotRegistry'
 // 通用注册场（ctx.registryOf 的地基）：设计文档 §2.1 的 Registry/Entry 契约与默认实现
 export { RegistryImpl } from './registry/registry'
-export type { Registry, Entry, RegistryWrapper, RegistryImplOptions } from './registry/registry'
+export type { Registry, Entry, RegistryWrapper, RegistryChange, RegistryImplOptions } from './registry/registry'
+// 模型可调用工具（function calling）：落点是注册场 ctx.registryOf('tool')，**不是** ctx.tools 服务。
+// 四个缺口（事件 / defineTool / callId+signal / output.schema+render）都在这里补（设计文档 §7.2 / §7.3）。
+export { defineTool, runToolCall, toolParamsToJsonSchema, validateToolValue, toolFieldOptions, TOOL_KIND, isJsonValue } from './modelTool'
+export type {
+  JsonValue,
+  ToolCallContext,
+  ToolCallRequest,
+  ToolCallResult,
+  ToolContentBlock,
+  ToolDefineOptions,
+  ToolEventEmitter,
+  ToolExecView,
+  ToolParamSpec,
+  ToolParamsSpec,
+  ToolSpec,
+  ToolValueSchema,
+} from './modelTool'
 // 内核自带能力：工具注册表（ctx.tools）——"注册一个外部能力、别人按名调用"，通用、与画布无关
 export {
   ToolRegistry,

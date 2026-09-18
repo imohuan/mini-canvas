@@ -30,6 +30,7 @@ import type { State } from './types'
 import { asPluginModule } from './pluginClass'
 import { RegistryImpl } from './registry/registry'
 import type { Registry } from './registry/registry'
+import { toolFieldOptions } from './modelTool'
 
 /**
  * 每个插件在 setup(ctx) 里拿到的"能力视图"见 types.ts 的 PluginScope（Context 实现之）。
@@ -677,7 +678,8 @@ export class Context implements PluginScope {
   private registryTable(kind: string): RegistryImpl<unknown> {
     let t = this.registries.get(kind)
     if (!t) {
-      t = new RegistryImpl<unknown>()
+      // 模型可调用工具那张场额外接上 tools/* 事件（其余 kind 零开销，见 toolFieldOptions）
+      t = new RegistryImpl<unknown>(toolFieldOptions(kind, this.bus))
       this.registries.set(kind, t)
     }
     return t
