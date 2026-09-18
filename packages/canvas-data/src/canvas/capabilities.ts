@@ -22,7 +22,8 @@ import type { NodeStoreService } from '../nodeStore'
 import type { NodeFactoryService, NodeCreator } from './nodeFactory'
 import type { CommandDef } from '@mini-canvas/kernel'
 import type { NodeRegion, NodeRegionAttachment } from './region'
-import { normalizeRegionKey } from './region'
+
+import { assertRegion, RETIRED_CONTENT_FIELD } from './region'
 
 /**
  * ctx.nodes.register 一次给全的定义（数据 + 展示 + 可选建节点实现）。
@@ -34,10 +35,16 @@ import { normalizeRegionKey } from './region'
 export interface NodeRegisterDef extends Omit<NodeTypeDef, 'defaultSize'> {
   /** 尺寸（数据侧叫 defaultSize；作者侧沿用 size，与既有 API 兼容） */
   size: { w: number; h: number }
-  /** 内容段组件（opaque）—— 最常见 */
-  // （其余展示字段继承自 NodeTypeDef：segments/inputs/outputs/icon/resizable/frameless）
-  content?: unknown
+  /**
+   * 内容组件（opaque）—— 最常见；落 `in` 区域（卡片内部，可叠多层）。
+   *
+   * 字段名就是区域词：段名进键之后，作者侧不给"另一套名字的段"留活口
+   * （步骤 9：老词 `content` 已是类型错误，改用它会让"哪个位置"再次分不清）。
+   */
+  in?: unknown
+  /** 标题位组件（opaque）；区域词 `title` 与老字段同名 */
   title?: unknown
+  // （其余展示字段继承自 NodeTypeDef：segments/inputs/outputs/icon/resizable/frameless）
   /** 可选：提供"建一个该 type 节点"的实现（挂 nodeFactory，自动回收） */
   create?: NodeCreator
 }
@@ -93,8 +100,9 @@ export function buildCapabilities(
   nodes: {
     register(def: NodeRegisterDef): void
     /**
-     * 往某 type 的某段叠一个 occupant（多插件同段叠加；content/装饰层/徽标等）。
+     * 往某 type 的某区域叠一个 occupant（多插件同区域叠加；内容/装饰层/徽标等）。
      * 自动回收：插件卸载时该 occupant 移除，基座与其它贡献原位保留。
+     * @param segment 区域词（十个之一，见 canvas/region.ts）；老段名是类型错误，运行时也抛错
      * @returns occupant id
      */
     contribute(
@@ -187,13 +195,20 @@ export function buildCapabilities(
     // ---------- ctx.nodes：注册一个节点类型（数据+展示+可选建节点），自动回收 ----------
     nodes: {
       register(def: NodeRegisterDef): void {
+        // 步骤 9 运行时兜底：作者侧老字段 content 已改名为区域词 in。
+        // 类型上它已被拦住；JS 调用方或漏网代码传进来时不能**静默丢掉组件**
+        // （那会表现为"注册成功了却什么都不显示"），要当场报同一条错。
+        if ((def as unknown as Record<string, unknown>)[RETIRED_CONTENT_FIELD] !== undefined) {
+          assertRegion(RETIRED_CONTENT_FIELD)
+        }
         // ⓪ 场落点（§8.2）：node/type/<type>（声明摘要）+ node/shell/<type>（展示定义）。
         // 糖保留 void 返回；既有 nodeStore/nodeRegistry 行为原样不动。
         const typeField = land<{ type: string; label: string }>('node/type')
         const shellField = land<unknown>('node/shell')
         typeField?.add(def.type, { type: def.type, label: def.label })
-        const segRecord = def.content || def.title
-          ? { content: def.content, title: def.title, ...(def.segments ?? {}) }
+        // 段名一律是区域词（步骤 9）：作者侧的 content 字段已改名为区域词 in。
+        const segRecord: Partial<Record<NodeSegment, unknown>> = def.in || def.title
+          ? { in: def.in, title: def.title, ...(def.segments ?? {}) }
           : (def.segments ?? {})
         shellField?.add(def.type, { type: def.type, segments: segRecord })
         // ① 数据 + 展示(经 registerNodeType，内部已 ctx.effect 回收)
@@ -229,6 +244,8 @@ export function buildCapabilities(
         component: unknown,
         opts: { id?: string; order?: number } = {},
       ): string {
+        // 步骤 9 运行时兜底：老段名不静默、不错位落场，当场抛清晰错误。
+        assertRegion(segment)
         // 场落点（§8.2）：node/region/<type>/<seg>。缺省 order 沿用 nodeRegistry 语义 =
         // 首条在基座之后(1)，其后 = 已有最大 + 1；糖内补回该语义（场缺省 order 是 0）。
         const regionField = land<unknown>('node/region')
@@ -265,8 +282,8 @@ export function buildCapabilities(
       },
       attach(type: string | '*', req: NodeAttachReq): Disposable {
         // 场落点（§8.3）：node/region/<type>/<region>，位置进键不进值；
-        // needs/props 进 value（条目自己的数据）。老段词容错归一到区域词（读写同一场）。
-        const region = normalizeRegionKey(String(req.region))
+        // needs/props 进 value（条目自己的数据）。region 只收十个区域词（步骤 9：不做归一）。
+        const region = assertRegion(String(req.region))
         const regionField = land<NodeRegionAttachment>('node/region')
         const value: NodeRegionAttachment = {
           component: req.component,

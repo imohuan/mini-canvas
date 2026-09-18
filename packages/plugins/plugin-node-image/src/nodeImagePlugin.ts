@@ -127,14 +127,14 @@ export function apply(ctx: Context) {
     // 只会变成内容边缘多余的一圈缝（用户实测报的"图片边上还有一像素边距"就是它）。
     // 选中环不受影响：环是 ::after 的 box-shadow，与边框互相独立。
     frameless: true,
-    content: ImageContent,
+    in: ImageContent,
     segments: {
-      'top-toolbar': ImageTopToolbar,
-      'bottom-toolbar': ImageGeneratePanel,
+      'out:top': ImageTopToolbar,
+      'out:bottom': ImageGeneratePanel,
       // 编辑浮层（裁剪框/扩展框）画在**卡片外面**：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
-      overlay: ImageFrameOverlay,
+      'over:inset': ImageFrameOverlay,
     },
     create(position) {
       return image.addImageNode(position, '')

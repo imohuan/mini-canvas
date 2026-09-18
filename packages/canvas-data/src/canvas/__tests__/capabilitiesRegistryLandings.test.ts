@@ -41,21 +41,21 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
           type: 'text',
           label: '文本',
           size: { w: 300, h: 200 },
-          content: TextContent,
+          in: TextContent,
           create: () => 'n1',
         })
       }),
     ])
     expect(ctx.registryOf('node/type').top('text')?.value).toEqual({ type: 'text', label: '文本' })
     const shell = ctx.registryOf('node/shell').top('text')?.value
-    expect((shell as { segments?: { content?: unknown } }).segments?.content).toBe(TextContent)
+    expect((shell as { segments?: { in?: unknown } }).segments?.in).toBe(TextContent)
     expect(typeof ctx.registryOf('node/creator').top('text')?.value).toBe('function')
   })
 
   it('ctx.nodes.contribute 落 node/region/<type>/<seg>，order 缺省 = 已有最大 + 1（首条在基座之后）', async () => {
     const ctx = await boot([
       mk('text-plugin', (c) => {
-        c.nodes.register({ type: 'text', label: '文本', size: { w: 10, h: 10 }, content: TextContent })
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 10, h: 10 }, in: TextContent })
       }),
       mk('badge-a', (c) => {
         const a = c.nodes.contribute('text', 'title', Badge, { id: 'a' })
@@ -66,7 +66,7 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
     ])
     const entries = ctx.registryOf('node/region').list('text/title')
     expect(entries.map((e) => e.id)).toEqual(['a', 'b'])
-    // title 段基座为空 → order 从 0 起；若贡献的是 content 段（基座在），首条 order = 1
+    // title 区域基座为空 → order 从 0 起；若贡献的是 in 区域（基座在），首条 order = 1
     expect(entries[0].order).toBe(0)
     expect(entries[1].order).toBe(entries[0].order + 1)
   })

@@ -2,7 +2,7 @@
  * BaseNode 按区域遍历（设计文档步骤 3 / §五 十个区域词）。
  *
  * 锁三件事：
- * 1. 五个老段（content/title/top/bottom/overlay）经区域映射层读出，渲染结果与老路径等价
+ * 1. 老段词已下线（步骤 9）：这里只锁「按区域词读出」的渲染结果
  *    （既有 baseNodeSlotsRender.test.ts 全组不动，这里只补"新读法"的等价证据）；
  * 2. 十个区域词各渲染出一个最小挂件（新区域 on:top/on:bottom/out:left/out:right/over:outset
  *    是本次新增渲染位，其余五个复用老容器的定位/压制语义）；
@@ -104,7 +104,7 @@ function renderNode(
 describe('BaseNode 十区域渲染（步骤 3）', () => {
   it('映射等价：老 content 段组件经区域层读出，渲染结果与老路径一致（同一探针 class）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: LegacyContent })
+    r.register('image', { in: LegacyContent })
     const html = await renderNode(r)
     expect(html).toContain('probe-legacy-content')
     expect(html).toContain('v2-content-clip')
@@ -112,7 +112,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it("in 区域：场条目（含 * 通配）与基座同摞渲染，key 语义与老 content 相同", async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/in', { component: probeOf('in') }, { id: 'r1', order: 1 })
     f.add('*/in', { component: probeOf('in') }, { id: 'star', order: 2 })
@@ -122,7 +122,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it('out:top / out:bottom：区域条目复用老插槽定位层（v2-slot--top/--bottom + 壳反缩放）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/out:top', { component: probeOf('out:top') }, { id: 't', order: 1 })
     f.add('image/out:bottom', { component: probeOf('out:bottom') }, { id: 'b', order: 1 })
@@ -135,7 +135,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it('out:left / out:right：新增渲染位出现（区域 class 命名容器）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/out:left', { component: probeOf('out:left') }, { id: 'l', order: 1 })
     f.add('image/out:right', { component: probeOf('out:right') }, { id: 'r', order: 1 })
@@ -146,7 +146,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it('on:top / on:bottom：贴边渲染位出现', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/on:top', { component: probeOf('on:top') }, { id: 't', order: 1 })
     f.add('image/on:bottom', { component: probeOf('on:bottom') }, { id: 'b', order: 1 })
@@ -155,9 +155,9 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
     expect(html).toContain('probe-region-on-bottom')
   })
 
-  it('over:inset：走老 overlay 容器语义（卡片外、不反缩放）；over:outset：新增渲染位出现', async () => {
+  it('over:inset：走老 v2-overlay 容器语义（卡片外、不反缩放）；over:outset：新增渲染位出现', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/over:inset', { component: probeOf('over:inset') }, { id: 'i', order: 1 })
     f.add('image/over:outset', { component: probeOf('over:outset') }, { id: 'o', order: 1 })
@@ -185,7 +185,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
       'over:outset',
     ]
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     regions.forEach((region, i) => {
       f.add(`image/${region}`, { component: probeOf(region) }, { id: `r${i}`, order: i })
@@ -198,7 +198,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it('title 区域：场条目替换默认标题条渲染（custom title 语义不变）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     f.add('image/title', { component: probeOf('title') }, { id: 'tt', order: 1 })
     const html = await renderNode(r, f)
@@ -208,7 +208,7 @@ describe('BaseNode 十区域渲染（步骤 3）', () => {
 
   it('新增五区域挂进 LOD 总开关：低细节时整层不渲染（契约 §1.4-3）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const f = new RegistryImpl<{ component: unknown }>()
     for (const region of ['out:left', 'out:right', 'on:top', 'on:bottom', 'over:outset']) {
       f.add(`image/${region}`, { component: probeOf(region) }, { id: region, order: 1 })

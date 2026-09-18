@@ -27,13 +27,12 @@ export {
 export type { NodeSegmentEntry } from './registry/nodeRenderer'
 export {
   NODE_REGIONS,
-  regionOfSegment,
-  isLegacyRegion,
+  isRegion,
+  assertRegion,
   regionKey,
-  legacySegmentKey,
-  normalizeRegionKey,
   nodeRegionStackEntries,
 } from './region'
+export { RETIRED_SEGMENT_NAMES, RETIRED_CONTENT_FIELD, isRetiredSegmentName } from './region'
 export type { NodeRegion, NodeRegionAttachment } from './region'
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'

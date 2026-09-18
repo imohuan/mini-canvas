@@ -110,9 +110,9 @@ function renderNode(
 }
 
 describe('BaseNode 上/下插槽：定位由壳负责', () => {
-  it('注册了 top-toolbar 段 → 壳画出定位层（贴边 + 居中 + 反缩放）', async () => {
+  it('注册了 out:top 区域 → 壳画出定位层（贴边 + 居中 + 反缩放）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
     const html = await renderNode(r)
     expect(html).toContain('probe-top-a')
     // 定位在壳这一层，不是插件组件内部
@@ -121,9 +121,9 @@ describe('BaseNode 上/下插槽：定位由壳负责', () => {
     expect(html).toContain('translateX(-50%) scale(1)')
   })
 
-  it('注册了 bottom-toolbar 段 → 同样由壳定位，浮在卡片下方', async () => {
+  it('注册了 out:bottom 区域 → 同样由壳定位，浮在卡片下方', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'bottom-toolbar': BottomA })
+    r.register('image', { in: ContentStub, 'out:bottom': BottomA })
     const html = await renderNode(r)
     expect(html).toContain('probe-bottom-a')
     expect(html).toContain('v2-slot--bottom')
@@ -132,16 +132,16 @@ describe('BaseNode 上/下插槽：定位由壳负责', () => {
 
   it('没注册该段 → 定位层整个不出现（不留空的浮层壳）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('v2-slot')
   })
 })
 
-describe('BaseNode overlay 段：编辑浮层画在卡片外面（用户要求：和上下操控栏同级）', () => {
-  it('注册了 overlay 段 → 壳在卡片**外面**画出浮层容器', async () => {
+describe('BaseNode over:inset 区域：编辑浮层画在卡片外面（用户要求：和上下操控栏同级）', () => {
+  it('注册了 over:inset 区域 → 壳在卡片**外面**画出浮层容器', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r)
     expect(html).toContain('probe-overlay')
     expect(html).toMatch(/class="v2-overlay nodrag nopan"/)
@@ -150,7 +150,7 @@ describe('BaseNode overlay 段：编辑浮层画在卡片外面（用户要求�
   it('浮层**不在**内容裁剪层里 —— 放里面会被卡片的 overflow:hidden 切掉', async () => {
     // 这是用户报的缺陷：裁剪区域被节点切掉，因为浮层当初挂在 .v2-content-clip 内部。
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r)
     const overlayAt = html.indexOf('probe-overlay')
     const clipAt = html.indexOf('v2-content-clip')
@@ -166,7 +166,7 @@ describe('BaseNode overlay 段：编辑浮层画在卡片外面（用户要求�
 
   it('浮层尺寸 = 卡片尺寸（不反缩放：必须与底下的画面像素严格对齐）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r, { cardWidth: 420, cardHeight: 236 })
     const overlayTag = html.match(/<div class="v2-overlay[^>]*>/)?.[0] ?? ''
     // Vue 渲染内联样式时不带空格（width:420px），故按无空格断言
@@ -176,16 +176,16 @@ describe('BaseNode overlay 段：编辑浮层画在卡片外面（用户要求�
     expect(overlayTag).not.toContain('scale(')
   })
 
-  it('没注册 overlay 段 → 不出现浮层容器（不留空壳）', async () => {
+  it('没注册 over:inset 区域 → 不出现浮层容器（不留空壳）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('v2-overlay')
   })
 
   it('多选时（选中 >=2）浮层跟着收起，避免多个编辑框同时出现', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, overlay: OverlayStub })
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).not.toContain('v2-overlay')
   })
@@ -195,8 +195,8 @@ describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
 
   it('同段叠两个 occupant → 两个都渲染（数据层早有的能力，壳要真的用上）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
-    r.registerContribution('image', 'top-toolbar', { id: 'b', component: TopB })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
+    r.registerContribution('image', 'out:top', { id: 'b', component: TopB })
     const html = await renderNode(r)
     expect(html).toContain('probe-top-a')
     expect(html).toContain('probe-top-b')
@@ -204,8 +204,8 @@ describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
 
   it('只有叠加 occupant、没有基座 → 也要渲染（第三方往别人的节点上挂按钮）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
-    r.registerContribution('image', 'bottom-toolbar', { id: 'extra', component: BottomA })
+    r.register('image', { in: ContentStub })
+    r.registerContribution('image', 'out:bottom', { id: 'extra', component: BottomA })
     const html = await renderNode(r)
     expect(html).toContain('probe-bottom-a')
   })
@@ -214,7 +214,7 @@ describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
 describe('BaseNode 上/下插槽：位置与缩放来自配置', () => {
   it('上控制栏偏移读到 24 就用 24（设置面板可调，改完实时生效）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
     const html = await renderNode(r, {}, { toolbarTopOffset: 24 })
     expect(html).toContain('calc(100% + 24px)')
     expect(html).not.toContain('calc(100% + 6px)')
@@ -222,7 +222,7 @@ describe('BaseNode 上/下插槽：位置与缩放来自配置', () => {
 
   it('读不到配置 → 回落 6px（不产生坏 CSS）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
     expect(await renderNode(r)).toContain('calc(100% + 6px)')
   })
 })
@@ -230,7 +230,7 @@ describe('BaseNode 上/下插槽：位置与缩放来自配置', () => {
 describe('多选相关显隐（用户要求：框选时不要出现控制栏；多选时标题可隐藏）', () => {
   it('框选进行中 → 上/下插槽整层不渲染（不会跟着框一起被框进去、也不挡视线）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA, 'bottom-toolbar': BottomA })
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
     const html = await renderNode(r, {}, {}, { selecting: true })
     expect(html).not.toContain('probe-top-a')
     expect(html).not.toContain('probe-bottom-a')
@@ -239,21 +239,21 @@ describe('多选相关显隐（用户要求：框选时不要出现控制栏；�
 
   it('多选（选中 2 个）→ 插槽整层不渲染（面板语义是"恰好选中一个"）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).not.toContain('probe-top-a')
   })
 
   it('单选 → 插槽照常渲染（多选压制不该误伤单选）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub, 'top-toolbar': TopA })
+    r.register('image', { in: ContentStub, 'out:top': TopA })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1'] })
     expect(html).toContain('probe-top-a')
   })
 
   it('开了"多选时隐藏标题"且处于多选 → 标题条不渲染', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -265,7 +265,7 @@ describe('多选相关显隐（用户要求：框选时不要出现控制栏；�
 
   it('开了开关但只是单选 → 标题照常显示（不该被误隐藏）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -277,7 +277,7 @@ describe('多选相关显隐（用户要求：框选时不要出现控制栏；�
 
   it('没开开关的多选 → 标题仍显示（默认不隐藏）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).toContain('v2-title')
   })
@@ -286,7 +286,7 @@ describe('多选相关显隐（用户要求：框选时不要出现控制栏；�
 describe('多选单选圈（用户要求：多选时在节点内容区左上角给个圆形标记）', () => {
   it('多选（选中 2 个）→ 出现圆形标记', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).toContain('v2-multi-radio')
     expect(html).toContain('v2-multi-radio-dot')
@@ -294,7 +294,7 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
 
   it('标记是自绘 SVG（用户要求：用自定义 svg 替代）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).toContain('<svg')
     expect(html).toContain('v2-multi-radio-icon')
@@ -306,21 +306,21 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
 
   it('单选 → 不出现圆形标记（卡片本身已有选中环，再多一个圆点反而多余）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1'] })
     expect(html).not.toContain('v2-multi-radio')
   })
 
   it('未选中 → 不出现圆形标记', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['other'] })
     expect(html).not.toContain('v2-multi-radio')
   })
 
   it('标记是纯指示（不接事件、不进无障碍树），点击行为仍归卡片（Shift+点是取消选中）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('role="presentation"')
@@ -331,14 +331,14 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
 describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变小一些 + 可配色 + 可配 size + 低缩放也显示的开关）', () => {
   it('读不到配置 → 默认就比原先小（18px，此前写死 26px）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     expect(html).toMatch(/class="v2-multi-radio[^"]*"[^>]*style="[^"]*width:18px/)
   })
 
   it('大小配置读到 32 → 元素宽高就是 32px（配置驱动，不是写死）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -351,7 +351,7 @@ describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变�
 
   it('颜色配置读到 hex → 标记元素带上该颜色（圆环/圆点走 currentColor）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -363,14 +363,14 @@ describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变�
 
   it('低缩放（zoom 低于低细节阈值）默认不显示标记', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'], zoom: 0.2 })
     expect(html).not.toContain('v2-multi-radio')
   })
 
   it('开了"低缩放也显示"的开关 → 低缩放下标记照样出现（用户要的就是这个开关）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -384,7 +384,7 @@ describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变�
 
   it('开了开关但没在多选 → 依然不显示（开关只管低缩放，不改变"只在多选时出现"）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -398,7 +398,7 @@ describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变�
 describe('多选标记的大小与缩放阈值同源（titleScaleMinZoom 改了标记也跟着改）', () => {
   it('阈值配 0.25 → 缩到 0.2 时反缩放 4 倍（跟随配置，不写死 0.5）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(
       r,
       {},
@@ -412,7 +412,7 @@ describe('多选标记的大小与缩放阈值同源（titleScaleMinZoom 改了�
 describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () => {
   it('data.resizable=true → 渲染拖柄，且带 scale 反缩放绑定（与标题同一套语义）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r, { resizable: true })
     expect(html).toContain('resize-handle')
     expect(html).toMatch(/class="resize-handle"[^>]*style="[^"]*transform:scale/)
@@ -420,7 +420,7 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
 
   it('不可 resize → 不渲染拖柄（不挡卡片内容）', async () => {
     const r = new NodeRegistry()
-    r.register('image', { content: ContentStub })
+    r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('resize-handle')
   })

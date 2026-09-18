@@ -141,13 +141,13 @@ export function apply(ctx: Context) {
     // 等于给了用户一个按不住的选择。所以视频节点不提供 resize。
     resizable: false,
     frameless: true,
-    content: VideoContent,
+    in: VideoContent,
     segments: {
-      'top-toolbar': VideoTopToolbar,
-      'bottom-toolbar': VideoClipPanel,
-      // 裁剪浮层画在**卡片外面**（overlay 段）：内容段住在 overflow:hidden 的裁剪层里，
+      'out:top': VideoTopToolbar,
+      'out:bottom': VideoClipPanel,
+      // 裁剪浮层画在**卡片外面**（over:inset 区域）：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
-      overlay: VideoFrameOverlay,
+      'over:inset': VideoFrameOverlay,
     },
     create(position) {
       return service.addVideoNode(position)

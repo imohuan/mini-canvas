@@ -374,7 +374,7 @@ export function apply(ctx: Context) {
     type: GROUP_NODE_TYPE,
     label: '分组',
     size: GROUP_DEFAULT_SIZE,
-    content: GroupContent,
+    in: GroupContent,
     // 容器型节点能力：
     // - resizable：右下角拖柄改 size/cardWidth/cardHeight（一条历史，与 recalculateBounds 同字段）
     // - transparent：外壳卡片底透明（边框保留），GroupContent 铺半透明色 → 连接线透出卡片区域

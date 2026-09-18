@@ -51,11 +51,11 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
   it('ctx.nodes.register 一次注册节点(数据+展示)，setup 期间可用', async () => {
     const { nodeStore, nodeRegistry } = await boot([
       mk('text-plugin', (c) => {
-        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, content: TextContent })
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, in: TextContent })
       }),
     ])
     expect(nodeStore.types.get('text')?.label).toBe('文本')
-    expect(resolveSegment(nodeRegistry, 'text', 'content')).toBe(TextContent)
+    expect(resolveSegment(nodeRegistry, 'text', 'in')).toBe(TextContent)
   })
 
   /**
@@ -112,7 +112,7 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
   it('插件卸载(stop)自动回收 ctx 各能力段的注册', async () => {
     const { ctx, theme, nodeStore, nodeRegistry, command } = await boot([
       mk('all', (c) => {
-        c.nodes.register({ type: 'img', label: '图', size: { w: 100, h: 100 }, content: AltContent })
+        c.nodes.register({ type: 'img', label: '图', size: { w: 100, h: 100 }, in: AltContent })
         c.theme.register('background', MyEdge)
         c.commands.register({ id: 'x', run: () => 1 })
         c.slots.register('canvas.dock', { id: 'bar', component: DockBar })
@@ -212,7 +212,7 @@ describe('ctx.nodes.contribute（段级叠加 occupant）', () => {
   it('叠加 occupant 到某 type 的某段，nodeSegmentStack 返回基座+贡献按序；卸载只抽走贡献', async () => {
     const { ctx, nodeRegistry } = await boot([
       mk('text-plugin', (c) =>
-        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, content: TextContent }),
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, in: TextContent }),
       ),
       mk('badge-a', (c) => c.nodes.contribute('text', 'title', BadgeA, { id: 'a', order: 1 })),
       mk('badge-b', (c) => c.nodes.contribute('text', 'title', BadgeB, { id: 'b', order: 2 })),
@@ -229,13 +229,13 @@ describe('ctx.nodes.contribute（段级叠加 occupant）', () => {
   it('卸载宿主全部插件后贡献与基座一并回收', async () => {
     const { ctx, nodeRegistry } = await boot([
       mk('text-plugin', (c) =>
-        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, content: TextContent }),
+        c.nodes.register({ type: 'text', label: '文本', size: { w: 300, h: 200 }, in: TextContent }),
       ),
-      mk('badge', (c) => c.nodes.contribute('text', 'content', BadgeA)),
+      mk('badge', (c) => c.nodes.contribute('text', 'in', BadgeA)),
     ])
-    expect(nodeRegistry.contributionIds('text', 'content')).toHaveLength(1)
+    expect(nodeRegistry.contributionIds('text', 'in')).toHaveLength(1)
     ctx.stop()
     expect(nodeRegistry.get('text')).toBeUndefined()
-    expect(nodeRegistry.contributionIds('text', 'content')).toHaveLength(0)
+    expect(nodeRegistry.contributionIds('text', 'in')).toHaveLength(0)
   })
 })

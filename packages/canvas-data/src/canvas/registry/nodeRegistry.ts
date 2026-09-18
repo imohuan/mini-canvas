@@ -6,7 +6,7 @@
  *
  * 职责边界（对齐 docs/plan/canvas-data-api.md §四 + runbook M2）：
  * - 一个业务 type 的**数据形状/尺寸**由 nodeStore.registerType 管（services/nodeStore）。
- * - 这个 registry 只补"**用什么组件渲染该 type 的每一段**"（content/title/top-toolbar/bottom-toolbar）。
+ * - 这个 registry 只补"**用什么组件渲染该 type 的每个区域**"（区域词见 canvas/region.ts 十词表）。
  *   组件句柄是 opaque 引用：本层不 import Vue，宿主在浏览器侧喂 .vue，测试喂 stub。
  *
  * 开放插槽语义（对齐 docs/goal/plugin-system-goal.md 目标 A）：
@@ -18,16 +18,20 @@
  * 兼容旧单值 API（register/get/set/unregister/has/types）：语义不变（读 base segments），存量零改动。
  */
 import { SlotRegistry } from '@mini-canvas/kernel'
+import { assertRegion } from '../region'
+import type { NodeRegion } from '../region'
 
 /**
- * 一段式节点展示可能有的段。top/bottom/overlay 缺省为空。
+ * 节点展示的位置名 = **十个区域词**（设计文档 §五；步骤 9 起老五段名已下线）。
  *
- * 为什么需要 overlay（第五段）：编辑类浮层（裁剪框 / 扩展框 / 蒙版笔刷）必须画在**卡片之外**。
- * content 段住在 .v2-content-clip（overflow:hidden）里，覆盖层挂那里会被卡片边界裁掉 ——
- * 用户实测报的"裁剪区域被节点切掉"就是这个原因。overlay 与 content 平级挂在卡片**外面**
- * （与上/下控制栏同级），overflow 可见，于是框可以画到卡片边缘甚至略微出界（扩展框必须能出界）。
+ * 名字为什么还叫 `NodeSegment`：全仓重命名函数/类型的收益只有"读起来更顺"，却要动
+ * 六七个测试文件的导入与断言。这里只把**含义**换成权威词表（单一来源 = region.ts 的 `NodeRegion`），
+ * 名字沿用，于是"写老词 = 编译期类型错误"这条退役目标达成、而无关文件零改动。
+ *
+ * 老五段名（content / top-toolbar / bottom-toolbar / overlay）**不在**这个联合里：
+ * 写它们会被 TS 拦住；运行时（类型被绕过时）由 `assertRegion` 抛清晰错误。
  */
-export type NodeSegment = 'content' | 'title' | 'top-toolbar' | 'bottom-toolbar' | 'overlay'
+export type NodeSegment = NodeRegion
 
 /** 节点展示定义：每段一个组件句柄(opaque)，没给就不渲染该段。 */
 export interface NodePresentation {
@@ -45,6 +49,19 @@ export interface NodeSegmentContribution {
 /** 段内叠加槽的 slot 键：`${type}/${segment}` */
 function segKey(type: string, segment: NodeSegment): string {
   return `${type}/${segment}`
+}
+
+/**
+ * 展示定义的段名守卫（步骤 9 运行时兜底）：逐个键校验，非区域词当场抛清晰错误。
+ *
+ * 放在 register/set 的入口而不是读取处：老词一旦进了表，"注册成功但不渲染"或"渲染到错位置"
+ * 会一路静默到界面，比在这里立刻报错难查得多。
+ */
+function guardSegments(
+  segments: NodePresentation['segments'],
+): NodePresentation['segments'] {
+  for (const key of Object.keys(segments)) assertRegion(key)
+  return segments
 }
 
 /**
@@ -92,7 +109,7 @@ export class NodeRegistry {
     if (this.byType.has(type)) {
       throw new Error(`[nodeRegistry] presentation for node type "${type}" already registered`)
     }
-    this.byType.set(type, { type, segments })
+    this.byType.set(type, { type, segments: guardSegments(segments) })
     this.notify()
   }
 
@@ -121,7 +138,7 @@ export class NodeRegistry {
 
   /** 覆盖式重设某 type（宿主升级/热更用）；未注册则新建 */
   set(type: string, segments: NodePresentation['segments']): void {
-    this.byType.set(type, { type, segments })
+    this.byType.set(type, { type, segments: guardSegments(segments) })
     this.notify()
   }
 
@@ -133,6 +150,7 @@ export class NodeRegistry {
    * @returns 该 occupant id（供 unregisterContribution）
    */
   registerContribution(type: string, segment: NodeSegment, req: NodeSegmentContribution): string {
+    assertRegion(segment)
     const slot = segKey(type, segment)
     // 新加 occupant 默认排基座之后：order 缺省 = 当前叠加层最大 order + 1
     const base = this.get(type)?.segments[segment]
@@ -146,16 +164,19 @@ export class NodeRegistry {
 
   /** 移除某 type 某段的一个叠加 occupant；不存在 no-op。返回是否真移除 */
   unregisterContribution(type: string, segment: NodeSegment, id: string): boolean {
+    assertRegion(segment)
     return this.contributions.remove(segKey(type, segment), id)
   }
 
   /** 某 type 某段已叠的 occupant id 列表（诊断/热卸用） */
   contributionIds(type: string, segment: NodeSegment): string[] {
+    assertRegion(segment)
     return this.contributions.ids(segKey(type, segment))
   }
 
   /** 某 type 某段当前的全部叠加 occupant（按 order 升序） */
   contributionOccupants(type: string, segment: NodeSegment): Array<{ id: string; order: number; component: unknown }> {
+    assertRegion(segment)
     return this.contributions.list(segKey(type, segment)).map((e) => ({
       id: e.id,
       order: e.order,

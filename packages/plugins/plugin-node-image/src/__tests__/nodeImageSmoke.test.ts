@@ -48,14 +48,14 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('三段展示都注册：content + top-toolbar + bottom-toolbar', async () => {
+  it('三段展示都注册：in + out:top + out:bottom', async () => {
     const ctx = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
-    expect(resolveSegment(registry, 'image', 'content')).toBeTruthy()
-    expect(resolveSegment(registry, 'image', 'top-toolbar')).toBeTruthy()
-    expect(resolveSegment(registry, 'image', 'bottom-toolbar')).toBeTruthy()
-    // 壳没注册的段不该凭空多出来
+    expect(resolveSegment(registry, 'image', 'in')).toBeTruthy()
+    expect(resolveSegment(registry, 'image', 'out:top')).toBeTruthy()
+    expect(resolveSegment(registry, 'image', 'out:bottom')).toBeTruthy()
+    // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, 'image', 'title')).toBeUndefined()
     ctx.stop()
   })

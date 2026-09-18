@@ -55,14 +55,14 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('三段展示都注册：content + top-toolbar + bottom-toolbar', async () => {
+  it('三段展示都注册：in + out:top + out:bottom', async () => {
     const { ctx } = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'content')).toBeTruthy()
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'top-toolbar')).toBeTruthy()
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'bottom-toolbar')).toBeTruthy()
-    // 壳没注册的段不该凭空多出来
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'in')).toBeTruthy()
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:top')).toBeTruthy()
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:bottom')).toBeTruthy()
+    // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'title')).toBeUndefined()
     ctx.stop()
   })
@@ -146,14 +146,14 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('卸载后类型与段一起回收（无残留）', async () => {
+  it('卸载后类型与区域一起回收（无残留）', async () => {
     const { ctx, nodeStore } = boot()
     await ctx.start()
     expect(nodeStore.types.has(VIDEO_NODE_TYPE)).toBe(true)
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
     ctx.uninstallPlugin('video')
     expect(nodeStore.types.has(VIDEO_NODE_TYPE)).toBe(false)
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'content')).toBeUndefined()
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'in')).toBeUndefined()
     expect(ctx.get('video')).toBeFalsy()
     ctx.stop()
   })

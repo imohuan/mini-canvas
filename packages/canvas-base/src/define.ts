@@ -5,17 +5,14 @@
  * 经 ctx.nodes/theme/commands/slots 注册并自动回收。作者拿它搭插件文件更省事：
  *
  * ```ts
- * export default defineNode({ type:'audio', label:'音频', size:{w:200,h:80}, content: AudioNode, create })
+ * export default defineNode({ type:'audio', label:'音频', size:{w:200,h:80}, in: AudioNode, create })
  * ```
  */
 import type { Context } from '@mini-canvas/canvas-base'
 import type { NodeRegisterDef } from '@mini-canvas/canvas-base'
 
-/** ctx.nodes.register 的一次给全定义 */
-export interface DefineNodeDef extends Omit<NodeRegisterDef, 'segments'> {
-  content?: unknown
-  title?: unknown
-}
+/** ctx.nodes.register 的一次给全定义（段名即区域词；步骤 9 起老段名 content/… 已下线） */
+export interface DefineNodeDef extends Omit<NodeRegisterDef, 'segments'> {}
 
 /**
  * defineNode —— 声明"一种画布节点"（数据+展示+可选建节点实现）。
@@ -31,7 +28,7 @@ export function defineNode(def: DefineNodeDef) {
         label: def.label,
         size: def.size,
         description: def.description,
-        content: def.content,
+        in: def.in,
         title: def.title,
         inputs: def.inputs,
         outputs: def.outputs,

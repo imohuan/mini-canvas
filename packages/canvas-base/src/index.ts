@@ -16,7 +16,7 @@
  * export const name = 'my-node'
  * export const inject = []            // 依赖的服务/插件名，没有可省
  * export function apply(ctx: Context) {
- *   ctx.nodes.register({ type: 'my', label: '我的', size: { w: 200, h: 100 }, content: MyContent })
+ *   ctx.nodes.register({ type: 'my', label: '我的', size: { w: 200, h: 100 }, in: MyContent })
  * }
  * ```
  */

@@ -26,13 +26,13 @@ async function bootWithSetup(setup: (ctx: PluginScope) => void): Promise<{
 }
 
 describe('registerNodeType（插件"一次自描述"节点注册接缝）', () => {
-  it('一次调用同时落 nodeStore(数据) + nodeRegistry(展示 content)', async () => {
+  it('一次调用同时落 nodeStore(数据) + nodeRegistry(展示 in 区域)', async () => {
     const { nodeStore, registry } = await bootWithSetup((ctx) => {
       registerNodeType(ctx, {
         type: 'text',
         label: '文本',
         defaultSize: { w: 300, h: 200 },
-        segments: { content: TextContentStub },
+        segments: { in: TextContentStub },
       })
     })
 
@@ -41,8 +41,8 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
     expect(def?.label).toBe('文本')
     expect(def?.defaultSize).toEqual({ w: 300, h: 200 })
 
-    // 展示侧：NodeRenderer 能解析出 content 组件（宿主免手 seed）
-    expect(resolveSegment(registry, 'text', 'content')).toBe(TextContentStub)
+    // 展示侧：NodeRenderer 能解析出 in 区域组件（宿主免手 seed）
+    expect(resolveSegment(registry, 'text', 'in')).toBe(TextContentStub)
     expect(registry.has('text')).toBe(true)
   })
 
@@ -61,7 +61,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
     ctx.plugin({
       name: 'no-registry',
       setup: (c) =>
-        registerNodeType(c, { type: 'x', label: 'X', defaultSize: { w: 1, h: 1 }, segments: { content: TextContentStub } }),
+        registerNodeType(c, { type: 'x', label: 'X', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } }),
     })
     await ctx.start()
     expect(nodeStore.types.has('x')).toBe(true)
@@ -70,7 +70,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   it('同 type 重复注册抛错（防覆盖，与 registerType 语义一致）', async () => {
     await expect(
       bootWithSetup((ctx) => {
-        registerNodeType(ctx, { type: 'text', label: 'a', defaultSize: { w: 1, h: 1 }, segments: { content: TextContentStub } })
+        registerNodeType(ctx, { type: 'text', label: 'a', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } })
         registerNodeType(ctx, { type: 'text', label: 'b', defaultSize: { w: 1, h: 1 } })
       }),
     ).rejects.toThrow(/already registered/i)
@@ -85,7 +85,7 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
         label: '带图标',
         defaultSize: { w: 10, h: 10 },
         icon: SvgIcon,
-        segments: { content: TextContentStub },
+        segments: { in: TextContentStub },
       })
       registerNodeType(ctx, {
         type: 'comp-icon',
@@ -132,16 +132,15 @@ describe('registerNodeType 原子性（P2-9）', () => {
     ctx.inject('nodeStore', nodeStore)
     ctx.inject('nodeRegistry', registry)
     // 构造不一致：展示侧已有该 type（来自别的路径），数据侧没有
-    registry.register('dup', { content: TextContentStub })
+    registry.register('dup', { in: TextContentStub })
     ctx.plugin({
       name: 'atomic-test',
       setup: (c) =>
-        registerNodeType(c, { type: 'dup', label: 'D', defaultSize: { w: 1, h: 1 }, segments: { content: TextContentStub } }),
+        registerNodeType(c, { type: 'dup', label: 'D', defaultSize: { w: 1, h: 1 }, segments: { in: TextContentStub } }),
     })
     // registerNodeType: nodeStore.registerType 成功 → nodeRegistry.register 抛"already" → 回滚 nodeStore
     await expect(ctx.start()).rejects.toThrow(/already registered/i)
     expect(nodeStore.types.has('dup')).toBe(false) // 数据侧已回滚，无半落状态
   })
 })
-
 

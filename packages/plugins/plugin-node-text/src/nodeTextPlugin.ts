@@ -117,9 +117,9 @@ export function apply(ctx: Context) {
     outputs: [{ port: 'source', contentType: 'text' }],
     // 声明支持 resize：BaseNode 据类型能力显示右下拖柄（尺寸写回 node.data.cardWidth/Height）。
     resizable: true,
-    content: TextContent,
+    in: TextContent,
     segments: {
-      'bottom-toolbar': TextGeneratePanel,
+      'out:bottom': TextGeneratePanel,
     },
     create(position) {
       return text.addTextNode(position)

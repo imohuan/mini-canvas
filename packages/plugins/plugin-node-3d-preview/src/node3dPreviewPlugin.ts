@@ -102,7 +102,7 @@ export function apply(ctx: Context) {
     outputs: [],
     // 全景窗口要能拉大拉小；渲染层按容器实测尺寸重建画布（ResizeObserver）
     resizable: true,
-    content: PanoramaContent,
+    in: PanoramaContent,
     create(position) {
       return service.addPreviewNode(position)
     },

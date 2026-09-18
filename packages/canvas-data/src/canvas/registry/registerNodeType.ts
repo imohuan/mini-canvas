@@ -32,7 +32,7 @@ export interface NodeTypeDef {
   type: string
   label: string
   defaultSize: { w: number; h: number }
-  /** 展示段：content = 内容组件；title/top-toolbar/bottom-toolbar 可选 */
+  /** 展示区域：in = 卡片内容组件（最常用）；title 等其余区域词可选（见 canvas/region.ts） */
   segments?: Partial<Record<NodeSegment, unknown>>
   /** 声明式连接约束（api.md §四） */
   inputs?: PortDef[]
@@ -76,7 +76,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
   })
   const revokers: Array<() => void> = [() => nodeStore.unregisterType(def.type)]
 
-  // ② 展示侧：content/title/toolbar 段组件（opaque 句柄）
+  // ② 展示侧：各区域组件（opaque 句柄；区域词见 canvas/region.ts）
   //    宿主经 createMiniCanvasHost 注入 'nodeRegistry'；纯 Node 单测若未注入则只落数据、跳过展示。
   const segs = def.segments ?? {}
   const nodeRegistry = safeGet<NodeRegistry>(ctx, 'nodeRegistry')

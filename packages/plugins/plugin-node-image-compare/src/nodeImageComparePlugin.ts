@@ -118,7 +118,7 @@ export function apply(ctx: Context) {
     inputs: [{ port: 'target', acceptsTypes: ['image'], capacity: INPUT_CAPACITY }],
     outputs: [],
     resizable: true,
-    content: ImageCompareContent,
+    in: ImageCompareContent,
     create(position) {
       return service.addCompareNode(position)
     },

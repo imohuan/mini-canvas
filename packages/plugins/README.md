@@ -32,12 +32,12 @@ export const nodeTextPlugin: PluginModule = {
   name: 'text',          // 插件唯一名（服务注入/依赖用）
   deps: [],              // 真会 ctx.get 的服务名；缺则 loader 等它（当前内核扁平装载，deps 作文档/拓扑）
   setup(ctx) {           // 一段式，无 install/uninstall；副作用靠 ctx.on/effect/inject 自动回收
-    // ★一次自描述：数据(type/label/尺寸/连接约束) + UI(content 组件) 一起落表
+    // ★一次自描述：数据(type/label/尺寸/连接约束) + UI(in 区域组件) 一起落表
     registerNodeType(ctx, {
       type: 'text',
       label: '文本',
       defaultSize: { w: 300, h: 200 },
-      segments: { content: TextContent },       // content 是 .vue 组件句柄(opaque)
+      segments: { in: TextContent },       // in 是 .vue 组件句柄(opaque)，落在卡片内部
       // inputs: [{ accepts: ['image'], limit: 'single' }],   // 声明式连接约束(可选)
     })
     // ……其余插件逻辑：ctx.get('doc')/ctx.inject('text', service) 等
@@ -48,9 +48,14 @@ export const nodeTextPlugin: PluginModule = {
 要点：
 - **内核不 import 插件、不 import 任何 content .vue**；content 是 opaque 句柄，由插件经
   `registerNodeType` 交出去，内核渲染壳(BaseNode)只负责槽位。依赖方向恒为 插件→内核。
-- `registerNodeType` 一次写两处：`nodeStore`(数据) + `nodeRegistry`(展示)，宿主不再手 seed content。
-- content 组件要调插件服务，经内核注入令牌 `HOST_KEY` 拿宿主句柄再 `host.ctx.get('text')`，
+- `registerNodeType` 一次写两处：`nodeStore`(数据) + `nodeRegistry`(展示)，宿主不再手 seed 段组件。
+- 段组件要调插件服务，经内核注入令牌 `HOST_KEY` 拿宿主句柄再 `host.ctx.get('text')`，
   **不反向依赖 demo-web**（令牌已上收到内核 `components/contentBridge.ts`）。
+
+> **位置名只有十个区域词**（设计文档 §五）：`in` / `title` / `out:top` / `out:bottom` /
+> `out:left` / `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset`。
+> 老五段名（`content` / `top-toolbar` / `bottom-toolbar` / `overlay`）**已在步骤 9 下线**：
+> 写它们是编译期类型错误，运行时也会抛错并列出十个合法词。
 
 ## 三、宿主怎么加载（manifest 即 plugins 数组）
 
@@ -65,7 +70,7 @@ const host = await bootCanvas({
 })
 ```
 宿主零硬编码某个具体插件的 UI 组件；加/减插件只改这份数组。渲染时 `nodeTypes` 统一指到 BaseNode 壳，
-壳经 `nodeRegistry` 按 type 解析 content——插件自带的 UI 就这样出现在画布上。
+壳经 `nodeRegistry` 按 type 解析各区域组件——插件自带的 UI 就这样出现在画布上。
 
 ## 四、新增一个节点插件的 checklist
 
@@ -89,34 +94,34 @@ const host = await bootCanvas({
 ```ts
 ctx.nodes.register({
   type: 'image', label: '图片', size: { w: 320, h: 240 },
-  content: ImageContent,
+  in: ImageContent,
   segments: {
-    'top-toolbar': ImageTopToolbar,      // 浮在卡片上缘之外
-    'bottom-toolbar': ImageGeneratePanel, // 浮在卡片下缘之外
+    'out:top': ImageTopToolbar,      // 浮在卡片上缘之外
+    'out:bottom': ImageGeneratePanel, // 浮在卡片下缘之外
   },
 })
 ```
 
 三条约定（照做就不会踩坑）：
 
-1. **段组件里不要写定位**。贴边距离（设置面板「布局/控制栏」的两项偏移）、水平居中、
+1. **区域组件里不要写定位**。贴边距离（设置面板「布局/控制栏」的两项偏移）、水平居中、
    `scale(1/zoom)` 反缩放全部由壳 `BaseNode` 的定位层（`.v2-slot--top/--bottom`）负责。
    插件组件写成普通流式内容（只排自己的内部布局 + 自己的材质/宽度）。
-2. **同一段可以叠多个**。别的插件可以往任意 type 的任意段挂东西，不必改那个插件：
-   `ctx.nodes.contribute('image', 'top-toolbar', MyButton)`（带 `id`/`order`，卸载自动摘除）。
+2. **同一区域可以叠多个**。别的插件可以往任意 type 的任意区域挂东西，不必改那个插件：
+   `ctx.nodes.contribute('image', 'out:top', MyButton)`（带 `id`/`order`，卸载自动摘除）。
 3. **按钮用现成的**。`NodeToolbarButton`（从 `@mini-canvas/plugin-theme-default` 导出）已按
    UI 规范做好图标按钮的尺寸/hover/focus/禁用/激活态；纯图标时 `title` 即无障碍名称。
    自己画也行，但按钮数值请照 `docs/design/ui-style-guide.md` §3.3。
 
-段组件只收到 `{ id, data }`；"我该不该出现"由段组件自己判断
+区域组件只收到 `{ id, data }`；"我该不该出现"由组件自己判断
 （通常用 `useSoleNodeSelected(id)` —— 恰好选中一个且是我才显示，多选时全部收起；
 壳另外会在框选手势进行中整体压掉上/下插槽）。
 
-最小例子（一个只注册段、不注册 type 的插件）：
+最小例子（一个只往区域挂件、不注册 type 的插件）：
 
 ```ts
 export const name = 'image-extra-actions'
 export function apply(ctx: Context) {
-  ctx.nodes.contribute('image', 'top-toolbar', MyButton, { order: 5 })
+  ctx.nodes.contribute('image', 'out:top', MyButton, { order: 5 })
 }
 ```

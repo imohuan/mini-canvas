@@ -73,16 +73,18 @@ describe('ctx.nodes.attach（§8.3 一等 API）', () => {
     expect(ctx.registryOf('node/region').list('image/out:left')).toHaveLength(0)
   })
 
-  it('老段词当 region 传入 → 归一到区域词键（兼容垫片）', async () => {
-    const ctx = await boot([
-      mk('p', (c) => {
-        c.nodes.attach('image', {
-          region: 'top-toolbar' as unknown as NodeRegion,
-          component: Comp,
-        })
-      }),
-    ])
-    expect(ctx.registryOf('node/region').list('image/out:top')).toHaveLength(1)
+  it('老段词当 region 传入 → 当场抛错（步骤 9：不再归一，垫片已删）', async () => {
+    // 类型上 'top-toolbar' 已不是 NodeRegion（这里用断言绕过，模拟 JS 调用方 / 漏网代码）
+    await expect(
+      boot([
+        mk('p', (c) => {
+          c.nodes.attach('image', {
+            region: 'top-toolbar' as unknown as NodeRegion,
+            component: Comp,
+          })
+        }),
+      ]),
+    ).rejects.toThrow(/不是合法区域词/)
   })
 
   it('needs/props 进 value 原样读回（§8.3：条目自己的数据）', async () => {

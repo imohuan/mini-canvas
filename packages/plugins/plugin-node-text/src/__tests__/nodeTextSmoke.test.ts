@@ -42,18 +42,18 @@ describe('node-text 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('段注册：content + 底部状态栏（顶部操作条已按用户要求删除）', async () => {
+  it('区域注册：in + 底部状态栏 out:bottom（顶部操作条已按用户要求删除）', async () => {
     const ctx = boot()
     await ctx.start()
-    // 与内核 resolveSegment 同一读法：registry.get(type).segments[segment]
+    // 与内核 resolveSegment 同一读法：registry.get(type).segments[region]
     const registry = ctx.get<{
       get(t: string): { segments: Record<string, unknown> } | undefined
     }>('nodeRegistry')
     const segments = registry.get('text')?.segments ?? {}
-    expect(segments.content).toBeTruthy()
-    expect(segments['bottom-toolbar']).toBeTruthy()
-    // 顶部操作条（加粗/字号/颜色/对齐）已删：段位不该再被注册
-    expect(segments['top-toolbar']).toBeUndefined()
+    expect(segments.in).toBeTruthy()
+    expect(segments['out:bottom']).toBeTruthy()
+    // 顶部操作条（加粗/字号/颜色/对齐）已删：该区域不该再被注册
+    expect(segments['out:top']).toBeUndefined()
     ctx.stop()
   })
 

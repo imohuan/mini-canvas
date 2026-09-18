@@ -102,7 +102,7 @@ export function apply(ctx: Context): void {
     type: CONNECTION_MENU_TYPE,
     label: '连线菜单',
     size: connectionMenuCardSize(1),
-    content: ConnectionMenuContent,
+    in: ConnectionMenuContent,
   })
   // 专属外壳：这张卡整体就是一张菜单（无标题条、菜单自绘边框底色、单侧端口、反缩放），
   // 与"标题+内容"的通用卡片形态不同 → 由本插件自己画，主题默认壳不必为它开特判。

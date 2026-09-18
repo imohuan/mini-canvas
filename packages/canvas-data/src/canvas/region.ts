@@ -1,20 +1,20 @@
 /**
- * region —— 节点区域词层（设计文档 §五 十个区域词 / 步骤 3）。
+ * region —— 节点区域词层（设计文档 §五 十个区域词 / 步骤 3；步骤 9 已删老段名垫片）。
  *
  * 两个职责，全部是纯函数、零 Vue：
- * 1. **词表与映射**：十个闭合区域词（in/title/out:top/out:bottom/out:left/out:right/
- *    on:top/on:bottom/over:inset/over:outset）；老五段（NodeSegment）到区域词的一一映射，
- *    读写两条路径最终落同一个场。
- * 2. **读取合成**：BaseNode 按区域渲染时，把「NodeRegistry 的老段（基座 + 段级贡献，
- *    经映射层归一）」与「node/region 注册场（attach 落点，键 = type/region，含 type='*' 通配）」
- *    合成同一摞 —— 老五段词继续可用（垫片），新区域词同时可读。
+ * 1. **词表与守卫**：十个闭合区域词（in/title/out:top/out:bottom/out:left/out:right/
+ *    on:top/on:bottom/over:inset/over:outset）是节点上**唯一合法**的位置名。
+ *    老五段名（content / top-toolbar / bottom-toolbar / overlay）已在步骤 9 下线：
+ *    类型上它们不再是 NodeRegion（编译期报错），运行时经 assertRegion 抛清晰错误。
+ *    不留映射、不做归一 —— 垫片永久化就是"分不清谁是谁"的病根（决策 3 的退役安排）。
+ * 2. **读取合成**：BaseNode 按区域渲染时，把「NodeRegistry 的基座 + 区域级贡献（键 = type/region）」
+ *    与「node/region 注册场（attach 落点，键 = type/region，含 type='*' 通配）」合成同一摞。
  *
  * 栈序沿用既有语义：基座在最前（id='base'），随后条目按 order 升序（order 小者在外）。
- * 同一条目经两条写路径（contribute 兼容层 / attach 场）出现时以**注册 id 去重**，contribute 侧优先 ——
- * 兼容层与场里同 id 的条目是同一次注册，重复渲染会让同一段组件挂两份。
+ * 同一条目经两条写路径（contribute 糖 / attach 场）出现时以**注册 id 去重**，NodeRegistry 侧优先 ——
+ * 两者同 id 的条目是同一次注册，重复渲染会让同一区域组件挂两份。
  */
 import type { Registry } from '@mini-canvas/kernel'
-import type { NodeSegment } from './registry/nodeRegistry'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { NodeSegmentEntry } from './registry/nodeRenderer'
 
@@ -45,43 +45,59 @@ export const NODE_REGIONS = [
   'over:outset',
 ] as const
 
-/** 老五段 → 区域词（§五「今天的对应（老段名）」列；迁移期垫片的归一表） */
-const SEGMENT_TO_REGION: Record<NodeSegment, NodeRegion> = {
-  content: 'in',
-  title: 'title',
-  'top-toolbar': 'out:top',
-  'bottom-toolbar': 'out:bottom',
-  overlay: 'over:inset',
+/** 词表查询用集合（守卫的热路径形式） */
+const REGION_SET: ReadonlySet<string> = new Set(NODE_REGIONS)
+
+/** 是不是十个区域词之一（闭合词表判定） */
+export function isRegion(value: string): value is NodeRegion {
+  return REGION_SET.has(value)
 }
 
-/** 老段词对应哪个区域词 */
-export function regionOfSegment(segment: NodeSegment): NodeRegion {
-  return SEGMENT_TO_REGION[segment]
+/**
+ * 老段名 content 的拼写（步骤 9 已下线）。
+ *
+ * 为什么单独命名：作者侧字段过去就叫这个名字（现为区域词 in），收到它必须当场报错而**不能静默丢弃**
+ * ——静默丢弃会表现为"注册成功了却什么都不显示"。把拼写放这里，全仓生产代码就只有本文件认得老词。
+ */
+export const RETIRED_CONTENT_FIELD = 'content'
+
+/**
+ * 步骤 9 已下线的老段名 —— **只用来报错，不参与任何放行 / 归一 / 映射**。
+ *
+ * 留这张表的唯一理由：报错时得认出"这是老写法"，才能给出"已下线 + 改用哪个区域词"的明确提示；
+ * 否则只剩笼统的"未知区域词"，作者还得多翻一轮文档。
+ * 它不是垫片：这里没有任何到区域词的映射，读到只抛错（对照表见本文件顶部注释与设计文档 §五）。
+ */
+export const RETIRED_SEGMENT_NAMES = [
+  RETIRED_CONTENT_FIELD,
+  'top-toolbar',
+  'bottom-toolbar',
+  'overlay',
+] as const
+
+/** 是不是已下线的老段名（守卫认词用；认证后一律抛错，不放行） */
+export function isRetiredSegmentName(value: string): boolean {
+  return RETIRED_SEGMENT_NAMES.some((name) => name === value)
 }
 
-/** 该区域词是否是老段映射来的（= 迁移期五个「已有」区域；其余五个是本次新增渲染位） */
-export function isLegacyRegion(region: string): region is NodeRegion {
-  return region === 'in' || region === 'title' || region === 'out:top' ||
-    region === 'out:bottom' || region === 'over:inset'
+/**
+ * 区域词守卫（步骤 9 运行时兜底）：只放行十个区域词，其余一律抛清晰错误。
+ *
+ * 决策 3 的退役安排：垫片不再存在。老五段名传进来**不静默、不错位渲染**，而是当场报错并
+ * 列出全部合法词 —— 静默忽略会让人以为"注册成功了却不显示"，比报错难查得多。
+ */
+export function assertRegion(value: string): NodeRegion {
+  if (isRegion(value)) return value
+  const retired = isRetiredSegmentName(value) ? '（老段名，步骤 9 已下线）' : ''
+  throw new Error(
+    `[nodeRegion] "${value}" 不是合法区域词${retired}；合法区域词只有十个：` +
+      `${NODE_REGIONS.join(' / ')}（老段名到区域词的对照见 canvas/region.ts 顶部注释与设计文档 §五）`,
+  )
 }
 
 /** 场键：type/region（type 可为 '*' 通配所有节点类型） */
 export function regionKey(type: string, region: NodeRegion): string {
   return `${type}/${region}`
-}
-
-/** 兼容层键：type/老段词（nodeRegistry 段级贡献槽的既有键形） */
-export function legacySegmentKey(type: string, segment: NodeSegment): string {
-  return `${type}/${segment}`
-}
-
-/** 区域侧参数容错：老段词当区域词传入时归一到区域词（读写两条路径最终落同一个场） */
-export function normalizeRegionKey(region: string): NodeRegion {
-  const segs: NodeSegment[] = ['content', 'title', 'top-toolbar', 'bottom-toolbar', 'overlay']
-  for (const s of segs) {
-    if (s === region) return SEGMENT_TO_REGION[s]
-  }
-  return region as NodeRegion
 }
 
 /**
@@ -101,12 +117,15 @@ interface RegionFieldEntry {
 }
 
 /**
- * 某节点某区域的完整渲染摞：NodeRegistry 老段（若有，经映射层）+ node/region 场条目。
+ * 某节点某区域的完整渲染摞：NodeRegistry 基座/区域贡献 + node/region 场条目。
  *
- * @param registry   节点展示注册表（老五段读写路径；缺省 = 不读兼容层）
- * @param regionField node/region 注册场（attach 落点；缺省 = 只读兼容层）
+ * 两条写路径都按区域词落键（contribute 糖写 NodeRegistry 的段槽、attach 写 node/region 场），
+ * 这里把同一区域的摞合成一份。
+ *
+ * @param registry   节点展示注册表（基座 + 区域级贡献；缺省 = 不读它）
+ * @param regionField node/region 注册场（attach 落点；缺省 = 只读 NodeRegistry）
  * @param type       节点类型
- * @param region     区域词（老段词也容忍，内部归一）
+ * @param region     区域词（十个之一；老段名传进来当场抛错）
  */
 export function nodeRegionStackEntries(
   registry: NodeRegistry | undefined,
@@ -117,7 +136,7 @@ export function nodeRegionStackEntries(
   type: string,
   region: string,
 ): NodeSegmentEntry[] {
-  const reg = normalizeRegionKey(region)
+  const reg = assertRegion(region)
   const entries: NodeSegmentEntry[] = []
   const seen = new Set<string>()
   const push = (id: string, component: unknown): void => {
@@ -126,31 +145,23 @@ export function nodeRegionStackEntries(
     entries.push({ id, component })
   }
 
-  // ① 兼容层：仅老段映射的区域有（基座固定 id='base'，随后段级贡献按 order）
-  if (registry && isLegacyRegion(reg)) {
-    const seg = (Object.keys(SEGMENT_TO_REGION) as NodeSegment[]).find(
-      (s) => SEGMENT_TO_REGION[s] === reg,
-    )!
-    const base = registry.get(type)?.segments[seg]
+  // ① NodeRegistry：基座固定 id='base'，随后区域级贡献按 order
+  if (registry) {
+    const base = registry.get(type)?.segments[reg]
     if (base !== undefined) push('base', base)
-    for (const e of registry.contributionOccupants(type, seg)) {
+    for (const e of registry.contributionOccupants(type, reg)) {
       push(e.id, e.component)
     }
   }
 
   // ② 注册场：attach 落点（具体 type 键 + '*' 通配键），按 order 升序（小者在外）。
-  //    兼容期顺带读该区域对应的老段词键（contribute 场落点用老段词），同 id 去重：
-  //    两条写路径的同一次注册在摞里只出现一份。
+  //    同 id 去重：contribute 糖落场与 attach 撞同 id 时，一次注册只出现一份。
   if (regionField) {
-    const legacyWord = isLegacyRegion(reg)
-      ? (Object.keys(SEGMENT_TO_REGION) as NodeSegment[]).find((s) => SEGMENT_TO_REGION[s] === reg)
-      : undefined
     const keys = [`${type}/${reg}`, `*/${reg}`]
-    if (legacyWord) keys.push(`${type}/${legacyWord}`)
     for (const key of keys) {
       for (const e of regionField.list(key)) {
-      const value = (e as RegionFieldEntry).value as NodeRegionAttachment
-      push(e.id, value?.component)
+        const value = (e as RegionFieldEntry).value as NodeRegionAttachment
+        push(e.id, value?.component)
       }
     }
   }

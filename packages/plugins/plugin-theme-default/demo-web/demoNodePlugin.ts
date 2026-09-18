@@ -66,7 +66,7 @@ export function apply(ctx: Context) {
     inputs: [{ port: 'target', acceptsTypes: ['text'] }],
     outputs: [{ port: 'source', contentType: 'text' }],
     resizable: true,
-    content: DemoTextContent,
+    in: DemoTextContent,
     create: create('text', { text: '我是一段示例文本' }),
   })
   ctx.nodes.register({
@@ -77,7 +77,7 @@ export function apply(ctx: Context) {
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
     frameless: true,
-    content: DemoImageContent,
+    in: DemoImageContent,
     create: create('image'),
   })
 }
