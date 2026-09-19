@@ -83,7 +83,9 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 的命令（建节点/删除/撤销/重做 4 条不进注册场，只读场会漏报）；`methods` 用 descriptor 反射取
 方法名、**不执行 getter**，属 best-effort 诊断字段。
 
-**两条收尾已完成（2026-09-19）** —— 设计文档 §十 验收清单至此全部勾上：
+**两条「扩展」项收尾已完成（2026-09-19）** —— 设计文档 §十 验收清单里**属本轮范围的两条**（都在
+「扩展」段）已勾上；§十 其余条目（分层/可诊断/工具等）是**整套终态的**验收项，不在本轮范围内，
+仍保持未勾，别误读成"全面验收通过"：
 
 1. **ui 组件目录场**（决策 4，commit efa6e5c）：`canvas-render/src/contracts/uiCatalog.ts`
    （`uiComponent` / `useUiComponent` / `uiNames` / `UI_NAMES`）；theme-default 把
