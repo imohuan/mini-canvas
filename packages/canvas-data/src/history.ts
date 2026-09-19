@@ -1,5 +1,6 @@
 /**
- * History —— 撤销/重做服务（ctx.get('history')）。最小版：对"节点图整体快照"做差异栈。
+ * History —— 撤销/重做实现（**5c 起不再是 ctx 服务名**：由 canvas-base 建好交给 doc，
+ * 撤销重做消费方一律 ctx.get('doc')）。最小版：对"节点图整体快照"做差异栈。
  *
  * 契约见 api.md §3.3：内核默认"变更即历史"——命令/节点操作经 `withRecord` 包一层即自动入历史，
  * 不再各插件手写 record。本实现用最简的"操作前后快照"栈（非逐字段 diff，够 M3 用）。
@@ -78,4 +79,3 @@ export class History implements HistoryService {
     return this.undoStack.length
   }
 }
-

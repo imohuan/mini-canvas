@@ -219,6 +219,20 @@ const uiDir = await page.evaluate(() => {
 });
 check('ui 目录场有主题登记的设计系统件（button 等）', uiDir.hasButton && typeof uiDir.src === 'string', 'keys=' + uiDir.before.join(','));
 check('ui 目录支持换主题（叠层：order 小者赢，原值仍在）', uiDir.afterTopIsProbe && uiDir.all.includes('default'), 'ids=' + uiDir.all.join(','));
+
+// 9e. 能力包（设计文档 §4.5 案例 5 / 决策 9）：宿主注册的标准四件在真实画布上按名可取
+const caps = await page.evaluate(() => {
+  const ctx = window.MiniCanvasUI.getContext();
+  const f = ctx.registryOf('capability');
+  const names = f.keys().sort();
+  const src = f.top('node')?.source ?? null;
+  // 真调一次 node 能力工厂：证明它拿得到节点上下文并产出可用的实例
+  const node = ctx.get('doc').getNodes()[0];
+  const cap = node ? f.top('node').value({ ctx, id: node.id, type: node.type, data: { value: node.data }, selected: { value: false }, solo: { value: false }, zoom: { value: 1 }, update: () => {} }) : null;
+  return { names, src, capId: cap ? cap.id : null, capLabel: cap ? typeof cap.setLabel : null };
+});
+check('能力包：宿主注册了标准四件（node/zoom/selected/tools）', ['node', 'zoom', 'selected', 'tools'].every((n) => caps.names.includes(n)), 'keys=' + caps.names.join(','));
+check('能力包：工厂按节点上下文产出实例（每节点一份）', caps.capId !== null && caps.capLabel === 'function', 'cap.id=' + caps.capId + ', setLabel=' + caps.capLabel);
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));

@@ -228,6 +228,11 @@ node/shell                    默认：兜底
 |---|---|---|
 | `tools` | kernel | 通用：调外部能力，与画布无关。**已存在，不动** |
 | `doc` | canvas-data | 节点+边+事务+撤销+落盘。**由今天的 `nodeStore`+`edgeStore`+`graph`+`history` 合并** |
+
+> **补充申报（5c 落地后回填）**：`doc` 上还公开了 `registerType / unregisterType` 两条**节点类型表写口**。
+> 它**不是**给作者的第二条注册路径 —— 作者侧正式入口始终是 `ctx.nodes.register`（一次落数据 + 展示两处）。
+> 这两条只是「只落数据侧」的低层口，唯一消费者是 `registerNodeType(ctx, def)` 底层助手与能力层
+> （助手自己没有实例，类型表唯一持有者就是 doc）。
 | `selection` | canvas-data | 选中态（将来可能换协同版） |
 | `save` | canvas-data | 存储适配器（本地/云端可插拔） |
 | `resources` | canvas-data | Blob / objectURL 生命周期 |

@@ -139,10 +139,21 @@ export function nodeRegionStackEntries(
   const reg = assertRegion(region)
   const entries: NodeSegmentEntry[] = []
   const seen = new Set<string>()
-  const push = (id: string, component: unknown, props?: Record<string, unknown>): void => {
+  const push = (
+    id: string,
+    component: unknown,
+    props?: Record<string, unknown>,
+    needs?: string[],
+  ): void => {
     if (seen.has(id)) return
     seen.add(id)
-    entries.push(props ? { id, component, props } : { id, component })
+    // 只有真带了才写字段：不凭空造 `props: undefined` / `needs: []`（消费者判空即"没声明"）
+    entries.push({
+      id,
+      component,
+      ...(props ? { props } : {}),
+      ...(needs && needs.length > 0 ? { needs } : {}),
+    })
   }
 
   // ① NodeRegistry：基座固定 id='base'，随后区域级贡献按 order
@@ -163,7 +174,8 @@ export function nodeRegionStackEntries(
         const value = (e as RegionFieldEntry).value as NodeRegionAttachment
         // props 透传给组件（规则 3：专属数据走 props；此前只取 component，props 是哑字段 ——
         // 严格审查 P1 指出「注册时传的共享状态到不了组件」，即此处断链）。
-        push(e.id, value?.component, value?.props)
+        // needs 同链透传（决策 9：组件只拿得到自己声明过的能力包）。
+        push(e.id, value?.component, value?.props, value?.needs)
       }
     }
   }

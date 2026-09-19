@@ -1,5 +1,6 @@
 /**
- * EdgeStore —— 边(edge)数据服务（ctx 注入：ctx.get('edgeStore')）。纯逻辑、零 Vue、Node 可单测。
+ * EdgeStore —— 边(edge)数据实现（**5c 起不再是 ctx 服务名**：由 canvas-base 建好交给 doc，
+ * 消费方一律 ctx.get('doc')）。纯逻辑、零 Vue、Node 可单测。
  *
  * 动机（settings-panel-slot-host-plan §三.D / 边下沉内核）：v2 里边原本只是 CanvasHost 的本地 VueFlow
  * 视觉态(edges ref)，不落盘、不进历史、无法撤销；换 canvas 渲染后端时没有任何"边数据源"可画。
@@ -164,7 +165,6 @@ export class EdgeStore implements EdgeStoreService {
     this.notify('replace')
   }
 }
-
 
 
 

@@ -43,6 +43,12 @@ export interface NodeSegmentEntry {
   * 基座与 contribute 糖没有 props（undefined）；只有 attach 落场条目会带。
   */
   props?: Record<string, unknown>
+  /**
+   * 注册时声明要用哪些能力包（`attach` 的 `needs`；决策 9）。
+   * 缺省 = 不声明 = 不用任何能力（零开销）。消费者是 `useCapabilities()`：
+   * 它只给声明过的名字，dev 下缺项当场抛错、prod 下 undefined + warn。
+   */
+  needs?: string[]
 }
 
 /**

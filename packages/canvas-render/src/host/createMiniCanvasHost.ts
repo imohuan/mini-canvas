@@ -2,7 +2,8 @@
  * createMiniCanvasHost —— 可复用画布宿主门面（window.MiniCanvas 的唯一装配点）。
  *
  * 定位：
- * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 11 件画布基础服务）→ 注入渲染层两件
+ * - 一个工厂：建 Context → 装基础插件（canvas-base，它自带 12 件画布基础服务 = 8 个 ctx 服务名
+ *   + 4 个仅由 services 直接持有的内部实例）→ 注入渲染层两件
  *   （nodeLayout / viewport）→ 冷启动业务插件 → start。
  * - **不 import 任何具体插件**：冷启动要装哪些由调用方(宿主/demo)经 `coldPlugins` 传入，
  *   顺序即装载顺序。这样本模块可被真宿主复用，不绑 demo、不绑任何 node 插件。
@@ -15,6 +16,8 @@
 import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
 import { Context, createCanvasBasePlugin, GRAPH_EDGES_KEY, GRAPH_KEY } from '@mini-canvas/canvas-data'
+import type { CapabilityFactory } from '../contracts/capabilities'
+import { createStandardCapabilities } from '../contracts/standardCapabilities'
 import type {
   CanvasEdge,
   CanvasNode,
@@ -149,7 +152,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   const ctx = new Context()
 
   // —— 基础插件：画布基础服务（save/doc/resources/nodeRegistry/themeRegistry/selection/command/
-  // nodeFactory 七个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、
+  // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、
   // 已不再是 ctx 服务名（5c 下线），数据统一经 doc）
   // + 画布通用命令 + 配置持久化桥，全在它的 apply 里自建自注入（§4.1：数据那一格只有 doc）。
   // 工厂在调用时就建好实例（它们都不依赖 ctx），宿主要先拿到 nodeStore 才能建 nodeLayout。 ——
@@ -176,6 +179,17 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
 
   // —— 装基础插件（core: true：拒绝动态热卸，见决策 1）——
   ctx.plugin(base.plugin)
+
+  // —— 标准能力包（§4.5 capability / 决策 9）——
+  // 组件在 ctx.nodes.attach 里写 needs:['node','zoom',…]，BaseNode 按名造实例喂给它
+  // （useCapabilities() 取用）。注册在这里 = "宿主那一份默认实现"；任何插件都能注册同名能力
+  // 覆盖它（order 小者赢），主题插件因此能整套换掉 —— 决策 9 的第①条。
+  {
+    const capField = ctx.registryOf<CapabilityFactory>('capability')
+    for (const [name, factory] of Object.entries(createStandardCapabilities(ctx))) {
+      capField.add(name, factory, { id: 'host:standard', order: 100 })
+    }
+  }
 
   // —— 统一安装句柄提前建（capture ctx 即可；内部方法需 ctx started，调用时满足） ——
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），

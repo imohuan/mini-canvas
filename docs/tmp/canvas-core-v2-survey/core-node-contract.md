@@ -326,7 +326,9 @@ index.ts:673 直接导出。
   `geometry`（EdgeAppearance：minCurvature/stepOffset/smoothRadius）。
 - **emits / slots：无**。
 - **注入读取**：useCanvasRender 两次解构（:64-65）：`ctx / edgeVisual / edgeSelection / connectionState`。
-- **数据读取**：canvas-data 的 `GRAPH_EDGES_KEY / isTransient / EdgeStoreService / SaveService`（:20-21）。
+- **数据读取**：canvas-data 的 `isTransient / DocService`（:20-21）。
+  ⚠️ **2026-09-19 更新（步骤 5c）**：原写 `GRAPH_EDGES_KEY / EdgeStoreService / SaveService` ——
+  这四个老名（nodeStore/edgeStore/graph/history）已从 ctx 服务表下线，数据统一经 `ctx.get('doc')`。
 
 ### 4.3 不变量
 
@@ -408,11 +410,13 @@ index.ts:673 直接导出。
 
 ### 4.5 依赖方向 / 数据层关系
 
-- **依赖**：canvas-render（useCanvasRender/EdgeVisual）、canvas-data（isTransient/GRAPH_EDGES_KEY/
-  EdgeStoreService/SaveService 类型）、同目录 edgeGeometry.ts/edgeFlow.ts。
+- **依赖**：canvas-render（useCanvasRender/EdgeVisual）、canvas-data（isTransient/DocService 类型；
+  ⚠️ 2026-09-19 步骤 5c：原列 GRAPH_EDGES_KEY/EdgeStoreService/SaveService 已下线，统一走 doc）、
+  同目录 edgeGeometry.ts/edgeFlow.ts。
 - **被依赖**：ConnectionLine（委托渲染）、宿主 edgeTypes、index.ts 导出。
 - **数据层**：外观 = 宿主注入 edgeVisual（实时对象）+ props.visual 合并，**不读 edge.data 的外观快照**；
-  剪切写 edgeStore（或命令）+ save 域 `graph.edges`；选中集合 = 宿主 edgeSelection（内核 selection 投影，
+  剪切写 `doc.removeEdges`（或命令；⚠️ 2026-09-19 步骤 5c 前是 edgeStore.removeEdge + save 域
+  `graph.edges`）；选中集合 = 宿主 edgeSelection（内核 selection 投影，
   CanvasHost.vue:187-192）；connectionState 只读。
 
 ---
@@ -507,9 +511,9 @@ index.ts:673 直接导出。
 
 | 读 | 写 |
 |---|---|
-| nodeRegistry（BaseNode 段路由：resolveSegment / nodeSegmentStackEntries；NodeSegment = content \| title \| top-toolbar \| bottom-toolbar \| overlay，nodeRegistry.ts:30） | 无（六件都不写注册表；注册是插件 index.ts 的职责） |
+| nodeRegistry（BaseNode 区域路由：resolveSegment / nodeSegmentStackEntries；NodeSegment = NodeRegion 别名 = 十个区域词 in \| title \| out:top \| out:bottom \| out:left \| out:right \| on:top \| on:bottom \| over:inset \| over:outset，nodeRegistry.ts:34 = region.ts） | 无（六件都不写注册表；注册是插件 index.ts 的职责） |
 | themeRegistry（间接：六件自己是被注册方；CanvasHost.applyTheme 消费） | 无 |
-| nodeStore.types（BaseNode 经 useNodeCapability；icon/frameless/transparent/resizable/inputs/outputs 全链） | 经 nodeWrite 间接（title label、resize 的 cardWidth/cardHeight + size） |
+| doc.types（BaseNode 经 useNodeCapability；icon/frameless/transparent/resizable/inputs/outputs 全链；⚠️ 5c 前为 nodeStore.types，同一份只读投影） | 经 nodeWrite 间接（title label、resize 的 cardWidth/cardHeight + size） |
 | selection 服务（BaseNode 多选判定；edgeSelection 投影给 CustomEdge 高亮） | 无 |
 | settings 服务（BaseNode：titleOffset/titleScaleMinZoom/nodeLodLowDetailZoom/多选标记三键/multiSelectHideTitles；键全局平面、先声明者独占） | 无（只订阅） |
 | nodeLayout / viewport 服务（BaseNode 改名聚焦） | viewport.setCenter（聚焦时） |

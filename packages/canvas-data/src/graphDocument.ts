@@ -80,7 +80,7 @@ export interface GraphTransaction {
   removeEdges(ids: string[]): number
 }
 
-/** ctx.get('graph') 得到的图服务形状 */
+/** 图服务形状（**5c 起不再是 ctx 服务名**：经 doc 门面暴露；GraphDocument 本体由 canvas-base 持有） */
 export interface GraphDocumentService extends GraphTransaction {
   /** 当前全部节点（只读快照；与 nodeStore 同源） */
   getNodes(): CanvasNode[]

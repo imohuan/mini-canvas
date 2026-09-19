@@ -190,6 +190,33 @@ export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contract
 // 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
 export { useUiComponent, uiComponent, uiNames, UI_NAMES } from './contracts/uiCatalog'
 export type { UiComponentHandle, UiName } from './contracts/uiCatalog'
+// 能力包（§4.5 / 案例 5 / 决策 9）：组件声明 needs，从 registryOf('capability') 按名取通用 hooks
+export {
+  useCapabilities,
+  useCapability,
+  resolveCapabilityBag,
+  provideCapabilityBag,
+  capabilityField,
+  createCapabilityNodeContext,
+  capabilityState,
+  CAPABILITY_BAG_KEY,
+} from './contracts/capabilities'
+export type {
+  CapabilityFactory,
+  CapabilityField,
+  CapabilityBag,
+  CapabilityNodeContext,
+} from './contracts/capabilities'
+// 宿主标准能力包四件（node/zoom/selected/tools）：工厂实现在这里，注册由 createMiniCanvasHost 做
+export { createStandardCapabilities, STANDARD_CAPABILITY_NAMES } from './contracts/standardCapabilities'
+export type {
+  NodeCapability,
+  ZoomCapability,
+  SelectedCapability,
+  ToolsCapability,
+} from './contracts/standardCapabilities'
+// 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
+export { default as RegionEntryHost } from './components/RegionEntryHost.vue'
 // 可替换设置面板宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家，把 ctx.settings 喂给它（见 plugin-theme-default/settings.ts 注册默认皮）
 export { default as SettingsHost } from './components/SettingsHost.vue'
 // 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口

@@ -1,5 +1,6 @@
 /**
- * NodeStore —— 节点数据服务（ctx 注入：ctx.get('nodeStore')）。
+ * NodeStore —— 节点数据实现（**5c 起不再是 ctx 服务名**：由 canvas-base 建好交给 doc，
+ * 消费方一律 ctx.get('doc')；详见设计文档 §4.1 与 STATUS 步骤 5c）。
  *
  * M4 最小实体，验证：
  * - 节点 type 用业务类型（'text'），不再是 v1 的全 'custom'。
@@ -334,7 +335,6 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
-
 
 
 
