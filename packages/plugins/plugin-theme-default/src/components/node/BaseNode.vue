@@ -377,10 +377,11 @@ const capabilityNode = createCapabilityNodeContext({
   update: (patch) => nodeWrite?.(props.id, patch),
 })
 /** 本节点的能力实例缓存（每节点一份；节点卸载统一回收） */
+const capabilityIsDev = ctx?.isDev === true
 const capabilityCache = createCapabilityCache(
   capabilityField(ctx),
   capabilityNode,
-  ctx?.isDev === true,
+  capabilityIsDev,
 )
 onBeforeUnmount(() => capabilityCache.dispose())
 
@@ -726,7 +727,7 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-slot v2-slot--top nodrag nopan"
       :style="topSlotsStyle"
     >
-      <RegionEntryHost v-for="seg in topSlots" :key="'top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in topSlots" :key="'top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <div class="v2-card" :class="{
@@ -752,7 +753,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
       <div v-if="showTitle" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
-      <RegionEntryHost v-if="customTitleEntry" :entry="customTitleEntry" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-if="customTitleEntry" :entry="customTitleEntry" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :title-icon="titleIcon">
           <template #title-label>
             <!-- 编辑用 contenteditable（同一元素切换属性），不换 <input>：换元素会改行高把标题条撑变形 -->
@@ -817,7 +818,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
       <div class="v2-content-clip">
         <!-- in 区域（老 content 段）：基座 + attach 场条目按 order 同摞渲染 -->
-      <RegionEntryHost v-for="seg in contentStack" :key="'in-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in contentStack" :key="'in-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
       </div>
 
@@ -847,23 +848,23 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-slot v2-slot--bottom nodrag nopan"
       :style="bottomSlotsStyle"
     >
-      <RegionEntryHost v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- out:left / out:right（新增区域）：左右外侧，垂直居中；不参与卡片布局、不撑高节点 -->
     <div v-if="leftRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-left nodrag nopan">
-      <RegionEntryHost v-for="seg in leftRegions" :key="'out-left-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in leftRegions" :key="'out-left-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
     <div v-if="rightRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-right nodrag nopan">
-      <RegionEntryHost v-for="seg in rightRegions" :key="'out-right-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in rightRegions" :key="'out-right-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- on:top / on:bottom（新增区域）：贴在卡片边框线上（骑线居中，如进度条） -->
     <div v-if="onTopRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-top nodrag nopan">
-      <RegionEntryHost v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
     <div v-if="onBottomRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-bottom nodrag nopan">
-      <RegionEntryHost v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- 编辑浮层（裁剪框/扩展框）：与卡片**同级**、画在卡片外面，所以不会被内容层的 overflow:hidden 裁掉。
@@ -874,13 +875,13 @@ function clamp(value: number, min: number, max: number): number {
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >
-      <RegionEntryHost v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in overlaySlots" :key="'overlay-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
          overflow 交给组件自带样式（拖拽手柄/悬停放大会出界）。 -->
     <div v-if="outsetRegions.length > 0 && !lowDetail" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
-      <RegionEntryHost v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" />
+      <RegionEntryHost v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
   </div>
 </template>

@@ -239,6 +239,9 @@ check('能力包：工厂按节点上下文产出实例（每节点一份）', c
 // 接通 isDev 之后才暴露 RenderEvents / clipboard / edge-cutting 等名字从未登记。
 const eventWarns = warns.filter((w) => w.includes('[EventBus:dev]'));
 check('事件名白名单：零条“未声明的事件名”warn（§7.4）', eventWarns.length === 0, eventWarns.slice(0, 2).join(' | '));
+// 能力包的两条提示（"不在区域子树里" / "needs 里没声明"）都不该在正常装配下出现。
+const capWarns = warns.filter((w) => w.includes('[capability]'));
+check('能力包：正常装配下零条 [capability] 提示', capWarns.length === 0, capWarns.slice(0, 2).join(' | '));
 
 // 9g. dev 开关真的接通了（决策 9 的"needs 缺项 dev 抛错"只有它是 true 时才可能生效）。
 // 用 dev server 跑时必须是 true；这条也反向守住"别再把 isDev 静默钉死为 false"。

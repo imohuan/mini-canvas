@@ -53,6 +53,15 @@ const NoNeedsProbe = defineComponent({
   },
 })
 
+/** 忘了在 attach 里声明 needs、却调 useCapability('node') 的探针（dev 下应给提示） */
+const ForgotNeedsProbe = defineComponent({
+  name: 'ForgotNeedsProbe',
+  setup() {
+    const node = useCapability('node')
+    return () => h('div', { class: 'probe-forgot', 'data-has': String(node !== undefined) })
+  },
+})
+
 /**
  * 造渲染上下文。capabilityField 就是真 Registration 场（RegistryImpl），
  * registryOf('capability') 返回它 —— 与生产里 ctx.registryOf 同语义。
@@ -115,6 +124,25 @@ function renderNode(
 const noCaps = () => new RegistryImpl<CapabilityFactory>()
 
 describe('BaseNode → 区域组件：needs 声明的能力真的送得到', () => {
+  it('dev 下忘了声明 needs → 组件调用 useCapability 时给一条提示（不静默）', async () => {
+    // 作者最容易踩的坑：写了组件、忘了在 attach 里写 needs。此前它与"能力没注册"一样静默 undefined。
+    const warns: string[] = []
+    const orig = console.warn
+    console.warn = (...a: unknown[]) => void warns.push(String(a[0]))
+    try {
+      const r = new NodeRegistry()
+      r.register('image', { in: ForgotNeedsProbe })
+      const f = new RegistryImpl<unknown>()
+      // 没有 needs
+      f.add('image/in', { component: ForgotNeedsProbe }, { id: 'forgot', order: 1 })
+      const html = await renderNode(r, f, noCaps(), true)
+      expect(html).toContain('probe-forgot')
+    } finally {
+      console.warn = orig
+    }
+    expect(warns.some((w) => w.includes('needs 里没有 "node"'))).toBe(true)
+  })
+
   it('声明 needs:[node] → 组件 useCapabilities() 拿到该节点的 node 实例', async () => {
     const cap = new RegistryImpl<CapabilityFactory>()
     cap.add('node', (n) => ({ id: n.id, type: n.type }))

@@ -47,6 +47,17 @@ export type CapabilityField = Registry<CapabilityFactory>
 export const CAPABILITY_BAG_KEY: InjectionKey<CapabilityBag> = Symbol('canvas-capability-bag')
 
 /**
+ * 作用域令牌：比能力袋多记两件事 —— "这条条目声明了哪些 needs" 与 "现在是 dev 还是 prod"。
+ *
+ * 为什么不能只用能力袋：光看袋子分不清两种"取不到"（都是 undefined）——
+ *   ① 你**没在 needs 里声明**它（作者忘了写，最典型）；② 声明了但没人注册（已在别处响亮处理）。
+ * 只有记下 declared 才谈得上对 ① 给提示。isDev 存一份是因为 useCapabilities 拿不到 ctx 时
+ * 无法判断该不该提示（prod 不该刷 warn）。
+ */
+export const CAPABILITY_SCOPE_KEY: InjectionKey<{ declared: string[]; isDev: boolean }> =
+  Symbol('canvas-capability-scope')
+
+/**
  * 一条区域条目的能力袋：{ [能力名]: 实例 }，**只含 needs 里声明过的**。
  *
  * 为什么按能力名分组（而不是摊平成一个对象）：摊平会让两个能力撞同名键时静默互相盖掉
@@ -57,17 +68,47 @@ export type CapabilityBag = Record<string, unknown>
 /**
  * 取本条区域条目的能力袋。必须在 BaseNode 的区域渲染子树内调用（那些位置包了 RegionEntryHost）。
  * 没有声明 needs 的条目拿到空对象 —— 不抛错（"我不用任何能力"是合法声明）。
+ *
+ * 在区域子树**之外**调用时（比如把浮层挂到 ctx.slots 的画布级槽里，或在 BaseNode 之外自绘组件）：
+ * 这里拿不到注入，返回 `{}`。为了让这种误用**不静默**，dev 下会 warn 一次并说明原因
+ * —— 与 `useCanvasRender()` 的抛错不同，这里不抛：本函数允许被"可选地"调用。
  */
 export function useCapabilities(): CapabilityBag {
-  return inject(CAPABILITY_BAG_KEY, null) ?? {}
+  const bag = inject(CAPABILITY_BAG_KEY, null)
+  const scope = inject(CAPABILITY_SCOPE_KEY, null)
+  if (bag) return bag
+  // 没有袋：要么本组件不在区域子树里（最常见），要么这条条目真的没声明 needs。
+  if (scope?.isDev && typeof console !== 'undefined') {
+    console.warn(
+      '[capability] useCapabilities() 取不到能力包：本组件不在 BaseNode 的区域渲染子树内' +
+        '（只有 RegionEntryHost 会 provide 能力袋）。用 ctx.nodes.attach(...) 挂到十个区域词上即可；' +
+        '若它是画布级浮层（ctx.slots.register("overlay", …)），它本来就拿不到节点能力，' +
+        '请改用 ctx.get(...) 直接取服务。详见设计文档 §4.5。',
+    )
+  }
+  return {}
 }
 
 /**
  * 取单个能力的便捷入口：const node = useCapability('node')。
  * 未声明（needs 里没有）→ undefined；未注册 → 由缺项裁决处理过了（dev 已抛 / prod 已 warn）。
+ *
+ * 作者最容易踩的坑是**忘了在 attach 里写 needs** —— 那会静默 undefined，与"能力没注册"长得一样。
+ * 这里在 dev 下把它与"已声明但为空"区分开并给一条提示（决策 9 的"响亮"补齐最后一段：
+ * 声明式白名单的"漏声明"不该无声无息）。
  */
 export function useCapability<C = unknown>(name: string): C | undefined {
-  return useCapabilities()[name] as C | undefined
+  const value = useCapabilities()[name] as C | undefined
+  if (value === undefined) {
+    const scope = inject(CAPABILITY_SCOPE_KEY, null)
+    if (scope?.isDev && !scope.declared.includes(name) && typeof console !== 'undefined') {
+      console.warn(
+        `[capability] useCapability('${name}') 拿到 undefined：这条条目的 needs 里没有 "${name}"。` +
+          `（已声明的是：[${scope.declared.join(', ')}]。）在 ctx.nodes.attach(...) 里加 needs: ['${name}'] 即可。`,
+      )
+    }
+  }
+  return value
 }
 
 /** 缺项裁决的结果：ok=false 表示"没注册这个能力"（dev 已抛错，或 prod 已 warn） */
@@ -181,9 +222,13 @@ export function provideCapabilityBag(
   cache: CapabilityCache,
   needs: string[] | undefined,
   entryId: string,
+  /** 本条目声明的能力名（= needs；供 useCapability 区分"没声明"与"没注册"）+ 是否 dev */
+  scope?: { isDev: boolean },
 ): CapabilityBag {
   const bag = cache.bagFor(needs, entryId)
   provide(CAPABILITY_BAG_KEY, bag)
+  // 作用域信息单独 provide：袋子本身只装实例，分不清"没声明"与"没注册"（见 CAPABILITY_SCOPE_KEY）
+  provide(CAPABILITY_SCOPE_KEY, { declared: needs ?? [], isDev: scope?.isDev === true })
   return bag
 }
 

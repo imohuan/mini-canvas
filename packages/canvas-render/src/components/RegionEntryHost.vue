@@ -26,10 +26,12 @@ const props = defineProps<{
   /** 下发给条目组件的节点 id / data（与既有区域渲染的 props 契约一致） */
   nodeId: string
   data: Record<string, unknown>
+  /** dev 开关（供能力缺失时的提示分 dev/prod；来自 ctx.isDev） */
+  isDev?: boolean
 }>()
 
 // 按本条目的 needs 取袋并 provide（实例的生命周期归 cache 所有者 = BaseNode）
-provideCapabilityBag(props.cache, props.entry.needs, props.entry.id)
+provideCapabilityBag(props.cache, props.entry.needs, props.entry.id, { isDev: props.isDev === true })
 </script>
 
 <template>
