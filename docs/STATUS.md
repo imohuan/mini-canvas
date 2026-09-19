@@ -159,8 +159,8 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 - 新增 `nodeRegionTypeLock.test.ts` 用 `@ts-expect-error` 锁编译期（老词又变合法则指令报 unused）。
 - canvas-data 306 → 312。
 
-**全量实测基线（2026-09-19）**：kernel 212 / canvas-data 314 / canvas-render 359 / ui 31 /
-24 个插件包全绿（theme-default 177）/ mcp-server 47 / cloud-server 109；
+**全量实测基线（2026-09-19，第四轮审查后）**：kernel 212 / canvas-data 314 / canvas-render 359 / ui 31 /
+24 个插件包全绿（合计 1303，theme-default 177）/ mcp-server 47 / cloud-server 109；
 kernel、canvas-data、canvas-render、canvas-base 四个 typecheck 0 错；
 `pnpm -C packages/ui build` 通过；UI e2e **36/36**。
 
