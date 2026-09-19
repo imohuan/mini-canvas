@@ -9,6 +9,7 @@
  * 插件内部自用的小组件照旧 import（全面目录化 = 字符串驱动，打错字运行时才炸、丢类型提示）。
  */
 import type { Context } from '@mini-canvas/canvas-data'
+import { onScopeDispose, shallowRef, type Ref } from 'vue'
 import { useCanvasRender } from './renderContext'
 
 /** ui 场的条目值：opaque 组件句柄（内核不解析、不 import Vue） */
@@ -16,7 +17,17 @@ export type UiComponentHandle = unknown;
 
 /** 目录里常用的名字（**约定俗成，不是封闭枚举**——主题可登记自定名字） */
 export const UI_NAMES = ['button', 'dropdown', 'select', 'slider', 'toolParamField'] as const;
-export type UiName = (typeof UI_NAMES)[number];
+
+/**
+ * 下拉选项的最小形状（**主题无关**）：与 theme-default 的 SelectOption 同构，
+ * 但住在这里 —— 业务插件描述选项时不必 import 任何主题包。
+ * 主题自己的 Select 组件按结构兼容消费（props 类型由主题侧声明）。
+ */
+export interface UiSelectOption {
+  label: string
+  value: string | number
+  disabled?: boolean
+}
 
 /**
  * 从内核 ctx 按名取一个设计系统组件。
@@ -31,17 +42,34 @@ export function uiComponent(ctx: Context | undefined, name: string): UiComponent
 /**
  * 组件里按名取设计系统组件的便捷入口（首选写法）：
  * ```ts
- * const Button = useUiComponent('button')
+ * const Button = useUiComponent('button')   // 模板里 <Button /> 即可（ref 自动解包）
  * ```
  * 必须在画布渲染子树内调用（走 useCanvasRender 拿 ctx）；树外抛清晰错误。
- * 名字不存在时返回 undefined + console.warn（不静默、也不炸 —— 与决策 9 的缺项策略同调）。
+ *
+ * **返回 Ref**（返回的是"当前这个名字对应的组件"，而不是一次性快照）：目录被换主题时它当场变，
+ * 消费组件不必重挂就跟着换 —— 与 themeRegistry.subscribe 驱动重装配同一套语义。
+ * 订阅随本组件作用域自动解除。
+ *
+ * 名字不存在时 value 为 undefined + console.warn（不静默、也不炸 —— 与决策 9 的缺项策略同调）。
  */
-export function useUiComponent(name: string): UiComponentHandle | undefined {
+export function useUiComponent(name: string): Ref<UiComponentHandle | undefined> {
   const { ctx } = useCanvasRender();
-  const found = uiComponent(ctx, name);
-  if (found === undefined && typeof console !== 'undefined') {
+  const field = ctx.registryOf<UiComponentHandle>('ui');
+  const found = shallowRef<UiComponentHandle | undefined>(field.top(name)?.value);
+  const sync = (): void => {
+    const next = field.top(name)?.value;
+    if (next === found.value) return;
+    found.value = next;
+    if (next === undefined && typeof console !== 'undefined') {
+      console.warn(`[ui] 目录里没有名为 "${name}" 的组件（主题插件没登记它？）。详见设计文档 §4.5。`);
+    }
+  };
+  // 首次就缺：立刻提示一次（此时值没"变"，sync 里的分支不会触发）
+  if (found.value === undefined && typeof console !== 'undefined') {
     console.warn(`[ui] 目录里没有名为 "${name}" 的组件（主题插件没登记它？）。详见设计文档 §4.5。`);
   }
+  const sub = field.subscribe(sync);
+  onScopeDispose(() => sub.dispose());
   return found;
 }
 

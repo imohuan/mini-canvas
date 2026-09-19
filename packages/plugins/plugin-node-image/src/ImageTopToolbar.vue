@@ -9,16 +9,18 @@
  * 选中态也不在这里：上插槽整体由壳按"框选中/多选收起、否则各段自己看选中态"的规则显隐。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
-import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { Select } from '@mini-canvas/plugin-theme-default'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改，按钮/下拉整体换成新主题的。
+// 缺目录（宿主没装登记 ui 的主题）时 undefined + warn（见 useUiComponent）。
+const NodeToolbarButton = useUiComponent('button')
+const Select = useUiComponent('select')
 // 显隐仍归本段自己判断（"恰好选中一个且是我"）：壳负责位置，插件负责"我该不该出现"。
 // 壳另外还会在框选手势/多选时整体压掉上插槽。
 const selected = useSoleNodeSelected(props.id)

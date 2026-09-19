@@ -23,7 +23,9 @@ import {
   useCanvasRender,
   useGenPanelMetrics,
   useSoleNodeSelected,
+  useUiComponent,
 } from '@mini-canvas/canvas-render'
+import type { UiSelectOption as SelectOption } from '@mini-canvas/canvas-render'
 import type { ToolDef, ToolParamDef, ToolProgress, ToolService } from '@mini-canvas/kernel'
 import { addSourceNode, createImageOps, downloadImageNode, readImageSummary, rotateImage } from './imageOps'
 import { readImageFitLimits } from './imageFit'
@@ -47,13 +49,15 @@ import {
   type MaterialCard,
   type UpstreamMaterial,
 } from './panelSource'
-import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
-import type { SelectOption } from '@mini-canvas/plugin-theme-default'
 
 /** 可见时能让外部传的只有 id/data（段组件契约），与顶部条一致 */
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
+// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
+const NodeToolbarButton = useUiComponent('button')
+const Select = useUiComponent('select')
+const ToolParamField = useUiComponent('toolParamField')
 // 单选才显示：多选时若每个节点都弹一份面板会互相叠（对齐 v1 NodeToolbar 的"恰好选中一个"语义）
 const selected = useSoleNodeSelected(props.id)
 

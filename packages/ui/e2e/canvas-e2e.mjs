@@ -219,6 +219,37 @@ const uiDir = await page.evaluate(() => {
 });
 check('ui 目录场有主题登记的设计系统件（button 等）', uiDir.hasButton && typeof uiDir.src === 'string', 'keys=' + uiDir.before.join(','));
 check('ui 目录支持换主题（叠层：order 小者赢，原值仍在）', uiDir.afterTopIsProbe && uiDir.all.includes('default'), 'ids=' + uiDir.all.join(','));
+// 9d-2. 目录**真有生产消费者**（reviewer 指出过：只有登记没有消费 = 机制在但零收益）。
+// 换掉 ui 目录里的 button，节点上控制栏渲染出来的按钮必须跟着换 —— 这就是"换主题业务插件零改动"。
+const uiSwap = await page.evaluate(async () => {
+  const api = window.MiniCanvasUI;
+  const h = api.getHost();
+  const ctx = api.getContext();
+  // 先选中一个 image 节点，让它的上控制栏浮出来（ImageTopToolbar 经目录取 button）
+  const img = h.nodeStore.getNodes().find((n) => n.type === 'image');
+  if (img) ctx.get('selection').set([img.id]);
+  await new Promise((r) => setTimeout(r, 700));
+  const baseline = document.querySelectorAll('.vue-flow__node button').length;
+  const f = ctx.registryOf('ui');
+  const MARK = 'E2E_UI_SWAP_BUTTON';
+  // 探针必须把会被传进来的 props/监听都声明掉，否则 Vue 的"多余属性"warn 会污染控制台
+  //（本测试后面有一条"零 error"与"零 [capability] 提示"是要看控制台的）。
+  const probe = {
+    name: 'E2EUiButton',
+    props: ['title', 'disabled', 'icon', 'variant', 'modelValue', 'options'],
+    emits: ['click', 'change', 'update:modelValue'],
+    // 根是文本节点，额外属性没法继承；显式关掉继承避免 Vue 的无害 warn 污染控制台断言。
+    inheritAttrs: false,
+    render: () => MARK,
+  };
+  const swap = f.add('button', probe, { id: 'e2e-ui', order: -100 });
+  await new Promise((r) => setTimeout(r, 700));
+  const seen = [...document.querySelectorAll('.vue-flow__node')].some((n) => n.innerText.includes(MARK));
+  swap.dispose();
+  await new Promise((r) => setTimeout(r, 600));
+  return { baseline, seen, restored: [...document.querySelectorAll('.vue-flow__node')].some((n) => n.innerText.includes(MARK)) };
+});
+check('ui 目录换主题真的生效（节点控制栏按钮跟着换，撤回即复原）', uiSwap.baseline > 0 && uiSwap.seen && !uiSwap.restored, JSON.stringify(uiSwap));
 
 // 9e. 能力包（设计文档 §4.5 案例 5 / 决策 9）：宿主注册的标准四件在真实画布上按名可取
 const caps = await page.evaluate(() => {
@@ -257,7 +288,14 @@ const shellSwap = await page.evaluate(async () => {
   const textOf = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText)
   const MARK = 'E2E_SHELL_SWAP_MARKER';
   const seenBefore = textOf().some((t) => t.includes(MARK));
-  const h = f.add('image', { name: 'E2EShell', props: ['id', 'data'], render: () => MARK }, { id: 'e2e-swap', order: -100 });
+  const shellProbe = {
+    name: 'E2EShell',
+    props: ['id', 'data', 'type', 'selected', 'position', 'dimensions', 'dragging', 'resizing', 'connectable', 'zIndex', 'events', 'sourcePosition', 'targetPosition'],
+    emits: ['updateNodeInternals'],
+    inheritAttrs: false,
+    render: () => MARK,
+  };
+  const h = f.add('image', shellProbe, { id: 'e2e-swap', order: -100 });
   await new Promise((r) => setTimeout(r, 500));
   const seenAfter = textOf().some((t) => t.includes(MARK));
   h.dispose();
@@ -274,4 +312,5 @@ await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n===== UI 自动化：${results.length - failed.length}/${results.length} 通过 =====`);
 if (warns.length) console.log(`warn ${warns.length} 条（首条：${warns[0].slice(0, 90)}...）`);
+{ const uniq = new Map(); for (const w of warns) { const k = w.slice(0, 120); uniq.set(k, (uniq.get(k) ?? 0) + 1) } if (process.env.E2E_SHOW_WARNS) console.log([...uniq].map(([k, n]) => n + 'x ' + k).join('\n')) }
 process.exit(failed.length ? 1 : 0);

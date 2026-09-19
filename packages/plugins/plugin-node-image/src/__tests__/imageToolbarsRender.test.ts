@@ -17,6 +17,8 @@ import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { ToolDef } from '@mini-canvas/kernel'
+import { RegistryImpl } from '@mini-canvas/kernel'
+import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
 import ImageTopToolbar from '../ImageTopToolbar.vue'
 import ImageGeneratePanel from '../ImageGeneratePanel.vue'
 
@@ -55,6 +57,8 @@ function renderCtx(
   settings?: { get(key: string): unknown },
 ): CanvasRenderContext {
   const selected = new Set(selectedIds)
+  /** ui 目录（§4.5）：惰性建一次、同一份（每次 renderCtx 各一份，测试间不串） */
+  let uiField: RegistryImpl<unknown> | undefined
   const services: Record<string, unknown> = {
     // 忠实于内核 SelectionService 的最小形状：**必须有 ids**——控制栏的显隐判定是
     // "恰好选中一个且是我"（多选要全部收起），只看 has 是过去的 bug，桩件不该再掩盖它。
@@ -70,6 +74,18 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
+      // 设计系统组件目录（§4.5）：生产由 theme-default 登记；测试里塞真组件，
+      // 这样断言锁的是"按名取到的真件渲染出来长什么样"，与生产同形。
+      registryOf: (kind: string) => {
+        if (kind !== 'ui') return new RegistryImpl()
+        if (!uiField) {
+          uiField = new RegistryImpl<unknown>()
+          uiField.add('button', NodeToolbarButton)
+          uiField.add('select', Select)
+          uiField.add('toolParamField', ToolParamField)
+        }
+        return uiField
+      },
       // 面板只认 ctx.tools 的 list/invoke（与内核 PluginCapabilities['tools'] 同形）
       tools: {
         list: () => tools,

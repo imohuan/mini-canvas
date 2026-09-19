@@ -12,17 +12,18 @@
  *   浮层只负责画框，按钮永远在控制栏这个固定位置上。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
-import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
 import { beginOverlay, endOverlay, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
-import { Select } from '@mini-canvas/plugin-theme-default'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { createVideoOps, uploadVideo } from './videoOps'
 import type { Rect } from './videoCrop'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
+const NodeToolbarButton = useUiComponent('button')
+const Select = useUiComponent('select')
 const selected = useSoleNodeSelected(props.id)
 
 /** 有没有视频：没有就只留「上传」 */

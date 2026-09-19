@@ -22,9 +22,9 @@ import {
   useCanvasRender,
   useGenPanelMetrics,
   useSoleNodeSelected,
+  useUiComponent,
 } from '@mini-canvas/canvas-render'
-import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
-import type { SelectOption } from '@mini-canvas/plugin-theme-default'
+import type { UiSelectOption as SelectOption } from '@mini-canvas/canvas-render'
 import type { ToolDef, ToolParamDef, ToolProgress, ToolResult, ToolService } from '@mini-canvas/kernel'
 import {
   buildToolInput,
@@ -48,6 +48,10 @@ import type { TextNodeService } from './nodeTextPlugin'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
+// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
+const NodeToolbarButton = useUiComponent('button')
+const Select = useUiComponent('select')
+const ToolParamField = useUiComponent('toolParamField')
 // 单选才显示：多选时所有控制栏（上下）都收起，避免多份面板互相叠
 const selected = useSoleNodeSelected(props.id)
 const visible = computed(() => selected.value)

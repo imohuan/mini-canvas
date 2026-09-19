@@ -11,6 +11,8 @@ import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { ToolDef } from '@mini-canvas/kernel'
+import { RegistryImpl } from '@mini-canvas/kernel'
+import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
 import TextGeneratePanel from '../TextGeneratePanel.vue'
 
 const DEMO_TOOL: ToolDef = {
@@ -45,6 +47,8 @@ function renderCtx(
   settings?: { get(key: string): unknown },
 ): CanvasRenderContext {
   const selected = new Set(selectedIds)
+  /** ui 目录（§4.5）：生产由 theme-default 登记；测试塞真组件，断言才锁得住真实渲染 */
+  let uiField: RegistryImpl<unknown> | undefined
   const services: Record<string, unknown> = {
     selection: { ids: selected, has: (id: string) => selected.has(id), onChange: () => () => {} },
     text: { editText: () => {}, duplicateTextNode: () => '', patchTextData: () => {} },
@@ -55,6 +59,16 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
+      registryOf: (kind: string) => {
+        if (kind !== 'ui') return new RegistryImpl()
+        if (!uiField) {
+          uiField = new RegistryImpl<unknown>()
+          uiField.add('button', NodeToolbarButton)
+          uiField.add('select', Select)
+          uiField.add('toolParamField', ToolParamField)
+        }
+        return uiField
+      },
       tools: { list: () => tools, invoke: async () => ({ ok: false, error: '测试里不真调工具' }) },
     },
     viewport: { value: { zoom: 1 } },

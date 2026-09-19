@@ -12,8 +12,7 @@
  * 确认时经命令一次性提交（与顶部条/内容区同一实现）。
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
-import { NodeToolbarButton } from '@mini-canvas/plugin-theme-default'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import {
   clampClipEnd,
   clampClipRange,
@@ -28,6 +27,8 @@ import { isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+// 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
+const NodeToolbarButton = useUiComponent('button')
 const selected = useSoleNodeSelected(props.id)
 const active = computed(() => isClipping(props.id))
 const visible = computed(() => selected.value && active.value)
