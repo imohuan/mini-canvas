@@ -210,6 +210,17 @@ export function nodeShellSlot(type: string): string {
 export function assembleTheme(
   theme: ThemeRegistry | undefined,
   storeTypes: Iterable<string>,
+  /**
+   * `registryOf('node/shell')`（壳组件的场；缺省 = 只读 themeRegistry，行为同旧）。
+   *
+   * 为什么要有它：设计文档 §4.5 把 `node/shell` 定义为"键=节点 type 或 `*`，值=壳组件"，
+   * 案例 3/8 教作者用它 `add`/`wrap` 换壳。若这里不读它，那些写法**不报错也不生效**
+   * （作者最怕的静默失效）。解析顺序见下。
+   */
+  shellField?: {
+    has(key: string): boolean
+    resolve(key: string, base?: unknown): unknown
+  },
 ): ThemeAssembly {
   const shell = theme?.get('nodeShell')
   const edge = theme?.get('edge')
@@ -218,13 +229,31 @@ export function assembleTheme(
   const edgeDefaultType =
     (theme?.get('edgeDefaultType') as string | undefined) ?? 'custom'
   const nodeTypes = [...storeTypes]
-  // 每 type 解析外壳：自带外壳优先，否则回落到全局默认壳。
+  // 每 type 解析外壳，四级优先（自上而下第一个命中的赢）：
+  //   ① 场 `node/shell/<type>`（精确；resolve 让 wrap 合成生效 = 设计文档案例 3/8 的写法）
+  //   ② 场 `node/shell/*`（通配：一处换掉所有节点的壳）
+  //   ③ theme 槽 `nodeShell:<type>`（某类型自带外壳）
+  //   ④ theme 槽 `nodeShell`（全局默认壳，即 BaseNode 那层）
+  // 场排在前面是因为它**语义更窄、更是显式 opt-in**（主题槽是"默认皮"，场是"我就要这个"）。
   // 这样"特殊形态的节点"由它自己的插件负责长相，默认壳不需要任何针对它的分支。
   const nodeShells: Record<string, unknown> = {}
   for (const t of nodeTypes) {
     const own = theme?.get(nodeShellSlot(t))
-    if (own !== undefined) nodeShells[t] = own
-    else if (shell !== undefined) nodeShells[t] = shell
+    // 场外兜底 = theme 槽给的那份壳（精确槽优先、否则全局默认壳）。
+    // 把它当 base 交给场的 resolve，作者 wrap 时 inner 就是"原来那个壳"（案例 3/8 的"原值不丢"）。
+    const base = own !== undefined ? own : shell
+    // 先精确键、再通配键（用 has 判断"这个键上到底有没有人"——不能靠 resolve 的返回值判，
+    // 因为给了 base 之后 resolve 在"键为空"时也返回 base，会把通配忽略掉）。
+    const fromField =
+      shellField === undefined
+        ? undefined
+        : shellField.has(t)
+          ? shellField.resolve(t, base)
+          : shellField.has('*')
+            ? shellField.resolve('*', base)
+            : undefined
+    if (fromField !== undefined) nodeShells[t] = fromField
+    else if (base !== undefined) nodeShells[t] = base
   }
   return {
     nodeShell: shell,

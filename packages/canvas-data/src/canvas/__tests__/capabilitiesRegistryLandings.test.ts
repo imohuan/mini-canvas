@@ -36,7 +36,7 @@ async function boot(plugins: PluginModule[]): Promise<Context> {
 const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
 
 describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
-  it('ctx.nodes.register 落 node/type/<type>、node/shell/<type>、node/creator/<type>', async () => {
+  it('ctx.nodes.register 落 node/type/<type>、node/creator/<type>', async () => {
     const ctx = await boot([
       mk('text-plugin', (c) => {
         c.nodes.register({
@@ -49,9 +49,11 @@ describe('糖 → 注册场落点（§8.2 兼容映射）', () => {
       }),
     ])
     expect(ctx.registryOf('node/type').top('text')?.value).toEqual({ type: 'text', label: '文本' })
-    const shell = ctx.registryOf('node/shell').top('text')?.value
-    expect((shell as { segments?: { in?: unknown } }).segments?.in).toBe(TextContent)
     expect(typeof ctx.registryOf('node/creator').top('text')?.value).toBe('function')
+    // node/shell 不再由 ctx.nodes.register 写"展示定义摘要"：§4.5 定义它的值是**壳组件**、
+    // 消费者是节点壳装配。写摘要会让装配端拿到非组件对象（渲染即崩），且那份摘要在
+    // nodeRegistry / node/region 里已有等价物。这里锁"糖不往这张场写东西"。
+    expect(ctx.registryOf('node/shell').has('text')).toBe(false)
   })
 
   it('ctx.nodes.contribute 落 node/region/<type>/<seg>，order 缺省 = 已有最大 + 1（首条在基座之后）', async () => {

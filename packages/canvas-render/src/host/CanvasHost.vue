@@ -255,7 +255,13 @@ function applyTheme(): void {
   if (!h) return
   // P1-9：孤儿 type（有存量节点但类型已注销）也映射 BaseNode 壳 → 卸载插件后存量节点仍有占位渲染，
   // 数据不丢、插件重装后自动恢复（BaseNode 对无 content 的 type 显示占位文本）。
-  const asm = assembleTheme(h.themeRegistry, [...h.nodeStore.types.keys(), ...h.nodeStore.orphanTypes()])
+  // 第三个参数 = registryOf('node/shell') 场：设计文档 §4.5/案例 3/8 教作者用 add/wrap 换壳，
+  // 不读它那些写法就"不报错也不生效"（作者最怕的静默失效）。解析优先级见 assembleTheme。
+  const asm = assembleTheme(
+    h.themeRegistry,
+    [...h.nodeStore.types.keys(), ...h.nodeStore.orphanTypes()],
+    h.ctx.registryOf<unknown>('node/shell') as unknown as { resolve(key: string): unknown },
+  )
   // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
   // 每次先完整重置再填充：主题插件被热卸/顶替后不能继续使用已卸载的旧组件句柄。
   nodeTypes.value = {}
@@ -1011,6 +1017,18 @@ onMounted(async () => {
       // 运行期主题槽/节点段 occupant 被改（不经过插件装卸）也要重装配 + 重挂渲染子树
       { dispose: host.themeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
       { dispose: host.nodeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
+      // node/shell 场（换壳）变了也要重装配：插件热装/热卸走上面的 lifecycle 事件，
+      // 但运行期直接 add/wrap 换壳（不经过插件装卸）只有订场才知道，否则"换了壳却没生效"。
+      {
+        dispose: (
+          host.ctx.registryOf<unknown>('node/shell') as unknown as {
+            subscribe(fn: () => void): { dispose(): void }
+          }
+        ).subscribe(() => {
+          applyTheme()
+          nodeEpoch.value += 1
+        }),
+      },
       // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。
       // 此处只转发 ERROR(装载失败)这一非正常终态，不误报 ACTIVE/卸载等正常跳变。
       host.ctx.on('ctx:lifecycle-change', ({ name, lifecycle }) => {

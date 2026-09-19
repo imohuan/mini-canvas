@@ -78,8 +78,15 @@ export interface Registry<T> {
    * @returns 该层的撤销句柄（dispose 即移除这一层，其余层原位不动）
    */
   wrap(key: string, fn: RegistryWrapper<T>, opts?: { id?: string; order?: number }): Disposable
-  /** 合成好的那一个：从里到外逐层套完；空键 undefined */
-  resolve(key: string): T | undefined
+  /**
+   * 合成好的那一个：从里到外逐层套完；空键 undefined。
+   *
+   * @param base 最里层的**兜底值**（可选）。用于"场外还有一份默认实现"的场景：
+   *   例如 `node/shell` 场外还有 theme 槽的默认壳，作者 `wrap` 时应当能收到那份默认壳当 inner，
+   *   否则他这个 wrap 拿到的 inner 是 undefined、包不起来（设计文档案例 3/8 要的正是"原值不丢"）。
+   *   只给 base、场里没条目时返回 **base 本身**（不是包裹结果）—— 与"'缺省 = 没覆盖'语义一致。
+   */
+  resolve(key: string, base?: T): T | undefined
   /** 变了通知我（渲染侧订阅重绘）；返回取消订阅句柄 */
   subscribe(fn: () => void): Disposable
 }
@@ -226,13 +233,13 @@ export class RegistryImpl<T> implements Registry<T> {
    * 从里到外逐层合成：list() 是"外→里"，故**倒着走**（先取最里层当底，再被一层层包上）。
    * - 普通条目 → 它就是当前这层的值（外面有普通条目时会盖住里面那层，这正是"覆盖"）；
    * - wrap 条目 → 调它的 fn(inner) 包住下面那层。
-   * 空键返回 undefined；最里层是 wrap 且下面没有底时，inner 收到 undefined。
+   * 空键返回 undefined（除非给了 base）；最里层是 wrap 且下面没有底时，inner 收到 base（缺省 undefined）。
    */
-  resolve(key: string): T | undefined {
+  resolve(key: string, base?: T): T | undefined {
     const slots = this.byKey.get(key)
-    if (!slots || slots.size === 0) return undefined
+    if (!slots || slots.size === 0) return base
     const ordered = [...slots.values()].sort((a, b) => a.entry.order - b.entry.order)
-    let acc: T | undefined
+    let acc: T | undefined = base
     for (let i = ordered.length - 1; i >= 0; i--) {
       const slot = ordered[i]
       acc = slot.wrapper ? slot.wrapper(acc as T, slot.entry) : slot.entry.value
@@ -287,7 +294,7 @@ export class RegistryImpl<T> implements Registry<T> {
       has: (key) => self.has(key),
       ids: (key) => self.ids(key),
       keys: () => self.keys(),
-      resolve: (key) => self.resolve(key),
+      resolve: (key, base) => self.resolve(key, base),
       subscribe(fn) {
         // 订阅与放置同权：视图带回收器时（插件视图），监听也随作用域自动解除
         const sub = self.subscribe(fn)

@@ -244,6 +244,24 @@ check('事件名白名单：零条“未声明的事件名”warn（§7.4）', e
 // 用 dev server 跑时必须是 true；这条也反向守住"别再把 isDev 静默钉死为 false"。
 const devFlag = await page.evaluate(() => window.MiniCanvasUI.getContext().isDev);
 check('dev 开关接通（ctx.isDev === true，dev server 下）', devFlag === true, 'isDev=' + devFlag);
+
+// 9h. node/shell 场（设计文档 §4.5 / 案例 3/8）：换壳**真的生效** —— 此前这张场只有写入端、
+// 没有读取端，作者照文档写 add/wrap 会"不报错也不生效"（最怕的静默失效）。
+// 断言不是"场上多了一条"，而是**节点上渲染出来的内容真的换了**（用一个吐标记文本的假壳）。
+const shellSwap = await page.evaluate(async () => {
+  const ctx = window.MiniCanvasUI.getContext();
+  const f = ctx.registryOf('node/shell');
+  const textOf = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText)
+  const MARK = 'E2E_SHELL_SWAP_MARKER';
+  const seenBefore = textOf().some((t) => t.includes(MARK));
+  const h = f.add('image', { name: 'E2EShell', props: ['id', 'data'], render: () => MARK }, { id: 'e2e-swap', order: -100 });
+  await new Promise((r) => setTimeout(r, 500));
+  const seenAfter = textOf().some((t) => t.includes(MARK));
+  h.dispose();
+  await new Promise((r) => setTimeout(r, 500));
+  return { seenBefore, seenAfter, seenRestored: textOf().some((t) => t.includes(MARK)) };
+});
+check('node/shell 场换壳真的生效（假壳渲染到节点上，撤回即复原）', !shellSwap.seenBefore && shellSwap.seenAfter && !shellSwap.seenRestored, JSON.stringify(shellSwap));
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));

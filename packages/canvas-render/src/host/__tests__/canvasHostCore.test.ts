@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { NodeStore } from '@mini-canvas/canvas-data'
 import { ThemeRegistry } from '@mini-canvas/canvas-data'
+import { RegistryImpl } from '@mini-canvas/kernel'
 import {
   assembleTheme,
   edgeId,
@@ -177,6 +178,83 @@ describe('assembleTheme', () => {
     expect(out.nodeShells['connection-menu']).toBe(ownShell)
     expect(out.nodeShells.text).toBe(defaultShell)
     expect(out.nodeShells.image).toBe(defaultShell)
+  })
+
+  // 设计文档 §4.5 把 node/shell 定义为"值=壳组件、消费者=节点壳装配"，案例 3/8 教作者用它换壳。
+  // 下面三条锁"那些写法真的生效" —— 此前这张场只有写入端、没有读取端，作者的 add/wrap 会静默失效。
+  it('node/shell 场：精确键换壳生效（覆盖 theme 槽的默认壳）', () => {
+    const theme = new ThemeRegistry()
+    const defaultShell = { name: 'BaseNode' }
+    const myShell = { name: 'MyShell' }
+    theme.register('nodeShell', defaultShell)
+    const store = makeStore()
+    const field = new RegistryImpl<unknown>()
+    field.add('text', myShell)
+    const out = assembleTheme(theme, store.types.keys(), field)
+    expect(out.nodeShells.text).toBe(myShell)
+    // 没被点名的类型仍用默认壳
+    expect(out.nodeShells.image).toBe(defaultShell)
+  })
+
+  it('node/shell 场：* 通配换壳（一处换掉所有节点）', () => {
+    const theme = new ThemeRegistry()
+    theme.register('nodeShell', { name: 'BaseNode' })
+    const store = makeStore()
+    const field = new RegistryImpl<unknown>()
+    const chrome = { name: 'MyChrome' }
+    field.add('*', chrome)
+    const out = assembleTheme(theme, store.types.keys(), field)
+    expect(out.nodeShells.text).toBe(chrome)
+    expect(out.nodeShells.image).toBe(chrome)
+  })
+
+  it('node/shell 场：wrap 能拿到 inner 并包一层（案例 8 的组合语义）', () => {
+    const theme = new ThemeRegistry()
+    theme.register('nodeShell', { name: 'BaseNode' })
+    const store = makeStore()
+    const field = new RegistryImpl<unknown>()
+    field.add('text', { name: 'BaseNode' })
+    // wrap 缺省放在最外（order 更小），resolve 时收到 inner = 原来那个
+    field.wrap('text', (inner) => ({ name: 'Badged', inner }))
+    const out = assembleTheme(theme, store.types.keys(), field)
+    expect(out.nodeShells.text).toEqual({ name: 'Badged', inner: { name: 'BaseNode' } })
+    // 别的类型不受影响
+    expect(out.nodeShells.image).toEqual({ name: 'BaseNode' })
+  })
+
+  it('node/shell 场：只有 wrap、没有 add → inner 是 theme 槽那份默认壳（案例 3/8"原值不丢"）', () => {
+    const theme = new ThemeRegistry()
+    const defaultShell = { name: 'BaseNode' }
+    theme.register('nodeShell', defaultShell)
+    const store = makeStore()
+    const field = new RegistryImpl<unknown>()
+    // 作者只写一行 wrap：包住"主题给的默认壳"
+    field.wrap('*', (inner) => ({ name: 'MyChrome', inner }))
+    const out = assembleTheme(theme, store.types.keys(), field)
+    expect(out.nodeShells.text).toEqual({ name: 'MyChrome', inner: defaultShell })
+    expect(out.nodeShells.image).toEqual({ name: 'MyChrome', inner: defaultShell })
+  })
+
+  it('node/shell 场：存在 wrap 时精确键优先于通配（各自 base 都拿到默认壳）', () => {
+    const theme = new ThemeRegistry()
+    const defaultShell = { name: 'BaseNode' }
+    theme.register('nodeShell', defaultShell)
+    const store = makeStore()
+    const field = new RegistryImpl<unknown>()
+    field.wrap('*', (inner) => ({ name: 'GlobalChrome', inner }))
+    field.wrap('image', (inner) => ({ name: 'ImageShell', inner }))
+    const out = assembleTheme(theme, store.types.keys(), field)
+    expect(out.nodeShells.image).toEqual({ name: 'ImageShell', inner: defaultShell })
+    expect(out.nodeShells.text).toEqual({ name: 'GlobalChrome', inner: defaultShell })
+  })
+
+  it('node/shell 场未注册该 type 时回落到 theme 槽（不缺省破坏既有默认皮）', () => {
+    const theme = new ThemeRegistry()
+    const defaultShell = { name: 'BaseNode' }
+    theme.register('nodeShell', defaultShell)
+    const store = makeStore()
+    const out = assembleTheme(theme, store.types.keys(), new RegistryImpl<unknown>())
+    expect(out.nodeShells.text).toBe(defaultShell)
   })
 
   it('nodeShells：无全局壳时只有自带外壳的 type 有壳，其余不带（裸内容渲染）', () => {

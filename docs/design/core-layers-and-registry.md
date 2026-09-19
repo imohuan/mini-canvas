@@ -412,17 +412,24 @@ export function apply(ctx) {
 export const name = 'my-theme'
 
 export function apply(ctx) {
-  // (a) 包住原来的：props.inner 就是它下面那层
-  ctx.registryOf('node/shell').wrap('*', MyChrome)
+  // (a) 包住原来的：inner = **原来那个壳**（theme 槽给的默认壳、或别人先叠的那层）
+  //     靠 resolve(key, base) 的 base 参数实现 —— 场外那份默认壳会作为最里层递给 wrap。
+  ctx.registryOf('node/shell').wrap('*', (inner) => MyChrome(inner))
 
   // (b) 整个换掉：只是叠上去，原来那个照样查得到
   ctx.registryOf('node/shell').add('image', MyShell, { order: -10 })
 
   // (c) 想拿某个插件注册的壳？列表给你（含 source）
   const 全部 = ctx.registryOf('node/shell').list('image')
-  // [{ id:'default', source:'theme-default', value: BaseNode }, …]
+  // [{ id:'my-theme', source:'my-theme', value: MyShell }, …]
+  // （theme 槽那份默认壳不在场里，要它用 ctx.get('themeRegistry').winner('nodeShell')）
 }
 ```
+
+> **读取端在哪**（初稿漏写，实现时才补足）：`assembleTheme`（canvas-render）按
+> ①场精确键 → ②场 `*` 通配 → ③theme 槽 `nodeShell:<type>` → ④theme 槽 `nodeShell`
+> 的顺序解析每个 type 的壳，并把 ③/④ 那份当 `base` 递进 `resolve` —— 所以只写一行 `wrap`
+> 也能拿到"原来那个壳"。运行期 `add`/`wrap` 经这张场的 `subscribe` 触发宿主重装配，即时生效。
 
 ### 案例 4 · 组件目录（作者要的"组件 Map"）
 
@@ -486,16 +493,18 @@ export function apply(ctx) {
 export const name = 'image-with-badge'
 
 export function apply(ctx) {
-  // 先取到别人注册的壳（不 import 对方的包）
-  const 现有 = ctx.registryOf('node/shell').top('image')
-  if (!现有) return
+  // 先看看别人往这个 type 上放过什么（不 import 对方的包）——只做诊断/条件判断用
+  const 现有 = ctx.registryOf('node/shell').list('image') // [{ id, source, value }, …]
 
-  // 在它外面套一层：inner = 原来那个
+  // 在它外面套一层：inner = **下面那层**（别人先叠的，或 theme 槽给的默认壳）
+  // 不需要先 top()/判空 —— 场为空时 inner 也会拿到 base（默认壳），所以这一行永远包得起来。
   ctx.registryOf('node/shell').wrap('image', (inner) => makeBadgedShell(inner))
 }
 ```
 
 **这是"不覆盖、只叠栈"真正的用途**：A 覆盖后，B 照样能拿到 A 那份并在它上面继续做。
+注意 `top()` 取的是"场上最外那条"，**不含** theme 槽那份默认壳；要"完整合成的当前壳"用
+`resolve(key, base)`（宿主 `assembleTheme` 正是这么读的）。
 
 ---
 

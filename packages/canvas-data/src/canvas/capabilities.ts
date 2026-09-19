@@ -201,16 +201,19 @@ export function buildCapabilities(
         if ((def as unknown as Record<string, unknown>)[RETIRED_CONTENT_FIELD] !== undefined) {
           assertRegion(RETIRED_CONTENT_FIELD)
         }
-        // ⓪ 场落点（§8.2）：node/type/<type>（声明摘要）+ node/shell/<type>（展示定义）。
+        // ⓪ 场落点（§8.2）：node/type/<type>（声明摘要）。
         // 糖保留 void 返回；既有 nodeStore/nodeRegistry 行为原样不动。
         const typeField = land<{ type: string; label: string }>('node/type')
-        const shellField = land<unknown>('node/shell')
         typeField?.add(def.type, { type: def.type, label: def.label })
         // 段名一律是区域词（步骤 9）：作者侧的 content 字段已改名为区域词 in。
         const segRecord: Partial<Record<NodeSegment, unknown>> = def.in || def.title
           ? { in: def.in, title: def.title, ...(def.segments ?? {}) }
           : (def.segments ?? {})
-        shellField?.add(def.type, { type: def.type, segments: segRecord })
+        // ⚠️ 此前这里还往 `node/shell/<type>` 写了一份 `{ type, segments }` 的"展示定义摘要"。
+        // 那是**错的**：§4.5 把 `node/shell` 定义为"值 = 壳组件（BaseNode 等）、消费者 = 节点壳装配"，
+        // 而这份摘要是普通对象、不是组件，且**全仓无任何读取端**。壳的装配端（assembleTheme）
+        // 现已按 §4.5 读这张场，若继续写摘要，它会被当成组件交给 VueFlow 渲染 → 整图崩。
+        // 摘要在 `nodeRegistry` 与 `node/region` 里已有等价物，故直接删除该写入。
         // ① 数据 + 展示(经 registerNodeType，内部已 ctx.effect 回收)
         const revoke = registerNodeType(ctx, {
           type: def.type,
