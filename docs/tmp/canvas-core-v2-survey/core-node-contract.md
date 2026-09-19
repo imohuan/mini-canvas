@@ -2,7 +2,9 @@
 # 核心节点件行为契约金标准（v2 现行实现）
 
 > 用途：在改动下列六个文件之前必读。**禁止改坏**本文列出的任何行为。
-> 依据：2026-09-17 对 `codex/registry-refactor` 分支现行源码的逐行精读（本文所有行号即该分支现状）。
+> 依据：2026-09-17 对 `codex/registry-refactor` 分支现行源码的逐行精读（本文所有行号即**当时**的现状）。
+> ⚠️ 行号锚点会随开发漂移（步骤十·能力包后 BaseNode 已增至 1132 行，§1.2/§0.1 等处已按 2026-09-19 现状
+> 校正主要锚点；其余 `（:NNN）` 为 09-17 精读值，读时以"不变量描述"为准、行号仅作大致定位）。
 > 历史说明：本文档的前身（v1 金标准，commit a37d4de）写的是 `packages/canvas-core` 的 v1 实现，
 > 2026-09-05 随 docs/tmp 清理被删（commit c052633）。代码注释里引用的「core-node-contract §3 / §6 / §6.3」
 > 指 v1 版文档的章节号；本文按 v2 现行实现重建，章节编号与 v1 版不一致（本文 §1=BaseNode、
@@ -27,8 +29,8 @@
 | CustomEdge | `themeRegistry("edge")` | index.ts:638 | CanvasHost → `edgeTypes.custom`（CanvasHost.vue:259）；另被 ConnectionLine 内部委托 |
 | DefaultBackground | `themeRegistry("background")` | index.ts:639 | CanvasSurface 模板 `<component :is="backgroundComp">`（CanvasSurface.vue:347） |
 | ConnectionLine | `themeRegistry("connectionLine")` | index.ts:640 | CanvasSurface `#connection-line` 槽 → ConnectionLineHost 渲染赢家（CanvasSurface.vue:349-356 + ConnectionLineHost.vue:50-63） |
-| MovingHandle | 不进 themeRegistry | index.ts:671 直接导出 | BaseNode 内部渲染（BaseNode.vue:752/777）；外部复用：plugin-multi-select 批量连线端口（preview 模式，SelectionFrame.vue:1053-1099） |
-| BaseTitle / TitleLabel | 不注册 | —（同目录静态 import） | 仅 BaseNode 默认标题条使用（BaseNode.vue:698-704） |
+| MovingHandle | 不进 themeRegistry | index.ts:671 直接导出 | BaseNode 内部渲染（BaseNode.vue:811/837）；外部复用：plugin-multi-select 批量连线端口（preview 模式，SelectionFrame.vue:1053-1099） |
+| BaseTitle / TitleLabel | 不注册 | —（同目录静态 import） | 仅 BaseNode 默认标题条使用（BaseNode.vue:753-763） |
 
 ### 0.2 注入上下文（单令牌）
 
@@ -46,7 +48,7 @@
 
 ---
 
-## 1. BaseNode.vue（1108 行）— 节点壳
+## 1. BaseNode.vue（1132 行，2026-09-19 步骤十后）— 节点壳
 
 ### 1.1 是什么 / 谁用
 
@@ -56,7 +58,7 @@
 
 ### 1.2 对外接口
 
-- **props**：`NodeProps`（@vue-flow/core 全量节点 props，经 canvas-render re-export，vueFlowBridge.ts:17）。`defineOptions({ inheritAttrs: false })`（:40）——透传属性不落到根元素。
+- **props**：`NodeProps`（@vue-flow/core 全量节点 props，经 canvas-render re-export，vueFlowBridge.ts:17）。`defineOptions({ inheritAttrs: false })`（:46）——透传属性不落到根元素。
 - **emits / slots：无**。它是"槽的渲染方"而非槽的提供方：区域条目组件收到 `{ id, data }`，
   另可收到注册时声明的 `props`（`attach`/`contribute` 的 props；没有就不传 —— 模板经
   RegionEntryHost 统一 `v-bind="entry.props"`）。
@@ -65,8 +67,8 @@
   区域条目组件**还**可经 `useCapabilities()` 取到自己 `needs` 声明过的能力包 ——
   这是新增的读取路径，原有的 `{ id, data, ...props }` props 契约一字未动。
 - **注入读取**：
-  - `useCanvasRender()`（:44）：ctx / registry / nodeWrite / handleParams / connectionState / interaction / debug / snapZone / updateNodeVisualSize / visibleRect。
-  - `useVueFlow()`（:45）：`viewport.zoom` 是缩放唯一来源（:58）。
+  - `useCanvasRender()`（:50）：ctx / registry / nodeWrite / handleParams / connectionState / interaction / debug / snapZone / updateNodeVisualSize / visibleRect。
+  - `useVueFlow()`（:51）：`viewport.zoom` 是缩放唯一来源（:58）。
   - ctx 字符串服务：`settings`（:62-97）、`selection`（:288-295）、`nodeLayout`（:256）、`viewport`（:263）。全部可缺省降级（极简宿主/单测桩里缺了不抛错）。
 - **注册表读取**：`resolveSegment(registry, type, "content" | "title")`（:307-308）、`nodeSegmentStackEntries(registry, type, "top-toolbar" | "bottom-toolbar" | "overlay")`（:313/314/326）。
 
@@ -90,7 +92,7 @@
 
 ### 1.4 不变量（改动时禁止破坏）
 
-1. **缩放防零**：`zoom = max(vf.viewport.zoom || 1, 0.01)`（:58）。所有 `1/zoom` 反缩放共用它。
+1. **缩放防零**：`zoom = max(vf.viewport.zoom || 1, 0.01)`（:64）。所有 `1/zoom` 反缩放共用它。
 2. **反缩放三件套同一阈值**：标题条 `scale = 1/max(zoom, titleScaleMinZoom)`（:101/184-190）、
    多选标记（multiRadio.ts:133-144）、resize 拖柄（:154）共用 `titleScaleMinZoom`（默认 0.5）。
    baseNodeSlotsRender.test.ts:398-410 锁死"改阈值三处同源"，改一处必须核对另两处。
@@ -277,7 +279,7 @@
 ### 3.1 是什么 / 谁用
 
 节点标题条，移植自 v1 Decoration/BaseTitle，纯展示组件（文件头 :2-5）。三段布局：图标 → 标签（80%）
-→ extra（≤20%）。仅 BaseNode 默认标题条使用（BaseNode.vue:698-704，自定义 title 段注册时不走它）。
+→ extra（≤20%）。仅 BaseNode 默认标题条使用（BaseNode.vue:753-763，自定义 title 段注册时不走它）。
 
 ### 3.2 对外接口
 

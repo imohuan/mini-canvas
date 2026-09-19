@@ -133,6 +133,3 @@ export function createStandardCapabilities(ctx: Context): Record<string, Capabil
     }),
   }
 }
-
-/** 标准四件的名字（诊断/文档用；**不是封闭枚举**——主题可注册自定名字） */
-export const STANDARD_CAPABILITY_NAMES = ['node', 'zoom', 'selected', 'tools'] as const

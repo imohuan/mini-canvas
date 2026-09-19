@@ -25,7 +25,10 @@ export const CONNECTION_MENU_PICK_EVENT = 'canvas:connection-menu:pick'
 export const CONNECTION_MENU_CANCEL_EVENT = 'canvas:connection-menu:cancel'
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
-// （PICK 由 ConnectionMenuContent.vue emit，CANCEL 由插件内部 emit；两个都登记，本模块是它俩的单一来源。）
+// PICK 由 ConnectionMenuContent.vue emit（contextMenuPlugin.ts:381 监听）。
+// CANCEL 目前**没有 emit 点**（实际取消走 clearTempConnection 直调，contextMenuPlugin.ts:245/264/316/444/447），
+// 只有 ctx.on 在听 —— 登记它是为了让"将来补 emit"的作者不再踩 §7.4 的 warn；
+// 也给此刻把 CANCEL 想成"已广播"的读者一句提醒：真要广播，先 emit 再谈监听。
 registerEventName(CONNECTION_MENU_PICK_EVENT)
 registerEventName(CONNECTION_MENU_CANCEL_EVENT)
 

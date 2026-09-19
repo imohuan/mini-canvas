@@ -111,8 +111,8 @@ export function useCapability<C = unknown>(name: string): C | undefined {
   return value
 }
 
-/** 缺项裁决的结果：ok=false 表示"没注册这个能力"（dev 已抛错，或 prod 已 warn） */
-export type CapabilityLookup = { ok: true; value: unknown } | { ok: false }
+/** 缺项裁决的结果：ok=false 表示"没注册这个能力"（dev 已抛错，或 prod 已 warn）。不导出：消费方一律走 bagFor/useCapabilities */
+type CapabilityLookup = { ok: true; value: unknown } | { ok: false }
 
 /**
  * **每节点一份**实例的缓存（决策 9 第②条："每节点一份实例"）。
@@ -128,8 +128,6 @@ export type CapabilityLookup = { ok: true; value: unknown } | { ok: false }
  * 工厂引用一变就重造（旧实例先回收），避免一直用旧实现。
  */
 export interface CapabilityCache {
-  /** 取（必要时造）本节点该能力的实例；未注册时按 isDev 裁决（dev 抛 / prod warn + ok:false） */
-  get(name: string, entryId: string): CapabilityLookup
   /** 造一条条目的能力袋（只含 needs 里声明过的；未声明 = 空袋） */
   bagFor(needs: string[] | undefined, entryId: string): CapabilityBag
   /** 回收本节点全部实例（有 dispose()/stop() 的顺手调一次） */
@@ -182,8 +180,7 @@ export function createCapabilityCache(
     return { ok: true, value }
   }
 
-  return {
-    get: lookup,
+ return {
     bagFor(needs, entryId) {
       const bag: CapabilityBag = {}
       if (!needs || needs.length === 0) return bag

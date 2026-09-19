@@ -189,7 +189,7 @@ export type { SettingsPanelSource, SettingSchema, SettingEntry } from './compone
 export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contracts/settingsField'
 // 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
 export { useUiComponent, uiComponent, uiNames, UI_NAMES } from './contracts/uiCatalog'
-export type { UiComponentHandle, UiName } from './contracts/uiCatalog'
+export type { UiComponentHandle } from './contracts/uiCatalog'
 // 能力包（§4.5 / 案例 5 / 决策 9）：组件声明 needs，从 registryOf('capability') 按名取通用 hooks
 export {
   useCapabilities,
@@ -206,10 +206,9 @@ export type {
   CapabilityBag,
   CapabilityNodeContext,
   CapabilityCache,
-  CapabilityLookup,
 } from './contracts/capabilities'
 // 宿主标准能力包四件（node/zoom/selected/tools）：工厂实现在这里，注册由 createMiniCanvasHost 做
-export { createStandardCapabilities, STANDARD_CAPABILITY_NAMES } from './contracts/standardCapabilities'
+export { createStandardCapabilities } from './contracts/standardCapabilities'
 export type {
   NodeCapability,
   ZoomCapability,
