@@ -149,6 +149,36 @@ const field = await page.evaluate(() => {
   return { before, after, src, hasResolve: !!resolved, afterDispose: f.ids('text/out:top').length };
 });
 check('注册场运行时放/取/回收（node/region）', field.after === field.before + 1 && field.afterDispose === field.before, JSON.stringify(field));
+
+// ⑧-2. 用户最初那段场景在真实画布上跑一遍（**并且是运行期直接改场**，不装卸插件）：
+// 插件给 image 节点的上控制栏加一个按钮、下控制栏加一个面板，两者共享同一份"展开"能力实例。
+// 这条此前会红：BaseNode 在挂载那刻读出条目就定了，之后往场里 add 不重渲染（静默失效）。
+const scenario = await page.evaluate(async () => {
+  const api = window.MiniCanvasUI;
+  const ctx = api.getContext();
+  const h = api.getHost();
+  const MARK = 'E2E_SCENARIO';
+  // ① 作者注册一个能力（每节点一份实例）
+  ctx.registryOf('capability').add('展开', (n) => ({ open: false, id: n.id }), { id: 'e2e:expand' });
+  // ② 上控制栏按钮 + 下控制栏面板，needs 同一个能力
+  const btn = { name: 'GenBtn', props: ['id', 'data'], inheritAttrs: false, render: () => MARK + '_BTN' };
+  const panel = { name: 'GenPanel', props: ['id', 'data'], inheritAttrs: false, render: () => MARK + '_PANEL' };
+  const f = ctx.registryOf('node/region');
+  const a = f.add('image/out:top', { component: btn, needs: ['展开'] }, { id: 'e2e-scenario-btn', order: -20 });
+  const c = f.add('image/out:bottom', { component: panel, needs: ['展开'] }, { id: 'e2e-scenario-panel', order: -20 });
+  const text = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText).join('|');
+  // ③ 选中 image 节点让控制栏浮出来
+  const img = h.nodeStore.getNodes().find((n) => n.type === 'image');
+  if (img) ctx.get('selection').set([img.id]);
+  await new Promise((r) => setTimeout(r, 800));
+  const seen = { btn: text().includes(MARK + '_BTN'), panel: text().includes(MARK + '_PANEL') };
+  a.dispose();
+  c.dispose();
+  await new Promise((r) => setTimeout(r, 600));
+  ctx.registryOf('capability').remove('展开', 'e2e:expand');
+  return { ...seen, gone: !text().includes(MARK) };
+});
+check('运行期直接改场 → 节点热增上/下控制栏条目（用户最初那段场景）', scenario.btn && scenario.panel && scenario.gone, JSON.stringify(scenario));
 check('场条目带 source（谁放的）', typeof field.src === 'string' && field.src.length > 0, `source=${field.src}`);
 check('wrap/resolve（叠层可合成）', field.hasResolve === true);
 

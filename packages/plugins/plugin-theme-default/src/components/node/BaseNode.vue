@@ -322,8 +322,20 @@ const regionField = (() => {
     return undefined
   }
 })()
+/**
+ * 区域场变更计数器：场是**非响应式**的普通对象（内核不认识 Vue），所以在这里订一次，
+ * 每次进出条目就 bump 一下，让下面所有 `regionEntries` 派生的 computed 重算。
+ *
+ * 为什么要它：此前节点**挂载那一刻**读出条目就定了，之后运行期直接往场里 `add`/`wrap`
+ * （不经过插件装卸，比如主题插件换壳、或宿主脚本调试）**不会重渲染** ——
+ * 表现为"注册成功了却什么都没出现"，正是最难查的一类静默失效（STATUS 曾把它列在遗留里）。
+ * 插件装卸那条路本来就有生命周期事件驱动重挂，这条补的是"不装卸、直接改场"。
+ */
+const regionTick = ref(0)
+const regionOff = regionField?.subscribe(() => void (regionTick.value += 1))
+onBeforeUnmount(() => regionOff?.dispose())
 const regionEntries = (region: string) =>
-  nodeRegionStackEntries(registry, regionField as never, props.type, region)
+  (void regionTick.value, nodeRegionStackEntries(registry, regionField as never, props.type, region))
 /** in 区域（老 content 段）：卡片内容，可叠多层 */
 const contentStack = computed(() => regionEntries('in'))
 /** title 区域（老 title 段）：单格换肤点，取最外一条（基座优先）替换默认标题条 */
