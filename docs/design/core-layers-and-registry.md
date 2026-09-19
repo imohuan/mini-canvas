@@ -601,7 +601,7 @@ export function apply(ctx) {
 
 | 老写法 | 糖落到哪个场 | **必须保留的行为**（否则既有测试红） |
 |---|---|---|
-| `ctx.nodes.register(def)` | `node/shell/<type>` + `node/creator/<type>` + `node/type/<type>` | 返回 `void`；`create` 会挂进 `nodeFactory`；卸载自动回收 |
+| `ctx.nodes.register(def)` | `node/type/<type>` + `node/creator/<type>` | 返回 `void`；`create` 会挂进 `nodeFactory`；卸载自动回收。（⚠️ 2026-09-19：不再往 `node/shell` 写"展示定义摘要" —— §4.5 定义这张场的值是**壳组件**、消费者是节点壳装配；写摘要会被装配端当成组件渲染而整图崩。摘要本就在 nodeRegistry / node/region 里。） |
 | `ctx.nodes.contribute(type, seg, comp, opts)` | `node/region/<type>/<seg>` | **返回 occupant id（string）**；缺省 order = "已有最大 + 1"（`nodeRegistry.ts:137`） |
 | `ctx.theme.register(slot, comp, opts)` | `theme/<slot>` | **同槽重复 register 抛错**（`already registered`，`themeRegistry.ts:102`，测试断言此行为）；`winner` = order 最小者 |
 | `ctx.commands.register(def)` | `command/<id>` | 重复 id 抛错；返回可 dispose 的句柄 |

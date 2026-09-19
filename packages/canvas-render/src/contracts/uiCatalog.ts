@@ -56,18 +56,19 @@ export function useUiComponent(name: string): Ref<UiComponentHandle | undefined>
   const { ctx } = useCanvasRender();
   const field = ctx.registryOf<UiComponentHandle>('ui');
   const found = shallowRef<UiComponentHandle | undefined>(field.top(name)?.value);
+  /** 缺名提示只给一次（同一文案别写两遍）：首次就缺时立刻给，之后只在"变过再变缺"时给 */
+  const warnMissing = (): void => {
+    if (typeof console === 'undefined') return;
+    console.warn(`[ui] 目录里没有名为 "${name}" 的组件（主题插件没登记它？）。详见设计文档 §4.5。`);
+  };
   const sync = (): void => {
     const next = field.top(name)?.value;
     if (next === found.value) return;
     found.value = next;
-    if (next === undefined && typeof console !== 'undefined') {
-      console.warn(`[ui] 目录里没有名为 "${name}" 的组件（主题插件没登记它？）。详见设计文档 §4.5。`);
-    }
+    if (next === undefined) warnMissing();
   };
   // 首次就缺：立刻提示一次（此时值没"变"，sync 里的分支不会触发）
-  if (found.value === undefined && typeof console !== 'undefined') {
-    console.warn(`[ui] 目录里没有名为 "${name}" 的组件（主题插件没登记它？）。详见设计文档 §4.5。`);
-  }
+  if (found.value === undefined) warnMissing();
   const sub = field.subscribe(sync);
   onScopeDispose(() => sub.dispose());
   return found;
