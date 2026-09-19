@@ -3,19 +3,19 @@
  *
  * 为什么要有标准四件：作者抱怨的"组件里得重复实现一堆通用 hooks"——读节点、改节点、
  * 看缩放、看选中、调工具，这四件事每个节点插件都在各写一份。宿主把它们注册进
- * \`registryOf('capability')\`，插件只需在 \`attach\` 里写 \`needs: ['node','zoom']\`。
+ * registryOf('capability')，插件只需在 attach 里写 needs: ['node','zoom']。
  *
  * 与决策 9 的关系：
  * - ① 谁有权注册：不设限 —— 任何插件都能注册同名能力（order 小者赢，主题插件因此能整套换掉）。
  *   本模块只是**宿主那一份**的默认实现，不是唯一入口。
- * - ② 实例作用域：工厂每节点调一次（由消费方组件回收，见 provideCapabilityBag）。
- * - ③ 缺项行为：本模块不参与 —— 由 resolveCapabilityBag 按 ctx.isDev 裁决。
+ * - ② 实例作用域：工厂每节点调一次（由消费方组件回收，见 createCapabilityCache）。
+ * - ③ 缺项行为：本模块不参与 —— 由 createCapabilityCache 按 ctx.isDev 裁决。
  */
 import type { Ref } from 'vue'
 import type { CapabilityFactory } from './capabilities'
 import type { Context } from '@mini-canvas/canvas-data'
 
-/** \`node\` 能力：本节点的身份 / 数据 / 写回 */
+/** node 能力：本节点的身份 / 数据 / 写回 */
 export interface NodeCapability {
   readonly id: string
   readonly type: string
@@ -29,7 +29,7 @@ export interface NodeCapability {
   update(patch: Record<string, unknown>): void
 }
 
-/** \`zoom\` 能力：读当前缩放 + 控制视口 */
+/** zoom 能力：读当前缩放 + 控制视口 */
 export interface ZoomCapability {
   /** 当前缩放（活引用；已防零） */
   readonly zoom: Readonly<Ref<number>>
@@ -43,7 +43,7 @@ export interface ZoomCapability {
   centerOn(x: number, y: number): void
 }
 
-/** \`selected\` 能力：本节点的选中态 */
+/** selected 能力：本节点的选中态 */
 export interface SelectedCapability {
   /** 是否在选中集里（活引用） */
   readonly selected: Readonly<Ref<boolean>>
@@ -51,14 +51,14 @@ export interface SelectedCapability {
   readonly solo: Readonly<Ref<boolean>>
 }
 
-/** \`tools\` 能力：调 \`ctx.tools\` 里的生成工具（文生图/图生文…），插件零 import */
+/** tools 能力：调 ctx.tools 里的生成工具（文生图/图生文…），插件零 import */
 export interface ToolsCapability {
   list(): Array<{ name: string; title?: string; description?: string; group?: string; produces?: string }>
   invoke(name: string, input: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown>
 }
 
 /**
- * 造宿主的标准四件（在 createMiniCanvasHost 里注册进 \`registryOf('capability')\`）。
+ * 造宿主的标准四件（在 createMiniCanvasHost 里注册进 registryOf('capability')）。
  *
  * 只依赖 ctx（与传入的节点上下文），不 import 任何节点插件 —— 保持"渲染层不认识业务节点"的边界。
  */

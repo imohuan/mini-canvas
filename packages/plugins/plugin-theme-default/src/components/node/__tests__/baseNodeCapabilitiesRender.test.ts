@@ -172,4 +172,23 @@ describe('BaseNode → 区域组件：needs 声明的能力真的送得到', () 
     expect(html).toContain('data-keys="node"')
     expect(html).toContain('data-keys="zoom"')
   })
+
+  it('**每节点一份实例**：两条条目声明同一个 needs → 组件拿到的是同一个对象（状态才共享）', async () => {
+    // 这是"按钮 + 它打开的面板"能共享状态的前提。用工厂调用次数断言（per-条目实现会是 2）。
+    let calls = 0
+    const cap = new RegistryImpl<CapabilityFactory>()
+    cap.add('node', (n) => {
+      calls += 1
+      return { id: n.id, token: 'shared' }
+    })
+    const r = new NodeRegistry()
+    r.register('image', { in: NoNeedsProbe })
+    const f = new RegistryImpl<unknown>()
+    f.add('image/out:top', { component: CapProbe, needs: ['node'] }, { id: 'btn', order: 1 })
+    f.add('image/out:bottom', { component: CapProbe, needs: ['node'] }, { id: 'panel', order: 1 })
+    const html = await renderNode(r, f, cap)
+    expect(calls).toBe(1)
+    expect(html).toContain('data-keys="node"')
+    expect(html).toContain('data-node-id="n1"')
+  })
 })

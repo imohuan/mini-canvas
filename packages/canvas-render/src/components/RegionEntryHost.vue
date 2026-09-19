@@ -10,20 +10,26 @@
 -->
 <script setup lang="ts">
 import type { NodeSegmentEntry } from '@mini-canvas/canvas-data'
-import { provideCapabilityBag, type CapabilityNodeContext } from '../contracts/capabilities'
+import { provideCapabilityBag, type CapabilityCache } from '../contracts/capabilities'
 
 const props = defineProps<{
   /** 本区域条目（带 needs/props） */
   entry: NodeSegmentEntry
-  /** 本节点的能力上下文（多条目共用同一份，见 BaseNode） */
-  node: CapabilityNodeContext
+  /**
+   * 本节点那份能力实例缓存（**每节点一份**，见决策 9 第②条）。
+   *
+   * 为什么收 cache 而不是"节点上下文"：实例必须按节点共享 —— 同一节点上"按钮"与"它打开的面板"
+   * 是两条条目，各自拿到的 tools/node 实例必须是同一个，否则状态不共享。cache 由 BaseNode 持有，
+   * 本组件只负责"按本条目 needs 取用 + provide"。
+   */
+  cache: CapabilityCache
   /** 下发给条目组件的节点 id / data（与既有区域渲染的 props 契约一致） */
   nodeId: string
   data: Record<string, unknown>
 }>()
 
-// 造袋 + provide + 随本组件作用域回收（决策 9 的三件事都在这里）
-provideCapabilityBag(props.entry, props.node)
+// 按本条目的 needs 取袋并 provide（实例的生命周期归 cache 所有者 = BaseNode）
+provideCapabilityBag(props.cache, props.entry.needs, props.entry.id)
 </script>
 
 <template>

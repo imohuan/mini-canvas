@@ -194,11 +194,10 @@ export type { UiComponentHandle, UiName } from './contracts/uiCatalog'
 export {
   useCapabilities,
   useCapability,
-  resolveCapabilityBag,
+  createCapabilityCache,
   provideCapabilityBag,
   capabilityField,
   createCapabilityNodeContext,
-  capabilityState,
   CAPABILITY_BAG_KEY,
 } from './contracts/capabilities'
 export type {
@@ -206,6 +205,8 @@ export type {
   CapabilityField,
   CapabilityBag,
   CapabilityNodeContext,
+  CapabilityCache,
+  CapabilityLookup,
 } from './contracts/capabilities'
 // 宿主标准能力包四件（node/zoom/selected/tools）：工厂实现在这里，注册由 createMiniCanvasHost 做
 export { createStandardCapabilities, STANDARD_CAPABILITY_NAMES } from './contracts/standardCapabilities'
