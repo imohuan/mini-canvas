@@ -63,7 +63,7 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 2. **严格 code review**：两个独立子代理（Standards 轴 + Spec 轴）复查；
    3 条硬违规（H1/H2/H3）逐条核实后已修，5 条坏味道 + 1 条规格缺口已申报。
 3. **UI 自动化测试**：`packages/ui/e2e/canvas-e2e.mjs`（真实 Chromium 跑 :5288），
-   **28/28 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+   **30/30 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
 
 另外，设计文档 §十 验收清单最后两条（**ui 组件目录场** = 决策 4、**能力包** = 决策 9）
 已于 2026-09-19 落地，见下方「两条收尾已完成」。
@@ -94,12 +94,22 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 2. **能力包**（决策 9，commit d6dffae）：`canvas-render/src/contracts/capabilities.ts`
    + `components/RegionEntryHost.vue` + `contracts/standardCapabilities.ts`（宿主标准四件
    node/zoom/selected/tools，id='host:standard'、order=100）。组件在 `ctx.nodes.attach` 里写
-   `needs`，BaseNode 为每条区域条目造"每节点一份"实例并 provide 给子树（`useCapabilities()` 取）。
+   `needs`；BaseNode 持有**每节点一份**的实例缓存（`createCapabilityCache`），
+   十个区域渲染位经 `RegionEntryHost` 按各自 needs 取袋并 provide（`useCapabilities()` 取）——
+   于是同一节点上的"按钮"与"它打开的面板"拿到的是**同一个**实例。
    决策 9 三件事全落地：① 任何插件可注册（叠层 order 小者赢，主题可整套换掉）；
-   ② 实例由消费它的组件作用域回收；③ `needs` 缺项 dev 抛错（写明缺哪个、谁声明的）
+   ② **每节点一份实例**、由消费它的组件回收（BaseNode 卸载时统一 dispose）；③ `needs` 缺项 dev 抛错（写明缺哪个、谁声明的）
    / prod undefined + warn。
-   测试：capabilities 10 条 + SSR 端到端 5 条（attach→BaseNode→provide→组件 inject 整条链，
-   含 dev 抛错、"两条目各带自己 needs 互不串"）+ e2e 2 条。
+   测试：capabilities 13 条（含"**每节点一份实例**：两条条目同 needs → 工厂只调 1 次且同对象"、
+   热换重造、dispose 回收）+ SSR 端到端 6 条（attach→BaseNode→provide→组件 inject 整条链，
+   含 dev 抛错、"两条目各带自己 needs 互不串"、"同 needs 两条目共享实例"）+ e2e 2 条。
+
+   另有 61f3180 修掉两个"配了却没生效"的缺陷：**ctx.isDev 在真实宿主里恒为 false**
+   （决策 9 的 dev 抛错分支因此是死代码）。原因是 vite 的 import.meta.env 替换只作用于应用包自身源码，
+   canvas-render 作为 workspace 包读不到替换；改为由 packages/ui 的 App.vue 显式传 :dev。
+   接通后暴露第二处：**RenderEvents 等事件名从未 registerEventName**（§7.4 要求），已全部补齐
+   （canvas-render 的 RenderEvents 全量 + clipboard/edge-cutting/canvas-export/context-menu/theme-default）。
+   e2e 新增 2 条锁死：**零条 "[EventBus:dev] 未声明的事件名" warn** + **dev 开关接通（isDev === true）**。
 
 **遗留（已申报，非阻塞）**：
 - `settingsPersist` 收回 save 内部、四个插件服务收回内部（都有既有测试直接断言，风险/收益不划算）；
@@ -134,10 +144,10 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 - 新增 `nodeRegionTypeLock.test.ts` 用 `@ts-expect-error` 锁编译期（老词又变合法则指令报 unused）。
 - canvas-data 306 → 312。
 
-**全量实测基线（2026-09-19）**：kernel 206 / canvas-data 314 / canvas-render 347 / ui 31 /
-24 个插件包全绿（theme-default 175）/ mcp-server 47 / cloud-server 109；
+**全量实测基线（2026-09-19）**：kernel 206 / canvas-data 314 / canvas-render 351 / ui 31 /
+24 个插件包全绿（theme-default 176）/ mcp-server 47 / cloud-server 109；
 kernel、canvas-data、canvas-render、canvas-base 四个 typecheck 0 错；
-`pnpm -C packages/ui build` 通过；UI e2e **28/28**。
+`pnpm -C packages/ui build` 通过；UI e2e **30/30**。
 
 ### 步骤 5 / 6 / 7 已完成（2026-09-18）
 
@@ -353,7 +363,7 @@ pnpm -C packages/ui typecheck               # vue-tsc
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
 
-UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **28/28**（或 `pnpm -C packages/ui e2e`）。
+UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **30/30**（或 `pnpm -C packages/ui e2e`）。
 自省：`ctx.surface()` 一次列出服务 / 注册场 / 命令 / 工具及其参数（见设计文档「十一·补」）。
 
 > 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。

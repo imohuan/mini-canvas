@@ -741,9 +741,11 @@ ctx.nodes.attach(type: string | '*', req: {
       **（已完成，commit efa6e5c）** `uiCatalog.ts` 提供 `uiComponent/useUiComponent/uiNames`；
       theme-default 登记 button/dropdown/select/slider/toolParamField；e2e 锁"按键可枚举 + 叠层换主题"。
 - [x] 能力包：组件 `needs` 声明即可用，测试可注入假能力
-      **（已完成，commit d6dffae）** `capabilities.ts` + `RegionEntryHost.vue` + 宿主标准四件
-      （node/zoom/selected/tools）；决策 9 三件事全落地（任何插件可注册 / 每节点一份由消费方回收 /
-      dev 抛错 prod warn）。测试：capabilities 10 条 + SSR 端到端 5 条 + e2e 2 条。
+      **（已完成，commit d6dffae + a14b27a）** `capabilities.ts`（`createCapabilityCache`
+      —— **每节点一份实例**，同一节点上"按钮"与"它打开的面板"拿到同一个实例）+ `RegionEntryHost.vue`
+      （按条目 needs 取袋 + provide）+ 宿主标准四件（node/zoom/selected/tools）。
+      决策 9 三件事全落地（任何插件可注册 / 每节点一份由消费方回收 / dev 抛错 prod warn）。
+      测试：capabilities 13 条 + SSR 端到端 6 条 + e2e 2 条。
 
 **可诊断**
 - [ ] 任何一条注册都能查出 `source`（谁放的）
@@ -944,7 +946,7 @@ export class DocService extends Service {
 
 **① 谁有权注册能力。** 不设"只有宿主能注册"的限制——任何插件都能注册（与 cordis「任何插件都能提供服务」一致）。**实际冲突按 order 裁决**：order 小者在外、优先被 `top` 取到，所以"主题插件换掉整套能力"就是叠一个更小 order 的条目。
 
-**② 实例作用域与回收。** 能力工厂 `(nodeId) => Capability` **每节点一份实例**，实例由**消费它的组件的插件**负责回收（挂该插件的 `ctx.effect`）。工厂本身由注册者持有、随注册者 fiber 回收。
+**② 实例作用域与回收。** 能力工厂 `(nodeId) => Capability` **每节点一份实例**（**同一节点**上所有声明了同名 `needs` 的条目共享同一份 —— 否则"按钮"与"它打开的面板"各拿一个实例，状态不共享，正是本条要解决的重复）。实例由**消费它的组件**负责回收：落地上就是 BaseNode 持有 `createCapabilityCache`、`onBeforeUnmount` 时 `dispose()` 统一回收（工厂返回的对象有 `dispose()`/`stop()` 就顺手调一次）。工厂本身由注册者持有、随注册者 fiber 回收。能力被热换（同键叠了新的更小 order 条目）时缓存按"产出它的工厂引用变了"自动重造，并把旧实例先回收。
 
 **③ `needs` 缺项时的行为。** 定死（避免静默半运行）：
 
@@ -957,6 +959,13 @@ export class DocService extends Service {
 
 > ⚠️ **`ctx.isDev` 今天不存在**：内核里那个是 `private dev`（`Context.ts:151`），插件作用域读不到。
 > 步骤 1 要把它一并补成公开成员（连同 `registryOf` / `state` 一起挂，见步骤 1 的"Proxy 注意"）。
+>
+> ✅ **2026-09-19 已落地并接通**（commit 61f3180）：`ctx.isDev` 早就公开可读，但**真实宿主里恒为 false**
+> —— vite 的 `import.meta.env` 替换只作用于应用包自身源码，canvas-render 作为 workspace 包读不到替换，
+> 所以"库里自己读 env"这条走不通，dev 分支一直是死代码。改为 `MiniCanvasOptions.dev` /
+> `CanvasHost` 的 `:dev`，由 `@mini-canvas/ui` 的 App.vue 显式传 `import.meta.env.DEV`；
+> 缺省 false = 生产语义（库不悄悄依赖打包器全局变量）。e2e 已加"dev 开关接通"断言。
+> 接通后当场暴露另一处同类缺陷：`RenderEvents` 等事件名从未 `registerEventName`（§7.4），已全部补齐。
 
 ### 决策 10 · 删除 `menu` 的准确范围 【待审批】
 
