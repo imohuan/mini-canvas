@@ -63,7 +63,7 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 2. **严格 code review**：两个独立子代理（Standards 轴 + Spec 轴）复查；
    3 条硬违规（H1/H2/H3）逐条核实后已修，5 条坏味道 + 1 条规格缺口已申报。
 3. **UI 自动化测试**：`packages/ui/e2e/canvas-e2e.mjs`（真实 Chromium 跑 :5288），
-   **30/30 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+   **36/36 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
 
 另外，设计文档 §十 验收清单最后两条（**ui 组件目录场** = 决策 4、**能力包** = 决策 9）
 已于 2026-09-19 落地，见下方「两条收尾已完成」。
@@ -90,8 +90,13 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 1. **ui 组件目录场**（决策 4，commit efa6e5c）：`canvas-render/src/contracts/uiCatalog.ts`
    （`uiComponent` / `useUiComponent` / `uiNames` / `UI_NAMES`）；theme-default 把
    button/dropdown/select/slider/toolParamField 登记进 `registryOf('ui')`（id='default'）。
-   边界照决策 4：只收"希望被主题整体换掉"的设计系统件，插件内部小组件照旧 import。
-   测试：uiCatalog 4 条 + e2e 2 条（按键可枚举 / 叠层换主题 order 小者赢且原值仍在）。
+  边界照决策 4：只收"希望被主题整体换掉"的设计系统件，插件内部小组件照旧 import。
+   **并已接上真实消费者**（8eea382）：node-image / node-text / node-video 的按钮·下拉·参数控件
+   全改走 `useUiComponent` 按名取，这些文件对 theme-default 的 import 清零；
+   `useUiComponent` 由快照改成**响应式 Ref**（订阅 ui 场）—— 换主题当场生效，消费组件不必重挂。
+   测试：uiCatalog 6 条（含"目录换成新组件后同一消费组件渲染出新组件"）+ node-image 136 /
+   node-text 65 条改为**经目录取真件**渲染（而非 import）+ e2e 3 条（按键可枚举 / 叠层换主题 /
+   换目录后节点控制栏按钮真的跟着换）。
 
 2. **能力包**（决策 9，commit d6dffae）：`canvas-render/src/contracts/capabilities.ts`
    + `components/RegionEntryHost.vue` + `contracts/standardCapabilities.ts`（宿主标准四件
@@ -109,14 +114,22 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
    另有 61f3180 修掉两个"配了却没生效"的缺陷：**ctx.isDev 在真实宿主里恒为 false**
    （决策 9 的 dev 抛错分支因此是死代码）。原因是 vite 的 import.meta.env 替换只作用于应用包自身源码，
    canvas-render 作为 workspace 包读不到替换；改为由 packages/ui 的 App.vue 显式传 :dev。
-   接通后暴露第二处：**RenderEvents 等事件名从未 registerEventName**（§7.4 要求），已全部补齐
-   （canvas-render 的 RenderEvents 全量 + clipboard/edge-cutting/canvas-export/context-menu/theme-default）。
-   e2e 新增 2 条锁死：**零条 "[EventBus:dev] 未声明的事件名" warn** + **dev 开关接通（isDev === true）**。
+  接通后暴露第二处：**RenderEvents 等事件名从未 registerEventName**（§7.4 要求），已全部补齐
+  （canvas-render 的 RenderEvents 全量 + clipboard/edge-cutting/canvas-export/context-menu/theme-default）。
+  e2e 新增 2 条锁死：**零条 "[EventBus:dev] 未声明的事件名" warn** + **dev 开关接通（isDev === true）**。
+
+3. **自省 API 补两条轴**（2e3f199，回应用户"列出注册的列表 + 它们支持的参数"）：
+   - `surface().registryEntries[].fields`：条目值的**顶层字段名**（如 node/type 的 `{type,label}`、
+     区域条目的 `{component,needs,props}`）。两处收窄（只认朴素对象、识别组件形状即跳过、下划线键不算），
+     否则这条轴只会输出 `__name`/`setup`/`render` 这类编译内部物。
+   - `surface().events`：`registerEventName` 的登记表此前只进不出，现在可直接列出"有哪些事件可监听"。
+   仍未闭合（如实申报）：capability 工厂签名/实例形状、ui 每个组件的 props、theme 槽当前赢家
+   （可经 `ctx.get('themeRegistry').winner(...)` 取）、某 type 用了哪些区域词。
 
 **遗留（已申报，非阻塞）**：
 - `settingsPersist` 收回 save 内部、四个插件服务收回内部（都有既有测试直接断言，风险/收益不划算）；
-- 七个 kind 的场目前无生产读取端（5c 前过渡态）、§2.2 通配查找未实现、
-  BaseNode 区域条目的热装响应性无订阅链；
+- 剩余几个 kind 的场仍无生产读取端（5c 前过渡态；`ui` 与 `node/shell` 两条已补上读取端与订阅，见上）、
+  §2.2 通配查找未实现、BaseNode 区域条目的热装响应性无订阅链；
 - **端口默认值双源漂移**（契约金标准 §9，86 vs 10）—— 动端口几何前必须先对齐。
 
 ### 步骤 8 / 9 已完成（2026-09-18）
@@ -146,10 +159,10 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 - 新增 `nodeRegionTypeLock.test.ts` 用 `@ts-expect-error` 锁编译期（老词又变合法则指令报 unused）。
 - canvas-data 306 → 312。
 
-**全量实测基线（2026-09-19）**：kernel 206 / canvas-data 314 / canvas-render 351 / ui 31 /
-24 个插件包全绿（theme-default 176）/ mcp-server 47 / cloud-server 109；
+**全量实测基线（2026-09-19）**：kernel 212 / canvas-data 314 / canvas-render 359 / ui 31 /
+24 个插件包全绿（theme-default 177）/ mcp-server 47 / cloud-server 109；
 kernel、canvas-data、canvas-render、canvas-base 四个 typecheck 0 错；
-`pnpm -C packages/ui build` 通过；UI e2e **30/30**。
+`pnpm -C packages/ui build` 通过；UI e2e **36/36**。
 
 ### 步骤 5 / 6 / 7 已完成（2026-09-18）
 
@@ -365,7 +378,8 @@ pnpm -C packages/ui typecheck               # vue-tsc
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
 
-UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **30/30**（或 `pnpm -C packages/ui e2e`）。
+UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **36/36**（或 `pnpm -C packages/ui e2e`）。
+控制台 warn 明细：`E2E_SHOW_WARNS=1 node packages/ui/e2e/canvas-e2e.mjs`（按去重分组打印）。
 自省：`ctx.surface()` 一次列出服务 / 注册场 / 命令 / 工具及其参数（见设计文档「十一·补」）。
 
 > 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。
