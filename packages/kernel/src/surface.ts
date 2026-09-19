@@ -38,6 +38,14 @@ export interface RegistryEntrySurface {
   id: string
   order: number
   source: string
+  /**
+   * 该条目值的**顶层字段名**（best-effort 诊断信息，不是稳定契约）。
+   * 值不是普通对象（函数 / 组件句柄 / 原始值）时为 undefined。
+   *
+   * 为什么给字段名而不是值：作者最常问的是"别人注册那条**有什么可读的**"
+   * （比如 node/region 条目的 needs/props），把值整个摊出去既读不完也会泄漏句柄。
+   */
+  fields?: string[]
 }
 
 /** 注册场汇总：一个 kind + 它下面全部键 */
@@ -100,4 +108,11 @@ export interface SurfaceReport {
   commands: CommandSurface[]
   tools: ToolSurface[]
   modelTools: ModelToolSurface[]
+  /**
+   * 已登记的事件名（`registerEventName` 的登记表）。
+   *
+   * 为什么要这条轴：作者想问"这台画布上都有哪些事件可监听"，此前只能翻源码；
+   * 而 dev 下"未登记的事件名"会 warn，登记表因此正好是"有哪些事件"的权威清单。
+   */
+  events: string[]
 }

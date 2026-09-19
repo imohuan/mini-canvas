@@ -998,10 +998,11 @@ const s = ctx.surface();   // 只读快照，零副作用，created/started 皆�
 s.state;                   // ctx 状态
 s.services;                // 服务轴：[{ name, source }] —— 按名可取的全部服务 + 谁注入的
 s.registries;              // 注册轴：[{ kind, keys, entries }] —— 每个场有哪些键、几条
-s.registryEntries;         // 明细：[{ kind, key, id, order, source }] —— 每条谁放的
+s.registryEntries;         // 明细：[{ kind, key, id, order, source, fields? }] —— 每条谁放的、值有哪些可读字段
 s.commands;                // 命令语义视图：[{ id, title, keys, areas, group, order, source }]
 s.tools;                   // 生成工具：[{ name, title, params, produces, accepts, ... }]
 s.modelTools;              // 模型可调用工具：[{ name, description, parameters, outputSchema, source }]
+s.events;                  // 事件轴：已登记的事件名（沿 registerEventName 登记表）
 ```
 
 要点：
@@ -1009,6 +1010,11 @@ s.modelTools;              // 模型可调用工具：[{ name, description, para
 2. `commands` / `modelTools` 是**语义视图**：从 `command` / `tool` 两个场把值拆成可读字段，不是独立存储。
 3. `ctx` 与插件 scope 上都可用（deriveScope 显式挂载，防 Proxy 漏挂静默 undefined）。
 4. 典型用途：诊断面板树、`console.table(ctx.surface().commands)`、AI 探查"现在有哪些工具可调"。
+5. **`fields`**（条目轴，2026-09-19 补）：值顶层的**字段名**清单（best-effort，不是稳定契约）。
+   回答作者最常问的那句"别人注册那条**有什么可读的**"（例如 node/region 条目的 needs/props），
+   同时**不摊值**（值里可能有组件句柄/函数，摊出去既读不完也会泄漏）。非朴素对象（函数 / 类实例 / 原始值）不给。
+6. **`events`**（事件轴，2026-09-19 补）：`registerEventName` 的登记表只进不出，作者想问"能监听什么"
+   只能翻源码。补这条轴后，"有哪些事件"与 dev 的"未登记事件名会 warn"共用同一份清单。
 
 ## 十二、术语表（防止再次混淆）
 

@@ -175,6 +175,11 @@ const surf = await page.evaluate(() => {
     toolCount: s.tools.length,
     toolParamsOk: s.tools.every((t) => t.params === undefined || Array.isArray(t.params)),
     modelToolNames: s.modelTools.map((t) => t.name),
+    eventNames: s.events,
+    // 条目轴：node/type 条目的值是 { type, label } 声明，应能查出它的字段名
+    entryFields: (s.registryEntries.find((e) => e.kind === 'node/type') || {}).fields,
+    // 组件句柄不该被当成"有字段的声明"（否则只会输出 __name/setup/render 这类编译内部物）
+    compFieldsShown: s.registryEntries.some((e) => (e.fields ?? []).includes('__name') || (e.fields ?? []).includes('setup')),
   };
 });
 check('surface().services 列出 doc 等服务且带 source（谁注入的）', surf.services.includes('doc') && typeof surf.docSource === 'string', 'services=' + surf.services.length + ', doc.source=' + surf.docSource);
@@ -182,6 +187,9 @@ check('surface().services 带方法清单（用户要的"支持哪些函数"）'
 check('surface().registries 覆盖 node/region、command 等场', ['node/region', 'command'].every((k) => surf.kinds.includes(k)), 'kinds=' + surf.kinds.join(','));
 check('surface().commands 列出已注册命令（含 id/keys/areas）', surf.commandCount > 0 && surf.commandIdsOk, surf.commandCount + ' 条');
 check('surface().tools 列出生成工具且 params 形状合法', surf.toolCount > 0 && surf.toolParamsOk, surf.toolCount + ' 个');
+check('surface().events 列出已登记事件（含内核与渲染层事件）', surf.eventNames.includes('ctx:ready') && surf.eventNames.includes('canvas:selection:change'), surf.eventNames.length + ' 个');
+check('surface().registryEntries 带 fields（条目值有哪些可读字段）', Array.isArray(surf.entryFields) && surf.entryFields.includes('label'), 'fields=' + JSON.stringify(surf.entryFields));
+check('surface().fields 不把组件句柄当声明（无 __name/setup 噪声）', surf.compFieldsShown === false);
 console.log('surface 快照: services=' + surf.services.length + ' kinds=[' + surf.kinds.join(',') + '] commands=' + surf.commandCount + ' tools=' + surf.toolCount + ' modelTools=[' + surf.modelToolNames.join(',') + ']');
 
 // 9c. surface 是活快照：运行时往 tool 场注册一条，再读一次必须能看见（证明不是启动时缓存）

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Context } from '../Context'
 import { CommandRegistry } from '../command'
+import { registerEventName } from '../EventBus'
 import type { PluginModule, PluginScope } from '../types'
 
 const mk = (name: string, setup: (c: PluginScope) => void): PluginModule => ({ name, setup })
@@ -201,6 +202,93 @@ describe('ctx.surface() 自省快照（列出注册了什么、支持什么）',
     // 副本：往快照里 push 不该污染注册表里的原始声明
     p0.options!.push({ label: 'X', value: 'x' });
     expect(opts).toHaveLength(1);
+    ctx.stop()
+  })
+
+  it('registryEntries 带 fields：知道别人那条"有什么可读的"（不摊值、不漏句柄）', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'region-probe',
+      apply(c) {
+        c.registryOf<unknown>('node/region').add(
+          'image/out:top',
+          { component: () => null, needs: ['node'], props: { open: true } },
+          { id: 'gen-button' },
+        )
+      },
+    })
+    await ctx.start()
+    const e = ctx.surface().registryEntries.find((x) => x.id === 'gen-button')!
+    expect(e.kind).toBe('node/region')
+    expect(e.fields).toEqual(['component', 'needs', 'props'])
+    ctx.stop()
+  })
+
+  it('registryEntries 对非普通对象（函数/类实例/原始值）不给 fields —— 那些没有"字段"可言', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'mixed',
+      apply(c) {
+        c.registryOf<unknown>('demo').add('fn', () => null, { id: 'is-fn' })
+        c.registryOf<unknown>('demo').add('cls', new (class {
+          x = 1
+        })(), { id: 'is-instance' })
+      },
+    })
+    await ctx.start()
+    const byId = new Map(ctx.surface().registryEntries.map((x) => [x.id, x]))
+    expect(byId.get('is-fn')!.fields).toBeUndefined()
+    expect(byId.get('is-instance')!.fields).toBeUndefined()
+    ctx.stop()
+  })
+
+  it('registryEntries 对组件句柄不给 fields —— 否则只会输出 __name/setup/render 这类编译内部物', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'ui-probe',
+      apply(c) {
+        // 模拟 SFC 编译产物（朴素对象 + 编译内部键）
+        c.registryOf<unknown>('ui').add('button', { __name: 'Btn', setup() {}, render() {}, __file: 'a.vue' }, { id: 'comp' })
+      },
+    })
+    await ctx.start()
+    const e = ctx.surface().registryEntries.find((x) => x.id === 'comp')!
+    expect(e.fields).toBeUndefined()
+    ctx.stop()
+  })
+
+  it('registryEntries 跳过下划线开头的键（编译/内部约定，不是声明字段）', async () => {
+    const ctx = new Context()
+    ctx.plugin({
+      name: 'p',
+      apply(c) {
+        c.registryOf<unknown>('demo').add('k', { component: 1, needs: ['x'], _internal: true }, { id: 'e' })
+      },
+    })
+    await ctx.start()
+    expect(ctx.surface().registryEntries.find((x) => x.id === 'e')!.fields).toEqual(['component', 'needs'])
+    ctx.stop()
+  })
+
+  it('events 轴列出已登记的事件名（作者不必翻源码问"能监听什么"）', async () => {
+    const ctx = new Context()
+    ctx.plugin({ name: 'p', apply: () => {} })
+    await ctx.start()
+    const names = ctx.surface().events
+    // 内核自带四条 + modelTool 模块加载时登记的三条
+    expect(names).toContain('ctx:ready')
+    expect(names).toContain('tools/result')
+    // 返回副本：调用方改不动登记表
+    names.push('injected-by-caller')
+    expect(ctx.surface().events).not.toContain('injected-by-caller')
+    ctx.stop()
+  })
+
+  it('registerEventName 之后，新事件名出现在 events 轴（活快照）', async () => {
+    registerEventName('e2e/live-probe')
+    const ctx = new Context()
+    await ctx.start()
+    expect(ctx.surface().events).toContain('e2e/live-probe')
     ctx.stop()
   })
 })

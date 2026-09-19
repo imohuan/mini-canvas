@@ -152,3 +152,13 @@ export function registerEventName(name: string): void {
 export function hasKnownEvent(name: string): boolean {
   return knownEvents.has(name)
 }
+
+/**
+ * 已知事件名清单（诊断/自省用；surface() 的 events 轴取它）。
+ *
+ * 为什么需要它：`registerEventName` 此前只进不出 —— 作者想问"这台画布上都有哪些事件可监听"，
+ * 只能翻源码。返回副本，调用方改不动登记表。
+ */
+export function knownEventNames(): string[] {
+  return [...knownEvents]
+}
