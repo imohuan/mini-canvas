@@ -55,15 +55,18 @@ kernel 不依赖任何 @mini-canvas 包；canvas-data 只依赖 kernel。
 
 ### 下一步（未开始）
 
-**九个步骤已全部落地 + 严格审查修正 + UI 自动化验证通过**（2026-09-18）。
-分支 `codex/registry-refactor`，29 个提交（2026-09-19 更新）。
+**九个步骤已全部落地 + §十 验收清单全部达成 + 两轮严格审查修正 + UI 自动化验证通过**（2026-09-19）。
+分支 `codex/registry-refactor`（2026-09-19 更新；提交数见 `git rev-list --count main..HEAD`）。
 
 已完成的三件交付（目标定义的三条）：
 1. **完整功能**：设计文档 §九 九个步骤全部落地（每步独立提交、可单独回退）。
 2. **严格 code review**：两个独立子代理（Standards 轴 + Spec 轴）复查；
    3 条硬违规（H1/H2/H3）逐条核实后已修，5 条坏味道 + 1 条规格缺口已申报。
 3. **UI 自动化测试**：`packages/ui/e2e/canvas-e2e.mjs`（真实 Chromium 跑 :5288），
-   **24/24 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+   **28/28 通过**。跑法：先 `pnpm -C packages/ui dev`，再 `pnpm -C packages/ui e2e`。
+
+另外，设计文档 §十 验收清单最后两条（**ui 组件目录场** = 决策 4、**能力包** = 决策 9）
+已于 2026-09-19 落地，见下方「两条收尾已完成」。
 
 **新增交付（2026-09-19）：自省 API `ctx.surface()`**（用户需求：列出注册的列表 + 它们支持的参数）
 
@@ -80,14 +83,28 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 的命令（建节点/删除/撤销/重做 4 条不进注册场，只读场会漏报）；`methods` 用 descriptor 反射取
 方法名、**不执行 getter**，属 best-effort 诊断字段。
 
+**两条收尾已完成（2026-09-19）** —— 设计文档 §十 验收清单至此全部勾上：
+
+1. **ui 组件目录场**（决策 4，commit efa6e5c）：`canvas-render/src/contracts/uiCatalog.ts`
+   （`uiComponent` / `useUiComponent` / `uiNames` / `UI_NAMES`）；theme-default 把
+   button/dropdown/select/slider/toolParamField 登记进 `registryOf('ui')`（id='default'）。
+   边界照决策 4：只收"希望被主题整体换掉"的设计系统件，插件内部小组件照旧 import。
+   测试：uiCatalog 4 条 + e2e 2 条（按键可枚举 / 叠层换主题 order 小者赢且原值仍在）。
+
+2. **能力包**（决策 9，commit d6dffae）：`canvas-render/src/contracts/capabilities.ts`
+   + `components/RegionEntryHost.vue` + `contracts/standardCapabilities.ts`（宿主标准四件
+   node/zoom/selected/tools，id='host:standard'、order=100）。组件在 `ctx.nodes.attach` 里写
+   `needs`，BaseNode 为每条区域条目造"每节点一份"实例并 provide 给子树（`useCapabilities()` 取）。
+   决策 9 三件事全落地：① 任何插件可注册（叠层 order 小者赢，主题可整套换掉）；
+   ② 实例由消费它的组件作用域回收；③ `needs` 缺项 dev 抛错（写明缺哪个、谁声明的）
+   / prod undefined + warn。
+   测试：capabilities 10 条 + SSR 端到端 5 条（attach→BaseNode→provide→组件 inject 整条链，
+   含 dev 抛错、"两条目各带自己 needs 互不串"）+ e2e 2 条。
+
 **遗留（已申报，非阻塞）**：
-- ~~5c 未做~~ → **已完成**（四个老名 nodeStore/edgeStore/graph/history 已下线，
-  数据服务统一为 doc；见提交 88cf307）；
-- **决策 9 能力包**未实现（本轮只补了它最小的一环：`attach` 的 props 透传；
-  `registryOf('capability')` + `useCapabilities` + `needs` 缺项行为单独立项）；
 - `settingsPersist` 收回 save 内部、四个插件服务收回内部（都有既有测试直接断言，风险/收益不划算）；
 - 七个 kind 的场目前无生产读取端（5c 前过渡态）、§2.2 通配查找未实现、
-  "ui" 目录场未建、BaseNode 区域条目的热装响应性无订阅链；
+  BaseNode 区域条目的热装响应性无订阅链；
 - **端口默认值双源漂移**（契约金标准 §9，86 vs 10）—— 动端口几何前必须先对齐。
 
 ### 步骤 8 / 9 已完成（2026-09-18）
@@ -117,9 +134,10 @@ s.modelTools; // 模型可调用工具（description/parameters JSON Schema/outp
 - 新增 `nodeRegionTypeLock.test.ts` 用 `@ts-expect-error` 锁编译期（老词又变合法则指令报 unused）。
 - canvas-data 306 → 312。
 
-**全量实测基线（2026-09-18）**：kernel 196 / canvas-data 312 / canvas-render 333 / ui 31 /
-24 个插件包全绿 / mcp-server 47 / cloud-server 109；kernel、canvas-data、canvas-render、canvas-base
-四个 typecheck 0 错；`pnpm -C packages/ui build` 通过。
+**全量实测基线（2026-09-19）**：kernel 206 / canvas-data 314 / canvas-render 347 / ui 31 /
+24 个插件包全绿（theme-default 175）/ mcp-server 47 / cloud-server 109；
+kernel、canvas-data、canvas-render、canvas-base 四个 typecheck 0 错；
+`pnpm -C packages/ui build` 通过；UI e2e **28/28**。
 
 ### 步骤 5 / 6 / 7 已完成（2026-09-18）
 
@@ -335,14 +353,15 @@ pnpm -C packages/ui typecheck               # vue-tsc
 pnpm -C packages/ui dev                     # 起画布应用看画面（:5288）
 ```
 
-UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **24/24**（或 `pnpm -C packages/ui e2e`）。
+UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-e2e.mjs` —— **28/28**（或 `pnpm -C packages/ui e2e`）。
 自省：`ctx.surface()` 一次列出服务 / 注册场 / 命令 / 工具及其参数（见设计文档「十一·补」）。
 
 > 数字为 **2026-09-18 实测**；会随开发变动，以本文件"最近一轮"记录为准。
 >
-> ⚠️ `packages/ui typecheck` 当前**在 HEAD 上就是红的**（`plugin-multi-select/src/SelectionFrame.vue`
-> 里 `dragStartPositions` 的类型与用法不一致，属他人进行中的改动），与步骤 4 无关；
-> 步骤 4 落地后 kernel / canvas-data / canvas-render 三个 typecheck 均绿。
+> ⚠️ `packages/ui typecheck` **在 main 与 HEAD 上都是红的**（2026-09-19 实测：main 12 条 / 分支 11 条；
+> 全部落在 `plugin-multi-select/src/SelectionFrame.vue`（`dragStartPositions`/整组平移那批未完成的改动）
+> 与 `canvas-render/src/host/CanvasHost.vue:721`），**与本轮改造无关**（把本轮改动 stash 掉同样红）。
+> kernel / canvas-data / canvas-render / canvas-base 四个 typecheck 均 0 错。
 
 ## 三、关键契约锚点（动手前读对应文档，不许自己发明接口）
 

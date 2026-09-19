@@ -737,8 +737,13 @@ ctx.nodes.attach(type: string | '*', req: {
 - [ ] **区域词表内**加新的 UI 位置不需要改 `BaseNode.vue`（表外的全新物理位置仍需改壳，见 §五）
 - [ ] 新增一类扩展点 = 一行 `ctx.registryOf('新种类')`，不是新的 `ctx.inject`
 - [ ] 覆盖永不丢原值：`list()` 永远能查到所有历史层，`wrap()` 能拿到 `inner`
-- [ ] 目录化（`ui` 场）：换主题插件，业务插件一行不改
-- [ ] 能力包：组件 `needs` 声明即可用，测试可注入假能力
+- [x] 目录化（`ui` 场）：换主题插件，业务插件一行不改
+      **（已完成，commit efa6e5c）** `uiCatalog.ts` 提供 `uiComponent/useUiComponent/uiNames`；
+      theme-default 登记 button/dropdown/select/slider/toolParamField；e2e 锁"按键可枚举 + 叠层换主题"。
+- [x] 能力包：组件 `needs` 声明即可用，测试可注入假能力
+      **（已完成，commit d6dffae）** `capabilities.ts` + `RegionEntryHost.vue` + 宿主标准四件
+      （node/zoom/selected/tools）；决策 9 三件事全落地（任何插件可注册 / 每节点一份由消费方回收 /
+      dev 抛错 prod warn）。测试：capabilities 10 条 + SSR 端到端 5 条 + e2e 2 条。
 
 **可诊断**
 - [ ] 任何一条注册都能查出 `source`（谁放的）
