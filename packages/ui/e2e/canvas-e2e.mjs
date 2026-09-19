@@ -233,6 +233,17 @@ const caps = await page.evaluate(() => {
 });
 check('能力包：宿主注册了标准四件（node/zoom/selected/tools）', ['node', 'zoom', 'selected', 'tools'].every((n) => caps.names.includes(n)), 'keys=' + caps.names.join(','));
 check('能力包：工厂按节点上下文产出实例（每节点一份）', caps.capId !== null && caps.capLabel === 'function', 'cap.id=' + caps.capId + ', setLabel=' + caps.capLabel);
+
+// 9f. 事件名白名单（设计文档 §7.4）：dev 下 emit 未登记的事件名会 warn —— 一条都不许有。
+// 这条前面被掩盖过：ctx.isDev 在真实宿主营恒为 false（见 CanvasHost props.dev 注释），
+// 接通 isDev 之后才暴露 RenderEvents / clipboard / edge-cutting 等名字从未登记。
+const eventWarns = warns.filter((w) => w.includes('[EventBus:dev]'));
+check('事件名白名单：零条“未声明的事件名”warn（§7.4）', eventWarns.length === 0, eventWarns.slice(0, 2).join(' | '));
+
+// 9g. dev 开关真的接通了（决策 9 的"needs 缺项 dev 抛错"只有它是 true 时才可能生效）。
+// 用 dev server 跑时必须是 true；这条也反向守住"别再把 isDev 静默钉死为 false"。
+const devFlag = await page.evaluate(() => window.MiniCanvasUI.getContext().isDev);
+check('dev 开关接通（ctx.isDev === true，dev server 下）', devFlag === true, 'isDev=' + devFlag);
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));

@@ -57,7 +57,13 @@
 ### 1.2 对外接口
 
 - **props**：`NodeProps`（@vue-flow/core 全量节点 props，经 canvas-render re-export，vueFlowBridge.ts:17）。`defineOptions({ inheritAttrs: false })`（:40）——透传属性不落到根元素。
-- **emits / slots：无**。它是"槽的渲染方"而非槽的提供方：上/下/overlay 段组件收到且仅收到 `{ id, data }`（模板 :671/791/802）。
+- **emits / slots：无**。它是"槽的渲染方"而非槽的提供方：区域条目组件收到 `{ id, data }`，
+  另可收到注册时声明的 `props`（`attach`/`contribute` 的 props；没有就不传 —— 模板经
+  RegionEntryHost 统一 `v-bind="entry.props"`）。
+  ⚠️ **2026-09-19 更新（步骤十·能力包，commit d6dffae）**：十个区域渲染位从内联 `<component>`
+  改为 `<RegionEntryHost>`（包一层 provide 能力袋，**不产生任何 DOM**）。
+  区域条目组件**还**可经 `useCapabilities()` 取到自己 `needs` 声明过的能力包 ——
+  这是新增的读取路径，原有的 `{ id, data, ...props }` props 契约一字未动。
 - **注入读取**：
   - `useCanvasRender()`（:44）：ctx / registry / nodeWrite / handleParams / connectionState / interaction / debug / snapZone / updateNodeVisualSize / visibleRect。
   - `useVueFlow()`（:45）：`viewport.zoom` 是缩放唯一来源（:58）。

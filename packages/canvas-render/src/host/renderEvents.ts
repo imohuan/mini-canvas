@@ -8,6 +8,7 @@
  * 本文件定义画布手势/数据事件名 + payload 归一化纯函数。CanvasHost 在 VueFlow 事件回调里
  * emit 这些事件（用 coalesce 节流高频的 drag/move），插件 ctx.on(事件名) 消费。
  */
+import { registerEventName } from '@mini-canvas/kernel'
 
 /** 渲染层广播的画布事件名（供 CanvasHost emit + 插件 on） */
 export const RenderEvents = {
@@ -44,6 +45,12 @@ export const RenderEvents = {
   /** 右键：边 { clientX, clientY, flowPosition, edgeId } */
   ContextMenuEdge: 'canvas:context-menu:edge',
 } as const
+
+// 设计文档 §7.4：**emit 的事件名必须 registerEventName 登记**，否则 dev 下每次 emit 一条
+// "[EventBus:dev] emit 了未声明的事件名" warn（验收要求"warn 仅限既有白名单"）。
+// ⚠️ 这条此前一直没做：因为 `ctx.isDev` 在真实宿主里恒为 false（见 CanvasHost 的 props.dev 注释），
+// 白名单 warn 从不触发，缺陷被掩盖。2026-09-19 接通 isDev 后当场暴露，此处补齐。
+for (const name of Object.values(RenderEvents)) registerEventName(name)
 
 export interface DragEventPayload {
   nodeId: string

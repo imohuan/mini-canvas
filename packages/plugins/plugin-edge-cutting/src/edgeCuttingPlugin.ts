@@ -17,6 +17,7 @@
  *   isPolylineHitByCut 判定折线相交（纯几何，geometry.ts 可单测）。
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import { registerEventName } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import type { ScreenPoint } from './geometry'
 import {
@@ -221,6 +222,9 @@ class EdgeCuttingController {
 }
 
 export const name = 'edge-cutting'
+
+// 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时 warn。
+registerEventName('edge-cutting:cut')
 
 export function apply(ctx: Context): void {
   const controller = new EdgeCuttingController(ctx)

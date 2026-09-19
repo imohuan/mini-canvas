@@ -34,6 +34,16 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
     expect(api.getRegistry()).toBe(host.nodeRegistry)
   })
 
+  it('dev 选项落到 ctx.isDev（决策 9 的 needs 缺项裁决依赖它）', async () => {
+    // 缺省 = 生产语义：库不悄悄读打包器全局变量，判据必须从调用方来
+    const off = await createMiniCanvasHost()
+    expect(off.host.ctx.isDev).toBe(false)
+    off.host.stop()
+    const on = await createMiniCanvasHost({ dev: true })
+    expect(on.host.ctx.isDev).toBe(true)
+    on.host.stop()
+  })
+
   it('api.installPlugin 热装插件立即可用（服务 + nodeStore type）', async () => {
     const { host, api } = await createMiniCanvasHost()
     api.installPlugin(demoPlugin('v1'))

@@ -110,6 +110,16 @@ const props = withDefaults(
      * 宿主想自己管理初始视口(或不要 viewport 落盘)时设 false。
      */
     persistViewport?: boolean
+    /**
+     * 开发态开关（落到 ctx.isDev）：决策 9 的"needs 缺项当场抛错"靠它区分 dev/prod。
+     *
+     * **必须由宿主显式传**（不在这里读 `import.meta.env.DEV`）：实测 canvas-render 是
+     * 独立 workspace 包，vite 的 `import.meta.env` 替换只作用于应用包自身源码，深链进
+     * node_modules/workspace 的 .vue 拿不到替换（读出来是 undefined），于是 dev 判定静默失效
+     * —— 正是"配了却没生效"那类坑。所以@mini-canvas/ui 在 `App.vue` 显式传
+     * `:dev="import.meta.env.DEV"`（应用包自己的 env 替换是可靠的），库侧缺省 false = 生产语义。
+     */
+    dev?: boolean
   }>(),
   {
     minZoom: 0.2,
@@ -949,6 +959,8 @@ onMounted(async () => {
       coldPlugins: props.plugins,
       nodeRegistry: registry,
       seedDefault: props.seed,
+      // dev 开关：**只认显式传参**（见 props.dev 的注释 —— 本包内读 import.meta.env 拿不到替换）
+      dev: props.dev,
     })
     hostRef.value = host
     apiRef.value = api

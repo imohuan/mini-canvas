@@ -15,6 +15,7 @@
 import { isTransient } from '@mini-canvas/canvas-data'
 import { validateConnection, type ExistingEdge, type NodeConnectionDef } from '@mini-canvas/canvas-data'
 import type { ContextMenuItem, MenuNodeTypeLike } from './menuBuilder'
+import { registerEventName } from '@mini-canvas/canvas-base'
 
 /** 临时菜单节点的节点类型名（本插件经 ctx.nodes.register 注册，带菜单卡片 content） */
 export const CONNECTION_MENU_TYPE = 'connection-menu'
@@ -22,6 +23,11 @@ export const CONNECTION_MENU_TYPE = 'connection-menu'
 export const CONNECTION_MENU_PICK_EVENT = 'canvas:connection-menu:pick'
 /** 请求取消（点画布空白 / Esc） */
 export const CONNECTION_MENU_CANCEL_EVENT = 'canvas:connection-menu:cancel'
+
+// 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
+// （PICK 由 ConnectionMenuContent.vue emit，CANCEL 由插件内部 emit；两个都登记，本模块是它俩的单一来源。）
+registerEventName(CONNECTION_MENU_PICK_EVENT)
+registerEventName(CONNECTION_MENU_CANCEL_EVENT)
 
 /** 卡片宽度（画布单位）：右键菜单 min-width 252 + 两侧 6px 内边距 */
 export const CARD_WIDTH = 264

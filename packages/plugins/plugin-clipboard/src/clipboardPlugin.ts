@@ -16,6 +16,7 @@
  * viewport 由 canvas-render 宿主注入、本插件只做"可选读取"（复制时把最近鼠标屏幕坐标经它换成 flow 锚点）。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { registerEventName } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
@@ -52,6 +53,12 @@ declare module '@mini-canvas/canvas-data' {
 
 export const name = 'clipboard'
 export const inject = ['doc', 'selection'] as string[]
+
+// 设计文档 §7.4：**emit 的事件名必须 registerEventName 登记**，否则 dev 下每次 emit 一条
+// "[EventBus:dev] emit 了未声明的事件名" warn。模块加载时登记（emit 全在运行期，加载先于此）。
+registerEventName('clipboard:copy')
+registerEventName('clipboard:cut')
+registerEventName('clipboard:paste')
 
 /** 可编辑输入框内不响应粘贴快捷键（与宿主 CanvasHost keydown 同规则；复制 ctrl+c 也避开） */
 function isEditableTarget(t: EventTarget | null): boolean {

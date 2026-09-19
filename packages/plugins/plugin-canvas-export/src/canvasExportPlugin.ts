@@ -52,6 +52,7 @@ import type {
 } from '@mini-canvas/canvas-base'
 import type { SelectionService } from '@mini-canvas/canvas-data'
 import { isTransient } from '@mini-canvas/canvas-data'
+import { registerEventName } from '@mini-canvas/canvas-base'
 import { getFontEmbedCSS, toCanvas } from 'html-to-image'
 import {
   EXPORT_SCALE_DEFAULT,
@@ -85,6 +86,9 @@ declare module '@mini-canvas/canvas-data' {
 
 export const name = 'canvas-export'
 export const inject = ['selection'] as string[]
+
+// 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
+registerEventName('canvas-export:exported')
 
 /** 背景网格参数：与主题 plugin-theme-default 的 DefaultBackground 在 zoom=1 时一致（GRID=24、DOT_R=1.6） */
 const BG_GRID = 24

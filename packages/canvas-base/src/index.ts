@@ -40,7 +40,7 @@ export type {
   EventHandlerFor,
   Services,
 } from '@mini-canvas/kernel'
-export { runPlugin, depsOf, Service, asPluginModule, F, resolveConfig, ConfigError } from '@mini-canvas/kernel'
+export { runPlugin, depsOf, Service, asPluginModule, F, resolveConfig, ConfigError, registerEventName } from '@mini-canvas/kernel'
 
 // —— 画布层（@mini-canvas/canvas-data）——
 // Context：画布消费方要的是"带画布能力段的 ctx"，故取画布层那份（它继承 kernel 的 Context 并默认装画布能力层）。

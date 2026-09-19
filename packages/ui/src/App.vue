@@ -30,6 +30,15 @@ const adapter = createDefaultStorageAdapter()
 
 const log = createV2Logger('config')
 
+/**
+ * 开发态开关 → CanvasHost 的 :dev → ctx.isDev（决策 9 的 needs 缺项裁决靠它分 dev/prod）。
+ *
+ * 为什么在这里读 `import.meta.env`：vite 的 env 替换只作用于**应用包自身源码**；
+ * canvas-render 是独立 workspace 包，它自己的源码读 `import.meta.env` 拿不到替换（实测 undefined），
+ * 于是判定会静默失效。应用包这一层是可靠的，所以由这里显式往下传。
+ */
+const DEV = import.meta.env.DEV
+
 // 外观（取自 theme-default 申报的默认，保证与内核一致；设置改动会窄更新到 cfg.edge / cfg.handle / cfg.snapZone）
 const cfg = reactive({
   edge: { ...DEFAULT_THEME_EDGE },
@@ -217,6 +226,7 @@ onBeforeUnmount(() => {
         :handle-visual="cfg.handle"
         :debug-visual="cfg.debug"
         :snap-zone-visual="cfg.snapZone"
+        :dev="DEV"
         window-key="MiniCanvasUI"
         @ready="onReady"
       >

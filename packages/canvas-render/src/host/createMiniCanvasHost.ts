@@ -71,6 +71,14 @@ export interface MiniCanvasOptions {
    * 多宿主/临时画布不需要配置持久化时可关掉。
    */
   persistSettings?: boolean
+  /**
+   * 开发态开关，落到 `ctx.isDev`。以**显式传参为准**：库不悄悄读打包器全局变量，
+   * 判据必须从调用方来（便于 Node 单测 / 多宿主复现）；宿主组件 CanvasHost 传 `import.meta.env.DEV`。
+   *
+   * 谁在用：决策 9 的 needs 缺项裁决 —— dev 当场抛错（响亮）、prod undefined + warn。
+   * 缺省 false（= 生产语义）。
+   */
+  dev?: boolean
 }
 
 /** 画布运行时句柄（宿主/Vue 消费：provide、渲染、读服务） */
@@ -149,7 +157,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   manager: PluginManager
   exposeToWindow: (key?: string) => void
 }> {
-  const ctx = new Context()
+  // dev 开关落到 ctx.isDev（决策 9 的 needs 缺项裁决要用；缺省 false = 生产语义）
+  const ctx = new Context({ dev: opts.dev ?? false })
 
   // —— 基础插件：画布基础服务（save/doc/resources/nodeRegistry/themeRegistry/selection/command/
   // nodeFactory 八个服务名；nodeStore/edgeStore/graph/history 四个实例由 base.services 直接持有、

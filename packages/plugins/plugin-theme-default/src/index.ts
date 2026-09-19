@@ -29,6 +29,7 @@ import CustomEdge from "./components/edge/CustomEdge.vue";
 import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue";
+import { registerEventName } from "@mini-canvas/canvas-base";
 import {
   Dropdown,
   Select,
@@ -36,6 +37,10 @@ import {
   ToolParamField,
   NodeToolbarButton,
 } from "./components/ui";
+
+// 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
+// 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
+registerEventName('settings:ui-close')
 
 export const name = "theme-default";
 // 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。
