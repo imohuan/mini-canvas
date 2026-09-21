@@ -393,7 +393,7 @@ UI 端到端自动化（需 dev server 在跑）：`node packages/ui/e2e/canvas-
 
 - 架构与分层设计（终态 + 迁移步骤 + 决策记录）：`docs/design/core-layers-and-registry.md`
 - 插件作者教程（7 篇，照抄能跑）：`docs/plugin-dev/`
-- 内核/渲染各 API 手册：`docs/代码开发/00-总览与架构.md`（及其 `canvas-core-v2/`、`canvas-render/` 子目录）
+- 各包 API 手册（按现行三层包结构分层）：`docs/代码开发/00-总览与架构.md`（子目录 `kernel/`、`canvas-data/`、`canvas-render/`、`plugins/`）
 - 节点交互区域与拖线规范：`docs/规则/节点区域与连接线拖拽规范.md`
 - 插件系统目标与验收：`docs/goal/plugin-system-goal.md`
 - 架构决策记录：`docs/adr/0001-canvas-core-v2-plugin-kernel.md`
