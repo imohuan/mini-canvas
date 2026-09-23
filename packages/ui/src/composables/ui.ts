@@ -17,6 +17,11 @@ interface HostApi {
   command?: { execute(id: string, payload?: unknown): void }
   nodeStore?: { getNodes(): unknown[] }
 }
+/** CanvasHost @ready 传出的宿主句柄（存进单例，供小地图等直接读 ctx） */
+let readyHost: HostApi | undefined
+export function setReadyHost(h: unknown): void {
+  readyHost = h as HostApi | undefined
+}
 /** CanvasHost 暴露的完整宿主（与 window.MiniCanvasUI.getHost() 同源） */
 type FullHost = HostApi & { command: { execute(id: string, payload?: unknown): void }; nodeStore: { getNodes(): unknown[] } }
 interface ManagerApi { install(opts: { url: string }, cfg?: { config?: unknown }): Promise<void> }
@@ -53,6 +58,9 @@ function createUi() {
     filterRatingOpen: false,
     filterType: '全部',
     filterRating: '所有评级',
+    // 画布 tab 搜索：点放大镜进入搜索态（工具行变成 输入框+筛选+关闭），再点 × 或 Esc 退出
+    searchOpen: false,
+    searchQuery: '',
     // 底部 dock
     addMenuOpen: false,
     moveMenuOpen: false,
@@ -191,15 +199,34 @@ function createUi() {
     return nodes.reduce((sum, n) => sum + 1 + (n.children ? nodeCount(n.children) : 0), 0)
   }
   const treeTotal = computed(() => nodeCount(tree))
+  // 搜索过滤视图：关键字匹配名字；分组在自身或子孙命中时保留，且子孙命中时强制展开
+  const filteredTree = computed<TreeNode[]>(() => {
+    const q = state.searchQuery.trim().toLowerCase()
+    if (!q) return tree
+    const walk = (list: TreeNode[]): TreeNode[] =>
+      list
+        .map((n) => {
+          if (!n.children) return n.name.toLowerCase().includes(q) ? n : null
+          const kids = walk(n.children)
+          return n.name.toLowerCase().includes(q) || kids.length ? { ...n, children: kids } : null
+        })
+        .filter((n): n is TreeNode => n !== null)
+    const out = walk(tree)
+    const mark = (list: TreeNode[]): void => { for (const n of list) if (n.children) { collapsed[n.id] = false; mark(n.children) } }
+    mark(out)
+    return out
+  })
   const histVisible = computed(() =>
     state.histType ? state.historyItems.filter((i) => i.kind === state.histType) : state.historyItems,
   )
   const histCount = (kind: string): number => state.historyItems.filter((i) => i.kind === kind).length
 
   // ===== 小地图显隐（唯一事实来源 = mini-map 插件服务；状态栏按钮只是它的开关） =====
-  const minimapOn = computed(() => (hostEl.value?.host?.ctx?.get<{ visible: boolean }>('mini-map')?.visible) ?? false)
+  // host ctx.get('mini-map') 每次返回同一个 reactive 对象（插件 apply 里注入的），
+  // computed 追踪 .visible 属性即可实时反映开关状态。
+  const minimapOn = computed(() => (readyHost?.ctx?.get<{ visible: boolean }>('mini-map')?.visible) ?? false)
   function toggleMinimap(): void {
-    const svc = hostEl.value?.host?.ctx?.get<{ visible: boolean }>('mini-map')
+    const svc = readyHost?.ctx?.get<{ visible: boolean }>('mini-map')
     if (svc) svc.visible = !svc.visible
   }
 
@@ -466,7 +493,7 @@ function createUi() {
   }
 
   return {
-    state, cfg, tree, collapsed, treeTotal, histVisible, histCount, shortcuts,
+    state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
     hostEl, showToast, onReady, createNode, toggleTheme, openDrawer, closeSettings,
     toggleShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 左侧抽屉：头部（复用 ProjectCluster）+ 画布/资产 tab + 列表/宫格双模式树 + 底部收起条 + 拖宽手柄。
 // 图标用 LibIcon（照 LibTV 官网 SVG 原样复刻），交互行为照目标实测。
-import { ref } from 'vue'
+import { ref, computed, isRef, nextTick } from 'vue'
 import { Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as ImageIcon } from 'lucide-vue-next'
 import folderImg from '../../assets/folder.png'
 import { AnimatePresence, motion } from 'motion-v'
@@ -18,6 +18,17 @@ const s = ui.state
 /** 展示模式：list（树行）/ grid（宫格卡片），照目标「展示设置」下拉 */
 const viewMode = ref<'list' | 'grid'>('grid')
 const menuOpen = ref(false)
+/** 搜索框 DOM 引用：进入搜索态后自动聚焦 */
+const searchInput = ref<HTMLInputElement | null>(null)
+async function openSearch(): Promise<void> {
+  s.searchOpen = true
+  await nextTick()
+  searchInput.value?.focus()
+}
+function closeSearch(): void {
+  s.searchOpen = false
+  s.searchQuery = ''
+}
 
 const lucideOf = (icon: string) =>
   icon === 'video' ? VideoIcon : icon === 'text' ? TypeIcon : icon === 'group' ? FolderIcon : ImageIcon
@@ -32,6 +43,11 @@ function collapseAll(): void {
   walk(ui.tree)
   ui.showToast('已收起全部分组')
 }
+/** 搜索过滤后的树：computed 必须放在顶层，模板才会自动解包 .value（ui.filteredTree 嵌在普通对象里不会解包） */
+const visibleTree = computed<TreeNode[]>(() => {
+  const t = ui.filteredTree
+  return isRef(t) ? t.value : t
+})
 </script>
 
 <template>
@@ -72,35 +88,70 @@ function collapseAll(): void {
         >{{ t === 'canvas' ? '画布' : '资产' }}</button>
       </div>
 
-      <!-- ===== 画布 tab 工具行 ===== -->
+      <!-- ===== 画布 tab 工具行：普通态 ⇄ 搜索态（点放大镜展开输入框，筛选/关闭在右侧） ===== -->
       <div v-if="s.leftTab === 'canvas'" class="flex h-12 flex-none items-center gap-1 p-2">
-        <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="搜索节点" @click="ui.showToast('搜索节点')">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path :d="'M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5'" fill="currentColor" fill-rule="evenodd" /></svg>
-        </button>
-        <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
-          <template #trigger><button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></button></template>
-          <template #default="{ close }"><AxMenu><AxMenuItem v-for="t in ['全部','图片','视频','文本','分组']" :key="t" @click="s.filterType = t; close()">{{ t }}</AxMenuItem></AxMenu></template>
-        </AxDropdown>
-        <AxDropdown v-model="s.filterRatingOpen" placement="bottom-start">
-          <template #trigger><button class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="所有评级"><span>{{ s.filterRating }}</span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(2.5 5.8)" /></svg></button></template>
-          <template #default="{ close }"><AxMenu><AxMenuItem v-for="r in ['所有评级','已通过','待审核','已拒绝']" :key="r" @click="s.filterRating = r; close()">{{ r }}</AxMenuItem></AxMenu></template>
-        </AxDropdown>
-        <span class="flex-1"></span>
-        <!-- 展示设置：列表/宫格/展开/收起（照图 2，带勾选态） -->
-        <AxDropdown v-model="menuOpen" placement="bottom-end" :offset="4" menu-width="180px">
-          <template #trigger>
-            <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="展示设置" :aria-expanded="menuOpen"><LibIcon name="display-grid" :size="16" /></button>
-          </template>
-          <template #default="{ close }">
-            <AxMenu>
-              <AxMenuItem :active="viewMode === 'list'" @click="viewMode = 'list'; close()"><LibIcon name="list-view" :size="16" /> 列表展示 <svg v-if="viewMode === 'list'" class="ml-auto" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z" fill="currentColor" /></svg></AxMenuItem>
-              <AxMenuItem :active="viewMode === 'grid'" @click="viewMode = 'grid'; close()"><LibIcon name="display-grid" :size="16" /> 宫格展示 <svg v-if="viewMode === 'grid'" class="ml-auto" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z" fill="currentColor" /></svg></AxMenuItem>
-              <div class="my-1 h-px bg-line"></div>
-              <AxMenuItem @click="expandAll(); close()"><LibIcon name="expand-groups" :size="16" /> 展开全部分组</AxMenuItem>
-              <AxMenuItem @click="collapseAll(); close()"><LibIcon name="collapse-groups" :size="16" /> 收起全部分组</AxMenuItem>
-            </AxMenu>
-          </template>
-        </AxDropdown>
+        <!-- 搜索态：输入框从放大镜位置向右展开，原工具按钮让位 -->
+        <AnimatePresence>
+          <motion.div
+            v-if="s.searchOpen"
+            class="flex h-9 w-full items-center gap-1"
+            :initial="{ width: 36, opacity: 0 }"
+            :animate="{ width: '100%', opacity: 1 }"
+            :exit="{ width: 36, opacity: 0 }"
+            :transition="{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }"
+          >
+            <div class="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-[10px] bg-chip px-2.5">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="none" class="flex-none text-ink-dim" aria-hidden="true"><path d="M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5" fill="currentColor" fill-rule="evenodd" /></svg>
+              <input
+                ref="searchInput"
+                :value="s.searchQuery"
+                class="h-full min-w-0 flex-1 bg-transparent text-[13px] text-ink placeholder:text-ink-dim focus:outline-none"
+                placeholder="搜索节点"
+                aria-label="搜索节点"
+                @input="s.searchQuery = ($event.target as HTMLInputElement).value"
+                @keydown.esc="closeSearch()"
+              />
+            </div>
+            <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
+              <template #trigger><button class="grid size-8 flex-none place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></button></template>
+              <template #default="{ close }"><AxMenu><AxMenuItem v-for="t in ['全部','图片','视频','文本','分组']" :key="t" @click="s.filterType = t; close()">{{ t }}</AxMenuItem></AxMenu></template>
+            </AxDropdown>
+            <button class="grid size-8 flex-none place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="关闭搜索" @click="closeSearch()">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9-9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
+            </button>
+          </motion.div>
+        </AnimatePresence>
+
+        <!-- 普通态 -->
+        <template v-if="!s.searchOpen">
+          <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="搜索节点" @click="openSearch">
+            <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path :d="'M11 2.25a8.75 8.75 0 0 1 6.7 14.38l3.83 3.84a.75.75 0 1 1-1.06 1.06l-3.84-3.84A8.75 8.75 0 1 1 11 2.25m0 1.5a7.25 7.25 0 1 0 0 14.5 7.25 7.25 0 0 0 0-14.5'" fill="currentColor" fill-rule="evenodd" /></svg>
+          </button>
+          <AxDropdown v-model="s.filterTypeOpen" placement="bottom-start">
+            <template #trigger><button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="筛选：全部"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 5h18M7 12h10M10.5 19h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></button></template>
+            <template #default="{ close }"><AxMenu><AxMenuItem v-for="t in ['全部','图片','视频','文本','分组']" :key="t" @click="s.filterType = t; close()">{{ t }}</AxMenuItem></AxMenu></template>
+          </AxDropdown>
+          <AxDropdown v-model="s.filterRatingOpen" placement="bottom-start">
+            <template #trigger><button class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="所有评级"><span>{{ s.filterRating }}</span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(2.5 5.8)" /></svg></button></template>
+            <template #default="{ close }"><AxMenu><AxMenuItem v-for="r in ['所有评级','已通过','待审核','已拒绝']" :key="r" @click="s.filterRating = r; close()">{{ r }}</AxMenuItem></AxMenu></template>
+          </AxDropdown>
+          <span class="flex-1"></span>
+          <!-- 展示设置：列表/宫格/展开/收起（照图 2，带勾选态） -->
+          <AxDropdown v-model="menuOpen" placement="bottom-end" :offset="4" menu-width="180px">
+            <template #trigger>
+              <button class="grid size-8 place-items-center rounded-lg text-ink/85 transition-colors hover:bg-hover" aria-label="展示设置" :aria-expanded="menuOpen"><LibIcon name="display-grid" :size="16" /></button>
+            </template>
+            <template #default="{ close }">
+              <AxMenu>
+                <AxMenuItem :active="viewMode === 'list'" @click="viewMode = 'list'; close()"><LibIcon name="list-view" :size="16" /> 列表展示 <svg v-if="viewMode === 'list'" class="ml-auto" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z" fill="currentColor" /></svg></AxMenuItem>
+                <AxMenuItem :active="viewMode === 'grid'" @click="viewMode = 'grid'; close()"><LibIcon name="display-grid" :size="16" /> 宫格展示 <svg v-if="viewMode === 'grid'" class="ml-auto" width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.8 4.2a.7.7 0 0 1 0 1L6.6 12.4a.7.7 0 0 1-1 0L2.2 9a.7.7 0 0 1 1-1l2.9 2.9 6.7-6.7a.7.7 0 0 1 1 0z" fill="currentColor" /></svg></AxMenuItem>
+                <div class="my-1 h-px bg-line"></div>
+                <AxMenuItem @click="expandAll(); close()"><LibIcon name="expand-groups" :size="16" /> 展开全部分组</AxMenuItem>
+                <AxMenuItem @click="collapseAll(); close()"><LibIcon name="collapse-groups" :size="16" /> 收起全部分组</AxMenuItem>
+              </AxMenu>
+            </template>
+          </AxDropdown>
+        </template>
       </div>
 
       <!-- ===== 资产 tab 工具行 ===== -->
@@ -123,7 +174,7 @@ function collapseAll(): void {
 
       <!-- ===== 画布 tab 主体：列表 / 宫格 双模式（照图 1）===== -->
       <AxScrollArea v-else class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
-        <template v-for="node in ui.tree" :key="node.id">
+        <template v-for="node in visibleTree" :key="node.id">
           <!-- 分组行（两种模式同款：44 高，箭头 + 文件夹图 + 名字；点整行展开/折叠） -->
           <div v-if="node.children" class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 0">
             <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
