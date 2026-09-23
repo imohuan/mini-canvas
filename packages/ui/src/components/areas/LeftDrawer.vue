@@ -89,12 +89,13 @@ const visibleTree = computed<TreeNode[]>(() => {
       </div>
 
       <!-- ===== 画布 tab 工具行：普通态 ⇄ 搜索态（点放大镜展开输入框，筛选/关闭在右侧） ===== -->
-      <div v-if="s.leftTab === 'canvas'" class="flex h-12 flex-none items-center gap-1 p-2">
-        <!-- 搜索态：输入框从放大镜位置向右展开，原工具按钮让位 -->
-        <AnimatePresence>
-          <motion.div
-            v-if="s.searchOpen"
-            class="flex h-9 w-full items-center gap-1"
+      <div v-if="s.leftTab === 'canvas'" class="relative flex h-12 flex-none items-center gap-1 p-2">
+        <!-- 搜索态：绝对定位悬浮层，从放大镜位置向右展开；收起时悬浮收缩，不挤压下面一行按钮 -->
+        <div class="pointer-events-none absolute inset-y-0 left-2 right-2 z-10 flex items-center">
+          <AnimatePresence>
+            <motion.div
+              v-if="s.searchOpen"
+              class="pointer-events-auto flex h-9 w-full items-center gap-1"
             :initial="{ width: 36, opacity: 0 }"
             :animate="{ width: '100%', opacity: 1 }"
             :exit="{ width: 36, opacity: 0 }"
@@ -120,7 +121,8 @@ const visibleTree = computed<TreeNode[]>(() => {
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 3.5l9 9m0-9-9 9" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
             </button>
           </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
 
         <!-- 普通态 -->
         <template v-if="!s.searchOpen">
@@ -132,7 +134,7 @@ const visibleTree = computed<TreeNode[]>(() => {
             <template #default="{ close }"><AxMenu><AxMenuItem v-for="t in ['全部','图片','视频','文本','分组']" :key="t" @click="s.filterType = t; close()">{{ t }}</AxMenuItem></AxMenu></template>
           </AxDropdown>
           <AxDropdown v-model="s.filterRatingOpen" placement="bottom-start">
-            <template #trigger><button class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="所有评级"><span>{{ s.filterRating }}</span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(2.5 5.8)" /></svg></button></template>
+            <template #trigger><button class="flex h-8 flex-none items-center gap-1 whitespace-nowrap rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="所有评级"><span>{{ s.filterRating }}</span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(2.5 5.8)" /></svg></button></template>
             <template #default="{ close }"><AxMenu><AxMenuItem v-for="r in ['所有评级','已通过','待审核','已拒绝']" :key="r" @click="s.filterRating = r; close()">{{ r }}</AxMenuItem></AxMenu></template>
           </AxDropdown>
           <span class="flex-1"></span>
