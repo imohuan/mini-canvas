@@ -353,10 +353,16 @@ function createUi() {
     return payload
   }
 
-  // ===== 动作 =====
+  // ===== 主题 =====
+  /** 把主题写到 <html class="dark">（Tailwind v4 / shadcn 通行做法）。
+      同步保留 data-canvas-theme 属性，兼容仍按属性写的旧样式/外部宿主。 */
+  function applyTheme(v: 'dark' | 'light'): void {
+    document.documentElement.classList.toggle('dark', v === 'dark')
+    document.documentElement.dataset.canvasTheme = v
+  }
   function toggleTheme(): void {
     state.theme = state.theme === 'dark' ? 'light' : 'dark'
-    document.documentElement.dataset.canvasTheme = state.theme
+    applyTheme(state.theme)
     showToast(state.theme === 'dark' ? '已切换暗色主题' : '已切换亮色主题')
   }
   function openDrawer(which: 'left' | 'roles'): void {
@@ -503,7 +509,7 @@ function createUi() {
   return {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
-    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, openDrawer, closeSettings,
+    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
     toggleShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }

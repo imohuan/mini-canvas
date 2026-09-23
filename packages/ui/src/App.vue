@@ -82,9 +82,9 @@ function onKeydown(event: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  document.documentElement.dataset.canvasTheme = s.theme
+  ui.applyTheme(s.theme)
 })
-watch(() => s.theme, (v) => { document.documentElement.dataset.canvasTheme = v })
+watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </script>
 

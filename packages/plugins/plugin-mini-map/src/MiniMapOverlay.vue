@@ -33,7 +33,7 @@ import {
 import { miniMapConfigFrom, type MiniMapConfig } from './miniMapConfig'
 
 /** 组件自身不定位、不自定颜色：位置交给宿主；配色**只走 CSS**（见下方 <style> 里的 --mm-*），
- *  由 <html data-canvas-theme="dark|light"> 自动切换，不提供任何"配色"配置项。 */
+ *  由宿主的 `<html class="dark">` 自动切换，不提供任何"配色"配置项。 */
 
 
 const { ctx, viewport, paneRect, renderNodes } = useCanvasRender()
@@ -303,10 +303,24 @@ function onPointerCancel(e: PointerEvent): void {
 </template>
 
 <style scoped>
-/* 配色**只走 CSS**：两套 --mm-* 按 <html data-canvas-theme> 切换（默认 = 暗色）。
+/* 配色**只走 CSS**：默认（亮色）一套 --mm-*，`.dark`（<html class="dark">）下覆盖另一套。
    组件不再有 theme prop / 配置项，宿主换主题时这里零 JS 参与、零重渲染。
    dark 风格参考截图：无圆角、深底 + 边框、浅灰节点方块、视口框浅灰描边。 */
 .mini-map-overlay {
+  --mm-bg: #f8fafc;
+  --mm-line: #e2e8f0;
+  --mm-node: #cbd5e1;
+  --mm-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  --mm-viewer-bg: rgb(59 130 246 / 0.08);
+  --mm-viewer-line: #3b82f6;
+  --mm-radius: 12px;
+  --mm-node-radius: 2px;
+  --mm-viewer-radius: 4px;
+}
+/* 注意用 `html.dark` 而不是 `.dark`：组件自己的 scoped 规则（.mini-map-overlay[data-v-xxx]）
+   特异性是 0,2,0，比 `.dark .mini-map-overlay`（0,2,0，同分靠顺序）更危险 ——
+   提到 0,2,1 才稳赢，不受样式加载顺序影响。 */
+html.dark .mini-map-overlay {
   --mm-bg: #252525;
   --mm-line: #3c3c3c;
   --mm-node: #8a8a8a;
@@ -317,17 +331,6 @@ function onPointerCancel(e: PointerEvent): void {
   --mm-radius: 0px;
   --mm-node-radius: 0px;
   --mm-viewer-radius: 0px;
-}
-html[data-canvas-theme='light'] .mini-map-overlay {
-  --mm-bg: #f8fafc;
-  --mm-line: #e2e8f0;
-  --mm-node: #cbd5e1;
-  --mm-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
-  --mm-viewer-bg: rgb(59 130 246 / 0.08);
-  --mm-viewer-line: #3b82f6;
-  --mm-radius: 12px;
-  --mm-node-radius: 2px;
-  --mm-viewer-radius: 4px;
 }
 
 .mini-map-overlay {

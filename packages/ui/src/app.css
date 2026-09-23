@@ -1,6 +1,11 @@
 /* 画布应用全局样式：Tailwind v4 入口 + 主题 token（暗色优先，亮色可切换） */
 @import "tailwindcss";
 
+/* Tailwind v4：把 dark 变体绑到 `<html class="dark">`（默认按系统 prefers-color-scheme，
+   shadcn/ui 与绝大多数应用都改成认 class —— 用户手动切换要能覆盖系统设置）。
+   必须写在本入口里：@custom-variant 只有 Tailwind 入口文件才处理。 */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   /* 语义 token：全部指向 CSS 变量，变量按主题在下面重定义（inline 让 Tailwind 生成 var() 引用） */
   --color-canvas-bg: var(--ui-canvas-bg);
@@ -38,9 +43,9 @@
 }
 
 /* ===== 主题变量 =====
-   通用 UI token（--ui-* / --sf-* / --ps-* / --dd-*）的唯一真源已上移到
-   @mini-canvas/canvas-render/src/styles/ui-theme.css（随 canvas-render 加载即生效，
-   按 <html data-canvas-theme="dark|light"> 自动切换）。这里不再重复定义，避免两处值漂移。 */
+   通用 UI token（--ui-* / --sf-* / --ps-* / --dd-*）的唯一真源在
+   @mini-canvas/canvas-render/src/styles/ui-theme.css（随 canvas-render 加载即生效）。
+   切换方式 = `<html class="dark">`（Tailwind v4 / shadcn 通行做法；旧 data-canvas-theme 仍兼容）。 */
 
 /* 全局滚动条（照 LibTV 实测：轨道 6px 透明 / 滑块 4px 圆角 6 / 白 40%） */
 * { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb) transparent; }
@@ -51,8 +56,10 @@
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* ===== 画布暗色主题（可换肤插槽）======
-   节点卡片在 CanvasHost 子树里，必须全局；画布底由 DefaultBackground 的 canvas 硬编码浅色绘制，用 filter 反相为暗色。 */
-html[data-canvas-theme='dark'] {
+   节点卡片在 CanvasHost 子树里，必须全局；画布底由 DefaultBackground 的 canvas 硬编码浅色绘制，用 filter 反相为暗色。
+   用 `html.dark`（而非 `.dark`）拿到 0,1,1 特异性：plugin-theme-default 的 node-theme.css
+   用 `:root` 定义这批变量的亮色默认值，同特异性下它后加载就会赢。 */
+html.dark {
   --canvas-node-surface: #262626;
   --canvas-node-panel-surface: #2e2e2e;
   --canvas-node-panel-surface-hover: #363636;
@@ -81,7 +88,11 @@ html[data-canvas-theme='dark'] {
   --canvas-node-debug-mouse: #9a9a9a;
   --canvas-node-debug-label-stroke: #141414;
 }
+.dark canvas.bg-canvas,
 html[data-canvas-theme='dark'] canvas.bg-canvas { filter: invert(1); }
+.dark .v2-content-clip,
 html[data-canvas-theme='dark'] .v2-content-clip { background: #1f1f1f !important; }
+.dark .v2-title,
+.dark .v2-node,
 html[data-canvas-theme='dark'] .v2-title,
 html[data-canvas-theme='dark'] .v2-node { color: #d0d0d0; }
