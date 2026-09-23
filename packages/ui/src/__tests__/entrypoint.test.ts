@@ -41,9 +41,11 @@ describe('@mini-canvas/ui 出口契约', () => {
     expect(typeof entry.createDefaultStorageAdapter).toBe('function')
   })
 
-  it('装配清单自洽：22 个插件、无重名、含画布基础件', () => {
-    // 21 个源码插件 + 1 个本应用自己的设置面板换皮（ui-settings-panel，order -1 顶替默认皮）
-    expect(APP_PLUGINS).toHaveLength(22)
+  it('装配清单自洽：21 个插件、无重名、含画布基础件', () => {
+    // 20 个源码插件 + 1 个本应用自己的设置面板换皮（ui-settings-panel，order -1 顶替默认皮）
+    // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea 按钮 + ModalsArea 浮层），
+    // 插件版 Ctrl+/ 帮助面板与之重复；键盘分发由 CanvasHost 按命令 keys 统一做，不依赖它。
+    expect(APP_PLUGINS).toHaveLength(21)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

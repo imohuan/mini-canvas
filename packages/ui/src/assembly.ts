@@ -27,12 +27,11 @@ import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
 import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
 import { groupPlugin } from '@mini-canvas/plugin-group'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
-import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
 import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 
 /**
- * 成品应用的插件清单（21 个源码插件，顺序即装载序）。
+ * 成品应用的插件清单（20 个源码插件，顺序即装载序）。
  *
  * 注意：`packages/plugins` 目录下另有 3 个**不**在清单里，是有意不装：
  * `plugin-auto-save` / `plugin-cloud-save` / `plugin-history` —— 它们是「按运行环境选装」的
@@ -60,7 +59,8 @@ export const APP_PLUGINS = [
   canvasExportPlugin, // 导出：Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中
   nodeFindPlugin, // 搜索：Ctrl/Cmd+F
   miniMapPlugin, // 小地图：Ctrl/Cmd+M
-  shortcutManagerPlugin, // 快捷键帮助：Ctrl/Cmd+/ 打开
+  // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea「快捷键」按钮 + ModalsArea 浮层），
+  // 插件版的 Ctrl+/ 帮助面板会与之重复。键盘分发由 CanvasHost 按命令 keys 统一做，不依赖该插件。
   fileDropPlugin, // 文件拖入 & 粘贴：把图片/视频/文本拖到画布或粘贴进来即建节点
 ]
 
