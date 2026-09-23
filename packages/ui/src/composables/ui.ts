@@ -73,7 +73,7 @@ function createUi() {
     snapOn: true,
     // 左下状态条
     // 画布
-    following: true,
+    following: false,
     storyboard: [
       { type: '文本', items: [{ name: '提示词', meta: '文本节点', icon: 'text' }] },
       { type: '图片', items: [
@@ -89,8 +89,8 @@ function createUi() {
         { name: '视频节点 2', meta: '待确认后生成 · 2.5', icon: 'video' },
       ] },
     ] as Array<{ type: string; items: Array<{ name: string; meta: string; icon: string }> }>,
-    // AI 对话面板
-    chatOpen: true,
+    // AI 对话面板（默认收起，底栏星形按钮可展开）
+    chatOpen: false,
     chatDocked: false,
     /** 浮动态默认 400×640（照 LibTV）；停靠态默认 516 */
     chatWidth: 400,
