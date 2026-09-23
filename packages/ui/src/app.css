@@ -29,6 +29,7 @@
   --color-thumb: var(--ui-thumb);
   --color-thumb-soft: var(--ui-thumb-soft);
   --color-overlay: var(--ui-overlay);
+  --color-overlay-solid: var(--ui-overlay-solid);
   --color-primary-bg: var(--ui-primary-bg);
   --color-primary-ink: var(--ui-primary-ink);
 }

@@ -16,7 +16,7 @@ const s = ui.state
 <template>
   <section
     v-show="s.chatOpen"
-    class="chat-panel fixed z-[60] flex flex-col overflow-hidden rounded-[28px] border border-line bg-overlay text-ink shadow-[0_4px_10px_rgba(0,0,0,0.1)] backdrop-blur-sm"
+    class="chat-panel fixed z-[60] flex flex-col overflow-hidden rounded-[28px] border border-line bg-overlay-solid text-ink shadow-[0_4px_10px_rgba(0,0,0,0.1)]"
     :class="{ 'inset-y-0 right-0 h-full rounded-none border-0 bg-panel-soft': s.chatDocked, 'bottom-[74px] left-1/2 -translate-x-1/2': !s.chatDocked && !s.chatPos }"
     :style="s.chatDocked
       ? { width: s.chatWidth + 'px' }
