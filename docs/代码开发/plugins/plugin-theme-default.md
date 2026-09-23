@@ -6,6 +6,9 @@
 > 相关底层：`canvas-data/主题换肤ctx-theme与ThemeRegistry.md`、`canvas-data/通用UI槽ctx-slots与命令ctx-commands.md`、
 > `canvas-render/06-SettingsHost与SlotHost.md`、`canvas-render/07-settingsPanelTypes与settingsSource.md`。
 
+> 🎨 **写颜色前先看 `../主题与配色.md`**：全仓配色走 `<html class="dark">` + CSS 变量，
+> 不要给组件发明 `theme` 配置项。本插件的 `--canvas-node-*` 默认值与暗色覆盖也在那篇里说明。
+
 ## 一句话
 
 它是 mini-canvas 的**默认画布皮**：装上它，画布就有默认的节点壳、连线样式、背景和一套可改外观的设置面板。
