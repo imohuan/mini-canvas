@@ -126,7 +126,7 @@ function collapseAll(): void {
         <template v-for="node in ui.tree" :key="node.id">
           <!-- 分组行（两种模式同款：44 高，箭头 + 文件夹图 + 名字；点整行展开/折叠） -->
           <div v-if="node.children" class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 0">
-            <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85 hover:bg-hover" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
+            <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" :class="ui.collapsed[node.id] ? '-rotate-90' : ''" class="transition-transform" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(3.4 5.8)" /></svg>
             </button>
             <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
