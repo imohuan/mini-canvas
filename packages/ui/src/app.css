@@ -62,7 +62,8 @@ html[data-canvas-theme='dark'] {
   --ui-overlay: rgb(31 31 31 / 0.75);
   --ui-overlay-solid: rgb(33 33 33);
   --ui-glass: rgb(30 30 30 / 0.82);
-  --ui-arrow: rgb(38 38 38 / 0.9);
+  /* 箭头与毛玻璃面板同色（指向箭头叠在面板边沿，必须同底色才不会出现上下两截） */
+  --ui-arrow: var(--ui-glass);
   --ui-tip: rgb(0 0 0 / 0.9);
   --ui-tip-ink: #ffffff;
   --ui-scrim: rgb(0 0 0 / 0.6);
@@ -128,7 +129,7 @@ html[data-canvas-theme='light'] {
   --ui-overlay: rgb(255 255 255 / 0.88);
   --ui-overlay-solid: #ffffff;
   --ui-glass: rgb(255 255 255 / 0.86);
-  --ui-arrow: rgb(255 255 255 / 0.95);
+  --ui-arrow: var(--ui-glass);
   --ui-tip: rgb(24 32 43 / 0.92);
   --ui-tip-ink: #ffffff;
   --ui-scrim: rgb(15 23 42 / 0.35);

@@ -49,7 +49,7 @@ watch(() => s.shortcutsOpen, async (open) => {
       </div>
     </motion.section>
     <!-- 箭头：面板底部中央，向下指向 dock 的「快捷键」按钮（实测按钮位置对准；translate+rotate 必须同写一个 transform，否则位移会落到旋转坐标系里） -->
-    <span class="relative z-[1] -mt-[7px] size-[14px] rounded-[3px] border-b border-r border-line bg-arrow backdrop-blur-[28px]" :style="{ transform: `translateX(${arrowShift}px) rotate(45deg)` }" aria-hidden="true"></span>
+    <span class="relative z-[1] -mt-[7px] size-[14px] rounded-[3px] border-b border-r border-line bg-arrow backdrop-blur-[28px] backdrop-saturate-[1.4]" :style="{ transform: `translateX(${arrowShift}px) rotate(45deg)` }" aria-hidden="true"></span>
   </div>
 
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
