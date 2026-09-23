@@ -66,6 +66,14 @@ describe('resolveMultiRadio：从配置读外观', () => {
     }
   })
 
+  it('8 位 hex 颜色（含透明度）会保留，不回落默认值', () => {
+    const color = '#3b82f680'
+    const cfg = resolveMultiRadio((key) => (key === MULTI_RADIO_KEYS.color ? color : undefined))
+    expect(cfg.color).toBe(color)
+    expect(applyMultiRadioChange(DEFAULT_MULTI_RADIO, MULTI_RADIO_KEYS.color, '#ff000080').color)
+      .toBe('#ff000080')
+  })
+
   it('开关非布尔 → 回落默认（半套脏值不该被当成 true）', () => {
     expect(
       resolveMultiRadio((k) => (k === MULTI_RADIO_KEYS.showInLowDetail ? 'yes' : undefined))

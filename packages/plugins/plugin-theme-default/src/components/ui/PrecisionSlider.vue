@@ -257,13 +257,14 @@ function onKeydown(e: KeyboardEvent): void {
   height: 5px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.12);
+  /* 主题变量：暗色下用浅半透明，亮色下沿用原来的深半透明 */
+  background: var(--ps-track, rgba(0, 0, 0, 0.12));
   overflow: hidden;
 }
 .ps-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #0891b2, rgba(8, 145, 178, 0.7));
+  background: linear-gradient(90deg, var(--ps-accent, #0891b2), color-mix(in srgb, var(--ps-accent, #0891b2) 70%, transparent));
 }
 .ps-thumb {
   position: absolute;
@@ -271,8 +272,8 @@ function onKeydown(e: KeyboardEvent): void {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
-  border: 2px solid #0891b2;
+  background: var(--ps-thumb, #fff);
+  border: 2px solid var(--ps-accent, #0891b2);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
   transform: translate(-50%, -50%);
   transition: border-color 0.18s ease;
@@ -280,7 +281,7 @@ function onKeydown(e: KeyboardEvent): void {
 }
 .ps:hover .ps-thumb,
 .ps.is-dragging .ps-thumb {
-  border-color: #0e7490;
+  border-color: var(--ps-accent-hover, #0e7490);
 }
 .ps:focus-visible .ps-thumb {
   outline: 2px solid rgba(8, 145, 178, 0.6);

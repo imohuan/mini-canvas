@@ -32,6 +32,28 @@ import {
 } from './miniMapEngine'
 import { miniMapConfigFrom, type MiniMapConfig } from './miniMapConfig'
 
+/** 组件自身不定位、不自定颜色：位置交给宿主，黑白两套配色经 theme prop 选择。 */
+const THEMES = {
+  light: {
+    bg: '#f8fafc',
+    line: '#e2e8f0',
+    node: '#cbd5e1',
+    shadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+    viewerBg: 'rgba(59, 130, 246, 0.08)',
+  },
+  dark: {
+    bg: '#1f1f1f',
+    line: '#3a3a3a',
+    node: '#525252',
+    shadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+    viewerBg: 'rgba(59, 130, 246, 0.15)',
+  },
+} as const
+
+const props = withDefaults(defineProps<{ /** 黑白两套配色（light 默认 = 画布浅底原生配色） */ theme?: 'light' | 'dark' }>(), {
+  theme: 'light',
+})
+
 const { ctx, viewport, paneRect, renderNodes } = useCanvasRender()
 
 // —— 配置（⚙ 设置面板：小地图 mini-map 分组；实时订阅，默认 240x160/灵敏度1，对齐老版）——
@@ -53,8 +75,14 @@ const sensitivityX = computed(() => cfg.value.miniMapSensitivityX)
 const sensitivityY = computed(() => cfg.value.miniMapSensitivityY)
 
 const PADDING = 8
-const NODE_COLOR = '#cbd5e1'
-const VIEWER_BORDER = '#3b82f6'
+const palette = computed(() => THEMES[props.theme])
+const rootVars = computed(() => ({
+  '--mm-bg': palette.value.bg,
+  '--mm-line': palette.value.line,
+  '--mm-node': palette.value.node,
+  '--mm-shadow': palette.value.shadow,
+  '--mm-viewer-bg': palette.value.viewerBg,
+}))
 
 // —— 显隐状态：mini-map 服务（命令切换与组件读同一对象）——
 interface MiniMapServiceState {
@@ -127,7 +155,6 @@ const viewerStyle = computed(() => {
     top: r.top + 'px',
     width: r.width + 'px',
     height: r.height + 'px',
-    borderColor: VIEWER_BORDER,
   }
 })
 
@@ -136,12 +163,11 @@ function nodeStyle(rect: MiniMapRect): Record<string, string> | null {
   const ms = mapState.value
   if (!ms) return null
   const r = rectToMap(rect, ms)
-  return {
+    return {
     left: r.left + 'px',
     top: r.top + 'px',
     width: r.width + 'px',
     height: r.height + 'px',
-    background: NODE_COLOR,
   }
 }
 
@@ -283,7 +309,7 @@ function onPointerCancel(e: PointerEvent): void {
 </script>
 
 <template>
-  <div v-if="visible" ref="rootEl" class="mini-map-overlay">
+  <div v-if="visible" ref="rootEl" class="mini-map-overlay" :style="rootVars">
     <div
       class="mini-map"
       :style="{ width: width + 'px', height: height + 'px' }"
@@ -305,30 +331,28 @@ function onPointerCancel(e: PointerEvent): void {
 
 <style scoped>
 .mini-map-overlay {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 5;
+  /* 定位归宿主：本组件只负责画一张地图（宽高由配置决定） */
 }
 .mini-map {
   position: relative;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--mm-bg);
+  border: 1px solid var(--mm-line);
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--mm-shadow);
   overflow: hidden;
   cursor: crosshair;
   touch-action: none;
 }
 .mini-node {
   position: absolute;
+  background: var(--mm-node);
   border-radius: 2px;
   pointer-events: none;
 }
 .mini-viewer {
   position: absolute;
   border: 2px solid #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
+  background: var(--mm-viewer-bg);
   border-radius: 4px;
   cursor: move;
   pointer-events: auto;

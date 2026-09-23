@@ -52,7 +52,13 @@ export class SaveServiceImpl implements SaveService {
     const batch = [...this.dirty.entries()]
     this.dirty.clear()
     for (const [prefixed, { value, type }] of batch) {
-      await this.adapters.get(type)!.set(prefixed, value)
+      try {
+        await this.adapters.get(type)!.set(prefixed, value)
+      } catch (err) {
+        // 存储配额不足不能变成未捕获 Promise；保留脏数据，下一次 flush 仍可重试。
+        this.dirty.set(prefixed, { value, type })
+        console.warn(`[save] 写入失败（${prefixed}），可能是浏览器存储配额不足`, err)
+      }
     }
   }
 
@@ -87,4 +93,3 @@ export class SaveServiceImpl implements SaveService {
     }, 0)
   }
 }
-

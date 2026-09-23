@@ -17,6 +17,8 @@ import { cardSizePatch, type ImageFitLimits } from './imageFit'
 
 /** 本流程要用到的外部能力（组件注入真实现，测试注入假实现） */
 export interface ImageRunDeps {
+  /** 将生成的 data/http 图片转为持久资源，返回当前页面可用 URL 与资源 id。 */
+  persistImage?(url: string): Promise<{ url: string; resourceId: string } | undefined>
   /** 调工具（= ctx.tools.invoke 的薄包装；nodeId 会作为运行上下文透传给外部） */
   invokeTool(
     name: string,
@@ -86,8 +88,13 @@ export async function runImageGeneration(args: ImageRunArgs, deps: ImageRunDeps)
   const url = result.urls?.[0]
   if (!url) return { ok: false, error: '生成完成了，但没有拿到图片' }
 
-  await writeGeneratedImage(nodeId, url, deps)
-  return { ok: true, url }
+  const persisted = await deps.persistImage?.(url)
+  if (/^data:/i.test(url) && deps.persistImage && !persisted) {
+    return { ok: false, error: '图片已生成，但本地持久化失败，请清理浏览器存储后重试' }
+  }
+  const finalUrl = persisted?.url ?? url
+  await writeGeneratedImage(nodeId, finalUrl, deps, persisted?.resourceId)
+  return { ok: true, url: finalUrl }
 }
 
 /**
@@ -99,13 +106,14 @@ export async function runImageGeneration(args: ImageRunArgs, deps: ImageRunDeps)
  * 旧图的 imageName / imageSize 描述的是被换掉的那张图，必须清掉 —— 否则状态栏显示"新图 + 旧文件名"。
  * 尺寸量不到就一并清空（宁可状态栏不显示，也不显示错的）。
  */
-export async function writeGeneratedImage(nodeId: string, url: string, deps: ImageRunDeps): Promise<void> {
+export async function writeGeneratedImage(nodeId: string, url: string, deps: ImageRunDeps, resourceId?: string): Promise<void> {
   const size = await deps.measure(url)
   // 卡片尺寸跟新图一致（等比 + 封顶）；量不到尺寸就没有尺寸补丁，只写地址并清空旧尺寸
   const sizes = cardSizePatch(size?.width, size?.height, deps.fitLimits?.())
   const data: Record<string, unknown> = {
     ...(deps.readData(nodeId) ?? {}),
     imageUrl: url,
+    ...(resourceId ? { resourceId } : {}),
     imageName: undefined,
     imageSize: undefined,
     imageWidth: size?.width,

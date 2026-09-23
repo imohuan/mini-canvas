@@ -21,6 +21,7 @@ import type { SettingsPanelSource, SettingEntry, SettingSchema } from '@mini-can
 import { createCoalescer } from '@mini-canvas/canvas-render'
 import Select from '../ui/Select.vue'
 import PrecisionSlider from '../ui/PrecisionSlider.vue'
+import ColorField from '../ui/ColorField.vue'
 
 const props = defineProps<{
   /** 字段所属分组（须等于 settings.groupOf 的组名） */
@@ -120,11 +121,12 @@ const fieldId = 'sf-' + props.fieldKey
     <template v-if="entry.schema.type === 'color'">
       <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
       <div class="sf-row">
-        <span class="sf-swatch">
-          <input :id="fieldId" type="color" :value="String(entry.value)"
-            @input="set(entry.key, ($event.target as HTMLInputElement).value)" />
-        </span>
-        <span class="sf-mon">{{ entry.value }}</span>
+        <ColorField
+          :input-id="fieldId"
+          :aria-label="entry.schema.label ?? entry.key"
+          :model-value="String(entry.value)"
+          @update:model-value="set(entry.key, $event)"
+        />
       </div>
     </template>
 
@@ -182,9 +184,11 @@ const fieldId = 'sf-' + props.fieldKey
 </template>
 
 <style scoped>
+/* 字段样式全部走主题变量（--sf-* 由画布主题提供；缺失时回落到原来的亮色值）：
+   之前这里整块硬编码亮色，暗色主题下标签几乎不可见。变量只改配色，不动结构/行为。 */
 .sf-field {
   padding: 14px 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--sf-line, rgba(0, 0, 0, 0.06));
 }
 
 .sf-field:first-of-type {
@@ -195,7 +199,7 @@ const fieldId = 'sf-' + props.fieldKey
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--sf-label, #111827);
   margin-bottom: 8px;
 }
 
@@ -221,37 +225,15 @@ const fieldId = 'sf-' + props.fieldKey
   margin: 6px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #9ca3af;
-}
-
-/* color swatch */
-.sf-swatch {
-  position: relative;
-  width: 30px;
-  height: 22px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
-}
-
-.sf-swatch input[type='color'] {
-  position: absolute;
-  inset: -8px;
-  width: 46px;
-  height: 38px;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  background: transparent;
+  color: var(--sf-desc, #9ca3af);
 }
 
 /* number bubble */
 .sf-value-bubble {
   font-size: 11px;
   font-weight: 700;
-  color: #0e7490;
-  background: rgba(8, 145, 178, 0.12);
+  color: var(--sf-bubble-ink, #0e7490);
+  background: var(--sf-bubble-bg, rgba(8, 145, 178, 0.12));
   padding: 1px 8px;
   border-radius: 999px;
 }
@@ -289,7 +271,7 @@ const fieldId = 'sf-' + props.fieldKey
   position: absolute;
   inset: 0;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.16);
+  background: var(--sf-track, rgba(0, 0, 0, 0.16));
   transition: background 0.18s ease;
 }
 
@@ -301,13 +283,13 @@ const fieldId = 'sf-' + props.fieldKey
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--sf-thumb, #fff);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 0.18s ease;
 }
 
 .sf-switch input:checked+.sf-slider {
-  background: #0891b2;
+  background: var(--sf-accent, #0891b2);
 }
 
 .sf-switch input:checked+.sf-slider::before {
@@ -324,12 +306,12 @@ const fieldId = 'sf-' + props.fieldKey
   width: 100%;
   box-sizing: border-box;
   padding: 7px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #111827;
-  background: rgba(0, 0, 0, 0.03);
+  color: var(--sf-label, #111827);
+  background: var(--sf-input-bg, rgba(0, 0, 0, 0.03));
   outline: none;
   font-family: inherit;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
@@ -337,7 +319,7 @@ const fieldId = 'sf-' + props.fieldKey
 
 .sf-text:focus {
   border-color: rgba(8, 145, 178, 0.6);
-  background: #fff;
+  background: var(--sf-input-bg-focus, #fff);
   box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
   outline: none;
 }
@@ -346,7 +328,7 @@ const fieldId = 'sf-' + props.fieldKey
 .sf-mon {
   font-family: ui-monospace, monospace;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--sf-desc, #6b7280);
   font-weight: 600;
 }
 </style>

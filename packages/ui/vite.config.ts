@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 // @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
   server: {
     port: 5288, // 独立端口，避开其它应用/demo 的端口
     strictPort: false,

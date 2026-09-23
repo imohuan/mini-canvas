@@ -121,6 +121,14 @@ describe('runImageGeneration：成功与失败', () => {
     expect(deps.writes[0].data.imageHeight).toBe(768)
   })
 
+  it('生成结果可先持久化再写回 resourceId，避免把大 data URL 存进画布', async () => {
+    const deps = fakeDeps({ persistImage: async () => ({ url: 'blob:persisted', resourceId: 'res-image' }) })
+    const res = await runImageGeneration(baseArgs, deps)
+    expect(res.url).toBe('blob:persisted')
+    expect(deps.writes[0].data.imageUrl).toBe('blob:persisted')
+    expect(deps.writes[0].data.resourceId).toBe('res-image')
+  })
+
   it('写回是**一次**（撤销一步到位），且清掉旧图的文件名/大小', async () => {
     const deps = fakeDeps()
     await runImageGeneration(baseArgs, deps)

@@ -20,6 +20,17 @@ const RECTS = [
   { id: 'b', x: 500, y: 260, w: 200, h: 200 },
 ]
 
+const SelectionToolbarProbe = {
+  name: 'SelectionToolbarProbe',
+  template: '<div class="probe-selection-toolbar" />',
+}
+
+type SelectionRegionEntry = { id: string; order: number; value: { component: unknown; props?: Record<string, unknown> } }
+type SelectionRegionField = { list(key: string): SelectionRegionEntry[]; subscribe(): { dispose(): void } }
+function selectionRegionField(entries: SelectionRegionEntry[] = []): SelectionRegionField {
+  return { list: (key: string) => (key === 'out:top' ? entries : []), subscribe: () => ({ dispose() {} }) }
+}
+
 /** 组件在渲染期订阅的渲染层事件名（断言拖拽链路接上了用） */
 const subscribedEvents: string[] = []
 
@@ -35,6 +46,7 @@ function renderCtx(
   selecting = false,
   handleParamsOverride: Partial<CanvasRenderContext['handleParams']> = {},
   nodeDragging = false,
+  regionField?: SelectionRegionField,
 ): CanvasRenderContext {
   const services: Record<string, unknown> = {
     selection: {
@@ -62,6 +74,8 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
+      registryOf: (kind: string) =>
+        kind === 'selection/region' && regionField ? regionField : selectionRegionField(),
       // 拖拽态由组件自己订阅渲染层拖拽事件维护（见 SelectionFrame 的 nodeDragging）。
       // 这里记录订阅名，供测试断言"链路接上了"。
       on: (name: string) => {
@@ -114,9 +128,10 @@ function render(
   handleParamsOverride: Partial<CanvasRenderContext['handleParams']> = {},
   /** 是否在渲染前先广播一次 NodeDragStart（模拟"已按住某节点正在拖"） */
   nodeDragging = false,
+  regionField?: SelectionRegionField,
 ): Promise<string> {
   const app = createSSRApp({ render: () => h(SelectionFrame as Component) })
-  app.provide(RENDER_CONTEXT_KEY, renderCtx(settings, zoom, selecting, handleParamsOverride, nodeDragging))
+  app.provide(RENDER_CONTEXT_KEY, renderCtx(settings, zoom, selecting, handleParamsOverride, nodeDragging, regionField))
   return renderToString(app)
 }
 
@@ -140,6 +155,13 @@ function outerGap(html: string, outerCls: string, innerCls: string): { left: num
 }
 
 describe('SelectionFrame 渲染（两个框不能重合）', () => {
+  it('选择框区域注册场：上栏条目渲染在外框上方', async () => {
+    const field = selectionRegionField([{ id: 'group-create', order: 10, value: { component: SelectionToolbarProbe } }])
+    const html = await render({}, 1, false, {}, false, field)
+    expect(html).toContain('probe-selection-toolbar')
+    expect(html).toContain('selection-frame-slot--top')
+  })
+
   it('选中 >1 个节点时渲染出内外两个框', async () => {
     const html = await render()
     expect(html).toContain('selection-frame-outer')

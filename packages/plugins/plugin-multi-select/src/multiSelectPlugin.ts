@@ -20,6 +20,7 @@ import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-ba
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
+import SelectionGroupToolbar from './SelectionGroupToolbar.vue'
 import { Config } from './multiSelectConfig'
 
 /** multi-select 暴露给外部插件的服务形状 */
@@ -122,6 +123,18 @@ export function apply(ctx: Context) {
     order: 40,
     component: SelectionFrame,
     meta: { title: '多选群组框' },
+  })
+
+  // 2.5 多选框自己的上控制栏内容 → selection/region 场（与节点 ctx.nodes.attach 同形）。
+  //     用 attach 而不是把按钮写死在 SelectionFrame 里：以后加功能 = 装一个插件再 attach 一条，
+  //     不必改本插件、更不必改 SelectionFrame（这正是"给这几个区域加新功能"要的接缝）。
+  //     needs 声明用到的能力：组件按名从能力场取，不自己 ctx.get 拼。
+  ctx.selectionRegion.attach({
+    region: 'out:top',
+    id: 'multi-select:group',
+    order: 10,
+    component: SelectionGroupToolbar,
+    needs: ['selection'],
   })
 
   // 3. 命令：全选 / 清除（keys 由宿主 CanvasHost 统一分发；热卸随 scope 自动回收）

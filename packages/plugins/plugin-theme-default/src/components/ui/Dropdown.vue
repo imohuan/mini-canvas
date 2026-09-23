@@ -245,11 +245,12 @@ watch(isOpen, (v) => {
   z-index: 100000;
   box-sizing: border-box;
   padding: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  /* 主题变量（--dd-* 由画布主题提供；缺失时回落到改造前的亮色值） */
+  border: 1px solid var(--dd-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
-  background: #fff;
+  background: var(--dd-bg, #fff);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  color: #374151;
+  color: var(--dd-ink, #374151);
   overflow-y: auto;
   scrollbar-width: thin;
   font-size: 13px;

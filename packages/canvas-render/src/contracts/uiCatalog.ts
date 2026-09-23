@@ -16,7 +16,7 @@ import { useCanvasRender } from './renderContext'
 export type UiComponentHandle = unknown;
 
 /** 目录里常用的名字（**约定俗成，不是封闭枚举**——主题可登记自定名字） */
-export const UI_NAMES = ['button', 'dropdown', 'select', 'slider', 'toolParamField'] as const;
+export const UI_NAMES = ['button', 'dropdown', 'select', 'slider', 'toolParamField', 'color'] as const;
 
 /**
  * 下拉选项的最小形状（**主题无关**）：与 theme-default 的 SelectOption 同构，

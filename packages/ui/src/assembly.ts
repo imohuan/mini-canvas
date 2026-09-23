@@ -29,6 +29,7 @@ import { groupPlugin } from '@mini-canvas/plugin-group'
 import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
 import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
 import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
+import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 
 /**
  * 成品应用的插件清单（21 个源码插件，顺序即装载序）。
@@ -40,6 +41,7 @@ import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
  */
 export const APP_PLUGINS = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
+  uiSettingsPanelPlugin, // 设置面板换皮：order -1 顶替默认皮，渲染本应用风格的设置界面
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
   nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏

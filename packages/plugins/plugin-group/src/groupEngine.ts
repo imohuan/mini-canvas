@@ -12,6 +12,15 @@
  * - 尺寸 w/h 由调用方给（渲染层 nodeLayout 实测/声明，引擎不关心来源）。
  */
 
+/**
+ * group 节点类型名。
+ *
+ * 放在本文件（纯逻辑、零依赖）而不是 groupPlugin：控制栏浮层组件也要用它判断
+ * "选中项是不是分组"，若从 groupPlugin import 会形成环（groupPlugin → 浮层组件 → groupPlugin），
+ * 顶层 const 在环里可能还没求值。放这里两边都能安全引用；groupPlugin 再导出一次保持既有 API。
+ */
+export const GROUP_NODE_TYPE = 'group'
+
 /** 一个矩形的坐标与尺寸（flow 绝对坐标） */
 export interface GroupRect {
   id: string
@@ -153,24 +162,27 @@ export interface GroupMembershipCandidate {
   currentParentId?: string
 }
 
-/** 分组预设色板（对齐老版 canvas-core/src/plugins/group/model.ts：前 7 个预设 + 1 自定义） */
-export type GroupColorSwatch =
-  | { kind: 'preset'; id: string; color: string; label: string }
-  | { kind: 'custom'; id: 'custom'; label: string }
+/**
+ * 分组预设色板（下拉里展示的就是这几个色块；用户拍板：只给预制色，不做自定义取色，
+ * 所以这里是一张**封闭**表 —— 不再有 v1 那个"自定义"入口）。
+ */
+export interface GroupColorSwatch {
+  id: string
+  color: string
+  label: string
+}
 
 export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
-  { kind: 'preset', id: 'slate', color: '#334155', label: '石板灰' },
-  { kind: 'preset', id: 'blue', color: '#0ea5e9', label: '蓝色' },
-  { kind: 'preset', id: 'red', color: '#ef4444', label: '红色' },
-  { kind: 'preset', id: 'orange', color: '#f97316', label: '橙色' },
-  { kind: 'preset', id: 'yellow', color: '#eab308', label: '黄色' },
-  { kind: 'preset', id: 'green', color: '#22c55e', label: '绿色' },
-  { kind: 'preset', id: 'violet', color: '#6366f1', label: '紫色' },
-  { kind: 'custom', id: 'custom', label: '自定义' },
+  { id: 'slate', color: '#334155', label: '石板灰' },
+  { id: 'blue', color: '#0ea5e9', label: '蓝色' },
+  { id: 'red', color: '#ef4444', label: '红色' },
+  { id: 'orange', color: '#f97316', label: '橙色' },
+  { id: 'yellow', color: '#eab308', label: '黄色' },
+  { id: 'green', color: '#22c55e', label: '绿色' },
+  { id: 'violet', color: '#6366f1', label: '紫色' },
 ]
 
-export const DEFAULT_GROUP_BACKGROUND_COLOR =
-  GROUP_COLOR_SWATCHES[0].kind === 'preset' ? GROUP_COLOR_SWATCHES[0].color : '#334155'
+export const DEFAULT_GROUP_BACKGROUND_COLOR = GROUP_COLOR_SWATCHES[0].color
 
 /** 取分组底色：存了颜色用存的，否则回退默认石板灰（对齐老版 model.ts 语义） */
 export function resolveGroupBackgroundColor(color: unknown): string {

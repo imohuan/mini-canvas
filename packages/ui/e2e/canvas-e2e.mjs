@@ -81,7 +81,8 @@ check('canvas-base 不可卸载（决策 1 core）', s0?.canUninstallBase.ok ===
 check('canvas-base 不在对外清单（环境而非插件项）', !s0?.plugins.includes('canvas-base'), `${s0?.plugins.length} 个业务插件`);
 
 // ③ 建节点
-await page.getByRole('button', { name: '+ 文本' }).click();
+await page.getByRole('button', { name: '添加节点' }).click();
+await page.getByRole('menuitem', { name: '文本', exact: true }).click();
 await page.waitForTimeout(500);
 const s1 = await state();
 check('点「+ 文本」建出节点', s1?.count === s0.count + 1, `${s0.count} -> ${s1?.count}`);
@@ -108,15 +109,15 @@ check('拖动节点位置真的变了', !!afterDrag && (Math.abs(afterDrag.x - b
 
 // ⑤ 撤销 / 重做（走工具栏按钮，与用户操作一致）
 const beforeUndo = (await state()).count;
-await page.getByRole('button', { name: '↶ 撤销' }).click();
+await page.keyboard.press('Control+z');
 await page.waitForTimeout(450);
 const afterUndo = (await state()).count;
-check('撤销按钮回退了上一步（拖动）', afterUndo === beforeUndo, `节点数 ${beforeUndo} -> ${afterUndo}（拖动撤销不改变节点数）`);
-await page.getByRole('button', { name: '↶ 撤销' }).click();
+check('撤销回退了上一步（拖动）', afterUndo === beforeUndo, `节点数 ${beforeUndo} -> ${afterUndo}（拖动撤销不改变节点数）`);
+await page.keyboard.press('Control+z');
 await page.waitForTimeout(450);
 const afterUndo2 = (await state()).count;
 check('再撤销回退了建节点', afterUndo2 === s0.count, `${afterUndo} -> ${afterUndo2}（期望 ${s0.count}）`);
-await page.getByRole('button', { name: '↷ 重做' }).click();
+await page.keyboard.press('Control+Shift+z');
 await page.waitForTimeout(450);
 const afterRedo = (await state()).count;
 check('重做恢复节点', afterRedo === s1.count, `${afterUndo2} -> ${afterRedo}`);
@@ -181,6 +182,35 @@ const scenario = await page.evaluate(async () => {
 check('运行期直接改场 → 节点热增上/下控制栏条目（用户最初那段场景）', scenario.btn && scenario.panel && scenario.gone, JSON.stringify(scenario));
 check('场条目带 source（谁放的）', typeof field.src === 'string' && field.src.length > 0, `source=${field.src}`);
 check('wrap/resolve（叠层可合成）', field.hasResolve === true);
+
+// ⑧b 多选框区域场（selection/region）：用户要求"多选时只显示多选框自己的状态栏"。
+//     两个断言：① 多选时节点控制栏被壳压掉；② 插件往 selection/region 挂的条目真的渲染在框上。
+const selToolbar = await page.evaluate(async () => {
+  const api = window.MiniCanvasUI;
+  const ctx = api.getContext();
+  const h = api.getHost();
+  const MARK = 'E2E_SELTOOLBAR';
+  const btn = { name: 'SelBtn', inheritAttrs: false, render: () => MARK };
+  const f = ctx.registryOf('selection/region');
+  const a = f.add('out:top', { component: btn, needs: ['selection'] }, { id: 'e2e-sel-top', order: 10 });
+  // 选中两个节点 → 多选框出现
+  const ids = h.nodeStore.getNodes().slice(0, 2).map((n) => n.id);
+  ctx.get('selection').set(ids);
+  await new Promise((r) => setTimeout(r, 800));
+  const text = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText).join('|');
+  // 多选时节点自身的上下控制栏应被压掉（壳的 hideToolbars）；
+  // 多选框的栏渲染在 .selection-frame-slot--top 里，不在 .vue-flow__node 内。
+  const shown = !!document.querySelector('.selection-frame-slot--top') &&
+    (document.querySelector('.selection-frame-slot--top')?.textContent || '').includes(MARK);
+  const nodeToolbarHidden = !text().includes('上传图片');
+  a.dispose();
+  await new Promise((r) => setTimeout(r, 600));
+  ctx.get('selection').clear();
+  return { shown, nodeToolbarHidden, gone: !document.body.innerHTML.includes(MARK) };
+});
+check('多选框区域场：插件挂的 out:top 条目渲染在框上（selection/region）', selToolbar.shown, JSON.stringify(selToolbar));
+check('多选时节点自身的上下控制栏被压掉（只留多选框的栏）', selToolbar.nodeToolbarHidden, JSON.stringify(selToolbar));
+check('selection/region 条目 dispose 后从框上摘除', selToolbar.gone, JSON.stringify(selToolbar));
 
 // ⑨ core 插件拒卸（真实宿主）
 const core = await page.evaluate(() => {

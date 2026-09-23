@@ -82,6 +82,11 @@ describe('Config schema（这些项必须出现在设置页面里）', () => {
     })
   })
 
+  it('颜色 schema 继续声明为 color（取色器可以写入 8 位透明 hex）', () => {
+    expect(Config[MULTI_SELECT_FRAME_KEYS.outerColor].type).toBe('color')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.innerColor].type).toBe('color')
+  })
+
   it('内框默认直角（radius 0）—— 用户明确要求去掉内框的圆角效果', () => {
     expect(DEFAULT_MULTI_SELECT_FRAME.inner.radius).toBe(0)
     expect(Config[MULTI_SELECT_FRAME_KEYS.innerRadius].default).toBe(0)
@@ -315,5 +320,22 @@ describe('frameStrokeCss / hexToRgba（生成出的样式就是配置的直接�
     expect(hexToRgba('#000000', 0.1)).toBe('rgba(0, 0, 0, 0.1)')
     expect(hexToRgba('oops', 1)).toBe('transparent')
     expect(hexToRgba('#ffffff', 5)).toBe('rgba(255, 255, 255, 1)')
+  })
+
+  it('hexToRgba 透传 #rgba / #rrggbbaa 自带的 alpha，再叠加 fillOpacity', () => {
+    expect(hexToRgba('#f008', 1)).toBe('rgba(255, 0, 0, 0.5333333333333333)')
+    expect(hexToRgba('#3b82f680', 1)).toBe('rgba(59, 130, 246, 0.5019607843137255)')
+    const half = /, ([0-9.]+)\)$/.exec(hexToRgba('#3b82f680', 0.5))
+    expect(Number(half?.[1])).toBeCloseTo((0x80 / 255) * 0.5, 12)
+  })
+
+  it('配置读取与单项更新都保留 8 位颜色，不回落默认色', () => {
+    const outer = '#3b82f680'
+    const cfg = resolveMultiSelectFrameConfig((key) =>
+      key === MULTI_SELECT_FRAME_KEYS.outerColor ? outer : undefined,
+    )
+    expect(cfg.outer.color).toBe(outer)
+    const changed = applyMultiSelectFrameChange(cfg, MULTI_SELECT_FRAME_KEYS.innerColor, '#ff000080')
+    expect(changed.inner.color).toBe('#ff000080')
   })
 })

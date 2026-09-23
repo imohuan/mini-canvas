@@ -214,6 +214,7 @@ export type {
   ZoomCapability,
   SelectedCapability,
   ToolsCapability,
+  SelectionCapability,
 } from './contracts/standardCapabilities'
 // 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
 export { default as RegionEntryHost } from './components/RegionEntryHost.vue'

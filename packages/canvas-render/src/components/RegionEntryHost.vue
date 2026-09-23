@@ -23,9 +23,15 @@ const props = defineProps<{
    * 本组件只负责"按本条目 needs 取用 + provide"。
    */
   cache: CapabilityCache
-  /** 下发给条目组件的节点 id / data（与既有区域渲染的 props 契约一致） */
-  nodeId: string
-  data: Record<string, unknown>
+  /**
+   * 下发给条目组件的节点 id / data（与既有区域渲染的 props 契约一致）。
+   *
+   * 可缺省：多选框（选择集）也是这套区域机制的一块宿主，但它**没有"某一个节点"** ——
+   * 传 undefined 时这两个 prop 整个不渲染（Vue 对 undefined 属性不落 DOM），
+   * 于是同一层壳既能服务节点区域、也能服务选择集区域，不必再抄一份。
+   */
+  nodeId?: string
+  data?: Record<string, unknown>
   /** dev 开关（供能力缺失时的提示分 dev/prod；来自 ctx.isDev） */
   isDev?: boolean
 }>()

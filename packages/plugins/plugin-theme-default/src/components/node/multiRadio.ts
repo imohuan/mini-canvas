@@ -60,9 +60,9 @@ export const DEFAULT_MULTI_RADIO: MultiRadioConfig = Object.freeze({
 /** 取值器：给一个 key 拿当前值（读不到返回 undefined） */
 export type MultiRadioGetter = (key: string) => unknown
 
-/** hex(#rgb / #rrggbb) 校验：不合法就回落，避免把坏值喂给 color() 让整条 CSS 失效 */
+/** hex(#rgb / #rgba / #rrggbb / #rrggbbaa) 校验：不合法就回落，避免把坏值喂给 color() 让整条 CSS 失效 */
 function toColor(value: unknown, fallback: string): string {
-  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
+  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
     ? value
     : fallback
 }

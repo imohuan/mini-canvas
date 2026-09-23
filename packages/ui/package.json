@@ -26,6 +26,7 @@
     "vue": "^3.5.34"
   },
   "dependencies": {
+    "@floating-ui/vue": "^1.1.11",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
@@ -49,7 +50,10 @@
     "@mini-canvas/plugin-shortcut-manager": "workspace:*",
     "@mini-canvas/plugin-theme-default": "workspace:*",
     "@mini-canvas/plugin-tool-image-generation": "workspace:*",
-    "@mini-canvas/plugin-tool-text-generation": "workspace:*"
+    "@mini-canvas/plugin-tool-text-generation": "workspace:*",
+    "@vueuse/core": "^14.3.0",
+    "lucide-vue-next": "^1.0.0",
+    "motion-v": "^2.4.4"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

@@ -242,10 +242,10 @@ const dropdownMenuWidth = computed(() =>
   width: 100%;
   box-sizing: border-box;
   padding: 7px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  color: #111827;
+  background: var(--sf-input-bg, rgba(0, 0, 0, 0.03));
+  color: var(--sf-label, #111827);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
@@ -257,13 +257,13 @@ const dropdownMenuWidth = computed(() =>
 }
 
 .sel-trigger:hover:not(.is-open) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
 }
 
 .sel-trigger.is-open {
-  border-color: rgba(8, 145, 178, 0.6);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--sf-input-bg-focus, #fff);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft, rgba(8, 145, 178, 0.14));
 }
 
 .sel-trigger:focus-visible {
@@ -277,11 +277,11 @@ const dropdownMenuWidth = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #111827;
+  color: var(--sf-label, #111827);
 }
 
 .sel-label.is-placeholder {
-  color: #9ca3af;
+  color: var(--sf-desc, #9ca3af);
   font-weight: 400;
 }
 
@@ -292,7 +292,7 @@ const dropdownMenuWidth = computed(() =>
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #6b7280;
+  color: var(--sf-desc, #6b7280);
   transition: transform 0.12s ease-out, color 0.12s ease-out;
 }
 
@@ -303,7 +303,7 @@ const dropdownMenuWidth = computed(() =>
 
 .sel-arrow.is-open {
   transform: rotate(180deg);
-  color: #0891b2;
+  color: var(--ui-accent, #0891b2);
 }
 
 .sel-search {
@@ -312,7 +312,7 @@ const dropdownMenuWidth = computed(() =>
   border: 0;
   outline: 0;
   background: transparent;
-  color: #111827;
+  color: var(--sf-label, #111827);
   font-size: 13px;
   font-weight: 500;
   font-family: inherit;
@@ -345,7 +345,7 @@ const dropdownMenuWidth = computed(() =>
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #374151;
+  color: var(--dd-ink, #374151);
   font-size: 13px;
   font-weight: 500;
   text-align: left;
@@ -359,12 +359,12 @@ const dropdownMenuWidth = computed(() =>
 
 .sel-option:hover,
 .sel-option.is-highlight {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
 }
 
 .sel-option.is-active {
-  background: rgba(8, 145, 178, 0.12);
-  color: #0e7490;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
+  color: var(--ui-accent, #0e7490);
   font-weight: 600;
 }
 
@@ -393,7 +393,7 @@ const dropdownMenuWidth = computed(() =>
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: #0891b2;
+  color: var(--ui-accent, #0891b2);
 }
 
 .sel-check svg {
@@ -404,7 +404,7 @@ const dropdownMenuWidth = computed(() =>
 .sel-empty {
   padding: 14px 8px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--sf-desc, #9ca3af);
   font-size: 12px;
 }
 
@@ -413,9 +413,9 @@ const dropdownMenuWidth = computed(() =>
 }
 .sel-list::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .sel-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 </style>

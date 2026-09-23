@@ -27,11 +27,19 @@ import {
   resolveGroupChanges,
   DEFAULT_GROUP_BACKGROUND_COLOR,
   DEFAULT_GROUP_PADDING,
+  GROUP_NODE_TYPE,
 } from './groupEngine'
 import GroupContent from './GroupContent.vue'
+import GroupTopToolbar from './GroupTopToolbar.vue'
+import GroupTopToolbarOverlay from './GroupTopToolbarOverlay.vue'
 
-/** group 节点类型名与默认声明尺寸 */
-export const GROUP_NODE_TYPE = 'group'
+/**
+ * group 节点类型名由 groupEngine.ts 定义（单一来源），这里**转发导出**保持既有 API。
+ * 为什么要转发而不是本地再定义一份：浮层组件也要用它判断"选中项是不是分组"，
+ * 若让浮层从本文件 import 会成环（groupPlugin → 浮层 → groupPlugin），顶层 const 在环里可能未求值。
+ */
+export { GROUP_NODE_TYPE }
+/** 分组节点默认声明尺寸 */
 export const GROUP_DEFAULT_SIZE = { w: 200, h: 100 }
 /** 渲染层事件名（对齐 canvas-render RenderEvents.NodeDragEnd；本地复制避免 runtime 依赖渲染层） */
 const NODE_DRAG_END = 'canvas:node:drag-end'
@@ -375,6 +383,12 @@ export function apply(ctx: Context) {
     label: '分组',
     size: GROUP_DEFAULT_SIZE,
     in: GroupContent,
+    // ⚠️ 这里**故意不注册** out:top 段。分组的控制栏有个绕不开的层级问题：
+    // 分组卡片的"垫底"靠给分组节点写 z-index:-3（canvasHostCore），而 z-index 非 auto 就在
+    // 该节点上创建层叠上下文 —— 写在节点内部的段（原本 z-index:30）会被整个关进 -3 里，
+    // 数字再大也越不过兄弟节点，任何普通节点都能盖住它（用户报的"被节点遮挡"）。
+    // 所以分组的控制栏改挂**画布 overlay 槽**（压在整个 VueFlow 之上），见下方 slots.register。
+    // 按钮内容仍是同一份 GroupTopToolbar，只是宿主换了层。
     // 容器型节点能力：
     // - resizable：右下角拖柄改 size/cardWidth/cardHeight（一条历史，与 recalculateBounds 同字段）
     // - transparent：外壳卡片底透明（边框保留），GroupContent 铺半透明色 → 连接线透出卡片区域
@@ -383,6 +397,15 @@ export function apply(ctx: Context) {
     outputs: [],
     resizable: true,
     transparent: true,
+  })
+
+  // 分组控制栏挂画布 overlay 槽（压在整个 VueFlow 之上，见上方注释里那段层叠上下文说明）。
+  // 浮层宿主自己判"恰好单选了一个分组节点"，并把 GroupTopToolbar 摆到卡片正上方。
+  ctx.slots.register('overlay', {
+    id: 'group-top-toolbar',
+    order: 35,
+    component: GroupTopToolbarOverlay,
+    meta: { title: '分组上控制栏' },
   })
 
   ctx.commands.register({

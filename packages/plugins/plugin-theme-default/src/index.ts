@@ -36,6 +36,7 @@ import {
   PrecisionSlider,
   ToolParamField,
   NodeToolbarButton,
+  ColorField,
 } from "./components/ui";
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
@@ -663,6 +664,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("select", Select, { id: "default" });
   ui.add("slider", PrecisionSlider, { id: "default" });
   ui.add("toolParamField", ToolParamField, { id: "default" });
+  ui.add("color", ColorField, { id: "default" });
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
   ctx.theme.register("settingsPanel", PluginSettingsDialog, {
@@ -681,7 +683,7 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
-export { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton } from "./components/ui";
+export { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
 
 /**

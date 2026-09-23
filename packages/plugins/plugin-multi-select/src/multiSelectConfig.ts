@@ -310,9 +310,9 @@ function toBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-/** hex 颜色校验（不合法回落默认，避免把 CSS 写坏） */
+/** hex 颜色校验（支持透明度 4/8 位；不合法回落默认，避免把 CSS 写坏） */
 function toColor(value: unknown, fallback: string): string {
-  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)
+  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
     ? value
     : fallback
 }
@@ -459,16 +459,20 @@ export function scaleFramePaddings(pads: FramePaddings, zoom: number): FramePadd
   return { inner: up(pads.inner), gap: up(pads.gap) }
 }
 
-/** hex(#rgb / #rrggbb) → rgba()；解析不出来时回落成"透明"，绝不写出坏值 */
+/** hex(#rgb / #rgba / #rrggbb / #rrggbbaa) → rgba()；解析不出来时回落成"透明"，绝不写出坏值 */
 export function hexToRgba(hex: string, alpha: number): string {
-  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex)
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.exec(hex)
   if (!m) return 'transparent'
   let body = m[1]
-  if (body.length === 3) body = body[0] + body[0] + body[1] + body[1] + body[2] + body[2]
+  if (body.length === 3 || body.length === 4) {
+    body = body.split('').map((c) => c + c).join('')
+  }
   const r = parseInt(body.slice(0, 2), 16)
   const g = parseInt(body.slice(2, 4), 16)
   const b = parseInt(body.slice(4, 6), 16)
-  const a = Math.min(Math.max(alpha, 0), 1)
+  const embeddedAlpha = body.length === 8 ? parseInt(body.slice(6, 8), 16) / 255 : 1
+  const requestedAlpha = Number.isFinite(alpha) ? Math.min(Math.max(alpha, 0), 1) : 0
+  const a = embeddedAlpha * requestedAlpha
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 

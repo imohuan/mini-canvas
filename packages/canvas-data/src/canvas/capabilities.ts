@@ -91,6 +91,24 @@ export interface NodeAttachReq {
 }
 
 /**
+ * ctx.selectionRegion.attach 的请求：多选框（选择集）的区域条目。
+ *
+ * 与 NodeAttachReq 的**唯一差别是没有 type** —— 多选框不是某一种节点，它就是"当前选中的一批"。
+ * 其余字段（region/id/order/component/needs/props）逐字同形：作者在节点上怎么写，在多选框上就怎么写。
+ *
+ * 场键 = 区域词本身（不像节点那样是 `type/region`）：多选框没有类型那一维。
+ */
+export interface SelectionAttachReq {
+  region: NodeRegion
+  id?: string
+  order?: number
+  component: unknown
+  needs?: string[]
+  props?: Record<string, unknown>
+}
+
+
+/**
  * 能力段收口。给定一个插件 scope ctx（含 get/effect），返回 ctx 上挂的 nodes/theme/commands/slots。
  */
 export function buildCapabilities(
@@ -127,6 +145,13 @@ export function buildCapabilities(
   commands: {
     register(def: CommandDef): { dispose(): void }
     has(id: string): boolean
+  }
+  /**
+   * 往"多选框（选择集）"的某区域挂组件（与 nodes.attach 同形，只是宿主换成选择集）。
+   * 落 selection/region 场，键 = 区域词；自动回收。
+   */
+  selectionRegion: {
+    attach(req: SelectionAttachReq): Disposable
   }
   slots: {
     register(slot: string, req: SlotRegisterReq): string
@@ -295,6 +320,30 @@ export function buildCapabilities(
         }
         // 缺省 id = 当前插件名（§8.3：同插件重装即替换该格），而不是场的自动 id
         const placed = regionField?.add(`${type}/${region}`, value, {
+          id: req.id ?? pluginName,
+          order: req.order,
+        })
+        if (placed) ctx.effect(() => () => placed.dispose())
+        return {
+          dispose: () => placed?.dispose(),
+        }
+      },
+    },
+
+    // ---------- ctx.selectionRegion：往"多选框（选择集）"的某区域挂组件，自动回收 ----------
+    // 与 ctx.nodes.attach 同一套语义（区域词、值形状、缺省 id、自动回收），
+    // 差别只有一处：**没有 type**（多选框不是某一种节点），故场键就是区域词本身。
+    // 消费者是 SelectionFrame（多选插件的群组框），它按区域词读出条目渲染到框外。
+    selectionRegion: {
+      attach(req: SelectionAttachReq): Disposable {
+        const region = assertRegion(String(req.region))
+        const regionField = land<NodeRegionAttachment>('selection/region')
+        const value: NodeRegionAttachment = {
+          component: req.component,
+          needs: req.needs,
+          props: req.props,
+        }
+        const placed = regionField?.add(region, value, {
           id: req.id ?? pluginName,
           order: req.order,
         })

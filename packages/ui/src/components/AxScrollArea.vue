@@ -1,0 +1,39 @@
+<script setup lang="ts">
+// AxScrollArea —— 画布应用统一滚动容器。
+// 滚动条样式照 LibTV 实测：轨道 6px 透明、滑块 4px 圆角 6、rgba(255,255,255,.4)，
+// hover 加深。亮色主题下换成 rgba(0,0,0,.2)。
+// 用法：<AxScrollArea class="flex-1 min-h-0"><div>…</div></AxScrollArea>
+withDefaults(
+  defineProps<{
+    /** x 横向 / y 纵向 / both 双向 */
+    direction?: 'x' | 'y' | 'both'
+    /** 滚动层额外 class（padding / gap 等布局样式放这里） */
+    bodyClass?: string
+  }>(),
+  { direction: 'y', bodyClass: '' },
+)
+</script>
+
+<template>
+  <div class="ax-sa" :class="'ax-sa--' + direction">
+    <div class="ax-sa-view" :class="bodyClass">
+      <slot />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.ax-sa { position: relative; min-height: 0; overflow: hidden; }
+.ax-sa-view { height: 100%; }
+.ax-sa--x .ax-sa-view { overflow-x: auto; overflow-y: hidden; }
+.ax-sa--y .ax-sa-view { overflow-y: auto; overflow-x: hidden; }
+.ax-sa--both .ax-sa-view { overflow: auto; }
+
+/* 滚动条：细条 + 圆角 + 半透明白（照 LibTV 实测） */
+.ax-sa-view { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb) transparent; }
+.ax-sa-view::-webkit-scrollbar { width: 6px; height: 6px; }
+.ax-sa-view::-webkit-scrollbar-track { background: transparent; }
+.ax-sa-view::-webkit-scrollbar-thumb { background: var(--ui-scroll-thumb); border-radius: 6px; }
+.ax-sa-view::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
+.ax-sa-view::-webkit-scrollbar-corner { background: transparent; }
+</style>

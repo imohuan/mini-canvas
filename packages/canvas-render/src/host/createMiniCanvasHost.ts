@@ -16,6 +16,7 @@
 import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
 import type { CommandService } from '@mini-canvas/kernel'
 import { Context, createCanvasBasePlugin, GRAPH_EDGES_KEY, GRAPH_KEY } from '@mini-canvas/canvas-data'
+import { restoreNodeMediaUrls } from '@mini-canvas/canvas-data'
 import type { CapabilityFactory } from '../contracts/capabilities'
 import { createStandardCapabilities } from '../contracts/standardCapabilities'
 import type {
@@ -257,7 +258,12 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     restoreEdges = (saved.edges ?? []) as CanvasEdge[]
   }
   if (hasStoredGraph) {
-    nodeStore.replaceAll(restoreNodes ?? [])
+    const nodes = restoreNodes ?? []
+    // 资源 URL 只在当前页面有效。先按持久化的 resourceId 重建各媒体字段的可用地址；
+    // 找不到资源时删掉失效地址，避免挂载媒体元素后触发控制台 ERR_FILE_NOT_FOUND。
+    // 判定收在 canvas-data 的 restoreNodeMediaUrls（视频/图片/全景各写哪个字段有单一来源）。
+    await restoreNodeMediaUrls(nodes, async (resourceId, kind) => resources.restore?.(resourceId, kind))
+    nodeStore.replaceAll(nodes)
     edgeStore.replaceAll(restoreEdges ?? [])
   } else if (opts.seedDefault) {
     const seeded = opts.seedDefault()

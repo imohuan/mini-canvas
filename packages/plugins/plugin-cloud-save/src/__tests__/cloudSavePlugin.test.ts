@@ -24,6 +24,7 @@ import {
 } from '@mini-canvas/canvas-data'
 import { cloudSavePlugin } from '../cloudSavePlugin'
 import type { CloudSaveService } from '../cloudSavePlugin'
+import { ResourceStore } from '@mini-canvas/canvas-data'
 
 // 装配一律走 `ctx.plugin(mod, config)`：与真实宿主同一条路径
 // （内核按 Config schema 校验 + 补默认，apply 收到的永远是全量 config）。
@@ -126,6 +127,7 @@ async function bootWithLocal(localNodes: unknown[], localEdges: unknown[] = []) 
   })
   // 5c：数据那一格只有 doc 一个名字（四个老服务名已下线）
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
+  ctx.inject('resources', new ResourceStore({ createUrl: (resource) => `blob:test-${(resource as Blob).size}`, revokeUrl() {} }))
 
   // 宿主恢复本地存档（真实顺序：这一步发生在插件装载之前）
   nodeStore.replaceAll(localNodes as never)
@@ -187,6 +189,21 @@ describe('cloud-save 安装后的云端优先恢复', () => {
 })
 
 describe('cloud-save 的资源搬运', () => {
+  it('resourceId 对应的 Blob 也走云端上传并写回稳定地址', async () => {
+    const fake = fakeCloud()
+    useCloud(fake.impl)
+    const { ctx, nodeStore } = await bootWithLocal([])
+    const resources = ctx.get<ResourceStore>('resources')
+    const resourceId = resources.register({ kind: 'image', resource: new Blob(['cloud-bytes'], { type: 'image/png' }) })
+    nodeStore.addNodes([{ id: 'r1', type: 'image', position: { x: 0, y: 0 }, data: { resourceId, imageUrl: resources.url(resourceId) } }])
+    ctx.plugin(cloudSavePlugin)
+    await ctx.start()
+    const st = await ctx.get<CloudSaveService>('cloud-save').sync()
+    expect(st.uploadedResources).toBe(1)
+    expect(fake.stats().uploads).toBe(1)
+    expect(String(nodeStore.getNode('r1')?.data.imageUrl)).toBe('/uploads/hash1.png')
+    await settle()
+  })
   it('把节点里的大 dataURL 换成 /uploads/... 稳定地址', async () => {
     const fake = fakeCloud()
     useCloud(fake.impl)

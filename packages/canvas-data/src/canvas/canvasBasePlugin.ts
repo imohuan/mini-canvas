@@ -29,7 +29,7 @@ import { Selection } from '../selection'
 import { History } from '../history'
 import { GraphDocument } from '../graphDocument'
 import type { GraphEnvelope } from '../graphDocument'
-import { ResourceStore } from '../resourceService'
+import { ResourceStore, createIndexedDbResourcePersistence, sanitizeTransientResourceUrls } from '../resourceService'
 import { createSettingsPersist } from '../settingsPersist'
 import type { SettingsPersistService } from '../settingsPersist'
 import { isTransient } from '../transient'
@@ -128,6 +128,7 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
           revokeUrl: (u) => URL.revokeObjectURL(u),
         }
       : undefined,
+    createIndexedDbResourcePersistence(),
   )
 
   // 展示注册表：节点段（content/工具栏）与主题槽（边/背景/设置面板）
@@ -157,7 +158,7 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   // commit 回调接收整图信封：宿主把当前节点+边持久化（与 CanvasHost/commands 的 graph/graph-edges 分存一致）。
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (envelope) => {
     // 落盘同样滤掉中间态：交互中间态刷新后不该复活。
-    save.set(GRAPH_KEY, envelope.nodes.filter((n) => !isTransient(n)), 'canvas')
+    save.set(GRAPH_KEY, sanitizeTransientResourceUrls(envelope.nodes.filter((n) => !isTransient(n))), 'canvas')
     save.set(GRAPH_EDGES_KEY, envelope.edges.filter((e) => !isTransient(e)), 'canvas')
   })
 

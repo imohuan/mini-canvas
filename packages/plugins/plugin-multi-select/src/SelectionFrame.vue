@@ -28,6 +28,7 @@
  *    这里加 wheel 监听把事件转发给 VueFlow 的 viewport（转发而非自己调 zoom，缩放中心才正确）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+defineOptions({ inheritAttrs: false })
 import {
   useCanvasRender,
   RenderEvents,
@@ -35,6 +36,13 @@ import {
   resolveFeedback,
   reasonText as reasonTextFrom,
   DEFAULT_SNAP_ZONE_CONFIG,
+} from '@mini-canvas/canvas-render'
+import {
+  RegionEntryHost,
+  useToolbarOffsets,
+  resolveNodeSlotStyle,
+  createCapabilityCache,
+  capabilityField,
 } from '@mini-canvas/canvas-render'
 import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
@@ -69,6 +77,7 @@ import {
 import { followFrame } from './dragFollow'
 import { pointerDown, POINTER_DOWN_CLASS, bindPointerPressWatchers } from './pointerPress'
 import { BoxSelectClickGuard } from './boxSelectGuard'
+import { selectionRegionEntries } from './selectionRegion'
 
 const { viewport, ctx, updateNodeVisual, pane, interaction, rootEl, handleParams, connectionState, screenToFlow, snapZone } = useCanvasRender()
 
@@ -861,6 +870,81 @@ const showInner = computed(() => {
 /** 有选中（>1）就显示整个浮层 */
 const isVisible = computed(() => frame.value !== null && !isSelecting.value)
 
+// ====== 多选框上/下控制栏（与节点 BaseNode 同一套机制）======
+/**
+ * 多选框也能挂"上/下控制栏"（用户要求："多选的时候只显示这个多选框的它的状态栏"）。
+ *
+ * 做法与节点**逐字同形**，只是宿主从"某个节点"换成"选择集"：
+ * - 位置注册走 ctx.selectionRegion.attach({ region:'out:top', component, needs, props })
+ *   → 落 selection/region 场（键 = 区域词）；
+ * - 这里按区域词读出条目，经 RegionEntryHost 渲染（那层按条目的 needs 造能力袋 provide）；
+ * - 定位复用**同一个** resolveNodeSlotStyle（贴边 + 居中 + 反缩放），所以多选框的栏
+ *   与节点的栏在屏幕上是同一套观感，不会因为两处各写一遍 CSS 而漂移。
+ */
+const regionField = (() => {
+  try {
+    return ctx.registryOf<unknown>('selection/region')
+  } catch {
+    return undefined
+  }
+})()
+/** 场是非响应式的普通对象（内核不认识 Vue）：订一次，进出条目就 bump 让下面的 computed 重算 */
+const regionTick = ref(0)
+const regionOff = regionField?.subscribe(() => void (regionTick.value += 1))
+onBeforeUnmount(() => regionOff?.dispose())
+const regionEntriesOf = (region: string) =>
+  (void regionTick.value, selectionRegionEntries(regionField as never, region))
+const topRegions = computed(() => regionEntriesOf('out:top'))
+const bottomRegions = computed(() => regionEntriesOf('out:bottom'))
+
+/**
+ * 能力袋缓存：**每块多选框一份**（对应节点的"每节点一份"）。
+ * 同一多选框上"按钮"与"它打开的面板"两条条目因此共享同一个能力实例（决策 9 第②条）。
+ * 多选框在流里只有一个，故这份缓存在组件层建一次即可；随组件卸载回收。
+ */
+const selectionCapabilityCache = createCapabilityCache(
+  capabilityField(ctx),
+  // 选择集没有"某一个节点"：id/type 给空串，data/selected/solo/zoom 给活引用占位，
+  // 真正给作者用的是 selection 能力（读整个选中集），不是这里的 node 视角。
+  {
+    ctx: ctx as never,
+    id: '',
+    type: '',
+    data: computed(() => ({})) as never,
+    selected: computed(() => true) as never,
+    solo: computed(() => false) as never,
+    zoom: computed(() => viewport.value.zoom) as never,
+    update: () => {},
+  },
+  ctx.isDev === true,
+)
+onBeforeUnmount(() => selectionCapabilityCache.dispose())
+
+/** 控制栏贴边距离：与节点控制栏共用同一个 offset 配置（「布局/控制栏」） */
+const toolbarOffsets = useToolbarOffsets()
+const topRegionsStyle = computed(() =>
+  resolveNodeSlotStyle({ side: 'top', offset: toolbarOffsets.value.top, zoom: viewport.value.zoom || 1 }),
+)
+const bottomRegionsStyle = computed(() =>
+  resolveNodeSlotStyle({ side: 'bottom', offset: toolbarOffsets.value.bottom, zoom: viewport.value.zoom || 1 }),
+)
+
+/**
+ * 控制栏的定位锚：与外框同位置、同尺寸（纯定位层，不接事件）。
+ * 这样两条栏的 calc(100% ± offset) 就等于"离外框这条边的距离" —— 与节点控制栏
+ * "离卡片这条边的距离"逐字同义。
+ */
+const toolbarAnchorStyle = computed(() => {
+  const g = frame.value
+  if (!g) return null
+  return {
+    left: `${g.outer.x}px`,
+    top: `${g.outer.y}px`,
+    width: `${g.outer.w}px`,
+    height: `${g.outer.h}px`,
+  }
+})
+
 // ====== 批量连线端口的定位与引导线 ======
 /**
  * 端口只在"有多选"且"没在拖动/框选"时出现。
@@ -1062,6 +1146,43 @@ onBeforeUnmount(() => {
     <div class="selection-frame-outer" :style="outerStyle" role="presentation" />
     <!-- 小框：紧贴选中节点并集（不含标题），纯装饰不接事件 -->
     <div v-if="showInner" class="selection-frame-inner" :style="innerStyle" />
+
+    <!-- 控制栏定位锚 = 外框本身（与外框同位置同尺寸、不吃事件）。
+         为什么要这一层：上/下栏要贴着"外框的边"算位置，而 resolveNodeSlotStyle 的
+         calc(100% ± offset) 是相对**定位父元素**算的 —— 节点那边父元素就是卡片，
+         这里就必须有一块与外框重合的父元素，才能得到逐字相同的贴边语义。 -->
+    <div class="selection-frame-toolbar-anchor" :style="toolbarAnchorStyle">
+      <!-- 上控制栏：插件经 ctx.selectionRegion.attach({ region:'out:top', … }) 挂进来。
+           定位与节点那套**同一个** resolveNodeSlotStyle（贴边 + 居中 + 反缩放），
+           所以多选框的栏与节点的栏观感一致；条目里没东西时整层不出现（不留空壳）。 -->
+      <div
+        v-if="topRegions.length > 0"
+        class="selection-frame-slot selection-frame-slot--top nodrag nopan"
+        :style="topRegionsStyle"
+      >
+        <RegionEntryHost
+          v-for="seg in topRegions"
+          :key="'sel-top-' + seg.id"
+          :entry="seg"
+          :cache="selectionCapabilityCache"
+          :is-dev="ctx.isDev === true"
+        />
+      </div>
+      <!-- 下控制栏：同上方，位置在框下缘外侧 -->
+      <div
+        v-if="bottomRegions.length > 0"
+        class="selection-frame-slot selection-frame-slot--bottom nodrag nopan"
+        :style="bottomRegionsStyle"
+      >
+        <RegionEntryHost
+          v-for="seg in bottomRegions"
+          :key="'sel-bottom-' + seg.id"
+          :entry="seg"
+          :cache="selectionCapabilityCache"
+          :is-dev="ctx.isDev === true"
+        />
+      </div>
+    </div>
     <!-- 批量连线端口：左右各一个（效果对称，右侧=选中节点当源、左侧=当目标）。
          直接复用主题的 MovingHandle（preview 模式 = 只复用外观、不注册 VueFlow 连接点），
          所以它和节点上的端口**长得完全一样**（半圆跟随区 + 浮动圆球 + 同一套主题变量）。
@@ -1180,6 +1301,24 @@ onBeforeUnmount(() => {
   position: absolute;
   box-sizing: border-box;
   pointer-events: none;
+}
+
+/* 控制栏定位锚：与外框重合的纯定位层（自身不接事件；栏里的控件各自开 pointer-events） */
+.selection-frame-toolbar-anchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* 上/下控制栏：位置（贴边 + 居中 + 反缩放）由 resolveNodeSlotStyle 注入 inline style，
+   这里只给"排一行"的默认排版 —— 与节点 .v2-slot 逐字同值，两处观感才一致。 */
+.selection-frame-slot {
+  position: absolute;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  pointer-events: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {

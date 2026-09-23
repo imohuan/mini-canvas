@@ -209,20 +209,27 @@
 - 前置搜索 SVG 14px、`--text-faint`；input 去边框去 outline、透明底、13px/500、`--text-strong`，placeholder 用 `--text-faint`。
 - 打开浮层时输入框 `autofocus`。
 
-### 3.7 标题区
+### 3.7 颜色控件
+
+- 颜色字段使用带棋盘格预览的取色控件，不使用原生颜色输入框：用户必须能看见当前透明度，并能直接拖动透明度滑杆。
+- 颜色值统一保存为 hex：不透明写 6 位，半透明写 8 位；读取时也接受 3/4 位缩写并展开。
+- 色块、十六进制值、透明度百分比在触发器上常显；取色面板内提供色相、饱和度、透明度和棋盘格。
+- 触发器是可聚焦按钮，必须有可见关联 label 或 aria-label；面板沿用浮层 z-index:100000、发丝边和柔和阴影。
+
+### 3.8 标题区
 
 - 双行结构：eyebrow（11px/700/`--text-faint`/字距 .04em）+ 标题（15px/700/`--text-strong`），两行 gap 2px。
 - 右侧放图标按钮组，gap 4px。
 - 分组小标题：12px/700/`--text-faint`，margin 4px 6px。
 
-### 3.8 内嵌展开卡（行内展开二级面板）
+### 3.9 内嵌展开卡（行内展开二级面板）
 
 - 外层行展开后变纵向：青色浅底 `rgba(8,145,178,.1)`、圆角 12；内嵌白卡：白底、1px `rgba(8,145,178,.16)` 青调边、圆角 10、e1 阴影、0.22s `--ease-back` 上滑淡入。
 - 表单行：label 固定 48px 宽、11px/700/`--text-muted`/字距 .04em，value 区 `flex:1`，保证上下行对齐。
 - "录制/选择类"输入框：dashed 1px `--line-dashed` + `--fill-quiet` 凹陷感；hover 转青边青底；进行中转实线青边 + 脉冲环；有值转白底实线灰边。
 - 底部动作条：左反馈信息、右按钮组，`justify-content:space-between`。
 
-### 3.9 滚动条
+### 3.10 滚动条
 
 ```css
 .list::-webkit-scrollbar { width: 8px; }
@@ -231,7 +238,7 @@
 .list { scrollbar-width: thin; }
 ```
 
-### 3.10 图标
+### 3.11 图标
 
 - 统一线性图标：`viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"`（Lucide/Feather 规范）。
 - 尺寸档：12（文本按钮内）/ 14（输入框前）/ 16（行、图标按钮），不允许其他尺寸。

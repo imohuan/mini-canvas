@@ -74,6 +74,21 @@ const panelStyle = computed<Record<string, string>>(() => ({
 
 /** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createImageOps(ctx)
+async function persistGeneratedImage(url: string): Promise<{ url: string; resourceId: string } | undefined> {
+  if (!/^data:/i.test(url)) return undefined
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const resources = ctx.get<{ register(input: { kind: string; resource: Blob }): string; url(id: string): string | undefined } | undefined>('resources')
+    if (!resources) return undefined
+    const resourceId = resources.register({ kind: 'image', resource: blob })
+    await resources.flush?.(resourceId)
+    const currentUrl = resources.url(resourceId)
+    return currentUrl ? { url: currentUrl, resourceId } : undefined
+  } catch {
+    return undefined
+  }
+}
 
 // ==================== 工具（模型）====================
 
@@ -329,6 +344,7 @@ async function onSend(): Promise<void> {
       // 出图后卡片尺寸也按同一套上限（配置改完下一次生成即生效）
       fitLimits: () => readImageFitLimits(ctx),
       measure: (url) => readImageSize(url),
+      persistImage: persistGeneratedImage,
     },
   )
 

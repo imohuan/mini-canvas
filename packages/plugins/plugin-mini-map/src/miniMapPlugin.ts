@@ -2,11 +2,12 @@
  * plugin-mini-map —— 小地图插件（独立包，v2 API）。
  *
  * 复刻老版 canvas-core/src/plugins/mini-map：
- * - 右下角小地图（overlay 槽 occupant，宿主 CanvasSurface 已渲染该槽）；
+ * - 小地图（mini-map 专用槽 occupant，宿主经 <SlotHost slot="mini-map"/> 自选位置渲染）；
  *   缩略节点 + 视口矩形 + 拖拽平移 / 点击跳转（组件 MiniMapOverlay.vue，纯 UI 与手势）。
  * - Ctrl/Cmd+M 切换显隐：老版 context.registerShortcut('ctrl+m') → v2 走命令 keys（mod+m），
  *   渲染层 CanvasHost 统一分发键盘，插件不自己绑 window。
- * - 显隐状态 = 本插件注入的 mini-map 服务（{ visible } 响应式）：命令切换与组件读取同一对象。
+ * - 显隐状态 = 本插件注入的 mini-map 服务（{ visible } 响应式）：命令切换、设置面板与
+ *   宿主（如把浮层装进自己的壳）读取同一个对象 —— 显隐只有一个事实来源。
  *
  * 依赖方向：只依赖内核服务（doc/nodeLayout/viewport 宿主恒在注入）+ canvas-render 只读上下文；
  * 不反向依赖宿主 demo / 其它插件。数据/几何纯逻辑在 miniMapEngine.ts（零 Vue 可单测）。
@@ -17,9 +18,8 @@ import MiniMapOverlay from './MiniMapOverlay.vue'
 import { Config, miniMapConfigFrom } from './miniMapConfig'
 
 export const name = 'mini-map'
-export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]
 
-/** mini-map 服务状态（命令与浮层共享同一响应式对象；热卸随服务注入自动回收） */
+/** mini-map 服务状态（命令、设置面板与宿主壳共享同一响应式对象；热卸随服务注入自动回收） */
 export interface MiniMapServiceState {
   /** 小地图是否可见（Ctrl/Cmd+M 切换；默认显示） */
   visible: boolean
@@ -49,8 +49,9 @@ export function apply(ctx: Context) {
     if (settings && settings.get('miniMapVisible') !== v) settings.set('miniMapVisible', v)
   }
 
-  // 2. 注册小地图浮层到 overlay 槽（宿主已渲染该槽；热卸随插件 scope 自动移除）
-  ctx.slots.register('overlay', {
+  // 2. 注册小地图到专用槽（不再占 overlay 槽：位置由宿主决定 —— 宿主 <SlotHost slot="mini-map"/>
+  //    放哪儿它就显示在哪儿；没渲染该槽的宿主不显示小地图。热卸随插件 scope 自动移除）
+  ctx.slots.register('mini-map', {
     id: 'mini-map',
     order: 80,
     component: MiniMapOverlay,

@@ -30,11 +30,12 @@ import type {
   GraphEnvelope,
   SaveService,
   SaveType,
+  ResourceService,
 } from '@mini-canvas/canvas-data'
 import { HttpAdapter } from './httpAdapter'
 import { GraphDeltaAdapter } from './graphDeltaAdapter'
 import { createRemoteSync } from './remoteSync'
-import { collectUploadableFields, uploadFields, DEFAULT_MIN_UPLOAD_BYTES } from './resourceUpload'
+import { collectUploadableFields, uploadFields, uploadBlob, DEFAULT_MIN_UPLOAD_BYTES } from './resourceUpload'
 import { GRAPH_EDGES_KEY, GRAPH_KEY, GRAPH_VIEWPORT_KEY } from './keys'
 
 export const name = 'cloud-save'
@@ -124,6 +125,7 @@ interface Deps {
   save: SaveService
   graph?: GraphDocumentService
   nodeStore?: { getNodes(): CanvasNode[]; updateNode(id: string, patch: { data: Record<string, unknown> }): void }
+  resources?: ResourceService
   /** 已注册的节点类型（判断云端来的节点本地认不认识；缺失则一律认） */
   knownTypes?: ReadonlyMap<string, unknown>
   /** 视口服务（渲染层注入）；只用到 setViewport，故按结构取，不 import 渲染层类型 */
@@ -198,8 +200,33 @@ async function offloadResources(deps: Deps, status: CloudSaveStatus, baseUrl: st
   const { graph, nodeStore } = deps
   const nodes = nodeStore?.getNodes() ?? []
   const fields = collectUploadableFields(nodes, minBytes)
-  if (fields.length === 0) return 0
   const { patches, errors } = await uploadFields(fields, { baseUrl })
+  const pendingResources = new Map<string, Promise<string | undefined>>()
+  for (const node of nodes) {
+    const data = node.data ?? {}
+    const resourceId = typeof data.resourceId === 'string' ? data.resourceId : undefined
+    if (!resourceId || !deps.resources) continue
+    const entry = deps.resources.get(resourceId)
+    const blob = entry?.resource instanceof Blob ? entry.resource : undefined
+    if (!blob) continue
+    for (const field of ['imageUrl', 'videoUrl', 'audioUrl', 'posterUrl']) {
+      const value = data[field]
+      if (typeof value !== 'string' || !/^(blob:|data:)/i.test(value)) continue
+      let task = pendingResources.get(resourceId)
+      if (!task) {
+        task = uploadBlob(blob, { baseUrl, name: entry?.kind || 'asset' }).then((uploaded) => uploaded.url).catch((err) => {
+          errors.push({ nodeId: node.id, field, error: err instanceof Error ? err.message : String(err) })
+          return undefined
+        })
+        pendingResources.set(resourceId, task)
+      }
+      const url = await task
+      if (!url) continue
+      const existing = patches.find((p) => p.nodeId === node.id)
+      if (existing) existing.data[field] = url
+      else patches.push({ nodeId: node.id, data: { [field]: url } })
+    }
+  }
   for (const e of errors) console.warn(`[cloud-save] 资源上传失败 ${e.nodeId}.${e.field}: ${e.error}`)
   for (const p of patches) {
     // 走 graph（有历史 + 提交落盘）；没有 graph 的宿主退到 nodeStore 直写
@@ -222,6 +249,7 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
     nodeStore: ctx.get<Deps['nodeStore'] | undefined>('doc') ?? undefined,
     viewport: ctx.get<Deps['viewport'] | undefined>('viewport') ?? undefined,
     knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('doc')?.types,
+    resources: ctx.get<ResourceService | undefined>('resources') ?? undefined,
   }
 
   const status: CloudSaveStatus = {

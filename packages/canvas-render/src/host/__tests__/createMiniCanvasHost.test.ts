@@ -22,6 +22,32 @@ function demoPlugin(flag: string): PluginModule {
 }
 
 describe('createMiniCanvasHost（可复用宿主门面）', () => {
+  it('启动时按 resourceId 恢复资源 URL，缺失资源不保留失效 blob 地址', async () => {
+    const storage = new MemoryStorageAdapter()
+    const seed = [{ id: '1', type: 'image', position: { x: 0, y: 0 }, data: { resourceId: 'res-missing', imageUrl: 'blob:dead' } }]
+    const first = await createMiniCanvasHost({ adapter: storage, seedDefault: () => seed })
+    await first.host.save.set('graph', seed, 'canvas')
+    await first.host.save.flush()
+    first.host.stop()
+    const second = await createMiniCanvasHost({ adapter: storage })
+    expect(second.host.nodeStore.getNode('1')?.data.imageUrl).toBeUndefined()
+    expect(second.host.nodeStore.getNode('1')?.data.resourceId).toBe('res-missing')
+    second.host.stop()
+  })
+
+  it('视频节点的 videoUrl 从 resourceId 恢复（按 node.type，而不是 data.nodeType）', async () => {
+    const storage = new MemoryStorageAdapter()
+    const seed = [{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: { resourceId: 'res-missing', videoUrl: 'blob:dead' } }]
+    const first = await createMiniCanvasHost({ adapter: storage, seedDefault: () => seed })
+    await first.host.save.set('graph', seed, 'canvas')
+    await first.host.save.flush()
+    first.host.stop()
+    const second = await createMiniCanvasHost({ adapter: storage })
+    const data = second.host.nodeStore.getNode('v1')?.data
+    expect(data?.videoUrl).toBeUndefined()
+    expect(data?.imageUrl).toBeUndefined()
+    second.host.stop()
+  })
   afterEach(() => {
     delete (globalThis as Record<string, unknown>)['MiniCanvas']
   })
