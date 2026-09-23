@@ -7,12 +7,10 @@
 //   3. 全局键盘（Esc / Ctrl+/）
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
-import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
 import { SlotHost } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
 import { APP_PLUGINS, createDefaultStorageAdapter, seedDefaultCanvas } from './assembly'
-import { uiMiniMapPanelPlugin } from './miniMapPanelPlugin'
 import CanvasShell from './components/CanvasShell.vue'
 import TopLeftArea from './components/areas/TopLeftArea.vue'
 import TopRightArea from './components/areas/TopRightArea.vue'
@@ -21,11 +19,50 @@ import DockArea from './components/areas/DockArea.vue'
 import LeftDrawer from './components/areas/LeftDrawer.vue'
 import ChatPanel from './components/areas/ChatPanel.vue'
 import ModalsArea from './components/areas/ModalsArea.vue'
-import { useUi } from './composables/ui'
+import { setReadyHost, useUi } from './composables/ui'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const ui = useUi()
 const s = ui.state
 const plugins = APP_PLUGINS
+
+// ===== 小地图跟随定位：每帧读状态栏「切换小地图」按钮的屏幕矩形，把地图贴在它正上方 =====
+// 为什么要逐帧（而不是监听事件）：抽屉开合走 transform 过渡（getBoundingClientRect 每帧都变），
+// resize/scroll 都感知不到这种过渡；常驻 rAF 逐帧重摆，动画全程贴合、拖拽调宽也跟手。
+// 摆位是无状态重放（按钮左缘 x + 顶边 y → translate 平移自身 0%/100%），不累计差量：
+// 窗口变化、配置改宽高都直接落到正确位置。
+const miniMapEl = ref<HTMLElement | null>(null)
+let miniMapRaf = 0
+let miniMapLast = ''
+function onCanvasReady(host: unknown): void {
+  setReadyHost(host)
+  void ui.onReady()
+}
+function placeMiniMap(): void {
+  const root = miniMapEl.value
+  if (root) {
+    const anchor = document.querySelector('button[aria-label="切换小地图"]')
+    if (anchor) {
+      const r = anchor.getBoundingClientRect()
+      if (r.width > 0 || r.height > 0) {
+        // 地图左缘 = 按钮左缘；底边 = 按钮顶边上方 8px
+        const t = 'translate(' + r.left + 'px, calc(' + (r.top - 8) + 'px - 100%))'
+        if (t !== miniMapLast) {
+          miniMapLast = t
+          root.style.transform = t
+        }
+      }
+    }
+  }
+  miniMapRaf = requestAnimationFrame(placeMiniMap) // 常驻循环：下一帧继续贴
+}
+onMounted(() => {
+  miniMapRaf = requestAnimationFrame(placeMiniMap)
+})
+onBeforeUnmount(() => {
+  if (miniMapRaf) cancelAnimationFrame(miniMapRaf)
+  miniMapRaf = 0
+})
 const adapter = createDefaultStorageAdapter()
 const DEV = import.meta.env.DEV
 
@@ -85,8 +122,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           <button class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90" aria-label="退出跟随" @click="s.following = false">取消ESC</button>
         </div>
         <!-- 真实画布 -->
+        <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。
+             必须经 setHostEl 写 ref.value；直接 `ui.hostEl = el` 只会覆盖属性、写不进 ref（绑定仍失效）。 -->
         <CanvasHost
-          ref="ui.hostEl"
+          :ref="ui.setHostEl"
           :plugins="plugins"
           :adapter="adapter"
           :seed="seedDefaultCanvas"
@@ -96,11 +135,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           :snap-zone-visual="ui.cfg.snapZone"
           :dev="DEV"
           window-key="MiniCanvasUI"
-          @ready="ui.onReady()"
+          @ready="onCanvasReady"
         >
           <template #ui>
             <SettingsHost v-if="s.settingsOpen" />
-            <SlotHost slot="ui-mini-map" />
+            <!-- 小地图：插件注册在 mini-map 专用槽；这里只给它一个宿主选择的位置（逐帧跟随状态栏按钮） -->
+            <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" style="pointer-events: none">
+              <div style="pointer-events: auto">
+                <SlotHost slot="mini-map" />
+              </div>
+            </div>
           </template>
         </CanvasHost>
       </div>
@@ -113,7 +157,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
     <ChatPanel />
     <ModalsArea />
 
-    <!-- 小地图：位置由 ui-mini-map 插件逐帧对齐状态栏「切换小地图」按钮，显隐走 mini-map 服务 -->
   </CanvasShell>
 </template>
 

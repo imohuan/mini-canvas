@@ -259,6 +259,14 @@ function createUi() {
 
   // ===== 宿主 =====
   const hostEl = ref<HostLike | null>(null)
+  /**
+   * 模板 ref 的写入口：App.vue 的函数 ref 调它把 CanvasHost 组件实例写进 hostEl 内部。
+   * 为什么不直接 `ui.hostEl = el`：hostEl 经单例 reactive 解包后，setupState 里读到的是
+   * HostLike 本身（不是 ref），赋值只会覆盖属性、写不进 ref.value —— 绑定会静默失效。
+   */
+  function setHostEl(el: unknown): void {
+    hostEl.value = el as HostLike | null
+  }
   let disposeSettingsBind: (() => void) | undefined
   /**
    * 轻提示：按需求**已停用**（原本右下角会浮一个 "message" 气泡，容易和 Agent 面板重叠）。
@@ -495,7 +503,7 @@ function createUi() {
   return {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
-    hostEl, showToast, onReady, createNode, toggleTheme, openDrawer, closeSettings,
+    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, openDrawer, closeSettings,
     toggleShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }

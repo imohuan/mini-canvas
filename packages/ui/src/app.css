@@ -193,6 +193,9 @@ html[data-canvas-theme='dark'] {
   --canvas-node-resize-handle-active: #ffffff;
   --canvas-node-snap-zone-surface: rgb(255 255 255 / 0.1);
   --canvas-node-snap-zone-border: rgb(255 255 255 / 0.85);
+  /* 吸附调试的"卡片接收区"(v2-debug-body)配色：暗色下深灰描边看不见，给白色系 */
+  --canvas-node-target-zone-surface: rgb(255 255 255 / 0.05);
+  --canvas-node-target-zone-border: rgb(255 255 255 / 0.6);
   --canvas-node-snap-zone-highlight: rgb(120 120 120 / 0.9);
   --canvas-node-debug-center: #ffffff;
   --canvas-node-debug-rest: #b0b0b0;
