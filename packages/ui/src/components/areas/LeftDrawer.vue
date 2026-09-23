@@ -3,6 +3,7 @@
 // 图标用 LibIcon（照 LibTV 官网 SVG 原样复刻），交互行为照目标实测。
 import { ref } from 'vue'
 import { Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as ImageIcon } from 'lucide-vue-next'
+import folderImg from '../../assets/folder.png'
 import { AnimatePresence, motion } from 'motion-v'
 import AxDropdown from '../AxDropdown.vue'
 import AxMenu from '../AxMenu.vue'
@@ -123,13 +124,13 @@ function collapseAll(): void {
       <!-- ===== 画布 tab 主体：列表 / 宫格 双模式（照图 1）===== -->
       <AxScrollArea v-else class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
         <template v-for="node in ui.tree" :key="node.id">
-          <!-- 分组行（两种模式同款：44 高，箭头 + 文件夹图 + 名字） -->
+          <!-- 分组行（两种模式同款：44 高，箭头 + 文件夹图 + 名字；点整行展开/折叠） -->
           <div v-if="node.children" class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 0">
             <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85 hover:bg-hover" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" :class="ui.collapsed[node.id] ? '-rotate-90' : ''" class="transition-transform" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(3.4 5.8)" /></svg>
             </button>
-            <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="'定位到分组 ' + node.name" @click="ui.showToast('定位到分组 ' + node.name)">
-              <span class="grid size-9 flex-none place-items-center text-ink-mute"><FolderIcon :size="33" :stroke-width="1" class="h-auto w-full" /></span>
+            <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
+              <img :src="folderImg" alt="" class="h-[30px] w-[33px] flex-none object-contain" draggable="false" />
               <span class="min-w-0 flex-1 truncate pr-0.5 text-sm leading-[22px]">{{ node.name }}</span>
             </button>
             <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/grow:opacity-100 group-hover/grow:opacity-100">
