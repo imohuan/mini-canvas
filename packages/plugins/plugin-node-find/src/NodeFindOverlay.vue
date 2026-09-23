@@ -94,6 +94,8 @@ onMounted(async () => {
 
 <style scoped>
 /* ============ 外层浮层 ============ */
+/* 配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换；值见
+   @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
 .node-find-overlay {
   position: fixed;
   inset: 0;
@@ -102,7 +104,7 @@ onMounted(async () => {
   align-items: flex-start;
   justify-content: center;
   padding-top: 12vh;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.2));
+  background: var(--ui-scrim-soft, linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.2)));
 }
 
 /* ============ 面板 ============ */
@@ -112,10 +114,10 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.16);
+  background: var(--ui-overlay, rgba(255, 255, 255, 0.98));
+  box-shadow: var(--ui-shadow-lg, 0 22px 70px rgba(0, 0, 0, 0.16));
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
@@ -127,12 +129,12 @@ onMounted(async () => {
   border: 0;
   outline: 0;
   background: transparent;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font-size: 16px;
   font-weight: 500;
 }
 .node-find-input::placeholder {
-  color: #9ca3af;
+  color: var(--ui-ink-dim, #9ca3af);
 }
 
 /* ============ 列表 ============ */
@@ -146,10 +148,10 @@ onMounted(async () => {
 }
 .node-find-results::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .node-find-results::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 
 .node-find-item {
@@ -163,13 +165,13 @@ onMounted(async () => {
   transition: background 0.18s ease;
 }
 .node-find-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
 .node-find-item.is-selected {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--ui-hover-strong, rgba(0, 0, 0, 0.08));
 }
 .node-find-item.is-selected:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--ui-hover-strong, rgba(0, 0, 0, 0.1));
 }
 
 .node-find-label {
@@ -180,15 +182,15 @@ onMounted(async () => {
   white-space: nowrap;
   font-size: 14px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ui-ink, #111827);
 }
 
 .node-find-type {
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
-  color: var(--type-fg, #6b7280);
-  background: var(--type-bg, rgba(0, 0, 0, 0.06));
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.06));
   padding: 2px 8px;
   border-radius: 6px;
 }
@@ -196,7 +198,7 @@ onMounted(async () => {
 .no-results {
   padding: 24px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--ui-ink-dim, #9ca3af);
   font-size: 14px;
 }
 </style>

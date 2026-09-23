@@ -71,19 +71,20 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
 </template>
 
 <style scoped>
-/* 卡片本体：数值对齐右键菜单 .ctx-menu（位置/尺寸由节点框决定，这里只管外观） */
+/* 卡片本体：数值对齐右键菜单 .ctx-menu（位置/尺寸由节点框决定，这里只管外观）。
+   配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换），本组件不带主题配置项。 */
 .conn-menu {
   box-sizing: border-box;
   width: 100%;
   height: 100%;
   padding: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--ui-glass, rgba(255, 255, 255, 0.92));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  color: #374151;
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.1));
+  color: var(--ui-ink, #374151);
   font-size: 13px;
   user-select: none;
   display: flex;
@@ -93,7 +94,7 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
 .conn-menu-divider {
   height: 1px;
   margin: 5px 6px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-line, rgba(0, 0, 0, 0.06));
 }
 
 /* 行：对齐 .ctx-menu-item */
@@ -117,8 +118,8 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
   animation: conn-item-in 0.2s ease both;
   animation-delay: calc(var(--item-index, 0) * 18ms);
 }
-.conn-menu-item:hover { background: rgba(0, 0, 0, 0.05); }
-.conn-menu-item:focus-visible { outline: 2px solid rgba(8, 145, 178, 0.6); outline-offset: -1px; }
+.conn-menu-item:hover { background: var(--ui-hover, rgba(0, 0, 0, 0.05)); }
+.conn-menu-item:focus-visible { outline: 2px solid var(--ui-accent, rgba(8, 145, 178, 0.6)); outline-offset: -1px; }
 
 .conn-menu-icon {
   width: 28px;
@@ -128,8 +129,8 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: #6b7280;
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
 }
 .conn-menu-icon-raw { display: inline-flex; align-items: center; justify-content: center; font-style: normal; }
 .conn-menu-icon :deep(svg), .conn-menu-icon svg { width: 16px; height: 16px; }
@@ -150,7 +151,7 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
   position: absolute;
   top: 50%;
   left: 0;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   transform: translateY(-50%);
   white-space: nowrap;
   overflow: hidden;
@@ -160,7 +161,7 @@ function onPick(item: ContextMenuItem, e: MouseEvent): void {
 .hasDescription .conn-menu-label { transition: top 0.3s ease-out, transform 0.3s ease-out; }
 .hasDescription:hover .conn-menu-label, .hasDescription:focus-within .conn-menu-label { top: 3px; transform: translateY(0); }
 .conn-menu-description {
-  color: #9ca3af;
+  color: var(--ui-ink-dim, #9ca3af);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;

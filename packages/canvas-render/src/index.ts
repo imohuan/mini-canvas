@@ -10,6 +10,10 @@
 // 注：edgeGeometry(边几何纯算法)已随实现插件迁到 plugin-theme-default/src/edgeGeometry.ts，
 //     由 CustomEdge 本地 import —— 本包与内核均不再提供。
 
+// 通用 UI 主题变量（--ui-* / --sf-* / --ps-* / --dd-*）：包加载即生效于 <html data-canvas-theme>，
+// 所有渲染插件与宿主应用共用同一套 token，插件不必再自己发明“配色”配置项。
+import './styles/ui-theme.css'
+
 // content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo）
 export { HOST_KEY } from './contracts/contentBridge'
 export type {

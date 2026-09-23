@@ -62,16 +62,17 @@ function onGroup(): void {
 </template>
 
 <style scoped>
-/* 只管"排一行"；位置（贴外框、居中、反缩放）由宿主那层负责 —— 与节点上插槽同一规矩。 */
+/* 只管"排一行"；位置（贴外框、居中、反缩放）由宿主那层负责 —— 与节点上插槽同一规矩。
+   配色走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换），本组件不带主题配置项。 */
 .selection-group-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--ui-panel, #ffffff);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
   white-space: nowrap;
 }
 </style>

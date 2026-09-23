@@ -128,26 +128,28 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
 </template>
 
 <style scoped>
+/* 配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换；值见
+   @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
 .ctx-menu {
   position: fixed;
   z-index: 100000;
   min-width: 252px;
   max-width: 340px;
   padding: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--ui-glass, rgba(255, 255, 255, 0.92));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  color: #374151;
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.1));
+  color: var(--ui-ink, #374151);
   font-size: 13px;
   user-select: none;
 }
 .ctx-menu-divider {
   height: 1px;
   margin: 5px 6px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-line, rgba(0, 0, 0, 0.06));
 }
 
 /* ===== item（对齐快捷键面板 canvas-menu-item 数值）===== */
@@ -170,21 +172,21 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   animation-delay: calc(var(--item-index, 0) * 18ms);
 }
 .ctx-menu-item:hover:not(.is-disabled) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
 .ctx-menu-item.is-disabled {
   cursor: not-allowed;
   opacity: 0.38;
 }
 .ctx-menu-item.is-danger {
-  color: #ef4444;
+  color: var(--ui-danger, #ef4444);
 }
 .ctx-menu-item.is-danger:hover:not(.is-disabled) {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--ui-danger-soft, rgba(239, 68, 68, 0.1));
 }
 .ctx-menu-item.is-danger .ctx-menu-icon {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
+  color: var(--ui-danger, #ef4444);
+  background: var(--ui-danger-veil, rgba(239, 68, 68, 0.08));
 }
 
 /* 图标托 */
@@ -196,8 +198,8 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: #6b7280;
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
 }
 .ctx-menu-icon-raw {
   display: inline-flex;
@@ -228,7 +230,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   position: absolute;
   top: 50%;
   left: 0;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   transform: translateY(-50%);
   white-space: nowrap;
   overflow: hidden;
@@ -244,7 +246,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   transform: translateY(0);
 }
 .ctx-menu-description {
-  color: #9ca3af;
+  color: var(--ui-ink-dim, #9ca3af);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
@@ -273,7 +275,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   margin-left: 4px;
 }
 .ctx-menu-shortcut-sep {
-  color: #9ca3af;
+  color: var(--ui-ink-dim, #9ca3af);
   font-size: 10px;
   font-weight: 700;
   margin: 0 1px;
@@ -285,11 +287,11 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   min-width: 20px;
   height: 20px;
   padding: 0 5px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-bottom-width: 2px;
   border-radius: 5px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--ui-panel, #ffffff);
+  color: var(--ui-ink, #374151);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;

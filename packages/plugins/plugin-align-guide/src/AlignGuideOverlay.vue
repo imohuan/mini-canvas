@@ -129,7 +129,8 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 0;
   left: 0;
-  background: rgba(99, 102, 241, 0.6);
+  /* 参考线色走主题（--ui-guide-* 在下面两套主题里各给一值；缺省回落强调色青/靛）。 */
+  background: var(--ui-guide, rgba(99, 102, 241, 0.6));
   pointer-events: none;
 }
 .align-guide-vline {

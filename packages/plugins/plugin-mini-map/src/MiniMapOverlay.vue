@@ -32,27 +32,9 @@ import {
 } from './miniMapEngine'
 import { miniMapConfigFrom, type MiniMapConfig } from './miniMapConfig'
 
-/** 组件自身不定位、不自定颜色：位置交给宿主，黑白两套配色经 theme prop 选择。 */
-const THEMES = {
-  light: {
-    bg: '#f8fafc',
-    line: '#e2e8f0',
-    node: '#cbd5e1',
-    shadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    viewerBg: 'rgba(59, 130, 246, 0.08)',
-  },
-  dark: {
-    bg: '#1f1f1f',
-    line: '#3a3a3a',
-    node: '#525252',
-    shadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-    viewerBg: 'rgba(59, 130, 246, 0.15)',
-  },
-} as const
+/** 组件自身不定位、不自定颜色：位置交给宿主；配色**只走 CSS**（见下方 <style> 里的 --mm-*），
+ *  由 <html data-canvas-theme="dark|light"> 自动切换，不提供任何"配色"配置项。 */
 
-const props = withDefaults(defineProps<{ /** 黑白两套配色（light 默认 = 画布浅底原生配色） */ theme?: 'light' | 'dark' }>(), {
-  theme: 'light',
-})
 
 const { ctx, viewport, paneRect, renderNodes } = useCanvasRender()
 
@@ -73,16 +55,7 @@ const width = computed(() => cfg.value.miniMapWidth)
 const height = computed(() => cfg.value.miniMapHeight)
 const sensitivityX = computed(() => cfg.value.miniMapSensitivityX)
 const sensitivityY = computed(() => cfg.value.miniMapSensitivityY)
-
 const PADDING = 8
-const palette = computed(() => THEMES[props.theme])
-const rootVars = computed(() => ({
-  '--mm-bg': palette.value.bg,
-  '--mm-line': palette.value.line,
-  '--mm-node': palette.value.node,
-  '--mm-shadow': palette.value.shadow,
-  '--mm-viewer-bg': palette.value.viewerBg,
-}))
 
 // —— 显隐状态：mini-map 服务（命令切换与组件读同一对象）——
 interface MiniMapServiceState {
@@ -309,7 +282,7 @@ function onPointerCancel(e: PointerEvent): void {
 </script>
 
 <template>
-  <div v-if="visible" ref="rootEl" class="mini-map-overlay" :style="rootVars">
+  <div v-if="visible" ref="rootEl" class="mini-map-overlay">
     <div
       class="mini-map"
       :style="{ width: width + 'px', height: height + 'px' }"
@@ -330,6 +303,33 @@ function onPointerCancel(e: PointerEvent): void {
 </template>
 
 <style scoped>
+/* 配色**只走 CSS**：两套 --mm-* 按 <html data-canvas-theme> 切换（默认 = 暗色）。
+   组件不再有 theme prop / 配置项，宿主换主题时这里零 JS 参与、零重渲染。
+   dark 风格参考截图：无圆角、深底 + 边框、浅灰节点方块、视口框浅灰描边。 */
+.mini-map-overlay {
+  --mm-bg: #252525;
+  --mm-line: #3c3c3c;
+  --mm-node: #8a8a8a;
+  --mm-shadow: none;
+  /* 视口框内部比小地图底色更深：黑色半透明叠在 --mm-bg 上得到凹陷感 */
+  --mm-viewer-bg: rgb(0 0 0 / 0.45);
+  --mm-viewer-line: #8a8a8a;
+  --mm-radius: 0px;
+  --mm-node-radius: 0px;
+  --mm-viewer-radius: 0px;
+}
+html[data-canvas-theme='light'] .mini-map-overlay {
+  --mm-bg: #f8fafc;
+  --mm-line: #e2e8f0;
+  --mm-node: #cbd5e1;
+  --mm-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
+  --mm-viewer-bg: rgb(59 130 246 / 0.08);
+  --mm-viewer-line: #3b82f6;
+  --mm-radius: 12px;
+  --mm-node-radius: 2px;
+  --mm-viewer-radius: 4px;
+}
+
 .mini-map-overlay {
   /* 定位归宿主：本组件只负责画一张地图（宽高由配置决定） */
 }
@@ -337,7 +337,7 @@ function onPointerCancel(e: PointerEvent): void {
   position: relative;
   background: var(--mm-bg);
   border: 1px solid var(--mm-line);
-  border-radius: 12px;
+  border-radius: var(--mm-radius);
   box-shadow: var(--mm-shadow);
   overflow: hidden;
   cursor: crosshair;
@@ -346,14 +346,14 @@ function onPointerCancel(e: PointerEvent): void {
 .mini-node {
   position: absolute;
   background: var(--mm-node);
-  border-radius: 2px;
+  border-radius: var(--mm-node-radius);
   pointer-events: none;
 }
 .mini-viewer {
   position: absolute;
-  border: 2px solid #3b82f6;
+  border: 2px solid var(--mm-viewer-line);
   background: var(--mm-viewer-bg);
-  border-radius: 4px;
+  border-radius: var(--mm-viewer-radius);
   cursor: move;
   pointer-events: auto;
   z-index: 1;
