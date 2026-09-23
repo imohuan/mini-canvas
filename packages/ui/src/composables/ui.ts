@@ -8,6 +8,7 @@ import {
   EDGE_SETTING_KEYS, HANDLE_SETTING_KEYS, DEBUG_SETTING_KEYS, SNAP_ZONE_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
 import { createV2Logger } from '@mini-canvas/canvas-render'
+import { buildV2HelpList, groupV2HelpList, keyPartsToLabels } from '@mini-canvas/plugin-shortcut-manager'
 import { SAMPLE_IMAGE_URL } from '../assembly'
 
 const log = createV2Logger('config')
@@ -231,31 +232,39 @@ function createUi() {
   }
 
   // ===== 快捷键数据 =====
-  const shortcuts: Array<{ group: string; items: Array<[string, string[]]> }> = [
-    { group: '创作', items: [
-      ['成组', ['Ctrl', '/', 'Alt', 'G']],
-      ['合并分镜组', ['Ctrl', 'Alt', 'G']],
-      ['解组', ['Ctrl', '/', 'Alt', 'Shift', 'G']],
-      ['连线', ['Ctrl', 'L']],
-      ['复制节点和连线', ['Ctrl', 'D']],
-      ['生成', ['Ctrl', 'Enter']],
-      ['新建节点', ['Tab']],
-      ['节点复制', ['Alt', '+ 拖动节点']],
-      ['创建副本', ['Ctrl', 'Alt', '+ 拖动']],
-    ] },
-    { group: '缩放', items: [
-      ['放大', ['Ctrl', '+']], ['缩小', ['Ctrl', '−']], ['适应画布', ['Ctrl', '0']],
-      ['触控板', ['双指捏合']], ['鼠标', ['Ctrl', '滚轮']],
-    ] },
-    { group: '移动画布', items: [
-      ['键盘', ['Space', '拖拽']], ['触控板', ['双指平移']], ['鼠标', ['中键拖拽']],
-      ['移动', ['V']], ['抓手工具', ['H']], ['整理画布', ['Alt', 'Shift', 'F']],
-    ] },
-    { group: '其他', items: [
-      ['撤销', ['Ctrl', 'Z']], ['重做', ['Ctrl', 'Shift', 'Z']],
-      ['画布节点搜索', ['Ctrl', 'F']], ['删除', ['Backspace']],
-    ] },
-  ]
+  // 唯一事实来源 = 命令注册表的 keys 字段（与插件版帮助面板同源：buildV2HelpList/groupV2HelpList）。
+  // 为什么不写死一份：写死的会跟真实按键漂移（曾经列了 Ctrl+Alt+G / Tab / Ctrl+Enter 等根本没实现的键）。
+  // 每次**打开面板时**现读一次 —— 命令注册表没有变更订阅，插件热装/热卸后重开即得最新，成本是一句 list()。
+  // 组合键的键帽翻译（mod → Ctrl/⌘、arrowup → ↑）也复用插件那份，避免两处各写一套。
+
+  /** 注册表分组 → 面板中文组名 */
+  const SHORTCUT_GROUP_LABEL: Record<string, string> = {
+    system: '系统', edit: '编辑', canvas: '画布', view: '视图', plugin: '更多',
+  }
+
+  /** 从宿主命令注册表现读快捷键，按分组返回（拿不到宿主 → 空数组，面板相应为空） */
+  function readShortcuts(): Array<{ group: string; items: Array<[string, string[]]> }> {
+    const host = (hostEl.value?.host ?? hostEl.value) as (FullHost & { command?: { list(): Array<Record<string, unknown>> } }) | undefined
+    const list = host?.command?.list?.()
+    if (!list) return []
+    const grouped = groupV2HelpList(
+      buildV2HelpList(list as Parameters<typeof buildV2HelpList>[0]),
+    )
+    return grouped.map((g) => ({
+      group: SHORTCUT_GROUP_LABEL[g.group] ?? g.group,
+      items: g.items.map((it) => [it.command, keyPartsToLabels(it.keys)] as [string, string[]]),
+    }))
+  }
+
+  /**
+   * 面板展示用：只显示**真实注册**的快捷键（手势/鼠标操作不是命令、注册表里没有，不列）。
+   * 用 reactive 数组（不是 ref）—— `ui` 是普通对象，模板里读 `ui.shortcuts` 时 ref 不会自动解包，
+   * reactive 数组则能直接遍历；刷新时**原地替换内容**，绑定不换对象、不闪。
+   */
+  const shortcuts = reactive<Array<{ group: string; items: Array<[string, string[]]> }>>([])
+  function refreshShortcuts(): void {
+    shortcuts.splice(0, shortcuts.length, ...readShortcuts())
+  }
 
   // ===== 宿主 =====
   const hostEl = ref<HostLike | null>(null)
@@ -368,7 +377,11 @@ function createUi() {
   function openDrawer(which: 'left' | 'roles'): void {
     state.drawer = state.drawer === which ? null : which
   }
-  function toggleShortcuts(): void { state.shortcutsOpen = !state.shortcutsOpen }
+  /** 开面板前先重读一次注册表（插件热装/热卸后开面板即见最新键位） */
+  function toggleShortcuts(): void {
+    if (!state.shortcutsOpen) refreshShortcuts()
+    state.shortcutsOpen = !state.shortcutsOpen
+  }
   function toggleHistory(): void { state.historyOpen = !state.historyOpen }
   function toggleLeftCollapsed(): void {
     state.leftCollapsed = !state.leftCollapsed
@@ -510,7 +523,7 @@ function createUi() {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
     hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
-    toggleShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
+    toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }
 }

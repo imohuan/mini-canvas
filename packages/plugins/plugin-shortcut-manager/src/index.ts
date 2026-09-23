@@ -10,6 +10,8 @@ export {
 } from './shortcutGroups'
 export { createShortcutRemapEngine, SHORTCUT_SAVE_KEY } from './shortcutRemapEngine'
 export type { ShortcutRemapMap } from './shortcutRemapEngine'
+// 键帽翻译（'mod+shift+z' → ['Ctrl','Shift','Z']）：纯展示工具，任何面板想画键帽都能直接用
+export { keyPartsToLabels, keyCapLabel, isMacPlatform, normalizeKeyForPlatform } from './keyLabels'
 export {
   buildV2HelpList,
   groupV2HelpList,
