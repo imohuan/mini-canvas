@@ -29,6 +29,9 @@
   --color-thumb: var(--ui-thumb);
   --color-thumb-soft: var(--ui-thumb-soft);
   --color-overlay: var(--ui-overlay);
+  /* 毛玻璃浮层（快捷键面板）与其指向箭头：半透明底，靠 backdrop-blur 出玻璃感 */
+  --color-glass: var(--ui-glass);
+  --color-arrow: var(--ui-arrow);
   --color-overlay-solid: var(--ui-overlay-solid);
   --color-primary-bg: var(--ui-primary-bg);
   --color-primary-ink: var(--ui-primary-ink);
@@ -58,7 +61,7 @@ html[data-canvas-theme='dark'] {
   --ui-thumb-soft: #2a2a2a;
   --ui-overlay: rgb(31 31 31 / 0.75);
   --ui-overlay-solid: rgb(33 33 33);
-  --ui-glass: rgb(30 30 30 / 0.62);
+  --ui-glass: rgb(30 30 30 / 0.82);
   --ui-arrow: rgb(38 38 38 / 0.9);
   --ui-tip: rgb(0 0 0 / 0.9);
   --ui-tip-ink: #ffffff;
@@ -124,7 +127,7 @@ html[data-canvas-theme='light'] {
   --ui-thumb-soft: #f2f4f7;
   --ui-overlay: rgb(255 255 255 / 0.88);
   --ui-overlay-solid: #ffffff;
-  --ui-glass: rgb(255 255 255 / 0.72);
+  --ui-glass: rgb(255 255 255 / 0.86);
   --ui-arrow: rgb(255 255 255 / 0.95);
   --ui-tip: rgb(24 32 43 / 0.92);
   --ui-tip-ink: #ffffff;

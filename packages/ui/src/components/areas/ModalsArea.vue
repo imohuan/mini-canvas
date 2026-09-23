@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 浮层区：快捷键 / 生成历史 / TV Director 设置 / Toast（全部走独立状态，可与抽屉共存）。
+import { nextTick, ref, watch } from 'vue'
 import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare } from 'lucide-vue-next'
 import { motion } from 'motion-v'
 import AxDialog from '../AxDialog.vue'
@@ -13,13 +14,21 @@ import { useUi } from '../../composables/ui'
 const ui = useUi()
 const s = ui.state
 const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? AudioLines : ImageIcon)
+
+/** 箭头水平偏移：dock 可能被左右抽屉挤偏，视口正中≠快捷键按钮中心，打开时实测对准 */
+const arrowShift = ref(0)
+watch(() => s.shortcutsOpen, async (open) => {
+  if (!open) { arrowShift.value = 0; return }
+  await nextTick()
+  const btn = document.querySelector('[aria-label="快捷键"]')
+  if (!btn) return
+  arrowShift.value = btn.getBoundingClientRect().left + btn.getBoundingClientRect().width / 2 - window.innerWidth / 2
+})
 </script>
 
 <template>
   <!-- 快捷键：毛玻璃，相对**整个视口**居中；底部箭头指向 dock 的「快捷键」按钮（中轴对齐） -->
   <div v-if="s.shortcutsOpen" class="fixed inset-0 z-[90] flex flex-col items-center justify-end pb-[74px]" @pointerdown.self="s.shortcutsOpen = false">
-    <!-- 箭头：与面板同宽居中，指向上一个元素（dock） -->
-    <span class="relative z-[1] -mb-[7px] size-[14px] rotate-45 rounded-[3px] border-b border-r border-line bg-arrow backdrop-blur-[28px]" aria-hidden="true"></span>
     <motion.section
       class="shortcut-modal relative flex h-[437px] w-[min(1152px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-glass text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.4]"
       role="dialog" aria-modal="true" aria-label="快捷键"
@@ -39,6 +48,8 @@ const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? Audio
         </div>
       </div>
     </motion.section>
+    <!-- 箭头：面板底部中央，向下指向 dock 的「快捷键」按钮（实测按钮位置对准；translate+rotate 必须同写一个 transform，否则位移会落到旋转坐标系里） -->
+    <span class="relative z-[1] -mt-[7px] size-[14px] rounded-[3px] border-b border-r border-line bg-arrow backdrop-blur-[28px]" :style="{ transform: `translateX(${arrowShift}px) rotate(45deg)` }" aria-hidden="true"></span>
   </div>
 
   <!-- 生成历史：无遮罩大弹窗（照 LibTV 实测 min(90vw,1600px) × calc(100vh-160px)） -->
