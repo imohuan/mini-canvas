@@ -41,7 +41,7 @@ watch(() => s.shortcutsOpen, async (open) => {
       <div class="grid flex-1 grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto px-5 pb-5">
         <div v-for="col in ui.shortcuts" :key="col.group" class="shortcut-col">
           <h4 class="mb-2 mt-1.5 text-xs font-bold text-brand">{{ col.group }}</h4>
-          <div v-for="row in col.items" :key="row[0]" class="flex min-h-[34px] items-center justify-between gap-2.5 border-b border-line-soft text-xs text-ink">
+          <div v-for="row in col.items" :key="row[0]" class="flex min-h-[34px] items-center justify-between gap-2.5 text-xs text-ink">
             <span>{{ row[0] }}</span>
             <span class="flex items-center gap-1"><template v-for="(k, i) in row[1]" :key="k + i"><kbd class="rounded-md border border-line bg-veil px-1.5 py-0.5 text-[10px] text-ink">{{ k }}</kbd><em v-if="i < row[1].length - 1" class="not-italic text-ink-dim">+</em></template></span>
           </div>
