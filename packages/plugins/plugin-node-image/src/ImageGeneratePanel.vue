@@ -571,10 +571,10 @@ function onDownload(): void {
   height: 30px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--text-muted, #6b7280);
+  background: var(--ntb-fill, rgba(0, 0, 0, 0.04));
+  color: var(--ntb-text, #6b7280);
   cursor: default;
   transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -604,9 +604,9 @@ function onDownload(): void {
 /* 末尾「加素材」占位框：虚线边，hover 转青 */
 .ig-card-add {
   border-style: dashed;
-  border-color: rgba(0, 0, 0, 0.18);
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.18));
   background: transparent;
-  color: var(--text-faint, #9ca3af);
+  color: var(--ui-ink-mute, #9ca3af);
   cursor: pointer;
 }
 .ig-card-add svg {
@@ -614,13 +614,13 @@ function onDownload(): void {
   height: 14px;
 }
 .ig-card-add:hover {
-  border-color: #0891b2;
-  color: #0891b2;
-  background: rgba(8, 145, 178, 0.06);
+  border-color: var(--ui-accent, #0891b2);
+  color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.06));
 }
 
 .ig-materials-hint {
-  color: var(--text-faint, #9ca3af);
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -634,24 +634,24 @@ function onDownload(): void {
   overflow-y: auto;
   overflow-x: hidden;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.86);
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--ui-veil, rgba(255, 255, 255, 0.86));
+  border: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
   scrollbar-width: thin;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .ig-editor:focus-within {
-  background: #fff;
-  border-color: rgba(8, 145, 178, 0.35);
+  background: var(--ui-panel, #fff);
+  border-color: var(--ntb-accent-ring, rgba(8, 145, 178, 0.35));
 }
 .ig-editor::-webkit-scrollbar {
   width: 6px;
 }
 .ig-editor::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .ig-editor::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 
 /* 编辑器本体：透明、无边框、13px 正文（中文最小 12px 之上） */
@@ -663,10 +663,10 @@ function onDownload(): void {
   outline: none !important;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-strong, #111827);
+  color: var(--ntb-text-strong, #111827);
 }
 .ig-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
-  color: var(--text-faint, #9ca3af);
+  color: var(--ui-ink-mute, #9ca3af);
   content: attr(data-placeholder);
   float: left;
   height: 0;
@@ -722,16 +722,16 @@ function onDownload(): void {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-muted, #6b7280);
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--ntb-text, #6b7280);
+  background: var(--ntb-fill, rgba(0, 0, 0, 0.04));
 }
 .ig-status.is-running {
-  color: #0e7490;
-  background: rgba(8, 145, 178, 0.1);
+  color: var(--ntb-active-ink, #0e7490);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
 }
 .ig-status.is-error {
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.1);
+  color: var(--ui-danger, #b91c1c);
+  background: var(--ui-danger-veil, rgba(239, 68, 68, 0.1));
 }
 
 /* 旋转/下载两个图标按钮改用通用 NodeToolbarButton（尺寸/hover/focus/禁用都在那一边） */

@@ -111,7 +111,7 @@ void markRaw
 </script>
 
 <template>
-  <div class="fixed inset-0 z-[210] grid place-items-center bg-[var(--ui-scrim)] backdrop-blur-[2px]" @pointerdown.self="closeOnMask !== false && closePanel()">
+  <div class="fixed inset-0 z-[210] grid place-items-center bg-[var(--ui-scrim)] backdrop-blur-[2px]" @pointerdown.self="closePanel()">
     <!-- 注意：AxDialog 的面板基类是 flex-direction: column（给纵向弹窗用）。
          设置面板是**左右布局**，所以这里必须显式 flex-row 覆盖，否则左导航与内容会竖着堆叠、右列高度失控。 -->
     <section

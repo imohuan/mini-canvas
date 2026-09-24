@@ -156,16 +156,18 @@ function cancelEdit(): void {
 </template>
 
 <style scoped>
-/* 只管"排一行 + 一个白底小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。 */
+/* 只管"排一行 + 一个小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。
+   配色走通用 UI token（<html class="dark"> 切换），不再写死白底 ——
+   控制栏浮在画布背景上而不是卡片里，暗色主题下必须是深底。 */
 .it-root {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--ui-overlay-solid, #ffffff);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
   white-space: nowrap;
 }
 

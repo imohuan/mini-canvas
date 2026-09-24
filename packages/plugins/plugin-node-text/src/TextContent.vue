@@ -244,10 +244,10 @@ onBeforeUnmount(() => {
 }
 .editor::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: var(--scrollbar, rgba(0, 0, 0, 0.12));
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .editor::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 .editor:focus-visible {
   outline: none;
@@ -257,7 +257,7 @@ onBeforeUnmount(() => {
 .text-node-skel {
   width: 100%;
   height: 100%;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
+  background: var(--canvas-node-surface, rgba(0, 0, 0, 0.04));
   position: relative;
   overflow: hidden;
 }

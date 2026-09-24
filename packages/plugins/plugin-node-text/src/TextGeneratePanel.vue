@@ -384,23 +384,23 @@ function onDelete(): void {
   width: 520px;
   box-sizing: border-box;
   padding: 10px;
-  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
-  background: var(--canvas-node-panel-surface, #fff);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  background: var(--ui-overlay-solid, #fff);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
 }
 
 /* 输入区：与设置面板一致的浅底 + 发丝边 + 内圆角（外圆 12 > 内圆 8） */
 .tg-editor {
   padding: 8px 10px;
-  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: var(--fill-quiet, rgba(0, 0, 0, 0.03));
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .tg-editor:focus-within {
-  background: #fff;
-  border-color: rgba(8, 145, 178, 0.6);
+  background: var(--ui-panel, #fff);
+  border-color: rgb(8 145 178 / 0.6);
 }
 .tg-editor :deep(.prose-mirror-editor) {
   /* 高度区间来自配置（布局/控制栏 → 生成栏输入框最小/最大高） */
@@ -410,13 +410,13 @@ function onDelete(): void {
   outline: none;
   font-size: 13px;
   line-height: 1.6;
-  color: var(--text-strong, #111827);
+  color: var(--ntb-text-strong, #111827);
 }
 .tg-editor :deep(.prose-mirror-editor p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
   float: left;
   height: 0;
-  color: var(--text-faint, #9ca3af);
+  color: var(--ui-ink-mute, #9ca3af);
   pointer-events: none;
 }
 
@@ -465,13 +465,13 @@ function onDelete(): void {
   font-weight: 600;
 }
 .tg-status.is-error {
-  color: #ef4444;
+  color: var(--ui-danger, #ef4444);
 }
 .tg-status.is-busy {
-  color: #0e7490;
+  color: var(--ntb-active-ink, #0e7490);
 }
 .tg-status.is-done {
-  color: var(--text-muted, #6b7280);
+  color: var(--ntb-text, #6b7280);
 }
 
 /* 字数读数 */
@@ -479,24 +479,24 @@ function onDelete(): void {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  color: var(--text-muted, #6b7280);
+  color: var(--ntb-text, #6b7280);
   font-size: 11px;
   font-weight: 600;
   user-select: none;
 }
 .tg-num {
-  color: var(--text-body, #374151);
+  color: var(--ntb-text-strong, #374151);
   font-variant-numeric: tabular-nums;
 }
 .tg-unit {
-  color: var(--text-faint, #9ca3af);
+  color: var(--ui-ink-mute, #9ca3af);
 }
 .tg-dot {
   width: 2px;
   height: 2px;
   margin: 0 2px;
   border-radius: 999px;
-  background: var(--text-faint, #9ca3af);
+  background: var(--ui-ink-mute, #9ca3af);
 }
 
 /* 复制/删除两个图标按钮改用通用 NodeToolbarButton（尺寸/hover/focus/禁用都在那一边） */
@@ -511,7 +511,7 @@ function onDelete(): void {
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
   color: #fff;
   font-size: 12px;
   font-weight: 700;
@@ -519,7 +519,7 @@ function onDelete(): void {
   transition: background-color 0.15s ease-out, transform 0.15s ease-out;
 }
 .tg-send:hover:not(:disabled) {
-  background: #0e7490;
+  background: var(--ui-accent-hover, #0e7490);
 }
 .tg-send:active:not(:disabled) {
   transform: scale(0.97);
@@ -529,7 +529,7 @@ function onDelete(): void {
   cursor: not-allowed;
 }
 .tg-send:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 .tg-send-icon {
@@ -558,12 +558,12 @@ function onDelete(): void {
   margin: -6px 2px 0;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
+  background: var(--ntb-fill, rgba(0, 0, 0, 0.04));
 }
 .tg-progress-bar {
   height: 100%;
   border-radius: inherit;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
   transition: width 0.2s ease-out;
 }
 .tg-progress-bar.is-indeterminate {

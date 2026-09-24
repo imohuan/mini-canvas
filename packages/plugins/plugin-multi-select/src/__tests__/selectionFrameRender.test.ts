@@ -328,6 +328,23 @@ describe('层级与命中（用户要求：节点必须在框之上，才能加�
   })
 })
 
+describe('整组拖动起手（回归：dragStartClient 未声明导致 ReferenceError）', () => {
+  it(
+    '组件必须声明 dragStartClient，且起手失败有回滚 —— 漏声明时 <script setup> 不做类型检查，' +
+      '运行时会在"框内空白按下拖动"的第一帧崩掉：isDragging 已置位、监听没装上，' +
+      '拖拽状态永久卡死（用户实测：报一次错后拖不动、点空白选不中）',
+    async () => {
+      const { readFileSync } = await import('node:fs')
+      const { fileURLToPath } = await import('node:url')
+      const src = readFileSync(fileURLToPath(new URL('../SelectionFrame.vue', import.meta.url)), 'utf8')
+      // 声明存在（ref 形式，响应式供 onDragMove 读取）
+      expect(src).toMatch(/const dragStartClient\s*=\s*ref</)
+      // 起手做了异常回滚：isDragging 置 true 之后任何异常都不能把状态卡在"拖动中"
+      expect(src).toMatch(/catch[^{]*{[\s\S]*?isDragging\.value\s*=\s*false/)
+    },
+  )
+})
+
 describe('群组框总开关', () => {
   it('多选框上挂的是主题的 MovingHandle（不是手绘按钮）——保证与节点端口同款', async () => {
     const html = await render()

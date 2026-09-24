@@ -121,16 +121,18 @@ function pickColor(color: string): void {
 </template>
 
 <style scoped>
-/* 只管"排一行 + 一个白底小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。 */
+/* 只管"排一行 + 一个小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。
+   配色走通用 UI token + --ntb-*（<html class="dark"> 切换），不再写死白底 ——
+   控制栏浮在画布背景上而不是卡片里，暗色主题下必须是深底。 */
 .group-top-toolbar {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 4px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--ui-overlay-solid, #ffffff);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
   white-space: nowrap;
 }
 
@@ -144,15 +146,15 @@ function pickColor(color: string): void {
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
+  background: var(--ntb-fill, rgba(0, 0, 0, 0.04));
   cursor: pointer;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .group-color-trigger:hover {
-  background: var(--fill-active, rgba(0, 0, 0, 0.06));
+  background: var(--ntb-fill-hover, rgba(0, 0, 0, 0.06));
 }
 .group-color-trigger:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgba(8, 145, 178, 0.6));
   outline-offset: 1px;
 }
 .group-color-trigger__dot {
@@ -191,7 +193,7 @@ function pickColor(color: string): void {
   transform: scale(1.08);
 }
 .group-color-swatch:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgba(8, 145, 178, 0.6));
   outline-offset: 1px;
 }
 /* 当前色：加一圈环，一眼看出"现在用的是哪个" */

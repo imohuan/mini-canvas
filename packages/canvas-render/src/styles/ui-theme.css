@@ -65,6 +65,19 @@
   /* 画布辅助线（对齐参考线 / 框选框） */
   --ui-guide: rgb(59 130 246 / 0.75);
   --ui-guide-veil: rgb(59 130 246 / 0.06);
+  /* 节点上/下控制栏（Node ToolBar）：浮在卡片外的操作条。
+     按钮底/文字/hover 三档 + 容器面板；暗色那套见 html.dark 块。
+     这套值独立于 --canvas-node-*：控制栏浮在**画布背景**上而不是卡片里，
+     所以跟着画布（--ui-*）走才不会在暗画布上出现一块白板。 */
+  --ntb-fill: rgb(0 0 0 / 0.04);
+  --ntb-fill-hover: rgb(0 0 0 / 0.06);
+  --ntb-fill-quiet: rgb(0 0 0 / 0.05);
+  --ntb-text: #6b7280;
+  --ntb-text-strong: #111827;
+  --ntb-accent-ring: rgb(8 145 178 / 0.6);
+  --ntb-active-bg: rgb(8 145 178 / 0.12);
+  --ntb-active-bg-hover: rgb(8 145 178 / 0.2);
+  --ntb-active-ink: #0e7490;
   /* 设置字段样式（供 plugin-theme-default 的 SettingsSchemaField 消费） */
   --sf-label: #111827;
   --sf-desc: #9ca3af;
@@ -135,6 +148,16 @@ html[data-canvas-theme='dark'] {
   /* 暗底上辅助线要够亮才看得见 */
   --ui-guide: rgb(99 102 241 / 0.6);
   --ui-guide-veil: rgb(99 102 241 / 0.06);
+  /* 节点控制栏（暗色）：白系半透明叠在暗画布上，文字用亮灰；激活态用更亮的青 */
+  --ntb-fill: rgb(255 255 255 / 0.08);
+  --ntb-fill-hover: rgb(255 255 255 / 0.14);
+  --ntb-fill-quiet: rgb(255 255 255 / 0.10);
+  --ntb-text: #b8b8b8;
+  --ntb-text-strong: #f5f5f5;
+  --ntb-accent-ring: rgb(103 232 249 / 0.7);
+  --ntb-active-bg: rgb(8 145 178 / 0.28);
+  --ntb-active-bg-hover: rgb(8 145 178 / 0.38);
+  --ntb-active-ink: #67e8f9;
   --sf-label: #e8e8e8;
   --sf-desc: #9a9a9a;
   --sf-line: rgb(255 255 255 / 0.07);

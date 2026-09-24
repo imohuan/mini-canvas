@@ -18,6 +18,7 @@ import MiniMapOverlay from './MiniMapOverlay.vue'
 import { Config, miniMapConfigFrom } from './miniMapConfig'
 
 export const name = 'mini-map'
+export const inject = ['doc', 'nodeLayout', 'viewport'] as string[]
 
 /** mini-map 服务状态（命令、设置面板与宿主壳共享同一响应式对象；热卸随服务注入自动回收） */
 export interface MiniMapServiceState {

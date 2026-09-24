@@ -60,8 +60,10 @@ import {
   type BatchGuideLine,
 } from './batchConnect'
 import {
+  computeUnionBounds,
   computeSelectionFrameGeometry,
   draggableMembers,
+  paddedBounds,
   resolveBatchHandleVisible,
   type MultiSelectRect,
   type SelectionFrameGeometry,
@@ -476,12 +478,62 @@ onBeforeUnmount(() => settingsOff?.dispose())
 // ====== 当前选中节点的内外两框（随选中 / 布局变化重算）======
 const frame = ref<SelectionFrameGeometry | null>(null)
 
+// ====== 整组拖动：状态声明必须在 refreshFrame 之前（它有 immediate watch，会立刻执行）======
+/** 本插件自己的"框内拖动 = 整组平移"手势进行中 */
+const isDragging = ref(false)
+/**
+ * 拖动起始时的**成员并集快照** + 累计位移（拖动中框 = 这份并集平移后按"当前缩放"重算两框）。
+ *
+ * 为什么存并集、而不是存"算好的两框"：
+ * 存算好的两框 → 间距(padding)是**起手那一刻的缩放**算出来的常量，拖动中滚轮缩放后
+ * 间距不再按 1/zoom 补偿（实测框宽停在 792、屏幕上间距从 16 涨到 26.4），框与节点脱节。
+ * 存并集 → 每帧按**当前缩放**重算间距，缩放天然参与，与静止态走同一套几何。
+ *
+ * 为什么必须用快照 + 位移、不能每帧读 store 并集：拖动中被拖节点的 store 位置**还是旧的**
+ * （VueFlow 只在松手时落盘），"新位置 + 旧并集"混算会让框越跑越偏（实测外扩量 -7 → -21）。
+ * 而拿"当前框"当基准更糟：累计位移会被重复计入，框按 1、3、6、10… 加速甩出去。
+ */
+const dragStartUnion = ref<MultiSelectRect | null>(null)
+/** 拖动中相对起手点的累计位移（flow 坐标） */
+const dragDelta = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+
+/**
+ * 拖动中两框的几何 = 起手并集快照平移累计位移，再用**当前缩放**算间距。
+ * 拖动中所有路径（每帧 move、缩放变化）都必须走它 —— 否则会被"用旧 store 位置重算"覆盖。
+ */
+function dragFrameGeometry(): SelectionFrameGeometry | null {
+  const union = dragStartUnion.value
+  if (!union) return null
+  const moved: MultiSelectRect = {
+    id: union.id,
+    x: union.x + dragDelta.value.x,
+    y: union.y + dragDelta.value.y,
+    w: union.w,
+    h: union.h,
+  }
+  const pads = scaleFramePaddings(framePaddingsOf(frameConfig.value), viewport.value.zoom || 1)
+  const inner = paddedBounds(moved, pads.inner)
+  return { inner, outer: paddedBounds(inner, pads.gap) }
+}
+
 function refreshFrame(): void {
   const l = layout()
   if (!l) return
   // 总开关关掉：不画框（多选本身照常可用）
   if (!frameConfig.value.enabled) {
     frame.value = null
+    return
+  }
+  /**
+   * 本插件自己发起的"整组平移"进行中：**必须走拖动路径**（并集快照 + 位移 + 当前缩放）。
+   *
+   * 为什么不能落进下面的"从 store 重算"：拖动中被拖节点的 store 位置还是旧的
+   * （VueFlow 松手才落盘），用旧位置重算会把跟手中的框立刻拽回起点。
+   * 这条分支真正救的是"拖动中滚轮缩放"：缩放会触发本函数（见下方 watch 的 zoom 依赖），
+   * 修前那一帧框会跳回原处、与节点脱开（实测 offset 16/34 → 61/68，松手才恢复）。
+   */
+  if (isDragging.value) {
+    frame.value = dragFrameGeometry()
     return
   }
   const ids = [...sel().ids]
@@ -514,7 +566,7 @@ unsubStore = nodeStore().subscribe(() => refreshFrame())
  * 位置要到松手才落盘 —— 只订阅 store 的话，整个拖动过程中框都定在原地，松手那一瞬才"跳"过去
  * （用户截图里看到的正是这个）。节点逐帧视觉写由渲染层负责，这里同步把框按当前帧的并集重算。
  *
- * 多选框平移（本组件自己发起的拖动）不走这里：那条路径由 dragStartFrame 快照 + 位移算，不查 store。
+ * 多选框平移（本组件自己发起的拖动）不走这里：那条路径由 dragStartUnion 快照 + 位移算，不查 store。
  */
 /**
  * 拖动开始那一刻的框快照 + 被拖成员在那一刻的位置。
@@ -589,8 +641,17 @@ watch([() => sel().ids, frameConfig, () => viewport.value.zoom], () => refreshFr
   immediate: true,
 })
 
-// ====== 整组拖动 ======
-const isDragging = ref(false)
+// ====== 整组拖动（续：屏幕坐标与节点位置基准）======
+/**
+ * 拖动起始的屏幕坐标（client）。每帧用它与当前 clientX/Y 的差算位移（除以 zoom 转 flow）。
+ *
+ * 曾经漏声明这个 ref：Vite/esbuild 的 <script setup> 不做类型检查（vue-tsc 才查），
+ * 代码带着 ReferenceError 就上了运行时 —— 用户一在"多选框内的空白处"按下拖动就崩
+ * （dragStartClient is not defined）。而且崩溃点在 isDragging=true **之后**、事件监听安装**之前**，
+ * 于是 isDragging 永久卡 true：后续所有"框内空白"按下都被它的 mousedown 分支吞掉，
+ * clickGuard 也把下一次点击吞了（用户实测：报错后拖不动、点空白选不中）。
+ */
+const dragStartClient = ref<{ x: number; y: number } | null>(null)
 /**
  * 正在拖动某个节点（含捏住选中成员卡片拖动）—— 批量连线端口的压制门。
  *
@@ -606,13 +667,6 @@ const nodeDragging = ref(false)
 const dragStartPositions = ref<Map<string, { x: number; y: number }>>(new Map())
 /** 拖动中最新视觉位置（松手落盘用） */
 const livePositions = ref<Map<string, { x: number; y: number }>>(new Map())
-/**
- * 拖动起始时的两框快照（拖动中框位置 = 快照 + 累计位移）。
- * 必须是**快照**、不能拿"当前框"当基准：mousemove 每帧都在写 frame，
- * 若每帧在当前值上再加一次"从按下算起的累计位移"，位移就会被重复累加 ——
- * 框会以 1、3、6、10… 的加速度甩出去（实测拖 100px 框跑了 300px）。
- */
-const dragStartFrame = ref<SelectionFrameGeometry | null>(null)
 // ====== 在画布层接管"框内拖动"======
 /**
  * 为什么要在 pane 上判断、而不是让框自己接事件：
@@ -728,40 +782,68 @@ function onPaneCaptureDown(e: PointerEvent | MouseEvent): void {
 /** 起一次"整组平移"手势（框内左键拖动 = 框与选中节点一起走） */
 function startGroupDrag(clientX: number, clientY: number): void {
   if (!frame.value) return
-  isDragging.value = true
-  dragStartClient.value = { x: clientX, y: clientY }
-  dragStartFrame.value = {
-    outer: { ...frame.value.outer },
-    inner: { ...frame.value.inner },
-  }
-
-  const nodes = nodeStore().getNodes()
-  const movable = draggableMembers(sel().ids, nodes)
-  const l = layout()
-  const ns = nodeStore()
-  // 每节点拖动基准：
-  //   abs  = 拖动起始的**绝对**坐标（flow，供 membership 判定与事件 payload）
-  //   base = 该节点**写回坐标系**的起始基准（无父 = 绝对；带父 = 相对父），父不随动故拖动期间恒定
-  const startMap = new Map<string, { abs: { x: number; y: number }; base: { x: number; y: number } }>()
-  const liveMap = new Map<string, { x: number; y: number }>()
-  for (const id of movable) {
-    const rect = l?.getNodeRect(id)
-    if (rect) {
-      const n = ns.getNode(id)
-      const parentAbs = n?.parentId ? (l.absolutePosition(n.parentId) ?? { x: 0, y: 0 }) : { x: 0, y: 0 }
-      startMap.set(id, { abs: { x: rect.x, y: rect.y }, base: { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y } })
-      liveMap.set(id, { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y })
+  /**
+   * 起手失败要**完整回滚**：isDragging / dragStartClient / dragStartUnion / dragDelta / window 监听
+   * 要么全部生效、要么全部不留。以前监听装上才算成功、isDragging 却在第一行就置位，
+   * 中途任何异常（数据服务缺失、几何计算抛错）都会把 isDragging 卡在 true ——
+   * 之后整个"框内空白拖动"入口就永久死了（onPaneCaptureDown 见 isDragging 即吞事件）。
+   */
+  try {
+    isDragging.value = true
+    dragStartClient.value = { x: clientX, y: clientY }
+    dragDelta.value = { x: 0, y: 0 }
+    /**
+     * 记下"起手时的成员并集"（不是算好的两框，见 dragStartUnion 的说明）。
+     * 并集含成员自身尺寸，拖动中只平移不改尺寸；间距每帧按当前缩放重算。
+     */
+    dragStartUnion.value = computeUnionBounds(
+      [...sel().ids]
+        .map((id) => layout()?.getNodeRect(id))
+        .filter((r): r is MultiSelectRect => !!r),
+    )
+    if (!dragStartUnion.value) {
+      // 拿不到任何成员矩形：无从跟随，回滚（比"框定格不动"更诚实）
+      throw new Error('起手时取不到选中节点的矩形')
     }
-  }
-  dragStartPositions.value = startMap
-  livePositions.value = liveMap
 
-  window.addEventListener('pointermove', onDragMove)
-  window.addEventListener('pointerup', onDragUp)
+    const nodes = nodeStore().getNodes()
+    const movable = draggableMembers(sel().ids, nodes)
+    const l = layout()
+    const ns = nodeStore()
+    // 每节点拖动基准：
+    //   abs  = 拖动起始的**绝对**坐标（flow，供 membership 判定与事件 payload）
+    //   base = 该节点**写回坐标系**的起始基准（无父 = 绝对；带父 = 相对父），父不随动故拖动期间恒定
+    const startMap = new Map<string, { abs: { x: number; y: number }; base: { x: number; y: number } }>()
+    const liveMap = new Map<string, { x: number; y: number }>()
+    for (const id of movable) {
+      const rect = l?.getNodeRect(id)
+      if (rect) {
+        const n = ns.getNode(id)
+        const parentAbs = n?.parentId ? (l.absolutePosition(n.parentId) ?? { x: 0, y: 0 }) : { x: 0, y: 0 }
+        startMap.set(id, { abs: { x: rect.x, y: rect.y }, base: { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y } })
+        liveMap.set(id, { x: rect.x - parentAbs.x, y: rect.y - parentAbs.y })
+      }
+    }
+    dragStartPositions.value = startMap
+    livePositions.value = liveMap
+
+    window.addEventListener('pointermove', onDragMove)
+    window.addEventListener('pointerup', onDragUp)
+  } catch (err) {
+    // 回滚到"没在拖"的干净态：比卡死好得多 —— 下一次按下还能正常起手。
+    isDragging.value = false
+    dragStartClient.value = null
+    dragStartUnion.value = null
+    dragDelta.value = { x: 0, y: 0 }
+    window.removeEventListener('pointermove', onDragMove)
+    window.removeEventListener('pointerup', onDragUp)
+    console.error('[multi-select] 整组拖动起手失败（已回滚）', err)
+  }
 }
 
 function onDragMove(e: MouseEvent): void {
   if (!isDragging.value) return
+  if (!dragStartClient.value) return
   const zoom = viewport.value.zoom || 1
   const canvasDx = (e.clientX - dragStartClient.value.x) / zoom
   const canvasDy = (e.clientY - dragStartClient.value.y) / zoom
@@ -775,12 +857,10 @@ function onDragMove(e: MouseEvent): void {
   }
   livePositions.value = nextLive
 
-  // 两框一起跟着位移 = 起始快照 + 累计位移（绝对定位，不累加；见 dragFollow 的说明）。
-  // 松手落盘后由 refreshFrame 从 store 重算接管。
-  const start = dragStartFrame.value
-  if (start) {
-    frame.value = followFrame(start, canvasDx, canvasDy)
-  }
+  // 两框一起跟着位移 = 起手并集快照 + 累计位移（绝对定位，不累加；见 dragStartUnion 的说明）。
+  // 每帧都按**当前缩放**重算间距 —— 拖动中缩放画布时框才跟着节点一起缩（见 dragFrameGeometry）。
+  dragDelta.value = { x: canvasDx, y: canvasDy }
+  frame.value = dragFrameGeometry()
 }
 
 function onDragUp(): void {
@@ -812,7 +892,8 @@ function onDragUp(): void {
 
   dragStartPositions.value.clear()
   livePositions.value.clear()
-  dragStartFrame.value = null
+  dragStartUnion.value = null
+  dragDelta.value = { x: 0, y: 0 }
   refreshFrame()
 }
 

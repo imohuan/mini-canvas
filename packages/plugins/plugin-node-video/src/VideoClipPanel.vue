@@ -266,9 +266,9 @@ onBeforeUnmount(() => {
   width: 12px;
   height: 20px;
   margin-left: -6px;
-  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 6px;
-  background: #fff;
+  background: var(--ui-panel, #fff);
   cursor: ew-resize;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }

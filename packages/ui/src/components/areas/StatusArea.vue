@@ -3,6 +3,7 @@
 // 「隐藏节点连线 / 网格吸附」可切换：关闭时图标画斜线（照目标）。
 import { PanelLeft, LayoutGrid, Map, Link2Off, Link2, Magnet, Grid2x2X } from 'lucide-vue-next'
 import AxDropdown from '../AxDropdown.vue'
+import AxMenuItem from '../AxMenuItem.vue'
 import AxTooltip from '../AxTooltip.vue'
 import { useUi } from '../../composables/ui'
 
@@ -25,7 +26,7 @@ const s = ui.state
       <AxTooltip content="切换小地图" placement="top">
         <button
           class="grid size-7 place-items-center rounded-lg transition-colors hover:bg-hover"
-          :class="ui.minimapOn ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图" :aria-pressed="ui.minimapOn"
+          :class="ui.minimapOn ? 'text-ink' : 'text-ink-dim'" aria-label="切换小地图" :aria-pressed="ui.minimapOn ? 'true' : 'false'"
           @click="ui.toggleMinimap()"
         ><Map :size="14" /></button>
       </AxTooltip>
@@ -54,11 +55,11 @@ const s = ui.state
           </AxTooltip>
         </template>
         <template #default="{ close }">
-          <button class="menu-item" @click="s.zoom = Math.min(800, s.zoom + 10); close()"><span>放大</span><kbd>⌘ +</kbd></button>
-          <button class="menu-item" @click="s.zoom = Math.max(10, s.zoom - 10); close()"><span>缩小</span><kbd>⌘ −</kbd></button>
-          <button class="menu-item" @click="s.zoom = 39; close()"><span>适合屏幕</span><kbd>⌘ 0</kbd></button>
-          <div class="mx-0 my-1 h-px bg-line"></div>
-          <button v-for="z in [50, 100, 800]" :key="z" class="menu-item" @click="s.zoom = z; close()"><span>缩放至{{ z }}%</span></button>
+          <AxMenuItem @click="s.zoom = Math.min(800, s.zoom + 10); close()">放大 <span class="ax-menu-hint">Ctrl +</span></AxMenuItem>
+          <AxMenuItem @click="s.zoom = Math.max(10, s.zoom - 10); close()">缩小 <span class="ax-menu-hint">Ctrl −</span></AxMenuItem>
+          <AxMenuItem :active="s.zoom === 39" @click="s.zoom = 39; close()">适合屏幕 <span class="ax-menu-hint">Ctrl 0</span></AxMenuItem>
+          <div class="ax-menu-sep"></div>
+          <AxMenuItem v-for="z in [50, 100, 800]" :key="z" :active="s.zoom === z" @click="s.zoom = z; close()">缩放至{{ z }}%</AxMenuItem>
         </template>
       </AxDropdown>
     </div>

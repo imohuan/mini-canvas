@@ -96,8 +96,8 @@ const componentIcon = computed<Component | null>(() =>
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
-  color: var(--text-muted, #6b7280);
+  background: var(--ntb-fill, rgb(0 0 0 / 0.04));
+  color: var(--ntb-text, #6b7280);
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -137,12 +137,12 @@ const componentIcon = computed<Component | null>(() =>
 }
 
 .ntb-btn:hover:not(:disabled) {
-  background: var(--fill-active, rgba(0, 0, 0, 0.06));
-  color: var(--text-strong, #111827);
+  background: var(--ntb-fill-hover, rgb(0 0 0 / 0.06));
+  color: var(--ntb-text-strong, #111827);
 }
 /* 文本按钮的 hover 是更浅的一档（规范 §3.3） */
 .ntb-btn:not(.is-icon-only):hover:not(:disabled) {
-  background: var(--fill-hover, rgba(0, 0, 0, 0.05));
+  background: var(--ntb-fill-quiet, rgb(0 0 0 / 0.05));
 }
 
 .ntb-btn:active:not(:disabled) {
@@ -151,7 +151,7 @@ const componentIcon = computed<Component | null>(() =>
 
 /* 焦点环：去掉默认 outline 就必须补上（规范 §5 第 1 条） */
 .ntb-btn:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 
@@ -165,32 +165,32 @@ const componentIcon = computed<Component | null>(() =>
    带文案的按钮会命中上面的 `.ntb-btn:not(.is-icon-only)`（特异度 0,2,0）把它设成透明底，
    而单类选择器 `.ntb-btn--primary`（0,1,0）特异度更低 —— 于是"确认"变成白字透明底，
    放在白色工具栏上完全看不见。抬到同等特异度、且排在后面，才能稳定压住那条通用规则。 */
-  .ntb-btn.ntb-btn--primary {
-    width: auto;
-    padding: 0 14px;
-    border-radius: 8px;
-    background: #0891b2;
-    color: #fff;
-  }
-  .ntb-btn.ntb-btn--primary:hover:not(:disabled) {
-    background: #0e7490;
-    color: #fff;
-  }
+.ntb-btn.ntb-btn--primary {
+  width: auto;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--ui-accent, #0891b2);
+  color: #fff;
+}
+.ntb-btn.ntb-btn--primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover, #0e7490);
+  color: #fff;
+}
 
-  /* 危险档：平时与 ghost 同，悬停才转红。同上抬特异度，保证带文案时也能压住通用规则。 */
-  .ntb-btn.ntb-btn--danger:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-  }
+/* 危险档：平时与 ghost 同，悬停才转红。同上抬特异度，保证带文案时也能压住通用规则。 */
+.ntb-btn.ntb-btn--danger:hover:not(:disabled) {
+  background: var(--ui-danger-veil, rgb(239 68 68 / 0.1));
+  color: var(--ui-danger, #ef4444);
+}
 
 /* 激活（开关打开）：浅青底 + 青字，表示"当前生效" */
 .ntb-btn.is-active {
-  background: rgba(8, 145, 178, 0.12);
-  color: #0e7490;
+  background: var(--ntb-active-bg, rgb(8 145 178 / 0.12));
+  color: var(--ntb-active-ink, #0e7490);
 }
 .ntb-btn.is-active:hover:not(:disabled) {
-  background: rgba(8, 145, 178, 0.2);
-  color: #0e7490;
+  background: var(--ntb-active-bg-hover, rgb(8 145 178 / 0.2));
+  color: var(--ntb-active-ink, #0e7490);
 }
 
 @media (prefers-reduced-motion: reduce) {

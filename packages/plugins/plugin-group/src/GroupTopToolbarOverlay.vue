@@ -50,13 +50,28 @@ const groupNode = computed(() => {
 })
 
 /**
- * 分组卡片的绝对矩形（flow 坐标 + 实测尺寸）；平移/缩放时重算。
+ * 数据变化信号：doc.subscribe 每次图变更（含拖动落盘的 update）都 bump 一次。
+ *
+ * 为什么必须显式依赖：storeRect 只读了 viewport —— VueFlow 拖动松手落盘后
+ * **视口没动、store 位置变了**，computed 不重算，工具栏就停在拖动前的旧位置
+ * （用户实测：拖完节点，"解散分组"工具栏留在原地，pan 一下画布才跳回来）。
+ * 多选框的 SelectionFrame 一直订着 store 所以没事，这里补上同一份订阅。
+ */
+const dataTick = ref(0)
+const offData = ctx
+  .get<{ subscribe(cb: (change: unknown) => void): () => void } | undefined>('doc')
+  ?.subscribe(() => void (dataTick.value += 1))
+onBeforeUnmount(() => offData?.())
+
+/**
+ * 分组卡片的绝对矩形（flow 坐标 + 实测尺寸）；平移/缩放/数据变化时重算。
  *
  * **拖动时不走这里**（见下方 dragFollow 的说明）——数据层位置要松手才落盘，
  * 拖动中读这里会停在原地，工具栏就会"跟视图不跟节点"（用户实测报的就是这个）。
  */
 const storeRect = computed(() => {
   void viewport.value // 依赖视口：pan/zoom 时重算（拖动中 nodeLayout 实测值会更新）
+  void dataTick.value // 依赖数据变化：拖动落盘后 store 位置变了，这里必须重读
   const id = groupNode.value?.id
   if (!id) return null
   return ctx.get<NodeLayoutService | undefined>('nodeLayout')?.getNodeRect(id) ?? null
