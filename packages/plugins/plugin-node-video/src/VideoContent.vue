@@ -47,6 +47,8 @@ const cropRect = computed<Rect | undefined>(() => {
 })
 const cropping = computed(() => isCropping(props.id))
 const fullscreenActive = computed(() => fullscreenOpen.value)
+/** 鼠标是否停在卡片上：卡内播放控件只在此时显形（不常驻遮画面） */
+const hovering = ref(false)
 
 /** 读写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createVideoOps(ctx)
@@ -288,7 +290,7 @@ const stageLabel = computed(() => {
 </script>
 
 <template>
-  <div class="video-node">
+  <div class="video-node" @pointerenter="hovering = true" @pointerleave="hovering = false">
     <div
       ref="stageRef"
       class="video-stage"
@@ -317,9 +319,14 @@ const stageLabel = computed(() => {
       <div v-else class="video-empty is-void">（无视频）</div>
     </div>
 
-    <!-- 播放控件：本地态的显隐规则是"有视频且不在裁剪中"。
+    <!-- 播放控件：本地态的显隐规则是"有视频且不在裁剪中"，再叠加卡片 hover（不常驻，免得遮画面）。
          三个 VueFlow 保留类名把画布手势挡在外面：nodrag 不拖节点、nopan 不拖画布、nowheel 不缩放画布。 -->
-    <div v-if="videoUrl && !broken && !cropping" class="video-controls nodrag nopan nowheel" @dblclick.stop>
+    <div
+      v-if="videoUrl && !broken && !cropping"
+      class="video-controls nodrag nopan nowheel"
+      :class="{ 'is-hidden': !hovering }"
+      @dblclick.stop
+    >
       <button class="vc-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
         <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
         <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
@@ -404,7 +411,9 @@ const stageLabel = computed(() => {
   position: relative;
   width: 100%;
   height: 100%;
-  background: #050505;
+  /* 与图片节点一致：卡片底色走主题表面色（亮/暗各一份），空卡片是灰的。
+     只有真的有画面时才由 .video-media 铺黑 —— 那是视频自己的留白边，不是卡片底色。 */
+  background: var(--canvas-node-surface, #f9fafb);
   overflow: hidden;
 }
 
@@ -435,7 +444,8 @@ const stageLabel = computed(() => {
 }
 
 /* —— 播放控件：压在画面底部，无背景 —— 只留图标/文字/进度条本身，
-   用轻投影保证亮画面上也读得清；整体贴底更紧凑。 */
+   用轻投影保证亮画面上也读得清；整体贴底更紧凑。
+   平时透明收起（鼠标离开卡片即藏），hover 卡片才淡入。 */
 .video-controls {
   position: absolute;
   left: 10px;
@@ -445,6 +455,12 @@ const stageLabel = computed(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.video-controls.is-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
 }
 
 .vc-btn {
@@ -545,19 +561,20 @@ const stageLabel = computed(() => {
   pointer-events: none;
 }
 
+/* 空态 / 失效态：站在灰底上，所以用节点文字色而不是白字（图片节点同一套） */
 .video-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
   padding: 8px;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--canvas-node-text-muted, #9ca3af);
   /* 中文正文最低 12px（§2.3） */
   font-size: 12px;
   text-align: center;
 }
 .video-empty.is-broken {
-  color: #fbbf24;
+  color: #b45309;
 }
 
 /* —— 全屏层 —— */
@@ -607,6 +624,13 @@ const stageLabel = computed(() => {
     transition: none !important;
   }
   .vc-btn:active:not(:disabled) {
+    transform: none;
+  }
+  /* 卡内控制条的 hover 淡入也去掉动效（直接显隐，不位移） */
+  .video-controls {
+    transition: none !important;
+  }
+  .video-controls.is-hidden {
     transform: none;
   }
   /* 淡入淡出去掉（直接显隐），位移也去掉 —— 只留"出现/消失"这件事本身 */
