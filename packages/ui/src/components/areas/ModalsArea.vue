@@ -35,16 +35,20 @@ watch(() => s.shortcutsOpen, async (open) => {
       :initial="{ opacity: 0, scale: 0.96, y: 8 }" :animate="{ opacity: 1, scale: 1, y: 0 }"
       :transition="{ duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }" @pointerdown.stop
     >
-      <div class="flex items-center justify-end p-1.5">
-        <button class="grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="关闭快捷键面板" @click="s.shortcutsOpen = false"><X :size="15" /></button>
-      </div>
-      <div class="grid flex-1 grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto px-5 pb-5">
-        <div v-for="col in ui.shortcuts" :key="col.group" class="shortcut-col">
-          <h4 class="mb-2 mt-1.5 text-xs font-bold text-brand">{{ col.group }}</h4>
-          <div v-for="row in col.items" :key="row[0]" class="flex min-h-[34px] items-center justify-between gap-2.5 text-xs text-ink">
-            <span>{{ row[0] }}</span>
-            <span class="flex items-center gap-1"><template v-for="(k, i) in row[1]" :key="k + i"><kbd class="rounded-md border border-line bg-veil px-1.5 py-0.5 text-[10px] text-ink">{{ k }}</kbd><em v-if="i < row[1].length - 1" class="not-italic text-ink-dim">+</em></template></span>
+      <!-- 内容 + 关闭按钮：左右 flex 排列；按钮在滚动区**外**，内容滚动时钉在右上角不动 -->
+      <div class="flex min-h-0 flex-1">
+        <!-- 滚动容器自己留 py-3/pl-5；mr-2 让滚动条从面板右缘向内收，pr-2 让键帽不贴着滚动条 -->
+        <div class="grid min-h-0 flex-1 content-start grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto py-3 pl-5 pr-2 mr-2">
+          <div v-for="col in ui.shortcuts" :key="col.group" class="shortcut-col">
+            <h4 class="mb-2 mt-1.5 text-xs font-bold text-brand">{{ col.group }}</h4>
+            <div v-for="row in col.items" :key="row[0]" class="flex min-h-[34px] items-center justify-between gap-2.5 text-xs text-ink">
+              <span>{{ row[0] }}</span>
+              <span class="flex items-center gap-1"><template v-for="(k, i) in row[1]" :key="k + i"><kbd class="rounded-md border border-line bg-veil px-1.5 py-0.5 text-[10px] text-ink">{{ k }}</kbd><em v-if="i < row[1].length - 1" class="not-italic text-ink-dim">+</em></template></span>
+            </div>
           </div>
+        </div>
+        <div class="flex flex-none items-start p-1.5">
+          <button class="grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="关闭快捷键面板" @click="s.shortcutsOpen = false"><X :size="15" /></button>
         </div>
       </div>
     </motion.section>
