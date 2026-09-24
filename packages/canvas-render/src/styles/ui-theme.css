@@ -55,13 +55,20 @@
   --ui-scroll-thumb: rgb(0 0 0 / 0.2);
   --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
   /* UI 规范强调色（青）——全界面唯一强调色，见 docs/design/ui-style-guide.md §2 */
+  /* 注意：--ui-accent / --ui-accent-hover / --ui-danger / --ui-warn 可被设置面板覆盖
+     （见 packages/ui/src/themeColorPlugin.ts：改色后写到 <html> 内联变量，优先级高于本文件），
+     所以这里写的是**默认值**，不是唯一来源。 */
   --ui-accent: #0891b2;
   --ui-accent-hover: #0e7490;
-  --ui-accent-soft: rgb(8 145 178 / 0.12);
+  /* soft 档由强调色现算（color-mix）：用户改强调色后，选中底/聚焦环等半透明变体自动跟随，
+     不会出现"主色改了、半透明底还是青的"这种漂移。 */
+  --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 12%, transparent);
   /* 语义色：危险（删除 / 断开连接等破坏性操作） */
   --ui-danger: #ef4444;
-  --ui-danger-soft: rgb(239 68 68 / 0.14);
-  --ui-danger-veil: rgb(239 68 68 / 0.08);
+  --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 14%, transparent);
+  --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 8%, transparent);
+  /* 语义色：警示（限时折扣 / 注意事项等提示文案） */
+  --ui-warn: #e3a25f;
   /* 画布辅助线（对齐参考线 / 框选框） */
   --ui-guide: rgb(59 130 246 / 0.75);
   --ui-guide-veil: rgb(59 130 246 / 0.06);
@@ -144,10 +151,11 @@ html[data-canvas-theme='dark'] {
   --ui-scroll-thumb-hover: rgb(255 255 255 / 0.55);
   --ui-accent: #0891b2;
   --ui-accent-hover: #0e7490;
-  --ui-accent-soft: rgb(8 145 178 / 0.20);
+  --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 20%, transparent);
   --ui-danger: #f87171;
-  --ui-danger-soft: rgb(248 113 113 / 0.18);
-  --ui-danger-veil: rgb(248 113 113 / 0.10);
+  --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 18%, transparent);
+  --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 10%, transparent);
+  --ui-warn: #e3a25f;
   /* 暗底上辅助线要够亮才看得见 */
   --ui-guide: rgb(99 102 241 / 0.6);
   --ui-guide-veil: rgb(99 102 241 / 0.06);

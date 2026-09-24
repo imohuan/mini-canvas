@@ -45,7 +45,7 @@ function onGroup(): void {
 
 <template>
   <!-- 定位由宿主给（selection-frame-slot--top）；这里只声明"这是上控制栏里的一排内容" -->
-  <div class="selection-group-toolbar">
+  <div class="ntp-root selection-group-toolbar">
     <component
       :is="ThemedButton || 'button'"
       class="selection-group-toolbar__btn"
@@ -62,17 +62,7 @@ function onGroup(): void {
 </template>
 
 <style scoped>
-/* 只管"排一行"；位置（贴外框、居中、反缩放）由宿主那层负责 —— 与节点上插槽同一规矩。
-   配色走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换），本组件不带主题配置项。 */
-.selection-group-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--ui-panel, #ffffff);
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 10px;
-  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
-  white-space: nowrap;
-}
+/* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
+   与节点上/下控制栏、分组工具栏共用同一套规则，这里不再自带容器样式。
+   位置（贴外框、居中、反缩放）由宿主那层负责。 */
 </style>

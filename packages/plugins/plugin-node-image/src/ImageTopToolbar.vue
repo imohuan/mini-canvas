@@ -156,20 +156,8 @@ function cancelEdit(): void {
 </template>
 
 <style scoped>
-/* 只管"排一行 + 一个小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。
-   配色走通用 UI token（<html class="dark"> 切换），不再写死白底 ——
-   控制栏浮在画布背景上而不是卡片里，暗色主题下必须是深底。 */
-.it-root {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--ui-overlay-solid, #ffffff);
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 10px;
-  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
-  white-space: nowrap;
-}
+/* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
+   位置（贴边/居中/反缩放）由壳的上插槽定位层给，本组件只管内容。 */
 
 .it-file {
   display: none;

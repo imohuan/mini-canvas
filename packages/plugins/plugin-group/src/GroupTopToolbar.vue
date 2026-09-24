@@ -62,7 +62,7 @@ function pickColor(color: string): void {
 </script>
 
 <template>
-  <div v-if="visible" class="group-top-toolbar">
+  <div v-if="visible" class="ntp-root group-top-toolbar">
     <!-- 背景颜色：色点触发器 + 下拉的预设色板（只有预制色，不做自定义取色） -->
     <component
       :is="ThemedDropdown"
@@ -75,16 +75,18 @@ function pickColor(color: string): void {
       :teleport="true"
     >
       <template #trigger>
-        <button
+        <!-- 色点触发器 = 控制栏通用按钮 + 图标位放色点（不再自绘一个 32×32 按钮，
+             尺寸/hover/focus/圆角全部跟随目录里登记的 button 组件）。 -->
+        <component
+          :is="ThemedButton || 'button'"
           class="group-color-trigger"
-          type="button"
           title="背景颜色"
           aria-label="背景颜色"
           aria-haspopup="listbox"
           :aria-expanded="colorOpen"
         >
           <span class="group-color-trigger__dot" :style="{ backgroundColor: currentColor }" aria-hidden="true" />
-        </button>
+        </component>
       </template>
       <template #default="{ close }">
         <div class="group-color-grid" role="listbox" aria-label="分组背景颜色" @click.stop>
@@ -121,42 +123,11 @@ function pickColor(color: string): void {
 </template>
 
 <style scoped>
-/* 只管"排一行 + 一个小面板"；位置（贴边/居中/反缩放）由壳的上插槽定位层给。
-   配色走通用 UI token + --ntb-*（<html class="dark"> 切换），不再写死白底 ——
-   控制栏浮在画布背景上而不是卡片里，暗色主题下必须是深底。 */
-.group-top-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: var(--ui-overlay-solid, #ffffff);
-  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
-  border-radius: 10px;
-  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
-  white-space: nowrap;
-}
+/* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
+   位置（贴边/居中/反缩放）由壳的上插槽定位层给，本组件只管内容。 */
 
-/* 色点触发器：与外层按钮同高（32px），保持整排对齐 */
-.group-color-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: var(--ntb-fill, rgba(0, 0, 0, 0.04));
-  cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.group-color-trigger:hover {
-  background: var(--ntb-fill-hover, rgba(0, 0, 0, 0.06));
-}
-.group-color-trigger:focus-visible {
-  outline: 2px solid var(--ntb-accent-ring, rgba(8, 145, 178, 0.6));
-  outline-offset: 1px;
-}
+/* 色点触发器：按钮本体（32×32/圆角/hover/focus）由目录里的 button 组件提供，
+   这里只补一件它管不到的事 —— 图标位里放的是"色点"而不是 SVG。 */
 .group-color-trigger__dot {
   width: 16px;
   height: 16px;
