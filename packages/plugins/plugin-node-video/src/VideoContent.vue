@@ -152,9 +152,52 @@ async function captureFrameNode(at: number): Promise<void> {
 
 // ==================== 全屏 ====================
 
+/**
+ * 全屏控制条：播放中默认隐藏，鼠标进底部热区才显示，离开 1 秒后收起。
+ * 暂停时常显 —— 画面不动时藏起来只会让人找不到按钮。
+ */
+const fsControlsVisible = ref(false)
+let fsHideTimer: ReturnType<typeof setTimeout> | null = null
+/** 底部热区高度：够宽就不用瞄准，也不至于吃掉画面中部 */
+const FS_HOTZONE = 140
+
+const fsControlsShown = computed(() => !playing.value || fsControlsVisible.value)
+
+function showFsControls(): void {
+  if (fsHideTimer) {
+    clearTimeout(fsHideTimer)
+    fsHideTimer = null
+  }
+  fsControlsVisible.value = true
+}
+
+/** 离开热区后延时 1 秒收起（缓冲够长，鼠标从热区划到按钮上不会闪没） */
+function scheduleFsHide(): void {
+  if (fsHideTimer) clearTimeout(fsHideTimer)
+  fsHideTimer = setTimeout(() => {
+    fsHideTimer = null
+    fsControlsVisible.value = false
+  }, 1000)
+}
+
+function clearFsHideTimer(): void {
+  if (fsHideTimer) {
+    clearTimeout(fsHideTimer)
+    fsHideTimer = null
+  }
+}
+
+function onFsPointerMove(e: MouseEvent): void {
+  if (window.innerHeight - e.clientY <= FS_HOTZONE) showFsControls()
+  else scheduleFsHide()
+}
+
 function openFullscreen(): void {
   if (!videoUrl.value || fullscreenOpen.value) return
   fullscreenOpen.value = true
+  // 刚进来先亮一下，让人知道有控制条；播放中随后自动收起
+  showFsControls()
+  scheduleFsHide()
   void nextTick(() => {
     const from = videoRef.value
     const to = fullscreenRef.value
@@ -167,6 +210,8 @@ function openFullscreen(): void {
 
 function closeFullscreen(): void {
   if (!fullscreenOpen.value) return
+  clearFsHideTimer()
+  fsControlsVisible.value = false
   const from = fullscreenRef.value
   const to = videoRef.value
   if (from && to) {
@@ -228,6 +273,7 @@ function onStageDblClick(e: MouseEvent): void {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
+  clearFsHideTimer()
   paneClickSub.dispose()
   endOverlay(props.id)
 })
@@ -308,7 +354,14 @@ const stageLabel = computed(() => {
 
   <!-- 全屏层：刻意纯黑无装饰，Esc / 双击 / 点背景退出。 -->
   <Teleport to="body">
-    <div v-if="fullscreenActive" class="video-fullscreen" @click.self="closeFullscreen">
+    <div
+      v-if="fullscreenActive"
+      class="video-fullscreen"
+      @click.self="closeFullscreen"
+      @mousemove="onFsPointerMove"
+      @mouseleave="scheduleFsHide"
+      @dblclick.self="closeFullscreen"
+    >
       <video
         ref="fullscreenRef"
         class="video-fullscreen-media"
@@ -321,7 +374,12 @@ const stageLabel = computed(() => {
         @play="playing = true"
         @pause="playing = false"
       />
-      <div class="video-fullscreen-controls nodrag nopan nowheel" @click.stop>
+      <div
+        class="video-fullscreen-controls nodrag nopan nowheel"
+        :class="{ 'is-hidden': !fsControlsShown }"
+        @click.stop
+        @mouseenter="showFsControls"
+      >
         <button class="vc-btn is-on-dark" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
           <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
@@ -524,18 +582,24 @@ const stageLabel = computed(() => {
   max-height: none;
   object-fit: fill;
 }
+/* —— 全屏控制条：与卡内控制条同一套观感（无背景、贴底紧凑）。
+      播放中默认藏起来，鼠标进底部热区才淡入；is-hidden 只管透明度和一点位移，
+      隐藏时 pointer-events:none，免得挡住画面上的点击。 */
 .video-fullscreen-controls {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: 16px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   width: min(760px, calc(100vw - 64px));
-  padding: 8px 12px;
-  border-radius: 16px;
-  background: rgba(17, 24, 39, 0.78);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.video-fullscreen-controls.is-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -544,6 +608,13 @@ const stageLabel = computed(() => {
   }
   .vc-btn:active:not(:disabled) {
     transform: none;
+  }
+  /* 淡入淡出去掉（直接显隐），位移也去掉 —— 只留"出现/消失"这件事本身 */
+  .video-fullscreen-controls {
+    transition: none !important;
+  }
+  .video-fullscreen-controls.is-hidden {
+    transform: translateX(-50%);
   }
 }
 </style>
