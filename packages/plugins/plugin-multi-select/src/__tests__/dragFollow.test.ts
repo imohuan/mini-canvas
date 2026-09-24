@@ -8,6 +8,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { followFrame, type FollowRects } from '../dragFollow'
+import { paddedBounds } from '../multiSelectEngine'
+import { scaleFramePaddings } from '../multiSelectConfig'
 
 const START: FollowRects = {
   outer: { id: '', x: 100, y: 200, w: 400, h: 300 },
@@ -102,6 +104,43 @@ describe('followFrame（拖动时框跟随）', () => {
       expect(expandAt(40, 40)).toEqual({ minX: 0, minY: 0 })
       // 而正确做法（位移量）此时框已经走了 40
       expect(followFrame(START, 40, 40).outer.x - START.outer.x).toBe(40)
+    })
+  })
+
+  // 用户报的缺陷："多选的时候 使用滚轮缩放的时候 你的多选框 没有实时更新"。
+  // 触发条件是"**拖动多选框的同时**滚轮缩放"：修前缩放那一帧框被"用旧 store 位置重算"拽回起点，
+  // 与节点脱开（实测偏移 16/34 → 61/68），松手才跳回。
+  describe('拖动中滚轮缩放（框必须跟着一起缩，间距按当前缩放重算）', () => {
+    const UNION = { id: '', x: 100, y: 200, w: 400, h: 300 }
+    const PADS = { paddingX: 16, paddingTop: 34, paddingBottom: 16 }
+
+    /** 拖动中某一帧的框 = 起手并集平移累计位移，再用"当前缩放"算间距（生产代码同一条式子） */
+    const frameAt = (dx: number, dy: number, zoom: number) => {
+      const moved = { ...UNION, x: UNION.x + dx, y: UNION.y + dy }
+      const scaled = scaleFramePaddings({ inner: { paddingX: 0, paddingTop: 0, paddingBottom: 0 }, gap: PADS }, zoom)
+      const inner = paddedBounds(moved, scaled.inner)
+      return { inner, outer: paddedBounds(inner, scaled.gap) }
+    }
+
+    it('"框相对节点并集"的 flow 间距 = 配置值 ÷ 当前缩放（屏幕上恒等于配置值）', () => {
+      for (const zoom of [1, 1.6, 2, 0.5]) {
+        const g = frameAt(0, 0, zoom)
+        expect(g.outer.x).toBeCloseTo(UNION.x - 16 / zoom, 6)
+        expect(g.outer.y).toBeCloseTo(UNION.y - 34 / zoom, 6)
+        expect(g.outer.x + g.outer.w).toBeCloseTo(UNION.x + UNION.w + 16 / zoom, 6)
+        expect(g.outer.y + g.outer.h).toBeCloseTo(UNION.y + UNION.h + 16 / zoom, 6)
+      }
+    })
+
+    it('回归：存"算好的框"会在缩放后漂 —— 存并集才恒定（修前的形态）', () => {
+      // 修前：起手时把算好的框存下来，之后只按位移平移 —— 缩放不参与
+      const frozenAtStart = frameAt(0, 0, 1)
+      const shiftedByFollow = followFrame(frozenAtStart, 40, 30)
+      // 缩放变成 2 之后仍用那份冻结的框 → flow 间距还停在 16（屏幕上变成 32，节点却已缩到一半）
+      expect(shiftedByFollow.outer.x - (UNION.x + 40)).toBe(-16)
+      // 正确做法：同样位移但按当前缩放重算 → flow 间距 8（屏幕上仍是 16）
+      const right = frameAt(40, 30, 2)
+      expect(right.outer.x - (UNION.x + 40)).toBe(-8)
     })
   })
 })
