@@ -35,10 +35,14 @@ watch(() => s.shortcutsOpen, async (open) => {
       :initial="{ opacity: 0, scale: 0.96, y: 8 }" :animate="{ opacity: 1, scale: 1, y: 0 }"
       :transition="{ duration: 0.22, ease: [0.34, 1.56, 0.64, 1] }" @pointerdown.stop
     >
-      <!-- 关闭按钮：绝对定位钉在右上角（不占流内空间，滚动条才能一路贴到面板最右侧） -->
-      <button class="absolute right-1.5 top-1.5 z-[1] grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="关闭快捷键面板" @click="s.shortcutsOpen = false"><X :size="15" /></button>
-      <!-- 内容区：mr-[10px] 让滚动条落在距面板右缘 10px 处；pr-[42px] 让键帽避开滚动条与关闭按钮 -->
-      <div class="grid min-h-0 flex-1 content-start grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto py-3 pl-5 pr-[42px] mr-[10px]">
+      <!-- 顶部条（左右布局）：左 = 面板标题，右 = 关闭按钮。
+           按钮回到流内的这一行 → 下方滚动容器的滚动条从顶栏下面才开始，两者不再重叠。 -->
+      <div class="flex flex-none items-center justify-between pb-1 pl-5 pr-1.5 pt-3">
+        <h3 class="text-sm font-medium text-ink">快捷键</h3>
+        <button class="grid size-8 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="关闭快捷键面板" @click="s.shortcutsOpen = false"><X :size="15" /></button>
+      </div>
+      <!-- 内容区：独占整宽；mr-[10px] 让滚动条落在距面板右缘 10px 处，pr-[42px] 让键帽避开滚动条 -->
+      <div class="grid min-h-0 flex-1 content-start grid-cols-4 gap-x-6 gap-y-1 overflow-y-auto pb-5 pl-5 pr-[42px] mr-[10px]">
         <div v-for="col in ui.shortcuts" :key="col.group" class="shortcut-col">
           <h4 class="mb-2 mt-1.5 text-xs font-bold text-brand">{{ col.group }}</h4>
           <div v-for="row in col.items" :key="row[0]" class="flex min-h-[34px] items-center justify-between gap-2.5 text-xs text-ink">
