@@ -96,7 +96,7 @@ const componentIcon = computed<Component | null>(() =>
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: var(--ntb-fill, rgb(0 0 0 / 0.04));
+  background: var(--ntb-fill, transparent);
   color: var(--ntb-text, #6b7280);
   font-family: inherit;
   font-size: 12px;

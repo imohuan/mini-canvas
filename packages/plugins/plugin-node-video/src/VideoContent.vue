@@ -411,9 +411,9 @@ const stageLabel = computed(() => {
   position: relative;
   width: 100%;
   height: 100%;
-  /* 与图片节点一致：卡片底色走主题表面色（亮/暗各一份），空卡片是灰的。
-     只有真的有画面时才由 .video-media 铺黑 —— 那是视频自己的留白边，不是卡片底色。 */
-  background: var(--canvas-node-surface, #f9fafb);
+  /* 不铺底色：空卡片让壳的内容裁剪层（--card-content-surface，亮 #eee / 暗 #1f1f1f）透出来，
+     与图片节点完全同源 —— 上一版用 --canvas-node-surface 反而比图片节点浅了一档（用户实测对比出来）。
+     有视频时画面由 .video-media 自己铺满（含黑边），也不依赖这层底色。 */
   overflow: hidden;
 }
 

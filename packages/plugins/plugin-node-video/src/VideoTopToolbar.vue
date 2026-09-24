@@ -121,7 +121,7 @@ function cancelEdit(): void {
 </script>
 
 <template>
-  <div v-if="visible" class="vt-root nodrag nopan">
+  <div v-if="visible" class="ntp-root vt-root nodrag nopan">
     <input ref="fileInput" class="vt-file" type="file" accept="video/*" @change="onFileChange" />
 
     <!-- 编辑态：只剩确认 / 取消（用户要求「确认按钮应该放在上下控制栏」）。

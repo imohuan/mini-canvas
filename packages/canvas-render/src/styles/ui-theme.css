@@ -66,10 +66,13 @@
   --ui-guide: rgb(59 130 246 / 0.75);
   --ui-guide-veil: rgb(59 130 246 / 0.06);
   /* 节点上/下控制栏（Node ToolBar）：浮在卡片外的操作条。
-     按钮底/文字/hover 三档 + 容器面板；暗色那套见 html.dark 块。
+     按钮 hover 档 + 文字 + 容器面板；暗色那套见 html.dark 块。
+     **按钮默认无背景**（用户要求：控制栏里是"一条条的按钮"，不是一排灰方块），
+     所以 `--ntb-fill` 是透明、只有 hover 才上色；`-hover` 是图标按钮档、
+     `-quiet` 是带文案按钮档（后者更浅，规范 §3.3）。
      这套值独立于 --canvas-node-*：控制栏浮在**画布背景**上而不是卡片里，
      所以跟着画布（--ui-*）走才不会在暗画布上出现一块白板。 */
-  --ntb-fill: rgb(0 0 0 / 0.04);
+  --ntb-fill: transparent;
   --ntb-fill-hover: rgb(0 0 0 / 0.06);
   --ntb-fill-quiet: rgb(0 0 0 / 0.05);
   --ntb-text: #6b7280;
@@ -148,8 +151,8 @@ html[data-canvas-theme='dark'] {
   /* 暗底上辅助线要够亮才看得见 */
   --ui-guide: rgb(99 102 241 / 0.6);
   --ui-guide-veil: rgb(99 102 241 / 0.06);
-  /* 节点控制栏（暗色）：白系半透明叠在暗画布上，文字用亮灰；激活态用更亮的青 */
-  --ntb-fill: rgb(255 255 255 / 0.08);
+  /* 节点控制栏（暗色）：按钮默认同样透明，hover 才上一层白系半透明；文字用亮灰 */
+  --ntb-fill: transparent;
   --ntb-fill-hover: rgb(255 255 255 / 0.14);
   --ntb-fill-quiet: rgb(255 255 255 / 0.10);
   --ntb-text: #b8b8b8;
@@ -172,4 +175,30 @@ html[data-canvas-theme='dark'] {
   --ps-track: rgb(255 255 255 / 0.16);
   --ps-accent-hover: #67e8f9;
   --ps-thumb: #ffffff;
+}
+
+/* ===== 控制栏容器（唯一一套规则）=====
+ *
+ * 节点上/下控制栏、"多选框上控制栏"、分组工具栏……都是**同一个东西**：
+ * 浮在画布上、排一行按钮的小面板。此前四处各写一份 `.it-root` / `.vt-root` /
+ * `.group-top-toolbar` / `.selection-group-toolbar`，四份数值已经开始漂移（底色一处
+ * `--ui-panel`、三处 `--ui-overlay-solid`）。收成这一个类，各组件直接挂它、不再自带容器 CSS。
+ *
+ * 为什么**不进 scoped 样式**：scoped 只作用于本组件模板，插件想复用就得各抄一遍 ——
+ * 那正是漂移的来源。这里是"全局类",与 token 同层，谁都能用且改一处全体生效。
+ *
+ * 只管"排一行 + 一块面板"。**位置不归它管**（贴边距离 / 居中 / 反缩放由各宿主
+ * 的上/下插槽定位层给），所以这里没有 position / translate / transform。
+ */
+.ntp-root {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  padding: 4px;
+  background: var(--ui-overlay-solid, #ffffff);
+  border: 1px solid var(--ui-line, rgb(0 0 0 / 0.08));
+  border-radius: 10px;
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgb(0 0 0 / 0.08));
+  white-space: nowrap;
 }
