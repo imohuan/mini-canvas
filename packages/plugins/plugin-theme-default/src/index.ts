@@ -142,7 +142,9 @@ export const DEFAULT_THEME_PANEL = {
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */
 export const DEFAULT_THEME_SNAP_ZONE = {
   heightRatio: 0.8,
-  width: 0, // 0 就是 0（带塌成 0 宽，不做兜底）；想用默认带宽就往这里填具体值
+  // 显式给值（不用 undefined 让它回落 portZoneWidth）：吸附调试带/命中带必须看得见、摸得着。
+  // 曾经默认 0（"0=塌成 0 宽，不兜底"的语义），结果吸附调试框宽 0 根本画不出来——被用户当成"调试框不见了"。
+  width: 24,
   offset: 0,
   shape: "rect",
 } as const;
@@ -233,7 +235,7 @@ export const Config: ConfigSchema = {
     step: 1,
     label: "吸附区宽度",
     group: "节点/端口",
-    description: "端口接收区矩形的横向宽度（默认 86）。",
+    description: "端口接收区矩形的横向宽度（缺省时吸附带才回落到它）。",
   },
   portZoneHeightRatio: {
     type: "number",

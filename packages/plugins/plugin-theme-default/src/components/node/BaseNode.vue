@@ -634,7 +634,7 @@ const showSnapDebugOverlay = computed(
 )
 // 吸附带/接收区几何（与 resolveFeedback 同源）
 // 端口区域宽 portZoneWidth 是端口交互区矩形的主尺寸；吸附带宽未显式给(缺省)时才用它兜底。
-// 设 0 等于"清零"（不兜底，带塌成 0 宽）；默认值由 DEFAULT_THEME_HANDLE.portZoneWidth = 86 提供。
+// 设 0 等于"清零"（不兜底，带塌成 0 宽）；缺省才回落 portZoneWidth（主题默认 10）。
 const portZoneWidth = computed(() => Number(handleParams.portZoneWidth) || 0)
 const portZoneHeight = computed(() => cardHeight.value * Math.min(Math.max(Number(handleParams.portZoneHeightRatio) || 0.8, 0), 1))
 const portZoneOffset = computed(() => Number(handleParams.portZoneOffset) || 0)

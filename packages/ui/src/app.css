@@ -77,12 +77,24 @@ html.dark {
   --canvas-node-ring-transparent: rgb(255 255 255 / 0);
   --canvas-node-resize-handle: #6b6b6b;
   --canvas-node-resize-handle-active: #ffffff;
+  --canvas-node-surface: #262626;
+  --canvas-node-shadow-strong: rgb(0 0 0 / 0.55);
+  --canvas-node-shadow-soft: rgb(0 0 0 / 0.4);
+  --canvas-node-shadow-subtle: rgb(0 0 0 / 0.35);
+  --canvas-node-shadow-panel: rgb(0 0 0 / 0.5);
   --canvas-node-snap-zone-surface: rgb(255 255 255 / 0.1);
   --canvas-node-snap-zone-border: rgb(255 255 255 / 0.85);
+  --canvas-node-snap-zone-shadow: rgb(0 0 0 / 0.55);
+  /* source 输出口吸附带（吸附调试右缘分色）：暗色下换亮蓝，深蓝描边在暗底看不见 */
+  --canvas-node-snap-zone-source-surface: rgb(96 165 250 / 0.16);
+  --canvas-node-snap-zone-source-border: rgb(96 165 250 / 0.9);
   /* 吸附调试的"卡片接收区"(v2-debug-body)配色：暗色下深灰描边看不见，给白色系 */
   --canvas-node-target-zone-surface: rgb(255 255 255 / 0.05);
   --canvas-node-target-zone-border: rgb(255 255 255 / 0.6);
   --canvas-node-snap-zone-highlight: rgb(120 120 120 / 0.9);
+  /* 端口调试半圆/辅助点（v1 亮色的深蓝系在暗底不可见，同换白系） */
+  --canvas-node-debug-danger: rgb(255 255 255 / 0.75);
+  --canvas-node-debug-danger-fill: rgb(255 255 255 / 0.06);
   --canvas-node-debug-center: #ffffff;
   --canvas-node-debug-rest: #b0b0b0;
   --canvas-node-debug-mouse: #9a9a9a;
