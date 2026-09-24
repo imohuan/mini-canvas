@@ -376,19 +376,17 @@ const stageLabel = computed(() => {
   object-fit: fill;
 }
 
-/* —— 播放控件：压在画面底部，半透明黑底保证任何画面上都读得清 —— */
+/* —— 播放控件：压在画面底部，无背景 —— 只留图标/文字/进度条本身，
+   用轻投影保证亮画面上也读得清；整体贴底更紧凑。 */
 .video-controls {
   position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
   z-index: 9;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  border-radius: 10px;
-  background: rgba(17, 24, 39, 0.72);
+  gap: 4px;
 }
 
 .vc-btn {
@@ -396,19 +394,18 @@ const stageLabel = computed(() => {
   align-items: center;
   justify-content: center;
   flex: none;
-  /* 交互目标 ≥32px（§5 第 4 条） */
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.88);
   cursor: pointer;
-  transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease;
 }
 .vc-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
 }
 .vc-btn:active:not(:disabled) {
   transform: scale(0.97);
@@ -422,8 +419,9 @@ const stageLabel = computed(() => {
   cursor: not-allowed;
 }
 .vc-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
 }
 
 .vc-time {
@@ -433,9 +431,10 @@ const stageLabel = computed(() => {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
 }
 
-/* 进度条：轨道 4px + 已播填充；input 透明覆盖在上面接手势（自绘才能跟画布缩放匹配） */
+/* 进度条：轨道 3px + 已播填充；input 透明覆盖在上面接手势（自绘才能跟画布缩放匹配） */
 .vc-progress {
   position: relative;
   flex: 1;
@@ -451,7 +450,7 @@ const stageLabel = computed(() => {
   left: 0;
   right: 0;
   top: 6px;
-  height: 4px;
+  height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.35);
 }
@@ -459,9 +458,9 @@ const stageLabel = computed(() => {
   position: absolute;
   left: 0;
   top: 6px;
-  height: 4px;
+  height: 3px;
   border-radius: 999px;
-  background: #0891b2;
+  background: #22d3ee;
   pointer-events: none;
 }
 .vc-progress input {
