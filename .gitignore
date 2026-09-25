@@ -48,3 +48,11 @@ packages/canvas-core-v2/demo-web/plugins/
 
 # 分析 VueFlow 源码用(浅克隆, 不入库); 用 codegraph 索引查询
 vendor/
+
+# 调试残留：截图 / 探针脚本 / 临时快照目录，都不是源码，不入库
+_snap_tmp/
+packages/ui/_snap_tmp/
+packages/ui/e2e/_shots/
+packages/ui/e2e/_probe-*.mjs
+docs/tmp/_scan/
+/_*.png
