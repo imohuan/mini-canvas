@@ -284,7 +284,7 @@ const fieldId = 'sf-' + props.fieldKey
   height: 15px;
   border-radius: 50%;
   background: var(--sf-thumb, #fff);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 2px var(--ui-shadow-md, rgba(0, 0, 0, 0.2));
   transition: transform 0.18s ease;
 }
 
@@ -297,7 +297,7 @@ const fieldId = 'sf-' + props.fieldKey
 }
 
 .sf-switch input:focus-visible+.sf-slider {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 2px;
 }
 
@@ -318,9 +318,9 @@ const fieldId = 'sf-' + props.fieldKey
 }
 
 .sf-text:focus {
-  border-color: rgba(8, 145, 178, 0.6);
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   background: var(--sf-input-bg-focus, #fff);
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft, rgba(8, 145, 178, 0.14));
   outline: none;
 }
 

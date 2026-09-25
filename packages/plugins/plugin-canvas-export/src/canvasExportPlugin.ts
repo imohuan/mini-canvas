@@ -125,14 +125,14 @@ export const Config: ConfigSchema = {
   },
   exportBackgroundColor: {
     type: 'color',
-    default: '#f8fafc',
+    default: '#f8fafc', // 主题色白名单: 导出图片像素色（画进导出 canvas），必须取到具体值 —— 新窗口/离屏画布没有 CSS 变量
     label: '背景颜色',
     group: '导出',
     description: '导出图的背景底色（仅在「导出背景」打开时生效）。',
   },
   exportDotColor: {
     type: 'color',
-    default: '#cbd5e1',
+    default: '#cbd5e1', // 主题色白名单: 同上，导出图片的圆点网格像素色
     label: '背景网格点颜色',
     group: '导出',
     description: '导出图背景圆点网格的颜色（仅在「导出背景」打开时生效）。',
@@ -240,16 +240,20 @@ function downloadPng(dataUrl: string, filename: string): void {
 const OVERLAY_STYLE_ID = 'canvas-export-overlay-style'
 const OVERLAY_ANIM = 'canvas-export-pulse'
 
-/** 注入遮罩样式（幂等；含 prefers-reduced-motion 降级，遵循项目 UI 规范的等待态约定） */
+/**
+ * 注入遮罩样式（幂等；含 prefers-reduced-motion 降级，遵循项目 UI 规范的等待态约定）。
+ * 配色走主题 token（--ui-accent 等，见 canvas-render 的 ui-theme.css）：遮罩挂在当前页面的真 DOM 上，
+ * 能取到 CSS 变量；半透明档用 color-mix 现算，用户改强调色后脉冲环跟着变。
+ */
 function ensureOverlayStyle(): void {
   if (document.getElementById(OVERLAY_STYLE_ID)) return
   const style = document.createElement('style')
   style.id = OVERLAY_STYLE_ID
   style.textContent =
     '@keyframes ' + OVERLAY_ANIM + ' {' +
-    '0%{box-shadow:0 0 0 0 rgba(8,145,178,0.45)}' +
-    '70%{box-shadow:0 0 0 8px rgba(8,145,178,0)}' +
-    '100%{box-shadow:0 0 0 0 rgba(8,145,178,0)}' +
+    '0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--ui-accent, #0891b2) 45%, transparent)}' +
+    '70%{box-shadow:0 0 0 8px transparent}' +
+    '100%{box-shadow:0 0 0 0 transparent}' +
     '}' +
     '@media (prefers-reduced-motion: reduce){.canvas-export-ring{animation:none!important}}'
   document.head.appendChild(style)
@@ -274,7 +278,8 @@ function showExportOverlay(target: HTMLElement | null): { el: HTMLElement; progr
     'display:flex',
     'align-items:center',
     'justify-content:center',
-    'background:linear-gradient(180deg, rgba(15,23,42,0.06), rgba(15,23,42,0.18))',
+    // 两档都从遮罩色现算：上浅下深，切主题时跟着变（原来写死的是一对深色半透明值）
+    'background:linear-gradient(180deg, color-mix(in srgb, var(--ui-scrim-soft, rgba(15,23,42,0.18)) 40%, transparent), var(--ui-scrim-soft, rgba(15,23,42,0.18)))',
     'backdrop-filter:blur(2px)',
     'cursor:progress',
   ].join(';')
@@ -285,11 +290,11 @@ function showExportOverlay(target: HTMLElement | null): { el: HTMLElement; progr
     'gap:10px',
     'padding:8px 14px',
     'border-radius:16px',
-    'background:#ffffff',
-    'border:1px solid rgba(0,0,0,0.08)',
-    'box-shadow:0 20px 40px rgba(0,0,0,0.08)',
+    'background:var(--ui-overlay-solid, #ffffff)',
+    'border:1px solid var(--ui-line, rgba(0,0,0,0.08))',
+    'box-shadow:var(--ui-shadow-md, 0 20px 40px rgba(0,0,0,0.08))',
     'font:600 13px/1.4 system-ui, sans-serif',
-    'color:#374151',
+    'color:var(--ui-ink-dim, #374151)',
   ].join(';')
   const dot = document.createElement('span')
   dot.className = 'canvas-export-ring'
@@ -297,7 +302,7 @@ function showExportOverlay(target: HTMLElement | null): { el: HTMLElement; progr
     'width:10px',
     'height:10px',
     'border-radius:999px',
-    'background:#0891b2',
+    'background:var(--ui-accent, #0891b2)',
     'animation:' + OVERLAY_ANIM + ' 1.2s ease-out infinite',
   ].join(';')
   const label = document.createElement('span')
@@ -511,8 +516,8 @@ export function apply(ctx: Context) {
         octx,
         rect,
         scale,
-        strOf('exportBackgroundColor', '#f8fafc'),
-        strOf('exportDotColor', '#cbd5e1'),
+        strOf('exportBackgroundColor', '#f8fafc'), // 主题色白名单: 导出图片像素色（兜底底色），导出时直接画进 canvas，须具体值
+        strOf('exportDotColor', '#cbd5e1'), // 主题色白名单: 导出图片圆点像素色（兜底点色），同上
       )
     }
 

@@ -107,7 +107,7 @@ watch(() => s.shortcutsOpen, async (open) => {
       <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
         <div v-if="ui.histVisible.length" class="grid gap-3" :style="{ gridTemplateColumns: 'repeat(' + (s.histZoom + 2) + ', minmax(0, 1fr))' }">
           <article v-for="item in ui.histVisible" :key="item.title" class="flex cursor-pointer flex-col gap-1 rounded-[10px] border border-line bg-veil p-2 text-left transition-colors hover:border-brand hover:bg-hover" @click="ui.showToast('打开 ' + item.title)">
-            <div class="mb-1 grid h-[92px] place-items-center rounded-lg bg-gradient-to-br from-[#3a3550] to-[#23242c] text-brand"><component :is="kindIcon(item.kind)" :size="22" /></div>
+            <div class="mb-1 grid h-[92px] place-items-center rounded-lg bg-gradient-to-br from-panel-active to-panel-soft text-brand"><component :is="kindIcon(item.kind)" :size="22" /></div>
             <strong class="text-xs font-semibold">{{ item.title }}</strong>
             <span class="text-[10px] text-ink-mute">{{ item.kind }} · {{ item.time }}</span>
           </article>

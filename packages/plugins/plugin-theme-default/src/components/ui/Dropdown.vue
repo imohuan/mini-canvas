@@ -249,7 +249,7 @@ watch(isOpen, (v) => {
   border: 1px solid var(--dd-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
   background: var(--dd-bg, #fff);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
   color: var(--dd-ink, #374151);
   overflow-y: auto;
   scrollbar-width: thin;

@@ -76,7 +76,6 @@ import {
   resolveMultiSelectFrameConfig,
   type MultiSelectFrameConfig,
 } from './multiSelectConfig'
-import { followFrame } from './dragFollow'
 import { pointerDown, POINTER_DOWN_CLASS, bindPointerPressWatchers } from './pointerPress'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 import { selectionRegionEntries } from './selectionRegion'
@@ -479,8 +478,13 @@ onBeforeUnmount(() => settingsOff?.dispose())
 const frame = ref<SelectionFrameGeometry | null>(null)
 
 // ====== 整组拖动：状态声明必须在 refreshFrame 之前（它有 immediate watch，会立刻执行）======
-/** 本插件自己的"框内拖动 = 整组平移"手势进行中 */
-const isDragging = ref(false)
+  /** 本插件自己的"框内拖动 = 整组平移"手势进行中 */
+  const isDragging = ref(false)
+  /**
+   * 正在拖动某个节点（含捏住选中成员卡片拖动）—— 批量连线端口的压制门 + refreshFrame 的拖拽分支门。
+   * 必须声明在 refreshFrame 之前（同 isDragging：immediate watch 会立刻执行）。
+   */
+  const nodeDragging = ref(false)
 /**
  * 拖动起始时的**成员并集快照** + 累计位移（拖动中框 = 这份并集平移后按"当前缩放"重算两框）。
  *
@@ -494,8 +498,17 @@ const isDragging = ref(false)
  * 而拿"当前框"当基准更糟：累计位移会被重复计入，框按 1、3、6、10… 加速甩出去。
  */
 const dragStartUnion = ref<MultiSelectRect | null>(null)
-/** 拖动中相对起手点的累计位移（flow 坐标） */
+/**
+ * 拖动中相对起手点的累计位移（flow 坐标）。
+ *
+ * 逐段累加，不是"总屏幕位移 ÷ 当前 zoom"：拖动中缩放时，**已拖过的屏幕距离**
+ * 必须保持它当时换算的 flow 量，只有新增段才按新 zoom 换算 —— 否则缩放会篡改历史段，
+ * 内容当场跳位（修前实测：zoom=1 拖 100px 后缩到 2x，已拖位移被腰斩成 50px，
+ * 内容弹回一半；缩回 1x 再拖又放大 1.566 倍，"拖拽的时候缩放定位出问题"就是这个）。
+ */
 const dragDelta = ref<{ x: number; y: number }>({ x: 0, y: 0 })
+/** 上一帧的屏幕坐标（用于算"两次事件之间的增量"） */
+const lastClient = ref<{ x: number; y: number } | null>(null)
 
 /**
  * 拖动中两框的几何 = 起手并集快照平移累计位移，再用**当前缩放**算间距。
@@ -534,6 +547,27 @@ function refreshFrame(): void {
    */
   if (isDragging.value) {
     frame.value = dragFrameGeometry()
+    return
+  }
+  /**
+   * **原生节点拖拽**（抓成员卡片，VueFlow 多选拖动）进行中：同样不能用旧 store 位置重算。
+   * 拖动中缩放会触发本函数（zoom 是 watch 依赖），store 里还是拖动前的位置 →
+   * 重算出来的框就是"拖拽之前的位置"（用户报的闪回）；而节点层已被 VueFlow 拉到新位置，
+   * 下一帧 NodeDrag 事件才把框拉回来 —— 视觉上就是"闪一下再恢复"。
+   * 处理：拖拽中保持上一帧的框（nodeDragging 期间它由 NodeDrag 逐帧更新），
+   * 只把**间距**按当前缩放重算（框必须跟着一起缩，见 dragFrameGeometry 的说明）。
+   */
+  // 宿主 interaction.isNodeDragging 也算（nodeDragging 由 NodeDragStart 事件置位，
+  // 但缩放帧可能在事件之间到达，interaction 是宿主同步置位的，更可靠）。
+  const draggingNow = nodeDragging.value || interaction?.isNodeDragging?.value === true
+  if (draggingNow && nodeDragFrameAnchor) {
+    /**
+     * 为什么传 {0,0}：followFrameByDelta(delta) 的语义是"并集快照平移 delta 后按当前缩放
+     * 重算间距"——这里 delta=0 表示"并集快照不动，只重算间距"。快照记录的是**拖拽起手**
+     * 的成员布局，帧间位移已由 NodeDrag 逐帧算进上次输出（见上：followFrameByDelta 直接
+     * 平移快照），缩放帧只需让**间距**跟上新 zoom，位置自然与节点层对齐。
+     */
+    followFrameByDelta({ x: 0, y: 0 })
     return
   }
   const ids = [...sel().ids]
@@ -578,19 +612,41 @@ unsubStore = nodeStore().subscribe(() => refreshFrame())
  * 用位移量移动框则天然同步：框与节点走同一个 delta，偏移恒定不变。
  */
 let nodeDragFrameAnchor: {
-  frame: SelectionFrameGeometry
+  /** 起手那一刻的**成员并集**（不是算好的两框 —— 缩放后间距要按新 zoom 重算，见下方） */
+  union: MultiSelectRect
   anchorNodeId: string
   anchorStart: { x: number; y: number }
 } | null = null
 
 /**
- * 拖动中按"位移量"移动框（不重算并集，见 nodeDragFrameAnchor 的说明）。
+ * 取"锚点节点 + 其余选中成员"的当前并集快照（给 nodeDragFrameAnchor 起手用）。
+ * 锚点节点读 payload.position（可能与 layout 有 1 帧 diff），其余成员读 nodeLayout。
+ */
+function nodeUnionSnapshot(anchorNodeId: string, anchorPos?: { x: number; y: number }): MultiSelectRect {
+  const l = layout()
+  const rects = [...sel().ids]
+    .map((id) => {
+      if (id === anchorNodeId && anchorPos) {
+        const size = l?.nodeSize(id) ?? { w: 0, h: 0 }
+        return { id, x: anchorPos.x, y: anchorPos.y, w: size.w, h: size.h }
+      }
+      return l?.getNodeRect(id) ?? null
+    })
+    .filter((r): r is MultiSelectRect => !!r)
+  return computeUnionBounds(rects) ?? { id: '', x: 0, y: 0, w: 0, h: 0 }
+}
+
+/**
+* 拖动中按"位移量"移动框（不重算 store 并集，见 nodeDragFrameAnchor 的说明）。
  * @param delta 相对拖动起始的位移（flow 坐标）
  */
 function followFrameByDelta(delta: { x: number; y: number }): void {
   const a = nodeDragFrameAnchor
   if (!a) return
-  frame.value = followFrame(a.frame, delta.x, delta.y)
+  const moved: MultiSelectRect = { ...a.union, x: a.union.x + delta.x, y: a.union.y + delta.y }
+  const pads = scaleFramePaddings(framePaddingsOf(frameConfig.value), viewport.value.zoom || 1)
+  const inner = paddedBounds(moved, pads.inner)
+  frame.value = { inner, outer: paddedBounds(inner, pads.gap) }
 }
 
 // 订阅渲染层的节点拖拽事件（宿主逐帧广播）：拖动中实时跟随，松手回到 store 权威值。
@@ -612,7 +668,7 @@ if (ctxOn) {
       }
       // 记下"框此刻的样子"与"抓着的那个节点的起始位置"；之后每帧只用位移量移框。
       nodeDragFrameAnchor = {
-        frame: { outer: { ...frame.value.outer }, inner: { ...frame.value.inner } },
+        union: nodeUnionSnapshot(p.nodeId, p.position),
         anchorNodeId: p.nodeId,
         anchorStart: { x: p.position.x, y: p.position.y },
       }
@@ -622,6 +678,14 @@ if (ctxOn) {
       // 只认"抓着的主节点"的帧：多选拖动时 VueFlow 会给每个成员各发一帧，
       // 用同一节点算位移才能保证框与节点严格同步。
       if (!a || p.nodeId !== a.anchorNodeId) return
+      // 宿主 NodeDrag payload 的 position 是 **flow 绝对坐标**（toDragPayload 归一 VueFlow 事件），
+      // 与 anchorStart 同域，直接相减就是本帧位移 —— 修前用屏幕 client 相减再除 zoom，
+      // 拖动中缩放时新旧段被不同 zoom 换算，框会跳（闪回拖拽前位置）。
+      // **先快进快照**：把并集快照平移本帧位移（节点已走到新位置），anchorStart 重置为本帧位置 ——
+      // 这样 followFrameByDelta({0,0})（refreshFrame 缩放分支）的语义变成"保持当前位置，
+      // 只按当前缩放重算间距"。缩放帧框就停在节点当前位置，不再闪回旧坐标。
+      a.union = { ...a.union, x: a.union.x + (p.position.x - a.anchorStart.x), y: a.union.y + (p.position.y - a.anchorStart.y) }
+      a.anchorStart = { x: p.position.x, y: p.position.y }
       followFrameByDelta({ x: p.position.x - a.anchorStart.x, y: p.position.y - a.anchorStart.y })
     }),
     ctxOn(RenderEvents.NodeDragEnd, () => {
@@ -642,27 +706,11 @@ watch([() => sel().ids, frameConfig, () => viewport.value.zoom], () => refreshFr
 })
 
 // ====== 整组拖动（续：屏幕坐标与节点位置基准）======
+// （起手屏幕坐标已并入 lastClient：位移改为"逐段增量累加"，不再需要独立的起点坐标。
+//   历史坑：这里曾漏声明 dragStartClient 导致运行时 ReferenceError + isDragging 卡死，
+//   收拢成 lastClient 后同样必须先声明后使用 —— 单测 dragZoomFollow 锁着这条。）
 /**
- * 拖动起始的屏幕坐标（client）。每帧用它与当前 clientX/Y 的差算位移（除以 zoom 转 flow）。
- *
- * 曾经漏声明这个 ref：Vite/esbuild 的 <script setup> 不做类型检查（vue-tsc 才查），
- * 代码带着 ReferenceError 就上了运行时 —— 用户一在"多选框内的空白处"按下拖动就崩
- * （dragStartClient is not defined）。而且崩溃点在 isDragging=true **之后**、事件监听安装**之前**，
- * 于是 isDragging 永久卡 true：后续所有"框内空白"按下都被它的 mousedown 分支吞掉，
- * clickGuard 也把下一次点击吞了（用户实测：报错后拖不动、点空白选不中）。
- */
-const dragStartClient = ref<{ x: number; y: number } | null>(null)
-/**
- * 正在拖动某个节点（含捏住选中成员卡片拖动）—— 批量连线端口的压制门。
- *
- * 为什么不用 interaction.isNodeDragging：实测它在真实拖拽全程恒为 false（宿主没点亮该位），
- * 靠它压不住端口（用户截图：拖动中 + 球还在）。这里改成由本组件自己订阅的渲染层拖拽事件维护，
- * 与下方 NodeDragStart/NodeDragEnd 订阅同源，链路已经验证过是真会触发的。
- */
-const nodeDragging = ref(false)
-
-/**
- * 指针是否按下中 —— 批量连线端口的**主压制门**。
+* 指针是否按下中 —— 批量连线端口的**主压制门**。
 /** 拖动起始时各可动节点的绝对位置（flow） */
 const dragStartPositions = ref<Map<string, { x: number; y: number }>>(new Map())
 /** 拖动中最新视觉位置（松手落盘用） */
@@ -783,14 +831,14 @@ function onPaneCaptureDown(e: PointerEvent | MouseEvent): void {
 function startGroupDrag(clientX: number, clientY: number): void {
   if (!frame.value) return
   /**
-   * 起手失败要**完整回滚**：isDragging / dragStartClient / dragStartUnion / dragDelta / window 监听
+   * 起手失败要**完整回滚**：isDragging / lastClient / dragStartUnion / dragDelta / window 监听
    * 要么全部生效、要么全部不留。以前监听装上才算成功、isDragging 却在第一行就置位，
    * 中途任何异常（数据服务缺失、几何计算抛错）都会把 isDragging 卡在 true ——
    * 之后整个"框内空白拖动"入口就永久死了（onPaneCaptureDown 见 isDragging 即吞事件）。
    */
   try {
     isDragging.value = true
-    dragStartClient.value = { x: clientX, y: clientY }
+    lastClient.value = { x: clientX, y: clientY }
     dragDelta.value = { x: 0, y: 0 }
     /**
      * 记下"起手时的成员并集"（不是算好的两框，见 dragStartUnion 的说明）。
@@ -832,7 +880,7 @@ function startGroupDrag(clientX: number, clientY: number): void {
   } catch (err) {
     // 回滚到"没在拖"的干净态：比卡死好得多 —— 下一次按下还能正常起手。
     isDragging.value = false
-    dragStartClient.value = null
+    lastClient.value = null
     dragStartUnion.value = null
     dragDelta.value = { x: 0, y: 0 }
     window.removeEventListener('pointermove', onDragMove)
@@ -843,10 +891,20 @@ function startGroupDrag(clientX: number, clientY: number): void {
 
 function onDragMove(e: MouseEvent): void {
   if (!isDragging.value) return
-  if (!dragStartClient.value) return
+  if (!lastClient.value) return
+  /**
+   * 位移 = 每段屏幕增量 ÷ 该段时的 zoom，逐段累加（见 dragDelta 的说明）。
+   *
+   * 为什么不能用"总屏幕位移 ÷ 当前 zoom"：中途缩放会篡改已拖过的段。
+   * 实测对比（浏览器）：修前 ratio 1 → 0.605 → 1.566（脱手/过冲），修后恒等于 1/zoom。
+   */
+  const last = lastClient.value ?? { x: e.clientX, y: e.clientY }
   const zoom = viewport.value.zoom || 1
-  const canvasDx = (e.clientX - dragStartClient.value.x) / zoom
-  const canvasDy = (e.clientY - dragStartClient.value.y) / zoom
+  const segDx = (e.clientX - last.x) / zoom
+  const segDy = (e.clientY - last.y) / zoom
+  lastClient.value = { x: e.clientX, y: e.clientY }
+  const canvasDx = dragDelta.value.x + segDx
+  const canvasDy = dragDelta.value.y + segDy
 
   // 整组节点视觉移动（渲染层单节点视觉写，不触发 store 重灌）
   const nextLive = new Map<string, { x: number; y: number }>()

@@ -70,13 +70,14 @@ export function createDefaultStorageAdapter(): StorageAdapter {
 }
 
 /** 示例图片（首次打开的空画布塞一个 image 节点，让人一眼知道能干什么） */
+// 下面 SVG 里的色值是**示例节点内容**（画进图片节点里当素材），不是界面配色 → 不跟随主题
 export const SAMPLE_IMAGE_URL =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">' +
-      '<rect width="320" height="240" fill="#dbeafe"/>' +
-      '<text x="160" y="118" font-family="sans-serif" font-size="20" fill="#1d4ed8" text-anchor="middle">v2 image 节点</text>' +
-      '<text x="160" y="142" font-family="sans-serif" font-size="13" fill="#64748b" text-anchor="middle">data.imageUrl</text>' +
+      '<rect width="320" height="240" fill="#dbeafe"/>' + // 主题色白名单: 示例图的 SVG 内容色（节点素材，非界面外观）
+      '<text x="160" y="118" font-family="sans-serif" font-size="20" fill="#1d4ed8" text-anchor="middle">v2 image 节点</text>' + // 主题色白名单: 同上
+      '<text x="160" y="142" font-family="sans-serif" font-size="13" fill="#64748b" text-anchor="middle">data.imageUrl</text>' + // 主题色白名单: 同上
       '</svg>',
   )
 

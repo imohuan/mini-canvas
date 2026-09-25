@@ -55,23 +55,27 @@
   --ui-scroll-thumb: rgb(0 0 0 / 0.2);
   --ui-scroll-thumb-hover: rgb(0 0 0 / 0.32);
   /* UI 规范强调色（青）——全界面唯一强调色，见 docs/design/ui-style-guide.md §2 */
-  /* 注意：--ui-accent / --ui-accent-hover / --ui-danger / --ui-warn 可被设置面板覆盖
-     （见 packages/ui/src/themeColorPlugin.ts：改色后写到 <html> 内联变量，优先级高于本文件），
-     所以这里写的是**默认值**，不是唯一来源。 */
-  --ui-accent: #0891b2;
-  --ui-accent-hover: #0e7490;
+  /* 品牌色**两格制**：亮/暗各一个有独立名字的内联变量，由本文件按主题挑一个。
+     用户没改过 → 内联不存在，用这里的默认值；改过 → 内联优先（`<html>` 内联压制本文件）。
+     单一真源与生成规则见 contracts/themePalette.ts；一个颜色两格 = 两套主题各配一个值。 */
+  --ui-accent: var(--uic-accent-color-light, #0891b2);
+  --ui-accent-hover: var(--uic-accent-hover-color-light, #0e7490);
   /* soft 档由强调色现算（color-mix）：用户改强调色后，选中底/聚焦环等半透明变体自动跟随，
      不会出现"主色改了、半透明底还是青的"这种漂移。 */
   --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 12%, transparent);
   /* 语义色：危险（删除 / 断开连接等破坏性操作） */
-  --ui-danger: #ef4444;
+  --ui-danger: var(--uic-danger-color-light, #ef4444);
   --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 14%, transparent);
   --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 8%, transparent);
   /* 语义色：警示（限时折扣 / 注意事项等提示文案） */
-  --ui-warn: #e3a25f;
-  /* 画布辅助线（对齐参考线 / 框选框） */
-  --ui-guide: rgb(59 130 246 / 0.75);
-  --ui-guide-veil: rgb(59 130 246 / 0.06);
+  --ui-warn: var(--uic-warn-color-light, #e3a25f);
+  /* 连线（rail = 静态导轨 / flow = 选中时的流动光斑）：两格制同上。
+     这两个是**画布内容**颜色，不走 --ce-* 内联通道，而是由 CustomEdge 读本变量。 */
+  --ui-edge-rail: var(--uic-edge-rail-color-light, #1f2937);
+  --ui-edge-flow: var(--uic-edge-flow-color-light, #0891b2);
+  /* 画布辅助线（对齐参考线 / 框选框）：色板两格制 + 原来的 0.75 透明度现算，改色后自动跟随 */
+  --ui-guide: color-mix(in srgb, var(--uic-guide-color-light, #3b82f6) 75%, transparent);
+  --ui-guide-veil: color-mix(in srgb, var(--ui-guide) 8%, transparent);
   /* 节点上/下控制栏（Node ToolBar）：浮在卡片外的操作条。
      按钮 hover 档 + 文字 + 容器面板；暗色那套见 html.dark 块。
      **按钮默认无背景**（用户要求：控制栏里是"一条条的按钮"，不是一排灰方块），
@@ -84,10 +88,12 @@
   --ntb-fill-quiet: rgb(0 0 0 / 0.05);
   --ntb-text: #6b7280;
   --ntb-text-strong: #111827;
-  --ntb-accent-ring: rgb(8 145 178 / 0.6);
-  --ntb-active-bg: rgb(8 145 178 / 0.12);
-  --ntb-active-bg-hover: rgb(8 145 178 / 0.2);
-  --ntb-active-ink: #0e7490;
+  /* 下面四档都从强调色现算（color-mix）：写死 rgba 的话，用户把强调色改成紫色后
+     主色变了、这些派生档还是青的 —— 就是"改一半"的漂移。 */
+  --ntb-accent-ring: color-mix(in srgb, var(--ui-accent) 60%, transparent);
+  --ntb-active-bg: color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  --ntb-active-bg-hover: color-mix(in srgb, var(--ui-accent) 20%, transparent);
+  --ntb-active-ink: var(--ui-accent-hover);
   /* 设置字段样式（供 plugin-theme-default 的 SettingsSchemaField 消费） */
   --sf-label: #111827;
   --sf-desc: #9ca3af;
@@ -95,8 +101,8 @@
   --sf-track: rgb(0 0 0 / 0.16);
   --sf-thumb: #ffffff;
   --sf-accent: var(--ui-accent);
-  --sf-bubble-ink: #0e7490;
-  --sf-bubble-bg: rgb(8 145 178 / 0.12);
+  --sf-bubble-ink: var(--ui-accent-hover);
+  --sf-bubble-bg: color-mix(in srgb, var(--ui-accent) 12%, transparent);
   --sf-input-line: rgb(0 0 0 / 0.08);
   --sf-input-bg: rgb(0 0 0 / 0.03);
   --sf-input-bg-focus: #ffffff;
@@ -104,7 +110,7 @@
   /* 精度滑块（PrecisionSlider） */
   --ps-track: rgb(0 0 0 / 0.12);
   --ps-accent: var(--ui-accent);
-  --ps-accent-hover: #0e7490;
+  --ps-accent-hover: var(--ui-accent-hover);
   --ps-thumb: #ffffff;
   /* 下拉浮层（Dropdown / Select） */
   --dd-bg: var(--ui-panel);
@@ -149,39 +155,42 @@ html[data-canvas-theme='dark'] {
   --ui-code-bg: rgb(255 255 255 / 0.06);
   --ui-scroll-thumb: rgb(255 255 255 / 0.4);
   --ui-scroll-thumb-hover: rgb(255 255 255 / 0.55);
-  --ui-accent: #0891b2;
-  --ui-accent-hover: #0e7490;
+  --ui-accent: var(--uic-accent-color-dark, #0891b2);
+  --ui-accent-hover: var(--uic-accent-hover-color-dark, #0e7490);
   --ui-accent-soft: color-mix(in srgb, var(--ui-accent) 20%, transparent);
-  --ui-danger: #f87171;
+  --ui-danger: var(--uic-danger-color-dark, #f87171);
   --ui-danger-soft: color-mix(in srgb, var(--ui-danger) 18%, transparent);
   --ui-danger-veil: color-mix(in srgb, var(--ui-danger) 10%, transparent);
-  --ui-warn: #e3a25f;
-  /* 暗底上辅助线要够亮才看得见 */
-  --ui-guide: rgb(99 102 241 / 0.6);
-  --ui-guide-veil: rgb(99 102 241 / 0.06);
+  --ui-warn: var(--uic-warn-color-dark, #e3a25f);
+  /* 连线两格制（暗色）：默认给浅灰/亮青 —— 深灰导轨在暗画布上几乎看不见（对比度约 1.3:1） */
+  --ui-edge-rail: var(--uic-edge-rail-color-dark, #9ca3af);
+  --ui-edge-flow: var(--uic-edge-flow-color-dark, #22d3ee);
+  /* 暗底上辅助线要够亮才看得见：0.6 透明度现算（比亮色档更透，免得在暗底上过曝） */
+  --ui-guide: color-mix(in srgb, var(--uic-guide-color-dark, #6366f1) 60%, transparent);
+  --ui-guide-veil: color-mix(in srgb, var(--ui-guide) 10%, transparent);
   /* 节点控制栏（暗色）：按钮默认同样透明，hover 才上一层白系半透明；文字用亮灰 */
   --ntb-fill: transparent;
   --ntb-fill-hover: rgb(255 255 255 / 0.14);
   --ntb-fill-quiet: rgb(255 255 255 / 0.10);
   --ntb-text: #b8b8b8;
   --ntb-text-strong: #f5f5f5;
-  --ntb-accent-ring: rgb(103 232 249 / 0.7);
-  --ntb-active-bg: rgb(8 145 178 / 0.28);
-  --ntb-active-bg-hover: rgb(8 145 178 / 0.38);
-  --ntb-active-ink: #67e8f9;
+  --ntb-accent-ring: color-mix(in srgb, var(--ui-accent) 70%, transparent);
+  --ntb-active-bg: color-mix(in srgb, var(--ui-accent) 28%, transparent);
+  --ntb-active-bg-hover: color-mix(in srgb, var(--ui-accent) 38%, transparent);
+  --ntb-active-ink: var(--ui-accent-hover);
   --sf-label: #e8e8e8;
   --sf-desc: #9a9a9a;
   --sf-line: rgb(255 255 255 / 0.07);
   --sf-track: rgb(255 255 255 / 0.14);
   --sf-thumb: #ffffff;
-  --sf-bubble-ink: #67e8f9;
-  --sf-bubble-bg: rgb(8 145 178 / 0.20);
+  --sf-bubble-ink: var(--ui-accent-hover);
+  --sf-bubble-bg: color-mix(in srgb, var(--ui-accent) 20%, transparent);
   --sf-input-line: rgb(255 255 255 / 0.12);
   --sf-input-bg: rgb(255 255 255 / 0.05);
   --sf-input-bg-focus: rgb(255 255 255 / 0.08);
   --sf-input-bg-hover: rgb(255 255 255 / 0.08);
   --ps-track: rgb(255 255 255 / 0.16);
-  --ps-accent-hover: #67e8f9;
+  --ps-accent-hover: var(--ui-accent-hover);
   --ps-thumb: #ffffff;
 }
 

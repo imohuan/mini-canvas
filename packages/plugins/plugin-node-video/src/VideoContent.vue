@@ -429,7 +429,7 @@ const stageLabel = computed(() => {
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: #050505;
+  background: #050505; /* 主题色白名单: 视频信箱黑边随画面内容恒定，与主题无关 */
   /* 卡片选中/拖动时不让浏览器原生手势打断 */
   user-select: none;
 }
@@ -474,18 +474,19 @@ const stageLabel = computed(() => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.88);
+  /* 控件叠在视频画面上（不是面板底色），用恒浅色前景保证任何画面上都读得清 */
+  color: color-mix(in srgb, var(--ui-tip-ink, #fff) 88%, transparent);
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease;
 }
 .vc-btn:hover:not(:disabled) {
-  color: #fff;
+  color: var(--ui-tip-ink, #fff);
 }
 .vc-btn:active:not(:disabled) {
   transform: scale(0.97);
 }
 .vc-btn:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 .vc-btn:disabled {
@@ -495,17 +496,18 @@ const stageLabel = computed(() => {
 .vc-btn svg {
   width: 15px;
   height: 15px;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.65));
+  /* 图标压在画面上，投影取恒深色档才能把图标从任何底色里分出来 */
+  filter: drop-shadow(0 1px 2px var(--ui-tip, rgba(0, 0, 0, 0.65)));
 }
 
 .vc-time {
   flex: none;
   min-width: 74px;
-  color: rgba(255, 255, 255, 0.92);
+  color: color-mix(in srgb, var(--ui-tip-ink, #fff) 92%, transparent);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.65);
+  text-shadow: 0 1px 2px var(--ui-tip, rgba(0, 0, 0, 0.65));
 }
 
 /* 进度条：轨道 3px + 已播填充；input 透明覆盖在上面接手势（自绘才能跟画布缩放匹配） */
@@ -526,7 +528,7 @@ const stageLabel = computed(() => {
   top: 6px;
   height: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.35);
+  background: color-mix(in srgb, var(--ui-tip-ink, #fff) 35%, transparent);
 }
 .vc-progress-fill {
   position: absolute;
@@ -534,7 +536,8 @@ const stageLabel = computed(() => {
   top: 6px;
   height: 3px;
   border-radius: 999px;
-  background: #22d3ee;
+  /* 已播填充 = 画布强调色（用户改品牌色时进度条一起变） */
+  background: var(--ui-accent, #22d3ee);
   pointer-events: none;
 }
 .vc-progress input {
@@ -554,8 +557,8 @@ const stageLabel = computed(() => {
   z-index: 8;
   padding: 2px 6px;
   border-radius: 6px;
-  background: rgba(17, 24, 39, 0.66);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--ui-tip, rgba(17, 24, 39, 0.66));
+  color: color-mix(in srgb, var(--ui-tip-ink, #fff) 85%, transparent);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
@@ -574,7 +577,7 @@ const stageLabel = computed(() => {
   text-align: center;
 }
 .video-empty.is-broken {
-  color: #b45309;
+  color: var(--ui-warn, #b45309);
 }
 
 /* —— 全屏层 —— */
@@ -585,7 +588,7 @@ const stageLabel = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000;
+  background: #000; /* 主题色白名单: 全屏播放层刻意纯黑无装饰 */
 }
 .video-fullscreen-media {
   width: 100%;

@@ -260,6 +260,11 @@ onBeforeUnmount(() => {
   background: var(--canvas-node-surface, rgba(0, 0, 0, 0.04));
   position: relative;
   overflow: hidden;
+  /* 扫光是"比底更亮一点"的高光：亮色要够白，暗色压低免得在暗底上过曝（组件私有色板，两套各一格） */
+  --tn-sweep: rgba(255, 255, 255, 0.65);
+}
+html.dark .text-node-skel {
+  --tn-sweep: rgba(255, 255, 255, 0.1);
 }
 .text-node-skel::after {
   content: '';
@@ -268,7 +273,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   left: -60%;
   width: 45%;
-  background: linear-gradient(105deg, transparent 0%, rgba(255, 255, 255, 0.65) 50%, transparent 100%);
+  background: linear-gradient(105deg, transparent 0%, var(--tn-sweep, rgba(255, 255, 255, 0.65)) 50%, transparent 100%);
   transform: skewX(-18deg);
   will-change: left, transform;
 }

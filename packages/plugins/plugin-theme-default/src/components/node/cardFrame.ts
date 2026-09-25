@@ -68,6 +68,6 @@ export function resolveCardFrame(input: CardFrameInput): CardFrame {
     outlineWidth: input.selected ? screenPx(OUTLINE_PX, input.zoom) : '0px',
     surface: input.transparent ? 'transparent' : 'var(--canvas-node-surface, #f9fafb)',
     shadow: input.transparent ? 'none' : '0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06))',
-    contentSurface: input.transparent ? 'transparent' : '#eee',
+    contentSurface: input.transparent ? 'transparent' : 'var(--canvas-node-panel-surface, #eee)',
   }
 }

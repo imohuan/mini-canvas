@@ -202,8 +202,9 @@ function onPreviewMaterial(m: UpstreamMaterial): void {
 function previewImage(url: string): void {
   if (typeof document === 'undefined' || closePreview) return
   const layer = document.createElement('div')
+  // 内联在真 DOM 里，CSS 变量可用；遮罩走主题 scrim（亮色浅、暗色深）
   layer.style.cssText =
-    'position:fixed;inset:0;background:rgba(15,23,42,.72);z-index:100000;display:flex;align-items:center;justify-content:center;cursor:zoom-out'
+    'position:fixed;inset:0;background:var(--ui-scrim, rgba(15,23,42,.72));z-index:100000;display:flex;align-items:center;justify-content:center;cursor:zoom-out'
   const img = document.createElement('img')
   img.src = url
   img.style.cssText = 'max-width:92vw;max-height:90vh;object-fit:contain;border-radius:12px'
@@ -530,11 +531,11 @@ function onDownload(): void {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 12px;
   /* 与设置面板同材质的纯白浮层（此前是浅灰底，与设置界面不一致） */
   background: var(--canvas-node-panel-surface, #fff);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
 }
 
 .ig-file {
@@ -557,7 +558,7 @@ function onDownload(): void {
 }
 .ig-materials::-webkit-scrollbar-thumb {
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 
 /* 素材卡片：30×30 圆角 6，hover 轻微上浮 */
@@ -583,10 +584,11 @@ function onDownload(): void {
 }
 .ig-card.is-clickable:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  /* 只换颜色来源，投影几何（0 2px 8px）保持原样 */
+  box-shadow: 0 2px 8px var(--canvas-node-shadow-soft, rgba(0, 0, 0, 0.15));
 }
 .ig-card:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 .ig-card-thumb {
@@ -746,8 +748,8 @@ function onDownload(): void {
   padding: 0 12px;
   border: 0;
   border-radius: 8px;
-  background: #0891b2;
-  color: #fff;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-tip-ink, #fff);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -755,13 +757,13 @@ function onDownload(): void {
   transition: background-color 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .ig-send:hover:not(:disabled) {
-  background: #0e7490;
+  background: var(--ui-accent-hover, #0e7490);
 }
 .ig-send:active:not(:disabled) {
   transform: scale(0.97);
 }
 .ig-send:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 .ig-send:disabled {
@@ -776,8 +778,9 @@ function onDownload(): void {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  /* 转圈画在主按钮上，用与按钮文字同源的浅色（跟品牌色一起变） */
+  border: 2px solid color-mix(in srgb, var(--ui-tip-ink, #fff) 40%, transparent);
+  border-top-color: var(--ui-tip-ink, #fff);
   border-radius: 50%;
   animation: ig-spin 0.7s linear infinite;
   box-sizing: border-box;
@@ -797,12 +800,12 @@ function onDownload(): void {
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(8, 145, 178, 0.14);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.14));
 }
 .ig-progress-bar {
   height: 100%;
   border-radius: 999px;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
   transition: width 0.3s ease;
 }
 .ig-progress-bar.is-indeterminate {

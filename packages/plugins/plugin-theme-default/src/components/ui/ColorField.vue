@@ -21,7 +21,8 @@ const props = withDefaults(
     inputId?: string
   }>(),
   {
-    modelValue: '#000000',
+  // 控件缺省色（调用方总会传真实值）；非主题外观
+  modelValue: '#000000', // 主题色白名单: 颜色控件缺省值，调用方始终传真实色
     disabled: false,
     ariaLabel: '选择颜色',
     inputId: '',
@@ -36,7 +37,7 @@ const emit = defineEmits<{
 const open = ref(false)
 
 /** 传进来的历史值可能是大写/缩写/8 位；控件内部始终吃确定的规范值。 */
-const normalized = computed(() => normalizeHexColor(props.modelValue, '#000000'))
+  const normalized = computed(() => normalizeHexColor(props.modelValue, props.modelValue))
 const alpha = computed(() => colorAlpha(normalized.value))
 const alphaText = computed(() => String(Math.round(alpha.value * 100)) + '%')
 
@@ -104,10 +105,10 @@ function toggle(): void {
   min-height: 32px;
   box-sizing: border-box;
   padding: 4px 8px 4px 5px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  color: #111827;
+  background: var(--sf-input-bg, rgba(0, 0, 0, 0.03));
+  color: var(--sf-label, #111827);
   font: 600 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-align: left;
   cursor: pointer;
@@ -116,18 +117,19 @@ function toggle(): void {
 }
 
 .cf-trigger:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
 }
 
 .cf-trigger.is-open,
 .cf-trigger:focus-visible {
-  border-color: rgba(8, 145, 178, 0.6);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+  /* 聚焦环走强调色现算：用户改强调色后这里跟着变（写死 rgba 会"主色改了环还是青的"） */
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  background: var(--sf-input-bg-focus, #fff);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft, rgba(8, 145, 178, 0.14));
 }
 
 .cf-trigger:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 
@@ -142,10 +144,16 @@ function toggle(): void {
   width: 30px;
   height: 22px;
   overflow: hidden;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
   border-radius: 6px;
-  background-color: #fff;
-  background-image: conic-gradient(rgba(0, 0, 0, 0.08) 25%, #fff 0 50%, rgba(0, 0, 0, 0.08) 0 75%, #fff 0);
+  /* 棋盘格（透明度预览底）：两色都跟随主题，暗色下不能还是白格 */
+  background-color: var(--sf-input-bg-focus, #fff);
+  background-image: conic-gradient(
+    var(--ui-chip, rgba(0, 0, 0, 0.08)) 25%,
+    var(--sf-input-bg-focus, #fff) 0 50%,
+    var(--ui-chip, rgba(0, 0, 0, 0.08)) 0 75%,
+    var(--sf-input-bg-focus, #fff) 0
+  );
   background-size: 8px 8px;
 }
 
@@ -164,7 +172,7 @@ function toggle(): void {
 .cf-alpha {
   flex: 0 0 auto;
   margin-left: auto;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
   font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
 }
 

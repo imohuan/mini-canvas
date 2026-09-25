@@ -105,10 +105,10 @@ export const DEFAULT_MULTI_SELECT_FRAME: MultiSelectFrameConfig = {
   innerPaddingX: 0,
   innerPaddingTop: 0,
   innerPaddingBottom: 0,
-  outer: { color: '#94a3b8', lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 },
+  outer: { color: '#94a3b8', lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 }, // 主题色白名单: 设置项默认值（外框颜色可在设置里改），属配置不是主题外观
   // 内框默认 0 = 直角：它要"紧贴选中节点的并集"，而节点并集是个正矩形，
   // 给它加圆角只会让四条边在角上提前弯掉、看起来没贴住（用户明确要求去掉这个圆角）。
-  inner: { color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 },
+  inner: { color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 }, // 主题色白名单: 设置项默认值（内框颜色可在设置里改）
 }
 
 /** 插件可配置项 schema（模块级 Config，随插件导出 → 内核校验 + 补默认 + 登记设置页面） */
@@ -473,7 +473,7 @@ export function hexToRgba(hex: string, alpha: number): string {
   const embeddedAlpha = body.length === 8 ? parseInt(body.slice(6, 8), 16) / 255 : 1
   const requestedAlpha = Number.isFinite(alpha) ? Math.min(Math.max(alpha, 0), 1) : 0
   const a = embeddedAlpha * requestedAlpha
-  return `rgba(${r}, ${g}, ${b}, ${a})`
+  return `rgba(${r}, ${g}, ${b}, ${a})` // 主题色白名单: 从配置色运行时生成的 rgba 字符串（非写死外观；色值来自上方 hex 参数）
 }
 
 /**

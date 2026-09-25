@@ -328,17 +328,23 @@ describe('层级与命中（用户要求：节点必须在框之上，才能加�
   })
 })
 
-describe('整组拖动起手（回归：dragStartClient 未声明导致 ReferenceError）', () => {
+describe('整组拖动起手（回归：拖动状态 ref 漏声明导致 ReferenceError + 卡死）', () => {
   it(
-    '组件必须声明 dragStartClient，且起手失败有回滚 —— 漏声明时 <script setup> 不做类型检查，' +
+    '拖动用到的状态 ref 必须先声明，且起手失败有回滚 —— 漏声明时 <script setup> 不做类型检查，' +
       '运行时会在"框内空白按下拖动"的第一帧崩掉：isDragging 已置位、监听没装上，' +
       '拖拽状态永久卡死（用户实测：报一次错后拖不动、点空白选不中）',
     async () => {
       const { readFileSync } = await import('node:fs')
       const { fileURLToPath } = await import('node:url')
       const src = readFileSync(fileURLToPath(new URL('../SelectionFrame.vue', import.meta.url)), 'utf8')
-      // 声明存在（ref 形式，响应式供 onDragMove 读取）
-      expect(src).toMatch(/const dragStartClient\s*=\s*ref</)
+      // 拖动位移状态存在（起手屏幕坐标 / 累计 flow 位移 / 成员并集快照，均 ref 形式）
+      expect(src).toMatch(/const lastClient\s*=\s*ref</)
+      expect(src).toMatch(/const dragDelta\s*=\s*ref</)
+      expect(src).toMatch(/const dragStartUnion\s*=\s*ref</)
+      // onDragMove 必须记录"上帧坐标"走逐段增量，不能保留"总位移 ÷ 当前 zoom"的旧公式：
+      // 旧公式在拖动中缩放会把已拖的段按新 zoom 重算，内容当场跳位（拖拽时缩放定位出问题）。
+      expect(src).toMatch(/lastClient\.value = \{ x: e\.clientX, y: e\.clientY \}/)
+      expect(src).not.toMatch(/e\.clientX - dragStartClient/)
       // 起手做了异常回滚：isDragging 置 true 之后任何异常都不能把状态卡在"拖动中"
       expect(src).toMatch(/catch[^{]*{[\s\S]*?isDragging\.value\s*=\s*false/)
     },

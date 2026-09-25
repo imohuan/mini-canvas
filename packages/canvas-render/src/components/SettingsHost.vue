@@ -64,7 +64,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .sh-empty {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
   padding: 8px;
 }

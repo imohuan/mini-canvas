@@ -1201,10 +1201,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
 }
 .chost-status.chost-err {
-  color: #dc2626;
+  color: var(--ui-danger, #dc2626);
 }
 .chost-canvas {
   flex: 1;

@@ -162,20 +162,20 @@ const numberValue = computed(() => {
   width: 100%;
   box-sizing: border-box;
   padding: 5px 8px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--sf-input-line, rgba(0, 0, 0, 0.08));
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  color: #111827;
+  background: var(--sf-input-bg, rgba(0, 0, 0, 0.03));
+  color: var(--sf-label, #111827);
   font: inherit;
   font-size: 12px;
   outline: none;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .tpf-input:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
 }
 .tpf-input:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 .tpf-input:disabled {
@@ -183,7 +183,7 @@ const numberValue = computed(() => {
   cursor: not-allowed;
 }
 .tpf-input::placeholder {
-  color: #9ca3af;
+  color: var(--sf-desc, #9ca3af);
 }
 
 /* 开关：小尺寸轨道 + 圆点，与设置界面的 checkbox 语义一致但更紧凑 */
@@ -211,7 +211,7 @@ const numberValue = computed(() => {
   width: 28px;
   height: 16px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.14);
+  background: var(--sf-track, rgba(0, 0, 0, 0.14));
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .tpf-bool-dot {
@@ -221,22 +221,22 @@ const numberValue = computed(() => {
   width: 12px;
   height: 12px;
   border-radius: 999px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: var(--sf-thumb, #fff);
+  box-shadow: 0 1px 2px var(--ui-shadow-md, rgba(0, 0, 0, 0.2));
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .tpf-bool-input:checked + .tpf-bool-track {
-  background: #0891b2;
+  background: var(--sf-accent, #0891b2);
 }
 .tpf-bool-input:checked + .tpf-bool-track .tpf-bool-dot {
   transform: translateX(12px);
 }
 .tpf-bool-input:focus-visible + .tpf-bool-track {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 .tpf-bool-text {
-  color: #374151;
+  color: var(--ui-ink, #374151);
   font-size: 12px;
   font-weight: 600;
 }

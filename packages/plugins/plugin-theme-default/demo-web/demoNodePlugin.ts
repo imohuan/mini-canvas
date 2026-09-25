@@ -24,7 +24,7 @@ const DemoTextContent = defineComponent({
             padding: '16px',
             fontSize: '14px',
             lineHeight: '1.6',
-            color: '#1f2937',
+            color: 'var(--canvas-node-text-body, #1f2937)',
             whiteSpace: 'pre-wrap',
             overflow: 'hidden',
           },

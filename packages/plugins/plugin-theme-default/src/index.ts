@@ -53,18 +53,21 @@ export const name = "theme-default";
 export const inject = [] as string[];
 
 // 默认皮对应的连线外观默认值（作为本插件 config schema 的默认/单一数据源初始值）。
-// 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动，
-// 克制但有科技感。edgeGlowColor 即“光斑色”（默认品牌青 #0891b2），edgeColor 为静态导轨/线色。
+// 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动。
+//
+// **连线颜色（导轨 / 流光）不在这里**：它们已上移进渲染层主题色板
+//（`@mini-canvas/canvas-render` 的 themePalette：`edgeRailColor` / `edgeFlowColor`，
+// 各带亮/暗两格）。理由：颜色必须"一套主题一个值"，而本插件的 Config 字段是单值 ——
+// 留着它就会永远盖住色板（登记过就有值 → CustomEdge 拿到后不再回落色板），
+// 于是用户改了主题色也看不到变化。其它非颜色的边外观（线宽/虚线/光斑参数）仍留在此处。
 export const DEFAULT_THEME_EDGE = {
   edgeType: "bezier",
-  edgeColor: "#1f2937",
   edgeLineWidth: 1.5,
   edgeDashed: false,
   edgeMarkerEnd: false,
   edgeMarkerSize: 8,
   edgeGlowEnabled: true,
   edgeGlowIntensity: 1,
-  edgeGlowColor: "#0891b2",
   edgeVisible: true,
   edgeVisibleOnSelect: false,
   edgeOnTop: false,
@@ -607,22 +610,11 @@ export const Config: ConfigSchema = {
     group: "边/连线",
     description: "发光色块峰值不透明度（越大越亮越实）。",
   },
-  // ===== 一级「常规」：主题配色 / 调试 / 小地图等跨插件的常规设置收归一处 =====
-  // —— 主题配色：各种插件的颜色集中统一调（本插件 = 连线色/辉光色）——
-  edgeColor: {
-    type: "color",
-    default: DEFAULT_THEME_EDGE.edgeColor,
-    label: "连线颜色",
-    group: "常规/主题配色",
-    description: "默认连线的颜色，改动后画布上现有连线实时跟随。",
-  },
-  edgeGlowColor: {
-    type: "color",
-    default: DEFAULT_THEME_EDGE.edgeGlowColor,
-    label: "辉光颜色",
-    group: "常规/主题配色",
-    description: "辉光/流光高亮使用的颜色（缺省跟随线色）。",
-  },
+  // ===== 一级「常规」：调试 / 小地图等跨插件的常规设置收归一处 =====
+  // 注意：连线颜色（导轨 / 流光）**不在这里声明** —— 已上移进渲染层主题色板
+  //（themePalette 的 `edgeRailColor` / `edgeFlowColor`，各带亮/暗两格，
+  //  见「常规/主题配色」与「常规/暗色主题配色」两个分组）。
+  // 单值 Config 无法表达"两套主题各一个值"，留着反而会盖住色板。
   // —— 调试：开发校准开关 ——
   handleDebug: {
     type: "boolean",

@@ -16,7 +16,7 @@
 //       的 var(--ce-color, #3b82f6) 兜底，避免被覆盖为线色（之前就是这个 bug）。
 // 几何：edgeGeometry.ts（与 v1 逐字节一致，可单测覆盖）。
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useThemeColor } from '@mini-canvas/canvas-render'
 import { isTransient } from '@mini-canvas/canvas-data'
 import type { DocService } from '@mini-canvas/canvas-data'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
@@ -72,7 +72,15 @@ const isTemporaryEdge = computed(() => Boolean(props.temporary) || isTransient({
 
 const edgeType = computed<EdgeType>(() => (visual.value.edgeType as EdgeType) || 'bezier')
 const lineWidth = computed(() => visual.value.edgeLineWidth ?? 2)
-const edgeColor = computed(() => visual.value.edgeColor ?? '#3b82f6')
+// 线色/流光色：**跟随主题色板的两格制**（亮/暗各一个值）。
+// 为什么经 JS 而不是 CSS 变量：下面 `:stroke="edgeColor"` 是 SVG 表现属性，`var(--x)` 在这种属性里
+// 不解析（只有 CSS 声明里才解析），所以必须取到具体色值。用 useThemeColor 后，
+// 用户在设置里改色 / 切亮暗主题都会立刻反映过来，两套主题各显各的（见 themePalette.ts）。
+// 显式传了 visual.edgeColor 的仍优先（保留覆盖能力）。
+const railPalette = useThemeColor('edgeRailColor')
+const flowPalette = useThemeColor('edgeFlowColor')
+// 末尾那个字面量只是"既没配显式色、又拿不到色板"（无 DOM 的单测/极简宿主）时的最后兜底
+const edgeColor = computed(() => visual.value.edgeColor || railPalette.value || '#3b82f6') // 主题色白名单: useThemeColor 拿不到时的最后兜底（无 DOM 环境）
 const dashArray = computed(() =>
   visual.value.edgeDashed ? `${lineWidth.value * 4} ${lineWidth.value * 2}` : undefined,
 )
@@ -97,7 +105,7 @@ const edgeShowVisual = computed(() => {
 })
 const edgeGlowEnabled = computed(() => visual.value.edgeGlowEnabled ?? true)
 const edgeGlowIntensity = computed(() => visual.value.edgeGlowIntensity ?? 1)
-const edgeGlowColor = computed(() => visual.value.edgeGlowColor || edgeColor.value)
+const edgeGlowColor = computed(() => visual.value.edgeGlowColor || flowPalette.value || edgeColor.value)
 const flowEnabled = computed(() => visual.value.edgeFlowEnabled ?? true)
 // 固定数量（一条边就是这么多块）+ 每份占比（色块占它那一份长度的百分比）。见 edgeFlow.ts。
 const flowCount = computed(() => visual.value.edgeFlowCount ?? 3)
@@ -669,11 +677,11 @@ onUnmounted(() => {
 .cut-btn {
   display: flex; align-items: center; justify-content: center;
   width: 32px; height: 32px; border-radius: 50%; border: none;
-  background: rgba(255, 255, 255, 0.95); color: #374151;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); cursor: pointer; padding: 0;
+  background: var(--ui-overlay-solid, rgba(255, 255, 255, 0.95)); color: var(--ui-ink-dim, #374151);
+  box-shadow: var(--ui-shadow-md, 0 2px 8px rgba(0, 0, 0, 0.15)); cursor: pointer; padding: 0;
   transition: background 0.15s;
 }
-.cut-btn:hover { background: #ef4444; color: #fff; }
+.cut-btn:hover { background: var(--ui-danger, #ef4444); color: var(--ui-tip-ink, #fff); }
 </style>
 
 <style>

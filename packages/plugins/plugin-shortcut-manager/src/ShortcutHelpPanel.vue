@@ -351,6 +351,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 </template>
 
 <style scoped>
+/* 配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换；值见 canvas-render 的
+   styles/ui-theme.css）—— 原先写死浅色值，暗色主题下面板会变成"白底黑字"贴块。
+   兜底值保留改造前的浅色值：脱离主题表单独渲染（单测/别的宿主）行为不变。 */
 /* ============ 外层：与 CanvasMenu 同样的浮层策略 ============ */
 .shortcut-help-layer {
   position: fixed;
@@ -361,7 +364,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18));
+  background: var(--ui-scrim-soft, linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18)));
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
 }
@@ -373,13 +376,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   display: flex;
   flex-direction: column;
   padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
-  background: rgba(255, 255, 255, 1);
+  background: var(--ui-glass, rgba(255, 255, 255, 1));
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  color: #374151;
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
+  color: var(--ui-ink, #374151);
   animation: menu-pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -399,7 +402,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .shortcut-help-eyebrow {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -407,7 +410,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 .shortcut-help-title {
   margin: 0;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
@@ -428,8 +431,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b7280;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
@@ -438,11 +441,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   height: 16px;
 }
 .shortcut-help-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: #111827;
+  background: var(--ui-hover, rgba(0, 0, 0, 0.08));
+  color: var(--ui-ink, #111827);
 }
 .shortcut-help-icon-btn.close-btn:hover {
-  color: #ef4444;
+  color: var(--ui-danger, #ef4444);
 }
 
 /* ============ 搜索条 ============ */
@@ -454,17 +457,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   padding: 6px 10px 6px 12px;
   margin: 4px 4px 8px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
   transition: background 0.18s ease;
 }
 .shortcut-help-search:focus-within {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 .search-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 .search-icon :deep(svg) {
   width: 14px;
@@ -477,20 +480,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   border: 0;
   outline: 0;
   background: transparent;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font-size: 13px;
   font-weight: 500;
 }
 .search-input::placeholder {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 .conflict-warning {
   flex: 0 0 auto;
   white-space: nowrap;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
+  background: color-mix(in srgb, var(--ui-warn, #b45309) 14%, transparent);
+  color: var(--ui-warn, #b45309);
   font-size: 11px;
   font-weight: 700;
 }
@@ -510,7 +513,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 .group-title {
   margin: 4px 6px 4px;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
   font-weight: 700;
 }
@@ -518,7 +521,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 .canvas-menu-divider {
   height: 1px;
   margin: 6px 4px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-line, rgba(0, 0, 0, 0.06));
 }
 
 .canvas-menu-item {
@@ -545,7 +548,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   height: auto;
   gap: 0;
   padding: 6px;
-  background: rgba(8, 145, 178, 0.1);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
   overflow: hidden;
   border-radius: 12px;
 }
@@ -562,7 +565,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   outline: none;
 }
 .remap-head:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: -1px;
   border-radius: 8px;
 }
@@ -581,11 +584,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .canvas-menu-item:hover:not(.is-disabled) {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
 
 .canvas-menu-item.is-remapping-open:hover {
-  background: rgba(8, 145, 178, 0.1);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
 }
 
 .canvas-menu-item.is-disabled {
@@ -594,11 +597,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .canvas-menu-item.is-danger {
-  color: #ef4444;
+  color: var(--ui-danger, #ef4444);
 }
 
 .canvas-menu-item.is-danger:hover:not(.is-disabled) {
-  background: rgba(239, 68, 68, 0.1);
+  background: var(--ui-danger-soft, rgba(239, 68, 68, 0.1));
 }
 
 .canvas-menu-icon {
@@ -609,8 +612,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  color: #6b7280;
-  background: rgba(0, 0, 0, 0.04);
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
 }
 .canvas-menu-icon :deep(svg) {
   width: 16px;
@@ -634,7 +637,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   position: absolute;
   top: 50%;
   left: 0;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   transform: translateY(-50%);
 }
 
@@ -648,7 +651,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .canvas-menu-description {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 11px;
   line-height: 1;
   white-space: nowrap;
@@ -676,16 +679,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
   padding: 2px 6px;
   border: 0;
   border-radius: 6px;
-  color: #0891b2;
-  background: rgba(8, 145, 178, 0.12);
+  color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
   font-size: 10px;
   font-weight: 700;
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
 .canvas-menu-badge:hover {
-  background: rgba(8, 145, 178, 0.2);
-  color: #0e7490;
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent);
+  color: var(--ui-accent-hover, #0e7490);
 }
 
 .remap-badge {
@@ -693,20 +696,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 
 .remap-badge.is-open {
-  background: rgba(8, 145, 178, 0.22);
-  color: #0e7490;
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 22%, transparent);
+  color: var(--ui-accent-hover, #0e7490);
 }
 
 .sys-reserved-badge {
   flex: 0 0 auto;
   white-space: nowrap;
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
+  background: color-mix(in srgb, var(--ui-warn, #b45309) 16%, transparent);
+  color: var(--ui-warn, #b45309);
   cursor: default;
 }
 .sys-reserved-badge:hover {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
+  background: color-mix(in srgb, var(--ui-warn, #b45309) 16%, transparent);
+  color: var(--ui-warn, #b45309);
 }
 
 .remap-slot {
@@ -715,7 +718,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 
 .no-results {
   text-align: center;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   padding: 24px 0;
   font-size: 13px;
 }
@@ -772,9 +775,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 }
 .shortcut-help-list::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .shortcut-help-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 </style>

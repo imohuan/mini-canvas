@@ -41,7 +41,7 @@ defineEmits<{ click: [MouseEvent] }>()
 .ax-btn--secondary { background: var(--ui-chip); }
 .ax-btn--secondary:hover { background: var(--ui-hover-strong); }
 .ax-btn--ghost:hover { background: var(--ui-hover); }
-.ax-btn--danger { color: #f87171; }
-.ax-btn--danger:hover { background: rgb(248 113 113 / .18); color: #fff; }
+.ax-btn--danger { color: var(--ui-danger); }
+.ax-btn--danger:hover { background: var(--ui-danger-soft, rgb(248 113 113 / .18)); color: var(--ui-tip-ink, #fff); }
 .ax-btn:disabled { opacity: .3; cursor: not-allowed; }
 </style>

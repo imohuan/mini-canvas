@@ -136,6 +136,35 @@ export type {
   CanvasInteractionSettings,
   CanvasInteractionSettingSchema,
 } from './contracts/canvasInteractionSettings'
+// 主题色板（可配置配色的两格制）：token 表 / Config 生成 / 取值 / 主题模式订阅
+export {
+  THEME_COLOR_TOKENS,
+  THEME_COLOR_LIGHT_GROUP,
+  THEME_COLOR_DARK_GROUP,
+  THEME_PALETTE_PLUGIN_NAME,
+  themeColorSlots,
+  themeColorLightKey,
+  themeColorDarkKey,
+  themeColorInlineVar,
+  themeColorVarNames,
+  buildThemeColorConfig,
+  isThemeColorKey,
+  resolveThemeColorOverrides,
+  resolveThemeColorValue,
+  currentThemeMode,
+  watchThemeMode,
+} from './contracts/themePalette'
+export type {
+  ThemeColorToken,
+  ThemeColorSlot,
+  ThemeColorMode,
+  ThemeColorVar,
+  ThemePaletteSettingsLike,
+} from './contracts/themePalette'
+// 色板接入宿主的两件（宿主 createMiniCanvasHost 已自用；自定义宿主可复用）
+export { defineThemePaletteSettings, installThemePalette } from './host/themePaletteSettings'
+// 取色板当前值（JS 通道）：SVG 表现属性/canvas 2D 这类吃不到 var() 的地方用它
+export { useThemeColor } from './contracts/useThemeColor'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
 export { useSoleNodeSelected, isSoleSelected } from './contracts/nodeSelection'
 // 媒体编辑浮层（裁剪 / 扩展）：图片与视频节点共用的通用件

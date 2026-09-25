@@ -16,7 +16,8 @@ import { demoNodePlugin } from './demoNodePlugin'
 const sampleImg = () =>
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#ddd6fe"/><text x="60" y="90" font-family="sans-serif" fill="#7c3aed">主题预览 image</text></svg>`,
+  // 演示用示例图（SVG data URL，画进图片节点当内容）—— 是"用户内容"，不是界面配色
+  `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"><rect width="320" height="180" fill="#ddd6fe"/><text x="60" y="90" font-family="sans-serif" fill="#7c3aed">主题预览 image</text></svg>`, // 主题色白名单: demo 示例图的 SVG 内容色
   )
 
 // 首次(存储空)默认图：text + image 两节点，展示壳(端口/标题/就地改名) + content。
@@ -52,9 +53,9 @@ const ready = ref(false)
 }
 .bar {
   padding: 8px 12px;
-  border-bottom: 1px solid #ddd;
-  background: #fff;
-  color: #6d28d9;
+  border-bottom: 1px solid var(--ui-line, #ddd);
+  background: var(--ui-panel, #fff);
+  color: var(--ui-accent, #6d28d9);
   font-size: 13px;
   z-index: 10;
 }

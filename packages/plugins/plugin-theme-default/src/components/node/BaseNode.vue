@@ -962,7 +962,7 @@ function clamp(value: number, min: number, max: number): number {
 
 /* 非法连接：灰框 + 内容模糊遮罩 */
 .v2-card.is-connection-invalid {
-  border-color: rgba(156, 163, 175, 0.45);
+  border-color: var(--canvas-node-border-hover, rgba(156, 163, 175, 0.45));
 }
 
 .v2-card.is-connection-invalid::after {
@@ -971,7 +971,7 @@ function clamp(value: number, min: number, max: number): number {
   inset: 0;
   z-index: 25;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.25);
+  background: var(--ui-hover-strong, rgba(255, 255, 255, 0.25));
   backdrop-filter: blur(1.5px);
   pointer-events: none;
 }
@@ -983,14 +983,14 @@ function clamp(value: number, min: number, max: number): number {
   transform: translate(-50%, -50%);
   padding: 8px 14px;
   border-radius: 999px;
-  background: rgba(31, 41, 55, 0.94);
-  color: #fff;
+  background: var(--ui-tip, rgba(31, 41, 55, 0.94));
+  color: var(--ui-tip-ink, #fff);
   font-size: 13px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   pointer-events: none;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--ui-shadow-lg, 0 10px 24px rgba(0, 0, 0, 0.28));
 }
 
 /* 满额"将替换"提示（蓝色系，与红气泡区分） */
@@ -1000,8 +1000,10 @@ function clamp(value: number, min: number, max: number): number {
   transform: translate(-50%, -50%);
   padding: 6px 12px;
   border-radius: 999px;
+  /* 满额替换提示：走蓝色系数据色（与红色非法气泡区分），不属主题外观 */
+  /* 主题色白名单: 满额替换提示的蓝色语义色，需与非法连接的红色气泡区分 */
   background: rgba(37, 99, 235, 0.95);
-  color: #fff;
+  color: var(--ui-tip-ink, #fff);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
@@ -1010,14 +1012,14 @@ function clamp(value: number, min: number, max: number): number {
   align-items: center;
   gap: 6px;
   pointer-events: none;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--ui-shadow-lg, 0 10px 24px rgba(0, 0, 0, 0.22));
 }
 
 .will-evict-tooltip .we-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--ui-tip-ink, #fff);
 }
 
 /* —— 调试叠加（SVG）—— */
@@ -1091,11 +1093,14 @@ function clamp(value: number, min: number, max: number): number {
   /* 圆环与圆点都吃父元素给的色（= 配置里那一项，默认值是主题的"选中色"变量，浅色/深色主题下都跟随） */
   color: inherit;
   /* 白底圆：让标记在任何节点内容上都看得清（SVG 里画白底而不是靠 CSS 底色） */
-  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.28));
+  filter: drop-shadow(0 1px 2px var(--canvas-node-shadow-strong, rgb(0 0 0 / 0.28)));
 }
 
 /* 外圈：白底 + 主题色描边（用描边而不是实心，视觉更轻、不压内容） */
 .v2-multi-radio-ring {
+  /* 恒白：这个标记要浮在**任意节点内容**上都看得清（图片/视频/文本），
+     跟随主题底色会在暗色下变成"深色环上的深色描边"、直接看不见 → 有意不跟随主题。 */
+  /* 主题色白名单: 多选标记的恒白底，保证浮在任何节点内容上都可见 */
   fill: #ffffff;
   stroke: currentColor;
   stroke-width: 2;
@@ -1190,7 +1195,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 .v2-content-missing {
-  color: #b45309;
+  color: var(--ui-warn, #b45309);
   padding: 8px;
   font-size: 12px;
 }

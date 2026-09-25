@@ -53,6 +53,8 @@ function uid(idx: number) {
 </template>
 
 <style scoped>
+/* 配色全部走通用 UI token（--ui-*，值见 canvas-render 的 styles/ui-theme.css）——
+   键帽原先写死白底黑字，暗色主题下会在暗面板上贴出一块白。 */
 .shortcut-keys {
   display: inline-flex;
   align-items: center;
@@ -66,18 +68,18 @@ function uid(idx: number) {
   min-width: 22px;
   height: 22px;
   padding: 0 6px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-bottom-width: 2px;
   border-radius: 6px;
-  background: #ffffff;
-  color: #374151;
+  background: var(--ui-panel, #ffffff);
+  color: var(--ui-ink, #374151);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 
 .kbd-plus {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 10px;
   font-weight: 700;
 }
@@ -98,7 +100,7 @@ function uid(idx: number) {
 
 .kbd-chip-placeholder {
   border-style: dashed;
-  color: #9ca3af;
-  background: rgba(0, 0, 0, 0.02);
+  color: var(--ui-ink-mute, #9ca3af);
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.02));
 }
 </style>

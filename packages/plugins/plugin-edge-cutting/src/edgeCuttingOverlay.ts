@@ -80,22 +80,22 @@ function createStyle(): HTMLStyleElement {
 }
 .edge-cutting-overlay .blade-edge {
   fill: none;
-  stroke: #ffffff;
+  stroke: #ffffff; /* 主题色白名单: 刀锋亮芯恒白（screen 混合下的高光，亮部不随主题变；跟项目 BaseNode 恒白标记同一约定） */
   stroke-width: 1.2;
   stroke-linecap: round;
   stroke-linejoin: round;
   mix-blend-mode: screen;
-  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px var(--edge-cutting-blade-color, #38bdf8));
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px var(--edge-cutting-blade-color, #38bdf8)); /* 主题色白名单: 内圈恒白光晕(screen 高光) + 外圈用户刀锋色(已走变量) */
 }
 .edge-cutting-overlay .blade-tip {
-  fill: rgba(255, 255, 255, 0.88);
+  fill: rgba(255, 255, 255, 0.88); /* 主题色白名单: 刀尖亮芯恒白半透明，同上（screen 高光） */
   stroke: var(--edge-cutting-blade-color, #38bdf8);
   stroke-width: 0.8;
   stroke-opacity: 0.5;
-  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.68));
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.68)); /* 主题色白名单: 刀尖恒白光晕（screen 高光） */
 }
 .edge-cutting-overlay .blade-spark {
-  stroke: #ffffff;
+  stroke: #ffffff; /* 主题色白名单: 火花恒白（screen 高光） */
   stroke-width: 0.8;
   stroke-linecap: round;
   opacity: 0.55;

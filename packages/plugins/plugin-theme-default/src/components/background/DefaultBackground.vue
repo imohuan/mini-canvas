@@ -16,8 +16,10 @@ const canvasEl = ref<HTMLCanvasElement | null>(null)
 const GRID = 24
 const MIN_SCREEN_STEP = 18 // 屏幕像素下限：缩小画布时点距不小于它
 const DOT_R = 1.6 // 圆点半径(内容坐标，会随 zoom 等比缩放)
-const DOT_COLOR = '#cbd5e1'
-const BG_COLOR = '#f8fafc'
+// 这两个是 canvas 2D 的**绘制基色**：暗色主题由 app.css 的 `filter: invert(1)` 反相处理，
+// 所以这里必须给亮色值 —— 换成暗色 token 会被反相成近白，反而更糟（契约 §6 亦记此设计）。
+const DOT_COLOR = '#cbd5e1' // 主题色白名单: canvas 绘制基色，暗色由 CSS invert(1) 反相，须写亮色值
+const BG_COLOR = '#f8fafc' // 主题色白名单: canvas 绘制基色，暗色由 CSS invert(1) 反相，须写亮色值
 
 const zoom = computed(() => Math.max(viewport.value?.zoom || 1, 0.01))
 const vx = computed(() => viewport.value?.x ?? 0)

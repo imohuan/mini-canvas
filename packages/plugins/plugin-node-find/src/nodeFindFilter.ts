@@ -7,17 +7,21 @@
  */
 import type { CanvasNode } from '@mini-canvas/canvas-data'
 
-/** 节点类型 → {中文名, 浅色背景, 深色文字}（对齐老版 TYPE_PRESETS，key 改为 node.type） */
+/**
+ * 节点类型 → {中文名, 浅色背景, 深色文字}（对齐老版 TYPE_PRESETS，key 改为 node.type）。
+ * 这一组是**类型标识色**（每个类型一个固定身份色，用户按颜色认类型），不是主题外观：
+ * 主题 token 是"同一语义在亮暗两套主题各一值"，而这里要的是"七个类型彼此可区分"，语义不同。
+ */
 export const TYPE_PRESETS: Record<string, { label: string; bg: string; fg: string }> = {
-  image: { label: '图片', bg: '#ede9fe', fg: '#6d28d9' }, // violet
-  panorama: { label: '全景', bg: '#cffafe', fg: '#0e7490' }, // cyan
-  video: { label: '视频', bg: '#fce7f3', fg: '#be185d' }, // pink
-  'image-compare': { label: '对比图', bg: '#fef3c7', fg: '#b45309' }, // amber
-  group: { label: '分组', bg: '#dbeafe', fg: '#1d4ed8' }, // blue
-  text: { label: '文本', bg: '#dcfce7', fg: '#15803d' }, // green
-  temp: { label: '临时', bg: '#e5e7eb', fg: '#4b5563' }, // gray
+  image: { label: '图片', bg: '#ede9fe', fg: '#6d28d9' }, // violet · 主题色白名单: 节点类型徽章标识色
+  panorama: { label: '全景', bg: '#cffafe', fg: '#0e7490' }, // cyan · 主题色白名单: 节点类型徽章标识色
+  video: { label: '视频', bg: '#fce7f3', fg: '#be185d' }, // pink · 主题色白名单: 节点类型徽章标识色
+  'image-compare': { label: '对比图', bg: '#fef3c7', fg: '#b45309' }, // amber · 主题色白名单: 节点类型徽章标识色
+  group: { label: '分组', bg: '#dbeafe', fg: '#1d4ed8' }, // blue · 主题色白名单: 节点类型徽章标识色
+  text: { label: '文本', bg: '#dcfce7', fg: '#15803d' }, // green · 主题色白名单: 节点类型徽章标识色
+  temp: { label: '临时', bg: '#e5e7eb', fg: '#4b5563' }, // gray · 主题色白名单: 节点类型徽章标识色
 }
-export const TYPE_FALLBACK = { label: '自定义', bg: '#f3f4f6', fg: '#6b7280' }
+export const TYPE_FALLBACK = { label: '自定义', bg: '#f3f4f6', fg: '#6b7280' } // 主题色白名单: 节点类型徽章标识色（兜底）
 
 /** 按节点 type 取类型元数据（无预设回退自定义） */
 export function typeMeta(type: string): { label: string; bg: string; fg: string } {

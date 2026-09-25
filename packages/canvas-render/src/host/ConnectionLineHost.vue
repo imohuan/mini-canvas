@@ -67,7 +67,7 @@ const defaultPath = computed(() => {
     :d="defaultPath"
     class="vue-flow__connection-path"
     fill="none"
-    stroke="#b1b1b7"
+    stroke="var(--ui-edge-rail, #b1b1b7)"
     stroke-width="1.5"
     stroke-dasharray="5 5"
   />

@@ -32,8 +32,8 @@ const s = ui.state
         <AxMenuItem @click="ui.createNode('text'); close()"><Type :size="15" /> 文本</AxMenuItem>
         <AxMenuItem @click="ui.createNode('image'); close()"><ImageIcon :size="15" /> 图片</AxMenuItem>
         <AxMenuItem @click="ui.createNode('video'); close()"><Video :size="15" /> 视频</AxMenuItem>
-        <AxMenuItem @click="ui.createNode('text'); close()"><Film :size="15" /> 智能剪辑 <em class="ml-auto rounded border border-[#6b5a35] px-1.5 py-px text-[9px] not-italic text-gold">Beta</em></AxMenuItem>
-        <AxMenuItem @click="ui.createNode('image'); close()"><Box :size="15" /> 导演台 <em class="ml-auto rounded border border-[#5a5382] px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
+        <AxMenuItem @click="ui.createNode('text'); close()"><Film :size="15" /> 智能剪辑 <em class="ml-auto rounded border border-gold/40 px-1.5 py-px text-[9px] not-italic text-gold">Beta</em></AxMenuItem>
+        <AxMenuItem @click="ui.createNode('image'); close()"><Box :size="15" /> 导演台 <em class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
         <AxMenuItem @click="ui.createNode('image'); close()"><Images :size="15" /> 逐帧拉片 <em class="ml-auto rounded border border-line px-1.5 py-px text-[9px] not-italic text-ink-dim">SD 2.5</em></AxMenuItem>
         <AxMenuItem @click="ui.showToast('音频节点即将支持'); close()"><AudioLines :size="15" /> 音频</AxMenuItem>
         <AxMenuItem @click="ui.showToast('脚本节点即将支持'); close()"><ScrollText :size="15" /> 脚本</AxMenuItem>
@@ -70,8 +70,8 @@ const s = ui.state
       </template>
       <template #default="{ close }">
         <AxMenu>
-          <AxMenuItem @click="close(); ui.showToast('风格库')"><Shapes :size="15" /> 风格库 <em class="ml-auto rounded border border-[#5a5382] px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
-          <AxMenuItem @click="close(); ui.showToast('特效库')"><Sparkles :size="15" /> 特效库 <em class="ml-auto rounded border border-[#5a5382] px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
+          <AxMenuItem @click="close(); ui.showToast('风格库')"><Shapes :size="15" /> 风格库 <em class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
+          <AxMenuItem @click="close(); ui.showToast('特效库')"><Sparkles :size="15" /> 特效库 <em class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em></AxMenuItem>
           <AxMenuItem @click="close(); ui.openDrawer('left')"><FolderOpen :size="15" /> 打开工具箱</AxMenuItem>
         </AxMenu>
       </template>

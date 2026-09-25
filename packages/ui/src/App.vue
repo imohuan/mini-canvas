@@ -116,9 +116,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
           </section>
         </div>
         <!-- 「正在跟随」协作横幅 -->
-        <div v-if="s.following" class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-ink shadow-[0_4px_12px_rgba(0,0,0,0.25)]" role="status">
+        <!-- 这是一条**语义状态色**（"正在跟随"= 亮绿，同"录制中"用红）：底色不随主题变，
+             所以前景也必须恒为深色才有对比（用 text-ink 的话暗色主题下白字压绿底会看不清）。 -->
+        <!-- 主题色白名单: 跟随横幅的语义状态色，恒亮绿底 + 恒深前景（不随主题变） -->
+        <div v-if="s.following" class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-[#111] shadow-[0_4px_12px_rgba(0,0,0,0.25)]" role="status">
           <span class="size-2 rounded-full bg-white"></span>
           <span>正在跟随</span>
+          <!-- 同上：白胶囊 + 深字压在恒亮绿横幅上，靠固定对比度保证可读，不随主题变 -->
+          <!-- 主题色白名单: 跟随横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
           <button class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90" aria-label="退出跟随" @click="s.following = false">取消ESC</button>
         </div>
         <!-- 真实画布 -->

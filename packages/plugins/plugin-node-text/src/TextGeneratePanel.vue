@@ -173,7 +173,8 @@ function toEditorResourcesSafe(ms: ReadonlyArray<UpstreamMaterial>): ResourceIte
       return {
         ...base,
         value: m.value ?? '',
-        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>',
+        // v-html 进 DOM 的 SVG 字符串：用 currentColor + 内联 color 变量，才能跟着主题走
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--ui-ink-dim, #6b7280)" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>',
       }
     }
     return { ...base, url: m.url, mediaType: m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : 'image' }
@@ -400,7 +401,7 @@ function onDelete(): void {
 }
 .tg-editor:focus-within {
   background: var(--ui-panel, #fff);
-  border-color: rgb(8 145 178 / 0.6);
+  border-color: var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
 }
 .tg-editor :deep(.prose-mirror-editor) {
   /* 高度区间来自配置（布局/控制栏 → 生成栏输入框最小/最大高） */
@@ -512,7 +513,7 @@ function onDelete(): void {
   border: 0;
   border-radius: 8px;
   background: var(--ui-accent, #0891b2);
-  color: #fff;
+  color: var(--ui-tip-ink, #fff);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -541,8 +542,9 @@ function onDelete(): void {
 .tg-spinner {
   width: 12px;
   height: 12px;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  border-top-color: #fff;
+  /* 转圈画在主按钮上，用与按钮文字同源的浅色（跟品牌色一起变） */
+  border: 2px solid color-mix(in srgb, var(--ui-tip-ink, #fff) 45%, transparent);
+  border-top-color: var(--ui-tip-ink, #fff);
   border-radius: 999px;
   animation: tg-spin 0.7s linear infinite;
 }

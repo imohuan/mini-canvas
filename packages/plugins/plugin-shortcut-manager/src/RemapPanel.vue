@@ -291,18 +291,31 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换；值见 canvas-render 的
+   styles/ui-theme.css）。半透明强调档一律 color-mix 从 --ui-accent 现算 ——
+   写死 rgba 的话用户改了品牌色这里还是青的。兜底值为改造前的浅色值。 */
+
 .remap-panel {
+  /* 组件私有色板（规范 §3.2）：内嵌卡走高程 e1 档，主题表只有 e2/e3 两档，直接套 e2 会把
+     这块小卡的阴影放大一圈，所以自持一格 —— 亮/暗成对给值，暗色块见下方 html.dark。 */
+  --remap-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
   width: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  background: #ffffff;
-  border: 1px solid rgba(8, 145, 178, 0.16);
+  background: var(--ui-panel, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--ui-accent, #0891b2) 16%, transparent);
   border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--remap-shadow);
   animation: remap-panel-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* html.dark（0,2,1）压住上面 scoped 的默认块（0,2,0）：写 .dark 会因同分靠加载顺序而输 */
+html.dark .remap-panel {
+  /* 暗色下阴影要明显更深才压得住（与共享 --ui-shadow-md 亮→暗同向放大） */
+  --remap-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .remap-panel-body {
@@ -322,7 +335,7 @@ onBeforeUnmount(() => {
   flex: 0 0 48px;
   font-size: 11px;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
   letter-spacing: 0.04em;
 }
 
@@ -338,10 +351,10 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 32px;
   padding: 6px 12px;
-  border: 1px dashed rgba(0, 0, 0, 0.18);
+  border: 1px dashed color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.03);
-  color: #6b7280;
+  background: var(--ui-hover-soft, rgba(0, 0, 0, 0.03));
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   font-weight: 600;
   text-align: left;
@@ -353,24 +366,24 @@ onBeforeUnmount(() => {
 }
 
 .remap-listen-btn:hover {
-  border-color: rgba(8, 145, 178, 0.5);
-  background: rgba(8, 145, 178, 0.06);
-  color: #111827;
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 50%, transparent);
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 6%, transparent);
+  color: var(--ui-ink, #111827);
 }
 
 .remap-listen-btn.listening {
   border-style: solid;
-  border-color: #0891b2;
-  color: #0e7490;
-  background: rgba(8, 145, 178, 0.1);
+  border-color: var(--ui-accent, #0891b2);
+  color: var(--ui-accent-hover, #0e7490);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
   animation: remap-pulse 1.2s ease-in-out infinite;
 }
 
 .remap-listen-btn.has-value {
   border-style: solid;
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #111827;
-  background: #ffffff;
+  border-color: var(--ui-line, rgba(0, 0, 0, 0.1));
+  color: var(--ui-ink, #111827);
+  background: var(--ui-panel, #ffffff);
 }
 
 .listening-dot {
@@ -378,7 +391,7 @@ onBeforeUnmount(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
   margin-right: 6px;
   flex: 0 0 8px;
 }
@@ -415,13 +428,13 @@ onBeforeUnmount(() => {
 }
 
 .remap-feedback-inline.is-conflict {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.16);
+  color: var(--ui-warn, #b45309);
+  background: color-mix(in srgb, var(--ui-warn, #b45309) 16%, transparent);
 }
 
 .remap-feedback-inline.is-pending {
-  color: #0e7490;
-  background: rgba(8, 145, 178, 0.1);
+  color: var(--ui-accent-hover, #0e7490);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
 }
 
 .remap-text-btn {
@@ -431,7 +444,7 @@ onBeforeUnmount(() => {
   padding: 6px 10px;
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -443,8 +456,8 @@ onBeforeUnmount(() => {
   height: 12px;
 }
 .remap-text-btn:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: #111827;
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
+  color: var(--ui-ink, #111827);
 }
 .remap-text-btn:disabled {
   opacity: 0.4;
@@ -454,8 +467,8 @@ onBeforeUnmount(() => {
 .remap-confirm-btn {
   padding: 6px 14px;
   border: 0;
-  background: #0891b2;
-  color: #fff;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-primary-ink, #fff);
   font-size: 12px;
   font-weight: 700;
   border-radius: 8px;
@@ -463,7 +476,7 @@ onBeforeUnmount(() => {
   transition: background 0.15s ease, transform 0.15s ease;
 }
 .remap-confirm-btn:hover {
-  background: #0e7490;
+  background: var(--ui-accent-hover, #0e7490);
 }
 .remap-confirm-btn:active {
   transform: scale(0.97);
@@ -475,8 +488,8 @@ onBeforeUnmount(() => {
 }
 
 @keyframes remap-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(8, 145, 178, 0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(8, 145, 178, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ui-accent, #0891b2) 40%, transparent); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -496,7 +509,7 @@ onBeforeUnmount(() => {
 .remap-listen-btn:focus-visible,
 .remap-text-btn:focus-visible,
 .remap-confirm-btn:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 </style>

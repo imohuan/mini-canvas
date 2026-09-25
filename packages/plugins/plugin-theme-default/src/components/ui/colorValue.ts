@@ -93,7 +93,8 @@ export function normalizeHexColor(value: unknown, fallback: string): string {
   const parsed = parseHexColor(value)
   if (parsed) return formatHexColor(parsed)
   const fb = parseHexColor(fallback)
-  return fb ? formatHexColor(fb) : '#000000'
+  // 最后兜底 #000000：这是"非法输入"的确定化默认，不是主题色（调用方都自带 fallback）
+  return fb ? formatHexColor(fb) : '#000000' // 主题色白名单: 颜色解析函数的最终兜底常量，非主题外观
 }
 
 /**

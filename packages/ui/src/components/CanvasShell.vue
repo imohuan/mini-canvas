@@ -79,8 +79,9 @@ const dockStyle = computed(() => {
 </template>
 
 <style scoped>
-.shell { position: relative; height: 100vh; overflow: hidden; background: #141414; color: #f7f7f7; font-family: system-ui, 'Microsoft YaHei', sans-serif; }
-.shell[data-theme='light'] { background: #f5f6f8; color: #18202b; }
+/* 外壳底/字走主题 token：亮暗由 <html class="dark"> 切换，不再靠 data-theme 手写两套值 */
+.shell { position: relative; height: 100vh; overflow: hidden; background: var(--ui-canvas-bg, #141414); color: var(--ui-ink, #f7f7f7); font-family: system-ui, 'Microsoft YaHei', sans-serif; }
+.shell[data-theme='light'] { background: var(--ui-canvas-bg, #f5f6f8); color: var(--ui-ink, #18202b); }
 .shell-canvas { position: absolute; inset: 0; }
 .shell-topbar { position: absolute; inset: 8px 8px auto; z-index: 60; display: flex; align-items: center; justify-content: space-between; height: 32px; pointer-events: none; }
 /* 块 A（项目胶囊）与块 B（视图切换）之间的间隔：照目标实测 8px */

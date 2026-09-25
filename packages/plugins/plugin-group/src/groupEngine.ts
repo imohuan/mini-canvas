@@ -173,13 +173,13 @@ export interface GroupColorSwatch {
 }
 
 export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
-  { id: 'slate', color: '#334155', label: '石板灰' },
-  { id: 'blue', color: '#0ea5e9', label: '蓝色' },
-  { id: 'red', color: '#ef4444', label: '红色' },
-  { id: 'orange', color: '#f97316', label: '橙色' },
-  { id: 'yellow', color: '#eab308', label: '黄色' },
-  { id: 'green', color: '#22c55e', label: '绿色' },
-  { id: 'violet', color: '#6366f1', label: '紫色' },
+  { id: 'slate', color: '#334155', label: '石板灰' }, // 主题色白名单: 用户可选的分组标识色（写进节点数据，不是主题外观）
+  { id: 'blue', color: '#0ea5e9', label: '蓝色' }, // 主题色白名单: 同上，分组标识色
+  { id: 'red', color: '#ef4444', label: '红色' }, // 主题色白名单: 同上，分组标识色
+  { id: 'orange', color: '#f97316', label: '橙色' }, // 主题色白名单: 同上，分组标识色
+  { id: 'yellow', color: '#eab308', label: '黄色' }, // 主题色白名单: 同上，分组标识色
+  { id: 'green', color: '#22c55e', label: '绿色' }, // 主题色白名单: 同上，分组标识色
+  { id: 'violet', color: '#6366f1', label: '紫色' }, // 主题色白名单: 同上，分组标识色
 ]
 
 export const DEFAULT_GROUP_BACKGROUND_COLOR = GROUP_COLOR_SWATCHES[0].color

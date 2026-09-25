@@ -267,7 +267,7 @@ const dropdownMenuWidth = computed(() =>
 }
 
 .sel-trigger:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 
@@ -319,7 +319,7 @@ const dropdownMenuWidth = computed(() =>
 }
 
 .sel-search::placeholder {
-  color: #9ca3af;
+  color: var(--sf-desc, #9ca3af);
   font-weight: 400;
 }
 
@@ -374,7 +374,7 @@ const dropdownMenuWidth = computed(() =>
 }
 
 .sel-option:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: -1px;
 }
 

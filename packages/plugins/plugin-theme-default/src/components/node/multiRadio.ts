@@ -53,7 +53,9 @@ export const MULTI_RADIO_SIZE_MAX = 48
  */
 export const DEFAULT_MULTI_RADIO: MultiRadioConfig = Object.freeze({
   size: 18,
-  color: '#111827',
+  // 这是**设置面板里的单值默认值**（用户可在「常规/节点」改），不是主题外观；
+  // 要让它也随亮/暗两套主题各取一个值，得给它单独开一对色板 token（同类问题见 edgeRail/edgeFlow）。
+  color: '#111827', // 主题色白名单: 多选标记颜色是用户可改的配置默认值（单值），随主题需另开色板 token
   showInLowDetail: false,
 })
 

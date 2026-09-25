@@ -161,13 +161,13 @@ onBeforeUnmount(() => endEdit(props.id))
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #9ca3af;
+  color: var(--canvas-node-text-muted, #9ca3af);
   font-size: 13px;
 }
 
 /* 失效提示：警告色小字（12px 下限，符合规范的中文最小字号） */
 .empty.is-broken {
-  color: #b45309;
+  color: var(--ui-warn, #b45309);
   font-size: 12px;
   padding: 8px;
   text-align: center;

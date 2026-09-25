@@ -41,8 +41,10 @@ describe('@mini-canvas/ui 出口契约', () => {
     expect(typeof entry.createDefaultStorageAdapter).toBe('function')
   })
 
-  it('装配清单自洽：21 个插件、无重名、含画布基础件', () => {
-    // 20 个源码插件 + 1 个本应用自己的设置面板换皮（ui-settings-panel，order -1 顶替默认皮）
+  it('装配清单自洽：20 个插件、无重名、含画布基础件', () => {
+    // 19 个源码插件 + 本应用自己的一个（ui-settings-panel 设置面板换皮）。
+    // 主题色配置**不在清单里**了：色板已上移进渲染层（canvas-render 的 themePalette），
+    // 由宿主 createMiniCanvasHost 直接声明与落值，任一宿主都自带。
     // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea 按钮 + ModalsArea 浮层），
     // 插件版 Ctrl+/ 帮助面板与之重复；键盘分发由 CanvasHost 按命令 keys 统一做，不依赖它。
     expect(APP_PLUGINS).toHaveLength(21)

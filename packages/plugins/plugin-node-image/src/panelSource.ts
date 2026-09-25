@@ -239,7 +239,8 @@ export function materialCards(materials: ReadonlyArray<UpstreamMaterial>): Mater
 
 /** 文本素材在 @ 引用里的图标（插入后显示的小图标） */
 const TEXT_ICON =
-  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>'
+  // v-html 进 DOM 的 SVG 字符串：用 currentColor + 内联 color 变量，才能跟着主题走
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--ui-ink-dim, #6b7280)" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>'
 
 /** 文本素材插入编辑器后的 DOM 规格（@名字） */
 function textResourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {

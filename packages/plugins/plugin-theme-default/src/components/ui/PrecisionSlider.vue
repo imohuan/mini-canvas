@@ -274,7 +274,7 @@ function onKeydown(e: KeyboardEvent): void {
   border-radius: 50%;
   background: var(--ps-thumb, #fff);
   border: 2px solid var(--ps-accent, #0891b2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 1px 3px var(--ui-shadow-md, rgba(0, 0, 0, 0.16));
   transform: translate(-50%, -50%);
   transition: border-color 0.18s ease;
   box-sizing: border-box;
@@ -284,7 +284,7 @@ function onKeydown(e: KeyboardEvent): void {
   border-color: var(--ps-accent-hover, #0e7490);
 }
 .ps:focus-visible .ps-thumb {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 2px;
 }
 </style>

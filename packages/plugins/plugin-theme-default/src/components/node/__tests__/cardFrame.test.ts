@@ -31,7 +31,8 @@ describe('普通类型：保留卡片边框', () => {
     const f = resolveCardFrame({ zoom: 1, frameless: false, selected: false })
     expect(f.surface).toContain('--canvas-node-surface')
     expect(f.shadow).toContain('--canvas-node-shadow-subtle')
-    expect(f.contentSurface).toBe('#eee')
+    // 内容裁剪层底色改走 --canvas-node-panel-surface（原来写死 #eee，暗色下是块亮板）
+    expect(f.contentSurface).toContain('--canvas-node-panel-surface')
   })
 })
 

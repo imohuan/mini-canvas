@@ -170,11 +170,11 @@ const componentIcon = computed<Component | null>(() =>
   padding: 0 14px;
   border-radius: 8px;
   background: var(--ui-accent, #0891b2);
-  color: #fff;
+  color: var(--ui-primary-ink, #fff);
 }
 .ntb-btn.ntb-btn--primary:hover:not(:disabled) {
   background: var(--ui-accent-hover, #0e7490);
-  color: #fff;
+  color: var(--ui-primary-ink, #fff);
 }
 
 /* 危险档：平时与 ghost 同，悬停才转红。同上抬特异度，保证带文案时也能压住通用规则。 */

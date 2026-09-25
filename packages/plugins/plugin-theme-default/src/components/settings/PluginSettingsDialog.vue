@@ -1042,7 +1042,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18));
+  background: var(--ui-scrim-soft, linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.18)));
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   font-family: system-ui, 'Microsoft YaHei', sans-serif;
@@ -1066,11 +1066,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   overflow: hidden;
   padding: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
-  color: #374151;
+  background: var(--ui-panel, #fff);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
+  color: var(--ui-ink, #374151);
   font-size: 13px;
   animation: psd-pop-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1);
   /* 给右下角 resize 把手提供定位上下文；浮动模式由内联 style 覆盖为 fixed */
@@ -1081,7 +1081,7 @@ onBeforeUnmount(() => {
 .psd-dialog-floating {
   animation: none;
   border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--ui-shadow-lg, 0 24px 60px rgba(0, 0, 0, 0.18));
 }
 
 /* 压缩/复原动画：只让 transform 走过渡（width/height 在同一帧瞬时切换，不参与动画）——
@@ -1099,9 +1099,12 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: linear-gradient(145deg, #22b8d4, #0891b2);
-  box-shadow: 0 10px 26px rgba(8, 145, 178, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-  color: #fff;
+  /* 悬浮球：渐变从强调色两档取（用户改强调色后整个球跟着变），不写死青绿 */
+  background: linear-gradient(145deg, var(--ui-accent-hover, #0e7490), var(--ui-accent, #0891b2));
+  /* inset 高光是镜面高光，恒白半透明（不属主题语义色） */
+  /* 主题色白名单: 镜面高光恒白半透明 */
+  box-shadow: var(--ui-shadow-md, 0 10px 26px rgba(8, 145, 178, 0.4)), inset 0 1px 0 rgb(255 255 255 / 0.25);
+  color: var(--ui-primary-ink, #fff);
   cursor: grab;
   user-select: none;
   /* 出现/消失的淡入淡出（尺寸由 transform 之外的 width/height 决定，不参与动画） */
@@ -1125,7 +1128,7 @@ onBeforeUnmount(() => {
 /* 吸附成贴边竖长条：椭圆的球变窄，图标转 90° 并缩小，居中贴合长条 */
 .psd-ball.is-docked {
   border-radius: 4px;
-  box-shadow: 0 4px 14px rgba(8, 145, 178, 0.35);
+  box-shadow: var(--ui-shadow-md, 0 4px 14px rgba(8, 145, 178, 0.35));
   animation: none;
 }
 
@@ -1145,7 +1148,7 @@ onBeforeUnmount(() => {
 }
 
 .psd-ball:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 2px;
 }
 
@@ -1171,9 +1174,9 @@ onBeforeUnmount(() => {
    真正露出的球是独立的 .psd-ball。这里必须关掉指针事件：
    否则这块"隐形的 520×360 大块"会盖在球上面，把所有点击/拖拽全吃掉。 */
 .psd-dialog-ball {
-  background: linear-gradient(145deg, #22b8d4, #0891b2);
-  border-color: rgba(8, 145, 178, 0.5);
-  box-shadow: 0 10px 26px rgba(8, 145, 178, 0.4);
+  background: linear-gradient(145deg, var(--ui-accent-hover, #0e7490), var(--ui-accent, #0891b2));
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 50%, transparent);
+  box-shadow: var(--ui-shadow-md, 0 10px 26px rgba(8, 145, 178, 0.4));
   overflow: hidden;
   pointer-events: none;
 }
@@ -1191,7 +1194,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 2px 6px 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.05));
   flex-shrink: 0;
 }
 
@@ -1215,7 +1218,7 @@ onBeforeUnmount(() => {
 }
 
 .psd-eyebrow {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1223,7 +1226,7 @@ onBeforeUnmount(() => {
 
 .psd-title {
   margin: 0;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font-size: 15px;
   font-weight: 700;
   line-height: 1.2;
@@ -1238,8 +1241,8 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b7280;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
@@ -1250,8 +1253,8 @@ onBeforeUnmount(() => {
 }
 
 .psd-close:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: #ef4444;
+  background: var(--ui-chip, rgba(0, 0, 0, 0.08));
+  color: var(--ui-danger, #ef4444);
 }
 
 /* 头部"转浮动/回弹窗"图标按钮：与关闭按钮同尺寸、同底色，仅 hover 色不同 */
@@ -1264,8 +1267,8 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  color: #6b7280;
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
+  color: var(--ui-ink-dim, #6b7280);
   cursor: pointer;
   transition: background 0.18s ease, color 0.18s ease;
 }
@@ -1276,8 +1279,8 @@ onBeforeUnmount(() => {
 }
 
 .psd-icon-btn:hover {
-  background: rgba(8, 145, 178, 0.12);
-  color: #0891b2;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
+  color: var(--ui-accent, #0891b2);
 }
 
 /* 右下角 resize 把手：贴角放一个 16x16 图标 + 隐形放大命中区 */
@@ -1291,7 +1294,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   cursor: nwse-resize;
   /* 命中区向右下扩展到 18px，方便抓 */
   box-sizing: content-box;
@@ -1300,7 +1303,7 @@ onBeforeUnmount(() => {
 }
 
 .psd-resize-handle:hover {
-  color: #0891b2;
+  color: var(--ui-accent, #0891b2);
 }
 
 .psd-body {
@@ -1315,7 +1318,7 @@ onBeforeUnmount(() => {
      避免 212px 固定宽度在窄屏（弹窗默认 920px 被 flex 居中压成 600px 时）显得过分占位。 */
   flex: 0 0 auto;
   width: clamp(96px, 22%, 180px);
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+  border-right: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.06));
   padding: 2px 4px 6px 2px;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -1336,7 +1339,7 @@ onBeforeUnmount(() => {
 }
 
 .psd-nav-empty {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
   text-align: center;
   padding: 16px 0;
@@ -1355,21 +1358,21 @@ onBeforeUnmount(() => {
   border-radius: 10px;
   background: transparent;
   text-align: left;
-  color: #374151;
+  color: var(--ui-ink, #374151);
   cursor: pointer;
   transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .psd-nav-item:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
 
 .psd-nav-item.active {
-  background: rgba(8, 145, 178, 0.12);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
 }
 
 .psd-nav-item:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: -1px;
 }
 
@@ -1391,14 +1394,14 @@ onBeforeUnmount(() => {
   min-width: 0;
   font-size: 13px;
   font-weight: 600;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .psd-nav-item.active .psd-nav-txt {
-  color: #0e7490;
+  color: var(--ui-accent-hover, #0e7490);
   font-weight: 700;
 }
 
@@ -1417,7 +1420,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 2px;
   flex-shrink: 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
 }
 
 .psd-tabs {
@@ -1454,7 +1457,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
   cursor: pointer;
   transition: background 0.16s ease, color 0.16s ease, opacity 0.16s ease;
 }
@@ -1465,8 +1468,8 @@ onBeforeUnmount(() => {
 }
 
 .psd-tab-arrow:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.06);
-  color: #111827;
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
+  color: var(--ui-ink, #111827);
 }
 
 .psd-tab-arrow:disabled {
@@ -1483,7 +1486,7 @@ onBeforeUnmount(() => {
   padding: 7px 16px;
   border: 0;
   background: transparent;
-  color: #6b7280;
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
@@ -1493,12 +1496,12 @@ onBeforeUnmount(() => {
 }
 
 .psd-tab-item:hover {
-  color: #111827;
+  color: var(--ui-ink, #111827);
 }
 
 /* active 态：文字变主题色 + 底部一条 2px 指示线 */
 .psd-tab-item.active {
-  color: #0891b2;
+  color: var(--ui-accent, #0891b2);
 }
 
 /* 指示线贴在页签条底边（页签条左右各有 12px 内边距，故线随内边距内缩） */
@@ -1510,11 +1513,11 @@ onBeforeUnmount(() => {
   bottom: 0;
   height: 2px;
   border-radius: 2px;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
 }
 
 .psd-tab-item:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: -2px;
 }
 
@@ -1527,14 +1530,14 @@ onBeforeUnmount(() => {
 .psd-section-title {
   margin: 0 0 6px;
   padding: 10px 0 8px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--ui-line-soft, rgba(0, 0, 0, 0.05));
   font-size: 13px;
   font-weight: 700;
-  color: #111827;
+  color: var(--ui-ink, #111827);
 }
 
 .psd-section-title.current {
-  color: #0891b2;
+  color: var(--ui-accent, #0891b2);
 }
 
 .psd-section-body {
@@ -1558,7 +1561,7 @@ onBeforeUnmount(() => {
 .psd-empty {
   padding: 24px 10px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
 }
 
@@ -1587,11 +1590,11 @@ onBeforeUnmount(() => {
 .psd-content-body::-webkit-scrollbar-thumb,
 .psd-nav::-webkit-scrollbar-thumb {
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
 .psd-content-body::-webkit-scrollbar-thumb:hover,
 .psd-nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
 
 @media (prefers-reduced-motion: reduce) {

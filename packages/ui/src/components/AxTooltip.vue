@@ -126,7 +126,7 @@ function hide(): void {
   color: var(--ui-tip-ink);
   border-radius: 6px;
   background: var(--ui-tip);
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  box-shadow: 0 4px 6px -1px var(--ui-scrim-soft, rgb(0 0 0 / 0.1));
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;

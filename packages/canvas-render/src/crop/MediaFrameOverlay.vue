@@ -404,6 +404,8 @@ function handleStyle(dir: HandleDir): Record<string, string> {
 /* 画面之外的留白：最暗（这里压根没有画面） */
 .mfo-letterbox {
   position: absolute;
+  /* 压在**图片像素**上的遮罩：必须恒为黑系，跟随主题会在浅色图上失效 → 有意不跟随 */
+  /* 主题色白名单: 压在画面像素上的留白遮罩，需恒定黑系 */
   background: rgba(0, 0, 0, 0.72);
   pointer-events: none;
 }
@@ -411,6 +413,7 @@ function handleStyle(dir: HandleDir): Record<string, string> {
 /* 画面内、框外：稍浅（用户仍看得见自己排除了什么） */
 .mfo-shade {
   position: absolute;
+  /* 主题色白名单: 同上，压在画面像素上 */
   background: rgba(0, 0, 0, 0.52);
   pointer-events: none;
 }
@@ -421,9 +424,9 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   box-sizing: border-box;
   pointer-events: auto;
   cursor: move;
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.95),
-    0 12px 36px rgba(0, 0, 0, 0.28);
+  /* 描边与阴影都压在**图片像素**上：白描边保证在暗图上可见、黑影保证在亮图上可见 → 有意不跟随主题。
+     写成一行是为了让豁免标记与两处色值同行（CSS 里 `//` 不是注释，不能写在行尾）。 */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.95), 0 12px 36px rgba(0, 0, 0, 0.28); /* 主题色白名单: 裁剪框描边+投影压在图上看，需恒定白描边/黑影 */
 }
 
 /* 尺寸小标：贴在框左上角外侧一点，不挡画面 */
@@ -433,8 +436,8 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   top: -24px;
   padding: 2px 6px;
   border-radius: 6px;
-  background: rgba(17, 24, 39, 0.82);
-  color: #fff;
+  background: var(--ui-tip, rgba(17, 24, 39, 0.82));
+  color: var(--ui-tip-ink, #fff);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -449,7 +452,8 @@ function handleStyle(dir: HandleDir): Record<string, string> {
 
 .mfo-grid-line {
   position: absolute;
-  background: rgba(255, 255, 255, 0.45);
+  /* 三等分参考线压在图片像素上（恒白半透明才有对比） */
+  background: rgba(255, 255, 255, 0.45); /* 主题色白名单: 压在图上的三等分参考线，需恒定白 */
 }
 .mfo-grid-line--h {
   left: 0;
@@ -469,7 +473,9 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   height: 10px;
   padding: 0;
   box-sizing: border-box;
-  background: #fff;
+  background: var(--ui-panel, #fff);
+  /* 描边压在**图片像素**上而不是界面底色上：必须恒为半透黑才有对比 → 有意不跟随主题 */
+  /* 主题色白名单: 裁剪框控制点压在图上看，需恒定半透黑描边 */
   border: 1.5px solid rgba(0, 0, 0, 0.5);
   border-radius: 2px;
   pointer-events: auto;
@@ -483,10 +489,10 @@ function handleStyle(dir: HandleDir): Record<string, string> {
   inset: -7px;
 }
 .mfo-handle:hover {
-  border-color: #0891b2;
+  border-color: var(--ui-accent, #0891b2);
 }
 .mfo-handle:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 

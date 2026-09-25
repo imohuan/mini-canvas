@@ -53,14 +53,14 @@ export const Config = {
   // —— 颜色统一归「常规/主题配色」——
   pathColor: {
     type: 'color',
-    default: '#38bdf8',
+    default: '#38bdf8', // 主题色白名单: 设置项默认值（用户在配色里可改），写进配置而非主题外观
     label: '切割轨迹颜色',
     group: '常规/主题配色',
     description: 'Alt 拖拽时画出的完整轨迹线的颜色（半透明发光线条）。',
   },
   bladeColor: {
     type: 'color',
-    default: '#38bdf8',
+    default: '#38bdf8', // 主题色白名单: 设置项默认值（用户在配色里可改），同上
     label: '刀锋颜色',
     group: '常规/主题配色',
     description: '刀锋尾迹/刀尖的主题色（发光描边颜色）。',
@@ -82,8 +82,8 @@ export function edgeCuttingConfigFrom(ctx: Context): EdgeCuttingConfig {
     enabled: read('enabled', true),
     tolerancePx: read('tolerancePx', 8),
     sampleStepPx: read('sampleStepPx', 6),
-    pathColor: read('pathColor', '#38bdf8'),
-    bladeColor: read('bladeColor', '#38bdf8'),
+    pathColor: read('pathColor', '#38bdf8'), // 主题色白名单: 与 schema 默认值同源（settings 未就绪时的回落）
+    bladeColor: read('bladeColor', '#38bdf8'), // 主题色白名单: 与 schema 默认值同源
     showCutPath: read('showCutPath', true),
   }
 }

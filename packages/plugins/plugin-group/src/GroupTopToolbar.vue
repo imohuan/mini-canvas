@@ -126,6 +126,26 @@ function pickColor(color: string): void {
 /* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
    位置（贴边/居中/反缩放）由壳的上插槽定位层给，本组件只管内容。 */
 
+/* 色块预览环：色点里画的是"任意用户色"，需要一圈中性描边把它从面板底上分出来。
+   这不是主题色本身，而是"任意颜色都要看得清"的对比环，故按亮/暗各给一套。
+
+   变量挂在这两个元素自己身上（而不是外层工具栏）：色板菜单是 teleport 到 body 的，
+   外层容器已不是它的祖先；挂在菜单内的 .group-color-grid 上才继承得到。
+   暗色分支用 html.dark（0,2,1）—— html 永远是祖先，且压得住上面亮色那条 0,2,0。 */
+.group-color-trigger {
+  --gt-ring-in: rgba(255, 255, 255, 0.42);
+  --gt-ring-out: rgba(15, 23, 42, 0.28);
+}
+.group-color-grid {
+  --gt-ring-in: rgba(255, 255, 255, 0.38);
+  --gt-ring-out: rgba(15, 23, 42, 0.22);
+}
+html.dark .group-color-trigger,
+html.dark .group-color-grid {
+  --gt-ring-in: rgba(15, 23, 42, 0.45);
+  --gt-ring-out: rgba(255, 255, 255, 0.34);
+}
+
 /* 色点触发器：按钮本体（32×32/圆角/hover/focus）由目录里的 button 组件提供，
    这里只补一件它管不到的事 —— 图标位里放的是"色点"而不是 SVG。 */
 .group-color-trigger__dot {
@@ -134,8 +154,8 @@ function pickColor(color: string): void {
   flex-shrink: 0;
   border-radius: 999px;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-    0 0 0 1px rgba(15, 23, 42, 0.28);
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.42)),
+    0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.28));
 }
 
 /* 色板：7 个预设色（4 列两行） */
@@ -156,8 +176,8 @@ function pickColor(color: string): void {
   border-radius: 999px;
   cursor: pointer;
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.38),
-    0 0 0 1px rgba(15, 23, 42, 0.22);
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.38)),
+    0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.22));
   transition: transform 120ms ease;
 }
 .group-color-swatch:hover {
@@ -170,8 +190,8 @@ function pickColor(color: string): void {
 /* 当前色：加一圈环，一眼看出"现在用的是哪个" */
 .group-color-swatch.is-active {
   box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.42),
-    0 0 0 2px rgba(8, 145, 178, 0.85);
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.38)),
+    0 0 0 2px var(--ntb-accent-ring, rgba(8, 145, 178, 0.85));
 }
 
 @media (prefers-reduced-motion: reduce) {

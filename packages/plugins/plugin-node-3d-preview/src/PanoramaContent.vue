@@ -91,6 +91,17 @@ let target: ViewState = { ...DEFAULT_VIEW }
 let current: ViewState = { ...DEFAULT_VIEW }
 let dragStart = { x: 0, y: 0, lon: 0, lat: 0 }
 
+/**
+ * 读一个主题变量当前的值（three 的 Color / 材质吃不到 CSS 变量，只能在运行时取一次）。
+ * 取不到（无 DOM，如单测 SSR）就回落传入的兜底色 —— 与 CSS 里的兜底值同一套。
+ */
+function themeColor(varName: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || fallback
+}
+/* 无 DOM 时的兜底色（= node-theme.css 亮色默认值，与各处 CSS 兜底同值） */
+const FALLBACK = { surface: '#f3f4f6', border: '#e5e7eb' } // 主题色白名单: 单测 SSR 无 DOM 读不到 CSS 变量，此处只是同值兜底
+
 /** 从画布边里找连到本节点的上游图片；没有就用节点自身的 imageUrl / panoUrl */
 const ownImageUrl = computed<string>(() => {
   const d = props.data ?? {}
@@ -112,7 +123,8 @@ function updateTexture(url: string): void {
   const token = ++textureToken
   if (!url) {
     mat.map = null
-    mat.color.set('#e5e7eb')
+    // three 吃不到 CSS 变量：运行时按主题读一次占位色（与节点表面色同源）
+    mat.color.set(themeColor('--canvas-node-border', FALLBACK.border))
     mat.needsUpdate = true
     hasTexture.value = false
     return
@@ -130,7 +142,8 @@ function updateTexture(url: string): void {
       loadedTexture.value = tex
       tex.colorSpace = THREE.SRGBColorSpace
       material.value.map = tex
-      material.value.color.set('#ffffff')
+      // 贴图颜色乘数：白色 = 原图不变，无需跟主题
+      material.value.color.set('#ffffff') // 主题色白名单: 贴图乘数恒白，改色会污染原图
       material.value.needsUpdate = true
       hasTexture.value = true
       renderError.value = ''
@@ -212,14 +225,15 @@ function initThree(): void {
     el.appendChild(rnd.domElement)
 
     const scn = new THREE.Scene()
-    scn.background = new THREE.Color('#f3f4f6')
+    // 全景背景是"没贴图时的底色"，跟节点表面色走（three 不认 CSS 变量，故运行时读）
+    scn.background = new THREE.Color(themeColor('--canvas-node-surface', FALLBACK.surface))
     const cam = new THREE.PerspectiveCamera(current.fov, w / h, 0.1, 1100)
     cam.position.set(0, 0, 0)
 
     // 球翻面（scale(-1,1,1)）→ 我们从球心看到的是内壁，正好当全景幕布
     const geo = new THREE.SphereGeometry(1000, 64, 32)
     geo.scale(-1, 1, 1)
-    const mat = new THREE.MeshBasicMaterial({ color: '#e5e7eb' })
+    const mat = new THREE.MeshBasicMaterial({ color: themeColor('--canvas-node-border', FALLBACK.border) })
     scn.add(new THREE.Mesh(geo, mat))
 
     renderer.value = rnd
@@ -483,7 +497,7 @@ onBeforeUnmount(() => {
   height: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: #f3f4f6;
+  background: var(--canvas-node-surface, #f3f4f6);
 }
 .pano-surface {
   position: absolute;
@@ -507,10 +521,10 @@ onBeforeUnmount(() => {
 .pano-empty-icon {
   width: 36px;
   height: 36px;
-  color: #d1d5db;
+  color: var(--canvas-node-border-hover, #d1d5db);
 }
 .pano-empty-text {
-  color: #9ca3af;
+  color: var(--canvas-node-text-muted, #9ca3af);
   /* 中文正文最低 12px */
   font-size: 12px;
   line-height: 1.5;
@@ -524,12 +538,12 @@ onBeforeUnmount(() => {
   width: min(260px, 100%);
   padding: 6px 6px 6px 10px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--ui-veil, rgba(0, 0, 0, 0.04));
   pointer-events: auto;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .pano-url:focus-within {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 .pano-url-input {
   flex: 1;
@@ -537,12 +551,12 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   outline: none;
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font: inherit;
   font-size: 13px;
 }
 .pano-url-input::placeholder {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
 }
 .pano-url-go {
   display: inline-flex;
@@ -554,20 +568,20 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  background: rgba(8, 145, 178, 0.12);
-  color: #0e7490;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
+  color: var(--ui-accent-hover, #0e7490);
   cursor: pointer;
   transition: background-color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .pano-url-go:hover:not(:disabled) {
-  background: rgba(8, 145, 178, 0.2);
+  background: color-mix(in srgb, var(--ui-accent, #0891b2) 20%, transparent);
 }
 .pano-url-go:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 .pano-url-go:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 .pano-url-go svg {
@@ -582,7 +596,7 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 100000;
-  background: #000;
+  background: #000; /* 主题色白名单: 全屏查看层刻意纯黑无装饰 */
   touch-action: none;
 }
 

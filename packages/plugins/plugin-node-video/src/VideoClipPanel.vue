@@ -202,15 +202,15 @@ onBeforeUnmount(() => {
   gap: 10px;
   width: 520px;
   padding: 8px 10px;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--ui-overlay-solid, #ffffff);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 10px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
 }
 
 .vclip-empty {
   flex: 1;
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 12px;
 }
 
@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
   top: 7px;
   height: 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 
 /* 被剪掉的区间：灰底（轨道本身就是这个色，这里只是显式地压在两端上，便于将来加深） */
@@ -243,7 +243,7 @@ onBeforeUnmount(() => {
   top: 7px;
   height: 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--ui-hover, rgba(0, 0, 0, 0.06));
 }
 .vclip-outside.is-left {
   left: 0;
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
   top: 7px;
   height: 6px;
   border-radius: 999px;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
   pointer-events: none;
 }
 
@@ -270,7 +270,8 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: var(--ui-panel, #fff);
   cursor: ew-resize;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  /* 只换颜色来源，投影几何（0 2px 10px）保持原样 */
+  box-shadow: 0 2px 10px var(--canvas-node-shadow-subtle, rgba(0, 0, 0, 0.06));
 }
 .vclip-handle::after {
   content: '';
@@ -281,10 +282,10 @@ onBeforeUnmount(() => {
   height: 10px;
   margin-left: -1px;
   border-radius: 999px;
-  background: #0891b2;
+  background: var(--ui-accent, #0891b2);
 }
 .vclip-handle:focus-visible {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 
@@ -297,12 +298,12 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 .vclip-time {
-  color: #111827;
+  color: var(--ui-ink, #111827);
   font-size: 12px;
   font-weight: 600;
 }
 .vclip-len {
-  color: #9ca3af;
+  color: var(--ui-ink-mute, #9ca3af);
   font-size: 11px;
 }
 

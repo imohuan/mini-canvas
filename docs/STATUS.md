@@ -5,6 +5,62 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 最近完成（2026-09-25，主题配色「两格制」+ 全仓去硬编码色）
+
+**用户问题**："一个连接线颜色我只能设一种 —— 设成灰色，暗色主题上就没法看"。
+
+- **核心：可配置颜色改成「亮/暗两格」**（`canvas-render/src/contracts/themePalette.ts`）。
+  每个颜色两个 Config 字段、写两个**不同名字**的内联变量
+  （`--uic-<key>-light` / `-dark`），由 `ui-theme.css` 的 `:root` / `html.dark` 各挑一个 →
+  **切主题仍是纯 CSS、零 JS**，消费方照旧只写一次 `var(--ui-accent, 兜底)`。
+  只在**用户改过**的格写内联（等于默认值不写），否则会压掉主题插件在 CSS 里给的配色。
+  色板 7 项：强调/强调悬停/危险/警示/连线/流光/参考线。
+- **位置归位**：原先住在 `packages/ui/src/themeColorPlugin.ts`（成品应用插件）→ 上移进
+  渲染层，由宿主 `createMiniCanvasHost` 直接声明（与「常规/画布」交互配置同层），
+  **任一宿主都自带**。旧文件已删。
+- **连线颜色真的跟着主题走**（用户举的例子）：`CustomEdge` 经新增的 `useThemeColor()`
+  读色板（SVG 表现属性不认 `var()`，必须取具体值）。顺带发现并修掉一个旧 bug ——
+  theme-default 原先声明单值 `edgeColor`（默认 `#1f2937`，暗色画布上对比度约 1.3:1
+  ≈ 看不见）且**永远盖住**色板 → 已删除该单值配置。
+- **JS 通道**：`useThemeColor(token)` 同时跟"改设置"与"切主题"；`watchThemeMode` 全仓
+  **共用一个** MutationObserver（连线组件是每边一份，几百条边不能各挂一个）。
+- **全仓去硬编码色**：把插件/渲染层/应用壳里写死的颜色换成主题 token（品牌色半透明档一律
+  `color-mix` 现算）。净化守卫 `packages/ui/src/__tests__/themeColorHygiene.test.ts` 把违规数
+  从 **325（38 个文件）** 压到 **0**，并把这条钉成测试（不再靠人工清单）。
+  同目录新增 `stylesCompile.test.ts`：全仓 `.vue` 样式段必须能被 Vue SFC 编译器解析 ——
+  堵住"守卫绿但应用打不开"（踩过一次：豁免标记在 CSS 里写成 `//`，PostCSS `Missed semicolon`）。
+- 规范已更新：`docs/代码开发/主题与配色.md` §七 重写为两格制、§五 token 表、§八 验收清单。
+- **验证**：28 个包全绿（kernel 212 / canvas-data 321 / canvas-render 390 / ui 39 /
+  theme-default 202 / 插件合计 918）；官方 e2e **40/40**；浏览器实测脚本
+  `packages/ui/e2e/theme-palette-check.mjs` **19/19**（含"改亮色格不影响暗色"与
+  "真实连线元素取到对应主题的色"）。
+
+### 最近修复（2026-09-25，多选拖动中缩放的跟手性）
+
+- **拖动中缩放后内容不再跟手**（用户报："拖拽的时候缩放你的定位就出现了问题"）。
+  浏览器实测（修前）：zoom=1 拖 100px 内容走 100px；缩到 2x 后再拖 100px 内容只走 60.5px
+  （脱手）；缩回 1x 再拖内容走 156.6px（过冲）。根因：整组平移的位移公式是
+  "(当前client − 起手client) ÷ 当前zoom" —— 中途缩放会把**已拖过的屏幕距离**按新 zoom
+  重新换算，历史段被篡改。修复：改为**逐段累加**（每段屏幕增量 ÷ 该段时的 zoom），
+  与 d3-zoom 拖画布手感一致；`dragStartClient` 收拢成 `lastClient`（上帧坐标）。
+  修后实测三段 ratio 恒为 1.0，终点抓取点贴合鼠标。测试：新增
+  `dragZoomFollow.test.ts`（4 条纯函数模型断言，含修前/修后公式对照）+ 更新
+  `selectionFrameRender.test.ts` 源码断言（锁"逐段增量"实现、禁旧公式回潮）；
+  multi-select 145 / group 45 单测全绿，官方 e2e 40/40，
+  `multiselect-regression.mjs` 22/22（含上轮"拖动中缩放选框贴合"场景 E 仍通过）。
+
+- **追加（2026-09-25 第二轮）· 抓节点拖拽中缩放，选框闪回拖拽前位置一帧**（用户报：
+  "缩放和拖拽同时进行时，多选框会莫名出现在拖拽之前的位置，下一帧移动才恢复"）。
+  与上一条同根因的另一条路径：**抓成员卡片拖**（VueFlow 原生多选拖拽，非框内空白拖）。
+  该路径的框跟随用 nodeDragFrameAnchor（起手快照 + 位移），但缩放触发 refreshFrame 时
+  走了"从 store 重算"分支（store 里还是拖动前位置）→ 框闪回；节点层已被 VueFlow 拉走，
+  下一帧 NodeDrag 才把框拉回来。修复三件：① refreshFrame 增加"拖拽中"分支
+  （interaction.isNodeDragging || nodeDragging 时保持当前位置、只按当前缩放重算间距）；
+  ② NodeDrag 逐帧**快进快照**（并集快照 += 本帧位移，anchorStart 重置为本帧），
+  缩放帧到达时快照已与节点同步；③ 起手快照改用 nodeUnionSnapshot（锚点读 payload
+  位置，其余读 nodeLayout）。实测异常帧 41 → **0**（偏移簇只剩基准簇 + 亚像素抖动簇）。
+  探针脚本已清理；验证：multi-select 145 全绿、回归脚本 22/22、官方 e2e 40/40。
+
 ### 包结构（现行，已定型）
 
 `packages/canvas-core-v2` **已删除**（实现与测试分别迁入 kernel 与 canvas-data）。

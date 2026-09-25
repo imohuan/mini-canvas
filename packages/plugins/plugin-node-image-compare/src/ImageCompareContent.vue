@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
   height: 100%;
   overflow: hidden;
   border-radius: 8px;
-  background: #f3f4f6;
+  background: var(--canvas-node-surface, #f3f4f6);
   user-select: none;
 }
 
@@ -242,10 +242,10 @@ onBeforeUnmount(() => {
 .cmp-empty-icon {
   width: 36px;
   height: 36px;
-  color: #d1d5db;
+  color: var(--canvas-node-border-hover, #d1d5db);
 }
 .cmp-empty-text {
-  color: #9ca3af;
+  color: var(--canvas-node-text-muted, #9ca3af);
   font-size: 12px;
 }
 
@@ -274,8 +274,8 @@ onBeforeUnmount(() => {
   top: 6px;
   padding: 1px 6px;
   border-radius: 6px;
-  background: rgba(17, 24, 39, 0.55);
-  color: #fff;
+  background: var(--ui-tip, rgba(17, 24, 39, 0.55));
+  color: var(--ui-tip-ink, #fff);
   font-size: 10px;
   line-height: 1.6;
   pointer-events: none;
@@ -295,8 +295,8 @@ onBeforeUnmount(() => {
   transform: translateX(-50%);
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(17, 24, 39, 0.55);
-  color: #fff;
+  background: var(--ui-tip, rgba(17, 24, 39, 0.55));
+  color: var(--ui-tip-ink, #fff);
   font-size: 11px;
   white-space: nowrap;
   pointer-events: none;
@@ -321,8 +321,9 @@ onBeforeUnmount(() => {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #fff;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+  background: var(--ui-tip-ink, #fff);
+  /* 只换颜色来源，投影几何（0 0 6px）保持原样 */
+  box-shadow: 0 0 6px var(--canvas-node-shadow-strong, rgba(0, 0, 0, 0.35));
 }
 .cmp-handle {
   position: relative;
@@ -332,22 +333,23 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 999px;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  color: #6b7280;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+  background: var(--ui-panel, #fff);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  color: var(--ui-ink-dim, #6b7280);
+  /* 只换颜色来源，投影几何（0 2px 10px）保持原样 */
+  box-shadow: 0 2px 10px var(--canvas-node-shadow-soft, rgba(0, 0, 0, 0.15));
   transition: box-shadow 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .cmp-divider:hover .cmp-handle,
 .cmp-divider.is-dragging .cmp-handle {
-  color: #111827;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  color: var(--ui-ink, #111827);
+  box-shadow: 0 4px 14px var(--canvas-node-shadow-strong, rgba(0, 0, 0, 0.22));
 }
 .cmp-divider:focus-visible {
   outline: none;
 }
 .cmp-divider:focus-visible .cmp-handle {
-  outline: 2px solid rgba(8, 145, 178, 0.6);
+  outline: 2px solid var(--ntb-accent-ring, rgb(8 145 178 / 0.6));
   outline-offset: 1px;
 }
 .cmp-handle-icon {

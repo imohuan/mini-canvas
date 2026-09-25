@@ -20,8 +20,8 @@
   /* 强调色统一走 UI 规范（docs/design/ui-style-guide.md §2）：全界面只用一种青色，
      不再引入紫色/蓝色第二个品牌色。亮暗两套值见下面 --ui-accent / --ui-accent-hover。 */
   --color-brand: var(--ui-accent);
-  --color-danger: #f87171;
-  --color-gold: #e3a25f;
+  --color-danger: var(--ui-danger);
+  --color-gold: var(--ui-warn);
   --color-accent: var(--ui-accent);
   --color-accent-hover: var(--ui-accent-hover);
   --color-accent-soft: var(--ui-accent-soft);

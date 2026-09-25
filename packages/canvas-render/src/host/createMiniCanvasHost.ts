@@ -44,6 +44,7 @@ import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
 } from '../contracts/canvasInteractionSettings'
+import { defineThemePaletteSettings, installThemePalette } from './themePaletteSettings'
 import type { PluginManifest } from './pluginManager'
 
 /** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
@@ -231,6 +232,11 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     )
   }
 
+  // —— 主题色板（「常规/主题配色」+「常规/暗色主题配色」）：每个可配置颜色**亮/暗各一格** ——
+  // 与上面交互配置同一套语义：渲染宿主级声明（scope='canvas-render'），热卸业务插件不回收；
+  // 时序也一致：在 settingsPersist.restore 之前 define，用户已保存的配色能在 define 时命中为初值。
+  defineThemePaletteSettings(interactionSettings)
+
   // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）已收进基础插件（canvasBasePlugin.apply 里的
   // ctx.effect → registerCanvasCommands），宿主不再重复注册 —— 再注册会撞命令 id 抛错。
 
@@ -239,6 +245,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 注入的保存快照能在 define 时命中为初值（若宿主关掉 persistSettings，桥缺席 → 不 restore）。
   const settingsPersist: SettingsPersistService | undefined = base.services.settingsPersist
   if (settingsPersist) await settingsPersist.restore()
+
+  // 色板落值：把"用户改过的那些格"写进 <html> 内联 CSS 变量（没改过的不写，CSS 侧默认值生效）。
+  // 这步必须在 restore() 之后 —— 否则用户上次存的配色要等下一次改动才可见。
+  const disposeThemePalette = installThemePalette(interactionSettings)
 
   // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
   // 否则用户删光节点后刷新会重新长出默认 seed。
@@ -295,6 +305,8 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
       // 停用前先把脏队列捕获进 flush 的批量快照（同步完成），再停内核，避免最后未落盘的写入丢失。
       // flush 会同步把 dirty 快照进本地 batch，故即使调用方不 await，数据也已进入落盘流程。
       void save.flush()
+      // 色板：解除订阅 + 清掉内联覆盖（否则"幽灵变量"会挡住下一个主题）
+      disposeThemePalette()
       settingsPersist?.dispose()
       resources.dispose()
       // P1-16：停用即清理 window 暴露的 API 句柄（防旧画布残留可被误调）
