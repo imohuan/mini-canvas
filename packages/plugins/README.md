@@ -50,8 +50,8 @@ export const nodeTextPlugin: PluginModule = {
   `registerNodeType` 交出去，内核渲染壳(BaseNode)只负责槽位。依赖方向恒为 插件→内核。
 - `registerNodeType` 一次写两处：`doc`(数据；5c 起旧的 `nodeStore` 服务名已下线) +
   `nodeRegistry`(展示)，宿主不再手 seed 段组件。
-- 段组件要调插件服务，经内核注入令牌 `HOST_KEY` 拿宿主句柄再 `host.ctx.get('text')`，
-  **不反向依赖宿主**（令牌已上收到渲染层 `contracts/contentBridge.ts`）。
+- 段组件在渲染子树内，用 `useCanvasRender()` 拿 `ctx`（`ctx.get('doc')` / `ctx.get('text')` 等），
+  **不反向依赖宿主**，也不需要自建注入令牌。
 
 > **位置名只有十个区域词**（设计文档 §五）：`in` / `title` / `out:top` / `out:bottom` /
 > `out:left` / `out:right` / `on:top` / `on:bottom` / `over:inset` / `over:outset`。
@@ -78,7 +78,7 @@ import { APP_PLUGINS } from './assembly'
 ## 四、新增一个节点插件的 checklist
 
 1. 复制 `plugin-node-text` 目录为 `plugin-node-<type>`，改 `package.json` 的 name。
-2. 写 `<Type>Content.vue`（展示/编辑该类型内容；需要服务就 `inject(HOST_KEY)` 后 `ctx.get('你的服务')`）。
+2. 写 `<Type>Content.vue`（展示/编辑该类型内容；需要服务就 `useCanvasRender()` 拿 `ctx` 后 `ctx.get('你的服务')`）。
 3. 写 `<Type>NodePlugin.ts`：`registerNodeType` 注册 + 可选 `ctx.inject('<type>', service)` + 建节点逻辑。
 4. 宿主 `packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 数组里加它（若想在成品应用里看到）。
 5. `pnpm install` 认到新包；`pnpm -C packages/plugins/<你的包> typecheck` 干净。

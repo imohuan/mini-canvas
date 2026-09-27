@@ -74,6 +74,42 @@ docs/plans/2026-09-27-port-zone-default-decision-brief.md。
 
 至此 docs/plans/2026-09-27-canvas-plugin-context-boundaries.md 的 T01 至 T10 全部完成。
 
+### 追加（2026-09-28，全量 API 迁移 + 作者 SDK 类型收口 + 兼容面清理）
+
+用户要求：**所有插件改成最新 API、不要任何兼容代码**，并核对执行计划 T01–T10。逐条落地：
+
+1. **迁移残漏修复**（f036634 / 4739928）：0786bd4 的全插件迁移留下两处回归与两处漏改：
+   - `VideoTopToolbar.vue` 上传回调的多行 `ctx.get<{...}>(` 只换了首行 → 破坏 SFC 语法（video 与
+     packages/ui 的装配测试同时红）；改为 `ctx.tryGet('resources')`。
+   - `alignGuideConfig.test.ts` 的 ctx 桩缺 `tryGet`（生产已改 `tryGet`）。
+   - `BaseNode.vue` 仍在解构已删除的 `viewport` / `updateNodeVisualSize` → 统一改走 `flow` facade；
+     同步 3 个 SSR 测试桩（补 `flow` 对象与 `tryGet`）。
+
+2. **作者 SDK 类型收口**（c4b9d0f）：这是用户"插件只需一个 canvas-base 类型入口"诉求里此前
+   **没做到位**的一环。服务名 → 类型的唯一事实源过去被拆在两层：数据服务声明在 canvas-data，
+   渲染服务（`nodeLayout`/`viewport`）**只在 canvas-render declare**。于是只依赖 canvas-base 的
+   纯逻辑插件（canvas-export / cloud-save / align-arrange…）拿不到这两个服务类型，只能手写
+   `ViewportPort` / `NodeLayoutPort` 窄端口（类型对错靠人抄），或为两个名字 import 整个渲染包。
+   做法：新增 `canvas-data/src/canvas/renderServiceContracts.ts`（`NodeLayoutContract` /
+   `ViewportContract` + `ViewportState`/`FlowPoint`/`LayoutRect`，零 Vue/零 VueFlow/零实现细节），
+   在 `serviceTypes.ts` 登记进 `Services` 与 `Context`；canvas-render 删重复 declare、改为
+   `implements` 契约；canvas-base 重导出契约。全插件清理内置服务的显式泛型残留与由此多余的窄端口。
+   插件自有服务（text/panorama3d/group/mini-map/…）仍保留显式泛型——这是新 API 允许的。
+
+3. **兼容面清理**（5f571ae）：核对全仓后删除**零生产消费方**的旧兼容面：
+   六个旧渲染注入令牌（`HOST_KEY`/`NODE_REGISTRY_KEY`/`NODE_WRITE_KEY`/`CANVAS_PARAMS_KEY`/
+   `EDGE_VISUAL_KEY`/`EDGE_SELECTION_KEY`/`DEBUG_KEY`）、`contentBridge.ts` 整文件、
+   `geometry.ts` 的 `SnapRatios`/`DEFAULT_SNAP_RATIOS`、CanvasHost 失效的 `minZoom`/`maxZoom` props、
+   以及 `CAPABILITY_BAG_KEY` 的对外导出。
+
+**验证基线（2026-09-28 实测）**：kernel 212 / canvas-data 328 / canvas-render 396 / canvas-base 6 /
+ui 42 / 24 个插件包合计 **1350**；typecheck 全包 0 错（`ui` 仅剩迁移前既有的 17 条，本次未新增）；
+浏览器：UI e2e **40/40**、多选回归 **22/22**、主题色板 **19/19**、视觉回归 **6/6**。
+
+文档同步：`docs/代码开发/canvas-render/05-渲染上下文与content组件.md`（原"六注入令牌"篇重写为
+"渲染上下文"，旧令牌枚举全部移除）、`01-包定位与整体架构.md`、`03-CanvasHost与CanvasSurface.md`、
+`docs/plugin-dev/07-into-canvas.md`、`packages/plugins/README.md`。
+
 ### 最近完成（2026-09-25，主题配色「两格制」+ 全仓去硬编码色）
 
 **用户问题**："一个连接线颜色我只能设一种 —— 设成灰色，暗色主题上就没法看"。

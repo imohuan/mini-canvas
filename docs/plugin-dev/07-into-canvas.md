@@ -156,7 +156,7 @@ store.get('placeholder')     // 读当前值
   `{ name, inject?, Config?, apply }` 就能被 `manager.install` 或 `applyManifest` 装进任何画布。
 - **看真实可复用样板**：`packages/plugins/` 下 text / image / theme-default / mini-map 等包。
 - **想给节点做精致 UI**：用 .vue 写 `in` 区域组件，参照 `plugin-node-text/src/TextContent.vue`；
-  节点组件会收到 `{ id, data }` props，需要调服务就 `inject(HOST_KEY)` 后 `host.value.ctx.get('…')`
-  （新组件用 `useCanvasRender().ctx`，见 `docs/代码开发/canvas-render/05-*`）。
+  节点组件会收到 `{ id, data }` props，需要调服务就用 `useCanvasRender().ctx` 后 `ctx.get('…')`
+  （旧 `HOST_KEY` 注入令牌已删除，见 `docs/代码开发/canvas-render/05-*`）。
 
 祝你写出自己的画布插件 🎉。

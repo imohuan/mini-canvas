@@ -140,6 +140,7 @@ CanvasHost 自身在 setup 期就要 provide，但那时 ctx 还没建好，只�
 const renderCtx: CanvasRenderContext = {
   ctx: host.ctx,           // 裸内核上下文
   host,                    // 裸宿主句柄
+  flow,                    // 画布 Flow/DOM 能力面（有就绪状态；视口/坐标/视觉写读都在这里）
   registry: props.registry,
   nodeWrite: props.nodeWrite,
   handleParams: props.handleParams,
@@ -149,25 +150,15 @@ const renderCtx: CanvasRenderContext = {
   interaction: props.interaction,          // 画布交互状态 —— 见 10 号专档
   debug: props.debugVisual,
   snapZone: props.snapZone,
-  viewport, paneRect, pane, rootEl, rendererEl,     // 只读数据源 / 坐标基准
   renderNodes, renderEdges,                          // 当前渲染态只读快照
   visibleRect, visibleNodes,
-  screenToFlow, flowToScreen,
-  updateNodeVisual, updateNodeVisualSize,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
 
-// 旧令牌兼容（同引用）：HOST_KEY 历史上是 Ref 形态，这里包成 shallowRef(host)
-provide(NODE_REGISTRY_KEY, props.registry)
-provide(NODE_WRITE_KEY, props.nodeWrite)
-provide(CANVAS_PARAMS_KEY, props.handleParams)
-provide(EDGE_VISUAL_KEY, props.edgeVisual)
-provide(EDGE_SELECTION_KEY, props.edgeSelection)
-provide(HOST_KEY, shallowRef(host))
 ```
 
 > 关键：`RENDER_CONTEXT_KEY` 里 ctx/host 是**裸值**（非 Ref 非空），渲染组件 setup 里直接 `ctx.get('doc')`，**零 `.value` 零判空**。这是推荐入口。
-> （`DEBUG_KEY` 也有导出，但 CanvasSurface 目前不逐个 provide 它；调试开关经 `useCanvasRender().debug` 取。）
+ > 渲染子树只有这一个令牌；旧的六个 `*_KEY`（含 `HOST_KEY`）已全部删除，调试开关经 `useCanvasRender().debug` 取。
 
 ### 渲染了什么
 
@@ -316,5 +307,5 @@ CanvasHost 内部用它们做回落：`edgeVisual ?? reactive({ ...DEFAULT_EDGE_
 2. **外观参数传响应式对象才会实时生效**：`edgeVisual` / `handleVisual` / `debugVisual` / `snapZoneVisual` 用 reactive 对象，改动属性会被消费方 computed 追踪。
 3. **`nodeEpoch` 别自己加**：插件热装热卸时 CanvasHost 已自动 bump。
 4. **nodeTypes 组件句柄要用 shallowRef/markRaw**：存的是 .vue 组件对象，ref 深代理会触发 Vue 警告（CanvasHost 已处理）。
-5. **要拿 `ctx` 就读 `useCanvasRender()`**：`HOST_KEY` 那条老路要 `.value` + 判空，新代码不要走。
+5. **要拿 `ctx` 就读 `useCanvasRender()`**：旧的六个 `*_KEY` 注入令牌已删除，一律走这一条路。
 6. **自己手写渲染（不用 CanvasHost）时**：要自己 provide 上下文 + mount VueFlow + 数据↔flow 双向同步——这正是 CanvasHost 替你收编掉的部分。真要用 CanvasHost 就别重复造。
