@@ -8,11 +8,18 @@
  * export default defineNode({ type:'audio', label:'音频', size:{w:200,h:80}, in: AudioNode, create })
  * ```
  */
-import type { Context } from '@mini-canvas/canvas-base'
-import type { NodeRegisterDef } from '@mini-canvas/canvas-base'
+// 类型从画布层直接取，不走本包 package name：包内自引用会形成"包 → 自己"的解析环，
+// 独立打包/类型解析都要多绕一圈（T02）。
+import type { Context, NodeRegisterDef } from '@mini-canvas/canvas-data'
 
-/** ctx.nodes.register 的一次给全定义（段名即区域词；步骤 9 起老段名 content/… 已下线） */
-export interface DefineNodeDef extends Omit<NodeRegisterDef, 'segments'> {}
+/**
+ * ctx.nodes.register 的一次给全定义（段名即区域词；步骤 9 起老段名 content/… 已下线）。
+ *
+ * **字段清单不在这里再抄一遍**：它就是 NodeRegisterDef。抄一份的下场已经踩过 ——
+ * 类型上放行的 icon/resizable/frameless/transparent/segments 在运行时被静默丢掉，
+ * 作者写了不报错也不生效（T02）。
+ */
+export type DefineNodeDef = NodeRegisterDef
 
 /**
  * defineNode —— 声明"一种画布节点"（数据+展示+可选建节点实现）。
@@ -23,18 +30,9 @@ export function defineNode(def: DefineNodeDef) {
     name: def.type,
     inject: [] as string[],
     apply(ctx: Context) {
-      const reg: NodeRegisterDef = {
-        type: def.type,
-        label: def.label,
-        size: def.size,
-        description: def.description,
-        in: def.in,
-        title: def.title,
-        inputs: def.inputs,
-        outputs: def.outputs,
-        create: def.create,
-      }
-      ctx.nodes.register(reg)
+      // 原样转发：NodeRegisterDef 是字段的单一来源，这里不再手写透传清单。
+      // ctx.nodes.register 自己负责 in/title 与 segments 的合并、类型能力与连接声明的落表。
+      ctx.nodes.register({ ...def })
     },
   }
 }

@@ -13,13 +13,15 @@
     "./*": "./src/*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0"
   }
 }
