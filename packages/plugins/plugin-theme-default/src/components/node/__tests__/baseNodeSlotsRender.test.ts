@@ -79,9 +79,12 @@ function renderCtx(
     interaction: { isNodeDragging: refOf(false), isSelecting: refOf(opts.selecting === true) },
     debug: { handleDebug: false, connectionSnapDebugVisible: false },
     snapZone: {},
-    viewport: refOf({ zoom: opts.zoom ?? 1, x: 0, y: 0 }),
     visibleRect: refOf(null),
-    updateNodeVisualSize: () => {},
+    flow: {
+      viewport: refOf({ zoom: opts.zoom ?? 1, x: 0, y: 0 }),
+      updateNodeVisualSize: () => {},
+      getNodeRenderPosition: () => undefined,
+    },
   } as unknown as CanvasRenderContext
 }
 

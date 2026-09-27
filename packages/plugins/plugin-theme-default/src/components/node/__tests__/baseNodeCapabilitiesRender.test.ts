@@ -107,9 +107,12 @@ function renderNode(
     interaction: { isNodeDragging: refOf(false), isSelecting: refOf(false) },
     debug: { handleDebug: false, connectionSnapDebugVisible: false },
     snapZone: {},
-    viewport: refOf({ zoom: 1, x: 0, y: 0 }),
     visibleRect: refOf(null),
-    updateNodeVisualSize: () => {},
+    flow: {
+      viewport: refOf({ zoom: 1, x: 0, y: 0 }),
+      updateNodeVisualSize: () => {},
+      getNodeRenderPosition: () => undefined,
+    },
   } as unknown as CanvasRenderContext
   const app = createSSRApp({
     setup() {

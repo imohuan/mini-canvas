@@ -46,7 +46,9 @@ defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈/内核上下文
 // visibleRect = 当前可视区（flow 坐标）：进编辑时判断要不要挪视图；未挂载为 null，判定自动跳过
-const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize, visibleRect, flow, viewport } = useCanvasRender()
+const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, visibleRect, flow } = useCanvasRender()
+// 视口 / 视觉尺寸写回统一走 flow facade（旧渲染上下文字段已下线）
+const viewport = flow.viewport
 
 const type = computed(() => props.type)
 
@@ -173,7 +175,7 @@ const card = useNodeCardSize({
   zoom: () => zoom.value,
   // 拖拽实时把新尺寸同步进 VueFlow 内部并重算：否则端口位置/相连边端点会停在旧尺寸
   // （渲染层 updateNodeVisualSize = updateNode(style) + updateNodeInternals）
-  onVisualSize: (w, h) => updateNodeVisualSize(props.id, w, h),
+  onVisualSize: (w, h) => flow.updateNodeVisualSize(props.id, w, h),
 })
 const cardWidth = card.cardWidth
 const cardHeight = card.cardHeight
