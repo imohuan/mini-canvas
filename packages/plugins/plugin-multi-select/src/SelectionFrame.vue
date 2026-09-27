@@ -44,7 +44,10 @@ import {
   createCapabilityCache,
   capabilityField,
 } from '@mini-canvas/canvas-render'
-import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
+// T06：端口与拖线临时线不直接依赖默认主题包，改为从主题可替换的 UI 目录按名取
+// （movingHandle / connectionLine）。换主题时这两个件跟着一起换，本插件零改动；
+// 目录里没有时组件为 undefined，模板用 v-if 兜住（不白屏）。
+import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { validateConnection, typeConnectionDef } from '@mini-canvas/canvas-data'
 import type { SelectionService, DocService, CanvasNode, CanvasNodeType, NodePatchEntry, AddEdgeRequest } from '@mini-canvas/canvas-data'
@@ -81,6 +84,10 @@ import { BoxSelectClickGuard } from './boxSelectGuard'
 import { selectionRegionEntries } from './selectionRegion'
 
 const { viewport, ctx, updateNodeVisual, pane, interaction, rootEl, handleParams, connectionState, screenToFlow, snapZone } = useCanvasRender()
+// 组件名字沿用模板里的写法（script setup 会把 ref 在模板中自动解包）。
+// 目录缺件时它们是 undefined：模板里已用 showBatchHandles / guideLines 兜住不会白屏。
+const MovingHandle = useUiComponent('movingHandle')
+const ConnectionLine = useUiComponent('connectionLine')
 
 // 批量连线端口的几何/外观参数：与节点端口同源（同一份 handleParams = 主题配置），
 // 所以多选框上的端口和节点上的端口看起来完全一致。

@@ -12,6 +12,9 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+// T06：多选已改为从 UI 目录按名取端口/拖线件。测试注入**真实主题实现**（devDependency），
+// 这样"与节点端口同款"的类名断言仍验的是真件，而不是自造的假桩。
+import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
 import SelectionFrame from '../SelectionFrame.vue'
 import { MULTI_SELECT_FRAME_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
 
@@ -29,6 +32,18 @@ type SelectionRegionEntry = { id: string; order: number; value: { component: unk
 type SelectionRegionField = { list(key: string): SelectionRegionEntry[]; subscribe(): { dispose(): void } }
 function selectionRegionField(entries: SelectionRegionEntry[] = []): SelectionRegionField {
   return { list: (key: string) => (key === 'out:top' ? entries : []), subscribe: () => ({ dispose() {} }) }
+}
+
+/** UI 目录桩：按名给出组件（多选只取 movingHandle / connectionLine 两个名字） */
+function uiCatalogField(): { top(name: string): { id: string; value: unknown } | undefined; subscribe(): { dispose(): void } } {
+  const byName: Record<string, unknown> = {
+    movingHandle: MovingHandle,
+    connectionLine: ConnectionLine,
+  }
+  return {
+    top: (name: string) => (name in byName ? { id: 'default', value: byName[name] } : undefined),
+    subscribe: () => ({ dispose() {} }),
+  }
 }
 
 /** 组件在渲染期订阅的渲染层事件名（断言拖拽链路接上了用） */
@@ -74,8 +89,11 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
-      registryOf: (kind: string) =>
-        kind === 'selection/region' && regionField ? regionField : selectionRegionField(),
+      registryOf: (kind: string) => {
+        if (kind === 'ui') return uiCatalogField()
+        if (kind === 'selection/region' && regionField) return regionField
+        return selectionRegionField()
+      },
       // 拖拽态由组件自己订阅渲染层拖拽事件维护（见 SelectionFrame 的 nodeDragging）。
       // 这里记录订阅名，供测试断言"链路接上了"。
       on: (name: string) => {

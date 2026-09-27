@@ -16,7 +16,22 @@ import { useCanvasRender } from './renderContext'
 export type UiComponentHandle = unknown;
 
 /** 目录里常用的名字（**约定俗成，不是封闭枚举**——主题可登记自定名字） */
-export const UI_NAMES = ['button', 'dropdown', 'select', 'slider', 'toolParamField', 'color'] as const;
+/**
+ * 目录里常用的名字（**约定俗成，不是封闭枚举**——主题可登记自定名字）。
+ *
+ * movingHandle / connectionLine：节点端口与拖线临时线的"外观件"。业务插件（如多选）
+ * 也要画同款端口与临时线，但它们不该依赖某个具体主题包 —— 从目录按名取即可（T06）。
+ */
+export const UI_NAMES = [
+  'button',
+  'dropdown',
+  'select',
+  'slider',
+  'toolParamField',
+  'color',
+  'movingHandle',
+  'connectionLine',
+] as const;
 
 /**
  * 下拉选项的最小形状（**主题无关**）：与 theme-default 的 SelectOption 同构，

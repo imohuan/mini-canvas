@@ -28,6 +28,7 @@ import {
 import CustomEdge from "./components/edge/CustomEdge.vue";
 import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
+import MovingHandle from "./components/node/MovingHandle.vue";
 import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue";
 import { registerEventName } from "@mini-canvas/canvas-base";
 import {
@@ -659,6 +660,10 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("slider", PrecisionSlider, { id: "default" });
   ui.add("toolParamField", ToolParamField, { id: "default" });
   ui.add("color", ColorField, { id: "default" });
+  // 端口与拖线临时线的外观件也进目录（T06）：业务插件（多选）按名取同款组件，
+  // 于是它们不必再直接依赖本主题包；换主题时这些件跟着一起换。
+  ui.add("movingHandle", MovingHandle, { id: "default" });
+  ui.add("connectionLine", ConnectionLine, { id: "default" });
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
   ctx.theme.register("settingsPanel", PluginSettingsDialog, {
