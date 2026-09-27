@@ -35,6 +35,8 @@ import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
 import { applyNodeVisualSize, type NodeVisualSyncApi } from './nodeVisualSync'
+import { createCanvasFlowController } from '../contracts/canvasFlowApi'
+import type { ViewportBackend } from '../viewport/viewportService'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 
@@ -98,6 +100,13 @@ if (!host) {
 const hostCtx = host.ctx
 // VueFlow 实例（viewport/screen-flow/flow-screen 等视图能力的来源；在 provide renderCtx 前拿到）
 const vfApi = useVueFlow()
+
+/**
+ * 有就绪状态的 Flow 能力面（T04）：CanvasSurface 一 setup 就建它（detached），
+ * VueFlow 能力在 onMounted 里 attachFlow，DOM 锚点同处 attachDom。
+ * 未挂载期间对它的调用会抛明确错误（不返回默认坐标/不做 no-op）。
+ */
+const flow = createCanvasFlowController()
 
 // —— 只读数据源 refs（供 renderCtx 暴露给插件；宿主/本组件维护，插件只读）——
 // 渲染态节点/边：随 props.nodes/edges(宿主订阅 store 自动重灌)同步，包成稳定 ref 供上下文消费方响应式读
@@ -186,6 +195,7 @@ const renderCtx: CanvasRenderContext = {
   interaction: props.interaction,
   debug: props.debugVisual,
   snapZone: props.snapZone,
+  flow,
   viewport: viewportRef,
   pane: paneEl,
   paneRect: paneRectRef,
@@ -217,6 +227,8 @@ const measure = useNodeMeasure({
 })
 onBeforeUnmount(() => {
   measure.stop()
+  // 销毁 Flow 能力面：此后任何调用都抛 NotReady（不再指向已卸载的 VueFlow 实例）
+  flow.dispose()
 })
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM（实例根内查询，多宿主页面不串线），捕获以量屏幕坐标
@@ -226,8 +238,9 @@ onMounted(() => {
   // 旧写法恒为 null 会让节点实测尺寸永不注入 → 自动布局按默认尺寸错算）
   rendererEl.value = resolveMeasureContainer(flowRoot)
   paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
-  // 视口服务接线：把 VueFlow 能力 attach 到 host.viewport（工厂注入的空壳），插件可 ctx.get('viewport')
-  props.host?.viewport.attachBackend({
+  // VueFlow 后端：一个适配对象，同时喂给旧 ViewportService（ctx.get('viewport')）与新的
+  // Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
+  const backend: ViewportBackend = {
     getViewport: () => {
       const vp = (vfApi.viewport as unknown as { value?: { x: number; y: number; zoom: number } }).value
       return vp ? { x: vp.x, y: vp.y, zoom: vp.zoom } : { x: 0, y: 0, zoom: 1 }
@@ -250,10 +263,26 @@ onMounted(() => {
     // setViewport = 程序化定位（小地图拖拽/自动布局聚焦/框选平移等"跟手"场景）→ 必须即时生效。
     // 带 duration 会让每帧拖拽都重启一次 200ms 补间动画，严重卡顿（老版 PluginContext.setViewport 即无动画）。
     setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v),
+    // 拖拽中视觉写位置（对齐吸附/多选整组移动用；不落盘）
+    updateNodeVisual: (id: string, position: { x: number; y: number }) => {
+      vfApi.updateNode(id, { position })
+    },
     // —— 实例级 DOM（多宿主页面不串线：一律在本实例根内查询）——
     getRootEl: () => rootEl.value,
     getRendererEl: () => rendererEl.value,
     getPaneEl: () => paneEl.value,
+    queryNodeEl: (nodeId: string) =>
+      rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+  }
+  // 视口服务接线（旧入口保留）：把 VueFlow 能力 attach 到 host.viewport
+  props.host?.viewport.attachBackend(backend)
+  // Flow 能力面（T04）：实例就绪（flow-ready）→ DOM 锚点捕获（dom-ready）
+  flow.attachFlow(backend)
+  flow.attachNodeVisual(vfApi as unknown as NodeVisualSyncApi)
+  flow.attachDom({
+    rootEl: () => rootEl.value,
+    rendererEl: () => rendererEl.value,
+    paneEl: () => paneEl.value,
     queryNodeEl: (nodeId: string) =>
       rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
   })

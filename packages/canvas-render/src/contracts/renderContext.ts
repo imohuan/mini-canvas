@@ -37,6 +37,7 @@ import type { FlowNode } from '../host/canvasHostCore'
 import type { ViewportState } from '../viewport/viewportService'
 import type { FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect } from '../layout/nodeLayout'
+import type { CanvasFlowApi } from './canvasFlowApi'
 
 /** 渲染宿主提供给其子树(VueFlow 内插件组件)的整包上下文（boot 后提供，值均就绪） */
 export interface CanvasRenderContext {
@@ -44,6 +45,14 @@ export interface CanvasRenderContext {
   ctx: Context
   /** 宿主句柄（ctx 的超集：save/nodeStore/selection/command/history/nodeRegistry/themeRegistry/stop） */
   host: CanvasHostHandle
+  /**
+   * 有就绪状态的画布 Flow/DOM 能力面（T04）。
+   *
+   * 与散落在本上下文里的 viewport/screenToFlow/queryNodeEl 等旧字段并存（保留兼容）；
+   * 新代码优先用它：它把"实例已挂载 / DOM 已捕获 / 已销毁"讲清楚，未就绪时抛明确错误，
+   * 不再用默认坐标或空操作掩盖"还没挂载"。
+   */
+  flow: CanvasFlowApi
   /** 节点展示注册表（content/toolbar 段组件） */
   registry: NodeRegistry
   /** 标题就地重命名写回（宿主总给，按需用） */
@@ -120,4 +129,3 @@ export function useCanvasRender(): CanvasRenderContext {
   }
   return ctx
 }
-

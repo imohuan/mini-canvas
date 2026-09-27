@@ -30,6 +30,8 @@ export interface ViewportBackend {
   fitView(padding?: number): void
   setCenter(x: number, y: number, zoom?: number): void
   setViewport(v: ViewportState): void
+  /** 拖拽中把单节点视觉位置写进 VueFlow（不触发 store）；可选（假后端可省） */
+  updateNodeVisual?(id: string, position: { x: number; y: number }): void
   /** 本画布实例根 DOM（多宿主不串线；未挂载 null） */
   getRootEl?(): HTMLElement | null
   /** VueFlow renderer DOM（节点层容器；导出/量测锚点） */
@@ -108,7 +110,6 @@ export class ViewportService {
     return this.requireBackend()?.queryNodeEl?.(nodeId) ?? null
   }
 }
-
 
 
 
