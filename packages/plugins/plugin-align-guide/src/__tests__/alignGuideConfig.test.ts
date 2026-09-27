@@ -72,7 +72,7 @@ describe('alignGuideConfigFrom（apply/组件实时读当前值）', () => {
   })
 
   it('settings 未就绪 / 未声明该项 → 回落默认开（插件永不因读不到配置而哑掉）', () => {
-    const bare = { get: () => undefined } as unknown as Context
+    const bare = { get: () => undefined, tryGet: () => undefined } as unknown as Context
     expect(alignGuideConfigFrom(bare).alignGuideEnabled).toBe(true)
   })
 })

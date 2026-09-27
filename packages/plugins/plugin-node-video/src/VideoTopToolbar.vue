@@ -96,9 +96,7 @@ async function onFileChange(e: Event): Promise<void> {
   try {
     await uploadVideo(ops, props.id, file, undefined, (url, blob) => {
       // 视频走 objectURL：登记进宿主资源表，删除节点后由引用扫描延迟回收（与图片同语义）
-    const resources = ctx.tryGet('resources')
-        'resources',
-      )
+      const resources = ctx.tryGet('resources')
       return resources?.register({ kind: 'video', url, resource: blob })
     })
   } finally {
