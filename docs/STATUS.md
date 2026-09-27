@@ -42,6 +42,25 @@ ui 42 / 24 个插件包合计 1350；UI e2e **40/40**、多选回归 22/22、主
 已知遗留（非本轮引入）：plugin-auto-layout / clipboard / file-drop / multi-select / node-image /
 node-text / theme-default 的 `typecheck` 在改动前就有报错（多为 .vue 类型导出与测试文件），本轮未新增。
 
+### 追加（2026-09-27 第二轮，typecheck 全仓清零）
+
+e6a36e5：把各插件包 typecheck 从 7 个失败清到 0（上面那条"已知遗留"不再成立）：
+
+1. 基础服务直访类型：doc/selection/resources/save/command/nodeFactory/nodeRegistry/themeRegistry
+   也声明到 Context（ctx.doc 等直访），并删掉 6 个插件里逐个 declare 的重复声明。注意 settings
+   不在此列：ctx.settings 是能力段糖（define/set/…），与 ctx.get('settings') 的原始 SettingsStore
+   形状不同，重复声明会接口冲突。
+2. css shim：canvas-render 的 index.ts 顶部 import styles/ui-theme.css，消费包的 tsconfig include
+   只覆盖自身 src，tsc 跟随依赖时报 TS2882。与 .vue shim 同一处理，各插件 env.d.ts 补一条即可。
+3. .vue 具名类型导出只有 vue-tsc 认：theme-default 把 DropdownTrigger/SelectOption 挪进
+   components/ui/types.ts，普通 tsc（multi-select/node-image/node-text 的 typecheck 随依赖解析到它）
+   不再报 no-exported-member。
+4. toolParamField 测试的组件桩改 defineComponent（消除 this 隐式 any）。
+
+**验证基线（2026-09-27 第二轮实测）**：typecheck 全部通过（kernel / canvas-data / canvas-render /
+canvas-base / ui / 24 个插件）；测试 kernel 212 / canvas-data 328 / canvas-render 396 /
+canvas-base 6 / ui 42 / 插件 1350；e2e 40/40、多选 22/22、色板 19/19。
+
 ### 最近完成（2026-09-25，主题配色「两格制」+ 全仓去硬编码色）
 
 **用户问题**："一个连接线颜色我只能设一种 —— 设成灰色，暗色主题上就没法看"。
