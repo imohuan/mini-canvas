@@ -61,6 +61,19 @@ e6a36e5：把各插件包 typecheck 从 7 个失败清到 0（上面那条"已�
 canvas-base / ui / 24 个插件）；测试 kernel 212 / canvas-data 328 / canvas-render 396 /
 canvas-base 6 / ui 42 / 插件 1350；e2e 40/40、多选 22/22、色板 19/19。
 
+### 追加（2026-09-27 第三轮，T10 端口几何双源关闭）
+
+4a62618：执行计划 T10 完成，方案 A：宿主回落 DEFAULT_HANDLE_VISUAL 对齐主题默认
+10/0.55/0.8（原 86/0.8/1），核心节点契约 §9-1 记录的双源漂移关闭。选 A 的理由：86 从未成为
+任何真实用户的观感（成品一直走主题值），B 会当场改变全部用户可见体验；不从主题派生宿主回落，
+避免 canvas-render 反向依赖主题包。验证：装主题宿主 10/0.55/0.8 行为不变；theme demo
+（未传 handleVisual，走宿主回落）端口区同为 110px，两场景一致；e2e 40/40、多选 22/22、
+色板 19/19、视觉 6/6；canvas-render 396 / theme 202 / multi-select 145 全绿。用户已保存的
+具体值不受影响（settingsPersist 存具体值）。决策全文见
+docs/plans/2026-09-27-port-zone-default-decision-brief.md。
+
+至此 docs/plans/2026-09-27-canvas-plugin-context-boundaries.md 的 T01 至 T10 全部完成。
+
 ### 最近完成（2026-09-25，主题配色「两格制」+ 全仓去硬编码色）
 
 **用户问题**："一个连接线颜色我只能设一种 —— 设成灰色，暗色主题上就没法看"。
