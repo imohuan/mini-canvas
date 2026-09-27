@@ -24,6 +24,7 @@ import type {
   PluginClassLike,
   PluginModule,
   PluginScope,
+  Services,
 } from './types'
 import { Lifecycle } from './types'
 import type { State } from './types'
@@ -681,6 +682,9 @@ export class Context implements PluginScope {
    * 本方法用于**可选依赖**：某能力缺失插件也能跑时，跳过 inject、在使用处探测 ——
    * 缺服务返回 `undefined`（不抛）。即"能不用就不用"的是本方法，而不是 inject。
    */
+  /** 按服务名推导（Services 里声明过时）；扩展/可选依赖走显式泛型重载 */
+  get<K extends keyof Services>(name: K): Services[K]
+  get<Service = unknown>(name: string): Service
   get<Service = unknown>(name: string): Service {
     const builtin = this.builtinService(name)
     if (builtin !== undefined) return builtin as Service
@@ -697,6 +701,9 @@ export class Context implements PluginScope {
    * `get` 的显式别名：缺服务返回 undefined（不抛）。
    * 供作者把"这里是可选依赖"表达清楚——硬依赖请改在模块顶层写 `export const inject = [...]`。
    */
+  /** 按服务名推导（Services 声明过时）；扩展/可选依赖走显式泛型重载 */
+  tryGet<K extends keyof Services>(name: K): Services[K] | undefined
+  tryGet<Service = unknown>(name: string): Service | undefined
   tryGet<Service = unknown>(name: string): Service | undefined {
     return this.get<Service | undefined>(name)
   }
@@ -1002,6 +1009,10 @@ export class Context implements PluginScope {
         return cleanup
       },
       get: <Service>(name: string): Service => ctx.get<Service>(name),
+      // 类型上 PluginScope 一直声明了 tryGet，但插件视图过去没实现它 —— 插件里
+      // ctx.tryGet(...) 运行时会 "not a function"（类型通过、运行期炸）。补上，
+      // 与根 Context 的语义一致：缺服务返回 undefined，不抛。
+      tryGet: <Service>(name: string): Service | undefined => ctx.tryGet<Service>(name),
       canUninstall: (name: string): CanUninstallResult => ctx.canUninstall(name),
       surface: (): SurfaceReport => ctx.surface(),
       registryOf<T>(kind: string): Registry<T> {

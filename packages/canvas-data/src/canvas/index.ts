@@ -13,6 +13,9 @@ export { createCanvasCapabilityLayer } from './capabilityLayer'
 export { buildCapabilities } from './capabilities'
 export type { NodeRegisterDef, ThemeOccupantOpts, SlotRegisterReq } from './capabilities'
 
+// 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
+import './serviceTypes'
+
 export { Context, canvasCapabilityLayer } from './context'
 
 export { NodeRegistry } from './registry/nodeRegistry'

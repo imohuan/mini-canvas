@@ -323,3 +323,14 @@ declare module '@mini-canvas/canvas-data' {
     viewport: import('./viewport/viewportService').ViewportService
   }
 }
+
+// 同一批渲染层服务也登记进内核 Services（T03）：内核在 canvas-data 之前、
+// 不认识渲染类型，故这两个名由渲染层自己补，才能按名推导（ctx.get('viewport')）。
+declare module '@mini-canvas/kernel' {
+  interface Services {
+    /** 节点布局只读服务（实测尺寸/绝对坐标；render 注入） */
+    nodeLayout: import('./layout/nodeLayout').NodeLayoutService
+    /** 视口服务（render 注入空壳 + CanvasSurface attach 后端） */
+    viewport: import('./viewport/viewportService').ViewportService
+  }
+}

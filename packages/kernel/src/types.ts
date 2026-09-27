@@ -210,7 +210,17 @@ export interface PluginScope extends PluginCapabilities {
    * 缺提供方则停在 PENDING）。本方法用于**可选依赖**：能力缺失时插件仍能跑，则跳过 inject、
    * 在此探测 —— 缺服务返回 undefined（不抛）。
    */
+  /**
+   * 取服务。两种写法都支持：
+   * - **按服务名推导**（首选）：服务名在 interface Services 里声明过时，返回类型直接由名字决定
+   *   （get('doc') → DocService），不必再手写泛型。
+   * - **显式指定**（扩展服务/可选探测）：get<MyThing>('my-thing')。
+   */
+  get<K extends keyof Services>(name: K): Services[K]
   get<Service = unknown>(name: string): Service
+  /** get 的可选依赖别名：缺服务返回 undefined（按服务名推导同理） */
+  tryGet<K extends keyof Services>(name: K): Services[K] | undefined
+  tryGet<Service = unknown>(name: string): Service | undefined
   /** 嵌套插件（本插件子作用域）。支持类形态（Service 子类）与 PluginModule 对象。 */
   plugin(mod: PluginModule | PluginClassLike): PluginScope
   /**
