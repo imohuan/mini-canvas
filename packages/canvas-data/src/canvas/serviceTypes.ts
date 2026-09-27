@@ -66,8 +66,9 @@ declare module '@mini-canvas/kernel' {
  * Proxy，ctx.doc 运行时等价于 ctx.get('doc')）。此前只登记了 Services，于是 6 个插件各自
  * declare module ... interface Context { doc: DocService } 把同一件事抄了一遍（T03 要消除的重复）。
  *
- * 渲染层注入的 nodeLayout / viewport 由 canvas-render 自行声明（它才知道那两个类型）。
- * 插件自己提供的服务（text/image/group/clipboard/…）仍由各自 declare，那是它们的私有契约。
+ * 渲染层注入的 nodeLayout / viewport 也在本文件登记（用 renderServiceContracts 的纯结构契约），
+ * 与 Services 那批同源。插件自己提供的服务（text/image/group/clipboard/…）仍由各自 declare，
+ * 那是它们的私有契约。
  */
 declare module '@mini-canvas/canvas-data' {
   interface Context {
