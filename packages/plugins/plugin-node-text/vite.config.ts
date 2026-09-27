@@ -16,13 +16,14 @@ export default defineConfig({
       fileName: () => 'plugin-node-text.js',
     },
     rollupOptions: {
-      // plugin-theme-default（通用 UI 组件）与 prosemirror-editor-bundle（富文本编辑器）都是
-      // "宿主只允许一份"的共享运行时：打进插件会造成两份组件/编辑器实例，故与 vue/内核同列 external。
+      // prosemirror-editor-bundle（富文本编辑器）是"宿主只允许一份"的共享运行时：
+      // 打进插件会造成两份编辑器实例，故与 vue/内核同列 external。
+      // 注：T07 起本插件的生产代码不再 import theme-default（UI 走主题可替换目录按名取），
+      // 它只因**测试**装载真实主题而留在 devDependencies。
       external: [
         'vue',
         '@mini-canvas/canvas-data',
         '@mini-canvas/canvas-render',
-        '@mini-canvas/plugin-theme-default',
         'prosemirror-editor-bundle',
       ],
       output: {
@@ -30,7 +31,6 @@ export default defineConfig({
           vue: 'Vue',
           '@mini-canvas/canvas-data': 'MiniCanvasCore',
           '@mini-canvas/canvas-render': 'MiniCanvasRender',
-          '@mini-canvas/plugin-theme-default': 'MiniCanvasPluginThemeDefault',
           'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
         },
       },

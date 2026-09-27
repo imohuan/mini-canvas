@@ -635,13 +635,13 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-theme-default':
-        specifier: workspace:*
-        version: link:../plugin-theme-default
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
@@ -712,13 +712,13 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-theme-default':
-        specifier: workspace:*
-        version: link:../plugin-theme-default
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
@@ -755,9 +755,6 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-theme-default':
-        specifier: workspace:*
-        version: link:../plugin-theme-default
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6

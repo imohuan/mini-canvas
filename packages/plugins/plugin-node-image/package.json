@@ -22,7 +22,6 @@
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/plugin-theme-default": "workspace:*",
     "prosemirror-editor-bundle": "workspace:*"
   },
   "peerDependencies": {
@@ -31,6 +30,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
+    "@mini-canvas/plugin-theme-default": "workspace:*",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",

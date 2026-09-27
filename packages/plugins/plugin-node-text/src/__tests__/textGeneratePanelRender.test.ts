@@ -6,13 +6,15 @@
  * 2. 面板里有输入框 + 模型/参数/模板下拉 + 发送按钮，且下拉**不是原生 select**（用项目统一 Select）；
  * 3. 贴边距离来自配置（工具栏底部偏移），读不到回落 6px。
  */
-import { describe, it, expect } from 'vitest'
+import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import type { ToolDef } from '@mini-canvas/kernel'
 import { RegistryImpl } from '@mini-canvas/kernel'
-import { NodeToolbarButton, Select, ToolParamField } from '@mini-canvas/plugin-theme-default'
+import { Context } from '@mini-canvas/canvas-data'
+// 只导入主题**插件**（走注册流程），不导入它的实现组件（T07）
+import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import TextGeneratePanel from '../TextGeneratePanel.vue'
 
 const DEMO_TOOL: ToolDef = {
@@ -38,6 +40,22 @@ const DEMO_TOOL: ToolDef = {
 }
 
 /**
+ * UI 目录来自**真实主题插件的注册流程**（T07）：不再从主题包 import 组件实现，
+ * 而是装载主题插件、从它登记的 ui 目录里按名取。这样断言锁的是"主题实际登记了什么"。
+ */
+async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }> {
+  const ctx = new Context()
+  ctx.plugin(themeDefaultPlugin)
+  await ctx.start()
+  // 直接返回注册场视图（含 top/subscribe），与生产 useUiComponent 的用法同形
+  return ctx.registryOf('ui')
+}
+let uiFieldShared: { top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }
+beforeAll(async () => {
+  uiFieldShared = await themeUiField()
+})
+
+/**
  * 最小渲染上下文：只桩出组件真正用到的几项。
  * selection **必须带 ids** —— 控制栏的显隐判定是"恰好选中一个且是我"，只看 has 是过去的 bug。
  */
@@ -47,8 +65,6 @@ function renderCtx(
   settings?: { get(key: string): unknown },
 ): CanvasRenderContext {
   const selected = new Set(selectedIds)
-  /** ui 目录（§4.5）：生产由 theme-default 登记；测试塞真组件，断言才锁得住真实渲染 */
-  let uiField: RegistryImpl<unknown> | undefined
   const services: Record<string, unknown> = {
     selection: { ids: selected, has: (id: string) => selected.has(id), onChange: () => () => {} },
     text: { editText: () => {}, duplicateTextNode: () => '', patchTextData: () => {} },
@@ -59,16 +75,8 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
-      registryOf: (kind: string) => {
-        if (kind !== 'ui') return new RegistryImpl()
-        if (!uiField) {
-          uiField = new RegistryImpl<unknown>()
-          uiField.add('button', NodeToolbarButton)
-          uiField.add('select', Select)
-          uiField.add('toolParamField', ToolParamField)
-        }
-        return uiField
-      },
+      // UI 目录来自真实主题注册流程（见上方 themeUiField）
+      registryOf: (kind: string) => (kind === 'ui' ? uiFieldShared : new RegistryImpl()),
       tools: { list: () => tools, invoke: async () => ({ ok: false, error: '测试里不真调工具' }) },
     },
     viewport: { value: { zoom: 1 } },
