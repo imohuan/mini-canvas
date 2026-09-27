@@ -8,8 +8,12 @@
  * 这里只做**一处**集中声明：服务名 → 类型。运行时一行不改（服务名与实例照旧由宿主注入）；
  * 扩展服务仍可各自 declare module 补充。
  *
- * 只登记数据层与画布语义这几个基础服务；渲染层注入的 nodeLayout/viewport 由 canvas-render
- * 自行补充（它才知道那两个类型，canvas-data 不认识渲染）。
+ * 登记数据层与画布语义这几个基础服务，外加渲染层两个内置服务（nodeLayout/viewport）的
+ * **纯结构契约**（renderServiceContracts.ts，零 Vue / 零 VueFlow / 零实现细节）。
+ *
+ * 为什么渲染服务的类型也在这里登记：服务名 → 类型必须能被任何只依赖 canvas-base 的逻辑插件
+ * 看到。canvas-render 是 canvas-data 的下游，把类型留在那边，纯逻辑插件就得为了两个名字
+ * import 整个渲染包（或手写窄端口，类型对错全靠人抄）。契约是结构类型，故放上游不引入反向依赖。
  */
 import type { CommandService, SettingsStore } from '@mini-canvas/kernel'
 import type { DocService } from '../docService'
@@ -20,6 +24,7 @@ import type { SaveService } from '../storage/types'
 import type { NodeFactoryService } from './nodeFactory'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { ThemeRegistry } from './registry/themeRegistry'
+import type { NodeLayoutContract, ViewportContract } from './renderServiceContracts'
 
 declare module '@mini-canvas/kernel' {
   interface Services {
@@ -43,6 +48,10 @@ declare module '@mini-canvas/kernel' {
     settings: SettingsStore
     /** 配置持久化桥（宿主关掉持久化时缺席，取用侧用 tryGet 或自行判空） */
     settingsPersist: SettingsPersistService
+    /** 节点布局只读服务（渲染层注入；契约见 renderServiceContracts） */
+    nodeLayout: NodeLayoutContract
+    /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
+    viewport: ViewportContract
   }
 }
 
@@ -78,5 +87,9 @@ declare module '@mini-canvas/canvas-data' {
     nodeRegistry: NodeRegistry
     /** 主题 / 外观注册表 */
     themeRegistry: ThemeRegistry
+    /** 节点布局只读服务（渲染层注入；契约见 renderServiceContracts） */
+    nodeLayout: NodeLayoutContract
+    /** 视口服务（渲染层注入；契约见 renderServiceContracts） */
+    viewport: ViewportContract
   }
 }

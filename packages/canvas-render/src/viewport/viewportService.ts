@@ -6,18 +6,16 @@
  *
  * 本服务定义视口后端最小接口(ViewportBackend)，CanvasHost 把 VueFlow 能力适配进去并注入
  * ctx.get(viewport)（服务名 viewport）；纯逻辑可单测（fake backend 验证语义）。
+ *
+ * 对外类型面见 canvas-data 的 ViewportContract（服务名 → 类型的唯一事实源在作者 SDK 上游）：
+ * 公开给插件的只有读视口 / 控视图 / 坐标换算 / 实例级 DOM 锚点；后端装配口（attachBackend）
+ * 与拖拽期视觉写口（updateNodeVisual / getNodeRenderPosition）是这个类的渲染层内部面，
+ * 不进契约（拖拽视觉读写由 flow facade 承担）。
  */
 
-export interface ViewportState {
-  x: number
-  y: number
-  zoom: number
-}
+import type { ViewportContract, ViewportState, FlowPoint } from '@mini-canvas/canvas-data'
 
-export interface FlowPoint {
-  x: number
-  y: number
-}
+export type { ViewportState, FlowPoint }
 
 /** CanvasHost 把 VueFlow 实例适配成的最小后端（screen-flow 换算 + 视图控制） */
 export interface ViewportBackend {
@@ -44,7 +42,7 @@ export interface ViewportBackend {
   queryNodeEl?(nodeId: string): HTMLElement | null
 }
 
-export class ViewportService {
+export class ViewportService implements ViewportContract {
   private backend?: ViewportBackend
 
   constructor(backend?: ViewportBackend) {
@@ -112,7 +110,6 @@ export class ViewportService {
     return this.requireBackend()?.queryNodeEl?.(nodeId) ?? null
   }
 }
-
 
 
 

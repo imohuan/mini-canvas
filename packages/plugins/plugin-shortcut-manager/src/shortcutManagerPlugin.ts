@@ -17,8 +17,6 @@
  */
 import { reactive } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { SaveService } from '@mini-canvas/canvas-data'
-import type { CommandService } from '@mini-canvas/kernel'
 import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
@@ -31,8 +29,8 @@ export interface ShortcutManagerState extends V2ShortcutManager {
 }
 
 export function apply(ctx: Context): void {
-  const save = ctx.get<SaveService | undefined>('save')
-  const command = ctx.get<CommandService>('command')
+  const save = ctx.tryGet('save')
+  const command = ctx.get('command')
 
   // 持久化 remap 引擎：装配时读回上次 remap 表并批量应用
   const remapEngine = createShortcutRemapEngine(command, save)

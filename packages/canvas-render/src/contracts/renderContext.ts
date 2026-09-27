@@ -47,8 +47,8 @@ export interface CanvasRenderContext {
   /**
    * 有就绪状态的画布 Flow/DOM 能力面（T04）。
    *
-   * 与散落在本上下文里的 viewport/screenToFlow/queryNodeEl 等旧字段并存（保留兼容）；
-   * 新代码优先用它：它把"实例已挂载 / DOM 已捕获 / 已销毁"讲清楚，未就绪时抛明确错误，
+   * 画布级视口 / DOM / 坐标能力都在这里，是唯一入口：它把"实例已挂载 / DOM 已捕获 / 已销毁"讲清楚，
+   * 未就绪时抛明确错误，
    * 不再用默认坐标或空操作掩盖"还没挂载"。
    */
   flow: CanvasFlowApi

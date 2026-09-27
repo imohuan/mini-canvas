@@ -17,7 +17,6 @@ import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
-import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import type { GroupRect, GroupBounds, GroupPadding } from './groupEngine'
 import {
   createGroupId,
@@ -137,7 +136,7 @@ export class GroupService extends Service implements GroupServiceAPI {
   private get doc(): DocService {
     return this.ctx.get('doc')
   }
-  private get layout(): NodeLayoutService {
+  private get layout() {
     return this.ctx.get('nodeLayout')
   }
 
@@ -163,7 +162,7 @@ export class GroupService extends Service implements GroupServiceAPI {
   /** 惰性读 settings（测试裸内核可能没注入 settings，不炸） */
   private currentPaddingOf(): GroupPadding {
     try {
-      const settings = this.ctx.get<{ get(key: string): unknown }>('settings')
+      const settings = this.ctx.tryGet('settings')
       if (settings && typeof settings.get === 'function') {
         return resolveGroupPadding((key) => settings.get(key))
       }

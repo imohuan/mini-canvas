@@ -56,7 +56,7 @@ function renderCtx(
     selection: { ids: selectedIds, has: (id: string) => selectedIds.has(id), onChange: () => () => {} },
   }
   return {
-    ctx: { get: (name: string) => services[name] },
+    ctx: { get: (name: string) => services[name], tryGet: (name: string) => services[name] },
     registry,
     nodeWrite: () => {},
     handleParams: {

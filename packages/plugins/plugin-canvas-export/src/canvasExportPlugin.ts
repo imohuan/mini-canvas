@@ -139,36 +139,14 @@ export interface CanvasExportConfig extends InferConfig<typeof Config> {}
 /** 导出类型（与旧版事件 payload 对齐） */
 type ExportType = 'full' | 'selected'
 
-// ==================== 宿主注入服务的最小结构（只声明用到的部分，不新增依赖） ====================
-
-interface ViewportPort {
-  getViewport(): { x: number; y: number; zoom: number }
-  setViewport(v: { x: number; y: number; zoom: number }): void
-  getRootEl?(): HTMLElement | null
-  getRendererEl?(): HTMLElement | null
-}
-
-interface NodeLayoutPort {
-  getAllRects(): NodeRect[]
-}
-
-/** 读侧端口：ctx.get('doc') 的形状子集（节点/边列表 + 中间态标记） */
-interface DocServicePort {
-  getNodes(): Array<{ id: string; data?: Record<string, unknown> }>
-  getEdges(): Array<{ id: string; source: string; target: string; data?: Record<string, unknown> }>
-}
-
-interface SettingsPort {
-  get(key: string): string | number | boolean | undefined
-}
-
 // ==================== DOM 工具 ====================
 
 /** 取当前画布视口 DOM（VueFlow 渲染约定：整张画布内容在 .vue-flow__viewport 内）。 */
 function getFlowEl(ctx: Context): HTMLElement | null {
-  const vp = ctx.get<ViewportPort | undefined>('viewport')
-  const root = vp?.getRootEl?.() ?? null
-  const renderer = vp?.getRendererEl?.() ?? null
+  // 内置服务名已集中登记类型（T03）：ctx.tryGet 按名推导，不必手写端口结构
+  const vp = ctx.tryGet('viewport')
+  const root = vp?.getRootEl() ?? null
+  const renderer = vp?.getRendererEl() ?? null
   const flowViewport = root?.querySelector<HTMLElement>('.vue-flow__viewport') ?? null
   if (flowViewport) return flowViewport
   return renderer ?? null
@@ -378,7 +356,7 @@ async function renderPane(
 export function apply(ctx: Context) {
   const { selection } = ctx
 
-  const settings = () => ctx.get<SettingsPort | undefined>('settings')
+  const settings = () => ctx.tryGet('settings')
   const numOf = (key: string, fallback: number): number => {
     const v = settings()?.get(key)
     return typeof v === 'number' && Number.isFinite(v) ? v : fallback
@@ -394,9 +372,9 @@ export function apply(ctx: Context) {
 
   /** 收集可导出的节点矩形：丢掉中间态节点（拖线落空白的临时菜单卡不是用户作品，不该进导出图） */
   function collectNodeRects(): NodeRect[] {
-    const layout = ctx.get<NodeLayoutPort | undefined>('nodeLayout')
-    const doc = ctx.get<DocServicePort | undefined>('doc')
-    const rects = layout?.getAllRects?.() ?? []
+    const layout = ctx.tryGet('nodeLayout')
+    const doc = ctx.tryGet('doc')
+    const rects = layout?.getAllRects() ?? []
     if (!doc) return rects
     const byId = new Map(doc.getNodes().map((n) => [n.id, n]))
     return rects.filter((r) => !isTransient(byId.get(r.id)))
@@ -404,8 +382,8 @@ export function apply(ctx: Context) {
 
   /** 收集可导出的连线：同样丢掉中间态边（占位连线） */
   function collectEdges(): Array<{ id: string; source: string; target: string }> {
-    const doc = ctx.get<DocServicePort | undefined>('doc')
-    const edges = doc?.getEdges?.() ?? []
+    const doc = ctx.tryGet('doc')
+    const edges = doc?.getEdges() ?? []
     return edges.filter((e) => !isTransient(e)).map((e) => ({ id: e.id, source: e.source, target: e.target }))
   }
 
@@ -418,7 +396,7 @@ export function apply(ctx: Context) {
       console.warn('[canvas-export] 没有选中节点')
       return
     }
-    const vp = ctx.get<ViewportPort | undefined>('viewport')
+    const vp = ctx.tryGet('viewport')
     const el = getFlowEl(ctx)
     if (!el || !vp) {
       console.warn('[canvas-export] 未找到画布元素 (.vue-flow__viewport)')

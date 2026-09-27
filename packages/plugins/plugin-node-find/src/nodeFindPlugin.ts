@@ -13,23 +13,10 @@
  */
 import { createApp, h } from 'vue'
 import type { PluginModule, Context } from '@mini-canvas/canvas-base'
-import type { ViewportService, NodeLayoutService } from '@mini-canvas/canvas-render'
 import NodeFindOverlay from './NodeFindOverlay.vue'
 
-/**
- * 渲染层服务的直访类型（ctx.viewport / ctx.nodeLayout）。
- *
- * canvas-render 自己声明了这两个属性，但那是它的模块增强：本包 tsconfig 不会自动加载它，
- * 故就地引用一次类型（doc 已在 canvas-data 集中声明，不必重复）。
- */
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    viewport: ViewportService
-    nodeLayout: NodeLayoutService
-  }
-}
-
-/** 类型增强缝：宿主恒在服务上 ctx 直访（doc/viewport/nodeLayout 与 createMiniCanvasHost 注入名一致） */
+// viewport / nodeLayout 的直访类型（ctx.viewport / ctx.nodeLayout）由 canvas-data 集中声明
+// （作者 SDK 上游，见 renderServiceContracts），本包不必再就地 declare。
 export const name = 'node-find'
 export const inject = ['doc', 'viewport', 'nodeLayout'] as string[]
 

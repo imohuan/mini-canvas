@@ -16,9 +16,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import type { ViewportService } from '@mini-canvas/canvas-render'
-import type { ViewportState } from '@mini-canvas/canvas-render'
-import type { NodeLayoutService } from '@mini-canvas/canvas-render'
+import type { ViewportState } from '@mini-canvas/canvas-base'
 import {
   computeContentBounds,
   unionRect,
@@ -41,10 +39,7 @@ const viewport = flow.viewport
 const paneRect = flow.paneRect
 
 // —— 配置（⚙ 设置面板：小地图 mini-map 分组；实时订阅，默认 240x160/灵敏度1，对齐老版）——
-const settings = ctx.get<{
-  get(key: string): string | number | boolean | undefined
-  onChange(cb: (key: string, v: unknown) => void): { dispose(): void }
-} | undefined>('settings')
+const settings = ctx.tryGet('settings')
 const cfg = ref<MiniMapConfig>(miniMapConfigFrom(ctx))
 if (settings) {
   const off = settings.onChange((key) => {
@@ -88,7 +83,7 @@ function measurePane(): void {
 
 /** 收内容节点矩形（过滤 group 容器节点；等价老版 renderNodes 过滤 hidden/group） */
 function collectContentRects(): MiniMapRect[] {
-  const layout = ctx.get<NodeLayoutService | undefined>('nodeLayout')
+  const layout = ctx.tryGet('nodeLayout')
   if (!layout) return []
   const list = renderNodes.value
   const out: MiniMapRect[] = []
@@ -193,7 +188,7 @@ let pendingViewport: ViewportState | null = null
 function flushPan(): void {
   panRaf = 0
   if (!pendingViewport) return
-  const vp = ctx.get<ViewportService>('viewport')
+  const vp = ctx.get('viewport')
   const next = pendingViewport
   pendingViewport = null
   if (vp) vp.setViewport(next)
@@ -215,7 +210,7 @@ function nextViewport(clientX: number, clientY: number): ViewportState {
 
 function onPointerDown(e: PointerEvent): void {
   if (e.button !== 0) return
-  const vpService = ctx.get<ViewportService>('viewport')
+  const vpService = ctx.get('viewport')
   if (!vpService || !mapState.value) return
   const target = e.target as HTMLElement | null
   downOnViewer = !!target?.classList.contains('mini-viewer')
@@ -252,7 +247,7 @@ function endPointer(e: PointerEvent, jumped: boolean): void {
     panRaf = 0
   }
   pendingViewport = null
-  const vp = ctx.get<ViewportService>('viewport')
+  const vp = ctx.get('viewport')
   if (jumped && session && !session.moved && vp) {
     // 点击（无拖动）且不是点在视口框/缩略节点上 → 跳到该 flow 点（保留 zoom）
     const target = e.target as HTMLElement | null

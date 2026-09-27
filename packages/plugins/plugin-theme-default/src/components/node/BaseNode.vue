@@ -260,7 +260,7 @@ function startTitleEdit() {
  * 拿不到 nodeLayout/visibleRect（未挂载/无 DOM 的测试环境）时静默跳过，不影响编辑本身。
  */
 function focusNodeIfNeeded(): void {
-  const layout = ctx?.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
+  const layout = ctx?.tryGet('nodeLayout')
   const rect = layout?.getNodeRect(props.id)
   const view = visibleRect?.value
   if (!rect || !view) return
@@ -292,12 +292,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onTitleEditKeydown
 
 // ============ 段组件路由（未注册段 = 不渲染/默认）============
 // —— 选中态读取：多选相关显隐要用；走内核 selection（选中单源），不依赖 VueFlow 内部态 ——
-interface SelectionPeek {
-  readonly ids: ReadonlySet<string>
-  onChange(cb: () => void): () => void
-}
 const selTick = ref(0)
-const selectionPeek = ctx?.get<SelectionPeek | undefined>('selection')
+const selectionPeek = ctx?.tryGet('selection')
 const selOff = selectionPeek?.onChange(() => void (selTick.value += 1))
 onBeforeUnmount(() => selOff?.())
 /** 我是否在选中集里 */

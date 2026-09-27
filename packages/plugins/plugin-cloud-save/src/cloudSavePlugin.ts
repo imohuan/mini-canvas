@@ -245,10 +245,10 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
   const deps: Deps = {
     save: ctx.get('save'),
     // 数据读写统一走 doc 门面（§4.1）；viewport 不是 doc 的一部分，仍单独取
-    graph: ctx.get<GraphDocumentService | undefined>('doc') ?? undefined,
-    nodeStore: ctx.get<Deps['nodeStore'] | undefined>('doc') ?? undefined,
-    viewport: ctx.get<Deps['viewport'] | undefined>('viewport') ?? undefined,
-    knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('doc')?.types,
+    graph: ctx.tryGet('doc') ?? undefined,
+    nodeStore: ctx.tryGet('doc') ?? undefined,
+    viewport: ctx.tryGet('viewport') ?? undefined,
+    knownTypes: ctx.tryGet('doc')?.types,
     resources: ctx.tryGet('resources') ?? undefined,
   }
 
@@ -434,8 +434,8 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
  * 取不到就退化成"只在安装时扫一次"，不报错。
  */
 function subscribeNodeStore(ctx: Context, cb: () => void): (() => void) | undefined {
-  const store = ctx.get<{ subscribe?(l: () => void): () => void } | undefined>('doc')
-  return store?.subscribe?.(cb)
+  const store = ctx.tryGet('doc')
+  return store?.subscribe(cb)
 }
 
 /**

@@ -48,7 +48,6 @@ import {
 // （movingHandle / connectionLine）。换主题时这两个件跟着一起换，本插件零改动；
 // 目录里没有时组件为 undefined，模板用 v-if 兜住（不白屏）。
 import { useUiComponent } from '@mini-canvas/canvas-render'
-import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { validateConnection, typeConnectionDef } from '@mini-canvas/canvas-data'
 import type { SelectionService, DocService, CanvasNode, CanvasNodeType, NodePatchEntry, AddEdgeRequest } from '@mini-canvas/canvas-data'
 import {
@@ -138,7 +137,7 @@ const isSelecting = computed(() => interaction?.isSelecting?.value === true)
 function sel(): SelectionService {
   return ctx.get('selection')
 }
-function layout(): NodeLayoutService | undefined {
+function layout() {
   return ctx.get('nodeLayout')
 }
 /**
@@ -176,7 +175,7 @@ function graph(): BatchWriter {
   if (!doc) throw new Error("[multi-select] 需要 doc 服务（宿主未装配画布数据层）")
   return doc;
 }
-function viewportSvc(): ViewportService | undefined {
+function viewportSvc() {
   return ctx.get('viewport')
 }
 function edgeStore(): { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined {

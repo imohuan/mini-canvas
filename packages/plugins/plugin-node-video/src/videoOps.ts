@@ -27,6 +27,7 @@ import { downloadFileName, frameFileName } from './videoNodeData'
 import { readVideoFitLimits, videoCardSizePatch, type VideoFitLimits } from './videoFit'
 import { clampClipRange, MIN_CLIP_DURATION } from './videoClip'
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import type { Services } from '@mini-canvas/canvas-base'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface VideoOpsContext {
@@ -72,9 +73,17 @@ export const defaultTransform: VideoTransform = {
   objectUrl: videoObjectUrl,
 }
 
-/** 只要"按名字取服务"这一件事的宿主形状（内核 Context 与渲染上下文都满足） */
+/**
+ * 只要"按名字取服务"这一件事的宿主形状（内核 Context 与渲染上下文都满足）。
+ *
+ * 保留内核那套"服务名 → 类型"重载：内置服务名（doc/nodeLayout/settings…）按名推导，
+ * 插件自有窄端口仍可显式泛型。这样这个结构端口不至于把类型信息拍平成 unknown。
+ */
 export interface ServiceGetter {
+  get<K extends keyof Services>(name: K): Services[K]
   get<T = unknown>(name: string): T
+  tryGet<K extends keyof Services>(name: K): Services[K] | undefined
+  tryGet<T = unknown>(name: string): T | undefined
 }
 
 /** 截图产出的新节点相对视频节点的偏移（摆在右侧同一水平线上） */
@@ -108,8 +117,7 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
   }
   /** doc 门面（5c 起数据唯一来源）；缺 doc 则安全降级（读 undefined、写 no-op） */
   const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
-  const layout = () =>
-    svc.get<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null } | undefined>('nodeLayout')
+  const layout = () => svc.tryGet('nodeLayout')
 
   return {
     read: (nodeId) => doc()?.getNode(nodeId)?.data,

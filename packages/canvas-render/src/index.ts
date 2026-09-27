@@ -315,26 +315,7 @@ export type { CoalesceScheduler } from './utils/coalesce'
 // 统一诊断日志（前缀 [v2:<scope>]），供默认皮组件/宿主共用
 export { createV2Logger } from './utils/log'
 
-// ============================================================================
-// 渲染层注入 ctx 的服务的类型增强（统一声明，插件不必各自 declare 冲突）
-// nodeLayout / viewport 由 createMiniCanvasHost 注入内核 ctx；这里给插件作者类型面。
-// ============================================================================
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    /** 节点布局只读服务（实测尺寸/绝对坐标；render 注入，恒在） */
-    nodeLayout: import('./layout/nodeLayout').NodeLayoutService
-    /** 视口服务（render 注入空壳 + CanvasSurface attach 后端；恒在） */
-    viewport: import('./viewport/viewportService').ViewportService
-  }
-}
-
-// 同一批渲染层服务也登记进内核 Services（T03）：内核在 canvas-data 之前、
-// 不认识渲染类型，故这两个名由渲染层自己补，才能按名推导（ctx.get('viewport')）。
-declare module '@mini-canvas/kernel' {
-  interface Services {
-    /** 节点布局只读服务（实测尺寸/绝对坐标；render 注入） */
-    nodeLayout: import('./layout/nodeLayout').NodeLayoutService
-    /** 视口服务（render 注入空壳 + CanvasSurface attach 后端） */
-    viewport: import('./viewport/viewportService').ViewportService
-  }
-}
+// nodeLayout / viewport 的服务名 → 类型登记已上移到 canvas-data（作者 SDK 上游）：
+// 见 canvas-data/src/canvas/renderServiceContracts.ts 的 ViewportContract / NodeLayoutContract
+// 与 serviceTypes.ts。这样只依赖 canvas-base 的逻辑插件也能 ctx.get('viewport') 拿到类型，
+// 不必为两个服务名 import 整个渲染包，也不必手写窄端口。渲染包不再重复 declare（事实源唯一）。

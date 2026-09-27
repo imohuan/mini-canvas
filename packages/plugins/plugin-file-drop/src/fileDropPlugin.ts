@@ -20,7 +20,6 @@
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
-import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   classifyFile,
   clampText,
@@ -193,7 +192,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
   private get doc(): DocService {
     return this.ctx.get('doc')
 }
-  private get viewport(): ViewportService | undefined {
+  private get viewport() {
     return this.ctx.tryGet('viewport') ?? undefined
   }
 

@@ -5,18 +5,17 @@
  * 渲染层用 ResizeObserver 量测真实 DOM 尺寸后经 setMeasuredSize 注入本服务（内存态，不落盘）。
  *
  * 矩形坐标一律 flow 绝对坐标：子节点 position 相对父，逐级累加父链得绝对坐标。
+ *
+ * 对外类型面见 canvas-data 的 NodeLayoutContract（服务名 → 类型的唯一事实源在作者 SDK 上游）：
+ * 插件只看到读口（nodeSize/absolutePosition/getNodeRect/getAllRects/childrenOf）；
+ * 实测写口（setMeasuredSize/clearMeasuredSize/reset）是渲染层内部面，不进契约。
  */
 import type { NodeStoreService } from '@mini-canvas/canvas-data'
+import type { NodeLayoutContract, LayoutRect } from '@mini-canvas/canvas-data'
 
-export interface LayoutRect {
-  id: string
-  x: number
-  y: number
-  w: number
-  h: number
-}
+export type { LayoutRect }
 
-export class NodeLayoutService {
+export class NodeLayoutService implements NodeLayoutContract {
   private measured = new Map<string, { w: number; h: number }>()
 
   constructor(private store: NodeStoreService) {}
@@ -91,6 +90,5 @@ export class NodeLayoutService {
       .filter(Boolean)
   }
 }
-
 
 

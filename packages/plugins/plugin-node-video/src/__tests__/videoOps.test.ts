@@ -37,7 +37,10 @@ import {
  * 空服务表：模拟"什么服务都没注入"的极简宿主。
  * 这里的断言是"读写都安全降级、不抛"，所以取什么服务都必须拿不到。
  */
-const noServices: ServiceGetter = { get: (() => undefined) as <T>() => T }
+const noServices: ServiceGetter = {
+  get: (() => undefined) as ServiceGetter['get'],
+  tryGet: (() => undefined) as ServiceGetter['tryGet'],
+}
 
 /** 起一个带真实内核服务的 ctx（含 video/image 两个类型） */
 function makeCtx() {

@@ -53,6 +53,7 @@ function renderCtx(
   return {
     ctx: {
       get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
       registryOf: (kind: string) =>
         kind === 'node/region' && regionField ? regionField : new RegistryImpl(),
     },

@@ -39,7 +39,7 @@ const ICON_UNGROUP =
  * 只读服务名，不 import 任何 group 内部实现，保持"UI 与逻辑同包但职责分开"。
  */
 function onUngroup(): void {
-  ctx.get<{ ungroup(groupId: string): void } | undefined>('group')?.ungroup(props.id)
+  ctx.group?.ungroup(props.id)
 }
 
 // ====== 背景颜色 ======
@@ -55,8 +55,7 @@ const colorOpen = ref(false)
  * 与 GroupContent 读的是同一个字段。
  */
 function pickColor(color: string): void {
-  ctx.get<{ updateNodeData(id: string, data: Record<string, unknown>): void } | undefined>('doc')
-    ?.updateNodeData(props.id, { ...props.data, backgroundColor: color })
+  ctx.get('doc')?.updateNodeData(props.id, { ...props.data, backgroundColor: color })
 }
 
 </script>

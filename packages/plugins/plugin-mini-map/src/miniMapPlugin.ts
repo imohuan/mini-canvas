@@ -38,7 +38,7 @@ export function apply(ctx: Context) {
 
   // 1b. settings 面板「显示小地图」开关 ↔ 服务状态双向同步（老版 store.toRef 语义：
   //     面板改 → 浮层即时变；命令 Ctrl/Cmd+M 改 → 面板开关跟着变）。
-  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined; set(key: string, v: string | number | boolean): boolean; onChange(cb: (key: string, v: unknown) => void): { dispose(): void } }>('settings')
+  const settings = ctx.tryGet('settings')
   if (settings) {
     const off = settings.onChange((key, v) => {
       if (key === 'miniMapVisible' && typeof v === 'boolean') state.visible = v

@@ -8,7 +8,7 @@
  * - 拖拽平移：小地图上屏幕位移 px ÷ scale = flow 位移，再 × zoom 换算成视口应移动量，
  *   新视口 = 起始视口 − 位移（拖地图向右 → 内容向右 → 视口向左，与老版一致）。
  */
-import type { ViewportState } from '@mini-canvas/canvas-render'
+import type { ViewportState } from '@mini-canvas/canvas-base'
 
 /** flow 坐标矩形 */
 export interface MiniMapRect {

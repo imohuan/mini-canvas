@@ -191,7 +191,7 @@ function resetToDefault() {
   clearModifierTimer()
   if (!manager) return
   // 默认键位：优先取 remapEngine 里记录的原始 keys 中同 combo 的一项；否则命令 originalKeys 当前匹配项
-  const command = ctx.get<{ originalKeys(id: string): string[] | undefined } | undefined>('command')
+  const command = ctx.tryGet('command')
   const orig = command?.originalKeys(props.item.commandId) ?? []
   const target = orig.find((k) => k.toLowerCase().replace(/\s+/g, '') === props.item.keys.toLowerCase().replace(/\s+/g, ''))
   if (target !== undefined) {

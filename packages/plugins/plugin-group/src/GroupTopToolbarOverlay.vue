@@ -21,7 +21,6 @@
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useCanvasRender, resolveNodeSlotStyle, useToolbarOffsets, RenderEvents } from '@mini-canvas/canvas-render'
-import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import type { DocService } from '@mini-canvas/canvas-data'
 import GroupTopToolbar from './GroupTopToolbar.vue'
 
@@ -34,12 +33,12 @@ const viewport = flow.viewport
 /** 唯一被单独选中的节点 id（恰好选一个才谈得上显示某一条工具栏）；订阅选中单源，不存影子状态 */
 const selectedId = ref<string | null>(null)
 const syncSelection = (): void => {
-  const sel = ctx.get<{ ids: ReadonlySet<string> } | undefined>('selection')
+  const sel = ctx.tryGet('selection')
   const ids = sel ? [...sel.ids] : []
   selectedId.value = ids.length === 1 ? ids[0] : null
 }
 syncSelection()
-const offSel = ctx.get<{ onChange(cb: () => void): () => void } | undefined>('selection')?.onChange(syncSelection)
+const offSel = ctx.tryGet('selection')?.onChange(syncSelection)
 onBeforeUnmount(() => offSel?.())
 
 /** 选中项是不是本浮层负责的类型（别的类型不归它管） */

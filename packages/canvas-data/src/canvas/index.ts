@@ -16,6 +16,15 @@ export type { NodeRegisterDef, ThemeOccupantOpts, SlotRegisterReq } from './capa
 // 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
 import './serviceTypes'
 
+// 渲染层两个内置服务（nodeLayout/viewport）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
+export type {
+  NodeLayoutContract,
+  ViewportContract,
+  LayoutRect,
+  ViewportState,
+  FlowPoint,
+} from './renderServiceContracts'
+
 export { Context, canvasCapabilityLayer } from './context'
 
 export { NodeRegistry } from './registry/nodeRegistry'

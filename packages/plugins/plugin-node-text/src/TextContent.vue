@@ -59,10 +59,9 @@ watch(
 )
 
 // —— 缩放分级 LOD 阈值（theme-default Config，经 ctx.settings 实时读）——
-type SettingsLike = { get(key: string): unknown; onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }
-const settingsGet = (key: string): unknown => ctx?.get<{ get(key: string): unknown }>('settings')?.get(key)
+const settingsGet = (key: string): unknown => ctx?.tryGet('settings')?.get(key)
 const lodThresholds = ref(resolveLodThresholds(settingsGet('titleScaleMinZoom'), settingsGet('textLodIconZoom')))
-const textSettingOff = ctx?.get<SettingsLike>('settings')?.onChange((key, value) => {
+const textSettingOff = ctx?.tryGet('settings')?.onChange((key, value) => {
   if (key === 'titleScaleMinZoom' || key === 'textLodIconZoom') {
     lodThresholds.value = resolveLodThresholds(settingsGet('titleScaleMinZoom'), settingsGet('textLodIconZoom'))
   }

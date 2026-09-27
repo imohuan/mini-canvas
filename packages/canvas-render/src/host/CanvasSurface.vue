@@ -8,7 +8,7 @@
 //
 // 职责边界（只管「渲染 + provide 裸上下文」）：
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
-// - provide RENDER_CONTEXT_KEY(裸) 与旧 6 个 *_KEY(同引用，兼容未迁移组件)。
+// - provide RENDER_CONTEXT_KEY(裸)：单一令牌，消费方一律走 useCanvasRender()。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
 import { provide, shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'

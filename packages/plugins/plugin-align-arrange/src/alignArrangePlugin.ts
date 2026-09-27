@@ -23,11 +23,6 @@ import {
 } from './arrangeEngine'
 import { computeCompactArrange, type CompactDirection, type CompactSpacing } from './compactArrange'
 
-/** 节点布局服务最小形状（宿主注入 @mini-canvas/canvas-render 的 NodeLayoutService；只读类型不落 declare 避免与渲染层冲突） */
-interface NodeLayoutLike {
-  nodeSize(id: string): { w: number; h: number }
-}
-
 export const name = 'align-arrange'
 export const inject = ['doc', 'selection'] as string[]
 
@@ -87,8 +82,8 @@ export type AlignArrangeConfigFromSchema = InferConfig<typeof Config>
 export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSchema>) {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
-  // nodeLayout 由渲染层宿主注入；此处经 ctx.get 可选读取（与 group/mini-map 同模式，不 declare 直访类型）
-  const layout = ctx.tryGet('nodeLayout') as NodeLayoutLike | undefined
+  // nodeLayout 由渲染层宿主注入；服务名 → 类型已在 canvas-data 集中登记（作者 SDK），故按名推导即可
+  const layout = ctx.tryGet('nodeLayout')
 
   // ⚙ 设置面板单一数据源（内置恒在）。每次执行命令**实时**读它 —— 面板改过立刻生效，
   // 不能把 apply 时的 config 冻结成闭包常量（那样改了间距/日志开关都不生效）。

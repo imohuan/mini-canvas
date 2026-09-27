@@ -81,6 +81,7 @@ function renderNode(
   const renderCtx = {
     ctx: {
       get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
       isDev,
       registryOf: (kind: string) =>
         kind === 'capability' ? capField : kind === 'node/region' ? regionField : new RegistryImpl(),

@@ -18,7 +18,6 @@
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
 import { registerEventName } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
-import type { ViewportService } from '@mini-canvas/canvas-render'
 import {
   makeSnapshot,
   internalEdgesOf,
@@ -86,7 +85,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     return this.ctx.get('doc')
   }
   /** 可选：canvas-render 宿主注入的视口服务；无则 null（粘贴退级联偏移） */
-  private get viewport(): ViewportService | undefined {
+  private get viewport() {
     return this.ctx.tryGet('viewport') ?? undefined
   }
 

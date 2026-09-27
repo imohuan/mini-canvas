@@ -23,7 +23,6 @@
 import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 import { resolveConfig } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
-import type { NodeLayoutService, ViewportService } from '@mini-canvas/canvas-render'
 import { layoutHierarchy } from './groupHierarchy'
 import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
 import { calculateFocusZoom, centerViewportOnBounds, type Bounds } from './focusViewport'
