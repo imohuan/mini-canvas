@@ -5,6 +5,43 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 最近完成（2026-09-27，插件上下文与包边界 T01–T09）
+
+执行计划：`docs/plans/2026-09-27-canvas-plugin-context-boundaries.md`（规格 `docs/goal/canvas-plugin-context-and-boundaries-spec.md`）。
+九项已落地、每项独立提交并验证，T10 待负责人拍板。
+
+- **T01** c50b108：主题/节点区域的注册事实源与 order 只有一份。`ctx.theme.add/remove` 过去只写
+  或只删 `ThemeRegistry`，与 `registryOf("theme")` 读数不一致；`nodes.contribute` 在场里自行算 order
+  且忽略显式 `opts.order`。现两处同源写入、同一 id/order/回收。
+  （实测修正：原审查称"卸载后注册场留幽灵条目"**未复现** —— 插件作用域视图本就随 fiber 回收。）
+- **T02** e129d76：`defineNode` 不再静默丢字段。它过去手抄透传清单，类型允许的
+  `icon/resizable/frameless/transparent/segments/连接声明` 运行时被丢；改为原样转发 `NodeRegisterDef`，
+  并去掉包内自引用。canvas-base 首次有 test 脚本。
+- **T03** 2bbe6bc：`ctx.get/tryGet` 按服务名推导类型。集中声明 doc/selection/resources/save/command/
+  nodeFactory/nodeRegistry/themeRegistry/settings/settingsPersist 与渲染层 nodeLayout/viewport；
+  显式泛型与扩展服务名保持可用。**顺带修一处类型/运行期漂移**：`PluginScope` 声明了 `tryGet`，
+  但插件作用域视图从未实现它（插件里调用会 `not a function`）。
+- **T04** b88f4ad：有就绪状态的 Flow/DOM 能力面。旧 `ViewportService` 在后端未挂载时静默降级
+  （默认坐标 / 原样回传 / no-op）；新增纯逻辑状态机 `detached→flow-ready→dom-ready→disposed`，
+  未就绪即抛 `CanvasFlowNotReadyError`，经 `useCanvasRender().flow` 暴露；与旧 viewport 共用同一份后端。
+- **T05** d56c4de：默认主题组件改用集中类型的服务（`ctx.get` 不再手写结构断言）；`DefaultBackground`
+  不再直接 import VueFlow，改从 `useCanvasRender()` 取视口。BaseNode 内 `useVueFlow` 保留（红线核心节点件）。
+- **T06** 70bbb59：多选端口/拖线件改从主题可替换目录取（`useUiComponent("movingHandle"/"connectionLine")`），
+  生产代码不再依赖 `plugin-theme-default`（降为 devDependency，仅测试注入真实件）。
+- **T07** 5cb5310：image/text/video 三个节点插件不再把主题包当共享组件库（清 dependencies 与构建 external）。
+- **T08** 28d6e1d：钉住插件依赖方向（`packages/ui/src/__tests__/pluginDependencyDirection.test.ts`，
+  扫 24 包 / 201 个生产源码文件；实测运行时依赖与值导入均为 0）。
+- **T09** 1a13f41：`canvas-foundation` 拆包 **no-go**（`docs/plans/2026-09-27-canvas-foundation-go-no-go.md`）——
+  四条准入只满足一条：反向依赖仍在（`graphDocument.ts → canvas/connection`）、无第二个真实消费者
+  （cloud-server/mcp-server 刻意不 import canvas-data）、迁移会再次移动 doc/canvasBasePlugin。
+- **T10** ⏳：端口几何默认值决策材料就绪（`docs/plans/2026-09-27-port-zone-default-decision-brief.md`，
+  实测成品应用走主题值 10/0.55/0.8，非宿主回落 86/0.8/1）。**待负责人选定后**再开几何实现票。
+
+**验证基线（2026-09-27 实测）**：kernel 212 / canvas-data 328 / canvas-render 396 / canvas-base 6 /
+ui 42 / 24 个插件包合计 1350；UI e2e **40/40**、多选回归 22/22、主题色板 19/19、视觉回归 6/6。
+已知遗留（非本轮引入）：plugin-auto-layout / clipboard / file-drop / multi-select / node-image /
+node-text / theme-default 的 `typecheck` 在改动前就有报错（多为 .vue 类型导出与测试文件），本轮未新增。
+
 ### 最近完成（2026-09-25，主题配色「两格制」+ 全仓去硬编码色）
 
 **用户问题**："一个连接线颜色我只能设一种 —— 设成灰色，暗色主题上就没法看"。
