@@ -274,7 +274,7 @@ function onDuplicate(): void {
   service().duplicateTextNode(props.id)
 }
 function onDelete(): void {
-  ctx.get<{ removeNodes(ids: string[]): number }>('doc').removeNodes([props.id])
+  ctx.get('doc').removeNodes([props.id])
 }
 </script>
 

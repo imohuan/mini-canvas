@@ -87,8 +87,27 @@ function renderCtx(
     },
   }
   return {
+    flow: {
+      viewport: { value: { x: 0, y: 0, zoom } },
+      pane: { value: null },
+      root: { value: null },
+      paneRect: { value: null },
+      renderer: { value: null },
+      screenToFlow: (x: number, y: number) => ({ x, y }),
+      updateNodeVisual: () => {},
+      updateNodeVisualSize: () => {},
+      updateNodeInternals: () => {},
+      getNodeRenderPosition: () => undefined,
+      phase: () => 'dom-ready', ready: () => true, domReady: () => true,
+      viewportSnapshot: () => ({ x: 0, y: 0, zoom }),
+      flowToScreen: (x: number, y: number) => ({ x, y }),
+      zoomIn: () => {}, zoomOut: () => {}, zoomTo: () => {}, fitView: () => {}, setCenter: () => {}, setViewport: () => {},
+      queryNodeEl: () => null, rootEl: () => null, paneEl: () => null, rendererEl: () => null,
+      subscribe: () => ({ dispose: () => {} }),
+    },
     ctx: {
       get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
       registryOf: (kind: string) => {
         if (kind === 'ui') return uiCatalogField()
         if (kind === 'selection/region' && regionField) return regionField

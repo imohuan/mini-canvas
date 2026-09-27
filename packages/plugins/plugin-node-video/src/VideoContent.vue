@@ -148,7 +148,7 @@ async function onCaptureFrame(): Promise<void> {
 }
 
 async function captureFrameNode(at: number): Promise<void> {
-  const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+  const command = ctx.get('command')
   command.execute('video.captureFrame', { nodeId: props.id, at })
 }
 

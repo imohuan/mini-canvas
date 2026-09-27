@@ -188,13 +188,13 @@ export class FileDropServiceImpl extends Service implements FileDropService {
   }
 
  private get selection(): SelectionService {
-   return this.ctx.get<SelectionService>('selection')
+   return this.ctx.get('selection')
  }
   private get doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
 }
   private get viewport(): ViewportService | undefined {
-    return this.ctx.get<ViewportService | undefined>('viewport') ?? undefined
+    return this.ctx.tryGet('viewport') ?? undefined
   }
 
   /** 类型是否已注册（node-image / node-video / node-text 插件装配才 true；缺则跳过该类文件） */
@@ -277,7 +277,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const payload = buildImagePayload(file, url, positions[i], dims)
           // P1-14：把生成的 object URL 登记进宿主 resources，写 resourceId 供引用扫描回收
           // PluginScope.get 对缺失服务返回 undefined（可选探测语义）
-          const resources = this.ctx.get<ResourceService | undefined>('resources')
+          const resources = this.ctx.tryGet('resources')
           if (resources) {
             const resourceId = resources.register({ kind: 'image', url, resource: file })
             payload.data.resourceId = resourceId
@@ -287,7 +287,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const url = this.readers.createObjectURL(file)
           const meta = await this.readers.readVideoMeta(file)
           const payload = buildVideoPayload(file, url, positions[i], meta)
-          const resources = this.ctx.get<ResourceService | undefined>('resources')
+          const resources = this.ctx.tryGet('resources')
           if (resources) {
             const resourceId = resources.register({ kind: 'video', url, resource: file })
             payload.data.resourceId = resourceId

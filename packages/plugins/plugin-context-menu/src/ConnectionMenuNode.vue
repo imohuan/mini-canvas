@@ -11,7 +11,7 @@
  * 位置/尺寸/缩放由画布负责（它是真节点）；这里只负责"长什么样"。
  */
 import { computed } from 'vue'
-import { Handle, Position, useVueFlow, useCanvasRender } from '@mini-canvas/canvas-render'
+import { Handle, Position, useCanvasRender } from '@mini-canvas/canvas-render'
 import type { NodeProps } from '@mini-canvas/canvas-render'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
 import { CARD_WIDTH, CARD_BORDER, CARD_PADDING_Y, ITEM_HEIGHT } from './connectionMenu'
@@ -21,11 +21,10 @@ const props = defineProps<NodeProps>()
 // 透传的 selected 等 VueFlow 内部 prop 不落到根元素
 defineOptions({ inheritAttrs: false })
 
-const vf = useVueFlow()
-const { ctx } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 /** 当前画布缩放（反缩放依据） */
-const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
+const zoom = computed(() => Math.max(flow.viewport.value?.zoom || 1, 0.01))
 
 /** 落线那一侧（插件建节点时写入 data.portSide）：从输出口拖出 → 新节点用输入口(左) */
 const portSide = computed(() => normalizePortSide((props.data as { portSide?: unknown })?.portSide))

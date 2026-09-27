@@ -34,8 +34,8 @@ export interface AutoSaveService {
 }
 
 export function apply(ctx: Context): void {
-  const save = ctx.get<SaveService>('save')
-  const doc = ctx.get<DocService>('doc')
+  const save = ctx.get('save')
+  const doc = ctx.get('doc')
   const interval = 1000
 
   const engine: AutoSaveEngine = createAutoSaveEngine({

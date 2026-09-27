@@ -77,10 +77,10 @@ class MultiSelectServiceImpl extends Service implements MultiSelectService {
   }
 
   private get selection(): SelectionService {
-    return this.ctx.get<SelectionService>('selection')
+    return this.ctx.get('selection')
   }
   private get doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   getSelectedNodeIds(): ReadonlySet<string> {

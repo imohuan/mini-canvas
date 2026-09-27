@@ -6,10 +6,9 @@
 //   3. 端口按节点类型能力显隐(useNodeCapability)；浮动端口外观全来自 handleParams。
 //   4. 拖线反馈(消费 useCanvasRender().connectionState)：3D 倾斜 / 非法气泡 / valid/invalid / 拖线时压源口。
 //   5. LOD：zoom 低时简化渲染。
-// 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState）+ useVueFlow。
+// 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState + flow facade）。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
-  useVueFlow,
   Position,
   useCanvasRender,
   createV2Logger,
@@ -47,8 +46,7 @@ defineOptions({ inheritAttrs: false })
 
 // 统一渲染上下文（CanvasHost provide）——单入口取 registry/写回回调/端口外观/连接反馈/内核上下文
 // visibleRect = 当前可视区（flow 坐标）：进编辑时判断要不要挪视图；未挂载为 null，判定自动跳过
-const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize, visibleRect } = useCanvasRender()
-const vf = useVueFlow()
+const { ctx, registry, nodeWrite, handleParams, connectionState, interaction, debug, snapZone, updateNodeVisualSize, visibleRect, flow, viewport } = useCanvasRender()
 
 const type = computed(() => props.type)
 
@@ -61,7 +59,7 @@ const CONNECT_FEEDBACK = {
 }
 
 // —— 缩放 / LOD / 标题反缩放（v2 固定卡尺寸，标题宽=cardWidth×max(zoom,minZoom)）——
-const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
+const zoom = computed(() => Math.max(viewport.value?.zoom || 1, 0.01))
 // 节点外观：全部来自本插件 Config（节点/标题、节点/低细节、节点/多选标记），对齐 v1 core 的
 // nodeTitleOffset / nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，
 // 故这里用 ref + onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
@@ -534,8 +532,8 @@ function onPortHover(value: boolean): void {
 /** 命中端口吸附带时，用真实渲染高度 cardHeight 算端口锚点 flow 坐标（保证端点居中，不依赖存储 dimensions）。
  *  input(target 输入口)=左缘中点；output(source 输出口)=右缘中点。 */
 function snapAnchorFor(side: 'input' | 'output'): { x: number; y: number } | undefined {
-  const node = vf.getNodes.value.find((n) => n.id === props.id)
-  const pos = (node?.computedPosition || node?.position) as { x: number; y: number } | undefined
+  // T04/T10：经 flow facade 读实时渲染位置（拖动中未落盘的位移也拿得到）
+  const pos = flow.getNodeRenderPosition(props.id)
   if (!pos) return undefined
   const y = pos.y + cardHeight.value / 2
   const x = side === 'input' ? pos.x : pos.x + cardWidth.value
@@ -689,8 +687,7 @@ function updateCardMousePosition(event: MouseEvent) {
 const feedbackMousePosition = computed(() => {
   const h = connectionHover.value
   if (h?.status === 'valid') {
-    const node = vf.getNodes.value.find((n) => n.id === props.id)
-    const pos = (node?.computedPosition || node?.position) as { x: number; y: number } | undefined
+    const pos = flow.getNodeRenderPosition(props.id)
     if (pos && cardWidth.value > 0) {
       return {
         x: clamp((h.flowPosition.x - pos.x) / cardWidth.value, 0, 1),
@@ -704,10 +701,7 @@ const feedbackMousePosition = computed(() => {
 // ============ 非法气泡定位 ============
 const invalidTooltipStyle = computed(() => {
   const h = connectionHover.value
-  const pos = (() => {
-    const node = vf.getNodes.value.find((n) => n.id === props.id)
-    return (node?.computedPosition || node?.position) as { x: number; y: number } | undefined
-  })()
+  const pos = flow.getNodeRenderPosition(props.id)
   if (h?.status === 'invalid' && pos && cardWidth.value > 0) {
     const x = clamp((h.flowPosition.x - pos.x) / cardWidth.value, 0.06, 0.94)
     const y = clamp((h.flowPosition.y - pos.y) / cardHeight.value, 0.08, 0.92)

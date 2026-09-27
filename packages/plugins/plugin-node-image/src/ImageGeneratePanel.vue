@@ -79,7 +79,7 @@ async function persistGeneratedImage(url: string): Promise<{ url: string; resour
   try {
     const response = await fetch(url)
     const blob = await response.blob()
-    const resources = ctx.get<{ register(input: { kind: string; resource: Blob }): string; url(id: string): string | undefined } | undefined>('resources')
+    const resources = ctx.tryGet('resources')
     if (!resources) return undefined
     const resourceId = resources.register({ kind: 'image', resource: blob })
     await resources.flush?.(resourceId)
@@ -325,7 +325,7 @@ async function onSend(): Promise<void> {
       // 工具调用的运行上下文：把本节点 id 透传出去（异步任务/进度写回要用）
       invokeTool: (name, input, opts) => svc.invoke(name, input, { ctx: { nodeId: opts.nodeId }, onProgress: opts.onProgress }),
       readData: (nodeId) =>
-        ctx.get<{ getNode(id: string): { data: Record<string, unknown> } | undefined } | undefined>('doc')
+      ctx.tryGet('doc')
           ?.getNode(nodeId)?.data ?? props.data,
       // 第三个参数是"本次写回要同步的卡片尺寸"（由 imageRun 算好传入）。
       // 它必须和 data 进同一个 patch：内核按一次 updateNode 记一条历史，

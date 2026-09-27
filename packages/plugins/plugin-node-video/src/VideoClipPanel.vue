@@ -49,7 +49,7 @@ const duration = computed(() => {
  * 读不到就回落 MIN_CLIP_DURATION —— 绝不因为配置缺失让剪辑失效。
  */
 const minClip = computed(() => {
-  const settings = ctx.get<{ get(key: string): unknown } | undefined>('settings')
+  const settings = ctx.tryGet('settings')
   const raw = settings?.get('videoMinClipDuration')
   const n = typeof raw === 'number' && Number.isFinite(raw) && raw > 0 ? raw : MIN_CLIP_DURATION
   // 最短时长不能超过视频总长（否则永远拖不出合法范围）
@@ -119,7 +119,7 @@ function onPointerUp(ev: PointerEvent): void {
 }
 
 function onConfirm(): void {
-  ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command').execute('video.clipConfirm', {
+  ctx.get('command').execute('video.clipConfirm', {
     nodeId: props.id,
     start: range.value.start,
     end: range.value.end,
@@ -127,7 +127,7 @@ function onConfirm(): void {
 }
 
 function onCancel(): void {
-  ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command').execute('video.clipCancel', {
+  ctx.get('command').execute('video.clipCancel', {
     nodeId: props.id,
   })
 }

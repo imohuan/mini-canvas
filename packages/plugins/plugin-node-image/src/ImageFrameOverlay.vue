@@ -54,7 +54,7 @@ const ratioValue = computed(() =>
 
 /** 确认：交给命令（与顶部条/快捷键同一实现），命令负责写回并退出编辑态 */
 function onConfirm(rect: Rect): void {
-  const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+  const command = ctx.get('command')
   command.execute(expanding.value ? 'image.expandConfirm' : 'image.cropConfirm', { nodeId: props.id, rect })
 }
 

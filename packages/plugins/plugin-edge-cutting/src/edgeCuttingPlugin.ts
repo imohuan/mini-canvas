@@ -63,7 +63,7 @@ class EdgeCuttingController {
   }
 
   private get doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   /** 绑定全部 DOM 监听（ctx.effect 调用；返回清理函数） */
@@ -184,7 +184,7 @@ class EdgeCuttingController {
   /** 取当前存活边里"已渲染且与视口重叠"的路径采样条目 */
   private visibleEdgeSamples(): Array<{ id: string; points: ScreenPoint[] }> {
     // F 项：取本画布实例根（viewport.getRootEl），多宿主不串线；退回全局 .vue-flow
-    const vp = this.ctx.get<{ getRootEl(): HTMLElement | null } | undefined>('viewport')
+    const vp = this.ctx.tryGet('viewport') as { getRootEl?(): HTMLElement | null } | undefined
     const scopeRoot = vp?.getRootEl?.() ?? null
     const canvasEl = scopeRoot ?? document.querySelector('.vue-flow')
     const viewportRect = canvasEl?.getBoundingClientRect()
@@ -231,7 +231,7 @@ export function apply(ctx: Context): void {
   // 默认装配监听；总开关(enabled)关闭 → 卸载 DOM 绑定与 overlay；重开 → 重装（overlay 惰性重建）。
   // config 已由内核经 Config schema 校验 + 补默认并登记 settings；这里订阅 onChange 让开关即时生效。
   let stop: (() => void) | undefined = controller.attach()
-  const settings = ctx.get<{
+    const settings = ctx.tryGet<{
     onChange(cb: (key: string, v: unknown) => void): { dispose(): void }
   } | undefined>('settings')
   const off = settings?.onChange((key) => {

@@ -46,7 +46,7 @@ export class ImageService extends Service implements ImageNodeService {
 
   /** 加一个 image 节点并写 imageUrl；返回短 id（统一走 graph 唯一写入口） */
   addImageNode(position: { x: number; y: number }, imageUrl: string): string {
-    const doc = this.ctx.get<DocService>('doc')
+    const doc = this.ctx.get('doc')
     return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, { imageUrl }))
   }
 
@@ -55,7 +55,7 @@ export class ImageService extends Service implements ImageNodeService {
    * 即时 revoke 会让恢复的图破图。统一由 CanvasHost flushSave 的引用扫描延迟回收
    * （落盘前已确认该 resourceId 不再被任何存活节点引用才 revoke），与 undo 语义兼容。 */
   removeNode(id: string): void {
-    this.ctx.get<DocService>('doc').removeNodes([id])
+    this.ctx.get('doc').removeNodes([id])
   }
 }
 

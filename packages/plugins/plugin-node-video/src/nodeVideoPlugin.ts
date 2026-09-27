@@ -64,7 +64,7 @@ export class VideoService extends Service implements VideoNodeService {
   }
 
   private doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   addVideoNode(position: { x: number; y: number }, videoUrl = ''): string {

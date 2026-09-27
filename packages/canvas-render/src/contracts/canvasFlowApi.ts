@@ -17,6 +17,7 @@
  */
 import type { ViewportBackend, ViewportState, FlowPoint } from '../viewport/viewportService'
 import type { NodeVisualSyncApi } from '../host/nodeVisualSync'
+import { ref, type Ref } from 'vue'
 
 /** 生命周期阶段（只增不减，dispose 为终态） */
 export type CanvasFlowPhase = 'detached' | 'flow-ready' | 'dom-ready' | 'disposed'
@@ -60,7 +61,20 @@ export interface CanvasFlowApi {
   domReady(): boolean
   subscribe(fn: () => void): { dispose(): void }
 
-  viewport(): ViewportState
+  /**
+   * 当前视口（响应式 Ref；pan/zoom 实时跟）。
+   *
+   * 与 viewport() 方法的区别：模板/computed 里做响应式绑定用它；命令式读取用 viewport()。
+   * 未挂载时 value 为 {0,0,1}（这是"视口状态"的默认值，不是"命令成功"的伪装）——
+   * 响应式状态无法抛错，需要强一致判断时配合 ready() 使用。
+   */
+  readonly viewport: Readonly<Ref<ViewportState>>
+  readonly pane: Readonly<Ref<HTMLElement | null>>
+  readonly paneRect: Readonly<Ref<DOMRect | null>>
+  readonly root: Readonly<Ref<HTMLElement | null>>
+  readonly renderer: Readonly<Ref<HTMLElement | null>>
+
+  viewportSnapshot(): ViewportState
   screenToFlow(clientX: number, clientY: number): FlowPoint
   flowToScreen(flowX: number, flowY: number): FlowPoint
   zoomIn(): void
@@ -74,6 +88,14 @@ export interface CanvasFlowApi {
   updateNodeVisualSize(id: string, w: number, h: number): void
   updateNodeInternals(id: string): void
 
+  /**
+   * 节点当前**渲染位置**（含拖动中未落盘的实时位移）。
+   *
+   * 与 store 投影的区别：拖动进行时 VueFlow 内部位置已更新、store 尚未提交，
+   * 需要贴"用户眼睛看到的"位置的代码（端口锚点 / 悬停反馈）用它。
+   */
+  getNodeRenderPosition(id: string): { x: number; y: number } | undefined
+
   queryNodeEl(nodeId: string): HTMLElement | null
   rootEl(): HTMLElement | null
   paneEl(): HTMLElement | null
@@ -85,11 +107,15 @@ export interface CanvasFlowController extends CanvasFlowApi {
   /** VueFlow 实例就绪 → flow-ready（幂等；已更靠后则不动） */
   attachFlow(backend: ViewportBackend): void
   /** DOM 锚点就绪 → dom-ready（必须在 attachFlow 之后） */
-  attachDom(dom: CanvasFlowDomApi): void
+  attachDom(dom: CanvasFlowDomApi, paneRect?: DOMRect | null): void
   /** 宿主停止 → disposed：后续任何调用都抛 NotReady */
   dispose(): void
   /** 节点视觉尺寸同步后端（CanvasSurface 把 VueFlow 的 updateNode* 适配进来） */
   attachNodeVisual(api: NodeVisualSyncApi): void
+  /** 节点实时渲染位置读取器（拖动中未落盘的位置） */
+  attachPositionReader(reader: (id: string) => { x: number; y: number } | undefined): void
+  /** 响应式视口数据源（宿主 watch VueFlow viewport 写入） */
+  attachViewportSource(source: Readonly<Ref<ViewportState>>): void
 }
 
 const ORDER: Record<CanvasFlowPhase, number> = {
@@ -108,6 +134,15 @@ export function createCanvasFlowController(): CanvasFlowController {
   let backend: ViewportBackend | undefined
   let dom: CanvasFlowDomApi | undefined
   let nodeVisual: NodeVisualSyncApi | undefined
+  /** 读节点实时渲染位置（宿主把 VueFlow 内部状态适配进来） */
+  let positionReader: ((id: string) => { x: number; y: number } | undefined) | undefined
+  /** 响应式视口（宿主把 VueFlow viewport 同步进来；未挂载 = 默认值） */
+  const viewportRef = ref<ViewportState>({ x: 0, y: 0, zoom: 1 })
+  const paneRef = ref<HTMLElement | null>(null)
+  const paneRectRef = ref<DOMRect | null>(null)
+  const rootRef = ref<HTMLElement | null>(null)
+  const rendererRef = ref<HTMLElement | null>(null)
+  let viewportSource: Readonly<Ref<ViewportState>> = viewportRef
   const listeners = new Set<() => void>()
 
   const notify = (): void => {
@@ -145,6 +180,13 @@ export function createCanvasFlowController(): CanvasFlowController {
     phase: () => phase,
     ready: () => ORDER[phase] >= ORDER['flow-ready'] && phase !== 'disposed',
     domReady: () => phase === 'dom-ready',
+    get viewport() {
+      return viewportSource
+    },
+    pane: paneRef,
+    paneRect: paneRectRef,
+    root: rootRef,
+    renderer: rendererRef,
     subscribe(fn) {
       listeners.add(fn)
       return { dispose: () => listeners.delete(fn) }
@@ -155,25 +197,40 @@ export function createCanvasFlowController(): CanvasFlowController {
       backend = next
       advanceTo('flow-ready')
     },
-    attachDom(next) {
+    attachDom(next, rect) {
       if (phase === 'disposed') return
       dom = next
+      paneRef.value = next.paneEl()
+      const pane = next.paneEl()
+      paneRectRef.value = rect ?? (typeof pane?.getBoundingClientRect === 'function' ? pane.getBoundingClientRect() : null)
+      rootRef.value = next.rootEl()
+      rendererRef.value = next.rendererEl()
       advanceTo('dom-ready')
     },
     attachNodeVisual(api) {
       nodeVisual = api
     },
+    attachPositionReader(reader) {
+      positionReader = reader
+    },
+    attachViewportSource(source) {
+      viewportSource = source
+    },
     dispose() {
       if (phase === 'disposed') return
       backend = undefined
       dom = undefined
+      paneRef.value = null
+      paneRectRef.value = null
+      rootRef.value = null
+      rendererRef.value = null
       nodeVisual = undefined
       phase = 'disposed'
       notify()
       listeners.clear()
     },
 
-    viewport() {
+    viewportSnapshot() {
       return needFlow().getViewport()
     },
     screenToFlow(x, y) {
@@ -212,6 +269,10 @@ export function createCanvasFlowController(): CanvasFlowController {
     updateNodeInternals(id) {
       require('flow-ready', 'updateNodeInternals')
       nodeVisual?.updateNodeInternals([id])
+    },
+
+    getNodeRenderPosition(id) {
+      return needFlow().getNodeRenderPosition?.(id) ?? positionReader?.(id)
     },
 
     queryNodeEl(nodeId) {

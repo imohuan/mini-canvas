@@ -25,7 +25,7 @@ interface SettingsLike {
 export function bindAlignGuideToggle(ctx: Context, attach: () => () => void): () => void {
   let detach: (() => void) | undefined = alignGuideConfigFrom(ctx).alignGuideEnabled ? attach() : undefined
 
-  const settings = ctx.get<SettingsLike | undefined>('settings')
+  const settings = ctx.tryGet('settings')
   const off = settings?.onChange((key) => {
     if (key !== 'alignGuideEnabled') return
     if (alignGuideConfigFrom(ctx).alignGuideEnabled) {

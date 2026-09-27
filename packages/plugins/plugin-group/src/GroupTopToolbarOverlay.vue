@@ -28,7 +28,8 @@ import GroupTopToolbar from './GroupTopToolbar.vue'
 // 常量从 groupEngine 取（纯逻辑、零依赖）。不能从 groupPlugin 取：那会成环（见该常量处的说明）。
 import { GROUP_NODE_TYPE } from './groupEngine'
 
-const { ctx, viewport } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
+const viewport = flow.viewport
 
 /** 唯一被单独选中的节点 id（恰好选一个才谈得上显示某一条工具栏）；订阅选中单源，不存影子状态 */
 const selectedId = ref<string | null>(null)
@@ -45,7 +46,7 @@ onBeforeUnmount(() => offSel?.())
 const groupNode = computed(() => {
   const id = selectedId.value
   if (!id) return null
-  const node = ctx.get<DocService | undefined>('doc')?.getNode(id)
+  const node = ctx.tryGet('doc')?.getNode(id)
   return node && node.type === GROUP_NODE_TYPE ? node : null
 })
 
@@ -74,7 +75,7 @@ const storeRect = computed(() => {
   void dataTick.value // 依赖数据变化：拖动落盘后 store 位置变了，这里必须重读
   const id = groupNode.value?.id
   if (!id) return null
-  return ctx.get<NodeLayoutService | undefined>('nodeLayout')?.getNodeRect(id) ?? null
+  return ctx.tryGet('nodeLayout')?.getNodeRect(id) ?? null
 })
 
 /**

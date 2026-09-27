@@ -57,7 +57,7 @@ export function apply(ctx: Context) {
   // 建节点走数据层唯一写入口（与真实节点插件同一条路径：可撤销 + 自动落盘），
   // 这样预览页右键"新建节点"也能用。
   const create = (type: string, data?: Record<string, unknown>) => (position: { x: number; y: number }) =>
-    ctx.get<DocService>('doc').transaction('demo-add-node', (tx) => tx.createNode(type, position, data))
+    ctx.get('doc').transaction('demo-add-node', (tx) => tx.createNode(type, position, data))
 
   ctx.nodes.register({
     type: 'text',

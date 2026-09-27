@@ -39,7 +39,7 @@ const canGroup = computed(() => count.value >= 2)
  */
 function onGroup(): void {
   if (!canGroup.value) return
-  ctx.get<{ execute(id: string): unknown } | undefined>('command')?.execute('group:create')
+  ctx.tryGet('command')?.execute('group:create')
 }
 </script>
 

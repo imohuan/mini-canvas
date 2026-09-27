@@ -114,13 +114,15 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
 }
 
 export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
-  const doc = ctx.get<DocService>('doc')
-  const { selection, nodeLayout, viewport } = ctx
+  const doc = ctx.get('doc')
+  const selection = ctx.get('selection')
+  const nodeLayout = ctx.get('nodeLayout')
+  const viewport = ctx.get('viewport')
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
 
   // 设置面板单一数据源（内置恒在）。每次执行命令时**实时**读它 —— 面板改过立刻生效。
-  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined } | undefined>('settings')
+  const settings = ctx.tryGet('settings')
 
   /**
    * 取当前生效配置：settings 现值优先，未声明/服务缺失回落 schema 默认。

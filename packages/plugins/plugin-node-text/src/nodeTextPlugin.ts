@@ -49,7 +49,7 @@ export class TextService extends Service implements TextNodeService {
 
   /** 内部统一走 graph 唯一写入口（历史 + 提交落盘），不直接改 nodeStore/save */
   private doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   addTextNode(position: { x: number; y: number }): string {
@@ -144,7 +144,7 @@ export function apply(ctx: Context) {
     run: (_c, payload) => {
       const { nodeId } = (payload ?? {}) as { nodeId?: string }
       if (!nodeId) return false
-      ctx.get<DocService>('doc').removeNodes([nodeId])
+      ctx.get('doc').removeNodes([nodeId])
       return true
     },
   })

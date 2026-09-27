@@ -34,12 +34,13 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
 import { computeAlignGuides, SNAP_THRESHOLD, shouldAlignOnDrag } from './alignGuideEngine'
 
-const { ctx, interaction, viewport, visibleNodes, updateNodeVisual } = useCanvasRender()
+const { ctx, interaction, flow, visibleNodes } = useCanvasRender()
+const viewport = flow.viewport
 
 /** 当前选中节点数：多选（>=2）时本插件整体让位（不吸附、不画线） */
 const selTick = ref(0)
 type SelectionLike = { ids: ReadonlySet<string>; onChange(cb: () => void): () => void }
-const selection = ctx.get<SelectionLike | undefined>('selection')
+const selection = ctx.tryGet('selection')
 const selOff = selection?.onChange?.(() => void (selTick.value += 1))
 onBeforeUnmount(() => selOff?.())
 const selectedCount = computed(() => {
@@ -76,7 +77,7 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
     hideGuides()
     return
   }
-  const layout = ctx.get<NodeLayoutService>('nodeLayout')
+  const layout = ctx.get('nodeLayout')
   if (!layout) return
   const size = layout.nodeSize(nodeId)
   if (size.w <= 0 || size.h <= 0) return
@@ -86,7 +87,7 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
   const others = visibleNodes(SNAP_THRESHOLD).filter((r) => r.id !== nodeId)
   const { deltaX, deltaY, guides } = computeAlignGuides(dragged, others)
   if (deltaX !== 0 || deltaY !== 0) {
-    updateNodeVisual(nodeId, { x: position.x + deltaX, y: position.y + deltaY })
+    flow.updateNodeVisual(nodeId, { x: position.x + deltaX, y: position.y + deltaY })
   }
   const v = guides.find((g) => g.type === 'vertical')
   const h = guides.find((g) => g.type === 'horizontal')

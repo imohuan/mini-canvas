@@ -85,14 +85,14 @@ export const Config = {
 export type AlignArrangeConfigFromSchema = InferConfig<typeof Config>
 
 export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSchema>) {
-  const doc = ctx.get<DocService>('doc')
-  const selection = ctx.get<SelectionService>('selection')
+  const doc = ctx.get('doc')
+  const selection = ctx.get('selection')
   // nodeLayout 由渲染层宿主注入；此处经 ctx.get 可选读取（与 group/mini-map 同模式，不 declare 直访类型）
-  const layout = ctx.get<NodeLayoutLike | undefined>('nodeLayout')
+  const layout = ctx.tryGet('nodeLayout') as NodeLayoutLike | undefined
 
   // ⚙ 设置面板单一数据源（内置恒在）。每次执行命令**实时**读它 —— 面板改过立刻生效，
   // 不能把 apply 时的 config 冻结成闭包常量（那样改了间距/日志开关都不生效）。
-  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined } | undefined>('settings')
+  const settings = ctx.tryGet('settings')
   const readSetting = <T extends string | number | boolean>(key: string, fallback: T): T => {
     const v = settings?.get(key)
     return (v === undefined || v === null ? fallback : v) as T

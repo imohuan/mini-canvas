@@ -79,7 +79,7 @@ const cropped = computed(() => Boolean(props.data?.cropRect))
 const clipped = computed(() => props.data?.clipStart !== undefined || props.data?.clipEnd !== undefined)
 
 function run(id: string, payload: Record<string, unknown> = {}): void {
-  ctx.get<{ execute(id: string, ...p: unknown[]): unknown }>('command').execute(id, { nodeId: props.id, ...payload })
+  ctx.get('command').execute(id, { nodeId: props.id, ...payload })
 }
 
 function openPicker(): void {
@@ -96,7 +96,7 @@ async function onFileChange(e: Event): Promise<void> {
   try {
     await uploadVideo(ops, props.id, file, undefined, (url, blob) => {
       // 视频走 objectURL：登记进宿主资源表，删除节点后由引用扫描延迟回收（与图片同语义）
-      const resources = ctx.get<{ register(i: { kind: string; url: string; resource: unknown }): string } | undefined>(
+    const resources = ctx.tryGet('resources')
         'resources',
       )
       return resources?.register({ kind: 'video', url, resource: blob })

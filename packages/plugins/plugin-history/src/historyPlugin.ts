@@ -31,7 +31,7 @@ export interface HistoryFacadeService {
 }
 
 export function apply(ctx: Context): void {
-  const doc = ctx.get<DocService>('doc')
+  const doc = ctx.get('doc')
 
   // —— 撤销 / 重做命令（无 keys：键位由 canvas-commands 的 command:undo/redo 负责，避免冲突） ——
   ctx.commands.register({

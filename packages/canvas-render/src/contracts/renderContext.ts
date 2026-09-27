@@ -18,8 +18,8 @@
  * 说明：
  * - 字段里凡"宿主注入的响应式对象"(edgeVisual/handleParams) 保持**原引用**，属性改即实时生效。
  *   edgeSelection.selectedNodeIds/selectedEdgeIds 是 Ref（供"相连被选即高亮"追踪）。
- * - 旧 6 个 *_KEY 常量仍保留导出(CanvasSurface 仍逐个 provide 同引用)以兼容未迁移的外部消费方；
- *   新代码一律走 useCanvasRender()。
+ * - 画布 Flow/DOM 能力统一收口到 flow 字段；不再散落在 render context 上。
+ *   新代码使用 useCanvasRender().flow。
  * - 仅限 CanvasSurface(渲染子树) 内调用；不在宿主内会抛清晰错误。
  */
 import { inject, type InjectionKey, type Ref } from 'vue'
@@ -34,7 +34,6 @@ import type { CanvasInteractionState } from './interactionContext'
 import type { CanvasDebug } from './debugContext'
 import type { SnapZoneConfig } from '../connection/geometry'
 import type { FlowNode } from '../host/canvasHostCore'
-import type { ViewportState } from '../viewport/viewportService'
 import type { FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect } from '../layout/nodeLayout'
 import type { CanvasFlowApi } from './canvasFlowApi'
@@ -72,16 +71,6 @@ export interface CanvasRenderContext {
   /** 吸附带配置（高占节点比例/宽/偏移/形状；属性改实时影响吸附判定与 BaseNode 调试叠加） */
   snapZone: SnapZoneConfig
   // ===== v2 完善（2026-09）：只读数据源 + 坐标能力，供插件(多选/浮层/装饰)消费，render 不掺决策 =====
-  /** 当前画布视口变换（响应式，pan/zoom 实时跟；浮层定位/坐标换算用） */
-  viewport: Readonly<Ref<ViewportState>>
-  /** 视口 pane 的 DOM 矩形（client 坐标基准；未挂载/无 DOM 时 null） */
-  paneRect: Readonly<Ref<DOMRect | null>>
-  /** 画布 pane DOM 元素（插件自绘框选/手势监听挂载点；未挂载时 null） */
-  pane: Readonly<Ref<HTMLElement | null>>
-  /** 本画布实例的根 DOM（.csurface，即 VueFlow 宿主容器；多宿主页面里区分实例用，未挂载时 null） */
-  rootEl: Readonly<Ref<HTMLElement | null>>
-  /** 节点层 DOM（含 .vue-flow__node 的最内层容器，如 .vue-flow__nodes；量测/导出的实例级锚点，未挂载时 null） */
-  rendererEl: Readonly<Ref<HTMLElement | null>>
   /** 当前渲染节点只读快照（含选中标记与位置；宿主订阅 store 自动重灌；拖动中为最近一次同步态） */
   renderNodes: Readonly<Ref<ReadonlyArray<FlowNode>>>
   /** 当前渲染边只读快照 */
@@ -94,25 +83,6 @@ export interface CanvasRenderContext {
    * 避免 pan/缩放每帧都自动重算全量节点。margin 单位为 flow 坐标，默认 0（严格可视区）。
    */
   visibleNodes(margin?: number): LayoutRect[]
-  /** 屏幕 client 坐标 → flow(画布)坐标（pane 偏移 + 视口逆变换；由 VueFlow 官方换算保证可靠） */
-  screenToFlow(clientX: number, clientY: number): { x: number; y: number }
-  /** flow(画布)坐标 → 屏幕 client 坐标（浮层画线/手柄定位/对齐线用） */
-  flowToScreen(flowX: number, flowY: number): { x: number; y: number }
-  /**
-   * 拖拽中把某节点的视觉位置写到渲染层（VueFlow 内部节点）——不触发 store/整组替换。
-   * 用途：对齐吸附/参考线等"拖动过程中实时微调被拖节点位置"的插件能力；
-   * 拖拽结束的位置落盘仍由宿主照常处理（nodeDragStop → store）。
-   */
-  updateNodeVisual(id: string, position: { x: number; y: number }): void
-  /**
-   * 拖拽中把某节点的**视觉尺寸**同步给 VueFlow 并强制重算内部（端口位置 / 相连边端点）。
-   *
-   * 为什么需要：resize 拖拽绕过 store 直接改卡片内联尺寸，VueFlow 内部记的节点尺寸不会自己变，
-   * 导致端口位置、节点外层尺寸、相连边端点全停在旧尺寸（实测确认）。本方法一次做两件事：
-   * 写新尺寸进 VueFlow + updateNodeInternals 重算 handle/边。
-   * 松手提交走 store 重渲染即可，不必再调。
-   */
-  updateNodeVisualSize(id: string, w: number, h: number): void
 }
 
 /** 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取 */

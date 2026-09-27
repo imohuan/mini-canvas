@@ -243,13 +243,13 @@ export function apply(ctx: Context, config?: CloudSavePluginConfig): void {
   const uploadResources = config?.cloudSaveUploadLocalImages !== false
 
   const deps: Deps = {
-    save: ctx.get<SaveService>('save'),
+    save: ctx.get('save'),
     // 数据读写统一走 doc 门面（§4.1）；viewport 不是 doc 的一部分，仍单独取
     graph: ctx.get<GraphDocumentService | undefined>('doc') ?? undefined,
     nodeStore: ctx.get<Deps['nodeStore'] | undefined>('doc') ?? undefined,
     viewport: ctx.get<Deps['viewport'] | undefined>('viewport') ?? undefined,
     knownTypes: ctx.get<{ types?: ReadonlyMap<string, unknown> } | undefined>('doc')?.types,
-    resources: ctx.get<ResourceService | undefined>('resources') ?? undefined,
+    resources: ctx.tryGet('resources') ?? undefined,
   }
 
   const status: CloudSaveStatus = {

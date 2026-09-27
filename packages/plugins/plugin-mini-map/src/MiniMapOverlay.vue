@@ -36,7 +36,9 @@ import { miniMapConfigFrom, type MiniMapConfig } from './miniMapConfig'
  *  由宿主的 `<html class="dark">` 自动切换，不提供任何"配色"配置项。 */
 
 
-const { ctx, viewport, paneRect, renderNodes } = useCanvasRender()
+const { ctx, flow, renderNodes } = useCanvasRender()
+const viewport = flow.viewport
+const paneRect = flow.paneRect
 
 // —— 配置（⚙ 设置面板：小地图 mini-map 分组；实时订阅，默认 240x160/灵敏度1，对齐老版）——
 const settings = ctx.get<{

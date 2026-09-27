@@ -16,12 +16,8 @@ import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '
 import type { CanvasHostHandle } from './createMiniCanvasHost'
 import type { NodeRegistry } from '@mini-canvas/canvas-data'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
-import { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from '../contracts/nodeRegistryKey'
 import type { CanvasParams } from '../contracts/canvasParamKey'
-import { CANVAS_PARAMS_KEY } from '../contracts/canvasParamKey'
-import { HOST_KEY } from '../contracts/contentBridge'
 import type { EdgeVisual, EdgeSelection } from '../contracts/edgeContext'
-import { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from '../contracts/edgeContext'
 import type { ConnectionFeedbackState } from '../contracts/connectionContext'
 import type { CanvasInteractionState } from '../contracts/interactionContext'
 import type { CanvasRenderContext } from '../contracts/renderContext'
@@ -122,6 +118,7 @@ watch(
 )
 // 视口变换：跟随 VueFlow viewport（响应式 computed）
 const viewportRef = shallowRef<ViewportState>({ x: 0, y: 0, zoom: 1 })
+flow.attachViewportSource(viewportRef)
 watch(
   () => (vfApi.viewport as unknown as { value?: ViewportState })?.value,
   (v) => { if (v) viewportRef.value = { x: v.x, y: v.y, zoom: v.zoom } },
@@ -196,29 +193,12 @@ const renderCtx: CanvasRenderContext = {
   debug: props.debugVisual,
   snapZone: props.snapZone,
   flow,
-  viewport: viewportRef,
-  pane: paneEl,
-  paneRect: paneRectRef,
-  rootEl,
-  rendererEl,
   renderNodes: renderNodesRef,
   renderEdges: renderEdgesRef,
   visibleRect: visibleRectRef,
   visibleNodes: collectVisibleNodes,
-  screenToFlow,
-  flowToScreen,
-  updateNodeVisual,
-  updateNodeVisualSize,
 }
 provide(RENDER_CONTEXT_KEY, renderCtx)
-
-// 旧 *_KEY 兼容：仍逐个 provide。HOST_KEY 历史上是 Ref 形态，这里包成稳定 ref 以兼容旧消费方。
-provide(NODE_REGISTRY_KEY, props.registry)
-provide(NODE_WRITE_KEY, props.nodeWrite)
-provide(CANVAS_PARAMS_KEY, props.handleParams)
-provide(EDGE_VISUAL_KEY, props.edgeVisual)
-provide(EDGE_SELECTION_KEY, props.edgeSelection)
-provide(HOST_KEY, shallowRef(host))
 
 // 节点实测尺寸注入 nodeLayout（ResizeObserver + MutationObserver）；start 在 onMounted 内（renderer DOM 就绪后）
 const measure = useNodeMeasure({
@@ -267,6 +247,10 @@ onMounted(() => {
     updateNodeVisual: (id: string, position: { x: number; y: number }) => {
       vfApi.updateNode(id, { position })
     },
+    getNodeRenderPosition: (id: string) => {
+      const node = (vfApi.getNodes.value ?? []).find((n) => n.id === id)
+      return node ? ((node.computedPosition || node.position) as { x: number; y: number }) : undefined
+    },
     // —— 实例级 DOM（多宿主页面不串线：一律在本实例根内查询）——
     getRootEl: () => rootEl.value,
     getRendererEl: () => rendererEl.value,
@@ -279,13 +263,17 @@ onMounted(() => {
   // Flow 能力面（T04）：实例就绪（flow-ready）→ DOM 锚点捕获（dom-ready）
   flow.attachFlow(backend)
   flow.attachNodeVisual(vfApi as unknown as NodeVisualSyncApi)
+  flow.attachPositionReader((id: string) => {
+    const node = (vfApi.getNodes.value ?? []).find((n) => n.id === id)
+    return node ? ((node.computedPosition || node.position) as { x: number; y: number }) : undefined
+  })
   flow.attachDom({
     rootEl: () => rootEl.value,
     rendererEl: () => rendererEl.value,
     paneEl: () => paneEl.value,
     queryNodeEl: (nodeId: string) =>
       rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
-  })
+  }, paneRectRef.value)
   // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
 })

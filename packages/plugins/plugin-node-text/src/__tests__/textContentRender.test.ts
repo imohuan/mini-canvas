@@ -23,8 +23,8 @@ function renderCtx(zoom = 1, settings?: { get(key: string): unknown }): CanvasRe
     ...(settings ? { settings: { ...settings, onChange: () => ({ dispose: () => {} }) } } : {}),
   }
   return {
-    ctx: { get: (name: string) => services[name] },
-    viewport: { value: { zoom } },
+    ctx: { get: (name: string) => services[name], tryGet: (name: string) => services[name] },
+    flow: { viewport: { value: { x: 0, y: 0, zoom } } },
   } as unknown as CanvasRenderContext
 }
 

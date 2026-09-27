@@ -23,7 +23,8 @@ import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 
-const { pane, screenToFlow, ctx, interaction } = useCanvasRender()
+const { flow, ctx, interaction } = useCanvasRender()
+const pane = flow.pane
 
 const DRAG_THRESHOLD = 4
 
@@ -105,15 +106,15 @@ function onPointerMove(e: PointerEvent): void {
   }
   updateBoxVisual(startX, startY, e.clientX, e.clientY)
 
-  const tl = screenToFlow(Math.min(startX, e.clientX), Math.min(startY, e.clientY))
-  const br = screenToFlow(Math.max(startX, e.clientX), Math.max(startY, e.clientY))
+  const tl = flow.screenToFlow(Math.min(startX, e.clientX), Math.min(startY, e.clientY))
+  const br = flow.screenToFlow(Math.max(startX, e.clientX), Math.max(startY, e.clientY))
   const box = { x: tl.x, y: tl.y, w: br.x - tl.x, h: br.y - tl.y }
 
-  const layout = ctx.get<NodeLayoutService>('nodeLayout')
+  const layout = ctx.get('nodeLayout')
   const rects = layout ? layout.getAllRects() : []
   const hitIds = hitTestRects(rects, box)
 
-  const sel = ctx.get<SelectionService>('selection')
+  const sel = ctx.get('selection')
   if (sel) sel.set(hitIds)
 }
 

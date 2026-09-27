@@ -31,7 +31,7 @@ export type AlignGuideConfig = InferConfig<typeof Config>
 
 /** 从 settings 读当前配置（未声明/未改时回落 schema 默认；settings 未就绪则全走默认） */
 export function alignGuideConfigFrom(ctx: Context): AlignGuideConfig {
-  const settings = ctx.get<{ get(key: string): string | number | boolean | undefined } | undefined>('settings')
+  const settings = ctx.tryGet('settings')
   const read = <T extends string | number | boolean>(key: string, fallback: T): T => {
     if (!settings) return fallback
     const v = settings.get(key)

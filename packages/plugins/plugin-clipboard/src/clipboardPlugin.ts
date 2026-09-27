@@ -80,14 +80,14 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
   }
 
   private get selection(): SelectionService {
-    return this.ctx.get<SelectionService>('selection')
+    return this.ctx.get('selection')
   }
   private get doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
   /** 可选：canvas-render 宿主注入的视口服务；无则 null（粘贴退级联偏移） */
   private get viewport(): ViewportService | undefined {
-    return this.ctx.get<ViewportService | undefined>('viewport') ?? undefined
+    return this.ctx.tryGet('viewport') ?? undefined
   }
 
   get hasData(): boolean {

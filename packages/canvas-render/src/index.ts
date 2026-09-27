@@ -14,19 +14,15 @@
 // 所有渲染插件与宿主应用共用同一套 token，插件不必再自己发明“配色”配置项。
 import './styles/ui-theme.css'
 
-// content 组件与宿主共享的注入令牌/桥（插件包 content .vue import HOST_KEY，不反向依赖 demo）
-export { HOST_KEY } from './contracts/contentBridge'
 export type {
   SegmentComponent,
   ContentComponent,
   SegmentContentProps,
   SegmentNodeData,
 } from './contracts/contentComponentTypes'
-export { NODE_REGISTRY_KEY, NODE_WRITE_KEY } from './contracts/nodeRegistryKey'
 export type { NodeWrite, NodeWritePatch } from './contracts/nodeRegistryKey'
 // 画布外观参数 / 边外观与选中 注入令牌（宿主 provide、默认皮消费）
-export { CANVAS_PARAMS_KEY, type CanvasParams } from './contracts/canvasParamKey'
-export { EDGE_VISUAL_KEY, EDGE_SELECTION_KEY } from './contracts/edgeContext'
+export type { CanvasParams } from './contracts/canvasParamKey'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
 // 调试可视化开关令牌（端口调试/吸附调试；宿主 provide、BaseNode/MovingHandle 消费）
 export { DEBUG_KEY, type CanvasDebug } from './contracts/debugContext'

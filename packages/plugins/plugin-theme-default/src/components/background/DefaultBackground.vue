@@ -9,7 +9,8 @@ import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 // T05：背景不再直接 import VueFlow，改从渲染上下文取视口（同一份来源，宿主已 provide 的响应式 ref）。
 // 这样背景只依赖画布渲染契约，不绑 VueFlow 的组合式 API。
-const { viewport } = useCanvasRender()
+const { flow } = useCanvasRender()
+const viewport = flow.viewport
 
 const hostEl = ref<HTMLElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)

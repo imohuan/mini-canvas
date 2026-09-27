@@ -34,7 +34,8 @@ const props = defineProps<{ id: string; data: { text?: string } }>()
 
 // 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；ctx 是裸内核上下文(boot 后已就绪，见 CanvasSurface)。
 // 根 Context 没有服务属性 Proxy（declare module 只增强类型）；这里用 ctx.get 取 text 服务，避免 ctx.text 运行时为 undefined。
-const { ctx, viewport } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
+const viewport = flow.viewport
 function textService() {
   return ctx.get<TextNodeService>('text')
 }

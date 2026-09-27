@@ -54,7 +54,7 @@ export class ImageCompareService extends Service implements ImageCompareNodeServ
   }
 
   private doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   addCompareNode(position: { x: number; y: number }): string {
@@ -127,7 +127,7 @@ export function apply(ctx: Context) {
   // 边一有变化就看一眼各对比节点是否超限（新边连入 → 挤掉最老一条）。
   // 放在边集订阅里而不是 connect 回调里：这样"哪条算最老"永远按 edgeStore 的真实顺序判断，
   // 撤销/重做/刷新恢复也能自动收敛，不必依赖某一次事件参数。
-  const doc = ctx.get<DocService>('doc')
+  const doc = ctx.get('doc')
   // 挤边本身会再触发一次边变化（remove 广播）→ 用标志挡住重入，避免无谓的层层套娃；
   // 即便不挡也会自然收敛（第二次进来已不超限），这里只是把行为说得更明确。
   let trimming = false

@@ -83,7 +83,13 @@ import { pointerDown, POINTER_DOWN_CLASS, bindPointerPressWatchers } from './poi
 import { BoxSelectClickGuard } from './boxSelectGuard'
 import { selectionRegionEntries } from './selectionRegion'
 
-const { viewport, ctx, updateNodeVisual, pane, interaction, rootEl, handleParams, connectionState, screenToFlow, snapZone } = useCanvasRender()
+const { flow, ctx, interaction, handleParams, connectionState, snapZone } = useCanvasRender()
+// 迁移到全新 render facade：旧 Context 里的散落字段不再作为插件契约。
+const viewport = flow.viewport
+const pane = flow.pane
+const rootEl = flow.root
+const screenToFlow = (x: number, y: number) => flow.screenToFlow(x, y)
+const updateNodeVisual = (id: string, p: { x: number; y: number }) => flow.updateNodeVisual(id, p)
 // 组件名字沿用模板里的写法（script setup 会把 ref 在模板中自动解包）。
 // 目录缺件时它们是 undefined：模板里已用 showBatchHandles / guideLines 兜住不会白屏。
 const MovingHandle = useUiComponent('movingHandle')
@@ -130,10 +136,10 @@ const isSelecting = computed(() => interaction?.isSelecting?.value === true)
 // 数据服务统一走 doc 门面（设计文档 §4.1：nodeStore+edgeStore+graph 合并后的正式名字）。
 // 5c 起四个老名已下线，宿主恒装配 doc（canvas-base 注入）。
 function sel(): SelectionService {
-  return ctx.get<SelectionService>('selection')
+  return ctx.get('selection')
 }
 function layout(): NodeLayoutService | undefined {
-  return ctx.get<NodeLayoutService>('nodeLayout')
+  return ctx.get('nodeLayout')
 }
 /**
  * 数据读写统一走 doc 门面（5c 起唯一来源：老名已下线）。
@@ -154,7 +160,7 @@ interface BatchWriter {
   transaction<T>(reason: string, fn: (tx: { connectEdge(input: AddEdgeRequest): unknown }) => T): T
 }
 function nodeStore(): NodeReader {
-  const doc = ctx.get<DocService>('doc')
+  const doc = ctx.get('doc')
   if (!doc) throw new Error("[multi-select] 需要 doc 服务（宿主未装配画布数据层）")
   // doc 的 subscribe 签名是 (change: DocChange)；适配成 NodeStoreListener 形状，
   // 让调用方（unsubStore = subscribe(...)）的写法不变。
@@ -166,15 +172,15 @@ function nodeStore(): NodeReader {
   };
 }
 function graph(): BatchWriter {
-  const doc = ctx.get<DocService>('doc')
+  const doc = ctx.get('doc')
   if (!doc) throw new Error("[multi-select] 需要 doc 服务（宿主未装配画布数据层）")
   return doc;
 }
 function viewportSvc(): ViewportService | undefined {
-  return ctx.get<ViewportService>('viewport')
+  return ctx.get('viewport')
 }
 function edgeStore(): { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined {
-  return ctx.get<DocService>('doc')
+  return ctx.get('doc')
 }
 // ====== 批量连线（复刻 v1 的 onSelectionBatchConnectStart/End）======
 /**
@@ -473,7 +479,7 @@ function validateBatchEdge(
 
 
 // ====== 外观配置（实时跟随设置面板）======
-const frameConfig = ref<MultiSelectFrameConfig>(resolveMultiSelectFrameConfig((key) => ctx.get<{ get(k: string): unknown } | undefined>('settings')?.get(key)))
+const frameConfig = ref<MultiSelectFrameConfig>(resolveMultiSelectFrameConfig((key) => ctx.tryGet('settings')?.get(key)))
 const settingsOff = ctx
   .get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } } | undefined>('settings')
   ?.onChange((key, value) => {

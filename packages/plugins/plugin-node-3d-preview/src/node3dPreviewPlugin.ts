@@ -48,7 +48,7 @@ export class Panorama3DService extends Service implements Panorama3DNodeService 
   }
 
   private doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
 
   addPreviewNode(position: { x: number; y: number }, imageUrl = ''): string {
@@ -113,8 +113,8 @@ export function apply(ctx: Context) {
   //   f 平时是自动布局的"聚焦选中"，r 平时是"适应视图"。
   // when 读 selection 现算（不缓存）：选中集是随时变的，缓存会判过期。
   const commandTarget = (): string => {
-    const selection = ctx.get<{ ids: ReadonlySet<string> }>('selection')
-    const nodeStore = ctx.get<{ getNode(id: string): { type: string } | undefined }>('doc')
+    const selection = ctx.get('selection')
+    const nodeStore = ctx.get('doc')
     return resolveCommandTarget([...(selection?.ids ?? [])], (id) => nodeStore?.getNode(id)?.type)
   }
 

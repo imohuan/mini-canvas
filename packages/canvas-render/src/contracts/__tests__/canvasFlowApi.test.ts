@@ -41,14 +41,14 @@ describe('T04 · Flow 能力就绪状态', () => {
     expect(flow.ready()).toBe(false)
     expect(flow.domReady()).toBe(false)
 
-    expect(() => flow.viewport()).toThrow(CanvasFlowNotReadyError)
+    expect(() => flow.viewportSnapshot()).toThrow(CanvasFlowNotReadyError)
     expect(() => flow.screenToFlow(1, 2)).toThrow(CanvasFlowNotReadyError)
     expect(() => flow.flowToScreen(1, 2)).toThrow(CanvasFlowNotReadyError)
     expect(() => flow.zoomIn()).toThrow(CanvasFlowNotReadyError)
     expect(() => flow.queryNodeEl('n1')).toThrow(CanvasFlowNotReadyError)
     // 错误里应写明阶段（调用方能看到为什么）
     try {
-      flow.viewport()
+      flow.viewportSnapshot()
     } catch (err) {
       expect((err as CanvasFlowNotReadyError).phase).toBe('detached')
       expect((err as CanvasFlowNotReadyError).required).toBe('flow-ready')
@@ -64,7 +64,7 @@ describe('T04 · Flow 能力就绪状态', () => {
     expect(flow.ready()).toBe(true)
     expect(flow.domReady()).toBe(false)
 
-    expect(flow.viewport()).toEqual({ x: 10, y: 20, zoom: 2 })
+    expect(flow.viewportSnapshot()).toEqual({ x: 10, y: 20, zoom: 2 })
     expect(flow.screenToFlow(100, 100)).toEqual({ x: 50, y: 50 })
     expect(flow.flowToScreen(50, 50)).toEqual({ x: 100, y: 100 })
     flow.zoomTo(3)
@@ -99,7 +99,7 @@ describe('T04 · Flow 能力就绪状态', () => {
     expect(flow.paneEl()).toBe(pane)
     expect(flow.queryNodeEl('a')?.id).toBe('node-a')
     // flow 能力没被 DOM 覆盖
-    expect(flow.viewport()).toEqual({ x: 10, y: 20, zoom: 2 })
+    expect(flow.viewportSnapshot()).toEqual({ x: 10, y: 20, zoom: 2 })
   })
 
   it('dispose：终态，之后任何调用（含视口）都抛', () => {
@@ -114,7 +114,7 @@ describe('T04 · Flow 能力就绪状态', () => {
     flow.dispose()
     expect(flow.phase()).toBe('disposed')
     expect(flow.ready()).toBe(false)
-    expect(() => flow.viewport()).toThrow(CanvasFlowNotReadyError)
+    expect(() => flow.viewportSnapshot()).toThrow(CanvasFlowNotReadyError)
     expect(() => flow.queryNodeEl('n1')).toThrow(CanvasFlowNotReadyError)
   })
 

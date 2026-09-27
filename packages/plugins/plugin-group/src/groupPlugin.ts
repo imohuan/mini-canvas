@@ -132,13 +132,13 @@ export class GroupService extends Service implements GroupServiceAPI {
   }
 
   private get selection(): SelectionService {
-    return this.ctx.get<SelectionService>('selection')
+    return this.ctx.get('selection')
   }
   private get doc(): DocService {
-    return this.ctx.get<DocService>('doc')
+    return this.ctx.get('doc')
   }
   private get layout(): NodeLayoutService {
-    return this.ctx.get<NodeLayoutService>('nodeLayout')
+    return this.ctx.get('nodeLayout')
   }
 
   /** 组嵌套深度（不支持嵌套的画布上恒 0；B 方案允许一层 → 最大 1） */
@@ -413,8 +413,8 @@ export function apply(ctx: Context) {
     title: '创建分组',
     keys: ['ctrl+g'],
     run() {
-      const selection = ctx.get<SelectionService>('selection')
-      const doc = ctx.get<DocService>('doc')
+      const selection = ctx.get('selection')
+      const doc = ctx.get('doc')
       const ids = [...selection.ids].filter((id) => {
         const node = doc.getNode(id)
         // 顶层成员（无父）参与打组；组节点允许（嵌套一层），深度超限的由 createGroup 内部过滤
@@ -428,8 +428,8 @@ export function apply(ctx: Context) {
     title: '解散分组',
     keys: ['ctrl+shift+g'],
     run() {
-      const selection = ctx.get<SelectionService>('selection')
-      const doc = ctx.get<DocService>('doc')
+      const selection = ctx.get('selection')
+      const doc = ctx.get('doc')
       for (const id of [...selection.ids]) {
         const node = doc.getNode(id)
         if (node && node.type === GROUP_NODE_TYPE) group.ungroup(id)
