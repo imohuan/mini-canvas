@@ -9,7 +9,7 @@
  * 4. 值以正确类型喂给控件（布尔不能变成字符串 "true"）。
  */
 import { describe, it, expect } from 'vitest'
-import { createSSRApp, h, type Component } from 'vue'
+import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import ToolParamField from '../ToolParamField.vue'
@@ -73,14 +73,14 @@ describe('内置控件按 type 渲染', () => {
 
 describe('自定义组件渲染（用户明确要求的能力）', () => {
   it('给了 param.component 就用它渲染，内置控件不再出现', async () => {
-    const Custom = {
+    const Custom = defineComponent({
       name: 'CustomParam',
-      props: ['param', 'modelValue', 'disabled'],
+      props: { param: { type: Object, default: undefined }, modelValue: { type: null, default: undefined }, disabled: { type: Boolean, default: false } },
       render() {
         // 自定义组件自己决定长什么样（这里用一个可识别的标记）
         return h('div', { 'data-custom-param': 'hit' }, String(this.modelValue))
       },
-    }
+    })
     const html = await render(
       {
         key: 'thinking',
@@ -133,13 +133,18 @@ describe('自定义组件渲染（用户明确要求的能力）', () => {
   })
 
   it('componentProps 透传给自定义组件（作者需要额外入参时用）', async () => {
-    const Custom = {
+    const Custom = defineComponent({
       name: 'PropBag',
-      props: ['param', 'modelValue', 'unit', 'hint'],
+      props: {
+        param: { type: Object, default: undefined },
+        modelValue: { type: null, default: undefined },
+        unit: { type: String, default: '' },
+        hint: { type: String, default: '' },
+      },
       render() {
         return h('div', { 'data-unit': this.unit, 'data-hint': this.hint })
       },
-    }
+    })
     const html = await render(
       {
         key: 'thinking',

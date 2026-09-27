@@ -16,12 +16,6 @@ import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { SaveService, DocService } from '@mini-canvas/canvas-data'
 import { createAutoSaveEngine, type AutoSaveEngine } from './autoSaveEngine'
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    save: SaveService
-  }
-}
-
 export const name = 'auto-save'
 export const inject = ['save', 'doc'] as string[]
 

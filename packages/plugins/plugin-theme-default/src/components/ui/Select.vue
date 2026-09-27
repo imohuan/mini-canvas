@@ -14,12 +14,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import Dropdown from './Dropdown.vue'
-
-export interface SelectOption {
-  label: string
-  value: string | number
-  disabled?: boolean
-}
+import type { SelectOption } from './types'
 
 const props = withDefaults(
   defineProps<{

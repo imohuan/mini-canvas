@@ -14,8 +14,7 @@
  *   </Dropdown>
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-
-export type DropdownTrigger = 'click' | 'hover' | 'contextmenu'
+import type { DropdownTrigger } from './types'
 
 const props = withDefaults(
   defineProps<{

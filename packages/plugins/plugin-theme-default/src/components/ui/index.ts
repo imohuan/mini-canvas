@@ -3,9 +3,8 @@
  * 不导出样式 token；样式跟随项目 UI 规范。
  */
 export { default as Dropdown } from './Dropdown.vue'
-export type { DropdownTrigger } from './Dropdown.vue'
 export { default as Select } from './Select.vue'
-export type { SelectOption } from './Select.vue'
+export type { DropdownTrigger, SelectOption } from './types'
 export { default as PrecisionSlider } from './PrecisionSlider.vue'
 export { default as ToolParamField } from './ToolParamField.vue'
 export { default as ColorField } from './ColorField.vue'

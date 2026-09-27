@@ -16,12 +16,6 @@
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    doc: DocService
-  }
-}
-
 export const name = 'history'
 // 5c 起撤销栈不再是独立服务名（并进 doc）；本包薄适配的那个名字也随之改到 doc。
 // 本包存在的价值不变：给「只想要老版 history 命令名、并自带只读查询服务」的宿主一个独立入口。

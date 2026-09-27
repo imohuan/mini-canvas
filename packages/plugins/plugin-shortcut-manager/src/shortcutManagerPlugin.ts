@@ -23,12 +23,6 @@ import { createShortcutRemapEngine } from './shortcutRemapEngine'
 import { createV2ShortcutManager, type V2ShortcutManager } from './v2ShortcutManager'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
 
-declare module '@mini-canvas/canvas-data' {
-  interface Context {
-    command: CommandService
-  }
-}
-
 export const name = 'shortcut-manager'
 
 /** 帮助面板共享状态 + 管理器方法（命令/组件/重映射面板读同一注入对象） */

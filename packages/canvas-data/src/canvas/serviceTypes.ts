@@ -16,7 +16,7 @@ import type { DocService } from '../docService'
 import type { SelectionService } from '../selection'
 import type { ResourceService } from '../resourceService'
 import type { SettingsPersistService } from '../settingsPersist'
-import type { SaveServiceImpl } from '../storage/SaveService'
+import type { SaveService } from '../storage/types'
 import type { NodeFactoryService } from './nodeFactory'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { ThemeRegistry } from './registry/themeRegistry'
@@ -30,7 +30,7 @@ declare module '@mini-canvas/kernel' {
     /** 资源生命周期（Blob / objectURL） */
     resources: ResourceService
     /** 存储适配器（本地 / 云端可插拔） */
-    save: SaveServiceImpl
+    save: SaveService
     /** 命令注册表 */
     command: CommandService
     /** 节点创建工厂 */
@@ -43,5 +43,40 @@ declare module '@mini-canvas/kernel' {
     settings: SettingsStore
     /** 配置持久化桥（宿主关掉持久化时缺席，取用侧用 tryGet 或自行判空） */
     settingsPersist: SettingsPersistService
+  }
+}
+
+/**
+ * 同一批基础服务也挂到 Context 上（直访形式）。
+ *
+ * 注意 settings **不在此列**：ctx.settings 是能力段的声明糖（define/set/get/onChange/groups），
+ * 与 ctx.get('settings') 拿到的原始 SettingsStore 不是同一个形状。属性直访命中能力段，
+ * 故这里不能重复声明它（会造成接口冲突）。取原始 store 请用 ctx.get('settings')。
+ *
+ * 为什么两处都要：ctx.get('doc') 与 ctx.doc 是同一批服务的两种写法（插件 ctx 有服务解析
+ * Proxy，ctx.doc 运行时等价于 ctx.get('doc')）。此前只登记了 Services，于是 6 个插件各自
+ * declare module ... interface Context { doc: DocService } 把同一件事抄了一遍（T03 要消除的重复）。
+ *
+ * 渲染层注入的 nodeLayout / viewport 由 canvas-render 自行声明（它才知道那两个类型）。
+ * 插件自己提供的服务（text/image/group/clipboard/…）仍由各自 declare，那是它们的私有契约。
+ */
+declare module '@mini-canvas/canvas-data' {
+  interface Context {
+    /** 文档门面（节点 + 边 + 事务 + 撤销 + 快照） */
+    doc: DocService
+    /** 选中态 */
+    selection: SelectionService
+    /** 资源生命周期 */
+    resources: ResourceService
+    /** 存储适配器 */
+    save: SaveService
+    /** 命令注册表 */
+    command: CommandService
+    /** 节点创建工厂 */
+    nodeFactory: NodeFactoryService
+    /** 节点展示注册表 */
+    nodeRegistry: NodeRegistry
+    /** 主题 / 外观注册表 */
+    themeRegistry: ThemeRegistry
   }
 }
