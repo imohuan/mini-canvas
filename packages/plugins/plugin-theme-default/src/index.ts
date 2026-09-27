@@ -81,12 +81,18 @@ export const DEFAULT_THEME_EDGE = {
   edgeFlowIntensity: 0.9,
 } as const;
 
-/** 浮动端口(half)外观默认值（对齐 canvasHostCore DEFAULT_HANDLE_VISUAL） */
+/**
+ * 浮动端口(half)外观默认值（**T10 决策：这是全仓唯一权威默认**）。
+ *
+ * canvas-render 的 DEFAULT_HANDLE_VISUAL 已对齐到这里的 10/0.55/0.8（此前宿主回落是
+ * 86/0.8/1，与主题双源漂移 —— 核心节点契约 §9-1）。两边一致后，"装不装主题插件"
+ * 不再影响端口几何。本值即成品应用一直以来的实际观感。
+ */
 export const DEFAULT_THEME_HANDLE = {
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  portZoneWidth: 10, // 端口吸附交互区/半圆耳朵水平外扩，默认 86（对齐 canvasHostCore；0 会让端口区塌成不可命中）
+  portZoneWidth: 10, // 端口吸附交互区/半圆耳朵水平外扩（T10：权威默认；0 会让端口区塌成不可命中）
   portZoneHeightRatio: 0.55,
   portZoneOffset: 0,
   portZoneShape: "arc",

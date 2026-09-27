@@ -294,15 +294,22 @@ export const DEFAULT_EDGE_VISUAL: EdgeVisual = {
 }
 
 /** 浮动端口外观默认值（对齐 BaseNode DEFAULT_HANDLE / contract §0） */
+/**
+ * T10 决策（2026-09-27）：portZone 三项对齐 theme-default 的 DEFAULT_THEME_HANDLE（10/0.55/0.8），
+ * 消除"宿主回落 86/0.8/1 vs 主题 10/0.55/0.8"的双源漂移（核心节点契约 §9-1）。
+ * 依据：成品应用一直走主题值（App.vue 传 :handle-visual=ui.cfg.handle），86 只在
+ * 未装主题插件的自建宿主生效 —— 对齐后自建宿主与成品观感一致。决策理由详见
+ * docs/plans/2026-09-27-port-zone-default-decision-brief.md。
+ */
 export const DEFAULT_HANDLE_VISUAL: CanvasParams = {
   handleRestOffset: 36,
   handleCursorGap: 24,
   handleButtonSize: 32,
-  portZoneWidth: 86,
-  portZoneHeightRatio: 0.8,
+  portZoneWidth: 10,
+  portZoneHeightRatio: 0.55,
   portZoneOffset: 0,
   portZoneShape: 'arc',
-  portZoneArcRatio: 1,
+  portZoneArcRatio: 0.8,
 }
 
 /** 调试可视化开关默认值（**默认开**：端口调试 + 吸附调试都开，方便设计/排错直观看到端口几何 + 吸附范围） */

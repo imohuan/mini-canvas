@@ -1,7 +1,7 @@
 # 插件上下文与包边界执行计划
 
 日期：2026-09-27  
-状态：**T01–T09 已落地**（每项独立提交 + 单测/浏览器验证）；T10 待负责人选定端口默认值
+状态：**T01–T10 全部落地**（每项独立提交 + 单测/浏览器验证）
 规格：[canvas-plugin-context-and-boundaries-spec.md](../goal/canvas-plugin-context-and-boundaries-spec.md)  
 审查：[canvas-base-data-render-theme-audit-2026-09-26.md](../tmp/canvas-base-data-render-theme-audit-2026-09-26.md)  
 作者目标形态：[plugin-author-final-shape-pseudocode-2026-09-27.md](../tmp/plugin-author-final-shape-pseudocode-2026-09-27.md)
@@ -74,7 +74,7 @@ T06 与 T07 在 T05 完成后可并行。T07 虽合并三个相同类型的包�
 | T07 | 把 image/text/video 的共享 UI 依赖迁出默认主题 | T05 | ✅ 5cb5310 |
 | T08 | 锁定插件依赖方向并运行整装回归 | T06、T07 | ✅ 28d6e1d |
 | T09 | 评估 canvas-foundation 拆包的收益与兼容成本 | T02、T03 | ✅ 1a13f41 · **no-go** |
-| T10 | 决定端口几何的唯一默认值 | 负责人输入 | ⏳ 决策材料就绪（83db63a） |
+| T10 | 决定端口几何的唯一默认值 | 负责人输入 | ✅ 方案 A（10/0.55/0.8，已实施 + 浏览器验证） |
 
 ## 任务说明
 
@@ -145,11 +145,7 @@ theme-default 的 apply 只注册主题和目录项。测试区分插件装载�
 
 ## 现在能开的任务
 
-- 第一波：T01、T02 可并行；T10 可由负责人阅读后决策。T01 和 T02 改动不同模块，交付后都不要求批量迁移插件。
-- 第二波：T03 在 T02 完成后开始；T09 可在 T02/T03 后并行分析。
-- 第三波：T04 在 T03 后；T05 等 T01、T03、T04 都过门槛。
-- 第四波：T06、T07 在 T05 后可以并行；共享组件契约保持冻结，T07 逐包验证 image、text、video。
-- 收尾：T08 等 T06、T07 完成；T09 go 后产生的新 foundation 任务另排，不回写本计划假装已有包。
+全部四波与收尾均已完成（T01–T10）。T09 结论为 no-go，未产生 foundation 实现任务。
 
 ## 发布方式与待确认项
 

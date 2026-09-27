@@ -4,12 +4,13 @@
 
 **Blocked by:** None (decision can start immediately; any implementation is a separate follow-up)
 
-**Status:** proposed
+**Status:** done —— 方案 A（10/0.55/0.8），作者授权按执行者的架构标准代答
 
 - [x] 对照宿主默认与主题配置，说明两条来源的实际生效路径和设置优先级
   （见 docs/plans/2026-09-27-port-zone-default-decision-brief.md：App.vue 传
   :handle-visual=ui.cfg.handle，CanvasHost 仅在未传时回落宿主默认；真浏览器实测成品走 10/0.55/0.8）。
-- [ ] 负责人明确目标默认值及是否保留用户保存的覆盖值。
+- [x] 负责人明确目标默认值及是否保留用户保存的覆盖值。
+  （方案 A：以主题值为准、宿主回落对齐；settingsPersist 存具体值，用户已保存设置不受影响。）
 - [x] 决策记录端口宽度、高度比例、弧比例对命中范围和可见端口的影响
   （命中范围、可见外观、存量设置、多选批量端口、调试叠加五个影响面已逐条列出）。
 - [x] 明确后续行为实现所需的核心节点契约检查、单测和浏览器场景

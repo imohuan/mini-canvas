@@ -277,8 +277,10 @@ describe('默认外观常量', () => {
   })
   it('handle 默认含全部尺寸字段', () => {
     expect(DEFAULT_HANDLE_VISUAL.handleButtonSize).toBe(32)
-    expect(DEFAULT_HANDLE_VISUAL.portZoneWidth).toBe(86)
-    expect(DEFAULT_HANDLE_VISUAL.portZoneArcRatio).toBe(1)
+    // T10：宿主回落对齐 theme-default（10/0.55/0.8），消除双源（契约 §9-1）
+    expect(DEFAULT_HANDLE_VISUAL.portZoneWidth).toBe(10)
+    expect(DEFAULT_HANDLE_VISUAL.portZoneHeightRatio).toBe(0.55)
+    expect(DEFAULT_HANDLE_VISUAL.portZoneArcRatio).toBe(0.8)
     expect(Object.keys(DEFAULT_HANDLE_VISUAL)).toHaveLength(8)
   })
   it('debug 开关默认均开（handleDebug/connectionSnapDebugVisible=true，开关设计默认给可视化）', () => {
