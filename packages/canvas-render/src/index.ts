@@ -24,8 +24,8 @@ export type { NodeWrite, NodeWritePatch } from './contracts/nodeRegistryKey'
 // 画布外观参数 / 边外观与选中 注入令牌（宿主 provide、默认皮消费）
 export type { CanvasParams } from './contracts/canvasParamKey'
 export type { EdgeVisual, EdgeSelection } from './contracts/edgeContext'
-// 调试可视化开关令牌（端口调试/吸附调试；宿主 provide、BaseNode/MovingHandle 消费）
-export { DEBUG_KEY, type CanvasDebug } from './contracts/debugContext'
+// 调试可视化开关（端口调试/吸附调试；宿主 prop、BaseNode/MovingHandle 经 useCanvasRender 消费）
+export type { CanvasDebug } from './contracts/debugContext'
 // 拖线连接过程反馈状态契约（canvas-render 能力层提供、BaseNode/ConnectionLine 消费）
 export type {
   ConnectionFeedbackState,
@@ -73,11 +73,9 @@ export {
   hitTest,
   closestZone,
   zoneDirectionAnchor,
-  DEFAULT_SNAP_RATIOS,
   DEFAULT_SNAP_ZONE_CONFIG,
 } from './connection/geometry'
 export type {
-  SnapRatios,
   NodeRect,
   SnapZone,
   SnapZoneSide,
@@ -235,7 +233,6 @@ export {
   provideCapabilityBag,
   capabilityField,
   createCapabilityNodeContext,
-  CAPABILITY_BAG_KEY,
 } from './contracts/capabilities'
 export type {
   CapabilityFactory,

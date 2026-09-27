@@ -99,9 +99,6 @@ const props = withDefaults(
     debugVisual?: CanvasDebug
     /** 吸附带配置覆盖（缺省对齐 DEFAULT_SNAP_ZONE_CONFIG）。传响应式对象可实时调整吸附带。 */
     snapZoneVisual?: SnapZoneConfig
-    /** VueFlow 缩放范围（「常规/画布」的 minZoom/maxZoom 已由 settings 接管，此 props 兼容保留但不生效） */
-    minZoom?: number
-    maxZoom?: number
     /** 挂到 window 的调试 key；传空则不挂 */
     windowKey?: string
     /**
@@ -122,8 +119,6 @@ const props = withDefaults(
     dev?: boolean
   }>(),
   {
-    minZoom: 0.2,
-    maxZoom: 2,
     persistViewport: true,
   },
 )

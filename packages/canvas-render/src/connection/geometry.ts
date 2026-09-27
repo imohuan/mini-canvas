@@ -13,27 +13,11 @@
  *       shape：rect | arc（仅视觉，命中一律按矩形）
  *   - body 区：整张卡片矩形。
  *
- * 旧 SnapRatios（outer/inner/height × handleRadius）保留为 deprecated 导出，避免破坏历史调用方/测试；
- * 新代码一律用 SnapZoneConfig。
+ * 吸附几何只有一套模型：SnapZoneConfig（旧 SnapRatios outer/inner×handleRadius 模型已删除）。
  */
 import type { FlowPoint } from '../contracts/connectionContext'
 
-// ======================== 旧比例常量（deprecated，保留兼容） ========================
-
-/** 节点吸附比例常量（**deprecated**：v1 outer/inner×handleRadius 模型。新代码用 SnapZoneConfig） */
-export interface SnapRatios {
-  /** 朝节点外侧的吸附带宽倍率（×handleRadius） */
-  outer: number
-  /** 朝节点内侧的吸附带深倍率（×handleRadius） */
-  inner: number
-  /** 吸附带高度倍率（×handleRadius） */
-  height: number
-}
-
-/** 默认吸附比例（v1 默认值，**deprecated**） */
-export const DEFAULT_SNAP_RATIOS: SnapRatios = { outer: 0.75, inner: 0.6, height: 1.35 }
-
-// ======================== 新 SnapZoneConfig 吸附带配置 ========================
+// ======================== SnapZoneConfig 吸附带配置 ========================
 
 /** 吸附带视觉形状 */
 export type SnapZoneShape = 'rect' | 'arc'

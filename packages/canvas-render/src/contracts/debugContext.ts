@@ -6,9 +6,9 @@
  *   - connectionSnapDebugVisible：打开后，拖线悬停到某节点时把它的吸附带 + body 反馈区画出来。
  *
  * 注：不塞进 CanvasParams(端口尺寸)，因那对象有"5 字段"合同(单测锁长度)；调试开关是独立的布尔组，
- * 走与 handleVisual/edgeVisual 完全一致的"宿主 prop reactive 对象 → provide → 组件消费"链路。
+ * 走与 handleVisual/edgeVisual 完全一致的"宿主 prop reactive 对象 → useCanvasRender 消费"链路。
+ * 旧 DEBUG_KEY 注入令牌已删除（统一走 useCanvasRender 单令牌）。
  */
-import type { InjectionKey } from 'vue'
 
 /** 调试可视化开关（宿主注入的响应式对象；属性改即实时生效） */
 export interface CanvasDebug {
@@ -17,5 +17,3 @@ export interface CanvasDebug {
   /** 吸附调试：拖线时画出目标节点吸附带与 body 反馈区 */
   connectionSnapDebugVisible: boolean
 }
-
-export const DEBUG_KEY: InjectionKey<CanvasDebug> = Symbol('canvas-v2-debug-visual')

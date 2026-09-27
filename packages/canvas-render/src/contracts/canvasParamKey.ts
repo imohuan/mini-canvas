@@ -1,10 +1,12 @@
 /**
- * canvasParamKey —— 宿主画布外观参数（供 BaseNode/端口等读取、由宿主设置面板实时修改）的注入令牌。
+ * canvasParamKey —— 宿主画布外观参数（供 BaseNode/端口等读取、由宿主设置面板实时修改）的**类型**契约。
  *
- * BaseNode 等壳组件经此读取响应式外观参数(如浮动端口尺寸)；宿主不注入则回落到 contract §0 默认值。
- * 注入值须为响应式(reactive)对象：其属性改动会被消费方 computed 追踪而实时生效。
+ * BaseNode 等壳组件经 useCanvasRender().handleParams 读响应式外观参数(如浮动端口尺寸)；
+ * 宿主不提供则回落到 contract §0 默认值。值须为响应式(reactive)对象：其属性改动会被
+ * 消费方 computed 追踪而实时生效。
+ *
+ * 旧的 CANVAS_PARAMS_KEY 注入令牌已删除（统一走 useCanvasRender 单令牌）。
  */
-import type { InjectionKey } from 'vue'
 
 /** BaseNode/端口外观参数（默认值对齐 core-node-contract §0） */
 export interface CanvasParams {
@@ -25,5 +27,3 @@ export interface CanvasParams {
   /** 端口弧垂直胖瘦系数(0~1)：1=锚点圆心半椭圆(与吸附带同款)，越小越扁接近平顶。缺省 1。 */
   portZoneArcRatio?: number
 }
-
-export const CANVAS_PARAMS_KEY: InjectionKey<CanvasParams> = Symbol('canvas-v2-canvas-params')
