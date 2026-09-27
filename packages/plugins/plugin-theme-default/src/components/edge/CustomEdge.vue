@@ -18,7 +18,6 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useCanvasRender, useThemeColor } from '@mini-canvas/canvas-render'
 import { isTransient } from '@mini-canvas/canvas-data'
-import type { DocService } from '@mini-canvas/canvas-data'
 import type { EdgeVisual } from '@mini-canvas/canvas-render'
 import {
   getSourcePosition,
@@ -179,13 +178,14 @@ function showCutButtonAtPointer(ev: MouseEvent) {
 function onMouseMove(ev: MouseEvent) { if (showCutButton.value) updateCutButtonPosition(ev) }
 function cutEdge(ev: MouseEvent) {
   ev.stopPropagation(); ev.preventDefault()
-  const command = ctx.get<{ has(id: string): boolean; execute(id: string, ...payload: unknown[]): unknown }>('command')
+  // T05：command / doc 已是集中登记类型的服务（T03），不再手写结构断言
+  const command = ctx.get('command')
   if (command?.has('command:delete-edge')) {
     command.execute('command:delete-edge', { edgeId: props.id ?? '' })
   } else {
     // 回落路径：没有命令服务时直接走 doc 的写入口 —— 自带历史 + 落盘调度（旧写法是
     // edgeStore.removeEdge + save.set(GRAPH_EDGES_KEY, …)，5c 删老名后统一收口到 doc）。
-    ctx.get<DocService>('doc').removeEdges([props.id ?? ''])
+    ctx.get('doc').removeEdges([props.id ?? ''])
   }
   showCutButton.value = false
 }

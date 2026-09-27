@@ -13,13 +13,13 @@
  *   v-if="cap.hasTarget" 渲染 target 口、v-if="cap.hasSource" 渲染 source 口。
  */
 import { computed } from "vue";
-import type { DocService } from "@mini-canvas/canvas-data";
 import { useCanvasRender } from "@mini-canvas/canvas-render";
 
 export function useNodeCapability(type: string) {
   const { ctx } = useCanvasRender();
   // 5c：nodeStore 老服务名已下线，类型表从 doc 门面读（同一份数据，只读投影）。
-  const store = ctx.get<DocService>("doc");
+  // T05：服务名已在 canvas-data 集中登记类型（T03），不必再手写 ctx.get<DocService>。
+  const store = ctx.get("doc");
   const nodeDef = computed(() => store.types.get(type));
 
   /** 该 type 是否有输入(target)能力（有 inputs 声明且非空才限制输入，否则默认有） */

@@ -97,7 +97,8 @@ disposers.push(
   ctx.on('ctx:plugin-uninstalled', reloadTabs),
 )
 // P2-1：内核 schema 变更订阅 → 强制刷新分组列表（插件热装卸后新 config 分组立即可见）
-const rawSettings = ctx.get<{ onSchemaChange(cb: () => void): { dispose(): void } }>('settings')
+// T05：settings 已是集中登记类型的服务（T03）
+const rawSettings = ctx.get('settings')
 const schemaOff = rawSettings?.onSchemaChange(() => { refreshTick.value += 1 })
 if (schemaOff) disposers.push(schemaOff)
 onBeforeUnmount(() => {

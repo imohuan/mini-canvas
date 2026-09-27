@@ -65,7 +65,8 @@ const zoom = computed(() => Math.max(vf.viewport.value?.zoom || 1, 0.01))
 // 节点外观：全部来自本插件 Config（节点/标题、节点/低细节、节点/多选标记），对齐 v1 core 的
 // nodeTitleOffset / nodeTitleScaleMinZoom / nodeLodLowDetailZoom。settings 单一数据源非 Vue 响应式，
 // 故这里用 ref + onChange 订阅把配置改动实时驱动到渲染（改设置面板即生效，不整图重建）。
-const settingsStore = () => ctx?.get<{ get(key: string): unknown }>('settings')
+// T05：settings 已是集中登记类型的服务（T03）；返回类型由服务名决定
+const settingsStore = () => ctx?.get('settings')
 const numOf = (key: string, fallback: number): number => {
   const v = settingsStore()?.get(key)
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
@@ -266,8 +267,8 @@ function focusNodeIfNeeded(): void {
   // 标题条在卡片上方：把判定范围向上扩 PAD，避免"节点刚好看得见、标题却被裁掉"
   const withTitle = { x: rect.x, y: rect.y - TITLE_FOCUS_PAD, w: rect.w, h: rect.h + TITLE_FOCUS_PAD }
   if (isRectFullyVisible(withTitle, view)) return
-  ctx?.get<{ setCenter(x: number, y: number, zoom?: number): void } | undefined>('viewport')
-    ?.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom.value)
+  // T05：viewport 由渲染层登记类型（T03），不必手写 setCenter 结构断言
+  ctx?.get('viewport')?.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom.value)
 }
 
 /** 标题空间余量（flow 坐标）：判定聚焦时向上多留这么多，保证标题不被视口裁掉 */
