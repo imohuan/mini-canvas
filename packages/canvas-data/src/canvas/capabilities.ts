@@ -203,17 +203,28 @@ export function buildCapabilities(
     }
   }
 
-  // ctx.theme.register / add 共享的落位逻辑：用闭包函数而非方法内 this，解构调用也不会丢上下文
+  /**
+   * ctx.theme.register / add 共享的落位逻辑：一次写入**两处**，两处语义逐字一致。
+   *
+   * 为什么必须写两处：ThemeRegistry 是渲染层取"当前赢家"的容器，registryOf('theme') 是自省/
+   * 诊断与统一注册场的落点。过去 add 只写容器、remove 只删容器 → 场里读到的内容与真实生效的
+   * 内容不一致（T01）。两处 entry 的 id/order 必须同源，否则"谁赢了"会随读取入口变化。
+   *
+   * 回收：容器那次用 ctx.effect 显式登记；场那次经 land() 拿到的插件视图，其 add 已随本插件
+   * fiber 自动回收（RegistryImpl.bind 的 keep 语义），不重复登记。
+   */
   const placeTheme = (
     slot: ThemeSlot,
     component: unknown,
     opts: ThemeOccupantOpts = {},
   ): void => {
-    const reg = theme()
-    if (!reg) return
     const id = opts.id ?? pluginName
-    reg.addOccupant(slot, { id, order: opts.order, value: component })
-    ctx.effect(() => () => reg.removeOccupant(slot, id))
+    const reg = theme()
+    if (reg) {
+      reg.addOccupant(slot, { id, order: opts.order, value: component })
+      ctx.effect(() => () => reg.removeOccupant(slot, id))
+    }
+    land<unknown>('theme')?.add(slot, component, { id, order: opts.order })
   }
 
   return {
@@ -274,24 +285,30 @@ export function buildCapabilities(
       ): string {
         // 步骤 9 运行时兜底：老段名不静默、不错位落场，当场抛清晰错误。
         assertRegion(segment)
-        // 场落点（§8.2）：node/region/<type>/<seg>。缺省 order 沿用 nodeRegistry 语义 =
-        // 首条在基座之后(1)，其后 = 已有最大 + 1；糖内补回该语义（场缺省 order 是 0）。
+        // 场落点（§8.2）：node/region/<type>/<seg>。
+        //
+        // order 只解析**一次**，两处用同一个值（T01）：过去场里自行计算、还把显式 opts.order
+        // 整个忽略掉，NodeRegistry 又按自己那套算 → 同一次注册在两处排序不同，作者声明的顺序
+        // 到不了界面。缺省语义沿用既有约定：首条排在基座之后(1)，其后 = 已有最大 + 1。
         const regionField = land<unknown>('node/region')
+        let order = opts.order
         if (regionField) {
           const regionKey = `${type}/${segment}`
-          const existing = regionField.list(regionKey)
-          // 基座判断用 nodeRegistry 展示定义（与 NodeRegistry.registerContribution 的
-          // "首条排在基座之后"语义对齐：基座 content → order 1 起）
-          let order: number
-          if (existing.length === 0) {
-            const base = nodeRegistry()
-            const baseSeg = base?.get(type)?.segments?.[segment]
-            order = baseSeg !== undefined ? 1 : 0
-          } else {
-            order = Math.max(...existing.map((e) => e.order)) + 1
+          if (order === undefined) {
+            const existing = regionField.list(regionKey)
+            if (existing.length === 0) {
+              // 基座判断用 nodeRegistry 展示定义（与 NodeRegistry.registerContribution 的
+              // "首条排在基座之后"语义对齐：基座 content → order 1 起）
+              const baseSeg = nodeRegistry()?.get(type)?.segments?.[segment]
+              order = baseSeg !== undefined ? 1 : 0
+            } else {
+              order = Math.max(...existing.map((e) => e.order)) + 1
+            }
           }
           regionField.add(regionKey, component, { id: opts.id, order })
         }
+        // 场缺席（最小 ctx）时 order 保持 opts.order（可为 undefined），由 NodeRegistry 按自己
+        // 的缺省规则解析 —— 与改动前一致。
         const registry = ctx.get<{
           registerContribution(
             t: string,
@@ -302,7 +319,7 @@ export function buildCapabilities(
         }>('nodeRegistry')
         const id = registry.registerContribution(type, segment, {
           id: opts.id,
-          order: opts.order,
+          order,
           component,
         })
         ctx.effect(() => () => registry.unregisterContribution(type, segment, id))
@@ -357,21 +374,19 @@ export function buildCapabilities(
     // ---------- ctx.theme：往主题槽叠/取 occupant，自动回收 ----------
     theme: {
       register(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
-        // 场落点（§8.2）：theme/<slot>。
         // 行为语义 = main 的"register = 放 id=调用方的 occupant，同 id 顶替、不同 id 叠加"
         //（严格审查 H3：步骤 2 曾把同 id 重复 register 改成抛错，属未申报的行为变化，本笔回退）。
-        // 唯一保留的抛错 = ThemeRegistry.register 的既有语义：default occupant 已存在时抛
-        //（见 themeRegistry.ts register()，有既有测试锁）——但那由 placeTheme 内部走容器判定，
-        // 糖不重复造判定（旧实现"reg && themeField && …"在场存在而容器缺席时漏抛）。
-        const themeField = land<unknown>('theme')
         placeTheme(slot, component, opts)
-        themeField?.add(slot, component, { id: opts.id ?? pluginName, order: opts.order })
       },
       add(slot: ThemeSlot, component: unknown, opts: ThemeOccupantOpts = {}): void {
+        // add 与 register 走同一条落位逻辑：两处的 id/order/回收完全一致（T01）。
+        // 差别只在调用方语义（add 用于运行期叠加/换皮，register 用于插件装载期声明）。
         placeTheme(slot, component, opts)
       },
       remove(slot: ThemeSlot, id: string): void {
+        // 两处同时移除，否则场里会留下一条"已经撤掉的主题"（T01）。
         theme()?.removeOccupant(slot, id)
+        land<unknown>('theme')?.remove(slot, id)
       },
     },
 
