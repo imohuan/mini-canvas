@@ -74,7 +74,7 @@ async function bootAll() {
 const EXPECTED = [
   { type: 'text', extraSegments: [] },
   { type: 'image', extraSegments: ['out:top', 'over:inset'] },
-  { type: 'video', extraSegments: ['out:top', 'out:bottom', 'over:inset'] },
+  { type: 'video', extraSegments: ['out:top', 'over:inset'] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const

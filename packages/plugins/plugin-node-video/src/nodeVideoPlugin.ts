@@ -25,6 +25,7 @@ import VideoContent from './VideoContent.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
+import { registerBarAction, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
 import { beginOverlay, endOverlay } from './videoSession'
 import {
   captureFrameNode,
@@ -126,6 +127,28 @@ export const Config: ConfigSchema = {
 export function apply(ctx: Context) {
   const service = new VideoService(ctx)
 
+  // 0.5 底栏动作（T9：剪辑面板搬进 plugin-bottom-bar，本包只发布动作）
+  //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
+  const registerBar = (): boolean => {
+    if (!ctx.tryGet('nodeBar')) return false
+    // AI 生成视频：每个 produces:'video' 的工具一条动作（输入框是临时的，发送时组装）
+    publishToolActions(ctx, { types: ['video'], produces: 'video', needsPrompt: true })
+    // 剪辑：选中动作 = 打开剪辑会话（面板显隐交给底栏，会话态由 onSelect/onDeselect 开合）
+    registerBarAction(ctx, {
+      id: 'video.clip', types: ['video'], title: '剪辑', panel: VideoClipPanel, needsPrompt: false, apply: 'self',
+      description: '裁掉首尾保留一段（元数据式，不重新编码）',
+      onSelect: (id) => beginOverlay(id, 'clip'),
+      onDeselect: (id) => endOverlay(id),
+      run: () => ({ ok: true }),   // 实际提交由面板经命令 video.clipConfirm 完成
+    })
+    return true
+  }
+  if (!registerBar()) {
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerBar()) off.dispose()
+    })
+  }
+
   ctx.nodes.register({
     type: VIDEO_NODE_TYPE,
     label: '视频',
@@ -144,7 +167,6 @@ export function apply(ctx: Context) {
     in: VideoContent,
     segments: {
       'out:top': VideoTopToolbar,
-      'out:bottom': VideoClipPanel,
       // 裁剪浮层画在**卡片外面**（over:inset 区域）：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       'over:inset': VideoFrameOverlay,

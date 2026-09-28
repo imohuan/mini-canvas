@@ -801,6 +801,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
