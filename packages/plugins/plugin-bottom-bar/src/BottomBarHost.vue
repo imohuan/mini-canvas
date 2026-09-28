@@ -30,9 +30,13 @@ disposers.push(
   ctx.on('ctx:plugin-installed', reload),
   ctx.on('ctx:plugin-uninstalled', reload),
 )
-const themeRegistry = ctx.get<{ subscribe(cb: () => void): { dispose(): void } } | undefined>('themeRegistry')
+// 注意：ThemeRegistry.subscribe 返回的是 **() => void**（不是 Disposable）——
+// 这里收窄成直接 push，之前包了一层 { dispose: () => sub.dispose() } 会在卸载时把
+// 函数当 Disposable 再调一次 dispose，抛 "sub.dispose is not a function"。
+const themeRegistry = ctx.get<{ subscribe(cb: () => void): () => void } | undefined>('themeRegistry')
 if (themeRegistry && typeof themeRegistry.subscribe === 'function') {
-  disposers.push(themeRegistry.subscribe(reload))
+  const sub = themeRegistry.subscribe(reload)
+  disposers.push({ dispose: () => sub() })
 }
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
@@ -42,4 +46,3 @@ onBeforeUnmount(() => {
 <template>
   <component :is="winner" :id="props.id" :data="props.data" />
 </template>
-
