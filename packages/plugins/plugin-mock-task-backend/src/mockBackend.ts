@@ -42,7 +42,9 @@ export class MockBackend {
       intervalMs: opts.intervalMs ?? 120,
       resultUrl: opts.resultUrl ?? 'data:image/svg+xml;utf8,' + encodeURIComponent(
         '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240">' +
+        /* 主题色白名单: 示例图的 SVG 内容色（画进图片节点里当素材），不是界面外观 */
         '<rect width="320" height="240" fill="#dbeafe"/>' +
+        /* 主题色白名单: 同上 */
         '<text x="160" y="120" font-size="18" text-anchor="middle" fill="#1d4ed8">mock 产物</text></svg>',
       ),
       now: opts.now ?? (() => Date.now()),
@@ -83,4 +85,3 @@ export class MockBackend {
     }
   }
 }
-
