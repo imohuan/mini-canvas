@@ -61,7 +61,7 @@ BaseNode.out:bottom
         │  读 themeRegistry.winner('bottomBar')
         ▼
    NodeBottomBar（默认皮）      ← 换底栏插件注册更小 order 即可整体顶掉
-        │  读 ctx.nodeBar.list({ type: 本节点类型 })
+        │  读 ctx.get('nodeBar').list({ type: 本节点类型 })
         ▼
    动作 A / 动作 B / 动作 C     ← 各插件注册（含 text/image/video 自己）
 ```
@@ -72,6 +72,14 @@ BaseNode.out:bottom
 |---|---|---|
 | 整个底栏的 UI 与内部逻辑 | `themeRegistry` 的 `bottomBar` 槽（order 最小者赢） | 与设置面板 `settingsPanel` 完全同构，已有机制 |
 | 只往底栏里加一个按钮 | `ctx.nodeBar.register(...)`（同 id 替换） | 注册场语义，插件卸载自动摘除 |
+
+**两条工程约定（照做才不会踩空）**
+
+- **组件里取服务用 `ctx.get('nodeBar')`，不要直访 `ctx.nodeBar`**：服务解析 Proxy 只存在于
+  插件作用域（`packages/kernel/src/Context.ts:1058`）；组件拿到的是根 `Context`，直访是 `undefined`。
+  插件在 `apply(ctx)` 里写 `ctx.nodeBar.register(...)` 是对的。
+- **底栏拿不到 `props.type`**：区域条目经 `RegionEntryHost` 只下发 `{ id, data }`，
+  类型要 `ctx.get('doc').getNode(props.id)?.type` 取。
 
 ## 三、`nodeBar` 服务（作者入口）
 
@@ -89,9 +97,9 @@ ctx.nodeBar.register({
   apply: 'applier',                   // 结果交给同 kind 写入器（默认）；'self' = 本动作自己写好了
   run(input, runCtx) {                // 与内核工具同一个契约
     return { ok: true, urls: [...] }              // 同步
-    // 或 return () => ({ status:'running', progress, message })  // 异步：内核已有的轮询形态
+    // 或 return () => ({ status:'running', progress, message })   // 异步：内核已有的轮询形态
   },
-  resume(taskId) { return () => ({ status: 'running' }) },      // 可选：刷新后接着查
+  resume(taskId) { return () => ({ status: 'running' }) },        // 可选：刷新后接着查
 })
 ```
 
@@ -102,10 +110,11 @@ ctx.nodeBar.register({
   不新造「动作参数」词表 —— 一个词表两处用，底栏与工具面板长得一样是因为它们本来就是同一件事。
 - `fields` 由默认底栏交给 **`useUiComponent('toolParamField')`** 渲染（主题可替换目录），
   所以加一个下拉 = 注册方多写一个字段，底栏与内核零改动。
-- 结果回写不走动作本身（除非它声明 `apply: 'self'`）：默认交给**同 kind 的写入器**（见 `五），
-  这样「一个动作服务多个类型」和「一个类型多个动作」都不打架。
-- `info(data)` 让动作给出本节点上的只读读数（文本节点「12 字 · 3 行」），
-  `onSelect/onDeselect` 让动作与会话态联动（视频剪辑面板开合）。
+- 结果回写不走动作本身（除非它声明 `apply: 'self'`）：默认交给**同 kind 的写入器**（见 `五）。
+- `info(data)` 给出本节点上的只读读数（文本节点「12 字 · 3 行」）；`onSelect/onDeselect`
+  让动作与会话态联动（视频剪辑面板开合）。
+- **`nodeBar` 是插件提供的服务，节点插件不硬 `inject` 它**：取得到就注册，取不到等
+  `ctx:plugin-installed` 再注册；没装 bottom-bar 的宿主里节点插件照常工作。
 
 ### 从 `ctx.tools` 自动生成动作
 
@@ -120,8 +129,7 @@ ctx.nodeBar.register({
 ctx.nodeTask.run(nodeId, actionId, { values, prompt })   // 起一次任务
 ctx.nodeTask.state(nodeId)                               // 读当前状态
 ctx.nodeTask.cancel(nodeId)                              // 取消（AbortSignal）
-// 宿主启动后调一次：把刷新前处于 running 的节点接回来
-ctx.nodeTask.restoreAll()
+ctx.nodeTask.restoreAll()                                // 刷新后把 running 的节点接回来
 ```
 
 ### 进度写盘（唯一口径）
@@ -140,7 +148,7 @@ ctx.nodeTask.restoreAll()
 「续查 / 判中断」两条分支永远命中不了，进度信息还是丢了。
 
 代价：`scheduleCommit()`（`graphDocument.ts:405-417`）每次都会全图 `snapshot()` 深拷贝并触发
-`save.set(GRAPH_KEY, …)`。所以中间帧做 200ms 节流（进度值与文案都没变就完全不写），
+`save.set(GRAPH_KEY, …)`。所以中间帧做 200ms 节流（**节流窗口内不写，不论进度是否变**），
 终态不节流、必写。
 
 `data.runState` 形状与 mcp-server 既有的一模一样（**有意撞名**：同一个含义用同一个键，
@@ -157,11 +165,14 @@ data.runState = {
 }
 ```
 
-### 刷新后恢复
+### 刷新后恢复（谁调用 `restoreAll`）
+
+`restoreAll()` 由 bottom-bar 插件自己的 `apply` 在 **`ctx:ready`**（`Context.start()` 末尾的内核事件）
+里调一次 —— 那时所有插件已激活、动作都注册完，才谈得上「这个 taskId 还找不找得到人续查」。
 
 - `done` / `error` → 直接读回显示（覆盖层不转圈，底栏显示结果或错误）；
 - `running` 且动作声明了 `resume` → **续查**（拿 `taskId` 从头续）；
-- `running` 但续不了（页面关了、后台重启、动作没声明 `resume`）→
+- `running` 但续不了（动作没声明 `resume`、页面关了、后台重启）→
   标成 `error: '刷新后任务已中断'`，不留悬挂转圈。
 
 ## 五、结果写入器（`applier`）
@@ -175,6 +186,7 @@ ctx.nodeBar.registerApplier('image', (nodeId, result) => { /* 写 imageUrl + 尺
 image 节点把今天 `imageRun.writeGeneratedImage` 的那套（量尺寸 → 一次 patch 写完 →
 清旧描述字段）搬进来；text 节点写 `data.text`；video 节点写 `data.videoUrl`。
 **一个 kind 只允许一个写入器**（同 kind 重复注册抛错），避免「谁写谁」分不清。
+声明 `apply: 'self'` 的即时动作（旋转/下载/复制/删除）不走写入器 —— 它们自己已经写好了。
 
 ## 六、加载/进度覆盖层
 
@@ -210,9 +222,9 @@ image 节点把今天 `imageRun.writeGeneratedImage` 的那套（量尺寸 → �
 
 - `plugin-node-text/src/TextGeneratePanel.vue` + `textPanelSource.ts` + 两个面板/来源测试
 - `plugin-node-image/src/ImageGeneratePanel.vue` + `panelSource.ts` + 两个面板/来源测试
-- `plugin-node-image/src/imageRun.ts` 的 `runImageGeneration`
+- `plugin-node-image/src/imageRun.ts` 的 `runImageGeneration`（连同它 import 的 `buildToolInput`）
 - `plugin-node-video/src/VideoClipPanel.vue` 的 `out:bottom` 段注册（组件本体保留，改为经
-  `nodeBar.register({ panel })` 使用，显隐门从会话态改成由底栏驱动）
+  `nodeBar.register({ panel })` 使用，显隐门从会话态改成 `visible = selected`）
 
 **保留并上移：**
 
@@ -222,23 +234,25 @@ image 节点把今天 `imageRun.writeGeneratedImage` 的那套（量尺寸 → �
 
 **测试同步：** `packages/ui/src/__tests__/nodePluginsAssembly.test.ts` 的 `EXPECTED`
 （text/image/video 不再有 `out:bottom` 基座段）、`entrypoint.test.ts` 的插件条数、
-`packages/ui/e2e/canvas-e2e.mjs` 追加底栏/覆盖层/落盘断言。
+`packages/ui/e2e/canvas-e2e.mjs` 追加底栏/覆盖层/落盘/刷新断言。
 
 ## 九、验收标准
 
 1. 三个节点插件里不再有任何 `out:bottom` 基座段；底栏只有一份实现。
-2. 另一个插件 `themeRegistry.add('bottomBar', MyBar, { order: -1 })` 后，界面上的底栏换成 MyBar。
+2. 另一个插件 `themeRegistry.add('bottomBar', MyBar, { order: -1 })` 后界面上的底栏换成 MyBar。
 3. `ctx.nodeBar.register({ id, types:['image'], fields:[…], run })` 之后图片节点底栏多出该动作，
    卸载插件后消失；同 id 再注册 = 替换而不是变成两条。
-4. 跑一次异步动作：卡片上出现覆盖层与百分比；localStorage 里该节点在终态后留有
-   `{ status:'done', actionId, taskId }`；条数不随进度帧增长（撤销栈不被冲垮）。
+4. 跑一次异步动作：卡片上出现覆盖层与百分比；终态后 localStorage 里该节点留有
+   `{ status:'done', actionId, taskId }`；撤销栈条数不随进度帧增长。
 5. 刷新页面后覆盖层不转圈（能续查就续查，续不了就明确报中断）。
 6. 全包测试与 typecheck 全绿。
 
 ## 十、已知取舍
 
-- 中间进度帧每帧落盘但进撤销栈为 0；落盘频率用 200ms 节流压住。
+- 中间进度帧每帧落盘、但进撤销栈为 0；落盘频率用 200ms 节流压住。
 - `over:inset` 会把覆盖层与图片/视频的编辑浮层放进同一层容器：基座恒在下、覆盖层恒在上；
   编辑态下不会同时有 running 任务，冲突面很小。
+- `nodeBar` 是插件服务：没装 bottom-bar 的宿主里底栏不存在（这是设计意图）；
+  节点插件不硬依赖它，因此不会把别人的宿主拖成 PENDING。
 - 音频节点类型目前不存在；`nodeBar.register({ types:['audio'] })` 在音频节点插件出现时
   直接可用，底栏无需改动。
