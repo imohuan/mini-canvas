@@ -110,17 +110,19 @@ publishToolActions(ctx, {
 
 ```ts
 let restored = false
+let readyFired = false
 const tryRestore = (): void => {
   if (restored) return
   if (!ctx.get('doc') || !ctx.get('nodeBar')) return
   restored = true
   void task.restoreAll()
 }
-ctx.on('ctx:ready', tryRestore)              // 冷启动（start() 末尾同步 emit）
-// 热装（manifest 那条链）：**必须排除自己的安装事件** —— bottom-bar 自己上架时也会
-// emit 它，而主装配把 bottom-bar 排在节点插件**之前**，不排除就会在节点插件还没
-// 注册动作时就跑完 restoreAll，把本可续查的任务误判成「中断」。
-ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
+ctx.on('ctx:ready', () => { readyFired = true; tryRestore() })   // 冷启动（start() 末尾同步 emit）
+// 热装（manifest 那条链）：在 ctx:ready **之前**要**排除自己的安装事件** —— bottom-bar 自己上架时
+// 也会 emit 它，而主装配把 bottom-bar 排在节点插件**之前**，不排除就会在节点插件还没注册
+// 动作时就跑完 restoreAll，把本可续查的任务误判成「中断」；而 ctx:ready 之后反而**要**放行
+// 自己的装事件（manifest 路径：ctx:ready 时还没装 bottom-bar，靠它补跑）。
+ctx.on('ctx:plugin-installed', (e) => { if (readyFired || e?.name !== 'bottom-bar') tryRestore() })
 ```
 
 ---
@@ -784,6 +786,39 @@ describe('bottom-bar 插件装配', () => {
     expect(nodeStore.getNode(id)?.data.runState).toMatchObject({ status: 'error' })
     ctx.stop()
   })
+
+  it('能续查的任务不会被误判成中断（restoreAll 必须排除自己的安装事件）', async () => {
+    // 关键：动作的提供方装在 bottom-bar **之前**，且它有 resume。
+    // 若 restoreAll 被 bottom-bar 自己的安装事件提前触发，就会在动作还没注册时跑完 → error。
+    const ctx = new Context()
+    const nodeStore = new NodeStore()
+    nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 10, h: 10 } })
+    const id = nodeStore.addNode('image', { x: 0, y: 0 })
+    nodeStore.updateNodeData(id, { runState: { status: 'running', taskId: 't1', actionId: 'resumable' } })
+    const edgeStore = new EdgeStore()
+    const selection = new Selection()
+    const history = new History({ snapshot: () => ({ nodes: [], edges: [] }), restore: () => {} })
+    ctx.inject('selection', selection)
+    ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph: new GraphDocument(nodeStore, edgeStore, selection, history), history }))
+    ctx.inject('nodeRegistry', new NodeRegistry())
+    ctx.inject('themeRegistry', new ThemeRegistry())
+    // 先装「提供一条可续查动作」的插件
+    ctx.plugin({
+      name: 'action-provider',
+      apply(c) {
+        registerBarAction(c, {
+          id: 'resumable', types: ['image'], title: 'R', run: () => ({ ok: true }),
+          resume: () => () => ({ status: 'done', result: { ok: true, urls: ['ok.png'] } }),
+        })
+      },
+    })
+    ctx.plugin(pluginBottomBar)   // 排在后面：它的安装事件不能让 restoreAll 提前跑
+    await ctx.start()
+    await Promise.resolve()
+    // 续查成功 → done（而不是被误判成 error）
+    expect(nodeStore.getNode(id)?.data.runState).toMatchObject({ status: 'done' })
+    ctx.stop()
+  })
 })
 ```
 
@@ -832,9 +867,10 @@ ctx.nodes.attach('*', { region: 'out:bottom', component: BottomBarHost, id: 'bot
 ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
 // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；必须排除自己的安装事件
 let restored = false
+let readyFired = false
 const tryRestore = () => { if (restored || !ctx.get('nodeBar')) return; restored = true; void task.restoreAll() }
-ctx.on('ctx:ready', tryRestore)
-ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
+ctx.on('ctx:ready', () => { readyFired = true; tryRestore() })
+ctx.on('ctx:plugin-installed', (e) => { if (readyFired || e?.name !== 'bottom-bar') tryRestore() })
 ctx.on('ctx:plugin-uninstalled', () => tryRestore())
 ```
 

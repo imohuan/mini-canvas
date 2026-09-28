@@ -190,15 +190,16 @@ data.runState = {
 
 ```ts
 let restored = false
+let readyFired = false
 const tryRestore = (): void => {
   if (restored || !ctx.get('doc') || !ctx.get('nodeBar')) return
   restored = true
   void task.restoreAll()
 }
-ctx.on('ctx:ready', tryRestore)              // 冷启动（start() 末尾同步 emit）
-// 热装（manifest 那条链）：**必须排除自己的安装事件** —— bottom-bar 自己上架时也会 emit 它，
-// 不排除就会在节点插件还没注册动作时就跑完 restoreAll，把本可续查的任务误判成「中断」。
-ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
+ctx.on('ctx:ready', () => { readyFired = true; tryRestore() })   // 冷启动（start() 末尾同步 emit）
+// 热装（manifest 那条链）：在 ctx:ready **之前**要排除自己的安装事件（否则在节点插件注册动作前
+// 就把可续查任务误判成中断）；ctx:ready 之后反而要放行它（manifest 路径靠它补跑）。
+ctx.on('ctx:plugin-installed', (e) => { if (readyFired || e?.name !== 'bottom-bar') tryRestore() })
 ```
 
 **为什么要同步写错误态**：`restoreAll` 用 `void` 调 `resumeAction`，异步分支抛错会被吞掉；
