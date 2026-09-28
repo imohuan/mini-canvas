@@ -12,11 +12,11 @@ import { registerEventName } from '@mini-canvas/kernel'
 
 /** 渲染层广播的画布事件名（供 CanvasHost emit + 插件 on） */
 export const RenderEvents = {
-  /** 节点拖动开始：{ nodeId, position } */
+  /** 节点拖动开始：{ nodeId, position }（position = flow 绝对坐标，见 toDragPayload） */
   NodeDragStart: 'canvas:node:drag-start',
-  /** 节点拖动逐帧：{ nodeId, position }（rAF 节流后广播） */
+  /** 节点拖动逐帧：{ nodeId, position }（position = flow 绝对坐标；rAF 节流后广播） */
   NodeDrag: 'canvas:node:drag',
-  /** 节点拖动结束：{ nodeId, position } */
+  /** 节点拖动结束：{ nodeId, position }（position = flow 绝对坐标） */
   NodeDragEnd: 'canvas:node:drag-end',
   /** 画布视图开始移动(pan/缩放)：{ viewport } */
   MoveStart: 'canvas:viewport:move-start',
@@ -54,6 +54,13 @@ for (const name of Object.values(RenderEvents)) registerEventName(name)
 
 export interface DragEventPayload {
   nodeId: string
+  /**
+   * 节点的 **flow 绝对坐标**（不是 VueFlow 的父相对坐标）。
+   *
+   * 分组子节点（有 parentNode）在 VueFlow 里存的 position 是**相对父**的，直接广播出去
+   * 会让消费方把两套坐标系混着算（多选包围盒、对齐吸附都踩过）。这里统一归一成绝对坐标，
+   * 消费方拿到的永远是"画布上的那个点"。
+   */
   position: { x: number; y: number }
 }
 
@@ -109,11 +116,26 @@ export interface SelectionChangePayload {
   edgeIds: string[]
 }
 
-/* 把一段任意节点拖拽事件对象归一成 { nodeId, position }（容忍 VueFlow NodeDragEvent / 窄对象） */
+/**
+ * 把一段任意节点拖拽事件对象归一成 { nodeId, position }（容忍 VueFlow NodeDragEvent / 窄对象）。
+ *
+ * **position 一律是 flow 绝对坐标**：优先取 VueFlow 的 `computedPosition`（= 逐级累加父链的
+ * 绝对位置，见 GraphNode 类型注释），拿不到才回落 `position`。
+ *
+ * 为什么必须这样：VueFlow 给分组子节点的 `position` 是**相对父节点**的（父在 (200,260)、
+ * 子在父内 (60,90) 时它报 (60,90)），而事件消费方 —— 多选包围盒用 nodeLayout 的绝对矩形、
+ * 对齐吸附也用绝对矩形 —— 全都按绝对坐标理解。混用会让几何当场算错：
+ * 实测（选中同一组内两个子节点并拖动）多选框高度从 240 撑到 600、位置跳出屏幕。
+ */
 export function toDragPayload(e: {
-  node?: { id?: string; position?: { x: number; y: number } }
+  node?: {
+    id?: string
+    position?: { x: number; y: number }
+    /** VueFlow 的绝对位置（有父节点时 = position + 父链 computedPosition） */
+    computedPosition?: { x: number; y: number }
+  }
 }): DragEventPayload | null {
   if (!e.node?.id) return null
-  const p = e.node.position
+  const p = e.node.computedPosition ?? e.node.position
   return { nodeId: e.node.id, position: p ? { x: p.x, y: p.y } : { x: 0, y: 0 } }
 }

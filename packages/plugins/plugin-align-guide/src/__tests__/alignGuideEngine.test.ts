@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeAlignGuides, shouldAlignOnDrag, SNAP_THRESHOLD } from '../alignGuideEngine'
+import { computeAlignGuides, toVisualPosition, shouldAlignOnDrag, SNAP_THRESHOLD } from '../alignGuideEngine'
 import type { AlignRect } from '../alignGuideEngine'
 
 /**
@@ -19,6 +19,28 @@ describe('shouldAlignOnDrag —— 多选时禁止对齐（用户要求）', () 
   it('多选（>=2）→ 不参与对齐（吸附只动一个节点，会把整组相对位置弄乱）', () => {
     expect(shouldAlignOnDrag(2)).toBe(false)
     expect(shouldAlignOnDrag(5)).toBe(false)
+  })
+})
+
+/**
+ * 吸附结果写回 updateNodeVisual 的坐标换算。
+ *
+ * 缺陷背景（用户报的"主节点内多选/拖动时几何错乱"同族问题）：拖拽事件与对齐引擎都用
+ * **绝对坐标**，而 updateNodeVisual 写的是 VueFlow 的 node.position —— 分组子节点那是
+ * **相对父**的。不换算就写回，每次吸附都会把子节点整体推出去一个父偏移（实测跳 200px）。
+ */
+describe('toVisualPosition —— 绝对坐标 → 节点写入坐标系', () => {
+  it('无父节点（顶层）：原样返回绝对坐标', () => {
+    expect(toVisualPosition({ x: 320, y: 180 }, null)).toEqual({ x: 320, y: 180 })
+  })
+
+  it('有父节点：减去父的绝对原点（VueFlow 子节点写的是相对父坐标）', () => {
+    // 父绝对原点 (200,260)，吸附后的绝对位置 (320,180) → 相对 (120,-80)
+    expect(toVisualPosition({ x: 320, y: 180 }, { x: 200, y: 260 })).toEqual({ x: 120, y: -80 })
+  })
+
+  it('父在原点：等价于原样返回（边界不特殊处理）', () => {
+    expect(toVisualPosition({ x: 5, y: 7 }, { x: 0, y: 0 })).toEqual({ x: 5, y: 7 })
   })
 })
 

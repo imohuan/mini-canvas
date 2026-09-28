@@ -38,11 +38,12 @@ function makeSession(
   live = vi.fn(),
   commit = vi.fn(),
   visual = vi.fn(),
+  toFlow: (x: number, y: number) => { x: number; y: number } = (x, y) => ({ x, y }),
 ) {
   const session = createResizeDragSession({
     minW: 120,
     minH: 80,
-    zoom: () => 1,
+    toFlow,
     onLive: live,
     onVisualSize: visual,
     onCommit: commit,
@@ -98,13 +99,14 @@ describe('resizeDragSession：move/up 绑全局（而非手柄元素）', () => 
     expect(target.count('pointermove')).toBe(0)
   })
 
-  it('缩放不为 1 时按 zoom 折算（屏幕位移 ÷ zoom）', () => {
+  it('缩放不为 1 时：屏幕点经视口换算成画布坐标（屏幕位移 ÷ zoom）', () => {
     const target = makeTarget()
     const live = vi.fn()
     const session = createResizeDragSession({
       minW: 120,
       minH: 80,
-      zoom: () => 2,
+      // 视口换算：zoom=2 → 屏幕位移减半
+      toFlow: (x, y) => ({ x: x / 2, y: y / 2 }),
       onLive: live,
       onCommit: vi.fn(),
       eventTarget: () => target,
@@ -162,7 +164,7 @@ describe('resizeDragSession：拖拽中同步尺寸给渲染层（端口/边跟�
     const session = createResizeDragSession({
       minW: 120,
       minH: 80,
-      zoom: () => 1,
+      toFlow: (x, y) => ({ x, y }),
       onLive: live,
       onCommit: vi.fn(),
       eventTarget: () => target,
@@ -182,6 +184,227 @@ describe('resizeDragSession：拖拽中同步尺寸给渲染层（端口/边跟�
     target.emit('pointerup', {})
     expect(visual.mock.calls.length).toBe(beforeUp)
     expect(commit).toHaveBeenCalledWith(250, 100)
+    session.dispose()
+  })
+})
+
+/**
+ * 线上缺陷（用户原话）："reset 节点的时候，如果我同时缩放……我的鼠标和那个控件就会形成一点距离，
+ * 因为这个地方没有进行反缩放"。
+ *
+ * 旧实现：尺寸 = 起始尺寸 + (鼠标屏幕位移 除以 当前 zoom)。
+ * 这在缩放全程不变时是对的（屏幕位移 除以 zoom = 画布位移）；但**拖拽途中缩放一变**，
+ * 同一段屏幕位移对应的画布位移就变了 —— 于是卡片越拖越偏、和鼠标拉开距离，缩放越大偏得越狠。
+ *
+ * 正解：每帧都用**当前视口**把起点屏幕点与当前屏幕点各换算一次画布坐标，取两次之差。
+ * 平移项在差值里相消，所以缩放不变时与旧公式逐帧同值（不会改坏既有手感），
+ * 缩放变化时才给出正确位移。
+ */
+describe('resizeDragSession：拖拽中改缩放也不脱手（真实滚轮缩放路径）', () => {
+  /**
+   * 可控视口：画布 = (屏幕 - 平移) 除以 zoom。真实 VueFlow 的滚轮缩放正是这个线性映射。
+   * setZoom 绕屏幕锚点改缩放 —— 锚点处的画布点保持不动（这正是滚轮缩放的行为）。
+   *
+   * 约定：本组把"节点左上角"放在画布原点，于是"卡片右下角画布坐标"就等于 (w, h)，
+   * 可以反过来用视口把它还原成屏幕位置来断言。
+   */
+  function makeViewport() {
+    let zoom = 1
+    let tx = 0
+    let ty = 0
+    return {
+      toFlow: (x: number, y: number) => ({ x: (x - tx) / zoom, y: (y - ty) / zoom }),
+      setZoom(next: number, ax = 0, ay = 0) {
+        tx = ax - ((ax - tx) / zoom) * next
+        ty = ay - ((ay - ty) / zoom) * next
+        zoom = next
+      },
+      /** 卡片右下角（画布坐标 = (w,h)）此刻落在屏幕上的位置 */
+      cornerScreen: (w: number, h: number) => ({ x: zoom * w + tx, y: zoom * h + ty }),
+    }
+  }
+
+  /** 判据：卡片右下角在**屏幕上**始终落在「指针 + 起手抓点偏移」处（控件贴住鼠标） */
+  function expectSticksTo(live: ReturnType<typeof vi.fn>, vp: ReturnType<typeof makeViewport>, mx: number, my: number, grab = { x: 0, y: 0 }) {
+    const [w, h] = live.mock.calls.at(-1) as [number, number]
+    const cs = vp.cornerScreen(w, h)
+    expect(cs.x).toBeCloseTo(mx + grab.x, 6)
+    expect(cs.y).toBeCloseTo(my + grab.y, 6)
+  }
+
+  it('拖到一半把画布缩小：卡片右下角仍贴住鼠标（旧实现会偏）', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const vp = makeViewport()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: vp.toFlow,
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    // 起点鼠标 (182,82)，抓点偏移 (18,18) → 卡片角屏幕 (200,100)；起始尺寸 200x100
+    session.start({ clientX: 182, clientY: 82 }, 200, 100, { x: 18, y: 18 })
+    target.emit('pointermove', { clientX: 182, clientY: 82 })
+    expectSticksTo(live, vp, 182, 82, { x: 18, y: 18 })
+
+    // 绕远离拖柄的锚点 (100,100) 缩小到 0.5 —— 这正是"旧实现会偏"的情形
+    vp.setZoom(0.5, 100, 100)
+    target.emit('pointermove', { clientX: 182, clientY: 82 })
+    expectSticksTo(live, vp, 182, 82, { x: 18, y: 18 })
+    // 该帧尺寸确实变了（不是"原地不动"混过去）
+    expect((live.mock.calls.at(-1) as number[])[0]).toBeCloseTo(300, 6)
+
+    // 再放大到 2：继续贴住
+    vp.setZoom(2, 200, 120)
+    target.emit('pointermove', { clientX: 190, clientY: 90 })
+    expectSticksTo(live, vp, 190, 90, { x: 18, y: 18 })
+    session.dispose()
+  })
+
+  it('缩放来回变 + 鼠标同时动：每一帧都贴住（不与缩放纠缠）', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const vp = makeViewport()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: vp.toFlow,
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    // 抓点偏移缺省 0（抓点即角点）；起点取 (startW,startH) → 节点左上角落在画布原点，
+    // 于是 cornerScreen(w,h) 的还原才成立（helper 的约定）。
+    session.start({ clientX: 600, clientY: 400 }, 600, 400)
+    target.emit('pointermove', { clientX: 620, clientY: 410 })
+    expectSticksTo(live, vp, 620, 410)
+
+    vp.setZoom(0.5, 100, 100)
+    target.emit('pointermove', { clientX: 640, clientY: 420 })
+    expectSticksTo(live, vp, 640, 420)
+
+    vp.setZoom(2, 200, 150)
+    target.emit('pointermove', { clientX: 660, clientY: 430 })
+    expectSticksTo(live, vp, 660, 430)
+
+    vp.setZoom(1, 0, 0)
+    target.emit('pointermove', { clientX: 660, clientY: 430 }) // 鼠标不动、只缩放
+    expectSticksTo(live, vp, 660, 430)
+    session.dispose()
+  })
+
+  it('未给抓点偏移时按 (0,0)：起手即"指针就是卡片角"', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const vp = makeViewport()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: vp.toFlow,
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    session.start({ clientX: 200, clientY: 100 }, 200, 100)
+    target.emit('pointermove', { clientX: 240, clientY: 130 }) // 画布 240,130 → 240,130
+    expect(live).toHaveBeenLastCalledWith(240, 130)
+    vp.setZoom(0.5, 100, 100)
+    target.emit('pointermove', { clientX: 240, clientY: 130 })
+    expectSticksTo(live, vp, 240, 130)
+    session.dispose()
+  })
+
+  /**
+   * 滚轮缩放时鼠标常常不动（只是滚轮），此时**没有 pointermove**。
+   * 若只在 move 时重算，卡片就会停在旧尺寸上、与指针短暂脱手 —— 用户报的"一点距离"。
+   * 所以暴露 refresh()：调用方在视口变化时喊一声，用"上一次指针位置 + 当前视口"重算。
+   */
+  it('缩放变化但鼠标没动：refresh() 立刻重算，卡片角回到指针上（不脱手）', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const vp = makeViewport()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: vp.toFlow,
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    session.start({ clientX: 182, clientY: 82 }, 200, 100, { x: 18, y: 18 })
+    target.emit('pointermove', { clientX: 182, clientY: 82 })
+    expectSticksTo(live, vp, 182, 82, { x: 18, y: 18 })
+
+    // 缩放绕远处锚点变化，鼠标不动（也没有 pointermove）
+    vp.setZoom(0.5, 100, 100)
+    // 不 refresh 就会脱手 —— 这是修复前的行为
+    const stale = live.mock.calls.at(-1) as [number, number]
+    expect(vp.cornerScreen(stale[0], stale[1]).x).not.toBeCloseTo(200, 3)
+    // refresh 之后立刻贴回
+    session.refresh()
+    expectSticksTo(live, vp, 182, 82, { x: 18, y: 18 })
+    session.dispose()
+  })
+
+  it('refresh() 在未开始/已结束会话时是空操作（安全幂等）', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const vp = makeViewport()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: vp.toFlow,
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    expect(() => session.refresh()).not.toThrow()
+    expect(live).not.toHaveBeenCalled()
+    session.start({ clientX: 200, clientY: 100 }, 200, 100)
+    target.emit('pointerup', {})
+    expect(() => session.refresh()).not.toThrow()
+    session.dispose()
+  })
+})
+
+/** 抓点偏移补偿：用户按下的位置是**拖柄中心**，而拖柄中心并不在卡片右下角上（见下组说明）。 */
+describe('resizeDragSession：refresh() 也在场（接口存在性）', () => {
+  it('会话暴露 refresh（供"视口变化时重算"用）', () => {
+    const target = makeTarget()
+    const { session } = makeSession(target)
+    expect(typeof session.refresh).toBe('function')
+    session.dispose()
+  })
+})
+
+/**
+ * 抓点偏移补偿：用户按下的位置是**拖柄中心**，而拖柄中心并不在卡片右下角上
+ * （拖柄是反缩放的方块，卡在角内侧约 15px 屏幕距离），且这段屏幕距离随缩放变化
+ * （取证实测：zoom 0.5 → 14px，zoom 2 → 18px）。所以起手时捕获它、每帧补回来，
+ * 卡片才会在按下的那一刻就"钉"在指针上，而不是先跳一小段。
+ */
+describe('resizeDragSession：抓点偏移补偿（拖柄中心 ≠ 卡片角）', () => {
+  it('传入抓点偏移：起手第一帧不跳（同一屏幕点算出的尺寸仍是起始尺寸）', () => {
+    const target = makeTarget()
+    const live = vi.fn()
+    const session = createResizeDragSession({
+      minW: 120,
+      minH: 80,
+      toFlow: (x, y) => ({ x, y }),
+      onLive: live,
+      onCommit: vi.fn(),
+      eventTarget: () => target,
+    })
+    // 鼠标在拖柄中心 (100,100)，卡片右下角在 (118,118) → 偏移 (18,18)
+    session.start({ clientX: 100, clientY: 100 }, 200, 100, { x: 18, y: 18 })
+    // 没动鼠标 → 尺寸仍是起始尺寸（不补偏移的话这里会算成 182x82）
+    target.emit('pointermove', { clientX: 100, clientY: 100 })
+    expect(live).toHaveBeenLastCalledWith(200, 100)
+    // 往外拖 (50,30) → 卡片角到 (168,148) → 尺寸 250,130
+    target.emit('pointermove', { clientX: 150, clientY: 130 })
+    expect(live).toHaveBeenLastCalledWith(250, 130)
     session.dispose()
   })
 })

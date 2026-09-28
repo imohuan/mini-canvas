@@ -145,7 +145,15 @@
     保留键 `size`（useNodeCardSize.ts:104-116），宿主 splitNodeWritePatch 拆分后同一条历史提交
     （canvasHostCore.ts:29-41 + CanvasHost.vue:160-168）。拆成两次写会产生两条撤销记录。
 17. **resize 拖拽中不回灌外部尺寸**：watch data.cardWidth/Height 时 `!isResizing` 才覆盖本地值
-    （useNodeCardSize.ts:70-83）；move/up 绑全局 document（:91-118，绑元素会"拖一半断掉"）。
+   （useNodeCardSize.ts:70-83）；move/up 绑全局 document（:91-118，绑元素会"拖一半断掉"）。
+17b. **resize 尺寸换算按"视口"而不是"当前 zoom"**（2026-09-28 修）：
+   `createResizeDragSession` 每帧把"指针 + 起手抓点偏移"经 `toFlow`（= flow.screenToFlow）换算成
+   画布坐标，再与**起手画布角点**求差（resizeDragSession.ts:onMove/recompute）。
+   旧写法"屏幕位移 ÷ 当前 zoom"只在缩放全程不变时成立——拖拽途中缩放一变就与鼠标脱手
+   （用户报的"同时缩放就形成一点距离"）。
+   两条配套：① 抓点偏移在 pointerdown 时用 DOM 量一次（壳传 grabOffset，拖柄中心≠卡片角）；
+   ② 滚轮缩放时**没有 pointermove**，壳 watch zoom 调 `refreshSize()` 补算。
+   canvas-e2e.mjs 锁不变式："卡片右下角 − 鼠标"整个拖拽过程恒定。
 18. **上/下插槽定位全在壳层**：`resolveNodeSlotStyle` = 贴边 + `left:50%` + `translateX(-50%) scale(1/zoom)`，
     transformOrigin 朝卡片一侧（nodeLayoutSettings.ts:209-216）。"居中"与"反缩放"必须在同一个
     transform 里，分开写会互相顶掉（注释 :329-343，图片面板因此错位过）。
@@ -154,8 +162,11 @@
     baseNodeSlotsRender.test.ts:141-192 整组锁死。
 20. **段渲染 key 用注册 id**：top/bottom/overlay 的列表 key = `seg.id`（基座固定 "base"，:671/791/802）。
     用下标做 key 会在插件热装卸时让 Vue 错位复用组件实例（nodeRenderer.ts:41-58 注释）。
-21. **插槽/浮层压制条件**：`hideToolbars = interaction.isSelecting || 多选`（:117-119）；标题另受
-    `multiSelectHideTitles`（multi-select 插件声明的 key，:76-78）与 LOD 控制（:109）。
+21. **插槽/浮层压制条件**：`hideToolbars = interaction.isSelecting || 多选 || 本节点正在被 resize`
+    （:124-134；resize 项的判定是读渲染层共享 activity 的 `nodeResizeId === props.id`，**不是**壳的局部
+    `isResizing`——分组控制栏挂在**节点之外**的 overlay 槽，两条路径必须读同一份信号）；
+    baseNodeSlotsRender.test.ts 锁"被 resize 的就收起、resize 别人时不收起"两条。
+    标题另受 `multiSelectHideTitles`（multi-select 插件声明的 key，:76-78）与 LOD 控制（:109）。
 22. **设置订阅按 key 过滤**（:94-97）：全局平面 key 表，不按插件 scope 过滤（避免命名/装配差异
     导致不触发）。键名带前缀防撞（multiRadio.ts:29-40）。
 
@@ -172,6 +183,9 @@
    查询 + 不认识的键返回同一引用（multiRadio.ts:95-110）避免无谓重渲染。
 7. 容器型（transparent）类型 body 瞄准被忽略（:483-485 注释）：否则出现"目标没有输入口"提示。
 8. 卡宽/卡高 >0 才算反馈与气泡位置（:617-645），0/未量测时回落，禁止除零。
+9. resize 起手/结束要通知共享 activity（useNodeCardSize 的 onResizeStart/onResizeEnd，:193-196；
+   BaseNode 接线 :184-185）：不写这份共享位，分组控制栏（挂节点外）resize 时就收不起来。
+   结束路径有两处（onCommit + onBeforeUnmount 兜底），只删其一会让"正在 resize"永久留在活动位上。
 
 ### 1.6 依赖方向 / 数据层关系
 
@@ -541,14 +555,15 @@ NodeSegment 的解析层（nodeRenderer.ts）：resolveSegment 单值（基座�
 - `pnpm -C packages/plugins/plugin-theme-default test`（STATUS.md 基线 158 条）。
 - 与六件直接相关的测试文件：
   - node/__tests__/baseNodeSlotsRender.test.ts —— 插槽定位壳层契约、overlay 出卡片、多选压制、
-    多选标记三配置、resize 拖柄反缩放（SSR 渲染真实 HTML 断言）。
+    多选标记三配置、resize 拖柄反缩放、**resize 进行中收起上/下控制栏**（SSR 渲染真实 HTML 断言）。
   - node/__tests__/cardFrame.test.ts —— 边框/选中环/transparent/防坏 CSS。
   - node/__tests__/titleEdit.test.ts、titleLabel.test.ts、baseTitleIcon.test.ts —— 标题编辑纯逻辑与
     BaseTitle 图标位。
   - node/__tests__/handleFollow.test.ts、multiRadio.test.ts、multiRadioConfig.test.ts。
   - edge/__tests__/edgeGeometry.test.ts —— 几何"与 v1 逐字节一致"锚定（§4.3.4-6）。
   - edge/__tests__/edgeFlow.test.ts —— 固定 N 块/占比/循环/速度语义/拖线压制（§4.3.7-10）。
-  - composables/__tests__/resizeDragSession.test.ts —— resize 会话。
+  - composables/__tests__/resizeDragSession.test.ts —— resize 会话（含"拖拽中改缩放也不脱手"
+    与"抓点偏移补偿"两组）。
   - 上游契约：canvas-render __tests__（connectionState/interactionContext/nodeLayoutSettings 等）。
 
 ## 9. 调查中发现的可疑之处（现状记录，不是本文建议）

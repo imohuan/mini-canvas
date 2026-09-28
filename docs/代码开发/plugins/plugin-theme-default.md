@@ -50,7 +50,7 @@
 | `background` | `DefaultBackground.vue` | 画布点状背景 |
 | `connectionLine` | `ConnectionLine.vue` | 拖线时的「待连预览线」 |
 | `edgeDefaultType` | `'custom'` | 建边默认走 `custom` 边类型 |
-| `settingsPanel` | `PluginSettingsDialog.vue`（id `default`，order 0） | 设置面板（默认赢家，被 `SettingsHost` 渲染） |
+| `settingsPanel` | `PluginSettingsDialog.vue`（id `default`，order 0） | 设置界面**中间层**（左导航 + 内容，默认赢家）；最外层 Dialog 由 `SettingsShell` 提供 |
 
 换皮示例：
 
@@ -192,10 +192,14 @@ defineProps<{ group?: string; settings?: SettingsPanelSource }>()
 - **二级页签只在「当前一级下二级分组多于一个」时出现**，所以 `settingsTab` 只在该场景有机会渲染。
 - **跨一级隔离**：`settingsTab` 按「id 首段 === 当前一级名」过滤，不会串到别的一级里。
 
-### 5.4 想换整张设置面板皮？
+### 5.4 想换设置面板皮？
 
-扩展插槽属于**默认皮实现**（`PluginSettingsDialog`），不是 `settingsPanel` 槽的契约。
+扩展插槽属于**默认皮的内容区实现**（`PluginSettingsDialog`），不是 `settingsPanel` 槽的契约。
 换了皮就没有这些槽了 —— 所以**优先在默认皮上加东西，而不是换掉整张皮**。
+
+> 换皮换的只是**内容区**：外壳（遮罩 / 居中 / 标题栏 / ✕ / Esc / 点遮罩关闭 / 浮动窗口 / 悬浮球）
+> 由渲染层 `SettingsShell` 提供，所有皮共用。所以换皮不必重画窗口，关闭行为也不会因换皮而变。
+> 中间层（含左导航）整个归皮，外壳不提供中间容器。
 
 ---
 
@@ -226,4 +230,3 @@ const plugins = [themeDefaultPlugin, nodeTextPlugin, nodeImagePlugin]
 5. 默认设置面板的 CSS 前缀是 `psd-`（`psd-nav` / `psd-tabs` / `psd-content`…）。
 6. 端口默认值存在**双源漂移**（宿主回落 `portZoneWidth = 86` vs 本插件 Config 默认 `10`），
    动端口几何前先对齐这两处（见 `docs/tmp/canvas-core-v2-survey/core-node-contract.md` §9）。
-

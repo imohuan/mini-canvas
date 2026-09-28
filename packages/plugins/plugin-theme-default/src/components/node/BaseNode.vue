@@ -15,6 +15,8 @@ import {
   useToolbarOffsets,
   resolveNodeSlotStyle,
   isConnectionSource,
+  beginNodeResize,
+  endNodeResize,
 } from '@mini-canvas/canvas-render'
 import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
 import {
@@ -119,10 +121,17 @@ const showTitle = computed(() => !lowDetail.value && !hideTitleOnMulti.value)
  * 是否隐藏上下控制栏（NodeToolbar）。两部分：
  * - 框选手势进行中：那一排操作条/状态栏会被一起框进来、也挡视线 → 无条件收起。
  * - 多选（>=2）时：多选下这些栏没有意义（面板都是"恰好选中一个"的语义）→ 收起。
+ * - 本节点正在被 resize（拖右下角拖柄改尺寸）：那排栏正挡在指针经过处、也会被新尺寸甩走
+ *   → 收起，松手立刻恢复（用户要求："节点 resize 的时候……不显示上下的控制栏"）。
+ *   判定读渲染层共享 activity 的 nodeResizeId（不是壳自己的局部 isResizing）：分组节点的
+ *   控制栏挂在节点之外的 overlay 槽，两条路径要读同一份信号才一致。
  * 单选时的显隐仍由各段组件自己的 useSoleNodeSelected 决定，这里只做"不该出现"的压制。
  */
 const hideToolbars = computed(
-  () => interaction?.isSelecting?.value === true || (isSelected.value && selectedCount.value > 1),
+  () =>
+    interaction?.isSelecting?.value === true ||
+    (isSelected.value && selectedCount.value > 1) ||
+    interaction?.nodeResizeId?.value === props.id,
 )
 
 /** 多选（选中 >=2）且本节点在其中：此时压掉自身端口，改用多选框上的批量连线端口 */
@@ -167,21 +176,53 @@ const nodeLabel = computed(() => {
 })
 
 // ============ 卡片固定尺寸 + resize（useNodeCardSize）============
+/**
+ * 抓点到卡片右下角的屏幕偏移（px）。
+ *
+ * 用户按下的位置是拖柄（中心不在卡片角上），而 resize 的语义是"卡片右下角跟住指针"，
+ * 所以要在这段偏移上补回来 —— 不补的话，按下那一刻卡片会先跳一小段（缩放越大跳得越明显）。
+ *
+ * 量测用 DOM（卡片的渲染矩形右下角 − 指针点）。拿不到 DOM（SSR/测试）就回 undefined（不补偿）。
+ */
+function resizeGrabOffset(e: PointerEvent): { x: number; y: number } | undefined {
+  const cardEl = (e.currentTarget as HTMLElement | null)?.closest('.v2-card') as HTMLElement | null
+  if (!cardEl || typeof cardEl.getBoundingClientRect !== 'function') return undefined
+  const r = cardEl.getBoundingClientRect()
+  return { x: r.right - e.clientX, y: r.bottom - e.clientY }
+}
+
 const card = useNodeCardSize({
   nodeId: props.id,
   data: () => props.data ?? {},
   type: props.type,
   writeback: nodeWrite ?? undefined,
-  zoom: () => zoom.value,
+  // 每帧用**当前视口**换算：拖拽途中缩放变了也不会与鼠标脱手（只除以 zoom 会脱手）
+  toFlow: (x, y) => flow.screenToFlow(x, y),
+  grabOffset: resizeGrabOffset,
   // 拖拽实时把新尺寸同步进 VueFlow 内部并重算：否则端口位置/相连边端点会停在旧尺寸
   // （渲染层 updateNodeVisualSize = updateNode(style) + updateNodeInternals）
   onVisualSize: (w, h) => flow.updateNodeVisualSize(props.id, w, h),
+  // 把"我正在被 resize"写进渲染层共享活动位：壳自己能用局部 isResizing 压上下插槽，
+  // 但**挂在节点之外的**分组控制栏读不到局部状态，只能读这份共享信号（见 hideToolbars）。
+  onResizeStart: () => beginNodeResize(interaction, props.id),
+  onResizeEnd: () => endNodeResize(interaction, props.id),
 })
 const cardWidth = card.cardWidth
 const cardHeight = card.cardHeight
 // 顶层解构：模板里 ref 自动解包，才能让 v-if 拿到布尔值(而非恒真的 ref 对象)。
 const cardResizable = card.resizable
 const cardIsResizing = card.isResizing
+
+/**
+ * 拖拽 resize 期间缩放变了（滚轮/工具栏/触控板）→ 立刻按新视口重算尺寸。
+ *
+ * 为什么必须单独盯：滚轮缩放时指针通常**不动**，也就没有 pointermove —— 只靠 move 重算的话，
+ * 卡片会停在旧尺寸上、与指针短暂脱手（用户报的"同时缩放就形成一点距离"）。
+ * 只依赖 zoom：平移变化不影响这块几何（toFlow 的平移项在差值里相消）。
+ */
+watch(zoom, () => {
+  if (cardIsResizing.value) card.refreshSize()
+})
 
 // 标题反缩宽度：DOM 宽 = cardWidth * max(zoom, minZoom)（屏幕宽 = 卡片屏幕宽）
 const titleCanvasWidth = computed(() => cardWidth.value * Math.max(zoom.value, TITLE_MIN_ZOOM.value))

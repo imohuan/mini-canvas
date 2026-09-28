@@ -34,6 +34,8 @@ theme / 插件读它决定显隐与行为——最典型的用途：**拖拽 / �
 interface InteractionActivity {
   nodeDragging: boolean        // 正在拖动某节点
   nodeDragId: string | null    // 被拖节点 id（多选拖动时是代表节点）
+  nodeResizing: boolean        // 正在拖拽修改某节点尺寸（卡片右下角 resize 拖柄）
+  nodeResizeId: string | null  // 正在被 resize 的节点 id
   paneDragging: boolean        // 画布视图在动（pan 或 wheel/pinch 缩放——A 决策不拆位）
   zooming: boolean             // 正在缩放（保留位；A 决策下暂不驱动）
   edgeDragging: boolean        // 正在重连边（当前交互未启用，占位未来）
@@ -44,11 +46,13 @@ interface InteractionActivity {
 interface CanvasInteractionState {
   activity: Ref<InteractionActivity>          // 活动位本体（响应式）
   isNodeDragging: ComputedRef<boolean>        // 派生便捷读
+  isNodeResizing: ComputedRef<boolean>        // 是否有节点在改尺寸
+  nodeResizeId: ComputedRef<string | null>    // 正在被 resize 的是哪个节点（无则 null）
   isPanning: ComputedRef<boolean>
   isZooming: ComputedRef<boolean>
   isEdgeDragging: ComputedRef<boolean>
   isSelecting: ComputedRef<boolean>
-  isBusyDragging: ComputedRef<boolean>        // 任一"物理拖拽"在动：node/pan/edge/selecting（不含 zooming）
+  isBusyDragging: ComputedRef<boolean>        // 任一"物理拖拽"在动：node/nodeResize/pan/edge/selecting（不含 zooming）
   isBusy: ComputedRef<boolean>                // 任何活动在动（含 zooming，比 isBusyDragging 更宽）
 }
 ```
@@ -57,10 +61,11 @@ interface CanvasInteractionState {
 
 | 派生位 | 含义 | 典型用途 |
 |---|---|---|
-| `isBusyDragging` | 有物理拖拽手势在动（node/pan/edge/selecting） | **"交互进行中"的显隐门**：拖拽期间不冒端口加号 |
+| `isBusyDragging` | 有物理拖拽手势在动（node/nodeResize/pan/edge/selecting） | **"交互进行中"的显隐门**：拖拽期间不冒端口加号 |
 | `isBusy` | 任何活动在动（含缩放） | 需要连缩放也算"忙"的场合（如禁快捷操作） |
 | `isPanning` | 视图在平移 / 缩放 | 画布视角类 UI |
 | `isNodeDragging` | 有节点被拖动 | 节点专属行为 |
+| `isNodeResizing` / `nodeResizeId` | 有节点在改尺寸 / 是哪一个 | 节点壳与节点外浮层（分组控制栏）据此在 resize 时收起 |
 
 `zooming` **不计入** `isBusyDragging`——它是为将来"想区分缩放手势"预留的位，当前统一归 `paneDragging`。
 
@@ -78,6 +83,8 @@ emptyActivity(): InteractionActivity               // 一份"全 false + id 空"
 ```ts
 beginNodeDrag(state, nodeId)   // nodeDragStart → 亮 nodeDragging + 记 id
 endNodeDrag(state)             // nodeDragStop → 灭 nodeDragging + 清 id
+beginNodeResize(state, nodeId) // 拖柄 pointerdown → 亮 nodeResizing + 记 id（节点壳自己调）
+endNodeResize(state, nodeId?)  // 拖柄 pointerup → 灭 nodeResizing + 清 id（传 id 时只清自己的）
 beginViewportMove(state)       // moveStart → 亮 paneDragging
 endViewportMove(state)         // moveEnd → 灭 paneDragging
 ```
@@ -196,7 +203,7 @@ mouseenter）——鼠标靠近哪个 zone，就只亮哪个端口；两个端�
 
 ## 测试
 
-`contracts/__tests__/interactionContext.test.ts`（7 例）：
+`contracts/__tests__/interactionContext.test.ts`（14 例）：
 
 - 初始态：全 false + id 空，派生位均 false
 - 局部分片写：开 nodeDragging 只动该位 + id，其它位保留
@@ -205,6 +212,8 @@ mouseenter）——鼠标靠近哪个 zone，就只亮哪个端口；两个端�
 - clearActivity：回到空态且换新引用（下游能感知）
 - beginNodeDrag/endNodeDrag：往返对称；pan 进行中结束拖节点不误清 pan
 - beginViewportMove/endViewportMove：驱动 paneDragging 往返对称
+- beginNodeResize/endNodeResize：往返对称；传 id 时只清自己那一条（不误清别人的）；
+  与 nodeDragging 可叠加、互不覆写；clearActivity 连 resize 位一起清
 
 > 验证命令（.vue 必须走 vue-tsc，纯 `tsc --noEmit` 查不到 .vue 会假绿）：
 > ```bash

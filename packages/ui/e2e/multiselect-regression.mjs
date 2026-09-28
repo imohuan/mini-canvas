@@ -442,6 +442,87 @@ const tbDrift = Math.abs(tbMoved - expectedMoved);
 check('C1 工具栏跟随节点移动', tbAfter && tbMoved > 30 && tbDrift < 8, `tb=${tbMoved?.toFixed(1)} 期望=${expectedMoved.toFixed(1)}`);
 check('C2 无新错误', errors.slice(errsBeforeC).length === 0, errors.slice(errsBeforeC).join(' | '));
 
+// ========== 场景 F：组内子节点多选拖动（用户报的"选框高度突破云端"）==========
+// 用户原话："这两个节点是主节点内的节点，我选中它们两个进行拖拽。你的这个多选框的高度直接突破了
+// 云端，它高度好像变成无限大了"。
+//
+// 根因：VueFlow 给有父节点的节点报的 drag position 是**相对父**的，而选框按绝对矩形算包围盒 ——
+// 两套坐标系混算，框高会被撑大（实测 240 → 600）。修好后：全程贴合（屏幕偏移恒 16/34/16/16）
+// 且框高 == 节点并集高 + 上下 padding，拖动也不会让框飞出去。
+await boot();
+const errsBeforeF = errors.length;
+await page.evaluate(() => {
+  const h = window.MiniCanvasUI.getHost();
+  const doc = h.ctx.get('doc');
+  const old = doc.getNodes();
+  if (old.length) doc.removeNodes(old.map((n) => n.id));
+  doc.addNodes([
+    { id: 'grpF', type: 'group', position: { x: 220, y: 300 }, size: { w: 820, h: 380 }, data: { label: 'g', backgroundColor: '#24262e' } },
+    { id: 'fA', type: 'text', parentId: 'grpF', position: { x: 60, y: 120 }, data: { content: 'A' } },
+    { id: 'fB', type: 'text', parentId: 'grpF', position: { x: 420, y: 150 }, data: { content: 'B' } },
+  ]);
+  h.selection.set(new Set(['fA', 'fB']));
+  h.viewport.setViewport({ x: 0, y: 0, zoom: 1 });
+});
+await page.waitForTimeout(700);
+
+/** 选框相对"选中节点 DOM 并集"的四边屏幕偏移 + 框高/并集高（拖动中也能用） */
+async function childFrameOffsets() {
+  return page.evaluate(() => {
+    const h = window.MiniCanvasUI.getHost();
+    const outer = document.querySelector('.selection-frame-outer');
+    if (!outer) return { missing: true };
+    const rs = [...h.selection.ids]
+      .map((id) => document.querySelector('.vue-flow__node[data-id="' + id + '"]'))
+      .filter(Boolean)
+      .map((el) => el.getBoundingClientRect());
+    if (!rs.length) return { missing: true };
+    const o = outer.getBoundingClientRect();
+    const u = { l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)), r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)) };
+    return {
+      l: +(u.l - o.left).toFixed(1), t: +(u.t - o.top).toFixed(1),
+      r: +(o.right - u.r).toFixed(1), b: +(o.bottom - u.b).toFixed(1),
+      outerH: +o.height.toFixed(1),
+      unionH: +(Math.max(...rs.map((r) => r.bottom)) - Math.min(...rs.map((r) => r.top))).toFixed(1),
+    };
+  });
+}
+
+const fBase = await childFrameOffsets();
+const okF = (o) => !o.missing && Math.abs(o.l - 16) < 2 && Math.abs(o.t - 34) < 2 && Math.abs(o.r - 16) < 2 && Math.abs(o.b - 16) < 2;
+check('F1 组内两子节点多选：静止态选框贴合（16/34/16/16）', okF(fBase), JSON.stringify(fBase));
+// 框高必须是"节点并集高 + 34 + 16"，而不是被撑到两倍（用户报的"无限大"）
+const fExpectedH = fBase.unionH + 50;
+check('F2 静止态框高 = 并集高 + 上下 padding（未被撑大）', Math.abs(fBase.outerH - fExpectedH) < 2, 'outerH=' + fBase.outerH + ' 期望=' + fExpectedH.toFixed(1));
+
+// 抓子节点卡片拖动（VueFlow 原生多选拖动 —— 用户截图里的操作）
+const fGrab = await page.evaluate(() => {
+  const r = document.querySelector('.vue-flow__node[data-id="fA"]').getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + 6 };
+});
+await page.mouse.move(fGrab.x, fGrab.y);
+await page.mouse.down();
+const fRows = [];
+for (let i = 1; i <= 6; i++) {
+  await page.mouse.move(fGrab.x + (140 * i) / 6, fGrab.y + (60 * i) / 6);
+  await page.waitForTimeout(45);
+  fRows.push(await childFrameOffsets());
+}
+await page.mouse.up();
+await page.waitForTimeout(400);
+const fBad = fRows.filter((r) => !okF(r));
+check('F3 组内子节点拖动全程：选框贴合不漂移', fBad.length === 0, fBad.length ? JSON.stringify(fBad[0]) : '6/6 帧贴合');
+const fHuge = fRows.filter((r) => !r.missing && r.outerH > fBase.unionH + 80);
+check('F4 拖动中框高未被撑大（"突破云端"的形态）', fHuge.length === 0, fHuge.length ? 'outerH=' + fHuge[0].outerH + ' 并集=' + fHuge[0].unionH : 'outerH 恒 ' + (fRows[0] && fRows[0].outerH));
+const fAfter = await childFrameOffsets();
+check('F5 松手后选框对齐', okF(fAfter), JSON.stringify(fAfter));
+const fPos = await page.evaluate(() => {
+  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  return { a: doc.getNode('fA').position, b: doc.getNode('fB').position };
+});
+check('F6 子节点位置已落盘（组内成员照常移动）', fPos.a.x !== 60 || fPos.a.y !== 120, JSON.stringify(fPos));
+check('F7 全程无新错误', errors.slice(errsBeforeF).length === 0, errors.slice(errsBeforeF).join(' | '));
+
 // ========== 汇总 ==========
 await browser.close();
 const failed = results.filter((r) => !r.ok);

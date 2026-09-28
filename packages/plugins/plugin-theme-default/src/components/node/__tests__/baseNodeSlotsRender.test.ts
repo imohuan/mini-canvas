@@ -42,7 +42,7 @@ const OverlayStub = defineComponent({ name: 'OverlayStub', render: () => h('div'
 function renderCtx(
   registry: NodeRegistry,
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number } = {},
+  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number; resizingId?: string | null } = {},
 ): CanvasRenderContext {
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(opts.selectedIds ?? [])
@@ -76,7 +76,12 @@ function renderCtx(
       suppressHandles: refOf(false),
       activeConnection: refOf(null),
     },
-    interaction: { isNodeDragging: refOf(false), isSelecting: refOf(opts.selecting === true) },
+    interaction: {
+      isNodeDragging: refOf(false),
+      isSelecting: refOf(opts.selecting === true),
+      nodeResizing: refOf(opts.resizingId != null),
+      nodeResizeId: refOf(opts.resizingId ?? null),
+    },
     debug: { handleDebug: false, connectionSnapDebugVisible: false },
     snapZone: {},
     visibleRect: refOf(null),
@@ -100,7 +105,7 @@ function renderNode(
   registry: NodeRegistry,
   data: Record<string, unknown> = {},
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number } = {},
+  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number; resizingId?: string | null } = {},
 ): Promise<string> {
   const app = createSSRApp({
     setup() {
@@ -409,6 +414,48 @@ describe('多选标记的大小与缩放阈值同源（titleScaleMinZoom 改了�
       { selectedIds: ['n1', 'n2'], zoom: 0.2 },
     )
     expect(html).toContain('transform:scale(4)')
+  })
+})
+
+/**
+ * 用户要求（原话）："节点 resize 的时候（分组节点 ，普通节点）不显示上下的 控制栏"。
+ *
+ * 上/下控制栏是浮在卡片外侧的一排按钮/面板：拖右下角 resize 拖柄时它正挡在指针经过的位置，
+ * 既碍事又会被 resize 出来的新尺寸甩到很远处 —— 所以 resize 进行中整排收起，松手立刻恢复。
+ *
+ * 判定读渲染层的共享 activity（nodeResizeId），不是壳自己的局部 isResizing：
+ * 分组节点的控制栏挂在节点之外的 overlay 槽，两条路径要读同一份信号才一致。
+ */
+describe('resize 进行中收起上/下控制栏（用户要求）', () => {
+  it('正在被 resize 的就是我 → 上/下插槽整层不渲染', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
+    const html = await renderNode(r, {}, {}, { resizingId: 'n1' })
+    expect(html).not.toContain('probe-top-a')
+    expect(html).not.toContain('probe-bottom-a')
+    expect(html).not.toContain('v2-slot')
+  })
+
+  it('正在被 resize 的是别人 → 我的控制栏照常显示（不做全局压制）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
+    const html = await renderNode(r, {}, {}, { resizingId: 'other' })
+    expect(html).toContain('probe-top-a')
+    expect(html).toContain('probe-bottom-a')
+  })
+
+  it('没在 resize → 控制栏照常显示（不误伤常态）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA })
+    const html = await renderNode(r)
+    expect(html).toContain('probe-top-a')
+  })
+
+  it('resize 进行中 → 编辑浮层（over:inset）也一起收起（同属"浮在外面的栏"）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
+    const html = await renderNode(r, {}, {}, { resizingId: 'n1' })
+    expect(html).not.toContain('v2-overlay')
   })
 })
 

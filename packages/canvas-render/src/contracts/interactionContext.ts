@@ -19,6 +19,19 @@ export interface InteractionActivity {
   /** 正在拖动某节点 */
   nodeDragging: boolean
   nodeDragId: string | null
+  /**
+   * 正在拖拽修改某节点尺寸（卡片右下角 resize 拖柄）。
+   *
+   * 为什么和 nodeDragging 分开而不是复用它：resize 是另一种手势（改尺寸 ≠ 改位置），
+   * 两者的消费者也不同（resize 要压控制栏，拖节点要压端口）。多面旗子可叠加是这份契约
+   * 本来就允许的（见文件头"多属性组合的响应式活动状态"）。
+   *
+   * 为什么必须是**共享**状态：普通节点的上下控制栏住在壳（BaseNode）里，壳自己有局部
+   * isResizing 就能压；但**分组节点的控制栏挂在画布 overlay 槽**（节点之外的层，
+   * 见 GroupTopToolbarOverlay），它读不到壳的局部状态，只能读这份共享状态。
+   */
+  nodeResizing: boolean
+  nodeResizeId: string | null
   /** 正在平移画布(pan) */
   paneDragging: boolean
   /** 正在缩放(wheel/pinch) */
@@ -35,6 +48,8 @@ export function emptyActivity(): InteractionActivity {
   return {
     nodeDragging: false,
     nodeDragId: null,
+    nodeResizing: false,
+    nodeResizeId: null,
     paneDragging: false,
     zooming: false,
     edgeDragging: false,
@@ -50,6 +65,10 @@ export interface CanvasInteractionState {
   // —— 派生便捷读（computed；UI/theme 一把读，不必自己拼多面旗子）——
   /** 是否正在拖动节点 */
   isNodeDragging: ComputedRef<boolean>
+  /** 是否正在拖拽修改某节点尺寸（resize 拖柄） */
+  isNodeResizing: ComputedRef<boolean>
+  /** 正在被 resize 的节点 id（无则 null）。分组控制栏浮层靠它判"被 resize 的是不是我" */
+  nodeResizeId: ComputedRef<string | null>
   /** 是否正在平移画布(pan) */
   isPanning: ComputedRef<boolean>
   /** 是否正在缩放 */
@@ -73,6 +92,8 @@ export function createInteractionState(): CanvasInteractionState {
   return {
     activity,
     isNodeDragging: computed(() => activity.value.nodeDragging),
+    isNodeResizing: computed(() => activity.value.nodeResizing),
+    nodeResizeId: computed(() => activity.value.nodeResizeId),
     isPanning: computed(() => activity.value.paneDragging),
     isZooming: computed(() => activity.value.zooming),
     isEdgeDragging: computed(() => activity.value.edgeDragging),
@@ -80,6 +101,7 @@ export function createInteractionState(): CanvasInteractionState {
     isBusyDragging: computed(
       () =>
         activity.value.nodeDragging ||
+        activity.value.nodeResizing ||
         activity.value.paneDragging ||
         activity.value.edgeDragging ||
         activity.value.selecting,
@@ -87,6 +109,7 @@ export function createInteractionState(): CanvasInteractionState {
     isBusy: computed(
       () =>
         activity.value.nodeDragging ||
+        activity.value.nodeResizing ||
         activity.value.paneDragging ||
         activity.value.zooming ||
         activity.value.edgeDragging ||
@@ -118,6 +141,28 @@ export function beginNodeDrag(state: CanvasInteractionState, nodeId: string): vo
 /** 节点拖动结束：灭 nodeDragging + 清 id。 */
 export function endNodeDrag(state: CanvasInteractionState): void {
   updateActivity(state, { nodeDragging: false, nodeDragId: null })
+}
+
+/**
+ * 节点 resize 开始：亮 nodeResizing + 记被改尺寸的节点 id。
+ *
+ * 由**节点壳自己**在拖柄 pointerdown 时调用（useNodeCardSize 起手处）——
+ * 渲染层不掺 resize 业务，只提供"共享活动位"这个传播面。
+ */
+export function beginNodeResize(state: CanvasInteractionState, nodeId: string): void {
+  updateActivity(state, { nodeResizing: true, nodeResizeId: nodeId })
+}
+
+/**
+ * 节点 resize 结束：灭 nodeResizing + 清 id。
+ *
+ * 传 nodeId 时**只在当前正在 resize 的就是它**才清（幂等 + 防误清）：
+ * 多个节点实例各自持有会话，A 的 pointerup 不该抹掉 B 的标记。
+ * 不传则无条件清空（宿主级兜底，例如会话异常中断）。
+ */
+export function endNodeResize(state: CanvasInteractionState, nodeId?: string): void {
+  if (nodeId !== undefined && state.activity.value.nodeResizeId !== nodeId) return
+  updateActivity(state, { nodeResizing: false, nodeResizeId: null })
 }
 
 /** 视图平移/缩放开始（pan 与 wheel/pinch 同源于 VueFlow move 事件，A 决策统一亮 paneDragging）。 */

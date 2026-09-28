@@ -308,14 +308,15 @@ const plugins = [themeDefaultPlugin]
   <CanvasHost :plugins="plugins">
     <template #ui>
       <button @click="settingsOpen = !settingsOpen">设置</button>
-      <!-- 弹窗默认皮由 theme-default 提供（`SettingsHost` 读 settingsPanel 槽赢家并喂 settings） -->
+      <!-- 最外层 Dialog（遮罩/居中/✕/Esc）由渲染层 SettingsShell 提供；中间层（左导航+内容）由 theme-default 注册 -->
       <SettingsHost v-if="settingsOpen" empty-hint="暂无设置面板" />
     </template>
   </CanvasHost>
 </template>
 ```
 
-面板自身负责"值变了刷新控件"，`SettingsHost` 只负责读赢家 + 传 settings 源（详见《06》《07》）。
+面板（中间层）自身负责"值变了刷新控件"；`SettingsHost` 只负责「最外层 Dialog + 读赢家 + 传 settings 源」，
+关闭由外壳 emit → `ctx.emit('settings:ui-close')` → 宿主收起面板（详见《06》《07》）。
 
 ---
 

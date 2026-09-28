@@ -278,6 +278,15 @@ function createUi() {
   }
   let disposeSettingsBind: (() => void) | undefined
   /**
+   * 内核事件 'settings:ui-close' 的订阅句柄。
+   *
+   * 为什么必须有：settingsPanel 是**可替换槽**，面板的关闭动作统一经 ctx.emit('settings:ui-close')
+   * 通知宿主（渲染层 SettingsShell 的 ✕ / 遮罩 / Esc 都从这里出去，皮不需要自己发）。装配层若不订阅，
+   * ✕ / 点遮罩就**静默失效**：不报错、不 warn、画面照旧，只有全局 Esc 兜得住。
+   * 这里是那次广播的落点（把 settingsOpen 置 false → <SettingsHost v-if> 卸载面板）。
+   */
+  let disposeSettingsClose: (() => void) | undefined
+  /**
    * 轻提示：按需求**已停用**（原本右下角会浮一个 "message" 气泡，容易和 Agent 面板重叠）。
    * 保留函数签名，调用点无需改动；要恢复提示只需重新实现这里。
    */
@@ -325,20 +334,39 @@ function createUi() {
     }).dispose
   }
 
+  /**
+   * 订阅设置面板的关闭广播（内核事件 settings:ui-close）。
+   *
+   * 面板换皮后关闭动作仍走同一条内核事件，所以这里订阅的是**契约**而不是某个具体皮：
+   * 渲染层 SettingsShell 统一 emit 它（任何皮都用同一个外壳，所以换皮不改变关闭行为）。
+   * 重复调用（宿主重建 / 热重载）先撤旧订阅，避免回调堆积。
+   */
+  function bindSettingsClose(): void {
+    disposeSettingsClose?.()
+    disposeSettingsClose = undefined
+    const ctx = hostEl.value?.host?.ctx
+    if (!ctx) return
+    disposeSettingsClose = ctx.on('settings:ui-close', closeSettings).dispose
+  }
+
   async function onReady(): Promise<void> {
     bindThemeSettings()
+    bindSettingsClose()
     await installExternalPlugins()
   }
 
   /**
-   * 设置面板关闭：由面板自身直接调用，不依赖内核事件订阅。
-   *
-   * 为什么不让面板 ctx.emit('settings:ui-close')：宿主侧的 ctx 订阅挂在 CanvasHost 的 ref 上，
-   * 该 ref 在本装配层下可能拿不到（与 createNode 同源问题），订阅没建起来 → 关闭静默失效。
-   * 单例状态直连最稳，也少一条隐式通道。
+   * 关闭设置面板：面板经内核事件 settings:ui-close 广播进来（见 bindSettingsClose），
+   * 装配层内的其它部件（如顶栏设置按钮）也可以直接调用它。
    */
   function closeSettings(): void {
     state.settingsOpen = false
+  }
+
+  /** 撤掉关闭广播订阅（宿主销毁时调用；重复 onReady 时由 bindSettingsClose 内部自动撤）。 */
+  function unbindSettingsClose(): void {
+    disposeSettingsClose?.()
+    disposeSettingsClose = undefined
   }
 
   function createNode(type: 'text' | 'image' | 'video'): void {
@@ -523,6 +551,7 @@ function createUi() {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
     hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
+    unbindSettingsClose,
     toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }

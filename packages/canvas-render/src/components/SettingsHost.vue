@@ -1,22 +1,23 @@
 <script setup lang="ts">
-// SettingsHost —— 渲染层"可替换设置面板"宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家设置 UI，
+// SettingsHost —— 渲染层"可替换设置面板"宿主：**提供外壳** + 读 themeRegistry.winner('settingsPanel') 渲染当前赢家的**内容区**，
 // 并把 ctx.settings(内核分组配置单一数据源) 实时喂给赢家组件。
 //
-// 解决的问题（settings-panel-slot-host-plan §三.A）：
-// - 过去设置面板在 demo 里硬写 `<PluginSettingsPanel :settings="settingsStore"/>`，从没注册成槽 → 无法运行时替换。
-// - 本组件把设置面板做成"可替换皮"(theme 单赢家槽 settingsPanel)：插件 ctx.theme.register('settingsPanel', 组件, {order})
-//   顶替默认；宿主一行 `<SettingsHost/>` 即渲染当前赢家。默认皮由 theme-default 注册(见其 src/settings.ts)。
-// - 数据喂法 = 渲染时现取不注册快照：ctx.settings 是画布级恒在数据，现取保证实时；默认/替换面板声明 props.settings 即可。
+// 职责切分（外壳归宿主，皮只管内容）：
+// - 本宿主只提供**最外层 Dialog**：遮罩 / 居中 / 框 / 标题栏 / ✕ / Esc / 点遮罩关闭 / 关闭广播，
+//   以及窗口级能力（浮动窗、拖拽、resize、悬浮球）。**不提供任何中间容器**。
+// - 槽里的皮渲染**中间层**（左导航 + 右侧设置项都归它），声明 props.settings 即可，不必自己画窗口、也不必自己处理关闭。
+// 这样"关闭"只有一份实现：皮的 ✕ 由外壳画，点遮罩/Esc 也由外壳统一处理 —— 历史缺陷（各皮自己实现、
+// closeOnMask 默认值不一致导致点遮罩关不掉）从结构上不会再出现。
 //
-// 职责边界（只管"读赢家 + 喂 settings"）：
-// - 不做定位/容器样式/展开收起——那是宿主放本组件处(如设置 dock)的布局职责。
-// - settings 值的自刷新由面板组件自己负责(PluginSettingsPanel 内部已订阅 onChange)：这里只读当前赢家 + 传稳定 settings 源，
-//   不在每次配置变化时用 :key 重挂面板(否则输入框每按键即重挂丢焦点)。
-// - 只在 CanvasHost 渲染子树/宿主业务 UI 区内用（useCanvasRender 拿 ctx）；组件树外会抛清晰错误。
+// 数据喂法 = 渲染时现取不注册快照：ctx.settings 是画布级恒在数据，现取保证实时；皮声明 props.settings 即可。
+// settings 值的自刷新由皮自己负责（默认皮内部已订阅 onChange）：这里只读当前赢家 + 传稳定 settings 源，
+// 不在每次配置变化时用 :key 重挂（否则输入框每按键即重挂丢焦点）。
+// 只在 CanvasHost 渲染子树/宿主业务 UI 区内用（useCanvasRender 拿 ctx）；组件树外会抛清晰错误。
 import { markRaw, onBeforeUnmount, ref } from 'vue'
 import { useCanvasRender } from '../contracts/renderContext'
 import type { SettingsPanelSource } from './settingsPanelTypes'
 import { settingsSourceFrom } from './settingsSource'
+import SettingsShell from './SettingsShell.vue'
 
 const props = defineProps<{
   /** 空槽(没插件注册设置面板)时是否显示"无设置面板"占位；默认 false=空 */
@@ -54,11 +55,18 @@ if (themeRegistry && typeof themeRegistry.subscribe === 'function') {
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
 })
+
+/** 外壳的关闭动作统一从这里出去：广播内核事件，宿主收起面板（<SettingsHost v-if> 卸载本组件）。 */
+function onShellClose(): void {
+  ctx.emit('settings:ui-close')
+}
 </script>
 
 <template>
-  <!-- 无赢家：显示空槽占位(宿主可自定义文案)；有赢家则把 settings 喂给它渲染（自刷新由面板负责） -->
-  <component v-if="winner" :is="winner" :settings="source" />
+  <!-- 有赢家：外壳包住赢家渲染的内容区；无赢家：显示空槽占位 -->
+  <SettingsShell v-if="winner" @close="onShellClose">
+    <component :is="winner" :settings="source" />
+  </SettingsShell>
   <div v-else-if="emptyHint" class="sh-empty">{{ emptyHint }}</div>
 </template>
 

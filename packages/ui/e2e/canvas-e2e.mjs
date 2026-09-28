@@ -135,6 +135,30 @@ check('设置面板能打开且长出分组', (await page.locator('text=/常规/
 await page.keyboard.press('Escape');
 await page.waitForTimeout(300);
 
+// ⑦-2 关闭通道（✕ / 遮罩 / Esc 三条都必须真的把面板收起来）
+// 这条曾经全红：默认皮的关闭只发内核事件 settings:ui-close，而装配层没人订阅 →
+// 点 ✕/遮罩毫无反应、不报错不 warn（只有宿主自己的全局 Esc 兜住了）。
+// 面板外壳（遮罩/居中/✕）由渲染层 SettingsShell 提供，所以任何皮打开时都有 .psd-mask。
+const panelOpen = () => page.evaluate(() => !!document.querySelector('.psd-mask'));
+const settingsBtn = () => page.getByRole('button', { name: '设置' }).first();
+await settingsBtn().click();
+await page.waitForTimeout(600);
+check('设置面板可再次打开（上一轮 Esc 已收起）', await panelOpen());
+await page.locator('button[aria-label="关闭"], button[aria-label="关闭设置"]').first().click();
+await page.waitForTimeout(400);
+check('点 ✕ 能关闭设置面板', !(await panelOpen()));
+await settingsBtn().click();
+await page.waitForTimeout(600);
+// 点弹窗外的空白处 = 遮罩（用左下角，任何皮/任何尺寸下都在弹窗之外）
+await page.mouse.click(12, 820);
+await page.waitForTimeout(400);
+check('点遮罩能关闭设置面板', !(await panelOpen()));
+await settingsBtn().click();
+await page.waitForTimeout(600);
+await page.keyboard.press('Escape');
+await page.waitForTimeout(400);
+check('Esc 能关闭设置面板', !(await panelOpen()));
+
 // ⑧ 注册场运行时放/取/回收 + source 可诊断
 const field = await page.evaluate(() => {
   const ctx = window.MiniCanvasUI.getContext();
@@ -371,6 +395,63 @@ const shellSwap = await page.evaluate(async () => {
   return { seenBefore, seenAfter, seenRestored: textOf().some((t) => t.includes(MARK)) };
 });
 check('node/shell 场换壳真的生效（假壳渲染到节点上，撤回即复原）', !shellSwap.seenBefore && shellSwap.seenAfter && !shellSwap.seenRestored, JSON.stringify(shellSwap));
+
+// 9i. resize 拖拽中缩放：卡片右下角必须始终贴住鼠标（用户报过"同时缩放就形成一点距离"）。
+// 根因是尺寸换算写成"屏幕位移 ÷ 当前 zoom"，只在缩放全程不变时成立；现在按当前视口换算。
+// 判据用**可观测不变式**：整个拖拽过程中「卡片右下角 − 鼠标」恒定（等于起手抓点偏移）。
+const resizeZoom = await page.evaluate(async () => {
+  const api = window.MiniCanvasUI;
+  const h = api.getHost();
+  const doc = h.ctx.get('doc');
+  const vp = h.ctx.get('viewport');
+  const target = doc.getNodes().find((n) => doc.types.get(n.type)?.resizable === true);
+  if (!target) return { skipped: true };
+  doc.updateNode(target.id, { position: { x: 250, y: 200 } });
+  h.ctx.get('selection').set([target.id]);
+  await new Promise((r) => setTimeout(r, 400));
+  return { skipped: false, id: target.id };
+});
+if (resizeZoom.skipped) {
+  check('resize 拖拽中缩放仍贴手（需要 resizable 节点）', false, '画布上没有 resizable 节点');
+} else {
+  const rid = resizeZoom.id;
+  const measure = () => page.evaluate((nid) => {
+    const el = document.querySelector(`.vue-flow__node[data-id="${nid}"]`);
+    const nr = el?.getBoundingClientRect();
+    const hr = el?.querySelector('.resize-handle')?.getBoundingClientRect();
+    return nr && hr ? { cx: hr.x + hr.width / 2, cy: hr.y + hr.height / 2, corner: { x: nr.right, y: nr.bottom } } : null;
+  }, rid);
+  const m0 = await measure();
+  if (!m0) {
+    check('resize 拖拽中缩放仍贴手（需要拖柄可见）', false, '拖柄不在 DOM 里');
+  } else {
+    await page.mouse.move(m0.cx, m0.cy);
+    await page.mouse.down();
+    await page.mouse.move(m0.cx + 20, m0.cy + 12);
+    await page.waitForTimeout(80);
+    const base = await measure();
+    const gap0 = { x: base.corner.x - (m0.cx + 20), y: base.corner.y - (m0.cy + 12) };
+    // 光标不动，滚轮缩小（没有 pointermove 的一帧 —— 旧实现在这里就会脱手）
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(250);
+    const afterWheel = await measure();
+    const gap1 = { x: afterWheel.corner.x - (m0.cx + 20), y: afterWheel.corner.y - (m0.cy + 12) };
+    // 再拖一段，确认跟随
+    await page.mouse.move(m0.cx + 70, m0.cy + 42);
+    await page.waitForTimeout(80);
+    const afterDrag = await measure();
+    const gap2 = { x: afterDrag.corner.x - (m0.cx + 70), y: afterDrag.corner.y - (m0.cy + 42) };
+    await page.mouse.up();
+    await page.waitForTimeout(150);
+    const drift = (a, b) => Math.abs(a.x - b.x) <= 1.5 && Math.abs(a.y - b.y) <= 1.5;
+    check(
+      'resize 拖拽中滚轮缩放：卡片右下角始终贴住鼠标（起手偏移恒定，无漂移）',
+      drift(gap0, gap1) && drift(gap0, gap2),
+      `基准=${JSON.stringify(gap0)} 滚轮后=${JSON.stringify(gap1)} 再拖后=${JSON.stringify(gap2)}`,
+    );
+  }
+}
+
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));

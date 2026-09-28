@@ -1,13 +1,17 @@
 # canvas-render 开发手册 · SettingsHost（设置面板宿主）与 SlotHost（通用槽宿主）
 
 > 来源：`packages/canvas-render/src/components/SettingsHost.vue`、`components/SlotHost.vue`、
-> 内核 `core/capabilities.ts`（ctx.slots / ctx.theme）、`plugin-theme-default`（settings 注册、PluginSettingsDialog）。
+ > `components/SettingsShell.vue`、内核 `core/capabilities.ts`（ctx.slots / ctx.theme）、
+ > `plugin-theme-default`（settings 注册、PluginSettingsDialog）。
 
 ## 一句话
 
 两个组件是渲染层给你的"**UI 宿主**"：它们不写死任何界面，而是去读内核的注册表（slot/theme 里的 occupants），把当前该渲染的东西渲染出来。这样界面可由插件在运行时替换/叠加，宿主组件保持通用。
 
-- **`SettingsHost`**：读 `themeRegistry.winner('settingsPanel')`，渲染"当前赢家的设置面板"，并把 `ctx.settings` 实时喂给它。
+ - **`SettingsHost`**：**提供最外层 Dialog**（遮罩 / 居中 / 框 / 标题栏 / ✕ / Esc / 点遮罩关闭 / 浮动窗口 / 悬浮球），
+   读 `themeRegistry.winner('settingsPanel')` 渲染"当前赢家设置的**中间层**"，并把 `ctx.settings` 实时喂给它。
+ - **`SettingsShell`**：上面那个最外层 Dialog 组件本身。外壳归宿主、皮只管中间层 —— 换皮不必重画窗口，关闭也只有一份实现。
+   注意边界：**左导航与右侧内容都算"设置界面"，都归皮**；外壳不提供任何中间容器（皮自己的根元素直接作为对话框的弹性子项）。
 - **`SlotHost`**：给定槽名，把该槽里所有 occupant（插件 `ctx.slots.register` 塞的）按 order 渲染。
 
 ---
@@ -51,13 +55,17 @@ reload()
 
 模板：
 ```html
-<component v-if="winner" :is="winner" :settings="source" />
+<!-- 有赢家：最外层 Dialog 包住赢家渲染的中间层（左导航 + 右侧内容） -->
+<SettingsShell v-if="winner" @close="ctx.emit('settings:ui-close')">
+  <component :is="winner" :settings="source" />
+</SettingsShell>
 <div v-else-if="emptyHint" class="sh-empty">{{ emptyHint }}</div>
 ```
 
 关键语义：
 - **数据喂法 = 渲染时现取，不注册快照**：`ctx.settings` 是画布级恒在数据，现取保证实时。
-- 面板组件声明 `props.settings` 接收。
+ - 皮组件声明 `props.settings` 接收，**只渲染中间层**（左导航 + 右侧设置项）；窗口级行为一概不碰。
+ - **关闭是外壳的职责**：外壳 emit(`close`) → SettingsHost `ctx.emit('settings:ui-close')` → 宿主收起面板（`<SettingsHost v-if>` 卸载）。
 - **设置值自刷新由面板自己负责**：SettingsHost 不监听配置变化给面板加 `:key` 重挂（否则输入框每按键就重挂丢焦点）。默认面板 PluginSettingsDialog 内部已订阅 onChange 自刷新。
 - 插件换皮：装一个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, { order: -1 })` 即顶替默认。
 
@@ -67,7 +75,8 @@ reload()
 ```ts
 ctx.theme.register('settingsPanel', PluginSettingsDialog, { id: 'default', order: 0 })
 ```
-它实现了一个"居中 modal + 左右布局"的标准设置界面（左导航 / 右内容），还带两个可扩展插槽（见《07 的槽名表》）。
+ 它实现的是**内容区**（左导航 / 右侧设置项）；居中 modal、遮罩、✕、Esc、浮动窗口与悬浮球由 `SettingsShell` 提供。
+ 内容区还带三个可扩展插槽（见《07 的槽名表》）。
 
 ### props
 

@@ -27,6 +27,24 @@ export function shouldAlignOnDrag(selectedCount: number): boolean {
   return selectedCount <= 1
 }
 
+/**
+ * 把 flow **绝对坐标**换算成 updateNodeVisual 需要的"节点写入坐标系"。
+ *
+ * 为什么要这一步：拖拽事件 payload.position 与对齐引擎的矩形都是**绝对坐标**（契约见
+ * renderEvents.toDragPayload / 本文件头），而 updateNodeVisual 写的是 VueFlow 的 node.position
+ * —— 有父节点（分组子节点）时那是**相对父**的。直接写绝对值会让子节点每帧被推出去一个父偏移
+ * （实测：父在 (200,260) 时，拖子节点吸附一下会跳 200px）。无父节点时两者同值，原样返回。
+ *
+ * @param parentOrigin 父节点的绝对左上角；无父传 null
+ */
+export function toVisualPosition(
+  abs: { x: number; y: number },
+  parentOrigin: { x: number; y: number } | null,
+): { x: number; y: number } {
+  if (!parentOrigin) return abs
+  return { x: abs.x - parentOrigin.x, y: abs.y - parentOrigin.y }
+}
+
 /** 参考线类型：垂直参考线定位 x，水平参考线定位 y */
 export type GuideLine = { type: 'vertical' | 'horizontal'; position: number }
 

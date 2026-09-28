@@ -57,6 +57,8 @@ export {
   endViewportMove,
   beginSelecting,
   endSelecting,
+  beginNodeResize,
+  endNodeResize,
 } from './contracts/interactionContext'
 export type {
   CanvasInteractionState,
@@ -252,8 +254,10 @@ export type {
 } from './contracts/standardCapabilities'
 // 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
 export { default as RegionEntryHost } from './components/RegionEntryHost.vue'
-// 可替换设置面板宿主：读 themeRegistry.winner('settingsPanel') 渲染当前赢家，把 ctx.settings 喂给它（见 plugin-theme-default/settings.ts 注册默认皮）
+// 可替换设置面板宿主：提供外壳(遮罩/居中/✕/Esc/浮动窗) + 读 themeRegistry.winner('settingsPanel') 渲染内容区，把 ctx.settings 喂给它
 export { default as SettingsHost } from './components/SettingsHost.vue'
+// 设置面板外壳：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗口 / 悬浮球。皮只渲染内容区，换皮不重画窗口
+export { default as SettingsShell } from './components/SettingsShell.vue'
 // 把 ctx.get('settings')(内核 SettingsStore) 适配成设置面板消费的最小接口(SettingsPanelSource) 的复用入口
 export { settingsSourceFrom } from './components/settingsSource'
 // 通用 UI 槽宿主：给槽名就渲染该槽全部 occupant（<SlotHost slot="overlay" />），插件侧 ctx.slots.register 填

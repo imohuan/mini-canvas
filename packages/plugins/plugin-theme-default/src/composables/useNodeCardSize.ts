@@ -2,7 +2,11 @@
  * useNodeCardSize —— 卡片固定尺寸 + 右下角拖拽 resize（移植自 v1 Decoration/BaseNode 的内置 resize 逻辑）。
  *
  * v2 卡片从"内容自适应"改为"固定可改尺寸框"。尺寸来源：node.data.cardWidth/cardHeight（与 v1 同名，便于存量迁移）
- * ?? nodeStore.types.defaultSize。resize 拖拽屏幕 delta ÷ zoom 还原成画布/内容坐标，
+ * ?? nodeStore.types.defaultSize。
+ *
+ * 尺寸换算（2026-09-28 修）：拖拽中把"指针 + 起手抓点偏移"经 **当前视口**（toFlow）换算成画布坐标，
+ * 再与起手画布角点求差 —— **不**用"屏幕位移 ÷ 当前 zoom"（后者只在缩放不变时成立，
+ * 拖拽途中缩放一变就与鼠标脱手）。另：滚轮缩放时常没有 pointermove，需要 refreshSize() 补算。
  * 结束经 nodeWrite 写回（触发 nodeStore 订阅 → 渲染态自动刷新，无需手动 updateNode/map）。
  *
  * 拖拽监听（修复）：move/up **绑到全局 document**，而不是手柄元素自己身上。
@@ -13,9 +17,10 @@
  * 类型声明支持 resize → 该类型所有节点(含存量)自动可拖；实例级 data.resizable 可单独覆盖/关闭。
  *
  * 用法（BaseNode）：
- *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, zoom })
+ *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, toFlow, grabOffset })
  *   :style="{ width: card.cardWidth+'px', height: card.cardHeight+'px', ... }"
  *   <div class="resize-handle" @pointerdown="card.onResizePointerDown" />
+ *   watch(zoom, () => card.isResizing.value && card.refreshSize())
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
@@ -42,13 +47,33 @@ export interface NodeCardSizeOptions {
    * 不传则只有卡片自身跟着变、端口与边会停在旧尺寸。
    */
   onVisualSize?: (w: number, h: number) => void;
-  /** 当前画布缩放（resize 屏幕 delta ÷ zoom 换算） */
-  zoom: () => number;
+  /**
+   * 屏幕坐标 → 画布坐标（**当前视口**；每帧调用）。BaseNode 传 flow.screenToFlow。
+   *
+   * 为什么不是"当前 zoom"：只除以 zoom 的话，拖拽途中缩放一变，同一段屏幕位移
+   * 对应的画布位移就变了 —— 卡片会与鼠标拉开距离（用户报的"resize 时同时缩放就形成一点距离"）。
+   * 每帧用当前视口换算，等价于把鼠标所在的画布点当成卡片角该在的点，缩放怎么变都贴住。
+   */
+  toFlow: (x: number, y: number) => { x: number; y: number };
   /**
    * 类型级 resizable 能力取值器（useNodeCapability().resizable）。缺省返回 false。
    * 显示拖柄的门 = 类型声明支持 resize **或** 节点实例 data.resizable === true（后者可单独覆盖）。
    */
   typeResizable?: () => boolean;
+  /**
+   * 指针到**卡片右下角**的屏幕偏移（px）取值器，在 pointerdown 时调用一次。
+   *
+   * 用户抓的是拖柄中心，而拖柄中心不在卡片右下角上；不补这段偏移，一按下卡片就会先跳一小段。
+   * 缺省 undefined = 抓点即角点（不补偿）。DOM 量测放在调用方（壳），本 composable 不碰 DOM。
+   */
+  grabOffset?: (e: PointerEvent) => { x: number; y: number } | undefined;
+  /**
+   * 拖拽起手/结束的对外通知（可选）。BaseNode 用它把"我正在被 resize"写进渲染层的共享活动位
+   * （beginNodeResize / endNodeResize），好让**挂在节点之外的**浮层（分组控制栏）也能收起。
+   * 缺省 no-op —— 不影响本 composable 独立可用（单测/极简宿主）。
+   */
+  onResizeStart?: () => void;
+  onResizeEnd?: () => void;
 }
 
 export const CARD_MIN_WIDTH = 120;
@@ -94,7 +119,7 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
   const session = createResizeDragSession({
     minW: CARD_MIN_WIDTH,
     minH: CARD_MIN_HEIGHT,
-    zoom: () => opts.zoom() || 1,
+    toFlow: opts.toFlow,
     onLive(w, h) {
       cardWidth.value = w;
       cardHeight.value = h;
@@ -103,6 +128,8 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     onVisualSize: opts.onVisualSize,
     onCommit(w, h) {
       isResizing.value = false;
+      // 先灭共享活动位再落盘：落盘会触发重渲染，控制栏此刻就该恢复（松手即恢复）
+      opts.onResizeEnd?.();
       // 一次写回两份尺寸（触发 nodeStore 订阅自动刷新渲染态）：
       //   data.cardWidth/cardHeight → 卡片渲染读它决定多大
       //   size                      → 宿主写进 node.size（正式尺寸字段，布局回退链的中间一环）
@@ -120,11 +147,14 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
   function onResizePointerDown(e: PointerEvent) {
     if (!resizable.value) return;
     isResizing.value = true;
-    session.start(e, cardWidth.value, cardHeight.value);
+    opts.onResizeStart?.();
+    session.start(e, cardWidth.value, cardHeight.value, opts.grabOffset?.(e));
   }
 
   onBeforeUnmount(() => {
     isResizing.value = false;
+    // 卸载时兜底灭位：拖拽中热卸/重挂不会把"正在 resize"永久留在共享活动位上
+    opts.onResizeEnd?.();
     session.dispose();
   });
 
@@ -134,5 +164,10 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     resizable,
     isResizing,
     onResizePointerDown,
+    /**
+     * 视口变化时重算一次尺寸（拖拽中缩放常用滚轮，**没有 pointermove**）。
+     * 不在拖拽中时是空操作；调用方（壳）watch 缩放变化后喊一声即可。
+     */
+    refreshSize: () => session.refresh(),
   };
 }

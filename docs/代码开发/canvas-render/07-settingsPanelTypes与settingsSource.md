@@ -72,7 +72,8 @@ export function settingsSourceFrom(ctx: Context): SettingsPanelSource {
 ## 谁用它
 
 - `SettingsHost`：`const source = settingsSourceFrom(ctx)`，然后把 `source` 作为 `props.settings` 传给当前赢家面板。
-- 宿主想自己直接渲染面板：`<PluginSettingsDialog :settings="settingsSourceFrom(ctx)" />`。
+ - 面板只渲染**中间层**（左导航 + 右侧内容都归它）；最外层 Dialog（遮罩 / 居中 / ✕ / Esc / 浮动窗 / 悬浮球）由 `SettingsShell` 提供，
+   由 `SettingsHost` 拼装（`<SettingsShell><component :is="winner" :settings="source" /></SettingsShell>`）。
 
 ---
 
@@ -80,7 +81,8 @@ export function settingsSourceFrom(ctx: Context): SettingsPanelSource {
 
 ```vue
 <script setup lang="ts">
-// 自己实现一个 settingsPanel 槽的组件：声明 props.settings 即可
+// 自己实现一个 settingsPanel 槽（中间层：左导航 + 内容）的组件：声明 props.settings 即可。
+// 不需要写遮罩 / ✕ / Esc —— 那些由渲染层 <SettingsShell> 统一提供。
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()

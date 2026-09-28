@@ -10,6 +10,8 @@ import {
   endViewportMove,
   beginSelecting,
   endSelecting,
+  beginNodeResize,
+  endNodeResize,
 } from '../interactionContext'
 
 describe('createInteractionState', () => {
@@ -118,3 +120,73 @@ describe('createInteractionState', () => {
   })
 })
 
+/**
+ * 节点 resize（卡片右下角拖柄）是"节点手势"的一种，和 nodeDragging 同属 activity。
+ *
+ * 为什么需要它：普通节点的上下控制栏由壳（BaseNode）自己压掉就行，但**分组节点的控制栏
+ * 挂在画布 overlay 槽**（节点外，见 GroupTopToolbarOverlay 的层叠上下文说明）——
+ * 它读不到壳里的局部 isResizing。于是把"谁正在被 resize"写进共享 activity，两条路径读同一份。
+ */
+describe('节点 resize 活动位（nodeResizing / nodeResizeId）', () => {
+  it('初始：nodeResizing=false、nodeResizeId=null，派生位同步', () => {
+    const s = createInteractionState()
+    expect(s.activity.value.nodeResizing).toBe(false)
+    expect(s.activity.value.nodeResizeId).toBeNull()
+    expect(s.isNodeResizing.value).toBe(false)
+    expect(s.nodeResizeId.value).toBeNull()
+  })
+
+  it('beginNodeResize：亮 nodeResizing + 记 id，且不碰 nodeDragging', () => {
+    const s = createInteractionState()
+    beginNodeResize(s, 'n1')
+    expect(s.activity.value.nodeResizing).toBe(true)
+    expect(s.activity.value.nodeResizeId).toBe('n1')
+    expect(s.isNodeResizing.value).toBe(true)
+    expect(s.nodeResizeId.value).toBe('n1')
+    expect(s.activity.value.nodeDragging).toBe(false)
+    expect(s.isNodeDragging.value).toBe(false)
+  })
+
+  it('endNodeResize：不传 id 就清空（往返对称）', () => {
+    const s = createInteractionState()
+    beginNodeResize(s, 'n1')
+    endNodeResize(s)
+    expect(s.activity.value.nodeResizing).toBe(false)
+    expect(s.activity.value.nodeResizeId).toBeNull()
+    expect(s.isNodeResizing.value).toBe(false)
+  })
+
+  it('endNodeResize 传 id：只清自己那一条（别人正在 resize 时不许清掉）', () => {
+    const s = createInteractionState()
+    beginNodeResize(s, 'n2')
+    endNodeResize(s, 'n1') // 我是 n1，正在被 resize 的是 n2 → 不该清
+    expect(s.activity.value.nodeResizing).toBe(true)
+    expect(s.activity.value.nodeResizeId).toBe('n2')
+    endNodeResize(s, 'n2')
+    expect(s.activity.value.nodeResizing).toBe(false)
+    expect(s.activity.value.nodeResizeId).toBeNull()
+  })
+
+  it('与 nodeDragging 可叠加（互不覆写）', () => {
+    const s = createInteractionState()
+    beginNodeDrag(s, 'a')
+    beginNodeResize(s, 'b')
+    expect(s.activity.value.nodeDragging).toBe(true)
+    expect(s.activity.value.nodeDragId).toBe('a')
+    expect(s.activity.value.nodeResizing).toBe(true)
+    expect(s.activity.value.nodeResizeId).toBe('b')
+    endNodeResize(s, 'b')
+    expect(s.activity.value.nodeResizing).toBe(false)
+    expect(s.activity.value.nodeDragging).toBe(true)
+    expect(s.activity.value.nodeDragId).toBe('a')
+  })
+
+  it('clearActivity 连 resize 位一起清（新空对象）', () => {
+    const s = createInteractionState()
+    beginNodeResize(s, 'n1')
+    clearActivity(s)
+    expect(s.activity.value).toEqual(emptyActivity())
+    expect(s.isNodeResizing.value).toBe(false)
+    expect(s.nodeResizeId.value).toBeNull()
+  })
+})

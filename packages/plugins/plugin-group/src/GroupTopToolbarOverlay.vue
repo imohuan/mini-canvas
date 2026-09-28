@@ -27,7 +27,7 @@ import GroupTopToolbar from './GroupTopToolbar.vue'
 // 常量从 groupEngine 取（纯逻辑、零依赖）。不能从 groupPlugin 取：那会成环（见该常量处的说明）。
 import { GROUP_NODE_TYPE } from './groupEngine'
 
-const { ctx, flow } = useCanvasRender()
+const { ctx, flow, interaction } = useCanvasRender()
 const viewport = flow.viewport
 
 /** 唯一被单独选中的节点 id（恰好选一个才谈得上显示某一条工具栏）；订阅选中单源，不存影子状态 */
@@ -116,6 +116,17 @@ onBeforeUnmount(() => { for (const d of disposers) d.dispose() })
 /** 实际用的矩形：拖动中用跟随值，静止时用 store 值（松手落盘后两者自然一致） */
 const rect = computed(() => dragRect.value ?? storeRect.value)
 
+/**
+ * 本分组**是不是正在被 resize**（用户要求："节点 resize 的时候（分组节点 ，普通节点）不显示上下的控制栏"）。
+ *
+ * 为什么这里要自己判（普通节点不用）：普通节点的上下控制栏住在壳（BaseNode）里，壳读自己的
+ * 局部 isResizing 就够了；但分组控制栏挂在**画布 overlay 槽**（节点之外的层，见文件头的层叠上下文
+ * 说明），读不到壳的局部状态 —— 只能读渲染层共享 activity 的 nodeResizeId。
+ *
+ * 只认"被 resize 的就是我"：别人 resize 时这条栏照常（不做全局压制，否则拖 A 会把 B 的栏一起吃掉）。
+ */
+const isSelfResizing = computed(() => interaction?.nodeResizeId?.value === groupNode.value?.id)
+
 /** 贴边距离读**同一份**「布局/控制栏」配置（节点控制栏也读它）→ 两个宿主间距天然一致 */
 const offsets = useToolbarOffsets()
 
@@ -139,7 +150,7 @@ const innerStyle = computed(() =>
 </script>
 
 <template>
-  <div v-if="rect" class="group-top-toolbar-overlay" :style="wrapperStyle">
+  <div v-if="rect && !isSelfResizing" class="group-top-toolbar-overlay" :style="wrapperStyle">
     <div class="group-top-toolbar-overlay__anchor" :style="anchorStyle">
       <div class="group-top-toolbar-overlay__slot" :style="innerStyle">
         <!-- 与挂在节点里时**同一份**组件：按钮、色板、显隐门全复用，不重复实现 -->

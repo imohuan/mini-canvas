@@ -32,7 +32,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
-import { computeAlignGuides, SNAP_THRESHOLD, shouldAlignOnDrag } from './alignGuideEngine'
+import { computeAlignGuides, toVisualPosition, SNAP_THRESHOLD, shouldAlignOnDrag } from './alignGuideEngine'
 
 const { ctx, interaction, flow, visibleNodes } = useCanvasRender()
 const viewport = flow.viewport
@@ -71,6 +71,13 @@ function hideGuides(): void {
 const vScreen = computed(() => (vGuide.value !== null ? vGuide.value * viewport.value.zoom + viewport.value.x : 0))
 const hScreen = computed(() => (hGuide.value !== null ? hGuide.value * viewport.value.zoom + viewport.value.y : 0))
 
+/** 被拖节点的父绝对原点（无父 = null）；吸附结果的绝对坐标要减掉它才写回 updateNodeVisual */
+function parentOriginOf(nodeId: string): { x: number; y: number } | null {
+  const parentId = ctx.tryGet('doc')?.getNode(nodeId)?.parentId
+  if (!parentId) return null
+  return ctx.get('nodeLayout').absolutePosition(parentId)
+}
+
 function handleDragFrame(nodeId: string, position: { x: number; y: number }): void {
   // 多选整组拖动：不对齐、不画线（吸附只动一个节点，会把整组相对位置弄乱）
   if (multiDrag.value) {
@@ -87,7 +94,11 @@ function handleDragFrame(nodeId: string, position: { x: number; y: number }): vo
   const others = visibleNodes(SNAP_THRESHOLD).filter((r) => r.id !== nodeId)
   const { deltaX, deltaY, guides } = computeAlignGuides(dragged, others)
   if (deltaX !== 0 || deltaY !== 0) {
-    flow.updateNodeVisual(nodeId, { x: position.x + deltaX, y: position.y + deltaY })
+    // 吸附结果是**绝对坐标**；写回要换回节点自身的写入坐标系（子节点是相对父）
+    flow.updateNodeVisual(
+      nodeId,
+      toVisualPosition({ x: position.x + deltaX, y: position.y + deltaY }, parentOriginOf(nodeId)),
+    )
   }
   const v = guides.find((g) => g.type === 'vertical')
   const h = guides.find((g) => g.type === 'horizontal')

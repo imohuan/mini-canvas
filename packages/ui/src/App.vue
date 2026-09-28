@@ -85,7 +85,11 @@ onMounted(() => {
   ui.applyTheme(s.theme)
 })
 watch(() => s.theme, (v) => ui.applyTheme(v))
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  // 撤掉 settings:ui-close 订阅：面板关闭广播的唯一落点，宿主销毁时不该继续持有 ctx 回调。
+  ui.unbindSettingsClose()
+})
 </script>
 
 <template>

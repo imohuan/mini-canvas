@@ -414,7 +414,11 @@ function onNodeDragStop(e: NodeDragEvent): void {
       ? moved
       : [{ id: e.node.id, x: e.node.position.x, y: e.node.position.y }]
   for (const m of movedIds) {
-    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: { x: m.x, y: m.y } })
+    // payload.position 一律报 **flow 绝对坐标**（与 NodeDragStart/NodeDrag 同契约，见 renderEvents.toDragPayload）。
+    // 上面写回 store 用的是 VueFlow 的 position —— 分组子节点那是**相对父**的（store 语义就是相对，必须这么写）；
+    // 但事件契约是绝对坐标（消费方按绝对理解：多选包围盒、对齐吸附都用 nodeLayout 的绝对矩形）。
+    // 直接广播 m.x/m.y 会让子节点场景下消费方拿到相对值 —— 多选框据此算包围盒时高度会炸（实测 240 → 600）。
+    h.ctx.emit(RenderEvents.NodeDragEnd, { nodeId: m.id, position: h.nodeLayout.absolutePosition(m.id) })
   }
 }
 
