@@ -300,6 +300,8 @@ node/shell                    默认：兜底
 | `ui` | 组件名（`button`/`dropdown`/…） | 设计系统组件 | 其它插件按名取 |
 | `capability` | 能力名（`node`/`zoom`/`tools`/…） | 工厂 `(nodeId) => Capability` | `useCapabilities()` |
 | `tool` | 工具名 | `ToolDef`（function calling 形态） | 模型/外部调用方 |
+| `node/bar` | 动作 id | 底栏动作（`BarAction`，含 fields/panel/run/resume） | 默认底栏/换皮底栏按节点类型渲染 |
+| `node/bar-applier` | 节点类型（kind） | 结果写入器 `BarApplier` | `nodeTask` 动作终态写回节点 |
 
 ---
 

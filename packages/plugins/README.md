@@ -128,3 +128,55 @@ export function apply(ctx: Context) {
   ctx.nodes.contribute('image', 'out:top', MyButton, { order: 5 })
 }
 ```
+
+---
+
+## 六a、底栏动作（plugin-bottom-bar）：可替换底部状态栏
+
+text/image/video 节点的底部控制栏统一由 `@mini-canvas/plugin-bottom-bar` 渲染
+（一个 `BottomBarHost` 挂在 `out:bottom`，读 `themeRegistry.winner('bottomBar')`）。
+各节点插件不再自己挂 `out:bottom` 基座段。
+
+**怎么往底栏加一个动作**（在你的插件 `apply(ctx)` 里）：
+
+```ts
+import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+
+// 1) 注册一个动作（条目落在**你的插件**作用域：卸载自动摘除、同 id 替换）
+registerBarAction(ctx, {
+  id: 'video.generate:seedance',   // 唯一标识；同 id 重复注册 = 替换（热更）
+  types: ['video'],                // 给哪些节点类型；省略 = 所有类型
+  title: '生成视频',
+  needsPrompt: true,               // 显示大输入框
+  fields: [                        // 可视化配置：复用内核 ToolParamDef（下拉/数字/开关/自定义组件）
+    { key: 'ratio', label: '比例', type: 'select', default: '16:9', options: [{ label: '16:9', value: '16:9' }] },
+  ],
+  run: (input, runCtx) => ({ ok: true, urls: ['…'] }),
+  // 异步任务：return 一个轮询函数（内核 ToolPollFn 形态），可选声明 resume(taskId) 供刷新后续查
+})
+```
+
+- **归属**：动作落 `ctx.registryOf('node/bar')`，用的是你插件自己的 ctx ——
+  不要存在 `NodeBarService` 上（那是共享单例，条目会挂到 bottom-bar 名下）。
+- **结果写回**：动作默认把结果交给「同类型写入器」（`registerBarApplier`，一个类型一个）；
+  动作自己改节点（复制/删除/旋转/下载）就声明 `apply: 'self'`。
+- **进度与状态**：`nodeTask` 每帧写 `data.runState`（`doc.updateNodeRuntime`：落盘但**不进撤销栈**），
+  形状 `{ status, progress, message, taskId, actionId, startedAt }`；覆盖层挂 `over:inset`，
+  按 `status === 'running'` 显隐。
+- **消费入口**（组件里用 `ctx.get`，根 ctx 没有服务代理）：
+  `ctx.get('nodeBar').list({ type })` / `ctx.get('nodeTask').run(nodeId, actionId, input)`。
+
+**整体换皮**（像主题那样换掉整个底栏 UI）：
+
+```ts
+ctx.theme.add('bottomBar', MyBottomBar, { order: -1 })   // order 最小者赢
+```
+
+**把 ctx.tools 里的模型自动发布成动作**（保持「加一个模型 = 装一个工具插件」）：
+
+```ts
+publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
+```
+
+完整示例：`packages/plugins/plugin-mock-task-backend`（同步动作 + 异步动作 + 参数下拉，
+并在成品应用里演示覆盖层与落盘）。

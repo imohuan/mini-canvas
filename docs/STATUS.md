@@ -1129,3 +1129,32 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
 - 基础服务现状实测：save / doc / resources / nodeRegistry / themeRegistry / selection /
   command / nodeFactory / nodeLayout / viewport / settingsPersist = **11 个**
   （§4.2 六个"表型服务"的退场属后续清理；slots/settings 为能力层内置）
+ 
+---
+
+## 追加（2026-09-28，节点底栏注册化 + 进度覆盖层）
+
+分支 `codex/node-bottom-bar-registry`（基于 49c165b，含设置面板外壳重构）。
+
+**新包**：`packages/plugins/plugin-bottom-bar` + `packages/plugins/plugin-mock-task-backend`。
+设计稿与执行计划见 `docs/superpowers/specs/2026-09-28-node-bottom-bar-design.md` 与
+`docs/superpowers/plans/2026-09-28-node-bottom-bar-registry.md`（子代理审核 4 轮）。
+
+**做了什么**：
+
+1. `doc.updateNodeRuntime`（canvas-data）：写节点运行期状态 —— 落盘但**不进撤销栈**（进度帧用）。
+2. `plugin-bottom-bar`：读服务 `nodeBar` + 执行服务 `nodeTask` + 注册糖 `registerBarAction` /
+   `registerBarApplier` / `publishToolActions`（落场用调用方 ctx，条目归注册方，卸载自动摘除）。
+3. 默认底栏 `NodeBottomBar`（themeRegistry 槽 `bottomBar`，order 最小者赢 = 整体可换皮）+
+   覆盖层 `NodeTaskOverlay`（`over:inset`，running 时显示进度/取消）。
+4. 三个节点插件删掉自己的 `out:bottom` 基座段（不设兼容）：生成动作经 `publishToolActions` 发布
+   （参数/模板照工具声明长出来），旋转/下载/复制/删除为 `apply:'self'` 即时动作；结果写入器复用
+   `writeGeneratedImage` 等既有写回规矩。
+5. mock 后台插件：同步动作（1.2s）+ 异步动作（10 帧进度，带 taskId/resume）。
+
+**验证基线（2026-09-28 实测）**：kernel 212 / canvas-data 332 / canvas-render 405 / canvas-base 6 /
+ui 44 / plugin-bottom-bar 17 / node-text 31 / node-image 111 / node-video 105 / mock-task-backend 3，
+全部通过；typecheck 全部通过；UI e2e 45 原有用例 + 5 条新断言 = **50/50**（底栏装配、覆盖层、
+runState 落盘、刷新不悬挂）。
+
+**注意**：mock 动作经 image 写入器写 `data.imageUrl` —— 点了它当前图会被换成 mock 产物（预期行为）。
