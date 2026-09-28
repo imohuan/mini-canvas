@@ -40,7 +40,7 @@ describe('node-text 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('区域注册：in + 底部状态栏 out:bottom（顶部操作条已按用户要求删除）', async () => {
+  it('区域注册：只有 in（底部状态栏搬进 plugin-bottom-bar，顶部操作条已按用户要求删除）', async () => {
     const ctx = boot()
     await ctx.start()
     // 与内核 resolveSegment 同一读法：registry.get(type).segments[region]
@@ -49,7 +49,8 @@ describe('node-text 装配 smoke', () => {
     }>('nodeRegistry')
     const segments = registry.get('text')?.segments ?? {}
     expect(segments.in).toBeTruthy()
-    expect(segments['out:bottom']).toBeTruthy()
+    // 底栏搬进 plugin-bottom-bar（T7）：本包只注册动作与写入器，不再自占 out:bottom 基座段
+    expect(segments['out:bottom']).toBeUndefined()
     // 顶部操作条（加粗/字号/颜色/对齐）已删：该区域不该再被注册
     expect(segments['out:top']).toBeUndefined()
     ctx.stop()

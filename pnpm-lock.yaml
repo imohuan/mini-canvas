@@ -752,6 +752,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
