@@ -116,8 +116,11 @@ const tryRestore = (): void => {
   restored = true
   void task.restoreAll()
 }
-ctx.on('ctx:ready', tryRestore)              // 冷启动
-ctx.on('ctx:plugin-installed', tryRestore)   // 热装（manifest 那条链）
+ctx.on('ctx:ready', tryRestore)              // 冷启动（start() 末尾同步 emit）
+// 热装（manifest 那条链）：**必须排除自己的安装事件** —— bottom-bar 自己上架时也会
+// emit 它，而主装配把 bottom-bar 排在节点插件**之前**，不排除就会在节点插件还没
+// 注册动作时就跑完 restoreAll，把本可续查的任务误判成「中断」。
+ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
 ```
 
 ---
@@ -393,7 +396,7 @@ describe('BarRegistry：按节点类型筛 + 排序（纯逻辑）', () => {
 
 `barRegistry.ts` 用 `Map`，`list` 排序键 = `order ?? Infinity`，同键保插入序。
 （`add`/`remove` 是**纯内存**容器方法，专供单测与 `toolActions` 用；跨插件落场的是
-`registryOf('node/bar')`，见 `0.3。）
+`registryOf('node/bar')`，见 §0.3。）
 
 - [ ] **Step 5: 跑测试确认通过**（2 tests） / **Step 6: 提交**
 
@@ -790,8 +793,12 @@ describe('bottom-bar 插件装配', () => {
 
 - `NodeBarService extends Service`（`super(ctx, 'nodeBar')`，**只读**）：`list(filter?)` 读
   `ctx.registryOf('node/bar')` 的场并按 `types` 过滤 + `order ?? Infinity` 升序；
-  `get(id)`；`applierOf(kind)` 读 `node/bar-applier`；`state(nodeId)` 读 `doc` 里该节点的 `runState`。
-- 三个注册糖（**关键：落场用调用方 ctx**，见 `0.3）：
+  `get(id)` 读 `field.get(id, id)`；`applierOf(kind)` 读 `field.get(kind, kind)`；
+  `state(nodeId)` 读 `doc` 里该节点的 `runState`。
+  `list(filter?)`：场的键就是 `action.id`（没有类型索引），所以要 `field.keys()`
+  逐键 `list(k)` 摊平 → 按 `types` 过滤 → 按 `order ?? Infinity` **跨键**升序。
+  动作量级几十条，扫全键无性能问题；`get(id)` 不走 `list().find()`（那等于每次洗全表）。
+- 三个注册糖（**关键：落场用调用方 ctx**，见 §0.3）：
 
 ```ts
 /** 注册一个底栏动作。条目归**调用方插件**（卸载自动摘除、同 id 覆盖） */
@@ -813,6 +820,7 @@ export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplie
   - `writeResult` → `doc.updateNode(nodeId, { data })`（**走历史**，那是作品）；
   - `readData` → `doc.getNode(nodeId)?.data ?? {}`；
   - `registry` → `{ get: (id) => bar.list().find(a => a.id === id), applierOf: (k) => bar.applierOf(k) }`。
+  - `registry` → `{ get: (id) => bar.get(id), applierOf: (k) => bar.applierOf(k) }`。
   - `restoreAll()`：遍历 `doc.getNodes()`，对 `readRunState(n.data).status === 'running'` 的
     调 `resumeAction`（`void`，内部同步写下错误态兜底）。
 - `apply(ctx)`：
@@ -822,11 +830,12 @@ const bar = new NodeBarService(ctx)
 const task = new NodeTaskService(ctx)
 ctx.nodes.attach('*', { region: 'out:bottom', component: BottomBarHost, id: 'bottom-bar/host' })
 ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
-// 刷新续查（`0.5）：冷启动与热装两条时机都挂，只跑一次
+// 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；必须排除自己的安装事件
 let restored = false
 const tryRestore = () => { if (restored || !ctx.get('nodeBar')) return; restored = true; void task.restoreAll() }
 ctx.on('ctx:ready', tryRestore)
-ctx.on('ctx:plugin-installed', tryRestore)
+ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
+ctx.on('ctx:plugin-uninstalled', () => tryRestore())
 ```
 
 - `export const inject = ['doc', 'nodeRegistry', 'themeRegistry']`（`themeRegistry` 必须进 inject：
@@ -878,10 +887,10 @@ git commit -m "feat(plugin-bottom-bar): 读服务 nodeBar + nodeTask + 按作用
 一行控件（动作下拉 / `fields` 控件 / 模板下拉 / `info` 文案 / 执行按钮）→ 进度条（`running`）。
 
 - 节点类型：`const nodeType = computed(() => doc?.getNode(props.id)?.type)`（`props` 没有 type，
-  见 `0.2）；订阅 `doc.subscribe` 跟随。
+  见 §0.2）；订阅 `doc.subscribe` 跟随。
 - `visible = useSoleNodeSelected(props.id)`；**没有可用动作时自身返回空**（壳的
   `.v2-slot--bottom` 包裹层不算底栏产出）。
-- 动作列表 = `bar.list({ type: nodeType.value })`（**不做 tools 自动展开**，见 `0.3；模型类动作由
+- 动作列表 = `bar.list({ type: nodeType.value })`（**不做 tools 自动展开**，见 §0.3；模型类动作由
   节点插件经 `publishToolActions` 发布）。
 - 热装卸后重读：订阅 `ctx:plugin-installed` / `ctx:plugin-uninstalled` 与
   `ctx.registryOf('node/bar').subscribe`。
@@ -979,9 +988,10 @@ git commit -m "feat(plugin-bottom-bar): 上移上游素材收集与工具入参�
 - 行为：把 `ctx.get('tools').list({ produces })` 的每个工具发布成一条动作
   （`id = 'tool:' + tool.name`、`title = tool.title ?? tool.name`、`fields = tool.params`、
   `templates = tool.templates`、`needsPrompt`/`promptBinding`/`apply` 取 opts、
-  `run = (input) => tools.invoke(tool.name, input)`），**落场用调用方 ctx**（`0.3）；
-  订阅 `ctx:plugin-installed`（工具表可能变化）做增量同步：新增的发布、消失的移除。
-  返回一个「立即重新同步」的句柄（测试用）。
+  `run = (input) => tools.invoke(tool.name, input)`），**落场用调用方 ctx**（§0.3）；
+  订阅 `ctx:plugin-installed` **与** `ctx:plugin-uninstalled`（工具表可能变化，两个方向都要）
+  做增量同步：新增的发布、**消失的移除**（工具提供方插件卸载时不能留僵尸动作）。
+  返回一个「立即重新同步」的句柄，测试直接调它（不依赖 emit 的时序）。
 
 - [ ] **Step 1: 写失败测试**
 
@@ -1002,25 +1012,28 @@ describe('publishToolActions：把工具表映射成底栏动作', () => {
     const ctx = await boot()
     ctx.tools.register({ name: 't.image', title: '图模型', produces: 'image', run: () => ({ ok: true }) })
     publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
-    const ids = ctx.registryOf('node/bar').list('tool:t.image').map((e) => e.id)
-    expect(ids).toEqual(['t.image'])
+  const ids = ctx.registryOf('node/bar').list('tool:t.image').map((e) => e.id)
+  expect(ids).toEqual(['tool:t.image'])   // 注册键就是动作 id
     ctx.stop()
   })
 
-  it('later 注册的工具：重新同步后出现', async () => {
+  it('晚注册的工具：重新同步后出现；工具消失后动作也消失', async () => {
     const ctx = await boot()
-    publishToolActions(ctx, { types: ['image'], produces: 'image' })
+    const sync = publishToolActions(ctx, { types: ['image'], produces: 'image' })
     expect(ctx.registryOf('node/bar').list('tool:late')).toHaveLength(0)
     ctx.tools.register({ name: 'late', title: '晚到', produces: 'image', run: () => ({ ok: true }) })
-    ctx.emit('ctx:plugin-installed', { name: 'someone' })  // 触发增量同步
+    sync()  // 直接调句柄，不依赖 emit 时序
     expect(ctx.registryOf('node/bar').list('tool:late')).toHaveLength(1)
+    ctx.tools.unregister('late')
+    sync()
+    expect(ctx.registryOf('node/bar').list('tool:late')).toHaveLength(0)
     ctx.stop()
   })
 })
 ```
 
-（若 `ctx.emit` 在测试里不便触发订阅，直接让 `publishToolActions` 返回的句柄＝同步函数，
-测试里调一次即可 —— 实现时保持这一条可测。）
+（返回句柄 = 立即重新同步函数；实现里额外挂 `ctx.on('ctx:plugin-installed'/'ctx:plugin-uninstalled')`
+自动同步，两条路都要有。）
 
 - [ ] **Step 2: 跑测试确认失败** / **Step 3: 实现**
 - [ ] **Step 4: 跑测试确认通过** / **Step 5: 提交**
@@ -1043,7 +1056,7 @@ git commit -m "feat(plugin-bottom-bar): publishToolActions —— 工具映射�
 
 **Interfaces:**
 - Consumes: `registerBarAction` / `registerBarApplier` / `publishToolActions`（**不进 inject**，
-  见 `0.3；bottom-bar 缺席时这些调用整体跳过）。
+  见 §0.3；bottom-bar 缺席时这些调用整体跳过）。
 - Produces: text 底栏动作：① 由 `publishToolActions` 发布的「每个文本工具一条」
   （`needsPrompt:true`、`promptBinding:'text'`）；② `text.duplicate` / `text.delete`
   （`apply:'self'`）；③ 每条动作的 `info` 显示字数/行数。写入器把 `result.text` 写进 `data.text`。
@@ -1056,7 +1069,7 @@ git commit -m "feat(plugin-bottom-bar): publishToolActions —— 工具映射�
 删 `segments` 整条字段、删 import 与三个文件；`apply` 里「取得到就注册、取不到等上架」：
 
 ```ts
-// `0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
+// §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
 // 注册糖把条目落在**本插件** scope（卸载自动摘除），所以这里不自己 ctx.effect。
 const registerBar = (): boolean => {
   if (!ctx.tryGet('nodeBar')) return false
@@ -1220,14 +1233,14 @@ pnpm -C packages/ui typecheck
 
 ## 风险与拆票点
 
-- **`nodeBar` 只读、写走注册方作用域**（`0.3）：这是本计划最易写错的一处；验收 3 的
+- **`nodeBar` 只读、写走注册方作用域**（§0.3）：这是本计划最易写错的一处；验收 3 的
   「卸载后消失」完全依赖它。
 - **工具动作的唯一来源是 `publishToolActions`**（默认皮不自动展开）：避免「generate 动作 +
   N 个工具动作」重复列出。
 - **`over:inset` 与编辑浮层同层**：基座恒在下、注册场条目恒在上。
 - **`data.runState` 与 mcp-server 撞名**：**有意为之**（同含义同键，云端写的进度前端能直接显示）。
 - **mock 动作会覆盖节点真图**：经 image 写入器写 `imageUrl` —— demo 预期行为，写进 `STATUS`。
-- **写盘频率**：中间帧 200ms 节流；调大窗口或改判据都要同步更新 `0.4。
+- **写盘频率**：中间帧 200ms 节流；调大窗口或改判据都要同步更新 §0.4。
 
 ### 被删能力 → 去处对照表（实现时逐项打勾）
 
