@@ -854,7 +854,6 @@ export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplie
   - `writeRuntime` → `doc.updateNodeRuntime(nodeId, { data: { runState } })`（**不走历史**）；
   - `writeResult` → `doc.updateNode(nodeId, { data })`（**走历史**，那是作品）；
   - `readData` → `doc.getNode(nodeId)?.data ?? {}`；
-  - `registry` → `{ get: (id) => bar.list().find(a => a.id === id), applierOf: (k) => bar.applierOf(k) }`。
   - `registry` → `{ get: (id) => bar.get(id), applierOf: (k) => bar.applierOf(k) }`。
   - `restoreAll()`：遍历 `doc.getNodes()`，对 `readRunState(n.data).status === 'running'` 的
     调 `resumeAction`（`void`，内部同步写下错误态兜底）。
@@ -871,7 +870,6 @@ let readyFired = false
 const tryRestore = () => { if (restored || !ctx.get('nodeBar')) return; restored = true; void task.restoreAll() }
 ctx.on('ctx:ready', () => { readyFired = true; tryRestore() })
 ctx.on('ctx:plugin-installed', (e) => { if (readyFired || e?.name !== 'bottom-bar') tryRestore() })
-ctx.on('ctx:plugin-uninstalled', () => tryRestore())
 ```
 
 - `export const inject = ['doc', 'nodeRegistry', 'themeRegistry']`（`themeRegistry` 必须进 inject：
