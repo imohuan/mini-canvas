@@ -441,4 +441,3 @@ const ICON_SEND =
   }
 }
 </style>
-

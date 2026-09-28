@@ -96,7 +96,9 @@ export class NodeTaskService extends Service {
     const bar = this.ctx.get<NodeBarService>('nodeBar')
     return {
       readData: (id) => doc.getNode(id)?.data ?? {},
-      writeRuntime: (id, data) => doc.updateNodeRuntime(id, data),
+      // 注意：data 这里就是 { runState } 载荷 —— 必须包进 NodePatch 的 data 键，
+      // 否则 nodeStore.updateNode 会把它当非法 patch 键整体忽略（e2e 排查实录）。
+      writeRuntime: (id, data) => doc.updateNodeRuntime(id, { data }),
       runApplier: (id, result, c) => void bar.applierOf(c.nodeType)?.(id, result, c),
     }
   }

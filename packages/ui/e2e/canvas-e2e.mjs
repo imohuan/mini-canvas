@@ -452,6 +452,120 @@ if (resizeZoom.skipped) {
   }
 }
 
+
+// ==================== 底栏 / 覆盖层 / 落盘 / 刷新（Task 10 新增断言） ====================
+{
+  // 防御：前序用例可能触发了页面导航，这里确保画布可用
+  await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
+  if (!(await page.evaluate(() => !!window.MiniCanvasUI).catch(() => false))) {
+    await page.goto('http://localhost:5288/', { waitUntil: 'load' });
+    await page.waitForTimeout(2200);
+  }
+  const bar2 = page.locator('[data-testid="node-bottom-bar"]');
+  const assembled = await page.evaluate(() => {
+    const ctx = window.MiniCanvasUI.getContext();
+    const field = ctx.registryOf('node/region');
+    return {
+      bar: field.list('*/out:bottom').length,
+      overlay: field.list('*/over:inset').length,
+      actions: ctx.get('nodeBar') ? ctx.get('nodeBar').list({ type: 'image' }).length : -1,
+    };
+  });
+  check(
+    '底栏装配：out:bottom 宿主 + over:inset 覆盖层 + image 动作',
+    assembled.bar === 1 && assembled.overlay === 1 && assembled.actions > 0,
+    JSON.stringify(assembled),
+  );
+
+  // 选中图片节点 → 默认底栏渲染出来
+  const hasBar = await (async () => {
+    const img = page.locator('.vue-flow__node').nth(1);
+    await img.click();
+    await page.waitForTimeout(400);
+    return (await page.locator('[data-testid="node-bottom-bar"]').count()) > 0;
+  })();
+  check('选中图片节点 → 默认底栏渲染出来', hasBar);
+
+  // 执行 mock 异步动作（服务层触发同一链路：nodeTask.run → runAction → updateNodeRuntime → 覆盖层）
+  const ran = await (async () => {
+    if ((await bar2.count()) === 0) return { overlayShown: false };
+    const runPromise = page.evaluate(() => {
+      const ctx = window.MiniCanvasUI.getContext();
+      const doc = ctx.get('doc');
+      const node = doc.getNodes().find((n) => n.type === 'image');
+       const calls = [];
+       const orig = doc.updateNodeRuntime.bind(doc);
+       doc.updateNodeRuntime = (id, patch) => { calls.push({ id, keys: Object.keys(patch?.data ?? {}) }); return orig(id, patch); };
+       window.__wrCalls = calls;
+      return ctx.get('nodeTask').run(node.id, 'mock-task:async', { prompt: 'e2e', values: {} })
+        .then((r) => ({ kind: 'returned', r }))
+        .catch((e) => ({ kind: 'threw', error: e?.message || String(e) }));
+    });
+    const stateProbe = await page.evaluate(() => {
+      const ctx = window.MiniCanvasUI.getContext();
+     const doc = ctx.get('doc');
+      const wrCalls = window.__wrCalls;
+      const node = doc.getNodes().find((n) => n.type === 'image');
+    const host = window.MiniCanvasUI.getHost();
+    const hostDoc = host.ctx.get('doc');
+     const appliers = ctx.registryOf('node/bar-applier');
+     return { viaDoc: node?.data?.runState ?? null, viaStore: (host.nodeStore.getNode(node.id)?.data?.runState) ?? null, id: node.id, sameDoc: hostDoc === doc, keys: Object.keys(node?.data ?? {}), applierKeys: appliers.keys(), applierIsFn: typeof appliers.get('image', 'image')?.value };
+   });
+    let runResult = null;
+    runPromise.then((v) => { runResult = v; }).catch((e) => { runResult = { kind: 'threw', error: String(e) } });
+    let overlayShown = false;
+    let overlayText = '';
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(100);
+      if ((await page.locator('.task-overlay').count()) > 0) {
+        overlayShown = true;
+        overlayText = await page.locator('.task-overlay-card').innerText();
+        break;
+      }
+    }
+    return { overlayShown, overlayText, runResult, stateProbe };
+  })();
+  check(
+    '执行 mock 异步动作 → 卡片出现覆盖层（running）',
+    ran.overlayShown,
+    'run=' + JSON.stringify(ran.runResult) + ' state=' + JSON.stringify(ran.stateProbe) + ' overlay=' + ran.overlayText,
+  );
+
+  // 终态落盘：等 runState 变 done（带 actionId）
+  const persisted = await (async () => {
+    for (let i = 0; i < 60; i++) {
+      await page.waitForTimeout(250);
+      const rs = await page.evaluate(() => {
+        const h = window.MiniCanvasUI.getHost();
+        const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
+        return node?.data?.runState ?? null;
+      });
+      if (rs && rs.status === 'done') return rs;
+    }
+    return null;
+  })();
+  check(
+    '终态落盘：runState.status=done 且带 actionId',
+    !!persisted && typeof persisted.actionId === 'string',
+    JSON.stringify(persisted),
+  );
+
+  // 刷新后不悬挂
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(2200);
+  const after = await page.evaluate(() => {
+    const h = window.MiniCanvasUI.getHost();
+    const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
+    return node?.data?.runState ?? null;
+  });
+  const overlayAfterReload = await page.locator('.task-overlay').count();
+  check(
+    '刷新后不悬挂：覆盖层不再出现',
+    overlayAfterReload === 0 && !!after && after.status !== 'running',
+    JSON.stringify(after),
+  );
+}
+
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));
