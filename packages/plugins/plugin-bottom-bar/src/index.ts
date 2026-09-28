@@ -23,6 +23,7 @@ export {
   registerBarApplier,
   kindOf,
 } from './nodeBarPlugin'
+export { publishToolActions } from './toolActions'
 export type {
   BarAction,
   BarRunInput,
@@ -34,4 +35,3 @@ export type { NodeRunState } from './runState'
 export { readRunState, runningState, progressState, doneState, errorState } from './runState'
 export { runAction, resumeAction, DEFAULT_INTERVAL, DEFAULT_TIMEOUT, DEFAULT_THROTTLE } from './taskRuntime'
 export type { TaskDeps } from './taskRuntime'
-
