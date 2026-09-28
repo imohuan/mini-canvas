@@ -19,6 +19,7 @@ import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
 import BottomBarHost from './BottomBarHost.vue'
 import NodeTaskOverlay from './NodeTaskOverlay.vue'
+import NodeBottomBar from './NodeBottomBar.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
@@ -187,6 +188,9 @@ export function apply(ctx: Context) {
   ctx.nodes.attach('*', { region: 'out:bottom', component: BottomBarHost, id: 'bottom-bar/host' })
   ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
 
+  // 默认皮登记进 themeRegistry 的 bottomBar 槽（order 最小者赢；换皮插件给更小 order 即顶掉）
+  ctx.theme.add(BOTTOM_BAR_SLOT, NodeBottomBar)
+
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；
   // ready 之前必须排除自己的安装事件（否则在节点插件注册动作前就把可续查任务误判成中断），
   // ready 之后放行它（manifest 路径 bottom-bar 是热装、ctx:ready 时还没它，靠这条补跑）。
@@ -205,4 +209,3 @@ export function apply(ctx: Context) {
     if (readyFired || e?.name !== 'bottom-bar') tryRestore()
   })
 }
-
