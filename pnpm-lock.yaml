@@ -1048,6 +1048,9 @@ importers:
       '@mini-canvas/plugin-auto-layout':
         specifier: workspace:*
         version: link:../plugins/plugin-auto-layout
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugins/plugin-bottom-bar
       '@mini-canvas/plugin-canvas-export':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-export
@@ -1069,6 +1072,9 @@ importers:
       '@mini-canvas/plugin-mini-map':
         specifier: workspace:*
         version: link:../plugins/plugin-mini-map
+      '@mini-canvas/plugin-mock-task-backend':
+        specifier: workspace:*
+        version: link:../plugins/plugin-mock-task-backend
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugins/plugin-multi-select
