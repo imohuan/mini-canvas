@@ -195,8 +195,10 @@ const tryRestore = (): void => {
   restored = true
   void task.restoreAll()
 }
-ctx.on('ctx:ready', tryRestore)              // 冷启动
-ctx.on('ctx:plugin-installed', tryRestore)   // 热装（manifest 那条链）
+ctx.on('ctx:ready', tryRestore)              // 冷启动（start() 末尾同步 emit）
+// 热装（manifest 那条链）：**必须排除自己的安装事件** —— bottom-bar 自己上架时也会 emit 它，
+// 不排除就会在节点插件还没注册动作时就跑完 restoreAll，把本可续查的任务误判成「中断」。
+ctx.on('ctx:plugin-installed', (e) => { if (e?.name !== 'bottom-bar') tryRestore() })
 ```
 
 **为什么要同步写错误态**：`restoreAll` 用 `void` 调 `resumeAction`，异步分支抛错会被吞掉；
