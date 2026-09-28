@@ -1,30 +1,15 @@
 /**
- * imageRun —— 点「发送」之后发生的事（纯逻辑，node 可单测）。
+ * imageRun —— image 写入器复用的「写回」函数（纯逻辑，node 可单测）。
  *
- * 流程本身很短：组装输入 → 调工具 → 把结果写进节点。但每一步都有必须守住的规矩：
- * - 调之前先挡掉必然失败的请求（没工具 / 没提示词也没素材）→ 不浪费一次外部调用；
- * - 调之后**只有拿到图片地址才算成功**（"200 但没有产物"必须如实说失败，不能假装成功）；
- * - 写回要一次写完（地址 + 量到的尺寸 + 清掉旧的描述字段），且必须走 graph 唯一写入口
- *   （自动进历史、可撤销、自动落盘）；
- * - 失败文案只交给 UI，**不写进节点 data**（写下去就会落盘、刷新后变成幽灵报错）。
- *
- * 所有外部依赖都从参数注入（工具调用、写回、量尺寸），所以这些规矩能在 node 里直接验，
- * 不用起浏览器。
+ * 历史说明：本文件原覆盖 runImageGeneration + writeGeneratedImage 两段；
+ * runImageGeneration（组装 + 调工具 + 写回全流程）随 ImageGeneratePanel 搬进 plugin-bottom-bar
+ * （动作的 run + image 写入器），流程断言由 bottom-bar 的 taskRuntime.test.ts 覆盖。
+ * 这里只保留 writeGeneratedImage。
  */
-import type { ToolDef, ToolInput, ToolProgress, ToolResult } from '@mini-canvas/kernel'
-import { buildToolInput, type UpstreamMaterial } from './panelSource'
 import { cardSizePatch, type ImageFitLimits } from './imageFit'
 
-/** 本流程要用到的外部能力（组件注入真实现，测试注入假实现） */
+/** 写回要用到的外部能力（写入器注入真实现，测试注入假实现） */
 export interface ImageRunDeps {
-  /** 将生成的 data/http 图片转为持久资源，返回当前页面可用 URL 与资源 id。 */
-  persistImage?(url: string): Promise<{ url: string; resourceId: string } | undefined>
-  /** 调工具（= ctx.tools.invoke 的薄包装；nodeId 会作为运行上下文透传给外部） */
-  invokeTool(
-    name: string,
-    input: ToolInput,
-    options: { nodeId: string; onProgress: (p: ToolProgress) => void },
-  ): Promise<ToolResult>
   /** 读本节点当前 data（写回时要把其它字段一起带上） */
   readData(nodeId: string): Record<string, unknown> | undefined
   /**
@@ -37,64 +22,6 @@ export interface ImageRunDeps {
   measure(url: string): Promise<{ width: number; height: number } | null>
   /** 图片预览上限（配置 imageFitMaxWidth/imageFitMaxHeight）；不注入则回落 420×300 */
   fitLimits?(): ImageFitLimits
-}
-
-/** 一次生成的结果（给 UI 看的那一句话） */
-export interface ImageRunResult {
-  ok: boolean
-  /** 成功时的图片地址 */
-  url?: string
-  /** 失败时给用户看的文案 */
-  error?: string
-}
-
-/** 生成前的本地校验（不能调工具的两种情况） */
-export interface ImageRunArgs {
-  nodeId: string
-  prompt: string
-  /** 当前选中的工具（可能还没选上） */
-  def: ToolDef | undefined
-  materials: ReadonlyArray<UpstreamMaterial>
-  params: Record<string, unknown>
-  onProgress?: (p: ToolProgress) => void
-}
-
-/**
- * 执行一次生成并把结果落到节点上。
- * @returns 结果（ok=false 时 error 是**给用户看的文案**，调用方直接显示，不必再包装）
- */
-export async function runImageGeneration(args: ImageRunArgs, deps: ImageRunDeps): Promise<ImageRunResult> {
-  const { nodeId, def, materials, params } = args
-  if (!def) return { ok: false, error: '没有可用的生成工具，请先安装提供图片生成能力的工具插件' }
-
-  const input = buildToolInput(args.prompt, def, materials, params)
-  // 空提示词且没连素材：后端必然拒，先在本地说清楚（省一次外部调用，也避免"点了没反应"）
-  if (!input.prompt && (input.resources?.length ?? 0) === 0) {
-    return { ok: false, error: '请先描述你想要的画面，或连一个素材进来' }
-  }
-
-  let result: ToolResult
-  try {
-    result = await deps.invokeTool(def.name, input, {
-      nodeId,
-      onProgress: (p) => args.onProgress?.(p),
-    })
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : '生成失败，请重试' }
-  }
-
-  if (!result.ok) return { ok: false, error: result.error || '生成失败，请重试' }
-
-  const url = result.urls?.[0]
-  if (!url) return { ok: false, error: '生成完成了，但没有拿到图片' }
-
-  const persisted = await deps.persistImage?.(url)
-  if (/^data:/i.test(url) && deps.persistImage && !persisted) {
-    return { ok: false, error: '图片已生成，但本地持久化失败，请清理浏览器存储后重试' }
-  }
-  const finalUrl = persisted?.url ?? url
-  await writeGeneratedImage(nodeId, finalUrl, deps, persisted?.resourceId)
-  return { ok: true, url: finalUrl }
 }
 
 /**

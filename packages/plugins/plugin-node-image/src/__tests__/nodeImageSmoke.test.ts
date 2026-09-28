@@ -46,13 +46,13 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('三段展示都注册：in + out:top + out:bottom', async () => {
+  it('展示段注册：in + out:top（底栏搬进 plugin-bottom-bar，本包不再自占 out:bottom）', async () => {
     const ctx = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
     expect(resolveSegment(registry, 'image', 'in')).toBeTruthy()
     expect(resolveSegment(registry, 'image', 'out:top')).toBeTruthy()
-    expect(resolveSegment(registry, 'image', 'out:bottom')).toBeTruthy()
+    expect(resolveSegment(registry, 'image', 'out:bottom')).toBeUndefined()
     // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, 'image', 'title')).toBeUndefined()
     ctx.stop()
