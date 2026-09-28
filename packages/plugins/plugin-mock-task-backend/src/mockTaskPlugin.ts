@@ -42,9 +42,16 @@ export function apply(ctx: Context) {
         },
       ],
       async run(_input, runCtx: BarRunContext) {
+        // 同步形态：创建任务 → 等待 → 查询（修 e2e 实测发现的空 result 崩溃：
+        // 创建后立刻查询时任务进度为 0，queryTask 返回 running、没有 result，
+        // 旧代码直接 .result!.urls! 读空 → runState=error，用户看到"点了没反应"）
+        const { taskId } = backend.createTask()
         await new Promise((r) => setTimeout(r, 1200))
         void runCtx
-        return { ok: true, urls: [backend.queryTask(backend.createTask().taskId).result!.urls![0]] }
+        const view = backend.queryTask(taskId)
+        return view.result?.urls?.length
+          ? { ok: true, urls: view.result.urls, taskId }
+          : { ok: false, error: view.result?.error ?? 'mock 同步任务失败' }
       },
     })
 
@@ -113,4 +120,3 @@ export function apply(ctx: Context) {
 }
 
 export const mockTaskPlugin: PluginModule = { name, inject, apply }
-
