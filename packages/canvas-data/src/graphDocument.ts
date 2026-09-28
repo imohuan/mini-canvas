@@ -396,9 +396,10 @@ export class GraphDocument implements GraphDocumentService {
       createNode: (type, position, data) => this.createNode(type, position, data),
       addNodes: (inputs) => this.addNodes(inputs),
       updateNode: (id, patch) => this.updateNode(id, patch),
-      updateNodes: (entries) => this.updateNodes(entries),
-      removeNodes: (ids) => this.removeNodes(ids),
-      addEdge: (input) => this.addEdge(input),
+  updateNodes: (entries) => this.updateNodes(entries),
+  removeNodes: (ids) => this.removeNodes(ids),
+   updateNodeRuntime: (id, patch) => this.updateNodeRuntime(id, patch),
+  addEdge: (input) => this.addEdge(input),
       connectEdge: (input) => this.connectEdge(input),
       removeEdges: (ids) => this.removeEdges(ids),
     }
