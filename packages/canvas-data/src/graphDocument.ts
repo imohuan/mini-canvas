@@ -59,6 +59,11 @@ export interface GraphTransaction {
   addNodes(inputs: AddNodeInput[]): number
   /** 更新一个/多个节点（position/size/parentId/data 均可 patch） */
   updateNode(id: string, patch: Parameters<NodeStoreService['updateNode']>[1]): void
+  /**
+   * 写节点的**运行期状态**（进度帧）：落盘，但**不进撤销栈**。
+   * 与 updateNode 的差别只有一个：不包 history.withRecord。
+   */
+  updateNodeRuntime(id: string, patch: Parameters<NodeStoreService['updateNode']>[1]): void
   updateNodes(entries: NodePatchEntry[]): void
   /** 删除节点：连带清与它相连的边、清掉仍存活子节点的 parentId、清选中态 */
   removeNodes(ids: string[]): number
@@ -196,6 +201,19 @@ export class GraphDocument implements GraphDocumentService {
 
   updateNode(id: string, patch: Parameters<NodeStoreService['updateNode']>[1]): void {
     this.history.withRecord(() => this.nodeStore.updateNode(id, patch))
+    this.scheduleCommit()
+  }
+
+  /**
+   * 写节点的**运行期状态**（进度帧）：落盘，但**不进撤销栈**。
+   *
+   * 为什么单独一条：进度帧每几百毫秒一次，若每帧都 withRecord，撤销栈会被冲垮
+   * （用户按一次 Ctrl+Z 只退一格进度条，真正的作品改动要按几十次才退得回来）。
+   * 而这类状态又必须持久化 —— 刷新页面不能丢（用户明确要求）。
+   * 两条一起要，只能把「写」与「记一次操作」拆开。
+   */
+  updateNodeRuntime(id: string, patch: Parameters<NodeStoreService['updateNode']>[1]): void {
+    this.nodeStore.updateNode(id, patch)
     this.scheduleCommit()
   }
 

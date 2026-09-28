@@ -116,6 +116,8 @@ export interface DocService {
   updateNodes(entries: NodePatchEntry[]): void
   /** 改某节点 data（等价 updateNode(id, { data })） */
   updateNodeData(id: string, data: Record<string, unknown>): void
+  /** 写节点运行期状态：落盘但不进撤销栈（进度帧用） */
+  updateNodeRuntime(id: string, patch: NodePatch): void
   /** 删节点：连带清相连边、清子节点父引用、清选中（进历史） */
   removeNodes(ids: string[]): number
   /** 加一条边（过守门人：自连/成环/重复/类型/容量） */
@@ -193,6 +195,7 @@ export function createDocService(sources: DocSources | DocSourceResolver): DocSe
     updateNode: (id, patch) => need('graph').updateNode(id, patch),
     updateNodes: (entries) => need('graph').updateNodes(entries),
     updateNodeData: (id, data) => need('graph').updateNode(id, { data }),
+    updateNodeRuntime: (id, patch) => need('graph').updateNodeRuntime(id, patch),
     removeNodes: (ids) => need('graph').removeNodes(ids),
     addEdge: (input) => need('graph').addEdge(input),
     connectEdge: (input) => need('graph').connectEdge(input),
