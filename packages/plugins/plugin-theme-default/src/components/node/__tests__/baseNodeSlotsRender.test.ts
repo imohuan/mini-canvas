@@ -14,7 +14,7 @@
  * 只测内部 computed 看不见。
  */
 import { describe, it, expect } from 'vitest'
-import { createSSRApp, defineComponent, h } from 'vue'
+import { createSSRApp, defineComponent, h, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { NodeRegistry } from '@mini-canvas/canvas-data'
 import {
@@ -231,7 +231,7 @@ describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
       },
     })
     app.provide(RENDER_CONTEXT_KEY, renderCtx(r))
-    app.provide(NODE_TOOLBAR_HOST_KEY, { value: fakeHost })
+    app.provide(NODE_TOOLBAR_HOST_KEY, ref(fakeHost as unknown as HTMLElement))
     // 未装宿主时（本文件其余用例）走原地渲染；装了走 Teleport —— 两条路都要能跑通，
     // 且**不能抛错**（早期实现用 v-else 分支，SSR 下曾因缺 DOM 直接报错）。
     await expect(renderToString(app)).resolves.toBeTypeOf('string')
