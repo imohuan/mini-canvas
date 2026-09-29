@@ -519,7 +519,8 @@ if (resizeZoom.skipped) {
       await page.waitForTimeout(100);
       if ((await page.locator('.task-overlay').count()) > 0) {
         overlayShown = true;
-        overlayText = await page.locator('.task-overlay-card').innerText();
+        // 覆盖层已改版：不再有中间黑底卡片，文案直接落在卡上
+        overlayText = await page.locator('.task-overlay').innerText();
         break;
       }
     }
