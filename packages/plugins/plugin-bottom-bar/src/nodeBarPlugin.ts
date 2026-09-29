@@ -215,18 +215,30 @@ export function apply(ctx: Context) {
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；
   // ready 之前必须排除自己的安装事件（否则在节点插件注册动作前就把可续查任务误判成中断），
   // ready 之后放行它（manifest 路径 bottom-bar 是热装、ctx:ready 时还没它，靠这条补跑）。
+  //
+  // ⚠️ 为什么不能只在 ctx:ready 跑一次（2026-09-29 实测复现的 bug）：
+  // `ctx:ready` 在**插件装载完成**时就广播了，而画布数据是**之后**才从 storage 恢复进 nodeStore 的
+  // （见 createMiniCanvasHost：先 ctx.start() → 恢复画布 → nodeStore.replaceAll）。
+  // 于是 ready 那一刻 doc.getNodes() 还是空的 —— 续查扫了个空，界面就永远停在刷新前的进度上。
+  // 修法：订阅 doc 变化，等**文档真有 running 节点**了再续查（扫到就收工）。
+  // 只在「文档真的有内容了」之后跑一次并锁死：
+  // - 冷启动 ctx:ready 那一刻文档还是空的（数据稍后才恢复）→ 不锁，等 doc 变化再来；
+  // - 热装时文档已在 → 立刻跑；
+  // - 真的空画布 → 每次 doc 变化只多一次 getNodes()，代价可忽略。
   let restored = false
-  let readyFired = false
   const tryRestore = () => {
     if (restored) return
+    const docServiceForCheck = ctx.get<DocService>('doc')
+    if (!docServiceForCheck || docServiceForCheck.getNodes().length === 0) return // 数据还没恢复出来，等下一拍
     restored = true
     void task.restoreAll()
   }
-  ctx.on('ctx:ready', () => {
-    readyFired = true
-    tryRestore()
-  })
-  ctx.on('ctx:plugin-installed', (e) => {
-    if (readyFired || e?.name !== 'bottom-bar') tryRestore()
-  })
+  const docService = ctx.get<{ subscribe(cb: (change: unknown) => void): () => void }>('doc')
+  if (docService && typeof docService.subscribe === 'function') {
+    const off = docService.subscribe(tryRestore)
+    ctx.effect(() => () => off())
+  }
+  // 兜底再来一次：插件都装完/数据可能已就位时（顺序不定，两处都试，tryRestore 自带幂等）
+  ctx.on('ctx:ready', tryRestore)
+  ctx.on('ctx:plugin-installed', tryRestore)
 }
