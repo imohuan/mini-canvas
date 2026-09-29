@@ -2,26 +2,25 @@
 /**
  * NodeBottomBar —— 默认底栏皮（themeRegistry 槽 bottomBar 的默认赢家）。
  *
- * 版式完全复刻用户给的 LibTV 参考（截图见对话）：
+ * 版式**照 LibTV 参考逐块复刻**（参考图 + 浏览器实测其真实 DOM 尺寸）：
  *
- *   ┌───────────────────────────────────────────────┐
- *   │ [+ 参考]                              [⤢]     │  ← 顶部行：左素材 chip，右展开
- *   │                                               │
- *   │  描述你想要的内容，可用 @ 引用素材              │  ← 大输入框（撑满剩余高度）
- *   │                                               │
- *   │ [🎚 模型 ▾] [中文·24k·wav ▾]  [文A]  0/2000 (↑) │  ← 底部行
- *   └───────────────────────────────────────────────┘
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ (+参考) (标记) (风格)                              [⤢]   │  ← 一排 pill（h26 圆角胶囊）
+ *   │ ┌────┐ ┌────┐                                            │  ← 素材卡常显（48×48，带序号角标）
+ *   │ │ 1  │ │ 1  │                                            │
+ *   │ └────┘ └────┘                                            │
+ *   │ @素材名 这里打字…                                         │  ← 输入**内联**在卡下面（点得进去、能打字、@ 引用）
+ *   │ [模型 ▾] │ [16:9·标准画质·2K·1张 ▾]      ⚙ ✨ 15 (↑)      │  ← 底部行；右边圆形发送
+ *   └──────────────────────────────────────────────────────────┘
  *
- * 分工（保持既有架构不变）：
- * - 动作列表 = ctx.get('nodeBar').list({ type })（模型类动作由节点插件经 publishToolActions 发布）；
- * - 动作的 fields 渲染成下拉（包括「模型」这类下拉本身）；
- * - promptBinding:'text' 的动作把输入框接到 data.text（编辑即写回，是作品）；
- * - 执行按钮是右下角圆形箭头按钮（参考图样式），running 时变转圈；
- * - 动作专属 panel（视频剪辑时间轴）渲染在顶部行与大输入框之间；
- * - 没有可用动作时自身返回空（壳的 .v2-slot--bottom 包裹层不算底栏产出）。
+ * 与参考的关键一致点（都是用户明确点出来的）：
+ * - 素材卡**直接显示**，不需要先点「参考」；点卡片进入预览；
+ * - 输入区在卡下面、内联一行，**可点击可输入**；
+ * - 一排 pill 与底部下拉的数值、圆角、间距照参考给。
  *
- * 服务取值（§0.1）：组件拿到的是根 ctx，一律 ctx.get(...)，不直访 ctx.nodeBar。
- * 节点类型（§0.2）：区域条目只下发 { id, data }，type 要 ctx.get('doc').getNode(id)?.type 取。
+ * 分工（架构不变）：动作列表 = ctx.get('nodeBar').list；动作的 fields 渲染成下拉；
+ * promptBinding:'text' 把输入框接到 data.text；没有可用动作时自身返回空。
+ * 服务取值（§0.1）：组件里一律 ctx.get(...)，不直访 ctx.nodeBar。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
@@ -49,6 +48,7 @@ const { ctx, renderEdges, renderNodes } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改
 const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
+const ToolParamGroup = useUiComponent('toolParamGroup')
 
 // 单选才显示（与既有三份面板同语义）
 const visible = useSoleNodeSelected(props.id)
@@ -59,7 +59,7 @@ const panelStyle = computed<Record<string, string>>(() => ({
   width: metrics.value.imageWidth + 'px',
 }))
 const editorStyle = computed<Record<string, string>>(() => ({
-  '--nb-min': metrics.value.editorMinHeight + 'px',
+  '--nb-min': '20px',
   '--nb-max': metrics.value.editorMaxHeight + 'px',
 }))
 
@@ -108,7 +108,16 @@ const hasActions = computed(() => actions.value.length > 0)
 const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
 const values = ref<Record<string, unknown>>({})
-const templateId = ref('')
+
+/**
+ * 默认动作：**优先选能输入的那条**（needsPrompt，即生成类），其次才是第一条。
+ * 为什么不是直接取第一条：动作按 order 排，即时动作（旋转/下载）order 更小，
+ * 于是默认选中一个没有输入框的动作 —— 用户连了素材却看不到输入框（实测反馈）。
+ */
+function defaultActionId(): string {
+  const list = actions.value
+  return (list.find((a) => a.needsPrompt === true) ?? list[0])?.id ?? ''
+}
 
 /** select 无 default 取第一项（与内核 resolveToolParams 同口径） */
 function defaultsOf(action: BarAction | undefined): Record<string, unknown> {
@@ -136,32 +145,11 @@ function selectAction(id: string): void {
   const prev = currentAction.value
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
-  templateId.value = ''
   values.value = defaultsOf(currentAction.value)
   currentAction.value?.onSelect?.(props.id)
 }
 
-/**
- * 默认动作：**优先选能输入的那条**（needsPrompt，即生成类），其次才是第一条。
- * 为什么不是直接取第一条：动作按 order 排，即时动作（旋转/下载）order 更小，
- * 于是默认选中一个没有输入框的动作 —— 用户连了素材却看不到输入框（实测反馈）。
- */
-function defaultActionId(): string {
-  const list = actions.value
-  return (list.find((a) => a.needsPrompt === true) ?? list[0])?.id ?? ''
-}
-
-// 面板挂载时若没选中任何动作，选默认那条
 if (hasActions.value && !currentId.value) selectAction(defaultActionId())
-
-const templates = computed(() => currentAction.value?.templates ?? [])
-
-function onTemplateSelect(v: string | number): void {
-  const id = String(v)
-  templateId.value = id
-  const tpl = templates.value.find((t) => t.id === id)
-  if (tpl?.prompt) prompt.value = tpl.prompt
-}
 
 // —— 提示词（promptBinding:'text' 时与 data.text 双向绑定） ——
 const prompt = ref(typeof props.data?.text === 'string' ? props.data.text : '')
@@ -175,10 +163,10 @@ watch(
 )
 const promptBinding = computed(() => currentAction.value?.promptBinding ?? 'none')
 const needsPrompt = computed(() => currentAction.value?.needsPrompt === true)
-/** 大输入框：needsPrompt 的动作才有 */
+/** 当前动作声明的参数（交给 ToolParamGroup 聚成一个下拉） */
+const paramDefs = computed<ToolParamDef[]>(() => (currentAction.value?.fields ?? []) as ToolParamDef[])
+/** 输入区：needsPrompt 的动作才有 */
 const showEditor = computed(() => needsPrompt.value)
-/** 输入框占位文案（参考图风格：一句话说明能写什么 + @ 引用提示；固定文案，不拼动作名以免读起来别扭） */
-const editorPlaceholder = '描述你想要的内容，可用 @ 引用素材'
 
 /** 输入框内容变化：promptBinding:'text' 就地写回节点（是作品，进历史 + 落盘） */
 function onPromptUpdate(v: string): void {
@@ -188,7 +176,7 @@ function onPromptUpdate(v: string): void {
   }
 }
 
-// —— 上游素材（顶部「+ 参考」chip 与 @ 引用共用） ——
+// —— 上游素材（素材卡与 @ 引用共用） ——
 const materials = computed<UpstreamMaterial[]>(() =>
   collectUpstreamMaterials(renderEdges.value, props.id, (nodeId) => {
     const node = renderNodes.value.find((n) => n.id === nodeId)
@@ -198,9 +186,11 @@ const materials = computed<UpstreamMaterial[]>(() =>
 const cards = computed(() => materialCards(materials.value))
 const editorResources = computed<ResourceItem[]>(() => toEditorResources(materials.value))
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
-const showMaterials = ref(false)
-function toggleMaterials(): void {
-  showMaterials.value = !showMaterials.value
+
+/** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
+const previewCard = ref<(typeof cards.value)[number] | null>(null)
+function openCard(card: (typeof cards.value)[number]): void {
+  previewCard.value = card
 }
 
 // —— 字符计数（与参考图一致：当前/上限） ——
@@ -231,14 +221,34 @@ function onFieldChange(key: string, v: string | number | boolean): void {
   values.value = { ...values.value, [key]: v }
 }
 
+/** 参数区：把只读读数拼进「比例·画质·2K·1张」那类紧凑展示（参考图是一串点分） */
+const fieldSummary = computed(() => {
+  const parts: string[] = []
+  for (const p of (currentAction.value?.fields ?? []) as ToolParamDef[]) {
+    const v = values.value[p.key]
+    if (v === undefined || v === '') continue
+    const opt = p.options?.find((o) => o.value === v)
+    parts.push(opt ? opt.label : String(v))
+  }
+  return parts.join(' · ')
+})
+
 const ICON_EXPAND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
 const ICON_PLUS =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+const ICON_TAG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>'
+const ICON_STYLE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.1 12.9a2 2 0 0 0 0 2.8l4.2 4.2a2 2 0 0 0 2.8 0L22 9"/><path d="M14 7l3 3"/><path d="M8.5 13.5v6"/><path d="M5.5 16.5h6"/></svg>'
 const ICON_SEND =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'
 const ICON_TRANSLATE =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 3v2c0 4-2 7-5 8"/><path d="M5 9c1 3 3 5 6 6"/><path d="M14 20l4-9 4 9"/><path d="M15.5 17h5"/></svg>'
+const ICON_SLIDERS =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'
+const ICON_SPARKLE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>'
 </script>
 
 <template>
@@ -249,58 +259,48 @@ const ICON_TRANSLATE =
     data-testid="node-bottom-bar"
     @pointerdown.stop
   >
-    <!-- 顶部行：左「+ 参考」chip，右展开 -->
-    <div class="nb-top">
-      <button
-        class="nb-chip"
-        type="button"
-        :title="cards.length > 0 ? '查看已连接的素材' : '把节点连进来当素材，或在输入框里用 @ 引用'"
-        :aria-expanded="showMaterials"
-        @click.stop="toggleMaterials"
-      >
-        <span class="nb-chip-icon" aria-hidden="true" v-html="ICON_PLUS" />
+    <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮） -->
+    <div class="nb-pills">
+      <button class="nb-pill" type="button" :title="'已连接 ' + cards.length + ' 个素材，输入框里可用 @ 引用'" @click.stop>
+        <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_PLUS" />
         <span>参考</span>
-        <span v-if="cards.length > 0" class="nb-chip-count">{{ cards.length }}</span>
+        <span v-if="cards.length > 0" class="nb-pill-badge">{{ cards.length }}</span>
       </button>
-      <button class="nb-icon-btn" type="button" title="展开编辑" aria-label="展开编辑">
+      <button class="nb-pill" type="button" title="标记" @click.stop>
+        <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
+        <span>标记</span>
+      </button>
+      <button class="nb-pill" type="button" title="风格" @click.stop>
+        <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_STYLE" />
+        <span>风格</span>
+      </button>
+      <button class="nb-expand nb-icon-btn" type="button" title="展开" aria-label="展开">
         <span aria-hidden="true" v-html="ICON_EXPAND" />
       </button>
     </div>
 
-    <!-- 动作一排（参考 LibTV：一排可点的建议动作，选中的高亮；生成类还带输入框） -->
-    <div class="nb-actions-bar">
+    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开预览 -->
+    <div v-if="cards.length > 0" class="nb-cards">
       <button
-        v-for="a in actions"
-        :key="a.id"
-        class="nb-action-chip"
-        :class="{ 'is-active': a.id === currentId }"
+        v-for="(card, i) in cards"
+        :key="card.id"
+        class="nb-card"
         type="button"
-        :title="a.description || a.title"
-        :disabled="running"
-        @click.stop="selectAction(a.id)"
+        :title="card.name"
+        @click.stop="openCard(card)"
       >
-        <span class="nb-action-title">{{ a.title }}</span>
-        <span v-if="a.needsPrompt" class="nb-action-dot" aria-hidden="true" />
+        <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" />
+        <span v-else class="nb-card-text">{{ (card.name || '文')[0] }}</span>
+        <span class="nb-card-index">{{ i + 1 }}</span>
       </button>
-    </div>
-
-    <!-- 素材行（点「参考」展开） -->
-    <div v-if="showMaterials" class="nb-materials">
-      <span v-if="cards.length === 0" class="nb-materials-hint">把图片/文本/视频连进来，或用 @ 引用</span>
-      <span v-for="card in cards" :key="card.id" class="nb-mat" :title="card.name">
-        <img v-if="card.url && !card.isText" class="nb-mat-img" :src="card.url" :alt="card.name" />
-        <span v-else class="nb-mat-text">{{ card.name }}</span>
-      </span>
     </div>
 
     <!-- 动作专属面板（video 剪辑时间轴这类） -->
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
 
-    <!-- 大输入框：撑满剩余高度 -->
-    <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle" @click.stop>
-      <!-- placeholder 自绘：编辑器自带的占位符在本仓库未实现（bundle 只声明了 prop 没消费），
-           所以这里用一层覆盖文本，有内容即隐（点击穿透到编辑器）。 -->
-      <span v-if="prompt.length === 0" class="nb-placeholder" aria-hidden="true">{{ editorPlaceholder }}</span>
+    <!-- 输入区：内联在卡下面（点得进去、能打字、@ 引用素材） -->
+    <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle">
+      <span v-if="prompt.length === 0" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
       <ProseMirrorEditor
         v-model="prompt"
         v-model:prompt-doc="promptDoc"
@@ -311,7 +311,7 @@ const ICON_TRANSLATE =
       />
     </div>
 
-    <!-- 底部行：左模型/参数下拉，右翻译·计数·发送 -->
+    <!-- 底部行：左模型 + 参数串，右图标·计数·圆形发送（照参考图） -->
     <div class="nb-bottom">
       <div class="nb-selects">
         <div class="nb-field nb-field--action">
@@ -321,47 +321,35 @@ const ICON_TRANSLATE =
             :disabled="running"
             dropdown-width="match"
             :input-id="'nb-action-' + props.id"
-            title="选择动作"
+            title="选择动作 / 模型"
             @update:model-value="(v: string | number) => selectAction(String(v))"
           />
         </div>
-        <div
-          v-for="p in (currentAction?.fields ?? []) as ToolParamDef[]"
-          :key="p.key"
-          class="nb-field"
-          :title="p.description || p.label || p.key"
-        >
-          <ToolParamField
-            :param="p"
-            :model-value="values[p.key]"
+        <span class="nb-divider" aria-hidden="true" />
+        <!-- 参数收成**一个合并下拉**（参考图：16:9 · 标准画质 · 2K · 1张 ⌄） -->
+        <div v-if="paramDefs.length > 0" class="nb-field nb-field--params">
+          <ToolParamGroup
+            :params="paramDefs"
+            :values="values"
             :disabled="running"
-            :id-prefix="'nb-field-' + props.id"
-            @update:model-value="(v: string | number | boolean) => onFieldChange(p.key, v)"
-          />
-        </div>
-        <div v-if="templates.length" class="nb-field" title="套用预设提示词">
-          <Select
-            :model-value="templateId"
-            :options="templates.map((t) => ({ label: t.name, value: t.id }))"
-            :disabled="running"
-            placeholder="模板"
-            dropdown-width="match"
-            :input-id="'nb-tpl-' + props.id"
-            @update:model-value="onTemplateSelect"
+            :id-prefix="'nb-group-' + props.id"
+            @change="onFieldChange"
           />
         </div>
       </div>
 
       <div class="nb-actions">
         <span v-if="infoText" class="nb-info">{{ infoText }}</span>
+        <button class="nb-icon-btn" type="button" title="高级参数" aria-label="高级参数">
+          <span aria-hidden="true" v-html="ICON_SLIDERS" />
+        </button>
         <button class="nb-icon-btn" type="button" title="翻译提示词" aria-label="翻译提示词">
           <span aria-hidden="true" v-html="ICON_TRANSLATE" />
         </button>
-        <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">
-          <span class="nb-count-num">{{ charCount }}</span>
-          <span class="nb-count-sep">/</span>
-          <span class="nb-count-max">{{ CHAR_LIMIT }}</span>
+        <span class="nb-icon-btn nb-icon-btn--static" :title="fieldSummary || '生成参数'">
+          <span aria-hidden="true" v-html="ICON_SPARKLE" />
         </span>
+        <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <button
           class="nb-run"
           :class="{ 'is-running': running }"
@@ -382,67 +370,82 @@ const ICON_TRANSLATE =
         {{ runState.status === 'error' ? (runState.message || '执行失败') : '已完成' }}
       </span>
     </div>
+
+    <!-- 素材预览（点卡片进入） -->
+    <div v-if="previewCard" class="nb-preview" @click.stop="previewCard = null">
+      <img v-if="previewCard.url && !previewCard.isText" class="nb-preview-img" :src="previewCard.url" :alt="previewCard.name" />
+      <pre v-else class="nb-preview-text">{{ previewCard.value || previewCard.name }}</pre>
+      <button class="nb-preview-close" type="button" title="关闭预览" @click.stop="previewCard = null">✕</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 /* 视觉照 docs/design/ui-style-guide.md；位置（贴边/居中/反缩放）由壳的下插槽定位层给。
-   尺寸对齐用户给的 LibTV 参考：面板圆角 16、底部行高 44、圆形发送按钮 Ø34-40。 */
+   尺寸照 LibTV 参考实测：面板圆角 16、内边距 8、pill 高 26、素材卡 48、发送按钮 Ø34。 */
 .nb-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   box-sizing: border-box;
-  /* 不再固定 220px：有输入框时由输入框撑高（min-height 在 .nb-editor），
-     即时动作没有输入框就自然收矮，不留一大片空白（实测反馈）。 */
   min-width: 360px;
-  padding: 10px 12px;
+  padding: 8px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
   background: var(--ui-panel, #fff);
   box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(15 23 42 / 0.16));
 }
 
-/* —— 顶部行 —— */
-.nb-top {
+/* —— 一排 pill（参考图顶行） —— */
+.nb-pills {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
+  padding: 2px 0 0 2px;
 }
-/* 左「+ 参考」chip：浅底、圆角 8、12px/600（参考图约 48×24） */
-.nb-chip {
+.nb-pill {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 24px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
   color: var(--ui-ink, #18202b);
   font-size: 12px;
   font-weight: 600;
+  line-height: 1;
   cursor: pointer;
-  transition: background-color 0.18s ease-out;
+  transition: background-color 0.18s ease-out, color 0.18s ease-out;
 }
-.nb-chip:hover {
+.nb-pill:hover:not(:disabled) {
   background: var(--ui-hover-strong, rgb(0 0 0 / 0.1));
 }
-.nb-chip:focus-visible {
+.nb-pill--action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.nb-pill--action.is-active {
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+.nb-pill:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
-.nb-chip-icon {
+.nb-pill-icon {
   display: inline-flex;
   width: 12px;
   height: 12px;
 }
-.nb-chip-icon :deep(svg) {
+.nb-pill-icon :deep(svg) {
   width: 12px;
   height: 12px;
 }
-.nb-chip-count {
+.nb-pill-badge {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
@@ -451,12 +454,18 @@ const ICON_TRANSLATE =
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+/* 展开按钮浮在右上角（参考图 right-2 top-2，28×28） */
+.nb-expand {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
 
-/* 图标按钮：26px 命中区，图标 14 */
 .nb-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   width: 26px;
   height: 26px;
   padding: 0;
@@ -471,121 +480,106 @@ const ICON_TRANSLATE =
   background: var(--ui-hover, rgb(0 0 0 / 0.06));
   color: var(--ui-ink, #18202b);
 }
+.nb-icon-btn--static {
+  cursor: default;
+}
+.nb-icon-btn--static:hover {
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+}
 .nb-icon-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
 .nb-icon-btn :deep(svg) {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
 
-/* —— 素材行 —— */
-/* —— 动作一排（LibTV 风格：一排可点 chip，选中高亮） —— */
-.nb-actions-bar {
+/* —— 素材卡（常显；48×48，序号角标左下；参考图 size-12） —— */
+.nb-cards {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
+  padding-left: 2px;
 }
-.nb-action-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 10px;
+.nb-card {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  padding: 0;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 8px;
-  background: transparent;
-  color: var(--ui-ink-dim, #6b7280);
-  font-size: 12px;
-  font-weight: 600;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  overflow: hidden;
   cursor: pointer;
-  transition: background-color 0.18s ease-out, color 0.18s ease-out, border-color 0.18s ease-out;
+  transition: border-color 0.18s ease-out, transform 0.15s ease-out;
 }
-.nb-action-chip:hover:not(:disabled):not(.is-active) {
-  background: var(--ui-hover, rgb(0 0 0 / 0.06));
-  color: var(--ui-ink, #18202b);
-}
-.nb-action-chip.is-active {
+.nb-card:hover {
   border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
-  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
-  color: var(--ui-accent, #0891b2);
 }
-.nb-action-chip:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.nb-card:active {
+  transform: scale(0.96);
 }
-.nb-action-chip:focus-visible {
+.nb-card:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
 }
-/* 可输入的动作右上角点一个小圆点，一眼看出「这个能写提示词」 */
-.nb-action-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: currentColor;
-  opacity: 0.7;
+.nb-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
-
-.nb-materials {
+.nb-card-text {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  max-height: 60px;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.nb-materials-hint {
-  color: var(--ui-ink-mute, #8c95a3);
-  font-size: 12px;
-  white-space: nowrap;
-}
-.nb-mat {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  max-width: 120px;
-  height: 26px;
-  padding: 0 8px;
-  border-radius: 8px;
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   color: var(--ui-ink-dim, #6b7280);
-  font-size: 11px;
+  font-size: 15px;
+  font-weight: 700;
 }
-.nb-mat-img {
-  width: 26px;
-  height: 26px;
-  margin-right: 4px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-.nb-mat-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.nb-card-index {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ui-ink, #18202b) 72%, transparent);
+  color: var(--ui-panel, #fff);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-/* —— 大输入框（撑满剩余高度） —— */
-.nb-editor {
-  flex: 1;
-  min-height: 0;
-  padding: 2px;
-  overflow-y: auto;
-}
-/* 有输入框时给整块一个最小高度，保证是「大输入框」而不是一条缝 */
-.nb-root:has(.nb-editor) {
-  min-height: 200px;
-}
-/* 自绘 placeholder：绝对定位在编辑区左上，有点击穿透 */
+/* —— 输入区（内联在卡下面；点得进去、能打字） —— */
 .nb-editor {
   position: relative;
+  min-height: 24px;
+  padding: 0 2px;
+  cursor: text;
+}
+.nb-editor :deep(.prose-mirror-editor) {
+  min-height: var(--nb-min, 20px);
+  max-height: var(--nb-max, 220px);
+  overflow-y: auto;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-ink, #18202b);
+  word-break: break-word;
 }
 .nb-placeholder {
   position: absolute;
-  top: 2px;
+  top: 0;
   left: 2px;
   color: var(--ui-ink-mute, #8c95a3);
   font-size: 13px;
@@ -593,75 +587,73 @@ const ICON_TRANSLATE =
   pointer-events: none;
   user-select: none;
 }
-.nb-editor :deep(.prose-mirror-editor) {
-  min-height: var(--nb-min, 64px);
-  max-height: var(--nb-max, 220px);
-  overflow-y: auto;
-  outline: none;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--ui-ink, #18202b);
-}
-.nb-editor :deep(.prose-mirror-editor p.is-editor-empty:first-child::before) {
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  color: var(--ui-ink-mute, #8c95a3);
-  pointer-events: none;
-}
 
-/* —— 底部行 —— */
+/* —— 底部行（参考图：左模型·参数，右图标·计数·发送） —— */
 .nb-bottom {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 40px;
-  /* 没有大输入框时（如「旋转」这类即时动作）把底部行推到底，版式仍与参考图一致 */
   margin-top: auto;
+  min-height: 36px;
 }
 .nb-selects {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
+  flex: 1 1 auto;
+}
+.nb-divider {
+  flex: none;
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--ui-line, #e2e5ea);
 }
 .nb-field {
   flex: none;
   min-width: 0;
 }
-/* 模型下拉（第一个）比参数下拉略宽，贴近参考图的层级 */
 .nb-field--action {
-  max-width: 190px;
+  max-width: 200px;
 }
-/* 下拉统一样式：无边框、透明底、hover 浅底（参考图的「⌄」文字按钮风格） */
+/* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
 .nb-field :deep(.sel-trigger) {
   gap: 4px;
   padding: 6px 8px;
   border-color: transparent;
   background: transparent;
-  color: var(--ui-ink, #18202b);
+  color: var(--ui-ink-dim, #6b7280);
   font-size: 12px;
   font-weight: 600;
+  border-radius: 999px;
 }
 .nb-field :deep(.sel-trigger:hover:not(.is-open)) {
-  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
 }
 .nb-field :deep(.sel-trigger.is-open) {
-  background: var(--ui-panel-active, #e8eaf0);
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
   border-color: transparent;
   box-shadow: none;
+  color: var(--ui-ink, #18202b);
 }
 .nb-field :deep(.sel-arrow) {
   width: 14px;
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
 }
+/* 参数合并下拉：允许收缩，超长省略（不然会把底行挤爆、模型名被裁） */
+.nb-field--params {
+  flex: 0 1 auto;
+  min-width: 0;
+}
 
 .nb-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: none;
 }
 .nb-info {
@@ -670,19 +662,13 @@ const ICON_TRANSLATE =
   font-variant-numeric: tabular-nums;
 }
 .nb-count {
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
   font-size: 11px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ui-ink-mute, #8c95a3);
 }
-.nb-count-num {
-  color: var(--ui-ink-dim, #6b7280);
-}
 
-/* 圆形执行按钮（参考图是白底箭头；本项目强调色 token 决定浅深主题下的观感） */
+/* 圆形发送按钮（参考图白底圆 Ø34，深色下白底深箭头——由 token 决定） */
 .nb-run {
   display: inline-flex;
   align-items: center;
@@ -734,7 +720,7 @@ const ICON_TRANSLATE =
   }
 }
 
-/* —— 状态提示（错误/完成） —— */
+/* —— 状态提示 —— */
 .nb-status-row {
   display: flex;
   justify-content: flex-end;
@@ -754,12 +740,64 @@ const ICON_TRANSLATE =
   color: var(--ui-ink-mute, #8c95a3);
 }
 
+/* —— 素材预览浮层 —— */
+.nb-preview {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  top: 8px;
+  bottom: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--ui-overlay, rgb(255 255 255 / 0.88));
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+.nb-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.nb-preview-text {
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0;
+  overflow: auto;
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.nb-preview-close {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12px;
+  cursor: pointer;
+}
+.nb-preview-close:hover {
+  color: var(--ui-danger, #ef4444);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .nb-run,
-  .nb-chip,
-  .nb-icon-btn {
+  .nb-pill,
+  .nb-card,
+  .nb-icon-btn,
+  .nb-run {
     transition: none !important;
   }
+  .nb-card:active,
   .nb-run:active:not(:disabled) {
     transform: none;
   }

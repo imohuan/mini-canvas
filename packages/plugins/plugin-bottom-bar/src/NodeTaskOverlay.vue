@@ -101,13 +101,28 @@ function onCancel(): void {
   animation: task-overlay-in 0.18s ease-out;
 }
 
-/* 铺满整卡的柔光（用面板色混合，浅深主题都成立；不新造颜色） */
+/* 铺满整卡的加载材质。
+   用户明确要求：**不要那种「黑底卡片」**，整块区域直接进入加载态。
+   所以这里用很轻的一层（让底下的画面若隐若现）+ 模糊 + 呼吸，而不是 92% 的实底。
+   深浅主题都成立：底色取主题面板色，只做低比例混合，不新造颜色。 */
 .task-overlay-veil {
   position: absolute;
   inset: 0;
-  /* 要让底下的内容若隐若现（加载态），但必须盖住可读性 → 92% 不透明 + 轻微模糊 */
-  background: color-mix(in srgb, var(--ui-panel, #fff) 92%, transparent);
-  backdrop-filter: blur(2px);
+  background: color-mix(in srgb, var(--ui-panel, #fff) 62%, transparent);
+  backdrop-filter: blur(3px) saturate(0.9);
+  animation: task-overlay-breathe 1.6s ease-in-out infinite;
+}
+
+/* 呼吸：整块加载材质轻微起伏（动 opacity，不动布局）。
+   reduced-motion 下由下方媒体查询关掉。 */
+@keyframes task-overlay-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* 缓慢扫过的高光：动的是 transform，不是 width/left */
@@ -239,6 +254,7 @@ function onCancel(): void {
 
 @media (prefers-reduced-motion: reduce) {
   .task-overlay,
+  .task-overlay-veil,
   .task-overlay-sheen,
   .task-overlay-ring,
   .task-overlay-ring-arc.is-indeterminate {

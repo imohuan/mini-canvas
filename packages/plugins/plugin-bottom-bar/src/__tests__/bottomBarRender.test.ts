@@ -98,10 +98,10 @@ function render(comp: Component, id: string, data: Record<string, unknown>, ctx:
 }
 
 describe('NodeBottomBar：版式与显隐契约', () => {
-  it('单选且有动作 → 渲染；含 chip / 输入框 / 底部行 / 圆形执行按钮 / 计数', async () => {
+  it('单选且有动作 → 渲染；含 pill / 输入区 / 底部行 / 圆形执行按钮 / 计数', async () => {
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
     expect(html).toContain('data-testid="node-bottom-bar"')
-    expect(html).toContain('nb-chip')
+    expect(html).toContain('nb-pill')
     expect(html).toContain('参考')
     expect(html).toContain('nb-editor')
     expect(html).toContain('prose-mirror-editor')
@@ -142,13 +142,32 @@ describe('NodeBottomBar：版式与显隐契约', () => {
     )
     // 默认选中生成动作 → 大输入框在（用户连了素材就该能直接打字）
     expect(html).toContain('nb-editor')
-    expect(html).toContain('is-active')
+    // 且底部模型下拉显示的是那条生成动作（不是 order 更小的「旋转」）
+    expect(html).toContain('生成图片')
+    expect(html).not.toContain('>旋转<')
   })
 
-  it('动作一排 chip：每个动作一个 chip，选中的那个带 is-active', async () => {
+  it('动作收在底部「模型」下拉里（照参考图：不在顶行做 pill）', async () => {
     const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
-    expect(html).toContain('nb-action-chip')
+    // 顶部 pill 行只放「参考」这类场景入口，动作不掺进来
+    expect(html).not.toContain('nb-pill--action')
+    expect(html).toContain('nb-field--action')
+    expect(html).toContain('nb-action-35')
     expect(html).toContain('Mock 同步任务')
+  })
+
+  it('素材卡**直接显示**（不需先点「参考」），带序号角标', async () => {
+    // 造一个上游素材：节点 35 连了一个文本节点
+    const ctx = makeCtx({ selectedIds: ['35'] })
+    // 桩里 renderEdges/renderNodes 是空的，这里补上一条边与上游节点
+    ;(ctx as unknown as { renderEdges: { value: unknown[] } }).renderEdges.value = [{ source: 't1', target: '35' }]
+    ;(ctx as unknown as { renderNodes: { value: unknown[] } }).renderNodes.value = [
+      { id: 't1', type: 'text', data: { text: '一段文字' } },
+    ]
+    const html = await render(NodeBottomBar as Component, '35', {}, ctx)
+    expect(html).toContain('nb-cards')
+    expect(html).toContain('nb-card')
+    expect(html).toContain('nb-card-index')
   })
 })
 

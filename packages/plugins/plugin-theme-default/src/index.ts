@@ -39,6 +39,7 @@ import {
   NodeToolbarButton,
   ColorField,
 } from "./components/ui";
+import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
@@ -665,6 +666,8 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("select", Select, { id: "default" });
   ui.add("slider", PrecisionSlider, { id: "default" });
   ui.add("toolParamField", ToolParamField, { id: "default" });
+  // 参数合并展示件：把「比例 · 画质 · 2K · 1张」那种多参数收敛成一个下拉（参考 LibTV 的底行样式）。
+  ui.add("toolParamGroup", ToolParamGroup, { id: "default" });
   ui.add("color", ColorField, { id: "default" });
   // 端口与拖线临时线的外观件也进目录（T06）：业务插件（多选）按名取同款组件，
   // 于是它们不必再直接依赖本主题包；换主题时这些件跟着一起换。

@@ -15,7 +15,9 @@ import { existsSync } from 'node:fs';
 
 const EXE = process.env.CANVAS_E2E_CHROME
   ?? 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe';
-const BASE = 'http://localhost:5288/';
+// BASE 可经 CANVAS_PORT 覆盖：多个 worktree 可能同时起 dev（vite.config 是 strictPort:false，
+// 谁先占 5288 谁就是 5288）——写死 5288 会打到别人的代码上，验证结果不算数。
+const BASE = `http://localhost:${process.env.CANVAS_PORT ?? 5288}/`;
 
 const errors = [];
 const warns = [];
@@ -458,22 +460,26 @@ if (resizeZoom.skipped) {
   // 防御：前序用例可能触发了页面导航，这里确保画布可用
   await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
   if (!(await page.evaluate(() => !!window.MiniCanvasUI).catch(() => false))) {
-    await page.goto('http://localhost:5288/', { waitUntil: 'load' });
+    await page.goto(BASE, { waitUntil: 'load' });
     await page.waitForTimeout(2200);
   }
   const bar2 = page.locator('[data-testid="node-bottom-bar"]');
   const assembled = await page.evaluate(() => {
     const ctx = window.MiniCanvasUI.getContext();
     const field = ctx.registryOf('node/region');
+    const slots = ctx.get('slots');
+    // overlay 槽是多 occupant（分组控制栏/多选框也在里面），按 id 精确认领底栏那一条
+    const barOccupant = slots ? slots.list('overlay').some((e) => e.id === 'bottom-bar/host') : false;
     return {
-      bar: field.list('*/out:bottom').length,
+      // 底栏宿主已从节点 out:bottom 迁到画布 overlay 槽（节点内 z 出不去，会被外壳工具栏截走点击）
+      bar: barOccupant,
       overlay: field.list('*/over:inset').length,
       actions: ctx.get('nodeBar') ? ctx.get('nodeBar').list({ type: 'image' }).length : -1,
     };
   });
   check(
-    '底栏装配：out:bottom 宿主 + over:inset 覆盖层 + image 动作',
-    assembled.bar === 1 && assembled.overlay === 1 && assembled.actions > 0,
+    '底栏装配：overlay 槽宿主 + over:inset 覆盖层 + image 动作',
+    assembled.bar === true && assembled.overlay === 1 && assembled.actions > 0,
     JSON.stringify(assembled),
   );
 

@@ -1158,3 +1158,38 @@ ui 44 / plugin-bottom-bar 17 / node-text 31 / node-image 111 / node-video 105 / 
 runState 落盘、刷新不悬挂）。
 
 **注意**：mock 动作经 image 写入器写 `data.imageUrl` —— 点了它当前图会被换成 mock 产物（预期行为）。
+
+## 追加（2026-09-29，底栏修「点不进去」+ 复刻 LibTV 版式）
+
+分支 `codex/node-bottom-bar-registry`。计划与实测见
+`docs/plans/2026-09-29-bottom-bar-libtv-parity.md`（子代理 plan_reviewer 审核，四点修正已并入）。
+
+**用户报的问题**：底栏输入框点不进去、打不了字；素材卡要点击才显示；底栏 UI 与参考图不一致。
+
+**根因（Chrome MCP 实测）**：底栏原挂在节点 `out:bottom`（`.v2-slot--bottom`）。
+`.vue-flow__node` 带 transform（VueFlow 定位用）**必然创建层叠上下文** ——
+节点内任何 z-index 都出不去；而应用外壳的底部工具栏 `.shell-dock`（`CanvasShell.vue`，
+`position:fixed; z-index:30`）是画布的**兄弟**，于是压在底栏输入区上、把点击整段截走。
+（实测：重叠段打字进不去，非重叠段正常。）
+
+**做法（比计划更小）**：不改 `canvas-render`、不新开层 —— 只把底栏 DOM 挪出节点层叠上下文：
+新增 `NodeBottomBarOverlay` 注册进**既有 overlay 槽**，内容 **Teleport 到 body** 并按屏幕坐标 fixed 定位
+（与本插件 @ 菜单同一手法）。这样一次性绕开三个坑：`.csurface-overlay` 的 z:20 层叠上下文、
+`overflow:hidden` 裁剪、与 z-index 分层表的契约冲突。
+栏内内容仍是 `themeRegistry.winner('bottomBar')`（整体可换皮，不变）。
+
+**顺带**：顶行补「标记 / 风格」两枚 pill（对齐参考图三枚）；加载材质由 92% 实底改 62% + 呼吸动画
+（用户要的「不要黑底卡片、整块进入加载态」）；mock 两条动作参数统一成同一套。
+
+**过程中真发现的坑**：浮层实例在不同节点间复用时只换 `id` prop，而 `NodeBottomBar` 只在 setup
+读一次节点类型 → 选中图片节点却按文本节点渲染、整栏空白。修法：`BottomBarHost` 加 `:key="selectedId"`。
+SSR 单测（每例新实例）照不出这条，只有真浏览器「先缩放再选中」的序列能复现。
+
+**验证**：`plugin-bottom-bar` 32/32、`plugin-theme-default` 213/213、`canvas-render` 405/405、
+`ui` 44/44、`mock-task-backend` 3/3、`node-text` 31/31、`node-image` 111/111；
+UI e2e **50/50**；三个 typecheck 全过。
+浏览器实测：输入区与底部工具栏重叠处点击命中 `ProseMirror` 且打字成功；素材卡常显带 1/2 角标；
+点卡片出预览；`@` 菜单贴光标；拖动节点底栏跟随；加载中拖拽节点仍可移动。
+
+**注意**：`packages/ui/e2e/canvas-e2e.mjs` 的 `BASE` 现支持 `CANVAS_PORT` 环境变量
+（`vite.config` 是 `strictPort:false`，多个 worktree 同起时 5288 归属不定，写死会打到别人的代码上）。

@@ -44,5 +44,5 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component :is="winner" :id="props.id" :data="props.data" />
+  <component :is="winner" v-if="winner" :id="props.id" :data="props.data" />
 </template>

@@ -17,12 +17,17 @@ import type { BarAction, BarApplier } from './barTypes'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
-import BottomBarHost from './BottomBarHost.vue'
 import NodeTaskOverlay from './NodeTaskOverlay.vue'
 import NodeBottomBar from './NodeBottomBar.vue'
+import NodeBottomBarOverlay from './NodeBottomBarOverlay.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
+
+/** 底栏所在的画布 UI 槽名（宿主 CanvasSurface 的 overlay 槽里按 order 渲染）。
+ *  为什么不是节点 out:bottom：节点带 transform 必然成层叠上下文，节点内的 z 压不过
+ *  外壳底部工具栏（.shell-dock），输入区会被截走点击 —— 实测复现，见 NodeBottomBarOverlay 文件头。 */
+export const BOTTOM_BAR_SLOT_NAME = 'overlay'
 
 /** 跨插件共用的两张注册场 */
 export const BAR_FIELD = 'node/bar'
@@ -186,9 +191,18 @@ export function apply(ctx: Context) {
   new NodeBarService(ctx)
   const task = new NodeTaskService(ctx)
 
-  // 底栏宿主挂 out:bottom、覆盖层挂 over:inset（都是 * 通配；组件自己判空与显隐）
-  ctx.nodes.attach('*', { region: 'out:bottom', component: BottomBarHost, id: 'bottom-bar/host' })
+  // 覆盖层挂节点 over:inset（* 通配；组件自己判空与显隐）
   ctx.nodes.attach('*', { region: 'over:inset', component: NodeTaskOverlay, id: 'bottom-bar/overlay' })
+
+  // 底栏宿主挂**画布 UI 槽**（不是节点 out:bottom）：节点带 transform 必然成层叠上下文，
+  // 底栏住在节点里就压不过外壳底部工具栏（.shell-dock z-index:30），输入区点击被截走（实测复现）。
+  // 挂到画布槽后由 NodeBottomBarOverlay 摆到卡片正下方，栏内内容仍是 themeRegistry 的 winner。
+  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
+    id: 'bottom-bar/host',
+    order: 40,
+    component: NodeBottomBarOverlay,
+    meta: { title: '节点底栏' },
+  })
 
   // 默认皮登记进 themeRegistry 的 bottomBar 槽（order 最小者赢；换皮插件给更小 order 即顶掉）
   ctx.theme.add(BOTTOM_BAR_SLOT, NodeBottomBar)
