@@ -19,7 +19,7 @@
  * 「基座条目在前、注册场条目按 order 在后」；order 只在同一条写路径内排序，跨不过基座。
  * 结论：图片/视频的编辑浮层（基座）恒在下、本覆盖层（注册场）恒在上。
  */
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { NodeRunState } from './runState'
 import { readRunState } from './runState'
@@ -27,6 +27,37 @@ import { readRunState } from './runState'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
+
+/**
+ * 跟随卡片圆角。
+ *
+ * 为什么必须跟：覆盖层挂在节点的 `over:inset` 区域容器里，而那个容器是**方角**（border-radius: 0），
+ * 我又铺了一层不透明纯黑 —— 结果把卡片自己的 4 个圆角**涂平成了直角**（用户实测反馈）。
+ * 圆角由主题按节点类型给（BaseNode 内联 cardFrame.borderRadius），所以这里**读卡片实算值**，
+ * 不写死数字：换主题/换节点类型都跟得上。
+ */
+const rootEl = ref<HTMLElement | null>(null)
+const radius = ref('8px')
+function syncRadius(): void {
+  const nodeEl = rootEl.value?.closest('.v2-node') as HTMLElement | null
+  const cardEl = nodeEl?.querySelector('.v2-card') as HTMLElement | null
+  if (!cardEl) return
+  const r = getComputedStyle(cardEl).borderRadius
+  if (r) radius.value = r
+}
+let rafId = 0
+function loop(): void {
+  syncRadius()
+  rafId = requestAnimationFrame(loop)
+}
+onMounted(() => {
+  syncRadius()
+  // 视口缩放/换主题都可能改圆角，逐帧跟最省事（只读一个值，代价可忽略）
+  rafId = requestAnimationFrame(loop)
+})
+onBeforeUnmount(() => {
+  if (rafId) cancelAnimationFrame(rafId)
+})
 
 const state = computed<NodeRunState>(() => readRunState(props.data))
 const running = computed(() => state.value.status === 'running')
@@ -53,9 +84,11 @@ function onCancel(): void {
 <template>
   <div
     v-if="running"
+    ref="rootEl"
     class="task-overlay"
     role="status"
     :aria-label="state.message || '执行中'"
+    :style="{ borderRadius: radius }"
     data-testid="task-overlay"
   >
     <!-- 铺满整卡的加载材质：柔光 + 缓慢扫过的高光（无盒子、无边框） -->
@@ -100,33 +133,23 @@ function onCancel(): void {
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  /* 圆角由 JS 跟随卡片实算值（见 syncRadius）：不写死，换主题/换节点类型都对得上 */
   overflow: hidden;
   animation: task-overlay-in 0.18s ease-out;
 }
 
 /* 铺满整卡的加载材质。
    用户明确要求：用**纯黑不透明**把底下的卡片内容整个盖住（节点里还有别的 UI，半透明会透出来糊在一起）。
-   所以这一层是不透明的纯黑；加载态的自有内容（环/百分比/文案）画在它上面。
-   呼吸动画只动 opacity，且**不下探到能看见底下内容**的区间（0.88~1），避免“忽明忽暗露出卡片”。 */
+   所以这一层是**恒定全不透明**的纯黑，自身不做 opacity 动画 ——
+   透明度一起伏，底下内容就会忽隐忽现（实测连 0.88~1 的呼吸都会透出"（无视频）"这类字）。
+   动效交给上面那层扫光与进度环：观感是活的，但内容始终被盖死。 */
 .task-overlay-veil {
   position: absolute;
   inset: 0;
   /* 主题色白名单: 加载遮罩刻意纯黑无装饰，与主题无关（同全屏播放层的做法） */
   background: #000;
-  animation: task-overlay-breathe 1.6s ease-in-out infinite;
 }
 
-/* 呼吸：整块加载材质轻微起伏（动 opacity，不动布局）。
-   reduced-motion 下由下方媒体查询关掉。 */
-@keyframes task-overlay-breathe {
-  0%,
-  100% {
-    opacity: 0.88;
-  }
-  50% {
-    opacity: 1;
-  }
-}
 
 /* 缓慢扫过的高光：动的是 transform，不是 width/left */
 .task-overlay-sheen {
@@ -135,7 +158,7 @@ function onCancel(): void {
   background: linear-gradient(
     115deg,
     transparent 38%,
-    color-mix(in srgb, var(--ui-accent, #0891b2) 9%, transparent) 50%,
+    color-mix(in srgb, var(--ui-accent, #0891b2) 15%, transparent) 50%,
     transparent 62%
   );
   animation: task-overlay-sheen 1.9s linear infinite;
@@ -265,7 +288,6 @@ function onCancel(): void {
 
 @media (prefers-reduced-motion: reduce) {
   .task-overlay,
-  .task-overlay-veil,
   .task-overlay-sheen,
   .task-overlay-ring,
   .task-overlay-ring-arc.is-indeterminate {
