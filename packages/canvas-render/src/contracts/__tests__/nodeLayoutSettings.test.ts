@@ -165,7 +165,7 @@ describe('resolveGenPanelMetrics（生成控制栏尺寸，纯函数）', () => 
     ).toEqual({ imageWidth: 700, textWidth: 480, editorMinHeight: 80, editorMaxHeight: 300 })
   })
 
-  it('没配置 → 回落默认（图片 650 / 文本 520 / 输入框 64~220）', () => {
+  it('没配置 → 回落默认（图片 660 / 文本 520 / 输入框 64~220）', () => {
     expect(resolveGenPanelMetrics(cfg({}))).toEqual(DEFAULT_GEN_PANEL_METRICS)
     expect(resolveGenPanelMetrics(() => undefined)).toEqual(DEFAULT_GEN_PANEL_METRICS)
   })

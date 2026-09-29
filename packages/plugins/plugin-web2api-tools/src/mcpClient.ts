@@ -26,8 +26,6 @@ export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
 export interface McpClientOptions {
   /** 服务地址，如 http://localhost:8033/mcp */
   endpoint: string
-  /** 取 cookieId（每次调用现取：设置里改了立刻生效） */
-  cookieId?: () => string
   /** 自定义 fetch（测试注入） */
   fetchImpl?: FetchLike
   /** 协议版本（与 web2api 对齐） */
@@ -173,14 +171,9 @@ export class McpClient {
    * （web2api 重启后旧会话全失效，不重试的话用户会看到莫名的"未初始化"）。
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<McpCallOutcome<McpToolCallResult>> {
-    const cookieId = this.opts.cookieId?.() ?? ''
-    if (!cookieId) {
-      return {
-        ok: false,
-        error: '还没填 web2api 的 cookieId。请到「设置 → 插件 → web2api 工具」里填平台账号的 Cookie ID。',
-      }
-    }
-    const payload = { ...args, cookieId }
+    // 不传 cookieId：服务端按账号状态/积分**自动选号**（失败自动换号），与 HTTP POST /api/tasks
+    // 同一语义。自动选号是 web2api 既有的能力，这里不重复实现、也不要求用户填账号。
+    const payload = { ...args }
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         await this.connect(attempt > 0)

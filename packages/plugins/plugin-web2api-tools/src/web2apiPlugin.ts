@@ -43,15 +43,6 @@ export const Config: ConfigSchema = {
     group: 'web2api/连接',
     description: 'web2api 的 MCP Streamable HTTP 端点。默认本机 8033 端口。',
   },
-  web2apiCookieId: {
-    type: 'string',
-    default: '',
-    label: 'cookieId',
-    group: 'web2api/连接',
-    description:
-      '平台账号的 Cookie ID（web2api 用它选账号）。可在 web2api 里调 system/get-accounts 查。' +
-      '留空时点发送会明确提示先填写，不会静默失败。',
-  },
   web2apiPollIntervalMs: {
     type: 'number',
     default: 3000,
@@ -77,7 +68,6 @@ export const Config: ConfigSchema = {
 /** 从 settings 读当前配置（未声明/未改 → 回落默认；settings 未就绪 → 全默认） */
 export function web2apiConfigFrom(ctx: Context): {
   endpoint: string
-  cookieId: string
   pollIntervalMs: number
   timeoutMs: number
 } {
@@ -89,7 +79,6 @@ export function web2apiConfigFrom(ctx: Context): {
   }
   return {
     endpoint: read('web2apiMcpEndpoint', 'http://localhost:8033/mcp'),
-    cookieId: read('web2apiCookieId', ''),
     pollIntervalMs: read('web2apiPollIntervalMs', 3000),
     timeoutMs: read('web2apiTimeoutMs', 1800000),
   }
@@ -135,10 +124,9 @@ function referenceImagesOf(resources: ToolResource[] | undefined): string[] {
 }
 
 export function apply(ctx: Context) {
-  // —— MCP 客户端（endpoint/cookieId 每次 run 现取：设置里改了立刻生效）——
+  // —— MCP 客户端（endpoint 每次 run 现取：设置里改了立刻生效）——
   const client = new McpClient({
     endpoint: web2apiConfigFrom(ctx).endpoint,
-    cookieId: () => web2apiConfigFrom(ctx).cookieId,
   })
 
   /** 执行依赖（presetRun 的纯逻辑只认这些，测试可注入假货） */

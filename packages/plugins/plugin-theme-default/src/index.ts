@@ -147,7 +147,7 @@ export const DEFAULT_THEME_LAYOUT = {
  * 与 DEFAULT_THEME_LAYOUT 同属「布局/控制栏」：贴边距离管"离节点多远"，这里管"多大"。
  */
 export const DEFAULT_THEME_PANEL = {
-  panelImageWidth: 650,
+  panelImageWidth: 660,
   panelTextWidth: 520,
   panelEditorMinHeight: 64,
   panelEditorMaxHeight: 220,

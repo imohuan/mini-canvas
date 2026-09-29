@@ -114,10 +114,10 @@ describe('runPreset：同步路径', () => {
     expect(out.error).toContain('连不上 web2api')
   })
 
-  it('cookieId 缺失时客户端返回的提示会被原样带出（用户知道下一步做什么）', async () => {
-    const { deps } = makeDeps({ call: () => ({ ok: false, error: '还没填 web2api 的 cookieId。' }) })
+  it('调用失败的原因会原样带出（用户知道下一步做什么）', async () => {
+    const { deps } = makeDeps({ call: () => ({ ok: false, error: '平台没有可用账号，请先在 web2api 里导入 Cookie' }) })
     const out = (await runPreset({ preset: doubaoTts, prompt: 'x', values: {}, referenceImages: [] }, deps)) as ToolResult
-    expect(out.error).toContain('cookieId')
+    expect(out.error).toContain('没有可用账号')
   })
 })
 

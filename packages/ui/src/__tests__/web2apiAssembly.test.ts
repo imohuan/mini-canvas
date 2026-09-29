@@ -121,13 +121,15 @@ describe('web2api 插件整装', () => {
     ctx.stop()
   })
 
-  it('插件的服务与配置键都在（AudioService + 四个 web2api 配置项）', async () => {
+  it('插件的服务与配置键都在（AudioService + 三个 web2api 配置项；账号不需要配置）', async () => {
     const { ctx } = await boot()
     expect(ctx.get('audio')).toBeTruthy()
     const settings = ctx.get<{ has(key: string): boolean }>('settings')
-    for (const key of ['web2apiMcpEndpoint', 'web2apiCookieId', 'web2apiPollIntervalMs', 'web2apiTimeoutMs']) {
+    for (const key of ['web2apiMcpEndpoint', 'web2apiPollIntervalMs', 'web2apiTimeoutMs']) {
       expect(settings.has(key), key + ' 未登记').toBe(true)
     }
+    // 账号由服务端自动选号，插件**不**提供账号/cookieId 配置项
+    expect(settings.has('web2apiCookieId')).toBe(false)
     ctx.stop()
   })
 
@@ -137,4 +139,3 @@ describe('web2api 插件整装', () => {
     expect(ctx.get('nodeBar')).toBeUndefined()
   })
 })
-

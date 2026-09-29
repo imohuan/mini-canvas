@@ -18,7 +18,7 @@ import type { Web2ApiPreset } from './presets'
 
 /** 跑一次动作要用的外部能力（生产由 web2apiPlugin 注入真实现） */
 export interface RunDeps {
-  /** 调一个 MCP 工具（cookieId 由客户端自己补） */
+  /** 调一个 MCP 工具（不传 cookieId —— 服务端按账号状态自动选号） */
   callTool(tool: string, args: Record<string, unknown>): Promise<{ ok: boolean; data?: McpToolCallResult; error?: string }>
   /** 查任务详情（system/get-task） */
   getTask(taskId: string): Promise<{ ok: boolean; data?: McpTaskDetail; error?: string }>

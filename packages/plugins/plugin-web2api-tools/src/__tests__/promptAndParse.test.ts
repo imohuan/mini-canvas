@@ -89,8 +89,8 @@ describe('resultFromCall', () => {
   })
 
   it('isError：把服务端的"错误：xxx"前缀去掉后透传', () => {
-    const out = resultFromCall({ content: [{ type: 'text', text: '错误：缺少必填参数: cookieId' }], isError: true })
-    expect(out).toEqual({ ok: false, error: '缺少必填参数: cookieId' })
+    const out = resultFromCall({ content: [{ type: 'text', text: '错误：平台不存在: nope' }], isError: true })
+    expect(out).toEqual({ ok: false, error: '平台不存在: nope' })
   })
 
   it('没有任何内容 → 明确失败（不返回空 ok）', () => {

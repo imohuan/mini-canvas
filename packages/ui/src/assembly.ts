@@ -54,7 +54,7 @@ export const APP_PLUGINS = [
   mockTaskPlugin,
   // web2api：把自建 MCP 服务（豆包 / dola / seedance / 火山引擎）的能力做成底栏动作。
   // 图片与视频走 dola / 豆包的 UI 自动化（auto）模式；音频含豆包 TTS 与火山引擎音频。
-  // 预置配置表在插件里（服务端没起也能渲染 UI）；cookieId 在「设置 → web2api」里填。
+  // 预置配置表在插件里（服务端没起也能渲染 UI）；账号由服务端自动选号，无需配置。
   web2apiToolsPlugin,
   node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
   nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）

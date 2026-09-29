@@ -466,8 +466,9 @@ const ICON_SPARKLE =
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 26px;
-  height: 26px;
+  /* 32×32 圆角 8：照参考站实测（底行右侧那排图标按钮与它同尺寸） */
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 8px;
@@ -492,8 +493,8 @@ const ICON_SPARKLE =
   outline-offset: 1px;
 }
 .nb-icon-btn :deep(svg) {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
 /* —— 素材卡（常显；48×48，序号角标左下；参考图 size-12） —— */
@@ -642,13 +643,14 @@ const ICON_SPARKLE =
 /* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
 .nb-field :deep(.sel-trigger) {
   gap: 4px;
-  padding: 6px 8px;
+  padding: 4px 8px;
   border-color: transparent;
   background: transparent;
   color: var(--ui-ink-dim, #6b7280);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  border-radius: 999px;
+  /* 圆角 8（不是胶囊）：照参考站的模型按钮 */
+  border-radius: 8px;
 }
 .nb-field :deep(.sel-trigger:hover:not(.is-open)) {
   background: var(--ui-chip, rgb(0 0 0 / 0.07));
@@ -683,22 +685,22 @@ const ICON_SPARKLE =
   font-variant-numeric: tabular-nums;
 }
 .nb-count {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ui-ink-mute, #8c95a3);
 }
 
-/* 圆形发送按钮（参考图白底圆 Ø34，深色下白底深箭头——由 token 决定） */
+/* 发送按钮：32×32、圆角 12（照参考站；浅色主题下白底深箭头，由 token 决定） */
 .nb-run {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 12px;
   background: var(--ui-primary-bg, #1f2937);
   color: var(--ui-primary-ink, #fff);
   cursor: pointer;
@@ -720,12 +722,12 @@ const ICON_SPARKLE =
 }
 .nb-send-icon {
   display: inline-flex;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
 }
 .nb-send-icon :deep(svg) {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
 }
 .nb-spinner {
   width: 14px;

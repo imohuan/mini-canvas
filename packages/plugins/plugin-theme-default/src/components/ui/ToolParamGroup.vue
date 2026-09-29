@@ -129,10 +129,10 @@ const summary = computed(() => {
 .tpg-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 32px;
   min-width: 0;
-  padding: 0 8px;
+  padding: 4px 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
