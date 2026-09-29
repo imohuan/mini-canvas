@@ -116,6 +116,27 @@
   --dd-bg: var(--ui-panel);
   --dd-line: var(--ui-line);
   --dd-ink: var(--ui-ink);
+  /* ===== 画布层叠带（z-index 唯一事实源的 CSS 出口）=====
+     数值与 packages/canvas-render/src/contracts/layers.ts 的 LAYERS **逐项一致**，
+     由 src/contracts/__tests__/layerTokens.test.ts 扫描本文件比对，漂移即报错。
+     为什么要有这份重复：纯 CSS（scoped style / 第三方样式）读不到 TS 常量，
+     只好把同一组数值以变量形式再给一份；"同一份"由测试保证，不靠约定。
+     新写样式优先用这些变量（如 z-index: var(--layer-modal)），不要再写数字字面量。 */
+  --layer-group-base: 50;
+  --layer-group-nested: 60;
+  --layer-edge: 100;
+  --layer-node: 200;
+  --layer-node-selected: 300;
+  --layer-temp-edge: 380;
+  --layer-edge-top: 400;
+  --layer-temp-node: 450;
+  --layer-node-toolbar: 500;
+  --layer-overlay: 600;
+  --layer-app-float: 650;
+  --layer-app-chrome: 700;
+  --layer-gesture: 900;
+  --layer-modal: 100000;
+  --layer-modal-top: 100001;
 }
 
 /* ===== 暗色：`<html class="dark">`（兼容 data-canvas-theme='dark' 旧写法，同规则共享值）

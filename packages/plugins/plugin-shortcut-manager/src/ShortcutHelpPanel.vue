@@ -358,7 +358,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleKeydown))
 .shortcut-help-layer {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   pointer-events: auto;
   display: flex;
   align-items: center;

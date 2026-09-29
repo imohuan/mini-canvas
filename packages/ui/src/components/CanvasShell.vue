@@ -83,7 +83,7 @@ const dockStyle = computed(() => {
 .shell { position: relative; height: 100vh; overflow: hidden; background: var(--ui-canvas-bg, #141414); color: var(--ui-ink, #f7f7f7); font-family: system-ui, 'Microsoft YaHei', sans-serif; }
 .shell[data-theme='light'] { background: var(--ui-canvas-bg, #f5f6f8); color: var(--ui-ink, #18202b); }
 .shell-canvas { position: absolute; inset: 0; }
-.shell-topbar { position: absolute; inset: 8px 8px auto; z-index: 60; display: flex; align-items: center; justify-content: space-between; height: 32px; pointer-events: none; }
+.shell-topbar { position: absolute; inset: 8px 8px auto; z-index: var(--layer-app-chrome, 700); display: flex; align-items: center; justify-content: space-between; height: 32px; pointer-events: none; }
 /* 块 A（项目胶囊）与块 B（视图切换）之间的间隔：照目标实测 8px */
 .shell-top-left { display: flex; align-items: center; gap: 8px; pointer-events: auto; transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
 .shell-top-left.pulled { transform: translateX(var(--shell-push, 320px)); }
@@ -91,6 +91,6 @@ const dockStyle = computed(() => {
 .shell-top-right { gap: 8px; }
 .shell-top-right.pulled { transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
 /* 外壳只负责「定位」：视觉（背景/边框/圆角）由插槽内容自己带，避免两层重复。 */
-.shell-status { position: fixed; left: 8px; bottom: 12px; z-index: 30; display: flex; align-items: flex-end; transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
-.shell-dock { position: fixed; left: 50%; bottom: 12px; z-index: 30; display: flex; align-items: center; transform: translateX(-50%); transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
+.shell-status { position: fixed; left: 8px; bottom: 12px; z-index: var(--layer-app-chrome, 700); display: flex; align-items: flex-end; transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
+.shell-dock { position: fixed; left: 50%; bottom: 12px; z-index: var(--layer-app-chrome, 700); display: flex; align-items: center; transform: translateX(-50%); transition: transform .25s cubic-bezier(.4, 0, .2, 1); }
 </style>

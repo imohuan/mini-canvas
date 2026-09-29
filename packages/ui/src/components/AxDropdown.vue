@@ -203,7 +203,8 @@ onBeforeUnmount(() => {
 .axd-root { position: relative; display: inline-block; text-align: left; }
 .axd-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   min-width: 180px;
   padding: 6px;
   color: var(--ui-ink);

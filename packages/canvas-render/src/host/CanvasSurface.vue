@@ -35,6 +35,7 @@ import { createCanvasFlowController } from '../contracts/canvasFlowApi'
 import type { ViewportBackend } from '../viewport/viewportService'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
+import { LAYERS } from '../contracts/layers'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -375,8 +376,9 @@ defineExpose({
       <slot />
     </VueFlow>
 
-    <!-- 通用 UI 槽(overlay)：渲染层封装成 SlotHost，自动读 ctx.slots.occupants('overlay') 并按序渲染 -->
-    <div class="csurface-overlay">
+    <!-- 通用 UI 槽(overlay)：渲染层封装成 SlotHost，自动读 ctx.slots.occupants('overlay') 并按序渲染。
+         z-index 用 LAYERS.overlay（唯一事实源）：它必须压过整棵 VueFlow（包括置顶连线）。 -->
+    <div class="csurface-overlay" :style="{ zIndex: LAYERS.overlay }">
       <SlotHost slot="overlay" item-class="csurface-overlay-item" />
     </div>
 
@@ -403,7 +405,7 @@ defineExpose({
   position: absolute;
   inset: 0;
   pointer-events: none; /* 不挡画布交互；浮层控件自己开 pointer-events 才能点 */
-  z-index: 20;
+  /* z-index 由模板 :style 绑 LAYERS.overlay 注入（唯一事实源）；此处不再写死 */
   overflow: hidden;
 }
 </style>

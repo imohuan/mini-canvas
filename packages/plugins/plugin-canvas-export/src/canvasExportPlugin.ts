@@ -246,7 +246,8 @@ function showExportOverlay(target: HTMLElement | null): { el: HTMLElement; progr
     'top:' + (box ? box.top : 0) + 'px',
     'width:' + (box ? box.width : '100vw') + (box ? 'px' : ''),
     'height:' + (box ? box.height : '100vh') + (box ? 'px' : ''),
-    'z-index:100000',
+    // z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts）
+    'z-index:var(--layer-modal, 100000)',
     'display:flex',
     'align-items:center',
     'justify-content:center',

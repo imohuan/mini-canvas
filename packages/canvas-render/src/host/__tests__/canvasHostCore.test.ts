@@ -15,6 +15,7 @@ import {
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
 } from '../canvasHostCore'
+import { LAYERS } from '../../contracts/layers'
 
 function makeStore(): NodeStore {
   const s = new NodeStore()
@@ -35,6 +36,8 @@ describe('nodesFromStore', () => {
       type: 'text',
       position: { x: 10, y: 20 },
       data: { text: 'hi' },
+      // 显式分层：普通节点落 LAYERS.node（不再靠 DOM 顺序）
+      zIndex: LAYERS.node,
     })
     // data 是浅拷贝：改 flow 的 data 不污染内核 store
     flow[0].data.text = 'MUTATED'
@@ -69,19 +72,20 @@ describe('nodesFromStore', () => {
     expect(c.style).toBeUndefined()
   })
 
-  it('transparent 类型（容器/分组）z 按嵌套深度分层：外层组-3、内层组-2（VueFlow computed 后 -1，仍在边之下）', () => {
+  it('transparent 类型（容器/分组）z 按嵌套深度分层：外层组 groupBase、内层组 groupNested（都在连线之下）', () => {
     const s = makeStore()
     s.registerType({ type: 'group', label: '分组', defaultSize: { w: 300, h: 200 }, transparent: true })
     const g = s.addNode('group', { x: 0, y: 0 })
     // 内层组：parentId 指向外层组
     const g2 = s.addNodes([{ type: 'group', position: { x: 10, y: 10 }, size: { w: 100, h: 80 }, id: 'inner', parentId: g }])
     const flow = nodesFromStore(s)
-    // 外层组 depth0 → -2（垫底）；内层组 depth1 → -1（盖在外层组上，仍在边之下）
-    expect(flow.find((n) => n.id === g)!.zIndex).toBe(-3)
-    expect(flow.find((n) => n.id === 'inner')!.zIndex).toBe(-2)
-    // 普通类型无 zIndex（走 VueFlow 默认 0）
+    // 外层组 depth0 → groupBase（垫底）；内层组 depth1 → groupNested（盖在外层组上，仍在连线之下）
+    expect(flow.find((n) => n.id === g)!.zIndex).toBe(LAYERS.groupBase)
+    expect(flow.find((n) => n.id === 'inner')!.zIndex).toBe(LAYERS.groupNested)
+    expect(LAYERS.groupNested).toBeLessThan(LAYERS.edge)
+    // 普通类型落 LAYERS.node（显式分层，不再靠 VueFlow 默认 0）
     const textId = s.addNode('text', { x: 10, y: 10 })
-    expect(nodesFromStore(s).find((n) => n.id === textId)!.zIndex).toBeUndefined()
+    expect(nodesFromStore(s).find((n) => n.id === textId)!.zIndex).toBe(LAYERS.node)
     void g2
   })
   it('data.isTemp 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {
@@ -96,8 +100,8 @@ describe('nodesFromStore', () => {
       selectable: false,
       deletable: false,
       focusable: false,
-      // 临时菜单卡恒在最上层：嵌套组内的子节点 z=1+，不提升会被压住（用户实测截图）
-      zIndex: 1001,
+      // 临时菜单卡恒在最上层：不提升会被普通节点压住（用户实测截图）
+      zIndex: LAYERS.tempNode,
     })
   })
 })
@@ -339,7 +343,7 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
       selectable: false,
       focusable: false,
       deletable: false,
-      zIndex: 1000,
+      zIndex: LAYERS.tempEdge,
     })
   })
 })

@@ -99,9 +99,10 @@ function onPointerMove(e: PointerEvent): void {
     // 值是运行时取，必须在这里拼字符串，不能写死进 <style>）
     const guide = getComputedStyle(document.documentElement).getPropertyValue('--ui-guide').trim() || '#3b82f6' /* 主题色白名单: 运行时读 CSS 变量的兜底（无主题表时的浅色值） */
     const veil = getComputedStyle(document.documentElement).getPropertyValue('--ui-guide-veil').trim() || 'rgba(59,130,246,0.06)' /* 主题色白名单: 同上，--ui-guide-veil 的兜底 */
+    // z-index 走画布层叠带变量（--layer-gesture，唯一事实源见 canvas-render/contracts/layers.ts）
     boxEl.style.cssText =
       `position:fixed;border:1.5px dashed ${guide};background:${veil};` +
-      'pointer-events:none;z-index:9999;border-radius:2px;'
+      'pointer-events:none;z-index:var(--layer-gesture, 900);border-radius:2px;'
     document.body.appendChild(boxEl)
   }
   updateBoxVisual(startX, startY, e.clientX, e.clientY)

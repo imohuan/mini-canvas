@@ -570,7 +570,8 @@ onBeforeUnmount(() => {
 .psd-mask {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -623,8 +624,8 @@ onBeforeUnmount(() => {
 /* 悬浮球：一颗真圆球（独立元素，尺寸即视觉尺寸，不靠缩放），带齿轮图标 */
 .psd-ball {
   position: fixed;
-  /* 必须高于 .psd-mask(100000)，否则被最小化时残留的 dialog 层盖住点不到 */
-  z-index: 100001;
+  /* 必须高于 .psd-mask(--layer-modal)，否则被最小化时残留的 dialog 层盖住点不到 */
+  z-index: var(--layer-modal-top, 100001);
   display: flex;
   align-items: center;
   justify-content: center;

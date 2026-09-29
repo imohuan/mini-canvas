@@ -132,7 +132,8 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
    @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
 .ctx-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   min-width: 252px;
   max-width: 340px;
   padding: 6px;

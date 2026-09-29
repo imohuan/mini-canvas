@@ -13,6 +13,7 @@ import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
 import type { CanvasDebug } from '../contracts/debugContext'
 import type { NodeWritePatch } from '../contracts/nodeRegistryKey'
+import { LAYERS } from '../contracts/layers'
 
 // ============================================================================
 // 节点写回 patch 拆分
@@ -73,22 +74,26 @@ export interface FlowNode {
  */
 export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySet<string>): FlowNode[] {
   return store.getNodes().map((n: CanvasNode) => {
+    const selected = selectedIds ? selectedIds.has(n.id) : false
     const out: Record<string, unknown> = {
       id: n.id,
       type: n.type,
       position: { x: n.position.x, y: n.position.y },
       data: { ...(n.data as Record<string, unknown>) },
+      // 显式分层（不再依赖 DOM 顺序）：普通节点同层，选中节点抬一档。
+      // 选中抬层**只在置顶连线之下**（用户口述的层级语义）——见 contracts/layers 的带序。
+      zIndex: selected ? LAYERS.nodeSelected : LAYERS.node,
     }
-    if (selectedIds) out.selected = selectedIds.has(n.id)
+    if (selectedIds) out.selected = selected
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
     // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。
     if (n.parentId) out.parentNode = n.parentId
-    // 容器型类型（transparent，如分组）z 按嵌套深度分层：外层组 -3、内层组 -2。
-    // 注意 VueFlow getXYZPos：有父节点的 computed z = max(父z, 自身z) + 1 ——
-    //   内层组(-2) 挂在外层组(-3) 下 → computed = max(-3,-2)+1 = -1，仍在边(0)之下 ✓；
-    //   全部普通子节点 = max(父z, 0)+1 = 1，在最上 ✓；连线(0) 夹在组与子节点之间 ✓。
-    //   选中提升已全局关闭(elevate-nodes-on-select=false)，层级恒定不随选中变化。
+    // 容器型类型（transparent，如分组）z 按嵌套深度分层：外层组 groupBase、内层组 groupNested。
+    // 注意 VueFlow getXYZPos：有父节点的 computed z = max(父z, 自身z) + 1，**逐级累加**。
+    //   所以普通子节点的 computed z 恒比父组高 1（父在 groupBase 时 → groupBase+1）；
+    //   嵌套子节点的父是内层组（groupNested+1）→ 再 +1，仍远低于 edge，"连线夹在组与子节点之间"不变。
+    // 全部数值来自 contracts/layers（唯一事实源），不再写裸数字。
     if (store.types.get(n.type)?.transparent === true) {
       let depth = 0
       let cur = n
@@ -101,7 +106,7 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
         depth += 1
         cur = p
       }
-      out.zIndex = depth === 0 ? -3 : -2
+      out.zIndex = depth === 0 ? LAYERS.groupBase : LAYERS.groupNested
     }
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
     if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
@@ -113,9 +118,9 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
       out.selectable = false
       out.deletable = false
       out.focusable = false
-      // 临时菜单卡（拖线落空白的选类型卡）恒在最上层：嵌套组内的子节点 z=1+，不提升会被压在下面
+      // 临时菜单卡（拖线落空白的选类型卡）恒在最上层：不提升会被普通节点压在下面
       //（用户实测截图：菜单卡被嵌套组内的 image 节点盖住）
-      out.zIndex = 1001
+      out.zIndex = LAYERS.tempNode
     }
     return out as unknown as FlowNode
   })
@@ -372,7 +377,7 @@ export function edgesFromStore(
       // 中间态边（拖线占位）—— 同样在 VueFlow 维度隔离：不可选中/不可键盘删除，与正式边视觉共存但语义隔离。
       // 判定读内核通用契约，不认识具体插件。
       ...(isTransient(e)
-        ? { selectable: false, focusable: false, deletable: false, zIndex: 1000 }
+        ? { selectable: false, focusable: false, deletable: false, zIndex: LAYERS.tempEdge }
         : {}),
     }))
 }

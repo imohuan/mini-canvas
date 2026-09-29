@@ -1516,7 +1516,8 @@ body.mc-pointer-down .selection-frame-batch-slot {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  z-index: 9998;
+  /* z-index 走画布层叠带变量（--layer-gesture，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-gesture, 900);
   overflow: visible;
 }
 

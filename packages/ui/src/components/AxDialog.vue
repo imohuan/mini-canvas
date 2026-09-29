@@ -88,7 +88,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 
 <style>
 /* 非 scoped：面板被 Teleport 到 body，必须用全局主题变量才能跟随亮/暗切换 */
-.axdlg-root { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; }
+.axdlg-root { position: fixed; inset: 0; z-index: var(--layer-modal, 100000); display: grid; place-items: center; }
 .axdlg-overlay { position: absolute; inset: 0; background: var(--ui-scrim); }
 /* 浅遮罩：大面板（生成历史）用，既能一眼看出"点外面可关"，又不太压暗底层 */
 .axdlg-overlay--soft { background: var(--ui-scrim-soft); }

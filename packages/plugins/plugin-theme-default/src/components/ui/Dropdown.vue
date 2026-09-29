@@ -241,7 +241,8 @@ watch(isOpen, (v) => {
 /* 浮层本体：直接显示 / 隐藏，不做入场/退场动画。 */
 .dd-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   box-sizing: border-box;
   padding: 4px;
   /* 主题变量（--dd-* 由画布主题提供；缺失时回落到改造前的亮色值） */

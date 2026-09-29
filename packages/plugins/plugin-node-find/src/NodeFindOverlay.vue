@@ -99,7 +99,8 @@ onMounted(async () => {
 .node-find-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100001;
+  /* z-index 走画布层叠带变量（--layer-modal-top） */
+  z-index: var(--layer-modal-top, 100001);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -202,5 +203,4 @@ onMounted(async () => {
   font-size: 14px;
 }
 </style>
-
 

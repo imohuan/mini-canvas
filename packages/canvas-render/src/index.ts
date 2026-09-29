@@ -105,6 +105,9 @@ export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
+// 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量
+export { LAYERS } from './contracts/layers'
+export type { LayerName } from './contracts/layers'
 // 有就绪状态的画布 Flow/DOM 能力面（T04）：未挂载/已销毁时抛明确错误，不静默降级
 export { createCanvasFlowController, CanvasFlowNotReadyError } from './contracts/canvasFlowApi'
 export type {
