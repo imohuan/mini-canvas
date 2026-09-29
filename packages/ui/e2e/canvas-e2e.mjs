@@ -573,6 +573,74 @@ if (resizeZoom.skipped) {
   );
 }
 
+// ==================== 底栏文字可读性（对照度，防"文字与背景同色"回归） ====================
+// 背景：本轮的真实 bug —— prosemirror-editor-bundle 的 style.css 把 `color:#111` 写死在
+// `.ProseMirror` 本体上，深色主题下输入的字是近黑、与面板背景糊在一起（用户一眼看出来）。
+// 只断"有文字"是不够的（文字在 DOM 里、但看不见）；这里按 WCAG 相对亮度算对比度下限。
+{
+  // 先选中图片节点并等一帧（这段跑在"刷新不悬挂"之后，刷新会清空选中，底栏要下一帧才出来）
+  await page.evaluate(() => {
+    const ctx = window.MiniCanvasUI.getContext();
+    const img = ctx.get('doc').getNodes().find((n) => n.type === 'image');
+    if (img) ctx.get('selection').set([img.id]);
+  });
+  await page.waitForTimeout(800);
+  const contrast = await page.evaluate(() => {
+    const parse = (c) => {
+      const s = String(c || '');
+      const srgb = s.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/);
+      if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+      const m = s.match(/[0-9.]+/g);
+      return m ? m.map(Number) : null;
+    };
+    const lum = (rgb) => {
+      const s = rgb.slice(0, 3).map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+    };
+    const over = (fg, bg) => { const a = fg[3] === undefined ? 1 : fg[3]; return [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a)); };
+    const effBg = (el) => {
+      let cur = el;
+      while (cur && cur !== document.documentElement) {
+        const c = parse(getComputedStyle(cur).backgroundColor);
+        if (c) { const a = c[3] === undefined ? 1 : c[3]; if (a > 0.9) return c.slice(0, 3); if (a > 0.05) return over(c, [38, 38, 38]); }
+        cur = cur.parentElement;
+      }
+      return [38, 38, 38];
+    };
+    const ratioOf = (el) => {
+      const cs = getComputedStyle(el);
+      const fg = parse(cs.color);
+      const own = parse(cs.backgroundColor);
+      let bg = effBg(el);
+      if (own) { const a = own[3] === undefined ? 1 : own[3]; if (a > 0.05) bg = over(own, bg); }
+      const a = lum(fg), b = lum(bg);
+      const hi = Math.max(a, b), lo = Math.min(a, b);
+      return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+    };
+    const bar = document.querySelector('[data-testid="node-bottom-bar"]');
+    if (!bar) return { missing: true };
+    const pm = bar.querySelector('.ProseMirror');
+    if (pm) pm.focus();
+    const targets = {
+      输入正文: bar.querySelector('.ProseMirror'),
+      模型名: bar.querySelector('.sel-label'),
+      参数摘要: bar.querySelector('.tpg-text'),
+      字数计数: bar.querySelector('.nb-count'),
+    };
+    const out = {};
+    for (const [name, el] of Object.entries(targets)) {
+      if (el) out[name] = ratioOf(el);
+    }
+    return out;
+  });
+  const minRatio = Math.min(...Object.values(contrast).filter((v) => typeof v === 'number'));
+  check(
+    '底栏文字对比度达标（深色主题下文字不能与背景同色）',
+    !contrast.missing && Number.isFinite(minRatio) && minRatio >= 4.5,
+    JSON.stringify(contrast),
+  );
+}
+
 const real404 = notFound.filter((u) => !/favicon/i.test(u));
 const realErrors = errors.filter((e) => !/favicon/i.test(e) && !/status of 404/.test(e));
 check('零 error（favicon 404 除外）', realErrors.length === 0, realErrors.slice(0, 2).join(' | '));

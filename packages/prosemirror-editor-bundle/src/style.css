@@ -5,7 +5,11 @@
   min-height: 120px;
   font-size: 16px;
   line-height: 24px;
-  color: #111;
+  /* 主题化：跟随宿主 token，脱离宿主（独立 Web Component）时回落深色。
+     原先写死 #111 → 深色主题下输入的字与背景同色、看不见。
+     注意：这条写在 .ProseMirror 本体上，调用方在**外壳**上设 color 是盖不过它的（继承值输给直配），
+     所以必须在这里改；需要不同字号的调用方请覆写 .ProseMirror 自身的 font-size。 */
+  color: var(--ui-ink, #111);
 }
 
 /* 编辑器内容区滚动由外部容器控制（如 .editor-wrapper），
@@ -62,7 +66,7 @@
   line-height: 1; /* 与正文行高保持一致 */
   position: relative;
   height: 24px; /* 明确设置容器高度 */
-  border-bottom: 1px solid #111;
+  border-bottom: 1px solid var(--ui-ink, #111);
 }
 
 /* 使用 CSS 伪元素创建光标停靠点 */
@@ -88,7 +92,7 @@
 }
 
 .prose-mirror-editor .resource-node .label {
-  color: #374151;
+  color: var(--ui-ink-dim, #374151);
   white-space: nowrap;
   pointer-events: none;
   font-size: 16px;
@@ -175,10 +179,13 @@
 .mention-menu {
   position: fixed;
   z-index: 9999;
-  background: white;
+  /* 主题化：跟随宿主主题 token；脱离宿主（独立 Web Component / 老宿主）时回落到浅色。
+     原先写死 white → 深色主题下弹出一块白板（与画布 UI 完全割裂）。
+     约定见 canvas-render/src/styles/ui-theme.css 文件头：一律 var(--ui-xxx, <浅色兜底>)。 */
+  background: var(--ui-panel, white);
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--ui-line, #e5e7eb);
   width: 200px;
   padding: 6px;
   padding-right: 0px;
@@ -216,7 +223,7 @@
 /* Firefox 滚动条 */
 .mention-menu .menu-content {
   scrollbar-width: thin;
-  scrollbar-color: #d1d5db transparent;
+  scrollbar-color: var(--ui-scroll-thumb, #d1d5db) transparent;
 }
 
 /* Webkit 滚动条 (Chrome, Safari, Edge) */
@@ -230,13 +237,13 @@
 }
 
 .mention-menu .menu-content::-webkit-scrollbar-thumb {
-  background-color: #d1d5db;
+  background-color: var(--ui-scroll-thumb, #d1d5db);
   border-radius: 3px;
   transition: background-color 0.2s ease;
 }
 
 .mention-menu .menu-content::-webkit-scrollbar-thumb:hover {
-  background-color: #9ca3af;
+  background-color: var(--ui-scroll-thumb-hover, #9ca3af);
 }
 
 .mention-menu .menu-item {
@@ -250,12 +257,12 @@
 }
 
 .mention-menu .menu-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--ui-hover, #f3f4f6);
 }
 
 .mention-menu .menu-item.active {
-  background-color: #eff6ff;
-  color: #2b6df2;
+  background-color: var(--ui-accent-soft, #eff6ff);
+  color: var(--ui-accent, #2b6df2);
 }
 
 .mention-menu .menu-item img {
@@ -264,19 +271,19 @@
   border-radius: 4px;
   object-fit: cover;
   flex-shrink: 0;
-  background-color: #f3f4f6;
+  background-color: var(--ui-hover, #f3f4f6);
 }
 
 .mention-menu .menu-item span {
   font-size: 14px;
-  color: #374151;
+  color: var(--ui-ink-dim, #374151);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .mention-menu .menu-item.active span {
-  color: #2b6df2;
+  color: var(--ui-accent, #2b6df2);
 }
 
 /* 变量菜单项样式 */

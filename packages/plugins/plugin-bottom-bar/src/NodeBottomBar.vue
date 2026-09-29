@@ -567,15 +567,36 @@ const ICON_SPARKLE =
   padding: 0 2px;
   cursor: text;
 }
-.nb-editor :deep(.prose-mirror-editor) {
-  min-height: var(--nb-min, 20px);
-  max-height: var(--nb-max, 220px);
-  overflow-y: auto;
-  outline: none;
+/*
+ * 字号/行高/最小高必须写在 **.ProseMirror 本体**上，不能只写在 .prose-mirror-editor 外壳上：
+ * bundle 的 `.prose-mirror-editor .ProseMirror` 把这些值直配在正文元素自己身上（16px/120px），
+ * 外壳上设的只是「会被继承的值」，永远输给它 —— 底栏要的是 13px 紧凑正文。
+ * color/min-height 也一并覆写，理由同上（本体直配 > 外壳继承）。
+ * 注意：颜色这件事的**根因**已在 bundle 侧修好（那边的写死 #111 会跟着主题走），
+ * 这里保留一条显式声明，是为了底栏自己不去依赖上游默认值。
+ */
+.nb-editor :deep(.ProseMirror) {
+  min-height: var(--nb-min, 20px) !important;
+  outline: none !important;
   font-size: 13px;
   line-height: 1.6;
   color: var(--ui-ink, #18202b);
   word-break: break-word;
+}
+.nb-editor :deep(.prose-mirror-editor) {
+  max-height: var(--nb-max, 220px);
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ui-ink, #18202b);
+}
+/* @ 引用素材的标签：bundle 里写死了深灰字 + 深色下划线，深色主题下同样看不清 */
+.nb-editor :deep(.resource-node .label) {
+  color: var(--ui-ink, #18202b);
+  font-size: 13px;
+}
+.nb-editor :deep(.resource-node) {
+  border-bottom-color: color-mix(in srgb, var(--ui-ink, #18202b) 45%, transparent);
 }
 .nb-placeholder {
   position: absolute;
