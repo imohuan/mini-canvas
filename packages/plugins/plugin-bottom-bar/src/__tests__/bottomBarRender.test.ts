@@ -7,8 +7,10 @@
  *    翻译图标 + 0/2000 计数 + 圆形执行按钮）；
  * 3. 覆盖层：running 才出现，有百分比显示百分比、没有走不确定态；整卡加载态、**没有中间小卡片**；
  *    取消按钮在右下角；
- * 4. 覆盖层不写死遮罩卡片类名（旧的 task-overlay-card / -mask 已删）——用户实测反馈的回归点。
- */
+* 4. 覆盖层不写死遮罩卡片类名（旧的 task-overlay-card / -mask 已删）——用户实测反馈的回归点。
+ * 5. 输入框用的是仓库自带富文本编辑器（prosemirror-editor-bundle），并把上游素材变成
+ *    @ 引用候选（文本/图片/视频三类都要在候选里）——用户明确要求「@ 我的节点输入端口资源」。
+*/
 import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
@@ -19,6 +21,7 @@ import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import NodeTaskOverlay from '../NodeTaskOverlay.vue'
 import type { BarAction } from '../barTypes'
+import { collectUpstreamMaterials, toEditorResources } from '../panelSource'
 
 const DEMO_ACTION: BarAction = {
   id: 'mock-task:sync',
@@ -129,6 +132,48 @@ describe('NodeBottomBar：版式与显隐契约', () => {
   })
 })
 
+describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () => {
+  it('输入框渲染的是 prosemirror-editor-bundle 的编辑器（不是原生 input）', async () => {
+    const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
+    expect(html).toContain('prose-mirror-editor')
+    expect(html).not.toContain('<input')
+  })
+
+  it('@ 引用候选：上游是文本/图片/视频时都能产出一条资源项，且都带 @ 插入所需的规格', () => {
+    const materials = collectUpstreamMaterials(
+      [
+        { source: 't1', target: '35' },
+        { source: 'i1', target: '35' },
+        { source: 'v1', target: '35' },
+      ],
+      '35',
+      (id) => {
+        if (id === 't1') return { type: 'text', data: { text: '一段文字' } }
+        if (id === 'i1') return { type: 'image', data: { imageUrl: 'data:image/png;base64,AAA' } }
+        if (id === 'v1') return { type: 'video', data: { videoUrl: 'blob:video' } }
+        return undefined
+      },
+    )
+    // 三类素材都要认出来（图片/文本/视频）
+    expect(materials.map((m) => m.kind).sort()).toEqual(['image', 'text', 'video'])
+    const items = toEditorResources(materials)
+    expect(items).toHaveLength(3)
+    // 每一项都要有 id（@token = 上游节点 id）与 name（下拉里显示）
+    for (const it of items) {
+      expect(it.id).toBeTruthy()
+      expect(it.name).toBeTruthy()
+    }
+    // 文本走 value、图片/视频走 url 与 mediaType（编辑器据此画缩略图/播放）
+    const text = items.find((i) => i.id === 't1')
+    const img = items.find((i) => i.id === 'i1')
+    const vid = items.find((i) => i.id === 'v1')
+    expect(text?.value).toBe('一段文字')
+    expect(img?.url).toBeTruthy()
+    expect(img?.mediaType).toBe('image')
+    expect(vid?.mediaType).toBe('video')
+  })
+})
+
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
   it('running + 有百分比 → 渲染百分比与文案', async () => {
     const html = await render(
@@ -187,4 +232,3 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     expect(html).toContain('取消')
   })
 })
-

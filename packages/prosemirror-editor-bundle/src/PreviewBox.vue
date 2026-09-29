@@ -1,4 +1,6 @@
 <template>
+  <!-- 同 MentionMenu：Teleport 到 body，避开反缩放祖先的 transform 包含块 -->
+  <Teleport to="body">
   <div
     v-show="visible"
     class="preview-box"
@@ -26,6 +28,7 @@
       {{ formattedTime }}
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
