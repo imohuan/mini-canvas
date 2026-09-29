@@ -65,6 +65,7 @@ export type {
   ToolPollFn,
   ToolPollState,
   ToolParamDef,
+  ToolParamKind,
   ToolParamOption,
   ToolProgress,
   ToolResource,

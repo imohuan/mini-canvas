@@ -53,6 +53,7 @@
     "@mini-canvas/plugin-theme-default": "workspace:*",
     "@mini-canvas/plugin-tool-image-generation": "workspace:*",
     "@mini-canvas/plugin-tool-text-generation": "workspace:*",
+    "@mini-canvas/plugin-web2api-tools": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "lucide-vue-next": "^1.0.0",
     "motion-v": "^2.4.4"

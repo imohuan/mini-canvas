@@ -62,6 +62,35 @@ export interface ToolTemplate {
 }
 
 /**
+ * 参数的**语义类型**（比 type 更具体的一层：type 说"用哪种控件"，
+ * kind 说"这个参数是哪一类东西"）。
+ *
+ * 为什么需要它：同一个"下拉"在参考实现里长得并不一样 —— 比例要画按真实宽高比缩放的
+ * 小矩形，画质/清晰度/数量是一排等宽按钮，时长是滑块或两档按钮。光靠 type:select
+ * 表达不出这层差异，只能让每个工具作者自己塞组件（那样每加一个模型都要写 UI）。
+ *
+ * 所以 kind 是**主题无关的语义标签**：工具作者声明它是 ratio / quality / …，
+ * 由 UI 层把 kind 映射到**预设组件**（映射住在主题包里，换主题一起换）。
+ * 不认识的 kind（或没声明）→ 回落内置 type 控件，不会炸。
+ *
+ * 词表是**开放**的：这里列出的是仓库现有预设组件覆盖的名字，工具作者可以用自己的
+ * 名字（那时回落内置控件），主题也可以登记新名字。
+ */
+export type ToolParamKind =
+  | 'ratio'
+  | 'quality'
+  | 'resolution'
+  | 'background'
+  | 'count'
+  | 'duration'
+  | 'model'
+  | 'style'
+  | 'speaker'
+  | 'format'
+  | 'speed'
+  | 'camera'
+
+/**
  * 声明式参数：UI 据此**自动**渲染控件（比例下拉、分辨率下拉、模板下拉…）。
  * 工具自己声明有什么参数，节点 UI 不需要认识"比例"这个业务概念——
  * 加一个新参数（比如"风格"）不用改任何节点代码。
@@ -73,6 +102,11 @@ export interface ToolParamDef {
   /** 一句话说明（面板 tooltip / 辅助文字） */
   description?: string
   /**
+   * 语义类型（见 {@link ToolParamKind}）：UI 层据此挑**预设组件**渲染本参数。
+   * 缺省或不认识 → 回落下面的 type 内置控件。
+   */
+  kind?: ToolParamKind | (string & {})
+  /**
    * 内置控件类型（不给 component 时按它渲染标准控件）：
    * - 'select'  下拉（配 options）
    * - 'string'  单行文本
@@ -80,6 +114,8 @@ export interface ToolParamDef {
    * - 'boolean' 开关
    */
   type?: 'select' | 'string' | 'number' | 'boolean'
+  /** number 类参数的显示单位（如 '秒' / 'Hz'）；预设滑块用它做后缀 */
+  unit?: string
   /** type='select' 时的候选值 */
   options?: ToolParamOption[]
   default?: string | number | boolean

@@ -12,3 +12,11 @@ export { default as ColorField } from './ColorField.vue'
 export { default as NodeToolbarButton } from './NodeToolbarButton.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）
 export { default as ToolParamGroup } from './ToolParamGroup.vue'
+// 参数预设件（「按参数类型自动选组件」的那一层，判定表见 paramKind.ts）：
+//   ratio → 比例网格（带按真实宽高比画的描边矩形）；quality/resolution/background/count/… → 按钮网格；
+//   duration（两档）→ 按钮网格；duration（连续）/ speed → 滑块。
+export { default as ToolOptionGrid } from './ToolOptionGrid.vue'
+export { default as ToolRatioGrid } from './ToolRatioGrid.vue'
+export { default as ToolParamSlider } from './ToolParamSlider.vue'
+export { resolvePresetKind, PRESET_UI_NAMES, presetColumns } from './paramKind'
+export type { PresetKind } from './paramKind'

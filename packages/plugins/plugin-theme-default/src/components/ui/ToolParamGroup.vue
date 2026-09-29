@@ -14,6 +14,7 @@ import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import Dropdown from './Dropdown.vue'
 import ToolParamField from './ToolParamField.vue'
+import { resolvePresetKind } from './paramKind'
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +33,21 @@ const emit = defineEmits<{
   change: [key: string, value: string | number | boolean]
 }>()
 
+/**
+ * 哪些参数走「预设件区块」版式（标题 + 按钮网格 / 滑块，一列竖排），
+ * 哪些走旧的「标签 + 控件」一行版式。
+ *
+ * 为什么两种并存：参考站的面板是**整块竖排**的（画质/清晰度/比例…各占一块），
+ * 那正是"按能力显隐"的观感 —— 该模型支持的块才有。但没声明 kind 的参数
+ * （普通下拉/开关）在竖排里会很怪，所以它们仍走一行式。
+ */
+const isPreset = (p: ToolParamDef): boolean => resolvePresetKind(p) !== undefined
+const presetParams = computed(() => (props.params ?? []).filter(isPreset))
+const rowParams = computed(() => (props.params ?? []).filter((p) => !isPreset(p)))
+/** 有预设块 → 面板按参考站的整块版式（宽 342 / padding 12 / 块间 gap 8） */
+const blocksMode = computed(() => presetParams.value.length > 0)
+const menuClass = computed(() => (blocksMode.value ? 'tpg-menu tpg-menu--blocks' : 'tpg-menu'))
+
 /** 每项当前值的显示文案（有 options 就用 option 的 label，否则原样字符串化） */
 function labelOf(p: ToolParamDef): string {
   const v = props.values?.[p.key]
@@ -48,7 +64,12 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <Dropdown :offset="4" body-class="tpg-menu-body" class="tpg-root">
+  <Dropdown
+    :offset="4"
+    :body-class="blocksMode ? 'tpg-menu-body tpg-menu-body--blocks' : 'tpg-menu-body'"
+    :menu-width="blocksMode ? '342px' : ''"
+    class="tpg-root"
+  >
     <template #trigger="{ open }">
       <button
         type="button"
@@ -73,8 +94,18 @@ const summary = computed(() => {
       </button>
     </template>
 
-    <div class="tpg-menu">
-      <div v-for="p in params ?? []" :key="p.key" class="tpg-row">
+    <div :class="menuClass">
+      <!-- 预设块（照参考站：整块竖排，每块自带标题 + 按钮网格 / 滑块） -->
+      <div v-for="p in presetParams" :key="'b-' + p.key" class="tpg-block">
+        <ToolParamField
+          :param="p"
+          :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
+          :disabled="disabled"
+          :id-prefix="idPrefix + '-b'"
+          @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
+        />
+      </div>
+      <div v-for="p in rowParams" :key="'r-' + p.key" class="tpg-row">
         <span class="tpg-label">{{ p.label || p.key }}</span>
         <ToolParamField
           :param="p"
@@ -171,11 +202,24 @@ const summary = computed(() => {
 .tpg-menu-body {
   padding: 6px;
 }
+/* 整块版式（有预设块时）：照参考站实测 —— 面板宽 342、圆角 16、内边距 12 */
+.tpg-menu-body--blocks {
+  padding: 12px;
+  border-radius: 16px;
+}
 .tpg-menu {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 260px;
+}
+/* 块间 gap 8（参考站实测）；块内间距由各预设件自己给 */
+.tpg-menu--blocks {
+  gap: 8px;
+  min-width: 0;
+}
+.tpg-menu--blocks .tpg-block {
+  display: block;
 }
 .tpg-menu .tpg-row {
   display: flex;
@@ -199,4 +243,3 @@ const summary = computed(() => {
   font-size: 12px;
 }
 </style>
-

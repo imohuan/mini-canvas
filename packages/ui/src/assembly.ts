@@ -16,6 +16,7 @@ import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
 import { mockTaskPlugin } from '@mini-canvas/plugin-mock-task-backend'
+import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
@@ -51,6 +52,10 @@ export const APP_PLUGINS = [
   // mock 假后台：两条图片动作（同步 1.2s / 异步 10 帧进度），用于验证底栏动作与进度覆盖层。
   // 注意：mock 动作经 image 写入器写 data.imageUrl —— 点了它当前图会被换成 mock 产物（预期行为）。
   mockTaskPlugin,
+  // web2api：把自建 MCP 服务（豆包 / dola / seedance / 火山引擎）的能力做成底栏动作。
+  // 图片与视频走 dola / 豆包的 UI 自动化（auto）模式；音频含豆包 TTS 与火山引擎音频。
+  // 预置配置表在插件里（服务端没起也能渲染 UI）；cookieId 在「设置 → web2api」里填。
+  web2apiToolsPlugin,
   node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
   nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）
   pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用
