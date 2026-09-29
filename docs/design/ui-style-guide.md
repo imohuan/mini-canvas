@@ -144,11 +144,36 @@
 
 ### 2.8 z-index
 
-| 层级 | 值 |
-|---|---|
-| 浮层（菜单/模态） | `100000` |
+| 层级 | CSS 变量 | 值 | 用于 |
+|---|---|---|---|
+| 画布分组容器 | `--layer-group-base` / `--layer-group-nested` | 50 / 60 | 分组卡片垫底（内层分组高一点） |
+| 画布连线 | `--layer-edge` | 100 | 普通连线（在节点之下） |
+| 画布节点 | `--layer-node` | 200 | 普通节点卡片（所有未选中节点同层） |
+| 选中节点 | `--layer-node-selected` | 300 | 选中节点抬层（仍在置顶连线之下） |
+| 临时边 | `--layer-temp-edge` | 380 | 拖线占位边 |
+| 置顶连线 | `--layer-edge-top` | 400 | 「连线显示在最上层」开关打开时的边 |
+| 临时菜单卡 | `--layer-temp-node` | 450 | 拖线落空白弹出的选类型卡 |
+| 节点上下控制栏 | `--layer-node-toolbar` | 500 | 节点上/下插槽、编辑浮层 |
+| 画布浮层 | `--layer-overlay` | 600 | `.csurface-overlay`（小地图、对齐线、多选框…） |
+| 应用浮标 | `--layer-app-float` | 650 | 贴外壳定位的浮层（小地图定位盒） |
+| 外壳 UI | `--layer-app-chrome` | 700 | 顶栏 / 底栏 / 状态条 |
+| 手势层 | `--layer-gesture` | 900 | 框选框 / 剪切刀光 / 批量连线临时线 |
+| 模态/菜单 | `--layer-modal` | 100000 | 模态、下拉、右键菜单 |
+| 模态内提示 | `--layer-modal-top` | 100001 | tooltip、搜索浮层（要能盖在模态上） |
 
-同一时刻只允许一个浮层；新浮层类型沿用该值，禁止自增魔法数字，确需多层时先在本表登记。
+>> **单一事实源**：上表数值定义在 `packages/canvas-render/src/contracts/layers.ts`（TS）与
+>> `packages/canvas-render/src/styles/ui-theme.css`（`--layer-*` CSS 变量，供纯 CSS 消费）。
+>> 两处由 `contracts/__tests__/layerTokens.test.ts` 扫描比对，漂移即报错。
+>> 组件里**一律** `import { LAYERS }` 或写 `var(--layer-xxx, 兜底)`，**不要再写 z-index 数字字面量**。
+
+同一时刻只允许一个浮层；新浮层类型先在 `layers.ts` 登记层档，禁止自增魔法数字。
+
+> 两条层叠上下文事实（2026-09-29 实测，改动画布层级前必读）：
+> 1. `.vue-flow` 自身带 `z-index` → 画布里的一切都关在它的上下文内，画布内任意大的 z
+>    都压不过作为其**兄弟**的 `.csurface-overlay`。
+> 2. `.vue-flow__node` 带 `transform` → **必然**形成层叠上下文，节点内部的任何 z-index
+>    都出不去、越不过作为其**兄弟**的边 svg。所以「节点控制栏要压过置顶连线」这一条，
+>    必须让控制栏离开节点上下文（做法见 `docs/plans/2026-09-29-canvas-z-layers.md` §6）。
 
 ---
 
@@ -314,7 +339,9 @@
 3. 冲突/警告处使用了 Unicode `⚠`，应统一替换为线性 SVG 警示图标。
 4. 模态缺 focus trap 与焦点归还，待补。
 5. 行 `role=button` 内嵌 `<button>` 的嵌套交互问题，待按 §5 第 2 条重构。
-6. `z-index:100000` 待收敛为统一层级变量/常量。
+6. ~~`z-index:100000` 待收敛为统一层级变量/常量。~~ **已偿还（2026-09-29）**：
+   画布层级收敛为 `canvas-render/contracts/layers.ts` 单一事实源 + `--layer-*` CSS 出口，
+   全仓落点已接线（见 §2.8）。
 
 ---
 
