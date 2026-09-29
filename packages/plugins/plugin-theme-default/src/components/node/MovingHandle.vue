@@ -151,6 +151,36 @@ const zoneStyle = computed(() => ({
   height: `${zoneHeight.value}px`,
 }))
 
+/**
+ * 命中区裁剪路径：与**可见形状**（矩形 + 半椭圆耳朵）逐点一致。
+ *
+ * 为什么必须裁：这个 span 的盒子是矩形（宽 = 矩形 + 耳朵外凸 rx），但看得见的只有
+ * 「紧贴卡边的矩形 + 外侧半椭圆」。不裁的话，矩形盒伸到卡外的那块**看不见的死区**
+ * （约 rx × h）照样吃 mousedown —— 节点一选中就抬层（LAYERS.nodeSelected），
+ * 死区便压在紧邻节点之上，把本该属于邻居的点击整个吃掉（2026-09-29 实测：
+ * 选中左节点后点不到右节点，e2e 卡在「选中图片节点」）。
+ * 裁成可见形状后耳朵照常起手拖线（形状与视觉完全一致），死区不再拦截邻居。
+ *
+ * 与 debug svg 的 debugArcPath 同一份几何（改一处必须改另一处）；
+ * 形状为 rect（zoneShape==='rect'）时无耳朵，不裁。
+ */
+const zoneClipPath = computed(() => {
+  if (zoneShape.value === 'rect') return undefined
+  const w = shapeWidth.value      // 外凸最远点
+  const h = zoneHeight.value
+  const rw = rectWidth.value      // 矩形宽（贴卡边那一块）
+  const cy = h / 2
+  const ry = Math.max(h / 2, 1)
+  const rx = Math.max((h / 2) * zoneArcRatio.value, 1)
+  if (isSource.value) {
+    // 矩形在左（贴卡右缘），耳朵向右鼓
+    return `path('M 0 0 V ${h} H ${rw} V ${cy + ry} A ${rx} ${ry} 0 0 0 ${rw} ${cy - ry} V 0 Z')`
+  }
+  // 矩形在右（贴卡左缘），耳朵向左鼓
+  const rwRight = w - rw
+  return `path('M ${w} 0 V ${h} H ${rwRight} V ${cy + ry} A ${rx} ${ry} 0 0 1 ${rwRight} ${cy - ry} V 0 Z')`
+})
+
 /** debug svg 定位：与 zone 同位置同尺寸，矩形+耳朵 整体覆盖 */
 const debugStyle = computed(() => ({
   width: `${shapeWidth.value}px`,
@@ -443,7 +473,7 @@ onBeforeUnmount(() => {
       'port-follow-zone--target': !isSource,
       'is-debug': debug,
       'port-follow-zone--rect': zoneShape === 'rect',
-    }" :style="zoneStyle" @mouseenter="handleEnter" @mouseleave="handleLeave" @mousemove="updatePosition" />
+    }" :style="{ ...zoneStyle, clipPath: zoneClipPath }" @mouseenter="handleEnter" @mouseleave="handleLeave" @mousemove="updatePosition" />
 
     <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
@@ -534,6 +564,7 @@ onBeforeUnmount(() => {
 .port-follow-zone--rect {
   border-radius: 0;
 }
+
 
 .moving-handle-button {
   position: absolute;

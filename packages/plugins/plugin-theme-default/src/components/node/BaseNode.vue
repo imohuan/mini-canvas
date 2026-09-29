@@ -7,7 +7,7 @@
 //   4. 拖线反馈(消费 useCanvasRender().connectionState)：3D 倾斜 / 非法气泡 / valid/invalid / 拖线时压源口。
 //   5. LOD：zoom 低时简化渲染。
 // 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState + flow facade）。
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import {
   Position,
   useCanvasRender,
@@ -17,6 +17,7 @@ import {
   isConnectionSource,
   beginNodeResize,
   endNodeResize,
+  NODE_TOOLBAR_HOST_KEY,
 } from '@mini-canvas/canvas-render'
 import type { NodeProps, AimedTarget } from '@mini-canvas/canvas-render'
 import {
@@ -450,6 +451,39 @@ const bottomSlotsStyle = computed(() =>
   resolveNodeSlotStyle({ side: 'bottom', offset: slotOffsets.value.bottom, zoom: zoom.value }),
 )
 
+// ============ 控制栏脱层：DOM 传送到画布级宿主（2026-09-29）============
+/**
+ * 上/下控制栏为什么不在节点里画：
+ *
+ * `.vue-flow__node` 带 `transform`（VueFlow 用它定位），**必然**创建层叠上下文 —— 节点内部的
+ * 任何 z-index 都出不去，越不过作为其**兄弟**的边层。用户开「连线显示在最上层」后，置顶连线
+ * 就把控制栏整个盖住（实测：边横穿下控制栏，216/3888 个采样点命中边）。
+ *
+ * 解法：渲染宿主（CanvasSurface）在画布级提供一层 `.csurface-node-toolbars`
+ * （层值 LAYERS.nodeToolbar，压在置顶连线之上），本组件把这三段**DOM 传送**过去。
+ * 注意只搬 DOM、不搬逻辑：区域条目、能力实例缓存、定位样式**全部仍在本组件**，
+ * 所以同一节点上「按钮」与「它打开的面板」照旧共享同一个能力实例（决策 9 第②条）。
+ *
+ * 缺省（没装该宿主：SSR 单测 / 极简宿主）→ 取不到令牌 → 原地渲染，行为与改动前逐字一致。
+ */
+const toolbarHostEl = inject(NODE_TOOLBAR_HOST_KEY, undefined)
+/** 传送目标：宿主元素；null/未装 → 原样留在节点内 */
+const toolbarHost = computed<HTMLElement | null>(() => toolbarHostEl?.value ?? null)
+/**
+ * 传送后的定位锚：与卡片**同位置同尺寸**（flow 绝对坐标）。
+ *
+ * 为什么要有它：`.v2-slot` 的 `bottom: calc(100% + offset)` 是相对**定位父元素**算的
+ * （节点里就是卡片盒）。传送到画布层后父元素变成了零尺寸的宿主容器，所以必须补一块
+ * 与卡片重合的锚点盒，`calc(100% ± offset)` 才仍然等于「离卡片这条边的距离」。
+ * 反缩放（scale 1/zoom）与外层视口变换合起来仍在屏幕尺寸上恒定——与留在节点里时同一套数学。
+ */
+const toolbarAnchorStyle = computed<Record<string, string>>(() => ({
+  left: `${props.position?.x ?? 0}px`,
+  top: `${props.position?.y ?? 0}px`,
+  width: `${cardWidth.value}px`,
+  height: `${cardHeight.value}px`,
+}))
+
 /**
  * 编辑浮层的定位：**与卡片完全重合**（同宽同高、无偏移、不反缩放）。
  *
@@ -766,10 +800,30 @@ function clamp(value: number, min: number, max: number): number {
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
   }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
-    <!-- 上插槽：可叠多个 occupant，位置（贴边 + 居中 + 反缩放）由壳这一层算好，插件只管往里放内容。
+    <!-- 上/下控制栏：装了解层宿主就 Teleport 过去（压过置顶连线），否则原地渲染（行为与改动前逐字一致）。
+         逻辑与能力实例都不搬 —— Teleport 只换 DOM 位置，provide/inject 沿组件树传递，共享关系不变。
          压制条件沿用既有语义：框选中整排收起、多选收起（见 hideToolbars）。 -->
+    <Teleport v-if="toolbarHost" :to="toolbarHost">
+      <!-- 与卡片同位置同尺寸的锚点盒：.v2-slot 的 calc(100% +/- offset) 才仍等于「离卡片这条边的距离」 -->
+      <div class="v2-toolbar-anchor" :data-node-id="id" :style="toolbarAnchorStyle">
+        <div
+          v-if="topSlots.length > 0 && !hideToolbars"
+          class="v2-slot v2-slot--top nodrag nopan"
+          :style="topSlotsStyle"
+        >
+          <RegionEntryHost v-for="seg in topSlots" :key="'top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
+        </div>
+        <div
+          v-if="bottomSlots.length > 0 && !hideToolbars"
+          class="v2-slot v2-slot--bottom nodrag nopan"
+          :style="bottomSlotsStyle"
+        >
+          <RegionEntryHost v-for="seg in bottomSlots" :key="'bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
+        </div>
+      </div>
+    </Teleport>
     <div
-      v-if="topSlots.length > 0 && !hideToolbars"
+      v-else-if="topSlots.length > 0 && !hideToolbars"
       class="v2-slot v2-slot--top nodrag nopan"
       :style="topSlotsStyle"
     >
@@ -888,9 +942,9 @@ function clamp(value: number, min: number, max: number): number {
         :debug="debugHandle && !isConnecting" @hover="onPortHover" />
     </div>
 
-    <!-- 下插槽：同上方，定位由壳统一给出 -->
+    <!-- 下插槽：装了解层宿主时已随上面一起 Teleport 过去；这里只在原地模式渲染。 -->
     <div
-      v-if="bottomSlots.length > 0 && !hideToolbars"
+      v-if="!toolbarHost && bottomSlots.length > 0 && !hideToolbars"
       class="v2-slot v2-slot--bottom nodrag nopan"
       :style="bottomSlotsStyle"
     >
@@ -945,6 +999,28 @@ function clamp(value: number, min: number, max: number): number {
    浮在卡片外侧：绝对定位、不占布局高度（节点不会被撑高）。
    贴边距离 / 水平居中 / 反缩放全在 :style 里（resolveNodeSlotStyle）；这里只给"排一行"的默认排版：
    插槽里可能只放一个插件组件，也可能叠了好几个 occupant 并排。 */
+
+/* 控制栏脱层后的定位锚：与卡片同位置同尺寸（flow 绝对坐标），纯定位层不接事件。
+   为什么需要：.v2-slot 的 bottom/top: calc(100% ± offset) 是相对**定位父元素**算的
+   （留在节点里时父元素就是卡片盒）。传送到画布级层后父元素变成零尺寸宿主，
+   补这一块与卡片重合的锚点盒，calc(100% ± offset) 才仍等于「离卡片这条边的距离」。 */
+.v2-toolbar-anchor {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* 传送宿主那层是 pointer-events:none（不挡画布交互），但控制栏里的按钮必须能点 ——
+   留在节点里时它们从 .v2-node 继承 auto，传送后必须显式恢复，否则按钮全变"看得见点不到"。 */
+.v2-slot--top,
+.v2-slot--bottom {
+  pointer-events: auto;
+}
+
+/* 上/下插槽的外层。
+   z-index:30 是**节点内**渲染时的必需值：slot 与 .v2-card 是 .v2-node 下的兄弟，
+   不加 z 会被卡片盖住（--top 在卡片之前、--bottom 在之后）。
+   装了解层宿主时本层会被 Teleport 到画布级层（.csurface-node-toolbars，层值 LAYERS.nodeToolbar），
+   那时这个 z 只在传送容器内部生效、不影响它与置顶连线的先后。 */
 .v2-slot {
   position: absolute;
   z-index: 30;

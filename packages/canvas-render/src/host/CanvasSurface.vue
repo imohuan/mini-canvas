@@ -10,7 +10,7 @@
 // - 接收 CanvasHost 传入的已就绪数据(host/registry/外观/渲染态)与交互回调，原样转发给 VueFlow。
 // - provide RENDER_CONTEXT_KEY(裸)：单一令牌，消费方一律走 useCanvasRender()。
 // - 不持有业务逻辑：所有 handler/订阅/生命周期仍在 CanvasHost，经 props 传入，避免状态双份。
-import { provide, shallowRef, ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { provide, shallowRef, ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { VueFlow, useVueFlow, ConnectionMode } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, NodeDragEvent, EdgeMouseEvent } from '@vue-flow/core'
 import type { CanvasHostHandle } from './createMiniCanvasHost'
@@ -36,6 +36,7 @@ import type { ViewportBackend } from '../viewport/viewportService'
 import { viewportRectInFlow, expandRect, rectsOverlap, type FlowRect } from '../geometry/visibleArea'
 import type { LayoutRect, NodeLayoutService } from '../layout/nodeLayout'
 import { LAYERS } from '../contracts/layers'
+import { NODE_TOOLBAR_HOST_KEY } from '../contracts/nodeToolbarHost'
 
 const props = defineProps<{
   /** boot 后已就绪的宿主句柄。模板类型上可为空(父级 v-else 保证 boot 完成才挂载本组件)，
@@ -128,6 +129,25 @@ watch(
 // pane DOM 矩形：onMounted 后填（见下方 paneEl 捕获）；move 事件经 CanvasHost 已桥，这里 watch viewport 变化时刷新
 const paneRectRef = shallowRef<DOMRect | null>(null)
 const paneEl = ref<HTMLElement | null>(null)
+/**
+ * 节点上/下控制栏的画布级宿主（flow 坐标系）。
+ *
+ * 为什么要有这一层（2026-09-29）：节点的控制栏原先住在节点壳内部，而 `.vue-flow__node` 带
+ * transform（VueFlow 定位用）必然创建层叠上下文 —— 里面的 z-index 再大也越不过作为其**兄弟**的
+ * 边层。用户开「连线显示在最上层」后控制栏就被边盖住（实测 216/3888 采样命中边）。
+ * 让壳把控制栏 DOM Teleport 到这里（层值 LAYERS.nodeToolbar，压在置顶连线之上）即可解决，
+ * 而逻辑/能力实例仍留在壳内（provider 沿组件树传递，共享关系不变）。
+ *
+ * 变换：外层跟随视口 translate+scale，于是子内容可直接用 flow 坐标定位
+ * （与 multi-select 的 SelectionFrame / 分组控制栏同一套数学）。
+ */
+const nodeToolbarHostEl = ref<HTMLElement | null>(null)
+provide(NODE_TOOLBAR_HOST_KEY, nodeToolbarHostEl)
+/** 宿主外层的视口变换（flow 坐标 → 屏幕） */
+const nodeToolbarHostTransform = computed(() => {
+  const vp = viewportRef.value
+  return { transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`, transformOrigin: '0 0' }
+})
 /** 本画布实例根 DOM（模板 ref）——实例级锚点，替代 document.querySelector('.vue-flow') */
 const rootEl = ref<HTMLElement | null>(null)
 /** 节点层 DOM（含 .vue-flow__node 的最内层容器；模板 ref 不可达内部渲染层，onMounted 内解析） */
@@ -382,6 +402,13 @@ defineExpose({
       <SlotHost slot="overlay" item-class="csurface-overlay-item" />
     </div>
 
+    <!-- 节点上/下控制栏的画布级宿主：压过整棵 VueFlow（含置顶连线），但低于上面的 overlay 槽。
+         节点壳（BaseNode）把控制栏 DOM Teleport 进 .csurface-node-toolbars（见 NODE_TOOLBAR_HOST_KEY）。
+         外层跟随视口变换，所以内部按 flow 坐标定位；零尺寸 + 不接事件（真实可点区域在控制栏自身）。 -->
+    <div class="csurface-node-toolbar-layer" :style="{ zIndex: LAYERS.nodeToolbar }">
+      <div ref="nodeToolbarHostEl" class="csurface-node-toolbars" :style="nodeToolbarHostTransform" />
+    </div>
+
     <!-- 宿主业务 UI 区(#ui)：宿主把 toolbar/设置 dock/右键菜单等画布之上的 UI 放这里，即可经 useCanvasRender 读 ctx。
          SlotHost / SettingsHost 在本作用域内任意嵌套可用。CanvasHost 不内置任何业务 UI，只把具名插槽转发到这里。 -->
     <slot name="ui" />
@@ -407,6 +434,21 @@ defineExpose({
   pointer-events: none; /* 不挡画布交互；浮层控件自己开 pointer-events 才能点 */
   /* z-index 由模板 :style 绑 LAYERS.overlay 注入（唯一事实源）；此处不再写死 */
   overflow: hidden;
+}
+/* 控制栏层：铺满画布、不接事件（真实可点区域是控制栏自己）；零尺寸子容器承载 flow 坐标内容 */
+.csurface-node-toolbar-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.csurface-node-toolbars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: visible;
 }
 </style>
 

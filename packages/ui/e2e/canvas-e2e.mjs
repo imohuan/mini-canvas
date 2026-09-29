@@ -191,7 +191,11 @@ const scenario = await page.evaluate(async () => {
   const f = ctx.registryOf('node/region');
   const a = f.add('image/out:top', { component: btn, needs: ['展开'] }, { id: 'e2e-scenario-btn', order: -20 });
   const c = f.add('image/out:bottom', { component: panel, needs: ['展开'] }, { id: 'e2e-scenario-panel', order: -20 });
-  const text = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText).join('|');
+  // 控制栏 DOM 被 Teleport 到画布级层（.csurface-node-toolbars），取样要含它
+  const text = () =>
+    [document.querySelectorAll('.vue-flow__node'), document.querySelectorAll('.csurface-node-toolbars')]
+      .map((nl) => [...nl].map((n) => n.innerText).join('|'))
+      .join('|');
   // ③ 选中 image 节点让控制栏浮出来
   const img = h.nodeStore.getNodes().find((n) => n.type === 'image');
   if (img) ctx.get('selection').set([img.id]);
@@ -321,7 +325,8 @@ const uiSwap = await page.evaluate(async () => {
   const img = h.nodeStore.getNodes().find((n) => n.type === 'image');
   if (img) ctx.get('selection').set([img.id]);
   await new Promise((r) => setTimeout(r, 700));
-  const baseline = document.querySelectorAll('.vue-flow__node button').length;
+  // 控制栏按钮可能住在节点子树（未装解层宿主）或传送层（装了）—— 两处都算基准
+  const baseline = document.querySelectorAll('.vue-flow__node button, .csurface-node-toolbars button').length;
   const f = ctx.registryOf('ui');
   const MARK = 'E2E_UI_SWAP_BUTTON';
   // 探针必须把会被传进来的 props/监听都声明掉，否则 Vue 的"多余属性"warn 会污染控制台
@@ -336,10 +341,16 @@ const uiSwap = await page.evaluate(async () => {
   };
   const swap = f.add('button', probe, { id: 'e2e-ui', order: -100 });
   await new Promise((r) => setTimeout(r, 700));
-  const seen = [...document.querySelectorAll('.vue-flow__node')].some((n) => n.innerText.includes(MARK));
+  // 节点上/下控制栏的 DOM 被 Teleport 到画布级层（.csurface-node-toolbars，为了压过置顶连线），
+  // 所以不能只扫 .vue-flow__node 子树 —— 必须把传送层一起算上。
+  const hasMark = () =>
+    [document.querySelectorAll('.vue-flow__node'), document.querySelectorAll('.csurface-node-toolbars')].some((nl) =>
+      [...nl].some((n) => n.innerText.includes(MARK)),
+    );
+  const seen = hasMark();
   swap.dispose();
   await new Promise((r) => setTimeout(r, 600));
-  return { baseline, seen, restored: [...document.querySelectorAll('.vue-flow__node')].some((n) => n.innerText.includes(MARK)) };
+  return { baseline, seen, restored: hasMark() };
 });
 check('ui 目录换主题真的生效（节点控制栏按钮跟着换，撤回即复原）', uiSwap.baseline > 0 && uiSwap.seen && !uiSwap.restored, JSON.stringify(uiSwap));
 
@@ -377,7 +388,9 @@ check('dev 开关接通（ctx.isDev === true，dev server 下）', devFlag === t
 const shellSwap = await page.evaluate(async () => {
   const ctx = window.MiniCanvasUI.getContext();
   const f = ctx.registryOf('node/shell');
-  const textOf = () => [...document.querySelectorAll('.vue-flow__node')].map((n) => n.innerText)
+  // 控制栏 DOM 被 Teleport 到画布级层（.csurface-node-toolbars），取样要含它
+  const textOf = () =>
+    [...document.querySelectorAll('.vue-flow__node, .csurface-node-toolbars')].map((n) => n.innerText ?? '')
   const MARK = 'E2E_SHELL_SWAP_MARKER';
   const seenBefore = textOf().some((t) => t.includes(MARK));
   const shellProbe = {
