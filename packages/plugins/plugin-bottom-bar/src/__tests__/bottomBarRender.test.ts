@@ -130,6 +130,26 @@ describe('NodeBottomBar：版式与显隐契约', () => {
     expect(html).toContain('node-bottom-bar')
     expect(html).not.toContain('nb-editor')
   })
+
+  it('默认动作优先选可输入的那条（即时动作 order 更小，也不能因此默认选中它）', async () => {
+    const rotate: BarAction = { id: 'image.rotate', types: ['image'], title: '旋转', order: 90, run: () => ({ ok: true }) }
+    const gen: BarAction = { id: 'tool:gen', types: ['image'], title: '生成图片', needsPrompt: true, run: () => ({ ok: true }) }
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      {},
+      makeCtx({ selectedIds: ['35'], actions: [rotate, gen] }),
+    )
+    // 默认选中生成动作 → 大输入框在（用户连了素材就该能直接打字）
+    expect(html).toContain('nb-editor')
+    expect(html).toContain('is-active')
+  })
+
+  it('动作一排 chip：每个动作一个 chip，选中的那个带 is-active', async () => {
+    const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
+    expect(html).toContain('nb-action-chip')
+    expect(html).toContain('Mock 同步任务')
+  })
 })
 
 describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () => {

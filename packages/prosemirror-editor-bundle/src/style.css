@@ -187,6 +187,26 @@
 }
 
 /* 自定义滚动条样式 */
+/* @ 下拉里的「带缩略图的资源项」（resource 的 renderItem 用这两个类） */
+.mention-menu .menu-item .mention-thumb {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+.mention-menu .menu-item .mention-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mention-menu .menu-item .mention-resource {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .mention-menu .menu-content {
   max-height: 268px;
   overflow-y: auto;

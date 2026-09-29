@@ -11,6 +11,7 @@
  */
 import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, type ToolResource, type ToolResourceKind } from '@mini-canvas/kernel'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { h } from 'vue'
 
 /** 一条连进本节点的上游素材（面板素材行 / @ 引用 / 生成输入 共用同一份） */
 export interface UpstreamMaterial {
@@ -73,7 +74,7 @@ export function collectUpstreamMaterials(
       out.push({
         id: edge.source,
         kind: 'image',
-        name: label || nonEmptyString(data.imageName) || '素材',
+        name: label || nonEmptyString(data.imageName) || '图片素材',
         url: imageUrl,
       })
       continue
@@ -316,6 +317,11 @@ export function toEditorResources(
       ...base,
       url: m.url,
       mediaType: m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : 'image',
+      // @ 下拉里给图片/视频带缩略图（编辑器默认只画 icon + 名字，看不出是哪张图）
+      renderItem: (self) => h('span', { class: 'mention-resource' }, [
+        h('img', { src: self.url, class: 'mention-thumb', draggable: false, alt: '' }),
+        h('span', { class: 'mention-name' }, self.name),
+      ]),
       renderEditor: imageResourceEditorSpec,
     }
     if (onPreview) item.onClick = () => onPreview(m)

@@ -127,7 +127,7 @@ watch(
   () => actions.value.map((a) => a.id).join('|'),
   () => {
     if (!actions.value.some((a) => a.id === currentId.value)) {
-      selectAction(actions.value[0]?.id ?? '')
+      selectAction(defaultActionId())
     }
   },
 )
@@ -141,8 +141,18 @@ function selectAction(id: string): void {
   currentAction.value?.onSelect?.(props.id)
 }
 
-// 面板挂载时若没选中任何动作，选第一条
-if (hasActions.value && !currentId.value) selectAction(actions.value[0].id)
+/**
+ * 默认动作：**优先选能输入的那条**（needsPrompt，即生成类），其次才是第一条。
+ * 为什么不是直接取第一条：动作按 order 排，即时动作（旋转/下载）order 更小，
+ * 于是默认选中一个没有输入框的动作 —— 用户连了素材却看不到输入框（实测反馈）。
+ */
+function defaultActionId(): string {
+  const list = actions.value
+  return (list.find((a) => a.needsPrompt === true) ?? list[0])?.id ?? ''
+}
+
+// 面板挂载时若没选中任何动作，选默认那条
+if (hasActions.value && !currentId.value) selectAction(defaultActionId())
 
 const templates = computed(() => currentAction.value?.templates ?? [])
 
@@ -257,6 +267,23 @@ const ICON_TRANSLATE =
       </button>
     </div>
 
+    <!-- 动作一排（参考 LibTV：一排可点的建议动作，选中的高亮；生成类还带输入框） -->
+    <div class="nb-actions-bar">
+      <button
+        v-for="a in actions"
+        :key="a.id"
+        class="nb-action-chip"
+        :class="{ 'is-active': a.id === currentId }"
+        type="button"
+        :title="a.description || a.title"
+        :disabled="running"
+        @click.stop="selectAction(a.id)"
+      >
+        <span class="nb-action-title">{{ a.title }}</span>
+        <span v-if="a.needsPrompt" class="nb-action-dot" aria-hidden="true" />
+      </button>
+    </div>
+
     <!-- 素材行（点「参考」展开） -->
     <div v-if="showMaterials" class="nb-materials">
       <span v-if="cards.length === 0" class="nb-materials-hint">把图片/文本/视频连进来，或用 @ 引用</span>
@@ -366,7 +393,9 @@ const ICON_TRANSLATE =
   flex-direction: column;
   gap: 8px;
   box-sizing: border-box;
-  min-height: 220px;
+  /* 不再固定 220px：有输入框时由输入框撑高（min-height 在 .nb-editor），
+     即时动作没有输入框就自然收矮，不留一大片空白（实测反馈）。 */
+  min-width: 360px;
   padding: 10px 12px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
@@ -452,6 +481,54 @@ const ICON_TRANSLATE =
 }
 
 /* —— 素材行 —— */
+/* —— 动作一排（LibTV 风格：一排可点 chip，选中高亮） —— */
+.nb-actions-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.nb-action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.18s ease-out, color 0.18s ease-out, border-color 0.18s ease-out;
+}
+.nb-action-chip:hover:not(:disabled):not(.is-active) {
+  background: var(--ui-hover, rgb(0 0 0 / 0.06));
+  color: var(--ui-ink, #18202b);
+}
+.nb-action-chip.is-active {
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+.nb-action-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.nb-action-chip:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}
+/* 可输入的动作右上角点一个小圆点，一眼看出「这个能写提示词」 */
+.nb-action-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
 .nb-materials {
   display: flex;
   align-items: center;
@@ -497,6 +574,10 @@ const ICON_TRANSLATE =
   min-height: 0;
   padding: 2px;
   overflow-y: auto;
+}
+/* 有输入框时给整块一个最小高度，保证是「大输入框」而不是一条缝 */
+.nb-root:has(.nb-editor) {
+  min-height: 200px;
 }
 /* 自绘 placeholder：绝对定位在编辑区左上，有点击穿透 */
 .nb-editor {
