@@ -30,6 +30,7 @@ import {
   useGenPanelMetrics,
   useSoleNodeSelected,
   useUiComponent,
+  RenderEvents,
 } from '@mini-canvas/canvas-render'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { BarAction } from './barTypes'
@@ -107,7 +108,21 @@ const hasActions = computed(() => actions.value.length > 0)
 // —— 当前动作与参数 ——
 const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
-const values = ref<Record<string, unknown>>({})
+
+/**
+ * 参数值。**优先用上次留在节点 data 上的那份**（`data.web2apiParams`）。
+ * 为什么：用户要求「下次点进来还是上一次提交的数据，不要清空」—— 参数像输入框一样属于
+ * 「我正在准备的作品」，不该因为收起再打开就回到默认值。
+ */
+function plainObject(v: unknown): Record<string, unknown> | undefined {
+  return v && typeof v === 'object' && !Array.isArray(v) ? { ...(v as Record<string, unknown>) } : undefined
+}
+const values = ref<Record<string, unknown>>(plainObject(props.data?.barValues) ?? {})
+/** 上次用的是哪个动作（用户要求"再点进来还是上次那套"，动作也要接着上次那个） */
+const storedActionId = computed<string | undefined>(() => {
+  const raw = plainObject(props.data?.barValues)
+  return typeof raw?.actionId === 'string' ? raw.actionId : undefined
+})
 
 /**
  * 默认动作：**优先选能输入的那条**（needsPrompt，即生成类），其次才是第一条。
@@ -136,7 +151,10 @@ watch(
   () => actions.value.map((a) => a.id).join('|'),
   () => {
     if (!actions.value.some((a) => a.id === currentId.value)) {
-      selectAction(defaultActionId())
+      // 优先回到上次用的那个动作（它还在的话）
+      const remembered = storedActionId.value
+      const pick = remembered && actions.value.some((a) => a.id === remembered) ? remembered : defaultActionId()
+      selectAction(pick)
     }
   },
 )
@@ -145,11 +163,25 @@ function selectAction(id: string): void {
   const prev = currentAction.value
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
-  values.value = defaultsOf(currentAction.value)
+  // 换动作时**保留**用户已经调过的参数（按 key 覆盖到新动作的默认值上）。
+  // 用户要求：再点进来还是上次提交的那份数据，不要被清空回默认。
+  values.value = { ...defaultsOf(currentAction.value), ...values.value }
   currentAction.value?.onSelect?.(props.id)
 }
 
 if (hasActions.value && !currentId.value) selectAction(defaultActionId())
+
+/**
+ * 把当前参数落一份到节点 data（`data.barValues`），下次点开这个节点时接着用。
+ * 走 doc.updateNode（是"我在准备的作品"，进历史 + 落盘）；失败不抛（参数持久化不该挡住交互）。
+ */
+function persistValues(): void {
+  try {
+    ctx.get('doc').updateNode(props.id, { data: { barValues: { ...values.value, actionId: currentId.value } } })
+  } catch {
+    /* 节点已不在等情况：忽略 */
+  }
+}
 
 // —— 提示词（promptBinding:'text' 时与 data.text 双向绑定） ——
 const prompt = ref(typeof props.data?.text === 'string' ? props.data.text : '')
@@ -208,17 +240,41 @@ const runState = computed(() => readRunState(props.data))
 const running = computed(() => runState.value.status === 'running')
 const canRun = computed(() => !running.value && !!currentAction.value)
 
+/**
+ * 已经提交过 → 收起底栏（像下拉选完就收那样）。
+ * 重新出现的方式（三条都留着，用户怎么操作都顺）:
+ * ① 再点一下这个节点；② 换选中别的节点再选回来；③ 节点自己开始跑（覆盖层出现时也不需要底栏）。
+ * 注意**只收起 UI、不丢状态**：prompt 与参数都还在（参数另有一份落在 data.barValues 上）。
+ */
+const submitted = ref(false)
+function resetSubmitted(): void {
+  submitted.value = false
+}
+if (typeof ctx.on === 'function') {
+  const clickOff = ctx.on(RenderEvents.NodeClick, (p: { nodeId?: string }) => {
+    if (p?.nodeId === props.id) resetSubmitted()
+  })
+  pluginOffs.push(clickOff)
+}
+
 /** 执行（写盘走 nodeTask → doc.updateNodeRuntime） */
 async function onRun(): Promise<void> {
   if (!canRun.value || !currentAction.value) return
+  // 提交前先把参数与输入落好：收起之后再点回来还是这一套（用户要求"不清空"）
+  persistValues()
+  if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
+  // 收起底栏：像下拉选完那样收起来，专注看节点上的进度覆盖层
+  submitted.value = true
   await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
     prompt: prompt.value,
     values: values.value,
   })
+  resetSubmitted()
 }
 
 function onFieldChange(key: string, v: string | number | boolean): void {
   values.value = { ...values.value, [key]: v }
+  persistValues()
 }
 
 /** 参数区：把只读读数拼进「比例·画质·2K·1张」那类紧凑展示（参考图是一串点分） */
@@ -253,7 +309,7 @@ const ICON_SPARKLE =
 
 <template>
   <div
-    v-if="visible && hasActions"
+    v-if="visible && hasActions && !submitted"
     class="nb-root nodrag nopan"
     :style="panelStyle"
     data-testid="node-bottom-bar"

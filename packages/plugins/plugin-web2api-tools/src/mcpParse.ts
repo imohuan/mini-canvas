@@ -104,9 +104,33 @@ export function urlsFromTask(detail: McpTaskDetail | undefined, origin?: string)
   return [...new Set(out)]
 }
 
-/** 任务的终态判定（web2api 的状态机：completed / failed / cancelled 是终态） */
+/** web2api 的完整任务状态词表（见 server/src/types/task.ts 的 TaskStatus） */
+export type Web2ApiTaskStatus =
+  | 'pending'
+  | 'processing'
+  | 'polling'
+  | 'paused'
+  | 'polling_failed'
+  | 'retrying'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+/** 终态：不会再自己往前走了 */
 export function isTaskDone(status: string | undefined): boolean {
   return status === 'completed' || status === 'failed' || status === 'cancelled'
+}
+
+/**
+ * 需要**用户处理**的中间态：任务没死、也不会自己继续。
+ *
+ * 为什么必须单独判：`paused`（验证码/风控/凭证失效）与 `polling_failed`（轮询中断）
+ * 都不属于终态，但也不会自己往前走 —— 如果按"还在跑"处理，UI 就会**永远停在那个百分比上**
+ * （用户实测反馈：任务早就 cancelled/paused 了，卡片还卡在 40%）。
+ * 这里把它们收敛成"停住了、要你决定"，并给出可读原因。
+ */
+export function isTaskStalled(status: string | undefined): boolean {
+  return status === 'paused' || status === 'polling_failed'
 }
 
 /**

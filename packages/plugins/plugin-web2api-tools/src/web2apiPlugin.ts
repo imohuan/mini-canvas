@@ -133,6 +133,7 @@ export function apply(ctx: Context) {
   const deps: RunDeps = {
     callTool: (tool, args) => client.callTool(tool, args),
     getTask: (taskId) => client.getTask(taskId),
+    cancelTask: (taskId) => client.cancelTask(taskId),
     origin: () => client.effectiveOrigin(),
     config: () => {
       const c = web2apiConfigFrom(ctx)
@@ -185,6 +186,11 @@ export function apply(ctx: Context) {
         // 刷新续查：拿 taskId 接回来接着轮询（页面重开也不丢在跑的任务）
         resume(taskId: string) {
           return makeTaskPoll(taskId, deps)
+        },
+        // 取消：覆盖层点「取消」时，除了客户端不再等，还要去服务端把任务真取消掉
+        // （只 abort 的话服务端那个任务还在排队/执行）。
+        onCancel(taskId: string) {
+          return deps.cancelTask(taskId).then(() => undefined)
         },
       })
     }

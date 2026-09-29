@@ -154,6 +154,10 @@ export class NodeTaskService extends Service {
     for (const node of doc.getNodes()) {
       const rs = readRunState(node.data)
       if (rs.status !== 'running' || !rs.actionId) continue
+      // ★ 必须登记 AbortController：续查出来的任务同样要能被「取消」按钮中断。
+      //   不登记的话 `cancel()` 拿不到控制器 → 点了取消什么都没发生（用户实测反馈）。
+      const ctrl = new AbortController()
+      this.cancels.set(node.id, ctrl)
       void resumeAction(
         {
           nodeId: node.id,
@@ -161,9 +165,10 @@ export class NodeTaskService extends Service {
           registry: this.lookup(),
           taskId: rs.taskId ?? '',
           actionId: rs.actionId,
+          signal: ctrl.signal,
         },
         this.deps(),
-      )
+      ).finally(() => this.cancels.delete(node.id))
     }
   }
 }

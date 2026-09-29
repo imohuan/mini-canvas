@@ -6,9 +6,11 @@
  * 显隐规则：running 才出现；done/error/idle/缺省一律渲染空。
  *
  * 视觉要求（用户明确）：
- * - **不要中间那个黑底小卡片**：整张卡变成一个「加载态」——铺满卡片区域的柔光 + 一圈进度环，
- *   没有盒子、没有边框；
- * - 加动效（环形进度 + 1.2s 青色脉冲 + 缓慢扫过的高光；走 transform/opacity，带 reduced-motion 降级）；
+ * - **整块铺满的不透明纯色底**：用纯黑把底下那张卡（图片/视频内容、其它浮层 UI）**完全盖住**。
+ *   为什么不用半透明：节点里还有别的 UI（标题条、端口、各种浮层），半透明会让它们透出来跟加载态糊在一起（用户反馈）。
+ * - 加动效（环形进度 + 1.2s 脉冲 + 缓慢扫过的高光；走 transform/opacity，带 reduced-motion 降级）；
+ * - **文案单独一行、布局稳定**：百分比与文案分两行（文案可能很长且一直在变），
+ *   整块居中不动 —— 否则文案一变宽窄就跳、进度环跟着位移（用户反馈）。
  * - 取消按钮放**右下角**、做小（一般不用它）；
  * - **不挡拖拽**：根 pointer-events: none，只有取消按钮是 pointer-events: auto。
  *   （此前根写 auto 会把整卡盖住，节点拖不动——用户实测反馈的正是这条。）
@@ -57,27 +59,28 @@ function onCancel(): void {
     data-testid="task-overlay"
   >
     <!-- 铺满整卡的加载材质：柔光 + 缓慢扫过的高光（无盒子、无边框） -->
+    <!-- 铺满整卡的不透明纯黑底：把底下的卡片内容与其它浮层 UI 完全盖住 -->
     <div class="task-overlay-veil" aria-hidden="true" />
     <div class="task-overlay-sheen" aria-hidden="true" />
 
-    <!-- 居中：进度环 + 百分比 + 阶段文案（直接落在卡上，没有卡片底） -->
+    <!-- 居中：上一行「进度环 + 百分比」，下一行文案**单独换行**（整块居中，文案变长变短都不位移） -->
     <div class="task-overlay-center">
-      <svg class="task-overlay-ring" viewBox="0 0 64 64" aria-hidden="true">
-        <circle class="task-overlay-ring-track" cx="32" cy="32" :r="RING_R" />
-        <circle
-          class="task-overlay-ring-arc"
-          :class="{ 'is-indeterminate': percent === null }"
-          cx="32"
-          cy="32"
-          :r="RING_R"
-          :stroke-dasharray="RING_C"
-          :stroke-dashoffset="ringOffset"
-        />
-      </svg>
-      <span class="task-overlay-readout">
+      <div class="task-overlay-head">
+        <svg class="task-overlay-ring" viewBox="0 0 64 64" aria-hidden="true">
+          <circle class="task-overlay-ring-track" cx="32" cy="32" :r="RING_R" />
+          <circle
+            class="task-overlay-ring-arc"
+            :class="{ 'is-indeterminate': percent === null }"
+            cx="32"
+            cy="32"
+            :r="RING_R"
+            :stroke-dasharray="RING_C"
+            :stroke-dashoffset="ringOffset"
+          />
+        </svg>
         <span v-if="percent !== null" class="task-overlay-num">{{ percent }}%</span>
-        <span class="task-overlay-text">{{ state.message || '执行中…' }}</span>
-      </span>
+      </div>
+      <p class="task-overlay-text">{{ state.message || '执行中…' }}</p>
     </div>
 
     <!-- 取消：右下角、小号（一般不用） -->
@@ -102,14 +105,14 @@ function onCancel(): void {
 }
 
 /* 铺满整卡的加载材质。
-   用户明确要求：**不要那种「黑底卡片」**，整块区域直接进入加载态。
-   所以这里用很轻的一层（让底下的画面若隐若现）+ 模糊 + 呼吸，而不是 92% 的实底。
-   深浅主题都成立：底色取主题面板色，只做低比例混合，不新造颜色。 */
+   用户明确要求：用**纯黑不透明**把底下的卡片内容整个盖住（节点里还有别的 UI，半透明会透出来糊在一起）。
+   所以这一层是不透明的纯黑；加载态的自有内容（环/百分比/文案）画在它上面。
+   呼吸动画只动 opacity，且**不下探到能看见底下内容**的区间（0.88~1），避免“忽明忽暗露出卡片”。 */
 .task-overlay-veil {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--ui-panel, #fff) 62%, transparent);
-  backdrop-filter: blur(3px) saturate(0.9);
+  /* 主题色白名单: 加载遮罩刻意纯黑无装饰，与主题无关（同全屏播放层的做法） */
+  background: #000;
   animation: task-overlay-breathe 1.6s ease-in-out infinite;
 }
 
@@ -118,7 +121,7 @@ function onCancel(): void {
 @keyframes task-overlay-breathe {
   0%,
   100% {
-    opacity: 0.82;
+    opacity: 0.88;
   }
   50% {
     opacity: 1;
@@ -140,6 +143,18 @@ function onCancel(): void {
 
 .task-overlay-center {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  /* 两侧留白：文案再长也不贴到卡片边缘 */
+  max-width: 100%;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+/* 上一行：环 + 百分比（这一行只随进度变，文案变长变短不影响它） */
+.task-overlay-head {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -172,26 +187,22 @@ function onCancel(): void {
   transform-origin: 32px 32px;
 }
 
-.task-overlay-readout {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
 .task-overlay-num {
-  font-size: 15px;
+  font-size: 20px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-ink, #18202b);
+  /* 压在纯黑底上：固定用白字（不随主题走，否则亮色主题下会黑底黑字） */
+  color: #fff; /* 主题色白名单: 加载遮罩恒为纯黑底，前景需恒定白字才有对比 */
 }
 .task-overlay-text {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
+  /* 文案**单独一行**：允许换到第二行，居中；不再用省略号（省略号会让“看起来在变宽”而跳动） */
+  margin: 0;
+  max-width: 100%;
+  text-align: center;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--ui-ink-dim, #6b7280);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.75); /* 主题色白名单: 同上，纯黑遮罩上的次级白字 */
 }
 
 /* 取消：右下角小号文本按钮 */

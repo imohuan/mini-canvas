@@ -13,7 +13,14 @@
  */
 import type { ToolOutcome, ToolPollFn, ToolPollState, ToolResult } from '@mini-canvas/kernel'
 import { buildChatAutoPrompt } from './chatAutoPrompt'
-import { isTaskDone, resultFromCall, urlsFromTask, type McpToolCallResult, type McpTaskDetail } from './mcpParse'
+import {
+  isTaskDone,
+  isTaskStalled,
+  resultFromCall,
+  urlsFromTask,
+  type McpToolCallResult,
+  type McpTaskDetail,
+} from './mcpParse'
 import type { Web2ApiPreset } from './presets'
 
 /** 跑一次动作要用的外部能力（生产由 web2apiPlugin 注入真实现） */
@@ -22,6 +29,8 @@ export interface RunDeps {
   callTool(tool: string, args: Record<string, unknown>): Promise<{ ok: boolean; data?: McpToolCallResult; error?: string }>
   /** 查任务详情（system/get-task） */
   getTask(taskId: string): Promise<{ ok: boolean; data?: McpTaskDetail; error?: string }>
+  /** 取消服务端任务（web2api 的 POST /api/tasks/:id/cancel） */
+  cancelTask(taskId: string): Promise<{ ok: boolean; error?: string }>
   /** 服务端 origin（相对资源地址补全用） */
   origin(): string
   /** 轮询间隔与超时（读设置） */
@@ -89,6 +98,14 @@ export async function pollOnce(taskId: string, deps: RunDeps): Promise<ToolPollS
   }
   const detail = res.data
   const status = detail?.status
+  // 暂停 / 轮询中断：任务既不前进也不结束，必须收敛成"停住了"，否则 UI 永远停在那个百分比
+  if (isTaskStalled(status)) {
+    const why = status === 'paused' ? '任务被暂停' : '轮询中断'
+    return {
+      status: 'done',
+      result: { ok: false, error: (detail?.message || why) + '（可在 web2api 里恢复或重试）', taskId },
+    }
+  }
   if (status === 'failed') {
     return { status: 'done', result: { ok: false, error: detail?.message || '任务执行失败', taskId } }
   }

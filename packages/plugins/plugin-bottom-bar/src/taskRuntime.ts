@@ -73,6 +73,19 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
     readData: () => deps.readData(nodeId),
   }
 
+  /** 服务端任务 id（异步任务拿到后记下来，取消时要拿它去服务端真取消）。
+   *  注意：`let` 而不是塞进 runCtx —— runCtx 是给动作用的只读上下文，不该被它改写。 */
+  let serverTaskId: string | undefined
+  /** 取消：先 abort 客户端等待，再让动作自己去服务端取消（拿得到 taskId 才有意义） */
+  const cancelUpstream = async (): Promise<void> => {
+    if (!action.onCancel || !serverTaskId) return
+    try {
+      await action.onCancel(serverTaskId, runCtx)
+    } catch {
+      /* 服务端取消失败不改变本地已取消的事实（本地已 abort，用户已看到取消） */
+    }
+  }
+
   const writeRuntime = (rs: NodeRunState): void => deps.writeRuntime(nodeId, { runState: rs })
 
   // ① 取消：直接收敛（不留悬挂 running）
@@ -109,6 +122,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
     if (signal?.aborted) {
       const rs = errorState(action.id, '已取消')
       writeRuntime(rs)
+      await cancelUpstream()
       return { ok: false, error: rs.message }
     }
     let state: ToolPollState
@@ -120,6 +134,8 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
       return toError(err, '任务执行中断')
     }
     if (state.status === 'done') return finish(action, nodeType, state.result)
+    // running 帧才带 taskId：记下来，取消时要用它去服务端真取消
+    if (typeof state.taskId === 'string' && state.taskId) serverTaskId = state.taskId
     // 中间帧：节流窗口内不写（不论进度是否变）；窗口外写
     const t = now()
     const next = progressState(lastState ?? runningState(action.id), state)
@@ -159,6 +175,8 @@ export interface ResumeActionArgs {
   registry: BarLookup
   taskId: string
   actionId: string
+  /** 取消信号：续查出来的任务同样要能被「取消」中断（不传 = 不可取消） */
+  signal?: AbortSignal
 }
 
 export interface ResumeResult {
@@ -173,7 +191,7 @@ export interface ResumeResult {
  * 异步分支抛错会被吞掉；同步写下的错误态是刷新场景唯一的兜底显示。
  */
 export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Promise<ResumeResult> {
-  const { nodeId, nodeType, registry, taskId, actionId } = args
+  const { nodeId, nodeType, registry, taskId, actionId, signal } = args
   const writeRuntime = (rs: NodeRunState): void => deps.writeRuntime(nodeId, { runState: rs })
 
   // 同步分支：动作不在了（提供方插件被卸/版本变了）或拿不到 taskId → 明确中断，不去猜
@@ -201,6 +219,17 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
       return { resumed: false, state: rs }
     }
     while (true) {
+      // 取消：续查的任务同样要能被打断（覆盖层「取消」按钮），且要顺手清掉服务端任务
+      if (signal?.aborted) {
+        const rs = errorState(actionId, '已取消')
+        writeRuntime(rs)
+        try {
+          if (typeof action.onCancel === 'function' && taskId) await action.onCancel(taskId, runCtx)
+        } catch {
+          /* 服务端取消失败不改本地已取消的事实 */
+        }
+        return { resumed: true, state: rs }
+      }
       const state = await poll()
       if (state.status === 'done') {
         const result = state.result
@@ -226,4 +255,3 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
     return { resumed: true, state: rs }
   }
 }
-

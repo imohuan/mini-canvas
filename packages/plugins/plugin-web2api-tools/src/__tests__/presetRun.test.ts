@@ -21,6 +21,7 @@ function makeDeps(script: {
 }) {
   const calls: Array<{ tool: string; args: Record<string, unknown> }> = []
   const taskQueries: string[] = []
+  const cancels: string[] = []
   let tick = 0
   const deps: RunDeps = {
     callTool: async (tool, args) => {
@@ -33,12 +34,16 @@ function makeDeps(script: {
       tick += 1
       return { ok: true, data: frame as never }
     },
+    cancelTask: async (taskId: string) => {
+      cancels.push(taskId)
+      return { ok: true }
+    },
     origin: () => 'http://localhost:8033',
     config: () => ({ pollIntervalMs: 1, timeoutMs: 10_000 }),
     now: script.now ?? (() => 0),
     sleep: async () => {},
   }
-  return { deps, calls, taskQueries }
+  return { deps, calls, taskQueries, cancels }
 }
 
 describe('buildToolArgs', () => {
@@ -188,5 +193,22 @@ describe('runPreset：异步路径（视频这类）', () => {
     if (state.status === 'done') expect(state.result.error).toBe('已取消')
     // 取消了就不该再去问服务端要进度
     expect(taskQueries.length).toBe(0)
+  })
+
+  it('任务 paused（验证码/风控）→ 收敛成"停住了"，不无限转圈', async () => {
+    const { deps } = makeDeps({ tasks: [{ status: 'paused', message: '触发人机验证码', progress: 40 }] })
+    const state = await pollOnce('t-6', deps)
+    expect(state.status).toBe('done')
+    if (state.status === 'done') {
+      expect(state.result.ok).toBe(false)
+      expect(state.result.error).toContain('触发人机验证码')
+    }
+  })
+
+  it('任务 polling_failed（轮询中断）→ 同样收敛，不卡在百分比上', async () => {
+    const { deps } = makeDeps({ tasks: [{ status: 'polling_failed', progress: 40 }] })
+    const state = await pollOnce('t-7', deps)
+    expect(state.status).toBe('done')
+    if (state.status === 'done') expect(state.result.ok).toBe(false)
   })
 })

@@ -217,4 +217,31 @@ export class McpClient {
       return { ok: false, error: describeError(err, this.opts.endpoint) }
     }
   }
+
+  /**
+   * 取消一个服务端任务。
+   *
+   * 走的是 web2api 的 **HTTP 接口** `POST /api/tasks/:id/cancel`，不是 MCP ——
+   * MCP 只暴露了 list-tasks / get-task / get-accounts 三个 system 工具，**没有取消**。
+   * （所以只调 MCP 的话，点"取消"只会让客户端不再等，服务端那个任务还在跑。）
+   *
+   * 幂等：任务已经是终态时服务端回 400「状态不允许取消」，这里当成"已经不跑了"吞掉，
+   * 不当错误往外抛 —— 用户点了取消，界面上就该是取消。
+   */
+  async cancelTask(taskId: string): Promise<McpCallOutcome<{ cancelled: boolean }>> {
+    try {
+      const origin = this.effectiveOrigin()
+      if (!origin) return { ok: false, error: '拿不到 web2api 服务地址，无法取消任务' }
+      const res = await this.fetchImpl()(origin + '/api/tasks/' + encodeURIComponent(taskId) + '/cancel', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      })
+      if (res.ok) return { ok: true, data: { cancelled: true } }
+      // 400/404：任务不在"可取消"状态（已完成/已失败/已取消）→ 目的已达到，不算失败
+      if (res.status === 400 || res.status === 404) return { ok: true, data: { cancelled: false } }
+      return { ok: false, error: '取消任务失败（HTTP ' + res.status + '）' }
+    } catch (err) {
+      return { ok: false, error: describeError(err, this.opts.endpoint) }
+    }
+  }
 }

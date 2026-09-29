@@ -95,6 +95,15 @@ export interface BarAction {
   run(input: BarRunInput, ctx: BarRunContext): ToolOutcome | Promise<ToolOutcome>
   /** 刷新后接着查（可选）：拿 taskId 造一个轮询函数 */
   resume?(taskId: string, ctx: BarRunContext): ToolPollFn | undefined
+  /**
+   * 取消一个**已经在服务端排队的任务**（可选）。
+   *
+   * 为什么单独一个钩子而不是复用 signal：`signal` 只能停掉**客户端**这边继续等，
+   * 服务端那个任务还在排队/执行（next 用户会看到它继续跑、继续烧额度）。
+   * 覆盖层的「取消」按钮在 abort 之后会调它，让插件有机会去服务端真正取消。
+   * 收不到 taskId（还没提交出去）时不调用 —— 此时 abort 已经够了。
+   */
+  onCancel?(taskId: string, ctx: BarRunContext): void | Promise<void>
 }
 
 /** 结果写入器：把动作产物写进节点（走 doc.updateNode，是作品、进历史） */
@@ -112,4 +121,3 @@ export interface BarLookup {
 
 // 页脚：这些类型是本包对外契约的一部分；改任何一个都要过计划与审核，
 // 因为它们同时是「别的插件怎么往底栏发布动作」的合同。
-
