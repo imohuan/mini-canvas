@@ -21,7 +21,7 @@ import { themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import NodeTaskOverlay from '../NodeTaskOverlay.vue'
 import type { BarAction } from '../barTypes'
-import { collectUpstreamMaterials, toEditorResources } from '../panelSource'
+import { collectUpstreamMaterials, makeResourceResolver, toEditorResources } from '../panelSource'
 
 const DEMO_ACTION: BarAction = {
   id: 'mock-task:sync',
@@ -211,6 +211,76 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect(img?.mediaType).toBe('image')
     expect(vid?.mediaType).toBe('video')
   })
+
+  /**
+   * 用户要求（2026-09-30）：「连多个素材时按类型各自编号，@ 引用与纯文本里都用
+   * 图片1/视频1/文本1 这种名字，而不是内部节点 id」。
+   */
+  it('素材引用名按类型各自编号：图片1/图片2、视频1、文本1（不是节点 id）', () => {
+    const materials = collectUpstreamMaterials(
+      [
+        { source: 'i1', target: '35' },
+        { source: 't1', target: '35' },
+        { source: 'i2', target: '35' },
+        { source: 'v1', target: '35' },
+      ],
+      '35',
+      (id) => {
+        if (id === 't1') return { type: 'text', data: { text: '一段文字' } }
+        if (id === 'i1') return { type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } }
+        if (id === 'i2') return { type: 'image', data: { imageUrl: 'https://x/b.png', label: '狗' } }
+        if (id === 'v1') return { type: 'video', data: { videoUrl: 'https://x/c.mp4' } }
+        return undefined
+      },
+    )
+    // 节点 id 仍是身份（请求组装 / 去重用），refName 才是给人看的引用名
+    expect(materials.map((m) => m.id)).toEqual(['i1', 't1', 'i2', 'v1'])
+    expect(materials.map((m) => m.refName)).toEqual(['图片1', '文本1', '图片2', '视频1'])
+    // 编辑器资源项的 name 就是 refName（@ 下拉 / 卡片文案 / 纯文本 token 三处一致）
+    const items = toEditorResources(materials)
+    expect(items.map((i) => i.name)).toEqual(['图片1', '文本1', '图片2', '视频1'])
+  })
+
+  it('@ 引用回查：token 是引用名（图片1）或老的节点 id 都能回查', () => {
+    const materials = collectUpstreamMaterials(
+      [{ source: 'i1', target: '35' }],
+      '35',
+      () => ({ type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } }),
+    )
+    const items = toEditorResources(materials)
+    const resolve = makeResourceResolver(items)
+    expect(resolve('图片1')?.id).toBe('i1')
+    expect(resolve('i1')?.name).toBe('图片1')
+    expect(resolve('不存在')).toBeNull()
+  })
+
+  it('@ 引用在编辑器里渲染成**卡片**（圆角框 + 缩略图 + 名字），不再是缩略图加下划线', () => {
+    const materials = collectUpstreamMaterials(
+      [
+        { source: 'i1', target: '35' },
+        { source: 't1', target: '35' },
+      ],
+      '35',
+      (id) =>
+        id === 't1'
+          ? { type: 'text', data: { text: '文字' } }
+          : { type: 'image', data: { imageUrl: 'https://x/a.png', label: '猫' } },
+    )
+    const items = toEditorResources(materials)
+    const imgSpec = items.find((i) => i.id === 'i1')!.renderEditor!(items.find((i) => i.id === 'i1')!) as unknown[]
+    const textSpec = items.find((i) => i.id === 't1')!.renderEditor!(items.find((i) => i.id === 't1')!) as unknown[]
+    // 外层 span：resource-chip 卡片类
+    expect((imgSpec[1] as Record<string, string>).class).toContain('resource-chip')
+    // 卡内是缩略图 + 名字两段（图片用 img，文本用图标）
+    const imgChildren = imgSpec.slice(2) as unknown[][]
+    expect(imgChildren[0][0]).toBe('img')
+    expect((imgChildren[0][1] as Record<string, string>).class).toBe('resource-chip-thumb')
+    expect((imgChildren[1][1] as Record<string, string>).class).toBe('resource-chip-name')
+    expect(imgChildren[1][2]).toBe('图片1')
+    // 文本卡片：图标 + 名字，且带 resource-chip--text 修饰类
+    expect((textSpec[1] as Record<string, string>).class).toContain('resource-chip--text')
+    expect((textSpec.slice(2) as unknown[][])[0][0]).toBe('span')
+  })
 })
 
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
@@ -242,17 +312,34 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     expect(html).toContain('排队中')
   })
 
-  it('done / error / idle / 缺省 → 一律渲染空', async () => {
+  it('done / idle / 缺省 → 渲染空（error 另有失败提示，见下一条）', async () => {
     const states = [
       {},
       { runState: { status: 'idle' } },
       { runState: { status: 'done', progress: 100 } },
-      { runState: { status: 'error', message: 'x' } },
     ]
     for (const data of states) {
       const html = await render(NodeTaskOverlay as Component, '35', data, makeCtx({ selectedIds: ['35'] }))
       expect(html, JSON.stringify(data)).not.toContain('task-overlay')
+      expect(html, JSON.stringify(data)).not.toContain('task-failed')
     }
+  })
+
+  /**
+   * 用户实测反馈：任务失败 / 暂停时卡片上什么都不显示，看着像还卡在进度上。
+   * 失败态必须在卡片上留下可读的原因（且不影响拖拽：根不接指针事件）。
+   */
+  it('失败态在卡片上留一条原因提示（不是留白，也不再显示进度覆盖层）', async () => {
+    const html = await render(
+      NodeTaskOverlay as Component,
+      '35',
+      { runState: { status: 'error', message: '任务被暂停（可在 web2api 里恢复或重试）' } },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(html).toContain('task-failed')
+    expect(html).toContain('任务被暂停')
+    // 失败态不该再渲染进度覆盖层（否则又是「卡在某个百分比」）
+    expect(html).not.toContain('data-testid="task-overlay"')
   })
 
   it('没有中间黑底卡片：渲染里不出现旧的卡片/遮罩容器类名', async () => {

@@ -20,6 +20,12 @@ export interface UpstreamMaterial {
   kind: ToolResourceKind
   /** 显示名（节点标题优先，回退文件名/默认名） */
   name: string
+  /**
+   * **带序号的引用名**（图片1 / 视频1 / 文本1 …）。
+   * 用户要的语义：连多个素材时按类型各自编号，@ 引用与纯文本里都用这个名字 ——
+   * 而不是内部节点 id（那串用户看不懂）。序号只在 UI/提示词里用，节点 id 仍是身份。
+   */
+  refName: string
   /** 图片/视频类素材的地址 */
   url?: string
   /** 文本类素材的内容 */
@@ -58,6 +64,13 @@ export function collectUpstreamMaterials(
   const out: UpstreamMaterial[] = []
   // 同一个上游节点可能有多条边连过来（重复连），只算一次：素材行不该出现两张一样的卡片
   const seen = new Set<string>()
+  // 按类型各自编号（图片1 / 图片2 / 视频1 …）—— 用户要的就是这种引用名
+  const seq: Record<string, number> = { image: 0, video: 0, audio: 0, text: 0 }
+  const CN: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
+  const nextRef = (kind: ToolResourceKind): string => {
+    seq[kind] = (seq[kind] ?? 0) + 1
+    return (CN[kind] ?? '素材') + seq[kind]
+  }
 
   for (const edge of edges) {
     if (edge.target !== targetId) continue
@@ -75,6 +88,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'image',
         name: label || nonEmptyString(data.imageName) || '图片素材',
+        refName: nextRef('image'),
         url: imageUrl,
       })
       continue
@@ -87,6 +101,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'video',
         name: label || nonEmptyString(data.videoName) || '视频',
+        refName: nextRef('video'),
         url: videoUrl,
       })
       continue
@@ -99,6 +114,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'text',
         name: label || '文本',
+        refName: nextRef('text'),
         value: typeof data.text === 'string' ? data.text : '',
       })
     }
@@ -255,41 +271,34 @@ const TEXT_ICON =
   // v-html 进 DOM 的 SVG 字符串：用 currentColor + 内联 color 变量，才能跟着主题走
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" style="color:var(--ui-ink-dim, #6b7280)" stroke-width="2"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>'
 
-/** 文本素材插入编辑器后的 DOM 规格（@名字） */
-function textResourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
+/**
+ * 素材插入编辑器后的 DOM 规格：**卡片式**（用户要求，替换原来"缩略图 + 下划线"）。
+ *
+ * 一个「卡片」= 圆角小框 + 里面缩略图（文本类用图标）+ 右侧名字。
+ * 名字用 **refName**（图片1 / 视频2 这种带序号的名字）——@ 引用与纯文本里也是它，
+ * 用户和后端看到的是同一个可读名，而不是内部节点 id。
+ *
+ * 注意：class 里仍保留 `resource-node`（编辑器靠它绑定点击/悬停预览，
+ *   并把 data-* 当序列化身份）；`resource-chip` 是卡片外观，纯装饰。
+ */
+function resourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
+  const name = self.name || ''
+  const isText = self.mediaType === undefined
   return [
     'span',
     {
-      class: 'resource-node resource-node-text',
-      'data-id': self.id,
-      'data-name': self.name,
-      'data-value': self.value || '',
-      'data-category': self.category,
-    },
-    ['span', { class: 'label' }, '@' + self.name],
-  ]
-}
-
-/** 图片/视频素材插入编辑器后的 DOM 规格（小缩略图） */
-function imageResourceEditorSpec(self: ResourceItem): [string, Record<string, unknown>, ...unknown[]] {
-  return [
-    'span',
-    {
-      class: 'resource-node',
+      class: 'resource-node resource-chip' + (isText ? ' resource-chip--text' : ''),
       'data-id': self.id,
       'data-url': self.url || '',
-      'data-name': self.name,
+      'data-name': name,
+      'data-value': self.value || '',
       'data-category': self.category,
-      style: 'display: inline-flex; align-items: center; gap: 4px; vertical-align: bottom',
+      title: name,
     },
-    [
-      'img',
-      {
-        src: self.url || '',
-        draggable: 'false',
-        style: 'width: 16px; height: 16px; border-radius: 2px; object-fit: cover; pointer-events: none',
-      },
-    ],
+    isText
+      ? ['span', { class: 'resource-chip-icon', innerHTML: TEXT_ICON }]
+      : ['img', { class: 'resource-chip-thumb', src: self.url || '', draggable: 'false', alt: '' }],
+    ['span', { class: 'resource-chip-name' }, name],
   ]
 }
 
@@ -304,13 +313,15 @@ export function toEditorResources(
   onPreview?: (material: UpstreamMaterial) => void,
 ): ResourceItem[] {
   return materials.map((m) => {
-    const base: ResourceItem = { id: m.id, name: m.name, category: '素材' }
+    // name 用**带序号的引用名**（图片1 / 视频1）：它同时是 @ 下拉的显示名、
+    // 插入后的卡片文案、以及纯文本序列化出来的 token —— 三处一致，用户看得懂。
+    const base: ResourceItem = { id: m.id, name: m.refName, category: '素材' }
     if (m.kind === 'text') {
       return {
         ...base,
         value: m.value,
         icon: TEXT_ICON,
-        renderEditor: textResourceEditorSpec,
+        renderEditor: resourceEditorSpec,
       }
     }
     const item: ResourceItem = {
@@ -322,7 +333,7 @@ export function toEditorResources(
         h('img', { src: self.url, class: 'mention-thumb', draggable: false, alt: '' }),
         h('span', { class: 'mention-name' }, self.name),
       ]),
-      renderEditor: imageResourceEditorSpec,
+      renderEditor: resourceEditorSpec,
     }
     if (onPreview) item.onClick = () => onPreview(m)
     return item
@@ -330,11 +341,11 @@ export function toEditorResources(
 }
 
 /**
- * @ 引用回查：富文本里的 @token 就是上游节点 id，据此找回资源项。
- * 找不到返回 null（编辑器会当作普通文字处理，不会炸）。
+ * @ 引用回查：富文本里的 token 可能是**引用名**（图片1）也可能是老的节点 id，
+ * 两种都认（改了名字的老文档也不至于回查不到）。找不到返回 null，编辑器当普通文字处理。
  */
 export function makeResourceResolver(items: ReadonlyArray<ResourceItem>): (token: string) => ResourceItem | null {
-  return (token: string) => items.find((it) => it.id === token) ?? null
+  return (token: string) => items.find((it) => it.name === token || it.id === token) ?? null
 }
 
 /** 面板底部一句话状态（发送按钮旁边 / 进度区显示什么） */

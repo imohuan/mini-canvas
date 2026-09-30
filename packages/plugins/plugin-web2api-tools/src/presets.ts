@@ -41,6 +41,12 @@ export interface Web2ApiPreset {
   promptMode: PromptMode
   /** chat-auto 时的媒体模式（决定 /image 还是 /video 前缀） */
   mediaMode?: 'image' | 'video'
+  /**
+   * 这条动作**固定用的模型**（不放进第二个下拉，直接烘焙进请求）。
+   * 用户要求：模型要直接出现在**第一个下拉**里 —— 所以一个模型 = 一条动作，
+   * 第一个下拉列的就是「豆包 Seedream 4.5」这种具体模型名；参数区只留比例/时长这类。
+   */
+  model?: string
   /** 声明式参数（kind 决定 UI 用哪个预设件；只放本平台真支持的） */
   fields: ToolParamDef[]
   /** 该工具需要的资源类型（上游素材） */
@@ -117,56 +123,6 @@ const RATIO_VIDEO_DOLA: ToolParamDef = {
   ],
 }
 
-
-const MODEL_IMAGE_CHAT_DOUBAO: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'Seedream 4.5',
-  options: [
-    { label: 'Seedream 5.0 Lite', value: 'Seedream 5.0 Lite' },
-    { label: 'Seedream 4.5', value: 'Seedream 4.5' },
-    { label: 'Seedream 4.0', value: 'Seedream 4.0' },
-  ],
-}
-
-const MODEL_IMAGE_DOLA: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'Seedream 4.5',
-  options: [
-    { label: 'Seedream 5.0 Pro', value: 'Seedream 5.0 Pro' },
-    { label: 'Seedream 4.5', value: 'Seedream 4.5' },
-  ],
-}
-
-const MODEL_VIDEO_DOUBAO: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'Seedance 2.0 Fast',
-  options: [
-    { label: 'Seedance 2.0 Fast', value: 'Seedance 2.0 Fast' },
-    { label: 'Seedance 2.0 Mini', value: 'Seedance 2.0 Mini' },
-  ],
-}
-
-const MODEL_VIDEO_DOLA: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'Seedance 2.0',
-  options: [
-    { label: 'Seedance 2.5', value: 'Seedance 2.5' },
-    { label: 'Seedance 2.0', value: 'Seedance 2.0' },
-    { label: 'Seedance 1.0', value: 'Seedance 1.0' },
-  ],
-}
 
 /** 时长（滑块）：豆包 auto 模式 4-10s */
 const DURATION_DOUBAO_AUTO: ToolParamDef = {
@@ -345,15 +301,6 @@ const SPEAKER_DOUBAO_TTS: ToolParamDef = {
   ],
 }
 
-const MODEL_VOLC_AUDIO: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'seed-audio-1.0',
-  options: [{ label: 'seed-audio-1.0', value: 'seed-audio-1.0' }],
-}
-
 const FORMAT_VOLC_AUDIO: ToolParamDef = {
   key: 'format',
   kind: 'format',
@@ -412,30 +359,6 @@ const CAMERA_DOUBAO_VIDEO: ToolParamDef = {
     { label: '镜头环绕', value: '镜头环绕拍摄' },
     { label: '镜头移动', value: '镜头移动' },
     { label: '镜头聚焦', value: '镜头聚焦' },
-  ],
-}
-
-const MODEL_VIDEO_DOUBAO_API: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'seedance_v2.0',
-  options: [
-    { label: 'Seedance 2.0 Mini', value: 'seedance_v2.0_mini' },
-    { label: 'Seedance 2.0 Fast', value: 'seedance_v2.0' },
-  ],
-}
-
-const MODEL_VIDEO_SEEDANCE: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'fast',
-  options: [
-    { label: 'Fast (5积分/秒)', value: 'fast' },
-    { label: '2.0 (8积分/秒)', value: '2.0' },
   ],
 }
 
@@ -574,42 +497,102 @@ const IMAGE_REF = 'image' as const
 /**
  * 全部预置动作。**顺序即底栏显示顺序**（order 小的在前）。
  *
- * 用户点名：图片与视频要优先走 dola / 豆包的 **auto 模式**（UI 自动化），所以那四条排最前。
+ * 用户要求（2026-09-30）：**模型直接列在第一个下拉里** ——
+ * 所以这里一个模型 = 一条动作，title 就是那条模型名（如「豆包 Seedream 4.5」）；
+ * 参数区只留比例/时长/风格这类，**不再有模型下拉**。
+ *
+ * 图片与视频优先走 dola / 豆包的 auto 模式（UI 自动化），所以排在前面。
  */
 export const WEB2API_PRESETS: Web2ApiPreset[] = [
+  // ==================== 图片 ====================
+  // —— 豆包（UI 自动化 /image，可选模型：4.5 默认、5.0 Lite、4.0）——
   {
-    id: 'web2api:doubao-image-auto',
+    id: 'web2api:doubao-image-seedream45',
     tool: 'doubao/chat-auto',
     platform: '豆包',
     operation: '图像生成（auto）',
     nodeType: 'image',
-    // 第一个下拉显示**大模型/渠道**（照参考站与用户要求）；具体子模型在第二个下拉里选
-    title: '豆包',
-    description: '走豆包网页 UI 自动化生成图片（/image 前缀指令），支持模型与比例',
+    title: '豆包 Seedream 4.5',
+    description: '豆包网页 UI 自动化生图（Seedream 4.5）：比例 / 风格可选',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
-    fields: [MODEL_IMAGE_CHAT_DOUBAO, RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
+    model: 'Seedream 4.5',
+    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
     accepts: [IMAGE_REF],
     order: 10,
     async: true,
   },
   {
-    id: 'web2api:dola-image-auto',
-    tool: 'dola/chat-auto',
-    platform: 'Dola',
+    id: 'web2api:doubao-image-seedream50lite',
+    tool: 'doubao/chat-auto',
+    platform: '豆包',
     operation: '图像生成（auto）',
     nodeType: 'image',
-    title: 'Dola',
-    description: '走 Dola 网页 UI 自动化生成图片（/image 前缀指令）；需海外网络',
+    title: '豆包 Seedream 5.0 Lite',
+    description: '豆包网页 UI 自动化生图（Seedream 5.0 Lite）：比例 / 风格可选',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
-    fields: [MODEL_IMAGE_DOLA, RATIO_IMAGE_DOLA],
+    model: 'Seedream 5.0 Lite',
+    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
     accepts: [IMAGE_REF],
     order: 11,
     async: true,
   },
+  {
+    id: 'web2api:doubao-image-seedream40',
+    tool: 'doubao/chat-auto',
+    platform: '豆包',
+    operation: '图像生成（auto）',
+    nodeType: 'image',
+    title: '豆包 Seedream 4.0',
+    description: '豆包网页 UI 自动化生图（Seedream 4.0）：比例 / 风格可选',
+    group: 'web2api · 图片',
+    promptMode: 'chat-auto',
+    mediaMode: 'image',
+    model: 'Seedream 4.0',
+    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
+    accepts: [IMAGE_REF],
+    order: 12,
+    async: true,
+  },
+  // —— Dola（UI 自动化 /image，可选：Seedream 5.0 Pro、4.5）——
+  {
+    id: 'web2api:dola-image-seedream50pro',
+    tool: 'dola/chat-auto',
+    platform: 'Dola',
+    operation: '图像生成（auto）',
+    nodeType: 'image',
+    title: 'Dola Seedream 5.0 Pro',
+    description: 'Dola 网页 UI 自动化生图（Seedream 5.0 Pro）；需海外网络',
+    group: 'web2api · 图片',
+    promptMode: 'chat-auto',
+    mediaMode: 'image',
+    model: 'Seedream 5.0 Pro',
+    fields: [RATIO_IMAGE_DOLA],
+    accepts: [IMAGE_REF],
+    order: 13,
+    async: true,
+  },
+  {
+    id: 'web2api:dola-image-seedream45',
+    tool: 'dola/chat-auto',
+    platform: 'Dola',
+    operation: '图像生成（auto）',
+    nodeType: 'image',
+    title: 'Dola Seedream 4.5',
+    description: 'Dola 网页 UI 自动化生图（Seedream 4.5）；需海外网络',
+    group: 'web2api · 图片',
+    promptMode: 'chat-auto',
+    mediaMode: 'image',
+    model: 'Seedream 4.5',
+    fields: [RATIO_IMAGE_DOLA],
+    accepts: [IMAGE_REF],
+    order: 14,
+    async: true,
+  },
+  // —— ChatGPT（用户点名两个渠道都做）——
   {
     id: 'web2api:chatgpt-image',
     tool: 'chatgpt/generate-image',
@@ -622,7 +605,7 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     promptMode: 'plain',
     fields: [RATIO_IMAGE_CHATGPT, STYLE_CHATGPT_IMAGE],
     accepts: [IMAGE_REF],
-    order: 13,
+    order: 15,
     async: true,
   },
   {
@@ -637,71 +620,166 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     promptMode: 'plain',
     fields: [RATIO_IMAGE_APIMART, RESOLUTION_APIMART_IMAGE, COUNT_APIMART_IMAGE],
     accepts: [IMAGE_REF],
-    order: 14,
+    order: 16,
     async: true,
   },
+
+  // ==================== 视频 ====================
+  // —— 豆包 auto（可选：Seedance 2.0 Fast / Mini）——
   {
-    id: 'web2api:doubao-video-auto',
+    id: 'web2api:doubao-video-fast',
     tool: 'doubao/chat-auto',
     platform: '豆包',
     operation: '视频生成（auto）',
     nodeType: 'video',
-    title: '豆包·视频 auto',
-    description: '走豆包网页 UI 自动化生成视频（/video 前缀指令），时长 4-10 秒',
+    title: '豆包 Seedance 2.0 Fast',
+    description: '豆包网页 UI 自动化生视频（Seedance 2.0 Fast）：比例 / 时长，4-10 秒',
     group: 'web2api · 视频',
     promptMode: 'chat-auto',
     mediaMode: 'video',
-    fields: [MODEL_VIDEO_DOUBAO, RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_AUTO],
+    model: 'Seedance 2.0 Fast',
+    fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_AUTO],
     accepts: [IMAGE_REF],
     order: 10,
     async: true,
   },
   {
-    id: 'web2api:dola-video-auto',
-    tool: 'dola/chat-auto',
-    platform: 'Dola',
+    id: 'web2api:doubao-video-mini',
+    tool: 'doubao/chat-auto',
+    platform: '豆包',
     operation: '视频生成（auto）',
     nodeType: 'video',
-    title: 'Dola·视频 auto',
-    description: '走 Dola 网页 UI 自动化生成视频；时长只有 5 / 10 秒两档；需海外网络',
+    title: '豆包 Seedance 2.0 Mini',
+    description: '豆包网页 UI 自动化生视频（Seedance 2.0 Mini）：比例 / 时长，4-10 秒',
     group: 'web2api · 视频',
     promptMode: 'chat-auto',
     mediaMode: 'video',
-    fields: [MODEL_VIDEO_DOLA, RATIO_VIDEO_DOLA, DURATION_DOLA_AUTO],
+    model: 'Seedance 2.0 Mini',
+    fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_AUTO],
     accepts: [IMAGE_REF],
     order: 11,
     async: true,
   },
+  // —— Dola auto（Seedance 2.5 / 2.0 / 1.0；时长只有 5/10 两档）——
   {
-    id: 'web2api:doubao-video',
-    tool: 'doubao/generate-video',
-    platform: '豆包',
-    operation: '文生视频',
+    id: 'web2api:dola-video-seedance25',
+    tool: 'dola/chat-auto',
+    platform: 'Dola',
+    operation: '视频生成（auto）',
     nodeType: 'video',
-    title: '豆包·文生视频',
-    description: '豆包 Seedance 2.0 接口式文生视频（异步轮询）：比例 / 时长 / 运镜',
+    title: 'Dola Seedance 2.5',
+    description: 'Dola 网页 UI 自动化生视频（Seedance 2.5）；时长只有 5 / 10 秒；需海外网络',
     group: 'web2api · 视频',
-    promptMode: 'plain',
-    fields: [MODEL_VIDEO_DOUBAO_API, RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_API, CAMERA_DOUBAO_VIDEO],
+    promptMode: 'chat-auto',
+    mediaMode: 'video',
+    model: 'Seedance 2.5',
+    fields: [RATIO_VIDEO_DOLA, DURATION_DOLA_AUTO],
     accepts: [IMAGE_REF],
     order: 12,
     async: true,
   },
   {
-    id: 'web2api:seedance-video',
-    tool: 'seedance/generate-video',
-    platform: 'Seedance',
-    operation: '文生视频',
+    id: 'web2api:dola-video-seedance20',
+    tool: 'dola/chat-auto',
+    platform: 'Dola',
+    operation: '视频生成（auto）',
     nodeType: 'video',
-    title: 'Seedance·文生视频',
-    description: 'Seedance 2.0 接口式文生视频（异步轮询）：时长最长 180 秒',
+    title: 'Dola Seedance 2.0',
+    description: 'Dola 网页 UI 自动化生视频（Seedance 2.0）；时长只有 5 / 10 秒；需海外网络',
     group: 'web2api · 视频',
-    promptMode: 'plain',
-    fields: [MODEL_VIDEO_SEEDANCE, RATIO_VIDEO_SEEDANCE, DURATION_SEEDANCE],
+    promptMode: 'chat-auto',
+    mediaMode: 'video',
+    model: 'Seedance 2.0',
+    fields: [RATIO_VIDEO_DOLA, DURATION_DOLA_AUTO],
     accepts: [IMAGE_REF],
     order: 13,
     async: true,
   },
+  {
+    id: 'web2api:dola-video-seedance10',
+    tool: 'dola/chat-auto',
+    platform: 'Dola',
+    operation: '视频生成（auto）',
+    nodeType: 'video',
+    title: 'Dola Seedance 1.0',
+    description: 'Dola 网页 UI 自动化生视频（Seedance 1.0）；时长只有 5 / 10 秒；需海外网络',
+    group: 'web2api · 视频',
+    promptMode: 'chat-auto',
+    mediaMode: 'video',
+    model: 'Seedance 1.0',
+    fields: [RATIO_VIDEO_DOLA, DURATION_DOLA_AUTO],
+    accepts: [IMAGE_REF],
+    order: 14,
+    async: true,
+  },
+  // —— 豆包接口式文生视频（Seedance 2.0 Mini / Fast）——
+  {
+    id: 'web2api:doubao-video-api-mini',
+    tool: 'doubao/generate-video',
+    platform: '豆包',
+    operation: '文生视频（接口）',
+    nodeType: 'video',
+    title: '豆包 Seedance 2.0 Mini（接口）',
+    description: '豆包接口式文生视频（Seedance 2.0 Mini，异步轮询）：比例 / 时长 / 运镜',
+    group: 'web2api · 视频',
+    promptMode: 'plain',
+    model: 'seedance_v2.0_mini',
+    fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_API, CAMERA_DOUBAO_VIDEO],
+    accepts: [IMAGE_REF],
+    order: 15,
+    async: true,
+  },
+  {
+    id: 'web2api:doubao-video-api-fast',
+    tool: 'doubao/generate-video',
+    platform: '豆包',
+    operation: '文生视频（接口）',
+    nodeType: 'video',
+    title: '豆包 Seedance 2.0 Fast（接口）',
+    description: '豆包接口式文生视频（Seedance 2.0 Fast，异步轮询）：比例 / 时长 / 运镜',
+    group: 'web2api · 视频',
+    promptMode: 'plain',
+    model: 'seedance_v2.0',
+    fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_API, CAMERA_DOUBAO_VIDEO],
+    accepts: [IMAGE_REF],
+    order: 16,
+    async: true,
+  },
+  // —— Seedance 独立平台（Fast / 2.0）——
+  {
+    id: 'web2api:seedance-video-fast',
+    tool: 'seedance/generate-video',
+    platform: 'Seedance',
+    operation: '文生视频',
+    nodeType: 'video',
+    title: 'Seedance Fast',
+    description: 'Seedance 平台接口式文生视频（Fast，异步轮询）：时长最长 180 秒',
+    group: 'web2api · 视频',
+    promptMode: 'plain',
+    model: 'fast',
+    fields: [RATIO_VIDEO_SEEDANCE, DURATION_SEEDANCE],
+    accepts: [IMAGE_REF],
+    order: 17,
+    async: true,
+  },
+  {
+    id: 'web2api:seedance-video-20',
+    tool: 'seedance/generate-video',
+    platform: 'Seedance',
+    operation: '文生视频',
+    nodeType: 'video',
+    title: 'Seedance 2.0',
+    description: 'Seedance 平台接口式文生视频（2.0，异步轮询）：时长最长 180 秒',
+    group: 'web2api · 视频',
+    promptMode: 'plain',
+    model: '2.0',
+    fields: [RATIO_VIDEO_SEEDANCE, DURATION_SEEDANCE],
+    accepts: [IMAGE_REF],
+    order: 18,
+    async: true,
+  },
+
+  // ==================== 音频 ====================
   {
     id: 'web2api:doubao-tts',
     tool: 'doubao/tts',
@@ -726,7 +804,7 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     description: 'seed-audio 音频生成：格式 / 语速 / 音量 / 音调可调',
     group: 'web2api · 音频',
     promptMode: 'plain',
-    fields: [MODEL_VOLC_AUDIO, FORMAT_VOLC_AUDIO, SPEED_VOLC_AUDIO, PITCH_VOLC_AUDIO, LOUDNESS_VOLC_AUDIO],
+    fields: [FORMAT_VOLC_AUDIO, SPEED_VOLC_AUDIO, PITCH_VOLC_AUDIO, LOUDNESS_VOLC_AUDIO],
     order: 11,
     async: false,
   },

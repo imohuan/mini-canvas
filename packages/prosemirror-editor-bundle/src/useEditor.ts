@@ -478,8 +478,9 @@ export function useEditor(
     let text = "";
     view.state.doc.descendants((node) => {
       if (node.type.name === "resource") {
-        // 纯文本 token 用节点唯一 id（改名稳定）；可读 name 只在文档/下拉展示
-        text += `@${node.attrs.id} `;
+        // 纯文本 token 用**可读名**（图片1 / 视频1 这种带序号的引用名）：
+        // 用户与后端拿到的是同一串人看得懂的文字；回查时 name 与 id 两种都认。
+        text += `@${node.attrs.name || node.attrs.id} `;
       } else if (node.isText) {
         // 过滤掉零宽空格（用于修复光标问题）
         text += node.text?.replace(/\u200B/g, "") || "";
@@ -496,8 +497,8 @@ export function useEditor(
     let text = "";
     view.state.doc.descendants((node) => {
       if (node.type.name === "resource") {
-        // 文本资源导出其正文；图片/视频导出节点 id token
-        text += node.attrs.value ? node.attrs.value : `@${node.attrs.id} `;
+        // 文本资源导出其正文；图片/视频导出**可读引用名** token（图片1 这种）
+        text += node.attrs.value ? node.attrs.value : `@${node.attrs.name || node.attrs.id} `;
       } else if (node.isText) {
         text += node.text?.replace(/\u200B/g, "") || "";
       } else if (node.isBlock && text.length > 0) {
@@ -901,7 +902,7 @@ export function useEditor(
         function collect(fragment: any) {
           fragment.forEach((node: any) => {
             if (node.type.name === "resource") {
-              text += `@${node.attrs.id} `;
+              text += `@${node.attrs.name || node.attrs.id} `;
             } else if (node.isText) {
               // 过滤掉零宽空格
               text += node.text?.replace(/\u200B/g, "") || "";

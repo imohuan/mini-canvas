@@ -60,19 +60,21 @@ describe('web2api 插件整装', () => {
     const { ctx } = await boot()
     const actions = actionsOf(ctx, 'image')
     const web = actions.filter((a) => a.id.startsWith('web2api:'))
-    // 四个图片渠道：豆包 / Dola / ChatGPT 官方 / GPT Image 2(API)
-    expect(web.length).toBeGreaterThanOrEqual(4)
-    expect(web[0].id).toBe('web2api:doubao-image-auto')
-    // 第一层下拉显示的是**大模型/渠道名**（具体子模型在第二个下拉里）
-    expect(web[0].title).toBe('豆包')
+    // 每个模型一条：豆包 3 + Dola 2 + ChatGPT 官方 + GPT Image 2(API)，共 7 条
+    expect(web.length).toBeGreaterThanOrEqual(7)
+    expect(web[0].id).toBe('web2api:doubao-image-seedream45')
+    // 第一个下拉显示的就是**具体模型名**（用户要求）
+    expect(web[0].title).toBe('豆包 Seedream 4.5')
     ctx.stop()
   })
 
   it('视频节点也有 web2api 动作，第一条同样是 auto 模式', async () => {
     const { ctx } = await boot()
     const web = actionsOf(ctx, 'video').filter((a) => a.id.startsWith('web2api:'))
-    expect(web.length).toBeGreaterThanOrEqual(4) // 豆包/dola auto + 豆包接口 + seedance
-    expect(web[0].id).toBe('web2api:doubao-video-auto')
+    // 豆包 auto 2 + Dola auto 3 + 豆包接口 2 + Seedance 2 = 9
+    expect(web.length).toBeGreaterThanOrEqual(9)
+    expect(web[0].id).toBe('web2api:doubao-video-fast')
+    expect(web[0].title).toBe('豆包 Seedance 2.0 Fast')
     ctx.stop()
   })
 
@@ -99,7 +101,7 @@ describe('web2api 插件整装', () => {
 
   it('按能力显隐：装配后 dola 视频时长仍只有 5 / 10 两档（不是滑块）', async () => {
     const { ctx } = await boot()
-    const dolaVideo = actionsOf(ctx, 'video').find((a) => a.id === 'web2api:dola-video-auto')!
+    const dolaVideo = actionsOf(ctx, 'video').find((a) => a.id === 'web2api:dola-video-seedance25')!
     const duration = dolaVideo.fields!.find((f) => f.kind === 'duration')!
     expect(duration.options?.map((o) => o.value)).toEqual(['5', '10'])
     ctx.stop()

@@ -57,7 +57,10 @@ describe('预置配置表', () => {
 
   it('auto 模式的四条动作都在（豆包/dola × 图片/视频）', () => {
     const autos = WEB2API_PRESETS.filter((p) => p.promptMode === 'chat-auto')
-    expect(autos.map((p) => p.tool + ':' + p.mediaMode).sort()).toEqual([
+    // 每个模型一条动作（用户要求模型直接进第一个下拉），所以数量会多；
+    // 这里只锁「两个平台 × 图片/视频 四种组合都覆盖到」。
+    const combos = [...new Set(autos.map((p) => p.tool + ':' + p.mediaMode))].sort()
+    expect(combos).toEqual([
       'dola/chat-auto:image',
       'dola/chat-auto:video',
       'doubao/chat-auto:image',
@@ -65,9 +68,21 @@ describe('预置配置表', () => {
     ])
   })
 
+  it('每个模型一条动作：标题就是具体模型名，且都带 model（第一个下拉列的就是它）', () => {
+    const autoWithModel = WEB2API_PRESETS.filter((p) => p.promptMode === 'chat-auto')
+    for (const p of autoWithModel) {
+      expect(p.model, p.id + ' 缺 model').toBeTruthy()
+      expect(p.title).toContain(p.model as string)
+    }
+    // 参数区**不再有模型下拉**（模型已经由第一个下拉决定）
+    for (const p of WEB2API_PRESETS) {
+      expect(p.fields.some((f) => f.kind === 'model'), p.id + ' 参数区不该再有模型').toBe(false)
+    }
+  })
+
   describe('按能力显隐', () => {
     it('dola 视频时长只有 5 / 10 两档（dola 平台只有这两档，不能给滑块）', () => {
-      const dolaVideo = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-video-auto')!
+      const dolaVideo = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-video-seedance25')!
       const duration = dolaVideo.fields.find((f) => f.kind === 'duration')!
       expect(duration.options?.map((o) => o.value)).toEqual(['5', '10'])
       // 只有两档 → 走按钮网格（无 min/max 就不是滑块）
@@ -75,15 +90,15 @@ describe('预置配置表', () => {
     })
 
     it('豆包 auto 视频时长上限 10 秒（服务端只到 10s，不能声明 15）', () => {
-      const doubaoVideo = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-video-auto')!
+      const doubaoVideo = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-video-fast')!
       const duration = doubaoVideo.fields.find((f) => f.kind === 'duration')!
       expect(duration.max).toBe(10)
       expect(duration.min).toBe(4)
     })
 
     it('豆包生图有 style，dola 图片没有（平台差异如实声明，不硬凑）', () => {
-      const doubaoImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-image-auto')!
-      const dolaImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-image-auto')!
+      const doubaoImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-image-seedream45')!
+      const dolaImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-image-seedream45')!
       expect(doubaoImage.fields.some((f) => f.kind === 'style')).toBe(true)
       expect(dolaImage.fields.some((f) => f.kind === 'style')).toBe(false)
     })
@@ -91,15 +106,19 @@ describe('预置配置表', () => {
     it('图片渠道齐了：豆包 / Dola / ChatGPT 官方 / GPT Image 2(API)', () => {
       const ids = presetsFor('image').map((p) => p.id)
       expect(ids).toEqual([
-        'web2api:doubao-image-auto',
-        'web2api:dola-image-auto',
+        // 豆包三个模型 + Dola 两个模型 + ChatGPT 官方 + GPT Image 2(API)
+        'web2api:doubao-image-seedream45',
+        'web2api:doubao-image-seedream50lite',
+        'web2api:doubao-image-seedream40',
+        'web2api:dola-image-seedream50pro',
+        'web2api:dola-image-seedream45',
         'web2api:chatgpt-image',
         'web2api:apimart-image',
       ])
     })
 
     it('Seedance 接口只有 16:9 / 9:16 两个比例（不能照抄豆包的七个）', () => {
-      const seedance = WEB2API_PRESETS.find((p) => p.id === 'web2api:seedance-video')!
+      const seedance = WEB2API_PRESETS.find((p) => p.id === 'web2api:seedance-video-fast')!
       const ratio = seedance.fields.find((f) => f.kind === 'ratio')!
       expect(ratio.options?.map((o) => o.value)).toEqual(['16:9', '9:16'])
     })

@@ -3,7 +3,11 @@
  * NodeTaskOverlay —— 节点卡片上的加载/进度覆盖层。
  *
  * 数据单一来源 = props.data.runState（插件经 doc.updateNodeRuntime 写，落盘不进撤销栈）。
- * 显隐规则：running 才出现；done/error/idle/缺省一律渲染空。
+ * 显隐规则：
+ * - running → 整卡加载态（流光百分比）；
+ * - error（失败 / 暂停 / 中断 / 取消）→ **卡片上一条小提示**（用户报过：任务失败后
+ *   卡片什么都不显示，看着像还卡在进度上，其实任务早结束了）。提示只在卡片上、不挡拖拽；
+ * - done / idle / 缺省 → 渲染空。
  *
  * 视觉要求（用户明确）：
  * 版式照用户给的参考稿（node_loading_ui_showcase.html）重做 —— **流光扰动**：
@@ -53,6 +57,15 @@ let timerId: ReturnType<typeof setInterval> | null = null
 
 const state = computed<NodeRunState>(() => readRunState(props.data))
 const running = computed(() => state.value.status === 'running')
+/**
+ * 失败态也要在卡片上留个交代。
+ *
+ * 为什么必须有（用户实测反馈）：任务失败 / 暂停 / 轮询中断时，running 覆盖层消失，
+ * 卡片就什么都不显示了 —— 用户看到的是一个没反应的节点，还以为是卡在进度上。
+ * 这里用一条不与内容打架的小条把原因说清楚（文案就是服务端/插件写的那句中文）。
+ */
+const failed = computed(() => state.value.status === 'error')
+const failedText = computed(() => state.value.message || '执行失败')
 const percent = computed(() =>
   typeof state.value.progress === 'number' && Number.isFinite(state.value.progress)
     ? Math.max(0, Math.min(100, Math.round(state.value.progress)))
@@ -131,6 +144,12 @@ function onCancel(): void {
     <button class="task-overlay-cancel" type="button" title="取消任务" @click.stop="onCancel">
       取消
     </button>
+  </div>
+
+  <!-- 失败/暂停：贴卡片顶部的一条小提示（不遮内容、不挡拖拽；根 pointer-events: none） -->
+  <div v-else-if="failed" class="task-failed" role="status" :title="failedText" data-testid="task-failed">
+    <span class="task-failed-icon" aria-hidden="true">!</span>
+    <span class="task-failed-text">{{ failedText }}</span>
   </div>
 </template>
 
@@ -437,5 +456,49 @@ html.dark .ld-prompt {
   .ld-dot {
     animation: none;
   }
+}
+
+/* ============================================================
+   失败 / 暂停：卡片上一条小提示
+   只占卡片顶部一条，不遮内容、不挡拖拽（根不接指针事件）；
+   颜色走主题 token，红底红字，一眼能看出「这次没成」。
+   ============================================================ */
+.task-failed {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border-radius: 7px;
+  background: var(--ui-danger-soft, color-mix(in srgb, #ef4444 16%, transparent));
+  color: var(--ui-danger, #ef4444);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  pointer-events: none;
+  animation: ld-in 0.18s ease-out;
+}
+.task-failed-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--ui-danger, #ef4444);
+  color: var(--ui-panel, #fff);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+}
+.task-failed-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

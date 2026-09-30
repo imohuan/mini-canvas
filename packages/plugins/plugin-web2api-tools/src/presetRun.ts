@@ -66,12 +66,14 @@ function cleanValues(values: Record<string, unknown>): Record<string, unknown> {
 /** 组一次工具调用的参数（导出以备单测直接核对参数名） */
 export function buildToolArgs(input: RunInput): Record<string, unknown> {
   const { preset, prompt, values, referenceImages } = input
+  // 模型来自**动作本身**（第一个下拉选的就是模型），不再从参数 values 里取
+  const model = preset.model ?? values.model
   if (preset.promptMode === 'chat-auto') {
     const args: Record<string, unknown> = {
       prompt: buildChatAutoPrompt(
         {
           mode: preset.mediaMode ?? (preset.nodeType === 'video' ? 'video' : 'image'),
-          model: values.model,
+          model,
           ratio: values.ratio,
           durationSec: values.durationSec,
           style: values.style,
@@ -84,6 +86,8 @@ export function buildToolArgs(input: RunInput): Record<string, unknown> {
   }
   // plain：参数直接传（文本参数名随平台而异）
   const args: Record<string, unknown> = { ...cleanValues(values) }
+  // 模型烘焙进参数（值用平台那边的 id，如 seedance_v2.0_mini）
+  if (model !== undefined && model !== '') args.model = model
   args[textKeyOf(preset.tool)] = prompt
   if (referenceImages.length > 0) args.referenceImages = referenceImages
   return args

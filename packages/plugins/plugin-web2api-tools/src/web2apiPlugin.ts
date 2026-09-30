@@ -122,8 +122,20 @@ export class AudioService extends Service implements AudioNodeService {
  *  画布里的素材是 URL，直接透传，能不能取到由服务端决定） */
 function referenceImagesOf(resources: ToolResource[] | undefined): string[] {
   return (resources ?? [])
-    .filter((r) => r.kind === 'image' && typeof r.url === 'string' && r.url)
+    // 用户要求：连进来的图片/视频**都要传**（不 @ 也要传）。
+    .filter((r) => (r.kind === 'image' || r.kind === 'video') && typeof r.url === 'string' && r.url)
     .map((r) => r.url as string)
+}
+
+/**
+ * 文本类素材 → 追加进 prompt 的一段。
+ * 服务端没有"文本附件"这个入参位（只有 referenceImages），文本本来就是要进提示词的东西，
+ * 所以这里拼成提示词的一部分；连进来的文本即使没 @ 也带上（用户要求）。
+ */
+function textBlocksOf(resources: ToolResource[] | undefined): string[] {
+  return (resources ?? [])
+    .filter((r) => r.kind === 'text' && typeof r.value === 'string' && r.value.trim() !== '')
+    .map((r) => r.value as string)
 }
 
 export function apply(ctx: Context) {
@@ -188,9 +200,12 @@ export function apply(ctx: Context) {
         pollIntervalMs: web2apiConfigFrom(ctx).pollIntervalMs,
         pollTimeoutMs: web2apiConfigFrom(ctx).timeoutMs,
         async run(input: BarRunInput, runCtx: BarRunContext) {
+          // 连进来的文本素材也带上：拼在用户提示词之后（没 @ 也带，用户要求）
+          const upstreamText = textBlocksOf(input.resources)
+          const prompt = [input.prompt ?? '', ...upstreamText].filter((s) => s.trim() !== '').join('\n')
           const runInput: RunInput = {
             preset,
-            prompt: input.prompt ?? '',
+            prompt,
             values: (input.values ?? {}) as Record<string, unknown>,
             referenceImages: referenceImagesOf(input.resources),
           }

@@ -9,7 +9,7 @@ import type { ToolPollFn, ToolResult } from '@mini-canvas/kernel'
 import { runPreset, pollOnce, makeTaskPoll, buildToolArgs, type RunDeps } from '../presetRun'
 import { WEB2API_PRESETS } from '../presets'
 
-const doubaoVideoAuto = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-video-auto')!
+const doubaoVideoAuto = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-video-fast')!
 const doubaoTts = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-tts')!
 const volcAudio = WEB2API_PRESETS.find((p) => p.id === 'web2api:volcengine-audio')!
 
@@ -51,10 +51,11 @@ describe('buildToolArgs', () => {
     const args = buildToolArgs({
       preset: doubaoVideoAuto,
       prompt: '一只猫在跑',
-      values: { model: 'Seedance 2.0 Fast', ratio: '16:9', durationSec: 10 },
+      values: { ratio: '16:9', durationSec: 10 },
       referenceImages: [],
     })
     expect(args.tool).toBeUndefined()
+    // 模型来自**动作本身**（第一个下拉选的就是模型），不再从 values 里取
     expect(args.prompt).toBe('/video(model:"Seedance 2.0 Fast", ratio:"16:9", durationSec:10) 一只猫在跑')
     expect(args.ratio).toBeUndefined()
     expect(args.model).toBeUndefined()

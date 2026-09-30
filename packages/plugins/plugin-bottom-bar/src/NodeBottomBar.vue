@@ -39,6 +39,7 @@ import {
   makeResourceResolver,
   materialCards,
   toEditorResources,
+  toToolResources,
   type UpstreamMaterial,
 } from './panelSource'
 import { readRunState } from './runState'
@@ -287,9 +288,14 @@ async function onRun(): Promise<void> {
   if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
   // 收起底栏：像下拉选完那样收起来，专注看节点上的进度覆盖层
   submitted.value = true
+  // ★ 把上游连进来的素材一并传下去（不只是 @ 引用的那些）——
+  //   用户要求：连了图片/视频/文字就要都上传给后端，没 @ 也要传。
+  //   这里用 materials 而不是编辑器里解析出的引用：编辑器只认 @ 过的 token，
+  //   而"连进来就算素材"是 v1 既有语义（useUpstreamResources 也是全收）。
   await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
     prompt: prompt.value,
     values: values.value,
+    resources: toToolResources(materials.value),
   })
   resetSubmitted()
 }
@@ -676,6 +682,61 @@ const ICON_SPARKLE =
 }
 .nb-editor :deep(.resource-node) {
   border-bottom-color: color-mix(in srgb, var(--ui-ink, #18202b) 45%, transparent);
+}
+
+/*
+ * @ 引用在输入框里的样子：**卡片**（用户要求，替换原来"缩略图 + 下划线"）。
+ * 圆角小框 + 缩略图/图标 + 名字，整体贴着文字基线，像一颗内联 chip。
+ * 颜色一律走主题变量；尺寸按 13px 正文配。
+ */
+.nb-editor :deep(.resource-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 160px;
+  height: 22px;
+  padding: 0 7px 0 3px;
+  margin: 0 2px;
+  border: 1px solid color-mix(in srgb, var(--ui-ink, #18202b) 18%, transparent);
+  border-radius: 6px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.04));
+  vertical-align: bottom;
+  line-height: 1;
+  /* 覆盖编辑器公共样式里那条下划线（卡片不需要它） */
+  border-bottom-width: 1px;
+}
+.nb-editor :deep(.resource-chip-thumb) {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex: none;
+  pointer-events: none;
+}
+.nb-editor :deep(.resource-chip-icon) {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.nb-editor :deep(.resource-chip-icon svg) {
+  width: 14px;
+  height: 14px;
+}
+.nb-editor :deep(.resource-chip-name) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #18202b);
+}
+/* 选中态：跟主题强调色走 */
+.nb-editor :deep(.resource-chip.ProseMirror-selectednode),
+.nb-editor :deep(.resource-chip.resource-node-selected) {
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
 }
 .nb-placeholder {
   position: absolute;
