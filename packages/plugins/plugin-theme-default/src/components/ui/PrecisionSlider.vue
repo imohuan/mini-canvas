@@ -81,6 +81,23 @@ const percent = computed(() => valueToPct(modelLocal.value))
 const dragging = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 
+/**
+ * 拇指半径（px）：拇指中心的可行驶范围要比轨道两端各内缩这么宽，拇指才收在轨道里。
+ *
+ * 为什么必须留（用户实测截图）：拇指 16px、按百分比定位 + 自身左移半个身位，
+ * 拉到 100% 时右半颗球（8px）戳出轨道外 —— 外层下拉是 overflow:auto，
+ * 于是整块面板冒出横向滚动条。
+ *
+ * 做法：拇指的 left 取「半径 + (轨道宽 - 2×半径) × 百分比」，即**中心**只在
+ * 「轨道内缩半径」这段里跑；0% / 100% 时整颗球都贴着轨道两端、不越界。
+ */
+const THUMB_R = 8
+
+/** 拇指中心的横向位置（CSS calc 值）：percent 是 0-100 的纯数字 */
+const thumbLeft = computed(
+  () => 'calc(' + THUMB_R + 'px + (100% - ' + THUMB_R * 2 + 'px) * ' + percent.value / 100 + ')',
+)
+
 // 拖动锚点：按下次拖动/换修饰键时重置
 let anchor = { clientX: 0, value: 0, multiplier: 1 }
 
@@ -91,7 +108,10 @@ function stepMultiplier(e: PointerEvent | KeyboardEvent): number {
 }
 
 function valueFromPointer(el: HTMLElement, clientX: number): number {
-  const rect = el.getBoundingClientRect()
+  // 换算基准 = 拇指中心能跑的那段（轨道两端各内缩一个半径），与 thumbLeft 的
+  // calc 口径严格一致；否则指针停在跑道两端时算出的值与拇指落点会差一个半径。
+  const root = el.getBoundingClientRect()
+  const rect = { left: root.left + THUMB_R, width: Math.max(0, root.width - THUMB_R * 2) }
   if (!rect.width) return modelLocal.value
   const pct = clampPct(((clientX - rect.left) / rect.width) * 100)
   return pctToValue(pct)
@@ -136,7 +156,10 @@ function onPointerMove(e: PointerEvent): void {
     // 基准与普通一致（满轨道=全量程），只缩放乘子 → 同样物理拖动 ctrl 只走十分之一，便于精确停格。
     const span = props.max - props.min
     if (span <= 0) return
-    const dxPct = ((e.clientX - anchor.clientX) / el.clientWidth) * 100
+    // 基准同样取轨道宽度（与 valueFromPointer 一致），免得两种拖动模式手感不同
+    const laneW = Math.max(0, el.clientWidth - THUMB_R * 2)
+    if (laneW <= 0) return
+    const dxPct = ((e.clientX - anchor.clientX) / laneW) * 100
     modelLocal.value = snap(anchor.value + (dxPct / 100) * span * m)
   }
   emitLive()
@@ -231,8 +254,8 @@ function onKeydown(e: KeyboardEvent): void {
     <div class="ps-track">
       <div class="ps-fill" :style="{ width: percent + '%' }"></div>
     </div>
-    <!-- 圆球：位置完全由 percent 派生，绝不另存 -->
-    <div class="ps-thumb" :style="{ left: percent + '%' }"></div>
+    <!-- 圆球：位置完全由 percent 派生（中心只在两端内缩半径的跑道里跑），绝不另存 -->
+    <div class="ps-thumb" :style="{ left: thumbLeft }"></div>
   </div>
 </template>
 

@@ -467,8 +467,10 @@ const ICON_SPARKLE =
   flex-direction: column;
   gap: 8px;
   box-sizing: border-box;
+  /* 左右多留一点（用户实测反馈：右侧内容贴到边、看着像出屏）：
+     上下 8、左右 12 */
   min-width: 360px;
-  padding: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
   background: var(--ui-panel, #fff);
@@ -535,7 +537,7 @@ const ICON_SPARKLE =
 /* 展开按钮浮在右上角（参考图 right-2 top-2，28×28） */
 .nb-expand {
   position: absolute;
-  right: 8px;
+  right: 12px;
   top: 8px;
 }
 
@@ -771,6 +773,8 @@ const ICON_SPARKLE =
   min-width: 0;
 }
 .nb-field--action {
+  /* 两个下拉同一档最小宽度，底行看起来齐整 */
+  min-width: 148px;
   max-width: 200px;
 }
 /* 下拉去边框、透明底（参考图的「文字 + ⌄」），hover 才给浅底 */
@@ -803,7 +807,15 @@ const ICON_SPARKLE =
 /* 参数合并下拉：允许收缩，超长省略（不然会把底行挤爆、模型名被裁） */
 .nb-field--params {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: 148px;
+}
+/* 触发器要填满这块最小宽度（用户实测：不填满时它按内容收缩，只剩 ~100px） */
+.nb-field--params :deep(.tpg-root),
+.nb-field--params :deep(.tpg-trigger) {
+  width: 100%;
+}
+.nb-field--params :deep(.tpg-trigger) {
+  justify-content: flex-start;
 }
 
 .nb-actions {

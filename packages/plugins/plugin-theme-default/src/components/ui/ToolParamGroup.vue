@@ -123,6 +123,9 @@ const summary = computed(() => {
 <style scoped>
 .tpg-root {
   display: inline-flex;
+  /* 填满宿主给的宽度（用户实测反馈：不填满时触发器按内容收缩，参数下拉只有 ~100px，
+     看着又挤又短，和左边的模型下拉不成对）。宿主那边给多宽就多宽。 */
+  width: 100%;
   min-width: 0;
 }
 /* 触发器照参考：h32、圆角 8、透明底、hover 浅底、13px 正文 */
@@ -131,6 +134,9 @@ const summary = computed(() => {
   align-items: center;
   gap: 4px;
   height: 32px;
+  /* 跟着根一起撑满；摘要仍靠 .tpg-text 的 ellipsis 截断，不会把底行挤爆 */
+  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   padding: 4px 8px;
   border: 0;

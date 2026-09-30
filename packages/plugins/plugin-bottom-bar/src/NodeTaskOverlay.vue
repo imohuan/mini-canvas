@@ -369,6 +369,14 @@ html.dark .ld-pct {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.5;
+  /* 最多 3 行，超出省略（用户要求）：错误原因可能很长（含本地路径），
+     不封顶会盖住中间的标记/百分比、把整块覆盖层的重心顶歪。 */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   /* 主题色白名单: 提示文案（亮），照参考稿 */
   color: #475569;
 }
