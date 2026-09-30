@@ -104,6 +104,14 @@ export interface BarAction {
    * 收不到 taskId（还没提交出去）时不调用 —— 此时 abort 已经够了。
    */
   onCancel?(taskId: string, ctx: BarRunContext): void | Promise<void>
+  /**
+   * 本动作自己声明的轮询节奏（可选；缺省用底栏共享的默认值）。
+   *
+   * 为什么给动作留口子：视频这类长任务，共享的 5 分钟超时 / 650ms 轮询不合适 ——
+   * 但底栏是**共享组件**，不能为某一个动作改它的口径。动作声明自己的节奏最干净。
+   */
+  pollIntervalMs?: number
+  pollTimeoutMs?: number
 }
 
 /** 结果写入器：把动作产物写进节点（走 doc.updateNode，是作品、进历史） */

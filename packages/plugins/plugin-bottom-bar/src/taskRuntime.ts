@@ -64,6 +64,9 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT
   const throttleMs = deps.throttleMs ?? DEFAULT_THROTTLE
   const now = deps.now ?? Date.now
+  // 动作可以覆盖共享默认值（长视频任务不能被共享的 5 分钟超时误杀）
+  const actionInterval = action.pollIntervalMs
+  const actionTimeout = action.pollTimeoutMs
 
   const runCtx: BarRunContext = {
     nodeId,
@@ -144,12 +147,12 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
       writeRuntime(next)
       lastWriteAt = t
     }
-    if (t - startedAt > timeoutMs) {
+    if (t - startedAt > (actionTimeout ?? timeoutMs)) {
       const rs = errorState(action.id, '任务超时（未在预期时间内完成）')
       writeRuntime(rs)
       return { ok: false, error: rs.message, taskId: next.taskId }
     }
-    await sleep(interval)
+    await sleep(actionInterval ?? interval)
   }
 
   /** 终态（不节流）：写 done/error，再交给写入器（除非动作声明了 self） */
@@ -248,6 +251,10 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
       }
       lastState = progressState(lastState, state)
       writeRuntime(lastState)
+      // ★ 等「interval」毫秒再问下一次 —— 续查循环漏了这一行，会变成疯狂连打服务端
+      //   （实测每秒几百次 /mcp 请求 + 每帧全图写盘，5 秒拖垮 dev server）。
+      //   间隔与主循环（runAction）同口径：deps.interval ?? DEFAULT_INTERVAL。
+      await sleep(deps.interval ?? DEFAULT_INTERVAL)
     }
   } catch (err) {
     const rs = errorState(actionId, toError(err, '任务执行中断').error ?? '任务执行中断')

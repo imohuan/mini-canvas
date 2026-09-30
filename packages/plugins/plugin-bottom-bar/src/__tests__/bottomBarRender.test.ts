@@ -214,7 +214,7 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
 })
 
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
-  it('running + 有百分比 → 渲染百分比与文案', async () => {
+  it('running + 有百分比 → 渲染超大百分比、耗时胶囊与文案（照参考稿的 3 元素版式）', async () => {
     const html = await render(
       NodeTaskOverlay as Component,
       '35',
@@ -222,18 +222,24 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
       makeCtx({ selectedIds: ['35'] }),
     )
     expect(html).toContain('task-overlay')
-    expect(html).toContain('42%')
+    // 数字与百分号是两个元素（中间超大号 + 小号 %），所以分开断言
+    expect(html).toContain('>42<')
+    expect(html).toContain('%')
     expect(html).toContain('生成中…')
+    // 流光层 3 个光斑（暗/亮两套配色靠 CSS，DOM 里就这 3 个）
+    expect(html).toContain('ld-blob--1')
+    expect(html).toContain('ld-blob--3')
   })
 
-  it('running 但外部只给阶段（无 progress）→ 走不确定态', async () => {
+  it('running 但外部只给阶段（无 progress）→ 显示占位而不是编一个百分比', async () => {
     const html = await render(
       NodeTaskOverlay as Component,
       '35',
       { runState: { status: 'running', message: '排队中' } },
       makeCtx({ selectedIds: ['35'] }),
     )
-    expect(html).toContain('is-indeterminate')
+    expect(html).toContain('···')
+    expect(html).toContain('排队中')
   })
 
   it('done / error / idle / 缺省 → 一律渲染空', async () => {

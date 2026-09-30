@@ -110,7 +110,7 @@ const currentId = ref('')
 const currentAction = computed<BarAction | undefined>(() => actions.value.find((a) => a.id === currentId.value))
 
 /**
- * 参数值。**优先用上次留在节点 data 上的那份**（`data.web2apiParams`）。
+ * 参数值。**优先用上次留在节点 data 上的那份**（`data.barValues`）。
  * 为什么：用户要求「下次点进来还是上一次提交的数据，不要清空」—— 参数像输入框一样属于
  * 「我正在准备的作品」，不该因为收起再打开就回到默认值。
  */
@@ -163,9 +163,14 @@ function selectAction(id: string): void {
   const prev = currentAction.value
   if (prev?.onDeselect) prev.onDeselect(props.id)
   currentId.value = id
-  // 换动作时**保留**用户已经调过的参数（按 key 覆盖到新动作的默认值上）。
-  // 用户要求：再点进来还是上次提交的那份数据，不要被清空回默认。
-  values.value = { ...defaultsOf(currentAction.value), ...values.value }
+  // 换动作时**保留**用户已经调过的参数（用户要求：再点进来还是上次那套，不要清空回默认），
+  // 但**只保留新动作也声明了的 key** —— 否则旧动作的值会跟着发出去（实测：先选 Dola 视频的
+  // model，再切到火山音频，model 还是 "Seedance 2.5"，把正确的 seed-audio-1.0 覆盖掉了）。
+  const kept: Record<string, unknown> = {}
+  for (const p of (currentAction.value?.fields ?? []) as ToolParamDef[]) {
+    if (p.key in values.value) kept[p.key] = values.value[p.key]
+  }
+  values.value = { ...defaultsOf(currentAction.value), ...kept }
   currentAction.value?.onSelect?.(props.id)
 }
 
@@ -182,6 +187,23 @@ function persistValues(): void {
     /* 节点已不在等情况：忽略 */
   }
 }
+
+/**
+ * 参数落盘**防抖**：拖动滑块会逐帧发 change。
+ * 每帧都 doc.updateNode 的话会写几千次历史快照（撤销栈被撑爆、整图 JSON 反复进 localStorage）。
+ * 内存里的 values 仍是即时的（界面立刻跟手），只是落盘攒一拍。
+ */
+let persistTimer: ReturnType<typeof setTimeout> | null = null
+function persistValuesSoon(): void {
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    persistValues()
+  }, 400)
+}
+onBeforeUnmount(() => {
+  if (persistTimer) clearTimeout(persistTimer)
+})
 
 // —— 提示词（promptBinding:'text' 时与 data.text 双向绑定） ——
 const prompt = ref(typeof props.data?.text === 'string' ? props.data.text : '')
@@ -274,7 +296,7 @@ async function onRun(): Promise<void> {
 
 function onFieldChange(key: string, v: string | number | boolean): void {
   values.value = { ...values.value, [key]: v }
-  persistValues()
+  persistValuesSoon()
 }
 
 /** 参数区：把只读读数拼进「比例·画质·2K·1张」那类紧凑展示（参考图是一串点分） */

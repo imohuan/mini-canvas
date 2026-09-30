@@ -174,6 +174,9 @@ export function apply(ctx: Context) {
         needsPrompt: true,
         fields: preset.fields.map((f) => ({ ...f })),
         order: preset.order,
+        // 轮询节奏用插件自己的配置（设置面板里那两项由此生效；共享默认 5 分钟会误杀长视频）
+        pollIntervalMs: web2apiConfigFrom(ctx).pollIntervalMs,
+        pollTimeoutMs: web2apiConfigFrom(ctx).timeoutMs,
         async run(input, runCtx: BarRunContext) {
           const runInput: RunInput = {
             preset,
