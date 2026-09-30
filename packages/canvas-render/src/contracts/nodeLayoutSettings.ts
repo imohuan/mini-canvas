@@ -48,7 +48,7 @@ export interface GenPanelMetrics {
 
 /** 与 theme-default Config 同值（读不到配置时的回落；也是"视觉默认值"的单一出处） */
 export const DEFAULT_GEN_PANEL_METRICS: GenPanelMetrics = Object.freeze({
-  imageWidth: 650,
+  imageWidth: 660,
   textWidth: 520,
   editorMinHeight: 64,
   editorMaxHeight: 220,

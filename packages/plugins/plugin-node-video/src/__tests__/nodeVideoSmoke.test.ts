@@ -53,13 +53,13 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('三段展示都注册：in + out:top + out:bottom', async () => {
+  it('展示段注册：in + out:top（底栏搬进 plugin-bottom-bar，本包不再自占 out:bottom）', async () => {
     const { ctx } = boot()
     await ctx.start()
     const registry = ctx.get<NodeRegistry>('nodeRegistry')
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'in')).toBeTruthy()
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:top')).toBeTruthy()
-    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:bottom')).toBeTruthy()
+    expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'out:bottom')).toBeUndefined()
     // 壳没注册的区域不该凭空多出来
     expect(resolveSegment(registry, VIDEO_NODE_TYPE, 'title')).toBeUndefined()
     ctx.stop()

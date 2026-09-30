@@ -14,6 +14,8 @@ import {
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
+  NODE_Z,
+  NODE_SELECTED_Z,
 } from '../canvasHostCore'
 
 function makeStore(): NodeStore {
@@ -35,6 +37,8 @@ describe('nodesFromStore', () => {
       type: 'text',
       position: { x: 10, y: 20 },
       data: { text: 'hi' },
+      // 普通节点显式落 NODE_Z（不再靠 VueFlow 默认 0/DOM 顺序）
+      zIndex: NODE_Z,
     })
     // data 是浅拷贝：改 flow 的 data 不污染内核 store
     flow[0].data.text = 'MUTATED'
@@ -52,6 +56,20 @@ describe('nodesFromStore', () => {
     const withSel = nodesFromStore(s, new Set(['a']))
     expect(withSel.find((n) => n.id === 'a')!.selected).toBe(true)
     expect(withSel.find((n) => n.id === 'b')!.selected).toBe(false)
+  })
+
+  it('选中节点抬到普通节点之上（否则重叠时被后建的节点盖住 —— 2026-09-30 用户实测）', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'a' },
+      { type: 'image', position: { x: 10, y: 10 }, id: 'b' },
+    ])
+    const flow = nodesFromStore(s, new Set(['a']))
+    const zOf = (id: string): number => flow.find((n) => n.id === id)!.zIndex ?? 0
+    // 选中抬层：两层 z 相同就只由 DOM 顺序决定谁在上面，后建的节点会盖住选中的那个
+    expect(zOf('a')).toBeGreaterThan(zOf('b'))
+    // 但仍必须在「置顶连线」之下 —— 用户要的是「连线显示在最上层」时能压过选中节点
+    expect(zOf('a')).toBeLessThan(1001)
   })
 
   it('parentId/size 投影：parentId → parentNode（VueFlow 父子字段）、size → style', () => {
@@ -79,9 +97,13 @@ describe('nodesFromStore', () => {
     // 外层组 depth0 → -2（垫底）；内层组 depth1 → -1（盖在外层组上，仍在边之下）
     expect(flow.find((n) => n.id === g)!.zIndex).toBe(-3)
     expect(flow.find((n) => n.id === 'inner')!.zIndex).toBe(-2)
-    // 普通类型无 zIndex（走 VueFlow 默认 0）
+    // 普通类型走 NODE_Z（显式分层；不再靠 VueFlow 默认 0 + DOM 顺序）
     const textId = s.addNode('text', { x: 10, y: 10 })
-    expect(nodesFromStore(s).find((n) => n.id === textId)!.zIndex).toBeUndefined()
+    expect(nodesFromStore(s).find((n) => n.id === textId)!.zIndex).toBe(NODE_Z)
+    // 相对次序不变：分组垫底 < 连线（VueFlow 默认 0）< 普通节点 < 选中节点 < 置顶连线
+    expect(flow.find((n) => n.id === g)!.zIndex!).toBeLessThan(0)
+    expect(NODE_Z).toBeLessThan(NODE_SELECTED_Z)
+    expect(NODE_SELECTED_Z).toBeLessThan(1001)
     void g2
   })
   it('data.isTemp 节点：在 VueFlow DTO 上关掉 draggable/selectable/deletable/focusable（防 pane click removeSelectedElements 误删）', () => {

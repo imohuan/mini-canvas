@@ -16,8 +16,10 @@ import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
-import ImageGeneratePanel from './ImageGeneratePanel.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
+import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+import { writeGeneratedImage, type ImageRunDeps } from './imageRun'
+import { createImageOpsWriteDeps } from './imageApplierDeps'
 import { beginCrop, beginExpand, endEdit } from './cropSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
@@ -103,15 +105,44 @@ export function apply(ctx: Context) {
   // 1. 构造即上架 'image' 服务（super(ctx,'image') → ctx.provide，随插件 scope 回收）
   const image = new ImageService(ctx)
 
+  // 1.5 底栏动作（T8：底部生成栏搬进 plugin-bottom-bar，本包只发布动作与写入器）
+  //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
+  const ops = createImageOps(ctx)
+  const registerBar = (): boolean => {
+    if (!ctx.tryGet('nodeBar')) return false
+    // AI 生成图片：每个 produces:'image' 的工具一条动作（输入框是临时的，发送时组装）
+    publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
+    // 旋转 / 下载：即时动作（自己已经写好节点），不经过写入器
+    registerBarAction(ctx, {
+      id: 'image.rotate', types: ['image'], title: '旋转', apply: 'self', order: 90,
+      description: '把图片旋转 90°（可撤销）',
+      run: async (_input, runCtx) => ((await rotateImage(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '旋转失败' }),
+    })
+    registerBarAction(ctx, {
+      id: 'image.download', types: ['image'], title: '下载', apply: 'self', order: 91,
+      description: '把图片保存到本地',
+      run: async (_input, runCtx) => ((await downloadImageNode(ops, runCtx.nodeId)) ? { ok: true } : { ok: false, error: '下载失败' }),
+    })
+    // image 写入器：量尺寸 → 一次 patch 写完 → 清旧描述字段（复用 writeGeneratedImage 的规矩）
+    const writeDeps: ImageRunDeps = createImageOpsWriteDeps(ctx)
+    registerBarApplier(ctx, 'image', (nodeId, result) => {
+      const url = result.urls?.[0]
+      if (!url) return
+      void writeGeneratedImage(nodeId, url, writeDeps)
+    })
+    return true
+  }
+  if (!registerBar()) {
+    // bottom-bar 还没装（装配顺序在后/热装）：等它上架再注册一次
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerBar()) off.dispose()
+    })
+  }
+
   // 2. 注册节点类型：create 委托服务（同一实现）。create 只收 position → 建默认空图节点。
   //    内容类型声明：image 输出产 image；输入口收 text+image（文生图/图生图），视频喂不进图片。
-  //    segments：除 content 外再挂"顶部操作条 / 底部生成面板"两段 —— 壳（BaseNode）注册了段才渲染，
-  //    段组件只收到 { id, data }，选中态由组件自己订阅内核 selection（useSoleNodeSelected：
-  //    仅"恰好选中一个且是我"时显示，多选时上下控制栏一起收起）。
-  //    底部面板承担两件事：① 生成控制栏（选模型/参数/写提示词 → 调 ctx.tools 出图）；
-  //    ② 图片本身的加工（旋转/下载）。既有能力与生成共存，不互相挡路。
-  //    注意：面板**不注册任何工具**（模型提供方由独立工具插件经 ctx.tools.register 提供），
-  //    本包只消费 ctx.tools —— 加一个模型不用改本包。
+    //    segments：除 content 外再挂"顶部操作条"一段 —— 壳（BaseNode）注册了段才渲染。
+    //    底部栏（out:bottom）搬进 plugin-bottom-bar（T8）：动作与写入器在上面 1.5 里注册。
   ctx.nodes.register({
     type: 'image',
     label: '图片',
@@ -130,7 +161,6 @@ export function apply(ctx: Context) {
     in: ImageContent,
     segments: {
       'out:top': ImageTopToolbar,
-      'out:bottom': ImageGeneratePanel,
       // 编辑浮层（裁剪框/扩展框）画在**卡片外面**：内容段住在 overflow:hidden 的裁剪层里，
       // 浮层挂那儿会被卡片边界切掉（用户实测报的「裁剪区域被节点切掉」）。
       // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
@@ -144,7 +174,6 @@ export function apply(ctx: Context) {
   // 3. 命令：界面按钮与命令走**同一批实现**（uploadImage/cropImage/rotateImage/downloadImageNode）——
   //    按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //    payload 约定：{ nodeId: string }（节点级操作）；裁剪确认额外给 rect（图片像素矩形）。
-  const ops = createImageOps(ctx)
   ctx.commands.register({
     id: 'image.upload',
     title: '上传图片',

@@ -22,6 +22,13 @@ export interface MenuPosition {
   top: string;
   origin?: string; // 动画原点，如 "top left", "bottom right"
   side?: 'top' | 'bottom'; // 菜单显示在触发点的上方还是下方
+  /**
+   * 触发点（光标）的视口坐标。给了它，菜单就能用**自己真实测量的尺寸**决定上下翻转，
+   * 而不是拿写死的高度估算 —— 估大了会把明明放得下的菜单顶到屏幕上方（实测 bug）。
+   * 自定义 mention-menu 插槽可以忽略这两个字段。
+   */
+  anchorTop?: number;
+  anchorBottom?: number;
 }
 
 export interface PreviewPosition {

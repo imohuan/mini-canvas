@@ -1,4 +1,11 @@
 <template>
+  <!--
+    Teleport 到 body 是**必须**的：菜单用 position:fixed + 视口坐标定位，
+    而画布节点壳会给插槽层加 transform（反缩放）——带 transform 的祖先会成为
+    fixed 的包含块，坐标被整体平移，菜单就跑到左上角并塌成 0×0（实测复现）。
+    挪到 body 后不再有任何 transform 祖先，fixed 按视口定位才正确。
+  -->
+  <Teleport to="body">
   <div v-show="visible" ref="menuRef" class="mention-menu" :style="dynamicStyle">
     <div ref="contentRef" class="menu-content">
       <template v-for="category in categoryOrder" :key="category">
@@ -41,6 +48,7 @@
       </template>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -55,6 +63,11 @@ const props = defineProps<{
   categoryOrder: string[]
   position: MenuPosition
   activeIndex: number
+  /**
+   * 量完自身尺寸后的回填口：调用方据此用**真实高度**决定上下翻转。
+   * 不传时退化为使用传入的估算位置（自定义插槽/旧调用方兼容）。
+   */
+  reflow?: (rect: { width: number; height: number }) => void
 }>()
 
 const emit = defineEmits<{
@@ -130,6 +143,20 @@ watch(() => props.activeIndex, () => {
     scrollToActiveItem()
   })
 })
+
+/**
+ * 用**自己真实的尺寸**回报给调用方，让它重算上下翻转。
+ * 时机：可见之后 + 内容变化之后各量一次（菜单高度随筛选结果变）。
+ */
+function reportSize() {
+  nextTick(() => {
+    if (!props.reflow || !menuRef.value) return
+    const rect = menuRef.value.getBoundingClientRect()
+    if (rect.width > 0 || rect.height > 0) props.reflow({ width: rect.width, height: rect.height })
+  })
+}
+
+watch(() => [props.visible, props.items] as const, reportSize, { immediate: true })
 
 // 入场动画
 onMounted(() => {

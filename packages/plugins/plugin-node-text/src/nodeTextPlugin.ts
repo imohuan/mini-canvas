@@ -18,7 +18,7 @@
 import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import TextContent from './TextContent.vue'
-import TextGeneratePanel from './TextGeneratePanel.vue'
+import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
 export interface TextNodeService {
@@ -98,15 +98,49 @@ export function apply(ctx: Context) {
   // 1. 构造即上架 'text' 服务（super(ctx,'text') → ctx.provide，随插件 scope 回收）
   const text = new TextService(ctx)
 
+  // 1.5 底栏动作（T7：底部生成栏搬进 plugin-bottom-bar，本包只发布动作与写入器）
+  //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
+  //     注册糖把条目落在**本插件** scope（卸载自动摘除），所以这里不自己 ctx.effect。
+  const registerBar = (): boolean => {
+    if (!ctx.tryGet('nodeBar')) return false
+    // AI 生成文本：每个 produces:'text' 的工具一条动作（输入框= data.text，编辑即写回）
+    publishToolActions(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })
+    // 复制 / 删除：即时动作（自己已经写好节点），不经过写入器
+    registerBarAction(ctx, {
+      id: 'text.duplicate', types: ['text'], title: '复制', apply: 'self', order: 90,
+      description: '复制一份本节点（内容一起带走）',
+      run: (_input, runCtx) => {
+        text.duplicateTextNode(runCtx.nodeId)
+        return { ok: true }
+      },
+    })
+    registerBarAction(ctx, {
+      id: 'text.delete', types: ['text'], title: '删除', apply: 'self', order: 100,
+      description: '删除本节点',
+      run: (_input, runCtx) => {
+        ctx.doc.removeNodes([runCtx.nodeId])
+        return { ok: true }
+      },
+    })
+    // 生成结果写入器：把 result.text 写进 data.text（走 doc.updateNode，是作品、可撤销）
+    registerBarApplier(ctx, 'text', (nodeId, result) => {
+      ctx.doc.updateNode(nodeId, { data: { text: typeof result.text === 'string' ? result.text : '' } })
+    })
+    return true
+  }
+  if (!registerBar()) {
+    // bottom-bar 还没装（装配顺序在后/热装）：等它上架再注册一次
+    const off = ctx.on('ctx:plugin-installed', () => {
+      if (registerBar()) off.dispose()
+    })
+  }
+
   // 2. 注册节点类型：数据/尺寸 + content 组件 + create 委托服务（同一实现，避免散落两处建节点逻辑）
   //    内容类型声明：text 输出产 text；输入口收 text（文本文案只收文本；图片/视频喂不进文本）。
-  //    segments：只挂"底部生成控制栏"一段——顶部操作条（加粗/字号/颜色/对齐）已被用户要求删除
+    //    segments：只挂"底部生成控制栏"一段——顶部操作条（加粗/字号/颜色/对齐）已被用户要求删除
   //    （对文本节点没有意义）；壳（BaseNode）注册了段才渲染。
-  //    底部栏按用户要求做成与图片节点同款的"输入框 + 下拉 + 发送"：文本会用 AI 生成，
-  //    能产出文本的工具由工具插件经 ctx.tools 注册，本包只消费（认不清任何模型名）。
-  //    字数/行数统计、复制/删除动作并入该栏（原独立状态栏职责）。
-  //    段组件只收到 { id, data }，选中态由组件自行订阅内核 selection（且仅单选时显示）。
-  ctx.nodes.register({
+    //    底部栏（out:bottom）搬进 plugin-bottom-bar（T7）：动作与写入器在上面 1.5 里注册。
+    ctx.nodes.register({
     type: 'text',
     label: '文本',
     description: '在画布中添加一个文本节点',
@@ -118,9 +152,6 @@ export function apply(ctx: Context) {
     // 声明支持 resize：BaseNode 据类型能力显示右下拖柄（尺寸写回 node.data.cardWidth/Height）。
     resizable: true,
     in: TextContent,
-    segments: {
-      'out:bottom': TextGeneratePanel,
-    },
     create(position) {
       return text.addTextNode(position)
     },

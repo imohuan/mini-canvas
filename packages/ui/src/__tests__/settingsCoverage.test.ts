@@ -83,7 +83,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     const settings = ctx.get<SettingsLike>('settings')
     // 同一二级块「控制栏」里既有贴边距离，也有尺寸 —— 都属于"控制栏的布局"
     expect(settings.groups()).toContain('布局/控制栏')
-    expect(settings.get('panelImageWidth')).toBe(650)
+    expect(settings.get('panelImageWidth')).toBe(660)
     expect(settings.get('panelTextWidth')).toBe(520)
     expect(settings.get('panelEditorMinHeight')).toBe(64)
     expect(settings.get('panelEditorMaxHeight')).toBe(220)

@@ -15,7 +15,9 @@ import { existsSync } from 'node:fs';
 
 const EXE = process.env.CANVAS_E2E_CHROME
   ?? 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe';
-const BASE = 'http://localhost:5288/';
+// BASE 可经 CANVAS_PORT 覆盖：多个 worktree 可能同时起 dev（vite.config 是 strictPort:false，
+// 谁先占 5288 谁就是 5288）——写死 5288 会打到别人的代码上，验证结果不算数。
+const BASE = `http://localhost:${process.env.CANVAS_PORT ?? 5288}/`;
 
 const errors = [];
 const warns = [];
@@ -450,6 +452,193 @@ if (resizeZoom.skipped) {
       `基准=${JSON.stringify(gap0)} 滚轮后=${JSON.stringify(gap1)} 再拖后=${JSON.stringify(gap2)}`,
     );
   }
+}
+
+
+// ==================== 底栏 / 覆盖层 / 落盘 / 刷新（Task 10 新增断言） ====================
+{
+  // 防御：前序用例可能触发了页面导航，这里确保画布可用
+  await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
+  if (!(await page.evaluate(() => !!window.MiniCanvasUI).catch(() => false))) {
+    await page.goto(BASE, { waitUntil: 'load' });
+    await page.waitForTimeout(2200);
+  }
+  const bar2 = page.locator('[data-testid="node-bottom-bar"]');
+  const assembled = await page.evaluate(() => {
+    const ctx = window.MiniCanvasUI.getContext();
+    const field = ctx.registryOf('node/region');
+    const slots = ctx.get('slots');
+    // overlay 槽是多 occupant（分组控制栏/多选框也在里面），按 id 精确认领底栏那一条
+    const barOccupant = slots ? slots.list('overlay').some((e) => e.id === 'bottom-bar/host') : false;
+    return {
+      // 底栏宿主已从节点 out:bottom 迁到画布 overlay 槽（节点内 z 出不去，会被外壳工具栏截走点击）
+      bar: barOccupant,
+      overlay: field.list('*/over:inset').length,
+      actions: ctx.get('nodeBar') ? ctx.get('nodeBar').list({ type: 'image' }).length : -1,
+    };
+  });
+  check(
+    '底栏装配：overlay 槽宿主 + over:inset 覆盖层 + image 动作',
+    assembled.bar === true && assembled.overlay === 1 && assembled.actions > 0,
+    JSON.stringify(assembled),
+  );
+
+  // 选中图片节点 → 默认底栏渲染出来
+  const hasBar = await (async () => {
+    const img = page.locator('.vue-flow__node').nth(1);
+    await img.click();
+    await page.waitForTimeout(400);
+    return (await page.locator('[data-testid="node-bottom-bar"]').count()) > 0;
+  })();
+  check('选中图片节点 → 默认底栏渲染出来', hasBar);
+
+  // 执行 mock 异步动作（服务层触发同一链路：nodeTask.run → runAction → updateNodeRuntime → 覆盖层）
+  const ran = await (async () => {
+    if ((await bar2.count()) === 0) return { overlayShown: false };
+    const runPromise = page.evaluate(() => {
+      const ctx = window.MiniCanvasUI.getContext();
+      const doc = ctx.get('doc');
+      const node = doc.getNodes().find((n) => n.type === 'image');
+       const calls = [];
+       const orig = doc.updateNodeRuntime.bind(doc);
+       doc.updateNodeRuntime = (id, patch) => { calls.push({ id, keys: Object.keys(patch?.data ?? {}) }); return orig(id, patch); };
+       window.__wrCalls = calls;
+      return ctx.get('nodeTask').run(node.id, 'mock-task:async', { prompt: 'e2e', values: {} })
+        .then((r) => ({ kind: 'returned', r }))
+        .catch((e) => ({ kind: 'threw', error: e?.message || String(e) }));
+    });
+    const stateProbe = await page.evaluate(() => {
+      const ctx = window.MiniCanvasUI.getContext();
+     const doc = ctx.get('doc');
+      const wrCalls = window.__wrCalls;
+      const node = doc.getNodes().find((n) => n.type === 'image');
+    const host = window.MiniCanvasUI.getHost();
+    const hostDoc = host.ctx.get('doc');
+     const appliers = ctx.registryOf('node/bar-applier');
+     return { viaDoc: node?.data?.runState ?? null, viaStore: (host.nodeStore.getNode(node.id)?.data?.runState) ?? null, id: node.id, sameDoc: hostDoc === doc, keys: Object.keys(node?.data ?? {}), applierKeys: appliers.keys(), applierIsFn: typeof appliers.get('image', 'image')?.value };
+   });
+    let runResult = null;
+    runPromise.then((v) => { runResult = v; }).catch((e) => { runResult = { kind: 'threw', error: String(e) } });
+    let overlayShown = false;
+    let overlayText = '';
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(100);
+      if ((await page.locator('.task-overlay').count()) > 0) {
+        overlayShown = true;
+        // 覆盖层已改版：不再有中间黑底卡片，文案直接落在卡上
+        overlayText = await page.locator('.task-overlay').innerText();
+        break;
+      }
+    }
+    return { overlayShown, overlayText, runResult, stateProbe };
+  })();
+  check(
+    '执行 mock 异步动作 → 卡片出现覆盖层（running）',
+    ran.overlayShown,
+    'run=' + JSON.stringify(ran.runResult) + ' state=' + JSON.stringify(ran.stateProbe) + ' overlay=' + ran.overlayText,
+  );
+
+  // 终态落盘：等 runState 变 done（带 actionId）
+  const persisted = await (async () => {
+    for (let i = 0; i < 60; i++) {
+      await page.waitForTimeout(250);
+      const rs = await page.evaluate(() => {
+        const h = window.MiniCanvasUI.getHost();
+        const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
+        return node?.data?.runState ?? null;
+      });
+      if (rs && rs.status === 'done') return rs;
+    }
+    return null;
+  })();
+  check(
+    '终态落盘：runState.status=done 且带 actionId',
+    !!persisted && typeof persisted.actionId === 'string',
+    JSON.stringify(persisted),
+  );
+
+  // 刷新后不悬挂
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForTimeout(2200);
+  const after = await page.evaluate(() => {
+    const h = window.MiniCanvasUI.getHost();
+    const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
+    return node?.data?.runState ?? null;
+  });
+  const overlayAfterReload = await page.locator('.task-overlay').count();
+  check(
+    '刷新后不悬挂：覆盖层不再出现',
+    overlayAfterReload === 0 && !!after && after.status !== 'running',
+    JSON.stringify(after),
+  );
+}
+
+// ==================== 底栏文字可读性（对照度，防"文字与背景同色"回归） ====================
+// 背景：本轮的真实 bug —— prosemirror-editor-bundle 的 style.css 把 `color:#111` 写死在
+// `.ProseMirror` 本体上，深色主题下输入的字是近黑、与面板背景糊在一起（用户一眼看出来）。
+// 只断"有文字"是不够的（文字在 DOM 里、但看不见）；这里按 WCAG 相对亮度算对比度下限。
+{
+  // 先选中图片节点并等一帧（这段跑在"刷新不悬挂"之后，刷新会清空选中，底栏要下一帧才出来）
+  await page.evaluate(() => {
+    const ctx = window.MiniCanvasUI.getContext();
+    const img = ctx.get('doc').getNodes().find((n) => n.type === 'image');
+    if (img) ctx.get('selection').set([img.id]);
+  });
+  await page.waitForTimeout(800);
+  const contrast = await page.evaluate(() => {
+    const parse = (c) => {
+      const s = String(c || '');
+      const srgb = s.match(/color\(srgb\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)(?:\s*\/\s*([0-9.]+))?\)/);
+      if (srgb) return [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255, srgb[4] === undefined ? 1 : Number(srgb[4])];
+      const m = s.match(/[0-9.]+/g);
+      return m ? m.map(Number) : null;
+    };
+    const lum = (rgb) => {
+      const s = rgb.slice(0, 3).map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); });
+      return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+    };
+    const over = (fg, bg) => { const a = fg[3] === undefined ? 1 : fg[3]; return [0, 1, 2].map((i) => fg[i] * a + bg[i] * (1 - a)); };
+    const effBg = (el) => {
+      let cur = el;
+      while (cur && cur !== document.documentElement) {
+        const c = parse(getComputedStyle(cur).backgroundColor);
+        if (c) { const a = c[3] === undefined ? 1 : c[3]; if (a > 0.9) return c.slice(0, 3); if (a > 0.05) return over(c, [38, 38, 38]); }
+        cur = cur.parentElement;
+      }
+      return [38, 38, 38];
+    };
+    const ratioOf = (el) => {
+      const cs = getComputedStyle(el);
+      const fg = parse(cs.color);
+      const own = parse(cs.backgroundColor);
+      let bg = effBg(el);
+      if (own) { const a = own[3] === undefined ? 1 : own[3]; if (a > 0.05) bg = over(own, bg); }
+      const a = lum(fg), b = lum(bg);
+      const hi = Math.max(a, b), lo = Math.min(a, b);
+      return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100;
+    };
+    const bar = document.querySelector('[data-testid="node-bottom-bar"]');
+    if (!bar) return { missing: true };
+    const pm = bar.querySelector('.ProseMirror');
+    if (pm) pm.focus();
+    const targets = {
+      输入正文: bar.querySelector('.ProseMirror'),
+      模型名: bar.querySelector('.sel-label'),
+      参数摘要: bar.querySelector('.tpg-text'),
+      字数计数: bar.querySelector('.nb-count'),
+    };
+    const out = {};
+    for (const [name, el] of Object.entries(targets)) {
+      if (el) out[name] = ratioOf(el);
+    }
+    return out;
+  });
+  const minRatio = Math.min(...Object.values(contrast).filter((v) => typeof v === 'number'));
+  check(
+    '底栏文字对比度达标（深色主题下文字不能与背景同色）',
+    !contrast.missing && Number.isFinite(minRatio) && minRatio >= 4.5,
+    JSON.stringify(contrast),
+  );
 }
 
 const real404 = notFound.filter((u) => !/favicon/i.test(u));

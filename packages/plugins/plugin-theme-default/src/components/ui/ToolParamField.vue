@@ -18,6 +18,10 @@ import { computed, type Component } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import Select from './Select.vue'
 import PrecisionSlider from './PrecisionSlider.vue'
+import { resolvePresetKind, PRESET_UI_NAMES, presetColumns } from './paramKind'
+import ToolOptionGrid from './ToolOptionGrid.vue'
+import ToolRatioGrid from './ToolRatioGrid.vue'
+import ToolParamSlider from './ToolParamSlider.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -37,6 +41,32 @@ const emit = defineEmits<{
 
 /** 自定义组件（opaque 句柄）；给了就走自定义路径 */
 const custom = computed<Component | undefined>(() => props.param.component as Component | undefined)
+
+/**
+ * 预设件（按参数**语义类型**选，见 paramKind.ts 的判定表）。
+ *
+ * 这是用户要求的「识别到固定类型参数就用预设组件」的落点：工具作者声明 kind:'ratio'，
+ * 这里就换成带比例小图标的网格；声明 kind:'duration' 且只有两档，就换成按钮网格。
+ * 认不得的 kind 或作者自带的 component 都回落下面的内置控件 —— 不猜、也不炸。
+ */
+const preset = computed<Component | undefined>(() => {
+  const kind = resolvePresetKind(props.param)
+  if (kind === 'grid') return ToolOptionGrid
+  if (kind === 'ratio') return ToolRatioGrid
+  if (kind === 'slider') return ToolParamSlider
+  return undefined
+})
+
+/** 预设件收到的 props（统一形状：param / modelValue / disabled） */
+const presetProps = computed<Record<string, unknown>>(() => {
+  const kind = resolvePresetKind(props.param)
+  return {
+    param: props.param,
+    modelValue: props.modelValue,
+    disabled: props.disabled,
+    ...(kind ? { columns: presetColumns(kind) } : {}),
+  }
+})
 
 /** select 的候选值（面板统一 Select 组件要的 {label,value} 形状） */
 const options = computed(() => (props.param.options ?? []).map((o) => ({ label: o.label, value: o.value })))
@@ -96,10 +126,18 @@ const numberValue = computed(() => {
 </script>
 
 <template>
+  <!-- 预设件优先于内置控件（但不抢作者自带 component：那个在上面第一条分支） -->
+  <component
+    :is="preset"
+    v-if="preset && !custom"
+    v-bind="presetProps"
+    @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
+  />
+
   <!-- 自定义组件优先：作者自带 UI 时完全交给他，本组件只接值 -->
   <component
     :is="custom"
-    v-if="custom"
+    v-else-if="custom"
     v-bind="customProps"
     @update:model-value="(v: string | number | boolean) => emit('update:modelValue', v)"
   />

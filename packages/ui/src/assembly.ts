@@ -14,6 +14,9 @@ import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
+import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
+import { mockTaskPlugin } from '@mini-canvas/plugin-mock-task-backend'
+import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
 import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
@@ -41,9 +44,18 @@ import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 export const APP_PLUGINS = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   uiSettingsPanelPlugin, // 设置面板换皮：order -1 顶替默认皮，渲染本应用风格的设置界面
+  // 底栏插件必须在三个节点插件**之前**装载：节点插件 apply 时 nodeBar 已在，走「取得到就注册」快路径
+  pluginBottomBar, // 节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度覆盖层
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
   nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏
+  // mock 假后台：两条图片动作（同步 1.2s / 异步 10 帧进度），用于验证底栏动作与进度覆盖层。
+  // 注意：mock 动作经 image 写入器写 data.imageUrl —— 点了它当前图会被换成 mock 产物（预期行为）。
+  mockTaskPlugin,
+  // web2api：把自建 MCP 服务（豆包 / dola / seedance / 火山引擎）的能力做成底栏动作。
+  // 图片与视频走 dola / 豆包的 UI 自动化（auto）模式；音频含豆包 TTS 与火山引擎音频。
+  // 预置配置表在插件里（服务端没起也能渲染 UI）；账号由服务端自动选号，无需配置。
+  web2apiToolsPlugin,
   node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
   nodeImageComparePlugin, // 图片对比节点：连两张图用可拖拽分割线左右对照（最多 2 条，超了挤最老）
   pluginImageGenerationTools, // 图片生成工具：把第三方生成 API 注册成 ctx.tools 里的工具，供节点调用

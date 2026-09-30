@@ -44,6 +44,11 @@ export function splitNodeWritePatch(patch: NodeWritePatch): NodeWriteSplit {
 // store → VueFlow 渲染态
 // ============================================================================
 
+/** 普通节点的基础渲染层级（所有未选中节点同一层） */
+export const NODE_Z = 10
+/** 选中节点的渲染层级：高于普通节点、仍低于置顶连线（见 CanvasHost 的 1001） */
+export const NODE_SELECTED_Z = 20
+
 /** VueFlow 消费的节点最小形状（宿主由此驱动渲染；与 nodeStore 节点同构 + 浅拷贝 data） */
 export interface FlowNode {
   id: string
@@ -73,13 +78,19 @@ export interface FlowNode {
  */
 export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySet<string>): FlowNode[] {
   return store.getNodes().map((n: CanvasNode) => {
+    const selected = selectedIds ? selectedIds.has(n.id) : false
     const out: Record<string, unknown> = {
       id: n.id,
       type: n.type,
       position: { x: n.position.x, y: n.position.y },
       data: { ...(n.data as Record<string, unknown>) },
+      // 选中抬层（2026-09-30 修）：不给选中节点更高 z 时，所有节点 z 都是 0，
+      // 「谁在上面」只剩 DOM 顺序 —— 后建的节点会盖住选中的节点（用户实测截图）。
+      // 取 NODE_Z / NODE_SELECTED_Z：抬一档但**仍在置顶连线(1001)之下**，
+      // 这样「连线显示在最上层」打开时依旧压得过选中节点（用户先前确定的层级语义）。
+      zIndex: selected ? NODE_SELECTED_Z : NODE_Z,
     }
-    if (selectedIds) out.selected = selectedIds.has(n.id)
+    if (selectedIds) out.selected = selected
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
     // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。

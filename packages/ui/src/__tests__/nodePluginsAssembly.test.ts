@@ -72,9 +72,9 @@ async function bootAll() {
  * 以后若要给某类型加回顶部栏，必须同步改这里，否则这条测试会拦住（这正是它的用处）。
  */
 const EXPECTED = [
-  { type: 'text', extraSegments: ['out:bottom'] },
-  { type: 'image', extraSegments: ['out:top', 'out:bottom', 'over:inset'] },
-  { type: 'video', extraSegments: ['out:top', 'out:bottom', 'over:inset'] },
+  { type: 'text', extraSegments: [] },
+  { type: 'image', extraSegments: ['out:top', 'over:inset'] },
+  { type: 'video', extraSegments: ['out:top', 'over:inset'] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const

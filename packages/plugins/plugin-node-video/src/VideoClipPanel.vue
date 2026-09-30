@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /**
- * VideoClipPanel —— 视频节点底部「剪辑」栏（**仅剪辑模式且单选时显示**）。
+ * VideoClipPanel —— 视频剪辑时间轴（底栏「剪辑」动作的专属面板；单选时显示）。
+ *
+ * 历史说明：本组件原是视频节点自挂的 out:bottom 底栏（显隐读剪辑会话态）；T9 起挂到
+ * plugin-bottom-bar 的 video.clip 动作上（panel），选中动作即渲染，会话态由动作的
+ * onSelect/onDeselect 开合。
  *
  * 定位不在这里：贴边距离 / 水平居中 / 反缩放由节点壳 BaseNode 的下插槽定位层统一负责
  * （与图片生成栏同约定），本组件只是一段普通流式内容。
@@ -30,8 +34,8 @@ const { ctx } = useCanvasRender()
 // 设计系统件按名取（§4.5 目录）：换主题插件时这里一行不改。
 const NodeToolbarButton = useUiComponent('button')
 const selected = useSoleNodeSelected(props.id)
-const active = computed(() => isClipping(props.id))
-const visible = computed(() => selected.value && active.value)
+// 显隐门从「会话态」改成「选中即渲染」：底栏已经决定了它该不该出现（T9）
+const visible = computed(() => selected.value)
 
 const ICON_CONFIRM =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'

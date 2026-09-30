@@ -325,6 +325,46 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
 
+  packages/plugins/plugin-bottom-bar:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../canvas-data
+      '@mini-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../canvas-render
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      prosemirror-editor-bundle:
+        specifier: workspace:*
+        version: link:../../prosemirror-editor-bundle
+    devDependencies:
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
   packages/plugins/plugin-canvas-export:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -531,6 +571,31 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
+  packages/plugins/plugin-mock-task-backend:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../canvas-data
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
   packages/plugins/plugin-multi-select:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -635,6 +700,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
@@ -712,6 +780,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
@@ -755,6 +826,9 @@ importers:
       '@mini-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
@@ -908,6 +982,43 @@ importers:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
 
+  packages/plugins/plugin-web2api-tools:
+    dependencies:
+      '@mini-canvas/canvas-base':
+        specifier: workspace:*
+        version: link:../../canvas-base
+      '@mini-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../canvas-data
+      '@mini-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugin-bottom-bar
+    devDependencies:
+      '@mini-canvas/plugin-theme-default':
+        specifier: workspace:*
+        version: link:../plugin-theme-default
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
   packages/prosemirror-editor-bundle:
     dependencies:
       prosemirror-commands:
@@ -974,6 +1085,9 @@ importers:
       '@mini-canvas/plugin-auto-layout':
         specifier: workspace:*
         version: link:../plugins/plugin-auto-layout
+      '@mini-canvas/plugin-bottom-bar':
+        specifier: workspace:*
+        version: link:../plugins/plugin-bottom-bar
       '@mini-canvas/plugin-canvas-export':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-export
@@ -995,6 +1109,9 @@ importers:
       '@mini-canvas/plugin-mini-map':
         specifier: workspace:*
         version: link:../plugins/plugin-mini-map
+      '@mini-canvas/plugin-mock-task-backend':
+        specifier: workspace:*
+        version: link:../plugins/plugin-mock-task-backend
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugins/plugin-multi-select
@@ -1028,6 +1145,9 @@ importers:
       '@mini-canvas/plugin-tool-text-generation':
         specifier: workspace:*
         version: link:../plugins/plugin-tool-text-generation
+      '@mini-canvas/plugin-web2api-tools':
+        specifier: workspace:*
+        version: link:../plugins/plugin-web2api-tools
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.38(typescript@6.0.3))

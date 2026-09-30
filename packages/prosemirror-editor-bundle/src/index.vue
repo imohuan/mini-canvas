@@ -19,9 +19,10 @@
         :grouped-items="groupedItems"
         :category-order="categoryOrder"
         :position="menuPosition"
-        :active-index="activeIndex"
-        @select="insertSelectedItem"
-      />
+      :active-index="activeIndex"
+      :reflow="reflowMenu"
+      @select="insertSelectedItem"
+    />
     </slot>
 
     <!-- 悬停预览框 -->
@@ -70,6 +71,7 @@ const {
   groupedItems,
   categoryOrder,
   insertSelectedItem,
+  reflowMenu,
   previewVisible,
   previewUrl,
   previewTitle,
