@@ -3,10 +3,11 @@
  * NodeTaskOverlay —— 节点卡片上的加载/进度覆盖层。
  *
  * 数据单一来源 = props.data.runState（插件经 doc.updateNodeRuntime 写，落盘不进撤销栈）。
- * 显隐规则：
+ * 显隐规则（用户要求：**所有任务消息只在节点这一处**，底栏不再显示任何状态文案）：
  * - running → 整卡加载态（流光百分比）；
- * - error（失败 / 暂停 / 中断 / 取消）→ **卡片上一条小提示**（用户报过：任务失败后
- *   卡片什么都不显示，看着像还卡在进度上，其实任务早结束了）。提示只在卡片上、不挡拖拽；
+ * - error（失败 / 暂停 / 中断 / 取消）→ **同样整卡覆盖**，只是把内容换成失败标记 + 原因，
+ *   底下一行小字提示「可重试」（用户报过：失败时只在卡片顶上贴一条，不够醒目；
+ *   要的是和加载态一样"整个节点盖住"的效果）；
  * - done / idle / 缺省 → 渲染空。
  *
  * 视觉要求（用户明确）：
@@ -58,14 +59,16 @@ let timerId: ReturnType<typeof setInterval> | null = null
 const state = computed<NodeRunState>(() => readRunState(props.data))
 const running = computed(() => state.value.status === 'running')
 /**
- * 失败态也要在卡片上留个交代。
+ * 失败 / 暂停 / 中断 / 取消 —— 与 running **同一块整卡覆盖**，只换内容。
  *
- * 为什么必须有（用户实测反馈）：任务失败 / 暂停 / 轮询中断时，running 覆盖层消失，
- * 卡片就什么都不显示了 —— 用户看到的是一个没反应的节点，还以为是卡在进度上。
- * 这里用一条不与内容打架的小条把原因说清楚（文案就是服务端/插件写的那句中文）。
+ * 用户要求（实测反馈）：失败时不要只在卡片顶上贴一条，要像加载态那样整个盖住；
+ * 而且所有任务消息只在节点上，底栏一个字都不显示。
+ * 文案就是服务端/插件写的那句中文，不再加工。
  */
 const failed = computed(() => state.value.status === 'error')
 const failedText = computed(() => state.value.message || '执行失败')
+/** 覆盖层是否出现（running 或 error 都盖住整卡） */
+const visible = computed(() => running.value || failed.value)
 const percent = computed(() =>
   typeof state.value.progress === 'number' && Number.isFinite(state.value.progress)
     ? Math.max(0, Math.min(100, Math.round(state.value.progress)))
@@ -108,13 +111,14 @@ function onCancel(): void {
 
 <template>
   <div
-    v-if="running"
+    v-if="visible"
     ref="rootEl"
     class="task-overlay"
+    :class="{ 'is-error': failed }"
     role="status"
     :aria-label="state.message || '执行中'"
     :style="{ borderRadius: radius }"
-    data-testid="task-overlay"
+    :data-testid="failed ? 'task-failed' : 'task-overlay'"
   >
     <!-- ① 底色：不透明，把底下的卡片内容与其它浮层完全盖住 -->
     <div class="ld-base" aria-hidden="true" />
@@ -125,31 +129,39 @@ function onCancel(): void {
       <span class="ld-blob ld-blob--3" />
     </div>
 
-    <!-- 元素 1：右上角耗时 -->
+    <!-- 顶部：左侧状态词 + 右上耗时（失败态没有耗时） -->
     <div class="ld-top">
-      <span class="ld-state"><i class="ld-dot" />生成中</span>
-      <span v-if="elapsedText" class="ld-timer">{{ elapsedText }}</span>
+      <span class="ld-state">
+        <i class="ld-dot" />{{ failed ? '执行失败' : '生成中' }}
+      </span>
+      <span v-if="!failed && elapsedText" class="ld-timer">{{ elapsedText }}</span>
     </div>
 
-    <!-- 元素 2：中间超大百分比 -->
-    <div class="ld-progress">
+    <!-- 中间主体：跑着时是超大百分比，失败时是失败标记 -->
+    <div v-if="!failed" class="ld-progress">
       <span class="ld-num">{{ percent === null ? '···' : percent }}</span>
       <span v-if="percent !== null" class="ld-pct">%</span>
     </div>
+    <div v-else class="ld-progress">
+      <span class="ld-fail-mark" aria-hidden="true">!</span>
+    </div>
 
-    <!-- 元素 3：下方提示文案（单独一行，居中，不挤百分比） -->
-    <p class="ld-prompt">{{ state.message || '执行中…' }}</p>
+    <!-- 下方一行：跑着时是阶段文案，失败时是原因（单独一行，居中，可换行） -->
+    <p class="ld-prompt">{{ failed ? failedText : state.message || '执行中…' }}</p>
 
-    <!-- 取消：右下角、小号（一般不用） -->
-    <button class="task-overlay-cancel" type="button" title="取消任务" @click.stop="onCancel">
+    <!-- 失败：给一句下一步（用户要的是「知道自己该怎么办」），不是编一个假进度 -->
+    <p v-if="failed" class="ld-hint">可再点一次发送重试</p>
+
+    <!-- 取消：右下角、小号（只有跑着时才给） -->
+    <button
+      v-if="running"
+      class="task-overlay-cancel"
+      type="button"
+      title="取消任务"
+      @click.stop="onCancel"
+    >
       取消
     </button>
-  </div>
-
-  <!-- 失败/暂停：贴卡片顶部的一条小提示（不遮内容、不挡拖拽；根 pointer-events: none） -->
-  <div v-else-if="failed" class="task-failed" role="status" :title="failedText" data-testid="task-failed">
-    <span class="task-failed-icon" aria-hidden="true">!</span>
-    <span class="task-failed-text">{{ failedText }}</span>
   </div>
 </template>
 
@@ -459,46 +471,77 @@ html.dark .ld-prompt {
 }
 
 /* ============================================================
-   失败 / 暂停：卡片上一条小提示
-   只占卡片顶部一条，不遮内容、不挡拖拽（根不接指针事件）；
-   颜色走主题 token，红底红字，一眼能看出「这次没成」。
+   失败 / 暂停 / 中断 / 取消：**同一块整卡覆盖**，只把内容换成"没成"的交代
+   （用户要求：失败也要像加载态那样整个盖住，不要只在顶上贴一条）
+   底色/光斑换成危险色，中间一个大感叹号，下面写原因 + 一句下一步。
    ============================================================ */
-.task-failed {
-  position: absolute;
-  left: 6px;
-  right: 6px;
-  top: 6px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 7px;
-  border-radius: 7px;
-  background: var(--ui-danger-soft, color-mix(in srgb, #ef4444 16%, transparent));
-  color: var(--ui-danger, #ef4444);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  pointer-events: none;
-  animation: ld-in 0.18s ease-out;
+
+/* 底色：失败态换一层偏红的板（仍是不透明，把卡片内容盖死） */
+.task-overlay.is-error .ld-base {
+  /* 主题色白名单: 加载/失败遮罩底色（亮） */
+  background: #fef2f2;
 }
-.task-failed-icon {
+html.dark .task-overlay.is-error .ld-base {
+  /* 主题色白名单: 加载/失败遮罩底色（暗） */
+  background: #1f0f12;
+}
+/* 光斑：失败态整体压暗、偏红，别和"正在生成"的科技蓝混淆 */
+.task-overlay.is-error .ld-fluid {
+  opacity: 0.4;
+  filter: saturate(0.5) blur(28px);
+}
+.task-overlay.is-error .ld-dot {
+  /* 主题色白名单: 失败状态点 */
+  background: #ef4444;
+}
+.task-overlay.is-error .ld-state {
+  /* 主题色白名单: 失败状态词 */
+  color: #dc2626;
+}
+
+/* 中间那个失败标记：圆底感叹号，尺寸对齐百分比那档的视觉重量 */
+.ld-fail-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: none;
-  width: 14px;
-  height: 14px;
+  width: 46px;
+  height: 46px;
   border-radius: 999px;
-  background: var(--ui-danger, #ef4444);
-  color: var(--ui-panel, #fff);
-  font-size: 10px;
+  /* 主题色白名单: 失败标记底/字（亮） */
+  background: #ef4444;
+  /* 主题色白名单: 失败标记字色（亮） */
+  color: #fff;
+  font-size: 26px;
   font-weight: 900;
   line-height: 1;
+  /* 主题色白名单: 失败标记外发光（亮） */
+  box-shadow: 0 0 22px rgb(239 68 68 / 0.35);
 }
-.task-failed-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+
+/* 失败原因：和加载态的提示同一版式（单独一行、居中、可换行） */
+.task-overlay.is-error .ld-prompt {
+  /* 主题色白名单: 失败原因（亮） */
+  color: #b91c1c;
+}
+html.dark .task-overlay.is-error .ld-prompt {
+  /* 主题色白名单: 失败原因（暗） */
+  color: #fca5a5;
+}
+
+/* 下一步提示：比原因更轻的一行小字 */
+.ld-hint {
+  position: relative;
+  z-index: 2;
+  margin: 4px 0 0;
+  max-width: calc(100% - 32px);
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  /* 主题色白名单: 失败下一步提示（亮） */
+  color: #9f8b8b;
+}
+html.dark .ld-hint {
+  /* 主题色白名单: 失败下一步提示（暗） */
+  color: #a18585;
 }
 </style>

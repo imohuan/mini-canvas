@@ -448,12 +448,6 @@ const ICON_SPARKLE =
       </div>
     </div>
 
-    <!-- 状态提示（错误/完成），贴右下 -->
-    <div v-if="!running && runState.status !== 'idle'" class="nb-status-row">
-      <span class="nb-status" :class="'is-' + runState.status" role="status">
-        {{ runState.status === 'error' ? (runState.message || '执行失败') : '已完成' }}
-      </span>
-    </div>
 
     <!-- 素材预览（点卡片进入） -->
     <div v-if="previewCard" class="nb-preview" @click.stop="previewCard = null">
@@ -880,26 +874,6 @@ const ICON_SPARKLE =
   to {
     transform: rotate(360deg);
   }
-}
-
-/* —— 状态提示 —— */
-.nb-status-row {
-  display: flex;
-  justify-content: flex-end;
-}
-.nb-status {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  font-weight: 600;
-}
-.nb-status.is-error {
-  color: var(--ui-danger, #ef4444);
-}
-.nb-status.is-done {
-  color: var(--ui-ink-mute, #8c95a3);
 }
 
 /* —— 素材预览浮层 —— */

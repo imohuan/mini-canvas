@@ -235,10 +235,25 @@ for (const [name, message, expect] of failStates) {
   await page.waitForTimeout(600)
   const info = await page.evaluate(() => {
     const el = document.querySelector('[data-testid="task-failed"]')
-    const ov = document.querySelector('[data-testid="task-overlay"]')
-    return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), pe: getComputedStyle(el).pointerEvents, hasOverlay: !!ov } : null
+    const card = document.querySelector('.v2-card')
+    const r = el && el.getBoundingClientRect()
+    const c = card && card.getBoundingClientRect()
+    return el
+      ? {
+          text: el.textContent.replace(/\s+/g, ' ').trim(),
+          pe: getComputedStyle(el).pointerEvents,
+          // 用户要求：失败要和加载态一样**整卡覆盖**，不是顶上贴一条
+          coversCard: !!r && !!c && Math.abs(r.width - c.width) < 2 && Math.abs(r.height - c.height) < 2,
+          hasCancel: !!document.querySelector('.task-overlay-cancel'),
+          barStatus: document.querySelectorAll('.nb-status').length,
+        }
+      : null
   })
-  check(`失败态「${name}」在卡片上给出原因`, !!info && info.text.includes(expect) && info.pe === 'none' && !info.hasOverlay, JSON.stringify(info))
+  check(
+    `失败态「${name}」整卡覆盖并给出原因`,
+    !!info && info.text.includes(expect) && info.pe === 'none' && info.coversCard && !info.hasCancel && info.barStatus === 0,
+    JSON.stringify(info),
+  )
 }
 await page.screenshot({ path: OUT + '/web2api-failed.png' })
 

@@ -24,9 +24,9 @@ import type { BarAction } from '../barTypes'
 import { collectUpstreamMaterials, makeResourceResolver, toEditorResources } from '../panelSource'
 
 const DEMO_ACTION: BarAction = {
-  id: 'mock-task:sync',
+  id: 'test:sync-action',
   types: ['image'],
-  title: 'Mock 同步任务',
+  title: '测试同步动作',
   needsPrompt: true,
   fields: [
     {
@@ -153,7 +153,7 @@ describe('NodeBottomBar：版式与显隐契约', () => {
     expect(html).not.toContain('nb-pill--action')
     expect(html).toContain('nb-field--action')
     expect(html).toContain('nb-action-35')
-    expect(html).toContain('Mock 同步任务')
+    expect(html).toContain('测试同步动作')
   })
 
   it('素材卡**直接显示**（不需先点「参考」），带序号角标', async () => {
@@ -312,7 +312,7 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     expect(html).toContain('排队中')
   })
 
-  it('done / idle / 缺省 → 渲染空（error 另有失败提示，见下一条）', async () => {
+  it('done / idle / 缺省 → 渲染空（error 另有整卡失败态，见下一条）', async () => {
     const states = [
       {},
       { runState: { status: 'idle' } },
@@ -326,10 +326,10 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
   })
 
   /**
-   * 用户实测反馈：任务失败 / 暂停时卡片上什么都不显示，看着像还卡在进度上。
-   * 失败态必须在卡片上留下可读的原因（且不影响拖拽：根不接指针事件）。
+   * 用户要求：失败也必须像加载态那样**整卡覆盖**，不要只在顶上贴一条；
+   * 且消息只出现在节点上（底栏一个字都不显示）。
    */
-  it('失败态在卡片上留一条原因提示（不是留白，也不再显示进度覆盖层）', async () => {
+  it('失败态：同样是整卡覆盖（不是顶部小条），写清原因 + 下一步', async () => {
     const html = await render(
       NodeTaskOverlay as Component,
       '35',
@@ -338,8 +338,35 @@ describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
     )
     expect(html).toContain('task-failed')
     expect(html).toContain('任务被暂停')
-    // 失败态不该再渲染进度覆盖层（否则又是「卡在某个百分比」）
-    expect(html).not.toContain('data-testid="task-overlay"')
+    // 整卡覆盖：与加载态同一个容器（不是浮在顶部的一条）
+    expect(html).toContain('task-overlay')
+    expect(html).toContain('is-error')
+    // 给一句下一步，而不是编一个百分比
+    expect(html).toContain('重试')
+    expect(html).not.toContain('ld-pct')
+  })
+
+  it('失败态不显示取消按钮（没在跑，没什么可取消的）', async () => {
+    const html = await render(
+      NodeTaskOverlay as Component,
+      '35',
+      { runState: { status: 'error', message: '失败了' } },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(html).not.toContain('task-overlay-cancel')
+  })
+
+  /** 用户要求：所有任务消息只出现在节点覆盖层，底栏不再显示任何状态文案 */
+  it('底栏不显示任何状态文案（错误/完成都只在节点上）', async () => {
+    for (const rs of [
+      { status: 'error', message: '任务执行失败: 触发了风控' },
+      { status: 'done', progress: 100 },
+    ]) {
+      const html = await render(NodeBottomBar as Component, '35', { runState: rs }, makeCtx({ selectedIds: ['35'] }))
+      expect(html).not.toContain('nb-status')
+      expect(html).not.toContain('触发了风控')
+      expect(html).not.toContain('已完成')
+    }
   })
 
   it('没有中间黑底卡片：渲染里不出现旧的卡片/遮罩容器类名', async () => {

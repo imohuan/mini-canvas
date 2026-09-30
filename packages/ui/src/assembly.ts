@@ -15,7 +15,6 @@ import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
 import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
-import { mockTaskPlugin } from '@mini-canvas/plugin-mock-task-backend'
 import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
@@ -34,7 +33,7 @@ import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 
 /**
- * 成品应用的插件清单（20 个源码插件，顺序即装载序）。
+ * 成品应用的插件清单（23 个源码插件，顺序即装载序）。
  *
  * 注意：`packages/plugins` 目录下另有 3 个**不**在清单里，是有意不装：
  * `plugin-auto-save` / `plugin-cloud-save` / `plugin-history` —— 它们是「按运行环境选装」的
@@ -49,9 +48,6 @@ export const APP_PLUGINS = [
   nodeTextPlugin, // text 节点
   nodeImagePlugin, // image 节点
   nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏
-  // mock 假后台：两条图片动作（同步 1.2s / 异步 10 帧进度），用于验证底栏动作与进度覆盖层。
-  // 注意：mock 动作经 image 写入器写 data.imageUrl —— 点了它当前图会被换成 mock 产物（预期行为）。
-  mockTaskPlugin,
   // web2api：把自建 MCP 服务（豆包 / dola / seedance / 火山引擎）的能力做成底栏动作。
   // 图片与视频走 dola / 豆包的 UI 自动化（auto）模式；音频含豆包 TTS 与火山引擎音频。
   // 预置配置表在插件里（服务端没起也能渲染 UI）；账号由服务端自动选号，无需配置。

@@ -41,7 +41,6 @@
     "@mini-canvas/plugin-file-drop": "workspace:*",
     "@mini-canvas/plugin-group": "workspace:*",
     "@mini-canvas/plugin-mini-map": "workspace:*",
-    "@mini-canvas/plugin-mock-task-backend": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
     "@mini-canvas/plugin-node-3d-preview": "workspace:*",
     "@mini-canvas/plugin-node-find": "workspace:*",

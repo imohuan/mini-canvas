@@ -178,5 +178,6 @@ ctx.theme.add('bottomBar', MyBottomBar, { order: -1 })   // order 最小者赢
 publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true })
 ```
 
-完整示例：`packages/plugins/plugin-mock-task-backend`（同步动作 + 异步动作 + 参数下拉，
-并在成品应用里演示覆盖层与落盘）。
+完整示例：`packages/plugins/plugin-web2api-tools`（多平台预置动作 + 参数下拉 + 异步轮询
++ 刷新续查 + 结果写入器），以及 `packages/ui/e2e/web2api-bottom-bar.mjs`（浏览器里
+现场注册一条假动作，演示覆盖层与落盘，不进成品清单）。

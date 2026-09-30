@@ -492,18 +492,38 @@ if (resizeZoom.skipped) {
   })();
   check('选中图片节点 → 默认底栏渲染出来', hasBar);
 
-  // 执行 mock 异步动作（服务层触发同一链路：nodeTask.run → runAction → updateNodeRuntime → 覆盖层）
+  // 执行一条异步动作（服务层触发同一链路：nodeTask.run → runAction → updateNodeRuntime → 覆盖层）
+  // 注意：这条动作是**测试现场注册**的（e2e 自己造一个假后台），不是成品装配里的插件 ——
+  // 成品清单里不该混进"测试用假动作"（用户明确要求：测试就写清是测试，别塞进别的插件）。
   const ran = await (async () => {
     if ((await bar2.count()) === 0) return { overlayShown: false };
     const runPromise = page.evaluate(() => {
       const ctx = window.MiniCanvasUI.getContext();
       const doc = ctx.get('doc');
       const node = doc.getNodes().find((n) => n.type === 'image');
+      // 注册一条测试动作（id 带 e2e 前缀，一眼看得出是测试用的）
+      const bar = ctx.get('nodeBar');
+      // 注册方作用域直接用根 ctx（e2e 不卸载，不需要回收器）
+      bar.register(ctx, {
+        id: 'e2e:fake-async',
+        types: ['image'],
+        title: 'e2e 假异步任务',
+        needsPrompt: true,
+        run() {
+          let step = 0;
+          return () => {
+            step += 1;
+            return step < 6
+              ? { status: 'running', progress: step * 16, message: 'e2e 进度 ' + step }
+              : { status: 'done', result: { ok: true, urls: [node.data.imageUrl] } };
+          };
+        },
+      });
        const calls = [];
        const orig = doc.updateNodeRuntime.bind(doc);
        doc.updateNodeRuntime = (id, patch) => { calls.push({ id, keys: Object.keys(patch?.data ?? {}) }); return orig(id, patch); };
        window.__wrCalls = calls;
-      return ctx.get('nodeTask').run(node.id, 'mock-task:async', { prompt: 'e2e', values: {} })
+      return ctx.get('nodeTask').run(node.id, 'e2e:fake-async', { prompt: 'e2e', values: {} })
         .then((r) => ({ kind: 'returned', r }))
         .catch((e) => ({ kind: 'threw', error: e?.message || String(e) }));
     });
@@ -533,7 +553,7 @@ if (resizeZoom.skipped) {
     return { overlayShown, overlayText, runResult, stateProbe };
   })();
   check(
-    '执行 mock 异步动作 → 卡片出现覆盖层（running）',
+    '执行测试异步动作 → 卡片出现覆盖层（running）',
     ran.overlayShown,
     'run=' + JSON.stringify(ran.runResult) + ' state=' + JSON.stringify(ran.stateProbe) + ' overlay=' + ran.overlayText,
   );

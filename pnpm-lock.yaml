@@ -571,31 +571,6 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
-  packages/plugins/plugin-mock-task-backend:
-    dependencies:
-      '@mini-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@mini-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@mini-canvas/plugin-bottom-bar':
-        specifier: workspace:*
-        version: link:../plugin-bottom-bar
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.22.4)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
   packages/plugins/plugin-multi-select:
     dependencies:
       '@mini-canvas/canvas-base':
@@ -1109,9 +1084,6 @@ importers:
       '@mini-canvas/plugin-mini-map':
         specifier: workspace:*
         version: link:../plugins/plugin-mini-map
-      '@mini-canvas/plugin-mock-task-backend':
-        specifier: workspace:*
-        version: link:../plugins/plugin-mock-task-backend
       '@mini-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugins/plugin-multi-select
