@@ -131,7 +131,14 @@ export class NodeTaskService extends Service {
       readData: (id) => doc.getNode(id)?.data ?? {},
       // 注意：data 这里就是 { runState } 载荷 —— 必须包进 NodePatch 的 data 键，
       // 否则 nodeStore.updateNode 会把它当非法 patch 键整体忽略（e2e 排查实录）。
-      writeRuntime: (id, data) => doc.updateNodeRuntime(id, { data }),
+      // 但节点可能在任务跑着的时候被删掉（用户删了节点）—— writeRuntime 一律不抛：
+      // nodeStore.updateNode 对不存在的节点会 throw，那会变成一条未捕获的 promise 异常
+      // （实测：轮询中删节点 → 页内 PAGEERROR [nodeStore] no node "x"）。任务本身还在跑，
+      // 只是没地方写进度了，静默跳过即可。
+      writeRuntime: (id, data) => {
+        if (!doc.getNode(id)) return
+        doc.updateNodeRuntime(id, { data })
+      },
       runApplier: (id, result, c) => void bar.applierOf(c.nodeType)?.(id, result, c),
     }
   }

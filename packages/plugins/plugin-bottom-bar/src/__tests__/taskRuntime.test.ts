@@ -132,6 +132,32 @@ describe('runAction', () => {
     expect(out.ok).toBe(false)
     expect(h.runtime.at(-1)).toMatchObject({ status: 'error' })
   })
+
+  /**
+   * 用户实测反馈：「点取消没反应」—— 轮询间隔默认 3 秒，而循环只在每圈开头查一次 signal，
+   * 于是取消最坏要等一整拍才收敛。等待本身必须可被打断。
+   */
+  it('轮询中途取消：立刻收敛，不用等完这一拍', async () => {
+    const ctrl = new AbortController()
+    const action = imageAction({
+      run: () => () => ({ status: 'running', progress: 10, message: '跑着呢' }),
+    })
+    const h = harness()
+    // 间隔开大（3s），取消后若还要等完这一拍，测试会明显变慢/断言失败
+    h.deps.interval = 3000
+    const started = Date.now()
+    const p = runAction(
+      { nodeId: 'n1', nodeType: 'image', action, input: {}, registry: registryOf([action]), signal: ctrl.signal },
+      h.deps,
+    )
+    await new Promise((r) => setTimeout(r, 120)) // 让它进入一次轮询等待
+    ctrl.abort()
+    const out = await p
+    const elapsed = Date.now() - started
+    expect(out.ok).toBe(false)
+    expect(h.runtime.at(-1)).toMatchObject({ status: 'error', message: '已取消' })
+    expect(elapsed).toBeLessThan(1500)
+  })
 })
 
 describe('resumeAction：刷新后接着查', () => {
@@ -187,4 +213,3 @@ describe('resumeAction：刷新后接着查', () => {
     expect(h.runtime.at(-1)).toMatchObject({ status: 'error' })
   })
 })
-
