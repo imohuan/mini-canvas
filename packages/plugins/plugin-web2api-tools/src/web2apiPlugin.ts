@@ -20,7 +20,10 @@
 import { type Context, type ConfigSchema, type PluginModule, Service } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import type { ToolResource } from '@mini-canvas/kernel'
-import { registerBarAction, registerBarApplier, type BarRunContext } from '@mini-canvas/plugin-bottom-bar'
+// 只借**类型**（类型编译期擦除，不构成运行时依赖）：插件之间不 import 实现。
+// 运行时一律 `ctx.get('nodeBar')` 拿服务（见 apply 里的 registerBar）。
+import type { BarRunContext } from '@mini-canvas/plugin-bottom-bar'
+import type { BarAction, BarApplier, BarRunInput } from '@mini-canvas/plugin-bottom-bar'
 import { McpClient } from './mcpClient'
 import { WEB2API_PRESETS } from './presets'
 import { runPreset, makeTaskPoll, type RunDeps, type RunInput } from './presetRun'
@@ -162,10 +165,17 @@ export function apply(ctx: Context) {
 
   // —— 底栏动作：每个预置一条动作（§0.3：nodeBar 是插件服务，取得到才注册）——
   const registerBar = (): boolean => {
-    if (!ctx.tryGet('nodeBar')) return false
+    // 插件之间**不互相 import**：按名字取底栏提供的服务（nodeBar）。
+    // 取不到 = 宿主没装底栏插件 → 本插件静默无用（不算错）。
+    // 服务方法签名（与 plugin-bottom-bar 的 NodeBarService 一致；这里只声明用得到的两个写入口）
+    const bar = ctx.tryGet<{
+      register(scope: Context, action: BarAction): void
+      registerApplier(scope: Context, kind: string, fn: BarApplier): void
+    }>('nodeBar')
+    if (!bar) return false
 
     for (const preset of WEB2API_PRESETS) {
-      registerBarAction(ctx, {
+      bar.register(ctx, {
         id: preset.id,
         types: [preset.nodeType],
         title: preset.title,
@@ -177,7 +187,7 @@ export function apply(ctx: Context) {
         // 轮询节奏用插件自己的配置（设置面板里那两项由此生效；共享默认 5 分钟会误杀长视频）
         pollIntervalMs: web2apiConfigFrom(ctx).pollIntervalMs,
         pollTimeoutMs: web2apiConfigFrom(ctx).timeoutMs,
-        async run(input, runCtx: BarRunContext) {
+        async run(input: BarRunInput, runCtx: BarRunContext) {
           const runInput: RunInput = {
             preset,
             prompt: input.prompt ?? '',
@@ -201,7 +211,7 @@ export function apply(ctx: Context) {
     // —— 结果写入器：image 复用 node-image 的（已有）；video / audio 由本插件提供 ——
     //    写 data.videoUrl / data.audioUrl（走 doc.updateNode → 进历史、可撤销、自动落盘）。
     try {
-      registerBarApplier(ctx, 'video', (nodeId, result) => {
+      bar.registerApplier(ctx, 'video', (nodeId: string, result: { urls?: string[] }) => {
         const url = result.urls?.[0]
         if (!url) return
         ctx.get<DocService>('doc').updateNode(nodeId, { data: { videoUrl: url } })
@@ -210,7 +220,7 @@ export function apply(ctx: Context) {
       /* 已有人注册（换了写回策略）：不重复注册、也不报错 */
     }
     try {
-      registerBarApplier(ctx, 'audio', (nodeId, result) => {
+      bar.registerApplier(ctx, 'audio', (nodeId: string, result: { urls?: string[] }) => {
         const url = result.urls?.[0]
         if (!url) return
         ctx.get<DocService>('doc').updateNode(nodeId, {

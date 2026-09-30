@@ -52,21 +52,6 @@ export interface Web2ApiPreset {
 }
 
 /** 比例候选（各平台枚举不同，按平台如实列） */
-const RATIO_IMAGE_DOUBAO: ToolParamDef = {
-  key: 'ratio',
-  kind: 'ratio',
-  label: '比例',
-  type: 'select',
-  default: '1:1',
-  options: [
-    { label: '1:1', value: '1:1' },
-    { label: '2:3', value: '2:3' },
-    { label: '3:4', value: '3:4' },
-    { label: '4:3', value: '4:3' },
-    { label: '9:16', value: '9:16' },
-    { label: '16:9', value: '16:9' },
-  ],
-}
 
 const RATIO_IMAGE_CHAT_DOUBAO: ToolParamDef = {
   key: 'ratio',
@@ -132,19 +117,6 @@ const RATIO_VIDEO_DOLA: ToolParamDef = {
   ],
 }
 
-const MODEL_IMAGE_DOUBAO: ToolParamDef = {
-  key: 'model',
-  kind: 'model',
-  label: '模型',
-  type: 'select',
-  default: 'Seedream 4.5',
-  options: [
-    { label: 'Seedream 5.0 Pro', value: 'Seedream 5.0 Pro' },
-    { label: 'Seedream 5.0 Lite', value: 'Seedream 5.0 Lite' },
-    { label: 'Seedream 4.5', value: 'Seedream 4.5' },
-    { label: 'Seedream 4.0', value: 'Seedream 4.0' },
-  ],
-}
 
 const MODEL_IMAGE_CHAT_DOUBAO: ToolParamDef = {
   key: 'model',
@@ -503,6 +475,100 @@ const DURATION_DOUBAO_API: ToolParamDef = {
   unit: '秒',
 }
 
+
+// ==================== ChatGPT（两个渠道：官方 / API 中转） ====================
+//
+// 用户点名这两种都要实现：
+// · 官方 ChatGPT —— 走 image_gen CLI（`chatgpt/generate-image`，需登录态 + access_token）；
+// · API 中转 APIMart —— OpenAI 兼容的 HTTP 接口（`apimart/generate-image`，用 API Key）。
+// 两者都是**异步**（服务端挂了 waitEngine，返回 taskId 后轮询 system/get-task）。
+
+/** ChatGPT 官方：比例 + 风格 */
+const RATIO_IMAGE_CHATGPT: ToolParamDef = {
+  key: 'ratio',
+  kind: 'ratio',
+  label: '比例',
+  type: 'select',
+  default: '1:1',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '2:3', value: '2:3' },
+    { label: '3:4', value: '3:4' },
+    { label: '4:3', value: '4:3' },
+    { label: '9:16', value: '9:16' },
+    { label: '16:9', value: '16:9' },
+  ],
+}
+
+const STYLE_CHATGPT_IMAGE: ToolParamDef = {
+  key: 'style',
+  kind: 'style',
+  label: '风格',
+  type: 'select',
+  options: [
+    { label: '写实摄影', value: 'photorealistic' },
+    { label: '动漫风格', value: 'anime' },
+    { label: '油画', value: 'oil-painting' },
+    { label: '水彩', value: 'watercolor' },
+    { label: '素描/手绘', value: 'sketch' },
+    { label: '3D 渲染', value: '3d-render' },
+    { label: '像素艺术', value: 'pixel-art' },
+    { label: '赛博朋克', value: 'cyberpunk' },
+    { label: '奇幻风格', value: 'fantasy' },
+    { label: '极简主义', value: 'minimalist' },
+  ],
+}
+
+/** APIMart（GPT Image 2 接口）：比例 15 档 + 分辨率 + 张数 */
+const RATIO_IMAGE_APIMART: ToolParamDef = {
+  key: 'ratio',
+  kind: 'ratio',
+  label: '比例',
+  type: 'select',
+  default: '1:1',
+  options: [
+    { label: '1:1', value: '1:1' },
+    { label: '3:2', value: '3:2' },
+    { label: '2:3', value: '2:3' },
+    { label: '4:3', value: '4:3' },
+    { label: '3:4', value: '3:4' },
+    { label: '5:4', value: '5:4' },
+    { label: '4:5', value: '4:5' },
+    { label: '16:9', value: '16:9' },
+    { label: '9:16', value: '9:16' },
+    { label: '2:1', value: '2:1' },
+    { label: '1:2', value: '1:2' },
+    { label: '3:1', value: '3:1' },
+    { label: '1:3', value: '1:3' },
+    { label: '21:9', value: '21:9' },
+    { label: '9:21', value: '9:21' },
+  ],
+}
+
+const RESOLUTION_APIMART_IMAGE: ToolParamDef = {
+  key: 'resolution',
+  kind: 'resolution',
+  label: '分辨率',
+  type: 'select',
+  default: '1k',
+  options: [
+    { label: '1K (标清)', value: '1k' },
+    { label: '2K (高清)', value: '2k' },
+    { label: '4K (超清)', value: '4k' },
+  ],
+}
+
+const COUNT_APIMART_IMAGE: ToolParamDef = {
+  key: 'n',
+  kind: 'count',
+  label: '数量',
+  type: 'number',
+  default: 1,
+  min: 1,
+  max: 10,
+  step: 1,
+}
+
 const IMAGE_REF = 'image' as const
 
 /**
@@ -517,12 +583,13 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     platform: '豆包',
     operation: '图像生成（auto）',
     nodeType: 'image',
-    title: '豆包·图像 auto',
+    // 第一个下拉显示**大模型/渠道**（照参考站与用户要求）；具体子模型在第二个下拉里选
+    title: '豆包',
     description: '走豆包网页 UI 自动化生成图片（/image 前缀指令），支持模型与比例',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
-    fields: [MODEL_IMAGE_CHAT_DOUBAO, RATIO_IMAGE_CHAT_DOUBAO],
+    fields: [MODEL_IMAGE_CHAT_DOUBAO, RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
     accepts: [IMAGE_REF],
     order: 10,
     async: true,
@@ -533,7 +600,7 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     platform: 'Dola',
     operation: '图像生成（auto）',
     nodeType: 'image',
-    title: 'Dola·图像 auto',
+    title: 'Dola',
     description: '走 Dola 网页 UI 自动化生成图片（/image 前缀指令）；需海外网络',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
@@ -544,19 +611,34 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     async: true,
   },
   {
-    id: 'web2api:doubao-image',
-    tool: 'doubao/generate-image',
-    platform: '豆包',
-    operation: '生图',
+    id: 'web2api:chatgpt-image',
+    tool: 'chatgpt/generate-image',
+    platform: 'ChatGPT',
+    operation: '文生图（官方）',
     nodeType: 'image',
-    title: '豆包·生图',
-    description: '豆包 AI 绘画接口：比例 / 风格 / 模型都可选',
+    title: 'ChatGPT 官方',
+    description: 'ChatGPT 官方渠道（image_gen CLI，需登录态）：比例 / 风格可选',
     group: 'web2api · 图片',
     promptMode: 'plain',
-    fields: [MODEL_IMAGE_DOUBAO, RATIO_IMAGE_DOUBAO, STYLE_DOUBAO_IMAGE],
+    fields: [RATIO_IMAGE_CHATGPT, STYLE_CHATGPT_IMAGE],
     accepts: [IMAGE_REF],
-    order: 12,
-    async: false,
+    order: 13,
+    async: true,
+  },
+  {
+    id: 'web2api:apimart-image',
+    tool: 'apimart/generate-image',
+    platform: 'ChatGPT',
+    operation: '文生图（API）',
+    nodeType: 'image',
+    title: 'GPT Image 2（API）',
+    description: 'API 中转渠道（APIMart，GPT Image 2）：比例 / 分辨率 / 张数可选',
+    group: 'web2api · 图片',
+    promptMode: 'plain',
+    fields: [RATIO_IMAGE_APIMART, RESOLUTION_APIMART_IMAGE, COUNT_APIMART_IMAGE],
+    accepts: [IMAGE_REF],
+    order: 14,
+    async: true,
   },
   {
     id: 'web2api:doubao-video-auto',

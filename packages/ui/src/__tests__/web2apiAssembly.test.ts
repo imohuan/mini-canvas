@@ -60,9 +60,11 @@ describe('web2api 插件整装', () => {
     const { ctx } = await boot()
     const actions = actionsOf(ctx, 'image')
     const web = actions.filter((a) => a.id.startsWith('web2api:'))
-    expect(web.length).toBeGreaterThanOrEqual(3)
+    // 四个图片渠道：豆包 / Dola / ChatGPT 官方 / GPT Image 2(API)
+    expect(web.length).toBeGreaterThanOrEqual(4)
     expect(web[0].id).toBe('web2api:doubao-image-auto')
-    expect(web[0].title).toContain('auto')
+    // 第一层下拉显示的是**大模型/渠道名**（具体子模型在第二个下拉里）
+    expect(web[0].title).toBe('豆包')
     ctx.stop()
   })
 

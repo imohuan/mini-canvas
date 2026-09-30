@@ -82,10 +82,20 @@ describe('预置配置表', () => {
     })
 
     it('豆包生图有 style，dola 图片没有（平台差异如实声明，不硬凑）', () => {
-      const doubaoImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-image')!
+      const doubaoImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-image-auto')!
       const dolaImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-image-auto')!
       expect(doubaoImage.fields.some((f) => f.kind === 'style')).toBe(true)
       expect(dolaImage.fields.some((f) => f.kind === 'style')).toBe(false)
+    })
+
+    it('图片渠道齐了：豆包 / Dola / ChatGPT 官方 / GPT Image 2(API)', () => {
+      const ids = presetsFor('image').map((p) => p.id)
+      expect(ids).toEqual([
+        'web2api:doubao-image-auto',
+        'web2api:dola-image-auto',
+        'web2api:chatgpt-image',
+        'web2api:apimart-image',
+      ])
     })
 
     it('Seedance 接口只有 16:9 / 9:16 两个比例（不能照抄豆包的七个）', () => {
@@ -114,4 +124,3 @@ describe('预置配置表', () => {
     })
   })
 })
-

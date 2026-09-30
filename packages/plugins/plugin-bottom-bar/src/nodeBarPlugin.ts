@@ -17,6 +17,7 @@ import type { BarAction, BarApplier } from './barTypes'
 import type { ToolResourceKind } from '@mini-canvas/kernel'
 import { runAction, resumeAction, type TaskDeps } from './taskRuntime'
 import { readRunState } from './runState'
+import { publishToolActions, type PublishToolActionsOptions } from './toolActions'
 import NodeTaskOverlay from './NodeTaskOverlay.vue'
 import NodeBottomBar from './NodeBottomBar.vue'
 import NodeBottomBarOverlay from './NodeBottomBarOverlay.vue'
@@ -80,6 +81,33 @@ export class NodeBarService extends Service {
   state(nodeId: string) {
     const doc = this.ctx.get<DocService>('doc')
     return readRunState(doc.getNode(nodeId)?.data)
+  }
+
+  // ==================== 写入面（给**别的插件**用；条目归调用方 scope） ====================
+  //
+  // 为什么方法要收一个 scope 参数：本服务是**共享单实例**，this.ctx 恒为 bottom-bar 的 scope。
+  // 若直接用 this.ctx 落场，别人的动作会挂在 bottom-bar 名下 —— 那家插件卸载时摘不掉自己的动作
+  // （留一条指向已死插件的 run）。所以把**调用方自己的 ctx** 传进来落场，卸载才会自动回收。
+  //
+  // 给方法而不是让调用方 import 注册糖：插件之间不互相 import（那是反向依赖），
+  // 统一经 `ctx.get('nodeBar')` 拿服务、按服务名协作。
+  /** 注册一条底栏动作（归属 = 传入的 scope，卸载自动摘除、同 id 替换） */
+  register(scope: PluginScope, action: BarAction): void {
+    registerBarAction(scope, action)
+  }
+
+  /** 注册某节点类型的结果写入器（一个 kind 只允许一个；归属 = 传入的 scope） */
+  registerApplier(scope: PluginScope, kind: string, fn: BarApplier): void {
+    registerBarApplier(scope, kind, fn)
+  }
+
+  /**
+   * 把 `ctx.tools` 里某类工具自动发布成底栏动作（「加一个模型 = 装一个工具插件」的保持点）。
+   * 与 register 同样归**传入的 scope**；工具表变化时自动增量同步。
+   * @returns 立即重新同步的函数（一般不用管）
+   */
+  publishTools(scope: PluginScope, opts: PublishToolActionsOptions): () => void {
+    return publishToolActions(scope, opts)
   }
 }
 
