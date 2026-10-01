@@ -117,6 +117,21 @@ export function buildCapabilities(
 ): {
   nodes: {
     register(def: NodeRegisterDef): void
+    /** 改某节点标题（label）。空串/undefined/全空白 → 清掉（显示回类型名）。 */
+    setLabel(id: string, label: string | undefined): void
+    /** 把某节点移到绝对坐标（同父坐标系） */
+    move(id: string, position: { x: number; y: number }): void
+    /** 设/清某节点的父（组归属）；undefined = 解除父 */
+    setParent(id: string, parentId: string | undefined): void
+    /** 删某节点（连带清相连边、子节点父引用、选中）；返回是否删到 */
+    remove(id: string): boolean
+    /**
+     * 改某节点的尺寸（宽高，px）—— 节点尺寸的一等入口，走唯一写入口（进历史 + 落盘），
+     * 并自动刷新卡片镜像（作者不用管 size 与 data.cardWidth 的分工）。
+     *
+     * @returns 是否写入成功；宽高非正有限数 → false 且不写。
+     */
+    setSize(id: string, w: number, h: number): boolean
     /**
      * 往某 type 的某区域叠一个 occupant（多插件同区域叠加；内容/装饰层/徽标等）。
      * 自动回收：插件卸载时该 occupant 移除，基座与其它贡献原位保留。
@@ -230,6 +245,22 @@ export function buildCapabilities(
   return {
     // ---------- ctx.nodes：注册一个节点类型（数据+展示+可选建节点），自动回收 ----------
     nodes: {
+      setLabel(id: string, label: string | undefined): void {
+        ctx.get<{ setNodeLabel(id: string, label: string | undefined): void }>('doc').setNodeLabel(id, label)
+      },
+      move(id: string, position: { x: number; y: number }): void {
+        ctx.get<{ moveNode(id: string, position: { x: number; y: number }): void }>('doc').moveNode(id, position)
+      },
+      setParent(id: string, parentId: string | undefined): void {
+        ctx.get<{ setNodeParent(id: string, parentId: string | undefined): void }>('doc').setNodeParent(id, parentId)
+      },
+      remove(id: string): boolean {
+        return ctx.get<{ removeNodes(ids: string[]): number }>('doc').removeNodes([id]) > 0
+      },
+      setSize(id: string, w: number, h: number): boolean {
+        // 薄糖：与 ctx.get('doc').setNodeSize 同一实现（尺寸只有一个写口，不新增第二条路）
+        return ctx.get<{ setNodeSize(id: string, w: number, h: number): boolean }>('doc').setNodeSize(id, w, h)
+      },
       register(def: NodeRegisterDef): void {
         // 步骤 9 运行时兜底：作者侧老字段 content 已改名为区域词 in。
         // 类型上它已被拦住；JS 调用方或漏网代码传进来时不能**静默丢掉组件**

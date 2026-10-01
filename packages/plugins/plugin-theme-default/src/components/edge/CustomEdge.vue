@@ -620,20 +620,6 @@ onUnmounted(() => {
         :style="{ opacity: isHighlighted ? 1 : 0.6 }"
       />
 
-      <foreignObject
-        v-if="showCutButton"
-        :x="cutButtonPosition.x - 16"
-        :y="cutButtonPosition.y - 16"
-        width="32"
-        height="32"
-        style="overflow: visible"
-      >
-        <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
-            <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </button>
-      </foreignObject>
     </template>
 
     <!-- 透明点击热区：独立于可见性 —— 隐藏连线时仍可选中/双击删除；临时拖线不渲染 -->
@@ -647,6 +633,24 @@ onUnmounted(() => {
       :stroke-width="Math.max(12, lineWidth)"
       stroke-linecap="round"
     />
+
+    <!-- 删除按钮必须**排在热区之后**：SVG 没有 z-index，后画的在上层、命中测试也归它。
+         之前按钮写在热区前面（顺序被 e1e1e997 把热区挪到末尾时打乱），于是宽 12px 的透明热区
+         整条盖住 32×32 的圆钮中心 —— 双击能弹出按钮，但点下去命中的是热区，看起来"按钮没反应"。 -->
+    <foreignObject
+      v-if="showCutButton && edgeShowVisual"
+      :x="cutButtonPosition.x - 16"
+      :y="cutButtonPosition.y - 16"
+      width="32"
+      height="32"
+      style="overflow: visible"
+    >
+      <button class="cut-btn" @click.stop="cutEdge" @mousedown.stop title="删除连线">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="w-4 h-4">
+          <path d="M14.1 14.1L19 19m-7-7l7-7m-7 7l-2.9 2.9M12 12L9.1 9.1" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+    </foreignObject>
   </g>
 </template>
 

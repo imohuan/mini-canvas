@@ -45,7 +45,6 @@ export async function writeGeneratedImage(nodeId: string, url: string, deps: Ima
     imageSize: undefined,
     imageWidth: size?.width,
     imageHeight: size?.height,
-    ...(sizes ? { cardWidth: sizes.cardWidth, cardHeight: sizes.cardHeight } : {}),
   }
   deps.writeData(nodeId, data, sizes?.size)
 }

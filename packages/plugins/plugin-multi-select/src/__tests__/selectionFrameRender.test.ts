@@ -303,22 +303,31 @@ describe('SelectionFrame 渲染（两个框不能重合）', () => {
     expect(inner).toContain('width:600px')
   })
 
-  it('两框线宽都按 1/zoom 反向缩放（配置值 = 屏幕上看到的粗细，与卡片边框同一约定）', async () => {
+  it('两框线宽**跟随画布缩放**（不再 1/zoom 反缩放，与卡片边框同一约定）', async () => {
     const html = await render(
       { [MULTI_SELECT_FRAME_KEYS.outerWidth]: 2, [MULTI_SELECT_FRAME_KEYS.innerWidth]: 3 },
       0.5,
     )
-    expect(styleOf(html, 'selection-frame-outer')).toContain('border-width:4px')
-    expect(styleOf(html, 'selection-frame-inner')).toContain('border-width:6px')
+    // 配置值原样落到 CSS（flow 单位）→ 屏幕上随画布一起变细
+    expect(styleOf(html, 'selection-frame-outer')).toContain('border-width:2px')
+    expect(styleOf(html, 'selection-frame-inner')).toContain('border-width:3px')
+  })
+
+  it('两框圆角也跟随画布缩放（不再 1/zoom 反缩放）', async () => {
+    const html = await render(
+      { [MULTI_SELECT_FRAME_KEYS.outerRadius]: 12, [MULTI_SELECT_FRAME_KEYS.innerRadius]: 8 },
+      0.5,
+    )
+    // 配置值原样落到 CSS（flow 单位）：0.5x 屏幕上看起来是 6 / 4px
+    expect(styleOf(html, 'selection-frame-outer')).toContain('border-radius:12px')
+    expect(styleOf(html, 'selection-frame-inner')).toContain('border-radius:8px')
   })
 
   /**
-   * 用户报的缺陷："你的这个多选框缩放之后的 padding 存在 BUG"。
-   *
-   * 线宽反缩放（屏幕上恒定）而间距不反缩放（屏幕上 = 配置 × zoom），于是缩得越小线越粗、
-   * 间距越窄，两条线糊成一条。这一条锁住"间距与线宽同空间"。
+   * 用户最新要求："希望这边的边框可以和画布一样一同缩放"。
+   * 这一条锁住间距**不再做 1/zoom 补偿**：flow 间距恒等于配置值，屏幕间距随 zoom 变小。
    */
-  it('间距也按 1/zoom 反缩放：缩小时 flow 间距变大，屏幕上量到的才是配置值', async () => {
+  it('间距跟随画布缩放：任意缩放下 flow 间距恒为配置值（不随 zoom 放大）', async () => {
     const at1 = await render()
     const at05 = await render({}, 0.5)
     const gap1 = outerGap(at1, 'selection-frame-outer', 'selection-frame-inner')
@@ -326,21 +335,22 @@ describe('SelectionFrame 渲染（两个框不能重合）', () => {
     // zoom=1：间距就是配置默认 16
     expect(gap1.left).toBe(16)
     expect(gap1.top).toBe(34)
-    // zoom=0.5：flow 间距翻倍成 32 / 68，屏幕上仍是 16 / 34
-    expect(gap05.left).toBe(32)
-    expect(gap05.top).toBe(68)
+    // zoom=0.5：flow 间距**仍是** 16 / 34（配置值即画布单位），屏幕上自然缩成 8 / 17
+    expect(gap05.left).toBe(16)
+    expect(gap05.top).toBe(34)
   })
 
-  it('缩小时两框不会因线宽撑大而糊在一起（间距屏幕值 > 两条线半宽之和）', async () => {
+  it('缩小时两框仍分得开（线宽也跟随画布，屏幕上按同比例缩，不会互相吃掉）', async () => {
     const zoom = 0.2
-    // 外框线宽 8 / 内框线宽 8：两侧各半宽 4 + 4 = 8px，间距在屏幕上必须仍大于它
+    // 外框线宽 8 / 内框线宽 8：屏幕上各为 8×0.2 = 1.6px，两侧半宽之和 1.6px
     const html = await render(
       { [MULTI_SELECT_FRAME_KEYS.outerWidth]: 8, [MULTI_SELECT_FRAME_KEYS.innerWidth]: 8 },
       zoom,
     )
     const gap = outerGap(html, 'selection-frame-outer', 'selection-frame-inner')
     const gapOnScreen = gap.left * zoom
-    expect(gapOnScreen).toBeGreaterThan(8)
+    const lineHalfSum = (8 * zoom) / 2 + (8 * zoom) / 2
+    expect(gapOnScreen).toBeGreaterThan(lineHalfSum)
   })
 
   it('外框线宽设为 0 时仍是拖动把手（元素在、可接收事件），内框照常显示', async () => {

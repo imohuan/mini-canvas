@@ -22,7 +22,7 @@
  * promptBinding:'text' 把输入框接到 data.text；没有可用动作时自身返回空。
  * 服务取值（§0.1）：组件里一律 ctx.get(...)，不直访 ctx.nodeBar。
  */
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import {
@@ -43,6 +43,12 @@ import {
   type UpstreamMaterial,
 } from './panelSource'
 import { readRunState } from './runState'
+// 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
+import { referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
+// 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
+import { openPreview } from './mediaPreview'
+// 右侧图标按钮里"改提示词"的小动作（翻译提示词）
+import { hasTranslateInstruction, toggleTranslateInstruction } from './promptActions'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -105,6 +111,38 @@ onBeforeUnmount(() => {
 })
 
 const hasActions = computed(() => actions.value.length > 0)
+
+/**
+ * 模型/动作下拉的选项。
+ *
+ * 带上 description：下拉浮层里悬停某一行时，名称上移、下方浮现这句话
+ * （用户要求「参考我的右键菜单那个 hover 描述动画」——Select 的选项行现在就是这么画的）。
+ * 带上 icon：按动作服务的节点类型取该类型的图标（图片/视频/音频），
+ * 下拉里每行左侧出一个图标托（用户要求「参考一下它的 UI 图标」，别再是一列光秃秃的文字）。
+ */
+const actionOptions = computed(() =>
+  actions.value.map((a) => ({
+    label: a.title,
+    value: a.id,
+    description: a.description,
+    icon: iconOfType(a.types?.[0] ?? nodeType.value),
+  })),
+)
+
+/**
+ * 节点类型 → 图标句柄。
+ *
+ * 单一来源 = 节点类型自己注册的 icon（ctx.nodes.register 的 icon），
+ * 取不到再按类型名回落内置 SVG —— 本插件不认识「图片节点长什么样」，
+ * 只把类型名翻译成一个图标给下拉用。
+ */
+function iconOfType(type: string | undefined): unknown {
+  if (!type) return undefined
+  const reg = ctx.tryGet<{ get(t: string): { icon?: unknown } | undefined }>('nodeRegistry')
+  const fromRegistry = reg?.get(type)?.icon
+  if (fromRegistry) return fromRegistry
+  return FALLBACK_TYPE_ICONS[type]
+}
 
 // —— 当前动作与参数 ——
 const currentId = ref('')
@@ -218,8 +256,16 @@ watch(
 )
 const promptBinding = computed(() => currentAction.value?.promptBinding ?? 'none')
 const needsPrompt = computed(() => currentAction.value?.needsPrompt === true)
-/** 当前动作声明的参数（交给 ToolParamGroup 聚成一个下拉） */
-const paramDefs = computed<ToolParamDef[]>(() => (currentAction.value?.fields ?? []) as ToolParamDef[])
+/**
+ * 当前动作声明的参数（交给 ToolParamGroup 聚成一个下拉）。
+ *
+ * **过滤掉「风格」类参数**（用户 2026-10-01 明确要求删除）：风格是写在提示词/标签里的文字，
+ * 不该作为模型参数出现在底栏 ——「把你这个疯狗给删掉，听不懂吗」。这里做一道与来源无关的
+ * 兜底：即便某个模型插件清单里仍声明了 `kind:'style'`，底栏也不再把它渲染成下拉。
+ */
+const paramDefs = computed<ToolParamDef[]>(() =>
+  ((currentAction.value?.fields ?? []) as ToolParamDef[]).filter((p) => p.kind !== 'style'),
+)
 /** 输入区：needsPrompt 的动作才有 */
 const showEditor = computed(() => needsPrompt.value)
 
@@ -243,9 +289,33 @@ const editorResources = computed<ResourceItem[]>(() => toEditorResources(materia
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
 
 /** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
-const previewCard = ref<(typeof cards.value)[number] | null>(null)
 function openCard(card: (typeof cards.value)[number]): void {
-  previewCard.value = card
+  // 全屏预览：用户要求「要的是全屏，是整个视图」
+  openPreview({
+    name: card.name,
+    kind: card.isText ? 'text' : (card.kind as 'image' | 'video' | 'audio'),
+    url: card.url,
+    text: card.value,
+  })
+}
+
+// —— 参考：两态开关（用户实测反馈「点击之后就无法取消」——这里做成开/关切换） ——
+const referencing = ref(false)
+function syncReference(): void {
+  referencing.value = referenceActive() && referenceOwner() === props.id
+}
+syncReference()
+// 会话状态是 module 级 ref：这里不需要订阅，跟住 epoch 变化即可（同一次选择态进入即高亮）
+watch(referenceEpoch, syncReference)
+
+/**
+ * 点「参考」：两态开关 —— 正在为本节点选参考 → 再点一次退出；否则进入。
+ * 用户实测反馈：「点击'参考'按钮之后就无法取消」原来是因为按钮显示态没跟上会话状态。
+ * 现在按钮高亮态直接读会话状态，点一下必切换。
+ */
+function toggleReference(): void {
+  toggleReferenceMode(props.id)
+  syncReference()
 }
 
 // —— 字符计数（与参考图一致：当前/上限） ——
@@ -292,7 +362,7 @@ async function onRun(): Promise<void> {
   //   用户要求：连了图片/视频/文字就要都上传给后端，没 @ 也要传。
   //   这里用 materials 而不是编辑器里解析出的引用：编辑器只认 @ 过的 token，
   //   而"连进来就算素材"是 v1 既有语义（useUpstreamResources 也是全收）。
-  await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
+await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
     prompt: prompt.value,
     values: values.value,
     resources: toToolResources(materials.value),
@@ -308,7 +378,9 @@ function onFieldChange(key: string, v: string | number | boolean): void {
 /** 参数区：把只读读数拼进「比例·画质·2K·1张」那类紧凑展示（参考图是一串点分） */
 const fieldSummary = computed(() => {
   const parts: string[] = []
-  for (const p of (currentAction.value?.fields ?? []) as ToolParamDef[]) {
+  // 用**过滤后的** paramDefs（不直接读 fields）：风格参数已按用户要求摘掉，
+  // 若读原始 fields，它的默认值会从摘要里漏出来（实测：摘要串里冒出「人像摄影」）。
+  for (const p of paramDefs.value) {
     const v = values.value[p.key]
     if (v === undefined || v === '') continue
     const opt = p.options?.find((o) => o.value === v)
@@ -319,51 +391,128 @@ const fieldSummary = computed(() => {
 
 const ICON_EXPAND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+/** 收起（展开态按钮）：把四角箭头反过来朝内 */
+const ICON_COLLAPSE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
+const ICON_GEAR =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+
+/** 类型名 → 内置回退图标（节点类型没声明 icon 时用；与各节点插件的图标同款线性 SVG） */
+const FALLBACK_TYPE_ICONS: Record<string, string> = {
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="8" y1="20" x2="16" y2="20"/></svg>',
+  image:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-8 8"/></svg>',
+  video:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 9l4-2v10l-4-2"/></svg>',
+  audio:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10v4"/><path d="M7 6v12"/><path d="M11 3v18"/><path d="M15 7v10"/><path d="M19 10v4"/></svg>',
+}
 const ICON_PLUS =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
 const ICON_TAG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>'
-const ICON_STYLE =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4.1 12.9a2 2 0 0 0 0 2.8l4.2 4.2a2 2 0 0 0 2.8 0L22 9"/><path d="M14 7l3 3"/><path d="M8.5 13.5v6"/><path d="M5.5 16.5h6"/></svg>'
 const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'
 const ICON_TRANSLATE =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 3v2c0 4-2 7-5 8"/><path d="M5 9c1 3 3 5 6 6"/><path d="M14 20l4-9 4 9"/><path d="M15.5 17h5"/></svg>'
-const ICON_SLIDERS =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>'
 const ICON_SPARKLE =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>'
+
+/**
+ * 是否把整个底栏**展开成大弹窗**（用户要求：点右上角「展开」→ 变成 dialog 形式展示同一套 UI）。
+ *
+ * 为什么用「同一个组件换定位」而不是另写一个弹窗：弹窗里要的是**同一份** UI 与**同一份**状态
+ * （素材、输入、模型、参数都一致）。复制一份 DOM 必然两边漂移；这里只是把同一块 `.nb-root`
+ * 在展开时 Teleport 到 body、居中并加一层遮罩，内容一个字都不改。
+ */
+const expanded = ref(false)
+function onExpandKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && expanded.value) {
+    e.stopPropagation()
+    expanded.value = false
+  }
+}
+onMounted(() => window.addEventListener('keydown', onExpandKeydown, true))
+onBeforeUnmount(() => window.removeEventListener('keydown', onExpandKeydown, true))
+/** 翻译提示词：有没有加过那句"翻成英文"的指令（按钮高亮态） */
+const translated = computed(() => hasTranslateInstruction(prompt.value))
+function toggleTranslate(): void {
+  // 程序化改文本时必须**清掉 promptDoc**：编辑器在 [modelValue, promptDoc] 变化时，
+  // 只要 promptDoc 还在就优先用它的旧 JSON 还原 —— 那会把这次追加的指令直接顶回去
+  // （实测：用户先打过字、promptDoc 已生成，再点「翻译」文字纹丝不动）。
+  // 清掉之后编辑器走「纯文本恢复」路径，按新的 modelValue 重建正文。
+  promptDoc.value = undefined
+  onPromptUpdate(toggleTranslateInstruction(prompt.value))
+}
+/**
+ * 「全局设置」入口：打开应用的**全局设置面板**（与顶栏那枚齿轮同一个面板）。
+ *
+ * 走内核事件（settings:ui-open）：本组件在插件里，够不到装配层的 settingsOpen，
+ * 装配层订阅该事件后把面板打开 —— 与关闭通道 settings:ui-close 对称。
+ * 面板内容还没定（用户说暂时占位），但**入口必须真的能用**（用户实测反馈：
+ * 「右侧你的这个设置按钮也给我搞没了，点击也没反应」）。
+ */
+function openGlobalSettings(): void {
+  const bus = ctx as unknown as { emit?: (name: string) => void }
+  bus.emit?.('settings:ui-open')
+}
 </script>
 
 <template>
+  <!--
+    展开时整块 Teleport 到 body、加一层遮罩、居中成大弹窗（用户要求「变成 dialog 的形式，
+    展示这里的 UI」）。收起时 Teleport 被禁用、外壳 `display:contents` 完全透明，
+    底栏还是原来那条贴在节点下方的浮层 —— 内容与状态一份，只是换了容器与定位。
+  -->
+  <Teleport to="body" :disabled="!expanded">
   <div
     v-if="visible && hasActions && !submitted"
+    class="nb-shell"
+    :class="{ 'is-expanded': expanded }"
+    @pointerdown.self="expanded = false"
+  >
+  <div
     class="nb-root nodrag nopan"
-    :style="panelStyle"
+    :class="{ 'is-expanded': expanded }"
+    :style="expanded ? undefined : panelStyle"
+    :role="expanded ? 'dialog' : undefined"
+    :aria-modal="expanded ? 'true' : undefined"
     data-testid="node-bottom-bar"
     @pointerdown.stop
   >
     <!-- 一排 pill（参考图顶行：+参考 / 标记 / 风格；动作也在这里成排，选中高亮） -->
     <div class="nb-pills">
-      <button class="nb-pill" type="button" :title="'已连接 ' + cards.length + ' 个素材，输入框里可用 @ 引用'" @click.stop>
+      <button
+        class="nb-pill"
+        :class="{ 'is-active': referencing }"
+        type="button"
+        :title="referencing ? '退出参考选择' : '在画布上选择参考（选一个就连到本节点）'"
+        @click.stop="toggleReference"
+      >
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_PLUS" />
         <span>参考</span>
         <span v-if="cards.length > 0" class="nb-pill-badge">{{ cards.length }}</span>
       </button>
-      <button class="nb-pill" type="button" title="标记" @click.stop>
+      <!-- 标记：功能尚未实现，置灰（用户要求：给一个透明度效果表示不支持） -->
+      <button class="nb-pill is-disabled" type="button" disabled :title="'标记：暂未支持'" @click.stop>
         <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_TAG" />
         <span>标记</span>
       </button>
-      <button class="nb-pill" type="button" title="风格" @click.stop>
-        <span class="nb-pill-icon" aria-hidden="true" v-html="ICON_STYLE" />
-        <span>风格</span>
-      </button>
-      <button class="nb-expand nb-icon-btn" type="button" title="展开" aria-label="展开">
-        <span aria-hidden="true" v-html="ICON_EXPAND" />
+      <!-- 风格：不在这里做（用户要求 pass 掉）。团队的风格是写在提示词里的文字，
+           后期会变成输入框里的一个 tag，而不是这里的第二类参考图。 -->
+      <button
+        class="nb-expand nb-icon-btn"
+        type="button"
+        :title="expanded ? '收起为浮动底栏' : '展开为大窗口'"
+        :aria-label="expanded ? '收起' : '展开'"
+        :aria-expanded="expanded"
+        @click.stop="expanded = !expanded"
+      >
+        <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
       </button>
     </div>
 
-    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开预览 -->
+    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开 → 全屏预览 -->
     <div v-if="cards.length > 0" class="nb-cards">
       <button
         v-for="(card, i) in cards"
@@ -373,7 +522,9 @@ const ICON_SPARKLE =
         :title="card.name"
         @click.stop="openCard(card)"
       >
-        <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" />
+        <!-- 图片素材卡：正方形 + cover 铺满，并对**图片本身**加模糊
+             （用户要求：卡片是正方形、图片用 cover、给图片一个模糊效果）。 -->
+        <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" draggable="false" />
         <span v-else class="nb-card-text">{{ (card.name || '文')[0] }}</span>
         <span class="nb-card-index">{{ i + 1 }}</span>
       </button>
@@ -401,16 +552,19 @@ const ICON_SPARKLE =
         <div class="nb-field nb-field--action">
           <Select
             :model-value="currentId"
-            :options="actions.map((a) => ({ label: a.title, value: a.id }))"
+            :options="actionOptions"
             :disabled="running"
             dropdown-width="match"
+            dropdown-min-width="300px"
             :input-id="'nb-action-' + props.id"
             title="选择动作 / 模型"
             @update:model-value="(v: string | number) => selectAction(String(v))"
           />
         </div>
         <span class="nb-divider" aria-hidden="true" />
-        <!-- 参数收成**一个合并下拉**（参考图：16:9 · 标准画质 · 2K · 1张 ⌄） -->
+        <!-- 比例等参数：**自己一个下拉**（不塞进模型下拉里，也不藏进"设置"面板）。
+             用户要求：「右侧的比例选择也是通过下拉的方式」——左边是插件/动作提供的功能
+             （模型 + 参数），都摆在底行上；右边那枚齿轮才是全局设置。 -->
         <div v-if="paramDefs.length > 0" class="nb-field nb-field--params">
           <ToolParamGroup
             :params="paramDefs"
@@ -424,15 +578,32 @@ const ICON_SPARKLE =
 
       <div class="nb-actions">
         <span v-if="infoText" class="nb-info">{{ infoText }}</span>
-        <button class="nb-icon-btn" type="button" title="高级参数" aria-label="高级参数">
-          <span aria-hidden="true" v-html="ICON_SLIDERS" />
-        </button>
-        <button class="nb-icon-btn" type="button" title="翻译提示词" aria-label="翻译提示词">
+        <button
+          class="nb-icon-btn"
+          :class="{ 'is-on': translated }"
+          type="button"
+          :disabled="!showEditor"
+          :title="translated ? '取消翻译指令' : '让模型用英文输出（在提示词里追加一句指令）'"
+          aria-label="翻译提示词"
+          @click.stop="toggleTranslate"
+        >
           <span aria-hidden="true" v-html="ICON_TRANSLATE" />
         </button>
         <span class="nb-icon-btn nb-icon-btn--static" :title="fieldSummary || '生成参数'">
           <span aria-hidden="true" v-html="ICON_SPARKLE" />
         </span>
+        <!-- 全局设置（右侧 = 跟插件/动作无关的全局项）：**占位**。
+             用户要求：位置在右侧、跟插件/动作无关；点它打开应用的全局设置面板。
+             面板里的内容暂不实现（还没想好写什么），但入口要真的能点开。 -->
+        <button
+          class="nb-icon-btn"
+          type="button"
+          title="全局设置"
+          aria-label="全局设置"
+          @click.stop="openGlobalSettings"
+        >
+          <span aria-hidden="true" v-html="ICON_GEAR" />
+        </button>
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <button
           class="nb-run"
@@ -448,28 +619,53 @@ const ICON_SPARKLE =
       </div>
     </div>
 
-
-    <!-- 素材预览（点卡片进入） -->
-    <div v-if="previewCard" class="nb-preview" @click.stop="previewCard = null">
-      <img v-if="previewCard.url && !previewCard.isText" class="nb-preview-img" :src="previewCard.url" :alt="previewCard.name" />
-      <pre v-else class="nb-preview-text">{{ previewCard.value || previewCard.name }}</pre>
-      <button class="nb-preview-close" type="button" title="关闭预览" @click.stop="previewCard = null">✕</button>
-    </div>
   </div>
+  </div>
+  </Teleport>
 </template>
 
 <style scoped>
 /* 视觉照 docs/design/ui-style-guide.md；位置（贴边/居中/反缩放）由壳的下插槽定位层给。
    尺寸照 LibTV 参考实测：面板圆角 16、内边距 8、pill 高 26、素材卡 48、发送按钮 Ø34。 */
+
+/* 外壳：收起时完全透明（display:contents，跟没有一样，保持原浮层布局）；
+   展开时铺满视口、居中、加遮罩当大弹窗用（用户要求「变成 dialog 的形式」）。 */
+.nb-shell {
+  display: contents;
+}
+.nb-shell.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: var(--ui-scrim, rgb(15 23 42 / 0.35));
+  backdrop-filter: blur(2px);
+}
+
+/* 展开态：固定尺寸、随视口限高；面板本身仍是同一套内容 */
+.nb-root.is-expanded {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+  box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.2));
+}
+/* 展开态：输入区给足高度（大窗口的意义就是能一次写很多） */
+.nb-root.is-expanded .nb-editor {
+  --nb-max: 40vh;
+}
+
 .nb-root {
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
   box-sizing: border-box;
-  /* 左右多留一点（用户实测反馈：右侧内容贴到边、看着像出屏）：
-     上下 8、左右 12 */
   min-width: 360px;
+  /* 左右多留一点（用户实测反馈：右侧内容贴到边、看着像出屏）：
+     上下 8、左右 12，给一排 pill / 输入区 / 底行都留出可呼吸的边距 */
   padding: 8px 12px;
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 16px;
@@ -508,6 +704,23 @@ const ICON_SPARKLE =
   opacity: 0.5;
   cursor: not-allowed;
 }
+.nb-pill:disabled,
+.nb-pill.is-disabled {
+  /* 用户要求：「标记」暂不支持 → 给一个透明度效果 */
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.nb-pill.is-active {
+  background: var(--ui-accent, #1f6dff);
+  color: var(--ui-primary-ink, #ffffff);
+}
+.nb-pill.is-active:hover:not(:disabled) {
+  background: var(--ui-accent, #1f6dff);
+}
+.nb-pill.is-active .nb-pill-badge {
+  background: color-mix(in srgb, var(--ui-primary-ink, #ffffff) 24%, transparent);
+  color: var(--ui-primary-ink, #ffffff);
+}
 .nb-pill--action.is-active {
   background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
   color: var(--ui-accent, #0891b2);
@@ -534,7 +747,7 @@ const ICON_SPARKLE =
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-/* 展开按钮浮在右上角（参考图 right-2 top-2，28×28） */
+/* 展开按钮浮在右上角；右缘与面板内容边（左右 padding 12）对齐 */
 .nb-expand {
   position: absolute;
   right: 12px;
@@ -567,6 +780,14 @@ const ICON_SPARKLE =
 .nb-icon-btn--static:hover {
   background: transparent;
   color: var(--ui-ink-dim, #6b7280);
+}
+.nb-icon-btn.is-on {
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  color: var(--ui-accent, #0891b2);
+}
+.nb-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .nb-icon-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
@@ -613,6 +834,10 @@ const ICON_SPARKLE =
   height: 100%;
   object-fit: cover;
   display: block;
+  /* 用户要求：图片本身加模糊（卡片是正方形、cover 铺满）——
+     放一点点 scale 是为了 blur 不把卡片四周"啃"出一圈透明边。 */
+  transform: scale(1.18);
+  filter: blur(1px);
 }
 .nb-card-text {
   display: flex;
@@ -772,8 +997,12 @@ const ICON_SPARKLE =
   flex: none;
   min-width: 0;
 }
+/*
+ * 两个下拉各自给一个最小宽度（用户实测反馈）：不设的话，模型名稍长就把触发框压成
+ * 一条窄缝，看着很挤；设了下限后，名字统一在 148/150px 起跳，两个框宽度也齐整。
+ */
 .nb-field--action {
-  /* 两个下拉同一档最小宽度，底行看起来齐整 */
+  /* 两个下拉给同一档最小宽度，底行看起来齐整（用户实测反馈：之前一个宽一个窄） */
   min-width: 148px;
   max-width: 200px;
 }
@@ -804,18 +1033,24 @@ const ICON_SPARKLE =
   height: 14px;
   color: var(--ui-ink-mute, #8c95a3);
 }
-/* 参数合并下拉：允许收缩，超长省略（不然会把底行挤爆、模型名被裁） */
+/*
+ * 参数合并下拉：**按内容自适应宽度**。
+ *
+ * 用户实测反馈：「你这个比例的下拉，文字就那么长，你给我把按钮搞那么大」——
+ * 之前这里写死 min-width:148px 又强制 width:100%，于是 "16:9" 撑成一整条长按钮。
+ * 参数摘要本来就短（16:9 / 1:1…），让它随内容收紧、超长才省略即可。
+ */
 .nb-field--params {
   flex: 0 1 auto;
-  min-width: 148px;
+  min-width: 0;
+  max-width: 240px;
 }
-/* 触发器要填满这块最小宽度（用户实测：不填满时它按内容收缩，只剩 ~100px） */
-.nb-field--params :deep(.tpg-root),
-.nb-field--params :deep(.tpg-trigger) {
-  width: 100%;
+/* 触发器按内容宽（不拉满），与模型下拉之间保持一个分隔线；箭头仍在文字右侧 */
+.nb-field--params :deep(.tpg-root) {
+  width: auto;
 }
 .nb-field--params :deep(.tpg-trigger) {
-  justify-content: flex-start;
+  width: auto;
 }
 
 .nb-actions {

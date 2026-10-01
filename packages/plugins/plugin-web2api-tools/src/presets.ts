@@ -150,46 +150,12 @@ const DURATION_DOLA_AUTO: ToolParamDef = {
   ],
 }
 
-const STYLE_DOUBAO_IMAGE: ToolParamDef = {
-  key: 'style',
-  kind: 'style',
-  label: '风格',
-  type: 'select',
-  options: [
-    { label: '人像摄影', value: 'skill_image_styles_portrait' },
-    { label: '电影写真', value: 'skill_image_styles_film' },
-    { label: '中国风', value: 'skill_image_styles_chinese' },
-    { label: '动漫', value: 'skill_image_styles_japanese_anime' },
-    { label: '3D渲染', value: 'skill_image_styles_3d' },
-    { label: '赛博朋克', value: 'image_gen_style_cyberpunk' },
-    { label: 'CG 动画', value: 'skill_image_styles_cg' },
-    { label: '水墨画', value: 'skill_image_styles_ink_wash_painting' },
-    { label: '油画', value: 'skill_image_styles_oil_painting' },
-    { label: '古典', value: 'skill_image_styles_classic' },
-    { label: '水彩画', value: 'skill_image_styles_watercolor' },
-    { label: '卡通', value: 'skill_image_styles_cartoon' },
-    { label: '平面插画', value: 'skill_image_styles_flat_illustration' },
-    { label: '风景', value: 'skill_image_styles_landscape' },
-    { label: '港风动漫', value: 'skill_image_styles_hongkong_anime' },
-    { label: '像素风格', value: 'skill_image_styles_pixel_style' },
-    { label: '荧光绘画', value: 'skill_image_styles_fluorescence' },
-    { label: '彩铅画', value: 'skill_image_styles_colored_pencil' },
-    { label: '手办', value: 'skill_image_styles_figure' },
-    { label: '儿童绘画', value: 'skill_image_styles_children_illustration' },
-    { label: '抽象', value: 'skill_image_styles_abstract' },
-    { label: '锐笔插画', value: 'skill_image_styles_sharp_illustration' },
-    { label: '二次元', value: 'skill_image_styles_acg' },
-    { label: '油墨印刷', value: 'skill_image_styles_ink_print' },
-    { label: '版画', value: 'skill_image_styles_bnw_printing' },
-    { label: '莫奈', value: 'skill_image_styles_monet' },
-    { label: '毕加索', value: 'skill_image_styles_picasso' },
-    { label: '伦勃朗', value: 'skill_image_styles_rembrandt' },
-    { label: '马蒂斯', value: 'skill_image_styles_matisse' },
-    { label: '巴洛克', value: 'skill_image_styles_baroque' },
-    { label: '复古动漫', value: 'skill_image_styles_oldschool' },
-    { label: '绘本', value: 'skill_image_styles_picturebook' },
-  ],
-}
+/**
+ * 注：这里原本有一个「风格」下拉（32 档平台预设）。
+ * 用户明确要求 pass 掉（2026-10-01）：「我们的风格一般都会直接写在提示词中或标签
+ * （后期在输入框里做成一个 tag），作为一个标签存在」—— 风格归提示词，不再占一个模型参数。
+ * 平台侧若仍需 style，由提示词/标签承载，不在这里重复一遍。
+ */
 
 const SPEAKER_DOUBAO_TTS: ToolParamDef = {
   key: 'speaker',
@@ -423,24 +389,7 @@ const RATIO_IMAGE_CHATGPT: ToolParamDef = {
   ],
 }
 
-const STYLE_CHATGPT_IMAGE: ToolParamDef = {
-  key: 'style',
-  kind: 'style',
-  label: '风格',
-  type: 'select',
-  options: [
-    { label: '写实摄影', value: 'photorealistic' },
-    { label: '动漫风格', value: 'anime' },
-    { label: '油画', value: 'oil-painting' },
-    { label: '水彩', value: 'watercolor' },
-    { label: '素描/手绘', value: 'sketch' },
-    { label: '3D 渲染', value: '3d-render' },
-    { label: '像素艺术', value: 'pixel-art' },
-    { label: '赛博朋克', value: 'cyberpunk' },
-    { label: '奇幻风格', value: 'fantasy' },
-    { label: '极简主义', value: 'minimalist' },
-  ],
-}
+/** 风格同上：已 pass 掉，归提示词/标签，不占模型参数。 */
 
 /** APIMart（GPT Image 2 接口）：比例 15 档 + 分辨率 + 张数 */
 const RATIO_IMAGE_APIMART: ToolParamDef = {
@@ -513,12 +462,12 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     operation: '图像生成（auto）',
     nodeType: 'image',
     title: '豆包 Seedream 4.5',
-    description: '豆包网页 UI 自动化生图（Seedream 4.5）：比例 / 风格可选',
+    description: '豆包网页 UI 自动化生图（Seedream 4.5）：比例可选；风格写在提示词里',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
     model: 'Seedream 4.5',
-    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
+    fields: [RATIO_IMAGE_CHAT_DOUBAO],
     accepts: [IMAGE_REF],
     order: 10,
     async: true,
@@ -530,12 +479,12 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     operation: '图像生成（auto）',
     nodeType: 'image',
     title: '豆包 Seedream 5.0 Lite',
-    description: '豆包网页 UI 自动化生图（Seedream 5.0 Lite）：比例 / 风格可选',
+    description: '豆包网页 UI 自动化生图（Seedream 5.0 Lite）：比例可选；风格写在提示词里',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
     model: 'Seedream 5.0 Lite',
-    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
+    fields: [RATIO_IMAGE_CHAT_DOUBAO],
     accepts: [IMAGE_REF],
     order: 11,
     async: true,
@@ -547,12 +496,12 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     operation: '图像生成（auto）',
     nodeType: 'image',
     title: '豆包 Seedream 4.0',
-    description: '豆包网页 UI 自动化生图（Seedream 4.0）：比例 / 风格可选',
+    description: '豆包网页 UI 自动化生图（Seedream 4.0）：比例可选；风格写在提示词里',
     group: 'web2api · 图片',
     promptMode: 'chat-auto',
     mediaMode: 'image',
     model: 'Seedream 4.0',
-    fields: [RATIO_IMAGE_CHAT_DOUBAO, STYLE_DOUBAO_IMAGE],
+    fields: [RATIO_IMAGE_CHAT_DOUBAO],
     accepts: [IMAGE_REF],
     order: 12,
     async: true,
@@ -600,10 +549,10 @@ export const WEB2API_PRESETS: Web2ApiPreset[] = [
     operation: '文生图（官方）',
     nodeType: 'image',
     title: 'ChatGPT 官方',
-    description: 'ChatGPT 官方渠道（image_gen CLI，需登录态）：比例 / 风格可选',
+    description: 'ChatGPT 官方渠道（image_gen CLI，需登录态）：比例可选；风格写在提示词里',
     group: 'web2api · 图片',
     promptMode: 'plain',
-    fields: [RATIO_IMAGE_CHATGPT, STYLE_CHATGPT_IMAGE],
+    fields: [RATIO_IMAGE_CHATGPT],
     accepts: [IMAGE_REF],
     order: 15,
     async: true,

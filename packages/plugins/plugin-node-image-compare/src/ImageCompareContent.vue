@@ -64,13 +64,11 @@ function syncFollowWidth(): void {
   const patch = compareWidthPatch(target, props.data, DEFAULT_COMPARE_HEIGHT)
   if (!patch) return
   ctx
-    .get<{ updateNode(id: string, patch: { data: Record<string, unknown>; size: { w: number; h: number } }): void }>(
+    .get<{ updateNode(id: string, patch: { size?: { w: number; h: number } }): void }>(
       'doc',
     )
-    .updateNode(props.id, {
-      data: { ...(props.data ?? {}), cardWidth: patch.cardWidth },
-      size: patch.size,
-    })
+    // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐
+    .updateNode(props.id, { size: patch.size })
 }
 
 // 上游图变化（新连一张 / 换图 / 上游卡片宽度被 resize）→ 重新对齐宽度。

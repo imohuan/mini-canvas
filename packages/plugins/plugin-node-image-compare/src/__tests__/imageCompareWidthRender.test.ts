@@ -55,8 +55,7 @@ describe('对比节点宽度跟随第一条连线的图片', () => {
     await render('cmp', { cardWidth: 480, cardHeight: 260 })
     expect(writes).toHaveLength(1)
     expect(writes[0].id).toBe('cmp')
-    expect(writes[0].patch.data.cardWidth).toBe(420)
-    // 两份尺寸必须一致：只改一个会出现"卡片变了但边端点还画在旧宽度"
+    // 只写正式尺寸 size（卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补齐）
     expect(writes[0].patch.size).toEqual({ w: 420, h: 260 })
   })
 
@@ -73,7 +72,7 @@ describe('对比节点宽度跟随第一条连线的图片', () => {
     ]
     await render('cmp', { cardWidth: 480, cardHeight: 260 })
     expect(writes).toHaveLength(1)
-    expect(writes[0].patch.data.cardWidth).toBe(420)
+    expect(writes[0].patch.size?.w).toBe(420)
   })
 
   it('调换连线顺序 → 跟新顺序里的第一条', async () => {
@@ -82,7 +81,7 @@ describe('对比节点宽度跟随第一条连线的图片', () => {
       { id: 'e2', source: 'imgA', target: 'cmp' },
     ]
     await render('cmp', { cardWidth: 480, cardHeight: 260 })
-    expect(writes[0].patch.data.cardWidth).toBe(300)
+    expect(writes[0].patch.size?.w).toBe(300)
   })
 
   it('还没连图 → 不写（不猜尺寸，保持用户拖过的宽度）', async () => {

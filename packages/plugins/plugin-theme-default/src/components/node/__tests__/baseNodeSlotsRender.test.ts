@@ -42,7 +42,13 @@ const OverlayStub = defineComponent({ name: 'OverlayStub', render: () => h('div'
 function renderCtx(
   registry: NodeRegistry,
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number; resizingId?: string | null } = {},
+  opts: {
+    selectedIds?: string[]
+    selecting?: boolean
+    zoom?: number
+    resizingId?: string | null
+    draggingId?: string | null
+  } = {},
 ): CanvasRenderContext {
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(opts.selectedIds ?? [])
@@ -77,7 +83,7 @@ function renderCtx(
       activeConnection: refOf(null),
     },
     interaction: {
-      isNodeDragging: refOf(false),
+      isNodeDragging: refOf(opts.draggingId != null),
       isSelecting: refOf(opts.selecting === true),
       nodeResizing: refOf(opts.resizingId != null),
       nodeResizeId: refOf(opts.resizingId ?? null),
@@ -105,7 +111,13 @@ function renderNode(
   registry: NodeRegistry,
   data: Record<string, unknown> = {},
   settings: Record<string, unknown> = {},
-  opts: { selectedIds?: string[]; selecting?: boolean; zoom?: number; resizingId?: string | null } = {},
+  opts: {
+    selectedIds?: string[]
+    selecting?: boolean
+    zoom?: number
+    resizingId?: string | null
+    draggingId?: string | null
+  } = {},
 ): Promise<string> {
   const app = createSSRApp({
     setup() {
@@ -456,6 +468,54 @@ describe('resize 进行中收起上/下控制栏（用户要求）', () => {
     r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r, {}, {}, { resizingId: 'n1' })
     expect(html).not.toContain('v2-overlay')
+  })
+})
+
+/**
+ * 用户要求（原话）："这边监听拖拽状态，如果正在拖拽的话，就不显示上下控制栏"；
+ * 追问后又明确："不管拖拽的是哪一个节点，都不应该显示这边的上下控制"。
+ *
+ * 所以规则是**画布级**的：拖任意一个节点，全画布的上下控制栏都收起（多选拖动时每张卡都会并排
+ * 刷出一片，逐节点判"是不是我"只收掉被拖的那几张、剩下的照样挡视野）。松手立刻恢复。
+ * 判定直接读渲染层共享 activity 的 isNodeDragging（"有没有节点在拖"），不比节点 id。
+ */
+describe('拖动进行中收起上/下控制栏（用户要求）', () => {
+  it('画布上有节点正在被拖 → 上/下插槽整层不渲染', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
+    const html = await renderNode(r, {}, {}, { draggingId: 'n1' })
+    expect(html).not.toContain('probe-top-a')
+    expect(html).not.toContain('probe-bottom-a')
+    expect(html).not.toContain('v2-slot')
+  })
+
+  it('正在被拖的是**别的**节点 → 我的控制栏照样收起（规则是全局的，不是"只收被拖的那张"）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
+    const html = await renderNode(r, {}, {}, { draggingId: 'other' })
+    expect(html).not.toContain('probe-top-a')
+    expect(html).not.toContain('probe-bottom-a')
+  })
+
+  it('没在拖动 → 控制栏照常显示（不误伤常态）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA })
+    const html = await renderNode(r)
+    expect(html).toContain('probe-top-a')
+  })
+
+  /**
+   * 边界：拖动只收"浮在卡片外面的那两排栏"（out:top / out:bottom），**不收** over:inset。
+   *
+   * over:inset 里除了编辑浮层还有生成任务的**整卡加载态**——那是长在卡片上、该跟着卡片走的东西，
+   * "任务跑着的时候把节点挪一挪"是常见动作，拖动时把进度显示收掉是倒退。
+   * 所以拖动的压制条件挂在上/下插槽自己那份（hideSlotBars），不并进 hideToolbars。
+   */
+  it('拖动进行中 → 编辑浮层（over:inset）照常保留（它不属于"控制栏"）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
+    const html = await renderNode(r, {}, {}, { draggingId: 'n1' })
+    expect(html).toContain('probe-overlay')
   })
 })
 

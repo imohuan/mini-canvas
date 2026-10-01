@@ -73,9 +73,22 @@ const numOf = (key: string, fallback: number): number => {
   const v = settingsStore()?.get(key)
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
 }
+const boolOf = (key: string, fallback: boolean): boolean => {
+  const v = settingsStore()?.get(key)
+  return typeof v === 'boolean' ? v : fallback
+}
 const TITLE_OFFSET = ref(numOf('titleOffset', 12))
 const TITLE_MIN_ZOOM = ref(numOf('titleScaleMinZoom', 0.5))
 const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
+/**
+ * 画布是否处于「移动」工具（= 节点可拖拽）。抓手工具会把它按成 false。
+ *
+ * 端口的语义是「拖节点用的手柄」：抓手模式下拖动是平移画布、节点根本不会被拖走，
+ * 端口留着只会误导（用户要求：抓手模式不显示端口球）。故这里读宿主级设置 `nodesDraggable`
+ * （分组「常规/画布」，缺省 true）喂进端口显示门；设置面板改它、底栏「移动/抓手」按钮改它，
+ * 都与端口显隐同源，不存在第二份开关。
+ */
+const CANVAS_NODES_DRAGGABLE = ref(boolOf('nodesDraggable', true))
 /**
  * 多选标记的外观（大小 / 颜色 / 低缩放是否显示）。
  * 配置来自本插件 Config 的「节点/多选标记」一组；这里读一次做初值，之后靠 onChange 窄更新。
@@ -88,6 +101,11 @@ const HIDE_TITLES_ON_MULTI = ref(
 const applyTitleSetting = (key: string, value: unknown): void => {
   if (key === 'multiSelectHideTitles') {
     HIDE_TITLES_ON_MULTI.value = value === true
+    return
+  }
+  // 画布工具（移动 / 抓手）：抓手 = nodesDraggable=false → 压掉端口显示
+  if (key === 'nodesDraggable') {
+    CANVAS_NODES_DRAGGABLE.value = value !== false
     return
   }
   // 多选标记的三项：只认识自己的键才动，别的键照旧往下走（互不干扰）
@@ -132,6 +150,22 @@ const hideToolbars = computed(
     interaction?.isSelecting?.value === true ||
     (isSelected.value && selectedCount.value > 1) ||
     interaction?.nodeResizeId?.value === props.id,
+)
+
+/**
+ * 上/下控制栏（out:top / out:bottom）是否收起 = hideToolbars 之上再加一条"画布上有节点正在被拖"。
+ *
+ * 为什么是**画布级**、不比节点 id（用户要求："不管拖拽的是哪一个节点，都不应该显示这边的上下控制"；
+ * "画布可以有一个全局状态表示正在被拖拽"）：拖动时整排栏跟着卡片跑、被拖出来的新位置甩开，
+ * 多选拖动时每张卡还会并排刷出一片 —— 所以拖任意一个节点，全画布的栏一起收，松手立刻恢复。
+ * 直接读共享 activity 的 isNodeDragging（"有没有节点在拖"）就够，不需要判"被拖的是不是本节点"。
+ *
+ * 为什么不并进 hideToolbars：hideToolbars 同时管 `over:inset`（编辑浮层 + 生成任务的整卡加载态）。
+ * 那些**不是控制栏**，是长在卡片上、该跟着卡片走的东西 —— 尤其任务进度，拖动节点时收掉进度显示是倒退。
+ * 所以拖动这条只收"浮在卡片外面的那两排栏"。
+ */
+const hideSlotBars = computed(
+  () => hideToolbars.value || interaction?.isNodeDragging?.value === true,
 )
 
 /** 多选（选中 >=2）且本节点在其中：此时压掉自身端口，改用多选框上的批量连线端口 */
@@ -622,10 +656,15 @@ watch(
 // 端口的语义只是"拖节点/拖线时别干扰"，滚轮缩放不该压端口，故这里只认 nodeDragging，
 // 不再吃 paneDragging/zooming。真拖拽期间仍由 disabled(拖线源) 与 suppressHandles(拖线) 负责压制。
 //
+// 【抓手工具】：CANVAS_NODES_DRAGGABLE=false（= 抓手）时整体压掉端口球 —— 抓手模式下拖动是平移画布、
+// 节点不会被拖走，端口留着只会误导（用户要求）。这是"移动 vs 抓手"工具语义的一部分，与
+// 拖线/低细节/多选等压制项并列；移动工具下照常显示。
+//
 // 注意：这只是"允许"，按钮最终显隐在 MovingHandle 内部——zone hover(keepVisible) 或 选中(selected) 才真正亮。
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
 const shouldShowHandles = computed(
   () =>
+    CANVAS_NODES_DRAGGABLE.value &&
     !lowDetail.value &&
     !suppressHandles.value &&
     !isCurrentConnectingNode.value &&
@@ -767,9 +806,10 @@ function clamp(value: number, min: number, max: number): number {
     'is-connection-invalid': isConnectionInvalidTarget,
   }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
     <!-- 上插槽：可叠多个 occupant，位置（贴边 + 居中 + 反缩放）由壳这一层算好，插件只管往里放内容。
-         压制条件沿用既有语义：框选中整排收起、多选收起（见 hideToolbars）。 -->
+         压制条件：框选中整排收起、多选收起、本节点 resize 中（hideToolbars），再加"画布上有节点在拖"
+         （hideSlotBars —— 拖动只收这两排栏，不减加载浮层，见该 computed 的说明）。 -->
     <div
-      v-if="topSlots.length > 0 && !hideToolbars"
+      v-if="topSlots.length > 0 && !hideSlotBars"
       class="v2-slot v2-slot--top nodrag nopan"
       :style="topSlotsStyle"
     >
@@ -890,7 +930,7 @@ function clamp(value: number, min: number, max: number): number {
 
     <!-- 下插槽：同上方，定位由壳统一给出 -->
     <div
-      v-if="bottomSlots.length > 0 && !hideToolbars"
+      v-if="bottomSlots.length > 0 && !hideSlotBars"
       class="v2-slot v2-slot--bottom nodrag nopan"
       :style="bottomSlotsStyle"
     >

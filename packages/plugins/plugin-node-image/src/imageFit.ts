@@ -33,10 +33,13 @@ export const MIN_CARD_HEIGHT = 80
 /** 读不到配置时的回落值 = v1 的 MAX_PREVIEW_WIDTH / MAX_PREVIEW_HEIGHT */
 export const DEFAULT_IMAGE_FIT_LIMITS: ImageFitLimits = Object.freeze({ maxWidth: 420, maxHeight: 300 })
 
-/** 尺寸写回补丁：cardWidth/cardHeight 给卡片渲染读，size 是内核正式尺寸字段（写 node.size） */
+/**
+ * 尺寸写回补丁：**只给正式字段 size**（唯一正身）。
+ *
+ * 以前这里手拼 cardWidth/cardHeight/size 三件套，现在镜像（data.cardWidth/cardHeight）由
+ * nodeStore 从 size 自动生成 —— 写尺寸的插件只报 size 一处，漏写镜像的可能从根上消掉。
+ */
 export interface CardSizePatch {
-  cardWidth: number
-  cardHeight: number
   size: { w: number; h: number }
 }
 
@@ -99,7 +102,7 @@ export function cardSizePatch(
 ): CardSizePatch | null {
   const fit = fitCardSize(imageWidth, imageHeight, limits)
   if (!fit) return null
-  return { cardWidth: fit.width, cardHeight: fit.height, size: { w: fit.width, h: fit.height } }
+  return { size: { w: fit.width, h: fit.height } }
 }
 
 /**
@@ -133,6 +136,6 @@ export function followedCardSizePatch(
   if (!data) return null
   const patch = cardSizePatch(data.imageWidth, data.imageHeight, limits)
   if (!patch) return null
-  if (positive(data.cardWidth) === patch.cardWidth && positive(data.cardHeight) === patch.cardHeight) return null
+  if (positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h) return null
   return patch
 }

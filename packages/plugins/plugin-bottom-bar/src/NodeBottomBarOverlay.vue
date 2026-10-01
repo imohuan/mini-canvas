@@ -19,8 +19,9 @@
  * winner），与挂在节点里时**同一份组件**，观感与行为完全一致。所以它自己仍会按单选/有动作判空。
  *
  * 壳的压制条件在这里补齐（挂到画布层后读不到 BaseNode 的局部状态，只能读共享信号）。
- * **逐条对齐 BaseNode 的下插槽**：`v-if="bottomSlots.length > 0 && !hideToolbars"`，
- * 而 hideToolbars = 框选中（isSelecting）| 多选（selectedCount>1）| 该节点 resize 中。
+ * **逐条对齐 BaseNode 的下插槽**：`v-if="bottomSlots.length > 0 && !hideSlotBars"`，
+ * 而 hideSlotBars = 框选中（isSelecting）| 多选（selectedCount>1）| 该节点 resize 中 | **画布上有节点在拖**。
+ * 判定收在 `bottomBarOverlay.ts` 的纯函数里（可单测；拖动那条是用户带截图报的"拖拽时底栏还在"）。
  * 注意**不含低缩放** —— 壳只有 out:left/right 才看 lowDetail，下插槽不看（对齐它，别多加）。
  * 拖动跟随：拖动中位置要松手才落盘，改用**实时读卡片 DOM 的 getBoundingClientRect**（VueFlow
  * 拖动时逐帧改节点元素的 transform，DOM 矩形实时反映），所以不需要另外做位移增量。
@@ -29,6 +30,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, useToolbarOffsets, RenderEvents } from '@mini-canvas/canvas-render'
 import type { DocService } from '@mini-canvas/canvas-data'
 import BottomBarHost from './BottomBarHost.vue'
+import { resolveBottomBarSuppressed } from './bottomBarOverlay'
 
 const { ctx, flow, interaction } = useCanvasRender()
 const viewport = flow.viewport
@@ -77,12 +79,19 @@ const docSub = ctx
   ?.subscribe(() => syncNode())
 if (docSub) offs.push({ dispose: docSub })
 
-/** 壳的压制条件（挂到画布层后读不到 BaseNode 局部状态，改读共享信号；逐条对齐 hideToolbars） */
-const suppressed = computed(
-  () =>
-    interaction?.isSelecting?.value === true ||
-    selectedCount.value > 1 ||
-    interaction?.nodeResizeId?.value === selectedId.value,
+/**
+ * 壳的压制条件（挂到画布层后读不到 BaseNode 局部状态，改读共享信号；逐条对齐 hideSlotBars）。
+ * 判定本体在 bottomBarOverlay.ts 的纯函数里（Node 可测）：框选 / 多选 / 本节点 resize / 画布在拖。
+ */
+const suppressed = computed(() =>
+  resolveBottomBarSuppressed({
+    selecting: interaction?.isSelecting?.value === true,
+    selectedCount: selectedCount.value,
+    selectedId: selectedId.value,
+    resizingId: interaction?.nodeResizeId?.value ?? null,
+    // 画布级：拖任意节点都收（用户要求；与 BaseNode 的 hideSlotBars 同一条规则）
+    nodeDragging: interaction?.isNodeDragging?.value === true,
+  }),
 )
 
 // —— 卡片屏幕矩形：实时量卡片 DOM（拖动中逐帧反映，无需位移增量） ——

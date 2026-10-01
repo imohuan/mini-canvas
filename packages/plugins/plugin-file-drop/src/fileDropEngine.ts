@@ -158,8 +158,10 @@ export function buildImagePayload(
  * 视频节点载荷（url 为 objectURL；meta 缺省则用默认卡片尺寸）。
  *
  * 字段名与 plugin-node-video 的 data 约定**逐字对齐**（videoUrl/videoName/videoWidth/videoHeight/
- * videoDuration/videoSize/cardWidth/cardHeight）—— 拖进来的节点与在节点里上传的视频必须是同一形状，
+ * videoDuration/videoSize）—— 拖进来的节点与在节点里上传的视频必须是同一形状，
  * 否则状态栏/裁剪/剪辑在"拖进来的"节点上会读不到值。
+ *
+ * 卡片尺寸只给 size（唯一正身）：data.cardWidth/cardHeight 由 nodeStore 自动镜像，不在这里手写。
  */
 export function buildVideoPayload(
   file: FileLike,
@@ -172,8 +174,6 @@ export function buildVideoPayload(
     videoUrl: url,
     videoName: file.name,
     videoType: file.type,
-    cardWidth: size.w,
-    cardHeight: size.h,
     ...(file.size !== undefined ? { videoSize: file.size } : {}),
   }
   if (meta) {

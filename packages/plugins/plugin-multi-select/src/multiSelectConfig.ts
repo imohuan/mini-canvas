@@ -429,34 +429,23 @@ export function framePaddingsOf(cfg: MultiSelectFrameConfig): FramePaddings {
 }
 
 /**
- * 把间距换算到"与线宽同一套空间"。
+ * 选框间距的取值：**跟随画布一起缩放**（用户明确要求）。
  *
- * 为什么需要：两框的**线宽**在 frameStrokeCss 里按 1/zoom 反缩放（屏幕上恒定粗细），
- * 而间距原本是 flow 常量 —— 于是缩得越小、线越粗、间距越窄，两条线最终糊成一条。
- * 实测（间距配 24、外框线宽 4、内框线宽 2）：
+ * 语义：配置里的 padding 是**画布(flow)单位**，与节点尺寸同域 —— 缩画布时选框连同它的
+ * 内边距一起变大变小，和节点卡片本身完全一致。
  *
- *   zoom   屏幕间距   外框线宽   是否重叠
- *   2      48px       2px        否
- *   1      24px       4px        否
- *   0.5    12px       8px        临界
- *   0.3    7.2px      13px       重叠 2.3px
- *   0.2    4.8px      20px       重叠 10.2px
+ * 历史（别再改回去）：早先这里按 1/zoom 把它换算成"屏幕上恒定"（反缩放），因为那时**线宽**
+ * 是反缩放的、间距不反缩放会让线在缩小时糊在一起。现在线宽也改回跟随画布（见 frameStrokeCss），
+ * 两者同域，1/zoom 反而会让间距与线宽**反过来**对不上（缩小时间距变大、线变细），所以必须去掉。
  *
- * 除以 zoom 之后，"间距"这个配置项的含义恒等于"你在屏幕上量到的两框间隙" ——
- * 与线宽那一项（含义恒为"屏幕上看到的粗细"）完全对齐，缩放画布时观感不再变。
+ * 保留这个函数（而不是删掉、把调用点直接换成恒等）：它是"间距怎么随缩放变"的唯一接缝，
+ * 以后要再引入别的策略只改这一处；也便于单测直接锁住"跟随画布"这条语义。
  *
- * @param zoom 当前缩放；非法值或 ≤0 一律回落到 1（绝不产生 Infinity 把几何算炸）
+ * @param zoom 当前缩放（本函数不再据此换算；保留形参是为了调用点与语义接缝保持稳定）
  */
 export function scaleFramePaddings(pads: FramePaddings, zoom: number): FramePaddings {
-  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
-  if (z === 1) return pads
-  const inv = 1 / z
-  const up = (p: { paddingX: number; paddingTop: number; paddingBottom: number }) => ({
-    paddingX: p.paddingX * inv,
-    paddingTop: p.paddingTop * inv,
-    paddingBottom: p.paddingBottom * inv,
-  })
-  return { inner: up(pads.inner), gap: up(pads.gap) }
+  void zoom // 跟随画布 = 不做任何换算；形参留着是接缝约定（见上方说明）
+  return pads
 }
 
 /** hex(#rgb / #rgba / #rrggbb / #rrggbbaa) → rgba()；解析不出来时回落成"透明"，绝不写出坏值 */
@@ -478,7 +467,12 @@ export function hexToRgba(hex: string, alpha: number): string {
 
 /**
  * 把一个框样式转成 CSS 声明（色彩 / 线型 / 线宽 / 圆角 / 填充）。
- * @param lineScale 线宽缩放：外框要反向缩放（1/zoom）让线看起来始终一样粗，内框传 1。
+ *
+ * 线宽 / 圆角**跟随画布一起缩放**（用户明确要求）：配置值是画布(flow)单位，与节点卡片边框
+ * 同一套约定（卡片边框也是 flow 单位、随画布缩放；见 theme-default 的 cardFrame）。
+ * 所以这里**不再**乘 1/zoom —— 缩小时选框的线会跟着变细，而非屏幕上恒粗。
+ *
+ * @param lineScale 线宽/圆角倍数（保留形参：调用方若确需另做反缩放可显式传入；默认 1 = 跟随画布）
  */
 export function frameStrokeCss(
   stroke: FrameStrokeStyle,

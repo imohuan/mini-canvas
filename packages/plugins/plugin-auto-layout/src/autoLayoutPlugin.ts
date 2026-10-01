@@ -242,7 +242,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     const result = layoutHierarchy(hierarchyNodes, edges, runConfig)
 
     // 组装写回 entries：
-    //  - 组节点：frame（绝对 position + size + cardWidth/cardHeight）
+    //  - 组节点：frame（绝对 position + size；卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补）
     //  - 组内子节点：相对父组坐标（result.positions 已按"相对父组左上"输出）
     //  - 顶层自由节点：绝对坐标
     const byId = new Map(doc.getNodes().map((n) => [n.id, n]))
@@ -253,7 +253,6 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
         patch: {
           position: { x: frame.x, y: frame.y },
           size: { w: frame.w, h: frame.h },
-          data: { ...(byId.get(gid)?.data ?? {}), cardWidth: frame.w, cardHeight: frame.h },
         },
       })
     }

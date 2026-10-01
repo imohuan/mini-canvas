@@ -25,6 +25,7 @@
  * nodeStore，门面不重复实现）。零 Vue、零 DOM，Node 可单测。
  */
 import type { NodeStoreService, CanvasNode, CanvasNodeType, NodePatch, NodePatchEntry, AddNodeInput } from './nodeStore'
+import { nodeSizePatch } from './nodeStore'
 import type { EdgeStoreService, CanvasEdge, AddEdgeRequest, StoredEdgeInput } from './edgeStore'
 import type {
   GraphDocumentService,
@@ -33,6 +34,11 @@ import type {
   ConnectEdgeResult,
 } from './graphDocument'
 import type { HistoryService } from './history'
+
+/** 正有限数判定：尺寸只认这种值（0/负数/NaN/Infinity/非数字一律拒写） */
+function isPositiveFinite(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
 
 /**
  * 门面背后的四个底层实现（**可能缺席**：单元测试只要一部分）。
@@ -116,6 +122,31 @@ export interface DocService {
   updateNodes(entries: NodePatchEntry[]): void
   /** 改某节点 data（等价 updateNode(id, { data })） */
   updateNodeData(id: string, data: Record<string, unknown>): void
+  /**
+   * 改某节点的标题（label）。这是"改标题"的一等入口 —— 调用方不该自己去拼 data.label。
+   * 传空串 / undefined / 全空白 → 清掉标题（节点显示回类型名）。
+   */
+  setNodeLabel(id: string, label: string | undefined): void
+  /** 把某节点移到绝对坐标（同父坐标系）。改的是位置，不是别的。 */
+  moveNode(id: string, position: { x: number; y: number }): void
+  /** 批量移动（原子一次历史）；顺序即入参顺序。 */
+  moveNodes(entries: Array<{ id: string; position: { x: number; y: number } }>): void
+  /**
+   * 设/清某节点的父（组归属）。undefined = 解除父（回到顶层）。
+   * 父 id 不存在或指向自己由调用方保证 —— 本方法只做这一件事：写 parentId。
+   */
+  setNodeParent(id: string, parentId: string | undefined): void
+  /**
+   * 改某节点的卡片尺寸（宽高，px）。这是"设尺寸"的**一等入口**：内部走唯一写入口，
+   * 自动进历史 + 调度落盘，并把 data.cardWidth/cardHeight 镜像一并刷新（不用自己写两份）。
+   *
+   * 为什么单独给一个方法，而不要求调用方拼 `updateNode(id, { size: { w, h } })`：
+   * 尺寸是插件最常改的东西之一，把"拼 patch + 记得正身是 size"这条约定收进一个方法，
+   * 作者不必知道 `size` 与 `data.cardWidth` 的分工（那是内部实现细节）。
+   *
+   * @returns 是否写入成功；宽高非正有限数（0/负数/NaN/字符串）→ false 且不写（不污染节点）
+   */
+  setNodeSize(id: string, w: number, h: number): boolean
   /** 写节点运行期状态：落盘但不进撤销栈（进度帧用） */
   updateNodeRuntime(id: string, patch: NodePatch): void
   /** 删节点：连带清相连边、清子节点父引用、清选中（进历史） */
@@ -195,6 +226,22 @@ export function createDocService(sources: DocSources | DocSourceResolver): DocSe
     updateNode: (id, patch) => need('graph').updateNode(id, patch),
     updateNodes: (entries) => need('graph').updateNodes(entries),
     updateNodeData: (id, data) => need('graph').updateNode(id, { data }),
+    setNodeLabel: (id, label) => {
+      const text = typeof label === 'string' ? label.trim() : ''
+      need('graph').updateNode(id, { data: { label: text || undefined } })
+    },
+    moveNode: (id, position) => need('graph').updateNode(id, { position: { x: position.x, y: position.y } }),
+    moveNodes: (entries) =>
+      need('graph').updateNodes(
+        entries.map((e) => ({ id: e.id, patch: { position: { x: e.position.x, y: e.position.y } } })),
+      ),
+    setNodeParent: (id, parentId) => need('graph').updateNode(id, { parentId }),
+    setNodeSize: (id, w, h) => {
+      // 非法尺寸一律拒写：NaN/0 写进去会让卡片塌成不可见的形状，比"没生效"更难排查
+      if (!isPositiveFinite(w) || !isPositiveFinite(h)) return false
+      need('graph').updateNode(id, nodeSizePatch(w, h))
+      return true
+    },
     updateNodeRuntime: (id, patch) => need('graph').updateNodeRuntime(id, patch),
     removeNodes: (ids) => need('graph').removeNodes(ids),
     addEdge: (input) => need('graph').addEdge(input),

@@ -196,7 +196,8 @@ function writeVideoData(ctx: VideoOpsContext, nodeId: string, data: Record<strin
     ctx.write(nodeId, data)
     return
   }
-  ctx.write(nodeId, { ...data, cardWidth: sizes.cardWidth, cardHeight: sizes.cardHeight }, sizes.size)
+  // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐
+  ctx.write(nodeId, data, sizes.size)
 }
 
 /**
@@ -300,8 +301,6 @@ export function cropVideo(ctx: VideoOpsContext, nodeId: string, rect: Rect): boo
   const sizes = videoCardSizePatch(bounded.width, bounded.height, ctx.fitLimits?.())
   const next: Record<string, unknown> = { ...current, cropRect: bounded }
   if (sizes) {
-    next.cardWidth = sizes.cardWidth
-    next.cardHeight = sizes.cardHeight
     ctx.write(nodeId, next, sizes.size)
     return true
   }
@@ -335,7 +334,7 @@ function writeWithSize(
   }
   ctx.write(
     nodeId,
-    { ...data, cardWidth: sizes.cardWidth, cardHeight: sizes.cardHeight },
+    data,
     sizes.size,
   )
   return true

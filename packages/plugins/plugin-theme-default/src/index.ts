@@ -47,6 +47,9 @@ import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
 registerEventName('settings:ui-close')
+// 打开通道：任何"全局设置"入口（顶栏齿轮 / 底栏齿轮）只需 ctx.emit('settings:ui-open')，
+// 装配层订阅后把面板打开 —— 与关闭通道对称，入口不必认识"面板怎么弹"。
+registerEventName('settings:ui-open')
 
 export const name = "theme-default";
 // 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。

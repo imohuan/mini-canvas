@@ -62,9 +62,11 @@ export function followedWidthPatch(targetWidth: number | null, currentWidth: unk
   return targetWidth
 }
 
-/** 写回补丁：卡片渲染读 data.cardWidth，内核正式尺寸字段是 size —— 两者必须同一次提交 */
+/**
+ * 写回补丁：**只给正式字段 size**（唯一正身），卡片镜像由 nodeStore 自动补齐。
+ * 高度原样带过来（用户拖过的高度保持不变）。
+ */
 export interface CompareWidthPatch {
-  cardWidth: number
   size: { w: number; h: number }
 }
 
@@ -72,12 +74,10 @@ export interface CompareWidthPatch {
 export const DEFAULT_COMPARE_HEIGHT = 320
 
 /**
- * 把「目标宽度」拼成一次写回的补丁（cardWidth + size 一起给）。
+ * 把「目标宽度」拼成一次写回的补丁（只给 size）。
  *
- * 为什么 size 也要给：卡片宽度有两个存放处 —— data.cardWidth 是渲染真正读的那个，
- * node.size 是内核的正式尺寸字段（布局与相连边端点用）。只改一个会出现「卡片变了、
- * 但边的端点还画在旧宽度上」（与 image 包 resize 时同一次提交两份尺寸是同一条规矩）。
- * 高度原样带过来，保持用户拖过的高度不变。
+ * 为什么只给 size：宽度过去要同时写 data.cardWidth 与 node.size 两份，漏一个就出现
+ * 「卡片变了、但边的端点还画在旧宽度上」。现在镜像由 nodeStore 从 size 统一生成。
  *
  * @param data 对比节点当前 data（读 cardHeight）
  * @param fallbackHeight 从 data 里拿不到高度时的兜底（通常是类型默认高度）
@@ -90,5 +90,5 @@ export function compareWidthPatch(
   const width = followedWidthPatch(targetWidth, data?.cardWidth)
   if (width === null) return null
   const height = positive(data?.cardHeight) ?? positive(fallbackHeight) ?? DEFAULT_COMPARE_HEIGHT
-  return { cardWidth: width, size: { w: width, h: Math.round(height) } }
+  return { size: { w: width, h: Math.round(height) } }
 }

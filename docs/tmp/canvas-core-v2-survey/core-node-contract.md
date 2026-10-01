@@ -420,6 +420,20 @@ index.ts:673 直接导出。
     （全仓 rg 仅 v1 canvas-core 与本文件此行），animated 边也不由本仓生成（canvas-render 不写
     edge.animated）。此行目前是**死样式**，动它之前先确认没有外部装配在用。
 
+17. **层序：删除钮必须排在透明热区之后**（2026-09-30 修）。SVG 没有 z-index，同 `<g>` 内后画的元素
+    在上层、命中测试也先归它。`showCutButton` 的 `<foreignObject>` 与 `.edge-hit-area`
+    （`pointer-events: stroke`、宽 `max(12, lineWidth)`）同在这个 `<g>` 里 —— 按钮若排在热区**之前**，
+    32×32 圆钮的中心被 12px 宽的透明热区整条盖住：双击能弹按钮，点下去命中的却是热区（只选中/双击，
+    不删线），表现为「按钮没反应」（用户报的正是这个）。
+
+    - 背景：e1e1e997「连线置顶 + 选中显示连线」把热区从「按钮之前」挪到了模板**末尾**
+      （为了让它 `v-if="!isTemporaryEdge"` 独立于 `edgeShowVisual`），当时没同步挪按钮 → 顺序反转。
+      v1（canvas-core）里热区在按钮之前，顺序是对的。
+    - 修法：把 `<foreignObject>` 移到 `.edge-hit-area` 之后，并加 `v-if="showCutButton && edgeShowVisual"`
+      （按钮本属可见视觉层：`edgeVisible=false` 时不该浮一个删除钮盖在隐藏连线上）。
+    - 不变式（回归红线）：按钮圆心处 `document.elementFromPoint` 必须命中按钮本身，不是 `.edge-hit-area`。
+    - 回归脚本：`packages/ui/e2e/edge-cut-button.mjs`（真实浏览器；实测旧顺序 7/11 通过、修后 11/11）。
+
 ### 4.4 已知易碎点（作者注释明示）
 
 1. "箭头颜色被覆盖为线色" 的历史 bug（:15-16 注释）：颜色必须 :style 内联绑定。

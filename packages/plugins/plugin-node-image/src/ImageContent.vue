@@ -64,11 +64,8 @@ watch(imageUrl, () => clearImageBroken(props.id))
  */
 function syncCardSize(patch: CardSizePatch | null): void {
   if (!patch) return
-  ops.write(
-    props.id,
-    { ...(ops.read(props.id) ?? props.data), cardWidth: patch.cardWidth, cardHeight: patch.cardHeight },
-    patch.size,
-  )
+  // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐（读回当前 data 保留其它字段）
+  ops.write(props.id, ops.read(props.id) ?? props.data, patch.size)
 }
 
 /**

@@ -66,15 +66,14 @@ describe('followedWidthPatch：该不该写回', () => {
   })
 })
 
-describe('compareWidthPatch：一次写回卡片的宽 + 内核尺寸', () => {
-  it('两个宽度字段一致，且高度原样保留（用户拖过的高度不该被跟随动作改掉）', () => {
+describe('compareWidthPatch：只给正式字段 size（卡片镜像由 nodeStore 自动补）', () => {
+  it('只带 size，且高度原样保留（用户拖过的高度不该被跟随动作改掉）', () => {
     const patch = compareWidthPatch(420, { cardWidth: 480, cardHeight: 260 })
-    expect(patch).toEqual({ cardWidth: 420, size: { w: 420, h: 260 } })
+    expect(patch).toEqual({ size: { w: 420, h: 260 } })
   })
 
   it('高度拿不到 → 回落类型默认高度，不把高度写成 0', () => {
     expect(compareWidthPatch(420, { cardWidth: 480 })).toEqual({
-      cardWidth: 420,
       size: { w: 420, h: DEFAULT_COMPARE_HEIGHT },
     })
   })
@@ -94,8 +93,9 @@ describe('compareWidthPatch：一次写回卡片的宽 + 内核尺寸', () => {
     const trigger = (): void => {
       const patch = compareWidthPatch(resolveFollowWidth([{ sourceId: 'a' }], getCardWidth), data)
       if (!patch) return
-      writes.push(patch.cardWidth)
-      data = { ...data, cardWidth: patch.cardWidth, cardHeight: patch.size.h }
+      // nodeStore 写 size 时同步镜像 data.cardWidth/cardHeight（这里手写模拟那一步）
+      writes.push(patch.size.w)
+      data = { ...data, cardWidth: patch.size.w, cardHeight: patch.size.h }
     }
     trigger()
     trigger()

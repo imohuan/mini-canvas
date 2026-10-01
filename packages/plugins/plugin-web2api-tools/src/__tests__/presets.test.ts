@@ -96,11 +96,18 @@ describe('预置配置表', () => {
       expect(duration.min).toBe(4)
     })
 
-    it('豆包生图有 style，dola 图片没有（平台差异如实声明，不硬凑）', () => {
-      const doubaoImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:doubao-image-seedream45')!
-      const dolaImage = WEB2API_PRESETS.find((p) => p.id === 'web2api:dola-image-seedream45')!
-      expect(doubaoImage.fields.some((f) => f.kind === 'style')).toBe(true)
-      expect(dolaImage.fields.some((f) => f.kind === 'style')).toBe(false)
+    /**
+     * 用户明确要求 pass 掉「风格」参数（2026-10-01）：
+     * 「我们的风格一般都会直接写在提示词中或标签，作为一个标签存在」——
+     * 所以**任何**图片预设都不该再出现 kind:'style' 的字段（提示词承担风格）。
+     */
+    it('图片预设不再声明「风格」参数（风格归提示词 / 标签）', () => {
+      for (const preset of presetsFor('image')) {
+        expect(
+          preset.fields.some((f) => f.kind === 'style'),
+          preset.id + ' 不该再有 kind:style 字段',
+        ).toBe(false)
+      }
     })
 
     it('图片渠道齐了：豆包 / Dola / ChatGPT 官方 / GPT Image 2(API)', () => {

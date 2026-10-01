@@ -200,15 +200,8 @@ function writeImageData(
   imageHeight: unknown,
 ): void {
   const sizes = cardSizePatch(imageWidth, imageHeight, ctx.fitLimits?.())
-  if (!sizes) {
-    ctx.write(nodeId, data)
-    return
-  }
-  ctx.write(
-    nodeId,
-    { ...data, cardWidth: sizes.cardWidth, cardHeight: sizes.cardHeight },
-    sizes.size,
-  )
+  // 只写正式尺寸 size（唯一正身）：卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补齐。
+  ctx.write(nodeId, data, sizes?.size)
 }
 
 /**

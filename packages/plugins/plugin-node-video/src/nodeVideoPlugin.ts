@@ -76,7 +76,8 @@ export class VideoService extends Service implements VideoNodeService {
 
   /** 换视频：清掉旧尺寸（新视频元数据还没量，留着旧尺寸会让卡片比例对不上） */
   setVideoUrl(id: string, videoUrl: string): void {
-    this.doc().updateNode(id, { data: { videoUrl, cardWidth: undefined, cardHeight: undefined } })
+    // size: undefined 清正式尺寸（镜像由 nodeStore 一并清掉），新视频元数据读出来再按比例写回
+    this.doc().updateNode(id, { data: { videoUrl }, size: undefined })
   }
 
   removeNode(id: string): void {

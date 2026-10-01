@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>到底选哪个：按时长计费 vs 直接调 API</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#fff;color:#1a1a1a;font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;padding:32px 24px 60px}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{font-size:22px;font-weight:600;margin-bottom:6px}
+  .meta{color:#666;font-size:13px;margin-bottom:24px}
+  h2{font-size:16px;font-weight:600;margin:30px 0 10px;padding-top:16px;border-top:1px solid #eee}
+  h2:first-of-type{border-top:none;padding-top:0}
+  p{margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
+  th{background:#f7f7f7;text-align:left;padding:9px 12px;font-weight:600;border-bottom:2px solid #e5e5e5;color:#333;white-space:nowrap}
+  td{padding:8px 12px;border-bottom:1px solid #eee;vertical-align:top}
+  tbody tr:hover{background:#fafafa}
+  .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .good{color:#0a7d32;font-weight:600}
+  .bad{color:#c0392b;font-weight:600}
+  a{color:#0066cc;text-decoration:none}
+  a:hover{text-decoration:underline}
+  .box{border:1px solid #e5e5e5;border-left:3px solid #0066cc;background:#f8fbff;padding:14px 18px;margin-bottom:18px;border-radius:0 4px 4px 0}
+  .warn{border:1px solid #e5e5e5;border-left:3px solid #c0392b;background:#fff8f7;padding:14px 18px;margin-bottom:18px;border-radius:0 4px 4px 0}
+  ul{margin:8px 0 8px 22px}
+  li{margin-bottom:5px}
+  .foot{margin-top:34px;padding-top:14px;border-top:1px solid #e5e5e5;color:#888;font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>到底选哪个：按时长计费，还是直接调 API？</h1>
+<div class="meta">结论页　|　汇率 1 USD ≈ ¥6.73　|　数据抓取 2026-09-27　|　配套：<a href="./price-table.html">价格表</a> · <a href="./deals-and-selfhost.html">活动与自建</a></div>
+
+<div class="box">
+<b>一句话结论：先调 API，别急着自建。</b>等真实用量跑出来再决定。只有当<b>图片每月超过约 1 万张</b>，或<b>视频每月超过约 600 条</b>时，按执行时长计费（RunningHub 那类）才真正开始省钱；在此之前，两者的差价不够覆盖你折腾的时间。
+</div>
+
+<h2>一、两种方式的本质区别</h2>
+<table>
+<thead><tr><th>方式</th><th>怎么收钱</th><th>你要做的事</th><th>适合谁</th></tr></thead>
+<tbody>
+<tr><td><b>直接调 API</b><br>（按次 / 按张 / 按秒视频）</td><td>出一张图扣一次钱，出 1 秒视频扣 1 秒的钱。<b>不跑不扣钱</b></td><td>只要一个 Key，写几行代码</td><td>用量不稳定、刚起步、不想管机器</td></tr>
+<tr><td><b>按执行时长计费</b><br>（GPU 秒 / ComfyUI 执行秒）</td><td>只按任务真正跑的那几秒扣钱，<b>空闲不扣</b></td><td>要准备 ComfyUI 工作流，调一次能跑通就能一直用</td><td>用的是开源模型（Z-Image、MiniMax-H3），且用量稳定</td></tr>
+<tr><td><b>租卡按小时</b><br>（AutoDL、算家云、RunPod）</td><td><b>开机就烧钱</b>，不管有没有在跑</td><td>装机、下模型、调环境、记得关机</td><td>每天连续跑好几个小时、能塞满显卡</td></tr>
+</tbody>
+</table>
+<p>关键一句话：<b>「按执行时长」和「租卡按小时」不是一回事。</b>前者是"跑 3 秒扣 3 秒"，后者是"开机 1 小时扣 1 小时，哪怕只跑了 3 秒"。很多人把这两件事混着说，账就完全算错了。</p>
+
+<h2>二、图片（Z-Image）：算给你看</h2>
+<table>
+<thead><tr><th>方案</th><th class="num">每张成本</th><th class="num">1 万张/月</th><th class="num">10 万张/月</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>调 API（硅基流动 Z-Image-Turbo）</td><td class="num">¥0.034</td><td class="num">¥340</td><td class="num">¥3,400</td><td>最省事，直接可用</td></tr>
+<tr><td>调 API（API mart z-image-turbo）</td><td class="num">¥0.067</td><td class="num">¥670</td><td class="num">¥6,700</td><td>比官方便宜约 20%</td></tr>
+<tr><td><b>按执行时长（RunningHub Standard，¥4/小时）</b></td><td class="num good">¥0.0022</td><td class="num good">¥22</td><td class="num good">¥220</td><td>按 2 GPU 秒/张算（1.5 秒生成 + 0.5 秒摊销）</td></tr>
+<tr><td>租 4090 按小时，用完即关（¥2/小时）</td><td class="num">¥0.00083</td><td class="num">¥28</td><td class="num">¥103</td><td>最便宜，但要自己开关机</td></tr>
+<tr><td>租 4090 常驻 7×24 不关</td><td class="num">—</td><td class="num bad">¥1,455</td><td class="num bad">¥1,455</td><td>固定支出，跑不满就是亏</td></tr>
+</tbody>
+</table>
+<p><b>读法：</b>按执行时长计费比调 API <b>便宜约 15 倍</b>，而且没有固定成本 —— 所以从数学上它"一开始就赢"。但真正的门槛不是钱，是<b>你得先把 ComfyUI 工作流跑通</b>。常驻开机的盈亏点是 <b>每月 4.3 万张</b>，达不到就别常驻。</p>
+
+<h2>三、视频（MiniMax-H3）：这是自建最划算的地方</h2>
+<table>
+<thead><tr><th>方案</th><th class="num">每条 5 秒成本</th><th class="num">折合每秒</th><th>画质上限</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>官方 API（国内 768P）</td><td class="num">¥2.50</td><td class="num">¥0.50</td><td>2K 可用（走官方）</td><td>最省事，能出 2K</td></tr>
+<tr><td>MiniMax 国际版 768P</td><td class="num">¥2.69</td><td class="num">$0.08/s</td><td>2K 可用</td><td>按 $0.08/秒</td></tr>
+<tr><td>自建 4090（¥2/小时，5.5 分钟/条）</td><td class="num good">¥0.18～0.33</td><td class="num good">¥0.037～0.066</td><td><b>只能 1280×704</b></td><td>便宜 7～14 倍</td></tr>
+<tr><td><b>按执行时长（RunningHub Standard）</b></td><td class="num good">¥0.37</td><td class="num good">¥0.073</td><td>同上，768P 级</td><td>不用管机器</td></tr>
+<tr><td>EvoLink seedance-2.0-mini（对比参照）</td><td class="num">¥0.40</td><td class="num">¥0.081</td><td>480p</td><td>Seedance 系最便宜渠道</td></tr>
+</tbody>
+</table>
+<p><b>视频比图片更值得自建</b>：单条贵、耗时长，常驻盈亏点只要 <b>每月 582 条</b>。自建一条 5 秒视频的 GPU 成本约 ¥0.18，官方要 ¥2.5，差 13 倍。</p>
+
+<div class="warn">
+<b>但视频自建有硬限制，别忽略：</b>
+<ul>
+<li><b>2K 管线没开源</b>。HuggingFace 官方 README 写明 H3-Context-IR "not yet open-sourced"，2K 必须走官方 API。<b>本地只能稳定出 768P</b>（4090 上 1344×768 会直接卡死，1280×704 是 24GB 安全上限）。</li>
+<li><b>授权不是 Apache</b>。用的是 <code>minimax-h3-community-license-agreement</code>，<b>商用要单独确认</b>。</li>
+<li><b>速度慢</b>。4090 上一条 5 秒视频要 5～6 分钟（含模型加载约 10 分钟）。不是"点一下就出"。</li>
+</ul>
+</div>
+
+<h2>四、闭源模型没得选，只能调 API</h2>
+<p>GPT Image 2.5 和 Seedance 2.5 都不开源，<b>不存在自建这条路</b>，只能在各家渠道里挑便宜的。</p>
+<table>
+<thead><tr><th>模型</th><th>最便宜渠道</th><th class="num">价格</th><th>次选</th><th class="num">价格</th></tr></thead>
+<tbody>
+<tr><td>GPT Image 2.5（flare/sunburst 1K）</td><td>API mart</td><td class="num good">¥0.057/张</td><td>OpenAI 官方 low</td><td class="num">¥0.040/张</td></tr>
+<tr><td>GPT Image 2.5（2K / 4K）</td><td>API mart</td><td class="num">¥0.094 / ¥0.141</td><td>—</td><td class="num">—</td></tr>
+<tr><td>Seedance 2.5（1080p）</td><td>火山方舟官方</td><td class="num">¥3.74/秒</td><td>EvoLink 480p</td><td class="num">¥0.565/秒</td></tr>
+<tr><td>Seedance 2.0 mini（低配替代）</td><td>EvoLink</td><td class="num good">¥0.081/秒</td><td>hiapi</td><td class="num">¥1.55/秒</td></tr>
+</tbody>
+</table>
+<p><b>Seedance 2.5 是这四个里最贵的，没有便宜路子。</b>如果不追求最新版本，2.0-mini 的价格只有它的 1/46，画质差点但差 46 倍的钱，值得先试。</p>
+
+<h2>五、决策表：按你的月用量对号入座</h2>
+<table>
+<thead><tr><th>你的情况</th><th>建议方案</th><th>理由</th></tr></thead>
+<tbody>
+<tr><td>刚起步 / 用量不定 / 不想折腾</td><td><b>直接调 API</b>（硅基流动 Z-Image、API mart GPT Image 2.5）</td><td>零运维，¥0.034/张 本来就不贵</td></tr>
+<tr><td>图片 &lt; 5 千张/月</td><td><b>直接调 API</b></td><td>省的几十块不值工作流调试时间</td></tr>
+<tr><td>图片 5 千 ～ 5 万张/月</td><td><b>按执行时长计费</b>（RunningHub Standard ¥4/小时）</td><td>便宜 15 倍，还不用管机器</td></tr>
+<tr><td>图片 &gt; 5 万张/月且稳定</td><td><b>租 4090 按需启停</b>（算家云 ¥1.24/h、AutoDL ¥2.14/h）</td><td>用完即关，成本再降一半</td></tr>
+<tr><td>图片 &gt; 40 万张/月</td><td><b>常驻开机或买卡</b></td><td>常驻盈亏点就是 4.3 万张，超过就划算</td></tr>
+<tr><td>视频 &lt; 600 条/月</td><td><b>直接调 API</b></td><td>自建盈亏点 582 条/月</td></tr>
+<tr><td>视频 &gt; 600 条/月、768P 够用</td><td><b>按执行时长计费 / 租卡</b></td><td>便宜 7～14 倍</td></tr>
+<tr><td>要 2K 视频 / 要商用</td><td><b>只能官方 API</b></td><td>2K 管线没开源，授权要另谈</td></tr>
+</tbody>
+</table>
+
+<h2>六、我的推荐路径（照着做就行）</h2>
+<ul>
+<li><b>第 1 步：</b>先用 API 跑两周。图片用硅基流动的 Z-Image-Turbo（¥0.034/张），视频用 EvoLink 或 MiniMax 官方。<b>目的不是省钱，是拿到你自己的真实用量曲线。</b></li>
+<li><b>第 2 步：</b>看数字。图片过了 1 万张/月、视频过了 600 条/月，再上 RunningHub 的按执行时长计费（Standard ¥4/小时，100 并发，并发按累计时长算不重复扣钱）。</li>
+<li><b>第 3 步：</b>还嫌贵再考虑租卡，而且必须"用完即关"。买卡是最后一步：按 ¥2/小时折算，4090 要跑满约 6500 小时才打平 —— 每天不到 4 小时就别买。</li>
+</ul>
+
+<h2>七、并发这个事，别抱幻想</h2>
+<table>
+<thead><tr><th>层级</th><th>做法</th><th>能到多少</th></tr></thead>
+<tbody>
+<tr><td>单进程批处理</td><td>ComfyUI 一次出 N 张</td><td>4090 上 Z-Image <b>batch=4 安全</b>（512² 峰值 15.3GB）；1024² 建议 batch=1</td></tr>
+<tr><td>单卡多实例</td><td>一张卡起多个 ComfyUI 进程</td><td>第三方数据：单实例并发 3～4，单卡约 3 个实例（可信度中等）</td></tr>
+<tr><td>多卡多实例</td><td>一卡一个实例 + 外层队列调度</td><td>8 卡 = 8 实例，线性扩展。<b>这才是真并发</b></td></tr>
+</tbody>
+</table>
+<p>ComfyUI 的并发本质是<b>排队制，不是真并行</b>。<code>--cuda-device</code> 指定多卡，不等于一个工作流会自动拆到多卡上。想要吞吐就是"一卡一实例 + 外层队列"。吞吐参照：单卡 4090 约 <b>0.65 张/秒</b>，理论日上限约 5.6 万张（实际打 3～5 折）。网上"单卡日产 10 万张"没找到官方出处，当宣传看。</p>
+
+<div class="foot">
+本页数字来自 2026-09-27 抓取的官方定价页与第三方实测文章。按执行时长计费的单张成本按 <b>2 GPU 秒/张</b>（1.5 秒生成 + 0.5 秒冷启动摊销）估算，实测耗时在 4090 上从 0.8 秒到 7.2 秒都有（跨度 9 倍），<b>建议自己实测一次再套公式</b>。另需计入每月 2～4 小时的维护时间（海外 1000 张实测作者给出的值）。
+</div>
+
+</div>
+</body>
+</html>

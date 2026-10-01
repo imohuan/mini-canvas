@@ -88,14 +88,13 @@ describe('resolveImageFitLimits / readImageFitLimits：从配置读封顶', () =
   })
 })
 
-describe('写回补丁：cardWidth/cardHeight/size 三件套一次带齐', () => {
-  it('尺寸拿得到 → 三个字段都有，且两份尺寸一致', () => {
+describe('写回补丁：只给正式字段 size（卡片镜像由 nodeStore 自动补）', () => {
+  it('尺寸拿得到 → 只带 size，不再手拼 cardWidth/cardHeight', () => {
     const patch = cardSizePatch(800, 600)!
-    expect(patch.cardWidth).toBe(patch.size.w)
-    expect(patch.cardHeight).toBe(patch.size.h)
+    expect('cardWidth' in patch).toBe(false)
+    expect('cardHeight' in patch).toBe(false)
     // 800×600：高是瓶颈（300/600=0.5，小于 420/800）→ 400×300
-    expect(patch.cardWidth).toBe(400)
-    expect(patch.cardHeight).toBe(300)
+    expect(patch.size).toEqual({ w: 400, h: 300 })
   })
 
   it('尺寸拿不到 → null（调用方只写 data，不动尺寸）', () => {
@@ -153,8 +152,9 @@ describe('followedCardSizePatch：换图时跟随新图 + 幂等', () => {
     const trigger = (): void => {
       const patch = followedCardSizePatch(data)
       if (!patch) return
-      writes.push({ cardWidth: patch.cardWidth, cardHeight: patch.cardHeight })
-      data = { ...data, cardWidth: patch.cardWidth, cardHeight: patch.cardHeight }
+      // nodeStore 写 size 时会同步镜像 data.cardWidth/cardHeight（这里手写模拟那一步）
+      writes.push({ cardWidth: patch.size.w, cardHeight: patch.size.h })
+      data = { ...data, cardWidth: patch.size.w, cardHeight: patch.size.h }
     }
     trigger()
     trigger()

@@ -165,10 +165,13 @@ const triggerEvents = computed(() => {
       }
     case 'click':
     default:
-      // click 触发器：单击 = 打开（关闭由 click-outside / Esc 接管）。
-      // 消费方需要自管 toggle 的（如 Select 想点 trigger 切换开/关），
-      // 必须在内部按钮上 @click.stop 阻止事件冒泡到这里，避免外层"重新打开"造成闪一下。
-      return { onClick: open }
+      // click 触发器：单击 = **开/关切换**（与用户直觉一致：再点一下收起）。
+      //
+      // 为什么是 toggle 而不是只 open：消费方若在内部按钮上写了 @click.stop 自管切换
+      // （Select / ColorField 都这样），事件到不了这里、不会重复触发；没写 @click.stop 的
+      // 消费方（ToolParamGroup 的触发器）只靠这里，过去只 open 就出现「点得开、点不关」
+      // （用户实测：「你这里的下拉还不能点击切换显示隐藏」）。toggle 两边都对。
+      return { onClick: toggle }
   }
 })
 

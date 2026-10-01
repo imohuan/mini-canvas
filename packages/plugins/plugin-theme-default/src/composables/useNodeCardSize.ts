@@ -25,6 +25,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
 import { createResizeDragSession, type PointerEventTargetLike } from "./resizeDragSession";
+import { nodeSizePatch } from "@mini-canvas/canvas-data";
 
 export interface NodeCardSizeOptions {
   nodeId: string;
@@ -130,15 +131,11 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
       isResizing.value = false;
       // 先灭共享活动位再落盘：落盘会触发重渲染，控制栏此刻就该恢复（松手即恢复）
       opts.onResizeEnd?.();
-      // 一次写回两份尺寸（触发 nodeStore 订阅自动刷新渲染态）：
-      //   data.cardWidth/cardHeight → 卡片渲染读它决定多大
-      //   size                      → 宿主写进 node.size（正式尺寸字段，布局回退链的中间一环）
+      // 只写正式尺寸 size（唯一正身）：nodeStore 会顺手把 data.cardWidth/cardHeight 镜像成同值。
+      // 以前这里手写三件套（cardWidth/cardHeight/size），镜像与正身靠"每次记得同时写"维系；
+      // 现在改由数据层统一生成镜像，漏写的可能从根上消掉。
       if (opts.writeback) {
-        opts.writeback(opts.nodeId, {
-          cardWidth: w,
-          cardHeight: h,
-          size: { w, h },
-        });
+        opts.writeback(opts.nodeId, nodeSizePatch(w, h));
       }
     },
     eventTarget: () => (typeof document !== 'undefined' ? (document as unknown as PointerEventTargetLike) : null),

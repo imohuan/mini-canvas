@@ -46,6 +46,47 @@ export interface NodePatchEntry {
   patch: NodePatch
 }
 
+/**
+ * 写回结果：写口报告"本次实际改了哪个尺寸字段"。
+ *
+ * 为什么要有：v2 存量里卡片尺寸同时存在于 data.cardWidth/cardHeight 与正式字段 node.size，
+ * 且以前的数据只写了 data 那一份。若 size 缺失而调用方只写 data.cardWidth，
+ * size 就补不上（镜像断链）。写口把"补了镜像"这件事报回去，调用方（宿主）据此把 size 一并落盘。
+ */
+export interface NodeWriteResult {
+  /**
+   * true = size 是本次**首次**建立（此前该节点没有 size），补镜像时同时写进了 data。
+   * 只有 size 写入发生在"size 原本不存在"时才为 true。
+   */
+  sizeFilled: boolean
+}
+
+/**
+ * 从节点 data 读回一张卡片尺寸（仅认正有限数，其余视为没有）—— 存量迁移用。
+ * 老节点（v1/旧存档/MCP 建的节点）只写了 data.cardWidth/cardHeight，node.size 是空的。
+ */
+export function nodeSizeOf(data: Record<string, unknown> | undefined): { w: number; h: number } | undefined {
+  const w = data?.cardWidth
+  const h = data?.cardHeight
+  if (typeof w !== 'number' || !Number.isFinite(w) || w <= 0) return undefined
+  if (typeof h !== 'number' || !Number.isFinite(h) || h <= 0) return undefined
+  return { w, h }
+}
+
+/**
+ * 尺寸写回补丁（**唯一正身写法**）：只给正式字段 size，卡片镜像由 nodeStore 自动补齐。
+ *
+ * 为什么只给 size：以前每个写尺寸的地方都要手拼 `{ cardWidth, cardHeight, size }` 三件套，
+ * 谁漏一个就出现"卡片变了、边还停在旧宽度"或反过来。现在尺寸只在一个地方成型（size），
+ * 镜像由数据层统一生成 —— 写尺寸的地方只剩这一处要记。
+ *
+ * @param w 卡片宽（px）
+ * @param h 卡片高（px）
+ */
+export function nodeSizePatch(w: number, h: number): { size: { w: number; h: number } } {
+  return { size: { w, h } }
+}
+
 /** 声明式端口约束（缺省 = 人人可 source→target 连） */
 export interface PortDef {
   /** 'target'(输入) / 'source'(输出) */
@@ -129,10 +170,15 @@ export interface NodeStoreService {
   addNodes(inputs: AddNodeInput[]): number
   /** 改某节点 data（内容组件上报改动入口；等价 updateNode(id,{data})） */
   updateNodeData(id: string, data: Record<string, unknown>): void
-  /** 任意字段更新（position/size/parentId/data；显式 undefined 清字段）。节点不存在抛错。广播一次 update。 */
-  updateNode(id: string, patch: NodePatch): void
-  /** 批量更新：不同节点各自 patch；原子广播一次 update。 */
-  updateNodes(entries: NodePatchEntry[]): void
+  /**
+   * 任意字段更新（position/size/parentId/data；显式 undefined 清字段）。节点不存在抛错。广播一次 update。
+   *
+   * size 是唯一正身：给了 size 自动刷卡片镜像；只给 data.cardWidth/cardHeight 会自动提升为 size。
+   * @returns sizeFilled = 本次是否首次建立了 size（老节点迁移完成；宿主据此把 size 落盘）
+   */
+  updateNode(id: string, patch: NodePatch): NodeWriteResult
+  /** 批量更新：不同节点各自 patch；原子广播一次 update。返回每条的结果（顺序同入参）。 */
+  updateNodes(entries: NodePatchEntry[]): NodeWriteResult[]
   /** 取某节点 */
   getNode(id: string): CanvasNode | undefined
   /** 删除某节点（返回是否删到） */
@@ -186,6 +232,31 @@ export class NodeStore implements NodeStoreService {
     this.types.set(def.type, def)
   }
 
+  /**
+   * 尺寸单向同步：**node.size 是唯一正身**，data.cardWidth/cardHeight 是从它生成的镜像。
+   *
+   * 卡片壳（BaseNode）读不到 node.size（它只拿得到 VueFlow 摊平的 props.data），
+   * 所以渲染要的那份必须由数据层顺手镜像过去 —— 而不是让每个写尺寸的插件各写一份。
+   * 镜像直接**改内存对象**、不经 applyPatch：它要活在被历史快照深拷贝的那一份里，
+   * 否则 undo 只还原 size、镜像会残留成"卡片尺寸和 size 不一致"。
+   *
+   * size 被删（size: undefined）时镜像一并删掉 —— 否则卡片会停在旧尺寸（镜像比正身活得久）。
+   *
+   * @returns 是否因为这次写入而首次建立了 size（老节点迁移完成的信号）
+   */
+  private syncSizeMirror(node: CanvasNode): boolean {
+    if (node.size === undefined) {
+      // 正身没了，镜像也一并清掉：否则卡片读镜像会停在旧尺寸
+      if ('cardWidth' in node.data) delete node.data.cardWidth
+      if ('cardHeight' in node.data) delete node.data.cardHeight
+      return false
+    }
+    const before = nodeSizeOf(node.data)
+    node.data.cardWidth = node.size.w
+    node.data.cardHeight = node.size.h
+    return before?.w !== node.size.w || before?.h !== node.size.h
+  }
+
   unregisterType(type: string): void {
     this.types.delete(type)
   }
@@ -235,14 +306,19 @@ export class NodeStore implements NodeStoreService {
     }
     for (const input of inputs) {
       const id = input.id ?? this.createNodeId()
-      this.nodes.set(id, {
+      const node: CanvasNode = {
         id,
         type: input.type,
         position: { x: input.position.x, y: input.position.y },
         data: input.data ? { ...input.data } : {},
         ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
         ...(input.size !== undefined ? { size: { ...input.size } } : {}),
-      })
+      }
+      // 显式给了 size（复制/粘贴、分组、后台建节点）→ 顺手镜像给卡片壳。
+      // 没给 size 就保持缺席：缺席 = 用类型默认尺寸（布局回退链与卡片壳都认这条），
+      // 不在这里凭空造一个尺寸。
+      this.syncSizeMirror(node)
+      this.nodes.set(id, node)
     }
     this.notify('add')
     return inputs.length
@@ -252,37 +328,58 @@ export class NodeStore implements NodeStoreService {
     this.updateNode(id, { data })
   }
 
-  updateNode(id: string, patch: NodePatch): void {
+  updateNode(id: string, patch: NodePatch): NodeWriteResult {
     const node = this.nodes.get(id)
     if (!node) throw new Error(`[nodeStore] no node "${id}"`)
-    this.applyPatch(node, patch)
+    const sizeFilled = this.applyPatch(node, patch)
     this.notify('update', id)
+    return { sizeFilled }
   }
 
-  updateNodes(entries: NodePatchEntry[]): void {
-    if (entries.length === 0) return
+  updateNodes(entries: NodePatchEntry[]): NodeWriteResult[] {
+    if (entries.length === 0) return []
     // 原子：先全量预校验 id 存在，任一缺失即抛错且不产生部分应用
     for (const { id } of entries) {
       if (!this.nodes.has(id)) throw new Error(`[nodeStore] no node "${id}"`)
     }
+    const results: NodeWriteResult[] = []
     for (const { id, patch } of entries) {
-      this.applyPatch(this.nodes.get(id)!, patch)
+      results.push({ sizeFilled: this.applyPatch(this.nodes.get(id)!, patch) })
     }
     this.notify('update')
+    return results
   }
 
-  /** 原地应用 patch；显式 undefined 的字段用 delete 移除（如 parentId: undefined 解除父子） */
-  private applyPatch(node: CanvasNode, patch: NodePatch): void {
+  /**
+   * 原地应用 patch；显式 undefined 的字段用 delete 移除（如 parentId: undefined 解除父子）。
+   *
+   * 尺寸这一路有两条规则：
+   * 1. patch 给了 size → size 是正身，写完顺手把镜像刷成同值；
+   * 2. patch 只给了 data.cardWidth/cardHeight（老插件、后台、MCP 那些只写 data 的写法）→
+   *    把它们提升成 node.size，让 size 补上、不再恒空。
+   *
+   * @returns 是否首次建立了 size（供调用方落盘；老节点迁移完成的信号）
+   */
+  private applyPatch(node: CanvasNode, patch: NodePatch): boolean {
     if (patch.position !== undefined) node.position = { x: patch.position.x, y: patch.position.y }
     if (patch.data !== undefined) node.data = { ...node.data, ...patch.data }
     if ('size' in patch) {
       if (patch.size === undefined) delete node.size
       else node.size = { w: patch.size.w, h: patch.size.h }
+      this.syncSizeMirror(node)
+    } else {
+      // 只写 data 的旧路径：data 里的卡片尺寸提升为正式 size
+      const promoted = nodeSizeOf(node.data)
+      if (promoted !== undefined && node.size === undefined) {
+        node.size = { ...promoted }
+      }
     }
     if ('parentId' in patch) {
       if (patch.parentId === undefined) delete node.parentId
       else node.parentId = patch.parentId
     }
+    const current = nodeSizeOf(node.data)
+    return node.size !== undefined && (current?.w !== node.size.w || current?.h !== node.size.h)
   }
 
   getNode(id: string): CanvasNode | undefined {
@@ -317,11 +414,24 @@ export class NodeStore implements NodeStoreService {
   }
 
   replaceAll(nodes: CanvasNode[]): void {
+    // 存量迁移（一次性）：老存档只写了 data.cardWidth/cardHeight，没有正式字段 size。
+    // 回填时把它们提升为 size，并向下刷镜像；size 与镜像都缺的，用类型默认尺寸补上。
+    // 不补的话，卡片壳依赖 data 兜底、布局读 size 恒空，两边会长期各说各话。
+    const migrated = nodes.map((n) => {
+      const data = n.data ? { ...n.data } : {}
+      const next: CanvasNode = { ...n, data }
+      if (next.size === undefined) {
+        const fromData = nodeSizeOf(data)
+        if (fromData !== undefined) next.size = { ...fromData }
+      }
+      this.syncSizeMirror(next)
+      return next
+    })
     this.nodes.clear()
-    for (const n of nodes) this.nodes.set(n.id, n)
+    for (const n of migrated) this.nodes.set(n.id, n)
     // 重建计数器：保证新加的 id 不撞已有的数字 id
     let max = 0
-    for (const n of nodes) {
+    for (const n of migrated) {
       const num = Number.parseInt(n.id, 10)
       if (!Number.isNaN(num) && num > max) max = num
     }
@@ -335,10 +445,4 @@ export class NodeStore implements NodeStoreService {
     return String(this.counter)
   }
 }
-
-
-
-
-
-
 

@@ -14,7 +14,7 @@
  * 组件只贴样式。
  *
  * 外观（颜色/线型/线宽/圆角/填充）与两框间距全来自插件 Config（分组「布局/多选」），
- * 改动经 settings.onChange 实时生效；线宽与圆角按 1/zoom 反向缩放，缩放画布时框线粗细恒定。
+ * 改动经 settings.onChange 实时生效；线宽/圆角/间距都跟随画布一起缩放（与节点卡片边框同约定）。
  *
  * 拖动：**在多选框内按住左键拖动 = 平移多选框 + 选中的节点**（逐帧 updateNodeVisual 视觉写，
  * 松手经 graph.updateNodes 批量落盘，唯一写入口负责历史）。只移动"顶层且祖先未选"的节点
@@ -589,8 +589,7 @@ function refreshFrame(): void {
   }
   const rects = ids.map((id) => l.getNodeRect(id)).filter((r): r is MultiSelectRect => r !== null)
   const pads = framePaddingsOf(frameConfig.value)
-  // 间距必须与线宽同空间（都按 1/zoom 反缩放）：否则缩得越小线越粗、间距越窄，两条线糊成一条。
-  // 详见 scaleFramePaddings 的说明与那张实测表。
+  // 间距与线宽同域（都跟随画布缩放，不做 1/zoom 换算）：配置值即画布单位，见 scaleFramePaddings。
   const scaled = scaleFramePaddings(pads, viewport.value.zoom || 1)
   frame.value = computeSelectionFrameGeometry(rects, scaled.gap, scaled.inner)
 }
@@ -974,12 +973,11 @@ const wrapperStyle = computed(() => ({
   transformOrigin: '0 0',
 }))
 
-/** 外框（大框）：几何 + 描边样式；线宽/圆角反向缩放，视觉粗细恒定 */
+/** 外框（大框）：几何 + 描边样式；线宽/圆角/间距都跟随画布缩放（用户明确要求，不做反缩放） */
 const outerStyle = computed(() => {
   const g = frame.value
   if (!g) return null
-  const zoom = viewport.value.zoom || 1
-  const stroke = frameStrokeCss(frameConfig.value.outer, 1 / zoom)
+  const stroke = frameStrokeCss(frameConfig.value.outer)
   return {
     left: `${g.outer.x}px`,
     top: `${g.outer.y}px`,
@@ -999,15 +997,13 @@ const outerStyle = computed(() => {
 const innerStyle = computed(() => {
   const g = frame.value
   if (!g) return null
-  const zoom = viewport.value.zoom || 1
   return {
     left: `${g.inner.x}px`,
     top: `${g.inner.y}px`,
     width: `${g.inner.w}px`,
     height: `${g.inner.h}px`,
-    // 与上面那条一样按 1/zoom 反缩放（见 frameStrokeCss 的 lineScale 说明）：
-    // 两框都对 zoom 免疫，所以"线宽"这个配置项的含义恒为"你屏幕上看到的粗细"。
-    ...frameStrokeCss(frameConfig.value.inner, 1 / zoom),
+    // 与外框同款：跟随画布缩放，不做 1/zoom 反缩放（见 frameStrokeCss 的说明）。
+    ...frameStrokeCss(frameConfig.value.inner),
   }
 })
 
@@ -1124,24 +1120,21 @@ const showBatchHandles = computed(
 
 /**
  * 端口位置：贴在大框左右两侧的垂直中点。
- * wrapper 本身带 viewport 变换，所以这里给"框内坐标"，再用 1/zoom 反缩放让屏幕上大小恒定。
+ * wrapper 本身带 viewport 变换，所以这里给"框内(flow)坐标"即可 —— 端口尺寸也走 flow 单位，
+ * 与节点端口同款（节点端口就是 flow 尺寸、随画布缩放），不做 1/zoom 反缩放。
  */
 function batchStyle(side: 'left' | 'right'): Record<string, string> {
   const g = frame.value
   if (!g) return {}
-  const zoom = viewport.value.zoom || 1
   // 定位盒：高 = 跟随区高、宽 = 0，摆在大框左/右缘的垂直中点。
   //
   // 为什么给高度而不给 0：MovingHandle 的锚点自带 top:50% + translateY(-50%)，它把跟随区
   // 以锚点为中心上下摆开。盒子高 = 跟随区高时，锚点就落在"盒子垂直中点"这个真正的几何中心上，
   // 跟随区上下各露一半 —— 与节点端口同款；以后改跟随区高度也不用再动这里。
-  // 用 1/zoom 反缩放，保证屏幕上端口大小恒定（与节点端口同观感）。
   return {
     top: `${g.outer.y + g.outer.h / 2 - portZoneHeight.value / 2}px`,
     height: `${portZoneHeight.value}px`,
     left: side === 'left' ? `${g.outer.x}px` : `${g.outer.x + g.outer.w}px`,
-    transform: `scale(${1 / zoom})`,
-    transformOrigin: side === 'left' ? 'left center' : 'right center',
   }
 }
 

@@ -244,16 +244,16 @@ describe('framePaddingsOf（配置 → 几何用的两组 padding）', () => {
 })
 
 /**
- * 缩放后两框间距（用户报的缺陷："你的这个多选框缩放之后的 padding 存在 BUG"）。
+ * 缩放时的选框间距（用户最新要求："希望这边的边框可以和画布一样一同缩放"）。
  *
- * 根因：两框线宽按 1/zoom 反缩放（屏幕上恒定粗细，线宽 4 在 zoom=0.2 时撑到 20px），
- * 而 padding 是 flow 常量（屏幕上只剩 24×0.2 = 4.8px）。于是缩得越小、线越粗、间距越窄，
- * 两条线最终糊成一条 —— 实测 zoom=0.3 起重叠、zoom=0.2 重叠 10px。
+ * 语义：配置里的 padding 是**画布(flow)单位**，跟随画布一起缩放 —— 缩画布时选框连同它的
+ * 内边距一起变小，与节点卡片完全一致。**不做** 1/zoom 反缩放。
  *
- * 修法：padding 与线宽用**同一套空间约定** —— 都除以 zoom。这样"间距"这个配置项的含义
- * 恒等于"你在屏幕上量到的两框间隙"，缩放画布时观感不变。
+ * 历史：这里一度按 1/zoom 换算成"屏幕上恒定"，那是因为当时**线宽**反缩放、间距不反缩放
+ * 会让缩小时的线糊在一起。现在线宽也跟随画布（见 frameStrokeCss），两者同域，
+ * 1/zoom 反而会让间距与线宽对接不上，所以统一改成"跟随画布"。
  */
-describe('scaleFramePaddings —— 间距必须与线宽同空间（1/zoom 反缩放）', () => {
+describe('scaleFramePaddings —— 间距跟随画布缩放（不做 1/zoom 反缩放）', () => {
   const PADS = framePaddingsOf({
     ...DEFAULT_MULTI_SELECT_FRAME,
     paddingX: 24,
@@ -264,33 +264,37 @@ describe('scaleFramePaddings —— 间距必须与线宽同空间（1/zoom 反�
     innerPaddingBottom: 12,
   })
 
-  it('zoom=1 原样返回（屏幕上量到的就是配置值）', () => {
+  it('zoom=1 原样返回', () => {
     const s = scaleFramePaddings(PADS, 1)
     expect(s.gap).toEqual(PADS.gap)
     expect(s.inner).toEqual(PADS.inner)
   })
 
-  it('zoom=0.5 → 间距翻倍（flow 值变大，屏幕上才还是 24px）', () => {
+  it('缩小时间距**不变**（配置值就是画布单位，跟随画布一起缩，屏幕上变小）', () => {
     const s = scaleFramePaddings(PADS, 0.5)
-    expect(s.gap).toEqual({ paddingX: 48, paddingTop: 48, paddingBottom: 48 })
-    expect(s.inner).toEqual({ paddingX: 20, paddingTop: 46, paddingBottom: 24 })
+    expect(s.gap).toEqual({ paddingX: 24, paddingTop: 24, paddingBottom: 24 })
+    expect(s.inner).toEqual({ paddingX: 10, paddingTop: 23, paddingBottom: 12 })
   })
 
-  it('zoom 非法 / 为 0 → 回落到 1（绝不产生 Infinity 把几何算炸）', () => {
+  it('放大时间距同样不变（跟随画布，与 zoom 无关）', () => {
+    const s = scaleFramePaddings(PADS, 2)
+    expect(s.gap).toEqual(PADS.gap)
+    expect(s.inner).toEqual(PADS.inner)
+  })
+
+  it('zoom 非法 / 为 0 / 负数 → 结果仍与配置一致（本函数不再看 zoom，绝不产生 Infinity）', () => {
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const s = scaleFramePaddings(PADS, bad)
       expect(s.gap).toEqual(PADS.gap)
     }
   })
 
-  it('回归：zoom=0.2 时间距不再被线宽吃掉（修前 gap=4.8 < 线宽需求 15 → 糊成一条）', () => {
-    const s = scaleFramePaddings(PADS, 0.2)
-    const outerLineScreen = 4 // 外框线宽配置（frameStrokeCss 里 ×1/zoom 后屏幕上仍是 4px）
-    const innerLineScreen = 2
-    const gapOnScreen = s.gap.paddingX * 0.2
-    expect(gapOnScreen).toBeCloseTo(24, 5)
-    // 两条线各自半宽之和必须小于间距，否则视觉重叠
-    expect(gapOnScreen).toBeGreaterThan(outerLineScreen / 2 + innerLineScreen / 2)
+  it('回归：不再有 1/zoom 补偿 —— 任意缩放下 flow 间距恒为配置值', () => {
+    for (const zoom of [0.2, 0.3, 0.5, 1, 1.6, 2, 3]) {
+      const s = scaleFramePaddings(PADS, zoom)
+      expect(s.gap.paddingX).toBe(24)
+      expect(s.inner.paddingTop).toBe(23)
+    }
   })
 })
 
@@ -309,7 +313,13 @@ describe('frameStrokeCss / hexToRgba（生成出的样式就是配置的直接�
     expect(css.background).toBe('rgba(96, 165, 250, 0.5)')
   })
 
-  it('外框线宽按 1/zoom 反向缩放（缩放画布时线粗细看起来恒定）', () => {
+  it('线宽/圆角默认跟随画布（lineScale 缺省 1，配置值原样落到 CSS）', () => {
+    const stroke = { color: '#000000', lineStyle: 'solid' as const, lineWidth: 2, radius: 8, fillOpacity: 0 }
+    expect(frameStrokeCss(stroke).borderWidth).toBe('2px')
+    expect(frameStrokeCss(stroke).borderRadius).toBe('8px')
+  })
+
+  it('lineScale 仍可显式传入（保留"确需反缩放"的口子：0.5 → 宽度/圆角减半）', () => {
     const stroke = { color: '#000000', lineStyle: 'solid' as const, lineWidth: 2, radius: 8, fillOpacity: 0 }
     expect(frameStrokeCss(stroke, 0.5).borderWidth).toBe('1px')
     expect(frameStrokeCss(stroke, 0.5).borderRadius).toBe('4px')

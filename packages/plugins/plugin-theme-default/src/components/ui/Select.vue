@@ -13,8 +13,14 @@
  *   <Select v-model="v" :options="[{value:'lr',label:'左→右'},…]" placeholder="请选择" searchable />
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { iconRenderMode } from '@mini-canvas/kernel'
 import Dropdown from './Dropdown.vue'
 import type { SelectOption } from './types'
+
+/** 图标形态：html=svg 字符串（v-html）/ component=Vue 组件 / none=无 */
+function iconMode(icon: unknown): 'html' | 'component' | 'none' {
+  return iconRenderMode(icon)
+}
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +33,16 @@ const props = withDefaults(
     /** 'match' = 浮层与触发框同宽；'auto' = 内容自适应；其它字符串 = CSS 宽度 */
     dropdownWidth?: string
     dropdownMaxWidth?: string
+    /**
+     * 浮层**最小宽度**（只在 dropdownWidth:'match' 时生效；缺省 200px）。
+     *
+     * 为什么要有它：底栏的模型下拉用 dropdownWidth:'match'（与触发框同宽），
+     * 而触发框只有 ~100px，于是浮层被挤成一条窄缝、模型名全被截断（用户实测反馈
+     * 「下拉的宽度也太窄了吧…至少得两百px」）。给一个最小宽度，窄触发器也能长出
+     * 一个看得清选项的面板（min-width 会盖过 match 给的 width）。
+     * 'auto' 仍按内容自适应（设置面板里的短选项不该被强行撑到 200px）。
+     */
+    dropdownMinWidth?: string
     /** 供设置表单给输入框 id（label for 关联） */
     inputId?: string
   }>(),
@@ -39,6 +55,7 @@ const props = withDefaults(
     placement: 'bottom-start',
     dropdownWidth: 'auto',
     dropdownMaxWidth: '320px',
+    dropdownMinWidth: '200px',
     inputId: '',
   },
 )
@@ -134,7 +151,7 @@ watch(open, (v) => {
 })
 
 const dropdownMenuWidth = computed(() =>
-  props.dropdownWidth === 'match' || props.dropdownWidth === 'auto' ? '' : props.dropdownWidth,
+  props.dropdownWidth === 'match' ? props.dropdownMinWidth : props.dropdownWidth === 'auto' ? '' : props.dropdownWidth,
 )
 </script>
 
@@ -204,11 +221,22 @@ const dropdownMenuWidth = computed(() =>
             'is-active': modelValue === opt.value,
             'is-highlight': !(modelValue === opt.value) && highlightIndex === index,
             'is-disabled': opt.disabled,
+            hasDescription: !!opt.description,
           }"
           @click="selectOption(opt)"
           @mouseenter="highlightIndex = index"
         >
-          <span class="sel-option-label">{{ opt.label }}</span>
+          <!-- 图标托（照右键菜单 / 主题菜单的 look）：有 icon 才渲染 -->
+          <span v-if="opt.icon" class="sel-option-icon" aria-hidden="true">
+            <span v-if="iconMode(opt.icon) === 'html'" class="sel-option-icon-raw" v-html="opt.icon" />
+            <component v-else-if="iconMode(opt.icon) === 'component'" :is="opt.icon" class="sel-option-icon-raw" />
+          </span>
+          <!-- 名称 + hover 描述：照右键菜单（ContextMenu 的 .ctx-menu-copy）——
+               悬停/聚焦时名称上移、描述从下方浮现（用户明确说喜欢这个动效）。 -->
+          <span class="sel-option-copy">
+            <span class="sel-option-label">{{ opt.label }}</span>
+            <span v-if="opt.description" class="sel-option-description">{{ opt.description }}</span>
+          </span>
           <span v-if="modelValue === opt.value" class="sel-check" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
               stroke-linejoin="round">
@@ -348,6 +376,35 @@ const dropdownMenuWidth = computed(() =>
   transition: background 0.1s ease-out, color 0.1s ease-out;
 }
 
+/* 图标托（照右键菜单）：28×28、圆角 8、淡底、次要前景色 */
+.sel-option-icon {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--ui-ink-dim, #6b7280);
+  background: var(--ui-veil, rgb(0 0 0 / 0.04));
+}
+.sel-option-icon-raw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sel-option-icon :deep(svg),
+.sel-option-icon svg {
+  width: 16px;
+  height: 16px;
+}
+/* 有图标时该行至少 44px 高（图标托 28 + 上下 padding），与右键菜单同节奏 */
+.sel-option:has(.sel-option-icon) {
+  min-height: 44px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 .sel-option:first-child {
   margin-top: 0;
 }
@@ -379,6 +436,55 @@ const dropdownMenuWidth = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ===== 名称/描述区（照右键菜单 .ctx-menu-copy 的 hover 动效）=====
+   label 绝对垂直居中；带描述的行 hover/focus-within 时 label 上移到 top:3px、
+   描述从下方 translateY(6px) 淡入。数值与 ContextMenu.vue 逐条对齐。 */
+.sel-option-copy {
+  min-width: 0;
+  flex: 1;
+  align-self: stretch;
+  position: relative;
+  overflow: hidden;
+  min-height: 32px;
+  display: block;
+}
+.sel-option-copy .sel-option-label {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  max-width: 100%;
+}
+.sel-option.hasDescription .sel-option-label {
+  transition: top 0.3s ease-out, transform 0.3s ease-out;
+}
+.sel-option.hasDescription:hover .sel-option-label,
+.sel-option.hasDescription:focus-within .sel-option-label {
+  top: 3px;
+  transform: translateY(0);
+}
+.sel-option-description {
+  position: absolute;
+  left: 0;
+  bottom: 3px;
+  max-width: 100%;
+  color: var(--ui-ink-dim, #9ca3af);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+.sel-option.hasDescription:hover .sel-option-description,
+.sel-option.hasDescription:focus-within .sel-option-description {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .sel-check {

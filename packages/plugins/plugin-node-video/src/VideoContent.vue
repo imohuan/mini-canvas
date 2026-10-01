@@ -241,11 +241,8 @@ function onKeydown(e: KeyboardEvent): void {
 function syncCardSize(patch: CardSizePatch | null): void {
   if (!patch) return
   const current = ops.read(props.id) ?? props.data
-  ops.write(
-    props.id,
-    { ...current, cardWidth: patch.cardWidth, cardHeight: patch.cardHeight },
-    patch.size,
-  )
+  // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐
+  ops.write(props.id, current, patch.size)
 }
 
 onMounted(() => {

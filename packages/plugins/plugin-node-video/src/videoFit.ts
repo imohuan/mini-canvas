@@ -34,10 +34,11 @@ export const DEFAULT_VIDEO_FIT_LIMITS: VideoFitLimits = Object.freeze({ maxWidth
 /** 一点元数据都读不到时的兜底卡片尺寸 = v1 的 NODE_SIZES.video */
 export const DEFAULT_VIDEO_CARD_SIZE = Object.freeze({ width: 480, height: 320 })
 
-/** 尺寸写回补丁：cardWidth/cardHeight 给卡片渲染读，size 是内核正式尺寸字段（写 node.size） */
+/**
+ * 尺寸写回补丁：**只给正式字段 size**（唯一正身）。
+ * 卡片镜像 data.cardWidth/cardHeight 由 nodeStore 从 size 自动生成，不再手拼三件套。
+ */
 export interface CardSizePatch {
-  cardWidth: number
-  cardHeight: number
   size: { w: number; h: number }
 }
 
@@ -100,7 +101,7 @@ export function videoCardSizePatch(
 ): CardSizePatch | null {
   const fit = fitVideoCardSize(videoWidth, videoHeight, limits)
   if (!fit) return null
-  return { cardWidth: fit.width, cardHeight: fit.height, size: { w: fit.width, h: fit.height } }
+  return { size: { w: fit.width, h: fit.height } }
 }
 
 /**
@@ -131,6 +132,6 @@ export function followedVideoCardSizePatch(
   if (!data) return null
   const patch = videoCardSizePatch(data.videoWidth, data.videoHeight, limits)
   if (!patch) return null
-  if (positive(data.cardWidth) === patch.cardWidth && positive(data.cardHeight) === patch.cardHeight) return null
+  if (positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h) return null
   return patch
 }

@@ -5,7 +5,262 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 最近完成（2026-10-01，底栏「参考」选择态 + 全屏预览 + 右侧按钮接通）
+
+**同日修正（用户第二轮截图反馈）**：
+
+- **「参考」改成两态开关**（用户实测「点击之后就无法取消」）：点一下进入、再点一下退出；
+  顶栏「返回节点」= 聚焦回节点 + 结束参考（与 ✕ / Esc 三条路都能收）。根因是按钮高亮态没
+  跟住会话状态 —— 现在直接读会话状态，点一下必切换（`toggleReference` 有单测锁两态）。
+- **「风格」pass 掉**（用户要求）：「我们的风格一般都会直接写在提示词中或标签（后期在输入框里做成
+  一个 tag）」。于是：顶行不再有「风格」pill；底栏不再有风格卡；**web2api 四个图片预设删掉
+  `kind:'style'` 参数**（豆包 32 档 / ChatGPT 10 档预设整块删除），描述文案改成「比例可选；风格写在
+  提示词里」。`presets.test.ts` 改成断言「任何图片预设都不再有 kind:style」。
+- **下拉菜单换皮 + hover 描述动效**（用户要求照右键菜单）：`Select.vue` 的选项行改成
+  「名称 + hover 描述」结构（名称绝对居中，悬停/聚焦时上移到 top:3px、描述从下方 translateY(6px)
+  淡入），数值与 `ContextMenu.vue` 逐条对齐（0.3s ease-out）；`SelectOption` 加可选 `description`；
+  底栏的**模型下拉**带上动作的 `description`，所以悬停能看到每个模型的一句话说明。
+
+**同日第六次修正（用户第七轮截图）** —— 上一轮把参数放错地方了，这次纠正：
+- **参数回到"底行上的一个下拉"**（用户要求：「右侧的比例选择也是通过下拉的方式」）：
+  上一轮把比例等参数放进了「设置区」追加面板——**那是错的**（见下条）。现在底行左侧是
+  「模型下拉 │ 参数下拉（比例 16:9 ⌄）」，用回 `ToolParamGroup`（自带图标 + 下拉）。
+- **左右分区纠正**（用户要求：「我说过你的设置放在右边，你把它放到左边去了」）：
+  **左侧 = 插件/动作提供的东西**（模型 + 它声明的参数，都在底行上）；**右侧 = 全局设置**位
+  （那枚齿轮，仍是**占位**、点了只提示）。上一轮把参数塞进「设置」区，等于让"设置"里出现了
+  动作参数 —— 与「设置是全局、跟插件/动作无关」的分工冲突，已回退。
+  于是上一轮新增的 `.nb-settings` 追加区 / AutoLink 开关 / 参数摘要 / 滑块图标全部删除
+  （那批是建立在错误理解上的）。
+- **模型下拉再放宽**：`dropdown-min-width` 240 → **300**（用户要求「模型选择框的下拉宽度可以再大一些」）。
+  **浏览器实测**：底栏子元素又回到 `nb-pills → nb-cards → nb-editor → nb-bottom`（无追加设置区）；
+  底行左 = `模型(154px) │ 16:9 下拉`、右 = `翻译 | ✨ | 齿轮占位 | 计数 | 发送`；模型浮层宽 300。
+
+**同日第五次修正（用户第六轮截图）**：
+- **下拉菜单重做 + 图标 + 标题**（用户强烈要求，附 3 张参考图「参考一下它的 UI 图标，然后再加这个标题」）：
+  `SelectOption` 加可选 `icon`（opaque 句柄，与节点类型 icon 同写法）；`Select` 选项行渲染
+  28×28 图标托（照仓库右键菜单 / 主题菜单的 look，有图标时行高 44px）；底栏模型下拉每行给出
+  该动作服务类型的图标（优先取 `nodeRegistry` 里节点类型注册的 icon，取不到按类型名回落内置 SVG），
+  于是「豆包 Seedream 4.5」这类**标题**左侧带图标、悬停还有描述。
+- **配置分区修正**（用户要求）：**左侧 = 插件/动作自己的配置**（模型下拉 + 参数摘要 + 动作配置开关，
+  参数在下方追加区摊开）；**右侧 = 全局设置**（跟插件/动作无关），目前只放一个**占位齿轮**
+  —— 用户明确说「这边暂时使用一个占位就行，不需要你实现」。原来那个「高级参数」滑块从右侧挪到左侧、
+  跟动作配置合并（一个入口，不再左右各一个开关）。
+  **浏览器实测**：下拉 9 行全部带图标托（行高 44）、标题 + 悬停描述齐；底行左侧
+  `模型 | 摘要 | 配置开关`、右侧 `翻译 | ✨ | 齿轮占位 | 计数 | 发送`。
+- **下拉「点得开、点不关」修复**（用户实测：「你这里的下拉还不能点击切换显示隐藏」）：
+  根因在 `Dropdown.vue` 的默认 click 触发器只做 `open()` 不做 toggle —— 没在内部按钮写
+  `@click.stop` 自管切换的消费方（ToolParamGroup 的参数下拉）就点不关。改成 `toggle`；
+  Select / ColorField 自己 `@click.stop` 的路径不受影响（事件到不了外层）。
+  **浏览器实测**：底栏模型下拉、设置面板下拉、添加节点菜单 —— 三者都是「开→再点→关」。
+- **参数搬到外面 + 设置区改成「底部追加、向下外扩、有动画」**（用户要求：「有些配置你可以直接放在
+  底部栏目中，而不是直接嵌套在这个下拉内部」+「设置是在底部追加一块区域…向下外扩，而且有动画」）：
+  新增 `.nb-settings` 设置区（默认展开），位置在**底行之后追加**（`nb-settings-wrap` 是底栏最后一个
+  子元素），参数**直接摊开**（比例网格 / 下拉 / 开关各自成块），不再塞进 `ToolParamGroup` 的合并下拉；
+  展开/收起走 `<Transition name="nb-set">` + `grid-template-rows 0fr↔1fr`（高度平滑长开）
+  再叠一点上滑淡入。底行原来的参数下拉位置换成**只读摘要**（点它开合设置区）；右下角滑块图标同效。
+  「智能引用 AutoLink」也从滑块图标里挪到设置区。
+  **浏览器实测**：底栏子元素顺序 `nb-pills → nb-cards → nb-editor → nb-bottom → nb-settings-wrap`
+  （设置区在底行**之后**、已 `settingsAfterBottom:true`），点摘要能收起再展开。
+- **模型下拉浮层宽度**：去掉上次为「太窄」加的固定 240px 最小宽，恢复与按钮同宽（用户实测
+  「你这里的 trigger 宽度被固定了大小？？」——长条目本就该撑开、短的与按钮齐）。
+- **底栏右上角「展开」按钮接上**（用户要求「点击展开 UI（变成 dialog 的形式，展示这里的 UI）」）：
+  原来是个死按钮。做法**不复制 DOM** —— 同一块 `.nb-root` 在展开时 `<Teleport to="body">` +
+  外层 `.nb-shell.is-expanded`（fixed 铺满 + 遮罩 + 居中），内容/状态一份；收起时 Teleport 禁用、
+  外壳 `display:contents`（完全透明，底栏还是原来那条浮层）。展开态宽度 min(760px,100%)、
+  限高滚动、输入区放宽到 40vh；Esc / 点遮罩 / 再点按钮都能收；按钮图标换成「收起」箭头。
+  **浏览器实测（Playwright 无头 Chromium，dev :5399）**：展开后 `aria-modal=true`、
+  外壳 `display:flex` + 遮罩 `rgba(0,0,0,.6)`、面板 760×274 且水平垂直都居中、
+  同一份 UI（输入框/素材卡/模型下拉都在）；Esc 后回到 `display:contents`。
+
+**同日第四次修正（用户第四～五轮截图）**：
+- **底栏素材卡模糊值**：用户指定改 `blur(1px)`（原 3px）。
+- **底部 dock「移动 / 抓手」按钮的图标不跟着模式切**（用户实测，指出在 `packages/ui`）：
+  按钮此前**恒定**画 `Hand`（抓手）图标，切到「移动」也还是抓手的样子。改成
+  `<component :is="s.canvasMode === 'move' ? Move : Hand" />` —— 移动态显示 Move、抓手态显示 Hand。
+  **浏览器实测（Playwright 无头 Chromium，dev :5399）**：点按钮→「抓手工具」后图标 class 变
+  `lucide-hand`、再切回「移动」变回 `lucide-move`，来回都跟着模式走。
+- **底栏素材卡：正方形 + cover + 图片本身模糊**（用户先指「素材卡」（第 414 行那块 div），
+  纠正过一次——第一次我误做到全屏预览上，已回退）。用户原话：「这里是正方形 你的图片要使用
+  cover 方式展示，然后给他一个模糊效果，但是你这里图片并没有模糊而是背景模糊（我要的是图片模糊）」。
+  最终做法就是一张 `.nb-card-img`：`object-fit: cover` + `filter: blur(3px)` +
+  `transform: scale(1.18)`（放大一点防 blur 啃出透明边）；不再分「模糊背景 + 清晰前景」两层。
+  **浏览器实测（Playwright 无头 Chromium，dev :5399）**：卡片 48×48 正方形、
+  `imgFit:cover`、`imgFilter:blur(3px)`、`imgTransform:matrix(1.18…)`，截图肉眼可见卡片是模糊的缩略图。
+
+**同日第三次修正（用户第三轮截图）**：
+
+- **下拉浮层太窄**（用户实测「至少得两百px」）：`Select` 新增 `dropdownMinWidth`（缺省 200px），
+  只在 `dropdownWidth:'match'` 时生效 —— 底栏模型下拉的触发框只有 ~100px，match 会让浮层
+  缩成一条窄缝、模型名全截断。底栏模型下拉显式设 `dropdown-min-width="240px"`。
+- **「风格」再兜底**（用户要求「删掉」）：除删预设参数外，`NodeBottomBar` 的 `paramDefs` 现在
+  **过滤掉任何 `kind:'style'` 字段**（与来源无关，防运行时清单再冒出风格参数）；
+  `fieldSummary` 改读过滤后的 `paramDefs`（原先读原始 `fields`，会把风格的默认值漏进 🌟 摘要 ——
+  这条是被新单测当场抓到的真 bug）。新增 1 条单测锁「带 kind:style 的动作，底栏摘要里不出现它」。
+
+用户带三张截图要求：①「参考」要真的能选节点建立链接（现在功能没实现）；②「标记」暂不支持但要给出
+不支持的样子；③底栏右侧那排按钮也没实现；④「风格」；⑤素材卡预览要**全屏**（原来缩在底栏里）。
+另明确：截图里那张有问题的预览卡是 **LibTV 参考站**的（索引在左上、图底带模糊），别照抄它。
+
+**参考选择态（新）** —— 判定全在 `referenceMode.ts`（零 DOM 纯函数，20 条单测）：
+
+- **谁能当参考 = 读节点类型自己声明的端口能力**（源输出口的 `contentType` ∈ 目标输入口的
+  `acceptsTypes`），不是底栏写死一张类型表 —— 加一个新节点类型不用动本插件。
+  与内核「缺省即全收」同口径（目标没声明 acceptsTypes → 来者不拒；源没声明产出 → 不当参考）。
+- 四种面孔：`owner`（自己，只描边）/ `selectable`（可点、悬停出「选择 XX」提示）/
+  `connected`（已连，提示变「取消选择 XX」，再点解除）/ `blocked`（灰罩 + 半透明，不可点）。
+- 点可选节点 = `doc.connectEdge({source, target})` 建立链接（它随即出现在底栏素材区）；
+  点已连节点 = 摘掉那条边。宿主节点掉出选中集 → 选择态自动收（逐帧守，防「底栏换人了盖层还留着」）。
+- 浮层 `ReferenceSelectOverlay.vue` 注册在既有 overlay 槽（与底栏宿主同槽、order 41），
+  Teleport 到 body + 屏幕坐标 fixed（与 `NodeBottomBarOverlay` 同一手法，绕开节点层叠上下文）。
+顶部蓝底操作框：提示 + 「返回节点」+ ✕；底部「按 ESC 退出」；Esc 可退。
+**「返回节点」= 聚焦回节点**（用户实测反馈）：点击后先把视口中心移到该节点（缩放 <60% 时抬到 100%，
+否则保留用户当前尺度），再退出选择态。**悬停提示改为跟随鼠标**（不再钉在节点右侧，与光标保持 14/18px
+偏移 —— 用户实测反馈「提示要跟着鼠标走」）。
+
+**全屏预览（改）** —— 用户要「全屏，是整个视图」：新 `MediaPreviewOverlay.vue` + `mediaPreview.ts`
+（module 级会话状态），铺满整个视口看大图/全文；Esc / 点背景 / 右上 ✕ 三种关法。
+素材卡序号角标仍是**左下**（没有被参考站那张卡带偏），缩略图**不加模糊底**。
+
+**「标记」置灰** —— `disabled` + `opacity .38`（用户要求：给一个透明度效果表示不支持）。
+
+**「风格」接通** —— 与「参考」同一条选择态通道，只是 purpose=`'style'`：选中的图写进本节点
+`data.styleRef`（一张风格参考图，不建连线），底栏素材区最前面显示「风格」卡（可点开预览、可替换）。
+
+**右侧按钮接通**：
+
+- 「高级参数」：就地展开**全部参数控件**（比底行那个合并下拉更细，逐项可改）+ 「智能引用 AutoLink」
+  开关（照参考图的高级设置项，写 `data.autoLink`）。
+- 「翻译提示词」：`promptActions.ts`（纯函数，6 条单测）在提示词后追加/摘除一句「译成英文」指令，
+  按钮两态高亮。**顺带修了一个真 bug**：程序化改文本时必须清掉 `promptDoc`，否则编辑器会优先用
+  旧 JSON 还原、把追加的指令顶回去（实测：用户先打过字就完全点不动）。
+
+**验证**：plugin-bottom-bar 单测 **76/76**（新增 referenceMode 20 / promptActions 6 / uiState 4）、
+typecheck 过；回归 ui **64/64**、canvas-render **406/406**、theme-default **241/241**、
+node-image **111/111** / node-text **31/31** / node-video **105/105**。
+Chrome MCP 实测（dev :5388）：参考态盖层 4 种状态齐、点可选→连上（素材卡 0→1）、点已连→解除、
+文本节点做宿主时图片节点为 `blocked`；全屏预览根 1400×836 = 整视口；翻译按钮空文案↔28 字两态来回、
+开关可写 `data.autoLink`；无 console error。
+
+
+
+### 最近完成（2026-09-30，节点尺寸改为单一来源 node.size）
+
+用户问题：卡片尺寸为什么要存两份（`node.size` 与 `data.cardWidth/cardHeight`）？能不能合成一个？
+
+结论：能。`node.size` 现在是**唯一正身**，`data.cardWidth/cardHeight` 降级为**数据层自动生成的镜像**
+（卡片壳 BaseNode 只拿得到 VueFlow 摊平的 `props.data`，读不到 `node.size`，所以镜像必须由数据层统一补，
+而不是让每个写尺寸的插件各写一份）。之前"要同时写两个数"的纪律散在五六个地方，谁漏一个就出现
+"卡片变了、边端点还停在旧宽度"；现在写尺寸只剩一处成型。
+
+- **数据层收口**（`canvas-data/nodeStore.ts`）：写 `size` → 自动刷镜像；只写 `data.cardWidth/cardHeight`（老插件 /
+  后台 / MCP 的旧写法）→ 自动**提升为 `node.size`**；清 `size`（`size: undefined`）→ 镜像一并清掉。
+  `replaceAll`（读档 / 云端合并 / 导入）对**存量老存档**做一次性迁移：只有 `data` 尺寸的节点补上 `size` 并刷镜像。
+  新增导出 `nodeSizePatch(w,h)`（只给 `size` 的写回补丁）与 `nodeSizeOf(data)`（从 data 读回尺寸）。
+- **生产端收敛**：resize（`useNodeCardSize`）、图片 / 视频 / 对比 / 分组 / 自动布局 / 拖入文件 / 视频换源
+  全部改成只报 `size`；各自的 `CardSizePatch` 从三件套收成单字段 `size`。
+- **不凭空造尺寸**：建节点（`addNode`/`addNodes` 未给 size）不写 `size`，缺席 = 用类型默认尺寸
+  （布局回退链与卡片壳都认这条），只有真被写过尺寸的节点才有 `size`，避免给存量图强加一个尺寸。
+
+**改尺寸的一等入口**（作者不必自己拼 patch）：
+`ctx.nodes.setSize(id, w, h)`（薄糖，与下者同一实现）或 `ctx.get('doc').setNodeSize(id, w, h)` ——
+内部走唯一写入口（进历史 + 调度落盘），自动刷 `data` 镜像；宽高非正有限数（0/负数/NaN）→ 返回 `false`
+且不写。批量/进阶仍可用低层 `doc.updateNode(id, { size })` / `updateNodes`。
+
+**节点语义写方法收口**（作者不写原始字段 `data.label`/`position`/`parentId`）：
+`ctx.nodes.setLabel / move / setParent / remove / setSize`（薄糖），或 `doc.setNodeLabel / moveNode /
+moveNodes / setNodeParent / setNodeSize`（真实现，走唯一写入口 + 历史 + 落盘）。`setNodeLabel` 会把
+空串/空白归一成"无标题"（显示回类型名）。`doc.updateNode(id, { data })` 等原始字段口仍在（低层/批量/内部用），
+只是不再是一等入口。
+
+验证：`canvas-data` 342（新增 `nodeSizeSingleSource.test.ts` 12 条锁单一来源/迁移/清镜像/`nodeSizeOf` 边界）、
+`canvas-render` 406、`ui` 64；图片 111 / 视频 105 / 对比 46 / 分组 48 / 自动布局 33 / 拖入 42 全绿；
+typecheck 过（canvas-data / canvas-render 业务码 / node-image / node-video / node-image-compare / group /
+auto-layout / file-drop / theme-default / mcp-server）。
+
 ### 最近完成（2026-09-27，插件上下文与包边界 T01–T09）
+
+### 最近完成（2026-09-30，左下角「缩放选项」接上真实画布）
+
+用户要求：左下角状态栏那个缩放百分比是**假的**，请把它接成"真正设置画布缩放值"。
+
+实测确认原状：`state.zoom = 39` 是写死的纯 UI 数字，菜单动作只改这个数字 —— 从没接到 viewport 上
+（表现：点「缩放至 100%」画布纹丝不动、读数永远是 39%，而真实视口其实是 160%）。
+
+做法（唯一事实来源 = 真实视口）：
+
+- `composables/ui.ts` 新增「缩放」段：`zoomInStep / zoomOutStep / zoomToPercent / zoomFit` 一律调
+  `ctx.get('viewport')`（宿主恒在注入的视口服务）去改真画布；`syncZoomDisplay()` 把
+  `getViewport().zoom` 镜像到状态栏读数。放大/缩小以**真实缩放**为基准 ±10%、钳 10%–800%；
+  「适合屏幕」= `viewport.fitView()`（替代原先那个只改文字的假按钮）。
+- **读数同步用常驻 rAF 比对，不订阅 move 事件**：实测 `zoomTo / fitView / 小地图拖拽 / 首屏 fitView`
+  **都不发** VueFlow 的 move 事件（`RenderEvents.MoveEnd` 收不到），只订阅事件会让读数停在旧值。
+  逐帧比一次整数、变了才写（同值不触发响应式）；node/SSR 无 rAF 时退化为只同步一次。
+  与 `App.vue` 里给小地图逐帧定位的 rAF 同款做法。`App.vue` 卸载时 `unbindZoomSync()` 停掉循环。
+- `StatusArea.vue`：三个动作改调 ui 入口；「缩放至 50% / 100%」的选中态按**真实缩放**高亮（±1% 容差）；
+  末项文案由「缩放至 800%」改为**「缩放到最大」**（用户要求），并改为按设置 `maxZoom`（默认 2 = 200%，
+  面板可调 1–8）走 —— 原先写死 800% 在默认上限 200% 下点了也到不了。
+
+验证：`canvasToggles.test.ts` 扩到 10 条（新增 4 条：菜单真调 viewport.zoomTo/±10% 钳位/fitView/
+读数取自真实 viewport；用假后端挂到真实 viewport 服务上，兑现 ui→ctx.get('viewport') 那条真实路径）；
+浏览器实测 **11/11**（读数=真实值 160%、缩放至 100%→1.0、50%→0.5、放大→0.6、适合屏幕→1.676、
+滚轮后读数跟随）；官方回归：画布 e2e 51/51、多选 33/33、主题色板 19/19；ui 单测 59/59
+（其余 2 条失败与本次无关：`entrypoint` 的插件数 19 与 `themeColorHygiene` 的 2 处颜色，
+均由工作区里**别的并行改动**（plugin-bottom-bar / assembly 增删插件）引入，非本次触碰）。
+
+### 最近完成（2026-09-30，抓手工具下不显示端口球）
+
+用户要求：切到**抓手工具**后，节点两侧的端口球（`MovingHandle`）不再显示。
+
+理由与做法：端口的本职是「拖节点用的手柄」；抓手模式下拖动是平移画布、节点根本不会被拖走，
+端口留着只会误导。抓手 = 设置 `nodesDraggable=false`（首轮已接通），故端口显示门直接读它：
+
+- `plugin-theme-default/src/components/node/BaseNode.vue`：新增 `CANVAS_NODES_DRAGGABLE`
+  （初值 `nodesDraggable ?? true`，`onChange` 窄更新），纳入 `shouldShowHandles` 的压制项。
+  **唯一事实来源 = 设置 `nodesDraggable`**：底栏「移动/抓手」按钮与设置面板「节点可拖拽」
+  改的都是它 → 三条路永远一致，不新增第二份开关。移动工具、以及未声明该键的旧宿主照常显示。
+- 同时排掉一个误判来源（本轮查出，非本改动引入）：低细节阈值 `nodeLodLowDetailZoom` 默认 0.4，
+  **低于它端口本就整体压掉**；而应用首屏 `fitView` 落在 39%，正好被压住 —— 表现为「刚进来就没端口」。
+  若需要低缩放也保留端口，调低该阈值（或后续把端口从低细节压制里摘出来）即可。
+
+验证：新增 SSR 测试 `baseNode/__tests__/handToolPortVisibility.test.ts`（3 条：移动/未声明→显示，
+抓手→不显示；实测把门摘掉即红，证明真在测）；theme-default 单测 **233/233**、typecheck 过；
+浏览器实测 6/6（含「同一页面热切抓手→圆球消失、切回移动→恢复」与「抓手仍能平移画布」）；
+官方回归：画布 e2e 51/51、多选 33/33、主题色板 19/19；ui 单测 59/59。
+
+### 最近完成（2026-09-30，画布工具按钮接通内核）
+
+用户要求（带截图）：左下角那一排按钮（整理画布 / 小地图 / 隐藏节点连线 / 网格吸附）与
+底栏「移动 / 抓手工具」当时**点了只有图标变化、画布毫无反应** —— 它们只改了 `useUi`
+里的本地状态，没有任何一处写到内核（设置面板改同一件事却真的生效）。
+
+做法：按钮改成和设置面板**走同一条通道**，自己不再存状态。
+
+- 写设置（`ctx.get('settings').set`）：`edgeVisible`（隐藏节点连线）、`snapToGrid`（网格吸附）、
+  `miniMapVisible`（小地图）、`nodesDraggable`（抓手 = 关掉拖节点，拖哪都平移画布）。
+  真正干活的是订阅这些键的消费方：`CustomEdge` 读 edgeVisible、渲染宿主 CanvasHost 把
+  snapToGrid/nodesDraggable 绑给 VueFlow、mini-map 插件订阅 miniMapVisible。
+- 执行命令（`ctx.get('command').execute`）：整理画布 → `auto-layout:run`（与 Ctrl/Cmd+L 同一条命令，
+  结果进历史栈、一并落盘）。顺带修掉按钮上过时的提示文案（原写 Alt+Shift+F，真实键是 Ctrl/Cmd+L）。
+- `bindCanvasToggles()` 订阅设置变化，把按钮图标与底栏高亮同步过来 —— 面板改了、按钮立刻跟着变，
+  不会出现"面板关了按钮还亮着"的假状态；`App.vue` 卸载时 `unbindCanvasToggles()` 退订。
+- 验证：新增整装测试 `packages/ui/src/__tests__/canvasToggles.test.ts`（6 条，真实内核 + 真实插件，
+  锁"按钮入口写的就是设置面板那个键"）；ui 单测 **59/59**；浏览器实测脚本 17/17
+  （含真拖拽：移动态拖节点节点动、抓手态拖节点不动而视图平移、光标 grab）；
+  官方 e2e **51/51**、多选回归 33/33、主题色板 19/19。
+
+### 最近完成（2026-09-30，多选框改为跟随画布缩放）
+
+用户要求（带截图）：多选时「节点边缘 → 选框边缘」的 padding **不要反缩放**，要跟随画布一起缩放。
+实测（修前，同一节点同一多选集）：屏幕间距恒 16px、flow 间距 0.5x→32 / 2x→8 —— 就是反缩放。
+
+- 三处去掉 `1/zoom`：`multiSelectConfig.scaleFramePaddings`（间距）改为恒等、`frameStrokeCss`
+  调用方不再传 `1/zoom`（线宽/圆角）、`SelectionFrame.batchStyle` 的端口定位去掉 `scale(1/zoom)`
+  （端口与节点端口同款 = flow 尺寸）。
+- 语义：配置项「两框间距 / 小框外扩 / 线宽 / 圆角」现在是**画布(flow)单位**，与节点卡片边框同约定。
+  缩小时 spacing/线宽一起变细；不再需要「间距与线宽同空间」那套补偿（两者现在同域）。
+- 验证：multi-select 单测 148 全绿、typecheck 过；浏览器 e2e 多选回归 **33/33**（新增场景 G 四条：
+  flow 间距恒 16/34/16/16、屏幕间距随缩放变、线宽不反缩放、无报错）、画布总回归 **51/51**。
+  实测（修后，同一条测量）：flow 间距恒 16、屏幕间距 0.5x→8 / 1x→16 / 1.5x→24 / 2x→32。
 
 执行计划：`docs/plans/2026-09-27-canvas-plugin-context-boundaries.md`（规格 `docs/goal/canvas-plugin-context-and-boundaries-spec.md`）。
 九项已落地、每项独立提交并验证，T10 待负责人拍板。

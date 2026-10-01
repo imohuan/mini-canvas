@@ -67,9 +67,19 @@ function createUi() {
     moveMenuOpen: false,
     libraryMenuOpen: false,
     canvasMode: 'move' as 'move' | 'hand',
-    zoom: 39,
+    /**
+     * 画布缩放（百分数）的**镜像值**：唯一事实来源是真实视口（viewport 服务的 getViewport().zoom）。
+     * 这里只在"视口变化结束"与"宿主就绪"时同步过来给状态栏显示；菜单动作则调 viewport 服务改真实画布。
+     */
+    zoom: 100,
     zoomMenuOpen: false,
-    /** 隐藏节点连线 / 网格吸附：可切换，关闭时图标画斜线（照目标） */
+    /**
+     * 隐藏节点连线 / 网格吸附的**镜像值**（关闭时图标画斜线，照目标）。
+     *
+     * 唯一事实来源是内核设置（ctx.get('settings') 的 edgeVisible / snapToGrid），
+     * 这里只是订阅后同步过来的副本：状态栏按钮负责写设置，设置面板改也走同一条通道，
+     * 两边读到的永远是同一个值（见 bindCanvasToggles）。
+     */
     edgesVisible: true,
     snapOn: true,
     // 左下状态条
@@ -228,7 +238,200 @@ function createUi() {
   const minimapOn = computed(() => (readyHost?.ctx?.get<{ visible: boolean }>('mini-map')?.visible) ?? false)
   function toggleMinimap(): void {
     const svc = readyHost?.ctx?.get<{ visible: boolean }>('mini-map')
-    if (svc) svc.visible = !svc.visible
+    const next = !minimapOn.value
+    // 优先写设置 miniMapVisible（插件订阅它同步服务，且会随配置持久化到下次启动）；
+    // 设置键缺席（未装 mini-map 插件）时退回直接翻服务位，至少当下这次切换是生效的。
+    const store = readyHost?.ctx?.get<SettingsStore>('settings')
+    if (store?.has?.('miniMapVisible')) store.set('miniMapVisible', next)
+    else if (svc) svc.visible = next
+  }
+
+  // ===== 画布开关（整理画布 / 连线显隐 / 网格吸附 / 移动工具）=====
+  //
+  // 原则：状态栏按钮**不自己保存一份状态、不直接碰画布**，只做两件事之一 ——
+  //   ① 写内核设置（ctx.get('settings').set）：连线显隐 / 网格吸附 / 画布模式
+  //      → 真正干活的是订阅这些 key 的消费方（渲染宿主 / 主题皮），与设置面板**同一条通道**；
+  //   ② 执行命令（ctx.get('command').execute）：整理画布 / 聚焦
+  //      → 走插件已注册的命令，复用撤销栈与落盘，不另抄一份实现。
+  //
+  // 为什么用 settings 而不是各插件的服务：edgeVisible / snapToGrid 是"宿主级"键
+  // （theme-default / canvas-render 声明并订阅），设置面板已经在用它们；按钮也写同一处，
+  // 面板与按钮天然同步、不出现"按钮关了面板还开着"这种双源漂移。
+  /** 当前宿主句柄里的 ctx（拿不到 = 画布还没就绪，所有开关静默不动） */
+  function hostCtx(): HostApi['ctx'] | undefined {
+    return ((hostEl.value?.host ?? hostEl.value) as FullHost | undefined)?.ctx
+  }
+  /** 读设置现值（未声明 / 服务缺失 → undefined，调用方自行回落） */
+  function readSetting<T extends string | number | boolean>(key: string): T | undefined {
+    return hostCtx()?.get<SettingsStore>('settings')?.get(key) as T | undefined
+  }
+  /** 写设置现值（未声明时 set 会抛，这里吞掉 —— 按钮不该因某个插件没装就报错） */
+  function writeSetting(key: string, value: string | number | boolean): void {
+    const store = hostCtx()?.get<SettingsStore>('settings')
+    if (!store?.has?.(key)) return
+    store.set(key, value)
+  }
+  /** 执行一条已注册命令（未注册 → no-op，不报错） */
+  function runCommand(id: string): void {
+    hostCtx()?.get<{ execute(id: string): unknown }>('command')?.execute(id)
+  }
+
+  // ===== 缩放（左下角「缩放选项」）=====
+  //
+  // 唯一事实来源 = 真实画布视口（viewport 服务的 getViewport().zoom）。状态栏那个百分比只是**镜像值**：
+  // 由宿主就绪时同步一次 + 每次视口移动/缩放结束（RenderEvents.MoveEnd）再同步，显示永远与画布一致。
+  // 菜单动作一律调 viewport 服务去改真实画布，不再只改一个数字（原先 s.zoom 是纯 UI 数字，
+  // 从没接到 viewport 上 —— 表现为"点缩放至 100% 画布纹丝不动"）。
+  /** viewport 服务的最小用面（契约见 canvas-data renderServiceContracts，宿主恒在注入） */
+  type ViewportLike = {
+    getViewport(): { zoom: number }
+    zoomIn(): void
+    zoomOut(): void
+    zoomTo(level: number): void
+    fitView(padding?: number): void
+  }
+  function viewportSvc(): ViewportLike | undefined {
+    return hostCtx()?.get<ViewportLike>('viewport')
+  }
+  /** 把真实视口缩放同步到状态栏镜像值（未就绪 → 不动，保留上一次显示） */
+  function syncZoomDisplay(): void {
+    const zoom = viewportSvc()?.getViewport?.().zoom
+    if (typeof zoom === 'number' && Number.isFinite(zoom)) state.zoom = Math.round(zoom * 100)
+  }
+  /** 放大（钳到 800%，与状态栏读数的上限一致） */
+  function zoomInStep(): void {
+    const svc = viewportSvc()
+    if (!svc) return
+    const current = Math.round((svc.getViewport?.().zoom ?? 1) * 100)
+    svc.zoomTo(Math.min(800, current + 10) / 100)
+  }
+  /** 缩小（钳到 10%） */
+  function zoomOutStep(): void {
+    const svc = viewportSvc()
+    if (!svc) return
+    const current = Math.round((svc.getViewport?.().zoom ?? 1) * 100)
+    svc.zoomTo(Math.max(10, current - 10) / 100)
+  }
+  /** 缩放到某个倍率（缩放菜单里的「缩放至 X%」） */
+  function zoomToPercent(percent: number): void {
+    viewportSvc()?.zoomTo(percent / 100)
+  }
+  /**
+   * 缩放到最大（缩放菜单里的「缩放到最大」）。
+   *
+   * "最大"取自宿主级设置 `maxZoom`（分组「常规/画布」，默认 2 = 200%，设置面板可调 1–8），
+   * 而不是写死一个 800% —— 那样在默认上限 200% 下点了也到不了，文案与实际不符。
+   * 设置键缺席（旧宿主）时按同一默认 2 兜底。
+   */
+  function zoomToMax(): void {
+    const svc = viewportSvc()
+    if (!svc) return
+    const max = readSetting<number>('maxZoom')
+    svc.zoomTo(typeof max === 'number' && Number.isFinite(max) ? max : 2)
+  }
+  /** 适合屏幕（把整张图收进视口；替代原先那个只改文字的假按钮） */
+  function zoomFit(): void {
+    viewportSvc()?.fitView()
+  }
+  /**
+   * 让状态栏读数始终跟着真实视口走。
+   *
+   * 为什么用常驻 rAF 而不是订阅视口事件：**程序化缩放不发 VueFlow 的 move 事件**（实测 zoomTo /
+   * fitView / 小地图拖拽 / 首屏 fitView 全部不发 moveEnd），只靠 `RenderEvents.MoveEnd` 订阅会让读数
+   * 停在旧值（表现为"点了缩放至 100%，画布动了、数字没动"）。逐帧比对一次真实 zoom、变了才写
+   * （同一个整数不触发响应式），任何来源的缩放都跟得上；成本是一次 getViewport + 整数比较，可忽略。
+   * 与 App.vue 里给小地图逐帧定位的 rAF 同款做法。重复 onReady 先撤旧循环。
+   */
+  let disposeZoomBind: (() => void) | undefined
+  function bindZoomSync(): void {
+    disposeZoomBind?.()
+    disposeZoomBind = undefined
+    const ctx = hostCtx()
+    if (!ctx) return
+    syncZoomDisplay()
+    // node/SSR 环境没有 rAF：只做一次同步即可（那些环境也没有真实视口可跟）
+    if (typeof requestAnimationFrame !== 'function') return
+    let raf = requestAnimationFrame(function tick(): void {
+      syncZoomDisplay()
+      raf = requestAnimationFrame(tick)
+    })
+    disposeZoomBind = () => { cancelAnimationFrame(raf) }
+  }
+  /** 撤掉视口订阅（宿主销毁时调用，与 unbindSettingsClose / unbindCanvasToggles 同处） */
+  function unbindZoomSync(): void {
+    disposeZoomBind?.()
+    disposeZoomBind = undefined
+  }
+
+  /**
+   * 连线显隐：写设置 edgeVisible（分组「边/连线」，默认皮 CustomEdge 订阅它决定画不画）。
+   * 与设置面板里那个「显示连线」开关是**同一个键** —— 在哪边改，另一边立刻一致。
+   */
+  function toggleEdges(): void {
+    const next = !state.edgesVisible
+    writeSetting('edgeVisible', next)
+    state.edgesVisible = readSetting<boolean>('edgeVisible') ?? next
+  }
+
+  /**
+   * 网格吸附：写设置 snapToGrid（分组「常规/画布」，渲染宿主 CanvasHost 订阅后绑给 VueFlow）。
+   * 吸附间距 snapGridX/Y 由同一个设置面板调，按钮只管开关。
+   */
+  function toggleSnap(): void {
+    const next = !state.snapOn
+    writeSetting('snapToGrid', next)
+    state.snapOn = readSetting<boolean>('snapToGrid') ?? next
+  }
+
+  /**
+   * 整理画布：执行 auto-layout 插件的自动布局命令（Ctrl/Cmd+L 同一条命令）。
+   * 走命令而非自写布局：结果一次写进 doc（含历史与落盘），撤销/重做与快捷键行为完全一致。
+   */
+  function organizeCanvas(): void {
+    runCommand('auto-layout:run')
+  }
+
+  /**
+   * 切换画布鼠标工具（移动 / 抓手）。两个模式各写两个宿主级设置键：
+   *
+   * - 移动 move：`nodesDraggable=true` + `panOnDrag=true` → 拖节点移动节点、拖空白平移画布（默认态）。
+   * - 抓手 hand：`nodesDraggable=false` + `panOnDrag=true` → 拖任何地方都是平移画布，
+   *   节点不会被拖走（真正的"抓手"；再点移动即恢复）。
+   *
+   * 为什么用设置而不是自己存一份：这两个键（分组「常规/画布」）由渲染宿主订阅后绑给 VueFlow，
+   * 写设置就等于真的改了画布交互；用户若在设置面板里手动开关这两项，模式按钮的状态也跟着翻。
+   * 光标不用手写：panOnDrag 开着时 VueFlow 给画布层加 `draggable` → grab / grabbing（见其 style.css）。
+   */
+  function setCanvasMode(mode: 'move' | 'hand'): void {
+    state.canvasMode = mode
+    writeSetting('panOnDrag', true)
+    writeSetting('nodesDraggable', mode === 'move')
+  }
+
+  /**
+   * 订阅宿主设置变化，把「按钮关心的那几个键」同步到本地镜像值。
+   *
+   * 为什么必须订阅：设置面板改 edgeVisible / snapToGrid 时，状态栏图标的亮/暗与斜线
+   * 也要跟着变；不订阅就会出现"面板关了、按钮还亮着"的假状态（本文件里 themePalette /
+   * mini-map 也是同款做法）。重复 onReady 时先撤旧订阅，避免回调堆积。
+   */
+  let disposeCanvasToggleBind: (() => void) | undefined
+  function bindCanvasToggles(): void {
+    disposeCanvasToggleBind?.()
+    disposeCanvasToggleBind = undefined
+    const store = hostCtx()?.get<SettingsStore>('settings')
+    if (!store) return
+    // 先按现值对齐一次（面板之前可能已经改过）
+    state.edgesVisible = (store.get('edgeVisible') as boolean | undefined) ?? state.edgesVisible
+    state.snapOn = (store.get('snapToGrid') as boolean | undefined) ?? state.snapOn
+    // 画布模式由 nodesDraggable 反推：关掉拖节点 = 抓手态（拖哪都平移画布），否则是移动态
+    const draggable = store.get('nodesDraggable') as boolean | undefined
+    if (typeof draggable === 'boolean') state.canvasMode = draggable ? 'move' : 'hand'
+    disposeCanvasToggleBind = store.onChange((key, value) => {
+      if (key === 'edgeVisible' && typeof value === 'boolean') state.edgesVisible = value
+      else if (key === 'snapToGrid' && typeof value === 'boolean') state.snapOn = value
+      else if (key === 'nodesDraggable' && typeof value === 'boolean') state.canvasMode = value ? 'move' : 'hand'
+    }).dispose
   }
 
   // ===== 快捷键数据 =====
@@ -346,12 +549,27 @@ function createUi() {
     disposeSettingsClose = undefined
     const ctx = hostEl.value?.host?.ctx
     if (!ctx) return
-    disposeSettingsClose = ctx.on('settings:ui-close', closeSettings).dispose
+    // 两条通道一起接：close 收面板，open 开面板。
+    // 为什么要有 open：底栏那枚「全局设置」齿轮是**插件**里的组件，它够不到装配层的
+    // settingsOpen 状态；统一走内核事件，任何入口（顶栏 / 底栏 / 以后更多）都只 emit 一个名字。
+    const offClose = ctx.on('settings:ui-close', closeSettings).dispose
+    const offOpen = ctx.on('settings:ui-open', openSettings).dispose
+    disposeSettingsClose = () => {
+      offClose()
+      offOpen()
+    }
+  }
+
+  /** 打开设置面板（内核事件 settings:ui-open 的落点；装配层其它部件也可直接调） */
+  function openSettings(): void {
+    state.settingsOpen = true
   }
 
   async function onReady(): Promise<void> {
     bindThemeSettings()
     bindSettingsClose()
+    bindCanvasToggles()
+    bindZoomSync()
     await installExternalPlugins()
   }
 
@@ -367,6 +585,12 @@ function createUi() {
   function unbindSettingsClose(): void {
     disposeSettingsClose?.()
     disposeSettingsClose = undefined
+  }
+
+  /** 撤掉画布开关的设置订阅（宿主销毁时调用，与 unbindSettingsClose 同处） */
+  function unbindCanvasToggles(): void {
+    disposeCanvasToggleBind?.()
+    disposeCanvasToggleBind = undefined
   }
 
   function createNode(type: 'text' | 'image' | 'video'): void {
@@ -550,7 +774,9 @@ function createUi() {
   return {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
-    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
+    toggleEdges, toggleSnap, organizeCanvas, setCanvasMode, unbindCanvasToggles,
+    syncZoomDisplay, zoomInStep, zoomOutStep, zoomToPercent, zoomToMax, zoomFit, unbindZoomSync,
+    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings, openSettings,
     unbindSettingsClose,
     toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,

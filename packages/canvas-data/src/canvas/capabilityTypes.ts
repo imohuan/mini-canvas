@@ -17,6 +17,19 @@ declare module '@mini-canvas/kernel' {
     /** 注册一个节点类型（数据+展示+可选建节点），自动回收 */
     nodes: {
       register(def: NodeRegisterDef): void
+      /** 改某节点标题（label）；空串/undefined/全空白 → 清掉 */
+      setLabel(id: string, label: string | undefined): void
+      /** 把某节点移到绝对坐标（同父坐标系） */
+      move(id: string, position: { x: number; y: number }): void
+      /** 设/清某节点的父（组归属）；undefined = 解除父 */
+      setParent(id: string, parentId: string | undefined): void
+      /** 删某节点（连带清相连边 / 子节点父引用 / 选中）；返回是否删到 */
+      remove(id: string): boolean
+      /**
+       * 改某节点尺寸（宽高，px）—— 一等入口，走唯一写入口（进历史 + 落盘）并自动刷新卡片镜像。
+       * @returns 是否写入成功；宽高非正有限数 → false 且不写
+       */
+      setSize(id: string, w: number, h: number): boolean
       /** 往某 type 的某段叠 occupant（多插件同段叠加；自动回收）。返回 occupant id */
       contribute(
         type: string,

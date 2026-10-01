@@ -170,22 +170,22 @@ describe('buildVideoPayload', () => {
     expect(p.data.videoHeight).toBe(720)
     // 时长取整到秒（与老版 Math.round 一致）
     expect(p.data.videoDuration).toBe(12)
-    expect(p.data.cardWidth).toBe(560)
-    expect(p.data.cardHeight).toBe(315)
+    // 卡片尺寸只给 size（唯一正身）；data.cardWidth/cardHeight 由 nodeStore 自动镜像
     expect(p.size).toEqual({ w: 560, h: 315 })
+    expect(p.data.cardWidth).toBeUndefined()
+    expect(p.data.cardHeight).toBeUndefined()
   })
 
   it('读不到元数据 → 默认卡片尺寸且不写尺寸字段（不猜）', () => {
     const p = buildVideoPayload(file('clip.mp4'), 'blob:vid1', { x: 0, y: 0 }, null)
     expect(p.size).toEqual({ w: 560, h: 360 })
-    expect(p.data.cardWidth).toBe(560)
     expect(p.data.videoWidth).toBeUndefined()
     expect(p.data.videoDuration).toBeUndefined()
   })
 
-  it('字段名与 plugin-node-video 的 data 约定逐字一致（否则状态栏/裁剪读不到值）', () => {
+  it('媒体元信息字段名与 plugin-node-video 的 data 约定逐字一致（否则状态栏/裁剪读不到值）', () => {
     const p = buildVideoPayload(file('clip.mp4'), 'blob:vid1', { x: 0, y: 0 }, null)
-    for (const key of ['videoUrl', 'videoName', 'cardWidth', 'cardHeight']) {
+    for (const key of ['videoUrl', 'videoName']) {
       expect(Object.prototype.hasOwnProperty.call(p.data, key)).toBe(true)
     }
   })

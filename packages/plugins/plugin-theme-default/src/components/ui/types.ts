@@ -14,4 +14,15 @@ export interface SelectOption {
   label: string
   value: string | number
   disabled?: boolean
+  /**
+   * 可选一句话说明（悬停/聚焦该行时从名称下方浮现）。
+   * 视觉与右键菜单的 hover 描述同一套动效（Select 的样式的 .sel-option-copy）。
+   */
+  description?: string
+  /**
+   * 可选图标（opaque 句柄，与节点类型 icon 同一写法：SVG 字符串或 Vue 组件）。
+   * 行左侧渲染一个 28×28 的图标托（照仓库右键菜单 / 主题菜单的 look）——
+   * 有图标时该行自动变「图标 + 名称（+ hover 描述）」两段式。
+   */
+  icon?: unknown
 }

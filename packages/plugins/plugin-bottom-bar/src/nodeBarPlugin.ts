@@ -21,6 +21,10 @@ import { publishToolActions, type PublishToolActionsOptions } from './toolAction
 import NodeTaskOverlay from './NodeTaskOverlay.vue'
 import NodeBottomBar from './NodeBottomBar.vue'
 import NodeBottomBarOverlay from './NodeBottomBarOverlay.vue'
+// 参考选择态浮层（顶行「参考」按钮引发）：注册进同一 overlay 槽，与底栏宿主同层。
+import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
+// 全屏媒体预览浮层（素材卡点开看大图/全文）
+import MediaPreviewOverlay from './MediaPreviewOverlay.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
@@ -246,6 +250,24 @@ export function apply(ctx: Context) {
 
   // 默认皮登记进 themeRegistry 的 bottomBar 槽（order 最小者赢；换皮插件给更小 order 即顶掉）
   ctx.theme.add(BOTTOM_BAR_SLOT, NodeBottomBar)
+
+  // 参考选择态浮层：与底栏宿主同槽、不同 order（浮层内容自己判空，不在选择态时不产出 DOM）。
+  // 为什么单独一条而不是塞进 NodeBottomBarOverlay：那个组件只管「底栏摆哪」，而这条要铺满
+  // 所有节点（每个节点一张盖层）—— 职责不同，分开放各自的显隐条件才写得清楚。
+  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
+    id: 'bottom-bar/reference-select',
+    order: 41,
+    component: ReferenceSelectOverlay,
+    meta: { title: '参考选择态' },
+  })
+
+  // 全屏媒体预览：素材卡点开看大图/全文（用户要求「要的是全屏，是整个视图」，不是在底栏里缩着看）
+  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
+    id: 'bottom-bar/media-preview',
+    order: 42,
+    component: MediaPreviewOverlay,
+    meta: { title: '媒体预览' },
+  })
 
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；
   // ready 之前必须排除自己的安装事件（否则在节点插件注册动作前就把可续查任务误判成中断），

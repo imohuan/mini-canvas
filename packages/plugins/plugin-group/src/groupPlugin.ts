@@ -196,9 +196,12 @@ export class GroupService extends Service implements GroupServiceAPI {
       .map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, w: n.size?.w ?? 0, h: n.size?.h ?? 0 }))
   }
 
-  /** 同步 group 声明尺寸 + BaseNode 卡片尺寸（data.cardWidth/cardHeight 同值，避免视觉框不一致） */
-  private groupSizePatch(w: number, h: number): { size: { w: number; h: number }; data: { cardWidth: number; cardHeight: number } } {
-    return { size: { w, h }, data: { cardWidth: w, cardHeight: h } }
+  /**
+   * 组尺寸写回补丁：只给正式字段 size（唯一正身）。
+   * 卡片镜像 data.cardWidth/cardHeight 由 nodeStore 从 size 自动生成，不再手写一份。
+   */
+  private groupSizePatch(w: number, h: number): { size: { w: number; h: number } } {
+    return { size: { w, h } }
   }
 
   createGroup(nodeIds: string[]): string | null {
@@ -233,8 +236,6 @@ export class GroupService extends Service implements GroupServiceAPI {
             label: '',
             nodeType: GROUP_NODE_TYPE,
             backgroundColor: DEFAULT_GROUP_BACKGROUND_COLOR,
-            cardWidth: bounds.w,
-            cardHeight: bounds.h,
           },
         },
       ])
