@@ -36,6 +36,10 @@ const boot = async () => {
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(2000);
   await page.waitForSelector('.vue-flow__node', { timeout: 30000 });
+  // 等宿主句柄就绪：插件改成运行期从清单安装后，冷启动会多花一点时间把外挂插件装完，
+  // 只等 selector 可能早于 MiniCanvasUI 挂上（后续 evaluate 会读到 undefined）。
+  await page.waitForFunction(() => !!window.MiniCanvasUI, null, { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(600);
 };
 
 /** 用宿主 API 直写两个文本节点 + 一个组（成员在组内），并选中 [组, 文本] —— 用户图2的形态 */
@@ -127,7 +131,9 @@ async function dragGroupAndSample(grab, totalDx, totalDy) {
  * 拖动多选框的**同时**滚轮缩放 —— 用户报的"多选时滚轮缩放，选框没实时更新"。
  *
  * 修前的形态：缩放那一帧选框被"用旧 store 位置重算"拽回起点，与节点脱开
- * （实测偏移 16/34 → 61/68，松手才跳回）。修好后全程必须钉在 16/34/16/16。
+ * （实测偏移 16/34 → 61/68，松手才跳回）。
+ * 判据（现行语义）：选框**跟随画布缩放** —— 间距是画布单位，所以全程的 **flow 间距**
+ * 必须恒为 16/34/16/16（屏幕上则随 zoom 一起变大变小）。
  */
 async function dragWithWheelZoom(grab, steps) {
   const rows = [];
@@ -151,7 +157,8 @@ async function dragWithWheelZoom(grab, steps) {
 }
 
 /**
- * 选框外框相对"**选中节点**并集"的四边屏幕偏移（静止态应为 16/34/16/16）。
+ * 选框外框相对"**选中节点**并集"的四边偏移：给**屏幕值**（贴合判定用）与**flow 值**
+ * （跟随画布语义下应恒为 16/34/16/16）。
  *
  * 必须只算选中集：组的子节点也在 DOM 里，但它们不该参与选框几何
  * （比如子节点探出组边界时，用"全部节点"量出来的底边偏移会假报失败）。
@@ -172,10 +179,15 @@ async function frameOffsets() {
       r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)),
     };
     const vp = window.MiniCanvasUI.getHost().viewport.getViewport();
+    const z = vp.zoom || 1
+    const sl = (u.l - o.left) / z, st = (u.t - o.top) / z
+    const sr = (o.right - u.r) / z, sb = (o.bottom - u.b) / z
     return {
       zoom: +vp.zoom.toFixed(3),
       l: +(u.l - o.left).toFixed(1), t: +(u.t - o.top).toFixed(1),
       r: +(o.right - u.r).toFixed(1), b: +(o.bottom - u.b).toFixed(1),
+      // flow 间距（画布单位）：跟随画布语义下应恒为配置值（默认 16/34/16/16）
+      fl: +sl.toFixed(2), ft: +st.toFixed(2), fr: +sr.toFixed(2), fb: +sb.toFixed(2),
     };
   });
 }
@@ -315,9 +327,11 @@ const grabE = await page.evaluate(() => {
   };
 });
 const zoomRows = await dragWithWheelZoom(grabE, 4);
-const badZoomRows = zoomRows.filter((r) => !r.missing && (Math.abs(r.l - 16) > 1.5 || Math.abs(r.t - 34) > 1.5 || Math.abs(r.r - 16) > 1.5 || Math.abs(r.b - 16) > 1.5));
+// 判据改成 **flow 间距恒定**（选框跟随画布缩放）：缩放会让屏幕间距跟着变，那是预期的，
+// 所以只能拿 flow 值比（屏幕值在缩放后本来就该变）。
+const badZoomRows = zoomRows.filter((r) => !r.missing && (Math.abs(r.fl - 16) > 1.5 || Math.abs(r.ft - 34) > 1.5 || Math.abs(r.fr - 16) > 1.5 || Math.abs(r.fb - 16) > 1.5));
 check(
-  'E1 拖动中滚轮缩放：选框全程贴合（偏移恒 16/34/16/16）',
+  'E1 拖动中滚轮缩放：选框全程贴合（flow 间距恒 16/34/16/16，屏幕间距随缩放一起变）',
   badZoomRows.length === 0,
   badZoomRows.length ? JSON.stringify(badZoomRows[0]) : 'zoom ' + zoomRows[0].zoom + '→' + zoomRows[zoomRows.length - 1].zoom,
 );
@@ -522,6 +536,103 @@ const fPos = await page.evaluate(() => {
 });
 check('F6 子节点位置已落盘（组内成员照常移动）', fPos.a.x !== 60 || fPos.a.y !== 120, JSON.stringify(fPos));
 check('F7 全程无新错误', errors.slice(errsBeforeF).length === 0, errors.slice(errsBeforeF).join(' | '));
+
+// ========== 场景 G：选框跟随画布缩放（用户要求："希望这边的边框可以和画布一样一同缩放"）==========
+// 判据：**flow 间距恒为配置值**（16/34/16/16），屏幕间距随 zoom 一起变大变小；
+// 线宽也不做 1/zoom 反缩放（配置值原样落到 CSS）。
+await boot();
+const errsBeforeG = errors.length;
+await seedGroupScene();
+// 保证选中 >=2（seedGroupScene 已选 [组, 独立节点]）
+const gOffsets = () => page.evaluate(() => {
+  const h = window.MiniCanvasUI.getHost();
+  const outer = document.querySelector('.selection-frame-outer');
+  const inner = document.querySelector('.selection-frame-inner');
+  if (!outer) return { missing: true };
+  const rs = [...h.selection.ids]
+    .map((id) => document.querySelector('.vue-flow__node[data-id="' + id + '"]'))
+    .filter(Boolean)
+    .map((el) => el.getBoundingClientRect());
+  if (!rs.length) return { missing: true };
+  const o = outer.getBoundingClientRect();
+  const u = { l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)), r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)) };
+  const z = h.viewport.getViewport().zoom || 1;
+  const cs = getComputedStyle(outer);
+  const flow = { l: (u.l - o.left) / z, t: (u.t - o.top) / z, r: (o.right - u.r) / z, b: (o.bottom - u.b) / z };
+  const screen = { l: u.l - o.left, t: u.t - o.top, r: o.right - u.r, b: o.bottom - u.b };
+  return { zoom: +z.toFixed(3), flow, screen, lineWidth: cs.borderTopWidth,
+    inner: inner ? { flowL: (Math.min(...rs.map((r) => r.left)) - inner.getBoundingClientRect().left) / z } : null };
+});
+const g1 = await gOffsets();
+// 缩到 0.5：flow 间距不变、屏幕间距腰斩
+await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 0.5 }));
+await page.waitForTimeout(400);
+const g05 = await gOffsets();
+// 放大到 2：flow 间距不变、屏幕间距翻倍
+await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 2 }));
+await page.waitForTimeout(400);
+const gZoomed2 = await gOffsets();
+const flowOk = (g) => !g.missing && Math.abs(g.flow.l - 16) < 1 && Math.abs(g.flow.t - 34) < 1 && Math.abs(g.flow.r - 16) < 1 && Math.abs(g.flow.b - 16) < 1;
+check('G1 跟随画布：任意缩放下 flow 间距恒为 16/34/16/16', flowOk(g1) && flowOk(g05) && flowOk(gZoomed2), `z1=${JSON.stringify(g1.flow)} z0.5=${JSON.stringify(g05.flow)} z2=${JSON.stringify(gZoomed2.flow)}`);
+check('G2 跟随画布：屏幕间距随缩放一起变（0.5x 变小、2x 变大）',
+  g05.screen.l < g1.screen.l - 2 && gZoomed2.screen.l > g1.screen.l + 2,
+  `screen.l: ${g1.screen.l.toFixed(1)} → 0.5x ${g05.screen.l.toFixed(1)} → 2x ${gZoomed2.screen.l.toFixed(1)}`);
+// 线宽：配置 1px → CSS 恒 1px（不再按 1/zoom 放大成 2/4px）
+check('G3 线宽不反缩放（配置值原样落到 CSS，不随 zoom 放大）',
+  g1.lineWidth === '1px' && g05.lineWidth === '1px' && gZoomed2.lineWidth === '1px',
+  `1x=${g1.lineWidth} 0.5x=${g05.lineWidth} 2x=${gZoomed2.lineWidth}`);
+check('G4 全程无新错误', errors.slice(errsBeforeG).length === 0, errors.slice(errsBeforeG).join(' | '));
+
+// ========== 场景 H：Shift 拖框选本身（不靠 selection.set 预置）==========
+// 为什么单列这个场景：此前所有断言都是先 h.selection.set(...) 预置选中再验框/拖，
+// 而“Shift 拖空白把节点框进来”这条真实手势路径从没被测过。实测踩到一个只在
+// “运行期逐个装卸插件”下才暴露的 bug：VueFlow 挂在 nodeEpoch 这个 key 上，插件每次装/卸都会
+// 整树重挂 → pane DOM 被换成新元素，而 flow.pane 只在 onMounted 捕获一次 → 插件把 pointer 监听
+// 绑在了已脱离文档的旧 pane 上，Shift 框选整体失效（冷启动只重挂一次，所以看着正常）。
+// 这条守的就是“外部安装插件后，框选这个手势必须还能用”。
+await boot();
+await page.evaluate(() => {
+  const h = window.MiniCanvasUI.getHost();
+  const doc = h.ctx.get('doc');
+  const old = doc.getNodes();
+  if (old.length) doc.removeNodes(old.map((n) => n.id));
+  h.selection.clear();
+});
+await page.waitForTimeout(300);
+const hIds = await page.evaluate(() => {
+  const f = window.MiniCanvasUI.getHost().ctx.get('nodeFactory');
+  return [f.create('text', { x: 300, y: 320 }), f.create('text', { x: 480, y: 420 })];
+});
+await page.waitForTimeout(500);
+const hErrsBefore = errors.length;
+const hStart = await page.evaluate((ids) => {
+  const rs = ids.map((id) => document.querySelector('.vue-flow__node[data-id="' + id + '"]')).filter(Boolean).map((el) => el.getBoundingClientRect());
+  const x = Math.min(...rs.map((r) => r.left)) - 60;
+  const y = Math.min(...rs.map((r) => r.top)) - 60;
+  const el = document.elementFromPoint(x, y);
+  const to = { x: Math.max(...rs.map((r) => r.right)) + 40, y: Math.max(...rs.map((r) => r.bottom)) + 40 };
+  return { from: { x, y }, to, onPane: !!(el && el.closest('.vue-flow__pane')) && !el.closest('.vue-flow__node') };
+}, hIds);
+await page.mouse.move(hStart.from.x, hStart.from.y);
+await page.keyboard.down('Shift');
+await page.mouse.down();
+for (let i = 1; i <= 12; i++) {
+  await page.mouse.move(hStart.from.x + ((hStart.to.x - hStart.from.x) * i) / 12, hStart.from.y + ((hStart.to.y - hStart.from.y) * i) / 12);
+  await page.waitForTimeout(18);
+}
+const hMid = await page.evaluate(() => ({
+  sel: [...window.MiniCanvasUI.getHost().selection.ids],
+  box: [...document.body.children].some((c) => c.style && String(c.style.border).includes('dashed')),
+}));
+await page.mouse.up();
+await page.keyboard.up('Shift');
+await page.waitForTimeout(400);
+const hEnd = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+check('H0 起手点确实落在画布空白（pane）上', hStart.onPane, JSON.stringify(hStart.from));
+check('H1 Shift 拖框：拖动中途就实时选中被框住的节点', hMid.sel.length === 2, '选中=' + hMid.sel.join(','));
+check('H2 Shift 拖框：屏幕上出现选框（视觉反馈）', hMid.box, 'box=' + hMid.box);
+check('H3 Shift 拖框：松手后选中保留（没被误当空白点击清掉）', hEnd.length === 2, '选中=' + hEnd.join(','));
+check('H4 Shift 拖框全程无错误', errors.slice(hErrsBefore).length === 0, errors.slice(hErrsBefore).join(' | '));
 
 // ========== 汇总 ==========
 await browser.close();

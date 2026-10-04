@@ -82,6 +82,7 @@ const {
   deserializeDoc,
   focusEnd,
   setText,
+  insertResource,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   promptDoc: promptDocRef,
@@ -96,6 +97,7 @@ defineExpose({
   deserializeDoc,
   focusEnd,
   setText,
+  insertResource,
 });
 </script>
 

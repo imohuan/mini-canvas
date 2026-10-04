@@ -4,7 +4,7 @@
  * 覆盖：加边/去重、按 id 删边、删节点连带清边、清悬挂边、整体回填、订阅(add/remove/replace 触发)。
  */
 import { describe, it, expect } from 'vitest'
-import { EdgeStore, edgeStoreId } from '../edgeStore'
+import { EdgeStore } from '../edgeStore'
 import type { StoredEdgeInput } from '../edgeStore'
 
 function aliveIds(nodes: Array<{ id: string }>): Set<string> {
@@ -12,15 +12,23 @@ function aliveIds(nodes: Array<{ id: string }>): Set<string> {
 }
 
 describe('EdgeStore（边数据服务）', () => {
-  it('addEdge 生成稳定 id(source→target)，重复连去重为一条', () => {
+  it('addEdge 分配自增数字 id，重复连（同端点）去重为一条', () => {
     const es = new EdgeStore()
     const id1 = es.addEdge({ source: '1', target: '2' })
-    expect(id1).toBe(edgeStoreId('1', '2'))
+    expect(id1).toBe('1')
     // 同源同目标再加 → 同一 id，替换不新增
     const id2 = es.addEdge({ source: '1', target: '2' })
     expect(id2).toBe(id1)
     expect(es.getEdges()).toHaveLength(1)
     expect(es.getEdge(id1)?.type).toBe('custom')
+  })
+
+  it('nextId：自增数字，且跳过已被占用的号', () => {
+    const es = new EdgeStore()
+    expect(es.nextId()).toBe('1')
+    expect(es.nextId()).toBe('2')
+    es.addEdge({ source: 'a', target: 'b', id: '3' })
+    expect(es.nextId()).toBe('4')
   })
 
   it('addEdge 保留 type / sourceHandle / targetHandle', () => {
@@ -34,8 +42,8 @@ describe('EdgeStore（边数据服务）', () => {
 
   it('removeEdge 按 id 删；不存在 no-op', () => {
     const es = new EdgeStore()
-    es.addEdge({ source: '1', target: '2' })
-    expect(es.removeEdge(edgeStoreId('1', '2'))).toBe(true)
+    const id = es.addEdge({ source: '1', target: '2' })
+    expect(es.removeEdge(id)).toBe(true)
     expect(es.getEdges()).toHaveLength(0)
     expect(es.removeEdge('nope')).toBe(false)
   })
@@ -60,43 +68,35 @@ describe('EdgeStore（边数据服务）', () => {
     expect(es.getEdges().map((e) => e.source + '->' + e.target)).toEqual(['1->2'])
   })
 
-  it('replaceAll 整体回填(刷新恢复)，id 缺省自动补', () => {
+  it('replaceAll 整体回填(刷新恢复)，无 id 者补自增数字', () => {
     const es = new EdgeStore()
     const edges: StoredEdgeInput[] = [
       { id: 'a', source: '1', target: '2' },
-      { source: '3', target: '4' }, // 无 id → 按 source/target 生成
+      { source: '3', target: '4' }, // 无 id → 分配数字 id
     ]
     es.replaceAll(edges)
     expect(es.getEdges()).toHaveLength(2)
     expect(es.getEdge('a')?.source).toBe('1')
-    expect(es.getEdges().some((e) => e.id === edgeStoreId('3', '4'))).toBe(true)
+    // 'a' 不是数字，计数器从 0 起 → 新边拿到 '1'
+    expect(es.getEdges().some((e) => e.id === '1')).toBe(true)
   })
 
   it('subscribe：add/remove/replace 各自触发，返回句柄可停收', () => {
     const es = new EdgeStore()
     const reasons: string[] = []
     const off = es.subscribe((r, id) => reasons.push(r + (id ? ':' + id : '')))
-    es.addEdge({ source: '1', target: '2' })
-    es.removeEdge(edgeStoreId('1', '2'))
+    const a = es.addEdge({ source: '1', target: '2' })
+    es.removeEdge(a)
     es.addEdge({ source: '2', target: '3' })
     es.replaceAll([])
-    expect(reasons).toEqual(['add:e-1-2', 'remove:e-1-2', 'add:e-2-3', 'replace'])
+    expect(reasons).toEqual(['add:' + a, 'remove:' + a, 'add:2', 'replace'])
     off()
     es.addEdge({ source: '5', target: '6' })
     expect(reasons).toHaveLength(4) // 停收
   })
 })
 
-describe('edgeStoreId 多端口维度（P0-5）', () => {
-  it('无 handle 保持旧格式；带显式 handle 时纳入 id 使同端点不同端口不互相覆盖', () => {
-    expect(edgeStoreId('a', 'b')).toBe('e-a-b')
-    expect(edgeStoreId('a', 'b', 'source', 'target')).toBe('e-a-b') // 默认 handle 不改变格式
-    const out1 = edgeStoreId('a', 'b', 'out1', 'in1')
-    const out2 = edgeStoreId('a', 'b', 'out2', 'in2')
-    expect(out1).not.toBe(out2)
-    expect(out1).toBe('e-a:out1-b:in1')
-    expect(out2).toBe('e-a:out2-b:in2')
-  })
+describe('多端口维度（P0-5）：去重按端点 + 端口判定', () => {
   it('EdgeStore.addEdge：同源同目标不同 handle 并存（不再互相覆盖）', () => {
     const es = new EdgeStore()
     const id1 = es.addEdge({ source: 'a', target: 'b', sourceHandle: 'out1', targetHandle: 'in1' })
@@ -105,13 +105,18 @@ describe('edgeStoreId 多端口维度（P0-5）', () => {
     expect(es.getEdges()).toHaveLength(2)
     expect(es.getEdges().map((e) => e.sourceHandle)).toEqual(['out1', 'out2'])
   })
-  it('单端 handle 缺省时与无 handle 边同 id（同语义去重兼容）', () => {
+  it('完全相同的端点（含缺省 handle）判为同一条 → 去重', () => {
     const es = new EdgeStore()
     const id1 = es.addEdge({ source: 'a', target: 'b' })
     const id2 = es.addEdge({ source: 'a', target: 'b' })
     expect(id1).toBe(id2)
     expect(es.getEdges()).toHaveLength(1)
   })
+  it('默认 handle 与显式写出的 source/target 视为同一条（归一后去重）', () => {
+    const es = new EdgeStore()
+    const id1 = es.addEdge({ source: 'a', target: 'b' })
+    const id2 = es.addEdge({ source: 'a', target: 'b', sourceHandle: 'source', targetHandle: 'target' })
+    expect(id1).toBe(id2)
+    expect(es.getEdges()).toHaveLength(1)
+  })
 })
-
-

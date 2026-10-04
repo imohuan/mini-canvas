@@ -29,7 +29,9 @@ import { Selection } from '../selection'
 import { History } from '../history'
 import { GraphDocument } from '../graphDocument'
 import type { GraphEnvelope } from '../graphDocument'
-import { ResourceStore, createIndexedDbResourcePersistence, sanitizeTransientResourceUrls } from '../resourceService'
+import { ResourceStore, sanitizeTransientResourceUrls } from '../resourceService'
+import { createIndexedDbResourceAdapter } from '../storage/indexedDbResourceAdapter'
+import { isResourceAdapter } from '../storage/types'
 import { createSettingsPersist } from '../settingsPersist'
 import type { SettingsPersistService } from '../settingsPersist'
 import { isTransient } from '../transient'
@@ -119,16 +121,26 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   const nodeStore = new NodeStore()
   const edgeStore = new EdgeStore()
 
-  // 资源生命周期服务：浏览器环境用真实 URL backend（create/revoke objectURL），
-  // 非浏览器（SSR / Node 测试）用 no-op 占位（只登记不回收，显式 url 仍可登记）。
+  // 资源服务：后端**现取**（向 save 要 resource 那一格的激活 adapter）。
+  // 本地默认装 IndexedDB；云插件 `save.useAdapter('resource', 云端适配器)` 一换就整体切走 ——
+  // 于是"文本存哪"与"资源存哪"是同一个开关（用户最初的设计：一个 adapter 管两种形式）。
+  // 兜底：宿主显式给了 adapter 时，若它不是资源后端，仍装上本地 IndexedDB 资源后端，
+  // 免得"换了文本 adapter"顺带把资源存储弄没了。
+  const localResourceAdapter = createIndexedDbResourceAdapter()
+  if (localResourceAdapter && !isResourceAdapter(save.adapterOf('resource'))) {
+    save.useAdapter('resource', localResourceAdapter)
+  }
   const resources = new ResourceStore(
+    () => {
+      const a = save.adapterOf('resource')
+      return isResourceAdapter(a) ? a : undefined
+    },
     typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
       ? {
           createUrl: (r) => URL.createObjectURL(r as Blob),
           revokeUrl: (u) => URL.revokeObjectURL(u),
         }
       : undefined,
-    createIndexedDbResourcePersistence(),
   )
 
   // 展示注册表：节点段（content/工具栏）与主题槽（边/背景/设置面板）

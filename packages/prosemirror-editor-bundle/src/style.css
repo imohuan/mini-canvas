@@ -181,14 +181,18 @@
   z-index: 9999;
   /* 主题化：跟随宿主主题 token；脱离宿主（独立 Web Component / 老宿主）时回落到浅色。
      原先写死 white → 深色主题下弹出一块白板（与画布 UI 完全割裂）。
-     约定见 canvas-render/src/styles/ui-theme.css 文件头：一律 var(--ui-xxx, <浅色兜底>)。 */
+     约定见 canvas-render/src/styles/ui-theme.css 文件头：一律 var(--ui-xxx, <浅色兜底>)。
+     阴影用 token（--ui-shadow-md）：写死 rgba(0,0,0,.15) 在暗色下几乎看不见，
+     菜单像蒙了一层灰。 */
   background: var(--ui-panel, white);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: var(--ui-shadow-md, 0 4px 20px rgba(0, 0, 0, 0.15));
   border: 1px solid var(--ui-line, #e5e7eb);
-  width: 200px;
+  /* 240 起（用户口径：宽度不够，最小宽度加大一点）；内容更宽时按内容撑 */
+  min-width: 240px;
+  width: max-content;
+  max-width: 340px;
   padding: 6px;
-  padding-right: 0px;
   max-height: 280px;
   overflow: hidden;
 }
@@ -274,9 +278,10 @@
   background-color: var(--ui-hover, #f3f4f6);
 }
 
+/* 名称用正文色（--ui-ink）。之前用 --ui-ink-dim：名称和描述一个灰度，整块像蒙了灰。 */
 .mention-menu .menu-item span {
-  font-size: 14px;
-  color: var(--ui-ink-dim, #374151);
+  font-size: 13px;
+  color: var(--ui-ink, #374151);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

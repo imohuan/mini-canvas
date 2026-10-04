@@ -50,6 +50,7 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
   afterEach(() => {
     // 先把订阅撤掉（否则下一个用例再 onReady 时回调会堆积到已停的宿主上）
     ui.unbindCanvasToggles()
+    ui.unbindThemeMode()
     host.stop()
   })
 
@@ -138,6 +139,23 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
     store.set('nodesDraggable', false)
     expect(s.canvasMode).toBe('hand')
   })
+
+  it('主题模式：右上角调色板切主题写进 settings（themeMode），刷新才能记住', () => {
+    const store = host.ctx.get<{ get(k: string): unknown; set(k: string, v: string | number | boolean): boolean }>(
+      'settings',
+    )
+    // 宿主默认暗色（对齐 index.html 首屏 class="dark"）
+    expect(store.get('themeMode')).toBe('dark')
+    expect(s.theme).toBe('dark')
+
+    ui.toggleTheme()
+    expect(store.get('themeMode')).toBe('light') // 写内核设置 = 可持久化
+    expect(s.theme).toBe('light')
+
+    // 设置面板里改同一项，按钮镜像值也跟着变
+    store.set('themeMode', 'dark')
+    expect(s.theme).toBe('dark')
+  })
 })
 
 /**
@@ -202,11 +220,11 @@ describe('缩放选项接上真实画布（状态栏）', () => {
     expect(fake.calls).toContain('fitView')
   })
 
-  it('「缩放到最大」按设置 maxZoom 走（默认 200%），不写死 800%', () => {
-    // 默认宿主声明里 maxZoom=2（200%）：点"缩放到最大"应真的到 2.0，而不是一个够不到的 8
+  it('「缩放到最大」按设置 maxZoom 走（默认 300%），不写死 800%', () => {
+    // 默认宿主声明里 maxZoom=3（300%）：点"缩放到最大"应真的到 3.0，而不是一个够不到的 8
     ui.zoomToMax()
-    expect(fake.state.zoom).toBe(2)
-    expect(fake.calls).toContain('zoomTo:2')
+    expect(fake.state.zoom).toBe(3)
+    expect(fake.calls).toContain('zoomTo:3')
 
     // 用户在设置面板把上限调高到 8 → 同一个按钮就走到 800%
     host.ctx.get<{ set(k: string, v: string | number | boolean): boolean }>('settings').set('maxZoom', 8)

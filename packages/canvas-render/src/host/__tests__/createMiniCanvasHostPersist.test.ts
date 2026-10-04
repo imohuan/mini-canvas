@@ -6,6 +6,7 @@ import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
 } from '../../contracts/canvasInteractionSettings'
+import { THEME_MODE_GROUP, THEME_MODE_KEY, THEME_MODE_DEFAULT } from '../../contracts/themeModeSettings'
 
 const cfgPlugin: PluginModule = {
   name: 'cfg-host-demo',
@@ -73,6 +74,24 @@ describe('createMiniCanvasHost 画布交互配置（「常规/画布」）声明
     expect(settings2.get('panOnDrag')).toBe(false)
     // 未改过的项仍为默认
     expect(settings2.get('nodesDraggable')).toBe(true)
+    h2.stop()
+  })
+
+  it('主题模式（亮/暗）在 settings 里声明，且改值经持久化桥跨 boot 恢复（刷新不回退）', async () => {
+    const storage = new MemoryStorageAdapter()
+    const { host } = await createMiniCanvasHost({ adapter: storage })
+    const settings = host.ctx.get<SettingsStore>('settings')
+    // 宿主级声明：不装任何插件也有这一项（设置面板才看得到）
+    expect(settings.groups()).toContain(THEME_MODE_GROUP)
+    expect(settings.get(THEME_MODE_KEY)).toBe(THEME_MODE_DEFAULT)
+
+    settings.set(THEME_MODE_KEY, 'light')
+    await host.save.flush()
+    host.stop()
+
+    const { host: h2 } = await createMiniCanvasHost({ adapter: storage })
+    // 刷新后仍是用户选的亮色（此前写死 dark、刷新回退）
+    expect(h2.ctx.get<SettingsStore>('settings').get(THEME_MODE_KEY)).toBe('light')
     h2.stop()
   })
 })

@@ -4,7 +4,11 @@
  * 锁三件事（都是用户可见、单测插件自己看不到的）：
  * 1. 动作真的落进底栏注册场，且**按节点类型分得清**（image / video / audio 各看得到自己的）；
  * 2. **按能力显隐**在装配后仍成立（dola 视频只有两个时长档）；
- * 3. audio 节点类型真的注册进 nodeStore（本插件补的画布缺口），且能建出节点、设成默认空表。
+ * 3. audio 节点类型真的注册进 nodeStore，且能建出节点、设成默认空表。
+ *
+ * 注意（2026-10-01 起）：audio 节点**不再由本插件注册** —— 它搬到了独立插件
+ * `@mini-canvas/plugin-node-audio`（波形 UI + 拖拽进度）。web2api 只保留"生成动作 + 写入器"。
+ * 这里既验"两者一起装上时音频能力齐备"，也验"只装 web2api 不会凭空长出 audio 节点类型"。
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
@@ -15,10 +19,14 @@ import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
 import type { BarAction } from '@mini-canvas/plugin-bottom-bar'
 import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
+import { nodeAudioPlugin } from '@mini-canvas/plugin-node-audio'
 import { web2apiToolsPlugin } from '@mini-canvas/plugin-web2api-tools'
 
-/** 起一个与宿主同形的内核：底栏在前、节点插件 + web2api 插件在后（与 assembly 同序） */
-async function boot() {
+/**
+ * 起一个与宿主同形的内核：底栏在前、节点插件 + web2api 插件在后（与 assembly 同序）。
+ * @param withAudioNode 是否装音频节点插件（默认装）；false = 只装 web2api，用来验"它不再自己注册节点"
+ */
+async function boot(withAudioNode = true) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   const edgeStore = new EdgeStore()
@@ -43,7 +51,9 @@ async function boot() {
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
 
-  for (const plugin of [pluginBottomBar, nodeImagePlugin, nodeVideoPlugin, web2apiToolsPlugin]) {
+  const plugins = [pluginBottomBar, nodeImagePlugin, nodeVideoPlugin, web2apiToolsPlugin]
+  if (withAudioNode) plugins.push(nodeAudioPlugin)
+  for (const plugin of plugins) {
     ctx.plugin(plugin)
   }
   await ctx.start()
@@ -107,10 +117,16 @@ describe('web2api 插件整装', () => {
     ctx.stop()
   })
 
-  it('audio 节点类型真的注册进了 nodeStore（画布此前没有音频节点）', async () => {
+  it('音频节点插件装上后 audio 类型就在（音频节点由它负责，不是 web2api 自己register）', async () => {
     const { ctx, nodeStore } = await boot()
     expect([...nodeStore.types.keys()]).toContain('audio')
     expect(nodeStore.types.get('audio')?.description).toBeTruthy()
+    ctx.stop()
+  })
+
+  it('只装 web2api（不装音频节点插件）时画布上没有 audio 类型 —— 节点所有权确实交还出去了', async () => {
+    const { ctx, nodeStore } = await boot(false)
+    expect([...nodeStore.types.keys()]).not.toContain('audio')
     ctx.stop()
   })
 
@@ -125,9 +141,8 @@ describe('web2api 插件整装', () => {
     ctx.stop()
   })
 
-  it('插件的服务与配置键都在（AudioService + 三个 web2api 配置项；账号不需要配置）', async () => {
+  it('插件的服务与配置键都在（三个 web2api 配置项；账号不需要配置）', async () => {
     const { ctx } = await boot()
-    expect(ctx.get('audio')).toBeTruthy()
     const settings = ctx.get<{ has(key: string): boolean }>('settings')
     for (const key of ['web2apiMcpEndpoint', 'web2apiPollIntervalMs', 'web2apiTimeoutMs']) {
       expect(settings.has(key), key + ' 未登记').toBe(true)

@@ -1,7 +1,7 @@
 // useUi —— 画布外壳的共享 UI 状态（单例）。
 // 所有区域组件从这里读写状态，避免 App.vue 承担几十个 prop 的透传。
 // 只有纯 UI / 虚拟数据；画布本体仍由 CanvasHost 负责。
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, shallowRef } from 'vue'
 import type { SettingsStore } from '@mini-canvas/kernel'
 import {
   DEFAULT_THEME_EDGE, DEFAULT_THEME_HANDLE, DEFAULT_THEME_DEBUG, DEFAULT_THEME_SNAP_ZONE,
@@ -18,10 +18,27 @@ interface HostApi {
   command?: { execute(id: string, payload?: unknown): void }
   nodeStore?: { getNodes(): unknown[] }
 }
-/** CanvasHost @ready 传出的宿主句柄（存进单例，供小地图等直接读 ctx） */
-let readyHost: HostApi | undefined
+/**
+ * CanvasHost @ready 传出的宿主句柄（存进单例，供小地图等直接读 ctx）。
+ *
+ * **必须是响应式的**（实测教训）：这个句柄在画布就绪后才写进来，而它的读取点全在
+ * computed / 渲染函数里（App.vue 的 right-width、minimapOn、agent.open…）。写成普通变量时，
+ * 首次渲染读到 undefined → 表达式短路、一个依赖都没收集到；之后 @ready 赋值又不触发重算，
+ * 于是「停靠 Agent 面板」这类依赖右缘宽度的布局**永远不更新**。现象就是：停靠后画布没被挤窄，
+ * 右上角那排按钮压在 Agent 面板标题上（用户报告的「点击侧边栏和右上角按钮重合」）。
+ *
+ * 为什么用 `{ get ctx }` 而不是把变量本身改成 ref：读取点有十几处，写成 `readyHost.value?.ctx`
+ * 要逐处改。这里保留 `readyHost?.ctx` 的调用写法，只把「读」变成一个 getter ——
+ * 任何在 effect 里读 `readyHost.ctx` 的地方都会把 hostRef 收进依赖，赋值即触发重算。
+ */
+const hostRef = shallowRef<HostApi | undefined>()
+export const readyHost: { readonly ctx?: HostApi['ctx'] } = {
+  get ctx() {
+    return hostRef.value?.ctx
+  },
+}
 export function setReadyHost(h: unknown): void {
-  readyHost = h as HostApi | undefined
+  hostRef.value = h as HostApi | undefined
 }
 /** CanvasHost 暴露的完整宿主（与 window.MiniCanvasUI.getHost() 同源） */
 type FullHost = HostApi & { command: { execute(id: string, payload?: unknown): void }; nodeStore: { getNodes(): unknown[] } }
@@ -110,6 +127,8 @@ function createUi() {
     chatMinW: 320,
     chatMinH: 400,
     chatPos: null as { x: number; y: number } | null,
+    /** Agent 面板的历史下拉是否展开（外壳自己的界面状态） */
+    agentHistoryOpen: false,
     chatInput: '',
     chatTitle: '技能总结',
     chatMessages: [
@@ -172,13 +191,19 @@ function createUi() {
     histRatingOpen: false,
     histSortDesc: true,
     histZoom: 3,
-    historyItems: [
-      { title: '正派长辈/母 角色立绘', time: '2 分钟前', kind: '图片' },
-      { title: '正派长辈/母 脸部近景', time: '18 分钟前', kind: '图片' },
-      { title: '25宫格连贯分镜', time: '1 小时前', kind: '图片' },
-      { title: '智能剪辑 5', time: '昨天 21:40', kind: '视频' },
-      { title: '720°全景图', time: '昨天 19:02', kind: '图片' },
-    ] as Array<{ title: string; time: string; kind: string }>,
+    /**
+     * 生成历史 —— **数据来自后台**（gen-history 服务），不是写死的假数组。
+     * 由 loadHistory() 拉取并填充；历史弹窗只负责渲染。
+     */
+    historyItems: [] as Array<{ title: string; time: string; kind: string; urls?: string[] }>,
+    /** 汇总：一共生成过多少（按类型分）—— 喂给历史弹窗上的计数徽章 */
+    historySummary: { total: 0, byKind: {} as Record<string, number> },
+    /** 是否拿到了后台历史（没连后台时为 false，弹窗给一句说明而不是空转） */
+    historyReady: false,
+    /** 历史分页 */
+    histPage: 1,
+    histPageSize: 20,
+    histTotal: 0,
   })
 
   // ===== 左侧树（虚拟数据）=====
@@ -227,10 +252,82 @@ function createUi() {
     mark(out)
     return out
   })
-  const histVisible = computed(() =>
-    state.histType ? state.historyItems.filter((i) => i.kind === state.histType) : state.historyItems,
-  )
-  const histCount = (kind: string): number => state.historyItems.filter((i) => i.kind === kind).length
+  // 历史：筛选与排序在**后台**做（那里有全量账本），这里只负责把结果拿出来渲染。
+  // 所以 histVisible 不再本地过滤 —— 后台已经把当前页筛好了。
+  const histVisible = computed(() => state.historyItems)
+  /** 计数徽章：用后台的汇总（不是本地数当前页） */
+  const histCount = (kind: string): number => state.historySummary.byKind[kind] ?? 0
+
+  /** 历史弹窗上那些中文标签 ↔ 后台的英文值（显示层的事，写在显示层） */
+  const HIST_KIND: Record<string, string> = { 图片: 'image', 视频: 'video', 音频: 'audio' }
+  const HIST_RATING: Record<string, string> = {
+    所有评级: 'all',
+    已通过: 'passed',
+    待审核: 'pending',
+    已拒绝: 'rejected',
+  }
+
+  /**
+   * 从后台拉一页历史。
+   *
+   * 服务名是 `gen-history`（由 plugin-cloud-client 挂上）。没装那个插件
+   * （比如纯前端开着）时服务不存在 —— 给一句人话，而不是装作"没有历史"。
+   */
+  async function loadHistory(): Promise<void> {
+    const svc = readyHost?.ctx?.get<{
+      query(q?: Record<string, unknown>): Promise<{
+        items: Array<{ title: string; kind: string; finishedAt: number; urls?: string[] }>
+        total: number
+        page: number
+        pageSize: number
+        summary: { total: number; byKind: Record<string, number> }
+      }>
+    }>('gen-history')
+    if (!svc) {
+      state.historyReady = false
+      return
+    }
+    try {
+      const page = await svc.query({
+        page: state.histPage,
+        pageSize: state.histPageSize,
+        ...(state.histType ? { kind: HIST_KIND[state.histType] ?? state.histType } : {}),
+        ...(state.histRating && state.histRating !== '所有评级'
+          ? { rating: HIST_RATING[state.histRating] ?? state.histRating }
+          : {}),
+        order: state.histSortDesc ? 'desc' : 'asc',
+        ...(state.histScope === '本画布' ? { canvasId: 'default' } : {}),
+      })
+      state.historyItems = page.items.map((e) => ({
+        title: e.title,
+        time: formatAgo(e.finishedAt),
+        // 后台给英文值，这里换回中文标签（弹窗按中文渲染）
+        kind: e.kind === 'video' ? '视频' : e.kind === 'audio' ? '音频' : '图片',
+        ...(e.urls && e.urls.length > 0 ? { urls: e.urls } : {}),
+      }))
+      state.historySummary = page.summary
+      state.histTotal = page.total
+      state.historyReady = true
+    } catch (err) {
+      console.warn('[ui] 拉历史失败', err)
+      state.historyReady = false
+    }
+  }
+
+  /** 时间戳 → 「2 分钟前」这种短文案（列表里看的是"多久之前"，不是精确时刻） */
+  function formatAgo(ts: number): string {
+    if (!Number.isFinite(ts)) return ''
+    const diff = Math.max(0, Date.now() - ts)
+    const min = Math.floor(diff / 60000)
+    if (min < 1) return '刚刚'
+    if (min < 60) return min + ' 分钟前'
+    const hour = Math.floor(min / 60)
+    if (hour < 24) return hour + ' 小时前'
+    const day = Math.floor(hour / 24)
+    if (day === 1) return '昨天'
+    if (day < 30) return day + ' 天前'
+    return new Date(ts).toLocaleDateString()
+  }
 
   // ===== 小地图显隐（唯一事实来源 = mini-map 插件服务；状态栏按钮只是它的开关） =====
   // host ctx.get('mini-map') 每次返回同一个 reactive 对象（插件 apply 里注入的），
@@ -248,6 +345,90 @@ function createUi() {
 
   // ===== 画布开关（整理画布 / 连线显隐 / 网格吸附 / 移动工具）=====
   //
+  // ===== Agent 对话（外壳在这里，内容在 plugin-agent 的 agent-conversation 槽里）=====
+  // 状态与动作都住在 agent 服务上：外壳只读它、只调它，自己不存一份 ——
+  // 这样别处（快捷键 / 底栏按钮）调同一个服务时，面板与它天然一致。
+  /**
+  * agent 服务句柄：**每次读都现取**（不用 computed 缓存）。
+  *
+  * 为什么不缓存：服务是插件在 apply 里注入的，可能在 createUi() 之后才上架；
+  * computed 会把第一次的 null 记住，之后永远拿不到。
+  * 属性访问本身仍是响应式的（读的是服务那个 reactive 对象的字段）。
+  */
+  /** 服务把状态放在 .state 上（方法在服务顶层），这里按同一形状读 */
+  interface AgentShellView {
+    open: boolean
+    docked: boolean
+    width: number
+    title: string
+    sessions: Array<{ id: string; title: string; preview?: string }>
+  }
+  const agentSvc = (): { state: AgentShellView } | undefined =>
+    readyHost?.ctx?.get<{ state: AgentShellView }>('agent')
+  /** 外壳要用的那几项（服务还没上架时给一份安全的空壳，界面照常渲染） */
+  const agent = {
+    get open(): boolean {
+      return agentSvc()?.state.open ?? false
+    },
+    set open(v: boolean) {
+      const svc = agentSvc()
+      if (svc) svc.state.open = v
+    },
+    get docked(): boolean {
+      return agentSvc()?.state.docked ?? false
+    },
+    set docked(v: boolean) {
+      const svc = agentSvc()
+      if (svc) svc.state.docked = v
+    },
+    get width(): number {
+      return agentSvc()?.state.width ?? 400
+    },
+    set width(v: number) {
+      const svc = agentSvc()
+      if (svc) svc.state.width = v
+    },
+    get title(): string {
+      return agentSvc()?.state.title ?? '新会话'
+    },
+    get sessions(): Array<{ id: string; title: string; preview?: string }> {
+      return agentSvc()?.state.sessions ?? []
+    },
+  }
+  /** 打开 / 收起面板（服务上没 toggle 时退回直接翻 open） */
+  function setAgentOpen(open: boolean): void {
+    const svc = agentSvc()
+    if (svc) svc.state.open = open
+  }
+  function toggleAgent(): void {
+    const svc = readyHost?.ctx?.get<{ toggle?: () => void; state?: { open: boolean } }>('agent')
+    if (!svc) return
+    if (typeof svc.toggle === 'function') svc.toggle()
+    else if (svc.state) svc.state.open = !svc.state.open
+  }
+  function newAgentChat(): void {
+    const svc = readyHost?.ctx?.get<{ newSession?: () => Promise<void> }>('agent')
+    if (svc?.newSession) void svc.newSession()
+  }
+  function toggleAgentHistory(): void {
+    state.agentHistoryOpen = !state.agentHistoryOpen
+  }
+  function openAgentSession(id: string): void {
+    state.agentHistoryOpen = false
+    const svc = readyHost?.ctx?.get<{ openSession?: (id: string) => Promise<void> }>('agent')
+    if (svc?.openSession) void svc.openSession(id)
+  }
+  function renameAgentSession(id: string, current: string): void {
+    const next = window.prompt('重命名这个对话', current)
+    if (!next || !next.trim()) return
+    const svc = readyHost?.ctx?.get<{ renameSession?: (id: string, t: string) => Promise<void> }>('agent')
+    if (svc?.renameSession) void svc.renameSession(id, next.trim())
+  }
+  function deleteAgentSession(id: string): void {
+    const svc = readyHost?.ctx?.get<{ deleteSession?: (id: string) => Promise<void> }>('agent')
+    if (svc?.deleteSession) void svc.deleteSession(id)
+  }
+
   // 原则：状态栏按钮**不自己保存一份状态、不直接碰画布**，只做两件事之一 ——
   //   ① 写内核设置（ctx.get('settings').set）：连线显隐 / 网格吸附 / 画布模式
   //      → 真正干活的是订阅这些 key 的消费方（渲染宿主 / 主题皮），与设置面板**同一条通道**；
@@ -507,7 +688,11 @@ function createUi() {
     for (const entry of entries) {
       if (entry.disabled) continue
       try {
-        const conf = cloudBase && entry.id.includes('cloud-save') ? { cloudSaveBaseUrl: cloudBase } : undefined
+        // 把「服务地址」注入给云端插件。
+        // ★ 这里按**服务名**判断，不看目录名 —— 插件改过名（plugin-cloud-client），
+        //   按老目录名匹配会静默失效：dev 下（ui 在 5288、后台在别处）插件拿不到地址，
+        //   画布存档与动作会一起失效，而且不报错。
+        const conf = cloudBase && entry.id.includes('cloud') ? { cloudClientBaseUrl: cloudBase } : undefined
         await manager.install({ url: entry.url }, conf ? { config: conf } : undefined)
         log.log('外部插件已装载: ' + entry.id)
       } catch (err) {
@@ -549,28 +734,41 @@ function createUi() {
     disposeSettingsClose = undefined
     const ctx = hostEl.value?.host?.ctx
     if (!ctx) return
-    // 两条通道一起接：close 收面板，open 开面板。
-    // 为什么要有 open：底栏那枚「全局设置」齿轮是**插件**里的组件，它够不到装配层的
-    // settingsOpen 状态；统一走内核事件，任何入口（顶栏 / 底栏 / 以后更多）都只 emit 一个名字。
-    const offClose = ctx.on('settings:ui-close', closeSettings).dispose
-    const offOpen = ctx.on('settings:ui-open', openSettings).dispose
-    disposeSettingsClose = () => {
-      offClose()
-      offOpen()
-    }
-  }
-
-  /** 打开设置面板（内核事件 settings:ui-open 的落点；装配层其它部件也可直接调） */
-  function openSettings(): void {
-    state.settingsOpen = true
+    disposeSettingsClose = ctx.on('settings:ui-close', closeSettings).dispose
   }
 
   async function onReady(): Promise<void> {
     bindThemeSettings()
+    bindThemeMode()
     bindSettingsClose()
     bindCanvasToggles()
     bindZoomSync()
     await installExternalPlugins()
+    // 外部插件装完（云插件会挂上 gen-history 服务）再拉历史；顺带订阅"有新生成"
+    void loadHistory()
+    bindHistoryUpdates()
+  }
+
+  /**
+   * 订阅"后台有了新历史"。
+   *
+   * 云插件在收到后台的历史信号时会通知订阅者（一条 SSE，不用前端轮询）；
+   * 这里收到就重拉当前页 —— 用户刚生成完那张图会立刻出现在历史里。
+   * 重复调用（宿主重建 / 热重载）先撤旧订阅，避免回调堆积。
+   */
+  let disposeHistorySub: (() => void) | undefined
+  function bindHistoryUpdates(): void {
+    disposeHistorySub?.()
+    disposeHistorySub = undefined
+    const svc = readyHost?.ctx?.get<{ subscribe(fn: () => void): () => void }>('gen-history')
+    if (!svc || typeof svc.subscribe !== 'function') return
+    disposeHistorySub = svc.subscribe(() => void loadHistory())
+  }
+
+  /** 撤掉历史订阅（宿主销毁时调用） */
+  function unbindHistory(): void {
+    disposeHistorySub?.()
+    disposeHistorySub = undefined
   }
 
   /**
@@ -615,16 +813,49 @@ function createUi() {
   }
 
   // ===== 主题 =====
-  /** 把主题写到 <html class="dark">（Tailwind v4 / shadcn 通行做法）。
-      同步保留 data-canvas-theme 属性，兼容仍按属性写的旧样式/外部宿主。 */
+  /**
+   * 把主题写到 <html class="dark">（Tailwind v4 / shadcn 通行做法）。
+   * 同步保留 data-canvas-theme 属性，兼容仍按属性写的旧样式/外部宿主。
+   *
+   * 注：权威落值点其实是渲染宿主的 installThemeMode（订阅 settings 的 themeMode），
+   * 这里保留同名动作是为了"宿主还没就绪 / 无宿主"时也能立即生效（幂等，重复写无害）。
+   */
   function applyTheme(v: 'dark' | 'light'): void {
+    if (typeof document === 'undefined') return // Node 单测环境无 DOM：跳过副作用（设置仍照常写入）
     document.documentElement.classList.toggle('dark', v === 'dark')
     document.documentElement.dataset.canvasTheme = v
   }
+  /**
+   * 订阅主题模式（渲染层配置 themeMode）→ 同步到本地镜像值。
+   *
+   * 唯一事实来源是内核设置；按钮与设置面板都写同一处，所以"面板里切了、按钮状态也跟着变"。
+   * 与 bindCanvasToggles 同款：重复 onReady 先撤旧订阅，避免回调堆积。
+   */
+  let disposeThemeModeBind: (() => void) | undefined
+  function bindThemeMode(): void {
+    disposeThemeModeBind?.()
+    disposeThemeModeBind = undefined
+    const store = hostCtx()?.get<SettingsStore>('settings')
+    if (!store) return
+    const cur = store.get('themeMode')
+    if (cur === 'dark' || cur === 'light') state.theme = cur
+    disposeThemeModeBind = store.onChange((key, value) => {
+      if (key === 'themeMode' && (value === 'dark' || value === 'light')) state.theme = value
+    }).dispose
+  }
+  /** 撤掉主题模式订阅（宿主销毁时调用） */
+  function unbindThemeMode(): void {
+    disposeThemeModeBind?.()
+    disposeThemeModeBind = undefined
+  }
   function toggleTheme(): void {
-    state.theme = state.theme === 'dark' ? 'light' : 'dark'
-    applyTheme(state.theme)
-    showToast(state.theme === 'dark' ? '已切换暗色主题' : '已切换亮色主题')
+    const next = state.theme === 'dark' ? 'light' : 'dark'
+    state.theme = next
+    // 写内核设置（= 持久化 + 落 DOM 的唯一通道）。宿主没就绪/没声明该键时 writeSetting 是 no-op，
+    // 此时下面的 applyTheme 兜底，保证按钮永远点得动。
+    writeSetting('themeMode', next)
+    applyTheme(next)
+    showToast(next === 'dark' ? '已切换暗色主题' : '已切换亮色主题')
   }
   function openDrawer(which: 'left' | 'roles'): void {
     state.drawer = state.drawer === which ? null : which
@@ -634,7 +865,11 @@ function createUi() {
     if (!state.shortcutsOpen) refreshShortcuts()
     state.shortcutsOpen = !state.shortcutsOpen
   }
-  function toggleHistory(): void { state.historyOpen = !state.historyOpen }
+  /** 开关历史弹窗：打开时重拉一页（后台那边可能已经有新的了） */
+  function toggleHistory(): void {
+    state.historyOpen = !state.historyOpen
+    if (state.historyOpen) void loadHistory()
+  }
   function toggleLeftCollapsed(): void {
     state.leftCollapsed = !state.leftCollapsed
     if (state.leftCollapsed) {
@@ -774,9 +1009,13 @@ function createUi() {
   return {
     state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
     minimapOn, toggleMinimap,
+    agent, setAgentOpen, toggleAgent, newAgentChat, toggleAgentHistory,
+    openAgentSession, renameAgentSession, deleteAgentSession,
     toggleEdges, toggleSnap, organizeCanvas, setCanvasMode, unbindCanvasToggles,
+    unbindThemeMode,
     syncZoomDisplay, zoomInStep, zoomOutStep, zoomToPercent, zoomToMax, zoomFit, unbindZoomSync,
-    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings, openSettings,
+    loadHistory, unbindHistory,
+    hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
     unbindSettingsClose,
     toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,

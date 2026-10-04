@@ -1,11 +1,18 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
+import { catalogPlugin } from './catalogPlugin.mjs'
 
 // @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
 export default defineConfig({
-  plugins: [vue(), tailwindcss()],
+  plugins: [
+    vue(),
+    tailwindcss(),
+    // 开发期在本 dev server 就地提供插件清单与产物（/plugin-catalog.json + /plugins/**），
+    // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
+    catalogPlugin({ pluginsDir: '../../packages/plugins' }),
+  ],
   server: {
     port: 5288, // 独立端口，避开其它应用/demo 的端口
     strictPort: false,
@@ -37,6 +44,8 @@ export default defineConfig({
     '@mini-canvas/plugin-mini-map',
     '@mini-canvas/plugin-shortcut-manager',
     '@mini-canvas/plugin-edge-cutting',
+    '@mini-canvas/plugin-cloud-client',
+    '@mini-canvas/canvas-base',
       // 编辑器组件包：workspace 源码（内部用带 .ts 后缀的相对导入），与其它源码包一样交给 vite 转换
       'prosemirror-editor-bundle',
     ],

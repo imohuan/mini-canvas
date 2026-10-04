@@ -27,11 +27,11 @@ describe('canvasInteractionSettings schema 声明', () => {
     }
   })
 
-  it('默认值对齐 v1：selectNodesOnDrag 关 / zoomOnDoubleClick 关 / onlyRenderVisibleElements 关', () => {
+  it('默认值对齐现行交互契约：selectNodesOnDrag 开 / zoomOnDoubleClick 关 / onlyRenderVisibleElements 关', () => {
     expect(CANVAS_INTERACTION_DEFAULTS.nodesDraggable).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.nodesConnectable).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.elementsSelectable).toBe(true)
-    expect(CANVAS_INTERACTION_DEFAULTS.selectNodesOnDrag).toBe(false)
+    expect(CANVAS_INTERACTION_DEFAULTS.selectNodesOnDrag).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.snapToGrid).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.snapGridX).toBe(15)
     expect(CANVAS_INTERACTION_DEFAULTS.snapGridY).toBe(15)
@@ -41,7 +41,7 @@ describe('canvasInteractionSettings schema 声明', () => {
     expect(CANVAS_INTERACTION_DEFAULTS.panOnDrag).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.zoomOnDoubleClick).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.minZoom).toBe(0.2)
-    expect(CANVAS_INTERACTION_DEFAULTS.maxZoom).toBe(2)
+    expect(CANVAS_INTERACTION_DEFAULTS.maxZoom).toBe(3)
     // v1 曾开（大画布性能），但 VueFlow 1.48 视口剔除对嵌套子节点用相对坐标判定 → 节点"消失"。
     // 嵌套组支持依赖关闭（VueFlow 库默认），且不再暴露进设置面板。
     expect(CANVAS_INTERACTION_DEFAULTS.onlyRenderVisibleElements).toBe(false)
@@ -98,7 +98,7 @@ describe('resolveCanvasInteraction（取值器 → 完整值对象）', () => {
     })
     expect(v.nodesDraggable).toBe(true)
     expect(v.minZoom).toBe(0.2)
-    expect(v.maxZoom).toBe(2)
+    expect(v.maxZoom).toBe(3)
     expect(v.snapGridX).toBe(15)
   })
 

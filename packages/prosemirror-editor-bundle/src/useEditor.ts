@@ -962,17 +962,19 @@ export function useEditor(
       }
 
       // 降级：纯文本恢复（无 promptDoc 的向后兼容路径）
-      const tr = view.state.tr;
-      tr.delete(0, view.state.doc.content.size);
-      if (newModelValue) {
-        const lines = newModelValue.split('\n')
-        for (const line of lines) {
-          const content = parsePlainTextToContent(line, unref(props.resolveResource))
-          const paragraph = mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
-          tr.insert(tr.doc.content.size, paragraph)
-        }
-      }
-      view.dispatch(tr);
+      //
+      // 为什么不再「先 delete 再 insert(tr.doc.content.size)」：删除后 `tr.doc.content.size` 变成 0，
+      // 后续每次 insert 又让 size 长大，于是段落被插到不断变化的位置上 —— 实测第一个空段落
+      // 会残留在开头，表现为「外部设值后文本前面多一个空行」。
+      // 改成一次 replaceWith(0, 当前 doc 全长, 新内容)：原子替换，不留残段。
+      const originalSize = view.state.doc.content.size;
+      const lines = (newModelValue ?? '').split('\n')
+      const paragraphs = lines.map((line) => {
+        const content = parsePlainTextToContent(line, unref(props.resolveResource))
+        return mySchema.node('paragraph', null, content.length > 0 ? content : undefined)
+      })
+      const doc = mySchema.node('doc', null, paragraphs.length ? paragraphs : [mySchema.node('paragraph')])
+      view.dispatch(view.state.tr.replaceWith(0, originalSize, doc.content))
     },
   );
 
@@ -1000,6 +1002,45 @@ export function useEditor(
     if (selection) {
       view.dispatch(state.tr.setSelection(selection))
     }
+    view.focus()
+  }
+
+  /**
+   * 用代码往输入框里插入一个资源**标签**（图片/技能/MCP 那种内联 chip），
+   * 等价于用户在 @ 菜单里点了一项。
+   *
+   * 供「工具栏下拉直接插入」的场景使用（如 Agent 面板点技能列表就插一个标签，
+   * 而不是切换一个开关）。标签的 DOM 由该 item 的 renderEditor 决定；
+   * 插入前把 item 登记进 registry —— toDOM 是异步渲染的，登记晚了标签会退化成
+   * 默认样式（实测：不登记就渲染不出图标/自定义外观）。
+   */
+  function insertResource(item: ResourceItem) {
+    if (!view) return
+    const nodeType = mySchema.nodes.resource
+    if (!nodeType) return
+    itemRegistry.set(item.id, item)
+    // 光标不在编辑器里（用户刚点了工具栏按钮）时，退到文末再插：
+    // 否则会插到旧的 selection 位置，甚至因为 selection 失效而插错地方。
+    if (!view.hasFocus()) {
+      const end = Selection.atEnd(view.state.doc)
+      if (end) view.dispatch(view.state.tr.setSelection(end))
+    }
+    const { from, to } = view.state.selection
+    const tr = view.state.tr.replaceWith(
+      from,
+      to,
+      nodeType.create({
+        id: item.id,
+        name: item.name,
+        category: item.category || 'resource',
+        url: item.url || '',
+        thumbnail_url: item.thumbnail_url || (item.url ? getThumbnailUrlFromAssetUrl(item.url, item.mediaType) : ''),
+        value: item.value || '',
+      }),
+    )
+    tr.insertText(' ')
+    view.dispatch(tr)
+    emit('resource-insert', item)
     view.focus()
   }
 
@@ -1041,5 +1082,6 @@ export function useEditor(
     deserializeDoc,
     focusEnd,
     setText,
+    insertResource,
   };
 }

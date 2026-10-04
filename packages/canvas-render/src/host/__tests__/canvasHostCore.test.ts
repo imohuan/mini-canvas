@@ -4,7 +4,6 @@ import { ThemeRegistry } from '@mini-canvas/canvas-data'
 import { RegistryImpl } from '@mini-canvas/kernel'
 import {
   assembleTheme,
-  edgeId,
   hitNodeIdAt,
   nodeShellSlot,
   nodesFromStore,
@@ -311,12 +310,6 @@ describe('默认外观常量', () => {
   })
 })
 
-describe('edgeId', () => {
-  it('生成稳定源→目标 id', () => {
-    expect(edgeId('1', '2')).toBe('e-1-2')
-  })
-})
-
 describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边）', () => {
   it('保留 sourceHandle/targetHandle；type 缺省补 custom', () => {
     const edges = [
@@ -383,15 +376,6 @@ describe('默认外观常量字段完整（P2-8 防漂移）', () => {
     for (const k of handleKeys) expect(DEFAULT_HANDLE_VISUAL, 'missing ' + k).toHaveProperty(k)
     const debugKeys = ['handleDebug', 'connectionSnapDebugVisible']
     for (const k of debugKeys) expect(DEFAULT_DEBUG_VISUAL, 'missing ' + k).toHaveProperty(k)
-  })
-})
-
-describe('edgeId 四元组（B 项，与内核 edgeStoreId 对齐）', () => {
-  it('无/默认 handle 保持 e-{s}-{t}；带显式 handle 纳入 id 不互相覆盖', () => {
-    expect(edgeId('a', 'b')).toBe('e-a-b')
-    expect(edgeId('a', 'b', 'source', 'target')).toBe('e-a-b')
-    expect(edgeId('a', 'b', 'out1', 'in1')).toBe('e-a:out1-b:in1')
-    expect(edgeId('a', 'b', 'out1', 'in1')).not.toBe(edgeId('a', 'b', 'out2', 'in2'))
   })
 })
 

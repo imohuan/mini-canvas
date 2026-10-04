@@ -255,7 +255,7 @@ function applyTheme(): void {
   const asm = assembleTheme(
     h.themeRegistry,
     [...h.nodeStore.types.keys(), ...h.nodeStore.orphanTypes()],
-    h.ctx.registryOf<unknown>('node/shell') as unknown as { resolve(key: string): unknown },
+    h.ctx.registryOf<unknown>('node/shell'),
   )
   // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
   // 每次先完整重置再填充：主题插件被热卸/顶替后不能继续使用已卸载的旧组件句柄。
@@ -733,7 +733,7 @@ function connectableNodeRects(): NodeRect[] {
     const def = h.nodeStore.types.get(type)
     return !def || (def.inputs?.length === 0 && def.outputs?.length === 0)
   }
-  return liveNodeRects().filter((r) => !portless(r.type))
+  return liveNodeRects().filter((r) => r.type != null && !portless(r.type))
 }
 
 /** 由前端上报的 aimedTarget（mouse 事件驱动）解析当前 hover + 线端点。
@@ -1026,7 +1026,7 @@ onMounted(async () => {
         ).subscribe(() => {
           applyTheme()
           nodeEpoch.value += 1
-        }),
+        }).dispose,
       },
       // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。
       // 此处只转发 ERROR(装载失败)这一非正常终态，不误报 ACTIVE/卸载等正常跳变。

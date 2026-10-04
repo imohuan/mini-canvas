@@ -25,8 +25,13 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const SCAN_DIRS = ['packages/plugins', 'packages/canvas-render', 'packages/ui'].map((p) =>
   path.join(REPO_ROOT, ...p.split('/')),
 )
-/** 主题定义真源：这里**就是**色板本身，出现颜色字面量是它的职责 */
-const EXEMPT_FILES = ['packages/canvas-render/src/contracts/themePalette.ts']
+/** 主题定义真源：这里**就是**色板本身，出现颜色字面量是它的职责。
+ *  colorAssets.ts 是内嵌 SVG 贴图素材库（艺术资源自带的填色），性质同「真源」——
+ *  素材配色不是界面主题色，改主题也不该跟着变。 */
+const EXEMPT_FILES = [
+  'packages/canvas-render/src/contracts/themePalette.ts',
+  'packages/plugins/plugin-cursor-effect/src/colorAssets.ts',
+]
 
 /** 颜色字面量：hex（3/4/6/8 位）或 rgb()/rgba()/hsl()/hsla() */
 const COLOR_LITERAL = /#[0-9a-fA-F]{3,8}\b|\brgba?\s*\(|\bhsla?\s*\(/g

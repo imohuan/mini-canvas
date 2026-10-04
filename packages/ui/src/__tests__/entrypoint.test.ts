@@ -42,14 +42,20 @@ describe('@mini-canvas/ui 出口契约', () => {
   })
 
   it('装配清单自洽：插件数、无重名、含画布基础件', () => {
-    // 19 个源码插件 + 本应用自己的一个（ui-settings-panel 设置面板换皮）。
+    // 20 个源码插件（含音频节点插件）+ 本应用自己的一个（ui-settings-panel 设置面板换皮）= 24。
+    // 2026-10-03：批量把插件改为经「插件管理」从云服务清单安装（默认已装），不再冷启动：
+    //   image-compare / tool-image-generation / tool-text-generation / web2api-tools +
+    //   edge-cutting / multi-select / align-guide / auto-layout / align-arrange /
+    //   group / context-menu / clipboard / canvas-export / node-find / mini-map / file-drop。
+    // 冷启动只剩画布骨架（主题皮 / 设置面板 / 下拉）+ 底栏 + 节点类型 + Agent + 插件管理本身。
     // 主题色配置**不在清单里**了：色板已上移进渲染层（canvas-render 的 themePalette），
     // 由宿主 createMiniCanvasHost 直接声明与落值，任一宿主都自带。
     // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea 按钮 + ModalsArea 浮层），
     // 插件版 Ctrl+/ 帮助面板与之重复；键盘分发由 CanvasHost 按命令 keys 统一做，不依赖它。
     // 假后台插件（旧 plugin-mock-task-backend）已删：测试用的假动作不该以插件形式
     // 混进成品清单 —— 需要假后台的浏览器回归在测试里现场注册一条 e2e 动作。
-    expect(APP_PLUGINS).toHaveLength(23)
+    // +1：ui-dropdown（全局下拉注册件，order -1 顶替主题默认件）。
+    expect(APP_PLUGINS).toHaveLength(11)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

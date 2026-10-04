@@ -14,6 +14,8 @@
  * 纯逻辑层只维护登记表与生命周期；测试注入假 backend 即可在 Node 环境验证。
  */
 
+import type { ResourcePutOptions, ResourceAdapter } from './storage/types'
+
 /** URL 生成/回收后端（浏览器实现包一层 URL.createObjectURL / revokeObjectURL；测试用假实现） */
 export interface ResourceUrlBackend {
   /** 为资源生成一个 URL（缺省实现直通调用方给的 url 时可不实现） */
@@ -22,13 +24,11 @@ export interface ResourceUrlBackend {
   revokeUrl(url: string): void
 }
 
-/** 跨页面保存 Blob 的后端。画布只保存资源 id，不把二进制塞进图数据。 */
-export interface ResourcePersistence {
-  save(id: string, kind: string, resource: Blob): Promise<void>
-  load(id: string): Promise<{ kind: string; resource: Blob } | undefined>
-  remove(id: string): Promise<void>
-}
-
+/**
+ * 资源后端就是 `ResourceAdapter`（见 storage/types.ts）：存字节、按引用换地址。
+ * 本服务**不自己持有它**，而是现取（`save.adapterOf('resource')`）——
+ * 于是换 adapter 立刻生效，无需重建资源库。
+ */
 /** 登记的资源条目（只读视图） */
 export interface ResourceEntry<T = unknown> {
   /** 资源 id（调用方写进节点 data 的引用键） */
@@ -59,6 +59,19 @@ export interface ResourceService {
    * @returns 资源 id（格式 res-{n}，可写进节点 data 作引用）
    */
   register(input: RegisterResourceInput): string
+  /**
+   * 存一份资源字节，返回**持久引用**（写进节点 data 的 `resourceId`）。
+   *
+   * 这是上传/生成的统一入口：本地会进 IndexedDB，云端会传到画布文件夹 —— 由当前
+   * `resource` 类型的 adapter 决定。**只回 ref，不回 URL**：URL 是临时的，要用时现算。
+   */
+  put(blob: Blob, opts?: ResourcePutOptions): Promise<string>
+  /**
+   * 用持久引用换一个当前可用的显示地址。
+   *
+   * 本地：按 id 取回字节 → 新建临时 objectURL；云端：拼服务器地址。取不到返回 undefined。
+   */
+  resolve(ref: string): Promise<string | undefined>
   /** 按 id 取条目；不存在 undefined */
   get(id: string): ResourceEntry | undefined
   /** 按 id 取 URL（渲染层读；不存在 undefined） */
@@ -88,9 +101,19 @@ const RESOURCE_URL_FIELDS = [
   "imageUrl", "videoUrl", "audioUrl", "posterUrl", "thumbUrl", "maskUrl",
   "panoUrl", "leftImageUrl", "rightImageUrl",
 ] as const
-const MAX_INLINE_RESOURCE_BYTES = 64 * 1024
-
-/** 保存画布前移除只在当前页面有效的 object URL；持久资源由 resourceId 重新加载。 */
+/**
+ * 保存画布前移除**当前页面之外取不回来**的临时地址。
+ *
+ * 只删两种（它们都有第二份拷贝兜底，刷新能重建）：
+ * 1. `blob:` —— object URL 只在当前文档有效，真正的 Blob 已按 resourceId 存进持久化资源表；
+ * 2. 带 `resourceId` 的 `data:` —— 同一份字节已在持久化资源表里，节点里这份是冗余副本。
+ *
+ * 刻意**不**删「内嵌的大 dataURL」：图片上传/裁剪/旋转/扩展产出的就是这种 dataURL，
+ * 它是这张图**唯一**的一份（没有 resourceId、资源表里也没有）。删掉就等于刷新后图片消失
+ * —— 而上传链路的设计前提正是「dataURL 写进节点 data，刷新照常显示」（见
+ * plugin-node-image 的 imageTransform）。要瘦身请走「登记资源 → 写 resourceId」那条路，
+ * 让字节进持久化资源表，而不是在保存时把数据销毁。
+ */
 export function sanitizeTransientResourceUrls<T extends { data?: Record<string, unknown> }>(nodes: T[]): T[] {
   return nodes.map((node) => {
     const data = node.data
@@ -99,7 +122,7 @@ export function sanitizeTransientResourceUrls<T extends { data?: Record<string, 
     for (const key of RESOURCE_URL_FIELDS) {
       if (typeof next[key] === "string") {
         const value = next[key] as string
-        if (/^blob:/i.test(value) || (typeof next.resourceId === "string" && /^data:/i.test(value)) || (value.length > MAX_INLINE_RESOURCE_BYTES && /^data:/i.test(value))) delete next[key]
+        if (/^blob:/i.test(value) || (typeof next.resourceId === "string" && /^data:/i.test(value))) delete next[key]
       }
     }
     return { ...node, data: next }
@@ -176,15 +199,91 @@ const ID_PREFIX = 'res-'
 export class ResourceStore implements ResourceService {
   private entries = new Map<string, ResourceEntry>()
   private backend: ResourceUrlBackend
-  private persistence?: ResourcePersistence
   private pending = new Map<string, Promise<void>>()
   private seq = 0
 
-  constructor(backend?: ResourceUrlBackend, persistence?: ResourcePersistence) {
-    this.backend = backend ?? noopBackend
-    this.persistence = persistence
+  /** 资源后端解析器（每次现取；构造未给 = 没有资源后端） */
+  private readonly backendResolver: () => ResourceAdapter | undefined = () => undefined
+
+  /**
+   * 资源后端**现取**（不再构造时写死）。
+   *
+   * 为什么不缓存：`save.useAdapter('resource', …)` 可以随时换（装云插件时换一次），
+   * 缓存住就会一直用旧后端 —— 那正是"云端换不动资源存哪"的老毛病。
+   *
+   * 传法有两种，都为历史与测试保留：
+   * - `new ResourceStore(() => save.adapterOf('resource'), urlBackend)` —— 现取（生产用这个）；
+   * - `new ResourceStore(urlBackend)` —— 只给 URL backend，没有资源后端（老测试用）。
+   */
+  constructor(
+    backendResolverOrBackend?: (() => ResourceAdapter | undefined) | ResourceUrlBackend,
+    /** 老形态：显式给的 URL backend（浏览器里是 createObjectURL）；缺省用 no-op */
+    backend?: ResourceUrlBackend,
+  ) {
+    if (typeof backendResolverOrBackend === 'function') {
+      this.backendResolver = backendResolverOrBackend
+      this.backend = backend ?? noopBackend
+    } else {
+      this.backendResolver = () => undefined
+      this.backend = backendResolverOrBackend ?? backend ?? noopBackend
+    }
   }
 
+  /** 当前资源后端（每次现取 —— 见构造函数说明） */
+  private adapter(): ResourceAdapter | undefined {
+    return this.backendResolver()
+  }
+
+  /**
+   * 存一份资源字节 → 持久引用（写进节点 data 的 resourceId）。
+   *
+   * **只回 ref、不回 URL**：URL 是临时的，要用的时候由 resolve 现算。
+   * 没有可用后端（极简宿主 / 单测）时抛错 —— 不静默造一个用不了的引用。
+   */
+  async put(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {
+    const adapter = this.adapter()
+    if (!adapter?.putResource) {
+      throw new Error('[resources] 当前 resource 类型的 adapter 不支持存资源（未装资源后端？）')
+    }
+    const ref = await adapter.putResource(blob, opts)
+    // 登记进内存表：本会话内 resolve 快、也能被引用扫描回收
+    this.entries.set(ref, { id: ref, kind: opts.kind ?? 'blob', url: '', resource: blob })
+    return ref
+  }
+
+  /**
+   * 持久引用 → 当前可用的显示地址。
+   *
+   * 本地是**新建一个临时 objectURL**（刷新后由下一次 resolve 重建）；
+   * 云端是把引用拼成服务器地址（稳定，不必下载字节）。
+   */
+  async resolve(ref: string): Promise<string | undefined> {
+    if (!ref) return undefined
+    const remembered = this.entries.get(ref)
+    if (remembered?.url) return remembered.url
+    const url = await this.adapter()?.resolveResource?.(ref)
+    if (!url) return undefined
+    this.entries.set(ref, {
+      id: ref,
+      kind: remembered?.kind ?? 'blob',
+      url,
+      ...(remembered?.resource !== undefined ? { resource: remembered.resource } : {}),
+    })
+    return url
+  }
+
+
+  /**
+   * 【旧接口，保留兼容】登记一个**已拿到的显示地址**（不落字节）。
+   *
+   * 新代码请用 `put`（存字节 → 拿持久引用）。这个方法存在的唯一理由是：
+   * 调用方手里已经有 url、只想登记进表以便统一回收（早期 file-drop 的用法）。
+   *
+   * ⚠️ **它不写后端**：返回的 id 只在本会话的表里有效，刷新即失效。
+   * 想“刷新不丢”必须走 `put` —— 旧实现会在这里偷偷 `put` 一次，
+   * 结果**返回的 id 与实际落库的引用不是同一个**：调用方拿着 id 什么也查不到，
+   * 还留下一份无法回收的孤儿字节。现在不再那样做。
+   */
   register(input: RegisterResourceInput): string {
     const kind = input.kind ?? 'blob'
     let url = input.url
@@ -196,13 +295,7 @@ export class ResourceStore implements ResourceService {
     }
     this.seq += 1
     const id = `${ID_PREFIX}${this.seq}-${randomSuffix()}`
-    const entry: ResourceEntry = { id, kind, url, ...(input.resource !== undefined ? { resource: input.resource } : {}) }
-    this.entries.set(id, entry)
-    if (this.persistence && typeof Blob !== "undefined" && input.resource instanceof Blob) {
-      const task = this.persistence.save(id, kind, input.resource).catch(() => {})
-      this.pending.set(id, task)
-      void task.finally(() => this.pending.delete(id))
-    }
+    this.entries.set(id, { id, kind, url, ...(input.resource !== undefined ? { resource: input.resource } : {}) })
     return id
   }
 
@@ -231,7 +324,7 @@ export class ResourceStore implements ResourceService {
     if (!entry) return false
     this.entries.delete(id)
     this.backend.revokeUrl(entry.url)
-    void this.persistence?.remove(id).catch(() => {})
+    void this.adapter()?.removeResource?.(id).catch(() => {})
     return true
   }
 
@@ -241,7 +334,7 @@ export class ResourceStore implements ResourceService {
       if (entry.resource === resource) {
         this.entries.delete(id)
         this.backend.revokeUrl(entry.url)
-        void this.persistence?.remove(id).catch(() => {})
+        void this.adapter()?.removeResource?.(id).catch(() => {})
         n += 1
       }
     }
@@ -254,7 +347,7 @@ export class ResourceStore implements ResourceService {
       if (entry.kind === kind) {
         this.entries.delete(id)
         this.backend.revokeUrl(entry.url)
-        void this.persistence?.remove(id).catch(() => {})
+        void this.adapter()?.removeResource?.(id).catch(() => {})
         n += 1
       }
     }
@@ -267,7 +360,7 @@ export class ResourceStore implements ResourceService {
       if (!referenced.has(id)) {
         this.entries.delete(id)
         this.backend.revokeUrl(entry.url)
-        void this.persistence?.remove(id).catch(() => {})
+        void this.adapter()?.removeResource?.(id).catch(() => {})
         n += 1
       }
     }
@@ -279,72 +372,18 @@ export class ResourceStore implements ResourceService {
     this.entries.clear()
   }
 
-  async restore(id: string, kind = "blob"): Promise<string | undefined> {
-    const current = this.entries.get(id)
-    if (current) return current.url
-    let stored: { kind: string; resource: Blob } | undefined
-    try {
-      stored = await this.persistence?.load(id)
-    } catch {
-      return undefined
-    }
-    if (!stored || !this.backend.createUrl) return undefined
-    const url = this.backend.createUrl(stored.resource)
-    this.entries.set(id, { id, kind: stored.kind || kind, url, resource: stored.resource })
-    return url
+  /**
+   * 刷新后按持久引用重建显示地址。
+   *
+   * 与 resolve 是同一件事（ref → 现算地址）；保留这个名字是因为宿主恢复流程按它调，
+   * 语义上强调"这是载入时把临时地址重新算一遍"。
+   */
+  async restore(ref: string, _kind = 'blob'): Promise<string | undefined> {
+    return this.resolve(ref)
   }
 }
 
 function randomSuffix(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID()
   return String(Date.now()) + "-" + String(Math.random()).slice(2)
-}
-
-/** 浏览器默认的 IndexedDB Blob 存储；Node/SSR 环境不启用。 */
-export function createIndexedDbResourcePersistence(): ResourcePersistence | undefined {
-  if (typeof indexedDB === "undefined") return undefined
-  const DB_NAME = "mini-canvas-resources"
-  const STORE_NAME = "blobs"
-  let dbPromise: Promise<IDBDatabase> | undefined
-  const open = (): Promise<IDBDatabase> => {
-    if (dbPromise) return dbPromise
-    dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1)
-      request.onupgradeneeded = () => {
-        if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME)
-      }
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-    })
-    return dbPromise
-  }
-  return {
-    async save(id, kind, resource) {
-      const db = await open()
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite")
-        tx.objectStore(STORE_NAME).put({ kind, resource }, id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-      })
-    },
-    async load(id) {
-      const db = await open()
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readonly")
-        const request = tx.objectStore(STORE_NAME).get(id)
-        request.onsuccess = () => resolve(request.result as { kind: string; resource: Blob } | undefined)
-        request.onerror = () => reject(request.error)
-      })
-    },
-    async remove(id) {
-      const db = await open()
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, "readwrite")
-        tx.objectStore(STORE_NAME).delete(id)
-        tx.oncomplete = () => resolve()
-        tx.onerror = () => reject(tx.error)
-      })
-    },
-  }
 }

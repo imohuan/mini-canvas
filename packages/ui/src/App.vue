@@ -17,7 +17,7 @@ import TopRightArea from './components/areas/TopRightArea.vue'
 import StatusArea from './components/areas/StatusArea.vue'
 import DockArea from './components/areas/DockArea.vue'
 import LeftDrawer from './components/areas/LeftDrawer.vue'
-import ChatPanel from './components/areas/ChatPanel.vue'
+import AgentPanel from './components/areas/AgentPanel.vue'
 import ModalsArea from './components/areas/ModalsArea.vue'
 import { setReadyHost, useUi } from './composables/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
@@ -91,14 +91,18 @@ onBeforeUnmount(() => {
   ui.unbindSettingsClose()
   // 撤掉画布开关的设置订阅（edgeVisible / snapToGrid / nodesDraggable 的镜像同步）。
   ui.unbindCanvasToggles()
+  // 撤掉主题模式的设置订阅（themeMode 的镜像同步）。
+  ui.unbindThemeMode()
   // 撤掉视口订阅（缩放读数的同步）。
   ui.unbindZoomSync()
+  // 撤掉历史订阅（后台有新生成时的重拉）。
+  ui.unbindHistory()
 })
 </script>
 
 <template>
   <CanvasShell class="app-root" :theme="s.theme" :left-width="s.drawer === 'left' ? s.drawerWidth : 0"
-    :right-width="s.chatDocked && s.chatOpen ? s.chatWidth : 0" :push-status="true" :push-dock="true">
+    :right-width="ui.agent.open && ui.agent.docked ? ui.agent.width : 0" :push-status="true" :push-dock="true">
     <template #top-left>
       <TopLeftArea />
     </template>
@@ -137,17 +141,12 @@ onBeforeUnmount(() => {
         <!-- 「正在跟随」协作横幅 -->
         <!-- 这是一条**语义状态色**（"正在跟随"= 亮绿，同"录制中"用红）：底色不随主题变，
              所以前景也必须恒为深色才有对比（用 text-ink 的话暗色主题下白字压绿底会看不清）。 -->
-        <!-- 主题色白名单: 跟随横幅的语义状态色，恒亮绿底 + 恒深前景（不随主题变） -->
-        <div v-if="s.following"
-          class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-[#111] shadow-[0_4px_12px_rgba(0,0,0,0.25)]"
-          role="status">
+        <!-- 主题色白名单: 「正在跟随」横幅的语义状态色（亮绿），恒亮绿底 + 恒深前景，不随主题变 -->
+        <div v-if="s.following" role="status" class="absolute left-1/2 top-0 z-[55] flex -translate-x-1/2 items-center gap-2 rounded-b-xl bg-[#25e44e] px-3 py-1.5 text-[13px] text-[#111] shadow-[0_4px_12px_rgba(0,0,0,0.25)]">
           <span class="size-2 rounded-full bg-white"></span>
           <span>正在跟随</span>
-          <!-- 同上：白胶囊 + 深字压在恒亮绿横幅上，靠固定对比度保证可读，不随主题变 -->
-          <!-- 主题色白名单: 跟随横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
-          <button
-            class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90"
-            aria-label="退出跟随" @click="s.following = false">取消ESC</button>
+          <!-- 主题色白名单: 横幅内的白胶囊按钮，压在恒亮绿底上需恒定对比 -->
+          <button class="h-[18px] rounded-full bg-white px-2 text-[11px] font-medium leading-none text-[#111] transition-colors hover:bg-white/90" aria-label="退出跟随" @click="s.following = false">取消ESC</button>
         </div>
         <!-- 真实画布 -->
         <!-- 函数 ref：字符串 ref("ui.hostEl") 带点号 Vue 绑不上（hostEl 恒 null → 设置改动永远到不了画布）。
@@ -157,6 +156,10 @@ onBeforeUnmount(() => {
           :snap-zone-visual="ui.cfg.snapZone" :dev="DEV" window-key="MiniCanvasUI" @ready="onCanvasReady">
           <template #ui>
             <SettingsHost v-if="s.settingsOpen" />
+            <!-- Agent 面板外壳：放在 #ui 里（它在 <CanvasHost> 渲染子树内），
+                 里面的 <SlotHost slot="agent-conversation" /> 才拿得到渲染上下文；
+                 组件自己用 fixed 定位，所以放哪一层不影响它出现在哪。 -->
+            <AgentPanel />
             <!-- 小地图：插件注册在 mini-map 专用槽；这里只给它一个宿主选择的位置（逐帧跟随状态栏按钮） -->
             <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" style="pointer-events: none">
               <div style="pointer-events: auto">
@@ -176,7 +179,6 @@ onBeforeUnmount(() => {
     </template>
 
     <LeftDrawer />
-    <ChatPanel />
     <ModalsArea />
 
   </CanvasShell>

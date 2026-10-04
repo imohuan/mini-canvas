@@ -166,6 +166,16 @@ export interface NodeStoreService {
   getSnapshot(): CanvasNode[]
   /** 按 type 在指定坐标建一个节点，返回短 id（如 '1'） */
   addNode(type: string, position: { x: number; y: number }): string
+  /**
+   * 取下一个可用节点 id（短数字：'1' '2' '3' …），**并把它占掉**。
+   *
+   * 为什么要暴露出来：插件（复制粘贴、拖入文件、打组…）需要在建节点**之前**拿到 id
+   * （要拿它连边、要把它加进选中集）。各自造 id 就会出现 fd- / group- / xxx-copy- 这些形态，
+   * 画布里 id 五花八门。统一向这里要，形态就只有一个。
+   *
+   * 与 addNodes 的差别：addNodes 不给 id 时内部也会取号；本方法给"我要先拿到号"的场景用。
+   */
+  nextId(): string
   /** 批量插入节点：可指定 id/data/size/parentId；返回实际插入数量。广播一次 add。 */
   addNodes(inputs: AddNodeInput[]): number
   /** 改某节点 data（内容组件上报改动入口；等价 updateNode(id,{data})） */
@@ -319,6 +329,10 @@ export class NodeStore implements NodeStoreService {
       // 不在这里凭空造一个尺寸。
       this.syncSizeMirror(node)
       this.nodes.set(id, node)
+      // 显式数字 id（复制粘贴 / AI 后台 / 云端合并进来的）也把计数器抬起来：
+      // 否则之后发号要一个个跳过，白跑若干轮。
+      const numeric = Number.parseInt(id, 10)
+      if (!Number.isNaN(numeric) && numeric > this.counter) this.counter = numeric
     }
     this.notify('add')
     return inputs.length
@@ -444,5 +458,17 @@ export class NodeStore implements NodeStoreService {
     this.counter += 1
     return String(this.counter)
   }
-}
 
+  /**
+   * 取下一个可用 id 并占掉它。
+   *
+   * "跳过已被占用的号"这条是必须的：有人用显式 id 插过节点（复制粘贴早期版本、AI 后台建节点、
+   * 云端合并进来的）时，计数器可能与实际存量不一致 —— 直接吐号会撞已有的节点，
+   * 撞了就会覆盖别人的数据。
+   */
+  nextId(): string {
+    let id = this.createNodeId()
+    while (this.nodes.has(id)) id = this.createNodeId()
+    return id
+  }
+}

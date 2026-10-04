@@ -55,6 +55,22 @@
 *::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
+/* ===== 整页默认不可选中文本（用户口径 2026-10-04）=====
+   这是桌面应用式的整页交互：拖拽画布 / 拖线 / 点菜单都不该顺带把界面文字拖蓝
+   （节点标题、按钮、面板文案都算界面文本）。v1 的宿主在 body 上做过这条兜底，
+   v2 成品壳丢了它，于是画布节点标题能被选中。
+   输入面必须 override 回 text（见下一条），否则文字编辑 / 标题编辑 / 输入框没法选字。 */
+body { user-select: none; -webkit-user-select: none; }
+/* 输入面例外：只对真正要打字 / 选字的地方放行，其余仍不可选。
+   ProseMirror 是 Agent 输入区与底栏编辑器的真实可编辑根（contenteditable 挂在它身上）；*/
+textarea,
+input,
+[contenteditable="true"],
+.ProseMirror {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* ===== 画布暗色主题（可换肤插槽）======
    节点卡片在 CanvasHost 子树里，必须全局；画布底由 DefaultBackground 的 canvas 硬编码浅色绘制，用 filter 反相为暗色。
    用 `html.dark`（而非 `.dark`）拿到 0,1,1 特异性：plugin-theme-default 的 node-theme.css

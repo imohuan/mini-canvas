@@ -1,0 +1,21 @@
+PASS  设置里存在 edgeRailColorLight  -- =#1f2937
+PASS  设置里存在 edgeRailColorDark  -- =#9ca3af
+PASS  设置里存在 accentColorLight  -- =#0891b2
+PASS  设置里存在 accentColorDark  -- =#0891b2
+PASS  设置里存在 guideColorLight  -- =#3b82f6
+PASS  设置里存在 guideColorDark  -- =#6366f1
+PASS  默认：连线色亮/暗不同  -- light=#1f2937 dark=#9ca3af
+PASS  默认：流光色亮/暗不同  -- light=#0891b2 dark=#22d3ee
+PASS  改亮色格：亮色生效  -- #ff00aa
+PASS  改亮色格：暗色不受影响  -- dark=#9ca3af (期望 #9ca3af)
+PASS  改暗色格：暗色生效  -- #00ff00
+PASS  改暗色格：亮色保持不动  -- light=#ff00aa
+PASS  改回默认：内联覆盖被清除  -- inline=""
+PASS  未改动的格不写内联  -- inline=""
+PASS  强调色派生档跟随现算  -- color-mix(in srgb, #0891b2 12%, transparent) -> color-mix(in srgb, #7c3aed 12%, transparent)
+PASS  连线元素渲染出来了  -- {"attr":"#9ca3af","computed":"rgb(156, 163, 175)"}
+PASS  暗色下连线取到暗色格的值  -- {"attr":"#9ca3af","computed":"rgb(156, 163, 175)"}
+PASS  亮色下连线取到亮色格的值  -- {"attr":"#ff00aa","computed":"rgb(255, 0, 170)"}
+PASS  无未捕获页面错误
+
+主题色板验证：19/19 通过

@@ -127,6 +127,23 @@ watch(
 // pane DOM 矩形：onMounted 后填（见下方 paneEl 捕获）；move 事件经 CanvasHost 已桥，这里 watch viewport 变化时刷新
 const paneRectRef = shallowRef<DOMRect | null>(null)
 const paneEl = ref<HTMLElement | null>(null)
+/**
+ * 重新捕获本画布实例的 DOM 锚点（pane / renderer / paneRect）。
+ *
+ * 为什么必须"重新"捕获：VueFlow 挂在 nodeEpoch 这个 key 上，而插件装/卸会 bump nodeEpoch
+ * → 整棵 VueFlow 子树销毁重建 → pane 变成一个全新的 DOM 元素。
+ * 若只在 onMounted 里捕获一次，paneEl 永远停在那个**已脱离文档**的旧元素上：
+ *   · 事件绑不上去（绑在死元素上收不到 pointer 事件）——多选的 Shift 框选因此整体失效；
+ *   · 屏幕坐标量出来的矩形也是旧的。
+ * 冷启动时插件在 VueFlow 挂载**之前**就注册好（此后只重挂一次），所以那个场景看着正常；
+ * 一旦改成运行期逐个安装插件（每个都触发一次重挂），问题才暴露。
+ */
+function refreshFlowDom(): void {
+  const flowRoot = rootEl.value
+  paneEl.value = (flowRoot?.querySelector('.vue-flow__pane') as HTMLElement | null) ?? null
+  rendererEl.value = resolveMeasureContainer(flowRoot)
+  paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
+}
 /** 本画布实例根 DOM（模板 ref）——实例级锚点，替代 document.querySelector('.vue-flow') */
 const rootEl = ref<HTMLElement | null>(null)
 /** 节点层 DOM（含 .vue-flow__node 的最内层容器；模板 ref 不可达内部渲染层，onMounted 内解析） */
@@ -213,11 +230,11 @@ onBeforeUnmount(() => {
 onMounted(() => {
   // VueFlow 渲染后 .vue-flow__pane 已在 DOM（实例根内查询，多宿主页面不串线），捕获以量屏幕坐标
   const flowRoot = rootEl.value
-  paneEl.value = flowRoot?.querySelector('.vue-flow__pane') as HTMLElement | null
   // 节点层容器：按"含 .vue-flow__node 的最内层节点容器"解析（Vue Flow 1.48 无 .vue-flow__renderer，
   // 旧写法恒为 null 会让节点实测尺寸永不注入 → 自动布局按默认尺寸错算）
-  rendererEl.value = resolveMeasureContainer(flowRoot)
-  paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
+  // 捕获 pane/renderer 的**统一入口**（见下方 refreshFlowDom 注释）：nodeEpoch 会让 VueFlow 整树重挂，
+  // pane DOM 会被换成一个新元素 —— 必须跟着刷新，否则插件（如多选的 Shift 框选）会一直绑在旧元素上。
+  refreshFlowDom()
   // VueFlow 后端：一个适配对象，同时喂给旧 ViewportService（ctx.get('viewport')）与新的
   // Flow 能力面（useCanvasRender().flow）——同一份实现，两处语义不再各写一遍。
   const backend: ViewportBackend = {
@@ -277,6 +294,27 @@ onMounted(() => {
   // renderer DOM 就绪后启动节点尺寸观测（在 onMounted 内，容器已挂载）
   measure.start()
 })
+
+// nodeEpoch 变化 = VueFlow 整树重挂 → pane/renderer 是新 DOM 元素。
+// 必须重新捕获 + 重新 attachDom，把新的 pane 元素灌进 flow.pane，
+// 否则消费方（BoxSelectLayer 的 Shift 框选、依赖 pane 的插件）会一直绑在旧元素上。
+// 在 flush: 'post' 里做（等 Vue 把新子树真正挂到 DOM 之后）。
+watch(
+  () => props.nodeEpoch,
+  () => {
+    if (!rootEl.value) return
+    refreshFlowDom()
+    flow.attachDom({
+      rootEl: () => rootEl.value,
+      rendererEl: () => rendererEl.value,
+      paneEl: () => paneEl.value,
+      queryNodeEl: (nodeId: string) =>
+        rootEl.value?.querySelector(`.vue-flow__node[data-id="${nodeId}"]`) ?? null,
+    }, paneRectRef.value)
+    measure.start()
+  },
+  { flush: 'post' },
+)
 
 // expose 给父：父级拖线时用 VueFlow 自带的 screenToFlowCoordinate（已处理 zoom/pan + pane 偏移，
 // 比手算 rect.left / zoom 准）。paneRect 也一并暴露，兜底用。

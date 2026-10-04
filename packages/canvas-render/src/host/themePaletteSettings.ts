@@ -65,7 +65,8 @@ export function installThemePalette(
     // 全格遍历：改过 → 写；没改过（或改回默认）→ 清掉内联，把控制权还给 CSS
     for (const slot of themeColorSlots()) {
       const value = overrides.get(slot.cssVar)
-      if (value !== undefined) el.style.setProperty(slot.cssVar, value)
+      // 空串 = 用户删掉了这个自定义色 → 清掉内联，回落 CSS（主题色）
+      if (value !== undefined && value !== '') el.style.setProperty(slot.cssVar, value)
       else el.style.removeProperty(slot.cssVar)
     }
   }

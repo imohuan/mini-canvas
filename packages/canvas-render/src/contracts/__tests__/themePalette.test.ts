@@ -97,15 +97,39 @@ describe('resolveThemeColorOverrides', () => {
     expect(vars).toHaveLength(1)
   })
 
+  it('可留空的 token（optional）：留空 → 登记为"清除"（空串），交回 CSS 走主题色', () => {
+    // optional token 已随多选插件移出色板（由该插件自己申报），这里用"临时空串取值器"验证清除语义
+    const values: Record<string, unknown> = {}
+    for (const s of themeColorSlots()) values[s.settingKey] = s.default
+    values[themeColorLightKey('selectOuterColor')] = '' // 模拟用户把多选框-外框颜色删了
+    const vars = resolveThemeColorOverrides((k) => values[k])
+    // optional 已不在色板 → 该格不会被遍历；本次改动后"清除"语义由 multi-select 自己的
+    // resolveMultiSelectFrameConfig（空串 → undefined → CSS 变量兜底）实现，宿主色板无需感知
+    expect(vars).toHaveLength(0)
+  })
+
   it('改回默认值 = 不再写内联（清掉覆盖，交还给 CSS）', () => {
     const byKey = new Map(themeColorSlots().map((s) => [s.settingKey, s.default]))
     const vars = resolveThemeColorOverrides((k) => byKey.get(k))
     expect(vars).toEqual([])
   })
 
-  it('非字符串/空白一律跳过', () => {
+  it('非字符串一律跳过（读不到 = 没这一步设置，不是"清除"）', () => {
     expect(resolveThemeColorOverrides(() => 42)).toEqual([])
-    expect(resolveThemeColorOverrides(() => '   ')).toEqual([])
+    expect(resolveThemeColorOverrides(() => undefined)).toEqual([])
+  })
+
+  it('非 optional 的格：空白跳过；optional 的格：空白 = 清除（空串）', () => {
+    const nonOptional = new Set(
+      themeColorSlots().filter((s) => !s.token.optional).map((s) => s.settingKey),
+    )
+    const optionalCount = themeColorSlots().filter((s) => s.token.optional).length
+    // 全部设为空白：非 optional 跳过，optional 全部登记为"清除"
+    const all = resolveThemeColorOverrides(() => '   ')
+    expect(all).toHaveLength(optionalCount)
+    expect(all.every((v) => v.value === '')).toBe(true)
+    // 只把非 optional 设为空白 → 一个都不写
+    expect(resolveThemeColorOverrides((k) => (nonOptional.has(k) ? '   ' : undefined))).toEqual([])
   })
 })
 
@@ -122,6 +146,22 @@ describe('resolveThemeColorValue', () => {
 
   it('未知 token 返回 undefined（不抛）', () => {
     expect(resolveThemeColorValue(() => undefined, 'nope', 'light')).toBeUndefined()
+  })
+
+  it('可留空 token（流光/参考线）：用户清空 → 跟随主题强调色（亮/暗各取 accentColor 那格）', () => {
+    // 用户没设过任何值 → 走各格默认值（不是 accent）
+    expect(resolveThemeColorValue(() => undefined, 'edgeFlowColor', 'light')).toBe('#0891b2')
+    // 注：guideColor 已移出色板（由 plugin-align-guide 插件自报），这里只剩流光走色板 optional
+    expect(resolveThemeColorValue(() => undefined, 'guideColor', 'dark')).toBeUndefined()
+    // 用户把两格都清空（空串 = 删除自定义色）→ JS 通道回落强调色（与 CSS 侧 var(--ui-accent) 兜底一致）
+    const cleared = (k: string): unknown =>
+      k === themeColorDarkKey('edgeFlowColor') ? '' : undefined
+    expect(resolveThemeColorValue(cleared, 'edgeFlowColor', 'light')).toBe('#0891b2') // accent 默认
+    expect(resolveThemeColorValue(cleared, 'guideColor', 'dark')).toBeUndefined()
+    // 强调色被用户改成紫色 → 清空的格跟着变紫（跟随的是"强调色的当前值"，不是固定青色）
+    const clearedWithAccent = (k: string): unknown =>
+      k === themeColorDarkKey('accentColor') ? '#7c3aed' : cleared(k)
+    expect(resolveThemeColorValue(clearedWithAccent, 'edgeFlowColor', 'dark')).toBe('#7c3aed')
   })
 })
 

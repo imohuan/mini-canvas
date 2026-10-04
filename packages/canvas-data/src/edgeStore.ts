@@ -26,6 +26,8 @@ export interface CanvasEdge {
 export interface AddEdgeRequest {
   source: string
   target: string
+  /** 显式指定边 id（不给则由本 store 分配自增数字 id） */
+  id?: string
   type?: string
   sourceHandle?: string
   targetHandle?: string
@@ -47,8 +49,15 @@ export interface EdgeStoreService {
   getEdges(): CanvasEdge[]
   /** 深拷贝快照（P1-10：安全只读，外部改动不污染 store） */
   getSnapshot(): CanvasEdge[]
-  /** 加一条边；id 缺省用 `edgeId(source,target)`，已有同 id 则替换(去重)。返回边 id */
+  /** 加一条边；id 缺省分配自增数字，端点（含端口）相同则复用既有边（去重）。返回边 id */
   addEdge(req: AddEdgeRequest): string
+  /**
+   * 取下一个可用边 id（短数字：'1' '2' '3' …），**并把它占掉**。
+   *
+   * 与节点 id 同一个道理：插件要在建边之前拿到号（比如先把占位边塞进渲染态）。
+   * 统一向这里要，边 id 形态才只有一个。
+   */
+  nextId(): string
   /** 按 id 移除一条边；不存在 no-op。返回是否真移除 */
   removeEdge(id: string): boolean
   /** 移除所有与给定节点相连的边(删节点连带清边)。返回移除的边数 */
@@ -63,25 +72,11 @@ export interface EdgeStoreService {
   subscribe(listener: EdgeStoreListener): () => void
 }
 
-/** 稳定边 id：源→目标。带显式端口时纳入 handle 维度（同源同目标不同端口互不覆盖，P0-5）。
- *  无 handle（或 handle 为默认 'source'/'target'）保持旧格式 e-{s}-{t}，单端口存量零改动。 */
-export function edgeStoreId(
-  source: string,
-  target: string,
-  sourceHandle?: string,
-  targetHandle?: string,
-): string {
-  const sh = sourceHandle && sourceHandle !== 'source' ? sourceHandle : ''
-  const th = targetHandle && targetHandle !== 'target' ? targetHandle : ''
-  if (!sh && !th) return `e-${source}-${target}`
-  const srcPart = sh ? `${source}:${sh}` : source
-  const tgtPart = th ? `${target}:${th}` : target
-  return `e-${srcPart}-${tgtPart}`
-}
-
 /** 实现：边数据列表（保序），按 id 索引去重 */
 export class EdgeStore implements EdgeStoreService {
   private edges = new Map<string, CanvasEdge>()
+  /** 自增 id 计数器（与 NodeStore 同款：画布内唯一） */
+  private counter = 0
   private listeners = new Set<EdgeStoreListener>()
 
   subscribe(listener: EdgeStoreListener): () => void {
@@ -110,9 +105,25 @@ export class EdgeStore implements EdgeStoreService {
   }
 
   addEdge(req: AddEdgeRequest): string {
-    const id = req.source && req.target
-      ? edgeStoreId(req.source, req.target, req.sourceHandle, req.targetHandle)
-      : `${Date.now()}`
+    // 去重看的是**连接本身**（端点 + 端口），不是 id —— id 改成自增数字后，
+    // 「同一条线再加一次」不再自动得到同一个 id，必须显式比端点，否则会画出两条重叠的线。
+    const key = connectionKey(req.source, req.target, req.sourceHandle, req.targetHandle)
+    for (const [existId, e] of this.edges) {
+      if (connectionKey(e.source, e.target, e.sourceHandle, e.targetHandle) === key) {
+        this.edges.set(existId, {
+          id: existId,
+          source: req.source,
+          target: req.target,
+          type: req.type ?? 'custom',
+          sourceHandle: req.sourceHandle,
+          targetHandle: req.targetHandle,
+          ...(req.data !== undefined ? { data: { ...req.data } } : {}),
+        })
+        this.notify('add', existId)
+        return existId
+      }
+    }
+    const id = req.id ?? this.nextId()
     this.edges.set(id, {
       id,
       source: req.source,
@@ -124,6 +135,29 @@ export class EdgeStore implements EdgeStoreService {
     })
     this.notify('add', id)
     return id
+  }
+
+  /** 取下一个可用边 id 并占掉它（'1' '2' '3' …）。跳过已被占用的号：有人用显式 id 插过边时
+   *  计数器可能与存量不一致，直接吐号会撞掉已有的边。 */
+  nextId(): string {
+    let id = this.createEdgeId()
+    while (this.edges.has(id)) id = this.createEdgeId()
+    return id
+  }
+
+  private createEdgeId(): string {
+    this.counter += 1
+    return String(this.counter)
+  }
+
+  /** 用存量里的数字 id 把计数器抬到最大值之后（整体回填 / 刷新恢复后调用） */
+  private rebuildCounter(): void {
+    let max = 0
+    for (const id of this.edges.keys()) {
+      const n = Number.parseInt(id, 10)
+      if (!Number.isNaN(n) && n > max) max = n
+    }
+    this.counter = max
   }
 
   removeEdge(id: string): boolean {
@@ -159,12 +193,23 @@ export class EdgeStore implements EdgeStoreService {
   replaceAll(edges: StoredEdgeInput[]): void {
     this.edges.clear()
     for (const e of edges) {
-      const id = e.id ?? edgeStoreId(e.source, e.target, e.sourceHandle, e.targetHandle)
+      const id = e.id ?? this.nextId()
       this.edges.set(id, { ...e, id } as CanvasEdge) // 归一化：无 id 者补齐，让对象上 id 与存储键一致
     }
+    // 回填后把计数器抬到存量最大值之后：保证之后新加的 id 不撞已有的数字 id
+    this.rebuildCounter()
     this.notify('replace')
   }
 }
 
-
-
+/** 连接身份键：端点 + 端口（与 handle 归一语义一致：默认 handle 视同未指定） */
+function connectionKey(
+  source: string,
+  target: string,
+  sourceHandle?: string,
+  targetHandle?: string,
+): string {
+  const sh = sourceHandle && sourceHandle !== 'source' ? sourceHandle : ''
+  const th = targetHandle && targetHandle !== 'target' ? targetHandle : ''
+  return `${source}|${target}|${sh}|${th}`
+}

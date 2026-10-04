@@ -1,5 +1,5 @@
 import { computed, toRef, type Ref } from 'vue'
-import type { Placement } from '@floating-ui/vue'
+import type { Middleware, Placement } from '@floating-ui/vue'
 import {
   useFloating as _useFloating,
   autoUpdate,
@@ -14,7 +14,7 @@ export interface UseFloatingOptions {
   offset?: number | Ref<number>
   matchWidth?: boolean | Ref<boolean>
   /** 对齐触发器的哪条边：start=左缘 / center=中轴（默认）/ end=右缘 */
-  align?: 'start' | 'center' | 'end'
+  align?: 'start' | 'center' | 'end' | Ref<'start' | 'center' | 'end'>
   /** 箭头元素 ref，传入后才启用 arrow middleware */
   arrowRef?: Ref<HTMLElement | null>
 }
@@ -41,11 +41,17 @@ export function useFloating(
       ? toRef(() => options.placement as string)
       : (options.placement ?? toRef(() => 'bottom-start'))
 
+  // align 允许传 Ref（调用方按 placement 后缀动态判定时要跟着变）；缺失 = center
+  const alignRef: Ref<'start' | 'center' | 'end'> =
+    options.align && typeof options.align === 'object' && 'value' in options.align
+      ? (options.align as Ref<'start' | 'center' | 'end'>)
+      : toRef(() => (options.align as 'start' | 'center' | 'end' | undefined) ?? 'center')
+
   // 对齐模式映射：center → 纯方位（菜单中轴对触发器中轴）；start/end → 加后缀
   const placementRef = computed<Placement>(() => {
     const base = placementBase.value as string
     const side = base.split('-')[0]
-    const a = options.align ?? 'center'
+    const a = alignRef.value
     return (a === 'center' ? side : `${side}-${a}`) as Placement
   })
 
@@ -53,7 +59,7 @@ export function useFloating(
   const effPlacement = computed<Placement>(() => {
     const base = placementRef.value as string
     const side = base.split('-')[0]
-    const a = options.align ?? 'center'
+    const a = alignRef.value
     return (a === 'center' ? side : `${side}-${a}`) as Placement
   })
 
@@ -63,7 +69,7 @@ export function useFloating(
       : toRef(() => (options.offset as number) ?? 6)
 
   const middlewareRef = computed(() => {
-    const arr: unknown[] = [offset(offsetRef.value), flip(), shift({ padding: 5 })]
+    const arr: Middleware[] = [offset(offsetRef.value), flip(), shift({ padding: 5 })]
     if (arrowRef?.value) arr.push(arrow({ element: arrowRef }))
     return arr
   })

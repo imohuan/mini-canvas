@@ -31,7 +31,17 @@
               :is-active="getGlobalIndex(item) === activeIndex"
               :is-hovered="getGlobalIndex(item) === hoveredIndex"
             >
-              <component v-if="item.renderItem" :is="() => item.renderItem!(item)" />
+              <!--
+                renderItem 直接**渲染它返回的 VNode**，不再包一层 `:is="() => …"`。
+
+                为什么必须这样（实测）：`:is` 接一个每次渲染新建的箭头函数时，那个函数就是
+                「一个新的组件类型」—— Vue 视其为换了个组件，于是**销毁重建**整段子树。
+                表现：hover 时行内节点被重挂（实测 sameNode=false / 增删 3 个节点），
+                新元素一出生就是展开态，CSS 过渡没有起点可插值 → 高度只能啪一下跳变
+                （用户口径：「没有动画，高度变化很突兀」）。
+                直接渲染 VNode，元素原地复用，过渡才有得动。
+              -->
+              <component v-if="item.renderItem" :is="item.renderItem(item)" />
               <template v-else>
               <span v-if="item.icon" class="item-icon" v-html="item.icon" />
               <span v-else class="item-icon-default">

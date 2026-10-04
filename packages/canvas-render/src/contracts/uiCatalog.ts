@@ -25,6 +25,7 @@ export type UiComponentHandle = unknown;
 export const UI_NAMES = [
   'button',
   'dropdown',
+  'tooltip',
   'select',
   'slider',
   'toolParamField',

@@ -15,8 +15,8 @@ import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@mini-canvas/canv
 import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import type { PluginModule } from '@mini-canvas/kernel'
 
-describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤2', () => {
-  it('createMiniCanvasHost.ts 只剩 nodeLayout / viewport 两处 ctx.inject', () => {
+describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤3', () => {
+  it('createMiniCanvasHost.ts 只剩 nodeLayout / viewport / pluginManager 三处 ctx.inject', () => {
     const src = readFileSync(fileURLToPath(new URL('../createMiniCanvasHost.ts', import.meta.url)), 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
@@ -24,9 +24,12 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤2', () 
       .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//'))
       .join('\n')
     const hits = code.match(/ctx\.inject\(/g) ?? []
-    expect(hits.length).toBeLessThanOrEqual(2)
+    // 三处：两件渲染服务（nodeLayout/viewport）+「统一安装句柄 pluginManager」。
+    // 后者是 2026-10-02 新增：插件管理插件要能按名装卸别的插件（用户诉求），故宿主把它上架成服务。
+    expect(hits.length).toBeLessThanOrEqual(3)
     expect(src).toContain("ctx.inject('nodeLayout'")
     expect(src).toContain("ctx.inject('viewport'")
+    expect(src).toContain("ctx.inject('pluginManager'")
   })
 
   it('其余服务由基础插件的 apply 注入（业务插件 ctx.get 照样取得到）', async () => {

@@ -19,6 +19,7 @@ import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
 import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
 import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
 import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
+import { nodeAudioPlugin } from '@mini-canvas/plugin-node-audio'
 import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
 import { pluginImageGenerationTools } from '@mini-canvas/plugin-tool-image-generation'
 import { pluginTextGenerationTools } from '@mini-canvas/plugin-tool-text-generation'
@@ -53,7 +54,14 @@ async function bootAll() {
   ctx.inject('nodeRegistry', nodeRegistry)
   ctx.inject('themeRegistry', new ThemeRegistry())
 
-  for (const plugin of [nodeTextPlugin, nodeImagePlugin, nodeVideoPlugin, node3dPreviewPlugin, nodeImageComparePlugin]) {
+  for (const plugin of [
+    nodeTextPlugin,
+    nodeImagePlugin,
+    nodeVideoPlugin,
+    nodeAudioPlugin,
+    node3dPreviewPlugin,
+    nodeImageComparePlugin,
+  ]) {
     ctx.plugin(plugin)
   }
   // 文件拖入/粘贴也照宿主清单装载：它是"把外部素材变成节点"的唯一入口，漏装就等于拖拽完全没反应。
@@ -69,12 +77,14 @@ async function bootAll() {
  * 各节点类型各自的预期段（壳 BaseNode 实际会读的槽位）。
  * 注意：text 只有底部状态栏 —— 顶部的加粗/字号/颜色/对齐对文本节点无语义，已按用户要求删除；
  * video 是上下都要：上面是"上传/剪辑/裁剪/截图/下载"操作条，下面是剪辑时间轴。
+ * audio 只有内容段（波形 + 播放控件都在内容里，不需要额外的上/下控制条）。
  * 以后若要给某类型加回顶部栏，必须同步改这里，否则这条测试会拦住（这正是它的用处）。
  */
 const EXPECTED = [
   { type: 'text', extraSegments: [] },
   { type: 'image', extraSegments: ['out:top', 'over:inset'] },
   { type: 'video', extraSegments: ['out:top', 'over:inset'] },
+  { type: 'audio', extraSegments: [] },
   { type: '3d-preview', extraSegments: [] },
   { type: 'image-compare', extraSegments: [] },
 ] as const
@@ -125,9 +135,9 @@ describe('节点插件整装', () => {
     ctx.stop()
   })
 
-  it('各插件的服务名都能取到（text / image / video / panorama3d / imageCompare）', async () => {
+  it('各插件的服务名都能取到（text / image / video / audio / panorama3d / imageCompare）', async () => {
     const { ctx } = await bootAll()
-    for (const service of ['text', 'image', 'video', 'panorama3d', 'imageCompare']) {
+    for (const service of ['text', 'image', 'video', 'audio', 'panorama3d', 'imageCompare']) {
       expect(ctx.get(service), `服务 ${service} 未上架`).toBeTruthy()
     }
     ctx.stop()

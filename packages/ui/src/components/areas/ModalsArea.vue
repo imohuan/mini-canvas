@@ -136,9 +136,9 @@ watch(() => s.shortcutsOpen, async (open) => {
         </div>
       </div>
       <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
-        <div v-if="ui.histVisible.length" class="grid gap-3"
+        <div v-if="ui.histVisible.value.length" class="grid gap-3"
           :style="{ gridTemplateColumns: 'repeat(' + (s.histZoom + 2) + ', minmax(0, 1fr))' }">
-          <article v-for="item in ui.histVisible" :key="item.title"
+          <article v-for="item in ui.histVisible.value" :key="item.title"
             class="flex cursor-pointer flex-col gap-1 rounded-[10px] border border-line bg-veil p-2 text-left transition-colors hover:border-brand hover:bg-hover"
             @click="ui.showToast('打开 ' + item.title)">
             <div
@@ -149,6 +149,11 @@ watch(() => s.shortcutsOpen, async (open) => {
             <span class="text-[10px] text-ink-mute">{{ item.kind }} · {{ item.time }}</span>
           </article>
         </div>
+        <!-- 没有后台：说清楚"去哪开"，而不是装作没有历史 -->
+        <p v-else-if="!s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
+          未连接云端服务 —— 生成历史由后台记录<br />
+          <span class="text-[11px] text-ink-mute">用 <code>npx mini-canvas-cloud serve</code> 起服务后即可看到</span>
+        </p>
         <p v-else class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
       </AxScrollArea>
     </div>

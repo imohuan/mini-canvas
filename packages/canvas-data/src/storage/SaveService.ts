@@ -1,4 +1,5 @@
-import type { SaveService, SaveType, StorageAdapter } from './types'
+import type { SaveService, SaveType, StorageAdapter, ResourceAdapter } from './types'
+import { isResourceAdapter } from './types'
 import { MemoryStorageAdapter } from './memoryAdapter'
 import { scopedKey, SAVE_TYPES } from './keys'
 
@@ -12,11 +13,18 @@ import { scopedKey, SAVE_TYPES } from './keys'
  * 4. 绝不"卸载才存/手动才存"：业务只负责 set，落盘时机由 flush 统一(空闲/hidden/pagehide/切项目)。
  */
 export class SaveServiceImpl implements SaveService {
-  /** 每个 type 的激活 adapter */
-  private adapters = new Map<SaveType, StorageAdapter>()
+  /**
+   * 每个 type 的激活 adapter。
+   *
+   * `'resource'` 那一格放的是 `ResourceAdapter`（字节流），其余三格是 `StorageAdapter`（key-value）——
+   * 两者接口不同，故这里用联合类型。取用方按 `isResourceAdapter` 判形状（见 resourceService）。
+   */
+  private adapters = new Map<SaveType, StorageAdapter | ResourceAdapter>()
   /** 未落盘的脏 set：key(type:) → { value, type } */
   private dirty = new Map<string, { value: unknown; type: SaveType }>()
   private timer: ReturnType<typeof setTimeout> | null = null
+  /** 适配器切换订阅者（见 onAdapterChange） */
+  private adapterListeners = new Set<(type: SaveType) => void>()
 
   /** 默认每 type 用内存 adapter（可被 useAdapter 覆盖为 localStorage/backend） */
   constructor(defaultAdapter?: StorageAdapter) {
@@ -33,14 +41,14 @@ export class SaveServiceImpl implements SaveService {
   }
 
   async get<T>(key: string, type: SaveType = 'config'): Promise<T | undefined> {
-    const adapter = this.adapters.get(type)!
+    const adapter = this.adapters.get(type)! as StorageAdapter
     return adapter.get<T>(scopedKey(type, key))
   }
 
   async remove(key: string, type: SaveType = 'config'): Promise<void> {
     const prefixed = scopedKey(type, key)
     this.dirty.delete(prefixed)
-    await this.adapters.get(type)!.remove(prefixed)
+    await (this.adapters.get(type)! as StorageAdapter).remove(prefixed)
   }
 
   async flush(): Promise<void> {
@@ -53,7 +61,7 @@ export class SaveServiceImpl implements SaveService {
     this.dirty.clear()
     for (const [prefixed, { value, type }] of batch) {
       try {
-        await this.adapters.get(type)!.set(prefixed, value)
+        await (this.adapters.get(type)! as StorageAdapter).set(prefixed, value)
       } catch (err) {
         // 存储配额不足不能变成未捕获 Promise；保留脏数据，下一次 flush 仍可重试。
         this.dirty.set(prefixed, { value, type })
@@ -67,13 +75,46 @@ export class SaveServiceImpl implements SaveService {
   }
 
   /** 切换某 type 的激活 adapter */
-  useAdapter(type: SaveType, adapter: StorageAdapter): void {
+  useAdapter(type: SaveType, adapter: StorageAdapter | ResourceAdapter): void {
     this.adapters.set(type, adapter)
+    // 通知订阅者（如配置持久化桥）：新后端可能已有数据，需要重读。
+    // 在**切换之后**才通知 —— 订阅者回调里会去读，必须读得到新适配器。
+    this.notifyAdapterChange(type)
+  }
+
+  /** 订阅「某 type 的激活 adapter 被切换」（见 types.ts 的说明） */
+  onAdapterChange(cb: (type: SaveType) => void): { dispose(): void } {
+    this.adapterListeners.add(cb)
+    return { dispose: () => this.adapterListeners.delete(cb) }
+  }
+
+  /** 取某 type 当前的激活 adapter（资源库用它现取资源后端，见 types.ts 的说明） */
+  adapterOf(type: SaveType): StorageAdapter | ResourceAdapter {
+    return this.adapters.get(type)!
   }
 
   /** 所有 type 的 adapter 都切到同一后端（整包迁移场景） */
-  useAdapterForAll(adapter: StorageAdapter): void {
-    for (const t of SAVE_TYPES) this.adapters.set(t, adapter)
+  useAdapterForAll(adapter: StorageAdapter | ResourceAdapter): void {
+    // 资源适配器只属于 'resource' 那一格：它没有 get/set/remove，铺到别处会让文本读写全炸。
+    if (isResourceAdapter(adapter)) {
+      this.adapters.set('resource', adapter)
+      return
+    }
+    for (const t of SAVE_TYPES) {
+      this.adapters.set(t, adapter)
+      this.notifyAdapterChange(t)
+    }
+  }
+
+  /** 通知适配器切换订阅者；单个订阅者抛错不影响其它订阅者 */
+  private notifyAdapterChange(type: SaveType): void {
+    for (const cb of [...this.adapterListeners]) {
+      try {
+        cb(type)
+      } catch {
+        /* 订阅者自己的问题 */
+      }
+    }
   }
 
   /** 释放：清掉未触发的防抖计时器（不再需要自动 flush 时调用） */

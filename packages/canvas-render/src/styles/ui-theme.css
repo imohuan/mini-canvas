@@ -43,6 +43,9 @@
   --ui-thumb-soft: #f2f4f7;
   --ui-overlay: rgb(255 255 255 / 0.88);
   --ui-overlay-solid: #ffffff;
+  /* 浮窗（Agent 面板浮动态这类"浮起来的卡片"）专用边框：比 --ui-line 略深一点，
+     压得住半透明底 + 毛玻璃，不然边框在模糊层上会糊掉看不清。值照 LiBTV 实测。 */
+  --ui-shell-line: #d4d9e0;
   --ui-glass: rgb(255 255 255 / 0.86);
   --ui-arrow: var(--ui-glass);
   --ui-tip: rgb(24 32 43 / 0.92);
@@ -72,10 +75,22 @@
   /* 连线（rail = 静态导轨 / flow = 选中时的流动光斑）：两格制同上。
      这两个是**画布内容**颜色，不走 --ce-* 内联通道，而是由 CustomEdge 读本变量。 */
   --ui-edge-rail: var(--uic-edge-rail-color-light, #1f2937);
-  --ui-edge-flow: var(--uic-edge-flow-color-light, #0891b2);
+  /* 流光色可留空（optional）：清空 = 跟随主题强调色（兜底走 --ui-accent，随色板联动） */
+  --ui-edge-flow: var(--uic-edge-flow-color-light, var(--ui-accent, #0891b2));
   /* 画布辅助线（对齐参考线 / 框选框）：色板两格制 + 原来的 0.75 透明度现算，改色后自动跟随 */
-  --ui-guide: color-mix(in srgb, var(--uic-guide-color-light, #3b82f6) 75%, transparent);
+  /* 参考线可留空（optional）：清空 = 跟随主题强调色（兜底走 --ui-accent，随色板联动）；
+     原来的 0.75 透明度现算保留：参考线本体需要半透明，不能全实 */
+  /* 参考线颜色：由 plugin-align-guide 插件自报 --uic-align-guide-light（清空时该变量被清除）；
+     兜底直通 --ui-accent。原 0.75 透明度现算保留（参考线需要半透明）。 */
+  --ui-guide: color-mix(in srgb, var(--uic-align-guide-light, var(--ui-accent, #3b82f6)) 75%, transparent);
   --ui-guide-veil: color-mix(in srgb, var(--ui-guide) 8%, transparent);
+  /* 多选框 / 绘制框颜色（色板两格制）：三个框各一个，用户能在「常规/主题配色」里改；
+     缺省时用 --uic-* 兜底。绘制框=Shift 拖拽时画的；外框/内框=选中后围着节点的两条线。 */
+  /* 多选三色（绘制框/多选框-外框/多选框-内框）：由 multi-select 插件自报（插件卸载配置跟着消失），
+     这里只是**兜底直通主题强调色** —— 不再走 --uic-* 间接层（那层已死：插件自报的 key 不经它）。 */
+  --ui-select-box: var(--ui-accent, #0891b2);
+  --ui-select-outer: var(--ui-accent, #0891b2);
+  --ui-select-inner: var(--ui-accent, #0891b2);
   /* 节点上/下控制栏（Node ToolBar）：浮在卡片外的操作条。
      按钮 hover 档 + 文字 + 容器面板；暗色那套见 html.dark 块。
      **按钮默认无背景**（用户要求：控制栏里是"一条条的按钮"，不是一排灰方块），
@@ -143,6 +158,9 @@ html[data-canvas-theme='dark'] {
   --ui-thumb-soft: #2a2a2a;
   --ui-overlay: rgb(31 31 31 / 0.75);
   --ui-overlay-solid: rgb(33 33 33);
+  /* 浮窗边框（暗色）：照 LiBTV 实测的 #525252 —— 比 --ui-line(#363636) 亮一档，
+     在半透明毛玻璃底上仍然看得见轮廓。 */
+  --ui-shell-line: #525252;
   --ui-glass: rgb(30 30 30 / 0.82);
   /* 箭头与毛玻璃面板同色（指向箭头叠在面板边沿，必须同底色才不会出现上下两截） */
   --ui-arrow: var(--ui-glass);
@@ -164,10 +182,14 @@ html[data-canvas-theme='dark'] {
   --ui-warn: var(--uic-warn-color-dark, #e3a25f);
   /* 连线两格制（暗色）：默认给浅灰/亮青 —— 深灰导轨在暗画布上几乎看不见（对比度约 1.3:1） */
   --ui-edge-rail: var(--uic-edge-rail-color-dark, #9ca3af);
-  --ui-edge-flow: var(--uic-edge-flow-color-dark, #22d3ee);
+  --ui-edge-flow: var(--uic-edge-flow-color-dark, var(--ui-accent, #22d3ee));
   /* 暗底上辅助线要够亮才看得见：0.6 透明度现算（比亮色档更透，免得在暗底上过曝） */
-  --ui-guide: color-mix(in srgb, var(--uic-guide-color-dark, #6366f1) 60%, transparent);
+  --ui-guide: color-mix(in srgb, var(--uic-align-guide-dark, var(--ui-accent, #6366f1)) 60%, transparent);
   --ui-guide-veil: color-mix(in srgb, var(--ui-guide) 10%, transparent);
+  /* 多选框 / 绘制框（暗色档）：与亮色同源，仅走 --uic-*-dark */
+  --ui-select-box: var(--ui-accent, #0891b2);
+  --ui-select-outer: var(--ui-accent, #0891b2);
+  --ui-select-inner: var(--ui-accent, #0891b2);
   /* 节点控制栏（暗色）：按钮默认同样透明，hover 才上一层白系半透明；文字用亮灰 */
   --ntb-fill: transparent;
   --ntb-fill-hover: rgb(255 255 255 / 0.14);

@@ -231,3 +231,61 @@ describe('doc 门面 —— 缺底层服务时报错（不静默返回空数据�
     expect(() => doc.undo()).toThrow(/"graph"/)
   })
 })
+
+
+describe('doc 门面 —— 统一 ID 分配（节点与边都用自增数字）', () => {
+  it('nextNodeId：从 1 起自增，且跳过已被占用的号', () => {
+    const { nodeStore, edgeStore, history, graph } = boot()
+    const doc = createDocService(() => ({ nodeStore, edgeStore, history, graph }))
+    expect(doc.nextNodeId()).toBe('1')
+    expect(doc.nextNodeId()).toBe('2')
+    // 已经有人用了 3（比如复制粘贴/后端建过）→ 不能再吐 3
+    nodeStore.addNodes([{ id: '3', type: 'text', position: { x: 0, y: 0 } }])
+    expect(doc.nextNodeId()).toBe('4')
+    // 分配结果要能直接拿去建节点，不会撞已有的
+    const id = doc.nextNodeId()
+    doc.addNodes([{ id, type: 'text', position: { x: 0, y: 0 } }])
+    expect(doc.getNode(id)).toBeDefined()
+  })
+
+  it('nextNodeId 分配多个时互不相同（批量建节点用）', () => {
+    const { nodeStore, edgeStore, history, graph } = boot()
+    const doc = createDocService(() => ({ nodeStore, edgeStore, history, graph }))
+    const ids = [doc.nextNodeId(), doc.nextNodeId(), doc.nextNodeId()]
+    expect(new Set(ids).size).toBe(3)
+    expect(ids).toEqual(['1', '2', '3'])
+  })
+
+  it('nextEdgeId：连接线同样是自增数字，且不与已有边撞', () => {
+    const { nodeStore, edgeStore, history, graph } = boot()
+    const doc = createDocService(() => ({ nodeStore, edgeStore, history, graph }))
+    expect(doc.nextEdgeId()).toBe('1')
+    expect(doc.nextEdgeId()).toBe('2')
+    edgeStore.addEdge({ source: 'a', target: 'b', id: '3' } as never)
+    expect(doc.nextEdgeId()).toBe('4')
+  })
+
+  it('节点与边的号各自独立计数（互不影响）', () => {
+    const { nodeStore, edgeStore, history, graph } = boot()
+    const doc = createDocService(() => ({ nodeStore, edgeStore, history, graph }))
+    doc.nextNodeId()
+    doc.nextNodeId()
+    expect(doc.nextEdgeId()).toBe('1')
+    expect(doc.nextNodeId()).toBe('3')
+  })
+
+  it('replaceAll 之后计数跟上（刷新恢复的图里有 1/2/3 → 下一个是 4）', () => {
+    const { nodeStore, edgeStore, history, graph } = boot()
+    const doc = createDocService(() => ({ nodeStore, edgeStore, history, graph }))
+    doc.replaceAll(
+      [
+        { id: '1', type: 'text', position: { x: 0, y: 0 }, data: {} },
+        { id: '2', type: 'text', position: { x: 0, y: 0 }, data: {} },
+        { id: '7', type: 'text', position: { x: 0, y: 0 }, data: {} },
+      ],
+      [{ id: '1', source: '1', target: '2' }],
+    )
+    expect(doc.nextNodeId()).toBe('8')
+    expect(doc.nextEdgeId()).toBe('2')
+  })
+})

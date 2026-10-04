@@ -3,7 +3,7 @@
  *
  * 这条测试用**真实内核 + 真实插件**跑一遍，把"哪些配置项真的会出现在设置页面里"钉死：
  * 设置面板的左导航/二级块完全由 ctx.settings.groups() 与各 key 的 group 驱动
- * （见 PluginSettingsDialog 的 sectionMap/navOf），所以断言 groups() 与关键 key 的分组，
+ * （见 PluginSettingsContent 的 sectionMap/navOf），所以断言 groups() 与关键 key 的分组，
  * 就等于断言"用户在设置里看得到"。
  *
  * 价值：以后新增配置项却忘了给 group（或 group 名写错、冒出一个没有归属的一级分类），
@@ -57,6 +57,7 @@ async function bootWithSettings() {
 interface SettingsLike {
   groups(): string[]
   get(key: string): string | number | boolean
+  has(key: string): boolean
 }
 
 describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
@@ -90,13 +91,14 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
-  it('多选标记的大小 / 颜色 / 低缩放开关出现在「节点」分类下', async () => {
+  it('多选标记的大小 / 低缩放开关出现在「节点」分类下（颜色已删，改走主题强调色）', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     expect(settings.groups()).toContain('节点/多选标记')
     expect(settings.get('nodeMultiRadioSize')).toBe(18)
-    expect(String(settings.get('nodeMultiRadioColor')).startsWith('#')).toBe(true)
     expect(settings.get('nodeMultiRadioShowInLowDetail')).toBe(false)
+    // 颜色不再是配置项（用户要求删掉「多选标记颜色」，改吃主题强调色 --ui-accent）
+    expect(settings.has('nodeMultiRadioColor')).toBe(false)
     // 改一下能读回来（设置面板可调、且会跨刷新持久化）
     ctx.settings.set('nodeMultiRadioSize', 24)
     expect(settings.get('nodeMultiRadioSize')).toBe(24)

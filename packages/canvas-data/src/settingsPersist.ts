@@ -41,6 +41,8 @@ export interface SettingsPersistService {
 export function createSettingsPersist(store: SettingsStore, save: SaveService): SettingsPersistService {
   let disposed = false
   let off: Disposable | null = null
+  /** 适配器切换订阅（云插件把 config 域切到云端后重读一次） */
+  let offAdapter: Disposable | null = null
   /** 持久化值快照（桥内副本；改动即 save.set，flush 由 SaveService 防抖负责） */
   let snapshot: Record<string, string | number | boolean> = {}
 
@@ -55,6 +57,33 @@ export function createSettingsPersist(store: SettingsStore, save: SaveService): 
     })
   }
 
+  /**
+   * 从**当前** config 后端重读一次并注入 store。
+   *
+   * 为什么需要：config 域的适配器是运行期可换的（云插件启动时把 config 切到云端）。
+   * 而本桥的首次 restore() 跑在插件装载之前、读的是**本地**后端 —— 不重读的话，
+   * 云端已保存的设置永远进不来。用户看到的正是这个现象：改设置后 settings.json（云端）在变，
+   * 刷新页面却回到本地旧值。
+   *
+   * 语义与启动恢复一致：
+   * - 新后端**有**存档 → 以它为准（云端是真身）注入 store；
+   * - 新后端**没有**存档（首次上云）→ 把当前值整份推上去，别把云端当空覆盖本地。
+   */
+  async function reloadFromBackend(): Promise<void> {
+    if (disposed) return
+    const saved = await save.get<Record<string, string | number | boolean>>(SETTINGS_SAVE_KEY, 'config')
+    if (saved && typeof saved === 'object') {
+      // 新后端已有存档（云端是真身）：以它为准，注入 store。
+      snapshot = { ...saved }
+      store.setSavedSnapshot(snapshot)
+      return
+    }
+    // 新后端还没存过（首次上云）：把本地当前值整份推上去，别把云端当空覆盖本地。
+    snapshot = { ...snapshot, ...store.entries() }
+    store.setSavedSnapshot(snapshot)
+    await save.set(SETTINGS_SAVE_KEY, snapshot, 'config')
+  }
+
   return {
     async restore(): Promise<void> {
       if (disposed) return
@@ -63,6 +92,11 @@ export function createSettingsPersist(store: SettingsStore, save: SaveService): 
       // 注入 store：已声明项立即覆盖；未声明项留给后续 define（define 命中快照作初值）
       store.setSavedSnapshot(snapshot)
       watch() // restore 后开始追踪变更（避免恢复本身被当成用户改动重复写回）
+      // 适配器被换（config 从本地切云端）→ 重读新后端，把云端已存的设置拉进来。
+      // 只认 config 域：本桥就管配置持久化；canvas/shortcut/resource 的切换与它无关。
+      offAdapter = save.onAdapterChange((type) => {
+        if (type === 'config') void reloadFromBackend()
+      })
     },
     async persistNow(): Promise<void> {
       if (disposed) return
@@ -82,10 +116,8 @@ export function createSettingsPersist(store: SettingsStore, save: SaveService): 
       disposed = true
       off?.dispose()
       off = null
+      offAdapter?.dispose()
+      offAdapter = null
     },
   }
 }
-
-
-
-

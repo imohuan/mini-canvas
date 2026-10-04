@@ -11,6 +11,7 @@ import AxDropdown from '../AxDropdown.vue'
 import AxTooltip from '../AxTooltip.vue'
 import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
+import AgentOrb from '../AgentOrb.vue'
 import { useUi } from '../../composables/ui'
 
 const ui = useUi()
@@ -139,10 +140,12 @@ const s = ui.state
         @click="ui.showToast('教程')">
         <CircleQuestionMark :size="16" />
       </button></AxTooltip>
-    <AxTooltip content="TV Director" placement="left"><button
+    <AxTooltip content="Agent 对话" placement="left"><button
         class="absolute left-full top-1/2 ml-1.5 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
-        aria-label="TV Director" :class="{ 'bg-panel-active': s.chatOpen }" @click="s.chatOpen = !s.chatOpen">
-        <Sparkles :size="19" />
+        aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">
+        <!-- 表情圆球（照用户给的参考文件移植）：瞳孔跟随鼠标、悬停咧嘴、离开变惊讶。
+             按钮本体的 aria-label / tooltip / 点击不变，只把里面的图标换成它。 -->
+        <AgentOrb :open="ui.agent.open" />
       </button></AxTooltip>
   </div>
 </template>

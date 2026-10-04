@@ -48,6 +48,13 @@ export interface ThemeColorToken {
   light: string
   /** 暗色主题下的默认值（hex） */
   dark: string
+  /**
+   * 是否**允许留空**（设置面板里能把这个颜色删掉）。
+   *
+   * 用户口径："颜色支持删除，删除之后默认使用主题颜色；只有该颜色存在时才用它。"
+   * 留空 → 消费方回落到 CSS 里那个 var(...) 的兜底（或上一层的默认），即"用主题色"。
+   */
+  optional?: boolean
 }
 
 /**
@@ -105,15 +112,12 @@ export const THEME_COLOR_TOKENS: readonly ThemeColorToken[] = Object.freeze([
     description: '连线被选中/拖线时沿路径流动的光斑色（缺省取强调色）。',
     light: '#0891b2',
     dark: '#22d3ee',
+    // 可留空：清掉自定义色 → 跟随主题强调色（与多选框颜色同一套语义，用户口径）
+    optional: true,
   },
-  {
-    key: 'guideColor',
-    cssVar: '--ui-guide',
-    label: '参考线颜色',
-    description: '拖拽时的对齐辅助线与框选框颜色。',
-    light: '#3b82f6',
-    dark: '#6366f1',
-  },
+  // 注：参考线颜色（--ui-guide）不进宿主色板 —— 它属于 plugin-align-guide 插件，
+  // 由该插件自己申报（用户口径"参考线的颜色放到专门的参考线插件里面"）。
+  // 插件卸载时配置跟着消失；CSS 侧 ui-theme.css 的 --ui-guide 兜底直通 --ui-accent。
 ])
 
 /** 亮色主题的配置分组（一级「常规」，与其它设置同层；二级点明是哪个主题） */
@@ -193,10 +197,14 @@ export function buildThemeColorConfig(): ConfigSchema {
       default: slot.default,
       label: slot.token.label,
       group: slot.group,
+      // 可留空的格在描述里写明清除语义（设置面板小字会渲染出来）
       description:
-        slot.mode === 'light'
-          ? `亮色主题下的${slot.token.label}。${slot.token.description}`
-          : `暗色主题下的${slot.token.label}。${slot.token.description}`,
+        (slot.mode === 'light' ? `亮色主题下的${slot.token.label}。` : `暗色主题下的${slot.token.label}。`) +
+        slot.token.description +
+        // 可留空（optional）的 token：给用户写明"清空 = 跟随主题强调色"（需求：描述要写清楚）
+        (slot.token.optional ? '清空 = 跟随主题强调色。' : ''),
+      // 允许留空的 token（如三个多选框颜色）：面板上能删掉 → 回落主题里的默认
+      ...(slot.token.optional ? { optional: true } : {}),
     }
   }
   return schema
@@ -231,8 +239,18 @@ export function resolveThemeColorOverrides(get: (key: string) => unknown): Theme
   const out: ThemeColorVar[] = []
   for (const slot of themeColorSlots()) {
     const raw = get(slot.settingKey)
+    // 非字符串（含 undefined = 这项没声明/读不到）一律跳过 —— 跳过 = 回落 CSS 默认。
     if (typeof raw !== 'string') continue
     const value = raw.trim()
+    // 可留空的 token（optional）：**只有显式空串**才表示"用户把这个自定义色删掉了"，
+    // 登记为清除（value: ''）→ installThemePalette 会 removeProperty，把控制权交回 CSS（主题色）。
+    // 注意与"没声明/没设置"区分：那是 undefined，上面已经跳过（不是"清除"，是"没这一步"）。
+    if (slot.token.optional) {
+      if (value === '') out.push({ name: slot.cssVar, value: '' })
+      else if (value.toLowerCase() !== slot.default.toLowerCase()) out.push({ name: slot.cssVar, value })
+      continue
+    }
+    // 非 optional：空串跳过（回落 CSS 默认，比写空串安全）
     if (!value) continue
     if (value.toLowerCase() === slot.default.toLowerCase()) continue
     out.push({ name: slot.cssVar, value })
@@ -252,8 +270,15 @@ export function resolveThemeColorValue(
   const slot = themeColorSlots().find((s) => s.token.key === key && s.mode === mode)
   if (!slot) return undefined
   const raw = get(slot.settingKey)
-  if (typeof raw === 'string' && raw.trim()) return raw.trim()
-  return slot.default
+  if (raw === undefined || raw === null) return slot.default
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  // 可留空 token：**显式空串** = 用户删掉了自定义色 → 跟随主题强调色（与 CSS 侧兜底一致）；
+  // undefined（没设置过）= 保持默认值，不是"清除" —— 两者必须区分，否则没设过的格会被误判成跟随强调色。
+  if (!value) {
+    if (slot.token.optional) return resolveThemeColorValue(get, 'accentColor', mode)
+    return slot.default
+  }
+  return value
 }
 
 /** 取当前主题模式（`<html class="dark">` 为准；无 DOM 环境一律 light） */

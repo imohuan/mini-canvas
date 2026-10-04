@@ -195,3 +195,37 @@ describe('步骤 4 完成标准③ —— headless 宿主跑通建节点 / 撤�
     ctx2.stop()
   })
 })
+
+describe('保存 → 刷新恢复：上传/生成写进节点 data 的内嵌资源不能丢', () => {
+  /**
+   * 用户实测：在画布上传一张图片，刷新后图片不见了。
+   *
+   * 直接原因：图片上传（plugin-node-image 的 uploadImage / addSourceNode）把 File 读成
+   * dataURL 写进 data.imageUrl —— 这是「刷新不丢」的既定做法（见 imageTransform 文件头）。
+   * 但落盘前的 sanitizeTransientResourceUrls 会把**超过 64KB 的 dataURL** 当成临时地址删掉，
+   * 而上传路径并没有 resourceId 之类的第二份拷贝可供恢复 —— 于是数据被永久丢弃。
+   *
+   * 这个测试走的是**真实落盘链路**（canvasBasePlugin 的提交回调 → save → 二次 boot 恢复），
+   * 而不是 imageOps 里那个自带 commit 回调、绕开 sanitize 的浅接缝。
+   */
+  it('超过 64KB 的 dataURL（图片上传的产物）落盘后仍在，刷新能恢复', async () => {
+    const storage = new MemoryStorageAdapter()
+    const { ctx, services } = await bootHeadless(storage)
+    services.nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
+
+    // 一张普通照片转出来的 base64 远大于 64KB
+    const dataUrl = 'data:image/png;base64,' + 'A'.repeat(200_000)
+    const id = services.graph.createNode('image', { x: 0, y: 0 }, { imageUrl: dataUrl, imageName: 'photo.png' })
+    await services.save.flush()
+
+    // 落盘的那一份必须还带着图（它是这张图唯一的拷贝）
+    const saved = await storage.get<CanvasNode[]>('canvas:' + GRAPH_KEY)
+    expect(saved?.[0]?.data.imageUrl).toBe(dataUrl)
+    ctx.stop()
+
+    // 模拟刷新：同一存储、全新 ctx
+    const { ctx: ctx2, services: s2 } = await bootHeadless(storage)
+    expect(s2.nodeStore.getNode(id)?.data.imageUrl).toBe(dataUrl)
+    ctx2.stop()
+  })
+})

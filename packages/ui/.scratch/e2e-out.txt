@@ -1,0 +1,109 @@
+PASS  画布渲染出节点 DOM  -- node 元素 = 2
+PASS  宿主句柄可读（window.MiniCanvasUI）
+PASS  seed 生效（2 个默认节点）  -- 实际 2: text,image
+PASS  doc 门面已装配（步骤 5a）
+PASS  canvas-base 不可卸载（决策 1 core）  -- {"ok":false,"reason":"core"}
+PASS  canvas-base 不在对外清单（环境而非插件项）  -- 24 个业务插件
+PASS  点「+ 文本」建出节点  -- 2 -> 3
+PASS  拖动节点位置真的变了  -- 几何={"x":180.74737548828125,"y":161.52630615234375,"w":480.7894287109375,"h":320.5263366699219} {"x":176,"y":80} -> {"x":260,"y":136.78160919540227}
+PASS  撤销回退了上一步（拖动）  -- 节点数 3 -> 3（拖动撤销不改变节点数）
+PASS  再撤销回退了建节点  -- 3 -> 2（期望 2）
+PASS  重做恢复节点  -- 2 -> 3
+PASS  刷新后节点数恢复（落盘链路）  -- 重新加载 3
+PASS  设置面板能打开且长出分组
+PASS  设置面板可再次打开（上一轮 Esc 已收起）
+PASS  点 ✕ 能关闭设置面板
+PASS  点遮罩能关闭设置面板
+PASS  Esc 能关闭设置面板
+PASS  注册场运行时放/取/回收（node/region）  -- {"before":0,"after":1,"src":"<host>","hasResolve":true,"afterDispose":0}
+PASS  运行期直接改场 → 节点热增上/下控制栏条目（用户最初那段场景）  -- {"btn":true,"panel":true,"gone":true}
+PASS  场条目带 source（谁放的）  -- source=<host>
+PASS  wrap/resolve（叠层可合成）
+PASS  多选框区域场：插件挂的 out:top 条目渲染在框上（selection/region）  -- {"shown":true,"nodeToolbarHidden":true,"gone":true}
+PASS  多选时节点自身的上下控制栏被压掉（只留多选框的栏）  -- {"shown":true,"nodeToolbarHidden":true,"gone":true}
+PASS  selection/region 条目 dispose 后从框上摘除  -- {"shown":true,"nodeToolbarHidden":true,"gone":true}
+PASS  真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下线  -- {"returned":false,"state":"active","graph":true,"oldGraphGone":true}
+PASS  surface().services 列出 doc 等服务且带 source（谁注入的）  -- services=27, doc.source=canvas-base
+PASS  surface().services 带方法清单（用户要的"支持哪些函数"）  -- doc.methods=27 个
+PASS  surface().registries 覆盖 node/region、command 等场  -- kinds=capability,theme,ui,node/region,slot,node/bar,node/bar-applier,node/type,node/creator,command,selection/region,node/shell
+PASS  surface().commands 列出已注册命令（含 id/keys/areas）  -- 54 条
+PASS  surface().tools 列出生成工具且 params 形状合法  -- 8 个
+PASS  surface().events 列出已登记事件（含内核与渲染层事件）  -- 28 个
+PASS  surface().registryEntries 带 fields（条目值有哪些可读字段）  -- fields=["type","label"]
+PASS  surface().fields 不把组件句柄当声明（无 __name/setup 噪声）
+surface 快照: services=27 kinds=[capability,theme,ui,node/region,slot,node/bar,node/bar-applier,node/type,node/creator,command,selection/region,node/shell] commands=54 tools=8 modelTools=[]
+PASS  surface 是活快照：运行时注册的模型工具立刻可见、注销后消失  -- {"before":[],"midDesc":"e2e 探针","midParams":"object","after":[]}
+PASS  ui 目录场有主题登记的设计系统件（button 等）  -- keys=button,color,connectionLine,dropdown,movingHandle,select,slider,toolParamField,toolParamGrid,toolParamGroup,toolParamRatio,toolParamSlider
+PASS  ui 目录支持换主题（叠层：order 小者赢，原值仍在）  -- ids=e2e,default
+PASS  ui 目录换主题真的生效（节点控制栏按钮跟着换，撤回即复原）  -- {"baseline":3,"seen":true,"restored":false}
+PASS  能力包：宿主注册了标准四件（node/zoom/selected/tools）  -- keys=node,selected,selection,tools,zoom
+PASS  能力包：工厂按节点上下文产出实例（每节点一份）  -- cap.id=1, setLabel=function
+PASS  事件名白名单：零条“未声明的事件名”warn（§7.4）
+PASS  能力包：正常装配下零条 [capability] 提示
+PASS  dev 开关接通（ctx.isDev === true，dev server 下）  -- isDev=true
+PASS  node/shell 场换壳真的生效（假壳渲染到节点上，撤回即复原）  -- {"seenBefore":false,"seenAfter":true,"seenRestored":false}
+PASS  resize 拖拽中滚轮缩放：卡片右下角始终贴住鼠标（起手偏移恒定，无漂移）  -- 基准={"x":15,"y":15} 滚轮后={"x":14.9991455078125,"y":14.99908447265625} 再拖后={"x":14.99609375,"y":14.997314453125}
+PASS  底栏装配：overlay 槽宿主 + over:inset 覆盖层 + image 动作  -- {"bar":true,"overlay":1,"actions":7}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.vue-flow__node').nth(1)
+    - locator resolved to <div data-id="2" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-image nopan draggable selectable">…</div>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is visible, enabled and stable
+      - scrolling into view if needed
+      - done scrolling
+      - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events
+    - retrying click action
+      - waiting 100ms
+    56 × waiting for element to be visible, enabled and stable
+       - element is visible, enabled and stable
+       - scrolling into view if needed
+       - done scrolling
+       - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events
+     - retrying click action
+       - waiting 500ms
+
+    at D:\Code\Git\mini-canvas\packages\ui\e2e\canvas-e2e.mjs:489:15
+    at D:\Code\Git\mini-canvas\packages\ui\e2e\canvas-e2e.mjs:492:5 {
+  log: [
+    "  - waiting for locator('.vue-flow__node').nth(1)",
+    '    - locator resolved to <div data-id="2" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-image nopan draggable selectable">…</div>',
+    '  - attempting click action',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events',
+    '    - retrying click action',
+    '    - waiting 20ms',
+    '    2 × waiting for element to be visible, enabled and stable',
+    '      - element is visible, enabled and stable',
+    '      - scrolling into view if needed',
+    '      - done scrolling',
+    '      - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events',
+    '    - retrying click action',
+    '      - waiting 100ms',
+    '    56 × waiting for element to be visible, enabled and stable',
+    '       - element is visible, enabled and stable',
+    '       - scrolling into view if needed',
+    '       - done scrolling',
+    '       - <span data-v-050d96b3="" class="port-follow-zone port-follow-zone--source is-debug"></span> from <div data-id="1" tabindex="0" role="group" aria-roledescription="node" aria-describedby="vue-flow__node-desc-vue-flow-0" class="vue-flow__node vue-flow__node-text nopan draggable selected selectable">…</div> subtree intercepts pointer events',
+    '     - retrying click action',
+    '       - waiting 500ms'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v24.15.0

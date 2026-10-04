@@ -64,6 +64,37 @@ describe('SettingsPersist 配置持久化桥', () => {
     expect(store.get('k')).toBe('user-value') // snapshot 里的用户值重装生效
     persist.dispose()
   })
+
+  it('配置后端从本地切到云端后自动重读：刷新/换后端不丢云端设置', async () => {
+    // 模拟启动：本地内存后端（空）先 restore
+    const { store, save } = makePair()
+    store.define('g', { x: { type: 'number', default: 1 } }, 'p')
+    const persist = createSettingsPersist(store, save)
+    await persist.restore()
+    expect(store.get('x')).toBe(1)
+
+    // 云插件把 config 域切到云端；云端早已存过用户的设置
+    const cloud = new MemoryStorageAdapter()
+    cloud.set('config:settings', { x: 42 })
+    save.useAdapter('config', cloud)
+    await new Promise((r) => setTimeout(r, 0)) // 让桥的异步重读跑完
+    expect(store.get('x')).toBe(42)
+    persist.dispose()
+  })
+
+  it('后端切到尚未存过的空白云时，把本地当前值推上去（首次上云不丢设置）', async () => {
+    const { store, save } = makePair()
+    store.define('g', { y: { type: 'text', default: 'd' } }, 'p')
+    const persist = createSettingsPersist(store, save)
+    await persist.restore()
+    store.set('y', 'local-value')
+    await save.flush()
+
+    const cloud = new MemoryStorageAdapter()
+    save.useAdapter('config', cloud)
+    await new Promise((r) => setTimeout(r, 0))
+    await save.flush()
+    expect(await cloud.get('config:settings')).toEqual({ y: 'local-value' })
+    persist.dispose()
+  })
 })
-
-

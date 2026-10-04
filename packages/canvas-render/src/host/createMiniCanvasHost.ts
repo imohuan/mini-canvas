@@ -45,6 +45,7 @@ import {
   CANVAS_INTERACTION_SCHEMA,
 } from '../contracts/canvasInteractionSettings'
 import { defineThemePaletteSettings, installThemePalette } from './themePaletteSettings'
+import { defineThemeModeSetting, installThemeMode } from '../contracts/themeModeSettings'
 import type { PluginManifest } from './pluginManager'
 
 /** 宿主/装配处可装载的插件形态（对象 PluginModule 或 Service 类，cordis 类形态） */
@@ -206,6 +207,10 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // hiddenPlugins：canvas-base 是宿主自有装配（不是应用可装卸的业务插件），
   // 从 manager.list()/diagnose() 隐去 —— 画布基础服务对应用层是"环境"，不是"清单项"。
   const manager: PluginManager = createPluginManager(ctx, { hiddenPlugins: [base.name] })
+  // 把统一安装句柄也上架成一个服务：插件（如「插件管理」）能在运行期按名取到它，
+  // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
+  // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
+  ctx.inject('pluginManager', manager)
 
   // —— 冷启动插件：manifest 模式走 applyManifest(disabled/config覆盖/同id换版本)；缺省 coldPlugins(顺序装载) ——
   if (opts.manifest) {
@@ -236,6 +241,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 与上面交互配置同一套语义：渲染宿主级声明（scope='canvas-render'），热卸业务插件不回收；
   // 时序也一致：在 settingsPersist.restore 之前 define，用户已保存的配色能在 define 时命中为初值。
   defineThemePaletteSettings(interactionSettings)
+  // 主题模式（亮色/暗色）也声明进 settings：与交互配置同一套语义（宿主级、scope='canvas-render'、可持久化）。
+  // 时序同样在 settingsPersist.restore 之前 define，用户保存过的模式才能在 define 时命中为初值。
+  defineThemeModeSetting(interactionSettings)
 
   // 画布通用命令（建节点 / 删选中 / 撤销 / 重做）已收进基础插件（canvasBasePlugin.apply 里的
   // ctx.effect → registerCanvasCommands），宿主不再重复注册 —— 再注册会撞命令 id 抛错。
@@ -249,6 +257,9 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 色板落值：把"用户改过的那些格"写进 <html> 内联 CSS 变量（没改过的不写，CSS 侧默认值生效）。
   // 这步必须在 restore() 之后 —— 否则用户上次存的配色要等下一次改动才可见。
   const disposeThemePalette = installThemePalette(interactionSettings)
+  // 主题模式落值：把持久化的亮/暗写进 <html class="dark">。这步也必须在 restore() 之后 ——
+  // 否则用户上次存的模式要等下一次改动才生效（刷新后主题回退的成因）。
+  const disposeThemeMode = installThemeMode(interactionSettings)
 
   // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
   // 否则用户删光节点后刷新会重新长出默认 seed。
@@ -307,6 +318,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
       void save.flush()
       // 色板：解除订阅 + 清掉内联覆盖（否则"幽灵变量"会挡住下一个主题）
       disposeThemePalette()
+      disposeThemeMode()
       settingsPersist?.dispose()
       resources.dispose()
       // P1-16：停用即清理 window 暴露的 API 句柄（防旧画布残留可被误调）

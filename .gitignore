@@ -58,3 +58,6 @@ packages/ui/e2e/_shots/
 packages/ui/e2e/_probe-*.mjs
 docs/tmp/_scan/
 /_*.png
+
+# cloud-server 本地复现环境（机器本地，不入库）
+packages/cloud-server/.repro/

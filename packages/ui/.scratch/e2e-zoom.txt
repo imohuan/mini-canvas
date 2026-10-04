@@ -1,0 +1,20 @@
+PASS  画布渲染出节点 DOM  -- node 元素 = 2
+PASS  宿主句柄可读（window.MiniCanvasUI）
+PASS  seed 生效（2 个默认节点）  -- 实际 2: text,image
+PASS  doc 门面已装配（步骤 5a）
+PASS  canvas-base 不可卸载（决策 1 core）  -- {"ok":false,"reason":"core"}
+PASS  canvas-base 不在对外清单（环境而非插件项）  -- 23 个业务插件
+PASS  点「+ 文本」建出节点  -- 2 -> 3
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.evaluate: TypeError: Cannot read properties of null (reading 'getBoundingClientRect')
+    at eval (eval at evaluate (:311:30), <anonymous>:3:16)
+    at UtilityScript.evaluate (<anonymous>:313:16)
+    at UtilityScript.<anonymous> (<anonymous>:1:44)
+    at D:\Code\Git\mini-canvas\packages\ui\e2e\canvas-e2e.mjs:97:22 {
+  log: []
+}
+
+Node.js v24.15.0

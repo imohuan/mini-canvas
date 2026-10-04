@@ -60,7 +60,7 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   nodesDraggable: true,
   nodesConnectable: true,
   elementsSelectable: true,
-  selectNodesOnDrag: false, // v1 关（VueFlow 库默认开：拖节点顺手选中）
+  selectNodesOnDrag: true, // v1 关（VueFlow 库默认开：拖节点顺手选中）
   snapToGrid: false,
   snapGridX: 15,
   snapGridY: 15,
@@ -70,7 +70,7 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   panOnDrag: true,
   zoomOnDoubleClick: false, // v1 关（VueFlow 库默认开）
   minZoom: 0.2,
-  maxZoom: 2,
+  maxZoom: 3,
   // v1 开过（大画布性能），但 VueFlow 1.48 的视口剔除对 parentNode 子节点用"相对坐标"判定可见性
   //（getNodesInside 未合并父 computedPosition）→ 嵌套组的子节点会被误判视口外而"消失"。
   // VueFlow 库默认关 —— 嵌套组支持依赖它关闭，改回库默认。

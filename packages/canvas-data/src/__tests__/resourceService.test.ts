@@ -2,11 +2,32 @@ import { describe, it, expect } from 'vitest'
 import {
   ResourceStore,
   type ResourceUrlBackend,
-  type ResourcePersistence,
   sanitizeTransientResourceUrls,
   mediaUrlFieldsOf,
   restoreNodeMediaUrls,
 } from '../resourceService'
+import type { ResourceAdapter } from '../storage/types'
+
+/** 内存版资源后端（等价于本地的 IndexedDB 适配器，只是不碰真 DB） */
+function memoryResourceAdapter(): ResourceAdapter & { blobs: Map<string, Blob> } {
+  const blobs = new Map<string, Blob>()
+  let seq = 0
+  return {
+    id: 'memory-resource',
+    capability: {},
+    blobs,
+    async putResource(blob) {
+      seq += 1
+      const ref = 'res-' + seq
+      blobs.set(ref, blob)
+      return ref
+    },
+    async resolveResource(ref) {
+      return blobs.has(ref) ? 'blob:resolved-' + ref : undefined
+    },
+    async removeResource(ref) { blobs.delete(ref) },
+  }
+}
 
 /** 记录 create/revoke 调用的假 backend */
 function fakeBackend() {
@@ -48,25 +69,27 @@ describe('ResourceStore 资源生命周期', () => {
     expect(nodes[1].data.videoUrl).toBe('/uploads/ok.mp4')
   })
   it('资源 id 可跨页面恢复 Blob，旧 blob URL 不参与保存', async () => {
-    const blobs = new Map<string, { kind: string; resource: Blob }>()
-    const persistence: ResourcePersistence = {
-      async save(id, kind, resource) { blobs.set(id, { kind, resource }) },
-      async load(id) { return blobs.get(id) },
-      async remove(id) { blobs.delete(id) },
-    }
-    const urls: string[] = []
-    const rs = new ResourceStore({ createUrl: () => "blob:restored", revokeUrl() {} }, persistence)
-    const id = rs.register({ kind: 'image', url: 'blob:old', resource: new Blob(['x'], { type: 'image/png' }) })
-    await Promise.resolve()
-    expect(await rs.restore?.(id)).toBe('blob:old')
-    // 新页面由另一个 ResourceStore 实例读取同一持久化后端
-    const rs2 = new ResourceStore({ createUrl: (blob) => { urls.push(String((blob as Blob).size)); return "blob:new-1" }, revokeUrl() {} }, persistence)
-    expect(await rs2.restore?.(id, 'image')).toBe('blob:new-1')
-    expect(urls).toEqual(['1'])
-    const saved = sanitizeTransientResourceUrls([{ id: '1', data: { imageUrl: 'blob:old', resourceId: id, label: 'x' } }])
-    expect(saved[0].data).toEqual({ resourceId: id, label: 'x' })
+    // 存字节 → 只拿回 ref（不拿 URL）；显示地址靠 resolve 现算
+    const adapter = memoryResourceAdapter()
+    const rs = new ResourceStore(() => adapter, { revokeUrl() {} })
+    const ref = await rs.put(new Blob(['x'], { type: 'image/png' }), { kind: 'image', name: 'a.png' })
+    expect(ref).toBe('res-1')
+    expect(adapter.blobs.get(ref)?.size).toBe(1)
+    expect(await rs.resolve(ref)).toBe('blob:resolved-res-1')
+
+    // 新页面：另一个实例读同一份后端 → 按 ref 重新算出地址（旧地址已随页面消失）
+    const rs2 = new ResourceStore(() => adapter, { revokeUrl() {} })
+    expect(await rs2.resolve(ref)).toBe('blob:resolved-res-1')
+
+    // 落盘时 blob: 被清掉、resourceId 保留（刷新后靠它重建）
+    const saved = sanitizeTransientResourceUrls([{ id: '1', data: { imageUrl: 'blob:old', resourceId: ref, label: 'x' } }])
+    expect(saved[0].data).toEqual({ resourceId: ref, label: 'x' })
+    // 带 resourceId 的 dataURL：字节已在持久化资源表里，节点里这份是冗余副本 → 删
+    const dup = sanitizeTransientResourceUrls([{ id: '3', data: { imageUrl: 'data:image/png;base64,AAAA', resourceId: 'res-x' } }])
+    expect(dup[0].data.imageUrl).toBeUndefined()
+    // 不带 resourceId 的 dataURL（图片上传/裁剪/旋转/扩展的产物）：它是这张图**唯一**的一份 → 必须留下
     const large = sanitizeTransientResourceUrls([{ id: '2', data: { imageUrl: 'data:image/png;base64,' + 'A'.repeat(70000) } }])
-    expect(large[0].data.imageUrl).toBeUndefined()
+    expect(large[0].data.imageUrl).toBe('data:image/png;base64,' + 'A'.repeat(70000))
   })
   it('register 自动生成 URL 并返回稳定 id；url/alive/get 可读', () => {
     const { backend } = fakeBackend()

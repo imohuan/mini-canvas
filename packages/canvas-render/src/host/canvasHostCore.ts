@@ -329,22 +329,6 @@ export const DEFAULT_DEBUG_VISUAL: CanvasDebug = {
   connectionSnapDebugVisible: true,
 }
 
-/** 给一条源→目标连接生成稳定边 id（与内核 edgeStoreId 四元组语义对齐；无/默认 handle 保持 e-{s}-{t} 兼容）。
- *  B 项：带显式端口时纳入 handle，避免同端点不同端口互相覆盖。 */
-export function edgeId(
-  source: string,
-  target: string,
-  sourceHandle?: string,
-  targetHandle?: string,
-): string {
-  const sh = sourceHandle && sourceHandle !== 'source' ? sourceHandle : ''
-  const th = targetHandle && targetHandle !== 'target' ? targetHandle : ''
-  if (!sh && !th) return `e-${source}-${target}`
-  const srcPart = sh ? `${source}:${sh}` : source
-  const tgtPart = th ? `${target}:${th}` : target
-  return `e-${srcPart}-${tgtPart}`
-}
-
 /** VueFlow 消费的边最小形状（含端口句柄，B 项：多端口边按 handle 匹配端点） */
 export interface FlowEdge {
   id: string

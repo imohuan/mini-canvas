@@ -2,7 +2,7 @@
  * 设置面板关闭通道 —— 装配层必须订阅内核事件 settings:ui-close。
  *
  * 为什么需要这条测试（真实缺陷，用户报的“你的面板无法关闭”）：
- *   settingsPanel 是主题单赢家槽。默认皮 PluginSettingsDialog（plugin-theme-default）的
+ *   settingsPanel 是主题单赢家槽。默认皮 PluginSettingsContent（plugin-theme-default）的
  *   ✕ / 遮罩 / Esc 都只做一件事：ctx.emit('settings:ui-close')，等宿主把 settingsOpen 置 false。
  *   一旦装配层没人订阅这条事件，最直观的关闭入口（✕、点遮罩）就静默失效 ——
  *   没有报错、没有 warn，画面照旧，只能靠集成层自己兜的全局 Esc 逃出去。

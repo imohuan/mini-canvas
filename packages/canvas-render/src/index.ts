@@ -167,6 +167,18 @@ export type {
 } from './contracts/themePalette'
 // 色板接入宿主的两件（宿主 createMiniCanvasHost 已自用；自定义宿主可复用）
 export { defineThemePaletteSettings, installThemePalette } from './host/themePaletteSettings'
+// 主题模式（亮色/暗色）作为渲染层配置：声明 + 落值（宿主 createMiniCanvasHost 已自用）
+export {
+  THEME_MODE_KEY,
+  THEME_MODE_GROUP,
+  THEME_MODE_DEFAULT,
+  THEME_MODE_SCHEMA,
+  resolveThemeMode,
+  applyThemeMode,
+  defineThemeModeSetting,
+  installThemeMode,
+} from './contracts/themeModeSettings'
+export type { ThemeMode, ThemeModeSettingsLike } from './contracts/themeModeSettings'
 // 取色板当前值（JS 通道）：SVG 表现属性/canvas 2D 这类吃不到 var() 的地方用它
 export { useThemeColor } from './contracts/useThemeColor'
 // 节点"被单独选中"判定：操作栏/状态栏/生成面板统一用它做显隐（多选时全部收起，对齐 v1 NodeToolbar）
@@ -221,12 +233,21 @@ export * from './vueFlowBridge'
 export { default as CanvasHost } from './host/CanvasHost.vue'
 // 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @mini-canvas/ui
 export type { SettingsPanelSource, SettingSchema, SettingEntry } from './components/settingsPanelTypes'
-// 设置面板「标准字段控件渲染器」下发令牌（provide/inject）：默认设置面板 provide，
+// 设置内容「标准字段控件渲染器」下发令牌（provide/inject）：默认设置内容 provide，
 // 插件自定义 settingsGroup/<key> 内容组件 inject 后直接渲染某字段控件（无需反向依赖 theme-default）
 export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contracts/settingsField'
 // 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
 export { useUiComponent, uiComponent, uiNames, UI_NAMES } from './contracts/uiCatalog'
 export type { UiComponentHandle, UiSelectOption } from './contracts/uiCatalog'
+// 下拉浮层互斥登记表（所有下拉实现共用这一份：成品应用的全局下拉 + 主题默认件 + 它的 Select）
+export {
+  claimDropdownExclusive,
+  releaseDropdown,
+  openDropdownCount,
+  closeAllDropdowns,
+  broadcastCloseAllDropdowns,
+  DROPDOWN_CLOSE_ALL_EVENT,
+} from './contracts/dropdownExclusive'
 // 能力包（§4.5 / 案例 5 / 决策 9）：组件声明 needs，从 registryOf('capability') 按名取通用 hooks
 export {
   useCapabilities,
@@ -268,7 +289,6 @@ export {
   pruneDanglingEdges,
   assembleTheme,
   nodeShellSlot,
-  edgeId,
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,

@@ -26,6 +26,7 @@ function toSettingSchema(field: ConfigField): SettingSchema {
   return {
     type,
     default: field.default as string | number | boolean,
+    ...(field.optional !== undefined ? { optional: field.optional } : {}),
     ...(field.label !== undefined ? { label: field.label } : {}),
     ...(field.description !== undefined ? { description: field.description } : {}),
     ...(field.min !== undefined ? { min: field.min } : {}),
@@ -96,8 +97,17 @@ export function createCanvasCapabilityLayer(): CapabilityLayer {
         const itemSchema = toSettingSchema(field)
         if (!settings.has(key)) {
           settings.define(field.group ?? pluginName, { [key]: itemSchema }, pluginName)
-          // define 初值=itemSchema.default；装配校验后的 config 可能覆盖默认 → 补齐成单一数据源当前值
-          settings.set(key, config[key] as string | number | boolean)
+          // define 初值：优先用**用户已保存值**（define 命中快照时会自动取它），其次才用装配 config。
+          //
+          // 为什么不能无条件 set 成 config[key]：插件可能是**运行期热装**的（云端清单装进来的那些，
+          // 如 mini-map）。刷新时宿主先按本地后端恢复设置（快照里已有用户改过的值），随后才热装插件 ——
+          // 此时 define 已经把用户值作为初值取到了，再 set 一次 config[key]（= schema 默认）会把它盖回去。
+          // 用户看到的现象就是「改了配置、刷新就回退」（小地图宽高即此）。
+          const saved = settings.getSavedSnapshot()
+          const hasSaved = !!saved && Object.prototype.hasOwnProperty.call(saved, key)
+          if (!hasSaved) {
+            settings.set(key, config[key] as string | number | boolean)
+          }
         } else if (dev) {
           // P1-4：该 key 已被其它插件声明 → 不静默覆盖（先占者保留所有权），仅提示
           // eslint-disable-next-line no-console

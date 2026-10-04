@@ -114,6 +114,15 @@ export interface DocService {
   // ==================== 写（唯一写入口：自动进历史 + 调度落盘） ====================
   /** 按已注册类型建一个节点，返回 id（进历史） */
   createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
+  /**
+   * 取下一个可用节点 id（短数字 '1' '2' '3' …）并占掉它。
+   *
+   * 插件要在**建节点之前**拿到 id（先拿 id 才能连边 / 选中）时用它 —— 别再各自造
+   * `xxx-时间戳-随机` 那种 id：统一来源，画布里的 id 才是一个形态。
+   */
+  nextNodeId(): string
+  /** 取下一个可用边 id（短数字）并占掉它。与 nextNodeId 同一道理（两者各自独立计数）。 */
+  nextEdgeId(): string
   /** 批量插入节点（可指定 id/data/size/parentId）；返回插入数（进历史） */
   addNodes(inputs: AddNodeInput[]): number
   /** 改某节点（position/size/parentId/data）；节点不存在抛错（进历史） */
@@ -222,6 +231,8 @@ export function createDocService(sources: DocSources | DocSourceResolver): DocSe
 
     // —— 写（全部经 graph：唯一写入口） ——
     createNode: (type, position, data) => need('graph').createNode(type, position, data),
+    nextNodeId: () => need('nodeStore').nextId(),
+    nextEdgeId: () => need('edgeStore').nextId(),
     addNodes: (inputs) => need('graph').addNodes(inputs),
     updateNode: (id, patch) => need('graph').updateNode(id, patch),
     updateNodes: (entries) => need('graph').updateNodes(entries),

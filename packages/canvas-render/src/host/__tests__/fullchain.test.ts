@@ -355,7 +355,9 @@ describe('边下沉内核：edgeStore 增删 + 撤销 + 持久化往返', () => 
       expect(es).toHaveLength(1)
       expect(es[0].type).toBe('custom')
       // 渲染层形状：CanvasHost.syncFromStore 会映射成 {id,type,source,target}
-      expect(es[0]).toMatchObject({ id: expect.stringMatching(/^e-1-2$/), source: '1', target: '2' })
+      // id 是自增数字（与节点号一套规则），这里断言的是"这条边被完整恢复了"
+      expect(es[0]).toMatchObject({ source: '1', target: '2' })
+      expect(es[0].id).toBeTruthy()
       host.stop()
     }
   })
@@ -440,5 +442,4 @@ describe('撤销后刷新闭环（P0-2 完整证据）', () => {
     h2.stop()
   })
 })
-
 

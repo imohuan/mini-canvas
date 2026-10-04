@@ -1,7 +1,7 @@
 /**
  * settingsField.ts —— 设置面板「字段渲染器」下发令牌（provide/inject）。
  *
- * 背景：theme-default 的默认设置面板 PluginSettingsDialog 会把标准 schema 字段控件
+ * 背景：theme-default 的默认设置内容 PluginSettingsContent 会把标准 schema 字段控件
  * （SettingsSchemaField：color/number/boolean/select/text + 描述）provide 出来，
  * 这样**别的插件自己注册的 settingsGroup/<key> 内容组件**（自定义预览UI等）不必反向依赖
  * theme-default，就能 `inject` 到该渲染器，直接 `<component :is>` 摆出某个字段的标准控件。

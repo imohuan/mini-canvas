@@ -29,6 +29,7 @@ export * from './storage/types'
 export * from './storage/keys'
 export * from './storage/memoryAdapter'
 export * from './storage/localStorageAdapter'
+export * from './storage/indexedDbResourceAdapter'
 export * from './storage/SaveService'
 
 // 画布语义层（节点/主题注册表、能力段、连接规则、菜单、建节点）

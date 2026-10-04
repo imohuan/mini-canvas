@@ -213,7 +213,8 @@ describe('GraphDocument —— 唯一写入口', () => {
     // 子节点父被删 → parentId 清掉
     expect(nodeStore.getNode(child)?.parentId).toBeUndefined()
     // 只删 parent：parent→child 被级联清，child→other 与两端存活节点保留
-    expect(edgeStore.getEdges().map((e) => e.id)).toEqual(['e-2-3'])
+    // 边的 id 现在是自增数字；这里断言的是"留下了哪条边"（按端点认），不是 id 形态
+    expect(edgeStore.getEdges().map((e) => e.source + '->' + e.target)).toEqual(['2->3'])
     expect(selection.has(parent)).toBe(false)
     // 未删节点仍保留选中（pruneSelection 只移幽灵，不清有效选中）
     expect(selection.has(child)).toBe(true)

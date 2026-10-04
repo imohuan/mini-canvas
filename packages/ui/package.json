@@ -29,7 +29,10 @@
     "@floating-ui/vue": "^1.1.11",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
+    "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
+    "@mini-canvas/plugin-agent": "workspace:*",
+    "@mini-canvas/plugin-cloud-client": "workspace:*",
     "@mini-canvas/plugin-align-arrange": "workspace:*",
     "@mini-canvas/plugin-align-guide": "workspace:*",
     "@mini-canvas/plugin-auto-layout": "workspace:*",
@@ -43,6 +46,7 @@
     "@mini-canvas/plugin-mini-map": "workspace:*",
     "@mini-canvas/plugin-multi-select": "workspace:*",
     "@mini-canvas/plugin-node-3d-preview": "workspace:*",
+    "@mini-canvas/plugin-node-audio": "workspace:*",
     "@mini-canvas/plugin-node-find": "workspace:*",
     "@mini-canvas/plugin-node-image": "workspace:*",
     "@mini-canvas/plugin-node-image-compare": "workspace:*",
@@ -55,7 +59,8 @@
     "@mini-canvas/plugin-web2api-tools": "workspace:*",
     "@vueuse/core": "^14.3.0",
     "lucide-vue-next": "^1.0.0",
-    "motion-v": "^2.4.4"
+    "motion-v": "^2.4.4",
+    "prosemirror-editor-bundle": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
