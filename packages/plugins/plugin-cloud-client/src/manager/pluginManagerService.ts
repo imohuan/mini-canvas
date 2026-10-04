@@ -631,8 +631,21 @@ export function createPluginManagerService(
     })
     const json = (await res.json()) as { ok?: boolean; error?: string }
     if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 安装失败：' + res.status)
-    // 装完重拉本地清单：新插件的前端半会出现在 rows 里
+    // 装完重拉本地清单（新插件的前端半这时才出现在 rows 里），并把它的**前端半立刻装进内核**——
+    // 用户点一次「安装」就该看到插件活，而不是还要在本地列表里再点一次（实测踩过：装完是"未安装"）。
     await refresh()
+    await installFrontHalfOfNpm(pkg)
+  }
+
+  /**
+   * 把刚经 NPM 装进来的那个包的前端半装进内核。
+   * 按包名对应到 catalog 行的 id（落盘目录名 = 包名去掉 @ 后把 / 换成 __）。
+   */
+  async function installFrontHalfOfNpm(pkg: string): Promise<void> {
+    const wantId = pkg.replace(/^@/, '').replace('/', '__')
+    const row = state.rows.find((r) => r.entry.id === wantId)
+    if (!row || row.installed) return
+    await install(row.entry.id, { serverConfirm: true })
   }
 
   async function updateFromNpm(pkg: string): Promise<{ updated: boolean; to?: string }> {
@@ -644,7 +657,13 @@ export function createPluginManagerService(
     })
     const json = (await res.json()) as { ok?: boolean; updated?: boolean; to?: string; error?: string }
     if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 更新失败：' + res.status)
+    // 更新后同样把前端半刷成新产物：先卸内核里的旧版，再重装（地址带破缓存参数，见 reinstall）
     await refresh()
+    if (json.updated === true) {
+      const wantId = pkg.replace(/^@/, '').replace('/', '__')
+      const row = state.rows.find((r) => r.entry.id === wantId)
+      if (row) await reinstall(row.entry.id)
+    }
     return { updated: json.updated === true, to: json.to }
   }
 
@@ -657,6 +676,11 @@ export function createPluginManagerService(
     })
     const json = (await res.json()) as { ok?: boolean; error?: string }
     if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 卸载失败：' + res.status)
+    // 卸载前先把内核里的**前端半**摘掉 —— 后端只删磁盘文件，不会动浏览器里已装载的插件
+    // （实测踩过：文件删了但面板还活着）。用卸前的 rows 找它的 id（refresh 后行就没了）。
+    const wantId = pkg.replace(/^@/, '').replace('/', '__')
+    const wasInstalled = state.rows.find((r) => r.entry.id === wantId)?.installed === true
+    if (wasInstalled) await uninstall(wantId)
     await refresh()
   }
 

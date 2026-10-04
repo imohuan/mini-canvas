@@ -259,4 +259,39 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     const list = await svc.listNpmInstalled()
     expect(list[0].version).toBe('1.1.0')
   })
+
+  it('installFromNpm 装完后把前端半自动装进内核（用户点一次就该活）', async () => {
+    // catalog 里带 npm 装进来的那条（id = 包名去 @ 后 / 换 __）
+    const catalogWithShowcase = {
+      ok: true,
+      plugins: [{ id: 'imohuan__plugin-showcase', name: 'showcase', title: '展示', url: '/plugins/imohuan__plugin-showcase/plugin-showcase.js' }],
+    }
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    // 第一次 catalog 拉取（install 之前的 refresh）没有 showcase；install 之后才有 —— 用计数器模拟
+    let catalogCalls = 0
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      if (u.includes('/api/npm-plugins/install')) return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response
+      if (u.includes('/api/npm-plugins/installed')) return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [] }), text: async () => '' } as Response
+      // catalog：首次空、之后带 showcase
+      catalogCalls += 1
+      return { ok: true, status: 200, json: async () => (catalogCalls <= 1 ? { ok: true, plugins: [] } : catalogWithShowcase), text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    await svc.installFromNpm('@imohuan/plugin-showcase', { serverConfirm: true })
+    // 前端半确实进了内核（假宿主的键是 UMD 全局名推导出的模块名）
+    expect([...host.installed.keys()].some((k) => /showcase/i.test(k))).toBe(true)
+    expect(svc.state.rows.find((r) => r.entry.id === 'imohuan__plugin-showcase')?.installed).toBe(true)
+  })
 })
