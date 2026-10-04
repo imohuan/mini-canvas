@@ -104,7 +104,7 @@ function checkDeleteList(v: unknown): string | null {
 /** 校验一条新增/更新的形状；返回错误文案或 null */
 function checkNodeEntry(entry: unknown, kind: "add" | "update"): string | null {
   if (!isPlainObject(entry)) return `${kind} 的每一项必须是对象`
-  // 新增时 id 可省略（服务端生成一个 ai- 前缀的）；给了就必须是字符串。更新则必须给 id。
+  // 新增时 id 可省略（服务端发一个自增数字号）；给了就必须是字符串。更新则必须给 id。
   if (kind === 'update' ? typeof entry.id !== 'string' : entry.id !== undefined && typeof entry.id !== 'string') {
     return kind === 'update' ? 'update 的 id 必须是字符串' : 'add 的 id 给了就必须是字符串'
   }

@@ -18,7 +18,8 @@ let srv: CloudServer
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-' + 'routes-'))
   // 不传 ui/plugins：单测不依赖仓库里的构建产物
-  srv = await createCloudServer({ dir })
+  // 关掉 provider 目录的自动重载：单测不需要定时器（避免影响用例与退出）
+  srv = await createCloudServer({ dir, watchProviders: false })
 })
 
 afterEach(async () => {
@@ -51,119 +52,125 @@ async function call(method: string, url: string, body?: unknown) {
   return { status: res.status, json, text, headers: res.headers }
 }
 
-describe('GET/PUT/DELETE /api/kv', () => {
-  it('未保存过的 key → 404（不是 200 + null）', async () => {
-    const r = await call('GET', '/api/kv/canvas/graph')
-    expect(r.status).toBe(404)
+describe('画布：GET/PUT /api/canvases/*', () => {
+  it('列出画布：一开始没有画布 → 空数组', async () => {
+    const r = await call('GET', '/api/canvases')
+    expect(r.status).toBe(200)
+    expect(r.json).toEqual({ ok: true, canvases: [] })
   })
 
-  it('PUT 后能 GET 回原值，并在磁盘留下 kv 文件', async () => {
-    const put = await call('PUT', '/api/kv/canvas/graph', { value: [{ id: '1' }] })
+  it('没存过的画布 → 空节点 + view null（200，不是 404：首次打开要能渲染）', async () => {
+    const r = await call('GET', '/api/canvases/default')
+    expect(r.status).toBe(200)
+    expect(r.json).toMatchObject({ ok: true, nodes: [], edges: [], view: null })
+  })
+
+  it('PUT 整包存 → GET 读回同一份，磁盘上是 canvases/default/canvas.json', async () => {
+    const put = await call('PUT', '/api/canvases/default', { nodes: [{ id: '1' }], edges: [] })
     expect(put.status).toBe(200)
     expect(put.json).toEqual({ ok: true })
 
-    const get = await call('GET', '/api/kv/canvas/graph')
-    expect(get.status).toBe(200)
-    expect(get.json).toEqual({ value: [{ id: '1' }] })
+    const get = await call('GET', '/api/canvases/default')
+    expect(get.json.nodes).toEqual([{ id: '1' }])
+    expect(get.json.edges).toEqual([])
 
-    // 物理文件名把 `:` 转义掉了（Windows 文件名不允许冒号）
-    const onDisk = await fs.readdir(path.join(dir, 'kv'))
-    expect(onDisk).toContain('canvas%3Agraph.json')
+    const onDisk = await fs.readdir(path.join(dir, 'canvases', 'default'))
+    expect(onDisk).toContain('canvas.json')
+    // 一份画布 = 一个文件夹，不该再有按 key 拆的 canvas:graph 之类的文件
+    expect(onDisk.filter((n) => n.includes('%3A'))).toHaveLength(0)
   })
 
-  it('保存过空数组 → GET 回 200 且值是 []（与"从未保存"区分开）', async () => {
-    await call('PUT', '/api/kv/canvas/graph', { value: [] })
-    const r = await call('GET', '/api/kv/canvas/graph')
+  it('存过空数组 → 读回还是空数组（与"从未保存过"区分开）', async () => {
+    await call('PUT', '/api/canvases/default', { nodes: [], edges: [] })
+    const r = await call('GET', '/api/canvases/default')
     expect(r.status).toBe(200)
-    expect(r.json).toEqual({ value: [] })
+    expect(r.json.nodes).toEqual([])
   })
 
-  it('DELETE 后 GET 回到 404', async () => {
-    await call('PUT', '/api/kv/canvas/graph', { value: [1] })
-    const del = await call('DELETE', '/api/kv/canvas/graph')
-    expect(del.status).toBe(200)
-    expect(del.json).toEqual({ ok: true, removed: true })
-    expect((await call('GET', '/api/kv/canvas/graph')).status).toBe(404)
+  it('PUT view → GET 读回视口；存画布本体不会把视口冲掉', async () => {
+    await call('PUT', '/api/canvases/default/view', { x: 10, y: 20, zoom: 1.5 })
+    await call('PUT', '/api/canvases/default', { nodes: [{ id: '1' }], edges: [] })
+    const r = await call('GET', '/api/canvases/default')
+    expect(r.json.view).toEqual({ x: 10, y: 20, zoom: 1.5 })
+    expect(r.json.nodes).toEqual([{ id: '1' }])
+  })
+
+  it('歪画布 id / 歪 body 被挡下（400），不落脏文件', async () => {
+    expect((await call('GET', '/api/canvases/%2E%2E%2Fevil')).status).toBe(400)
+    expect((await call('PUT', '/api/canvases/default', { nope: 1 })).status).toBe(400)
+    expect((await call('PUT', '/api/canvases/default', 'not json')).status).toBe(400)
+    // 上面几次失败之后，画布目录里不该出现文件
+    expect(await fs.readdir(path.join(dir, 'canvases')).catch(() => [])).toEqual([])
+  })
+
+  it('旧 canvas:* key 已下线（写入明确报错，而不是悄悄写一份没人读的数据）', async () => {
+    const r = await call('PUT', '/api/kv/canvas/graph', { value: [{ id: '1' }] })
+    expect(r.status).toBe(400)
+    expect(String(r.json.error)).toContain('/api/canvases')
+  })
+})
+
+describe('KV：设置 / 快捷这类小数据仍按 key 存', () => {
+  it('未保存过的 key → 404（不是 200 + null）', async () => {
+    expect((await call('GET', '/api/kv/config/theme')).status).toBe(404)
+  })
+
+  it('PUT 后能 GET 回原值，并在磁盘留下 kv 文件', async () => {
+    const put = await call('PUT', '/api/kv/config/theme', { value: { mode: 'dark' } })
+    expect(put.status).toBe(200)
+    const get = await call('GET', '/api/kv/config/theme')
+    expect(get.status).toBe(200)
+    expect(get.json).toEqual({ value: { mode: 'dark' } })
+    // 落盘布局：全部小数据装在一个 settings.json 里，按 type 分桶
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'settings.json'), 'utf8'))
+    expect(raw).toEqual({ config: { theme: { mode: 'dark' } } })
   })
 
   it('歪 type / 歪 body 被挡下（400），不会写脏数据', async () => {
     expect((await call('GET', '/api/kv/evil/x')).status).toBe(400)
-    expect((await call('PUT', '/api/kv/canvas/graph', { nope: 1 })).status).toBe(400)
-    expect((await call('PUT', '/api/kv/canvas/graph', 'not json')).status).toBe(400)
-    // 空画布目录里不该因为上面几次失败而出现文件
-    await expect(fs.readdir(path.join(dir, 'kv'))).rejects.toThrow()
-  })
-
-  it('可列某作用域下的 key（后台查看用）', async () => {
-    await call('PUT', '/api/kv/canvas/graph', { value: 1 })
-    await call('PUT', '/api/kv/canvas/graph-edges', { value: [] })
-    await call('PUT', '/api/kv/config/theme', { value: 2 })
-    const r = await call('GET', '/api/kv/canvas')
-    expect(r.status).toBe(200)
-    expect(r.json.keys).toEqual(['graph', 'graph-edges'])
-  })
-
-  it('?values=1 连值一起给（客户端一次读回整张画布，免掉三个 GET 里未命中那两个的 404 噪音）', async () => {
-    await call('PUT', '/api/kv/canvas/graph', { value: [1, 2] })
-    const r = await call('GET', '/api/kv/canvas/?values=1')
-    expect(r.status).toBe(200)
-    expect(r.json.keys).toEqual(['graph'])
-    expect(r.json.values).toEqual({ graph: [1, 2] })
-    // 只回真的存过的 key：没保存过的不出现（客户端据此当 undefined）
-    expect(r.json.values['graph-edges']).toBeUndefined()
-  })
-
-  it('单项 GET 的 404 语义不受批量口影响', async () => {
-    await call('PUT', '/api/kv/canvas/graph', { value: [] })
-    expect((await call('GET', '/api/kv/canvas/graph')).status).toBe(200)
-    expect((await call('GET', '/api/kv/canvas/graph-edges')).status).toBe(404)
+    expect((await call('PUT', '/api/kv/config/theme', { nope: 1 })).status).toBe(400)
   })
 })
 
-describe('POST /api/files + GET /uploads', () => {
-  it('上传 → 返回同源 url，回读字节完全一致', async () => {
+describe('画布资源：POST/GET /api/canvases/:id/resources', () => {
+  it('上传 → 返回 res: 引用，回读字节完全一致', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3])
-    const up = await call('POST', '/api/files?name=a.png', bytes)
+    const up = await call('POST', '/api/canvases/default/resources?name=a.png', bytes)
     expect(up.status).toBe(200)
-    expect(up.json.url).toMatch(/^\/uploads\/[0-9a-f]{16}\.png$/)
-    expect(up.json.mime).toBe('image/png')
+    expect(up.json.ref).toMatch(/^res:[0-9a-f]{16}\.png$/)
     expect(up.json.size).toBe(bytes.byteLength)
 
-    const res = await srv.app.fetch(new Request('http://localhost' + up.json.url))
+    const res = await srv.app.fetch(new Request('http://localhost/api/canvases/default/resources/' + up.json.hashName))
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('image/png')
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes)
   })
 
-  it('没给文件名时用 Content-Type 反推扩展名', async () => {
-    const res = await srv.app.fetch(
-      new Request('http://localhost/api/files', {
-        method: 'POST',
-        body: new Uint8Array([1, 2, 3]),
-        headers: { 'content-type': 'image/webp' },
-      }),
-    )
-    const json: any = await res.json()
-    expect(json.id.endsWith('.webp')).toBe(true)
-  })
-
   it('白名单外扩展名不按原名存（.html 挡掉，防同源 XSS）', async () => {
-    const up = await call('POST', '/api/files?name=evil.html', new Uint8Array([60, 104, 49, 62]))
-    expect(up.json.id).not.toMatch(/\.html$/)
-    expect(up.json.mime).toBe('application/octet-stream')
+    const up = await call('POST', '/api/canvases/default/resources?name=evil.html', new Uint8Array([60, 104, 49, 62]))
+    expect(up.json.hashName).not.toMatch(/\.html$/)
   })
 
-  it('空文件 400；不存在的 uploads 404', async () => {
-    expect((await call('POST', '/api/files', new Uint8Array([]))).status).toBe(400)
-    expect((await srv.app.fetch(new Request('http://localhost/uploads/0123456789abcdef.png'))).status).toBe(404)
+  it('空文件 400；不存在的资源 404', async () => {
+    expect((await call('POST', '/api/canvases/default/resources', new Uint8Array([]))).status).toBe(400)
+    expect(
+      (await srv.app.fetch(new Request('http://localhost/api/canvases/default/resources/0123456789abcdef.png'))).status,
+    ).toBe(404)
   })
 
-  it('同内容上传两次 → 只有一份文件', async () => {
+  it('同内容上传两次 → 只有一份文件（按内容哈希去重）', async () => {
     const bytes = new Uint8Array([5, 5, 5])
-    const a = await call('POST', '/api/files?name=x.png', bytes)
-    const b = await call('POST', '/api/files?name=x.png', bytes)
-    expect(a.json.id).toBe(b.json.id)
-    expect(await fs.readdir(path.join(dir, 'uploads'))).toHaveLength(1)
+    const a = await call('POST', '/api/canvases/default/resources?name=x.png', bytes)
+    const b = await call('POST', '/api/canvases/default/resources?name=x.png', bytes)
+    expect(a.json.hashName).toBe(b.json.hashName)
+    expect(await fs.readdir(path.join(dir, 'canvases', 'default', 'resources'))).toHaveLength(1)
+  })
+
+  it('资源落在自己的画布文件夹里（两张画布互不可见）', async () => {
+    const bytes = new Uint8Array([7, 7, 7])
+    await call('POST', '/api/canvases/a/resources?name=x.png', bytes)
+    expect(await fs.readdir(path.join(dir, 'canvases', 'a', 'resources'))).toHaveLength(1)
+    expect(await fs.readdir(path.join(dir, 'canvases', 'b', 'resources')).catch(() => [])).toEqual([])
   })
 })
 

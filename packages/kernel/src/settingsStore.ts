@@ -26,6 +26,12 @@ export interface SettingSchema {
   type: 'color' | 'number' | 'select' | 'boolean' | 'text'
   /** 默认值（作为单一数据源的初始值） */
   default: string | number | boolean
+  /**
+   * color 用：是否允许留空（用户把颜色删掉 → 回落主题色）。
+   * 由插件的 Config schema（configSchema.ConfigField.optional）映射而来；
+   * 设置面板据此渲染"清除"按钮（空值 = 跟随主题强调色）。缺省 false。
+   */
+  optional?: boolean
   /** UI 显示文案 */
   label?: string
   /** UI 描述/说明（可选，控件下方小字；缺省不显示） */
@@ -224,11 +230,11 @@ export class SettingsStore {
       if (schema.min !== undefined && value < schema.min) return schema.min
       if (schema.max !== undefined && value > schema.max) return schema.max
     }
+    // 可留空（optional）的颜色：空串合法（= 没有自定义色，消费方回落主题色）。
+    // 非 optional 的颜色维持原样（空串会被消费方当作脏值回落默认，这里不额外拦截）。
     return value
   }
 }
-
-
 
 
 

@@ -3,3 +3,5 @@ packages:
   - 'packages/plugins/*'
 allowBuilds:
   vue-demi: false
+  # cloud-server 的 esbuild 打包需要它的平台二进制（postinstall 装），否则 bundle 跑不起来
+  esbuild: true

@@ -40,6 +40,16 @@ describe('Registry · add / list（栈序 = order 升序从外到里）', () => 
     expect(r.get('t', 'x')!.value).toBe('v2')
   })
 
+  it('同一个放置方同 id 再 add = 替换自己那层（不叠高、不泄漏）', () => {
+    const r = new RegistryImpl<string>()
+    const a = r.bind('plugin-a')
+    a.add('k', 'v1', { id: 'x' })
+    a.add('k', 'v2', { id: 'x' })
+    a.add('k', 'v3', { id: 'x' })
+    expect(r.ids('k')).toEqual(['x'])
+    expect(r.get('k', 'x')!.value).toBe('v3')
+  })
+
   it('一个键可容纳多条（叠加，不重复抛错）', () => {
     const r = new RegistryImpl<string>()
     r.add('t', 'A')
@@ -243,3 +253,87 @@ describe('Registry · bind 的自动回收', () => {
   })
 })
 
+/**
+ * 不同插件用同一个 id（底栏动作就是这种：内置 web2api 与云端 cloud-client 都注册
+ * 同名的 web2api:* 动作）必须**叠层，不能互删**。
+ *
+ * 为什么单开一组：早先 add 是"同 id 破坏性替换" —— 后注册者把先注册者从表里删掉，
+ * 后注册者一卸载，先注册者的那条也整条消失（用户实测报过）。这组用例钉住"叠层 + 撤销露底"。
+ */
+describe('Registry · 不同放置方同 id = 叠层（撤销上层，下层露出来）', () => {
+  it('后注册者盖住先注册者；撤销后注册者 → 先注册者自动恢复（不是整条消失）', () => {
+    const r = new RegistryImpl<string>()
+    const a = r.bind('plugin-a')
+    const b = r.bind('plugin-b')
+    a.add('node/bar', 'A 的动作', { id: 'web2api:x' })
+    const hb = b.add('node/bar', 'B 的动作', { id: 'web2api:x' })
+
+    // 台面上只看得见一条（后注册的 B 在外）
+    expect(r.list('node/bar')).toHaveLength(1)
+    expect(r.get('node/bar', 'web2api:x')!.value).toBe('B 的动作')
+    expect(r.get('node/bar', 'web2api:x')!.source).toBe('plugin-b')
+
+    // 卸载 B：只是把它那层拿走，A 那层露出来 —— 这是修复的核心断言
+    hb.dispose()
+    expect(r.get('node/bar', 'web2api:x')!.value).toBe('A 的动作')
+    expect(r.get('node/bar', 'web2api:x')!.source).toBe('plugin-a')
+  })
+
+  it('反序撤销：先撤下层（A）→ 上层（B）不受影响；再撤 B → 该 id 才真正消失', () => {
+    const r = new RegistryImpl<string>()
+    const a = r.bind('plugin-a')
+    const b = r.bind('plugin-b')
+    const ha = a.add('k', 'A', { id: 'x' })
+    const hb = b.add('k', 'B', { id: 'x' })
+
+    ha.dispose() // 撤下面那层
+    expect(r.get('k', 'x')!.value).toBe('B')
+    hb.dispose()
+    expect(r.has('k')).toBe(false)
+  })
+
+  it('三层叠加：逐层撤销按后进先出露出来', () => {
+    const r = new RegistryImpl<string>()
+    const h1 = r.bind('p1').add('k', '1', { id: 'x' })
+    const h2 = r.bind('p2').add('k', '2', { id: 'x' })
+    const h3 = r.bind('p3').add('k', '3', { id: 'x' })
+    expect(r.get('k', 'x')!.value).toBe('3')
+    h3.dispose()
+    expect(r.get('k', 'x')!.value).toBe('2')
+    h2.dispose()
+    expect(r.get('k', 'x')!.value).toBe('1')
+    h1.dispose()
+    expect(r.has('k')).toBe(false)
+  })
+
+  it('bind 的自动回收（= 插件卸载）走的也是"只摘自己那层"', () => {
+    const table = new RegistryImpl<string>()
+    const undoB: Array<() => void> = []
+    const a = table.bind('plugin-a')
+    const b = table.bind('plugin-b', (fn) => undoB.push(fn))
+    a.add('k', 'A', { id: 'x' })
+    b.add('k', 'B', { id: 'x' })
+    expect(table.get('k', 'x')!.value).toBe('B')
+
+    // 模拟卸载 plugin-b
+    for (const fn of undoB) fn()
+    expect(table.get('k', 'x')!.value).toBe('A')
+  })
+
+  it('显式 remove(key,id) 清该 id 的**整摞**（彻底不要这个 id 了）', () => {
+    const r = new RegistryImpl<string>()
+    r.bind('plugin-a').add('k', 'A', { id: 'x' })
+    r.bind('plugin-b').add('k', 'B', { id: 'x' })
+    expect(r.remove('k', 'x')).toBe(true)
+    expect(r.has('k')).toBe(false)
+  })
+
+  it('叠层时显式 order 仍决定谁在外（小者在外，压过后注册的新层）', () => {
+    const r = new RegistryImpl<string>()
+    const a = r.bind('plugin-a')
+    const b = r.bind('plugin-b')
+    a.add('k', 'A(高级皮)', { id: 'x', order: -1 })
+    b.add('k', 'B(普通)', { id: 'x', order: 0 })
+    expect(r.get('k', 'x')!.value).toBe('A(高级皮)')
+  })
+})

@@ -52,6 +52,13 @@ export interface ConfigField {
   item?: ConfigField
   /** object 用：递归子 schema（缺省则只做"是普通对象"检查，内部原样保留） */
   fields?: ConfigSchema
+  /**
+   * color 用：是否允许留空（用户把颜色删掉）。
+   *
+   * 语义（用户口径）：删掉自定义色 → 回落主题色；只有该颜色存在时才用它。
+   * 允许留空时空串是合法值（表示没有自定义色），校验放行；缺省 false = 必须有颜色。
+   */
+  optional?: boolean
 }
 
 /** 对象级 config schema：字段名 → 字段 schema */
@@ -183,6 +190,8 @@ function validateValue(key: string, field: ConfigField, raw: unknown): ConfigVal
       return raw
     }
     case 'color': {
+      // optional 色允许空串（= 没有自定义色，消费方回落主题色）
+      if (field.optional === true && raw === '') return raw
       if (typeof raw !== 'string' || !/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(raw)) {
         throw new ConfigError(`"${key}" expected hex color but got ${describe(raw)}`)
       }
@@ -247,4 +256,3 @@ function describe(v: unknown): string {
   if (typeof v === 'object') return 'an object'
   return `"${String(v)}"`
 }
-

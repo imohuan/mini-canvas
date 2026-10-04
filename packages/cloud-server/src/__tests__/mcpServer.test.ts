@@ -11,8 +11,12 @@
 import { describe, it, expect } from 'vitest'
 import { TOOL_LIST, listTools, createCanvasMcpServer } from '../mcp/server'
 import { CanvasDocument } from '../mcp/canvasDoc'
-import { KvStore } from '../store/kvStore'
-import { FileStore } from '../store/fileStore'
+import { CanvasStore } from '../store/canvasStore'
+import { CanvasResourceStore } from '../store/canvasResources'
+import { ProviderRegistry } from '../providers/registry'
+import { HistoryStore } from '../tasks/history'
+import { TaskManager } from '../tasks/taskManager'
+import { createWeb2ApiProvider } from '../providers/web2api/index'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -33,6 +37,13 @@ describe('MCP 工具清单', () => {
     }
   })
 
+  it('生成三件套都在（不开页面也要能下单）', () => {
+    const names = listTools().map((t) => t.name)
+    for (const n of ['generation.actions', 'generation.create', 'generation.status']) {
+      expect(names).toContain(n)
+    }
+  })
+
   it('每个工具都有非空描述（AI 靠描述决定用哪个）', () => {
     for (const t of TOOL_LIST) {
       expect(t.description.length).toBeGreaterThan(5)
@@ -42,7 +53,17 @@ describe('MCP 工具清单', () => {
   it('清单与真实注册一致：TOOL_LIST 里的名字，server 上都注册了', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-tools-'))
     try {
-      const server = createCanvasMcpServer(new CanvasDocument(new KvStore(dir), new FileStore(dir)))
+      // 生成三件套要 registry + tasks 才注册得上（不开页面也能下单）
+      const doc = new CanvasDocument(new CanvasStore(dir), new CanvasResourceStore(dir))
+      const registry = new ProviderRegistry()
+      registry.add(createWeb2ApiProvider())
+      const tasks = new TaskManager({
+        doc,
+        registry,
+        history: new HistoryStore(dir),
+        resolveResourceUrl: (_c, ref) => ref,
+      })
+      const server = createCanvasMcpServer(doc, registry, tasks)
       // SDK 内部把已注册工具放在 _registeredTools；用它核对清单没有"列了却没注册"的落空项
       const registered = Object.keys(
         (server as unknown as { _registeredTools?: Record<string, unknown> })._registeredTools ?? {},

@@ -42,6 +42,8 @@ packages/mcp-server/workspace
 
 # cloud-server 打包时收集的随包产物（由 scripts/bundle-assets.mjs 生成，不入库）
 packages/cloud-server/assets/
+# cloud-server 资源构建的源码指纹（由 scripts/build-assets-parallel.mjs 生成，机器本地缓存、不入库）
+packages/cloud-server/.build-stamp.json
 
 # 由插件 pnpm build 生成后复制到此，供 plugin-load demo 加载（勿手改）
 packages/canvas-core-v2/demo-web/plugins/

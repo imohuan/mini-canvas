@@ -7,12 +7,12 @@
  *   2. 外部插件清单被读到，cloud-save 真的装上（ctx 服务在）
  *   3. 建节点/连线 → **服务器磁盘上的 json 随之变化**
  *   4. 换一个全新浏览器 profile（= 换一台机器）打开 → **画布完整恢复**  ← 云端保存的核心证据
- *   5. 大图搬上服务器 → 节点换成 /uploads/... → 刷新后仍能取回真字节
+ *   5. 大图搬上服务器 → 节点换成画布内引用 res:<hash> → 刷新后仍能取回真字节
  *   6. 全程控制台零报错、零 4xx
  *
  * 跑法（先构建 ui 与插件）：
  *   cd packages/ui && pnpm build
- *   cd packages/plugins/plugin-cloud-save && pnpm build
+ *   cd packages/plugins/plugin-cloud-client && pnpm build
  *   cd packages/cloud-server && pnpm e2e
  *
  * 服务由本脚本自己起（随机端口 + 临时数据目录），跑完自动清理，不污染你的工作区。
@@ -44,9 +44,9 @@ async function main(): Promise<void> {
     console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd packages/ui && pnpm build`)
     process.exit(2)
   }
-  const pluginBundle = path.join(PLUGINS_DIR, 'plugin-cloud-save/dist/plugin-cloud-save.js')
+  const pluginBundle = path.join(PLUGINS_DIR, 'plugin-cloud-client/dist/plugin-cloud-client.js')
   if (!exists(pluginBundle)) {
-    console.error(`✗ 没找到云端保存插件产物：${pluginBundle}\n  请先执行：cd packages/plugins/plugin-cloud-save && pnpm build`)
+    console.error(`✗ 没找到云端保存插件产物：${pluginBundle}\n  请先执行：cd packages/plugins/plugin-cloud-client && pnpm build`)
     process.exit(2)
   }
 
@@ -90,7 +90,8 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
      })()`,
     true,
   )
-  check('清单里有云端保存插件', pluginInfo.manifest.some((id) => id.includes('cloud-save')), pluginInfo.manifest)
+  // 插件改过名：插件包是 plugin-cloud-client，但它沿用 'cloud-save' 这个**服务名**（装配层按服务名判断）
+  check('清单里有云端保存插件', pluginInfo.manifest.some((id) => id.includes('cloud-')), pluginInfo.manifest)
   check('插件真的装上了（ctx 服务在）', pluginInfo.hasService, pluginInfo.status)
 
   const built = await pageA.ev<{ before: number; nodes: { id: string }[]; edges: number }>(
@@ -107,37 +108,44 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   )
   check('新建 3 个节点 + 1 条连线', built.nodes.length === built.before + 3 && built.edges === 1, built)
 
-  // 大图搬运：放一张超过默认门槛（32KB）的图，等插件把它搬到服务器
-  const placed = await pageA.ev<{ id: string; dataUrlBytes: number }>(
-    `(() => {
-       const cv = document.createElement('canvas')
-       cv.width = 900; cv.height = 700
-       const g = cv.getContext('2d')
-       const img = g.createImageData(cv.width, cv.height)
-       for (let i = 0; i < img.data.length; i++) img.data[i] = (i * 2654435761) % 256
-       g.putImageData(img, 0, 0)
-       const dataUrl = cv.toDataURL('image/png')
-       const host = window.MiniCanvasUI.getHost()
-       const target = host.nodeStore.getNodes().find((n) => n.type === 'image')
-       if (!target) return { id: '', dataUrlBytes: 0 }
-       host.graph.updateNode(target.id, { data: { imageUrl: dataUrl, imageName: 'big.png' } })
-       return { id: target.id, dataUrlBytes: dataUrl.length }
-     })()`,
+  // 上传一张大图：走**真实上传路径**（resources.put → resource adapter → 服务器文件）。
+  // 注意不要再往节点里直接塞 base64 —— 那绕过了上传，是旧设计里被删掉的兜底路径。
+  const placed = await pageA.ev<{ id: string; dataUrlBytes: number; ref: string }>(
+    `(async () => {
+        const cv = document.createElement('canvas')
+        cv.width = 900; cv.height = 700
+        const g = cv.getContext('2d')
+        const img = g.createImageData(cv.width, cv.height)
+        for (let i = 0; i < img.data.length; i++) img.data[i] = (i * 2654435761) % 256
+        g.putImageData(img, 0, 0)
+        const host = window.MiniCanvasUI.getHost()
+        const target = host.nodeStore.getNodes().find((n) => n.type === 'image')
+        if (!target) return { id: '', dataUrlBytes: 0, ref: '' }
+        const blob = await new Promise((r) => cv.toBlob(r, 'image/png'))
+        const resources = host.ctx.get('resources')
+        const ref = await resources.put(blob, { kind: 'image', name: 'big.png' })
+        const url = await resources.resolve(ref)
+        host.graph.updateNode(target.id, { data: { imageUrl: url, resourceId: ref, imageName: 'big.png' } })
+        return { id: target.id, dataUrlBytes: blob.size, ref }
+      })()`,
+    true,
   )
-  check('放了一张超过搬运门槛的图（> 32KB）', placed.dataUrlBytes > 32 * 1024, placed)
+  check('上传了一张超过搬运门槛的图（> 32KB）', placed.dataUrlBytes > 32 * 1024, placed)
 
   console.log('  等同步落盘...')
   await sleep(6000)
 
   // 服务器磁盘：这才是"真的上云了"的证据（不看前端内存）
   const disk = diskState(dataDir)
-  check('磁盘出现 canvas:graph.json', disk.files.includes('canvas%3Agraph.json'), disk.files)
+  check('磁盘出现画布文件夹 canvases/default/canvas.json', disk.files.includes('canvas.json'), disk.files)
   check('磁盘节点数与画布一致', disk.nodes?.length === built.nodes.length, {
     disk: disk.nodes?.length,
     canvas: built.nodes.length,
   })
   check('磁盘边数 = 1', disk.edges?.length === 1, { edges: disk.edges?.length })
 
+  // 两处都要看：本地内存里已换成**可渲染的真地址**（资源引用在本地渲染不出来），
+  // 去重的证据在磁盘上（json 里只应有 res:，不该有 base64）。
   const uploaded = await pageA.ev<{ imageUrl: string; status: unknown }>(
     `(() => {
        const host = window.MiniCanvasUI.getHost()
@@ -145,14 +153,23 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
        return { imageUrl: n.data.imageUrl, status: host.ctx.get('cloud-save').status() }
      })()`,
   )
-  check('节点里的图已换成服务器地址', String(uploaded.imageUrl).startsWith('/uploads/'), uploaded)
+  check('本地节点里是可直接渲染的真地址（不是 res: 引用）', String(uploaded.imageUrl).includes('/resources/'), uploaded)
 
-  const uploadsDir = path.join(dataDir, 'uploads')
-  const uploadFiles = exists(uploadsDir) ? readdirSync(uploadsDir) : []
-  const uploadName = String(uploaded.imageUrl).replace('/uploads/', '')
-  check('服务器 uploads/ 里真有这个文件', uploadFiles.includes(uploadName), { files: uploadFiles })
-  if (uploadFiles.includes(uploadName)) {
-    const size = statSync(path.join(uploadsDir, uploadName)).size
+  // 磁盘上的 json 才是"云端到底存了什么"的证据：必须只有 res: 引用，绝不能有 base64
+  const canvasJson = readFileSync(path.join(dataDir, 'canvases', 'default', 'canvas.json'), 'utf8')
+  const diskNodes = (disk.nodes ?? []) as Array<{ id?: string; data?: { imageUrl?: string } }>
+  const diskImg = diskNodes.find((n) => n.id === placed.id)?.data?.imageUrl
+  check('云端节点里存的是画布内相对引用 res:<hash>', String(diskImg).startsWith('res:'), { diskImg })
+  check('云端画布 JSON 里没有 base64（远程不再存 base64）', !canvasJson.includes('data:image/'), {
+    hasDataUrl: canvasJson.includes('data:image/'),
+  })
+
+  const resDir = path.join(dataDir, 'canvases', 'default', 'resources')
+  const resFiles = exists(resDir) ? readdirSync(resDir) : []
+  const resName = String(diskImg).replace('res:', '')
+  check('本画布 resources/ 里真有这个文件（以文件形式落在磁盘上）', resFiles.includes(resName), { files: resFiles })
+  if (resFiles.includes(resName)) {
+    const size = statSync(path.join(resDir, resName)).size
     check('文件是真字节（不是空壳）', size > 1000, { size })
   }
 
@@ -185,10 +202,12 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   })
   check('★ 换机器后连线也恢复', restored.edges === 1, { edges: restored.edges })
 
-  // 图片经服务器 URL 回读（换机器后图还在，这才是真"不丢"）
-  if (uploadName) {
+  // 图片经服务器回读（换机器后图还在，这才是真"不丢"）
+  // 节点里存的是画布内引用 res:<hash>，取字节要按"当前画布 + 资源名"拼地址
+  if (resName) {
+    const resUrl = '/api/canvases/default/resources/' + resName
     const imgBack = await pageB.ev<{ status: number; size: number }>(
-      `(async () => { const r = await fetch(${JSON.stringify(uploaded.imageUrl)}); const b = await r.blob(); return { status: r.status, size: b.size } })()`,
+      `(async () => { const r = await fetch(${JSON.stringify(resUrl)}); const b = await r.blob(); return { status: r.status, size: b.size } })()`,
       true,
     )
     check('★ 换机器后图片仍能取回', imgBack.status === 200 && imgBack.size > 1000, imgBack)
@@ -445,15 +464,18 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
 }
 
 /** 读服务器磁盘上的 kv 文件（"数据真的落盘"的唯一证据） */
+/**
+ * 读磁盘上的画布文件夹（这才是"真的上云了"的证据，不看前端内存）。
+ * 一个画布一个文件夹：canvases/<id>/canvas.json 里同时放着 nodes 与 edges。
+ */
 function diskState(dataDir: string): { files: string[]; nodes: unknown[] | null; edges: unknown[] | null } {
-  const kv = path.join(dataDir, 'kv')
-  if (!exists(kv)) return { files: [], nodes: null, edges: null }
-  const files = readdirSync(kv)
-  const read = (name: string): unknown[] | null => {
-    const f = files.find((n) => n === name)
-    return f ? (JSON.parse(readFileSync(path.join(kv, f), 'utf8')) as unknown[]) : null
-  }
-  return { files, nodes: read('canvas%3Agraph.json'), edges: read('canvas%3Agraph-edges.json') }
+  const dir = path.join(dataDir, 'canvases', 'default')
+  if (!exists(dir)) return { files: [], nodes: null, edges: null }
+  const files = readdirSync(dir)
+  const file = path.join(dir, 'canvas.json')
+  if (!exists(file)) return { files, nodes: null, edges: null }
+  const raw = JSON.parse(readFileSync(file, 'utf8')) as { nodes?: unknown[]; edges?: unknown[] }
+  return { files, nodes: raw.nodes ?? null, edges: raw.edges ?? null }
 }
 
 function exists(p: string): boolean {

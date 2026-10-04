@@ -22,6 +22,8 @@ interface CliOptions {
   hostname: string
   ui?: string
   plugins?: string
+  providers?: string
+  serverPlugins?: string
   open: boolean
   /** 是否提供 MCP 接口（缺省开） */
   mcp: boolean
@@ -41,6 +43,8 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
       --host <地址>   监听地址（默认 127.0.0.1，只本机可访问）
       --ui <目录>     画布界面产物目录（默认自动探测 packages/ui/dist）
       --plugins <目录> 插件目录（默认自动探测 packages/plugins）
+      --providers <目录> 平台提供方目录（后台的"投递箱"；默认 <数据目录>/providers）
+      --server-plugins <目录> 后台插件目录（丢 .js 进去即多一个后台插件；默认 <数据目录>/server-plugins）
       --no-mcp        不提供 MCP 接口（默认提供）
       --open          启动后自动打开浏览器（默认开）
       --no-open       不自动打开浏览器
@@ -48,8 +52,12 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
 启动后（网页与 MCP 共用一个服务、一份数据）:
   http://127.0.0.1:<端口>/            画布界面
   http://127.0.0.1:<端口>/mcp          MCP 接口（Streamable HTTP，配置给 AI 客户端）
-  GET|PUT|DELETE /api/kv/:type/:key   画布数据读写
-  POST /api/files · GET /uploads/*    资源上传与回读
+  GET|PUT|DELETE /api/kv/:type/:key   设置 / 快捷这类小数据（画布数据不在这里）
+  GET|PUT /api/canvases/:id           画布本体（节点 + 边）与视口
+  POST/GET /api/canvases/:id/resources/:name   画布资源上传与回读
+  GET /api/actions                    动作清单（前端菜单来源；后台加平台即多一项）
+  POST /api/jobs · GET /api/jobs/:id · POST /api/jobs/:id/cancel   任务下单 / 查单 / 撤单
+  GET /api/history                    生成历史（分页 + 汇总）
   GET /plugin-manifest.json           外部插件清单
 `
 
@@ -83,6 +91,8 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--host' || a === '--hostname') opts.hostname = takeValue(a)
     else if (a === '--ui') opts.ui = takeValue(a)
     else if (a === '--plugins') opts.plugins = takeValue(a)
+    else if (a === '--providers') opts.providers = takeValue(a)
+    else if (a === '--server-plugins') opts.serverPlugins = takeValue(a)
     else if (a === '--mcp') opts.mcp = true
     else if (a === '--no-mcp') opts.mcp = false
     else if (a === '--open') opts.open = true
@@ -133,6 +143,8 @@ async function startWithPortFallback(opts: CliOptions) {
       hostname: opts.hostname,
       ...(opts.ui ? { uiDist: opts.ui } : {}),
       ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
+      ...(opts.providers ? { providersDir: opts.providers } : {}),
+      ...(opts.serverPlugins ? { serverPluginsDir: opts.serverPlugins } : {}),
       mcp: opts.mcp,
     })
     try {
@@ -160,11 +172,13 @@ async function main(): Promise<void> {
   console.log(`  画布   ${info.url}/`)
   if (portChanged) console.log(`         （端口 ${opts.port} 被占用，已自动改用 ${info.port}）`)
   console.log(`  数据   ${srv.paths.data}`)
-  console.log(`         kv/      ${srv.paths.kv}`)
-  console.log(`         uploads/ ${srv.paths.uploads}`)
+  console.log(`         kv/       ${srv.paths.kv}（设置 / 快捷这类小数据）`)
+  console.log(`         canvases/ ${srv.paths.canvases}（一个画布一个文件夹）`)
   console.log(`  界面   ${srv.paths.ui ?? '未找到 packages/ui/dist —— 先执行 cd packages/ui && pnpm build'}`)
   console.log(`  插件   ${srv.paths.plugins ?? '(未找到插件目录)'} · 清单里 ${manifest.length} 个`)
   for (const p of manifest) console.log(`         - ${p.id}  → ${p.url}`)
+  console.log(`  平台   ${srv.paths.providers}（丢 .js 进去即多一个平台）`)
+  console.log(`  后台插件 ${srv.paths.serverPlugins}（丢 .js 进去即多一个后台插件；重启生效）`)
   if (srv.mcpEnabled) {
     // MCP 地址一定要显眼：用户是拿这行去配 AI 客户端的
     console.log('')

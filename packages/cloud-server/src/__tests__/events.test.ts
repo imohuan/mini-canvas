@@ -3,7 +3,7 @@
  *
  * 锁的是这条链路存在的**唯一理由**：AI 经 MCP 改画布之后，网页端不用刷新就能知道「变了」。
  * 因此这里不测「SSE 格式对不对」，而测「谁写都会惊动订阅者」—— 包括最容易漏掉的那条：
- * **MCP 的写**（不经过 HTTP 的 /api/kv，而是直接落到同一个 KvStore）。
+ * **MCP 的写**（不经过 HTTP，直接落到同一个 CanvasStore）。
  *
  * 不启真端口，直接把 Request 喂给 app.fetch。
  */
@@ -25,7 +25,8 @@ afterEach(async () => {
 
 async function boot(): Promise<void> {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-events-'))
-  srv = await createCloudServer({ dir })
+  // 关掉 provider 目录的自动重载：单测不需要定时器
+  srv = await createCloudServer({ dir, watchProviders: false })
 }
 
 /** 等到条件成立或超时（返回 false）。用于等「事件到达」这类异步结果。 */
@@ -97,6 +98,30 @@ async function put(type: string, key: string, value: unknown): Promise<void> {
   expect(res.status).toBe(200)
 }
 
+/** 存一张画布本体（走新路由）。等价于网页端的整包保存。 */
+async function putCanvas(nodes: unknown[], edges: unknown[] = []): Promise<void> {
+  const res = await srv.app.fetch(
+    new Request('http://localhost/api/canvases/default', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nodes, edges }),
+    }),
+  )
+  expect(res.status).toBe(200)
+}
+
+/** 存视口（走新路由）。 */
+async function putView(view: unknown): Promise<void> {
+  const res = await srv.app.fetch(
+    new Request('http://localhost/api/canvases/default/view', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(view),
+    }),
+  )
+  expect(res.status).toBe(200)
+}
+
 /** 直接调 MCP 工具（与 AI 客户端走的是同一条路） */
 async function callMcp(name: string, args: Record<string, unknown>): Promise<string> {
   const res = await srv.app.fetch(
@@ -113,7 +138,7 @@ describe('GET /api/kv/events（实时通道）', () => {
   it('网页端 PUT 之后，订阅者收到「哪个 key 变了」', async () => {
     await boot()
     const { events } = await subscribe('?type=canvas')
-    await put('canvas', 'graph', [{ id: 'n1' }])
+    await putCanvas([{ id: 'n1' }])
 
     expect(await waitFor(() => events.length > 0)).toBe(true)
     expect(events[0]).toEqual({ type: 'canvas', key: 'graph' })
@@ -131,6 +156,13 @@ describe('GET /api/kv/events（实时通道）', () => {
     expect(events.some((e) => e.key === 'graph-edges')).toBe(true)
   })
 
+  it('存视口也会通知（视口单独一个 key）', async () => {
+    await boot()
+    const { events } = await subscribe('?type=canvas')
+    await putView({ x: 1, y: 2, zoom: 1 })
+    expect(await waitFor(() => events.some((e) => e.key === 'graph-viewport'))).toBe(true)
+  })
+
   it('按作用域过滤：订阅 canvas 的不该收到 config 的动静', async () => {
     await boot()
     const { events } = await subscribe('?type=canvas')
@@ -139,7 +171,7 @@ describe('GET /api/kv/events（实时通道）', () => {
     await new Promise((r) => setTimeout(r, 150))
     expect(events).toEqual([])
 
-    await put('canvas', 'graph', [])
+    await putCanvas([])
     expect(await waitFor(() => events.length > 0)).toBe(true)
     expect(events[0]).toEqual({ type: 'canvas', key: 'graph' })
   })
@@ -150,7 +182,7 @@ describe('GET /api/kv/events（实时通道）', () => {
     const configStream = await subscribe('?type=config')
 
     await put('config', 'theme', 'dark')
-    await put('canvas', 'graph', [])
+    await putCanvas([])
 
     expect(await waitFor(() => configStream.events.length > 0)).toBe(true)
     expect(await waitFor(() => canvasStream.events.length > 0)).toBe(true)

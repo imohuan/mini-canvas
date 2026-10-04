@@ -12,6 +12,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
+import { buildPluginCatalog } from './plugins/catalog.js'
 
 /**
  * 本包自己的根目录（用于找随包发布的 assets/）。
@@ -36,9 +37,18 @@ const MIME_BY_EXT: Record<string, string> = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
   '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  '.eot': 'application/vnd.ms-fontobject',
   '.map': 'application/json; charset=utf-8',
   '.wasm': 'application/wasm',
   '.txt': 'text/plain; charset=utf-8',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.ogg': 'audio/ogg',
+  '.wav': 'audio/wav',
 }
 
 function mimeFor(file: string): string {
@@ -60,6 +70,44 @@ async function exists(p: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * 插件资源扩展名白名单（服务端发插件目录里的文件时用）。
+ *
+ * 为什么要放开到非 .js：插件的产物**不一定只有一个 js** —— 超过 vite 内联阈值的大图、
+ * 显式 ?url 引用的资源、new URL('./x.png', import.meta.url) 这类写法都会另存成兄弟文件，
+ * 插件运行时要去取。仍只放白名单内的静态资源，不给任意文件当下载器。
+ */
+const PLUGIN_ASSET_EXTS = new Set([
+  'js', 'mjs', 'cjs', 'css', 'json', 'txt',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif', 'ico', 'bmp',
+  'woff', 'woff2', 'ttf', 'otf', 'eot',
+  'mp3', 'mp4', 'webm', 'ogg', 'wav',
+  'wasm',
+])
+
+/** 每段路径的名字白名单（不含分隔符） */
+const PLUGIN_SEG_RE = /^[\w.@-]+$/
+
+/**
+ * 解析一个「插件资源」请求：/plugins/<pkg>/<相对路径…>
+ * 逐段校验 + 扩展名白名单；不合法给明确原因（服务端据此回 400）。
+ */
+export function resolvePluginAsset(urlPath: string): { rel: string } | { error: string } {
+  const clean = decodeURIComponent(urlPath.split('?')[0] ?? '')
+  const m = clean.match(/^\/plugins\/(.+)$/)
+  if (!m) return { error: '未知路径' }
+  const segs = m[1]!.split('/')
+  for (const seg of segs) {
+    if (!seg || seg === '.' || seg === '..' || !PLUGIN_SEG_RE.test(seg)) return { error: '非法路径段' }
+  }
+  const ext = (segs[segs.length - 1]!.split('.').pop() ?? '').toLowerCase()
+  if (!PLUGIN_ASSET_EXTS.has(ext)) return { error: '不允许的资源类型：.' + ext }
+  // 扁平形态（单段）：文件直接放在插件目录下，不套 <pkg>/dist。
+  if (segs.length === 1) return { rel: segs[0]! }
+  const [pkg, ...rest] = segs
+  return { rel: [pkg!, 'dist', ...rest].join('/') }
 }
 
 /**
@@ -319,39 +367,31 @@ export function pluginRoutes(pluginsDir: string | undefined): Hono {
     const plugins = await buildManifest(pluginsDir)
     if (pluginsDir && !(await exists(pluginsDir))) {
       // 目录不存在不是错（可能只是还没建插件），但说清楚更好排查
-      return c.json({ plugins: [], note: `插件目录不存在: ${pluginsDir}` })
+      return c.json({ plugins: [], note: '插件目录不存在: ' + pluginsDir })
     }
     return c.json({ plugins })
   })
 
-  app.get('/plugins/:pkg/:file', async (c) => {
-    const { pkg, file } = c.req.param()
-    if (!pluginsDir) return c.json({ ok: false, error: '未配置插件目录' }, 404)
-    // 只允许"一层名字"：字符白名单 + 显式拒绝 `..`（`.` 本身在白名单里，光靠正则挡不住穿越）
-    if (!/^[\w.@-]+$/.test(pkg) || pkg.includes('..') || !/^[\w.-]+\.js$/.test(file) || file.includes('..')) {
-      return c.json({ ok: false, error: '非法路径' }, 400)
-    }
-    const bytes = await readWithin(path.join(pluginsDir, pkg, 'dist'), file)
-    if (!bytes) return c.json({ ok: false, error: '插件文件不存在' }, 404)
-    return c.body(bytes, 200, {
-      'content-type': MIME_BY_EXT['.js'],
-      // 开发期别缓存插件：改完刷新就要生效
-      'cache-control': 'no-cache',
-    })
+  /**
+   * 插件管理要的清单：只列**声明了 miniCanvas.installable 的 UMD 插件**。
+   * 与上面的 /plugin-manifest.json（ESM，给应用冷启动用）各管一摊，详见 plugins/catalog.ts 文件头。
+   */
+  app.get('/plugin-catalog.json', async (c) => {
+    return c.json(await buildPluginCatalog(pluginsDir))
   })
 
-  // 扁平形态：插件目录下直接放的单个 js（`/plugins/my-plugin.js`）。
-  // 注册在上面那条带目录的路由之后，避免把 `/plugins/pkg/file.js` 抢走。
-  app.get('/plugins/:file', async (c) => {
-    const file = c.req.param('file')
+  // 插件资源：/plugins/<pkg>/<相对路径…>（嵌套）或 /plugins/<file>（扁平）。
+  // 用**通配**（不是 :pkg/:file）—— 否则子目录资源（assets/logo.svg）匹配不上，
+  // 会掉进静态层的 SPA 回落、拿到一份 index.html（实测踩过：svg 的 content-type 成了 text/html）。
+  app.get('/plugins/*', async (c) => {
     if (!pluginsDir) return c.json({ ok: false, error: '未配置插件目录' }, 404)
-    if (!/^[\w.-]+\.js$/.test(file) || file.includes('..')) {
-      return c.json({ ok: false, error: '非法路径' }, 400)
-    }
-    const bytes = await readWithin(pluginsDir, file)
+    const resolved = resolvePluginAsset(c.req.path)
+    if ('error' in resolved) return c.json({ ok: false, error: resolved.error }, 400)
+    const bytes = await readWithin(pluginsDir, resolved.rel)
     if (!bytes) return c.json({ ok: false, error: '插件文件不存在' }, 404)
     return c.body(bytes, 200, {
-      'content-type': MIME_BY_EXT['.js'],
+      'content-type': mimeFor(resolved.rel),
+      // 开发期别缓存插件：改完刷新就要生效
       'cache-control': 'no-cache',
     })
   })

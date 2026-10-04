@@ -22,6 +22,7 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { isKvType, type KvChangeEvent, type KvStore } from '../store/kvStore.js'
+import type { CanvasStore } from '../store/canvasStore.js'
 
 /**
  * 保活间隔。
@@ -32,8 +33,25 @@ import { isKvType, type KvChangeEvent, type KvStore } from '../store/kvStore.js'
  */
 const PING_INTERVAL_MS = 25_000
 
-export function eventsRoutes(store: KvStore): Hono {
+export function eventsRoutes(store: KvStore, canvas?: CanvasStore): Hono {
   const app = new Hono()
+
+  /**
+   * 收集该订阅者应收到的事件。
+   *
+   * 两个来源：
+   * - KvStore 的写（设置 / 快捷这类按 key 存的小数据）；
+   * - CanvasStore 的写（画布本体 / 视口）—— 画布数据已经不经过 kv 了，
+   *   若只听 kv，AI 改完画布网页端就永远收不到通知（得手动刷新）。
+   */
+  function collector(emit: (e: KvChangeEvent) => void): () => void {
+    const offKv = store.onChange(emit)
+    const offCanvas = canvas?.onChange((e) => emit({ type: 'canvas', key: e.key }))
+    return () => {
+      offKv()
+      offCanvas?.()
+    }
+  }
 
   app.get('/api/kv/events', (c) => {
     const type = c.req.query('type')
@@ -47,7 +65,7 @@ export function eventsRoutes(store: KvStore): Hono {
       const queue: KvChangeEvent[] = []
       let wake: (() => void) | null = null
 
-      const off = store.onChange((e) => {
+      const off = collector((e) => {
         if (closed) return
         if (type !== undefined && e.type !== type) return
         queue.push(e)

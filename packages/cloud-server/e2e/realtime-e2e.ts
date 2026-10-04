@@ -14,7 +14,7 @@
  *
  * 跑法（先构建 ui 与插件）：
  *   cd packages/ui && pnpm build
- *   cd packages/plugins/plugin-cloud-save && pnpm build
+ *   cd packages/plugins/plugin-cloud-client && pnpm build
  *   cd packages/cloud-server && pnpm e2e:realtime
  */
 import { existsSync } from 'node:fs'
@@ -57,9 +57,9 @@ async function main(): Promise<void> {
     console.error('✗ 没找到画布构建产物：' + UI_DIST + '\n  请先执行：cd packages/ui && pnpm build')
     process.exit(2)
   }
-  const bundle = path.join(PLUGINS_DIR, 'plugin-cloud-save/dist/plugin-cloud-save.js')
+  const bundle = path.join(PLUGINS_DIR, 'plugin-cloud-client/dist/plugin-cloud-client.js')
   if (!existsSync(bundle)) {
-    console.error('✗ 没找到云端保存插件产物：' + bundle + '\n  请先执行：cd packages/plugins/plugin-cloud-save && pnpm build')
+    console.error('✗ 没找到云端保存插件产物：' + bundle + '\n  请先执行：cd packages/plugins/plugin-cloud-client && pnpm build')
     process.exit(2)
   }
 

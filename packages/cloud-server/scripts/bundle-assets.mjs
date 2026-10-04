@@ -1,5 +1,5 @@
 /**
- * 把「画布界面」与「云端保存插件」的**已构建产物**收进本包 assets/。
+ * 把「画布界面」与「云端客户端插件」的**已构建产物**收进本包 assets/。
  *
  * 为什么需要：`npx mini-canvas-cloud serve` 的目标是"起个服务就能看到画布"。
  * 但 ui 与插件是两个独立包，装 cloud-server 的人不会同时装它们，产物也不在
@@ -21,9 +21,9 @@ const ASSETS = path.join(PACKAGE_ROOT, 'assets')
 const SOURCES = [
   { from: path.join(REPO_ROOT, 'packages/ui/dist'), to: path.join(ASSETS, 'ui'), label: '画布界面' },
   {
-    from: path.join(REPO_ROOT, 'packages/plugins/plugin-cloud-save/dist'),
-    to: path.join(ASSETS, 'plugins/plugin-cloud-save/dist'),
-    label: '云端保存插件',
+    from: path.join(REPO_ROOT, 'packages/plugins/plugin-cloud-client/dist'),
+    to: path.join(ASSETS, 'plugins/plugin-cloud-client/dist'),
+    label: '云端客户端插件',
   },
 ]
 
@@ -57,7 +57,7 @@ if (missing > 0) process.exit(1)
 // 校验：至少确认 ui 有入口、插件有产物，不然打出来的包是残的
 for (const must of [
   path.join(ASSETS, 'ui/index.html'),
-  path.join(ASSETS, 'plugins/plugin-cloud-save/dist/plugin-cloud-save.js'),
+  path.join(ASSETS, 'plugins/plugin-cloud-client/dist/plugin-cloud-client.js'),
 ]) {
   if (!(await exists(must))) {
     console.error(`✗ 收进来的产物不完整，缺少：${must}`)

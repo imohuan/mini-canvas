@@ -11,9 +11,8 @@ import type {
   ToolInvokeOptions,
   ToolResult,
 } from './toolRegistry'
-import { Fiber, FiberState } from './fiber'
+import { Fiber } from './fiber'
 import { resolveConfig } from './configSchema'
-import type { ConfigSchema } from './configSchema'
 import type {
   CanUninstallResult,
   Disposable,

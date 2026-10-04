@@ -18,12 +18,25 @@ import { Hono } from 'hono'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { CanvasDocument } from '../mcp/canvasDoc.js'
 import { createCanvasMcpServer } from '../mcp/server.js'
+import type { ProviderRegistry } from '../providers/registry.js'
+import type { TaskManager } from '../tasks/taskManager.js'
+import type { McpToolDef } from '../serverFramework/mcp.js'
 
-export function mcpRoutes(doc: CanvasDocument): Hono {
+/**
+ * @param pluginTools 取「当前插件注册的 MCP 工具」的函数。
+ *   为什么传函数而不是数组：MCP server 是**每请求新建**的（stateless），
+ *   每次建时现取才能反映"插件刚装/刚卸"的最新集合。缺省 = 没有插件工具（行为与以前一字不差）。
+ */
+export function mcpRoutes(
+  doc: CanvasDocument,
+  registry?: ProviderRegistry,
+  tasks?: TaskManager,
+  pluginTools?: () => McpToolDef[],
+): Hono {
   const app = new Hono()
   app.all('/mcp', async (c) => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = createCanvasMcpServer(doc)
+    const server = createCanvasMcpServer(doc, registry, tasks, pluginTools?.())
     await server.connect(transport)
     const response = await transport.handleRequest(c.req.raw)
     // 原样把 SDK 的 Response 交回 Hono（保留 SSE body 与各类响应头）

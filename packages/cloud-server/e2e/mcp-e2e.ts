@@ -13,7 +13,7 @@
  * 跑法：cd packages/cloud-server && pnpm e2e:mcp
  * （需要先构建 ui：cd packages/ui && pnpm build）
  */
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { promises as fs, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -114,14 +114,14 @@ async function main(): Promise<void> {
   const uploadRes = parseToolResult(
     await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }),
   )
-  check('resource.upload 从本地路径存下资源，返回同源 URL', uploadRes.ok === true && String(uploadRes.url).startsWith('/uploads/'), uploadRes)
+  check('resource.upload 从本地路径存下资源，返回画布内引用', uploadRes.ok === true && String(uploadRes.ref).startsWith('res:'), uploadRes)
   check('返回的 mime 按扩展名识别正确', uploadRes.mime === 'image/png', { mime: uploadRes.mime })
 
-  // 同一个文件再传一次 → 同一个 URL（内容去重）
+  // 同一个文件再传一次 → 同一个引用（内容去重）
   const again = parseToolResult(await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }))
-  check('同内容重复上传返回同一个 URL（去重）', again.url === uploadRes.url, { first: uploadRes.url, second: again.url })
+  check('同内容重复上传返回同一个引用（去重）', again.ref === uploadRes.ref, { first: uploadRes.ref, second: again.ref })
 
-  // 服务器上真能取回这张图
+  // 服务器上真能取回这张图（url 是按当前画布拼出来的可展示地址）
   const fetched = await fetch(url + uploadRes.url)
   const fetchedBytes = new Uint8Array(await fetched.arrayBuffer())
   check('按返回的 URL 能取回原始字节', fetched.status === 200 && fetchedBytes.byteLength === pngBytes.byteLength, {
@@ -140,13 +140,13 @@ async function main(): Promise<void> {
   check('canvas.add_image 一步上传并建节点', addImage.ok === true && typeof addImage.nodeId === 'string', addImage)
   const withImage = parseToolResult(await client.callTool({ name: 'canvas.get', arguments: {} }))
   const imgNode = withImage.nodes.find((n: { id: string }) => n.id === addImage.nodeId)
-  check('新节点是 image 类型且指向服务器资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.url, {
+  check('新节点是 image 类型且指向画布资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.ref, {
     type: imgNode?.type,
     imageUrl: imgNode?.data?.imageUrl,
   })
 
   const resList = parseToolResult(await client.callTool({ name: 'resource.list', arguments: {} }))
-  check('resource.list 列出了已存资源', resList.count >= 1 && resList.resources[0].url.startsWith('/uploads/'), resList)
+  check('resource.list 列出了已存资源', resList.count >= 1 && typeof resList.resources[0] === 'string', resList)
 
   // 磁盘上确实落了（不是只在内存里）
   const disk = diskState(dataDir)
@@ -243,15 +243,12 @@ function makeTinyPng(): Uint8Array {
 }
 
 /** 读服务器磁盘上的 kv 文件 */
+/** 读磁盘上的画布文件夹（一个画布一个文件夹：nodes 与 edges 同住 canvas.json） */
 function diskState(dataDir: string): { nodes: unknown[] | null; edges: unknown[] | null } {
-  const kv = path.join(dataDir, 'kv')
-  if (!exists(kv)) return { nodes: null, edges: null }
-  const files = readdirSync(kv)
-  const read = (name: string): unknown[] | null => {
-    const f = files.find((n) => n === name)
-    return f ? (JSON.parse(readFileSync(path.join(kv, f), 'utf8')) as unknown[]) : null
-  }
-  return { nodes: read('canvas%3Agraph.json'), edges: read('canvas%3Agraph-edges.json') }
+  const file = path.join(dataDir, 'canvases', 'default', 'canvas.json')
+  if (!exists(file)) return { nodes: null, edges: null }
+  const raw = JSON.parse(readFileSync(file, 'utf8')) as { nodes?: unknown[]; edges?: unknown[] }
+  return { nodes: raw.nodes ?? null, edges: raw.edges ?? null }
 }
 
 function exists(p: string): boolean {

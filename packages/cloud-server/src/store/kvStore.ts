@@ -1,28 +1,52 @@
 /**
- * kvStore —— 服务端 key-value 落盘（纯逻辑，Node fs，可单测）。
+ * kvStore —— 服务端"零碎小数据"的落盘（纯逻辑，Node fs，可单测）。
  *
- * 磁盘布局（对齐计划 §二）：`{dir}/kv/{type}:{key}.json`，每项一个文件。
+ * ## 布局：全部装在一个文件里
  *
- * 为什么一项一文件（而不是一个总 JSON）：
- * - SaveService 是按 key 增量 set 的，整包写会把不相关的域也一起重写；
- * - 一个文件坏掉不会连带其它数据；
- * - 与客户端 `save.get(key)` 一一对应，语义直白。
+ *   {dir}/settings.json
+ *   {
+ *     "config":   { "settings": {...}, "plugin-manager:installed": [...] },
+ *     "shortcut": { "map": {...} }
+ *   }
  *
- * key 安全：物理 key（如 `canvas:graph`）含 `:`，Windows 文件名不允许，
- * 故落盘时按 `encodeURIComponent` 转义（`canvas%3Agraph.json`），读回时反解。
+ * 文件里按 type 分桶、桶里按 key 存值。
+ *
+ * ## 为什么一个文件
+ *
+ * 这里存的全是几十字节的零碎：设置快照、快捷键表、插件安装清单。
+ * 一项一个文件会让磁盘长出一堆两行的小文件，名字还得整串转义成 config%3Asettings.json ——
+ * 收益为零，代价是认不出、也删不干净。
+ *
+ * ## 为什么不是"一个大 JSON 全放"
+ *
+ * 画布与资源**不在这里**：它们各有自己的目录（见 canvasStore / canvasResources）——
+ * 那两类是大数据、还要按画布分家。这里只装真正的配置类小数据。
+ *
+ * ## 对外契约没变
+ *
+ * 客户端看到的仍是 (type, key) 两级：HTTP 接口 /api/kv/:type/:key 与 SSE 事件形状都没动，
+ * 改的只是"磁盘上一个文件装下全部"。
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { atomicWriteJson } from './atomicWrite.js'
 
-/** 允许的 value 作用域（与客户端 SaveType 一致） */
+/** 允许的作用域（与客户端 SaveType 一致） */
 export type KvType = 'config' | 'canvas' | 'resource' | 'shortcut'
 
 const KV_TYPES: readonly KvType[] = ['config', 'canvas', 'resource', 'shortcut']
 
 /**
+ * 真正落到 settings.json 里的作用域。
+ * canvas / resource 各有自己的目录（canvases/<id>/），不走这里 —— 留着这份名单是为了
+ * 迁移旧数据时只搬"还活着"的两类，别把早就废弃的 canvas:* 塞回配置里。
+ */
+const STORED_TYPES: readonly string[] = ['config', 'shortcut']
+
+/**
  * 一次 kv 变更（set 或 remove 之后发出）。
  *
- * type 是作用域，key 是**裸 key**（不带 type: 前缀，如 graph）—— 与
+ * type 是作用域，key 是**裸 key**（不带 type: 前缀，如 settings）—— 与
  * /api/kv/:type/:key 的 URL 段、keys() 的返回保持同一套写法，订阅方不用再做前缀拼接。
  */
 export interface KvChangeEvent {
@@ -35,66 +59,53 @@ export function isKvType(v: string): v is KvType {
   return (KV_TYPES as readonly string[]).includes(v)
 }
 
-/**
- * 物理文件名：`{type}:{key}` → 安全文件名。
- * 同时反解用的前缀校验，避免 `..` 之类越权路径。
- */
-export function kvFileName(type: string, key: string): string {
-  return encodeURIComponent(`${type}:${key}`) + '.json'
+/** 小数据落盘文件的绝对路径：{dir}/settings.json */
+export function settingsFilePath(dir: string): string {
+  return path.join(dir, 'settings.json')
 }
 
+/** 文件内容形状：type → key → value */
+export type KvFileData = Record<string, Record<string, unknown>>
+
 /**
- * kvStore —— 一个根目录下的 KV 存储。
+ * kvStore —— 全部小数据装在一个 settings.json 里。
  *
- * 语义：`get` 未命中返回 **undefined**（不是 null）—— 调用方（HttpAdapter）
- * 靠这个判"从未保存过"，与客户端 `saved === undefined` 对齐（否则空画布会重新长 seed）。
+ * 语义：get 未命中返回 **undefined**（不是 null）—— 调用方（CloudKvAdapter）靠它判
+ * "从未保存过"，与客户端 SaveStore 的 undefined 语义对齐。
  */
 export class KvStore {
   /** 变更订阅者（见 onChange） */
   private readonly changeListeners = new Set<(e: KvChangeEvent) => void>()
 
   /**
-   * 每个 key 一条写链（见 runFor）。
+   * 写链：**所有写都排这一条**。
    *
-   * 为什么必须在这一层做：`set` 是「写临时文件 → rename 到目标」两步。两个并发写同一个 key 时，
-   * **撞的不是临时名，而是目标文件** —— Windows 上两个 rename 打同一个目标会直接 EPERM。
-   * 实测（400 轮 ×3 并发）：不串行 ~31% 失败；按 key 串行后 0 失败。
-   *
-   * 上层的 CanvasDocument 也有把锁，但它只覆盖画布那两个 key，而这里是**所有**写路径的地基
-   * （配置、视口、资源……都要过 set）。地基不稳，上面怎么排都会漏。
+   * 与"一项一文件"时代的关键差别：那时可以按 (type,key) 各排一条（不同项互不影响）；
+   * 现在全部落同一个文件，读-改-写必须整体串行 —— 否则两个并发写各读到同一份旧内容、
+   * 各自写回，后写的把先写的整段盖掉（丢配置）。
    */
-  private readonly writeChains = new Map<string, Promise<unknown>>()
+  private chain: Promise<unknown> = Promise.resolve()
+
+  /** 旧布局迁移：只做一次（首次访问触发）；记住 promise，避免并发首访各迁一遍 */
+  private migration: Promise<void> | null = null
 
   constructor(private readonly dir: string) {}
 
-  /**
-   * 把一次写排进「同 key 串行」的链尾（不同 key 互不影响，各走各的）。
-   *
-   * 链上某个任务失败不会卡住后面的：错误交给它自己的调用方，链本身用 catch 吞掉状态继续。
-   */
-  private runFor(channel: string, job: () => Promise<void>): Promise<void> {
-    const prev = this.writeChains.get(channel) ?? Promise.resolve()
-    const next = prev.then(job, job)
-    // 链上保存的是「吞掉错误后的尾巴」：某个任务失败不能把后面等着的一起带崩
-    const tail = next.catch(() => undefined)
-    this.writeChains.set(channel, tail)
-    // 跑完且自己仍是链尾时才摘掉条目，免得 key 多了只增不减（长跑服务里的慢泄漏）。
-    // 若期间又排了新任务，链尾已经换人，这里删会把新链一起删掉 —— 所以要判等。
-    void tail.then(() => {
-      if (this.writeChains.get(channel) === tail) this.writeChains.delete(channel)
-    })
+  /** 把一次写排进链尾（链上任务失败不卡住后面的） */
+  private runExclusive<T>(job: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(job, job)
+    this.chain = next.catch(() => undefined)
     return next
   }
 
   /**
    * 订阅"某一项被写过/删过"。返回取消函数。
    *
-   * 存在的理由：MCP 与网页画布共用一个服务、一份数据，但**写入口是分散的**
-   * （MCP 工具、网页端 PUT、上传接口……）。要让网页端在 AI 改完画布后实时看到变化，
-   * 就必须有个统一的"谁写完了"信号 —— 放在这一层，因为所有写路径最终都要落到 set/remove。
+   * 存在的理由：网页端与 AI（MCP）共用一个服务、一份数据，但**写入口是分散的**。
+   * 要让网页端在 AI 改完之后实时看到变化，就必须有个统一的"谁写完了"信号 ——
+   * 放在这一层，因为所有写路径最终都要落到 set/remove。
    *
-   * 有意只报"哪个 type/key 变了"，不带新值：订阅方按需自己去读，
-   * 免得大画布每写一次就把整份数据塞进事件里穿过若干层。
+   * 有意只报"哪个 type/key 变了"，不带新值：订阅方按需自己去读。
    */
   onChange(listener: (e: KvChangeEvent) => void): () => void {
     this.changeListeners.add(listener)
@@ -116,68 +127,76 @@ export class KvStore {
     }
   }
 
-  /** kv 目录绝对路径（懒创建） */
-  private kvDir(): string {
-    return path.join(this.dir, 'kv')
+  /**
+   * 读整个文件。
+   *
+   * 内容坏掉（非法 JSON）**抛错**，不静默当空：
+   * 若当成空再写回，会把用户剩下的全部配置一起抹掉 —— 宁可这次请求失败、让人看见。
+   * （get() 会把这个错误降级成 undefined + 一条 warn。）
+   */
+  private async readFile(): Promise<KvFileData> {
+    await this.ensureMigrated()
+    const file = settingsFilePath(this.dir)
+    let raw: string
+    try {
+      raw = await fs.readFile(file, 'utf8')
+    } catch (err) {
+      if (isNotFound(err)) return {}
+      throw err
+    }
+    const parsed = JSON.parse(raw) as unknown
+    return isPlainObject(parsed) ? (parsed as KvFileData) : {}
   }
 
-  /** 某项的文件路径 */
-  private filePath(type: string, key: string): string {
-    return path.join(this.kvDir(), kvFileName(type, key))
+  /** 写整个文件（原子写：临时文件 + rename，读者永远看到完整内容） */
+  private async writeFile(data: KvFileData): Promise<void> {
+    await atomicWriteJson(settingsFilePath(this.dir), data)
   }
 
   /** 读一项；不存在返回 undefined */
   async get<T = unknown>(type: string, key: string): Promise<T | undefined> {
+    let data: KvFileData
     try {
-      const raw = await fs.readFile(this.filePath(type, key), 'utf8')
-      return JSON.parse(raw) as T
+      data = await this.readFile()
     } catch (err) {
-      // 文件不存在 = 从未保存过（正常路径，返回 undefined 是本模块的核心契约）。
-      // 但**不能把所有错误都当成「没保存过」**：磁盘权限错、IO 错若也返回 undefined，
-      // 上层的画布读取会看到一个空画布，AI 接着在「空画布」上写回 —— 整张画布被覆盖掉。
-      // 所以只有 ENOENT 是正常缺失，JSON 坏掉要出声，其它错误照抛。
-      if (isNotFound(err)) return undefined
-      if (isSyntaxError(err)) {
-        console.warn(`[kvStore] ${type}:${key} 的内容不是合法 JSON，按缺失处理（文件：${this.filePath(type, key)}）`)
-        return undefined
-      }
-      throw err
+      console.warn('[kvStore] ' + settingsFilePath(this.dir) + ' 读不出来，按空处理：' + String(err))
+      return undefined
     }
+    const bucket = data[type]
+    return bucket ? (bucket[key] as T | undefined) : undefined
   }
 
-  /** 写一项（原子写：先写临时文件再 rename，避免半截 JSON） */
+  /** 写一项 */
   async set(type: string, key: string, value: unknown): Promise<void> {
     // JSON.stringify(undefined) 返回 undefined（不是字符串），直接写会抛难懂的 TypeError。
-    // 明确拒绝：想删用 remove（语义清晰，调用方不会「以为存了 undefined」）。
+    // 明确拒绝：想删用 remove（语义清晰，调用方不会"以为存了 undefined"）。
     if (value === undefined) {
-      throw new Error(`[kvStore] 不接受 undefined 值（type=${type} key=${key}）：要删请用 remove`)
+      throw new Error('[kvStore] 不接受 undefined 值（type=' + type + ' key=' + key + '）：要删请用 remove')
     }
-    // 序列化在这里做（同步、快）：一是早点暴露循环引用，二是别让 stringify 占着串行链。
+    // 序列化先做一次（同步、快）：早点暴露循环引用，也别让 stringify 占着写链。
     // 注意它也可能因**嵌套过深**抛 RangeError（爆栈）—— 那是调用方的输入问题，照抛给上层。
-    const text = JSON.stringify(value)
-    await this.runFor(`${type}:${key}`, async () => {
-      await fs.mkdir(this.kvDir(), { recursive: true })
-      const file = this.filePath(type, key)
-      // 临时名唯一化：同一毫秒、同一 key 的两次写也不共用临时文件
-      const tmp = `${file}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-      await fs.writeFile(tmp, text, 'utf8')
-      await fs.rename(tmp, file)
+    JSON.stringify(value)
+    await this.runExclusive(async () => {
+      const data = await this.readFile()
+      const bucket = data[type] ?? (data[type] = {})
+      bucket[key] = value
+      await this.writeFile(data)
     })
     this.notifyChange(type, key)
   }
 
   /** 删一项；返回是否真删到 */
   async remove(type: string, key: string): Promise<boolean> {
-    // 删除同样排进这条链：它和「写的 rename」是同一份文件上的两个动作，
-    // 不排队就可能出现「删完了又被并发写还原」或 rename 撞到正在删的目标。
     let removed = false
-    await this.runFor(`${type}:${key}`, async () => {
-      try {
-        await fs.unlink(this.filePath(type, key))
-        removed = true
-      } catch (err) {
-        if (!isNotFound(err)) throw err
-      }
+    await this.runExclusive(async () => {
+      const data = await this.readFile()
+      const bucket = data[type]
+      if (!bucket || !(key in bucket)) return
+      delete bucket[key]
+      // 桶空了就把 type 也去掉，免得文件里留一堆空对象
+      if (Object.keys(bucket).length === 0) delete data[type]
+      removed = true
+      await this.writeFile(data)
     })
     if (removed) this.notifyChange(type, key)
     return removed
@@ -185,21 +204,74 @@ export class KvStore {
 
   /** 列某作用域下全部裸 key（诊断/后台查看用） */
   async keys(type: string): Promise<string[]> {
+    const data = await this.readFile().catch(() => ({}) as KvFileData)
+    return Object.keys(data[type] ?? {}).sort()
+  }
+
+  // ==================== 旧布局迁移（只做一次） ====================
+
+  /** 迁移只跑一次；并发首访共用同一个 promise */
+  private ensureMigrated(): Promise<void> {
+    this.migration ??= this.migrateLegacy()
+    return this.migration
+  }
+
+  /**
+   * 把旧布局的文件折进 settings.json。
+   *
+   * 要认两种旧形态：
+   *   1. {dir}/kv/{type}/{key}.json      —— 上一版
+   *   2. {dir}/kv/{type}%3A{key}.json    —— 最早那版（整串转义）
+   *
+   * 只搬 STORED_TYPES 里的两类（config / shortcut）：canvas / resource 早已各有目录，
+   * 把它们搬回来只会往配置里塞死数据。
+   *
+   * 搬完把整个 kv 目录**改名**（不是删）成 kv.migrated —— 留一份人肉可查的备份。
+   * 新文件已存在时整段跳过。
+   */
+  private async migrateLegacy(): Promise<void> {
+    const target = settingsFilePath(this.dir)
+    if (await exists(target)) return
+    const kvDir = path.join(this.dir, 'kv')
     let names: string[]
     try {
-      names = await fs.readdir(this.kvDir())
-    } catch (err) {
-      if (isNotFound(err)) return []
-      throw err
+      names = await fs.readdir(kvDir)
+    } catch {
+      return // 没有旧目录 = 全新安装
     }
-    const prefix = `${type}:`
-    const out: string[] = []
-    for (const n of names) {
-      if (!n.endsWith('.json') || n.includes('.tmp-')) continue
-      const decoded = decodeURIComponent(n.slice(0, -'.json'.length))
-      if (decoded.startsWith(prefix)) out.push(decoded.slice(prefix.length))
+    const data: KvFileData = {}
+    const put = (type: string, key: string, value: unknown): void => {
+      if (!STORED_TYPES.includes(type)) return
+      const bucket = data[type] ?? (data[type] = {})
+      bucket[key] = value
     }
-    return out.sort()
+    for (const name of names) {
+      if (name.includes('.tmp-')) continue
+      const full = path.join(kvDir, name)
+      const stat = await fs.stat(full).catch(() => null)
+      if (!stat) continue
+      if (stat.isDirectory()) {
+        // 形态 1：目录名是 type，里面是 {key}.json
+        const inner = await fs.readdir(full).catch(() => [] as string[])
+        for (const f of inner) {
+          if (!f.endsWith('.json') || f.includes('.tmp-')) continue
+          const value = await readJsonSafe(path.join(full, f))
+          if (value !== undefined) put(name, tryDecode(f.slice(0, -'.json'.length)), value)
+        }
+      } else if (name.endsWith('.json')) {
+        // 形态 2：文件名是 {type}%3A{key}.json
+        const decoded = tryDecode(name.slice(0, -'.json'.length))
+        const i = decoded.indexOf(':')
+        if (i < 0) continue
+        const value = await readJsonSafe(full)
+        if (value !== undefined) put(decoded.slice(0, i), decoded.slice(i + 1), value)
+      }
+    }
+    if (Object.keys(data).length === 0) return
+    await this.writeFile(data)
+    // 改名而不是删：万一看走眼，备份还在
+    await fs.rename(kvDir, kvDir + '.migrated').catch(() => undefined)
+    console.log('[kvStore] 已把旧 kv/ 折进 settings.json（旧目录改名 kv.migrated 备份）')
   }
 }
 
@@ -208,7 +280,36 @@ function isNotFound(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT'
 }
 
-/** 判断是不是「内容不是合法 JSON」（文件在、内容坏了，与「没保存过」不是一回事） */
-function isSyntaxError(err: unknown): boolean {
-  return err instanceof SyntaxError
+/** 是不是普通对象（不是数组 / null） */
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
+
+/** 文件存在与否 */
+async function exists(file: string): Promise<boolean> {
+  try {
+    await fs.access(file)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** 读一个 JSON 文件；坏掉/读不到都返回 undefined（迁移不因单个坏文件中断） */
+async function readJsonSafe(file: string): Promise<unknown> {
+  try {
+    return JSON.parse(await fs.readFile(file, 'utf8')) as unknown
+  } catch {
+    return undefined
+  }
+}
+
+/** 解 key 的转义（旧布局对 key 做过 encodeURIComponent）；坏串原样返回 */
+function tryDecode(raw: string): string {
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}
+

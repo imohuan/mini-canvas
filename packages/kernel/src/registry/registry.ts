@@ -91,8 +91,24 @@ export interface Registry<T> {
   subscribe(fn: () => void): Disposable
 }
 
-/** 场里的一格：对外是 entry，对内额外记住"它是不是叠加器" */
+/**
+ * 场里的一格：**一个 id 下的一摞层**。
+ *
+ * 为什么一摞而不是一条：不同插件常用同一个 id（底栏动作就是活例：内置 web2api 与
+ * cloud-client 都注册 web2api:*）。若同 id 直接覆盖，后注册者把先注册者**删掉**，
+ * 后注册者一卸载，先注册者那条也整条不见了（用户实测报过："卸载 web2api 后云端配置也没了"）。
+ * 叠层之后：后注册的在外（可见），撤销它就露出下面那层 —— 符合规则 1"永不覆盖，只往栈上叠"。
+ *
+ * 层内以 source（放置方）为身份：**同一插件**同 id 再 add = 替换自己那层（热更语义不变），
+ * **不同插件**同 id = 各自一层。排序用 order（小者在外），同 order 保插入序。
+ */
 interface Slot<T> {
+  /** 该 id 下的层，按插入序；对外顺序由 order 排序决定 */
+  layers: Layer<T>[]
+}
+
+/** 摞里的一层 = 一个放置方放的一条 */
+interface Layer<T> {
   entry: Entry<T>
   wrapper?: RegistryWrapper<T>
 }
@@ -166,20 +182,22 @@ export class RegistryImpl<T> implements Registry<T> {
   remove(key: string, id: string): boolean {
     const slots = this.byKey.get(key)
     if (!slots) return false
-    const removed = slots.get(id)?.entry
-    const ok = slots.delete(id)
+    const slot = slots.get(id)
+    if (!slot) return false
+    // remove 是"这个 id 整个不要了"：摘掉该 id 下的**整摞**（各放置方都算）
+    const gone = slot.layers.map((l) => l.entry)
+    slots.delete(id)
     if (slots.size === 0) this.byKey.delete(key) // 键空则回收
-    if (ok) {
-      this.emitChange({ type: 'removed', key, entry: removed! })
-      this.notify() // no-op 不广播（订阅方不必为没发生的事重绘）
-    }
-    return ok
+    for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
+    this.notify()
+    return true
   }
 
   clear(key: string): void {
     const slots = this.byKey.get(key)
     if (!slots) return
-    const gone = [...slots.values()].map((s) => s.entry)
+    const gone: Entry<T>[] = []
+    for (const slot of slots.values()) for (const l of slot.layers) gone.push(l.entry)
     this.byKey.delete(key)
     for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
     this.notify()
@@ -190,7 +208,8 @@ export class RegistryImpl<T> implements Registry<T> {
     let changed = false
     for (const key of [...this.byKey.keys()]) {
       if (key.startsWith(prefix)) {
-        const gone = [...this.byKey.get(key)!.values()].map((s) => s.entry)
+        const gone: Entry<T>[] = []
+        for (const slot of this.byKey.get(key)!.values()) for (const l of slot.layers) gone.push(l.entry)
         this.byKey.delete(key)
         for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
         changed = true
@@ -204,7 +223,14 @@ export class RegistryImpl<T> implements Registry<T> {
   list(key: string): Entry<T>[] {
     const slots = this.byKey.get(key)
     if (!slots) return []
-    return [...slots.values()].map((s) => s.entry).sort((a, b) => a.order - b.order)
+    // 每个 id 只出**最外层**那一条（order 小者在外；同 order 后放者在外）——同 id 的层叠
+    // 对消费方表现为"只看得见一条"，这正是底栏动作要的语义。
+    const out: Entry<T>[] = []
+    for (const slot of slots.values()) {
+      const visible = this.visibleOf(slot)
+      if (visible) out.push(visible.entry)
+    }
+    return out.sort((a, b) => a.order - b.order)
   }
 
   top(key: string): Entry<T> | undefined {
@@ -212,7 +238,8 @@ export class RegistryImpl<T> implements Registry<T> {
   }
 
   get(key: string, id: string): Entry<T> | undefined {
-    return this.byKey.get(key)?.get(id)?.entry
+    const slot = this.byKey.get(key)?.get(id)
+    return slot ? this.visibleOf(slot)?.entry : undefined
   }
 
   has(key: string): boolean {
@@ -234,11 +261,17 @@ export class RegistryImpl<T> implements Registry<T> {
    * - 普通条目 → 它就是当前这层的值（外面有普通条目时会盖住里面那层，这正是"覆盖"）；
    * - wrap 条目 → 调它的 fn(inner) 包住下面那层。
    * 空键返回 undefined（除非给了 base）；最里层是 wrap 且下面没有底时，inner 收到 base（缺省 undefined）。
-   */
+  */
   resolve(key: string, base?: T): T | undefined {
     const slots = this.byKey.get(key)
     if (!slots || slots.size === 0) return base
-    const ordered = [...slots.values()].sort((a, b) => a.entry.order - b.entry.order)
+    // 每个 id 只贡献**最外层**那一条参与合成（同 id 的多层对消费方是"只看得见最外那条"）。
+    const visible: Layer<T>[] = []
+    for (const slot of slots.values()) {
+      const top = this.visibleOf(slot)
+      if (top) visible.push(top)
+    }
+    const ordered = visible.sort((a, b) => a.entry.order - b.entry.order)
     let acc: T | undefined = base
     for (let i = ordered.length - 1; i >= 0; i--) {
       const slot = ordered[i]
@@ -315,14 +348,13 @@ export class RegistryImpl<T> implements Registry<T> {
   ): { id: string; dispose(): void } {
     const id = opts.id ?? this.genId(key)
     const order = opts.order ?? DEFAULT_ORDER
-    const previous = this.byKey.get(key)?.get(id)?.entry
-    // 同 id 再放 = 替换该条（连同它原来的 wrapper 身份一起丢掉：它现在是一条普通值）
     const entry: Entry<T> = { id, value, order, source }
-    this.ensure(key).set(id, { entry })
-    if (previous) this.emitChange({ type: 'removed', key, entry: previous })
+    // 同 id：**同一个放置方**再放 = 替换自己那层（热更，不叠高）；
+    // **不同放置方** = 各占一层（后放者默认在外，撤销它露出下面那层）。
+    const previous = this.pushLayer(key, id, { entry })
     this.emitChange({ type: 'added', key, entry, ...(previous ? { previous } : {}) })
     this.notify()
-    return { id, dispose: this.disposer(key, id) }
+    return { id, dispose: this.disposer(key, id, source, entry) }
   }
 
   /** 放一条叠加器 */
@@ -336,22 +368,65 @@ export class RegistryImpl<T> implements Registry<T> {
     // 缺省放在最外：取当前最小 order 再减一（空键则 0）
     const order = opts.order ?? this.outermostOrder(key)
     const entry: Entry<T> = { id, value: fn as unknown as T, order, source }
-    const previous = this.byKey.get(key)?.get(id)?.entry
-    this.ensure(key).set(id, { entry, wrapper: fn })
-    if (previous) this.emitChange({ type: 'removed', key, entry: previous })
+    const previous = this.pushLayer(key, id, { entry, wrapper: fn })
     this.emitChange({ type: 'added', key, entry, ...(previous ? { previous } : {}) })
     this.notify()
-    return { dispose: this.disposer(key, id) }
+    return { dispose: this.disposer(key, id, source, entry) }
   }
 
-  /** 撤销句柄：幂等（重复 dispose 安全），执行后该条从表里消失 */
-  private disposer(key: string, id: string): () => void {
+  /**
+   * 撤销句柄：幂等（重复 dispose 安全）。**只摘自己放的那一层**，不碰同 id 别人的层。
+   *
+   * 为什么按 (source, entry) 认层而不是按 id：同 id 可能有多个放置方各一层，
+   * 按 id 删会把别人的层一起带走 —— 那正是"卸载 web2api 后云端配置也消失"的成因。
+   * 用 entry 引用兜底：同插件同 id 热更后，旧的撤销句柄再 dispose 不应摘掉新放的那层。
+   */
+  private disposer(key: string, id: string, source: string, entry: Entry<T>): () => void {
     let live = true
     return () => {
       if (!live) return
       live = false
-      this.remove(key, id)
+      this.removeLayer(key, id, source, entry)
     }
+  }
+
+  /**
+   * 把一条压进某 id 的摞里。
+   * @returns 被替换掉的旧层（同放置方同 id 热更时），没有则 undefined
+   */
+  private pushLayer(key: string, id: string, layer: Layer<T>): Entry<T> | undefined {
+    const slots = this.ensure(key)
+    const slot = slots.get(id)
+    if (!slot) {
+      slots.set(id, { layers: [layer] })
+      return undefined
+    }
+    // 同一个放置方同 id：替换它自己那层（保持原位置，避免反复热更把层越挪越外/越内）
+    const idx = slot.layers.findIndex((l) => l.entry.source === layer.entry.source)
+    if (idx >= 0) {
+      const previous = slot.layers[idx].entry
+      slot.layers[idx] = layer
+      return previous
+    }
+    slot.layers.push(layer)
+    return undefined
+  }
+
+  /**
+   * 摘掉某一层（放置方 + entry 身份都对上才摘）。摘完该 id 一层不剩时连这个 id 一起回收。
+   * 找不到那一层就什么都不做（例如句柄已被同插件同 id 的热更换掉）。
+   */
+  private removeLayer(key: string, id: string, source: string, entry: Entry<T>): void {
+    const slots = this.byKey.get(key)
+    const slot = slots?.get(id)
+    if (!slots || !slot) return
+    const idx = slot.layers.findIndex((l) => l.entry === entry && l.entry.source === source)
+    if (idx < 0) return
+    const [gone] = slot.layers.splice(idx, 1)
+    if (slot.layers.length === 0) slots.delete(id)
+    if (slots.size === 0) this.byKey.delete(key)
+    this.emitChange({ type: 'removed', key, entry: gone.entry })
+    this.notify()
   }
 
   /** 缺省 wrap 位置 = 最外 = 当前最小 order - 1；空键 0 */
@@ -367,6 +442,23 @@ export class RegistryImpl<T> implements Registry<T> {
       this.byKey.set(key, m)
     }
     return m
+  }
+
+  /**
+   * 一摞层里当前"看得见"的那层 = order 最小者；同 order 取**最后放的**（后放者在外）。
+   * 层的插入序天然是"先放的在先"，故同 order 时取数组末尾那条。
+   */
+  private visibleOf(slot: Slot<T>): Layer<T> | undefined {
+    let best: Layer<T> | undefined
+    for (const layer of slot.layers) {
+      if (!best) {
+        best = layer
+        continue
+      }
+      // <= 而非 <：同 order 时后者（数组更靠后 = 更晚放）赢
+      if (layer.entry.order <= best.entry.order) best = layer
+    }
+    return best
   }
 
   /** 自动 id：key#n（与 SlotRegistry 同形状，便于将来糖薄转发时 id 不变） */

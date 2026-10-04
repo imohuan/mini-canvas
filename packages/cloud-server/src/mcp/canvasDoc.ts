@@ -5,12 +5,12 @@
  * 这两边必须看到同一张画布 —— 否则 AI 改的和用户在浏览器里看到的各是一份，
  * 那这个 MCP 就是摆设。所以 MCP 不另起一套存储，直接读写网页界面用的那套 key：
  *
- *   canvas:graph          节点数组（或 {nodes,edges} 信封）
- *   canvas:graph-edges    边数组
- *   canvas:graph-viewport 视口
- *
- * 这几条的物理形态就是 `KvStore` 落盘的 `.mini-canvas/kv/*.json`，
- * 也就是网页端 `HttpAdapter` 打在 `/api/kv/canvas/*` 上的同一批数据。
+  *   canvases/<id>/canvas.json   画布本体（节点 + 边 + 画布信息）
+  *   canvases/<id>/view.json     视口
+  *   canvases/<id>/history.json  任务记录
+  *   canvases/<id>/resources/    本画布资源（节点里存 res:<hash> 相对引用）
+  *
+  * 一个画布一个文件夹：复制文件夹 = 复制画布，删文件夹 = 删干净，AI 也能直接读文件。
  *
  * 边界（有意如此）：
  * - 本模块只管"读出来 / 写回去"与批量增删改的语义，不认识 Vue、不认识渲染。
@@ -31,26 +31,20 @@
  *    本文件的 CanvasNode.type 存的是语义类型（text/image…，与网页端 GraphDocument 同款）；
  *    mcp-server 的 GraphModel 存的是渲染类型：语义类型会被改写成 type=custom + data.nodeType
  *    （见 GraphModel.test.ts 的「语义类型节点自动转成 VueFlow 格式」）。
- *    边 id 也不同源：本文件 edgeIdOf 生成 e-{source}-{target}（与 canvas-data 的 edgeStoreId 逐字一致，
- *    canvasDoc.test.ts 里钉死了 e-a-b），而 GraphModel.createEdge 用 randomUUID()。
+ *    边 id 也不同源：本文件与网页端统一用**自增数字**（取现有最大 + 1），
+ *    而 GraphModel.createEdge 用 randomUUID()。
  *    把两套塞进同一个类，等于要在数据层里加一个「你那边用哪种形态」的开关——那才是真风险。
- * 3. 两个后端的存储形态本就不同：本包是 KV（.mini-canvas/kv/*.json），
- *    mcp-server 是 workspace/project-{id}/canvas.json（NodeStorage）。
+  * 3. 两个后端的存储形态本就不同：本包是一个画布一个文件夹，
+  *    mcp-server 是 workspace/project-{id}/canvas.json（NodeStorage）。
  *    共用的只有「JSON 字段形状」，而那一层已经由 canvasDoc.test.ts 与本文件的类型逐字比对守住。
  *
  * 因此本步只做不加依赖、不动独立性的动作：把结论写在这里，免得下一个人重新评估一遍。
  * 若将来真要合并，正确顺序是：先发布 kernel → 再发布 canvas-data → 然后才是在两个后端之间抽共享内核。
  */
-import { randomUUID } from 'node:crypto'
-import type { KvStore } from '../store/kvStore.js'
-import { extFromMime, safeExt, type FileStore } from '../store/fileStore.js'
-
-/** 画布节点图的持久化 key（type='canvas'）。值 = CanvasNode[] 或 {nodes,edges} 信封 */
-export const GRAPH_KEY = 'graph'
-/** 画布边集的持久化 key（type='canvas'）。值 = CanvasEdge[] */
-export const GRAPH_EDGES_KEY = 'graph-edges'
-/** 画布视口的持久化 key（type='canvas'）。值 = { x, y, zoom } */
-export const GRAPH_VIEWPORT_KEY = 'graph-viewport'
+import { DEFAULT_CANVAS_ID } from '../store/canvasPaths.js'
+import type { CanvasStore } from '../store/canvasStore.js'
+import { extFromMime, safeExt, mimeOf } from '../store/mime.js'
+import type { CanvasResourceStore } from '../store/canvasResources.js'
 
 /** 画布节点（与 @mini-canvas/canvas-data 的同名字段对齐；这里只留数据层用得到的） */
 export interface CanvasNode {
@@ -159,27 +153,28 @@ export interface EdgeBatchInput {
   update?: { id: string; source?: string; target?: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }[]
 }
 
-/** 稳定边 id：与数据层 edgeStoreId 同约定（无端口时 `e-{source}-{target}`） */
-export function edgeIdOf(edge: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): string {
-  const sh = edge.sourceHandle && edge.sourceHandle !== 'source' ? edge.sourceHandle : ''
-  const th = edge.targetHandle && edge.targetHandle !== 'target' ? edge.targetHandle : ''
-  if (!sh && !th) return `e-${edge.source}-${edge.target}`
-  return `e-${sh ? `${edge.source}:${sh}` : edge.source}-${th ? `${edge.target}:${th}` : edge.target}`
-}
-
 /** 深拷贝（快照隔离：读出去的数组被调用方改了也不能污染我们内部状态） */
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T
 }
 
+/** 连接身份键：端点 + 端口（默认 handle 视同未指定）。去重按它判定，不按 id。 */
+function edgeKey(e: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): string {
+  const sh = e.sourceHandle && e.sourceHandle !== 'source' ? e.sourceHandle : ''
+  const th = e.targetHandle && e.targetHandle !== 'target' ? e.targetHandle : ''
+  return `${e.source}|${e.target}|${sh}|${th}`
+}
+
 export class CanvasDocument {
   /**
-   * @param kv    画布数据（与网页界面同一份）
-   * @param files 资源存储（与网页端 `POST /api/files` 同一个 FileStore）
+   * @param store     画布文件夹（canvas.json / view.json）
+   * @param resources 本画布资源（节点里存 `res:<hash>` 相对引用）
+   * @param canvasId  画布 id（前端界面当前只有一张，默认 default）
    */
   constructor(
-    private readonly kv: KvStore,
-    private readonly files?: FileStore,
+    private readonly store: CanvasStore,
+    private readonly resources?: CanvasResourceStore,
+    private readonly canvasId: string = DEFAULT_CANVAS_ID,
   ) {}
 
   /**
@@ -207,44 +202,42 @@ export class CanvasDocument {
   }
 
   /**
-   * 存一个资源（图片/视频等字节），返回**同源稳定 URL**。
+   * 存一个资源（图片/视频等字节），返回**画布内引用**与可直接展示的同源地址。
    *
    * 为什么 MCP 需要这个：AI 要往画布里放图，得先把字节交给服务器 —— 否则节点里只能写
-   * 一个外链（可能挂、可能跨域、用户换机器就取不到）。落盘后拿到 `/uploads/<hash>.png`，
-   * 与网页端上传走的是**同一个 FileStore**（同内容会去重成同一个 url）。
+   * 一个外链（可能挂、可能跨域、用户换机器就取不到）。
+   *
+   * 节点里写 `ref`（`res:<hash>`），不写绝对地址 —— 这样复制整个画布文件夹仍然能用。
+   * `url` 只是给调用方当**同源可展示地址**用的（渲染时要按当前画布解析回来）。
    */
   async saveResource(bytes: Uint8Array, opts: { fileName?: string; mime?: string } = {}) {
-    if (!this.files) throw new Error('[mcp] 未配置资源存储，无法保存资源')
+    if (!this.resources) throw new Error('[mcp] 未配置资源存储，无法保存资源')
     if (bytes.byteLength === 0) throw new Error('[mcp] 资源内容为空')
     // 扩展名来源：文件名 → MIME 反查。白名单外（含 .html/.js）回落空扩展名，
     // 与网页端同规则（同源托管下这些会造成 XSS 面）。
     const ext = safeExt(opts.fileName ?? '') || extFromMime(opts.mime ?? '')
-    return this.files.save(bytes, ext)
+    const saved = await this.resources.save(this.canvasId, bytes, ext)
+    return {
+      ref: saved.ref,
+      hashName: saved.hashName,
+      url: '/api/canvases/' + this.canvasId + '/resources/' + saved.hashName,
+      size: saved.size,
+      mime: opts.mime ?? mimeOf(saved.hashName),
+    }
   }
 
-  /** 列出已存资源的 id（AI 排查"我传的图在不在"用） */
+  /** 列出本画布已存资源（AI 排查"我传的图在不在"用） */
   async listResources(): Promise<string[]> {
-    return this.files ? this.files.ids() : []
+    return this.resources ? this.resources.list(this.canvasId) : []
   }
 
   /** 读整张画布。从未保存过 = 空画布（不是错误） */
   async read(): Promise<CanvasSnapshot> {
-    const raw = await this.kv.get<CanvasNode[] | { nodes?: CanvasNode[]; edges?: CanvasEdge[] }>( 'canvas', GRAPH_KEY)
-    const rawEdges = await this.kv.get<CanvasEdge[]>('canvas', GRAPH_EDGES_KEY)
-    const viewport = await this.kv.get<{ x: number; y: number; zoom: number }>('canvas', GRAPH_VIEWPORT_KEY)
-
-    // 三种形态都要认（与网页端恢复逻辑同款）：旧数组只存节点 / 新信封含边 / 空
-    let nodes: CanvasNode[] = []
-    let edges: CanvasEdge[] = Array.isArray(rawEdges) ? rawEdges : []
-    if (Array.isArray(raw)) {
-      nodes = raw
-    } else if (raw && Array.isArray(raw.nodes)) {
-      nodes = raw.nodes
-      if (Array.isArray(raw.edges)) edges = raw.edges
-    }
+    const data = (await this.store.readCanvas(this.canvasId)) ?? { nodes: [], edges: [] }
+    const viewport = await this.store.readView(this.canvasId)
     return {
-      nodes: clone(nodes),
-      edges: clone(edges),
+      nodes: clone(data.nodes) as CanvasNode[],
+      edges: clone(data.edges) as CanvasEdge[],
       ...(viewport ? { viewport: clone(viewport) } : {}),
     }
   }
@@ -254,41 +247,37 @@ export class CanvasDocument {
    * 只写 nodes/edges 两个 key（**不碰 viewport**：AI 编辑不该重置用户当前视野）。
    */
   async write(snapshot: { nodes: CanvasNode[]; edges: CanvasEdge[] }): Promise<void> {
-    await this.kv.set('canvas', GRAPH_KEY, snapshot.nodes)
-    await this.kv.set('canvas', GRAPH_EDGES_KEY, snapshot.edges)
+    await this.store.writeCanvas(this.canvasId, { nodes: snapshot.nodes, edges: snapshot.edges })
   }
 
   /**
-  * 「以这份为准」整体重写（网页端的整包保存走这条）。
- *
-  * 与 batchNodes 的区别：batch 是「在现有画布上增删改」，这条是「整个换成我这份」。
-  * 用户删光节点、恢复历史、导入画布这类操作必须用它 —— 用 batch 表达不出「删掉你没提到的那些」。
- *
-  * 同样进串行链：否则它与 AI 的增量写并发时，一方会把另一方整个盖掉。
-  */
-  /**
-   * 单个画布 key 的改写（网页端 `PUT /api/kv/canvas/graph` 这类整包保存走这条）。
+   * 「以这份为准」整体重写（网页端整包保存走这条）。
    *
-   * 为什么必须收进本对象、而不是让路由直接调 `kv.set`：整包保存是「读全量 → 改 → 写全量」的兄弟形态，
-   * 它与 AI 的增量写并发时同样会互相覆盖。只有把**所有对画布 key 的写**都排进同一把锁，
-   * 「谁后写谁覆盖」这件事才真正消失。
-   *
-   * `key` 用裸 key（`graph` / `graph-edges`），与路由的 URL 段一致。
+   * 与 batchNodes 的区别：batch 是「在现有画布上增删改」，这条是「整个换成我这份」。
+   * 用户删光节点、恢复历史、导入画布这类操作必须用它 —— 用 batch 表达不出
+   * 「删掉你没提到的那些」。同样进串行链：否则它与 AI 的增量写并发时会互相覆盖。
    */
-  async writeKey(key: string, value: unknown): Promise<void> {
+  async replaceAll(nodes: unknown[], edges: unknown[]): Promise<void> {
     return this.runExclusive(async () => {
-      await this.kv.set('canvas', key, value)
+      await this.store.writeCanvas(this.canvasId, { nodes, edges })
     })
   }
 
-  /** 单键删除（同样要过锁：它在语义上也是一次画布写） */
-  async removeKey(key: string): Promise<boolean> {
-    return this.runExclusive(async () => this.kv.remove('canvas', key))
+  /**
+   * 视图状态（视口）整体改写。
+   *
+   * 与 `write`（画布本体）分开：改动视野不该重写整份节点边。
+   * 同样进串行链 —— 它也是一次落盘。
+   */
+  async writeView(view: unknown): Promise<void> {
+    return this.runExclusive(async () => {
+      await this.store.writeView(this.canvasId, view)
+    })
   }
 
-  /** 这个 key 是否属于「画布图数据」（决定要不要收进上面那把锁） */
-  static isGraphKey(key: string): boolean {
-    return key === GRAPH_KEY || key === GRAPH_EDGES_KEY
+  /** 读视口（宿主恢复视野用） */
+  async readView<T = { x: number; y: number; zoom: number }>(): Promise<T | undefined> {
+    return this.store.readView<T>(this.canvasId)
   }
 
   /**
@@ -302,13 +291,47 @@ export class CanvasDocument {
     return { x: Math.round(maxRight + 80), y: Math.round(minTop) }
   }
 
-  /** 生成一个不与现有节点冲突的 id。用 `ai-` 前缀，和网页端自增的数字 id 天然不撞。 */
+  /**
+   * 生成一个不与现有节点冲突的节点 id：**自增数字**（与网页端同一套规则）。
+   *
+   * 过去用 `ai-` 前缀是为了和网页端的数字 id 区分开；现在两边统一成数字了，
+   * AI 建的节点与网页建的节点就是同一种东西（用户要求：AI 加节点不必自己指定 id，
+   * 由服务端发号并在 added 里回给调用方）。
+   */
   private newNodeId(taken: Set<string>): string {
-    for (let i = 0; i < 1000; i++) {
-      const id = `ai-${randomUUID().slice(0, 8)}`
-      if (!taken.has(id)) return id
+    let max = 0
+    for (const id of taken) {
+      const n = Number.parseInt(id, 10)
+      if (!Number.isNaN(n) && n > max) max = n
     }
-    throw new Error('[mcp] 生成节点 id 失败（连续冲突）')
+    let candidate = ''
+    do {
+      max += 1
+      candidate = String(max)
+    } while (taken.has(candidate))
+    return candidate
+  }
+
+  /**
+   * 生成一个不与现有边冲突的 id：**自增数字**（与网页端同一套规则）。
+   *
+   * 为什么不沿用过去的 `e-{source}-{target}`：那边 id 形态五花八门（见 canvas-data 的 edgeStore），
+   * 现在统一成数字，AI 建的边与网页建的边才是同一种东西。取「现有最大数字 + 1」，
+   * 并跳过已被其它 id 占用的号。
+   */
+  private nextEdgeId(existing: Array<{ id: string }>): string {
+    const taken = new Set(existing.map((e) => e.id))
+    let max = 0
+    for (const e of existing) {
+      const n = Number.parseInt(e.id, 10)
+      if (!Number.isNaN(n) && n > max) max = n
+    }
+    let candidate = ''
+    do {
+      max += 1
+      candidate = String(max)
+    } while (taken.has(candidate))
+    return candidate
   }
 
   /**
@@ -459,9 +482,12 @@ export class CanvasDocument {
     let edges = snap.edges.filter((e) => !delSet.has(e.id))
 
     for (const a of adds) {
-      const id = a.id ?? edgeIdOf(a)
-      // 同 id 视为同一条（与数据层 addEdge 的去重语义一致）
-      const dup = edges.find((e) => e.id === id)
+      const id = a.id ?? this.nextEdgeId(snap.edges.concat(edges))
+      // 去重看**连接本身**（端点 + 端口），不是 id —— id 已是自增数字，
+      // 「同一条线再加一次」不再自动得到同一个 id，必须显式比端点，
+      // 否则会写出两条端点相同的边（与数据层 addEdge 的去重语义对齐）。
+      const key = edgeKey(a)
+      const dup = edges.find((e) => edgeKey(e) === key)
       if (dup) {
         // upsert：已存在就按新内容更新它（端点/端口/data/type 都跟上）
         if (input.upsert) {

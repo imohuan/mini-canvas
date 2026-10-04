@@ -25,7 +25,23 @@ afterEach(async () => {
 
 async function boot(): Promise<void> {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'canvas-ops-'))
-  srv = await createCloudServer({ dir })
+  // 关掉 provider 目录的自动重载：单测不需要定时器
+  srv = await createCloudServer({ dir, watchProviders: false })
+}
+
+/**
+ * 画布本体是否真的落过盘。
+ *
+ * 为什么不复用 readGraph：readGraph 把「没存过」和「存过但为空」都压成了 []，
+ * 而这里要的正是那个区分 —— 被拒的请求**连文件都不该创建**。
+ */
+async function canvasFileExists(): Promise<boolean> {
+  try {
+    await fs.access(path.join(dir, 'canvases', 'default', 'canvas.json'))
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 发一条增量写请求，返回解析后的 JSON（含 status） */
@@ -47,17 +63,25 @@ async function post(pathname: string, body: unknown) {
   return { status: res.status, json }
 }
 
-/** 读当前画布（走 KV 读口，等于是「第三方视角」看到的落盘结果） */
-async function readGraph<T = any[]>(): Promise<T> {
-  const res = await srv.app.fetch(new Request('http://localhost/api/kv/canvas/graph'))
+/**
+ * 读当前画布（走画布读口，等于是「第三方视角」看到的落盘结果）。
+ *
+ * 从未保存过 → 返回 undefined（与 /api/kv 的 404 语义一致）：
+ * 调用方靠它区分「没存过」与「存过一张空画布」。
+ */
+async function readCanvas(): Promise<{ nodes: any[]; edges: any[] } | undefined> {
+  const res = await srv.app.fetch(new Request('http://localhost/api/canvases/default'))
+  if (res.status !== 200) return undefined
   const body: any = await res.json()
-  return body.value as T
+  return { nodes: body.nodes ?? [], edges: body.edges ?? [] }
 }
 
-async function readEdges<T = any[]>(): Promise<T> {
-  const res = await srv.app.fetch(new Request('http://localhost/api/kv/canvas/graph-edges'))
-  const body: any = await res.json()
-  return body.value as T
+async function readGraph<T = any[]>(): Promise<T | undefined> {
+  return (await readCanvas())?.nodes as T | undefined
+}
+
+async function readEdges<T = any[]>(): Promise<T | undefined> {
+  return (await readCanvas())?.edges as T | undefined
 }
 
 describe('POST /api/canvas/nodes —— 增量加节点', () => {
@@ -68,7 +92,7 @@ describe('POST /api/canvas/nodes —— 增量加节点', () => {
     expect(r.json.ok).toBe(true)
     expect(r.json.added).toEqual(['n1'])
 
-    const nodes = await readGraph()
+    const nodes = (await readGraph())!
     expect(nodes.map((n: any) => n.id)).toEqual(['n1'])
     expect(nodes[0].data.text).toBe('嗨')
   })
@@ -78,8 +102,8 @@ describe('POST /api/canvas/nodes —— 增量加节点', () => {
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a', position: { x: 0, y: 0 } }] })
     const r = await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'b' }] })
     expect(r.json.ok).toBe(true)
-    const nodes = await readGraph()
-    const b = nodes.find((n: any) => n.id === 'b')
+    const nodes = (await readGraph())!
+    const b = nodes.find((n: any) => n.id === 'b')!
     expect(b.position.x).toBeGreaterThan(0)
   })
 })
@@ -92,7 +116,7 @@ describe('POST /api/canvas/nodes —— 增量改节点', () => {
       update: [{ id: 'a', position: { x: 88, y: 99 }, data: { runState: 'running' } }],
     })
     expect(r.json.ok).toBe(true)
-    const a = (await readGraph()).find((n: any) => n.id === 'a')
+    const a = (await readGraph())!.find((n: any) => n.id === 'a')!
     expect(a.position).toEqual({ x: 88, y: 99 })
     expect(a.data.runState).toBe('running')
   })
@@ -101,7 +125,7 @@ describe('POST /api/canvas/nodes —— 增量改节点', () => {
     await boot()
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'p' }, { type: 'text', id: 'c' }] })
     await post('/api/canvas/nodes', { update: [{ id: 'c', size: { w: 300, h: 200 }, parentId: 'p' }] })
-    const nodes = await readGraph()
+    const nodes = (await readGraph())!
     const c = nodes.find((n: any) => n.id === 'c')
     expect(c.size).toEqual({ w: 300, h: 200 })
     expect(c.parentId).toBe('p')
@@ -111,7 +135,7 @@ describe('POST /api/canvas/nodes —— 增量改节点', () => {
     await boot()
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a', data: { keep: 1, change: 'old' } }] })
     await post('/api/canvas/nodes', { update: [{ id: 'a', data: { change: 'new' } }] })
-    const a = (await readGraph()).find((n: any) => n.id === 'a')
+    const a = (await readGraph())!.find((n: any) => n.id === 'a')!
     expect(a.data).toEqual({ keep: 1, change: 'new' })
   })
 })
@@ -122,7 +146,7 @@ describe('POST /api/canvas/nodes —— 增量删节点', () => {
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     await post('/api/canvas/edges', { add: [{ source: 'a', target: 'b' }] })
     await post('/api/canvas/nodes', { delete: ['a'] })
-    expect((await readGraph()).map((n: any) => n.id)).toEqual(['b'])
+    expect((await readGraph())!.map((n: any) => n.id)).toEqual(['b'])
     expect(await readEdges()).toEqual([])
   })
 })
@@ -136,7 +160,7 @@ describe('POST /api/canvas/nodes —— 非法请求被挡下', () => {
     // （MCP 口没这层宽容，那边写错 id 会明确报错 —— 别把两个口的容错策略搞混。）
     expect(r.json.ok).toBe(true)
     expect(r.json.deleted).toEqual([])
-    expect((await readGraph()).map((n: any) => n.id)).toEqual(['a'])
+    expect((await readGraph())!.map((n: any) => n.id)).toEqual(['a'])
   })
 
   it('缺 type 的新增被挡下', async () => {
@@ -158,7 +182,7 @@ describe('POST /api/canvas/edges —— 增量连线', () => {
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     const r = await post('/api/canvas/edges', { add: [{ source: 'a', target: 'b' }] })
     expect(r.json.ok).toBe(true)
-    expect((await readEdges()).length).toBe(1)
+    expect((await readEdges())!.length).toBe(1)
   })
 
   it('端点不存在 → 拒绝，不写悬挂边', async () => {
@@ -193,7 +217,7 @@ describe('两个写方同时改画布：谁都不会盖掉谁', () => {
     expect(r.json.ok).toBe(true)
     expect(r.json.added).toEqual(['z']) // y 不算新增（它已经在了）
 
-    const ids = (await readGraph()).map((n: any) => n.id).sort()
+    const ids = (await readGraph())!.map((n: any) => n.id).sort()
     expect(ids).toEqual(['y', 'z'])
   })
 
@@ -215,7 +239,7 @@ describe('两个写方同时改画布：谁都不会盖掉谁', () => {
     )
     expect(results.every((r) => r.json.ok)).toBe(true)
 
-    const ids = (await readGraph()).map((n: any) => n.id).sort()
+    const ids = (await readGraph())!.map((n: any) => n.id).sort()
     expect(ids.length).toBe(11)
     expect(ids).toEqual(['base', ...Array.from({ length: 10 }, (_, i) => 'n' + i)].sort())
   })
@@ -230,7 +254,7 @@ describe('两个写方同时改画布：谁都不会盖掉谁', () => {
       post('/api/canvas/nodes', { add: [{ type: 'text', id: 'ai-2' }] }),
     ])
 
-    const nodes = await readGraph()
+    const nodes = (await readGraph())!
     const seed = nodes.find((n: any) => n.id === 'seed')
     expect(seed.data.runState).toBe('running')
     expect(nodes.length).toBe(3)
@@ -256,9 +280,9 @@ describe('POST /api/canvas/nodes —— 形状校验（这个口对浏览器开�
       add: [{ type: 'text', id: 'bad', position: { x: 'oops', y: null } }],
     })
     expect(bad.status).toBe(400)
-    // 画布必须还是干净的：否则之后每个新节点的自动定位都会被这个坏值带坏
-    // 被拒的请求连画布文件都不该创建（readGraph 在「从未保存过」时返回 undefined）
-    expect(await readGraph()).toBeUndefined()
+    // 画布必须还是干净的：否则之后每个新节点的自动定位都会被这个坏值带坏。
+    // 被拒的请求连画布文件都不该创建。
+    expect(await canvasFileExists()).toBe(false)
 
     expect((await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'b2', size: { w: 'x', h: 1 } }] })).status).toBe(400)
   })
@@ -286,7 +310,7 @@ describe('同一批里既要删又要加同一个 id → 明确报错（不是 5
     expect(r.status).toBe(200)
     expect(r.json.ok).toBe(false)
     expect(r.json.errors[0].message).toContain('既要删又要加')
-    expect((await readGraph()).map((n: any) => n.id)).toEqual(['a'])
+    expect((await readGraph())!.map((n: any) => n.id)).toEqual(['a'])
   })
 })
 
@@ -299,18 +323,18 @@ describe('边的 type 必须落盘（不写会让云端与本地对同一条边�
     await boot()
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     await post('/api/canvas/edges', { add: [{ source: 'a', target: 'b' }] })
-    expect((await readEdges())[0].type).toBe('custom')
+    expect((await readEdges())![0].type).toBe('custom')
   })
 
   it('显式给的 type 被保留', async () => {
     await boot()
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     await post('/api/canvas/edges', { add: [{ source: 'a', target: 'b', type: 'custom' }] })
-    expect((await readEdges())[0].type).toBe('custom')
+    expect((await readEdges())![0].type).toBe('custom')
   })
 })
 
-describe('整包保存（PUT /api/kv/canvas/graph）也要过同一把锁', () => {
+describe('整包保存（PUT /api/canvases/:id）也要过同一把锁', () => {
   /**
    * 整包保存是「读全量 → 改 → 写全量」的兄弟形态，与 AI 的增量写并发时同样会互相覆盖。
    * 这条钉住「它也被排进串行链」——审查发现原先这条路径绕过了锁（等于漏了一整条数据丢失路径）。
@@ -320,16 +344,24 @@ describe('整包保存（PUT /api/kv/canvas/graph）也要过同一把锁', () =
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'base' }] })
 
     const put = srv.app.fetch(
-      new Request('http://localhost/api/kv/canvas/graph', {
+      new Request('http://localhost/api/canvases/default', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ value: [{ id: 'base', type: 'text', position: { x: 0, y: 0 }, data: {} }, { id: 'from-page', type: 'text', position: { x: 1, y: 1 }, data: {} }] }),
+        body: JSON.stringify({
+          nodes: [
+            { id: 'base', type: 'text', position: { x: 0, y: 0 }, data: {} },
+            // 注意：整包保存是「以这份为准」，所以它会**带上** from-ai（并发到达时可能还没有，
+            // 那就看谁后落地）。这条测的是"两边都不丢"，不是"整包不覆盖" —— 后者本来就是它的语义。
+            { id: 'from-page', type: 'text', position: { x: 1, y: 1 }, data: {} },
+          ],
+          edges: [],
+        }),
       }),
     )
     const delta = post('/api/canvas/nodes', { add: [{ type: 'text', id: 'from-ai' }] })
     await Promise.all([put, delta])
 
-    const ids = (await readGraph()).map((n: any) => n.id).sort()
+    const ids = (await readGraph())!.map((n: any) => n.id).sort()
     // 关键：无论两者谁先谁后，都不能出现「整包那份把 AI 新增的那个抹掉」
     expect(ids).toContain('from-page')
     expect(ids).toContain('from-ai')
@@ -360,7 +392,7 @@ describe('POST /api/canvas/nodes —— delete 元素与 parentId 也要校验',
     expect((await post('/api/canvas/nodes', { delete: [{}] })).status).toBe(400)
     expect((await post('/api/canvas/nodes', { delete: [''] })).status).toBe(400)
     // 节点还是干净的一个（没被塞进 '123' 之类的裸 key）
-    const nodes = await readGraph()
+    const nodes = (await readGraph())!
     expect(nodes.length).toBe(1)
     expect(Object.keys(nodes[0]).sort()).toEqual(['data', 'id', 'position', 'type'])
   })
@@ -384,15 +416,17 @@ describe('POST /api/canvas/nodes —— delete 元素与 parentId 也要校验',
   })
 })
 
-describe('PUT /api/kv —— 坏 value 给人话 400，而不是 500', () => {
-  it('循环引用 → 400 且有说明', async () => {
+describe('写不下去的坏 value 给人话 400，而不是 500', () => {
+  /**
+   * 深度超限的输入会让落盘那一步的 JSON.stringify 爆栈。
+   * 挑一个**非 canvas 作用域**来测，因为 canvas 那条已经改了语义（明确报错指向新路由）。
+   */
+  it('嵌套过深的值 → 400 且有说明（不是 500）', async () => {
     await boot()
-    // 手写一个极深的 JSON 字符串（不经 JSON.stringify，模拟「别人直接发过来的 body」）：
-    // 解析能过，但落盘序列化时会爆栈 —— 以前这条会以 500 收场，现在应当是明确的 400。
     const depth = 100000
     const body = '{"value":' + '{"a":'.repeat(depth) + '1' + '}'.repeat(depth) + '}'
     const res = await srv.app.fetch(
-      new Request('http://localhost/api/kv/canvas/graph', {
+      new Request('http://localhost/api/kv/config/theme', {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body,
