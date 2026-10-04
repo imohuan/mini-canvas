@@ -252,14 +252,19 @@ const adapter = new CanvasDiffAdapter(api, CANVAS_ID)
       onError: (msg, err) => console.warn(msg, err),
     }
     return {
-      async run(input: { prompt?: string; values?: Record<string, unknown>; resources?: ResourceLike[]; nodeId?: string }) {
+      // 节点 id 来自**第二个参数**（底栏契约 BarRunContext.nodeId），不在 input 里。
+      // 之前误读 input.nodeId —— 那个键从来不存在，于是永远兜底成空串、被服务端判「缺少 nodeId」。
+      async run(
+        input: { prompt?: string; values?: Record<string, unknown>; resources?: ResourceLike[] },
+        runCtx: { nodeId: string },
+      ) {
         const r = await submitJob(deps, {
-          nodeId: input.nodeId ?? '',
+          nodeId: runCtx.nodeId,
           actionId: def.id,
           ...(input.prompt !== undefined ? { prompt: input.prompt } : {}),
           ...(input.values ? { values: input.values } : {}),
           ...(input.resources ? { resources: input.resources } : {}),
-        } as never)
+        })
         if ('done' in r) return r.done
         // 返回轮询函数：交给底栏既有的 taskRuntime 驱动
         return makeJobPoll(deps, r.jobId)

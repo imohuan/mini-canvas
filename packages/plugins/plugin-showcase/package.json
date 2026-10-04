@@ -1,6 +1,6 @@
 {
-  "name": "@mini-canvas/plugin-showcase",
-  "version": "1.0.0",
+  "name": "@imohuan/plugin-showcase",
+  "version": "1.0.1",
   "description": "插件展示 —— 前后台成对的示例插件：演示 routes/store/jobs/mcp/agent 五个后台能力 + 在线测试/在线文档面板",
   "type": "module",
   "license": "MIT",

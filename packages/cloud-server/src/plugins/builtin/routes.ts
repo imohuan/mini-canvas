@@ -205,6 +205,15 @@ export const npmPluginsPlugin: PluginModule = {
       createNpmPluginsRoutes({
         pluginsDir: ctx.tryGet<string>(S.pluginsDir),
         serverPluginsDir: need<string>(ctx, S.serverPluginsDir),
+        // scope 白名单：环境变量 MINI_CANVAS_NPM_SCOPES 可覆盖（逗号分隔，如 "@imohuan/,@acme/"）
+        ...(process.env.MINI_CANVAS_NPM_SCOPES
+          ? {
+              scopeAllowlist: process.env.MINI_CANVAS_NPM_SCOPES.split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((s) => (s.endsWith('/') ? s : s + '/')),
+            }
+          : {}),
       }),
     )
   },

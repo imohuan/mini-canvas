@@ -114,7 +114,7 @@ cloud-server 取到包就能读到全部元数据，不用再发明清单格式�
 **Step 1** plugin-showcase 接发布脚本；npm pack 内容检查：只有 dist + package.json。
 **Step 2** 用用户已登录的 npm 执行 npm publish --access public（**发布前向用户展示包名+版本并确认**）。
 **Step 3** 端到端（真 NPM）：
-  1. 界面搜索「showcase」→ 搜到 @mini-canvas/plugin-showcase；
+  1. 界面搜索「@imohuan/plugin-showcase」（精确包名）→ 搜到它；
   2. 点安装 → 成功 → 面板出现 → hello/echo 可用（在线注册演示）；
   3. 卸载 → 面板消失、一次性路由 404；
   4. 改版本重发（1.0.1，改文案）→ 搜索结果显示「有更新」→ 点更新 → 界面显示新版本（更新闭环）。
@@ -145,7 +145,9 @@ Task 1 → 2 →（6 步骤 1 打包，先不发布）→ 3 → 4 → 5 →（6 
 | NPM 元数据放 package.json 的 miniCanvas 段 | registry API 免费返回，不发明第二清单 |
 | 后台半重启生效（不热载） | 现有安全设计（落盘/执行分离），保持；管理页已有状态灯 |
 | tar 用系统 tar 命令解 | Node 无内置 tar；Win10+/Linux/macOS 全自带，零依赖 |
-| 默认只允许 @mini-canvas/ scope | 装 NPM 包 = 代码执行，白名单起步，后续配置放开 |
+| 默认允许 @mini-canvas/ 与 @imohuan/ | 装 NPM 包 = 代码执行，白名单起步；可用 MINI_CANVAS_NPM_SCOPES 配置放开 |
+| 发布到 @imohuan/ scope | @mini-canvas 不属于本账号（registry 维护者是他人），npm 拒绝跨 scope 发布 |
+| 搜索加"精确包名直查" | npm 搜索按热度排序，刚发布 0 下载的包排不进结果（实测 top 250 都无），必须直查补上 |
 | confirm 语义复用 | 装远程包风险不低于手动粘贴，必须同款确认 |
 | 发布动作放在链路就绪之后 | 真发一次就是一个版本号，避免验证过程刷版本 |
 

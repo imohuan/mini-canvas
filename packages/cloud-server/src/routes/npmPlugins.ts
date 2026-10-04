@@ -24,8 +24,11 @@ import path from 'node:path'
 import { safeJson } from './agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
 
-/** 默认 scope 白名单：本系统发布的插件都在 @mini-canvas/ 下 */
-const DEFAULT_SCOPES = ['@mini-canvas/']
+/**
+ * 默认 scope 白名单：只允许这些 scope 下的包被安装（装 NPM 包 = 服务端执行代码）。
+ * 可用 opts.scopeAllowlist 覆盖，或环境变量 MINI_CANVAS_NPM_SCOPES（逗号分隔）在服务层注入。
+ */
+const DEFAULT_SCOPES = ['@mini-canvas/', '@imohuan/']
 
 /** 包名校验（scope/name 形态；name 段不含路径分隔符） */
 const PKG_RE = /^@[a-z0-9-][a-z0-9-._]*[/][a-z0-9-][a-z0-9-._]*$/
@@ -76,30 +79,47 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     if (!q) return c.json({ ok: false, error: '需要 q（搜索关键词）' }, 400)
     try {
       const hits = await client.search(q, 20)
-      // 并发查每个命中的 packument，只留 installable 且 scope 合法的
-      const checked = await Promise.all(
-        hits
-          .filter((h) => scopeAllowed(h.name))
-          .map(async (h) => {
+      // 收集候选包名：搜索命中 + **精确直查**。
+      //
+      // 为什么要精确直查：npm 搜索按热度排序，刚发布、0 下载的包**排不进任何关键词的
+      // 搜索结果前若干页**（实测：新发的包在 top 250 都找不到）。用户搜自己刚发的插件
+      // 会一无所获。所以除了模糊搜索，再按"直接输入包名 / scope 名"精确查一次。
+      const names = new Set<string>()
+      for (const h of hits) names.add(h.name)
+      // 输入像包名（含 / 或以 @ 开头）→ 直接当包名查
+      if (q.includes('/')) names.add(q.startsWith('@') ? q : q)
+      // 输入是 scope（@xxx 或 @xxx/）→ 用该 scope 的搜索再捞一次
+      if (/^@[a-z0-9-]+\/?$/i.test(q)) {
+        try {
+          for (const h of await client.search(q.replace(/\/$/, ''), 50)) names.add(h.name)
+        } catch { /* scope 搜索失败忽略 */ }
+      }
+
+      const descriptors = await Promise.all(
+        [...names]
+          .filter((n) => scopeAllowed(n))
+          .map(async (name) => {
             try {
-              const pk = await client.packument(h.name)
+              const pk = await client.packument(name)
               const latest = pk['dist-tags'].latest
-              const mini = latest ? pk.versions[latest]?.miniCanvas : undefined
+              if (!latest) return null
+              const vInfo = pk.versions[latest] as unknown as { miniCanvas?: Record<string, unknown> }
+              const mini = vInfo?.miniCanvas
               if (mini?.installable !== true) return null
               return {
-                pkg: h.name,
-                description: h.description,
-                version: h.version,
-                date: h.date,
+                pkg: name,
+                description: pk.description ?? '',
+                version: latest,
+                date: pk.time?.[latest] ?? '',
                 hasServer: mini.server !== undefined,
-                title: typeof mini.title === 'string' ? mini.title : h.name,
+                title: typeof mini.title === 'string' ? mini.title : name,
               }
             } catch {
-              return null // 单个命中查失败不影响整页
+              return null // 单个查失败不影响整页（含"搜到的名字其实不存在"）
             }
           }),
       )
-      return c.json({ ok: true, results: checked.filter((x) => x !== null) })
+      return c.json({ ok: true, results: descriptors.filter((x) => x !== null) })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
     }

@@ -24,8 +24,10 @@ describe('NPM 路由 · 真 registry（只读）', () => {
     const body = (await res.json()) as { ok: boolean; results: Array<{ pkg: string }> }
     expect(body.ok).toBe(true)
     expect(Array.isArray(body.results)).toBe(true)
-    // 过滤语义：所有结果的包名都在白名单 scope 里
-    for (const r of body.results) expect(r.pkg.startsWith('@mini-canvas/')).toBe(true)
+    // 过滤语义：所有结果的包名都在白名单 scope 里（默认 @mini-canvas/ 与 @imohuan/）
+    for (const r of body.results) {
+      expect(r.pkg.startsWith('@mini-canvas/') || r.pkg.startsWith('@imohuan/')).toBe(true)
+    }
     srv.stop()
   }, 30_000)
 
