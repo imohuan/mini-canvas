@@ -245,9 +245,10 @@ const canRedo = ref(false)
 
 // ==================== 装配：主题 + nodeTypes ====================
 
-function applyTheme(): void {
+function applyTheme(): boolean {
   const h = hostRef.value
-  if (!h) return
+  if (!h) return false
+  let typesChanged = false
   // P1-9：孤儿 type（有存量节点但类型已注销）也映射 BaseNode 壳 → 卸载插件后存量节点仍有占位渲染，
   // 数据不丢、插件重装后自动恢复（BaseNode 对无 content 的 type 显示占位文本）。
   // 第三个参数 = registryOf('node/shell') 场：设计文档 §4.5/案例 3/8 教作者用 add/wrap 换壳，
@@ -258,19 +259,51 @@ function applyTheme(): void {
     h.ctx.registryOf<unknown>('node/shell'),
   )
   // markRaw 组件句柄：防止它们被 VueFlow/响应式系统 proxy，避免 Vue "组件被 reactive 化" 警告与性能损耗。
-  // 每次先完整重置再填充：主题插件被热卸/顶替后不能继续使用已卸载的旧组件句柄。
-  nodeTypes.value = {}
-  edgeTypes.value = {}
-  // 每 type 用解析出的壳（自带外壳优先，否则全局默认壳）：特殊形态节点由自己的插件决定长相，
-  // 默认壳不必认识它。markRaw 防组件句柄被 VueFlow/响应式系统 proxy。
+  // **结构 diff 后再写**：没变化就不替换引用 —— 一个插件装载会同时命中 4 个订阅源
+  // （ctx:plugin-installed / themeRegistry / nodeRegistry / node/shell 场），每个都调 applyTheme；
+  // 若每次都整体重置 nodeTypes/edgeTypes，引用全变 → VueFlow 全量重渲（对每条边重跑校验），
+  // 启动装载 N 个插件 = 4N 次全量重渲（实测：日志爆发 200+ 条、画布闪烁、图片反复重载）。
+  // 相同内容保持旧引用 = VueFlow 零更新，代价只是一次浅比较。
+  const nextNodeTypes: Record<string, unknown> = {}
   for (const t of asm.nodeTypes) {
     const shell = asm.nodeShells[t]
-    if (shell !== undefined && shell !== null) nodeTypes.value[t] = markRaw(shell)
+    if (shell !== undefined && shell !== null) nextNodeTypes[t] = shell
   }
-  if (asm.edge) edgeTypes.value = { custom: markRaw(asm.edge) }
-  edgeDefaultType.value = asm.edgeDefaultType
-  backgroundComp.value = asm.background ? markRaw(asm.background) : undefined
-  connectionLineComp.value = asm.connectionLine ? markRaw(asm.connectionLine) : undefined
+  const nextEdgeTypes: Record<string, unknown> = asm.edge ? { custom: asm.edge } : {}
+  if (!shallowEqualMarks(nodeTypes.value, nextNodeTypes)) {
+    nodeTypes.value = markRawAll(nextNodeTypes)
+    typesChanged = true
+  }
+  if (!shallowEqualMarks(edgeTypes.value, nextEdgeTypes)) {
+    edgeTypes.value = markRawAll(nextEdgeTypes)
+    typesChanged = true
+  }
+  const nextEdgeDefault = asm.edgeDefaultType
+  if (edgeDefaultType.value !== nextEdgeDefault) { edgeDefaultType.value = nextEdgeDefault; typesChanged = true }
+  const nextBackground = asm.background ?? undefined
+  if (backgroundComp.value !== nextBackground) { backgroundComp.value = nextBackground ? markRaw(nextBackground) : undefined; typesChanged = true }
+  const nextConnLine = asm.connectionLine ?? undefined
+  if (connectionLineComp.value !== nextConnLine) { connectionLineComp.value = nextConnLine ? markRaw(nextConnLine) : undefined; typesChanged = true }
+  return typesChanged
+}
+
+/** 浅比较两个"组件句柄表"：键集合一致且每值同引用才算没变（markRaw 包装不改变比较对象，见 markRawAll） */
+function shallowEqualMarks(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const ka = Object.keys(a)
+  const kb = Object.keys(b)
+  if (ka.length !== kb.length) return false
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false
+    if (a[k] !== b[k]) return false
+  }
+  return true
+}
+
+/** 整表 markRaw：防组件句柄被 VueFlow/响应式系统 proxy */
+function markRawAll(table: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of Object.keys(table)) out[k] = markRaw(table[k] as object)
+  return out
 }
 
 // ==================== 通用 UI 槽(overlay) ====================
@@ -1004,18 +1037,27 @@ onMounted(async () => {
 
     // 订阅插件热装/热卸：重装配主题与 nodeTypes + bump epoch 触发 VueFlow 重挂
     // (overlay 槽内容由 CanvasSurface 内 SlotHost 自行订阅刷新，无需在此处理)
+    // 插件装卸的重挂请求走**微任务合并**：一次装载会同时命中下面 4 个订阅源（事件 + 三个注册场），
+    // 各自 bump nodeEpoch 会让 VueFlow 连挂 4 次（启动时装 N 个插件 = 4N 次整树重挂 →
+    // 画布闪烁 / 图片节点反复重载 / 每次重挂全量重校验边）。合并成一帧内一次重挂，语义不变。
+    let remountQueued = false
+    function queueRemount(): void {
+      const typesChanged = applyTheme()
+      // 装配结果没变（该插件不提供壳/主题组件）→ 不重挂，画布零扰动
+      if (!typesChanged) return
+      if (remountQueued) return
+      remountQueued = true
+      void Promise.resolve().then(() => {
+        remountQueued = false
+        nodeEpoch.value += 1
+      })
+    }
     subs.push(
-      host.ctx.on('ctx:plugin-installed', () => {
-        applyTheme()
-        nodeEpoch.value += 1
-      }),
-      host.ctx.on('ctx:plugin-uninstalled', () => {
-        applyTheme()
-        nodeEpoch.value += 1
-      }),
+      host.ctx.on('ctx:plugin-installed', () => { queueRemount() }),
+      host.ctx.on('ctx:plugin-uninstalled', () => { queueRemount() }),
       // 运行期主题槽/节点段 occupant 被改（不经过插件装卸）也要重装配 + 重挂渲染子树
-      { dispose: host.themeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
-      { dispose: host.nodeRegistry.subscribe(() => { applyTheme(); nodeEpoch.value += 1 }) },
+      { dispose: host.themeRegistry.subscribe(() => { queueRemount() }) },
+      { dispose: host.nodeRegistry.subscribe(() => { queueRemount() }) },
       // node/shell 场（换壳）变了也要重装配：插件热装/热卸走上面的 lifecycle 事件，
       // 但运行期直接 add/wrap 换壳（不经过插件装卸）只有订场才知道，否则"换了壳却没生效"。
       {
@@ -1024,8 +1066,7 @@ onMounted(async () => {
             subscribe(fn: () => void): { dispose(): void }
           }
         ).subscribe(() => {
-          applyTheme()
-          nodeEpoch.value += 1
+          queueRemount()
         }).dispose,
       },
       // 运行期插件装载失败上报(事件驱动)：内核在插件 setup/config 抛错时经 ctx:lifecycle-change ERROR 广播。

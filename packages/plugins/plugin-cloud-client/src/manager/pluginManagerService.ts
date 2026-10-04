@@ -402,6 +402,10 @@ export function createPluginManagerService(
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可装卸（页面上也不给按钮，这里是兜底）
     if (row.installed) return
+    // **在途去重锁**：refresh 与 adapter 切换后的 applyIntent 可能交叠，同一插件被两条链各调一次
+    // → UMD script 注入两份、插件重复装载（实测：启动爆发 200+ 条校验日志 / 画布闪烁）。
+    // busy=true 的行直接跳过 —— 第二条链等第一条装完（row.installed 变 true）自然不会再装。
+    if (row.busy) return
     row.busy = true
     row.error = undefined
     // 用户的显式确认（界面动作）记在 row 上，供 installServerHalf 读。
