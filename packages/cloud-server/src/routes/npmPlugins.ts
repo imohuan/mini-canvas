@@ -42,6 +42,9 @@ export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   recordFile?: string
   /** scope 白名单（前缀匹配；缺省 @mini-canvas/） */
   scopeAllowlist?: string[]
+  /** 热装/热卸钩子：装完/卸完当场生效（见 serverFramework/hotLoad.ts）；缺省不调 */
+  hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
+  hotUninstall?: (id: string) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string }
 }
 
 interface InstallRecord {
@@ -195,11 +198,17 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
 
       // ⑦ server 半 → serverPluginsDir/<id>.js；服务端自己算 sha256 记来源
       let serverSha: string | undefined
+      let hotMsg = ''
       if (serverFile) {
         const serverText = await fs.readFile(path.join(distDir, serverFile), 'utf8')
         serverSha = createHash('sha256').update(serverText, 'utf8').digest('hex')
         const serverId = pkg.replace(/^@/, '').replace('/', '__')
         await fs.writeFile(path.join(opts.serverPluginsDir, serverId + '.js'), serverText, 'utf8')
+        // 热装：宿主当场 import + 登记内核 → 后台路由即时可用，不必重启（见 hotLoad.ts）
+        if (opts.hotInstall) {
+          const hot = await opts.hotInstall(serverId)
+          hotMsg = hot.ok ? '并即时生效' : '（热装失败，重启后生效：' + hot.error + '）'
+        }
       }
 
       // ⑧ 记来源
@@ -219,7 +228,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           pkg,
           version,
           hasServer: serverFile !== undefined,
-          note: '已安装；前端半刷新即可见，后台半重启生效',
+          note: '已安装；前端半刷新即可见' + (serverFile ? '，后台半' + hotMsg : ''),
         },
       }
     } catch (err) {
@@ -287,7 +296,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     const serverId = pkgDirName
     await fs.rm(path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName), { recursive: true, force: true })
     await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
-    return c.json({ ok: true, pkg, note: '已卸载；前端半刷新即可见，后台半重启生效' })
+    // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）
+    let hotMsg = '并即时失效'
+    if (opts.hotUninstall) {
+      const hot = await opts.hotUninstall(serverId)
+      hotMsg = hot.ok ? '并即时失效' : '（热卸失败，重启后消失：' + hot.error + '）'
+    }
+    return c.json({ ok: true, pkg, note: '已卸载；前端半刷新即可见，后台半' + hotMsg })
   })
 
   return app

@@ -53,6 +53,18 @@ export interface ServerPluginsRoutesOptions {
   permissionsOf?: (id: string) => Promise<string[] | undefined>
   /** 本次启动已成功登记的外挂后台插件名（运行时观测面：部署者据此审计"目录里到底活着什么"） */
   loaded?: string[]
+  /**
+   * 热装/热卸钩子（缺省不调，行为与旧版一致）。
+   *
+   * 有它之后，安装/卸载当场生效，不再需要重启服务：
+   *   - install 落盘后调 hotInstall(id)：宿主 import 该文件并登记进内核（路由即时可用）；
+   *   - uninstall 删文件后调 hotUninstall(id)：从内核摘掉（路由即时失效）。
+   *
+   * 为什么钩子由宿主实现而不是路由自己 import：保持 install 路由"只碰文件、不执行代码"的
+   * 既有分工 —— 执行交给宿主（它才知道 kernel/ctx 怎么建）。
+   */
+  hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
+  hotUninstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
 }
 
 export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hono {
@@ -135,6 +147,12 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
     } catch (err) {
       return c.json({ ok: false, error: '写入失败：' + (err instanceof Error ? err.message : String(err)) }, 500)
     }
+    // ⑥ 热装：宿主当场 import + 登记内核 → 路由即时可用（没配 hotInstall 就退化成重启生效）
+    if (opts.hotInstall) {
+      const hot = await opts.hotInstall(id)
+      if (!hot.ok) return c.json({ ok: true, id, note: '已落盘；热装失败（重启后生效）', hotError: hot.error }, 200)
+      return c.json({ ok: true, id, note: '已安装并即时生效' })
+    }
     return c.json({ ok: true, id, note: '已安装；重启服务后生效' })
   })
 
@@ -149,6 +167,12 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
       const code = (err as { code?: string }).code
       if (code === 'ENOENT') return c.json({ ok: false, error: '插件不存在：' + id }, 404)
       return c.json({ ok: false, error: String(err) }, 500)
+    }
+    // 热卸：宿主当场从内核摘掉 → 路由即时失效（没配 hotUninstall 就退化成重启生效）
+    if (opts.hotUninstall) {
+      const hot = await opts.hotUninstall(id)
+      if (!hot.ok) return c.json({ ok: true, id, note: '已删文件；热卸失败（重启后消失）', hotError: hot.error }, 200)
+      return c.json({ ok: true, id, note: '已卸载并即时失效' })
     }
     return c.json({ ok: true, id, note: '已卸载；重启服务后生效' })
   })

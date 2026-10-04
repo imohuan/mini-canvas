@@ -8,6 +8,8 @@
  * 代码块 = 在线文档：每组折叠一段 fetch 示例，看文档即测试。
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { apiUrl, resolveApiBase } from '../apiBase'
+import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -38,6 +40,22 @@ const selfTest = reactive({ scriptLoaded: true, globalPresent: true, mounted: fa
 const jobsTicks = ref<number | undefined>()
 let jobsPollTimer: ReturnType<typeof setInterval> | undefined
 
+// 后台半在哪：同源托管时为空串；独立界面（跨源）时读"服务地址"配置。见 apiBase.ts 的说明。
+const ctx = useCanvasRender().ctx
+const apiBase = resolveApiBase(ctx)
+
+/** 把"后台返回了 HTML（多半是地址不对或后台半没生效）"翻成人话 */
+function friendlyError(raw: string): string {
+  if (/Unexpected token '<'|<!doctype|not valid JSON/i.test(raw)) {
+    return (
+      '后台没应答 JSON（收到的是网页）。两种可能：① 画布界面不是由 cloud-server 托管，需在' +
+      '「设置 → 常规 → 云端客户端 → 服务地址」填 cloud-server 地址；② 后台半是重启才生效的，' +
+      '重启 cloud-server 后再试。'
+    )
+  }
+  return raw
+}
+
 const keyOf = (e: { method: string; path: string }): string => e.method + ' ' + e.path
 
 const loadIndex = async (): Promise<void> => {
@@ -45,15 +63,15 @@ const loadIndex = async (): Promise<void> => {
   indexError.value = undefined
   try {
     const [metaRes, idxRes] = await Promise.all([
-      fetch('/api/showcase/meta'),
-      fetch('/api/showcase/endpoints'),
+      fetch(apiUrl(apiBase, '/api/showcase/meta')),
+      fetch(apiUrl(apiBase, '/api/showcase/endpoints')),
     ])
     if (!metaRes.ok || !idxRes.ok) throw new Error('后台接口不可达（meta ' + metaRes.status + ' / endpoints ' + idxRes.status + '）')
     meta.value = (await metaRes.json()) as Record<string, unknown>
     const idx = (await idxRes.json()) as { groups: EndpointGroup[] }
     groups.value = idx.groups
   } catch (err) {
-    indexError.value = err instanceof Error ? err.message : String(err)
+    indexError.value = friendlyError(err instanceof Error ? err.message : String(err))
   } finally {
     fetchingIndex.value = false
   }
@@ -62,7 +80,7 @@ const loadIndex = async (): Promise<void> => {
 // ===== :id 真实取值链（附录 B.9）：PUT/DELETE 前先拿真 id =====
 const ensureRealId = async (path: string): Promise<string | null> => {
   if (path.includes('todos/:id')) {
-    const res = await fetch('/api/showcase/todos', {
+    const res = await fetch(apiUrl(apiBase, '/api/showcase/todos'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ title: '演示条目（测试台自动创建）' }),
@@ -96,7 +114,7 @@ const runOne = async (e: Endpoint): Promise<void> => {
       if (id === null) throw new Error('取真实 id 失败（前置请求没拿到）')
       path = path.replace(/:id|:key/g, id)
     }
-    const res = await fetch(path, {
+    const res = await fetch(apiUrl(apiBase, path), {
       method: e.method,
       ...(body !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
     })
@@ -110,7 +128,7 @@ const runOne = async (e: Endpoint): Promise<void> => {
     }
     if (key === 'GET /api/showcase/jobs/heartbeat') syncJobsTicks(text)
   } catch (err) {
-    results[key] = { state: 'fail', error: err instanceof Error ? err.message : String(err) }
+    results[key] = { state: 'fail', error: friendlyError(err instanceof Error ? err.message : String(err)) }
   }
 }
 
@@ -133,7 +151,7 @@ const runGroup = async (g: EndpointGroup): Promise<void> => {
 
 const codeOf = (e: Endpoint): string => {
   const body = defaultBody(e.method, e.path)
-  return 'await fetch(' + JSON.stringify(e.path) + ', {' +
+  return 'await fetch(' + JSON.stringify(apiUrl(apiBase, e.path)) + ', {' +
     (e.method === 'GET' ? '' : "\n  method: '" + e.method + "',") +
     (body !== undefined ? "\n  headers: { 'content-type': 'application/json' }," +
       "\n  body: JSON.stringify(" + JSON.stringify(body) + '),' : '') +

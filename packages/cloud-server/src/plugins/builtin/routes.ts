@@ -23,6 +23,7 @@ import { agentSessionRoutes } from '../../routes/agentSessions.js'
 import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
+import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../../serverFramework/hotLoad.js'
 import { buildPluginCatalog } from '../catalog.js'
 import { healthPlugin } from './health.js'
 import { runAgentMiddleware } from '../../serverFramework/agent.js'
@@ -180,6 +181,9 @@ export const serverPluginsPlugin: PluginModule = {
           const catalog = await buildPluginCatalog(ctx.tryGet<string | undefined>(S.pluginsDir))
           return catalog.plugins.find((p) => p.id === id)?.server?.permissions
         },
+        // 热装/热卸：装完/卸完当场生效，用户不必重启服务（见 serverFramework/hotLoad.ts）
+        hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
+        hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
       }),
     )
   },
@@ -214,6 +218,9 @@ export const npmPluginsPlugin: PluginModule = {
                 .map((s) => (s.endsWith('/') ? s : s + '/')),
             }
           : {}),
+        // 热装/热卸：装完当场生效（见 serverFramework/hotLoad.ts）
+        hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
+        hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
       }),
     )
   },

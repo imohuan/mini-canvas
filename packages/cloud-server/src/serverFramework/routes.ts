@@ -135,7 +135,7 @@ export function createRouteRegistrar(ctx: PluginScope, scopeName: string): Route
  * **只能调一次**，且必须在任何 `app.fetch` 之前（`ctx:ready` 时）。
  * 之后再调用会重复挂代理 / 撞上 Hono 的路由冻结。
  */
-export function flushRoutes(app: Hono, ctx: Context): void {
+export function flushRoutes(app: Hono, ctx: Context, opts: { hotFallback?: boolean } = {}): void {
   const field = ctx.registryOf<RouteEntry>(ROUTE_FIELD)
   const mounts = ctx.registryOf<MountEntry>(MOUNT_FIELD)
 
@@ -171,5 +171,22 @@ export function flushRoutes(app: Hono, ctx: Context): void {
     }
     app.all(prefix, proxy as never)
     app.all(prefix + '/*', proxy as never)
+  }
+
+  // ④ **运行期热装兜底**：挂一条 catch-all，按 method+path 现查注册场。
+  //
+  // 为什么需要：② 只为"启动那一刻已存在的 path"挂了代理 —— Hono 路由表之后会冻死，
+  // 运行期新注册的 path 在 Hono 里没有对应路由，请求会漏到 404。catch-all 让运行期装进来的
+  // 后台插件（例如从 NPM 现装的）无需重启即可命中（实测：加它之前 404、加了之后 200）。
+  //
+  // 它排在 ② 之后 → 只接管 ② 没覆盖的 path，不改变既有路由优先级。
+  // 只在"服务可能运行期装插件"时开（cloud-server）；测试里的纯 framework 默认不开，
+  // 避免改变既有断言语义。
+  if (opts.hotFallback) {
+    app.all('*', ((c: Parameters<Handler>[0], next: () => Promise<void>) => {
+      const key = c.req.method + ' ' + new URL(c.req.url).pathname
+      const e = field.list(key)[0]
+      return e ? (e.value.handler as (c: unknown, n: unknown) => unknown)(c, next) : next()
+    }) as never)
   }
 }

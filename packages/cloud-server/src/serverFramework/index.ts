@@ -51,11 +51,19 @@ export interface ServerFrameworkOptions {
    * 缺省用进程当前目录（测试常见；真实服务由 server.ts 传真实数据根）。
    */
   root?: string
+  /**
+   * 是否开启"运行期热装兜底"：装一个 catch-all 代理，让**运行期**新注册的后台插件路由
+   * 无需重启即可命中（见 routes.ts ④）。真实服务（cloud-server，可能从 NPM 现装插件）开 true；
+   * 测试里的纯 framework 缺省 false（不改变既有路由语义）。
+   */
+  hotFallback?: boolean
 }
 
 export function createServerFramework(opts: ServerFrameworkOptions = {}): ServerFramework {
   const raw = new Hono()
   let started = false
+  /** runtime 转发壳（见 setDefaultCapabilityLayerFactory 处的说明） */
+  const runtimeRef: { install?: (m: unknown) => void; uninstall?: (n: string) => boolean } = {}
 
   // `app` 用 Proxy 包住**请求入口**（fetch / request / fire 三个都会触发路由匹配）。
   //
@@ -104,9 +112,23 @@ export function createServerFramework(opts: ServerFrameworkOptions = {}): Server
   // 立刻产出 layer，所以「先建 host A、再建 host B」不会让 A 拿到 B 的 app ——
   // 有测试锁住这个隔离性（serverFrameworkIsolation.test.ts）。
   setDefaultCapabilityLayerFactory(() =>
-    createServerCapabilityLayer({ app: raw, root: opts.root ?? process.cwd() }),
+    createServerCapabilityLayer({
+      app: raw,
+      root: opts.root ?? process.cwd(),
+      // runtime 晚绑定：layer 在 new Context() 那刻就建好，而 ctx 在下一行才有，
+      // 故先给一个转发壳，等 ctx 就绪再填真身（见下）。
+      runtime: {
+        install: (m) => runtimeRef.install?.(m),
+        uninstall: (n) => runtimeRef.uninstall?.(n) ?? false,
+      },
+    }),
   )
   const ctx = new Context()
+  // 填 runtime 真身：把根 Context 的运行期装卸能力接到上面那个转发壳上
+  runtimeRef.install = (m) => {
+    ctx.installPlugin(m as never)
+  }
+  runtimeRef.uninstall = (n) => ctx.uninstallPlugin(n)
 
   let afterRoutesCb: (() => void) | undefined
 
@@ -118,7 +140,7 @@ export function createServerFramework(opts: ServerFrameworkOptions = {}): Server
   // （审查发现的 bug：早先在 start() 末尾又调了一次 afterRoutes，导致 ui 兜底重复注册）。
   ctx.on('ctx:ready', () => {
     if (started) return
-    flushRoutes(raw, ctx)
+    flushRoutes(raw, ctx, { hotFallback: opts.hotFallback === true })
     // ⑦ 兜底路由（ui 静态 + SPA）：**必须最后**，否则 get('*') 吃掉插件路由
     afterRoutesCb?.()
     started = true

@@ -22,6 +22,17 @@ export interface ServerCapabilityOptions {
   app: Hono
   /** 数据根目录（ctx.store 的插件私有数据落在这里的 plugin-data/ 下） */
   root?: string
+  /**
+   * 运行期装载/卸载插件（可选）。由 host 在构造时注入（它持有根 Context）。
+   *
+   * 为什么要它：插件从 ctx 拿到的是**作用域 ctx**（deriveScope 产物），上面没有
+   * installPlugin/uninstallPlugin（那是根 Context 的方法）。host 插件要"运行期热装/热卸"
+   * 其它插件（例如从 NPM 现装的），就得经这个能力段拿到根 Context 的能力。
+   */
+  runtime?: {
+    install: (mod: unknown) => void
+    uninstall: (name: string) => boolean
+  }
 }
 
 /**
@@ -41,7 +52,7 @@ export function createServerCapabilityLayer(opts: ServerCapabilityOptions): Capa
       })
       const jobs: JobsRegistrar = createJobsRegistrar(ctx, scopeName)
       const mcp: McpRegistrar = createMcpRegistrar(ctx, scopeName)
-      return { routes, agent, store, jobs, mcp }
+      return { routes, agent, store, jobs, mcp, runtime: opts.runtime }
     },
     builtins(): Record<string, unknown> {
       // 后台当前没有「恒在的内置服务」；后续 Task 可把 store / providerRegistry 之类放这里。

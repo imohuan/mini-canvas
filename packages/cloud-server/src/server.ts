@@ -207,7 +207,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 这是「后台也能像前端那样丢文件扩展」的落地：新增接口 = 写一个插件。
   // root 传给 framework：ctx.store 的插件私有数据落在数据根下的 plugin-data/（审查发现：
   // 不传会落到 process.cwd()，多实例/换目录会写错位置）。
-  const host = createServerFramework({ root: dataDir })
+  // hotFallback：让运行期从 NPM 装进来的后台插件**无需重启**即可命中路由
+  // （见 serverFramework/routes.ts ④）。真实服务开启；纯测试的 framework 默认不开。
+  const host = createServerFramework({ root: dataDir, hotFallback: true })
   const app = host.app
 
   // ---- 装配阶段（顺序即匹配优先级；全部必须在 start() 之前完成，Hono 首次 fetch 后冻结）----
