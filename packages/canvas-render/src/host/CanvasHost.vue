@@ -331,7 +331,7 @@ function syncFromStore(): void {
   nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
-  log.log(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
+  log.debug(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
 }
 
 // ==================== 视口(view)持久化与恢复 ====================
@@ -553,7 +553,9 @@ function checkConnection(
     )
   if (alreadyCommitted) {
     if (allowCommitted) {
-      log.log(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
+      // 高频路径：每次 VueFlow 重挂都会对每条已提交边跑一遍（O(边数)）——插件/边一多必刷屏。
+      // 降为 debug（默认静音，localStorage.v2debug=1 打开），真正的"新候选非法"仍走 warn。
+      log.debug(`checkConnection ${source}→${target} = 已提交边，幂等放行`)
       return { ok: true, reason: 'ok' as const }
     }
     // 新候选语义：端点完全相同的边已存在 → duplicate（"已存在同一条连线"气泡）
@@ -1047,10 +1049,17 @@ onMounted(async () => {
       if (!typesChanged) return
       if (remountQueued) return
       remountQueued = true
-      void Promise.resolve().then(() => {
+      // **防抖窗口 120ms**：插件启动风暴期间（N 个插件逐个装，每个都 bump），把重挂一直推迟到
+      // 风暴安静 120ms 后 —— 一批 N 个插件只重挂 1 次，而不是 N 次。120ms 足以覆盖单个插件
+      // 的装载间隔，又不至于让用户在装卸单个插件后感觉到可感知的延迟。
+      const sched: (fn: () => void, ms: number) => void =
+        typeof window !== 'undefined'
+          ? (fn, ms) => window.setTimeout(fn, ms)
+          : (fn) => Promise.resolve().then(fn)
+      sched(() => {
         remountQueued = false
         nodeEpoch.value += 1
-      })
+      }, 120)
     }
     subs.push(
       host.ctx.on('ctx:plugin-installed', () => { queueRemount() }),

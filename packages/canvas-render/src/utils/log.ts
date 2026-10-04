@@ -19,6 +19,9 @@ const ENABLED = true
 export interface V2Logger {
   /** info 级：普通状态/动作日志 */
   log(...args: unknown[]): void
+  /** debug 级：高频路径日志（默认静音；localStorage.v2debug=1 打开）——
+   *  幂等重校验这类每次重挂都跑 O(边数) 的路径绝不能打 info，插件一多直接刷屏 */
+  debug(...args: unknown[]): void
   /** warn 级：可疑/降级路径 */
   warn(...args: unknown[]): void
   /** error 级：确实出错 */
@@ -29,6 +32,9 @@ export function createV2Logger(scope: string): V2Logger {
   const tag = `[v2:${scope}]`
   const on = () => ENABLED && enabledByScope[scope] !== false
   return {
+    debug: (...args) => {
+      if (on() && typeof localStorage !== 'undefined' && localStorage.getItem('v2debug') === '1') console.log(tag, ...args)
+    },
     log: (...args) => {
       if (on()) console.log(tag, ...args)
     },

@@ -198,10 +198,11 @@ export function createPluginManagerService(
       if (row.entry.builtin === true) continue
       if (row.installed && !want.has(row.entry.id)) await uninstall(row.entry.id)
     }
-    for (const id of ids) {
+    const missing = ids.filter((id) => {
       const row = state.rows.find((r) => r.entry.id === id)
-      if (row && !row.installed) await install(id)
-    }
+      return row && !row.installed
+    })
+    await installMany(missing)
   }
 
   /**
@@ -493,17 +494,34 @@ export function createPluginManagerService(
   async function installAll(): Promise<void> {
     state.installingAll = true
     try {
-      for (const row of state.rows) {
-        if (!row.installed) {
-          // 含后台半的插件：一次性确认（installAll 入口弹一次，覆盖本批所有 server 插件），
-          // 不然"全部安装"会把服务端半静默留在半装状态（后端 400 拒掉 confirm=false 的请求）。
-          const needConfirm = row.entry.server !== undefined
-          await install(row.entry.id, { serverConfirm: !needConfirm || window.confirm(SERVER_CONFIRM_TEXT) })
-        }
-      }
+      // 含后台半的插件：一次性确认（installAll 入口弹一次，覆盖本批所有 server 插件），
+      // 不然"全部安装"会把服务端半静默留在半装状态（后端 400 拒掉 confirm=false 的请求）。
+      const hasServer = state.rows.some((row) => !row.installed && row.entry.server !== undefined)
+      const serverConfirm = !hasServer || window.confirm(SERVER_CONFIRM_TEXT)
+      await installMany(
+        state.rows.filter((row) => !row.installed).map((row) => row.entry.id),
+        { serverConfirm },
+      )
     } finally {
       state.installingAll = false
     }
+  }
+
+  /**
+   * 批量装载（并发受限）。串行 for-await 在插件多时启动时间线性膨胀（每个 = 下载 + 执行 + 装配）；
+   * 并发能显著缩短启动窗口。并发上限 4：再高会对浏览器/网络造成无谓压力，收益递减。
+   * 失败隔离：单个失败不影响其它（错误已写进各自 row.error）。
+   */
+  async function installMany(ids: string[], opts?: { serverConfirm?: boolean }): Promise<void> {
+    const CONCURRENCY = 4
+    let cursor = 0
+    const workers = Array.from({ length: Math.min(CONCURRENCY, ids.length) }, async () => {
+      while (cursor < ids.length) {
+        const id = ids[cursor++]!
+        await install(id, opts)
+      }
+    })
+    await Promise.all(workers)
   }
 
   function refresh(): Promise<void> {
@@ -540,16 +558,17 @@ export function createPluginManagerService(
         persistIntent()
         state.installingAll = true
         try {
-          for (const id of desired) await install(id)
+          await installMany(desired)
         } finally {
           state.installingAll = false
         }
       } else {
         // 有存档：只装「存档里有、但此刻内核里没有」的（例如换机器、或上次卸载失败留下的缺口）
-        for (const id of desired) {
+        const missing = desired.filter((id) => {
           const row = state.rows.find((r) => r.entry.id === id)
-          if (row && !row.installed) await install(id)
-        }
+          return row && !row.installed
+        })
+        await installMany(missing)
       }
     } catch (err) {
       state.error = err instanceof Error ? err.message : String(err)
