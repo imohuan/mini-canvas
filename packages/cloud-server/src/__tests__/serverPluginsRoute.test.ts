@@ -124,6 +124,15 @@ describe('server-plugins 安装路由（安全收口）', () => {
     host.ctx.stop()
   })
 
+  it('GET 清单带 loaded（本次启动已登记的外挂插件名，运行时观测面）', async () => {
+    const host = boot(createServerPluginsRoutes({ dir, loaded: ['my-ext', 'other'] }))
+    await host.start()
+    const res = await host.app.fetch(new Request('http://x/api/server-plugins'))
+    const body = (await res.json()) as { loaded?: string[] }
+    expect(body.loaded).toEqual(['my-ext', 'other'])
+    host.ctx.stop()
+  })
+
   it('没有可信哈希来源 → 拒绝安装（不假装校验过）', async () => {
     const host = boot(createServerPluginsRoutes({ dir, origin: 'http://x' }))
     await host.start()

@@ -51,6 +51,8 @@ export interface ServerPluginsRoutesOptions {
    * 计划要求 permissions 必须有消费点 —— 这就是：诊断接口把它列出来给界面看。
    */
   permissionsOf?: (id: string) => Promise<string[] | undefined>
+  /** 本次启动已成功登记的外挂后台插件名（运行时观测面：部署者据此审计"目录里到底活着什么"） */
+  loaded?: string[]
 }
 
 export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hono {
@@ -84,7 +86,7 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
         return { id, file, size, ...(permissions ? { permissions } : {}) }
       }),
     )
-    return c.json({ ok: true, plugins })
+    return c.json({ ok: true, plugins, loaded: opts.loaded ?? [] })
   })
 
   app.post('/api/server-plugins/install', async (c) => {

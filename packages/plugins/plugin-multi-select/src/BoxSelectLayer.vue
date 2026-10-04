@@ -120,7 +120,8 @@ function onPointerMove(e: PointerEvent): void {
     //  - 线型 / 线宽 / 填充来自「布局/多选」的绘制框三项配置。
     // 位置/尺寸随拖拽逐帧改（updateBoxVisual），样式只在首次建元素时定一次。
     const c = boxCfg.value
-    const color = 'var(--ui-select-box, var(--ui-accent, #0891b2))'
+    // 颜色：自定义色优先（用户在主题配色格填了 hex），空 = 主题 token（--ui-select-box → --ui-accent 兜底）
+    const color = c.color ?? 'var(--ui-select-box, var(--ui-accent, #0891b2))'
     boxEl.style.cssText =
       'position:fixed;' +
       'border:' + c.lineWidth + 'px ' + c.lineStyle + ' ' + color + ';' +

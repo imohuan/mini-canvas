@@ -505,9 +505,8 @@ onBeforeUnmount(() => {
 }
 .ce-offset { position: absolute; left: 0; top: 0; }
 .ce-frame {
-  /* 主题色白名单: 同上，投影用黑色保证可读性 */
   position: absolute; left: 0; top: 0; display: block; pointer-events: none;
-  /* 主题色白名单: 同上 */
+  /* 主题色白名单: 投影用黑色保证任意背景可读 */
   image-rendering: auto; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 .ce-inner svg { display: block; }

@@ -250,9 +250,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   for (const f of scannedServerPlugins.failures) {
     console.warn('[cloud-server] 后台插件加载失败 ' + f.file + '：' + f.error)
   }
+  const registeredServerPlugins: string[] = []
   for (const mod of scannedServerPlugins.modules) {
     try {
       host.ctx.plugin(mod)
+      registeredServerPlugins.push(mod.name)
     } catch (err) {
       // 重名等登记问题：记一条、继续装别的（别让一个坏插件把整个服务带崩）
       console.warn(
@@ -260,6 +262,19 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       )
     }
   }
+  // 运行时观测面（审查 P1）：目录可写 = 服务端代码执行，部署者必须能一眼看清"加载了哪些外挂插件"。
+  // 启动日志逐个列出；GET /api/server-plugins 也带 loaded 状态（见 builtin/routes.ts）。
+  if (registeredServerPlugins.length > 0 || scannedServerPlugins.failures.length > 0) {
+    console.log(
+      '[cloud-server] 外挂后台插件 ' +
+        registeredServerPlugins.length +
+        ' 个: [' +
+        registeredServerPlugins.join(', ') +
+        ']' +
+        (scannedServerPlugins.failures.length > 0 ? '；失败 ' + scannedServerPlugins.failures.length + ' 个' : ''),
+    )
+  }
+  host.ctx.inject('serverPluginsLoaded', registeredServerPlugins)
 
   // ④ MCP 直挂（**不收敛成插件**：SDK transport，与「代理 handler」模型不兼容）。
   //    ui 静态托管放在最后（见 ⑤ 的 afterRoutes）——它是兜底通配，必须排在插件路由之后。

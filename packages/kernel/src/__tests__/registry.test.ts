@@ -320,12 +320,27 @@ describe('Registry · 不同放置方同 id = 叠层（撤销上层，下层露�
     expect(table.get('k', 'x')!.value).toBe('A')
   })
 
-  it('显式 remove(key,id) 清该 id 的**整摞**（彻底不要这个 id 了）', () => {
+  it('显式 remove(key,id) 只摘最外层；下层（别人的）露出来 —— 与 dispose 同语义，不误伤', () => {
     const r = new RegistryImpl<string>()
     r.bind('plugin-a').add('k', 'A', { id: 'x' })
     r.bind('plugin-b').add('k', 'B', { id: 'x' })
     expect(r.remove('k', 'x')).toBe(true)
+    expect(r.get('k', 'x')!.value).toBe('A')
+    expect(r.get('k', 'x')!.source).toBe('plugin-a')
+    // 连摘两次：整摞清空
+    expect(r.remove('k', 'x')).toBe(true)
     expect(r.has('k')).toBe(false)
+  })
+
+  it('remove 与 dispose 并存：先 remove 再 dispose 句柄，不会重复摘别人的层', () => {
+    const r = new RegistryImpl<string>()
+    r.bind('plugin-a').add('k', 'A', { id: 'x' })
+    const h = r.bind('plugin-b').add('k', 'B', { id: 'x' })
+    // remove 摘掉最外层（B），再 dispose 同一条的句柄 = 幂等 no-op
+    // remove 摘掉最外层（B），再 dispose 同一条的句柄 = 幂等 no-op
+    expect(r.remove('k', 'x')).toBe(true)
+    expect(() => h.dispose()).not.toThrow()
+    expect(r.get('k', 'x')!.value).toBe('A')
   })
 
   it('叠层时显式 order 仍决定谁在外（小者在外，压过后注册的新层）', () => {

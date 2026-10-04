@@ -79,15 +79,19 @@ export interface PluginCatalog {
   skipped: Array<{ file: string; reason: string }>
 }
 
-/** 产物运行时可能需要的 window 全局（与各插件 vite.config 的 output.globals 对齐） */
-const KNOWN_GLOBALS = [
+/**
+ * 产物运行时可能需要的 window 全局。
+ * 单一事实源是 packages/plugins/vite-plugin-lib.ts 的 HOST_GLOBALS（值的集合）；
+ * 这边必须与它保持一致 —— sharedGlobals.test.ts 会同时读两边做守卫（漂移即红）。
+ */
+export const KNOWN_GLOBALS = [
   'Vue',
   'VueFlow',
   'MiniCanvasCore',
-  'MiniCanvasRender',
+  'MiniCanvasKernel',
   'MiniCanvasBase',
+  'MiniCanvasRender',
   'ProseMirrorEditorBundle',
-  'THREE',
 ] as const
 
 /**

@@ -105,6 +105,11 @@ export interface PluginManagerService {
  */
 export const DEFAULT_CATALOG_URL = '/plugin-catalog.json'
 
+/** 「全部安装」时的服务端权限一次性确认文案（与单个安装的确认同口径，覆盖整批） */
+const SERVER_CONFIRM_TEXT =
+  '本批插件中有包含后台插件（以服务端权限运行，可读写文件、发起网络请求）。\n\n' +
+  '只在你信任插件来源时才继续。是否确认安装？'
+
 export interface CreateServiceOptions {
   /** 中转后台清单地址（含 /catalog.json） */
   catalogUrl?: string
@@ -485,7 +490,12 @@ export function createPluginManagerService(
     state.installingAll = true
     try {
       for (const row of state.rows) {
-        if (!row.installed) await install(row.entry.id)
+        if (!row.installed) {
+          // 含后台半的插件：一次性确认（installAll 入口弹一次，覆盖本批所有 server 插件），
+          // 不然"全部安装"会把服务端半静默留在半装状态（后端 400 拒掉 confirm=false 的请求）。
+          const needConfirm = row.entry.server !== undefined
+          await install(row.entry.id, { serverConfirm: !needConfirm || window.confirm(SERVER_CONFIRM_TEXT) })
+        }
       }
     } finally {
       state.installingAll = false

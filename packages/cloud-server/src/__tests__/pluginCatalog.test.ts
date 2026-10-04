@@ -11,6 +11,8 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer } from '../server'
+import { KNOWN_GLOBALS } from '../plugins/catalog'
+import { HOST_GLOBALS } from '../../../../packages/plugins/vite-plugin-lib'
 
 /** 造一个插件目录：<dir>/<pkg>/{package.json, dist/<file>} */
 async function makePluginsDir(spec: Record<string, { file: string; content: string; pkg?: object }>): Promise<string> {
@@ -28,6 +30,12 @@ const UMD = (global: string, args = '') =>
   '(function(e,t){t(e.' + global + '={}' + (args ? ',' + args : '') + ')})(this,function(e){e.name="x";e.apply=function(){}})'
 
 describe('插件管理清单 /plugin-catalog.json', () => {
+  it('KNOWN_GLOBALS 与打包端 HOST_GLOBALS 的值集一致（双源漂移守卫）', () => {
+    const host = [...new Set(Object.values(HOST_GLOBALS))].sort()
+    const catalog = [...new Set([...KNOWN_GLOBALS])].sort()
+    expect(catalog).toEqual(host)
+  })
+
   it('收录 installable 的 UMD 插件：url 相对本服务、带 globalName/requiresGlobals/文案', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({

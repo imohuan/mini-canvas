@@ -91,8 +91,13 @@ export interface MultiSelectFrameConfig {
   boxSelect: BoxSelectStyle
 }
 
-/** 绘制框的样式（颜色走主题 token，故此处只有线型/线宽/填充） */
+/** 绘制框的样式（color 可空 = 回落主题 token --ui-select-box，与内外框同语义） */
 export interface BoxSelectStyle {
+  /**
+   * 线色（hex）—— 可缺省。缺省 = 主题配色里的绘制框色（--ui-select-box → --ui-accent 兜底）。
+   * 用户口径："清空 = 跟随主题"，与内框/外框的 color 一致。
+   */
+  color?: string
   lineStyle: FrameLineStyle
   lineWidth: number
   fillOpacity: number
@@ -156,7 +161,7 @@ export const DEFAULT_MULTI_SELECT_FRAME: MultiSelectFrameConfig = {
   // 给它加圆角只会让四条边在角上提前弯掉、看起来没贴住（用户明确要求去掉这个圆角）。
   inner: { lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 },
   // 绘制框：颜色走主题，样式默认实线 + 一点点底
-  boxSelect: { lineStyle: 'solid', lineWidth: 1.5, fillOpacity: 0.16 },
+  boxSelect: { color: undefined, lineStyle: 'solid', lineWidth: 1.5, fillOpacity: 0.16 },
 }
 
 /** 插件可配置项 schema（模块级 Config，随插件导出 → 内核校验 + 补默认 + 登记设置页面） */
@@ -472,6 +477,7 @@ export function resolveMultiSelectFrameConfig(
       fillOpacity: toOpacity(get(MULTI_SELECT_FRAME_KEYS.innerFill), d.inner.fillOpacity),
     },
     boxSelect: {
+      color: toOptionalColor(get(mode === 'dark' ? MULTI_SELECT_COLOR_KEYS.boxDark : MULTI_SELECT_COLOR_KEYS.boxLight)),
       lineStyle: toLineStyle(get(MULTI_SELECT_FRAME_KEYS.boxStyle), d.boxSelect.lineStyle),
       lineWidth: toNumber(get(MULTI_SELECT_FRAME_KEYS.boxWidth), d.boxSelect.lineWidth, 0),
       fillOpacity: toOpacity(get(MULTI_SELECT_FRAME_KEYS.boxFill), d.boxSelect.fillOpacity),

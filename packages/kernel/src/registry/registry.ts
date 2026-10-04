@@ -54,7 +54,10 @@ export interface Registry<T> {
    * @returns { id, dispose() }：老调用方取 .id（= 今天的 string），新调用方可 .dispose()。
    */
   add(key: string, value: T, opts?: { id?: string; order?: number }): { id: string; dispose(): void }
-  /** 移除某条；不存在返回 false */
+  /**
+   * 移除某条。**叠层语义**：摘掉该 id 最外（最新）的一层；其它放置方压的层原位不动，
+   * 语义同"撤销最近一次放置"。整摞不要了请用 clear(key)。不存在该 id 返回 false。
+   */
   remove(key: string, id: string): boolean
   /** 清空某键 */
   clear(key: string): void
@@ -184,11 +187,13 @@ export class RegistryImpl<T> implements Registry<T> {
     if (!slots) return false
     const slot = slots.get(id)
     if (!slot) return false
-    // remove 是"这个 id 整个不要了"：摘掉该 id 下的**整摞**（各放置方都算）
-    const gone = slot.layers.map((l) => l.entry)
-    slots.delete(id)
+    // remove 与 dispose 同语义：只摘**最外（最新）**一层 —— 其余层（其它放置方压的）原位不动，
+    // 露出下面那层。这与叠层设计一致：谁放谁撤，互不误伤。
+    const top = slot.layers[slot.layers.length - 1]!
+    slot.layers.pop()
+    if (slot.layers.length === 0) slots.delete(id)
     if (slots.size === 0) this.byKey.delete(key) // 键空则回收
-    for (const entry of gone) this.emitChange({ type: 'removed', key, entry })
+    this.emitChange({ type: 'removed', key, entry: top.entry })
     this.notify()
     return true
   }

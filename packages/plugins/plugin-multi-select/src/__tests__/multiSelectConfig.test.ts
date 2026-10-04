@@ -172,6 +172,17 @@ describe('resolveMultiSelectFrameConfig（读配置）', () => {
     }
   })
 
+  it('绘制框颜色与内外框同语义：亮/暗分格、可空回落主题', () => {
+    const withColor = schemaDefaults()
+    withColor[MULTI_SELECT_COLOR_KEYS.boxLight] = '#123abc'
+    withColor[MULTI_SELECT_COLOR_KEYS.boxDark] = '#456def'
+    expect(resolveMultiSelectFrameConfig((k) => withColor[k], 'light').boxSelect.color).toBe('#123abc')
+    expect(resolveMultiSelectFrameConfig((k) => withColor[k], 'dark').boxSelect.color).toBe('#456def')
+    const cleared = schemaDefaults()
+    cleared[MULTI_SELECT_COLOR_KEYS.boxLight] = ''
+    expect(resolveMultiSelectFrameConfig((k) => cleared[k]).boxSelect.color).toBeUndefined()
+  })
+
   it('填充% 换算成 0~1 不透明度，并按 0~100 夹取', () => {
     const all = schemaDefaults()
     all[MULTI_SELECT_FRAME_KEYS.innerFill] = 40

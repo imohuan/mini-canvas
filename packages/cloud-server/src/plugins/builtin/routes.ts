@@ -159,11 +159,12 @@ export const agentSessionPlugin: PluginModule = {
  */
 export const serverPluginsPlugin: PluginModule = {
   name: 'server-plugins',
-  inject: [S.serverPluginsDir, S.selfOrigin],
+  inject: [S.serverPluginsDir, S.selfOrigin, 'serverPluginsLoaded'],
   apply(ctx) {
     ctx.routes.adopt(
       createServerPluginsRoutes({
         dir: need<string>(ctx, S.serverPluginsDir),
+        loaded: need<string[]>(ctx, 'serverPluginsLoaded'),
         // 服务自己的 origin：用于跨源安装检查（审查发现：不传 origin 时该检查整段被跳过）。
         origin: need<string>(ctx, S.selfOrigin),
         // 可信哈希来源 = 本服务扫插件目录得到的清单（**不是**调用方声明的）。
