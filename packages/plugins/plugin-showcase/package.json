@@ -1,0 +1,52 @@
+{
+  "name": "@mini-canvas/plugin-showcase",
+  "version": "1.0.0",
+  "description": "插件展示 —— 前后台成对的示例插件：演示 routes/store/jobs/mcp/agent 五个后台能力 + 在线测试/在线文档面板",
+  "type": "module",
+  "license": "MIT",
+  "miniCanvas": {
+    "installable": true,
+    "title": "插件展示",
+    "description": "在线测试 + 在线文档：演示后台五能力（路由/存储/定时/MCP/Agent）与前端插槽注册，装上即生效",
+    "pluginName": "showcase",
+    "web": {
+      "entry": "dist/plugin-showcase.js",
+      "globalName": "MiniCanvasPluginShowcase"
+    },
+    "server": {
+      "entry": "dist/server.js"
+    },
+    "serverPermissions": []
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build && node scripts/build-server.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/server-renderer": "3.5.38",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

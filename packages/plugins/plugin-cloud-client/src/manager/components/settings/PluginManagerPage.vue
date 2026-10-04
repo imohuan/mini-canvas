@@ -79,6 +79,84 @@ function serverBadgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on'
   if (row.serverError) return { text: '后台失败', tone: 'err' }
   return row.serverInstalled ? { text: '后台已装', tone: 'on' } : { text: '后台未装', tone: 'off' }
 }
+
+// ============================================================================
+// NPM 市场（搜索 → 安装/更新/卸载；含后台半的包安装前必须确认）
+// ============================================================================
+const npmQuery = ref('')
+const npmSearching = ref(false)
+const npmResults = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
+const npmError = ref('')
+const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
+const npmBusyPkg = ref('')
+const npmSearched = ref(false)
+
+async function onNpmSearch(): Promise<void> {
+  const q = npmQuery.value.trim()
+  if (!q) return
+  npmSearching.value = true
+  npmError.value = ''
+  try {
+    npmResults.value = await svc.searchNpmPlugins(q)
+    npmSearched.value = true
+    npmInstalled.value = await svc.listNpmInstalled()
+  } catch (err) {
+    npmError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    npmSearching.value = false
+  }
+}
+
+async function onNpmInstall(pkg: string, hasServer: boolean): Promise<void> {
+  if (hasServer) {
+    const ok = window.confirm(
+      '「' + pkg + '」包含后台插件。\n\n' +
+        '后台插件会以**服务端权限**在本机运行（可读写文件、发起网络请求）。\n' +
+        '只在你信任这个包来源时才继续。\n\n确定要从 NPM 安装吗？',
+    )
+    if (!ok) return
+  }
+  npmBusyPkg.value = pkg
+  npmError.value = ''
+  try {
+    await svc.installFromNpm(pkg, { serverConfirm: hasServer })
+    npmInstalled.value = await svc.listNpmInstalled()
+  } catch (err) {
+    npmError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    npmBusyPkg.value = ''
+  }
+}
+
+async function onNpmUpdate(pkg: string): Promise<void> {
+  npmBusyPkg.value = pkg
+  npmError.value = ''
+  try {
+    await svc.updateFromNpm(pkg)
+    npmInstalled.value = await svc.listNpmInstalled()
+  } catch (err) {
+    npmError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    npmBusyPkg.value = ''
+  }
+}
+
+async function onNpmUninstall(pkg: string): Promise<void> {
+  if (!window.confirm('从 NPM 卸载「' + pkg + '」？\n（后台半重启服务后消失）')) return
+  npmBusyPkg.value = pkg
+  npmError.value = ''
+  try {
+    await svc.uninstallFromNpm(pkg)
+    npmInstalled.value = await svc.listNpmInstalled()
+  } catch (err) {
+    npmError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    npmBusyPkg.value = ''
+  }
+}
+
+const npmVersionOf = (pkg: string): string | undefined =>
+  npmInstalled.value.find((e) => e.pkg === pkg)?.version
 </script>
 
 <template>
@@ -157,6 +235,40 @@ function serverBadgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on'
         </div>
       </section>
     </template>
+
+    <!-- NPM 市场：搜索 + 结果（与本地清单分开一个区块） -->
+    <section class="pmp-section pmp-npm">
+      <h4 class="pmp-sec-title">NPM 市场<span class="pmp-sec-count">@mini-canvas/</span></h4>
+      <form class="pmp-npm-search" @submit.prevent="onNpmSearch">
+        <input v-model="npmQuery" class="pmp-input" type="text" spellcheck="false"
+          aria-label="搜索 NPM 插件" placeholder="搜索插件，如 showcase…" />
+        <button class="pmp-btn" type="submit" :disabled="npmSearching || !npmQuery.trim()">
+          <RefreshCw :size="14" :class="{ spin: npmSearching }" /> 搜索
+        </button>
+      </form>
+      <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
+      <div v-if="npmSearched" class="pmp-list">
+        <p v-if="!npmResults.length && !npmSearching" class="pmp-npm-empty">
+          没有找到可安装的插件（只显示声明了 miniCanvas.installable 的 @mini-canvas/ 包）。
+        </p>
+        <article v-for="r in npmResults" :key="r.pkg" class="pmp-row">
+          <div class="pmp-row-main">
+            <strong class="pmp-name">{{ r.title }} <code class="pmp-pkg">{{ r.pkg }}</code></strong>
+            <small class="pmp-desc">{{ r.description }}</small>
+            <small class="pmp-desc">v{{ r.version }}<template v-if="r.hasServer"> · 含后台半</template></small>
+          </div>
+          <span v-if="npmVersionOf(r.pkg)" class="pmp-badge is-on">已装 v{{ npmVersionOf(r.pkg) }}</span>
+          <div class="pmp-actions">
+            <button v-if="!npmVersionOf(r.pkg)" class="pmp-mini" :disabled="npmBusyPkg === r.pkg"
+              @click="onNpmInstall(r.pkg, r.hasServer)">安装</button>
+            <button v-else class="pmp-mini" :disabled="npmBusyPkg === r.pkg"
+              @click="onNpmUpdate(r.pkg)">更新</button>
+            <button v-if="npmVersionOf(r.pkg)" class="pmp-mini danger" :disabled="npmBusyPkg === r.pkg"
+              @click="onNpmUninstall(r.pkg)"><Trash2 :size="13" /> 卸载</button>
+          </div>
+        </article>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -210,4 +322,10 @@ function serverBadgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on'
 .spin { animation: pmp-spin 0.9s linear infinite; }
 @keyframes pmp-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.pmp-npm { border-top: 1px solid var(--ui-line-soft, #eef0f4); padding-top: 12px; }
+.pmp-npm-search { display: flex; gap: 8px; }
+.pmp-npm-search .pmp-input { flex: 1; }
+.pmp-npm-empty { margin: 0; font-size: 12px; color: var(--ui-ink-dim, #6b7280); }
+.pmp-pkg { font-size: 10px; font-weight: 400; color: var(--ui-ink-dim, #6b7280); }
 </style>

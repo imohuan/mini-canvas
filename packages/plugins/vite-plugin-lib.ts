@@ -48,6 +48,8 @@ export interface PluginLibOptions {
   name: string
   /** 产物文件名（默认 = 包目录名 + .js）。一般不用改 */
   fileName?: string
+  /** 是否产 sourcemap（默认 true；发布到 NPM 的演示包可关掉减小体积） */
+  sourcemap?: boolean
 }
 
 /**
@@ -71,6 +73,6 @@ export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {
       output: { globals: HOST_GLOBALS },
     },
     cssCodeSplit: false,
-    sourcemap: true,
+    sourcemap: opts.sourcemap ?? true,
   }
 }

@@ -204,3 +204,59 @@ describe('地址归一', () => {
     expect(absolutize('https://cdn/x.js', 'http://h')).toBe('https://cdn/x.js')
   })
 })
+
+describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
+  /** boot 的 NPM 变体：fetch 按 URL 路由分发（catalog / npm 各回各的假响应） */
+  function bootNpm(handlers: Record<string, { body: unknown; status?: number }>) {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url)
+      for (const [match, h] of Object.entries(handlers)) {
+        if (u.includes(match)) {
+          return { ok: (h.status ?? 200) === 200, status: h.status ?? 200, json: async () => h.body, text: async () => JSON.stringify(h.body) } as Response
+        }
+      }
+      // 默认：catalog（refresh 会调）
+      return { ok: true, status: 200, json: async () => CATALOG, text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    return { svc }
+  }
+
+  it('searchNpmPlugins 走服务端搜索端点并返回结果', async () => {
+    const results = [{ pkg: '@mini-canvas/plugin-demo', title: 'Demo', description: '', version: '1.0.0', date: '', hasServer: true }]
+    const { svc } = bootNpm({
+      '/api/npm-plugins/search': { body: { ok: true, results } },
+    })
+    const out = await svc.searchNpmPlugins('demo')
+    expect(out).toEqual(results)
+  })
+
+  it('installFromNpm 带 serverConfirm 发 confirm；失败抛出后端错误', async () => {
+    const { svc } = bootNpm({
+      '/api/npm-plugins/install': { body: { ok: false, error: '需要 confirm: true' }, status: 400 },
+    })
+    await expect(svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: false })).rejects.toThrow('需要 confirm: true')
+  })
+
+  it('updateFromNpm 返回 updated/to；listNpmInstalled 返回记录', async () => {
+    const { svc } = bootNpm({
+      '/api/npm-plugins/update': { body: { ok: true, updated: true, to: '1.1.0' } },
+      '/api/npm-plugins/installed': { body: { ok: true, plugins: [{ pkg: '@mini-canvas/plugin-demo', version: '1.1.0', installedAt: 't' }] } },
+    })
+    const r = await svc.updateFromNpm('@mini-canvas/plugin-demo')
+    expect(r).toEqual({ updated: true, to: '1.1.0' })
+    const list = await svc.listNpmInstalled()
+    expect(list[0].version).toBe('1.1.0')
+  })
+})

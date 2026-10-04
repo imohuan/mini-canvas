@@ -200,6 +200,7 @@ const INSTALLABLE_PLUGIN_DIRS = [
   "plugin-multi-select",
   "plugin-node-find",
   "plugin-node-image-compare",
+  "plugin-showcase",
   "plugin-tool-image-generation",
   "plugin-tool-text-generation",
   "plugin-web2api-tools",

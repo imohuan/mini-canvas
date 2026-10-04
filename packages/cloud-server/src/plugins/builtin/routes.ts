@@ -22,6 +22,7 @@ import { agentRoutes } from '../../routes/agent.js'
 import { agentSessionRoutes } from '../../routes/agentSessions.js'
 import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
+import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
 import { buildPluginCatalog } from '../catalog.js'
 import { healthPlugin } from './health.js'
 import { runAgentMiddleware } from '../../serverFramework/agent.js'
@@ -192,6 +193,23 @@ export const pluginCatalogPlugin: PluginModule = {
   },
 }
 
+/**
+ * npm-plugins 内置插件：从 NPM 搜索 / 安装 / 更新 / 卸载插件（NPM 对接）。
+ * 安全模型见 routes/npmPlugins.ts 文件头（confirm 必填 + scope 白名单 + installable 校验）。
+ */
+export const npmPluginsPlugin: PluginModule = {
+  name: 'npm-plugins',
+  inject: [S.pluginsDir, S.serverPluginsDir],
+  apply(ctx) {
+    ctx.routes.adopt(
+      createNpmPluginsRoutes({
+        pluginsDir: ctx.tryGet<string>(S.pluginsDir),
+        serverPluginsDir: need<string>(ctx, S.serverPluginsDir),
+      }),
+    )
+  },
+}
+
 /** 全部内置插件（顺序 = 默认装载序；实际激活顺序由 inject 依赖决定） */
 export const BUILTIN_PLUGINS: PluginModule[] = [
   healthPlugin,
@@ -206,4 +224,5 @@ export const BUILTIN_PLUGINS: PluginModule[] = [
   agentSessionPlugin,
   pluginCatalogPlugin,
   serverPluginsPlugin,
+  npmPluginsPlugin,
 ]

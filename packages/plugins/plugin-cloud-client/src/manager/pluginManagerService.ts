@@ -94,6 +94,34 @@ export interface PluginManagerService {
   reinstall(id: string): Promise<void>
   /** 装全部未装的（默认全装也走它） */
   installAll(): Promise<void>
+  /** NPM 市场搜索（服务端代查 + installable 过滤） */
+  searchNpmPlugins(q: string): Promise<NpmSearchResult[]>
+  /** 从 NPM 安装（含后台半时调用方须已确认） */
+  installFromNpm(pkg: string, opts?: { serverConfirm?: boolean }): Promise<void>
+  /** 从 NPM 更新到 latest */
+  updateFromNpm(pkg: string): Promise<{ updated: boolean; to?: string }>
+  /** 卸载 NPM 来源的包（两半一起删；后台半重启生效） */
+  uninstallFromNpm(pkg: string): Promise<void>
+  /** NPM 来源的已装清单 */
+  listNpmInstalled(): Promise<NpmInstalledEntry[]>
+}
+
+/** NPM 搜索结果的一条（cloud-server /api/npm-plugins/search 的 results 元素） */
+export interface NpmSearchResult {
+  pkg: string
+  title: string
+  description: string
+  version: string
+  date: string
+  hasServer: boolean
+}
+
+/** NPM 来源已装记录（/api/npm-plugins/installed 的元素） */
+export interface NpmInstalledEntry {
+  pkg: string
+  version: string
+  installedAt: string
+  serverSha256?: string
 }
 
 /**
@@ -580,5 +608,68 @@ export function createPluginManagerService(
 
   bindAdapterReload()
 
-  return { state, refresh, install, uninstall, reinstall, installAll }
+  // ============================================================================
+  // NPM 市场（计划 Task 5）：搜索 / 安装 / 更新 / 卸载（走 cloud-server 的 npm-plugins 路由）
+  // ============================================================================
+  async function searchNpmPlugins(q: string): Promise<NpmSearchResult[]> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/search?q=' + encodeURIComponent(q), {
+      headers: { accept: 'application/json' },
+    })
+    const json = (await res.json()) as { ok?: boolean; results?: NpmSearchResult[]; error?: string }
+    if (!res.ok || json.ok !== true) throw new Error(json.error ?? '搜索失败：' + res.status)
+    return json.results ?? []
+  }
+
+  /** 装一个 NPM 包（含后台半时调用方必须已确认；confirm 直传后端） */
+  async function installFromNpm(pkg: string, opts?: { serverConfirm?: boolean }): Promise<void> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/install', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ package: pkg, confirm: opts?.serverConfirm === true }),
+    })
+    const json = (await res.json()) as { ok?: boolean; error?: string }
+    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 安装失败：' + res.status)
+    // 装完重拉本地清单：新插件的前端半会出现在 rows 里
+    await refresh()
+  }
+
+  async function updateFromNpm(pkg: string): Promise<{ updated: boolean; to?: string }> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ package: pkg, confirm: true }),
+    })
+    const json = (await res.json()) as { ok?: boolean; updated?: boolean; to?: string; error?: string }
+    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 更新失败：' + res.status)
+    await refresh()
+    return { updated: json.updated === true, to: json.to }
+  }
+
+  async function uninstallFromNpm(pkg: string): Promise<void> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/uninstall', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ package: pkg }),
+    })
+    const json = (await res.json()) as { ok?: boolean; error?: string }
+    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 卸载失败：' + res.status)
+    await refresh()
+  }
+
+  /** 已从 NPM 装的包（含版本与是否有更新） */
+  async function listNpmInstalled(): Promise<NpmInstalledEntry[]> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/installed', { headers: { accept: 'application/json' } })
+    const json = (await res.json()) as { ok?: boolean; plugins?: NpmInstalledEntry[] }
+    return json.plugins ?? []
+  }
+
+  return {
+    state, refresh, install, uninstall, reinstall, installAll,
+    searchNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled,
+  }
 }
