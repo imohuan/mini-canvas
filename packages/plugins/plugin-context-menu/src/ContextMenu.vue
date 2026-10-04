@@ -129,7 +129,9 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
 
 <style scoped>
 /* 配色全部走通用 UI token（--ui-*，由 <html data-canvas-theme> 切换；值见
-   @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
+   @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。
+   背景用**不透光档** --ui-overlay-solid（与节点控制栏同一档）：菜单压在画布节点/图片上，
+   半透明毛玻璃会让底下的内容透出来、字读不清（用户口径 2026-10-04：把这个透明度删掉）。 */
 .ctx-menu {
   position: fixed;
   z-index: 100000;
@@ -138,9 +140,7 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   padding: 6px;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 16px;
-  background: var(--ui-glass, rgba(255, 255, 255, 0.92));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--ui-overlay-solid, #ffffff);
   box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.1));
   color: var(--ui-ink, #374151);
   font-size: 13px;

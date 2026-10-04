@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "默认主题",
+    "description": "画布默认皮：节点壳 / 连线 / 背景 / 设置面板",
+    "pluginName": "theme-default",
+    "builtin": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

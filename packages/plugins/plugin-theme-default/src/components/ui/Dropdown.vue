@@ -18,6 +18,7 @@ import type { DropdownTrigger } from './types'
 // 排他登记表放在独立模块：<script setup> 里的"模块级变量"其实每个实例一份（编译进 setup），
 // 那样登记表在实例之间不通、排他失效。详见该文件注释。
 import { claimDropdownExclusive, releaseDropdown } from './dropdownRegistry'
+import { DROPDOWN_CLOSE_ALL_EVENT } from '@mini-canvas/canvas-render'
 
 const props = withDefaults(
   defineProps<{
@@ -38,6 +39,16 @@ const props = withDefaults(
     menuMaxHeight?: string
     /** 浮层 role（默认 menu；选项列表用 listbox） */
     menuRole?: string
+    /**
+     * 浮层的滚动结构：
+     *   'overlay-scroll'（默认）= 整个浮层滚（内容一起滚，适合短菜单 / 单选列表）；
+     *   'inner-scroll'          = 浮层只当外框（flex 列、不滚），**内容区自己滚**。
+     *
+     * 为什么要分两种：需要「顶部标题固定、只有下面列表滚」的结构时，
+     * 若仍让整个浮层滚，就只能用 sticky 之类去补 —— 那是绕，不是对的结构
+     * （用户口径：上下是 flex 布局，只有下面内容滚动的地方才显示滚动条）。
+     */
+    layout?: 'overlay-scroll' | 'inner-scroll'
   }>(),
   {
     modelValue: false,
@@ -52,6 +63,7 @@ const props = withDefaults(
     teleport: true,
     menuMaxHeight: '',
     menuRole: 'menu',
+    layout: 'overlay-scroll',
   },
 )
 
@@ -193,6 +205,11 @@ function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && isOpen.value) close()
 }
 
+/** 「都关了吧」广播：拖拽/缩放这类环境变化时，谁开着的谁收（与全局件同一条广播） */
+function onCloseAll(): void {
+  if (isOpen.value) close()
+}
+
 watch(isOpen, (v) => {
   if (v) {
     // 排他：任何路径（click / hover / contextmenu / 受控 v-model）把它打开时，
@@ -208,6 +225,7 @@ let ro: ResizeObserver | undefined
 onMounted(() => {
   document.addEventListener('pointerdown', onDocPointerDown)
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener(DROPDOWN_CLOSE_ALL_EVENT, onCloseAll)
   if (typeof ResizeObserver !== 'undefined') {
     ro = new ResizeObserver(() => {
       if (isOpen.value) computePosition()
@@ -217,6 +235,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocPointerDown)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener(DROPDOWN_CLOSE_ALL_EVENT, onCloseAll)
   ro?.disconnect()
   clearCloseTimer()
   // 组件没了就别在登记表里留一条指向已销毁实例的 closer（否则下次 open 会去调空实例）
@@ -241,7 +260,7 @@ watch(isOpen, (v) => {
         v-if="isOpen"
         ref="menuRef"
         class="dd-menu"
-        :class="bodyClass"
+        :class="[bodyClass, props.layout === 'inner-scroll' ? 'dd-menu--inner-scroll' : '']"
         :style="{
           left: pos.left + 'px',
           top: pos.top + 'px',
@@ -296,4 +315,18 @@ watch(isOpen, (v) => {
   scrollbar-width: thin;
   font-size: 13px;
 }
+
+/* inner-scroll：浮层只当**外框**，自己不滚；由内容区（如 .ac-menu-scroll）滚。
+   这样「顶部标题固定 + 下面列表滚」是天然的 flex 上下分栏，不需要 sticky 去补。
+   min-height:0 是让内部 flex 子项能真正收缩（否则内容会把高度顶回去、滚动不触发）。 */
+.dd-menu--inner-scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: hidden;
+}
+.dd-menu--inner-scroll > * {
+  min-height: 0;
+}
+
 </style>

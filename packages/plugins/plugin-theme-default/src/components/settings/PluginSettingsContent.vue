@@ -1,8 +1,12 @@
 <script setup lang="ts">
 /**
- * PluginSettingsDialog —— theme-default 的默认设置面板**内容区**（左导航 + 右侧设置项 + 可选二级页签）。
+ * PluginSettingsContent —— theme-default 的默认设置**内容区**（左导航 + 右侧设置项 + 可选二级页签）。
  *
- * 定位：可替换设置面板 settingsPanel 槽的默认赢家。**外壳不在本组件里**——遮罩 / 居中 / 标题栏 / ✕ / Esc
+ * **名字里没有 Dialog 是有意的**：本组件不是弹窗。它只是弹窗里的那一块内容。
+ * 遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球全在渲染层的 SettingsShell（外壳），
+ * 与「SettingsShell + 本组件」这套叫法配套（Shell = 外壳，Content = 内容）。
+ *
+ * 定位：可替换设置槽 settingsPanel 的默认赢家。**外壳不在本组件里**——遮罩 / 居中 / 标题栏 / ✕ / Esc
  * / 点遮罩关闭 / 浮动窗口 / 悬浮球全部由渲染层 <SettingsShell> 提供（见 canvas-render/components/SettingsHost.vue）。
  * 本组件只渲染外壳内容区那一格，所以换皮的人只写内容，不重画窗口、也不用管怎么关。
  * 支持"分组名带 / 的二级菜单"：
@@ -265,8 +269,11 @@ function onBodyScroll(): void {
   }
   if (best) currentSection.value = best
 }
-// 切换一级时，若该一级只有一段也置高亮；否则滚回顶部
-watch(sections, () => { void nextTick(scrollToTop) })
+// 切换一级导航时滚回顶部（selectNav 已处理点击切页，这里覆盖"activeNav 被自动纠正"等路径）。
+// **监听 activeNav 而不是 sections**：插件安装/卸载会登记新的配置分组，导致 groups()/sections
+// 重算成一个新数组；若按 sections 变化来滚顶，用户点"安装"时就会被当成换页、把正在看的滚动位置
+// 弹回顶部（用户实测报过）。只有真的换了一级导航才滚顶。
+watch(activeNav, () => { void nextTick(scrollToTop) })
 
 /**
  * 滚动联动页签条：内容区滚动带出的当前段若在页签条可视区之外，
@@ -396,7 +403,7 @@ watch(
 watch(sections, () => void nextTick(updateTabsOverflow), { flush: 'post' })
 </script>
 <template>
-  <!-- 中间层根：左导航 + 右侧内容都归本皮，外壳只给最外层 Dialog（框/标题栏/✕/Esc）。
+  <!-- 中间层根：左导航 + 右侧内容都归本皮，外壳只给最外层窗口（框/标题栏/✕/Esc）。
        这一层直接作为 .psd-dialog 的弹性子项占满标题栏以下的高度。 -->
   <div class="psd-content-root">
   <nav class="psd-nav">

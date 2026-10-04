@@ -1,0 +1,69 @@
+/*
+ * 光标特效设置页的共用样式（本插件自绘整页，所以自带一套；颜色/圆角/动效值取自
+ * docs/design/ui-style-guide.md，一律用 --ui-* token，缺省时回落到规范里的亮色值）。
+ */
+.ce-page { display: flex; flex-direction: column; gap: 16px; }
+
+/* 区块：标题条 + 内容 */
+.ce-block { display: flex; flex-direction: column; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 10px; overflow: hidden; }
+.ce-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--ui-veil, rgb(0 0 0 / 0.03)); border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
+.ce-block-head h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
+.ce-block-head small { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ce-block-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+/* 页签 */
+.ce-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ce-tab { height: 28px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #6b7280); font-size: 12px; cursor: pointer; transition: background 0.16s ease, color 0.16s ease; }
+.ce-tab:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); color: var(--ui-ink, #18202b); }
+.ce-tab.is-active { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-weight: 600; }
+
+/* 选择网格（光标 / 跟随 / 特效） */
+.ce-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; }
+.ce-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 10px 6px 8px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 10px; background: var(--ui-panel, transparent); color: var(--ui-ink, #18202b); cursor: pointer; transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease; }
+.ce-tile:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); transform: translateY(-1px); }
+.ce-tile.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); box-shadow: 0 0 0 1px var(--ui-accent-soft, rgb(8 145 178 / 0.2)); }
+.ce-tile .ce-thumb { display: grid; place-items: center; width: 30px; height: 30px; }
+.ce-tile .ce-thumb svg { width: 100%; height: 100%; display: block; }
+.ce-tile .ce-thumb.is-mono { color: var(--ui-ink, #18202b); }
+.ce-tile.is-on .ce-thumb.is-mono { color: var(--ui-accent-hover, #0e7490); }
+.ce-tile .ce-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ce-tile .ce-frames { position: absolute; top: 4px; left: 5px; font-size: 9px; color: var(--ui-accent-hover, #0e7490); font-weight: 700; }
+.ce-tile .ce-del {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; line-height: 1; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #6b7280);
+  font-size: 14px; cursor: pointer; opacity: 0; transition: opacity 0.14s ease, color 0.14s ease;
+}
+.ce-custom-tile:hover .ce-del { opacity: 1; }
+.ce-tile .ce-del:hover { color: var(--ui-danger, #ef4444); background: var(--ui-hover, rgb(0 0 0 / 0.06)); }
+.ce-custom { display: flex; flex-direction: column; gap: 10px; }
+.ce-custom-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ce-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.ce-custom-err { font-size: 11px; color: var(--ui-danger, #ef4444); }
+.ce-tile .ce-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ce-tile.is-on .ce-name { color: inherit; font-weight: 600; }
+.ce-tile .ce-tag { position: absolute; top: 4px; right: 5px; font-size: 9px; color: var(--ui-ink-mute, #8c95a3); }
+
+/* 参数字段：标签在上、控件在下 */
+.ce-field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ce-field-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ce-bubble { font-size: 11px; font-weight: 700; color: var(--ui-accent-hover, #0e7490); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); padding: 1px 7px; border-radius: 999px; }
+.ce-range { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; margin: 0; border-radius: 99px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.14)); outline: none; }
+.ce-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ui-accent, #0891b2); cursor: pointer; }
+.ce-range::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--ui-accent, #0891b2); cursor: pointer; }
+.ce-range:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: 2px; }
+
+/* 开关行 */
+.ce-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
+.ce-switch-row strong { display: block; font-size: 12px; font-weight: 500; color: var(--ui-ink, #18202b); }
+.ce-switch-row small { display: block; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ce-switch { position: relative; width: 40px; height: 22px; flex: none; border: 0; border-radius: 999px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.12)); cursor: pointer; transition: background 0.16s ease; }
+.ce-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-primary-ink, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.16s ease; }
+.ce-switch.is-on { background: var(--ui-accent, #0891b2); }
+.ce-switch.is-on::after { transform: translateX(18px); }
+
+/* 底部 */
+.ce-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; }
+.ce-hint { font-size: 10px; line-height: 1.6; color: var(--ui-ink-dim, #6b7280); }
+.ce-mini { height: 28px; padding: 0 12px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); font-size: 12px; cursor: pointer; }
+.ce-mini:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
+.ce-mini:focus-visible { outline: 2px solid var(--ui-accent-ring, rgb(8 145 178 / 0.6)); outline-offset: 1px; }

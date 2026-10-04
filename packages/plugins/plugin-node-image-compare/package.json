@@ -5,6 +5,12 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "miniCanvas": {
+    "title": "图片对比节点",
+    "description": "连两张图，用可拖拽分割线左右对照",
+    "pluginName": "image-compare",
+    "installable": true
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "多选",
+    "description": "Shift+拖框选 / Ctrl+A 全选 / Escape 清除",
+    "pluginName": "multi-select",
+    "installable": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -13,6 +19,7 @@
     "./*": "./src/*"
   },
   "scripts": {
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -27,6 +34,8 @@
     "@vue/server-renderer": "3.5.38",
     "@mini-canvas/plugin-theme-default": "workspace:*",
     "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0"
   }
 }

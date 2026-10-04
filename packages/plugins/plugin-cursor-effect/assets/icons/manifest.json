@@ -1,0 +1,228 @@
+{
+  "pointer-arrow": {
+    "id": "fluent/cursor-24-filled",
+    "file": "pointer-arrow.svg",
+    "license": "fluent"
+  },
+  "pointer-arrow-2": {
+    "id": "ph/cursor-fill",
+    "file": "pointer-arrow-2.svg",
+    "license": "ph"
+  },
+  "pointer-triangle": {
+    "id": "tabler/pointer",
+    "file": "pointer-triangle.svg",
+    "license": "tabler"
+  },
+  "hand-point": {
+    "id": "solar/hand-stars-bold",
+    "file": "hand-point.svg",
+    "license": "solar"
+  },
+  "hand-click": {
+    "id": "lucide/mouse-pointer-click",
+    "file": "hand-click.svg",
+    "license": "lucide"
+  },
+  "click-tap": {
+    "id": "tabler/click",
+    "file": "click-tap.svg",
+    "license": "tabler"
+  },
+  "crosshair": {
+    "id": "lucide/crosshair",
+    "file": "crosshair.svg",
+    "license": "lucide"
+  },
+  "text-i": {
+    "id": "lucide/text-cursor",
+    "file": "text-i.svg",
+    "license": "lucide"
+  },
+  "move": {
+    "id": "lucide/move",
+    "file": "move.svg",
+    "license": "lucide"
+  },
+  "wait": {
+    "id": "lucide/hourglass",
+    "file": "wait.svg",
+    "license": "lucide"
+  },
+  "help": {
+    "id": "lucide/circle-help",
+    "file": "help.svg",
+    "license": "lucide"
+  },
+  "target": {
+    "id": "lucide/target",
+    "file": "target.svg",
+    "license": "lucide"
+  },
+  "sparkle": {
+    "id": "lucide/sparkles",
+    "file": "sparkle.svg",
+    "license": "lucide"
+  },
+  "star": {
+    "id": "mingcute/star-fill",
+    "file": "star.svg",
+    "license": "mingcute"
+  },
+  "heart": {
+    "id": "mingcute/heart-fill",
+    "file": "heart.svg",
+    "license": "mingcute"
+  },
+  "snow": {
+    "id": "lucide/snowflake",
+    "file": "snow.svg",
+    "license": "lucide"
+  },
+  "drop": {
+    "id": "mingcute/drop-fill",
+    "file": "drop.svg",
+    "license": "mingcute"
+  },
+  "flame": {
+    "id": "lucide/flame",
+    "file": "flame.svg",
+    "license": "lucide"
+  },
+  "ghost": {
+    "id": "lucide/ghost",
+    "file": "ghost.svg",
+    "license": "lucide"
+  },
+  "zap": {
+    "id": "lucide/zap",
+    "file": "zap.svg",
+    "license": "lucide"
+  },
+  "rainbow": {
+    "id": "mingcute/rainbow-fill",
+    "file": "rainbow.svg",
+    "license": "mingcute"
+  },
+  "leaf": {
+    "id": "lucide/leaf",
+    "file": "leaf.svg",
+    "license": "lucide"
+  },
+  "moon": {
+    "id": "lucide/moon",
+    "file": "moon.svg",
+    "license": "lucide"
+  },
+  "paw": {
+    "id": "lucide/paw-print",
+    "file": "paw.svg",
+    "license": "lucide"
+  },
+  "circle": {
+    "id": "lucide/circle",
+    "file": "circle.svg",
+    "license": "lucide"
+  },
+  "diamond": {
+    "id": "lucide/diamond",
+    "file": "diamond.svg",
+    "license": "lucide"
+  },
+  "bolt": {
+    "id": "mingcute/lightning-fill",
+    "error": 429
+  },
+  "sun": {
+    "id": "lucide/sun",
+    "error": 429
+  },
+  "cloud": {
+    "id": "lucide/cloud",
+    "error": 429
+  },
+  "feather": {
+    "id": "lucide/feather",
+    "error": 429
+  },
+  "flower": {
+    "id": "lucide/flower",
+    "error": 429
+  },
+  "bug": {
+    "id": "lucide/bug",
+    "error": 429
+  },
+  "cat": {
+    "id": "lucide/cat",
+    "error": 429
+  },
+  "cherry": {
+    "id": "lucide/cherry",
+    "error": 429
+  },
+  "gem": {
+    "id": "lucide/gem",
+    "error": 429
+  },
+  "crown": {
+    "id": "lucide/crown",
+    "error": 429
+  },
+  "eye": {
+    "id": "lucide/eye",
+    "error": 429
+  },
+  "rocket": {
+    "id": "lucide/rocket",
+    "error": 429
+  },
+  "wand": {
+    "id": "lucide/wand-sparkles",
+    "error": 429
+  },
+  "music": {
+    "id": "lucide/music",
+    "error": 429
+  },
+  "hexagon": {
+    "id": "lucide/hexagon",
+    "error": 429
+  },
+  "plus": {
+    "id": "lucide/plus",
+    "error": 429
+  },
+  "atom": {
+    "id": "lucide/atom",
+    "error": 429
+  },
+  "orbit": {
+    "id": "lucide/orbit",
+    "error": 429
+  },
+  "bone": {
+    "id": "lucide/bone",
+    "error": 429
+  },
+  "fish": {
+    "id": "lucide/fish",
+    "error": 429
+  },
+  "bird": {
+    "id": "lucide/bird",
+    "error": 429
+  },
+  "wind": {
+    "id": "lucide/wind",
+    "error": 429
+  },
+  "droplet": {
+    "id": "lucide/droplet",
+    "error": 429
+  },
+  "grip": {
+    "id": "lucide/grip",
+    "error": 429
+  }
+}

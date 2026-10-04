@@ -14,7 +14,7 @@
  */
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import AlignGuideOverlay from './AlignGuideOverlay.vue'
-import { Config } from './alignGuideConfig'
+import { Config, ALIGN_GUIDE_COLOR_KEYS } from './alignGuideConfig'
 import { bindAlignGuideToggle } from './alignGuideToggle'
 
 export const name = 'align-guide'
@@ -39,12 +39,51 @@ function attach(ctx: Context): () => void {
   }
 }
 
+/**
+ * 把用户自定义的参考线颜色落到 <html> 内联变量（--uic-align-guide-light/dark）。
+ *
+ * 为什么写内联而不是别的：与宿主色板同一套机制（ui-theme.css 的 --ui-guide 消费这两个变量，
+ * 亮/暗各挑一个；内联优先级最高、不怕加载顺序）。清空 = removeProperty，控制权交回 CSS 兜底
+ * （--ui-accent，即跟随主题强调色）。随插件 fiber 回收，卸载时清干净不留"幽灵变量"。
+ */
+function bindGuideColorVars(ctx: Context): () => void {
+  const settings = ctx.tryGet<{ get(k: string): unknown; onChange(cb: (k: string, v: unknown) => void): { dispose(): void } }>('settings')
+  if (!settings || typeof document === 'undefined') return () => {}
+  const root = document.documentElement
+  const colorKeys = new Set<string>(Object.values(ALIGN_GUIDE_COLOR_KEYS))
+  const sync = (): void => {
+    for (const key of colorKeys) {
+      const mode = key.endsWith('Dark') ? 'dark' : 'light'
+      const varName = '--uic-align-guide-' + mode
+      const raw = settings.get(key)
+      const value = typeof raw === 'string' ? raw.trim() : ''
+      if (value) root.style.setProperty(varName, value)
+      else root.style.removeProperty(varName)
+    }
+  }
+  sync()
+  const off = settings.onChange((key) => {
+    if (colorKeys.has(key)) sync()
+  })
+  return () => {
+    off.dispose()
+    for (const key of colorKeys) root.style.removeProperty('--uic-align-guide-' + (key.endsWith('Dark') ? 'dark' : 'light'))
+  }
+}
+
 export function apply(ctx: Context) {
   // 总开关（alignGuideEnabled）关闭 → 连浮层都不装：不吸附、不画线、不订阅拖拽事件。
   // 重开 → 现装（浮层组件重新挂载并重新订阅），无需重载画布。
   // config 已由内核经 Config schema 校验 + 补默认并登记 settings；订阅见 bindAlignGuideToggle。
   // ctx.effect：订阅与浮层全随插件 fiber 自动回收（热卸/重载不留残线）。
-  ctx.effect(() => bindAlignGuideToggle(ctx, () => attach(ctx)))
+  ctx.effect(() => {
+    const stopToggle = bindAlignGuideToggle(ctx, () => attach(ctx))
+    const stopColor = bindGuideColorVars(ctx)
+    return () => {
+      stopToggle()
+      stopColor()
+    }
+  })
 }
 
 /** 兼容旧装配的 PluginModule 出口（Config 随模块声明，内核装配时校验 + 登记设置面板） */

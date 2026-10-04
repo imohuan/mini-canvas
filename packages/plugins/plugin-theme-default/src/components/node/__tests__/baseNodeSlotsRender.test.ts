@@ -348,7 +348,7 @@ describe('多选单选圈（用户要求：多选时在节点内容区左上角�
   })
 })
 
-describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变小一些 + 可配色 + 可配 size + 低缩放也显示的开关）', () => {
+describe('多选标记的大小 / 低缩放开关（颜色已改走主题强调色，不再是配置项）', () => {
   it('读不到配置 → 默认就比原先小（18px，此前写死 26px）', async () => {
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub })
@@ -369,16 +369,17 @@ describe('多选标记的大小 / 颜色 / 低缩放开关（用户要求：变�
     expect(html).toContain('height:32px')
   })
 
-  it('颜色配置读到 hex → 标记元素带上该颜色（圆环/圆点走 currentColor）', async () => {
+  it('颜色不再由内联样式给（走 CSS 的 var(--ui-accent)）→ 标记元素的内联 style 里没有 color', async () => {
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub })
+    // 即便有人塞了旧的颜色 key，也不该再进内联样式（它已不是配置项）
     const html = await renderNode(
       r,
       {},
       { nodeMultiRadioColor: '#ff0000' },
       { selectedIds: ['n1', 'n2'] },
     )
-    expect(html).toContain('color:#ff0000')
+    expect(html).not.toContain('color:#ff0000')
   })
 
   it('低缩放（zoom 低于低细节阈值）默认不显示标记', async () => {
@@ -525,7 +526,8 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     r.register('image', { in: ContentStub })
     const html = await renderNode(r, { resizable: true })
     expect(html).toContain('resize-handle')
-    expect(html).toMatch(/class="resize-handle"[^>]*style="[^"]*transform:scale/)
+    // 拖柄是「临时 UI」，挂了导出剔除标记 mc-export-ignore（见下方 describe）
+    expect(html).toMatch(/class="resize-handle mc-export-ignore"[^>]*style="[^"]*transform:scale/)
   })
 
   it('不可 resize → 不渲染拖柄（不挡卡片内容）', async () => {
@@ -533,5 +535,47 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     r.register('image', { in: ContentStub })
     const html = await renderNode(r)
     expect(html).not.toContain('resize-handle')
+  })
+})
+
+/**
+ * 导出剔除标记 mc-export-ignore：画布上的临时 UI（多选圆点 / resize 拖柄 / 端口球）
+ * 必须带上它，导出插件才会在截图时整棵跳过 —— 否则多选圆点会被照进导出图（用户报的问题）。
+ * 这里只锁「节点壳内部」这几件；端口球在 MovingHandle、选框在多选插件，各自另有测试。
+ */
+describe('导出剔除标记 mc-export-ignore（临时 UI 不进导出图）', () => {
+  const MARK = 'mc-export-ignore'
+
+  it('多选圆点带标记（用户报：多选标记被照进导出图）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
+    // 标记类必须落在多选圆点那个元素上（不是别处）
+    expect(html).toMatch(/class="v2-multi-radio[^"]*\bmc-export-ignore\b[^"]*"/)
+    // 多选圆点自己的调试/交互类仍在（没有把别的类挤掉）
+    expect(html).toMatch(/class="v2-multi-radio[^"]*\bnodrag\b/)
+    expect(html).toMatch(/class="v2-multi-radio[^"]*\bnopan\b/)
+  })
+
+  it('多选圆点只在多选时出现 —— 单选/未选中时既不渲染、也就谈不上标记', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const single = await renderNode(r, {}, {}, { selectedIds: ['n1'] })
+    expect(single).not.toContain('v2-multi-radio')
+  })
+
+  it('resize 拖柄带标记', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const html = await renderNode(r, { resizable: true })
+    expect(html).toMatch(new RegExp('class="resize-handle ' + MARK + '"'))
+  })
+
+  it('端口锚点（MovingHandle）带标记 —— 端口球 / 透明接收区都不该进导出图', async () => {
+    const r = new NodeRegistry()
+    // 不声明 inputs/outputs 即默认可进可出（useNodeCapability），两端端口都会渲染
+    r.register('image', { in: ContentStub })
+    const html = await renderNode(r, {}, {}, { selectedIds: ['n1'] })
+    expect(html).toMatch(new RegExp('moving-handle-anchor[^"]*' + MARK))
   })
 })

@@ -15,12 +15,22 @@ export interface BladeStyle {
   showCutPath?: boolean
 }
 
-/** 覆盖默认主题色的 CSS 变量 key（与 createStyle 里的 var(--...) 对应） */
-function themeCssVars(style: BladeStyle): Record<string, string> {
-  const vars: Record<string, string> = {}
-  if (style.pathColor) vars['--edge-cutting-path-color'] = style.pathColor
-  if (style.bladeColor) vars['--edge-cutting-blade-color'] = style.bladeColor
-  return vars
+/** 两个可覆盖主题色的 CSS 变量（与 createStyle 里的 var(--...) 对应） */
+const PATH_COLOR_VAR = '--edge-cutting-path-color'
+const BLADE_COLOR_VAR = '--edge-cutting-blade-color'
+
+/**
+ * 把配置色写进 overlay 的内联 CSS 变量：
+ * - 有自定义色 → setProperty；
+ * - 空串（用户清空 = 跟随主题）→ **removeProperty**，把控制权交回 CSS 的 var(--ui-accent*) 兜底。
+ *
+ * 为什么必须显式 remove：只在"非空才写"会在用户清空后留下上一次的内联值，颜色清不掉。
+ */
+function applyThemeCssVars(el: SVGElement, style: BladeStyle): void {
+  if (style.pathColor) el.style.setProperty(PATH_COLOR_VAR, style.pathColor)
+  else el.style.removeProperty(PATH_COLOR_VAR)
+  if (style.bladeColor) el.style.setProperty(BLADE_COLOR_VAR, style.bladeColor)
+  else el.style.removeProperty(BLADE_COLOR_VAR)
 }
 
 function createOverlay(style: BladeStyle): SVGSVGElement {
@@ -35,7 +45,7 @@ function createOverlay(style: BladeStyle): SVGSVGElement {
     'pointer-events:none',
     'z-index:10000',
   ].join(';')
-  for (const [k, v] of Object.entries(themeCssVars(style))) svg.style.setProperty(k, v)
+  applyThemeCssVars(svg, style)
   document.body.appendChild(svg)
   syncOverlayViewport(svg)
   return svg
@@ -54,21 +64,23 @@ function createStyle(): HTMLStyleElement {
   style.textContent = `
 .edge-cutting-overlay .cut-path {
   fill: none;
-  stroke: var(--edge-cutting-path-color, #38bdf8);
+  /* 未设自定义色（空串）→ 跟随主题强调色的**悬停档**（用户口径：轨迹用悬停样式） */
+  stroke: var(--edge-cutting-path-color, var(--ui-accent-hover, #0e7490));
   stroke-width: 1.1;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-opacity: 0.42;
   mix-blend-mode: screen;
-  filter: drop-shadow(0 0 2px var(--edge-cutting-path-color, #38bdf8));
+  filter: drop-shadow(0 0 2px var(--edge-cutting-path-color, var(--ui-accent-hover, #0e7490)));
 }
 .edge-cutting-overlay .blade-trail {
   fill: none;
-  stroke: var(--edge-cutting-blade-color, #38bdf8);
+  /* 未设自定义色（空串）→ 跟随主题强调色（用户口径：刀锋用默认主题色） */
+  stroke: var(--edge-cutting-blade-color, var(--ui-accent, #0891b2));
   stroke-linecap: round;
   stroke-linejoin: round;
   mix-blend-mode: screen;
-  filter: drop-shadow(0 0 3px var(--edge-cutting-blade-color, #38bdf8));
+  filter: drop-shadow(0 0 3px var(--edge-cutting-blade-color, var(--ui-accent, #0891b2)));
 }
 .edge-cutting-overlay .blade-trail--wide {
   stroke-opacity: 0.13;
@@ -85,11 +97,11 @@ function createStyle(): HTMLStyleElement {
   stroke-linecap: round;
   stroke-linejoin: round;
   mix-blend-mode: screen;
-  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px var(--edge-cutting-blade-color, #38bdf8)); /* 主题色白名单: 内圈恒白光晕(screen 高光) + 外圈用户刀锋色(已走变量) */
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px var(--edge-cutting-blade-color, var(--ui-accent, #0891b2))); /* 主题色白名单: 内圈恒白光晕(screen 高光) + 外圈用户刀锋色(已走变量；空值跟随主题强调色) */
 }
 .edge-cutting-overlay .blade-tip {
   fill: rgba(255, 255, 255, 0.88); /* 主题色白名单: 刀尖亮芯恒白半透明，同上（screen 高光） */
-  stroke: var(--edge-cutting-blade-color, #38bdf8);
+  stroke: var(--edge-cutting-blade-color, var(--ui-accent, #0891b2));
   stroke-width: 0.8;
   stroke-opacity: 0.5;
   filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.68)); /* 主题色白名单: 刀尖恒白光晕（screen 高光） */
@@ -99,7 +111,7 @@ function createStyle(): HTMLStyleElement {
   stroke-width: 0.8;
   stroke-linecap: round;
   opacity: 0.55;
-  filter: drop-shadow(0 0 2px var(--edge-cutting-blade-color, #38bdf8));
+  filter: drop-shadow(0 0 2px var(--edge-cutting-blade-color, var(--ui-accent, #0891b2)));
 }
 body.edge-cutting-active {
   cursor: crosshair;
@@ -128,7 +140,7 @@ export class EdgeCuttingOverlay {
   updateStyle(style: BladeStyle): void {
     this.style = style
     if (!this.svg) return
-    for (const [k, v] of Object.entries(themeCssVars(style))) this.svg.style.setProperty(k, v)
+    applyThemeCssVars(this.svg, style)
   }
 
   private ensure(): SVGSVGElement {

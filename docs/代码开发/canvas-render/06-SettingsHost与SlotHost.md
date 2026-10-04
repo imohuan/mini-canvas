@@ -2,7 +2,7 @@
 
 > 来源：`packages/canvas-render/src/components/SettingsHost.vue`、`components/SlotHost.vue`、
  > `components/SettingsShell.vue`、内核 `core/capabilities.ts`（ctx.slots / ctx.theme）、
- > `plugin-theme-default`（settings 注册、PluginSettingsDialog）。
+ > `plugin-theme-default`（settings 注册、PluginSettingsContent）。
 
 ## 一句话
 
@@ -66,14 +66,14 @@ reload()
 - **数据喂法 = 渲染时现取，不注册快照**：`ctx.settings` 是画布级恒在数据，现取保证实时。
  - 皮组件声明 `props.settings` 接收，**只渲染中间层**（左导航 + 右侧设置项）；窗口级行为一概不碰。
  - **关闭是外壳的职责**：外壳 emit(`close`) → SettingsHost `ctx.emit('settings:ui-close')` → 宿主收起面板（`<SettingsHost v-if>` 卸载）。
-- **设置值自刷新由面板自己负责**：SettingsHost 不监听配置变化给面板加 `:key` 重挂（否则输入框每按键就重挂丢焦点）。默认面板 PluginSettingsDialog 内部已订阅 onChange 自刷新。
+- **设置值自刷新由面板自己负责**：SettingsHost 不监听配置变化给面板加 `:key` 重挂（否则输入框每按键就重挂丢焦点）。默认设置内容 PluginSettingsContent 内部已订阅 onChange 自刷新。
 - 插件换皮：装一个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, { order: -1 })` 即顶替默认。
 
 ### 默认皮从哪来
 
 `plugin-theme-default` 在 `apply(ctx)` 里注册：
 ```ts
-ctx.theme.register('settingsPanel', PluginSettingsDialog, { id: 'default', order: 0 })
+ctx.theme.register('settingsPanel', PluginSettingsContent, { id: 'default', order: 0 })
 ```
  它实现的是**内容区**（左导航 / 右侧设置项）；居中 modal、遮罩、✕、Esc、浮动窗口与悬浮球由 `SettingsShell` 提供。
  内容区还带三个可扩展插槽（见《07 的槽名表》）。
@@ -150,7 +150,7 @@ SlotHost **不做定位/pointer-events/容器样式**——那是具体槽（如
 | `edge` | 组件 | VueFlow edge-types（`edgeTypes.custom`） | `CustomEdge` |
 | `background` | 组件 | VueFlow 背景 | `DefaultBackground` |
 | `edgeDefaultType` | 字面值(默认 'custom') | 建边时默认 type | `'custom'` |
-| `settingsPanel` | 组件 | SettingsHost 的赢家 | `PluginSettingsDialog` |
+| `settingsPanel` | 组件 | SettingsHost 的赢家 | `PluginSettingsContent` |
 | `connectionLine` | 组件 | VueFlow 拖线时的"待连预览线"渲染 | （theme-default 未填，缺省） |
 
 > 内核 `ThemeSlot` 类型另含 `connectionLine` 一槽（拖拽连线的预览线渲染组件），`ThemeSlot` 也允许任意字符串新槽。
@@ -163,9 +163,9 @@ SlotHost **不做定位/pointer-events/容器样式**——那是具体槽（如
 | 槽名 | 谁读 | 插件怎么填（示例） |
 |------|------|------------------|
 | `overlay` | CanvasSurface 里的 `<SlotHost slot="overlay">` | `ctx.slots.register('overlay', { component, order })` |
-| `settingsNav` | PluginSettingsDialog 左导航 | 塞自定义**一级**导航项 / 顶替某一级 tab（id = 一级名，命中顶替，否则末尾追加自定义一级项） |
-| `settingsTab` | PluginSettingsDialog 二级页签条 | 定制**二级**页签：id 首段 = 当前一级名才生效；id 命中该一级下某完整分组 key → 顶替那个二级页签，否则追加一个自定义二级页签 |
-| `settingsGroup/<key>` | PluginSettingsDialog 右内容 | 接管某**完整 key**（扁平分组名或带 `/` 的二级叶子全名）的内容区（meta.mode: replace/prepend/append） |
+| `settingsNav` | PluginSettingsContent 左导航 | 塞自定义**一级**导航项 / 顶替某一级 tab（id = 一级名，命中顶替，否则末尾追加自定义一级项） |
+| `settingsTab` | PluginSettingsContent 二级页签条 | 定制**二级**页签：id 首段 = 当前一级名才生效；id 命中该一级下某完整分组 key → 顶替那个二级页签，否则追加一个自定义二级页签 |
+| `settingsGroup/<key>` | PluginSettingsContent 右内容 | 接管某**完整 key**（扁平分组名或带 `/` 的二级叶子全名）的内容区（meta.mode: replace/prepend/append） |
 
 > 分组 key 语义：字段 `group` 可用 `/` 表示二级菜单，如 `常规/显示` → 左导航一级=`常规`，右页面签=二级分组。某一级下二级分组**多于一个**才显示页签条；只有一个则无页签直接展示正文。扁平分组（无 `/`）即一级=自己，行为同旧版。
 
@@ -175,9 +175,9 @@ SlotHost **不做定位/pointer-events/容器样式**——那是具体槽（如
 
 ## 端到端：怎么让"设置"能改边外观
 
-1. `plugin-theme-default` `apply`：注册 `settingsPanel` 赢家（PluginSettingsDialog）+ `Config` schema（连线/背景各项）。
+1. `plugin-theme-default` `apply`：注册 `settingsPanel` 赢家（PluginSettingsContent）+ `Config` schema（连线/背景各项）。
 2. 内核启动时：Config schema 字段自动登记进 `settings` 单一数据源（scope=theme-default）。
-3. 宿主想显示设置：在自己业务 UI 区放 `<SettingsHost/>`（或直接 `<PluginSettingsDialog :settings="settingsSourceFrom(ctx)" />`）。
+3. 宿主想显示设置：在自己业务 UI 区放 `<SettingsHost/>`（或直接 `<PluginSettingsContent :settings="settingsSourceFrom(ctx)" />`）。
 4. 面板里调 `settings.set(key, value)` 或走插槽自定义组件 → onChange → 外观就地窄更新实时生效（不整图重建）。
 
 ---
@@ -188,4 +188,4 @@ SlotHost **不做定位/pointer-events/容器样式**——那是具体槽（如
 2. **SlotHost 只渲染，不定位**：给 occupant 的 pointer-events/布局要靠使用方套 CSS + itemClass。
 3. **设置面板别用 `:key` 重挂**：输入框每按键会丢焦点。要面板自己订阅 onChange 自刷新。
 4. **occupant 组件句柄要 markRaw**：组件内部（SettingsHost/SlotHost）已处理；你自己手写渲染槽时要记得。
-5. **`settingsNav`/`settingsGroup/<key>` 是设置面板(PluginSettingsDialog)内部的插槽**，不是 SlotHost 渲染的通用槽——要跟通用 `overlay`/任意自定义槽区分开。
+5. **`settingsNav`/`settingsGroup/<key>` 是设置内容(PluginSettingsContent)内部的插槽**，不是 SlotHost 渲染的通用槽——要跟通用 `overlay`/任意自定义槽区分开。

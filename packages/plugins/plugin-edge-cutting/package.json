@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "连线切割",
+    "description": "按住 Alt 拖拽划过连线即可删除",
+    "pluginName": "edge-cutting",
+    "installable": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -13,6 +19,7 @@
     "./*": "./src/*"
   },
   "scripts": {
+    "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -24,7 +31,10 @@
     "vue": "^3.5.34"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34"
   }

@@ -94,10 +94,11 @@ async function onFileChange(e: Event): Promise<void> {
   if (!file || uploading.value) return
   uploading.value = true
   try {
-    await uploadVideo(ops, props.id, file, undefined, (url, blob) => {
-      // 视频走 objectURL：登记进宿主资源表，删除节点后由引用扫描延迟回收（与图片同语义）
+    await uploadVideo(ops, props.id, file, undefined, async (blob) => {
+      // 存进宿主资源库（本地 IndexedDB / 云端画布文件夹，由当前 adapter 决定）
       const resources = ctx.tryGet('resources')
-      return resources?.register({ kind: 'video', url, resource: blob })
+      if (!resources) return undefined
+      return resources.put(blob, { kind: 'video', ...(blob instanceof File && blob.name ? { name: blob.name } : {}) })
     })
   } finally {
     uploading.value = false

@@ -115,5 +115,5 @@ ctx.theme.register('settingsPanel', MyPanel, { order: -1 })
 
 1. **SettingsStore 变更非响应式**（plain class）：面板不能靠 Vue 自动追踪，必须用 `onChange` 订阅 + 自己驱动刷新（version 号 / 手动改 ref）。
 2. **`set` 未知 key 会抛错**：改一项前它必须已被声明（插件 Config schema 或 settings.define 登记过）。越界值会被夹取到 min/max。
-3. **默认面板自刷新**：PluginSettingsDialog 内部已订阅 onChange，所以 SettingsHost 不会为每次配置变化给面板加 `:key` 重挂。
+3. **默认设置内容自刷新**：PluginSettingsContent 内部已订阅 onChange，所以 SettingsHost 不会为每次配置变化给面板加 `:key` 重挂。
 4. **settingsSourceFrom 在缺 settings 服务时抛错**：但 createMiniCanvasHost/CanvasHost 恒注入 settings，通常不会缺。

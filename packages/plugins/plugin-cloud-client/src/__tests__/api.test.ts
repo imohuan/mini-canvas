@@ -1,0 +1,166 @@
+import { describe, it, expect } from 'vitest'
+import { CloudApi } from '../api'
+import type { FetchLike } from '../apiTypes'
+
+/** 记录请求的假 fetch（不起真服务） */
+function fakeFetch(handler: (url: string, init?: RequestInit) => { status?: number; body?: unknown }): {
+  fetchImpl: FetchLike
+  calls: Array<{ url: string; init?: RequestInit }>
+} {
+  const calls: Array<{ url: string; init?: RequestInit }> = []
+  const fetchImpl: FetchLike = async (url, init) => {
+    calls.push({ url, ...(init ? { init } : {}) })
+    const r = handler(url, init)
+    return new Response(JSON.stringify(r.body ?? {}), { status: r.status ?? 200 })
+  }
+  return { fetchImpl, calls }
+}
+
+describe('动作清单', () => {
+  it('按 baseUrl 拼地址，且不带 ifVersion 时全量拉', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 3, changed: true, actions: [{ id: 'a', title: 'A' }] } }))
+    const api = new CloudApi({ baseUrl: 'http://srv:8865/', fetchImpl })
+    const r = await api.fetchActions()
+    expect(calls[0].url).toBe('http://srv:8865/api/actions')
+    expect(r.version).toBe(3)
+    expect(r.actions).toHaveLength(1)
+  })
+
+  it('带 ifVersion → 版本没变时 changed:false 且 actions 为空（省掉整份搬运）', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 3, changed: false, actions: [] } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const r = await api.fetchActions(3)
+    expect(calls[0].url).toContain('ifVersion=3')
+    expect(r.changed).toBe(false)
+    expect(r.actions).toEqual([])
+  })
+
+  it('拿不到清单要抛（调用方据此显示"连不上服务"）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ status: 500, body: {} }))
+    await expect(new CloudApi({ fetchImpl }).fetchActions()).rejects.toThrow()
+  })
+})
+
+describe('任务', () => {
+  it('下单取 jobId', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, jobId: 'j1' } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    expect(await api.createJob({ canvasId: 'default', nodeId: 'n1', actionId: 'a' })).toBe('j1')
+    expect(calls[0].init?.method).toBe('POST')
+  })
+
+  it('下单失败要带出后台的说明（用户看得懂）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ status: 400, body: { ok: false, error: '未找到动作 x' } }))
+    await expect(new CloudApi({ fetchImpl }).createJob({ canvasId: 'default', nodeId: 'n1', actionId: 'x' })).rejects.toThrow(
+      '未找到动作 x',
+    )
+  })
+
+  it('查任务：404 → undefined（任务没了，不是异常）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ status: 404, body: {} }))
+    expect(await new CloudApi({ fetchImpl }).getJob('nope')).toBeUndefined()
+  })
+
+  it('记住 taskId 的查询地址', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, job: { id: 'j1', status: 'running' } } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await api.getJob('j1')
+    expect(calls[0].url).toBe('http://srv/api/jobs/j1')
+  })
+})
+
+describe('历史', () => {
+  it('筛选条件拼进 query string，空值不拼', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { items: [], total: 0, page: 1, pageSize: 20, summary: { total: 0, byKind: {} } } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await api.fetchHistory({ page: 2, pageSize: 10, kind: 'image', status: '', order: 'asc' })
+    const url = calls[0].url
+    expect(url).toContain('page=2')
+    expect(url).toContain('pageSize=10')
+    expect(url).toContain('kind=image')
+    expect(url).toContain('order=asc')
+    expect(url).not.toContain('status=')
+  })
+
+  it('后端少给的字段有兜底（不会因为缺字段崩）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ body: {} }))
+    const r = await new CloudApi({ fetchImpl }).fetchHistory()
+    expect(r.items).toEqual([])
+    expect(r.summary).toEqual({ total: 0, byKind: {} })
+  })
+})
+
+describe('地址管理', () => {
+  it('setBaseUrl 立刻生效（设置改了不用重装插件）', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 1, actions: [] } }))
+    const api = new CloudApi({ baseUrl: 'http://a', fetchImpl })
+    await api.fetchActions()
+    api.setBaseUrl('http://b')
+    await api.fetchActions()
+    expect(calls[0].url).toContain('http://a')
+    expect(calls[1].url).toContain('http://b')
+  })
+
+  it('空 baseUrl = 同源（相对地址）', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 1, actions: [] } }))
+    await new CloudApi({ fetchImpl }).fetchActions()
+    expect(calls[0].url).toBe('/api/actions')
+  })
+})
+
+describe('实时通道', () => {
+  /** 假 EventSource：手动喂帧 */
+  function fakeSource() {
+    const listeners = new Map<string, Array<(e: { data: string }) => void>>()
+    return {
+      closed: false,
+      addEventListener(type: string, fn: (e: { data: string }) => void) {
+        if (!listeners.has(type)) listeners.set(type, [])
+        listeners.get(type)!.push(fn)
+      },
+      close() {
+        this.closed = true
+      },
+      emit(data: unknown) {
+        for (const fn of listeners.get('message') ?? []) fn({ data: JSON.stringify(data) })
+      },
+    }
+  }
+
+  it('订阅地址不带 type 过滤（一条连接要听 canvas 与 config 两域）', () => {
+    const src = fakeSource()
+    let url = ''
+    const api = new CloudApi({ baseUrl: 'http://srv', createEventSource: (u) => ((url = u), src) })
+    api.subscribeChanges(() => {})
+    expect(url).toBe('http://srv/api/kv/events')
+    expect(url).not.toContain('type=')
+  })
+
+  it('收到的帧转发给回调；坏帧忽略（不该打断订阅）', () => {
+    const src = fakeSource()
+    const got: Array<{ type: string; key: string }> = []
+    const api = new CloudApi({ createEventSource: () => src })
+    api.subscribeChanges((e) => got.push(e))
+    src.emit({ type: 'canvas', key: 'graph' })
+    src.emit({ type: 'config', key: 'history-rev' })
+    // 坏帧：不该抛，也不该进 got
+    for (const fn of [() => {}]) fn()
+    expect(got).toEqual([
+      { type: 'canvas', key: 'graph' },
+      { type: 'config', key: 'history-rev' },
+    ])
+  })
+
+  it('取消订阅会关掉连接', () => {
+    const src = fakeSource()
+    const api = new CloudApi({ createEventSource: () => src })
+    const off = api.subscribeChanges(() => {})
+    off()
+    expect(src.closed).toBe(true)
+  })
+
+  it('没有 EventSource 也不报错（Node / SSR 环境）', () => {
+    const api = new CloudApi({})
+    expect(() => api.subscribeChanges(() => {})()).not.toThrow()
+  })
+})

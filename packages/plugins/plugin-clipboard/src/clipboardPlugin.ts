@@ -120,7 +120,9 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     if (!snap || snap.nodes.length === 0) return false
     const anchor = this.flowAnchor()
     const offset = computePasteOffset(snap.nodes, anchor, this.pasteCount)
-    const { nodes, edges } = remapSnapshot(snap, offset)
+    // 新 id 统一向内核要（自增数字），插件不再自造 `原id-copy-时间戳-随机` 那种形态。
+    // 注意 genId 会被 remapSnapshot 对每个节点调用一次，顺序即节点顺序。
+    const { nodes, edges } = remapSnapshot(snap, offset, () => this.doc.nextNodeId())
     if (nodes.length === 0) return false
 
    const added: string[] = []

@@ -50,24 +50,27 @@ export function releaseDrawable(source: CanvasImageSource): void {
 }
 
 /**
- * 建一块画布、交给 draw 画、产出 PNG dataURL。
+ * 建一块画布、交给 draw 画、产出 PNG **Blob**。
+ *
+ * 为什么是 Blob 不是 dataURL：产出的字节要交给宿主资源库（浏览器里是 IndexedDB）保存，
+ * 节点里只留引用。base64 会把图片撑大约 1/3，塞进 localStorage 既慢又容易撞配额。
  *
  * 画布默认**透明**（不填底色）—— 扩展出来的区域必须是透明的，
  * 交给生成模型时它才知道"这块是要你补内容的地方"（填白会变成"这是一块白画布"）。
  */
-export function paintCanvas(
+export function paintCanvasBlob(
   width: number,
   height: number,
   draw: (c2d: CanvasRenderingContext2D) => void,
-): string | null {
-  if (typeof document === 'undefined' || width <= 0 || height <= 0) return null
+): Promise<Blob | null> {
+  if (typeof document === 'undefined' || width <= 0 || height <= 0) return Promise.resolve(null)
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const c2d = canvas.getContext('2d')
-  if (!c2d) return null
+  if (!c2d) return Promise.resolve(null)
   draw(c2d)
-  const dataUrl = canvas.toDataURL('image/png')
-  return dataUrl.startsWith('data:image') ? dataUrl : null
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob && blob.size > 0 ? blob : null), 'image/png')
+  })
 }
-

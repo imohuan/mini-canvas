@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "文本节点",
+    "description": "文本节点：双击编辑 + 生成",
+    "pluginName": "text",
+    "builtin": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

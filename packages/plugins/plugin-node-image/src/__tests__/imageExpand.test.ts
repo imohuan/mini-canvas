@@ -71,7 +71,7 @@ describe('expandImage：执行一次扩展', () => {
         const c2d = { drawImage: (...args: unknown[]) => calls.push(args[1] as number, args[2] as number) } as unknown as CanvasRenderingContext2D
         draw(c2d, source)
         painted.push({ width: bounds.width, height: bounds.height, offsetX: calls[0], offsetY: calls[1] })
-        return 'data:image/png;base64,EXPANDED'
+        return Promise.resolve(new Blob(['expanded'], { type: 'image/png' }))
       },
       release: () => {
         released += 1
@@ -80,10 +80,12 @@ describe('expandImage：执行一次扩展', () => {
     return { io, painted, releasedCount: () => released }
   }
 
-  it('产出新 dataURL，并按扩出来的偏移把原图画上去', async () => {
+  it('产出新 PNG Blob，并按扩出来的偏移把原图画上去', async () => {
     const { io, painted } = fakeIO()
     const result = await expandImage('data:image/png;base64,SRC', { x: -100, y: -50, width: 1100, height: 850 }, 1000, 800, io)
-    expect(result).toEqual({ dataUrl: 'data:image/png;base64,EXPANDED', width: 1100, height: 850 })
+    expect(result?.blob).toBeInstanceOf(Blob)
+    expect(result?.width).toBe(1100)
+    expect(result?.height).toBe(850)
     expect(painted).toEqual([{ width: 1100, height: 850, offsetX: 100, offsetY: 50 }])
   })
 
@@ -104,9 +106,9 @@ describe('expandImage：执行一次扩展', () => {
     expect(await expandImage('u', { x: 0, y: 0, width: 0, height: 0 }, 1000, 800, io)).toBeNull()
   })
 
-  it('画布产出失败 → null（不返回空 dataURL 让上游写出破图）', async () => {
+  it('画布产出失败 → null（不返回空产物让上游写出破图）', async () => {
     const { io } = fakeIO()
-    const failing: ExpandBitmapIO = { ...io, paint: () => null }
+    const failing: ExpandBitmapIO = { ...io, paint: () => Promise.resolve(null) }
     expect(
       await expandImage('u', { x: -10, y: 0, width: 1010, height: 800 }, 1000, 800, failing),
     ).toBeNull()

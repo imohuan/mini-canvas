@@ -15,14 +15,13 @@
  * node 环境下所有图片操作安全地返回 false（环境不支持），不会抛。
  */
 import {
-  fileToDataUrl,
-  cropToDataUrl,
+  cropToBlob,
   downloadImage,
   pickImageFile,
   readImageSize,
-  rotateToDataUrl,
+  rotateToBlob,
 } from './imageTransform'
-import { loadDrawableSource, paintCanvas, releaseDrawable } from './imageBitmap'
+import { loadDrawableSource, paintCanvasBlob, releaseDrawable } from './imageBitmap'
 import { describeImageMeta, downloadFileName } from './imageNodeData'
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, type ImageFitLimits } from './imageFit'
@@ -57,6 +56,12 @@ export interface ImageOpsContext {
     data: Record<string, unknown>,
     target: string,
   ): string | null
+  /**
+   * 把一个图片 Blob 存进宿主**资源库**（浏览器里是 IndexedDB）。
+   * 返回可写进节点的 `resourceId` 与本次会话可显示的 `url`（objectURL，刷新后由资源库重建）。
+   * 资源库不可用（极简宿主 / 单测）时返回 undefined —— 调用方按"这次操作没法持久化"处理，不猜。
+   */
+  persistImage?(blob: Blob): Promise<{ resourceId: string; url: string } | undefined>
 }
 
 /**
@@ -66,25 +71,23 @@ export interface ImageOpsContext {
  * 单测注入假实现即可验证"算得对不对、写回得对不对"，而不必启动浏览器。
  */
 export interface ImageTransform {
-  fileToDataUrl(file: Blob): Promise<string>
   readImageSize(url: string): Promise<{ width: number; height: number } | null>
-  cropToDataUrl(
+  cropToBlob(
     url: string,
     rect: Rect,
     baseWidth: number,
     baseHeight: number,
-  ): Promise<{ dataUrl: string; width: number; height: number } | null>
-  rotateToDataUrl(url: string, degrees: number): Promise<{ dataUrl: string; width: number; height: number } | null>
+  ): Promise<{ blob: Blob; width: number; height: number } | null>
+  rotateToBlob(url: string, degrees: number): Promise<{ blob: Blob; width: number; height: number } | null>
   downloadImage(url: string, fileName: string): boolean
   pickImageFile(): Promise<File | null>
 }
 
 /** 生产实现：全部走浏览器原生能力（见 imageTransform） */
 export const defaultTransform: ImageTransform = {
-  fileToDataUrl,
   readImageSize,
-  cropToDataUrl,
-  rotateToDataUrl,
+  cropToBlob,
+  rotateToBlob,
   downloadImage,
   pickImageFile,
 }
@@ -92,7 +95,7 @@ export const defaultTransform: ImageTransform = {
 /** 扩展的生产实现：取图 → 画到更大画布 → 释放（见 imageBitmap） */
 export const defaultExpandIO: ExpandBitmapIO = {
   load: (url) => loadDrawableSource(url),
-  paint: (bounds, draw, source) => paintCanvas(bounds.width, bounds.height, (c2d) => draw(c2d, source)),
+  paint: (bounds, draw, source) => paintCanvasBlob(bounds.width, bounds.height, (c2d) => draw(c2d, source)),
   release: (source) => releaseDrawable(source),
 }
 
@@ -141,6 +144,26 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
   const doc = (): ImageDocPort | undefined =>
     svc.get<ImageDocPort | undefined>('doc') ?? undefined
 
+  /**
+   * 图片 Blob → 资源库。资源库不可用（没装 resources 的极简宿主）→ undefined：
+   * 调用方据此放弃这次操作，而不是退回 base64（那正是我们要摆脱的东西）。
+   */
+  const resources = (): {
+    /** 存字节 → 持久引用（本地库 id / 云端内容哈希） */
+    put(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>
+    /** 持久引用 → 当前可显示地址（本地现建临时 objectURL、云端拼服务器地址） */
+    resolve(ref: string): Promise<string | undefined>
+  } | undefined => svc.get<never>('resources')
+
+  const persistImage = async (blob: Blob): Promise<{ resourceId: string; url: string } | undefined> => {
+    const store = resources()
+    if (!store) return undefined
+    // 只存字节、拿回持久引用；显示地址由 resolve 现算（本地是临时 objectURL，刷新后会换新的）
+    const resourceId = await store.put(blob, { kind: 'image', ...(blob instanceof File && blob.name ? { name: blob.name } : {}) })
+    const url = await store.resolve(resourceId)
+    return url ? { resourceId, url } : undefined
+  }
+
   return {
     read: (nodeId) => doc()?.getNode(nodeId)?.data,
     // size 与 data 在**同一次** updateNode 里提交：内核按 patch 记一条历史 → 一次撤销退干净
@@ -162,6 +185,7 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
         return null
       }
     },
+    persistImage,
   }
 }
 
@@ -205,13 +229,13 @@ function writeImageData(
 }
 
 /**
- * 上传：File → dataURL 写回节点。
+ * 上传：File → 资源库（IndexedDB）→ 节点只留 resourceId + objectURL。
  *
- * - 一律转 dataURL（不用 objectURL）：刷新后仍然显示，这是"刷新不丢"的前提；
+ * - 字节进资源库、节点里不塞 base64：刷新后按 resourceId 从库里重建地址显示（不再撑大 localStorage）；
  * - 同时写 imageName / imageWidth / imageHeight / imageSize，供状态栏展示与裁剪换算；
  * - 一并把卡片尺寸按"等比 + 封顶"调成跟图片一致（用户要求：上传后节点宽高跟图片一致）；
  * - 尺寸由图片元素实测（读不到就只写 url，不猜尺寸）。
- * @returns 是否写成功（节点不存在 / 环境不支持 / 读取失败 → false）
+ * @returns 是否写成功（节点不存在 / 环境不支持 / 读取失败 / 没有资源库 → false）
  */
 export async function uploadImage(
   ctx: ImageOpsContext,
@@ -221,15 +245,12 @@ export async function uploadImage(
 ): Promise<boolean> {
   const current = ctx.read(nodeId)
   if (!current) return false
-  let dataUrl: string
-  try {
-    dataUrl = await transform.fileToDataUrl(file)
-  } catch {
-    return false
-  }
-  if (!dataUrl) return false
-  const size = await transform.readImageSize(dataUrl)
-  const patch: Record<string, unknown> = { imageUrl: dataUrl }
+  if (!ctx.persistImage) return false
+  // 先登记字节（拿到 objectURL 才能量尺寸），再写回；任何一步失败都放弃，不留半截数据
+  const persisted = await ctx.persistImage(file)
+  if (!persisted) return false
+  const size = await transform.readImageSize(persisted.url)
+  const patch: Record<string, unknown> = { imageUrl: persisted.url, resourceId: persisted.resourceId }
   const name = (file as File).name
   if (typeof name === 'string' && name) patch.imageName = name
   if (typeof (file as File).size === 'number') patch.imageSize = (file as File).size
@@ -243,9 +264,9 @@ export async function uploadImage(
 }
 
 /**
- * 裁剪：按"图片像素坐标"的矩形裁出新图，**原地替换** imageUrl（不新建节点）。
+ * 裁剪：按"图片像素坐标"的矩形裁出新图，**原地替换**（不新建节点）。
  *
- * 矩形先收敛成整像素（toCropPixels），再交给 canvas 绘制；成功后同步更新宽高，
+ * 新图字节进资源库（IndexedDB），节点只留新的 resourceId + objectURL；成功后同步更新宽高，
  * 使后续裁剪/状态栏按新尺寸工作。
  * @returns 是否写成功
  */
@@ -259,11 +280,15 @@ export async function cropImage(
   if (!data.imageUrl) return false
   const pixels = toPixelRect(rect)
   if (pixels.width <= 0 || pixels.height <= 0) return false
-  const result = await transform.cropToDataUrl(data.imageUrl, pixels, data.imageWidth ?? 0, data.imageHeight ?? 0)
+  const result = await transform.cropToBlob(data.imageUrl, pixels, data.imageWidth ?? 0, data.imageHeight ?? 0)
   if (!result) return false
+  if (!ctx.persistImage) return false
+  const persisted = await ctx.persistImage(result.blob)
+  if (!persisted) return false
   writeImageData(ctx, nodeId, {
     ...ctx.read(nodeId),
-    imageUrl: result.dataUrl,
+    imageUrl: persisted.url,
+    resourceId: persisted.resourceId,
     imageWidth: result.width,
     imageHeight: result.height,
     // 裁剪后原图字节数不再代表内容，清掉避免状态栏显示过期大小
@@ -273,7 +298,7 @@ export async function cropImage(
 }
 
 /**
- * 旋转：顺时针转 90°（图片像素级重绘，不是 CSS 旋转），原地替换 imageUrl。
+ * 旋转：顺时针转 90°（图片像素级重绘，不是 CSS 旋转），原地替换（新字节进资源库）。
  * 90°/270° 会交换宽高，一并写回，后续裁剪才不会错位。
  * @returns 是否写成功
  */
@@ -284,12 +309,16 @@ export async function rotateImage(
 ): Promise<boolean> {
   const data = asImageData(ctx.read(nodeId))
   if (!data.imageUrl) return false
-  const result = await transform.rotateToDataUrl(data.imageUrl, 90)
+  const result = await transform.rotateToBlob(data.imageUrl, 90)
   if (!result) return false
+  if (!ctx.persistImage) return false
+  const persisted = await ctx.persistImage(result.blob)
+  if (!persisted) return false
   // 90°/270° 宽高互换 → 卡片跟着新比例重算（旋转也该"节点宽高跟图片一致"）
   writeImageData(ctx, nodeId, {
     ...ctx.read(nodeId),
-    imageUrl: result.dataUrl,
+    imageUrl: persisted.url,
+    resourceId: persisted.resourceId,
     imageWidth: result.width,
     imageHeight: result.height,
     imageSize: undefined,
@@ -347,13 +376,17 @@ export async function expandImageNode(
   if (!isExpandEffective(rect, data.imageWidth, data.imageHeight)) return false
   const result = await expandImage(data.imageUrl, rect, data.imageWidth, data.imageHeight, io)
   if (!result) return false
+  if (!ctx.persistImage) return false
+  const persisted = await ctx.persistImage(result.blob)
+  if (!persisted) return false
   // 扩出来的图是**新位图**：原图的字节数/文件名不再代表它，清掉避免状态栏显示过期信息
   writeImageData(
     ctx,
     nodeId,
     {
       ...ctx.read(nodeId),
-      imageUrl: result.dataUrl,
+      imageUrl: persisted.url,
+      resourceId: persisted.resourceId,
       imageWidth: result.width,
       imageHeight: result.height,
       imageSize: undefined,
@@ -370,7 +403,7 @@ export async function expandImageNode(
  * 为什么要单独这层：面板点加号要的不是"换掉本节点的图"（那是上传），而是**新建一个上游图片节点并连到本节点**
  * —— 它随后会出现在素材行里、能被 @ 引用、能作为生成输入。
  *
- * 关键点（顺序不能反）：**先读文件成功，再建节点**。先建后读会在读失败时留下一个空图节点，
+ * 关键点（顺序不能反）：**先把文件存进资源库、再建节点**。先建后存会在存失败时留下一个空图节点，
  * 用户看到"点了加号多出来一个空框"。
  *
  * @param at 新节点位置（调用方按本节点位置算好；不传则落在本节点左侧 SOURCE_NODE_OFFSET）
@@ -385,16 +418,12 @@ export async function addSourceNode(
 ): Promise<string | null> {
   if (!ctx.createNodeWithEdge || !ctx.read(targetId)) return null
 
-  let dataUrl: string
-  try {
-    dataUrl = await transform.fileToDataUrl(file)
-  } catch {
-    return null
-  }
-  if (!dataUrl) return null
+  if (!ctx.persistImage) return null
+  const persisted = await ctx.persistImage(file)
+  if (!persisted) return null
 
-  const size = await transform.readImageSize(dataUrl)
-  const data: Record<string, unknown> = { imageUrl: dataUrl }
+  const size = await transform.readImageSize(persisted.url)
+  const data: Record<string, unknown> = { imageUrl: persisted.url, resourceId: persisted.resourceId }
   const name = (file as File).name
   if (typeof name === 'string' && name) data.imageName = name
   if (typeof (file as File).size === 'number') data.imageSize = (file as File).size

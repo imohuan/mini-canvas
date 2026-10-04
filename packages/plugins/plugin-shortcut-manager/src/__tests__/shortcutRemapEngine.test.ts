@@ -53,5 +53,37 @@ describe('shortcutRemapEngine（G 项 remap 持久化）', () => {
     expect(() => engine.remap('nope', ['x'])).toThrow(/unknown/)
     expect(engine.reset('nope')).toBeUndefined()
   })
-})
 
+  it('subscribe：shortcut 后端切到云端后自动重读，云端 remap 表被应用', async () => {
+    // 本地无记录、云端有记录（模拟：引擎先按本地 restore，云插件随后把 shortcut 切到云端）
+    const local = new Map<string, unknown>()
+    const cloud = new Map<string, unknown>([['keys', { copy: ['mod+k'] }]])
+    let active: Map<string, unknown> = local
+    const listeners = new Set<(t: string) => void>()
+    const save = {
+      async get<T>(key: string) { return active.get(key) as T | undefined },
+      set(key: string, value: unknown) { active.set(key, value) },
+      onAdapterChange(cb: (t: string) => void) {
+        listeners.add(cb)
+        return { dispose: () => listeners.delete(cb) }
+      },
+    }
+    const c = makeCmd('copy', ['mod+c'])
+    const engine = createShortcutRemapEngine(c, save)
+    const off = engine.subscribe()
+    await engine.restore()
+    expect(c.get('copy')?.keys).toEqual(['mod+c']) // 本地没记录 → 还是原键
+
+    // 云插件切到云端 → 广播 → 引擎自动重读，应用云端 remap
+    active = cloud
+    for (const cb of listeners) cb('shortcut')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(c.get('copy')?.keys).toEqual(['mod+k'])
+    // 其它域切换不误触
+    active = local
+    for (const cb of listeners) cb('canvas')
+    await new Promise((r) => setTimeout(r, 0))
+    expect(c.get('copy')?.keys).toEqual(['mod+k'])
+    off()
+  })
+})

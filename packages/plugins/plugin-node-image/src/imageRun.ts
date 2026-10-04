@@ -22,6 +22,12 @@ export interface ImageRunDeps {
   measure(url: string): Promise<{ width: number; height: number } | null>
   /** 图片预览上限（配置 imageFitMaxWidth/imageFitMaxHeight）；不注入则回落 420×300 */
   fitLimits?(): ImageFitLimits
+  /**
+   * 把一段内嵌字节（dataURL/blobURL）收进资源库，返回可写进节点的引用。
+   * 生成工具常直接回 dataURL；不注入或转换失败时返回 undefined ——
+   * 那就按原样写地址（保住图，不退化成 base64 是尽力而为，不是硬要求）。
+   */
+  persistImage?(url: string): Promise<{ url: string; resourceId: string } | undefined>
 }
 
 /**
@@ -34,13 +40,23 @@ export interface ImageRunDeps {
  * 尺寸量不到就一并清空（宁可状态栏不显示，也不显示错的）。
  */
 export async function writeGeneratedImage(nodeId: string, url: string, deps: ImageRunDeps, resourceId?: string): Promise<void> {
-  const size = await deps.measure(url)
+  // 内嵌字节（data:/blob:）先收进资源库：节点里只留引用，别再让 base64 进画布 JSON
+  let finalUrl = url
+  let finalResourceId = resourceId
+  if (!finalResourceId && /^(data:|blob:)/i.test(url) && deps.persistImage) {
+    const persisted = await deps.persistImage(url)
+    if (persisted) {
+      finalUrl = persisted.url
+      finalResourceId = persisted.resourceId
+    }
+  }
+  const size = await deps.measure(finalUrl)
   // 卡片尺寸跟新图一致（等比 + 封顶）；量不到尺寸就没有尺寸补丁，只写地址并清空旧尺寸
   const sizes = cardSizePatch(size?.width, size?.height, deps.fitLimits?.())
   const data: Record<string, unknown> = {
     ...(deps.readData(nodeId) ?? {}),
-    imageUrl: url,
-    ...(resourceId ? { resourceId } : {}),
+    imageUrl: finalUrl,
+    ...(finalResourceId ? { resourceId: finalResourceId } : {}),
     imageName: undefined,
     imageSize: undefined,
     imageWidth: size?.width,

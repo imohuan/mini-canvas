@@ -20,8 +20,6 @@
 export interface MultiRadioConfig {
   /** 屏幕上的直径（px） */
   size: number
-  /** 圆环与中心点的颜色 */
-  color: string
   /** 低缩放（低于节点低细节阈值）时是否仍然显示 */
   showInLowDetail: boolean
 }
@@ -32,7 +30,6 @@ export interface MultiRadioConfig {
  */
 export const MULTI_RADIO_KEYS = {
   size: 'nodeMultiRadioSize',
-  color: 'nodeMultiRadioColor',
   showInLowDetail: 'nodeMultiRadioShowInLowDetail',
 } as const
 
@@ -47,27 +44,19 @@ export const MULTI_RADIO_SIZE_MIN = 12
 export const MULTI_RADIO_SIZE_MAX = 48
 
 /**
- * 默认值：大小比原先写死的 26px 小一圈（用户要求“变小一些”）；
- * 颜色取主题里的“节点选中色”（深灰 #111827）—— 圆点是“这个节点在选中集里”的指示，
- * 跟选中环同一色系才不会看成一个不相干的小图标。
+ * 默认值：只留大小与低缩放开关。
+ *
+ * **颜色不再是配置项**（用户要求删掉它）：那个圆圈改用**主题的强调色**（--ui-accent），
+ * 于是它自动跟随「常规/主题配色」里用户选的强调色、也自动随亮/暗主题切换 —— 不必再单立一格颜色。
+ * 具体色在组件样式里写 `color: var(--ui-accent)`（见 BaseNode 的 .v2-multi-radio）。
  */
 export const DEFAULT_MULTI_RADIO: MultiRadioConfig = Object.freeze({
   size: 18,
-  // 这是**设置面板里的单值默认值**（用户可在「常规/节点」改），不是主题外观；
-  // 要让它也随亮/暗两套主题各取一个值，得给它单独开一对色板 token（同类问题见 edgeRail/edgeFlow）。
-  color: '#111827', // 主题色白名单: 多选标记颜色是用户可改的配置默认值（单值），随主题需另开色板 token
   showInLowDetail: false,
 })
 
 /** 取值器：给一个 key 拿当前值（读不到返回 undefined） */
 export type MultiRadioGetter = (key: string) => unknown
-
-/** hex(#rgb / #rgba / #rrggbb / #rrggbbaa) 校验：不合法就回落，避免把坏值喂给 color() 让整条 CSS 失效 */
-function toColor(value: unknown, fallback: string): string {
-  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
-    ? value
-    : fallback
-}
 
 /** 大小取值：非数字 / 负数 / NaN 回落默认，超界收进边界 */
 function toSize(value: unknown, fallback: number): number {
@@ -85,7 +74,6 @@ export function resolveMultiRadio(get: MultiRadioGetter): MultiRadioConfig {
   const d = DEFAULT_MULTI_RADIO
   return {
     size: toSize(get(MULTI_RADIO_KEYS.size), d.size),
-    color: toColor(get(MULTI_RADIO_KEYS.color), d.color),
     showInLowDetail: toBool(get(MULTI_RADIO_KEYS.showInLowDetail), d.showInLowDetail),
   }
 }
@@ -102,8 +90,6 @@ export function applyMultiRadioChange(
   switch (key) {
     case MULTI_RADIO_KEYS.size:
       return { ...current, size: toSize(value, DEFAULT_MULTI_RADIO.size) }
-    case MULTI_RADIO_KEYS.color:
-      return { ...current, color: toColor(value, DEFAULT_MULTI_RADIO.color) }
     case MULTI_RADIO_KEYS.showInLowDetail:
       return { ...current, showInLowDetail: toBool(value, DEFAULT_MULTI_RADIO.showInLowDetail) }
     default:
@@ -115,8 +101,6 @@ export function applyMultiRadioChange(
 export interface MultiRadioStyleInput {
   /** 屏幕上的直径（px） */
   size: number
-  /** 圆环/圆点颜色 */
-  color: string
   /** 当前画布缩放 */
   zoom: number
   /** 反缩放下限（与标题条共用 titleScaleMinZoom）：低于它之后不再继续放大，避免标记吃掉半个节点 */
@@ -141,6 +125,5 @@ export function multiRadioStyle(input: MultiRadioStyleInput): Record<string, str
     height: `${input.size}px`,
     transform: `scale(${1 / Math.max(zoom, minZoom)})`,
     transformOrigin: 'left top',
-    color: input.color,
   }
 }

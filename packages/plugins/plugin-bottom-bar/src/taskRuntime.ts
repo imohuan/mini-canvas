@@ -109,7 +109,17 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
     }
   }
 
-  const writeRuntime = (rs: NodeRunState): void => deps.writeRuntime(nodeId, { runState: rs })
+  /**
+   * 写节点进度。
+   *
+   * **外部管状态的动作不写**（如云端动作：后台自己会把进度写进节点）。
+   * 两支笔写同一张便利贴会来回跳 —— 后台一份时钟/文案，本地一份，谁也不服谁。
+   * 不声明 externalRunState 的动作（今天全部）行为不变。
+   */
+  const writeRuntime = (rs: NodeRunState): void => {
+    if (action.externalRunState) return
+    deps.writeRuntime(nodeId, { runState: rs })
+  }
 
   // ① 取消：直接收敛（不留悬挂 running）
   if (signal?.aborted) {
@@ -215,10 +225,20 @@ export interface ResumeResult {
  */
 export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Promise<ResumeResult> {
   const { nodeId, nodeType, registry, taskId, actionId, signal } = args
-  const writeRuntime = (rs: NodeRunState): void => deps.writeRuntime(nodeId, { runState: rs })
-
   // 同步分支：动作不在了（提供方插件被卸/版本变了）或拿不到 taskId → 明确中断，不去猜
   const action = registry.get(actionId)
+
+  /**
+   * 续查路径同样要尊重"外部管状态"（刷新后接着看的那些）。
+   *
+   * 注意这行**必须在 action 取到之后**才定义：之前的写法把 writeRuntime 提到了
+   * registry.get 前面，函数体里引用了一个还没赋值的 action —— 一进续查就抛。
+   */
+  const writeRuntime = (rs: NodeRunState): void => {
+    if (action?.externalRunState) return
+    deps.writeRuntime(nodeId, { runState: rs })
+  }
+
   if (!action?.resume || !taskId) {
     const rs = errorState(actionId, '刷新后任务已中断')
     writeRuntime(rs)

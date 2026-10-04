@@ -1,5 +1,10 @@
 <script setup lang="ts">
 /**
+ * 根节点是 Teleport：插槽宿主（SlotHost）下发的 class/data-slot-* 继承不了，
+ * 不关掉属性继承 Vue 每次渲染都会警告一次（实测刷屏）。我们本来就不用那些属性。
+ */
+defineOptions({ inheritAttrs: false })
+/**
  * NodeBottomBarOverlay —— 底栏的**画布级浮层宿主**（注册在 overlay 槽）。
  *
  * 为什么要有它（2026-09-29 Chrome 实测，用户报的「输入框点不进去」）：

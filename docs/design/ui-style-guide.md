@@ -118,6 +118,10 @@
 | 毛玻璃菜单 | `rgba(255,255,255,0.82)` | `backdrop-filter: blur(20px)` | 右键菜单、轻量弹出菜单（CanvasMenu） |
 | 不透光对话框 | `#ffffff`（不写 blur） | — | 承载表单/长列表的模态（ShortcutHelpPanel） |
 
+> 右键菜单 / 连线菜单（plugin-context-menu）：**用不透光档**（`--ui-overlay-solid`，与节点控制栏同一档），
+> 不用毛玻璃。理由：这张菜单压在画布节点/图片上，半透明毛玻璃会让底下的内容透出来、字读不清
+> （用户口径 2026-10-04）。上表「毛玻璃菜单」一档保留给不压内容的轻量弹出菜单。
+
 遮罩层（scrim）：`background:linear-gradient(180deg, rgba(15,23,42,0.06), rgba(15,23,42,0.18)); backdrop-filter: blur(2px);`，刻意保持很淡，不遮挡画布阅读。
 
 > 技术债：ShortcutHelpPanel 当前在纯白底上残留了无效的 `blur(20px)`，新代码不要照抄——要么半透明配 blur，要么纯白不写 blur。

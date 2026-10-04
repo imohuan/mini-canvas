@@ -8,7 +8,6 @@ export {
   makeSnapshot,
   computePasteOffset,
   remapSnapshot,
-  defaultIdGenerator,
   deepClone,
 } from './clipboardEngine'
 export type {

@@ -19,11 +19,14 @@ const props = withDefaults(
     disabled?: boolean
     ariaLabel?: string
     inputId?: string
+    /** 是否允许清空（设置里能把这个颜色删掉 → 回落主题色）。缺省 false */
+    clearable?: boolean
   }>(),
   {
   // 控件缺省色（调用方总会传真实值）；非主题外观
   modelValue: '#000000', // 主题色白名单: 颜色控件缺省值，调用方始终传真实色
     disabled: false,
+    clearable: false,
     ariaLabel: '选择颜色',
     inputId: '',
   },
@@ -33,6 +36,14 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   change: [value: string]
 }>()
+
+/** 是否处于"已清空"态（值为空 = 用户删掉了自定义色，走主题色） */
+const isEmpty = computed(() => !String(props.modelValue ?? '').trim())
+/** 清空 / 恢复：清空写空串（消费方回落主题色），恢复写默认兜底色 */
+function clearColor(): void {
+  emit('update:modelValue', '')
+  emit('change', '')
+}
 
 const open = ref(false)
 
@@ -66,42 +77,68 @@ function toggle(): void {
     body-class="cf-menu-body"
   >
     <template #trigger>
-      <button
-        type="button"
-        :id="inputId || undefined"
-        class="cf-trigger"
-        :class="{ 'is-open': open, 'is-disabled': disabled }"
-        :disabled="disabled"
-        :aria-label="ariaLabel"
-        aria-haspopup="dialog"
-        :aria-expanded="open"
-        @click.stop="toggle"
-      >
-        <span class="cf-swatch" aria-hidden="true">
-          <span class="cf-swatch-color" :style="{ backgroundColor: normalized }" />
-        </span>
-        <span class="cf-value">{{ normalized }}</span>
-        <span class="cf-alpha">{{ alphaText }}</span>
-      </button>
+      <div class="cf-wrap">
+        <button
+          type="button"
+          :id="inputId || undefined"
+          class="cf-trigger"
+          :class="{ 'is-open': open, 'is-disabled': disabled, 'is-empty': clearable && isEmpty }"
+          :disabled="disabled"
+          :aria-label="ariaLabel"
+          aria-haspopup="dialog"
+          :aria-expanded="open"
+          @click.stop="toggle"
+        >
+          <span class="cf-swatch" aria-hidden="true">
+            <span v-if="!(clearable && isEmpty)" class="cf-swatch-color" :style="{ backgroundColor: normalized }" />
+          </span>
+          <span class="cf-value">{{ clearable && isEmpty ? '跟随主题' : normalized }}</span>
+          <span v-if="!(clearable && isEmpty)" class="cf-alpha">{{ alphaText }}</span>
+        </button>
+        <!-- 清除按钮放**触发器右侧**（用户要求：不要塞进取色下拉里）。
+             空态 = 已在跟随主题，无需清除；非空态才给清除。 -->
+        <button
+          v-if="clearable && !isEmpty"
+          type="button"
+          class="cf-clear-btn"
+          title="清除自定义颜色，改用主题色"
+          aria-label="清除自定义颜色，改用主题色"
+          @click.stop="clearColor"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
     </template>
 
     <template #default>
-      <Chrome
-        :model-value="normalized"
-        :disable-fields="false"
-        :disable-alpha="false"
-        @update:model-value="commit"
-      />
+      <div class="cf-pop">
+        <Chrome
+          :model-value="normalized"
+          :disable-fields="false"
+          :disable-alpha="false"
+          @update:model-value="commit"
+        />
+      </div>
     </template>
   </Dropdown>
 </template>
 
 <style scoped>
+.cf-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
 .cf-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  flex: 1;
   min-height: 32px;
   box-sizing: border-box;
   padding: 4px 8px 4px 5px;
@@ -176,8 +213,51 @@ function toggle(): void {
   font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
 }
 
+/* 清除按钮（触发器右侧）：X 图标，hover 变红提示"移除自定义色" */
+.cf-clear-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.cf-clear-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.cf-clear-btn:hover {
+  border-color: var(--ui-danger, #ef4444);
+  color: var(--ui-danger, #ef4444);
+  background: var(--ui-danger-veil, rgba(239, 68, 68, 0.08));
+}
+
+.cf-clear-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: 1px;
+}
+
 :global(.cf-menu-body) {
   padding: 0;
+}
+
+/* 已清空态：触发器不画色块、文字改「跟随主题」 */
+.cf-trigger.is-empty .cf-swatch {
+  background-image: none;
+}
+
+.cf-trigger.is-empty .cf-value {
+  color: var(--ui-ink-dim, #6b7280);
+  font-family: inherit;
+  font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {

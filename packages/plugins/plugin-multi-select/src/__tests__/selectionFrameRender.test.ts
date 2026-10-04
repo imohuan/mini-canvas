@@ -16,7 +16,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 // 这样"与节点端口同款"的类名断言仍验的是真件，而不是自造的假桩。
 import { MovingHandle, ConnectionLine } from '@mini-canvas/plugin-theme-default'
 import SelectionFrame from '../SelectionFrame.vue'
-import { MULTI_SELECT_FRAME_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
+import { MULTI_SELECT_FRAME_KEYS, MULTI_SELECT_COLOR_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
 
 const RECTS = [
   { id: 'a', x: 100, y: 200, w: 300, h: 120 },
@@ -146,16 +146,21 @@ const DEFAULT_MULTI_SELECT_FRAME_VALUE: Record<string, unknown> = {
   [MULTI_SELECT_FRAME_KEYS.paddingX]: DEFAULT_MULTI_SELECT_FRAME.paddingX,
   [MULTI_SELECT_FRAME_KEYS.paddingTop]: DEFAULT_MULTI_SELECT_FRAME.paddingTop,
   [MULTI_SELECT_FRAME_KEYS.paddingBottom]: DEFAULT_MULTI_SELECT_FRAME.paddingBottom,
-  [MULTI_SELECT_FRAME_KEYS.outerColor]: DEFAULT_MULTI_SELECT_FRAME.outer.color,
   [MULTI_SELECT_FRAME_KEYS.outerStyle]: DEFAULT_MULTI_SELECT_FRAME.outer.lineStyle,
+  [MULTI_SELECT_COLOR_KEYS.outerLight]: '',
+  [MULTI_SELECT_COLOR_KEYS.outerDark]: '',
   [MULTI_SELECT_FRAME_KEYS.outerWidth]: DEFAULT_MULTI_SELECT_FRAME.outer.lineWidth,
   [MULTI_SELECT_FRAME_KEYS.outerRadius]: DEFAULT_MULTI_SELECT_FRAME.outer.radius,
   [MULTI_SELECT_FRAME_KEYS.outerFill]: Math.round(DEFAULT_MULTI_SELECT_FRAME.outer.fillOpacity * 100),
-  [MULTI_SELECT_FRAME_KEYS.innerColor]: DEFAULT_MULTI_SELECT_FRAME.inner.color,
   [MULTI_SELECT_FRAME_KEYS.innerStyle]: DEFAULT_MULTI_SELECT_FRAME.inner.lineStyle,
+  [MULTI_SELECT_COLOR_KEYS.innerLight]: '',
+  [MULTI_SELECT_COLOR_KEYS.innerDark]: '',
   [MULTI_SELECT_FRAME_KEYS.innerWidth]: DEFAULT_MULTI_SELECT_FRAME.inner.lineWidth,
   [MULTI_SELECT_FRAME_KEYS.innerRadius]: DEFAULT_MULTI_SELECT_FRAME.inner.radius,
   [MULTI_SELECT_FRAME_KEYS.innerFill]: Math.round(DEFAULT_MULTI_SELECT_FRAME.inner.fillOpacity * 100),
+  [MULTI_SELECT_FRAME_KEYS.boxStyle]: DEFAULT_MULTI_SELECT_FRAME.boxSelect.lineStyle,
+  [MULTI_SELECT_FRAME_KEYS.boxWidth]: DEFAULT_MULTI_SELECT_FRAME.boxSelect.lineWidth,
+  [MULTI_SELECT_FRAME_KEYS.boxFill]: Math.round(DEFAULT_MULTI_SELECT_FRAME.boxSelect.fillOpacity * 100),
 }
 
 function render(
@@ -236,14 +241,15 @@ describe('SelectionFrame 渲染（两个框不能重合）', () => {
     expect(inner).toContain('top:200px')
   })
 
-  it('两框线型/颜色/线宽来自配置：外框灰虚线、内框蓝实线', async () => {
+  it('两框线型/线宽来自配置；颜色缺省 → 走各自的主题变量', async () => {
     const html = await render()
     const outer = styleOf(html, 'selection-frame-outer')
     const inner = styleOf(html, 'selection-frame-inner')
-    expect(outer).toContain('border-color:#94a3b8')
+    // 默认没自定义颜色 → 主题变量兜（外框 --ui-select-outer、内框 --ui-select-inner）
+    expect(outer).toContain('border-color:var(--ui-select-outer')
     expect(outer).toContain('border-style:dashed')
     expect(outer).toContain('border-width:1px')
-    expect(inner).toContain('border-color:#60a5fa')
+    expect(inner).toContain('border-color:var(--ui-select-inner')
     expect(inner).toContain('border-style:solid')
   })
 
@@ -287,20 +293,25 @@ describe('SelectionFrame 渲染（两个框不能重合）', () => {
     expect(inner).toContain('height:260px')
   })
 
-  it('改配置 → HTML 跟着变（线型换成点线、颜色换成红、内缩调大）', async () => {
+  it('改配置 → HTML 跟着变（线型换成点线、内缩调大）；颜色缺省走主题变量', async () => {
     const html = await render({
       [MULTI_SELECT_FRAME_KEYS.outerStyle]: 'dotted',
-      [MULTI_SELECT_FRAME_KEYS.outerColor]: '#ff0000',
       [MULTI_SELECT_FRAME_KEYS.paddingX]: 40,
     })
     const outer = styleOf(html, 'selection-frame-outer')
     const inner = styleOf(html, 'selection-frame-inner')
     expect(outer).toContain('border-style:dotted')
-    expect(outer).toContain('border-color:#ff0000')
+    // 颜色没自定义 → 走主题变量（不再是写死的 hex）
+    expect(outer).toContain('border-color:var(--ui-select-outer')
     // padding 只影响外框大小与内框落点，内框自身尺寸不变（仍 = 600×260）
     expect(outer).toContain('width:680px')
     expect(inner).toContain('left:100px')
     expect(inner).toContain('width:600px')
+  })
+
+  it('自定义了颜色 → 用自定义色（覆盖主题变量）', async () => {
+    const html = await render({ multiSelectFrameOuterColorLight: '#ff0000' })
+    expect(styleOf(html, 'selection-frame-outer')).toContain('border-color:#ff0000')
   })
 
   it('两框线宽**跟随画布缩放**（不再 1/zoom 反缩放，与卡片边框同一约定）', async () => {

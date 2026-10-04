@@ -1,5 +1,10 @@
 <script setup lang="ts">
 /**
+ * 根节点是 Teleport：插槽宿主（SlotHost）下发的 class/data-slot-* 继承不了，
+ * 不关掉属性继承 Vue 每次渲染都会警告一次（实测刷屏）。我们本来就不用那些属性。
+ */
+defineOptions({ inheritAttrs: false })
+/**
  * ReferenceSelectOverlay —— 底栏「参考」按钮引发的**画布选择态**浮层（注册在 overlay 槽）。
  *
  * 用户要的交互（照 LibTV 参考站实测 + 用户口述）：

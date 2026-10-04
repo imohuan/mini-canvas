@@ -19,7 +19,6 @@ import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
 import type { GroupRect, GroupBounds, GroupPadding } from './groupEngine'
 import {
-  createGroupId,
   computeGroupBounds,
   toRelativePosition,
   toAbsolutePosition,
@@ -223,7 +222,8 @@ export class GroupService extends Service implements GroupServiceAPI {
     const bounds = computeGroupBounds(rects, { padding: this.currentPaddingOf() })
     if (!bounds) return null
 
-    const groupId = createGroupId()
+    // 组节点的 id 也统一向内核要（自增数字）：插件不自造 `group-时间戳-序号` 那种形态。
+    const groupId = this.doc.nextNodeId()
     // 统一走 graph：一次事务内建组节点 + 子节点改父/相对坐标（历史合并 + 提交落盘）
     this.doc.transaction('group-create', (tx) => {
       tx.addNodes([

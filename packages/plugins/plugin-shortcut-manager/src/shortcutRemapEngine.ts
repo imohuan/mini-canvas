@@ -27,6 +27,14 @@ export interface RemapableCommandRegistry {
 export interface RemapSaveService {
   get<T>(key: string, type?: string): Promise<T | undefined>
   set(key: string, value: unknown, type?: string): void
+  /**
+   * 订阅「某 type 的激活 adapter 被切换」（可选）。
+   *
+   * 为什么要它：shortcut 域的后端是**运行期可换**的（云插件启动时把它切到云端）。
+   * 本引擎的 restore() 跑在插件装配时、读的是本地后端；云插件之后才切过去 ——
+   * 不重读的话，云端存的重映射键位永远进不来（用户改的快捷键刷新就丢）。
+   */
+  onAdapterChange?(cb: (type: string) => void): { dispose(): void }
 }
 
 /**
@@ -44,15 +52,34 @@ export function createShortcutRemapEngine(
   /** 命令当前是否被 remap（备份存在）——已 remap 的 resetKeys 才恢复原键 */
   const isRemapped = (id: string): boolean => registry.isRemapped(id)
 
+  /** 从 save 读 remap 表并对现网命令批量应用（restore 与后端切换重读共用同一实现） */
+  async function loadAndApply(): Promise<void> {
+    if (!save) return
+    const saved = await save.get<ShortcutRemapMap>(SHORTCUT_SAVE_KEY, 'shortcut')
+    map = saved && typeof saved === 'object' ? { ...saved } : {}
+    for (const [id, keys] of Object.entries(map)) {
+      if (registry.has(id)) registry.remapKeys(id, keys)
+    }
+  }
+
   return {
     /** 从 save 读 remap 表并对现网命令批量应用（插件装配时调用；无 save/无记录则 no-op） */
     async restore(): Promise<void> {
-      if (!save) return
-      const saved = await save.get<ShortcutRemapMap>(SHORTCUT_SAVE_KEY, 'shortcut')
-      map = saved && typeof saved === 'object' ? { ...saved } : {}
-      for (const [id, keys] of Object.entries(map)) {
-        if (registry.has(id)) registry.remapKeys(id, keys)
-      }
+      await loadAndApply()
+    },
+
+    /**
+     * 订阅 shortcut 域的后端切换，切完重读一次。
+     *
+     * 与 restore() 同义、只是触发时机不同：云插件把 shortcut 域从本地切到云端后，
+     * 云端存着的 remap 表才读得到。返回取消句柄（宿主/插件卸载时调）。
+     */
+    subscribe(): () => void {
+      if (!save?.onAdapterChange) return () => {}
+      const off = save.onAdapterChange((type) => {
+        if (type === 'shortcut') void loadAndApply()
+      })
+      return () => off.dispose()
     },
 
     /** 重映射某命令并持久化；返回该命令当前 keys。命令不存在抛错。 */
@@ -82,4 +109,3 @@ export function createShortcutRemapEngine(
     isRemapped,
   }
 }
-

@@ -1,7 +1,7 @@
 # plugin-theme-default —— 默认主题/默认「皮」插件用法（重点：它占的槽与它开的插槽）
 
 > 来源：`packages/plugins/plugin-theme-default/src/index.ts`（插件主文件 + Config + 默认值常量）、
-> `src/components/settings/PluginSettingsDialog.vue`（默认设置面板 = 扩展插槽的宿主）、
+      > `src/components/settings/PluginSettingsContent.vue`（默认设置内容 = 扩展插槽的宿主）、
 > `src/components/node/BaseNode.vue` 等六个核心渲染件。
 > 相关底层：`canvas-data/主题换肤ctx-theme与ThemeRegistry.md`、`canvas-data/通用UI槽ctx-slots与命令ctx-commands.md`、
 > `canvas-render/06-SettingsHost与SlotHost.md`、`canvas-render/07-settingsPanelTypes与settingsSource.md`。
@@ -29,7 +29,7 @@
 1. **注册渲染皮** —— 用 `ctx.theme.register` 占住内核的 theme 槽（见 §二）。
 2. **登记设计系统组件目录** —— 用 `ctx.registryOf('ui').add(...)` 登记按钮/下拉/滑块等通用件（见 §三）。
 3. **申明可配置项 + 注册默认设置面板** —— `Config` 自动登记进 settings 单一数据源，
-   再 `ctx.theme.register('settingsPanel', PluginSettingsDialog)` 把这些项展示成 UI，改动实时生效。
+   再 `ctx.theme.register('settingsPanel', PluginSettingsContent)` 把这些项展示成 UI，改动实时生效。
 
 依赖方向：`theme-default → canvas-render（useCanvasRender 拿 ctx）→ canvas-data → kernel`，不反向。
 
@@ -50,7 +50,7 @@
 | `background` | `DefaultBackground.vue` | 画布点状背景 |
 | `connectionLine` | `ConnectionLine.vue` | 拖线时的「待连预览线」 |
 | `edgeDefaultType` | `'custom'` | 建边默认走 `custom` 边类型 |
-| `settingsPanel` | `PluginSettingsDialog.vue`（id `default`，order 0） | 设置界面**中间层**（左导航 + 内容，默认赢家）；最外层 Dialog 由 `SettingsShell` 提供 |
+| `settingsPanel` | `PluginSettingsContent.vue`（id `default`，order 0） | 设置界面**中间层**（左导航 + 内容，默认赢家）；最外层窗口由 `SettingsShell` 提供 |
 
 换皮示例：
 
@@ -124,7 +124,7 @@ const NodeToolbarButton = useUiComponent('button')   // 返回响应式 Ref；�
 
 ## 五、【重点】默认设置面板的扩展插槽
 
-默认设置面板是 `PluginSettingsDialog.vue`（「居中 modal + 左一级导航 + 右内容」的皮）。
+默认设置内容是 `PluginSettingsContent.vue`（「左一级导航 + 右内容」的皮 —— **弹窗本身不在这里**，遮罩/居中/标题栏/✕/Esc 由渲染层 `SettingsShell` 提供）。
 它**内部读内核通用 UI 槽**（`ctx.slots.occupants(...)`），于是别的插件不必换掉整个面板，就能：
 
 - 往左侧**一级菜单**塞/替换项 —— 槽 `settingsNav`
@@ -194,7 +194,7 @@ defineProps<{ group?: string; settings?: SettingsPanelSource }>()
 
 ### 5.4 想换设置面板皮？
 
-扩展插槽属于**默认皮的内容区实现**（`PluginSettingsDialog`），不是 `settingsPanel` 槽的契约。
+扩展插槽属于**默认皮的内容区实现**（`PluginSettingsContent`），不是 `settingsPanel` 槽的契约。
 换了皮就没有这些槽了 —— 所以**优先在默认皮上加东西，而不是换掉整张皮**。
 
 > 换皮换的只是**内容区**：外壳（遮罩 / 居中 / 标题栏 / ✕ / Esc / 点遮罩关闭 / 浮动窗口 / 悬浮球）

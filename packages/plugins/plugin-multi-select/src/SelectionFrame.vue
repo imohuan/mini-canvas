@@ -77,7 +77,9 @@ import {
   frameStrokeCss,
   resolveMultiSelectFrameConfig,
   type MultiSelectFrameConfig,
+  MULTI_SELECT_COLOR_KEYS,
 } from './multiSelectConfig'
+import { currentThemeMode, watchThemeMode } from '@mini-canvas/canvas-render'
 import { pointerDown, POINTER_DOWN_CLASS, bindPointerPressWatchers } from './pointerPress'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 import { selectionRegionEntries } from './selectionRegion'
@@ -478,10 +480,21 @@ function validateBatchEdge(
 
 
 // ====== 外观配置（实时跟随设置面板）======
-const frameConfig = ref<MultiSelectFrameConfig>(resolveMultiSelectFrameConfig((key) => ctx.tryGet('settings')?.get(key)))
+/** 当前主题模式（亮/暗）：三个框的颜色是两格制的，按当前主题挑那一格 */
+const themeMode = ref<'light' | 'dark'>(currentThemeMode())
+const themeOff = watchThemeMode((m) => { themeMode.value = m })
+onBeforeUnmount(() => themeOff())
+const frameConfig = ref<MultiSelectFrameConfig>(
+  resolveMultiSelectFrameConfig((key) => ctx.tryGet('settings')?.get(key), themeMode.value),
+)
 const settingsOff = ctx
   .get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } } | undefined>('settings')
   ?.onChange((key, value) => {
+    // 颜色格（亮/暗）改的是另一份"值"，但 resolve 出来就是这个主题该用的颜色 → 直接全量重算
+    if (key.startsWith('multiSelectFrame') || key.startsWith('multiSelectBoxColor') || key.startsWith('multiSelectFrameOuterColor') || key.startsWith('multiSelectFrameInnerColor')) {
+      frameConfig.value = resolveMultiSelectFrameConfig((k) => ctx.tryGet('settings')?.get(k), themeMode.value)
+      return
+    }
     frameConfig.value = applyMultiSelectFrameChange(frameConfig.value, key, value)
   })
 onBeforeUnmount(() => settingsOff?.dispose())
@@ -977,7 +990,8 @@ const wrapperStyle = computed(() => ({
 const outerStyle = computed(() => {
   const g = frame.value
   if (!g) return null
-  const stroke = frameStrokeCss(frameConfig.value.outer)
+  // 外框：颜色缺省 → 主题的「多选框-外框颜色」token
+  const stroke = frameStrokeCss(frameConfig.value.outer, 1, 'var(--ui-select-outer, var(--ui-accent, #0891b2))')
   return {
     left: `${g.outer.x}px`,
     top: `${g.outer.y}px`,
@@ -1003,7 +1017,8 @@ const innerStyle = computed(() => {
     width: `${g.inner.w}px`,
     height: `${g.inner.h}px`,
     // 与外框同款：跟随画布缩放，不做 1/zoom 反缩放（见 frameStrokeCss 的说明）。
-    ...frameStrokeCss(frameConfig.value.inner),
+    // 内框：颜色缺省 → 主题的「多选框-内框颜色」token
+    ...frameStrokeCss(frameConfig.value.inner, 1, 'var(--ui-select-inner, var(--ui-accent, #0891b2))'),
   }
 })
 

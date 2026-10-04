@@ -66,6 +66,20 @@ function makeCtx() {
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('settings', { get: () => undefined })
+  // 资源库（内存版）：截图要把字节存进来、并拿回引用 —— 与真实宿主同一条路
+  const resourceBlobs = new Map<string, Blob>()
+  let resSeq = 0
+  ctx.inject('resources', {
+    async put(blob: Blob) {
+      resSeq += 1
+      const ref = 'res-' + resSeq
+      resourceBlobs.set(ref, blob)
+      return ref
+    },
+    async resolve(ref: string) {
+      return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
+    },
+  })
   return { ctx, nodeStore, edgeStore, history, graph }
 }
 
@@ -163,7 +177,7 @@ describe('uploadVideo：文件 → objectURL → 载入', () => {
     const id = makeNode(env.nodeStore)
     const ops = createVideoOps(env.ctx)
     const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
-    const ok = await uploadVideo(ops, id, file, fakeTransform(), () => 'res-9')
+    const ok = await uploadVideo(ops, id, file, fakeTransform(), async () => 'res-9')
     expect(ok).toBe(true)
     const data = env.nodeStore.getNode(id)!.data
     expect(data.videoUrl).toBe('blob:video-1')
@@ -264,14 +278,16 @@ describe('clipVideo / resetClip：剪辑范围', () => {
 })
 
 describe('captureFrameNode：截图建图片节点', () => {
-  it('在视频节点右侧建一个 image 节点，带 dataURL 与真实像素尺寸', async () => {
+  it('在视频节点右侧建一个 image 节点，写入资源引用与真实像素尺寸（不写 base64）', async () => {
     const id = makeNode(env.nodeStore, { videoUrl: 'blob:v', videoName: 'clip.mp4', cardWidth: 560 })
     const ops = createVideoOps(env.ctx)
     const newId = await captureFrameNode(ops, id, 65, fakeTransform())
     expect(newId).toBeTruthy()
     const node = env.nodeStore.getNode(newId!)!
     expect(node.type).toBe('image')
-    expect(node.data.imageUrl).toBe('data:image/png;base64,AAAA')
+    // 截图是**新的一张图**：必须走资源库，不能把 base64 写进节点（那会原样落进云端画布数据）
+    expect(node.data.imageUrl).not.toMatch(/^data:/)
+    expect(typeof node.data.resourceId).toBe('string')
     expect(node.data.imageName).toBe('clip_1-05.png')
     expect(node.data.imageWidth).toBe(640)
     expect(node.data.imageHeight).toBe(360)

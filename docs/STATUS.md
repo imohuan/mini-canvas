@@ -5,6 +5,942 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 最近完成（2026-10-04，全仓扫描：同一类「启动/恢复先后顺序」bug 清查）
+
+前面三个 bug（设置刷新回退、插件刷新掉、小地图宽高回退）是**同一类根因**：数据是先按本地后端恢复、
+云端插件随后才把后端切过去，而"切过去之后没人重读"或"重读时被默认值盖掉"。按这条线索做了系统清查。
+
+**已修（本轮）**：
+- 小地图宽高：见下一条（capabilityLayer 用默认值盖掉已恢复的用户值）——**已修 + 验证**。
+
+**扫描发现并已修**：
+1. **快捷键重映射刷新不生效**（同 settingsPersist 一类）。plugin-shortcut-manager 的
+   shortcutRemapEngine.restore() 只跑一次（插件装配时，读的是本地 shortcut 后端）；
+   plugin-cloud-client 之后才把 shortcut 域切到云端，切完**没人重读** → 云端存的重映射键位进不来。
+   **已修**：引擎新增 subscribe()（订阅 save.onAdapterChange('shortcut') 后重读并 re-apply），
+   插件 apply 里经 ctx.effect 挂上（随卸载回收）。新增单测 1 条（先确认无修复时红）；
+   plugin-shortcut-manager 30 全绿 + tsc 干净。（注：成品 UI 当前不装该插件，属"直连 cloud-server
+   且装了它"的宿主才暴露；但根因同类，一并修掉。）
+
+**扫描发现、尚未修（属别的会话在写的新插件，非本次主线）**：
+2. **新插件 plugin-cursor-effect 让主题色守卫变红**（与本次主线无关，是别的会话正在加的新插件）。
+   packages/ui 的 themeColorHygiene 扫到它写死的颜色（catalog.ts 的 color 字段、colorAssets.ts 的
+   SVG 素材、CursorEffectOverlay.vue 的 canvas 绘制色）共 54 处。这些多是"用户可选的数据色 / 画进 canvas
+   的像素色"，按规范加精确到行的 `主题色白名单: 原因` 豁免即可；但**该插件还在开发中**，
+   豁免标记应由它的作者补（我避免替半成品定调）。
+
+### 最近完成（2026-10-04，修「小地图宽高改了刷新就回退」）
+
+**用户报的问题**：改小地图（plugin-mini-map）宽高，改完刷新，改动没生效（回退到默认 240×160）。
+
+**根因**：运行期热装插件的 Config 声明会用 schema 默认值盖掉刚恢复的用户值。
+启动顺序是「宿主先按本地后端恢复设置（快照里已有用户改过的 miniMapWidth）→ 再热装插件」；
+而 mini-map 是云端清单**运行期热装**的，内核调 declareConfig 把它声明进 settings 时，
+settings.define 本来已经命中快照取到了用户值，紧接着那行 settings.set(key, config[key])
+（config 是 schema 校验后的默认值）又把它写了回去 —— 用户值当场丢失。
+内联 config 时代（插件冷启动先声明、恢复在后）没这问题，改成运行期热装后才暴露。
+
+**修法**：capabilityLayer.declareConfig 里，若该项在**保存快照**里已有值，就不要再 set config[key]
+（define 已经取到用户值）；只有快照里没有的项才用装配 config 补齐初值。
+
+**验证**：canvas-data 新增 declareConfigSavedValue.test.ts 2 条（先确认无修复时红：expected 240 to be 320）；
+真机端到端（云服务 8877）：改宽高 320×220 → 刷新 → 仍是 320×220、小地图 DOM style 同步；
+把修复关掉重跑则回退 240×160（决定性对照）。canvas-data 364 全绿 + typecheck 干净。
+
+### 最近完成（2026-10-04，音频节点：拖动播放头改为「手停就停」的节流出声）
+
+**用户报的问题**：拖波纹上那条播放头时，希望"拖动才出声"；实测按住不放、指针停住后
+音频还在播，播放头/时间轴自己往前走，跟手指脱节。用户给的方案：
+每次移动重置一个 **60ms 定时器**，到点就把播放暂停 —— 相当于对出声做节流。
+
+**改法**（`plugin-node-audio/src/AudioContent.vue`）：
+- 拖动（播放头 + 波纹下那条整体进度条，两者同一手势）期间，`onPointerMove` 每次调用
+  `noteScrubActivity()`：若停手时被暂停过就先 `play()` 恢复出声，再重置 `SCRUB_IDLE_MS = 60ms`
+  定时器 `armScrubIdleTimer()`；到点没再动 → `pauseScrub()` 暂停并把 `scrubPaused = true`。
+- 连续拖动时 rAF/指针事件每帧都来，定时器不断被打断 → 一直出声；手一停约 60ms 静音。
+  声音、播放头、时间轴同时停住，按住不放也不会自己往前溜。
+- 松手仍按"拖之前是播是停"恢复（原有口径不变）；松手 / 卸载都 `cancelScrubIdle()` 清定时器。
+
+**验证**：先写红（`audioSeekAndProgress` 补 3 条：节流常量与定时器、移动重置 + 恢复出声、
+松手/卸载清理），再实现转绿；本包 **93/93**、typecheck 干净。
+（`packages/ui` 里 `canvasToggles`(maxZoom)、`themeColorHygiene`(plugin-cursor-effect 写死颜色)
+两条红是用户既有 WIP，输出与本包无关。）
+
+### 最近完成（2026-10-04，修「装好的插件刷新后消失、配置跟着丢」）
+
+**用户报的问题**："很多插件是后续安装的……刷新之后，这些已安装的插件甚至没有被加载，每次刷新都要重新安装，
+关于这些插件的配置也就全部消失了。总结：配置不管用，刷新就无。"
+
+**复现（决定性）**：把插件管理要读的「已装名单」在本地设成空、云端设成全量，再人为拖慢云插件脚本
+（模拟真实网络），刷新后**一个外部插件都没装**（期望 16）。
+
+**根因**：与「设置刷新回退」同源 —— 配置后端在运行期被换，读写两本账错位。
+插件管理的**读**发生在启动早期（那时 config 域还指向浏览器本地），而**写**（用户点安装时）
+发生在云插件把 config 域切到云端之后。于是"读本地旧名单、写云端新名单"对不上；
+插件没装上，它们声明的配置项也就从未 define，设置面板里自然全没了。
+
+**修法**：plugin-manager 服务订阅 save.onAdapterChange，config 域换后端后把安装名单与**新后端**对齐
+（语义与配置持久化桥一致）：新后端有名单 → 以它为准（多的卸掉、少的补装）；新后端是空的（首次上云）→
+把当前意图搬过去，别让云端的空把已装插件抹掉。
+
+**验证**：同一个 6 秒延迟复现 —— 修前 **0 个插件**（bug 重现）、修后 **16 个插件**；
+真机端到端（云服务 8877）：卸载多选 → 刷新 → 它仍「未装」、其余 15 个插件都在、改的 themeMode 也保住；
+新增单测 1 条（先确认无修复时红）；plugin-cloud-client 117 全绿 + typecheck 干净。
+注意：调试期发现本机另一个程序（loadout-desktop.exe）也占着 8865/8866，早先几次读数是打到它上面导致的假象 —— 换端口 8877 后一切自洽。
+
+### 最近完成（2026-10-04，整页不可选中文本 + 右键菜单去掉透明度）
+
+**用户报的问题**：
+1. Package UI 整个页面要 select-none，界面文本不能被选中（截图里画布节点标题「image」能被拖蓝）；
+2. 右键菜单插件有透明度，要删掉（截图：菜单卡片半透明，背后节点内容透进来）。
+
+**根因与修法**：
+- 问题 1：v2 成品壳丢了 v1 主机在 body 上 user-select: none 的兜底，全站没有整页禁选。
+  在 packages/ui/src/app.css 重加 body { user-select: none }，并给输入面
+  （textarea / input / [contenteditable="true"] / .ProseMirror）override 成 user-select: text，
+  否则节点文本编辑、标题编辑、Agent/底栏输入框连字都选不了。
+- 问题 2：plugin-context-menu 的 .ctx-menu 与 .conn-menu 用 var(--ui-glass)（约 0.86 不透明）
+  + backdrop-filter: blur(20px)，菜单压节点上时内容直接透出。改成**不透光档**
+  var(--ui-overlay-solid)（与节点控制栏同一档），并删掉 backdrop-filter（规范 §2.6：纯色底上写 blur 无效）。
+
+**验证**：pnpm -C packages/ui test 新增 pageSelectNone.test.ts 2 条（先写红）、
+pnpm -C packages/plugins/plugin-context-menu test 新增 menuOpaque.test.ts 4 条（先写红）；
+插件已重新 build（UMD 含 ui-overlay-solid）；浏览器实测：body/节点标题 user-select=none、
+textarea 为 text，右键菜单与连线菜单均为不透明底（暗色 rgb(33,33,33)）、backdrop-filter=none。
+（packages/ui 里 canvasToggles 的 maxZoom 那条红是用户既有 WIP，与本次无关。）
+
+### 最近完成（2026-10-04，修「设置保存后刷新被还原」+ 主题模式进 render 配置）
+### 最近完成（2026-10-04，新增「光标特效」插件 plugin-cursor-effect）
+### 追加（2026-10-04，光标特效：全页面生效 + 指针零延迟）
+### 追加（2026-10-04，光标特效：下载真实素材 + 修「图标渲染成方块」）
+### 追加（2026-10-04，光标特效：修「动画不播」+ 支持自定义上传/帧序列）
+### 追加（2026-10-04，光标特效：自定义上传稳健化——大图缩放 + 失败不静默）
+### 追加（2026-10-04，光标特效：修「选中自定义光标后完全空白」—— 根因是 localStorage 被禁用）
+### 追加（2026-10-04，光标特效：修「自定义光标选中后画布上什么都不显示」—— 图片宽度被算成 0）
+### 追加（2026-10-04，光标特效：帧序列可设帧率）
+
+- **用户要求**：上传多帧时，希望能设置它的帧率。
+- **做法**：帧率从「全局一个」改成「**每条帧序列各自一个**」——
+  - CustomCursor.fps 已存在；渲染层改用 cust.fps 优先（不再被全局值覆盖）；
+  - 设置页在选中某条**多帧**素材时，显示一个「帧率（这条 N 帧序列）」滑杆（2–30 帧/秒）；
+    改它 → updateCustomCursor(id,{fps}) → 写回并广播 → 渲染层重读、**立即变速**；
+  - 参数区里原来那个「帧序列帧率」改名为「**新上传帧率默认值**」，只决定新上传时的初值，避免两个「帧率」混淆。
+- **验证**：单测 **33/33**（新增 customCursors.test.ts 6 条：内存兜底、改帧率只动该条且 id 不可被覆盖、删除、事件名稳定）；
+  tsc/vue-tsc 干净；UMD 重打包 ~153KB；真机（用户实例 5289）——上传 3 张不同颜色小图成「f1（3 帧）」，
+  选中后设置页出现「帧率（这条 3 帧序列）12 帧/秒」滑杆（AX 可见、值 12）。
+- **注意（非本插件）**：验证时页面被一个无关的编译错误浮层挡住 ——
+  packages/plugins/plugin-cloud-client/src/manager/components/settings/PluginManagerPage.vue:45 的模板字符串少了起始反引号，
+  导致该文件解析失败。**不是本次改动**，未擅自修改。
+
+
+- **根因（真机在用户实例 5289 上抓到）**：自定义光标用的是跟随层里的一个 `<img class="ce-frame">`。
+  我在设置尺寸时的顺序是「先量/先设样式、后 display」，而那时 `<img>` 还是 `display:none`、
+  处在 flex 居中容器里 —— 量出来宽度是 **0**；成品表现就是「图片在 DOM 里、`naturalWidth` 正常、
+  但 `getBoundingClientRect().width === 0`，画布上什么都不显示」（探针实测 `w:0, h:30`）。
+- **修法**：在 `paintFollower` 里改成**先写死尺寸、再显示** ——
+  同时写 `img.width/height` 属性与 `style.width/height`（外加 `max-width:none`），然后才 `display:block`；
+  帧序列切换只换 `src`，不再碰尺寸。实测 `w=30, h=30`、`naturalWidth=97`，你的上传图**已作为光标正常显示**。
+- **验证（用户实例 5289，真机目视）**：设置→光标→自定义里选中已上传的图 → 关设置 → 移动鼠标，
+  画布上出现该图作为光标（截图确认）；内置指针/动画/拖尾/点击特效不受影响。
+- 顺带说明：`localStorage` 在这些内置浏览器标签里读不到（探针返回 undefined），但页面主环境可用 ——
+  之前加的**内存兜底**保证了「即便读不到 localStorage，上传→选中→显示」整条链仍然通。
+- 单测 27/27；`tsc`/`vue-tsc` 干净；UMD 重打包 ~152KB。
+
+
+- **用户反馈**（附截图）：上传的图片**选中后光标完全空白**。
+- **端到端复现**（这次跑了整链：上传 → 选中 → 看画布上的光标），查明**两个真 bug**：
+  1. **本环境 localStorage 是 undefined（被禁用/沙箱化）** —— 自定义光标存在 localStorage，
+     loadCustomCursors() 读到空、saveCustomCursors() 抛错被吞 → 上传看似成功、选中却没有任何素材 → **光标空白**。
+  2. **选中自定义但没有素材时不回落** —— 渲染层把跟随层清空后留了个**空白**，既不是自定义光标、也不是默认箭头。
+- **修法**：
+  - customCursors.ts：加**内存兜底**（模块级缓存）+ 安全的 ls()（探测不可用返回 null，绝不抛）。
+    写的时候**总是先写内存**，localStorage 只是持久化增强；不可用/配额满都照常能用，只带回一条 warning
+    （「素材只在本次会话有效，刷新后会丢」）。设置页把 warning 显示成**提示**（不再是红错），环境不支持时提前告知。
+  - CursorEffectOverlay：选中自定义但**一条素材都没有**时 → **回落默认箭头**，**绝不空白**。
+    原先的 find(...) ?? customCursors[0] 在空数组时返回 undefined，就是空白源。
+- **验证（真机、localStorage 被禁的 IAB 环境）**：
+  上传点状 PNG → 列表出现条目（内存兜底生效、无报错）；选中它 → ce-frame 显示、naturalWidth=128、跟随层跟手；
+  删光全部素材后仍选中自定义 → 跟随层**显示箭头**（isArrow=true、innerSvgLen=397），不再空白。
+  单测 27/27；tsc/vue-tsc 干净；UMD 重打包 ~152KB。
+- **我的疏漏**：前几轮只测了「上传成功」与「帧序列循环」，**没测「选中它当光标用」这一步**，所以漏了这个空白 bug。
+
+
+**用户反馈**：上传的光标缩略图是**破图**（浏览器占位图标）。
+
+**根因（两类）**：
+1. **大图爆 localStorage 配额**：把原图（手机照片动辄几 MB）原样转 data URL 塞进 localStorage，
+   超过 ~5MB 配额时 `setItem` 抛错，而当时**静默吞掉**了 —— 素材没存进去，界面却像"成功了"，重载后就成了破图。
+2. **不可被 <img> 渲染的编码**：极少数格式浏览器画不出来，也表现为破图。
+
+**修法**：
+- `customCursors.ts` 新增 `normalizeUpload(file, maxEdge=160)`：**位图**先画进 canvas 缩放到 ≤160px 再重编码成 PNG（必然可渲染、且只剩几 KB）；
+  **SVG 保留矢量原样**（不栅格化，保持清晰）；任何一步失败都回落原 data URL，绝不丢用户的东西。
+- `saveCustomCursors` 改成**返回 { ok, error }**，配额满时给出「素材太大，浏览器存储放不下」的提示；
+  `addCustomCursor` 写失败就**回滚**（不把存不下的素材留在内存里假装成功）。设置页把 error 显示成红字。
+- 缩略图与跟随帧都加 `onerror` → 失败时**隐藏**（不显示浏览器破图图标）。
+
+**验证**：单测 27/27；`tsc`/`vue-tsc` 干净；UMD 重打包 ~151KB。
+真机：上传 1MB 的 1600×1200 PNG → 列表出现「big-photo」且缩略图**正常渲染**（归一化后仅几 KB）；
+普通 SVG 单张/多帧上传也正常（前一轮已验证帧序列循环 3 帧）。
+
+
+
+**用户反馈**：① 动态效果完全没反应、依然是静态；② 希望能**自己上传图片或 SVG**，并支持**帧序列**动画。
+
+**问题①根因**：pulse / spin 的 idle 动画与「热点偏移」的内联 `transform` 写在**同一个元素**上——
+内联 transform 把 CSS 动画的 transform 覆盖了，所以永远不动（脉冲点永远不动、旋转环永远不转）。
+**修**：拆成两层各自管一个 transform ——
+  外层 `ce-offset` 只写热点偏移（`translate(-hx*size, -hy*size)`），内层 `ce-inner` 留给 pulse/spin 动画；
+  两者互不覆盖。实测：选「靶心」后 `ce-inner` 带 `pulse` 类、`animationName=ce-pulse-…`、且它的内联 style 为空。
+
+**问题②新增能力**：
+- `src/customCursors.ts`：自定义光标存**本机 localStorage**（`mc-cursor-effect:custom-cursors`）。
+  为什么不用内核 settings：上传的 data URL 可达几百 KB，而 settings 会随 settingsPersist 同步到云端 KV，
+  塞进去会把「配置」撑爆。settings 只存"当前用哪一个"这个**小 id**（`cursorFxCustomId`）+ 帧率（`cursorFxCustomFps`）。
+- 渲染层 `CursorEffectOverlay`：自定义时用透明光标藏原生指针，绘图交给一个 `<img>`；
+  `frames.length>1` 就按帧率 `setInterval` 循环换 `src`（**帧序列动画**）。监听 `mc-cursor-effect:custom-changed` 立即生效。
+- 设置页新增「自定义」页签：上传**一张**图片/SVG = 静态光标；**多选几张** = 帧序列；可删除、可切换；显示「N帧」角标。
+- Config 新增两项：`cursorFxCustomId`、`cursorFxCustomFps`；`cursorFxCursor` 的 select 增加「自定义上传」选项。
+
+**验证**：单测 27/27；`tsc`/`vue-tsc` 干净；UMD 重打包 ~150KB；
+真机——① 选「靶心」动画真的在动（animationName 有值、内联 transform 已清空）；② 上传 3 张 SVG → 面板出现「star（3 帧）」；
+采样 1.2s 帧的 src 出现 **3 个不同值**（帧序列在循环播放）。
+
+
+
+**用户反馈**：很多特效"没有真实效果"——落叶是小方块、选「帮助」光标显示成方块、粒子是代码画的不好看；
+要求**去网上把真实素材下载进项目**。
+
+**根因（方块）**：重写目录后 `catalog.ts` 引用了新素材键（`pointer-arrow` / `hand-point` / `text-i` …），
+但 `icons.ts` 还是旧键名 → `svgIcon` 查不到返回空串 → 渲染成空/方块。修：用脚本从 Iconify 重新生成 `icons.ts`（50 个键）。
+
+**真实素材（已下载进仓库，运行时不联网）**：
+- `assets/icons/*.svg`（50 个，脚本同步进 `src/icons.ts`）：Lucide / Solar / Phosphor / MingCute / Tabler —— 单色线框，指针形状。
+- `src/assets/color/*.svg`（31 个，同步进 `src/colorAssets.ts`）：**Noto Emoji（Apache-2.0）真彩色** —— 落叶/枫叶/樱花/向日葵/星星/闪光/爱心/雪花/彩纸/礼花/月亮/彩虹/音符/彗星/星球/蝴蝶/猫爪/猫脸/宝石/泡泡/气球/糖果/火焰/眩晕。
+- `src/engine.ts` 的 `svgIcon(name,size,color)`：有彩色素材且未指定颜色 → 返回彩色原件；否则查单色表并把 currentColor 换成给定色。
+
+**效果全部换成真实素材**：
+- 指针分四类页签：**指针**（单色真鼠标形状，白填充+深色描边，任何底色都看得清）/ **彩色**（真实彩色素材当光标）/ **系统** / **图片**。
+- 跟随拖尾：彩虹 / 仙女尘 / 星光 / 落叶（真叶子+枫叶+樱花）/ 爱心 / 雪花 / 音符 / 蝴蝶 / 气泡 / 月光 / 幽灵 / **猫爪队列**（真实猫爪素材串成队列）。
+- 点击特效：烟花 / 星芒 / 彩纸 / 爱心 / **花瓣** / 雪爆 / 音符 / 涟漪 / 冲击波。
+- canvas 精灵对彩色素材**不做染色**（保留自带颜色），对单色才用 `col` 着色。
+
+**验证**：单测 27/27（含"每个清单项引用的素材键都真实存在"的防方块护栏 + 彩色素材完整性）；`tsc` 干净；
+UMD 重打包 143KB（含全部素材）；真机复验——指针不再是方块（白箭头带描边）、拖尾与点击特效都是真实彩色星星，
+设置页四个页签的缩略图全部为真实的矢量图标。
+
+
+
+**用户反馈两条**：① 光标只在画布里生效，一开下拉/浮层就被盖住或裁掉；② 光标跟随有延迟（"拖尾才有动画，光标必须实时跟手"）。
+
+**改法**：
+1. **整块 Teleport 到 `document.body`**：覆盖层原来住在画布容器里（`.csurface-overlay` 带 overflow:hidden、z-index:20），
+   搬到 body + `position:fixed; inset:0; z-index:2147483000`（顶层，压过设置面板/下拉的 100000）→ 光标覆盖整个页面、永远是鼠标本身。
+   坐标随之改用 `clientX/clientY`（不再算容器矩形）；canvas 尺寸用 `window.innerWidth/Height` + resize 事件。
+2. **原生光标藏在整个 document**：透明光标那条 CSS 从画布根挪到 `<html>`（`html.mc-cursor-hidden`）→ 画布/设置/下拉/弹窗里都换成自绘指针。
+   拆成**三层各自管一个 transform**（外层位置 / hover 放大 / 点按回弹 / 内层热点偏移+idle 动画），互不覆盖。
+3. **指针零延迟**：删掉原先的平滑插值，`pointermove` 里**直接**把跟随层 `transform` 设到鼠标坐标（事件驱动、即时跟手）；
+   RAF 只负责推进拖尾与点击粒子的动画。实测跟随层 transform 精确等于鼠标坐标（300,300 / 800,600 逐点核过）。
+
+**验证**：单测 26/26 保持全绿；`tsc` 干净、`vue-tsc` 无本插件报错；UMD 重打包 48KB；
+真机——设置弹窗开着时光标与拖尾仍画在弹窗**之上**、跟随层 z-index=2147483000 且挂在 body 下、`html` 已加隐藏类。
+
+
+
+**用户要求**：把画布鼠标从默认手掌换掉，加样式库 + 点击特效；先做可玩的 Demo，再做成带**自绘设置页**的插件装进 cloud client 插件系统。
+
+**产物**：`packages/plugins/plugin-cursor-effect`（`installable: true`，清单会收录、默认装好）。
+
+- **光标指针**（`catalog.ts` 的 CURSORS）：图标款会动（透明原生指针 + 跟随元素）/ 系统款（`cursor:pointer` 等）/ 图片款（`cursor:url(图片)`，静态）。
+- **跟随特效** FOLLOWS：彩虹拖尾 / 仙女尘 / 星星 / 雪花 / 表情 / 气泡 / 幽灵 / 落叶 / 月光 / 蚂蚁队列 / 跟随圆点；**这才是"会动的光标"**。
+- **点击特效** EFFECTS：烟花 / 星芒 / 涟漪 / 彩纸 / 爱心 / 冲击波 / 雪爆。
+- **配置**：模块级 `Config`（10 项，全部 `group: '光标'` 的扁平分组）→ 设置面板独占一个一级页「光标」；页面自绘（`settingsNav` + `settingsGroup/光标` `mode:'replace'`），照 plugin-manager / plugin-agent 的做法。
+- **分层**：纯逻辑在 `engine.ts`（粒子配方/帧推进/图标→SVG），渲染在 `CursorEffectOverlay.vue`（注册 `overlay` 槽），图标来自 Iconify 聚合的真实图标集（Lucide/Solar/Phosphor/MingCute/Remix）。
+
+**踩到的三个真坑（都在真浏览器里实测定位）**：
+1. **canvas 像素缓冲一直是 300×150**（容器 1280×720）——挂载那一刻量不到真实尺寸，粒子画在缓冲之外、完全看不见；跟随元素是 DOM 定位不看 canvas，所以它照常工作、把问题掩盖了。改由 **ResizeObserver 驱动尺寸**。
+2. VueFlow 会在 pane 的 pointerdown 上 `stopPropagation` → 冒泡阶段收不到点击（**跟随正常但点击特效不出来**）。改成**捕获阶段**监听。
+3. 卡顿三因：每粒子 `shadowBlur` 光晕、拖尾每帧全画布涂抹、连点粒子无上限。改：光晕换成**预渲染精灵** blit、粒子加**硬上限**、无内容跳过绘制。
+
+**验证**：单测 26/26（engine 16 + catalog 10）全绿；`tsc` 干净、`vue-tsc` 只剩 canvas-render 既有 3 条（其它插件同样）；UMD 打包 48KB（只 external Vue + MiniCanvasRender）；真机跑通——插件管理默认装好、设置页 32 个选择块渲染、画布上指针跟随 + 彩虹拖尾 + 连续点击烟花都正常。
+
+**Demo（并行产出，供挑样式）**：`C:/Users/Administrator/.codex/visualizations/2026/10/04/01a105c3-.../cursor-effects-demo.html`。
+
+
+
+**用户报的问题**：
+1. 把主题（亮/暗）也收进 config，作为 render 库的一项配置；
+2. 改完设置 clouds-server 的 .mini-canvas/settings.json 确实在变，但**刷新页面又回到旧值**。
+
+**根因（问题 2）**：启动时序错位。宿主的顺序是「先按**本地**存档 restore 画布与配置，再装外部插件」；
+settingsPersist 桥的 restore() 跑在插件装载**之前**，读的是本地后端。而 plugin-cloud-client
+是在 apply() 里才把 config 域切到云端的 —— 切完之后**没有任何人重读**，于是云端已保存的设置永远进不来，
+页面显示的一直是本地那份（本地没存过 → 全部回落 schema.default）。
+
+**修法**：
+- SaveService 新增 onAdapterChange(cb)：useAdapter / useAdapterForAll 换后端时广播「哪个 type 换了」；
+- settingsPersist 桥在 restore() 里订阅 onAdapterChange，只在 type === 'config' 时**重读新后端**：
+  新后端有存档 → 以它为准注入 store；新后端还是空的（首次上云）→ 把当前值整份推上去，别把云端当空覆盖本地。
+  这样「本地先恢复、云端后接管」这条启动路径闭环。
+
+**问题 1 的做法**：新增 canvas-render/src/contracts/themeModeSettings.ts（与色板同一套语义）——
+把「主题模式 light/dark」作为**渲染层配置**收进 settings 单一数据源（key=themeMode，分组「常规/外观」，
+默认暗色），由 createMiniCanvasHost 声明 + installThemeMode 把值落到 html 的 dark class；
+成品应用 ui.ts 的 state.theme 改成它的镜像（bindThemeMode 订阅），右上角调色板 toggleTheme() 改**写设置**，
+于是切换既即时生效、又随 settingsPersist 一起持久化（刷新不再回退到暗色）。
+注：这不违反「不要给单个插件发明 theme 配置项」（那是禁止按插件各切各的主题）；这是**全应用唯一**的开关，
+见 docs/代码开发/主题与配色.md §3.3 的允许情形。
+
+**验证**：canvas-data 362/362（新增 2 条：换后端重读 / 首次上云推本地，先写测试确认无修复时红）；
+canvas-render 新增 themeModeSettings.test.ts 7 条 + createMiniCanvasHostPersist 补 1 条（跨 boot 恢复），
+host 包 typecheck 干净（余下 2 条红是用户 WIP）；ui 新增 1 条（调色板写 settings），
+余 1 条红是用户 WIP（maxZoom 默认改 3、测试仍期望 2）；kernel / plugin-cloud-client 全绿。
+
+### 最近完成（2026-10-04，导出插件修三个问题：多选标记照进图 + 选中导出缺标题 + 标题发白）
+
+**用户报的问题**（`plugin-canvas-export`，Ctrl+Shift+E 导出选中节点）：
+1. 导出图左上角的圆形多选标记没被剔除；
+2. 右上角图片没有标题 —— 标题条画在卡片上缘之外，被裁掉了。
+
+**根因一（多选标记）**：导出用的 html-to-image `filter` 只认 `data-id` 成员判定和一份写死的调试类名；
+`BaseNode` 的 `.v2-multi-radio`（以及端口球 `.moving-handle-anchor`、resize 拖柄 `.resize-handle`）
+没有任何「别截我」的标记，于是被照进图。
+
+**根因二（缺标题）**：`NodeLayoutService` 的节点矩形**只覆盖卡片本体**，不含标题；
+标题条画在卡片上缘外 `titleOffset + 标题高` 处。`planExport` 的 selected 分支把范围算成
+「选中节点包围盒 + padding」，上方没留任何空间 → 标题整条被裁。
+
+**改法**：
+- 新增通用剔除类 `mc-export-ignore`（`exportGeometry.EXPORT_IGNORE_CLASS`）：任何元素（含子树）
+  挂上它，导出时整棵跳过。导出插件的 filter 认它；主题侧给多选圆点 / 端口锚点（MovingHandle 根）/
+  resize 拖柄挂上。插件作者给自己的浮层加这一个类即可，导出插件不必知道主题内部类名。
+- `planExport` 新增 `topPadding`：只在**上边**外扩一段「标题带」（`EXPORT_TITLE_BAND(20)` +
+  主题 `titleOffset`），full / selected 两种模式都生效；缺省 0 = 与旧行为逐字一致。
+
+**验证**：plugin-canvas-export 70/70（新增 8 条：expandRectTop、topPadding、ignore 类语义）、
+plugin-theme-default 248/248（更新 resize 精确类断言 + 新增 4 条标记契约）、plugin-multi-select 152/152
+全绿；export / theme 两包 typecheck 干净；`pnpm -C packages/plugins/plugin-canvas-export build` 通过
+（UMD 产物已含 `mc-export-ignore` 与 `topPadding`）。
+（注：ui 包的 `themeColorHygiene`（`packages/ui/_mm.ts`）与 `canvasToggles`（maxZoom）2 条红是
+用户既有 WIP，与本次无关。）
+
+**追加（同日，第三个问题：导出图标题发白看不清）**：用户报「这边你的文字颜色也需要进行一个修改」。
+根因（截图取色实测）：节点标题色来自主题 token `--canvas-node-text-muted`，**跟应用主题走**；
+应用在**暗色主题**时它是 `#919191`（浅灰），而导出插件**永远**按自己的设置画亮色底（默认 `#f8fafc`）
+—— 浅灰标题落在亮底上几乎看不见。
+
+改法（最小改动，不动主题默认）：导出是亮底，导出期间临时把标题色 token
+（`--canvas-node-text-muted` / `--canvas-node-text-strong`）盖成深色（注入一条 `<style>`，
+导出结束 finally 移除；画布期间被遮罩盖住，用户看不到换色）。
+**验证**：plugin-canvas-export 70/70；typecheck 干净；UMD 重新构建（含 `canvas-export-text-style`）。
+
+### 最近完成（2026-10-03晚，多选插件：概念统一 + 主题配色 + 修「多选后还能拖出连线」）
+
+**用户报的问题**：
+1. 多选后，框内节点的连接线依然能拖出来（已把 moving handle 隐藏了仍不行）。
+2. 概念统一：拖拽时画出来的叫「绘制框」；选中后出现的（两条线）叫「多选框」。绘制框可设线型/线宽/填充；
+   多选框两条线各自可设线型/线宽/圆角/填充；颜色都希望能「删掉 → 回落主题色」，且统一放到
+   「常规/主题配色」与「常规/暗色主题配色」（原来多选框的外框颜色在「布局/多选」里，要挪走）。
+
+**问题 2 的根因（浏览器实测）**：多选时端口按钮确实隐藏了（opacity:0，符合预期），
+但端口的吸附接收区 .port-follow-zone 仍然 pointer-events:all、尺寸 87×176 ——
+鼠标按住那块透明区域照样起手拖线（实测建出 1 条边）。根因是 shouldShowHandles 只控制按钮 opacity，
+接收区从不吃这些压制条件。
+
+**修法**：BaseNode 把几条硬压制（多选 / 抓手 / 低细节 / 拖节点中 / 拖线中 / 本节点是拖线源）抽成
+handleBlocked，传给 MovingHandle 的 :blocked；MovingHandle 加 is-blocked 样式把
+anchor / 接收区 / 按钮一起 pointer-events: none !important。实测多选下 zone PE=none、拖拽建边 0 条。
+
+**问题 1 的做法**：
+- 概念统一：配置键与文档改用「绘制框 boxSelect / 多选框外框 outer / 多选框内框 inner」三个词。
+- 绘制框新增三项配置（线型 / 线宽 / 填充%；颜色走主题）。
+- 颜色统一收进主题配色：themePalette 新增三个 token —— 绘制框颜色 / 多选框-外框颜色 /
+  多选框-内框颜色（两格制：常规/主题配色 + 常规/暗色主题配色），并标 optional: true。
+- 颜色支持删除：ColorField 加 clearable（选色器里多一个「清除（改用主题色）」按钮，值可写空串）；
+  kernel 的 color 校验支持 optional（空串合法）；resolveThemeColorOverrides 见到空串登记为「清除」，
+  installThemePalette 清掉内联变量 → 回落 CSS 默认（即主题色）。
+- 多选插件自己的两个颜色配置项移出设置面板（键保留用于存自定义色，页面上不再出取色器 ——
+  颜色统一在主题配色里调）；frameStrokeCss 颜色缺省时走传入的主题变量。
+
+**验证**：真机实测 —— 多选拖拽建边 0 条、三个新 token 已登记在两个主题配色分组、
+改色跟随 + 清除后内联变量被清掉回落主题默认。单测：multi-select 152、canvas-render 406、
+kernel 212、theme-default 244 全绿；theme-default / multi-select typecheck 干净。
+（注：canvasInteractionSettings 2 条红仍是用户 WIP —— selectNodesOnDrag / maxZoom 改值未同步测试。）
+
+### 最近完成（2026-10-03，plugin-web2api-tools 改成可装卸）
+
+**用户要求**：把 packages/plugins/plugin-web2api-tools 做成能安装/卸载的插件。
+
+**做了什么**：
+- 加 vite.config.ts（走共享表 ../vite-plugin-lib）+ build 脚本 → 打出 dist/plugin-web2api-tools.js（25.8 KB）。
+- miniCanvas 标记 builtin: true → installable: true。
+- 从 ui 的 APP_PLUGINS 冷启动清单移出（改由插件管理安装，默认已装）；清单 12 → 11。
+
+**为什么它好装**：运行时依赖全是 import type（打包时擦除），零 Vue —— 干活靠 ctx.tryGet('nodeBar') 与 ctx.get('tools')。
+
+**顺带回答用户的疑问（为什么不写进 inject）**：
+- tools 是内核自带（Context.builtinService 里 if (name === 'tools') return this.builtinTools），依赖检查天然通过；
+  写进 inject 只是表达意图（tool-image-generation 就写了），功能上等价。
+- nodeBar 是插件服务（plugin-bottom-bar 提供）。刻意不写 inject：写了就会「底栏没到 → 整个插件卡 PENDING」。
+  它改用 tryGet 探测 + 监听 ctx:plugin-installed 自愈（底栏晚到就补注册），所以谁先谁后都能用。
+  这在改成异步逐个安装之后尤其关键 —— 装载顺序不由我们控制。
+
+**验证（真机）**：装上且 state=active、不再是 builtin；底栏动作齐（图片 7 / 视频 9 / 音频 2 条）；
+卸载后动作归零 7→0、重装后回来 0→7；零报错。清单：自带 8 + 可装卸 16 = 24。
+单测：plugin-web2api-tools 51、ui 73（entrypoint / web2apiAssembly 均通过）；typecheck 干净。
+
+
+### 最近完成（2026-10-03下午，插件管理页列出**全部**插件：自带只读、可装卸带按钮）
+
+**用户要求**：`packages/plugins` 里还有一批插件没分离（图片/音频等节点、web2api 等）；
+**即使自带的插件也要显示出来，但不显示安装/卸载按钮**。
+
+**做了“显示”这一半**（拆包那一半待定，见下）：
+- 插件 `package.json` 加 `miniCanvas.builtin: true` 标记自带件（theme-default / bottom-bar /
+  node-text / node-image / node-video / node-audio / node-3d-preview / web2api-tools / agent）。
+- `cloud-server` 的 `buildPluginCatalog` 收录两类：`installable`（可装卸）与 `builtin`（自带）。
+  **自带件只需 package.json，不要求有 UMD 产物**（它由应用冷启动装配、不经清单加载）。
+- 插件管理页分两段展示：「自带（随应用启动，不可装卸）」只读列表 + 「可装卸」带 安装/卸载/重装。
+- 自带件在服务层也硬兜底：`install/uninstall/reinstall` 对 builtin 行直接 return（不给按钮之外再加一道）。
+
+**结果**（真机实测）：清单 3 → **24** 条 = 自带 9 + 可装卸 15；
+自带段 9 行 **0 个按钮**（徽章「自带」），可装卸段 15 行 **15 个都有按钮**（徽章「已安装」）。
+
+**验证**：cloud-server 217、plugin-cloud-client 116、canvas-render 404、ui 73 全绿；两个包 typecheck 通过。
+（注：`canvasInteractionSettings` / `themeColorHygiene` 的 2 条红是用户既有 WIP —— selectNodesOnDrag/maxZoom 改值
+与 `packages/ui/_mm.ts` 的写死颜色，与本次无关，已核实。）
+
+**待定（已问用户）**：是否继续把节点类（图片/文本/视频/音频/3D）与 web2api 也拆成可装卸。
+风险点：冷启动会把默认画布的两个示例节点（text+image）直接种进 store，而节点类型由插件注册；
+改成运行期安装后种子会早于类型注册 —— 需要一并改 seed 时序。
+
+
+### 最近完成（2026-10-03，修 bug：外部安装插件后 Shift 框选失效）
+
+**用户报告**：多选插件的 Shift 框选功能，在以「插件管理」方式安装后失效了。
+
+**根因**（浏览器实测定位，非猜测）：`CanvasSurface` 的 VueFlow 挂在 `:key="nodeEpoch"` 上，
+而**插件每装/卸一个就 bump nodeEpoch → 整棵 VueFlow 子树销毁重建 → pane 是个新 DOM 元素**。
+但 `flow.pane` 只在 `onMounted` 捕获一次、之后再不更新 → 插件（多选的 BoxSelectLayer）把
+pointerdown 监听绑在了**已脱离文档的旧 pane** 上 → Shift 框选永远收不到事件。
+冷启动时插件在 VueFlow 挂载**之前**就注册好（只重挂一次），所以那条路看着正常 ——
+一旦改成运行期逐个安装插件（每个触发一次重挂），问题才暴露。
+
+**修法**：`CanvasSurface` 新增 `refreshFlowDom()`（重新捕获 pane/renderer/paneRect），
+并 `watch(props.nodeEpoch)` 在重挂后（`flush: 'post'`）重新捕获 + 重新 `attachDom`，
+把新 pane 灌进 `flow.pane`。
+
+**佐证**：`multiselect-regression` 新增场景 H（Shift 拖框选本身 —— 此前所有断言都是先
+`selection.set` 预置选中，这条真实手势路径从没被测过）。**把修复临时回退后 H1/H2/H3 精确变红**，
+恢复后 38/38 全绿；canvas-render typecheck 干净。
+
+**顺带**：此前 `packages/plugins` 里 12 个「布局 / 画布工具」插件（参考线 / 小地图 / 多选 / 分组…）
+已改成可装卸（经插件管理从云服务清单安装），并各自补了 UMD 构建；共享打包配置收进
+`packages/plugins/vite-plugin-lib.ts`（external/globals 唯一事实源）。清单从 3 → 15 个。
+
+
+### 最近完成（2026-10-03，插件管理里的插件从 3 个扩到 15 个）
+
+**用户反馈**：插件管理页里太少了 —— 插件目录里明明有很多（参考线、小地图这些布局类），
+「除了一些必须自带的插件，其他都该做成这种（可装卸）方式」。
+
+**做了什么**：把 12 个「布局 / 画布工具」类插件也改成可装卸（经插件管理从云服务清单安装，默认已装）：
+
+| 插件 | 说明 |
+| --- | --- |
+| align-guide / align-arrange / auto-layout | 参考线 / 对齐排列 / 自动布局 |
+| mini-map / node-find | 小地图 / 节点搜索 |
+| edge-cutting / multi-select | 连线切割 / 多选 |
+| group / context-menu / clipboard | 分组 / 右键菜单 / 复制粘贴 |
+| canvas-export / file-drop | 导出图片 / 文件拖入 |
+
+**怎么做的（三件）**：
+1. **共享打包配置** `packages/plugins/vite-plugin-lib.ts`：external / globals / 产物名收成一处
+   （此前几个打包过的插件各写一遍，极易漂移 → 插件「加载了却没装上」还不报错）。12 个插件补上
+   `vite.config.ts` + `build` 脚本，打出 UMD。
+2. **host 全局补齐**：ui 的 `sharedGlobals.ts` 补 `MiniCanvasKernel`（含 `VueFlow` /
+   `ProseMirrorEditorBundle`），供 UMD 插件取依赖；守卫测试逐条核对两边一致。
+3. **dev 期清单**：新增 `packages/ui/catalogPlugin.mjs`（vite 插件，仅 dev）——
+   在 ui dev server 就地实现 `/plugin-catalog.json` + `/plugins/**`，判定口径与 cloud-server 一致。
+   这样单开 `pnpm -C packages/ui dev` 也能用插件管理；生产形态仍由 cloud-server 提供同两条路由。
+
+**结果**：清单 3 → **15**；冷启动装配 24 → 12（只剩画布骨架 + 节点类型 + Agent + 插件管理本身）。
+
+**验证**：dev server 与真 cloud-server 两种形态都用真浏览器跑过 —— 15/15 默认装好、
+`nodeBar/mini-map/group/multi-select/clipboard/file-drop` 服务全在、58 条命令、控制台零报错。
+单测：ui 73、cloud-server 216、plugin-cloud-client 114、canvas-render 404、kernel 212、canvas-data 360 全绿。
+
+
+## 一、现在该做什么（2026-09-17）
+
+### 最近完成（2026-10-02，KV 收进单个 settings.json）
+
+**用户要求**：别一个 type 一个目录、一个 key 一个文件。直接一个 settings.json，
+里面按 type 分桶：`{ "config": {...}, "shortcut": {...} }`。
+
+**改法（服务端 `cloud-server/src/store/kvStore.ts`）**：
+- 落盘从 `kv/{type}/{key}.json` 改成**一个 `{dir}/settings.json`**，内容 `type → key → value`；
+- 对外契约**没动**：HTTP 仍是 `/api/kv/:type/:key`、SSE 事件形状不变 ——
+  客户端（含 CloudKvAdapter）一行没改，改的只是磁盘怎么放；
+- **写必须整体串行**：以前一项一文件可以按 (type,key) 各排一条链；现在全落同一个文件，
+  读-改-写必须串行，否则并发写会各读同一份旧内容、互相覆盖（丢配置）。新增并发写测试锁这条；
+- 旧布局**自动迁移**（认两种历史形态：`kv/{type}/{key}.json` 与最早的 `kv/{type}%3A{key}.json`），
+  只搬 config / shortcut（canvas / resource 早有各自目录），搬完把旧目录改名 `kv.migrated` 留作备份。
+
+**顺带删掉的死代码**：`kvFileName` / `kvTypeDir`（只为"一项一文件"的文件名转义服务，已无用途）。
+
+**实测（真服务）**：老数据自动迁移成功 ——
+  `.mini-canvas/settings.json` = `{"config":{"plugin-manager:installed":[...],"settings":{"imageFitMaxWidth":321}}}`，
+  旧 `kv/` 已改名 `kv.migrated`。
+单测 cloud-server 190（新增并发写 2 条、迁移 5 条），其余包全绿；官方 e2e **30 PASS / 0 FAIL**。
+
+### 最近完成（2026-10-02，磁盘落盘布局改成人肉可读 + 命名更诚实）
+
+**用户指出的问题（两条都成立）**：
+
+**① KV 文件名丑得认不出内容**：老实现把 type 与 key 拼成一条文件名再整串转义 ——
+   `config%3Asettings.json`（`%3A` 就是冒号）。用户原话："它不支持冒号，你用横线或者下划线来替代呀。
+   你不能用这个东西啊"。
+   **修**：改成 **type 当目录、key 当文件名** —— `kv/config/settings.json`。
+   目录名天然不含冒号（四个 type 都是合法文件名），于是只有 key 需要转义；
+   而真正带冒号的 key 只剩命名空间式的（`plugin-manager:installed`），转义面小到几乎看不见。
+   新增 `kvTypeDir(dir, type)`；`kvFileName(key)` 参数从 `(type,key)` 收成 `(key)`。
+   **老文件兼容读 + 自动搬迁**：读不到新路径时回退旧路径，读到就 rename 到新位置 ——
+   否则用户已有的设置会因为换布局而凭空消失（实测：老 `config%3Asettings.json` 读得到值，
+   并在同一次读里被搬成 `config/settings.json`）。
+
+**② `CanvasAdapter` 名字怪**：它干的是"只发差异"（不整包覆盖，专治 AI 与用户并发写互相盖掉），
+   名字却没说这件事。**修**：改名 `CanvasDiffAdapter`（文件同步改名 `canvasDiffAdapter.ts`），
+   旁边算差异的 `graphDiff.ts` 与之成对。
+
+**验证**：新增 3 条旧布局兼容读测试（老文件读得到并自动搬迁 / 新布局优先 / 两边都没有 → undefined）；
+单测 cloud-server 188、cloud-client 114、canvas-data 360、canvas-render 404、ui 67、node-image 111、
+node-video 105、file-drop 42、clipboard 22 全绿；真机验证老文件自动迁移；官方 e2e **30 PASS / 0 FAIL**。
+
+### 最近完成（2026-10-02，接口拆细 + 配置也上云）
+
+**用户提出的两个问题（都成立，都已改）**：
+
+**① 接口臃肿**：把「资源（二进制）」硬塞进 StorageAdapter（与文本的 get/set/remove 同一个 interface），
+   导致两个资源适配器被迫实现三个只用来抛错的方法。用户原话："资源可以单独配置、单独实现一个 adapter，
+   而不是每一个 adapter 里面都必须包含这些类 —— 这不就臃肿了吗"。
+   **修**：拆成两个接口 —— StorageAdapter（key-value：配置/画布/快捷键）与
+   ResourceAdapter（字节流：putResource / resolveResource / removeResource）。两者只共享 id / capability。
+   两个资源适配器删掉抛错方法，各只剩自己那三个；ResourceStore 不再需要 as never 强转。
+   save.adapters 用联合类型，useAdapterForAll 遇到资源适配器只铺 resource 那一格。
+
+**② 配置没上云**：云插件原来只换 canvas / resource 两格，config / shortcut 留在浏览器 local ——
+   换台机器设置与快捷键全丢。用户要求："云端的时候 config 和快捷键等配置也直接使用云端的设置"。
+   **修**：新增 CloudKvAdapter（走 cloud-server 的 /api/kv/:type/:key，服务端本就支持这两类），
+   装云插件时把 config / shortcut 两格也切过去。404 = 从未保存过 → undefined（与本地语义一致）。
+
+**验证**：新增 5 条 CloudKvAdapter 测试（URL 正确 / 404→undefined / 删除幂等 / 两域互不干扰 / 5xx 抛错）；
+单测 canvas-data 360、canvas-render 404、ui 67、cloud-server 185、cloud-client 89、node-image 111、
+node-video 105、node-audio 90、file-drop 42、bottom-bar 85、kernel 212 全绿；
+真机：云端改一个设置 → 服务器 kv 目录出现 config 文件且值正确；官方 e2e **30 PASS / 0 FAIL**。
+
+### 最近完成（2026-10-02，插件管理插件 + 本地中转后台）
+
+**用户诉求**：做一个能**安装 / 卸载 / 重装**第三方插件的「插件管理」插件，它自己带一个**自定义设置页**
+（插槽实现，照 plugin-agent）；第三方插件经「请求 JSON 清单拿 js 地址 → 加载那个 js」装载（同 cloud-server 的
+`/plugin-manifest.json`）；后台放哪还没定，先做一个**本地临时中转后台**；`packages/ui` 里注释掉一部分插件，
+改由插件管理安装，**默认全部设为已安装**。
+
+**加载方式（用户选 A）**：宿主暴露全局 + 加载 UMD —— `ui` 把 `Vue / MiniCanvasCore / MiniCanvasRender /
+MiniCanvasBase / VueFlow` 挂 `window`（`src/sharedGlobals.ts`），中转站直接发已有的 UMD 产物，
+插件管理用 `<script>` 装载。改动最小、复用现有打包。
+
+**交付两件**（原独立的 `plugin-relay` 包已删，功能并入 cloud-server）：
+- `packages/cloud-server`（加两样）：`GET /plugin-catalog.json` 给「插件管理」的清单（只收录**声明了
+  `miniCanvas.installable` 的 UMD 插件**，避免与冷启动装配的基础件撞名）；`GET /plugins/**` 发插件资源
+  （js/css/图片/字体，子目录也支持）。与既有的 `/plugin-manifest.json`（ESM，给应用冷启动用）分工并存。
+  实现见 `src/plugins/catalog.ts` + `static.ts`。
+- 插件管理：设置面板「插件」页（`settingsNav` + `settingsGroup/插件` 两个槽）+ 服务
+  （清单/已装状态/装·卸·重装）。首次无存档 → 默认全装；之后照存档（卸过的不自动回来）。装/卸走宿主新注入的
+  `pluginManager` 服务（`createMiniCanvasHost` 多一行 `ctx.inject('pluginManager', manager)`）。默认清单地址
+  是同源 `/plugin-catalog.json`。**它已并入 `packages/plugins/plugin-cloud-client/src/manager/`**
+  （原独立包 `plugin-manager` 已删；仍是可独立装卸的插件，导入路径 `.@mini-canvas/plugin-cloud-client/manager`）。
+- `packages/ui`：`main.ts` 先 `exposeSharedGlobals()` 再挂载；`assembly.ts` 注释掉 `node-image-compare /
+tool-image-generation / tool-text-generation`（改由插件管理装），加 `pluginManagerPlugin`；清单 25 → 23。
+
+**验证（单测 + 真服务 + 真浏览器）**：cloud-server 185、plugin-cloud-client 114、kernel 212、canvas-data 360、
+canvas-render 404、ui 67 全绿；三个插件默认装上、卸载「图片对比节点」后节点类型消失、重装后回来、
+刷新照存档、控制台 0 报错。见 `docs/superpowers/plans/2026-10-02-plugin-manager-and-relay.md`。
+
+### 最近完成（2026-10-02，资源存储改造的 code review 复查 + 同类问题清查）
+
+按 code-review 技能起两个并行子代理（Standards / Spec 双轴）复查本次改动，两个代理**独立**报出了同一批问题。
+逐条验证后修掉 3 个真缺陷：
+
+1. **视频截图往节点里写 base64**（最严重，两轴都报）：captureFrameNode 直接写 imageUrl: frame.dataUrl（无 resourceId），
+   而保存时的清洗只删「blob:」与「带 resourceId 的 data:」—— 这张图会原样落进云端 canvas.json。
+   修：截图走资源库（persistImage → put/resolve），与图片上传同一条路。
+2. **AI 生成出图落盘时 persistImage 根本没注入**（Standards 轴报出）：createImageOpsWriteDeps 漏了这项，
+   而 ImageRunDeps.persistImage 与 ImageOpsContext.persistImage **同名不同签名**（url:string vs blob:Blob），
+   于是生成工具回的 dataURL 永远不进资源库 → 云端画布出现 base64。修：补上注入，并给两处签名写清区别。
+3. **首次上云静默丢图**（Spec 轴报出）：pushLocal 整包直推本地节点，但资源 adapter 在装载时**已经**换成云端，
+   本地 IndexedDB 的字节够不着 → 节点上的本地引用与 blob: 地址在云端两头落空。
+   修：换 adapter **之前先抓住本地那个**，上云时用 migrateLocalResources 逐个取字节传云端、换 res。<哈希>。
+
+另外清掉三处**误导性/死代码**：
+- ResourceStore.register() 已无生产调用者，且旧实现会「偷偷 put 一次」导致**返回的 id 与实际落库引用不一致**
+  （拿着 id 查不到东西、还留孤儿字节）—— 改为诚实的「只登记显式 url」，注释写明刷新即失效。
+- 删除上一轮遗留的 embeddedResources 引用与过期注释（canvasAdapter 那段已不再上传，只收回引用）。
+- API 手册 docs/代码开发/canvas-data/存储SaveService与Adapter.md 补上「两种形式（文本 / 资源）」与 adapterOf。
+
+**验证**：新增回归测试 7 条（截图不写 base64 1 条、首次上云迁移 5 条、register 语义调整改 1 条）；
+单测 canvas-data 360、canvas-render 404、ui 65、cloud-server 171、cloud-client 83、node-image 111、
+node-video 105、node-audio 90、file-drop 42、clipboard 22 全绿；真机：上传 826KB 图 → 磁盘落文件 →
+刷新后渲染 600px 宽、画布无 base64、控制台 0 报错；官方 e2e **30 PASS / 0 FAIL**。
+
+### 最近完成（2026-10-02，资源存储收进 StorageAdapter：一个开关管两种形式）
+
+**用户的设计（也是本次落地）**：配置 StoreAdapter 的地方**统一决定数据存哪**，它管两种形式 ——
+文本（JSON）与资源（二进制：图片/视频/音频）。本地装本地版、云端装云端版，一个开关。
+
+**之前为什么不对**：文本那个开关做对了（`save.useAdapter('canvas', …)`），资源那个**写死在构造时**
+（`new ResourceStore(urlBackend, createIndexedDbResourcePersistence())`），云端够不着它 → 资源永远进
+浏览器 IndexedDB。于是本地落盘清掉 `blob:` 后，推给云端的节点里只剩一个**指向浏览器库的** `resourceId`，
+服务器既没字节也没地址（复现实测：一次 `/resources` 上传请求都没发）。
+
+**改法**：
+- `StorageAdapter` 补上**资源形式的孔位**：`putResource(blob) → ref`（只回引用，**不回 URL**）、
+  `resolveResource(ref) → url`（现算显示地址）、`removeResource(ref)`。
+- `ResourceStore` 不再自己攥后端，改成**现取**：`new ResourceStore(() => save.adapterOf('resource'), …)`。
+  于是 `save.useAdapter('resource', 云端资源适配器)` 一换，资源就跟画布走同一个开关。
+- 本地版：新增 `IndexedDbResourceAdapter`（写入库、`resolve` 现建 **objectURL**）。
+- 云端版：新增 `plugin-cloud-client` 的 `createCloudResourceAdapter`（POST 上传 → 回 `res:<哈希>`；
+  `resolve` 拼服务器地址，不下载字节）。
+- 上传/生成调用点（image / video / audio / file-drop / 生成面板）统一改成 `await resources.put(blob, {kind})`
+  + `await resources.resolve(ref)`。
+- **删除**上一轮那段「保存时扫描节点、按 resourceId 取字节重传」的补丁（`embeddedResources.ts`）——
+  字节在上传那一下就已经存好了，保存路径不再做任何上传。
+
+**两条不变量（用户强调）**：① 节点里**只存 ref（ID）**，绝不存 URL；② **URL 永远是现算的**
+（本地每次刷新都是一个全新的临时 objectURL，旧的自然作废；云端由内容哈希拼出稳定地址）。
+
+**验证（真服务 + 真浏览器）**：`pnpm build:assets` → `pnpm serve`（:8865）→ 点上传一张 1.65MB PNG：
+| 检查点 | 结果 |
+| --- | --- |
+| 上传那一下 | `POST /api/canvases/default/resources?name=upload-test2.png` ✅ |
+| 服务器磁盘 | 新增 `resources/f27d88fc2049cfb2.png`（1.65MB）✅ |
+| 节点 | `imageUrl = res:f27d88fc2049cfb2.png`（只有引用）✅ |
+| 画布 JSON | 无 base64 ✅ |
+| 刷新后 | 图片渲染 800×600、控制台 0 报错 ✅ |
+| 本地 IndexedDB | **未被写入**（云端模式不再碰本地库）✅ |
+
+单测：canvas-data 360、canvas-render 404、ui 65、cloud-server 171、node-image 111、
+cloud-client 78、node-video 105、node-audio 90、file-drop 42；云端 e2e **30 PASS / 0 FAIL**。
+
+### 最近完成（2026-10-02，云端上传图片真的落盘了 + AI 建节点也用自增数字）
+
+**用户报的问题**：云端环境下上传图片，刷新后图片不见了；本地 `canvases/default/resources/` 里没有对应文件。
+
+**真根因（用真服务 + 浏览器自动化复现，拿到确凿证据）**：本地落盘时 `sanitizeTransientResourceUrls` 会清掉
+`blob:` 地址（那是会话级地址），于是推给云端的那份节点里**只剩 `resourceId`** —— 而它指向浏览器的
+IndexedDB，服务器读不到。上一轮的"保存时把 base64/blob 转文件"只覆盖了"字段里还有内嵌地址"，
+**完全没覆盖"只剩 resourceId"这条真实路径**，所以一次上传请求都没发（实测 `资源相关请求：[]`）。
+
+**改法（走资源自己的路径，不在字段层打补丁）**：保存前若节点带着 `resourceId` 而资源字段是空的，
+就**按 id 从宿主资源库取出字节** → 上传成画布资源文件 → 换 `res:<hash>` 写回该节点类型对应的媒体字段
+（image→imageUrl、video→videoUrl、audio→audioUrl…，按类型映射，不再一律塞 imageUrl）。
+同一张图按 resourceId 缓存、只传一次。首次上云的整包推送走同一道处理。
+
+**用户同时要求**：AI 建节点**不必自己指定 id** —— 交给服务端发号、在 `added` 里回传。
+已改：cloud-server 的 `newNodeId` 从 `ai-随机` 改为**自增数字**（与网页端同一套规则，取现有最大 + 1、跳过已占用号）；
+MCP 工具描述同步更正。
+
+**验证（真服务 + 真浏览器，按用户给的启动方式）**：
+`pnpm build:assets` → `pnpm serve`（:8865）→ Playwright 打开画布 → 选中图片节点 → 点上传 → 塞入 1.65MB 真 PNG：
+
+| 检查点 | 结果 |
+| --- | --- |
+| 触发了资源上传 | `POST /api/canvases/default/resources?name=asset.png` ✅ |
+| 磁盘落文件 | `canvases/default/resources/56f9baac44b0805e.png`（1.65MB）✅ |
+| 磁盘 canvas.json | `"imageUrl":"res:56f9baac44b0805e.png"`，**无 base64** ✅ |
+| 刷新后 | 地址展开为真 URL、`<img>` 渲染出 800×600 ✅ |
+| 控制台 | 0 报错 ✅ |
+
+新增失败测试 2 条（`canvasAdapter.test.ts` 的"只剩 resourceId 也要传上去""同一张图不重传"）先红后绿。
+单测：cloud-server 171、cloud-server e2e 30 PASS / 0 FAIL、canvas-data 360、canvas-render 404、ui 65、
+node-image 111、file-drop 42、clipboard 22、group 47 全绿。
+
+### 最近完成（2026-10-01，节点与边的 id 统一成自增数字）
+
+**用户诉求（原话）**：节点 id 用数字替代；每次添加节点 / 复制粘贴 / 拖资源进画布，新 id 自增；
+连接线同理。插件各写各的 id 形态，画布里五花八门 —— 画布应提供「取当前最新 id」的方法，谁要 id 都向它要。
+
+**根因**：内核**本来就有**自增数字（`NodeStore.createNodeId`），但只有「不指定 id 建节点」这条路会用到；
+而插件偏偏都要**先拿到 id**（拿到才能连边、才能选中），于是各造各的：
+`fd-时间戳-序号`（file-drop）、`原id-copy-时间戳-随机`（clipboard）、`group-时间戳-序号`（group）、
+`temp-menu-时间戳`（context-menu）；边则是 `e-源-目标`（由端点派生）。
+
+**改法**：把「取下一个可用 id」收进 `doc` 门面 —— `doc.nextNodeId()` / `doc.nextEdgeId()`，
+**先拿号、再占号**（拿到就标记为已用，跳过已在存的号）。所有插件改向它要：
+
+| 位置 | 原来 | 现在 |
+| --- | --- | --- |
+| file-drop 拖入/粘贴文件 | `fd-时间戳-序号` | `doc.nextNodeId()` |
+| clipboard 复制粘贴 | `原id-copy-…` | `doc.nextNodeId()`（`remapSnapshot` 改为**必须**注入生成器，删掉会自造 id 的默认实现） |
+| group 打组 | `group-时间戳-序号` | `doc.nextNodeId()`（删掉 `createGroupId`） |
+| context-menu 临时菜单节点 | `temp-menu-时间戳` | `doc.nextNodeId()` |
+| 边（内核 `EdgeStore`） | `e-源-目标`（端点派生） | 自增数字 + `nextId()` |
+| 边（cloud-server MCP） | `e-{source}-{target}` | 自增数字（取现有最大 + 1） |
+
+**连带的两处语义调整**（id 不再由端点派生，就必须显式做这两件事）：
+1. **边去重改看「连接本身」**（端点 + 端口），不再靠「同端点算出同一个 id」—— 内核 `EdgeStore.addEdge`
+   与 cloud-server `batchEdges` 都改成按端点键去重，否则同一条线连两次会画出两条重叠的边；
+2. **回填后重建计数器**（`replaceAll` 后把计数器抬到存量最大值之后），刷新恢复的图里有 1/2/7 时，
+   下一个必须是 8，不能撞已有节点。
+
+**顺带清掉的死代码**（都是被取代后没人再用的）：`edgeStoreId`（canvas-data）、`edgeId`（canvas-render，
+及其导出与两条测试）、`createGroupId`（group）、`defaultIdGenerator`（clipboard）。
+
+**验证**：新增 `docService.test.ts` 的「统一 ID 分配」5 条（自增、跳过已占用号、节点与边各自独立计数、
+replaceAll 后计数跟上、批量分配互不相同）+ `edgeStore` 的 `nextId` 与按端点去重用例。
+单测：canvas-data 360、canvas-render 404、cloud-server 171、plugin-clipboard 22、plugin-group 47、
+plugin-file-drop 42、plugin-context-menu 53、其他包全绿。**真浏览器实测**（`pnpm -C packages/ui dev`）：
+常规建节点 → 复制粘贴得到 3/4/5/6 → 拖入文件 7 → 打组 8，边是 1/2，**全是自增数字**；云端 e2e 30 PASS / 0 FAIL。
+
+### 最近完成（2026-10-01，图片资源改为「字节进库 + 引用」；云端不再存 base64）
+
+**用户诉求（原话）**：本地保存图片改用 DB 数据库方式做资源缓存，不再转 base64；
+远程也是 base64 不对，应以**文件**形式保存。
+
+**根因（两处，方向一致）**：
+1. **本地**：图片上传/裁剪/旋转/扩展把结果转成 dataURL 直接写进 `data.imageUrl`（base64 体积约 +33%，全塞 localStorage）；
+2. **云端**：云服务端**本来就是**按内容哈希存文件（`canvases/<id>/resources/<hash>.ext` + `res:<hash>` 引用），
+   但 `plugin-cloud-client` 保存前只把「服务器地址」收回 `res:`、**从不上传内嵌字节** —— 节点里的 base64 原样进了云端 `canvas.json`。
+
+**改法**：
+- **本地**：图片四条路径（上传 / 裁剪 / 旋转 / 扩展）+「加素材」统一改为
+  `File/画布产物 → Blob → 资源库（浏览器为 IndexedDB）→ 节点只留 resourceId + 本会话地址`，与视频/音频同一条路。
+  做法：`imageTransform` 的 `cropToDataUrl/rotateToDataUrl/paint` 换成 `cropToBlob/rotateToBlob/paintCanvasBlob`（`canvas.toBlob`）；
+  `ImageOpsContext` 新增 `persistImage(blob) → { resourceId, url }`；落盘前的 `sanitizeTransientResourceUrls` 不再按大小删 dataURL（上一轮已改）。
+- **云端**：`plugin-cloud-client` 新增 `embeddedResources.prepareNodesForSave` —— 保存前扫九个媒体字段，
+  `data:`/`blob:` 取字节 → `POST /api/canvases/:id/resources` 传成资源文件 → 换 `res:<hash>`；同一张图按地址缓存、只传一次。
+  **任一字段上传失败就整批不发**（绝不把 base64 落进云端）。「首次上云」的整包推送走同一道处理。
+  删除死代码 `resourceUpload.ts`（还指着已废弃的 `/api/files`）。
+
+**顺带修掉两个真 bug**（e2e 实测暴露，不是猜的）：
+1. **换机器恢复时 `res:` 没展开** → 浏览器拿 `res:...` 当 URL 渲染，报 `ERR_UNKNOWN_URL_SCHEME`、图不显示。
+   修：`CanvasAdapter.getRaw()`（恢复路径专用）读回时展开成当前画布的可请求地址（`get()` 一直有展开，恢复这条漏了）。
+2. **云端偶发 500**：`/api/canvas/edges` 报 `EPERM: rename canvas.json` —— Windows 上两个写打同一个目标文件必然 EPERM
+   （与 `kvStore` 记的是同一个坑）。修：`canvasStore` 补「同文件写串行」+ rename 对瞬时占用做退避重试，并加并发写回归测试。
+
+**验证**：单测 `canvas-data` 354 / `plugin-node-image` 111 / `plugin-cloud-client` 81 / `cloud-server` 155 全绿；
+真浏览器（本地）上传 2.1MB 图 → 节点存 `blob:` + `resourceId`、IndexedDB 有字节、存档无 base64、刷新后图片仍在，控制台 0 报错；
+真服务端 + 真浏览器（`pnpm -C packages/cloud-server e2e`）**30 PASS / 0 FAIL**，含「云端画布 JSON 里没有 base64」
+「节点存 `res:<hash>`」「resources/ 里是真文件」「换机器图仍能取回」「全程零报错 / 零 4xx」。
+
+### 最近完成（2026-10-01，云端真身：存储改造 + 投递箱 + 任务历史 + 云端客户端插件）
+
+**一句话**：把「生成」整条链从前端搬到 cloud-server —— 页面关了任务照跑，
+不打开页面（只走 MCP）也能下单；前端只负责下单与看。**不做兼容，硬切。**
+
+**后台（packages/cloud-server）**
+
+- **存储改成「一个画布一个文件夹」**：`canvases/<id>/{canvas.json, view.json, history.json, resources/}`。
+  `canvas.json` 装节点 + 边 + 画布信息；`view.json` 单独放（视图状态）。
+  老 kv 的 `canvas:*` key 与 `/uploads/*` **直接下线**（不做兼容读）。
+  资源引用改成画布内相对引用 `res:<hash>` —— 复制文件夹 = 复制画布，AI 也能直接读文件。
+- **平台「投递箱」**：`providers/` 目录，丢一个 `.js` 就是一个平台（几秒内热重载，删掉即消失）。
+  内置 web2api 用**同一套接口**写成第一个 provider。
+  `GET /api/actions` 给前端清单（带 ifVersion）。
+- **任务与历史**：`POST/GET /api/jobs`、`cancel`、`GET /api/history`（分页 + 汇总）。
+  后台跑任务、把进度**写进节点**（走增量口，与网页端共用一把锁）、终态归档一笔历史。
+- **MCP 生成三件套**：`generation.actions / create / status` —— 不开页面也能下单。
+
+**插件（新包 packages/plugins/plugin-cloud-client，取代 plugin-cloud-save）**
+
+一个包干四件事、共用一条 SSE：存档 + 实时跟随、拉后台清单**注册进底栏**、
+下单/看进度/取消、读历史。**零 import 单文件产物**，经后台清单下发（就是"后台发插件"那条路）。
+
+**前端（packages/ui）**：历史弹窗改读服务（不再写死假数据）；底栏加可选标记
+`externalRunState`（云动作的进度由后台写，底栏不重复写）。
+
+**验证**：cloud-server 154 / plugin-cloud-client 76 / plugin-bottom-bar 85 / ui 65 全绿；
+真实服务端到端跑通（存储结构、provider 热重载 11→12、下单→节点 runState→历史、
+MCP 全程下单、插件零引用产物动态装载）。计划见
+`docs/superpowers/plans/2026-10-01-cloud-server-storage.md`，设计见
+`docs/superpowers/specs/2026-10-01-cloud-client-design.md`。
+
+### 最近完成（2026-10-01，修「上传图片后刷新就没了」）
+
+**用户报的问题**：在画布上传图片，刷新后图片不见了。
+
+**根因**：图片上传走的是「File → dataURL 写进 `data.imageUrl`」这条路
+（`plugin-node-image/src/imageTransform.ts` 文件头写明：**dataURL 落盘、刷新照常显示，这是
+「刷新不丢」的前提**；裁剪 / 旋转 / 扩展的产物同样是 dataURL）。而保存前的清洗函数
+`sanitizeTransientResourceUrls`（`canvas-data/src/resourceService.ts`）把**超过 64KB 的
+dataURL** 也当成临时地址删掉了 —— 上传链路并没有 `resourceId` 这类第二份拷贝可供恢复，
+于是这张图**唯一的一份数据被永久销毁**，刷新自然就没了。裁剪/旋转/扩展的图一起丢。
+
+**修法**：清洗只删「页面之外取不回来」的两种地址，且它们都有第二份拷贝兜底 ——
+1. `blob:`（object URL 会话级失效，字节已按 `resourceId` 进持久化资源表）；
+2. 带 `resourceId` 的 `data:`（字节同样已在资源表里，节点里这份是冗余副本）。
+**不再按大小删内嵌 dataURL**：那是这张图唯一的一份。要瘦身请走「登记资源 → 写 resourceId」
+那条路，把字节搬进持久化资源表，而不是在保存时销毁数据。
+
+**验证**：新增失败测试（RED → GREEN）钉住这条 —— `canvasBasePlugin.test.ts` 走**真实落盘链路**
+（提交回调 → save → 二次 boot 恢复），断言 200KB dataURL 落盘后仍在；`resourceService.test.ts`
+补「带 resourceId 的 dataURL 才删 / 不带 resourceId 的必须留」。
+真浏览器端到端复现（起 dev server，走 `image.upload` 命令 + `save.flush` + 真刷新）：
+上传 2.1MB 随机噪点图（dataURL 2.89MB，远超 64KB）→ 刷新后 `data.imageUrl` 仍是 dataURL、
+`<img>` 加载出 900×700、控制台 0 错误。
+测试基线：canvas-data **354**、canvas-render 406、kernel 212、theme-default 241、
+node-image 111、node-video 105、node-audio 90、file-drop 42、cloud-save 91、ui 65，全绿；
+canvas-data / canvas-render / node-image typecheck 干净（ui 仍余 4 个既有报错文件，与本次无关）。
+
+### 最近完成（2026-10-01，音频节点抽成独立插件 + 波形进度条）
+
+**同日第二/三轮修正（用户截图反馈）**：
+
+**同日第四轮修正（用户报 1 个警告 + 3 个 bug）**：
+
+**同日第五轮修正（用户报"滑动失败 + 参考线只有中间一段"）**：
+
+**同日第六轮修正（用户报"拖进度条又拉出来一条波纹"）**：
+
+**同日第七轮修正（用户报"水波纹晃荡 + 后面全是平的"）**：
+
+**同日第八轮（用户提三件事：拖拽静音 / 加整体进度条 / 拖到边缘波纹滚动）**：
+
+**同日第九轮（用户两条修正）**：
+
+**同日第十轮（用户纠正：边框是 hover 才出现，不是常驻）**：
+- 第九轮做成了"平时有边框、hover 只换颜色"，理解反了。用户口径是
+  **平时看不到边框，hover/拖动上去才出现**。
+- 现在 `.aw-knob::after` 平时 `border: 1px solid transparent`（保留占位以免 hover 时线宽跳变，
+  但视觉上**没有边框**），hover/拖动时才把 `border-color` 换成面板色（暗色下即白边）并把线体换主题色；
+  全程没有 `box-shadow`。
+- 实测：平时 `border: 1px solid rgba(0,0,0,0)`（不可见）→ hover `border: 1px solid rgb(38,38,38)`，
+  两者 `boxShadow` 均为 `none`。测试 **89/89**、`ui` 65/65 全绿。
+- **拖拽期间要出声，松手恢复"拖拽前"的状态**（第九轮推翻了第八轮的"拖拽静音"）：
+  按下把手/进度条时**不暂停、不静音**（播放起来），靠不断改 `currentTime` 出声（"搓碟"手感）；
+  松手时按**按下前的状态**恢复 —— 拖前在播就继续播，拖前暂停就回到暂停。
+  实测：拖前 paused=true → 拖动中 paused=false 且 `playing` 按钮变"暂停" → 松手 paused=true；
+  拖前在播 → 拖动中继续播 → 松手仍在播。
+- **播放头线的 hover 高亮去掉阴影，改成边框**（用户要求）：`.aw-knob::after` 平时
+  `border: 1px` 半透明前景色，hover/拖动时线体换主题色、边框换成面板色（白），全程无 `box-shadow`。
+  实测 hover 时 `boxShadow: none`、`border: 1px rgb(38,38,38)`。
+- 测试：本包 **89/89**、`ui` 65/65、bottom-bar 85/85、web2api 51/51 全绿；本包 typecheck 干净。
+- **拖拽时不出声**（用户原话："拖拽的时候有声音的那种（站停的播放？）"）：按下把手或进度条时
+  先 `pause()` + `muted = true`，并记下"原本是否在播"；松手时恢复静音开关，
+  **只有原本在播**才继续播。实测：播放中 `muted=false` → 拖动中 `muted=true, paused=true` → 松手恢复播放。
+- **波纹下面新增一条普通进度条**（`.aw-progress`：细轨 + 主题色填充 + 圆点把手，`role="slider"`）：
+  它控制**整条音频**的进度，与波纹那条"窗口内位置"是两把不同的尺子。实测点 80% 处 → 定位到 1:12/1:30。
+- **拖到一侧时波纹自动滚动**（用户要的"不然进度条只能控制部分区域"）：
+  指针进入可视区左右 28px 边缘区时，用 rAF 逐帧把**窗口**往那一侧推
+  （`EDGE_SCROLL_SECONDS_PER_FRAME = 0.12`），停了也继续滚；松手/卸载立刻取消。
+  实测：按住把手停在右边缘 → 窗口位移 0 → -79px → -240px，整体进度 10% → 29%（到得了全片）。
+- 顺带把"拖动中不补算峰值"的限制去掉（拖动中也要按需取新进入可视区的峰值，否则滚过去是空白）。
+- 测试：本包 **87/87**（新增 `audioSeekAndProgress` 9 条）、`ui` 65/65、bottom-bar 85/85、web2api 51/51 全绿。
+- **"像水波纹一样来回晃荡"**：竖条原本锚在**窗口左端**（`timeSec = start + i * perBar`），
+  而 `start` 随播放连续变化 → 同一格每帧显示的采样点都在换，表现为波形原地抖动变形。
+  改成**锚在绝对时间轴上**（`cell = firstCell + k`，`firstCell` 取整），
+  格子不动、由 `translateX` 整体平移 —— 实测 t=20/22/24s 的平移量是 29.4px/2s 的**线性**关系，格子高度稳定不变。
+- **"后面全是平的"（实时计算看着没生效）**：分块取峰值时对**每个小块各自做了一次归一化**，
+  安静段被拉满、相对响度全丢。改成 `PeakCache` / `audioSource` 只返回**原始振幅（0..1）**，
+  归一化留在最后一次性做。实测 45 秒音频的可见高度有 4 档不同值（90/75/15/10），跟随分段振幅。
+- 顺带把两种数据源量纲统一：按需结果是 0..1、已存概览是 1..100 百分比 → 在组件里换算。
+- 测试：本包 **78/78**、`ui` 65/65 全绿；`plugin-node-audio` 的 `tsc` 与 ui 的 `vue-tsc` 对本包均 0 报错
+  （ui 仍余 4 个既有报错文件，与本次无关）。
+- **根因**：波形被写成"两层叠放、上层按进度宽度裁切"，而上层是个**窄容器**，
+  里面按百分比定位的竖条被横向压扁 → 看起来像第二条波纹。
+- **改成用户口径**：**从头到尾只有一条波形**；进度只做一件事 ——
+  把播放头**左边**那些竖条染成主题色（每根自己带 `is-played`，单层）。
+- **滑动改成"轮播图模型"**：时间轴是一条长条，靠 `transform: translateX` 整体左移，
+  可视区只是一扇窗（窗口不动、内容在动）。实测 t=15s 时 `translateX(-73.5px)`、t=35s 时 `-367.5px`。
+- **每根竖条固定像素宽**（`--aw-bar-width`，默认 2px）：可视区能放多少根 = 容器宽度 ÷ 条距。
+  实测 294px 容器 → 98 根、铺满 100%。
+- **按需算峰值**（用户要点）：新增 `peakCache.ts`（按时间分块缓存 + 多分辨率聚合）与
+  `audioSource.ts`（WAV 用 `Range` **只取可视区那几百毫秒字节**；压缩格式退回整段解码但峰值仍按区间算）。
+  组件只请求"窗口那一段"的峰值，窗口平移时新进入的部分才算。
+- **修掉一个真 bug**：节点常是"先建出来、音频随后写进去"，挂载那一刻波形子树还没渲染 →
+  量不到宽度、也没挂上 `ResizeObserver` → 条数退化成保底值、波形只铺最左边一小撮。
+  现在 `watch(waveRef)` 在元素出现时测量并挂观察器。
+- 测试：本包 **78/78**、`ui` 65/65、bottom-bar 85/85、web2api 51/51 全绿；typecheck 干净。
+- **根因是同类错误的两处**：整个滚动窗口的实现里，"波形宽度"与"位置"用了**两套坐标**。
+  ① `pitch` 按**整条 100 桶**算宽度，可实际只画了视口内的 20 桶 → 波形只铺满左边 1/5（截图可见）；
+  ② 已播色块宽度用"整条百分比"、播放头竖线用"视口内位置" → 两者不重合，且 SVG 里还留了一条
+  固定高度的短线与把手叠加，才出现"只有中间一段高亮"。
+- **修法：整个窗口换算收敛成一处**（新纯函数 `audioViewport`）——组件只问它要
+  `{ start, visible, fraction }`，波形布局、已播宽度、竖线位置**三者共用这一个视口与这一个 fraction**，
+  从结构上不可能再不一致。
+- **波形改用 HTML 竖条**（原来是单条 SVG path）：宽度走百分比 `calc(100% / 视口桶数)`，
+  与缩放/画布变换无关 —— SVG 在 `preserveAspectRatio="none"` 下要反算"视口=多少用户单位"，
+  正是上面 ① 的温床。两层（灰底 + 已播）叠放，上层按 `width: fraction%` 裁切。
+- **参考线改为贯穿整个波形高度**（原是 12px 的小圆球/短线）：hover/拖动时变主题色 + 柔光。
+  实测：20 根竖条铺满整宽（末根右缘 = 容器右缘 845.8）、t=2s 分界/竖线都在左端、t=45.7s 同步移到 ~32%、
+  拖时间文字移动节点（90,90 → 120,120）、拖参考线只 seek（节点不动，0 → 26.6s）、控制台 warn/error 仍为 0。
+- **Vue 警告刷屏**（`Extraneous non-props attributes (class, data-slot-order, data-slot-id)`）：
+  底栏三个浮层（NodeBottomBarOverlay / ReferenceSelectOverlay / MediaPreviewOverlay）的根节点是
+  `Teleport`，插槽宿主 SlotHost 下发的 `class`/`data-slot-*` 没法被继承 → 每次渲染警告一次。
+  三处各加 `defineOptions({ inheritAttrs: false })`（我们本来就不用那些属性）。实测控制台 warn/error **0 条**。
+- **只有按钮与播放头拦画布手势**（用户原话："正常来说，只有这两个按钮，以及波纹上面的滑块在拖拽时才会
+  拦截，其他元素都不会拦截节点的拖拽"）：`.aw-bar` 整条原本带 `nodrag nopan nowheel`，把时间/文件名
+  一起拦了。现在把三个类**下移到每个 `<button>` 与播放头**上，控制条本体放行。实测拖"时间文字"
+  节点位置 `120,120 → 161,147`。
+- **滑动效果异常（回馈环）**：视口跟着播放位置走、而拖拽又是"指针 → 播放位置"，两者一起动就越拖越跑偏。
+  新增"拖动中**冻结视口**"（`frozenWindow`）：按下把手时锁定当前视口，整段拖拽用同一把尺子，
+  松手才重新居中。缩放窗口换算也改成按**实际视口**算（`seekRatio` / `headFraction`），
+  而不是原来写死的"整条百分比 / 恒在中点 50%"（窗口被夹住时那是错的）。实测拖到 30% 就是 6/40 秒、
+  拖到 70% 就是 14/40 秒，不再跑飞。
+- **播放头从圆球改成竖线**（用户原话："中间有一个小圆球 我是希望你删掉他"）：`.aw-knob` 变成一条
+  细竖线（11px 命中区 + 2px 视觉线），hover/拖动时换成主题色 + 一圈柔光。实测 hover 前
+  `rgb(145,145,145)`、hover 后 `rgb(8,145,178)`。
+- **hover 不再有灰底**（用户原话："会有一个灰色的背景，这是我不太喜欢的地方"）：删掉
+  `.aw-wave:hover` 的 `background`，改成**只提亮波形本身** —— 未播的灰从 `--canvas-node-text-muted`
+  提到 `--canvas-node-text`（不透明度 0.7→0.95），已播的主题色与 `--ui-panel` 混白提亮一档。
+- **节点能拖了**（用户实测："拖拽节点变成了拖拽你的进度条"）：根因是波形整块带了 `nodrag`。
+  现在**波形本体去掉 `nodrag`**（拖波形 = 拖节点），进度改由**播放头上的圆形把手**负责
+  （把手自带 `nodrag nopan nowheel` + `role="slider"`，方向键可微调 1 秒）；点波形空白跳转仍可用
+  （只拦 `click`，不拦 `pointerdown`）。
+- **高度不再留空带**（用户实测："下面的区域是空白的"）：波形原本固定高度，卡片多出来的空间就空着。
+  改为**弹性填满**（`flex: 1 1 auto`），SVG 跟着长高；配置项 `audioWaveHeight` 语义从"高度"改为
+  **"最低高度"**（默认 46→28，下限 16），只在卡片被压得很矮时兜底。
+- **长音频的滑动窗口**（用户要求："它是一个非常长的波纹…根据当前进度显示对应可视区域"）：
+  新增纯函数 `audioWindow.ts`（`visibleBucketCount` / `windowStartBucket`，各带边界测试）+
+  组件侧按窗口算 `viewBox` 与绘制区间。短音频整条显示；长音频只画可视那一段（最少 20 桶防"放大成粗条"），
+  窗口把当前位置摆在正中，**播放时窗口平移 = 波纹在背景里滑动**（实测：40 秒音频 seek 到
+  10/24/36 秒，可视区里的波形形状各不相同）。
+
+**用户诉求**：web2api-tools 里顺带注册的 `audio` 节点抽成**独立节点插件**，UI 换成"音频纹波"
+（波形当进度条：左侧主题色 = 已播、右侧灰 = 未播、可在波纹上拖拽 seek、播放时有动画）；
+不显示字幕/歌词，只有一个音频；节点**不支持 resize**；波形数据在**第一次加载音频时算一次并存进节点**
+（约 100 个数字），之后只读缓存。后续追加两点：右侧"更换音频"按钮改成**刷新**（重算波形与时长）；
+**时长要随波形一起加载并存进节点**（实测时长没显示）。
+
+**新包 `packages/plugins/plugin-node-audio`**（照 `plugin-node-video` 分层）：
+
+| 文件 | 职责 |
+|---|---|
+| `waveform.ts` | 纯函数：桶化峰值（每桶取绝对最大值，负半周也算）、归一化到 1..100 整数（静音保底 1）、`isValidWaveform` 校验、`fallbackWaveform(seed)` 确定性回落（同名地址恒同形状，不用 Math.random） |
+| `audioPlayback.ts` | 纯函数：`progressRatio` / `seekTime` / `ratioFromPointer` / `formatClock`（含 NaN 收敛） |
+| `audioTransform.ts` | 浏览器端口：`fetch → decodeAudioData` 一次拿到**波形与时长**（多声道逐帧取最大；`finally` 里 `close()` 释放 AudioContext）、选文件、下载（node 下安全返回 null/false） |
+| `audioOps.ts` | 载入一条路：`loadAudio`（换地址必重算）/ `uploadAudio` / `ensureAudioMeta`（**波形与时长缺哪个补哪个**，两者齐了零开销）/ `reanalyzeAudio`（刷新）/ `downloadAudioNode` |
+| `nodeAudioPlugin.ts` | 注册 `audio` 类型（`size 320×120`、`resizable: false`、in: AudioContent）+ `AudioService` + 命令 `audio.upload` / `audio.download` / `audio.reanalyze` + Config（`audioWaveHeight` / `audioBarMinWidth`，组 `节点/音频节点`） |
+| `AudioContent.vue` | 内容段：**单条 SVG path** 画 100 根竖条（一个元素 vs 一百个）→ `clipPath` 分两层上色（`--ui-accent` 已播 / `--canvas-node-text-muted` 未播）+ 播放头；指针按下/移动 = seek（`setPointerCapture`，`nodrag nopan nowheel`）；rAF 只在播放中跑；播放态 `.is-playing` 走 `aw-breathe` 呼吸动画（带 reduced-motion 降级）；空态给「上传音频」入口 |
+
+**数据契约**（存进节点）：`data.audioUrl` / `audioName` / `audioDuration`（秒）/ `audioWaveform`（100 个 1..100 整数）。
+波形是派生数据 → 走 `doc.updateNodeRuntime`（落盘、不进撤销栈）；地址/时长/文件名 → `doc.updateNode`（进历史）。
+
+**web2api-tools 交还节点所有权**：删掉 `AudioContent.vue` 与 `AudioService` / `ctx.nodes.register`，
+**只保留**音频生成动作与结果写入器（继续写 `data.audioUrl`）—— 于是没装 web2api 的宿主也能有音频节点。
+
+**装配**：`packages/ui/src/assembly.ts` 加 `nodeAudioPlugin`（清单 23 → **24**）；`packages/ui/package.json` 加依赖。
+
+**验证（实测）**：`plugin-node-audio` **50/50**、`plugin-web2api-tools` 51/51、`ui` **65/65**、
+kernel 212 / canvas-data 353 / canvas-render 406 / canvas-base 6 / node-video 105 / node-image 111 /
+node-text 31 / bottom-bar 85 / theme-default 241 / file-drop 42 全绿；新包 / web2api / ui 三个 typecheck 干净
+（ui 的 `vue-tsc` 仅剩 4 个**既存**文件报错：CanvasHost.vue / SelectionFrame.vue / ModalsArea.vue / useFloating.ts，与本次无关）。
+**浏览器实测**（dev :5411，CDP 驱动）：写入 dataURL 音频后波形与时长自动落库（`audioWaveform` 100 个、
+`audioDuration` 正确）；拖拽波形到 75% → `currentTime 0.749`、clip 749.43、播放头同步；
+点播放 → `.is-playing` 挂上、`aw-breathe` 动画生效、进度随播放推进、播完停在末尾；
+只写 `audioUrl` 的节点（模拟 web2api 写入器）挂载后**时长与波形一起补齐**（实测 2 秒音频显示 `0:00 / 0:02`）；
+底栏同时出现 web2api 的音频动作（豆包·语音合成），两插件协同正常。
+
 ### 最近完成（2026-10-01，底栏「参考」选择态 + 全屏预览 + 右侧按钮接通）
 
 **同日修正（用户第二轮截图反馈）**：
@@ -20,6 +956,49 @@
   「名称 + hover 描述」结构（名称绝对居中，悬停/聚焦时上移到 top:3px、描述从下方 translateY(6px)
   淡入），数值与 `ContextMenu.vue` 逐条对齐（0.3s ease-out）；`SelectOption` 加可选 `description`；
   底栏的**模型下拉**带上动作的 `description`，所以悬停能看到每个模型的一句话说明。
+
+**同日第八次修正（用户第九轮截图）** —— 全局设置入口按用户最终要求重做：
+- **展开/收起的动画卡顿修掉**（用户反馈「展开和缩回的时候，动画一点也不流畅…一卡一卡的」）：
+  根因是用了 `grid-template-rows: 0fr↔1fr` —— 查下来**这个属性在各浏览器对 fr 区间的过渡支持不一**，
+  Chromium 里既可能逐帧 reflow 掉帧、也可能干脆**不补间直接跳变**（那正是"卡"的来源）。
+  改成**测量高度过渡**：Transition 的 `@enter/@leave` 把 `height` 显式从 0 ↔ `scrollHeight`
+  写好、配 `transition: height .26s`，到位后 `height` 归 `auto`（内容变化不被钉死）。
+  **浏览器实测逐帧采样**：展开 282→292→306→322→333→337→340→342→343→344→345→346 共 12 个中间值
+  平滑补间（不再是跳变），收起同样逐帧回落。
+- **末尾那个"跳一下"也修了**（用户二次反馈：「高度缩减为零之后……最后一个过渡很难受」，猜是分割线被隐藏）：
+  根因不是分割线，是**父容器 `.nb-root` 的 flex `gap: 8px`** —— gap 属于父元素、不在本元素高度里，
+  自定义 height 过渡到 0 时那 8px 还在，等 `v-if` 摘掉元素的瞬间 gap 才消失 → 末尾"啪"跳 8px
+  （实测：346→…→282 停住、然后 282→274）。给 `.nb-global` 一个 `margin-top:-8px` 抵消 gap，
+  间距改由元素**内部**承担（`.nb-global-inner` 的 margin-top 补齐），于是留白跟着 height 一起裁剪、
+  一起动画。**逐帧实测**：收起 346→334→319→301→289→284→280→278→277→276→275→275→274，全程平滑无跳变。
+- **图标换回「滑块」样式**（用户要求：「你这边的图标给我改过来，你前面几个版本的那个设置图标还可以」）：
+  把底栏那枚齿轮（⚙ cog）换成**三条横线 + 滑块**的设置图标（`ICON_SETTINGS`，即"偏好/调节"那款）。
+- **点它不再弹窗，改为在底栏下面追加一块**（用户要求：「它是在底部状态栏的下面一部分进行展示，
+  而不是打开我的弹出框设置界面……类似在底部增加一块区域，并且带有一个动画效果（比如底部状态栏
+  慢慢增高）。这块区域要有一条分割线来进行分割，并在里面显示当前的全局设置。这部分你可以直接
+  使用占位文本」）：新增 `.nb-global` 区域，**追加在底行之后**（底栏最后一块），
+  `border-top` 一条分割线，里面是「全局设置 + 占位说明」文本；展开用 `grid-template-rows 0fr↔1fr`
+  让底栏平滑增高（与上一版「设置区」同一手法，但那是参数、这次是全局设置）。按钮高亮随开合。
+  **浏览器实测**：点图标后底栏子元素变为 `pills → cards → editor → bottom → global`、
+  分割线 1px、占位文本就位、底栏高度 274 → 346（增高动画）。
+- 顺带**回退**上一版为「齿轮打开应用设置面板」加的 `settings:ui-open` 事件通道（用户不要弹窗，
+  该通道已无用）：`packages/ui/src/composables/ui.ts` 的订阅与 openSettings、theme-default 的
+  registerEventName、以及那条单测一并撤掉。
+
+**同日第七次修正（用户第八轮截图）**：
+- **底栏齿轮真的能开全局设置**（用户实测：「右侧你的这个设置按钮也给我搞没了，点击也没反应」）：
+  新增内核事件 **`settings:ui-open`**（与既有的 `settings:ui-close` 对称），装配层
+  `useUi.bindSettingsClose` 一并订阅它 → 置 `settingsOpen = true`。底栏那枚齿轮在插件里、
+  够不到装配层状态，现在 `ctx.emit('settings:ui-open')` 就能弹出**同一个**全局设置面板
+  （实测验到 偏好/设置 面板：节点/布局/边/常规/web2api/导出）；不再是什么都不做的假占位。
+  新增 1 条整装测试锁这条通道（`settingsCloseChannel.test.ts`）。
+- **比例下拉按内容宽**（用户实测：「你这个比例的下拉，文字就那么长，你给我把按钮搞那么大」）：
+  参数下拉原来写死 `min-width:148px` + `width:100%`，把「16:9」撑成一条长按钮。
+  改为按内容自适应（`width:auto`、`min-width:0`、`max-width:240px`）。
+  **浏览器实测**：参数触发器宽度 148 → **81px**（正好包住「16:9 ⌄」），模型下拉仍 154px。
+- **顺带修**：`packages/ui/src/App.vue` 的「正在跟随」横幅颜色净化测试一直红 —— 白名单标记
+  与颜色行之间隔了两行，而测试只在**相邻上一行**认标记。把横幅收成整行、标记紧贴颜色行后转绿
+  （`ui` 单测 64 → 65，含新增的 `settings:ui-open` 那条）。
 
 **同日第六次修正（用户第七轮截图）** —— 上一轮把参数放错地方了，这次纠正：
 - **参数回到"底行上的一个下拉"**（用户要求：「右侧的比例选择也是通过下拉的方式」）：

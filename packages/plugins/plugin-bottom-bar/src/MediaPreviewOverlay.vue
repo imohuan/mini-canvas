@@ -1,5 +1,10 @@
 <script setup lang="ts">
 /**
+ * 根节点是 Teleport：插槽宿主（SlotHost）下发的 class/data-slot-* 继承不了，
+ * 不关掉属性继承 Vue 每次渲染都会警告一次（实测刷屏）。我们本来就不用那些属性。
+ */
+defineOptions({ inheritAttrs: false })
+/**
  * MediaPreviewOverlay —— 素材卡的**全屏预览**浮层（注册在 overlay 槽，Teleport 到 body）。
  *
  * 用户要求（2026-09-30）：「当前预览时是在底部状态栏中进行预览，我要的是全屏，是整个视图」。

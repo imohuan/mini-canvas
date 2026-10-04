@@ -35,6 +35,8 @@ export function apply(ctx: Context): void {
   // 持久化 remap 引擎：装配时读回上次 remap 表并批量应用
   const remapEngine = createShortcutRemapEngine(command, save)
   void remapEngine.restore()
+  // shortcut 域后端被云插件切到云端后，重读一次（否则云端存的重映射键位刷新后进不来）
+  ctx.effect(() => remapEngine.subscribe())
 
   // v2 适配器：命令 registry（含 remap）+ 持久化引擎 → 老版面板需要的查询/改键 API
   const manager = createV2ShortcutManager(command, {

@@ -4,30 +4,24 @@
  * 归本包私有：这些操作不需要内核能力，只是 canvas 与 FileReader 的薄封装。全部函数在
  * **非浏览器环境（node 单测）里返回 null / 空**，所以插件在无头环境 import 本模块不会炸。
  *
- * 为什么上传一律转 dataURL：objectURL 只在当前文档生命周期有效，刷新即失效。dataURL 写进
- * 节点 data 后能直接落盘、刷新照常显示（代价是 localStorage 体积变大，属已知取舍）。
+ * 为什么不再转 dataURL：base64 会把图片撑大约 1/3，写进画布 JSON 既慢又容易撞 localStorage 配额。
+ * 上传/裁剪/旋转/扩展产出的字节统一交给宿主**资源库**（浏览器里是 IndexedDB）保存，
+ * 节点 data 里只留 `resourceId` 引用；刷新后由资源库按 id 重建可显示地址（见 canvas-render 的恢复流程）。
  */
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
 
-/** 加工结果：新的图片地址与它自己的像素尺寸 */
-export interface TransformResult {
-  dataUrl: string
+/** 加工产物：图片字节（交给资源库）与它的像素尺寸 */
+export interface TransformBlobResult {
+  blob: Blob
   width: number
   height: number
 }
 
-/** File → dataURL（浏览器）；失败抛错由调用方处理 */
-export function fileToDataUrl(file: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (typeof FileReader === 'undefined') {
-      reject(new Error('[image] 当前环境不支持 FileReader'))
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result ?? ''))
-    reader.onerror = () => reject(reader.error ?? new Error('[image] 读取文件失败'))
-    reader.readAsDataURL(file)
-  })
+/** 旧形态：加工结果是 dataURL（仅存量测试/兼容路径还在用，新代码走 Blob） */
+export interface TransformResult {
+  dataUrl: string
+  width: number
+  height: number
 }
 
 /**
@@ -72,17 +66,18 @@ async function loadSource(url: string): Promise<{ source: CanvasImageSource; wid
   })
 }
 
-/** 建一块画布并把位图画上去 */
-function paint(width: number, height: number, draw: (c2d: CanvasRenderingContext2D) => void): string | null {
-  if (typeof document === 'undefined' || width <= 0 || height <= 0) return null
+/** 建一块画布并把位图画上去 → PNG Blob（交给资源库保存） */
+function paintBlob(width: number, height: number, draw: (c2d: CanvasRenderingContext2D) => void): Promise<Blob | null> {
+  if (typeof document === 'undefined' || width <= 0 || height <= 0) return Promise.resolve(null)
   const canvas = document.createElement('canvas')
   canvas.width = width
   canvas.height = height
   const c2d = canvas.getContext('2d')
-  if (!c2d) return null
+  if (!c2d) return Promise.resolve(null)
   draw(c2d)
-  const dataUrl = canvas.toDataURL('image/png')
-  return dataUrl.startsWith('data:image') ? dataUrl : null
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob && blob.size > 0 ? blob : null), 'image/png')
+  })
 }
 
 /** 释放位图（ImageBitmap 需要显式 close，<img> 不用） */
@@ -92,17 +87,17 @@ function release(source: CanvasImageSource): void {
 }
 
 /**
- * 按裁剪框（图片像素坐标）裁出新的 dataURL。
+ * 按裁剪框（图片像素坐标）裁出新的 PNG Blob。
  * `baseWidth/baseHeight` 是 data 里记的显示尺寸：原图真实像素与它不一致时按比例换算，
  * 保证"用户框到的内容"与"实际裁下的内容"一致（v1 ImageCropper 同款处理）。
  * 失败（环境不支持/取图失败/结果为空）返回 null，调用方保留原图并提示。
  */
-export async function cropToDataUrl(
+export async function cropToBlob(
   url: string,
   rect: Rect,
   baseWidth: number,
   baseHeight: number,
-): Promise<TransformResult | null> {
+): Promise<TransformBlobResult | null> {
   const loaded = await loadSource(url)
   if (!loaded) return null
   try {
@@ -119,19 +114,19 @@ export async function cropToDataUrl(
     const sw = Math.min(px.width, loaded.width - sx)
     const sh = Math.min(px.height, loaded.height - sy)
     if (sw <= 0 || sh <= 0) return null
-    const dataUrl = paint(sw, sh, (c2d) => c2d.drawImage(loaded.source, sx, sy, sw, sh, 0, 0, sw, sh))
-    if (!dataUrl) return null
-    return { dataUrl, width: sw, height: sh }
+    const blob = await paintBlob(sw, sh, (c2d) => c2d.drawImage(loaded.source, sx, sy, sw, sh, 0, 0, sw, sh))
+    if (!blob) return null
+    return { blob, width: sw, height: sh }
   } finally {
     release(loaded.source)
   }
 }
 
 /**
- * 顺时针旋转 90° 的整数倍，产出新的 dataURL（宽高随 90/270 交换）。
+ * 顺时针旋转 90° 的整数倍，产出新的 PNG Blob（宽高随 90/270 交换）。
  * degrees 归一化到 [0,360)；0 或非浏览器环境返回 null（调用方按"没变化"处理）。
  */
-export async function rotateToDataUrl(url: string, degrees: number): Promise<TransformResult | null> {
+export async function rotateToBlob(url: string, degrees: number): Promise<TransformBlobResult | null> {
   const deg = ((Math.round(degrees / 90) * 90) % 360 + 360) % 360
   if (deg === 0) return null
   const loaded = await loadSource(url)
@@ -140,7 +135,7 @@ export async function rotateToDataUrl(url: string, degrees: number): Promise<Tra
     const swap = deg === 90 || deg === 270
     const outW = swap ? loaded.height : loaded.width
     const outH = swap ? loaded.width : loaded.height
-    const dataUrl = paint(outW, outH, (c2d) => {
+    const blob = await paintBlob(outW, outH, (c2d) => {
       if (deg === 90) {
         c2d.translate(outW, 0)
         c2d.rotate(Math.PI / 2)
@@ -153,9 +148,9 @@ export async function rotateToDataUrl(url: string, degrees: number): Promise<Tra
       }
       c2d.drawImage(loaded.source, 0, 0)
     })
-    if (!dataUrl) return null
+    if (!blob) return null
     // 旋转后原尺寸标记失效（宽高可能互换），故这里按输出位图的实际尺寸回报
-    return { dataUrl, width: outW, height: outH }
+    return { blob, width: outW, height: outH }
   } finally {
     release(loaded.source)
   }

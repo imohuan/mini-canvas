@@ -51,19 +51,24 @@ export const Config = {
       '开启：显示完整拖拽轨迹，并按整条轨迹切割（划到哪删到哪）。关闭：只显示刀锋短尾迹，且只按刀锋短路径切割——完整长轨迹扫到、但刀锋没真正碰到的地方不会误删。',
   },
   // —— 颜色统一归「常规/主题配色」——
+  // 两个颜色都是**可选**（optional）：不给自定义色 → 跟随主题（见下 description）。
+  // 语义与多选框颜色一致：清空 = 回落主题色；只有设置了自定义色才用它。
   pathColor: {
     type: 'color',
-    default: '#38bdf8', // 主题色白名单: 设置项默认值（用户在配色里可改），写进配置而非主题外观
+    default: '',
     label: '切割轨迹颜色',
     group: '常规/主题配色',
-    description: 'Alt 拖拽时画出的完整轨迹线的颜色（半透明发光线条）。',
+    optional: true,
+    description:
+      'Alt 拖拽时画出的完整轨迹线的颜色（半透明发光线条）。清空 = 跟随主题强调色（悬停档）。',
   },
   bladeColor: {
     type: 'color',
-    default: '#38bdf8', // 主题色白名单: 设置项默认值（用户在配色里可改），同上
+    default: '',
     label: '刀锋颜色',
     group: '常规/主题配色',
-    description: '刀锋尾迹/刀尖的主题色（发光描边颜色）。',
+    optional: true,
+    description: '刀锋尾迹/刀尖的主题色（发光描边颜色）。清空 = 跟随主题强调色。',
   },
 } satisfies ConfigSchema
 
@@ -82,8 +87,9 @@ export function edgeCuttingConfigFrom(ctx: Context): EdgeCuttingConfig {
     enabled: read('enabled', true),
     tolerancePx: read('tolerancePx', 8),
     sampleStepPx: read('sampleStepPx', 6),
-    pathColor: read('pathColor', '#38bdf8'), // 主题色白名单: 与 schema 默认值同源（settings 未就绪时的回落）
-    bladeColor: read('bladeColor', '#38bdf8'), // 主题色白名单: 与 schema 默认值同源
+    // 空串 = 没设自定义色 → 由 overlay 的 CSS 变量回落主题色（清空 = 跟随主题）
+    pathColor: read('pathColor', ''),
+    bladeColor: read('bladeColor', ''),
     showCutPath: read('showCutPath', true),
   }
 }

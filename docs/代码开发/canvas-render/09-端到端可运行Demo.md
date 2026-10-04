@@ -292,7 +292,7 @@ export const notePlugin: PluginModule = { name, inject, apply }
 
 ## 6) 进阶 C：设置面板
 
-theme-default 已把 `settingsPanel` 槽的默认赢家（`PluginSettingsDialog`）注册好，也把连线/背景/端口等 config 登记进了 settings。你在 `#ui` 里放个开关控制设置面板显隐即可：
+theme-default 已把 `settingsPanel` 槽的默认赢家（`PluginSettingsContent`）注册好，也把连线/背景/端口等 config 登记进了 settings。你在 `#ui` 里放个开关控制设置面板显隐即可：
 
 ```vue
 <script setup lang="ts">

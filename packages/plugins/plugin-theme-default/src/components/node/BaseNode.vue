@@ -185,13 +185,14 @@ const showMultiRadio = computed(
 )
 
 /**
- * 圆圈的大小 + 反缩放 + 颜色（与标题同一套语义）：保持"屏幕上的大小恒定"，
- * 否则缩到 0.2x 时它会小成一个点、完全起不到指示作用。三个值都来自本插件 Config。
+ * 圆圈的大小 + 反缩放（与标题同一套语义）：保持"屏幕上的大小恒定"，
+ * 否则缩到 0.2x 时它会小成一个点、完全起不到指示作用。
+ * 颜色**不在这里算** —— 它走主题强调色（--ui-accent，见样式里的 color），
+ * 于是自动跟随「常规/主题配色」的强调色与亮/暗主题。
  */
 const radioStyle = computed(() =>
   multiRadioStyle({
     size: MULTI_RADIO.value.size,
-    color: MULTI_RADIO.value.color,
     zoom: zoom.value,
     minZoom: TITLE_MIN_ZOOM.value,
   }),
@@ -662,17 +663,34 @@ watch(
 //
 // 注意：这只是"允许"，按钮最终显隐在 MovingHandle 内部——zone hover(keepVisible) 或 选中(selected) 才真正亮。
 // 鼠标只停卡片 body（未进任何 zone）时 visible 虽 true，但 keepVisible/selected 均 false → 不亮（只亮靠近的端口）。
-const shouldShowHandles = computed(
+/**
+ * **硬压制**门：命中其一，端口区就该**完全不吃指针事件**（不只是按钮不亮）。
+ *
+ * 为什么必须单独抽出来（2026-10-03 实测踩到的真 bug）：以前只有 shouldShowHandles 一个布尔，
+ * 它只传给 MovingHandle 的 :visible，而 :visible 只控制**按钮的 opacity** ——
+ * 那圈透明的"端口吸附接收区"(.port-follow-zone) 始终 pointer-events: all、尺寸 87×176。
+ * 于是多选（或抓手/低细节/拖节点）时按钮虽已隐藏，鼠标按住那块**看不见的区域**照样能起手拖出连线
+ * （用户报："多选后依然能从框里的节点拖出连接线"）。把这几条抽成 handleBlocked 喂给接收区，
+ * 它才真的不接事件。
+ *
+ * 注意它**不含** (isHovered || portHovered || selected)——那一项是"软可见"（hover/选中才亮），
+ * 若并进来会在未 hover 时就把接收区关掉，鼠标就永远进不来（鸡生蛋）。
+ */
+const handleBlocked = computed(
   () =>
-    CANVAS_NODES_DRAGGABLE.value &&
-    !lowDetail.value &&
-    !suppressHandles.value &&
-    !isCurrentConnectingNode.value &&
-    !interaction.isNodeDragging.value &&
-    // 多选时压掉自身端口：十几个节点的圆球会和多选框上的"批量连线端口"混在一起，
-    // 分不清该拖哪个（用户要求：多选时节点的 MouseHandle 全不显示）。
-    !isMultiSelected.value &&
-    (isHovered.value || portHovered.value || props.selected),
+    !CANVAS_NODES_DRAGGABLE.value || // 抓手工具：拖动是平移画布，端口留着只会误导
+    lowDetail.value || // 低细节：端口整体不画
+    suppressHandles.value || // 拖线中全局压
+    isCurrentConnectingNode.value || // 本节点是本次拖线源
+    interaction.isNodeDragging.value || // 正在拖节点
+    // 多选：十几个节点的圆球 + 接收区会和多选框上的"批量连线端口"混在一起，
+    // 分不清该拖哪个（用户要求：多选时节点自身的端口全不接事件）。
+    isMultiSelected.value,
+)
+
+/** 端口"允许显示"门 = 非硬压制 且 (鼠标在卡片上 || 鼠标在端口 zone 上 || 选中) */
+const shouldShowHandles = computed(
+  () => !handleBlocked.value && (isHovered.value || portHovered.value || props.selected),
 )
 
 // ============ 拖线"禁止端口落线"（隐藏与源同类型的端口，避免输入连输入/输出连输出）============
@@ -824,7 +842,7 @@ function clamp(value: number, min: number, max: number): number {
            纯指示，不接事件 —— 点击行为交给卡片本身（Shift+点节点 = 从选中集里去掉它）。 -->
       <div
         v-if="showMultiRadio"
-        class="v2-multi-radio nodrag nopan"
+        class="v2-multi-radio nodrag nopan mc-export-ignore"
         :style="radioStyle"
         role="presentation"
         aria-hidden="true"
@@ -896,6 +914,7 @@ function clamp(value: number, min: number, max: number): number {
            加上 Strict 模式 isValidHandle 类型校验，行为门是双保险。 -->
       <MovingHandle v-if="showTargetHandle" ref="targetHandleRef" id="target" type="target" :position="Position.Left"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedTargetPort" :selected="props.selected"
+        :blocked="handleBlocked"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
@@ -911,7 +930,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
            反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
-      <div v-if="cardResizable" class="resize-handle" :class="{ 'is-resizing': cardIsResizing }"
+      <div v-if="cardResizable" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
         :style="{ transform: `scale(${resizeHandleScale})` }" @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -922,6 +941,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 右侧输出口(source)：同 target。 -->
       <MovingHandle v-if="showSourceHandle" ref="sourceHandleRef" id="source" type="source" :position="Position.Right"
         :visible="shouldShowHandles" :disabled="isCurrentConnectingNode || blockedSourcePort" :selected="props.selected"
+        :blocked="handleBlocked"
         :rest-offset="handleParams.handleRestOffset" :cursor-gap="handleParams.handleCursorGap"
         :button-size="handleParams.handleButtonSize" :zone-width="portZoneWidth" :zone-height="portZoneHeight"
         :zone-offset="portZoneOffset" :zone-shape="portZoneShape" :zone-arc-ratio="portZoneArcRatio"
@@ -1155,7 +1175,9 @@ function clamp(value: number, min: number, max: number): number {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 尺寸 / 反缩放 / 颜色由 multiRadioStyle() 内联给（配置驱动），这里只管定位与不接事件 */
+  /* 尺寸 / 反缩放 由 multiRadioStyle() 内联给；**颜色走主题强调色**（不再有单独的颜色配置项，
+     用户要求删掉它）—— 在「常规/主题配色」里改强调色或切亮/暗主题，这个标记自动跟随。 */
+  color: var(--ui-accent, #0891b2);
   pointer-events: none;
 }
 

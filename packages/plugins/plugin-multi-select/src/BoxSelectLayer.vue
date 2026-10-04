@@ -16,15 +16,35 @@
  * 只读渲染上下文（useCanvasRender）拿 pane/screenToFlow；数据写走内核 ctx.get('selection')。
  * 纯碰撞逻辑在 multiSelectEngine（hitTestRects），本组件只做 DOM 手势与换算。
  */
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender, beginSelecting, endSelecting } from '@mini-canvas/canvas-render'
 import type { SelectionService } from '@mini-canvas/canvas-data'
 import type { NodeLayoutService } from '@mini-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
 import { BoxSelectClickGuard } from './boxSelectGuard'
+import {
+  MULTI_SELECT_FRAME_KEYS,
+  MULTI_SELECT_COLOR_KEYS,
+  resolveMultiSelectFrameConfig,
+  applyMultiSelectFrameChange,
+} from './multiSelectConfig'
+import { currentThemeMode, watchThemeMode } from '@mini-canvas/canvas-render'
 
 const { flow, ctx, interaction } = useCanvasRender()
 const pane = flow.pane
+
+// 绘制框的外观（线型/线宽/填充）：颜色走主题 token（--ui-select-box），其余来自配置。
+// 订阅 settings.onChange 实时生效（与 SelectionFrame 同源那一套）。
+const settings = (): { get(k: string): unknown; onChange(cb: (k: string, v: unknown) => void): { dispose(): void } } | undefined =>
+  ctx.tryGet('settings')
+const themeMode = ref<'light' | 'dark'>(currentThemeMode())
+const themeOff = watchThemeMode((m) => { themeMode.value = m })
+const boxCfg = ref(resolveMultiSelectFrameConfig((k) => settings()?.get(k), themeMode.value).boxSelect)
+const offSettings = settings()?.onChange(() => {
+  // 颜色格（亮/暗）也走全量重算：改动可能来自任一主题格
+  boxCfg.value = resolveMultiSelectFrameConfig((k) => settings()?.get(k), themeMode.value).boxSelect
+})
+onBeforeUnmount(() => themeOff())
 
 const DRAG_THRESHOLD = 4
 
@@ -95,12 +115,16 @@ function onPointerMove(e: PointerEvent): void {
 
   if (!boxEl) {
     boxEl = document.createElement('div')
-    // 框选框配色走主题 token（--ui-guide*，由 <html data-canvas-theme> 切换；
-    // 值是运行时取，必须在这里拼字符串，不能写死进 <style>）
-    const guide = getComputedStyle(document.documentElement).getPropertyValue('--ui-guide').trim() || '#3b82f6' /* 主题色白名单: 运行时读 CSS 变量的兜底（无主题表时的浅色值） */
-    const veil = getComputedStyle(document.documentElement).getPropertyValue('--ui-guide-veil').trim() || 'rgba(59,130,246,0.06)' /* 主题色白名单: 同上，--ui-guide-veil 的兜底 */
+    // 绘制框（Shift 拖拽时画出来的那个框）：
+    //  - 颜色走**主题 token** --ui-select-box（用户在「常规/主题配色」里改，用户口径"删掉自定义色就用主题色"）；
+    //  - 线型 / 线宽 / 填充来自「布局/多选」的绘制框三项配置。
+    // 位置/尺寸随拖拽逐帧改（updateBoxVisual），样式只在首次建元素时定一次。
+    const c = boxCfg.value
+    const color = 'var(--ui-select-box, var(--ui-accent, #0891b2))'
     boxEl.style.cssText =
-      `position:fixed;border:1.5px dashed ${guide};background:${veil};` +
+      'position:fixed;' +
+      'border:' + c.lineWidth + 'px ' + c.lineStyle + ' ' + color + ';' +
+      'background:' + (c.fillOpacity > 0 ? 'color-mix(in srgb, ' + color + ' ' + c.fillOpacity * 100 + '%, transparent)' : 'transparent') + ';' +
       'pointer-events:none;z-index:9999;border-radius:2px;'
     document.body.appendChild(boxEl)
   }
@@ -172,7 +196,10 @@ watch(pane, (el) => {
   if (el) attach()
 })
 onMounted(() => attach())
-onBeforeUnmount(() => detach())
+onBeforeUnmount(() => {
+  detach()
+  offSettings?.dispose()
+})
 </script>
 
 <template>

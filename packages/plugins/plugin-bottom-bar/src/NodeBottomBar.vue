@@ -394,8 +394,8 @@ const ICON_EXPAND =
 /** 收起（展开态按钮）：把四角箭头反过来朝内 */
 const ICON_COLLAPSE =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
-const ICON_GEAR =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+const ICON_SETTINGS =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" y1="4" x2="14" y2="4"/><line x1="10" y1="4" x2="3" y2="4"/><line x1="21" y1="12" x2="12" y2="12"/><line x1="8" y1="12" x2="3" y2="12"/><line x1="21" y1="20" x2="16" y2="20"/><line x1="12" y1="20" x2="3" y2="20"/><line x1="14" y1="2" x2="14" y2="6"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="16" y1="18" x2="16" y2="22"/></svg>'
 
 /** 类型名 → 内置回退图标（节点类型没声明 icon 时用；与各节点插件的图标同款线性 SVG） */
 const FALLBACK_TYPE_ICONS: Record<string, string> = {
@@ -445,16 +445,46 @@ function toggleTranslate(): void {
   onPromptUpdate(toggleTranslateInstruction(prompt.value))
 }
 /**
- * 「全局设置」入口：打开应用的**全局设置面板**（与顶栏那枚齿轮同一个面板）。
+ * 全局设置区是否展开。
  *
- * 走内核事件（settings:ui-open）：本组件在插件里，够不到装配层的 settingsOpen，
- * 装配层订阅该事件后把面板打开 —— 与关闭通道 settings:ui-close 对称。
- * 面板内容还没定（用户说暂时占位），但**入口必须真的能用**（用户实测反馈：
- * 「右侧你的这个设置按钮也给我搞没了，点击也没反应」）。
+ * 用户要求：点右侧齿轮**不弹窗**，而是在底栏**下面追加一块区域**显示全局设置
+ * （类似底部状态栏慢慢增高，带一条分割线，内容暂用占位文本）。
  */
-function openGlobalSettings(): void {
-  const bus = ctx as unknown as { emit?: (name: string) => void }
-  bus.emit?.('settings:ui-open')
+const settingsOpen = ref(false)
+
+/**
+ * 全局设置区的展开/收起动画用**测量高度**做（不用 grid-template-rows）。
+ *
+ * 为什么：grid-template-rows 的 0fr↔1fr 过渡在部分浏览器里会**不补间、直接跳变**，
+ * 即使能补间也是逐帧改布局（reflow），视觉上就是"一卡一卡"。改成把元素高度从 0 显式过渡到
+ * 量出来的 scrollHeight —— height 过渡在所有浏览器都稳，且只影响这一个盒子的布局。
+ * 到位后 height 归 auto，避免内容变化（换行/字号）时被钉死。
+ */
+const globalRef = ref<HTMLElement | null>(null)
+
+function onGlobalEnter(el: Element): void {
+  const h = el as HTMLElement
+  h.style.height = '0px'
+  h.style.opacity = '0'
+  // 强制读一次布局，确保上面写的 0 生效（否则浏览器可能合并成"从 auto 开始"）
+  void h.offsetHeight
+  h.style.height = h.scrollHeight + 'px'
+  h.style.opacity = '1'
+}
+
+function onGlobalAfterEnter(el: Element): void {
+  const h = el as HTMLElement
+  h.style.height = ''
+  h.style.opacity = ''
+}
+
+function onGlobalLeave(el: Element): void {
+  const h = el as HTMLElement
+  // 先从 auto 收成具体像素值，才能从该值过渡到 0
+  h.style.height = h.scrollHeight + 'px'
+  void h.offsetHeight
+  h.style.height = '0px'
+  h.style.opacity = '0'
 }
 </script>
 
@@ -592,17 +622,17 @@ function openGlobalSettings(): void {
         <span class="nb-icon-btn nb-icon-btn--static" :title="fieldSummary || '生成参数'">
           <span aria-hidden="true" v-html="ICON_SPARKLE" />
         </span>
-        <!-- 全局设置（右侧 = 跟插件/动作无关的全局项）：**占位**。
-             用户要求：位置在右侧、跟插件/动作无关；点它打开应用的全局设置面板。
-             面板里的内容暂不实现（还没想好写什么），但入口要真的能点开。 -->
+        <!-- 全局设置（右侧 = 跟插件/动作无关的全局项）：点它在底栏下面展开一块设置区 -->
         <button
           class="nb-icon-btn"
+          :class="{ 'is-on': settingsOpen }"
           type="button"
-          title="全局设置"
+          :title="settingsOpen ? '收起全局设置' : '展开全局设置'"
+          :aria-expanded="settingsOpen"
           aria-label="全局设置"
-          @click.stop="openGlobalSettings"
+          @click.stop="settingsOpen = !settingsOpen"
         >
-          <span aria-hidden="true" v-html="ICON_GEAR" />
+          <span aria-hidden="true" v-html="ICON_SETTINGS" />
         </button>
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
         <button
@@ -619,6 +649,19 @@ function openGlobalSettings(): void {
       </div>
     </div>
 
+    <!-- 全局设置区：**在底栏下面追加的一块**（用户要求：不弹窗、底栏慢慢增高式的展开、
+         一条分割线 + 里面显示全局设置）。动画用**高度过渡**让底栏平滑增高（见 script 里的
+         onGlobalEnter/Leave：把 height 0↔scrollHeight 显式写好，比 grid-template-rows 稳）。
+         内容暂时是占位文本（用户说后期自己做实现）。 -->
+    <Transition name="nb-gset" @enter="onGlobalEnter" @after-enter="onGlobalAfterEnter" @leave="onGlobalLeave">
+      <div v-if="settingsOpen" ref="globalRef" class="nb-global nodrag nopan nowheel">
+        <div class="nb-global-inner">
+          <p class="nb-global-title">全局设置</p>
+          <p class="nb-global-hint">这里放全局设置（与插件/动作无关）。暂为占位，后续实现。</p>
+        </div>
+      </div>
+    </Transition>
+
   </div>
   </div>
   </Teleport>
@@ -627,6 +670,55 @@ function openGlobalSettings(): void {
 <style scoped>
 /* 视觉照 docs/design/ui-style-guide.md；位置（贴边/居中/反缩放）由壳的下插槽定位层给。
    尺寸照 LibTV 参考实测：面板圆角 16、内边距 8、pill 高 26、素材卡 48、发送按钮 Ø34。 */
+
+/* —— 全局设置区（底栏下面追加的一块；用户要求：不弹窗、底栏慢慢增高式展开） ——
+   展开/收起靠**高度过渡**（JS 里把 height 0↔scrollHeight 写好），不是 grid-template-rows：
+   后者在部分浏览器不补间、且逐帧改布局，观感就是「一卡一卡」。height 过渡到处都稳。 */
+.nb-global {
+  overflow: hidden;
+  /*
+   * 抵消父容器 .nb-root 的 flex gap: 8px。
+   *
+   * 为什么必须抵消（用户实测："高度缩到 0 之后最后一个过渡很难受"）：flex gap 是**父元素**
+   * 在相邻 item 之间留的，不属于本元素的高度 —— 自定义 height 从 H 过渡到 0 时，那 8px gap
+   * 一直还在，等 v-if 把本元素摘掉的那一刻 gap 才消失 → 末尾"啪"地跳 8px（实测：346→…→282
+   * 停住，然后 282→274）。给一个等量负 margin 把它抵成 0，间距就完全由**本元素内部**承担
+   * （见 .nb-global-inner 的 margin-top），跟着 height 一起被裁剪、一起动画，末尾不再跳。
+   */
+  margin-top: -8px;
+}
+.nb-global-inner {
+  /* 分割线上方的留白（原来由 flex gap 8 + 这里 10 组成；gap 抵消后补足到 18） */
+  margin-top: 18px;
+  padding-top: 10px;
+  /* 与上面内容之间一条分割线（用户要求） */
+  border-top: 1px solid var(--ui-line, #e2e5ea);
+}
+.nb-global-title {
+  margin: 0;
+  color: var(--ui-ink, #18202b);
+  font-size: 13px;
+  font-weight: 600;
+}
+.nb-global-hint {
+  margin: 4px 0 0;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+/* height + opacity 一起过渡；内层轻微上滑，让「长出来」更有层次 */
+.nb-gset-enter-active,
+.nb-gset-leave-active {
+  transition: height 0.26s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.22s ease;
+}
+.nb-gset-enter-active .nb-global-inner,
+.nb-gset-leave-active .nb-global-inner {
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.nb-gset-enter-from .nb-global-inner,
+.nb-gset-leave-to .nb-global-inner {
+  transform: translateY(-6px);
+}
 
 /* 外壳：收起时完全透明（display:contents，跟没有一样，保持原浮层布局）；
    展开时铺满视口、居中、加遮罩当大弹窗用（用户要求「变成 dialog 的形式」）。 */
@@ -997,12 +1089,9 @@ function openGlobalSettings(): void {
   flex: none;
   min-width: 0;
 }
-/*
- * 两个下拉各自给一个最小宽度（用户实测反馈）：不设的话，模型名稍长就把触发框压成
- * 一条窄缝，看着很挤；设了下限后，名字统一在 148/150px 起跳，两个框宽度也齐整。
- */
+/* 模型下拉给一个最小宽度（用户实测反馈）：不设的话，模型名稍长就把触发框压成一条窄缝。
+   参数下拉**不设**下限 —— 它的摘要本来很短（16:9），按内容宽即可，见 .nb-field--params。 */
 .nb-field--action {
-  /* 两个下拉给同一档最小宽度，底行看起来齐整（用户实测反馈：之前一个宽一个窄） */
   min-width: 148px;
   max-width: 200px;
 }

@@ -128,15 +128,8 @@ export function computePasteOffset(
 }
 
 /**
- * id 生成器默认实现（老版同款：oldId-copy-时间戳-随机；保证不与内核数字短 id 撞车）。
- */
-export function defaultIdGenerator(oldId: string): string {
-  return `${oldId}-copy-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-}
-
-/**
  * 快照 → 粘贴内容（克隆 + 重映射 + 平移）：
- * - 每个节点新 id = genId(oldId)（缺省 defaultIdGenerator），old→new 记入 idMap；
+ * - 每个节点新 id = genId(oldId)，old→new 记入 idMap；
  * - 节点 position 整体 + offset；data 深拷贝（剪贴板快照已剥干净，直接引用快照 data 即可，不共享画布节点）；
  * - 父节点在同批选中集内 → parentId 跟随重映射；父不在批内 → 剥离 parentId(防悬挂引用)；
  * - 边按 idMap 重连 source/target；映射不到任一端则丢弃(理论不发生，防御)。
@@ -144,7 +137,9 @@ export function defaultIdGenerator(oldId: string): string {
 export function remapSnapshot(
   snapshot: ClipboardSnapshot,
   offset: { offsetX: number; offsetY: number },
-  genId: (oldId: string) => string = defaultIdGenerator,
+  /** 新 id 生成器。**必须由调用方注入** —— 统一走内核 `doc.nextNodeId()`（自增数字），
+   *  本层不再提供"自造 id"的默认实现：那正是画布里 id 形态五花八门的来源。 */
+  genId: (oldId: string) => string,
 ): { nodes: ClipboardNode[]; edges: ClipboardEdge[]; idMap: Map<string, string> } {
   const idMap = new Map<string, string>()
   // 先全量建 old→new 映射（父/子谁先谁后都安全：父引用查找不依赖数组序）

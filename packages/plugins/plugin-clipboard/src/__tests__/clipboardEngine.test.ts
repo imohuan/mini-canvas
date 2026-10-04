@@ -7,7 +7,6 @@ import {
   makeSnapshot,
   computePasteOffset,
   remapSnapshot,
-  defaultIdGenerator,
 } from '../clipboardEngine'
 
 const N = (id: string, x: number, y: number, size?: { w: number; h: number }) => ({
@@ -127,12 +126,5 @@ describe('remapSnapshot', () => {
     const snap = makeSnapshot([N('a', 0, 0)], [E('ab', 'a', 'ghost')], 1)
     const { edges } = remapSnapshot(snap, { offsetX: 0, offsetY: 0 }, (old) => 'x' + old)
     expect(edges).toEqual([])
-  })
-})
-
-describe('defaultIdGenerator', () => {
-  it('带 oldId-copy 前缀（不与内核数字短 id 撞车）', () => {
-    const out = defaultIdGenerator('5')
-    expect(out.startsWith('5-copy-')).toBe(true)
   })
 })

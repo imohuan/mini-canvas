@@ -31,6 +31,7 @@ interface SaveService {
   flush(): Promise<void>                                            // 立即把脏队列落盘
   isDirty(): boolean                                                // 是否有未落盘脏 key
   useAdapter(type: SaveType, adapter: StorageAdapter): void         // 切换某 type 的 adapter
+  adapterOf(type: SaveType): StorageAdapter                          // 取该 type 当前的 adapter（只读）
 }
 type SaveType = 'config' | 'canvas' | 'resource' | 'shortcut'
 ```
@@ -112,7 +113,43 @@ interface StorageAdapter {                     // storage/types.ts:24
   get<T>(key: string): Promise<T | undefined>
   set(key: string, value: unknown): Promise<void>
   remove(key: string): Promise<void>
+
+  // —— 资源形式（二进制：图片 / 视频 / 音频）。不支持的后端可以不实现这三个。 ——
+  putResource?(blob: Blob, opts: ResourcePutOptions): Promise<string>   // 存字节 → 持久引用（ref）
+  resolveResource?(ref: string): Promise<string | undefined>            // ref → 当前可用显示地址
+  removeResource?(ref: string): Promise<void>
 }
+```
+
+### 4.0 两种形式：文本 与 资源
+
+**一个 adapter 同时管两种形式的数据**（这是设计本意）：
+
+| 形式 | 方法 | 存什么 |
+| --- | --- | --- |
+| 文本 | `get / set / remove` | JSON：配置、画布、快捷键 |
+| 资源 | `putResource / resolveResource / removeResource` | 二进制：图片、视频、音频 |
+
+**两条硬规则**（踩过坑，别再违反）：
+
+1. **节点里只存 ref（引用），绝不存 URL。** URL 是**临时**的 —— 本地每次刷新都是一个全新的
+   `blob:` 地址，旧的自然作废。存进节点里，刷新后必然失效。
+2. **显示地址永远现算**：`resolveResource(ref)` 才产出地址。本地实现是「取回字节 → 新建
+   objectURL」，云端实现是「引用直接拼服务器地址」（内容哈希，稳定，不必下载）。
+
+于是「本地存 DB、云端存文件夹」只是**换了 resource 那一格的 adapter**：
+
+```ts
+save.useAdapter('resource', createIndexedDbResourceAdapter())  // 本地：进 IndexedDB
+save.useAdapter('resource', createCloudResourceAdapter(api))   // 云端：进画布文件夹
+```
+
+资源库（`ResourceStore`，服务名 `resources`）**不自己攥后端**，而是现取（`save.adapterOf('resource')`）——
+这样 `useAdapter` 一换，资源就跟着走。
+
+```ts
+const ref = await resources.put(blob, { kind: 'image', name: 'a.png' })  // 存字节 → 拿引用
+const url = await resources.resolve(ref)                                // 引用 → 现在的显示地址
 ```
 
 同一 type 任一时刻只有一个激活 adapter（换云端 = 整包迁移，不做双写）。adapter 只看到**物理 key**。

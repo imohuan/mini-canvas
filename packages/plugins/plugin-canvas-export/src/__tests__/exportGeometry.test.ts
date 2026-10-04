@@ -7,6 +7,7 @@ import {
   unionRect,
   contentBounds,
   expandRect,
+  expandRectTop,
   intersects,
   roundRectOutward,
   planTiles,
@@ -28,6 +29,7 @@ import {
   MAX_EXPORT_DIMENSION,
   NODE_TILE_MARGIN,
   EDGE_TILE_MARGIN,
+  EXPORT_IGNORE_CLASS,
   type Rect,
   type NodeRect,
 } from '../exportGeometry'
@@ -77,6 +79,19 @@ describe('expandRect', () => {
   })
   it('非有限数视作 0', () => {
     expect(expandRect({ x: 0, y: 0, w: 10, h: 10 }, Number.NaN)).toEqual({ x: 0, y: 0, w: 10, h: 10 })
+  })
+})
+
+describe('expandRectTop（只扩上边：给卡片上缘之外的标题条留位置）', () => {
+  it('只改 y 与 h，左右与下边不动', () => {
+    expect(expandRectTop({ x: 10, y: 20, w: 100, h: 50 }, 30)).toEqual({ x: 10, y: -10, w: 100, h: 80 })
+  })
+  it('pad=0 原样（不改变左右下）', () => {
+    expect(expandRectTop({ x: 0, y: 0, w: 10, h: 10 }, 0)).toEqual({ x: 0, y: 0, w: 10, h: 10 })
+  })
+  it('负数/非有限 pad 视作 0', () => {
+    expect(expandRectTop({ x: 0, y: 0, w: 10, h: 10 }, -5)).toEqual({ x: 0, y: 0, w: 10, h: 10 })
+    expect(expandRectTop({ x: 0, y: 0, w: 10, h: 10 }, Number.NaN)).toEqual({ x: 0, y: 0, w: 10, h: 10 })
   })
 })
 
@@ -273,6 +288,7 @@ describe('keepExportElement（克隆阶段决定留谁）', () => {
     dataId: null as string | null,
     innerEdgeId: null as string | null,
     debugClasses: DEBUG,
+    ignoreClasses: [] as string[],
     keepNodes: new Set(['A']),
     keepEdges: new Set(['e-AB']),
     ...over,
@@ -299,6 +315,26 @@ describe('keepExportElement（克隆阶段决定留谁）', () => {
   it('调试叠加一律剔除（不管它挂在哪）', () => {
     expect(keepExportElement(base({ classes: ['v2-debug-overlay'] }))).toBe(false)
     expect(keepExportElement(base({ classes: ['vue-flow__node', 'moving-handle-debug'], dataId: 'A' }))).toBe(false)
+  })
+  it('通用「别截我」标记：挂上它的元素（含子树）一律剔除（多选圆点/端口球/拖柄/选框）', () => {
+    const marked = base({ ignoreClasses: [EXPORT_IGNORE_CLASS] })
+    expect(keepExportElement({ ...marked, classes: [EXPORT_IGNORE_CLASS] })).toBe(false)
+    // 标记在节点内层元素上：即便那层是某节点的子树，也照样剔除
+    expect(
+      keepExportElement({ ...marked, classes: ['v2-multi-radio', EXPORT_IGNORE_CLASS] }),
+    ).toBe(false)
+    expect(
+      keepExportElement({ ...marked, classes: ['moving-handle-anchor', EXPORT_IGNORE_CLASS] }),
+    ).toBe(false)
+    // 没有标记的普通元素照常保留
+    expect(keepExportElement(base({ classes: ['v2-multi-radio'] }))).toBe(true)
+  })
+  it('标记优先于节点成员判定：即便节点本身在白名单里，带标记的子元素也剔除（剔除的是子元素而非节点）', () => {
+    // 这条锁的是语义：ignore 判定在 node/edge 判定之前，所以「节点的子元素」能被单独摘掉
+    const marked = base({ ignoreClasses: [EXPORT_IGNORE_CLASS] })
+    expect(
+      keepExportElement({ ...marked, classes: [EXPORT_IGNORE_CLASS, 'vue-flow__node'], dataId: 'A' }),
+    ).toBe(false)
   })
 })
 describe('normalizeScale', () => {
@@ -423,5 +459,45 @@ describe('planExport', () => {
       padding: 4,
     })
     expect(plan).toBeNull()
+  })
+
+  it('选中：topPadding 只把范围上边再抬一段（给卡片上缘之外的标题条留位置）', () => {
+    const plan = planExport({
+      mode: 'selected',
+      nodes,
+      edges,
+      selectedNodeIds: new Set(['A', 'B']),
+      padding: 4,
+      topPadding: 30,
+    })
+    // 原：-4,-4,308,108 → 上边再抬 30：y=-34,h=138；左右与下边不变
+    expect(plan?.rect).toEqual({ x: -4, y: -34, w: 308, h: 138 })
+  })
+
+  it('选中：topPadding 缺省/为 0 时范围与旧行为完全一致（不改变既有导出）', () => {
+    const baseReq = {
+      mode: 'selected' as const,
+      nodes,
+      edges,
+      selectedNodeIds: new Set(['A', 'B']),
+      padding: 4,
+    }
+    const without = planExport(baseReq)
+    const zero = planExport({ ...baseReq, topPadding: 0 })
+    expect(without?.rect).toEqual({ x: -4, y: -4, w: 308, h: 108 })
+    expect(zero?.rect).toEqual(without?.rect)
+  })
+
+  it('全量：topPadding 同样只抬上边（标题条在两张图里都该进图）', () => {
+    const plan = planExport({
+      mode: 'full',
+      nodes,
+      edges,
+      selectedNodeIds: new Set(),
+      padding: 4,
+      topPadding: 20,
+    })
+    // 原：-4,-4,558,558 → 上边再抬 20
+    expect(plan?.rect).toEqual({ x: -4, y: -24, w: 558, h: 578 })
   })
 })

@@ -1,5 +1,8 @@
 /**
- * 多选标记的三项配置必须真的出现在本插件的 Config（设置页面）里。
+ * 多选标记的两项配置必须真的出现在本插件的 Config（设置页面）里。
+ *
+ * 注意：**颜色已不是配置项**（用户要求删掉「多选标记颜色」）—— 它改吃主题的强调色
+ * （--ui-accent），在「常规/主题配色」里统一调，不再单列一格。所以这里只查大小与开关两项。
  *
  * 为什么单独一条：multiRadio.ts 的纯函数测的是"给了配置怎么算"，但用户要的是
  * "能在设置页面里调"。若只加纯函数而忘了在 Config 里声明，设置面板上什么都看不到 —— 这个
@@ -14,20 +17,21 @@ import {
   MULTI_RADIO_SIZE_MAX,
 } from '../multiRadio'
 
-describe('多选标记的 Config 声明（设置页面里要能看到这三项）', () => {
-  it('三项都在 Config 里（大小 / 颜色 / 低缩放显示）', () => {
+describe('多选标记的 Config 声明（设置页面里要能看到这两项）', () => {
+  it('两项都在 Config 里（大小 / 低缩放显示）', () => {
     for (const key of Object.values(MULTI_RADIO_KEYS)) {
       expect(Config[key], key + ' 未在 Config 里声明').toBeDefined()
     }
+    // 颜色键已删除：不该再出现在 Config 里
+    expect(Config['nodeMultiRadioColor']).toBeUndefined()
   })
 
-  it('控件类型对得上：大小=数字、颜色=颜色选择器、开关=布尔', () => {
+  it('控件类型对得上：大小=数字、开关=布尔', () => {
     expect(Config[MULTI_RADIO_KEYS.size].type).toBe('number')
-    expect(Config[MULTI_RADIO_KEYS.color].type).toBe('color')
     expect(Config[MULTI_RADIO_KEYS.showInLowDetail].type).toBe('boolean')
   })
 
-  it('三项归在「节点/多选标记」一组（设置页面里排在一起）', () => {
+  it('两项归在「节点/多选标记」一组（设置页面里排在一起）', () => {
     for (const key of Object.values(MULTI_RADIO_KEYS)) {
       expect(Config[key].group).toBe('节点/多选标记')
     }
@@ -35,7 +39,6 @@ describe('多选标记的 Config 声明（设置页面里要能看到这三项�
 
   it('默认值与组件读到的默认值同源（不各写一份）', () => {
     expect(Config[MULTI_RADIO_KEYS.size].default).toBe(DEFAULT_MULTI_RADIO.size)
-    expect(Config[MULTI_RADIO_KEYS.color].default).toBe(DEFAULT_MULTI_RADIO.color)
     expect(Config[MULTI_RADIO_KEYS.showInLowDetail].default).toBe(
       DEFAULT_MULTI_RADIO.showInLowDetail,
     )
@@ -46,7 +49,7 @@ describe('多选标记的 Config 声明（设置页面里要能看到这三项�
     expect(Config[MULTI_RADIO_KEYS.size].max).toBe(MULTI_RADIO_SIZE_MAX)
   })
 
-  it('三项都有中文 label 与 description（设置页面不是裸键名）', () => {
+  it('两项都有中文 label 与 description（设置页面不是裸键名）', () => {
     for (const key of Object.values(MULTI_RADIO_KEYS)) {
       expect(Config[key].label).toBeTruthy()
       expect(Config[key].description).toBeTruthy()

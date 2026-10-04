@@ -267,7 +267,9 @@ export function apply(ctx: Context): void {
     // 端口位置 = 松手点：卡片按 portSideOf 摆放，让对应边的竖直中点落在松手点上。
     const size = connectionMenuCardSize(items.length)
     const position = placeByPortAnchor(fact.flowPosition, size, portSideOf(fact))
-    const nodeId = `temp-menu-${Date.now()}`
+    // 临时菜单节点也向内核要号（自增数字）：id 形态全画布统一。
+    // 它是 transient（不落盘/不进历史），号被占用一次无所谓，删掉即作废。
+    const nodeId = doc.nextNodeId()
     // ① 先放临时节点（进 nodeStore → VueFlow 渲染）。transient → 不进历史/不落盘。
     //    卡片尺寸由本插件的外壳按 items 自行计算（与 node.size 同源），无需再往 data 里塞尺寸。
     graph.addNodes([

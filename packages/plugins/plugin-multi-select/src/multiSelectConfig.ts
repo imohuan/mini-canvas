@@ -22,10 +22,33 @@ import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
 /** 线型：实线 / 虚线 / 点线 */
 export type FrameLineStyle = 'solid' | 'dashed' | 'dotted'
 
+/**
+ * 三个框的颜色配置（挂「常规/主题配色」与「常规/暗色主题配色」，与其它主题色同层）。
+ *
+ * 为什么在这里声明而不是进 canvas-render 的色板：这些颜色**属于多选插件**——插件卸载后
+ * 这几格配置也该一起消失（用户实测报过"卸载了多选，颜色还留在主题配色里"）。declareConfig
+ * 的清理函数随插件 fiber 回收，正好实现这一点。
+ *
+ * 颜色语义（用户口径）：**可选**；清空 = 回落主题强调色（--ui-accent）。
+ */
+export const MULTI_SELECT_COLOR_KEYS = {
+  boxLight: 'multiSelectBoxColorLight',
+  boxDark: 'multiSelectBoxColorDark',
+  outerLight: 'multiSelectFrameOuterColorLight',
+  outerDark: 'multiSelectFrameOuterColorDark',
+  innerLight: 'multiSelectFrameInnerColorLight',
+  innerDark: 'multiSelectFrameInnerColorDark',
+} as const
+
 /** 一个框的描边样式 */
 export interface FrameStrokeStyle {
-  /** 线色（hex） */
-  color: string
+  /**
+   * 线色（hex）—— **可缺省**。缺省 = 用主题配色里的对应 token（见 themePalette）。
+   *
+   * 用户口径："颜色支持删除，删除之后默认使用主题颜色；只有当该颜色存在时才用它。"
+   * 所以这里不是"必填 + 有默认值"，而是"可为空"：空 → 由 CSS 变量（--ui-guide / --ui-accent…）兜。
+   */
+  color?: string
   /** 线型 */
   lineStyle: FrameLineStyle
   /** 线宽（px） */
@@ -58,6 +81,21 @@ export interface MultiSelectFrameConfig {
   outer: FrameStrokeStyle
   /** 内框（小框）样式：紧贴节点并集 */
   inner: FrameStrokeStyle
+  /**
+   * **绘制框**（Shift 拖拽时那个随鼠标画出来的框）的样式。
+   *
+   * 概念区分（用户口径）：拖拽时画出来的叫**绘制框**；选中之后围着节点出现的那两条线叫**多选框**。
+   * 颜色不在这里 —— 它跟多选框一样走主题配色（见 themePalette 的三个颜色 token），
+   * 于是"删掉自定义色 → 回落主题色"这一套对三个框一致生效。
+   */
+  boxSelect: BoxSelectStyle
+}
+
+/** 绘制框的样式（颜色走主题 token，故此处只有线型/线宽/填充） */
+export interface BoxSelectStyle {
+  lineStyle: FrameLineStyle
+  lineWidth: number
+  fillOpacity: number
 }
 
 /**
@@ -75,16 +113,22 @@ export const MULTI_SELECT_FRAME_KEYS = {
   innerPaddingX: 'multiSelectFrameInnerPaddingX',
   innerPaddingTop: 'multiSelectFrameInnerPaddingTop',
   innerPaddingBottom: 'multiSelectFrameInnerPaddingBottom',
-  outerColor: 'multiSelectFrameOuterColor',
   outerStyle: 'multiSelectFrameOuterStyle',
   outerWidth: 'multiSelectFrameOuterWidth',
   outerRadius: 'multiSelectFrameOuterRadius',
   outerFill: 'multiSelectFrameOuterFillOpacity',
-  innerColor: 'multiSelectFrameInnerColor',
   innerStyle: 'multiSelectFrameInnerStyle',
   innerWidth: 'multiSelectFrameInnerWidth',
   innerRadius: 'multiSelectFrameInnerRadius',
   innerFill: 'multiSelectFrameInnerFillOpacity',
+  // —— 绘制框（Shift 拖拽时画的那个框）——
+  boxStyle: 'multiSelectBoxStyle',
+  boxWidth: 'multiSelectBoxWidth',
+  boxFill: 'multiSelectBoxFillOpacity',
+  // 颜色键（optional：可清除，清空 = 走主题强调色）。**声明在 Config 的主题配色组里**（见下方 schema），
+  // 由本插件申报、随插件卸载一起消失；读取仍用这些 key。
+  outerColor: 'multiSelectFrameOuterColor',
+  innerColor: 'multiSelectFrameInnerColor',
 } as const
 
 /** 可选的线型下拉项（schema 与测试共用一处） */
@@ -105,10 +149,14 @@ export const DEFAULT_MULTI_SELECT_FRAME: MultiSelectFrameConfig = {
   innerPaddingX: 0,
   innerPaddingTop: 0,
   innerPaddingBottom: 0,
-  outer: { color: '#94a3b8', lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 }, // 主题色白名单: 设置项默认值（外框颜色可在设置里改），属配置不是主题外观
+  // 颜色默认**留空** = 走主题配色（用户在「常规/主题配色」里改；这是用户要求的"删掉自定义色就用主题色"）。
+  // 想要固定色就自己在设置里选一个。
+  outer: { lineStyle: 'dashed', lineWidth: 1, radius: 6, fillOpacity: 0 },
   // 内框默认 0 = 直角：它要"紧贴选中节点的并集"，而节点并集是个正矩形，
   // 给它加圆角只会让四条边在角上提前弯掉、看起来没贴住（用户明确要求去掉这个圆角）。
-  inner: { color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 }, // 主题色白名单: 设置项默认值（内框颜色可在设置里改）
+  inner: { lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.05 },
+  // 绘制框：颜色走主题，样式默认实线 + 一点点底
+  boxSelect: { lineStyle: 'solid', lineWidth: 1.5, fillOpacity: 0.16 },
 }
 
 /** 插件可配置项 schema（模块级 Config，随插件导出 → 内核校验 + 补默认 + 登记设置页面） */
@@ -190,13 +238,6 @@ export const Config: ConfigSchema = {
     group: '布局/多选',
     description: '小框比节点下沿再往下扩多少像素。默认 0。',
   },
-  [MULTI_SELECT_FRAME_KEYS.outerColor]: {
-    type: 'color',
-    default: DEFAULT_MULTI_SELECT_FRAME.outer.color,
-    label: '外框颜色',
-    group: '布局/多选',
-    description: '多选时外面那个大框的颜色。',
-  },
   [MULTI_SELECT_FRAME_KEYS.outerStyle]: {
     type: 'select',
     default: DEFAULT_MULTI_SELECT_FRAME.outer.lineStyle,
@@ -234,13 +275,6 @@ export const Config: ConfigSchema = {
     label: '外框填充%',
     group: '布局/多选',
     description: '外框内部的填色浓度（%，0 = 完全透明）。',
-  },
-  [MULTI_SELECT_FRAME_KEYS.innerColor]: {
-    type: 'color',
-    default: DEFAULT_MULTI_SELECT_FRAME.inner.color,
-    label: '内框颜色',
-    group: '布局/多选',
-    description: '多选时里面那个紧贴节点的小框的颜色。',
   },
   [MULTI_SELECT_FRAME_KEYS.innerStyle]: {
     type: 'select',
@@ -280,6 +314,85 @@ export const Config: ConfigSchema = {
     group: '布局/多选',
     description: '内框内部的填色浓度（%，0 = 完全透明）。',
   },
+  // —— 绘制框（Shift 拖拽时随鼠标画出来的那个框）——
+  [MULTI_SELECT_FRAME_KEYS.boxStyle]: {
+    type: 'select',
+    default: DEFAULT_MULTI_SELECT_FRAME.boxSelect.lineStyle,
+    label: '绘制框线型',
+    group: '布局/多选',
+    description: 'Shift 拖拽时画出来的那个框，是实线、虚线还是点线。',
+    options: FRAME_LINE_STYLE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+  },
+  [MULTI_SELECT_FRAME_KEYS.boxWidth]: {
+    type: 'number',
+    default: DEFAULT_MULTI_SELECT_FRAME.boxSelect.lineWidth,
+    min: 1,
+    max: 8,
+    step: 0.5,
+    label: '绘制框线宽',
+    group: '布局/多选',
+    description: '绘制框线条粗细（px）。',
+  },
+  [MULTI_SELECT_FRAME_KEYS.boxFill]: {
+    type: 'number',
+    default: Math.round(DEFAULT_MULTI_SELECT_FRAME.boxSelect.fillOpacity * 100),
+    min: 0,
+    max: 40,
+    step: 1,
+    label: '绘制框填充%',
+    group: '布局/多选',
+    description: '绘制框内部的填色浓度（%，0 = 完全透明）。想让框选时的背景完全透明就调到 0。',
+  },
+  // ====== 三个框的颜色：optional（可清空 = 跟随主题强调色），挂主题配色两格制 ======
+  // 由本插件申报 → 插件卸载时这几格跟着消失（用户要求：卸载多选后主题配色里不再留它们）。
+  [MULTI_SELECT_COLOR_KEYS.boxLight]: {
+    type: 'color',
+    default: '',
+    label: '绘制框颜色',
+    group: '常规/主题配色',
+    optional: true,
+    description: 'Shift 拖拽框选时随鼠标画出来的框（绘制框）的描边颜色。清空 = 跟随主题强调色。',
+  },
+  [MULTI_SELECT_COLOR_KEYS.boxDark]: {
+    type: 'color',
+    default: '',
+    label: '绘制框颜色',
+    group: '常规/暗色主题配色',
+    optional: true,
+    description: '暗色主题下的绘制框描边颜色。清空 = 跟随主题强调色。',
+  },
+  [MULTI_SELECT_COLOR_KEYS.outerLight]: {
+    type: 'color',
+    default: '',
+    label: '多选框-外框颜色',
+    group: '常规/主题配色',
+    optional: true,
+    description: '选中多个节点后，外面那圈较大的框（多选框-外框）的颜色。清空 = 跟随主题强调色。',
+  },
+  [MULTI_SELECT_COLOR_KEYS.outerDark]: {
+    type: 'color',
+    default: '',
+    label: '多选框-外框颜色',
+    group: '常规/暗色主题配色',
+    optional: true,
+    description: '暗色主题下的多选框-外框颜色。清空 = 跟随主题强调色。',
+  },
+  [MULTI_SELECT_COLOR_KEYS.innerLight]: {
+    type: 'color',
+    default: '',
+    label: '多选框-内框颜色',
+    group: '常规/主题配色',
+    optional: true,
+    description: '选中多个节点后，紧贴节点那圈较小的框（多选框-内框）的颜色。清空 = 跟随主题强调色。',
+  },
+  [MULTI_SELECT_COLOR_KEYS.innerDark]: {
+    type: 'color',
+    default: '',
+    label: '多选框-内框颜色',
+    group: '常规/暗色主题配色',
+    optional: true,
+    description: '暗色主题下的多选框-内框颜色。清空 = 跟随主题强调色。',
+  },
 }
 
 /** apply 收到的 config TS 类型（与 schema 对齐） */
@@ -310,15 +423,30 @@ function toBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-/** hex 颜色校验（支持透明度 4/8 位；不合法回落默认，避免把 CSS 写坏） */
-function toColor(value: unknown, fallback: string): string {
-  return typeof value === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
-    ? value
-    : fallback
+/**
+ * hex 颜色取值：**空值一律返回 undefined**（= 用主题色），非法值也回落 undefined。
+ *
+ * 用户口径："颜色支持删除，删除之后默认使用主题颜色；只有该颜色存在时才用它。"
+ * 所以这里不再有"缺省 hex 兜底"，而是"没有 → undefined → 消费方走 CSS 变量"。
+ */
+function toOptionalColor(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const v = value.trim()
+  if (!v) return undefined
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v) ? v : undefined
 }
 
-/** 从配置读当前群组框外观（一项坏了只回落那一项，不影响其它项） */
-export function resolveMultiSelectFrameConfig(get: ConfigGetter): MultiSelectFrameConfig {
+/**
+ * 从配置读当前群组框外观（一项坏了只回落那一项，不影响其它项）。
+ *
+ * @param get 配置取值器
+ * @param mode 当前主题模式（亮/暗）：三个框的**颜色**是两格制的（亮色格 / 暗色格各一个 key），
+ *   按当前主题挑那一格；线型/线宽等几何项不分主题。
+ */
+export function resolveMultiSelectFrameConfig(
+  get: ConfigGetter,
+  mode: 'light' | 'dark' = 'light',
+): MultiSelectFrameConfig {
   const d = DEFAULT_MULTI_SELECT_FRAME
   return {
     enabled: toBool(get(MULTI_SELECT_FRAME_KEYS.enabled), d.enabled),
@@ -330,18 +458,23 @@ export function resolveMultiSelectFrameConfig(get: ConfigGetter): MultiSelectFra
     innerPaddingTop: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerPaddingTop), d.innerPaddingTop),
     innerPaddingBottom: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerPaddingBottom), d.innerPaddingBottom),
     outer: {
-      color: toColor(get(MULTI_SELECT_FRAME_KEYS.outerColor), d.outer.color),
+      color: toOptionalColor(get(mode === 'dark' ? MULTI_SELECT_COLOR_KEYS.outerDark : MULTI_SELECT_COLOR_KEYS.outerLight)),
       lineStyle: toLineStyle(get(MULTI_SELECT_FRAME_KEYS.outerStyle), d.outer.lineStyle),
       lineWidth: toNumber(get(MULTI_SELECT_FRAME_KEYS.outerWidth), d.outer.lineWidth, 0),
       radius: toNumber(get(MULTI_SELECT_FRAME_KEYS.outerRadius), d.outer.radius),
       fillOpacity: toOpacity(get(MULTI_SELECT_FRAME_KEYS.outerFill), d.outer.fillOpacity),
     },
     inner: {
-      color: toColor(get(MULTI_SELECT_FRAME_KEYS.innerColor), d.inner.color),
+      color: toOptionalColor(get(mode === 'dark' ? MULTI_SELECT_COLOR_KEYS.innerDark : MULTI_SELECT_COLOR_KEYS.innerLight)),
       lineStyle: toLineStyle(get(MULTI_SELECT_FRAME_KEYS.innerStyle), d.inner.lineStyle),
       lineWidth: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerWidth), d.inner.lineWidth, 0),
       radius: toNumber(get(MULTI_SELECT_FRAME_KEYS.innerRadius), d.inner.radius),
       fillOpacity: toOpacity(get(MULTI_SELECT_FRAME_KEYS.innerFill), d.inner.fillOpacity),
+    },
+    boxSelect: {
+      lineStyle: toLineStyle(get(MULTI_SELECT_FRAME_KEYS.boxStyle), d.boxSelect.lineStyle),
+      lineWidth: toNumber(get(MULTI_SELECT_FRAME_KEYS.boxWidth), d.boxSelect.lineWidth, 0),
+      fillOpacity: toOpacity(get(MULTI_SELECT_FRAME_KEYS.boxFill), d.boxSelect.fillOpacity),
     },
   }
 }
@@ -372,8 +505,6 @@ export function applyMultiSelectFrameChange(
       return { ...current, innerPaddingTop: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.innerPaddingTop) }
     case MULTI_SELECT_FRAME_KEYS.innerPaddingBottom:
       return { ...current, innerPaddingBottom: toNumber(value, DEFAULT_MULTI_SELECT_FRAME.innerPaddingBottom) }
-    case MULTI_SELECT_FRAME_KEYS.outerColor:
-      return { ...current, outer: { ...current.outer, color: toColor(value, current.outer.color) } }
     case MULTI_SELECT_FRAME_KEYS.outerStyle:
       return { ...current, outer: { ...current.outer, lineStyle: toLineStyle(value, current.outer.lineStyle) } }
     case MULTI_SELECT_FRAME_KEYS.outerWidth:
@@ -382,8 +513,6 @@ export function applyMultiSelectFrameChange(
       return { ...current, outer: { ...current.outer, radius: toNumber(value, current.outer.radius) } }
     case MULTI_SELECT_FRAME_KEYS.outerFill:
       return { ...current, outer: { ...current.outer, fillOpacity: toOpacity(value, current.outer.fillOpacity) } }
-    case MULTI_SELECT_FRAME_KEYS.innerColor:
-      return { ...current, inner: { ...current.inner, color: toColor(value, current.inner.color) } }
     case MULTI_SELECT_FRAME_KEYS.innerStyle:
       return { ...current, inner: { ...current.inner, lineStyle: toLineStyle(value, current.inner.lineStyle) } }
     case MULTI_SELECT_FRAME_KEYS.innerWidth:
@@ -392,6 +521,22 @@ export function applyMultiSelectFrameChange(
       return { ...current, inner: { ...current.inner, radius: toNumber(value, current.inner.radius) } }
     case MULTI_SELECT_FRAME_KEYS.innerFill:
       return { ...current, inner: { ...current.inner, fillOpacity: toOpacity(value, current.inner.fillOpacity) } }
+    case MULTI_SELECT_FRAME_KEYS.boxStyle:
+      return { ...current, boxSelect: { ...current.boxSelect, lineStyle: toLineStyle(value, current.boxSelect.lineStyle) } }
+    case MULTI_SELECT_FRAME_KEYS.boxWidth:
+      return { ...current, boxSelect: { ...current.boxSelect, lineWidth: toNumber(value, current.boxSelect.lineWidth, 0) } }
+    case MULTI_SELECT_FRAME_KEYS.boxFill:
+      return { ...current, boxSelect: { ...current.boxSelect, fillOpacity: toOpacity(value, current.boxSelect.fillOpacity) } }
+    case MULTI_SELECT_COLOR_KEYS.boxLight:
+    case MULTI_SELECT_COLOR_KEYS.boxDark:
+      // 颜色是 optional：空串合法（= 跟随主题），非空须为合法 hex
+      return { ...current, boxSelect: { ...current.boxSelect } }
+    case MULTI_SELECT_COLOR_KEYS.outerLight:
+    case MULTI_SELECT_COLOR_KEYS.outerDark:
+      return { ...current, outer: { ...current.outer } }
+    case MULTI_SELECT_COLOR_KEYS.innerLight:
+    case MULTI_SELECT_COLOR_KEYS.innerDark:
+      return { ...current, inner: { ...current.inner } }
     default:
       return current
   }
@@ -477,12 +622,18 @@ export function hexToRgba(hex: string, alpha: number): string {
 export function frameStrokeCss(
   stroke: FrameStrokeStyle,
   lineScale = 1,
+  /** 颜色缺省时用哪个 CSS 变量（默认 --ui-guide；外框传 --ui-select-outer、内框传 --ui-select-inner） */
+  fallbackVar = 'var(--ui-guide, #3b82f6)',
 ): Record<string, string> {
+  // 颜色缺省（用户删掉了自定义色）→ 交给传入的 CSS 变量（--ui-guide），设置面板里删掉即回主题色。
+  // fillOpacity > 0 时用 color-mix 从同一个色现算底色 —— 两种来源（自定义 hex / 主题变量）都适用，
+  // 不必再手写 rgba（hexToRgba 只认 hex，喂 CSS 变量会写坏值）。
+  const color = stroke.color ?? fallbackVar
   return {
-    borderColor: stroke.color,
+    borderColor: color,
     borderStyle: stroke.lineStyle,
     borderWidth: `${stroke.lineWidth * lineScale}px`,
     borderRadius: `${stroke.radius * lineScale}px`,
-    background: stroke.fillOpacity > 0 ? hexToRgba(stroke.color, stroke.fillOpacity) : 'transparent',
+    background: stroke.fillOpacity > 0 ? `color-mix(in srgb, ${color} ${stroke.fillOpacity * 100}%, transparent)` : 'transparent',
   }
 }

@@ -1,0 +1,161 @@
+{
+  "leaf": {
+    "name": "fallen-leaf",
+    "file": "leaf.svg",
+    "size": 3536
+  },
+  "leaf-flutter": {
+    "name": "leaf-flutter",
+    "error": "missing"
+  },
+  "maple": {
+    "name": "maple-leaf",
+    "file": "maple.svg",
+    "size": 3451
+  },
+  "blossom": {
+    "name": "cherry-blossom",
+    "file": "blossom.svg",
+    "size": 2782
+  },
+  "hibiscus": {
+    "name": "hibiscus",
+    "file": "hibiscus.svg",
+    "size": 3284
+  },
+  "sunflower": {
+    "name": "sunflower",
+    "file": "sunflower.svg",
+    "size": 2460
+  },
+  "star": {
+    "name": "star",
+    "file": "star.svg",
+    "size": 870
+  },
+  "glow-star": {
+    "name": "glowing-star",
+    "file": "glow-star.svg",
+    "size": 1516
+  },
+  "dizzy": {
+    "name": "dizzy",
+    "file": "dizzy.svg",
+    "size": 2157
+  },
+  "sparkles": {
+    "name": "sparkles",
+    "file": "sparkles.svg",
+    "size": 2037
+  },
+  "sparkle": {
+    "name": "sparkle",
+    "file": "sparkle.svg",
+    "size": 993
+  },
+  "heart": {
+    "name": "red-heart",
+    "file": "heart.svg",
+    "size": 1088
+  },
+  "heart-pink": {
+    "name": "beating-heart",
+    "file": "heart-pink.svg",
+    "size": 3027
+  },
+  "snow": {
+    "name": "snowflake",
+    "file": "snow.svg",
+    "size": 5288
+  },
+  "snow2": {
+    "name": "snowman",
+    "file": "snow2.svg",
+    "size": 3857
+  },
+  "confetti": {
+    "name": "confetti-ball",
+    "file": "confetti.svg",
+    "size": 4607
+  },
+  "collision": {
+    "name": "collision",
+    "file": "collision.svg",
+    "size": 927
+  },
+  "boom": {
+    "name": "firecracker",
+    "file": "boom.svg",
+    "size": 2341
+  },
+  "fire": {
+    "name": "fire",
+    "file": "fire.svg",
+    "size": 1942
+  },
+  "moon": {
+    "name": "crescent-moon",
+    "file": "moon.svg",
+    "size": 772
+  },
+  "rainbow": {
+    "name": "rainbow",
+    "file": "rainbow.svg",
+    "size": 1065
+  },
+  "music": {
+    "name": "musical-note",
+    "file": "music.svg",
+    "size": 492
+  },
+  "comet": {
+    "name": "comet",
+    "file": "comet.svg",
+    "size": 2998
+  },
+  "planet": {
+    "name": "ringed-planet",
+    "file": "planet.svg",
+    "size": 4091
+  },
+  "butterfly": {
+    "name": "butterfly",
+    "file": "butterfly.svg",
+    "size": 8003
+  },
+  "cat": {
+    "name": "cat-face",
+    "file": "cat.svg",
+    "size": 2311
+  },
+  "paw": {
+    "name": "paw-prints",
+    "file": "paw.svg",
+    "size": 1259
+  },
+  "gem": {
+    "name": "gem-stone",
+    "file": "gem.svg",
+    "size": 830
+  },
+  "bubble": {
+    "name": "bubbles",
+    "file": "bubble.svg",
+    "size": 2469
+  },
+  "circus": {
+    "name": "circus-tent",
+    "file": "circus.svg",
+    "size": 6314
+  },
+  "candy": {
+    "name": "candy",
+    "file": "candy.svg",
+    "size": 3644
+  },
+  "balloon": {
+    "name": "balloon",
+    "file": "balloon.svg",
+    "size": 898
+  }
+}

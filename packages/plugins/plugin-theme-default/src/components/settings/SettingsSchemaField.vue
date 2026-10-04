@@ -119,12 +119,15 @@ const fieldId = 'sf-' + props.fieldKey
   <div v-if="entry" class="sf-field">
     <!-- color -->
     <template v-if="entry.schema.type === 'color'">
-      <label class="sf-label" :for="fieldId">{{ entry.schema.label ?? entry.key }}</label>
+      <!-- 不用 <label for>：label 的点击会转发给触发按钮 → 点标题右侧空白也会弹开取色器（用户实测报过）。
+           改成 span 后只有点色块本体才弹。 -->
+      <span class="sf-label">{{ entry.schema.label ?? entry.key }}</span>
       <div class="sf-row">
         <ColorField
           :input-id="fieldId"
           :aria-label="entry.schema.label ?? entry.key"
           :model-value="String(entry.value)"
+          :clearable="(entry.schema as { optional?: boolean }).optional === true"
           @update:model-value="set(entry.key, $event)"
         />
       </div>

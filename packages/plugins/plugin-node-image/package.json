@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "图片节点",
+    "description": "图片节点：上传 / 裁剪 / 旋转 / 生成",
+    "pluginName": "image",
+    "builtin": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

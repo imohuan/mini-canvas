@@ -1,0 +1,107 @@
+/*
+ * Agent 设置页的共用样式（四个页面共享，所以放在一个非 scoped 的文件里）。
+ *
+ * 布局规矩（用户口径）：
+ * 1. **上下布局**：上面是表头行，下面才是内容行 —— 不做横向滚动；
+ * 2. **表单一行一个字段**：标签在上、控件在下、占满整宽（挤成两列在窄面板里会互相压住）；
+ * 3. 颜色一律 --ui-* token；数值取自 docs/design/ui-style-guide.md。
+ */
+.ap { display: flex; flex-direction: column; gap: 14px; flex: none; }
+
+/* —— 每个区块：标题条 + 内容 —— */
+.ap-block { display: flex; flex-direction: column; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 10px; overflow: hidden; }
+.ap-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--ui-veil, rgb(0 0 0 / 0.03)); border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
+.ap-block-head h4 { margin: 0; font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
+.ap-count { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ap-block-body { padding: 10px 12px; }
+
+/* —— 表格：表头一行 + 内容行，列对齐 —— */
+.ap-table { display: flex; flex-direction: column; }
+.ap-tr { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) auto; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
+.ap-tr:last-child { border-bottom: 0; }
+.ap-tr.is-head { background: transparent; }
+.ap-tr.is-head span { font-size: 10px; font-weight: 600; letter-spacing: 0.02em; color: var(--ui-ink-dim, #6b7280); }
+.ap-td { min-width: 0; font-size: 12px; color: var(--ui-ink, #18202b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-td-meta { font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ap-td-act { display: flex; gap: 4px; justify-content: flex-end; }
+.ap-scroll { max-height: 240px; overflow-y: auto; }
+
+/* —— 表单：一行一个字段，整宽 —— */
+.ap-fields { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.ap-field { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ap-field-row { display: flex; gap: 6px; align-items: center; }
+.ap-field-row > select, .ap-field-row > input { flex: 1; min-width: 0; }
+.ap-input, .ap-field select, .ap-field input { height: 32px; padding: 0 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b); font-size: 12px; outline: none; box-sizing: border-box; width: 100%; }
+.ap-field select { height: 32px; }
+.ap-hint { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ap-submit { height: 32px; border: 0; border-radius: 8px; background: var(--ui-accent, #0891b2); color: var(--ui-primary-ink, #fff); font-size: 12px; cursor: pointer; }
+.ap-submit:disabled { opacity: 0.5; cursor: default; }
+
+/* —— 小控件 —— */
+.ap-mini { height: 26px; padding: 0 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 7px; background: transparent; color: var(--ui-ink, #18202b); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.ap-mini.is-on { border-color: var(--ui-warn, #b45309); color: var(--ui-warn, #b45309); }
+.ap-mini.danger { color: var(--ui-danger, #ef4444); }
+
+/* —— 状态 —— */
+.ap-empty { padding: 16px 12px; text-align: center; font-size: 12px; color: var(--ui-ink-dim, #6b7280); }
+.ap-error { margin: 0; padding: 8px 10px; border: 1px solid var(--ui-danger, #ef4444); border-radius: 8px; font-size: 12px; color: var(--ui-danger, #ef4444); }
+.ap-tag { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
+.ap-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ap-switch-row strong { display: block; font-size: 12px; color: var(--ui-ink, #18202b); }
+.ap-switch-row small { display: block; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ap-switch { position: relative; width: 40px; height: 24px; flex: none; border: 0; border-radius: 999px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.1)); cursor: pointer; }
+.ap-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 999px; background: var(--ui-primary-ink, #fff); transition: transform 0.16s ease; }
+.ap-switch.on { background: var(--ui-accent, #0891b2); }
+.ap-switch.on::after { transform: translateX(16px); }
+.ap-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* —— 模型选择器（tag 池）——
+   用户口径：「使用这种 tag 的方式自动布局优化，同时支持多选、反选和全选」。
+   所以是 flex-wrap 的 chip 池，不是下拉多选 —— 拉回来上百个模型也能一眼看全、逐个大范围操作。 */
+.ap-picker { display: flex; flex-direction: column; gap: 8px; }
+.ap-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ap-tagpool {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 8px;
+  background: var(--ui-panel-soft, #fff);
+}
+.ap-tagchip {
+  max-width: 100%;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 11px;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+.ap-tagchip:hover { border-color: var(--ui-ink-mute, #8c95a3); color: var(--ui-ink, #18202b); }
+/* 选中态：强调色描边 + 淡底（与全站「青 = 选中/激活」一致） */
+.ap-tagchip.is-on {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  color: var(--ui-accent-hover, #0e7490);
+  font-weight: 600;
+}
+
+/* —— MCP「检查连接」的结果区 —— */
+.ap-probe { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--ui-line-soft, #eef0f4); }
+.ap-probe .ap-hint.is-bad { color: var(--ui-danger, #ef4444); }
+.ap-probe .is-bad { color: var(--ui-danger, #ef4444); }
+.ap-toolgroup { display: flex; flex-direction: column; gap: 4px; }
+.ap-toolgroup-name { font-size: 11px; color: var(--ui-ink, #18202b); }
+/* 工具名也是 tag：只读展示（复用选择器那套观感，但不给 hover/指针，免得像能点） */
+.ap-toolgroup .ap-tagpool { max-height: 160px; }
+.ap-toolgroup .ap-tagchip { cursor: default; }

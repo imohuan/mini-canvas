@@ -52,19 +52,19 @@ export function computeExpandLayout(
 export interface ExpandBitmapIO {
   /** 把 url 解成可绘制位图 + 真实像素尺寸 */
   load(url: string): Promise<{ source: CanvasImageSource; width: number; height: number } | null>
-  /** 建一块透明画布并把原图画进去 → 返回 PNG dataURL */
-  paint(bounds: { width: number; height: number }, draw: (c2d: CanvasRenderingContext2D, source: CanvasImageSource) => void, source: CanvasImageSource): string | null
+  /** 建一块透明画布并把原图画进去 → 返回 PNG Blob（交给资源库保存，节点里只留引用） */
+  paint(bounds: { width: number; height: number }, draw: (c2d: CanvasRenderingContext2D, source: CanvasImageSource) => void, source: CanvasImageSource): Promise<Blob | null>
   /** 释放位图（ImageBitmap 需显式 close） */
   release(source: CanvasImageSource): void
 }
 
 /**
- * 执行一次扩展：读原图 → 画到更大的透明画布 → 产出新的 dataURL。
+ * 执行一次扩展：读原图 → 画到更大的透明画布 → 产出新的 PNG Blob。
  *
- * 为什么产出 dataURL 而不是 objectURL：与图片上传同一取舍 —— dataURL 写进节点 data 后
- * 能直接落盘、刷新照常显示（objectURL 出文档即失效）。
+ * 为什么产出 Blob 而不是 dataURL：字节交给宿主资源库（IndexedDB）保存、节点里只留 resourceId，
+ * 刷新后由资源库重建可显示地址；base64 会撑大体积且不适合落 localStorage。
  *
- * @returns 新图的 dataURL 与像素尺寸；任一步失败返回 null（调用方保留原图，不写半成品）
+ * @returns 新图的 Blob 与像素尺寸；任一步失败返回 null（调用方保留原图，不写半成品）
  */
 export async function expandImage(
   url: string,
@@ -72,22 +72,22 @@ export async function expandImage(
   imageWidth: number,
   imageHeight: number,
   io: ExpandBitmapIO,
-): Promise<{ dataUrl: string; width: number; height: number } | null> {
+): Promise<{ blob: Blob; width: number; height: number } | null> {
   if (!url) return null
   const loaded = await io.load(url)
   if (!loaded) return null
   try {
     const layout = computeExpandLayout(rect, imageWidth, imageHeight, loaded.width, loaded.height)
     if (!layout) return null
-    const dataUrl = io.paint(
+    const blob = await io.paint(
       { width: layout.canvasWidth, height: layout.canvasHeight },
       (c2d, source) => {
         c2d.drawImage(source, layout.offsetX, layout.offsetY)
       },
       loaded.source,
     )
-    if (!dataUrl) return null
-    return { dataUrl, width: layout.canvasWidth, height: layout.canvasHeight }
+    if (!blob) return null
+    return { blob, width: layout.canvasWidth, height: layout.canvasHeight }
   } finally {
     io.release(loaded.source)
   }

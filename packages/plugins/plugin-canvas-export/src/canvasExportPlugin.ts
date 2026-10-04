@@ -43,6 +43,18 @@
  * - 无 DOM / 无选中不弹 alert：命令内 console.warn + 直接 return。
  * - 读选中用 ctx.selection.ids，不 import 任何 render/core 内部 .vue。
  * - 命令 id 与 'canvas-export:exported' 事件 payload 保持与旧版一致（{type:'full'} / {type:'selected', count}）。
+ *
+ * ## 怎么把元素排除出导出图
+ * 画布 DOM 里有一类「临时 UI」（多选圆点、端口球/透明接收区、resize 拖柄、吸附调试带…）：
+ * 它们是操作提示，不该出现在用户的作品截图里。约定一个通用类名 `mc-export-ignore`
+ * （见 exportGeometry.EXPORT_IGNORE_CLASS）：任何元素（含其子树）挂上它，导出时整棵跳过。
+ * 主题侧在 BaseNode / MovingHandle 上已挂好；插件作者给自己的浮层加这一个类即可，
+ * 导出插件不必知道每个主题内部用了哪些具体类名（旧调试类 DEBUG_OVERLAY_CLASSES 仍保留兼容）。
+ *
+ * ## 标题条为什么要额外留上方空间
+ * 节点矩形（nodeLayout）只覆盖卡片本体，标题条画在卡片上缘之外（titleOffset + 标题高）。
+ * 严格按节点并集裁剪会把标题切掉（用户报的「右上角图片没有标题」），故导出范围上方
+ * 额外外扩一段标题带（EXPORT_TITLE_BAND + 主题 titleOffset），见 planExport 的 topPadding。
  */
 import type {
   PluginModule,
@@ -58,6 +70,7 @@ import {
   EXPORT_SCALE_DEFAULT,
   EXPORT_SCALE_MAX,
   EXPORT_SCALE_MIN,
+  EXPORT_IGNORE_CLASS,
   MAX_BG_DOTS,
   MAX_EXPORT_TILES,
   LARGE_EXPORT_TILES,
@@ -161,6 +174,23 @@ const DEBUG_OVERLAY_CLASSES = [
 ]
 
 /**
+ * 通用「别截我」标记类（见 exportGeometry.EXPORT_IGNORE_CLASS）。
+ * 主题侧在临时 UI（多选圆点 / 端口球 / resize 拖柄 / 吸附带…）上挂这个类即可被剔除，
+ * 导出插件不必知道每个主题内部用了哪些具体类名。
+ */
+const EXPORT_IGNORE_CLASSES = [EXPORT_IGNORE_CLASS]
+
+/**
+ * 标题条在 flow 坐标下的高度（= zoom=1 时导出用到的量）。
+ *
+ * 为什么是常量而不是去量 DOM：标题字号 / 行高由主题 CSS 定死（BaseTitle + TitleLabel：
+ * 12px/16px 行高，标题条还有一点上下 padding）。导出前还要把视口切到 zoom=1、逐个取块，
+ * 那时按 DOM 量标题既慢又不可靠（标题在卡片外、不一定在本块里）。
+ * 取「16px 行高 + 4px 余量」这一保守上界，宁可多留 4px 背景也不切到标题。
+ */
+const EXPORT_TITLE_BAND = 20
+
+/**
  * 造一次导出的 filter：跳过调试叠加 + 跳过「本次不进图」的节点/连线。
  *
  * 关键：html-to-image 的 filter 收到的是**原始 DOM 节点**（不是克隆体），所以能直接按 data-id 判成员。
@@ -183,6 +213,7 @@ function makeExportFilter(keepNodes: ReadonlySet<string>, keepEdges: ReadonlySet
       dataId: node.getAttribute('data-id'),
       innerEdgeId: innerEdge?.getAttribute('data-id') ?? null,
       debugClasses: DEBUG_OVERLAY_CLASSES,
+      ignoreClasses: EXPORT_IGNORE_CLASSES,
       keepNodes,
       keepEdges,
     })
@@ -229,6 +260,30 @@ function ensureOverlayStyle(): void {
     '}' +
     '@media (prefers-reduced-motion: reduce){.canvas-export-ring{animation:none!important}}'
   document.head.appendChild(style)
+}
+
+/** 临时覆盖标题文字色的 <style> 元素 id（导出期间挂上、结束时摘掉） */
+const EXPORT_TEXT_STYLE_ID = 'canvas-export-text-style'
+
+/**
+ * 导出期间把标题文字改成深色；返回还原函数（finally 里调）。
+ *
+ * 为什么要改：标题条画在卡片上缘之外、底下就是导出底色（亮色），而标题颜色来自主题 token
+ * （`--canvas-node-text-muted`），**跟应用主题走** —— 应用是暗色主题时它是浅灰（#919191），
+ * 落在亮色导出图上几乎看不见。导出这张图默认就是白底黑字，标题也统一用深色即可。
+ *
+ * 只在这两个标题色变量上盖一条样式（导出期间画布被遮罩盖住，用户看不到），结束后移除。
+ */
+function applyExportTitleColors(): () => void {
+  const style = document.createElement('style')
+  style.id = EXPORT_TEXT_STYLE_ID
+  style.textContent =
+    'html,html.dark{' +
+    '--canvas-node-text-muted:#334155!important;' + // 主题色白名单: 导出图标题深色（html-to-image 克隆时算色用）
+    '--canvas-node-text-strong:#0f172a!important;' + // 主题色白名单: 导出图标题深色（选中态，同上）
+    '}'
+  document.head.appendChild(style)
+  return () => style.remove()
 }
 
 /**
@@ -417,6 +472,12 @@ export function apply(ctx: Context) {
     const edges = collectEdges()
     const padding = Math.max(0, numOf('exportSelectedRectPadding', 4))
 
+    // 标题条画在卡片上缘之外的固定位置（主题 titleOffset + 标题高）：节点矩形只覆盖卡片本体，
+    // 不给上方留一段，标题就会被裁掉（用户报的「右上角图片没有标题」）。这里把「标题带」
+    // 也算进导出范围上方。取主题里那个 titleOffset（缺省 12，与 BaseNode 同键），再叠加标题高。
+    const titleOffset = numOf('titleOffset', 12)
+    const topPadding = EXPORT_TITLE_BAND + Math.max(0, titleOffset)
+
     // 全量模式在图里一个节点都没有时，退到「当前可视区」，避免导出一张空图
     const saved = vp.getViewport()
     const fallbackRect = visibleRectInFlow(saved, paneW, paneH)
@@ -426,6 +487,7 @@ export function apply(ctx: Context) {
       edges,
       selectedNodeIds: selection.ids,
       padding,
+      topPadding,
       fallbackRect,
     })
     if (!plan) {
@@ -483,12 +545,14 @@ export function apply(ctx: Context) {
       return
     }
 
-    if (boolOf('exportBackground', true)) {
+    const bgOn = boolOf('exportBackground', true)
+    const bgColor = strOf('exportBackgroundColor', '#f8fafc') // 主题色白名单: 导出图片像素色（兜底底色），导出时直接画进 canvas，须具体值
+    if (bgOn) {
       paintBackground(
         octx,
         rect,
         scale,
-        strOf('exportBackgroundColor', '#f8fafc'), // 主题色白名单: 导出图片像素色（兜底底色），导出时直接画进 canvas，须具体值
+        bgColor,
         strOf('exportDotColor', '#cbd5e1'), // 主题色白名单: 导出图片圆点像素色（兜底点色），同上
       )
     }
@@ -507,6 +571,9 @@ export function apply(ctx: Context) {
     } catch (err) {
       console.warn('[canvas-export] 内联字体失败，改用系统字体渲染：', err)
     }
+
+    // 导出是亮底，标题统一用深色（否则暗色主题下标题是浅灰、在导出图上几乎看不见）
+    const restoreTitleColors = applyExportTitleColors()
 
     try {
       for (let i = 0; i < tiles.length; i++) {
@@ -558,7 +625,8 @@ export function apply(ctx: Context) {
       // 常见原因：画布里有跨域图片把 canvas 污染了，导致导出（toDataURL）被浏览器拒绝
       console.error('[canvas-export] 导出失败:', err)
     } finally {
-      // 无论如何都要还原：视口回原位、遮罩摘掉（出错也不能把用户画布卡在临时状态）
+      // 无论如何都要还原：视口回原位、标题色覆盖摘掉、遮罩摘掉（出错也不能把用户画布卡在临时状态）
+      restoreTitleColors()
       vp.setViewport(saved)
       overlay.el.remove()
     }

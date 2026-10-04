@@ -49,6 +49,13 @@ export interface VideoOpsContext {
   nodePosition?(nodeId: string): { x: number; y: number } | null
   /** 读某节点实测/声明宽度（决定新节点摆多远）；未注入返回 null */
   nodeWidth?(nodeId: string): number | null
+  /**
+   * 把一段图片字节存进宿主资源库，返回可写进节点的引用 + 显示地址。
+   * 截图产出的是**新图片**，必须走这条（与图片插件上传同一条路）：
+   * 直接写 dataURL 会让 base64 落进画布数据，云端保存时原样上云。
+   * 未注入时返回 undefined —— 调用方放弃这次截图，而不是退回 base64。
+   */
+  persistImage?(blob: Blob, name?: string): Promise<{ resourceId: string; url: string } | undefined>
 }
 
 /** 视频加工端口（读元数据 / 截图 / 下载 / 选文件 / 生成 objectURL）。
@@ -143,6 +150,17 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       } catch {
         return null
       }
+    },
+    // 截图产出的图片字节存进资源库（与图片插件上传同一条路；不退回 base64）
+    persistImage: async (blob, name) => {
+      const store = svc.tryGet<{
+        put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>
+        resolve(ref: string): Promise<string | undefined>
+      }>('resources')
+      if (!store) return undefined
+      const resourceId = await store.put(blob, { kind: 'image', ...(name ? { name } : {}) })
+      const url = await store.resolve(resourceId)
+      return url ? { resourceId, url } : undefined
     },
   }
 }
@@ -247,14 +265,14 @@ export async function loadVideo(
  * 写进 localStorage 直接撑爆配额、刷新反而丢数据。objectURL 当前会话可见，
  * 配合宿主 resources 服务登记回收（删除/撤销语义与图片一致）。
  *
- * @param registerResource 可选：把 objectURL 登记进宿主资源表并写 resourceId（供引用扫描回收）
+ * @param registerResource 可选：把文件存进宿主资源库并返回持久引用（本地进库 / 云端进文件夹）
  */
 export async function uploadVideo(
   ctx: VideoOpsContext,
   nodeId: string,
   file: Blob,
   transform: VideoTransform = defaultTransform,
-  registerResource?: (url: string, file: Blob) => string | undefined,
+  registerResource?: (file: Blob) => Promise<string | undefined>,
 ): Promise<boolean> {
   if (!ctx.read(nodeId)) return false
   const url = transform.objectUrl(file)
@@ -262,7 +280,7 @@ export async function uploadVideo(
   const name = (file as File).name
   // 资源登记**先做、且不单独写库**：resourceId 随本次载入一起提交，
   // 于是"换视频"对用户始终是**一次撤销**就退回原样（分两次写会让撤销只退半步）。
-  const resourceId = registerResource?.(url, file)
+  const resourceId = await registerResource?.(file)
   return loadVideo(
     ctx,
     nodeId,
@@ -393,11 +411,25 @@ export async function captureFrameNode(
   const frame = await transform.captureFrame(data.videoUrl, at, data.cropRect ?? null)
   if (!frame) return null
 
+  // 截图是**新的一张图**：字节存进资源库（本地进库 / 云端进文件夹），节点里只留引用。
+  // 不能直接写 frame.dataUrl —— 那是 base64，会原样落进画布数据并上云。
+  if (!ctx.persistImage) return null
+  let persisted: { resourceId: string; url: string } | undefined
+  try {
+    // dataURL → Blob（fetch 支持 data: 地址；不必自己解析 base64）
+    const blob = await (await fetch(frame.dataUrl)).blob()
+    persisted = await ctx.persistImage(blob, frameFileName(data.videoName, at))
+  } catch {
+    return null
+  }
+  if (!persisted) return null
+
   const source = ctx.nodePosition?.(nodeId) ?? { x: 0, y: 0 }
   const width = ctx.nodeWidth?.(nodeId) ?? DEFAULT_NODE_WIDTH
   const position = { x: source.x + width + FRAME_NODE_GAP, y: source.y }
   return ctx.createNode('image', position, {
-    imageUrl: frame.dataUrl,
+    imageUrl: persisted.url,
+    resourceId: persisted.resourceId,
     imageName: frameFileName(data.videoName, at),
     imageWidth: frame.width,
     imageHeight: frame.height,

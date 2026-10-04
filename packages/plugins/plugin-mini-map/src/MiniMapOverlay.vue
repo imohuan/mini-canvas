@@ -308,8 +308,10 @@ function onPointerCancel(e: PointerEvent): void {
   --mm-line: #e2e8f0;
   --mm-node: #cbd5e1;
   --mm-shadow: 0 2px 8px rgb(0 0 0 / 0.08);
-  --mm-viewer-bg: rgb(59 130 246 / 0.08);
-  --mm-viewer-line: #3b82f6;
+  /* 亮色的视口框改用中性灰（不再是蓝色）：取规范灰阶里的中灰 #6b7280，
+     落在浅灰节点(#cbd5e1)与暗色之间；填充也去掉淡蓝，改成中性的黑色淡底。 */
+  --mm-viewer-bg: rgb(0 0 0 / 0.06);
+  --mm-viewer-line: #6b7280;
   --mm-radius: 12px;
   --mm-node-radius: 2px;
   --mm-viewer-radius: 4px;

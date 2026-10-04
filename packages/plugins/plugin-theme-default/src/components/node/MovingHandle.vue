@@ -36,6 +36,14 @@ const props = defineProps<{
   overlap?: number
   /** 节点被选中（BaseNode props.selected）：选中时端口按钮常显（不依赖 zone hover） */
   selected?: boolean
+  /**
+   * 硬压制：为 true 时**整个端口区不接指针事件**（不只是按钮不亮）。
+   *
+   * 为什么要它（2026-10-03 实测）：原先只有 visible 一个门，而 visible 只控制按钮 opacity；
+   * 那圈透明的"吸附接收区"始终 pointer-events:all、尺寸约 87×176 —— 多选/抓手/低细节时
+   * 按钮虽已隐藏，按住那块看不见的区域照样能拖出连线。父层（BaseNode）把这几条算成 blocked 传进来。
+   */
+  blocked?: boolean
   zoneWidth?: number
   zoneHeight?: number
   zoneOffset?: number
@@ -457,7 +465,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor"
+  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor mc-export-ignore"
     :class="{
       'moving-handle-anchor--source': isSource,
       'moving-handle-anchor--target': !isSource,
@@ -465,6 +473,7 @@ onBeforeUnmount(() => {
       'is-moving': isMoving,
       'is-restoring': isRestoring,
       'is-disabled': disabled,
+      'is-blocked': blocked,
       'is-preview': preview,
     }" :style="anchorStyle">
     <span class="port-follow-zone" :class="{
@@ -523,6 +532,16 @@ onBeforeUnmount(() => {
 
 .moving-handle-anchor.is-restoring {
   transition: top 180ms ease-out, left 180ms ease-out, right 180ms ease-out;
+}
+
+/* 硬压制：端口区整体不接指针事件（含那圈透明的吸附接收区）。
+   只靠按钮 opacity:0 是不够的 —— 接收区尺寸约 87×176、一直 pointer-events:all，
+   按住那块看不见的区域照样能起手拖线（多选/抓手/低细节下用户实测就是这么拖出线的）。
+   这里把 anchor 与 zone 一起关掉；可见性与按钮显隐仍由 is-visible 管。 */
+.moving-handle-anchor.is-blocked,
+.moving-handle-anchor.is-blocked .port-follow-zone,
+.moving-handle-anchor.is-blocked .moving-handle-button {
+  pointer-events: none !important;
 }
 
 .moving-handle-anchor--source {

@@ -74,7 +74,7 @@ const NODE_ICON =
 /**
  * image 插件可配置项 schema（P4：模块级 Config）。
  * 字段带 group，内核装配时经 Config 校验+补默认并登记进 settings 单一数据源(scope=image)；
- * 设置面板(PluginSettingsDialog)据此渲染成左侧分组导航 + 右侧 schema 控件。
+ * 设置内容(PluginSettingsContent)据此渲染成左侧分组导航 + 右侧 schema 控件。
  *
  * 分组命名约定：`一级/二级`（左侧一级导航、右侧二级页签条），一级按"画布对象"归类、跨插件聚合。
  * 本包只声明真正读得到的项（图片尺寸上限，归一级「布局」）。

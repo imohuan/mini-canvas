@@ -5,7 +5,6 @@ import {
   toAbsolutePosition,
   rectIntersectsGroup,
   resolveGroupChanges,
-  createGroupId,
   selectDownloadableGroupChildren,
   type GroupPadding,
 } from '../groupEngine'
@@ -157,15 +156,6 @@ describe('resolveGroupChanges 拖拽归组决策', () => {
       nested,
     )
     expect(changes).toEqual([])
-  })
-})
-
-describe('createGroupId', () => {
-  it('前缀 group- + 时间戳 + 序号（同一毫秒连续打组不撞 id）', () => {
-    const a = createGroupId(1234)
-    const b = createGroupId(1234)
-    expect(a).toMatch(/^group-1234-\d+$/)
-    expect(b).not.toBe(a)
   })
 })
 

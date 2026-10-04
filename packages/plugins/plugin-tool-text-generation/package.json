@@ -5,6 +5,12 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "miniCanvas": {
+    "title": "文本生成工具",
+    "description": "把文本生成 API 注册成工具，供文本节点调用",
+    "pluginName": "tool-text-generation",
+    "installable": true
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

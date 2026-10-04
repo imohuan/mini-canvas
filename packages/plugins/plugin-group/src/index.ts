@@ -18,7 +18,6 @@ export {
   toAbsolutePosition,
   rectIntersectsGroup,
   resolveGroupChanges,
-  createGroupId,
   selectDownloadableGroupChildren,
   getNodeType,
   resolveGroupBackgroundColor,

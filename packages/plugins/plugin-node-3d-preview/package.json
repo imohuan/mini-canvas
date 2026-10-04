@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "3D 预览节点",
+    "description": "接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）",
+    "pluginName": "3d-preview",
+    "builtin": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

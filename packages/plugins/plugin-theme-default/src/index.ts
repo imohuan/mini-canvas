@@ -29,7 +29,7 @@ import CustomEdge from "./components/edge/CustomEdge.vue";
 import DefaultBackground from "./components/background/DefaultBackground.vue";
 import ConnectionLine from "./components/edge/ConnectionLine.vue";
 import MovingHandle from "./components/node/MovingHandle.vue";
-import PluginSettingsDialog from "./components/settings/PluginSettingsDialog.vue";
+import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue";
 import { registerEventName } from "@mini-canvas/canvas-base";
 import {
   Dropdown,
@@ -39,6 +39,7 @@ import {
   NodeToolbarButton,
   ColorField,
 } from "./components/ui";
+import Tooltip from "./components/ui/Tooltip.vue";
 import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
@@ -47,9 +48,6 @@ import ToolParamSlider from "./components/ui/ToolParamSlider.vue";
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 // 设置弹窗（本插件默认皮）的 ✕/遮罩/Esc → 通知宿主关闭（消费方见 @mini-canvas/ui 的 App.vue）。
 registerEventName('settings:ui-close')
-// 打开通道：任何"全局设置"入口（顶栏齿轮 / 底栏齿轮）只需 ctx.emit('settings:ui-open')，
-// 装配层订阅后把面板打开 —— 与关闭通道对称，入口不必认识"面板怎么弹"。
-registerEventName('settings:ui-open')
 
 export const name = "theme-default";
 // 本插件不声明任何 inject：apply 里只做 ctx.theme.register（主题槽 + 设置面板），不消费任何服务。
@@ -108,8 +106,8 @@ export const DEFAULT_THEME_HANDLE = {
 
 /** 调试可视化开关默认值（对齐 canvasHostCore DEFAULT_DEBUG_VISUAL；作为本插件 config 的初始值） */
 export const DEFAULT_THEME_DEBUG = {
-  handleDebug: true,
-  connectionSnapDebugVisible: true,
+  handleDebug: false,
+  connectionSnapDebugVisible: false,
 } as const;
 
 /**
@@ -339,13 +337,6 @@ export const Config: ConfigSchema = {
     group: "节点/多选标记",
     description:
       "多选时节点左上角那个圆圈的直径（px，屏幕上量到的大小）。缩放不低于「标题缩放阈值」时屏幕大小不变，再小则随画布一起缩小。",
-  },
-  [MULTI_RADIO_KEYS.color]: {
-    type: "color",
-    default: DEFAULT_MULTI_RADIO.color,
-    label: "多选标记颜色",
-    group: "节点/多选标记",
-    description: "那个圆圈的圆环与中心点的颜色。默认深灰，与节点选中色一致。",
   },
   [MULTI_RADIO_KEYS.showInLowDetail]: {
     type: "boolean",
@@ -669,6 +660,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   const ui = ctx.registryOf<unknown>("ui");
   ui.add("button", NodeToolbarButton, { id: "default" });
   ui.add("dropdown", Dropdown, { id: "default" });
+  // 悬浮提示（设计系统件）：插件按名取用，气泡观感随主题一起换。
+  // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
+  ui.add("tooltip", Tooltip, { id: "default" });
   ui.add("select", Select, { id: "default" });
   ui.add("slider", PrecisionSlider, { id: "default" });
   ui.add("toolParamField", ToolParamField, { id: "default" });
@@ -686,7 +680,7 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ui.add("connectionLine", ConnectionLine, { id: "default" });
   // 设置面板皮：settingsPanel 槽默认赢家（渲染抽象层 SettingsHost 消费 winner，把 ctx.settings 实时喂给它）；
   // 其它宿主想换皮装个 order 更小的插件 `ctx.theme.register('settingsPanel', 新组件, {order:-1})` 即顶替。
-  ctx.theme.register("settingsPanel", PluginSettingsDialog, {
+  ctx.theme.register("settingsPanel", PluginSettingsContent, {
     id: "default",
     order: 0,
   });
@@ -702,7 +696,7 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 节点插件（图片/文本的生成控制栏等）直接引用同一份组件，才能与设置界面完全同风格 ——
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
-export { Dropdown, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField } from "./components/ui";
+export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
 
 /**

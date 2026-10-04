@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "视频节点",
+    "description": "视频节点：播放 / 裁剪 / 剪辑 / 截图 / 下载",
+    "pluginName": "video",
+    "builtin": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

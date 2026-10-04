@@ -32,7 +32,16 @@ describe('Config schema（开关的声明）', () => {
   })
 
   it('key 带插件前缀（裸 enabled 已被连线切割插件占用，撞名会被先声明者独占而失效）', () => {
-    expect(Object.keys(Config)).toEqual(['alignGuideEnabled'])
+    expect(Object.keys(Config)).toEqual(['alignGuideEnabled', 'alignGuideColorLight', 'alignGuideColorDark'])
+  })
+
+  it('参考线颜色：可清空（optional）、默认空（= 跟随主题强调色）、两格分属亮/暗分组', () => {
+    expect(Config.alignGuideColorLight.type).toBe('color')
+    expect(Config.alignGuideColorLight.default).toBe('')
+    expect(Config.alignGuideColorLight.optional).toBe(true)
+    expect(Config.alignGuideColorLight.group).toBe('常规/主题配色')
+    expect(Config.alignGuideColorDark.group).toBe('常规/暗色主题配色')
+    expect(Config.alignGuideColorDark.description).toContain('清空 = 跟随主题强调色')
   })
 })
 

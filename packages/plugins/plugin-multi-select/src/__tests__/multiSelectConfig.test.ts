@@ -15,6 +15,7 @@ import {
   DEFAULT_MULTI_SELECT_FRAME,
   FRAME_LINE_STYLE_OPTIONS,
   MULTI_SELECT_FRAME_KEYS,
+  MULTI_SELECT_COLOR_KEYS,
   applyMultiSelectFrameChange,
   frameStrokeCss,
   hexToRgba,
@@ -43,17 +44,25 @@ describe('Config schema（这些项必须出现在设置页面里）', () => {
     }
   })
 
-  it('两框各自的颜色 / 线型 / 线宽 / 圆角 / 填充都有独立项', () => {
-    expect(Config[MULTI_SELECT_FRAME_KEYS.outerColor].type).toBe('color')
+  it('两框各自的线型 / 线宽 / 圆角 / 填充都有独立项；颜色键保留但**不在设置里**（统一走主题配色）', () => {
+    // 颜色键不在 Config 里（设置页面不出取色器；颜色统一在「常规/主题配色」里调）
+    expect(Config[MULTI_SELECT_FRAME_KEYS.outerColor]).toBeUndefined()
+    expect(Config[MULTI_SELECT_FRAME_KEYS.innerColor]).toBeUndefined()
     expect(Config[MULTI_SELECT_FRAME_KEYS.outerStyle].type).toBe('select')
     expect(Config[MULTI_SELECT_FRAME_KEYS.outerWidth].type).toBe('number')
     expect(Config[MULTI_SELECT_FRAME_KEYS.outerRadius].type).toBe('number')
     expect(Config[MULTI_SELECT_FRAME_KEYS.outerFill].type).toBe('number')
-    expect(Config[MULTI_SELECT_FRAME_KEYS.innerColor].type).toBe('color')
     expect(Config[MULTI_SELECT_FRAME_KEYS.innerStyle].type).toBe('select')
     expect(Config[MULTI_SELECT_FRAME_KEYS.innerWidth].type).toBe('number')
     expect(Config[MULTI_SELECT_FRAME_KEYS.innerRadius].type).toBe('number')
     expect(Config[MULTI_SELECT_FRAME_KEYS.innerFill].type).toBe('number')
+  })
+
+  it('绘制框（Shift 拖拽那个框）的线型 / 线宽 / 填充在设置里；颜色走主题', () => {
+    expect(Config[MULTI_SELECT_FRAME_KEYS.boxStyle].type).toBe('select')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.boxStyle].group).toBe('布局/多选')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.boxWidth].type).toBe('number')
+    expect(Config[MULTI_SELECT_FRAME_KEYS.boxFill].type).toBe('number')
   })
 
   it('线型下拉就是实线/虚线/点线三种（不是"有没有边框"的开关）', () => {
@@ -62,29 +71,22 @@ describe('Config schema（这些项必须出现在设置页面里）', () => {
       .toEqual(['solid', 'dashed', 'dotted'])
   })
 
-  it('默认值对齐老版（v1 selectionFramePadding*）：左右 16 / 上 34 / 下 16，外框灰虚线、内框浅蓝实线', () => {
+  it('默认值：左右 16 / 上 34 / 下 16；颜色默认留空（走主题配色）', () => {
     expect(DEFAULT_MULTI_SELECT_FRAME.paddingX).toBe(16)
     expect(DEFAULT_MULTI_SELECT_FRAME.paddingTop).toBe(34)
     expect(DEFAULT_MULTI_SELECT_FRAME.paddingBottom).toBe(16)
-    expect(DEFAULT_MULTI_SELECT_FRAME.outer).toEqual({
-      color: '#94a3b8',
-      lineStyle: 'dashed',
-      lineWidth: 1,
-      radius: 6,
-      fillOpacity: 0,
-    })
-    expect(DEFAULT_MULTI_SELECT_FRAME.inner).toEqual({
-      color: '#60a5fa',
-      lineStyle: 'solid',
-      lineWidth: 1,
-      radius: 0,
-      fillOpacity: 0.05,
-    })
+    // 颜色不再是默认值的一部分（缺省 = 用主题色）
+    expect(DEFAULT_MULTI_SELECT_FRAME.outer.color).toBeUndefined()
+    expect(DEFAULT_MULTI_SELECT_FRAME.inner.color).toBeUndefined()
+    expect(DEFAULT_MULTI_SELECT_FRAME.outer.lineStyle).toBe('dashed')
+    expect(DEFAULT_MULTI_SELECT_FRAME.outer.radius).toBe(6)
+    expect(DEFAULT_MULTI_SELECT_FRAME.inner.lineStyle).toBe('solid')
+    expect(DEFAULT_MULTI_SELECT_FRAME.inner.radius).toBe(0)
   })
 
-  it('颜色 schema 继续声明为 color（取色器可以写入 8 位透明 hex）', () => {
-    expect(Config[MULTI_SELECT_FRAME_KEYS.outerColor].type).toBe('color')
-    expect(Config[MULTI_SELECT_FRAME_KEYS.innerColor].type).toBe('color')
+  it('颜色已从本插件 Config 移出（用户要求删掉自定义色、改用主题配色）', () => {
+    expect(Config['multiSelectFrameOuterColor']).toBeUndefined()
+    expect(Config['multiSelectFrameInnerColor']).toBeUndefined()
   })
 
   it('内框默认直角（radius 0）—— 用户明确要求去掉内框的圆角效果', () => {
@@ -134,12 +136,12 @@ describe('resolveMultiSelectFrameConfig（读配置）', () => {
   it('用户改了值就读到改后的值', () => {
     const all = schemaDefaults()
     all[MULTI_SELECT_FRAME_KEYS.paddingX] = 40
-    all[MULTI_SELECT_FRAME_KEYS.outerColor] = '#ff0000'
     all[MULTI_SELECT_FRAME_KEYS.innerStyle] = 'dotted'
+    all[MULTI_SELECT_FRAME_KEYS.boxStyle] = 'dashed'
     const cfg = resolveMultiSelectFrameConfig((k) => all[k])
     expect(cfg.paddingX).toBe(40)
-    expect(cfg.outer.color).toBe('#ff0000')
     expect(cfg.inner.lineStyle).toBe('dotted')
+    expect(cfg.boxSelect.lineStyle).toBe('dashed')
   })
 
   it('非法值只回落那一项，别的项照旧（一项坏了不连累其它项）', () => {
@@ -147,16 +149,27 @@ describe('resolveMultiSelectFrameConfig（读配置）', () => {
     all[MULTI_SELECT_FRAME_KEYS.paddingX] = 'abc'
     all[MULTI_SELECT_FRAME_KEYS.paddingTop] = Number.NaN
     all[MULTI_SELECT_FRAME_KEYS.paddingBottom] = -50
-    all[MULTI_SELECT_FRAME_KEYS.outerColor] = 'not-a-color'
     all[MULTI_SELECT_FRAME_KEYS.outerStyle] = 'wavy'
-    all[MULTI_SELECT_FRAME_KEYS.innerColor] = '#00ff00' // 这一项合法，必须保住
     const cfg = resolveMultiSelectFrameConfig((k) => all[k])
     expect(cfg.paddingX).toBe(DEFAULT_MULTI_SELECT_FRAME.paddingX)
     expect(cfg.paddingTop).toBe(DEFAULT_MULTI_SELECT_FRAME.paddingTop)
     expect(cfg.paddingBottom).toBe(DEFAULT_MULTI_SELECT_FRAME.paddingBottom)
-    expect(cfg.outer.color).toBe(DEFAULT_MULTI_SELECT_FRAME.outer.color)
     expect(cfg.outer.lineStyle).toBe(DEFAULT_MULTI_SELECT_FRAME.outer.lineStyle)
-    expect(cfg.inner.color).toBe('#00ff00')
+  })
+
+  it('颜色可选：给了就用它，没给 / 空串 / 非法 → undefined（消费方走主题变量）', () => {
+    const withColor = schemaDefaults()
+    withColor[MULTI_SELECT_COLOR_KEYS.outerLight] = '#ff0000'
+    withColor[MULTI_SELECT_COLOR_KEYS.outerDark] = '#00ff00'
+    // 亮色主题读亮色格、暗色主题读暗色格
+    expect(resolveMultiSelectFrameConfig((k) => withColor[k], 'light').outer.color).toBe('#ff0000')
+    expect(resolveMultiSelectFrameConfig((k) => withColor[k], 'dark').outer.color).toBe('#00ff00')
+    for (const bad of ['', 'not-a-color', undefined]) {
+      const all = schemaDefaults()
+      all[MULTI_SELECT_COLOR_KEYS.outerLight] = bad
+      all[MULTI_SELECT_COLOR_KEYS.outerDark] = bad
+      expect(resolveMultiSelectFrameConfig((k) => all[k], 'dark').outer.color).toBeUndefined()
+    }
   })
 
   it('填充% 换算成 0~1 不透明度，并按 0~100 夹取', () => {
@@ -180,10 +193,10 @@ describe('applyMultiSelectFrameChange（设置改动实时生效）', () => {
   it('改内框样式不会碰到外框（两框互相独立）', () => {
     const after = applyMultiSelectFrameChange(
       DEFAULT_MULTI_SELECT_FRAME,
-      MULTI_SELECT_FRAME_KEYS.innerColor,
-      '#123456',
+      MULTI_SELECT_FRAME_KEYS.innerStyle,
+      'dotted',
     )
-    expect(after.inner.color).toBe('#123456')
+    expect(after.inner.lineStyle).toBe('dotted')
     expect(after.outer).toEqual(DEFAULT_MULTI_SELECT_FRAME.outer)
   })
 
@@ -308,9 +321,20 @@ describe('frameStrokeCss / hexToRgba（生成出的样式就是配置的直接�
     expect(css.background).toBe('transparent')
   })
 
-  it('填充不透明度 >0 时生成 rgba 底色', () => {
+  it('填充不透明度 >0 时用 color-mix 从该色生成底色（自定义色与主题变量都适用）', () => {
     const css = frameStrokeCss({ color: '#60a5fa', lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0.5 })
-    expect(css.background).toBe('rgba(96, 165, 250, 0.5)')
+    expect(css.background).toBe('color-mix(in srgb, #60a5fa 50%, transparent)')
+    expect(css.borderColor).toBe('#60a5fa')
+  })
+
+  it('颜色缺省（删掉自定义色）→ 走传入的主题变量，不写死 hex', () => {
+    const css = frameStrokeCss(
+      { lineStyle: 'solid', lineWidth: 1, radius: 0, fillOpacity: 0 },
+      1,
+      'var(--ui-select-inner, #60a5fa)',
+    )
+    expect(css.borderColor).toBe('var(--ui-select-inner, #60a5fa)')
+    expect(css.background).toBe('transparent')
   })
 
   it('线宽/圆角默认跟随画布（lineScale 缺省 1，配置值原样落到 CSS）', () => {
@@ -339,13 +363,12 @@ describe('frameStrokeCss / hexToRgba（生成出的样式就是配置的直接�
     expect(Number(half?.[1])).toBeCloseTo((0x80 / 255) * 0.5, 12)
   })
 
-  it('配置读取与单项更新都保留 8 位颜色，不回落默认色', () => {
+  it('配置读取保留 8 位自定义颜色（含透明度）', () => {
     const outer = '#3b82f680'
     const cfg = resolveMultiSelectFrameConfig((key) =>
-      key === MULTI_SELECT_FRAME_KEYS.outerColor ? outer : undefined,
+      key === MULTI_SELECT_COLOR_KEYS.outerDark ? outer : undefined,
+      'dark',
     )
     expect(cfg.outer.color).toBe(outer)
-    const changed = applyMultiSelectFrameChange(cfg, MULTI_SELECT_FRAME_KEYS.innerColor, '#ff000080')
-    expect(changed.inner.color).toBe('#ff000080')
   })
 })

@@ -81,9 +81,9 @@ async function persistGeneratedImage(url: string): Promise<{ url: string; resour
     const blob = await response.blob()
     const resources = ctx.tryGet('resources')
     if (!resources) return undefined
-    const resourceId = resources.register({ kind: 'image', resource: blob })
-    await resources.flush?.(resourceId)
-    const currentUrl = resources.url(resourceId)
+    // 只存字节、拿回持久引用；显示地址现算（与上传同一条路：本地进库 / 云端进文件夹）
+    const resourceId = await resources.put(blob, { kind: 'image' })
+    const currentUrl = await resources.resolve(resourceId)
     return currentUrl ? { url: currentUrl, resourceId } : undefined
   } catch {
     return undefined

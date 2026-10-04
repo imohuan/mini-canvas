@@ -174,8 +174,6 @@ function readClipboardString(item: DataTransferItem): Promise<string> {
 }
 
 export class FileDropServiceImpl extends Service implements FileDropService {
-  /** 节点 id 生成计数（老版 fd- 前缀 + 自增，避免与内核数字短 id 撞车） */
-  private static counter = 0
   /** 最近一次画布内鼠标位置（屏幕坐标；供粘贴锚点） */
   private lastClient: { x: number; y: number } | null = null
   /** 浏览器 IO（可注入：node 测试用假实现） */
@@ -225,15 +223,12 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     return this.toFlow(this.lastClient)
   }
 
-  private nextId(): string {
-    FileDropServiceImpl.counter += 1
-    return `fd-${Date.now()}-${FileDropServiceImpl.counter}`
-  }
-
   /** 建节点载荷批量写入（history 一次；选中新节点便于立刻拖动/删除） */
   private commitPayloads(payloads: NodePayload[], description: string): string[] {
    if (payloads.length === 0) return []
-   const ids = payloads.map(() => this.nextId())
+    // id 统一向内核要（自增数字）：插件不再自造 `fd-时间戳-序号` 这种形态。
+    // 先拿号再写入 —— 拿号才能连边 / 选中，这也是必须暴露 nextNodeId 的原因。
+    const ids = payloads.map(() => this.doc.nextNodeId())
     this.doc.transaction('file-drop-add', (tx) => {
       tx.addNodes(
         payloads.map((p, i) => ({
@@ -274,11 +269,11 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const url = this.readers.createObjectURL(file)
           const dims = await this.readers.readImageDims(file)
           const payload = buildImagePayload(file, url, positions[i], dims)
-          // P1-14：把生成的 object URL 登记进宿主 resources，写 resourceId 供引用扫描回收
-          // PluginScope.get 对缺失服务返回 undefined（可选探测语义）
+          // 把字节存进宿主资源库（本地 IndexedDB / 云端画布文件夹，由当前 adapter 决定），
+          // 节点里写持久引用（resourceId）—— 拖进来的图因此也能刷新不丢、云端也有文件。
           const resources = this.ctx.tryGet('resources')
           if (resources) {
-            const resourceId = resources.register({ kind: 'image', url, resource: file })
+            const resourceId = await resources.put(file, { kind: 'image', name: file.name })
             payload.data.resourceId = resourceId
           }
           payloads.push(payload)
@@ -288,7 +283,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const payload = buildVideoPayload(file, url, positions[i], meta)
           const resources = this.ctx.tryGet('resources')
           if (resources) {
-            const resourceId = resources.register({ kind: 'video', url, resource: file })
+            const resourceId = await resources.put(file, { kind: 'video', name: file.name })
             payload.data.resourceId = resourceId
           }
           payloads.push(payload)

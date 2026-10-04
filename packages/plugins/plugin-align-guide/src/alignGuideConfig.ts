@@ -24,10 +24,35 @@ export const Config = {
     description:
       '总开关。开启：拖动节点时自动吸附其它节点的边缘/中心，并显示参考线。关闭：拖动就是纯自由移动，不出参考线也不吸附；重开即恢复，无需重载画布。',
   },
+  // 参考线颜色：**两格制**（亮/暗各一格），**可清空** —— 清空 = 跟随主题强调色（--ui-accent）。
+  // 由本插件自己申报（用户口径："参考线的颜色放到专门的参考线插件里面"），
+  // 卸载插件时配置跟着消失；CSS 侧 ui-theme.css 的 --ui-guide 兜底直通 --ui-accent。
+  alignGuideColorLight: {
+    type: 'color',
+    default: '',
+    optional: true,
+    label: '参考线颜色',
+    group: '常规/主题配色',
+    description: '亮色主题下的参考线颜色。拖拽时的对齐辅助线颜色。清空 = 跟随主题强调色。',
+  },
+  alignGuideColorDark: {
+    type: 'color',
+    default: '',
+    optional: true,
+    label: '参考线颜色',
+    group: '常规/暗色主题配色',
+    description: '暗色主题下的参考线颜色。拖拽时的对齐辅助线颜色。清空 = 跟随主题强调色。',
+  },
 } satisfies ConfigSchema
 
 /** apply 侧可用的配置 TS 类型（与 schema 对齐） */
 export type AlignGuideConfig = InferConfig<typeof Config>
+
+/** 参考线颜色的两个 settings key（亮/暗格）—— 组件按当前主题挑一格读 */
+export const ALIGN_GUIDE_COLOR_KEYS = {
+  light: 'alignGuideColorLight',
+  dark: 'alignGuideColorDark',
+} as const
 
 /** 从 settings 读当前配置（未声明/未改时回落 schema 默认；settings 未就绪则全走默认） */
 export function alignGuideConfigFrom(ctx: Context): AlignGuideConfig {
@@ -39,5 +64,9 @@ export function alignGuideConfigFrom(ctx: Context): AlignGuideConfig {
   }
   return {
     alignGuideEnabled: read('alignGuideEnabled', true),
+    // 颜色格：读不到（未声明/未设置）回落空串 = 跟随主题强调色（组件侧不需要缓存这个值，
+    // AlignGuideOverlay 走 CSS 变量、alignGuidePlugin 的 bindGuideColorVars 写内联，这里只为类型完整）
+    alignGuideColorLight: read('alignGuideColorLight', ''),
+    alignGuideColorDark: read('alignGuideColorDark', ''),
   }
 }

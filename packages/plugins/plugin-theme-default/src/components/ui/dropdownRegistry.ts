@@ -1,31 +1,13 @@
 /**
- * dropdownRegistry —— 「同屏只开一个下拉浮层」的进程内登记表。
+ * dropdownRegistry —— 「同屏只开一个下拉浮层」的登记表（**转发**到渲染层那一份）。
  *
- * 为什么单独一个模块（而不是写在 Dropdown.vue 的 <script setup> 里）：
- * `<script setup>` 里的代码会被编译进 **setup() 函数体**，于是每个组件实例各拿一份
- * 「模块级」变量 —— 我第一版就踩了这个坑：登记表在实例之间根本不通，排他自然失效
- * （实测：两个下拉同时开着）。要真模块作用域，就得放在独立 .ts 模块里。
+ * 为什么改成转发：这份表要跨实现共用才有意义。应用里同时存在两处下拉实现 ——
+ * 成品应用注册进 ui 目录的全局下拉、以及本主题默认件（Dropdown 与直接复用它的 Select）。
+ * 两处各拿一份表 → 同屏会开出两个浮层。真源收在 `@mini-canvas/canvas-render` 的
+ * `contracts/dropdownExclusive`，本文件只做转发，保证两处 import 到的是同一个 Set。
  *
- * 语义：谁打开就把自己的 closer 登记进来，并**先把别的都关掉**；关闭/卸载时摘掉自己。
+ * 为什么必须是独立模块（不写在 Dropdown.vue 的 <script setup> 里）：
+ * `<script setup>` 的顶层代码会被编译进 **setup() 函数体**，于是每个组件实例各拿一份
+ * 「模块级」变量 —— 登记表在实例之间根本不通、互斥自然失效（实测：两个下拉同时开着）。
  */
-
-const openClosers = new Set<() => void>()
-
-/** 打开自己：先把**其它**还开着的浮层关掉（保证同屏只有一个） */
-export function claimDropdownExclusive(self: () => void): void {
-  for (const closer of [...openClosers]) {
-    if (closer !== self) closer()
-  }
-  openClosers.add(self)
-}
-
-/** 关闭自己：从登记表摘掉（幂等，重复调用无副作用） */
-export function releaseDropdown(self: () => void): void {
-  openClosers.delete(self)
-}
-
-/** 当前开着的浮层数（仅供测试/调试：断言排他是否真的生效） */
-export function openDropdownCount(): number {
-  return openClosers.size
-}
-
+export { claimDropdownExclusive, releaseDropdown, openDropdownCount } from '@mini-canvas/canvas-render'

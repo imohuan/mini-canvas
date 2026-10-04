@@ -174,9 +174,21 @@ describe('file-drop 插件集成（真实内核服务）', () => {
 
   it('注入 resources 时图片节点登记 resourceId；无 resources 时保持纯 url', async () => {
     const { ctx, svc, nodeStore } = makeService()
-    // 给 ctx 注入 ResourceStore（no-op URL backend：register 显式 url 可用）
+    // 注入带内存资源后端的 ResourceStore：拖入的字节真的会被存下来并写回持久引用
     const { ResourceStore } = await import('@mini-canvas/canvas-data')
-    const rs = new ResourceStore({ revokeUrl() {} })
+    const blobs = new Map<string, Blob>()
+    let seq = 0
+    const adapter = {
+      id: 'mem',
+      capability: {},
+      async get() { return undefined },
+      async set() {},
+      async remove() {},
+      async putResource(blob: Blob) { seq += 1; const ref = 'res-' + seq; blobs.set(ref, blob); return ref },
+      async resolveResource(ref: string) { return blobs.has(ref) ? 'blob:mock-url' : undefined },
+      async removeResource(ref: string) { blobs.delete(ref) },
+    }
+    const rs = new ResourceStore(() => adapter, { revokeUrl() {} })
     ctx.inject('resources', rs)
     const f = makeFile('pic.png', 'image/png')
     await svc.addFiles([f], { x: 0, y: 0 })
@@ -185,13 +197,25 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(node.data.imageUrl).toBe('blob:mock-url')
     const rid = node.data.resourceId as string
     expect(rid).toMatch(/^res-/)
-    expect(rs.url(rid)).toBe('blob:mock-url')
+    expect(await rs.resolve(rid)).toBe('blob:mock-url')
     expect(rs.alive(rid)).toBe(true)
   })
   it('disposeUnreferenced 经 host flush 语义：被引用 resourceId 存活、图内消失的被回收', async () => {
     const { ctx, svc, nodeStore } = makeService()
     const { ResourceStore } = await import('@mini-canvas/canvas-data')
-    const rs = new ResourceStore({ revokeUrl() {} })
+    const blobs = new Map<string, Blob>()
+    let seq = 0
+    const adapter = {
+      id: 'mem',
+      capability: {},
+      async get() { return undefined },
+      async set() {},
+      async remove() {},
+      async putResource(blob: Blob) { seq += 1; const ref = 'res-' + seq; blobs.set(ref, blob); return ref },
+      async resolveResource(ref: string) { return blobs.has(ref) ? 'blob:mock-url' : undefined },
+      async removeResource(ref: string) { blobs.delete(ref) },
+    }
+    const rs = new ResourceStore(() => adapter, { revokeUrl() {} })
     ctx.inject('resources', rs)
     const f = makeFile('pic.png', 'image/png')
     await svc.addFiles([f], { x: 0, y: 0 })

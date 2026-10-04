@@ -78,6 +78,22 @@ export const NODE_TILE_MARGIN = 24
 /** 连线取块余量：bezier 控制点沿端口方向外扩 minCurvature(80)，再加光晕/箭头余量 */
 export const EDGE_TILE_MARGIN = 120
 
+/**
+ * 通用「别截我」标记类名。
+ *
+ * 任何长在画布 DOM 里、但属于**临时 UI** 的元素（多选圆点、端口球/接收区、resize 拖柄、
+ * 吸附调试带…）挂上这个类，导出时就会被 html-to-image 的 filter 整棵跳过。
+ *
+ * 为什么要一个通用标记，而不是继续往 DEBUG_OVERLAY_CLASSES 里堆类名：
+ * 那些「调试叠加」是主题自己的内部结构，导出插件不该知道每个主题内部用了哪些类名；
+ * 有了这个约定，主题侧只要在元素上加一个类，插件侧零改动就能剔除，互不耦合。
+ *
+ * 与插件作者的约定（同名常量在 plugin-theme-default 的 BaseNode/MovingHandle 里以字面量出现，
+ * 因为插件之间不互相 import —— 与下方 DEBUG_OVERLAY_CLASSES 的处理方式一致）。
+ */
+export const EXPORT_IGNORE_CLASS = 'mc-export-ignore'
+
+
 /** 两个矩形并集（null 视作空；两个都空返回 null） */
 export function unionRect(a: Rect | null, b: Rect | null): Rect | null {
   // 只取四要素：入参可能是带 id 的 NodeRect，包围盒不该把 id 漏给调用方
@@ -107,6 +123,19 @@ export function expandRect(rect: Rect, pad: number): Rect {
   const p = Number.isFinite(pad) && pad > 0 ? pad : 0
   if (p === 0) return { ...rect }
   return { x: rect.x - p, y: rect.y - p, w: rect.w + p * 2, h: rect.h + p * 2 }
+}
+
+/**
+ * 只把矩形**上边**向上外扩一段（左右与下边不动）。
+ *
+ * 用来给「画在卡片上缘之外」的标题条留位置：节点矩形只覆盖卡片本体（见 NodeLayoutService），
+ * 标题条挂在卡片上方 `titleOffset + 标题高` 处，严格按节点并集裁剪会把标题整条切掉。
+ * 只扩上边是因为标题只在上方；左右下仍是节点并集，不白扩多余背景。
+ */
+export function expandRectTop(rect: Rect, pad: number): Rect {
+  const p = Number.isFinite(pad) && pad > 0 ? pad : 0
+  if (p === 0) return { ...rect }
+  return { x: rect.x, y: rect.y - p, w: rect.w, h: rect.h + p }
 }
 
 /** 两矩形是否重叠（margin > 0 时把 b 外扩一圈再判；仅贴边不算重叠） */
@@ -303,6 +332,13 @@ export interface PlanExportRequest {
   selectedNodeIds: ReadonlySet<string>
   /** 包围盒向外扩展像素 */
   padding: number
+  /**
+   * 导出范围**上方**额外外扩像素（标题条等画在节点上缘之外的元素）。
+   *
+   * 只在 topPadding > 0 时生效，且只动上边（见 expandRectTop）。给标题留位置用：
+   * 节点矩形只覆盖卡片本体，标题挂在卡片上缘外，不给上方留白就会被裁掉。
+   */
+  topPadding?: number
   /** full 模式下"图里一个节点都没有"时的兜底范围（当前可视区；没有则返回 null） */
   fallbackRect?: Rect | null
 }
@@ -316,12 +352,14 @@ export interface PlanExportRequest {
  */
 export function planExport(req: PlanExportRequest): ExportPlan | null {
   const { mode, nodes, edges, selectedNodeIds, padding } = req
+  const topPad = Number.isFinite(req.topPadding) && (req.topPadding as number) > 0 ? (req.topPadding as number) : 0
 
   if (mode === 'full') {
     const bounds = contentBounds(nodes)
     if (bounds) {
       const nodeIds = new Set(nodes.map((n) => n.id))
-      return { rect: expandRect(bounds, padding), nodeIds, edgeIds: connectedEdgeIds(edges, nodeIds) }
+      const rect = topPad > 0 ? expandRectTop(expandRect(bounds, padding), topPad) : expandRect(bounds, padding)
+      return { rect, nodeIds, edgeIds: connectedEdgeIds(edges, nodeIds) }
     }
     const fallback = req.fallbackRect
     if (!fallback) return null
@@ -332,7 +370,9 @@ export function planExport(req: PlanExportRequest): ExportPlan | null {
   const bounds = contentBounds(picked)
   if (!bounds) return null
   const nodeIds = new Set(picked.map((n) => n.id))
-  return { rect: expandRect(bounds, padding), nodeIds, edgeIds: connectedEdgeIds(edges, nodeIds) }
+  // 上方再多留一段（标题条位置）：节点矩形不含标题，不留就会把标题切掉。
+  const rect = topPad > 0 ? expandRectTop(expandRect(bounds, padding), topPad) : expandRect(bounds, padding)
+  return { rect, nodeIds, edgeIds: connectedEdgeIds(edges, nodeIds) }
 }
 
 /** 两端都在给定节点集内的连线 id（丢掉悬空线：防止导出图里出现拖到图外的线） */
@@ -365,6 +405,8 @@ export interface ExportElementInfo {
   innerEdgeId: string | null
   /** 要剔除的调试叠加类名（端口辅助线/吸附区等） */
   debugClasses: readonly string[]
+  /** 通用「别截我」标记类名（任何临时 UI 挂上它就被剔除；见 EXPORT_IGNORE_CLASS） */
+  ignoreClasses: readonly string[]
   /** 本次允许进图的节点 id */
   keepNodes: ReadonlySet<string>
   /** 本次允许进图的连线 id */
@@ -376,6 +418,10 @@ export function keepExportElement(info: ExportElementInfo): boolean {
   const classes = new Set(info.classes)
   for (const debugClass of info.debugClasses) {
     if (classes.has(debugClass)) return false
+  }
+  // 通用「别截我」标记：挂上它的元素（含子树）不进导出图
+  for (const ignoreClass of info.ignoreClasses) {
+    if (classes.has(ignoreClass)) return false
   }
   if (classes.has('vue-flow__node')) {
     return !!info.dataId && info.keepNodes.has(info.dataId)

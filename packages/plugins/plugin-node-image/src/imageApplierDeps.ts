@@ -30,5 +30,22 @@ export function createImageOpsWriteDeps(svc: ServiceGetter): ImageRunDeps {
     writeData: (nodeId, data, size) => ops.write(nodeId, data, size),
    measure: (url) => measureImage(url),
     fitLimits: ops.fitLimits,
+    // 生成工具常直接回 dataURL —— 必须收进资源库，否则 base64 会写进节点、进而落进云端画布数据。
+    // 没有这一项时 writeGeneratedImage 会原样写地址（旧行为），云端就会出现 base64。
+    persistImage: async (url) => {
+      const resources = svc.get<{
+        put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>
+        resolve(ref: string): Promise<string | undefined>
+      } | undefined>('resources')
+      if (!resources) return undefined
+      try {
+        const blob = await (await fetch(url)).blob()
+        const resourceId = await resources.put(blob, { kind: 'image' })
+        const resolved = await resources.resolve(resourceId)
+        return resolved ? { url: resolved, resourceId } : undefined
+      } catch {
+        return undefined
+      }
+    },
   }
 }
