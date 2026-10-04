@@ -109,17 +109,11 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
       'dist-tags': { latest: '1.0.0' },
       versions: {},
     }
-    registry = await startFakeRegistry(packument, {})
+    // 先起 registry（tarball 映射一并给出），再用它的端口填 URL
+    registry = await startFakeRegistry(packument, { '/plain.tgz': tgz, '/plain2.tgz': tgzPlain })
     const ver = (packument.versions as Record<string, unknown>)
     ver['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/plain.tgz' }, miniCanvas: { installable: true } }
     ver['2.0.0'] = { version: '2.0.0', dist: { tarball: registry.url + '/plain2.tgz' }, miniCanvas: {} }
-    // 假 registry 的 tarball 映射：plain.tgz → installable 包；plain2.tgz → 非 installable 包
-    //（registry 已起，映射建晚了 —— 重起一个带映射的）
-    registry.close()
-    registry = await startFakeRegistry(packument, {
-      '/plain.tgz': tgz,
-      '/plain2.tgz': tgzPlain,
-    })
 
     const host = await boot(registry.url)
     const noConfirm = await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo' })
@@ -134,18 +128,16 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
   it('install → installed → update(已是最新) → uninstall 全流程', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
     const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
-    registry = await startFakeRegistry(packument, {})
+    // 先起 registry（拿到端口），再用它填 tarball URL —— 顺序反了会指向未监听的端口
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
-      dist: { tarball: 'file:///' + tgz.replace(/\\/g, '/') },
+      dist: { tarball: registry.url + '/demo.tgz' },
       miniCanvas: { installable: true },
     }
-    registry.close()
-    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
 
     const host = await boot(registry.url)
     const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true }))
-    if (!inst.ok) console.log('INSTALL FAIL BODY:', JSON.stringify(inst))
     expect(inst.ok).toBe(true)
     expect(inst.hasServer).toBe(true)
     await expect(fs.access(path.join(pluginsDir, 'mini-canvas__plugin-demo', 'dist', 'plugin-demo.js'))).resolves.toBeUndefined()
@@ -170,11 +162,9 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     await fs.mkdir(dir2, { recursive: true })
     const tgzV11 = await makePkg(dir2, { installable: true, withServer: true, version: '1.1.0' })
     const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
-    registry = await startFakeRegistry(packument, {})
-    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: 'file:///' + tgzV1.replace(/\\/g, '/') }, miniCanvas: { installable: true } }
-    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: 'file:///' + tgzV11.replace(/\\/g, '/') }, miniCanvas: { installable: true } }
-    registry.close()
     registry = await startFakeRegistry(packument, { '/v1.tgz': tgzV1, '/v11.tgz': tgzV11 })
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, miniCanvas: { installable: true } }
+    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, miniCanvas: { installable: true } }
 
     const host = await boot(registry.url)
     await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', version: '1.0.0', confirm: true })

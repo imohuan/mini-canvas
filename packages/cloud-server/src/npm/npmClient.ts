@@ -95,13 +95,6 @@ export function createNpmClient(opts: NpmClientOptions = {}) {
 
   /** 下载 tarball 到指定文件（tgz 原样落盘） */
   async function downloadTarball(tarballUrl: string, destFile: string): Promise<void> {
-    // file:// URL：测试注入假 registry 时直接用本地文件（跳过网络层；生产只用 http(s)）
-    if (tarballUrl.startsWith('file:')) {
-      const { fileURLToPath } = await import('node:url')
-      const fs = await import('node:fs')
-      await fs.promises.copyFile(fileURLToPath(tarballUrl), destFile)
-      return
-    }
     // 用 node:http 而不是 fetch：vitest 环境里全局 fetch 的连接池与本地 http server 的
     // 短生命周期端口有 keep-alive 竞态（实测 ECONNREFUSED，同 URL fetch 探针却成功）。
     // http.get 每次新建连接，行为可预期。
