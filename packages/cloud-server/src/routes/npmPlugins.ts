@@ -164,6 +164,14 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       await fs.mkdir(webDest, { recursive: true })
       const webText = await fs.readFile(path.join(distDir, webFile), 'utf8')
       await fs.writeFile(path.join(webDest, webFile), webText, 'utf8')
+      // ⚠️ package.json 必须一起落：catalog 靠它的 miniCanvas 段判定 installable 并取
+      // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
+      await fs.copyFile(pkgJsonPath, path.join(path.dirname(webDest), 'package.json'))
+      // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
+      // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。
+      if (serverFile) {
+        await fs.copyFile(path.join(distDir, serverFile), path.join(webDest, serverFile))
+      }
 
       // ⑦ server 半 → serverPluginsDir/<id>.js；服务端自己算 sha256 记来源
       let serverSha: string | undefined
