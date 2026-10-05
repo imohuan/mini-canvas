@@ -52,3 +52,49 @@ export function canvasFilePath(root: string, id: string, which: 'canvas' | 'view
 export function canvasResourcesDir(root: string, id: string): string {
   return path.join(canvasDir(root, id), 'resources')
 }
+
+// ==================== 项目 / 资产（2026-10-05 新增）====================
+//
+// 「项目 → 画布」在磁盘上表现为**索引关系**（画布文件夹路径不变，见 docs/design/project-canvas-assets.md）：
+//   canvases/index.json  画布索引（带 projectId）
+//   projects.json        项目注册表
+// 资源（生成产物 + 自己上传）单独一个目录：
+//   assets/index.json    资产登记
+//   assets/files/<hash>  自己上传的字节
+
+/** 项目 / 资产 id 白名单：与画布 id 同口径（字母数字下划线连字符，1-64 位） */
+const ENTITY_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+export function isSafeEntityId(id: string): boolean {
+  return ENTITY_ID_RE.test(id)
+}
+
+/** 项目注册表文件 */
+export function projectsFile(root: string): string {
+  return path.join(root, 'projects.json')
+}
+
+/** 画布索引文件（画布 id → 名字 / 所属项目 / 创建时间） */
+export function canvasIndexFile(root: string): string {
+  return path.join(canvasesRoot(root), 'index.json')
+}
+
+/** 资产目录 */
+export function assetsDir(root: string): string {
+  return path.join(root, 'assets')
+}
+
+/** 资产登记文件 */
+export function assetsIndexFile(root: string): string {
+  return path.join(assetsDir(root), 'index.json')
+}
+
+/** 自己上传的资产字节目录 */
+export function assetsFilesDir(root: string): string {
+  return path.join(assetsDir(root), 'files')
+}
+
+/** 资产文件名白名单：与画布资源同名（16 位十六进制 + 可选扩展名） */
+export function isSafeAssetName(name: string): boolean {
+  return /^[0-9a-f]{16}(\.[a-z0-9]+)?$/i.test(name)
+}

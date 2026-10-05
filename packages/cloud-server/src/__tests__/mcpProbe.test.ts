@@ -68,7 +68,9 @@ function startFakeMcp(): Promise<void> {
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-' + 'mcp-probe-'))
-  srv = await createCloudServer({ dir, watchProviders: false })
+  // 关掉「内置画布 MCP 自动注册」：这些用例要验的是「用户自己配了什么」这一面，
+  // 而内置 MCP 默认携带会让「没配任何 MCP」不再是空集。内置注册另有专门用例。
+  srv = await createCloudServer({ dir, watchProviders: false, builtinCanvasMcp: false })
   mcpTools = ['alpha', 'beta']
   mcpBroken = false
   await startFakeMcp()
@@ -138,4 +140,3 @@ describe('主动检查 MCP（不必先发一句话）', () => {
     expect(r.json.servers).toEqual([])
   })
 })
-

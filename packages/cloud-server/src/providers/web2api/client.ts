@@ -14,7 +14,7 @@
  */
 
 export interface McpToolCallResult {
-  content?: Array<{ type?: string; text?: string }>
+  content?: Array<{ type?: string; text?: string; resource?: { uri?: string; text?: string; mimeType?: string } }>
   structuredContent?: Record<string, unknown>
   isError?: boolean
 }
@@ -195,21 +195,49 @@ export function parseTaskId(result: McpToolCallResult): string | undefined {
   return undefined
 }
 
-/** 从任务详情里尽力取出产物地址（防御性：形状随平台而异） */
-export function extractUrls(detail: McpTaskDetail): string[] {
+/**
+ * 把相对地址补成绝对地址（已经是 http(s)/data/blob 的原样返回）。
+ *
+ * MCP 返回的资源地址常是**服务端相对路径**（如 /api/resources/audios/doubao/x.ogg），
+ * 前端要能直接加载就必须带上 web2api 的 origin —— 否则浏览器会把当前页面的域名当成它的。
+ */
+export function absolutizeUrl(u: string, origin: string): string {
+  const s = (u ?? '').trim()
+  if (!s) return ''
+  if (/^(https?:|data:|blob:)/i.test(s)) return s
+  if (!origin) return s
+  return origin.replace(/\/+$/, '') + (s.startsWith('/') ? s : '/' + s)
+}
+
+/**
+ * 从各种形态里尽力取出产物地址（防御性：形状随平台而异）。
+ *
+ * 兼容两类入参：
+ * - `tools/call` 的同步返回（产物在 `content[].resource.uri` —— tts 这类同步工具走这条）；
+ * - `system/get-task` 的任务详情（产物在 `resources[].downloadUrl`）。
+ *
+ * 认的字段：url / uri / src / urls / downloadUrl，外加递归 `resource` 与文本里内嵌的 JSON。
+ * **入参为 undefined / 非对象时返回空数组**——同步工具没有 structuredContent，传它进来不该炸。
+ */
+export function extractUrls(detail: McpTaskDetail | McpToolCallResult | undefined | null): string[] {
+  if (!detail || typeof detail !== 'object') return []
   const out: string[] = []
   const push = (v: unknown): void => {
-    if (typeof v === 'string' && /^(https?:|data:|\/)/i.test(v)) out.push(v)
+    if (typeof v === 'string') { if (/^(https?:|data:|\/)/i.test(v)) out.push(v) }
     else if (Array.isArray(v)) for (const item of v) push(item)
     else if (v && typeof v === 'object') {
       const o = v as Record<string, unknown>
       push(o.url)
+      push(o.uri)
       push(o.src)
       push(o.urls)
+      push(o.downloadUrl)
+      push(o.resource)
     }
   }
-  push(detail.urls)
-  push(detail.resources)
-  push(detail.result)
+  push((detail as McpTaskDetail).urls)
+  push((detail as McpTaskDetail).resources)
+  push((detail as McpTaskDetail).result)
+  push((detail as McpToolCallResult).content)
   return [...new Set(out)]
 }

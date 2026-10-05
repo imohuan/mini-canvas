@@ -76,6 +76,25 @@ export interface CanvasSnapshot {
   viewport?: { x: number; y: number; zoom: number }
 }
 
+/**
+ * 节点类型 → 中文名（与前端各节点插件声明的 label 对齐）。
+ *
+ * 为什么要在这一层也有一份：MCP 建出来的节点是**没有名字**的（以前 data 直接是 {}），
+ * 而前端现在把「节点名」统一成只看 data.label —— MCP 建的节点在 @ 菜单 / 左侧树里就没名字。
+ * 这份表让 MCP 建节点时也能补上和网页端同款的中文默认名。
+ *
+ * 类型名不认识时回落 type 本身（不猜、也不报错）。
+ */
+export const NODE_TYPE_LABELS: Record<string, string> = {
+  text: '文本',
+  image: '图片',
+  video: '视频',
+  audio: '音频',
+  group: '分组',
+  '3d-preview': '3D 预览',
+  'image-compare': '图片对比',
+}
+
 /** 批量增删改的结果（与 mcp-server 的 BatchResult 同形状，便于客户端迁移） */
 export interface BatchResult {
   ok: boolean
@@ -313,6 +332,33 @@ export class CanvasDocument {
   }
 
   /**
+   * 给 MCP 新建的节点补一个默认名（写进 data.label），与网页端"图片 1"同款。
+   *
+   * 语义与前端 nodeStore.nextDefaultName 对齐：
+   * - 名字 = `<类型中文名> <序号>`，序号**按类型独立计数**；
+   * - 序号从**现有同类型节点的名字**里推断（找名字末尾的数字取最大），所以
+   *   "先由 AI 建两个图片、再让 AI 建第三个"会得到「图片 3」，而不是从头开始；
+   * - 调用方已显式给 label 时不生成（尊重调用方的名字）。
+   *
+   * 为什么在这里做、而不是让前端补：MCP 写的是同一份 canvas.json，写进去就该是完整的；
+   * 等前端补等于"没打开页面时建的节点永远没名字"。
+   */
+  private defaultNodeName(type: string, nodes: CanvasNode[]): string {
+    const base = NODE_TYPE_LABELS[type] ?? type
+    let max = 0
+    for (const n of nodes) {
+      if (n.type !== type) continue
+      const label = n.data?.label
+      if (typeof label !== 'string') continue
+      const m = /(\d+)\s*$/.exec(label.trim())
+      if (!m) continue
+      const num = Number.parseInt(m[1], 10)
+      if (!Number.isNaN(num) && num > max) max = num
+    }
+    return base + ' ' + (max + 1)
+  }
+
+  /**
    * 生成一个不与现有边冲突的 id：**自增数字**（与网页端同一套规则）。
    *
    * 为什么不沿用过去的 `e-{source}-{target}`：那边 id 形态五花八门（见 canvas-data 的 edgeStore），
@@ -415,7 +461,12 @@ export class CanvasDocument {
         type: a.type,
         // 自动定位只看"当前存活"的节点（用 kept：已剔除被删的，且含本批刚加的）
         position: a.position ?? this.nextFreePosition(kept),
-        data: a.data ? { ...a.data } : {},
+        // 调用方没给 label 就补默认名（「图片 1」这种，与网页端同款）。
+        // 不补的话 MCP 建的节点在 @ 菜单 / 左侧树里就没名字（那里现在只看 data.label）。
+        data: {
+          ...(a.data ?? {}),
+          ...(a.data?.label === undefined ? { label: this.defaultNodeName(a.type, kept) } : {}),
+        },
         ...(a.size ? { size: { ...a.size } } : {}),
         ...(a.parentId ? { parentId: a.parentId } : {}),
       })

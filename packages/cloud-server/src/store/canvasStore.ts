@@ -11,7 +11,7 @@
  * 「从未保存过」与「保存过一张空画布」—— 空画布刷新后不该重新长出默认节点。
  */
 import { promises as fs } from 'node:fs'
-import { canvasFilePath, canvasesRoot } from './canvasPaths.js'
+import { canvasDir, canvasFilePath, canvasesRoot } from './canvasPaths.js'
 import { atomicWriteJson } from './atomicWrite.js'
 
 /** 画布本体。name / createdAt 是画布信息，随节点边一起住 canvas.json */
@@ -137,6 +137,14 @@ export class CanvasStore {
       if (isNotFound(err)) return []
       throw err
     }
+  }
+
+  /**
+   * 删掉一张画布的整个文件夹（画布本体 / 视口 / 历史 / 资源 / agent 会话一起没）。
+   * 目录不存在也算删成功（幂等）。
+   */
+  async remove(id: string): Promise<void> {
+    await fs.rm(canvasDir(this.root, id), { recursive: true, force: true })
   }
 }
 

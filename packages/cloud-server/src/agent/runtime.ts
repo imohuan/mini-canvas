@@ -17,6 +17,7 @@ import { createTranslateState, translateMessage, contextLeftPercent, type Transl
 import { decideTool, normalizePolicy, type ApprovalPolicy } from './approval.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, canvasWorkspaceDir } from './agentPaths.js'
 import type { AgentSessionStore } from './sessionStore.js'
+import { buildReferenceGuidance, namesOfKind, stripMarkupToPlain } from './referenceMarkup.js'
 
 export interface AgentSessionLike {
   readonly sessionId: string
@@ -47,6 +48,14 @@ export interface SessionPrefs {
   mcpServers?: string[]
   /** 本次要引用的技能名（进 [use_skills] 前缀块） */
   skills?: string[]
+  /**
+   * 本次要用的**模式系统提示词**（「全能创作 / 剧本创编」各一套）。
+   *
+   * 做法与 mcpServers 同款：SDK 在**建会话时**读一次 agent_state/AGENTS.md，
+   * 所以临场把它换成这段文本、建完还原，这一条会话的系统提示词就是它。
+   * 不传则用 AGENTS.md 里原有的内容（保持旧行为）。
+   */
+  systemPrompt?: string
   /** 规则列表里的审批开关（随会话走；不传用运行时当前策略） */
   policy?: ApprovalPolicy
   /** 这个模型的上下文窗口（算「剩余百分比」的分母；缺省则退回 session_meta 里的值） */
@@ -62,6 +71,8 @@ export interface AgentRuntimeDeps {
   filterMcp?(names: string[]): Promise<() => Promise<void>>
   /** 技能名 → SKILL.md 全文（拼进 [use_skills] 块） */
   readSkill?(name: string): Promise<string | undefined>
+  /** 临时把 AGENTS.md 换成这段文本，返回还原函数（模式系统提示词用） */
+  withSystemPrompt?(text: string): Promise<() => Promise<void>>
   log?: (message: string, extra?: unknown) => void
 }
 
@@ -134,6 +145,11 @@ export class AgentRuntime {
     }
     await fs.mkdir(canvasWorkspaceDir(this.deps.root, canvasId), { recursive: true })
     const restore = await this.applyMcpFilter(prefs.mcpServers)
+    // 模式系统提示词：与 MCP 一样，卡在「建会话前换、建会话后还原」这一小段里。
+    const restorePrompt =
+      prefs.systemPrompt && this.deps.withSystemPrompt
+        ? await this.deps.withSystemPrompt(prefs.systemPrompt)
+        : async () => undefined
     const agent = await this.deps.agent()
     let session: AgentSessionLike
     try {
@@ -144,6 +160,7 @@ export class AgentRuntime {
       })
     } finally {
       await restore()
+      await restorePrompt()
     }
     const id = session.sessionId
     await this.deps.store.ensure(canvasId, {
@@ -227,10 +244,11 @@ export class AgentRuntime {
     const { id } = await this.ensureSession(canvasId, {
       ...(input.sessionId ? { sessionId: input.sessionId } : {}),
       title: input.text,
-      ...(input.prefs ? { prefs: input.prefs } : {}),
+      // 从正文标记里现算这次要连的 MCP（删掉标记即不再连），与显式 prefs 合并去重。
+      prefs: mergeMarkupPrefs(input.prefs, input.text),
     })
     const entry = this.live.get(this.key(canvasId, id))!
-    const userMessages: unknown[] = await this.buildUserMessages(input.text, input.prefs, input.images)
+    const userMessages: unknown[] = await this.buildUserMessages(input.text, input.images)
 
     // 已经有会话在跑：这一句当 steering 送进去，不并发开第二个 run
     if (entry.running) {
@@ -251,7 +269,9 @@ export class AgentRuntime {
       yield { type: 'session', sessionId: id, title: '' }
       await this.deps.store.appendTurn(canvasId, id, {
         role: 'user',
-        text: input.text,
+        // 转录里存**可读文本**（标记降级成 `@名字`）：历史回放与普通展示都不该看到机器串。
+        // 模型真正拿到的是上面 buildUserMessages 拼好的引导块，与这里无关。
+        text: stripMarkupToPlain(input.text),
         // 图一起落转录：否则刷新 / 切会话后只剩一句文字，用户以为图丢了
         ...(input.images?.length ? { images: input.images } : {}),
         ts: Date.now(),
@@ -335,25 +355,20 @@ export class AgentRuntime {
     }
   }
 
-  /** 组装这一次的用户消息：文本 +（选了技能时）[use_skills] 前缀块 + 图片 */
-  private async buildUserMessages(text: string, prefs: Simp, images: string[] | undefined): Promise<unknown[]> {
+  /**
+   * 组装这一次的用户消息：引用引导块 + 正文 + 图片。
+   *
+   * 口径（用户 2026-10-05）：引用**只给钥匙、不给内容** —— 技能不贴 SKILL.md 全文
+   * （否则引用几次上下文就爆、内容完全重复），只说明它在哪、让模型按需 read_file；
+   * 节点不贴内容，只给画布 id + 节点 id，引导模型用内置画布 MCP 自己去查。
+   * MCP 不在这里（它靠 prefs.mcpServers 决定连哪几个）。
+   */
+  private async buildUserMessages(text: string, images: string[] | undefined): Promise<unknown[]> {
     const make = this.deps.makeUserMessage
-    const raw = make(text, images)
-    const messages: unknown[] = Array.isArray(raw) ? [...raw] : [raw]
-    const skills = prefs?.skills ?? []
-    if (!skills.length || !this.deps.readSkill) return messages
-    const blocks: string[] = []
-    for (const name of skills) {
-      const md = await this.deps.readSkill(name)
-      if (md) blocks.push('## ' + name + String.fromCharCode(10) + md)
-    }
-    if (!blocks.length) return messages
-    const prefix = '[use_skills]' + String.fromCharCode(10) + blocks.join(String.fromCharCode(10, 10)) + String.fromCharCode(10) + '[/use_skills]'
-    const first = messages[0] as { payload?: { text?: string } } | undefined
-    if (first?.payload && typeof first.payload.text === 'string') {
-      first.payload.text = prefix + String.fromCharCode(10, 10) + first.payload.text
-    }
-    return messages
+    // 正文里的引用标记 → 引导块（技能给路径、节点给画布id+节点id）；没有标记则原样。
+    const guided = buildReferenceGuidance(text)
+    const raw = make(guided, images)
+    return Array.isArray(raw) ? [...raw] : [raw]
   }
 
   /** 首轮之后把会话名从「新会话」改成首句（列表里看得懂） */
@@ -422,7 +437,19 @@ export class AgentRuntime {
   }
 }
 
-type Simp = SessionPrefs | undefined
+/**
+ * 把正文标记里声明的 MCP 并进这次会话的 prefs。
+ *
+ * 为什么还要保留显式 prefs：老客户端 / 中间件仍可能直接传 mcpServers。
+ * 两条来源合并去重 —— 标记是「这轮正文里写了什么」，prefs 是「调用方额外指定了什么」。
+ * 都没有时返回原值（undefined 或空），让 ensureSession 走「全部已配置」的默认路径。
+ */
+function mergeMarkupPrefs(prefs: SessionPrefs | undefined, text: string): SessionPrefs | undefined {
+  const fromMarkup = namesOfKind(text, 'mcp')
+  if (!fromMarkup.length) return prefs
+  const merged = [...new Set([...(prefs?.mcpServers ?? []), ...fromMarkup])]
+  return { ...(prefs ?? {}), mcpServers: merged }
+}
 
 /** 与 agentRoot 一起导出，路由层建 agent 时要用 */
 export { agentRoot, AGENT_ID, AGENT_PROJECT_ID }

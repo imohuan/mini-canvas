@@ -115,10 +115,28 @@ export function createCanvasMcpServer(
 
   server.tool(
     'canvas.get',
-    '读取整张画布全量（nodes/edges/viewport）。AI 编辑前应先读一次，掌握现有节点 id 与连线关系',
-    {},
-    async () => {
+    '读取画布。不给 nodeId = 读整张全量（nodes/edges/viewport），AI 编辑前先读一次掌握现状；' +
+      '给 nodeId = 只读那一个节点（引用某个节点时用，不必为看一个节点拉回整张画布）',
+    { nodeId: z.string().optional().describe('只读这一个节点；省略 = 读整张画布') },
+    async ({ nodeId }) => {
       const snap = await doc.read()
+      // 按 id 只取一个：省掉"读全量再自己筛"。找不到就如实回空，不编一个空节点。
+      if (nodeId !== undefined) {
+        const node = snap.nodes.find((n) => n.id === nodeId)
+        if (!node) return toText({ ok: false, error: '节点不存在: ' + nodeId })
+        const related = snap.edges.filter((e) => e.source === nodeId || e.target === nodeId)
+        const byId = new Map(snap.nodes.map((n) => [n.id, n]))
+        return toText({
+          ok: true,
+          node,
+          // 顺带把直接相连的边与对端节点给出：AI 常要"这个节点连了谁"，省一次往返
+          edges: related,
+          neighbors: related
+            .map((e) => byId.get(e.source === nodeId ? e.target : e.source))
+            .filter((n): n is NonNullable<typeof n> => n !== undefined)
+            .map((n) => ({ id: n.id, type: n.type, label: n.data?.label ?? null })),
+        })
+      }
       return toText({
         ok: true,
         nodeCount: snap.nodes.length,

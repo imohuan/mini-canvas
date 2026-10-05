@@ -31,6 +31,7 @@
  */
 import { Hono } from 'hono'
 import type { CanvasDocument } from '../mcp/canvasDoc.js'
+import { DEFAULT_CANVAS_ID } from '../store/canvasPaths.js'
 
 /** 请求体的体积上限（与 kv 路由的 MAX_KEY_LENGTH 同精神：挡住意外/恶意的巨物，而不是精确配额） */
 const MAX_BODY_BYTES = 16 * 1024 * 1024
@@ -143,8 +144,25 @@ function checkList(v: unknown, check: (entry: unknown) => string | null): string
   return null
 }
 
-export function canvasOpsRoutes(doc: CanvasDocument): Hono {
+/**
+ * 增量写接口。
+ *
+ * @param defaultDoc 默认画布的 CanvasDocument（兼容老路径 `/api/canvas/nodes`）
+ * @param docForCanvas 按画布 id 取 CanvasDocument（多画布：`/api/canvases/:id/nodes`）。
+ *   不传则多画布那条路由不可用（纯老宿主/旧测试）。
+ */
+export function canvasOpsRoutes(
+  defaultDoc: CanvasDocument,
+  docForCanvas?: (canvasId: string) => CanvasDocument,
+): Hono {
   const app = new Hono()
+
+  /** 当前请求该写哪张画布：`/api/canvases/:id/nodes` 用 :id；老路径 `/api/canvas/nodes` 用默认画布 */
+  function resolveDoc(c: { req: { param: (k: string) => string | undefined } }): CanvasDocument | undefined {
+    const id = c.req.param('id')
+    if (!id || id === DEFAULT_CANVAS_ID) return defaultDoc
+    return docForCanvas?.(id)
+  }
 
   /**
    * 读 body：先按文本量大小（巨物不该进 JSON.parse，超深嵌套还会让 stringify 爆栈），
@@ -182,6 +200,8 @@ export function canvasOpsRoutes(doc: CanvasDocument): Hono {
     const read = await readBody(c)
     if (!read.ok) return read.res
     const { body } = read
+    const doc = resolveDoc(c)
+    if (!doc) return c.json({ ok: false, error: '画布不存在' }, 404)
 
     const segErr = checkSegments(body)
     if (segErr) return c.json({ ok: false, error: segErr }, 400)
@@ -207,6 +227,61 @@ export function canvasOpsRoutes(doc: CanvasDocument): Hono {
     const read = await readBody(c)
     if (!read.ok) return read.res
     const { body } = read
+    const doc = resolveDoc(c)
+    if (!doc) return c.json({ ok: false, error: '画布不存在' }, 404)
+
+    const segErr = checkSegments(body)
+    if (segErr) return c.json({ ok: false, error: segErr }, 400)
+    const delErr = checkDeleteList(body.delete)
+    if (delErr) return c.json({ ok: false, error: delErr }, 400)
+    const addErr = checkList(body.add, (e) => checkEdgeEntry(e, 'add'))
+    if (addErr) return c.json({ ok: false, error: addErr }, 400)
+    const updErr = checkList(body.update, (e) => checkEdgeEntry(e, 'update'))
+    if (updErr) return c.json({ ok: false, error: updErr }, 400)
+
+    const result = await doc.batchEdges({
+      ...(body.add ? { add: body.add as never } : {}),
+      ...(body.delete ? { delete: body.delete as never } : {}),
+      ...(body.update ? { update: body.update as never } : {}),
+      upsert: true,
+      lenient: true,
+    })
+    return c.json(result)
+  })
+
+  // 多画布：把同一套增量写挂到具体画布名下（前端按当前画布 id 发到这里）
+  app.post('/api/canvases/:id/nodes', async (c) => {
+    const read = await readBody(c)
+    if (!read.ok) return read.res
+    const { body } = read
+    const doc = resolveDoc(c)
+    if (!doc) return c.json({ ok: false, error: '画布不存在' }, 404)
+
+    const segErr = checkSegments(body)
+    if (segErr) return c.json({ ok: false, error: segErr }, 400)
+    const delErr = checkDeleteList(body.delete)
+    if (delErr) return c.json({ ok: false, error: delErr }, 400)
+    const addErr = checkList(body.add, (e) => checkNodeEntry(e, 'add'))
+    if (addErr) return c.json({ ok: false, error: addErr }, 400)
+    const updErr = checkList(body.update, (e) => checkNodeEntry(e, 'update'))
+    if (updErr) return c.json({ ok: false, error: updErr }, 400)
+
+    const result = await doc.batchNodes({
+      ...(body.add ? { add: body.add as never } : {}),
+      ...(body.delete ? { delete: body.delete as never } : {}),
+      ...(body.update ? { update: body.update as never } : {}),
+      upsert: true,
+      lenient: true,
+    })
+    return c.json(result)
+  })
+
+  app.post('/api/canvases/:id/edges', async (c) => {
+    const read = await readBody(c)
+    if (!read.ok) return read.res
+    const { body } = read
+    const doc = resolveDoc(c)
+    if (!doc) return c.json({ ok: false, error: '画布不存在' }, 404)
 
     const segErr = checkSegments(body)
     if (segErr) return c.json({ ok: false, error: segErr }, 400)

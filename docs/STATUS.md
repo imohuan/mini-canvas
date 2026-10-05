@@ -5,6 +5,224 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追加（2026-10-05，音频地址一变就重算波形）
+
+用户口径：**只要播放地址（audioUrl）变化，就自动刷新波形**。
+场景：先上传本地音频（节点上已有波形+时长），再用底栏动作生成新音频 —— 新地址写进来了，
+但节点上还留着**上一段**的波形，而 `ensureAudioMeta` 见「波形+时长都在」会跳过 → 画的是旧音频的波形，
+得点右下角「刷新」才对。
+
+改法（`plugin-node-audio/AudioContent.vue`）：`audioUrl` 变化的 watch 里，地址非空时调
+`reanalyzeAudio`（**无条件**按当前地址重新解码并覆盖波形/时长），不再用 `ensureAudioMeta`
+（它会因为旧波形还在而跳过）。
+
+**验证**：plugin-node-audio **94**（新增 1 条：地址换成新音频后重算的是新地址、时长同步更新）
++ ui **94** 全绿 + tsc/vue-tsc 干净 + 构建通过。Chrome 实测：把音频节点的地址换成真实音频后，
+波形**自动**变成新音频的形状（DOM 竖条 196 根、有真实起伏），无需点刷新。
+
+### 最近完成（2026-10-05，侧栏命名/过滤 + 音频波形时序）
+
+用户报的四条：
+
+1. **侧栏名字与画布不一致**：`nodeDisplayName` 兜底给类型名加了「节点」后缀、且会把节点文本当名字。
+   改成与画布节点标题对齐 —— 优先 `data.label`（用户改名 → 画布/侧栏同时变），其次节点自带名
+   （`imageName`/`audioName`/`videoName`/`title`），都没有才回**类型名**（分组 / 文本 / 图片 / 音频 / 视频），
+   **不加后缀、不拿文本当名字**（用户口径）。
+2. **搜索右侧「过滤」下拉不生效** → 抽出纯函数 `canvasTree.filterTree`：类型过滤（全部/图片/视频/
+   音频/文本/分组）真正生效，分组保留并自动展开；补 `filterTree` 单测 6 条 + `音频` 不再被当成图片
+   （`iconOf` 补 audio，TreeNode.icon 联合类型加 'audio'，抽屉图标与过滤项都加「音频」）。
+3. **隐藏「所有评级」下拉**：侧边栏画布 tab 里的那个已移除（历史弹窗里那个保留）。
+4. **音频波形初次不显示、点刷新才出来**：根因是**时序** —— 音频是「节点先建、音频后写入」，
+   挂载那一刻 `audioUrl` 还是空的，`ensureAudioMeta` 直接 return，之后再没人补。改成 `audioUrl` 变化时
+   再补一次（已齐时零开销早返回）。
+
+**验证**：ui **94**、plugin-node-audio **93** 全绿 + `vue-tsc` / `tsc` 干净 + `vite build` 通过；
+Chrome 端到端（8879 源码服务 + 真实数据）：侧栏名字为「分组 / 文本 / 图片 1 / 音频 1 / 音频 2」（无「节点」后缀）、
+「所有评级」已不在、选「图片」过滤后音频/文本被过滤掉、音频波形**初次就渲染**出竖条。
+
+**注**：音频节点「生成完成后变成图片节点」——后台生成结果由 action 声明的节点类型决定，不在本次改动范围。
+
+### 最近完成（2026-10-05，节点默认名统一：注册时模板 → 建节点时生成 → 处处同源）
+
+**用户报的问题**：画布节点标题显示的是英文 type（`text`/`image`）；Agent @ 菜单显示的
+是文本内容首行 / 图片文件名；左侧画布树又各显示一套 —— 同一个节点三处三个名字。
+根因是**谁都没为新节点写过名字**（`addNode` 建出来 data 是空的），标题条只能回落 props.type，
+@ 菜单与左侧树各自按字段猜。
+
+**改法**：名字只有一个来源 `data.label`。
+- 注册时声明模板：`ctx.nodes.register({ ..., nameTemplate: '图片 {{ID}}' })`
+  （`{{ID}}` = 该类型自己的递增序号，**按类型独立计数**；`{{NAME}}` = 类型 label；不写则 `label {{ID}}`）。
+- 建节点时由数据层统一生成（`nodeStore.addNode/addNodes` → `nextDefaultName`）；
+  `replaceAll` 回填时重建每类型序号，不与被恢复的旧名字撞号。
+- 三处读取统一为 `data.label`（读不到才回落类型中文名）：
+  `BaseNode` 标题条（`useNodeCapability` 新增 `label` 兜底）、Agent @ 菜单、左侧 `canvasTree`。
+
+**验证**：canvas-data 370、canvas-render 415、ui 86、theme-default 248、group 47、
+五个节点插件全绿；编辑器 16 / agent 51 / cloud 330；各包 typecheck 干净。
+浏览器探针 `packages/ui/e2e/node-name-probe.mjs`：新建节点标题条与 @ 菜单都显示「文本 1」。
+
+### 最近完成（2026-10-05，左上角名字=当前画布名）
+
+用户澄清口径：左上角那个可编辑名字应该是**当前画布的名字**（双击即改这张画布），
+下拉菜单里列出的也是这些名字；右侧小胶囊只作位置提示（「画布 + 索引」）。
+
+- `ProjectCluster.vue`：可编辑输入框绑定 **canvas（当前画布名）**，事件由 `rename-project` 改为
+  `rename-canvas`（改的就是当前画布）；下拉项仍列出画布名清单。
+- `ui.renameCanvas(name)`：写回 `/api/canvases/:id/meta`（后端同时更新索引与 canvas.json 的 name），
+  本地即时更新 + `refreshCanvasList()` 拉回真值；两处调用点（TopLeftArea / LeftDrawer）同步改。
+- 工作区/项目名（`state.projectName` + `renameProject`）保留但不再绑在这个输入框上（项目名另有归属，
+  见项目页 `ProjectsPage`）。
+
+**验证**：ui **85** 全绿 + `vue-tsc` 干净 + `vite build` 通过；Chrome 端到端：名字框显示当前画布名（「我的111」）、
+改名 → 索引与输入框同步、下拉列出「画布 1 / 我的111」、切换画布后名字框与胶囊都跟着变。
+
+### 最近完成（2026-10-05，修「切画布丢改动」根因 + 侧栏缩略图/命名）
+
+用户报：「下拉切换画布后发现之前的修改都没保存」「侧栏图片节点不显示」「顶部下拉没跟随左侧名」
+「工作区名变成只读的『我的项目』」。
+
+**保存丢数据的根因（真凶，跨三层）**：
+- 增量保存接口 `POST /api/canvas/nodes` **不带画布 id**，服务端 `CanvasDocument` 绑死在 `default`
+  （`mcp/canvasDoc.ts` 的构造参数）。于是**任何非默认画布**的改动都被写进了 `default`（= 丢失）。
+  实测：新建画布 X 里加节点、切走 → X 文件仍是空的，写请求全打到 default。
+- 修法（从头到尾贯通画布 id）：`/api/canvases/:id/nodes|edges` 新增（`routes/canvasOps.ts`，按 `:id`
+  现建 `CanvasDocument`）；`plugin-cloud-client` 的 `api.patchNodes/patchEdges` 带画布 id、
+  `CanvasDiffAdapter` 每次操作**现读**当前画布（`cid()`，不再构造时定死 —— 那时 hash 路由还没落地会回落 default）。
+- 附带两处加固：`SaveService.flush` 串行化（并发 flush 会「立刻返回」而没等真正写完，守卫以为存完了）；
+  路由守卫 `beforeEach` 在**离开画布前先 await 落盘**（`composables/pendingSave.ts`），覆盖下拉切换/
+  浏览器返回/改 hash 所有路径。
+
+**界面三条**：
+- 侧栏图片/视频节点显示**缩略图**（`canvasTree.nodeThumbUrl` 取 imageUrl/posterUrl…，抽屉里 <img> 渲染）。
+- 画布下拉：默认画布显示「画布 1」（`canvasOptions` 把没真名字的显示成「画布 N」，不露 `default`）；
+  工作区名读后端项目名（`loadProjectName`），改造后**仍可编辑**（`renameProject` 写回 `/api/projects/:id`）。
+
+**验证**：cloud-server **330**、cloud-client **127**、ui **85** 全绿 + 三个包 typecheck 干净；
+Chrome 端到端：新画布加节点 → 切走 → 文件里在（保存修复）；侧栏缩略图真加载（naturalWidth 320）；
+工作区名「我的项目」可编辑、显示真名、下拉「画布 1/画布 2」。`cloud-server` 与 `plugin-cloud-client` 产物已重建。
+
+**注**：用户报的 `imageName` 出现 `undefined_...` 是**生成上游**给的文件名（不是显示 bug）。
+
+### 最近完成（2026-10-05，修用户报的 UI 一串问题）
+
+用户对上一轮「项目/画布/资产」提的 7 条，逐条修：
+
+1. **分组节点被丢 + 名字不跟随**（最要紧）：`plugin-cloud-client/restore.ts` 恢复时按 `knownType`
+   过滤节点，而 `group` 是**云清单运行期热装**（注册晚于恢复）→ 分组节点被过滤掉、子节点变孤儿平铺。
+   用户实测现象正是「分组没了 / 名字不跟随」。改：恢复**一律保留**节点（丢节点=用户数据消失，
+   orphan 由渲染层兜底）；`restore.test.ts` 那条断言从「过滤掉」改成「保留」。
+2. **分组名读错字段**：分组名在 `data.label`（外壳标题条双击改的就是它），`canvasTree.ts` 原来没读 → 补上；
+   同时类型优先 `data.nodeType`（渲染层可能包成 custom），图片/视频名走 `imageName`/`videoName`。
+3. **下拉显示 `default`**：`ui.canvasOptions` 给「没有真名字」的画布显示「画布 N」（按清单顺序），
+   有自定义名就用自定义名 —— 用户口径「要么画布1、要么我的命名，不露内部 id」。
+4. **工作区改名不生效**：原来只改本地 `state.projectName`（没写后端）。改：`ui.renameProject()` 写回
+   `/api/projects/:id` 项目名（工作区命名 = 项目文件夹名），进入时 `loadProjectName()` 读回。
+5. **项目页左栏切不了**：`ProjectsPage` 的 首页/项目/资产 做成真页签（切主区内容，资产页拉 `/api/assets`）。
+6. **项目页不支持主题**：读 KV `config/themeMode` + 右上主题切换按钮（写回同一键，与画布工作台同一套 token）。
+7. **点侧栏节点居中「效果极差」**：`locateNode` 原来只 `setCenter(x,y)`（节点左上角）且无缩放。改成
+   **选中节点 + 用 nodeLayout 实测矩形算中心 + 保留缩放**（退路 `fitView(opts.nodes)`）——与「F 聚焦同一套取景」。
+
+**验证**：cloud-server **327** 全绿；cloud-client **126** 全绿；ui **85** 全绿（canvasTree 补 2 条）+ `vue-tsc` 干净 + `vite build` 通过；
+`plugin-cloud-client` 与 `cloud-server` 产物已重建。Chrome 端到端（8878 源码服务 + 真实数据目录）：
+分组「发的发大」+ 两个子节点都在（共 3 节点）、画布下拉显示「画布 1 / 画布 2」不再有 default、
+工作区名显示「我的项目」、项目页页签与主题切换可用。
+
+**注**：用户报的「左侧 table 无法切换」我按「项目页左栏页签」理解并做成可切换。
+
+### 最近完成（2026-10-05，Agent 引用改成「只给钥匙不给内容」+ 模式提示词）
+
+**用户报的问题**：技能引用 = 把 SKILL.md 全文贴进每条消息 → 引用几次上下文就爆、内容完全重复；
+「全能创作 / 剧本创编」那个下拉是个死开关（选了不影响任何行为）；节点不能被 @。
+
+**改法（设计见 `docs/design/agent-reference-and-modes.md`）**：
+- **引用标记**：输入框里存的是**一段纯文本**，引用 = 文本里的标记 —— `@[skill:名](说明书路径)`、
+  `@[mcp:名]`、`@[node:名](画布id#节点id)`。删掉标记即引用失效。
+- **后台只给钥匙**：技能**不贴正文**，只写一句「说明书在 <路径>，需要时自己 read_file」（懒读）；
+  节点**不贴内容**，只给画布 id + 节点 id，引导模型用**内置画布 MCP** 自己去查；
+  MCP 靠标记决定这次连哪几个服务。发送时不再带 `skills`/`mcpServers` 特殊属性。
+- **内置画布 MCP**：cloud-server 启动时把自己的 `/mcp` 端点写进 Agent 的 MCP 清单
+  （默认携带、用户零配置；`builtinCanvasMcp` 可关，测试用）。
+- **模式 = 两套系统提示词**：清单住后台 KV（`config/agent-prompts`，用现成 storeAdapter）；
+  设置 → Agent → 提示词 里可增删改，内置两条**不可删**。模式是**会话级**的（SDK 把系统提示词
+  钉在建会话那一次），切模式会开一条新会话才真正生效。
+- **@ 节点 + 点标签聚焦**：@ 菜单新增「节点」分组（订阅 doc 实时更新），搜索词过滤 + 前 5 项；
+  点节点标签让画布 `viewport.setCenter` 聚焦到该节点。
+
+**验证**：prosemirror-editor-bundle 16/16、plugin-agent 46/46、cloud-server 327/327、ui 83/83；
+浏览器探针 `packages/ui/e2e/reference-probe.mjs` 通过；真服务里 `system_config.yaml` 自动多出
+`canvas` 服务、`GET /api/agent/prompts` 返回两条内置。
+
+**留的接口**：节点读取没有新增工具（用户后台在更新）—— 引导语只说「用画布 MCP 查」，不绑具体工具名，
+等后台出「按 id 取单节点」的工具时引导语不用改。
+
+### 最近完成（2026-10-05，项目/画布/资产三层 + 项目页路由）
+
+**用户要求「完整修改」**：项目 → 多张画布（后台文件夹套文件夹）+ 独立资产目录（生成产物 + 自己上传）
++ 复刻 LibTV `/project` 的项目页 + `vue-router` 切换。设计见 `docs/design/project-canvas-assets.md`。
+
+**后端（cloud-server，全部带单测先红后绿）**：
+- `store/projectStore.ts`：项目注册表（`projects.json`）+ 画布索引（`canvases/index.json`，带 projectId）。
+  画布**文件夹路径不变**（仍在 `canvases/<id>/`），「属于哪个项目」记索引 —— 理由：改物理路径要动
+  CanvasStore/Resources/History/Doc/TaskManager/agent 一整条链 + 迁移已有数据，风险远大于收益。
+  有 `default` 项目兜底（老画布不丢），画布目录存在但索引缺失时归 default。
+- `store/assetStore.ts`：资产目录（`assets/index.json` + `assets/files/`）。生成产物**按引用登记**
+  （不复制字节），上传的字节落 `assets/files/<hash>`；同 url / 同内容幂等。
+- `routes/projects.ts`（项目/画布 CRUD）+ `routes/assets.ts`（列表/上传/取字节/删），注册为内置插件
+  `projects` / `assets`（内置插件从 13 → 15，`builtinBehavior` 断言同步更新）。
+- `TaskManager` 加 `onArtifact` 钩子：任务成功有产物 → 登记进资产目录；`CanvasStore.remove` 删画布文件夹。
+
+**前端（packages/ui）**：
+- 引入 `vue-router`（hash 模式）：`#/` 项目页、`#/canvas/:id` 画布工作台；`Root.vue` 按 `fullPath` 做 key，
+  切画布时**重新挂载**工作台（插件在 apply 时读画布 id，不重挂会拿旧数据）。
+- `components/ProjectsPage.vue`：复刻 LibTV 项目页，**去掉用户红框**（右上积分/会员/头像；左栏
+  Agent/3D-BOX/插件与扩展/社区/版本更新记录）。数据来自 `/api/projects`，点项目→打开其画布（没有就先建）。
+- 画布「画布」下拉改绑**当前项目的真实画布**（`/api/projects/:id/canvases`）：可切换（换 hash 重挂）、
+  可新建（`POST /api/projects/:id/canvases`）。
+- 左侧「资产」页改读 `/api/assets`（生成 + 上传统一），图片当缩略图、可下载。
+- `plugin-cloud-client` 支持多画布：当前画布 id 从 URL（`?canvas=` / `#/canvas/`）现算，不再写死 `default`。
+
+**验证**：cloud-server **312** 全绿（新增 projectAssetStore 9 条 + projectsAssetsRoute 6 条）；
+cloud-client **125** 全绿；ui **83** 全绿（新增 canvasTree 4 + assetModel 3）+ `vue-tsc` 干净 + `vite build` 通过。
+Chrome 端到端（8899 源码服务 + 干净数据目录）：项目页 → 点进 → 画布工作台；下拉列出「分镜A/分镜B」并切换成功；
+上传资产后资产页显示。**注意**：线上跑的 `cloud-server` 是 `dist/` 产物，要重启/重编译才生效。
+
+### 最近完成（2026-10-05，UI 完善：音频任务解析 + 侧边栏抽屉三件 + 真实画布树 + 资产页）
+
+**用户报的一串问题，本轮做掉 5 件（都在 packages/ui + cloud-server，未碰核心节点件）：**
+
+1. **音频任务「执行失败 Cannot read properties of undefined (reading 'urls')」** —— 根因两条：
+   豆包 tts 是**同步完成**（`tools/call` 只回 `content[].resource.uri`，没有 `structuredContent`），
+   而 `cloud-server/src/providers/web2api/index.ts` 的 submit 分支无脑 `extractUrls(result.structuredContent)`
+   → 传 `undefined` 进去就抛；且 `client.ts` 的 `extractUrls` 不认任务详情里真正的字段 `resources[].downloadUrl`、
+   也不认同步返回的 `content[].resource.uri`。**修**：`extractUrls` 防御化（undefined→[]）+ 认
+   `uri/downloadUrl/resource`，submit 同时扫 `structuredContent` 与 `content`，两处地址都用新增的
+   `absolutizeUrl` 绝对化到 web2api origin（相对 `/api/resources/...` 不补 origin 前端会 404）。
+   真机探针（8033）确认：任务在 web2api 侧成功、产物在 `resources[].downloadUrl`。
+   单测 `web2apiSubmit.test.ts` 4 条（先红后绿）；cloud-server 297 全绿 + typecheck 干净。
+
+2. **左抽屉展开后画布下拉点不动** —— 根因：抽屉打开时**同时挂载了两个 ProjectCluster**
+   （左上角 `v-show` 隐藏但仍挂载 + 抽屉里那个），二者共享 `s.canvasMenuOpen`，AxDropdown 的
+   「同屏只开一个」排他逻辑互相关闭 → 永远打不开。**修**：左上角那份 `v-show` 改 `v-if`（只挂载一个）。
+   浏览器实测：展开抽屉后点画布 chip，`aria-expanded=true`、菜单正常列出「画布 1/2/3」。
+
+3. **下拉命名的重复** —— 按用户提案：画布下拉**触发器**改为显示「画布 + 索引」
+   （不再显示画布名，避免与列表里重复）；工作区名拆成独立可编辑的 `s.projectName`，画布列表另算。
+
+4. **左侧「画布」树改为跟着真实画布数据实时画** —— 新增纯函数 `ui/src/composables/canvasTree.ts`
+   （`buildCanvasTree` / `nodeDisplayName`）：按 `parentId` 组织分组树、名字全部来自节点自身
+   （imageName/audioName/text…）、孤儿节点升为根不丢。`ui.ts` 由 `doc.subscribe` 驱动重画
+   （`bindCanvasTree`/`unbindCanvasTree`）；点节点（或定位按钮）调 `locateNode` → viewport `setCenter` 居中。
+   单测 `canvasTree.test.ts` 4 条。浏览器实测：抽屉列出真实 8 个节点（文件名即节点名）、点击视口居中。
+
+5. **「资产」页显示真实生成资源** —— 资产 = **有产物地址的历史记录**（复用 `gen-history` 全量账本，
+   不另起一套资产库）；`ui.assetItems` 过滤 `urls` 非空，图片直接当缩略图（视频/音频用类型图标）、
+   可下载、文件名取自产物地址。空态给一句人话 + 入口（不是假的「创建分类」按钮）。
+   实测：当前历史只剩失败记录（urls 为空）→ 正确显示空态。
+
+**其它**：调试期仓库里 `PluginManagerPage.vue` 的 WIP 模板尾部有残留（`Invalid end tag`）会让整包构建失败，
+该文件已被并发的插件管理提交（`34a7ec38`）修好；本轮的 UI 改动已在其之上重新构建，产物刷新到 `packages/ui/dist`。
+**验证**：ui 80 全绿 + vue-tsc 干净；cloud-client 125 全绿；cloud-server 297 全绿 + tsc 干净。
+
 ### 最近完成（2026-10-04，全仓扫描：同一类「启动/恢复先后顺序」bug 清查）
 
 前面三个 bug（设置刷新回退、插件刷新掉、小地图宽高回退）是**同一类根因**：数据是先按本地后端恢复、

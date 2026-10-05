@@ -68,6 +68,37 @@ describe('与网页界面共用同一份存储', () => {
     await expect(doc.saveResource(new Uint8Array([]))).rejects.toThrow('为空')
   })
 
+  it('MCP 建节点自动补默认名（「图片 1」这种，与网页端同款），序号按类型独立', async () => {
+    const r1 = await doc.batchNodes({
+      add: [{ type: 'image' }, { type: 'text' }, { type: 'image' }],
+    })
+    expect(r1.ok).toBe(true)
+    const snap = await doc.read()
+    const byId = new Map(snap.nodes.map((n) => [n.id, n]))
+    expect(byId.get(r1.added[0])!.data.label).toBe('图片 1')
+    expect(byId.get(r1.added[1])!.data.label).toBe('文本 1')
+    expect(byId.get(r1.added[2])!.data.label).toBe('图片 2')
+  })
+
+  it('调用方显式给了 label 就尊重它，不覆盖', async () => {
+    const r = await doc.batchNodes({ add: [{ type: 'image', data: { label: '我的图' } }] })
+    const snap = await doc.read()
+    expect(snap.nodes.find((n) => n.id === r.added[0])!.data.label).toBe('我的图')
+  })
+
+  it('默认名接着已有的同类型序号往下数（已存在「图片 3」→ 下一个是「图片 4」）', async () => {
+    await store.writeCanvas('default', {
+      nodes: [
+        { id: '1', type: 'image', position: { x: 0, y: 0 }, data: { label: '图片 3' } },
+        { id: '2', type: 'image', position: { x: 0, y: 0 }, data: { label: '别的名字' } },
+      ],
+      edges: [],
+    })
+    const r = await doc.batchNodes({ add: [{ type: 'image' }] })
+    const snap = await doc.read()
+    expect(snap.nodes.find((n) => n.id === r.added[0])!.data.label).toBe('图片 4')
+  })
+
   it('写入后，磁盘上的 canvas.json 就是同一份数据（网页端读的也是它）', async () => {
     await doc.batchNodes({ add: [{ type: 'text', id: 'n1', data: { text: '你好' } }] })
     await doc.batchEdges({ add: [{ source: 'n1', target: 'n1' }] }).catch(() => {})
@@ -120,7 +151,8 @@ describe('batchNodes', () => {
     expect(r.ok).toBe(true)
     expect(r.updated).toEqual(['n1'])
     const node = (await doc.read()).nodes[0]
-    expect(node.data).toEqual({ text: 'b', keep: 1 })
+    // label 是 MCP 建节点时补的默认名（add 没给 label），浅合并不动它
+    expect(node.data).toEqual({ label: '文本 1', text: 'b', keep: 1 })
   })
 
   it('删节点会连带删掉它的连线（不留悬挂边）', async () => {

@@ -33,7 +33,7 @@ import { runAgentMiddleware } from '../../serverFramework/agent.js'
 import type { KvStore } from '../../store/kvStore.js'
 import type { CanvasStore } from '../../store/canvasStore.js'
 import type { CanvasResourceStore } from '../../store/canvasResources.js'
-import type { CanvasDocument } from '../../mcp/canvasDoc.js'
+import { CanvasDocument } from '../../mcp/canvasDoc.js'
 import type { ProviderRegistry } from '../../providers/registry.js'
 import type { TaskManager } from '../../tasks/taskManager.js'
 import type { HistoryStore } from '../../tasks/history.js'
@@ -152,9 +152,15 @@ export const kvPlugin: PluginModule = {
 
 export const canvasOpsPlugin: PluginModule = {
   name: 'canvas-ops',
-  inject: [S.doc],
+  inject: [S.doc, S.canvasStore, S.canvasResources],
   apply(ctx) {
-    ctx.routes.adopt(canvasOpsRoutes(need<CanvasDocument>(ctx, S.doc)))
+    const store = need<CanvasStore>(ctx, S.canvasStore)
+    const resources = need<CanvasResourceStore>(ctx, S.canvasResources)
+    // 多画布：按画布 id 现建一个 CanvasDocument（增量写接口写哪张由路由的 :id 决定）。
+    // 默认画布那份仍用宿主共享的实例（与 MCP / 网页读同一份、同一把写锁）。
+    ctx.routes.adopt(
+      canvasOpsRoutes(need<CanvasDocument>(ctx, S.doc), (canvasId) => new CanvasDocument(store, resources, canvasId)),
+    )
   },
 }
 

@@ -136,7 +136,8 @@ describe('POST /api/canvas/nodes —— 增量改节点', () => {
     await post('/api/canvas/nodes', { add: [{ type: 'text', id: 'a', data: { keep: 1, change: 'old' } }] })
     await post('/api/canvas/nodes', { update: [{ id: 'a', data: { change: 'new' } }] })
     const a = (await readGraph())!.find((n: any) => n.id === 'a')!
-    expect(a.data).toEqual({ keep: 1, change: 'new' })
+    // label 是建节点时补的默认名（add 没给 label），浅合并不动它
+    expect(a.data).toEqual({ label: '文本 1', keep: 1, change: 'new' })
   })
 })
 

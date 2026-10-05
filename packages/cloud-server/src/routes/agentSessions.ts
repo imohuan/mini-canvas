@@ -68,6 +68,9 @@ export function agentSessionRoutes(
     if (typeof body.modelId === 'string' && body.modelId) prefs.modelId = body.modelId
     if (Array.isArray(body.mcpServers)) prefs.mcpServers = body.mcpServers.map(String)
     if (Array.isArray(body.skills)) prefs.skills = body.skills.map(String)
+    // 模式系统提示词（全能创作 / 剧本创编各一套）：随这一轮传给运行时，
+    // 它在建会话时临时替换 AGENTS.md（见 AgentRuntime.ensureSession）。
+    if (typeof body.systemPrompt === 'string' && body.systemPrompt.trim()) prefs.systemPrompt = body.systemPrompt
     const window = await config.modelContextWindow(prefs.provider, prefs.modelId)
     if (window) prefs.contextWindow = window
     return Object.keys(prefs).length ? prefs : undefined

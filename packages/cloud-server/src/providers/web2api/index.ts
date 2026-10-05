@@ -7,7 +7,7 @@
  * 三件事：把动作表交出去；提交时按 `promptMode` 拼参数、调 MCP 工具；有 taskId 就查进度。
  */
 import type { ActionDef, JobInput, Provider, ProviderPollResult, ProviderSubmitResult } from '../types.js'
-import { Web2ApiClient, extractUrls, parseTaskId } from './client.js'
+import { Web2ApiClient, absolutizeUrl, extractUrls, parseTaskId } from './client.js'
 import { buildChatAutoPrompt } from './chatAutoPrompt.js'
 import { WEB2API_ACTIONS } from './presets.js'
 
@@ -79,7 +79,11 @@ export function buildToolArgs(action: ActionDef, input: JobInput): Record<string
 }
 
 /** 一次任务查询 → 统一的轮询结果 */
-function toPollResult(detail: Awaited<ReturnType<Web2ApiClient['getTask']>>, taskId: string): ProviderPollResult {
+function toPollResult(
+  detail: Awaited<ReturnType<Web2ApiClient['getTask']>>,
+  taskId: string,
+  origin: string,
+): ProviderPollResult {
   const status = detail.status
   if (status === 'paused' || status === 'interrupted') {
     return { status: 'error', error: (detail.message || '任务被暂停') + '（可在 web2api 里恢复或重试）', taskId }
@@ -87,7 +91,9 @@ function toPollResult(detail: Awaited<ReturnType<Web2ApiClient['getTask']>>, tas
   if (status === 'failed') return { status: 'error', error: detail.message || '任务执行失败', taskId }
   if (status === 'cancelled') return { status: 'error', error: detail.message || '任务已取消', taskId }
   if (status === 'completed' || status === 'done' || status === 'success') {
-    const urls = extractUrls(detail)
+    // 产物地址要**绝对化**到 web2api origin：tasks 详情里给的是 /api/resources/... 这种相对路径，
+    // 不补 origin 的话浏览器会拿 cloud-server 的域名去取，图/音/视频全 404。
+    const urls = extractUrls(detail).map((u) => absolutizeUrl(u, origin))
     if (urls.length === 0) return { status: 'error', error: '任务完成但没有产出资源', taskId }
     return { status: 'done', urls, taskId }
   }
@@ -134,7 +140,9 @@ export function createWeb2ApiProvider(opts: Web2ApiProviderOptions = {}): Provid
       const tool = action.tool
       if (!tool) return { error: '动作 ' + action.id + ' 没声明 tool' }
       try {
-        const client = clientFor(endpointOf())
+        const endpoint = endpointOf()
+        const client = clientFor(endpoint)
+        const origin = new URL(endpoint).origin
         const result = await client.callTool(tool, buildToolArgs(action, input))
         if (result.isError) {
           const text = (result.content ?? []).map((c) => c.text ?? '').join(' ').trim()
@@ -142,8 +150,14 @@ export function createWeb2ApiProvider(opts: Web2ApiProviderOptions = {}): Provid
         }
         const taskId = parseTaskId(result)
         if (taskId) return { taskId }
-        // 没有 taskId：可能是同步完成的
-        const urls = extractUrls(result.structuredContent as never)
+        // 没有 taskId：可能是同步完成的（tts 这类）。产物地址可能在 content[].resource.uri，
+        // 也可能在 structuredContent 里 —— 两处都扫，且**入参可能是 undefined**（同步工具没有
+        // structuredContent，直接把它喂给 extractUrls 会抛「reading 'urls'」——这正是用户实测的坑）。
+        // 这两种形态的产物地址都要绝对化，否则前端加载不到。
+        const urls = [
+          ...extractUrls(result.structuredContent as never),
+          ...extractUrls(result),
+        ].map((u) => absolutizeUrl(u, origin))
         if (urls.length > 0) return { done: true, urls }
         // 给不出 taskId 也给不出产物 —— 明确报错，别让任务永远挂着
         return { error: tool + ' 未返回可识别的 taskId（响应格式可能与预期不符）' }
@@ -154,7 +168,8 @@ export function createWeb2ApiProvider(opts: Web2ApiProviderOptions = {}): Provid
 
     async poll(taskId): Promise<ProviderPollResult> {
       try {
-        return toPollResult(await clientFor(endpointOf()).getTask(taskId), taskId)
+        const endpoint = endpointOf()
+        return toPollResult(await clientFor(endpoint).getTask(taskId), taskId, new URL(endpoint).origin)
       } catch (err) {
         // 查不到不是终态：报给用户但继续（服务重启后任务可能真没了 —— 由后台的超时兜底）
         return { status: 'running', message: err instanceof Error ? err.message : '任务查询失败', taskId }

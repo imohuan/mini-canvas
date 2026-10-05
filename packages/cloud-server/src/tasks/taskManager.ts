@@ -26,6 +26,14 @@ export const DEFAULT_TIMEOUT = 300_000
 /** 一次任务要用的外部能力（注入，便于单测给假货） */
 export interface TaskDeps {
   doc: CanvasDocument
+  /**
+   * 按画布 id 取该画布的文档（多画布：**进度/终态要写进任务所属的那张画布**）。
+   *
+   * 不传时回落 `doc`（默认画布）。曾经的写法固定用 `doc`（默认画布的文档），于是
+   * **非默认画布**上的任务，进度全写进了 default（那里根本没有那个节点 id）→ 静默失败，
+   * 表现就是"进度一直卡在 0%"（用户实测）。
+   */
+  docForCanvas?: (canvasId: string) => CanvasDocument
   registry: ProviderRegistry
   history: HistoryStore
   /** 把节点里的 `res:<hash>` 引用解析成 provider 能取的真实地址 */
@@ -33,6 +41,8 @@ export interface TaskDeps {
   /** 测试可注入假时钟 / 睡眠 */
   now?: () => number
   sleep?: (ms: number) => Promise<void>
+  /** 任务成功产出资源时的回调（server 用来把产物登记进资产目录；测试可省） */
+  onArtifact?: (canvasId: string, urls: string[]) => void
   onError?: (message: string, err?: unknown) => void
 }
 
@@ -165,7 +175,9 @@ export class TaskManager {
   /** 写节点 runState（走增量口；节点已被删就静默跳过 —— 任务还在跑，只是没地方写进度） */
   private async writeRunState(job: Job, runState: Record<string, unknown>): Promise<void> {
     try {
-      await this.deps.doc.batchNodes({ update: [{ id: job.nodeId, ...nodeRunStatePatch(runState) }] })
+      // 写进**任务所属那张画布**的文档（多画布）：用 deps.doc 会写错画布 → 静默失败 → 进度卡 0
+      const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
+      await doc.batchNodes({ update: [{ id: job.nodeId, ...nodeRunStatePatch(runState) }] })
     } catch (err) {
       this.deps.onError?.('[tasks] 写节点进度失败（节点可能已被删除）', err)
     }
@@ -258,6 +270,12 @@ export class TaskManager {
     )
 
     await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt))
+
+    // 成功且有产物 → 通知宿主把它登记进资产目录（用户口径：资产 = 所有生成过的产物）。
+    // 放在历史之后、终态之前：登记失败不该影响任务终态（宿主侧自己兜错）。
+    if (result.ok && result.urls && result.urls.length > 0) {
+      this.deps.onArtifact?.(job.canvasId, result.urls)
+    }
 
     job.status = result.ok ? 'done' : 'error'
     job.progress = result.ok ? 100 : job.progress

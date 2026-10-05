@@ -209,6 +209,28 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     return c.json({ ok: true, text: await config.systemPrompt() })
   })
 
+  /**
+   * 模式提示词清单（全能创作 / 剧本创编 + 用户自建），住后台 KV。
+   *
+   * GET  -> { prompts: PromptPreset[] }
+   * PUT  -> body { prompts: PromptPreset[] } 整包写回；内置项被删会自动补回。
+   */
+  app.get('/api/agent/prompts', async (c) => {
+    const r = await guard(() => config.prompts())
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, prompts: r.value })
+  })
+
+  app.put('/api/agent/prompts', async (c) => {
+    const body = await safeJson(c)
+    if (!body || !Array.isArray((body as { prompts?: unknown }).prompts)) {
+      return c.json({ ok: false, error: 'body 需要 { prompts: PromptPreset[] }' }, 400)
+    }
+    const r = await guard(() => config.savePrompts((body as { prompts: unknown }).prompts))
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, prompts: r.value })
+  })
+
   /** 上游可用模型清单（界面下拉用） */
   app.post('/api/agent/models/available', async (c) => {
     const body = (await safeJson(c)) ?? {}

@@ -37,6 +37,26 @@ import {
   MCP_TOOL_PREFIX,
 } from '@prismshadow/penguin-core'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, agentSkillSources } from './agentPaths.js'
+import { KvStore } from '../store/kvStore.js'
+
+/** 去重 + 保证内置项标记正确（写回前统一走一遍） */
+function normalizePrompts(list: PromptPreset[]): PromptPreset[] {
+  const builtinIds = new Set(DEFAULT_PROMPTS.map((p) => p.id))
+  const seen = new Set<string>()
+  const out: PromptPreset[] = []
+  for (const p of list) {
+    const id = String(p.id ?? '').trim()
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push({
+      id,
+      name: String(p.name ?? '').trim() || id,
+      text: String(p.text ?? ''),
+      ...(builtinIds.has(id) ? { builtin: true } : {}),
+    })
+  }
+  return out
+}
 
 export interface AgentProviderView {
   provider: string
@@ -97,6 +117,8 @@ export interface AgentSkillView {
   description: string
   size: number
   fileCount: number
+  /** 技能目录的绝对路径（前端拿它拼 SKILL.md 路径，写进引用标记） */
+  dir: string
 }
 
 export interface AgentSkillCandidate {
@@ -126,6 +148,53 @@ export interface AddMcpInput {
   url?: string
   permission?: 'auto' | 'r' | 'rw'
 }
+
+/** 一套「模式系统提示词」（全能创作 / 剧本创编 / 用户自建…） */
+export interface PromptPreset {
+  /** 稳定 id（内置的两条固定为 general / script） */
+  id: string
+  /** 展示名（下拉里显示的那个名字） */
+  name: string
+  /** 提示词正文 */
+  text: string
+  /** 内置项：不可删除（用户可以改名/改内容，但不能删掉这一条） */
+  builtin?: boolean
+}
+
+/** KV 里存提示词清单的 key（type=config） */
+export const AGENT_PROMPTS_KEY = 'agent-prompts'
+
+/** 提示词清单住的 KV 作用域（与设置/快捷键同为 config，落在 settings.json） */
+export const AGENT_PROMPTS_KV_TYPE = 'config'
+
+/**
+ * 两条内置提示词（用户提供的内容就落在这里）。
+ * 它们是用户点名的两个模式，**不允许删除** —— 只允许改名与改正文。
+ */
+export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
+  {
+    id: 'general',
+    name: '全能创作',
+    builtin: true,
+    text:
+      '# 角色\n你是画布里的创作助手，帮用户把想法变成画布上的节点与内容。\n\n' +
+      '# 工作方式\n- 先看清画布现状（用画布 MCP 工具读，再动手），不要凭空假设画布上有什么。\n' +
+      '- 用户 @ 了节点时，先查到那个节点的真实内容再回答。\n' +
+      '- 需要几样东西才能生成时，直接生成；不确定时先问一句。\n' +
+      '- 回答问题用中文，简短直接。',
+  },
+  {
+    id: 'script',
+    name: '剧本创编',
+    builtin: true,
+    text:
+      '# 角色\n你是一个剧本编剧助手：**先把剧本写出来，让用户确认，确认之后再生成画面/视频**。\n\n' +
+      '# 工作方式\n- 第一轮只出剧本（分镜 / 台词 / 场景），不要直接生成素材。\n' +
+      '- 剧本要落到具体的镜头，一条一条列清楚。\n' +
+      '- 等用户说「可以」之后再调用生成工具。\n' +
+      '- 用中文，简短直接。',
+  },
+]
 
 export class AgentConfigService {
   /**
@@ -160,6 +229,36 @@ export class AgentConfigService {
     await fs.writeFile(target, text, 'utf8')
   }
 
+  /**
+   * 临场把 AGENTS.md 换成这段文本，返回**还原函数**（模式系统提示词用）。
+   *
+   * 为什么用这个手法（与 subsetMcp 同款）：SDK 只在**建会话时**读一次 AGENTS.md
+   * 来组装系统提示词。所以「建会话前换成模式提示词、建完立刻还原」正好卡在那个点上 ——
+   * 既让这一条会话用上模式提示词，又不永久改动 AGENTS.md（用户自己的系统提示词还在）。
+   *
+   * 还原失败不抛（宁可留下模式提示词，也不能让建会话这一步崩掉）。
+   */
+  async withSystemPrompt(text: string): Promise<() => Promise<void>> {
+    await this.ensureInit()
+    // 取互斥锁：一次只容一个「换 → 建会话 → 还原」走完（见 acquirePromptLock 的说明）。
+    // 锁一直握到还原（返回的 restore 里释放），所以并发建会话不会互相覆盖 AGENTS.md。
+    const release = await this.acquirePromptLock()
+    const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
+    const previous = await fs.readFile(target, 'utf8').catch(() => '')
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, text, 'utf8')
+    return async () => {
+      try {
+        await fs.writeFile(target, previous, 'utf8')
+      } catch {
+        /* 还原失败：保住眼下这条会话，别把错抛出去 */
+      } finally {
+        // 无论还原成败都要放锁，否则后面排队的建会话全卡死
+        release()
+      }
+    }
+  }
+
   private readonly skillSources: string[]
   /**
    * 首次初始化只做一次。
@@ -171,8 +270,82 @@ export class AgentConfigService {
    */
   private initPromise?: Promise<void>
 
+  /**
+   * AGENTS.md 临时替换的**互斥锁**（一次只容一个「换 → 建会话 → 还原」走完）。
+   *
+   * 为什么必须有：`withSystemPrompt` 是「读旧值 → 写新值 → 建会话 → 还原旧值」，
+   * 且**建会话在中间**（SDK 那时才读 AGENTS.md）。两个并发 createSession
+   * （用户连点两次 / 两个画布同时开）会交错：A 读旧、B 读旧、A 写、B 写、A 还原、B 还原 ——
+   * 最后谁写谁赢，可能把用户的系统提示词覆盖掉。
+   * 锁要**一直握到还原**，所以不是简单的任务链，而是一个带排队的信号量。
+   */
+  private promptLock: Promise<void> = Promise.resolve()
+
+  /** 排队取锁；返回释放函数 */
+  private async acquirePromptLock(): Promise<() => void> {
+    let release!: () => void
+    const mine = new Promise<void>((r) => (release = r))
+    const prior = this.promptLock
+    this.promptLock = prior.then(() => mine)
+    await prior
+    return release
+  }
+
   constructor(private readonly dataRoot: string, skillSources?: string[]) {
     this.skillSources = skillSources ?? agentSkillSources()
+  }
+
+  /**
+   * 提示词清单的落点：与设置 / 快捷键同一条 KV（`{dataRoot}/settings.json` 的 `config` 桶）。
+   *
+   * 用户口径：提示词存在后台，用已有的 storeAdapter（KV）保存 —— 于是换台机器也在，
+   * 且与「设置」这条已验证的链路同源，不必再开新存储。
+   */
+  private get promptKv(): KvStore {
+    return new KvStore(this.dataRoot)
+  }
+
+  /**
+   * 读提示词清单。**首次为空时落上两条内置**，之后永远以 KV 里的为准。
+   *
+   * 为什么首次要落盘（而不是「读不到就现返回默认」）：用户改了内置项的正文之后，
+   * 「读不到就返回默认」会把他的修改一直盖掉 —— 只有真的存过一次，修改才留得住。
+   */
+  async prompts(): Promise<PromptPreset[]> {
+    const stored = await this.promptKv.get<PromptPreset[]>(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY)
+    if (Array.isArray(stored) && stored.length) return normalizePrompts(stored)
+    const seed = DEFAULT_PROMPTS.map((p) => ({ ...p }))
+    await this.promptKv.set(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY, seed)
+    return seed
+  }
+
+  /**
+   * 整包写回提示词清单。
+   *
+   * 校验两件事：
+   * 1. **内置项不允许被删**：传来的清单里必须仍含两个内置 id，缺了就补回（以默认内容为底）；
+   * 2. id 唯一、name 非空 —— 否则下拉里会出现两个同名项。
+   */
+  async savePrompts(list: unknown): Promise<PromptPreset[]> {
+    const incoming = Array.isArray(list) ? (list as PromptPreset[]) : []
+    const byId = new Map<string, PromptPreset>()
+    for (const raw of incoming) {
+      if (!raw || typeof raw !== 'object') continue
+      const id = String((raw as PromptPreset).id ?? '').trim()
+      const name = String((raw as PromptPreset).name ?? '').trim()
+      const text = String((raw as PromptPreset).text ?? '')
+      if (!id || !name) continue
+      byId.set(id, { id, name, text, ...(raw.builtin ? { builtin: true } : {}) })
+    }
+    // 内置项必须在：被删掉的补回来（正文用默认；用户改过的会以传入的为准）
+    for (const d of DEFAULT_PROMPTS) {
+      const cur = byId.get(d.id)
+      if (!cur) byId.set(d.id, { ...d })
+      else byId.set(d.id, { ...cur, builtin: true })
+    }
+    const next = normalizePrompts([...byId.values()])
+    await this.promptKv.set(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY, next)
+    return next
   }
 
   /** SDK 的数据根（全局配置住它下面） */
@@ -531,6 +704,34 @@ export class AgentConfigService {
     return this.mcpServers()
   }
 
+  /** 内置画布 MCP 的服务名（system_config.yaml 里的条目名） */
+  readonly BUILTIN_CANVAS_MCP = 'canvas'
+
+  /**
+   * 把**自身的画布 MCP** 写进 Agent 的 MCP 清单（默认携带，用户零配置）。
+   *
+   * 用户口径（2026-10-05）：这个画布 MCP 是随 Agent 内置的，用户不用在设置里添任何东西，
+   * 开箱就能操作当前画布；@ 出来的节点也靠它去查。
+   *
+   * 幂等：只补 / 纠正名为 `canvas` 的那一条，不动用户自己配的（如 smart）。
+   * URL 变了（换端口）也会更新。
+   */
+  async ensureBuiltinCanvasMcp(url: string): Promise<void> {
+    await this.ensureInit()
+    const trimmed = (url ?? '').trim()
+    if (!trimmed) return
+    const cfg = await loadSystemConfig(this.sdkRoot)
+    const existing = cfg.tools?.mcpServers ?? []
+    const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
+    if (current && (current.config as { url?: unknown }).url === trimmed && (current.config as { type?: unknown }).type === 'http') {
+      return // 已经是它，别白写一次（写会触发 kv 变更广播）
+    }
+    const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url: trimmed } }
+    resolveMCPServer(entry as never)
+    const next = [...existing.filter((e) => e.name !== this.BUILTIN_CANVAS_MCP), entry]
+    await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+  }
+
   /**
    * **主动**连一次 MCP 并列出可用工具（不必先发一句话）。
    *
@@ -627,7 +828,7 @@ export class AgentConfigService {
       } catch {
         /* 目录在列举与 stat 之间消失：按空处理 */
       }
-      out.push({ name: s.name, description: s.description ?? '', size, fileCount })
+      out.push({ name: s.name, description: s.description ?? '', size, fileCount, dir: path.join(dir, s.name) })
     }
     return out
   }

@@ -70,6 +70,36 @@ async function waitFor(cond: () => boolean, ms = 2000): Promise<boolean> {
 }
 
 describe('下单', () => {
+  it('多画布：进度写进**任务所属那张画布**（写错画布会表现为"进度一直卡 0"）', async () => {
+    const p: Provider = {
+      id: 'p', actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll(): Promise<ProviderPollResult> { return { status: 'done', urls: ['https://x/1.png'] } },
+    }
+    // 造两张画布：default（共享 doc）与 other（另一个 CanvasDocument）
+    const defaultDoc = new CanvasDocument(new CanvasStore(root), new CanvasResourceStore(root))
+    const otherDoc = new CanvasDocument(new CanvasStore(root), new CanvasResourceStore(root), 'other')
+    const registry = new ProviderRegistry()
+    registry.add({ ...p, actions: [ACTION] })
+    const tasks = new TaskManager({
+      doc: defaultDoc,
+      docForCanvas: (id) => (id === 'other' ? otherDoc : defaultDoc),
+      registry,
+      history: new HistoryStore(root),
+      resolveResourceUrl: (canvasId, ref) => '/api/canvases/' + canvasId + '/resources/' + ref.replace('res:', ''),
+    })
+    tasksRef = tasks
+    await defaultDoc.batchNodes({ add: [{ type: 'image', id: 'n1' }] })
+    await otherDoc.batchNodes({ add: [{ type: 'image', id: 'n1' }] })
+
+    const job = (await tasks.createJob({ canvasId: 'other', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+
+    // other 那张画布上的节点拿到了终态；default 上同名节点**不该**被写（写错画布的症状）
+    expect((await runStateOf(otherDoc, 'n1')).status).toBe('done')
+    expect((await runStateOf(defaultDoc, 'n1')).status).toBeUndefined()
+  })
+
   it('立刻返回 jobId，并把"排队中"写进节点', async () => {
     const p: Provider = { id: 'p', actions: [ACTION], async submit() { return { taskId: 'pt1' } }, async poll() { return { status: 'running' } } }
     const { doc, tasks } = await setup(p, { interval: 100000 })

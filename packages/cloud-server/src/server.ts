@@ -17,6 +17,8 @@ import { serve, type ServerType } from '@hono/node-server'
 import { KvStore } from './store/kvStore.js'
 import { CanvasStore } from './store/canvasStore.js'
 import { CanvasResourceStore } from './store/canvasResources.js'
+import { ProjectStore } from './store/projectStore.js'
+import { AssetStore } from './store/assetStore.js'
 import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
@@ -33,6 +35,7 @@ import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
 import { parseResourceRef } from './store/canvasResources.js'
+import { DEFAULT_CANVAS_ID } from './store/canvasPaths.js'
 import { AgentConfigService } from './agent/config.js'
 import { AgentSessionStore } from './agent/sessionStore.js'
 import { AgentRuntime } from './agent/runtime.js'
@@ -73,6 +76,13 @@ export interface CloudServerOptions {
    * 只想当静态托管 + KV 接口用时可关掉。
    */
   mcp?: boolean
+  /**
+   * 是否把**自身的画布 MCP**自动写进 Agent 的 MCP 清单（缺省开）。
+   *
+   * 产品口径：这个画布 MCP 是随 Agent 内置的，用户零配置。
+   * 测试里可关掉 —— 那些用例要验「用户没配 MCP 时是什么样」的行为。
+   */
+  builtinCanvasMcp?: boolean
 }
 
 export interface CloudServer {
@@ -116,6 +126,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const kvStore = new KvStore(dataDir)
   const canvasStore = new CanvasStore(dataDir)
   const canvasResources = new CanvasResourceStore(dataDir)
+  // 项目 / 资产：画布文件夹路径不变，项目归属走索引（见 store/projectStore.ts 文件头）
+  const projectStore = new ProjectStore(dataDir)
+  const assetStore = new AssetStore(dataDir)
   // MCP 与网页界面共用同一份画布（同一个 CanvasStore）→ 两边看到的是同一张画布
   // 资源也共用同一套画布资源目录：MCP 传的图和网页端上传的图落在同一处、同内容还会去重
   const doc = new CanvasDocument(canvasStore, canvasResources)
@@ -147,6 +160,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     filterMcp: (names) => agentConfig.subsetMcp(names),
     readSkill: (name) => agentConfig.readSkillFile(name),
+    withSystemPrompt: (text) => agentConfig.withSystemPrompt(text),
     log: (message, extra) => console.log('[agent] ' + message, extra ?? ''),
   })
   // 同步引用：makeUserMessage 是同步签名，SDK 一旦加载就填进来
@@ -175,8 +189,14 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const history = new HistoryStore(dataDir)
   const tasks = new TaskManager({
     doc,
+    // 多画布：任务的进度/终态写进**它所属的那张画布**（用默认 doc 会写错画布 → 进度卡 0）
+    docForCanvas: (canvasId) => (canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)),
     registry,
     history,
+    // 生成成功 → 把产物登记进**资产目录**（用户口径：资产 = 所有生成过的产物）
+    onArtifact: (canvasId, urls) => {
+      for (const url of urls) void assetStore.addByUrl({ url, canvasId }).catch(() => undefined)
+    },
     // 节点里存的是画布内引用 res:<hash>；provider 拿不到"相对引用"，
     // 这里按**当前画布**换成真实可取的地址。
     resolveResourceUrl: (canvasId, ref) => {
@@ -220,6 +240,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('kvStore', kvStore)
   host.ctx.inject('canvasStore', canvasStore)
   host.ctx.inject('canvasResources', canvasResources)
+  host.ctx.inject('projectStore', projectStore)
+  host.ctx.inject('assetStore', assetStore)
   host.ctx.inject('doc', doc)
   host.ctx.inject('providerRegistry', registry)
   host.ctx.inject('taskManager', tasks)
@@ -286,6 +308,17 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       '/',
       mcpRoutes(doc, registry, tasks, () => listPluginMcpTools(host.ctx)),
     )
+  }
+
+  // 内置画布 MCP：把自己 `/mcp` 端点写进 Agent 的 MCP 清单（默认携带、用户零配置）。
+  // 放在这里是因为地址要等 port / hostname 定下来才知道。失败只记日志，不拦启动 ——
+  // 用户可能根本没用 Agent，不该因为这一条写不进去就起不来。
+  if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
+    // 必须 **await**：这是建服务的一部分，不能留一条还在写的异步尾巴 ——
+    // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
+    await agentConfig
+      .ensureBuiltinCanvasMcp(`http://${opts.hostname ?? '127.0.0.1'}:${port}/mcp`)
+      .catch((err) => console.warn('[agent] 内置画布 MCP 写入失败：' + String(err)))
   }
 
   // ⑤ 装载插件 + 把插件路由翻成代理；**插件路由挂好之后**再挂 ui 兜底。
