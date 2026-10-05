@@ -153,7 +153,7 @@ export const useCanvasStore = defineStore('canvasState', () => {
       bottomToolbarOffset: 12,
 
       // ==================== 节点标题 ====================
-      nodeTitleOffset: 12,
+      nodeTitleOffset: 4,
       nodeTitleScaleMinZoom: 0.5,
 
       // ==================== 节点缩放分级 (LOD) ====================

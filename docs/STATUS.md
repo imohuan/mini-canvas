@@ -5,6 +5,29 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 最近完成（2026-10-05，修「生成进度一直卡 0%」）
+
+用户报：图片生成进度一直卡 0%，刷新页面还是 0。
+
+**根因（与「切画布丢改动」同源，只是换了个写入口）**：`TaskManager.writeRunState` 固定用
+`this.deps.doc`（**默认画布**的 `CanvasDocument`）写节点进度。而任务是在**它所属的那张画布**上下的
+（用户这张画布 id 是 `430c8f1f00bd4aba`）—— 于是进度被写进 `default`（那里根本没有那个节点 id），
+`batchNodes` 的 update 找不到目标节点 → 静默返回（不报错），`writeRunState` 也不告警。
+表现就是节点永远停在 0%（提交帧可能压根没写成功、或用户看到的是上一次的残留）。
+任务本身在 web2api 侧是**成功**的（实测 get-task 100% + 有产物），所以「后台没问题、前端卡 0」很有迷惑性。
+
+**修法**：`TaskDeps` 加 `docForCanvas?(canvasId)`；`writeRunState` 按 `job.canvasId` 取对应文档
+（`deps.docForCanvas?.(job.canvasId) ?? deps.doc`）；`server.ts` 注入
+`(canvasId) => canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)`。
+和 canvasOps 路由用的是同一套「按画布 id 现建文档」。
+
+**验证**：cloud-server **335** 全绿（taskManager 新增 1 条：任务写进 `other` 画布、`default` 上同名节点不被写）
++ tsc 干净。真机（8880 源码服务 + 真实数据）：对 `430c8f1f00bd4aba` 的画布下单 → 节点进度
+**0 → 30 → done 100%**（带 `urls`），不再卡 0。`cloud-server` 产物已重建，**8865 服务已用新产物重启**。
+
+**注**：测试用的节点 10 的 `runState` 已清空（回到空闲），其 `imageUrl` 仍为空 —— 是缺少 image applier
+把产物落到节点的独立问题（见下条待办），不影响本次「进度卡 0」的修复。
+
 ### 追加（2026-10-05，音频地址一变就重算波形）
 
 用户口径：**只要播放地址（audioUrl）变化，就自动刷新波形**。
