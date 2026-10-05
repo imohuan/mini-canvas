@@ -301,11 +301,11 @@ describe('插件资源投放：不只发 js', () => {
         content: UMD('MiniCanvasPluginDemo'),
         pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
       },
-      // NPM 装进来的副本：id = scope__name，pluginName 相同 → 同一个插件
+      // NPM 装进来的副本：带显式标记 npmInstalled（安装路由写入），pluginName 相同 → 同一个插件
       'mini-canvas__plugin-demo': {
         file: 'plugin-demo.js',
         content: UMD('MiniCanvasPluginDemo'),
-        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
       },
     })
     const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-dedup-')), pluginsDir: dir, watchProviders: false })
@@ -313,6 +313,32 @@ describe('插件资源投放：不只发 js', () => {
     const demo = body.plugins.filter((p) => p.name === 'demo')
     expect(demo, '同一插件只应列一份').toHaveLength(1)
     expect(demo[0].id, '保留已装副本（卸载只删它，不动源码）').toBe('mini-canvas__plugin-demo')
+    srv.stop()
+  })
+
+  it('副本 id 不含 scope__（普通包名 mini-canvas-plugin-demo）时，去重仍靠 npmInstalled 生效', async () => {
+    // 这是审查指出的回归场景：包名去 scope 后 id 不含 `__`。
+    // 目录名故意让**源码包排在前面**（aaa 先于 zzz）—— 旧代码"保留先来的"会错误地保留源码，
+    // 新代码靠 npmInstalled 标记仍能正确保留副本。这样这条测试才真正能分辨新旧行为。
+    const dir = await makePluginsDir({
+      'aaa-source-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: { name: '@mini-canvas/plugin-demo', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+      },
+      'zzz-npm-copy-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: { name: 'mini-canvas-plugin-demo', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
+      },
+    })
+    const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-plain-')), pluginsDir: dir, watchProviders: false })
+    const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as {
+      plugins: Array<{ id: string; name: string }>
+    }
+    const demo = body.plugins.filter((p) => p.name === 'demo')
+    expect(demo, '同插件的两个目录只应列一份').toHaveLength(1)
+    expect(demo[0].id, '保留带 npmInstalled 标记的副本（不是排在前面那份源码）').toBe('zzz-npm-copy-demo')
     srv.stop()
   })
 

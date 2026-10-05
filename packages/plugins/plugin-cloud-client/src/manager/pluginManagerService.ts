@@ -339,8 +339,11 @@ export function createPluginManagerService(
       // 服务端目录里的 id 与清单 id 一致（都是文件名形如 imohuan__plugin-showcase）
       const onServer = installedIds.has(row.entry.id) || (row.realName ? installedIds.has(row.realName) : false)
       row.serverInstalled = onServer
-      // 已登记进内核 = 正在生效（热装后为 true；只有文件没登记为 false）
-      row.serverLoaded = onServer && (loadedNames.size === 0 ? true : loadedNames.has(row.realName ?? row.entry.name))
+      // 已登记进内核 = 正在生效。
+      // ⚠️ loaded 为空数组**不等于**"都生效"——它只说明服务端没报出任何已登记项
+      // （旧版本服务 / 接口尚未支持 loaded）。这种情况判"未生效"是保守的正确解：
+      // 宁可少显示一个绿灯，也不能对每个后台行都误报"已生效"（审查指出）。
+      row.serverLoaded = onServer && loadedNames.has(row.realName ?? row.entry.name)
       // 装着就清掉陈旧的"失败"红字（它可能来自上一次未确认的静默请求）
       if (onServer) row.serverError = undefined
     }
@@ -481,7 +484,14 @@ export function createPluginManagerService(
     }
   }
 
-  async function install(id: string, opts?: { serverConfirm?: boolean }): Promise<void> {
+  /**
+   * 装一个插件的前端半。
+   *
+   * @param opts.skipServerHalf 只装前端半、不碰后台半 —— 给"后台半已由别处装好"的调用方用
+   *   （从 NPM 安装走的是 /api/npm-plugins/install，它**已经**装了后台半；若这里再调
+   *   /api/server-plugins/install 会重复写入/重复热装，与卸载那个 404 同型的重复调用）。
+   */
+  async function install(id: string, opts?: { serverConfirm?: boolean; skipServerHalf?: boolean }): Promise<void> {
     const row = state.rows.find((r) => r.entry.id === id)
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可装卸（页面上也不给按钮，这里是兜底）
@@ -505,7 +515,8 @@ export function createPluginManagerService(
       await m.install(mod)
       row.installed = true
       // 前端装上了 → 顺带装后台那一半（成对安装；后台失败不影响前端已装成的事实）
-      await installServerHalf(row)
+      // 除非调用方说明后台半已由别处处理（NPM 安装那条路）。
+      if (!opts?.skipServerHalf) await installServerHalf(row)
       setIntent(row.entry.id, true)
       syncRuntimeState()
       persistIntent()
@@ -723,7 +734,8 @@ export function createPluginManagerService(
     const wantId = pkg.replace(/^@/, '').replace('/', '__')
     const row = state.rows.find((r) => r.entry.id === wantId)
     if (!row || row.installed) return
-    await install(row.entry.id, { serverConfirm: true })
+    // 后台半已在 /api/npm-plugins/install 里装好了 → 这里只装前端半，别再发一次后台安装请求
+    await install(row.entry.id, { serverConfirm: true, skipServerHalf: true })
   }
 
   async function updateFromNpm(pkg: string): Promise<{ updated: boolean; to?: string }> {

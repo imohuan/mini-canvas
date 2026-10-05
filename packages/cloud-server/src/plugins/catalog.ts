@@ -49,6 +49,13 @@ export interface PluginCatalogEntry {
    */
   builtin?: boolean
   /**
+   * 这个目录是**从 NPM 安装落盘**的副本（安装路由写入 package.json 的显式标记）。
+   *
+   * 用途：同名插件（源码包 + NPM 副本）去重时优先保留副本 —— 卸载只删副本，不动源码。
+   * 用显式标记而不是猜 id 里有没有 `scope__`：包名去 scope 后那个判据会失效（审查指出）。
+   */
+  npmInstalled?: boolean
+  /**
    * 后台插件产物（同一个包里若还有 dist/server.js，则这一项有值）。
    *
    * 为什么放在同一条清单项里：用户要的是「一个插件 = 前后端一起装」的体验。
@@ -138,6 +145,14 @@ interface PkgJson {
     installable?: boolean
     /** 插件在画布里的真实名字（= 源码 export 的 name） */
     pluginName?: string
+    /**
+     * 这个目录是**从 NPM 安装落盘**的副本（由安装路由写入，作者不会手写）。
+     *
+     * 为什么要这个显式标记（而不是靠 id 有没有 `scope__` 猜）：包名去掉 scope 后
+     * id 可能不含 `__`（如 mini-canvas-plugin-showcase），旧判据会失效，导致
+     * "源码包与 NPM 副本同时列入"的重复问题复发（审查指出）。
+     */
+    npmInstalled?: boolean
    /** 是否自带（随应用冷启动、不可装卸）；见 PluginCatalogEntry.builtin */
     /** 后台插件声明的权限（记录 + 展示用，暂不强制） */
     serverPermissions?: string[]
@@ -207,6 +222,8 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     const id = pkgName
     const name = pkg.miniCanvas?.pluginName ?? (pkg.name ?? pkgName).replace(/^@[^/]+\//, '')
     const title = pkg.miniCanvas?.title ?? pkgName
+    // 这个目录是不是"NPM 安装落盘的副本"（安装路由写进 package.json 的显式标记）
+    const isNpmCopy = pkg.miniCanvas?.npmInstalled === true
 
     // 自带插件：**只要 package.json 声明了就能列**（不必构建 UMD —— 它由应用冷启动装配，不靠清单加载）。
     if (isBuiltin) {
@@ -220,6 +237,7 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
         requiresGlobals: [],
         defaultInstalled: true,
         builtin: true,
+        ...(isNpmCopy ? { npmInstalled: true } : {}),
         // 自带件若声明了 serverBuiltin，标一个 server 段（url 空 —— 它是内置路由，不经 URL 装）
         ...(pkg.miniCanvas?.serverBuiltin === true ? { server: { url: '' } } : {}),
         ...(pkg.version ? { version: pkg.version } : {}),
@@ -284,6 +302,7 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       requiresGlobals: parseRequiresGlobals(text),
       defaultInstalled: pkg.miniCanvas?.defaultInstalled ?? true,
       ...(server ? { server } : {}),
+        ...(isNpmCopy ? { npmInstalled: true } : {}),
       ...(pkg.version ? { version: pkg.version } : {}),
     })
   }
@@ -304,11 +323,11 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       deduped.push(p)
     } else {
       const incumbent = deduped[prev]!
-      // 保留"已装副本"的那份：id 含 scope__ 前缀优先；两份同形则保留先来的
-      const incumbentIsInstalled = incumbent.id.includes('__')
-      const pIsInstalled = p.id.includes('__')
-      // 已装副本优先；同形（都不是/都是）保留先来的
-      const keepIncumbent = incumbentIsInstalled || !pIsInstalled
+      // 保留"NPM 安装副本"那份：看**安装路由写入的显式标记** npmInstalled，
+      // 不靠 id 里有没有 scope__（那个判据在包名去 scope 后会失效 —— 审查指出）。
+      // 两份都不是副本（或都是）时保留先来的。
+      const incumbentIsNpmCopy = incumbent.npmInstalled === true
+      const keepIncumbent = incumbentIsNpmCopy || p.npmInstalled !== true
       const loser = keepIncumbent ? p : incumbent
       const winner = keepIncumbent ? incumbent : p
       skipped.push({ file: loser.id, reason: '与 ' + winner.id + ' 同为一个插件（运行时名 ' + p.name + '），只列一份' })

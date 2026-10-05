@@ -105,13 +105,18 @@ function serverBadgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on'
 // ============================================================================
 const npmQuery = ref('')
 const npmSearching = ref(false)
-const npmResults = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
 const npmError = ref('')
 const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
 const npmBusyPkg = ref('')
-const npmSearched = ref(false)
 /** 当前选中的页签：市场（可安装）/ 已装 / 本地清单 / 自带 */
 const npmTab = ref<'market' | 'installed' | 'local' | 'builtin'>('market')
+/** 页签定义（模板 v-for 用；label 中文、id 与 npmTab 取值一致） */
+const TABS = [
+  { id: 'market' as const, label: '市场' },
+  { id: 'installed' as const, label: '已装' },
+  { id: 'local' as const, label: '本地清单' },
+  { id: 'builtin' as const, label: '自带' },
+]
 
 /** 市场列表（浏览结果或搜索结果共用一个）与本地前缀过滤 */
 const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
@@ -124,6 +129,13 @@ const filteredMarket = computed(() => {
 
 /** 已装（NPM 来源） */
 const installedNpm = computed(() => npmInstalled.value)
+/** 页签计数（市场/已装/本地清单/自带） */
+function tabCount(id: 'market' | 'installed' | 'local' | 'builtin'): number {
+  if (id === 'market') return filteredMarket.value.length
+  if (id === 'installed') return installedNpm.value.length
+  if (id === 'local') return installableRows.value.length
+  return builtinRows.value.length
+}
 
 /** 默认加载：进页面就按前缀把可安装插件列出来（用户要求：不必先点搜索） */
 async function loadMarket(): Promise<void> {
@@ -148,9 +160,7 @@ async function onNpmSearch(): Promise<void> {
   npmSearching.value = true
   npmError.value = ''
   try {
-    npmResults.value = await svc.searchNpmPlugins(q)
-    marketList.value = npmResults.value
-    npmSearched.value = true
+    marketList.value = await svc.searchNpmPlugins(q)
     npmInstalled.value = await svc.listNpmInstalled()
   } catch (err) {
     npmError.value = err instanceof Error ? err.message : String(err)
@@ -236,20 +246,22 @@ onMounted(() => { void loadMarket() })
 
     <!-- 页签：市场 / 已装 / 本地清单 / 自带（表格形态，一屏可比可扫） -->
     <div class="pmp-tabs" role="tablist">
-      <button class="pmp-tab" :class="{ active: npmTab === 'market' }" role="tab"
-        @click="npmTab = 'market'">市场<span class="pmp-tab-n">{{ marketList.length }}</span></button>
-      <button class="pmp-tab" :class="{ active: npmTab === 'installed' }" role="tab"
-        @click="npmTab = 'installed'">已装<span class="pmp-tab-n">{{ installedNpm.length }}</span></button>
-      <button class="pmp-tab" :class="{ active: npmTab === 'local' }" role="tab"
-        @click="npmTab = 'local'">本地清单<span class="pmp-tab-n">{{ installableRows.length }}</span></button>
-      <button class="pmp-tab" :class="{ active: npmTab === 'builtin' }" role="tab"
-        @click="npmTab = 'builtin'">自带<span class="pmp-tab-n">{{ builtinRows.length }}</span></button>
+      <!-- a11y（ui-style-guide §5 硬性）：role=tab 必须有 aria-selected；容器带 aria-label；
+           键盘可用（button 天然可 Tab 聚焦 + Enter/Space 触发）。 -->
+      <button v-for="t in TABS" :key="t.id" class="pmp-tab" :class="{ active: npmTab === t.id }"
+        role="tab" :aria-selected="npmTab === t.id" :id="'pmp-tab-' + t.id"
+        :aria-controls="'pmp-panel-' + t.id" @click="npmTab = t.id">
+        {{ t.label }}<span class="pmp-tab-n">{{ tabCount(t.id) }}</span>
+      </button>
     </div>
 
     <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
+    <!-- 清单拉取失败也要提示（改写页签时漏掉了，审查指出） -->
+    <p v-if="s.error" class="pmp-error" role="alert">{{ s.error }}</p>
 
     <!-- 市场：默认就列出前缀下全部可安装插件（不必先搜） -->
-    <section v-if="npmTab === 'market'" class="pmp-table-wrap">
+    <section v-if="npmTab === 'market'" class="pmp-table-wrap" role="tabpanel" id="pmp-panel-market"
+      aria-labelledby="pmp-tab-market" tabindex="0">
       <form class="pmp-npm-search" @submit.prevent="onNpmSearch">
         <input v-model="npmQuery" class="pmp-input" type="text" spellcheck="false"
           aria-label="搜索 NPM 插件" placeholder="搜索包名（留空 = 列出全部可安装插件）" @keydown.enter.prevent="onNpmSearch" />
@@ -288,7 +300,8 @@ onMounted(() => { void loadMarket() })
     </section>
 
     <!-- 已装（NPM 来源） -->
-    <section v-else-if="npmTab === 'installed'" class="pmp-table-wrap">
+    <section v-else-if="npmTab === 'installed'" class="pmp-table-wrap" role="tabpanel" id="pmp-panel-installed"
+      aria-labelledby="pmp-tab-installed" tabindex="0">
       <table class="pmp-table">
         <thead><tr><th>包名</th><th>版本</th><th>安装时间</th><th class="pmp-th-act">操作</th></tr></thead>
         <tbody>
@@ -308,7 +321,8 @@ onMounted(() => { void loadMarket() })
     </section>
 
     <!-- 本地清单（服务端目录里的可装卸插件） -->
-    <section v-else-if="npmTab === 'local'" class="pmp-table-wrap">
+    <section v-else-if="npmTab === 'local'" class="pmp-table-wrap" role="tabpanel" id="pmp-panel-local"
+      aria-labelledby="pmp-tab-local" tabindex="0">
       <table class="pmp-table">
         <thead><tr><th>插件</th><th>状态</th><th>后台</th><th class="pmp-th-act">操作</th></tr></thead>
         <tbody>
@@ -340,7 +354,8 @@ onMounted(() => { void loadMarket() })
     </section>
 
     <!-- 自带（随应用启动，只读） -->
-    <section v-else class="pmp-table-wrap">
+    <section v-else class="pmp-table-wrap" role="tabpanel" id="pmp-panel-builtin"
+      aria-labelledby="pmp-tab-builtin" tabindex="0">
       <table class="pmp-table">
         <thead><tr><th>插件</th><th>前端</th><th>后台</th><th class="pmp-th-act">类型</th></tr></thead>
         <tbody>
@@ -396,7 +411,7 @@ onMounted(() => { void loadMarket() })
 .pmp-desc { font-size: 11px; color: var(--ui-ink-dim, #6b7280); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pmp-row-err { font-size: 11px; color: var(--ui-danger, #ef4444); }
 
-.pmp-badge { flex: none; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; }
+ .pmp-badge { flex: none; padding: 2px 6px; border-radius: var(--radius-badge, 6px); font-size: 10px; font-weight: 700; }
 .pmp-badge.is-on { color: var(--ui-accent-hover, #0e7490); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
 .pmp-badge.is-off { color: var(--ui-ink-dim, #6b7280); background: var(--ui-veil, rgb(0 0 0 / 0.04)); }
 .pmp-badge.is-warn { color: var(--ui-warn, #b45309); background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); }
@@ -439,5 +454,6 @@ onMounted(() => { void loadMarket() })
 .pmp-table td.pmp-nowrap { white-space: nowrap; }
 .pmp-table td.pmp-nowrap:last-child { text-align: right; }
 .pmp-empty-cell { padding: 20px 8px; text-align: center; color: var(--ui-ink-dim, #6b7280); }
-.pmp-tag { margin-left: 5px; padding: 0 5px; border-radius: 5px; background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); color: var(--ui-warn, #b45309); font-size: 10px; }
+/* 圆角走设计 token（ui-style-guide §2.2：Badge = --radius-badge 6px，不许跳级到 5px） */
+.pmp-tag { margin-left: 5px; padding: 1px 6px; border-radius: var(--radius-badge, 6px); background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); color: var(--ui-warn, #b45309); font-size: 10px; }
 </style>

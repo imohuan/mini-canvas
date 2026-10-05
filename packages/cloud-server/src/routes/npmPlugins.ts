@@ -112,7 +112,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const dirNameOf = (pkg: string): string => pkg.replace(/^@/, '').replace('/', '__')
 
   /**
-   * 把一批候选包名变成"可安装插件描述"：查 packument → 校验 installable → 归一字段。
+   * 把一批候选包名变成"可安装插件描述"：查 packument → 校验是插件（isPluginMeta：看结构）→ 归一字段。
    * 多处（搜索/浏览）共用；单个包查失败返回 null（不影响整页）。
    */
   async function describeInstalled(names: Iterable<string>): Promise<Array<{
@@ -296,10 +296,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       //
       // 关键：**强制补上 installable: true**。作者为了让源码包不进列表，会在发布的包里关掉它；
       // 但装进来的这份**就是**本地列表要展示的插件，必须显式打开，否则装完列表里看不到（实测踩过）。
+      // 同时写入 **npmInstalled: true** —— 这是"本目录是从 NPM 安装的副本"的显式标记：
+      // catalog 同名插件去重时据此优先保留副本（卸载只删副本、不动源码），
+      // 比猜"id 里有没有 scope__"可靠（包名去 scope 后那个判据会失效）。
       const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, 'utf8')) as {
         miniCanvas?: Record<string, unknown>
       }
-      pkgObj.miniCanvas = { ...(pkgObj.miniCanvas ?? {}), installable: true }
+      pkgObj.miniCanvas = { ...(pkgObj.miniCanvas ?? {}), installable: true, npmInstalled: true }
       await fs.writeFile(path.join(path.dirname(webDest), 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
       // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
       // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。

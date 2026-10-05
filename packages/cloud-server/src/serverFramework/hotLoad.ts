@@ -27,9 +27,6 @@ const hotLoaded = new Map<string, string>()
 /** 取"运行期热装且仍活着"的插件名（server-plugins 路由的 loaded 用） */
 export function hotLoadedNames(): string[] { return [...hotLoaded.values()] }
 
-/** 按 id 摘掉热装记录（卸载时用；同时返回它的插件名供内核卸载） */
-export function hotLoadedNameOf(id: string): string | undefined { return hotLoaded.get(id) }
-export function hotLoadedForget(id: string): void { hotLoaded.delete(id) }
 
 export interface HotLoadResult {
   ok: boolean

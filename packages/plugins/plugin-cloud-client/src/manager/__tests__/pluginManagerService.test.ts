@@ -439,3 +439,49 @@ describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用�
     expect(calls.some((u) => u.includes('/api/npm-plugins/uninstall'))).toBe(true)
   })
 })
+
+describe('plugin-manager 服务：从 NPM 安装只调一次后台安装（与卸载同型的重复调用）', () => {
+  it('installFromNpm 不再重复调 /api/server-plugins/install', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    // 存档为空 = 不做"首次默认全装"，让安装只由 NPM 那条路触发（否则 refresh 时行已装好，测不到）
+    save.set(INSTALLED_KEY, [])
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const calls: string[] = []
+    const catalogWithServer = {
+      ok: true,
+      plugins: [
+        {
+          id: 'mini-canvas-plugin-demo',
+          name: 'demo',
+          title: 'Demo',
+          url: '/plugins/mini-canvas-plugin-demo/demo.js',
+          server: { url: '/plugins/mini-canvas-plugin-demo/server.js', sha256: 'abc' },
+        },
+      ],
+    }
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      calls.push(u)
+      if (u.includes('/api/npm-plugins/install')) return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response
+      if (u.includes('/api/npm-plugins/installed')) return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [] }), text: async () => '' } as Response
+      if (u.includes('/api/server-plugins')) return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
+      return { ok: true, status: 200, json: async () => catalogWithServer, text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    calls.length = 0 // 只看安装阶段的请求
+    await svc.installFromNpm('mini-canvas-plugin-demo', { serverConfirm: true })
+    const serverInstallCalls = calls.filter((u) => u.includes('/api/server-plugins/install'))
+    expect(serverInstallCalls, '不该再调 /api/server-plugins/install（NPM 安装已装过后台半）').toEqual([])
+    expect(calls.some((u) => u.includes('/api/npm-plugins/install'))).toBe(true)
+  })
+})

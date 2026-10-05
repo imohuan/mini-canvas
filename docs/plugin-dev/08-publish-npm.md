@@ -1,7 +1,7 @@
 # 第 8 篇：把插件发布到 NPM（前后台成对 + 让别人一键安装）
 
 > 前 7 篇教你写插件。这一篇教你把它发出去：打成包 → 传到 NPM → 别人
-> 在「插件管理 → NPM 市场」里搜到它、点一下安装，前端半立刻活、后台半重启生效。
+ > 在「插件管理 → NPM 市场」里搜到它、点一下安装，**前后台两半都立刻活**。
 > 照抄能跑，全部命令都在下面。
 
 ## 你要做成什么样（一句话）
@@ -9,7 +9,7 @@
 一个 npm 包，只发打包产物（不带依赖树、不带源码），元数据写在 package.json
 的 miniCanvas 段里。别人装的时候，cloud-server 从 NPM 拉包、解出产物、落到正确位置。
 
-    @mini-canvas/plugin-你的名字/
+    mini-canvas-plugin-你的名字/
     ├── package.json     ← files 只含 dist；miniCanvas 段写清入口
     └── dist/
         ├── web.js       ← 前端半（UMD，css 内联；靠全局 Vue/MiniCanvasRender… 取依赖）
@@ -110,14 +110,15 @@ scope 包（@xxx/yyy）必须带 --access public，否则默认私有、别人�
 
 1. 在搜索框输入关键词（如 showcase）→ 搜到你的包；
 2. 点「安装」——若这个包带后台半，会弹一次服务端权限确认（必选，防误装）；
-3. 前端半刷新即可见（面板/按钮出现）；后台半重启 cloud-server 后生效；
+3. 前端半刷新即可见（面板/按钮出现）；后台半**当场生效**（装完就热载，无需重启）；
 4. 你发了新版本后，对方在同一处点「更新」即可升级。
 
 服务端要连得上 NPM，用这几条路由（cloud-server 内置的 npm-plugins 插件提供）：
 
 | 路由 | 作用 |
 |---|---|
-| GET /api/npm-plugins/search?q=… | 搜包（只回 installable 且在 scope 白名单里的） |
+| GET /api/npm-plugins/search?q=… | 搜包（候选池 + 名称二次校验，只回前缀白名单内、且声明了 miniCanvas 入口的） |
+| GET /api/npm-plugins/browse | 浏览：按前缀白名单列出全部可安装插件（列表页默认加载，不必先搜） |
 | POST /api/npm-plugins/install | 安装（body 需 { package, confirm: true }） |
 | POST /api/npm-plugins/update | 按 latest 升级 |
 | POST /api/npm-plugins/uninstall | 卸载（前后半一起清） |
@@ -125,7 +126,7 @@ scope 包（@xxx/yyy）必须带 --access public，否则默认私有、别人�
 
 ### 安全约束（别绕过）
 
-- 只能装 scope 白名单里的包，默认 @mini-canvas/。要装别的 scope 得在服务端配置里放开。
+- 只能装**前缀白名单**内的包，默认为 `mini-canvas-` 与 `@mini-canvas/`。要装别的前缀，在服务端配置 `MINI_CANVAS_NPM_SCOPES` 放开。
 - confirm: true 必填：装一个后台半 = 让别人的代码以服务端权限在你机器上跑，必须显式确认。
 - 完整性校验：安装时服务端自己算 sha256 存进来源记录，以后可审计。
 
@@ -148,8 +149,8 @@ scope 包（@xxx/yyy）必须带 --access public，否则默认私有、别人�
 装完管理页里没有？ 前端半的 dist/ 里得有能被加载的 .js，且有 MiniCanvasPluginXxx
 全局。用 npm pack --dry-run 确认产物发出去了。
 
-后台半装上了但不生效？ 后台插件是重启生效（落盘与执行分离的安全设计）——
-重启 cloud-server。管理页的「后台」状态灯会显示当前状态。
+后台半装上了但不生效？ 正常情况下装完**当场生效**（热载）。若管理页「后台」灯仍不亮，
+先看服务端日志；兜底手段是重启 cloud-server。
 
 globalName 写错会怎样？ 前端半装载直接失败、报"取不到全局"。改 package.json
 的 web.globalName 与 vite 的 pluginLibBuild({ name })，两者必须一字不差。
