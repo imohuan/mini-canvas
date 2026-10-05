@@ -108,6 +108,13 @@ export interface PluginManagerService {
   uninstallFromNpm(pkg: string): Promise<void>
   /** NPM 来源的已装清单 */
   listNpmInstalled(): Promise<NpmInstalledEntry[]>
+  /**
+   * 检查哪些已装插件有新版（返回 包名 → 最新版）。
+   *
+   * 附录 Task 5 要求已装列表有"有更新"灯；靠这个把"最新版"拉回来跟本地版本比。
+   * 数据源是 browse（它已经查过每个包的 packument，带最新 version），不额外打服务端接口。
+   */
+  checkNpmUpdates(): Promise<Record<string, string>>
 }
 
 /** NPM 搜索结果的一条（cloud-server /api/npm-plugins/search 的 results 元素） */
@@ -784,8 +791,25 @@ export function createPluginManagerService(
     return json.plugins ?? []
   }
 
+  /**
+   * 检查已装的 NPM 插件哪些有新版。
+   *
+   * 做法：已装清单（本地版本）+ browse（每个包的最新版）逐一比对。
+   * browse 查不到某个包（下架/网络问题）就跳过它 —— 宁可少报"有更新"，也不误报。
+   */
+  async function checkNpmUpdates(): Promise<Record<string, string>> {
+    const [installed, market] = await Promise.all([listNpmInstalled(), browseNpmPlugins()])
+    const latestOf = new Map(market.map((m) => [m.pkg, m.version]))
+    const out: Record<string, string> = {}
+    for (const e of installed) {
+      const latest = latestOf.get(e.pkg)
+      if (latest && latest !== e.version) out[e.pkg] = latest
+    }
+    return out
+  }
+
   return {
     state, refresh, install, uninstall, reinstall, installAll,
-    searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled,
+    searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
   }
 }

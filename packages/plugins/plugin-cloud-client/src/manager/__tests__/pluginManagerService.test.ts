@@ -441,6 +441,41 @@ describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用�
 })
 
 describe('plugin-manager 服务：从 NPM 安装只调一次后台安装（与卸载同型的重复调用）', () => {
+  it('checkNpmUpdates：只报"最新版 != 已装版"的包', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      // browse：返回 pkg-a 最新 2.0.0、pkg-b 最新 1.0.0
+      if (u.includes('/api/npm-plugins/browse')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, results: [
+          { pkg: 'pkg-a', title: 'A', description: '', version: '2.0.0', date: '', hasServer: false },
+          { pkg: 'pkg-b', title: 'B', description: '', version: '1.0.0', date: '', hasServer: false },
+        ] }), text: async () => '' } as Response
+      }
+      // installed：pkg-a 装的是 1.0.0、pkg-b 装的是 1.0.0
+      if (u.includes('/api/npm-plugins/installed')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [
+          { pkg: 'pkg-a', version: '1.0.0', installedAt: 't' },
+          { pkg: 'pkg-b', version: '1.0.0', installedAt: 't' },
+        ] }), text: async () => '' } as Response
+      }
+      return { ok: true, status: 200, json: async () => CATALOG, text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    const updates = await svc.checkNpmUpdates()
+    expect(updates, '只报有新版的那个').toEqual({ 'pkg-a': '2.0.0' })
+  })
+
   it('installFromNpm 不再重复调 /api/server-plugins/install', async () => {
     const ctx = new Context()
     const host = fakeHost()

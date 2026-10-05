@@ -31,6 +31,9 @@ export const Config: ConfigSchema = {
 /** 导航 id 必须 === Config 的分组名（见上） */
 const NAV_ID = '插件展示'
 
+/** 「在线注册」演示用的注册场 id（面板可运行期增删，证明注册场实时生效） */
+export const DEMO_FIELD = 'showcase/demo-item'
+
 export function apply(ctx: Context): void {
   // 设置面板：左导航「插件展示」项 + 整页正文（自绘，与光标特效插件同机制）
   ctx.slots.register('settingsNav', {
@@ -44,6 +47,14 @@ export function apply(ctx: Context): void {
     order: 8,
     component: markRaw(ShowcasePage),
     meta: { mode: 'replace' },
+  })
+
+  // 把"在线注册"要用的注册场挂到服务上，供面板实时增删（演示注册场的作用域回收）。
+  // 为什么经服务而不是让面板直接拿 ctx：面板组件拿不到插件 ctx，且注册要归到本插件作用域，
+  // 这样面板里加的一条才会"随插件卸载一起回收"（正是要演示的点）。
+  ctx.inject('showcase-demo', {
+    field: () => ctx.registryOf<{ label: string }>(DEMO_FIELD),
+    fieldName: DEMO_FIELD,
   })
 }
 

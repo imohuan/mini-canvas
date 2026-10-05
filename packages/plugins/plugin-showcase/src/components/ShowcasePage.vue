@@ -7,7 +7,7 @@
  *    （先 GET/POST 拿真 id，写死 id 一重启就 404 —— 附录 B.9 的坑）。
  * 代码块 = 在线文档：每组折叠一段 fetch 示例，看文档即测试。
  */
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { apiUrl, resolveApiBase } from '../apiBase'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 
@@ -164,13 +164,59 @@ const startedAt = computed(() => {
 })
 
 onMounted(async () => {
-  // ① 前端自测：全局对象 + 挂载
-  selfTest.globalPresent = typeof (window as Record<string, unknown>).MiniCanvasPluginShowcase !== 'undefined' ||
-    typeof (window as Record<string, unknown>).MiniCanvasPluginShowcase === 'undefined' // UMD 已执行即视为通过（面板能跑本身就是证据）
-  selfTest.globalPresent = true
-  selfTest.mounted = true
+  // ① 前端自测（**真检测**，不是写死 true —— 审查指出旧版两盏灯是假的）：
+  //  - scriptLoaded：UMD 全局对象挂上了没（挂上说明当初的 <script> 真的执行了）
+  //  - globalPresent：宿主全局（Vue / MiniCanvasRender）在不在（缺了插件根本跑不到这里）
+  //  - mounted：面板挂载（进 onMounted 本身就是证据；这里再校验一次 DOM 真的渲染了）
+  const g = window as unknown as Record<string, unknown>
+  selfTest.scriptLoaded = typeof g.MiniCanvasPluginShowcase !== 'undefined'
+  selfTest.globalPresent = typeof g.MiniCanvasRender !== 'undefined' || typeof g.MiniCanvasBase !== 'undefined'
+  // 挂载自测要等一帧（rootEl 的 ref 绑定与 DOM 插入发生在渲染后）
+  await nextTick()
+  selfTest.mounted = rootEl.value !== null && document.contains(rootEl.value)
+  // 取"在线注册"演示用的注册场（插件 apply 时注入的服务）
+  demoReg.value = (ctx.tryGet('showcase-demo') as { field: () => DemoField; fieldName: string } | undefined) ?? null
+  refreshDemo()
   await loadIndex()
 })
+
+/** 面板根元素句柄（挂载自测用：确认它真的在文档里，不是"进 onMounted 就算过"） */
+const rootEl = ref<HTMLElement | null>(null)
+
+// ===== ④ 在线注册演示（注册场实时增删；卸载插件时这些注册会一起被回收） =====
+interface DemoField {
+  add(key: string, value: { label: string }, opts?: { id?: string }): { id: string; dispose(): void }
+  remove(key: string, id: string): boolean
+  list(key: string): Array<{ id: string; value: { label: string }; source: string }>
+}
+const demoReg = ref<{ field: () => DemoField; fieldName: string } | null>(null)
+const demoItems = ref<Array<{ id: string; label: string; source: string }>>([])
+const demoSeq = ref(0)
+let demoDisposers: Array<() => void> = []
+
+/** 读当前注册场内容（每次现读，注册场一变立刻反映） */
+function refreshDemo(): void {
+  const reg = demoReg.value
+  if (!reg) return
+  demoItems.value = reg.field().list(reg.fieldName).map((e) => ({ id: e.id, label: e.value.label, source: e.source }))
+}
+
+/** 运行期加一条（演示"注册场实时生效"） */
+function addDemoItem(): void {
+  const reg = demoReg.value
+  if (!reg) return
+  demoSeq.value += 1
+  const handle = reg.field().add(reg.fieldName, { label: '演示项 #' + demoSeq.value }, { id: 'demo-' + demoSeq.value })
+  demoDisposers.push(handle.dispose)
+  refreshDemo()
+}
+
+/** 撤销最后加的一条（演示"移除即消失"） */
+function removeLastDemoItem(): void {
+  const dispose = demoDisposers.pop()
+  if (dispose) dispose()
+  refreshDemo()
+}
 
 onBeforeUnmount(() => {
   if (jobsPollTimer) clearInterval(jobsPollTimer)
@@ -185,7 +231,7 @@ const groupIcon = (id: string): string => {
 </script>
 
 <template>
-  <div class="showcase-page">
+  <div class="showcase-page" ref="rootEl">
     <!-- ① 前端自测区（三盏灯） -->
     <section class="sc-section">
       <h3>前端自测</h3>
@@ -247,11 +293,31 @@ const groupIcon = (id: string): string => {
     </section>
 
     <!-- ④ 生命周期说明（静态，防误解） -->
+    <!-- ④ 在线注册演示：运行期往注册场加/删条目，实时生效；卸载插件时这些一起被回收 -->
+    <section class="sc-section">
+      <div class="sc-h3row">
+        <h3>在线注册演示</h3>
+        <div class="sc-demo-btns">
+          <button class="sc-btn" :disabled="!demoReg" @click="addDemoItem">注册一条</button>
+          <button class="sc-btn" :disabled="!demoReg || !demoItems.length" @click="removeLastDemoItem">撤销最后一条</button>
+          <button class="sc-btn" @click="refreshDemo">刷新</button>
+        </div>
+      </div>
+      <p class="sc-dim">
+        {{ demoReg ? '注册场：' + demoReg.fieldName + '（加/删立即生效；卸载本插件时这些注册会一起被回收）' : '注册场不可用（插件未注入 showcase-demo 服务）' }}
+      </p>
+      <ul v-if="demoItems.length" class="sc-notes">
+        <li v-for="it in demoItems" :key="it.id"><code>{{ it.id }}</code> — {{ it.label }} <span class="sc-dim">(放置方 {{ it.source }})</span></li>
+      </ul>
+      <p v-else class="sc-dim">还没有注册项 —— 点上面的「注册一条」。</p>
+    </section>
+
+    <!-- ⑤ 生命周期说明（静态，防误解） -->
     <section class="sc-section">
       <h3>生效时机</h3>
       <ul class="sc-notes">
         <li>前端半（本面板）：<b>装上即生效</b>，卸载立即消失。</li>
-        <li>后台半（API）：<b>重启生效</b>（安全设计：落盘与执行分离）。</li>
+        <li>后台半（API）：<b>装完即热载生效</b>（cloud-server 支持运行期装卸，无需重启）。</li>
         <li>私有存储：跨重启保留；<b>卸载插件即清空</b>。</li>
         <li>定时任务：内存态，重启后停止；store 里的计数保留（ticks 续算）。</li>
       </ul>
@@ -287,4 +353,6 @@ const groupIcon = (id: string): string => {
 .sc-json { margin: 2px 0 0; padding: 8px; border-radius: 6px; background: var(--ui-code-bg, rgba(128,128,128,.1)); font-size: 11px; max-height: 180px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
 .sc-doc summary { font-size: 12px; color: var(--ui-dim, #8a8a8a); cursor: pointer; margin-top: 4px; }
 .sc-notes { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.9; }
+.sc-demo-btns { display: flex; gap: 6px; }
+.sc-demo-btns .sc-btn { margin-left: 0; }
 </style>

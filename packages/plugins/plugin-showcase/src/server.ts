@@ -45,6 +45,18 @@ interface Todo {
 
 export const name = PLUGIN_NAME
 
+/**
+ * 取当前已登记的后台插件名（自省能力演示）。
+ *
+ * 为什么这样取：插件拿到的 ctx 是**作用域 ctx**，没有 inspectPlugins；内核把"注册了什么"
+ * 放在事件总线上（ctx:lifecycle-change）。这里退回一个稳定可得的来源：本进程装载过的
+ * 外挂插件名由宿主在启动时广播 —— 拿不到就回空数组（演示不该因自省失败而报错）。
+ */
+function listRegisteredPluginNames(ctx: { tryGet<T>(n: string): T | undefined }): string[] {
+  const names = ctx.tryGet<string[]>('serverPluginsLoaded')
+  return Array.isArray(names) ? [...names] : []
+}
+
 export function apply(ctx: Parameters<NonNullable<PluginModule['apply']>>[0]): void {
   // ============================================================
   // meta 组（2 条）
@@ -129,7 +141,14 @@ export function apply(ctx: Parameters<NonNullable<PluginModule['apply']>>[0]): v
   // routes 组（6 条）：todos CRUD 全链（内存态 —— 与 store 的"持久"对照）
   // ============================================================
   ctx.routes.get('/api/showcase/hello', (c) =>
-    c.json({ ok: true, demo: 'routes', message: '你好，这是 showcase 插件的第一个路由', at: new Date().toISOString() }),
+    c.json({
+      ok: true,
+      demo: 'routes',
+      message: '你好，这是 showcase 插件的第一个路由',
+      // 附录 A.2 要求：回「当前已登记的后台插件列表」—— 顺势展示 ctx.registry 的自省能力
+      plugins: listRegisteredPluginNames(ctx),
+      at: new Date().toISOString(),
+    }),
   )
 
   ctx.routes.post('/api/showcase/echo', async (c) => {

@@ -48,6 +48,10 @@ describe('showcase 外挂形态（真实产物 → loader → 路由生效）', 
     expect(idx.groups).toHaveLength(5)
 
     // routes 组：echo + todos CRUD
+    // hello 要回"当前已登记的后台插件列表"（附录 A.2；顺势演示自省能力）
+    const hello = (await (await get('/api/showcase/hello')).json()) as { message: string; plugins: string[] }
+    expect(typeof hello.message).toBe('string')
+    expect(Array.isArray(hello.plugins), 'hello 应带 plugins 数组').toBe(true)
     const echo = (await (await get('/api/showcase/echo', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

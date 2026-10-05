@@ -129,6 +129,8 @@ const filteredMarket = computed(() => {
 
 /** 已装（NPM 来源） */
 const installedNpm = computed(() => npmInstalled.value)
+/** 哪些已装插件有新版（包名 → 最新版）；由 checkNpmUpdates 填 */
+const npmUpdates = ref<Record<string, string>>({})
 /** 页签计数（市场/已装/本地清单/自带） */
 function tabCount(id: 'market' | 'installed' | 'local' | 'builtin'): number {
   if (id === 'market') return filteredMarket.value.length
@@ -144,6 +146,8 @@ async function loadMarket(): Promise<void> {
   try {
     marketList.value = await svc.browseNpmPlugins()
     npmInstalled.value = await svc.listNpmInstalled()
+    // 顺手查一次"有没有新版"（附录 Task 5 的"有更新"灯）
+    npmUpdates.value = await svc.checkNpmUpdates()
   } catch (err) {
     npmError.value = err instanceof Error ? err.message : String(err)
   } finally {
@@ -307,7 +311,10 @@ onMounted(() => { void loadMarket() })
         <tbody>
           <tr v-for="e in installedNpm" :key="e.pkg">
             <td><code class="pmp-pkg">{{ e.pkg }}</code></td>
-            <td class="pmp-nowrap">v{{ e.version }}</td>
+            <td class="pmp-nowrap">
+              v{{ e.version }}
+              <span v-if="npmUpdates[e.pkg]" class="pmp-tag">有更新 → v{{ npmUpdates[e.pkg] }}</span>
+            </td>
             <td class="pmp-nowrap pmp-desc">{{ (e.installedAt || '').slice(0, 19).replace('T', ' ') }}</td>
             <td class="pmp-nowrap">
               <button class="pmp-mini" :disabled="npmBusyPkg === e.pkg" @click="onNpmUpdate(e.pkg)">更新</button>
