@@ -148,8 +148,32 @@ describe('插件管理清单 /plugin-catalog.json', () => {
   })
 })
 
-describe('插件资源投放：不只发 js', () => {
-+describe('前后端成对插件（Task 7）', () => {
+describe('前后端成对插件（Task 7）', () => {
+  it('自带插件声明 serverBuiltin → 清单带 server 标记（让界面能显示自带件的后台状态）', async () => {
+    const pluginsDir = await makePluginsDir({
+      'plugin-builtin-with-be': {
+        file: 'plugin-builtin-with-be.js',
+        content: UMD('MiniCanvasPluginBuiltinWithBe'),
+        pkg: {
+          name: '@mini-canvas/plugin-builtin-with-be',
+          miniCanvas: { builtin: true, pluginName: 'bwb', serverBuiltin: true },
+        },
+      },
+      'plugin-builtin-fe-only': {
+        file: 'plugin-builtin-fe-only.js',
+        content: UMD('MiniCanvasPluginBuiltinFeOnly'),
+        pkg: { name: '@mini-canvas/plugin-builtin-fe-only', miniCanvas: { builtin: true, pluginName: 'bfo' } },
+      },
+    })
+    const srv = await createCloudServer({ port: 0, pluginsDir, watchProviders: false })
+    const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as {
+      plugins: Array<{ id: string; builtin?: boolean; server?: unknown }>
+    }
+    expect(body.plugins.find((p) => p.id === 'plugin-builtin-with-be')?.server, '声明 serverBuiltin 的自带件应带 server').toBeTruthy()
+    expect(body.plugins.find((p) => p.id === 'plugin-builtin-fe-only')?.server, '纯前端自带件没有 server').toBeUndefined()
+    srv.stop()
+  })
+
   it('包里有 dist/server.js → 清单项带 server.url 与 permissions', async () => {
     const pluginsDir = await makePluginsDir({
       'plugin-pair': {
@@ -189,6 +213,8 @@ describe('插件资源投放：不只发 js', () => {
     srv.stop()
   })
 })
+
+describe('插件资源投放：不只发 js', () => {
 
   async function bootWithAssets() {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))

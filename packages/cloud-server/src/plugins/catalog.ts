@@ -143,6 +143,13 @@ interface PkgJson {
     serverPermissions?: string[]
     /** 是否自带（随应用冷启动、不可装卸）；见 PluginCatalogEntry.builtin */
     builtin?: boolean
+    /**
+     * 自带插件是否**配套一个后台半**（已在 cloud-server 内置跑着）。
+     *
+     * 为什么要有：自带件（如 Agent）的前端半随应用启动，另一半是后台内置路由 ——
+     * 用户希望列表里也能看出"这个自带件有没有后台"。声明 true 时清单给 server 标记。
+     */
+    serverBuiltin?: boolean
   }
 }
 
@@ -213,6 +220,8 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
         requiresGlobals: [],
         defaultInstalled: true,
         builtin: true,
+        // 自带件若声明了 serverBuiltin，标一个 server 段（url 空 —— 它是内置路由，不经 URL 装）
+        ...(pkg.miniCanvas?.serverBuiltin === true ? { server: { url: '' } } : {}),
         ...(pkg.version ? { version: pkg.version } : {}),
       })
       continue

@@ -342,12 +342,18 @@ onMounted(() => { void loadMarket() })
     <!-- 自带（随应用启动，只读） -->
     <section v-else class="pmp-table-wrap">
       <table class="pmp-table">
-        <thead><tr><th>插件</th><th class="pmp-th-act">状态</th></tr></thead>
+        <thead><tr><th>插件</th><th>前端</th><th>后台</th><th class="pmp-th-act">类型</th></tr></thead>
         <tbody>
           <tr v-for="row in builtinRows" :key="row.entry.id">
             <td>
               <strong class="pmp-name">{{ row.entry.title || row.entry.id }}</strong>
               <div class="pmp-desc">{{ row.entry.description || row.entry.id }}</div>
+            </td>
+            <td class="pmp-nowrap"><span class="pmp-badge is-on">已装</span></td>
+            <td class="pmp-nowrap">
+              <span v-if="row.hasServer" class="pmp-badge" :class="'is-' + serverBadgeOf(row).tone"
+                :title="'后台插件（以服务端权限运行）'">{{ serverBadgeOf(row).text }}</span>
+              <span v-else class="pmp-desc" title="随应用启动，无独立后台插件">无</span>
             </td>
             <td class="pmp-nowrap"><span class="pmp-badge is-builtin">自带</span></td>
           </tr>
@@ -420,10 +426,14 @@ onMounted(() => { void loadMarket() })
 .pmp-tab:hover { color: var(--ui-ink, #18202b); }
 .pmp-tab.active { color: var(--ui-accent, #0891b2); border-bottom-color: var(--ui-accent, #0891b2); }
 .pmp-tab-n { padding: 0 5px; border-radius: 999px; background: var(--ui-veil, rgb(0 0 0 / 0.05)); font-size: 10px; font-weight: 700; }
-.pmp-table-wrap { display: flex; flex-direction: column; gap: 8px; }
-.pmp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+/* 关键（用户实测的"顶开布局"）：表格必须被约束在容器宽度内，
+否则长描述/长包名会把它撑宽，溢出到设置面板之外。
+- table-layout: fixed —— 列宽由我们指定，不被内容撑；
+- 外层 table-wrap 允许横向滚动兜底（内容实在放不下时不撑破外层）。 */
+.pmp-table-wrap { display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-x: auto; }
+.pmp-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 .pmp-table th { text-align: left; padding: 6px 8px; font-size: 11px; font-weight: 700; color: var(--ui-ink-dim, #6b7280); border-bottom: 1px solid var(--ui-line, #e2e5ea); white-space: nowrap; }
-.pmp-table td { padding: 8px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); vertical-align: middle; }
+.pmp-table td { padding: 8px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }
 .pmp-table tbody tr:hover { background: var(--ui-hover, rgb(0 0 0 / 0.03)); }
 .pmp-th-act { text-align: right; }
 .pmp-table td.pmp-nowrap { white-space: nowrap; }
