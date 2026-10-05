@@ -392,3 +392,50 @@ describe('plugin-manager 服务：config 后端切换时的安装名单对齐（
     expect(host.installed.has('plugin-a')).toBe(true)
   })
 })
+
+describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用户实测的多余 404）', () => {
+  it('uninstallFromNpm 不再重复调 /api/server-plugins/uninstall', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const calls: string[] = []
+    // catalog 里有一条带后台半的插件（前端半已装）
+    const catalogWithServer = {
+      ok: true,
+      plugins: [
+        {
+          id: 'mini-canvas-plugin-demo',
+          name: 'demo',
+          title: 'Demo',
+          url: '/plugins/mini-canvas-plugin-demo/demo.js',
+          server: { url: '/plugins/mini-canvas-plugin-demo/server.js', sha256: 'abc' },
+        },
+      ],
+    }
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      calls.push(u)
+      if (u.includes('/api/npm-plugins/uninstall')) return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response
+      // 后台卸载：这里**不该**被调到（NPM 卸载已删过），真被调到就让它 404 —— 暴露 bug
+      if (u.includes('/api/server-plugins/uninstall')) return { ok: false, status: 404, json: async () => ({ ok: false, error: '插件不存在' }), text: async () => '' } as Response
+      if (u.includes('/api/server-plugins')) return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
+      return { ok: true, status: 200, json: async () => catalogWithServer, text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    await svc.install('mini-canvas-plugin-demo', { serverConfirm: true })
+    calls.length = 0 // 只看卸载阶段的请求
+    await svc.uninstallFromNpm('mini-canvas-plugin-demo')
+    const serverUninstallCalls = calls.filter((u) => u.includes('/api/server-plugins/uninstall'))
+    expect(serverUninstallCalls, '不该再调 /api/server-plugins/uninstall（NPM 卸载已删过后台文件）').toEqual([])
+    expect(calls.some((u) => u.includes('/api/npm-plugins/uninstall'))).toBe(true)
+  })
+})

@@ -516,7 +516,14 @@ export function createPluginManagerService(
     }
   }
 
-  async function uninstall(id: string): Promise<void> {
+  /**
+   * 卸一个插件。
+   *
+   * @param opts.skipServerHalf 只卸前端半、不碰后台半 —— 给"后台半已由别处删掉"的调用方用
+   *   （NPM 卸载走的是 /api/npm-plugins/uninstall，它**已经**删了后台文件；若这里再调
+   *   /api/server-plugins/uninstall 会因为文件已不在而 404，用户实测到多余的那个 404）。
+   */
+  async function uninstall(id: string, opts?: { skipServerHalf?: boolean }): Promise<void> {
     const row = state.rows.find((r) => r.entry.id === id)
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可卸（页面上不给按钮，这里兜底）
@@ -530,8 +537,11 @@ export function createPluginManagerService(
       if (!tryUninstall(row)) throw new Error(`没能卸载（可能不是本插件管理的插件，或该插件不允许卸载）：${row.entry.id}`)
       row.installed = false
       row.state = undefined
-      // 前端卸了 → 顺带卸后台那一半（成对；后台失败只记 serverError，不影响前端已卸成）
-      await uninstallServerHalf(row)
+      // 后台半：只有"还没被别处处理过"时才由这里卸载（NPM 卸载已删过 → 跳过，避免 404 噪音）
+      if (!opts?.skipServerHalf) {
+        // 前端卸了 → 顺带卸后台那一半（成对；后台失败只记 serverError，不影响前端已卸成）
+        await uninstallServerHalf(row)
+      }
       setIntent(row.entry.id, false)
       syncRuntimeState()
       persistIntent()
@@ -748,7 +758,9 @@ export function createPluginManagerService(
     // （实测踩过：文件删了但面板还活着）。用卸前的 rows 找它的 id（refresh 后行就没了）。
     const wantId = pkg.replace(/^@/, '').replace('/', '__')
     const wasInstalled = state.rows.find((r) => r.entry.id === wantId)?.installed === true
-    if (wasInstalled) await uninstall(wantId)
+    // 后台半已在上面那个请求里删掉了 → 这里只摘前端半，别再调 /api/server-plugins/uninstall
+    // （否则文件已不在，会多出一个 404）。
+    if (wasInstalled) await uninstall(wantId, { skipServerHalf: true })
     await refresh()
   }
 
