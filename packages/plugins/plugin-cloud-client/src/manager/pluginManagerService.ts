@@ -254,24 +254,34 @@ export function createPluginManagerService(
     ctx.effect(() => {
       const off = svc.onAdapterChange!((type) => {
         if (type !== 'config') return
-        void (async () => {
-          const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
-          if (saved === undefined) {
-            // 全新后端：把当前意图搬过去（不重装，现有状态已符合意图），别让云端的空抹掉已装插件。
-            save()?.set(INSTALLED_KEY, [...state.intent], 'config')
-            return
-          }
-          // 清单还没拉完（rows 为空）→ 交给 refresh 重新按新后端走一遍（它会读到刚切好的后端）。
-          if (!state.ready) {
-            void refresh()
-            return
-          }
-          state.intent = [...saved]
-          await applyIntent(saved)
-        })()
+        void reloadFromBackend()
       })
       return () => off.dispose()
     })
+  }
+
+  /**
+   * 按**当前 config 后端**对齐安装名单。
+   *
+   * 关键：**清单没拉完（!state.ready）时绝不能写后端**。
+   * 用户实测的数据丢失 bug：cloud-client 切 config 到云端那一刻，若 refresh 还没跑完，
+   * state.intent 还是初始的 []；旧代码会把这个空数组写进云端 → refresh 随后读回 []（非 undefined）
+   * 当成"用户选择不装" → 所有插件显示未装，且空名单已落盘，反复刷新也回不来。
+   * 现在：没就绪就只触发一次 refresh，等它就绪后再对齐。
+   */
+  async function reloadFromBackend(): Promise<void> {
+    if (!state.ready) {
+      await refresh()
+      if (!state.ready) return // 拉清单失败：宁可不动，也不要用不确定的名单覆盖后端
+    }
+    const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
+    if (saved === undefined) {
+      // 全新后端：把当前意图搬过去（不重装，现有状态已符合意图），别让后端的空抹掉已装插件。
+      save()?.set(INSTALLED_KEY, [...state.intent], 'config')
+      return
+    }
+    state.intent = [...saved]
+    await applyIntent(saved)
   }
 
   /** 把内核的运行时态（active/pending/failed + missingDeps）刷进每一行 */

@@ -23,6 +23,8 @@ import { agentSessionRoutes } from '../../routes/agentSessions.js'
 import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
+import { projectsRoutes } from '../../routes/projects.js'
+import { assetsRoutes } from '../../routes/assets.js'
 import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../../serverFramework/hotLoad.js'
 import { hotLoadedNames } from '../../serverFramework/hotLoad.js'
 import { buildPluginCatalog } from '../catalog.js'
@@ -38,12 +40,16 @@ import type { HistoryStore } from '../../tasks/history.js'
 import type { AgentConfigService } from '../../agent/config.js'
 import type { AgentSessionStore } from '../../agent/sessionStore.js'
 import type { AgentRuntime } from '../../agent/runtime.js'
+import type { ProjectStore } from '../../store/projectStore.js'
+import type { AssetStore } from '../../store/assetStore.js'
 
 /** 服务名常量（与 server.ts 的 inject 一一对应，改名要一起改） */
 export const S = {
   kvStore: 'kvStore',
   canvasStore: 'canvasStore',
   canvasResources: 'canvasResources',
+  projectStore: 'projectStore',
+  assetStore: 'assetStore',
   doc: 'doc',
   providerRegistry: 'providerRegistry',
   taskManager: 'taskManager',
@@ -85,6 +91,30 @@ export const canvasesPlugin: PluginModule = {
         need<CanvasDocument>(ctx, S.doc),
       ),
     )
+  },
+}
+
+/** 项目 / 画布两层组织（项目注册表 + 画布索引）。 */
+export const projectsPlugin: PluginModule = {
+  name: 'projects',
+  inject: [S.projectStore, S.canvasStore, S.assetStore],
+  apply(ctx) {
+    ctx.routes.adopt(
+      projectsRoutes(
+        need<ProjectStore>(ctx, S.projectStore),
+        need<CanvasStore>(ctx, S.canvasStore),
+        need<AssetStore>(ctx, S.assetStore),
+      ),
+    )
+  },
+}
+
+/** 资产目录（生成产物 + 自己上传）。 */
+export const assetsPlugin: PluginModule = {
+  name: 'assets',
+  inject: [S.assetStore],
+  apply(ctx) {
+    ctx.routes.adopt(assetsRoutes(need<AssetStore>(ctx, S.assetStore)))
   },
 }
 
@@ -232,7 +262,9 @@ export const npmPluginsPlugin: PluginModule = {
 export const BUILTIN_PLUGINS: PluginModule[] = [
   healthPlugin,
   eventsPlugin,
+  projectsPlugin,
   canvasesPlugin,
+  assetsPlugin,
   actionsPlugin,
   jobsPlugin,
   historyPlugin,

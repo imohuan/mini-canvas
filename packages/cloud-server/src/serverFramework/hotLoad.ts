@@ -18,10 +18,18 @@ import { isValidServerPlugin } from './pluginLoader.js'
 /** id（文件名）→ 内核真实插件名。装的时候记下，卸的时候按它摘（两者可能不同名）。 */
 const installedNames = new Map<string, string>()
 
-/** 运行期热装进来的插件名（供 /api/server-plugins 的 loaded 现算；启动装载的不在这里） */
-const hotLoaded = new Set<string>()
+/**
+ * 运行期热装进来的 id → 插件名（loaded 现算用）。
+ *
+ * 为什么留 id：卸载时按 id 精确摘掉自己的那条，避免"卸了还在列表里"的幽灵项（用户实测）。
+ */
+const hotLoaded = new Map<string, string>()
 /** 取"运行期热装且仍活着"的插件名（server-plugins 路由的 loaded 用） */
-export function hotLoadedNames(): string[] { return [...hotLoaded] }
+export function hotLoadedNames(): string[] { return [...hotLoaded.values()] }
+
+/** 按 id 摘掉热装记录（卸载时用；同时返回它的插件名供内核卸载） */
+export function hotLoadedNameOf(id: string): string | undefined { return hotLoaded.get(id) }
+export function hotLoadedForget(id: string): void { hotLoaded.delete(id) }
 
 export interface HotLoadResult {
   ok: boolean
@@ -56,7 +64,7 @@ export async function hotInstallServerPlugin(
     if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply/setup）" }
     runtime.install(candidate)
     installedNames.set(id, candidate.name)
-    hotLoaded.add(candidate.name)
+    hotLoaded.set(id, candidate.name)
     return { ok: true, name: candidate.name }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -72,17 +80,30 @@ export async function hotInstallServerPlugin(
 export function hotUninstallServerPlugin(ctx: PluginScope, id: string, knownName?: string): HotLoadResult {
   const runtime = runtimeOf(ctx)
   if (!runtime) return { ok: false, error: "宿主未提供运行期装卸能力（ctx.runtime）" }
-  const candidates = [knownName, installedNames.get(id), id, id.replace(/^[^_]*__/, ""), id.replace(/__/g, "-")].filter(
+  const candidates = [
+    knownName,
+    hotLoaded.get(id), // 热装时记下的真名（最准）
+    installedNames.get(id),
+    id,
+    id.replace(/^[^_]*__/, ""),
+    id.replace(/__/g, "-"),
+    // 兜底：去掉常见包前缀后剩下的部分（mini-canvas-plugin-showcase → showcase）
+    id.replace(/^mini-canvas-plugin-/, ""),
+    id.replace(/^mini-canvas-/, ""),
+  ].filter(
     (x): x is string => typeof x === "string" && x.length > 0,
   )
   try {
     for (const name of candidates) {
       if (runtime.uninstall(name)) {
         installedNames.delete(id)
-        hotLoaded.delete(name)
+        hotLoaded.delete(id)
         return { ok: true }
       }
     }
+    // 内核里确实没有：仍要清掉加载记录，否则列表留幽灵项
+    installedNames.delete(id)
+    hotLoaded.delete(id)
     return { ok: false, error: "内核里没有该插件（可能从未装载）：" + id }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

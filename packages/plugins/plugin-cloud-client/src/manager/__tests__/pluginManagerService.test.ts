@@ -348,3 +348,47 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     expect(svc.state.rows.find((r) => r.entry.id === 'imohuan__plugin-showcase')?.installed).toBe(true)
   })
 })
+
+describe('plugin-manager 服务：config 后端切换时的安装名单对齐（用户实测的数据丢失 bug）', () => {
+  /** 造一个能手动触发 onAdapterChange 的假 save */
+  function fakeSaveWithAdapter() {
+    const kv = new Map<string, unknown>()
+    const listeners = new Set<(t: string) => void>()
+    const save = {
+      async get<T>(k: string) {
+        return kv.get(k) as T | undefined
+      },
+      set(k: string, v: unknown) {
+        kv.set(k, v)
+      },
+      onAdapterChange(cb: (t: string) => void) {
+        listeners.add(cb)
+        return { dispose: () => { listeners.delete(cb) } }
+      },
+    }
+    return { save, kv, fire: (t: string) => { for (const cb of [...listeners]) cb(t) } }
+  }
+
+  it('清单还没拉完就切后端：不会用空名单覆盖后端、也不会把插件判成未装', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save, kv, fire } = fakeSaveWithAdapter()
+    // 用户上一轮已经装过 plugin-a（后端里有名单）
+    kv.set(INSTALLED_KEY, ['plugin-a'])
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const fetchImpl = (async () => ({ ok: true, status: 200, json: async () => CATALOG, text: async () => '' })) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    // 关键：**不先 refresh**，直接触发 adapter 切换（模拟切换瞬间清单还没拉完）
+    fire('config')
+    await new Promise((r) => setTimeout(r, 50))
+    expect(kv.get(INSTALLED_KEY), '后端名单不能被清空').toEqual(['plugin-a'])
+    expect(host.installed.has('plugin-a')).toBe(true)
+  })
+})

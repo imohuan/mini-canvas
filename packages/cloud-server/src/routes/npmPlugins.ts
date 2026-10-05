@@ -95,6 +95,19 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       .map((s) => s.trim())
       .filter(Boolean)
 
+  /**
+   * 维护者名（环境变量 MINI_CANVAS_NPM_MAINTAINER；默认取第一个 scope 前缀里的名字）。
+   *
+   * 为什么要有：npm 搜索按**热度**排序，刚发布的包（0 下载）用包名/前缀词**永远搜不到**
+   * （实测：`mini-canvas-plugin-` 搜 250 条命中 0 个）。但 `maintainer:xxx` 是按发布者过滤的，
+   * 能把同一作者的全部包列出来（实测 30 个里就有我们的包）。所以浏览/搜索都带上它兜底。
+   */
+  const maintainers = (): string[] =>
+    (process.env.MINI_CANVAS_NPM_MAINTAINER ?? 'imohuan')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
   /** 包名 → 落盘目录/文件 id（去 scope 前缀，/ 换 __；普通包名原样） */
   const dirNameOf = (pkg: string): string => pkg.replace(/^@/, '').replace('/', '__')
 
@@ -151,6 +164,14 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
         } catch { /* 单个前缀搜失败不致命 */ }
       }
+      // 按维护者搜：绕过 npm 的"热度排序"（新包搜不到），把本作者的全部包捞出来
+      for (const m of maintainers()) {
+        try {
+          for (const h of await client.search('maintainer:' + m, 100)) {
+            if (scopeAllowed(h.name)) names.add(h.name)
+          }
+        } catch { /* 单个维护者搜失败不致命 */ }
+      }
       // 显式配置的包名（环境变量 MINI_CANVAS_NPM_PACKAGES，逗号分隔）**直查**：
       // npm 搜索按热度排序，刚发布的包排不进结果（实测），这些名字必须绕过搜索直接列。
       for (const n of extraPackages()) names.add(n)
@@ -176,6 +197,14 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // 会一无所获。所以除了模糊搜索，再按"直接输入包名 / scope 名"精确查一次。
       const names = new Set<string>()
       for (const h of hits) names.add(h.name)
+      // 按维护者搜：npm 的热度排序让新包搜不到，但 maintainer 过滤能捞出来（同 browse）
+      for (const m of maintainers()) {
+        try {
+          for (const h of await client.search('maintainer:' + m, 100)) {
+            if (scopeAllowed(h.name)) names.add(h.name)
+          }
+        } catch { /* 忽略单个失败 */ }
+      }
       // **总是**把输入本身当包名精确查一次（查不到会在 describeInstalled 里自然跳过）。
       // 必须：npm 搜索按热度排序，刚发布/0 下载的包排不进任何关键词结果（实测 top 250 都没有），
       // 用户按包名搜自己的插件会一无所获 —— 直查 packument 才能命中。
