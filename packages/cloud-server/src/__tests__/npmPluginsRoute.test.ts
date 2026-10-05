@@ -121,6 +121,27 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     expect(Array.isArray(body.results)).toBe(true)
     host.stop()
   })
+
+  it('搜索：无关词（乱输入）不返回任何结果；包名含词才返回', async () => {
+    const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
+    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
+      version: '1.0.0',
+      dist: { tarball: registry.url + '/demo.tgz' },
+      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+    }
+    const host = await boot(registry.url)
+    const search = async (q: string) =>
+      (await (await host.app.fetch(new Request('http://x/api/npm-plugins/search?q=' + encodeURIComponent(q)))).json()) as {
+        results: Array<{ pkg: string }>
+      }
+    // 无关词 → 空（用户实测的 bug：搜乱七八糟的东西下面照样有数据）
+    expect((await search('乱七八糟zzz')).results).toEqual([])
+    // 包名含词 → 命中
+    expect((await search('plugin-demo')).results.map((r) => r.pkg)).toEqual(['@mini-canvas/plugin-demo'])
+    host.stop()
+  })
   let registry: FakeRegistry | undefined
   afterEach(() => { registry?.close(); registry = undefined })
 

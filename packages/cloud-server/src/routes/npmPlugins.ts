@@ -164,18 +164,19 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
         } catch { /* 单个前缀搜失败不致命 */ }
       }
-      // 按维护者搜：绕过 npm 的"热度排序"（新包搜不到），把本作者的全部包捞出来
       for (const m of maintainers()) {
         try {
           for (const h of await client.search('maintainer:' + m, 100)) {
-            if (scopeAllowed(h.name)) names.add(h.name)
+            names.add(h.name)
           }
         } catch { /* 单个维护者搜失败不致命 */ }
       }
       // 显式配置的包名（环境变量 MINI_CANVAS_NPM_PACKAGES，逗号分隔）**直查**：
       // npm 搜索按热度排序，刚发布的包排不进结果（实测），这些名字必须绕过搜索直接列。
       for (const n of extraPackages()) names.add(n)
-      const results = await describeInstalled(names)
+      // 二次名称校验：只留**前缀白名单内**的（describeInstalled 里已按 scopeAllowed 过滤，
+      // 这里再显式收一次，保证"浏览"列出的全是本系统认的插件，不掺无关包）。
+      const results = await describeInstalled([...names].filter((n) => scopeAllowed(n)))
       return c.json({ ok: true, results })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
@@ -189,34 +190,41 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     const q = c.req.query('q')?.trim() ?? ''
     if (!q) return c.json({ ok: false, error: '需要 q（搜索关键词）' }, 400)
     try {
-      const hits = await client.search(q, 20)
-      // 收集候选包名：搜索命中 + **精确直查**。
-      //
-      // 为什么要精确直查：npm 搜索按热度排序，刚发布、0 下载的包**排不进任何关键词的
-      // 搜索结果前若干页**（实测：新发的包在 top 250 都找不到）。用户搜自己刚发的插件
-      // 会一无所获。所以除了模糊搜索，再按"直接输入包名 / scope 名"精确查一次。
-      const names = new Set<string>()
-      for (const h of hits) names.add(h.name)
-      // 按维护者搜：npm 的热度排序让新包搜不到，但 maintainer 过滤能捞出来（同 browse）
+      // 搜索两步走（用户口径）：
+      //   ① **候选池**：npm 模糊搜索 + 维护者列表（后者绕开"热度排序让新包搜不到"）；
+      //   ② **名称校验**：候选池里的包名必须**真的含搜索词**才留 —— 否则搜乱七八糟的东西
+      //      也会把作者的整份插件列表倒出来（用户实测：搜"撒旦法的发"下面照样有数据）。
+      const pool = new Set<string>()
+      try {
+        for (const h of await client.search(q, 50)) pool.add(h.name)
+      } catch { /* 忽略 */ }
       for (const m of maintainers()) {
         try {
-          for (const h of await client.search('maintainer:' + m, 100)) {
-            if (scopeAllowed(h.name)) names.add(h.name)
-          }
+          for (const h of await client.search('maintainer:' + m, 100)) pool.add(h.name)
         } catch { /* 忽略单个失败 */ }
       }
-      // **总是**把输入本身当包名精确查一次（查不到会在 describeInstalled 里自然跳过）。
-      // 必须：npm 搜索按热度排序，刚发布/0 下载的包排不进任何关键词结果（实测 top 250 都没有），
-      // 用户按包名搜自己的插件会一无所获 —— 直查 packument 才能命中。
-      names.add(q)
-      // 输入是 scope（@xxx 或 @xxx/）→ 用该 scope 的搜索再捞一次
-      if (/^@[a-z0-9-]+\/?$/i.test(q)) {
-        try {
-          for (const h of await client.search(q.replace(/\/$/, ''), 50)) names.add(h.name)
-        } catch { /* scope 搜索失败忽略 */ }
+      // 输入本身也进候选池（精确包名场景：搜全名要必中，哪怕它热度排不上）
+      pool.add(q)
+      // 也把"前缀 + 输入"当候选（让 plugin-demo 能命中 @scope/plugin-demo / mini-canvas-plugin-demo）。
+      // 安全性由后面的名称校验 + packument 实查兜底：查不到/不匹配的自然被丢掉。
+      for (const prefix of prefixes) {
+        const trimmed = prefix.replace(/\/$/, '')
+        if (/^[a-z0-9-]+$/i.test(q)) {
+          pool.add(prefix + q) // @scope/ + q  或  mini-canvas- + q
+          pool.add(trimmed + '-' + q)
+        }
       }
 
-      return c.json({ ok: true, results: await describeInstalled(names) })
+      // ② 名称校验：只留包名包含搜索词的（大小写不敏感）。
+      //    搜全名 / 前缀 / 词片段都能命中；搜无关内容则一个都不留（正确行为）。
+      //    注意："包名含搜索词"用**词义包含**（去掉 scope 前缀后再比），这样 plugin-demo
+      //    能命中 @mini-canvas/plugin-demo，而乱七八糟的词一个都不留。
+      const needle = q.toLowerCase()
+      const matched = [...pool].filter((n) => {
+        const bare = n.replace(/^@[^/]+\//, '').toLowerCase()
+        return n.toLowerCase().includes(needle) || bare.includes(needle)
+      })
+      return c.json({ ok: true, results: await describeInstalled(matched) })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
     }
