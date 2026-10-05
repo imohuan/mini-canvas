@@ -212,11 +212,27 @@ describe('audioOps · 上传与重分析', () => {
     expect(table.n1.audioWaveform).not.toEqual(before)
   })
 
- it('重分析没有地址的节点返回 false', async () => {
+  it('重分析没有地址的节点返回 false', async () => {
    const { ops } = fakeOps({ n1: {} })
    const { transform } = fakeTransform()
    expect(await reanalyzeAudio(ops, 'n1', transform)).toBe(false)
  })
+
+  it('地址变了要能重算出**新地址**的波形（覆盖旧波形）—— 对应"换音频/生成新音频后波形不更新"', async () => {
+    // 节点上还留着上一段音频的波形与时长（旧数据）
+    const oldWave = fallbackWaveform('old')
+    const { ops, table } = fakeOps({ n1: { audioUrl: 'https://x/old.mp3', audioWaveform: oldWave, audioDuration: 5 } })
+    const seen: string[] = []
+    const { transform } = fakeTransform({
+      analyze: async (url: string) => { seen.push(url); return { peaks: fallbackWaveform('new'), duration: 8 } },
+    })
+    // 把地址换成新生成的音频
+    table.n1.audioUrl = 'https://x/new.mp3'
+    await reanalyzeAudio(ops, 'n1', transform)
+    expect(seen).toEqual(['https://x/new.mp3']) // 分析的是**新**地址
+    expect(table.n1.audioWaveform).not.toEqual(oldWave)
+    expect(table.n1.audioDuration).toBe(8) // 时长也跟着更新
+  })
 
   it('重分析拿不到时长时不写 duration（不把好数据抹成 0）', async () => {
     const { ops, table } = fakeOps({ n1: { audioUrl: 'https://x/a.mp3', audioDuration: 9 } })

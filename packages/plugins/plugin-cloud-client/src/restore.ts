@@ -46,12 +46,15 @@ export async function restoreOrSeed(deps: RestoreDeps): Promise<RestoreResult> {
     return { phase: 'seeded', nodes: local.nodes.length, edges: local.edges.length }
   }
 
-  // 本地不认识的节点类型不该塞进来：渲染层没有对应组件，加进去只会是一片空白/报错
-  const known = deps.knownType ?? (() => true)
-  const nodes = server.nodes.filter((n) => {
-    const type = n && typeof n === 'object' ? (n as { type?: unknown }).type : undefined
-    return typeof type === 'string' ? known(type) : true
-  })
+  // ★ 不要因为「本地暂时不认识这个类型」就丢节点。
+  //
+  // 曾经的写法是按 knownType 过滤，理由是「没有对应组件会渲染成空白」。但它有个更糟的副作用：
+  // **类型是运行期热装的**（group / mini-map 这类插件由云清单联网后才 apply，注册时机晚于恢复），
+  // 于是恢复那一刻 group 还没注册 → 分组节点被丢 → 它的子节点失去 parentId 变成孤儿平铺，
+  // 用户看到的就是「分组没了、名字也不跟随」（实测踩到）。
+  // 节点数据是用户的，宁可先留着（渲染层对未注册类型本来就有 orphan 兜底），
+  // 也不能因为时序问题把它从画布里抹掉。
+  const nodes = server.nodes.filter((n) => !!n && typeof n === 'object')
 
   deps.replaceLocal(nodes, server.edges)
 

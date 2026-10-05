@@ -112,6 +112,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: IMAGE_COMPARE_NODE_TYPE,
     label: '图片对比',
+    nameTemplate: '图片对比 {{ID}}',
     description: '在画布中添加一个图片对比节点',
     icon: NODE_ICON,
     size: { w: 480, h: DEFAULT_COMPARE_HEIGHT },

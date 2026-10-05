@@ -58,5 +58,11 @@ export function useNodeCapability(type: string) {
   /** 该 type 声明的图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省 undefined = 标题不显示图标） */
   const icon = computed(() => nodeDef.value?.icon);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent };
+  /**
+   * 该 type 的中文名（label）。标题条在没有 data.label 时用它兜底 ——
+   * 以前回落成英文 type（text/image），界面上看着就不对。
+   */
+  const label = computed(() => nodeDef.value?.label);
+
+  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent, label };
 }

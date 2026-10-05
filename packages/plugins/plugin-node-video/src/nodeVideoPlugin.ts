@@ -153,6 +153,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: VIDEO_NODE_TYPE,
     label: '视频',
+    nameTemplate: '视频 {{ID}}',
     description: '在画布中添加一个视频节点',
     icon: NODE_ICON,
     // 尺寸与 v1 NODE_SIZES.video 同：一点元数据都读不到时的兜底

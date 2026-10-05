@@ -58,6 +58,9 @@ export function skillResources(skills: SkillRow[]): ResourceItem[] {
     name: sk.name,
     category: '技能',
     value: sk.description,
+    // 引用标记：带**说明书路径**（skill.dir 是后端给的技能目录，不是文件）。
+    // 后端据它写一句「说明书在 <路径>，需要时自己读」，不再贴正文（用户口径）。
+    ref: { kind: 'skill', name: sk.name, value: skillDirOf(sk) },
     renderItem: () => renderMenuRow(ICON_SKILL, sk.name, sk.description),
     renderEditor: () => renderTag(ICON_SKILL, sk.name),
   }))
@@ -72,9 +75,57 @@ export function mcpResources(servers: McpRow[]): ResourceItem[] {
       name: m.name,
       category: 'MCP',
       value: hint,
+      // MCP 的标记**不带地址**（用户口径）：后端靠服务名决定这次连哪几个。
+      ref: { kind: 'mcp', name: m.name },
       renderItem: () => renderMenuRow(ICON_MCP, m.name, hint),
       renderEditor: () => renderTag(ICON_MCP, m.name),
     }
   })
 }
 
+/**
+ * 技能目录 → SKILL.md 路径。
+ *
+ * 后端的 SkillRow 只给名字与说明，不给路径；约定技能说明书固定叫 `SKILL.md`，
+ * 而技能目录落在 `<app_data_dir>/agents/<agent>/agent_state/skills/<name>/`。
+ * 路径拿不到时返回空串：标记仍成立（后端只说「技能已生效」），只是少了路径提示。
+ */
+function skillDirOf(sk: SkillRow & { dir?: string; path?: string }): string {
+  const base = sk.dir ?? sk.path
+  if (!base) return ''
+  return base.replace(/[\\/]+$/, '') + '/SKILL.md'
+}
+
+/** 画布节点的最小形状（左抽屉 / @ 菜单都用它；不 import 数据层类型） */
+export interface CanvasNodeRow {
+  id: string
+  name: string
+  type: string
+}
+
+/** 节点图标（按类型粗分；装饰用，认不出就当通用节点） */
+export const ICON_NODE =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>'
+
+/**
+ * 画布节点 → 资源标签。
+ *
+ * 标记里带 `画布id#节点id`（Node ref 载荷），后端据此引导模型用内置画布 MCP 去查这个节点。
+ * onClick（可选）：点标签 = 让画布聚焦到该节点（用户要的「点标签跳到节点」）。
+ */
+export function nodeResources(
+  nodes: CanvasNodeRow[],
+  canvasId: string,
+  onClick?: (nodeId: string) => void,
+): ResourceItem[] {
+  return nodes.map((n) => ({
+    id: 'node:' + n.id,
+    name: n.name || n.id,
+    category: '节点',
+    value: n.id,
+    ref: { kind: 'node', name: n.name || n.id, value: canvasId + '#' + n.id },
+    ...(onClick ? { onClick: () => onClick(n.id) } : {}),
+    renderItem: () => renderMenuRow(ICON_NODE, n.name || n.id, n.type),
+    renderEditor: () => renderTag(ICON_NODE, n.name || n.id),
+  }))
+}

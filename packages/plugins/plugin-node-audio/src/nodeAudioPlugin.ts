@@ -98,6 +98,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: AUDIO_NODE_TYPE,
     label: '音频',
+    nameTemplate: '音频 {{ID}}',
     description: '在画布中添加一个音频节点（语音合成 / 音频生成）',
     icon: AUDIO_ICON,
     size: { w: 320, h: 120 },

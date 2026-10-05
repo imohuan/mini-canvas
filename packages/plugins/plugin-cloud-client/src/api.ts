@@ -152,9 +152,9 @@ export class CloudApi {
     }
   }
 
-  /** 增量写节点（后台与网页两个写方共用同一个口子，谁都不会盖掉谁） */
-  async patchNodes(body: { add?: unknown[]; delete?: string[]; update?: unknown[] }): Promise<void> {
-    const res = await this.doFetch(this.absolute('/api/canvas/nodes'), {
+  /** 增量写节点（后台与网页两个写方共用同一个口子，谁都不会盖掉谁）；带画布 id，多画布各写各的 */
+  async patchNodes(canvasId: string, body: { add?: unknown[]; delete?: string[]; update?: unknown[] }): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/canvases/' + encodeURIComponent(canvasId) + '/nodes'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -163,8 +163,8 @@ export class CloudApi {
   }
 
   /** 增量写边（同上） */
-  async patchEdges(body: { add?: unknown[]; delete?: string[]; update?: unknown[] }): Promise<void> {
-    const res = await this.doFetch(this.absolute('/api/canvas/edges'), {
+  async patchEdges(canvasId: string, body: { add?: unknown[]; delete?: string[]; update?: unknown[] }): Promise<void> {
+    const res = await this.doFetch(this.absolute('/api/canvases/' + encodeURIComponent(canvasId) + '/edges'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),

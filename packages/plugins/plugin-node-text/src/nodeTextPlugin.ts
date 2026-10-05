@@ -143,6 +143,7 @@ export function apply(ctx: Context) {
     ctx.nodes.register({
     type: 'text',
     label: '文本',
+    nameTemplate: '文本 {{ID}}',
     description: '在画布中添加一个文本节点',
     icon: NODE_ICON,
     size: { w: 300, h: 200 },

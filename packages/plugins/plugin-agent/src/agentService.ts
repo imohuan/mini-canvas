@@ -10,6 +10,7 @@
 import { computed, reactive, type ComputedRef } from 'vue'
 import { AgentApi, type ChatEvent, type SessionMetaView, type SendOptions } from './agentApi.js'
 import { ChatModel, type AgentTurnView } from './sessionModel.js'
+import { stripMarkupToPlain } from 'prosemirror-editor-bundle'
 
 export const CANVAS_ID = 'default'
 
@@ -35,6 +36,8 @@ export interface SkillRow {
   description: string
   size?: number
   fileCount?: number
+  /** 技能目录的绝对路径（后端给；前端拼 SKILL.md 写进引用标记） */
+  dir?: string
 }
 
 export interface ModelRow {
@@ -95,8 +98,6 @@ export interface AgentServiceState {
 
   /** 本轮选中项（随会话走） */
   model: { provider: string; modelId: string } | null
-  activeSkills: string[]
-  activeMcp: string[]
   /** 规则列表（审批用） */
   policy: ApprovalPolicyView
 
@@ -114,8 +115,44 @@ export interface AgentServiceState {
   /** Agent 的系统提示词（agent_state/AGENTS.md） */
   systemPrompt: string
 
+  /**
+   * 模式提示词清单（全能创作 / 剧本创编 + 用户自建），住后台 KV。
+   * 内置两条不可删（只能改名/改正文）；用户自建的可增删改查。
+   */
+  prompts: PromptPreset[]
+  /** 当前选中的模式 id（发送时用它的 text 当系统提示词） */
+  activePromptId: string
+  /**
+   * 当前这条会话**建的时候用的提示词正文**（SDK 把系统提示词钉在会话上，切模式 / 改正文
+   * 都要开新会话才生效）。
+   *
+   * 为什么记正文而不是模式 id：同一模式下把正文改了，id 没变但提示词变了，也该换会话 ——
+   * 记正文才能同时覆盖「换模式」和「改当前模式正文」两种情形。'' = 不知道（历史会话）。
+   */
+  sessionPromptText: string
+
+  /** 当前画布 id（节点标记要用：`画布id#节点id`）；由宿主经 setCanvasId 喂进来 */
+  canvasId: string
+
+  /**
+   * 待插入的节点引用（右键菜单「引用到 Agent」用）。
+   *
+   * 为什么要走服务中转：命令在插件上下文里执行，而输入框在组件里 ——
+   * 服务是两者唯一共享的通道。组件看见这个值就把该节点插成标签，然后调 clearNodeRef 清掉。
+   */
+  pendingNodeRef: string | null
+
   /** 后端地址（排查用） */
   baseUrl: string
+}
+
+/** 一套「模式系统提示词」（与后端 PromptPreset 同形） */
+export interface PromptPreset {
+  id: string
+  name: string
+  text: string
+  /** 内置项：不可删除 */
+  builtin?: boolean
 }
 
 export interface AgentService {
@@ -148,15 +185,6 @@ export interface AgentService {
   stop(): void
   retry(): Promise<void>
   setModel(provider: string, modelId: string): void
-  toggleSkill(name: string): void
-  toggleMcp(name: string): void
-  /**
-   * 输入框正文变了：按正文里出现的 @ 标签（技能 / MCP 的内联 chip）**重算**本轮引用。
-   *
-   * 为什么是重算而不是「翻一下开关」：标签是可删的 —— 用户把 chip 删掉，引用就该立刻失效。
-   * 拿「是否出现过」做一次纯函数映射，增删两侧自然都对；不必再维护两份状态。
-   */
-  syncRefsFromText(text: string): void
   /** 审批：用户点允许 / 拒绝 */
   decide(approvalId: string, decision: 'allow' | 'deny'): Promise<void>
   savePolicy(policy: ApprovalPolicyView): Promise<void>
@@ -179,6 +207,20 @@ export interface AgentService {
   saveModelsBulk(body: Record<string, unknown>): Promise<void>
   deleteModel(provider: string, modelId: string): Promise<void>
   setDefaultModel(provider: string, modelId: string): Promise<void>
+  /** 拉一次模式提示词清单（打开面板 / 进设置页时调） */
+  loadPrompts(): Promise<void>
+  /** 整包写回模式提示词清单（增删改都用它；后端会保证内置项不被删） */
+  savePrompts(list: PromptPreset[]): Promise<void>
+  /** 选中一个模式（后续发送用它的系统提示词） */
+  setActivePrompt(id: string): void
+  /** 当前模式的提示词正文（给 sendOptions 用；没有就空串） */
+  activePromptText(): string
+  /** 宿主告诉服务当前画布 id（节点标记要用） */
+  setCanvasId(id: string): void
+  /** 请求把一个节点引用插进输入框（右键菜单入口；组件消费） */
+  requestNodeRef(nodeId: string): void
+  /** 组件插完清掉待办 */
+  clearNodeRef(): void
 }
 
 /** 造一份服务（agentPlugin 在 apply 里调用一次） */
@@ -205,8 +247,6 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     mcpServers: [],
     catalog: [],
     model: null,
-    activeSkills: [],
-    activeMcp: [],
     policy: { enabled: true, rules: [] },
     needsModel: false,
     offline: false,
@@ -216,8 +256,24 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     upstreamModels: [],
     clientTypes: ['openai-chat', 'deepseek-v4'],
     systemPrompt: '',
+    prompts: [],
+    activePromptId: '',
+    sessionPromptText: '',
+    canvasId: CANVAS_ID,
+    pendingNodeRef: null,
     baseUrl: opts.baseUrl ?? '',
   })
+
+  /**
+   * 当前画布 id：宿主经 setCanvasId 喂进来的实时值优先，拿不到才回落默认。
+   *
+   * 为什么统一走它：会话 / 消息必须落在**用户当前看的这张画布**上。
+   * 否则「URL 上是画布 B、消息却发到 default」—— 而节点引用标记里写的是 B 的 id，
+   * 模型按标记去 default 查节点就查错了（code review 发现的真问题）。
+   */
+  function canvasId(): string {
+    return state.canvasId || CANVAS_ID
+  }
 
   /** 把 ChatModel 的内容同步到响应式 state（turns 是普通数组，靠整体替换触发更新） */
   function sync(): void {
@@ -254,6 +310,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.catalog = (Array.isArray(cfg.catalog) ? cfg.catalog : []) as AgentServiceState['catalog']
       if (Array.isArray(cfg.clientTypes)) state.clientTypes = cfg.clientTypes.map(String)
       if (typeof cfg.systemPrompt === 'string') state.systemPrompt = cfg.systemPrompt
+      // 模式提示词清单也随这次 refresh 一起拉（列表不长，不必单独一趟）
+      await loadPrompts()
       // 只有「带密钥的模型」才算配好：SDK 预置了一份目录（几十个模型、全无密钥），
       // 拿 models.length 判断会让界面在真没配的时候也以为配好了。
       const usable = state.models.filter((m) => m.hasKey)
@@ -277,7 +335,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function listSessions(): Promise<void> {
     try {
-      state.sessions = await api.listSessions(CANVAS_ID)
+      state.sessions = await api.listSessions(canvasId())
       state.offline = false
     } catch (err) {
       state.offline = true
@@ -290,6 +348,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     model.reset()
     sync()
     state.sessionId = null
+    state.sessionPromptText = ''
     state.title = '新会话'
     state.error = ''
     state.contextLeft = null
@@ -298,10 +357,13 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function openSession(id: string): Promise<void> {
     try {
-      const rec = await api.getSession(CANVAS_ID, id)
+      const rec = await api.getSession(canvasId(), id)
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
       sync()
       state.sessionId = id
+      // 历史会话的提示词正文无从得知：清空 → 下次发送时 ensurePromptFresh 会按当前模式判定，
+      // 若不一致就换新会话（宁可换一条，也不要让用户以为改了提示词却没生效）。
+      state.sessionPromptText = ''
       state.title = rec.title || '新会话'
       state.error = ''
       if (rec.provider && rec.modelId) state.model = { provider: rec.provider, modelId: rec.modelId }
@@ -312,7 +374,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function renameSession(id: string, title: string): Promise<void> {
     try {
-      await api.renameSession(CANVAS_ID, id, title)
+      await api.renameSession(canvasId(), id, title)
       if (state.sessionId === id) state.title = title
       await listSessions()
     } catch (err) {
@@ -322,7 +384,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function deleteSession(id: string): Promise<void> {
     try {
-      await api.deleteSession(CANVAS_ID, id)
+      await api.deleteSession(canvasId(), id)
       if (state.sessionId === id) await newSession()
       else await listSessions()
     } catch (err) {
@@ -342,8 +404,15 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
         opts.provider = state.model.provider
         opts.modelId = state.model.modelId
       }
-      const created = await api.createSession(CANVAS_ID, { ...opts })
+      // 模式提示词在**建会话时**定死（SDK 把系统提示词钉在会话上）：
+      // 这是它真正生效的那一次；后续轮次沿用同一条会话的提示词。
+      const prompt = activePromptText()
+      if (prompt) opts.systemPrompt = prompt
+      const created = await api.createSession(canvasId(), { ...opts })
       state.sessionId = created.id
+      // 记下建这条会话时用的提示词正文（见 sessionPromptText 的说明）：
+      // 之后发送前比对，正文变了就换会话，保证「改了提示词下一句就生效」。
+      state.sessionPromptText = prompt
       await listSessions()
       return created.id
     } catch (err) {
@@ -358,8 +427,11 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       opts.provider = state.model.provider
       opts.modelId = state.model.modelId
     }
-    if (state.activeMcp.length) opts.mcpServers = [...state.activeMcp]
-    if (state.activeSkills.length) opts.skills = [...state.activeSkills]
+    // 技能 / MCP **不再作为特殊属性发送**：它们已经是正文里的引用标记，后端自己解析。
+    // 跨机器一致、删标签即失效，也不会出现「属性说有、正文里没有」的第二处真相。
+    // 模式提示词（若选了）随这一轮发给后端。
+    const prompt = activePromptText()
+    if (prompt) opts.systemPrompt = prompt
     return opts
   }
 
@@ -369,18 +441,23 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     // 只有图、没有字也算一条合法消息（用户常直接丢图问"这是什么"）
     if ((!value && !pics.length) || state.running) return
     setError('')
+    // 发送前再校一次提示词新鲜度：用户可能刚在设置里改了模式正文、没动过模式下拉，
+    // 这条会话就得换成新提示词的那条（见 ensurePromptFresh）。
+    ensurePromptFresh()
     const id = await ensureSession()
     if (!id) return
     lastText = value
     lastImages = pics.length ? pics : undefined
-    model.send(value, pics.length ? pics : undefined)
+    // 界面上这条用户消息显示**可读文本**（标记降级成 `@名字`），与落盘转录同一口径；
+    // 真正发出去的是带标记的 value（后端据它解析引用）。
+    model.send(stripMarkupToPlain(value), pics.length ? pics : undefined)
     sync()
     state.running = true
     const ac = new AbortController()
     abort = ac
     try {
       await api.sendMessage(
-        CANVAS_ID,
+        canvasId(),
         id,
         value,
         { ...sendOptions(), ...(pics.length ? { images: pics } : {}) },
@@ -405,7 +482,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   function stop(): void {
     abort?.abort()
-    if (state.sessionId) void api.abort(CANVAS_ID, state.sessionId)
+    if (state.sessionId) void api.abort(canvasId(), state.sessionId)
     state.running = false
   }
 
@@ -417,22 +494,62 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     state.model = { provider, modelId }
   }
 
-  function toggleSkill(name: string): void {
-    state.activeSkills = state.activeSkills.includes(name)
-      ? state.activeSkills.filter((s) => s !== name)
-      : [...state.activeSkills, name]
+  function activePromptText(): string {
+    const p = state.prompts.find((x) => x.id === state.activePromptId)
+    return p?.text ?? ''
   }
 
-  function toggleMcp(name: string): void {
-    state.activeMcp = state.activeMcp.includes(name)
-      ? state.activeMcp.filter((s) => s !== name)
-      : [...state.activeMcp, name]
+  /**
+   * 提示词变了就开新会话。
+   *
+   * 模式是**会话级**的：SDK 把系统提示词钉在建会话那一次（见 ensureSession）。于是
+   * 「切了模式」或「改了当前模式的正文」都要换一条会话，否则用户看到的是旧提示词在跑。
+   * 判定用**正文比对**（不是模式 id）：改正文时 id 没变，只有正文能看出来。
+   * sessionPromptText 为空 = 打开的是历史会话、不知道当时用什么，一并当作需要换。
+   */
+  function ensurePromptFresh(): void {
+    if (!state.sessionId) return
+    if (state.sessionPromptText === activePromptText()) return
+    void newSession()
   }
 
-  function syncRefsFromText(text: string): void {
-    const has = (name: string): boolean => text.includes('@' + name)
-    state.activeSkills = state.skills.filter((sk) => has(sk.name)).map((sk) => sk.name)
-    state.activeMcp = state.mcpServers.filter((m) => has(m.name)).map((m) => m.name)
+  async function loadPrompts(): Promise<void> {
+    try {
+      const r = await api.prompts()
+      state.prompts = (Array.isArray(r.prompts) ? r.prompts : []) as PromptPreset[]
+      // 没有选中 / 选中的已被删 → 落回第一条（内置的「全能创作」永远在）
+      if (!state.prompts.some((p) => p.id === state.activePromptId)) {
+        state.activePromptId = state.prompts[0]?.id ?? ''
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function savePrompts(list: PromptPreset[]): Promise<void> {
+    const r = await api.savePrompts(list)
+    state.prompts = (Array.isArray(r.prompts) ? r.prompts : []) as PromptPreset[]
+    if (!state.prompts.some((p) => p.id === state.activePromptId)) {
+      state.activePromptId = state.prompts[0]?.id ?? ''
+    }
+  }
+
+  function setActivePrompt(id: string): void {
+    if (!state.prompts.some((p) => p.id === id)) return
+    state.activePromptId = id
+    ensurePromptFresh()
+  }
+
+  function setCanvasId(id: string): void {
+    if (id) state.canvasId = id
+  }
+
+  function requestNodeRef(nodeId: string): void {
+    if (nodeId) state.pendingNodeRef = nodeId
+  }
+
+  function clearNodeRef(): void {
+    state.pendingNodeRef = null
   }
 
   async function decide(approvalId: string, decision: 'allow' | 'deny'): Promise<void> {
@@ -440,7 +557,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     // 先把卡片点亮（用户立刻看到反馈），再发请求
     applyEvent({ type: 'approval_result', id: approvalId, decision })
     try {
-      await api.approve(CANVAS_ID, state.sessionId, approvalId, decision)
+      await api.approve(canvasId(), state.sessionId, approvalId, decision)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
@@ -499,7 +616,6 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function removeSkill(name: string): Promise<void> {
     await api.removeSkill(name)
-    state.activeSkills = state.activeSkills.filter((s) => s !== name)
     await refresh()
     await loadSkillCandidates()
   }
@@ -511,7 +627,6 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function removeMcp(name: string): Promise<void> {
     await api.removeMcp(name)
-    state.activeMcp = state.activeMcp.filter((s) => s !== name)
     await refresh()
   }
 
@@ -551,7 +666,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
   async function reconnectMcp(): Promise<boolean> {
     if (!state.sessionId) return false
     try {
-      const r = await api.reconnectMcp(CANVAS_ID, state.sessionId)
+      const r = await api.reconnectMcp(canvasId(), state.sessionId)
       return r.released === true
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -605,9 +720,6 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     stop,
     retry,
     setModel,
-    toggleSkill,
-    toggleMcp,
-    syncRefsFromText,
     decide,
     savePolicy,
     importSkill,
@@ -623,5 +735,12 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     saveModelsBulk,
     deleteModel,
     setDefaultModel,
+    loadPrompts,
+    savePrompts,
+    setActivePrompt,
+    activePromptText,
+    setCanvasId,
+    requestNodeRef,
+    clearNodeRef,
   }
 }

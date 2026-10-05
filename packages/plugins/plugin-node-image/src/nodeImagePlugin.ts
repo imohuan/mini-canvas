@@ -146,6 +146,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: 'image',
     label: '图片',
+    nameTemplate: '图片 {{ID}}',
     description: '在画布中添加一张图片',
     icon: NODE_ICON,
     size: { w: 320, h: 240 },

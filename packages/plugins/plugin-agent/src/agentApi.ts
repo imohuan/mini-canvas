@@ -47,6 +47,13 @@ export interface SendOptions {
   modelId?: string
   mcpServers?: string[]
   skills?: string[]
+  /**
+   * 这一轮用的**模式系统提示词**（全能创作 / 剧本创编各一套）。
+   *
+   * 后端在建会话时临时用它替换 AGENTS.md（见 AgentRuntime.ensureSession），
+   * 于是同一个会话的后续轮次会自动沿用这套提示词（SDK 记在 session_meta 里）。
+   */
+  systemPrompt?: string
   /** 随这条消息一起发出去的图片（data URL；服务端转给 SDK 的 imageUrlMessage） */
   images?: string[]
 }
@@ -123,6 +130,16 @@ export class AgentApi {
   /** 写 Agent 的系统提示词 */
   saveSystemPrompt(text: string): Promise<{ text?: string }> {
     return this.json('/api/agent/system-prompt', { method: 'PUT', body: JSON.stringify({ text }) })
+  }
+
+  /** 读模式提示词清单（住后台 KV） */
+  prompts(): Promise<{ prompts?: unknown[] }> {
+    return this.json('/api/agent/prompts')
+  }
+
+  /** 整包写回模式提示词清单（后端会保证内置项不被删） */
+  savePrompts(prompts: unknown[]): Promise<{ prompts?: unknown[] }> {
+    return this.json('/api/agent/prompts', { method: 'PUT', body: JSON.stringify({ prompts }) })
   }
 
   skillSources(): Promise<Record<string, unknown>> {
@@ -230,6 +247,7 @@ export class AgentApi {
     if (opts.modelId) payload.modelId = opts.modelId
     if (opts.mcpServers?.length) payload.mcpServers = opts.mcpServers
     if (opts.skills?.length) payload.skills = opts.skills
+    if (opts.systemPrompt) payload.systemPrompt = opts.systemPrompt
     if (opts.images?.length) payload.images = opts.images
     const res = await this.f(this.sessionPath(canvasId, sessionId) + '/messages', {
       method: 'POST',

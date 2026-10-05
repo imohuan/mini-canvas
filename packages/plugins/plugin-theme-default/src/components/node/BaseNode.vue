@@ -204,10 +204,13 @@ const radioStyle = computed(() =>
  */
 const resizeHandleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
-// —— 节点标题（data.label ?? type）——
+// —— 节点标题（data.label ?? 类型中文名 ?? type）——
+// 名字的唯一来源是节点自身的 data.label（建节点时由数据层按类型模板生成，见 nodeStore.nextDefaultName）。
+// 兜底顺序：类型表里的中文 label（图片/文本…），再退到 type、最后 '节点' ——
+// 以前直接回落 props.type，没有 label 的老节点会显示英文 type。
 const nodeLabel = computed(() => {
   const label = props.data?.label as string | undefined
-  return label || props.type || '节点'
+  return label || cap.label.value || props.type || '节点'
 })
 
 // ============ 卡片固定尺寸 + resize（useNodeCardSize）============

@@ -95,6 +95,7 @@ export function apply(ctx: Context) {
   ctx.nodes.register({
     type: PANORAMA_NODE_TYPE,
     label: '3D 预览',
+    nameTemplate: '3D 预览 {{ID}}',
     description: '在画布中添加一个 3D 全景节点',
     icon: NODE_ICON,
     size: { w: 420, h: 280 },

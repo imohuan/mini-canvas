@@ -74,15 +74,17 @@ describe('云端优先', () => {
     expect(views).toEqual([])
   })
 
-  it('本地不认识的节点类型不塞进来（渲染不了，塞进来只会是空白）', async () => {
+  it('类型暂时不认识也保留节点（热装类型注册晚于恢复，丢节点=用户数据消失）', async () => {
+    // 真出过：group 是云清单运行期热装的，恢复那一刻还没注册，按类型过滤把分组节点丢了、
+    // 子节点变孤儿 → 用户看到「分组没了」。所以现在一律保留，渲染层对 orphan 有兜底。
     const { d, replaced } = deps({
       readServer: async () => ({ nodes: [node('a', 'text'), node('b', 'pano-unknown')], edges: [], view: null }),
       readLocal: () => ({ nodes: [], edges: [] }),
       knownType: (t) => t === 'text',
     })
     const r = await restoreOrSeed(d)
-    expect(replaced[0].nodes.map((n) => (n as { id: string }).id)).toEqual(['a'])
-    expect(r.nodes).toBe(1)
+    expect(replaced[0].nodes.map((n) => (n as { id: string }).id)).toEqual(['a', 'b'])
+    expect(r.nodes).toBe(2)
   })
 
   it('边照常恢复（边不按类型过滤）', async () => {

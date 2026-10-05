@@ -78,6 +78,23 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     order: 60,
     run: () => service.toggle(),
   })
+
+  // ④ 命令：把当前节点**引用到 Agent 输入框**（节点右键菜单的「引用到 Agent」）。
+  //    areas:['node'] → 只出现在节点的右键菜单里（沿用 context-menu 插件的 areas 语义）。
+  //    做法：服务记下待插入的节点 id，面板打开后由内容组件插成标签（服务是两者唯一共享通道）。
+  ctx.commands.register({
+    id: 'agent:reference-node',
+    title: '引用到 Agent',
+    areas: ['node'],
+    group: '节点',
+    order: 20,
+    run: (_c, payload: { nodeId?: string }) => {
+      const nodeId = payload?.nodeId
+      if (!nodeId) return
+      service.requestNodeRef(nodeId)
+      service.show()
+    },
+  })
 }
 
 export const agentPlugin: PluginModule = { name, inject, Config, apply }

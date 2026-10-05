@@ -18,8 +18,29 @@ export const PROVIDERS_VERSION_KEY = 'providers-version'
 /** 历史变化的版本信号键（type='config'） */
 export const HISTORY_REV_KEY = 'history-rev'
 
-/** 画布 id（前端界面当前只有一张；与后端 DEFAULT_CANVAS_ID 必须一致） */
+/**
+ * 默认画布 id（与后端 DEFAULT_CANVAS_ID 一致）。
+ *
+ * 现在界面是多画布的：当前画布 id 由 `canvasId()` 现算（URL 的 `?canvas=` 参数优先），
+ * 拿不到才落回这个默认值。`CANVAS_ID` 保留给「不需要知道当前是哪张」的固定默认场景与单测。
+ */
 export const CANVAS_ID = 'default'
+
+/** 当前画布 id（多画布）：URL `?canvas=<id>` 优先，否则回落到默认画布。 */
+export function canvasId(): string {
+  if (typeof window !== 'undefined') {
+    try {
+      const id = new URLSearchParams(window.location.search).get('canvas')
+      if (id && /^[A-Za-z0-9_-]{1,64}$/.test(id)) return id
+      // 前端用的是 hash 路由 `#/canvas/<id>`：从哈希里再认一次（界面就是这么跳的）
+      const m = /\/canvas\/([A-Za-z0-9_-]{1,64})/.exec(window.location.hash)
+      if (m) return m[1]
+    } catch {
+      /* 取不到 URL（异常环境）→ 回落默认 */
+    }
+  }
+  return CANVAS_ID
+}
 
 /** 画布内资源引用前缀（与后端 RESOURCE_REF_PREFIX 一致） */
 export const RESOURCE_REF_PREFIX = 'res:'

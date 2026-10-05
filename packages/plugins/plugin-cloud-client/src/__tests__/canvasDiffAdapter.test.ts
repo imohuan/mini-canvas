@@ -27,7 +27,7 @@ function fakeBackend(initial: { nodes?: unknown[]; edges?: unknown[]; view?: unk
     }
     const body = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
     writes.push({ path, body })
-    if (path === '/api/canvas/nodes') {
+    if (path === '/api/canvases/default/nodes') {
       const del = new Set((body.delete as string[]) ?? [])
       const list = nodes.filter((n) => !del.has((n as { id: string }).id))
       for (const a of (body.add as unknown[]) ?? []) list.push(a)
@@ -65,7 +65,7 @@ describe('写：只发差异，且磁盘上只存 res:', () => {
     await adapter.primeFromServer()
     await adapter.set('canvas:graph', [{ id: 'n1', type: 'text', position: { x: 0, y: 0 }, data: {} }])
     expect(b.writes).toHaveLength(1)
-    expect(b.writes[0].path).toBe('/api/canvas/nodes')
+    expect(b.writes[0].path).toBe('/api/canvases/default/nodes')
     expect((b.writes[0].body.add as unknown[]).length).toBe(1)
   })
 
@@ -162,6 +162,5 @@ describe('恢复：服务器上的 res: 引用要展开成真地址（否则浏�
     expect(node.data.imageName).toBe('a.png')
   })
 })
-
 
 

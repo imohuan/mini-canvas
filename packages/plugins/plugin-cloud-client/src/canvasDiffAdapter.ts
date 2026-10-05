@@ -12,7 +12,7 @@
  */
 import { diffGraph, isEmptyOps, type GraphOps } from './graphDiff.js'
 import type { CloudApi } from './api.js'
-import { CANVAS_ID } from './keys.js'
+import { CANVAS_ID, canvasId } from './keys.js'
 import { expandNodes, shrinkNodes } from './resourceRef.js'
 
 /** 宿主交给 adapter 的 key 是带 type 前缀的物理 key（如 canvas:graph） */
@@ -46,14 +46,26 @@ export class CanvasDiffAdapter {
 
   constructor(
     private readonly api: CloudApi,
-    private readonly canvasId: string = CANVAS_ID,
+    private readonly fixedCanvasId: string = CANVAS_ID,
   ) {}
+
+  /**
+   * 当前画布 id —— **每次操作现算**（不是构造时定死）。
+   *
+   * 为什么必须现算：这个 adapter 是插件在**冷启动装载时**构造的，那时 hash 路由 `#/canvas/<id>`
+   * 可能还没落地（`canvasId()` 读 hash 读不到 → 回落 `default`），于是整张新画布的读写都跑到
+   * `default` 去了（实测：新建画布里的改动切走就没了 —— 其实写进了 default）。
+   * 每次现读，任何挂载时机都拿到当前真正在看的那张画布。
+   */
+  private cid(): string {
+    return typeof window !== 'undefined' ? canvasId() : this.fixedCanvasId
+  }
 
   async get<T>(key: string): Promise<T | undefined> {
     const bare = bareKey(key)
-    const snap = await this.api.readCanvas(this.canvasId)
+    const snap = await this.api.readCanvas(this.cid())
     // 读出去之前把 res: 展开成真地址：本地画布（渲染 / 合并比较）用的都是完整地址
-    if (bare === GRAPH) return expandAll(snap.nodes, this.canvasId) as T
+    if (bare === GRAPH) return expandAll(snap.nodes, this.cid()) as T
     if (bare === EDGES) return snap.edges as T
     if (bare === VIEWPORT) return (snap.view ?? undefined) as T
     return undefined
@@ -62,7 +74,7 @@ export class CanvasDiffAdapter {
   async set(key: string, value: unknown): Promise<void> {
     const bare = bareKey(key)
     if (bare === VIEWPORT) {
-      await this.api.putView(this.canvasId, value)
+      await this.api.putView(this.cid(), value)
       return
     }
     // 写出去之前：内嵌字节先传成画布资源、换 res:；本画布地址收回 res:
@@ -71,7 +83,7 @@ export class CanvasDiffAdapter {
     // 所以这里不做任何上传 —— 保存路径只负责"把节点里的地址写成引用"。
     let normalized = value
     if (bare === GRAPH && Array.isArray(value)) {
-      normalized = shrinkAll(value, this.canvasId)
+      normalized = shrinkAll(value, this.cid())
     }
     if (bare === GRAPH) return this.submitDelta('nodes', this.submittedNodes, normalized, (v) => (this.submittedNodes = v))
     if (bare === EDGES) return this.submitDelta('edges', this.submittedEdges, value, (v) => (this.submittedEdges = v))
@@ -81,19 +93,19 @@ export class CanvasDiffAdapter {
   async remove(key: string): Promise<void> {
     const bare = bareKey(key)
     if (bare === GRAPH) {
-      await this.api.patchNodes({ delete: collectIds(this.submittedNodes) })
+      await this.api.patchNodes(this.cid(), { delete: collectIds(this.submittedNodes) })
       this.submittedNodes = []
       return
     }
     if (bare === EDGES) {
-      await this.api.patchEdges({ delete: collectIds(this.submittedEdges) })
+      await this.api.patchEdges(this.cid(), { delete: collectIds(this.submittedEdges) })
       this.submittedEdges = []
     }
   }
 
   /** 把"服务器现有的这份"记成基准（装载时先读一次，免得第一次保存把已有的全当成新增） */
   async primeFromServer(): Promise<void> {
-    const snap = await this.api.readCanvas(this.canvasId)
+    const snap = await this.api.readCanvas(this.cid())
     this.submittedNodes = Array.isArray(snap.nodes) ? snap.nodes : []
     this.submittedEdges = Array.isArray(snap.edges) ? snap.edges : []
   }
@@ -106,8 +118,8 @@ export class CanvasDiffAdapter {
    * 图显示不出来。恢复路径（装载时以云端为准覆盖本地）走的就是这里，必须给真地址。
    */
   async getRaw(): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown }> {
-    const snap = await this.api.readCanvas(this.canvasId)
-    return { ...snap, nodes: expandAll(snap.nodes, this.canvasId) as unknown[] }
+    const snap = await this.api.readCanvas(this.cid())
+    return { ...snap, nodes: expandAll(snap.nodes, this.cid()) as unknown[] }
   }
 
   /**
@@ -133,8 +145,8 @@ export class CanvasDiffAdapter {
       ...(ops.delete.length > 0 ? { delete: ops.delete } : {}),
       ...(ops.update.length > 0 ? { update: ops.update } : {}),
     }
-    if (kind === 'nodes') await this.api.patchNodes(body as never)
-    else await this.api.patchEdges(body as never)
+    if (kind === 'nodes') await this.api.patchNodes(this.cid(), body as never)
+    else await this.api.patchEdges(this.cid(), body as never)
     remember(value)
   }
 }
@@ -178,5 +190,3 @@ function shrinkAll(nodes: unknown, canvasId: string): unknown {
     byId.has(String(n.id ?? '')) ? { ...n, data: { ...(n.data ?? {}), ...byId.get(String(n.id ?? ''))! } } : n,
   )
 }
-
-

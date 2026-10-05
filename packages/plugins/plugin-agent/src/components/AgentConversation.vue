@@ -12,8 +12,8 @@
  * 两处刻意的设计：
  *  ① 下拉一律用**设计系统目录里登记的 dropdown**（useUiComponent('dropdown')），
  *    不自绘浮层 —— 定位/翻边/出屏收进/互斥/点外关闭都由它统一负责（换主题零改动）。
- *  ② 技能 / MCP 是**输入框内联标签**：点下拉里的一项 = 往正文插一个 chip，
- *    引用了谁由正文反推（syncRefsFromText）—— 删掉 chip 引用即失效，不再切开关。
+ *  ② 技能 / MCP / 节点是**输入框内联标签**：点下拉里的一项 = 往正文插一个标记 chip，
+ *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
@@ -21,16 +21,19 @@ import {
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert,
 } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
 import { useStickyScroll } from '../useStickyScroll.js'
-import { skillResources, mcpResources, ICON_SKILL, ICON_MCP } from '../agentResources.js'
+import { skillResources, mcpResources, nodeResources, type CanvasNodeRow, ICON_SKILL, ICON_MCP, ICON_NODE } from '../agentResources.js'
 import AgentMarkdown from './AgentMarkdown.vue'
 
 const agent = useAgent()
 const s = agent.state
+
+/** 画布上下文：节点 @ 引用与「点标签聚焦节点」都要它（doc / viewport / nodeLayout） */
+const { ctx } = useCanvasRender()
 
 /**
  * 上下文环的几何常量（照参考页实测：viewBox 12×12、半径 5.25、描边 1.5）。
@@ -237,16 +240,106 @@ const { scrollToBottom: stickToBottom } = useStickyScroll({
   threshold: 48,
 })
 
-/** @ 下拉候选：已装技能 + 已配 MCP（与工具栏按钮是同一件事、同一套标签外观） */
+/**
+ * 画布节点 → @ 候选（节点标记 + 点击聚焦）。
+ *
+ * 节点从 doc 现取、并**订阅 doc 变化**：用户加/删/改节点后，@ 菜单要跟着变，
+ * 不能只在挂载时取一次快照（否则新节点 @ 不出来）。
+ */
+const nodeList = ref<CanvasNodeRow[]>([])
+let nodeSub: { dispose?: () => void } | null = null
+/**
+ * 节点显示名：**只认节点自己的名字 data.label**（建节点时由数据层按类型模板生成，如「图片 1」）。
+ *
+ * 为什么不再按 imageName / text 首行之类去猜：那是以前没有统一命名时的权宜，
+ * 结果同一节点在标题条 / @ 菜单 / 左侧树三处显示三个名字。名字只有一个来源 —— data.label。
+ */
+function nodeNameOf(
+  n: { id: string; type: string; data?: Record<string, unknown> },
+  typeLabelOf: (t: string) => string | undefined,
+): string {
+  const label = n.data?.label
+  if (typeof label === 'string' && label.trim()) return label.trim().split('\n')[0].slice(0, 40)
+  // 没有 label（改动前建的旧节点）：回落类型中文名（与标题条 / 左侧树同一套兜底），最后才用 id。
+  const d = n.data ?? {}
+  const t = (typeof d.nodeType === 'string' && d.nodeType) || n.type
+  return typeLabelOf(t) || n.id
+}
+function syncNodes(): void {
+  const doc = ctx.tryGet<{
+    getNodes(): Array<{ id: string; type: string; data?: Record<string, unknown>; parentId?: string | null }>
+    types?: Map<string, { label?: string }>
+  }>('doc')
+  if (!doc) return
+  const typeLabelOf = (t: string): string | undefined => doc.types?.get(t)?.label
+  nodeList.value = doc
+    .getNodes()
+    .filter((n) => n.type !== 'group') // 分组只当容器，不作为内容引用
+    .map((n) => ({ id: n.id, name: nodeNameOf(n, typeLabelOf), type: n.type }))
+}
+syncNodes()
+onMounted(() => {
+  // 告诉服务当前画布 id（节点标记要写 `画布id#节点id`）。
+  // 认法跟 cloud-client 的 canvasId() 一致：URL `?canvas=` 优先，其次 hash 路由 `#/canvas/<id>`。
+  try {
+    const q = new URLSearchParams(window.location.search).get('canvas')
+    const h = /\/canvas\/([A-Za-z0-9_-]{1,64})/.exec(window.location.hash)?.[1]
+    const id = q || h
+    if (id) agent.setCanvasId(id)
+  } catch {
+    /* 取不到 URL → 用默认画布 id */
+  }
+  const doc = ctx.tryGet<{ subscribe(cb: () => void): unknown }>('doc')
+  // subscribe 返回取消句柄（与本仓其它插件同款）；形状不确定时按 off/dispose 兜底
+  const off = doc?.subscribe(() => syncNodes()) as { dispose?: () => void } | (() => void) | undefined
+  if (typeof off === 'function') nodeSub = { dispose: off }
+  else if (off) nodeSub = off
+})
+onBeforeUnmount(() => nodeSub?.dispose?.())
+
+/** 点节点标签 = 让画布聚焦到该节点（用户要的「点标签跳到节点」） */
+function focusNode(nodeId: string): void {
+  const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
+  const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
+  if (!viewport) return
+  const rect = layout?.getNodeRect(nodeId)
+  if (rect) {
+    viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
+    return
+  }
+  const doc = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')
+  const node = doc?.getNode(nodeId)
+  if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
+}
+
+/** @ 下拉候选：画布节点 + 已装技能 + 已配 MCP（同一套标签外观、同一个标记格式） */
 const editorResources = computed<ResourceItem[]>(() => [
+  ...nodeResources(nodeList.value, s.canvasId, focusNode),
   ...skillResources(s.skills),
   ...mcpResources(s.mcpServers),
 ])
 
-/** 正文变化 → 引用（技能 / MCP）跟着正文里的标签重算，而不是靠开关状态 */
-function onPromptUpdate(value: string): void {
-  agent.syncRefsFromText(value)
+/**
+ * 右键菜单「引用到 Agent」→ 把那个节点插成标签。
+ *
+ * 命令在插件上下文里执行、输入框在这里，服务是唯一共享通道：命令只往 state.pendingNodeRef
+ * 写一句「引用这个 id」，组件看见就插标签并清掉（见 agentPlugin 的 agent:reference-node）。
+ */
+function insertPendingNodeRef(): void {
+  const nodeId = s.pendingNodeRef
+  if (!nodeId) return
+  syncNodes()
+  // 节点可能刚被删：拿不到就只清待办，不插半截东西
+  const item = nodeResources(nodeList.value, s.canvasId, focusNode).find((x) => x.id === 'node:' + nodeId)
+  if (item) void nextTick(() => editorRef.value?.insertResource(item))
+  agent.clearNodeRef()
 }
+// 两条路都要覆盖：
+//   · 面板已开着 → 右键命令只改 state，watch 触发；
+//   · 面板本来关着 → 命令会 show()，组件此刻才挂载，onMounted 补上这一次（watch 非 immediate，
+//     挂载前设的值它收不到）。onMounted 跑在子组件挂载之后，editorRef 已就绪。
+watch(() => s.pendingNodeRef, () => insertPendingNodeRef())
+onMounted(() => insertPendingNodeRef())
 
 /** 往输入框插一个标签（点下拉里的一项 = 插 chip，不切开关），插完就收起下拉 */
 function insertRef(item: ResourceItem, close: () => void): void {
@@ -262,7 +355,6 @@ function submit(): void {
   prompt.value = ''
   attached.value = []
   modeOpen.value = modelOpen.value = skillOpen.value = mcpOpen.value = authOpen.value = false
-  agent.syncRefsFromText('')
   void agent.send(text, pics.length ? pics : undefined)
   // 自己发的消息必须能看见：无视之前的吸附状态，直接到底。
   // （用户如果先往上翻着看历史，然后发一句 —— 不这样做就会看不到自己刚发的内容。）
@@ -289,11 +381,20 @@ function pickModel(m: { provider: string; modelId: string }, close: () => void):
   close()
 }
 
-const GEN_MODES = [
-  { value: 'auto', label: '全能创作', hint: '自动生成图片/视频/音频/剧本' },
-  { value: 'manual', label: '剧本创编', hint: '先出剧本，确认后再生成' },
-] as const
-const genMode = ref<'auto' | 'manual'>('auto')
+/**
+ * 模式 = **两套独立的系统提示词**（用户口径 2026-10-05）。
+ *
+ * 以前这里是个死开关（选了不影响任何行为）。现在它读后台的提示词清单：
+ * 选中哪一条，发送时就把那条的正文当系统提示词发给后端（见 agentService.sendOptions）。
+ * 清单在「设置 → Agent → 提示词」里维护；内置两条不可删。
+ */
+const promptPresets = computed(() => s.prompts)
+const activePrompt = computed(() => s.prompts.find((p) => p.id === s.activePromptId))
+const modeLabel = computed(() => activePrompt.value?.name ?? '全能创作')
+function pickMode(id: string, close: () => void): void {
+  agent.setActivePrompt(id)
+  close()
+}
 
 /**
  * 授权方式（输入框左下角那个下拉）。
@@ -373,6 +474,8 @@ interface UserSegment { type: 'text' | 'tag'; value: string; name: string; categ
 
 const userSegments = (text: string): UserSegment[] => {
   const refs: Array<{ name: string; category: string; icon: string }> = [
+    // 节点引用也还原成标签（历史里发过的节点引用照样看得出是引用，不是普通文字）
+    ...nodeList.value.map((n) => ({ name: n.name, category: '节点', icon: ICON_NODE })),
     ...s.skills.map((sk) => ({ name: sk.name, category: '技能', icon: ICON_SKILL })),
     ...s.mcpServers.map((m) => ({ name: m.name, category: 'MCP', icon: ICON_MCP })),
   ]
@@ -554,7 +657,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
             ref="editorRef"
             v-model="prompt"
             :resources="editorResources"
-            @update:model-value="onPromptUpdate"
             @keydown.enter.exact.prevent="submit"
             @paste="onPaste"
           />
@@ -569,16 +671,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           <ThemedDropdown v-model="modeOpen" placement="top-start" :offset="8" menu-width="220px" menu-role="listbox">
             <template #trigger>
               <button class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
-                {{ genMode === 'auto' ? '全能创作' : '剧本创编' }}<ChevronDown :size="13" />
+                {{ modeLabel }}<ChevronDown :size="13" />
               </button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择创作模式">
-                <button v-for="m in GEN_MODES" :key="m.value" class="ac-menu-item" role="option"
-                  :aria-selected="genMode === m.value" @click="genMode = m.value; close()">
-                  <span class="ac-menu-name">{{ m.label }}</span>
-                  <span class="ac-menu-hint">{{ m.hint }}</span>
+                <button v-for="m in promptPresets" :key="m.id" class="ac-menu-item" role="option"
+                  :aria-selected="s.activePromptId === m.id" @click="pickMode(m.id, close)">
+                  <span class="ac-menu-name">{{ m.name }}</span>
+                  <span class="ac-menu-hint">{{ m.builtin ? '内置提示词' : '自建提示词' }}</span>
                 </button>
+                <!-- 一套都没拉到（后端没起 / 还在加载）：别给空菜单 -->
+                <p v-if="!promptPresets.length" class="ac-menu-empty">还没有提示词，去「设置 → Agent → 提示词」加一个</p>
               </div>
             </template>
           </ThemedDropdown>

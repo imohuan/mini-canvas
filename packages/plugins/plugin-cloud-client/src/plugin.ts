@@ -19,7 +19,7 @@ import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
 import { restoreOrSeed } from './restore.js'
 import { Config, configFrom } from './config.js'
-import { CANVAS_ID } from './keys.js'
+import { CANVAS_ID, canvasId } from './keys.js'
 import { createCloudResourceAdapter } from './cloudResourceAdapter.js'
 import { createCloudKvAdapter } from './cloudKvAdapter.js'
 import type { ServerAction, ServerHistoryPage } from './apiTypes.js'
@@ -122,8 +122,10 @@ export async function migrateLocalResources(
   nodes: Array<{ type?: string; data?: Record<string, unknown> }>,
   localAdapter: ResolveCapable | undefined,
   api: CloudApi,
+  /** 当前画布 id（多画布）：资源要传进**这张画布**的目录 */
+  canvasIdArg: string = CANVAS_ID,
 ): Promise<unknown[]> {
-  const cloudResource = createCloudResourceAdapter(api, CANVAS_ID)
+  const cloudResource = createCloudResourceAdapter(api, canvasIdArg)
   const uploaded = new Map<string, string>()
   const out: unknown[] = []
   for (const node of nodes) {
@@ -177,8 +179,12 @@ export function apply(ctx: Context): void {
   const cfg = configFrom(settings as never)
   const api = new CloudApi({ baseUrl: cfg.baseUrl })
 
+  // 当前画布 id（多画布）：URL `?canvas=` 优先，拿不到回落默认。本插件的所有存档 / 资源 / 任务
+  // 都围绕它走 —— 同一套代码服务任意一张画布，不再写死 default。
+  const CID = canvasId()
+
   const doc = ctx.get<HostDoc>('doc')
-const adapter = new CanvasDiffAdapter(api, CANVAS_ID)
+const adapter = new CanvasDiffAdapter(api, CID)
   const status: CloudClientStatus = { active: true, baseUrl: cfg.baseUrl, actions: 0 }
 
   // ==================== 1. 存档：画布域换成走后台的 adapter ====================
@@ -195,7 +201,7 @@ const adapter = new CanvasDiffAdapter(api, CANVAS_ID)
     | undefined
   // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存 res:<哈希>。
   // 与画布用同一个开关（用户最初的设计：一个 adapter 管文本 + 资源两种形式）。
-  save?.useAdapter('resource', createCloudResourceAdapter(api, CANVAS_ID))
+  save?.useAdapter('resource', createCloudResourceAdapter(api, CID))
   // 配置与快捷键：走 cloud-server 的 KV 接口（服务端对这两类照常收，只有 canvas 被专属路由接管）
   save?.useAdapter('config', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'config' }))
   save?.useAdapter('shortcut', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'shortcut' }))
@@ -220,8 +226,9 @@ const adapter = new CanvasDiffAdapter(api, CANVAS_ID)
             nodes as Array<{ data?: Record<string, unknown> }>,
             localResourceAdapter,
             api,
+            CID,
           )
-          await api.replaceCanvas(CANVAS_ID, migrated, edges)
+          await api.replaceCanvas(CID, migrated, edges)
         },
         ...(viewport ? { setViewport: (v) => viewport.setViewport(v) } : {}),
         ...(doc.types ? { knownType: (t: string) => doc.types!.has(t) } : {}),
@@ -244,7 +251,7 @@ const adapter = new CanvasDiffAdapter(api, CANVAS_ID)
   function handlersFor(def: ServerAction) {
     const deps: RunDeps = {
       api,
-      canvasId: CANVAS_ID,
+      canvasId: CID,
       readNodeData: (nodeId) => doc.getNode(nodeId)?.data,
       uploadLocal: (canvasId, bytes, nm) => api.uploadResource(canvasId, bytes, nm),
       // data: 与 blob: 都取得到（共享实现；blob: 以前会被静默跳过）

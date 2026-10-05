@@ -703,6 +703,13 @@ watch(
     current.value = 0
     ratio.value = 0
     void openSource()
+    // ★ 音频地址一变就**强制重算**波形与时长（用户口径："检测到播放地址发生变化就自动刷新"）。
+    //   - 节点先建、音频后写入（web2api/后台生成）：挂载时 audioUrl 还是空的，ensureAudioMeta 直接 return，
+    //     之后再没人补 → "波形不显示，点刷新才出来"；
+    //   - 先上传本地音频、再用 API 生成覆盖：新地址写进来了，但节点上还留着**上一段**的波形，
+    //     而 ensureAudioMeta 见"波形+时长都在"会跳过 → 画的是旧音频的波形。
+    //   两种都靠"地址变了就重算"根治：reanalyzeAudio 无条件按**当前地址**重新解码并覆盖。
+    if (audioUrl.value) void reanalyzeAudio(ops, props.id, defaultTransform)
   },
 )
 

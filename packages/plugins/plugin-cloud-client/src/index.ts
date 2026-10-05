@@ -60,6 +60,7 @@ export {
   PROVIDERS_VERSION_KEY,
   HISTORY_REV_KEY,
   CANVAS_ID,
+  canvasId,
   RESOURCE_REF_PREFIX,
   RESOURCE_URL_FIELDS,
 } from './keys.js'

@@ -233,7 +233,8 @@ export class GroupService extends Service implements GroupServiceAPI {
           position: { x: bounds.x, y: bounds.y },
           size: { w: bounds.w, h: bounds.h },
           data: {
-            label: '',
+            // 不显式给 label：交给数据层按类型模板生成默认名（分组 1、分组 2…）。
+            // 以前给空串会把默认名顶掉，标题条就只剩类型名。
             nodeType: GROUP_NODE_TYPE,
             backgroundColor: DEFAULT_GROUP_BACKGROUND_COLOR,
           },
