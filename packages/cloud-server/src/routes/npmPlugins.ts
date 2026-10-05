@@ -294,7 +294,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     await writeRecords(recs)
     const pkgDirName = pkg.replace(/^@/, '').replace('/', '__')
     const serverId = pkgDirName
-    await fs.rm(path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName), { recursive: true, force: true })
+    // 只删"NPM 安装副本"目录（scope__name 形态）。
+    // 绝不删不带 scope__ 前缀的目录 —— 那可能是作者的仓库源码（如 packages/plugins/plugin-showcase）。
+    // 安全护栏：万一目录名与源码包撞名，宁可留下空目录也不删源码。
+    const removeDir = pkgDirName.includes('__')
+    if (removeDir) {
+      await fs.rm(path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName), { recursive: true, force: true })
+    }
     await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
     // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）
     let hotMsg = '并即时失效'

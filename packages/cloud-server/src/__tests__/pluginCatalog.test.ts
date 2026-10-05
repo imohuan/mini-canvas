@@ -266,4 +266,27 @@ describe('插件资源投放：不只发 js', () => {
     expect(resolvePluginAsset('/plugins/pkg/assets/logo.svg')).toEqual({ rel: 'pkg/dist/assets/logo.svg' })
     expect(resolvePluginAsset('/plugins/flat.js')).toEqual({ rel: 'flat.js' })
   })
+
+  it('同一插件两个目录（源码包 + NPM 装副本）只列一份，且优先已装副本', async () => {
+    const dir = await makePluginsDir({
+      // 仓库源码包：id 无 scope__ 前缀
+      'plugin-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+      },
+      // NPM 装进来的副本：id = scope__name，pluginName 相同 → 同一个插件
+      'mini-canvas__plugin-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+      },
+    })
+    const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-dedup-')), pluginsDir: dir, watchProviders: false })
+    const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as { plugins: Array<{ id: string; name: string }> }
+    const demo = body.plugins.filter((p) => p.name === 'demo')
+    expect(demo, '同一插件只应列一份').toHaveLength(1)
+    expect(demo[0].id, '保留已装副本（卸载只删它，不动源码）').toBe('mini-canvas__plugin-demo')
+    srv.stop()
+  })
 })

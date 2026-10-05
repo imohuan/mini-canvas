@@ -279,5 +279,32 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     })
   }
 
-  return { ok: true, version: catalogVersion(plugins), plugins, skipped }
+  // 按插件运行时名去重：NPM 装进来的前端半（id 形如 scope__name）与仓库里的源码包
+  // （id 形如 plugin-name）的 miniCanvas.pluginName 相同（如都是 showcase）。内核按插件名
+  // 索引，装一个会顶掉另一个 —— 清单里列两行是**假的重复项**（用户实测：看到两个一样的
+  // 插件展示）。这里只保留一份。
+  // 保留谁：优先保留 **NPM 装进来的那份**（id 带 scope__ 前缀）。
+  // 理由（安全）：管理页的"卸载"会删掉该条对应的目录 —— 若清单指向仓库源码目录，
+  // 卸载就把作者的源码删了。指向 NPM 副本则只删副本，源码包原地不动（之后会重新列出来）。
+  const deduped: PluginCatalogEntry[] = []
+  const seenName = new Map<string, number>()
+  for (const p of plugins) {
+    const prev = seenName.get(p.name)
+    if (prev === undefined) {
+      seenName.set(p.name, deduped.length)
+      deduped.push(p)
+    } else {
+      const incumbent = deduped[prev]!
+      // 保留"已装副本"的那份：id 含 scope__ 前缀优先；两份同形则保留先来的
+      const incumbentIsInstalled = incumbent.id.includes('__')
+      const pIsInstalled = p.id.includes('__')
+      // 已装副本优先；同形（都不是/都是）保留先来的
+      const keepIncumbent = incumbentIsInstalled || !pIsInstalled
+      const loser = keepIncumbent ? p : incumbent
+      const winner = keepIncumbent ? incumbent : p
+      skipped.push({ file: loser.id, reason: '与 ' + winner.id + ' 同为一个插件（运行时名 ' + p.name + '），只列一份' })
+      deduped[prev] = winner
+    }
+  }
+  return { ok: true, version: catalogVersion(deduped), plugins: deduped, skipped }
 }
