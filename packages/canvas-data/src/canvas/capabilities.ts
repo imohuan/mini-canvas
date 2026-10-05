@@ -286,6 +286,7 @@ export function buildCapabilities(
           type: def.type,
           label: def.label,
           defaultSize: def.size,
+          nameTemplate: def.nameTemplate,
           icon: def.icon,
           description: def.description,
           inputs: def.inputs,

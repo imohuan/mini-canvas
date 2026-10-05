@@ -23,6 +23,8 @@ export class SaveServiceImpl implements SaveService {
   /** 未落盘的脏 set：key(type:) → { value, type } */
   private dirty = new Map<string, { value: unknown; type: SaveType }>()
   private timer: ReturnType<typeof setTimeout> | null = null
+  /** 正在跑的那次落盘（flush 串行化用） */
+  private inflight: Promise<void> | null = null
   /** 适配器切换订阅者（见 onAdapterChange） */
   private adapterListeners = new Set<(type: SaveType) => void>()
 
@@ -56,17 +58,36 @@ export class SaveServiceImpl implements SaveService {
       clearTimeout(this.timer)
       this.timer = null
     }
+    // ★ 串行化：若已有一次落盘在跑，**先等它结束**。
+    // 之前的写法是并发调用各写各的 —— 定时器那一轮把脏队列快照走了，守卫再调 flush 时队列已空、
+    // 立刻返回，于是「await flush 完再导航」根本没等到真正的写。导航一发生，那次在飞的请求被打断，
+    // 改动就丢了（用户实测：编辑后立刻切画布，回来发现没保存）。等它结束再处理新脏数据，才是真的写完了。
+    if (this.inflight) {
+      try {
+        await this.inflight
+      } catch {
+        /* 上一轮的失败已把该项放回 dirty，下面会重试 */
+      }
+    }
     // 快照后清空，避免落盘期间新 set 被并发吞
     const batch = [...this.dirty.entries()]
     this.dirty.clear()
-    for (const [prefixed, { value, type }] of batch) {
-      try {
-        await (this.adapters.get(type)! as StorageAdapter).set(prefixed, value)
-      } catch (err) {
-        // 存储配额不足不能变成未捕获 Promise；保留脏数据，下一次 flush 仍可重试。
-        this.dirty.set(prefixed, { value, type })
-        console.warn(`[save] 写入失败（${prefixed}），可能是浏览器存储配额不足`, err)
+    if (batch.length === 0) return
+    this.inflight = (async () => {
+      for (const [prefixed, { value, type }] of batch) {
+        try {
+          await (this.adapters.get(type)! as StorageAdapter).set(prefixed, value)
+        } catch (err) {
+          // 存储配额不足不能变成未捕获 Promise；保留脏数据，下一次 flush 仍可重试。
+          this.dirty.set(prefixed, { value, type })
+          console.warn(`[save] 写入失败（${prefixed}），可能是浏览器存储配额不足`, err)
+        }
       }
+    })()
+    try {
+      await this.inflight
+    } finally {
+      this.inflight = null
     }
   }
 

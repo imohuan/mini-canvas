@@ -121,6 +121,21 @@ export interface CanvasNodeType {
   type: string
   label: string
   defaultSize: { w: number; h: number }
+  /**
+   * 新节点默认名称的模板（可选）。
+   *
+   * 支持两个占位符：
+   * - {{ID}}   —— 该类型自己的递增序号（**按类型独立计数**：图片 1、图片 2、文本 1…）
+   * - {{NAME}} —— 类型的 label（图片 / 文本…）
+   *
+   * 例：nameTemplate: '图片 {{ID}}' → 第一个图片节点叫「图片 1」。
+   * 不写则用 label 兜底（同类型多开几个时用 label+序号 区分）。
+   *
+   * 为什么把"默认名"交给注册处声明：以前没有人为新节点写过名字，标题条只能回落成
+   * 英文类型名（text / image），@ 菜单与左侧树又各自按字段猜 → 三处不一致。
+   * 名字模板由**最清楚自己是什么**的类型声明，建节点时由数据层统一生成。
+   */
+  nameTemplate?: string
   /** 声明式连接约束：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
   inputs?: PortDef[]
   outputs?: PortDef[]
@@ -220,6 +235,13 @@ export class NodeStore implements NodeStoreService {
   readonly types = new Map<string, CanvasNodeType>()
   private nodes = new Map<string, CanvasNode>()
   private counter = 0
+  /**
+   * 每类型的名称序号（按类型独立计数：图片 1、图片 2、文本 1…）。
+   *
+   * 与 counter（节点 id）分开：id 是全画布唯一自增，名称序号只服务于默认名，
+   * 二者语义不同（删除节点后 id 不复用，名称序号也不必回退）。
+   */
+  private typeCounters = new Map<string, number>()
   private listeners = new Set<NodeStoreListener>()
 
   subscribe(listener: NodeStoreListener): () => void {
@@ -292,7 +314,7 @@ export class NodeStore implements NodeStoreService {
       throw new Error(`[nodeStore] unknown node type "${type}". Register it first.`)
     }
     const id = this.createNodeId()
-    this.nodes.set(id, { id, type, position, data: {} })
+    this.nodes.set(id, { id, type, position, data: { label: this.nextDefaultName(def) } })
     this.notify('add', id)
     return id
   }
@@ -316,11 +338,15 @@ export class NodeStore implements NodeStoreService {
     }
     for (const input of inputs) {
       const id = input.id ?? this.createNodeId()
+      const data = input.data ? { ...input.data } : {}
+      // 没给 label 就补默认名（见 nextDefaultName）：显式带 label 的（复制粘贴、后台建节点）
+      // 保留原样，不被模板覆盖。
+      if (data.label === undefined) data.label = this.nextDefaultName(this.types.get(input.type)!)
       const node: CanvasNode = {
         id,
         type: input.type,
         position: { x: input.position.x, y: input.position.y },
-        data: input.data ? { ...input.data } : {},
+        data,
         ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
         ...(input.size !== undefined ? { size: { ...input.size } } : {}),
       }
@@ -443,6 +469,18 @@ export class NodeStore implements NodeStoreService {
     })
     this.nodes.clear()
     for (const n of migrated) this.nodes.set(n.id, n)
+    // 重建"每类型名称序号"：让之后新节点的默认名不与存档里已有的撞号
+    //（存档里「图片 1」「图片 2」已存在 → 下一个新图片从 3 起）。
+    this.typeCounters.clear()
+    for (const n of migrated) {
+      const label = n.data?.label
+      if (typeof label !== 'string') continue
+      const m = /(\d+)\s*$/.exec(label.trim())
+      if (!m) continue
+      const num = Number.parseInt(m[1], 10)
+      if (Number.isNaN(num)) continue
+      this.typeCounters.set(n.type, Math.max(this.typeCounters.get(n.type) ?? 0, num))
+    }
     // 重建计数器：保证新加的 id 不撞已有的数字 id
     let max = 0
     for (const n of migrated) {
@@ -451,6 +489,25 @@ export class NodeStore implements NodeStoreService {
     }
     this.counter = max
     this.notify('replace')
+  }
+
+  /**
+   * 生成某类型的下一个默认名称（新建节点时写进 data.label）。
+   *
+   * 模板优先用类型声明的 nameTemplate；没声明就用 label 兜底。
+   * - {{ID}}   → 该类型自己的递增序号（**按类型独立**；每个类型一份计数器）
+   * - {{NAME}} → 类型的 label
+   *
+   * 序号只在这里自增：同一次调用拿号即用，不会被用来"试"而浪费。
+   */
+  private nextDefaultName(def: CanvasNodeType): string {
+    const seq = (this.typeCounters.get(def.type) ?? 0) + 1
+    this.typeCounters.set(def.type, seq)
+    // 兜底也带序号（不是光秃秃的 label）：用户报的问题里"两个节点同名分不清"就是它。
+    // 确实想要固定名（如单例节点）的类型，显式写 nameTemplate: '分组' 即可关掉序号。
+    const template = def.nameTemplate ?? def.label + ' {{ID}}'
+    const name = template.replace(/\{\{ID\}\}/g, String(seq)).replace(/\{\{NAME\}\}/g, def.label)
+    return name.trim() || def.label
   }
 
   /** 短数字 id：'1' '2' '3' …（画布内唯一） */

@@ -35,7 +35,8 @@ describe('nodesFromStore', () => {
       id,
       type: 'text',
       position: { x: 10, y: 20 },
-      data: { text: 'hi' },
+      // label 是建节点时按类型模板生成的默认名（nodeStore.nextDefaultName），随 data 一起过来
+      data: { label: '文本 1', text: 'hi' },
       // 普通节点显式落 NODE_Z（不再靠 VueFlow 默认 0/DOM 顺序）
       zIndex: NODE_Z,
     })

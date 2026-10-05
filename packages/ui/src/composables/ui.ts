@@ -10,6 +10,10 @@ import {
 import { createV2Logger } from '@mini-canvas/canvas-render'
 import { buildV2HelpList, groupV2HelpList, keyPartsToLabels } from '@mini-canvas/plugin-shortcut-manager'
 import { SAMPLE_IMAGE_URL } from '../assembly'
+import { buildCanvasTree, filterTree } from './canvasTree'
+import { listCanvases as apiListCanvases, createCanvas as apiCreateCanvas, listAssets as apiListAssets, renameCanvas as apiRenameCanvas, renameProject as apiRenameProject, type CanvasSummary } from './projectsApi'
+import { toAssetItems, type AssetItem } from './assetModel'
+import { registerPendingSave, unregisterPendingSave } from './pendingSave'
 
 const log = createV2Logger('config')
 
@@ -46,7 +50,18 @@ interface ManagerApi { install(opts: { url: string }, cfg?: { config?: unknown }
 interface HostLike { host?: HostApi; manager?: ManagerApi }
 interface ManifestEntry { id: string; url: string; disabled?: boolean }
 
-export interface TreeNode { id: string; name: string; meta: string; icon: 'group' | 'image' | 'video' | 'text'; children?: TreeNode[] }
+export interface TreeNode {
+  id: string
+  name: string
+  meta: string
+  icon: 'group' | 'image' | 'video' | 'audio' | 'text'
+  children?: TreeNode[]
+  /** 画布坐标（点击节点居中显示用；由 canvasTree.buildCanvasTree 从节点 position 带来） */
+  x?: number
+  y?: number
+  /** 缩略图地址（图片/视频节点；由 canvasTree 从 data 里取，抽屉里直接当 <img> 用） */
+  thumb?: string
+}
 
 function createUi() {
   const cfg = reactive({
@@ -63,6 +78,8 @@ function createUi() {
     settingsOpen: false,
     // 顶部
     canvasMenuOpen: false,
+    /** 工作区（项目）名称：与画布名分开 —— 就是一个可编辑的项目名，画布列表另算 */
+    projectName: '未命名工作区',
     canvasList: ['画布 1', '画布 2', '画布 3'],
     currentCanvas: '画布 1',
     // 弹窗开合（快捷键 / 生成历史独立，可与抽屉共存）
@@ -206,57 +223,216 @@ function createUi() {
     histTotal: 0,
   })
 
-  // ===== 左侧树（虚拟数据）=====
-  const tree = reactive([
-    { id: 'g1', name: 'Group 1', meta: '分组 3 个节点', icon: 'group', children: [
-      { id: 'n1', name: '参考节点 1', meta: '图片 · 1024×1024', icon: 'image' },
-      { id: 'n2', name: 'pasted', meta: '903 × 666', icon: 'image' },
-    ] },
-    { id: 'n3', name: '720°全景图', meta: '全景', icon: 'image' },
-    { id: 'n4', name: '25宫格连贯分镜', meta: '分镜', icon: 'video' },
-    { id: 'g2', name: '分组 3 个节点', meta: '分组', icon: 'group', children: [
-      { id: 'n5', name: '参考图', meta: '1080 × 1920', icon: 'image' },
-      { id: 'n6', name: '成品', meta: '1080 × 1920', icon: 'image' },
-      { id: 'n7', name: '提示词', meta: '文本', icon: 'text' },
-    ] },
-    { id: 'n8', name: '智能剪辑 5', meta: '视频节点', icon: 'video' },
-    { id: 'n9', name: '图片节点 4', meta: '图片节点', icon: 'image' },
-    { id: 'n10', name: '正派长辈/母 表情参考', meta: '图片', icon: 'image' },
-    { id: 'n11', name: '正派长辈/母 角色立绘', meta: '1536 × 2048', icon: 'image' },
-    { id: 'n12', name: '正派长辈/母 脸部近景', meta: '1792 × 2400', icon: 'image' },
-    { id: 'n13', name: '正派长辈/母 三视图', meta: '三视图', icon: 'image' },
-    { id: 'n14', name: '图生图', meta: '图片节点', icon: 'image' },
-    { id: 'n15', name: '图片节点 3', meta: '图片节点', icon: 'image' },
-    { id: 'n16', name: '视频节点 2', meta: '视频节点', icon: 'video' },
-    { id: 'n17', name: '导演台 1', meta: '3D 场景', icon: 'group' },
-  ]) as TreeNode[]
+  // ===== 左侧树（**真实画布数据**）=====
+  // 以前这里是写死的假数组；现在跟着画布实时画（doc.subscribe → buildCanvasTree）。
+  // 名字全部来自节点自身（见 canvasTree.ts）；空画布就是空树，不塞假节点。
+  const tree = reactive<TreeNode[]>([])
   const collapsed = reactive<Record<string, boolean>>({})
+  let disposeTreeBind: (() => void) | undefined
+
+  /** doc 服务的**最小用面**（读节点 + 订阅变化；5c 后 nodeStore 不再是服务名，读走 doc） */
+  type DocTreeLike = { getNodes(): unknown[]; subscribe(cb: () => void): () => void }
+  const docSvc = (): DocTreeLike | undefined => hostCtx()?.get<DocTreeLike>('doc')
+
+  /** 从画布数据重建抽屉树（原地替换内容，绑定不换对象、不闪） */
+  function refreshCanvasTree(): void {
+    const built = buildCanvasTree((docSvc()?.getNodes?.() ?? []) as never)
+    tree.splice(0, tree.length, ...built)
+  }
+  /** 订阅画布变化（增删改节点都自动重画左侧树）；重复 onReady 先撤旧订阅 */
+  function bindCanvasTree(): void {
+    disposeTreeBind?.()
+    disposeTreeBind = undefined
+    refreshCanvasTree()
+    disposeTreeBind = docSvc()?.subscribe(() => refreshCanvasTree())
+  }
+  /** 撤掉画布树订阅（宿主销毁时调用） */
+  function unbindCanvasTree(): void {
+    disposeTreeBind?.()
+    disposeTreeBind = undefined
+  }
+
+  // ===== 当前画布 / 项目的画布列表（多画布）=====
+  // 数据来自 cloud-server 的 `/api/projects/:id/canvases`；当前画布 id 从 URL 的
+  // `#/canvas/<id>` 读（与 cloud-client 的 canvasId() 同一口径）。切画布 = 换 hash → Root 重新挂载。
+  /** 从当前 URL 读画布 id（#/canvas/<id> 或 ?canvas=<id>），取不到回落 default */
+  function canvasIdFromUrl(): string {
+    if (typeof window === 'undefined') return 'default'
+    const m = /\/canvas\/([A-Za-z0-9_-]{1,64})/.exec(window.location.hash)
+    if (m) return m[1]
+    const q = new URLSearchParams(window.location.search).get('canvas')
+    return q && /^[A-Za-z0-9_-]{1,64}$/.test(q) ? q : 'default'
+  }
+  const currentCanvasId = ref('default')
+  /** 当前项目的画布清单（下拉用）；名字来自后端索引 */
+  const canvasListItems = ref<CanvasSummary[]>([])
+  /** 读当前画布在清单里的名字（拿不到回落 id） */
+  function canvasNameOf(id: string): string {
+    return canvasOptions.value.find((c) => c.id === id)?.label ?? '画布'
+  }
+  /**
+   * 画布下拉的选项：把「没有真名字」的画布（如内置的 `default`、手工丢进来的目录）
+   * 显示成「画布 N」（按清单顺序）—— 用户口径：要么显示「画布1」，要么显示自定义名，
+   * 不该把内部 id（default / 一串哈希）露给用户。
+   */
+  const canvasOptions = computed<Array<{ id: string; label: string }>>(() =>
+    canvasListItems.value.map((c, i) => {
+      const hasName = typeof c.name === 'string' && c.name && c.name !== c.id
+      return { id: c.id, label: hasName ? c.name : '画布 ' + (i + 1) }
+    }),
+  )
+  /** 拉当前项目的画布清单（项目 id 从「含当前画布的那一项」反查；独立画布回落 default） */
+  async function refreshCanvasList(): Promise<void> {
+    try {
+      const all = await apiListCanvases('default').catch(() => [] as CanvasSummary[])
+      // default 项目未必含当前画布 —— 再尝试从项目清单里找。简单起见：先放 default 的，
+      // 若当前画布不在其中，用一个「查询全部项目」的兜底：遍历项目很少（通常个位数）。
+      let list = all
+      if (!list.some((c) => c.id === currentCanvasId.value)) {
+        const projects = await listProjectsLoose()
+        for (const p of projects) {
+          const cs = await apiListCanvases(p.id).catch(() => [] as CanvasSummary[])
+          if (cs.some((c) => c.id === currentCanvasId.value)) { list = cs; break }
+        }
+      }
+      canvasListItems.value = list
+    } catch {
+      canvasListItems.value = []
+    }
+  }
+  async function listProjectsLoose(): Promise<Array<{ id: string }>> {
+    try {
+      const res = await fetch('/api/projects')
+      const body = (await res.json()) as { projects?: Array<{ id: string }> }
+      return body.projects ?? []
+    } catch {
+      return []
+    }
+  }
+  /** 切到另一张画布：换 hash → Root 按 key 重新挂载画布 */
+  async function openCanvas(id: string): Promise<void> {
+    if (typeof window === 'undefined' || id === currentCanvasId.value) return
+    // ★ 换画布之前**先把当前这张落盘**（await 到真正写完）——否则切走时那次保存还在半路上，
+    //   旧画布的改动就丢了（用户实测：切了画布回来发现改动没了）。
+    await flushCanvasSave()
+    window.location.hash = '#/canvas/' + id
+  }
+
+  /**
+   * 把当前画布的脏改动**真正写完**（await 到存储层返回）。
+   * 离开画布（切画布 / 回项目页）前调用它，保证不丢最后一次编辑。
+   */
+  async function flushCanvasSave(): Promise<void> {
+    try {
+      const save = hostCtx()?.get<{ flush?(): Promise<void> }>('save')
+      await save?.flush?.()
+    } catch (err) {
+      console.warn('[ui] 保存画布失败', err)
+    }
+  }
+  // 注册给路由守卫：离开画布前先 await 落盘（切画布丢改动的根治点）
+  registerPendingSave(flushCanvasSave)
+  function releasePendingSave(): void {
+    unregisterPendingSave(flushCanvasSave)
+  }
+  /** 在当前项目下新建一张画布，并切过去 */
+  async function newCanvas(): Promise<void> {
+    const pid = canvasListItems.value.find((c) => c.id === currentCanvasId.value)?.projectId
+      ?? canvasListItems.value[0]?.projectId
+      ?? 'default'
+    try {
+      const made = await apiCreateCanvas(pid, '画布 ' + (canvasListItems.value.length + 1))
+      openCanvas(made.id)
+    } catch (err) {
+      console.warn('[ui] 新建画布失败', err)
+    }
+  }
+
+  /**
+   * 改**当前画布**的名字（左上角那个可编辑名字；双击改名后调它）。
+   * 写回 `/api/canvases/:id/meta`（后端同时更新索引与 canvas.json 的 name），再刷新下拉清单。
+   */
+  async function renameCanvas(name: string): Promise<void> {
+    const next = name.trim()
+    const id = currentCanvasId.value
+    if (!next) return
+    try {
+      await apiRenameCanvas(id, next)
+      // 本地先改，界面立刻跟上（随后 refreshCanvasList 会用后端真值覆盖）
+      const item = canvasListItems.value.find((c) => c.id === id)
+      if (item) item.name = next
+      await refreshCanvasList()
+    } catch (err) {
+      console.warn('[ui] 改画布名失败', err)
+    }
+  }
+
+  /** 当前画布所属的项目 id（独立画布回落 default） */
+  function currentProjectId(): string {
+    return (
+      canvasListItems.value.find((c) => c.id === currentCanvasId.value)?.projectId ??
+      canvasListItems.value[0]?.projectId ??
+      'default'
+    )
+  }
+  /** 读项目名 → 工作区名（用户口径：工作区名就是这个项目文件夹的名字） */
+  async function loadProjectName(): Promise<void> {
+    try {
+      const res = await fetch('/api/projects')
+      const body = (await res.json()) as { projects?: Array<{ id: string; name: string }> }
+      const pid = currentProjectId()
+      const p = body.projects?.find((x) => x.id === pid)
+      if (p?.name) state.projectName = p.name
+    } catch {
+      /* 拿不到就保持默认名 */
+    }
+  }
+  /** 改工作区名 → 写回后端项目名（用户口径：工作区命名 = 项目文件夹名） */
+  async function renameProject(name: string): Promise<void> {
+    const next = name.trim()
+    if (!next) return
+    try {
+      await apiRenameProject(currentProjectId(), next)
+      state.projectName = next
+    } catch (err) {
+      console.warn('[ui] 改工作区名失败', err)
+    }
+  }
   function nodeCount(nodes: TreeNode[]): number {
     return nodes.reduce((sum, n) => sum + 1 + (n.children ? nodeCount(n.children) : 0), 0)
   }
   const treeTotal = computed(() => nodeCount(tree))
-  // 搜索过滤视图：关键字匹配名字；分组在自身或子孙命中时保留，且子孙命中时强制展开
+  // 搜索 + 类型过滤视图（纯函数在 canvasTree.filterTree）：关键字匹配名字、类型按 图片/视频/文本/分组
+  // 过滤；分组在有子节点留下时保留并展开。这里只负责把结果接上折叠状态。
   const filteredTree = computed<TreeNode[]>(() => {
-    const q = state.searchQuery.trim().toLowerCase()
-    if (!q) return tree
-    const walk = (list: TreeNode[]): TreeNode[] =>
-      list
-        .map((n) => {
-          if (!n.children) return n.name.toLowerCase().includes(q) ? n : null
-          const kids = walk(n.children)
-          return n.name.toLowerCase().includes(q) || kids.length ? { ...n, children: kids } : null
-        })
-        .filter((n): n is TreeNode => n !== null)
-    const out = walk(tree)
-    const mark = (list: TreeNode[]): void => { for (const n of list) if (n.children) { collapsed[n.id] = false; mark(n.children) } }
-    mark(out)
-    return out
+    const { nodes, expandIds } = filterTree(tree, { query: state.searchQuery, type: state.filterType })
+    for (const id of expandIds) collapsed[id] = false
+    return nodes
   })
   // 历史：筛选与排序在**后台**做（那里有全量账本），这里只负责把结果拿出来渲染。
   // 所以 histVisible 不再本地过滤 —— 后台已经把当前页筛好了。
   const histVisible = computed(() => state.historyItems)
   /** 计数徽章：用后台的汇总（不是本地数当前页） */
   const histCount = (kind: string): number => state.historySummary.byKind[kind] ?? 0
+
+  // ===== 资产：所有**生成了产物**的历史记录（图片 / 视频 / 音频）=====
+  // 用户口径：资产 = 所有生成过的列表 + 自己上传的资源。生成记录后台本来就有全量账本
+  // （见 plugin-cloud-client 的 gen-history 服务），这里直接复用它，不必再起一套「资产库」。
+  // 只留有产物地址（urls 非空）的条目 —— 失败/无产物的记录不算资产。
+  /**
+   * 资产清单：来自后台 `/api/assets`（生成产物 + 自己上传，统一登记）。
+   * 与历史（historyItems）分开：历史是「生成账本」（含失败记录），资产是「真的有产物的东西」。
+   */
+  const assetItems = ref<AssetItem[]>([])
+  async function loadAssets(): Promise<void> {
+    try {
+      assetItems.value = toAssetItems(await apiListAssets())
+    } catch {
+      assetItems.value = []
+    }
+  }
+  /** 资产计数：按类型（喂给资产页顶部的小统计） */
+  const assetCount = (kind: string): number => state.historySummary.byKind[kind] ?? 0
 
   /** 历史弹窗上那些中文标签 ↔ 后台的英文值（显示层的事，写在显示层） */
   const HIST_KIND: Record<string, string> = { 图片: 'image', 视频: 'video', 音频: 'audio' }
@@ -743,6 +919,12 @@ function createUi() {
     bindSettingsClose()
     bindCanvasToggles()
     bindZoomSync()
+    bindCanvasTree()
+    // 当前画布 / 画布清单：从 URL 认当前是哪张，再拉（可能跨项目）它的清单
+    currentCanvasId.value = canvasIdFromUrl()
+    void refreshCanvasList()
+    void loadAssets()
+    void loadProjectName()
     await installExternalPlugins()
     // 外部插件装完（云插件会挂上 gen-history 服务）再拉历史；顺带订阅"有新生成"
     void loadHistory()
@@ -893,6 +1075,59 @@ function createUi() {
     }
     walk(tree)
   }
+  /**
+   * 定位到某个节点：把它在画布上居中显示（左侧树点击时用）。
+   *
+   * 为什么用 viewport.setCenter 而不是自己改视口：那是渲染层视口的唯一入口，
+   * 与缩放 / 适配屏幕走同一条路（缓存与边界面一致）。拿不到坐标（旧节点）就只选中、不移动。
+   */
+  function locateNode(id: string): void {
+    const ctx = hostCtx()
+    // 选中节点（居中后给出视觉落点，与「F 聚焦」是同一套取景）。
+    // select 服务是渲染层给插件/命令用的选中入口（见 canvas-data selection.ts）；宿主没就绪就跳过。
+    const sel = ctx?.get<{ set(ids: string[]): void }>('selection')
+    try {
+      sel?.set([id])
+    } catch {
+      /* 选中失败不影响聚焦 */
+    }
+    const vp = viewportSvc() as
+      | (ViewportLike & {
+          setCenter?(x: number, y: number, zoom?: number): void
+          fitView?(padding?: number, opts?: { nodes?: Array<{ id: string }> }): void
+        })
+      | undefined
+    if (!vp) return
+    // 优先「聚焦到该节点」：nodeLayout 有实测矩形就用它算居中 + 舒适缩放（与 F 聚焦同一算法），
+    // 比只 setCenter 到节点左上角准得多（那正是用户说的"效果极差"）。
+    const layout = ctx?.get<{ getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | undefined }>('nodeLayout')
+    const rect = layout?.getNodeRect?.(id)
+    const zoom = vp.getViewport().zoom
+    if (rect && rect.w > 0 && rect.h > 0 && typeof vp.setCenter === 'function') {
+      vp.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, zoom)
+      return
+    }
+    // 退路：让 VueFlow 只对这一批节点取景（pane 级 fit，比逐帧 rAF 稳，不会出现 offset 漂移）
+    if (typeof vp.fitView === 'function') {
+      try {
+        vp.fitView(0.45, { nodes: [{ id }] })
+        return
+      } catch {
+        /* fitView 不支持 nodes 选项时继续走坐标退路 */
+      }
+    }
+    const pos = findTreeNode(tree, id)
+    if (pos && typeof vp.setCenter === 'function') vp.setCenter(pos.x ?? 0, pos.y ?? 0, zoom)
+  }
+
+  /** 在树里找某个节点（定位退路用） */
+  function findTreeNode(list: TreeNode[], id: string): TreeNode | undefined {
+    for (const n of list) {
+      if (n.id === id) return n
+      if (n.children) { const h = findTreeNode(n.children, id); if (h) return h }
+    }
+    return undefined
+  }
   function sendChat(): void {
     const text = state.chatInput.trim()
     if (!text) return
@@ -1007,7 +1242,9 @@ function createUi() {
   }
 
   return {
-    state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, shortcuts,
+    state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, assetItems, assetCount, shortcuts,
+    currentCanvasId, canvasListItems, canvasNameOf, refreshCanvasList, openCanvas, newCanvas, renameCanvas, loadAssets,
+    canvasOptions, loadProjectName, renameProject, currentProjectId, flushCanvasSave, releasePendingSave,
     minimapOn, toggleMinimap,
     agent, setAgentOpen, toggleAgent, newAgentChat, toggleAgentHistory,
     openAgentSession, renameAgentSession, deleteAgentSession,
@@ -1017,7 +1254,7 @@ function createUi() {
     loadHistory, unbindHistory,
     hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
     unbindSettingsClose,
-    toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, sendChat,
+    toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, locateNode, unbindCanvasTree, sendChat,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }
 }

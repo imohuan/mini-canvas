@@ -40,6 +40,8 @@ export interface NodeTypeDef {
   type: string
   label: string
   defaultSize: { w: number; h: number }
+  /** 新节点默认名称模板（{{ID}} = 该类型递增序号，{{NAME}} = label）。见 CanvasNodeType.nameTemplate。 */
+  nameTemplate?: string
   /** 展示区域：in = 卡片内容组件（最常用）；title 等其余区域词可选（见 canvas/region.ts） */
   segments?: Partial<Record<NodeSegment, unknown>>
   /** 声明式连接约束（api.md §四） */
@@ -74,6 +76,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     type: def.type,
     label: def.label,
     defaultSize: def.defaultSize,
+    nameTemplate: def.nameTemplate,
     icon: def.icon,
     description: def.description,
     inputs: def.inputs,

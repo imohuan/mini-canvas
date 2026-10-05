@@ -11,16 +11,16 @@ const s = ui.state
 
 <template>
   <ProjectCluster
-    v-show="s.drawer !== 'left'"
-    :canvas="s.currentCanvas"
-    :canvas-list="s.canvasList"
+    v-if="s.drawer !== 'left'"
+    :canvas="ui.canvasNameOf(ui.currentCanvasId.value)"
+    :canvas-list="ui.canvasOptions.value.map((c) => c.label)"
     :menu-open="s.canvasMenuOpen"
     @update:menu-open="s.canvasMenuOpen = $event"
-    @new-canvas="s.canvasList.push('画布 ' + (s.canvasList.length + 1)); ui.showToast('已新建画布')"
-    @pick-canvas="s.currentCanvas = $event"
+    @new-canvas="ui.newCanvas()"
+    @pick-canvas="ui.openCanvas(ui.canvasOptions.value.find((c) => c.label === $event)?.id ?? $event)"
     @more-canvas="ui.showToast($event + ' 更多操作')"
     @open-menu="ui.openDrawer('left')"
-    @rename="ui.showToast('已重命名项目')"
+    @rename-canvas="ui.renameCanvas($event)"
   />
   <!-- <nav class="flex h-8 items-center rounded-lg border border-line bg-panel/80" aria-label="视图模式">
     <button

@@ -97,6 +97,10 @@ onBeforeUnmount(() => {
   ui.unbindZoomSync()
   // 撤掉历史订阅（后台有新生成时的重拉）。
   ui.unbindHistory()
+  // 撤掉画布树订阅（左侧抽屉跟着画布数据实时画的订阅）。
+  ui.unbindCanvasTree()
+  // 注销「离开画布前落盘」钩子（宿主已销毁，钩子里取不到 ctx 了）。
+  ui.releasePendingSave()
 })
 </script>
 

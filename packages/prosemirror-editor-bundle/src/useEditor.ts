@@ -8,6 +8,8 @@ import { baseKeymap } from "prosemirror-commands";
 import { history, undo, redo } from "prosemirror-history";
 import type { MenuPosition, ResourceItem } from "./types";
 import { isVideoUrl, getThumbnailUrlFromAssetUrl, loadImageWithThumbnail } from "./utils";
+import { formatReferenceMarkup } from "./referenceMarkup";
+import { filterMentionItems } from "./mentionFilter";
 
 // 拖拽参考线插件配置
 interface DropCursorOptions {
@@ -162,6 +164,10 @@ const mySchema = new Schema({
         url: { default: '' },
         thumbnail_url: { default: '' },
         value: { default: '' },
+        // 引用标记（技能 / MCP / 节点）：纯文本导出时还原成 `@[kind:name](value)`。
+        // 只有这三类引用带它；图片/视频素材标签留空，仍旧导出 `@名字`。
+        refKind: { default: '' },
+        refValue: { default: '' },
       },
       group: "inline",
       inline: true,
@@ -178,6 +184,8 @@ const mySchema = new Schema({
             result.setAttribute("data-url", node.attrs.url || "")
             result.setAttribute("data-name", node.attrs.name || "")
             result.setAttribute("data-category", node.attrs.category || "")
+            result.setAttribute("data-ref-kind", node.attrs.refKind || "")
+            result.setAttribute("data-ref-value", node.attrs.refValue || "")
             return result
           }
           return result  // DOMOutputSpec 数组，直接透传
@@ -390,8 +398,11 @@ function parsePlainTextToContent(
     return text ? [mySchema.text(text)] : []
   }
   const content: any[] = []
-  // 匹配 @xxx，其中 xxx 为资源节点唯一 id（非空白字符序列）
-  const regex = /@(\S+)/g
+  // 两种形态都认：
+  //   ① 引用标记 `@[kind:name](value)`（技能 / MCP / 节点）—— 按 name 交给 resolver 还原；
+  //   ② 旧的 `@token`（素材引用）—— 按 token 交给 resolver。
+  // 用一个组合正则一次扫完，顺序天然保持。
+  const regex = /@\[([a-zA-Z][a-zA-Z0-9_-]*):([^\]]+)\](?:\(([^)]*)\))?|@(\S+)/g
   let lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = regex.exec(text)) !== null) {
@@ -399,7 +410,11 @@ function parsePlainTextToContent(
     if (match.index > lastIndex) {
       content.push(mySchema.text(text.slice(lastIndex, match.index)))
     }
-    const token = match[1]
+    const isMarkup = match[1] !== undefined
+    const kind = isMarkup ? match[1].toLowerCase() : ''
+    const name = isMarkup ? match[2] : ''
+    const refValue = isMarkup ? (match[3] ?? '') : ''
+    const token = isMarkup ? name : match[4]
     const item = resolver(token)
     if (item) {
       content.push(mySchema.nodes.resource.create({
@@ -409,12 +424,16 @@ function parsePlainTextToContent(
         url: item.url || '',
         thumbnail_url: item.thumbnail_url || '',
         value: item.value || '',
+        // 标记里的 kind/value 是权威的：即使 resolver 不知道 item.ref，也照原样还原，
+        // 否则「粘贴 / 预设插入」一次就会把标记退化成 @名字，引用信息当场丢。
+        refKind: kind || item.ref?.kind || '',
+        refValue: refValue || item.ref?.value || '',
       }))
       // 注册到全局 registry，toDOM 需要
       itemRegistry.set(item.id, item)
     } else {
       // 未解析到，保留为纯文本
-      content.push(mySchema.text(`@${token}`))
+      content.push(mySchema.text(match[0]))
     }
     lastIndex = regex.lastIndex
   }
@@ -423,6 +442,26 @@ function parsePlainTextToContent(
     content.push(mySchema.text(text.slice(lastIndex)))
   }
   return content
+}
+
+/**
+ * 造一个 resource 标签节点。
+ *
+ * 两条插入路径共用（@ 菜单 insertSelectedItem / 编程插入 insertResource）——
+ * 以前各自抄一份建节点代码，漏改一处就会让某条路的引用退化成 `@名字`（review 抓到过）。
+ * 引用类标签必须带 refKind/refValue，getPlainText 才序列化得出 `@[kind:名](值)`。
+ */
+function buildResourceNode(nodeType: any, item: ResourceItem): any {
+  return nodeType.create({
+    id: item.id,
+    name: item.name,
+    category: item.category || 'resource',
+    url: item.url || '',
+    thumbnail_url: item.thumbnail_url || (item.url ? getThumbnailUrlFromAssetUrl(item.url, item.mediaType) : ''),
+    value: item.value || '',
+    refKind: item.ref?.kind || '',
+    refValue: item.ref?.value || '',
+  })
 }
 
 export function useEditor(
@@ -460,6 +499,7 @@ export function useEditor(
   // 过滤后的项目
   const filteredItems = ref<ResourceItem[]>([])
 
+
   const groupedItems = computed(() => {
     const map = new Map<string, ResourceItem[]>()
     for (const item of filteredItems.value) {
@@ -478,9 +518,14 @@ export function useEditor(
     let text = "";
     view.state.doc.descendants((node) => {
       if (node.type.name === "resource") {
-        // 纯文本 token 用**可读名**（图片1 / 视频1 这种带序号的引用名）：
-        // 用户与后端拿到的是同一串人看得懂的文字；回查时 name 与 id 两种都认。
-        text += `@${node.attrs.name || node.attrs.id} `;
+        // 引用类标签（技能 / MCP / 节点）导出成**标记文本**：`@[kind:name](value)`。
+        // 它是后端认「引用了哪一种、引用了谁」的唯一凭据，也是删标签即失效的那份真相。
+        // 其它标签（图片 / 视频素材）维持旧的 `@名字` —— 它们只是展示，不需要后端解析。
+        if (node.attrs.refKind) {
+          text += formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue) + " ";
+        } else {
+          text += `@${node.attrs.name || node.attrs.id} `;
+        }
       } else if (node.isText) {
         // 过滤掉零宽空格（用于修复光标问题）
         text += node.text?.replace(/\u200B/g, "") || "";
@@ -623,14 +668,7 @@ export function useEditor(
     const tr = view.state.tr.replaceWith(
       from - 1 - mentionQuery.value.length,
       from,
-      nodeType.create({
-        id: item.id,
-        name: item.name,
-        category: item.category || 'resource',
-        url: item.url || '',
-        thumbnail_url: item.thumbnail_url || (item.url ? getThumbnailUrlFromAssetUrl(item.url, item.mediaType) : ''),
-        value: item.value || '',
-      }),
+      buildResourceNode(nodeType, item),
     )
     tr.insertText(" ")
     itemRegistry.set(item.id, item)
@@ -858,7 +896,7 @@ export function useEditor(
               mentionQuery.value = "";
               const coords = view.coordsAtPos(sel.from);
               const allItems = unref(props.resources) || [];
-              filteredItems.value = allItems;
+              filteredItems.value = filterMentionItems(allItems, "");
               if (filteredItems.value.length > 0) {
                 showMenu({ left: coords.left, top: coords.top, bottom: coords.bottom, right: coords.right });
               }
@@ -869,13 +907,7 @@ export function useEditor(
                 const coords = view.coordsAtPos(sel.from);
                 const allItems = unref(props.resources) || [];
                 if (allItems.length > 0) {
-                  if (mentionQuery.value) {
-                    filteredItems.value = allItems.filter(
-                      item => item.name.toLowerCase().includes(mentionQuery.value.toLowerCase())
-                    );
-                  } else {
-                    filteredItems.value = allItems;
-                  }
+                  filteredItems.value = filterMentionItems(allItems, mentionQuery.value);
                   if (filteredItems.value.length > 0) {
                     showMenu({ left: coords.left, top: coords.top, bottom: coords.bottom, right: coords.right });
                   } else {
@@ -902,7 +934,10 @@ export function useEditor(
         function collect(fragment: any) {
           fragment.forEach((node: any) => {
             if (node.type.name === "resource") {
-              text += `@${node.attrs.name || node.attrs.id} `;
+              // 复制走的文本要和输入框里的一致：引用类标签复制成标记，其它照旧 @名字。
+              text += node.attrs.refKind
+                ? formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue) + " "
+                : `@${node.attrs.name || node.attrs.id} `;
             } else if (node.isText) {
               // 过滤掉零宽空格
               text += node.text?.replace(/\u200B/g, "") || "";
@@ -983,13 +1018,7 @@ export function useEditor(
     () => unref(props.resources),
     (newResources) => {
       if (menuVisible.value && newResources) {
-        if (mentionQuery.value) {
-          filteredItems.value = newResources.filter(
-            item => item.name.toLowerCase().includes(mentionQuery.value.toLowerCase())
-          )
-        } else {
-          filteredItems.value = newResources
-        }
+        filteredItems.value = filterMentionItems(newResources, mentionQuery.value)
       }
     },
     { deep: true },
@@ -1029,14 +1058,7 @@ export function useEditor(
     const tr = view.state.tr.replaceWith(
       from,
       to,
-      nodeType.create({
-        id: item.id,
-        name: item.name,
-        category: item.category || 'resource',
-        url: item.url || '',
-        thumbnail_url: item.thumbnail_url || (item.url ? getThumbnailUrlFromAssetUrl(item.url, item.mediaType) : ''),
-        value: item.value || '',
-      }),
+      buildResourceNode(nodeType, item),
     )
     tr.insertText(' ')
     view.dispatch(tr)

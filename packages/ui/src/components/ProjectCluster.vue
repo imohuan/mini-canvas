@@ -1,15 +1,21 @@
 <script setup lang="ts">
-// ProjectCluster —— 左上角「块 A」：logo 下拉 + 项目名 + 画布 chip。
+// ProjectCluster —— 左上角「块 A」：logo + **当前画布名（双击可改）** + 画布 chip。
 //
 // 这个组件在同一个页面里被**渲染两次**（左上角悬浮栏 / 左侧抽屉头部），
 // 两块 UI 完全一致，同一时刻只显示一个：抽屉打开时左上角那份隐藏。
+//
+// 名字语义（用户口径）：左边那个可编辑的名字 = **当前画布的名字**（改了就是改这张画布，
+// 下拉里出现的也是这些名字）；右边的小胶囊显示「画布 + 索引」，只是位置提示。
 import { ChevronDown, MoreHorizontal, Plus } from 'lucide-vue-next'
+import { computed } from 'vue'
 import AxDropdown from './AxDropdown.vue'
 import AxMenu from './AxMenu.vue'
 import AxMenuItem from './AxMenuItem.vue'
 
-defineProps<{
+const props = defineProps<{
+  /** 当前画布的名字（显示在可编辑输入框里；双击即可改） */
   canvas: string
+  /** 画布名清单（下拉列出每一项；点了切过去） */
   canvasList: string[]
   menuOpen: boolean
 }>()
@@ -20,8 +26,12 @@ const emit = defineEmits<{
   'new-canvas': []
   'pick-canvas': [string]
   'more-canvas': [string]
-  rename: []
+  /** 改当前画布的名字（输入框失焦 / 回车时发） */
+  'rename-canvas': [string]
 }>()
+
+/** 右侧小胶囊只显示「画布 + 索引」（位置提示）；画布名显示在左边的输入框里 */
+const canvasIndex = computed(() => Math.max(1, props.canvasList.indexOf(props.canvas) + 1))
 </script>
 
 <template>
@@ -32,10 +42,10 @@ const emit = defineEmits<{
     </button>
     <input
       class="project-name"
-      aria-label="项目名称"
-      value="未命名工作区"
+      aria-label="画布名称"
+      :value="canvas"
       maxlength="120"
-      @change="emit('rename')"
+      @change="emit('rename-canvas', ($event.target as HTMLInputElement).value)"
     />
     <span class="divider"></span>
     <AxDropdown
@@ -47,7 +57,7 @@ const emit = defineEmits<{
     >
       <template #trigger>
         <button class="canvas-chip" aria-label="当前画布" :aria-expanded="menuOpen">
-          <span>{{ canvas }}</span><ChevronDown :size="12" />
+          <span>画布 {{ canvasIndex }}</span><ChevronDown :size="12" />
         </button>
       </template>
       <template #default="{ close }">
