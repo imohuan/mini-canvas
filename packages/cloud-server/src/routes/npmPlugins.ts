@@ -74,7 +74,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     await fs.writeFile(recordFile, JSON.stringify(recs, null, 2), 'utf8')
   }
 
-  const scopeAllowed = (pkg: string): boolean => prefixes.some((s) => pkg.startsWith(s))
+  const prefixAllowed = (pkg: string): boolean => prefixes.some((s) => pkg.startsWith(s))
 
   /**
    * 判断一个包的 miniCanvas 段是不是"可用插件"。
@@ -112,10 +112,36 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const dirNameOf = (pkg: string): string => pkg.replace(/^@/, '').replace('/', '__')
 
   /**
-   * 把一批候选包名变成"可安装插件描述"：查 packument → 校验是插件（isPluginMeta：看结构）→ 归一字段。
+   * 候选池：把"可能是本系统插件"的包名尽可能收全。
+   *
+   * 为什么不能只靠 npm 一次搜索：它按**热度**排序，刚发布/0 下载的包排不进结果
+   * （实测 top 250 都没有）。所以三路并集：① 按前缀搜 ② 按维护者搜（绕开热度）
+   * ③ 显式配置的包名直查。浏览与搜索共用这一份（审查指出两处重复）。
+   */
+  async function candidateNames(extra: Iterable<string> = []): Promise<Set<string>> {
+    const names = new Set<string>()
+    for (const prefix of prefixes) {
+      try {
+        // 每个前缀搜一次（去掉尾部 / ，npm 搜索不吃带斜杠的 scope）
+        for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
+      } catch { /* 单个前缀搜失败不致命 */ }
+    }
+    for (const m of maintainers()) {
+      try {
+        for (const h of await client.search('maintainer:' + m, 100)) names.add(h.name)
+      } catch { /* 单个维护者搜失败不致命 */ }
+    }
+    for (const n of extraPackages()) names.add(n)
+    for (const n of extra) names.add(n)
+    return names
+  }
+
+  /**
+   * 把一批**候选包名**变成"可安装插件描述"：查 packument → 校验是插件（isPluginMeta：看结构）→ 归一字段。
+   * 名字里带 "candidates" 是为了别跟"已安装"混淆（返回的是可安装候选，不是已装项）。
    * 多处（搜索/浏览）共用；单个包查失败返回 null（不影响整页）。
    */
-  async function describeInstalled(names: Iterable<string>): Promise<Array<{
+  async function describeCandidates(names: Iterable<string>): Promise<Array<{
     pkg: string
     description: string
     version: string
@@ -123,7 +149,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     hasServer: boolean
     title: string
   }>> {
-    const list = [...names].filter((n) => scopeAllowed(n))
+    const list = [...names].filter((n) => prefixAllowed(n))
     const out = await Promise.all(
       list.map(async (name) => {
         try {
@@ -157,26 +183,10 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   // ------------------------------------------------------------------
   app.get('/api/npm-plugins/browse', async (c) => {
     try {
-      const names = new Set<string>()
-      for (const prefix of prefixes) {
-        try {
-          // 每个前缀搜一次（去掉尾部 / ，npm 搜索不吃带斜杠的 scope）
-          for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
-        } catch { /* 单个前缀搜失败不致命 */ }
-      }
-      for (const m of maintainers()) {
-        try {
-          for (const h of await client.search('maintainer:' + m, 100)) {
-            names.add(h.name)
-          }
-        } catch { /* 单个维护者搜失败不致命 */ }
-      }
-      // 显式配置的包名（环境变量 MINI_CANVAS_NPM_PACKAGES，逗号分隔）**直查**：
-      // npm 搜索按热度排序，刚发布的包排不进结果（实测），这些名字必须绕过搜索直接列。
-      for (const n of extraPackages()) names.add(n)
-      // 二次名称校验：只留**前缀白名单内**的（describeInstalled 里已按 scopeAllowed 过滤，
+      const names = await candidateNames()
+      // 二次名称校验：只留**前缀白名单内**的（describeCandidates 里已按 prefixAllowed 过滤，
       // 这里再显式收一次，保证"浏览"列出的全是本系统认的插件，不掺无关包）。
-      const results = await describeInstalled([...names].filter((n) => scopeAllowed(n)))
+      const results = await describeCandidates([...names].filter((n) => prefixAllowed(n)))
       return c.json({ ok: true, results })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
@@ -194,25 +204,24 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       //   ① **候选池**：npm 模糊搜索 + 维护者列表（后者绕开"热度排序让新包搜不到"）；
       //   ② **名称校验**：候选池里的包名必须**真的含搜索词**才留 —— 否则搜乱七八糟的东西
       //      也会把作者的整份插件列表倒出来（用户实测：搜"撒旦法的发"下面照样有数据）。
-      const pool = new Set<string>()
-      try {
-        for (const h of await client.search(q, 50)) pool.add(h.name)
-      } catch { /* 忽略 */ }
-      for (const m of maintainers()) {
-        try {
-          for (const h of await client.search('maintainer:' + m, 100)) pool.add(h.name)
-        } catch { /* 忽略单个失败 */ }
-      }
-      // 输入本身也进候选池（精确包名场景：搜全名要必中，哪怕它热度排不上）
-      pool.add(q)
-      // 也把"前缀 + 输入"当候选（让 plugin-demo 能命中 @scope/plugin-demo / mini-canvas-plugin-demo）。
-      // 安全性由后面的名称校验 + packument 实查兜底：查不到/不匹配的自然被丢掉。
-      for (const prefix of prefixes) {
-        const trimmed = prefix.replace(/\/$/, '')
-        if (/^[a-z0-9-]+$/i.test(q)) {
-          pool.add(prefix + q) // @scope/ + q  或  mini-canvas- + q
-          pool.add(trimmed + '-' + q)
+      // 候选池 = 公共三路并集 + 本次搜索特有的两类：
+      //   · 输入本身（精确包名场景：搜全名要必中，哪怕热度排不上）
+      //   · "前缀 + 输入"（让 plugin-demo 能命中 @scope/plugin-demo / mini-canvas-plugin-demo）
+      //   安全性由后面的名称校验 + packument 实查兜底：查不到/不匹配的自然被丢掉。
+      const extra: string[] = [q]
+      if (/^[a-z0-9-]+$/i.test(q)) {
+        for (const prefix of prefixes) {
+          extra.push(prefix + q) // @scope/ + q  或  mini-canvas- + q
+          extra.push(prefix.replace(/\/$/, '') + '-' + q)
         }
+      }
+      let pool: Set<string>
+      try {
+        // 按搜索词再搜一次（公共池只按前缀/维护者搜，这里补上用户输入的关键词）
+        pool = await candidateNames(extra)
+        for (const h of await client.search(q, 50)) pool.add(h.name)
+      } catch {
+        pool = await candidateNames(extra)
       }
 
       // ② 名称校验：只留包名包含搜索词的（大小写不敏感）。
@@ -224,7 +233,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         const bare = n.replace(/^@[^/]+\//, '').toLowerCase()
         return n.toLowerCase().includes(needle) || bare.includes(needle)
       })
-      return c.json({ ok: true, results: await describeInstalled(matched) })
+      return c.json({ ok: true, results: await describeCandidates(matched) })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
     }
@@ -236,7 +245,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   async function doInstall(pkg: string, wantVersion: string | undefined): Promise<{ status: number; body: Record<string, unknown> }> {
     // ① scope 白名单 + 包名形状
     if (!PKG_RE.test(pkg)) return { status: 400, body: { ok: false, error: '非法包名（要 @scope/name 形态）' } }
-    if (!scopeAllowed(pkg)) {
+    if (!prefixAllowed(pkg)) {
       return { status: 400, body: { ok: false, error: '包名不在允许的前缀内（允许：' + prefixes.join(' / ') + '）。装其它来源需在服务端配置 scopeAllowlist。' } }
     }
     // ② packument → 定版本
