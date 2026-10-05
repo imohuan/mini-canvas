@@ -110,14 +110,46 @@ const npmError = ref('')
 const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
 const npmBusyPkg = ref('')
 const npmSearched = ref(false)
+/** 当前选中的页签：市场（可安装）/ 已装 / 本地清单 / 自带 */
+const npmTab = ref<'market' | 'installed' | 'local' | 'builtin'>('market')
+
+/** 市场列表（浏览结果或搜索结果共用一个）与本地前缀过滤 */
+const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
+const npmFilter = ref('')
+const filteredMarket = computed(() => {
+  const q = npmFilter.value.trim().toLowerCase()
+  if (!q) return marketList.value
+  return marketList.value.filter((r) => r.pkg.toLowerCase().includes(q) || r.title.toLowerCase().includes(q))
+})
+
+/** 已装（NPM 来源） */
+const installedNpm = computed(() => npmInstalled.value)
+
+/** 默认加载：进页面就按前缀把可安装插件列出来（用户要求：不必先点搜索） */
+async function loadMarket(): Promise<void> {
+  npmSearching.value = true
+  npmError.value = ''
+  try {
+    marketList.value = await svc.browseNpmPlugins()
+    npmInstalled.value = await svc.listNpmInstalled()
+  } catch (err) {
+    npmError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    npmSearching.value = false
+  }
+}
 
 async function onNpmSearch(): Promise<void> {
   const q = npmQuery.value.trim()
-  if (!q) return
+  if (!q) {
+    await loadMarket() // 清空搜索词 = 回到"浏览全部"
+    return
+  }
   npmSearching.value = true
   npmError.value = ''
   try {
     npmResults.value = await svc.searchNpmPlugins(q)
+    marketList.value = npmResults.value
     npmSearched.value = true
     npmInstalled.value = await svc.listNpmInstalled()
   } catch (err) {
@@ -177,6 +209,9 @@ async function onNpmUninstall(pkg: string): Promise<void> {
 
 const npmVersionOf = (pkg: string): string | undefined =>
   npmInstalled.value.find((e) => e.pkg === pkg)?.version
+
+// 进页面就默认把市场列表拉出来（不是等用户点搜索）
+onMounted(() => { void loadMarket() })
 </script>
 
 <template>
@@ -198,96 +233,126 @@ const npmVersionOf = (pkg: string): string | undefined =>
       <span class="pmp-count">{{ installedCount }} / {{ s.rows.length }} 已装</span>
     </div>
 
-    <p v-if="s.error" class="pmp-error" role="alert">{{ s.error }}</p>
 
-    <p v-if="!s.rows.length && !s.loading" class="pmp-empty">
-        <Puzzle :size="20" />
-        <span>还没有插件清单 —— 先起云服务：<code>mini-canvas-cloud serve</code>（清单在 <code>/plugin-catalog.json</code>），再点「刷新」。</span>
-    </p>
-    <p v-else-if="s.loading && !s.rows.length" class="pmp-empty"><span>正在读取清单…</span></p>
-    <template v-else>
-      <!-- 自带：随应用冷启动装配，只读展示（用户要求"自带的也显示，但不给安装/卸载"） -->
-      <section v-if="builtinRows.length" class="pmp-section">
-        <h4 class="pmp-sec-title">自带（随应用启动，不可装卸）<span class="pmp-sec-count">{{ builtinRows.length }}</span></h4>
-        <div class="pmp-list">
-          <article v-for="row in builtinRows" :key="row.entry.id" class="pmp-row is-builtin">
-            <div class="pmp-row-main">
-              <strong class="pmp-name">{{ row.entry.title || row.entry.id }}</strong>
-              <small class="pmp-desc">{{ row.entry.description || row.entry.id }}</small>
-            </div>
-            <span class="pmp-badge is-builtin">自带</span>
-          </article>
-        </div>
-      </section>
+    <!-- 页签：市场 / 已装 / 本地清单 / 自带（表格形态，一屏可比可扫） -->
+    <div class="pmp-tabs" role="tablist">
+      <button class="pmp-tab" :class="{ active: npmTab === 'market' }" role="tab"
+        @click="npmTab = 'market'">市场<span class="pmp-tab-n">{{ marketList.length }}</span></button>
+      <button class="pmp-tab" :class="{ active: npmTab === 'installed' }" role="tab"
+        @click="npmTab = 'installed'">已装<span class="pmp-tab-n">{{ installedNpm.length }}</span></button>
+      <button class="pmp-tab" :class="{ active: npmTab === 'local' }" role="tab"
+        @click="npmTab = 'local'">本地清单<span class="pmp-tab-n">{{ installableRows.length }}</span></button>
+      <button class="pmp-tab" :class="{ active: npmTab === 'builtin' }" role="tab"
+        @click="npmTab = 'builtin'">自带<span class="pmp-tab-n">{{ builtinRows.length }}</span></button>
+    </div>
 
-      <!-- 可装卸：清单里 installable 的那些，默认已装 -->
-      <section class="pmp-section">
-        <h4 class="pmp-sec-title">
-          可装卸<span class="pmp-sec-count">{{ installableRows.filter((r) => r.installed).length }} / {{ installableRows.length }}</span>
-        </h4>
-        <div class="pmp-list">
-          <article v-for="row in installableRows" :key="row.entry.id" class="pmp-row">
-            <div class="pmp-row-main">
-              <strong class="pmp-name">{{ row.entry.title || row.entry.id }}</strong>
-              <small class="pmp-desc">{{ row.entry.description || row.entry.id }}</small>
-              <small v-if="row.error" class="pmp-row-err">{{ row.error }}</small>
-              <small v-else-if="row.missingDeps && row.missingDeps.length" class="pmp-row-err">缺少依赖：{{ row.missingDeps.join('、') }}</small>
-              <small v-if="row.serverError" class="pmp-row-err">{{ row.serverError }}</small>
-            </div>
-            <!-- 成对插件：两个状态灯（前端 / 后台 各一个） -->
-            <span class="pmp-badge" :class="'is-' + badgeOf(row).tone">{{ badgeOf(row).text }}</span>
-            <span
-              v-if="row.hasServer"
-              class="pmp-badge"
-              :class="'is-' + serverBadgeOf(row).tone"
-              :title="'后台插件（以服务端权限运行）'"
-            >{{ serverBadgeOf(row).text }}</span>
-            <div class="pmp-actions">
-              <button v-if="!row.installed" class="pmp-mini" :disabled="row.busy" @click="onInstall(row)">安装</button>
-              <button v-else class="pmp-mini danger" :disabled="row.busy" @click="svc.uninstall(row.entry.id)">
-                <Trash2 :size="13" /> 卸载
-              </button>
-               <button class="pmp-mini" :disabled="row.busy" title="卸载后按最新产物重新安装" @click="onReinstall(row)">
-                <RotateCcw :size="13" /> 重装
-              </button>
-            </div>
-          </article>
-        </div>
-      </section>
-    </template>
+    <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
 
-    <!-- NPM 市场：搜索 + 结果（与本地清单分开一个区块） -->
-    <section class="pmp-section pmp-npm">
-      <h4 class="pmp-sec-title">NPM 市场<span class="pmp-sec-count">@mini-canvas/</span></h4>
+    <!-- 市场：默认就列出前缀下全部可安装插件（不必先搜） -->
+    <section v-if="npmTab === 'market'" class="pmp-table-wrap">
       <form class="pmp-npm-search" @submit.prevent="onNpmSearch">
         <input v-model="npmQuery" class="pmp-input" type="text" spellcheck="false"
-          aria-label="搜索 NPM 插件" placeholder="搜索插件，如 showcase…" />
-        <button class="pmp-btn" type="submit" :disabled="npmSearching || !npmQuery.trim()">
-          <RefreshCw :size="14" :class="{ spin: npmSearching }" /> 搜索
+          aria-label="搜索 NPM 插件" placeholder="搜索包名（留空 = 列出全部可安装插件）" @keydown.enter.prevent="onNpmSearch" />
+        <button class="pmp-btn" type="submit" :disabled="npmSearching">
+          <RefreshCw :size="14" :class="{ spin: npmSearching }" /> {{ npmSearching ? '加载中' : '搜索' }}
         </button>
       </form>
-      <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
-      <div v-if="npmSearched" class="pmp-list">
-        <p v-if="!npmResults.length && !npmSearching" class="pmp-npm-empty">
-          没有找到可安装的插件（只显示声明了 miniCanvas.installable 的 @mini-canvas/ 包）。
-        </p>
-        <article v-for="r in npmResults" :key="r.pkg" class="pmp-row">
-          <div class="pmp-row-main">
-            <strong class="pmp-name">{{ r.title }} <code class="pmp-pkg">{{ r.pkg }}</code></strong>
-            <small class="pmp-desc">{{ r.description }}</small>
-            <small class="pmp-desc">v{{ r.version }}<template v-if="r.hasServer"> · 含后台半</template></small>
-          </div>
-          <span v-if="npmVersionOf(r.pkg)" class="pmp-badge is-on">已装 v{{ npmVersionOf(r.pkg) }}</span>
-          <div class="pmp-actions">
-            <button v-if="!npmVersionOf(r.pkg)" class="pmp-mini" :disabled="npmBusyPkg === r.pkg"
-              @click="onNpmInstall(r.pkg, r.hasServer)">安装</button>
-            <button v-else class="pmp-mini" :disabled="npmBusyPkg === r.pkg"
-              @click="onNpmUpdate(r.pkg)">更新</button>
-            <button v-if="npmVersionOf(r.pkg)" class="pmp-mini danger" :disabled="npmBusyPkg === r.pkg"
-              @click="onNpmUninstall(r.pkg)"><Trash2 :size="13" /> 卸载</button>
-          </div>
-        </article>
-      </div>
+      <table class="pmp-table">
+        <thead><tr><th>插件</th><th>包名</th><th>版本</th><th class="pmp-th-act">操作</th></tr></thead>
+        <tbody>
+          <tr v-for="r in filteredMarket" :key="r.pkg">
+            <td>
+              <strong class="pmp-name">{{ r.title }}</strong>
+              <div class="pmp-desc">{{ r.description }}</div>
+            </td>
+            <td><code class="pmp-pkg">{{ r.pkg }}</code></td>
+            <td class="pmp-nowrap">v{{ r.version }}<span v-if="r.hasServer" class="pmp-tag">含后台</span></td>
+            <td class="pmp-nowrap">
+              <button v-if="!npmVersionOf(r.pkg)" class="pmp-mini" :disabled="npmBusyPkg === r.pkg"
+                @click="onNpmInstall(r.pkg, r.hasServer)">安装</button>
+              <template v-else>
+                <span class="pmp-badge is-on">已装</span>
+                <button class="pmp-mini" :disabled="npmBusyPkg === r.pkg" @click="onNpmUpdate(r.pkg)">更新</button>
+                <button class="pmp-mini danger" :disabled="npmBusyPkg === r.pkg"
+                  @click="onNpmUninstall(r.pkg)"><Trash2 :size="13" /> 卸载</button>
+              </template>
+            </td>
+          </tr>
+          <tr v-if="!filteredMarket.length">
+            <td colspan="4" class="pmp-empty-cell">
+              {{ npmSearching ? '正在加载…' : '没有匹配的插件（只列声明了 miniCanvas.installable 且在前缀白名单内的包）' }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 已装（NPM 来源） -->
+    <section v-else-if="npmTab === 'installed'" class="pmp-table-wrap">
+      <table class="pmp-table">
+        <thead><tr><th>包名</th><th>版本</th><th>安装时间</th><th class="pmp-th-act">操作</th></tr></thead>
+        <tbody>
+          <tr v-for="e in installedNpm" :key="e.pkg">
+            <td><code class="pmp-pkg">{{ e.pkg }}</code></td>
+            <td class="pmp-nowrap">v{{ e.version }}</td>
+            <td class="pmp-nowrap pmp-desc">{{ (e.installedAt || '').slice(0, 19).replace('T', ' ') }}</td>
+            <td class="pmp-nowrap">
+              <button class="pmp-mini" :disabled="npmBusyPkg === e.pkg" @click="onNpmUpdate(e.pkg)">更新</button>
+              <button class="pmp-mini danger" :disabled="npmBusyPkg === e.pkg"
+                @click="onNpmUninstall(e.pkg)"><Trash2 :size="13" /> 卸载</button>
+            </td>
+          </tr>
+          <tr v-if="!installedNpm.length"><td colspan="4" class="pmp-empty-cell">还没有从 NPM 装过插件</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 本地清单（服务端目录里的可装卸插件） -->
+    <section v-else-if="npmTab === 'local'" class="pmp-table-wrap">
+      <table class="pmp-table">
+        <thead><tr><th>插件</th><th>状态</th><th>后台</th><th class="pmp-th-act">操作</th></tr></thead>
+        <tbody>
+          <tr v-for="row in installableRows" :key="row.entry.id">
+            <td>
+              <strong class="pmp-name">{{ row.entry.title || row.entry.id }}</strong>
+              <div class="pmp-desc">{{ row.entry.description || row.entry.id }}</div>
+              <div v-if="row.error" class="pmp-row-err">{{ row.error }}</div>
+              <div v-else-if="row.missingDeps && row.missingDeps.length" class="pmp-row-err">缺少依赖：{{ row.missingDeps.join('、') }}</div>
+              <div v-if="row.serverError" class="pmp-row-err">{{ row.serverError }}</div>
+            </td>
+            <td class="pmp-nowrap"><span class="pmp-badge" :class="'is-' + badgeOf(row).tone">{{ badgeOf(row).text }}</span></td>
+            <td class="pmp-nowrap">
+              <span v-if="row.hasServer" class="pmp-badge" :class="'is-' + serverBadgeOf(row).tone"
+                :title="'后台插件（以服务端权限运行）'">{{ serverBadgeOf(row).text }}</span>
+              <span v-else class="pmp-desc">—</span>
+            </td>
+            <td class="pmp-nowrap">
+              <button v-if="!row.installed" class="pmp-mini" :disabled="row.busy" @click="onInstall(row)">安装</button>
+              <button v-else class="pmp-mini danger" :disabled="row.busy" @click="svc.uninstall(row.entry.id)">
+                <Trash2 :size="13" /> 卸载</button>
+              <button class="pmp-mini" :disabled="row.busy" title="卸载后按最新产物重新安装" @click="onReinstall(row)">
+                <RotateCcw :size="13" /> 重装</button>
+            </td>
+          </tr>
+          <tr v-if="!installableRows.length"><td colspan="4" class="pmp-empty-cell">服务端目录里没有可装卸的插件</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 自带（随应用启动，只读） -->
+    <section v-else class="pmp-table-wrap">
+      <table class="pmp-table">
+        <thead><tr><th>插件</th><th class="pmp-th-act">状态</th></tr></thead>
+        <tbody>
+          <tr v-for="row in builtinRows" :key="row.entry.id">
+            <td>
+              <strong class="pmp-name">{{ row.entry.title || row.entry.id }}</strong>
+              <div class="pmp-desc">{{ row.entry.description || row.entry.id }}</div>
+            </td>
+            <td class="pmp-nowrap"><span class="pmp-badge is-builtin">自带</span></td>
+          </tr>
+        </tbody>
+      </table>
     </section>
   </div>
 </template>
@@ -348,4 +413,21 @@ const npmVersionOf = (pkg: string): string | undefined =>
 .pmp-npm-search .pmp-input { flex: 1; }
 .pmp-npm-empty { margin: 0; font-size: 12px; color: var(--ui-ink-dim, #6b7280); }
 .pmp-pkg { font-size: 10px; font-weight: 400; color: var(--ui-ink-dim, #6b7280); }
+
+/* ---- 页签 + 表格（用户要求：table 切换形态） ---- */
+.pmp-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
+.pmp-tab { display: inline-flex; align-items: center; gap: 5px; padding: 7px 12px; border: none; background: transparent; color: var(--ui-ink-dim, #6b7280); font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.pmp-tab:hover { color: var(--ui-ink, #18202b); }
+.pmp-tab.active { color: var(--ui-accent, #0891b2); border-bottom-color: var(--ui-accent, #0891b2); }
+.pmp-tab-n { padding: 0 5px; border-radius: 999px; background: var(--ui-veil, rgb(0 0 0 / 0.05)); font-size: 10px; font-weight: 700; }
+.pmp-table-wrap { display: flex; flex-direction: column; gap: 8px; }
+.pmp-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pmp-table th { text-align: left; padding: 6px 8px; font-size: 11px; font-weight: 700; color: var(--ui-ink-dim, #6b7280); border-bottom: 1px solid var(--ui-line, #e2e5ea); white-space: nowrap; }
+.pmp-table td { padding: 8px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); vertical-align: middle; }
+.pmp-table tbody tr:hover { background: var(--ui-hover, rgb(0 0 0 / 0.03)); }
+.pmp-th-act { text-align: right; }
+.pmp-table td.pmp-nowrap { white-space: nowrap; }
+.pmp-table td.pmp-nowrap:last-child { text-align: right; }
+.pmp-empty-cell { padding: 20px 8px; text-align: center; color: var(--ui-ink-dim, #6b7280); }
+.pmp-tag { margin-left: 5px; padding: 0 5px; border-radius: 5px; background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); color: var(--ui-warn, #b45309); font-size: 10px; }
 </style>

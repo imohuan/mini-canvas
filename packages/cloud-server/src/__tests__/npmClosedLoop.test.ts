@@ -96,14 +96,16 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     registryUrl = 'http://127.0.0.1:' + (server.address() as { port: number }).port
     // 用真端口回填 tarball 地址
     for (const p of Object.values(packuments) as Array<{ versions: Record<string, { dist: { tarball: string } }> }>) {
-      for (const v of Object.values(p.versions)) v.dist.tarball = registryUrl + '/pkg.tgz'
+    for (const v of Object.values(p.versions)) v.dist.tarball = registryUrl + '/pkg.tgz'
     }
-  })
+    // 真跑 npm pack：并发下单次可能 >10s（默认 hook 超时），给它放宽
+  }, 60_000)
 
   afterAll(async () => {
-    await new Promise<void>((r) => server.close(() => r()))
-    await fs.rm(dir, { recursive: true, force: true })
-    await fs.rm(path.dirname(tgz), { recursive: true, force: true })
+    // beforeAll 若失败（如并发下 npm pack 超时），这里要能安全收尾
+    if (server) await new Promise<void>((r) => server.close(() => r()))
+    if (dir) await fs.rm(dir, { recursive: true, force: true })
+    if (tgz) await fs.rm(path.dirname(tgz), { recursive: true, force: true })
   })
 
   it('安装 → 前端半进 catalog → 后台半被 loader 装载 → /api/showcase 可调 → 卸载即清', async () => {

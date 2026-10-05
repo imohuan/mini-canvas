@@ -25,13 +25,15 @@ import { safeJson } from './agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
 
 /**
- * 默认 scope 白名单：只允许这些 scope 下的包被安装（装 NPM 包 = 服务端执行代码）。
+ * 允许安装的包名前缀（装 NPM 包 = 服务端执行代码，所以白名单起步）。
+ *
+ * 是**包名前缀**不是 npm scope：既能是 "@imohuan/"（scope 包），也能是 "mini-canvas-"（普通包）。
  * 可用 opts.scopeAllowlist 覆盖，或环境变量 MINI_CANVAS_NPM_SCOPES（逗号分隔）在服务层注入。
  */
-const DEFAULT_SCOPES = ['@mini-canvas/', '@imohuan/']
+const DEFAULT_PREFIXES = ['@imohuan/', 'mini-canvas-']
 
-/** 包名校验（scope/name 形态；name 段不含路径分隔符） */
-const PKG_RE = /^@[a-z0-9-][a-z0-9-._]*[/][a-z0-9-][a-z0-9-._]*$/
+/** 包名校验：scope 包（@scope/name）或普通包（name）都收；不含路径分隔符/大写 */
+const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
 
 export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   /** 前端半落点（catalog 的 pluginsDir） */
@@ -40,7 +42,7 @@ export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   serverPluginsDir: string
   /** 来源记录文件（NPM 装了什么、什么版本，落 JSON 供 GET installed 与 update 比对） */
   recordFile?: string
-  /** scope 白名单（前缀匹配；缺省 @mini-canvas/） */
+  /** 允许的包名前缀（缺省见 DEFAULT_PREFIXES；既支持 @scope/ 也支持 mini-canvas- 这类前缀） */
   scopeAllowlist?: string[]
   /** 热装/热卸钩子：装完/卸完当场生效（见 serverFramework/hotLoad.ts）；缺省不调 */
   hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
@@ -57,7 +59,7 @@ interface InstallRecord {
 export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const app = new Hono()
   const client = createNpmClient(opts)
-  const scopes = opts.scopeAllowlist ?? DEFAULT_SCOPES
+  const prefixes = opts.scopeAllowlist ?? DEFAULT_PREFIXES
   const recordFile = opts.recordFile ?? path.join(opts.serverPluginsDir, '.npm-installed.json')
 
   const readRecords = async (): Promise<Record<string, InstallRecord>> => {
@@ -72,7 +74,66 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     await fs.writeFile(recordFile, JSON.stringify(recs, null, 2), 'utf8')
   }
 
-  const scopeAllowed = (pkg: string): boolean => scopes.some((s) => pkg.startsWith(s))
+  const scopeAllowed = (pkg: string): boolean => prefixes.some((s) => pkg.startsWith(s))
+
+  /**
+   * 把一批候选包名变成"可安装插件描述"：查 packument → 校验 installable → 归一字段。
+   * 多处（搜索/浏览）共用；单个包查失败返回 null（不影响整页）。
+   */
+  async function describeInstalled(names: Iterable<string>): Promise<Array<{
+    pkg: string
+    description: string
+    version: string
+    date: string
+    hasServer: boolean
+    title: string
+  }>> {
+    const list = [...names].filter((n) => scopeAllowed(n))
+    const out = await Promise.all(
+      list.map(async (name) => {
+        try {
+          const pk = await client.packument(name)
+          const latest = pk['dist-tags'].latest
+          if (!latest) return null
+          const mini = (pk.versions[latest] as unknown as { miniCanvas?: Record<string, unknown> })?.miniCanvas
+          if (mini?.installable !== true) return null
+          return {
+            pkg: name,
+            description: pk.description ?? '',
+            version: latest,
+            date: pk.time?.[latest] ?? '',
+            hasServer: mini.server !== undefined,
+            title: typeof mini.title === 'string' ? mini.title : name,
+          }
+        } catch {
+          return null
+        }
+      }),
+    )
+    return out.filter((x): x is NonNullable<typeof x> => x !== null)
+  }
+
+  // ------------------------------------------------------------------
+  // 浏览：把白名单前缀下**全部可安装插件**列出来（列表页默认加载，不必先搜）
+  //
+  // 为什么不让前端默认发一个搜索词：npm 搜索按热度排序，刚发布的新包排不进结果。
+  // 按前缀浏览走的是"逐前缀搜 + packument 校验"，能把前缀下的插件尽量都捞出来。
+  // ------------------------------------------------------------------
+  app.get('/api/npm-plugins/browse', async (c) => {
+    try {
+      const names = new Set<string>()
+      for (const prefix of prefixes) {
+        try {
+          // 每个前缀搜一次（去掉尾部 / ，npm 搜索不吃带斜杠的 scope）
+          for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
+        } catch { /* 单个前缀搜失败不致命 */ }
+      }
+      const results = await describeInstalled(names)
+      return c.json({ ok: true, results })
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
+    }
+  })
 
   // ------------------------------------------------------------------
   // 搜索：转发 npm 搜索 + 按 miniCanvas.installable 二次过滤（路由职责）
@@ -98,31 +159,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         } catch { /* scope 搜索失败忽略 */ }
       }
 
-      const descriptors = await Promise.all(
-        [...names]
-          .filter((n) => scopeAllowed(n))
-          .map(async (name) => {
-            try {
-              const pk = await client.packument(name)
-              const latest = pk['dist-tags'].latest
-              if (!latest) return null
-              const vInfo = pk.versions[latest] as unknown as { miniCanvas?: Record<string, unknown> }
-              const mini = vInfo?.miniCanvas
-              if (mini?.installable !== true) return null
-              return {
-                pkg: name,
-                description: pk.description ?? '',
-                version: latest,
-                date: pk.time?.[latest] ?? '',
-                hasServer: mini.server !== undefined,
-                title: typeof mini.title === 'string' ? mini.title : name,
-              }
-            } catch {
-              return null // 单个查失败不影响整页（含"搜到的名字其实不存在"）
-            }
-          }),
-      )
-      return c.json({ ok: true, results: descriptors.filter((x) => x !== null) })
+      return c.json({ ok: true, results: await describeInstalled(names) })
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
     }
@@ -135,7 +172,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     // ① scope 白名单 + 包名形状
     if (!PKG_RE.test(pkg)) return { status: 400, body: { ok: false, error: '非法包名（要 @scope/name 形态）' } }
     if (!scopeAllowed(pkg)) {
-      return { status: 400, body: { ok: false, error: '包不在允许的 scope 内（' + scopes.join(', ') + '）。装第三方包需在服务端配置 scopeAllowlist。' } }
+      return { status: 400, body: { ok: false, error: '包名不在允许的前缀内（允许：' + prefixes.join(' / ') + '）。装其它来源需在服务端配置 scopeAllowlist。' } }
     }
     // ② packument → 定版本
     let pk

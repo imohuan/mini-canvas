@@ -81,6 +81,8 @@ async function boot(registryUrl: string) {
     pluginsDir,
     serverPluginsDir,
     recordFile: path.join(dir, '.npm-installed.json'),
+    // 测试用 @mini-canvas/ 前缀（默认白名单是 @imohuan/ + mini-canvas-）
+    scopeAllowlist: ['@mini-canvas/'],
   })
   const host = createServerFramework({ root: dir })
   host.ctx.routes.adopt(routes)
@@ -98,6 +100,25 @@ const call = (host: { app: Hono }, p: string, method?: string, body?: unknown) =
 const j = async (r: Response) => (await r.json()) as Record<string, unknown>
 
 describe('NPM 插件路由（假 registry 全流程）', () => {
+  it('browse：按前缀列出全部可安装插件（不传搜索词也能列）', async () => {
+    const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
+    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    registry = await startFakeRegistry(packument, {})
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
+      version: '1.0.0',
+      dist: { tarball: registry.url + '/demo.tgz' },
+      miniCanvas: { installable: true },
+    }
+    registry.close()
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
+    const host = await boot(registry.url)
+    const res = await host.app.fetch(new Request('http://x/api/npm-plugins/browse'))
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { ok: boolean; results: Array<{ pkg: string }> }
+    expect(body.ok).toBe(true)
+    expect(Array.isArray(body.results)).toBe(true)
+    host.stop()
+  })
   let registry: FakeRegistry | undefined
   afterEach(() => { registry?.close(); registry = undefined })
 

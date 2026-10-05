@@ -98,6 +98,8 @@ export interface PluginManagerService {
   installAll(): Promise<void>
   /** NPM 市场搜索（服务端代查 + installable 过滤） */
   searchNpmPlugins(q: string): Promise<NpmSearchResult[]>
+  /** NPM 市场浏览：按允许的包名前缀列出全部可安装插件（列表页默认加载，不必先搜） */
+  browseNpmPlugins(): Promise<NpmSearchResult[]>
   /** 从 NPM 安装（含后台半时调用方须已确认） */
   installFromNpm(pkg: string, opts?: { serverConfirm?: boolean }): Promise<void>
   /** 从 NPM 更新到 latest */
@@ -667,6 +669,15 @@ export function createPluginManagerService(
     if (!res.ok || json.ok !== true) throw new Error(json.error ?? '搜索失败：' + res.status)
     return json.results ?? []
   }
+  /** 浏览：服务端按前缀列出全部可安装插件（列表页默认加载用） */
+  async function browseNpmPlugins(): Promise<NpmSearchResult[]> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/npm-plugins/browse', { headers: { accept: 'application/json' } })
+    const json = (await res.json()) as { ok?: boolean; results?: NpmSearchResult[]; error?: string }
+    if (!res.ok || json.ok !== true) throw new Error(json.error ?? '浏览失败：' + res.status)
+    return json.results ?? []
+  }
+
 
   /** 装一个 NPM 包（含后台半时调用方必须已确认；confirm 直传后端） */
   async function installFromNpm(pkg: string, opts?: { serverConfirm?: boolean }): Promise<void> {
@@ -741,6 +752,6 @@ export function createPluginManagerService(
 
   return {
     state, refresh, install, uninstall, reinstall, installAll,
-    searchNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled,
+    searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled,
   }
 }

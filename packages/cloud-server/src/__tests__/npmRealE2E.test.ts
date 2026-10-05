@@ -17,16 +17,16 @@ afterEach(async () => {
 })
 
 describe('NPM 路由 · 真 registry（只读）', () => {
-  it('搜索端点连通且只回 installable 的 @mini-canvas/ 包（可能为空，但结构必须对）', async () => {
+  it('搜索端点连通且只回白名单前缀内的包（可能为空，但结构必须对）', async () => {
     const srv = await createCloudServer({ port: 0, dir, watchProviders: false })
     const res = await srv.app.fetch(new Request('http://x/api/npm-plugins/search?q=mini-canvas'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { ok: boolean; results: Array<{ pkg: string }> }
     expect(body.ok).toBe(true)
     expect(Array.isArray(body.results)).toBe(true)
-    // 过滤语义：所有结果的包名都在白名单 scope 里（默认 @mini-canvas/ 与 @imohuan/）
+    // 过滤语义：所有结果的包名都在白名单前缀内（默认 @imohuan/ 与 mini-canvas-）
     for (const r of body.results) {
-      expect(r.pkg.startsWith('@mini-canvas/') || r.pkg.startsWith('@imohuan/')).toBe(true)
+      expect(r.pkg.startsWith('@imohuan/') || r.pkg.startsWith('mini-canvas-')).toBe(true)
     }
     srv.stop()
   }, 30_000)
@@ -36,7 +36,7 @@ describe('NPM 路由 · 真 registry（只读）', () => {
     const res = await srv.app.fetch(new Request('http://x/api/npm-plugins/install', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ package: '@mini-canvas/plugin-not-exist-xyz', confirm: true }),
+      body: JSON.stringify({ package: '@imohuan/plugin-not-exist-xyz', confirm: true }),
     }))
     expect(res.status).toBe(404)
     srv.stop()
