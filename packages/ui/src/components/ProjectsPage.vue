@@ -8,10 +8,11 @@
  *
  * 数据全部来自 cloud-server（`/api/projects`），不写死；点项目 → 打开它的画布（没有就先建一张）。
  */
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
+import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode } from '../composables/appTheme'
 
 const router = useRouter()
 const projects = ref<ProjectSummary[]>([])
@@ -21,34 +22,33 @@ const query = ref('')
 /** 左栏页签：首页 / 项目 / 资产（同一页里切换主区内容） */
 const nav = ref<'home' | 'projects' | 'assets'>('projects')
 const assets = ref<AssetSummary[]>([])
-/** 主题：亮 / 暗（写回 KV 的 config/themeMode，与画布工作台同一个键） */
+/**
+ * 主题：亮 / 暗。
+ *
+ * 真源是 `config/settings` —— 与画布工作台**同一份**（不是另一个独立的 themeMode 键）。
+ * 读值与落值都走 appTheme（复用画布页那套 applyThemeMode / installThemePalette），
+ * 所以首页也会用上用户改过的配色，两页不再各显各的。
+ */
 const theme = ref<'dark' | 'light'>('dark')
+/** 配色落值的 dispose（解除订阅 + 清内联覆盖）；切页/卸载时收回 */
+let disposeTheme: (() => void) | undefined
 
-function applyTheme(v: 'dark' | 'light'): void {
-  if (typeof document === 'undefined') return
-  document.documentElement.classList.toggle('dark', v === 'dark')
-  document.documentElement.dataset.canvasTheme = v
+/** 把当前这份设置套到页面上（主题模式 + 配色，一处生效） */
+function applyTheme(values: Record<string, unknown>): void {
+  disposeTheme?.()
+  disposeTheme = applyAppTheme(values)
 }
 async function loadTheme(): Promise<void> {
-  try {
-    const res = await fetch('/api/kv/config/themeMode')
-    if (res.ok) {
-      const body = (await res.json()) as { value?: unknown }
-      if (body.value === 'dark' || body.value === 'light') theme.value = body.value
-    }
-  } catch {
-    /* 没连后台 → 保持默认暗色 */
-  }
-  applyTheme(theme.value)
+  // 与画布工作台读同一份设置（云端优先、退回本地）：主题模式 + 用户改过的配色都在里面
+  const { values } = await loadAppSettings()
+  if (values.themeMode === 'light' || values.themeMode === 'dark') theme.value = values.themeMode
+  applyTheme(values)
 }
-function toggleTheme(): void {
+async function toggleTheme(): Promise<void> {
   theme.value = theme.value === 'dark' ? 'light' : 'dark'
-  applyTheme(theme.value)
-  void fetch('/api/kv/config/themeMode', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ value: theme.value }),
-  }).catch(() => undefined)
+  // 读-改-写同一份 config/settings（不冲掉画布页的配色），再按新值刷新页面主题
+  await saveThemeMode(theme.value)
+  applyTheme((await loadAppSettings()).values)
 }
 
 async function refresh(): Promise<void> {
@@ -63,8 +63,15 @@ async function refresh(): Promise<void> {
   }
 }
 onMounted(() => {
+  // 一次性清掉老版本留下的独立 themeMode 键（两套配置的残骸；只删那一个，不碰共用的 settings）
+  void clearLegacyThemeModeKey()
   void loadTheme()
   void refresh()
+})
+onBeforeUnmount(() => {
+  // 撤掉配色落值（解除订阅 + 清掉 <html> 上的内联覆盖），避免切页后残留
+  disposeTheme?.()
+  disposeTheme = undefined
 })
 
 /** 切左栏页签：进「资产」时拉一次资产清单 */
