@@ -18,6 +18,11 @@ import { isValidServerPlugin } from './pluginLoader.js'
 /** id（文件名）→ 内核真实插件名。装的时候记下，卸的时候按它摘（两者可能不同名）。 */
 const installedNames = new Map<string, string>()
 
+/** 运行期热装进来的插件名（供 /api/server-plugins 的 loaded 现算；启动装载的不在这里） */
+const hotLoaded = new Set<string>()
+/** 取"运行期热装且仍活着"的插件名（server-plugins 路由的 loaded 用） */
+export function hotLoadedNames(): string[] { return [...hotLoaded] }
+
 export interface HotLoadResult {
   ok: boolean
   error?: string
@@ -51,6 +56,7 @@ export async function hotInstallServerPlugin(
     if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply/setup）" }
     runtime.install(candidate)
     installedNames.set(id, candidate.name)
+    hotLoaded.add(candidate.name)
     return { ok: true, name: candidate.name }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -73,6 +79,7 @@ export function hotUninstallServerPlugin(ctx: PluginScope, id: string, knownName
     for (const name of candidates) {
       if (runtime.uninstall(name)) {
         installedNames.delete(id)
+        hotLoaded.delete(name)
         return { ok: true }
       }
     }

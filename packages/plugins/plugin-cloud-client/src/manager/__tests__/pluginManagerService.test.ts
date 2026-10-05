@@ -76,6 +76,20 @@ const CATALOG = {
   ],
 }
 
+// 带后台半的清单（测成对安装用）
+const CATALOG_WITH_SERVER = {
+  ok: true,
+  plugins: [
+    {
+      id: 'plugin-srv',
+      name: 'srv',
+      title: 'srv-plugin',
+      url: '/plugins/plugin-srv/srv.js',
+      server: { url: '/plugins/plugin-srv/server.js', sha256: 'abc' },
+    },
+  ],
+}
+
 describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
   it('首次（没有存档）→ 默认全部装上（用户要求）', async () => {
     const { svc, host, kv } = boot({ catalog: CATALOG })
@@ -258,6 +272,45 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     expect(r).toEqual({ updated: true, to: '1.1.0' })
     const list = await svc.listNpmInstalled()
     expect(list[0].version).toBe('1.1.0')
+  })
+
+  it('未确认时不请求后台安装（避免假故障红字）；确认后才发请求', async () => {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const calls: string[] = []
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const u = String(url)
+      calls.push(u)
+      if (u.includes('/api/server-plugins/install')) {
+        const b = JSON.parse(String(init?.body ?? '{}')) as { confirm?: boolean }
+        return b.confirm === true
+          ? ({ ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response)
+          : ({ ok: false, status: 400, json: async () => ({ ok: false, error: 'need confirm' }), text: async () => '' } as Response)
+      }
+      if (u.includes('/api/server-plugins')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
+      }
+      return { ok: true, status: 200, json: async () => CATALOG_WITH_SERVER, text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    await svc.refresh()
+    await svc.install('plugin-srv', { serverConfirm: false })
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-srv')?.serverError).toBeUndefined()
+    expect(calls.some((u) => u.includes('/api/server-plugins/install'))).toBe(false)
+    // 卸掉（前端半也卸），再以确认方式装一次：这次应发后台安装请求
+    await svc.uninstall('plugin-srv')
+    await svc.install('plugin-srv', { serverConfirm: true })
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-srv')?.serverError).toBeUndefined()
+    expect(calls.some((u) => u.includes('/api/server-plugins/install'))).toBe(true)
   })
 
   it('installFromNpm 装完后把前端半自动装进内核（用户点一次就该活）', async () => {

@@ -24,6 +24,7 @@ import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
 import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../../serverFramework/hotLoad.js'
+import { hotLoadedNames } from '../../serverFramework/hotLoad.js'
 import { buildPluginCatalog } from '../catalog.js'
 import { healthPlugin } from './health.js'
 import { runAgentMiddleware } from '../../serverFramework/agent.js'
@@ -166,7 +167,8 @@ export const serverPluginsPlugin: PluginModule = {
     ctx.routes.adopt(
       createServerPluginsRoutes({
         dir: need<string>(ctx, S.serverPluginsDir),
-        loaded: need<string[]>(ctx, 'serverPluginsLoaded'),
+        // 现算：启动登记的快照 + 运行期热装 —— 否则热装/热卸后 loaded 不更新，前端据它误判（用户实测）
+        loaded: () => [...new Set([...(ctx.tryGet<string[]>('serverPluginsLoaded') ?? []), ...hotLoadedNames()])],
         // 服务自己的 origin：用于跨源安装检查（审查发现：不传 origin 时该检查整段被跳过）。
         origin: need<string>(ctx, S.selfOrigin),
         // 可信哈希来源 = 本服务扫插件目录得到的清单（**不是**调用方声明的）。

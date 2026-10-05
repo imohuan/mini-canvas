@@ -52,7 +52,8 @@ export interface ServerPluginsRoutesOptions {
    */
   permissionsOf?: (id: string) => Promise<string[] | undefined>
   /** 本次启动已成功登记的外挂后台插件名（运行时观测面：部署者据此审计"目录里到底活着什么"） */
-  loaded?: string[]
+  /** 已登记进内核的外挂插件名（热装/热卸后必须同步更新，故允许传函数现取） */
+  loaded?: string[] | (() => string[])
   /**
    * 热装/热卸钩子（缺省不调，行为与旧版一致）。
    *
@@ -98,7 +99,8 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
         return { id, file, size, ...(permissions ? { permissions } : {}) }
       }),
     )
-    return c.json({ ok: true, plugins, loaded: opts.loaded ?? [] })
+    const loaded = typeof opts.loaded === "function" ? opts.loaded() : (opts.loaded ?? [])
+    return c.json({ ok: true, plugins, loaded })
   })
 
   app.post('/api/server-plugins/install', async (c) => {

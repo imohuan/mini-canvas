@@ -41,6 +41,8 @@ export interface PluginRow {
   hasServer: boolean
   /** 后台那一半是否已装到服务器上 */
   serverInstalled: boolean
+  /** 后台那一半是否已**登记进内核**（= 正在生效）。只有文件没登记为 false。刷新后由服务端回填。 */
+  serverLoaded?: boolean
   /**
    * 用户是否已**显式确认**装后台那一半（界面上的确认动作）。
    * 没有它 = 不装后台（后端也会拒 confirm !== true，两边都拦）。
@@ -91,7 +93,7 @@ export interface PluginManagerService {
   /** 卸一个 */
   uninstall(id: string): Promise<void>
   /** 重装（卸了再装；用于「改了产物想看新版」） */
-  reinstall(id: string): Promise<void>
+  reinstall(id: string, opts?: { serverConfirm?: boolean }): Promise<void>
   /** 装全部未装的（默认全装也走它） */
   installAll(): Promise<void>
   /** NPM 市场搜索（服务端代查 + installable 过滤） */
@@ -296,6 +298,41 @@ export function createPluginManagerService(
   }
 
   /** 把「意图（想装哪些）」存盘，供下次启动照旧 */
+  /**
+   * 从**服务端真实状态**回填每一行的"后台半"状态（serverInstalled / serverError）。
+   *
+   * 为什么必须有它：serverInstalled 只是"本次会话点过安装"的记忆 —— 刷新页面就丢，
+   * 于是"后台其实装着、界面却显示未装/失败"（用户实测）。真相在服务端的
+   * /api/server-plugins（它按目录实况列出）+ /api/npm-plugins/installed（NPM 来源版本）。
+   * 这里拉一次、按 id 对齐，把真相写回行上。
+   */
+  async function syncServerState(): Promise<void> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const installedIds = new Set<string>()
+    const loadedNames = new Set<string>()
+    // 目录实况：任何来源装的后台半都在这里（含手工丢文件、NPM 装、启动装载）
+    try {
+      const res = await doFetch(origin + "/api/server-plugins", { headers: { accept: "application/json" } })
+      if (res.ok) {
+        const j = (await res.json()) as { plugins?: Array<{ id?: string }>; loaded?: string[] }
+        for (const p of j.plugins ?? []) if (p.id) installedIds.add(p.id)
+        // loaded = 本次启动已登记进内核的（能证明"真的活着"，不只是文件在）
+        for (const n of j.loaded ?? []) loadedNames.add(n)
+      }
+      // 另一个可能的落点：前端半目录名（服务端 pluginsDir）—— 有些部署后台半与前端半同 id
+    } catch { /* 服务端不可达：保持现状，不误报 */ }
+
+    for (const row of state.rows) {
+      if (!row.hasServer) continue
+      // 服务端目录里的 id 与清单 id 一致（都是文件名形如 imohuan__plugin-showcase）
+      const onServer = installedIds.has(row.entry.id) || (row.realName ? installedIds.has(row.realName) : false)
+      row.serverInstalled = onServer
+      // 已登记进内核 = 正在生效（热装后为 true；只有文件没登记为 false）
+      row.serverLoaded = onServer && (loadedNames.size === 0 ? true : loadedNames.has(row.realName ?? row.entry.name))
+      // 装着就清掉陈旧的"失败"红字（它可能来自上一次未确认的静默请求）
+      if (onServer) row.serverError = undefined
+    }
+  }
   function persistIntent(): void {
     save()?.set(INSTALLED_KEY, [...state.intent], 'config')
   }
@@ -354,6 +391,7 @@ export function createPluginManagerService(
           busy: false,
           hasServer: entry.server !== undefined,
           serverInstalled: false,
+          serverLoaded: false,
         })
       }
     }
@@ -375,6 +413,11 @@ export function createPluginManagerService(
     const server = row.entry.server
     if (!server) return
     row.serverError = undefined
+    // 没有用户显式确认**不要**发请求：后台插件是以服务端权限运行的代码，
+    // confirm 缺省 false 会被后端 400 拒（"需要 confirm: true"）。把 400 当失败报红是**假故障**
+    // （用户实测：后台其实已装好、接口能访问，界面却显示"后台失败"）。
+    // 正确做法：静默留在"未装"，等用户在界面上点安装（那时才有确认）。
+    if (row.serverConfirm !== true) return
     try {
       const abs = absolutize(server.url, baseOfCatalogUrl(state.catalogUrl))
       const res = await doFetch(abs, { headers: { accept: 'text/javascript' } })
@@ -395,7 +438,7 @@ export function createPluginManagerService(
           // 清单声明的哈希（服务端会拿它跟自己扫出来的对；对不上就拒）
           sha256: server.sha256,
           // 用户已在界面上显式确认"以服务端权限运行"（由 install() 的 opts.confirm 传来）
-          confirm: row.serverConfirm === true,
+          confirm: true,
           origin,
         }),
       })
@@ -487,10 +530,12 @@ export function createPluginManagerService(
     }
   }
 
-  async function reinstall(id: string): Promise<void> {
+  async function reinstall(id: string, opts?: { serverConfirm?: boolean }): Promise<void> {
     const row = state.rows.find((r) => r.entry.id === id)
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可重装（页面上不给按钮，这里兜底）
+    // 用户在界面上点了重装 = 已确认"以服务端权限重写后台代码"（与 install 同一语义）
+    if (opts?.serverConfirm === true) row.serverConfirm = true
     const m = hostManager()
     if (!m) {
       row.error = '宿主没有提供 pluginManager 服务'
@@ -578,6 +623,8 @@ export function createPluginManagerService(
       // 两边操作的也是同一批 row 对象，不会有「孤儿行」（真实踩过：三插件只装上两个）。
       reconcileRows(entries)
       syncRuntimeState()
+      // 后台半的真相在服务端（刷新页面后 serverInstalled 记忆会丢，必须回填）
+      await syncServerState()
       state.ready = true
 
       // 首次（saved === undefined）：把清单里默认该装的都装上

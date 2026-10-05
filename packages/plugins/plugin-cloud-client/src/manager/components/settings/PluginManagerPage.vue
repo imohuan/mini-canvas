@@ -50,6 +50,19 @@ function onInstall(row: (typeof s.rows)[number]): void {
   void svc.install(row.entry.id, { serverConfirm: hasServer })
 }
 
+/** 重装：与安装一样要先让用户确认后台半（重装同样会重新写后台代码，别静默做）。 */
+function onReinstall(row: (typeof s.rows)[number]): void {
+  const hasServer = row.entry.server !== undefined
+  if (hasServer) {
+    const ok = window.confirm(
+      `「${row.entry.title || row.entry.id}」包含后台插件。\n\n` +
+        '重装会把后台代码**重新写入本机并以服务端权限运行**。\n\n确定要重装吗？',
+    )
+    if (!ok) return
+  }
+  void svc.reinstall(row.entry.id, { serverConfirm: hasServer })
+}
+
 const installedCount = computed(() => s.rows.filter((r) => r.installed).length)
 
 /**
@@ -76,8 +89,15 @@ function badgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on' | 'of
  * 前端 ✓ / 后台 ✓ 各看各的 —— 后台装不上时能一眼看出是哪一半的问题。
  */
 function serverBadgeOf(row: (typeof s.rows)[number]): { text: string; tone: 'on' | 'off' | 'err' } {
+  // 以服务端实况为准（serverInstalled/serverLoaded 由 syncServerState 回填）：
+  // 服务端装着就绝不显示失败 —— 陈旧红字必须让位给事实（用户实测：后台明明装了，界面却报后台失败）。
+  if (row.serverInstalled) {
+    return row.serverLoaded
+      ? { text: '后台已生效', tone: 'on' }
+      : { text: '后台已装', tone: 'on' }
+  }
   if (row.serverError) return { text: '后台失败', tone: 'err' }
-  return row.serverInstalled ? { text: '后台已装', tone: 'on' } : { text: '后台未装', tone: 'off' }
+  return { text: '后台未装', tone: 'off' }
 }
 
 // ============================================================================
@@ -227,7 +247,7 @@ const npmVersionOf = (pkg: string): string | undefined =>
               <button v-else class="pmp-mini danger" :disabled="row.busy" @click="svc.uninstall(row.entry.id)">
                 <Trash2 :size="13" /> 卸载
               </button>
-              <button class="pmp-mini" :disabled="row.busy" title="卸载后按最新产物重新安装" @click="svc.reinstall(row.entry.id)">
+               <button class="pmp-mini" :disabled="row.busy" title="卸载后按最新产物重新安装" @click="onReinstall(row)">
                 <RotateCcw :size="13" /> 重装
               </button>
             </div>
