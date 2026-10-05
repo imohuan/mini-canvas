@@ -290,26 +290,26 @@ describe('插件资源投放：不只发 js', () => {
     srv.stop()
   })
 
-  it('声明了 publishedTo 的源码包不列入（NPM 装的那份才列），避免重复', async () => {
+  it('源码包不声明 installable → 不列入；NPM 装的那份声明了 → 列入（避免重复只留一份）', async () => {
     const dir = await makePluginsDir({
-      // 仓库源码包：已发布到 NPM → 不列
+      // 仓库源码包：已发布到 NPM，作者故意不声明 installable → 不列
       'plugin-demo': {
         file: 'plugin-demo.js',
         content: UMD('MiniCanvasPluginDemo'),
         pkg: {
           name: '@mini-canvas/plugin-demo',
           version: '1.0.0',
-          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', publishedTo: 'npm:@mini-canvas/plugin-demo' },
+          miniCanvas: { pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
         },
       },
-      // NPM 装进来的副本：带同样的 publishedTo，但要照常列（它是安装结果）
+      // NPM 装进来的副本：安装时会被补上 installable: true → 照常列
       'mini-canvas__plugin-demo': {
         file: 'plugin-demo.js',
         content: UMD('MiniCanvasPluginDemo'),
         pkg: {
           name: '@mini-canvas/plugin-demo',
           version: '1.0.0',
-          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', publishedTo: 'npm:@mini-canvas/plugin-demo' },
+          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
         },
       },
     })
@@ -319,7 +319,7 @@ describe('插件资源投放：不只发 js', () => {
       skipped: Array<{ file: string; reason: string }>
     }
     expect(body.plugins.map((p) => p.id)).toEqual(['mini-canvas__plugin-demo'])
-    expect(body.skipped.some((s) => s.file === 'plugin-demo' && s.reason.includes('publishedTo'.replace('publishedTo', 'NPM')))).toBe(true)
+    expect(body.skipped.some((s) => s.file === 'plugin-demo' && s.reason.includes('installable'))).toBe(true)
     srv.stop()
   })
 })

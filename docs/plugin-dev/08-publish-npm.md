@@ -21,7 +21,7 @@
 ## 第 1 步：package.json 的 miniCanvas 段（最关键）
 
     {
-      "name": "@imohuan/plugin-showcase",
+      "name": "mini-canvas-plugin-showcase",
       "version": "1.0.0",
       "type": "module",
       "files": ["dist"],
@@ -102,7 +102,7 @@ scope 包（@xxx/yyy）必须带 --access public，否则默认私有、别人�
 
 发完验证一下：
 
-    npm view @imohuan/plugin-showcase version
+    npm view mini-canvas-plugin-showcase version
 
 ## 第 5 步：让别人安装（闭环的后半段）
 

@@ -122,7 +122,7 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     const res = await host.app.fetch(new Request('http://x/api/npm-plugins/install', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ package: '@imohuan/plugin-showcase', confirm: true }),
+      body: JSON.stringify({ package: 'mini-canvas-plugin-showcase', confirm: true }),
     }))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { ok: boolean; hasServer: boolean; version: string }
@@ -132,7 +132,7 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
 
     // ---- 2) 前端半被 catalog 扫到（管理页能列出、前端能装载）----
     const catalog = await buildPluginCatalog(pluginsDir)
-    const entry = catalog.plugins.find((p) => p.id === 'imohuan__plugin-showcase')
+    const entry = catalog.plugins.find((p) => p.id === 'mini-canvas-plugin-showcase')
     expect(entry, '装进来的前端半应被 catalog 收录').toBeTruthy()
     expect(entry!.globalName).toBe('MiniCanvasPluginShowcase')
     expect(entry!.server?.sha256).toMatch(/^[0-9a-f]{64}$/)
@@ -164,11 +164,11 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     const del = await host2.app.fetch(new Request('http://x/api/npm-plugins/uninstall', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ package: '@imohuan/plugin-showcase' }),
+      body: JSON.stringify({ package: 'mini-canvas-plugin-showcase' }),
     }))
     expect(del.status).toBe(200)
     host2.stop()
-    await expect(fs.access(path.join(serverPluginsDir, 'imohuan__plugin-showcase.js'))).rejects.toThrow()
-    await expect(fs.access(path.join(pluginsDir, 'imohuan__plugin-showcase'))).rejects.toThrow()
+    await expect(fs.access(path.join(serverPluginsDir, 'mini-canvas-plugin-showcase.js'))).rejects.toThrow()
+    await expect(fs.access(path.join(pluginsDir, 'mini-canvas-plugin-showcase'))).rejects.toThrow()
   }, 60_000)
 })

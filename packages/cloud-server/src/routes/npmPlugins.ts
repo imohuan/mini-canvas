@@ -30,10 +30,10 @@ import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOption
  * 是**包名前缀**不是 npm scope：既能是 "@imohuan/"（scope 包），也能是 "mini-canvas-"（普通包）。
  * 可用 opts.scopeAllowlist 覆盖，或环境变量 MINI_CANVAS_NPM_SCOPES（逗号分隔）在服务层注入。
  */
-const DEFAULT_PREFIXES = ['@imohuan/', 'mini-canvas-']
+const DEFAULT_PREFIXES = ['mini-canvas-', '@mini-canvas/']
 
-/** 包名校验：scope 包（@scope/name）或普通包（name）都收；不含路径分隔符/大写 */
-const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
+  /** 包名校验：scope 包（@scope/name）或普通包（mini-canvas-xxx）都收；不含路径分隔符/大写 */
+  const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
 
 export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   /** 前端半落点（catalog 的 pluginsDir） */
@@ -77,6 +77,28 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const scopeAllowed = (pkg: string): boolean => prefixes.some((s) => pkg.startsWith(s))
 
   /**
+   * 判断一个包的 miniCanvas 段是不是"可用插件"。
+   *
+   * 用**结构**（pluginName + 至少一个 web/server 入口）而不是 installable 标记来判定 ——
+   * 因为 installable 的语义是"是否进本地插件列表"（作者为了不重复展示会关掉它），
+   * 那不是"是不是插件"的判据。
+   */
+  function isPluginMeta(mini: Record<string, unknown> | undefined): boolean {
+    if (!mini || typeof mini.pluginName !== 'string' || !mini.pluginName) return false
+    return mini.web !== undefined || mini.server !== undefined
+  }
+
+  /** 额外要直查的包名（环境变量 MINI_CANVAS_NPM_PACKAGES；绕过 npm 搜索的排序问题） */
+  const extraPackages = (): string[] =>
+    (process.env.MINI_CANVAS_NPM_PACKAGES ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+  /** 包名 → 落盘目录/文件 id（去 scope 前缀，/ 换 __；普通包名原样） */
+  const dirNameOf = (pkg: string): string => pkg.replace(/^@/, '').replace('/', '__')
+
+  /**
    * 把一批候选包名变成"可安装插件描述"：查 packument → 校验 installable → 归一字段。
    * 多处（搜索/浏览）共用；单个包查失败返回 null（不影响整页）。
    */
@@ -96,14 +118,15 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           const latest = pk['dist-tags'].latest
           if (!latest) return null
           const mini = (pk.versions[latest] as unknown as { miniCanvas?: Record<string, unknown> })?.miniCanvas
-          if (mini?.installable !== true) return null
+          if (!isPluginMeta(mini)) return null
+          const m = mini as Record<string, unknown>
           return {
             pkg: name,
             description: pk.description ?? '',
             version: latest,
             date: pk.time?.[latest] ?? '',
-            hasServer: mini.server !== undefined,
-            title: typeof mini.title === 'string' ? mini.title : name,
+            hasServer: m.server !== undefined,
+            title: typeof m.title === 'string' ? m.title : name,
           }
         } catch {
           return null
@@ -128,6 +151,9 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           for (const h of await client.search(prefix.replace(/\/$/, ''), 100)) names.add(h.name)
         } catch { /* 单个前缀搜失败不致命 */ }
       }
+      // 显式配置的包名（环境变量 MINI_CANVAS_NPM_PACKAGES，逗号分隔）**直查**：
+      // npm 搜索按热度排序，刚发布的包排不进结果（实测），这些名字必须绕过搜索直接列。
+      for (const n of extraPackages()) names.add(n)
       const results = await describeInstalled(names)
       return c.json({ ok: true, results })
     } catch (err) {
@@ -150,8 +176,10 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // 会一无所获。所以除了模糊搜索，再按"直接输入包名 / scope 名"精确查一次。
       const names = new Set<string>()
       for (const h of hits) names.add(h.name)
-      // 输入像包名（含 / 或以 @ 开头）→ 直接当包名查
-      if (q.includes('/')) names.add(q.startsWith('@') ? q : q)
+      // **总是**把输入本身当包名精确查一次（查不到会在 describeInstalled 里自然跳过）。
+      // 必须：npm 搜索按热度排序，刚发布/0 下载的包排不进任何关键词结果（实测 top 250 都没有），
+      // 用户按包名搜自己的插件会一无所获 —— 直查 packument 才能命中。
+      names.add(q)
       // 输入是 scope（@xxx 或 @xxx/）→ 用该 scope 的搜索再捞一次
       if (/^@[a-z0-9-]+\/?$/i.test(q)) {
         try {
@@ -191,8 +219,9 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     console.log('[npm] tarballUrl:', tarballUrl)
     const mini = vInfo.miniCanvas as Record<string, unknown> | undefined
     // ③ installable 校验
-    if (mini?.installable !== true) {
-      return { status: 400, body: { ok: false, error: '该包不是 miniCanvas 插件（miniCanvas.installable !== true）' } }
+    // ③ 是不是插件：看结构（pluginName + web/server 入口），不看 installable
+    if (!isPluginMeta(mini)) {
+      return { status: 400, body: { ok: false, error: '该包不是 miniCanvas 插件（缺 miniCanvas.pluginName 或 web/server 入口）' } }
     }
 
     // ④ 下载 + 解包到临时目录
@@ -219,14 +248,22 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       }
 
       // ⑥ 前端半 → pluginsDir/<pkgName>/dist/（catalog 自动收录）
-      const pkgDirName = pkg.replace(/^@/, '').replace('/', '__')
+      // 落盘目录名：包名去掉 scope 前缀、把 / 换成 __（普通包如 mini-canvas-plugin-showcase 原样）
+      const pkgDirName = dirNameOf(pkg)
       const webDest = path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName, 'dist')
       await fs.mkdir(webDest, { recursive: true })
       const webText = await fs.readFile(path.join(distDir, webFile), 'utf8')
       await fs.writeFile(path.join(webDest, webFile), webText, 'utf8')
-      // ⚠️ package.json 必须一起落：catalog 靠它的 miniCanvas 段判定 installable 并取
+      // ⚠️ package.json 必须一起落：catalog 靠它的 miniCanvas 段判定"进不进本地列表"并取
       // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
-      await fs.copyFile(pkgJsonPath, path.join(path.dirname(webDest), 'package.json'))
+      //
+      // 关键：**强制补上 installable: true**。作者为了让源码包不进列表，会在发布的包里关掉它；
+      // 但装进来的这份**就是**本地列表要展示的插件，必须显式打开，否则装完列表里看不到（实测踩过）。
+      const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, 'utf8')) as {
+        miniCanvas?: Record<string, unknown>
+      }
+      pkgObj.miniCanvas = { ...(pkgObj.miniCanvas ?? {}), installable: true }
+      await fs.writeFile(path.join(path.dirname(webDest), 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
       // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
       // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。
       if (serverFile) {
@@ -239,7 +276,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       if (serverFile) {
         const serverText = await fs.readFile(path.join(distDir, serverFile), 'utf8')
         serverSha = createHash('sha256').update(serverText, 'utf8').digest('hex')
-        const serverId = pkg.replace(/^@/, '').replace('/', '__')
+        const serverId = dirNameOf(pkg)
         await fs.writeFile(path.join(opts.serverPluginsDir, serverId + '.js'), serverText, 'utf8')
         // 热装：宿主当场 import + 登记内核 → 后台路由即时可用，不必重启（见 hotLoad.ts）
         if (opts.hotInstall) {
@@ -329,14 +366,24 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     if (!recs[pkg]) return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
     delete recs[pkg]
     await writeRecords(recs)
-    const pkgDirName = pkg.replace(/^@/, '').replace('/', '__')
+    const pkgDirName = dirNameOf(pkg)
     const serverId = pkgDirName
-    // 只删"NPM 安装副本"目录（scope__name 形态）。
-    // 绝不删不带 scope__ 前缀的目录 —— 那可能是作者的仓库源码（如 packages/plugins/plugin-showcase）。
-    // 安全护栏：万一目录名与源码包撞名，宁可留下空目录也不删源码。
-    const removeDir = pkgDirName.includes('__')
-    if (removeDir) {
-      await fs.rm(path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName), { recursive: true, force: true })
+    // 只删"NPM 安装副本"目录。护栏：目录名必须与**我们落盘时用的名字**一致（dirNameOf(pkg)），
+    // 且位于插件目录下 —— 绝不会误删作者的仓库源码包（它的目录名是 plugin-showcase 这种，
+    // 与本函数算出的 pkgDirName 不同名时一律不动）。
+    const pluginsRoot = opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins')
+    const target = path.join(pluginsRoot, pkgDirName)
+    // 真护栏：只有当这个目录**确实是我们从 NPM 装进来的**（package.json 的 name === 该包名）才删。
+    // 这样万一目录名与作者的仓库源码包撞名（如 plugin-showcase），也绝不会误删源码。
+    let isOurInstall = false
+    try {
+      const pj = JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8')) as { name?: string }
+      isOurInstall = pj.name === pkg
+    } catch {
+      isOurInstall = false
+    }
+    if (isOurInstall) {
+      await fs.rm(target, { recursive: true, force: true })
     }
     await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
     // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）

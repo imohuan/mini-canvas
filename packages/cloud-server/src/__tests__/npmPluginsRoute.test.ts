@@ -64,6 +64,8 @@ async function makePkg(
   if (opts.withServer) await fs.writeFile(path.join(dist, 'server.js'), serverCode, 'utf8')
   const mini: Record<string, unknown> = { title: 'Demo', pluginName: 'demo' }
   if (opts.installable) mini.installable = true
+  // 结构上"是个插件"：有 pluginName + web 入口（现在的判定看结构，不看 installable）
+  mini.web = { entry: 'dist/plugin-demo.js' }
   if (opts.withServer) mini.server = { entry: 'dist/server.js' }
   const pkgJson = { name: '@mini-canvas/plugin-demo', version: opts.version, miniCanvas: mini }
   await fs.writeFile(path.join(workDir, 'payload', 'package.json'), JSON.stringify(pkgJson), 'utf8')
@@ -107,7 +109,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { installable: true },
+      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
     registry.close()
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
@@ -122,7 +124,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
   let registry: FakeRegistry | undefined
   afterEach(() => { registry?.close(); registry = undefined })
 
-  it('安全三闸：缺 confirm 400 / 非白名单 scope 400 / 非 installable 400', async () => {
+  it('安全三闸：缺 confirm 400 / 非白名单前缀 400 / 非插件（缺 pluginName）400', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
     const tgzPlain = await makePkg(dir + '-p', { installable: false, withServer: false, version: '1.0.0' })
     const packument = {
@@ -133,7 +135,11 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     // 先起 registry（tarball 映射一并给出），再用它的端口填 URL
     registry = await startFakeRegistry(packument, { '/plain.tgz': tgz, '/plain2.tgz': tgzPlain })
     const ver = (packument.versions as Record<string, unknown>)
-    ver['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/plain.tgz' }, miniCanvas: { installable: true } }
+    ver['1.0.0'] = {
+      version: '1.0.0',
+      dist: { tarball: registry.url + '/plain.tgz' },
+      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+    }
     ver['2.0.0'] = { version: '2.0.0', dist: { tarball: registry.url + '/plain2.tgz' }, miniCanvas: {} }
 
     const host = await boot(registry.url)
@@ -154,7 +160,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { installable: true },
+      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
 
     const host = await boot(registry.url)
@@ -184,8 +190,8 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     const tgzV11 = await makePkg(dir2, { installable: true, withServer: true, version: '1.1.0' })
     const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, { '/v1.tgz': tgzV1, '/v11.tgz': tgzV11 })
-    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, miniCanvas: { installable: true } }
-    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, miniCanvas: { installable: true } }
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
+    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
 
     const host = await boot(registry.url)
     await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', version: '1.0.0', confirm: true })

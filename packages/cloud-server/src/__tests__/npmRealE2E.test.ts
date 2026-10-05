@@ -36,7 +36,7 @@ describe('NPM 路由 · 真 registry（只读）', () => {
     const res = await srv.app.fetch(new Request('http://x/api/npm-plugins/install', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ package: '@imohuan/plugin-not-exist-xyz', confirm: true }),
+      body: JSON.stringify({ package: 'mini-canvas-plugin-not-exist-xyz', confirm: true }),
     }))
     expect(res.status).toBe(404)
     srv.stop()

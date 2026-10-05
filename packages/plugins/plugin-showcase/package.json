@@ -1,12 +1,11 @@
 {
-  "name": "@imohuan/plugin-showcase",
-  "version": "1.0.5",
+  "name": "mini-canvas-plugin-showcase",
+  "version": "1.0.6",
   "description": "插件展示 —— 前后台成对的示例插件：演示 routes/store/jobs/mcp/agent 五个后台能力 + 在线测试/在线文档面板",
   "type": "module",
   "license": "MIT",
   "miniCanvas": {
-    "installable": true,
-    "publishedTo": "npm:@imohuan/plugin-showcase",
+    "_comment": "installable 已注释：本插件已发布到 NPM（mini-canvas-plugin-showcase），改由插件管理从 NPM 安装；仓库这份只作开发源 + 构建用，不再进本地插件列表（避免与 NPM 装的那份重复）。",
     "title": "插件展示",
     "description": "在线测试 + 在线文档：演示后台五能力（路由/存储/定时/MCP/Agent）与前端插槽注册，装上即生效",
     "pluginName": "showcase",
