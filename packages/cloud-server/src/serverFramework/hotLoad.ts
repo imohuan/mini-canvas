@@ -105,19 +105,22 @@ export async function hotInstallServerPlugin(
 export function hotUninstallServerPlugin(ctx: PluginScope, id: string, knownName?: string): HotLoadResult {
   const runtime = runtimeOf(ctx)
   if (!runtime) return { ok: false, error: "宿主未提供运行期装卸能力（ctx.runtime）" }
+  // 候选名按"最可能→最不像"排列，逐个试（摘到就停）。
+  //
+  // 为什么需要从包名推导（而不只靠装时记下的真名）：**启动装载**的插件不走热装，
+  // hotLoaded/installedNames 里没有它 —— 此时只能从 id 现推。实测（重启后卸载）：
+  // id 是 mini-canvas-plugin-showcase、真名是 showcase，不推就摘不掉，后台变幽灵。
+  // 顺序很关键：先真名（准），再逐步剥离包前缀（-plugin- / 前缀-），最后才用 id 本身。
   const candidates = [
     knownName,
     hotLoaded.get(id), // 热装时记下的真名（最准）
     installedNames.get(id),
-    id,
-    id.replace(/^[^_]*__/, ""),
-    id.replace(/__/g, "-"),
-    // 兜底：去掉常见包前缀后剩下的部分（mini-canvas-plugin-showcase → showcase）
-    id.replace(/^mini-canvas-plugin-/, ""),
+    // 从包名推真名：mini-canvas-plugin-showcase → showcase；@scope/name → name
+    id.replace(/^@?[a-z0-9-]*-plugin-/, ""),
     id.replace(/^mini-canvas-/, ""),
-  ].filter(
-    (x): x is string => typeof x === "string" && x.length > 0,
-  )
+    id.replace(/^@/, "").replace(/^[^/]+\//, ""),
+    id,
+  ].filter((x): x is string => typeof x === "string" && x.length > 0)
   try {
     for (const name of candidates) {
       if (runtime.uninstall(name)) {
