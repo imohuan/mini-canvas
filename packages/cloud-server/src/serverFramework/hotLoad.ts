@@ -27,6 +27,33 @@ const hotLoaded = new Map<string, string>()
 /** 取"运行期热装且仍活着"的插件名（server-plugins 路由的 loaded 用） */
 export function hotLoadedNames(): string[] { return [...hotLoaded.values()] }
 
+/**
+ * 把一个共享数组接到热装/热卸上：装载时把插件名推进去，卸载时摘掉。
+ *
+ * 为什么需要：`serverPluginsLoaded` 是启动时算好的快照，热装的插件不在里面 ——
+ * 插件自省（如 showcase 的 hello.plugins）与诊断都看不到它（实测）。这里让那份快照
+ * **活着**：热装推入、热卸移除，读它的人拿到的始终是最新集合。
+ */
+export function bindHotLoadedTracking(sink: string[]): void {
+  // 绑定那一刻 sink 里的 = 启动登记的那批 —— **永不摘除**（它们不是热装的）。
+  hotLoadedSinks.set(sink, new Set(sink))
+  syncSink(sink)
+}
+
+/** sink → 它绑定时的启动名单（这些永不摘除） */
+const hotLoadedSinks = new Map<string[], Set<string>>()
+/** 把 sink 对齐到当前 hotLoaded 集合：热装的补进去；已卸的摘掉（但不动启动登记的那批） */
+function syncSink(sink: string[]): void {
+  const bootNames = hotLoadedSinks.get(sink) ?? new Set<string>()
+  const live = new Set(hotLoaded.values())
+  for (let i = sink.length - 1; i >= 0; i--) {
+    const n = sink[i]!
+    if (!live.has(n) && !bootNames.has(n)) sink.splice(i, 1)
+  }
+  for (const n of live) if (!sink.includes(n)) sink.push(n)
+}
+function syncAllSinks(): void { for (const s of hotLoadedSinks.keys()) syncSink(s) }
+
 
 export interface HotLoadResult {
   ok: boolean
@@ -62,6 +89,7 @@ export async function hotInstallServerPlugin(
     runtime.install(candidate)
     installedNames.set(id, candidate.name)
     hotLoaded.set(id, candidate.name)
+    syncAllSinks()
     return { ok: true, name: candidate.name }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -95,12 +123,14 @@ export function hotUninstallServerPlugin(ctx: PluginScope, id: string, knownName
       if (runtime.uninstall(name)) {
         installedNames.delete(id)
         hotLoaded.delete(id)
+        syncAllSinks()
         return { ok: true }
       }
     }
     // 内核里确实没有：仍要清掉加载记录，否则列表留幽灵项
     installedNames.delete(id)
     hotLoaded.delete(id)
+    syncAllSinks()
     return { ok: false, error: "内核里没有该插件（可能从未装载）：" + id }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

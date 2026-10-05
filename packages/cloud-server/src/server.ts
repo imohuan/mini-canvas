@@ -25,6 +25,7 @@ import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
 import type { Context } from '@mini-canvas/kernel'
 import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFramework/pluginLoader.js'
+import { bindHotLoadedTracking } from './serverFramework/hotLoad.js'
 import { listPluginMcpTools } from './serverFramework/mcp.js'
 import { CanvasDocument } from './mcp/canvasDoc.js'
 import { TOOL_LIST } from './mcp/server.js'
@@ -298,7 +299,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         (scannedServerPlugins.failures.length > 0 ? '；失败 ' + scannedServerPlugins.failures.length + ' 个' : ''),
     )
   }
+  // 注入一个**活的共享数组**：启动登记的那批 + 运行期热装/热卸都要反映在它身上。
+  // 为什么不能只注入启动快照：热装的插件不在快照里，插件自省/诊断都看不到它
+  // （实测：从 NPM 装完 hello.plugins 为空）。hotLoad 会往这个数组里增删。
   host.ctx.inject('serverPluginsLoaded', registeredServerPlugins)
+  bindHotLoadedTracking(registeredServerPlugins)
 
   // ④ MCP 直挂（**不收敛成插件**：SDK transport，与「代理 handler」模型不兼容）。
   //    ui 静态托管放在最后（见 ⑤ 的 afterRoutes）——它是兜底通配，必须排在插件路由之后。
