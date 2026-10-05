@@ -6,6 +6,7 @@
   "license": "MIT",
   "miniCanvas": {
     "installable": true,
+    "publishedTo": "npm:@imohuan/plugin-showcase",
     "title": "插件展示",
     "description": "在线测试 + 在线文档：演示后台五能力（路由/存储/定时/MCP/Agent）与前端插槽注册，装上即生效",
     "pluginName": "showcase",

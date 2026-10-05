@@ -289,4 +289,37 @@ describe('插件资源投放：不只发 js', () => {
     expect(demo[0].id, '保留已装副本（卸载只删它，不动源码）').toBe('mini-canvas__plugin-demo')
     srv.stop()
   })
+
+  it('声明了 publishedTo 的源码包不列入（NPM 装的那份才列），避免重复', async () => {
+    const dir = await makePluginsDir({
+      // 仓库源码包：已发布到 NPM → 不列
+      'plugin-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: {
+          name: '@mini-canvas/plugin-demo',
+          version: '1.0.0',
+          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', publishedTo: 'npm:@mini-canvas/plugin-demo' },
+        },
+      },
+      // NPM 装进来的副本：带同样的 publishedTo，但要照常列（它是安装结果）
+      'mini-canvas__plugin-demo': {
+        file: 'plugin-demo.js',
+        content: UMD('MiniCanvasPluginDemo'),
+        pkg: {
+          name: '@mini-canvas/plugin-demo',
+          version: '1.0.0',
+          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', publishedTo: 'npm:@mini-canvas/plugin-demo' },
+        },
+      },
+    })
+    const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-pub-')), pluginsDir: dir, watchProviders: false })
+    const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as {
+      plugins: Array<{ id: string }>
+      skipped: Array<{ file: string; reason: string }>
+    }
+    expect(body.plugins.map((p) => p.id)).toEqual(['mini-canvas__plugin-demo'])
+    expect(body.skipped.some((s) => s.file === 'plugin-demo' && s.reason.includes('publishedTo'.replace('publishedTo', 'NPM')))).toBe(true)
+    srv.stop()
+  })
 })

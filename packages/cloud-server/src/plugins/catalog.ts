@@ -136,6 +136,13 @@ interface PkgJson {
     defaultInstalled?: boolean
     /** 是否交给插件管理安装（默认 false，见文件头说明） */
     installable?: boolean
+    /**
+     * 这个包的正规发布来源（如 "npm:@imohuan/plugin-showcase"）。
+     *
+     * 有它 = 仓库里这份只是**开发源**，插件应从该来源安装 → catalog **不列它**，
+     * 以免与 NPM 装进来的那份重复（用户实测：同一个插件显示两份）。
+     */
+    publishedTo?: string
     /** 插件在画布里的真实名字（= 源码 export 的 name） */
     pluginName?: string
    /** 是否自带（随应用冷启动、不可装卸）；见 PluginCatalogEntry.builtin */
@@ -192,6 +199,16 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     //   · builtin: true     —— 自带（冷启动装配），**只读展示**、不给安装/卸载。
     const isInstallable = pkg.miniCanvas?.installable === true
     const isBuiltin = pkg.miniCanvas?.builtin === true
+    // 声明了 publishedTo 的包 = 它的正规来源是 NPM（仓库这份只是开发源）。
+    // 不列它：否则 NPM 装的那份与它会同时出现在插件列表里（用户实测：重复两份）。
+    //
+    // ⚠️ 只跳过**仓库源码目录**（id 无 scope__ 前缀）：publishedTo 会随包一起发布，
+    // NPM 装进来的副本（id 形如 scope__name）也带这个字段 —— 它是安装结果，必须照常列。
+    const isInstalledCopy = pkgName.includes('__')
+    if (!isInstalledCopy && typeof pkg.miniCanvas?.publishedTo === 'string' && pkg.miniCanvas.publishedTo) {
+      skipped.push({ file: pkgName, reason: '已发布到 ' + pkg.miniCanvas.publishedTo + '（经插件管理从 NPM 安装，不在本地列表重复展示）' })
+      continue
+    }
     if (!isInstallable && !isBuiltin) {
       skipped.push({ file: pkgName, reason: '未声明 miniCanvas.installable / builtin（不在插件管理里展示）' })
       continue
