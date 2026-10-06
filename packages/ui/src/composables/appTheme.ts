@@ -159,3 +159,41 @@ export async function clearLegacyThemeModeKey(): Promise<void> {
     /* 后台没连 / 已删过：忽略 */
   }
 }
+
+/** 服务端 KV 变更广播的事件形状（cloud-server /api/kv/events） */
+interface KvChangeEventLike {
+  type: string
+  key: string
+}
+
+/**
+ * 订阅云端配置变更：别的页面/别的标签改了 `config/settings`，这里重新读一份并回调。
+ *
+ * 为什么需要：首页只在挂载时读一次配置 —— 用户开着两个标签页，在画布页改了强调色，
+ * 另一个标签的首页会一直显示旧颜色，直到手动刷新。接上后台的 KV 变更广播
+ * （cloud-server 的 `/api/kv/events`，SSE）后闭环：谁改了都立刻同步。
+ *
+ * 无 EventSource（node 测试/极端环境）或后台没连 → 返回 no-op dispose，不抛错。
+ */
+export function watchCloudSettings(onChange: (values: AppSettings) => void): () => void {
+  if (typeof EventSource === 'undefined') return () => {}
+  const es = new EventSource('/api/kv/events')
+  let closed = false
+  es.onmessage = (e: MessageEvent<string>): void => {
+    if (closed) return
+    try {
+      const event = JSON.parse(e.data) as KvChangeEventLike
+      // 只认「配置总表」这一条：别的 key（插件清单等）变了与主题无关
+      if (event.type !== 'config' || event.key !== SETTINGS_KV_KEY) return
+      void loadAppSettings().then((r) => {
+        if (!closed && r.source === 'cloud') onChange(r.values)
+      })
+    } catch {
+      /* 坏数据/断线：安静收场，下次广播再试 */
+    }
+  }
+  return () => {
+    closed = true
+    es.close()
+  }
+}

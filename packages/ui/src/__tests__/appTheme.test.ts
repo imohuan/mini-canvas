@@ -22,6 +22,7 @@ import {
   applyAppTheme,
   saveThemeMode,
   clearLegacyThemeModeKey,
+  watchCloudSettings,
 } from '../composables/appTheme'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -219,5 +220,82 @@ describe('两套配置的老路不许复活', () => {
     for (const sub of ['components', 'composables']) walk(path.join(PKG_ROOT, 'src', sub))
 
     expect(offenders, `这些文件仍在用旧键 ${LEGACY_THEME_MODE_KV_PATH}，请改走 appTheme：\n${offenders.join('\n')}`).toEqual([])
+  })
+})
+
+/**
+ * 跨标签页实时同步：别的页面（画布页/另一个首页标签）改了配置，已打开的首页要**立刻**跟上，
+ * 不该等用户手动刷新。
+ *
+ * 用户实测场景：两个标签页开着，在画布页把强调色改了，另一个标签页的首页还是旧颜色 ——
+ * 因为首页只在挂载时读一次。接上后台的 KV 变更广播（/api/kv/events）后这才闭环。
+ */
+describe('首页订阅配置变更（跨标签页实时同步）', () => {
+  class FakeEventSource {
+    static instances: FakeEventSource[] = []
+    url: string
+    onmessage: ((e: { data: string }) => void) | null = null
+    onerror: (() => void) | null = null
+    closed = false
+    constructor(url: string) {
+      this.url = url
+      FakeEventSource.instances.push(this)
+    }
+    close(): void {
+      this.closed = true
+    }
+    /** 测试用：模拟服务端广播一条 KV 变更 */
+    emit(type: string, key: string): void {
+      this.onmessage?.({ data: JSON.stringify({ type, key }) })
+    }
+  }
+
+  beforeEach(() => {
+    FakeEventSource.instances = []
+    vi.stubGlobal('EventSource', FakeEventSource as unknown)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('config/settings 变了 → 重新读一份并回调（带上最新值）', async () => {
+    const seen: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', async (url: string) => {
+      expect(String(url)).toBe(SETTINGS_KV_PATH)
+      return { ok: true, status: 200, json: async () => ({ value: { themeMode: 'dark', accentColorDark: '#920000' } }) }
+    })
+
+    const dispose = watchCloudSettings((v) => void seen.push(v))
+    const es = FakeEventSource.instances[0]
+    expect(es).toBeTruthy()
+    expect(es.url).toBe('/api/kv/events')
+
+    es.emit('config', 'settings')
+    await vi.waitFor(() => expect(seen).toHaveLength(1))
+    expect(seen[0].themeMode).toBe('dark')
+    expect(seen[0].accentColorDark).toBe('#920000')
+
+    // 别的 key 变了不触发（比如 plugin-manager:installed）
+    es.emit('config', 'plugin-manager:installed')
+    await new Promise((r) => setTimeout(r, 30))
+    expect(seen).toHaveLength(1)
+
+    dispose()
+    expect(es.closed).toBe(true)
+  })
+
+  it('服务端广播断线/坏数据时安静收场，不抛错', async () => {
+    const seen: unknown[] = []
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('offline')
+    })
+    const dispose = watchCloudSettings((v) => void seen.push(v))
+    const es = FakeEventSource.instances[0]
+    es.onmessage?.({ data: 'not-json' })
+    es.emit('config', 'settings')
+    await new Promise((r) => setTimeout(r, 30))
+    expect(seen).toHaveLength(0)
+    dispose()
+    expect(es.closed).toBe(true)
   })
 })

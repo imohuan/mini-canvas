@@ -12,7 +12,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
-import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode } from '../composables/appTheme'
+import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 
 const router = useRouter()
 const projects = ref<ProjectSummary[]>([])
@@ -32,6 +32,8 @@ const assets = ref<AssetSummary[]>([])
 const theme = ref<'dark' | 'light'>('dark')
 /** 配色落值的 dispose（解除订阅 + 清内联覆盖）；切页/卸载时收回 */
 let disposeTheme: (() => void) | undefined
+/** 云端配置变更订阅（别的标签/画布页改了配置，这里立刻跟上）的 dispose */
+let disposeSettingsWatch: (() => void) | undefined
 
 /** 把当前这份设置套到页面上（主题模式 + 配色，一处生效） */
 function applyTheme(values: Record<string, unknown>): void {
@@ -67,11 +69,19 @@ onMounted(() => {
   void clearLegacyThemeModeKey()
   void loadTheme()
   void refresh()
+  // 跨标签页实时同步：画布页（或另一个首页标签）改了配置 → 立刻重读并重套主题。
+  // 没有这一步的话，先打开的标签会一直显示旧颜色，直到手动刷新（用户实测报过）。
+  disposeSettingsWatch = watchCloudSettings((values) => {
+    if (values.themeMode === 'light' || values.themeMode === 'dark') theme.value = values.themeMode
+    applyTheme(values)
+  })
 })
 onBeforeUnmount(() => {
   // 撤掉配色落值（解除订阅 + 清掉 <html> 上的内联覆盖），避免切页后残留
   disposeTheme?.()
   disposeTheme = undefined
+  disposeSettingsWatch?.()
+  disposeSettingsWatch = undefined
 })
 
 /** 切左栏页签：进「资产」时拉一次资产清单 */
