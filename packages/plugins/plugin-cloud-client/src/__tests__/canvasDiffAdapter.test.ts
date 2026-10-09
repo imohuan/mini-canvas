@@ -3,7 +3,6 @@ import { CanvasDiffAdapter } from '../canvasDiffAdapter'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
 
-const REF = 'res:0123456789abcdef.png'
 const URL = '/api/canvases/default/resources/0123456789abcdef.png'
 
 /** 假后端：存着当前的 nodes / edges / view，并记录收到的增量写 */
@@ -21,9 +20,12 @@ function fakeBackend(initial: { nodes?: unknown[]; edges?: unknown[]; view?: unk
       }
       return new Response(JSON.stringify({ ok: false }), { status: 404 })
     }
-    if (path.startsWith('/api/canvases/default/resources')) {
+    if (path.startsWith('/api/canvases/default/resources?')) {
       uploads.push({ path, name: decodeURIComponent(path.split('?name=')[1] ?? '') })
-      return new Response(JSON.stringify({ ok: true, ref: 'res:fedcba9876543210.png', hashName: 'fedcba9876543210.png' }), { status: 200 })
+      return new Response(
+        JSON.stringify({ ok: true, hashName: 'fedcba9876543210.png', url: '/api/canvases/default/resources/fedcba9876543210.png' }),
+        { status: 200 },
+      )
     }
     const body = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
     writes.push({ path, body })
@@ -42,9 +44,9 @@ function fakeBackend(initial: { nodes?: unknown[]; edges?: unknown[]; view?: unk
   return { api: new CloudApi({ baseUrl: 'http://srv', fetchImpl }), writes, uploads, get nodes() { return nodes } }
 }
 
-describe('读：把 res: 展开成真地址', () => {
-  it('读出来的节点里，资源字段已经是完整地址（渲染组件直接就能用）', async () => {
-    const b = fakeBackend({ nodes: [{ id: 'n1', type: 'image', data: { imageUrl: REF, text: 'hi' } }] })
+describe('读：节点原样返回（资源字段里就是同源 URL）', () => {
+  it('读出来的节点一个字段都不动（渲染组件直接就能用）', async () => {
+    const b = fakeBackend({ nodes: [{ id: 'n1', type: 'image', data: { imageUrl: URL, text: 'hi' } }] })
     const adapter = new CanvasDiffAdapter(b.api)
     const nodes = (await adapter.get('canvas:graph')) as Array<{ data: { imageUrl: string; text: string } }>
     expect(nodes[0].data.imageUrl).toBe(URL)
@@ -58,7 +60,7 @@ describe('读：把 res: 展开成真地址', () => {
   })
 })
 
-describe('写：只发差异，且磁盘上只存 res:', () => {
+describe('写：只发差异，节点里的资源地址原样发', () => {
   it('首次保存 = 全是新增', async () => {
     const b = fakeBackend()
     const adapter = new CanvasDiffAdapter(b.api)
@@ -90,13 +92,13 @@ describe('写：只发差异，且磁盘上只存 res:', () => {
     expect((b.writes[0].body.add as unknown[] | undefined)?.length ?? 0).toBe(0)
   })
 
-  it('写出去的节点里，本画布地址被收回 res:（磁盘上只存相对引用）', async () => {
+  it('写出去的节点里，资源地址原样发（就是同源 URL）', async () => {
     const b = fakeBackend()
     const adapter = new CanvasDiffAdapter(b.api)
     await adapter.primeFromServer()
     await adapter.set('canvas:graph', [{ id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { imageUrl: URL } }])
     const added = b.writes[0].body.add as Array<{ data: { imageUrl: string } }>
-    expect(added[0].data.imageUrl).toBe(REF)
+    expect(added[0].data.imageUrl).toBe(URL)
   })
 
   it('保存**不再上传**：字节在上传/生成时就由 resource adapter 存好了', async () => {
@@ -110,7 +112,7 @@ describe('写：只发差异，且磁盘上只存 res:', () => {
     ])
     expect(b.uploads).toHaveLength(0)
     const added = b.writes[0].body.add as Array<{ data: { imageUrl: string; resourceId: string } }>
-    expect(added[0].data.imageUrl).toBe(REF)
+    expect(added[0].data.imageUrl).toBe(URL)
   })
 })
 
@@ -149,18 +151,58 @@ describe('失败时不丢改动', () => {
   })
 })
 
-describe('恢复：服务器上的 res: 引用要展开成真地址（否则浏览器渲染不出来）', () => {
-  it('getRaw 读回来的节点里，资源字段已是当前画布的真地址', async () => {
+describe('恢复：服务器那份原样交给渲染层', () => {
+
+/**
+ * 出组 / 解组的持久化（真 bug 回归，2026-10-08 实测）。
+ *
+ * 服务端把「对象里没有 parentId 这个 key」读成「这次没提这个字段」，只有显式 `null`
+ * 才执行删除。而本地节点出组后就是根本没有这个 key —— 于是「拖出分组 / 解散分组」
+ * 写上去等于没写：刷新后节点又回到组里，组被删时还会留下悬挂 parentId。
+ */
+describe('出组持久化：解除父子要发显式 parentId: null', () => {
+  it('本地去掉 parentId → 增量里带 parentId: null（服务端据此删字段）', async () => {
+    const grouped = { id: 'n1', type: 'image', position: { x: 10, y: 10 }, data: {}, parentId: 'g1' }
+    const b = fakeBackend({ nodes: [grouped] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+    // 出组后的本地形状：parentId 键**不存在**（不是 null）
+    const out = { id: 'n1', type: 'image', position: { x: 10, y: 10 }, data: {} }
+    expect('parentId' in out).toBe(false)
+    await adapter.set('canvas:graph', [out])
+    expect(b.writes).toHaveLength(1)
+    const upd = b.writes[0].body.update as Array<Record<string, unknown>>
+    expect(upd).toHaveLength(1)
+    expect(upd[0].parentId).toBeNull()
+  })
+
+  it('一直在组里（没变）→ 不发任何请求，也不会被塞 null', async () => {
+    const grouped = { id: 'n1', type: 'image', position: { x: 10, y: 10 }, data: {}, parentId: 'g1' }
+    const b = fakeBackend({ nodes: [grouped] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+    await adapter.set('canvas:graph', [{ ...grouped }])
+    expect(b.writes).toHaveLength(0)
+  })
+
+  it('只是换了个组（g1 → g2）→ 原样送新父，不塞 null', async () => {
+    const grouped = { id: 'n1', type: 'image', position: { x: 10, y: 10 }, data: {}, parentId: 'g1' }
+    const b = fakeBackend({ nodes: [grouped] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+    await adapter.set('canvas:graph', [{ ...grouped, parentId: 'g2' }])
+    const upd = b.writes[0].body.update as Array<Record<string, unknown>>
+    expect(upd[0].parentId).toBe('g2')
+  })
+})
+  it('getRaw 读回来的节点里，资源字段就是同源 URL', async () => {
     const b = fakeBackend({
-      nodes: [{ id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { imageUrl: REF, imageName: 'a.png' } }],
+      nodes: [{ id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { imageUrl: URL, imageName: 'a.png' } }],
     })
     const adapter = new CanvasDiffAdapter(b.api)
     const snap = await adapter.getRaw()
     const node = snap.nodes[0] as { data: { imageUrl: string; imageName: string } }
     expect(node.data.imageUrl).toBe(URL)
-    expect(node.data.imageUrl.startsWith('res:')).toBe(false)
     expect(node.data.imageName).toBe('a.png')
   })
 })
-
-

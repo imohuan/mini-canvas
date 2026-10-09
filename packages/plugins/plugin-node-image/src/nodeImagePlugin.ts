@@ -11,7 +11,7 @@
  *
  * 红线：只做最简 image（content 显示 data.imageUrl）。M6 复杂件（裁剪/蒙版/扩展/backend）不在此包。
  */
-import { Service, type PluginModule, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
+import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import ImageContent from './ImageContent.vue'
@@ -86,6 +86,17 @@ const NODE_ICON =
  * 那时一次性把实现与测试一起补上；现在留着只会让人以为能调。
  */
 export const Config: ConfigSchema = {
+  // —— 「布局 / 图片节点尺寸」：新节点默认尺寸（改完实时生效，未 resize 过的节点跟着变）——
+  imageDefaultWidth: {
+    type: 'number', default: 320, min: 80, max: 2000, step: 10,
+    label: '默认宽', group: '布局/图片节点尺寸',
+    description: '图片节点没有自己的尺寸时用的宽度（px）。改完立即生效：没被手动拖过尺寸的图片节点会立刻跟着变。',
+  },
+  imageDefaultHeight: {
+    type: 'number', default: 240, min: 80, max: 2000, step: 10,
+    label: '默认高', group: '布局/图片节点尺寸',
+    description: '图片节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
+  },
   // —— 「布局 / 图片节点尺寸」：换图后卡片跟着图片等比缩放时的封顶 ——
   // 键名必须带本包前缀：内核 settings 是全局同一张表、先声明者独占，
   // 叫 "maxWidth" 这种通用名会和其他插件抢同一个键。
@@ -167,10 +178,16 @@ export function apply(ctx: Context) {
       // 扩展框还要能画到卡片之外（扩出来的部分本来就在原图外面），只有这一层做得到。
       'over:inset': ImageFrameOverlay,
     },
-    create(position) {
-      return image.addImageNode(position, '')
+    create(position, extra) {
+      // extra 里带 imageUrl 时直接建出有图的节点（右键菜单 / 资产「添加到画布」/ command:create-node 都走这里）。
+      // 之前忽略了 extra —— 于是这类调用建出来的是**空白图片节点**（用户实测报过）。
+      const url = (extra as { imageUrl?: unknown } | undefined)?.imageUrl
+      return image.addImageNode(position, typeof url === 'string' ? url : '')
     },
   })
+
+  // 2b. 默认尺寸接设置面板：改完**实时**生效（没 resize 过的图片节点立刻跟着变）
+  bindTypeDefaultSize(ctx, 'image', { w: 320, h: 240 }, { widthKey: 'imageDefaultWidth', heightKey: 'imageDefaultHeight' })
 
   // 3. 命令：界面按钮与命令走**同一批实现**（uploadImage/cropImage/rotateImage/downloadImageNode）——
   //    按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。

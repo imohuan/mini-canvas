@@ -164,3 +164,28 @@ describe('实时通道', () => {
     expect(() => api.subscribeChanges(() => {})()).not.toThrow()
   })
 })
+
+describe('资源上传', () => {
+  it('拿到 hashName 就够：地址由它拼出', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({
+      body: { ok: true, hashName: 'abc123.png' },
+    }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const r = await api.uploadResource('default', new Blob([new Uint8Array([1])]), 'a.png')
+    expect(r.url).toBe('/api/canvases/default/resources/abc123.png')
+    expect(calls[0].url).toBe('http://srv/api/canvases/default/resources?name=a.png')
+  })
+
+  it('画布 id 跟着走（多画布各传各的目录）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ body: { ok: true, hashName: 'abc123.png' } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const r = await api.uploadResource('c1', new Blob([new Uint8Array([1])]), 'a.png')
+    expect(r.url).toBe('/api/canvases/c1/resources/abc123.png')
+  })
+
+  it('没有 hashName → 抛（地址拼不出来，不能静默给个假地址）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ body: { ok: true } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.uploadResource('c1', new Blob([new Uint8Array([1])]), 'a.png')).rejects.toThrow()
+  })
+})

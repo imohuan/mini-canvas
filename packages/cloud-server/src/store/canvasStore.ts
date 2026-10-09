@@ -11,8 +11,8 @@
  * 「从未保存过」与「保存过一张空画布」—— 空画布刷新后不该重新长出默认节点。
  */
 import { promises as fs } from 'node:fs'
-import { canvasDir, canvasFilePath, canvasesRoot } from './canvasPaths.js'
-import { atomicWriteJson } from './atomicWrite.js'
+import { canvasDir, canvasFilePath, canvasResourcesDir, canvasesRoot } from './canvasPaths.js'
+import { atomicWriteJson, atomicWriteText } from './atomicWrite.js'
 
 /** 画布本体。name / createdAt 是画布信息，随节点边一起住 canvas.json */
 export interface CanvasData {
@@ -145,6 +145,48 @@ export class CanvasStore {
    */
   async remove(id: string): Promise<void> {
     await fs.rm(canvasDir(this.root, id), { recursive: true, force: true })
+  }
+
+  /**
+   * 把一张画布的内容**复制进另一张已存在的画布文件夹**（「复制画布」用）。
+   *
+   * 复制的范围：节点 + 边 + 资源字节 + 生成历史。
+   * **视口不复制** —— 复制是为了分享内容，不是分享「我当时看到哪儿」（设计文档已定）。
+   *
+   * 关键一步是**改写资源地址里的画布 id**：节点里存的是同源 URL
+   * `/api/canvases/<画布id>/resources/<哈希>`，不换 id 的话副本里的图全都指回原画布
+   * （原画布一删，副本全裂）。换掉之后副本自包含，与「复制文件夹 = 复制画布」同义。
+   */
+  async copyInto(fromId: string, toId: string, name?: string): Promise<void> {
+    const src = await this.readCanvas(fromId)
+    const fromMarker = '/api/canvases/' + fromId + '/resources/'
+    const toMarker = '/api/canvases/' + toId + '/resources/'
+    // 资源字节整目录拷一份：文件夹自包含的代价（不复用去重），设计文档已认。
+    try {
+      await fs.cp(canvasResourcesDir(this.root, fromId), canvasResourcesDir(this.root, toId), {
+        recursive: true,
+      })
+    } catch (err) {
+      if (!isNotFound(err)) throw err
+    }
+    // 节点/边：走 JSON 文本级替换（画布 id 是白名单字符，不会碰坏 JSON 结构）。
+    const rewrite = (value: unknown): unknown =>
+      JSON.parse(JSON.stringify(value ?? []).split(fromMarker).join(toMarker))
+    await this.writeCanvas(toId, {
+      nodes: rewrite(src?.nodes) as unknown[],
+      edges: rewrite(src?.edges) as unknown[],
+      // 名字用调用方给的（副本要叫「原名字 副本」）；没给才继承原画布的名字
+      ...(name !== undefined ? { name } : src?.name !== undefined ? { name: src.name } : {}),
+      createdAt: Date.now(),
+    })
+    // 生成历史：同样换地址（历史里的产物地址也带画布 id）；读不到就当没有。
+    const history = await readJson(canvasFilePath(this.root, fromId, 'history'))
+    if (history !== undefined) {
+      await atomicWriteText(
+        canvasFilePath(this.root, toId, 'history'),
+        JSON.stringify(history).split(fromMarker).join(toMarker),
+      )
+    }
   }
 }
 

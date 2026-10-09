@@ -133,11 +133,13 @@ describe('KV：设置 / 快捷这类小数据仍按 key 存', () => {
 })
 
 describe('画布资源：POST/GET /api/canvases/:id/resources', () => {
-  it('上传 → 返回 res: 引用，回读字节完全一致', async () => {
+  it('上传 → 返回同源 URL，回读字节完全一致', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3])
     const up = await call('POST', '/api/canvases/default/resources?name=a.png', bytes)
     expect(up.status).toBe(200)
-    expect(up.json.ref).toMatch(/^res:[0-9a-f]{16}\.png$/)
+    // 写入侧统一成 URL：前端 / AI 拿它直接写进节点 data 的 imageUrl 等字段
+    expect(up.json.url).toMatch(/^\/api\/canvases\/default\/resources\/[0-9a-f]{16}\.png$/)
+    expect(up.json.url).toBe('/api/canvases/default/resources/' + up.json.hashName)
     expect(up.json.size).toBe(bytes.byteLength)
 
     const res = await srv.app.fetch(new Request('http://localhost/api/canvases/default/resources/' + up.json.hashName))
@@ -393,7 +395,7 @@ describe('MCP 与网页共用一个服务', () => {
 
   it('服务里报告了 MCP 开着、并列出工具', () => {
     expect(srv.mcpEnabled).toBe(true)
-    expect(srv.tools.map((t) => t.name)).toContain('canvas.batch_nodes')
+    expect(srv.tools.map((t) => t.name)).toContain('canvas_batch_nodes')
   })
 
   it('--no-mcp（opts.mcp=false）时端点不存在，但网页与 KV 接口照常', async () => {

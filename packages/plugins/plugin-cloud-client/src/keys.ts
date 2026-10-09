@@ -42,10 +42,7 @@ export function canvasId(): string {
   return CANVAS_ID
 }
 
-/** 画布内资源引用前缀（与后端 RESOURCE_REF_PREFIX 一致） */
-export const RESOURCE_REF_PREFIX = 'res:'
-
-/** 需要处理"画布内引用"的媒体字段（与 canvas-data 的 RESOURCE_URL_FIELDS 一致） */
+/** 存资源地址的媒体字段（与 canvas-data 的 RESOURCE_URL_FIELDS 一致；下单前按它查有没有没上传的本地地址） */
 export const RESOURCE_URL_FIELDS = [
   'imageUrl',
   'videoUrl',

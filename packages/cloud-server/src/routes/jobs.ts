@@ -47,9 +47,25 @@ export function jobsRoutes(tasks: TaskManager): Hono {
       ...(Array.isArray(o.resources) ? { resources: o.resources as JobInput['resources'] } : {}),
     }
 
+    // 409 = 冲突（该节点已有在跑的任务）；前端据此提示"任务进行中"而不是当失败
     const job = await tasks.createJob(input)
-    if ('error' in job) return c.json({ ok: false, error: job.error }, 400)
+    if ('error' in job) {
+      const busy = job.error.includes('已有任务在进行中')
+      return c.json({ ok: false, error: job.error }, busy ? 409 : 400)
+    }
     return c.json({ ok: true, jobId: job.id, status: job.status })
+  })
+
+  /**
+   * 查某个节点当前有没有在跑的任务（前端用它禁用「发送」按钮）。
+   * ★ 必须**先注册**：Hono 先注册者优先，否则 'active' 会被后面的 :jobId 当成 jobId 吃掉。
+   */
+  app.get('/api/jobs/active', (c) => {
+    const canvasId = c.req.query('canvasId') ?? ''
+    const nodeId = c.req.query('nodeId') ?? ''
+    if (!canvasId || !nodeId) return c.json({ ok: false, error: '缺少 canvasId / nodeId' }, 400)
+    const job = tasks.findJobByNode(canvasId, nodeId)
+    return c.json({ ok: true, active: job && job.status === 'running' ? { jobId: job.id, progress: job.progress } : null })
   })
 
   app.get('/api/jobs/:jobId', (c) => {

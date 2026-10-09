@@ -31,6 +31,7 @@ import type { BarAction, BarApplier, BarRunInput } from '@mini-canvas/plugin-bot
 import { McpClient } from './mcpClient'
 import { WEB2API_PRESETS } from './presets'
 import { runPreset, makeTaskPoll, type RunDeps, type RunInput } from './presetRun'
+import { prepareReferenceImages } from './referencePrep'
 
 /**
  * 本插件可配置项（P4：模块级 Config，内核装配时校验 + 补默认 + 登记进设置面板）。
@@ -90,8 +91,8 @@ export function web2apiConfigFrom(ctx: Context): {
 export const name = 'web2api-tools'
 export const inject = ['doc'] as string[]
 
-/** 上游素材 → web2api 的 referenceImages（它收"相对 uploadsDir 的路径或绝对路径"；
- *  画布里的素材是 URL，直接透传，能不能取到由服务端决定） */
+/** 上游素材 → web2api 参考图的原始地址（canvas 本站的相对地址、data/blob、外链都由它收集）；
+ *  能不能被 web2api 取到不在这里判断 —— 下单前统一走 referencePrep 上传成它的 referenceUrl。 */
 function referenceImagesOf(resources: ToolResource[] | undefined): string[] {
   return (resources ?? [])
     // 用户要求：连进来的图片/视频**都要传**（不 @ 也要传）。
@@ -122,6 +123,23 @@ export function apply(ctx: Context) {
     getTask: (taskId) => client.getTask(taskId),
     cancelTask: (taskId) => client.cancelTask(taskId),
     origin: () => client.effectiveOrigin(),
+    // 参考图整理：画布里的本地素材先上传到 web2api，换成它能直接用的 referenceUrl。
+    // 传不过去的那张会被 referencePrep 丢弃并 console.warn，不让整个任务 4002 失败。
+    prepareReferenceImages: (urls) =>
+      prepareReferenceImages(urls, {
+        webOrigin: client.effectiveOrigin(),
+        fetchBlob: async (url) => {
+          try {
+            const res = await fetch(url)
+            if (!res.ok) return undefined
+            return await res.blob()
+          } catch {
+            return undefined
+          }
+        },
+        upload: (content, mimeType) => client.uploadResource(content, mimeType),
+        onError: (msg, err) => console.warn('[web2api-tools]', msg, err ?? ''),
+      }),
     config: () => {
       const c = web2apiConfigFrom(ctx)
       return { pollIntervalMs: c.pollIntervalMs, timeoutMs: c.timeoutMs }

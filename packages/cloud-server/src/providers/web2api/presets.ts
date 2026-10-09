@@ -10,6 +10,32 @@
  */
 import type { ActionDef, ActionParam } from '../types.js'
 
+/**
+ * 各类动作的轮询节奏与**超时**（ms）。
+ *
+ * 为什么要显式给（真出过的 bug）：后台的默认超时是 5 分钟，而网页自动化的生成
+ * 远不止这个数（实测：一次成功生图 136s，视频更长，加上可能等用户过验证码/换号退避）。
+ * 不设的话视频任务在 5 分钟必被判超时失败 —— 任务还在 web2api 那边正常跑着。
+ *
+ * 终值怎么来的：
+ *   - 图片（网页自动化）：10 分钟 ≈ 成功均值 136s 的 4 倍多，留足风控/重试余量；
+ *   - 视频（网页自动化）：30 分钟（web2api 插件那条直连链路也用 30 分钟，两边一致）；
+ *   - 视频（接口式）：45 分钟（Seedance 最长 180s 成片 + 排队，且 web2api 自己的任务超时是 20 分钟、
+ *     轮询超时默认 24h —— 上游没死我们就不该先放弃）；
+ *   - 音频：10 分钟（TTS 秒级完成，留重试余量就够）。
+ *
+ * 注意「等用户过验证码」`waiting` 态不占这份预算（见 taskManager 的 waitingMs 扣减）——
+ * 这里只是普通生成中的兜底上限，不是"最多等多久"。
+ */
+const IMAGE_POLL_INTERVAL = 1500
+const IMAGE_POLL_TIMEOUT = 10 * 60_000
+const VIDEO_AUTO_POLL_INTERVAL = 4000
+const VIDEO_AUTO_POLL_TIMEOUT = 30 * 60_000
+const VIDEO_API_POLL_INTERVAL = 10_000
+const VIDEO_API_POLL_TIMEOUT = 45 * 60_000
+const AUDIO_POLL_INTERVAL = 2000
+const AUDIO_POLL_TIMEOUT = 10 * 60_000
+
 /** 常用比例（各平台枚举不同，按平台如实列） */
 function ratio(defaultValue: string, values: string[]): ActionParam {
   return {
@@ -103,30 +129,35 @@ export const WEB2API_ACTIONS: ActionDef[] = [
     title: '豆包 Seedream 4.5', description: '豆包网页 UI 自动化生图（Seedream 4.5）：比例可选；风格写在提示词里',
     group: 'web2api · 图片', nodeTypes: ['image'], needsPrompt: true,
     promptMode: 'chat-auto', mediaMode: 'image', fields: [RATIO_IMAGE_DOUBAO], order: 10,
+    pollIntervalMs: IMAGE_POLL_INTERVAL, pollTimeoutMs: IMAGE_POLL_TIMEOUT,
   },
   {
     id: 'web2api:doubao-image-seedream50lite', tool: 'doubao/chat-auto', model: 'Seedream 5.0 Lite',
     title: '豆包 Seedream 5.0 Lite', description: '豆包网页 UI 自动化生图（Seedream 5.0 Lite）：比例可选',
     group: 'web2api · 图片', nodeTypes: ['image'], needsPrompt: true,
     promptMode: 'chat-auto', mediaMode: 'image', fields: [RATIO_IMAGE_DOUBAO], order: 11,
+    pollIntervalMs: IMAGE_POLL_INTERVAL, pollTimeoutMs: IMAGE_POLL_TIMEOUT,
   },
   {
     id: 'web2api:dola-image-seedream50pro', tool: 'dola/chat-auto', model: 'Seedream 5.0 Pro',
     title: 'Dola Seedream 5.0 Pro', description: 'Dola 网页 UI 自动化生图（Seedream 5.0 Pro）；需海外网络',
     group: 'web2api · 图片', nodeTypes: ['image'], needsPrompt: true,
     promptMode: 'chat-auto', mediaMode: 'image', fields: [RATIO_IMAGE_DOLA], order: 12,
+    pollIntervalMs: IMAGE_POLL_INTERVAL, pollTimeoutMs: IMAGE_POLL_TIMEOUT,
   },
   {
     id: 'web2api:chatgpt-image', tool: 'chatgpt/generate-image',
     title: 'ChatGPT 官方', description: 'ChatGPT 官方渠道（image_gen，需登录态）：比例可选',
     group: 'web2api · 图片', nodeTypes: ['image'], needsPrompt: true,
     promptMode: 'plain', fields: [RATIO_IMAGE_CHATGPT], order: 13,
+    pollIntervalMs: IMAGE_POLL_INTERVAL, pollTimeoutMs: IMAGE_POLL_TIMEOUT,
   },
   {
     id: 'web2api:apimart-image', tool: 'apimart/generate-image',
     title: 'GPT Image 2（API）', description: 'APIMart 中转（GPT Image 2）：比例 / 分辨率 / 张数可选',
     group: 'web2api · 图片', nodeTypes: ['image'], needsPrompt: true,
     promptMode: 'plain', fields: [RATIO_IMAGE_APIMART, RESOLUTION_APIMART, COUNT_APIMART], order: 14,
+    pollIntervalMs: IMAGE_POLL_INTERVAL, pollTimeoutMs: IMAGE_POLL_TIMEOUT,
   },
 
   // ==================== 视频 ====================
@@ -135,24 +166,28 @@ export const WEB2API_ACTIONS: ActionDef[] = [
     title: '豆包 Seedance 2.0 Fast', description: '豆包网页 UI 自动化生视频：比例 / 时长 4-10 秒',
     group: 'web2api · 视频', nodeTypes: ['video'], needsPrompt: true,
     promptMode: 'chat-auto', mediaMode: 'video', fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_AUTO], order: 10,
+    pollIntervalMs: VIDEO_AUTO_POLL_INTERVAL, pollTimeoutMs: VIDEO_AUTO_POLL_TIMEOUT,
   },
   {
     id: 'web2api:dola-video-seedance25', tool: 'dola/chat-auto', model: 'Seedance 2.5',
     title: 'Dola Seedance 2.5', description: 'Dola 网页 UI 自动化生视频：时长只有 5 / 10 秒；需海外网络',
     group: 'web2api · 视频', nodeTypes: ['video'], needsPrompt: true,
     promptMode: 'chat-auto', mediaMode: 'video', fields: [RATIO_VIDEO_DOLA, DURATION_DOLA_AUTO], order: 11,
+    pollIntervalMs: VIDEO_AUTO_POLL_INTERVAL, pollTimeoutMs: VIDEO_AUTO_POLL_TIMEOUT,
   },
   {
     id: 'web2api:doubao-video-api-mini', tool: 'doubao/generate-video', model: 'seedance_v2.0_mini',
     title: '豆包 Seedance 2.0 Mini（接口）', description: '豆包接口式文生视频（异步轮询）：比例 / 时长 / 运镜',
     group: 'web2api · 视频', nodeTypes: ['video'], needsPrompt: true,
     promptMode: 'plain', fields: [RATIO_VIDEO_DOUBAO, DURATION_DOUBAO_API, CAMERA_DOUBAO], order: 12,
+    pollIntervalMs: VIDEO_API_POLL_INTERVAL, pollTimeoutMs: VIDEO_API_POLL_TIMEOUT,
   },
   {
     id: 'web2api:seedance-video-fast', tool: 'seedance/generate-video', model: 'fast',
     title: 'Seedance Fast', description: 'Seedance 平台接口式文生视频（异步轮询）：时长最长 180 秒',
     group: 'web2api · 视频', nodeTypes: ['video'], needsPrompt: true,
     promptMode: 'plain', fields: [RATIO_VIDEO_SEEDANCE, DURATION_SEEDANCE], order: 13,
+    pollIntervalMs: VIDEO_API_POLL_INTERVAL, pollTimeoutMs: VIDEO_API_POLL_TIMEOUT,
   },
 
   // ==================== 音频 ====================
@@ -161,6 +196,7 @@ export const WEB2API_ACTIONS: ActionDef[] = [
     title: '豆包·语音合成', description: '文本转语音（不开浏览器，不耗视频积分）：选音色即可',
     group: 'web2api · 音频', nodeTypes: ['audio'], needsPrompt: true,
     promptMode: 'plain', fields: [SPEAKER_DOUBAO], order: 10,
+    pollIntervalMs: AUDIO_POLL_INTERVAL, pollTimeoutMs: AUDIO_POLL_TIMEOUT,
   },
   {
     id: 'web2api:volcengine-audio', tool: 'volcengine/generate-audio',
@@ -169,5 +205,6 @@ export const WEB2API_ACTIONS: ActionDef[] = [
     promptMode: 'plain',
     fields: [FORMAT_VOLC, speed('speechRate', '语速', -50, 100, 0), speed('pitchRate', '音调', -12, 12, 0), speed('loudnessRate', '音量', -50, 100, 0)],
     order: 11,
+    pollIntervalMs: AUDIO_POLL_INTERVAL, pollTimeoutMs: AUDIO_POLL_TIMEOUT,
   },
 ]

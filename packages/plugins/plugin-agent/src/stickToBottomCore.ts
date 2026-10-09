@@ -25,3 +25,13 @@ export function isNearBottom(m: ScrollMetrics, threshold: number): boolean {
   return distanceToBottom(m) <= Math.max(0, threshold)
 }
 
+/**
+ * 是否存在滚动条（内容高于视口）。
+ *
+ * 「回到底部」悬浮按钮的显示条件之一（用户口径 2026-10-07：
+ * 检测到滚动条存在、且没有滚动到底部时才显示）。
+ * 1px 容差：亚像素高度差不值得给按钮；真要能滚起来必然差得多。
+ */
+export function hasScrollbar(m: ScrollMetrics): boolean {
+  return m.scrollHeight > m.clientHeight + 1
+}

@@ -57,7 +57,7 @@ export const Config: ConfigSchema = {
     type: 'number',
     default: DEFAULT_DRAG_THRESHOLD,
     min: 0,
-    max: 60,
+    max: 200,
     step: 1,
     label: '拖线触发距离',
     group: '节点/连线菜单',

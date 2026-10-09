@@ -149,7 +149,7 @@ describe('GET /api/kv/events（实时通道）', () => {
     const { events } = await subscribe('?type=canvas')
 
     // AI 加一个节点：走 MCP，完全不碰 /api/kv
-    await callMcp('canvas.batch_nodes', { add: [{ type: 'text', data: { text: '嗨' } }] })
+    await callMcp('canvas_batch_nodes', { add: [{ type: 'text', data: { text: '嗨' } }] })
 
     expect(await waitFor(() => events.some((e) => e.key === 'graph'))).toBe(true)
     // 边也要跟着通知（同一个写批里有 graph 与 graph-edges）

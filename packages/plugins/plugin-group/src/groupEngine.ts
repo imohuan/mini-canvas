@@ -112,7 +112,9 @@ export function computeGroupBounds(
 export function toRelativePosition(
   absX: number,
   absY: number,
-  bounds: GroupBounds,
+  /** 相对基准（左上角）。只要左上角即可 —— 调用方常有「组真实绝对左上」而没有宽高，
+   *  以前收窄成 GroupBounds 会逼调用方凭空造 w/h（造出来的值还会被误当成生效值）。 */
+  bounds: { x: number; y: number },
 ): { x: number; y: number } {
   return { x: absX - bounds.x, y: absY - bounds.y }
 }
@@ -254,4 +256,35 @@ export function selectDownloadableGroupChildren<T extends { id: string; parentId
 /** 取一个节点的展示类型（兼容 data.nodeType 与 type 字段） */
 export function getNodeType(node: { type?: string; data?: { nodeType?: string } }): string {
   return node.data?.nodeType || node.type || ''
+}
+
+/** 分组服务在**组件侧**需要的那一小块（只要 ungroup；不 import 服务实现，避免组件↔插件成环） */
+export interface GroupServiceLike {
+  ungroup(groupId: string): void
+}
+
+/** 能被本函数认的服务表（根 Context / 插件 scope 都满足；两个口都是可选的） */
+export interface ServiceTableLike {
+  tryGet?(name: string): unknown
+  get?(name: string): unknown
+}
+
+/**
+ * 从服务表里取「分组服务」—— 组件侧取 group 服务的**唯一入口**。
+ *
+ * 为什么必须走 tryGet/get、**不能**写 `ctx.group`（真 bug，2026-10-08 实测：点「解散分组」没反应）：
+ * `ctx.<服务名>` 这种直访是靠「每个插件自己的 scope 代理」实现的（kernel Context.ts 里 new Proxy：
+ * 属性读命中已上架服务名才转发）。而节点工具栏组件经 `useCanvasRender()` 拿到的是**根 Context** ——
+ * 根 Context 没有那层代理，`ctx.group` 恒为 undefined；再配上可选链 `?.`，就变成「点得动、什么也不发生」
+ * 的静默失败。同仓其它工具栏组件一律走 `ctx.get/tryGet`，这里对齐并抽成函数，好让 node 单测盯住。
+ *
+ * @param ctx 服务表（根 Context / 插件 scope / 测试替身都行）
+ * @returns 认得出的分组服务；缺服务或形状不对给 undefined（调用方按「没这能力」处理）
+ */
+export function groupServiceOf(ctx: ServiceTableLike | undefined): GroupServiceLike | undefined {
+  if (!ctx) return undefined
+  // tryGet 优先（缺服务不抛）：根 Context 与插件 scope 两个口都在；只有 get 的实现照样能用
+  const svc = ctx.tryGet?.('group') ?? ctx.get?.('group')
+  if (!svc || typeof (svc as GroupServiceLike).ungroup !== 'function') return undefined
+  return svc as GroupServiceLike
 }

@@ -7,7 +7,7 @@
  *   2. 外部插件清单被读到，cloud-save 真的装上（ctx 服务在）
  *   3. 建节点/连线 → **服务器磁盘上的 json 随之变化**
  *   4. 换一个全新浏览器 profile（= 换一台机器）打开 → **画布完整恢复**  ← 云端保存的核心证据
- *   5. 大图搬上服务器 → 节点换成画布内引用 res:<hash> → 刷新后仍能取回真字节
+ *   5. 大图搬上服务器 → 节点换成同源 URL（/api/canvases/<id>/resources/<hash>）→ 刷新后仍能取回真字节
  *   6. 全程控制台零报错、零 4xx
  *
  * 跑法（先构建 ui 与插件）：
@@ -144,8 +144,8 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   })
   check('磁盘边数 = 1', disk.edges?.length === 1, { edges: disk.edges?.length })
 
-  // 两处都要看：本地内存里已换成**可渲染的真地址**（资源引用在本地渲染不出来），
-  // 去重的证据在磁盘上（json 里只应有 res:，不该有 base64）。
+  // 两处都要看：本地内存与服务器磁盘上存的都应是**可直接渲染的同源 URL**，
+  // 去重的证据在磁盘上（json 里只应有 URL，不该有 base64）。
   const uploaded = await pageA.ev<{ imageUrl: string; status: unknown }>(
     `(() => {
        const host = window.MiniCanvasUI.getHost()
@@ -153,20 +153,21 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
        return { imageUrl: n.data.imageUrl, status: host.ctx.get('cloud-save').status() }
      })()`,
   )
-  check('本地节点里是可直接渲染的真地址（不是 res: 引用）', String(uploaded.imageUrl).includes('/resources/'), uploaded)
+  check('本地节点里是可直接渲染的真地址（画布资源 URL）', String(uploaded.imageUrl).includes('/resources/'), uploaded)
 
-  // 磁盘上的 json 才是"云端到底存了什么"的证据：必须只有 res: 引用，绝不能有 base64
+  // 磁盘上的 json 才是"云端到底存了什么"的证据：必须是同源 URL，绝不能有 base64
   const canvasJson = readFileSync(path.join(dataDir, 'canvases', 'default', 'canvas.json'), 'utf8')
   const diskNodes = (disk.nodes ?? []) as Array<{ id?: string; data?: { imageUrl?: string } }>
   const diskImg = diskNodes.find((n) => n.id === placed.id)?.data?.imageUrl
-  check('云端节点里存的是画布内相对引用 res:<hash>', String(diskImg).startsWith('res:'), { diskImg })
+  check('云端节点里存的是同源 URL（不再是 res:<hash> 内部引用）', String(diskImg).startsWith('/api/canvases/') && !String(diskImg).startsWith('res:'), { diskImg })
   check('云端画布 JSON 里没有 base64（远程不再存 base64）', !canvasJson.includes('data:image/'), {
     hasDataUrl: canvasJson.includes('data:image/'),
   })
 
   const resDir = path.join(dataDir, 'canvases', 'default', 'resources')
   const resFiles = exists(resDir) ? readdirSync(resDir) : []
-  const resName = String(diskImg).replace('res:', '')
+  // 从同源 URL 里取资源名（尾段）；取不到就空着，后面按「有没有」决定要不要核对
+  const resName = String(diskImg).split('/').pop() ?? ''
   check('本画布 resources/ 里真有这个文件（以文件形式落在磁盘上）', resFiles.includes(resName), { files: resFiles })
   if (resFiles.includes(resName)) {
     const size = statSync(path.join(resDir, resName)).size
@@ -203,7 +204,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   check('★ 换机器后连线也恢复', restored.edges === 1, { edges: restored.edges })
 
   // 图片经服务器回读（换机器后图还在，这才是真"不丢"）
-  // 节点里存的是画布内引用 res:<hash>，取字节要按"当前画布 + 资源名"拼地址
+  // 节点里存的就是画布资源的同源 URL；资源名从地址尾段取（同源地址按当前部署解析）
   if (resName) {
     const resUrl = '/api/canvases/default/resources/' + resName
     const imgBack = await pageB.ev<{ status: number; size: number }>(

@@ -109,7 +109,10 @@ describe('node-image 装配 smoke', () => {
 
     // 分组与 label 决定设置面板长在哪、叫什么
     const group = settings.groupOf('布局/图片节点尺寸')
-    expect(group.map((i) => i.key).sort()).toEqual(['imageFitMaxHeight', 'imageFitMaxWidth'])
+    // 「布局/图片节点尺寸」下现在有四项：默认宽/高（新建节点尺寸）+ 预览上限宽/高（换图后缩放封顶）
+    expect(group.map((i) => i.key).sort()).toEqual([
+      'imageDefaultHeight', 'imageDefaultWidth', 'imageFitMaxHeight', 'imageFitMaxWidth',
+    ])
     expect(group.find((i) => i.key === 'imageFitMaxWidth')?.schema.label).toBe('图片预览上限宽')
     expect(group.find((i) => i.key === 'imageFitMaxHeight')?.schema.label).toBe('图片预览上限高')
 

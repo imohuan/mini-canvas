@@ -1,22 +1,33 @@
 /**
  * referenceMarkup（服务端一份）—— 解析用户消息里的**引用标记**。
  *
- * 与前端 `prosemirror-editor-bundle/src/referenceMarkup.ts` 同一套格式（有意各存一份，
- * 与 canvasDoc / GraphModel 同理由：cloud-server 要能独立 `npx` 跑，不依赖工作区私有包）。
- * 两份由测试逐字比对守住（见 __tests__/referenceMarkup.test.ts）。
+ * 与前端 prosemirror-editor-bundle/src/referenceMarkup.ts 同一套格式（有意各存一份，
+ * cloud-server 要能独立 npx 跑）。两份由测试逐字比对守住。
  *
- *   @[skill:archify](/abs/skills/archify/SKILL.md)   技能（带说明书路径）
- *   @[mcp:smart]                                      MCP 服务（无地址）
- *   @[node:角色立绘](default#n_12)                     节点（画布 id # 节点 id）
+ * 格式（用户口径 2026-10-08：XML 元素标签，字段化携带完整信息，后端**原样转发**不翻译）：
+ *
+ *   <ref type="skill" name="archify" path="D:/.../SKILL.md" />
+ *   <ref type="node" name="花海" canvasId="430c8f1f" nodeId="35" />
+ *   <ref type="asset" name="图片 18.png" path="D:/.../ab.png" ext="png" />
+ *   <ref type="mcp" name="canvas" />
  */
 
+export type RefKind = 'asset' | 'node' | 'skill' | 'mcp'
+
 export interface ReferenceMarkup {
-  kind: string
+  type: RefKind
   name: string
-  value: string
+  path?: string
+  ext?: string
+  canvasId?: string
+  nodeId?: string
+  folderId?: string
 }
 
-export const REFERENCE_MARKUP_SOURCE = '@\\[([a-zA-Z][a-zA-Z0-9_-]*):([^\\]]+)\\](?:\\(([^)]*)\\))?'
+/** 自闭合 <ref ... /> 元素（**只认 XML 形式**；用户拍板：不做旧格式兼容） */
+export const REFERENCE_MARKUP_SOURCE = '<ref\\b[^>]*\\/>'
+
+const ATTR_SOURCE = '(\\w+)="([^"]*)"'
 
 export function parseReferenceMarkups(text: string): ReferenceMarkup[] {
   const out: ReferenceMarkup[] = []
@@ -24,75 +35,75 @@ export function parseReferenceMarkups(text: string): ReferenceMarkup[] {
   const re = new RegExp(REFERENCE_MARKUP_SOURCE, 'g')
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
-    out.push({ kind: m[1].toLowerCase(), name: m[2], value: m[3] ?? '' })
+    const attrs: Record<string, string> = {}
+    let a: RegExpExecArray | null
+    const are = new RegExp(ATTR_SOURCE, 'g')
+    while ((a = are.exec(m[0])) !== null) attrs[a[1]] = a[2]
+    const type = (attrs.type || '').toLowerCase()
+    if (type !== 'skill' && type !== 'mcp' && type !== 'node' && type !== 'asset') continue
+    out.push({
+      type: type as RefKind,
+      name: attrs.name || '',
+      ...(attrs.path ? { path: attrs.path } : {}),
+      ...(attrs.ext ? { ext: attrs.ext } : {}),
+      ...(attrs.canvasId ? { canvasId: attrs.canvasId } : {}),
+      ...(attrs.nodeId ? { nodeId: attrs.nodeId } : {}),
+      ...(attrs.folderId ? { folderId: attrs.folderId } : {}),
+    })
   }
   return out
 }
 
-/** 取某一种引用的名字（去重保序）。用于 skills / mcpServers */
+/** 取某一种引用的名字（去重保序）。用于 skills / mcpServers / MCP 合并 */
 export function namesOfKind(text: string, kind: string): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const r of parseReferenceMarkups(text)) {
-    if (r.kind !== kind || !r.name || seen.has(r.name)) continue
+    if (r.type !== kind || !r.name || seen.has(r.name)) continue
     seen.add(r.name)
     out.push(r.name)
   }
   return out
 }
 
-/** 引用标记 → 人类可读文本（`@名字`）。落进转录前用，避免把机器串塞进历史 */
+/** 引用标记剥成「@名字」。**只用于标题等纯展示场景**（转录里改存 XML 原文） */
 export function stripMarkupToPlain(text: string): string {
-  return text.replace(new RegExp(REFERENCE_MARKUP_SOURCE, 'g'), (_full, _kind: string, name: string) => '@' + name)
+  const re = new RegExp(REFERENCE_MARKUP_SOURCE, 'g')
+  return text.replace(re, (full) => {
+    const m = parseReferenceMarkups(full)[0]
+    return m ? '@' + m.name : full
+  })
 }
 
-/** 节点引用载荷 `<canvasId>#<nodeId>` 解码 */
+/** 节点引用载荷 <canvasId>#<nodeId> 解码 */
 export function decodeNodeRef(value: string): { canvasId: string; nodeId: string } {
   const i = (value || '').indexOf('#')
   if (i < 0) return { canvasId: '', nodeId: value || '' }
   return { canvasId: value.slice(0, i), nodeId: value.slice(i + 1) }
 }
 
-/**
- * 把用户消息里的引用标记，改写成给模型看的**引导块**（只给钥匙，不给内容）。
- *
- * 关键口径（用户 2026-10-05）：
- * - 技能：**不贴正文**。只说明它在哪，让模型需要时自己 `read_file` —— 系统本就能读本地文件，
- *   于是同一技能引用多次也不会重复占用上下文。
- * - 节点：**不贴内容**。只给画布 id + 节点 id，引导模型用内置画布 MCP 自己去查。
- * - MCP：不在文本里留话（它靠 prefs.mcpServers 决定连哪几个）。
- *
- * 返回改写后的正文（标记本身被替换成引导块；没有标记时原样返回）。
- */
+/** 组装用户消息正文：**原样透传**（不翻译；含义由系统提示词的 REFERENCE_MARKUP_GUIDE 说明） */
 export function buildReferenceGuidance(text: string): string {
-  const marks = parseReferenceMarkups(text)
-  if (!marks.length) return text
-
-  const skills: Array<{ name: string; path: string }> = []
-  const nodes: Array<{ name: string; canvasId: string; nodeId: string }> = []
-  for (const m of marks) {
-    if (m.kind === 'skill') skills.push({ name: m.name, path: m.value })
-    else if (m.kind === 'node') {
-      const { canvasId, nodeId } = decodeNodeRef(m.value)
-      nodes.push({ name: m.name, canvasId, nodeId })
-    }
-  }
-
-  const lines: string[] = []
-  for (const s of skills) {
-    lines.push(
-      '- 技能 `' + s.name + '` 已生效' + (s.path ? '，说明书在 `' + s.path + '`' : '') +
-        '。需要时用 read_file 读它，再按它做；不要凭空猜测它的内容。',
-    )
-  }
-  for (const n of nodes) {
-    lines.push(
-      '- 用户引用了画布 `' + (n.canvasId || 'default') + '` 上的节点 `' + n.nodeId + '`（' + n.name +
-        '）。它的内容用画布 MCP 工具查询后再回答，不要凭标题猜。',
-    )
-  }
-
-  const body = stripMarkupToPlain(text)
-  if (!lines.length) return body
-  return '[references]\n' + lines.join('\n') + '\n[/references]\n\n' + body
+  return text
 }
+
+/**
+ * 引用标记的**含义说明**（写进系统提示词一次，而不是每条消息翻译一遍）。
+ *
+ * 为什么不翻译（用户口径 2026-10-06/08）：
+ *   用户会把输入框里的内容**复制到本机 Agent**（Codex 等）接着用 —— 后端翻译了对方就看不懂。
+ *   标记本身已是**字段化的 XML**（自带本机绝对路径），模型直接可读；说明写一次即可。
+ */
+export const REFERENCE_MARKUP_GUIDE = [
+  '## 引用标记（引用元素）',
+  '',
+  '用户消息里可能出现 <ref ... /> 形式的引用元素（也可能被复制到别处继续使用）。含义：',
+  '',
+  '- <ref type="asset" name="…" path="/abs/path.png" ext="png" /> —— 资产**文件**。path 是**本机绝对路径**，ext 是扩展名。需要看图时直接按 path 读取（不要当 URL、不要猜别的路径）。',
+  '- <ref type="asset" name="…" path="/abs/dir" folderId="…" /> 或 <ref type="asset" name="…" folderId="…" /> —— 资产**文件夹**（一堆资产的目录）。**没有 ext 就是目录**。path（有的话）是里面资产的公共目录，可以直接 ls。folderId 是资产库里的文件夹 id，属于界面内部标识，不用管它。',
+  '- <ref type="node" name="…" canvasId="…" nodeId="…" /> —— 画布节点。用画布 MCP 工具按 canvasId + nodeId 读取，不要用本地文件去猜它的资源路径。',
+  '- <ref type="skill" name="…" path="/abs/path/SKILL.md" /> —— 技能。需要时打开这份说明书再照做。',
+  '- <ref type="mcp" name="…" /> —— MCP 服务（已按名字连好，不需要额外动作）。',
+  '',
+  '标记里的路径都是本机绝对路径，可直接读取。',
+].join(String.fromCharCode(10))

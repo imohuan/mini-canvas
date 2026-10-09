@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>视频播放器控件 · 方案 A（定稿）</title>
+<style>
+:root{
+  --panel:#1b1f27; --line:rgba(255,255,255,.10);
+  --ink:#e8eaee; --dim:#98a2b3; --accent:#0891b2; --scrim:rgba(10,14,20,.82);
+}
+*{box-sizing:border-box}
+body{margin:0;padding:28px;background:#0d1017;color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+h1{font-size:17px;margin:0 0 4px}
+.sub{color:var(--dim);font-size:12px;margin:0 0 20px;line-height:1.75}
+.sub b{color:#67e8f9}
+ul.tips{font-size:12px;color:var(--dim);line-height:1.9;margin:0 0 22px;padding-left:20px}
+ul.tips code{background:rgba(255,255,255,.07);padding:1px 5px;border-radius:4px;font-size:11px}
+.wrap{width:760px;max-width:100%}
+
+/* 播放器舞台（视频用色块代替） */
+.player{position:relative;width:100%;aspect-ratio:16/9;border-radius:16px;overflow:hidden;
+  background:#05070a;border:1px solid var(--line)}
+.fakevideo{position:absolute;inset:0;
+  background:linear-gradient(120deg,#0e7490,#155e75 28%,#1e3a8a 55%,#0f766e 82%,#0e7490);
+  background-size:300% 300%;animation:flow 14s ease-in-out infinite}
+@keyframes flow{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+.fakevideo::after{content:"";position:absolute;inset:0;
+  background:radial-gradient(120% 80% at 30% 20%,rgba(255,255,255,.16),transparent 60%)}
+.hintbar{position:absolute;left:16px;top:14px;z-index:3;font-size:10.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:rgba(255,255,255,.55);pointer-events:none}
+
+/* 控件条：居中悬浮胶囊 */
+.bar{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);z-index:5;
+  display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:16px;
+  max-width:calc(100% - 24px);
+  background:var(--scrim);backdrop-filter:blur(14px);
+  border:1px solid var(--line);box-shadow:0 10px 30px rgba(0,0,0,.45);
+  opacity:0;translate:0 6px;transition:opacity .18s ease,translate .18s ease}
+.player:hover .bar,.player.force .bar{opacity:1;translate:0 0}
+
+.btn{display:grid;place-items:center;width:30px;height:30px;flex:none;padding:0;border:0;
+  border-radius:8px;background:transparent;color:#fff;cursor:pointer;transition:background .15s ease}
+.btn:hover{background:rgba(255,255,255,.14)}
+.btn svg{width:15px;height:15px}
+.btn.is-on{background:color-mix(in srgb,var(--accent) 24%,transparent);color:#67e8f9}
+.time{font-size:11px;color:#fff;font-variant-numeric:tabular-nums;white-space:nowrap;flex:none}
+
+.range{appearance:none;-webkit-appearance:none;height:3px;border-radius:2px;cursor:pointer;
+  background:rgba(255,255,255,.3);flex:1 1 auto;min-width:120px}
+.range::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.range::-moz-range-thumb{width:10px;height:10px;border:0;border-radius:50%;background:#fff}
+
+/* 倍速 */
+.rate{position:relative;flex:none}
+.ratebtn{width:auto;min-width:38px;padding:0 7px}
+.ratebtn span{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums}
+.menu{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%);
+  display:flex;flex-direction:column;gap:2px;padding:5px;border-radius:12px;min-width:68px;
+  background:var(--scrim);backdrop-filter:blur(14px);border:1px solid var(--line);
+  box-shadow:0 10px 26px rgba(0,0,0,.45);opacity:0;pointer-events:none;
+  transition:opacity .15s ease}
+.rate.open .menu{opacity:1;pointer-events:auto}
+.menu button{padding:5px 10px;border:0;border-radius:8px;background:transparent;color:#fff;
+  font-size:11px;font-variant-numeric:tabular-nums;text-align:center;cursor:pointer;white-space:nowrap}
+.menu button:hover{background:rgba(255,255,255,.14)}
+.menu button.active{background:color-mix(in srgb,var(--accent) 30%,transparent);color:#a5f3fc;font-weight:700}
+
+/* 音量：向上弹出的竖直滑杆 */
+.vol{position:relative;display:flex;align-items:center;flex:none}
+.vol-pop{position:absolute;left:50%;bottom:calc(100% + 10px);transform:translateX(-50%) scale(.94);
+  transform-origin:bottom center;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:10px 7px;border-radius:999px;background:var(--scrim);backdrop-filter:blur(14px);
+  border:1px solid var(--line);box-shadow:0 10px 26px rgba(0,0,0,.45);
+  opacity:0;pointer-events:none;transition:opacity .16s ease,transform .16s ease}
+.vol.open .vol-pop{opacity:1;pointer-events:auto;transform:translateX(-50%) scale(1)}
+.vol-pct{font-size:9.5px;color:#fff;font-variant-numeric:tabular-nums}
+.vrange{writing-mode:vertical-lr;direction:rtl;appearance:none;-webkit-appearance:none;
+  width:4px;height:88px;border-radius:2px;background:rgba(255,255,255,.3);cursor:pointer}
+.vrange::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+.vrange::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:#fff}
+</style>
+</head>
+<body>
+<h1>视频播放器控件 · 方案 A（定稿）</h1>
+<p class="sub">
+  视频画面用一个<b>流动色块</b>代替。控件条是<b>居中悬浮胶囊</b>；鼠标移进播放器才显形，移开收起。
+</p>
+<ul class="tips">
+  <li><b>音量</b>：点按钮或悬停 → 按钮正上方弹出<code>竖直</code>滑杆（不占横向空间、不挤别的按钮）。</li>
+  <li><b>倍速</b>：点 <code>1x</code> 弹小菜单（0.5 / 1 / 1.5 / 2 / 3），当前档高亮；非 1x 时按钮本身会点亮。</li>
+  <li><b>循环</b>：按钮式开关，亮起 = 开。</li>
+  <li><b>进度条</b>与<b>时间</b>照旧。</li>
+</ul>
+
+<div class="wrap">
+  <div class="player force" id="pl">
+    <div class="fakevideo"></div>
+    <div class="hintbar">方案 A · 定稿</div>
+    <div class="bar">
+      <button class="btn" data-play title="播放/暂停"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+      <span class="time" data-time>0:03 / 0:15</span>
+      <input class="range" type="range" min="0" max="15" value="3" data-seek aria-label="进度" />
+      <div class="rate" data-rate>
+        <button class="btn ratebtn" data-ratebtn title="播放速度"><span data-ratelabel>1x</span></button>
+        <div class="menu" data-menu>
+          <button data-r="0.5">0.5x</button>
+          <button data-r="1" class="active">1x</button>
+          <button data-r="1.5">1.5x</button>
+          <button data-r="2">2x</button>
+          <button data-r="3">3x</button>
+        </div>
+      </div>
+      <button class="btn" data-loop title="循环播放"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button>
+      <div class="vol" data-vol>
+        <button class="btn" data-mute title="静音"><svg viewBox="0 0 24 24" fill="currentColor" data-volicon><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg></button>
+        <div class="vol-pop">
+          <span class="vol-pct" data-volpct>100</span>
+          <input class="vrange" type="range" min="0" max="100" value="100" data-volrange aria-label="音量" />
+        </div>
+      </div>
+    </div>
+  </div>
+  <p class="sub" style="margin-top:12px">提示：把鼠标移出播放器再移回来，可以看控件条的淡入淡出。</p>
+</div>
+
+<script>
+const pl = document.getElementById('pl')
+const seek = pl.querySelector('[data-seek]')
+const time = pl.querySelector('[data-time]')
+const playBtn = pl.querySelector('[data-play]')
+const mute = pl.querySelector('[data-mute]')
+const vol = pl.querySelector('[data-vol]')
+const vr = pl.querySelector('[data-volrange]')
+const pct = pl.querySelector('[data-volpct]')
+const icon = pl.querySelector('[data-volicon]')
+const rate = pl.querySelector('[data-rate]')
+const rateBtn = pl.querySelector('[data-ratebtn]')
+const rateLabel = pl.querySelector('[data-ratelabel]')
+const menu = pl.querySelector('[data-menu]')
+const loopBtn = pl.querySelector('[data-loop]')
+
+let playing = true, v = 100, muted = false, loop = false, curRate = 1
+const fmt = (s) => Math.floor(s/60) + ':' + String(Math.floor(s%60)).padStart(2,'0')
+function sync(){
+  time.textContent = fmt(Number(seek.value)) + ' / 0:15'
+  vr.value = muted ? 0 : v
+  pct.textContent = String(Math.round(muted ? 0 : v))
+  icon.style.opacity = (muted || v === 0) ? .5 : 1
+  playBtn.innerHTML = playing
+    ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20"/></svg>'
+  rateLabel.textContent = curRate + 'x'
+  rateBtn.classList.toggle('is-on', curRate !== 1)
+  loopBtn.classList.toggle('is-on', loop)
+}
+playBtn.addEventListener('click', () => { playing = !playing; sync() })
+seek.addEventListener('input', sync)
+vr.addEventListener('input', () => { v = Number(vr.value); if (v>0) muted = false; sync() })
+mute.addEventListener('click', () => { muted = !muted; sync() })
+
+// 倍速：点按钮开合菜单；选一档
+rateBtn.addEventListener('click', (e) => { e.stopPropagation(); rate.classList.toggle('open') })
+menu.querySelectorAll('[data-r]').forEach((b) => b.addEventListener('click', (e) => {
+  e.stopPropagation()
+  curRate = Number(b.dataset.r)
+  menu.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b))
+  rate.classList.remove('open')
+  sync()
+}))
+// 循环
+loopBtn.addEventListener('click', () => { loop = !loop; sync() })
+
+// 音量：悬停展开（点按钮切静音）
+let t
+vol.addEventListener('pointerenter', () => { clearTimeout(t); vol.classList.add('open') })
+vol.addEventListener('pointerleave', () => { t = setTimeout(() => vol.classList.remove('open'), 220) })
+
+// 点空白收起弹层
+document.addEventListener('click', () => rate.classList.remove('open'))
+
+sync()
+</script>
+</body>
+</html>
+

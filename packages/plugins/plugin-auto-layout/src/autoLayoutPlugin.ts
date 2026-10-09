@@ -190,9 +190,17 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
           minZoom: cfg.minZoom,
           maxZoom: cfg.maxZoom,
         })
-    viewport.setViewport(
-      centerViewportOnBounds({ bounds, viewportWidth: vw, viewportHeight: vh, zoom }),
-    )
+    /**
+     * 聚焦取景**带动画**（用户口径：「聚焦太快了，没有动画效果。希望可以添加动画效果」）。
+     *
+     * 早先这里走 setViewport（即时、无过渡）—— 那条路是给"跟手"场景用的
+     * （小地图拖拽/逐帧写视口，加动画会每帧重启补间而卡顿），聚焦是一次性动作，
+     * 该走带过渡的那条。宿主没实现 animateViewport（假后端/老装配）时服务内部自动退回即时，
+     * 行为不退化、只是没动画。
+     */
+    const next = centerViewportOnBounds({ bounds, viewportWidth: vw, viewportHeight: vh, zoom })
+    if (viewport.animateViewport) viewport.animateViewport(next)
+    else viewport.setViewport(next)
   }
 
   function focusSelected(): boolean {

@@ -8,7 +8,7 @@ import { baseKeymap } from "prosemirror-commands";
 import { history, undo, redo } from "prosemirror-history";
 import type { MenuPosition, ResourceItem } from "./types";
 import { isVideoUrl, getThumbnailUrlFromAssetUrl, loadImageWithThumbnail } from "./utils";
-import { formatReferenceMarkup } from "./referenceMarkup";
+import { encodeNodeRef, formatReferenceMarkup, REF_ICONS } from "./referenceMarkup";
 import { filterMentionItems } from "./mentionFilter";
 
 // 拖拽参考线插件配置
@@ -152,6 +152,10 @@ function isAtomNode(nodeType: string): boolean {
 
 // 全局 item 注册表：toDOM 通过 node.attrs.id 查这里获取 ResourceItem（含 renderEditor）
 const itemRegistry = new Map<string, ResourceItem>()
+/** 供测试读取（回填后标签外观靠它 —— 没有 renderEditor 就退化成 @名字 样式） */
+export function registeredItem(id: string): ResourceItem | undefined {
+  return itemRegistry.get(id)
+}
 
 // Schema 定义
 const mySchema = new Schema({
@@ -168,6 +172,13 @@ const mySchema = new Schema({
         // 只有这三类引用带它；图片/视频素材标签留空，仍旧导出 `@名字`。
         refKind: { default: '' },
         refValue: { default: '' },
+        // 资产引用专用（见 referenceMarkup.ts）：
+        //   refExt      扩展名（png / mp4 / mp3…）—— 点标签预览时靠它决定用哪个预览器；
+        //   refFolderId 资产库文件夹 id —— 点文件夹标签时靠它定位到资产管理的那一层。
+        // 必须存成节点属性：导出（getPlainText / 复制）要原样写回标记，靠 itemRegistry 会丢
+        // （回填出来的最小 item 没有这两个字段）。
+        refExt: { default: '' },
+        refFolderId: { default: '' },
       },
       group: "inline",
       inline: true,
@@ -186,6 +197,8 @@ const mySchema = new Schema({
             result.setAttribute("data-category", node.attrs.category || "")
             result.setAttribute("data-ref-kind", node.attrs.refKind || "")
             result.setAttribute("data-ref-value", node.attrs.refValue || "")
+            result.setAttribute("data-ref-ext", node.attrs.refExt || "")
+            result.setAttribute("data-ref-folder", node.attrs.refFolderId || "")
             return result
           }
           return result  // DOMOutputSpec 数组，直接透传
@@ -390,19 +403,21 @@ function createPasteHandlerPlugin(
 
 // 将纯文本（含 @id 标记）解析为 ProseMirror content 节点数组
 // 如果提供了 resolver，尝试将 @id 还原为 resource node；否则全当纯文本
-function parsePlainTextToContent(
+export function parsePlainTextToContent(
   text: string,
   resolver: ((token: string) => ResourceItem | null) | undefined,
+  /** 现成资源清单：回填时按名字复用（**它带 renderEditor，标签才是漂亮 chip**）。 */
+  resources?: readonly ResourceItem[] | undefined,
 ): any[] {
-  if (!resolver) {
-    return text ? [mySchema.text(text)] : []
-  }
+  if (!text) return []
   const content: any[] = []
-  // 两种形态都认：
-  //   ① 引用标记 `@[kind:name](value)`（技能 / MCP / 节点）—— 按 name 交给 resolver 还原；
-  //   ② 旧的 `@token`（素材引用）—— 按 token 交给 resolver。
+  // 三种形态都认：
+  //   ① XML 引用元素 `<ref type=... ... />`（当前格式；字段自带完整信息，不需要 resolver）——
+  //      直接建 resource chip，refKind/refValue 从属性取。
+  //   ② 旧引用标记 `@[kind:name](value)` —— 兼容旧转录/粘贴内容。
+  //   ③ 旧 `@token` —— 按 token 交给 resolver。
   // 用一个组合正则一次扫完，顺序天然保持。
-  const regex = /@\[([a-zA-Z][a-zA-Z0-9_-]*):([^\]]+)\](?:\(([^)]*)\))?|@(\S+)/g
+  const regex = /<ref\b[^>]*\/>|@\[([a-zA-Z][a-zA-Z0-9_-]*):([^\]]+)\](?:\(([^)]*)\))?|@(\S+)/g
   let lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = regex.exec(text)) !== null) {
@@ -410,30 +425,110 @@ function parsePlainTextToContent(
     if (match.index > lastIndex) {
       content.push(mySchema.text(text.slice(lastIndex, match.index)))
     }
+    const isRefElement = match[0].startsWith("<ref")
     const isMarkup = match[1] !== undefined
-    const kind = isMarkup ? match[1].toLowerCase() : ''
-    const name = isMarkup ? match[2] : ''
-    const refValue = isMarkup ? (match[3] ?? '') : ''
-    const token = isMarkup ? name : match[4]
-    const item = resolver(token)
-    if (item) {
+    if (isRefElement) {
+      // XML 元素：解析属性，直接建 chip（不依赖 resolver —— 字段自带完整信息）
+      const attrs: Record<string, string> = {}
+      let a: RegExpExecArray | null
+      const are = /(\w+)="([^"]*)"/g
+      while ((a = are.exec(match[0])) !== null) attrs[a[1]] = a[2]
+      const kind = (attrs.type || '').toLowerCase()
+      let refValue = attrs.path || ""
+      if (kind === 'node') refValue = encodeNodeRef(attrs.canvasId || '', attrs.nodeId || '')
+      // 资产专用：ext（挑预览器）/ folderId（定位到资产管理那一层）。
+      // 文件夹标签没有 path 也没有 ext，只有 folderId —— 靠它区分「目录」与「文件」。
+      const refExt = kind === 'asset' ? (attrs.ext || '') : ''
+      const refFolderId = kind === 'asset' ? (attrs.folderId || '') : ''
+      // 优先复用现成清单里的同款 item（带 renderEditor / 图标 / 点击聚焦）——
+      // 否则回填出来的标签退化成默认「@名字」样式，与右键插入的标签长得不一样（用户报过）。
+      const cleanName = (attrs.name || '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&amp;/g, '&')
+      let item = resources?.find((r) => r.ref?.kind === kind && r.name === cleanName)
+      if (!item) {
+        // 清单里没有（节点已删 / MCP 已卸 / 资产挪走）→ 造最小 item；也带 renderEditor，
+        // 样式与现成标签一致（只是点了没反应、预览取不到）。
+        const minimalRef = {
+          kind: kind as any,
+          name: cleanName,
+          value: refValue,
+          ...(refExt ? { ext: refExt } : {}),
+          ...(refFolderId ? { folderId: refFolderId } : {}),
+        }
+        item = {
+          id: 'ref:' + kind + ':' + (attrs.nodeId || attrs.path || cleanName),
+          name: cleanName,
+          category: kind === 'asset' ? '资产' : kind === 'node' ? '节点' : kind === 'skill' ? '技能' : 'MCP',
+          url: '',
+          value: refValue,
+          ref: minimalRef,
+          renderEditor: (it: ResourceItem) => {
+            const el = document.createElement('span')
+            el.className = 'ac-tag'
+            // 图标取唯一那份 REF_ICONS（referenceMarkup.ts）—— 与 @ 菜单 / 右键插入的标签同源
+            const ic = document.createElement('span')
+            ic.className = 'ac-tag-icon'
+            ic.innerHTML = REF_ICONS[kind as keyof typeof REF_ICONS] || REF_ICONS.asset
+            el.append(ic)
+            const lb = document.createElement('span')
+            lb.className = 'ac-tag-label'
+            lb.textContent = it.name
+            el.append(lb)
+            return el
+          },
+        }
+      }
       content.push(mySchema.nodes.resource.create({
         id: item.id,
         name: item.name,
-        category: item.category || 'resource',
-        url: item.url || '',
-        thumbnail_url: item.thumbnail_url || '',
-        value: item.value || '',
-        // 标记里的 kind/value 是权威的：即使 resolver 不知道 item.ref，也照原样还原，
-        // 否则「粘贴 / 预设插入」一次就会把标记退化成 @名字，引用信息当场丢。
-        refKind: kind || item.ref?.kind || '',
-        refValue: refValue || item.ref?.value || '',
+        category: item.category,
+        url: item.url,
+        value: item.value,
+        refKind: kind,
+        refValue,
+        refExt: item.ref?.ext || refExt,
+        refFolderId: item.ref?.folderId || refFolderId,
       }))
-      // 注册到全局 registry，toDOM 需要
       itemRegistry.set(item.id, item)
+    } else if (isMarkup) {
+      const kind = match[1].toLowerCase()
+      const name = match[2]
+      const refValue = match[3] ?? ""
+      const token = name
+      const item = resolver ? resolver(token) : null
+      if (item) {
+        content.push(mySchema.nodes.resource.create({
+          id: item.id,
+          name: item.name,
+          category: item.category || "resource",
+          url: item.url || "",
+          thumbnail_url: item.thumbnail_url || "",
+          value: item.value || "",
+          refKind: kind || item.ref?.kind || "",
+          refValue: refValue || item.ref?.value || "",
+        }))
+        itemRegistry.set(item.id, item)
+      } else {
+        content.push(mySchema.text(match[0]))
+      }
     } else {
-      // 未解析到，保留为纯文本
-      content.push(mySchema.text(match[0]))
+      // 旧 @token
+      const token = match[4]
+      const item = resolver ? resolver(token) : null
+      if (item) {
+        content.push(mySchema.nodes.resource.create({
+          id: item.id,
+          name: item.name,
+          category: item.category || "resource",
+          url: item.url || "",
+          thumbnail_url: item.thumbnail_url || "",
+          value: item.value || "",
+          refKind: item.ref?.kind || "",
+          refValue: item.ref?.value || "",
+        }))
+        itemRegistry.set(item.id, item)
+      } else {
+        content.push(mySchema.text(match[0]))
+      }
     }
     lastIndex = regex.lastIndex
   }
@@ -443,14 +538,6 @@ function parsePlainTextToContent(
   }
   return content
 }
-
-/**
- * 造一个 resource 标签节点。
- *
- * 两条插入路径共用（@ 菜单 insertSelectedItem / 编程插入 insertResource）——
- * 以前各自抄一份建节点代码，漏改一处就会让某条路的引用退化成 `@名字`（review 抓到过）。
- * 引用类标签必须带 refKind/refValue，getPlainText 才序列化得出 `@[kind:名](值)`。
- */
 function buildResourceNode(nodeType: any, item: ResourceItem): any {
   return nodeType.create({
     id: item.id,
@@ -461,6 +548,9 @@ function buildResourceNode(nodeType: any, item: ResourceItem): any {
     value: item.value || '',
     refKind: item.ref?.kind || '',
     refValue: item.ref?.value || '',
+    // 资产引用额外字段（见 schema 注释）：导出/复制时要原样写回标记，必须进节点属性。
+    refExt: item.ref?.ext || '',
+    refFolderId: item.ref?.folderId || '',
   })
 }
 
@@ -522,7 +612,10 @@ export function useEditor(
         // 它是后端认「引用了哪一种、引用了谁」的唯一凭据，也是删标签即失效的那份真相。
         // 其它标签（图片 / 视频素材）维持旧的 `@名字` —— 它们只是展示，不需要后端解析。
         if (node.attrs.refKind) {
-          text += formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue) + " ";
+          text += formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
+            ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
+            ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
+          }) + " ";
         } else {
           text += `@${node.attrs.name || node.attrs.id} `;
         }
@@ -848,7 +941,7 @@ export function useEditor(
         const initialValue = unref(props.modelValue)
         paragraphs = initialValue
           ? initialValue.split('\n').map(line => {
-              const content = parsePlainTextToContent(line, unref(props.resolveResource))
+              const content = parsePlainTextToContent(line, unref(props.resolveResource), unref(props.resources))
               return mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
             })
           : [mySchema.node("paragraph")]
@@ -857,7 +950,7 @@ export function useEditor(
       const initialValue = unref(props.modelValue)
       paragraphs = initialValue
         ? initialValue.split('\n').map(line => {
-            const content = parsePlainTextToContent(line, unref(props.resolveResource))
+            const content = parsePlainTextToContent(line, unref(props.resolveResource), unref(props.resources))
             return mySchema.node("paragraph", null, content.length > 0 ? content : undefined)
           })
         : [mySchema.node("paragraph")]
@@ -936,7 +1029,10 @@ export function useEditor(
             if (node.type.name === "resource") {
               // 复制走的文本要和输入框里的一致：引用类标签复制成标记，其它照旧 @名字。
               text += node.attrs.refKind
-                ? formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue) + " "
+                ? formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
+                    ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
+                    ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
+                  }) + " "
                 : `@${node.attrs.name || node.attrs.id} `;
             } else if (node.isText) {
               // 过滤掉零宽空格
@@ -1005,7 +1101,7 @@ export function useEditor(
       const originalSize = view.state.doc.content.size;
       const lines = (newModelValue ?? '').split('\n')
       const paragraphs = lines.map((line) => {
-        const content = parsePlainTextToContent(line, unref(props.resolveResource))
+        const content = parsePlainTextToContent(line, unref(props.resolveResource), unref(props.resources))
         return mySchema.node('paragraph', null, content.length > 0 ? content : undefined)
       })
       const doc = mySchema.node('doc', null, paragraphs.length ? paragraphs : [mySchema.node('paragraph')])
@@ -1075,7 +1171,7 @@ export function useEditor(
     if (!view) return
     const trimmed = text ?? ''
     const paragraphs = trimmed.split('\n').map((line) => {
-      const content = parsePlainTextToContent(line, unref(props.resolveResource))
+      const content = parsePlainTextToContent(line, unref(props.resolveResource), unref(props.resources))
       return mySchema.node('paragraph', null, content.length > 0 ? content : undefined)
     })
     const doc = mySchema.node('doc', null, paragraphs.length > 0 ? paragraphs : [mySchema.node('paragraph')])

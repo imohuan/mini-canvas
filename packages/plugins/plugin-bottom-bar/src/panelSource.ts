@@ -107,6 +107,20 @@ export function collectUpstreamMaterials(
       continue
     }
 
+    // 音频节点：素材行要如实显示连了什么（用户要求音频也能预览，不能默默丢掉）
+    const audioUrl = nonEmptyString(data.audioUrl)
+    if (audioUrl) {
+      seen.add(edge.source)
+      out.push({
+        id: edge.source,
+        kind: 'audio',
+        name: label || nonEmptyString(data.audioName) || '音频',
+        refName: nextRef('audio'),
+        url: audioUrl,
+      })
+      continue
+    }
+
     // 文本节点：内容暂时为空也收（用户可能正打算先连再写），@ 时用名字占位
     if (node?.type === 'text') {
       seen.add(edge.source)

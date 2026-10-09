@@ -35,6 +35,28 @@ describe('模型消息', () => {
     expect(translateMessage(model({ type: 'brand_new' }), st, (m) => warned.push(m))).toEqual([])
     expect(warned).toHaveLength(1)
   })
+
+  /**
+   * 真 bug（2026-10-09 真机）：目标的 harness 协议文本（sender:'harness' 的用户文本）
+   * 被原样当成**助手文本**，于是转录里夹进了一堆
+   * 「This message was sent automatically by goal mode: work toward the objective…」，
+   * 界面也跟着显示。它不是助手说的话，必须挡在翻译层之外。
+   */
+  it('harness 注入的用户文本（sender 非 user）不当成助手文本', () => {
+    const st = createTranslateState()
+    const out = translateMessage(
+      model({ type: 'text', role: 'user', sender: 'harness', text: 'This message was sent automatically by goal mode' }),
+      st,
+    )
+    expect(out).toEqual([])
+  })
+
+  it('server / parent_agent 注入的用户文本同样不透明成助手文本', () => {
+    const st = createTranslateState()
+    for (const sender of ['server', 'parent_agent']) {
+      expect(translateMessage(model({ type: 'text', role: 'user', sender, text: 'x' }), st)).toEqual([])
+    }
+  })
 })
 
 describe('事件消息', () => {

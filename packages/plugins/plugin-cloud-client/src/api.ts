@@ -94,6 +94,17 @@ export class CloudApi {
     return body.job
   }
 
+  /** 查某节点当前有没有在跑的任务（前端据此禁用「发送」，挡住连点重复下单） */
+  async activeJob(canvasId: string, nodeId: string): Promise<{ jobId: string; progress?: number } | null> {
+    const res = await this.doFetch(
+      this.absolute('/api/jobs/active?canvasId=' + encodeURIComponent(canvasId) + '&nodeId=' + encodeURIComponent(nodeId)),
+      { headers: { accept: 'application/json' } },
+    )
+    if (!res.ok) return null
+    const body = (await res.json()) as { active?: { jobId: string; progress?: number } | null }
+    return body.active ?? null
+  }
+
   /** 取消任务（进后台 → 后台再去服务端真取消） */
   async cancelJob(jobId: string): Promise<void> {
     await this.doFetch(this.absolute('/api/jobs/' + encodeURIComponent(jobId) + '/cancel'), { method: 'POST' })
@@ -133,8 +144,12 @@ export class CloudApi {
     return { nodes: body.nodes ?? [], edges: body.edges ?? [], view: body.view ?? null }
   }
 
-  /** 上传一个资源（原始字节）→ 拿到画布内引用 */
-  async uploadResource(canvasId: string, bytes: Blob, name: string): Promise<{ ref: string; hashName: string; url: string }> {
+  /**
+   * 上传一个资源（原始字节）→ 拿到画布内资源地址。
+   *
+   * 关键字段只有 `hashName`（地址由它拼出）；节点里存的就是 `url`。
+   */
+  async uploadResource(canvasId: string, bytes: Blob, name: string): Promise<{ hashName: string; url: string }> {
     const url =
       '/api/canvases/' + encodeURIComponent(canvasId) + '/resources?name=' + encodeURIComponent(name)
     const res = await this.doFetch(this.absolute(url), {
@@ -143,10 +158,9 @@ export class CloudApi {
       body: bytes as unknown as BodyInit,
     })
     if (!res.ok) throw new Error('[cloud-client] 上传资源失败 ' + res.status)
-    const body = (await res.json()) as { ref?: string; hashName?: string }
-    if (!body.ref || !body.hashName) throw new Error('[cloud-client] 上传资源返回异常')
+    const body = (await res.json()) as { hashName?: string }
+    if (!body.hashName) throw new Error('[cloud-client] 上传资源返回异常')
     return {
-      ref: body.ref,
       hashName: body.hashName,
       url: '/api/canvases/' + canvasId + '/resources/' + body.hashName,
     }

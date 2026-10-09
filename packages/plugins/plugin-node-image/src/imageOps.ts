@@ -24,7 +24,7 @@ import {
 import { loadDrawableSource, paintCanvasBlob, releaseDrawable } from './imageBitmap'
 import { describeImageMeta, downloadFileName } from './imageNodeData'
 import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
-import { cardSizePatch, readImageFitLimits, type ImageFitLimits } from './imageFit'
+import { cardSizePatch, readImageFitLimits, MIN_CARD_WIDTH, type ImageFitLimits } from './imageFit'
 import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
@@ -43,19 +43,21 @@ export interface ImageOpsContext {
    */
   fitLimits?(): ImageFitLimits
   /** 当前全部节点（找"把它摆在谁左边"时用）；未注入返回 [] */
-  listNodes?(): Array<{ id: string; type: string; position: { x: number; y: number } }>
+  listNodes?(): Array<{ id: string; type: string; position: { x: number; y: number }; data?: Record<string, unknown>; size?: { w: number; h: number } }>
   /** 当前全部边（"加素材"要按输入口容量挤最老一条时需要）；未注入返回 [] */
-  /**
-   * 在一个事务里同时建节点 + 连边（"加素材"必须原子：只能一次 undo）。
-   * 未注入时返回 null（调用方据此判断"这个宿主不具备加素材能力"）。
-   * 容量/挤出/校验由统一入口 tx.connectEdge 处理（本接口不再单独传 evictEdgeId）。
-   */
-  createNodeWithEdge?(
-    type: string,
-    position: { x: number; y: number },
-    data: Record<string, unknown>,
-    target: string,
-  ): string | null
+ /**
+  * 在一个事务里同时建节点 + 连边（"加素材"必须原子：只能一次 undo）。
+  * 未注入时返回 null（调用方据此判断"这个宿主不具备加素材能力"）。
+  * 容量/挤出/校验由统一入口 tx.connectEdge 处理（本接口不再单独传 evictEdgeId）。
+   * @param edgeDirection 默认 newToTarget（新节点→目标，加素材语义）；targetToNew = 目标→新节点（裁剪语义：原图是上游）
+  */
+ createNodeWithEdge?(
+   type: string,
+   position: { x: number; y: number },
+   data: Record<string, unknown>,
+   target: string,
+  edgeDirection?: "newToTarget" | "targetToNew",
+ ): string | null
   /**
    * 把一个图片 Blob 存进宿主**资源库**（浏览器里是 IndexedDB）。
    * 返回可写进节点的 `resourceId` 与本次会话可显示的 `url`（objectURL，刷新后由资源库重建）。
@@ -170,15 +172,20 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
     write: (nodeId, data, size) =>
       doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
     fitLimits: () => readImageFitLimits(svc),
-    listNodes: () => (doc()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position })),
-    createNodeWithEdge: (type, position, data, target) => {
+    listNodes: () => (doc()?.getNodes() ?? []).map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data, size: (n as { size?: { w: number; h: number } }).size })),
+    createNodeWithEdge: (type, position, data, target, edgeDirection = 'newToTarget') => {
       const g = doc()
       if (!g) return null
       try {
         return g.transaction('add-image-source', (tx) => {
           const id = tx.createNode(type, position, data)
           // 挤出/校验统一走 connectEdge（节点先建，再连边——满额会自动挤掉最老一条）
-          tx.connectEdge({ source: id, target, sourceHandle: 'source', targetHandle: 'target' })
+          // 方向由调用方声明：加素材 = 新节点是上游；裁剪出图 = 原图（target）是上游
+          tx.connectEdge(
+            edgeDirection === 'targetToNew'
+              ? { source: target, target: id, sourceHandle: 'source', targetHandle: 'target' }
+              : { source: id, target, sourceHandle: 'source', targetHandle: 'target' },
+          )
           return id
         })
       } catch {
@@ -264,11 +271,11 @@ export async function uploadImage(
 }
 
 /**
- * 裁剪：按"图片像素坐标"的矩形裁出新图，**原地替换**（不新建节点）。
+ * 裁剪：按"图片像素坐标"的矩形裁出新图，**新建一个下游图片节点**装它（不覆盖当前节点）。
  *
- * 新图字节进资源库（IndexedDB），节点只留新的 resourceId + objectURL；成功后同步更新宽高，
- * 使后续裁剪/状态栏按新尺寸工作。
- * @returns 是否写成功
+ * 当前节点保持原图不动；新节点的 label 按"裁剪 N"累加取名（扫描画布取最大号+1，撤销/删中间节点后也不撞名）。
+ * 建节点 + 连边（当前节点 → 新节点）包在同一个事务里：一次 undo 一起退。
+ * @returns 是否写成功（节点不存在 / 没有图 / 环境不支持 / 建节点失败 → false）
  */
 export async function cropImage(
   ctx: ImageOpsContext,
@@ -285,16 +292,30 @@ export async function cropImage(
   if (!ctx.persistImage) return false
   const persisted = await ctx.persistImage(result.blob)
   if (!persisted) return false
-  writeImageData(ctx, nodeId, {
-    ...ctx.read(nodeId),
+
+  // 定位：原图右边缘 + 间隔（CROP_NODE_GAP）。多个裁剪结果会往右排开，不叠在原图上
+  const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
+  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
+  const position = {
+    x: (source?.position.x ?? 0) + sourceWidth + CROP_NODE_GAP,
+    y: source?.position.y ?? 0,
+  }
+  // 名字：扫当前画布所有 image 节点里"裁剪 N"的 N，取最大值+1（撤销/删中间节点后也不撞名）
+  const label = nextCropLabel(
+    (ctx.listNodes?.() ?? []).map((n) => ({ type: n.type, data: n.data ?? {} })),
+  )
+  const cropData: Record<string, unknown> = {
+    label,
     imageUrl: persisted.url,
     resourceId: persisted.resourceId,
     imageWidth: result.width,
     imageHeight: result.height,
-    // 裁剪后原图字节数不再代表内容，清掉避免状态栏显示过期大小
-    imageSize: undefined,
-  }, result.width, result.height)
-  return true
+    imageName: label,
+  }
+    // 原子性/校验/连边统一交给 createNodeWithEdge（内部 graph.transaction：一次撤销退干净）
+  // 原图是上游、裁剪结果是下游（用户拖线方向：从原图拉到空白处出新图）
+  const newId = ctx.createNodeWithEdge?.('image', position, cropData, nodeId, 'targetToNew')
+  return typeof newId === 'string' && newId.length > 0
 }
 
 /**
@@ -352,8 +373,46 @@ export function readImageSummary(data: Record<string, unknown> | undefined): { n
 /** 「加素材」时新节点相对本节点的偏移（与 v1 一致：摆在左边同一水平线上） */
 export const SOURCE_NODE_OFFSET = { x: -260, y: 0 }
 
+/** 裁剪出的新节点与原图右边缘的间隔（用户要求：别贴太近，留 100px） */
+export const CROP_NODE_GAP = 100
+
+/** 裁剪节点名的前缀（扫描/生成都用它） */
+export const CROP_LABEL_PREFIX = '裁剪'
+
 /**
- * 确认扩展：把画面往外扩出一圈透明画布，**原地替换** imageUrl（与裁剪同一套语义）。
+ * 下一个可用的裁剪节点名：扫描现有 image 节点里"裁剪 N"的 N，取最大值 + 1。
+ *
+ * 为什么不存计数器：计数器要么进 data（污染节点数据）、要么在插件内存里（撤销/刷新后与画布对不上）。
+ * 扫描是幂等的：不管撤销几次、删掉中间哪个，算出来的名字都不会和画布上的撞车。
+ * 第一个叫「裁剪」，第二个起叫「裁剪 2」「裁剪 3」……
+ */
+export function nextCropLabel(
+  nodes: Array<{ type: string; data?: Record<string, unknown> }>,
+): string {
+  let max = 0
+  const re = new RegExp('^' + CROP_LABEL_PREFIX + '\\s*(\\d+)$')
+  const used = new Set<string>()
+  for (const n of nodes) {
+    if (n.type !== 'image') continue
+    const label = (n.data as Record<string, unknown> | undefined)?.label
+    if (typeof label !== 'string') continue
+    used.add(label.trim())
+    const m = re.exec(label.trim())
+    if (!m) continue
+    const num = Number.parseInt(m[1], 10)
+    if (!Number.isNaN(num) && num > max) max = num
+  }
+  // 画布上已经有裸的「裁剪」→ 这次必须带号（从 2 起），不跟它撞车
+  if (used.has(CROP_LABEL_PREFIX)) {
+    const n = max + 1 === 1 ? 2 : max + 1
+    return CROP_LABEL_PREFIX + ' ' + String(n)
+  }
+  // 第一个裁剪节点：光秃秃的「裁剪」，不带号
+  return max === 0 ? CROP_LABEL_PREFIX : CROP_LABEL_PREFIX + ' ' + String(max + 1)
+}
+
+/**
+* 确认扩展：把画面往外扩出一圈透明画布，**原地替换** imageUrl（与裁剪同一套语义）。
  *
  * 为什么原地替换而不是新建节点（与 v1 不同）：用户的心智是「把这张图改一下」而不是「多出一张图」，
  * 与裁剪保持一致也让撤销栈干净。真想要一份新的，复制节点即可。

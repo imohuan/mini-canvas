@@ -106,6 +106,13 @@ export interface DocService {
   registerType(def: CanvasNodeType): void
   /** 注销某节点类型（热卸插件时回收；不存在则 no-op）。语义与 registerType 对称。 */
   unregisterType(type: string): void
+  /**
+   * 改某类型的**默认尺寸**（设置面板调默认尺寸时调用）。
+   * 只影响没有显式尺寸（没被 resize 过）的节点 —— 有自己 size 的节点不受影响。
+   */
+  updateTypeSize(type: string, size: { w: number; h: number }): void
+  /** 取该类型下一个默认名（"分组 2"）并推进该类型序号 —— 给存量补名用，避免与新建撞号。 */
+  nextTypeName(type: string): string
   /** 当前全部边（只读快照；与 edgeStore 同源） */
   getEdges(): CanvasEdge[]
   /** 取某条边 */
@@ -226,6 +233,8 @@ export function createDocService(sources: DocSources | DocSourceResolver): DocSe
     },
     registerType: (def) => need('nodeStore').registerType(def),
     unregisterType: (type) => need('nodeStore').unregisterType(type),
+    updateTypeSize: (type, size) => need('nodeStore').updateTypeSize(type, size),
+    nextTypeName: (type) => need('nodeStore').nextTypeName(type),
     getEdges: () => need('edgeStore').getEdges(),
     getEdge: (id) => need('edgeStore').getEdge(id),
 

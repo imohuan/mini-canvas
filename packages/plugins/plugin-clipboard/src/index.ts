@@ -13,6 +13,8 @@ export {
 export type {
   ClipboardSnapshot,
   ClipboardNode,
+  ClipboardNodeInput,
   ClipboardEdge,
   ClipboardFlowPoint,
+  ClipboardAbsProvider,
 } from './clipboardEngine'

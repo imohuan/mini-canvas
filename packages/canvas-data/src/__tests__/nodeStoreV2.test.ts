@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { computed } from 'vue'
 import { NodeStore, type CanvasNode } from '../nodeStore'
 
 /**
@@ -15,6 +16,31 @@ function makeStore(): NodeStore {
 }
 
 describe('NodeStore v2 写 API', () => {
+  /**
+   * 用户口径（2026-10-06）：节点默认尺寸要能在设置面板里改，且**实时生效** ——
+   * 类型表里那份 defaultSize 必须是**响应式**的，改一下依赖它的卡片尺寸就跟着重算。
+   */
+  it('updateTypeSize 改默认尺寸，且类型默认尺寸可被响应式追踪（实时生效的前提）', () => {
+    const s = makeStore()
+    // 模拟卡片尺寸 computed：读类型默认尺寸（这就是「实时生效」依赖的那条链）
+    const cardW = computed(() => s.types.get('text')!.defaultSize.w)
+    expect(cardW.value).toBe(100)
+    s.updateTypeSize('text', { w: 360, h: 480 })
+    expect(s.types.get('text')!.defaultSize).toEqual({ w: 360, h: 480 })
+    // 响应式：computed 立刻读到新值（依赖它的卡片尺寸因此跟着重算）
+    expect(cardW.value).toBe(360)
+  })
+
+  it('updateTypeSize 通知订阅者；未知类型 no-op', () => {
+    const s = makeStore()
+    let calls = 0
+    s.subscribe(() => (calls += 1))
+    s.updateTypeSize('text', { w: 360, h: 480 })
+    expect(calls).toBe(1)
+    s.updateTypeSize('不存在的类型', { w: 1, h: 1 })
+    expect(calls).toBe(1)
+  })
+
   it('addNodes 批量插入：可指定 id/data/size/parentId；返回插入数量', () => {
     const s = makeStore()
     const n = s.addNodes([
@@ -212,5 +238,3 @@ describe('NodeStore getSnapshot 安全只读（P1-10）', () => {
     expect(snap).toHaveLength(1)
   })
 })
-
-

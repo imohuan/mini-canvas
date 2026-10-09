@@ -20,6 +20,7 @@ import { kvRoutes } from '../../routes/kv.js'
 import { canvasOpsRoutes } from '../../routes/canvasOps.js'
 import { agentRoutes } from '../../routes/agent.js'
 import { agentSessionRoutes } from '../../routes/agentSessions.js'
+import type { BranchStore } from '../../agent/branchStore.js'
 import { pluginRoutes } from '../../static.js'
 import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
@@ -29,6 +30,7 @@ import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../../serverFr
 import { hotLoadedNames } from '../../serverFramework/hotLoad.js'
 import { buildPluginCatalog } from '../catalog.js'
 import { healthPlugin } from './health.js'
+import { pluginWatchRoutes } from '../pluginWatch.js'
 import { runAgentMiddleware } from '../../serverFramework/agent.js'
 import type { KvStore } from '../../store/kvStore.js'
 import type { CanvasStore } from '../../store/canvasStore.js'
@@ -40,6 +42,9 @@ import type { HistoryStore } from '../../tasks/history.js'
 import type { AgentConfigService } from '../../agent/config.js'
 import type { AgentSessionStore } from '../../agent/sessionStore.js'
 import type { AgentRuntime } from '../../agent/runtime.js'
+import type { SessionHub } from '../../agent/sessionHub.js'
+import type { QueueScheduler } from '../../agent/queueScheduler.js'
+import type { GoalRuntimePort } from '../../routes/agentSessions.js'
 import type { ProjectStore } from '../../store/projectStore.js'
 import type { AssetStore } from '../../store/assetStore.js'
 
@@ -57,6 +62,7 @@ export const S = {
   agentConfig: 'agentConfig',
   agentSessions: 'agentSessions',
   agentRuntime: 'agentRuntime',
+  agentBranches: 'agentBranches',
   pluginsDir: 'pluginsDir',
   serverPluginsDir: 'serverPluginsDir',
   selfOrigin: 'selfOrigin',
@@ -136,9 +142,9 @@ export const jobsPlugin: PluginModule = {
 
 export const historyPlugin: PluginModule = {
   name: 'history',
-  inject: [S.history],
+  inject: [S.history, S.assetStore],
   apply(ctx) {
-    ctx.routes.adopt(historyRoutes(need<HistoryStore>(ctx, S.history)))
+    ctx.routes.adopt(historyRoutes(need<HistoryStore>(ctx, S.history), need<AssetStore>(ctx, S.assetStore)))
   },
 }
 
@@ -176,17 +182,24 @@ export const agentPluginRoutes: PluginModule = {
 
 export const agentSessionPlugin: PluginModule = {
   name: 'agent-sessions',
-  inject: [S.agentSessions, S.agentRuntime, S.agentConfig],
+  inject: [S.agentSessions, S.agentRuntime, S.agentConfig, S.agentBranches, 'agentHub', 'agentQueue', 'agentGoal'],
   apply(ctx) {
     ctx.routes.adopt(
       agentSessionRoutes(
         need<AgentSessionStore>(ctx, S.agentSessions),
         need<AgentRuntime>(ctx, S.agentRuntime),
         need<AgentConfigService>(ctx, S.agentConfig),
+        need<BranchStore>(ctx, S.agentBranches),
         // ★ pre-turn 钩子：把 Agent 中间件链挂上去（用户点 2）。
         //   用 ctx 自己即可 —— 中间件注册场（server/agent-mw）是**全插件共享的一张表**，
         //   任何插件的 ctx.registryOf 读到的都是同一份，不必再找"根 ctx"。
         (turn) => runAgentMiddleware(ctx, turn),
+        // 托管通道（设计 §3.2）：给了它 = 「后台对话」模式（一轮不绑连接）
+        need<SessionHub>(ctx, 'agentHub'),
+        // 队列变化后的调度机会（设计 §3.3.2）：路由只管落盘，发不发由调度器决定
+        (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').tick(canvasId, sessionId),
+        // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动
+        need<GoalRuntimePort>(ctx, 'agentGoal'),
       ),
     )
   },
@@ -236,6 +249,20 @@ export const pluginCatalogPlugin: PluginModule = {
 }
 
 /**
+ * plugin-watch —— 插件热重载：盯插件产物目录，变了经 SSE（/api/plugin-events）通知前端重装。
+ *
+ * 前端（window.MiniCanvasPlugin）连这条 SSE，收到 { id, name } 就调 reload(id) 拉最新产物重装。
+ * 目录经 S.pluginsDir 取（与 plugin-routes 同一个服务）。监视器按需起停（见 pluginWatch.ts）。
+ */
+export const pluginWatchPlugin: PluginModule = {
+  name: 'plugin-watch',
+  inject: [S.pluginsDir],
+  apply(ctx) {
+    ctx.routes.adopt(pluginWatchRoutes(ctx.tryGet<string | undefined>(S.pluginsDir)))
+  },
+}
+
+/**
  * npm-plugins 内置插件：从 NPM 搜索 / 安装 / 更新 / 卸载插件（NPM 对接）。
  * 安全模型见 routes/npmPlugins.ts 文件头（confirm 必填 + scope 白名单 + installable 校验）。
  */
@@ -268,6 +295,7 @@ export const npmPluginsPlugin: PluginModule = {
 export const BUILTIN_PLUGINS: PluginModule[] = [
   healthPlugin,
   eventsPlugin,
+  pluginWatchPlugin,
   projectsPlugin,
   canvasesPlugin,
   assetsPlugin,

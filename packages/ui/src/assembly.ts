@@ -40,6 +40,10 @@ import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 // 全局下拉：把成品应用那份带箭头的 AxDropdown 注册进 ui 目录（order -1 顶替主题默认件）。
 // 详见该文件顶部注释：全应用只剩一份下拉实现，插件按名取到的也是它。
 import { uiDropdownPlugin } from './uiDropdownPlugin'
+// 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
+import { uiHotReloadPlugin } from './hotReloadPlugin'
+// 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
+import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@mini-canvas/plugin-agent'
 // 插件管理已并入 plugin-cloud-client 包（见该包 src/manager/），仍是一个可独立装卸的插件。
 import { pluginManagerPlugin } from '@mini-canvas/plugin-cloud-client/manager'
@@ -61,6 +65,8 @@ export const APP_PLUGINS = [
   themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
   uiSettingsPanelPlugin, // 设置面板换皮：order -1 顶替默认皮，渲染本应用风格的设置界面
   uiDropdownPlugin, // 全局下拉：order -1 顶替主题默认件（全应用唯一一份 dropdown 实现）
+  uiHotReloadPlugin, // 设置面板「热重载」分类：登记链接，产物变了自动重装（开发工具）
+  uiAssetUploadPlugin, // 「加入资产库」：节点右键 + 多选上控制栏 → 贴进上传弹窗（注册式，不改 multi-select/context-menu）
   // 底栏插件必须在三个节点插件**之前**装载：节点插件 apply 时 nodeBar 已在，走「取得到就注册」快路径
   pluginBottomBar, // 节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度覆盖层
   nodeTextPlugin, // text 节点

@@ -10,16 +10,14 @@
  * 拿不到 Vue 组件实例；字符串是两边都能用的形式。
  */
 import { h, type VNode } from 'vue'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { REF_ICONS, type ResourceItem } from 'prosemirror-editor-bundle'
 import type { McpRow, SkillRow } from './agentService.js'
 
 /** 技能图标（魔杖 + 星光）：与工具栏上的技能按钮同源 */
-export const ICON_SKILL =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m14.622 17.897-10.68-2.913"/><path d="M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z"/><path d="M9 8c-1.804 2.71-3.97 3.46-6 3.5m2 8c.5-1.5 1.5-2.5 3-3"/></svg>'
+export const ICON_SKILL = REF_ICONS.skill
 
 /** MCP 图标（插头）：与工具栏上的 MCP 按钮同源 */
-export const ICON_MCP =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>'
+export const ICON_MCP = REF_ICONS.mcp
 
 /** 标签里那枚图标：ProseMirror 直接把这串 HTML 塞进 span */
 function iconSpan(svg: string): HTMLElement {
@@ -52,6 +50,97 @@ function renderMenuRow(svg: string, name: string, hint: string): VNode {
 }
 
 /** 已装技能 → 资源标签（名字就是触发关键词，@ 或直接点列表插入） */
+/** 资产图标（图片） */
+export const ICON_ASSET = REF_ICONS.asset
+
+/** 资产引用要用的三样东西：本地路径 / 扩展名 / 所属资产库文件夹 id */
+export interface AssetRefInput {
+  id?: string
+  name: string
+  url: string
+  path?: string
+  folderId?: string
+  /**
+   * 这是一条**资产库文件夹**引用（不是文件）。
+   *
+   * 为什么必须显式标：文件夹的 path 是「里面资产的公共目录」，而目录名可能带点号
+   * （「素材 v1.2」）—— 光看扩展名会把文件夹误判成文件，点一下变成弹图片预览。
+   */
+  isFolder?: boolean
+}
+
+/** 点标签时广播出去的形状：与 `<ref type="asset" … />` 的属性一一对应 */
+export interface AssetRefOpen {
+  name: string
+  path?: string
+  ext?: string
+  folderId?: string
+}
+
+/**
+ * 从路径 / 地址 / 文件名里取扩展名（小写、不带点）。取不到返回空串。
+ *
+ * 为什么要三处都试：资产行给的是 url（`/api/assets/files/ab12.png`），拖拽/引用的老入口
+ * 可能只给 name，而 path 是后端惰性迁移补上的、可能缺。
+ */
+export function assetExtOf(a: { path?: string; url?: string; name?: string }): string {
+  for (const s of [a.path, a.url, a.name]) {
+    if (!s) continue
+    const m = /\.([A-Za-z0-9]{1,8})$/.exec(String(s).split('?')[0].split('#')[0].trim())
+    if (m) return m[1].toLowerCase()
+  }
+  return ''
+}
+
+/**
+ * 一份**资产**（左侧资产面板里的图/视频/音频）→ 资源标签。
+ * 走与技能/MCP 同一条插入通道：服务把待插项放进 state，输入框组件插成 chip。
+ *
+ * 标记里带的是**本机绝对路径**（asset.path），不是 HTTP 地址 ——
+ * 与技能引用给 SKILL.md 绝对路径同一条规矩：引用要能复制到本机 Agent（Codex 等）直接用，
+ * 给 URL 的话对方还得猜 base、下载，绕好几步。没有 path 的资产不会走到这里（入口不显示）。
+ *
+ * 另外带两个**给前端自己用**的字段（2026-10-08 用户口径：引用标签要能点开看东西）：
+ *   ext      扩展名 —— 点标签时按它挑预览器（图片/视频/音频/文本）；
+ *   folderId 资产库文件夹 id —— 点**文件夹**标签时定位到资产管理的那一层。
+ */
+export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen) => void): ResourceItem {
+  // 文件夹不取扩展名（见 AssetRefInput.isFolder 的说明）——「没有 ext」就是给读的人看的「这是目录」
+  const ext = asset.isFolder ? '' : assetExtOf(asset)
+  const open: AssetRefOpen = {
+    name: asset.name,
+    ...(asset.path ? { path: asset.path } : {}),
+    ...(ext ? { ext } : {}),
+    ...(asset.folderId ? { folderId: asset.folderId } : {}),
+  }
+  return {
+    id: 'asset:' + (asset.id ?? asset.url),
+    name: asset.name,
+    category: '资产',
+    value: asset.path || asset.url,
+    ref: {
+      kind: 'asset',
+      name: asset.name,
+      value: asset.path || asset.url,
+      ...(ext ? { ext } : {}),
+      ...(asset.folderId ? { folderId: asset.folderId } : {}),
+    },
+    renderItem: () => renderMenuRow(ICON_ASSET, asset.name, '资产'),
+    renderEditor: () => renderTag(ICON_ASSET, asset.name),
+    // 点输入框里这颗 chip = 与点对话气泡里的标签同一件事（预览 / 打开所在文件夹）。
+    // 不传 onOpen（纯展示场景）就不带点击行为 —— 与技能 / MCP 标签一致。
+    ...(onOpen ? { onClick: () => onOpen(open) } : {}),
+  }
+}
+
+/**
+ * 批量版 assetResource：多选工具栏「加入资产库」一次插多张图。
+ * 每一项与单张完全同形（同一渲染器、同一载荷口径），只是数量 N。
+ */
+export function assetResources(assets: AssetRefInput[], onOpen?: (ref: AssetRefOpen) => void): ResourceItem[] {
+  return assets.map((a) => assetResource(a, onOpen))
+}
+
 export function skillResources(skills: SkillRow[]): ResourceItem[] {
   return skills.map((sk) => ({
     id: 'skill:' + sk.name,
@@ -104,8 +193,7 @@ export interface CanvasNodeRow {
 }
 
 /** 节点图标（按类型粗分；装饰用，认不出就当通用节点） */
-export const ICON_NODE =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>'
+export const ICON_NODE = REF_ICONS.node
 
 /**
  * 画布节点 → 资源标签。

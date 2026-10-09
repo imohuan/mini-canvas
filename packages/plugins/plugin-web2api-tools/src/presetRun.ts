@@ -33,6 +33,8 @@ export interface RunDeps {
   cancelTask(taskId: string): Promise<{ ok: boolean; error?: string }>
   /** 服务端 origin（相对资源地址补全用） */
   origin(): string
+  /** 下单前把参考图整理成 web2api 可直接用的形态（可选；不给就原样传） */
+  prepareReferenceImages?(urls: string[]): Promise<string[]>
   /** 轮询间隔与超时（读设置） */
   config(): { pollIntervalMs: number; timeoutMs: number }
   now(): number
@@ -102,12 +104,17 @@ export async function pollOnce(taskId: string, deps: RunDeps): Promise<ToolPollS
   }
   const detail = res.data
   const status = detail?.status
-  // 暂停 / 轮询中断：任务既不前进也不结束，必须收敛成"停住了"，否则 UI 永远停在那个百分比
+  // 轮询中断（polling_failed）：任务不会自己往前走，必须收敛成"停住了"，
+  // 否则 UI 永远停在那个百分比上。
+  //
+  // 注意 `paused` 不在这里（用户实测的 bug，2026-10-08）：它是「等用户在浏览器里过验证码」，
+  // web2api 的 captcha-watcher 会自动盯着并恢复 —— 早先这里把它当"停住了"直接收工，
+  // 于是用户还在过验证码，画布上任务已经「完成（失败）」。现在它落进下面的 running 分支，
+  // 界面上继续转、消息显示暂停原因（"触发人机验证码…"），等它自己走完。
   if (isTaskStalled(status)) {
-    const why = status === 'paused' ? '任务被暂停' : '轮询中断'
     return {
       status: 'done',
-      result: { ok: false, error: (detail?.message || why) + '（可在 web2api 里恢复或重试）', taskId },
+      result: { ok: false, error: (detail?.message || '轮询中断') + '（可在 web2api 里恢复或重试）', taskId },
     }
   }
   if (status === 'failed') {
@@ -125,6 +132,7 @@ export async function pollOnce(taskId: string, deps: RunDeps): Promise<ToolPollS
   }
   return {
     status: 'running',
+    // 暂停类中间态（等验证码）优先显示服务端那句原因 —— 用户要知道"卡在哪、该做什么"
     message: detail?.message || '生成中…',
     progress: typeof detail?.progress === 'number' ? detail.progress : undefined,
     taskId,
@@ -158,7 +166,13 @@ export async function runPreset(
   deps: RunDeps,
   runCtx?: { signal?: AbortSignal },
 ): Promise<ToolOutcome> {
-  const args = buildToolArgs(input)
+  // 下单前把参考图整理成 web2api 能直接取的形态（本地素材先上传换成 referenceUrl；
+  // 没接这个能力、或没有参考图时，保持原样传）。整理失败的那项已被丢弃并 console.warn。
+  let referenceImages = input.referenceImages
+  if (deps.prepareReferenceImages && input.referenceImages.length > 0) {
+    referenceImages = await deps.prepareReferenceImages(input.referenceImages)
+  }
+  const args = buildToolArgs({ ...input, referenceImages })
   const called = await deps.callTool(input.preset.tool, args)
   if (!called.ok) return { ok: false, error: called.error ?? 'web2api 调用失败' }
 

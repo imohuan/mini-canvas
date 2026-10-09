@@ -20,7 +20,12 @@ import { RenderEvents, useCanvasRender } from '@mini-canvas/canvas-render'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
-import { followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
+import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
+
+/** 正有限数才算有值（与 videoFit 内同口径） */
+function positiveNum(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
 import { createVideoOps, displaySizeOf } from './videoOps'
 import { endOverlay, isCropping } from './videoSession'
 
@@ -98,6 +103,16 @@ function onLoadedMetadata(e: Event): void {
   const v = e.target as HTMLVideoElement
   duration.value = Number.isFinite(v.duration) ? v.duration : duration.value
   broken.value = false
+  // 兜底：卡片尺寸缺失（后台没写 videoWidth/Height 的视频，如 MCP/上传加的）时，
+  // 用 `<video>` 量到的真实宽高补一次 —— 宽高与卡片尺寸要一起写，否则按比例算卡片那步无从下手，
+  // 卡片会停在 4:3（9:16 竖视频被塞成横的，与图片节点同一个毛病）。
+  const w = v.videoWidth
+  const h = v.videoHeight
+  const hasCard = positiveNum(props.data?.cardWidth) !== null && positiveNum(props.data?.cardHeight) !== null
+  if (w > 0 && h > 0 && !hasCard) {
+    const patch = videoCardSizePatch(w, h, ops.fitLimits?.())
+    if (patch) ops.write(props.id, { ...(ops.read(props.id) ?? props.data), videoWidth: w, videoHeight: h }, patch.size)
+  }
   // 起点在剪辑段之前时先对齐到段首（换过剪辑范围后重新加载也适用）
   const { start } = clipRange.value
   if (start > 0 && v.currentTime < start) v.currentTime = start

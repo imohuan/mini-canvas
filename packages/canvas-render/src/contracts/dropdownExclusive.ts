@@ -27,6 +27,26 @@ const openClosers = new Set<() => void>()
  */
 export const DROPDOWN_CLOSE_ALL_EVENT = 'mini-canvas:dropdown-close-all'
 
+/**
+ * 「关掉所有**二级**菜单」的广播事件名（detail = 请求方 id；null = 全部关）。
+ *
+ * 为什么二级菜单要单独一条：一级菜单各自 claim 互斥，但**二级菜单的逻辑父级是一级菜单**，
+ * 它不能去 claim 互斥（那样会把父菜单一起关掉）。于是改成：
+ * - 一级菜单关闭时广播 null → 挂在它下面的二级菜单全收（二级浮层是 teleport 出去的，不在父 DOM 里，收不到别的信号）；
+ * - 二级菜单打开时广播自己的 id → 同级的兄弟菜单互相关掉（父菜单不受影响）。
+ */
+export const SUB_MENU_CLOSE_EVENT = 'mini-canvas:submenu-close'
+
+/** 关掉所有二级菜单（一级菜单关闭时调用） */
+export function closeAllSubMenus(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SUB_MENU_CLOSE_EVENT, { detail: null }))
+}
+
+/** 关掉除 keepId 之外的二级菜单（某个二级菜单打开时调用） */
+export function broadcastSubMenuOpen(keepId: string): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(SUB_MENU_CLOSE_EVENT, { detail: keepId }))
+}
+
 /** 广播「关掉所有下拉」（任何实现都会收到） */
 export function broadcastCloseAllDropdowns(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(DROPDOWN_CLOSE_ALL_EVENT))

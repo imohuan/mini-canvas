@@ -15,7 +15,27 @@
  *
  * 依赖方向：只依赖内核(@mini-canvas/canvas-base / canvas-data)，不反向依赖宿主/其它插件。
  */
-import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
+import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
+import TextPreview from './TextPreview.vue'
+
+/**
+ * 本插件可配置项（cordis P4：模块级 Config）。
+ *
+ * 键名带本包前缀 text…：内核 settings 是**全局同一张表、先声明者独占**，通用名会跟别的插件抢键。
+ * 分组沿用既有一级分类（布局 / 常规 / 节点 / 边）。
+ */
+export const Config: ConfigSchema = {
+  textDefaultWidth: {
+    type: 'number', default: 300, min: 80, max: 2000, step: 10,
+    label: '默认宽', group: '布局/文本节点尺寸',
+    description: '文本节点没有自己的尺寸时用的宽度（px）。改完立即生效：没被手动拖过尺寸的文本节点会立刻跟着变。',
+  },
+  textDefaultHeight: {
+    type: 'number', default: 200, min: 80, max: 2000, step: 10,
+    label: '默认高', group: '布局/文本节点尺寸',
+    description: '文本节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
+  },
+}
 import type { DocService } from '@mini-canvas/canvas-data'
 import TextContent from './TextContent.vue'
 import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
@@ -98,6 +118,10 @@ export function apply(ctx: Context) {
   // 1. 构造即上架 'text' 服务（super(ctx,'text') → ctx.provide，随插件 scope 回收）
   const text = new TextService(ctx)
 
+  // 文本**预览**注册件（从 TextContent 抽出的纯展示件）：登记进 ui 目录，
+  // 任何宿主按名取用 —— 换实现一起换（与 audioPreview / videoPreview 同一条路）。
+  ctx.registryOf<unknown>('ui').add('textPreview', TextPreview, { id: 'node-text' })
+
   // 1.5 底栏动作（T7：底部生成栏搬进 plugin-bottom-bar，本包只发布动作与写入器）
   //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
   //     注册糖把条目落在**本插件** scope（卸载自动摘除），所以这里不自己 ctx.effect。
@@ -157,6 +181,9 @@ export function apply(ctx: Context) {
       return text.addTextNode(position)
     },
   })
+
+  // 默认尺寸接设置面板：改完**实时**生效（没 resize 过的文本节点立刻跟着变）
+  bindTypeDefaultSize(ctx, 'text', { w: 300, h: 200 }, { widthKey: 'textDefaultWidth', heightKey: 'textDefaultHeight' })
 
   // 3. 命令：底部条的按钮与命令走**同一批服务方法**——按钮是"组件自己调实现"，
   //    命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。

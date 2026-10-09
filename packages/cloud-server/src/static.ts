@@ -188,6 +188,12 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
   for (const name of names.sort()) {
     if (name.startsWith('_') || name.startsWith('.')) continue
 
+    // 冷启动自带插件（miniCanvas.builtin: true）不进外部清单。
+    // 为什么必须卡：它们由应用 APP_PLUGINS 装配，产物多为「external @mini-canvas/* 的 ESM」，
+    // 被 install({ url }) 走 import(data:…) 加载时裸模块名解析不了，每次开页必炸一条
+    // "Failed to resolve module specifier"（实测：plugin-bottom-bar）。
+    if (await isBuiltinPlugin(path.join(pluginsDir, name))) continue
+
     // —— 形态一：目录下直接放的单个 .js 文件 ——
     // 这是给"手写个小插件试一下"准备的：扔一个 js 进来就行，不用搭 <包名>/dist/ 那套目录。
     // 前提同样是它得是 ESM（有顶层 export），否则浏览器那边加载会炸。
@@ -207,6 +213,20 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
     out.push({ id: await readPluginId(path.join(pluginsDir, name), name), url: `/plugins/${name}/${file}` })
   }
   return out
+}
+
+/**
+ * 该插件目录是否为**冷启动自带件**（package.json 声明 miniCanvas.builtin: true）。
+ * 与 /plugin-catalog.json 的 builtin 判据同源（见 plugins/catalog.ts 的 isBuiltin）。
+ */
+async function isBuiltinPlugin(pkgDir: string): Promise<boolean> {
+  try {
+    const raw = await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')
+    const pkg = JSON.parse(raw) as { miniCanvas?: { builtin?: boolean } }
+    return pkg.miniCanvas?.builtin === true
+  } catch {
+    return false
+  }
 }
 
 /**

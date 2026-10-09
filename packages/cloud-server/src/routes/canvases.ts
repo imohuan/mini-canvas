@@ -6,7 +6,10 @@
  *   GET  /api/canvases/:id                    → { ok, nodes, edges, view }
  *   PUT  /api/canvases/:id                    ← { nodes, edges }（整包保存）
  *   PUT  /api/canvases/:id/view               ← { x, y, zoom }
- *   POST /api/canvases/:id/resources          ← 原始字节（?name= 给扩展名）→ { ok, ref, hashName, size }
+ *   POST /api/canvases/:id/resources          ← 原始字节（?name= 给扩展名）
+ *                                               → { ok, url, hashName, size }
+ *                                               url 是**同源 URL**（/api/canvases/<id>/resources/<hash>），
+ *                                               直接就能写进节点 data 的 imageUrl 等字段
  *   GET  /api/canvases/:id/resources/:name    → 字节
  *
  * 与增量口的分工（两条都要）：

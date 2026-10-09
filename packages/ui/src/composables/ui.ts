@@ -1,24 +1,29 @@
 // useUi —— 画布外壳的共享 UI 状态（单例）。
 // 所有区域组件从这里读写状态，避免 App.vue 承担几十个 prop 的透传。
 // 只有纯 UI / 虚拟数据；画布本体仍由 CanvasHost 负责。
-import { computed, reactive, ref, shallowRef } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import type { SettingsStore } from '@mini-canvas/kernel'
 import {
   DEFAULT_THEME_EDGE, DEFAULT_THEME_HANDLE, DEFAULT_THEME_DEBUG, DEFAULT_THEME_SNAP_ZONE,
   EDGE_SETTING_KEYS, HANDLE_SETTING_KEYS, DEBUG_SETTING_KEYS, SNAP_ZONE_SETTING_KEYS,
 } from '@mini-canvas/plugin-theme-default'
-import { createV2Logger } from '@mini-canvas/canvas-render'
+import { createV2Logger, setUiCatalogHost } from '@mini-canvas/canvas-render'
 import { buildV2HelpList, groupV2HelpList, keyPartsToLabels } from '@mini-canvas/plugin-shortcut-manager'
 import { SAMPLE_IMAGE_URL } from '../assembly'
 import { buildCanvasTree, filterTree } from './canvasTree'
-import { listCanvases as apiListCanvases, createCanvas as apiCreateCanvas, listAssets as apiListAssets, renameCanvas as apiRenameCanvas, renameProject as apiRenameProject, type CanvasSummary } from './projectsApi'
-import { toAssetItems, type AssetItem } from './assetModel'
+import { listCanvases as apiListCanvases, createCanvas as apiCreateCanvas, duplicateCanvas as apiDuplicateCanvas, deleteCanvas as apiDeleteCanvas, listAssets as apiListAssets, uploadAsset as apiUploadAsset, deleteAsset as apiDeleteAsset, renameAsset as apiRenameAsset, renameCanvas as apiRenameCanvas, renameProject as apiRenameProject, listAssetFolders as apiListAssetFolders, createAssetFolder as apiCreateAssetFolder, renameAssetFolder as apiRenameAssetFolder, moveAssetFolder as apiMoveAssetFolder, setAssetFolderIcon as apiSetAssetFolderIcon, deleteAssetFolder as apiDeleteAssetFolder, moveAssets as apiMoveAssets, setAssetTags as apiSetAssetTags, type CanvasSummary, type AssetFolderSummary } from './projectsApi'
+import { toAssetItems, assetKindOf, type AssetItem } from './assetModel'
 import { registerPendingSave, unregisterPendingSave } from './pendingSave'
 
 const log = createV2Logger('config')
 
 interface HostApi {
-  ctx?: { get<T>(key: string): T; on(evt: string, cb: () => void): { dispose(): void } }
+  ctx?: {
+    get<T>(key: string): T
+    on(evt: string, cb: () => void): { dispose(): void }
+    /** 运行时是完整内核 Context：树外读 ui 目录用（类型窄声明即可） */
+    registryOf?<T>(name: string): { top(key: string): { value: T } | undefined }
+  }
   command?: { execute(id: string, payload?: unknown): void }
   nodeStore?: { getNodes(): unknown[] }
 }
@@ -41,8 +46,21 @@ export const readyHost: { readonly ctx?: HostApi['ctx'] } = {
     return hostRef.value?.ctx
   },
 }
+
+/**
+ * 按名取 ui 目录里登记的组件（画布树外也能用 —— 走宿主 ready ctx）。
+ * 树外区域（生成历史弹窗等）没有 useCanvasRender 的 provide，取不到渲染上下文；
+ * 宿主 ctx 就绪后从 registryOf('ui') 读一份即可。没就绪/没登记 → undefined。
+ */
+export function uiComponentOf(name: string): unknown {
+  return readyHost?.ctx?.registryOf?.<unknown>('ui')?.top(name)?.value
+}
 export function setReadyHost(h: unknown): void {
   hostRef.value = h as HostApi | undefined
+  // 同步给 canvas-render 的“树外取件”入口：MediaViewer（plugin-theme-default）在画布树外
+  // （资产抽屉 / 生成历史弹窗）也要能按名取注册件 —— 主题包不能反向依赖 ui 包，
+  // 所以由宿主侧在就绪时注入，见 canvas-render/contracts/uiCatalog.ts。
+  void setUiCatalogHost(readyHost?.ctx as never)
 }
 /** CanvasHost 暴露的完整宿主（与 window.MiniCanvasUI.getHost() 同源） */
 type FullHost = HostApi & { command: { execute(id: string, payload?: unknown): void }; nodeStore: { getNodes(): unknown[] } }
@@ -61,6 +79,9 @@ export interface TreeNode {
   y?: number
   /** 缩略图地址（图片/视频节点；由 canvasTree 从 data 里取，抽屉里直接当 <img> 用） */
   thumb?: string
+  /** 视频节点的播放地址（缩略图用 <video> 显示首帧；由 canvasTree.nodeVideoUrl 带来）。
+   *  与 thumb 分开：thumb 只认图（mp4 塞 <img> 必裂），视频没有海报时靠这个字段出首帧。 */
+  video?: string
 }
 
 function createUi() {
@@ -96,6 +117,12 @@ function createUi() {
     // 画布 tab 搜索：点放大镜进入搜索态（工具行变成 输入框+筛选+关闭），再点 × 或 Esc 退出
     searchOpen: false,
     searchQuery: '',
+    // 资产 tab：搜索关键字与类型筛选（「全部 / 图片 / 视频 / 音频 / 其他」；空 = 不筛）
+    assetSearchQuery: '',
+    assetFilterKind: '全部' as '全部' | '图片' | '视频' | '音频' | '其他',
+    // 资产 tab：批量选择模式（开关 + 已选 id 集合，转数组用）
+    assetBatchOn: false,
+    assetSelectedIds: [] as string[],
     // 底部 dock
     addMenuOpen: false,
     moveMenuOpen: false,
@@ -183,7 +210,9 @@ function createUi() {
     ],
     currentSkill: null as string | null,
     directorOpen: false,
-    director: { collab: true, budget: false, budgetLimit: 1000, notify: true, sound: true },
+    // 「浏览器通知 / 通知声音」已改读后台 KV（config/agentNotify，见 composables/agentSettings.ts），
+    // 不再在这里留一份 —— 两处各存一份就是漂移。collab/budget 仍是本地 UI 状态。
+    director: { collab: true, budget: false, budgetLimit: 1000 },
     publishOpen: false,
     creditsOpen: false,
     memberOpen: false,
@@ -203,7 +232,8 @@ function createUi() {
     histScopes: ['全部画布', '本画布'],
     histTypes: ['图片', '视频', '音频'],
     histScope: '全部画布',
-    histType: '',
+    // 进页面默认「图片」页签（用户口径：进来先看图片）
+    histType: '图片',
     histRating: '所有评级',
     histRatingOpen: false,
     histSortDesc: true,
@@ -212,7 +242,7 @@ function createUi() {
      * 生成历史 —— **数据来自后台**（gen-history 服务），不是写死的假数组。
      * 由 loadHistory() 拉取并填充；历史弹窗只负责渲染。
      */
-    historyItems: [] as Array<{ title: string; time: string; kind: string; urls?: string[] }>,
+    historyItems: [] as Array<{ id: string; title: string; time: string; kind: string; urls?: string[]; canvasId?: string; nodeId?: string }>,
     /** 汇总：一共生成过多少（按类型分）—— 喂给历史弹窗上的计数徽章 */
     historySummary: { total: 0, byKind: {} as Record<string, number> },
     /** 是否拿到了后台历史（没连后台时为 false，弹窗给一句说明而不是空转） */
@@ -221,6 +251,22 @@ function createUi() {
     histPage: 1,
     histPageSize: 20,
     histTotal: 0,
+    /** 历史是否还有下一页（滚到底部时给"加载中"或停止追加的依据） */
+    histHasMore: false,
+    /** 正在拉下一页（防触底重复请求） */
+    histLoadingMore: false,
+    /**
+     * 数据版本号：每次 loadHistory 成功自增。历史弹窗靠「版本变了」而不是「长度变了」
+     * 感知数据更新 —— 翻页/筛选后长度可能恰好相同（都是满页 20 条），长度 watch 会漏触发，
+     * 瀑布流就还挂着旧筛选的卡片（用户看到的"切到图片显示音频"）。
+     */
+    histDataVersion: 0,
+    /** 显示异常记录开关（无产物的那批）：默认关 —— 开关只在真的有异常记录时显示（弹窗按 summary 判断） */
+    histShowError: false,
+    /** 批量操作模式：进入后卡片出现勾选框，底部出操作栏 */
+    histBatchMode: false,
+    /** 批量选中的历史 id */
+    histSelectedIds: [] as string[],
   })
 
   // ===== 左侧树（**真实画布数据**）=====
@@ -375,6 +421,96 @@ function createUi() {
       'default'
     )
   }
+
+  // ===== 画布列表行的操作菜单（用户口径 2026-10-09）=====
+  // 「在新窗口打开 / 重命名画布 / 复制画布 / 删除画布」四件事的实现都收在这里：
+  // 组件只发事件（它不知道数据在哪），落盘/请求/导航全在宿主这一层。
+
+  /**
+   * 在新窗口打开某张画布：走 `#/canvas/<id>` 的新标签页。
+   *
+   * 为什么要先把当前画布写完：新标签页会读同一份后端数据，但**当前这张**的脏改动
+   * 可能还在防抖队列里；此时另开一个页面读到的就是旧数据，看起来像「新窗口没带我的改动」。
+   */
+  async function openCanvasInNewWindow(id: string): Promise<void> {
+    if (typeof window === 'undefined') return
+    await flushCanvasSave()
+    const base = window.location.href.split('#')[0]
+    window.open(base + '#/canvas/' + id, '_blank', 'noopener')
+  }
+
+  /**
+   * 重命名**指定**画布（列表行菜单用）。
+   *
+   * 名字从哪来：`window.prompt` 与「项目页新建项目 / 改名」同一种口径，不另造一套弹窗组件。
+   * 改的不是当前画布时，改完只要刷新列表；改的正是当前这张，界面上的名字框靠 computed 自己跟上。
+   */
+  async function renameCanvasById(id: string): Promise<void> {
+    if (typeof window === 'undefined') return
+    const cur = canvasOptions.value.find((c) => c.id === id)?.label ?? ''
+    const input = window.prompt('重命名画布', cur)
+    if (input === null) return
+    const next = input.trim()
+    if (!next || next === cur) return
+    try {
+      await apiRenameCanvas(id, next)
+      const item = canvasListItems.value.find((c) => c.id === id)
+      if (item) item.name = next
+      await refreshCanvasList()
+    } catch (err) {
+      console.warn('[ui] 改画布名失败', err)
+    }
+  }
+
+  /**
+   * 复制一张画布（节点 / 边 / 资源 / 历史一起；**视口不带走** —— 复制内容不复制「我当时看到哪儿」）。
+   * 复制完刷新列表，副本就出现在下拉里（不自动切过去：用户多半是拿它做另一版，不是当场改它）。
+   */
+  async function duplicateCanvas(id: string): Promise<void> {
+    try {
+      await apiDuplicateCanvas(id)
+      await refreshCanvasList()
+    } catch (err) {
+      console.warn('[ui] 复制画布失败', err)
+    }
+  }
+
+  /**
+   * 删掉一张画布（连带文件夹与资源）。
+   *
+   * 用户口径（2026-10-09）：「不管是哪个画布都支持删除，即使是当前选中的也支持删除。
+   * 只不过你删除之后，跳转到第一个画布就行了呀」。所以**没有例外**：内置画布也删，
+   * 当前正在看的也删；删完跳到剩下清单里的第一张。
+   *
+   * 两条必须保留的收尾（否则会白屏）:
+   * ① 删的正是当前这张时，先把脏改动落盘让路，再删、再导航 —— 删完还停在已不存在的 hash 上就白屏了；
+   * ② 删空了（一张不剩）时**补建一张空画布**再跳过去 —— 没画布可跳同样白屏，而且用户回到下拉里
+   *    必须还能看见至少一张。
+   */
+  async function deleteCanvas(id: string): Promise<void> {
+    if (typeof window !== 'undefined' && !window.confirm('删除画布「' + (canvasNameOf(id)) + '」及其全部内容？')) return
+    const wasCurrent = id === currentCanvasId.value
+    try {
+      if (wasCurrent) await flushCanvasSave()
+      await apiDeleteCanvas(id)
+      if (wasCurrent) {
+        // 跳到剩下清单里的第一张；一张不剩就现建一张（删空了也得有画布可看）
+        const next = canvasListItems.value.find((c) => c.id !== id)
+        if (next) {
+          // openCanvas 会先 flush + 换 hash；此处 next 一定与当前 id 不同，能真正导航
+          await openCanvas(next.id)
+          await refreshCanvasList()
+          return
+        }
+        await newCanvas()
+        return
+      }
+      await refreshCanvasList()
+    } catch (err) {
+      console.warn('[ui] 删除画布失败', err)
+    }
+  }
+
   /** 读项目名 → 工作区名（用户口径：工作区名就是这个项目文件夹的名字） */
   async function loadProjectName(): Promise<void> {
     try {
@@ -411,9 +547,24 @@ function createUi() {
   })
   // 历史：筛选与排序在**后台**做（那里有全量账本），这里只负责把结果拿出来渲染。
   // 所以 histVisible 不再本地过滤 —— 后台已经把当前页筛好了。
-  const histVisible = computed(() => state.historyItems)
-  /** 计数徽章：用后台的汇总（不是本地数当前页） */
-  const histCount = (kind: string): number => state.historySummary.byKind[kind] ?? 0
+  /**
+   * 历史可见条目：异常开关关闭时滤掉"无产物"的记录（用户口径：异常卡默认不出现，
+   * 打开"显示异常"开关才看得到）。开关开着或批量模式里全部可见（选择/删除异常也合理）。
+   */
+  const histVisible = computed(() =>
+    state.histShowError ? state.historyItems : state.historyItems.filter((e) => (e.urls?.length ?? 0) > 0),
+  )
+  /** 当前页里有多少条异常（弹窗按它决定"显示异常"开关显不显示） */
+  const histErrorCount = computed(() => state.historyItems.filter((e) => !e.urls || e.urls.length === 0).length)
+  /** 历史弹窗上那些中文标签 ↔ 后台的英文值（显示层的事，写在显示层） */
+  const HIST_KIND: Record<string, string> = { 图片: 'image', 视频: 'video', 音频: 'audio' }
+  /**
+   * 计数徽章：用后台的汇总（不是本地数当前页）。
+   *
+   * 后台的 byKind 键是**英文**（image / video / audio），而徽章上的标签是中文 —— 必须转一道，
+   * 否则 `byKind['图片']` 永远是 undefined，三个计数全显示 0（用户报的就是这个）。
+   */
+  const histCount = (kind: string): number => state.historySummary.byKind[HIST_KIND[kind] ?? kind] ?? 0
 
   // ===== 资产：所有**生成了产物**的历史记录（图片 / 视频 / 音频）=====
   // 用户口径：资产 = 所有生成过的列表 + 自己上传的资源。生成记录后台本来就有全量账本
@@ -431,17 +582,234 @@ function createUi() {
       assetItems.value = []
     }
   }
-  /** 资产计数：按类型（喂给资产页顶部的小统计） */
-  const assetCount = (kind: string): number => state.historySummary.byKind[kind] ?? 0
+  /**
+   * 资产 tab 的搜索 / 筛选（用户报的「点了没效果」）。
+   * 搜索按名字匹配；类型筛选按 图片/视频/音频/其他 —— 都是纯前端过滤，不打后台。
+   */
+  const filteredAssets = computed<AssetItem[]>(() => {
+    const q = (state.assetSearchQuery || '').trim().toLowerCase()
+    const kindWanted = state.assetFilterKind
+    return assetItems.value.filter((a) => {
+      if (q && !a.name.toLowerCase().includes(q)) return false
+      if (kindWanted !== '全部') {
+        // 中文筛选标签 → 后台的英文 kind
+        const want = kindWanted === '图片' ? 'image' : kindWanted === '视频' ? 'video' : kindWanted === '音频' ? 'audio' : 'other'
+        if (a.kind !== want) return false
+      }
+      return true
+    })
+  })
+  /** 上传资产：选择文件后直传后台，成功即刷新清单（新增项会出现在列表最前） */
+  async function uploadAssets(files: FileList | File[]): Promise<void> {
+    const list = Array.from(files)
+    for (const f of list) {
+      try {
+        await apiUploadAsset(f.name, f)
+      } catch (err) {
+        console.warn('[ui] 资产上传失败: ' + f.name, err)
+      }
+    }
+    await loadAssets()
+  }
+  /** 带位置的上传（上传弹窗用）：逐个字节直传后台并登记进 folderId */
+  async function uploadAssetsTo(files: FileList | File[], folderId?: string): Promise<void> {
+    for (const f of Array.from(files)) {
+      try {
+        await apiUploadAsset(f.name, f, folderId)
+      } catch (err) {
+        console.warn('[ui] 资产上传失败: ' + f.name, err)
+      }
+    }
+    await loadAssets()
+  }
+  /**
+   * 从**画布上已有的图**上传（节点右键 / 多选「加入资产库」用）：
+   * 先把地址取成字节，再走与本地文件同一条 API —— 用户口径「和左侧侧边栏点击一样」。
+   */
+  async function uploadAssetsFromUrls(items: { url: string; name: string }[], folderId?: string): Promise<void> {
+    for (const it of items) {
+      try {
+        const bytes = await fetch(it.url).then((r) => {
+          if (!r.ok) throw new Error('HTTP ' + r.status)
+          return r.blob()
+        })
+        await apiUploadAsset(it.name, bytes, folderId)
+      } catch (err) {
+        console.warn('[ui] 画布图入库失败: ' + it.name, err)
+      }
+    }
+    await loadAssets()
+  }
+  /** 删除资产：调后台 DELETE 后本地摘掉该项（不用整表重拉，删一条已知 id） */
+  async function deleteAssetById(id: string): Promise<void> {
+    try {
+      await apiDeleteAsset(id)
+      assetItems.value = assetItems.value.filter((a) => a.id !== id)
+    } catch (err) {
+      console.warn('[ui] 资产删除失败: ' + id, err)
+    }
+  }
+  /** 资产改名 */
+  async function renameAssetById(id: string, name: string): Promise<void> {
+    try {
+      await apiRenameAsset(id, name)
+      await loadAssets()
+    } catch (err) {
+      console.warn('[ui] 资产改名失败: ' + id, err)
+    }
+  }
 
-  /** 历史弹窗上那些中文标签 ↔ 后台的英文值（显示层的事，写在显示层） */
-  const HIST_KIND: Record<string, string> = { 图片: 'image', 视频: 'video', 音频: 'audio' }
+  // ===== 资产文件夹（树形）+ 批量选择 + 标签 =====
+  const assetFolders = ref<AssetFolderSummary[]>([])
+  async function loadAssetFolders(): Promise<void> {
+    try {
+      assetFolders.value = await apiListAssetFolders()
+    } catch {
+      assetFolders.value = []
+    }
+  }
+  /** 建文件夹（parentId 空 = 根目录）；成功后刷新文件夹清单 */
+  async function newAssetFolder(name: string, parentId?: string): Promise<void> {
+    try {
+      await apiCreateAssetFolder(name, parentId)
+      await loadAssetFolders()
+    } catch (err) {
+      console.warn('[ui] 新建文件夹失败: ' + name, err)
+    }
+  }
+  async function renameAssetFolderById(id: string, name: string): Promise<void> {
+    try {
+      await apiRenameAssetFolder(id, name)
+      await loadAssetFolders()
+    } catch (err) {
+      console.warn('[ui] 文件夹改名失败: ' + id, err)
+    }
+  }
+  async function setAssetFolderIcon(id: string, icon: string): Promise<void> {
+    try {
+      await apiSetAssetFolderIcon(id, icon)
+      await loadAssetFolders()
+    } catch (err) {
+      console.warn('[ui] 设置文件夹图标失败: ' + id, err)
+    }
+  }
+  async function removeAssetFolder(id: string): Promise<void> {
+    try {
+      await apiDeleteAssetFolder(id)
+      await Promise.all([loadAssetFolders(), loadAssets()])
+    } catch (err) {
+      console.warn('[ui] 删文件夹失败: ' + id, err)
+    }
+  }
+  /** 文件夹移动（拖拽嵌套 / 「移动到」二级菜单共用）：target 空 = 回根 */
+  async function moveAssetFolderTo(id: string, parentId?: string): Promise<void> {
+    try {
+      await apiMoveAssetFolder(id, parentId)
+      await loadAssetFolders()
+    } catch (err) {
+      console.warn('[ui] 移动文件夹失败: ' + id, err)
+    }
+  }
+  /**
+   * 批量移动（「移动到」= 真挪；「添加到」= 也落归属，后台同一字段）。
+   *
+   * 成功给一句 toast（用户报过「移动到没生效」：其实挪成了，但列表里没明显变化、
+   * 也没有任何反馈，看着像没反应）。loadAssets 之后 assetFolderTree 的 count 也会跟着重算。
+   */
+  async function moveSelectedAssets(folderId?: string, idList?: string[]): Promise<void> {
+    const ids = idList ?? [...state.assetSelectedIds]
+    if (!ids.length) return
+    try {
+      await apiMoveAssets(ids, folderId)
+      await loadAssets()
+      const target = folderId ? assetFolders.value.find((f) => f.id === folderId)?.name : ''
+      showToast('已移动 ' + ids.length + ' 项到「' + (target || '个人资产库') + '」')
+    } catch (err) {
+      console.warn('[ui] 批量移动失败', err)
+    }
+  }
+  /** 单资产挪文件夹（上传弹窗按位置归档用） */
+  async function moveAssetTo(id: string, folderId?: string): Promise<void> {
+    try {
+      await apiMoveAssets([id], folderId)
+      await loadAssets()
+    } catch (err) {
+      console.warn('[ui] 移动资产失败: ' + id, err)
+    }
+  }
+  /** 给单个资产覆盖标签 */
+  async function tagsForAsset(id: string, tags: string[]): Promise<void> {
+    try {
+      await apiSetAssetTags(id, tags)
+      await loadAssets()
+    } catch (err) {
+      console.warn('[ui] 设置标签失败: ' + id, err)
+    }
+  }
+  /** 批量选择开关：退出时清空已选 */
+  function toggleAssetBatch(on?: boolean): void {
+    state.assetBatchOn = on ?? !state.assetBatchOn
+    if (!state.assetBatchOn) state.assetSelectedIds = []
+  }
+  function toggleAssetSelected(id: string): void {
+    const i = state.assetSelectedIds.indexOf(id)
+    if (i >= 0) state.assetSelectedIds.splice(i, 1)
+    else state.assetSelectedIds.push(id)
+  }
+
+  /** 资产文件夹树（含每层下的资产数量，供行尾角标） */
+  const assetFolderTree = computed(() => {
+    type FolderNode = AssetFolderSummary & { children: FolderNode[]; count: number }
+    const byId = new Map<string, FolderNode>()
+    for (const f of assetFolders.value) byId.set(f.id, { ...f, children: [], count: 0 })
+    const roots: FolderNode[] = []
+    for (const node of byId.values()) {
+      const parent = node.parentId ? byId.get(node.parentId) : undefined
+      if (parent) parent.children.push(node)
+      else roots.push(node)
+    }
+    // 数量 = 直接挂在文件夹下的资产数（不含子文件夹，直观对应「这个文件夹里有几张」）
+    for (const a of assetItems.value) {
+      const key = a.folderId ?? ''
+      const node = byId.get(key)
+      if (node) node.count++
+    }
+    const sortRec = (list: FolderNode[]) => {
+      list.sort((x, y) => x.name.localeCompare(y.name, 'zh'))
+      for (const n of list) sortRec(n.children)
+    }
+    sortRec(roots)
+    return roots
+  })
+
+  // ===== 「加入资产库」上传弹窗的共享输入（节点右键 / 多选两条入口的宿主用）=====
+  /** 平铺的文件夹行（上传弹窗「保存位置」下拉用；与左侧那个弹窗同一份数据） */
+  const flatFoldersForUpload = computed(() => {
+    const out: { id: string; name: string; depth: number }[] = []
+    const walk = (list: typeof assetFolderTree.value, depth: number): void => {
+      for (const f of list) {
+        out.push({ id: f.id, name: f.name, depth })
+        walk(f.children, depth + 1)
+      }
+    }
+    walk(assetFolderTree.value, 0)
+    return out
+  })
+  /** 标签固定清单（上传弹窗「设置标签」用；与 LeftDrawer 的 ASSET_TAGS 同一份口径） */
+  const assetTagOptions = computed(() => ['角色', '场景', '物品', '风格', '音效'])
+
+  /** 资产计数：按类型（喂给资产页顶部的小统计）—— 与 histCount 同一道中英转换 */
+  const assetCount = (kind: string): number => state.historySummary.byKind[HIST_KIND[kind] ?? kind] ?? 0
+
+  /** 评级筛选的中文标签 ↔ 后台英文值 */
   const HIST_RATING: Record<string, string> = {
     所有评级: 'all',
     已通过: 'passed',
     待审核: 'pending',
     已拒绝: 'rejected',
   }
+  /** 历史请求序号：只让最新一次请求的结果落表（防快速切页签时旧响应覆盖新响应） */
+  let historyReqSeq = 0
 
   /**
    * 从后台拉一页历史。
@@ -450,9 +818,9 @@ function createUi() {
    * （比如纯前端开着）时服务不存在 —— 给一句人话，而不是装作"没有历史"。
    */
   async function loadHistory(): Promise<void> {
-    const svc = readyHost?.ctx?.get<{
+      const svc = readyHost?.ctx?.get<{
       query(q?: Record<string, unknown>): Promise<{
-        items: Array<{ title: string; kind: string; finishedAt: number; urls?: string[] }>
+        items: Array<{ id: string; title: string; kind: string; finishedAt: number; urls?: string[]; canvasId?: string; nodeId?: string }>
         total: number
         page: number
         pageSize: number
@@ -463,6 +831,9 @@ function createUi() {
       state.historyReady = false
       return
     }
+    // 请求序号：快速切页签/触底时多个请求并发，慢的旧响应不能覆盖新响应
+    //（否则点"图片"后，晚到的"音频"响应会把画面改回去 —— 用户报的错乱之一）。
+    const seq = ++historyReqSeq
     try {
       const page = await svc.query({
         page: state.histPage,
@@ -472,21 +843,39 @@ function createUi() {
           ? { rating: HIST_RATING[state.histRating] ?? state.histRating }
           : {}),
         order: state.histSortDesc ? 'desc' : 'asc',
-        ...(state.histScope === '本画布' ? { canvasId: 'default' } : {}),
+        // 「本画布」= URL 里那个真实画布 id（`currentCanvasId`）——
+        // 以前写死 `'default'`，于是切到别的画布后「本画布」筛的是 default 的历史（与屏幕上的画布对不上）。
+        ...(state.histScope === '本画布' ? { canvasId: currentCanvasId.value } : {}),
       })
-      state.historyItems = page.items.map((e) => ({
+      if (seq !== historyReqSeq) return // 已有更新的请求发出，丢弃这份过期响应
+      const mapped = page.items.map((e) => ({
+        id: e.id,
         title: e.title,
         time: formatAgo(e.finishedAt),
         // 后台给英文值，这里换回中文标签（弹窗按中文渲染）
         kind: e.kind === 'video' ? '视频' : e.kind === 'audio' ? '音频' : '图片',
         ...(e.urls && e.urls.length > 0 ? { urls: e.urls } : {}),
+        // 画布 / 节点 id 也要带上：卡片缩略图要按「同源资源地址」取图（见 ModalsArea 的 thumbOf）
+        ...(e.canvasId ? { canvasId: e.canvasId } : {}),
+        ...(e.nodeId ? { nodeId: e.nodeId } : {}),
       }))
+      // 追加式分页：第 1 页（或筛选切换后回到第 1 页）替换整表；后续页**追加**，
+      // 无限滚动才能不断把下一批接到已有卡片后面（历史卡片 DOM 与滚动位置都保留）。
+      if (state.histPage <= 1) {
+        state.historyItems = mapped
+      } else {
+        state.historyItems.push(...mapped)
+      }
       state.historySummary = page.summary
       state.histTotal = page.total
+      state.histHasMore = page.items.length >= state.histPageSize
+      state.histDataVersion += 1
       state.historyReady = true
     } catch (err) {
       console.warn('[ui] 拉历史失败', err)
       state.historyReady = false
+      // 失败也要推进版本：弹窗可能在等新数据重建（filterSwitching 挂着会白屏）
+      state.histDataVersion += 1
     }
   }
 
@@ -537,7 +926,15 @@ function createUi() {
     docked: boolean
     width: number
     title: string
+    /** 当前会话 id（历史列表高亮「我现在在哪条」要它；null = 还没开聊） */
+    sessionId: string | null
     sessions: Array<{ id: string; title: string; preview?: string }>
+    /** 历史列表行：一个对话一行（分支树聚合；rootId = 点击目标） */
+    conversations: Array<{
+      rootId: string
+      memberIds: string[]
+      meta: { id: string; title: string; preview?: string; updatedAt: number }
+    }>
   }
   const agentSvc = (): { state: AgentShellView } | undefined =>
     readyHost?.ctx?.get<{ state: AgentShellView }>('agent')
@@ -570,6 +967,16 @@ function createUi() {
     get sessions(): Array<{ id: string; title: string; preview?: string }> {
       return agentSvc()?.state.sessions ?? []
     },
+    get sessionId(): string | null {
+      return agentSvc()?.state.sessionId ?? null
+    },
+    get conversations(): Array<{
+      rootId: string
+      memberIds: string[]
+      meta: { id: string; title: string; preview?: string; updatedAt: number }
+    }> {
+      return agentSvc()?.state.conversations ?? []
+    },
   }
   /** 打开 / 收起面板（服务上没 toggle 时退回直接翻 open） */
   function setAgentOpen(open: boolean): void {
@@ -593,6 +1000,21 @@ function createUi() {
     state.agentHistoryOpen = false
     const svc = readyHost?.ctx?.get<{ openSession?: (id: string) => Promise<void> }>('agent')
     if (svc?.openSession) void svc.openSession(id)
+  }
+  /**
+   * 打开一个「对话」：优先停在当前会话（若它属于这棵树 —— 分支里任意一条），
+   * 否则打开最新更新的那条成员。这样点历史列表不会把用户从当前分支踢走。
+   */
+  function openAgentConversation(rootId: string, memberIds: string[]): void {
+    const current = agentSvc()?.state.sessionId
+    const target = current && memberIds.includes(current) ? current : memberIds[0] ?? rootId
+    openAgentSession(target)
+  }
+  /** 删一个「对话」= 删整棵树（分支一起删；用户口径：一个对话就是一份历史） */
+  function deleteAgentConversation(memberIds: string[]): void {
+    const svc = readyHost?.ctx?.get<{ deleteSession?: (id: string) => Promise<void> }>('agent')
+    if (!svc?.deleteSession) return
+    for (const id of [...memberIds].reverse()) void svc.deleteSession(id)
   }
   function renameAgentSession(id: string, current: string): void {
     const next = window.prompt('重命名这个对话', current)
@@ -924,11 +1346,37 @@ function createUi() {
     currentCanvasId.value = canvasIdFromUrl()
     void refreshCanvasList()
     void loadAssets()
+    // 文件夹清单也在就绪时拉一次（不只等「打开资产 tab」）：
+    // 「加入资产库」上传弹窗的"保存位置"下拉、节点/多选的资产入口都要用它，
+    // 那些入口在抽屉关着时也能用 —— 只在开 tab 时拉就会看到空/过期的下拉。
+    void loadAssetFolders()
     void loadProjectName()
     await installExternalPlugins()
     // 外部插件装完（云插件会挂上 gen-history 服务）再拉历史；顺带订阅"有新生成"
     void loadHistory()
     bindHistoryUpdates()
+    bindHistoryFilters()
+    // 外部插件（多选工具栏 / 节点右键）往资产库塞了新东西时刷新清单
+    bindAssetsChanged()
+  }
+
+  /**
+   * 订阅「资产库被外部入口改了」（多选工具栏「加入资产库」、节点右键「加入资产库」）：
+   * 那些入口走插件、直接 POST /api/assets，不经过 ui 层 —— 发一条 window 事件，
+   * 这里收到就重拉资产清单，左侧面板立刻能看到新条目。
+   */
+  function bindAssetsChanged(): void {
+    if (typeof window === 'undefined') return // Node 单测环境无 window：跳过副作用
+    window.removeEventListener('mini-canvas:assets-changed', onAssetsChanged)
+    window.addEventListener('mini-canvas:assets-changed', onAssetsChanged)
+  }
+  function unbindAssetsChanged(): void {
+    if (typeof window === 'undefined') return
+    window.removeEventListener('mini-canvas:assets-changed', onAssetsChanged)
+  }
+  function onAssetsChanged(): void {
+    void loadAssets()
+    if (state.leftTab === 'assets') void loadAssetFolders()
   }
 
   /**
@@ -951,6 +1399,102 @@ function createUi() {
   function unbindHistory(): void {
     disposeHistorySub?.()
     disposeHistorySub = undefined
+    unbindHistoryFilters()
+  }
+
+  /**
+   * 筛选条件（画布范围 / 类型 / 评级 / 排序）一变就重拉。
+   *
+   * 为什么必须有：这些条件是由 state 驱动的，以前只在**打开弹窗**时拉一次 ——
+   * 用户点了「图片」「本画布」后列表纹丝不动（看上去就像筛选坏了）。
+   * 只在弹窗开着时拉，避免后台白白扫一遍全量账本。
+   */
+  let disposeHistFilterWatch: (() => void) | undefined
+  function bindHistoryFilters(): void {
+    disposeHistFilterWatch?.()
+    disposeHistFilterWatch = watch(
+      () => [state.histScope, state.histType, state.histRating, state.histSortDesc, state.histPageSize],
+      () => {
+        if (!state.historyOpen) return
+        state.histPage = 1 // 换筛选条件要回到第一页
+        void loadHistory()
+      },
+    )
+  }
+
+  /** 撤掉筛选 watch（宿主销毁时调用） */
+  function unbindHistoryFilters(): void {
+    disposeHistFilterWatch?.()
+    disposeHistFilterWatch = undefined
+  }
+
+  /**
+   * 无限滚动：历史弹窗滚到底部时拉下一页并**追加**（不重置 renderedCount，
+   * 已渲染的卡片与滚动位置都保留 —— 参照 web2api 画廊「触底再加载一批」的体验）。
+   */
+  function loadMoreHistory(): void {
+    if (!state.historyOpen || !state.histHasMore || state.histLoadingMore) return
+    state.histLoadingMore = true
+    state.histPage += 1
+    void loadHistory().finally(() => {
+      state.histLoadingMore = false
+    })
+  }
+
+  // ===== 批量操作（历史弹窗底部操作栏）=====
+  /** 后台调用（同源；与 projectsApi 同风格但不 import —— 那份没覆盖 history 路由） */
+  async function histReq<T>(path: string, body?: unknown): Promise<T> {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    })
+    const data = (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string }
+    if (!res.ok || data?.ok === false) throw new Error(data?.error || '请求失败（HTTP ' + res.status + '）')
+    return data
+  }
+
+  /** 批量删除选中历史（后台删账本条目；产物资源文件不动） */
+  async function batchDeleteHistory(): Promise<void> {
+    const ids = [...state.histSelectedIds]
+    if (ids.length === 0) return
+    try {
+      const r = await histReq<{ removed: number }>('/api/history/batch-delete', { ids })
+      showToast('已删除 ' + r.removed + ' 条')
+      state.histSelectedIds = []
+      state.histPage = 1
+      await loadHistory()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '删除失败')
+    }
+  }
+
+  /** 批量改评级 */
+  async function batchRateHistory(rating: 'passed' | 'pending' | 'rejected'): Promise<void> {
+    const ids = [...state.histSelectedIds]
+    if (ids.length === 0) return
+    try {
+      const r = await histReq<{ updated: number }>('/api/history/batch-rating', { ids, rating })
+      showToast('已更新 ' + r.updated + ' 条评级')
+      state.histSelectedIds = []
+      state.histPage = 1
+      await loadHistory()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '评级失败')
+    }
+  }
+
+  /** 批量保存到资产（把产物地址登记进资产库，addByUrl 按地址去重） */
+  async function batchSaveAssets(): Promise<void> {
+    const ids = [...state.histSelectedIds]
+    if (ids.length === 0) return
+    try {
+      const r = await histReq<{ saved: number }>('/api/history/batch-save-assets', { ids })
+      showToast('已保存 ' + r.saved + ' 项到资产')
+      state.histSelectedIds = []
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : '保存失败')
+    }
   }
 
   /**
@@ -992,6 +1536,226 @@ function createUi() {
     }
     if (type === 'image') payload.imageUrl = SAMPLE_IMAGE_URL
     return payload
+  }
+  /** 一份资产在画布上对应的节点类型：image / video / audio；不支持的类型 → null */
+  function nodeTypeOfAsset(asset: { kind?: string; assetKind?: string }): 'image' | 'video' | 'audio' | null {
+    const kind = assetKindOf(asset)
+    return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : null
+  }
+
+  /** 建节点时的落点：优先用调用方给的 flow 坐标（拖拽落点），否则按已有节点数级联错开 */
+  function spawnPosition(atFlow?: { x: number; y: number }): { x: number; y: number } {
+    if (atFlow && Number.isFinite(atFlow.x) && Number.isFinite(atFlow.y)) {
+      // 拖拽落点 = 指针位置：把节点左上角回退半个身位，视觉上"落在指针处"而不是"指针在左上角"
+      return { x: Math.round(atFlow.x - 24), y: Math.round(atFlow.y - 24) }
+    }
+    const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
+    const count = host?.nodeStore?.getNodes().length ?? 0
+    return { x: 80 + (count % 5) * 48, y: 80 + Math.floor(count / 5) * 60 }
+  }
+
+  /** 只选中（不动视口）：拖拽落点已在用户眼前，再挪视口等于画布自己乱动 */
+  function selectNewNode(newId: unknown): void {
+    if (typeof newId !== 'string' || !newId) return
+    hostCtx()?.get<{ set(ids: Iterable<string>): void }>('selection')?.set([newId])
+  }
+
+  /** 建完选中 + 聚焦（等价按 F）；宿主没就绪或没返回 id 时静默跳过 */
+  function focusNewNode(newId: unknown): void {
+    if (typeof newId !== 'string' || !newId) return
+    const ctx = hostCtx()
+    const selection = ctx?.get<{ set(ids: Iterable<string>): void }>('selection')
+    selection?.set([newId])
+    // 聚焦放在 nextTick：节点刚建出来，等一帧让渲染层拿到它的位置/尺寸再算 bounds。
+    void nextTick(() => ctx?.get<{ execute(id: string): unknown }>('command')?.execute('auto-layout:focus-selected'))
+  }
+
+  /** 取画布宿主（hostEl 优先；没有就退到 window 上暴露的那份） */
+  function canvasHost(): FullHost | undefined {
+    const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
+    return host ?? (window as unknown as { MiniCanvasUI?: { getHost(): FullHost } }).MiniCanvasUI?.getHost()
+  }
+
+  /**
+   * 指定类型与地址建节点（资产「添加到画布」/ 拖拽落画布共用）。
+   *
+   * 为什么分类型走**插件自己的服务**而不是一条命令：image 有 command:create-node 的 extra 通道，
+   * video / audio 的初始地址通道在各自插件的服务上（addVideoNode / addAudioNode）——
+   * 那是各类型唯一的写入口，从这里进才不会绕过撤销栈/落盘/默认尺寸（与按钮同一条路）。
+   * atFlow 给了就用它当落点（拖拽），没给就级联错开（菜单"添加到画布"）。
+   */
+  function createAssetNode(
+    asset: { name?: string; url: string; kind?: string; assetKind?: string },
+    atFlow?: { x: number; y: number },
+  ): string | null {
+    const type = nodeTypeOfAsset(asset)
+    if (!type) {
+      showToast('暂不支持把「' + assetKindOf(asset) + '」类型的资产添加到画布')
+      return null
+    }
+    const target = canvasHost()
+    const ctx = hostCtx()
+    const position = spawnPosition(atFlow)
+    let newId: unknown
+    if (type === 'image') {
+      if (!target?.command) return null
+      newId = target.command.execute('command:create-node', {
+        type: 'image',
+        position,
+        imageUrl: asset.url,
+        ...(asset.name ? { name: asset.name } : {}),
+      })
+    } else {
+      // video / audio：走插件服务（服务名与节点类型同名；插件没装 → undefined → 明确反馈）
+      const svc = ctx?.get<{ addVideoNode?: (p: { x: number; y: number }, url?: string) => string; addAudioNode?: (p: { x: number; y: number }, url?: string) => string }>(type)
+      if (type === 'video' && svc?.addVideoNode) newId = svc.addVideoNode(position, asset.url)
+      else if (type === 'audio' && svc?.addAudioNode) newId = svc.addAudioNode(position, asset.url)
+      else {
+        showToast('「' + type + '」节点插件未启用，无法添加')
+        return null
+      }
+    }
+    /**
+     * 选中新节点**总是要做**（用户一眼看到"加进来了"），但**取景只在不拖拽时做**：
+     *   用户口径（2026-10-07）：「从左侧面板拖拽到画布添加节点时，希望不要对画布进行任何缩放和平移操作，
+     *   直接添加上去就行」—— 拖拽的落点就是用户当前正看着的地方，再把视口挪走属于"画布自己乱动"。
+     *   菜单「添加到画布」那条路（atFlow 为空）节点可能落在视口外，所以照旧取景。
+     */
+    if (atFlow) selectNewNode(newId)
+    else focusNewNode(newId)
+    return typeof newId === 'string' ? newId : null
+  }
+
+  /**
+   * 指定图片地址建图片节点（资产「添加到画布」用；复用 command:create-node 的 payload 形状）。
+   *
+   * 建完**选中它并聚焦**（等价于按 F）—— 用户口径：「节点添加到画布之后，自动聚焦就是快捷键 F」。
+   * 不这么做的话，新节点可能落在当前视口外，用户看不到"加进去了"（以为没生效）。
+   */
+  function createImageNodeWithUrl(imageUrl: string, name?: string): void {
+    createAssetNode({ url: imageUrl, ...(name ? { name } : {}) }, undefined)
+  }
+
+  /**
+   * 屏幕坐标 → flow 坐标（拖拽落画布时把指针位置换算成节点位置）。
+   * viewport 服务缺失（宿主未就绪）→ null，调用方退级联默认落点。
+   */
+  function screenToFlow(clientX: number, clientY: number): { x: number; y: number } | null {
+    const vp = hostCtx()?.get<{ screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    if (!vp?.screenToFlow) return null
+    try {
+      return vp.screenToFlow(clientX, clientY)
+    } catch {
+      return null
+    }
+  }
+
+  // ===== 资产「服务动作」：把资产接到画布 / Agent =====
+  // 为什么收进 ui 层当**服务**（用户口径：「我觉得你应该把这个功能做成一个服务」）：
+  // 左侧抽屉、资产管理弹窗、将来的右键菜单/搜索面板都要干同一件事，散在各组件里必然走样。
+  // 这里只做「取到目标（ctx 服务 / 画布命令）→ 调一次」，UI 组件退化成调用点。
+
+  /** 取内核 ctx（画布服务都挂在它下面）；宿主未就绪或没装插件 → undefined */
+  function canvasCtx(): { get<T>(name: string): T | undefined } | undefined {
+    const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
+    return host?.ctx as { get<T>(name: string): T | undefined } | undefined
+  }
+
+  /**
+   * 数据集：把一份资产建到画布上。
+   *
+   * 类型一律经 assetKindOf 取 —— 列表行给的是 assetKind、AssetItem 给的是 kind，
+   * 之前直接读 asset.kind：列表行传进来时是 undefined，于是**静默走了「不支持」分支、什么也没建**
+   * （用户报的「添加到画布没有效果」）。
+   */
+  function addAssetToCanvas(asset: { name: string; url: string; kind?: string; assetKind?: string }): void {
+    createAssetNode(asset, undefined)
+  }
+
+  /**
+   * 把一份资产**拖到画布**上：在落点（屏幕坐标）建对应类型的节点。
+   * 拖拽的落点即指针位置 —— 用户口径：「资源里的图片、音频和视频等，可以直接拖拽到画布上，
+   * 拖拽上去就是直接添加一个新的节点」。
+   */
+  function dropAssetToCanvas(asset: { name?: string; url: string; kind?: string; assetKind?: string }, client: { x: number; y: number }): string | null {
+    const flow = screenToFlow(client.x, client.y) ?? undefined
+    return createAssetNode(asset, flow)
+  }
+
+  /**
+   * 文件夹「添加到 Agent」：把**文件夹路径**作为一条引用发给 Agent（不是把里面的资产一张张贴）。
+   *
+   * 用户口径（2026-10-07）：「将文件夹添加到 Agent：直接把文件夹的地址发过去就行」。
+   * 文件夹在后端只是登记表里的一条记录（没有本机目录），它的"地址"= 里面资产的公共目录
+   * （取第一条有 path 的资产所在目录）。标签显示文件夹名，载荷是这条路径 —— Agent 侧自己 ls。
+   */
+  function addFolderToAgent(folder: { id: string; name: string }): void {
+    const agent = canvasCtx()?.get<{ referenceAsset?: (a: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }) => void }>('agent')
+    if (!agent?.referenceAsset) return
+    const first = assetItems.value.find((a) => a.folderId === folder.id && a.path)
+    const dir = first?.path ? first.path.replace(/[\\/][^\\/]+$/, '') : undefined
+    // folderId 一定要带（用户口径 2026-10-08）：Agent 里点这颗文件夹标签时要能打开
+    // 资产管理并展开到那一层 —— 只有 dir 没地方定位。
+    // isFolder：显式标出「这是目录」（目录名带点号时不会被误判成文件）。
+    agent.referenceAsset({ id: folder.id, name: folder.name, url: '', ...(dir ? { path: dir } : {}), folderId: folder.id, isFolder: true })
+  }
+
+  /**
+   * 文件夹「添加到画布」：把文件夹里的**全部内容**按类型建到画布上（图片/视频/音频各走各的节点服务）。
+   *
+   * 用户口径（2026-10-07）：「将文件夹添加到画布：把文件夹中的所有内容全部添加到画布中。
+   * 如果数量超过 10 个，需要弹出一个对话框让我点击确认，不然一下添加太多会卡死」。
+   *
+   * 数量 > 上限时**先弹确认**（确认回调由宿主给 —— 弹窗长什么样是 UI 的事，这里只问"允不允许"）；
+   * 用户不点确认就一个都不建。返回实际建出的数量；空文件夹返回 0。
+   */
+  async function addFolderAssetsToCanvas(
+    folderId: string,
+    opts: { confirm?: (count: number) => Promise<boolean> } = {},
+  ): Promise<number> {
+    const items = assetItems.value.filter((a) => a.folderId === folderId)
+    if (!items.length) return 0
+    if (items.length > 10 && opts.confirm) {
+      const ok = await opts.confirm(items.length)
+      if (!ok) return 0
+    }
+    let created = 0
+    const newIds: string[] = []
+    for (const a of items) {
+      const kind = assetKindOf(a)
+      if (kind === 'image') {
+        // 图片：createAssetNode 内部会"选中/聚焦"单个节点 —— 这里传 atFlow 会走"只选中"分支，
+        // 但它选中会**覆盖**之前批量的选区。所以批量场景绕过它，直接走命令拿 id，收尾一次性多选。
+        const target = canvasHost()
+        if (!target?.command) continue
+        const pos = { x: 80 + (created % 5) * 48, y: 80 + Math.floor(created / 5) * 60 }
+        const newId = target.command.execute('command:create-node', {
+          type: 'image',
+          position: pos,
+          imageUrl: a.url,
+          ...(a.name ? { name: a.name } : {}),
+        })
+        if (typeof newId === 'string' && newId) { newIds.push(newId); created++ }
+      } else if (kind === 'video' || kind === 'audio') {
+        const svc = hostCtx()?.get<{ addVideoNode?: (p: { x: number; y: number }, url?: string) => string; addAudioNode?: (p: { x: number; y: number }, url?: string) => string }>(kind)
+        const pos = { x: 80 + (created % 5) * 48, y: 80 + Math.floor(created / 5) * 60 }
+        const newId = kind === 'video' ? svc?.addVideoNode?.(pos, a.url) : svc?.addAudioNode?.(pos, a.url)
+        if (newId) { newIds.push(newId); created++ }
+      }
+      // other 类型跳过（没有对应节点实现），不算失败也不打断
+    }
+    // **一次性多选**全部新建的节点（用户口径：菜单添加的节点，添加之后自动选中）——
+    // 若建一个选一个，最后选区只剩最后一个；这里批量建完统一 set，用户能直接拖动/删除这一批。
+    if (newIds.length) hostCtx()?.get<{ set(ids: Iterable<string>): void }>('selection')?.set(newIds)
+    return created
+  }
+  function addAssetToAgent(asset: { name: string; url: string; path?: string; folderId?: string }): void {
+    const agent = canvasCtx()?.get<{ referenceAsset?: (a: { name: string; url: string; path?: string; folderId?: string }) => void }>('agent')
+    if (!agent?.referenceAsset) {
+      showToast('Agent 插件未启用')
+      return
+    }
+    agent.referenceAsset(asset)
   }
 
   // ===== 主题 =====
@@ -1063,12 +1827,23 @@ function createUi() {
       showToast('已展开节点侧栏')
     }
   }
-  function renameNode(id: string, current: string): void {
-    const next = window.prompt('重命名节点', current)
-    if (next === null || !next.trim()) return
+  /**
+   * 提交节点标题改名（写**画布数据**，不是只改左侧树那份副本）。
+   *
+   * 用户口径（2026-10-08）：画布 tab 的重命名要和资产树同一种效果 —— 行内输入框，
+   * 不弹浏览器原生框。所以「进入改名态 / 输入框提交」都在 LeftDrawer（宿主）里，
+   * 这里只留**唯一写口**：标题写进节点自己的 data.label（画布标题条、@ 菜单、左侧树
+   * 读的是同一份）。树经 doc.subscribe → refreshCanvasTree 自动重画。
+   */
+  function renameNode(id: string, name: string): void {
+    const next = name.trim()
+    const doc = hostCtx()?.get<{ setNodeLabel?(id: string, label: string | undefined): void }>('doc')
+    // 清空 = 恢复类型默认名（与画布标题条双击清空同一语义）；宿主没就绪时无操作。
+    doc?.setNodeLabel?.(id, next || undefined)
+    // 本地树先跟上，避免落盘/订阅链路的延迟让输入框关掉后名字闪一下旧值
     const walk = (list: TreeNode[]): boolean => {
       for (const n of list) {
-        if (n.id === id) { n.name = next.trim(); return true }
+        if (n.id === id) { if (next) n.name = next; return true }
         if (n.children && walk(n.children)) return true
       }
       return false
@@ -1128,6 +1903,54 @@ function createUi() {
     }
     return undefined
   }
+
+  /**
+   * 删除一个节点（左侧画布树的行菜单用）。
+   *
+   * 走 doc.removeNodes：级联清相连边、清子节点父引用、清选中态，并自动进历史 + 落盘
+   * （见 canvas-data 的 graphDocument.removeNodes）—— 不自己拼删除步骤。
+   */
+  function removeNode(id: string): void {
+    hostCtx()?.get<{ removeNodes(ids: string[]): number }>('doc')?.removeNodes([id])
+  }
+
+  /**
+   * 复制一份某个节点（左侧画布树的行菜单用）。
+   *
+   * 为什么先选中再走 clipboard 命令：复制语义是「复制**选中集**」，命令本身不带节点参数
+   * （见 plugin-clipboard 的 duplicate()：它读 selection）。只选中这一个再执行，
+   * 结果就是「复制这一份」—— 不重复实现一份复制逻辑（重映射 id / 偏移 / 内外连边那套）。
+   *
+   * 插件没装时（拿不到 clipboard 服务）静默无操作：菜单项该由**能力是否存在**决定，
+   * 但命令是活注册的，这里按「插件没装就没有这件事」处理，与其它可选插件调用一致。
+   */
+  function duplicateNode(id: string): void {
+    const ctx = hostCtx()
+    if (!ctx) return
+    ctx.get<{ set(ids: Iterable<string>): void }>('selection')?.set([id])
+    runCommand('clipboard:duplicate')
+  }
+
+  /**
+   * 把某个画布节点引用到 Agent 输入框（左侧画布树的行菜单用）。
+   *
+   * 走 agent 插件已有的 `agent:reference-node` 命令（areas:['node'] 的那条，节点右键菜单同款）：
+   * 命令内部只记待插入的节点 id + 打开面板，标签由输入框组件现造 —— 这里不重复那套。
+   */
+  function referenceNodeToAgent(id: string): void {
+    hostCtx()?.get<{ execute(id: string, payload?: unknown): unknown }>('command')?.execute('agent:reference-node', { nodeId: id })
+  }
+
+  /** 解散一个分组（左侧画布树的分组行菜单用）：走 group 服务（它自己包历史 + 还原子节点绝对坐标） */
+  function ungroupNode(id: string): void {
+    const svc = hostCtx()?.get<{ ungroup?(groupId: string): void } | undefined>('group')
+    if (!svc?.ungroup) {
+      showToast('分组插件未启用')
+      return
+    }
+    svc.ungroup(id)
+  }
+
   function sendChat(): void {
     const text = state.chatInput.trim()
     if (!text) return
@@ -1242,19 +2065,32 @@ function createUi() {
   }
 
   return {
-    state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, assetItems, assetCount, shortcuts,
+    state, cfg, tree, filteredTree, collapsed, treeTotal, histVisible, histCount, histErrorCount, assetItems, filteredAssets, assetCount, shortcuts,
+    loadMoreHistory,
+    batchDeleteHistory, batchRateHistory, batchSaveAssets,
     currentCanvasId, canvasListItems, canvasNameOf, refreshCanvasList, openCanvas, newCanvas, renameCanvas, loadAssets,
+    openCanvasInNewWindow, renameCanvasById, duplicateCanvas, deleteCanvas,
     canvasOptions, loadProjectName, renameProject, currentProjectId, flushCanvasSave, releasePendingSave,
     minimapOn, toggleMinimap,
     agent, setAgentOpen, toggleAgent, newAgentChat, toggleAgentHistory,
     openAgentSession, renameAgentSession, deleteAgentSession,
+    openAgentConversation, deleteAgentConversation,
     toggleEdges, toggleSnap, organizeCanvas, setCanvasMode, unbindCanvasToggles,
     unbindThemeMode,
     syncZoomDisplay, zoomInStep, zoomOutStep, zoomToPercent, zoomToMax, zoomFit, unbindZoomSync,
     loadHistory, unbindHistory,
     hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
+    runCommand,
+    addAssetToCanvas, dropAssetToCanvas, addAssetToAgent, addFolderToAgent, addFolderAssetsToCanvas, screenToFlow, createAssetNode,
+    uploadAssets, uploadAssetsTo, uploadAssetsFromUrls, deleteAssetById, assetFolders, assetFolderTree, flatFoldersForUpload, assetTagOptions, loadAssetFolders, newAssetFolder, moveAssetTo,
+    renameAssetById,
+    renameAssetFolderById, removeAssetFolder, moveSelectedAssets, tagsForAsset,
+    setAssetFolderIcon,
+    moveAssetFolderTo, createImageNodeWithUrl,
+    toggleAssetBatch, toggleAssetSelected,
     unbindSettingsClose,
-    toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, locateNode, unbindCanvasTree, sendChat,
+    toggleShortcuts, refreshShortcuts, toggleHistory, toggleLeftCollapsed, renameNode, locateNode, unbindCanvasTree, unbindAssetsChanged, sendChat,
+    removeNode, duplicateNode, referenceNodeToAgent, ungroupNode,
     renameChat, closeMenus, startChatDrag, startDrawerResize, startChatResize, startChatCornerResize,
   }
 }

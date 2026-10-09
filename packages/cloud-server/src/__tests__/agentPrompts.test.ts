@@ -79,6 +79,28 @@ describe('模式提示词清单', () => {
   })
 })
 
+describe('会话标题模型（自动命名用哪个模型）', () => {
+  it('默认为空（用会话默认模型）', async () => {
+    const r = await call('GET', '/api/agent/title-model')
+    expect(r.status).toBe(200)
+    expect(r.json).toMatchObject({ ok: true })
+    expect(r.json.provider ?? '').toBe('')
+    expect(r.json.modelId ?? '').toBe('')
+  })
+
+  it('写进并读回；清空 = 回落默认', async () => {
+    const put = await call('PUT', '/api/agent/title-model', { provider: 'no-such-provider', modelId: 'no-such-model' })
+    // 没配凭据的模型会被拦下（坏配置存不进去）
+    expect(put.status).toBe(400)
+
+    // 清空（两个都空 = 回落默认）应该成功
+    const clear = await call('PUT', '/api/agent/title-model', {})
+    expect(clear.status).toBe(200)
+    const back = await call('GET', '/api/agent/title-model')
+    expect(back.json.provider ?? '').toBe('')
+  })
+})
+
 describe('内置画布 MCP', () => {
   it('启动后自动在 Agent 的 MCP 清单里（默认携带，用户零配置）', async () => {
     const cfg = await call('GET', '/api/agent/config')

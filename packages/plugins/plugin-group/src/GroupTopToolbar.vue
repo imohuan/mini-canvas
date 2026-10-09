@@ -14,7 +14,7 @@
  */
 import { computed, ref } from 'vue'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
-import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor } from './groupEngine'
+import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx } = useCanvasRender()
@@ -36,10 +36,16 @@ const ICON_UNGROUP =
 
 /**
  * 解组：调 group 服务（唯一写入口在服务里 —— 它自己包历史、还原子节点绝对坐标）。
- * 只读服务名，不 import 任何 group 内部实现，保持"UI 与逻辑同包但职责分开"。
+ * 只读服务名，不 import 任何 group 内部实现，保持「UI 与逻辑同包但职责分开」。
+ *
+ * ⚠️ 必须用 ctx.get('group')，**不能**写 ctx.group（真 bug，2026-10-08 实测：点了解散分组没反应）。
+ * useCanvasRender() 递进来的是**根 Context**，而 `ctx.<服务名>` 这种直访是靠「每个插件自己的
+ * scope 代理」实现的（Context.ts 的 new Proxy：属性读命中已上架服务名才转发）——
+ * 根 Context 没有那层代理，`ctx.group` 恒为 undefined。写成 ctx.group?.ungroup() 时可选链又把
+ * 它吞成静默 no-op：按钮点得动、什么也不发生。同仓其它节点工具栏组件一律走 ctx.get/tryGet，这里对齐。
  */
 function onUngroup(): void {
-  ctx.group?.ungroup(props.id)
+  groupServiceOf(ctx)?.ungroup(props.id)
 }
 
 // ====== 背景颜色 ======
@@ -63,59 +69,39 @@ function pickColor(color: string): void {
 <template>
   <div v-if="visible" class="ntp-root group-top-toolbar">
     <!-- 背景颜色：色点触发器 + 下拉的预设色板（只有预制色，不做自定义取色） -->
-    <component
-      :is="ThemedDropdown"
-      v-model="colorOpen"
-      placement="bottom-start"
-      :offset="8"
-      menu-width="112px"
-      menu-role="listbox"
-      body-class="group-color-menu-body"
-      :teleport="true"
-    >
+    <component :is="ThemedDropdown" v-model="colorOpen" placement="bottom-start" :offset="8" menu-width="152px"
+      menu-role="listbox" body-class="group-color-menu-body" :teleport="true">
       <template #trigger>
-        <!-- 色点触发器 = 控制栏通用按钮 + 图标位放色点（不再自绘一个 32×32 按钮，
-             尺寸/hover/focus/圆角全部跟随目录里登记的 button 组件）。 -->
-        <component
-          :is="ThemedButton || 'button'"
-          class="group-color-trigger"
-          title="背景颜色"
-          aria-label="背景颜色"
-          aria-haspopup="listbox"
-          :aria-expanded="colorOpen"
-        >
-          <span class="group-color-trigger__dot" :style="{ backgroundColor: currentColor }" aria-hidden="true" />
+        <!--
+          触发器 = 「小圆点 + 文字」的文本按钮（用户口径 2026-10-08）。
+
+          为什么必须给色点写 display（真 bug，实测）：色点是 <span>，**inline 元素会忽略
+          width/height** —— 只声明尺寸不声明 display 时它实测量到 0×0，屏幕上只剩那圈 1px
+          描边，看着就是「一个点」（用户报的「它变成了一个点，怎么可能会是一个点呢」）。
+          同一个坑在别处也出现过：凡是 span 画色块，display 与尺寸要成对写。
+          文字与 aria-label 同名（无障碍硬性要求：可见标签要能被读屏念出来）。
+        -->
+        <component :is="ThemedButton || 'button'" class="group-color-trigger" title="背景颜色" aria-label="背景颜色"
+          aria-haspopup="listbox" :aria-expanded="colorOpen">
+          <div class="group-color-trigger__content">
+            <span class="group-color-trigger__dot" :style="{ backgroundColor: currentColor }" aria-hidden="true" />
+            <span>背景颜色</span>
+          </div>
         </component>
       </template>
       <template #default="{ close }">
         <div class="group-color-grid" role="listbox" aria-label="分组背景颜色" @click.stop>
-          <button
-            v-for="swatch in GROUP_COLOR_SWATCHES"
-            :key="swatch.id"
-            class="group-color-swatch"
-            :class="{ 'is-active': swatch.color === currentColor }"
-            type="button"
-            role="option"
-            :aria-selected="swatch.color === currentColor ? 'true' : 'false'"
-            :title="swatch.label"
-            :aria-label="swatch.label"
-            :style="{ backgroundColor: swatch.color }"
-            @click.stop="pickColor(swatch.color); close()"
-          />
+          <button v-for="swatch in GROUP_COLOR_SWATCHES" :key="swatch.id" class="group-color-swatch"
+            :class="{ 'is-active': swatch.color === currentColor }" type="button" role="option"
+            :aria-selected="swatch.color === currentColor ? 'true' : 'false'" :title="swatch.label"
+            :aria-label="swatch.label" :style="{ backgroundColor: swatch.color }"
+            @click.stop="pickColor(swatch.color); close()" />
         </div>
       </template>
     </component>
 
-    <component
-      :is="ThemedButton || 'button'"
-      class="group-top-toolbar__btn"
-      type="button"
-      title="解散分组"
-      aria-label="解散分组"
-      :icon="ICON_UNGROUP"
-      variant="danger"
-      @click="onUngroup"
-    >
+    <component :is="ThemedButton || 'button'" class="group-top-toolbar__btn" type="button" title="解散分组"
+      aria-label="解散分组" :icon="ICON_UNGROUP" variant="danger" @click="onUngroup">
       解散分组
     </component>
   </div>
@@ -135,19 +121,33 @@ function pickColor(color: string): void {
   --gt-ring-in: rgba(255, 255, 255, 0.42);
   --gt-ring-out: rgba(15, 23, 42, 0.28);
 }
+
+.group-color-trigger__content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .group-color-grid {
   --gt-ring-in: rgba(255, 255, 255, 0.38);
   --gt-ring-out: rgba(15, 23, 42, 0.22);
 }
+
 html.dark .group-color-trigger,
 html.dark .group-color-grid {
   --gt-ring-in: rgba(15, 23, 42, 0.45);
   --gt-ring-out: rgba(255, 255, 255, 0.34);
 }
 
-/* 色点触发器：按钮本体（32×32/圆角/hover/focus）由目录里的 button 组件提供，
-   这里只补一件它管不到的事 —— 图标位里放的是"色点"而不是 SVG。 */
+/*
+ * 色点：比色板里的圆块（26px）小一档的 18px 小圆，放在文字左边当「当前底色」的预览。
+ *
+ * `display: block` 不是装饰、是**修 bug 的必要一行**：span 默认 inline，inline 元素忽略
+ * width/height —— 只写尺寸时它渲染成 0×0，只剩 box-shadow 那圈 1px 描边，看起来就是「一个点」
+ * （真机实测：按钮 24×32、色点量到 0×0，用户报的正是这个）。
+ */
 .group-color-trigger__dot {
+  display: block;
   width: 16px;
   height: 16px;
   flex-shrink: 0;
@@ -157,19 +157,33 @@ html.dark .group-color-grid {
     0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.28));
 }
 
-/* 色板：7 个预设色（4 列两行） */
+/*
+ * 色板：7 个预设色。
+ *
+ * 为什么是「奇数个 + 4 列」还要额外居中（用户报「颜色卡片宽度不够」，2026-10-08 实测）：
+ * 7 个色块按 4 列排是 4 + 3，第二行右端天然空一格；若让网格贴着面板左缘、面板又只比网格宽一点，
+ * 视觉上就是「右下角缺一块、整块面板挤」。这里做两件事：
+ *   ① 面板给足宽度（menu-width 152px），网格在面板里**水平居中** —— 第二行的 3 个落在中段，
+ *      与第一行 4 个形成对称的宝塔形，不再看起来缺角；
+ *   ② 色块从 22px 提到 26px：7 个 22px 点在一屏里偏小、也达不到「交互目标 ≥24px」的舒适档
+ *      （菜单项本身是 32px，色点是它里面的图形，按 26px + 6px 间距读起来才不挤）。
+ * 4 列 × 26 + 3 × 6 = 122px，加两侧 8px 内边距 = 138px < 152px，居中后左右各留 7px。
+ */
 .group-color-grid {
   display: grid;
-  grid-template-columns: repeat(4, 22px);
+  grid-template-columns: repeat(4, 26px);
   gap: 6px;
   padding: 8px;
+  /* 水平居中：第二行的 3 个色块落在中段，与第一行形成对称（不再右端缺一角） */
+  justify-content: center;
 }
+
 .group-color-swatch {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -179,13 +193,16 @@ html.dark .group-color-grid {
     0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.22));
   transition: transform 120ms ease;
 }
+
 .group-color-swatch:hover {
   transform: scale(1.08);
 }
+
 .group-color-swatch:focus-visible {
   outline: 2px solid var(--ntb-accent-ring, rgba(8, 145, 178, 0.6));
   outline-offset: 1px;
 }
+
 /* 当前色：加一圈环，一眼看出"现在用的是哪个" */
 .group-color-swatch.is-active {
   box-shadow:
@@ -194,6 +211,7 @@ html.dark .group-color-grid {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .group-color-trigger,
   .group-color-swatch {
     transition: none;

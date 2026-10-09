@@ -28,15 +28,7 @@ export type { RemoteSync, RemoteSyncOptions, LocalGraphHandlers } from './remote
 export { planRemoteMerge, isPlanEmpty } from './remoteMerge.js'
 export type { CanvasGraphSnapshot, MergeNode, MergeEdge, RemoteMergePlan } from './remoteMerge.js'
 
-export {
-  isResourceRef,
-  parseResourceRef,
-  resolveRef,
-  toRef,
-  expandNodes,
-  shrinkNodes,
-  pendingUploadFields,
-} from './resourceRef.js'
+export { pendingUploadFields } from './resourceRef.js'
 
 export { makeJobPoll, submitJob, toPollState } from './jobRunner.js'
 export type { PollState, RunDeps, ResourceLike } from './jobRunner.js'
@@ -61,6 +53,5 @@ export {
   HISTORY_REV_KEY,
   CANVAS_ID,
   canvasId,
-  RESOURCE_REF_PREFIX,
   RESOURCE_URL_FIELDS,
 } from './keys.js'

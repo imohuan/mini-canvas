@@ -63,7 +63,9 @@ export interface ResourceService {
    * 存一份资源字节，返回**持久引用**（写进节点 data 的 `resourceId`）。
    *
    * 这是上传/生成的统一入口：本地会进 IndexedDB，云端会传到画布文件夹 —— 由当前
-   * `resource` 类型的 adapter 决定。**只回 ref，不回 URL**：URL 是临时的，要用时现算。
+   * `resource` 类型的 adapter 决定。回的是**持久引用**：云端是同源 URL
+   * （`/api/canvases/<画布id>/resources/<哈希>`），本地是 `res-<n>` id；
+   * 要用时由 resolve 换成当前可显示地址。
    */
   put(blob: Blob, opts?: ResourcePutOptions): Promise<string>
   /**
@@ -237,7 +239,8 @@ export class ResourceStore implements ResourceService {
   /**
    * 存一份资源字节 → 持久引用（写进节点 data 的 resourceId）。
    *
-   * **只回 ref、不回 URL**：URL 是临时的，要用的时候由 resolve 现算。
+   * 云端回的是同源 URL（`/api/canvases/<画布id>/resources/<哈希>`），本地回 `res-<n>` id；
+   * 两种情况都由 resolve 换成当前可显示地址。
    * 没有可用后端（极简宿主 / 单测）时抛错 —— 不静默造一个用不了的引用。
    */
   async put(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {

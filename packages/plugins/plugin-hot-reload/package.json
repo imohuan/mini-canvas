@@ -1,0 +1,38 @@
+{
+  "name": "@mini-canvas/plugin-hot-reload",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "热重载",
+    "description": "开发用：手动登记几条链接（cloud-server 的 SSE / 插件自己的 vite dev server），产物一变自动重装插件",
+    "pluginName": "hot-reload",
+    "installable": false
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "typecheck:vue": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-data": "workspace:*",
+    "lucide-vue-next": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}
+

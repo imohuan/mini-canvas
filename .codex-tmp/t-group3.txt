@@ -1,0 +1,95 @@
+
+> @mini-canvas/plugin-group@0.0.0 test D:\Code\Git\mini-canvas\packages\plugins\plugin-group
+> vitest run
+
+
+ RUN  v3.2.7 D:/Code/Git/mini-canvas/packages/plugins/plugin-group
+
+ ✓ src/__tests__/groupEngine.test.ts (19 tests) 8ms
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 渲染出解组按钮（文案 + 无障碍名齐全）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 背景颜色入口：收起时只有触发器，没有色块（工具栏不会被撑长）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 常态（没人在 resize）→ 浮层照常渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 展开后是 7 个预设色块，每个带颜色与无障碍名（没有"自定义"入口）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 正在被 resize 的是别人 → 本分组浮层照常（不做全局压制）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+ ✓ src/__tests__/groupTopToolbarOverlayRender.test.ts (3 tests) 20ms
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 当前底色那个色块被标成选中（aria-selected）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+ ✓ src/__tests__/groupTopToolbarRender.test.ts (7 tests) 66ms
+ ❯ src/__tests__/groupPlugin.test.ts (24 tests | 1 failed) 197ms
+   ✓ group 插件集成（真实内核服务） > createGroup：两个顶层节点 → 建组 + 子节点转相对坐标 + 挂父 11ms
+   ✓ group 插件集成（真实内核服务） > createGroup：成员<2 / 已分组节点过滤 / 组节点允许嵌套一层 2ms
+   ✓ group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 同组内两个节点打组 → 新组挂在原组里，子节点相对坐标按绝对位置算 3ms
+   ✓ group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 跨组打组被拒（父不同不能凭空建组），同父的仍可建 1ms
+   ✓ group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 内层组不能再被包进新组（上限 1 仍然守得住） 2ms
+   ✓ group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 新建的分组拿到编号默认名（不再被空串顶掉） 7ms
+   × group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 存量迁移：label 是空串的老分组被补上编号名，且不与新建撞号 16ms
+     → [nodeStore] unknown node type "group". Register it first.
+   ✓ group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 解散内层组：子节点升为外层组成员（不是被扔到顶层） 2ms
+   ✓ group 插件集成（真实内核服务） > ungroup：子节点还原绝对坐标 + 删除组节点 1ms
+   ✓ group 插件集成（真实内核服务） > recalculateBounds：组随子节点新绝对位置扩展/收缩 33ms
+   ✓ group 插件集成（真实内核服务） > reparentIfInside：顶层节点拖进组 → 加入 33ms
+   ✓ group 插件集成（真实内核服务） > applyDragMembership：子节点移出组外 → 解父还原绝对坐标 2ms
+   ✓ group 插件集成（真实内核服务） > 命令注册：group:create / group:ungroup 16ms
+   ✓ group 插件集成（真实内核服务） > 类型能力：resizable + transparent（容器型节点：可拖尺寸、卡片底透明让连接线透出） 1ms
+   ✓ group 插件集成（真实内核服务） > 组嵌套一层（B 方案）：拖组A到组B上 → 组A挂 parent 到组B + 坐标转相对 4ms
+   ✓ group 插件集成（真实内核服务） > 组嵌套一层：打组允许组节点（组+节点混合 → 新组包住旧组） 1ms
+   ✓ group 插件集成（真实内核服务） > 组嵌套上限：内层组不能再被包进新组（拖拽与打组两条路径都拒绝） 1ms
+   ✓ 嵌套跨层移动的坐标换算（用户实测 bug） > 第二层组内节点拖到外层组（组B）内 → join 后相对坐标正确 19ms
+   ✓ 嵌套跨层移动的坐标换算（用户实测 bug） > 第二层组内节点拖到最外层空白 → 解父后绝对坐标正确（不再少加一层） 9ms
+   ✓ resolveGroupPadding padding 配置解析（纯函数） > 全部读不到 → 默认值 0ms
+   ✓ resolveGroupPadding padding 配置解析（纯函数） > 读到合法值 → 逐项生效 0ms
+   ✓ resolveGroupPadding padding 配置解析（纯函数） > 非法值（负数/非数值/NaN）逐项回落默认，0 是合法值 0ms
+   ✓ 分组 padding 配置（settings 单一数据源） > settings 改 padding → createGroup 实时按新值算包围盒 + 子节点相对坐标跟随 16ms
+   ✓ 分组 padding 配置（settings 单一数据源） > 拖拽归组与建组共用同一套 membership 决策（applyDragMembership） 1ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/groupPlugin.test.ts > group 插件集成（真实内核服务） > 组内打组（Ctrl+G 在分组里也要生效） > 存量迁移：label 是空串的老分组被补上编号名，且不与新建撞号
+Error: [nodeStore] unknown node type "group". Register it first.
+ ❯ NodeStore.addNodes ../../canvas-data/src/nodeStore.ts:371:15
+    369|     for (const input of inputs) {
+    370|       if (!this.types.has(input.type)) {
+    371|         throw new Error(`[nodeStore] unknown node type "${input.type}"…
+       |               ^
+    372|       }
+    373|       const id = input.id ?? undefined
+ ❯ src/__tests__/groupPlugin.test.ts:205:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 52 passed (53)
+   Start at  11:44:25
+   Duration  5.04s (transform 4.97s, setup 0ms, collect 11.83s, tests 290ms, environment 1ms, prepare 862ms)
+
+ ELIFECYCLE  Test failed. See above for more details.

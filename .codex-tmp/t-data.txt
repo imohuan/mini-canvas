@@ -1,0 +1,49 @@
+
+> @mini-canvas/canvas-data@0.0.0 test D:\Code\Git\mini-canvas\packages\canvas-data
+> vitest run
+
+
+ RUN  v3.2.7 D:/Code/Git/mini-canvas/packages/canvas-data
+
+ ✓ src/__tests__/nodeStoreV2.test.ts (19 tests) 14ms
+ ✓ src/__tests__/graphDocument.test.ts (15 tests) 32ms
+ ✓ src/__tests__/settingsPersist.test.ts (6 tests) 9ms
+ ✓ src/__tests__/docService.test.ts (17 tests) 35ms
+ ✓ src/canvas/__tests__/canvasCommands.test.ts (10 tests) 20ms
+ ✓ src/canvas/__tests__/configSchema.test.ts (15 tests) 14ms
+ ✓ src/canvas/__tests__/cordisParity.test.ts (18 tests) 16ms
+ ✓ src/canvas/__tests__/registrationSourceOfTruth.test.ts (7 tests) 20ms
+ ✓ src/canvas/__tests__/capabilitiesRegistryLandings.test.ts (6 tests) 17ms
+ ✓ src/canvas/__tests__/canvasBasePlugin.test.ts (9 tests) 51ms
+ ✓ src/canvas/__tests__/capabilities.test.ts (11 tests) 31ms
+ ✓ src/canvas/__tests__/declareConfigSavedValue.test.ts (2 tests) 36ms
+ ✓ src/canvas/__tests__/context.test.ts (48 tests) 82ms
+ ✓ src/canvas/__tests__/capabilitiesAttach.test.ts (8 tests) 15ms
+ ✓ src/canvas/__tests__/nodeRegionTypeLock.test.ts (5 tests) 14ms
+ ✓ src/__tests__/resourceService.test.ts (10 tests) 12ms
+ ✓ src/__tests__/nodeSizeSingleSource.test.ts (17 tests) 12ms
+ ✓ src/canvas/__tests__/themeRegistry.test.ts (10 tests) 14ms
+ ✓ src/canvas/__tests__/nodeRegion.test.ts (8 tests) 11ms
+ ✓ src/canvas/__tests__/registerNodeType.test.ts (8 tests) 15ms
+ ✓ src/canvas/__tests__/connection.test.ts (31 tests) 12ms
+ ✓ src/canvas/__tests__/nodesSetSize.test.ts (4 tests) 12ms
+ ✓ src/canvas/__tests__/b2SettingsHost.test.ts (3 tests) 12ms
+ ✓ src/canvas/__tests__/nodeRenderer.test.ts (12 tests) 10ms
+ ✓ src/__tests__/nodeStoreSubscribe.test.ts (6 tests) 10ms
+ ✓ src/canvas/__tests__/selectionRegionAttach.test.ts (4 tests) 11ms
+ ✓ src/__tests__/edgeStore.test.ts (11 tests) 9ms
+ ✓ src/__tests__/canvasServices.test.ts (11 tests) 10ms
+ ✓ src/__tests__/saveContract.test.ts (9 tests) 9ms
+ ✓ src/__tests__/localStorageAdapter.test.ts (5 tests) 6ms
+ ✓ src/__tests__/selectionV2.test.ts (8 tests) 6ms
+ ✓ src/__tests__/docRuntimeWrite.test.ts (4 tests) 10ms
+ ✓ src/__tests__/nodeDefaultName.test.ts (6 tests) 6ms
+ ✓ src/__tests__/transient.test.ts (4 tests) 4ms
+ ✓ src/canvas/__tests__/themeRegistrySubscribe.test.ts (2 tests) 5ms
+ ✓ src/canvas/__tests__/nodeRegistrySubscribe.test.ts (3 tests) 5ms
+
+ Test Files  36 passed (36)
+      Tests  372 passed (372)
+   Start at  11:40:02
+   Duration  9.38s (transform 14.63s, setup 0ms, collect 45.82s, tests 607ms, environment 10ms, prepare 10.25s)
+

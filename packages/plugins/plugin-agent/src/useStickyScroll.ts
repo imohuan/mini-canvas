@@ -23,7 +23,7 @@
  * 另暴露 scrollToBottom()，供「用户自己点了发送」这类"必须到底"的场景显式调用。
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
-import { isNearBottom } from './stickToBottomCore.js'
+import { hasScrollbar, isNearBottom } from './stickToBottomCore.js'
 
 export interface StickyScrollOptions {
   /** 视口元素（滚动容器） */
@@ -41,6 +41,11 @@ export function useStickyScroll(opts: StickyScrollOptions) {
   const threshold = opts.threshold ?? 48
   /** 是否处于吸附状态（用户往上滚超出阈值就置 false） */
   const stuck = ref(true)
+  /**
+   * 「回到底部」按钮的显示条件（用户口径 2026-10-07）：
+   * ① 存在滚动条（内容比视口高）；② 且当前没有滚到底。
+   */
+  const showScrollToBottom = ref(false)
   let raf = 0
   let ro: ResizeObserver | undefined
   /**
@@ -64,6 +69,20 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     const m = metrics()
     if (!m) return
     stuck.value = isNearBottom(m, threshold)
+    syncButtonState()
+  }
+
+  /** 平滑滚动进行中：期间不显示「回到底部」按钮（否则动画中闪来闪去） */
+  let animating = false
+
+  /** 只更新「回到底部」按钮的显隐（不碰 stuck —— 内容增长时不该重算吸附） */
+  function syncButtonState(): void {
+    const m = metrics()
+    if (!m) {
+      showScrollToBottom.value = false
+      return
+    }
+    showScrollToBottom.value = !animating && hasScrollbar(m) && !isNearBottom(m, threshold)
   }
 
   /** 立即滚到底（并保持吸附） */
@@ -92,8 +111,71 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     })
   }
 
+  /**
+   * 平滑滚到底（「回到底部」按钮）。
+   *
+   * 为什么不用原生 scrollTo({ behavior: 'smooth' })：
+   * 实测（远程调试 / 后台标签的 Chrome）原生平滑动画**完全不执行** ——
+   * 调完 scrollTop 一动不动，而 behavior: 'instant' 正常。
+   * 自己插值（easeOutCubic，300ms）在哪都能跑，也让动效参数可控。
+   *
+   * 为什么用 setInterval 驱动而不是 rAF：rAF 在同一种环境里会被节流到
+   * 400ms 只有 2 帧（实测），动画同样「点了不动」；setInterval(16ms) 照常跑，
+   * 配合时间戳插值，可见标签页里一样平滑。
+   *
+   * 动画期间：`animating` 挡住 onUserScroll 的干扰（那些 scroll 事件是动画自己发的，
+   * 量到的都是「还没到底」，会把按钮闪回来）；结束后归位并重算一次状态。
+   * 用户在系统里开了「减少动态效果」→ 直接跳到底（不要动画）。
+   */
+  function smoothScrollToBottom(): void {
+    const el = opts.target.value
+    if (!el) return
+    stuck.value = true
+    animating = true
+    showScrollToBottom.value = false
+    const from = el.scrollTop
+    const reduce = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduce) {
+      el.scrollTop = el.scrollHeight
+      animating = false
+      programmaticTop = el.scrollTop
+      syncStuck()
+      return
+    }
+    const started = performance.now()
+    const DURATION = 300
+    /** 一次推进：t = 0..1，返回是否结束 */
+    const advance = (): boolean => {
+      const t = Math.min(1, (performance.now() - started) / DURATION)
+      // easeOutCubic：起步快、收尾稳（比线性自然）
+      const eased = 1 - Math.pow(1 - t, 3)
+      // 目标**每帧现算**：动画期间内容还在长（流式输出）时也能追到最新的底
+      const to = Math.max(0, el.scrollHeight - el.clientHeight)
+      el.scrollTop = from + (to - from) * eased
+      return t >= 1
+    }
+    const finish = (): void => {
+      animating = false
+      programmaticTop = el.scrollTop
+      syncStuck()
+    }
+    const timer = window.setInterval(() => {
+      if (advance()) {
+        window.clearInterval(timer)
+        finish()
+      }
+    }, 16)
+    // 起手先推一帧，避免首帧前有 16ms 的静默
+    if (advance()) {
+      window.clearInterval(timer)
+      finish()
+    }
+  }
+
   /** 用户往上滚：只在"用户自己滚"时更新吸附状态 */
   function onUserScroll(): void {
+    // 平滑滚动动画自己产生的 scroll 事件：全部忽略（超时收尾时统一归位）。
+    if (animating) return
     const el = opts.target.value
     // 我们自己刚滚到的那一位（允许 ±2px 的亚像素误差）→ 不算用户操作。
     if (el && programmaticTop >= 0 && Math.abs(el.scrollTop - programmaticTop) <= 2) return
@@ -105,6 +187,13 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     // 等 DOM 把新内容渲染出来再决定滚不滚（否则量到的还是旧的 scrollHeight）
     await nextTick()
     if (stuck.value) scheduleScroll()
+    // 内容变了也重算「回到底部」的显隐。
+    //
+    // 为什么必须在这里算（用户实测"看不到这个按钮"）：按钮原来只在
+    // ResizeObserver 与用户滚动时更新 —— 面板从隐藏变可见那一瞬（display:none ⇒ flex）
+    // 尺寸变化不一定触发 RO，而用户还没滚过，于是"内容早就超出一屏了、按钮却不出现"。
+    // 内容信号是每次渲染都必然走到的路，放在这里最稳。
+    syncButtonState()
   })
 
   /**
@@ -142,6 +231,8 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     // 整个吸附功能会静默失效（实测过）。
     if (typeof ResizeObserver !== 'undefined') {
       ro = new ResizeObserver(() => {
+        // 内容/容器尺寸变了：吸附跟随 + 「回到底部」按钮重算
+        syncButtonState()
         if (stuck.value) scheduleScroll()
       })
     }
@@ -160,5 +251,5 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     boundEl = null
   })
 
-  return { stuck, scrollToBottom, syncStuck, observeInner }
+  return { stuck, showScrollToBottom, scrollToBottom, smoothScrollToBottom, syncStuck, observeInner }
 }

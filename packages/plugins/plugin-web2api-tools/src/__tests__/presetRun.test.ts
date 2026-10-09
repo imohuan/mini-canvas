@@ -18,6 +18,7 @@ function makeDeps(script: {
   call?: (tool: string, args: Record<string, unknown>) => { ok: boolean; data?: unknown; error?: string }
   tasks?: Array<{ status?: string; message?: string; progress?: number; resources?: Array<{ downloadUrl?: string }> }>
   now?: () => number
+  prepare?: (urls: string[]) => Promise<string[]>
 }) {
   const calls: Array<{ tool: string; args: Record<string, unknown> }> = []
   const taskQueries: string[] = []
@@ -42,6 +43,7 @@ function makeDeps(script: {
     config: () => ({ pollIntervalMs: 1, timeoutMs: 10_000 }),
     now: script.now ?? (() => 0),
     sleep: async () => {},
+    ...(script.prepare ? { prepareReferenceImages: script.prepare } : {}),
   }
   return { deps, calls, taskQueries, cancels }
 }
@@ -196,13 +198,18 @@ describe('runPreset：异步路径（视频这类）', () => {
     expect(taskQueries.length).toBe(0)
   })
 
-  it('任务 paused（验证码/风控）→ 收敛成"停住了"，不无限转圈', async () => {
+  /**
+   * 用户实测的 bug（2026-10-08）：paused = 等用户在浏览器里过验证码，
+   * web2api 的 captcha-watcher 会**自动恢复**它 —— 不能当成"停住了"直接收工。
+   * 早先把它收敛成 done(ok:false)，于是用户还在过验证码，画布上任务已经「完成（失败）」。
+   */
+  it('任务 paused（等验证码）→ 继续 running（带原因），不判失败', async () => {
     const { deps } = makeDeps({ tasks: [{ status: 'paused', message: '触发人机验证码', progress: 40 }] })
     const state = await pollOnce('t-6', deps)
-    expect(state.status).toBe('done')
-    if (state.status === 'done') {
-      expect(state.result.ok).toBe(false)
-      expect(state.result.error).toContain('触发人机验证码')
+    expect(state.status).toBe('running')
+    if (state.status === 'running') {
+      expect(state.message).toContain('触发人机验证码')
+      expect(state.progress).toBe(40)
     }
   })
 
@@ -211,5 +218,42 @@ describe('runPreset：异步路径（视频这类）', () => {
     const state = await pollOnce('t-7', deps)
     expect(state.status).toBe('done')
     if (state.status === 'done') expect(state.result.ok).toBe(false)
+  })
+})
+
+describe('runPreset：下单前整理参考图（referencePrep 接线）', () => {
+  it('给 prepareReferenceImages 时，工具参数里的 referenceImages 用的是整理后的值', async () => {
+    const seen: string[][] = []
+    const { deps, calls } = makeDeps({
+      prepare: async (urls) => {
+        seen.push(urls)
+        // 本地素材换成 web2api 的 referenceUrl；外链原样
+        return urls.map((u) => (u.startsWith('/api/') ? '/uploaded.png' : u))
+      },
+    })
+    await runPreset(
+      {
+        preset: doubaoVideoAuto,
+        prompt: '猫',
+        values: {},
+        referenceImages: ['/api/assets/files/x.png', 'https://cdn.example.com/a.png'],
+      },
+      deps,
+    )
+    expect(seen).toEqual([['/api/assets/files/x.png', 'https://cdn.example.com/a.png']])
+    const args = calls[0].args as { referenceImages?: string[] }
+    expect(args.referenceImages).toEqual(['/uploaded.png', 'https://cdn.example.com/a.png'])
+  })
+
+  it('没有参考图时不做整理（不白跑一次）', async () => {
+    let called = 0
+    const { deps } = makeDeps({
+      prepare: async (urls) => {
+        called += 1
+        return urls
+      },
+    })
+    await runPreset({ preset: doubaoTts, prompt: '你好', values: {}, referenceImages: [] }, deps)
+    expect(called).toBe(0)
   })
 })

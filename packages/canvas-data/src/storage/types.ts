@@ -44,7 +44,8 @@ export interface ResourceAdapter {
   /**
    * 存一段二进制，返回**持久引用**（写进节点 data 的 `resourceId`）。
    *
-   * 只回 ref、**不回 URL**：URL 是临时的（本地每次刷新都会变），由 resolveResource 现算。
+   * 回**持久引用**：云端是同源 URL（`/api/canvases/<画布id>/resources/<哈希>`），
+   * 本地是 `res-<n>` id；`resolveResource` 负责把它换成当前可显示地址。
    */
   putResource(blob: Blob, opts: ResourcePutOptions): Promise<string>
   /**

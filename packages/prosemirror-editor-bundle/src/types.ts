@@ -12,7 +12,13 @@ export interface ResourceItem {
    * 而不是退化成 `@名字` —— 发消息时后端据此认出「引用了哪一种、引用了谁」。
    * 不给则维持旧的 `@名字`（图片 / 视频素材这类只作展示的标签）。
    */
-  ref?: { kind: string; name: string; value?: string }
+  /**
+   * 引用标记信息（技能 / MCP / 节点 / 资产）。
+   *
+   * 资产专用两个字段（见 referenceMarkup.ts）：`ext` = 扩展名（点标签预览时挑预览器），
+   * `folderId` = 资产库文件夹 id（点文件夹标签时定位到资产管理的那一层）。
+   */
+  ref?: { kind: string; name: string; value?: string; ext?: string; folderId?: string }
   renderItem?: (item: ResourceItem) => VNode   // MentionMenu 下拉菜单渲染
   renderEditor?: (item: ResourceItem) => [string, Record<string, any>, ...any[]] | HTMLElement  // 输入框内 DOM 渲染；数组=DOMOutputSpec（ProseMirror 创建），HTMLElement=直接返回
   // 编辑器内交互事件（不传 → 无默认行为）

@@ -23,23 +23,37 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 describe('MCP 工具清单', () => {
+  /**
+   * 用户报的「检测出来 0 个工具」根因就在这条：工具名带 `.`（如 `canvas.get`）。
+   * Agent 用的 SDK 会把服务名拼成前缀（`mcp__canvas__` + 工具名），而它只接受
+   * **字母 / 数字 / 下划线 / 短横线** —— 带点的名字会被**整条跳过**，于是 10 个工具全没了、
+   * 检测结果显示 0。名字必须能安全拼上前缀。
+   */
+  it('工具名是 SDK 合法名：字母 / 数字 / 下划线 / 短横线（带点会被跳过 → 0 个工具）', () => {
+    for (const t of TOOL_LIST) {
+      expect(t.name, t.name).toMatch(/^[A-Za-z0-9_-]+$/)
+      // 拼上 SDK 的 `mcp__<服务名>__` 前缀后依然合法（SDK 就是这么校验的），且不超长
+      expect(`mcp__canvas__${t.name}`.length, t.name).toBeLessThanOrEqual(128)
+    }
+  })
+
   it('画布读写四件套都在', () => {
     const names = listTools().map((t) => t.name)
-    for (const n of ['canvas.get', 'canvas.overview', 'canvas.batch_nodes', 'canvas.batch_edges']) {
+    for (const n of ['canvas_get', 'canvas_overview', 'canvas_batch_nodes', 'canvas_batch_edges']) {
       expect(names).toContain(n)
     }
   })
 
   it('资源上传三件套都在（AI 要能往画布放图，不能只建空节点）', () => {
     const names = listTools().map((t) => t.name)
-    for (const n of ['resource.upload', 'resource.list', 'canvas.add_image']) {
+    for (const n of ['resource_upload', 'resource_list', 'canvas_add_image']) {
       expect(names).toContain(n)
     }
   })
 
   it('生成三件套都在（不开页面也要能下单）', () => {
     const names = listTools().map((t) => t.name)
-    for (const n of ['generation.actions', 'generation.create', 'generation.status']) {
+    for (const n of ['generation_actions', 'generation_create', 'generation_status']) {
       expect(names).toContain(n)
     }
   })
@@ -61,7 +75,7 @@ describe('MCP 工具清单', () => {
         doc,
         registry,
         history: new HistoryStore(dir),
-        resolveResourceUrl: (_c, ref) => ref,
+        resolveResourceUrl: async (_c, ref) => ref,
       })
       const server = createCanvasMcpServer(doc, registry, tasks)
       // SDK 内部把已注册工具放在 _registeredTools；用它核对清单没有"列了却没注册"的落空项

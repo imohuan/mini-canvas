@@ -14,7 +14,7 @@
  *   POST /api/canvas/nodes  { add?, delete?, update? }  → BatchResult
  *   POST /api/canvas/edges  { add?, delete?, update? }  → BatchResult
  *
- * 语义与 MCP 的 `canvas.batch_nodes` / `canvas.batch_edges` 同源（同一套 CanvasDocument 方法）。
+ * 语义与 MCP 的 `canvas_batch_nodes` / `canvas_batch_edges` 同源（同一套 CanvasDocument 方法）。
  * **但容错策略不同**，这是有意的：
  *
  *   MCP 口（AI 用）  严格：说错 id 就报错。AI 会看到错误并改正。

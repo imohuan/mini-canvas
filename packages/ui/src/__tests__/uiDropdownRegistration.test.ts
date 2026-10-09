@@ -67,6 +67,48 @@ describe('下拉互斥登记表：两种实现共用同一份', () => {
 })
 
 /**
+ * 子浮层（`nestedIn`）—— 「两个下拉并存」的唯一合法例外。
+ *
+ * 用户口径（2026-10-09）：「触发这个菜单的时候，你的画布的这个菜单消失了，有没有办法」。
+ * 默认的「同屏只留一个浮层」会把父菜单（画布列表）当场顶掉；子浮层要的恰恰相反 ——
+ * 列表留着、操作菜单挂在它旁边。三条判据缺一都会退回到「一开子菜单父菜单就消失」：
+ *   ① 子浮层打开时**不 claim 排他**；
+ *   ② 面板组链写成「父链 + 自己」（父菜单的点外判定才知道点的是自己人）；
+ *   ③ 自己判「点外」只认自己的 id（否则点父列表时以为还在组内、菜单赖着不关）。
+ */
+describe('子浮层（nestedIn）：两个菜单并存', () => {
+  const src = readFileSync(new URL('../components/AxDropdown.vue', import.meta.url), 'utf-8')
+
+  it('声明了 nestedIn 开关（不传 = 普通下拉，行为完全不变）', () => {
+    expect(src).toMatch(/nestedIn\?: \(\) => \{ chain: string; open: boolean \} \| undefined/)
+    expect(src).toMatch(/nestedIn: undefined,/)
+  })
+
+  it('① 打开时对子浮层**不 claim 排他**（claim 会把父菜单关掉）', () => {
+    expect(src).toMatch(/if \(v && !isNested\.value\) claimDropdownExclusive\(close\)/)
+  })
+
+  it('② 面板组链 = 父链 + 自己（父菜单借它认出「点的是自己人」）', () => {
+    expect(src).toMatch(/isNested\.value \? parentChain\.value \+ ' ' \+ chainId : chainId/)
+    // 链要真写进面板
+    expect(src).toMatch(/:data-floating-chain="panelChain"/)
+  })
+
+  it('③ 自己判点外只认自己的 id（点父列表才关得掉子菜单）', () => {
+    expect(src).toMatch(/const mine = isNested\.value \? chainId : panelChain\.value/)
+    expect(src).toMatch(/isInFloatingGroup\(node, mine\)/)
+  })
+
+  it('父浮层关掉时子浮层跟着收（不留没有爹的孤儿菜单）', () => {
+    expect(src).toMatch(/isNested\.value && nestedCtx\.value\?\.open === false/)
+  })
+
+  it('把开关与组链交给子浮层（defineExpose）', () => {
+    expect(src).toMatch(/defineExpose\(\{ openAtPoint, isOpen, chainId \}\)/)
+  })
+})
+
+/**
  * 箭头怎么放、放哪一层 —— 两条都是实测踩过才钉的。
  *
  * 用户报的问题（2026-10-03）：「所有抓不到它的箭头都不见了，只有快捷键面板才有」。
@@ -100,20 +142,24 @@ describe('箭头的位置契约（结构层）', () => {
     expect(menuRule![1]).toMatch(/z-index:\s*100000/)
   })
 
+
   /**
-   * 箭头**居中**在它贴着的那条边上（用户口径 2026-10-03：「箭头好像都是指向左侧的，
-   * 我希望你把这些全部改成居中显示」）。
+   * 箭头横向位置**跟着 align 走**（用户口径 2026-10-07：「下拉左对齐了，但箭头没左对齐」）。
    *
-   * 之前跟的是**触发器中心**，而多数菜单是 bottom-start / top-start（左缘对齐触发器、
-   * 从按钮往左铺开），触发器中心换算进去就落在最左边 —— 箭头全挤在左下角，看着像指向左侧。
-   * 现在取菜单自己的中线，所以这里钉横向公式是 mw / 2。
+   * 历史：早先跟触发器中心（箭头全挤左边、看着指向左侧）→ 改成菜单中线；
+   * 但菜单设了 align=start（左对齐触发器）后，菜单左移、箭头仍在中线，于是又不齐了。
+   * 现在按 align 取：start→贴左缘(内缩 PAD)、end→贴右缘、center→中线。
    */
-  it('箭头横向取菜单中线（不是触发器中轴、也不是 arrow 中间件的 x）', () => {
+  it('箭头横向跟 align 走（start/end/center 三档）', () => {
     const at = src.indexOf('const arrowStyle = computed')
     const body = src.slice(at, src.indexOf('function clearCloseTimer'))
-    expect(body, '箭头横向应是 ml + mw / 2').toMatch(/cx = ml \+ mw \/ 2/)
+    // 必须读到 effectiveAlign（不再写死中线）
+    expect(body, '箭头横向要读 effectiveAlign').toMatch(/effectiveAlign\.value/)
+    // 三档都要有：start 贴左、end 贴右、center 中线
+    expect(body, 'start 档应贴菜单左缘').toMatch(/a === 'start'/)
+    expect(body, 'end 档应贴菜单右缘').toMatch(/a === 'end'/)
+    expect(body, 'center 档仍是中线').toMatch(/ml \+ mw \/ 2/)
     // 不能再读 floating-ui 的 arrow 中间件输出（按打开那一刻的尺寸算，菜单被内容撑宽后就失准）
-    // —— 判据：代码里不该再出现 d?.x / d?.y 那种取值（注释里提到 middlewareData 是说明，不算）
     const code = body
       .split('\n')
       .filter((l) => !/^\s*(\/\/|\/\*|\*)/.test(l))

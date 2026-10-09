@@ -39,6 +39,7 @@ import {
   NodeToolbarButton,
   ColorField,
 } from "./components/ui";
+import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
 import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
@@ -664,6 +665,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
   ui.add("tooltip", Tooltip, { id: "default" });
   ui.add("select", Select, { id: "default" });
+  // 全屏媒体预览（文本/图片/视频/音频内置；#stage 插槽可扩展新资源类型）。
+  // 底栏插件的素材预览浮层与成品应用（生成历史/资产面板）都用它；换主题时一起换。
+  ui.add("mediaViewer", MediaViewer, { id: "default" });
   ui.add("slider", PrecisionSlider, { id: "default" });
   ui.add("toolParamField", ToolParamField, { id: "default" });
   // 参数合并展示件：把「比例 · 画质 · 2K · 1张」那种多参数收敛成一个下拉（参考 LibTV 的底行样式）。
@@ -697,6 +701,7 @@ export const themeDefaultPlugin: PluginModule = { name, inject, Config, apply };
  * 各自复制一份必然漂移。样式随组件内联，使用方无需额外引 CSS。
  */
 export { Dropdown, Tooltip, Select, PrecisionSlider, ToolParamField, NodeToolbarButton, ColorField } from "./components/ui";
+export { MediaViewer } from "./components/ui";
 export type { DropdownTrigger, SelectOption } from "./components/ui";
 
 /**

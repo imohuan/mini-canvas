@@ -18,17 +18,19 @@ import SkillsPage from './SkillsPage.vue'
 import McpPage from './McpPage.vue'
 import RulesPage from './RulesPage.vue'
 import PromptPage from './PromptPage.vue'
+import TitleModelPage from './TitleModelPage.vue'
 
 const agent = useAgent()
 const s = agent.state
 
-type TabKey = 'models' | 'skills' | 'mcp' | 'rules' | 'prompt'
+type TabKey = 'models' | 'skills' | 'mcp' | 'rules' | 'prompt' | 'title'
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'models', label: 'Provider' },
   { key: 'skills', label: '技能' },
   { key: 'mcp', label: 'MCP' },
   { key: 'rules', label: '审批规则' },
   { key: 'prompt', label: '系统提示词' },
+  { key: 'title', label: '会话标题模型' },
 ]
 const tab = ref<TabKey>('models')
 
@@ -50,7 +52,8 @@ onMounted(() => void agent.refresh())
       <SkillsPage v-else-if="tab === 'skills'" />
       <McpPage v-else-if="tab === 'mcp'" />
       <RulesPage v-else-if="tab === 'rules'" />
-      <PromptPage v-else />
+      <PromptPage v-else-if="tab === 'prompt'" />
+      <TitleModelPage v-else />
     </div>
   </div>
 </template>

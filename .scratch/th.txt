@@ -1,0 +1,1 @@
+ST= {"goalThumb":true,"goalThumbBorder":"1px color(srgb 0.0941176 0.12549 0.168627 / 0.22)","goalPlusN":"+1","queueThumb":true,"queuePlusN":"+1"}

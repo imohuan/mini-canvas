@@ -20,6 +20,38 @@ export type AgentChatEvent =
   | { type: 'approval_request'; approval: { id: string; toolName: string; arguments: string; createdAt: number } }
   | { type: 'approval_result'; id: string; decision: 'allow' | 'deny' }
   | { type: 'done' }
+  /**
+   * 这条会话有没有一轮正在跑（托管模式专有，由 SessionHub 广播）。
+   *
+   * 为什么单独一个事件：队列在空闲时也会自动起轮，界面需要"什么时候开始"的权威信号；
+   * 从 text/tool 事件推断会在"一轮还没产出任何内容"的窗口里失准。
+   */
+  | { type: 'run_state'; running: boolean }
+  /** 队列变化快照（加/删/改/暂停后广播；界面据此刷新输入框上方的列表） */
+  | { type: 'queue'; queue: unknown }
+  /** 队列全部发完且会话空闲（通知用："队列已跑完"） */
+  | { type: 'queue_idle' }
+  /** 目标状态更新（每次读 GOAL.json 后推；界面显示「第 N 轮 · 已用 / 预算」） */
+  | { type: 'goal_state'; goal: unknown }
+  /** 一轮结束（通知时机之一；由 server 的 onRunFinished 广播） */
+  | { type: 'round_done' }
+  /**
+   * 「目标轮次边界」信号（目标插件 stop hook 刚跑完）。
+   * 为什么需要它：目标是在**一次 SDK run() 里连跑多轮**的（stop hook 循环），
+   * 我们此前只在整轮 run 结束时读一次 GOAL.json ⇒ 中间几轮全被跳过（真机：从第 3 轮直接跳到第 7 轮）。
+   * 这个标记由 translate 从 SDK 的 hook 事件里翻出来，runtime 收到后读一次 GOAL.json 推 goal_state。
+   */
+  | { type: 'goal_round' }
+  /**
+   * 这一轮喂给模型的**用户消息**（正文 + 可选的图 + 是否引导）。
+   *
+   * 为什么必须单独推一条（真机实测的洞）：用户自己点发送时，前端会先在本地造一个用户气泡；
+   * 但**队列自动发的那一条**前端完全没参与 —— 后端只把它写进转录、不推事件，
+   * 于是界面从头到尾没有这条消息的气泡，用户看到的是"AI 对着空气回答"
+   * （用户实测截图：消息跑到了助手那一侧）。
+   * 前端收到它时按"如果本地已有同文本的末条用户消息就不重复造"去重。
+   */
+  | { type: 'user_message'; text: string; images?: string[]; steered?: boolean }
 
 type Log = (message: string, extra?: unknown) => void
 
@@ -70,6 +102,11 @@ export function translateMessage(msg: unknown, state: TranslateState, log?: Log)
         ? [{ type: 'thinking', delta: String(p.thinking ?? ''), partial: true }]
         : []
     case 'text':
+      // 非人类来源的用户文本（harness / server / parent_agent 注入）**不是助手说的话**：
+      // 目标模式的协议文本就带 sender:'harness'，原样翻成助手 text 会让转录和界面里
+      // 夹进一长串「This message was sent automatically by goal mode…」（真机实测）。
+      // 这类消息模型照样读得到（它在 SDK 的上下文里），只是不该进对话流给用户看。
+      if (p.role === 'user' && p.sender !== undefined) return []
       return [{ type: 'text', text: String(p.text ?? ''), final: true }]
     case 'thinking':
       return [{ type: 'thinking', text: String(p.thinking ?? ''), final: true }]
@@ -158,6 +195,12 @@ function eventNotice(p: Record<string, unknown>, state: TranslateState, log?: Lo
     }
     case 'abort':
       return []
+    case 'hook': {
+      // 目标插件的 stop hook 每轮结束都会跑一次 —— 这是**轮次边界**。
+      // 原生翻成 goal_round（不带数据）：runtime 收到后读 GOAL.json 推 goal_state（见类型注释）。
+      if (p.hook === 'stop' && p.name === 'goal') return [{ type: 'goal_round' }]
+      return []
+    }
     default:
       log?.('non-model message', { type: p.type })
       return []

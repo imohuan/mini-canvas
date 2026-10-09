@@ -43,6 +43,7 @@ import {
   type UpstreamMaterial,
 } from './panelSource'
 import { readRunState } from './runState'
+import { initialPromptText, promptPersistFields } from './promptPersist'
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
 import { referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
@@ -216,12 +217,23 @@ function selectAction(id: string): void {
 if (hasActions.value && !currentId.value) selectAction(defaultActionId())
 
 /**
- * 把当前参数落一份到节点 data（`data.barValues`），下次点开这个节点时接着用。
- * 走 doc.updateNode（是"我在准备的作品"，进历史 + 落盘）；失败不抛（参数持久化不该挡住交互）。
+ * 把当前参数与输入落一份到节点 data，下次点开这个节点时接着用。
+ * 走 doc.updateNode（是"我在准备的作品"，进历史 + 落盘）；失败不抛（不该挡住交互）。
+ *
+ * 提示词：'text' 绑定写 data.text（onPromptUpdate 已即时写，这里不重复），
+ * 'none' 绑定写 data.barPrompt —— 这是用户报的「内容消失」的落点。
  */
 function persistValues(): void {
   try {
-    ctx.get('doc').updateNode(props.id, { data: { barValues: { ...values.value, actionId: currentId.value } } })
+    ctx.get('doc').updateNode(props.id, {
+      data: {
+        barValues: { ...values.value, actionId: currentId.value },
+        // 只有真的存在过输入框（当前动作 needsPrompt）才落提示词：
+        // 否则像文本节点（默认动作是「复制/删除」、压根没有输入框）会被写进一个
+        // 多余的 barPrompt（它正文在 data.text，不该再复制一份）。
+        ...(showEditor.value ? promptPersistFields(promptBinding.value, prompt.value) : {}),
+      },
+    })
   } catch {
     /* 节点已不在等情况：忽略 */
   }
@@ -241,17 +253,32 @@ function persistValuesSoon(): void {
   }, 400)
 }
 onBeforeUnmount(() => {
+  // 卸载前把攒着的那一拍落掉：用户打完字立刻点别处（底栏被收起 → 本组件卸载）时，
+  // 400ms 防抖还没到点，不 flush 就会丢掉这次输入 —— 正是用户报的「输入后去操作别的画布，再回来内容没了」。
   if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = null
+  persistValues()
 })
 
-// —— 提示词（promptBinding:'text' 时与 data.text 双向绑定） ——
-const prompt = ref(typeof props.data?.text === 'string' ? props.data.text : '')
+// —— 提示词 ——
+// 'text' 绑定（文本节点）与 data.text 双向；'none' 绑定（图片生成等）落 data.barPrompt，
+// 这样底栏**重新挂载**（切画布/再点节点/任务跑完再回来）后内容还在，发送之后也还在。
+// 用户报的「输入内容一下就全消失」根因就是这个：'none' 绑定从没写过节点 data。
+const prompt = ref(initialPromptText(props.data))
 const promptDoc = ref<unknown>(undefined)
 watch(
   () => props.data?.text,
   (next) => {
     const text = typeof next === 'string' ? next : ''
     if (promptBinding.value === 'text' && text !== prompt.value) prompt.value = text
+  },
+)
+// 'none' 绑定下节点 data.barPrompt 被外部改（undo/别的插件）也要跟回来
+watch(
+  () => props.data?.barPrompt,
+  (next) => {
+    const text = typeof next === 'string' ? next : ''
+    if (promptBinding.value === 'none' && text !== prompt.value) prompt.value = text
   },
 )
 const promptBinding = computed(() => currentAction.value?.promptBinding ?? 'none')
@@ -269,11 +296,19 @@ const paramDefs = computed<ToolParamDef[]>(() =>
 /** 输入区：needsPrompt 的动作才有 */
 const showEditor = computed(() => needsPrompt.value)
 
-/** 输入框内容变化：promptBinding:'text' 就地写回节点（是作品，进历史 + 落盘） */
+/**
+ * 输入框内容变化：就地写回节点（是作品，进历史 + 落盘）。
+ *
+ * - 'text' 绑定（文本节点）：即写 data.text（既有行为，输入框就是节点正文）。
+ * - 'none' 绑定（图片生成等）：防抖落 data.barPrompt —— 用户报的「输入后去操作别的画布、
+ *   再点回来内容就没了」正是这条从缺：以前 'none' 绑定只存在组件本地 ref 里，底栏一收就没了。
+ */
 function onPromptUpdate(v: string): void {
   prompt.value = v
   if (promptBinding.value === 'text') {
     ctx.get('doc').updateNode(props.id, { data: { text: v } })
+  } else {
+    persistValuesSoon()
   }
 }
 
@@ -293,10 +328,11 @@ function openCard(card: (typeof cards.value)[number]): void {
   // 全屏预览：用户要求「要的是全屏，是整个视图」
   openPreview({
     name: card.name,
+    nodeId: card.id,
     kind: card.isText ? 'text' : (card.kind as 'image' | 'video' | 'audio'),
     url: card.url,
     text: card.value,
-  })
+  }, props.id)
 }
 
 // —— 参考：两态开关（用户实测反馈「点击之后就无法取消」——这里做成开/关切换） ——
@@ -353,6 +389,10 @@ if (typeof ctx.on === 'function') {
 /** 执行（写盘走 nodeTask → doc.updateNodeRuntime） */
 async function onRun(): Promise<void> {
   if (!canRun.value || !currentAction.value) return
+  // ★ 防连点：正在跑的期间（runState.status==='running'）按钮已经 disabled，但"从点击到 runState 落盘"
+  //   这几百毫秒里仍可能被连点（用户实测：卡的时候连点创建了多个相同任务）。这里再加一道同步闸门 ——
+  //   submitted 是同步置位的，第二次点击进不来。服务端还有一道权威闸门（api/jobs 的 409），双保险。
+  if (submitted.value || running.value) return
   // 提交前先把参数与输入落好：收起之后再点回来还是这一套（用户要求"不清空"）
   persistValues()
   if (promptBinding.value === 'text') ctx.get('doc').updateNode(props.id, { data: { text: prompt.value } })
@@ -639,7 +679,7 @@ function onGlobalLeave(el: Element): void {
           class="nb-run"
           :class="{ 'is-running': running }"
           type="button"
-          :disabled="!canRun"
+          :disabled="!canRun || submitted"
           :title="currentAction?.title || '执行'"
           @click.stop="onRun"
         >
@@ -974,12 +1014,22 @@ function onGlobalLeave(el: Element): void {
  * 这里保留一条显式声明，是为了底栏自己不去依赖上游默认值。
  */
 .nb-editor :deep(.ProseMirror) {
+  /* 撑满整块可见输入框（用户实测：绿色框那么大，却只有第一行能点进去聚焦）。
+     bundle 里 `.prose-mirror-editor > div:first-child` 有 min-height:120px 决定了整块高度，
+     但 .ProseMirror 本体只有一行高（21px）——真正能聚焦/能点的只有那一行。
+     这里让正文元素 flex 撑满外壳，于是整块区域都可点、可聚焦。 */
+  flex: 1 1 auto;
   min-height: var(--nb-min, 20px) !important;
   outline: none !important;
   font-size: 13px;
   line-height: 1.6;
   color: var(--ui-ink, #18202b);
   word-break: break-word;
+}
+/* bundle 的中间层（editorRef 容器）：转成纵向 flex 列，正文才能被 flex:1 撑到整块高度。 */
+.nb-editor :deep(.prose-mirror-editor > div:first-child) {
+  display: flex;
+  flex-direction: column;
 }
 .nb-editor :deep(.prose-mirror-editor) {
   max-height: var(--nb-max, 220px);

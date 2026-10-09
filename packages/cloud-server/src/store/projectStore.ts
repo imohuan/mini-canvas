@@ -173,4 +173,37 @@ export class ProjectStore {
     const idx = await this.readIndex()
     await this.writeIndex(idx.filter((e) => e.id !== id))
   }
+
+  /**
+   * 复制一张画布：建新目录 + 记索引；**内容拷贝**由调用方（CanvasStore.copyInto）做。
+   *
+   * 为什么分两半：索引（属于哪个项目、叫什么）住这里，节点/边/资源住 CanvasStore ——
+   * 一次性把两边都写会多一条跨存储的耦合路径，不如各自管自己那份。
+   *
+   * 名字：默认「原名字 副本」；重名时后缀递增（「… 副本 2」），免得列表里两条一模一样。
+   */
+  async duplicateCanvas(id: string): Promise<CanvasIndexEntry | undefined> {
+    const idx = await this.readIndex()
+    // 索引里没有（老画布 / 手工丢进来的目录）：按 default 项目补一条 ——
+    // 与 renameCanvas 的兜底同一口径，否则这类画布在下拉里点得动、复制却 404。
+    // 目录真的不存在时仍按「画布不存在」处理（别造出一张空副本）。
+    let src = idx.find((e) => e.id === id)
+    if (!src) {
+      const onDisk = await fs
+        .access(canvasDir(this.root, id))
+        .then(() => true)
+        .catch(() => false)
+      if (!onDisk) return undefined
+      src = { id, name: id, projectId: DEFAULT_PROJECT_ID, createdAt: 0 }
+    }
+    const newId = randomUUID().replace(/-/g, '').slice(0, 16)
+    if (!isSafeEntityId(newId)) return undefined
+    await fs.mkdir(canvasDir(this.root, newId), { recursive: true })
+    const used = new Set(idx.map((e) => e.name))
+    let name = src.name + ' 副本'
+    for (let n = 2; used.has(name); n++) name = src.name + ' 副本 ' + n
+    const entry: CanvasIndexEntry = { id: newId, name, projectId: src.projectId, createdAt: Date.now() }
+    await this.writeIndex([...idx, entry])
+    return entry
+  }
 }

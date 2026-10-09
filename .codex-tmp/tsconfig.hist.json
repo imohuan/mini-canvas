@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "CommonJS",
+    "moduleResolution": "node10",
+    "ignoreDeprecations": "6.0",
+    "types": ["node"],
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "outDir": "C:/Users/Administrator/.codex/visualizations/2026/10/06/01a11097-f93f-7d23-abfc-1821949e5c23/hist-test",
+    "rootDir": "D:/Code/Git/mini-canvas/packages/cloud-server/src",
+    "noEmitOnError": true
+  },
+  "include": ["D:/Code/Git/mini-canvas/packages/cloud-server/src/tasks/history.ts", "D:/Code/Git/mini-canvas/packages/cloud-server/src/tasks/types.ts"]
+}

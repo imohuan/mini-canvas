@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>目标标签 / 预算内联编辑 / 回到底部 · Demo</title>
+<style>
+  :root {
+    --ui-canvas-bg:#f5f6f8; --ui-panel:#fff; --ui-line:#e2e5ea; --ui-line-soft:#eef0f4;
+    --ui-ink:#18202b; --ui-ink-dim:#6b7280; --ui-ink-mute:#8c95a3;
+    --ui-hover:rgb(0 0 0/.06); --ui-veil:rgb(0 0 0/.04); --ui-chip:rgb(0 0 0/.07);
+    --ui-overlay-solid:#fff; --ui-shadow-md:0 18px 44px rgb(15 23 42/.16);
+    --ui-accent:#0891b2; --ui-accent-hover:#0e7490; --ui-accent-soft:color-mix(in srgb,var(--ui-accent) 12%,transparent);
+    --ui-danger:#ef4444; --ui-danger-veil:color-mix(in srgb,var(--ui-danger) 8%,transparent); --ui-warn:#e3a25f;
+  }
+  html.dark {
+    --ui-canvas-bg:#141414; --ui-panel:#262626; --ui-line:#363636; --ui-line-soft:#2a2a2a;
+    --ui-ink:#f7f7f7; --ui-ink-dim:#919191; --ui-ink-mute:#a8a8a8;
+    --ui-hover:rgb(255 255 255/.10); --ui-veil:rgb(255 255 255/.06); --ui-chip:rgb(255 255 255/.10);
+    --ui-overlay-solid:rgb(33 33 33); --ui-shadow-md:0 18px 44px rgb(0 0 0/.45);
+    --ui-accent:#0891b2; --ui-accent-hover:#22b8d6; --ui-accent-soft:color-mix(in srgb,var(--ui-accent) 20%,transparent);
+    --ui-danger:#f87171; --ui-danger-veil:color-mix(in srgb,var(--ui-danger) 10%,transparent);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:28px 20px 60px;background:var(--ui-canvas-bg);color:var(--ui-ink);
+    font:13px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",system-ui,sans-serif}
+  .topbar{position:sticky;top:0;z-index:50;display:flex;gap:8px;align-items:center;padding:10px 12px;
+    margin:-28px -20px 24px;background:var(--ui-canvas-bg);border-bottom:1px solid var(--ui-line)}
+  .topbar h1{font-size:14px;margin:0 12px 0 0}
+  .sw{display:inline-flex;border:1px solid var(--ui-line);border-radius:8px;overflow:hidden}
+  .sw button{border:0;background:transparent;color:var(--ui-ink-dim);padding:6px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .sw button.on{background:var(--ui-accent-soft);color:var(--ui-accent-hover)}
+  .grid{display:flex;flex-direction:column;gap:34px;align-items:center}
+  .case{width:560px;max-width:100%}
+  .case h2{font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--ui-ink-mute);margin:0 0 6px 2px}
+  .case .note{font-size:11px;color:var(--ui-ink-mute);margin:0 0 12px 2px}
+  .panel{position:relative;padding:12px 10px 14px;background:var(--ui-panel);border:1px solid var(--ui-line);border-radius:16px}
+  .inputbox{display:flex;flex-direction:column;gap:8px;padding:8px;border:1px solid var(--ui-line);
+    border-radius:16px;background:var(--ui-overlay-solid)}
+  .editor{min-height:36px;padding:4px 4px 0;color:var(--ui-ink-mute);font-size:14px}
+  .toolbar{display:flex;align-items:center;gap:6px}
+  .icobtn{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--ui-ink-dim);cursor:pointer}
+  .icobtn:hover{background:var(--ui-hover);color:var(--ui-ink)}
+  .spacer{flex:1}
+  .send{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:12px;background:var(--ui-ink);color:var(--ui-panel);cursor:pointer}
+  .qbtn{display:grid;place-items:center;width:22px;height:22px;flex:none;padding:0;border:0;border-radius:6px;background:transparent;color:inherit;cursor:pointer}
+  .qbtn:hover{background:var(--ui-hover)}
+  .qbtn.plain{color:var(--ui-ink-dim)} .qbtn.plain:hover{color:var(--ui-ink)}
+  .rowactions{display:flex;align-items:center;gap:2px}
+
+  /* ===== 目标标签：方案 1（现样式 + 预算可点）===== */
+  .goalmark{display:flex;align-items:center;gap:4px;width:100%;height:26px;padding:0 4px 0 10px;
+    border-radius:8px;background:var(--ui-accent-soft);color:var(--ui-accent-hover);font-size:12px;font-weight:600}
+  .goalmark .gtext{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .goalmark .gtag{flex:none;display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px;
+    border-radius:6px;background:color-mix(in srgb,var(--ui-accent) 16%,transparent);font-size:11px;font-weight:600}
+
+  /* ===== 目标标签：方案 2（结构小标签：目标模式 | 预算不限 ▾ | ✕）===== */
+  .goalwrap{display:flex;align-items:center;gap:0;width:100%}
+  .goalchip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 8px;border-radius:10px;
+    background:var(--ui-veil);border:1px solid var(--ui-line);font-size:12px}
+  .goalchip .seg{display:inline-flex;align-items:center;gap:4px;padding:0 6px;color:var(--ui-ink)}
+  .goalchip .seg.mode{color:var(--ui-accent-hover);font-weight:600}
+  .goalchip .sep{width:1px;height:14px;background:var(--ui-line)}
+  .goalchip .budgetbtn{display:inline-flex;align-items:center;gap:2px;height:20px;padding:0 6px;border:0;border-radius:6px;
+    background:transparent;color:var(--ui-ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .goalchip .budgetbtn:hover{background:var(--ui-hover)}
+  .goalchip .rm{color:var(--ui-ink-dim)}
+  .goalchip .rm:hover{color:var(--ui-danger);background:var(--ui-danger-veil)}
+
+  /* ===== 预算内联编辑弹层（图 2）===== */
+  .budgetpop{position:absolute;z-index:20;width:230px;padding:12px;border:1px solid var(--ui-line);border-radius:12px;
+    background:var(--ui-overlay-solid);box-shadow:var(--ui-shadow-md)}
+  .budgetpop h4{margin:0 0 8px;font-size:13px;font-weight:700;color:var(--ui-ink)}
+  .budgetrow{display:flex;gap:8px;align-items:center}
+  .budgetinput{flex:1;height:34px;padding:0 10px;border:1px solid var(--ui-line);border-radius:8px;
+    background:var(--ui-veil);color:var(--ui-ink);font:inherit;font-size:13px}
+  .budgetinput::placeholder{color:var(--ui-ink-mute)}
+  .budgetok{display:grid;place-items:center;width:34px;height:34px;flex:none;border:0;border-radius:8px;
+    background:var(--ui-accent);color:#fff;cursor:pointer}
+  .budgetok:hover{background:var(--ui-accent-hover)}
+  .budgethint{margin:8px 0 0;font-size:11px;color:var(--ui-ink-mute)}
+
+  /* ===== 目标状态行（发送之后，像队列那样留在输入区上方）===== */
+  .goalstate{display:flex;align-items:center;gap:6px;width:100%;margin-top:8px;padding:6px 10px;
+    border:1px solid var(--ui-line);border-radius:12px;background:var(--ui-veil);font-size:11px;color:var(--ui-ink-dim)}
+  .goalstate .gname{font-weight:600;color:var(--ui-ink)}
+  .goalstate .bar{flex:1;height:4px;border-radius:999px;background:var(--ui-chip);overflow:hidden}
+  .goalstate .bar i{display:block;height:100%;background:var(--ui-accent)}
+  .goalstate .cyclebtn{display:inline-flex;align-items:center;gap:2px;height:20px;padding:0 6px;border:0;border-radius:6px;
+    background:transparent;color:var(--ui-ink-dim);font:inherit;font-size:11px;cursor:pointer}
+  .goalstate .cyclebtn:hover{background:var(--ui-hover);color:var(--ui-ink)}
+
+  /* ===== 回到底部：三种落点 ===== */
+  .to-bottom{position:absolute;left:50%;transform:translateX(-50%);z-index:6;display:grid;place-items:center;
+    width:32px;height:32px;padding:0;border:1px solid var(--ui-line);border-radius:999px;
+    background:var(--ui-overlay-solid);color:var(--ui-ink-dim);cursor:pointer;box-shadow:var(--ui-shadow-md)}
+  .to-bottom:hover{color:var(--ui-ink)}
+  /* A 输入框正上方居中 */
+  .tb-A{bottom:calc(100% + 10px)}
+  /* B 面板底部正中央（浮在输入框下沿之上） */
+  .tb-B{bottom:14px}
+  /* C 右侧竖排（原样，仅对比） */
+  .tb-C{left:auto;right:14px;bottom:calc(100% + 10px);transform:none}
+  .fake{height:70px;border-radius:10px;background:var(--ui-veil);margin-bottom:10px;display:grid;place-items:center;color:var(--ui-ink-mute);font-size:11px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>目标标签 / 预算编辑 / 回到底部</h1>
+    <div class="sw" id="sw"><button data-theme="light" class="on">亮色</button><button data-theme="dark">暗色</button></div>
+  </div>
+
+  <div class="grid">
+
+    <section class="case">
+      <h2>目标标签 · 方案 1（在现有标签上补「预算可点」）</h2>
+      <p class="note">保持你现在的青色标签观感；把预算做成一个可点的小胶囊，点它弹内联编辑框。</p>
+      <div class="panel">
+        <div class="inputbox" style="position:relative">
+          <div class="goalmark">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+            <span class="gtext">把这批素材整理成一套分镜脚本</span>
+            <button class="gtag" onclick="document.getElementById('pop1').style.display='block'">预算 50k</button>
+            <button class="qbtn" title="结束目标"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div id="pop1" class="budgetpop" style="display:none;bottom:44px;left:50%;transform:translateX(-50%)">
+            <h4>Token 预算</h4>
+            <div class="budgetrow">
+              <input class="budgetinput" placeholder="例如 500k" value="50k" />
+              <button class="budgetok" onclick="document.getElementById('pop1').style.display='none'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg></button>
+            </div>
+            <p class="budgethint">支持 k/m 后缀；留空表示预算不限</p>
+          </div>
+          <div class="editor">开始你的创作，或者 @ 引用技能 / MCP</div>
+          <div class="toolbar">
+            <button class="icobtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <span class="spacer"></span>
+            <button class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case">
+      <h2>目标标签 · 方案 2（图 2 那种「结构小标签」，预算用下拉）</h2>
+      <p class="note">「目标模式 | 预算不限 ▾ | ✕」变成一个小胶囊；预算做成下拉（不限 / 50k / 100k / 自定义…）。</p>
+      <div class="panel">
+        <div class="inputbox" style="position:relative">
+          <div class="goalwrap">
+            <div class="goalchip">
+              <span class="seg mode"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>目标模式</span>
+              <span class="sep"></span>
+              <button class="budgetbtn" onclick="document.getElementById('pop2').style.display='block'">预算不限
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <span class="sep"></span>
+              <button class="qbtn plain rm" title="取消目标"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+            </div>
+          </div>
+          <div id="pop2" class="budgetpop" style="display:none;bottom:44px;left:8px">
+            <h4>Token 预算</h4>
+            <div class="budgetrow">
+              <input class="budgetinput" placeholder="例如 500k" />
+              <button class="budgetok" onclick="document.getElementById('pop2').style.display='none'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg></button>
+            </div>
+            <p class="budgethint">支持 k/m 后缀；留空表示预算不限</p>
+          </div>
+          <div class="editor">把这批素材整理成一套分镜脚本</div>
+          <div class="toolbar">
+            <button class="icobtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <span class="spacer"></span>
+            <button class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case">
+      <h2>目标发送之后（补上「像队列那样」的常驻状态）</h2>
+      <p class="note">输入框上方一条：目标名 + 进度条 + 第 N 轮 · 已用/预算 + 暂停/结束。与队列同一套观感。</p>
+      <div class="panel">
+        <div class="inputbox">
+          <div class="goalstate">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>
+            <span class="gname">把这批素材整理成一套分镜脚本</span>
+            <span class="bar"><i style="width:37%"></i></span>
+            <span>第 5 轮 · 3.7k / 10k</span>
+            <button class="cyclebtn" title="暂停目标"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 5v14M15 5v14"/></svg></button>
+            <button class="cyclebtn" title="结束目标"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="editor">开始你的创作，或者 @ 引用技能 / MCP</div>
+          <div class="toolbar">
+            <button class="icobtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+            <span class="spacer"></span>
+            <button class="send" style="background:var(--ui-danger);color:#fff"><span style="width:11px;height:11px;border-radius:2px;background:currentColor"></span></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case">
+      <h2>「回到底部」落点 · A 输入框正上方居中（推荐）</h2>
+      <p class="note">在输入框上边缘正中间，浮一个小圆钮。队列空着时也在。</p>
+      <div class="panel">
+        <div class="fake">（上方很长的对话）</div>
+        <div style="position:relative">
+          <button class="to-bottom tb-A" title="回到底部"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>
+          <div class="inputbox"><div class="editor">继续输入…</div><div class="toolbar"><button class="icobtn">+</button><span class="spacer"></span><button class="send">↑</button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="case">
+      <h2>「回到底部」落点 · B 面板底部正中央</h2>
+      <p class="note">贴在面板最下沿的中央（浮在输入框之下）。更“独立”，但会压住一点输入框下缘。</p>
+      <div class="panel" style="padding-bottom:52px">
+        <div class="fake">（上方很长的对话）</div>
+        <div style="position:relative">
+          <div class="inputbox"><div class="editor">继续输入…</div><div class="toolbar"><button class="icobtn">+</button><span class="spacer"></span><button class="send">↑</button></div></div>
+          <button class="to-bottom tb-B" style="bottom:-38px" title="回到底部"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg></button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    document.getElementById('sw').addEventListener('click',(e)=>{
+      const b=e.target.closest('button'); if(!b) return;
+      [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+      document.documentElement.classList.toggle('dark', b.dataset.theme==='dark');
+    });
+  </script>
+</body>
+</html>
+

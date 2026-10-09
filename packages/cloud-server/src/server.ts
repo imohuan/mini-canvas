@@ -35,12 +35,20 @@ import { createWeb2ApiProvider } from './providers/web2api/index.js'
 import { watchProviders, type ProviderWatcher } from './providers/watch.js'
 import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
-import { parseResourceRef } from './store/canvasResources.js'
 import { DEFAULT_CANVAS_ID } from './store/canvasPaths.js'
+import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
 import { AgentConfigService } from './agent/config.js'
 import { AgentSessionStore } from './agent/sessionStore.js'
+import { branchStore } from './agent/branchStore.js'
+ import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from './agent/testModel.js'
 import { AgentRuntime } from './agent/runtime.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot } from './agent/agentPaths.js'
+import { ensureGoalInstalled } from './agent/goal.js'
+import { SessionHub } from './agent/sessionHub.js'
+import { QueueScheduler } from './agent/queueScheduler.js'
+import { GoalRuntime, goalHooksDir, findSessionTrace } from './agent/goalRuntime.js'
+import { sessionScratchpadPath } from './agent/agentPaths.js'
+import { tracesDirOf } from './agent/traceFork.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
 export const DEFAULT_PORT = 8865
@@ -143,9 +151,15 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   let sdkPromise: Promise<typeof import('@prismshadow/penguin-core')> | undefined
   const loadSdk = (): Promise<typeof import('@prismshadow/penguin-core')> =>
     (sdkPromise ??= import('@prismshadow/penguin-core'))
+  // 「后台对话」的事件通道（设计 §3.2）：每会话一条常驻流，队列在空闲时自动起轮也靠它广播。
+  const agentHub = new SessionHub({ log: (m, extra) => console.log('[agent-hub] ' + m, extra ?? '') })
+  // 队列调度器（设计 §3.3）：唯一裁判，见 queueScheduler.ts 文件头。
+  // 先声明后赋值（agentRuntime 的 onRunFinished 要引用它，而它的 deps 又要 agentRuntime 的派生面）。
+  let queueScheduler: QueueScheduler
   const agentRuntime = new AgentRuntime({
     root: dataDir,
     store: agentSessions,
+    hub: agentHub,
     agent: async () => {
       const sdk = await loadSdk()
       return sdk.createAgent({ root: agentRoot(dataDir), projectId: AGENT_PROJECT_ID, agentId: AGENT_ID })
@@ -159,16 +173,113 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       for (const url of images ?? []) messages.push(sdk.imageUrlMessage(url))
       return messages
     },
+    // 宿主注入的用户消息（目标协议文本）：必须走 sender:'harness' —— SDK 的 goal
+    // stop hook 靠这个戳划轮次边界，缺了它记账会退化成「整份 trace = 一轮」（真机实测）。
+    makeHarnessMessage: (text) => {
+      const sdk = sdkRef
+      if (!sdk) throw new Error('SDK 尚未就绪：请先配置模型后重试')
+      return sdk.userText(text, 'harness')
+    },
     filterMcp: (names) => agentConfig.subsetMcp(names),
     readSkill: (name) => agentConfig.readSkillFile(name),
     withSystemPrompt: (text) => agentConfig.withSystemPrompt(text),
+    // 会话自动命名：走「会话标题模型」配置的模型（没配则回落会话默认模型）。
+    // 失败返回 null，runtime 回落「首句截断」—— 起名失败不该报错打扰对话。
+    generateTitle: (plainFirstText) => agentConfig.generateSessionTitle(plainFirstText),
+    // 一轮结束 → 队列调度（先结算 sending 的账，再看能不能发下一条）
+    //    目标还有**轮次边界**（一次 run 里 stop hook 连跑多轮）：见下面的 onGoalRound。
+    onGoalRound: (canvasId, sessionId) => {
+      /**
+       * 目标的一轮结束（stop hook 刚跑完）：立刻读一次 GOAL.json 推 goal_state。
+       * 为什么需要它（真机实测的滞后）：目标是在**一次 SDK run() 里连跑多轮**的，
+       * 只在 run 结束时读一次会让中间几轮全被跳过（用户看到「第 3 轮直接跳到第 7 轮」）。
+       */
+      void goalRuntime
+        .read(canvasId, sessionId)
+        .then((g) => {
+          if (g) agentHub.append(canvasId, sessionId, { type: 'goal_state', goal: g })
+        })
+        .catch(() => undefined)
+    },
+    onRunFinished: (canvasId, sessionId) => {
+      // 一轮结束的收尾顺序（设计 §3.4.4 的"守住缺席" + §3.3.2 的调度）：
+      // 1. 目标被暂停时守住 GOAL.json 的缺席（那一轮里模型可能把它写回来）；
+      // 2. 通知时机之一：这一轮结束（round_done）；
+      // 3. 交给队列调度器：结算 sending 的账、再看能不能发下一条。
+      void goalRuntime
+        .enforcePauseIfNeeded(canvasId, sessionId)
+        .catch((err) =>
+          console.warn('[agent-goal] 守住暂停失败', err instanceof Error ? err.message : String(err)),
+        )
+        .finally(() => {
+          agentHub.append(canvasId, sessionId, { type: 'round_done' })
+          /**
+           * 每轮结束都推一次 goal_state（用户口径 2026-10-09：目标行上的「第 N 轮 ·
+           * 已用/剩余预算」必须跟着跑）。GOAL.json 由 goal 插件的 stop.mjs 在轮末更新，
+           * 这时读它就是最新值；没有目标（读不到文件）就不推，界面保持原样。
+           * 不推的后果（真机实测）：数字永远停在发起那一刻（第 1 轮 · 剩余预算 100k）。
+           */
+          void goalRuntime
+            .read(canvasId, sessionId)
+            .then((g) => {
+              if (g) agentHub.append(canvasId, sessionId, { type: 'goal_state', goal: g })
+            })
+            .catch(() => undefined)
+          queueScheduler.onRunFinished(canvasId, sessionId)
+        })
+    },
     log: (message, extra) => console.log('[agent] ' + message, extra ?? ''),
+  })
+  queueScheduler = new QueueScheduler({
+    store: agentSessions,
+    runtime: agentRuntime,
+    hub: agentHub,
+    // 起一轮的实现：与 HTTP 的"发消息"走同一条路（pre-turn 中间件由 HTTP 层跑；
+    // 队列发的是**已经在队列里核准过的**文本，不再过一遍中间件 —— 避免同一条消息被改写两次）
+    // 调度器给的是一个带 canvasId 的 StartRunInput；runtime.startRun 是 (canvasId, input) 两参
+    startRun: (input) => agentRuntime.startRun(input.canvasId, input),
+    // 带目标的条目：先把目标文件与第 1 轮的协议文本备好，再起一轮
+    startGoal: (canvasId, sessionId, objective, budget) =>
+      goalRuntime.beginGoal(canvasId, sessionId, objective, budget),
+    log: (message, extra) => console.log('[agent-queue] ' + message, extra ?? ''),
+  })
+  // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动。
+  const goalRuntime = new GoalRuntime({
+    scratchpadOf: (_canvasId, sessionId) => sessionScratchpadPath(agentRoot(dataDir), sessionId),
+    hooksDir: goalHooksDir(agentRoot(dataDir), AGENT_PROJECT_ID, AGENT_ID),
+    latestTraceOf: (sessionId) => findSessionTrace(tracesDirOf(agentRoot(dataDir)), sessionId),
+    startRun: async (canvasId, sessionId, text, harnessText) => {
+      const r = await agentRuntime.startRun(canvasId, {
+        canvasId,
+        sessionId,
+        text,
+        ...(harnessText ? { harnessText } : {}),
+      })
+      return { started: r.started }
+    },
+    isRunning: (canvasId, sessionId) => agentRuntime.isRunning(canvasId, sessionId),
+    // 经 SDK 会话跑官方 start.mjs（它注入 sessionId / scratchpadDir —— 会话才知道的）
+    runUserPromptHook: (canvasId, sessionId, name, prompt, extras) =>
+      agentRuntime.runUserPromptHook(canvasId, sessionId, name, prompt, extras),
+    emit: (canvasId, sessionId, ev) => agentHub.append(canvasId, sessionId, ev),
+    setPausedFlag: (canvasId, sessionId, paused) => agentSessions.setGoalPaused(canvasId, sessionId, paused),
+    isPausedFlag: async (canvasId, sessionId) => (await agentSessions.get(canvasId, sessionId))?.goalPaused === true,
+    log: (message, extra) => console.log('[agent-goal] ' + message, extra ?? ''),
   })
   // 同步引用：makeUserMessage 是同步签名，SDK 一旦加载就填进来
   let sdkRef: typeof import('@prismshadow/penguin-core') | undefined
   void loadSdk().then((sdk) => {
     sdkRef = sdk
   }).catch(() => undefined)
+
+  // 目标（goal）插件的 hook 包：装进 agent_state/hooks/goal/ 之后才有目标功能（设计 §3.4.1）。
+  // 恒幂等（已装且版本一致时一个字节都不写），且**永不抛错** —— 插件取不到只记一条日志，
+  // 没配模型时启动照常成功（它只读插件库、写本地文件，不碰网络）。
+  // 必须 await（与下面内置画布 MCP 同一条规矩）：不能留一条还在写的异步尾巴，
+  // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
+  if (agentEnabled) {
+    await ensureGoalInstalled(agentRoot(dataDir), AGENT_PROJECT_ID, AGENT_ID)
+  }
 
   // ==================== 平台提供方（后台的「投递箱」）====================
   // 内置 web2api 用**和外挂完全一样**的接口注册；再扫一遍目录把外挂装进来。
@@ -188,22 +299,56 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   // ==================== 任务与历史 ====================
   const history = new HistoryStore(dataDir)
+  // 参考图交给 web2api 时要转成 **data URL**（它自己会落盘）——
+  // 两个服务可能不在同一台机器，地址（尤其 127.0.0.1）它够不到；内嵌字节则与网络无关。
   const tasks = new TaskManager({
     doc,
     // 多画布：任务的进度/终态写进**它所属的那张画布**（用默认 doc 会写错画布 → 进度卡 0）
     docForCanvas: (canvasId) => (canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)),
     registry,
     history,
-    // 生成成功 → 把产物登记进**资产目录**（用户口径：资产 = 所有生成过的产物）
+    /**
+     * 生成成功 → 把产物登记进**资产目录**（用户口径：资产 = 所有生成过的产物）。
+     *
+     * 关键（与 writeMediaFields 同一条规矩）：不能把 provider 的地址原样登记 —— 那是另一个服务的
+     * 地址，换机器/换端口就取不到，资产面板里全是坏图（用户实测：图挂了、预览打不开）。
+     * 必须先把字节收进本画布资源目录，再登记**同源地址**。
+     */
     onArtifact: (canvasId, urls) => {
-      for (const url of urls) void assetStore.addByUrl({ url, canvasId }).catch(() => undefined)
+      const docFor = canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)
+      for (const url of urls) {
+        void (async () => {
+          try {
+            const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+            if (!res.ok) throw new Error("取产物失败 " + res.status)
+            const bytes = new Uint8Array(await res.arrayBuffer())
+            const fileName = url.split("?")[0]?.split("/").pop() || undefined
+            const stored = await docFor.saveResource(bytes, fileName ? { fileName } : {})
+            const sameOrigin = typeof stored === "string" ? stored : (stored as { url?: string }).url
+            if (sameOrigin) await assetStore.addByUrl({ url: sameOrigin, name: fileName, canvasId })
+          } catch (err) {
+            console.warn("[cloud-server] 产物登记资产失败，回落原始地址：" + url, err)
+            await assetStore.addByUrl({ url, name: url.split("/").pop(), canvasId }).catch(() => undefined)
+          }
+        })()
+      }
     },
-    // 节点里存的是画布内引用 res:<hash>；provider 拿不到"相对引用"，
-    // 这里按**当前画布**换成真实可取的地址。
-    resolveResourceUrl: (canvasId, ref) => {
-      const name = parseResourceRef(ref)
-      return name ? '/api/canvases/' + canvasId + '/resources/' + name : ref
-    },
+    /**
+     * 节点里存的是画布内引用 res:<hash>；provider 拿不到"相对引用"，
+     * 这里按**当前画布**换成它真能取到的内容（data URL）。
+     *
+     * 参考图有**三种**形态，全都要转成 data URL：
+     *   - `res:<hash>`                    数据层原样存的
+     *   - `/api/canvases/<id>/resources/<hash>`   渲染层展开过、UI 就是这么传上来的
+     *   - `/api/assets/files/<hash>`      资产库（上传的素材）里的地址
+     * 第三种以前落到"原样返回"，相对路径被直接发给 web2api —— 它当自己 uploads 下的相对文件找，
+     * 报「图片不存在…\api\assets\files\…」（用户实测）。解析逻辑收在 tasks/resourceResolver，
+     * 单独可测；认不出 / 读不到的地址仍然原样返回。
+     */
+    resolveResourceUrl: makeResolveResourceUrl({
+      canvasResources,
+      readAssetBytes: (name) => assetStore.readFile(name),
+    }),
     onError: (message, err) => console.warn(message, err),
   })
 
@@ -237,6 +382,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // ① 跨域：**必须最先**（实测：cors 后注册对已注册路由不生效）
   app.use('*', cors())
 
+   // ①.5 本地 test 模型端点（用户口径 2026-10-09）：一个假的 OpenAI 兼容端点，
+   //      命中「test模型」时由它就地伪造回复，完全不请求真实后台。
+   //      必须排在 ui 静态兜底（⑤ 的 get('*')）之前，否则会被通配吃掉。
+   app.route('/', testModelRoutes())
+
   // ② 把宿主建好的实例按名上架（内置插件经 inject 取用；见 §三·补 服务名表）
   host.ctx.inject('kvStore', kvStore)
   host.ctx.inject('canvasStore', canvasStore)
@@ -255,6 +405,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     host.ctx.inject('agentConfig', agentConfig)
     host.ctx.inject('agentSessions', agentSessions)
     host.ctx.inject('agentRuntime', agentRuntime)
+    host.ctx.inject('agentBranches', branchStore(dataDir))
+    host.ctx.inject('agentHub', agentHub)
+    host.ctx.inject('agentQueue', queueScheduler)
+    host.ctx.inject('agentGoal', goalRuntime)
   }
 
   // ③ 登记内置插件。**顺序即路由优先级**（Hono 先注册者优先）：
@@ -311,13 +465,34 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   if (mcpEnabled) {
     app.route(
       '/',
-      mcpRoutes(doc, registry, tasks, () => listPluginMcpTools(host.ctx)),
+      mcpRoutes(
+        doc,
+        registry,
+        tasks,
+        () => listPluginMcpTools(host.ctx),
+        // 按画布取文档：默认画布复用上面那个实例；别的画布现建一个（内部只是拼路径）。
+        // 关键：AI 传了 canvasId 就必须写到那张画布，否则会全落进 default（就是用户报的「画布上什么都没有」）。
+        // **先确认画布存在**：不存在就返回 undefined，让工具报「画布不存在」而不是凭空建一张空画布。
+        async (canvasId) => {
+          if (canvasId === DEFAULT_CANVAS_ID) return doc
+          const ids = await canvasStore.list()
+          return ids.includes(canvasId) ? new CanvasDocument(canvasStore, canvasResources, canvasId) : undefined
+        },
+        // 画布清单：给 AI 发现「该往哪张画布写」的 id（用户看的那张）
+        async () => {
+          const ids = await canvasStore.list()
+          const idx = await projectStore.readIndex()
+          const nameOf = new Map(idx.map((e) => [e.id, e.name]))
+          return ids.map((id) => ({ id, name: nameOf.get(id) ?? id }))
+        },
+      ),
     )
   }
 
   // 内置画布 MCP：把自己 `/mcp` 端点写进 Agent 的 MCP 清单（默认携带、用户零配置）。
-  // 放在这里是因为地址要等 port / hostname 定下来才知道。失败只记日志，不拦启动 ——
-  // 用户可能根本没用 Agent，不该因为这一条写不进去就起不来。
+  // 这里先用**请求的**端口写一次（测试 / 不开监听也能拿到 builtin 标记与删除锁）；
+  // 真正的监听端口要等 listen 回调才知道（port 传 0 时由系统分配），start() 里会再纠正一次。
+  // 失败只记日志，不拦启动 —— 用户可能根本没用 Agent，不该因为这一条写不进去就起不来。
   if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
     // 必须 **await**：这是建服务的一部分，不能留一条还在写的异步尾巴 ——
     // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
@@ -334,6 +509,24 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   let server: ServerType | undefined
   const hostname = opts.hostname ?? '127.0.0.1'
+
+  /**
+   * 保证「test模型」在配置里（用户口径 2026-10-09）。
+   * 写它的 base_url 时用**请求的**端口先写一次，等真正监听端口确定后再纠正一次
+   * （port 传 0 / CLI 换端口时实际端口 ≠ 请求端口，与内置画布 MCP 同一套做法）。
+   */
+  const ensureTestModel = (origin: string): Promise<void> =>
+    agentConfig
+      .ensureTestModel({
+        provider: TEST_PROVIDER,
+        modelId: TEST_MODEL_ID,
+        baseUrl: testModelBaseUrl(origin),
+        apiKey: TEST_API_KEY,
+      })
+      .catch((err) => console.warn('[agent] test 模型登记失败：' + String(err)))
+  if (agentEnabled) {
+    await ensureTestModel(`http://${opts.hostname ?? '127.0.0.1'}:${port}`)
+  }
 
   /**
    * 重扫目录并整体替换清单。
@@ -378,6 +571,18 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         let listening = false
         const s = serve({ fetch: app.fetch, port, hostname }, (info) => {
           listening = true
+          // 真实端口定了，纠正内置画布 MCP 的地址：
+          //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
+          //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。
+          if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
+            void agentConfig
+              .ensureBuiltinCanvasMcp(`http://${hostname}:${info.port}/mcp`)
+              .catch((err) => console.warn('[agent] 内置画布 MCP 地址纠正失败：' + String(err)))
+          }
+          // test 模型同理：真实端口定了，纠正它的 base_url（否则会指向 ...:0）
+          if (agentEnabled) {
+            void ensureTestModel(`http://${hostname}:${info.port}`)
+          }
           // 端口传 0 时真实端口由系统分配，以 info.port 为准
           resolve({ port: info.port, url: `http://${hostname}:${info.port}` })
         })
@@ -391,7 +596,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     stop() {
       watcher?.stop()
-      agentRuntime.disposeAll()
+    agentRuntime.disposeAll()
+    agentHub.disposeAll()
       void tasks.dispose()
       // 回收插件作用域：jobs 的定时器、store 的命名空间清理都在插件的 ctx.effect 里，
       // 不调它永不 dispose（审查发现的泄漏）。

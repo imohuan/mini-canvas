@@ -1,0 +1,27 @@
+import { chromium } from 'playwright-core'
+const EXE = 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe'
+const browser = await chromium.launch({ executablePath: EXE, headless: true })
+const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+await page.goto('http://127.0.0.1:8865/#/canvas/430c8f1f00bd4aba', { waitUntil: 'load' })
+await page.waitForTimeout(6000)
+// 选中一个分组
+const ok = await page.evaluate(() => {
+  const ctx = window.MiniCanvasUI.getHost().ctx
+  ctx.get('selection').set(['43'])
+  return true
+})
+await page.waitForTimeout(1200)
+await page.evaluate(() => {
+  const btn = [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label')||'') === '背景颜色')
+  if (btn) btn.click()
+})
+await page.waitForTimeout(900)
+const panel = page.locator('.group-color-menu-body')
+const box = await panel.boundingBox()
+console.log('panel box', JSON.stringify(box))
+await panel.screenshot({ path: 'D:/Code/Git/mini-canvas/.codex-tmp/color-panel.png' })
+// 同时截工具条
+const tb = page.locator('.group-top-toolbar-overlay').first()
+console.log('toolbar count', await page.locator('.group-top-toolbar-overlay').count())
+await page.screenshot({ path: 'D:/Code/Git/mini-canvas/.codex-tmp/color-panel-full.png' })
+await browser.close()

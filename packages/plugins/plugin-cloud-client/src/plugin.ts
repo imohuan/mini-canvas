@@ -109,12 +109,13 @@ interface ResolveCapable {
 }
 
 /**
- * 首次上云：把节点里**本地引用的资源**搬到云端，换成 `res:<哈希>`。
+ * 首次上云：把节点里**本地引用的资源**搬到云端，换成同源 URL。
  *
  * 为什么需要：本地节点存的是本地引用（`res-…`）配 `blob:` 地址，字节在浏览器库里。
  * 直接整包推上去，云端两样都拿不到 —— 用户的图就没了。
  * 做法：用**切换前抓住的本地资源后端**按引用取回字节（本地 resolve 会给一个临时 objectURL），
- * fetch 成 Blob → 传给云端资源后端 → 换回 `res:<哈希>` 写进对应媒体字段。
+ * fetch 成 Blob → 传给云端资源后端 → 换回服务器 URL（`/api/canvases/<画布id>/resources/<哈希>`）
+ * 写进对应媒体字段。
  *
  * 取不到字节的字段原样保留（宁可少搬一张，也不要因为一张图失败把整次迁移搞崩）。
  */
@@ -126,6 +127,8 @@ export async function migrateLocalResources(
   canvasIdArg: string = CANVAS_ID,
 ): Promise<unknown[]> {
   const cloudResource = createCloudResourceAdapter(api, canvasIdArg)
+  /** 本画布的资源地址前缀：用它认出"已经传过的图"，避免重复上云时又传一遍 */
+  const resourceUrlPrefix = '/api/canvases/' + canvasIdArg + '/resources/'
   const uploaded = new Map<string, string>()
   const out: unknown[] = []
   for (const node of nodes) {
@@ -135,8 +138,8 @@ export async function migrateLocalResources(
       out.push(node)
       continue
     }
-    // 已是云端引用（重复上云）→ 不动
-    if (ref.startsWith('res:')) {
+    // 已是本画布的资源 URL（重复上云）→ 不动。认不出的话首次上云会把已上传的图再传一遍。
+    if (ref.startsWith(resourceUrlPrefix)) {
       out.push(node)
       continue
     }
@@ -199,7 +202,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
   const localResourceAdapter = save?.adapterOf?.('resource') as
     | { resolveResource?(ref: string): Promise<string | undefined> }
     | undefined
-  // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存 res:<哈希>。
+  // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存同源 URL。
   // 与画布用同一个开关（用户最初的设计：一个 adapter 管文本 + 资源两种形式）。
   save?.useAdapter('resource', createCloudResourceAdapter(api, CID))
   // 配置与快捷键：走 cloud-server 的 KV 接口（服务端对这两类照常收，只有 canvas 被专属路由接管）
@@ -221,7 +224,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
         },
         pushLocal: async (nodes, edges) => {
           // 首次上云要把**本地已有的图**也搬上去：节点里存的还是本地引用（res-…），
-          // 直接整包推的话云端拿不到字节、图就丢了。逐个取字节 → 传到云端 → 换成 res:<哈希>。
+          // 直接整包推的话云端拿不到字节、图就丢了。逐个取字节 → 传到云端 → 换成服务器 URL。
           const migrated = await migrateLocalResources(
             nodes as Array<{ data?: Record<string, unknown> }>,
             localResourceAdapter,
@@ -353,7 +356,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
   // ==================== 5. 实时跟随（一条 SSE 带三件事）====================
   const sync = createRemoteSync({
     readCloud: async (type, key) => {
-      // 画布那三个 key 直接问 adapter（它会做 res: 展开）；其余从 save 读
+      // 画布那三个 key 直接问 adapter（它从服务器读）；其余从 save 读
       if (type === 'canvas') return adapter.get(key)
       return save ? save.get(key, type) : undefined
     },

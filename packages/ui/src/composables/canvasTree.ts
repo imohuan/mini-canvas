@@ -36,6 +36,18 @@ function effectiveType(node: CanvasNodeLike): string {
   return (typeof t === 'string' && t) || node.type
 }
 
+/**
+ * 这个节点在抽屉里**算不算「分组」**（要排在普通节点前面）。
+ *
+ * 判据与会话里其它地方一致（图标映射 / 分组能力都认这两个字段）：
+ * - type === 'group'（分组插件注册的类型名）；
+ * - 或 data.nodeType === 'group'（渲染层把节点包成 custom 时类型写在 data 里）。
+ * 刻意**不**用「有没有 children」判：那会把「只有一个孩子的普通节点」也算成分组（不成立）。
+ */
+function isGroupLike(node: CanvasNodeLike): boolean {
+  return effectiveType(node) === 'group'
+}
+
 /** 类型 → 中文名（兜底标题用） */
 const TYPE_LABEL: Record<string, string> = {
   image: '图片',
@@ -65,16 +77,34 @@ export function nodeDisplayName(node: CanvasNodeLike): string {
 }
 
 /**
- * 节点的缩略图地址（图片用 imageUrl、视频用 posterUrl/thumbUrl）。拿不到就 undefined（用类型图标兜底）。
+ * 节点的**缩略图**地址（能塞进 <img> 的图）。拿不到就 undefined（用类型图标兜底）。
+ *
+ * 视频节点**不再回落到 videoUrl**（裂图根因，用户 2026-10-08 报「视频没有缩略图」）：
+ * mp4 地址塞进 <img> 必然裂图，还给不出任何视频标识。视频的播放地址改走 nodeVideoUrl，
+ * 抽屉用 <video preload=metadata> 显示首帧；没有海报图时缩略图就是"没有"，
+ * 由渲染方用**视频图标 + 播放角标**兜底（不再是裂图）。
  */
 export function nodeThumbUrl(node: CanvasNodeLike): string | undefined {
   const d = (node.data ?? {}) as Record<string, unknown>
   const t = effectiveType(node)
-  const candidates = t === 'video' ? [d.posterUrl, d.thumbUrl, d.videoUrl] : [d.imageUrl, d.thumbUrl, d.panoUrl]
+  const candidates = t === 'video' ? [d.posterUrl, d.thumbUrl] : [d.imageUrl, d.thumbUrl, d.panoUrl]
   for (const c of candidates) {
-    if (typeof c === 'string' && c.trim() && !c.startsWith('res:')) return c
+    if (typeof c === 'string' && c.trim()) return c
   }
   return undefined
+}
+
+/**
+ * 视频节点的**播放地址**（抽屉缩略图用 <video preload="metadata"> 显示首帧）。
+ *
+ * 只对视频节点给值；拿不到就 undefined（给不出就用图标兜底）。
+ * 为什么抽屉要单独一个字段：thumb 只认图（见上），而视频需要真正的 <video> 才能出首帧。
+ */
+export function nodeVideoUrl(node: CanvasNodeLike): string | undefined {
+  if (effectiveType(node) !== 'video') return undefined
+  const d = (node.data ?? {}) as Record<string, unknown>
+  const v = d.videoUrl
+  return typeof v === 'string' && v.trim() ? v : undefined
 }
 
 /** meta 小字：尺寸 / 时长能给就给，给不了就空串（不硬编"待确认"那类假文案） */
@@ -111,6 +141,20 @@ export function buildCanvasTree(nodes: CanvasNodeLike[]): TreeNode[] {
     }
   }
 
+  /**
+   * 排序：**分组在前、普通节点在后**（用户口径 2026-10-08：「分组类似于文件夹，统一显示在最上面」）。
+   *
+   * 为什么在数据层排、而不是在渲染层排：树的每一层都有这个需求（顶层分组要提前，
+   * 分组里的子分组同样要提前 —— 否则「分组 2 在图片 3 下面」这种还是刺眼），
+   * 在 `toTree` 里对 kids 递归调用同一个函数，一次就能覆盖所有层。
+   * 组内相对顺序 / 普通节点之间的相对顺序一律**保持画布节点的原始顺序**（Array.sort 稳定），
+   * 不引入第二套排序键（画布顺序才是用户能感知、能拖拽调整的那个顺序）。
+   */
+  const groupsFirst = (list: CanvasNodeLike[]): CanvasNodeLike[] =>
+    list.every(isGroupLike) || list.every((n) => !isGroupLike(n))
+      ? list // 全是分组 / 全是普通节点：顺序无关，省一次拷贝
+      : [...list].sort((a, b) => Number(isGroupLike(b)) - Number(isGroupLike(a)))
+
   const toTree = (n: CanvasNodeLike): TreeNode => {
     const kids = childrenOf.get(n.id)
     const t = effectiveType(n)
@@ -124,17 +168,89 @@ export function buildCanvasTree(nodes: CanvasNodeLike[]): TreeNode[] {
     }
     const thumb = nodeThumbUrl(n)
     if (thumb) node.thumb = thumb
-    if (kids && kids.length) node.children = kids.map(toTree)
+    const video = nodeVideoUrl(n)
+    if (video) node.video = video
+    if (kids && kids.length) node.children = groupsFirst(kids).map(toTree)
     return node
   }
 
-  return roots.map(toTree)
+  return groupsFirst(roots).map(toTree)
 }
 
 /** 类型过滤的中文名 → 树的 icon 值（'全部' 不在表里 = 不过滤） */
 export const TYPE_FILTER: Record<string, string> = {
   图片: 'image', 视频: 'video', 音频: 'audio', 文本: 'text', 分组: 'group',
 }
+
+/** 树里的一段同层节点（行块；宫格模式下一段 = 一个三列网格） */
+export interface CanvasTreeNodeRow {
+  id: string
+  name: string
+  icon: TreeNode['icon']
+  /** 缩略图地址（图片/视频节点） */
+  thumb?: string
+  /** 视频播放地址（缩略图出首帧用；与 TreeNode.video 同源） */
+  video?: string
+}
+
+/**
+ * 抽屉「画布」树的行块：分组头 + 一段同层节点。
+ *
+ * 为什么不是嵌套结构：递归渲染在模板里要子组件才能自引用，而「分组头 + 缩进节点」
+ * 本质上是一维有序块 —— 拍平（= 前序遍历）后模板一个循环就能画，测试也能纯函数锁。
+ * 分组头带 depth（缩进 = depth × 24px），节点段同理；宫格模式下每段自成一组三列。
+ */
+export type CanvasTreeBlock =
+  | { kind: 'group'; key: string; id: string; name: string; depth: number; collapsed: boolean }
+  | { kind: 'run'; key: string; depth: number; nodes: CanvasTreeNodeRow[] }
+
+/**
+ * 把嵌套树拍平成「行块」序列（前序：分组头 → 其子块递归），支持任意层嵌套。
+ *
+ * 关键行为（用户报的「第二层没实现」就是缺这段递归）：
+ * - 子节点自己也是分组（有 children）时，它出**分组头块**并继续往下走 ——
+ *   老模板只画一层孩子，嵌套分组的整棵子树会被丢掉；
+ * - 折叠的分组只出分组头，不出子块；
+ * - 连续的同层节点并成一个 run（宫格模式一个 run 画成一个三列网格，
+ *   这样每层各自成网格、缩进不打架）。
+ *
+ * @param tree 树（可见性/搜索过滤后的都行）
+ * @param isCollapsed 某分组是否折叠（宿主给，函数本身不持状态）
+ */
+export function canvasTreeBlocks(
+  tree: TreeNode[],
+  isCollapsed: (id: string) => boolean,
+): CanvasTreeBlock[] {
+  const out: CanvasTreeBlock[] = []
+  let run: CanvasTreeNodeRow[] = []
+  let runDepth = 0
+  const flush = (): void => {
+    if (run.length === 0) return
+    out.push({ kind: 'run', key: `run:${runDepth}:${run[0].id}`, depth: runDepth, nodes: run })
+    run = []
+  }
+  const walk = (list: TreeNode[], depth: number): void => {
+    for (const n of list) {
+      if (n.children && n.children.length > 0) {
+        flush() // 分组头是整行，隔断同层节点段（宫格里不会和上一段挤在同一行）
+        const collapsed = isCollapsed(n.id)
+        out.push({ kind: 'group', key: `group:${n.id}`, id: n.id, name: n.name, depth, collapsed })
+        if (!collapsed) walk(n.children, depth + 1)
+        continue
+      }
+      if (run.length > 0 && runDepth !== depth) flush()
+      runDepth = depth
+      const row: CanvasTreeNodeRow = { id: n.id, name: n.name, icon: n.icon }
+      if (n.thumb) row.thumb = n.thumb
+      if (n.video) row.video = n.video
+      run.push(row)
+    }
+  }
+  walk(tree, 0)
+  flush()
+  return out
+}
+
 
 /**
  * 搜索 + 类型过滤（纯函数，Node 可单测）。

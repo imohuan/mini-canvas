@@ -5,6 +5,8 @@ export { default as ProseMirrorEditor } from './index.vue';
 export * from './types.ts';
 export * from './utils.ts';
 export * from './referenceMarkup.ts';
+export { parsePlainTextToContent } from './useEditor.ts';
+export { registeredItem } from './useEditor.ts';
 export * from './mentionFilter.ts';
 import "./style.css"
 

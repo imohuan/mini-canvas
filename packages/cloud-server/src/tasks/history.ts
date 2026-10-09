@@ -66,6 +66,44 @@ export class HistoryStore {
     this.notify()
   }
 
+  /** 按条目 id 删除（批量操作用；跨画布也能删 —— 逐画布找）。返回是否删到了。 */
+  async remove(canvasId: string, id: string): Promise<boolean> {
+    const all = await this.readAll(canvasId)
+    const next = all.filter((e) => e.id !== id)
+    if (next.length === all.length) return false
+    await atomicWriteJson(canvasFilePath(this.root, canvasId, 'history'), next)
+    this.notify()
+    return true
+  }
+
+  /** 按条目 id 改评级（批量操作用）。找不到返回 undefined。 */
+  async setRating(canvasId: string, id: string, rating: HistoryEntry['rating']): Promise<HistoryEntry | undefined> {
+    const all = await this.readAll(canvasId)
+    const hit = all.find((e) => e.id === id)
+    if (!hit) return undefined
+    hit.rating = rating
+    await atomicWriteJson(canvasFilePath(this.root, canvasId, 'history'), all)
+    this.notify()
+    return hit
+  }
+
+  /** 查一条（拿 canvasId / urls 等元数据；批量动作的入口）。 */
+  async find(id: string): Promise<HistoryEntry | undefined> {
+    const { promises: fsp } = await import('node:fs')
+    const root = path.join(this.root, 'canvases')
+    let ids: string[]
+    try {
+      ids = (await fsp.readdir(root)).filter((n) => /^[A-Za-z0-9_-]{1,64}$/.test(n))
+    } catch {
+      return undefined
+    }
+    for (const cid of ids) {
+      const hit = (await this.readAll(cid)).find((e) => e.id === id)
+      if (hit) return hit
+    }
+    return undefined
+  }
+
   /**
    * 查询：筛选 + 排序 + 分页 + 汇总。
    *
@@ -81,24 +119,27 @@ export class HistoryStore {
     const ordered = order === 'desc' ? source : [...source].reverse()
 
     const filtered = ordered.filter((e) => {
-      if (q.kind && e.kind !== q.kind) return false
       if (q.status && e.status !== q.status) return false
       // 'all' 与省略等价（前端那个下拉的"所有评级"）
       if (q.rating && q.rating !== 'all' && e.rating !== q.rating) return false
       return true
     })
 
+    // 类型筛选单独一层：items/total 跟着它走，但**计数徽章不跟着走** ——
+    // 用户点开「图片」页签时，「视频/音频」页签的计数要照常显示全量分布
+    //（否则切页签后数字全变成 0 或只剩本类，看起来像坏了一样）。
+    const kindFiltered = q.kind ? filtered.filter((e) => e.kind === q.kind) : filtered
     const byKind: Record<string, number> = {}
     for (const e of filtered) byKind[e.kind] = (byKind[e.kind] ?? 0) + 1
 
     const start = (page - 1) * pageSize
     return {
-      items: filtered.slice(start, start + pageSize),
-      total: filtered.length,
+      items: kindFiltered.slice(start, start + pageSize),
+      total: kindFiltered.length,
       page,
       pageSize,
-      // 汇总也按筛选后的集合算（用户筛了"图片"，那"一共多少"就该是图片的数）
-      summary: { total: filtered.length, byKind },
+      // 汇总的 total 跟随类型筛选（页签下划线旁的数字），byKind 永远给全量分布
+      summary: { total: kindFiltered.length, byKind },
     }
   }
 

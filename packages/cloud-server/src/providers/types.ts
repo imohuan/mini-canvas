@@ -117,6 +117,14 @@ export interface ProviderPollResult {
   text?: string
   /** status=error 时的原因 */
   error?: string
+  /**
+   * 这一拍是不是「等外部条件」的中间态（**不占超时预算**）。
+   *
+   * 场景：web2api 的 `paused` 在等用户在浏览器里过验证码 —— 人处理多久不由程序决定，
+   * 拿它去顶 pollTimeoutMs 会把人还在操作的任务判成超时失败（真出过的 bug）。
+   * provider 标记 true 时，后台这一拍不计入超时。
+   */
+  waiting?: boolean
 }
 
 /**

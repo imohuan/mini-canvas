@@ -1,0 +1,46 @@
+{
+  "name": "@mini-canvas/plugin-style-library",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "风格库",
+    "description": "本地风格素材库：读一个资源目录（图片/视频 + 索引），前后台成对，带亮暗主题的风格广场 UI",
+    "pluginName": "style-library",
+    "installable": true,
+    "defaultInstalled": true,
+    "serverPermissions": []
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build && node scripts/build-server.mjs",
+    "typecheck": "tsc --noEmit",
+    "typecheck:vue": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "lucide-vue-next": "^1.0.0"
+  },
+  "peerDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/server-renderer": "3.5.38",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

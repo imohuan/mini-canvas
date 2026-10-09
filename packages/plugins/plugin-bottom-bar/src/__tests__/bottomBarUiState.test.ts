@@ -182,9 +182,12 @@ describe('全屏预览浮层', () => {
     const teleports = (ctx as { teleports?: Record<string, string> }).teleports ?? {}
     const body = Object.values(teleports).join('')
     const all = html + body
-    expect(all).toContain('media-preview-overlay')
+    // 2026-10-06：视觉整只交给主题注册的 MediaViewer（AxImageViewer 同款交互），
+    // 测试锚点跟着组件走（mv-root / mv-corner-btn），删除按钮来自底栏的 onDelete。
     expect(all).toContain('图片1')
-    expect(all).toContain('mp-close')
+    expect(all).toContain('mv-root')
+    expect(all).toContain('mv-corner-btn')
+    expect(all).toContain('mv-remove')
     closePreview()
   })
 
@@ -293,4 +296,3 @@ describe('展开按钮：变成 dialog（用户要求）', () => {
     expect(html).toContain('nb-root')
   })
 })
-

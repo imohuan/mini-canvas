@@ -43,7 +43,13 @@ export interface ViewportContract {
   zoomTo(level: number): void
   fitView(padding?: number): void
   setCenter(x: number, y: number, zoom?: number): void
+  /** 即时写视口（"跟手"场景：小地图拖拽 / 逐帧写）——**不加过渡**，否则每帧重启补间会卡 */
   setViewport(v: ViewportState): void
+  /**
+   * 带过渡的取景（聚焦 / 适配这类一次性动作）。
+   * 可选：后端未实现时服务内部退回即时写，行为不退化、只是没有补间动画。
+   */
+  animateViewport?(v: ViewportState, durationMs?: number): void
   /** 本画布实例根 DOM（多宿主不串线；未挂载 null） */
   getRootEl(): HTMLElement | null
   /** VueFlow renderer DOM（节点层容器；导出/量测锚点） */

@@ -12,13 +12,14 @@
  * - audioTransform.ts 浏览器端口：解码音频 / 选文件 / 下载（唯一碰 Web Audio 与 DOM 的地方）；
  * - audioOps.ts     载入一条路：解码一次 → 波形与时长一起写回（界面按钮与命令共用同一实现）；
  * - 本文件           接线：注册节点类型 + 服务 + 命令（唯一碰 ctx 的地方）；
- * - AudioContent.vue 内容段：画波形、接拖拽、跑播放动画。
+ * - AudioContent.vue 内容段：装配 AudioWavePlayer（波形/播放），管节点特有（上传/设置/刷新）。
  *
  * 依赖方向：只依赖 canvas-base / canvas-data / canvas-render / kernel。
  * 不 import plugin-theme-default（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
  */
-import { Service, type Context, type ConfigSchema, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
+import AudioPreview from './AudioPreview.vue'
 import AudioContent from './AudioContent.vue'
 import { createAudioOps, downloadAudioNode, reanalyzeAudio, uploadAudio } from './audioOps'
 
@@ -70,6 +71,16 @@ const AUDIO_ICON =
  * 分组沿用项目既有一级分类（布局 / 常规 / 节点 / 边），不新立无主分类。
  */
 export const Config: ConfigSchema = {
+  audioDefaultWidth: {
+    type: 'number', default: 320, min: 80, max: 2000, step: 10,
+    label: '默认宽', group: '节点/音频节点',
+    description: '音频节点没有自己的尺寸时用的宽度（px）。改完立即生效：没被手动拖过尺寸的音频节点会立刻跟着变。',
+  },
+  audioDefaultHeight: {
+    type: 'number', default: 120, min: 60, max: 2000, step: 10,
+    label: '默认高', group: '节点/音频节点',
+    description: '音频节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
+  },
   audioWaveHeight: {
     type: 'number', default: 28, min: 16, max: 120, step: 2,
     label: '波形最低高度', group: '节点/音频节点',
@@ -95,6 +106,10 @@ export function apply(ctx: Context) {
   const service = new AudioService(ctx)
   const ops = createAudioOps(ctx)
 
+  // 音频**预览**注册件：波形与进度条来自 AudioWavePlayer（与 AudioContent 共用同一套实现），
+  // 这里只补预览壳（底部播放/时间/大小/文件名）。登记进 ui 目录，任何宿主按名取用。
+  ctx.registryOf<unknown>('ui').add('audioPreview', AudioPreview, { id: 'node-audio' })
+
   ctx.nodes.register({
     type: AUDIO_NODE_TYPE,
     label: '音频',
@@ -111,6 +126,9 @@ export function apply(ctx: Context) {
       return service.addAudioNode(position)
     },
   })
+
+  // 默认尺寸接设置面板：改完**实时**生效（没 resize 过的音频节点立刻跟着变）
+  bindTypeDefaultSize(ctx, 'audio', { w: 320, h: 120 }, { widthKey: 'audioDefaultWidth', heightKey: 'audioDefaultHeight' })
 
   // —— 命令：界面按钮与命令走**同一批实现**（uploadAudio / downloadAudioNode / reanalyzeAudio）——
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。

@@ -13,7 +13,6 @@
 import { diffGraph, isEmptyOps, type GraphOps } from './graphDiff.js'
 import type { CloudApi } from './api.js'
 import { CANVAS_ID, canvasId } from './keys.js'
-import { expandNodes, shrinkNodes } from './resourceRef.js'
 
 /** 宿主交给 adapter 的 key 是带 type 前缀的物理 key（如 canvas:graph） */
 function bareKey(key: string): string {
@@ -33,7 +32,7 @@ interface CanvasNodeLike {
 /**
  * 只发差异，且**记住"服务器实际拥有什么"**（没送成功的项要留在待发状态）
  *
- * 写出去之前把显示地址收回 `res:<hash>` 相对引用（磁盘上只存引用）。
+ * 节点**原样**读、**原样**写：资源字段里就是同源 URL，不做任何形态转换。
  * **资源字节不在这里上传** —— 上传/生成时就已经由 resource adapter 存进画布文件夹了
  * （见 cloudResourceAdapter）。这条分工是本次重构的核心：保存路径不再碰字节。
  */
@@ -64,8 +63,7 @@ export class CanvasDiffAdapter {
   async get<T>(key: string): Promise<T | undefined> {
     const bare = bareKey(key)
     const snap = await this.api.readCanvas(this.cid())
-    // 读出去之前把 res: 展开成真地址：本地画布（渲染 / 合并比较）用的都是完整地址
-    if (bare === GRAPH) return expandAll(snap.nodes, this.cid()) as T
+    if (bare === GRAPH) return snap.nodes as T
     if (bare === EDGES) return snap.edges as T
     if (bare === VIEWPORT) return (snap.view ?? undefined) as T
     return undefined
@@ -77,15 +75,11 @@ export class CanvasDiffAdapter {
       await this.api.putView(this.cid(), value)
       return
     }
-    // 写出去之前：内嵌字节先传成画布资源、换 res:；本画布地址收回 res:
-    // 写出去之前把显示地址收回 res: 相对引用（磁盘上只存引用；渲染用的完整地址不落盘）。
+    // 写出去的节点**原样**发：资源字段里就是同源 URL（/api/canvases/<id>/resources/<hash>），
+    // 不做任何转换。
     // 资源的**字节**在更早的时候就存好了（上传/生成时经 resource adapter 直接进画布文件夹），
-    // 所以这里不做任何上传 —— 保存路径只负责"把节点里的地址写成引用"。
-    let normalized = value
-    if (bare === GRAPH && Array.isArray(value)) {
-      normalized = shrinkAll(value, this.cid())
-    }
-    if (bare === GRAPH) return this.submitDelta('nodes', this.submittedNodes, normalized, (v) => (this.submittedNodes = v))
+    // 所以这里不做任何上传 —— 保存路径只负责"把节点原样发出去"。
+    if (bare === GRAPH) return this.submitDelta('nodes', this.submittedNodes, value, (v) => (this.submittedNodes = v))
     if (bare === EDGES) return this.submitDelta('edges', this.submittedEdges, value, (v) => (this.submittedEdges = v))
     // 其它 key（不该出现）静默忽略：画布域只有这三个
   }
@@ -111,15 +105,12 @@ export class CanvasDiffAdapter {
   }
 
   /**
-   * 读服务器那份，并把 `res:` 展开成当前画布的可请求地址。
+   * 读服务器那份（恢复路径：装载时以云端为准覆盖本地）。
    *
-   * 为什么要展开：服务器上存的是画布内相对引用（`res:<hash>`），而渲染组件是拿值直接塞进
-   * `<img src>` 的 —— 直接把 `res:...` 塞进去，浏览器只会报 ERR_UNKNOWN_URL_SCHEME，
-   * 图显示不出来。恢复路径（装载时以云端为准覆盖本地）走的就是这里，必须给真地址。
+   * 存的就是同源 URL，渲染组件拿去直接塞 `<img src>` 就能用，这里原样给。
    */
   async getRaw(): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown }> {
-    const snap = await this.api.readCanvas(this.cid())
-    return { ...snap, nodes: expandAll(snap.nodes, this.cid()) as unknown[] }
+    return this.api.readCanvas(this.cid())
   }
 
   /**
@@ -159,34 +150,4 @@ function collectIds(list: unknown[] | undefined): string[] {
     if (typeof id === 'string') out.push(id)
   }
   return out
-}
-
-/** 把一批节点里的 res: 展开（只回变过的那些，逐节点应用） */
-function expandAll(nodes: unknown, canvasId: string): unknown {
-  if (!Array.isArray(nodes)) return nodes
-  const list = nodes as Array<{ id?: unknown; data?: Record<string, unknown> }>
-  const patches = expandNodes(
-    list.map((n) => ({ id: String(n.id ?? ''), ...(n.data ? { data: n.data } : {}) })),
-    canvasId,
-  )
-  if (patches.length === 0) return nodes
-  const byId = new Map(patches.map((p) => [p.id, p.data]))
-  return list.map((n) =>
-    byId.has(String(n.id ?? '')) ? { ...n, data: { ...(n.data ?? {}), ...byId.get(String(n.id ?? ''))! } } : n,
-  )
-}
-
-/** 把一批节点里的画布内资源地址收回 `res:`（磁盘上只存相对引用） */
-function shrinkAll(nodes: unknown, canvasId: string): unknown {
-  if (!Array.isArray(nodes)) return nodes
-  const list = nodes as Array<{ id?: unknown; data?: Record<string, unknown> }>
-  const patches = shrinkNodes(
-    list.map((n) => ({ id: String(n.id ?? ''), ...(n.data ? { data: n.data } : {}) })),
-    canvasId,
-  )
-  if (patches.length === 0) return nodes
-  const byId = new Map(patches.map((p) => [p.id, p.data]))
-  return list.map((n) =>
-    byId.has(String(n.id ?? '')) ? { ...n, data: { ...(n.data ?? {}), ...byId.get(String(n.id ?? ''))! } } : n,
-  )
 }

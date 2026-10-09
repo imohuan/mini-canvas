@@ -4,32 +4,44 @@
  * 命名按**内容哈希**（sha256 前 16 位）+ 扩展名，与既有的 FileStore 同规矩：
  * 同内容天然去重、地址与内容绑定（内容一变地址就变，所以能挂长缓存）。
  *
- * **引用形态 `res:<hashName>`**：节点里存的是画布内相对引用 —— 不带画布 id、不带根路径。
- * 这样整个画布文件夹复制到别处（或交给别人、进版本库）资源地址依然成立。
- * 绝对地址做不到这一点：复制成新画布后路径里还写着原画布 id，不是显示错东西就是 404。
+ * **节点里存「同源 URL」**：`/api/canvases/<canvasId>/resources/<hashName>`（见 toResourceUrl）。
+ * 浏览器直接能请求 —— 渲染 / 下单 / 资产登记都不必再"先解析引用再拼地址"。
+ * 曾经用过的 `res:<hash>` 相对引用已彻底移除（连读取兼容也没有），存量已由
+ * scripts/migrate-res-to-url.mjs 迁完。
  */
 import { promises as fs } from 'node:fs'
+import type { FileHandle } from 'node:fs/promises'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { canvasResourcesDir } from './canvasPaths.js'
 import { ALLOWED_EXT } from './mime.js'
 
-/** 画布内资源引用的前缀 */
-export const RESOURCE_REF_PREFIX = 'res:'
-
-export function toResourceRef(hashName: string): string {
-  return RESOURCE_REF_PREFIX + hashName
+/**
+ * 资源地址（新写入的唯一形态）：`/api/canvases/<canvasId>/resources/<hashName>`。
+ *
+ * 为什么不带 origin：云端可能换机器 / 换端口 / 挂反代，写死 origin 迟早失效；
+ * 同源相对路径在任何部署形态下都对。hashName 是 16 位十六进制 + 可选扩展名（白名单形态），
+ * 无需 URL 转义。
+ */
+export function toResourceUrl(canvasId: string, hashName: string): string {
+  return '/api/canvases/' + canvasId + '/resources/' + hashName
 }
 
-export function isResourceRef(v: unknown): boolean {
-  return typeof v === 'string' && v.startsWith(RESOURCE_REF_PREFIX)
-}
-
-/** `res:<hash>` → `<hash>`；不是引用或名字不合法 → undefined */
-export function parseResourceRef(ref: string): string | undefined {
-  if (!isResourceRef(ref)) return undefined
-  const name = ref.slice(RESOURCE_REF_PREFIX.length)
-  return isSafeResourceName(name) ? name : undefined
+/**
+ * 从「画布资源地址」里取资源名。
+ *
+ * 节点里存的就是这个地址（或它的带 origin 版本），后台收到的参考图也是它。
+ * 画布 id 必须与调用方给的一致（不认别的画布的资源，防串）。
+ */
+export function parseResourceNameFromUrl(url: string, canvasId: string): string | undefined {
+  const markers = ['/api/canvases/' + canvasId + '/resources/', '/canvases/' + canvasId + '/resources/']
+  for (const marker of markers) {
+    const i = url.indexOf(marker)
+    if (i < 0) continue
+    const name = url.slice(i + marker.length).split('?')[0].split('#')[0]
+    if (isSafeResourceName(name)) return name
+  }
+  return undefined
 }
 
 /** 资源名白名单：16 位十六进制 + 可选扩展名（与既有 isSafeFileId 同口径） */
@@ -40,8 +52,8 @@ export function isSafeResourceName(name: string): boolean {
 }
 
 export interface SavedResource {
-  /** 写进节点 data 的引用（`res:<hash>`） */
-  ref: string
+  /** 写进节点 data 的地址（同源 URL：`/api/canvases/<画布id>/resources/<hashName>`） */
+  url: string
   /** 磁盘上的文件名 */
   hashName: string
   /** 字节数 */
@@ -51,7 +63,11 @@ export interface SavedResource {
 export class CanvasResourceStore {
   constructor(private readonly root: string) {}
 
-  /** 存一个资源；同内容不重复写。返回画布内引用与磁盘名 */
+  /**
+   * 存一个资源；同内容不重复写。返回**同源 URL**（写进节点 data 的那个）与磁盘名。
+   *
+   * 这里就返回 URL 而不是 `res:<hash>`：写入侧只有这一个出口，统一了才不会有人漏改。
+   */
   async save(canvasId: string, bytes: Uint8Array, ext = ''): Promise<SavedResource> {
     const dir = canvasResourcesDir(this.root, canvasId)
     // 只认白名单里的媒体扩展名，其余（含 .html/.js/.mjs）一律不落扩展名 ——
@@ -65,13 +81,35 @@ export class CanvasResourceStore {
       await fs.writeFile(tmp, bytes)
       await fs.rename(tmp, file)
     }
-    return { ref: toResourceRef(hashName), hashName, size: bytes.byteLength }
+    return { url: toResourceUrl(canvasId, hashName), hashName, size: bytes.byteLength }
   }
 
   /** 读本画布某个资源；名字不合法或不存在 → undefined */
   async read(canvasId: string, hashName: string): Promise<Uint8Array<ArrayBuffer> | undefined> {
     if (!isSafeResourceName(hashName)) return undefined
     return readBytes(path.join(canvasResourcesDir(this.root, canvasId), hashName))
+  }
+
+  /**
+   * 只读文件头 n 字节（类型嗅探用，见 mime.sniffMimeFromHead）。
+   *
+   * 为什么不复用 read：资源里有不少几 MB 的图，只为了判个类型把整张读进内存纯属浪费
+   * （列表接口一次要判几十个）。名字不合法 / 不存在 → undefined（与 read 同口径）。
+   */
+  async readHead(canvasId: string, hashName: string, n = 16): Promise<Uint8Array | undefined> {
+    if (!isSafeResourceName(hashName)) return undefined
+    let fh: FileHandle | undefined
+    try {
+      fh = await fs.open(path.join(canvasResourcesDir(this.root, canvasId), hashName), 'r')
+      const buf = new Uint8Array(n)
+      const { bytesRead } = await fh.read(buf, 0, n, 0)
+      return buf.subarray(0, bytesRead)
+    } catch (err) {
+      if (isNotFound(err)) return undefined
+      throw err
+    } finally {
+      await fh?.close()
+    }
   }
 
   /** 列本画布的资源名 */

@@ -7,7 +7,7 @@
  *   canvases/<id>/canvas.json    画布本体（节点 + 边 + 画布信息）
  *   canvases/<id>/view.json      视图状态（视口）
  *   canvases/<id>/history.json   任务记录 / 生成历史
- *   canvases/<id>/resources/     本画布资源（节点里存 `res:<hash>` 相对引用）
+ *   canvases/<id>/resources/     本画布资源（节点里存同源 URL；老数据的 `res:<hash>` 读取兼容）
  *   providers/                   平台提供方（丢一个 .js 进去就是一个平台）
  * 另有 `kv/` 存"设置 / 快捷"这类按 key 的小数据。不依赖任何外部 SaaS。
  *
@@ -30,10 +30,7 @@ export {
 } from './store/canvasPaths.js'
 export {
   CanvasResourceStore,
-  RESOURCE_REF_PREFIX,
-  toResourceRef,
-  isResourceRef,
-  parseResourceRef,
+  toResourceUrl,
   isSafeResourceName,
 } from './store/canvasResources.js'
 export type { SavedResource } from './store/canvasResources.js'

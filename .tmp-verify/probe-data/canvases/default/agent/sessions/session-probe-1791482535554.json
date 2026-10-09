@@ -1,0 +1,13 @@
+{
+  "id": "session-probe-1791482535554",
+  "title": "探针",
+  "createdAt": 1791482535554,
+  "updatedAt": 1791482535555,
+  "provider": "p",
+  "modelId": "m",
+  "turns": [],
+  "queue": {
+    "paused": true,
+    "items": []
+  }
+}

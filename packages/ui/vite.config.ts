@@ -17,6 +17,11 @@ export default defineConfig({
     port: 5288, // 独立端口，避开其它应用/demo 的端口
     strictPort: false,
     open: true,
+    // /api 转给 cloud-server（8865）：dev 下前端同源相对路径才能真正打到后台，
+    // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
+    proxy: {
+      '/api': 'http://localhost:8865',
+    },
   },
   // 让应用能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
   optimizeDeps: {

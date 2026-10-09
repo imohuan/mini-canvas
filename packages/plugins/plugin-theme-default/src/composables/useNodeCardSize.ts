@@ -93,6 +93,23 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     (data.value.cardHeight as number) || capability.defaultSize.value.h,
   );
 
+  /**
+   * **实时跟随类型默认尺寸**：只有「没有显式尺寸」（没被 resize 过、data.cardWidth 缺失）的节点才跟。
+   * 用户在设置面板调了某类型的默认尺寸，未 resize 的节点立刻重画 —— 不用刷新、不用重建节点。
+   * 已经 resize 过的节点有 data.cardWidth/cardHeight，`!Number.isFinite(...)` 为假 → 不跟随。
+   */
+  watch(
+    () => capability.defaultSize.value,
+    (d) => {
+      if (isResizing.value) return;
+      const hasOwnW = Number.isFinite(data.value?.cardWidth);
+      const hasOwnH = Number.isFinite(data.value?.cardHeight);
+      if (!hasOwnW) cardWidth.value = d.w;
+      if (!hasOwnH) cardHeight.value = d.h;
+    },
+    { deep: true },
+  );
+
   // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值
   const isResizing = ref(false);
   watch(

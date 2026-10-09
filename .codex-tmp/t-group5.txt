@@ -1,0 +1,140 @@
+
+> @mini-canvas/plugin-group@0.0.0 test D:\Code\Git\mini-canvas\packages\plugins\plugin-group
+> vitest run
+
+
+ RUN  v3.2.7 D:/Code/Git/mini-canvas/packages/plugins/plugin-group
+
+ ✓ src/__tests__/groupEngine.test.ts (19 tests) 8ms
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 点击后 group.ungroup 收到本节点 id（而不是被可选链吞掉）
+[Vue warn]: injection "Symbol(v-scx)" not found. 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+[Vue warn]: Server rendering context not provided. Make sure to only call useSSRContext() conditionally in the server build. 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+[Vue warn]: Unhandled error during execution of setup function 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 没选中我时不渲染按钮，不存在「点了没反应」的幽灵按钮
+[Vue warn]: injection "Symbol(v-scx)" not found. 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+[Vue warn]: Server rendering context not provided. Make sure to only call useSSRContext() conditionally in the server build. 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+[Vue warn]: Unhandled error during execution of setup function 
+  at <GroupTopToolbar id="g1" data= {} > 
+  at <App>
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 常态（没人在 resize）→ 浮层照常渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 正在被 resize 的是别人 → 本分组浮层照常（不做全局压制）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+ ✓ src/__tests__/groupTopToolbarOverlayRender.test.ts (3 tests) 20ms
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 渲染出解组按钮（文案 + 无障碍名齐全）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 背景颜色入口：收起时只有触发器，没有色块（工具栏不会被撑长）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 展开后是 7 个预设色块，每个带颜色与无障碍名（没有"自定义"入口）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 当前底色那个色块被标成选中（aria-selected）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+ ❯ src/__tests__/groupTopToolbarRender.test.ts (11 tests | 4 failed) 51ms
+   × 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 点击后 group.ungroup 收到本节点 id（而不是被可选链吞掉） 17ms
+     → Cannot read properties of undefined (reading 'modules')
+   × 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 没选中我时不渲染按钮，不存在「点了没反应」的幽灵按钮 2ms
+     → Cannot read properties of undefined (reading 'modules')
+   × 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 点击后 group.ungroup 收到本节点 id（而不是被可选链吞掉） 3ms
+     → document is not defined
+   × 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 没选中我时不渲染按钮，不存在「点了没反应」的幽灵按钮 1ms
+     → document is not defined
+   ✓ 分组节点上控制栏 > 只有"恰好单独选中我"时才显示：未选中 / 选中别人 → 整条栏不渲染 12ms
+   ✓ 分组节点上控制栏 > 渲染出解组按钮（文案 + 无障碍名齐全） 1ms
+   ✓ 分组节点上控制栏 > 背景颜色入口：收起时只有触发器，没有色块（工具栏不会被撑长） 2ms
+   ✓ 分组节点上控制栏 > 展开后是 7 个预设色块，每个带颜色与无障碍名（没有"自定义"入口） 4ms
+   ✓ 分组节点上控制栏 > 当前底色那个色块被标成选中（aria-selected） 2ms
+   ✓ 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰） 3ms
+   ✓ 分组节点上控制栏 > 色板是一张只有预设色的封闭表（用户拍板：不做自定义取色） 1ms
+ ✓ src/__tests__/groupPlugin.test.ts (24 tests) 52ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 点击后 group.ungroup 收到本节点 id（而不是被可选链吞掉）
+ FAIL  src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 没选中我时不渲染按钮，不存在「点了没反应」的幽灵按钮
+TypeError: Cannot read properties of undefined (reading 'modules')
+ ❯ _sfc_main.setup src/GroupTopToolbar.vue:239:14
+    219|   }
+    220| }
+    221| </style>
+       |         ^
+    222| 
+ ❯ callWithErrorHandling ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:200:19
+ ❯ setupStatefulComponent ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:8102:25
+ ❯ setupComponent ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:8064:36
+ ❯ mountComponent ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5978:7
+ ❯ processComponent ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5944:9
+ ❯ patch ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:5454:11
+ ❯ ReactiveEffect.componentUpdateFn [as fn] ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:6092:11
+ ❯ ReactiveEffect.run ../../../node_modules/.pnpm/@vue+reactivity@3.5.38/node_modules/@vue/reactivity/dist/reactivity.cjs.js:264:19
+ ❯ setupRenderEffect ../../../node_modules/.pnpm/@vue+runtime-core@3.5.38/node_modules/@vue/runtime-core/dist/runtime-core.cjs.js:6220:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 点击后 group.ungroup 收到本节点 id（而不是被可选链吞掉）
+ReferenceError: document is not defined
+ ❯ clickUngroup src/__tests__/groupTopToolbarRender.test.ts:187:18
+    185|     const box = renderCtx(false, selectedIds)
+    186|     const { createApp } = await import('vue')
+    187|     const root = document.createElement('div')
+       |                  ^
+    188|     document.body.append(root)
+    189|     const app = createApp({ render: () => h(GroupTopToolbar as Compone…
+ ❯ src/__tests__/groupTopToolbarRender.test.ts:202:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 点「解散分组」调到 group 服务（可点击回归） > 没选中我时不渲染按钮，不存在「点了没反应」的幽灵按钮
+ReferenceError: document is not defined
+ ❯ src/__tests__/groupTopToolbarRender.test.ts:209:18
+    207|     const box = renderCtx(false, ['other'])
+    208|     const { createApp } = await import('vue')
+    209|     const root = document.createElement('div')
+       |                  ^
+    210|     document.body.append(root)
+    211|     const app = createApp({ render: () => h(GroupTopToolbar as Compone…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  4 failed | 53 passed (57)
+   Start at  14:10:35
+   Duration  3.20s (transform 3.43s, setup 0ms, collect 7.83s, tests 131ms, environment 1ms, prepare 936ms)
+
+ ELIFECYCLE  Test failed. See above for more details.

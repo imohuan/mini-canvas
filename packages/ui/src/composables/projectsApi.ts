@@ -22,9 +22,20 @@ export interface AssetSummary {
   name: string
   kind: 'image' | 'video' | 'audio' | 'other'
   url: string
+  /** 本机绝对路径（有字节落盘时才有；客户端的引用要用它，见「添加到 Agent」） */
+  path?: string
+  folderId?: string
+  tags?: string[]
   canvasId?: string
   size?: number
   source: 'generated' | 'upload'
+  createdAt: number
+}
+export interface AssetFolderSummary {
+  id: string
+  name: string
+  parentId?: string
+  icon?: string
   createdAt: number
 }
 
@@ -60,10 +71,72 @@ export async function createCanvas(projectId: string, name: string): Promise<Can
 export async function renameCanvas(id: string, name: string): Promise<void> {
   await req('/api/canvases/' + id + '/meta', json('PATCH', { name }))
 }
+/** 复制画布（节点 / 边 / 资源 / 历史；视口不带走）。返回新画布的索引项。 */
+export async function duplicateCanvas(id: string): Promise<CanvasSummary> {
+  return (await req<{ canvas: CanvasSummary }>('/api/canvases/' + id + '/duplicate', { method: 'POST' }))
+    .canvas
+}
+/** 删除画布（连带它的文件夹与资源） */
+export async function deleteCanvas(id: string): Promise<void> {
+  await req('/api/canvases/' + id, { method: 'DELETE' })
+}
 
 // ==================== 资产 ====================
 export async function listAssets(): Promise<AssetSummary[]> {
   return (await req<{ assets: AssetSummary[] }>('/api/assets')).assets ?? []
+}
+
+/** 上传资产：字节直传后台（后台按内容落盘并登记 source='upload'） */
+export async function uploadAsset(name: string, bytes: ArrayBuffer | Blob, folderId?: string): Promise<AssetSummary> {
+  const q = '?name=' + encodeURIComponent(name) + (folderId ? '&folderId=' + encodeURIComponent(folderId) : '')
+  const res = await fetch('/api/assets' + q, {
+    method: 'POST',
+    body: bytes as BodyInit,
+  })
+  const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; asset?: AssetSummary }
+  if (!res.ok || body?.ok === false || !body.asset) throw new Error(body?.error || '上传失败（HTTP ' + res.status + '）')
+  return body.asset
+}
+
+/** 删除资产（后台按 id 摘除登记；本体文件保留在 assets/files 目录里不回收） */
+export async function deleteAsset(id: string): Promise<void> {
+  await req('/api/assets/' + id, { method: 'DELETE' })
+}
+
+// ==================== 资产文件夹 ====================
+export async function listAssetFolders(): Promise<AssetFolderSummary[]> {
+  return (await req<{ folders: AssetFolderSummary[] }>('/api/asset-folders')).folders ?? []
+}
+export async function createAssetFolder(name: string, parentId?: string): Promise<AssetFolderSummary> {
+  return (await req<{ folder: AssetFolderSummary }>('/api/asset-folders', json('POST', { name, parentId }))).folder
+}
+export async function renameAssetFolder(id: string, name: string): Promise<AssetFolderSummary> {
+  return (await req<{ folder: AssetFolderSummary }>('/api/asset-folders/' + id, json('PATCH', { name }))).folder
+}
+/** 更新文件夹图标（空串 = 清除回默认） */
+export async function setAssetFolderIcon(id: string, icon: string): Promise<AssetFolderSummary> {
+  return (await req<{ folder: AssetFolderSummary }>('/api/asset-folders/' + id, json('PATCH', { icon }))).folder
+}
+/** 移动文件夹（parentId 空 = 回根；后台拒绝成环） */
+export async function moveAssetFolder(id: string, parentId?: string): Promise<AssetFolderSummary> {
+  return (await req<{ folder: AssetFolderSummary }>('/api/asset-folders/' + id, json('PATCH', { parentId }))).folder
+}
+export async function deleteAssetFolder(id: string): Promise<void> {
+  await req('/api/asset-folders/' + id, { method: 'DELETE' })
+}
+
+// ==================== 资产批量 / 标签 ====================
+/** 整组资产挪到某文件夹（folderId 传空 = 回根目录）。「移动到」「添加到」共用。 */
+export async function moveAssets(ids: string[], folderId?: string): Promise<void> {
+  await req('/api/assets/batch', json('POST', { ids, folderId }))
+}
+/** 覆盖式设置标签（固定清单） */
+export async function setAssetTags(id: string, tags: string[]): Promise<void> {
+  await req('/api/assets/' + id, json('PATCH', { tags }))
+}
+/** 资产改名 */
+export async function renameAsset(id: string, name: string): Promise<void> {
+  await req('/api/assets/' + id, json('PATCH', { name }))
 }
 
 function json(method: string, body: unknown): RequestInit {

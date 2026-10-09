@@ -95,3 +95,24 @@ export function uiNames(ctx: Context | undefined): string[] {
   if (!ctx) return [];
   return ctx.registryOf<UiComponentHandle>('ui').keys();
 }
+
+/**
+ * 树外按名取件：给「不在画布渲染子树里」的消费方用（生成历史弹窗 / 资产抽屉 / Teleport 到 body 的全屏预览）。
+ *
+ * 与 useUiComponent 的分工：useUiComponent 走 provide/inject（树内、且是响应式 Ref）；
+ * 本函数走**宿主单例**（ui.ts 的 readyHost 在 @ready 时把 ctx 存进来）—— 树里树外都能取，
+ * 但它是**一次性取值**（非响应式）。全屏预览这类“打开时取一次就渲染”的场景用它正合适。
+ *
+ * 为什么住这里而不住 packages/ui：MediaViewer（plugin-theme-default）要在树外取注册件，
+ * 而主题包**不能反向依赖** ui 包（依赖方向 kernel ← canvas-data ← canvas-render ← plugins ← ui）；
+ * readyHost 的写入点在 ui 侧，但读取只需要一个“能拿到 ctx”的弱引用 —— 这里提供函数，
+ * ui 侧在 @ready 时把 ctx 塞进来（见下方 setUiCatalogHost）。
+ */
+let hostCtxForCatalog: Context | undefined
+export function setUiCatalogHost(ctx: Context | undefined): void {
+  hostCtxForCatalog = ctx
+}
+
+export function uiComponentOutside(name: string): UiComponentHandle | undefined {
+  return hostCtxForCatalog?.registryOf<UiComponentHandle>('ui').top(name)?.value
+}

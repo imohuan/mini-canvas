@@ -8,7 +8,6 @@ import {
   PROVIDERS_VERSION_KEY,
   HISTORY_REV_KEY,
   CANVAS_ID,
-  RESOURCE_REF_PREFIX,
   RESOURCE_URL_FIELDS,
 } from '../keys'
 import {
@@ -43,10 +42,6 @@ describe('自身约定', () => {
   it('两个信号键落在 config 域（是"后台的元信息"，不是画布内容）', () => {
     expect(PROVIDERS_VERSION_KEY).toBe('providers-version')
     expect(HISTORY_REV_KEY).toBe('history-rev')
-  })
-
-  it('资源引用前缀', () => {
-    expect(RESOURCE_REF_PREFIX).toBe('res:')
   })
 
   it('媒体字段清单覆盖九个（只写 imageUrl 会漏掉视频/音频/全景/对比图）', () => {

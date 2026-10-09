@@ -36,6 +36,23 @@ const s = ui.state
  */
 const ThemedDropdown = useUiComponent('dropdown')
 
+/**
+ * 历史列表的标题 / 摘要显示：剥掉引用标记再截断。
+ *
+ * 后端新会话已改为「剥标记后再入标题」，但**老数据**里还留着 `@[node:图片 4](430c8f1f00b…#12)`
+ * 这种机器串（用户截图里历史列表一片机器码就是它）；前端剥一道，同一口径，不改后端存量。
+ */
+function historyText(raw: string, max: number): string {
+  const plain = String(raw ?? '')
+    .replace(/@\[([a-zA-Z][a-zA-Z0-9_-]*):([^\]]+)\](?:\([^)]*\))?/g, (_m, _k: string, name: string) => '@' + name)
+    // 老数据里标题被 24 字符截断时，标记只剩半截（如 `@图片 4(430c8f1f00b`）——
+    // 正则匹配不上完整标记，这里把残留的截断括号段也去掉。
+    .replace(/\([0-9a-fA-F#-]{6,}[^)]*$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return plain.length > max ? plain.slice(0, max) + '…' : plain
+}
+
 /** 视口尺寸（响应式）：窗口变化时重夹尺寸与坐标，浮窗不会因为缩窗口而跑出屏幕 */
 const vw = ref(window.innerWidth)
 const vh = ref(window.innerHeight)
@@ -198,19 +215,22 @@ function startCornerResize(e: PointerEvent): void {
               <!-- 分组头：与其它下拉同一套结构（标题 + 计数，固定不滚） -->
               <div class="agent-history-head">
                 <span class="agent-history-title">历史对话</span>
-                <span class="agent-history-count">{{ ui.agent.sessions.length }}</span>
+                <span class="agent-history-count">{{ ui.agent.conversations.length }}</span>
               </div>
               <!-- 列表区：唯一会滚的那层 -->
               <ul class="agent-history-list">
-                <li v-for="h in ui.agent.sessions" :key="h.id">
-                  <button class="agent-history-item" @click="ui.openAgentSession(h.id); close()">
-                    <strong>{{ h.title }}</strong>
-                    <small>{{ h.preview || h.id }}</small>
+                <!-- 一个对话一行（用户口径 2026-10-06）：分支不再各占一行；
+                     选中 = 当前会话属于这棵树（在任意一条分支上都算「在这个对话里」）。 -->
+                <li v-for="c in ui.agent.conversations" :key="c.rootId">
+                  <button class="agent-history-item" :class="{ 'is-current': c.memberIds.includes(ui.agent.sessionId || '') }"
+                    @click="ui.openAgentConversation(c.rootId, c.memberIds); close()">
+                    <strong>{{ historyText(c.meta.title, 24) }}</strong>
+                    <small>{{ historyText(c.meta.preview || c.rootId, 60) }}</small>
                   </button>
-                  <button class="agent-history-icon" :aria-label="'重命名 ' + h.title" @click="ui.renameAgentSession(h.id, h.title)">✎</button>
-                  <button class="agent-history-icon danger" :aria-label="'删除 ' + h.title" @click="ui.deleteAgentSession(h.id)">✕</button>
+                  <button class="agent-history-icon" :aria-label="'重命名 ' + c.meta.title" @click="ui.renameAgentSession(c.rootId, c.meta.title)">✎</button>
+                  <button class="agent-history-icon danger" :aria-label="'删除 ' + c.meta.title" @click="ui.deleteAgentConversation(c.memberIds)">✕</button>
                 </li>
-                <li v-if="!ui.agent.sessions.length" class="agent-history-empty">还没有历史对话</li>
+                <li v-if="!ui.agent.conversations.length" class="agent-history-empty">还没有历史对话</li>
               </ul>
             </div>
           </template>
@@ -266,9 +286,12 @@ function startCornerResize(e: PointerEvent): void {
 .agent-history-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 10px; line-height: 16px; text-align: center; color: var(--ui-ink-dim, #919191); }
 .agent-history-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0 2px 2px; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 /* 每行一张卡片（与技能/MCP 下拉同一套观感）：点主体切会话，右侧两个图标按钮管改名/删除 */
-.agent-history li { display: flex; align-items: center; gap: 4px; flex: none; padding: 2px 4px; border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
+.agent-history li { display: flex; align-items: center; gap: 4px; flex: none; padding: 2px 4px; border-radius: 10px; background: transparent; }
 .agent-history li:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
+.agent-history li:has(.agent-history-item.is-current) { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
+.agent-history li:has(.agent-history-item.is-current):hover { background: var(--ui-accent-soft, rgb(8 145 178 / 0.18)); }
 .agent-history-item { flex: 1; min-width: 0; padding: 8px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.agent-history-item.is-current strong { color: var(--ui-accent-hover, #0e7490); }
 .agent-history-item strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ui-ink, #f7f7f7); }
 .agent-history-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #919191); }
 .agent-history-icon { display: grid; place-items: center; width: 26px; height: 26px; flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; cursor: pointer; }

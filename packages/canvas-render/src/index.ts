@@ -237,7 +237,15 @@ export type { SettingsPanelSource, SettingSchema, SettingEntry } from './compone
 // 插件自定义 settingsGroup/<key> 内容组件 inject 后直接渲染某字段控件（无需反向依赖 theme-default）
 export { SETTINGS_FIELD_RENDERER, injectSettingsFieldRenderer } from './contracts/settingsField'
 // 设计系统组件目录（§4.5 / 案例 4）：按名取"希望被主题整体换掉"的通用件
-export { useUiComponent, uiComponent, uiNames, UI_NAMES } from './contracts/uiCatalog'
+export {
+  useUiComponent,
+  uiComponent,
+  uiNames,
+  UI_NAMES,
+  // 树外按名取件（uiCatalog.ts 内的宿主单例版；生成历史/资产抽屉这类树外消费方用）
+  uiComponentOutside,
+  setUiCatalogHost,
+} from './contracts/uiCatalog'
 export type { UiComponentHandle, UiSelectOption } from './contracts/uiCatalog'
 // 下拉浮层互斥登记表（所有下拉实现共用这一份：成品应用的全局下拉 + 主题默认件 + 它的 Select）
 export {
@@ -247,6 +255,10 @@ export {
   closeAllDropdowns,
   broadcastCloseAllDropdowns,
   DROPDOWN_CLOSE_ALL_EVENT,
+  // 子菜单（AxSubMenu 的二级浮层）与主下拉同一套互斥登记表：子菜单开 = 通知主下拉让位
+  SUB_MENU_CLOSE_EVENT,
+  closeAllSubMenus,
+  broadcastSubMenuOpen,
 } from './contracts/dropdownExclusive'
 // 能力包（§4.5 / 案例 5 / 决策 9）：组件声明 needs，从 registryOf('capability') 按名取通用 hooks
 export {
@@ -264,6 +276,9 @@ export type {
   CapabilityNodeContext,
   CapabilityCache,
 } from './contracts/capabilities'
+// 能力袋注入令牌：RegionEntryHost 之外的消费方（如测试要在内存渲染器里模拟区域宿主）
+// 需要拿到**同一对象身份**才能 provide/inject 对上，故与 useCapability 一起导出。
+export { CAPABILITY_BAG_KEY, CAPABILITY_SCOPE_KEY } from './contracts/capabilities'
 // 宿主标准能力包四件（node/zoom/selected/tools）：工厂实现在这里，注册由 createMiniCanvasHost 做
 export { createStandardCapabilities } from './contracts/standardCapabilities'
 export type {

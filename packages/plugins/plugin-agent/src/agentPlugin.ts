@@ -15,8 +15,10 @@ import { markRaw, reactive } from 'vue'
 import type { Context, PluginModule } from '@mini-canvas/canvas-base'
 import { createAgentService, type AgentService } from './agentService.js'
 import AgentConversation from './components/AgentConversation.vue'
+import AgentRefToolbar from './components/AgentRefToolbar.vue'
 import AgentSettingsNav from './components/settings/AgentSettingsNav.vue'
 import AgentSettingsPage from './components/settings/AgentSettingsPage.vue'
+import { AGENT_REFERENCE_COMMAND_ID } from './agentCommands.js'
 
 export const name = 'agent'
 export const inject = [] as string[]
@@ -70,6 +72,21 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     component: markRaw(AgentSettingsPage),
   })
 
+  // ③ 「引用到 Agent」按钮 → **多选框的上控制栏**（与「加入资产库」同一条接缝）。
+  //    用户口径（2026-10-08）：「向主节点的顶部控制栏注册一个按钮…参考『加入资产库』是怎么做的」——
+  //    「加入资产库」挂在多选框（选择集）的顶栏，不是节点卡片自己的操作条，故这里走
+  //    ctx.selectionRegion.attach（多选插件暴露的区域注册函数，多选插件零改动）。
+  //    needs:['selection'] → 组件按名取选中集（与打组按钮、加入资产库按钮同一规矩）。
+  //    定位（贴外框上缘 + 居中 + 反缩放）由 SelectionFrame 统一给，组件只放内容。
+  //    @see AgentRefToolbar
+  ctx.selectionRegion.attach({
+    region: 'out:top',
+    id: 'agent-refer-selection',
+    order: 30,
+    component: markRaw(AgentRefToolbar),
+    needs: ['selection'],
+  })
+
   // ③ 命令：键盘开合面板（外壳读 open 决定显隐）
   ctx.commands.register({
     id: 'agent:toggle',
@@ -79,19 +96,20 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     run: () => service.toggle(),
   })
 
-  // ④ 命令：把当前节点**引用到 Agent 输入框**（节点右键菜单的「引用到 Agent」）。
-  //    areas:['node'] → 只出现在节点的右键菜单里（沿用 context-menu 插件的 areas 语义）。
+  // ④ 命令：把节点**引用到 Agent 输入框**（两个入口共用：节点右键菜单 + 多选上控制栏按钮）。
+  //    areas:['node'] → 出现在节点的右键菜单里（沿用 context-menu 插件的 areas 语义）。
   //    做法：服务记下待插入的节点 id，面板打开后由内容组件插成标签（服务是两者唯一共享通道）。
   ctx.commands.register({
-    id: 'agent:reference-node',
+    id: AGENT_REFERENCE_COMMAND_ID,
     title: '引用到 Agent',
     areas: ['node'],
     group: '节点',
     order: 20,
-    run: (_c, payload: { nodeId?: string }) => {
+    run: (_c, payload: { nodeId?: string; nodeIds?: string[] }) => {
       const nodeId = payload?.nodeId
-      if (!nodeId) return
-      service.requestNodeRef(nodeId)
+      const ids = Array.isArray(payload?.nodeIds) ? payload.nodeIds : nodeId ? [nodeId] : []
+      if (!ids.length) return
+      service.requestNodeRefs(ids)
       service.show()
     },
   })

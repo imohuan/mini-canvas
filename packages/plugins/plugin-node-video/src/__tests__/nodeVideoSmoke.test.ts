@@ -137,6 +137,8 @@ describe('node-video 装配 smoke', () => {
     expect(settings.get('videoFitMaxHeight')).toBe(360)
     // 分组落在既有一级分类下（布局 / 节点），不新立无主分类
     expect(settings.groupOf('布局/视频节点尺寸').map((i) => i.key).sort()).toEqual([
+      'videoDefaultHeight',
+      'videoDefaultWidth',
       'videoFitMaxHeight',
       'videoFitMaxWidth',
     ])

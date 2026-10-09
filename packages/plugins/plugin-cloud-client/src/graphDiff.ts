@@ -71,7 +71,7 @@ export function diffGraph(base: unknown, mine: unknown): GraphOps {
   for (const [id, item] of mineIdx) {
     const before = baseIdx.get(id)
     if (before === undefined) ops.add.push(item)
-    else if (stable(before) !== stable(item)) ops.update.push(item)
+    else if (stable(before) !== stable(item)) ops.update.push(withExplicitParentRemoval(item, before))
   }
   for (const id of baseIdx.keys()) {
     if (!mineIdx.has(id)) ops.delete.push(id)
@@ -79,8 +79,27 @@ export function diffGraph(base: unknown, mine: unknown): GraphOps {
   return ops
 }
 
+/**
+ * 把「本地已没有 parentId、服务器那份还有」的节点补成显式 `parentId: null`。
+ *
+ * 为什么必须补（真 bug，2026-10-08 实测）：服务端把「对象里没有这个 key」读成
+ * **「这次没提这个字段」**（见 canvasDocument.batchNodes 的注释），只有显式给 `null`
+ * 才执行 `delete node.parentId`。而本地节点出组后就是**不存在这个 key**（JS 里是 undefined，
+ * JSON 序列化时整个丢掉）—— 于是「把节点拖出分组 / 解散分组」写上去等于没写：
+ * 刷新一看节点又回到组里；组被删掉时还会留下指向已删组的悬挂 parentId。
+ *
+ * 只对 parentId 这一条做（它是服务端唯一支持 null 清除语义的字段）；别的字段少 key
+ * 仍按「没提」处理，不给服务器塞一堆字面 null。
+ */
+function withExplicitParentRemoval(item: unknown, before: unknown): unknown {
+  if (!item || typeof item !== 'object') return item
+  const hadParent = typeof (before as { parentId?: unknown } | undefined)?.parentId === 'string'
+  const hasParent = typeof (item as { parentId?: unknown }).parentId === 'string'
+  if (!hadParent || hasParent) return item
+  return { ...(item as Record<string, unknown>), parentId: null }
+}
+
 /** 这份增量里有没有要干的事（没有就别发请求） */
 export function isEmptyOps(ops: GraphOps): boolean {
   return ops.add.length === 0 && ops.delete.length === 0 && ops.update.length === 0
 }
-

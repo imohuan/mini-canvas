@@ -12,6 +12,10 @@
  * - addNodes 批量带 id/data/size/parentId 插入；updateNode 任意 patch；updateNodes 批量改；removeNodes 批量删。
  * - 动态实测宽高不属于本包（那是渲染层 nodeLayout 服务的事），size 仅承载声明/落盘的静态尺寸。
  */
+// 类型表要能**实时改默认尺寸**（设置面板调默认尺寸，未 resize 的节点立刻跟着变），
+// 所以注册进类型表的对象包一层 shallowReactive：只让**顶层**可追踪（`updateTypeSize` 是整体替换
+// `defaultSize` 这个属性），不深包装 icon/segments 等句柄 —— 深包装会把它们变成代理、破坏引用相等。
+import { shallowReactive } from 'vue'
 
 /** 画布节点数据的最小可持久化形状 */
 export interface CanvasNode {
@@ -175,6 +179,19 @@ export interface NodeStoreService {
   registerType(def: CanvasNodeType): void
   /** 注销一个节点类型（热卸插件时回收；不存在则 no-op） */
   unregisterType(type: string): void
+  /**
+   * 改某类型的默认尺寸（设置面板调默认尺寸时调用）。
+   * 只影响没有显式尺寸（没被 resize 过）的节点。
+   */
+  updateTypeSize(type: string, size: { w: number; h: number }): void
+  /**
+   * 取该类型**下一个默认名**（"图片 3" / "分组 2"）并推进该类型的序号计数。
+   *
+   * 与建节点自动补名走的是同一份计数：给既有节点补默认名（存量空标题的分组）时用它，
+   * 否则「补的名字」与「之后新建的名字」各数各的、必然撞号（两个「分组 1」）。
+   * 类型没注册 / 取不到模板时回落类型 label。
+   */
+  nextTypeName(type: string): string
   /** 所有节点 */
   getNodes(): CanvasNode[]
   /** 深拷贝快照（P1-10：安全只读——返回与内部引用隔离的副本，外部改动不污染 store） */
@@ -261,7 +278,33 @@ export class NodeStore implements NodeStoreService {
     if (this.types.has(def.type)) {
       throw new Error(`[nodeStore] node type "${def.type}" already registered`)
     }
-    this.types.set(def.type, def)
+    // 存响应式副本：类型默认尺寸要能**实时改**（设置面板调默认尺寸，未 resize 的节点立刻跟着变）。
+    // 不改调用方传进来的对象（作者模块级的字面量可能被复用），只派生一份可追踪的。
+    this.types.set(def.type, shallowReactive({ ...def }) as CanvasNodeType)
+  }
+
+  /**
+   * 改某类型的默认尺寸（设置面板改「默认尺寸」时调用）。
+   *
+   * 只动 `defaultSize` 里的值（原地改响应式对象 → 依赖它的卡片尺寸 computed 自动重算）。
+   * 语义：**只影响没有显式尺寸的节点**（没 `node.size`/`data.cardWidth` 的），
+   * 已经 resize 过、有自己尺寸的节点不受影响 —— 由「实测 > node.size > type.defaultSize」这条链天然保证。
+   */
+  updateTypeSize(type: string, size: { w: number; h: number }): void {
+    const t = this.types.get(type) as (CanvasNodeType & { defaultSize: { w: number; h: number } }) | undefined
+    if (!t) return
+    t.defaultSize = { w: size.w, h: size.h }
+    this.notify('update', type)
+  }
+
+  /**
+   * 取某类型的下一个默认名（并推进该类型计数）—— 见服务接口处的说明。
+   * 类型没注册就返回个安全值（调用方通常是批量补名循环，不该因为一个未知类型整批炸）。
+   */
+  nextTypeName(type: string): string {
+    const def = this.types.get(type)
+    if (!def) return type
+    return this.nextDefaultName(def)
   }
 
   /**

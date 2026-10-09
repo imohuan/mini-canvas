@@ -1,0 +1,308 @@
+
+> @mini-canvas/plugin-group@0.0.0 test D:\Code\Git\mini-canvas\packages\plugins\plugin-group
+> vitest run
+
+
+ RUN  v3.2.7 D:/Code/Git/mini-canvas/packages/plugins/plugin-group
+
+ ✓ src/__tests__/groupEngine.test.ts (19 tests) 9ms
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有「恰好单独选中我」时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有「恰好单独选中我」时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有「恰好单独选中我」时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 只有「恰好单独选中我」时才显示：未选中 / 选中别人 → 整条栏不渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 渲染出解组按钮（文案 + 无障碍名齐全）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 背景颜色入口：收起时只有触发器，没有色块（工具栏不会被撑长）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 展开后是 7 个预设色块，每个带颜色与无障碍名（没有「自定义」入口）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 常态（没人在 resize）→ 浮层照常渲染
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 当前底色那个色块被标成选中（aria-selected）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarRender.test.ts > 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+stderr | src/__tests__/groupTopToolbarOverlayRender.test.ts > 分组上控制栏浮层：resize 时收起（用户要求） > 正在被 resize 的是别人 → 本分组浮层照常（不做全局压制）
+[ui] 目录里没有名为 "button" 的组件（主题插件没登记它？）。详见设计文档 §4.5。
+
+ ✓ src/__tests__/groupTopToolbarOverlayRender.test.ts (3 tests) 24ms
+ ❯ src/__tests__/groupTopToolbarRender.test.ts (10 tests | 1 failed) 37ms
+   ✓ 分组节点上控制栏 > 只有「恰好单独选中我」时才显示：未选中 / 选中别人 → 整条栏不渲染 16ms
+   ✓ 分组节点上控制栏 > 渲染出解组按钮（文案 + 无障碍名齐全） 1ms
+   ✓ 分组节点上控制栏 > 背景颜色入口：收起时只有触发器，没有色块（工具栏不会被撑长） 1ms
+   ✓ 分组节点上控制栏 > 展开后是 7 个预设色块，每个带颜色与无障碍名（没有「自定义」入口） 3ms
+   ✓ 分组节点上控制栏 > 当前底色那个色块被标成选中（aria-selected） 1ms
+   ✓ 分组节点上控制栏 > 触发器上的色点 = 当前底色（没设过则回落默认石板灰） 2ms
+   ✓ 分组节点上控制栏 > 色板是一张只有预设色的封闭表（用户拍板：不做自定义取色） 1ms
+   ✓ 分组节点上控制栏 > 色板面板宽度容得下网格（不再被裁）+ 色块放大到 26px 1ms
+   ✓ 点「解散分组」调到 group 服务（真 bug 回归） > groupServiceOf：只从 tryGet/get 取服务，形状不对给 undefined（不抛） 0ms
+   × 点「解散分组」调到 group 服务（真 bug 回归） > 组件不再用 ctx.group 直属性（根 Context 没有服务代理 → 会静默 no-op） 8ms
+     → expected '<script setup lang="ts">\n/**\n * Gro…' not to match /ctx\.group\s*(\?\.|\.|\[)/
+ ✓ src/__tests__/groupPlugin.test.ts (24 tests) 41ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/__tests__/groupTopToolbarRender.test.ts > 点「解散分组」调到 group 服务（真 bug 回归） > 组件不再用 ctx.group 直属性（根 Context 没有服务代理 → 会静默 no-op）
+AssertionError: expected '<script setup lang="ts">\n/**\n * Gro…' not to match /ctx\.group\s*(\?\.|\.|\[)/
+
+- Expected: 
+/ctx\.group\s*(\?\.|\.|\[)/
+
++ Received: 
+"<script setup lang=\"ts\">
+/**
+ * GroupTopToolbar —— 分组节点「上控制栏」里的操作：解组 + 背景颜色。
+ *
+ * 用户要求：\"这边的操作都是显示在这个上下控制栏里面，你可以参考节点中上下这个控制栏是如何实现的，
+ * 它是悬浮在节点外的\"；\"这边分组还支持选择这里的背景颜色，放在它的上浮控制栏中\"。
+ *
+ * 为什么从内容区（GroupContent 右上角那个小图标）搬到这里：
+ * - 位置语义统一 —— 节点上的操作一律走 out:top / out:bottom，不再是\"内容组件里自己绝对定位一个角\"；
+ * - 显隐统一 —— 壳（BaseNode）按\"框选中/多选收起\"统一压掉这一层，不必每个组件各判一遍；
+ * - 定位统一 —— 贴边距离/居中/反缩放由壳给，本组件只放内容。
+ *
+ * 与图片节点的 ImageTopToolbar 逐字同形：**定位不在这里**，选中态也不在这里。
+ */
+import { computed, ref } from 'vue'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
+
+const props = defineProps<{ id: string; data: Record<string, unknown> }>()
+const { ctx } = useCanvasRender()
+/**
+ * 显隐门：**恰好单独选中我**时才出现（与图片/文本节点的上控制栏同一判据）。
+ *
+ * 为什么必须自己判：壳（BaseNode）只做\"压制\"（框选中/多选时收起），它**不负责显示** ——
+ * 见 BaseNode 的注释\"单选时的显隐仍由各段组件自己的 useSoleNodeSelected 决定\"。
+ * 少了这一句，未选中或选中别人时这条栏也会一直挂在那儿（用户实测报的就是这个）。
+ */
+const visible = useSoleNodeSelected(props.id)
+/** 设计系统件按名取（§4.5 目录）：换主题时这里一行不改 */
+const ThemedButton = useUiComponent('button')
+const ThemedDropdown = useUiComponent('dropdown')
+
+/** 解组图标（与 GroupContent 里那枚同源写法：内联 SVG 字符串） */
+const ICON_UNGROUP =
+  '<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M8 8h8v8H8z\"/><path d=\"M3 3h6v6H3zM15 3h6v6h-6zM3 15h6v6H3zM15 15h6v6h-6z\"/></svg>'
+
+/**
+ * 解组：调 group 服务（唯一写入口在服务里 —— 它自己包历史、还原子节点绝对坐标）。
+ * 只读服务名，不 import 任何 group 内部实现，保持「UI 与逻辑同包但职责分开」。
+ *
+ * ⚠️ 必须用 ctx.get('group')，**不能**写 ctx.group（真 bug，2026-10-08 实测：点了解散分组没反应）。
+ * useCanvasRender() 递进来的是**根 Context**，而 `ctx.<服务名>` 这种直访是靠「每个插件自己的
+ * scope 代理」实现的（Context.ts 的 new Proxy：属性读命中已上架服务名才转发）——
+ * 根 Context 没有那层代理，`ctx.group` 恒为 undefined。写成 ctx.group?.ungroup() 时可选链又把
+ * 它吞成静默 no-op：按钮点得动、什么也不发生。同仓其它节点工具栏组件一律走 ctx.get/tryGet，这里对齐。
+ */
+function onUngroup(): void {
+  groupServiceOf(ctx)?.ungroup(props.id)
+}
+
+// ====== 背景颜色 ======
+/** 当前底色（没设过 = 默认石板灰），触发器上的色点画它 */
+const currentColor = computed(() => resolveGroupBackgroundColor(props.data?.backgroundColor))
+
+/** 色板浮层开合 */
+const colorOpen = ref(false)
+
+/**
+ * 落色：色值只来自那张**封闭的预设表**（GROUP_COLOR_SWATCHES），所以不需要额外校验 ——
+ * 表里没有\"用户手输的字符串\"这条路径。写走 doc.updateNodeData（唯一图写入口 → 自动进历史 + 落盘），
+ * 与 GroupContent 读的是同一个字段。
+ */
+function pickColor(color: string): void {
+  ctx.get('doc')?.updateNodeData(props.id, { ...props.data, backgroundColor: color })
+}
+
+</script>
+
+<template>
+  <div v-if=\"visible\" class=\"ntp-root group-top-toolbar\">
+    <!-- 背景颜色：色点触发器 + 下拉的预设色板（只有预制色，不做自定义取色） -->
+    <component
+      :is=\"ThemedDropdown\"
+      v-model=\"colorOpen\"
+      placement=\"bottom-start\"
+      :offset=\"8\"
+      menu-width=\"152px\"
+      menu-role=\"listbox\"
+      body-class=\"group-color-menu-body\"
+      :teleport=\"true\"
+    >
+      <template #trigger>
+        <!-- 色点触发器 = 控制栏通用按钮 + 图标位放色点（不再自绘一个 32×32 按钮，
+             尺寸/hover/focus/圆角全部跟随目录里登记的 button 组件）。 -->
+        <component
+          :is=\"ThemedButton || 'button'\"
+          class=\"group-color-trigger\"
+          title=\"背景颜色\"
+          aria-label=\"背景颜色\"
+          aria-haspopup=\"listbox\"
+          :aria-expanded=\"colorOpen\"
+        >
+          <span class=\"group-color-trigger__dot\" :style=\"{ backgroundColor: currentColor }\" aria-hidden=\"true\" />
+        </component>
+      </template>
+      <template #default=\"{ close }\">
+        <div class=\"group-color-grid\" role=\"listbox\" aria-label=\"分组背景颜色\" @click.stop>
+          <button
+            v-for=\"swatch in GROUP_COLOR_SWATCHES\"
+            :key=\"swatch.id\"
+            class=\"group-color-swatch\"
+            :class=\"{ 'is-active': swatch.color === currentColor }\"
+            type=\"button\"
+            role=\"option\"
+            :aria-selected=\"swatch.color === currentColor ? 'true' : 'false'\"
+            :title=\"swatch.label\"
+            :aria-label=\"swatch.label\"
+            :style=\"{ backgroundColor: swatch.color }\"
+            @click.stop=\"pickColor(swatch.color); close()\"
+          />
+        </div>
+      </template>
+    </component>
+
+    <component
+      :is=\"ThemedButton || 'button'\"
+      class=\"group-top-toolbar__btn\"
+      type=\"button\"
+      title=\"解散分组\"
+      aria-label=\"解散分组\"
+      :icon=\"ICON_UNGROUP\"
+      variant=\"danger\"
+      @click=\"onUngroup\"
+    >
+      解散分组
+    </component>
+  </div>
+</template>
+
+<style scoped>
+/* 容器（排一行 + 一块面板）由全局 `.ntp-root` 提供（canvas-render 的 ui-theme.css）——
+   位置（贴边/居中/反缩放）由壳的上插槽定位层给，本组件只管内容。 */
+
+/* 色块预览环：色点里画的是\"任意用户色\"，需要一圈中性描边把它从面板底上分出来。
+   这不是主题色本身，而是\"任意颜色都要看得清\"的对比环，故按亮/暗各给一套。
+
+   变量挂在这两个元素自己身上（而不是外层工具栏）：色板菜单是 teleport 到 body 的，
+   外层容器已不是它的祖先；挂在菜单内的 .group-color-grid 上才继承得到。
+   暗色分支用 html.dark（0,2,1）—— html 永远是祖先，且压得住上面亮色那条 0,2,0。 */
+.group-color-trigger {
+  --gt-ring-in: rgba(255, 255, 255, 0.42);
+  --gt-ring-out: rgba(15, 23, 42, 0.28);
+}
+.group-color-grid {
+  --gt-ring-in: rgba(255, 255, 255, 0.38);
+  --gt-ring-out: rgba(15, 23, 42, 0.22);
+}
+html.dark .group-color-trigger,
+html.dark .group-color-grid {
+  --gt-ring-in: rgba(15, 23, 42, 0.45);
+  --gt-ring-out: rgba(255, 255, 255, 0.34);
+}
+
+/* 色点触发器：按钮本体（32×32/圆角/hover/focus）由目录里的 button 组件提供，
+   这里只补一件它管不到的事 —— 图标位里放的是\"色点\"而不是 SVG。 */
+.group-color-trigger__dot {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.42)),
+    0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.28));
+}
+
+/*
+ * 色板：7 个预设色。
+ *
+ * 为什么是「奇数个 + 4 列」还要额外居中（用户报「颜色卡片宽度不够」，2026-10-08 实测）：
+ * 7 个色块按 4 列排是 4 + 3，第二行右端天然空一格；若让网格贴着面板左缘、面板又只比网格宽一点，
+ * 视觉上就是「右下角缺一块、整块面板挤」。这里做两件事：
+ *   ① 面板给足宽度（menu-width 152px），网格在面板里**水平居中** —— 第二行的 3 个落在中段，
+ *      与第一行 4 个形成对称的宝塔形，不再看起来缺角；
+ *   ② 色块从 22px 提到 26px：7 个 22px 点在一屏里偏小、也达不到「交互目标 ≥24px」的舒适档
+ *      （菜单项本身是 32px，色点是它里面的图形，按 26px + 6px 间距读起来才不挤）。
+ * 4 列 × 26 + 3 × 6 = 122px，加两侧 8px 内边距 = 138px < 152px，居中后左右各留 7px。
+ */
+.group-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 26px);
+  gap: 6px;
+  padding: 8px;
+  /* 水平居中：第二行的 3 个色块落在中段，与第一行形成对称（不再右端缺一角） */
+  justify-content: center;
+}
+.group-color-swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.38)),
+    0 0 0 1px var(--gt-ring-out, rgba(15, 23, 42, 0.22));
+  transition: transform 120ms ease;
+}
+.group-color-swatch:hover {
+  transform: scale(1.08);
+}
+.group-color-swatch:focus-visible {
+  outline: 2px solid var(--ntb-accent-ring, rgba(8, 145, 178, 0.6));
+  outline-offset: 1px;
+}
+/* 当前色：加一圈环，一眼看出\"现在用的是哪个\" */
+.group-color-swatch.is-active {
+  box-shadow:
+    inset 0 0 0 1px var(--gt-ring-in, rgba(255, 255, 255, 0.38)),
+    0 0 0 2px var(--ntb-accent-ring, rgba(8, 145, 178, 0.85));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group-color-trigger,
+  .group-color-swatch {
+    transition: none;
+  }
+}
+</style>
+"
+
+ ❯ src/__tests__/groupTopToolbarRender.test.ts:198:21
+    196|     const src = read('../GroupTopToolbar.vue')
+    197|     // 只认「取值后立刻调用」的形态（?. / . / [）；注释里提到名字不算违规
+    198|     expect(src).not.toMatch(/ctx\.group\s*(\?\.|\.|\[)/)
+       |                     ^
+    199|     expect(src).toMatch(/groupServiceOf\(ctx\)/)
+    200|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 55 passed (56)
+   Start at  14:19:54
+   Duration  2.80s (transform 2.69s, setup 0ms, collect 6.60s, tests 110ms, environment 1ms, prepare 830ms)
+
+ ELIFECYCLE  Test failed. See above for more details.

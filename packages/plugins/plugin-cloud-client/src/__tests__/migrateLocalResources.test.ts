@@ -16,7 +16,10 @@ function fakeApi(): { api: CloudApi; uploads: Array<{ name: string; size: number
     const path = String(url).replace('http://srv', '')
     if (path.startsWith('/api/canvases/default/resources')) {
       uploads.push({ name: decodeURIComponent(path.split('?name=')[1] ?? ''), size: 1 })
-      return new Response(JSON.stringify({ ok: true, ref: 'res:abc123.png', hashName: 'abc123.png' }), { status: 200 })
+      return new Response(
+        JSON.stringify({ ok: true, hashName: 'abc123.png', url: '/api/canvases/default/resources/abc123.png' }),
+        { status: 200 },
+      )
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
@@ -24,7 +27,7 @@ function fakeApi(): { api: CloudApi; uploads: Array<{ name: string; size: number
 }
 
 describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
-  it('本地引用 → 取字节 → 传云端 → 换成 res:<哈希> 写进该类型的媒体字段', async () => {
+  it('本地引用 → 取字节 → 传云端 → 换成资源 URL 写进该类型的媒体字段', async () => {
     const { api, uploads } = fakeApi()
     const local = {
       async resolveResource(ref: string) {
@@ -34,15 +37,28 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'res-1-local', imageUrl: 'blob:old' } }]
     const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(1)
-    expect(out[0].data.imageUrl).toBe('res:abc123.png')
+    expect(out[0].data.imageUrl).toBe('/api/canvases/default/resources/abc123.png')
   })
 
-  it('已是云端引用（res:）→ 不重复上传', async () => {
+  it('已是云端引用（资源 URL）→ 不重复上传', async () => {
     const { api, uploads } = fakeApi()
     const local = { async resolveResource() { return undefined } }
-    const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'res:already.png' } }]
+    const nodes = [
+      { id: 'n1', type: 'image', data: { resourceId: '/api/canvases/default/resources/abc123.png' } },
+    ]
     await migrateLocalResources(nodes, local, api)
     expect(uploads).toHaveLength(0)
+  })
+
+  it('别的画布的资源 URL → 不算「已上传」，照常走本地迁移（只认本画布前缀）', async () => {
+    const { api, uploads } = fakeApi()
+    const local = { async resolveResource() { return 'data:image/png;base64,AAAA' } }
+    const nodes = [
+      { id: 'n1', type: 'image', data: { resourceId: '/api/canvases/other/resources/abc123.png' } },
+    ]
+    const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
+    expect(uploads).toHaveLength(1)
+    expect(out[0].data.imageUrl).toBe('/api/canvases/default/resources/abc123.png')
   })
 
   it('取不到字节 → 原样保留（不因一张图失败把整次迁移搞崩）', async () => {
@@ -71,4 +87,3 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     await expect(migrateLocalResources(nodes, undefined, api)).resolves.toHaveLength(1)
   })
 })
-

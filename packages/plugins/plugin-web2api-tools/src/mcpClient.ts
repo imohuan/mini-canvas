@@ -197,6 +197,47 @@ export class McpClient {
     return { ok: false, error: 'web2api 会话建立失败' }
   }
 
+  /**
+   * 把一个「data URL 或 base64」交给 web2api（MCP system/upload-resource），
+   * 返回它的 referenceUrl（/<hash>.ext）；失败返回 undefined。
+   *
+   * 为什么要这一步：画布里的素材是**本站的相对地址**（/api/canvases/... 等），
+   * web2api 的 referenceImages 只认它自己能取到的形态（/hash.ext、/api/resources/uploads/...），
+   * 裸相对地址原样发过去，它会当成自己 uploads 目录下的相对文件去找 → 4002「图片不存在」。
+   *
+   * 失败（isError / 网络异常 / 拿不到地址）一律吞成 undefined —— 调用方宁可少一张参考图，
+   * 也不要把坏地址发出去让整个任务失败。
+   */
+  async uploadResource(content: string, mimeType?: string): Promise<string | undefined> {
+    const args: Record<string, unknown> = { content }
+    if (mimeType) args.mimeType = mimeType
+    // 会话失效（-32002）时重连一次再试：与 callTool 同一策略（服务重启后旧会话全失效）
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await this.connect(attempt > 0)
+        const result = (await this.rpc({
+          jsonrpc: '2.0',
+          id: this.seq++,
+          method: 'tools/call',
+          params: { name: 'system/upload-resource', arguments: args },
+        })) as McpToolCallResult
+        if (result?.isError) return undefined
+        const sc = (result?.structuredContent ?? {}) as { referenceUrl?: unknown; url?: unknown }
+        if (typeof sc.referenceUrl === 'string' && sc.referenceUrl) return sc.referenceUrl
+        if (typeof sc.url === 'string' && sc.url) return sc.url
+        return undefined
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (attempt === 0 && /-32002|Session|session/.test(msg)) {
+          this.sessionId = null
+          continue
+        }
+        return undefined
+      }
+    }
+    return undefined
+  }
+
   /** 查任务（system/get-task）；不需要 cookieId */
   async getTask(taskId: string): Promise<McpCallOutcome<McpTaskDetail>> {
     try {

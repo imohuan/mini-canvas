@@ -103,7 +103,7 @@ async function main(): Promise<void> {
     const client = new Client({ name: 'realtime-e2e', version: '1.0.0' })
     await client.connect(new StreamableHTTPClientTransport(new URL(`${url}/mcp`)))
     const added = await client.callTool({
-      name: 'canvas.batch_nodes',
+      name: 'canvas_batch_nodes',
       arguments: {
         add: [{ type: 'text', id: 'ai-realtime-1', position: { x: 200, y: 200 }, data: { text: 'AI 实时加进来的' } }],
       },
@@ -130,7 +130,7 @@ async function main(): Promise<void> {
 
     // ==================== AI 删节点，浏览器跟着消失 ====================
     console.log("\n--- AI 经 MCP 删掉这个节点 ---")
-    await client.callTool({ name: 'canvas.batch_nodes', arguments: { delete: ['ai-realtime-1'] } })
+    await client.callTool({ name: 'canvas_batch_nodes', arguments: { delete: ['ai-realtime-1'] } })
     let gone = false
     for (let i = 0; i < 20 && !gone; i++) {
       await sleep(500)
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
     // 这里让画布真的改一次节点位置（等价于用户拖完落定），确定会触发一次保存。
     console.log('\n--- 画布保存一次，看 AI 刚加的节点还在不在 ---')
     await client.callTool({
-      name: 'canvas.batch_nodes',
+      name: 'canvas_batch_nodes',
       arguments: {
         add: [{ type: 'text', id: 'ai-keep-1', position: { x: 300, y: 300 }, data: { text: '别把我盖掉' } }],
       },
@@ -172,7 +172,7 @@ async function main(): Promise<void> {
     check('★ 画布保存之后，AI 刚加的节点还在（没被整包覆盖掉）', afterSave.ids.includes('ai-keep-1'), afterSave)
 
    // 再从服务端侧面确认一次：不只是本地内存里留着，服务器上那份也还在
-   const onServer = await client.callTool({ name: 'canvas.get', arguments: {} })
+   const onServer = await client.callTool({ name: 'canvas_get', arguments: {} })
    const onServerText = ((onServer as { content: { text?: string }[] }).content ?? []).map((c) => c.text ?? '').join('')
    check('★ 服务器上那份也还有它（保存没把它从云端抹掉）', onServerText.includes('ai-keep-1'))
 
@@ -188,7 +188,7 @@ async function main(): Promise<void> {
     const localId = await page.ev<string>(
       `(() => window.MiniCanvasUI.getHost().graph.createNode('text', { x: 700, y: 500 }, { text: '本地建的' }))()`,
     )
-    await client.callTool({ name: 'canvas.batch_nodes', arguments: { add: [{ type: 'text', data: { text: 'AI 又加一个' } }] } })
+    await client.callTool({ name: 'canvas_batch_nodes', arguments: { add: [{ type: 'text', data: { text: 'AI 又加一个' } }] } })
     await sleep(2500)
     const after = await page.ev<{ ids: string[]; texts: string[] }>(PROBE)
     check('★ 本地刚建的节点还在（没被云端整包覆盖冲掉）', after.ids.includes(localId), { localId, ids: after.ids })

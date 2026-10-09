@@ -260,6 +260,10 @@ onMounted(() => {
     // setViewport = 程序化定位（小地图拖拽/自动布局聚焦/框选平移等"跟手"场景）→ 必须即时生效。
     // 带 duration 会让每帧拖拽都重启一次 200ms 补间动画，严重卡顿（老版 PluginContext.setViewport 即无动画）。
     setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v),
+    // 带过渡的取景（聚焦/适配这类一次性动作）：VueFlow 的 setViewport 接受 duration，
+    // 走的是它自己的补间；「跟手」场景仍用上面那条即时版。
+    animateViewport: (v: { x: number; y: number; zoom: number }, durationMs = 320) =>
+      vfApi.setViewport(v, { duration: durationMs }),
     // 拖拽中视觉写位置（对齐吸附/多选整组移动用；不落盘）
     updateNodeVisual: (id: string, position: { x: number; y: number }) => {
       vfApi.updateNode(id, { position })
@@ -352,6 +356,9 @@ defineExpose({
   setCenter: (x: number, y: number, zoom?: number) =>
     vfApi.setCenter(x, y, zoom !== undefined ? { zoom, duration: 200 } : { duration: 200 }),
   setViewport: (v: { x: number; y: number; zoom: number }) => vfApi.setViewport(v),
+  // 带过渡的取景（聚焦/适配这类一次性动作）；「跟手」场景仍用上面那条即时版
+  animateViewport: (v: { x: number; y: number; zoom: number }, durationMs = 320) =>
+    vfApi.setViewport(v, { duration: durationMs }),
 })
 </script>
 

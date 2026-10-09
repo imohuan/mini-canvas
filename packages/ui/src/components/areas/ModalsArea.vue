@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 浮层区：快捷键 / 生成历史 / TV Director 设置 / Toast（全部走独立状态，可与抽屉共存）。
-import { nextTick, ref, watch } from 'vue'
-import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare } from 'lucide-vue-next'
+// 浮层区：快捷键 / 生成历史（masonry 瀑布流）/ TV Director 设置 / Toast。
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Image as ImageIcon, AudioLines, CheckSquare, Download } from 'lucide-vue-next'
 import { motion } from 'motion-v'
 import AxDialog from '../AxDialog.vue'
 import AxDropdown from '../AxDropdown.vue'
@@ -9,11 +9,485 @@ import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AxScrollArea from '../AxScrollArea.vue'
 import AxButton from '../AxButton.vue'
-import { useUi } from '../../composables/ui'
+import { MediaViewer } from '@mini-canvas/plugin-theme-default'
+import { useMasonry } from '../../composables/useMasonry'
+import { uiComponentOf, useUi } from '../../composables/ui'
+import { useAgentSettings } from '../../composables/agentSettings'
+import { createApp, h, type Component } from 'vue'
 
 const ui = useUi()
 const s = ui.state
 const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? AudioLines : ImageIcon)
+
+/**
+ * 「后台对话 / 通知 / 目标预算」的真源在后台 KV（composables/agentSettings，键与路径照着设计定死）。
+ * 组件只做绑定与提交：读它给的响应式快照，改它给的写入口 —— 组件里不放第二份本地状态。
+ */
+const agent = useAgentSettings()
+
+/**
+ * 目标默认预算输入框：改完（失焦 / 回车）归一化再落 KV，并把归一化结果写回输入框
+ * （0 / 空 / 负数都收成 0 = 不限）。不用 v-model：默认预算的真源在后台，本地再绑一个变量就是第三份状态。
+ */
+function agentBudgetOnChange(e: Event): void {
+  const input = e.target as HTMLInputElement
+  void agent.setGoalBudget(input.value).then((n) => { input.value = String(n) })
+}
+
+/**
+ * 历史条目的缩略图地址。
+ *
+ * 后台给的 urls 可能是**跨端地址**（如 web2api 的 `http://localhost:8033/...`），在别处打不开；
+ * 优先用同源的画布资源地址（`/api/canvases/<画布>/resources/<文件名>`）—— 那是后台把产物收下后
+ * 稳定可取的形态，浏览器同源、一定能加载。拿不到同源地址才退回原 url。
+ */
+function thumbOf(item: { kind: string; urls?: string[]; canvasId?: string; nodeId?: string }): string | null {
+  const url = item.urls?.[0]
+  if (!url) return null
+  // 已经是同源 / 相对地址就直接用（后台已把历史存成同源地址）
+  if (url.startsWith('/')) return url
+  const name = url.split('?')[0]?.split('/').pop() || ''
+  if (name && item.canvasId) return '/api/canvases/' + item.canvasId + '/resources/' + name
+  return url
+}
+
+/** 点开的预览：接主题注册的 MediaViewer（图片放大 / 视频 / 音频原生播放） */
+const previewItem = ref<{ name: string; kind: string; url: string } | null>(null)
+
+// ==================== Masonry 瀑布流（照 web2api TaskResultGalleryView 搬入） ====================
+const masonry = useMasonry()
+const MASONRY_ID = 'hist-masonry'
+const ITEM_CLASS = 'hist-masonry-item'
+const GUTTER = 16
+/** 首屏只渲染 24 张，滚动到底再追加，避免一次创建全部 img 节点 */
+const BATCH_SIZE = 24
+const renderedCount = ref(BATCH_SIZE)
+const masonryEl = ref<HTMLElement | null>(null)
+let sentinelObserver: IntersectionObserver | null = null
+let lastBatchTime = 0
+let lastItemVisible = false
+let lastColumnWidth = 0
+let relayoutTimer: ReturnType<typeof setTimeout> | null = null
+let rebuilding = false
+/** 筛选切换标记：数据 watch 见到它就整墙重建，不把新数据当"追加分页"接上 */
+let filterSwitching = false
+
+/**
+ * histZoom 滑杆 → 最小卡片宽度（px）：滑杆越大卡片越大、列数越少。
+ * 瀑布流的列数随容器宽度自适应（calcColumns），这里只提供「最小列宽」。
+ */
+const minCardSize = computed(() => ({ 1: 340, 2: 280, 3: 220, 4: 170, 5: 120 }[s.histZoom] ?? 220))
+
+/**
+ * 缩放滑块（自绘，替代原生 input[type=range]）：
+ * 原生 range 只有 thumb（14px）附近才能按下拖拽，点轨道只跳值不跟手 —— 用户实测"拖不动"。
+ * 这里整条轨道自己接管 pointerdown/move/up：按下任意位置即跳档并进入拖拽，
+ * 移动实时换算档位，松手结束。thumb 位置按 (value-1)/(max-1) 居中定位。
+ */
+const ZOOM_MIN = 1
+const ZOOM_MAX = 5
+const zoomPct = computed(() => ((s.histZoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)) * 100)
+let zoomDragging = false
+
+function zoomApply(clientX: number, track: HTMLElement): void {
+  const rect = track.getBoundingClientRect()
+  if (rect.width <= 0) return
+  const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  s.histZoom = Math.round(ZOOM_MIN + f * (ZOOM_MAX - ZOOM_MIN))
+}
+
+function onZoomPointerDown(e: PointerEvent): void {
+  const track = e.currentTarget as HTMLElement | null
+  if (!track) return
+  zoomDragging = true
+  track.setPointerCapture(e.pointerId)
+  zoomApply(e.clientX, track)
+}
+function onZoomPointerMove(e: PointerEvent): void {
+  if (!zoomDragging) return
+  zoomApply(e.clientX, e.currentTarget as HTMLElement)
+}
+function onZoomPointerUp(e: PointerEvent): void {
+  zoomDragging = false
+  ;(e.currentTarget as HTMLElement | null)?.releasePointerCapture?.(e.pointerId)
+}
+
+/** 容器宽 + 最小列宽 → 实际列数与列宽（列宽均分撑满容器） */
+function calcColumns(containerWidth: number): { cols: number; columnWidth: number } {
+  const cols = Math.max(1, Math.floor((containerWidth + GUTTER) / (minCardSize.value + GUTTER)))
+  const columnWidth = Math.floor((containerWidth - GUTTER * (cols - 1)) / cols)
+  return { cols, columnWidth }
+}
+
+/** 最后一张卡可见且距上次追加超过 1s 时追加下一批（1s 节流 + 可见时续链） */
+function loadMoreBatch(): void {
+  const items = ui.histVisible.value
+  if (renderedCount.value >= items.length) { lastItemVisible = false; return }
+  const elapsed = Date.now() - lastBatchTime
+  if (elapsed < 1000) {
+    if (lastItemVisible) setTimeout(() => { if (lastItemVisible) loadMoreBatch() }, 1000 - elapsed)
+    return
+  }
+  lastBatchTime = Date.now()
+  const previousCount = renderedCount.value
+  renderedCount.value = Math.min(renderedCount.value + BATCH_SIZE, items.length)
+  nextTick(() => appendMasonryItems(previousCount, renderedCount.value))
+}
+
+/** 滚动容器触底：还有下一页就先拉数据（loadHistory 追加），数据到位后由 watch 续接瀑布流 */
+function onScrollReachBottom(): void {
+  ui.loadMoreHistory()
+}
+
+/** 滚动事件：距底部 400px 内 → 触发加载下一页（与参考组件的「最后一张卡进入可视区即追加」同一体验） */
+function onHistScroll(e: Event): void {
+  const el = e.target as HTMLElement | null
+  if (!el) return
+  const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (distToBottom < 400) onScrollReachBottom()
+}
+
+/** 进入/退出批量模式：卡片要重画（出现/移除勾选层），退出时清空选择 */
+function toggleBatchMode(): void {
+  s.histBatchMode = !s.histBatchMode
+  s.histSelectedIds = []
+  if (s.historyOpen) nextTick(rebuildMasonry)
+}
+
+/** 监听最后一张卡：进入可视区（含下方 600px 缓冲）就追加下一批 */
+function observeLastItem(): void {
+  sentinelObserver?.disconnect()
+  const container = masonryEl.value
+  if (!container) return
+  const els = container.querySelectorAll<HTMLElement>('.' + ITEM_CLASS)
+  const last = els.length > 0 ? els[els.length - 1] : null
+  if (!last) return
+  sentinelObserver = new IntersectionObserver(
+    (entries) => {
+      lastItemVisible = entries.some((e) => e.isIntersecting)
+      if (lastItemVisible) loadMoreBatch()
+    },
+    { root: container, rootMargin: '0px 0px 600px 0px' },
+  )
+  sentinelObserver.observe(last)
+
+}
+
+/** HTML 转义（卡片 DOM 用 innerHTML 拼，标题来自后台要防注入） */
+function esc(t: string): string {
+  return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;')
+}
+
+/** 无产物（失败/裂图）的异常卡：警示图标 + 标题（用户口径：没数据 = 异常，不装作正常素材） */
+function buildErrorCard(item: HistItem): HTMLElement {
+  const wrap = document.createElement('div')
+  wrap.className = 'hist-card-fallback is-error'
+  wrap.innerHTML =
+    '<span class="hist-card-fallback-icon">!</span>' +
+    '<strong>' + esc(item.title) + '</strong>' +
+    '<span class="hist-card-meta hist-card-meta--danger">生成异常 · 无产物</span>' +
+    '<span class="hist-card-meta">' + esc(item.kind) + ' · ' + esc(item.time) + '</span>'
+  wrap.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+  if (s.histBatchMode && item.id) wrap.appendChild(buildCheckOverlay(item.id))
+  return wrap
+}
+
+/** 历史条目类型（卡片构建函数共用；id 参与批量勾选） */
+interface HistItem {
+  id?: string
+  title: string
+  kind: string
+  time: string
+  urls?: string[]
+  canvasId?: string
+  nodeId?: string
+}
+
+/** 批量模式下的勾选覆盖层（点它切换选中；不在批量模式不出现） */
+function buildCheckOverlay(id: string): HTMLElement {
+  const el = document.createElement('span')
+  el.className = 'hist-card-check' + (s.histSelectedIds.includes(id) ? ' is-on' : '')
+  el.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  el.addEventListener('click', (ev) => {
+    ev.stopPropagation()
+    toggleHistSelected(id)
+  })
+  return el
+}
+
+/** 勾选/取消一条 */
+function toggleHistSelected(id: string): void {
+  const i = s.histSelectedIds.indexOf(id)
+  if (i >= 0) s.histSelectedIds.splice(i, 1)
+  else s.histSelectedIds.push(id)
+  // 重新刷这张卡的勾选态（覆盖层 class）
+  const el = masonryEl.value?.querySelector('[data-hist-id="' + id + '"] .hist-card-check')
+  if (el) el.classList.toggle('is-on', s.histSelectedIds.includes(id))
+}
+
+/**
+ * 音频/视频卡：封面 + 播放圆钮（点卡片直接开 MediaViewer 预览/播放）。
+ * 音频没有画面 —— 给柔和渐变底 + 波形点阵装饰；视频有封面帧。
+ */
+function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): HTMLElement {
+  const card = document.createElement('div')
+  card.className = 'hist-card'
+  if (item.id) card.dataset.histId = item.id
+  const isAudio = kind === 'audio'
+  // 音频/视频卡优先用节点插件注册的预览件（真播放器：波形 / 带控件的视频画面）；
+  // 目录里没登记/没就绪才回落到静态装饰。视频以前直接把媒体地址塞 <img>，必然裂图。
+  const PluginPreview = isAudio
+    ? (uiComponentOf('audioPreview') as Component | undefined)
+    : (uiComponentOf('videoPreview') as Component | undefined)
+  if (PluginPreview) {
+      const mount = document.createElement('div')
+      mount.className = isAudio ? 'hist-card-audio-plugin' : 'hist-card-video-plugin'
+      card.appendChild(mount)
+      const app = createApp({ render: () => h(PluginPreview, isAudio ? { url, name: item.title, compact: true } : { url, name: item.title }) })
+      app.mount(mount)
+      // 上下布局：上面组件，下面同级信息条（fixed 高度）—— 不再压在组件上，彻底不重叠
+      const foot = document.createElement('div')
+      foot.className = 'hist-card-foot'
+      foot.innerHTML = '<span class="hist-tag">' + (isAudio ? '♪ 音频' : '▶ 视频') + '</span><span class="hist-tag hist-tag--dim">' + esc(item.time) + '</span>'
+      card.appendChild(foot)
+      card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+      if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+      return card
+  }
+  card.innerHTML =
+    '<div class="hist-card-media" style="aspect-ratio:' + (isAudio ? '4/3' : '16/9') + '">' +
+    (isAudio
+      ? '<div class="hist-card-audio"><span class="hist-card-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>'
+      : '<img src="' + esc(url) + '" alt="" loading="lazy" />') +
+    '<div class="hist-card-play">▶</div>' +
+    '<div class="hist-card-tags"><span class="hist-tag">' + (isAudio ? '♪ 音频' : '▶ 视频') + '</span><span class="hist-tag hist-tag--dim">' + esc(item.time) + '</span></div>' +
+    '</div>'
+  if (!isAudio) {
+    const img = card.querySelector('img')!
+    const media = card.querySelector('.hist-card-media') as HTMLElement
+    img.addEventListener('load', () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
+        masonry.layout()
+      }
+    })
+    img.addEventListener('error', () => {
+      card.replaceWith(buildErrorCard(item))
+      masonry.layout()
+    })
+  }
+  card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+  if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+  return card
+}
+
+/** 生成瀑布流里一张卡的 DOM（图片卡带骨架屏 + 底部渐变信息栏；无产物退图标卡） */
+function createMasonryElement(item: HistItem): HTMLElement {
+  const card = document.createElement('div')
+  card.className = 'hist-card'
+  if (item.id) card.dataset.histId = item.id
+  const url = thumbOf(item)
+
+  // 音频/视频先行：它们的 urls[0] 是媒体地址（不是图片），交给专属媒体卡
+  // （之前顺序反了：音频地址先被当图片 <img> 加载 → error → 被误换成"异常卡"，
+  //  而点开其实能播 —— 用户实测抓到的就是这个）。
+  const isAudio = item.kind === '音频' || item.kind === 'audio'
+  const isVideo = item.kind === '视频' || item.kind === 'video'
+  if ((isAudio || isVideo) && item.urls?.[0]) {
+    return buildMediaCard(item, item.urls[0], isAudio ? 'audio' : 'video')
+  }
+
+  if (url) {
+    // 图片卡：aspect-ratio 先给 1/1 骨架，onload 后按真实宽高比重设（再触发 masonry 重排）
+    card.innerHTML =
+      '<div class="hist-card-media" style="aspect-ratio:1/1">' +
+      '<img src="' + esc(url) + '" alt="" loading="lazy" />' +
+      '<div class="hist-card-skeleton"><span class="hist-card-pulse"></span></div>' +
+      '<div class="hist-card-tags"><span class="hist-tag hist-tag--dim"><b class="hist-card-dim"></b></span><span class="hist-tag">' + esc(item.kind) + ' · ' + esc(item.time) + '</span></div>' +
+      '</div>'
+    const img = card.querySelector('img')!
+    const media = card.querySelector('.hist-card-media') as HTMLElement
+    img.addEventListener('load', () => {
+      if (img.naturalWidth && img.naturalHeight) {
+        media.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight
+        card.querySelector('.hist-card-skeleton')?.remove()
+        const dim = card.querySelector('.hist-card-dim') as HTMLElement | null
+        if (dim) dim.textContent = img.naturalWidth + '×' + img.naturalHeight
+        masonry.layout()
+      }
+    })
+    img.addEventListener('error', () => {
+      // 裂图：退异常卡
+      media.replaceWith(buildErrorCard(item))
+      masonry.layout()
+    })
+    card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
+  } else {
+    card.appendChild(buildErrorCard(item))
+  }
+  if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
+  return card
+
+}
+
+/** 完整重建瀑布流（数据/筛选变更时用） */
+function rebuildMasonry(): void {
+  const container = masonryEl.value
+  if (!container || rebuilding) return
+  rebuilding = true
+  masonry.destroy()
+
+  const containerWidth = container.clientWidth
+  if (containerWidth === 0) { rebuilding = false; return }
+  const { columnWidth } = calcColumns(containerWidth)
+  lastColumnWidth = columnWidth
+  container.innerHTML = ''
+
+  const items = ui.histVisible.value.slice(0, renderedCount.value)
+  for (const item of items) {
+    const wrapper = document.createElement('div')
+    wrapper.className = ITEM_CLASS
+    wrapper.style.width = columnWidth + 'px'
+    wrapper.style.marginBottom = GUTTER + 'px'
+    wrapper.appendChild(createMasonryElement(item))
+    container.appendChild(wrapper)
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!masonryEl.value) { rebuilding = false; return }
+      masonry.init('#' + MASONRY_ID, { itemSelector: '.' + ITEM_CLASS, columnWidth, gutter: GUTTER })
+      rebuilding = false
+      observeLastItem()
+    })
+  })
+}
+
+/** 只把新增一批交给 Masonry（保留已有 DOM 与滚动位置） */
+function appendMasonryItems(from: number, to: number): void {
+  const container = masonryEl.value
+  if (!container || from >= to) return
+  const items = ui.histVisible.value
+  const columnWidth = lastColumnWidth || calcColumns(container.clientWidth).columnWidth
+  const wrappers = items.slice(from, to).map((item) => {
+    const wrapper = document.createElement('div')
+    wrapper.className = ITEM_CLASS
+    wrapper.style.width = columnWidth + 'px'
+    wrapper.style.marginBottom = GUTTER + 'px'
+    wrapper.appendChild(createMasonryElement(item))
+    return wrapper
+  })
+  masonry.append(wrappers)
+  observeLastItem()
+}
+
+/** 滑杆 / 容器宽度变化：只改列宽后重排（保留 DOM，masonry 自带过渡动画） */
+function relayoutMasonry(): void {
+  const container = masonryEl.value
+  if (!container) return
+  const containerWidth = container.clientWidth
+  if (containerWidth === 0) return
+  const { columnWidth } = calcColumns(containerWidth)
+  if (columnWidth === lastColumnWidth) return
+  lastColumnWidth = columnWidth
+  const wrappers = container.querySelectorAll<HTMLElement>('.' + ITEM_CLASS)
+  wrappers.forEach((w) => { w.style.width = columnWidth + 'px' })
+  masonry.setColumnWidth(columnWidth)
+}
+
+function onContainerResize(): void {
+  if (relayoutTimer) clearTimeout(relayoutTimer)
+  relayoutTimer = setTimeout(relayoutMasonry, 150)
+}
+
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  resizeObserver = new ResizeObserver(onContainerResize)
+})
+
+// 弹窗打开 / 筛选变化 / 滑杆变化 / 数据到位 → 重建或重排
+watch(() => s.historyOpen, (open) => {
+  if (!open) {
+    masonry.destroy()
+    sentinelObserver?.disconnect()
+    if (resizeObserver && masonryEl.value) resizeObserver.unobserve(masonryEl.value)
+    return
+  }
+  renderedCount.value = Math.min(renderedCount.value > 0 ? renderedCount.value : BATCH_SIZE, Math.max(ui.histVisible.value.length, 1))
+  nextTick(() => {
+    rebuildMasonry()
+    if (masonryEl.value) resizeObserver?.observe(masonryEl.value)
+  })
+})
+watch(() => [s.histScope, s.histType, s.histRating, s.histSortDesc] as const, () => {
+  if (!s.historyOpen) return
+  filterSwitching = true
+  // 不用旧数据重建（旧数据是上一个筛选的）—— 先把已渲染计数清零，容器随 v-if 之外的
+  // 内容等数据版本 watch 接管；这里只把画面上的旧卡清掉，避免"切到图片还挂着音频"。
+  renderedCount.value = 0
+  nextTick(() => {
+    masonry.destroy()
+    const container = masonryEl.value
+    if (container) container.innerHTML = ''
+  })
+})
+/**
+ * 数据版本变化（loadHistory 落表就 +1）：用版本号而不是数组长度感知更新 ——
+ * 翻页后长度可能恰好不变（都是满页），长度 watch 会漏触发，画面就停在旧筛选的卡上。
+ * 追加分页 → 只补新增的卡；筛选切换（filterSwitching 被置位）→ 整墙重建。
+ */
+watch(() => s.histDataVersion, () => {
+  const len = ui.histVisible.value.length
+  if (!s.historyOpen) return
+  if (filterSwitching) {
+    filterSwitching = false
+    renderedCount.value = Math.min(BATCH_SIZE, len)
+    nextTick(rebuildMasonry)
+    return
+  }
+  if (renderedCount.value < len) {
+    const from = renderedCount.value
+    renderedCount.value = len
+    nextTick(() => appendMasonryItems(from, len))
+  } else if (renderedCount.value > len) {
+    // 数据变少（异常回落）：整墙重建兜底
+    renderedCount.value = Math.min(BATCH_SIZE, len)
+    nextTick(rebuildMasonry)
+  }
+})
+watch(() => s.histZoom, () => {
+  if (s.historyOpen) nextTick(relayoutMasonry)
+})
+// 显示异常开关：切换会过滤/恢复无产物的卡 → 整墙重建（含批量勾选层）
+watch(() => s.histShowError, () => {
+  if (s.historyOpen) {
+    renderedCount.value = Math.min(BATCH_SIZE, ui.histVisible.value.length)
+    nextTick(rebuildMasonry)
+  }
+})
+onBeforeUnmount(() => {
+  masonry.destroy()
+  sentinelObserver?.disconnect()
+  resizeObserver?.disconnect()
+  if (relayoutTimer) clearTimeout(relayoutTimer)
+})
+
+/** 点一张卡：有产物就打开预览；没有产物（失败 / 老记录）就不弹空窗，给个提示 */
+function openHistoryItem(item: { title: string; kind: string; urls?: string[] }): void {
+  const url = item.urls?.[0]
+  if (!url) {
+    ui.showToast('这条记录没有产物（可能失败或已过清理）')
+    return
+  }
+  // 预览地址必须走 thumbOf 的同源转换（原始 urls 可能是跨端地址打不开）；
+  // kind 用原始中文标签即可 —— MediaViewer 里做了归一化。
+  const viewUrl = thumbOf(item)
+  if (!viewUrl) {
+    ui.showToast('这条记录没有可预览的产物')
+    return
+  }
+  previewItem.value = { name: item.title, kind: item.kind, url: viewUrl }
+}
+
 
 /** 箭头水平偏移：dock 可能被左右抽屉挤偏，视口正中≠快捷键按钮中心，打开时实测对准 */
 const arrowShift = ref(0)
@@ -24,6 +498,7 @@ watch(() => s.shortcutsOpen, async (open) => {
   if (!btn) return
   arrowShift.value = btn.getBoundingClientRect().left + btn.getBoundingClientRect().width / 2 - window.innerWidth / 2
 })
+
 </script>
 
 <template>
@@ -74,8 +549,16 @@ watch(() => s.shortcutsOpen, async (open) => {
       <div class="flex items-center gap-4">
         <div class="hist-zoom-wrap flex items-center gap-2 rounded-lg bg-veil p-2" role="group" aria-label="缩放">
           <Grid2x2 :size="16" class="text-ink" />
-          <input v-model.number="s.histZoom" type="range" min="1" max="5" step="1"
-            class="hist-zoom h-3 w-[100px] cursor-pointer appearance-none bg-transparent" aria-label="调整卡片密度" />
+          <!-- 自绘滑块：整条轨道可按下拖拽（原生 range 只有 thumb 可拖，用户实测"拖不动"） -->
+          <div class="hist-zoom-track relative h-4 w-[120px] cursor-pointer touch-none" role="slider"
+            :aria-valuenow="s.histZoom" :aria-valuemin="ZOOM_MIN" :aria-valuemax="ZOOM_MAX"
+            aria-label="调整卡片宽度（大值列多图小）"
+            @pointerdown="onZoomPointerDown" @pointermove="onZoomPointerMove"
+            @pointerup="onZoomPointerUp" @pointercancel="onZoomPointerUp">
+            <span class="hist-zoom-rail" />
+            <span class="hist-zoom-fill" :style="{ width: zoomPct + '%' }" />
+            <span class="hist-zoom-thumb" :style="{ left: zoomPct + '%' }" />
+          </div>
           <LayoutGrid :size="16" class="text-ink" />
         </div>
         <AxButton variant="ghost" size="icon" aria-label="关闭生成历史" @click="s.historyOpen = false">
@@ -109,6 +592,12 @@ watch(() => s.shortcutsOpen, async (open) => {
           </div>
         </div>
         <div class="flex items-center gap-2">
+          <!-- 显示异常开关：只有存在异常记录时出现（默认关 = 不显示异常卡） -->
+          <label v-if="ui.histErrorCount.value > 0" class="flex h-8 cursor-pointer items-center gap-1.5 rounded-lg px-2 text-[13px] text-ink select-none hover:bg-hover"
+            title="显示没有产物的异常记录">
+            <input v-model="s.histShowError" type="checkbox" class="hist-error-toggle" aria-label="显示异常记录" />
+            显示异常<span class="inline-flex h-4 min-w-4 items-center justify-center rounded bg-chip px-1 text-[11px]">{{ ui.histErrorCount.value }}</span>
+          </label>
           <AxDropdown v-model="s.histRatingOpen" placement="bottom-end" menu-width="140px">
             <template #trigger><button
                 class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
@@ -130,25 +619,17 @@ watch(() => s.shortcutsOpen, async (open) => {
           </button>
           <button
             class="flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-ink transition-colors hover:bg-hover"
-            aria-label="批量操作" @click="ui.showToast('批量操作')">
-            <ListChecks :size="16" /> 批量操作
+            :class="s.histBatchMode ? 'bg-brand text-primary-ink' : 'hover:bg-hover'"
+            aria-label="批量操作" @click="toggleBatchMode">
+            <ListChecks :size="16" /> {{ s.histBatchMode ? '退出批量' : '批量操作' }}
           </button>
         </div>
       </div>
-      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
-        <div v-if="ui.histVisible.value.length" class="grid gap-3"
-          :style="{ gridTemplateColumns: 'repeat(' + (s.histZoom + 2) + ', minmax(0, 1fr))' }">
-          <article v-for="item in ui.histVisible.value" :key="item.title"
-            class="flex cursor-pointer flex-col gap-1 rounded-[10px] border border-line bg-veil p-2 text-left transition-colors hover:border-brand hover:bg-hover"
-            @click="ui.showToast('打开 ' + item.title)">
-            <div
-              class="mb-1 grid h-[92px] place-items-center rounded-lg bg-gradient-to-br from-panel-active to-panel-soft text-brand">
-              <component :is="kindIcon(item.kind)" :size="22" />
-            </div>
-            <strong class="text-xs font-semibold">{{ item.title }}</strong>
-            <span class="text-[10px] text-ink-mute">{{ item.kind }} · {{ item.time }}</span>
-          </article>
-        </div>
+      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6" @scroll="onHistScroll">
+        <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
+             卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
+        <div v-if="ui.histVisible.value.length" :id="MASONRY_ID" ref="masonryEl" class="hist-masonry"></div>
+        <p v-if="ui.state.histLoadingMore" class="hist-loading text-center text-[12px] text-ink/50 pb-4">加载中…</p>
         <!-- 没有后台：说清楚"去哪开"，而不是装作没有历史 -->
         <p v-else-if="!s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
           未连接云端服务 —— 生成历史由后台记录<br />
@@ -156,8 +637,26 @@ watch(() => s.shortcutsOpen, async (open) => {
         </p>
         <p v-else class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
       </AxScrollArea>
+      <!-- 批量操作栏（图2 参考效果）：进入批量模式才出现 -->
+      <div v-if="s.histBatchMode" class="hist-batch-bar flex flex-none items-center justify-between border-t border-line px-6 py-3">
+        <span class="text-[13px] text-ink">已选择 {{ s.histSelectedIds.length }} 项</span>
+        <div class="flex items-center gap-2">
+          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
+            aria-label="批量删除" @click="ui.batchDeleteHistory()">删除</button>
+          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
+            aria-label="批量评级" @click="ui.batchRateHistory('passed')">评级</button>
+          <button class="flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] text-ink transition-colors hover:bg-hover"
+            aria-label="保存到资产" @click="ui.batchSaveAssets()">保存到资产</button>
+          <button class="flex h-8 items-center gap-1.5 rounded-lg bg-brand px-3 text-[13px] text-primary-ink transition-colors hover:opacity-90"
+            aria-label="完成选择" @click="toggleBatchMode">完成</button>
+        </div>
+      </div>
     </div>
   </AxDialog>
+
+  <!-- 历史预览：与资产面板同一只 MediaViewer（Esc / 点遮罩 / 右上角关闭；历史不可删 → 不传 onDelete）。
+       视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
+  <MediaViewer :item="previewItem" @close="previewItem = null" />
 
   <!-- TV Director 全局设置：独立全局弹窗（不在 Agent 面板内） -->
   <AxDialog :model-value="s.directorOpen" width="600px" height="532px" radius="12px"
@@ -184,6 +683,26 @@ watch(() => s.shortcutsOpen, async (open) => {
             :aria-checked="s.director.collab" aria-label="协作模式"
             @click="s.director.collab = !s.director.collab"></button>
         </div>
+        <!-- 后台对话：开=连接断了这一轮也跑完（config/agentRunMode = 'background'）；关=旧行为（'followTab'） -->
+        <div class="flex items-center justify-between gap-3 py-2">
+          <div><strong class="text-[13px] text-ink">后台对话</strong>
+            <p class="text-xs text-ink-dim">开启后，对话在后台继续跑：离开或关闭浏览器也会进行，刷新后重新进入该对话能继续之前的对话流</p>
+          </div>
+          <button
+            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
+            :class="{ 'after:translate-x-4 bg-brand': agent.state.runMode === 'background' }" role="switch"
+            :aria-checked="agent.state.runMode === 'background'" aria-label="后台对话"
+            @click="agent.setRunMode(agent.state.runMode === 'background' ? 'followTab' : 'background')"></button>
+        </div>
+        <!-- 目标设置的默认预算（config/agentGoalDefaults）：点 + 选目标时取这里的值，0 = 不限 -->
+        <div class="flex items-center justify-between gap-3 py-2">
+          <div><strong class="text-[13px] text-ink">目标设置</strong>
+            <p class="text-xs text-ink-dim">点 + 选目标时用这里的默认预算；之后可以点目标标签单独改</p>
+          </div>
+          <input :value="agent.state.goalBudget" type="number" min="0" step="1000" placeholder="0 = 不限"
+            class="h-8 w-28 rounded-lg border border-line bg-veil px-2 text-xs text-ink outline-none"
+            aria-label="目标默认预算" @change="agentBudgetOnChange" />
+        </div>
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">积分预算管理</strong>
             <p class="text-xs text-ink-dim">开启后，当本项目累计消耗积分达到设置阈值时，会提醒你留意用量</p>
@@ -208,9 +727,9 @@ watch(() => s.shortcutsOpen, async (open) => {
           </div>
           <button
             class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': s.director.notify }" role="switch"
-            :aria-checked="s.director.notify" aria-label="浏览器通知"
-            @click="s.director.notify = !s.director.notify"></button>
+            :class="{ 'after:translate-x-4 bg-brand': agent.state.notify.browser }" role="switch"
+            :aria-checked="agent.state.notify.browser" aria-label="浏览器通知"
+            @click="agent.setNotify({ browser: !agent.state.notify.browser })"></button>
         </div>
         <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">通知声音</strong>
@@ -218,8 +737,9 @@ watch(() => s.shortcutsOpen, async (open) => {
           </div>
           <button
             class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-            :class="{ 'after:translate-x-4 bg-brand': s.director.sound }" role="switch" :aria-checked="s.director.sound"
-            aria-label="通知声音" @click="s.director.sound = !s.director.sound"></button>
+            :class="{ 'after:translate-x-4 bg-brand': agent.state.notify.sound }" role="switch"
+            :aria-checked="agent.state.notify.sound" aria-label="通知声音"
+            @click="agent.setNotify({ sound: !agent.state.notify.sound })"></button>
         </div>
       </div>
     </div>
@@ -233,33 +753,72 @@ watch(() => s.shortcutsOpen, async (open) => {
 </template>
 
 <style scoped>
-/* 缩放滑块：轨道/滑块用主题变量，亮暗都可读 */
-.hist-zoom::-webkit-slider-runnable-track {
-  height: 2px;
-  border-radius: 9999px;
-  background: var(--ui-hover-strong);
-}
+/* 自绘缩放滑块：整条轨道可拖（原生 range 只有 thumb 可拖，用户实测"拖不动"） */
+.hist-zoom-track { display: flex; align-items: center; }
+.hist-zoom-rail { position: absolute; left: 0; right: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-hover-strong); }
+.hist-zoom-fill { position: absolute; left: 0; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 9999px; background: var(--ui-accent, #0891b2); }
+.hist-zoom-thumb { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 9999px; background: var(--ui-ink); transform: translate(-50%, -50%); box-shadow: 0 0 0 3px var(--ui-panel, #fff); pointer-events: none; }
+.hist-zoom-track:hover .hist-zoom-thumb { box-shadow: 0 0 0 3px var(--ui-panel, #fff), 0 0 0 5px var(--ui-veil, rgb(0 0 0 / 0.06)); }
+/* 显示异常开关（checkbox 自绘小方块） */
+.hist-error-toggle { appearance: none; width: 14px; height: 14px; margin: 0; border: 1.5px solid var(--ui-ink-mute, #888); border-radius: 4px; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.hist-error-toggle:checked { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); }
+.hist-error-toggle:checked::after { content: ""; width: 8px; height: 8px; background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E"); }
+/* 批量模式勾选层：卡片左上角圆形勾选钮 */
+.hist-card-check { position: absolute; left: 6px; top: 6px; z-index: 5; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 9999px; border: 1.5px solid var(--ui-tip-ink, rgb(255 255 255 / 0.85)); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); color: transparent; cursor: pointer; backdrop-filter: blur(4px); transition: background .15s ease, border-color .15s ease; }
+.hist-card-check svg { width: 12px; height: 12px; }
+.hist-card-check.is-on { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent, #0891b2); color: var(--ui-on-accent, #fff); /* 主题色白名单: 勾选态对勾在主题色上的前景色 */ }
+/* 批量操作栏 */
+.hist-batch-bar { background: var(--ui-panel, #fff); }
 
-.hist-zoom::-webkit-slider-thumb {
-  margin-top: -3.5px;
-  width: 9px;
-  height: 9px;
-  appearance: none;
-  border-radius: 9999px;
-  background: var(--ui-ink);
-}
+/* 加载下一页指示 */
+.hist-loading { pointer-events: none; }
+</style>
 
-.hist-zoom::-moz-range-track {
-  height: 2px;
-  border-radius: 9999px;
-  background: var(--ui-hover-strong);
-}
-
-.hist-zoom::-moz-range-thumb {
-  width: 9px;
-  height: 9px;
-  border: 0;
-  border-radius: 9999px;
-  background: var(--ui-ink);
-}
+<!--
+  ===== masonry 瀑布流卡片样式（非 scoped）=====
+  卡片 DOM 由 createMasonryElement / buildMediaCard / buildErrorCard 用 JS 手工创建，
+  带不上 Vue scoped 的 data-v 属性 → scoped 样式对它们全部失效（实测：信息条 position
+  变 static、渐变条消失、音频卡布局崩）。这些类全部 hist- 前缀且只在 .hist-masonry
+  容器内出现，放开到全局不会与其它模块冲突。
+-->
+<style>
+.hist-masonry { min-height: 200px; }
+.hist-card { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--ui-line, rgba(128,128,128,.2)); background: var(--ui-veil, rgba(127,127,127,.08)); transition: border-color .16s ease, box-shadow .16s ease; }
+/* 强调色走规范青（ui-style-guide §2.1：全界面只有青一种强调色；--ui-brand 全仓未定义，会掉进蓝色兜底） */
+.hist-card:hover { border-color: var(--ui-accent, #0891b2); box-shadow: 0 2px 10px var(--ui-scrim, rgb(0 0 0 / 0.08)); }
+.hist-card-media { position: relative; width: 100%; overflow: hidden; cursor: pointer; background: var(--ui-scrim, rgb(0 0 0 / 0.06)); }
+.hist-card-media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 骨架屏：onload 后由 JS 移除 */
+.hist-card-skeleton { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; background: var(--ui-veil, rgba(127,127,127,.12)); }
+.hist-card-pulse { width: 40px; height: 40px; border-radius: 12px; background: var(--ui-hover, rgba(127,127,127,.25)); animation: hist-pulse 1.4s ease-in-out infinite; }
+@keyframes hist-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+/* 底部渐变 tag 行：类型 tag（左）+ 时间 tag（右），压在媒体底部 */
+.hist-card-tags { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 18px 8px 7px; background: linear-gradient(transparent, var(--ui-scrim, rgb(0 0 0 / 0.55))); pointer-events: none; }
+.hist-tag { display: inline-flex; align-items: center; gap: 3px; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 7px; border-radius: 999px; font-size: 10px; line-height: 1.5; color: var(--ui-tip-ink, #fff); background: var(--ui-scrim, rgb(0 0 0 / 0.35)); backdrop-filter: blur(4px); }
+.hist-tag--dim { color: color-mix(in srgb, var(--ui-tip-ink, #fff) 85%, transparent); background: transparent; padding-inline: 0; }
+/* 图片卡媒体底部渐变（tags 自带渐变即可，无需额外层） */
+/* 播放圆钮：音频/视频卡中央，hover 微放大 */
+.hist-card-play { position: absolute; left: 50%; top: 50%; z-index: 3; transform: translate(-50%, -50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ui-scrim, rgb(0 0 0 / 0.45)); color: var(--ui-tip-ink, #fff); font-size: 12px; backdrop-filter: blur(4px); transition: transform 0.16s ease; pointer-events: none; }
+.hist-card-media:hover .hist-card-play { transform: translate(-50%, -50%) scale(1.1); }
+/* 音频卡（静态装饰兜底）：柔和渐变底 + 波形竖条 */
+.hist-card-audio { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(135deg, var(--ui-accent-soft, rgb(8 145 178 / 0.12)), var(--ui-veil, rgb(127 127 127 / 0.1))); }
+.hist-card-wave { display: flex; align-items: center; justify-content: center; gap: 3px; width: 70%; height: 46%; }
+.hist-card-wave i { flex: 1 1 auto; max-width: 5px; height: 30%; border-radius: 2px; background: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent); }
+.hist-card-wave i:nth-child(3n) { height: 62%; }
+.hist-card-wave i:nth-child(4n) { height: 44%; }
+.hist-card-wave i:nth-child(5n) { height: 78%; }
+.hist-card-wave i:nth-child(7n) { height: 24%; }
+/* 音频注册件卡（上下布局）：组件舞台定高 96px 自适应宽，下方信息条 fixed 行高 —— 用户口径 */
+.hist-card-audio-plugin { position: relative; width: 100%; height: 96px; overflow: hidden; background: linear-gradient(135deg, var(--ui-accent-soft, rgb(8 145 178 / 0.1)), var(--ui-veil, rgb(127 127 127 / 0.08))); }
+.hist-card-audio-plugin .apv-root { height: 100%; }
+.hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
+.hist-card-video-plugin { position: relative; width: 100%; height: 180px; overflow: hidden; background: var(--ui-scrim, #000); /* 主题色白名单: 视频黑边属媒体底色，不随主题 */ }
+.hist-card-video-plugin .vpv-root { height: 100%; }
+.hist-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex: none; height: 30px; padding: 0 8px; }
+/* 异常卡：警示圆圈 + 「生成异常 · 无产物」说明 */
+.hist-card-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 130px; padding: 16px 12px; cursor: pointer; text-align: center; }
+.hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }
+.hist-card-fallback strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 600; color: var(--ui-ink, inherit); }
+.hist-card-fallback .hist-card-meta { font-size: 10px; color: var(--ui-ink-mute, #888); }
+.hist-card-fallback .hist-card-meta--danger { color: var(--ui-danger, #ef4444); }
 </style>

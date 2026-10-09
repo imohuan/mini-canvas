@@ -19,6 +19,8 @@ import DockArea from './components/areas/DockArea.vue'
 import LeftDrawer from './components/areas/LeftDrawer.vue'
 import AgentPanel from './components/areas/AgentPanel.vue'
 import ModalsArea from './components/areas/ModalsArea.vue'
+import AssetUploadHost from './components/AssetUploadHost.vue'
+import AssetUiSlot from './components/AssetUiSlot.vue'
 import { setReadyHost, useUi } from './composables/ui'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
@@ -68,6 +70,15 @@ const DEV = import.meta.env.DEV
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
+    /**
+     * 正在内联改名 / 正在拖拽时，Esc 只取消**那一件事**，不要顺带关掉整个抽屉。
+     *
+     * 为什么要挡（实测）：HTML5 拖拽的中途按 Esc 是「取消这次拖拽」的浏览器约定；
+     * 而改名输入框自己的 Esc 已经处理了。若宿主在这里照样 s.drawer = null，
+     * 用户按 Esc 取消拖拽的瞬间整个抽屉消失（数据还在、但看着像操作失败）。
+     * 这两类状态由各自组件声明（data 属性 = 跨组件的最小契约）。
+     */
+    if (document.querySelector('input[data-row-rename], input[data-manage-rename], [data-dragging="1"]')) return
     s.shortcutsOpen = false
     s.historyOpen = false
     s.drawer = null
@@ -170,6 +181,9 @@ onBeforeUnmount(() => {
                 <SlotHost slot="mini-map" />
               </div>
             </div>
+            <!-- 资产浮层（资产管理弹窗 / 全屏预览）+ 「引用被点了」事件的监听。
+                 必须待在渲染子树里（ctx.on 与主题注册件都只有子树内取得到），组件本身不占位。 -->
+            <AssetUiSlot />
           </template>
         </CanvasHost>
       </div>
@@ -184,6 +198,8 @@ onBeforeUnmount(() => {
 
     <LeftDrawer />
     <ModalsArea />
+    <!-- 「加入资产库」贴进来的图 → 复用左侧同一个上传弹窗（节点右键 / 多选上控制栏两条入口） -->
+    <AssetUploadHost />
 
   </CanvasShell>
 </template>

@@ -1,0 +1,256 @@
+*** Begin Patch
+*** Update File: D:/Code/Git/mini-canvas/packages/ui/src/components/areas/LeftDrawer.vue
+@@
+       <AxScrollArea v-if="isCanvasTab" class="min-h-0 flex-1" direction="y" body-class="px-2 pb-2">
+-        <template v-for="node in visibleTree" :key="node.id">
+-          <!-- 分组行（两种模式同款：44 高，箭头 + 文件夹图 + 名字；点整行展开/折叠） -->
+-          <div v-if="node.children" class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 0">
+-            <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
+-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" :class="ui.collapsed[node.id] ? '-rotate-90' : ''" class="transition-transform" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(3.4 5.8)" /></svg>
+-            </button>
+-            <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="(ui.collapsed[node.id] ? '展开 ' : '折叠 ') + node.name" :aria-expanded="!ui.collapsed[node.id]" @click="ui.collapsed[node.id] = !ui.collapsed[node.id]">
+-              <img :src="folderImg" alt="" class="h-[30px] w-[33px] flex-none object-contain" draggable="false" />
+-              <span class="min-w-0 flex-1 truncate pr-0.5 text-sm leading-[22px]">{{ node.name }}</span>
+-            </button>
+-            <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/grow:opacity-100 group-hover/grow:opacity-100">
+-              <AxDropdown placement="bottom-end" :offset="4">
+-                <template #trigger><button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="更多操作"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
+-                <template #default="{ close }">
+-                  <AxMenu>
+-                    <AxMenuItem @click="ui.renameNode(node.id, node.name); close()"><PencilIcon /> 重命名</AxMenuItem>
+-                    <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + node.name)"><TrashIcon /> 删除</AxMenuItem>
+-                  </AxMenu>
+-                </template>
+-              </AxDropdown>
+-              <button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到分组 ' + node.name" @click="ui.locateNode(node.id)"><LibIcon name="locate" :size="14" /></button>
+-            </span>
+-          </div>
+-
+-          <!-- 分组内容 -->
+-          <template v-if="node.children && !ui.collapsed[node.id]">
+-            <!-- 列表模式：缩进行 -->
+-            <template v-if="viewMode === 'list'">
+-              <div v-for="child in node.children" :key="child.id" class="group/row relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 24px">
+-                <span class="size-6 flex-none" aria-hidden="true"></span>
+-                <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)">
+-                <span class="relative grid size-9 flex-none place-items-center overflow-hidden rounded-lg bg-thumb text-ink-mute">
+-                  <img v-if="child.thumb" :src="child.thumb" alt="" class="h-full w-full object-cover" />
+-                  <template v-else-if="child.video">
+-                      <video :src="child.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
+-                      <span class="absolute grid size-5 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)]" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
+-                    </template>
+-                    <component v-else :is="lucideOf(child.icon)" :size="16" />
+-                  </span>
+-                  <span class="min-w-0 flex-1 truncate text-sm leading-[22px]">{{ child.name }}</span>
+-                </button>
+-                <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+-                  <AxDropdown placement="bottom-end" :offset="4">
+-                    <template #trigger><button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'更多操作 ' + child.name"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
+-                    <template #default="{ close }">
+-                      <AxMenu>
+-                        <AxMenuItem @click="ui.renameNode(child.id, child.name); close()"><PencilIcon /> 重命名</AxMenuItem>
+-                        <AxMenuItem @click="close(); ui.showToast('已复制 ' + child.name)"><CopyIcon /> 复制</AxMenuItem>
+-                        <AxMenuItem @click="close(); ui.showToast('已添加到 Agent')"><WandIcon /> 添加到 Agent</AxMenuItem>
+-                        <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + child.name)"><TrashIcon /> 删除</AxMenuItem>
+-                      </AxMenu>
+-                    </template>
+-                  </AxDropdown>
+-                  <button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"><LibIcon name="locate" :size="14" /></button>
+-                </span>
+-              </div>
+-            </template>
+-
+-            <!-- 宫格模式：3 列卡片（照图 1：卡片 120 宽 圆角16 缩略图方形圆角12 名字 13px 在下方） -->
+-            <div v-else class="grid grid-cols-3 gap-0.5 pt-0.5" style="padding-left: 24px">
+-              <div v-for="child in node.children" :key="child.id" class="group/cell relative flex min-w-0 flex-col gap-2 rounded-[16px] p-1 pb-3 transition-colors hover:bg-hover-soft">
+-                <button class="absolute inset-0 z-10 rounded-[16px]" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"></button>
+-                <div class="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-thumb-soft transition-opacity">
+-                  <img v-if="child.thumb" :src="child.thumb" alt="" class="h-full w-full object-cover" />
+-                  <!-- 视频没有海报图：<video> 出首帧；出不来出视频图标（不拿 mp4 塞 <img> 裂图） -->
+-                  <video v-else-if="child.video" :src="child.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
+-                  <span class="absolute inset-0 flex items-center justify-center overflow-hidden rounded-xl text-ink-mute">
+-                    <span v-if="!child.thumb" class="flex w-[26%] shrink-0 items-center justify-center"><component :is="child.video ? VideoIcon : lucideOf(child.icon)" :size="29" :stroke-width="1" /></span>
+-                  </span>
+-                  <span v-if="child.video" class="absolute left-1/2 top-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)] backdrop-blur-sm" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
+-                </div>
+-                <span class="truncate px-0.5 text-[13px] leading-none text-ink">{{ child.name }}</span>
+-                <span class="absolute right-1 top-1 z-20 flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/cell:opacity-100 group-hover/cell:opacity-100">
+-                  <AxDropdown placement="bottom-end" :offset="4">
+-                    <template #trigger><button class="grid size-6 place-items-center rounded-lg bg-panel/90 text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'更多操作 ' + child.name"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
+-                    <template #default="{ close }">
+-                      <AxMenu>
+-                        <AxMenuItem @click="ui.renameNode(child.id, child.name); close()"><PencilIcon /> 重命名</AxMenuItem>
+-                        <AxMenuItem @click="close(); ui.showToast('已复制 ' + child.name)"><CopyIcon /> 复制</AxMenuItem>
+-                        <AxMenuItem @click="close(); ui.showToast('已添加到 Agent')"><WandIcon /> 添加到 Agent</AxMenuItem>
+-                        <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + child.name)"><TrashIcon /> 删除</AxMenuItem>
+-                      </AxMenu>
+-                    </template>
+-                  </AxDropdown>
+-                  <button class="grid size-6 place-items-center rounded-lg bg-panel/90 text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"><LibIcon name="locate" :size="14" /></button>
+-                </span>
+-              </div>
+-            </div>
+-          </template>
+-
+-          <!-- 顶级叶子节点 -->
+-          <template v-if="!node.children">
+-            <div v-if="viewMode === 'list'" class="group/row relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" style="padding-left: 0">
+-              <span class="size-6 flex-none" aria-hidden="true"></span>
+-              <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="'定位到节点 ' + node.name" @click="ui.locateNode(node.id)">
+-                <span class="relative grid size-9 flex-none place-items-center overflow-hidden rounded-lg bg-thumb text-ink-mute">
+-                  <img v-if="node.thumb" :src="node.thumb" alt="" class="h-full w-full object-cover" />
+-                  <template v-else-if="node.video">
+-                    <video :src="node.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
+-                    <span class="absolute grid size-5 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)]" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
+-                  </template>
+-                  <component v-else :is="lucideOf(node.icon)" :size="16" />
+-                </span>
+-                <span class="min-w-0 flex-1 truncate text-sm leading-[22px]">{{ node.name }}</span>
+-              </button>
+-              <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100">
+-                <button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到节点 ' + node.name" @click="ui.locateNode(node.id)"><LibIcon name="locate" :size="14" /></button>
+-              </span>
+-            </div>
+-            <div v-else class="inline-block w-1/3">
+-              <div class="group/cell relative m-0.5 flex min-w-0 flex-col gap-2 rounded-[16px] p-1 pb-3 transition-colors hover:bg-hover-soft">
+-                <button class="absolute inset-0 z-10 rounded-[16px]" :aria-label="'定位到节点 ' + node.name" @click="ui.locateNode(node.id)"></button>
+-                <div class="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-thumb-soft">
+-                  <img v-if="node.thumb" :src="node.thumb" alt="" class="h-full w-full object-cover" />
+-                  <!-- 视频没有海报图：用 <video> 显示首帧；仍然出不来就出视频图标（不再拿 mp4 塞 <img> 裂图） -->
+-                  <video v-else-if="node.video" :src="node.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
+-                  <span v-else-if="node.video" class="absolute inset-0 flex items-center justify-center rounded-xl text-ink-mute"><span class="flex w-[26%] items-center justify-center"><VideoIcon :size="29" :stroke-width="1" /></span></span>
+-                  <span v-else class="absolute inset-0 flex items-center justify-center rounded-xl text-ink-mute"><span class="flex w-[26%] items-center justify-center"><component :is="lucideOf(node.icon)" :size="29" :stroke-width="1" /></span></span>
+-                  <!-- 播放角标：视频卡片的标识（与生成历史卡同款语义；鼠标交互留给上层按钮，这里纯装饰） -->
+-                  <span v-if="node.video" class="absolute left-1/2 top-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)] backdrop-blur-sm" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
+-                </div>
+-                <span class="truncate px-0.5 text-[13px] leading-none text-ink">{{ node.name }}</span>
+-              </div>
+-            </div>
+-          </template>
+-        </template>
++        <template v-for="block in canvasBlocks" :key="block.key">
++          <!-- 分组行（任意层）：depth 决定缩进；行内改名与资产树同款（用户口径 2026-10-08） -->
++          <div v-if="block.kind === 'group'" class="group/grow relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" :style="{ paddingLeft: block.depth * 24 + 'px' }">
++            <button class="grid size-6 flex-none place-items-center rounded-lg text-ink/85" :aria-label="(block.collapsed ? '展开 ' : '折叠 ') + block.name" :aria-expanded="!block.collapsed" @click="ui.collapsed[block.id] = !ui.collapsed[block.id]">
++              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" :class="block.collapsed ? '-rotate-90' : ''" class="transition-transform" aria-hidden="true"><path d="M6.2.12a.4.4 0 0 1 .56 0l.43.42a.4.4 0 0 1 0 .57L4.15 4.15a.7.7 0 0 1-1 0L.13 1.1a.4.4 0 0 1 0-.57L.54.12a.4.4 0 0 1 .57 0l2.54 2.54z" fill="currentColor" transform="translate(3.4 5.8)" /></svg>
++            </button>
++            <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="(block.collapsed ? '展开 ' : '折叠 ') + block.name" :aria-expanded="!block.collapsed" @click="ui.collapsed[block.id] = !ui.collapsed[block.id]">
++              <img :src="folderImg" alt="" class="h-[30px] w-[33px] flex-none object-contain" draggable="false" />
++              <!-- 行内改名（与资产树同一套口径：受控输入框 / 回车或失焦提交 / Esc 只退改名不关抽屉） -->
++              <input
++                v-if="renamingNodeId === block.id"
++                v-model="renamingNodeName"
++                data-canvas-rename
++                class="h-7 min-w-0 flex-1 rounded-md border border-brand/60 bg-chip px-1.5 text-[13px] text-ink focus:outline-none"
++                aria-label="分组名称"
++                @click.stop
++                @keydown.enter="commitRenameNode()"
++                @keydown.esc.stop="cancelRenameNode()"
++                @blur="commitRenameNode()"
++              />
++              <span v-else class="min-w-0 flex-1 truncate pr-0.5 text-sm leading-[22px]">{{ block.name }}</span>
++            </button>
++            <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/grow:opacity-100 group-hover/grow:opacity-100">
++              <AxDropdown placement="bottom-end" :offset="4">
++                <template #trigger><button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="更多操作"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
++                <template #default="{ close }">
++                  <AxMenu>
++                    <AxMenuItem @click="startRenameNode(block.id, block.name); close()"><PencilIcon /> 重命名</AxMenuItem>
++                    <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + block.name)"><TrashIcon /> 删除</AxMenuItem>
++                  </AxMenu>
++                </template>
++              </AxDropdown>
++              <button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到分组 ' + block.name" @click="ui.locateNode(block.id)"><LibIcon name="locate" :size="14" /></button>
++            </span>
++          </div>
++
++          <!-- 同层节点段（任意层）：列表 = 缩进行；宫格 = 一个三列网格（每层各自成网格，缩进不打架） -->
++          <template v-else>
++            <template v-if="viewMode === 'list'">
++              <div v-for="child in block.nodes" :key="child.id" class="group/row relative flex h-11 w-full items-center gap-0.5 rounded-[10px] py-1 pr-1 transition-colors hover:bg-hover" :style="{ paddingLeft: block.depth * 24 + 'px' }">
++                <span class="size-6 flex-none" aria-hidden="true"></span>
++                <button class="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg text-left" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)">
++                  <span class="relative grid size-9 flex-none place-items-center overflow-hidden rounded-lg bg-thumb text-ink-mute">
++                    <img v-if="child.thumb" :src="child.thumb" alt="" class="h-full w-full object-cover" />
++                    <template v-else-if="child.video">
++                      <video :src="child.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
++                      <span class="absolute grid size-5 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)]" aria-hidden="true"><svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
++                    </template>
++                    <component v-else :is="lucideOf(child.icon)" :size="16" />
++                  </span>
++                  <input
++                    v-if="renamingNodeId === child.id"
++                    v-model="renamingNodeName"
++                    data-canvas-rename
++                    class="h-7 min-w-0 flex-1 rounded-md border border-brand/60 bg-chip px-1.5 text-[13px] text-ink focus:outline-none"
++                    aria-label="节点名称"
++                    @click.stop
++                    @keydown.enter="commitRenameNode()"
++                    @keydown.esc.stop="cancelRenameNode()"
++                    @blur="commitRenameNode()"
++                  />
++                  <span v-else class="min-w-0 flex-1 truncate text-sm leading-[22px]">{{ child.name }}</span>
++                </button>
++                <span class="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-focus-within/row:opacity-100 group-hover/row:opacity-100">
++                  <AxDropdown placement="bottom-end" :offset="4">
++                    <template #trigger><button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'更多操作 ' + child.name"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
++                    <template #default="{ close }">
++                      <AxMenu>
++                        <AxMenuItem @click="startRenameNode(child.id, child.name); close()"><PencilIcon /> 重命名</AxMenuItem>
++                        <AxMenuItem @click="close(); ui.showToast('已复制 ' + child.name)"><CopyIcon /> 复制</AxMenuItem>
++                        <AxMenuItem @click="close(); ui.showToast('已添加到 Agent')"><WandIcon /> 添加到 Agent</AxMenuItem>
++                        <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + child.name)"><TrashIcon /> 删除</AxMenuItem>
++                      </AxMenu>
++                    </template>
++                  </AxDropdown>
++                  <button class="grid size-6 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"><LibIcon name="locate" :size="14" /></button>
++                </span>
++              </div>
++            </template>
++
++            <!-- 宫格模式：3 列卡片（照图 1：卡片 120 宽 圆角16 缩略图方形圆角12 名字 13px 在下方） -->
++            <div v-else class="grid grid-cols-3 gap-0.5 pt-0.5" :style="{ paddingLeft: block.depth * 24 + 'px' }">
++              <div v-for="child in block.nodes" :key="child.id" class="group/cell relative flex min-w-0 flex-col gap-2 rounded-[16px] p-1 pb-3 transition-colors hover:bg-hover-soft">
++                <!-- 改名中收起整卡点击层，输入框才接得到鼠标 -->
++                <button v-if="renamingNodeId !== child.id" class="absolute inset-0 z-10 rounded-[16px]" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"></button>
++                <div class="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-thumb-soft transition-opacity">
++                  <img v-if="child.thumb" :src="child.thumb" alt="" class="h-full w-full object-cover" />
++                  <!-- 视频没有海报图：<video> 出首帧；出不来出视频图标（不拿 mp4 塞 <img> 裂图） -->
++                  <video v-else-if="child.video" :src="child.video" class="h-full w-full object-cover" muted playsinline preload="metadata" aria-hidden="true"></video>
++                  <span class="absolute inset-0 flex items-center justify-center overflow-hidden rounded-xl text-ink-mute">
++                    <span v-if="!child.thumb" class="flex w-[26%] shrink-0 items-center justify-center"><component :is="child.video ? VideoIcon : lucideOf(child.icon)" :size="29" :stroke-width="1" /></span>
++                  </span>
++                  <span v-if="child.video" class="absolute left-1/2 top-1/2 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[var(--ui-scrim)] text-[var(--ui-tip-ink)] backdrop-blur-sm" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg></span>
++                </div>
++                <input
++                  v-if="renamingNodeId === child.id"
++                  v-model="renamingNodeName"
++                  data-canvas-rename
++                  class="h-7 min-w-0 rounded-md border border-brand/60 bg-chip px-1.5 text-[13px] text-ink focus:outline-none"
++                  aria-label="节点名称"
++                  @click.stop
++                  @keydown.enter="commitRenameNode()"
++                  @keydown.esc.stop="cancelRenameNode()"
++                  @blur="commitRenameNode()"
++                />
++                <span v-else class="truncate px-0.5 text-[13px] leading-none text-ink">{{ child.name }}</span>
++                <span class="absolute right-1 top-1 z-20 flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/cell:opacity-100 group-hover/cell:opacity-100">
++                  <AxDropdown placement="bottom-end" :offset="4">
++                    <template #trigger><button class="grid size-6 place-items-center rounded-lg bg-panel/90 text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'更多操作 ' + child.name"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="3" cy="8" r="1.4" fill="currentColor" /><circle cx="8" cy="8" r="1.4" fill="currentColor" /><circle cx="13" cy="8" r="1.4" fill="currentColor" /></svg></button></template>
++                    <template #default="{ close }">
++                      <AxMenu>
++                        <AxMenuItem @click="startRenameNode(child.id, child.name); close()"><PencilIcon /> 重命名</AxMenuItem>
++                        <AxMenuItem @click="close(); ui.showToast('已复制 ' + child.name)"><CopyIcon /> 复制</AxMenuItem>
++                        <AxMenuItem @click="close(); ui.showToast('已添加到 Agent')"><WandIcon /> 添加到 Agent</AxMenuItem>
++                        <AxMenuItem danger @click="close(); ui.showToast('已删除 ' + child.name)"><TrashIcon /> 删除</AxMenuItem>
++                      </AxMenu>
++                    </template>
++                  </AxDropdown>
++                  <button class="grid size-6 place-items-center rounded-lg bg-panel/90 text-ink-dim transition-colors hover:bg-hover hover:text-ink" :aria-label="'定位到节点 ' + child.name" @click="ui.locateNode(child.id)"><LibIcon name="locate" :size="14" /></button>
++                </span>
++              </div>
++            </div>
++          </template>
++        </template>
+       </AxScrollArea>
+*** End Patch

@@ -28,6 +28,14 @@ export interface ViewportBackend {
   fitView(padding?: number): void
   setCenter(x: number, y: number, zoom?: number): void
   setViewport(v: ViewportState): void
+  /**
+   * 带过渡的视口定位（**只给"聚焦/取景"这类一次性动作**用）。
+   *
+   * 为什么单独开一条而不是给 setViewport 加 duration：setViewport 还服务"跟手"场景
+   * （小地图拖拽、自动布局逐帧写视口）—— 那里每帧都重启一次补间会严重卡顿（老版实测），
+   * 所以那条必须即时。这里把"要不要动画"变成调用方的选择，两条路互不影响。
+   */
+  animateViewport?(v: ViewportState, durationMs?: number): void
   /** 拖拽中把单节点视觉位置写进 VueFlow（不触发 store）；可选（假后端可省） */
   updateNodeVisual?(id: string, position: { x: number; y: number }): void
   /** 读节点当前渲染位置（含拖动中未落盘位移）；可选（假后端可省） */
@@ -94,6 +102,17 @@ export class ViewportService implements ViewportContract {
     this.requireBackend()?.setViewport(v)
   }
 
+  /**
+   * 带过渡的视口定位（聚焦取景用）。后端没实现这条（假后端/老装配）时**退回即时**，
+   * 行为不退化 —— 只是没有补间动画。
+   */
+  animateViewport(v: ViewportState, durationMs = 320): void {
+    const backend = this.requireBackend()
+    if (!backend) return
+    if (backend.animateViewport) backend.animateViewport(v, durationMs)
+    else backend.setViewport(v)
+  }
+
   getRootEl(): HTMLElement | null {
     return this.requireBackend()?.getRootEl?.() ?? null
   }
@@ -110,7 +129,5 @@ export class ViewportService implements ViewportContract {
     return this.requireBackend()?.queryNodeEl?.(nodeId) ?? null
   }
 }
-
-
 
 

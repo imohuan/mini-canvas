@@ -63,23 +63,23 @@ async function main(): Promise<void> {
   const toolNames = listed.tools.map((t) => t.name).sort()
   check(
     '工具面里有画布读写四件套',
-    ['canvas.batch_edges', 'canvas.batch_nodes', 'canvas.get', 'canvas.overview'].every((n) => toolNames.includes(n)),
+    ['canvas_batch_edges', 'canvas_batch_nodes', 'canvas_get', 'canvas_overview'].every((n) => toolNames.includes(n)),
     toolNames,
   )
   check(
     '工具面里有资源上传（AI 要往画布放图，不能只能建空节点）',
-    ['resource.upload', 'resource.list', 'canvas.add_image'].every((n) => toolNames.includes(n)),
+    ['resource_upload', 'resource_list', 'canvas_add_image'].every((n) => toolNames.includes(n)),
     toolNames,
   )
 
   // ==================== AI 经 MCP 改画布 ====================
   console.log('\n--- AI 经 MCP 建节点 + 连线 ---')
-  const before = parseToolResult(await client.callTool({ name: 'canvas.overview', arguments: {} }))
+  const before = parseToolResult(await client.callTool({ name: 'canvas_overview', arguments: {} }))
   check('空画布起始状态', before.nodeCount === 0 && before.edgeCount === 0, before)
 
   const addRes = parseToolResult(
     await client.callTool({
-      name: 'canvas.batch_nodes',
+      name: 'canvas_batch_nodes',
       arguments: {
         add: [
           { type: 'text', id: 'ai-a', position: { x: 80, y: 80 }, data: { text: 'AI 写的第一段' } },
@@ -92,14 +92,14 @@ async function main(): Promise<void> {
 
   const edgeRes = parseToolResult(
     await client.callTool({
-      name: 'canvas.batch_edges',
+      name: 'canvas_batch_edges',
       arguments: { add: [{ source: 'ai-a', target: 'ai-b' }] },
     }),
   )
   check('AI 经 MCP 连了一条线', edgeRes.ok === true && edgeRes.added.length === 1, edgeRes)
 
-  const got = parseToolResult(await client.callTool({ name: 'canvas.get', arguments: {} }))
-  check('canvas.get 读回来节点与连线齐全', got.nodeCount === 2 && got.edgeCount === 1, {
+  const got = parseToolResult(await client.callTool({ name: 'canvas_get', arguments: {} }))
+  check('canvas_get 读回来节点与连线齐全', got.nodeCount === 2 && got.edgeCount === 1, {
     nodeCount: got.nodeCount,
     edgeCount: got.edgeCount,
   })
@@ -112,14 +112,18 @@ async function main(): Promise<void> {
   writeFileSync(pngPath, pngBytes)
 
   const uploadRes = parseToolResult(
-    await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }),
+    await client.callTool({ name: 'resource_upload', arguments: { path: pngPath } }),
   )
-  check('resource.upload 从本地路径存下资源，返回画布内引用', uploadRes.ok === true && String(uploadRes.ref).startsWith('res:'), uploadRes)
+  check(
+    'resource_upload 从本地路径存下资源，返回同源 URL',
+    uploadRes.ok === true && String(uploadRes.url).startsWith('/api/canvases/default/resources/'),
+    uploadRes,
+  )
   check('返回的 mime 按扩展名识别正确', uploadRes.mime === 'image/png', { mime: uploadRes.mime })
 
   // 同一个文件再传一次 → 同一个引用（内容去重）
-  const again = parseToolResult(await client.callTool({ name: 'resource.upload', arguments: { path: pngPath } }))
-  check('同内容重复上传返回同一个引用（去重）', again.ref === uploadRes.ref, { first: uploadRes.ref, second: again.ref })
+  const again = parseToolResult(await client.callTool({ name: 'resource_upload', arguments: { path: pngPath } }))
+  check('同内容重复上传返回同一个地址（去重）', again.url === uploadRes.url, { first: uploadRes.url, second: again.url })
 
   // 服务器上真能取回这张图（url 是按当前画布拼出来的可展示地址）
   const fetched = await fetch(url + uploadRes.url)
@@ -133,20 +137,28 @@ async function main(): Promise<void> {
   // add_image：一步上传 + 建节点
   const addImage = parseToolResult(
     await client.callTool({
-      name: 'canvas.add_image',
+      name: 'canvas_add_image',
       arguments: { path: pngPath, position: { x: 900, y: 80 }, label: 'AI 放的图' },
     }),
   )
-  check('canvas.add_image 一步上传并建节点', addImage.ok === true && typeof addImage.nodeId === 'string', addImage)
-  const withImage = parseToolResult(await client.callTool({ name: 'canvas.get', arguments: {} }))
+  check('canvas_add_image 一步上传并建节点', addImage.ok === true && typeof addImage.nodeId === 'string', addImage)
+  const withImage = parseToolResult(await client.callTool({ name: 'canvas_get', arguments: {} }))
   const imgNode = withImage.nodes.find((n: { id: string }) => n.id === addImage.nodeId)
-  check('新节点是 image 类型且指向画布资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.ref, {
+  check('新节点是 image 类型且指向画布资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.url, {
     type: imgNode?.type,
     imageUrl: imgNode?.data?.imageUrl,
   })
 
-  const resList = parseToolResult(await client.callTool({ name: 'resource.list', arguments: {} }))
-  check('resource.list 列出了已存资源', resList.count >= 1 && typeof resList.resources[0] === 'string', resList)
+  const resList = parseToolResult(await client.callTool({ name: 'resource_list', arguments: {} }))
+  // 形状：{ name, mime, kind, url } —— 前端按 kind 决定怎么展示（音频不能塞进 <img>，那是裂图）
+  check(
+    'resource_list 列出了已存资源（带类型与访问地址）',
+    resList.count >= 1 &&
+      typeof resList.resources[0]?.name === 'string' &&
+      ['image', 'video', 'audio', 'other'].includes(resList.resources[0]?.kind) &&
+      String(resList.resources[0]?.url ?? '').startsWith('/api/canvases/'),
+    resList,
+  )
 
   // 磁盘上确实落了（不是只在内存里）
   const disk = diskState(dataDir)
@@ -205,7 +217,7 @@ async function main(): Promise<void> {
   check('浏览器里建了一个节点', webCreated.after === webCreated.before + 1, webCreated)
   await sleep(2500) // 等网页端的防抖落盘 + 云端同步
 
-  const afterWeb = parseToolResult(await client.callTool({ name: 'canvas.overview', arguments: {} }))
+  const afterWeb = parseToolResult(await client.callTool({ name: 'canvas_overview', arguments: {} }))
   check('★ MCP 读得到浏览器刚建的那个节点（同一份数据）', afterWeb.nodeCount === 4, afterWeb)
 
   const errs = page.consoleErrors.filter((e) => !/favicon/i.test(e))
@@ -221,7 +233,7 @@ async function main(): Promise<void> {
   const { url: url2 } = await srv2.start()
   const client2 = new Client({ name: 'cloud-e2e-2', version: '1.0.0' })
   await client2.connect(new StreamableHTTPClientTransport(new URL(`${url2}/mcp`)))
-  const afterRestart = parseToolResult(await client2.callTool({ name: 'canvas.overview', arguments: {} }))
+  const afterRestart = parseToolResult(await client2.callTool({ name: 'canvas_overview', arguments: {} }))
   check('★ 重启后画布还在（AI 的改动真的落了盘）', afterRestart.nodeCount === 4, afterRestart)
   await client2.close()
   srv2.stop()

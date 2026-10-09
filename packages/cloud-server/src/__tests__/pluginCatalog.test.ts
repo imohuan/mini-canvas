@@ -146,6 +146,39 @@ describe('插件管理清单 /plugin-catalog.json', () => {
       await fs.rm(pluginsDir, { recursive: true, force: true })
     }
   })
+
+  it('冷启动自带插件（builtin）不进 /plugin-manifest.json（data: URL import 裸模块名必炸）', async () => {
+    // 实测背景：plugin-bottom-bar（builtin + ESM 产物）被列进 manifest，应用冷启动
+    // install({ url }) 走 import(data:text/javascript)，产物里 external 的
+    // "@mini-canvas/canvas-base" 在 data: URL 里解析不了 → 每次开页 console 报
+    // "Failed to resolve module specifier"。它由 APP_PLUGINS 冷启动装配，清单不该列它。
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
+    const pluginsDir = await makePluginsDir({
+      'plugin-builtin-esm': { file: 'plugin-builtin-esm.js', content: 'import { x } from "@mini-canvas/canvas-base";export const name = "b";export { x };' },
+      'plugin-builtin-umd': { file: 'plugin-builtin-umd.js', content: UMD('MiniCanvasPluginBuiltinUmd') },
+      'plugin-ext-esm': { file: 'plugin-ext-esm.js', content: 'export const name = "ext";' },
+    })
+    await fs.writeFile(
+      path.join(pluginsDir, 'plugin-builtin-esm', 'package.json'),
+      JSON.stringify({ name: '@mini-canvas/plugin-builtin-esm', miniCanvas: { builtin: true, pluginName: 'b-esm' } }),
+    )
+    await fs.writeFile(
+      path.join(pluginsDir, 'plugin-builtin-umd', 'package.json'),
+      JSON.stringify({ name: '@mini-canvas/plugin-builtin-umd', miniCanvas: { builtin: true, pluginName: 'b-umd' } }),
+    )
+    const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
+    try {
+      const manifest = (await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()) as {
+        plugins: Array<{ id: string }>
+      }
+      // builtin 两个都不列；普通 ESM 插件照列
+      expect(manifest.plugins.map((p) => p.id)).toEqual(['plugin-ext-esm'])
+    } finally {
+      s.stop()
+      await fs.rm(dir, { recursive: true, force: true })
+      await fs.rm(pluginsDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('前后端成对插件（Task 7）', () => {

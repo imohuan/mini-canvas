@@ -19,7 +19,7 @@
 //
 // 其余 props（placement / offset / menuWidth / trigger / layout…）与主题默认件逐条对齐，
 // 调用方换实现不用改代码。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import {
   claimDropdownExclusive,
@@ -28,6 +28,7 @@ import {
 } from '@mini-canvas/canvas-render'
 import { useFloating } from './hooks/useFloating'
 import { useTeleportTarget } from './hooks/useTeleportTarget'
+import { isInFloatingGroup } from './hooks/floatingGroup'
 
 export type DropdownTrigger = 'click' | 'hover' | 'contextmenu'
 
@@ -66,6 +67,22 @@ const props = withDefaults(
      * （用户口径：上下是 flex 布局，只有下面内容滚动的地方才显示滚动条）。
      */
     layout?: 'overlay-scroll' | 'inner-scroll'
+    /**
+     * 把它当成**另一个浮层的子浮层**（父浮层传来的组链 + 开关状态）。
+     *
+     * 用户口径（2026-10-09）：「触发这个菜单的时候，你的画布的这个菜单消失了」——
+     * 画布下拉里点行尾「⋯」弹操作菜单，**列表本身要留着**，两个浮层并排。
+     *
+     * 为什么需要这个开关（默认行为是「同屏只留一个浮层」）：
+     * - 打开时不 claim 排他 —— claim 会把父浮层（列表）当场关掉，而它正是要留着的那个；
+     * - 面板的组链写成「父链 + 自己」，于是父浮层的「点外关闭」会把子面板算作**组内**，不关父；
+     *   反过来，点子浮层自己的判定仍只看自己的 id：点父列表（换画布那一块）只关子菜单，
+     *   点真正的浮层之外两个都关。
+     * - 父浮层关掉时子浮层跟着关（不然会剩一个没有爹的孤儿菜单挂在屏幕上）。
+     *
+     * 传 undefined = 普通（独立）下拉，行为完全不变。
+     */
+    nestedIn?: () => { chain: string; open: boolean } | undefined
   }>(),
   {
     modelValue: false,
@@ -83,6 +100,7 @@ const props = withDefaults(
     arrow: true,
     menuRole: 'menu',
     layout: 'overlay-scroll',
+    nestedIn: undefined,
   },
 )
 
@@ -93,6 +111,57 @@ const containerRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const closeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+/**
+ * 右键打开用的**鼠标点锚点**（null = 用默认的触发器锚点）。
+ *
+ * 为什么需要：同一份菜单既要从「⋯」按钮点开（锚在按钮上），也要能被行的右键唤出（锚在鼠标点）。
+ * 不这么做就得在两处各绘一次浮层 —— 那正是用户要求避免的重复。
+ * 用一个 0×0 的行内元素当锚：它跟着浮层一起 living，触发的 autoUpdate / 翻转 / 箭头逻辑与
+ * 真实触发器完全一致，不需要给 floating-ui 喂虚拟元素（那会破坏 whileElementsMounted 的自动更新）。
+ */
+const contextAnchor = ref<HTMLElement | null>(null)
+/** 右键唤出的鼠标点（null = 没有，走默认触发器锚点） */
+const contextPoint = ref<{ x: number; y: number } | null>(null)
+/** 浮层锚点：右键唤出时用鼠标点锚，否则用触发器 */
+const floatAnchorRef = computed<HTMLElement | null>(() => (contextPoint.value ? contextAnchor.value : triggerRef.value))
+/** 右键坐标锚点的定位（0×0，贴在鼠标点上） */
+const contextAnchorStyle = computed<Record<string, string | undefined>>(() =>
+  contextPoint.value
+    ? { position: 'fixed', left: contextPoint.value.x + 'px', top: contextPoint.value.y + 'px', width: '0', height: '0', pointerEvents: 'none' }
+    : { display: 'none' },
+)
+
+/**
+ * 在鼠标点处打开（右键菜单用）：把锚点挪到该坐标，再按常规流程开。
+ * 位置锚是真实 DOM（0×0），所以翻转 / 防溢出 / 箭头 / autoUpdate 全部照旧生效。
+ */
+function openAtPoint(x: number, y: number): void {
+  contextPoint.value = { x, y }
+  open()
+  // 已经开着时（行尾「⋯」从这一行换到另一行）锚点坐标变了，必须重算一次：
+  // autoUpdate 只在**参考元素自己**移动/缩放时触发，光改 left/top 不触发重定位
+  // （实测：换行后菜单留在原处）。
+  void nextTick(() => updatePosition())
+}
+
+/**
+ * 本浮层的组 id（写进面板的 data-floating-chain，供子浮层续链 + 点外判定用）。
+ * 二级/三级菜单的面板链会写成「父链 + 自己的 id」，所以任一级判定「是不是点在我这一组里」
+ * 都只需看链里有没有自己的 id（见 hooks/floatingGroup.ts）。
+ */
+const chainId = 'dd-' + Math.random().toString(36).slice(2)
+
+// ===== 子浮层（挂在另一个浮层旁边）=====
+const nestedCtx = computed(() => props.nestedIn?.())
+/** 父浮层的组链（空 = 这不是子浮层） */
+const parentChain = computed(() => nestedCtx.value?.chain ?? '')
+const isNested = computed(() => parentChain.value !== '')
+/**
+ * 写进面板的组链：子浮层 = 「父链 + 自己」。
+ * 父浮层的点外判定读到的就是这条链 —— 含父 id 就说明「这点还在我这一组里」，父菜单不关。
+ */
+const panelChain = computed(() => (isNested.value ? parentChain.value + ' ' + chainId : chainId))
 
 // 支持无 v-model 的 uncontrolled 用法
 const isOpen = ref(props.modelValue)
@@ -109,14 +178,20 @@ watch(
  * 真要贴左/右缘的调用方显式传 align="start" / "end"。
  */
 const effectiveAlign = computed<'start' | 'center' | 'end'>(() => {
+  // 右键唤出：锚点就是光标本身（0×0），菜单左上角贴着光标展开 —— 这是右键菜单的通行手感。
+  // （只有这时才强制 start；其它情况仍按 props.align，保持既有下拉的对齐行为不变）
+  if (contextPoint.value) return 'start'
   if (props.align && props.align !== 'auto') return props.align
   return 'center'
 })
 
-const { floatingStyles, isPositioned, placement } = useFloating(triggerRef, menuRef, {
+/** 右键唤出的浮层偏移：0（菜单直接贴光标），其余沿用 props.offset */
+const effectiveOffset = computed(() => (contextPoint.value ? 0 : props.offset))
+
+const { floatingStyles, isPositioned, placement, updatePosition } = useFloating(floatAnchorRef, menuRef, {
   placement: computed(() => props.placement.split('-')[0] ?? 'bottom'),
   align: effectiveAlign,
-  offset: computed(() => props.offset),
+  offset: effectiveOffset,
   matchWidth: computed(() => props.matchWidth),
 })
 
@@ -154,8 +229,16 @@ const arrowStyle = computed(() => {
     cx = ml + mw
     cy = mt + mh / 2
   } else {
-    // bottom = 箭头贴菜单**上缘**；top = 贴**下缘**。横向一律居中
-    cx = ml + mw / 2
+    // bottom = 箭头贴菜单**上缘**；top = 贴**下缘**。
+    // 横向位置**跟 align 走**（原先写死取菜单中线，左对齐时菜单左移、箭头还留在中间，看着"没对齐"）：
+    //   start  → 贴菜单左缘内缩（箭头尖对着触发器的左对齐边）
+    //   end    → 贴菜单右缘内缩
+    //   center → 菜单中线（老行为）
+    const PAD = 14 // 离菜单边角的距离（避免箭头压在圆角上）
+    const a = effectiveAlign.value
+    cx = a === 'start' ? ml + PAD
+      : a === 'end' ? ml + mw - PAD
+        : ml + mw / 2
     cy = side === 'top' ? mt + mh : mt
   }
   // 旋转 45° 后，哪些原边会露在外面（决定画哪两条边框，才能和菜单边框接上）
@@ -218,8 +301,21 @@ const panelEvents = computed(() =>
   props.trigger === 'hover' ? { onMouseenter: clearCloseTimer, onMouseleave: close } : {},
 )
 
+/**
+ * 点外部关闭。判定用**整组浮层**（触发器 + 自己的面板 + 自己派生出去的子浮层）。
+ *
+ * 为什么不能只看 containerRef / menuRef：二级菜单是 teleport 到 body 的**独立浮层**，
+ * DOM 上不在父面板里。只看这两处的话，点在二级菜单项上会被判成「点了外面」——
+ * 于是父菜单先被关掉、二级菜单随父一起卸载，click 派发时目标已脱离文档，
+ * Vue 的 click 回调不再触发（用户报的「嵌套菜单无法点击」正是这条链）。
+ * 组内谁都不算外面；点真正的外部（含别人家的浮层）才关。
+ */
 onClickOutside(containerRef, (e) => {
-  if (menuRef.value?.contains(e.target as Node)) return
+  const node = e.target as Node
+  // 子浮层判定用**组链**（含父 id）：点在父面板里时，按点外规则父菜单该关，
+  // 但子菜单只该关自己 —— 若拿链判，子菜单会以为「还在我这一组里」而不关（用户实测：点不动）。
+  const mine = isNested.value ? chainId : panelChain.value
+  if (isInFloatingGroup(node, mine)) return
   if (isOpen.value) close()
 })
 
@@ -235,13 +331,17 @@ function onCloseAll(): void {
 // 同屏只留一个浮层：打开时先把别的关掉。登记表与主题默认件共用同一份
 // （@mini-canvas/canvas-render 的 contracts/dropdownExclusive）。
 watch(isOpen, (v) => {
-  if (v) claimDropdownExclusive(close)
+  // 子浮层**不 claim 排他**：claim 会把「别的还开着的」全关掉，而它旁边那个父浮层
+  // （画布列表）正是要留着的那个 —— 那正是用户报的「触发这个菜单时画布菜单消失了」。
+  if (v && !isNested.value) claimDropdownExclusive(close)
   else releaseDropdown(close)
 })
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   window.addEventListener(DROPDOWN_CLOSE_ALL_EVENT, onCloseAll)
+  // 子浮层要跟着父浮层一起收：父菜单关了（点外 / Esc / 换画布），孤儿子菜单不能还挂在那儿
+  startedWatchParent()
 })
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
@@ -249,6 +349,27 @@ onBeforeUnmount(() => {
   clearCloseTimer()
   releaseDropdown(close)
 })
+
+/** 订阅「父浮层开了没」：父关 → 自己关（只对子浮层生效；普通下拉没有父，watch 是空转） */
+let stopParentWatch: (() => void) | undefined
+function startedWatchParent(): void {
+  stopParentWatch?.()
+  stopParentWatch = watch(
+    () => isNested.value && nestedCtx.value?.open === false,
+    (parentClosed) => {
+      if (parentClosed && isOpen.value) close()
+    },
+  )
+}
+onBeforeUnmount(() => stopParentWatch?.())
+
+/**
+ * 供宿主调用：
+ * - `openAtPoint`：在鼠标点打开（行右键菜单那套）；
+ * - `isOpen` / `chainId`：给「子浮层」用 —— 父浮层把自己的开关与组链交给子浮层，
+ *   子浮层据此加入同一条组链、并在父浮层关掉时跟着收（见 props.nestedIn）。
+ */
+defineExpose({ openAtPoint, isOpen, chainId })
 </script>
 
 <template>
@@ -256,12 +377,27 @@ onBeforeUnmount(() => {
     <div ref="triggerRef" class="axd-trigger" v-bind="triggerEvents">
       <slot name="trigger" :open="isOpen" :toggle="toggle" :close="close" />
     </div>
-
     <Teleport :to="teleportTarget" :disabled="!teleport">
+      <!--
+        右键坐标锚（0×0，贴在鼠标点；只有右键唤出时才参与定位）。
+
+        ⚠️ 它必须待在 Teleport **里面**（跟着菜单一起挂在 body 下），不能留在 .axd-root 里。
+        原因（真 bug，2026-10-08 实测）：锚点用 `position: fixed` 表达「鼠标在视口里的绝对坐标」，
+        而 CSS 规定 —— **任何非 none 的 transform / translate，或 backdrop-filter 等，
+        都会给后代创建一个「包含块」**，后代 fixed 元素于是改以那个祖先为基准。
+        画布树的「分组行 / 列表行」操作条容器正是靠 `-translate-y-1/2` 做垂直居中的，
+        锚点被关进去后 `left: 28px` 变成「相对那个容器左边 28px」，整块菜单被推到右边
+        （实测：鼠标 x=28，菜单落到 x=282；而宫格卡片的操作条没有 translate，落点精确 ——
+          用户看到的正是「分组右键菜单位置错了，普通资源的都对」）。
+        锚点挂在 body 下就没有这层祖先，left/top 恢复成真正的视口坐标，
+        与同样 teleport 到 body 的菜单处在同一坐标系 —— 两者的数学才自洽。
+      -->
+        <span ref="contextAnchor" :style="contextAnchorStyle" aria-hidden="true" />
       <Transition name="axd">
         <div
           v-if="isOpen"
           ref="menuRef"
+          :data-floating-chain="panelChain"
           :style="menuStyle"
           v-bind="panelEvents"
           :class="['dd-menu', menuClass, bodyClass, props.layout === 'inner-scroll' ? 'dd-menu--inner-scroll' : '']"
@@ -273,7 +409,7 @@ onBeforeUnmount(() => {
       <!-- 箭头放浮层**外面**（兄弟节点）：它要探出菜单边缘才像"小尖角"，
            留在菜单里会把那几 px 算进菜单的可滚溢出，inner-scroll 的「只有列表区滚」就破了。 -->
       <span
-        v-if="props.arrow && isOpen && isPositioned"
+        v-if="props.arrow && !contextPoint && isOpen && isPositioned"
         :style="arrowStyle"
         class="axd-arrow"
         aria-hidden="true"

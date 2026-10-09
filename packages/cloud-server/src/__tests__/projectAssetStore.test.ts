@@ -13,6 +13,50 @@ import path from 'node:path'
 import { ProjectStore, DEFAULT_PROJECT_ID } from '../store/projectStore'
 import { AssetStore, kindOfName } from '../store/assetStore'
 
+  /**
+   * 资产的**本机绝对路径**（用户口径：技能给的就是绝对路径，图片也应一致）。
+   *
+   * 为什么要 path：引用要能复制到本机 Agent（Codex 等）直接用 —— 给相对 URL 的话对方得先猜 base、
+   * 再下载到本地才能读，绕好几步。绝对路径一步 read_file 到位（这就是「更快的方式」）。
+   */
+  it('上传资产：带本机绝对路径（指向 assets/files 下的真实文件）', async () => {
+    const s = new AssetStore(root)
+    const a = await s.saveUpload(new Uint8Array([1, 2, 3]), 'x.png')
+    expect(a.path, '上传资产应有 path').toBeTruthy()
+    expect(path.isAbsolute(a.path!)).toBe(true)
+    await expect(fs.access(a.path!)).resolves.toBeUndefined()
+  })
+
+  it('画布内生成产物：path 指向 canvases/<id>/resources 下的真实文件', async () => {
+    const s = new AssetStore(root)
+    const a = await s.addByUrl({ url: '/api/canvases/c1/resources/abcdef0123456789.png', canvasId: 'c1' })
+    expect(a.path, '画布资源应有 path').toBeTruthy()
+    expect(a.path!.replace(/\\/g, '/')).toContain('/canvases/c1/resources/abcdef0123456789.png')
+  })
+
+  it('外部地址（本机没字节）：path 为空，不瞎编', async () => {
+    const s = new AssetStore(root)
+    const a = await s.addByUrl({ url: 'http://localhost:8033/api/resources/x.png', canvasId: 'c1' })
+    expect(a.path).toBeUndefined()
+  })
+
+  /**
+   * 惰性迁移：老登记表没有 path 字段（那时还没这个概念）。
+   * 不做迁移的话，老资产永远「不可用」—— 菜单里「添加到 Agent / 添加到画布」不出现。
+   */
+  it('老数据（index.json 里没 path）读到时会自动补上并写回', async () => {
+    // 直接写一条缺 path 的老记录（模拟升级前的磁盘状态）
+    const legacy = [{ id: 'legacy-1', name: 'x.png', kind: 'image', url: '/api/assets/files/aabbccdd11223344.png', source: 'upload', createdAt: 1 }]
+    await fs.mkdir(path.join(root, 'assets'), { recursive: true })
+    await fs.writeFile(path.join(root, 'assets', 'index.json'), JSON.stringify(legacy))
+    const s = new AssetStore(root)
+    const list = await s.list()
+    expect(list[0].path, '读到时应补上 path').toBeTruthy()
+    // 并且写回了磁盘（下次不必再推）
+    const onDisk = JSON.parse(await fs.readFile(path.join(root, 'assets', 'index.json'), 'utf8'))
+    expect(onDisk[0].path).toBeTruthy()
+  })
+
 let root: string
 beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'cs-proj-'))

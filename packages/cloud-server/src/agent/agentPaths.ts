@@ -70,3 +70,27 @@ export function canvasSessionFile(root: string, canvasId: string, sessionId: str
 export function canvasWorkspaceDir(root: string, canvasId: string): string {
   return path.join(canvasAgentDir(root, canvasId), 'workspace')
 }
+
+/**
+ * SDK 的**会话草稿目录**（scratchpad），本仓库侧的路径推导。
+ *
+ * 与 SDK 的 `sessionScratchpadDir(root, projectId, agentId, sessionId)` 必须逐字一致
+ * （否则我们读一份、SDK 与插件写另一份）：`<root>/<projectId>/agents/<agentId>/scratchpad/<sessionId>`。
+ * 目标的 GOAL.json 就落在这里（插件约定）。
+ */
+export function sessionScratchpadPath(root: string, sessionId: string): string {
+  if (!isSafeSessionId(sessionId)) throw new Error('[agentPaths] 非法会话 id: ' + sessionId)
+  /**
+   * 与 SDK 的 `sessionScratchpadDir(root, projectId, agentId, sessionId)` **逐字同形**：
+   *   `<root>/<projectId>/agents/<agentId>/scratchpad/<sessionId>`
+   * 其中 `root` 是 **SDK 口径的 root**（= 本仓的 `agentRoot(dataDir)`），
+   * SDK 内部就是从这个 root 起拼 projectId / agents / agentId 三段的。
+   *
+   * 踩过的坑（真机）：这里曾经走 `agentStateDir(root)` —— 那个函数期望的是**数据根**、
+   * 自己会再拼一层 `agent/`，于是传 SDK root 进去就拼成了
+   * `<dataDir>/agent/agent/<projectId>/...`（多一层）：GOAL.json 写到那个假目录里，
+   * 插件在真目录里读不到 ⇒ 目标永远不结束、界面也永远看不到目标状态。
+   * 所以这里**不复用**任何别的路径函数，按 SDK 的公式逐段拼，一眼能对上。
+   */
+  return path.join(root, AGENT_PROJECT_ID, 'agents', AGENT_ID, 'scratchpad', sessionId)
+}

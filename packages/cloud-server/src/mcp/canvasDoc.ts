@@ -8,7 +8,8 @@
   *   canvases/<id>/canvas.json   画布本体（节点 + 边 + 画布信息）
   *   canvases/<id>/view.json     视口
   *   canvases/<id>/history.json  任务记录
-  *   canvases/<id>/resources/    本画布资源（节点里存 res:<hash> 相对引用）
+ *   canvases/<id>/resources/    本画布资源（节点里存同源 URL `/api/canvases/<id>/resources/<hash>`；
+ *                               老数据里的 res:<hash> 读取时仍兼容）
   *
   * 一个画布一个文件夹：复制文件夹 = 复制画布，删文件夹 = 删干净，AI 也能直接读文件。
  *
@@ -43,8 +44,8 @@
  */
 import { DEFAULT_CANVAS_ID } from '../store/canvasPaths.js'
 import type { CanvasStore } from '../store/canvasStore.js'
-import { extFromMime, safeExt, mimeOf } from '../store/mime.js'
-import type { CanvasResourceStore } from '../store/canvasResources.js'
+import { extFromMime, safeExt, mimeOf, sniffMimeFromHead, kindOfMime } from '../store/mime.js'
+import { toResourceUrl, type CanvasResourceStore } from '../store/canvasResources.js'
 
 /** 画布节点（与 @mini-canvas/canvas-data 的同名字段对齐；这里只留数据层用得到的） */
 export interface CanvasNode {
@@ -187,7 +188,7 @@ function edgeKey(e: { source: string; target: string; sourceHandle?: string; tar
 export class CanvasDocument {
   /**
    * @param store     画布文件夹（canvas.json / view.json）
-   * @param resources 本画布资源（节点里存 `res:<hash>` 相对引用）
+   * @param resources 本画布资源（节点里存同源 URL；老数据 `res:<hash>` 读取兼容）
    * @param canvasId  画布 id（前端界面当前只有一张，默认 default）
    */
   constructor(
@@ -221,13 +222,13 @@ export class CanvasDocument {
   }
 
   /**
-   * 存一个资源（图片/视频等字节），返回**画布内引用**与可直接展示的同源地址。
+   * 存一个资源（图片/视频等字节），返回**同源 URL**。
    *
    * 为什么 MCP 需要这个：AI 要往画布里放图，得先把字节交给服务器 —— 否则节点里只能写
    * 一个外链（可能挂、可能跨域、用户换机器就取不到）。
    *
-   * 节点里写 `ref`（`res:<hash>`），不写绝对地址 —— 这样复制整个画布文件夹仍然能用。
-   * `url` 只是给调用方当**同源可展示地址**用的（渲染时要按当前画布解析回来）。
+   * 节点里现在存 **URL**（`/api/canvases/<画布id>/resources/<hash>`，浏览器直接就能请求）：
+   * 渲染、下单、资产登记都不必再拼一次地址。
    */
   async saveResource(bytes: Uint8Array, opts: { fileName?: string; mime?: string } = {}) {
     if (!this.resources) throw new Error('[mcp] 未配置资源存储，无法保存资源')
@@ -237,9 +238,8 @@ export class CanvasDocument {
     const ext = safeExt(opts.fileName ?? '') || extFromMime(opts.mime ?? '')
     const saved = await this.resources.save(this.canvasId, bytes, ext)
     return {
-      ref: saved.ref,
       hashName: saved.hashName,
-      url: '/api/canvases/' + this.canvasId + '/resources/' + saved.hashName,
+      url: saved.url,
       size: saved.size,
       mime: opts.mime ?? mimeOf(saved.hashName),
     }
@@ -248,6 +248,39 @@ export class CanvasDocument {
   /** 列出本画布已存资源（AI 排查"我传的图在不在"用） */
   async listResources(): Promise<string[]> {
     return this.resources ? this.resources.list(this.canvasId) : []
+  }
+
+  /**
+   * 带**类型信息**的资源清单（给 MCP 的 resource_list 用）。
+   *
+   * 为什么不能只给文件名：资源按内容哈希落盘、很多没有扩展名 —— 调用方拿到一串名字
+   * 只能拿名字猜类型，音频会被塞进 `<img>` 当图片渲染，表现就是裂图（用户报过）。
+   * 这里把 mime / kind 一并给出，调用方照着 kind 决定怎么展示。
+   *
+   * mime 先按扩展名（便宜的查表）；查不出（octet-stream = 没扩展名）时才开文件读**前 16 字节**嗅探
+   * —— 只读头部，不整读（资源里有不少几 MB 的图，列表一次要判几十个）。
+   */
+  async listResourceInfos(): Promise<
+    Array<{ name: string; mime: string; kind: 'image' | 'video' | 'audio' | 'other'; url: string }>
+  > {
+    if (!this.resources) return []
+    const names = await this.resources.list(this.canvasId)
+    const out: Array<{ name: string; mime: string; kind: 'image' | 'video' | 'audio' | 'other'; url: string }> = []
+    for (const name of names) {
+      let mime = mimeOf(name)
+      if (mime === 'application/octet-stream') {
+        const head = await this.resources.readHead(this.canvasId, name)
+        const sniffed = head ? sniffMimeFromHead(head) : undefined
+        if (sniffed) mime = sniffed
+      }
+      out.push({
+        name,
+        mime,
+        kind: kindOfMime(mime),
+        url: toResourceUrl(this.canvasId, name),
+      })
+    }
+    return out
   }
 
   /** 读整张画布。从未保存过 = 空画布（不是错误） */
@@ -383,7 +416,7 @@ export class CanvasDocument {
   /**
    * 节点批量增删改（一次调用合并执行）。
    *
-   * 语义与 mcp-server 的 canvas.batch_nodes 对齐：**先整体预校验，再按 delete→add→update 应用**。
+   * 语义与 mcp-server 的 canvas_batch_nodes 对齐：**先整体预校验，再按 delete→add→update 应用**。
    * 预校验不过就整批拒绝、一个都不动 —— 半成品最难查（AI 以为改成功了，画布却是错的）。
    */
   async batchNodes(input: NodeBatchInput): Promise<BatchResult> {

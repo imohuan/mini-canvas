@@ -16,6 +16,7 @@ import { usePluginManager } from '../../usePluginManager'
 const svc = usePluginManager()
 const s = svc.state
 
+
 /** 地址输入框绑一份本地草稿：改完点「刷新」才写到服务（避免边打字边重拉） */
 const urlDraft = ref(s.catalogUrl)
 
@@ -464,3 +465,5 @@ onMounted(() => { void loadMarket() })
 /* 圆角走设计 token（ui-style-guide §2.2：Badge = --radius-badge 6px，不许跳级到 5px） */
 .pmp-tag { margin-left: 5px; padding: 1px 6px; border-radius: var(--radius-badge, 6px); background: var(--ui-warn-soft, rgb(245 158 11 / 0.16)); color: var(--ui-warn, #b45309); font-size: 10px; }
 </style>
+
+

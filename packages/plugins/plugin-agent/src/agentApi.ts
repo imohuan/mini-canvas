@@ -15,6 +15,49 @@ export type ChatEvent =
   | { type: 'approval_request'; approval: { id: string; toolName: string; arguments: string; createdAt: number } }
   | { type: 'approval_result'; id: string; decision: 'allow' | 'deny' }
   | { type: 'done' }
+  /** 这条会话有没有一轮在跑（托管模式由后端广播；空闲时队列自动起轮也靠它） */
+  | { type: 'run_state'; running: boolean }
+  /** 队列变化快照（加/删/改/暂停后推；界面据此刷新输入框上方的列表） */
+  | { type: 'queue'; queue: QueueStateView }
+  /** 队列全部发完且会话空闲（"队列已跑完"的通知时机） */
+  | { type: 'queue_idle' }
+  /** 一轮结束（每轮的通知时机） */
+  | { type: 'round_done' }
+  /** 这一轮喂给模型的用户消息（队列自动发的那条前端没参与，靠它补气泡） */
+  | { type: 'user_message'; text: string; images?: string[]; steered?: boolean }
+  /** 目标状态更新（后端读 GOAL.json 后推；界面显示「第 N 轮 · 已用 / 预算」） */
+  | { type: 'goal_state'; goal: GoalStateView | null }
+
+/** 队列条目（与后端 sessionStore 的 QueueItem 同形；前后端各一份类型，字段名钉死） */
+export interface QueueItemView {
+  id: string
+  text: string
+  images?: string[]
+  goal?: { objective: string; budget: number }
+  /** queued 等着发 / editing 正在编辑（阻塞队列）/ sending 已认领正在发 */
+  /** queued 等着发 / editing 正在编辑（阻塞队列）/ sending 已认领正在发 / sent 已送达（留一拍） */
+  state: 'queued' | 'editing' | 'sending' | 'sent'
+  createdAt: number
+  sentAt?: number
+  /** 界面本地标记：引导过（显示小标用） */
+  steered?: boolean
+}
+
+/** 一个会话的待发队列（暂停开关 + 条目） */
+export interface QueueStateView {
+  paused: boolean
+  items: QueueItemView[]
+}
+
+/** 目标状态（读 GOAL.json 来；界面显示「第 N 轮 · 已用 / 预算」） */
+export interface GoalStateView {
+  objective: string
+  status: string
+  budget: number
+  round: number
+  tokensUsed: number
+  ended?: boolean
+}
 
 export interface SessionMetaView {
   id: string
@@ -56,6 +99,11 @@ export interface SendOptions {
   systemPrompt?: string
   /** 随这条消息一起发出去的图片（data URL；服务端转给 SDK 的 imageUrlMessage） */
   images?: string[]
+  /**
+   * 以**目标模式**发这一条（设计 §3.4.2）：
+   * 后端先写 GOAL.json、把官方 start.mjs 的协议文本接在正文后面，再起第 1 轮。
+   */
+  goal?: { objective: string; budget: number }
 }
 
 export interface AgentApiOptions {
@@ -142,6 +190,16 @@ export class AgentApi {
     return this.json('/api/agent/prompts', { method: 'PUT', body: JSON.stringify({ prompts }) })
   }
 
+  /** 读「会话标题模型」配置（空 = 用会话默认模型） */
+  titleModel(): Promise<{ provider?: string; modelId?: string }> {
+    return this.json('/api/agent/title-model')
+  }
+
+  /** 写「会话标题模型」配置（两个都空 = 清掉，回落会话默认模型） */
+  saveTitleModel(body: { provider?: string; modelId?: string }): Promise<{ provider?: string; modelId?: string }> {
+    return this.json('/api/agent/title-model', { method: 'PUT', body: JSON.stringify(body) })
+  }
+
   skillSources(): Promise<Record<string, unknown>> {
     return this.json('/api/agent/skills/sources')
   }
@@ -179,13 +237,113 @@ export class AgentApi {
     return r.sessions ?? []
   }
 
+  /** 会话列表 + 分支关系（child → parent）：历史列表聚合「一个对话一行」用 */
+  async listSessionsWithParents(canvasId: string): Promise<{ sessions: SessionMetaView[]; parents: Record<string, string> }> {
+    const r = await this.json<{ sessions: SessionMetaView[]; parents?: Record<string, string> }>(this.sessionsPath(canvasId))
+    return { sessions: r.sessions ?? [], parents: r.parents ?? {} }
+  }
+
   async getSession(canvasId: string, sessionId: string): Promise<SessionRecordView> {
     const r = await this.json<{ session: SessionRecordView }>(this.sessionPath(canvasId, sessionId))
     return r.session
   }
 
+  /**
+   * 会话全景（设计 §3.2 / §3.3）：转录之外的**运行态与队列**一次拿全。
+   *
+   * 刷新后靠这一条恢复：history 从 session.turns 来，队列/目标/暂停标记/流序号都在这。
+   */
+  async sessionState(canvasId: string, sessionId: string): Promise<{
+    session: SessionRecordView
+    running: boolean
+    queue: QueueStateView
+    goal?: GoalStateView
+  goalPaused?: boolean
+  /** 目标的参考图（迷你预览用；随会话记录走） */
+  goalImages?: string[]
+  seq?: number
+    lastSeq?: number
+  }> {
+    return this.json(this.sessionPath(canvasId, sessionId))
+  }
+
+  // ------------------------------------------------------------------ 队列
+
+  /** 队列操作的总入口（add / update / remove / close / cancel-edit / pause / resume） */
+  queueOp(
+    canvasId: string,
+    sessionId: string,
+    body: {
+      op: 'add' | 'update' | 'remove' | 'close' | 'cancel-edit' | 'pause' | 'resume'
+      | 'edit'
+      itemId?: string
+      text?: string
+      images?: string[]
+      goal?: { objective: string; budget: number }
+    },
+  ): Promise<{ ok: boolean; queue?: QueueStateView; error?: string }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/queue', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  /**
+   * 引导（插队）：把这条送进**正在跑**的那一轮的下一次请求。
+   * 返回 steered=false 表示那一刻没在跑 —— 条目会留在队列里按序发（不丢）。
+   */
+  steerQueueItem(
+    canvasId: string,
+    sessionId: string,
+    itemId: string,
+  ): Promise<{ ok: boolean; steered?: boolean; reason?: string }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/queue/' + encodeURIComponent(itemId) + '/steer', {
+      method: 'POST',
+      body: '{}',
+    })
+  }
+
+  // ------------------------------------------------------------------ 目标
+
+  /** 目标操作：改预算/目标（update）、暂停（pause）、启动（resume） */
+  goalOp(
+    canvasId: string,
+    sessionId: string,
+    body:
+      | { op: 'update'; objective?: string; budget?: number; deltaBudget?: number; tokensUsed?: number }
+      | { op: 'pause' }
+      | { op: 'resume' }
+      | { op: 'end' },
+  ): Promise<{ ok: boolean; goal?: GoalStateView; paused?: boolean; error?: string }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/goal', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  /** 写当前目标的参考图（迷你预览用；空数组 = 清掉） */
+  setGoalImages(canvasId: string, sessionId: string, images: string[]): Promise<{ ok: boolean }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/goal-images', {
+      method: 'POST',
+      body: JSON.stringify({ images }),
+    })
+  }
+
   createSession(canvasId: string, body: Record<string, unknown> = {}): Promise<{ id: string; resumed: boolean }> {
     return this.json(this.sessionsPath(canvasId), { method: 'POST', body: JSON.stringify(body) })
+  }
+
+  /** 分支（fork）：编辑某条旧消息重发 → 以它上面的内容为历史开新会话 */
+  forkSession(canvasId: string, sessionId: string, afterText: string): Promise<{ sessionId: string; parentId: string; copied: number; title?: string }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/fork', {
+      method: 'POST',
+      body: JSON.stringify({ afterText }),
+    })
+  }
+
+  /** 分支信息：本会话的分叉点 + 全画布分叉点全表（分页器用） */
+  branchInfo(canvasId: string, sessionId: string): Promise<{ parentSessionId?: string; point?: string; points: Array<{ parentId: string; point: string; children: string[]; userOrdinal?: number }> }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/branch-info')
   }
 
   renameSession(canvasId: string, sessionId: string, title: string): Promise<unknown> {
@@ -249,6 +407,7 @@ export class AgentApi {
     if (opts.skills?.length) payload.skills = opts.skills
     if (opts.systemPrompt) payload.systemPrompt = opts.systemPrompt
     if (opts.images?.length) payload.images = opts.images
+    if (opts.goal) payload.goal = opts.goal
     const res = await this.f(this.sessionPath(canvasId, sessionId) + '/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -257,7 +416,41 @@ export class AgentApi {
     })
     if (!res.ok) throw new Error(await readError(res))
     if (!res.body) throw new Error('响应没有内容')
-    const reader = res.body.getReader()
+    await this.consumeSse(res.body, onEvent)
+  }
+
+  /**
+   * 接回一条会话**正在跑**的那一轮（设计 §3.2 的重连端点）。
+   *
+   * 为什么需要它：托管模式下后台自己跑一轮，页面只是订阅者。刷新 / 重开面板后
+   * 前端不知道后台在干什么，必须用这个端点从"转录已有的水位"（since）续上 ——
+   * 传 0 会与转录里的内容重复显示，所以调用方应当传 sessionState() 回来的 seq。
+   *
+   * 一直读到这一轮结束（服务端在轮结束时收尾关流）。
+   */
+  async streamSession(
+    canvasId: string,
+    sessionId: string,
+    since: number,
+    onEvent: (e: ChatEvent) => void,
+    signal?: AbortSignal,
+    opts: { follow?: boolean } = {},
+  ): Promise<void> {
+    const res = await this.f(
+      this.sessionPath(canvasId, sessionId) +
+        '/stream?since=' +
+        Math.max(0, Math.floor(since)) +
+        (opts.follow ? '&follow=1' : ''),
+      { ...(signal ? { signal } : {}) },
+    )
+    if (!res.ok) throw new Error(await readError(res))
+    if (!res.body) return
+    await this.consumeSse(res.body, onEvent)
+  }
+
+  /** 逐帧消费一条 SSE 流（sendMessage 与 streamSession 共用这一份解析） */
+  private async consumeSse(body: ReadableStream<Uint8Array>, onEvent: (e: ChatEvent) => void): Promise<void> {
+    const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     for (;;) {

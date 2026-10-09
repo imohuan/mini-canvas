@@ -17,7 +17,7 @@ function deps(api: CloudApi, over: Partial<RunDeps> = {}): RunDeps {
     api,
     canvasId: 'default',
     readNodeData: () => ({}),
-    uploadLocal: async () => ({ ref: 'res:0123456789abcdef.png' }),
+    uploadLocal: async () => ({ url: '/api/canvases/default/resources/0123456789abcdef.png' }),
     ...over,
   }
 }
@@ -87,16 +87,23 @@ describe('下单', () => {
 
   it('上游素材里"后台取不到"的地址先上传再交（data:/blob:）', async () => {
     const uploaded: string[] = []
-    const api = fakeApi(() => ({ body: { ok: true, jobId: 'j1' } }))
+    let sent: { resources?: Array<{ kind: string; url?: string }> } = {}
+    const fetchImpl: FetchLike = async (_url, init) => {
+      if (init?.method === 'POST') sent = JSON.parse(String(init.body ?? '{}')) as typeof sent
+      return new Response(JSON.stringify({ ok: true, jobId: 'j1' }), { status: 200 })
+    }
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
     const d = deps(api, {
       toBlob: async () => new Blob([new Uint8Array([1, 2, 3])]),
       uploadLocal: async (_c, _b, name) => {
         uploaded.push(name)
-        return { ref: 'res:0123456789abcdef.png' }
+        return { url: '/api/canvases/default/resources/0123456789abcdef.png' }
       },
     })
     await submitJob(d, { nodeId: 'n1', actionId: 'a:1', resources: [{ kind: 'image', url: 'data:image/png;base64,AAA' }] })
     expect(uploaded).toHaveLength(1)
+    // 交出去的必须是画布资源 URL（不是原本的 data:）
+    expect(sent.resources?.[0]?.url).toBe('/api/canvases/default/resources/0123456789abcdef.png')
   })
 
   it('节点里还有没上传的本地地址 → 提醒一句（不静默）', async () => {

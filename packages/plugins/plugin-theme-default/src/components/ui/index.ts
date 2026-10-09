@@ -5,6 +5,8 @@
 export { default as Dropdown } from './Dropdown.vue'
 export { default as Tooltip } from './Tooltip.vue'
 export { default as Select } from './Select.vue'
+/** 全屏媒体预览（文本/图片/视频/音频内置，#stage 插槽可扩展新类型；详见组件头注释） */
+export { default as MediaViewer } from './MediaViewer.vue'
 export type { DropdownTrigger, SelectOption } from './types'
 export { default as PrecisionSlider } from './PrecisionSlider.vue'
 export { default as ToolParamField } from './ToolParamField.vue'

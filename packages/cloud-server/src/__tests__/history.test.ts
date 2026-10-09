@@ -95,11 +95,12 @@ describe('查询：筛选 + 分页 + 汇总', () => {
     expect(page2.items.map((e) => e.id)).toEqual(['v1', 'i1'])
   })
 
-  it('按类型筛（汇总跟着筛后的集合）', async () => {
+  it('按类型筛（items/total 跟着筛；byKind 计数徽章给全量分布）', async () => {
     const h = await seed()
     const r = await h.query({ kind: 'image' })
     expect(r.items.map((e) => e.id).sort()).toEqual(['e1', 'i1'])
-    expect(r.summary.byKind).toEqual({ image: 2 })
+    expect(r.summary.byKind).toEqual({ image: 2, video: 1, audio: 1 })
+    expect(r.summary.total).toBe(2)
   })
 
   it('按状态筛', async () => {

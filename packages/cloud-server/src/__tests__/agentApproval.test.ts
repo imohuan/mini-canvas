@@ -11,7 +11,7 @@ describe('通配匹配', () => {
     expect(matchesPattern('mcp__smart__*', 'mcp__smart__search')).toBe(true)
     expect(matchesPattern('mcp__smart__*', 'mcp__other__x')).toBe(false)
     expect(matchesPattern('*generate*', 'doubao-generate-image')).toBe(true)
-    expect(matchesPattern('*generate*', 'canvas.get')).toBe(false)
+    expect(matchesPattern('*generate*', 'canvas_get')).toBe(false)
     // 模式里的点是字面量（不是「任意字符」），所以带点的模式只匹配带点的工具名
     expect(matchesPattern('*.generate*', 'x.generate-image')).toBe(true)
     expect(matchesPattern('*.generate*', 'doubao-generate-image')).toBe(false)
@@ -28,7 +28,7 @@ describe('默认策略', () => {
     for (const name of ['exec_command', 'input_command', 'write_file', 'edit_file']) {
       expect(decideTool(DEFAULT_POLICY, name), name).toBe('ask')
     }
-    for (const name of ['read_file', 'canvas.get', 'mcp__smart__status']) {
+    for (const name of ['read_file', 'canvas_get', 'mcp__smart__status']) {
       expect(decideTool(DEFAULT_POLICY, name), name).toBe('allow')
     }
   })

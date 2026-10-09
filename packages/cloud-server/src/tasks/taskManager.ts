@@ -17,6 +17,7 @@ import type { ProviderRegistry } from '../providers/registry.js'
 import type { ActionDef, JobInput, Provider } from '../providers/types.js'
 import type { HistoryStore } from './history.js'
 import type { HistoryEntry, Job } from './types.js'
+import { imageSizeFromBytes, videoSizeFromBytes, mediaKindFromName } from './mediaSize.js'
 
 /** 默认轮询间隔（ms） */
 export const DEFAULT_INTERVAL = 1500
@@ -36,13 +37,31 @@ export interface TaskDeps {
   docForCanvas?: (canvasId: string) => CanvasDocument
   registry: ProviderRegistry
   history: HistoryStore
-  /** 把节点里的 `res:<hash>` 引用解析成 provider 能取的真实地址 */
-  resolveResourceUrl(canvasId: string, ref: string): string
+  /**
+   * 把节点里的资源地址解析成 **provider 能拿到的素材**（多画布 + 跨服务器的关键）。
+   *
+   * 返回 **data URL**（内嵌字节），不是地址：cloud-server 与 web2api 是**两个独立服务**
+   * （可能不在同一台机器），给 web2api 一个 cloud-server 的地址它可能根本下载不到。
+   * 而 web2api 的 `utils/reference-images.ts` 明确支持 data URL（**它会自己落盘成本地文件**），
+   * 所以把字节直接交给它最稳，不依赖任何网络可达性。
+   */
+  resolveResourceUrl(canvasId: string, ref: string): Promise<string>
   /** 测试可注入假时钟 / 睡眠 */
   now?: () => number
   sleep?: (ms: number) => Promise<void>
   /** 任务成功产出资源时的回调（server 用来把产物登记进资产目录；测试可省） */
   onArtifact?: (canvasId: string, urls: string[]) => void
+  /**
+   * 取产物字节（落进画布资源目录用）。默认真 fetch；测试注入假货，免得去连真地址。
+   */
+  fetchArtifact?: (url: string) => Promise<Uint8Array>
+  /**
+   * 查某个节点**当前是否有在跑的任务**（用于挡住重复下单）。
+   *
+   * 返回 undefined 表示没有。宿主（server）可以用它做跨实例的判定；
+   * 省略时 TaskManager 退回查自己内存里的任务表（单实例足够）。
+   */
+  activeJob?: (canvasId: string, nodeId: string) => { id: string } | undefined
   onError?: (message: string, err?: unknown) => void
 }
 
@@ -86,6 +105,14 @@ export class TaskManager {
     const provider = this.deps.registry.providerOf(input.actionId)
     if (!provider) return { error: '动作 ' + input.actionId + ' 没有归属的 provider' }
 
+    // ★ 挡重复下单：同一个（画布, 节点）已经有在跑的任务时，直接返回它，不再新建。
+    //   用户实测：卡的时候连点「发送」会创建多个相同任务（既浪费额度、又互相打架）。
+    //   前端也会在点后禁用按钮，但那是 UI 层的尽力而为；**服务端这一层才是权威**（多标签页/重放也挡得住）。
+    const active = this.deps.activeJob
+      ? this.deps.activeJob(input.canvasId, input.nodeId)
+      : [...this.jobs.values()].find((j) => j.canvasId === input.canvasId && j.nodeId === input.nodeId && j.status === 'running')
+    if (active) return { error: '该节点已有任务在进行中（jobId: ' + active.id + '）' }
+
     const job: Job = {
       id: randomUUID(),
       canvasId: input.canvasId,
@@ -105,7 +132,9 @@ export class TaskManager {
     const ctrl = new AbortController()
     this.cancels.set(job.id, ctrl)
     // 后台跑（不阻塞 createJob 返回）
-    const loop = this.run(job, provider, action, this.resolveInput(job.canvasId, input), ctrl.signal)
+    // resolveInput 要读资源字节（异步）→ 先把它算出来再交给后台循环
+    const resolved = await this.resolveInput(job.canvasId, input)
+    const loop = this.run(job, provider, action, resolved, ctrl.signal)
     this.running.add(loop)
     void loop.finally(() => this.running.delete(loop))
     return job
@@ -161,18 +190,105 @@ export class TaskManager {
     return this.deps.sleep ? this.deps.sleep(ms) : new Promise((r) => setTimeout(r, ms))
   }
 
-  /** 把节点里的 res: 引用换成 provider 能取的真实地址（provider 拿不到"画布内相对引用"） */
-  private resolveInput(canvasId: string, input: JobInput): JobInput {
-    const resources = (input.resources ?? []).map((r) => ({
-      ...r,
-      ...(typeof r.url === 'string' && r.url.startsWith('res:')
-        ? { url: this.deps.resolveResourceUrl(canvasId, r.url) }
-        : {}),
-    }))
+  /** 把节点里的资源地址换成 provider 能取的真实字节（data URL） */
+  private async resolveInput(canvasId: string, input: JobInput): Promise<JobInput> {
+    const resources = await Promise.all(
+      (input.resources ?? []).map(async (r) => ({
+        ...r,
+        // 只要给了 url 就走一遍解析：画布资源（`/api/canvases/<id>/resources/<hash>`）
+        // 与资产地址（`/api/assets/files/<hash>`）→ 转 data URL；别的地址原样返回。
+        ...(typeof r.url === 'string' && r.url
+          ? { url: await this.deps.resolveResourceUrl(canvasId, r.url) }
+          : {}),
+      })),
+    )
     return { ...input, resources }
   }
 
-  /** 写节点 runState（走增量口；节点已被删就静默跳过 —— 任务还在跑，只是没地方写进度） */
+  /**
+   * 产物该写进节点的哪个字段 —— 按节点类型决定（与前端 applier 同一套映射）。
+   * 认不出类型时退回 imageUrl（图片是最常见的产物）。
+   */
+  private mediaFieldFor(type: string | undefined): string {
+    switch (type) {
+      case 'audio':
+        return 'audioUrl'
+      case 'video':
+        return 'videoUrl'
+      case '3d-preview':
+      case 'image-compare':
+      case 'image':
+      default:
+        return 'imageUrl'
+    }
+  }
+
+  /**
+   * 按产物后缀给出该写进节点的那对「尺寸字段」名。
+   * 图片写 `imageWidth/imageHeight`、视频写 `videoWidth/videoHeight`（前端就是读这两对来定卡片比例）。
+   */
+  private sizeFieldsFor(fileName: string): { w: string; h: string } | null {
+    const kind = mediaKindFromName(fileName)
+    if (kind === 'image') return { w: 'imageWidth', h: 'imageHeight' }
+    if (kind === 'video') return { w: 'videoWidth', h: 'videoHeight' }
+    return null
+  }
+
+  /** 从字节里量尺寸（按后缀选图片还是视频解析器；认不出返回 null） */
+  private measureBytes(bytes: Uint8Array, fileName: string): { width: number; height: number } | null {
+    const kind = mediaKindFromName(fileName)
+    if (kind === 'image') return imageSizeFromBytes(bytes)
+    if (kind === 'video') return videoSizeFromBytes(bytes)
+    // 后缀认不出：两种都试一下（产物常见就是图 / 视频）
+    return imageSizeFromBytes(bytes) ?? videoSizeFromBytes(bytes)
+  }
+
+  /**
+   * 把产物**字节**收进本画布资源目录，再把**同源地址**写进节点的媒体字段。
+   *
+   * 关键：不能只把 provider 的地址（`http://localhost:8033/...`）抄进节点 —— 那是另一个服务的地址，
+   * 换机器 / 换端口就取不到，画布上只会显示「图片已失效」。必须先 `saveResource` 把字节落到
+   * `<画布>/resources/`（按内容哈希，重复不重复存），再把 `saveResource` 返回的同源地址写进节点。
+   * 这个地址形如 `/api/canvases/<画布>/resources/<hash>.<ext>`，文件**确实存在**，图片节点直接就能加载。
+   */
+  private async writeMediaFields(job: Job, action: ActionDef, urls: string[] | undefined): Promise<string | undefined> {
+    const raw = urls?.[0]
+    if (!raw) return undefined
+    try {
+      const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
+      const bytes = this.deps.fetchArtifact
+        ? await this.deps.fetchArtifact(raw)
+        : await (async () => {
+            // 加超时：产物地址取不到时不能让「收敛成终态」一直等（超时就当没拿到，任务照常 done）
+            const res = await fetch(raw, { signal: AbortSignal.timeout(30_000) })
+            if (!res.ok) throw new Error('取产物失败 ' + res.status + '：' + raw)
+            return new Uint8Array(await res.arrayBuffer())
+          })()
+      const fileName = raw.split('?')[0]?.split('/').pop() ?? undefined
+      const stored = await doc.saveResource(bytes, fileName ? { fileName } : {})
+      // 量出宽高一起写：前端靠 imageWidth/Height（图片）或 videoWidth/Height（视频）算卡片比例，
+      // 缺了就会停在类型默认的 4:3 —— 9:16 的竖图被塞成横的（用户实测）。
+      const size = fileName ? this.measureBytes(bytes, fileName) : null
+      const sizeFields = fileName ? this.sizeFieldsFor(fileName) : null
+      await doc.batchNodes({
+        update: [
+          {
+            id: job.nodeId,
+            data: {
+              [this.mediaFieldFor(action.nodeTypes?.[0])]: stored.url,
+              ...(size && sizeFields ? { [sizeFields.w]: size.width, [sizeFields.h]: size.height } : {}),
+            },
+          },
+        ],
+      })
+      // 返回**同源地址**（存在的那份）：历史 / runState 都用它，前端缩略图才加载得出来
+      return stored.url
+    } catch (err) {
+      this.deps.onError?.('[tasks] 写节点产物字段失败（产物可能取不到，或节点已被删除）', err)
+      return undefined
+    }
+  }
+
   private async writeRunState(job: Job, runState: Record<string, unknown>): Promise<void> {
     try {
       // 写进**任务所属那张画布**的文档（多画布）：用 deps.doc 会写错画布 → 静默失败 → 进度卡 0
@@ -188,12 +304,22 @@ export class TaskManager {
     const interval = action.pollIntervalMs ?? DEFAULT_INTERVAL
     const timeoutMs = action.pollTimeoutMs ?? DEFAULT_TIMEOUT
     const startedAt = this.now()
+    /**
+     * 「等外部条件」累计时长（ms）—— 从超时预算里扣掉。
+     *
+     * 为什么必须扣：web2api 的 paused 是「等用户在浏览器里过验证码」，人处理多久不由程序决定；
+     * 拿它顶 pollTimeoutMs 的话，人还在操作就被判超时失败（真出过的 bug：
+     * 用户过验证码时 cloud-server 那边已经收工）。普通生成中的等待不在此列，仍按超时算。
+     */
+    let waitingMs = 0
+    let lastPollAt = startedAt
 
     try {
       const submitted = await provider.submit(action, input)
 
       // 提交即完成（同步生成）
       if ('done' in submitted) {
+        if (submitted.urls && submitted.urls.length > 0) this.deps.onArtifact?.(job.canvasId, submitted.urls)
         return this.finish(job, action, { ok: true, urls: submitted.urls, text: submitted.text })
       }
       if ('error' in submitted) {
@@ -214,12 +340,15 @@ export class TaskManager {
           job.finishedAt = this.now()
           return
         }
-        if (this.now() - startedAt > timeoutMs) {
+        if (this.now() - startedAt - waitingMs > timeoutMs) {
           const minutes = Math.max(1, Math.round(timeoutMs / 60000))
           return this.finish(job, action, { ok: false, error: '任务超时（已等待 ' + minutes + ' 分钟）' })
         }
 
         const poll = provider.poll ? await provider.poll(submitted.taskId, action) : { status: 'running' as const }
+        // 这一拍如果是「等外部条件」（过验证码 / 换号退避），把它耗掉的时间记进 waitingMs
+        if (poll.waiting) waitingMs += Math.max(0, this.now() - lastPollAt)
+        lastPollAt = this.now()
         if (poll.taskId) job.providerTaskId = poll.taskId
 
         if (poll.status === 'running') {
@@ -240,7 +369,11 @@ export class TaskManager {
         if (poll.status === 'error') {
           return this.finish(job, action, { ok: false, error: poll.error ?? '任务失败' })
         }
-        return this.finish(job, action, { ok: true, urls: poll.urls, text: poll.text })
+        // 产物是 provider 那边的地址（可能跨机 / 换端口就取不到）：先让宿主把它收进本画布资源目录
+        // （onArtifact），再写回节点 —— 顺序不能反，否则节点上写的同源地址取不到字节（显示空白）。
+        const urls = poll.urls
+        if (urls && urls.length > 0) this.deps.onArtifact?.(job.canvasId, urls)
+        return this.finish(job, action, { ok: true, urls, text: poll.text })
       }
     } catch (err) {
       // 任何异常都收敛成失败，不留悬挂的 running
@@ -262,6 +395,16 @@ export class TaskManager {
     // 反过来的话，别人一看到 status 变了就来读节点，可能读到的还是上一帧
     // （测试里实测过这个竞态）。
     const finishedAt = this.now()
+    // 产物落到节点的**媒体字段**（imageUrl / audioUrl / videoUrl）—— 这一步不能少：
+    // 节点只有在「有产物字段」时才把图/音频显示出来；只写 runState.urls 的话画布上是空的。
+    // 前端那条路是靠底栏的 applier 写这个字段；MCP 下的单没有底栏，必须由后台补写。
+    // 写之前先把字节收进画布资源目录（见 writeMediaFields），写的是**确实存在**的同源地址。
+    // 它返回的同源地址要**回填进 result**：历史 / runState 也用它 —— 否则那两处仍存 web2api 的原始地址，
+    // 前端拿它当缩略图会因为「文件名不是内容哈希」被资源接口判非法（400），历史卡片就是一片裂图。
+    if (result.ok) {
+      const sameOrigin = await this.writeMediaFields(job, action, result.urls)
+      if (sameOrigin) result = { ...result, urls: [sameOrigin, ...(result.urls ?? []).slice(1)] }
+    }
     await this.writeRunState(
       job,
       result.ok
@@ -271,12 +414,8 @@ export class TaskManager {
 
     await this.deps.history.append(job.canvasId, this.toHistoryEntry(job, action, result, finishedAt))
 
-    // 成功且有产物 → 通知宿主把它登记进资产目录（用户口径：资产 = 所有生成过的产物）。
-    // 放在历史之后、终态之前：登记失败不该影响任务终态（宿主侧自己兜错）。
-    if (result.ok && result.urls && result.urls.length > 0) {
-      this.deps.onArtifact?.(job.canvasId, result.urls)
-    }
-
+    // 产物登记（onArtifact）**已经在上游做过**（见 run 里轮询到终态那一步）——
+    // 这里不再重复调：目的是让「字节先落进画布资源目录」发生在写节点媒体字段之前。
     job.status = result.ok ? 'done' : 'error'
     job.progress = result.ok ? 100 : job.progress
     job.result = { ...result, taskId: job.id }

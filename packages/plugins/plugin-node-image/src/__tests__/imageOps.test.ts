@@ -14,7 +14,7 @@ import {
   NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter,
   ResourceStore, type GraphEnvelope,
 } from '@mini-canvas/canvas-data'
-import { createImageOps, cropImage, downloadImageNode, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
+import { createImageOps, cropImage, downloadImageNode, nextCropLabel, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
 import type { Rect } from '@mini-canvas/canvas-render'
 
 const BLOB = (tag = 'x') => new Blob([tag], { type: 'image/png' })
@@ -86,7 +86,7 @@ function boot() {
   // 真资源库：objectURL 由假 backend 生成本会话地址；字节落内存持久化后端（模拟 IndexedDB）
   const { adapter, blobs } = memoryResourceAdapter()
   const resources = new ResourceStore(() => adapter, { revokeUrl() {} })
-  nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
+  nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 }, nameTemplate: '图片 {{ID}}' })
   const ops = createImageOps({
     // 5c：数据读写走 doc；资源登记走 resources（新）
     get: (name: string) => (name === 'doc' ? graph : name === 'resources' ? resources : undefined),
@@ -197,30 +197,63 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
   })
 })
 
-describe('cropImage：裁剪原地替换', () => {
+describe('cropImage：裁剪 = 新建下游图片节点并连边（原图不动）', () => {
   const rect: Rect = { x: 10, y: 20, width: 300, height: 200 }
 
-  it('原地替换（新字节进资源库、换新 resourceId）并同步新宽高（不新建节点）', async () => {
-    const { nodeStore, ops, id, blobs } = boot()
+  it('原图不动，新节点装裁剪结果（新 resourceId/宽高/名字），并有一条边连到原图节点', async () => {
+    const { nodeStore, graph, ops, id, blobs } = boot()
     await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
     const beforeId = String(nodeStore.getNode(id)!.data.resourceId)
-    const countBefore = nodeStore.getNodes().length
     const ok = await cropImage(ops, id, rect, fakeTransform())
     expect(ok).toBe(true)
-    expect(nodeStore.getNodes().length).toBe(countBefore)
-    const data = nodeStore.getNode(id)!.data
+    // 原图节点不动
+    expect(nodeStore.getNode(id)!.data.resourceId).toBe(beforeId)
+    // 多了一个新节点，且装的是裁剪结果
+    expect(nodeStore.getNodes().length).toBe(2)
+    const created = nodeStore.getNodes().find((n) => n.id !== id)!
+    const data = created.data
     expect(typeof data.resourceId).toBe('string')
     expect(data.resourceId).not.toBe(beforeId)
     expect(blobs.has(String(data.resourceId))).toBe(true)
     expect(data.imageWidth).toBe(300)
     expect(data.imageHeight).toBe(200)
-    // 裁剪后原图字节数不再代表内容 → 必须清掉，否则状态栏显示过期大小
     expect(data.imageSize).toBeUndefined()
-    expect(data.imageName).toBe('photo.png')
-    // 裁剪后卡片尺寸也跟着新图（300×200 小于上限，原样）→ data 与 node.size 都有
-    expect(data.cardWidth).toBe(300)
-    expect(data.cardHeight).toBe(200)
-    expect(nodeStore.getNode(id)!.size).toEqual({ w: 300, h: 200 })
+    expect(data.imageName).toBe('裁剪')
+    expect(data.label).toBe('裁剪')
+   // 连边：原图 → 裁剪结果
+   const edges = graph.getEdges()
+   expect(edges).toHaveLength(1)
+    // 方向：原图是上游（source），裁剪结果是下游（target）
+    expect(edges[0].source).toBe(id)
+    expect(edges[0].target).toBe(created.id)
+    // 定位：原图右边缘（x + 卡片宽 375）+ 100 间隔，同一水平线
+    expect(created.position.x).toBe(0 + 375 + 100)
+    expect(created.position.y).toBe(0)
+  })
+
+  it('名字累加：第二次裁剪叫「裁剪 2」，且第二个节点不会被误当成第一个', async () => {
+    const { nodeStore, ops, id } = boot()
+    await uploadImage(ops, id, new File(['x'], 'photo.png', { type: 'image/png' }), fakeTransform())
+  await cropImage(ops, id, rect, fakeTransform())
+  await cropImage(ops, id, rect, fakeTransform())
+  // 直接走 nextCropLabel：若画布上已有「裁剪」，下一个必须带号
+   const existing = nodeStore.getNodes().map((n: { type: string; data?: Record<string, unknown> }) => ({ type: n.type, data: n.data as Record<string, unknown> | undefined }))
+   const next = nextCropLabel(existing)
+   expect(next).toBe('裁剪 3')
+  const labels = nodeStore.getNodes().map((n: { data?: Record<string, unknown> }) => n.data?.label)
+    expect(labels).toContain('裁剪')
+    expect(labels).toContain('裁剪 2')
+  })
+
+  it('nextCropLabel：扫已有名字取下一个号（含裸「裁剪」占 1 号）', () => {
+    const nodes = (type: string, labels: string[]) => labels.map((label) => ({ type, data: { label } }))
+    expect(nextCropLabel([])).toBe('裁剪')
+    expect(nextCropLabel(nodes('image', ['图片 1']))).toBe('裁剪')
+    expect(nextCropLabel(nodes('image', ['裁剪']))).toBe('裁剪 2')
+    expect(nextCropLabel(nodes('image', ['裁剪', '裁剪 2', '裁剪 5']))).toBe('裁剪 6')
+    expect(nextCropLabel(nodes('image', ['裁剪 3']))).toBe('裁剪 4')
+    // 文本节点的「裁剪 9」不该占号（名字空间按类型隔离）
+    expect(nextCropLabel(nodes('text', ['裁剪 9']))).toBe('裁剪')
   })
 
   it('无可裁图片 / 空矩形 → false，不动数据', async () => {

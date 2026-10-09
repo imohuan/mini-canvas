@@ -105,11 +105,13 @@ const s = ui.state
       </template>
       <template #default="{ close }">
         <AxMenu>
-          <AxMenuItem @click="close(); ui.showToast('风格库')">
+          <!-- 「风格库」由 plugin-style-library 提供：这里执行它注册的命令（未装该插件则 no-op，不报错） -->
+          <AxMenuItem @click="close(); ui.runCommand('style-library:open')">
             <Shapes :size="15" /> 风格库 <em
               class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em>
           </AxMenuItem>
-          <AxMenuItem @click="close(); ui.showToast('特效库')">
+          <!-- 「特效库」由 plugin-style-library 提供（与风格库同一插件、两套数据）：执行它注册的命令 -->
+          <AxMenuItem @click="close(); ui.runCommand('effect-library:open')">
             <Sparkles :size="15" /> 特效库 <em
               class="ml-auto rounded border border-brand/40 px-1.5 py-px text-[9px] not-italic text-brand">NEW</em>
           </AxMenuItem>

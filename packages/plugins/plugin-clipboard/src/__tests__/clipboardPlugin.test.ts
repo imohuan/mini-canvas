@@ -196,3 +196,93 @@ describe('clipboard 实例隔离（P2-4）', () => {
     expect(a.nodeStore.getNodes().length).toBe(before + 1)
   })
 })
+
+/**
+ * 用户 2026-10-09 报的缺陷端到端复现：复制一个带子节点的分组（框选整块：父 + 子），
+ * 粘贴后子节点位置必须仍然相对父、父子关系必须还在。
+ *
+ * 子节点 position 是**相对父的局部坐标**（v2 内核 + VueFlow 父子语义），
+ * 复制的偏移只能作用在父（绝对坐标）上，子的相对坐标必须原样保留。
+ */
+describe('复制带子节点的分组（父子坐标系，用户 2026-10-09 缺陷）', () => {
+  /** 注入一个最小 nodeLayout：absolutePosition 沿 parentId 链累加（与渲染层实现同语义） */
+  function injectLayout(ctx: { inject: (n: string, s: unknown) => void }, nodeStore: NodeStore) {
+    const abs = (id: string) => {
+      let n = nodeStore.getNode(id)
+      let x = n?.position.x ?? 0
+      let y = n?.position.y ?? 0
+      const seen = new Set<string>([id])
+      while (n?.parentId) {
+        if (seen.has(n.parentId)) break
+        seen.add(n.parentId)
+        const p = nodeStore.getNode(n.parentId)
+        if (!p) break
+        x += p.position.x
+        y += p.position.y
+        n = p
+      }
+      return { x, y }
+    }
+    ctx.inject('nodeLayout', {
+      nodeSize: (id: string) => nodeStore.getNode(id)?.size ?? { w: 0, h: 0 },
+      absolutePosition: abs,
+      getNodeRect: (id: string) => {
+        const node = nodeStore.getNode(id)
+        if (!node) return null
+        const { x, y } = abs(id)
+        const size = node.size ?? { w: 0, h: 0 }
+        return { id, x, y, w: size.w, h: size.h }
+      },
+      getAllRects: () => nodeStore.getNodes().map((n) => ({ id: n.id, ...abs(n.id), w: n.size?.w ?? 0, h: n.size?.h ?? 0 })),
+      childrenOf: (pid: string) => nodeStore.childNodesOf(pid).map((n) => ({ id: n.id, ...abs(n.id), w: n.size?.w ?? 0, h: n.size?.h ?? 0 })),
+    })
+  }
+
+  it('父+子一起复制：粘贴后父整体平移，子相对坐标不变、parentId 指向新父', async () => {
+    const { ctx, nodeStore, selection } = makeCtx()
+    injectLayout(ctx, nodeStore)
+    // 分组在绝对 (1000,1000)，尺寸 400x300
+    const g = addNode(nodeStore, 'text', 1000, 1000, { label: 'G' })
+    nodeStore.updateNode(g, { size: { w: 400, h: 300 } })
+    // 子节点：相对分组的局部坐标 (30,40)
+    const c = addNode(nodeStore, 'text', 30, 40, { label: 'C' })
+    nodeStore.updateNode(c, { parentId: g })
+    selection.set([g, c])
+
+    await ctx.start()
+    const svc = ctx.get<ClipboardService>('clipboard')
+    expect(svc.copy()).toBe(true)
+    expect(svc.paste()).toBe(true)
+
+    const pasted = nodeStore.getNodes().filter((n) => n.id !== g && n.id !== c)
+    expect(pasted.length).toBe(2)
+    const ng = pasted.find((n) => n.parentId === undefined)!
+    const nc = pasted.find((n) => n.parentId !== undefined)!
+    // 新父 = 原父 + 级联偏移 50（无鼠标锚点）
+    expect(ng.position).toEqual({ x: 1050, y: 1050 })
+    // 子仍在父内部：相对坐标一格没动 —— 这是"父子关系没丢、子没四散"的判据
+    expect(nc.position).toEqual({ x: 30, y: 40 })
+    expect(nc.parentId).toBe(ng.id)
+    // 子绝对坐标 = 新父 + 相对 = (1080,1090)，与旧的 (1030,1040) 相差整块偏移 (50,50)
+    expect(nc.position.x + ng.position.x).toBe(1080)
+    expect(nc.position.y + ng.position.y).toBe(1090)
+  })
+
+  it('只复制子节点（父未被选中）：按绝对坐标落顶层，不悬挂', async () => {
+    const { ctx, nodeStore, selection } = makeCtx()
+    injectLayout(ctx, nodeStore)
+    const g = addNode(nodeStore, 'text', 1000, 1000, { label: 'G' })
+    const c = addNode(nodeStore, 'text', 30, 40, { label: 'C' })
+    nodeStore.updateNode(c, { parentId: g })
+    selection.set([c])
+
+    await ctx.start()
+    const svc = ctx.get<ClipboardService>('clipboard')
+    svc.copy()
+    svc.paste()
+    const clone = nodeStore.getNodes().find((n) => n.id !== g && n.id !== c)!
+    // 父在批外 → 剥离父引用，按复制时刻的绝对坐标 (1030,1040) + 偏移 50 落顶层
+    expect(clone.parentId).toBeUndefined()
+    expect(clone.position).toEqual({ x: 1080, y: 1090 })
+  })
+})

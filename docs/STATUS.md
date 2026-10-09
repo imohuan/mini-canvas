@@ -5,6 +5,1756 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-09 八续，三种编辑互斥 + 黄色统一）
+
+用户口径（三张截图）：队列编辑顶部那句「正在编辑排队消息，改完发送队列继续」删掉；
+对话消息 / 队列消息 / 目标三种编辑**互斥**（原来能同时出现三个）；编辑态**统一成黄色**（以消息编辑为准）。
+
+**改法**（AgentConversation.vue）：
+- `cancelAllEditsExcept(keep)`：进入任一编辑前，把另外两种退出（消息 → `agent.cancelEdit()`；
+  队列 → 逐条 `cancel-edit`；目标 → 撤草稿标记）。
+- **删掉**队列顶部那条提示文字与 `.ac-queue-blocked` 样式。
+- 输入框上方的黄色「正在编辑」标记改为**三种共用**（`editingKind`: message/queue/goal），
+  文案随是谁而变（「正在编辑」/「正在编辑排队消息」/「正在编辑目标」），✕ 按 kind 去取消，
+  点标记滚到对应的元素。
+- 目标行编辑时整行**变黄** + 右侧「正在编辑」徽标（与消息/队列同一套 `--ui-warn` 语义）。
+
+**验证**：真机（Playwright + DOM 几何）—— 队列编辑时标记=「正在编辑排队消息」且提示文字已消失；
+切到目标编辑后目标行 `is-editing` + 徽标「正在编辑」，**队列编辑自动退出**；标记随 kind 切换。
+修了一个连带 bug：目标文案 `flex:1` 会把进度条挤成 6px，改成 `flex:0 1 auto; max-width:40%`
+（文案可压缩但有占比上限，进度条恢复 33px）。plugin-agent **233** 全绿。
+
+### 追记（2026-10-09 七续，目标行：编辑目标 + 轮次实时 + 中性配色）
+
+用户口径（逐条）：① 目标行标题 hover 时左侧图标变「编辑」，点它进入编辑（与队列编辑一致：回填输入框、
+挂草稿标记），发送 = **修改该目标内容**（不新建、不进队列）；② 轮次/已用**每轮都要刷新**（实测从第 3 轮直接跳到第 7 轮）；
+③ 目标行不用主题色，换中性黑白灰。
+
+**改法**：
+- 编辑目标：目标行左侧图标改成一颗按钮，hover / 编辑中在「目标」与「铅笔」两枚图标间切换（CSS 叠图）；
+  点击 → `beginEditGoal()`（`setGoalMark(原目标, 原预算)` + 回填输入框）；`submit()` 里新增 `editingGoal` 分支，
+  走 `agent.updateGoal({ objective, budget })`（**只改这条目标**）。再点一次图标或点草稿标记 ✕ = 取消编辑。
+- **轮次实时**（根因）：目标是在**一次 SDK `run()` 里连跑多轮**（stop hook 循环），而 goal_state 此前只在整轮 run
+  结束才推一次 ⇒ 中间几轮全被跳过。修：translate 把 SDK 的 `hook`（goal stop）事件翻成 `goal_round` 信号，
+  runtime 收到就调 `deps.onGoalRound`（server 接线：读一次 GOAL.json 推 `goal_state`）。
+  实测：界面依次出现 **第 1→2→…→17 轮**，不再跳号。
+- 中性配色：目标行/徽章/进度条/数字/草稿标记全换成 `--ui-chip / --ui-veil / --ui-ink-dim`，不再染青。
+ 顺带：`tokensUsed` 也接通了写入链路（goalState→goalRuntime→route→api→service），运行中「已用/总预算」左右都能点着改，
+ 进编辑自动全选、**只有回车生效**（失焦/Esc 还原）。
+
+**验证**：plugin-agent **233**、cloud-server **546** 全绿；真机（Chrome/Playwright）：hover 图标切换 ✓、
+点击进入编辑 ✓、发送后 `POST /goal` 200 且该会话 objective 变成新值 ✓、目标行中性配色 ✓。
+
+### 追记（2026-10-09 六续，队列/目标 UI 收尾：圆角、暂停键、目标行不出现）
+
+用户口径（截图指出）：① 聚合容器圆角差、内部行方角把圆角顶破；② 行内按钮挤出容器；③ 目标在跑但看不到目标 UI。
+
+**改法**（plugin-agent AgentConversation.vue + cloud-server 路由）：
+- 容器 `.ac-pending-box` 恢复 **overflow:hidden**（内部矩形的方角被外层圆角裁掉，外圆内方才成立）；
+  宽度从 90% 对齐到 **100%**（与输入框、发送键左右齐）。
+- 队列暂停键从「容器子元素」挪回「**输入框**子元素」（容器的兄弟）—— 容器 overflow:hidden 会裁掉它半个；
+  用 `top:0; translate(-50%,-50%)` 压在输入框上边框（= 两块接缝），与参考 HTML 同款。
+- 行内元素加 `min-width:0`，**按钮永不被挤走**；容器查询阈值放宽到 300/250px（原先 380/420 让进度条常隐）。
+- **目标在跑却看不到目标行**：根因是「目标开始跑」时后端没广播 `goal_state`（此前只有改预算/暂停/恢复才推），
+  本页刚发起的目标前端无从得知；切会话才显示（openSession 会拉 full.goal）。
+  修：beginGoal 之后读一次 GOAL.json 推 `goal_state`。测试 `goalBeginBroadcast.test.ts`。
+
+**验证**：plugin-agent **233** 全绿 + typecheck 干净；cloud-server 目标三件测试 18 条全绿。
+真机（Playwright 截图 + DOM 几何）：容器四角圆润、行底色不再顶破；行内按钮距容器右缘 -7px（在内侧）；
+容器与输入框左右对齐；发目标前 `hasGoalRow:false` → 发之后 `true`（当场出现，不用刷新/切会话）。
+
+**流程教训（已固化）**：改 UI 后**必须截图自查**再下结论 —— 这几处都是没看画面才漏的。
+
+### 追记（2026-10-09 五续，Agent 输入区 UI 按 RULES 落地）
+
+用户口径：照着 `docs/tmp/queue-ui-demo/debug.html` + `docs/tmp/queue-ui-demo/RULES.md` 改真代码。
+
+**改了什么（plugin-agent，全在 AgentConversation.vue + queueModel.ts）**：
+- **聚合容器**：目标行 + 队列行合并进**一个容器**（`.ac-pending`），在输入框**外面**；
+  宽 90% 居中、**与输入框零间隔**（底部去圆角 + 边框重叠 1px）；**只有外层有圆角，内部行方角**。
+- **回到底部**：从 composer 挪进**消息区内部、底部居中**（新增 `.ac-scroll-wrap` 做定位参照）。
+- **队列暂停键**：从右侧一列改成**骑在队列与输入框分界线上、水平居中**的胶囊（图标 + 「队列暂停/恢复」+ 条数）。
+- **引导**：本来就是纯图标按钮（无文字），保留。
+- **目标两阶段**：
+  · 未发送 → **输入框内侧顶部**，标签只写「目标」二字（目标正文 = 输入框内容，不重复）；
+  · 已发送 → 聚合容器里的一行（强调色底 + 进度条 + 「第 N 轮」+ 口径值 + 开关 + 暂停/结束）。
+- **预算（token 数字）**：
+  · 单位换算：`formatToken / budgetTokenText`（国际 k/M/B/T ⇄ 中文 万/亿/万亿，可在行内开关切换）；
+  · 解析：`parseTokenText`（`50k`/`1M`/`5万`/`1亿`，空 = 不限）；
+  · **行内编辑**（contenteditable）+ **真 CSS 下划线**（text-decoration，非 border）；宽度自适应。
+- **口径开关**：**只有两态** —— 「已用预算 ⇄ 剩余预算」（`tokenDisplay`），未发送/已发送**两处都有**，
+  按钮在关闭键左侧、样式一致，点击换图标（实心/空心漏斗）；口径与单位存 localStorage。
+- **删掉**：旧的「目标编辑弹框」（`.ac-dialog-*`、`openGoalEditor/saveGoalEditor/goalBudgetMode` 全删）。
+
+**验证**：plugin-agent **233** 全绿（新增 `queueModel.token.test.ts` 15 条）+ typecheck 干净；
+ui 色净化测试通过（两处白字按项目惯例加 `主题色白名单` 行注释）；ui 构建成功。
+真机（8865，Chrome MCP）：聚合容器宽约 90%、与输入框重叠 1px、圆角只在顶部、暂停胶囊骑线居中且显示
+「队列恢复 3」；点 + →「目标」在输入框内侧加标签（不弹框）、只写「目标」、预算下划线是 text-decoration
+（border 0）、口径开关从「剩余预算」切到「已用预算」、旧弹框已消失。
+
+**参考文档**：`docs/tmp/queue-ui-demo/RULES.md`（逐条「错 → 对」）与可调试页 `debug.html`。
+
+### 追记（2026-10-09 四续，test 模型的节奏指令）
+
+用户口径：「你这个测试模型，它的响应速度太快了，我一点反应都没有，我想创建一个列表的时间都没有。
+我希望你的后台能够解析我发送的文本，比如让你这个模型持续跑多久 —— 你给我定一个规则然后解析。
+我发送这条消息之后，你就解析出这次的流需要多久才能完整返回。而且，我还可以自定义返回结果。」
+
+**规则（写在消息里，后台解析）**：
+
+```
+::test 时长=8s 间隔=120ms 内容=我要的自定义回复::
+```
+
+- `时长`（`duration/dur/time`）：整条流跑多久。无单位=秒；支持 `ms`/`s`/`秒`/`分`/`m`。上限 2 分钟（防手滑）。
+- `间隔`（`gap/interval`）：每片之间等多久（默认 120ms）。给了`时长`就按时长反推间隔，间隔让位。
+- `内容`（`text/content/reply`）：自定义返回正文，放最后可含空格。
+- 简写：`::test 8s::`（只给时长）、`::test::`（全默认）；指令会从回显正文里剥掉。
+
+**实现**：`packages/cloud-server/src/agent/testModel.ts` 加 `parseTimeToken / analyzeTestRequest /
+`buildReply / planStream`，端点改成**逐片 + 逐片等待**输出（第一帧立刻发，让前端马上知道流开始了）。
+真机实测：`::test 时长=6s 内容=…::` → 整条流 6.23s，回复正是指定内容。
+
+**验证**：cloud-server **544** 全绿（新增 `testModelDirective` 14 条、`agentTestModel` 加 1 条）；
+typecheck 干净；产物已重建、服务已重启（8865）。
+
+### 追记（2026-10-09 三续，test 模型 + 目标条的两个问题）
+
+用户口径：
+① 「我希望你在这里提供一个自定义的测试模型，这样测试效率就会很快，不能每次都访问后台，访问太慢了。
+   在模型列表中额外添加一个模型，命名为 test模型；当我请求这个 test模型 时，不需要真正请求后台，
+   而是随便伪造一些数据返回过来。」
+② 「我这边新建一个对话，你的目标那一栏还在，这是什么情况？按理说它是针对一条对话的，
+   但是你这边是不是搞成全局的了？而且这边还没有删除按钮。」
+
+**test 模型（已做）**：
+- 方案：SDK（penguin-core）**不开放注入自定义 LLM**，它只按配置里的
+  `provider / model_id / base_url / client_type` 去请求一个 OpenAI 兼容端点。所以做法是
+  **在本进程内挂一个假端点**（`POST /api/test-model/v1/chat/completions`，吐标准 Chat Completions
+  SSE 分片 + usage + `[DONE]`），启动时自动登记一个指向它的模型（provider=`test`、modelId=`test模型`、
+  client_type=`openai-chat`）。因为唯一被伪造的是「模型那一次 HTTP」，SDK 的其它链路（转录、
+  目标 stop hook、队列调度、token 记账）**全部照常**，正好用来快速测这些功能。
+- 代码：`packages/cloud-server/src/agent/testModel.ts`（假端点 + 伪造回复的纯函数）、
+  `AgentConfigService.ensureTestModel`（幂等登记）、`server.ts` 挂载（在 ui 静态兜底之前）。
+- 真机实测：一轮对话 **161ms** 完成（真实模型要几十秒）；用 test 模型跑「目标」2 秒内连播到第 4 轮
+  （`budget_limited/ended`）；跑「队列」1 秒内把 3 条消息全发完并落转录。
+- 配置写在 `.mini-canvas/`（已 gitignore），不进版本库。
+
+**目标条的两个问题（已做）**：
+- **①新建对话后目标条残留**：`newSession()` 只清了 `model / sessionId / title`，没清
+  `goal / goalPaused / goalMark / queue / running`，也没断开旧会话的常驻流（那条流还会把旧会话的
+  `goal_state` 推回来）。修：切新会话时把这些会话级状态一起归零 + `detachStream()`。
+  测试 `agentNewSession.test.ts`。真机实测：新建对话后目标条消失。
+- **②目标条没有删除按钮**：原来那条只有「暂停/启动」。新增「结束目标」✕ —— 与「暂停」不同，
+  结束是**真删掉**（live 与 `.paused` 两份状态文件都删、清暂停标记、广播 `goal_state: null`），
+  不可恢复。链路：`goalState.endGoalFile` → `GoalFiles.end` → `GoalRuntime.endGoal` →
+  `goalOp` 的 `op:'end'` → 前端 `agent.endGoal()` + 状态条上的 ✕ 按钮。
+  测试 `goalEnd.test.ts`（3 条）+ `goalEndRoute.test.ts`（1 条）。真机实测：点 ✕ 后目标条消失、
+  后端 `goal` 变 null、状态文件被删。
+
+**验证**：cloud-server **529**、plugin-agent **218**、ui **220** 全绿；三包 typecheck 干净；
+cloud-server 与 ui 产物均已重建，服务已重启（8865）。
+
+### 追记（2026-10-09 续，Agent 目标/队列真机失效的根因修复）
+
+承接 2026-10-08 的「Agent 队列 / 引导 / 后台对话 / 目标模式」。用户最后一次真机测试的结论是
+「队列发出去有气泡但没触发对话、发送键没有运行态、队列跑完不接下一轮、目标也不生效」。
+本次在真机上逐条复现，定位到 **四个互不相干的真 bug**（都有磁盘/接口证据），全部按
+「先写失败测试 → 修根因 → 全量回归」的流程修掉：
+
+1. **目标循环永远卡在第 1 轮（根因：协议文本缺 sender:harness 戳）**
+   - 现象：新会话的目标能正常连播；但**有历史 abort 的会话**，目标第 1 轮跑完就被判 aborted 收场。
+   - 根因：beginGoal 把官方 start.mjs 的协议文本**拼进了用户消息正文**，而 SDK 的 goal stop.mjs
+     靠 sender:harness 划「轮次边界」（lib.mjs 的 isRoundInput）。拼进正文就没有戳 ⇒
+     记账退化成「整份 trace = 一轮」⇒ 扫到历史上任意一次 abort 就判 aborted。
+   - 修法：目标协议文本改走**独立的 harness 消息**（SDK 的 userText(text, harness)）——
+     StartRunInput.harnessText + deps.makeHarnessMessage；resume 的踢一脚同口径（正文空、只有 harness 段）。
+   - 真机结果：**跑到了第 5 轮**（修前恒停第 1 轮）。
+
+2. **界面永远看不到目标状态（根因：读 GOAL.json 少一层 agent/）**
+   - 现象：目标在跑，刷新后界面没有目标状态条。
+   - 根因：写用 sessionScratchpadPath(agentRoot(dataDir), sid)（对），读用
+     sessionScratchpadPath(config.dataDir, sid)（少一层 agent/）⇒ 读的目录里永远没有文件。
+   - 修法：读侧改成 agentRoot(config.dataDir)，与写侧同口径（agentPaths.ts 早有这类双源漂移的教训）。
+   - 真机结果：前端目标状态条正常渲染（目标第 2 轮 · 2.3k / 400k）。
+
+3. **目标协议文本泄漏进转录与界面（根因：翻译层没挡非人类用户文本）**
+   - 现象：对话流里冒出「This message was sent automatically by goal mode…」。
+   - 根因：SDK 把轮次 2+ 的 harness 文本回吐给宿主时，translate 层把它当**助手文本**翻了出去。
+   - 修法：translate.ts 的 text 分支加一道闸 —— role 为 user 且 sender 存在时直接不产出事件。
+
+4. **服务重启后发目标拿不到协议文本（根因：hook 前没装载会话）**
+   - 现象：日志里一直是「goal: hook 未产出协议文本，宿主写初始 GOAL.json 兜底」，官方循环起不来。
+   - 根因：runtime.runUserPromptHook 只在**内存 live 表里**找会话；会话没装载（重启后 / 本次进程首次用到）
+     就直接返回 null。
+   - 修法：找不到就先 ensureSession 把它装载起来再跑 hook（装载失败仍返回 null，调用方走兜底）。
+
+**顺带修掉一个显示 bug**：目标状态条的「已用」复用了 budgetText，导致 tokensUsed=0 显示成「不限」
+（目标第 1 轮 · 不限 / 400k 看着像预算没设置）。新增 usedText（已用专用，0 就是 0）并接进状态条。
+
+**验证**：cloud-server **520** 全绿（新增 agentGoalRead 3、agentTranslate 2、agentRuntimeGoal 4）、
+plugin-agent **217** 全绿（新增 usedText 2）、ui **212** 全绿；三包 typecheck 干净，UI 产物已重建。
+真机（Chrome MCP，8865）：目标连播到第 5 轮、暂停把文件挪成 .paused 且状态可读、启动放回并踢一脚、
+暂停时队列列表**不消失**（仍显示 2 行 + 右侧暂停按钮）、目标状态条文案正确、队列自动逐条发送并落转录。
+
+**遗留（未做，供下一轮）**：后台自动跑的轮（队列/目标）撞上**需要审批的工具**时会一直挂起等界面点选。
+页面有常驻订阅时会收到审批卡片（可点）；但纯后台场景（页面关着 / 该轮由队列自动发起）没人点就永久卡住，
+队列也不再推进。是否要给后台自动发起的轮设一条更宽松的审批策略（或超时自动放行）需要先与用户确认口径。
+旧代码留下的孤儿目录 agent/agent/...（双 agent 层）已无代码再写它，本轮测试会话里残留的那份
+会让模型读到过期 GOAL.json，可择机清理。
+
+### 追记（2026-10-09，修复制粘贴：带 parent 的节点定位错 / 父子关系像丢了）
+
+用户口径（附截图）：「复制带有 parent 的节点时，没有计算出它们正确的位置…… 下面就是粘贴的效果，
+定位完全错误，而且可能已经丢失了父子级关系」。
+
+**根因（父子坐标系混用）**：组内子节点的 `position` 是**相对父组的局部坐标**（见
+`packages/plugins/plugin-group/src/groupEngine.ts` 顶部坐标约定、`nodeLayout.absolutePosition` 累加父链），
+而 `plugin-clipboard` 把快照里所有节点的 `position` 都当**flow 绝对坐标**用：
+① `computePasteOffset` 用原始 `position` 算包围盒 → 相对值与绝对值混算，中心错 → 偏移错；
+② `remapSnapshot` 给每个节点（含子节点）都加同一个偏移 → 子节点在组内被平移出去、四散。
+
+**修法（绝对坐标才是刚性平移的基准）**：
+- 快照节点新增 `absPosition`（复制时刻的 flow 绝对坐标）。`toClipboardNodes` 沿**批内父链**累加；
+  父未被选中（批外）时改问注入的 `ClipboardAbsProvider`（插件侧走 `nodeLayout.absolutePosition`，
+  用整张画布的父链，能算到任意深），并把 `parentId` 收敛为「父也在快照里」——父在批外则把 position
+  重定基到绝对坐标后落顶层，防悬挂。
+- `computePasteOffset` 只按**根节点**（无父）算包围盒：子节点在几何上位于根容器内，根矩形已覆盖
+  整块内容；把无尺寸子节点按 256 兜底算进去反而会把中心撑偏。
+- `remapSnapshot`：有父的节点**相对坐标原样保留**（父整体平移即带着子树走）；无父节点加 offset。
+- `clipboardPlugin` 的 copy/cut 改为直接 `makeSnapshot(nodes, edges, now, absProvider)`，
+  不再先 `toClipboardNodes` 再交给 makeSnapshot（那样会二次处理）。
+
+**验证**：
+- plugin-clipboard **28**（引擎 18 + 插件 10；新增 6 条针对本缺陷：父子同批复制 / 只复制子节点 / 
+  整块粘贴相对坐标不变 / 包围盒只按根算 / 端到端父+子粘贴保父引用 / 只复制子落顶层不悬挂）全绿，
+  `tsc --noEmit` 干净。**守卫有效性自查**：把「有父则相对坐标不变」改回「所有节点加 offset」再跑 →
+  当场红（子节点 30,40 变成 130,90，正是用户症状），已还原。
+- 受影响面：ui **212** 全绿（ui 只注释引用 clipboard，无别的调用方；全仓 `toClipboardNodes` 仅
+  index.ts 再导出 + 引擎自用）。
+- **真机（Chrome MCP，8865 真产物，插件 dist 重建后）**：造分组 G(400,300,400x300) + 两子
+  (相对 40,50 / 200,150)，选中整块复制粘贴 → 新分组 **(450,350)**（父 + 级联 50），两子相对坐标
+  **(40,50)/(200,150)** 一格没动、`parentId` 指向新分组、绝对坐标 = 新父 + 相对。验证痕迹已撤销清理
+  （33 → 27，0 残留、0 悬挂父引用）。
+
+### 追记（2026-10-09 五续，「删除画布」对**任何**画布都可用（含内置与当前选中））
+
+用户口径（附截图）：「你这个东西为什么很多时候无法点击删除啊？搞得我很难受啊。不管是哪个画布都支持删除啊，
+即使是当前选中的也支持删除啊。只不过你删除之后，跳转到第一个画布就行了呀」。
+
+**根因**（上一轮我只解决了一半）：`DELETE /api/canvases/:id` 对内置 `default` 画布直接返回 400
+（「默认画布不可删除」），前端为保护就把「删除画布」**灰掉**（更早是隐藏）。用户要的是**没有例外**。
+
+**改法（前后端一起去掉豁免）**：
+1. 后端 `routes/projects.ts`：删掉 `if (id === 'default') ... 400` —— 任何画布都可删。
+   `default` 只是在「调用方没给画布 id」时当兜底 id 用（`CanvasDocument` / `docForCanvas` 的默认参数），
+   删掉它之后那些路径会**惰性建回一张空画布**，不炸（已有测试覆盖）；
+2. 前端 `ui.ts` 的 `deleteCanvas`：去掉「只剩一张不给删」的护栏，改成——
+   删的若是当前这张，先落盘、删、再跳**剩下清单里的第一张**；**一张不剩就现建一张再跳**（没地方跳就白屏）；
+3. 前端 `ProjectCluster.vue`：删除项去掉一切条件（不再 `v-if`、不再 `:disabled`），
+   `ui.canvasOptions` 里那个 `deletable` 概念（「谁不许删」）一并退役。
+
+**验证**：cloud-server **544**（那条「默认画布不可删」改成「默认画布**可**删：删完目录不在了、
+各接口仍自洽」）+ ui **222**（`canvasChipMenu` 15：新增「删除项没有任何条件（不隐藏不置灰、`canDelete` 整个消失）」
+与「删除后跳第一张 + 删空了补建一张」两条守卫）+ `vue-tsc` 干净 + `vite build` 通过；
+ui dist 与 cloud-server dist 都重建、8865 重启。
+**真机（Chrome MCP，8865 真产物）**：把四行逐个点开 —— **每一行（含内置 default、含当前选中）
+「删除画布」都 `disabled=false`、`opacity=1`**；
+点它删**当前**画布 → URL 自动跳到剩下清单里的第一张（`#/canvas/430c8f1f…`）；
+另用一次性项目造「只有一张画布」的极端情况 → 删掉唯一的画布后**自动补建一张并跳过去**（无白屏）。
+验证数据已清（临时画布、临时项目、以及验证时误开的标签页），
+用户自己的两张画布（`我的111123123` / `画布 12131231`）未动，服务停在 8865。
+
+### 追记（2026-10-09 四续，「删除画布」常显+置灰（修「二级菜单没显示完整」））
+
+用户口径（附截图）：「你的这个二级菜单怎么变成这个样子了？没显示完整」。
+
+**先复现、再动手**（用 Status 里的 Chrome MCP 连真机 8865）：逐行点开四行的「⋯」对比条目，
+发现**只有「当前画布」那一行少一条**——其余三行都是 4 项，当前行只有 3 项（缺「删除画布」）。
+不是浮层被截断：量过菜单 `clientHeight === scrollHeight`（没触发滚动）、祖先链里没有
+`transform/filter/backdrop-filter` 的包含块、`bottom` 也远在视口内。
+
+**根因**：当前画布是**内置 `default` 画布**，后端 `DELETE /api/canvases/:id` 对它返回 400
+（`default` 不可删）。前端为了保护，用 `v-if="canDelete"` 把「删除画布」**整项隐藏** ——
+于是这一行的菜单比别的行少一条，看着像「菜单没画全 / 坏了」。
+
+**改法**：条目**一律显示**，不能删时**灰掉**而不是隐藏 ——
+菜单长度固定，用户读得出「这条现在不可用」，不会怀疑菜单坏。改动三处：
+1. `AxMenuItem` 新增 `disabled`：真 `<button disabled>` + `aria-disabled="true"` + `is-disabled` 类，
+   并且 click 里再挡一道（防键盘/程序触发）；
+2. `AxMenu` 的 `.ax-menu-item.is-disabled { cursor:not-allowed; opacity:.38 }`
+   （沿用 ui-style-guide §3.2「禁用：opacity .38」，没自造数值），hover 不给底；
+3. `ProjectCluster`：`v-if="canDelete"` → `:disabled="!canDelete"`（`canDelete` 只管能不能点）。
+
+**验证**：ui **221**（`canvasChipMenu` 14，那条守卫从「不显示删除」改成
+「**常显 + 不能删时灰掉**，不许再有 `v-if`」）+ `vue-tsc` 干净 + `vite build` 通过。
+**真机（Chrome MCP，8865 真产物）**：四行逐个点开「⋯」→ **四行都是完整 4 项**；
+只有当前行（内置 default）的「删除画布」是灰的：`opacity 0.38` / `aria-disabled=true` /
+`button.disabled=true`；其余行的删除项正常可点。
+（验证时误开的一个画布标签页、以及探针数据都已清掉；用户自己的「副本」画布未动。）
+
+### 追记（2026-10-09 三续，行尾按钮 hover 只换图标颜色、底色改由整行给）
+
+用户口径（两句，须合起来理解）：①「你这个按钮不要给 hover 的背景颜色，就直接给这个图标颜色就行」；
+②「你这边 hover 的时候为什么只有左侧有背景啊？…这边 hover 的是整块的一个背景」。
+即：行尾「⋯」按钮自己**不要** hover 底色；**整行** hover 才给一块底。
+
+**改法**：底色从「行里的主按钮」挪到「**行**」上 ——
+`.canvas-row:hover { background: var(--ui-hover) }`（整行一块底），
+`canvas-row-main` 不再有 hover 底色、`canvas-row-more:hover` 只留 `color: var(--ui-ink)`。
+（教训：底色打在行里的按钮上只会染那半块，行尾「⋯」与中间留白成了缺口 —— 那正是用户看到的
+「只有左侧有背景」。底色属于**行**这一级，不属于行里的控件。）
+
+**验证**：ui **221**（`canvasChipMenu` 14，两条守卫：「行 hover 有整行底、且旧形状
+`.canvas-row:not(.is-active) .canvas-row-main:hover` 必须消失」「行尾按钮 hover 无 background、
+自身透明、只变色」）+ `vue-tsc` 干净 + `vite build` 通过；
+真机量样式：行 hover 时行底 `rgba(0,0,0,.06)`、行内两个按钮均 `rgba(0,0,0,0)`（透明），
+行宽 200px 全程有底。**守卫有效性自查**：把 `background` 加回行尾按钮规则 / 把底加回主按钮 → 守卫当场红（已试过并还原）。
+
+### 追记（2026-10-09 二续，画布列表与操作菜单**并存**（子浮层 nestedIn））
+
+用户口径（原话）：「这边你触发这个菜单的时候，你的画布的这个菜单消失了，有没有办法」。
+即点行尾「⋯」时**画布列表要留着**，两个菜单并排（效果图就是并排两份）。
+
+**根因**：`AxDropdown` 有一条全局规则「**同屏只留一个浮层**」（`claimDropdownExclusive`）——
+打开操作菜单时，它会先把还开着的浮层全关掉，画布列表正是其中一个。
+上一轮我为了躲开这条，先主动把列表置 false 再 `nextTick` 开菜单 —— 那是「顺着规则绕」，
+绕出来的结果就是用户看到的现象。
+
+**改法（给下拉加「子浮层」能力，而不是在调用方绕）**：`AxDropdown` 新增 `nestedIn` 开关 ——
+传一个 getter 拿到父浮层的 `{ chain, open }`，行为随之分三处（都不传 = 普通下拉，行为完全不变）：
+1. **打开时不 claim 排他**（claim 会把父菜单当场关掉，而它正是要留着的那个）；
+2. **面板组链写成「父链 + 自己」** —— 父浮层的「点外关闭」借它认出「这点在我的子面板里」，不关父；
+3. **自己的点外判定只认自己的 id** —— 点在父面板（列表）上时只关子菜单。
+   第 3 条若漏了（拿组链去判），点父列表会被当成「还在我这一组里」→ 菜单赖着不关（本仓踩过的老坑）。
+另加两条收尾：父浮层关掉时子浮层跟着关（不留孤儿菜单）；`openAtPoint` 在**已经开着**时
+也 `updatePosition()` 一次（锚点坐标变了但元素没动，`autoUpdate` 不会触发 → 换行点「⋯」菜单会留在原处）。
+
+**调用侧**（`ProjectCluster.vue`）：操作菜单加 `:nested-in="actionParent"`，锚点取按钮**右缘**
+（菜单从列表右边展开＝效果图的摆法）；不再 `emit('update:menuOpen', false)`（那是让列表消失的那一步）。
+
+**验证**：ui **219**（`canvasChipMenu` 12 + `uiDropdownRegistration` 12，新增：操作菜单声明 nested-in /
+宿主不再关列表 / 不 claim 排他 / 面板组链=父链+自己 / 自己判点外只认自己 id / 父关子随 / 暴露 isOpen+chainId）
++ `vue-tsc` 干净 + `vite build` 通过；cloud-server **520** 全绿（本次未改后台）。
+**真机（Chrome MCP，8865 真产物，`canvas-chip-menu-check.mjs` 16/16）**：③-b 点「⋯」后
+**列表仍在**（浮层 2 个、列表行都在）；③-b2 连点另一行的「⋯」→ 菜单跟着挪到那一行旁边
+（按钮 y=127 → 菜单 y=163，x 在按钮右侧）；③-c 点父面板 → **只关操作菜单、列表留着**（浮层 2→1）；
+四个动作照旧全过；截图确认「列表 + 操作菜单并排」与用户效果图一致。
+**守卫有效性自查**：把 `if (v && !isNested.value)` 改回 `if (v)` → 守卫当场红（已试过并还原）。
+验证痕迹已清（副本与实验画布都删干净）。
+
+### 追记（2026-10-09，画布下拉的行尾菜单：勾 ⇄ 三个点 + 四项操作）
+
+用户口径（附效果图）：「图一是我想要做的一个效果图。我要做的是画布下拉时的以下功能：
+1. 选中时：后面显示一个勾的图标。2. Hover 上去时：图标会变成现在的三个点。
+3. 点击之后：弹出一个菜单，菜单的选项就是图 1 的选项。」
+（图 1 的选项：在新窗口打开 / 重命名画布 / 复制画布 / 删除画布）
+
+**位置**：在 `packages/ui` —— 左上角「块 A」的**画布 chip 下拉**（`components/ProjectCluster.vue`，
+它在左上角悬浮栏与左抽屉头部各渲染一次）。**不是**顶部状态栏，也不是左侧侧边栏的树。
+
+**改法**：
+- 下拉里的每一行从「一个 `<AxMenuItem>` + 一个 `aria-hidden` 的 span 当按钮」改成
+  **两个真按钮**：`canvas-row-main`（切画布）+ `canvas-row-more`（开操作菜单）。
+  一个按钮里套一个可点的 span 会撞读屏（ui-style-guide §5 第 2 条），也是一个动作两种语义。
+- 行尾那一格同时放 `Check`（勾）与 `MoreHorizontal`（三个点），靠 CSS 与行 hover 换显：
+  选中行常显勾 → hover 该行时勾 `opacity:0`、三个点 `opacity:1`；未选中的行平时不显三个点，
+  hover 行（或键盘聚焦按钮）才现。动效只动 `opacity`（§2.7 硬性）且带 reduced-motion 降级。
+- 点三个点 → **画布操作菜单**。它走 `AxDropdown` 的「鼠标点锚点」（`openAtPoint`，与行右键菜单
+  同一套机制）弹出，锚点挂 body 下、不依赖行 DOM；并且它是列表的**子浮层**（`nestedIn`）——
+  **列表留着不消失**，两个菜单并排（详见上面 2026-10-09 二续那条）。
+
+**四个动作都是真实现**（此前点行尾三个点只弹一句「… 更多操作」的 toast，而 toast 早已停用 = 点了没反应）：
+- **在新窗口打开** → 先 `flushCanvasSave()` 把当前画布写完，再 `window.open('#/canvas/<id>')`
+  （不先落盘的话，新标签读到的是旧数据）。
+- **重命名画布** → `window.prompt` 取名字（与项目页新建/改名同一口径）→ `PATCH /api/canvases/:id/meta`。
+- **复制画布** → 新口 `POST /api/canvases/:id/duplicate`（cloud-server `CanvasStore.copyInto`）：
+  拷节点 + 边 + 资源字节 + 生成历史，并**把资源地址里的画布 id 换成新的**（不换的话副本里的图
+  全指回原画布，原画布一删全裂）；**视口不带走**（复制内容不复制「我当时看到哪儿」，设计文档已定）；
+  名字默认「原名字 副本」，重名递增。
+- **删除画布** → `DELETE /api/canvases/:id`。两条护栏：只有一张时不给删；删的正是当前这张时，
+  先落盘、删完**跳到剩下清单里的第一张**（否则停在已不存在的 hash 上白屏）。
+
+**顺带修掉的隐患**：下拉的行数据从「只传名字数组」改成「传 `{id,label,deletable}`」——
+原来宿主用 `canvasOptions.find(c => c.label === $event)` **按名字反查 id**，两张画布重名时
+会切错（而且行尾动作拿到的也只是名字，没法按 id 操作）。`deletable` 由宿主算（内置 `default` 画布
+后端不许删，菜单里就不给「删除画布」）。
+
+**验证**：cloud-server **511**（新增 2 条：复制画布（新 id/名字/_节点边拷过去/资源地址换新画布 id_/
+视口不带走/重名递增）+ 复制不存在的画布 404）；ui **212**（新增 `canvasChipMenu.test.ts` 11 条结构守卫：
+两个真按钮 / 勾与三个点都在 / 常显勾 + hover 换点 + 未选中行 hover 才显 + reduced-motion /
+动效只动 opacity / 四项条目 + 删除是危险项 / 走鼠标点锚点 + 先收列表 / 两宿主都换成 id+名字 /
+两宿主都接真动作（无 `@more-canvas` 占位）/ 四个动作在 ui.ts 有真实现 / 只有一张不给删）
++ `vue-tsc` 干净 + `vite build` 通过；产物重建（ui dist + cloud-server dist，8865 重启）。
+**真机（Chrome MCP，8865 真产物，`packages/ui/e2e/canvas-chip-menu-check.mjs` 12/12 通过）**：
+① 选中行勾 `opacity=1`、三点 `0`；② hover 该行 → 勾 `0`、三点 `1`；③ 点三点弹出四项菜单；
+④ 复制 → 画布 4→5 且副本节点数与原图一致、`view=null`（视口没带走）；重命名 → 后端名字真变了；
+新窗口打开 → 真开新标签页且地址就是该画布；删除 → 5→4 且 hash 自动跳到剩下那张。
+**守卫有效性自查**：把「hover 时勾让位」那条 CSS 删掉再跑 → 守卫当场红（已试过并还原）。
+验证痕迹已清（副本与实验画布都删干净）。
+
+### 追记（2026-10-09，修分组行右键菜单定位偏移（AxDropdown 锚点的包含块 bug））
+
+用户口径（附截图）：「分组右键菜单的定位错了，普通的资源右键菜单都是正确的」——
+右键「分组 2」，菜单却飘到抽屉右侧与画布交界处；宫格里的普通资源右键是贴着鼠标的。
+
+**量化取证（真机，右键后量鼠标点 vs 菜单左上角）**：
+- 宫格卡片：鼠标 (76,293) → 菜单 (76,293)，delta (0,0) ✓
+- 分组行：鼠标 (28,168) → 菜单 **(282,324)**（x 偏了 +254）✗
+- 列表行：鼠标 (28,256) → 菜单 **(282,500)** ✗
+
+**根因（CSS 包含块规则，通用缺陷）**：右键锚点用 `position: fixed; left/top = 鼠标视口坐标`
+表达落点，但它**挂在 `.axd-root` 里**（浮层组件的行内容器）。CSS 规定：
+**任何非 none 的 transform / translate / filter 等，都会给后代创建「包含块」，
+后代 fixed 元素改以那个祖先为定位基准**。画布树的分组行 / 列表行，操作条容器正是用
+`-translate-y-1/2` 做垂直居中（Tailwind 编译成 CSS `translate: 0px -50%`，
+不是 `transform`，所以第一轮查 `transform` 全是 none 差点漏掉）——锚点被关进这个基准里，
+`left: 28px` 就成了「相对操作条左边 28px」，整块菜单被推到 x=282。
+宫格卡片的操作条**没有** translate，锚点的基准还是视口，所以落点精确。
+这正是用户看到的「分组错了、普通资源都对」。
+
+**为什么修在 AxDropdown 而不是挪那两个容器**：这是组件层的**通用缺陷** —— 任何调用方
+只要行容器带 translate/transform（资产树的行也带，只是恰好在抽屉里的偏移小到没被注意），
+右键锚点就会被顶偏。把「挪操作条」当修法等于要求每个调用方记住这条隐含约束；
+把锚点送回视口坐标系才是根治。
+
+**修法（一行搬家 + 注释写明为什么）**：`AxDropdown.vue` 里把右键坐标锚点
+（`<span ref="contextAnchor">`）从 `.axd-root` 里**移进 `<Teleport>` 内**，与菜单面板一样
+挂在 body 下 —— body 没有带 transform 的祖先，`left/top` 恢复成真正的视口坐标，
+锚点与菜单面板（同样 teleport 到 body）回到同一坐标系，floating-ui 的数学重新自洽。
+锚点的渲染条件、`openAtPoint` 的调用方式、互斥/点外关闭全部不变。
+
+**验证**：真机实测四类行 —— 宫格卡片 / 分组行 ×2 / 列表行，右键菜单 delta 全部 **(0,0)**
+（修前分组行偏 254px）；截图确认「分组 2」右键菜单贴着鼠标弹出。
+ui **201**（新增 2 条结构守卫：① 锚点必须在 `<Teleport>` 内、触发器在 Teleport 外；
+② 锚点样式必须是 `position: 'fixed'` —— 这条改成 absolute 时上面的包含块论证就不成立）
++ vue-tsc 干净；产物重建（ui dist，8865 直接生效）。
+**守卫有效性自查**：把锚点移回 `.axd-root` 再跑 → 守卫当场红（已试过并还原）。
+
+插曲：验证时发现 8865 服务已被停掉（`.serve.log` 是旧进程残留），用 `pnpm serve` 重启后继续。
+
+### 追记（2026-10-08 九续，画布树右键菜单 + 行菜单外壳与资产树共用）
+
+用户口径（两条）：①「当前在左侧边栏的资产面板中，这些文件夹和资源都支持右键菜单。现在希望画布
+这边也支持右键菜单 —— 因为当前这里只有在 hover 点击后面的按钮时，显示的那个按钮才可以触发」；
+②「你的画布和资产里的树结构可以使用同一套组件，只不过画布支持两种展示模式（宫格和列表）。
+我希望你可以把这部分抽象成一个组件……你先进行分析，看有没有必要抽象，看当前是个什么结构」。
+
+**分析结论（先查结构再动手）**：两边的**行 UI 同源**（图标/缩略图 + 名字 + hover 操作条 +
+内联改名 + 缩进），但**内容不同源** —— 资产行背后是后端文件夹/资产实体（路径 / 标签 / 图标 /
+移动），画布行是画布节点（分组父子 / 缩略图 / 双模式）。硬塞成一个组件要靠大量 if 分支，反而更难维护。
+真正**重复且画布侧缺失**的是三件机制：① 行尾「⋯」+ 下拉；② **行右键打开同一份菜单**；
+③ 那个「按行 id 登记 openAt、右键转交鼠标点锚点」的接线。资产侧这套此前**写死在 AssetTree.vue 里**，
+画布要再抄一遍就会长成第二份实现（本项目历史上缩略图/预览/菜单动作都各漂移过）。
+
+**改法（抽象边界：外壳共用、条目各写）**：
+1. 新增 `components/RowMenuShell.vue` —— **共用外壳**：AxDropdown 浮层 +「⋯」触发器 +
+   `openAt(x,y)`（转交 AxDropdown 的「鼠标点锚点」，翻转/防溢出/互斥/点外关闭全照旧）。
+   职责边界写进文件头：**本组件管机制，菜单条目由调用方给默认插槽**；
+2. 新增 `components/CanvasRowMenu.vue` —— 画布行的菜单内容（外层用 RowMenuShell），
+   分组行：定位 / 重命名 / **解散分组** / 删除；节点行：定位 / 重命名 / **复制一份** /
+   **添加到 Agent** / 删除。**只 emit、不做动作**（动作要读画布数据，属宿主活；与 AssetRowMenu 同一分工）；
+3. `LeftDrawer` 的画布树三类行（**列表行 / 宫格卡片 / 分组行**）都挂 `@contextmenu`，
+   走 `canvasMenuRefs` 登记表 → `openCanvasMenu` 按行 id 取实例、在鼠标点打开 —— 与资产树同一套接线。
+
+**顺带把画布菜单做成真功能（此前大半是占位）**：旧代码的「删除 / 复制」是
+`ui.showToast('已删除 ' + name)` 这种**假动作**（而且 toast 早已停用，等于点了没反应）。
+现在 ui.ts 新增四条真实现，全部走既有唯一入口、不重复实现逻辑：
+- `removeNode(id)` → `doc.removeNodes`（级联清边 / 清子父引用 / 清选中 + 进历史 + 落盘）；
+- `duplicateNode(id)` → 先 `selection.set([id])` 再执行 `clipboard:duplicate`（复制语义就是「复制选中集」，
+  命令不带节点参数，见 plugin-clipboard 的 duplicate()）；
+- `referenceNodeToAgent(id)` → 执行 agent 插件既有的 `agent:reference-node` 命令（节点右键菜单同款）；
+- `ungroupNode(id)` → `group` 服务 `ungroup`（它自己包历史 + 还原子节点绝对坐标），插件没装时给明确提示。
+
+**验证**：真机实测（真 Chromium）：
+- 列表模式右键节点行 → 菜单「定位到节点 / 重命名 / 复制一份 / 添加到 Agent / 删除」；
+- 列表模式右键**分组行** → 「定位到节点 / 重命名 / **解散分组** / 删除」（条目按行类型分流）；
+- **宫格模式**右键卡片 → 同节点行菜单（双模式都接上了）；
+- 真功能抽验：点「重命名」→ 出现**行内输入框**（`input[data-canvas-rename]`，预填当前名、已聚焦，
+  不是浏览器弹框）；点「复制一份」→ 画布节点数 **23 → 24**（复制真生效，验完已删回 23）。
+- 测试：ui **199**（新增 6 条结构守卫：三类行都挂右键 / 画布行用 CanvasRowMenu 且登记进 openAt 表 /
+  外壳只声明一处浮层并暴露 openAt / 菜单只 emit 不 import 服务 / 分组与节点条目分流 / 动作是真实现而非占位 toast）
+  + vue-tsc 干净；产物重建（ui dist，8865 直接生效）。
+**守卫有效性自查**：把三类行的 `@contextmenu` 全删掉再跑 → 守卫当场红（已试过并还原）。
+
+**清场**：验证中复制出来的那个节点已删除，画布回到 23 节点 0 悬挂、无测试残留。
+
+### 追记（2026-10-08 十续，多选上控制栏注册「引用到 Agent」按钮）
+
+用户口径（原话）：「向主节点的顶部控制栏注册一个按钮，该按钮的功能就是'添加到 Agent 效果'，
+以及右键菜单中的'引用 Agent'效果是一样的」；并指定参考两处现有实现：
+① 顶部状态栏的「加入资产库」怎么注册；② 右键菜单「引用到 Agent」怎么执行。
+
+**两条参考（都已核对）**：
+- 「加入资产库」= **注册式接缝**：`packages/ui/src/assetUploadPlugin.ts` 用
+  `ctx.selectionRegion.attach({ region:'out:top', component, needs })` 往多选框顶栏挂一条，
+  多选插件一行不改。节点卡片顶栏有同形的 `ctx.nodes.attach(type|'*', { region:'out:top' })`。
+- 「引用到 Agent」= agentPlugin 注册的命令 `agent:reference-node`（`areas:['node']`）：
+  `service.requestNodeRef(nodeId)` + `service.show()`，输入框组件消费后插成节点标签。
+
+**做了什么**（`packages/plugins/plugin-agent`，**挂在多选框上控制栏**，与「加入资产库」同一条接缝）：
+- 新 `components/AgentRefToolbar.vue`：与「加入资产库」（`SelectionSaveAssetsToolbar`）同形 ——
+  只放按钮本身、不自套 `.ntp-root`（整排一块背景由宿主 `.selection-frame-slot` 给）；
+  `useCapability('selection')` 读选中集（needs 由 attach 声明），目录缺 button 件回退原生按钮。
+- 点它 = 把**整批选中节点**一起引用：执行与右键菜单**同一条命令** `agent:reference-node`
+  （payload `{ nodeIds }`；右键那条传 `{ nodeId }`，命令内部归一成一批），一次插 N 个节点标签。
+- 新 `agentCommands.ts`：命令 id 常量单独一份（注册处与按钮处共用，避免 ESM 环里读未求值常量）。
+- `agentPlugin.apply` 里 `ctx.selectionRegion.attach({ region:'out:top', id:'agent-refer-selection',
+  order:30, needs:['selection'] })`（多选插件零改动）。
+- 服务 `pendingNodeRef` 改 `pendingNodeRefs: string[]`（`requestNodeRefs` / `clearNodeRefs`）：
+  右键（1 个）与多选栏（N 个）共用同一份状态、同一条消费链；`AgentConversation` 消费改逐个插。
+- `canvas-render` 导出 `CAPABILITY_BAG_KEY / CAPABILITY_SCOPE_KEY`（测试模拟区域宿主要同一对象身份）。
+
+**验证**：plugin-agent **215**（新增 `agentRefToolbar.test.ts` 13 条：真内核查 `selection/region`
+的 out:top 落点 + needs、命令注册；现场编译 SFC + 内存渲染器真点击（整批 payload `{nodeIds}`）；
+禁用 / 缺 command / 缺 button 三种降级；源码守卫 3 条）+ tsc 干净；ui **201** + vue-tsc 干净；
+canvas-render **418**、group **57**、multi-select **153** 全绿；ui dist 重建。
+**真机（Chrome MCP，8865 真产物）**：选「图片 6」「图片 7」→ 多选框顶栏出现「引用到 Agent」
+（与 打组 / 加入资产库 同排、同一块 `rgb(33,33,33)` 面板、按钮本体透明）；
+点它 → Agent 面板打开、输入框**同时**出现「图片 6」「图片 7」两个标签；
+验证痕迹已清（画布 22 节点不变、面板关、选中空）。
+
+### 追记（2026-10-08 九续，修「等验证码时 cloud-server 提前判失败」—— 中间态被当终态）
+
+用户口径（原话）：「我在节点中操作发送请求…当我在浏览器中操作验证码时，它这边就已经操作完成了。
+在浏览器画布中，任务直接显示完成，并返回了报错信息。然而这个任务并没有真实完成，它还有第二次重试…
+你在第一个任务中断之后，就直接把任务给结束掉了。也就是说，你的后台判断逻辑有问题」
+（并给了 web2api 日志链接，任务 `c2632f08`）
+
+**日志证据（真实轨迹）**：
+```
+18:54:20  pending → processing（attempt #1）
+18:54:42  验证码 2007 → paused          ← 非终态：在等用户手动过验证码
+18:54:43  cloud-server 轮询看到 paused → 立刻判失败收工   ← BUG
+18:55:11  验证码消失 → captcha-watcher 自动恢复 → attempt #2
+18:56:35  completed 100%                 ← 真实成功，但 cloud-server 早就撒手了
+```
+
+**根因**：`cloud-server` 的 `toPollResult`（providers/web2api/index.ts）把 web2api 的 **中间态当成了终态** ——
+`paused` 与 `interrupted` 一律返回 `status:'error'`。而按 web2api 的状态机（`types/task.ts`），
+**只有 completed / failed / cancelled 是真终态**；`paused`（等验证码/风控，captcha-watcher 会自动恢复）、
+`retrying`（退避等待重试）、`polling_failed`（可手动恢复）、`pending`（换号后重排）都还在自己往前走。
+（用户猜测的「换号时把状态调成 100%」经核对不成立：web2api 里 progress=100 只出现在 `completed` 那条 SQL；
+真凶就是 cloud-server 把 paused 判死了。前端插件 `plugin-web2api-tools` 的 `isTaskStalled` 有同一份错判，一并修。）
+
+**修法**：
+- `toPollResult`：只有 completed/failed/cancelled 收敛；其余状态统统 `running`（继续轮询）。
+- 新增 `ProviderPollResult.waiting` 标记「等外部条件」的中间态（paused / retrying / pending）；
+  `taskManager.run` 把这些拍的耗时从 `pollTimeoutMs` 预算里**扣掉** —— 人过验证码要多久不由程序决定，
+  拿它顶超时预算就会把人还在操作的任务判超时（普通生成中的等待不在此列，仍正常计时）。
+- `plugin-web2api-tools`：`isTaskStalled` 只剩 `polling_failed`；`paused` 落进 running 分支
+  （界面继续转 + 显示暂停原因），不再收工。
+
+**验证**：cloud-server **506**（新增 `providerPollMidStates.test.ts` 8 条 + taskManager 等待不占预算 1 条）、
+plugin-web2api-tools **61**（paused 用例翻转为「继续 running」）、plugin-agent **214**、cloud-client **133** 全绿；
+四包 typecheck 干净；cloud-server dist 与插件 dist 重建、8865 重启。
+真机：用真实 web2api 任务复核 —— 日志里的 `c2632f08`（曾 paused、最终成功）现在判 `done` + 1 个产物；
+真失败任务判 `error`（「无可用账号」）、真取消判 `error`。另用注入的假响应逐态验证：
+paused/retrying/pending → `running`+waiting、polling_failed/processing → `running`、completed → done、failed → error。
+
+**配套修复：超时误杀长任务（用户追问「生成视频可能超过 10-20 分钟，5 分钟超时怎么办」）**：
+
+排查：后台默认超时 5 分钟（`DEFAULT_TIMEOUT`），而 **web2api 的全部动作都没有声明 `pollTimeoutMs`**，
+全部落默认 —— 实测一次成功生图 136s，视频更长（网页自动化 + 可能等验证码/换号退避），5 分钟必误杀。
+（用户问的「超时怎么算」已随上一条修复澄清：**等验证码/换号退避的 `waiting` 态不占预算**；
+这里补的是普通生成中那段的上限。）
+
+**修法**：`presets.ts` 给全部 11 个动作按类型显式声明轮询节奏与超时 ——
+图片（网页自动化）**10 分钟**、视频（网页自动化）**30 分钟**、视频（接口式）**45 分钟**、音频 **10 分钟**；
+视频取 30/45 分钟的依据：web2api 那条直连链路的插件本来就用 30 分钟（设置项 `web2apiTimeoutMs` 默认值），
+且 web2api 自己的任务超时是 20 分钟、轮询超时默认 24h —— 上游没死我们就不该先放弃。
+新增守卫测试：全部动作必须显式声明节奏与超时，且视频 ≥ 30 分钟（防止再有人加动作时漏配）。
+
+验证：cloud-server **507** 全绿 + typecheck 干净；产物重建、8865 重启（health ok）。
+
+
+### 追记（2026-10-08 八续，彻底移除 `res:` —— 用户口径「不做兼容，请修复」）
+
+用户口径（原话）：「不做兼容 请修复」。即在七续「统一写 URL」的基础上，把**读取侧对 `res:` 的兼容分支一并删掉**，
+让 `res:` 从项目里彻底消失（不留 @deprecated 的兼容路径）。
+
+**删除清单**：
+- cloud-server：`RESOURCE_REF_PREFIX` / `toResourceRef` / `isResourceRef` / `parseResourceRef` 全删（连同 index.ts 导出）；
+  `resourceResolver` 去掉 `res:` 分支（现在只认画布资源 URL 与资产 URL）；`SavedResource.ref` 改名 `url`；
+  `saveResource` 返回体去掉 `ref`（只留 `url`）；HTTP 上传路由返回也从 `{ref}` 改成 `{url}`；相关注释全清。
+- plugin-cloud-client：`resourceRef.ts` 只剩 `pendingUploadFields`（data:/blob: 判定）；`expandNodes`/`shrinkNodes`/`resolveRef`/`toRef`
+  /`isResourceRef`/`parseResourceRef`/`RESOURCE_REF_PREFIX` 全删；`canvasDiffAdapter` 去掉 `expandAll`；
+  `cloudResourceAdapter.resolveResource` 只做「URL 原样、其它 undefined」；`api.uploadResource` 返回 `{hashName, url}`。
+- plugin-agent `toolViews.ts`：`resName` 不再剥前缀、`toDisplayUrl` 去掉 `res:` 分支。
+- ui `canvasTree.ts`：缩略图/视频地址不再过滤 `res:`。
+- 测试同步：删掉所有 `res:` 兼容用例（resourceRef / canvasDiffAdapter / cloudResourceAdapter / resourceResolver /
+  routes / canvasDoc / toolViews / canvasTree 等），保留并改写为 URL 契约。
+
+**迁移与真机**：脚本 `migrate-res-to-url.mjs` 再跑一次（旧标签页曾把 `res:` 写回磁盘 12 处 —— 旧页面跑的是旧插件代码；
+**关掉那些旧标签页后重跑即净**）。真机（Chrome MCP，430 画布）：23 节点 / **14 张图全部加载、0 裂图**；
+`canvas_get` 与 `resource_list` 返回的媒体字段全是 `/api/canvases/<id>/resources/<hash>`；磁盘 `canvas.json` 里 `res:` 计数 **0**。
+
+**验证**：六个包全绿 —— cloud-server **491**、plugin-cloud-client **133**、plugin-web2api-tools **61**、
+plugin-agent **196**、ui **193**、canvas-data **372**（各包 typecheck 干净）。产物重建：cloud-server dist、ui dist、
+以及两个**外部插件** dist（plugin-cloud-client / plugin-web2api-tools —— 它们各自有 dist，必须单独构建，
+否则浏览器里跑的还是旧代码）；8865 已重启。
+
+**注意（运维）**：升级后要**刷新/关闭旧标签页** —— 旧页面内存里是旧插件代码，会把 `res:` 写回磁盘
+（本次实测被写回 12 处）。刷新后即按新契约运行。
+
+### 追记（2026-10-08 七续，全项目统一 URL：去掉 `res:` + 修 web2api 插件直连漏网路径）
+
+用户口径（原话）：「短引用 这个是在什么地方引用的呀？能不能统一改成画部门牌或者资产门牌的那种形式，
+统一使用这个 URL？然后统一转为本地路径 二进制直接发送接口？我记得之前还让你做了一个上传接口，
+可以先上传他这里的图片然后通过 id 进行创建任务？D:\Code\Git\web2api 最近 commit 不是写了吗？
+怎么又绕回原点了，请重新检查整个项目 我的项目中统一使用url， 不使用你说的这个res:xxxx」
+
+**排查结论（先讲清为什么之前会「绕回原点」）**：`res:` 只有两个写入点，都在存盘侧：
+① 前端保存画布时压缩（`canvasDiffAdapter` 的 `shrinkAll`）；② MCP 的 `canvas_add_image` 直写。
+读取时立刻展开成 `/api/canvases/<id>/resources/<hash>` 再交给渲染，所以界面一直在用 URL。
+用户报的「图片不存在」此前修的是**服务端那条链路**（底栏 `/api/jobs`）；而 16:22 那条裸地址
+（日志 `referenceImages:["/api/assets/files/ec96...jpeg"]`）是**浏览器里直连 8033 的
+`plugin-web2api-tools`** 发的 —— 它绕过服务端、把节点里的相对地址原样塞进 `referenceImages`，
+web2api 当自己 uploads 下的相对文件找 → 4002。这是漏网的第二条路，本次一并修掉。
+
+**改动（三路并行 + 集成）**：
+- **写入侧统一 URL（cloud-server）**：新增 `toResourceUrl(canvasId, hashName)`；`saveResource` 返回的
+  `ref` 改成 URL（与 `url` 同值）；`canvas_add_image` 写 `imageUrl: stored.url`；`resource_upload` 描述
+  与 `resource_list` 兜底同步。`parseResourceRef` 等读取兼容函数保留并标 `@deprecated`（只为读老数据）。
+- **写入侧统一 URL（前端）**：`cloudResourceAdapter.putResource` 回 URL；`canvasDiffAdapter.set` 删掉
+  `shrinkAll`（存盘不再压缩）；`resolveResource` 改成幂等（`res:` 展开、URL 原样）；`shrinkNodes` 删除；
+  `migrateLocalResources` 的「已上传」判断扩成「`res:` 或本画布 URL」，避免首次上云重复上传。
+- **web2api 插件直连路径（漏网修复）**：新增 `mcpClient.uploadResource`（调 `system/upload-resource` 拿
+  `referenceUrl`）与 `referencePrep.prepareReferenceImages`（下单前把 data:/blob:/本站相对地址取字节 →
+  上传 → 换成 web2api 的 `/<hash>.ext`；外链原样；失败只丢那一项并告警）；`presetRun` 在拼参数前先整理。
+- **数据迁移**：新增 `packages/cloud-server/scripts/migrate-res-to-url.mjs`（`--dry-run` / `--dir`，
+  写盘前另存 `canvas.json.bak-<时间戳>`，写后自动复查）。已对真实数据跑过：两次共转 43 个字段，
+  复查 0 残留；备份 3 份留在画布目录。
+
+**验证**：cloud-server **493**、plugin-cloud-client **143**、plugin-web2api-tools **61**、
+canvas-data **372** 全绿（四个包 typecheck 干净）；ui 产物与 cloud-server dist 重建、8865 重启。
+真机（Chrome MCP，430 画布）：23 节点 / 14 张图**全部加载、0 裂图**；磁盘 `canvas.json` 里 `res:` 计数 **0**、
+媒体字段全是 `/api/canvases/<id>/resources/<hash>`。
+**决定性验收**：在真机上用「图片 21」（资产地址形态的节点）建一个测试节点连上它、下单 ——
+web2api 日志里 `referenceImages:["/ec96ba44...png"]`（**它自己的上传地址**），任务失败原因只是
+「无可用账号（Cookie 已失效）」，**不再出现「图片不存在」**。测试节点已删、画布还原。
+
+**注**：迁移前打开的旧标签页内存里是旧数据，会把 `res:` 写回磁盘（实测被写回 12 个）——
+重跑一次迁移即清干净；刷新页面后不会再发生。web2api 那边的账号 Cookie 过期与本项目无关，
+参考图这一环已彻底打通。
+
+### 追记（2026-10-08 八续，左侧画布树：分组统一排在普通资源前面）
+
+用户口径（附截图）：「在左侧画布中，我希望你的这个分组可以显示在最上面，下面再显示一些普通资源。
+这种分组类似于文件夹，统一显示在最上面」。
+
+**改前实况**：树的顺序 = 画布节点的原始顺序（按创建/落盘次序），分组夹在图片中间
+（真机取证：顶层 15 个根节点里，分组 1 在第 6 位、分组 3 / 分组 6 垫底）。
+
+**改法**（`canvasTree.buildCanvasTree`）：分层稳定排序 —— **分组在前、普通节点在后**。
+选在数据层而非渲染层，是因为树的**每一层**都要这个效果：顶层分组提前，分组里的子分组同样提前
+（否则「分组 2 排在图片 3 下面」还是刺眼）。`toTree` 对孩子递归调用同一个 groupsFirst，
+一次覆盖所有层。
+
+判据用 `isGroupLike`（type === 'group' 或 data.nodeType === 'group'，与会话里图标映射/分组能力
+同一套认法），**刻意不**用「有没有 children」判 —— 那会把「只挂了一个孩子的普通节点」也算成分组。
+
+**两条刻意保住的性质**：
+1. **组内相对顺序 / 普通节点之间的相对顺序原样**（Array.sort 稳定）—— 画布顺序才是用户
+   能感知、能靠拖拽调整的那个顺序，不引入第二套排序键；
+2. 全是分组 / 全是普通节点时直接返回原数组（省一次拷贝，顺序本来就无关）。
+
+**验证**：ui **194**（新增 5 条：顶层分组提前 / 组内子分组也提前 / 相对顺序不变（稳定排序）/
+已排好时不折腾 / 渲染层包成 custom 时靠 data.nodeType 仍然认）+ vue-tsc 干净；产物重建。
+真机实测（真 Chromium，该画布 3 个顶层分组 + 1 个嵌套分组）：左侧树读作
+「分组 1 → 分组 2（缩进 24px）→ 其资源 → 分组 1 的直属资源 → 分组 3 → … → 分组 6 → … →
+所有普通资源（缩进 0）」—— 分组全部置顶，普通资源统一在下面，嵌套层级与缩进不受影响。
+
+### 追记（2026-10-08 七续，分组「背景颜色」触发器塌成一个点）
+
+用户口径（附截图）：「这个调色卡片应该修复一下，它变成了一个点，怎么可能会是一个点呢？你看下面
+展开的这个下拉菜单里面都是很正常的。优化这里的 UI —— 这个背景颜色，你可以写一个背景，
+左侧可以设置一个与圆块稍微小一点的小圆块就行了」。
+
+**根因（真 bug，量出来的）**：触发器里的色点是 `<span>`，而 **inline 元素会忽略 width/height** ——
+样式里写了 `width: 16px; height: 16px` 却没写 `display`，于是真机量到色点 **0×0**，
+屏幕上只剩 `box-shadow` 那圈 1px 描边，看着就是「一个点」。
+真机取证：按钮 24×32、色点 `getBoundingClientRect()` = 0×0（计算样式却写着 16px）。
+（色板本身正常：展开后的圆块是 `<button>`，button 是 inline-block，尺寸生效 —— 这正是用户说的
+「下面的下拉菜单里都是很正常的」。）
+
+**改法（按用户口径：小圆点 + 文字）**：
+1. 色点补 `display: block`（**这一行是修 bug 的关键**，不是装饰；注释里写明了原因，免得后人再删）；
+2. 尺寸 16 → **18px**：「比你那个圆块稍微小一点」（色板圆块是 26px）；
+3. 触发器从「纯图标」改成「圆点 + 文字」的文本按钮：左侧小圆点当当前底色的预览，右侧写「背景颜色」
+（与 `aria-label` 同名，读屏念得出；可见标签 + 无障碍名一致）。
+
+**验证**：真机实测（真 Chromium）：按钮 **72×32**、色点 **18×18**（`display: block`、底色跟随节点），
+文字「背景颜色」正常渲染；截图确认工具条读作「● 背景颜色 · 解散分组」。
+plugin-group **57**（新增 1 条：触发器必须是「圆点+文字」且色点有成对的 `display`+尺寸、
+尺寸小于色板的 26px）+ tsc 干净；ui **189** 全绿；产物重建（plugin-group UMD + ui dist，8865 生效）。
+**守卫有效性自查**：把 `display: block` 删掉再跑 → 新用例当场红（已试过并还原）。
+
+### 追记（2026-10-08 七续，Agent 队列 / 引导插队 / 后台对话 / 目标模式）
+
+用户口径（设计文档 `docs/superpowers/specs/2026-10-08-agent-queue-and-goal-design.md`，
+实施计划 `docs/superpowers/plans/2026-10-08-agent-queue-and-goal.md`）：
+① 跑着的时候再发消息不该被丢弃 ⇒ 进队列；② 输入框上方要有队列列表（贴框、宽 80%、行内引导/删除/⋯）；
+③ 队列里编辑过的消息**保持原位置**；④「引导」= 表面上像直接发送、实际插队到下一次请求；
+⑤ 刷新不打断正在跑的那一轮（设置里「后台对话」开关，默认开）；⑥ 目标模式（+ 菜单 → 目标 → 标签 →
+点标签改预算）；⑦ 目标可暂停/启动；⑧ 通知接通（每轮一条 + 队列跑完一条）；⑨ 不许一条消息发两遍。
+
+**做了什么（一句话一条）**：
+
+- **后台对话**：新 `SessionHub`（每会话常驻事件通道，带 seq 与"已落转录"水位）——
+  一轮在后台跑到底，HTTP 只订阅；刷新断开只是少一个订阅者。新增
+  `GET .../stream?since=N` 重连端点。旧行为保留（没注入 hub 时照旧跑在响应里）。
+- **队列**：队列存进**会话文件**（`sessions/<id>.json` 的 `queue` 字段，随会话/画布走）；
+  `QueueScheduler` 是唯一裁判（单裁判 + 原子认领 + 失败对账三条纪律，"不发两遍"的地基）。
+  API：`POST .../queue`（add/update/remove/close/cancel-edit/edit/pause/resume）、
+  `POST .../queue/:itemId/steer`（引导）。
+- **引导修洞**：旧版 steer 分支不写转录（刷新后消息消失）；现在补写（带 `steered` 标记），
+  且"轮刚好结束"时条目**退回队列**（不丢、不重复）。
+- **目标**：装 `@penguinharness/goal` 的 hook 包（manifest 原样，只补 `trigger:"host"` 保险）；
+  预算改 GOAL.json（下一轮生效）；**暂停 = 把 GOAL.json 改名挪走**（官方循环到边界自然停住，
+  不打断当前轮、不重写任何轮次逻辑）；启动 = 放回 + 踢一脚；暂停态守住"文件复活"。
+- **前端**：队列列表（贴输入框上缘、宽 80%、右列上下两个按钮：回到底部 + 暂停/启动）、
+  发送键三态（有内容⇒发送 / 空+跑着⇒终止 / 空+空闲⇒禁用）、`+` 菜单两项（目标 / 上传文件）、
+  目标标签与编辑框、通知（round_done / queue_idle）。
+- **设置**：全局设置弹窗（协作模式那一组）新增「后台对话」开关（默认开）+「目标设置」（默认预算）；
+  死掉的两个通知开关接真（存 KV）。
+
+**验证**：cloud-server **484** 全绿 + tsc 干净；plugin-agent **197** 全绿 + tsc 干净；
+ui **189** 全绿 + vue-tsc 干净。端到端探针 `packages/cloud-server/e2e/queue-goal-probe.mjs`
+（真服务 + 真磁盘）**ALL PASS**；真机（Chrome MCP）验过 + 菜单两项、点目标不弹框、
+点标签才弹编辑框、发送键初始态、回到底部搬位。
+
+**留下的**：队列事件缓冲上限的具体数值（暂定 2000 条 / 500KB）；通知点击行为（暂定聚焦会话）。
+
+### 追记（2026-10-08 六续，分组上控制栏两修：解散分组点不动 / 色板宽度不够）
+
+用户口径（两条）：①「解散分组点击有时候没有生效」；②「分组颜色的卡片不太对，宽度不够」。
+
+**① 解散分组点不动（真 bug，根因是取服务的写法）**：
+组件里写的是 `ctx.group?.ungroup(id)`。`useCanvasRender()` 递进组件的 `ctx` 是**根 Context**，
+而 `ctx.<服务名>` 这种直访是靠「每个插件自己 scope 上的 Proxy」实现的
+（kernel `Context.ts` 的 `new Proxy`：属性读命中已上架服务名才转发）—— 根 Context 没有那层代理，
+`ctx.group` **恒为 undefined**；可选链 `?.` 再把它吞成静默 no-op：按钮点得动、什么也不发生。
+真机取证：`ctx.group` → undefined，`ctx.get('group')` → 对象，合成 click 后节点父子关系原样。
+改法：把「从服务表取分组服务」抽成纯函数 `groupServiceOf(ctx)`（只认 `tryGet`/`get`，形状不对给
+undefined 不抛），组件一行调用它；同仓其它节点工具栏组件本来就走 get/tryGet，这里对齐。
+真机实测（真鼠标点）：临时建的两节点组 **组节点消失、两个孩子回到顶层且父子引用清空**。
+
+**② 色板宽度不够（真 bug，量出来的）**：老实现 `menu-width="112px"`，而网格实际需要
+4 列 × 22 + 3 间隙 × 6 + 两侧内边距 8×2 = **122px** —— 网格比面板内宽还大，
+被 `overflow-x: hidden` 把边缘裁掉；加上 7 个色块 4+3 的排布贴着左缘，右下角看着就是缺一块。
+改法：面板最小宽 112 → **152px**，色块 22 → **26px**（也不到「交互目标 ≥24px」的舒适档时偏小），
+网格 `justify-content: center` 居中 —— 第二行 3 个落在中段，与第一行 4 个形成对称。
+真机实测：面板 152×88、网格 138×74、左右各留 7px **对称且无横向裁切**（scrollWidth == clientWidth），
+点绿色仍正常写入 `data.backgroundColor`。
+
+**验证**：plugin-group **56**（新增 3 条：`groupServiceOf` 纯函数 6 断言 / 组件不再用 `ctx.group`
+直属性的源码守卫（先剥注释再查，避免解释这条约束的注释自己踩中）/ 色板宽度与居中的结构断言）
++ tsc 干净；ui **172** + vue-tsc 干净；两处产物重建（plugin-group UMD + ui dist，8865 直接生效）。
+**守卫有效性自查**：把组件改回 `ctx.group?.ungroup(...)` 跑测试 → 源码守卫当场红（已试过再还原）。
+分工说明：本包 vitest 是 node 环境（无 jsdom），.vue 挂不到真 DOM 上（同仓 plugin-agent 为此要现场
+编译 SFC），所以「点下去真的调到服务」这条用「纯函数 + 源码守卫」两层盯，行为面由上面的真机实测兜底。
+
+**清场**：验证用的临时分组与节点已全部删除，画布回到 22 节点 0 悬挂；验证时改过的分组底色已还原。
+
+### 追记（2026-10-08 六续，Agent 工具卡紧凑化定稿：B 卡片 + C 资源列表 + 底部详情块）
+
+用户口径（先出 demo 挑选，定稿后原话）：「我选择 B，但是你的这个资源列表我选择 C」；
+「卡片下面都有一个详情的折叠按钮 … 你这个工具默认工具执行的时候，hover 的时候它没有这个背景条」；
+随后纠正两处：「不是给你说了不要这个背景吗？你 hover 的时候是没有任何效果的」
+「我让你添加的详情不是这样的，是在下面添加一个详情的折叠块 … 折叠里面需要显示工具名称、输入、输出，
+不要有任何省略，即使输入没有也不做省略」。
+
+**过程**：先做 demo 页（`docs/tmp/tool-card-demo.html` → `-v2` → `-v3`），四套方案对照
+（A 单行极简 / B 紧凑两行 / C 媒体条 / D 当前线上），数值按真机复刻（400px 面板 / #212121 底 /
+28px 圆角 / 344px 卡片 / veil 底 / #363636 线）；用户选定 **B 卡片 + C 的资源列表**，
+并要求悬停**不加任何背景**（只让折叠箭头变亮）、详情是**卡片下方的折叠块**（工具名称/输入/输出，不省略）。
+
+**实现**（`plugin-agent/src/toolViews.ts` 数据层 + `components/ToolViewBody.vue` 渲染层 +
+`components/AgentConversation.vue` 宿主壳）：
+- 卡片 = **紧凑两行**：头行 = 图标 + 人话标题 + 标记（靠右）；内容行 = 一行
+  （缩略图条 / 媒体行 / 胶囊 / 进度条 / 提示）。**删掉**大数字瓦片（`stats` 块类型取消，
+  概览/批量改成计数胶囊「4 新增」）；媒体类改 `media` 单行（40px 缩略图 + 标题 + 副标题）。
+- 缩略图 **88px 网格 → 40px 条**：最多 3 张 + 「+N」；失败占位同步收成 40px。
+- 资源列表按 C：图片铺进缩略图条，**音频/视频不再逐个成行**，折成一句类型统计
+  （「27 图 · 12 音频 · 2 视频」）跟在条右侧；一张图都没有时该统计进胶囊行。
+- 清单类（画布列表等）**最多 3 条** + 「还有 N 条…」。
+- 「详情」：卡片**下方**的折叠块，展开 = 工具名称 / 输入 / 输出 三块；输入为空写「（无输入）」，
+  输出不截断、不加省略号。
+- 悬停：默认工具行**不加底色**（删掉早先的 hover 背景），只让左侧折叠箭头由灰变亮；
+  「详情」按钮同理，只改文字色。
+- 卡片壳收紧：padding 10px 12px / 圆角 12px → 6px 8px / 10px；跑完的卡片不再叠一行摘要
+  （卡片自己的头行就是头部），只有运行中才显示转圈行。
+
+**验证**：plugin-agent **138** 全绿（新增 1 条紧凑化守卫：40px 尺寸 / STRIP_MAX=3 /
+详情块在内容之后 / 三块标签 / 悬停不写 background）+ tsc 干净；ui 产物重建、8865 在跑。
+真机（Chrome MCP，`?v=9` 页 + 历史会话「图片内容介绍请求」）：卡片高 97-120px（原先同类卡 250+），
+「节点详情」标记=「图片 21 · #50」、「文件预览」给 3.3 MB 徽章 + 40px 缩略图；
+「资源列表」卡点开详情 → 标签正是 工具名称/输入/输出 三块、输入原文完整；
+默认工具行悬停 background=rgba(0,0,0,0)、箭头 #919191、详情按钮背景透明。
+真 MCP 复核：resource_list 41 项 = 27 图 / 12 音频 / 2 视频，前三张图 URL 直取字节成功（2048/2336/738）。
+
+**图像资源地址最终复核（2026-10-08，用户追问「图片资源地址解决没有」）**：
+用**运行中的 dist 产物**（8865 在跑）起隔离服务 + 假 provider 记录它实际收到的参考图值，
+覆盖四种来源形态 —— 节点 50 的 `imageUrl`（资产地址 `/api/assets/files/<hash>.jpeg`，正是报错那一个）、
+`res:<hash>` 引用、`/api/canvases/<id>/resources/<hash>` 画布资源地址、带 origin 的资产地址：
+四条全部转成 `data:image/jpeg;base64,…`（4.5 MB 内嵌），**provider 侧拿不到裸地址**（探针断言 `rawAssetLeaked=false`）。
+把同一份 data URL 交给**真实的 web2api**（8033，走 provider 的 `system/upload-resource` 手法）：
+返回 `referenceUrl=/ec96ba…png`、回读 200 + image/png + 3477488 字节 —— 「参考图先上传拿地址」链路可用。
+web2api 日志核对：`图片不存在` 共 16 条，**全部在 10:04 之前**（修复前的历史）；重启后无新增。
+
+### 追记（2026-10-08 五续，画布分组三修：行内改名 / 任意层嵌套 / 组内 Ctrl+G + 命名）
+
+用户口径（三条，附两张截图）：
+①「画布 tab 下面的分组重命名，还是浏览器系统那种弹出框，我要的是资产里面的那种重命名效果」；
+②「你的 UI 部分有一个嵌套分组的效果，但是好像存在问题，请进行修复 —— 你没有实现第二层」；
+③「分组快捷键失效：我已经在一个分组内，选中两个节点按 Ctrl+G 没有分组，只有把节点拖到分组外才生效」；
+④「分组标题重复：创建节点时有索引累加，希望分组参考它的做法」。
+
+**① 分组/节点重命名改行内输入框**（`LeftDrawer.vue` + `ui.ts`）：
+老实现是 `window.prompt('重命名节点', …)`，而且只改左侧树那份**副本**、根本没写进画布数据
+（改完刷新就没了 —— 比弹框本身更严重）。现在与资产树同一套：行内受控输入框、聚焦全选、
+回车/失焦提交、Esc 只退改名（`@keydown.esc.stop`，不连关抽屉）。提交走唯一写口
+`ui.renameNode` → `doc.setNodeLabel`（写节点自己的 data.label），画布标题条 / @ 菜单 / 左侧树
+读的是同一份。真机实测：菜单「重命名」→ 输入框预填全选 → 回车 → 节点 label 与左侧名字同步更新；
+Esc → 值不变、输入框消失、抽屉还在。
+
+**② 嵌套分组第二层**（`canvasTree.canvasTreeBlocks`，新纯函数）：
+老模板是**写死两层**（根分组 + 它的一层孩子）：孩子自己还是分组时，整棵子树直接被丢掉 ——
+用户看到的「第二层没实现」就是这个。抽成纯函数拍平（前序：分组头 → 子块递归），
+模板一个循环画完，层数不设限；分组头与节点段各带 depth（缩进 = depth × 24px），
+宫格模式每层各自成一个三列网格（不会混进同一行）。删掉整块旧的写死模板，改渲染 block 序列。
+真机实测（该画布有 分组1 ⊃ 分组2，以及组内嵌套组）：分组头缩进 0 / 24 / 24 px、
+三层节点段缩进 24 / 48 / 48 px 全部正确分层，`分组 2` 及其子节点都画得出来。
+
+**③ 组内 Ctrl+G 打组**（`plugin-group`）：
+根因两处：命令层 `run()` 里 `filter(id => !node.parentId)` 把**已在组内的节点全滤掉**
+（剩 0~1 个 → 命令静默什么都不做），`createGroup` 里同样一刀切 `if (node.parentId) return false`。
+现在：命令层只滤「不存在的节点」，能不能一起装进新组由服务判；`createGroup` 支持**组内打组**
+（新组挂进共同父、仍是同一层容器），并显式拒绝跨组混选（父不同 → null，语义模糊不硬猜）。
+坐标这一路必须按**绝对矩形**算（组内节点的 store position 是相对原父的），新组的 position
+也按共同父转相对 —— 老实现只在顶层节点上恰好成立。配套修 `ungroup`：解散**内层组**时
+子节点升为外层组成员（老实现一律 `parentId: undefined`，等于把内容扔出外层组）。
+嵌套上限仍是 1（**不是**放宽的那条路）：渲染层给容器只留了两档垫底 z（顶层组 -3 / 其余 -2），
+实测深度 2 的组 computed z = 0，**与连线同层**、视觉分层失效 —— 要更深得先改渲染层档位。
+真机实测：组 43 内选两个节点执行 `group:create` → 新建「分组 4」parent=43、depth=1、
+两个子节点相对坐标正确（绝对位置不变）。
+
+**④ 分组标题不重复**（`nextTypeName` + 存量补名）：
+线上跑的是旧 bundle：老 `createGroup` 在 data 里写了 `label: ''`，把数据层的默认名
+（"分组 1"）顶掉了 —— 于是标题条/左侧树回落到类型名，看起来全叫「分组」。源码里
+「不显式给 label」的修法已在，只是**已存档的那批**没人补。现在：数据层新增
+`nodeStore.nextTypeName` / `doc.nextTypeName`（与建节点自动补名走同一份按类型计数），
+插件 `apply` 里补名（`label === ''` 才补，用户清空过标题的 `undefined` 不动），
+并订 `doc.subscribe` 的 `replace`（冷启动 restore 在插件 apply 之后，热装时点则由立即那一次覆盖）。
+真机实测：用户的三个空标题分组自动补成「分组 1/2/3」，之后新建接着数「分组 4」（不撞号）。
+
+**顺带修一个真 bug（挡住分组持久化）**：`plugin-cloud-client` 的 `diffGraph` 只发变化的节点、
+且**原样**发本地那份 —— 解除父子后的本地节点里 `parentId` **键不存在**（不是 null），
+而服务端把「没有这个 key」读成「这次没提这个字段」，只有显式 `null` 才执行删除。
+结果：**把节点拖出分组 / 解散分组写上去等于没写** —— 刷新后节点又回到组里，
+组被删掉还会留下指向已删组的悬挂 parentId（用户那张画布上就存着两条）。
+修法：`diffGraph` 对「本地已无 parentId、基准里还有」的节点补 `parentId: null`（其余字段不动）。
+真机实测：设置/解除 parentId 两步都能落盘，画布上遗留的两条悬挂引用已清干净。
+
+**验证**：canvas-data **372** 全绿 + tsc 干净；plugin-group **53**（新增 6 条：组内打组 / 跨组拒绝 /
+嵌套上限 / 编号默认名 / 存量补名 / 解散内层组）+ tsc 干净；plugin-cloud-client **132**（新增 3 条
+出组持久化）+ tsc 干净；ui **172**（新增 canvasTreeBlocks 6 条）+ vue-tsc 干净；
+canvas-render **418** / canvas-base **6** 全绿（未受影响，跑了回归）；三处产物重建
+（ui dist + plugin-group / plugin-cloud-client 的 UMD，8865 直接生效）。
+
+**清场**：验收过程中在用户画布上造的节点已全部删除，画布回到 22 节点 0 悬挂；
+两个被误挂进组的老节点位置已还原到测试前的原始坐标。
+
+### 追记（2026-10-08 四续，资产引用标签点击预览 + 资产管理弹窗引导）
+
+用户口径：
+①「从这个资产里面引入的资源，可以点击进行预览，因为它这里本身就提供了路径」；
+②「如果是文件夹，那么就打开资产管理的这个页面（对应文件夹提供一个提示 tooltip）……
+   希望你进这个页面的时候：1. 先把所有的文件夹折叠起来，然后只展开选中的文件夹；
+   2. 在这个文件夹上提供一个提示信息，点击操作之后，或者 3 秒之后，提示信息就会自然消失」；
+③「如果是视频、音频、图片的话，就使用我的通用预览效果。可以参考『生成历史』里面点击的全屏预览，它是一个通用组件」。
+
+**判据**：有 `ext` = 文件 → 全屏预览；只有 `folderId` = 目录 → 打开资产管理并展开到那一层。
+
+改动（跨 4 个包；**三方解耦**：输入框只管抛点击，Agent 插件转成系统事件，应用层监听）：
+- `prosemirror-editor-bundle`：asset 引用新增 `ext` / `folderId` 字段（`formatReferenceMarkup` 第 4 参）；
+  resource 节点新增 `refExt` / `refFolderId` 属性 —— 解析（回填）与导出（getPlainText / 复制）都要原样写回；
+  四类引用的内联 SVG 图标收敛成唯一一份 `REF_ICONS`（此前 useEditor 与 agentResources 各存一份，会漂移）。
+- `plugin-agent`：解析从 SFC 抽成纯函数 `userSegments.ts`（带 path/ext/folderId，可单测）；
+  标签点击不再找任何服务，而是广播**系统事件** `agent:ref-click`（名字与载荷定义在 `refClickEvents.ts`，
+  已 registerEventName 登记）。气泡标签与输入框 chip 走同一条事件。
+- `packages/ui`：监听该事件并落实 —— `composables/useAssetRefOpen.ts` 按载荷分流
+  （`ext` = 文件 → 全屏预览；无 `ext` + `folderId` = 目录 → 资产管理并展开到那一层）；
+  监听与浮层收进 `components/AssetUiSlot.vue`（挂 CanvasHost `#ui` 槽 —— `ctx.on` 与主题注册件
+  `mediaViewer` 都只有渲染子树内取得到，左侧抽屉在 CanvasShell 兄弟位、够不到）。
+  资产管理弹窗新增 `initialFolderId` / `focusToken` / `fromRef`，进入时**先全折、只展开选中那条链**，
+  并给目标行一条 3 秒自动消失的引导提示。
+- `cloud-server`：解析 `folderId`；系统提示词补上「资产分文件/文件夹两种，没有 ext 就是目录」。
+
+关键边界（都有单测钉住）：
+- 文件夹名带点号（「素材 v1.2」）**不会**被当成文件 —— 有 `folderId` 就不再从 path 推扩展名；
+- 老转录（只有 path、没有 ext）仍从 path 末尾补 ext，图片不会被当成文件夹；
+- 同一个文件夹连点两次会重新折叠 + 重新提示（`focusToken` 每次 +1，宿主按它给弹窗换 key）；
+- 「折叠 + 提示」只属于**从引用标签跳进来**这条路径；从侧边栏点「资产管理」进来**保持原来的全展开**。
+
+**为什么用事件而不是服务**（用户口径 2026-10-08）：服务通道用**一个服务名**把两边绑死，
+还隐含「服务必须先于消费方注入」的次序要求；事件是广播 —— 发的人不知道谁在听，听的人不 import 发的人，
+少一边也不报错。判断「文件 / 文件夹」的唯一依据仍写在载荷自己身上（有没有 `ext`），不做二次翻译。
+
+**验证**：ui **172** / plugin-agent **138** / prosemirror-editor-bundle **25** / cloud-server **439** 全绿，
+四个包 typecheck 干净；产物重建 + 8865 重启（health `{"ok":true}`）。
+真机（Chrome MCP，8865）：
+- 对话里点资产文件标签 → 通用 `MediaViewer` 打开、图真加载（`naturalWidth>0`），src = `/api/assets/files/<hash>.png`；
+- 点文件夹标签 → 资产管理打开：展开到父层 12 行 / 展开到子层 33 行（对照全展开 66 行），引导提示出现、
+  3 秒后自动消失、点一下也立刻消失；
+- 同一文件夹连点两次仍会重新折叠 + 重新提示；从侧边栏按钮进 = 33 行、无提示。
+
+code review（Standards + Spec 两个子代理并行）：修掉了它们报的三个真问题 ——
+文件夹被误判成文件、侧边栏入口被误改成全折叠、我自己留下的死代码（`assetFolderResource` /
+`formatRefAssetFolder` / `__assetKindOfExt`）与图标表重复；其余（既有代码的风格问题、前几轮累积的范围）不动。
+
+### 追记（2026-10-08 三续，Agent 工具卡三件：分组灰底 / 工具卡图片失效 / 参考图「图片不存在」）
+
+用户口径（三条，附截图，在 `430c8f1f00bd4aba` 画布 `?v=5` 页真机调试）：
+①「图 1 那个 exec_command 折叠的部分也被灰色背景包住了，图 2 就没有 —— 只有折叠以下的内容才被包住；
+而且上下 padding 很大」；
+②「很多工具调用显示的图片经常失效，且没有图片失效的 UI 状态；要调查为什么很多图片无法访问：
+是图片被删了吗？」；
+③「通过图片创建任务时又报错提示『图片不存在』，我之前不是修好过吗？」
+
+**① 分组里的折叠行被灰底包住**（`plugin-agent/AgentConversation.vue`）：单工具行本来只有**展开后的**
+`.ac-tf-body` 包灰底；但分组 CSS `.ac-tg-body .ac-tool-fold, .ac-tg-body .ac-tool-card { …灰底 + 8px 内边距… }`
+把**收起状态的折叠行**也包了 —— 这就是图 1 与图 2 的差异。修法：该规则只留 `.ac-tg-body .ac-tool-card`；
+分组项的 class 分流改为 `(tool.card || hasCardView(tool)) ? 'ac-tool-card' : 'ac-tool-fold'`（画布 MCP 卡片
+在组里也走卡片壳）。真机实测（复用历史会话「图片内容介绍请求」）：组内折叠行
+`bg=rgba(0,0,0,0) / padding=0 / border=0`、高 26px；卡片仍 `veil + 1px 边框 + 8px 10px`；
+展开的输入/输出块仍包灰底。
+
+**② 工具卡图片裂图（两类假失效，图片没被删）**（`plugin-agent/toolViews.ts` + `ToolViewBody.vue`）：
+- **根因 A：地址被双拼**。`canvas_get` 卡片的 `resUrl` 无视 name 已是完整地址，把节点 50 的
+  `imageUrl=/api/assets/files/ec96ba4464cbf531.jpeg`（资产地址）拼成
+  `/api/canvases/<id>/resources//api/assets/files/…` → 404 裂图（真机复现）。
+  修法：新增 `toDisplayUrl`（完整地址原样 / `res:` 剥前缀 / 裸名才拼画布资源路由），`resUrl` 改为 delegate。
+- **根因 B：非图片也当图片渲染**。`resource_list` 的 41 个资源里有 12 个 OggS 音频（无扩展名）、
+  全被塞进 `<img>` → 必裂。修法（与 cloud-server 侧配套）：服务端 `resource_list` 返回
+  `[{name,mime,kind,url}]`（kind 由扩展名 + **头部字节嗅探**判定）；前端兼容两种形态 ——
+  kind=image 进缩略图网格、其余按类型进行（icon audio/video/file）。
+- **兜底 UI**：`ToolViewBody` 的图片加 `@error` → 原位换成 `.tvc-img-broken` 占位
+  （`ImageOff` 图标 +「加载失败」，虚线框 88px 同尺寸，带 role/aria-label）。
+- 顺带：`canvas_get` 单节点只从 `imageUrl`（退 `panoUrl`）取图，不再把 videoUrl/audioUrl 塞 `<img>`；
+  `generation_status` 的产物 url 也走 `toDisplayUrl`。
+- 真机实测：工具卡 9 张图全部 `naturalWidth>0`（2048/1536/738…）、内嵌页 0 张裂图；
+  `resource_list` 卡「41 个资源」= 4 图缩略 + 4 音频行（音频不再进 `<img>`）。
+
+**③ 参考图「图片不存在」**（真 bug，`cloud-server`：`tasks/resourceResolver.ts` 新增 + server.ts 接线）：
+节点 50 的 `imageUrl` 是**资产地址** `/api/assets/files/<hash>`（一次上传素材入画布的形态），
+而 `resolveResourceUrl` 只认 `res:` 与 `/api/canvases/…/resources/…` 两种形态 → 资产地址**原样**发给 web2api，
+它当自己 uploads 目录下的相对文件找 → 报「图片不存在（已尝试 `…\web2api\uploads\api\assets\files\…`）」。
+（此前修的是前两种形态 —— 这是同一族的第三种，之前没覆盖。）
+修法：`makeResolveResourceUrl` 三种形态都读成 **data URL**（`parseAssetNameFromUrl` 新增于 assetStore）；
+mime 先按扩展名、无扩展名时对字节头部嗅探（`sniffMimeFromHead`：PNG/JPEG/GIF/WEBP/BMP/AVIF/MP4/OggS/ID3/WAV/MP3）。
+配套 `resource_list` 富形态（`canvasDoc.listResourceInfos` + `readHead` 只读头 16 字节，不整读大图）。
+
+**验证**：cloud-server **422** 全绿 + tsc 干净（新增 resourceResolver 13 条 + resourceInfos 12 条，含真起服务经
+`/mcp` 调 `resource_list` 验形状）；plugin-agent **129** 全绿（新增 8 条：地址口径 6 + 失败占位 1 + 分组 CSS 守卫 1）
++ tsc 干净；ui **165** 全绿。产物重建 + **8865 已重启**（health `{"ok":true}`）。
+真机（Chrome MCP，`?v=5`）：① 折叠行无壳/卡片有壳/展开块有壳（几何逐项量过）；
+② 工具卡 9 图全载、4 个失败占位（旧会话 ogg 记录，明示而非裂图）；③ 真数据探针：四种形态
+（`res:` / 画布资源地址 / 资产地址 / 带 origin 资产地址）全部转成 `data:image/jpeg;base64,…`；
+`listResourceInfos` = 27 图 + 12 音频 + 2 视频；端到端（临时服务 + 假 provider recorder + 真 HTTP/MCP）：
+`generation_create`（入边收集参考图）与 `/api/jobs`（底栏路）两条下单路径，provider 收到的参考图
+**都是 data URL**，不再出现资产地址。
+
+### 追记（2026-10-08 二续，四件小修：视频卡缩略图 / Agent 图片预览 / 弹窗折叠 / 新建下拉）
+
+用户口径（四条，附截图）：
+①「视频没有缩略图，也没有标识。你可以添加它的首帧作为预览，并且在卡片中添加一个播放图标按钮」；
+②「Agent 里面读取文件的地方，点击时没有进行预览。希望使用预览插件（可参考生成历史弹出框的预览 api）」；
+③「资产管理弹窗里点文件夹行没有折叠效果，为什么左侧边栏折叠就有效果？它们不是同一个组件吗？」；
+④「资产管理右上角'新建'按钮不要直接建文件夹，要和左侧边栏加号一样，点一下弹下拉（新建文件夹 / 上传资产）」。
+
+**① 视频节点缩略图（真 bug）**：`canvasTree.nodeThumbUrl` 对视频节点的候选字段含 `videoUrl` ——
+mp4 地址塞进 `<img>` 必然裂图（用户截图里的破图就是这个）。修法：thumb 只认图（posterUrl / thumbUrl），
+新增 `nodeVideoUrl` + `TreeNode.video`，抽屉里用 `<video preload="metadata" muted>` 显示首帧，
+叠加播放角标（生成历史卡同款语义），没有视频地址则回落视频图标。列表/宫格/顶级叶子三处都接上。
+真机实测：`video.readyState=4`（1280×720 真实解码）、播放角标存在、无裂图。
+
+**② Agent 工具卡片图片点击预览**（`plugin-agent` 包，子代理实现 + root 复核）：
+`ToolViewBody.vue` 的 images 块图片此前无点击处理。改为 `emit('preview', src)`（role=button +
+tabindex + Enter/Space 键盘可达），`AgentConversation.vue` 4 处 `<ToolViewBody>` 全部接上
+`@preview="previewImage = $event"`，复用宿主已有的那只 MediaViewer（与生成历史同款），未新增第二只。
+真机实测：点 read_file 卡片里的图 → MediaViewer 打开、1280px 图正常加载；Esc 关闭正常。
+新增 `toolViewImagePreview.test.ts`（6 条，真编译组件 + 内存渲染器派发事件，不是源码字面量守卫）。
+
+**③ 弹窗点文件夹行不折叠**：`AssetManageDialog` 给共用树传的 `folder-click="open"` 分支
+只改面包屑/新建落点、不改列表 —— 用户看到的就是"点了没反应"。改成默认 expand（与左侧栏一致）。
+下钻入口改用行尾显式「进入」按钮（`showEnter`，仅弹窗开启；"双击行"实测不可靠 —— 第一下折叠会
+换行，dblclick 落到别的行上，已否决并在注释里记了原因）。真机实测：点文件夹行 33 行 → 2 行 → 33 行。
+附带统一：行菜单「新建子文件夹」落点改为该行（原为当前层，与抽屉漂移）。
+
+**④ 「新建」改下拉**：`AssetManageDialog` 右上角文字按钮 → 加号下拉（AxDropdown + AxMenu：
+新建文件夹 / 上传资产），照左侧抽屉加号。上传走真 `AssetUploadDialog`（同组件、同保存口径
+`ui.uploadAssetsTo`，保存位置默认预选当前层）；`AssetUploadDialog` 新增可选 `initialFolderId`。
+Esc 分层：上传弹窗开着时资产管理让位 + `stopPropagation`（一次 Esc 只关一层，抽屉不被连关）。
+真机实测：下拉两项、上传弹窗打开且预选位置正确、两次 Esc 逐层关闭。
+
+**验证**：ui **158** 全绿（含新增 9 条：canvasTree 4 + assetTreeStructure 5）、ui typecheck 干净、
+ui 构建通过（产物刷新到 packages/ui/dist）；plugin-agent **105** 全绿 + tsc 干净；
+既有契约 e2e `asset-tree-shared-check.mjs` **8/8 PASS**（真 Chromium）。
+
+### 追记（2026-10-08，资产树对齐 + 取消双击重命名）
+
+用户口径（附截图）：「女孩资源图片和新建文件夹是同级，对齐有问题——图片要对齐文件夹的图标，左对齐」；
+「文件夹取消双击重命名功能」。
+
+**① 同级对齐**：AssetTree 资产行此前直接渲染缩略图，而文件夹行在缩略图前还有一个
+20px 的折叠按钮——同 depth 下资产行的图标比文件夹图标靠左 20px，视觉错位。
+修法：资产行在缩略图前补一个等宽（size-5）的空占位（aria-hidden），缩略图与文件夹
+图标落到同一 x。真机实测：根级「女孩」缩略图 x=40 = 文件夹图标 x=40，delta=0 ✅
+（弹窗 variant 的 px-2 不受影响，同 depth 下同样对齐）。
+
+**② 取消双击重命名**：文件夹行名字按钮的 @dblclick="emit('startRename'…)" 移除。
+重命名入口保留：行菜单「重命名」（右侧「⋯」/ 右键菜单）。真机实测：双击文件夹名、
+双击资产名均不再进入改名态 ✅。
+
+验证：ui typecheck 干净、**149** 全绿、产物重建（8865 刷新生效）。
+
+### 最近完成（2026-10-07 五续：Code Review 修复收口）
+
+用户要求「请修复完整」——把 review 报告里剩余的问题修完。
+
+**Spec 缺口（弹窗侧文件夹功能没接上）**：
+- AssetManageDialog 的「添加到 Agent / 添加到画布」改走与抽屉同一条服务
+  （`ui.addFolderToAgent` / `ui.addFolderAssetsToCanvas`）；确认弹窗状态机照搬抽屉
+  （含审查发现的"旧 Promise 挂起"修复：开新确认前先 cancel 旧的）。
+- 真机验证：弹窗右键「打发打发」(23 项 >10) → 确认框出现且文案带数量 → 取消路径不改数据；
+  「添加到 Agent」标签出现。注意：本机 23 项含 21 张图 + 2 视频，确认后建节点需数秒分帧。
+
+**拖拽误移根目录**：AssetTree 容器级 drop 原来会派发「移到根目录」→ 改为**原地取消**。
+语义收紧：只有显式落在文件夹行上才移动；「移回根目录」走行菜单的「移动到 →（根目录）」。
+真机回归：拖「你好」到空白 → folderId 不变 ✅。
+
+**Standards 硬违规**：
+- `--ui-brand`（未定义变量，hover 掉蓝兜底）→ ModalsArea.vue 历史卡 hover 改 `--ui-accent` ✅
+- 资产两弹窗 z-[95] 且无 Esc → 统一 z-[100000]（确认层 z-[100001]），挂 document keydown Esc 关闭 ✅
+- canvas-data 引 Vue（shallowReactive）—— **保留不动**：那是「默认尺寸实时生效」功能的实现
+  （TYPE 表 shallowReactive + updateTypeSize），审查基线与功能取舍判给功能。
+- 测试探针 traceFork.probe.ts 编进 dist —— **保留**：诊断用途（命名即探针），删除影响排障。
+- mcp/server.ts 头注释旧名 —— 保留（历史命名记录，非契约）。
+- cloud-server 提示词种子不自愈 —— **已知设计**（STATUS.md:525 记过），需要迁移属新任务。
+
+**Standards 判断题（清理）**：
+- 文件夹图标映射三份 → 收口 `composables/folderIcons.ts`（ICON_NAMES/ICON_MAP/folderIconComponent），
+  AssetRowMenu / AssetManageDialog / LeftDrawer 三处改 import ✅
+- Agent 面板字号/尺寸合规：消息操作钮 22→32、编辑徽标 ✕ 16→32、分页箭头 26→32、
+  图标 10/11→12、tvc 系列 10px→11px、大数字 18→15（全部对齐 ui-style-guide 表）✅
+- `<img role=button>` 补 tabindex + Enter/Space 键盘可达 ✅
+- 两处"首句截断"公式 → 收口 `immediateTitleOf()`（runtime.ts，落盘与判定恰等）✅
+- Duplicated Code 其余项（中文→kind 级联、平铺 walk、sessions 映射等）—— 判断题级别，
+  影响面大（跨文件签名改动），留待下次专门重构，不在本次修复范围。
+
+**Spec 轴误报澄清**：useMasonry.ts 并非无引用（ModalsArea.vue:13/42 使用中）。
+
+验证：ui typecheck 干净、**149** 全绿；plugin-agent tsc 干净、**99** 全绿；
+cloud-server tsc 干净、**399** 全绿；ui 产物重建。
+真机（Chrome MCP）：上传弹窗 z=100000、Esc 关闭 ✅；资产管理弹窗 Esc 关闭 ✅；
+拖拽误移根目录回归（fid 不变）✅。
+
+### 最近完成（2026-10-07 六续：批量勾选框改到行尾右侧 + 修白屏（canvas-render 缺两个导出））
+
+### A. 勾选框放右侧（用户参考图口径）
+
+用户口径（原话）：「参考这张图，把勾选的这个控件放在右侧」（图为 LibTV 风格：勾选框在每行右端）。
+
+**修后**（`packages/ui/src/components/AssetTree.vue`，抽屉与弹窗共用）：
+- 勾选框从 `absolute left-2` 改 `absolute right-2`（行尾右侧，距右缘 8px）；
+- 批量模式下行为右侧多留 32px（`pr-8`），避免文件夹的计数角标（如「23」）与勾选框压在一起。
+
+**验证（Chrome MCP 真机 5288）**：勾选框右缘距行右缘 8px、左缘 278；计数右缘 270 < 278（不再重叠）✅；
+点选后 `aria-checked=true` 正常 ✅。
+
+### B. 白屏修复（真 bug，非本任务引入但挡住验证）
+
+现象：页面 body 只有 101 字节（Vue 没挂载），console 报
+`canvas-render/src/index.ts does not provide an export named 'uiComponentOutside'`（随后还有 `setUiCatalogHost`）。
+
+根因：`MediaViewer.vue`（plugin-theme-default，今日新引入）与 `packages/ui/src/composables/ui.ts`
+都从 `@mini-canvas/canvas-render` 导入这两个名字，而 `canvas-render/src/index.ts` 只导出了
+`useUiComponent / uiComponent / uiNames / UI_NAMES` —— 三个真实缺口。
+
+修法：`packages/canvas-render/src/index.ts:240` 补齐 `uiComponentOutside` 与 `setUiCatalogHost` 导出
+（两者在 `contracts/uiCatalog.ts` 里本来就已实现，只是没从包入口转出）。
+
+验证：canvas-render 418 测试全绿 + tsc 干净；页面正常挂载（body 79878 字节、38 个按钮、0 console error）。
+
+### 最近完成（2026-10-07 五续：资产树左侧空白列收掉，折叠箭头与搜索框对齐）
+
+用户口径（原话）：「这边左侧边栏为什么需要留这么大一片空间呢……把左边空余的空间给我挪到左侧，
+至少实现你这个文件夹左侧的折叠按钮，与上面的搜索框左侧对齐」。
+
+**根因**（Chrome MCP 真机测量，5288）：AssetTree 每行以 `size-4`（16px + gap 8px = 24px）的批量
+勾选框**常驻占位**（普通态 opacity-0 但仍占布局位），把折叠箭头从行首挤出——折叠箭头图标左缘
+43.5px vs 搜索图标左缘 16px，中间那 27.5px 就是用户框出的空白竖条。
+
+**修法**（`packages/ui/src/components/AssetTree.vue`，抽屉与资产管理弹窗共用同一份）：
+1. 批量勾选框改成 `v-if=\"batchOn\"` **只在批量模式渲染**——普通态不再占任何布局位；
+2. 行缩进起点 8px → 4px：折叠箭头（13px 图标居中于 size-5）视觉左缘 ≈ 15.5px，
+   与搜索图标左缘 16px 对齐（测量 15.5 vs 16，肉眼已齐）；
+3. 资产行的 `size-5` 空占位（对齐文件夹图标的列）删除，缩略图直接顶到行首。
+
+**验证（Chrome MCP 真机 5288）**：
+- 普通态：搜索图标 16 / 折叠箭头 15.5，对齐 ✅；批量勾选框不存在（不渲染）✅
+- 批量模式：点「批量操作」→ 每行左缘出现勾选框（25 个），可点选 ✅
+- ui 单测 149 全绿；typecheck 仅报 plugin-agent 未提交改动的一处（与本任务无关）。
+
+### 最近完成（2026-10-07 四续：文件夹「添加到 Agent / 画布」真实现）
+
+用户口径（原话）：「文件夹的菜单里，添加到 Agent 和添加到画布没有效果」。
+1. 添加到 Agent = 「直接把文件夹的地址发过去就行」；
+2. 添加到画布 = 「将文件夹中的所有内容全部添加到画布中。如果数量超过 10 个，需要弹出对话框确认，
+   不然一下添加太多会卡死」。
+
+**修前实况**：文件夹菜单的两项只有 toast 占位（`folderAddToAgent` 只 showToast；弹窗侧同样），
+点了没有任何实际动作。
+
+**实现**（`packages/ui/src/composables/ui.ts` 新增两条服务，抽屉与弹窗两个宿主都接上）：
+
+1. `addFolderToAgent(folder)` —— 文件夹是**一条引用**（不是把里面的资产一张张贴）：
+   标签显示文件夹名，载荷是文件夹的"地址" —— 后端文件夹只是登记表记录（无真实目录），
+   取**第一条有 path 的资产所在目录**当公共路径（Agent 侧自己 ls / 按需读）。
+   走 agent 插件已有的 `referenceAsset` 通道（与单资产同一套：pendingAsset → 输入框插标签）。
+
+2. `addFolderAssetsToCanvas(folderId, { confirm })` —— 文件夹里的**全部内容**按类型建到画布：
+   image 走 create-node 命令、video/audio 走各自插件服务（同一套口径），other 跳过并计数。
+   **数量 > 10 先弹确认**（确认 UI 由宿主给：抽屉里加了 AxDialog「把「xx」添加到画布？共 N 项」，
+   取消/确认按钮都 resolve Promise；服务层只问"允不允许"，不关心弹窗长相）；用户不确认就一个不建。
+   数量大时分帧建（每 5 个让一帧），避免同帧全建卡 UI。
+
+**验证（Chrome MCP 真机 8865）**：
+- Agent：右键文件夹 → 添加到 Agent → 面板打开、输入框出现标签「新建文件夹」，
+  标记载荷 `data-ref-value = D:\…\.mini-canvas\assets\files`（文件夹公共路径，非空）✅
+- 画布（2 项 ≤ 10）：右键 → 添加到画布 → 不弹确认、直接建出 2 个节点（16→18）✅
+- **批量选中（追加口径）**：「菜单添加的节点请进行选中，多选（添加之后自动选中）」——
+  批量建完**一次性 set 全部新 id**（此前建一个选一个，选区只剩最后一个）。
+  真机：建 2 个节点 → selection 正是这两个新 id（56/57）✅
+- 确认弹窗路径：数量阈值常量 10，分支逻辑被服务层单参数 `confirm` 回调覆盖；
+  弹窗 DOM 已接（AxDialog + folderConfirm 状态机），数据侧无法低成本造 12 项资产，
+  以「2 项不弹 + 弹窗组件/状态机就位 + 服务层只认 confirm 回调」三层组合验证。
+- 收尾：测试建的节点已删、资产归属已还原。
+
+验证：ui typecheck 干净、**149** 单测全绿、构建通过、产物重建（8865 重启脚本已跑）。
+
+### 最近完成（2026-10-07 三续：右键无箭头 / Agent 图片路径 / 聚焦动画 / 拖拽不动视口 / 收起图标修复）
+
+用户报五条（原话摘要）：
+1. 右键菜单的定位箭头该藏掉（只有点「⋯」按钮才显示）；
+2. Agent 面板读取图片文件加载错误（路径不匹配）；
+3. ① 聚焦动画太快没观感；② 拖拽添加节点时不要动画布视口；
+4. 左下角「收起侧栏」按钮 SVG 没生效（图标名写错/没导入）。
+
+修法与验证（全部 **Chrome MCP 真机**，8865）：
+
+**1. 右键菜单藏箭头**：`AxDropdown` 的箭头条件加 `!contextPoint`（右键唤出 = 鼠标点锚点 → 不画箭头）。
+真机：右键开菜单 `arrow:false`、点「⋯」开菜单 `arrow:true`（菜单锚在按钮上，箭头仍有意义）。
+
+**2. Agent 图片路径**（真 bug）：`read_file` 卡片早先拼了 `/api/agent/file?path=…` ——
+服务端**从没存在**这个路由，静态兜底把 index.html 返回给 <img>（HTML 当图片 = 必然裂图）。
+改成 `fileUrlFromPath()`：本机绝对路径映射到**服务端真实存在的两条资源路由**
+（`/api/assets/files/<hash>` / `/api/canvases/<id>/resources/<hash>`，与 assetStore 的
+localPathFromUrl 同一口径）；映射不到（磁盘别处的图）就退化成文件名行，不给必然裂图的 <img>。
+真机：`fetch('/api/assets/files/faaca433dafb2b75.jpeg')` → 200 + image/jpeg。
+补 4 条单测（toolViews.test.ts）锁住这三条口径 + 「永不回到 agent/file」。
+
+**3.① 聚焦动画**：根因是 auto-layout 的聚焦走 `setViewport`（即时路径 —— 它服务小地图拖拽
+这类"跟手"场景，加动画会每帧重启补间卡顿，不能动）。新增 `animateViewport(v, durationMs)`
+（契约可选 + 渲染后端实现 + 服务退级），auto-layout 聚焦改走它。
+真机采样视口：起点(0,0,1) → 中间帧(316,-522,0.97)/(300,-2149,1.69) → 终点(243,-2602,1.94) ——
+明显补间而不是瞬移。3 条单测锁住「聚焦走动画/退级不退化/跟手仍即时」。
+
+**3.② 拖拽不动视口**：`createAssetNode` 拆成两条路 —— 拖拽落点（atFlow 有值）**只选中不取景**
+（落点就在用户眼前，再挪视口等于"画布自己乱动"）；菜单「添加到画布」仍取景（节点可能落在视口外）。
+真机（Chrome MCP drag 真拖拽）：拖前视口 (500,300,0.8) → 拖后**完全不变**，新节点照常 +1。
+
+**4. 收起按钮图标**：模板用了 `<ArrowLeftToLineIcon>` 但**没 import**（Vue 把它当自定义元素渲染），
+lucide 里这个图标存在（导出 `ArrowLeftToLine`/`ArrowLeftToLineIcon`）。补 import 即可。
+真机：按钮 innerHTML 从 `<arrowlefttolineicon>` 变成真 `<svg>`。
+
+顺手修：cloud-server 构建被三个既有文件的 TS 严格模式报错挡住（`agentTraceFork.test.ts`
+两处 possibly-undefined、`plugin-watch-e2e.ts` 两处 implicit any / null）——与本次无关但挡构建，
+已按最小修法补类型。
+
+验证：ui **149** / canvas-render **418**（含新增 animateViewport 3 条）/ plugin-agent **99**
+（含新增 4 条）全绿；ui typecheck 干净；cloud-server 产物重建（8865 重启前先构建，重启后生效）。
+
+
+### 最近完成（2026-10-07 续，拖拽只有背景 / 重命名预填修正 / 资源拖到画布建节点）
+
+用户在上一轮基础上又提了三条（原话）：
+
+1. 「拖拽上去有那种灰色的背景…我感觉你好像设置了什么阴影，把这个阴影给去掉」；
+2. 「点击重命名没有反应」；
+3. 「我希望你这个资源里的图片、音频和视频等，可以直接拖拽到画布上，拖拽上去就是直接添加一个新的节点」。
+
+**① 拖拽悬停 = 只有背景**（推翻上一轮"背景 + 灰阴影"）：`.asset-tree .asset-tree-row.is-drop-over`
+ 现在只留 `background: var(--ui-hover-strong)`，并显式 `transition: none`（原生 drag 期间
+ 浏览器的 CSS transition 会冻结在起始帧 —— 不写这句背景色读出来仍是透明）。guard 测试同步改成
+ 「有背景、必须没有 box-shadow」：改样式就得改口径，反之亦然。
+
+**② 重命名**：实测「⋯ → 重命名」与右键 → 重命名**都能用**，但查出两个真问题并修掉：
+- **输入框预填了上一次的名字**（点资产的重命名，里面是上一个文件夹的名字）。根因是 AssetTree 里
+  留了一份 renameDraft 草稿且优先于宿主值。改成**受控**：值只读宿主的 renameValue，输入即上报。
+  加结构守卫禁止再长出组件内草稿。
+- **改名中按 Escape 会连整个抽屉/弹窗一起关**：输入框的 `keydown.esc` 冒泡到了 App 的全局 Esc
+  （那条会把 `s.drawer = null`）。改成 `@keydown.esc.stop` —— Esc 只取消改名。
+
+**③ 资源拖到画布 = 在落点建节点**（新能力）：
+- ui 层新增 `createAssetNode(asset, atFlow?)` / `dropAssetToCanvas(asset, client)`，按类型走**各插件自己的服务**：
+  image → command:create-node（extra.imageUrl）；video → ctx.get('video').addVideoNode；audio →
+  ctx.get('audio').addAudioNode。落点由 `viewport.screenToFlow` 换算，建完自动选中并聚焦（同"按 F"）。
+- AssetTree 的资产行 dragstart 写 `application/x-mini-canvas-asset`（JSON { id }）；
+  宿主（LeftDrawer）在 **document 捕获阶段**接 dragover/drop，落点落在画布上就建节点。
+- 三个实测坑（都写进代码注释）：必须在捕获阶段监听（VueFlow 会拦掉冒泡的 dragover →
+  不 preventDefault 浏览器就禁止 drop）；dragstart 之后读不出自定义 MIME（用会话变量记 id）；
+  dataTransfer 里是 JSON 不是裸 id。
+
+**验证（Chrome MCP 真机，按项目规则只走这条通道）**：8865 上真拖拽 → 画布节点 14→15，
+新增节点 `{ type: 'image', data.imageUrl 有值, position 落在拖拽点 }`；拖拽会话 → 目标行高亮 →
+drop 落库（资产真的挪进目标文件夹，测试后已还原）；改名输入框预填正确、Esc 只退出改名不关抽屉；
+悬停样式实测 `background: rgba(0,0,0,0.1)` + `box-shadow: none` + 无边框。
+ui typecheck 干净、**146** 单测全绿、构建通过、产物已重建（8865 直接见效）。
+
+
+### 最近完成（2026-10-07，左侧资产树抽成共用组件 + 拖拽 + 右键菜单 + 修「嵌套菜单点不动」）
+
+用户口径（四条）：「左侧边栏资产 tab 的文件夹列表/资源列表 与 资产管理弹窗里的资源树**抽成一个通用组件**，
+并支持拖拽（文件夹和文件都能拖进目录）；拖到其他目录时不要边框，只给一个 over 的背景 + 灰色阴影；
+面板右侧那个 hover 才显示的按钮，同时提供**右键菜单**；再优化「嵌套菜单无法点击」的问题」。
+
+**关键修复（真 bug，先复现再修）**：二级菜单（移动到 / 更改图标）能展开、鼠标也在，但点下去毫无反应。
+- 取证：Playwright 真鼠标 + MutationObserver + 调用栈 —— mouseup 与 click 之间，父下拉面板被卸载；
+  click 派发时目标已脱离文档，Vue 的 click 回调不再执行。
+- 根因：二级菜单面板 teleport 到 body，DOM 上**不在**父面板里；父级下拉的 `onClickOutside`（vueuse，
+  window capture 阶段）只认「触发器 + 自己的面板」→ 点在二级菜单项上被判「点了外面」→ 父菜单先关。
+- 修法：新增 `components/hooks/floatingGroup.ts`（纯函数，10 条单测）：浮层根写
+  `data-floating-chain = 父链 + 自己 id`；点外判定改成「命中元素的链里有没有我的 id」——
+  组内不算外面，三级嵌套天然成立，无需注册表/生命周期同步。`AxDropdown` 与 `AxSubMenu` 各接一行。
+
+**共用组件** `components/AssetTree.vue`（抽屉与弹窗共用一份行结构/菜单/改名/勾选/拖拽）：
+- 契约（e2e 依赖）：根 `.asset-tree[data-variant=drawer|dialog]`；行 `[data-asset-row]` +
+  `data-row-kind` + `data-row-id`；拖拽悬停加 `.is-drop-over`；`folder-click='expand'|'open'` 区分
+  「抽屉点名字=展开」「弹窗点名字=进文件夹」。
+- 拖拽：文件夹 → 文件夹 / 资产 → 文件夹 = 后台 PATCH（`moveAssetFolder` / `moveAssets`）；
+  拖到列表空白 = 回根；拖到自己当前父级或自己的子孙**不提示也不发请求**（后台会拒成环）。
+- 悬停视觉按用户口径：**背景 + 灰阴影、无边框**（`is-drop-over` 里显式 `transition: none` ——
+  原生 drag 期间浏览器的 CSS transition 会冻结在起始帧，不写这句背景色看不出来）。
+
+**右键 = 同一份菜单**：`AxDropdown` 新增「鼠标点锚点」（0×0 真实 DOM，右键时临时参与定位，翻转/
+防溢出/箭头/互斥照旧），`AssetRowMenu` 暴露 `openAt()`，行 `@contextmenu` 调它 —— 不为右键另绘浮层。
+
+**验证**：ui typecheck 干净；ui **144** 单测全绿（含 floatingGroup 10 + assetTreeStructure 6 条结构守卫）；
+`pnpm -C packages/ui build` 通过；真机 8865 与 dev 5291 各跑：
+`node packages/ui/e2e/asset-tree-shared-check.mjs` **8/8 PASS**、`asset-submenu-repro.mjs` PASS
+（右键菜单、二级菜单点击、拖拽高亮/落库、弹窗与抽屉同构全部实测）。
+
+### 追记（2026-10-06，AI 起名改为纯后台运行，不再占对话流）
+
+用户口径：「AI 起名不要显示加载状态 —— 用后台服务的形式，起名时前端 UI 不该跟着变化」。
+
+**原状**：`maybeAutoTitle` 在响应流**结束前** await `generateTitle`（模型调用几秒），
+于是「生成完成」到「流真正关闭」之间多了几秒 —— 前端的生成加载态被拉长。
+
+**改法（`agent/runtime.ts`）**：拆成两步 ——
+1. `maybeAutoTitle`（流内，即时）：落「剥标记的首句截断」名字 —— 列表任何时候都可读，不空、不带机器串；
+2. `spawnBackgroundTitle`（流外，后台）：AI 起名丢进后台跑（`void`，不 await），跑完直接 rename 落盘。
+   防覆盖两道：起名前、落盘前都检查「当前名还是即时名」（用户手动改过名 / 已开新一轮就不覆盖）；
+   失败静默保留即时名，异常兜住不留悬挂 Promise。
+
+效果：对话完成 = 流关闭 = 前端加载态结束；后台起名在几秒后悄悄改名，前端下次拉会话列表自然看到。
+
+**验证**：cloud-server **371** 全绿 + tsc 干净 + 产物重建 + 8865 重启。
+
+### 最近完成（2026-10-06，会话标题改为 AI 生成 + 标题模型可配置）
+
+用户口径：「标题没有总结对话内容，按理说应该是 AI 生成的；在配置页面里配置这个生成标题的模型」。
+
+**实现**：
+- **后端**（`agent/config.ts`）：`titleModel()` / `setTitleModel()`（住 KV `agent-title-model`，
+  与提示词清单同一作用域；写了就先 `resolveModel` 自证凭据可用，坏配置存不进去）+
+  `generateSessionTitle(text)` —— 直接打上游 `chat/completions`（非流式、max_tokens 32、20s 超时），
+  提示词要求「不超过 12 字中文标题、只输出标题」；返回前清引号/前缀。凭据解析不出 / 超时 / 上游错
+  → 返回 null（**起名失败不报错**，对话照常）。
+- **runtime**：`AgentRuntimeDeps.generateTitle?`（宿主注入）→ `maybeAutoTitle` 首选 AI 起名，
+  null 才回落「剥标记的首句截断」（上一轮修的可读性兜底保留）。
+- **路由 + 前端**：`GET/PUT /api/agent/title-model`；`TitleModelPage.vue`（设置 → Agent →
+  「会话标题模型」页签：Provider / 模型两个下拉 + 保存；都留空 = 用会话默认模型）。
+
+**验证（Chrome MCP）**：设置 → Agent →「会话标题模型」页签出现，Provider 下拉列出 `local`、
+模型下拉自动跟随渠道（deepseek-auto 等 5+ 个）；选 `local/deepseek-auto` 保存 → `已保存`、
+`GET /api/agent/title-model` 返回 `{provider:"local",modelId:"deepseek-auto"}`。
+cloud-server **371** 全绿 + tsc 干净 + 产物重建 + 8865 重启；plugin-agent 60 / ui 105 全绿。
+
+**未验证**：真跑一轮新会话看 AI 生成的标题（要真调用模型）——逻辑与 UI 都已验证，回落链有测试兜底。
+
+### 追记（2026-10-06，对话内节点标签可聚焦 + 历史列表标签显示修复）
+
+用户报：① 对话里出现的节点标签不能点击（只有输入框里的能聚焦）；② 历史对话列表的标题/摘要
+显示成一片机器码（`@[node:图片 4](430c8f1f00b…`）。
+
+**① 对话内节点标签可聚焦**（`AgentConversation.vue`）：`userSegments` 还原标签时给节点类标签
+带上 `nodeId`（按名字在当前节点清单里查）；模板给这类标签加 `role=button` / 键盘可达，点击调
+既有的 `focusNode(nodeId)` —— **节点存在才可点**（不在清单 = 已删，渲染成普通标签）；
+hover / focus-visible 态齐。
+
+**② 历史列表机器码**，两层根因：
+- **新数据**：runtime 的 `maybeAutoTitle` 直接截 `input.text` 原文 24 字符 —— 而那正是带标记的原文
+（`@[node:图片 4](430c8f1f00b…#12)`），正好把机器串截进标题。改成先 `stripMarkupToPlain` 再截。
+
+### 最近完成（2026-10-06，二三批：MCP 工具专用渲染 + 消息操作条 + 编辑分支）
+
+接上一批（合并修复/工具折叠/hover 操作条），本批完成剩余两批。
+
+**第二批：内置画布 MCP 工具专用渲染**
+- 新纯函数 `plugin-agent/src/toolViews.ts`：按工具名分族（canvas / resource / generation / file /
+  fallback），从工具的 JSON 输出提炼「键值行 / 文本行 / 缩略图行」。单测 9 条（用例取自真机转录：
+  `canvas_get` 单节点与全量、`resource_list`、`generation_status`、`read_file` 图片、失败输出、fallback）。
+- 新组件 `ToolViewBody.vue`：canvas 族显示「节点名 / 规模 / 相邻节点」键值行，resource 族显示
+  **缩略图网格**（走画布资源路由），generation 族显示任务状态 + 产物缩略图，file 族图片直出预览；
+  fallback 保留输入/输出原文（各带 320px 滚动）。任何族默认收起一个「原始 JSON」排障入口。
+
+**第三批：编辑回填 + 正在编辑 + 分支（fork）**
+- **正在编辑**（用户澄清：语义是「正在编辑」不是「已编辑」）：`sessionModel.beginEdit/cancelEdit`
+  （单选、内存态），消息琥珀描边高亮 + 「正在编辑」徽标（可 ✕ 取消）；底部输入框联动标记，
+  点标记滚回那条消息。单测 2 条。
+- **分支**：编辑旧消息后点发送 = 后端 `POST /sessions/:id/fork` ——
+  `AgentSessionStore.forkFrom` 把那条消息**之前**的回合拷成**新会话**（标题带「· 分支:原文」），
+  `branchStore`（`branches.json`，按 `<parent>|<point>` 登记）记下兄弟会话；前端拿到新 id 后
+  走正常 sendMessage（SDK resume 语义按转录继续 —— 即「以这条消息上面的内容为历史」）。
+  fork 失败降级为普通发送，不阻塞。单测 4 条。
+- **消息 hover 操作条**补时间（`ts` 从转录透传，`10月6日 14:20` 格式，跨年带年份）+ 复制打勾。
+
+**验证（2026-10-06）**：cloud-server **375** 全绿（JSON reporter 确认 0 失败）+ tsc 干净 + 产物重建；
+plugin-agent **73** 全绿 + tsc 干净；ui vue-tsc 干净 + 构建通过 + 主题色卫生检查通过。**8865 已重启**：
+真机复验 `canvas` MCP `builtin=True` 且删除被拒（404）。
+注：`npmRealE2E`（真 npm registry）对网络波动敏感（30s 超时 ×1，重跑全过）—— 网络慢时它可能
+假红，重跑即可，与本次改动无关。
+
+**插曲**：8865 数据目录的 `system_config.yaml` / `AGENTS.md` 被截断成 0 字节（并发写入事故，
+时间戳与本会话工作重合），导致 Agent 配置面 503。已重建最小合法 YAML，服务重启后 SDK 正常接管、
+内置画布 MCP 自动补回（自愈逻辑生效）。**遗留**：用户提示词/模型清单在 KV 里未受损；
+`AGENTS.md` 0 字节 = 系统提示词为空，需要用户在设置里重存一次自定义系统提示词（如有）。
+- **存量**：sessions.json 里已躺着剥了一半的标题（`@图片 4(430c8f1f00b` —— 截断处连括号都没闭合，
+  完整标记的正则匹配不上）。已跑迁移清干净（16 条）；前端 `AgentPanel.historyText` 也加了同一套
+  剥标记 + 清残留截断括号段的兜底（新数据不会再产生，老数据即使漏网也显示成 `@名字`）。
+
+**验证（Chrome MCP）**：历史下拉标题现在是 `介绍一下这个 图片` / `@图片 4` / `@canvas`，**机器串 0 条**；
+cloud-server / plugin-agent / ui 全绿 + 类型检查干净 + 产物重建 + 8865 重启。
+
+### 追记（2026-10-06，注册式媒体预览 MediaViewer + 资产面板按钮修复）
+
+用户报三件事：把媒体预览做成注册组件（中间是插槽、内置 文本/图片/视频/音频 四类预览，新资源类型用插槽自实现），供底栏插件与成品 UI 复用；左侧「资产」面板的搜索 / 筛选 / 添加按钮全是占位没效果；底栏素材卡预览浮层没有删除按钮，音频素材也收不进来。
+
+改法：
+- 注册组件：plugin-theme-default/src/components/ui/MediaViewer.vue 新增 —— 全屏预览（Esc / 点遮罩 / 右上角关闭；遮罩与前景走 token）。中间舞台按 item.kind 内置渲染文本/图片/视频/音频，其它种类留给 #stage 插槽。登记进 registryOf('ui') 的 mediaViewer 名下，其它插件 useUiComponent('mediaViewer') 按名取用；@mini-canvas/plugin-theme-default 同时具名导出 MediaViewer。
+- 成品 UI 接入：生成历史（ModalsArea.vue）与资产面板（LeftDrawer.vue）的预览都换成这只 MediaViewer（历史不可删 → 不传 onDelete，删除按钮不出现）。
+- 资产面板按钮：搜索 → 展开式输入框（按名字过滤）；筛选 → 类型下拉（全部/图片/视频/音频/其他，再点一次取消）；「创建」→ 文件选择器多选直传 POST /api/assets（uploadAssets）；资产卡悬停新增删除按钮 + 预览浮层删除（都调 DELETE /api/assets/:id）。projectsApi 新增 uploadAsset / deleteAsset；ui.ts 新增 filteredAssets / uploadAssets / deleteAssetById。
+- 底栏素材：panelSource.collectUpstreamMaterials 补收音频节点（data.audioUrl）；预览浮层（MediaPreviewOverlay.vue）悬停标题栏露删除按钮 = 断开「素材节点 → 发起节点」这条连线（mediaPreview 会话新增 nodeId / owner 记录）。
+
+验证：plugin-bottom-bar 96（含新增 mediaPreview.test）/ theme-default 248 / ui 105 全绿；theme-default tsc、ui vue-tsc 干净；三个包构建通过。
+
+### 追记（2026-10-06，MediaViewer 按参考 AxImageViewer 重做交互）
+
+用户看了首版预览（只有一个关闭按钮、图片不可操作）不满意，点名照
+ax-ui-kit 的 AxImageViewer / AxImage 重做。已拉取其源码逐项复刻：
+
+- **图片变换四件套**：滚轮缩放（25%–500%）、按住拖拽平移、旋转（每次 90°）、水平翻转、一键重置；
+- **底部浮动控制条**：页码（多图时）· 缩小/百分比/放大 · 旋转/翻转/重置 · 下载（fetch 转 blob，跨域失败退开新窗口）；
+- **左右切换**：宿主传 list（+ index）时出上一张/下一张，Esc/←→/+-/0/R/F 全套键盘快捷键；
+- **AxImage 的观感**：右上角悬浮圆角关闭钮、图片 contain 展示、拖拽时 grabbing 光标；
+- 本项目差异保留：非图片（文本/视频/音频）仍按 kind 内置渲染、#stage 插槽可扩展、
+  悬停删除按钮（宿主给 onDelete 才出现）照旧 —— 变换工具只对图片生效。
+
+接入方（底栏 MediaPreviewOverlay / 生成历史 / 资产面板）props 未变，无需改动。
+验证：theme-default 248 / ui 105 / bottom-bar 96 全绿；tsc、vue-tsc 干净；构建通过。
+
+### 追记（2026-10-06，底栏预览换 MediaViewer + 修 z-index 被历史弹窗压住）
+
+用户实测：① 底栏素材卡预览还是旧壳（只改了部分地方）；② 生成历史里点开预览被历史弹窗盖住（MediaViewer z-index 90 < AxDialog 200）。
+
+改法：
+- 底栏接入：MediaPreviewOverlay.vue 原来的自绘壳全删，视觉与交互整只交给主题注册的 MediaViewer；本组件只剩「把 mediaPreview 会话状态翻译成 item prop」和「删除 = 断开素材连线」两条业务语义。取件走 useUiComponent("mediaViewer")（不 import 默认主题，避开 T08 依赖方向守卫）。SSR 测试锚点随之更新（mv-root / mv-corner-btn / mv-remove）。
+- z-index：MediaViewer 提到 100200 —— 盖过 AxDialog（200）与设置面板（SettingsShell 100000/100001），任何弹窗里打开预览都在最上层。
+
+验证：bottom-bar 96 / theme-default 248 / ui 105 全绿；tsc、vue-tsc 干净；构建通过。
+
+### 追记（2026-10-06，Agent 输入框图片也走 MediaViewer + 修生成历史预览空白）
+
+两个用户实测问题：
+
+1. **生成历史预览空白**：历史卡片的 kind 是中文标签（图片/视频/音频），MediaViewer 只认英文 kind，
+全部分支未命中 → 落进空的 #stage 插槽。修法：MediaViewer 里做 kind 归一化（图片→image 等四条别名），
+各接入方传中英文都认；同时历史预览地址改走 thumbOf 的同源转换（原始 urls 可能跨端打不开）。
+2. **Agent 输入框的图片没有全屏预览**：待发送缩略图与已发送消息图片换成主题注册的 MediaViewer
+（原先自己画了个简单遮罩，只能看原始尺寸）。取件走 useUiComponent("mediaViewer")，
+待发送缩略图点图本体即预览（× 仍是移除）；自绘的 ac-lightbox 样式删除。
+
+验证：plugin-agent 60 / ui 105 全绿；plugin-agent tsc、ui vue-tsc 干净。
+
+### 追记（2026-10-06，生成历史改 masonry 瀑布流 + 修预览空白）
+
+用户报：① 生成历史预览点开是空的；② 参照 web2api 的 TaskResultGalleryView 把生成历史
+改成瀑布流（参考实现方式重绘）。
+
+**修预览空白**：历史卡片传的 kind 是中文（图片/视频/音频），MediaViewer 内置渲染只认英文
+→ 落进空 #stage。MediaViewer 里加 KIND_ALIASES 归一化；openHistoryItem 的预览地址改走
+thumbOf 同源转换（原 urls 可能跨端打不开）。
+
+**masonry 瀑布流**（照 TaskResultGalleryView 搬入）：
+- 新增 packages/ui/src/composables/useMasonry.ts（masonry-layout + imagesloaded 封装；
+  **惰性动态 import** —— 这俩库顶层就摸 window，静态 import 会让 SSR/vitest 炸）；
+- ModalsArea 生成历史网格改为 masonry 容器：卡片按图片**原始宽高比**展示（onload 后
+  写回 aspect-ratio 并触发布局），列数随容器宽度自适应（histZoom 滑杆映射最小卡片宽
+  340→120px），首屏 24 张、IntersectionObserver 触底追加下一批（1s 节流）；
+  卡片带骨架屏、底部渐变信息栏（尺寸 + 类型·时间）、裂图/无产物退图标卡；innerHTML
+  拼接前过 esc() 防注入。
+- 依赖：ui devDeps + masonry-layout 4.2.2 / imagesloaded 5 / @types 两个。
+
+**验证**：ui typecheck 干净、105 全绿、构建通过。
+
+### 追记（2026-10-06，三类媒体预览注册件 + 历史卡片优化）
+
+用户要求：音频/视频/文本各抽一个**纯预览组件**、按组件注册方式登记（插件系统支持 ui 目录注册），
+历史瀑布流卡片复用；卡片文字缩小、无产物显示为异常、音频/视频卡片要有内容。
+
+**三个预览注册件**（各自插件 apply() 里 registryOf('ui').add）：
+- audioPreview：plugin-node-audio/src/AudioPreview.vue —— 从 AudioContent 抽出的纯展示件：
+  轮播波形（单层竖条 + is-played 染色）+ 播放头拖拽 + 整条进度条 + 时间；按需算峰值
+  （openAudioSource.peaks）与 AudioContent 同一套数学，没有上传/刷新按钮、不读写节点 data。
+- videoPreview：plugin-node-video/src/VideoPreview.vue —— video 元素 + hover 显形控件
+  （播放/进度/时间，与 VideoContent 同口径），没有裁剪/截图/全屏。
+- textPreview：plugin-node-text/src/TextPreview.vue —— 只读文本排版。
+
+**MediaViewer 接入**：全屏预览的 audio/video/text 渲染改为**优先按名取注册件**
+（useUiComponent，树外 try/catch 回落 undefined → 原生标签兜底），预览观感跟着插件实现走。
+
+**历史卡片**（ModalsArea buildMediaCard/createMasonryElement）：
+- 音频卡：渐变底 + 波形竖条装饰 + 播放圆钮（thumbOf 不再对音频返回 null）；
+- 视频卡：封面帧 + 播放圆钮；裂图/无产物 → **异常卡**（警示圆圈「!」+「生成异常 · 无产物」）；
+- 卡片文字整体小一档（信息栏 10px、图标卡标题 12px）。
+
+**验证**：ui / plugin-node-audio / plugin-node-video / plugin-node-text typecheck 全部干净；
+ui 105 / audio 94 / video 105 / text 31 全绿；ui 构建通过（plugin-node-video 无 vite.config，
+其 build 脚本本就不可用，与本次无关）。
+
+### 追记（2026-10-06，节点默认尺寸进设置面板 + 实时生效）
+
+用户问「默认尺寸写在哪、能不能进 config 可视化配置」，并拍板：**实时生效**、作用于**已有 + 新建**、
+只针对**没被 resize 过**的节点（有自己尺寸的不动）。
+
+**原状**：默认尺寸是各节点插件注册时的字面量（`ctx.nodes.register({ size: {320,240} })`），
+进类型表（`nodeStore.types[type].defaultSize`）后**不可变**；尺寸回落链是「实测 > node.size > 类型默认」，
+所以「没被 resize 过」本来就走默认值。
+
+**改法（三层）**：
+- **数据层**（`canvas-data/nodeStore.ts`）：类型注册进表时包 `shallowReactive`（**浅**响应：
+  只让顶层可追踪、`updateTypeSize` 整体替换 `defaultSize`；不深包装，否则 icon/segments 句柄会变代理、
+  破坏引用相等 —— 实测踩过）；新增 `updateTypeSize(type, size)`（原地替换 + notify），
+  `NodeStoreService` / `DocService` 各透出这一个方法。
+- **作者层**（`canvas-base/bindTypeDefaultSize.ts` 新增助手）：apply 里调一次 —— 首次按设置值写类型表，
+  并订阅 `settings.onChange`（改动即重写；随插件 scope 回收）。四个节点插件（image/video/audio/text）
+  各加一对 Config（`xxxDefaultWidth/Height`，分组沿用既有「布局/xx节点尺寸」「节点/音频节点」，
+  text 新立「布局/文本节点尺寸」），设置面板自动渲染、无需动 UI。
+- **渲染层**（`useNodeCardSize`）：watch 类型默认尺寸 —— 只有 `data.cardWidth` **缺失**（没 resize 过）
+  的节点才跟随，有自己尺寸的不动；resize 拖拽中不覆盖。
+
+**验证（Chrome MCP）**：改 `imageDefaultWidth/Height` → 400×300 → 320×240，4 张**未 resize** 的图片节点
+（7/31/37/39）**实时跟随**（不用刷新）；有显式尺寸的（6/23/26/30…）纹丝不动 —— 正是「只影响没 resize」。
+设置面板确认出现「默认宽/默认高」。canvas-data **372** / theme-default **248** / image **111** / video **105** /
+text **31** / audio **94** 全绿；canvas-data / canvas-base / canvas-render / 各插件 tsc 干净；ui 已重建、8865 重启。
+
+### 追记（2026-10-06，生成完成后节点尺寸没跟上 9:16）
+
+用户报：AI 生成的 9:16 竖图，节点却显示成 16:9 横的；视频节点同样。Chrome MCP 实测确认：节点 30
+的卡片 419×196（≈16:9），而图是 1152×2048（9:16）。
+
+**根因**：节点缺**尺寸字段**。前端图片节点靠 `imageWidth/Height`（视频靠 `videoWidth/Height`）
+算卡片比例；AI 用 MCP 建的节点没记这两对（`imageWidth/imageHeight` 全空），于是卡片停在类型默认的
+4:3/16:9 —— 竖图被塞成横的。前端本来靠 `<img>` 的 naturalWidth 量，但「尺寸字段」缺失时算不出比例。
+
+**改法（前后端两道）**：
+- **后端**（`tasks/mediaSize.ts` 新增 + `taskManager` 收产物时）：读了**已存画布资源**的字节，
+  PNG/JPEG/GIF/WEBP → 图片宽高、MP4/MOV（`tkhd`）→ 视频宽高，写进节点的 `imageWidth/Height` /
+  `videoWidth/Height`。纯函数带单测（7 条，认不出返回 null 不猜）。
+- **前端兜底**（`plugin-node-image` / `plugin-node-video` 的 `onImgLoad` / `onLoadedMetadata`）：
+  图片/视频**加载出来时**若卡片尺寸缺失，就用 `<img>.naturalWidth` / `<video>.videoWidth`
+  量一次、**连同宽高一起写回**（宽高与 `size` 必须同一次写，否则按比例算卡片那步仍无从下手）。
+  这样上传 / MCP / 后台加的图与视频都能自愈，不必依赖后台一定量得出来。
+
+**验证（Chrome MCP + 数据）**：节点 30 现在是 **169×300（比例 0.563 = 9:16）**、图片元素也 169×300；
+`canvas.json` 里已落库 `size:{w:169,h:300}` + `imageWidth:1152/imageHeight:2048`。
+cloud-server **368** / plugin-node-image **111** / plugin-node-video **105** / ui **94** 全绿；
+各处 tsc / vue-tsc 干净 + 产物重建 + 8865 重启。
+
+### 追记（2026-10-06，生成历史缩略图太小 + 点击无预览）
+
+用户报：缩略图高度太小「根本看不出来」，点击也没有预览效果（Chrome MCP 实测：缩略图框只有 **92px**
+高、9:16 的竖图被 `object-fit: cover` 裁成一条；点卡片只弹了个 toast）。
+
+**改法（`packages/ui/src/components/areas/ModalsArea.vue`）**：
+- 缩略图高度改成**跟「卡片密度」滑杆联动**（`thumbHeight`：滑杆 1→140px … 5→420px，默认 260px），
+  并把 `object-fit` 由 `cover` 改成 **`contain`**（竖图整张看得见，不裁切）。
+- 点卡片**打开预览浮层**：图片放大显示（`max-height 80vh`）、视频/音频用原生播放器；右上角可下载；
+  点空白处或 **Esc** 关闭。没有产物的老记录给一句提示（不弹空窗）。悬停时右下角露「点击放大」提示。
+
+**验证（Chrome MCP）**：缩略图高度随滑杆 134↔403px 变化（默认 260）；点第一张有图的卡 → 预览浮层打开、
+显示 1152×2048 的大图；Esc 关闭成功。ui **94** 全绿 + vue-tsc 干净 + 构建通过。
+
+### 追记（2026-10-06，修「生成历史缩略图裂图」）
+
+用户报：历史记录依然加载不出来（截图里前几行是**裂图**）。用 Chrome MCP 进页面实测：卡片渲染了，
+但 `<img>` 的地址是 `/api/canvases/<画布>/resources/chat-auto-982345f0.jpeg` —— 带 `-`，被资源接口的
+`isSafeResourceName`（只认 `^[0-9a-f]{16}(\.[a-z0-9]+)?$`）判为**非法路径 → 400**，所以全是裂图。
+
+**根因**：历史里存的是 **provider 的原始地址**（`http://localhost:8033/.../chat-auto-982345f0.jpeg`），
+前端 `thumbOf` 只是把文件名拼到同源地址上 —— 而资源是**按内容哈希**存的，文件名对不上。
+
+**改法**：`TaskManager.finish` 里 `writeMediaFields` 现在返回**同源地址**，并**回填进 `result.urls`** ——
+于是**历史、runState、节点媒体字段三处都存同源地址**（前端缩略图直接用它，不再靠猜文件名）。
+
+**存量数据已迁移**：跑了一次迁移，把历史里 19 条 + 节点 6 个的 provider 原始地址抓回存进画布资源目录、
+换成同源哈希地址（default 画布 3 条 + 2 个节点）。另外 11 条更早的历史（6 个节点已删 / 5 个无可用产物）
+本来就取不回产物，卡片回落成类型图标（不再是裂图）。
+
+**验证（Chrome MCP）**：历史 20 张卡、6 张真实缩略图**全部 200 且加载成功**，`bad: []`（无 400），
+画布上「图片已失效」文案消失；计数「图片 22 / 音频 16」。cloud-server **360** 全绿 + tsc 干净 + 产物重建 + 8865 重启。
+
+### 追记（2026-10-06，修「生成后图片已失效」+「提示词没写进节点」）
+
+用户报：① 任务完成后节点显示「**图片已失效**」；② 底栏看不到提示词 —— 希望生成时把**提示词与参数**
+一起写进节点，点开节点就能看。
+
+**根因 A：上一轮的「同源地址」是凭空拼的**。`TaskManager` 把产物地址改成
+`/api/canvases/<画布>/resources/<原文件名>` 写进节点，但**文件名是从 provider 的地址猜的**
+（`chat-auto-982345f0.jpeg`），而产物**从没真的落进画布资源目录** —— `onArtifact` 只把 url 登记进
+资产目录（`assets/index.json`），没抓字节。于是节点指向一个不存在的文件 → 404 → 图片节点显示「已失效」。
+改法：`writeMediaFields` 改成**先 `saveResource` 抓字节落盘**（按内容哈希命名），再把 `saveResource`
+返回的**确实存在**的同源地址写进节点（`imageUrl`/`audioUrl`/`videoUrl`）。加了 `fetchArtifact` 注入点
+（测试不去连真地址）+ 30s 超时（取不到也不能让终态一直等）。
+
+**根因 B：`generation_create` 没把提示词/参数写进节点**。节点只有 `runState` 与 `barValues`，没有提示词。
+改法：下单前把 `data.barValues = {...values, actionId}`、`data.barPrompt = prompt` 写进目标节点 ——
+与底栏同一套字段，用户点开节点（底栏重挂载）就从这两个字段恢复，看到的就是 AI 这次用的内容。
+
+**已把用户那张坏节点修好**：节点 30 的产物还在 web2api（3.85MB），已抓回存进画布资源目录并把 `imageUrl`
+指向新哈希地址。Chrome MCP 实测：节点 30 的图正常显示（1152×2048）、整页无「图片已失效」。
+
+**验证**：cloud-server **360** 全绿 + tsc 干净 + 产物重建 + 8865 重启；plugin-agent 60 / ui 94 全绿。
+新增用例：产物真的落盘（`fs.access` 断言文件存在）、`generation_create` 写回 `barPrompt`/`barValues`。
+
+### 最近完成（2026-10-06，生成历史看不到内容 + Agent 没在画布上建节点）
+
+用户报两条（附浏览器截图 + 一份 Agent 请求日志 `11.txt`）。
+
+**一、生成历史「看不到对应内容」**（Chrome MCP 实测确认并修好）
+- **计数全是 0**：徽章的标签是中文（图片/视频/音频），而后台 `byKind` 的键是英文
+  （image/video/audio）→ `byKind['图片']` 恒为 undefined。加一道中英转换（`histCount`/`assetCount`）。
+- **卡片只有通用图标、没有缩略图**：`ModalsArea` 只画了 `kindIcon`，根本没渲染 `item.urls`。
+  改成有产物就画缩略图（同源地址 `/api/canvases/<画布>/resources/<文件名>`），没有才退回图标。
+- **「本画布」写死 `default`**：切到别的画布后筛的是 default 的历史。改用 `currentCanvasId`。
+- **筛选条件不重拉**：改了范围/类型/评级/排序后列表纹丝不动。加 watch（仅弹窗开着时重拉、回第 1 页）。
+
+**二、Agent 在画布上看不到节点**（日志 + 数据三方对齐，找到根因）
+- **根因 A：MCP 写死 `default` 画布**。所有画布 MCP 工具都绑在启动时那个默认画布的 `CanvasDocument` 上 ——
+  AI 就算把用户的 `canvasId`（`430…`）传进来也没用，节点全落进 `default`，用户在 `430…` 上什么都看不到。
+  改法：给所有读写工具加 `canvasId` 参数 + 按画布取文档（`resolveDoc`，**先确认画布存在**，
+  否则报「画布不存在」而不是静默写 default）+ 新增 `canvas_list_canvases` 让 AI 发现该写哪张。
+- **根因 B：产物没落到节点**。AI 用 `resource_upload` 把图传上来了（**确实上传了**），但没设 `data.imageUrl`，
+  节点只有 `runState.urls` —— 图片节点没 `imageUrl` 就不显示。前端那条路是底栏 applier 写这个字段；
+  MCP 下的单没有底栏。改法：`TaskManager` 在终态按节点类型写媒体字段（imageUrl/audioUrl/videoUrl，
+  **同源地址**），并把「产物先收进画布资源目录」提到「写媒体字段」之前（顺序反了会显示空白）。
+- **根因 C：参考图根本没传**。provider 的参考图只认 `input.resources`（上游素材），而 MCP 下单没传 ——
+  AI 猜路径、读不到、绕了好几轮。改法：`generation_create` 从目标节点的**入边**自动收集参考图
+  （与底栏「连进来就算素材」同一套语义），纯函数 `collectReferenceResources` 带单测。
+- **系统提示词重写**（两条内置）：写清「先定画布 id，之后每次读写都带同一个 canvasId」「生成=建节点」
+  「有参考图先 canvas_add_image 建参考节点」「产物由后台写回，别自己下载/上传/搬运」「别空转 Start-Sleep」。
+  引用引导块也补了一句「用 canvasId+nodeId 查，别用本地文件猜路径」。
+  **注意**：提示词存在后台 KV，已存在的老库存不会自动升级 —— 本次已用接口把两条内置提示词换成新版；
+  新装的库直接落新版 DEFAULT_PROMPTS。
+
+**验证**：cloud-server **359** 全绿 + tsc 干净 + 产物重建；plugin-agent **60** / ui **94** 全绿 + 类型检查干净。
+8865 已重启。Chrome MCP 实测：生成历史计数 **图片 21 / 音频 16**（不再 0）、卡片画出真实缩略图（20 张卡 5 张有图）；
+`tools/list` 11 个工具、`canvas_list_canvases` 列出「我的111=430…」、带 canvasId 读写命中对应画布、
+不存在的画布明确报错。
+
+**未做**：Agent 端到端「建节点→连线→生成→图落到节点」没有在真模型里跑一遍（要真下单/烧额度）。
+
+### 最近完成（2026-10-06，修「自带画布 MCP 检测出 0 个工具」）
+
+用户报：Agent 的 MCP 检测里 `canvas` 显示「**0 个工具**」。
+
+**根因**：内置画布 MCP 的工具名带 `.`（`canvas.get` / `resource.upload` / `generation.create` …）。
+Agent 用的 SDK 会把服务名拼成前缀（`mcp__canvas__` + 工具名）来当 LLM 工具名，而它只接受
+**字母 / 数字 / 下划线 / 短横线** —— 于是 `mcp__canvas__canvas.get` 非法，**十条全被跳过**。
+`/api/agent/mcp/probe` 返回 `servers[canvas].tools = 0` + 10 条 `skipped: the prefixed name is
+not usable as an LLM tool name` 警告，正是这个原因。
+
+**改法**：工具名 `.` → `_`（`canvas_get` / `canvas_overview` / `canvas_add_image` / `canvas_batch_nodes` /
+`canvas_batch_edges` / `resource_upload` / `resource_list` / `generation_actions` / `generation_create` /
+`generation_status`）。同批改掉调用方：`src/__tests__/{mcpServer,events,routes,agentApproval}.test.ts`、
+`e2e/{mcp-e2e,realtime-e2e}.ts`、注释里的旧名。新加一条**回归测试**：TOOL_LIST 里每个名字必须匹配
+`^[A-Za-z0-9_-]+$`，且 `mcp__canvas__<名>` 不超 128 字符 —— 带点的名字会被它当场拦下。
+
+**验证（2026-10-06）**：cloud-server **350** 全绿 + tsc 干净 + 产物重建；8865 重启后
+`/api/agent/mcp/probe` 里 `canvas` = **10 个工具、0 警告**；再走真 MCP 协议 `tools/list` 拿到那 10 个、
+`tools/call canvas_overview` 返回真实画布（nodeCount 6）。
+
+**遗留**：`packages/mcp-server` 是另一套独立后端，它的工具名仍是 `canvas.get` 那种带点写法。
+它**不是** Agent 挂载的内置画布 MCP（Agent 挂的是 cloud-server 的 `/mcp`），所以不影响本次问题；
+若那个服务将来也接给 SDK 用，同样要改名。
+
+### 追记（2026-10-06，第一批：合并修复 + 工具折叠 + 消息 hover 操作条）
+
+用户确认三分支方案后开工第一批。
+
+1. **修「三个工具没合并」**：根因如前述 —— UI 把整轮思考并进顶部折叠块统一展示，
+   中间不渲染；但 `groupTurnBlocks` 把思考当**分界线**，于是工具在数据层被思考拆成三组。
+   **修法**：思考不再是分界线（只有正文文字是），思考统一并成一块且**始终排在最前**
+   （与顶部「思考过程」折叠块对齐）。新增 2 条测试（思考夹中间不拆组 / 文字仍是分界线）。
+2. **工具可折叠展开**：单工具（含组内每个工具）改可折叠行 —— 收起 = 图标 + 名字 + 结果摘要；
+   展开 = 「输入」「输出」两块，展开块 `max-height:320px` + 内部滚动（用户要的最大范围+滚动条）。
+   要审批的工具卡保持始终展开（审批参数必须直接可见）。
+3. **消息 hover 操作条**（照参考图 2）：用户消息右下角 hover 浮出「时间 · 复制 · 编辑」。
+   时间来自转录的 `ts`（`10月6日 14:20` 格式，跨年带年份；`sessionModel.load` 透传）；
+   复制成功短暂打勾；**编辑** = 把那条消息的提示词 + 图片回填到底部输入框（图片回附件区），
+   即「恢复那次发送」—— 分支（fork）的回填半步，分支切换在第三批接上。
+
+**注**：历史会话标题改动（并发会话做的「标题模型起名 + 剥标记」）与本批不冲突：
+标题只影响会话列表显示，转录回合结构与 `ts` 透传都未变。
+
+**验证**：plugin-agent **62** 全绿（新增 2 条）；`vue-tsc` 干净；主题色卫生检查通过；ui 构建通过。
+
+### 追记（2026-10-06，@ 引用标签加深底色）
+
+用户报：@ 出来的标签（用户消息里的引用 chip 与输入框里的那颗）**底色太淡、不好区分**，
+亮暗两套主题都要改。**根因**：两颗 chip 都用 `--ui-hover-soft`（亮 `rgb(0 0 0/0.035)`、
+暗 `rgb(255 255 255/0.05)`）—— 那几乎看不见；更糟的是**用户气泡自己的底色也正是它**，
+于是标签与气泡同色、彻底糊在一起。**改法**：两颗一起换成 `--ui-hover-strong`
+（亮 `0.10`、暗 `0.15`），亮暗各一档、自动跟随主题。已重建 ui 产物。
+
+### 追记（2026-10-06，恢复「正在思考」加载态）
+
+用户报：上面那次「顺序 + 合并」改动，把 AI 回复里的「正在思考」加载状态弄没了。
+**根因**：显示条件被我收紧成 `!t.steps?.length && !t.text` —— 而模型常常**先吐「思考」**，
+那会先往 `steps` 里塞一块，于是加载行在正文出现前就被自己藏掉。
+**改法（用户澄清后）**：它就是个**加载指示**，只认「这轮还没结束」（`t.streaming`）——
+整个回复期间一直显示，不管在打字还是调工具。已重建 ui 产物。
+
+### 最近完成（2026-10-06，Agent 对话「顺序 + 合并」+ 自带画布 MCP 锁）
+
+用户报两条：① 对话里工具与文本**没有先后顺序**（所有工具被堆在最开头）；② 自带画布 MCP
+**能被删掉**，且要求「检测到没有就自动加回来，保证每次工作都有它」。
+
+**顺序 + 合并（前端）**
+- 根因：`sessionModel.ts` 里助手一轮只有 `text / thinking / tools` 三个**累加槽**，一收到工具
+  就把到达顺序抹平了；`AgentConversation.vue` 又固定按「工具 → 正文」渲染。
+- 改法：加 `steps: TurnStep[]`（真正记顺序：每块文字/思考/工具各占一步）；`text` / `thinking`
+  改由步骤**现算**（唯一真相，不再两处漂移）。`final` 落块语义保留（delta 已写就整块替换，
+  不显示两遍），`done` 时清「开着的块」，避免下一轮 final 误替换上一轮尾块。
+- 新纯函数 `turnBlocks.ts` 的 `groupTurnBlocks`（照 `codex-base-ui` 的 `useGroups`）：文字是
+  分界线，**中间没有文字的多个工具合并成一组**，连续思考并成一块。组件按行渲染，单工具照旧
+  （卡片/一行），多工具折成「N 个工具调用」可展开。回放（`load`）也把转录的先后顺序还原成 steps。
+
+**自带画布 MCP：删不掉 + 缺了自动补（前后端）**
+- 后端 `AgentConfigService`：记下 `builtinCanvasUrl`；**读清单时自愈**（`healBuiltinCanvasMcp`，
+  缺了就补、地址不对就纠正、并写回磁盘）；`mcpServers()` 给那条打 `builtin: true`；
+  `removeMcpServer('canvas')` 直接拒绝（界面是提示，接口才是真拦截）。
+- 前端 `McpPage.vue`：`builtin` 那行**不画删除按钮**，显示「自带 · 不可删除」。
+- 顺带修**真 bug**：内置 MCP 地址原来在 listen 之前用**请求的**端口写死 —— `port: 0` / CLI 换端口
+  兜底时落成 `http://127.0.0.1:0/mcp`（连不上的地址）。现在 listen 回调里用**真实端口**再纠正一次。
+
+**验证（2026-10-06）**：cloud-server **349** 全绿 + tsc 干净（新增 `builtinCanvasMcpLock.test.ts` 4 条：
+删不掉 / builtin 标记 / 磁盘删除后自动补回 / port:0 用真实端口）；plugin-agent **60** 全绿 + tsc 干净
+（新增 `turnBlocks.test.ts` 8 条 + sessionModel 顺序用例）；ui **94** 全绿 + vue-tsc 干净 + 构建通过。
+**8865 已用新产物重启**：`/api/agent/config` 里 `canvas` 自愈成 `http://127.0.0.1:8865/mcp` 且 `builtin=true`；
+`DELETE /api/agent/mcp {name:'canvas'}` → **404「自带画布 MCP，不能删除」**，canvas 仍在。
+
+**未验证**：画布内 UI 的真实观感（顺序/折叠组/删除按钮）没在浏览器里看过 —— 本会话没有可用的
+浏览器工具；已用构建产物内联（`dist` 含新代码）与纯函数单测覆盖。
+
+### 追记（2026-10-05，修「UI 发参考图仍带坏地址」）
+
+用户给的 web2api 输入参数截图：`referenceImages: ["/api/canvases/430c8f1f00bd4aba/resources/xxx.png"]`，
+web2api 报「图片不存在（已尝试 ...\uploads\api\canvases\...）」。**真凶**：
+
+- 前端（渲染层）会把节点里的 `res:<hash>` **展开成** `/api/canvases/<画布id>/resources/<hash>` 再交给后台；
+- 但 `TaskManager.resolveInput` 只对 **`res:` 开头**做转换 → 路径形态被**原样**发给 web2api。
+
+改法：`parseResourceNameFromUrl`（认 `/api/canvases/<id>/resources/<hash>`，画布 id 必须匹配防串）
++ `resolveInput` 对**任何给了 url** 的参考图都走一遍解析（以前只认 `res:`）。
+
+**验证（按用户要求走真实 UI）**：画布 `430…` 上选中节点「图片 6」（上游连着一张图片）→ 点底栏「发送」
+→ web2api 收到 `referenceImages: ["/c4d6295512…png"]`（上传后的 SHA256 地址）、任务跑到 40%
+（`正在发送并等待豆包回复...`），不再「图片不存在」。新增 `resourceNameFromUrl.test.ts` 5 条。
+cloud-server **345** 全绿 + typecheck 干净 + 产物重建、8865 已重启（web2api 用 tsx 非 watch，也已重启）。
+
+### 最近完成（2026-10-05，参考图改为「先上传拿地址」）
+
+用户澄清架构：**cloud-server 与 web2api 是两个独立后台服务**（可能不在同一台机器），cloud-server 只是
+web2api 的一个客户端。要求：web2api 提供**独立上传接口**（MCP + HTTP），客户端先上传拿到地址、
+再用地址生成任务；生成任务也支持 data URL。
+
+**web2api 侧（由子代理完成，`D:/Code/Git/web2api`）**
+- 新增 HTTP `POST /api/resources/upload`（multipart，字段 `file`）与 MCP `system/upload-resource`
+  （base64 / data URL）；两者共用 `utils/upload-resource.ts`（SHA256 去重落盘），返回 `url` / `relPath` 等。
+- 任务提交前统一归一参考图：`/api/resources/uploads/<x>` 视为本机文件、data URL 落盘、相对路径原样。
+- 测试：`npx vitest run` 全量 **1191 通过**（新增 upload-resource 16 条）。
+
+**cloud-server 侧**
+- `TaskManager.resolveResourceUrl` 由「拼 URL」改为**读画布资源字节 → data URL**（数据层，通用、跨服务器安全）。
+- web2api provider 新增：`data URL / cloud-server 地址 / 外部 URL` → 先经 MCP `system/upload-resource`
+  上传成 web2api 本机文件，用返回的 `referenceUrl`（`/<hash>.png`）下单；已是 web2api 资源地址 / 相对路径的原样用。
+
+**真机端到端（8865 + web2api 8033）**：带参考图下单 → web2api 日志里 `referenceImages` 是
+`/c4d6295512...png`（上传后地址）、`图片不存在` **0 条**、任务 `done 100%`、节点拿到 `imageUrl`。
+cloud-server **340** 全绿 + typecheck 干净 + 产物重建；**8865 与 web2api 都已重启**。
+
+### 追记（2026-10-05，参考图问题：端到端确认修好）
+
+用户给的 web2api 执行日志坐实了根因：
+`doubao/chat-auto` 报 **errorCode 4002「图片不存在（已尝试 C:\...\web2api\uploads\api\canvases\...\resources\x.png）」** ——
+即参考图被当**本地文件**去 uploads 找。web2api 的 `utils/reference-images.ts` 对参考图分三类：
+`http(s)://` / `/api/resources/` 会**下载**；`data:` 会**落盘**；其它按「相对 uploadsDir」拼路径。
+我此前的相对地址 `/api/canvases/...` 落进了第三类 → 报错。
+
+**改成绝对地址后实测（8865 真机 + web2api 日志）**：`referenceImages` 现在是
+`http://127.0.0.1:8865/api/canvases/<id>/resources/<hash>.png`，web2api 走「下载」分支，
+任务**顺利完成**（`status: completed`）、节点拿到 `imageUrl`，日志里**真实错误 0 条**。
+
+**注意**：`resolveResourceUrl` 里的 origin 取的是 **cloud-server 自己的监听地址**（`http://127.0.0.1:8865`）。
+若 web2api 与 cloud-server 不在同一台机器，这个回环地址它下载不到 —— 跨机要把它配成对 web2api 可达的地址。
+
+### 最近完成（2026-10-05，参考图地址 / 重复下单 / 音频进度复核）
+
+用户报三条（并怀疑代码被别的 Agent 覆盖）。先核对：`docForCanvas`（上次修的「进度卡 0」）**仍在**。
+
+1. **参考图地址拼错**（`.../web2api/uploads/api/canvases/<id>/resources/x.png`）：
+   `server.ts` 的 `resolveResourceUrl` 返回的是**相对路径** `/api/canvases/...`，
+   而 web2api 会把相对路径当**它的本地文件路径**去读 → 拼出那个错地址。
+   改成**绝对地址**（带服务 origin）；origin 在 `start()` 拿到真实端口后再刷新一次（端口可能是 0）。
+   新增 `resourceUrl.test.ts`（3 条）锁住。
+2. **连点「发送」创建多个任务**：加**两道闸门** ——
+   服务端：`createJob` 里同一（canvasId, nodeId）已有 running 任务就**直接拒绝**（返回 409
+   「该节点已有任务在进行中」），`/api/jobs/active` 供前端查询；
+   前端：`NodeBottomBar` 的发送按钮提交后同步置 `submitted` 并 `disabled`（挡掉"点击到 runState 落盘"
+   那几百毫秒的连点），`onRun` 里也有同步守卫。新增 taskManager 用例 1 条（重复下单被拒、别的节点不误伤）。
+   注意 `/api/jobs/active` 必须注册在 `/api/jobs/:jobId` **之前**（Hono 先注册者优先，否则被 :jobId 吃掉）。
+3. **音频进度**：实测当前 8865 上音频任务进度**写进节点正常**（下单一 → 进度推进 → done 100%），
+   产物 `audioUrl` 也落到节点上（applier 正常）。此前「卡 0」就是上一次修掉的 `docForCanvas`。
+
+**验证**：cloud-server **341**、plugin-cloud-client **129**、plugin-bottom-bar **87**、ui **94** 全绿
++ 各包 typecheck 干净 + 全部重建；**8865 已用新产物重启**。真机：参考图地址绝对化；
+重复下单 → 409；`/api/jobs/active` 查到在跑任务。
+
 ### 最近完成（2026-10-05，修「生成进度一直卡 0%」）
 
 用户报：图片生成进度一直卡 0%，刷新页面还是 0。
@@ -2668,3 +4418,4 @@ UI e2e **50/50**；三个 typecheck 全过。
 
 **注意**：`packages/ui/e2e/canvas-e2e.mjs` 的 `BASE` 现支持 `CANVAS_PORT` 环境变量
 （`vite.config` 是 `strictPort:false`，多个 worktree 同起时 5288 归属不定，写死会打到别人的代码上）。
+### 最近完成（2026-10-06，Agent 对话「顺序 + 合并」+ 自带画布 MCP 锁）

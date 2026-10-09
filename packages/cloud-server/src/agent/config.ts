@@ -102,6 +102,13 @@ export interface AgentMcpView {
   config: Record<string, unknown>
   permission?: string
   invalid?: string
+  /**
+   * 是不是**随 Agent 自带的**服务（目前只有画布 MCP）。
+   *
+   * 界面据此不给删除按钮；服务端也拦同名删除请求（两道闸，缺一不可 ——
+   * 界面是提示，接口才是真拦截）。
+   */
+  builtin?: boolean
 }
 
 /** 「主动检查 MCP」的返回：每个服务连没连上 + 真正拿到了哪些工具 */
@@ -167,6 +174,9 @@ export const AGENT_PROMPTS_KEY = 'agent-prompts'
 /** 提示词清单住的 KV 作用域（与设置/快捷键同为 config，落在 settings.json） */
 export const AGENT_PROMPTS_KV_TYPE = 'config'
 
+/** 会话标题模型配置住的 KV key（type=config；值 { provider?, modelId? }，缺省 = 用会话默认模型） */
+export const AGENT_TITLE_MODEL_KEY = 'agent-title-model'
+
 /**
  * 两条内置提示词（用户提供的内容就落在这里）。
  * 它们是用户点名的两个模式，**不允许删除** —— 只允许改名与改正文。
@@ -177,22 +187,39 @@ export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
     name: '全能创作',
     builtin: true,
     text:
-      '# 角色\n你是画布里的创作助手，帮用户把想法变成画布上的节点与内容。\n\n' +
-      '# 工作方式\n- 先看清画布现状（用画布 MCP 工具读，再动手），不要凭空假设画布上有什么。\n' +
-      '- 用户 @ 了节点时，先查到那个节点的真实内容再回答。\n' +
-      '- 需要几样东西才能生成时，直接生成；不确定时先问一句。\n' +
-      '- 回答问题用中文，简短直接。',
+      '# 角色\n你是画布里的创作助手，把用户的想法变成画布上的节点与内容。\n\n' +
+      '# 铁律（先读再动手，且只动一张画布）\n' +
+      '1. 动手前先读：用 canvas_overview 看画布规模；用户 @ 了节点就用 canvas_get 带 nodeId 查它（不要用本地文件去猜资源路径）。\n' +
+      '2. **先确定画布 id**：用户 @ 了节点，画布 id 就是引用里 `画布id#节点id` 的前半段；否则用 canvas_list_canvases 问一次，或直接用用户的画布 id。**之后每一次读写都带上同一个 canvasId** —— 不带会写进 default，用户在自己的画布上什么都看不到。\n' +
+      '3. **生成任务 = 在画布上建一个节点**：节点就是任务本体。不要只调 generation_create 去写一个不存在的节点，也不要自己上传产物再手动挂上去。\n\n' +
+      '# 生成一个素材的正确流程（以图片为例）\n' +
+      '1. 选动作：generation_actions 挑一个 actionId（图片 / 音频 / 视频）。\n' +
+      '2. 有参考图 → 用 canvas_add_image（url / path / dataUrl 均可）把它作为一张图片节点放进画布，拿到它的 nodeId。\n' +
+      '3. 建目标节点：canvas_batch_nodes 加一个同类型节点（图片任务→image，视频→video，音频→audio），label 起个能看懂的名字，作者参数（比例等）写进 `barValues`。\n' +
+      '4. 下单：generation_create 带上 canvasId、上一步的 nodeId、actionId、prompt、values。需要参考图就把参考图节点也一起在 prompt 里说明。\n' +
+      '5. **产物由后台自己写回节点**（节点上的 runState / imageUrl / audioUrl / videoUrl）。不要自己下载产物、不要自己上传、不要用 exec_command 去搬运文件。\n' +
+      '6. 收尾：把参考节点与生成节点用 canvas_batch_edges 连起来，再跟用户说一句「已在画布上生成」。\n\n' +
+      '# 不要做的事\n' +
+      '- 不要用 exec_command / Copy-Item / Invoke-WebRequest 去搬生成产物，那些是后台的活。\n' +
+      '- 不要反复 Start-Sleep 等生成；下单后可以 generation_status 隔一会儿查一次，但别空转。\n' +
+      '- 不确定「往哪张画布写」时，先 canvas_list_canvases，不要默认写 default。\n\n' +
+      '# 说话方式\n用中文，简短直接，先给结果。',
   },
   {
     id: 'script',
     name: '剧本创编',
     builtin: true,
     text:
-      '# 角色\n你是一个剧本编剧助手：**先把剧本写出来，让用户确认，确认之后再生成画面/视频**。\n\n' +
-      '# 工作方式\n- 第一轮只出剧本（分镜 / 台词 / 场景），不要直接生成素材。\n' +
+      '# 角色\n你是剧本编剧助手：**先把剧本写出来让用户确认，确认之后再生成画面/视频**。\n\n' +
+      '# 工作方式\n' +
+      '- 第一轮只出剧本（分镜 / 台词 / 场景），不要直接生成素材。\n' +
       '- 剧本要落到具体的镜头，一条一条列清楚。\n' +
-      '- 等用户说「可以」之后再调用生成工具。\n' +
-      '- 用中文，简短直接。',
+      '- 等用户说「可以」之后再调用生成工具。\n\n' +
+      '# 生成时的铁律（与「全能创作」一致）\n' +
+      '- 生成任务 = **在画布上建一个节点**：先 canvas_add_image 放参考图（有的话），再 canvas_batch_nodes 建目标节点，最后 generation_create 下单（带 canvasId + nodeId + actionId）。\n' +
+      '- 每次读写都带**用户那张画布的 canvasId**（引用里 `画布id#节点id` 的前半段），不要写进 default。\n' +
+      '- 产物由后台自己写回节点；不要自己下载 / 上传 / 搬运文件。\n\n' +
+      '# 说话方式\n用中文，简短直接。',
   },
 ]
 
@@ -353,6 +380,11 @@ export class AgentConfigService {
     return agentRoot(this.dataRoot)
   }
 
+  /** 数据根（fork 写 Trace 种子要按它推 Trace 目录；只给服务内部用） */
+  get dataDir(): string {
+    return this.dataRoot
+  }
+
   /** 保证 Agent 已经初始化（幂等、串行），之后所有读都可以安全并行 */
   private ensureInit(): Promise<void> {
     this.initPromise ??= loadAgentState({
@@ -466,6 +498,33 @@ export class AgentConfigService {
 
   async deleteModel(provider: string, modelId: string): Promise<void> {
     await removeModel(this.sdkRoot, AGENT_PROJECT_ID, { provider, model_id: modelId })
+  }
+
+  /**
+   * 保证「test模型」在配置里（用户口径 2026-10-09：模型列表里多一个本地伪造模型）。
+   *
+   * 幂等：已存在且 base_url 一致时一个字节都不写（每次启动都会调它，不能天天重写配置）；
+   * 服务换端口时 base_url 变了要纠正过来。
+   *
+   * 为什么把登记交给 config 而不是直接调 SDK：本项目所有模型写入都收在这一层
+   * （密钥不回传、base_url 校验那两条口径都在这里），散出去必然漂移。
+   */
+  async ensureTestModel(input: { provider: string; modelId: string; baseUrl: string; apiKey: string }): Promise<void> {
+    const provider = input.provider.trim()
+    const modelId = input.modelId.trim()
+    const baseUrl = assertHttpUrl(input.baseUrl)
+    const cfg = await loadProjectConfig(this.sdkRoot, AGENT_PROJECT_ID)
+    const existing = cfg.models.find((m) => m.provider === provider && m.model_id === modelId)
+    if (existing && existing.base_url === baseUrl && !!existing.api_key) return
+    await addModel(this.sdkRoot, AGENT_PROJECT_ID, {
+      provider,
+      model_id: modelId,
+      api_key: input.apiKey,
+      base_url: baseUrl,
+      client_type: 'openai-chat',
+      context_window: 200000,
+      vision: true,
+    })
   }
 
   /**
@@ -646,11 +705,99 @@ export class AgentConfigService {
     }
   }
 
+  // -------------------------------------------------- 会话标题模型（自动命名用）
+
+  /** 读「生成标题用哪个模型」的配置（没配 = 用会话默认模型） */
+  async titleModel(): Promise<{ provider?: string; modelId?: string }> {
+    const stored = await this.promptKv.get<{ provider?: string; modelId?: string }>(
+      AGENT_PROMPTS_KV_TYPE,
+      AGENT_TITLE_MODEL_KEY,
+    )
+    return {
+      ...(typeof stored?.provider === 'string' && stored.provider ? { provider: stored.provider } : {}),
+      ...(typeof stored?.modelId === 'string' && stored.modelId ? { modelId: stored.modelId } : {}),
+    }
+  }
+
+  /** 写「生成标题用哪个模型」的配置（provider/modelId 都空 = 清掉，回落会话默认模型） */
+  async setTitleModel(provider: string | undefined, modelId: string | undefined): Promise<{
+    provider?: string
+    modelId?: string
+  }> {
+    const p = provider?.trim()
+    const m = modelId?.trim()
+    // 给了就先自证能用（凭据解析得出）—— 坏配置宁可存不进去，也不能让自动命名静默坏掉
+    if (p && m) {
+      const resolved = await this.resolveModel(p, m)
+      if (!resolved.configured) {
+        throw new Error('该模型没有可用凭据（先在「Provider」页配好密钥，或换一个模型）')
+      }
+    }
+    const value = { ...(p ? { provider: p } : {}), ...(m ? { modelId: m } : {}) }
+    await this.promptKv.set(AGENT_PROMPTS_KV_TYPE, AGENT_TITLE_MODEL_KEY, value)
+    return value
+  }
+
+  /**
+   * 用「标题模型」（没配则回落会话默认模型）给一段对话起名。
+   *
+   * 直接打上游的 chat/completions（一次小请求，非流式、max_tokens 很小），
+   * 不经过 SDK 的会话——起名不该在会话里留下痕迹、也不该打扰正在跑的对话。
+   * 凭据解析不出（没配密钥 / 地址坏）→ 返回 null，调用方保持现有的「首句截断」标题，不报错。
+   */
+  async generateSessionTitle(firstText: string): Promise<string | null> {
+    const pref = await this.titleModel()
+    const resolved = await this.resolveModel(pref.provider, pref.modelId)
+    if (!resolved.configured || !resolved.baseUrl) return null
+    let base: URL
+    try {
+      base = new URL(assertHttpUrl(resolved.baseUrl))
+    } catch {
+      return null
+    }
+    // 地址不带 /chat/completions 就补上（与 upstreamModels 拼 /models 同一套容错）
+    const url = base.pathname.endsWith('/chat/completions')
+      ? base
+      : new URL(base.origin + base.pathname.replace(/\/+$/, '') + '/chat/completions')
+    const prompt =
+      '为下面的用户消息起一个不超过 12 个字的中文标题。只输出标题本身，不要标点、不要引号、不要解释。\n\n' +
+      firstText.slice(0, 500)
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(resolved.apiKey ? { authorization: 'Bearer ' + resolved.apiKey } : {}),
+        },
+        body: JSON.stringify({
+          model: resolved.modelId,
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 32,
+          temperature: 0.3,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      })
+      if (!res.ok) return null
+      const body = (await res.json()) as {
+        choices?: Array<{ message?: { content?: unknown } }>
+      }
+      const raw = String(body.choices?.[0]?.message?.content ?? '').trim()
+      // 清掉模型可能带的引号 / 前缀词，留纯标题；空结果按失败处理
+      const title = raw.replace(/^["'“”「『]+|["'“”」』。.]+$/g, '').replace(/^(标题|title)[:：]\s*/i, '').trim()
+      return title ? title.slice(0, 30) : null
+    } catch {
+      return null // 起名失败不打扰对话：保持首句截断的旧标题
+    }
+  }
+
   // -------------------------------------------------------------------- MCP
 
   async mcpServers(): Promise<AgentMcpView[]> {
     await this.ensureInit()
-    const cfg = await loadSystemConfig(this.sdkRoot)
+    // 自愈放在**读路径**上：清单缺了自带画布 MCP 就补回来（详见 healBuiltinCanvasMcp）。
+    const cfg = await this.healBuiltinCanvasMcp(await loadSystemConfig(this.sdkRoot))
+    const isBuiltin = (name: string): boolean => !!this.builtinCanvasUrl && name === this.BUILTIN_CANVAS_MCP
     const entries = cfg.tools?.mcpServers ?? []
     return entries.map((e) => {
       try {
@@ -659,9 +806,15 @@ export class AgentConfigService {
           name: e.name,
           config: e.config as Record<string, unknown>,
           permission: resolved.permission ?? 'auto',
+          ...(isBuiltin(e.name) ? { builtin: true } : {}),
         }
       } catch (err) {
-        return { name: e.name, config: e.config as Record<string, unknown>, invalid: describe(err) }
+        return {
+          name: e.name,
+          config: e.config as Record<string, unknown>,
+          invalid: describe(err),
+          ...(isBuiltin(e.name) ? { builtin: true } : {}),
+        }
       }
     })
   }
@@ -696,6 +849,11 @@ export class AgentConfigService {
 
   async removeMcpServer(name: string): Promise<AgentMcpView[]> {
     await this.ensureInit()
+    // 自带画布 MCP **不许删**（用户口径 2026-10-05）：界面已经不给删除按钮，
+    // 这里再拦一道 —— 界面是提示，接口才是真拦截（手搓一个请求也删不掉）。
+    if (name === this.BUILTIN_CANVAS_MCP && this.builtinCanvasUrl) {
+      throw new Error('「' + this.BUILTIN_CANVAS_MCP + '」是自带画布 MCP，不能删除')
+    }
     const cfg = await loadSystemConfig(this.sdkRoot)
     const existing = cfg.tools?.mcpServers ?? []
     const next = existing.filter((e) => e.name !== name)
@@ -706,6 +864,14 @@ export class AgentConfigService {
 
   /** 内置画布 MCP 的服务名（system_config.yaml 里的条目名） */
   readonly BUILTIN_CANVAS_MCP = 'canvas'
+
+  /**
+   * 自带画布 MCP 的端点地址；空串 = 这台服务**没启用**它（`builtinCanvasMcp: false`，测试用）。
+   *
+   * 为什么要记着：读清单时要靠它（a）判断哪条是自带件、给上 builtin 标记；
+   * （b）在清单缺了它时补回来。关掉开关的实例不补、也不锁 —— 否则测试隔离就没法做了。
+   */
+  private builtinCanvasUrl = ''
 
   /**
    * 把**自身的画布 MCP** 写进 Agent 的 MCP 清单（默认携带，用户零配置）。
@@ -720,6 +886,7 @@ export class AgentConfigService {
     await this.ensureInit()
     const trimmed = (url ?? '').trim()
     if (!trimmed) return
+    this.builtinCanvasUrl = trimmed
     const cfg = await loadSystemConfig(this.sdkRoot)
     const existing = cfg.tools?.mcpServers ?? []
     const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
@@ -730,6 +897,32 @@ export class AgentConfigService {
     resolveMCPServer(entry as never)
     const next = [...existing.filter((e) => e.name !== this.BUILTIN_CANVAS_MCP), entry]
     await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+  }
+
+  /**
+   * 读清单时**顺带自愈**：缺了自带画布 MCP 就补回去，保证「每次工作时都有这个工具」。
+   *
+   * 为什么放在读路径：删它的路径不止一条 —— 磁盘被手改、老数据里从来没写过、
+   * 或者别的工具重写了整份 system_config。只在启动时补一次挡不住这些；
+   * 每次读清单都补，才是真正的「保证」。
+   */
+  private async healBuiltinCanvasMcp(cfg: SystemConfigLike): Promise<SystemConfigLike> {
+    const url = this.builtinCanvasUrl
+    if (!url) return cfg // 这台服务没启用自带件（测试隔离），不补也不锁
+    const existing = cfg.tools?.mcpServers ?? []
+    const current = existing.find((e) => e.name === this.BUILTIN_CANVAS_MCP)
+    if (current && (current.config as { url?: unknown }).url === url) return cfg
+    // 补这一条时保持**原有顺序**：已有就原地纠正地址，没有才追加在末尾
+    const entry = { name: this.BUILTIN_CANVAS_MCP, config: { type: 'http' as const, url } }
+    const next = current
+      ? existing.map((e) => (e.name === this.BUILTIN_CANVAS_MCP ? entry : e))
+      : [...existing, entry]
+    const healed = { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } }
+    // 写回磁盘（幂等、尽力而为）：下次启动也在；写失败不拦读，仍把补好的这份返回给界面
+    await writeSystemConfig(this.sdkRoot, healed).catch((err) =>
+      console.warn('[agent] 自动补回画布 MCP 落盘失败：' + String(err)),
+    )
+    return healed
   }
 
   /**

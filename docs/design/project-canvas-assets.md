@@ -34,6 +34,7 @@ DELETE /api/projects/:id                → { ok }   （连同它的画布一起
 GET    /api/projects/:id/canvases       → { ok, canvases: [{id,name,projectId,createdAt}] }
 POST   /api/projects/:id/canvases {name}→ { ok, canvas }  （建目录 + 记索引）
 PATCH  /api/canvases/:id/meta  {name}   → { ok }  （重命名画布）
+POST   /api/canvases/:id/duplicate       → { ok, canvas }  （复制画布）
 DELETE /api/canvases/:id                → { ok }  （删画布文件夹）
 GET    /api/assets                      → { ok, assets: [...] }
 POST   /api/assets        ?name=  (bytes)→ { ok, asset }   （上传 = source:'upload'，字节落 assets/files/）

@@ -22,12 +22,12 @@ import {
   makeSnapshot,
   internalEdgesOf,
   touchingEdgesOf,
-  toClipboardNodes,
   toClipboardEdges,
   computePasteOffset,
   remapSnapshot,
   type ClipboardSnapshot,
   type ClipboardNode,
+  type ClipboardAbsProvider,
 } from './clipboardEngine'
 
 /** 剪贴板对外服务形状（其它插件/UI 读选中复制粘贴） */
@@ -89,6 +89,21 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     return this.ctx.tryGet('viewport') ?? undefined
   }
 
+  /**
+   * 复制时取节点绝对坐标的提供者（父链逐级累加）。
+   *
+   * 用渲染层的 `nodeLayout`（同一份 absolutePosition 实现，分组插件的建组/解组也用它），
+   * 而不是让引擎只看快照里的批内父链 —— 复制**只选了子节点、父没被选**时，批内算不出绝对坐标，
+   * 必须回到整张画布的父链上问。缺服务时返回 undefined，引擎退化为"把自身 position 当绝对坐标"。
+   */
+  private absProvider(): ClipboardAbsProvider | undefined {
+    const layout = this.ctx.tryGet('nodeLayout') as
+      | { absolutePosition?(id: string): { x: number; y: number } }
+      | undefined
+    if (!layout || typeof layout.absolutePosition !== 'function') return undefined
+    return (id: string) => layout.absolutePosition!(id)
+  }
+
   get hasData(): boolean {
     return this.shared !== null && this.shared.nodes.length > 0
   }
@@ -105,10 +120,8 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     const nodes = this.selectedNodes()
     if (nodes.length === 0) return false
     const edges = internalEdgesOf(this.doc.getEdges(), this.selection.ids)
-    this.shared = makeSnapshot(
-      toClipboardNodes(nodes),
-      toClipboardEdges(edges),
-    )
+    // makeSnapshot 内部做剥字段 + 绝对坐标（absProvider 走 nodeLayout）；这里不再自己调 toClipboardNodes
+    this.shared = makeSnapshot(nodes, toClipboardEdges(edges), Date.now(), this.absProvider())
     this.pasteCount = 0
     this.ctx.emit('clipboard:copy', { nodeCount: nodes.length, edgeCount: edges.length })
     return true
@@ -170,10 +183,7 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     if (nodes.length === 0) return false
     const allEdges = this.doc.getEdges()
     const internalEdges = internalEdgesOf(allEdges, this.selection.ids)
-    this.shared = makeSnapshot(
-      toClipboardNodes(nodes),
-      toClipboardEdges(internalEdges),
-    )
+    this.shared = makeSnapshot(nodes, toClipboardEdges(internalEdges), Date.now(), this.absProvider())
     this.pasteCount = 0
    const nodeIds = nodes.map((n) => n.id)
  const touching = touchingEdgesOf(allEdges, nodeIds)

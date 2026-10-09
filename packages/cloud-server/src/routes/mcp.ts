@@ -21,6 +21,7 @@ import { createCanvasMcpServer } from '../mcp/server.js'
 import type { ProviderRegistry } from '../providers/registry.js'
 import type { TaskManager } from '../tasks/taskManager.js'
 import type { McpToolDef } from '../serverFramework/mcp.js'
+import type { CanvasDocResolver } from '../mcp/server.js'
 
 /**
  * @param pluginTools 取「当前插件注册的 MCP 工具」的函数。
@@ -32,11 +33,15 @@ export function mcpRoutes(
   registry?: ProviderRegistry,
   tasks?: TaskManager,
   pluginTools?: () => McpToolDef[],
+  /** 按画布取文档：AI 传 canvasId 时用它取对应画布（否则一切读写都落进默认画布） */
+  resolveDoc?: CanvasDocResolver,
+  /** 列出全部画布（canvas_list_canvases 用） */
+  listCanvases?: () => Promise<Array<{ id: string; name: string }>>,
 ): Hono {
   const app = new Hono()
   app.all('/mcp', async (c) => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = createCanvasMcpServer(doc, registry, tasks, pluginTools?.())
+    const server = createCanvasMcpServer(doc, registry, tasks, pluginTools?.(), resolveDoc, listCanvases)
     await server.connect(transport)
     const response = await transport.handleRequest(c.req.raw)
     // 原样把 SDK 的 Response 交回 Hono（保留 SSE body 与各类响应头）

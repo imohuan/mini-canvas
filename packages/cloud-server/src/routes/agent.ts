@@ -231,6 +231,27 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     return c.json({ ok: true, prompts: r.value })
   })
 
+  /**
+   * 会话标题模型（自动命名用哪个模型）。
+   * GET  -> { provider?, modelId? }（空 = 用会话默认模型）
+   * PUT  -> body { provider?, modelId? }；两个都空 = 清掉配置。
+   */
+  app.get('/api/agent/title-model', async (c) => {
+    const r = await guard(() => config.titleModel())
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, ...r.value })
+  })
+
+  app.put('/api/agent/title-model', async (c) => {
+    const body = await safeJson(c)
+    if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    const provider = typeof body.provider === 'string' ? body.provider : undefined
+    const modelId = typeof body.modelId === 'string' ? body.modelId : undefined
+    const r = await guard(() => config.setTitleModel(provider, modelId))
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, ...r.value })
+  })
+
   /** 上游可用模型清单（界面下拉用） */
   app.post('/api/agent/models/available', async (c) => {
     const body = (await safeJson(c)) ?? {}

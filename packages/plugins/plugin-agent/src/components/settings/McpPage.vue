@@ -87,11 +87,16 @@ async function save(): Promise<void> {
       <div class="ap-table ap-scroll">
         <div class="ap-tr is-head"><span>名称</span><span>地址 / 命令</span><span></span></div>
         <div v-for="m in s.mcpServers" :key="m.name" class="ap-tr">
-          <span class="ap-td" :title="m.name">{{ m.name }}</span>
+          <span class="ap-td" :title="m.name">{{ m.name }}<span v-if="m.builtin" class="ap-tag"> 自带</span></span>
           <span class="ap-td ap-td-meta" :title="String(m.config.url || m.config.command || '')">
             {{ String(m.config.url || m.config.command || '') }}{{ m.invalid ? ' · 解析失败' : '' }}
           </span>
-          <span class="ap-td-act"><button class="ap-mini danger" @click="agent.removeMcp(m.name)">删除</button></span>
+          <!-- 自带画布 MCP **不给删除按钮**（用户口径 2026-10-05）：它是随 Agent 内置的，
+               删了 Agent 就查不了当前画布。后端也拦同名删除请求 —— 这里只是第一道提示。 -->
+          <span class="ap-td-act">
+            <button v-if="!m.builtin" class="ap-mini danger" @click="agent.removeMcp(m.name)">删除</button>
+            <span v-else class="ap-hint">自带 · 不可删除</span>
+          </span>
         </div>
         <p v-if="!s.mcpServers.length" class="ap-empty">还没有配置 MCP 服务</p>
       </div>

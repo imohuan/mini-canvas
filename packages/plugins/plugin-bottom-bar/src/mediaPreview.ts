@@ -11,6 +11,8 @@ import { ref } from 'vue'
 export interface PreviewItem {
   /** 素材名（标题栏显示） */
   name: string
+  /** 素材来源节点 id（删除=断开它连出的线；无来源的老素材没有） */
+  nodeId?: string
   /** 图片/视频地址 */
   url?: string
   /** 文本内容 */
@@ -20,15 +22,24 @@ export interface PreviewItem {
 }
 
 const current = ref<PreviewItem | null>(null)
+/** 预览是从哪个节点的底栏点开的（删除连线时找「素材 → 这个节点」用） */
+let currentOwner = ''
 
-/** 打开全屏预览 */
-export function openPreview(item: PreviewItem): void {
+/** 打开全屏预览（owner = 点开时所在节点的 id） */
+export function openPreview(item: PreviewItem, owner?: string): void {
   current.value = item
+  currentOwner = owner ?? ''
+}
+
+/** 预览发起节点的 id（没有返回空串） */
+export function previewOwner(): string {
+  return currentOwner
 }
 
 /** 关闭全屏预览（Esc / 点背景 / 关闭按钮都调它；幂等） */
 export function closePreview(): void {
   current.value = null
+  currentOwner = ''
 }
 
 /** 当前预览项（null = 没在预览） */
@@ -40,4 +51,3 @@ export function previewItem(): PreviewItem | null {
 export function previewActive(): boolean {
   return current.value !== null
 }
-

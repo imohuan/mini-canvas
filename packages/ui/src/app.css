@@ -124,3 +124,31 @@ html[data-canvas-theme='dark'] .v2-content-clip { background: #1f1f1f !important
 .dark .v2-node,
 html[data-canvas-theme='dark'] .v2-title,
 html[data-canvas-theme='dark'] .v2-node { color: #d0d0d0; }
+
+/* ===== 多选「上/下控制栏」：整排只画一个背景块 ===== */
+/*
+ * 现象（用户 2026-10-07 报）：「你为两个按钮提供了两个背景，看起来好像是分开的。
+ * 它不是应该用同一个背景吗？你看一下其他节点的顶部状态栏，内部的按钮是放在一个背景块上的」。
+ *
+ * 原因：多选栏的每个区域条目各自带一层 .ntp-root（那是「一排控件」的容器类，
+ * 节点栏里整排就一个、所以正常），但多选栏把它们并排放进 .selection-frame-slot，
+ * 于是每组条目各画一块底 → 视觉上就是「两个背景」。
+ *
+ * 修法（不改多选插件、也不改条目组件）：让 slot 自己当唯一的背景块，
+ * 其内部条目那层 .ntp-root 退成透明的「排一行」，与节点栏逐字同观感。
+ */
+.selection-frame-slot {
+  padding: 4px;
+  background: var(--ui-overlay-solid, #fafafa);
+  border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
+  box-sizing: border-box;
+}
+.selection-frame-slot .ntp-root {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}

@@ -122,15 +122,16 @@ export function isTaskDone(status: string | undefined): boolean {
 }
 
 /**
- * 需要**用户处理**的中间态：任务没死、也不会自己继续。
+ * 需要**用户处理**且不会自己往前走的中间态：`polling_failed`（轮询中断，可手动恢复）。
  *
- * 为什么必须单独判：`paused`（验证码/风控/凭证失效）与 `polling_failed`（轮询中断）
- * 都不属于终态，但也不会自己往前走 —— 如果按"还在跑"处理，UI 就会**永远停在那个百分比上**
- * （用户实测反馈：任务早就 cancelled/paused 了，卡片还卡在 40%）。
- * 这里把它们收敛成"停住了、要你决定"，并给出可读原因。
+ * 注意 `paused` **不在此列**（用户实测的 bug，2026-10-08）：它虽然也要人处理，
+ * 但 web2api 的 captcha-watcher 会**自动盯着** —— 验证码一消失就自动恢复任务并重排。
+ * 早先把它当"停住了"直接收工，于是用户在浏览器里过验证码时，画布上任务已经「完成（失败）」了
+ * （真实日志：18:54:42 暂停 → 立刻判失败；18:55:11 自动恢复；18:56:35 真成功）。
+ * 现在按"还在跑"处理，只是把原因显示出来（UI 继续转，等它自己走完）。
  */
 export function isTaskStalled(status: string | undefined): boolean {
-  return status === 'paused' || status === 'polling_failed'
+  return status === 'polling_failed'
 }
 
 /**

@@ -15,19 +15,43 @@
  *  ② 技能 / MCP / 节点是**输入框内联标签**：点下拉里的一项 = 往正文插一个标记 chip，
  *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
-  ArrowUp, ChevronDown, ChevronRight, X, Loader2, Sparkles, Plus, Box,
+  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
-  RefreshCw, Hand, ShieldAlert,
+  RefreshCw, Hand, ShieldAlert, Copy, Pencil,
+  Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
 } from 'lucide-vue-next'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
 import { useStickyScroll } from '../useStickyScroll.js'
-import { skillResources, mcpResources, nodeResources, type CanvasNodeRow, ICON_SKILL, ICON_MCP, ICON_NODE } from '../agentResources.js'
+import { groupTurnBlocks, type TurnRow } from '../turnBlocks.js'
+// ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。
+import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
+import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
+import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
+import { pagerAnchors, type PagerGroup } from '../branchNav.js'
+import {
+  queuePanelView,
+  sendButtonMode,
+  budgetText,
+  goalMarkText,
+  usedText,
+  budgetTokenText,
+  formatToken,
+  tokenDisplay,
+  goalProgress,
+  parseTokenText,
+  type TokenUnit,
+} from '../queueModel.js'
+import type { QueueStateView } from '../agentApi.js'
+import { loadNotifyPrefs, notifyPayload, playNotifySound, showNotify, type AgentNotifyPrefs } from '../agentNotify.js'
+import { toolView, type ToolView } from '../toolViews.js'
+import type { AgentTurnView, ToolCard } from '../sessionModel.js'
 import AgentMarkdown from './AgentMarkdown.vue'
+import ToolViewBody from './ToolViewBody.vue'
 
 const agent = useAgent()
 const s = agent.state
@@ -57,6 +81,8 @@ const contextArcOffset = computed(() => {
 const ThemedDropdown = useUiComponent('dropdown')
 /** 悬浮提示也走主题目录（与 dropdown 同一套做法）—— 提示气泡的观感随主题一起换 */
 const ThemedTooltip = useUiComponent('tooltip')
+/** 全屏媒体查看器也走主题目录（用户消息图片 / 待发送图片点开看大图） */
+const MediaViewer = useUiComponent('mediaViewer')
 
 const prompt = ref('')
 /**
@@ -122,8 +148,32 @@ function removeAttachment(i: number): void {
   attached.value = attached.value.filter((_, idx) => idx !== i)
 }
 
-/** 点缩略图看大图（再点关掉）。放个简单遮罩就够，不引弹窗组件 */
+/**
+ * 点缩略图看大图：整只交给主题注册的 MediaViewer（AxImageViewer 同款：
+ * 滚轮缩放 / 拖拽 / 旋转 / 翻转 / 下载 / Esc 关闭），与底栏素材卡、
+ * 生成历史、资产面板共用同一份实现 —— 不再自己画遮罩。
+ */
 const previewImage = ref<string | null>(null)
+/**
+ * 预览所在的**整组图片**（用户口径 2026-10-09：预览时用 ← / → 轮播，循环）。
+ * MediaViewer 本来就支持（list + index + 键盘 ←→ 取模循环），此前各调用点只传了单张。
+ * 传了 list 的才有轮播；单图（如目标只有一张参考图）不显示翻页按钮。
+ */
+const previewList = ref<string[] | null>(null)
+function openPreview(url: string, list?: string[] | null): void {
+  previewImage.value = url
+  previewList.value = list && list.length > 1 ? list : null
+}
+const previewItem = computed(() =>
+  previewImage.value
+    ? {
+        name: "图片预览",
+        kind: "image",
+        url: previewImage.value,
+        ...(previewList.value ? { list: previewList.value, index: Math.max(0, previewList.value.indexOf(previewImage.value)) } : {}),
+      }
+    : null,
+)
 
 /** 粘贴图片（截图直接 Ctrl+V）也收：比"先存盘再选文件"顺手得多 */
 function onPaste(e: ClipboardEvent): void {
@@ -164,6 +214,8 @@ const authOpen = ref(false)
 const modelOpen = ref(false)
 const skillOpen = ref(false)
 const mcpOpen = ref(false)
+/** 「+」两项菜单（目标 / 上传文件） */
+const plusOpen = ref(false)
 
 function dismissHint(): void {
   hintDismissed.value = true
@@ -221,6 +273,12 @@ async function runMcpProbe(): Promise<void> {
 
 onMounted(() => {
   void agent.refresh()
+  // 两个全局设置都读一次（后台对话开关在这里只作"设置页"的值来源，退出时也不用它，
+  // 反正组件不订阅别的 config 键）
+  void Promise.all([loadGoalDefaults(), refreshNotifyPrefs()])
+  // 常驻订阅不在这里接：refresh() → restoreCurrentSession() 装载完会话后自己会接
+  // （那里拿到的才是"当前会话"的正确 id）。这里再接一次只会用**刷新前遗留的旧 id**
+  // 先占住流句柄，后面真正该接的那次被 "已经有流了" 挡掉（真机实测踩到的坑）。
 })
 
 /**
@@ -234,7 +292,7 @@ onMounted(() => {
 const streamSignal = computed(() =>
   s.turns.length + ':' + s.turns.reduce((n, t) => n + (t.text?.length ?? 0) + (t.thinking?.length ?? 0), 0),
 )
-const { scrollToBottom: stickToBottom } = useStickyScroll({
+const { scrollToBottom: stickToBottom, showScrollToBottom, smoothScrollToBottom } = useStickyScroll({
   target: scroller,
   signal: () => streamSignal.value,
   threshold: 48,
@@ -312,7 +370,13 @@ function focusNode(nodeId: string): void {
   if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
 }
 
-/** @ 下拉候选：画布节点 + 已装技能 + 已配 MCP（同一套标签外观、同一个标记格式） */
+/**
+ * @ 下拉候选 + **回填复用清单**：画布节点 + 已装技能 + 已配 MCP + 资产。
+ *
+ * 为什么要含资产：编辑回填时按名字从这份清单里复用现成 item —— 只有清单里的 item
+ * 带 renderEditor（图标 + 标签外观），回填出来的标签才和右键插入的长得一样。
+ * 资产清单用于「回填复用」；@ 下拉里按名字过滤也能顺带搜到资产，是加分项。
+ */
 const editorResources = computed<ResourceItem[]>(() => [
   ...nodeResources(nodeList.value, s.canvasId, focusNode),
   ...skillResources(s.skills),
@@ -320,26 +384,57 @@ const editorResources = computed<ResourceItem[]>(() => [
 ])
 
 /**
- * 右键菜单「引用到 Agent」→ 把那个节点插成标签。
+ * 「引用到 Agent」→ 把那些节点插成标签（两个入口共用：右键菜单给一个、多选上控制栏给一批）。
  *
- * 命令在插件上下文里执行、输入框在这里，服务是唯一共享通道：命令只往 state.pendingNodeRef
- * 写一句「引用这个 id」，组件看见就插标签并清掉（见 agentPlugin 的 agent:reference-node）。
+ * 命令在插件上下文里执行、输入框在这里，服务是唯一共享通道：命令只往 state.pendingNodeRefs
+ * 写一句「引用这些 id」，组件看见就插标签并清掉（见 agentPlugin 的 agent:reference-node）。
  */
-function insertPendingNodeRef(): void {
-  const nodeId = s.pendingNodeRef
-  if (!nodeId) return
+function insertPendingNodeRefs(): void {
+  const nodeIds = s.pendingNodeRefs
+  if (!nodeIds || !nodeIds.length) return
   syncNodes()
-  // 节点可能刚被删：拿不到就只清待办，不插半截东西
-  const item = nodeResources(nodeList.value, s.canvasId, focusNode).find((x) => x.id === 'node:' + nodeId)
-  if (item) void nextTick(() => editorRef.value?.insertResource(item))
-  agent.clearNodeRef()
+  // 节点可能刚被删：拿不到的跳过，不插半截东西
+  const all = nodeResources(nodeList.value, s.canvasId, focusNode)
+  const items = nodeIds.map((id) => all.find((x) => x.id === 'node:' + id)).filter((x) => Boolean(x))
+  if (items.length) void nextTick(() => { for (const item of items) editorRef.value?.insertResource(item!) })
+  agent.clearNodeRefs()
 }
 // 两条路都要覆盖：
-//   · 面板已开着 → 右键命令只改 state，watch 触发；
+//   · 面板已开着 → 命令只改 state，watch 触发；
 //   · 面板本来关着 → 命令会 show()，组件此刻才挂载，onMounted 补上这一次（watch 非 immediate，
 //     挂载前设的值它收不到）。onMounted 跑在子组件挂载之后，editorRef 已就绪。
-watch(() => s.pendingNodeRef, () => insertPendingNodeRef())
-onMounted(() => insertPendingNodeRef())
+watch(() => s.pendingNodeRefs, () => insertPendingNodeRefs())
+onMounted(() => insertPendingNodeRefs())
+
+/**
+ * 资产「添加到 Agent」：服务只记**资产数据**（state.pendingAsset），这里用 assetResource
+ * 现造成完整标签再插 —— 与「引用到 Agent」完全同一条路（那边也是只传 id、组件现造标签）。
+ * 面板关着时先记下，组件挂载/打开后补插。
+ */
+function insertPendingResource(): void {
+  const asset = s.pendingAsset
+  if (!asset) return
+  // 带上 onClick：插进输入框的 chip 点一下也发同一条事件（与气泡里的标签同一件事）
+  const item = assetResource(asset, emitRefClick)
+  void nextTick(() => editorRef.value?.insertResource(item))
+  agent.clearPendingResource()
+}
+watch(() => s.pendingAsset, () => insertPendingResource())
+onMounted(() => insertPendingResource())
+
+/**
+ * 批量插资产标签（多选工具栏「加入资产库」→ referenceAssets）。
+ * 每张与单张同形；插完一次清空（clearPendingResources）。
+ */
+function insertPendingResources(): void {
+  const assets = s.pendingAssets
+  if (!assets || !assets.length) return
+  const items = assetResources(assets, emitRefClick)
+  void nextTick(() => { for (const item of items) editorRef.value?.insertResource(item) })
+  agent.clearPendingResources()
+}
+watch(() => s.pendingAssets, () => insertPendingResources())
+onMounted(() => insertPendingResources())
 
 /** 往输入框插一个标签（点下拉里的一项 = 插 chip，不切开关），插完就收起下拉 */
 function insertRef(item: ResourceItem, close: () => void): void {
@@ -351,11 +446,36 @@ function submit(): void {
   const text = prompt.value.trim()
   const pics = [...attached.value]
   // 只有图、没打字也算合法的一条（"这图里是什么"这种问法很常见）
-  if ((!text && !pics.length) || s.running) return
+  if (!text && !pics.length) return
   prompt.value = ''
   attached.value = []
   modeOpen.value = modelOpen.value = skillOpen.value = mcpOpen.value = authOpen.value = false
-  void agent.send(text, pics.length ? pics : undefined)
+  plusOpen.value = false
+  // 一条正在编辑的**队列消息**：发送 = 原位替换那一条（设计 §3.3.4 / G3 —— 不换位置、不新起一条）
+  const editingItem = queue.value.editingId
+  if (editingItem) {
+    void updateEditingQueueItem(editingItem, text, pics)
+  } else if (editingGoal.value) {
+    // 编辑**已有目标**：只改它的内容（用户口径 2026-10-09）—— 不新建目标、不进队列。
+    // 预算一并带上（用户可能在草稿标记里改了预算）。下一轮生效（stop.mjs 每轮读 GOAL.json）。
+    const b = goalMark.value?.budget ?? s.goal?.budget ?? -1
+    void agent.updateGoal({ objective: text, budget: b > 0 ? b : -1 })
+    // 参考图也跟着更新（目标行迷你预览用）；没带图 = 清掉
+    if (s.goal) s.goalImages = pics
+    void agent.setGoalImages(pics)
+    editingGoal.value = false
+    agent.clearGoalMark()
+  } else if (goalMark.value) {
+    // 有目标标记：跑着时进队列（条目里带 goal，轮到它时按目标模式起）；
+    // 空闲时直接按目标模式起一轮（目标消息不进队列，见 agentService.sendGoal 的分工）
+    void (s.running ? agent.sendToQueue(text, pics.length ? pics : undefined) : agent.sendGoal(text, pics.length ? pics : undefined))
+  } else if (s.running) {
+    // 跑着的时候发送 = **进队列**（设计 G1/G2），不再像以前那样把这条丢掉
+    void agent.sendToQueue(text, pics.length ? pics : undefined)
+  } else {
+    // 空闲：和以前一样直接发
+    void agent.send(text, pics.length ? pics : undefined)
+  }
   // 自己发的消息必须能看见：无视之前的吸附状态，直接到底。
   // （用户如果先往上翻着看历史，然后发一句 —— 不这样做就会看不到自己刚发的内容。）
   void nextTick(() => stickToBottom())
@@ -365,12 +485,472 @@ function toggleThinking(id: string): void {
   openThinking.value[id] = !openThinking.value[id]
 }
 
+/**
+ * 助手一轮里的块**按到达顺序**排（用户口径 2026-10-05）。
+ *
+ * 以前模板固定「先工具、后正文」，于是所有工具都被堆到最上面、看不出时序；
+ * 现在交给纯函数 groupTurnBlocks：文字是分界线，中间没有文字的多个工具合并成一组。
+ * 兜底：老数据 / 极端情况下 steps 为空但 text 有值，就当一整块文字渲染（别把回答藏起来）。
+ * 用户那条返回空数组 —— 它的正文由下面的标签行单独渲染，不走这里（避免重复一遍）。
+ */
+function assistantRows(t: AgentTurnView): TurnRow[] {
+  if (t.kind !== 'assistant') return []
+  const steps = t.steps ?? []
+  if (!steps.length) return t.text ? [{ type: 'text', key: 'fallback', text: t.text }] : []
+  return groupTurnBlocks(steps, t.tools ?? [])
+}
+
+/** 工具组（一组多个工具）的展开态，key 用块的 key */
+const openToolGroups = ref<Record<string, boolean>>({})
+function toggleToolGroup(key: string): void {
+  openToolGroups.value[key] = !openToolGroups.value[key]
+}
+
+/** 组标题：跑着几个 / 跑完了几个（照参考项目的「N 个工具调用」写法） */
+function toolGroupTitle(tools: ToolCard[]): string {
+  const running = tools.filter((x) => !x.settled).length
+  return running ? `${tools.length} 个工具调用 · ${running} 个进行中` : `${tools.length} 个工具调用`
+}
+
+/**
+ * 画布 MCP 工具（自带卡片）走「直接展示卡片 + 卡内详情折叠」；
+ * **其它工具（默认工具）保持原来的折叠行行为**（用户口径 2026-10-07：只删 hover，别动折叠）。
+ */
+const openTools = ref<Record<string, boolean>>({})
+function toggleTool(id: string): void {
+  openTools.value[id] = !openTools.value[id]
+}
+/** 该工具是否有自定义卡片（画布族）——有卡片才直接展示，其余走折叠行 */
+function hasCardView(tool: ToolCard): boolean {
+  return viewOf(tool).family !== 'fallback'
+}
+/**
+ * 收起行的摘要：优先用卡片给的人话摘要（「25 节点 · 11 连线」这种），
+ * 没有才退回输出原文的一行截断（用户口径 2026-10-07：收起行也要能读懂）。
+ */
+function toolSummary(tool: ToolCard): string {
+  const card = viewOf(tool)
+  if (card.summary) return card.summary.length > 60 ? card.summary.slice(0, 60) + '…' : card.summary
+  const one = (tool.output ?? '').replace(/\s+/g, ' ').trim()
+  return one.length > 60 ? one.slice(0, 60) + '…' : one
+}
+
+/**
+ * 展开区的**专用视图**（用户口径 2026-10-06）：内置画布 MCP 工具各自配专用 UI，
+ * 不认识的回退通用 JSON。纯函数 toolView 出数据，这里只缓存（同一工具不重复解析）。
+ *
+ * 缓存条件：output 已到。工具调用先到、结果后到 —— 若先给「无输出」的结果缓存了 fallback
+ * 视图，结果到了也不会刷新（实测：专用渲染不生效的根因之一）。
+ */
+const viewCache = new Map<string, ToolView>()
+function viewOf(tool: ToolCard): ToolView {
+  if (tool.output !== undefined) {
+    const hit = viewCache.get(tool.id)
+    if (hit) return hit
+  }
+  const v = toolView(tool.name, tool.arguments, tool.output)
+  if (tool.output !== undefined) viewCache.set(tool.id, v)
+  return v
+}
+
+/** 换会话 / 清屏时把缓存与展开态一起丢掉（tool id 在不同会话可能重复） */
+function resetViewCaches(): void {
+  viewCache.clear()
+  openTools.value = {}
+  openToolGroups.value = {}
+}
+watch(() => s.sessionId, () => resetViewCaches())
+
+/**
+ * 用户消息 hover 操作条（用户口径 2026-10-06，照参考图 2）。
+ *
+ * ① 时间：`10月2日 23:20` 格式；跨年带年份。拿不到时间（老数据）不显示。
+ * ② 复制：把**显示文本**（@ 标记已降级成 `@名字` 的那份）复制进剪贴板，成功时短暂打勾。
+ * ③ 编辑：把那条消息的**提示词 + @ 引用 + 图片**填回底部输入框（图片回附件区），
+ *    相当于恢复那次发送 —— 分支（fork）的第一步（分支本身在第三批做）。
+ */
+const copied = ref<Record<string, boolean>>({})
+function msgTimeText(ts?: number): string {
+  if (!ts) return ''
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  const md = d.getMonth() + 1 + '月' + d.getDate() + '日 ' +
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0')
+  return sameYear ? md : d.getFullYear() + '年' + md
+}
+function msgTimeTitle(ts?: number): string | undefined {
+  if (!ts) return undefined
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? undefined : d.toLocaleString()
+}
+async function copyMessage(text: string, turnId: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+    copied.value[turnId] = true
+    setTimeout(() => { copied.value[turnId] = false }, 1200)
+  } catch {
+    /* 剪贴板被拒（非安全上下文等）：静默 —— 用户看得到没有变化，不值得为它弹错 */
+  }
+}
+
+/**
+ * 「编辑」= 恢复那次发送：正文回输入框、图片回附件区。
+ *
+ * 为什么直接 setText 就行：转录里存的是**引用标记原文**（`<ref … />`，后端口径：不翻译），
+ * 而 setText 内部的 parsePlainTextToContent 会把它还原成与右键插入同款的 chip 标签
+ *（见 prosemirror-editor-bundle 的 parsePlainTextToContent 与 refRestore 测试）。
+ * 用户在此基础上改完直接重发即可（重发走 agentService 的分支 fork）。
+ */
+function editIntoComposer(text: string, images: string[] | undefined): void {
+  editorRef.value?.setText(text)
+  if (!editorRef.value) prompt.value = text
+  attached.value = [...(images ?? [])]
+  // 输入框获得焦点，用户直接改就行
+  void nextTick(() => editorRef.value?.$el?.querySelector?.('.ProseMirror')?.focus?.())
+}
+
+/** 点「编辑」：回填 + 进入「正在编辑」状态（消息高亮、输入框出联动标记） */
+function beginEditMessage(t: AgentTurnView): void {
+  cancelAllEditsExcept('message')
+  editIntoComposer(t.text, t.images)
+  agent.beginEdit(t.id)
+  // 高亮的消息要可见：滚到它（比「点标记滚回来」更早一步到位）
+  void nextTick(() => scrollToEditing())
+}
+
+/** 输入框联动标记被点：滚回正在编辑的那条消息 */
+function scrollToEditing(): void {
+  // 三种编辑各自的目标元素不同：谁在编辑就滚到谁（类名挂在外层 .ac-msg 上，选择器对准真身）
+  const sel =
+    editingKind.value === 'message' ? '.ac-msg.is-editing'
+    : editingKind.value === 'queue' ? '.ac-queue-row.is-editing'
+    : '.ac-goal-row.is-editing'
+  document.querySelector(sel)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+/** 当前在编辑哪一种（消息 / 队列 / 目标）；都没有则 null —— 三者互斥，最多一个 */
+const editingKind = computed<'message' | 'queue' | 'goal' | null>(() => {
+  if (s.editingId) return 'message'
+  if (editingItems.value.length) return 'queue'
+  if (editingGoal.value) return 'goal'
+  return null
+})
+const editingKindText = computed(() =>
+  editingKind.value === 'queue' ? '正在编辑排队消息'
+  : editingKind.value === 'goal' ? '正在编辑目标'
+  : '正在编辑',
+)
+/** 那条黄色标记上的 ✕：按当前是哪种编辑去取消 */
+function cancelEditing(): void {
+  if (editingKind.value === 'message') agent.cancelEdit()
+  else if (editingKind.value === 'queue') {
+    for (const id of [...editingItems.value]) void agent.cancelEditQueueItem(id)
+    editingItems.value = []
+  } else if (editingKind.value === 'goal') cancelEditGoal()
+}
+
+/** 分页器切到上/下一条（越界返回 null，按钮同时是 disabled 状态） */
+function pagerTarget(p: PagerGroup, delta: number): string | null {
+  const next = p.index + delta
+  if (next < 0 || next >= p.items.length) return null
+  return p.items[next].id
+}
+
+/* ——————————————————— 排队消息（设计 §3.6 G2/G3/G7/G8/G9/G10） ——————————————————— */
+
+/**
+ * 队列的**镜像**：真相在后台（会话文件里的 queue 字段），state.queue 由
+ * 数据层恢复（GET 会话）+ SSE 的 `queue` 事件持续同步；本组件只读它。
+ *
+ * 上面再叠一层**本地编辑态**：后端的 `update` 语义是"改完待发"（op 一调就把状态刷回
+ * queued），没有"置 editing"的接口 —— 所以"这条正在被编辑"由本组件自己记（唯一真相在这里），
+ * 折算时把那几条强制成 `editing`（queueModel 据此出琥珀行 + 队列阻塞提示）。
+ */
+const editingItems = ref<string[]>([])
+const queueView = computed<QueueStateView>(() => {
+  const base = s.queue
+  if (!editingItems.value.length) return base
+  const ids = new Set(editingItems.value)
+  return { ...base, items: base.items.map((it) => (ids.has(it.id) ? { ...it, state: 'editing' as const } : it)) }
+})
+/** 折算成一排排要画的行（纯函数在 queueModel，可单测） */
+const queue = computed(() => queuePanelView(queueView.value))
+/**
+ * 有队列消息正在编辑 ⇒ **队列整体阻塞**（后端保证不发下一条，G7）。
+ * 组件用它决定列表上方那条提示（用户得知道"为什么队列不动了"）。
+ */
+const queueBlocked = computed(() => queue.value.blocked)
+
+/**
+ * 聚合容器是否要画：**有队列消息 或 有已发送的目标**时为真。
+ * 未发送的目标不进这个容器（它在输入框内侧），所以不进这个判断。
+ */
+const pending = computed(() => ({ hasAny: queue.value.hasItems || !!goalRow.value }))
+
+/** 目标标记（G12）：`+ → 目标` 直接加一个默认预算的标记，点标签才弹编辑框 */
+const goalMark = computed<{ objective: string; budget: number } | null>(() => s.goalMark)
+
+/**
+ * token 口径（用户口径 2026-10-09）：**只有两态** —— 已用预算 ⇄ 剩余预算。
+ * 未发送的目标标签、已发送的目标行**共用这一个开关**（两处都能改，口径一致）。
+ * 持久化到 localStorage：刷新后口径不跳。
+ */
+/**
+ * token 单位制（用户口径 2026-10-09）：国际 k/M/B/T ⇄ 中文 万/亿/万亿。
+ * 跟着「换算口径」走，不放进设置弹框 —— 它就是这里数字的显示方式。
+ */
+const UNIT_KEY = 'mini-canvas:agent:token-unit'
+const tokenUnit = ref<TokenUnit>(
+  (typeof localStorage !== 'undefined' && localStorage.getItem(UNIT_KEY) === 'cn') ? 'cn' : 'si',
+)
+watch(tokenUnit, (u) => {
+  try {
+    localStorage.setItem(UNIT_KEY, u)
+  } catch {
+    /* 同上 */
+  }
+})
+function toggleTokenUnit(): void {
+  tokenUnit.value = tokenUnit.value === 'si' ? 'cn' : 'si'
+}
+/**
+ * 目标默认预算：读全局设置（KV `config/agentGoalDefaults`，由设置弹窗那一路维护；
+ * 体是 `{ value: { budget } }`，与 packages/ui 的 agentSettings 同一个键 —— 别自创路径）。
+ *
+ * 三种情况要分清（与 ui 侧 budgetFromKv 同口径）：
+ *   · 整键没存过（404）⇒ 用默认 50000（设计 §3.6.3）；
+ *   · 存了 `{ budget: 0 }` ⇒ 用户明确选了"不限"，就用 0，**不能**被默认值盖回去；
+ *   · 坏数据 ⇒ 回落默认。
+ */
+const goalDefaultBudget = ref(50000)
+async function loadGoalDefaults(): Promise<void> {
+  try {
+    const base = (s.baseUrl ?? '').replace(/\/+$/, '')
+    const res = await fetch(base + '/api/kv/config/agentGoalDefaults', { headers: { accept: 'application/json' } })
+    if (!res.ok) return
+    const body = (await res.json()) as { value?: { budget?: unknown } } | null
+    const raw = body?.value
+    if (!raw || typeof raw !== 'object' || !('budget' in raw)) return
+    const b = Number(raw.budget)
+    if (Number.isFinite(b) && b >= 0) goalDefaultBudget.value = Math.floor(b)
+  } catch {
+    /* 后台没连 / 没这个键：用默认值，不打扰用户 */
+  }
+}
+
+/** 点「+ → 目标」：直接加标签（**不弹框**），内容留空提示「输入目标内容」 */
+function addGoalMark(): void {
+  agent.setGoalMark('', goalDefaultBudget.value)
+}
+
+function clearGoalMark(): void {
+  agent.clearGoalMark()
+  // 若正在编辑运行中的目标，撤掉标记 = 取消这次编辑（目标本身没动过）
+  editingGoal.value = false
+}
+
+/**
+ * 编辑**正在运行**的目标（用户口径 2026-10-09）：点目标行左侧那颗图标进入。
+ * 效果与队列编辑一致 —— 恢复成**待编辑的草稿状态**：目标内容回填输入框 + 挂上目标标记；
+ * 发送时（见 submit）**只更新该目标的内容**，不新建目标、也不进队列。
+ */
+const editingGoal = ref(false)
+/**
+ * 三种编辑**互斥**（用户口径 2026-10-09）：对话消息 / 队列消息 / 目标，同一时刻只能有一个在编辑。
+ * 进入任一编辑前先调它 —— 把另外两种退出，避免三个编辑态叠在一起。
+ */
+function cancelAllEditsExcept(keep: 'message' | 'queue' | 'goal'): void {
+  if (keep !== 'message' && s.editingId) agent.cancelEdit()
+  if (keep !== 'queue' && editingItems.value.length) {
+    for (const id of [...editingItems.value]) void agent.cancelEditQueueItem(id)
+    editingItems.value = []
+  }
+  if (keep !== 'goal' && editingGoal.value) {
+    editingGoal.value = false
+    agent.clearGoalMark()
+  }
+}
+function beginEditGoal(): void {
+  const g = s.goal
+  if (!g) return
+  cancelAllEditsExcept('goal')
+  editingGoal.value = true
+  agent.setGoalMark(g.objective, g.budget)   // 挂上草稿标记（输入框顶部那条）
+  // 图片也一并回填（与队列编辑同款）：目标的参考图就在宿主记录里
+  editIntoComposer(g.objective, s.goalImages?.length ? s.goalImages : undefined)
+}
+/** 取消编辑目标：撤掉标记，恢复原样（目标本身没动过） */
+function cancelEditGoal(): void {
+  editingGoal.value = false
+  agent.clearGoalMark()
+}
+/** 目标行左侧图标点击：进入编辑（再点一次 = 退出编辑、撤掉草稿标记） */
+function startEditGoalRow(): void {
+  if (editingGoal.value) cancelEditGoal()
+  else beginEditGoal()
+}
+
+/** 目标标签文案（`目标内容 · 预算 50k`）—— 已发送目标行/无障碍用的文本 */
+const goalText = computed(() => goalMarkText(goalMark.value?.objective, goalMark.value?.budget))
+
+/**
+ * 已发送目标的列表行：状态徽章 + 第 N 轮 + 进度。
+ * 预算**只有一个口径**（用户口径 2026-10-09 修正）：进度 = 已用 / 总预算，没有「已用/剩余」切换。
+ */
+const goalRow = computed(() => {
+  const g = s.goal
+  if (!g) return null
+  const badge = s.goalPaused
+    ? { text: '已暂停', cls: 'is-paused' }
+    : (g.ended ? { text: '已完成', cls: 'is-done' } : { text: '运行中', cls: '' })
+  return {
+    badge,
+    round: g.round,
+    progress: goalProgress(g.budget, g.tokensUsed),
+    resumed: s.goalPaused,
+  }
+})
+
+/**
+ * 预算值就地编辑（contenteditable）。用户口径 2026-10-09：
+ *   1. **点进去就全选**（省得手动删）——用 focus 时 selectAll；
+ *   2. **只有回车才算有效**；Esc 或点别处（失焦）= 放弃、还原原值。
+ * 参数：kind = 'budget'（总预算）| 'used'（已用，只读，不触发提交）；scope = 'mark'(草稿) | 'row'(运行中)。
+ */
+function onGoalEditFocus(e: FocusEvent): void {
+  const el = e.target as HTMLElement
+  // 记下原值（用于 Esc / 失焦还原），再全选，用户一敲键盘就覆盖
+  el.dataset.raw = el.textContent ?? ''
+  const sel = window.getSelection?.()
+  if (sel) {
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+}
+function commitGoalBudget(el: HTMLElement, scope: 'mark' | 'row' | 'used'): void {
+  const n = parseTokenText(el.textContent)
+  if (Number.isNaN(n)) {
+    // 解析不了 = 不改，还原
+    el.textContent = el.dataset.raw ?? el.textContent
+    return
+  }
+  if (scope === 'used') void agent.updateGoal({ tokensUsed: n > 0 ? n : 0 })
+  else if (scope === 'row') void agent.updateGoal({ budget: n > 0 ? n : -1 })
+  else agent.setGoalMark(goalMark.value?.objective ?? '', n > 0 ? n : -1)
+  // 提交后清掉 raw，避免下一次失焦又拿旧值还原
+  delete el.dataset.raw
+}
+function onGoalBudgetKeydown(e: KeyboardEvent, el: HTMLElement, scope: 'mark' | 'row' | 'used'): void {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    commitGoalBudget(el, scope)   // **只有回车才提交**
+    el.blur()
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    el.textContent = el.dataset.raw ?? el.textContent
+    delete el.dataset.raw
+    el.blur()
+  }
+}
+function onGoalBudgetBlur(e: FocusEvent): void {
+  // 失焦**不提交**（用户口径：只有回车算有效）—— 有未提交的改动就还原
+  const el = e.target as HTMLElement
+  if (el.dataset.raw !== undefined) {
+    el.textContent = el.dataset.raw
+    delete el.dataset.raw
+  }
+}
+
+/** 发送键三态（G1）：有内容 ⇒ 发送（跑着也是发送，点了进队列）；空 + 跑着 ⇒ 终止；空 + 空闲 ⇒ 禁用 */
+const sendMode = computed(() => sendButtonMode(!!prompt.value.trim() || attached.value.length > 0, s.running))
+
+/**
+ * 「引导」↳：表面上像直接发送，实际插队（G4/G13）。
+ * 跑着时 = 插进当前轮的下一次请求；没跑时后端会把它按普通发送处理（设计 §3.3.3，
+ * 三种情况全由后端裁决，前端照调即可）。
+ */
+async function steerItem(id: string): Promise<void> {
+  await agent.steerQueueItem(id)
+}
+
+/** 删除这条排队消息（真不要了）；正在编辑的那条删了 = 编辑结束（输入框内容保留） */
+async function removeItem(id: string): Promise<void> {
+  editingItems.value = editingItems.value.filter((x) => x !== id)
+  await agent.removeQueueItem(id)
+}
+
+/** 「关闭排队」：不移除内容 —— 文本 + 图片**回填输入框**（用户接着改或直接发） */
+async function closeItem(id: string): Promise<void> {
+  // 服务把「被关掉那条的内容」回给调用方 —— 关掉的同时回填输入框（它就是"关闭排队"的语义）
+  editingItems.value = editingItems.value.filter((x) => x !== id)
+  const back = await agent.closeQueueItem(id)
+  if (back) editIntoComposer(back.text, back.images)
+}
+
+/** 编辑队列消息（G3）：回填输入框 + 标记 editing（位置不变，队列整体阻塞） */
+async function beginEditQueue(id: string): Promise<void> {
+  // 先要内容（服务那边顺手把这条刷新一遍），再在本地记上"正在编辑"
+  cancelAllEditsExcept('queue')
+  const back = await agent.beginEditQueueItem(id)
+  const item = back ?? s.queue.items.find((x) => x.id === id) ?? null
+  if (item && !editingItems.value.includes(id)) editingItems.value = [...editingItems.value, id]
+  if (item) editIntoComposer(item.text, item.images)
+}
+
+/** 取消编辑（队列行上的 ✕）：状态回 queued，内容不变 */
+async function cancelEditQueue(id: string): Promise<void> {
+  editingItems.value = editingItems.value.filter((x) => x !== id)
+  await agent.cancelEditQueueItem(id)
+}
+
+/** 编辑中的那条消息发送：**原位替换**内容（不新起一条、不换位置） */
+async function updateEditingQueueItem(id: string, text: string, images: string[]): Promise<void> {
+  await agent.saveEditedQueueItem(id, text, images.length ? images : undefined)
+  // 发送 = 编辑结束：本地那条"正在编辑"的标记要撤掉，队列才能继续
+  editingItems.value = editingItems.value.filter((x) => x !== id)
+}
+
+/**
+ * 暂停 / 启动队列的自动发送（G8）。
+ *
+ * 必须写成**函数**、每次点击时现读当前状态：原来的三元（`paused ? resume : pause`）
+ * 在 setup 里立刻求值一次，挂载后永远是同一个分支 —— 暂停后点"启动"其实还在调 pause，
+ * 看起来完全没反应（真机实测踩到的 bug）。
+ */
+function toggleQueuePause(): void {
+  if (queueView.value.paused) void agent.resumeQueue()
+  else void agent.pauseQueue()
+}
+
+/** 行内 ⋯ 菜单开合（同一时刻只留一个） */
+const rowMenuId = ref<string | null>(null)
+
+/**
+ * 分页器**跟随消息**的锚点（用户口径 2026-10-07）：
+ * userOrdinal = 第几条用户消息（0 基）在当前位置被编辑过；
+ * 分页器插在那条用户消息**整块回复**结束处（下一条用户消息之前 / 列表末尾）。
+ * 返回 turnId -> PagerGroup（模板在对应回合后面渲染）。
+ */
+const pagerByAnchor = computed(() => pagerAnchors(s.turns, s.pagers))
+
 function onKeydown(e: KeyboardEvent): void {
   if (e.key !== 'Escape') return
   if (previewImage.value) {
     previewImage.value = null
     return
   }
+  // Esc 先关自己开的那些浮层，最后才轮到别的（手势优先级从最近的一次操作往回退）
+  if (rowMenuId.value) {
+    rowMenuId.value = null
+    return
+  }
+  if (plusOpen.value) {
+    plusOpen.value = false
+    return
+  }
+  // 目标编辑框也吃 Esc（设计 §3.1 的模态三要素之一）
   modeOpen.value = modelOpen.value = skillOpen.value = mcpOpen.value = authOpen.value = false
 }
 
@@ -392,7 +972,7 @@ const promptPresets = computed(() => s.prompts)
 const activePrompt = computed(() => s.prompts.find((p) => p.id === s.activePromptId))
 const modeLabel = computed(() => activePrompt.value?.name ?? '全能创作')
 function pickMode(id: string, close: () => void): void {
-  agent.setActivePrompt(id)
+  void agent.setActivePrompt(id)
   close()
 }
 
@@ -444,6 +1024,82 @@ async function enableNotify(): Promise<void> {
   notifyDismissed.value = true
 }
 
+/**
+ * 「一轮跑完 / 队列跑完」的通知（设计 §3.5 / G11）。
+ *
+ * 为什么在组件里做：浏览器通知与提示音**只能由页面发**（后台脚本发不了）。
+ * 两个开关读后台 KV 的 `agentNotify`（设置弹窗维护那一边，这里只读）；
+ * 开关关了就不弹、不响；通知权限没给也不弹（宁缺勿扰，不弹错）。
+ */
+const notifyPrefs = ref<AgentNotifyPrefs>({ notify: false, sound: false })
+async function refreshNotifyPrefs(): Promise<void> {
+  notifyPrefs.value = await loadNotifyPrefs({ baseUrl: s.baseUrl })
+}
+
+/**
+ * 会话标题 + 最后一条的摘要（通知正文用）。
+ * 摘要在**动手之前**取：`done` 事件一到，最后那条助手消息就是这一轮的答案。
+ */
+function notifySummary(): { title: string; summary: string } {
+  const last = [...s.turns].reverse().find((t) => t.kind === 'assistant' && (t.text ?? '').trim())
+  const raw = (last?.text ?? '').replace(/s+/g, ' ').trim()
+  return { title: s.title || 'Agent', summary: raw.length > 80 ? raw.slice(0, 80) + '…' : raw }
+}
+
+/** 一轮跑完：弹通知 + 播音（开关在用户手里） */
+function onRoundDone(): void {
+  const { title, summary } = notifySummary()
+  showNotify('round_done', { title, summary }, notifyPrefs.value)
+  playNotifySound(notifyPrefs.value)
+}
+
+/** 队列全部发完且会话空闲：再弹一条（用户口径：队列跑完也要说一声） */
+function onQueueIdle(): void {
+  const { title, summary } = notifySummary()
+  showNotify('queue_idle', { title, summary }, notifyPrefs.value)
+  playNotifySound(notifyPrefs.value)
+}
+
+/**
+ * 盯住"跑完"的两个时刻。
+ *
+ * 为什么用 watch 而不是直接吃 SSE 事件：SSE 的 `round_done` / `queue_idle` 事件由
+ * 数据层消化（不进 ChatModel），组件这一层看到的是**它消化后的状态变化**：
+ *   · 一轮结束 ⇒ `s.running` 从 true 变 false；
+ *   · 队列跑完且空闲 ⇒ 上一条的用户消息在队里发出、队空 + 空闲。
+ * 两个时刻在这里都能可靠地观测到，且不依赖数据层把事件转发出来。
+ *
+ * 摘要必须在**变化之后**取：这时最后一条助手消息已是这一轮的答案。
+ */
+let roundDoneTimer: ReturnType<typeof setTimeout> | null = null
+/** 这一轮开始时队列里还有几条：> 0 且这一轮跑完时队列空了 = **队列全部跑完**（G11 的第二个时机） */
+let queueAtRunStart = 0
+watch(
+  () => s.running,
+  (now, before) => {
+    if (!before && now) {
+      queueAtRunStart = queue.value.count
+      return
+    }
+    if (!(before && !now)) return
+    const drained = queueAtRunStart > 0 && queue.value.count === 0
+    queueAtRunStart = 0
+    // 稍等一拍再取摘要：`done` 之后的最后几个 delta 可能还在路上
+    if (roundDoneTimer) clearTimeout(roundDoneTimer)
+    roundDoneTimer = setTimeout(() => {
+      roundDoneTimer = null
+      onRoundDone()
+      // 这一轮是队列里的最后一条 ⇒ 队列跑完了，再来一条（两个时机各一条，G11）
+      if (drained) onQueueIdle()
+    }, 250)
+  },
+)
+onBeforeUnmount(() => {
+  if (roundDoneTimer) clearTimeout(roundDoneTimer)
+  // 断开事件流订阅（只是取消收听；后台那一轮照跑 —— 这是「后台对话」的语义）
+  agent.detachStream()
+})
+
 /** 空态下的三行建议（照参考图；点了就填进输入框） */
 const SUGGESTIONS = [
   { icon: Box, text: '感知画布开始创作' },
@@ -463,50 +1119,46 @@ function useSuggestion(text: string): void {
 /**
  * 把用户消息的纯文本切成「文字 / 标签」两种片段。
  *
- * 为什么要这一段：后端只存纯文本（`getPlainText()` 把引用写成 `@名字 `），所以历史里
- * 没有结构化引用可读；但「装了哪些技能 / MCP」我们本地就有 —— 按名字回推即可还原成
- * 与输入框里那颗 chip 完全同款的标签。
- *
- * 匹配规则：按名单**从长到短**扫，避免 `@art` 先命中而把 `@artist` 截断；
- * 名字后必须是词边界（空格 / 标点 / 行尾），否则 `@archifyX` 会被误判成 `@archify`。
+ * 解析本身住在 ../userSegments.ts（纯函数，有单测）—— 这里只做「按段渲染 + 点击派发」。
+ * 转录里存的是 `<ref … />` XML 原文（后端不翻译），字段自带完整信息，不再靠名字回推。
  */
-interface UserSegment { type: 'text' | 'tag'; value: string; name: string; category: string; icon: string }
+const userSegments = parseUserSegments
 
-const userSegments = (text: string): UserSegment[] => {
-  const refs: Array<{ name: string; category: string; icon: string }> = [
-    // 节点引用也还原成标签（历史里发过的节点引用照样看得出是引用，不是普通文字）
-    ...nodeList.value.map((n) => ({ name: n.name, category: '节点', icon: ICON_NODE })),
-    ...s.skills.map((sk) => ({ name: sk.name, category: '技能', icon: ICON_SKILL })),
-    ...s.mcpServers.map((m) => ({ name: m.name, category: 'MCP', icon: ICON_MCP })),
-  ]
-  if (!refs.length || !text.includes('@')) return [{ type: 'text', value: text, name: '', category: '', icon: '' }]
-  // 长的名字排前面：`@代码评审` 要先于 `@代码` 试。
-  refs.sort((a, b) => b.name.length - a.name.length)
-  const out: UserSegment[] = []
-  let rest = text
-  while (rest.length) {
-    let hit: { name: string; category: string; icon: string; at: number } | null = null
-    for (const ref of refs) {
-      const at = rest.indexOf('@' + ref.name)
-      if (at === -1) continue
-      const after = rest.charAt(at + 1 + ref.name.length)
-      // 名字后不是词边界 → 只是巧合的前缀，跳过
-      if (after && !/[\s,，。.、;；:：!！?？)\]}>"'」』]/.test(after)) continue
-      if (!hit || at < hit.at) hit = { ...ref, at }
-    }
-    if (!hit) {
-      out.push({ type: 'text', value: rest, name: '', category: '', icon: '' })
-      break
-    }
-    if (hit.at > 0) out.push({ type: 'text', value: rest.slice(0, hit.at), name: '', category: '', icon: '' })
-    out.push({ type: 'tag', value: '@' + hit.name, name: hit.name, category: hit.category, icon: hit.icon })
-    rest = rest.slice(hit.at + 1 + hit.name.length)
-  }
-  return out
+/**
+ * 点对话里的标签：
+ *   · 节点 → 让画布聚焦到它（读起来最自然，也是老行为）；
+ *   · 资产（文件或文件夹）→ 发一条 `agent:ref-click` 系统事件，由应用层决定怎么响应。
+ *
+ * 为什么用事件而不是服务（用户口径 2026-10-08）：预览与资产管理弹窗属于成品应用，
+ * 本插件按依赖方向 import 不到它。走服务时两边被一个**服务名**绑住（还要满足注入先后）；
+ * 走事件则三方互不认识 —— 本插件只负责「有人点了这个引用」，谁想响应谁 ctx.on 监听。
+ */
+function onSegClick(seg: UserSegment): void {
+  if (seg.nodeId) { focusNode(seg.nodeId); return }
+  emitRefClick(assetRefInputOf(seg))
 }
 
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+/**
+ * 把「某条引用被点了」广播出去（`agent:ref-click`）。
+ *
+ * 只发**引用自带的字段**，不做翻译：怎么响应（预览 / 打开资产管理 / 别的）是监听方的事。
+ * 没人监听也不报错（事件是广播，不是调用）。
+ */
+function emitRefClick(ref: AssetRefOpen): void {
+  const payload = refClickPayloadOf({ ...ref, refType: 'asset' })
+  if (payload) ctx.emit(REF_CLICK_EVENT, payload)
+}
+
+/**
+ * Esc 走**捕获阶段**（第三个参数 true）。
+ *
+ * 为什么不能用冒泡：焦点在输入编辑器里时，ProseMirror 会在自己那层把 Esc 吃掉
+ * （它要用来关自己的 @ 菜单等等），事件根本传不到 document 的冒泡监听 ——
+ * 实测「目标编辑框开着、光标还在输入框里，按 Esc 关不掉」就是这么来的。
+ * 捕获阶段先于编辑器拿到事件，模态的 Esc 才真的可靠。
+ */
+onMounted(() => document.addEventListener('keydown', onKeydown, true))
+onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 </script>
 
 <template>
@@ -528,7 +1180,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     </div>
 
     <!-- ③ 消息流 -->
-    <div v-else ref="scroller" class="ac-scroll" role="log" aria-live="polite">
+    <div v-else class="ac-scroll-wrap">
+    <!-- 「回到底部」（用户口径 2026-10-09）：放在**消息区内部、底部居中**。
+         有滚动条且未滚到底时才出现（原语义不变）。 -->
+    <button v-if="showScrollToBottom" class="ac-to-bottom" aria-label="回到底部" title="回到底部"
+      @click="smoothScrollToBottom()"><ChevronDown :size="16" /></button>
+    <div ref="scroller" class="ac-scroll" role="log" aria-live="polite">
       <!-- 稳定的**内容容器**：空态与消息流都在它里面。
            为什么必须有一层稳定的壳：ResizeObserver 只能盯住一个具体的 DOM 节点，
            而空态与消息流是 v-if/v-else 互换的（挂载时看到的那个节点随后会被换掉），
@@ -568,33 +1225,121 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         </div>
 
         <!-- 用户靠右 / 助手靠左（照参考图，都没有头像） -->
-        <div v-else class="ac-msg" :class="t.kind">
+        <div v-else class="ac-msg" :class="[t.kind, { 'is-editing': t.editing }]">
           <div class="ac-bubble">
             <button v-if="t.thinking" class="ac-think-toggle" @click="toggleThinking(t.id)">
               <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id] }" />思考过程
             </button>
             <pre v-if="t.thinking && openThinking[t.id]" class="ac-think">{{ t.thinking }}</pre>
 
-            <div v-for="tool in t.tools.filter((x) => x.card)" :key="tool.id" class="ac-tool-card">
-              <div class="ac-tool-head">
-                <!-- 转圈只认 settled：没有它就还在跑。
-                     早先按有没有 output 判断，导致「跑完但没输出」的工具刷新后永远转圈。 -->
-                <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" /><strong>{{ tool.name }}</strong>
+            <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
+                 文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
+                 以前这里是「先把所有工具画完、再画正文」，所以工具永远堆在最上面、看不出时序。
+                 注意：这里只接 text / tools 两种行；thinking 行**不在这里画** ——
+                 思考仍由上面那条「思考过程」折叠行统一展示（它仍是工具组的分界，见 groupTurnBlocks）。 -->
+            <template v-for="row in assistantRows(t)" :key="row.key">
+              <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
+
+              <!-- 审批卡（要审批的重活）：一直展开，审批与参数必须直接可见 -->
+              <template v-else-if="row.type === 'tools' && row.tools.length === 1 && row.tools[0].card">
+                <div :class="row.tools[0].card ? 'ac-tool-card' : 'ac-tool-fold'">
+                    <div class="ac-tool-head">
+                      <Loader2 v-if="!row.tools[0].settled" :size="13" class="ac-spin" /><strong>{{ row.tools[0].name }}</strong>
+                    </div>
+                    <pre class="ac-tool-args">{{ row.tools[0].arguments }}</pre>
+                    <pre v-if="row.tools[0].output" class="ac-tool-out">{{ row.tools[0].output }}</pre>
+                </div>
+              </template>
+              <!-- 单工具（非审批）：有自定义卡片（画布 MCP）= 直接展示卡片；
+                   没有卡片的默认工具 = 保持原来的**折叠行**（用户口径 2026-10-07：只删 hover）。 -->
+              <template v-else-if="row.type === 'tools' && row.tools.length === 1 && hasCardView(row.tools[0])">
+                <div class="ac-tool-card">
+                  <!-- 运行中才显示一行转圈 + 摘要；跑完后卡片自己的头行（图标 + 标题 + 标记）
+                       已经是头部，再叠一行就重复了（用户口径 2026-10-08：卡片就是紧凑两行） -->
+                  <div v-if="!row.tools[0].settled" class="ac-tool-head">
+                    <Loader2 v-if="!row.tools[0].settled" :size="13" class="ac-spin" />
+                    <span v-if="row.tools[0].output" class="ac-tf-summary">{{ toolSummary(row.tools[0]) }}</span>
+                  </div>
+                  <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                    :output="row.tools[0].output" :name="row.tools[0].name"
+                    @preview="previewImage = $event" />
+                </div>
+              </template>
+              <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
+              <template v-else-if="row.type === 'tools' && row.tools.length === 1">
+                <div class="ac-tool-fold">
+                  <button class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
+                    @click="toggleTool(row.tools[0].id)">
+                    <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[row.tools[0].id] }" />
+                    <code>{{ row.tools[0].name }}</code>
+                    <span v-if="row.tools[0].output" class="ac-tf-summary">{{ toolSummary(row.tools[0]) }}</span>
+                  </button>
+                  <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
+                    <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                      :output="row.tools[0].output" :name="row.tools[0].name"
+                      @preview="previewImage = $event" />
+                  </div>
+                </div>
+              </template>
+
+              <!-- 多个工具：折成一组（用户口径：中间没有文字的工具要合并），标题点开看逐个明细 -->
+              <div v-else-if="row.type === 'tools'" class="ac-tool-group">
+                <button class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
+                  @click="toggleToolGroup(row.key)">
+                  <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openToolGroups[row.key] }" />
+                  {{ toolGroupTitle(row.tools) }}
+                </button>
+                <div v-if="openToolGroups[row.key]" class="ac-tg-body">
+                  <div v-for="tool in row.tools" :key="tool.id"
+                    :class="(tool.card || hasCardView(tool)) ? 'ac-tool-card' : 'ac-tool-fold'">
+                    <template v-if="tool.card">
+                      <div class="ac-tool-head">
+                        <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" /><strong>{{ tool.name }}</strong>
+                      </div>
+                      <pre class="ac-tool-args">{{ tool.arguments }}</pre>
+                      <pre v-if="tool.output" class="ac-tool-out">{{ tool.output }}</pre>
+                    </template>
+                    <template v-else>
+                      <!-- 有卡片（画布 MCP）→ 直接展示；默认工具 → 折叠行 -->
+                      <template v-if="hasCardView(tool)">
+                        <div class="ac-tool-head">
+                          <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
+                          <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
+                        </div>
+                        <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
+                          @preview="previewImage = $event" />
+                      </template>
+                      <template v-else>
+                        <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
+                          @click="toggleTool(tool.id)">
+                          <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
+                          <code>{{ tool.name }}</code>
+                          <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
+                        </button>
+                        <div v-if="openTools[tool.id]" class="ac-tf-body">
+                          <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
+                            @preview="previewImage = $event" />
+                        </div>
+                      </template>
+                    </template>
+                  </div>
+                </div>
               </div>
-              <pre class="ac-tool-args">{{ tool.arguments }}</pre>
-              <pre v-if="tool.output" class="ac-tool-out">{{ tool.output }}</pre>
-            </div>
-            <div v-for="tool in t.tools.filter((x) => !x.card)" :key="tool.id" class="ac-tool-line">
-              <code>{{ tool.name }}</code>
-              <span v-if="tool.output" class="ac-tool-line-out">{{ tool.output.slice(0, 80) }}</span>
-            </div>
+            </template>
 
             <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），
                  其余文字照常显示。为什么不直接存结构化引用：会话历史里只有纯文本（后端只存
                  getPlainText 的结果），靠"@名字 + 已装清单"回推，刷新/切会话也得到同一份渲染。 -->
             <p v-if="t.kind === 'user'" class="ac-user-line">
               <template v-for="(seg, si) in userSegments(t.text)" :key="si">
-                <span v-if="seg.type === 'tag'" class="ac-sent-tag" :title="seg.category + '：' + seg.name">
+                <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
+                     用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
+                <span v-if="seg.type === 'tag'" class="ac-sent-tag" :class="{ 'is-clickable': segClickable(seg) }"
+                  :title="segTitle(seg)"
+                  :role="segClickable(seg) ? 'button' : undefined"
+                  :tabindex="segClickable(seg) ? 0 : undefined"
+                  @click="onSegClick(seg)"
+                  @keydown.enter.prevent="onSegClick(seg)">
                   <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
                   <span class="ac-sent-tag-label">{{ seg.name }}</span>
                 </span>
@@ -604,18 +1349,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
             <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
             <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
               <button v-for="(src, ii) in t.images" :key="ii" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
-                @click="previewImage = src">
+                @click="openPreview(src, t.images)">
                 <img :src="src" alt="" />
               </button>
             </div>
+            <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
+            <span v-if="t.editing" class="ac-editing-badge" role="status">
+              <Pencil :size="12" />正在编辑
+              <button class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()"><X :size="12" /></button>
+            </span>
             <!-- 助手消息才走 Markdown。
                  这里**必须**是独立的 v-if，不能接在用户那条的 v-else-if 链上：
                  中间隔着「用户图片」那个 div 时，链会被打断，导致用户消息既渲染标签行、
                  又再渲染一遍原始 Markdown 文本（实测文本重复出现两次，还带出字面 @名字）。 -->
-            <AgentMarkdown v-if="t.kind !== 'user' && t.text" :text="t.text" />
-            <!-- 等模型首个 token 时显示「正在思考」的加载行（照参考图：转圈 + 文字）。
-                 此前这里是一根闪烁的方块（学光标），用户点名要换成这种带文案的加载态。 -->
-            <p v-if="t.streaming && t.kind === 'assistant' && !t.text" class="ac-pending" role="status" aria-live="polite">
+            <!-- 「正在思考」就是个**加载指示**（用户口径 2026-10-06）：只要这轮还没结束（t.streaming）
+                 就一直显示在回复区底部 —— 不管它此刻在打字、在调工具，还是真在思考。
+                 以前只在「还没出正文」时显示，模型一开始吐字它就没了 —— 那正是用户报的「加载状态没了」。 -->
+            <p v-if="t.streaming && t.kind === 'assistant'" class="ac-pending" role="status" aria-live="polite">
               <!-- 图标是**一段开口的圆弧**（照参考图：3/4 圈转圈），不是整圈的 Loader2 ——
                    整圈转起来几乎看不出在动，开口的弧才有"在转"的观感。 -->
               <span class="ac-pending-spin" aria-hidden="true"></span>
@@ -628,9 +1378,39 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
             <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
             <p v-if="t.error" class="ac-error">{{ t.error }}</p>
           </div>
+          <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
+               不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
+          <div v-if="t.kind === 'user'" class="ac-msg-actions">
+            <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
+            <button class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
+              @click="copyMessage(t.text, t.id)">
+              <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" /><Copy v-else :size="13" />
+            </button>
+            <button class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑"
+              @click="beginEditMessage(t)"><Pencil :size="13" /></button>
+          </div>
+        </div>
+        <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
+             回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
+             切过去后不含当前版本后来的消息。 -->
+        <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
+          <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0"
+            aria-label="上一个版本" title="上一个版本"
+            @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
+            <ChevronLeft :size="14" />
+          </button>
+          <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
+            {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
+          </span>
+          <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1"
+            aria-label="下一个版本" title="下一个版本"
+            @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
+            <ChevronRight :size="14" />
+          </button>
         </div>
       </template>
       </div>
+    </div>
     </div>
 
     <!-- ④ 输入区（照参考图：整块圆角 16 的框，里面上编辑器、下工具条） -->
@@ -642,11 +1422,170 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         <button class="ac-notify-btn" @click="enableNotify">开启</button>
         <button class="ac-notify-close" aria-label="不再提示" @click="notifyDismissed = true"><X :size="13" /></button>
       </div>
+      <!-- 排队列表（设计 §3.6.1）：**紧贴**输入框上缘、宽 80%、靠左；右侧 36px 一列放
+           暂停 / 启动按钮（G9）。
+           「回到底部」不在这里 —— 它是**随时要用**的（队列空时也要能点），
+           所以独立悬浮在消息区右下角（见下面的 .ac-to-bottom）。
+           照旧贴着 .ac-input-box —— 即使还没配模型（输入框还在，只是没编辑器）也照画，
+           否则队列里的消息会**没有任何入口**能删。 -->
+      <!-- 聚合容器（用户口径 2026-10-09）：目标行 + 队列行**同一个容器**，在输入框**外面**。
+           宽 90% 居中、紧贴输入框（零间隔、边框重叠 1px）；**只有外层有圆角，内部行一律方角**。 -->
+      <div v-if="pending.hasAny" class="ac-pending-box">
+        <div class="ac-pending-list" role="list" aria-label="目标与排队消息">
+            <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）——
+                 UI 与队列行刻意不同：强调色底 + 进度条 + 「第 N 轮」+ 口径值 + 口径开关 + 暂停/结束。 -->
+            <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
+              <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
+              <!-- 已完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。 -->
+              <button v-if="!s.goal?.ended" class="ac-pending-lead ac-goal-lead" type="button"
+                :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
+                :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
+                <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
+                <Target :size="14" class="ac-goal-lead-target" />
+                <Pencil :size="14" class="ac-goal-lead-edit" />
+              </button>
+              <span v-else class="ac-pending-lead" aria-hidden="true"><Target :size="14" /></span>
+              <!-- 目标参考图迷你预览：**放文字前面**（与队列行同位——lead 图标之后、正文之前）。
+                   淡边框 + 多图「+N」，与队列缩略图同一套样式（用户口径 2026-10-09）。 -->
+              <template v-if="s.goalImages?.length">
+                <img class="ac-queue-thumb" :src="s.goalImages[0]" alt="" role="button"
+                  :aria-label="'查看目标图片'" :title="'这个目标带 ' + s.goalImages.length + ' 张图'"
+                  @click="openPreview(s.goalImages[0], s.goalImages)" />
+                <span v-if="s.goalImages.length > 1" class="ac-queue-thumb-more" role="status"
+                  :title="'共 ' + s.goalImages.length + ' 张图'">+{{ s.goalImages.length - 1 }}</span>
+              </template>
+              <span class="ac-goal-row-text" :title="s.goal?.objective">{{ goalMarkText(s.goal?.objective, s.goal?.budget) }}</span>
+              <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
+              <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
+              <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status"><Pencil :size="11" /><span>正在编辑</span></span>
+              <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
+                   进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
+              <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
+              <!-- 「已用/总预算」一体式（用户口径 2026-10-09）：形如 5.2k/5k，左右两段**各自可点着改**。
+                   左边是已用、右边是总预算；两段都能点着改，**回车才生效**。 -->
+              <span class="ac-goal-ratio" :title="'已用 / 总预算' + '（点数字可改，回车生效）'">
+                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                  aria-label="已用 token，点击编辑（回车生效）"
+                  @focus="onGoalEditFocus($event)"
+                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'used')"
+                  @blur="onGoalBudgetBlur($event)">{{ formatToken(s.goal?.tokensUsed, tokenUnit) }}</span>
+                <span class="ac-goal-ratio-sep">/</span>
+                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                  aria-label="总预算，点击编辑（回车生效）"
+                  @focus="onGoalEditFocus($event)"
+                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'row')"
+                  @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(s.goal?.budget, tokenUnit) }}</span>
+              </span>
+              <button v-if="!s.goal?.ended" class="ac-goal-btn"
+                :aria-label="s.goalPaused ? '启动目标' : '暂停目标'" :title="s.goalPaused ? '启动目标' : '暂停目标'"
+                @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
+                <Play v-if="s.goalPaused" :size="12" /><Pause v-else :size="12" />
+              </button>
+              <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）"
+                @click="agent.endGoal()"><X :size="12" /></button>
+            </div>
+            <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
+            <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
+              :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
+              <!-- 左侧图标（参考 HTML 的 .prow .lead，内联 SVG 逐字对齐）：与目标行的图标列对齐 -->
+              <span class="ac-pending-lead" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
+                </svg>
+              </span>
+              <!-- 迷你图 + 「+N」：白图与背景同色会看不见，加一圈淡边框（不抢眼）；多于 1 张显示 +N -->
+              <img v-if="row.thumbs.length" class="ac-queue-thumb" :src="row.thumbs[0]" alt=""
+                role="button" :aria-label="'查看排队图片'"
+                :title="'这条消息带 ' + row.images.length + ' 张图'"
+                @click="openPreview(row.thumbs[0], row.images)" />
+              <span v-if="row.images.length > 1" class="ac-queue-thumb-more" role="status"
+                :title="'共 ' + row.images.length + ' 张图'">+{{ row.images.length - 1 }}</span>
+              <span class="ac-queue-text" :title="row.text">{{ row.display || '（图片）' }}</span>
+              <!-- 编辑中：队列**整体阻塞**（后端保证不发下一条），行上直接说明，用户不用猜为什么不动 -->
+              <span v-if="row.editing" class="ac-queue-flag" role="status">编辑中</span>
+              <span v-else-if="row.goal" class="ac-queue-flag is-goal" :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</span>
+              <span v-if="row.sending" class="ac-queue-flag is-sending">发送中</span>
+              <span v-else-if="row.sent" class="ac-queue-flag is-sent">已发送</span>
+
+              <span class="ac-queue-actions">
+                <!-- 编辑中：这一条是"停住队列"的那条，行上给一个取消编辑（状态回 queued） -->
+                <button v-if="row.editing" class="ac-queue-btn" aria-label="取消编辑这条排队消息" title="取消编辑"
+                  @click="cancelEditQueue(row.id)"><X :size="12" /></button>
+                <!-- 引导 ↳：跑着时 = 插队（插进当前轮的下一次请求）；没跑时后端直接当一次发送 -->
+                <button v-else class="ac-queue-btn" aria-label="引导（插队发送）" title="引导：插到当前这一轮的下一次请求"
+                  @click="steerItem(row.id)"><CornerUpRight :size="12" /></button>
+                <button class="ac-queue-btn is-danger" aria-label="删除这条排队消息" title="删除"
+                  @click="removeItem(row.id)"><Trash2 :size="12" /></button>
+                <!-- ⋯ 只有两项：编辑消息 / 关闭排队（设计 §3.6.2），用目录里的 dropdown -->
+                <ThemedDropdown placement="top-end" :offset="6" menu-width="180px"
+                  :model-value="rowMenuId === row.id" @update:model-value="(v: boolean) => (rowMenuId = v ? row.id : null)">
+                  <template #trigger>
+                    <button class="ac-queue-btn" :aria-expanded="rowMenuId === row.id"
+                      aria-label="更多操作"><MoreHorizontal :size="12" /></button>
+                  </template>
+                  <template #default="{ close }">
+                    <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
+                      <button class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); close()">
+                        <span class="ac-menu-name">编辑消息</span>
+                        <span class="ac-menu-hint">改完发送，位置不变</span>
+                      </button>
+                      <button class="ac-menu-item" role="menuitem" @click="closeItem(row.id); close()">
+                        <span class="ac-menu-name">关闭排队</span>
+                        <span class="ac-menu-hint">内容回到输入框，不再自动发</span>
+                      </button>
+                    </div>
+                  </template>
+                </ThemedDropdown>
+              </span>
+            </div>
+        </div>
+      </div>
       <div class="ac-input-box">
-        <!-- 待发送的图片：贴在输入框上方，可单张移除 -->
+        <!-- 队列暂停 / 恢复：**骑在队列容器与输入框的分界线上**、水平居中。
+             位置口径与参考 HTML 一致 —— 挂在 **composer** 里（不是容器里）：容器要 overflow:hidden
+             才能把内部方角按外层圆角裁掉；按钮若放进容器会被一起裁掉半个。 -->
+        <button v-if="queue.hasItems" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
+          :aria-label="queue.paused ? '恢复队列' : '暂停队列自动发送'"
+          :title="queue.pauseTitle" @click="toggleQueuePause()">
+          <Play v-if="queue.paused" :size="12" /><Pause v-else :size="12" />
+          <span>{{ queue.paused ? '队列恢复' : '队列暂停' }}</span>
+          <span class="ac-queue-pause-cnt">{{ queue.count }}</span>
+        </button>
+        <!-- 未发送的目标：**输入框内侧顶部**（用户口径 2026-10-09）。
+             标签只写「目标」二字（目标正文就是下面输入框里的内容，不重复）；
+             预算行内可编辑（下划线 = CSS text-decoration）；口径开关与取消在右侧。 -->
+        <!-- 编辑**正在运行的目标**时不画这张卡片：上面已有目标行（它就是「卡片头部」），
+             再画一张就成了两张卡片（用户截图指出的重复）。 -->
+        <div v-if="goalMark && !editingGoal" class="ac-goal-mark">
+          <Target :size="13" class="ac-goal-icon" />
+          <span class="ac-goal-mark-label">目标</span>
+          <span class="ac-goal-token">
+            <span class="ac-goal-token-prefix">预算</span>
+            <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+              aria-label="总预算，点击编辑"
+              @focus="onGoalEditFocus($event)"
+              @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'mark')"
+              @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(goalMark?.budget, tokenUnit) }}</span>
+          </span>
+          <span class="ac-tb-spacer"></span>
+          <button class="ac-goal-btn" aria-label="取消目标（这条按普通消息发）" title="取消目标" @click="clearGoalMark()">
+            <X :size="12" />
+          </button>
+        </div>
+        <!-- 「正在编辑」联动标记：**输入框内部最上一行**（用户口径 2026-10-06 参考图箭头位），
+             点它滚回那条消息、✕ 取消 —— 与消息上的徽标互为呼应 -->
+        <!--    三种编辑（对话消息 / 队列消息 / 目标）**共用这一条**黄色标记（用户口径 2026-10-09）：
+               谁在编辑就说谁；三者互斥，所以这里最多出现一条。 -->
+        <div v-if="editingKind" class="ac-editing-mark" role="status">
+          <Pencil :size="12" />
+          <button class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText }}</button>
+          <span class="ac-editing-mark-spacer"></span>
+          <button class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing"><X :size="12" /></button>
+        </div>
+        <!-- 待发送的图片：贴在输入框上方，可单张移除；点图本体看全屏预览 -->
         <div v-if="attached.length" class="ac-attach-list">
           <div v-for="(src, i) in attached" :key="i" class="ac-attach">
-            <img :src="src" alt="" />
+            <img :src="src" alt="" role="button" :aria-label="'查看图片 ' + (i + 1)" style="cursor: zoom-in" @click="openPreview(src, attached)" />
             <button class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)"><X :size="12" /></button>
           </div>
         </div>
@@ -663,8 +1602,32 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
         </div>
 
         <div class="ac-toolbar">
-          <!-- 附件：选了图就等这条消息一起发（data URL，服务端转给 SDK 的图片消息） -->
-          <button class="ac-plus" aria-label="添加图片" @click="pickImages()"><Plus :size="17" /></button>
+          <!-- 「+」两项菜单（设计 §3.6.4 / G12）：**目标** / **上传文件**。
+               点「目标」直接在输入框上方加标签（预算用全局设置里的默认值），**不弹框**；
+               只有点那个标签本身才弹目标编辑框。 -->
+          <ThemedDropdown v-model="plusOpen" placement="top-start" :offset="8" menu-width="210px" menu-role="menu">
+            <template #trigger>
+              <button class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加"><Plus :size="17" /></button>
+            </template>
+            <template #default="{ close }">
+              <div class="ac-ddmenu" role="menu" aria-label="添加">
+                <button class="ac-menu-item" role="menuitem" @click="addGoalMark(); close()">
+                  <span class="ac-menu-title-row">
+                    <span class="ac-menu-icon"><Target :size="14" /></span>
+                    <span class="ac-menu-name">目标</span>
+                  </span>
+                  <span class="ac-menu-hint">给这条消息挂一个目标（可改预算）</span>
+                </button>
+                <button class="ac-menu-item" role="menuitem" @click="pickImages(); close()">
+                  <span class="ac-menu-title-row">
+                    <span class="ac-menu-icon"><Upload :size="14" /></span>
+                    <span class="ac-menu-name">上传文件</span>
+                  </span>
+                  <span class="ac-menu-hint">选图片，跟这条消息一起发</span>
+                </button>
+              </div>
+            </template>
+          </ThemedDropdown>
           <input ref="fileInput" class="ac-file" type="file" accept="image/*" multiple aria-hidden="true" tabindex="-1" @change="onFilesPicked" />
 
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
@@ -839,30 +1802,37 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
           </component>
           <button
             class="ac-send"
-            :class="{ 'is-running': s.running }"
-            :aria-label="s.running ? '停止' : '发送'"
-            :disabled="!s.running && !prompt.trim() && !attached.length"
-            @click="s.running ? agent.stop() : submit()"
+            :class="{ 'is-running': sendMode === 'stop' }"
+            :aria-label="sendMode === 'stop' ? '停止' : '发送'"
+            :disabled="sendMode === 'disabled'"
+            @click="sendMode === 'stop' ? agent.stop() : submit()"
           >
-            <Loader2 v-if="s.running" :size="17" class="ac-spin" />
+            <!-- 三态（设计 G1）：有内容 ⇒ 发送（**跑着也是发送**，点了进队列）；
+                 空 + 跑着 ⇒ 红方块「终止」；空 + 空闲 ⇒ 禁用（灰色箭头）。
+                 方块用 CSS 画（不受 lucide 线性图标 stroke 影响），颜色随 currentColor。 -->
+            <span v-if="sendMode === 'stop'" class="ac-stop-square" aria-hidden="true"></span>
             <ArrowUp v-else :size="17" />
           </button>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- 看大图：点任意处关掉（Esc 也可以，见 onKeydown） -->
-  <div v-if="previewImage" class="ac-lightbox" role="dialog" aria-modal="true" aria-label="图片预览" @click="previewImage = null">
-    <img :src="previewImage" alt="" />
-    <button class="ac-lightbox-close" aria-label="关闭预览" @click.stop="previewImage = null"><X :size="16" /></button>
-  </div>
+    <!-- 关闭 .ac-scroll-wrap（消息区容器；「回到底部」挂在它里面） -->
+    </div>
+
+  <!-- 看大图：主题注册的 MediaViewer（Esc / 点遮罩 / 右上角关闭；与全站预览同款交互） -->
+  <MediaViewer :item="previewItem" @close="previewImage = null" />
 </template>
 
 <style scoped>
 /* 数值全部来自 Chrome MCP 对参考页的实测；颜色一律走 --ui-*（实测与本项目暗色主题同值）。 */
-.ac-root { display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--ui-ink, #f7f7f7); }
-.ac-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; }
+/* position: relative 是给「回到底部」的绝对定位做参照（它挂在消息区右下角） */
+.ac-root { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--ui-ink, #f7f7f7); }
+ /* 顶部留白（用户口径 2026-10-07）：第一条消息是内容的第一个元素，
+    滚到它时（点「编辑」会 scrollIntoView）它会贴死容器顶 —— 琥珀色描边被
+    overflow 裁掉、看起来「顶端被遮住」。给容器顶部留 12px，
+    滚到顶时首条消息的描边与圆角都能完整露出来。 */
+.ac-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 0; }
 /* 内容容器：滚动容器里那层稳定的壳（空态与消息流都在里面）。
    它的高度才是真正随消息增长的那个 —— useStickyScroll 盯它做「吐多少都跟到底」。 */
 .ac-inner { display: flex; flex-direction: column; }
@@ -898,13 +1868,46 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 /* 用户消息正文：文字与标签在同一行内自然换行 */
 .ac-user-line { display: block; margin: 0; font-size: 14px; line-height: 24px; color: var(--ui-ink, #f7f7f7); word-break: break-word; }
 .ac-user-text { white-space: pre-wrap; }
-/* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6、底色同 --ui-hover-soft）。
+/* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */
+.ac-msg.user { flex-direction: column; align-items: flex-end; }
+/* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。
    之所以单独一套类名：输入框里那颗是 ProseMirror 直接造 DOM 的（.ac-tag），
-   这颗是 Vue 模板渲染的（.ac-sent-tag）—— 两边选择器作用域不同，但视觉值必须一致。 */
-.ac-sent-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin: 0 2px; padding: 0 6px 0 4px; border-radius: 6px; background: var(--ui-hover-soft, rgb(255 255 255 / 0.08)); vertical-align: bottom; }
+   这颗是 Vue 模板渲染的（.ac-sent-tag）—— 两边选择器作用域不同，但视觉值必须一致。
+   底色用 --ui-hover-strong（用户口径 2026-10-06：原来太淡、不好区分）：它亮暗各一档、
+   比旧值 --ui-hover-soft 深两三倍；而**旧值正是用户气泡本身的底色**，标签与气泡同色
+   所以糊在一起，加深后才分得开。 */
+.ac-sent-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin: 0 2px; padding: 0 6px 0 4px; border-radius: 6px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.10)); vertical-align: bottom; }
+/* 可聚焦的节点标签：给 hover 态与 focus 环（用户口径：对话里的标签也要能点开聚焦） */
+.ac-sent-tag.is-clickable { cursor: pointer; transition: background 0.14s ease; }
+.ac-sent-tag.is-clickable:hover { background: var(--ui-accent-soft, rgb(8 145 178 / 0.16)); }
+.ac-sent-tag.is-clickable:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
 .ac-sent-tag-icon { display: grid; place-items: center; color: var(--ui-ink-dim, #919191); }
 .ac-sent-tag-icon :deep(svg) { width: 13px; height: 13px; }
 .ac-sent-tag-label { font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
+/* 用户消息 hover 操作条（时间 · 复制 · 编辑）：右下角浮出，不占布局空间。
+   位置参照参考图 2 —— 时间在消息气泡外右下角，按钮跟在旁边。 */
+.ac-msg { position: relative; }
+.ac-msg.user .ac-bubble { position: relative; }
+.ac-msg-actions { display: flex; align-items: center; gap: 2px; justify-content: flex-end; height: 22px; margin-top: 2px; opacity: 0; pointer-events: none; transition: opacity 0.16s ease; }
+.ac-msg.user:hover .ac-msg-actions, .ac-msg-actions:focus-within { opacity: 1; pointer-events: auto; }
+.ac-msg-time { font-size: 11px; color: var(--ui-ink-dim, #919191); margin-right: 4px; }
+.ac-msg-btn { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
+.ac-msg-btn:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
+.ac-msg-btn .is-ok { color: var(--ui-accent, #0891b2); }
+/* 「正在编辑」：消息高亮（琥珀警示语义，与语义色表一致）+ 徽标 + 输入框联动标记。
+   高亮只描边不填底，避免盖住用户消息气泡本来的层次。 */
+.ac-msg.is-editing .ac-bubble { box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f); border-radius: 12px; }
+.ac-editing-badge { display: inline-flex; align-items: center; gap: 4px; align-self: flex-end; height: 20px; margin-top: 4px; padding: 0 4px 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); color: var(--ui-warn, #e3a25f); font-size: 11px; font-weight: 600; }
+/* 行内版：不换行（`white-space:nowrap`）—— 否则空间不够时「正在编辑」会被逐字竖排（真机踩到）。
+   真挤不下时由文字先省略；图标与标签本体始终在。 */
+  .ac-editing-badge.is-compact { flex: none; align-self: center; margin-top: 0; height: 18px; white-space: nowrap; }
+  .ac-editing-badge.is-compact span { white-space: nowrap; }
+.ac-editing-mark { display: flex; align-items: center; gap: 4px; width: 100%; height: 26px; margin: 0; padding: 0 4px 0 10px; border-radius: 8px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); color: var(--ui-warn, #e3a25f); font-size: 12px; font-weight: 600; }
+.ac-editing-mark-btn { padding: 0; border: 0; background: transparent; color: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.ac-editing-mark-btn:hover { text-decoration: underline; }
+.ac-editing-mark-spacer { flex: 1; }
+.ac-editing-x { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.ac-editing-x:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
 .ac-bubble :deep(.md) { font-size: 14px; line-height: 24px; color: var(--ui-ink, #f7f7f7); }
 .ac-bubble :deep(.md .md-p) { margin: 0 0 10px; }
 .ac-bubble :deep(.md .md-p:last-child) { margin-bottom: 0; }
@@ -916,14 +1919,40 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .ac-rot { transform: rotate(90deg); }
 .ac-think { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); font-size: 12px; line-height: 20px; white-space: pre-wrap; color: var(--ui-ink-dim, #919191); font-family: inherit; }
 /* 等首个 token 的加载行（照参考图）：转圈 + 「正在思考」，整行用次要文字色。 */
-.ac-pending { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; line-height: 24px; color: var(--ui-ink-dim, #919191); }
+.ac-pending { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: 14px; line-height: 24px; color: var(--ui-ink-dim, #919191); }
 /* 开口圆弧 = 一个圆 + 透明上边框：转起来能看清缺口在走。
    颜色随 currentColor，所以这行整体改色时图标自动跟随。 */
 .ac-pending-spin { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: ac-rotate 0.8s linear infinite; }
 .ac-tool-line { display: flex; align-items: baseline; gap: 6px; margin: 6px 0; font-size: 12px; color: var(--ui-ink-dim, #919191); }
 .ac-tool-line code { padding: 2px 6px; border-radius: 6px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); }
 .ac-tool-line-out { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-tool-card { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--ui-line, #363636); border-radius: 12px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
+.ac-tool-group { margin: 6px 0; }
+.ac-tg-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; cursor: pointer; }
+.ac-tg-toggle:hover { color: var(--ui-ink, #f7f7f7); }
+.ac-tg-body { margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--ui-line, #363636); }
+/* 可折叠工具行（单工具与组内工具同一套）：收起一行，展开看输入/输出（用户口径 2026-10-06）。
+   展开块 max-width 到气泡全宽、pre 自身滚动 —— 「提供最大的范围 + 滚动条」。 */
+.ac-tool-fold { margin: 4px 0; }
+/* 默认工具行（用户口径 2026-10-08 定稿）：悬停**不加任何背景**，只让左侧折叠箭头变亮。
+   早先悬停给整行加 rgba(255,255,255,.06) 的底色 —— 用户明确不要背景条。 */
+.ac-tf-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 4px; margin: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; text-align: left; cursor: pointer; }
+ .ac-tf-toggle:hover { color: var(--ui-ink, #f7f7f7); }
+.ac-tf-caret { flex: none; color: var(--ui-ink-dim, #919191); }
+ .ac-tf-toggle:hover .ac-tf-caret { color: var(--ui-ink, #f7f7f7); }
+ /* 折叠箭头动画（用户口径 2026-10-07）：旋转要有过渡，不是啪一下跳 */
+ .ac-tf-caret { transition: transform 0.18s ease; }
+ .ac-tf-caret.is-open { transform: rotate(90deg); }
+.ac-tf-toggle code { padding: 2px 6px; border-radius: 6px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); flex: none; }
+.ac-tf-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
+ .ac-tf-body { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
+.ac-tf-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ac-tf-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--ui-ink-dim, #919191); }
+.ac-tf-body .ac-tool-args, .ac-tf-body .ac-tool-out { margin: 0; max-width: 100%; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+.ac-tool-card { margin: 8px 0; padding: 6px 8px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
+/* 分组里的**卡片**沿用同一只卡片壳（用户口径 2026-10-07：分界线要好找）；
+   收起状态的折叠行不加壳（用户口径 2026-10-08）：单工具长什么样，组里就长什么样 ——
+   早先的规则把每条折叠行也包了灰底 + 8px 内边距，收起行被灰底裹住、上下很空。 */
+.ac-tg-body .ac-tool-card { margin: 6px 0; padding: 6px 8px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
 .ac-tool-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .ac-tool-args, .ac-tool-out { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--ui-ink-dim, #919191); font-family: ui-monospace, Menlo, Consolas, monospace; }
 .ac-notice { margin: 6px 0 0; font-size: 12px; color: var(--ui-ink-dim, #919191); }
@@ -942,8 +1971,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .ac-onboard-icon { color: var(--ui-accent, #0891b2); }
 .ac-onboard-path { font-size: 12px; opacity: 0.75; word-break: break-all; }
 
+/* 分支分页器（AI 回复结束下面一条）：左箭头 / 第 N / 共 M / 右箭头。
+   居中、紧凑、不抢内容视线；到底/到顶的那侧箭头置灰不可点。 */
+.ac-branch-nav { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 4px 0 12px; }
+.ac-branch-arrow { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
+.ac-branch-arrow:hover:not(:disabled) { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
+.ac-branch-arrow:disabled { opacity: 0.35; cursor: default; }
+.ac-branch-pos { min-width: 48px; padding: 0 2px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-ink-dim, #919191); }
+
 /* —— 输入区（照参考图：外块圆角 16 + 1px 边框 + 内边距 8 + 间距 8）—— */
-.ac-composer { flex: none; padding: 4px 8px 12px; }
+/* position: relative 是给「回到底部」的绝对定位做参照（它浮在输入框正上方右侧） */
+.ac-composer { position: relative; flex: none; padding: 4px 8px 12px; }
 /* 通知提示条：照参考页实测 40 高 / 圆角 12 / 强调色 20% 底；底色用 --ui-accent-soft 现算，
    用户改强调色后这里自动跟随，不会出现"主色改了、提示条还是青的"。 */
 .ac-notify { display: flex; align-items: center; gap: 8px; height: 40px; margin-bottom: 8px; padding: 0 6px 0 10px; border-radius: 12px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.2)); color: var(--ui-ink, #f7f7f7); }
@@ -953,7 +1991,143 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .ac-notify-btn:hover { color: var(--ui-accent, #0891b2); }
 .ac-notify-close { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
 .ac-notify-close:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-input-box { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--ui-line, #363636); border-radius: 16px; background: var(--ui-overlay-solid, #212121); }
+.ac-input-box { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--ui-line, #363636); border-radius: 16px; background: var(--ui-overlay-solid, #212121); }
+/* —— 「回到底部」：消息区**内部**、底部居中（用户口径 2026-10-09）——
+   外层 .ac-scroll-wrap 是定位参照（它固定占满消息区，内容在里面的 .ac-scroll 滚）。 */
+  /* 注意：包了一层 wrap 之后，**必须也是 flex 容器** —— 里面的 .ac-scroll 靠 flex:1 撑高、
+     自己 overflow-y:auto 滚。wrap 若只是普通块级，.ac-scroll 会按内容高度长出去、溢出到输入区，
+     表现就是「消息文字压在队列行/输入框上」（真机踩到）。 */
+  .ac-scroll-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ac-to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 5; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: var(--ui-overlay-solid, #212121); color: var(--ui-ink-dim, #919191); cursor: pointer; box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16)); transition: color 0.15s ease, transform 0.15s ease; }
+.ac-to-bottom:hover { color: var(--ui-ink, #f7f7f7); transform: translateX(-50%) translateY(-1px); }
+.ac-to-bottom:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .ac-to-bottom { transition: none; } }
+
+/* —— 聚合容器（目标行 + 队列行，同一个容器）——
+   几何（RULES §1）：宽 90% 居中；**紧贴输入框、零间隔**（底部去掉圆角 + 边框重叠 1px）；
+   **只有这个外层有圆角，内部行一律方角**；四边 1px 描边。
+   它有 .ac-composer 内的正常流定位（position:relative 供「骑线」暂停键参照）。 */
+  /* 注意：**不能 overflow:hidden** —— 「骑线」的暂停胶囊有一半在容器外，会被裁掉。
+     内部行的方角靠 .ac-pending-row 自己 border-radius:0 保证（不依赖裁切）。 */
+  /* 类名刻意不叫 .ac-pending —— 那个名字被上面的「正在思考」加载行占用了，
+     同名会把它的 font-size:14/line-height:24 混进来，把行内文字撑成两行（真机踩到）。 */
+  /* overflow:hidden **必须有** —— 里面每一行都是矩形（方角），只有容器是圆角；
+     不裁切的话行底色会在四个角上「顶破」圆角，露出方块（真机截图看到过）。
+     底部两角去圆角 + 与输入框重叠 1px，是为了和输入框拼成一体。 */
+  /* 宽 90% 居中（用户口径 2026-10-09）：比输入框窄一圈、居中，不铺满整个输入框宽度。 */
+  .ac-pending-box { position: relative; width: 90%; margin: 0 auto -1px; border: 1px solid var(--ui-line, #363636); border-radius: 14px 14px 0 0; background: var(--ui-veil, rgb(255 255 255 / 0.04)); overflow: hidden; }
+  /* 极端防护（RULES §9）：容器变窄时，**进度条先让位**，保证目标文案/按钮不被挤没。
+     用容器查询而不是媒体查询 —— 让位要看的是「这个容器多宽」，不是「窗口多宽」。 */
+.ac-pending-box { container-type: inline-size; }
+/*
+ * 极端防护（RULES §9）：容器装不下时**按优先级让位** —— 进度条先走，其次状态徽章，
+ * 文案与按钮永不让位。真实面板宽约 400（容器 90% ≈ 344），本来就装不下「进度条 + 徽章」。
+ * 阈值必须够大到覆盖真实宽度，否则行内元素之和超出容器、最后一个按钮被挤出去（真机量到 +8px 溢出）。
+ * 用容器查询而不是媒体查询：要看的是「这个容器多宽」。
+ */
+@container (max-width: 300px) { .ac-goal-bar { display: none; } }
+@container (max-width: 250px) { .ac-goal-flag { display: none; } }
+.ac-pending-list { display: flex; flex-direction: column; min-width: 0; }
+  /* 行几何与参考 HTML 的 .prow 一致：gap 8、padding 0 8 0 10、min-height 36 */
+  .ac-pending-row { display: flex; align-items: center; gap: 8px; min-height: 36px; min-width: 0; padding: 0 8px 0 10px; border-radius: 0; }
+.ac-pending-row + .ac-pending-row { border-top: 1px solid var(--ui-line-soft, #2a2a2a); }
+.ac-pending-row:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
+.ac-pending-lead { flex: none; display: grid; place-items: center; color: var(--ui-ink-mute, #a8a8a8); }
+  .ac-queue-row.is-editing { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 12%, transparent); }
+.ac-queue-row.is-sending { opacity: 0.7; }
+.ac-queue-thumb { flex: none; width: 16px; height: 16px; border-radius: 4px; object-fit: cover; cursor: zoom-in; background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
+/* 白图与容器背景同色会「看不见」—— 加一圈低对比发丝边 + 微阴影（用户口径 2026-10-09，
+   「边框颜色不能太突出」：用 ink 的 22% 而不是强调色/警示色）。 */
+.ac-queue-thumb, .ac-goal-ratio ~ .ac-queue-thumb { border: 1px solid color-mix(in srgb, var(--ui-ink, #f7f7f7) 22%, transparent); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06); }
+.ac-queue-thumb-more { flex: none; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--ui-ink-dim, #919191); }
+.ac-queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--ui-ink, #f7f7f7); }
+.ac-queue-row.is-editing .ac-queue-text { color: var(--ui-ink-dim, #919191); }
+.ac-queue-flag { flex: none; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent); color: var(--ui-warn, #e3a25f); font-size: 10px; font-weight: 700; line-height: 14px; }
+.ac-queue-flag.is-sending { background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink-dim, #919191); }
+.ac-queue-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.ac-queue-btn { display: grid; place-items: center; width: 24px; height: 24px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
+.ac-queue-btn:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.14)); color: var(--ui-ink, #f7f7f7); }
+.ac-queue-btn.is-danger:hover { background: var(--ui-danger-veil, rgb(239 68 68 / 0.1)); color: var(--ui-danger, #ef4444); }
+.ac-queue-btn:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+  /* 队列暂停/恢复：**骑在容器与输入框分界线上**、水平居中。
+     它是 .ac-input-box 的子元素（不是容器的）—— 容器 overflow:hidden 会把它裁掉半个；
+     挂输入框上、top:0 + translateY(-50%)，正好压在输入框上边框 = 两块的接缝。 */
+  .ac-queue-pause { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); z-index: 6; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 9px; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: var(--ui-overlay-solid, #212121); color: var(--ui-ink-dim, #919191); font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16)); cursor: pointer; transition: color 0.15s ease; }
+.ac-queue-pause:hover { color: var(--ui-ink, #f7f7f7); background: linear-gradient(var(--ui-hover-strong, rgb(255 255 255 / 0.15)), var(--ui-hover-strong, rgb(255 255 255 / 0.15))), var(--ui-overlay-solid, #212121); }
+  /* 主题色白名单: 暂停态是琥珀实心底，字必须是白 —— 与发送键红色实心底同款口径 */
+  .ac-queue-pause.is-paused { border-color: transparent; background: var(--ui-warn, #e3a25f); color: #fff; }
+  .ac-queue-pause-cnt { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); display: grid; place-items: center; font-size: 10px; color: var(--ui-ink-dim, #919191); }
+  /* 主题色白名单: 琥珀实心底上的计数胶囊也走白字（同上） */
+  .ac-queue-pause.is-paused .ac-queue-pause-cnt { background: rgb(255 255 255 / 0.28); color: #fff; }
+.ac-queue-pause:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+@media (prefers-reduced-motion: reduce) { .ac-queue-pause { transition: none; } }
+
+/* —— 目标行（**已发送**，在聚合容器里）—— UI 与队列行刻意不同 —— */
+  /* 目标行用**中性灰阶**（用户口径 2026-10-09：这里用不到主题强调色）——
+     靠底色深浅 + 字重与队列行区分，不再染青色。 */
+  .ac-goal-row { background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
+  .ac-goal-row:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.15)); }
+  /* 编辑中的目标行：**统一成黄色**（与消息 / 队列编辑同一套语义，用户口径 2026-10-09）。 */
+  .ac-goal-row.is-editing { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); }
+  .ac-goal-row.is-editing:hover { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 20%, transparent); }
+  .ac-goal-row .ac-pending-lead { color: var(--ui-ink-dim, #919191); }
+  /* 目标行左侧那颗图标：平时画「目标」，hover / 编辑中画「编辑」—— 两枚图标叠在同一格。
+     点击进入编辑（进入后按钮带 is-editing，图标保持铅笔，一眼看出「正在编辑目标」）。 */
+  /* 几何与队列行的 .ac-pending-lead 完全一致：不另设宽高（图标 14×14 决定格子大小），
+     不用负 margin、不用绝对定位 —— 那两样会让两行左列的基线对不上（真机量到 13 vs 14）。 */
+  .ac-goal-lead { flex: none; display: grid; place-items: center; padding: 0; border: 0;
+    border-radius: 4px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
+  .ac-goal-lead:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
+  .ac-goal-lead:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+  .ac-goal-lead .ac-goal-lead-edit { display: none; }
+  .ac-goal-lead:hover .ac-goal-lead-target { display: none; }
+  .ac-goal-lead:hover .ac-goal-lead-edit { display: block; }
+  .ac-goal-lead.is-editing .ac-goal-lead-target { display: none; }
+  .ac-goal-lead.is-editing .ac-goal-lead-edit { display: block; }
+  /* 目标文案：给它一个**可伸展但有下限**的宽度（min-width 太小会被同行的进度条/轮次挤成 0，
+     真机踩到「文字只剩 6px」）。flex:1 1 auto + min-width:6em 保证至少能看到一小段。 */
+  /* 文案是**唯一可压缩**的元素（min-width:0 + flex:1）：装不下时它先缩，绝不让按钮被挤出去。
+     但**不能无上限占满** —— flex:1 会让它把进度条挤成 0（真机量到 bar 只有 6px）。
+     改成「占比上限」：最多吃容器的 40%，剩余空间自然分给进度条等次要信息。 */
+  /* 文案 **flex:1**（吃掉剩余空间）：这样右侧一组（图 / 轮次 / 已用/总预算 / 按钮）才会
+     **顶到容器右缘**（用户口径：目标行是左右布局，右侧贴右）。
+     文案自身 min-width:0 + 省略号 —— 空间不够时它先缩，按钮永不被挤走（RULES §9）。 */
+  .ac-goal-row-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
+  .ac-goal-flag { flex: none; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 14px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink-dim, #919191); }
+.ac-goal-flag.is-paused { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent); color: var(--ui-warn, #e3a25f); }
+.ac-goal-flag.is-done { background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink-dim, #919191); }
+.ac-goal-round { flex: none; font-size: 12px; color: var(--ui-ink-dim, #919191); white-space: nowrap; }
+
+/* —— token 数字（预算 / 已用 / 剩余）：前缀 + **可编辑数值**。
+   下划线用 CSS text-decoration（不是 border —— 边框会把文字压偏，见 RULES §8）；
+   数值用 contenteditable，宽度天然跟着文字走。 */
+  .ac-goal-token { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
+.ac-goal-token-prefix { flex: none; color: var(--ui-ink-dim, #919191); font-weight: 600; }
+  .ac-goal-token-val { flex: none; min-width: 2.2ch; padding: 0; font-size: 12px; font-weight: 600; line-height: 16px; white-space: pre; cursor: text; outline: none; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: var(--ui-ink-mute, #a8a8a8); }
+  .ac-goal-token-val:hover { text-decoration-color: var(--ui-ink, #f7f7f7); }
+  .ac-goal-token-val:focus { text-decoration-style: solid; text-decoration-color: var(--ui-ink, #f7f7f7); }
+/* 「已用」只读：不画下划线、不改光标 —— 一眼能区分「这个不能改」 */
+.ac-goal-token-val.is-readonly { text-decoration: none; cursor: default; }
+/* 「已用/总预算」一体式：两个可编辑数字 + 中间一个斜杠，整体一块、样式统一 */
+  .ac-goal-ratio { flex: none; display: inline-flex; align-items: center; gap: 1px; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
+  .ac-goal-ratio .ac-goal-token-val { min-width: 2.6ch; text-align: center; }
+  .ac-goal-ratio-sep { flex: none; padding: 0 1px; color: var(--ui-ink-mute, #a8a8a8); font-weight: 600; }
+
+/* —— 未发送目标的标签（**输入框内侧顶部**，用户口径 2026-10-09）—— */
+  .ac-goal-mark { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 4px 0 8px; border-radius: 8px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink, #f7f7f7); }
+.ac-goal-icon { flex: none; }
+/* 标签只写「目标」二字；预算（口径 + 值）紧跟其后，右端留白由 spacer 顶开 */
+.ac-goal-mark-label, .ac-goal-mark .ac-goal-token-prefix, .ac-goal-mark .ac-goal-token-val { font-size: 12px; font-weight: 600; line-height: 20px; }
+  .ac-goal-mark .ac-goal-token { color: var(--ui-ink, #f7f7f7); }
+.ac-goal-btn { display: grid; place-items: center; width: 22px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.ac-goal-btn:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
+.ac-goal-btn:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+/* 口径开关的图标：已用 = 实心、剩余 = 空心 */
+.ac-goal-btn .is-hollow { opacity: 0.55; }
+
+/* 极端防护（RULES §9）：面板变窄时次要信息逐级让位，操作按钮永不被挤走 */
+  .ac-goal-row.is-narrow .ac-goal-bar { display: none; }
+
 .ac-editor { position: relative; min-height: 64px; max-height: min(45vh, 15rem); overflow-y: auto; }
 .ac-placeholder { position: absolute; top: 0; left: 0; font-size: 14px; line-height: 24px; color: var(--ui-ink-dim, #919191); pointer-events: none; }
 .ac-toolbar { display: flex; align-items: center; gap: 3px; min-width: 0; }
@@ -985,14 +2159,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 .ac-user-image { display: block; width: 96px; height: 96px; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: transparent; cursor: zoom-in; }
 .ac-user-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* 看大图：铺满面板的遮罩（z-index 要在下拉/浮层之上） */
-.ac-lightbox { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 24px; background: var(--ui-scrim, rgb(0 0 0 / 0.6)); cursor: zoom-out; }
-.ac-lightbox img { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(0 0 0 / 0.55)); }
-.ac-lightbox-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: var(--ui-tip, rgb(0 0 0 / 0.9)); color: var(--ui-tip-ink, #fff); cursor: pointer; }
 /* 底圈：整圈淡显（照参考页 opacity .25），提供"盘面"感 */
 .ac-ctx-track { opacity: 0.25; }
 .ac-send { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 12px; background: var(--ui-primary-bg, #f7f7f7); color: var(--ui-primary-ink, #141414); cursor: pointer; transition: opacity 0.16s ease; }
 .ac-send:disabled { opacity: 0.45; cursor: default; }
 .ac-send.is-running { background: var(--ui-danger, #ef4444); color: var(--ui-primary-ink, #141414); }
+/* 停止键里的实心方块：走 currentColor（与按钮文字色同一套 token），
+   不引线框图标，圆角 2 让方角不至于太生硬。 */
+.ac-stop-square { width: 11px; height: 11px; border-radius: 2px; background: currentColor; }
 
 /* —— 下拉内容（浮层本体由目录里的 dropdown 提供：定位/翻边/出屏/互斥它负责）——
    层次结构（照参考图）：上下 flex 分栏 ——
@@ -1006,14 +2180,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 /* 分组头：普通 flex 行。它不滚是因为**滚动发生在下面的列表区**，不是靠定位吸住。 */
 .ac-menu-head { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 10px 6px; }
 .ac-menu-head-title { font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
-.ac-menu-head-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 10px; line-height: 16px; text-align: center; color: var(--ui-ink-dim, #919191); }
+.ac-menu-head-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 11px; line-height: 16px; text-align: center; color: var(--ui-ink-dim, #919191); }
 /* 分组头右侧的操作（MCP 的「检测」）：把计数推到左边、按钮贴右 */
 .ac-menu-head-spacer { flex: 1; min-width: 4px; }
 .ac-menu-head-btn { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 22px; padding: 0 8px; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 11px; cursor: pointer; }
 .ac-menu-head-btn:hover:not(:disabled) { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
 .ac-menu-head-btn:disabled { opacity: 0.6; cursor: default; }
 /* 每行右侧的检测徽章 */
-.ac-menu-card-badge { flex: none; margin-top: 3px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 999px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-size: 10px; line-height: 15px; }
+.ac-menu-card-badge { flex: none; margin-top: 3px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 999px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-size: 11px; line-height: 15px; }
 .ac-menu-card-badge.is-bad { background: var(--ui-danger-veil, rgb(239 68 68 / 0.1)); color: var(--ui-danger, #ef4444); }
 
 /* 列表区：**唯一会滚的那层**。flex:1 + min-height:0 才能在限高的浮层里正确收缩 */
@@ -1070,7 +2244,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
   padding: 0 6px 0 4px;
   margin: 0 2px;
   border-radius: 6px;
-  background: var(--ui-hover-soft, rgb(255 255 255 / 0.08));
+  /* 与已发送标签同款底色（--ui-hover-strong）：亮暗各一档，比旧的 --ui-hover-soft 明显（用户口径 2026-10-06） */
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
   vertical-align: bottom;
   user-select: none;
   cursor: pointer;

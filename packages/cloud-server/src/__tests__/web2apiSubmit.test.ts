@@ -13,7 +13,7 @@
  * 这两条都**不联网**就能复现：给 provider 注入一个假 fetch，回真实的响应形状。
  */
 import { describe, it, expect } from 'vitest'
-import { createWeb2ApiProvider } from '../providers/web2api/index'
+import { createWeb2ApiProvider, WEB2API_ACTIONS } from '../providers/web2api/index'
 import { Web2ApiClient } from '../providers/web2api/client'
 import type { ActionDef } from '../providers/types'
 
@@ -116,5 +116,83 @@ describe('extractUrls 防御性', () => {
     const { extractUrls } = await import('../providers/web2api/client')
     expect(extractUrls(undefined)).toEqual([])
     void client
+  })
+})
+
+describe('每个动作都显式声明轮询节奏与超时（视频不该被默认 5 分钟误杀）', () => {
+  /**
+   * 真出过的问题：动作不设 pollTimeoutMs 时落到后台默认 5 分钟 —— 一次成功生图实测 136s，
+   * 视频更长（web2api 自己的任务超时是 20 分钟、轮询超时 24h），5 分钟必把正常任务判死。
+   */
+  it('全部动作都带 pollIntervalMs / pollTimeoutMs，且视频 ≥ 30 分钟', () => {
+    expect(WEB2API_ACTIONS.length).toBeGreaterThan(0)
+    for (const a of WEB2API_ACTIONS) {
+      expect(a.pollIntervalMs, a.id).toBeGreaterThan(0)
+      expect(a.pollTimeoutMs, a.id).toBeGreaterThan(0)
+      if (a.nodeTypes?.includes('video')) {
+        expect(a.pollTimeoutMs!, a.id).toBeGreaterThanOrEqual(30 * 60_000)
+      }
+    }
+  })
+})
+
+/**
+ * 中间态不能当终态（用户实测的 bug，2026-10-08）。
+ *
+ * 现场：任务在浏览器里等用户过验证码（web2api 那边 status=`paused`，非终态），
+ * cloud-server 却把 paused 直接判成失败收工 —— 用户还在过验证码，画布上任务已经「完成（失败）」。
+ * 真实日志：18:54:42 暂停 → 立刻判失败；18:55:11 验证码消失自动恢复；18:56:35 真成功。
+ *
+ * web2api 的状态机里，只有 completed / failed / cancelled 是**真终态**；
+ * paused（等验证码）/ retrying（退避）/ polling_failed / pending（换号后重排）都还在自己往前走。
+ */
+describe('中间态继续轮询，不判失败（paused 等验证码 / retrying 退避）', () => {
+  const pollWith = async (status: string, extra: Record<string, unknown> = {}) => {
+    const provider = createWeb2ApiProvider({
+      endpoint: EP,
+      fetchImpl: fakeFetch({ task: { structuredContent: { status, message: 'm', ...extra } } }),
+    })
+    return provider.poll!('t-1', TTS)
+  }
+
+  it('paused（等用户过验证码）→ running + waiting（不占超时预算）', async () => {
+    const p = await pollWith('paused', { message: '触发人机验证码，需人工在远程控制中完成验证后恢复' })
+    expect(p.status).toBe('running')
+    expect(p.waiting).toBe(true)
+    expect(p.message).toContain('验证码')
+  })
+
+  it('retrying（退避等待重试）→ running + waiting', async () => {
+    const p = await pollWith('retrying', { message: '失败，稍后自动重试' })
+    expect(p.status).toBe('running')
+    expect(p.waiting).toBe(true)
+  })
+
+  it('pending（换号后重新排队）→ running + waiting', async () => {
+    const p = await pollWith('pending', { message: '已换号，10s 后重新执行' })
+    expect(p.status).toBe('running')
+    expect(p.waiting).toBe(true)
+  })
+
+  it('polling_failed（轮询中断，可手动恢复）→ running（仍算普通等待）', async () => {
+    const p = await pollWith('polling_failed')
+    expect(p.status).toBe('running')
+    expect(p.waiting).toBeUndefined()
+  })
+
+  it('普通进行中（processing/polling）→ running，不带 waiting', async () => {
+    for (const s of ['processing', 'polling']) {
+      const p = await pollWith(s, { progress: 40 })
+      expect(p.status, s).toBe('running')
+      expect(p.waiting, s).toBeUndefined()
+      expect(p.progress, s).toBe(40)
+    }
+  })
+
+  it('真终态仍然收敛：failed / cancelled → error；completed → done', async () => {
+    expect((await pollWith('failed', { message: '节点不存在' })).status).toBe('error')
+    expect((await pollWith('cancelled')).status).toBe('error')
+    const done = await pollWith('completed', { resources: [{ downloadUrl: '/api/resources/audios/doubao/x.ogg' }] })
+    expect(done.status).toBe('done')
   })
 })

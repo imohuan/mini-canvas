@@ -9,7 +9,8 @@
  *   GET    /api/projects/:id/canvases         → { ok, canvases }
  *   POST   /api/projects/:id/canvases {name}  → { ok, canvas }
  *   PATCH  /api/canvases/:id/meta  {name}     → { ok }（重命名画布）
- *   DELETE /api/canvases/:id                  → { ok }（删画布文件夹）
+ *   POST   /api/canvases/:id/duplicate         → { ok, canvas }（复制画布：节点/边/资源/历史；视口不带）
+ *   DELETE /api/canvases/:id                  → { ok }（删画布文件夹；任何画布都可删，含内置 default）
  *
  * 为什么画布文件夹路径不变、靠索引记归属：见 store/projectStore.ts 文件头（迁移代价的取舍）。
  */
@@ -103,11 +104,21 @@ export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, as
   app.delete('/api/canvases/:id', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
-    if (id === 'default') return c.json({ ok: false, error: '默认画布不可删除' }, 400)
     await canvases.remove(id)
     await projects.removeCanvas(id)
     await assets.removeByCanvas(id)
     return c.json({ ok: true })
+  })
+
+  // 复制画布：先建新索引（新 id/名字），再把旧画布的内容拷进去。
+  // 内容拷贝（含资源地址换画布 id）在 CanvasStore.copyInto 里 —— 路径拼装只此一份。
+  app.post('/api/canvases/:id/duplicate', async (c) => {
+    const id = c.req.param('id')
+    if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    const made = await projects.duplicateCanvas(id)
+    if (!made) return c.json({ ok: false, error: '画布不存在' }, 404)
+    await canvases.copyInto(id, made.id, made.name)
+    return c.json({ ok: true, canvas: made })
   })
 
   return app

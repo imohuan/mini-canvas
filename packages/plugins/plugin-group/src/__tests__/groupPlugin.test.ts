@@ -110,6 +110,142 @@ describe('group 插件集成（真实内核服务）', () => {
     expect(nodeStore.getNode(gid)?.parentId).toBe(nested)
   })
 
+  /**
+   * 用户报的三个真 bug 的回归守卫（2026-10-08）：
+   *   ① 已在分组内的节点 Ctrl+G 打组曾经静默失效（命令层把有父的节点全滤掉了）；
+   *   ② 组内打组曾经坐标算错（子节点相对坐标拿 node.position 算，少减一个原组位置）；
+   *   ③ 分组默认名曾经被空串顶掉，标题回落到类型名 → 看起来「分组标题重复」。
+   */
+  describe('组内打组（Ctrl+G 在分组里也要生效）', () => {
+    it('同组内两个节点打组 → 新组挂在原组里，子节点相对坐标按绝对位置算', async () => {
+      const { ctx, nodeStore, selection } = makeCtx()
+      const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+      const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const outer = svc.createGroup([a, b])!
+      // 再放两个节点进外层组（直接建到绝对位置再拖进组，最贴近真机路径）
+      const c = addNode(nodeStore, 'text', 200, 160, { w: 100, h: 80 })
+      const d = addNode(nodeStore, 'text', 320, 260, { w: 100, h: 80 })
+      svc.applyDragMembership(c)
+      svc.applyDragMembership(d)
+      expect(nodeStore.getNode(c)?.parentId).toBe(outer)
+      expect(nodeStore.getNode(d)?.parentId).toBe(outer)
+      // 关键调用：两个「已在组里」的节点打组（老实现这里恒返回 null）
+      const inner = svc.createGroup([c, d])
+      expect(inner).toBeTruthy()
+      expect(nodeStore.getNode(inner!)?.parentId).toBe(outer)
+      // 新组深度 = 1（合法）；外层组深度不变
+      expect(svc.getGroupDepth(inner!)).toBe(1)
+      // 子节点相对新组：绝对位置 - 新组绝对左上（不是「相对坐标 - 新组相对坐标」那套错的）
+      const innerAbs = svc.getGroupBounds(inner!)!
+      const cAbs = { x: innerAbs.x + nodeStore.getNode(c)!.position.x, y: innerAbs.y + nodeStore.getNode(c)!.position.y }
+      expect(cAbs.x).toBeCloseTo(200)
+      expect(cAbs.y).toBeCloseTo(160)
+    })
+
+    it('跨组打组被拒（父不同不能凭空建组），同父的仍可建', async () => {
+      const { ctx, nodeStore } = makeCtx()
+      const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+      const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+      const p = addNode(nodeStore, 'text', 900, 100, { w: 100, h: 80 })
+      const q = addNode(nodeStore, 'text', 1100, 200, { w: 100, h: 80 })
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const g1 = svc.createGroup([a, b])!
+      const g2 = svc.createGroup([p, q])!
+      // 一个在 g1、一个在 g2 → 父不同 → 拒
+      expect(svc.createGroup([a, p])).toBeNull()
+      const moved = nodeStore.getNode(a)!
+      expect(moved.parentId).toBe(g1)
+      void g2
+    })
+
+    it('内层组不能再被包进新组（上限 1 仍然守得住）', async () => {
+      const { ctx, nodeStore } = makeCtx()
+      const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+      const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const outer = svc.createGroup([a, b])!
+      const c = addNode(nodeStore, 'text', 200, 160, { w: 100, h: 80 })
+      const e = addNode(nodeStore, 'text', 360, 260, { w: 100, h: 80 })
+      svc.applyDragMembership(c)
+      svc.applyDragMembership(e)
+      const inner = svc.createGroup([c, e])!
+      expect(svc.getGroupDepth(inner)).toBe(1)
+      // 拿内层组 + 一个同层节点再打组 → 内层组要变成深度 2，越限 → 拒
+      const f = addNode(nodeStore, 'text', 700, 100, { w: 100, h: 80 })
+      nodeStore.updateNode(f, { parentId: outer, position: { x: 460, y: 40 } })
+      expect(svc.createGroup([inner, f])).toBeNull()
+      expect(nodeStore.getNode(inner)?.parentId).toBe(outer)
+    })
+
+    it('新建的分组拿到编号默认名（不再被空串顶掉）', async () => {
+      const { ctx, nodeStore } = makeCtx()
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const a = addNode(nodeStore, 'text', 0, 0)
+      const b = addNode(nodeStore, 'text', 300, 0)
+      const g1 = svc.createGroup([a, b])!
+      const c = addNode(nodeStore, 'text', 600, 0)
+      const d = addNode(nodeStore, 'text', 900, 0)
+      const g2 = svc.createGroup([c, d])!
+      const n1 = nodeStore.getNode(g1)!.data.label
+      const n2 = nodeStore.getNode(g2)!.data.label
+      expect(n1).toBe('分组 1')
+      expect(n2).toBe('分组 2')
+      expect(n1).not.toBe(n2)
+    })
+
+    it('存量迁移：label 是空串的老分组被补上编号名，且不与新建撞号', async () => {
+      const { ctx, nodeStore } = makeCtx()
+      await ctx.start()
+      /**
+       * 模拟**冷启动时序**（真机就是这条）：插件 apply 先跑（类型已注册、但画布还是空的），
+       * 画布 restore 在之后 —— `replaceAll` 触发一次 `replace`，补名逻辑挂在它上面。
+       */
+      ctx.get('doc').replaceAll([
+        { id: 'old1', type: 'group', position: { x: 0, y: 0 }, size: { w: 300, h: 200 }, data: { label: '', nodeType: 'group' } },
+        { id: 'old2', type: 'group', position: { x: 500, y: 0 }, size: { w: 300, h: 200 }, data: { label: '', nodeType: 'group' } },
+        { id: 'old3', type: 'group', position: { x: 900, y: 0 }, size: { w: 300, h: 200 }, data: { label: '用户改过的名字', nodeType: 'group' } },
+      ])
+      expect(nodeStore.getNode('old1')!.data.label).toBe('分组 1')
+      expect(nodeStore.getNode('old2')!.data.label).toBe('分组 2')
+      // 用户自己改过的名字不许动
+      expect(nodeStore.getNode('old3')!.data.label).toBe('用户改过的名字')
+      // 之后新建的组接着往数（不与补出来的号撞）
+      const a = addNode(nodeStore, 'text', 1300, 0)
+      const b = addNode(nodeStore, 'text', 1500, 0)
+      const svc = ctx.get<GroupService>('group')
+      expect(nodeStore.getNode(svc.createGroup([a, b])!)!.data.label).toBe('分组 3')
+    })
+
+    it('解散内层组：子节点升为外层组成员（不是被扔到顶层）', async () => {
+      const { ctx, nodeStore } = makeCtx()
+      const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })
+      const b = addNode(nodeStore, 'text', 300, 200, { w: 120, h: 60 })
+      await ctx.start()
+      const svc = ctx.get<GroupService>('group')
+      const outer = svc.createGroup([a, b])!
+      const c = addNode(nodeStore, 'text', 200, 160, { w: 100, h: 80 })
+      const d = addNode(nodeStore, 'text', 340, 240, { w: 100, h: 80 })
+      svc.applyDragMembership(c)
+      svc.applyDragMembership(d)
+      const inner = svc.createGroup([c, d])!
+      const innerAbs = svc.getGroupBounds(inner)!
+      const before = { x: innerAbs.x + nodeStore.getNode(c)!.position.x, y: innerAbs.y + nodeStore.getNode(c)!.position.y }
+      svc.ungroup(inner)
+      const nc = nodeStore.getNode(c)!
+      // 归属：升到外层组
+      expect(nc.parentId).toBe(outer)
+      // 绝对位置不变（只是坐标系换了）
+      const outerAbs = svc.getGroupBounds(outer)!
+      expect(outerAbs.x + nc.position.x).toBeCloseTo(before.x)
+      expect(outerAbs.y + nc.position.y).toBeCloseTo(before.y)
+    })
+  })
+
   it('ungroup：子节点还原绝对坐标 + 删除组节点', async () => {
     const { ctx, nodeStore } = makeCtx()
     const a = addNode(nodeStore, 'text', 100, 100, { w: 100, h: 80 })

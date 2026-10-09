@@ -8,7 +8,7 @@
  * 这里钉的是**判定**（纯函数）；监听/滚动那部分靠浏览器 e2e 验收。
  */
 import { describe, it, expect } from 'vitest'
-import { distanceToBottom, isNearBottom } from '../stickToBottomCore'
+import { distanceToBottom, hasScrollbar, isNearBottom } from '../stickToBottomCore'
 
 /** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
 const at = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({ scrollTop, scrollHeight, clientHeight })
@@ -61,3 +61,17 @@ describe('isNearBottom：吸附判定', () => {
   })
 })
 
+describe('hasScrollbar：有没有滚动条（悬浮按钮的显示条件之一）', () => {
+  it('内容高于视口 → 有滚动条', () => {
+    expect(hasScrollbar(at(0, 1000, 600))).toBe(true)
+  })
+  it('内容不高于视口 → 没有滚动条', () => {
+    expect(hasScrollbar(at(0, 300, 600))).toBe(false)
+  })
+  it('高度差 1px 以内 → 不算（亚像素噪声不给按钮）', () => {
+    expect(hasScrollbar(at(0, 601, 600))).toBe(false)
+  })
+  it('高度差超过 1px → 算', () => {
+    expect(hasScrollbar(at(0, 602, 600))).toBe(true)
+  })
+})

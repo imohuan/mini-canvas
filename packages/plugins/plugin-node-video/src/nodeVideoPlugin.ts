@@ -17,11 +17,12 @@
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层(canvas-render) + 默认皮的通用按钮，
  * 不反向依赖宿主/其它节点插件。
  */
-import { Service, type Context, type ConfigSchema, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_VIDEO_FIT_LIMITS } from './videoFit'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
+import VideoPreview from './VideoPreview.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
@@ -100,6 +101,17 @@ const NODE_ICON =
  * 分组沿用项目既有一级分类（布局 / 常规 / 节点 / 边），不新立无主分类。
  */
 export const Config: ConfigSchema = {
+  // —— 「布局 / 视频节点尺寸」：新节点默认尺寸（改完实时生效，未 resize 过的节点跟着变）——
+  videoDefaultWidth: {
+    type: 'number', default: 480, min: 80, max: 2000, step: 10,
+    label: '默认宽', group: '布局/视频节点尺寸',
+    description: '视频节点没有自己的尺寸时用的宽度（px）。改完立即生效：没被手动拖过尺寸的视频节点会立刻跟着变。',
+  },
+  videoDefaultHeight: {
+    type: 'number', default: 320, min: 80, max: 2000, step: 10,
+    label: '默认高', group: '布局/视频节点尺寸',
+    description: '视频节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
+  },
   videoFitMaxWidth: {
     type: 'number', default: DEFAULT_VIDEO_FIT_LIMITS.maxWidth, min: 120, max: 2000, step: 10,
     label: '视频预览上限宽', group: '布局/视频节点尺寸',
@@ -127,6 +139,10 @@ export const Config: ConfigSchema = {
  */
 export function apply(ctx: Context) {
   const service = new VideoService(ctx)
+
+  // 视频**预览**注册件（从 VideoContent 抽出的纯展示件）：登记进 ui 目录，
+  // 任何宿主按名取用 —— 换实现一起换（与 audioPreview 同一条路）。
+  ctx.registryOf<unknown>('ui').add('videoPreview', VideoPreview, { id: 'node-video' })
 
   // 0.5 底栏动作（T9：剪辑面板搬进 plugin-bottom-bar，本包只发布动作）
   //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
@@ -177,6 +193,9 @@ export function apply(ctx: Context) {
       return service.addVideoNode(position)
     },
   })
+
+  // 默认尺寸接设置面板：改完**实时**生效（没 resize 过的视频节点立刻跟着变）
+  bindTypeDefaultSize(ctx, 'video', { w: 480, h: 320 }, { widthKey: 'videoDefaultWidth', heightKey: 'videoDefaultHeight' })
 
   // —— 命令：界面按钮与命令走**同一批实现**（cropVideo / clipVideo / captureFrameNode …）——
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。

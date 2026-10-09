@@ -36,7 +36,8 @@ function render(id: string, data: Record<string, unknown>): Promise<string> {
   app.provide(RENDER_CONTEXT_KEY, renderCtx())
   return renderToString(app)
 }
-const SFC = readFileSync(new URL('../AudioContent.vue', import.meta.url), 'utf8')
+// 波形/拖拽实现随抽组件搬进了 AudioWavePlayer.vue（行为契约原样搬走，测试跟着锁新家）
+const SFC = readFileSync(new URL('../AudioWavePlayer.vue', import.meta.url), 'utf8')
 
 describe('波纹下面那条整体进度条', () => {
   it('渲染出来了，且带无障碍语义（role=slider + 数值范围）', async () => {
@@ -143,7 +144,6 @@ describe('拖到一侧时波纹跟着滚动', () => {
     expect(SFC).not.toMatch(/if \(!src \|\| seeking\) return/)
   })
 })
-
 
 
 

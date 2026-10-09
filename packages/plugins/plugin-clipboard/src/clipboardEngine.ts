@@ -7,19 +7,49 @@
  * - 粘贴偏移：有鼠标锚点 → 组中心对齐锚点(flow 坐标)；无锚点 → 级联 +20/次；
  * - 快照重映射：为克隆节点生成新 id(含父引用跟随)、按新 id 重连边、整组平移 offset。
  *
- * 快照里节点取 v2 内核最小形状 {id,type,position,data,parentId?,size?}；
+ * 快照里节点取 v2 内核最小形状 + 绝对坐标 {id,type,position,absPosition,data,parentId?,size?}；
  * 边取 {id,source,target,type?,sourceHandle?,targetHandle?}；data 深拷贝(JSON)防共享引用。
+ *
+ * **坐标语义（本轮修复重点）**：子节点 position 相对父、顶层节点 position 绝对（两套坐标系）。
+ * 快照额外记录复制时刻的绝对坐标 absPosition，粘贴偏移一律基于绝对坐标；有父的节点相对坐标不变。
  */
 
 /** 剪贴板节点最小形状（v2 CanvasNode 的"可持久化"子集，剥掉 selected/运行时脏字段） */
 export interface ClipboardNode {
   id: string
   type: string
+  /**
+   * 节点坐标，语义随 parentId 走（与画布一致）：
+   * - 有 parentId（父也在本快照里）-> 相对父的局部坐标；
+   * - 无 parentId -> flow 绝对坐标。
+   */
   position: { x: number; y: number }
+  /**
+   * 复制时刻的 flow 绝对坐标（父链逐级累加）。
+   *
+   * 为什么快照要另存它：父与子的 position 是**两套坐标系**（子相对父、顶层绝对），
+   * 只拿原始 position 一起算包围盒/加偏移就是把两块坐标混着算 —— 带分组的复制粘贴整块错位、
+   * 子节点在分组里四散（用户 2026-10-09 报的就是这个）。绝对坐标才是"整块刚性平移"的基准。
+   */
+  absPosition: { x: number; y: number }
   data: Record<string, unknown>
+  /** 父节点 id —— 仅当该父也在本快照里时才保留（父在批外时按绝对坐标落顶层，防悬挂引用） */
   parentId?: string
   size?: { w: number; h: number }
 }
+
+/** toClipboardNodes 的输入：可持久化节点（position 可能是相对父的局部值） */
+export interface ClipboardNodeInput {
+  id: string
+  type: string
+  position: { x: number; y: number }
+  data?: Record<string, unknown>
+  parentId?: string
+  size?: { w: number; h: number }
+}
+
+/** 复制时取节点绝对坐标的注入口（用整张画布的父链，能算到"父未被选中"的子节点） */
+export type ClipboardAbsProvider = (id: string) => { x: number; y: number } | undefined
 
 /** 剪贴板边最小形状 */
 export interface ClipboardEdge {
@@ -63,16 +93,69 @@ export function touchingEdgesOf<E extends { source: string; target: string }>(
   return edges.filter((e) => ids.has(e.source) || ids.has(e.target))
 }
 
-/** 把节点剥成可持久化最小形状（丢弃 selected 等渲染态字段；data 深拷贝） */
-export function toClipboardNodes(nodes: any[]): ClipboardNode[] {
-  return nodes.map((n) => ({
-    id: n.id,
-    type: n.type,
-    position: { x: n.position?.x ?? 0, y: n.position?.y ?? 0 },
-    data: deepClone<Record<string, unknown>>(n.data ?? {}),
-    ...(n.parentId !== undefined ? { parentId: n.parentId } : {}),
-    ...(n.size !== undefined ? { size: { w: n.size.w, h: n.size.h } } : {}),
-  }))
+/**
+ * 把节点剥成可持久化最小形状（丢弃 selected 等渲染态字段；data 深拷贝），
+ * 并补上"复制时刻的绝对坐标" `absPosition`。
+ *
+ * 为什么必须在这里算绝对坐标：带 parentId 的节点 position 是**相对父的局部坐标**，
+ * 与顶层节点的绝对坐标是两套体系。粘贴偏移只能基于绝对坐标（整块刚性平移）——
+ * 直接混算原始 position 会让带分组的复制粘贴整块错位、子节点四散。
+ *
+ * 父链解析规则（快照只带被复制的节点，父可能不在批内）：
+ * - 父**在批内** → 沿批内父链累加（父的 position 相对它自己的父，正是需要的量）；
+ * - 父**不在批内**（复制时父未被选中）→ 批内父链断在父那里，改问注入的 `absProvider`
+ *   （宿主用整张画布的 parentId 链算绝对坐标，能算到任意深）；`absProvider` 缺席时
+ *   退化为"把自身 position 当绝对坐标"（顶层节点本就如此）。
+ *
+ * 同时把 parentId 收敛到"父也在快照里"：父在批外 → 不写 parentId（粘贴后按绝对坐标落顶层，防悬挂）。
+ */
+export function toClipboardNodes(nodes: ClipboardNodeInput[], absProvider?: ClipboardAbsProvider): ClipboardNode[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+
+  /** 某节点的绝对坐标：批内能解析的部分用批内累加，断在批外则交给 absProvider */
+  const resolveAbs = (node: ClipboardNodeInput): { x: number; y: number } => {
+    let x = node.position?.x ?? 0
+    let y = node.position?.y ?? 0
+    let cur: ClipboardNodeInput | undefined = node
+    const seen = new Set<string>([node.id])
+    while (cur?.parentId !== undefined) {
+      if (seen.has(cur.parentId)) break // 环保护
+      seen.add(cur.parentId)
+      const parent = byId.get(cur.parentId)
+      if (!parent) {
+        // 父在批外：批内父链到此为止，改用整张画布的绝对坐标（拿不到就保持当前累加值）
+        const outer = absProvider?.(node.id)
+        if (outer) {
+          x = outer.x
+          y = outer.y
+        }
+        break
+      }
+      x += parent.position?.x ?? 0
+      y += parent.position?.y ?? 0
+      cur = parent
+    }
+    return { x, y }
+  }
+
+  return nodes.map((n) => {
+    const abs = resolveAbs(n)
+    // 父在快照里才带 parentId；父在批外 → 剥离（粘贴时按绝对坐标落顶层）
+    const parentInBatch = n.parentId !== undefined && byId.has(n.parentId)
+    return {
+      id: n.id,
+      type: n.type,
+      // 保持"position 语义随 parentId 走"这条不变量：
+      // 父在批内 → 保留相对坐标；父被剥离 → 把 position 重定基到绝对坐标（否则粘贴会把局部值当绝对用）
+      position: parentInBatch
+        ? { x: n.position?.x ?? 0, y: n.position?.y ?? 0 }
+        : { x: abs.x, y: abs.y },
+      absPosition: abs,
+      data: deepClone<Record<string, unknown>>(n.data ?? {}),
+      ...(parentInBatch ? { parentId: n.parentId } : {}),
+      ...(n.size !== undefined ? { size: { w: n.size.w, h: n.size.h } } : {}),
+    }
+  })
 }
 
 /** 把边剥成可持久化最小形状（输入容忍内核 CanvasEdge / 渲染态窄对象；仅取 id/source/target/handle/type） */
@@ -89,9 +172,14 @@ export function toClipboardEdges<E extends { id: string; source: string; target:
   }))
 }
 
-/** 建一份剪贴板快照（节点/边已剥干净 + 深拷贝） */
-export function makeSnapshot(nodes: ClipboardNode[], edges: ClipboardEdge[], copyTime = Date.now()): ClipboardSnapshot {
-  return { nodes: toClipboardNodes(nodes), edges: toClipboardEdges(edges), copyTime }
+/** 建一份剪贴板快照（节点/边已剥干净 + 深拷贝 + 绝对坐标） */
+export function makeSnapshot(
+  nodes: ClipboardNodeInput[],
+  edges: ClipboardEdge[],
+  copyTime = Date.now(),
+  absProvider?: ClipboardAbsProvider,
+): ClipboardSnapshot {
+  return { nodes: toClipboardNodes(nodes, absProvider), edges: toClipboardEdges(edges), copyTime }
 }
 
 /**
@@ -102,24 +190,30 @@ export function makeSnapshot(nodes: ClipboardNode[], edges: ClipboardEdge[], cop
  * 空快照兜底返回 {x:50,y:50}。
  */
 export function computePasteOffset(
-  nodes: Array<{ position: { x: number; y: number }; size?: { w: number; h: number } }>,
+  nodes: Array<{ absPosition: { x: number; y: number }; size?: { w: number; h: number }; parentId?: string }>,
   anchor?: ClipboardFlowPoint | null,
   pasteCount = 0,
 ): { offsetX: number; offsetY: number } {
   if (nodes.length === 0) return { offsetX: 50, offsetY: 50 }
   const FALLBACK_W = 256
   const FALLBACK_H = 256
+  // 包围盒只取"根"节点（无父）：子节点在几何上位于根容器内部，根矩形已覆盖整块内容。
+  // 把子节点也算进去反而会偏 —— 子节点常没有声明尺寸，256 兜底会把包围盒撑到容器外面，
+  // 中心随之偏移（分组复制粘贴时会看出"贴不到鼠标"）。
+  const roots = nodes.filter((n) => n.parentId === undefined)
+  const boxed = roots.length > 0 ? roots : nodes
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
   let maxY = -Infinity
-  for (const n of nodes) {
+  for (const n of boxed) {
     const w = n.size?.w ?? FALLBACK_W
     const h = n.size?.h ?? FALLBACK_H
-    minX = Math.min(minX, n.position.x)
-    minY = Math.min(minY, n.position.y)
-    maxX = Math.max(maxX, n.position.x + w)
-    maxY = Math.max(maxY, n.position.y + h)
+    // 用**绝对坐标**算包围盒：子节点 position 是相对父的局部值，混着算中心就错了（见 absPosition 说明）
+    minX = Math.min(minX, n.absPosition.x)
+    minY = Math.min(minY, n.absPosition.y)
+    maxX = Math.max(maxX, n.absPosition.x + w)
+    maxY = Math.max(maxY, n.absPosition.y + h)
   }
   const centerX = (minX + maxX) / 2
   const centerY = (minY + maxY) / 2
@@ -130,8 +224,12 @@ export function computePasteOffset(
 /**
  * 快照 → 粘贴内容（克隆 + 重映射 + 平移）：
  * - 每个节点新 id = genId(oldId)，old→new 记入 idMap；
- * - 节点 position 整体 + offset；data 深拷贝（剪贴板快照已剥干净，直接引用快照 data 即可，不共享画布节点）；
- * - 父节点在同批选中集内 → parentId 跟随重映射；父不在批内 → 剥离 parentId(防悬挂引用)；
+ * - **平移按绝对坐标做**：
+ *   · 有父（父也在本批里）→ `position` 是相对父的局部坐标，**整块刚性平移时不变**，
+ *     父节点自己平移即可带着子树一起走（这正是父子关系不丢的关键）；
+ *   · 无父（顶层）→ `position` 是绝对坐标，加上 offset；
+ *   · 快照里 `parentId` 已收敛为"父也在批内"（见 toClipboardNodes），故不在此再判悬挂；
+ * - data 深拷贝（快照已剥干净，直接引用快照 data 即可，不共享画布节点）；
  * - 边按 idMap 重连 source/target；映射不到任一端则丢弃(理论不发生，防御)。
  */
 export function remapSnapshot(
@@ -146,17 +244,23 @@ export function remapSnapshot(
   for (const n of snapshot.nodes) idMap.set(n.id, genId(n.id))
   const nodes = snapshot.nodes.map((n) => {
     const newId = idMap.get(n.id)!
-    // 显式重建（不 spread n）：只带持久化字段；父在同批才带新 parentId，否则剥离防悬挂
+    const parentId = n.parentId
+    const mappedParentId = parentId !== undefined ? idMap.get(parentId) : undefined
+    const hasParent = mappedParentId !== undefined
+    // 显式重建（不 spread n）：只带持久化字段
     const node: ClipboardNode = {
       id: newId,
       type: n.type,
-      position: { x: n.position.x + offset.offsetX, y: n.position.y + offset.offsetY },
+      // 有父 → 相对坐标原样保留（随父整体平移）；无父 → 绝对坐标加偏移
+      position: hasParent
+        ? { x: n.position.x, y: n.position.y }
+        : { x: n.position.x + offset.offsetX, y: n.position.y + offset.offsetY },
+      // 绝对坐标仅供诊断/下游参考，给平移后的值
+      absPosition: { x: n.absPosition.x + offset.offsetX, y: n.absPosition.y + offset.offsetY },
       data: n.data,
       ...(n.size !== undefined ? { size: { w: n.size.w, h: n.size.h } } : {}),
     }
-    if (n.parentId !== undefined && idMap.has(n.parentId)) {
-      node.parentId = idMap.get(n.parentId)
-    }
+    if (hasParent) node.parentId = mappedParentId
     return node
   })
   const edges: ClipboardEdge[] = []

@@ -28,6 +28,20 @@ afterEach(async () => {
 })
 
 describe('工具调用落盘', () => {
+  it('带标记的首句入标题时被剥成 @名字（历史列表不出现机器串）', async () => {
+    // 直接用 store 验不了 runtime 的 maybeAutoTitle（那是私有方法），
+    // 这里锁的是**数据层契约**：标题就是「剥完标记的原文」——runtime 只负责剥。
+    await store.appendTurn('c1', 's2', { role: 'user', text: '@图片 4 根据参考图生成', ts: 2 })
+    // 模拟 runtime 的标题剥法（与 stripMarkupToPlain 同一正则口径）
+    const raw = '@[node:图片 4](430c8f1f00bd4aba#12) 根据参考图生成'
+    const stripped = raw.replace(/@\[([a-zA-Z][a-zA-Z0-9_-]*):([^\]]+)\](?:\([^)]*\))?/g, (_m, _k, name) => '@' + name)
+    expect(stripped).toBe('@图片 4 根据参考图生成')
+    expect(await store.rename('c1', 's2', stripped.slice(0, 24))).toBe(true)
+    const rec = await store.get('c1', 's2')
+    expect(rec!.title).toBe('@图片 4 根据参考图生成')
+    expect(rec!.title).not.toContain('@[')
+  })
+
   it('结构化存：名字/参数都留着（回放才还原得出样子）', async () => {
     await store.appendTurn('c1', 's1', {
       role: 'tool',
@@ -72,4 +86,3 @@ describe('工具调用落盘', () => {
     expect(rec!.turns[1].done).toBeUndefined()
   })
 })
-

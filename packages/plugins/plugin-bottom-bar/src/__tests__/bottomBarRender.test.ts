@@ -281,6 +281,26 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
     expect((textSpec[1] as Record<string, string>).class).toContain('resource-chip--text')
     expect((textSpec.slice(2) as unknown[][])[0][0]).toBe('span')
   })
+
+  /**
+   * 用户报的「输入内容一下就全消失」：'none' 绑定（图片生成）的输入以前只存在组件本地 ref，
+   * 底栏一重挂载（切画布/再点节点/任务跑完再回来）就没了。修法是挂载时从节点 data.barPrompt 恢复。
+   * SSR 里 ProseMirror 正文是客户端建的、照不到，但**占位符的有无**由挂载时的初始值决定 ——
+   * 有 data.barPrompt 时不该再显示「描述你想要的内容…」占位。
+   */
+  it('挂载时从 data.barPrompt 恢复输入（有内容 → 不显示占位符；空 → 显示占位符）', async () => {
+    const withText = await render(
+      NodeBottomBar as Component,
+      '35',
+      { barPrompt: '我上次写的提示词' },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(withText).toContain('prose-mirror-editor')
+    expect(withText).not.toContain('描述你想要的内容')
+
+    const empty = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
+    expect(empty).toContain('描述你想要的内容')
+  })
 })
 
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {

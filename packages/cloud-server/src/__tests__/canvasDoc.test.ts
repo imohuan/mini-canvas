@@ -44,12 +44,13 @@ describe('与网页界面共用同一份存储', () => {
   it('MCP 存的资源落在本画布 resources/ 下（同内容去重成同一个引用）', async () => {
     const bytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3])
     const a = await doc.saveResource(bytes, { fileName: 'x.png' })
-    expect(a.ref).toMatch(/^res:[0-9a-f]{16}\.png$/)
+    // 写入侧统一成**同源 URL**（res:<hash> 已彻底移除）
+    expect(a.url).toMatch(/^\/api\/canvases\/default\/resources\/[0-9a-f]{16}\.png$/)
     expect(a.mime).toBe('image/png')
 
     // 同一份字节再来一次 → 同一个引用（不存两份）
     const b = await doc.saveResource(bytes, { fileName: 'y.png' })
-    expect(b.ref).toBe(a.ref)
+    expect(b.url).toBe(a.url)
 
     // listResources 列的是本画布资源名
     expect(await doc.listResources()).toEqual([a.hashName])
@@ -62,6 +63,12 @@ describe('与网页界面共用同一份存储', () => {
     const r = await doc.saveResource(new Uint8Array([60, 104, 49, 62]), { fileName: 'evil.html' })
     expect(r.hashName).not.toMatch(/\.html$/)
     expect(r.mime).toBe('application/octet-stream')
+  })
+
+  it('非默认画布：资源地址带的是那张画布自己的 id', async () => {
+    const other = new CanvasDocument(store, new CanvasResourceStore(dir), 'c1')
+    const r = await other.saveResource(new Uint8Array([1, 2, 3]), { fileName: 'a.png' })
+    expect(r.url).toBe('/api/canvases/c1/resources/' + r.hashName)
   })
 
   it('空内容被拒', async () => {
@@ -109,7 +116,7 @@ describe('与网页界面共用同一份存储', () => {
     expect(raw.edges).toEqual([])
   })
 
-  it('网页端写了什么，MCP 也读得到（反向）', async () => {
+  it('网页端写了什么，MCP 也读得到（反向；老数据里的 res: 原样读回，不做转换）', async () => {
     await store.writeCanvas('default', {
       nodes: [{ id: 'web-1', type: 'image', position: { x: 5, y: 6 }, data: { imageUrl: 'res:a1b2c3d4e5f6a7b8.png' } }],
       edges: [],

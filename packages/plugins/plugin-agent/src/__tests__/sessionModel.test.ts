@@ -3,6 +3,28 @@ import { describe, it, expect } from 'vitest'
 import { ChatModel } from '../sessionModel'
 
 describe('基本形态', () => {
+  /**
+   * 用户口径（2026-10-05）：工具与文本有先后顺序。
+   * 一段文字 → 三个工具 → 再一段文字，`steps` 必须按这个顺序记下来
+   * （否则界面只能把所有工具堆在开头，看不到真实时序）。
+   */
+  it('按到达顺序记下「文字 / 工具 / 文字」的步骤（不再丢顺序）', () => {
+    const m = new ChatModel()
+    const id = m.send('问')
+    m.apply({ type: 'text', text: '我先说一句', final: true })
+    m.apply({ type: 'tool_call', id: 't1', name: 'a', arguments: '{}' })
+    m.apply({ type: 'tool_call', id: 't2', name: 'b', arguments: '{}' })
+    m.apply({ type: 'text', text: '再说一句', final: true })
+    const t = m.turns.find((x) => x.id === id)!
+    expect(t.steps.map((s) => (s.type === 'tool' ? { type: s.type, id: s.id } : s.type))).toEqual([
+      'text',
+      { type: 'tool', id: 't1' },
+      { type: 'tool', id: 't2' },
+      'text',
+    ])
+    expect(t.text).toBe('我先说一句再说一句')
+  })
+
   it('发送后立刻有用户消息与一条空的助手消息', () => {
     const m = new ChatModel()
     const id = m.send('你好')
@@ -147,5 +169,39 @@ describe('历史回放', () => {
     m.send('x')
     m.reset()
     expect(m.turns).toEqual([])
+  })
+})
+
+describe('编辑状态（分支回填的第一步）', () => {
+  /**
+   * 用户口径（2026-10-06）：点「编辑」→ 消息上显示「**正在编辑**」徽标 + 高亮，
+   * 输入框联动标记可点回这里；发送后这个点成为分支根。标签语义是「正在编辑」不是「已编辑」。
+   */
+  it('beginEdit / cancelEdit：正在编辑的消息 id，单选', () => {
+    const m = new ChatModel()
+    m.send('第一条')
+    m.send('第二条')
+    const target = m.turns.find((t) => t.kind === 'user' && t.text === '第一条')!
+    m.beginEdit(target.id)
+    expect(m.editingId).toBe(target.id)
+    expect(m.turns.find((t) => t.id === target.id)?.editing).toBe(true)
+    // 换一条 = 换选中（不是多选）
+    const other = m.turns.find((t) => t.kind === 'user' && t.text === '第二条')!
+    m.beginEdit(other.id)
+    expect(m.editingId).toBe(other.id)
+    expect(m.turns.find((t) => t.id === target.id)?.editing).toBe(false)
+    m.cancelEdit()
+    expect(m.editingId).toBeNull()
+    expect(m.turns.every((t) => !t.editing)).toBe(true)
+  })
+
+  it('load 回放后 editing 全空（编辑是内存态，不落盘）', () => {
+    const m = new ChatModel()
+    m.load([{ role: 'user', text: 'hi', ts: 1 }])
+    m.beginEdit(m.turns[0].id)
+    const m2 = new ChatModel()
+    m2.load([{ role: 'user', text: 'hi', ts: 1 }])
+    expect(m2.editingId).toBeNull()
+    expect(m2.turns.every((t) => !t.editing)).toBe(true)
   })
 })

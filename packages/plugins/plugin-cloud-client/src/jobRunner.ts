@@ -30,8 +30,8 @@ export interface RunDeps {
   canvasId: string
   /** 读某节点 data（下单前检查有没有没上传的本地地址） */
   readNodeData(nodeId: string): Record<string, unknown> | undefined
-  /** 把 dataURL / blob 传成画布资源，返回画布内引用 */
-  uploadLocal(canvasId: string, bytes: Blob, name: string): Promise<{ ref: string }>
+  /** 把 dataURL / blob 传成画布资源，返回画布内资源地址（同源 URL） */
+  uploadLocal(canvasId: string, bytes: Blob, name: string): Promise<{ url: string }>
   /** 数据地址 → Blob（浏览器环境由 URL/atob 实现；测试注入假的） */
   toBlob?(dataUrl: string): Promise<Blob | undefined>
   onError?(msg: string, err?: unknown): void
@@ -47,12 +47,12 @@ async function normalizeResources(
     const kind = typeof r.kind === 'string' ? r.kind : 'image'
     const url = typeof r.url === 'string' ? r.url : undefined
     if (url && /^(data:|blob:)/i.test(url) && deps.toBlob) {
-      // 后台拿不到 data:/blob: —— 先传上去换成 res:
+      // 后台拿不到 data:/blob: —— 先传上去换成画布资源地址（URL）
       try {
         const blob = await deps.toBlob(url)
         if (blob) {
           const uploaded = await deps.uploadLocal(deps.canvasId, blob, kind + '.bin')
-          out.push({ kind, url: uploaded.ref })
+          out.push({ kind, url: uploaded.url })
           continue
         }
       } catch (err) {

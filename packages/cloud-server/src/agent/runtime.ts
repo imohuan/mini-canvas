@@ -17,7 +17,18 @@ import { createTranslateState, translateMessage, contextLeftPercent, type Transl
 import { decideTool, normalizePolicy, type ApprovalPolicy } from './approval.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, canvasWorkspaceDir } from './agentPaths.js'
 import type { AgentSessionStore } from './sessionStore.js'
-import { buildReferenceGuidance, namesOfKind, stripMarkupToPlain } from './referenceMarkup.js'
+import { buildReferenceGuidance, namesOfKind, stripMarkupToPlain, REFERENCE_MARKUP_GUIDE } from './referenceMarkup.js'
+
+/**
+ * 会话的**即时名**（首轮首句剥标记后截 24 字）—— 这份公式全仓只有这一份。
+ *
+ * 为什么必须单份：落盘名用 maybeAutoTitle、AI 起名的「是否已被用户改过」判定用
+ * spawnBackgroundTitle，两处比对的是同一个字符串。公式各写一份的话，改了一处忘另一处，
+ * 判定永假 → 会话永远不被 AI 改名（审查发现的隐患）。
+ */
+function immediateTitleOf(firstText: string): string {
+  return stripMarkupToPlain(firstText).trim().replace(/\s+/g, ' ').slice(0, 24)
+}
 
 export interface AgentSessionLike {
   readonly sessionId: string
@@ -25,6 +36,12 @@ export interface AgentSessionLike {
   readonly modelId?: string
   run(messages: unknown[], opts?: Record<string, unknown>): AsyncIterable<unknown>
   steer?(messages: unknown[]): boolean
+  /**
+   * 跑命名 hook 包的 user_prompt 命令（SDK 的目标启动入口）。
+   * 可选：老测试的假会话没有它；只有真 SDK 会话才提供。
+   * 返回 null = 包没装 / 没这条命令（宿主据此拒绝启动目标）。
+   */
+  runUserPromptHook?(name: string, prompt: string, extras?: Record<string, string | number | boolean>): Promise<{ context?: string } | null>
   dispose?(): void
 }
 
@@ -67,20 +84,79 @@ export interface AgentRuntimeDeps {
   store: AgentSessionStore
   agent(): Promise<AgentLike>
   makeUserMessage(text: string, images?: string[]): unknown | unknown[]
+  /**
+   * 造一条**宿主注入**的用户消息（SDK 的 userText(text, 'harness')）。
+   *
+   * 为什么必须单独一个口子：SDK 用 sender:'harness' 这个戳划**轮次边界**
+   * （goal 的 stop hook 靠它算「这一轮用了多少 token、有没有被中止」）。
+   * 目标的协议文本必须这样发，否则 stop hook 会把整份 trace 当一轮扫 ——
+   * 扫到历史上任何一次 abort 就判 aborted，目标于是永远停在第 1 轮（真机实测）。
+   * 不注入 = 老测试的假宿主，退化成「拼进正文」（仅够跑通，不起目标循环）。
+   */
+  makeHarnessMessage?(text: string): unknown
+  /**
+   * 每会话常驻事件通道（设计 §3.2）。给了它 = 开启「后台对话」托管模式：
+   * 一轮在后台跑到底、事件进 hub，HTTP 只是订阅。不给 = 旧行为（跑在响应里）。
+   */
+  hub?: AgentHub
   /** 读/写 system_config.yaml（按本次选择过滤 MCP） */
   filterMcp?(names: string[]): Promise<() => Promise<void>>
   /** 技能名 → SKILL.md 全文（拼进 [use_skills] 块） */
   readSkill?(name: string): Promise<string | undefined>
   /** 临时把 AGENTS.md 换成这段文本，返回还原函数（模式系统提示词用） */
   withSystemPrompt?(text: string): Promise<() => Promise<void>>
+  /**
+   * 给一段对话**用模型起个标题**（宿主注入：走「会话标题模型」配置的模型）。
+   * 返回 null = 没配 / 起名失败，调用方回落「首句截断」。
+   */
+  generateTitle?(plainFirstText: string): Promise<string | null>
+  /**
+   * 一轮结束的回调（队列调度用；设计 §3.3.2 的触发点之一）。
+   *
+   * 为什么用回调而不是 runtime 直接调调度器：runtime 只管"跑一轮"，
+   * 谁在这一轮之后决定发下一条由宿主接线（与 preTurn / onQueueChanged 同一风格）。
+   */
+  onRunFinished?(canvasId: string, sessionId: string): void
+  /**
+   * 目标的一轮结束（stop hook 触发）。runtime 只在整轮 run 结束时才有 onRunFinished；
+   * 目标是一次 run 里连跑多轮的，所以它需要**每轮**都能被通知到（否则界面轮次/已用跳号）。
+   * 宿主借此读一次 GOAL.json 并推 goal_state。
+   */
+  onGoalRound?(canvasId: string, sessionId: string): void
   log?: (message: string, extra?: unknown) => void
 }
+
+/**
+ * runtime 对 hub 的最小依赖面（只声明用到的部分）。
+ *
+ * 为什么用结构化类型而不是直接 import SessionHub：单测可以塞一个假 hub，
+ * 不必起真的调度器；同时 runtime 不依赖 hub 的实现细节。
+ */
+export interface AgentHub {
+  append(canvasId: string, sessionId: string, ev: AgentChatEvent): void
+  start(
+    canvasId: string,
+    sessionId: string,
+    opts: { run: (signal: AbortSignal) => AsyncGenerator<AgentChatEvent> },
+  ): Promise<void>
+  isRunning(canvasId: string, sessionId: string): boolean
+  abort(canvasId: string, sessionId: string): boolean
+}
+
+/** hub.start 在"已经在跑"时抛的错误信息前缀（runtime 用它区分"重复触发"与真错误） */
+export const HUB_ALREADY_RUNNING = '这一轮已经在跑了'
 
 export interface StartRunInput {
   canvasId: string
   sessionId?: string
   text: string
   images?: string[]
+  /**
+   * 紧跟用户消息之后、由**宿主注入**的一段文本（目标模式的协议文本）。
+   * 以 sender:'harness' 发送：模型看得到，但它在 SDK 眼里是一条独立输入
+   * （轮次边界），不进用户气泡、也不进转录。
+   */
+  harnessText?: string
   prefs?: SessionPrefs
 }
 
@@ -137,19 +213,32 @@ export class AgentRuntime {
       const record = await this.deps.store.get(canvasId, opts.sessionId)
       if (record) {
         const agent = await this.deps.agent()
-        const session = await agent.resumeSession({ sessionId: opts.sessionId })
-        this.attach(canvasId, session, prefs)
-        return { id: opts.sessionId, resumed: true }
+        try {
+          const session = await agent.resumeSession({ sessionId: opts.sessionId })
+          this.attach(canvasId, session, prefs)
+          return { id: opts.sessionId, resumed: true }
+        } catch (err) {
+          // 有转录记录、但 SDK 侧没有对应的 Trace（会话从没真跑过一轮 —— 比如队列
+          // 在第一条消息发出前就落了记录，或那一轮在 bootstrap 阶段就失败了）。
+          // 这种 id 续不上上下文，**不当成错误**：往下走新建一条，让这一轮照常跑起来。
+          this.log('resume failed, falling back to new session', {
+            session: opts.sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
       // 磁盘上也没有 → 不当成错误，退回新建（界面传来的旧 id 可能已被删）
     }
     await fs.mkdir(canvasWorkspaceDir(this.deps.root, canvasId), { recursive: true })
     const restore = await this.applyMcpFilter(prefs.mcpServers)
     // 模式系统提示词：与 MCP 一样，卡在「建会话前换、建会话后还原」这一小段里。
-    const restorePrompt =
-      prefs.systemPrompt && this.deps.withSystemPrompt
-        ? await this.deps.withSystemPrompt(prefs.systemPrompt)
-        : async () => undefined
+    // 系统提示词 = 模式提示词（若有）+ **引用标记说明**（恒有）。
+    // 标记说明放这里的原因：后端不再翻译标记（用户口径：要能原样复制到本机 Agent），
+    // 所以模型必须事先知道那套标记是什么意思 —— 一次说明，比每条消息翻译干净。
+    const promptText = [prefs.systemPrompt, REFERENCE_MARKUP_GUIDE].filter(Boolean).join('\n\n')
+    const restorePrompt = this.deps.withSystemPrompt
+      ? await this.deps.withSystemPrompt(promptText)
+      : async () => undefined
     const agent = await this.deps.agent()
     let session: AgentSessionLike
     try {
@@ -207,7 +296,125 @@ export class AgentRuntime {
 
   /** 会话当前是否在跑（界面据此把发送按钮换成停止） */
   isRunning(canvasId: string, sessionId: string): boolean {
+    // 托管模式下以 hub 为准（它是跨连接的唯一真相）；没有 hub 就走内存态
+    if (this.deps.hub) return this.deps.hub.isRunning(canvasId, sessionId)
     return this.live.get(this.key(canvasId, sessionId))?.running ?? false
+  }
+
+  /** 现在能给这条会话插队吗（正在跑 + 会话对象在内存里才可能） */
+  isSteerable(canvasId: string, sessionId: string): boolean {
+    if (!this.isRunning(canvasId, sessionId)) return false
+    const entry = this.live.get(this.key(canvasId, sessionId))
+    return !!entry?.session.steer
+  }
+
+  /**
+   * 经 SDK 会话跑命名 hook 包的 user_prompt 命令（目标启动的官方入口）。
+   *
+   * 返回 null = 会话不在内存 / 包没装（调用方据此拒绝启动目标）。
+   * 注意：**不要求会话在跑** —— 目标第 1 轮发起前会话可能刚建好还没跑过。
+   */
+  async runUserPromptHook(
+    canvasId: string,
+    sessionId: string,
+    name: string,
+    prompt: string,
+    extras?: Record<string, string | number | boolean>,
+  ): Promise<{ context?: string } | null> {
+    // 会话可能还没进内存（服务刚重启 / 这条会话从没在本次进程跑过）——
+    // 先 ensureSession 把它装载起来，否则 hook 恒返回 null，
+    // 目标只能靠宿主兜底文本「假装启动」，官方 start.mjs 的协议文本永远拿不到
+    // （真机实测：重启后发目标，日志里一直是「hook 未产出协议文本」）。
+    let entry = this.live.get(this.key(canvasId, sessionId))
+    if (!entry) {
+      try {
+        const resolved = await this.ensureSession(canvasId, { sessionId })
+        entry = this.live.get(this.key(canvasId, resolved.id))
+      } catch (err) {
+        this.log('runUserPromptHook: 装载会话失败', {
+          session: sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        return null
+      }
+    }
+    if (!entry?.session.runUserPromptHook) return null
+    try {
+      return await entry.session.runUserPromptHook(name, prompt, extras)
+    } catch (err) {
+      this.log('runUserPromptHook failed', {
+        session: sessionId,
+        hook: name,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
+  }
+
+  /**
+   * 把一句话插进**正在跑**的那一轮（引导 / 插队；设计 §3.3.3）。
+   *
+   * 返回 true = 已进队（SDK 下一次请求组装时会投递给模型）。
+   * 返回 false = 那一刻已经不在跑了（轮刚好结束）—— 调用方**必须保留**这条消息
+   * （退回队列按序发），绝不要因为 false 就丢掉它（用户口径：不丢、不重复）。
+   *
+   * 落转录（带 steered 标记）也在这里做：引导是真实用户输入，刷新后必须还在界面上。
+   */
+  async steerInto(canvasId: string, sessionId: string, text: string, images?: string[]): Promise<boolean> {
+    const entry = this.live.get(this.key(canvasId, sessionId))
+    if (!entry?.running) return false
+    const messages = await this.buildUserMessages(text, images)
+    const steered = entry.session.steer?.(messages) ?? false
+    this.log('steered into running task', { session: sessionId, steered })
+    if (steered) {
+      await this.deps.store.appendTurn(canvasId, sessionId, {
+        role: 'user',
+        text,
+        ...(images?.length ? { images } : {}),
+        steered: true,
+        ts: Date.now(),
+      })
+    }
+    return steered
+  }
+
+  /**
+   * **托管开跑**（设计 §3.2）：把这一轮交给 hub 在后台跑到底，函数立刻返回。
+   *
+   * 与 run() 的分工：run() 是"这一轮的实现"（异步生成器，产出事件、写转录），
+   * startRun() 是"把它托管出去"——HTTP 层调它之后只需订阅 hub 看事件。
+   *
+   * 返回 `{ started: false }` 的场景：这一轮的会话**已经在跑**（重复触发 / 并发请求）——
+   * 调用方据此走 steer 或提示，绝不并发开第二个 run（防重复的地基）。
+   */
+  async startRun(canvasId: string, input: StartRunInput): Promise<{ started: boolean; sessionId?: string }> {
+    const hub = this.deps.hub
+    if (!hub) throw new Error('startRun 需要注入 hub（托管模式）；否则请用 run()')
+    // 先解析会话 id（与 run() 同一条路径：可能有 sessionId、也可能要新建）
+    const probe = await this.ensureSession(canvasId, {
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      title: input.text,
+      prefs: mergeMarkupPrefs(input.prefs, input.text),
+    })
+    if (hub.isRunning(canvasId, probe.id)) return { started: false, sessionId: probe.id }
+    // 后台跑：hub.start 会消费生成器；这里不 await（HTTP 不等它）
+    void hub
+      .start(canvasId, probe.id, {
+        run: (signal) => this.run(canvasId, { ...input, sessionId: probe.id }, signal),
+      })
+      .catch((err) => {
+        this.log('managed run failed', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
+      })
+      .finally(() => {
+        // 一轮彻底结束（hub 的 running 已清）之后才通知队列调度器 ——
+        // 顺序至关重要：早一步通知，调度器会看到"还在跑"而拒绝发下一条（队列就卡住了）。
+        try {
+          this.deps.onRunFinished?.(canvasId, probe.id)
+        } catch (err) {
+          this.log('onRunFinished threw', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
+        }
+      })
+    return { started: true, sessionId: probe.id }
   }
 
   /** 当前挂起的审批（界面渲染审批卡片用） */
@@ -248,12 +455,35 @@ export class AgentRuntime {
       prefs: mergeMarkupPrefs(input.prefs, input.text),
     })
     const entry = this.live.get(this.key(canvasId, id))!
-    const userMessages: unknown[] = await this.buildUserMessages(input.text, input.images)
+    const userMessages: unknown[] = await this.buildTurnMessages(input.text, input.images, input.harnessText)
+    /**
+     * 审批的推送通道（真机实测的洞）：
+     * - HTTP 直连模式：路由层传 notify（写到那条响应流）—— 原行为；
+     * - **托管模式**：没有 notify（队列自动发的那一轮前端根本没参与这次 HTTP），
+     *   审批请求必须经 **hub** 推，否则永远挂起等一个界面看不见的卡片 ——
+     *   表现就是"队列发出去之后整个对话就死了"（用户实测）。
+     *   页面只要有常驻订阅（attachStream）就能收到卡片、点允许/拒绝。
+     */
+    const emitApproval = (event: AgentChatEvent): void => {
+      if (notify) notify(event)
+      else this.deps.hub?.append(canvasId, id, event)
+    }
 
     // 已经有会话在跑：这一句当 steering 送进去，不并发开第二个 run
     if (entry.running) {
       const steered = entry.session.steer?.(userMessages) ?? false
       this.log('steered into running task', { session: id, steered })
+      // 引导是**真的用户输入**：落转录（否则刷新后界面上会消失 —— 用户实测的旧洞）。
+      // 落盘用 steer 标记，界面据此画"引导"小标（与普通消息区分）。
+      if (steered) {
+        await this.deps.store.appendTurn(canvasId, id, {
+          role: 'user',
+          text: input.text,
+          ...(input.images?.length ? { images: input.images } : {}),
+          steered: true,
+          ts: Date.now(),
+        })
+      }
       yield { type: 'notice', message: steered ? '已作为补充指令发送给进行中的任务' : '任务正在执行中' }
       yield { type: 'done' }
       return
@@ -267,16 +497,33 @@ export class AgentRuntime {
     let assistantText = ''
     try {
       yield { type: 'session', sessionId: id, title: '' }
-      await this.deps.store.appendTurn(canvasId, id, {
-        role: 'user',
-        // 转录里存**可读文本**（标记降级成 `@名字`）：历史回放与普通展示都不该看到机器串。
-        // 模型真正拿到的是上面 buildUserMessages 拼好的引导块，与这里无关。
-        text: stripMarkupToPlain(input.text),
-        // 图一起落转录：否则刷新 / 切会话后只剩一句文字，用户以为图丢了
-        ...(input.images?.length ? { images: input.images } : {}),
-        ts: Date.now(),
-      })
-
+      /**
+       * 把"这一轮的用户消息"推给界面（真机实测的洞）。
+       *
+       * 为什么：用户自己点发送时，前端在本地就造好了用户气泡；但**队列自动发的**那一条
+       * 前端完全没有参与 —— 只写转录、不推事件的话，界面上从头到尾没有这条消息的
+       * 用户气泡，看起来就是"AI 对着空气说话"（用户实测截图）。
+       * 前端会做去重（本地已有同文本的末条用户消息就不重复造）。
+       */
+      // 没有人类正文（目标 resume 时只发 harness 协议块）就不造气泡、不落用户回合 ——
+      // 否则转录与界面里会多出一条空白的用户消息。
+      if (input.text) {
+        yield {
+          type: 'user_message',
+          text: input.text,
+          ...(input.images?.length ? { images: input.images } : {}),
+        }
+        await this.deps.store.appendTurn(canvasId, id, {
+          role: 'user',
+          // 转录里存 **XML 原文**（用户口径 2026-10-08：标记改用 <ref …>，字段自带完整信息）：
+          // 「编辑回填」靠它把引用还原成输入框的 chip 标签（此前降级成 @名字，回填后标签就丢了）。
+          // 气泡展示时由组件把它解析成 tag 段，不会把 XML 串直接显示出来。
+          text: input.text,
+          // 图一起落转录：否则刷新 / 切会话后只剩一句文字，用户以为图丢了
+          ...(input.images?.length ? { images: input.images } : {}),
+          ts: Date.now(),
+        })
+      }
       const approve = async (toolCall: unknown): Promise<'allow' | 'deny'> => {
         const payload = (toolCall as { payload?: Record<string, unknown> })?.payload ?? {}
         const name = String(payload.name ?? '')
@@ -299,14 +546,20 @@ export class AgentRuntime {
         // 否则刷新后它会缩成一行，与刚才看到的样子不一致。
         const callId = String((payload as { id?: unknown }).id ?? '')
         if (callId) await this.deps.store.patchTool(canvasId, id, callId, { card: true }).catch(() => undefined)
-        notify?.({ type: 'approval_request', approval: info })
+        emitApproval({ type: 'approval_request', approval: info })
         const result = await answer
-        notify?.({ type: 'approval_result', id: approvalId, decision: result })
+        emitApproval({ type: 'approval_result', id: approvalId, decision: result })
         return result
       }
 
       for await (const msg of entry.session.run(userMessages, { signal: own.signal, approve })) {
         for (const ev of translateMessage(msg, entry.state, (m, extra) => this.log(m, extra))) {
+          // 目标轮次边界（stop hook 每轮跑一次）：让 gooalRuntime 读一次 GOAL.json 推 goal_state，
+          // 否则「第 N 轮 / 已用」只在整轮 run 结束时才更新（真机：3 → 7 跳号）。
+          if (ev.type === 'goal_round') {
+            this.deps.onGoalRound?.(canvasId, id)
+            continue
+          }
           if (ev.type === 'usage') {
             entry.contextLeft = contextLeftPercent(ev.usedTokens, ev.limitTokens)
             yield ev
@@ -334,7 +587,12 @@ export class AgentRuntime {
           yield ev
         }
       }
+      // 会话命名**全部放到后台异步**：起名（AI 调用可能要几秒）不该卡在响应流上 ——
+      // 卡在流上会让前端在「生成完成」之后还多等一段（加载态被拉长，用户实测）。
+      // 先落一个**即时**的「首句截断」名字（保证列表任何时候都可读），AI 起名在后台跑，
+      // 跑完直接改名落盘 —— 前端下次拉会话列表自然看到新名字。
       await this.maybeAutoTitle(canvasId, id, input.text)
+      this.spawnBackgroundTitle(canvasId, id, input.text)
       // 这一轮结束：把工具记录统一标成已完成，避免刷新后还挂着「正在执行」的转圈
       await this.deps.store.finishTools(canvasId, id)
       this.log('run done', { session: id, ms: Date.now() - started, chars: assistantText.length })
@@ -371,12 +629,67 @@ export class AgentRuntime {
     return Array.isArray(raw) ? [...raw] : [raw]
   }
 
+  /**
+   * 组装这一轮的完整输入：用户消息（+图）+ 可选的 **harness 注入块**。
+   *
+   * harness 块必须是一条**独立**的用户消息并带 sender 戳：SDK 的 goal stop hook
+   * 以它划轮次边界（`isRoundInput`）。拼进用户正文里就没有边界，
+   * 记账会退化成「整份 trace = 一轮」—— 历史里的 abort 会让目标每轮判 aborted
+   * （真机实测：有历史 abort 的会话目标永远停在第 1 轮）。
+   */
+  private async buildTurnMessages(
+    text: string,
+    images: string[] | undefined,
+    harnessText: string | undefined,
+  ): Promise<unknown[]> {
+    const messages = await this.buildUserMessages(text, images)
+    if (harnessText && this.deps.makeHarnessMessage) messages.push(this.deps.makeHarnessMessage(harnessText))
+    else if (harnessText) messages.push(harnessText) // 假宿主兜底：没注入构造器时退化成纯文本块
+    return messages
+  }
+
   /** 首轮之后把会话名从「新会话」改成首句（列表里看得懂） */
   private async maybeAutoTitle(canvasId: string, sessionId: string, firstText: string): Promise<void> {
     const record = await this.deps.store.get(canvasId, sessionId)
     if (!record || record.title !== '新会话') return
-    const title = firstText.trim().replace(/\s+/g, ' ').slice(0, 24)
+    // 标题要**人类可读**：先剥掉引用标记（`@[node:图片 4](画布#节点)` → `@图片 4`）再截断 ——
+    // 直接截原文会把 `@[node:图片 4](430c8f1f00b…` 这种机器串截进标题里（历史列表一片机器码，用户实测）。
+    // 截断公式**只有这一份**（immediateTitleOf）—— 落盘名与「是否已被用户改过」的判定必须恰等，
+    // 两份公式一改一留，AI 起名的覆盖判定就永远不成立（审查发现）。
+    const title = immediateTitleOf(firstText)
     if (title) await this.deps.store.rename(canvasId, sessionId, title)
+  }
+
+  /**
+   * **后台自动起名**（纯后台服务，不占对话流）。
+   *
+   * 用户口径（2026-10-06）：AI 起名不要显示加载状态 —— 那几秒的模型调用不该让前端
+   * 在对话完成后还转圈。做法：本轮响应结束、即时名字落盘之后，把 AI 起名丢进后台跑；
+   * 跑完直接 rename 落盘。前端「生成中」的加载态只覆盖对话本身，**感知不到**这次改名。
+   *
+   * 只在「即时名还是首句截断」时才起名（用户手动改过名字就不覆盖）；
+   * 失败静默（保留即时名）；异常兜住不留悬挂 Promise。
+   */
+  private spawnBackgroundTitle(canvasId: string, sessionId: string, firstText: string): void {
+    void (async () => {
+      try {
+        const record = await this.deps.store.get(canvasId, sessionId)
+        // 名字已被用户改过（不是即时名）→ 不覆盖
+        if (!record) return
+        const immediate = immediateTitleOf(firstText)
+        if (record.title !== immediate) return
+        const generated = await this.deps.generateTitle?.(immediate)
+        if (!generated) return
+        // 再查一次：起名的这几秒里用户可能改了名 / 开了新一轮
+        const cur = await this.deps.store.get(canvasId, sessionId)
+        if (!cur || cur.title !== immediate) return
+        await this.deps.store.rename(canvasId, sessionId, generated)
+        this.log('session renamed by title model', { session: sessionId, title: generated })
+      } catch (err) {
+        // 后台起名失败不算事：保留即时名
+        this.log('background title failed', { session: sessionId, err: err instanceof Error ? err.message : String(err) })
+      }
+    })()
   }
 
   /** 中止当前轮：会话本身留着（用户只是停下，不是删掉） */
