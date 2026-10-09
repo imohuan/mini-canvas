@@ -196,8 +196,13 @@ export const agentSessionPlugin: PluginModule = {
         (turn) => runAgentMiddleware(ctx, turn),
         // 托管通道（设计 §3.2）：给了它 = 「后台对话」模式（一轮不绑连接）
         need<SessionHub>(ctx, 'agentHub'),
-        // 队列变化后的调度机会（设计 §3.3.2）：路由只管落盘，发不发由调度器决定
-        (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').tick(canvasId, sessionId),
+        // 队列变化后的调度机会（设计 §3.3.2）：路由只管落盘，发不发由调度器决定。
+        //
+        // **forced**：这条回调的全部触发点都是**用户明确操作**（加 / 删 / 改 / 暂停 /
+        // 恢复 / 引导）。调度器对「自动重试」有 30 秒冷却（防配置错误时刷日志），但那道闸
+        // 不该挡住用户 —— 不传 forced 的话，上一次派发失败后用户点「恢复队列」也会在 30 秒内
+        // 毫无反应（真机表现：点了没动静，只能等）。
+        (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').tick(canvasId, sessionId, { forced: true }),
         // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动
         need<GoalRuntimePort>(ctx, 'agentGoal'),
       ),

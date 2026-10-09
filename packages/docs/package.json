@@ -1,0 +1,16 @@
+{
+  "name": "@mini-canvas/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "mini-canvas 文档站：MD 写文档 + 自动列出插件注册的功能 + 直接在页面里预览真实组件",
+  "scripts": {
+    "dev": "vitepress dev --port 5290",
+    "build": "vitepress build",
+    "preview": "vitepress preview --port 5291"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.34"
+  }
+}

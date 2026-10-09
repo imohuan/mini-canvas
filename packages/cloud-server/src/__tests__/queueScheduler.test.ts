@@ -252,4 +252,48 @@ describe('队列调度器', () => {
     expect(goalCalls).toEqual([{ objective: '把测试跑绿', budget: 50000 }])
     expect(sent).toEqual([]) // 走的是目标通道，不是普通发送
   })
+
+  /**
+   * 纯图条目**不能无限重发**（代码审查发现的洞）。
+   *
+   * text 为空的条目没法按文本比对；旧实现在对账时一律「退回 queued」，于是
+   * 发一次 → 退一次 → 再发一次 → … 永不收敛（每轮都多烧一次模型调用）。
+   * 修法：对账指纹改成「文本 + 图」，转录里那条纯图用户回合就能把它认成已送达。
+   */
+  it('对账：纯图条目在转录里已有同图回合 ⇒ 标 sent（不重发）', async () => {
+    await store.updateQueue('c1', 's1', (q) => ({
+      ...q,
+      items: [{ id: 'img1', text: '', images: ['data:image/png;base64,AAA'], state: 'sending', createdAt: 1 }],
+    }))
+    // 转录里有这条纯图用户回合（说明真送达了）
+    await store.appendTurn('c1', 's1', { role: 'user', text: '', images: ['data:image/png;base64,AAA'], ts: 1 })
+    await scheduler.settleAsync('c1', 's1')
+    const q = await store.getQueue('c1', 's1')
+    expect(q.items[0]).toMatchObject({ id: 'img1', state: 'sent' })
+    // 下一次 tick 清掉它，且**不会重发**
+    scheduler.tick('c1', 's1')
+    await waitFor(async () => (await store.getQueue('c1', 's1')).items.length === 0)
+    expect(sent).toEqual([])
+  })
+
+  /**
+   * 带目标的条目：实际发出去的是 **objective**（startGoal），不是 item.text。
+   * 对账若拿 item.text 比会恒不成立 ⇒ 退回 queued ⇒ 目标被反复重启。
+   */
+  it('对账：带 goal 的条目按 objective 认送达（不把目标无限重启）', async () => {
+    await store.updateQueue('c1', 's1', (q) => ({
+      ...q,
+      items: [{
+        id: 'g1',
+        text: '（这条文本与目标内容不同）',
+        goal: { objective: '把测试跑绿', budget: 5000 },
+        state: 'sending',
+        createdAt: 1,
+      }],
+    }))
+    // 目标的第 1 轮把 objective 作为用户正文落进转录
+    await store.appendTurn('c1', 's1', { role: 'user', text: '把测试跑绿', ts: 1 })
+    await scheduler.settleAsync('c1', 's1')
+    expect((await store.getQueue('c1', 's1')).items[0]).toMatchObject({ id: 'g1', state: 'sent' })
+  })
 })

@@ -111,6 +111,15 @@ export interface AgentApiOptions {
   fetchImpl?: typeof fetch
 }
 
+/**
+ * SSE 帧级回调（可选）：`acceptSeq` 返回 false = 这条 seq 已经应用过，跳过；
+ * `onSeq` 收到**刚应用**的 seq（推进重连水位用）。
+ */
+export interface SseFrameSink {
+  acceptSeq?: (seq: number) => boolean
+  onSeq?: (seq: number) => void
+}
+
 export class AgentApi {
   private readonly base: string
   private readonly f: typeof fetch
@@ -399,6 +408,12 @@ export class AgentApi {
     opts: SendOptions,
     onEvent: (e: ChatEvent) => void,
     signal?: AbortSignal,
+    /**
+     * 帧级水位（可选）：send 响应与常驻流**同时**订阅着同一个 hub 通道
+     *（设计如此：send 响应只是"订阅 + 保活"），同一条事件因此会到两次。
+     * 带上 `acceptSeq`/`onSeq` 让调用方按 seq 去重，事件只被应用一次。
+     */
+    sink?: SseFrameSink,
   ): Promise<void> {
     const payload: Record<string, unknown> = { text }
     if (opts.provider) payload.provider = opts.provider
@@ -416,7 +431,7 @@ export class AgentApi {
     })
     if (!res.ok) throw new Error(await readError(res))
     if (!res.body) throw new Error('响应没有内容')
-    await this.consumeSse(res.body, onEvent)
+    await this.consumeSse(res.body, onEvent, sink)
   }
 
   /**
@@ -434,7 +449,7 @@ export class AgentApi {
     since: number,
     onEvent: (e: ChatEvent) => void,
     signal?: AbortSignal,
-    opts: { follow?: boolean } = {},
+    opts: { follow?: boolean } & SseFrameSink = {},
   ): Promise<void> {
     const res = await this.f(
       this.sessionPath(canvasId, sessionId) +
@@ -445,11 +460,21 @@ export class AgentApi {
     )
     if (!res.ok) throw new Error(await readError(res))
     if (!res.body) return
-    await this.consumeSse(res.body, onEvent)
+    await this.consumeSse(res.body, onEvent, opts)
   }
 
-  /** 逐帧消费一条 SSE 流（sendMessage 与 streamSession 共用这一份解析） */
-  private async consumeSse(body: ReadableStream<Uint8Array>, onEvent: (e: ChatEvent) => void): Promise<void> {
+  /**
+   * 逐帧消费一条 SSE 流（sendMessage 与 streamSession 共用这一份解析）。
+   *
+   * `onSeq` 收每帧的 `id:`（后端 `hub.subscribe` 回放/续推时带的 seq）：常驻流用它把
+   * 重连水位推到**最新**，否则断开重连只能从很旧的水位重放 —— 已应用过的事件再应用一遍，
+   * 界面上就冒出重复的助手正文 / 工具卡片（真机可复现）。
+   */
+  private async consumeSse(
+    body: ReadableStream<Uint8Array>,
+    onEvent: (e: ChatEvent) => void,
+    sink?: SseFrameSink,
+  ): Promise<void> {
     const reader = body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
@@ -460,10 +485,19 @@ export class AgentApi {
       const frames = buffer.split(String.fromCharCode(10, 10))
       buffer = frames.pop() ?? ''
       for (const frame of frames) {
-        const line = frame.split(String.fromCharCode(10)).find((l) => l.startsWith('data: '))
+        const lines = frame.split(String.fromCharCode(10))
+        const line = lines.find((l) => l.startsWith('data: '))
         if (!line) continue
+        // id 行要**单独取**：它可能排在 data 行之前（`id: N\ndata: {…}`），
+        // 用 find(data) 那一行取不到它（见 writeSSE 的输出顺序）。
+        const idLine = lines.find((l) => l.startsWith('id: '))
+        const seq = idLine ? Number(idLine.slice(4)) : NaN
         try {
+          // 已应用过的 seq（重复投递 / 重连回放）直接跳过：不加这一步，助手正文与
+          // 工具卡片会被应用两遍（真机实测：正文变 `AAABBBBBB`）。
+          if (Number.isFinite(seq) && sink?.acceptSeq && !sink.acceptSeq(seq)) continue
           onEvent(JSON.parse(line.slice(6)) as ChatEvent)
+          if (Number.isFinite(seq)) sink?.onSeq?.(seq)
         } catch {
           /* 坏帧跳过，不因一帧解析失败杀掉整条流 */
         }

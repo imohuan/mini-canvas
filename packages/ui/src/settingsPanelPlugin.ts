@@ -19,6 +19,6 @@ export const uiSettingsPanelPlugin: PluginModule = {
   name,
   apply(ctx: { theme: { register(slot: string, comp: unknown, opts?: { id?: string; order?: number }): void } }) {
     // order 比默认皮(0)小 → 顶替它成为 settingsPanel 赢家
-    // ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })
+    ctx.theme.register('settingsPanel', AppSettingsPanel, { id: name, order: -1 })
   },
 }

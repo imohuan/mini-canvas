@@ -85,6 +85,16 @@ export function agentSessionRoutes(
 ): Hono {
   const app = new Hono()
 
+  /**
+   * 目标参考图的落盘上限（与界面 pickImages 的 4 张 × 4MB 同口径）。
+   *
+   * 为什么在路由层再设一道：图是 data URL，直接写进**会话文件**；而会话文件每次转录写入
+   * 都是「整体读 → 改 → 整体写」——无上限时一次请求就能把文件撑大，之后每轮对话都在搬它。
+   * 单张按 base64 后约 1.37 倍估算：4MB 原图 ≈ 5.6M 字符。
+   */
+  const MAX_GOAL_IMAGES = 4
+  const MAX_GOAL_IMAGE_URL_CHARS = 6 * 1024 * 1024
+
   /** 校验路径两段；不合法时回一个 400 响应 */
   function guardParams(c: { req: { param: (k: string) => string | undefined } }):
     | { ok: true; canvasId: string; sessionId?: string }
@@ -236,7 +246,10 @@ export function agentSessionRoutes(
         p.sessionId!,
         since,
         (item) => {
-          void stream.writeSSE({ data: JSON.stringify(item.ev) })
+          // 带 `id: <seq>`：客户端据此推进自己的重连水位（见按帧解析的 consumeSse）。
+          // 没有它，客户端重连时只能拿一个**很旧**的水位，缓冲里已应用过的事件会被重放
+          // （重复的助手正文 / 工具卡片 —— 真机可复现）。
+          void stream.writeSSE({ id: String(item.seq), data: JSON.stringify(item.ev) })
         },
       )
       if (gapDetected) {
@@ -338,6 +351,14 @@ export function agentSessionRoutes(
             ),
           }
         case 'cancel-edit':
+          // 不传 itemId = **清掉这条会话里所有 editing**（"放弃全部编辑"）。
+          //
+          // 为什么需要它（代码审查发现的洞）：`editing` 会**阻塞队列**（调度器只放行非
+          // editing 的队头），而编辑态有一部分是发起编辑的**那个客户端**记的（界面本地
+          // editingItems）。用户编辑到一半切走会话 / 关掉面板 / 刷新，服务端这条 editing
+          // 就没人再取消它 —— 等它排到队头，队列就**永久卡住**、界面上连取消按钮都没有。
+          // 所以切会话时由界面调一次「清空 editing」把它兜回来。
+          if (!itemId) return { ...q, items: q.items.map((it) => (it.state === 'editing' ? { ...it, state: 'queued' } : it)) }
           return { ...q, items: q.items.map((it) => (it.id === itemId ? { ...it, state: 'queued' } : it)) }
         case 'edit':
           // 开始编辑某条：**只改状态**（内容不动）—— 队头变 editing 后调度器就停在那里等用户
@@ -460,7 +481,15 @@ export function agentSessionRoutes(
     const p = guardParams(c)
     if (!p.ok) return p.res
     const body = await safeJson(c)
-    const images = Array.isArray(body?.images) ? (body!.images as unknown[]).map(String).filter(Boolean) : []
+    const raw = Array.isArray(body?.images) ? (body!.images as unknown[]).map(String).filter(Boolean) : []
+    /**
+     * 上限（与界面的 4 张 / 单张 4MB 同口径）：这些是 data URL，直接落进**会话文件**，
+     * 而会话文件每次转录写入都要整体读 + 整体写 —— 不设限的话，一次请求就能把文件撑到
+     * 几十 MB，之后每一轮对话都在重复搬它（写入变慢、索引变大）。
+     * 超限截断而不是报错：界面永远发不出超限的量，真超了多半是调用方写错，
+     * 截断比让"写目标参考图"整个失败更不打扰用户（图本身是可选装饰）。
+     */
+    const images = raw.slice(0, MAX_GOAL_IMAGES).filter((u) => u.length <= MAX_GOAL_IMAGE_URL_CHARS)
     await store.setGoalImages(p.canvasId, p.sessionId!, images)
     return c.json({ ok: true })
   })
@@ -606,7 +635,20 @@ export function agentSessionRoutes(
     // 页面刷新 = 这条订阅断掉，但那一轮继续跑（用户口径 2026-10-08）；
     // 回来时用 GET .../stream?since=N 接上（见下面的 stream 路由）。
     if (hub) {
-      const since = Number(c.req.query('since') ?? 0) || 0
+      /**
+       * 这一轮 **专有**事件的起点。
+       *
+       * 为什么不是 `Number(c.req.query('since') ?? 0)`（真机实测的洞）：send 响应是
+       * 「订阅这一会话的常驻通道」，而前端发消息时**不带 since** ⇒ 恒为 0 ⇒ 每次发消息
+       * 都把通道缓冲里的**全部历史事件**重放一遍。后果：第 2 条消息就重放第 1 轮
+       * （探针实测 11 帧 → 21 帧、正文变成「回复甲回复甲回复乙回复乙」），界面上冒出
+       * 重复的用户气泡、`run_state` 还会中途闪回 false；而且缓冲越满重放越大（O(n²)）。
+       *
+       * 正确口径：起点 = **开跑之前**的缓冲头水位。之后 append 的事件（这一轮的
+       * run_state / session / user_message / 正文…）全部 > 它，一条不漏；之前的历史一条不重放。
+       * 会话 id 还不存在时（首条消息要新建）水位就是 0 —— 反正那时候缓冲是空的。
+       */
+      const subscribeSince = hub.lastSeq(p.canvasId, p.sessionId!)
       // 带目标的消息（设计 §3.4.2）：先备好目标文件与第 1 轮文本，再走托管开跑。
       // 目标与普通消息的差别只有这一步（其余路径完全一样）。
       const goalSpec = body.goal && typeof body.goal === 'object'
@@ -629,6 +671,36 @@ export function agentSessionRoutes(
             })
           }
         }
+        /**
+         * 会话**正在跑**时别直接 beginGoal（代码审查发现的竞态）：
+         * `beginGoal` 会先让 start.mjs 写好 GOAL.json，再调 startRun —— 而 startRun 在
+         * 「已经在跑」时返回 `{started:false}`，那一步就白写了：目标文件躺在那儿、当前这一轮
+         * 的 stop hook 下一拍就会读它开始续轮，可用户的 objective 文本**从没作为消息发出去**
+         * （第 1 轮协议文本也一起丢了）。旧实现还回了一句 `{steered:true}` —— 其实什么都没送进去。
+         *
+         * 正确做法与「跑着时发普通消息」完全一致（设计 §3.3.3 / G2）：**进队列**，
+         * 条目带 goal，轮到它时由调度器调 startGoal（见 QueueScheduler.tickBody）。
+         */
+        if (hub.isRunning(p.canvasId, p.sessionId!)) {
+          const queued = await store.updateQueue(p.canvasId, p.sessionId!, (q) => ({
+            ...q,
+            items: [
+              ...q.items,
+              {
+                id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                text,
+                ...(Array.isArray(body?.images) && body.images.length ? { images: body.images.map(String) } : {}),
+                goal: { objective: goalSpec.objective, budget: goalSpec.budget },
+                state: 'queued' as const,
+                createdAt: Date.now(),
+              },
+            ],
+          }))
+          hub.append(p.canvasId, p.sessionId!, { type: 'queue', queue: queued })
+          // 让调度器看一眼（这一轮跑完就会自动起这个目标）
+          onQueueChanged?.(p.canvasId, p.sessionId!)
+          return c.json({ ok: true, queued: true, sessionId: p.sessionId!, goal: true })
+        }
         const outcome = await goalRuntime.beginGoal(p.canvasId, p.sessionId!, goalSpec.objective, goalSpec.budget)
         if (!outcome.started) {
           return c.json({ ok: true, steered: true, sessionId: p.sessionId!, goal: true })
@@ -649,8 +721,8 @@ export function agentSessionRoutes(
           })
           .catch(() => undefined)
         return streamSSE(c, async (stream) => {
-          const { unsubscribe } = hub.subscribe(p.canvasId, p.sessionId!, since, (item) => {
-            void stream.writeSSE({ data: JSON.stringify(item.ev) })
+          const { unsubscribe } = hub.subscribe(p.canvasId, p.sessionId!, subscribeSince, (item) => {
+            void stream.writeSSE({ id: String(item.seq), data: JSON.stringify(item.ev) })
           })
           stream.onAbort(() => unsubscribe())
           await new Promise<void>((resolve) => {
@@ -688,10 +760,11 @@ export function agentSessionRoutes(
         return c.json({ ok: true, steered: true, sessionId: outcome.sessionId })
       }
       return streamSSE(c, async (stream) => {
-        // 订阅这一会话的常驻通道：先回放 since 之后的事件，再续推。
+        // 订阅这一会话的常驻通道：起点是**开跑前**的水位（只收这一轮的事件，
+        // 不重放历史 —— 见 subscribeSince 的说明），之后续推新的。
         // 断开 = 只是少一个订阅者，后台那一轮照跑（这就是「后台对话」）。
-        const { unsubscribe } = hub.subscribe(p.canvasId!, outcome.sessionId!, since, (item) => {
-          void stream.writeSSE({ data: JSON.stringify(item.ev) })
+        const { unsubscribe } = hub.subscribe(p.canvasId!, outcome.sessionId!, subscribeSince, (item) => {
+          void stream.writeSSE({ id: String(item.seq), data: JSON.stringify(item.ev) })
         })
         stream.onAbort(() => unsubscribe())
         // 响应挂到这一轮结束：前端用"SSE 还开着"作为正在收流的凭据。

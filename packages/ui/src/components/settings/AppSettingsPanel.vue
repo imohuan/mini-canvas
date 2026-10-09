@@ -1,40 +1,67 @@
 <script setup lang="ts">
 /**
- * AppSettingsPanel —— @mini-canvas/ui 的**成品设置内容区**（LibTV 风格），注册到可替换槽 settingsPanel。
+ * AppSettingsPanel —— @mini-canvas/ui 的成品设置**内容区**（左侧两级树 + 右侧全量配置）。
  *
- * 只是"内容"：数据仍来自宿主喂进来的 props.settings（内核 settings 单一数据源），
- * 字段级控件复用 canvas-render 的 SETTINGS_FIELD_RENDERER（插件也可 inject 后自绘）。
+ * 布局与交互（用户口径 2026-10-09）：
+ *   · 左：**两级树**。一级 = 分组名的第一个 / 分段（扁平分组就是它自己）；展开后二级缩进显示
+ *     （只有两层，没有第三层）。**折叠箭头只画在"真的能折叠"的一级行上**；二级是叶子、不可再折叠，
+ *     不画箭头（用户口径：没有折叠块时不要显示折叠按钮）。
+ *   · 右：**全部配置**不分页地叠成一个长列表（一级小标题 → 二级小标题 → 字段 / 插槽内容），整块滚动浏览。
+ *     **字段直接铺在最外层、不套卡片**（用户口径：不要卡片包裹）。
+ *   · 点左侧任一项 → 右侧平滑滚到对应位置；右侧滚动时左侧高亮跟着走（scroll-spy）。
  *
- * **窗口级外壳不在这里**：遮罩 / 居中 / 标题栏 / ✕ / Esc / 点遮罩关闭 / 浮动窗口 / 悬浮球
- * 全部由渲染层 <SettingsShell> 提供（SettingsHost 负责拼装）。本组件只画外壳里那一格内容：
- *   左侧一级导航（图标+文字，选中态实心）→ 右侧「分组卡片」（卡片头 + 若干行，行间细分隔线）。
+ * 数据与插槽：
+ *   · 数据仍是宿主喂进来的 props.settings（内核 settings 单一数据源）；字段控件复用默认皮的
+ *     SettingsSchemaField（color / number 精度滑块 / boolean 开关 / select），不自造第二套。
+ *   · **内容插槽** settingsGroup/<完整分组 key> 仍被消费 —— 插件自绘页（Agent / 插件 / 热重载 /
+ *     光标 / 插件展示）靠它接管正文；没有这一层，那些页就只剩一个占位项。
+ *   · **左导航插槽 settingsNav 与二级页签插槽 settingsTab 本面板不消费**（用户口径：这里不需要这两个
+ *     插槽）—— 树的层级完全由 settings.groups() 的分组名推导。各插件都声明了同名占位分组，
+ *     所以一级项一个都不会丢，只是不再由插件定制外观。
  *
- * 三级插槽全部保留（与默认皮同协议，插件换皮不破坏）：
- *   settingsNav / settingsTab / settingsGroup/<完整分组key>
+ * 窗口外壳不在这里：遮罩 / 居中 / 标题栏 / ✕ / Esc / 浮动窗 / 悬浮球由渲染层 <SettingsShell> 提供
+ *（见 canvas-render/components/SettingsHost.vue），这里只画外壳里那一格。
  */
-import { computed, onBeforeUnmount, provide, ref, watch } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { SETTINGS_FIELD_RENDERER } from '@mini-canvas/canvas-render'
+import { SETTINGS_FIELD_RENDERER, useCanvasRender } from '@mini-canvas/canvas-render'
 import SettingsSchemaField from '@mini-canvas/plugin-theme-default/components/settings/SettingsSchemaField.vue'
 
 const props = defineProps<{ settings: SettingsPanelSource }>()
 
-// 字段渲染器：默认皮注册的 SettingsSchemaField（含 color 取色器 / number 精度滑块 / boolean 开关 / select）。
-// 本面板自己 provide 给子树（默认皮也是这么干的），这样 settingsGroup/<key> 自定义内容插槽也能拿到同一套控件。
-const FieldRenderer = SettingsSchemaField as unknown
+const { ctx } = useCanvasRender()
+
+// 把标准字段渲染器下发给子树：settingsGroup/<key> 的内容插槽组件可 inject 后直接渲染某个字段控件。
 provide(SETTINGS_FIELD_RENDERER, SettingsSchemaField as never)
 
 const SEP = '/'
+/** 一级名：分组名的第一个分段（扁平分组 = 它自己） */
 const navOf = (key: string): string => key.split(SEP)[0]
-const leafOf = (key: string): string => {
+/** 二级名（展示名）：带 / 的取后段，扁平分组取它自己 */
+const leafLabelOf = (key: string): string => {
   const segs = key.split(SEP)
   return segs.slice(1).join(SEP) || segs[0]
 }
 
-/** 分组变化时强制重算（schema 热更新的最小支持：宿主换皮时重建即可） */
-const refreshTick = ref(0)
-const groups = computed(() => { void refreshTick.value; return props.settings.groups() })
-const sectionMap = computed<Map<string, string[]>>(() => {
+// ———— 插件装卸 → 重算树与内容（热装卸登记的新分组立刻可见）————
+const occTick = ref(0)
+function bumpOcc(): void {
+  occTick.value += 1
+}
+const disposers: Array<{ dispose(): void }> = [
+  ctx.on('ctx:plugin-installed', bumpOcc),
+  ctx.on('ctx:plugin-uninstalled', bumpOcc),
+]
+onBeforeUnmount(() => {
+  for (const d of disposers) d.dispose()
+})
+
+// ———— 树：一级 → 该一级下的完整分组 key 列表（保持 groups() 的原序）————
+const groups = computed<string[]>(() => {
+  void occTick.value
+  return props.settings.groups()
+})
+const tree = computed<Map<string, string[]>>(() => {
   const m = new Map<string, string[]>()
   for (const g of groups.value) {
     const nav = navOf(g)
@@ -43,156 +70,426 @@ const sectionMap = computed<Map<string, string[]>>(() => {
   }
   return m
 })
-
-/** 一级导航：图标（用简短字符/emoji 之外的统一图形）+ 名称 */
-const NAV_ICON: Record<string, string> = {
-  节点: 'node', 布局: 'layout', 边: 'edge', 常规: 'general', 导出: 'export',
+const navs = computed<string[]>(() => [...tree.value.keys()])
+function leavesOf(nav: string): string[] {
+  return tree.value.get(nav) ?? []
 }
-function iconFor(nav: string): string {
-  return NAV_ICON[nav] ?? 'general'
+/**
+ * 一级下只有一个二级：**合并成一条平级项**（用户口径 2026-10-09：只有一个子节点的就不要拆成两级，
+ * 一级菜单也就没必要做折叠）。左右都按"一个菜单"处理：左树一条、右侧一个小标题。
+ */
+function isSolo(nav: string): boolean {
+  return leavesOf(nav).length === 1
+}
+/** 合并项对应的唯一二级 key（= 段锚点） */
+function soloLeafOf(nav: string): string {
+  return leavesOf(nav)[0] ?? ''
 }
 
-const activeNav = ref('')
-const navKeys = computed(() => [...sectionMap.value.keys()])
+// ———— 折叠：一级收起/展开自己的二级 ————
+const collapsed = ref<Set<string>>(new Set())
+const isCollapsed = (nav: string): boolean => collapsed.value.has(nav)
+function toggleNav(nav: string): void {
+  const next = new Set(collapsed.value)
+  if (next.has(nav)) next.delete(nav)
+  else next.add(nav)
+  collapsed.value = next
+}
+function expandNav(nav: string): void {
+  if (!collapsed.value.has(nav)) return
+  const next = new Set(collapsed.value)
+  next.delete(nav)
+  collapsed.value = next
+}
+
+// ———— 高亮态：当前"正在视口顶部"的段（完整分组 key）与它所属的一级 ————
+const scrollEl = ref<HTMLElement | null>(null)
+const treeEl = ref<HTMLElement | null>(null)
+const currentKey = ref<string>('')
+const currentNav = ref<string>('')
+
+/** 选择器转义：分组名含 /、中文等字符时，用 CSS.escape；没有它就只去掉引号字符 */
+function cssEscape(v: string): string {
+  const es = (globalThis as { CSS?: { escape?: (s: string) => string } }).CSS?.escape
+  return typeof es === 'function' ? es(v) : v.split('"').join('')
+}
+function navElOf(nav: string): HTMLElement | null {
+  const cont = scrollEl.value
+  return cont ? cont.querySelector<HTMLElement>('[data-nav="' + cssEscape(nav) + '"]') : null
+}
+function sectionElOf(key: string): HTMLElement | null {
+  const cont = scrollEl.value
+  return cont ? cont.querySelector<HTMLElement>('[data-sec="' + cssEscape(key) + '"]') : null
+}
+
+/**
+ * 程序化滚动锁：smooth 滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
+ * 高亮会在途经的段之间闪来闪去。锁未解前不重算高亮，保证落点即所选。
+ * 解锁时机：容器 scrollend（动画真正结束），或兜底超时。
+ */
+let scrollLocked = false
+let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
+const SCROLL_LOCK_MAX_MS = 1200
+
+function releaseScrollLock(): void {
+  scrollLocked = false
+  if (scrollLockTimer !== null) {
+    clearTimeout(scrollLockTimer)
+    scrollLockTimer = null
+  }
+}
+function lockScrollUntilSettles(el: HTMLElement): void {
+  scrollLocked = true
+  if (scrollLockTimer !== null) clearTimeout(scrollLockTimer)
+  scrollLockTimer = setTimeout(releaseScrollLock, SCROLL_LOCK_MAX_MS)
+  const onEnd = (): void => {
+    el.removeEventListener('scrollend', onEnd)
+    releaseScrollLock()
+  }
+  el.addEventListener('scrollend', onEnd)
+}
+function scrollToEl(el: HTMLElement): void {
+  const cont = scrollEl.value
+  if (!cont) return
+  const top = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
+  cont.scrollTo({ top, behavior: 'smooth' })
+  lockScrollUntilSettles(cont)
+}
+
+/** 点一级：展开它、滚到该一级的标题锚点（没标题时退到它第一段） */
+function selectNav(nav: string): void {
+  expandNav(nav)
+  currentNav.value = nav
+  const leaves = leavesOf(nav)
+  currentKey.value = leaves[0] ?? ''
+  void nextTick(() => {
+    const el = navElOf(nav) ?? (leaves[0] ? sectionElOf(leaves[0]) : null)
+    if (el) scrollToEl(el)
+  })
+}
+
+/** 点二级：展开所属一级、滚到该段 */
+function selectLeaf(key: string): void {
+  const nav = navOf(key)
+  expandNav(nav)
+  currentNav.value = nav
+  currentKey.value = key
+  void nextTick(() => {
+    const el = sectionElOf(key)
+    if (el) scrollToEl(el)
+  })
+}
+
+/** scroll-spy：内容区滚动 → 取"最后一个贴到顶部"的段作为当前段 */
+function onBodyScroll(): void {
+  if (scrollLocked) return
+  const cont = scrollEl.value
+  if (!cont) return
+  const ctop = cont.getBoundingClientRect().top
+  let best = ''
+  for (const nav of navs.value) {
+    for (const leaf of leavesOf(nav)) {
+      const el = sectionElOf(leaf)
+      if (el && el.getBoundingClientRect().top <= ctop + 8) best = leaf
+    }
+  }
+  if (!best) return
+  currentKey.value = best
+  currentNav.value = navOf(best)
+}
+
+/** 高亮段变化 → 左树里对应那行若被裁在可视区外，滚到"刚好露出"（block:nearest 不惊动外层） */
+watch(currentKey, (key) => {
+  if (!key) return
+  void nextTick(() => {
+    treeEl.value?.querySelector<HTMLElement>('[data-item="' + cssEscape(key) + '"]')?.scrollIntoView({ block: 'nearest' })
+  })
+})
+
+// 分组变化（含插件热装卸）后，保证高亮仍指向存在的项（默认第一个一级的第一段）
 watch(
-  navKeys,
-  (keys) => {
-    if (keys.length && !keys.includes(activeNav.value)) activeNav.value = keys[0]
+  navs,
+  (list) => {
+    if (!list.length) {
+      currentNav.value = ''
+      currentKey.value = ''
+      return
+    }
+    if (!list.includes(currentNav.value)) {
+      currentNav.value = list[0]
+      currentKey.value = leavesOf(list[0])[0] ?? ''
+    }
   },
   { immediate: true },
 )
 
-/** 当前一级下的完整分组（叶子），每个渲染成一张卡片 */
-const leaves = computed<string[]>(() => sectionMap.value.get(activeNav.value) ?? [])
+// ———— 段正文：内容插槽 settingsGroup/<key> 优先，否则按 schema 平铺字段 ————
+// 插槽可经 meta.mode 声明摆放：prepend / append / replace（缺省 = 接管整组）。
+interface SlotOcc {
+  id: string
+  order: number
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  component: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  meta?: any
+}
+type ContentBlock = { kind: 'field'; key: string } | { kind: 'slot'; occ: SlotOcc }
 
-/** 分组 key → 副标题（第一条字段 label 之外的说明，简单用字段数表示） */
-function groupMeta(key: string): string {
-  const n = props.settings.groupOf(key).length
-  return n + ' 项设置'
+function slotMode(oc: SlotOcc): 'replace' | 'prepend' | 'append' {
+  const m = (oc.meta as { mode?: string } | undefined)?.mode
+  return m === 'prepend' ? 'prepend' : m === 'append' ? 'append' : 'replace'
 }
 
-/** 取某个字段的当前值（store 非响应式，靠本地 tick 驱动刷新） */
-const valueTick = ref(0)
-let unsub: { dispose(): void } | undefined
-unsub = props.settings.onChange(() => { valueTick.value += 1 })
-onBeforeUnmount(() => unsub?.dispose())
-
-function setValue(key: string, v: string | number | boolean): void {
-  props.settings.set(key, v)
+function blocksOf(groupKey: string): ContentBlock[] {
+  void occTick.value
+  const occs: SlotOcc[] = ctx.slots.occupants('settingsGroup/' + groupKey).map((e) => ({
+    id: e.id,
+    order: e.order,
+    component: markRaw(e.component as object),
+    meta: e.meta,
+  }))
+  const fields = props.settings.groupOf(groupKey)
+  if (!occs.length) return fields.map((e) => ({ kind: 'field' as const, key: e.key }))
+  const coexist = occs.some((o) => slotMode(o) !== 'replace')
+  const sorted = (m: string): SlotOcc[] => occs.filter((o) => slotMode(o) === m).sort((a, b) => a.order - b.order)
+  const blocks: ContentBlock[] = []
+  blocks.push(...sorted('prepend').map((o) => ({ kind: 'slot' as const, occ: o })))
+  if (coexist) blocks.push(...fields.map((e) => ({ kind: 'field' as const, key: e.key })))
+  blocks.push(...sorted('replace').map((o) => ({ kind: 'slot' as const, occ: o })))
+  blocks.push(...sorted('append').map((o) => ({ kind: 'slot' as const, occ: o })))
+  return blocks
 }
-
-/**
- * 字段行：label + 控件。控件按 schema.type 走——
- * 有 FieldRenderer（宿主提供了标准控件）就用它；否则退化成本组件内置的极简控件。
- */
-const useFieldRenderer = computed(() => !!FieldRenderer)
 </script>
 
 <template>
-  <!-- 中间层根：左导航 + 右侧内容都归本皮，外壳只给最外层 Dialog（框 / 标题栏 / ✕ / Esc）。
-       这一层直接作为 .psd-dialog 的弹性子项占满标题栏以下的高度（外壳不提供中间容器）。 -->
+  <!-- 中间层根：左树 + 右侧内容都归本面板，外壳只给最外层窗口（框 / 标题栏 / ✕ / Esc）。
+       本层直接作为 .psd-dialog 的弹性子项占满标题栏以下的高度。 -->
   <div class="flex min-h-0 w-full min-w-0 flex-1">
-    <!-- 左：一级导航（比面板更暗一档，形成明确分区） -->
-    <aside class="flex min-h-0 w-[196px] flex-none flex-col border-r border-line bg-panel-soft p-2.5">
-      <nav class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto" aria-label="设置导航">
-          <button v-for="nav in navKeys" :key="nav"
-            class="relative flex h-9 items-center gap-2.5 rounded-[10px] pl-5 pr-2.5 text-left text-[13px] transition-colors"
-            :class="activeNav === nav ? 'bg-chip font-medium text-ink' : 'text-ink-dim hover:bg-hover hover:text-ink'"
-            :aria-current="activeNav === nav ? 'page' : undefined" @click="activeNav = nav">
-            <!-- 选中态左侧强调条：暗色/亮色下都能一眼定位 -->
-            <span v-if="activeNav === nav"
-              class="absolute left-1.5 top-1/2 h-4 w-[2.5px] -translate-y-1/2 rounded-full bg-brand"
-              aria-hidden="true"></span>
-            <span class="grid size-4 flex-none place-items-center opacity-80">
-              <!-- 统一线性小图标：节点=方块 / 布局=网格 / 边=连线 / 常规=滑块 / 导出=下载 -->
-              <svg v-if="iconFor(nav) === 'node'" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="2" width="12" height="12" rx="3" stroke="currentColor" stroke-width="1.4" />
-                <path d="M6 8h4M8 6v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-              </svg>
-              <svg v-else-if="iconFor(nav) === 'layout'" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <rect x="2" y="2" width="5" height="5" rx="1.6" stroke="currentColor" stroke-width="1.4" />
-                <rect x="9" y="2" width="5" height="5" rx="1.6" stroke="currentColor" stroke-width="1.4" />
-                <rect x="2" y="9" width="5" height="5" rx="1.6" stroke="currentColor" stroke-width="1.4" />
-                <rect x="9" y="9" width="5" height="5" rx="1.6" stroke="currentColor" stroke-width="1.4" />
-              </svg>
-              <svg v-else-if="iconFor(nav) === 'edge'" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M3 12c4 0 6-8 10-8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-                <circle cx="3" cy="12" r="1.4" fill="currentColor" />
-                <circle cx="13" cy="4" r="1.4" fill="currentColor" />
-              </svg>
-              <svg v-else-if="iconFor(nav) === 'export'" width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2v8M5 7l3 3 3-3M3 12.5v.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-.5" stroke="currentColor"
-                  stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-              <svg v-else width="15" height="15" viewBox="0 0 16 16" fill="none">
-                <path d="M3 5h10M5 8h6M7 11h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-              </svg>
-            </span>
-            <span class="truncate">{{ nav }}</span>
-          </button>
-        </nav>
-    </aside>
+    <!-- 左：两级树（紧凑内边距） -->
+    <aside class="flex min-h-0 w-[192px] flex-none flex-col border-r border-line bg-panel-soft p-1.5">
+      <nav ref="treeEl" class="flex min-h-0 flex-1 flex-col overflow-y-auto" aria-label="设置导航">
+        <div v-if="!navs.length" class="py-6 text-center text-[12px] text-ink-dim">暂无设置分组</div>
 
-    <!-- 右：分组卡片列表 -->
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header class="flex h-11 flex-none items-center gap-3 border-b border-line px-5">
-        <h3 class="truncate text-[13px] font-semibold">{{ activeNav || '设置' }}</h3>
-        <p class="truncate text-[11px] text-ink-dim">共 {{ leaves.length }} 个分组 · {{ groups.length }} 项分组</p>
-      </header>
+        <template v-for="nav in navs" :key="nav">
+          <!-- 只有一个子节点：合并成一条平级项（不拆两级、不折叠、无箭头） -->
+          <div v-if="isSolo(nav)" class="asp-row asp-row--solo"
+            :class="{ 'is-current': currentKey === soloLeafOf(nav) }">
+            <button class="asp-label" :data-item="soloLeafOf(nav)" @click="selectLeaf(soloLeafOf(nav))">{{ nav }}</button>
+          </div>
 
-      <!-- 内容区：底色比面板深一档，卡片用面板色 → 卡片边界一眼可见（不再糊成一片） -->
-      <div class="min-h-0 flex-1 overflow-y-auto bg-canvas-bg p-4">
-          <div v-if="!leaves.length" class="grid h-full place-items-center text-xs text-ink-dim">该分类下暂无设置项</div>
-          <section v-for="leaf in leaves" :key="leaf"
-            class="mb-3 overflow-hidden rounded-xl border border-line bg-panel">
-            <header class="flex items-baseline justify-between gap-3 border-b border-line-soft px-4 py-2.5">
-              <h4 class="text-[13px] font-medium">{{ leafOf(leaf) }}</h4>
-              <span class="text-[11px] text-ink-dim">{{ groupMeta(leaf) }}</span>
-            </header>
-            <div class="divide-y divide-[var(--ui-line-soft)]">
-              <!-- 字段行交给标准渲染器（它自带 label + 控件 + 说明，布局随主题规范） -->
-              <div v-for="entry in props.settings.groupOf(leaf)" :key="entry.key" class="px-4 py-2.5">
-                <component v-if="useFieldRenderer" :is="FieldRenderer as never" :group="leaf" :field-key="entry.key"
-                  :settings="props.settings" />
-                <!-- 兜底极简控件（宿主没提供渲染器时） -->
-                <div v-else class="flex min-h-[24px] items-center justify-between gap-4">
-                  <label class="min-w-0 flex-1 truncate text-[12px] text-ink/90" :for="'set-' + entry.key">{{
-                    entry.schema.label || entry.key }}</label>
-                  <div class="flex flex-none items-center gap-2">
-                    <button v-if="entry.schema.type === 'boolean'"
-                      class="relative h-6 w-10 flex-none rounded-full transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
-                      :class="entry.value ? 'bg-brand after:translate-x-4' : 'bg-hover-strong'" role="switch"
-                      :aria-checked="!!entry.value" :aria-label="entry.schema.label || entry.key"
-                      @click="setValue(entry.key, !entry.value)"></button>
-                    <input v-else-if="entry.schema.type === 'color'" :id="'set-' + entry.key" type="color"
-                      class="h-7 w-14 cursor-pointer rounded-lg border border-line bg-transparent"
-                      :value="String(entry.value)"
-                      @input="setValue(entry.key, ($event.target as HTMLInputElement).value)" />
-                    <input v-else-if="entry.schema.type === 'number'" :id="'set-' + entry.key" type="number"
-                      :step="entry.schema.step ?? 1"
-                      class="h-7 w-24 rounded-lg border border-line bg-panel px-2 text-right text-[12px] text-ink outline-none"
-                      :value="Number(entry.value)"
-                      @change="setValue(entry.key, Number(($event.target as HTMLInputElement).value))" />
-                    <select v-else-if="entry.schema.type === 'select'" :id="'set-' + entry.key"
-                      class="h-7 rounded-lg border border-line bg-panel px-2 text-[12px] text-ink outline-none"
-                      :value="String(entry.value)"
-                      @change="setValue(entry.key, ($event.target as HTMLSelectElement).value)">
-                      <option v-for="o in entry.schema.options ?? []" :key="String(o.value ?? o)"
-                        :value="String(o.value ?? o)">{{ o.label ?? o }}</option>
-                    </select>
-                    <input v-else :id="'set-' + entry.key" type="text"
-                      class="h-7 w-40 rounded-lg border border-line bg-panel px-2 text-[12px] text-ink outline-none"
-                      :value="String(entry.value)"
-                      @change="setValue(entry.key, ($event.target as HTMLInputElement).value)" />
-                  </div>
-                </div>
+          <!-- 有多个子节点：一级 + 可折叠的二级 -->
+          <template v-else>
+            <!-- 一级行：画折叠箭头 -->
+            <div class="asp-row asp-row--l1" :class="{ 'is-current': currentNav === nav }">
+              <button
+                class="asp-caret"
+                :aria-expanded="!isCollapsed(nav)"
+                :aria-label="(isCollapsed(nav) ? '展开' : '收起') + nav"
+                :title="(isCollapsed(nav) ? '展开' : '收起') + nav"
+                @click="toggleNav(nav)"
+              >
+                <svg class="asp-chevron" :class="{ 'is-open': !isCollapsed(nav) }" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+              <button class="asp-label" :data-item="nav" @click="selectNav(nav)">{{ nav }}</button>
+            </div>
+
+            <!-- 二级行（缩进、无折叠箭头：叶子不可再折叠） -->
+            <div v-show="!isCollapsed(nav)" class="flex flex-col">
+              <div v-for="leaf in leavesOf(nav)" :key="leaf" class="asp-row asp-row--l2"
+                :class="{ 'is-current': currentKey === leaf }">
+                <button class="asp-label asp-label--l2" :data-item="leaf" @click="selectLeaf(leaf)">{{ leafLabelOf(leaf) }}</button>
               </div>
             </div>
-          </section>
-        </div>
+          </template>
+        </template>
+      </nav>
+    </aside>
+
+    <!-- 右：全部配置叠成一个长列表（字段不套卡片，直接铺在最外层），点左树滚过来 -->
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <header class="flex h-11 flex-none items-center gap-3 border-b border-line px-5">
+        <h3 class="truncate text-[13px] font-semibold">{{ currentNav || '设置' }}</h3>
+        <p class="truncate text-[11px] text-ink-dim">共 {{ navs.length }} 个分类 · {{ groups.length }} 个分组</p>
+      </header>
+
+      <div ref="scrollEl" class="min-h-0 flex-1 overflow-y-auto bg-canvas-bg px-5 pb-10 pt-1" @scroll="onBodyScroll">
+        <div v-if="!groups.length" class="grid h-full place-items-center text-xs text-ink-dim">暂无设置项</div>
+
+        <template v-for="nav in navs" :key="nav">
+          <!-- 只有一个子节点：合并成一段（小标题 = 一级名，锚点 = 那个二级 key） -->
+          <template v-if="isSolo(nav)">
+            <section :data-sec="soloLeafOf(nav)" class="asp-section">
+              <h4 class="asp-section-title" :data-nav="nav">{{ nav }}</h4>
+              <div class="asp-section-body">
+                <template v-for="b in blocksOf(soloLeafOf(nav))" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
+                  <SettingsSchemaField v-if="b.kind === 'field'" :group="soloLeafOf(nav)" :field-key="b.key"
+                    :settings="props.settings" />
+                  <component v-else :is="b.occ.component" :group="soloLeafOf(nav)" :settings="props.settings" />
+                </template>
+                <p v-if="!blocksOf(soloLeafOf(nav)).length" class="asp-empty">这个分组还没有可配置项</p>
+              </div>
+            </section>
+          </template>
+
+          <!-- 多个子节点：一级小标题 + 各二级段 -->
+          <template v-else>
+            <!-- 一级小标题：既是视觉分界，也是"点一级"的滚动锚点 -->
+            <h3 class="asp-group-title" :data-nav="nav">{{ nav }}</h3>
+
+            <section v-for="leaf in leavesOf(nav)" :key="leaf" :data-sec="leaf" class="asp-section">
+              <!-- 二级小标题：细线条分隔，无卡片包裹 -->
+              <h4 class="asp-section-title">{{ leafLabelOf(leaf) }}</h4>
+              <div class="asp-section-body">
+                <template v-for="b in blocksOf(leaf)" :key="b.kind === 'field' ? 'f-' + b.key : 's-' + b.occ.id">
+                  <SettingsSchemaField v-if="b.kind === 'field'" :group="leaf" :field-key="b.key"
+                    :settings="props.settings" />
+                  <component v-else :is="b.occ.component" :group="leaf" :settings="props.settings" />
+                </template>
+                <p v-if="!blocksOf(leaf).length" class="asp-empty">这个分组还没有可配置项</p>
+              </div>
+            </section>
+          </template>
+        </template>
+      </div>
     </div>
   </div>
 </template>
+
 <style scoped>
-/* 窗口级样式（遮罩 / 居中 / 标题栏 / 浮动）在外壳 SettingsShell 里，这里只剩内容区自己的东西。 */
+/* 窗口级样式（遮罩 / 居中 / 标题栏 / 浮动）在外壳 SettingsShell 里，这里只剩内容区自己的东西。
+   配色全部走主题 token（--ui-*），不写死 hex。 */
+
+/* ===== 左树行（紧凑：一级 30px / 二级 26px）===== */
+.asp-row {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.asp-row--l1 { min-height: 30px; }
+.asp-row--l2 { min-height: 26px; }
+
+/* 合并项（一级下只有一个二级）：与一级同样高，文字与一级文字对齐（24px），无箭头 */
+.asp-row--solo { min-height: 30px; }
+.asp-row--solo .asp-label { padding-left: 24px; }
+
+.asp-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
+
+/* 当前项（定位锚点选中态）：一层**主题色浅底** + 主题色文字，与 hover 的中性灰明确区分。
+   为什么不用中性灰：暗色面板上灰 10% 几乎看不见，跟 hover 的灰又几乎一样 —— 用户实测报过
+   「只有 hover 有背景、没有选择效果」（2026-10-09）。这也正是默认皮 .psd-nav-item.active 的做法。
+   一级 / 二级 / 合并项共用同一条规则；**不要边框**（border/outline 皆 0）。
+   is-current 规则写在 :hover 之后 → 同特异性下选中态赢，鼠标停在选中项上不会把它压回灰。 */
+.asp-row.is-current { background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
+.asp-row.is-current .asp-label { color: var(--ui-accent-hover, #0e7490); }
+
+.asp-caret {
+  flex: 0 0 auto;
+  /* 点击区域放大到 24×24（用户口径：按钮区域太小） */
+  width: 24px;
+  height: 24px;
+}
+
+.asp-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink-mute, #9ca3af);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+/* 不给背景：hover 只把箭头颜色变深（用户口径） */
+.asp-caret:hover {
+  color: var(--ui-ink, #111827);
+}
+
+.asp-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.18s ease;
+}
+
+/* 展开态 = 箭头转正向下；收起态保持指向右 */
+.asp-chevron.is-open { transform: rotate(90deg); }
+
+.asp-label {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  /* 一级文字起点 = 箭头 24px（这里不再额外留左边距） */
+  padding: 0 8px 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #374151);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* 二级（叶子）：**相对一级文字再缩进**（一级 24px → 二级 44px，差 20px 一眼看出层级）+ 小一号字 */
+.asp-label--l2 {
+  padding-left: 44px;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.asp-label:focus-visible,
+.asp-caret:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* ===== 右侧内容（无卡片：小标题 + 字段直接铺开）===== */
+.asp-group-title {
+  margin: 12px 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.asp-group-title:first-child { margin-top: 4px; }
+
+.asp-section { padding: 0; }
+
+.asp-section-title {
+  margin: 6px 0 0;
+  padding: 8px 0 8px;
+  border-bottom: 1px solid var(--ui-line-soft, rgb(0 0 0 / 0.05));
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-ink, #111827);
+}
+
+.asp-section-body { padding-bottom: 4px; }
+
+.asp-empty {
+  margin: 0;
+  padding: 12px 0;
+  font-size: 12px;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asp-row,
+  .asp-caret,
+  .asp-chevron {
+    transition: none !important;
+  }
+}
 </style>

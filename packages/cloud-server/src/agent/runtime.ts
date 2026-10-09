@@ -505,9 +505,14 @@ export class AgentRuntime {
        * 用户气泡，看起来就是"AI 对着空气说话"（用户实测截图）。
        * 前端会做去重（本地已有同文本的末条用户消息就不重复造）。
        */
-      // 没有人类正文（目标 resume 时只发 harness 协议块）就不造气泡、不落用户回合 ——
-      // 否则转录与界面里会多出一条空白的用户消息。
-      if (input.text) {
+      // 没有人类正文、也没有图（目标 resume 时只发 harness 协议块）就不造气泡、
+      // 不落用户回合 —— 否则转录与界面里会多出一条空白的用户消息。
+      //
+      // **纯图消息必须落盘**（回归审计发现的洞）：条件写成 `if (input.text)` 时，
+      // 「只发图不打字」那一条整条不进转录 ⇒ ①刷新后用户消息凭空消失（界面只剩 AI
+      // 的回答，等于把图丢了）；②队列里的纯图条目在对账时被判定「没送达」⇒ 退回 queued
+      // ⇒ 再发一遍 ⇒ 跑完再退回 ⇒ **无限重发同一条**（见 queueScheduler 的 settleAsync）。
+      if (input.text || input.images?.length) {
         yield {
           type: 'user_message',
           text: input.text,

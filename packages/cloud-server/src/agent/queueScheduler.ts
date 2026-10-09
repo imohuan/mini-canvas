@@ -127,9 +127,18 @@ export class QueueScheduler {
     if (!record?.queue?.items?.length) return
     const sending = record.queue.items.filter((it) => it.state === 'sending')
     if (!sending.length) return
-    // 转录里的 user 回合文本（去空白比较；引导过的也算送达 —— 它确实进过模型）
+    /**
+     * 转录里的 user 回合指纹（文本 + 图，去空白比较；引导过的也算送达 ——
+     * 它确实进过模型）。
+     *
+     * 为什么要带上图（回归审计发现的洞）：纯图条目 text 为空，只按文本比对时
+     * 「转录里有没有这条」恒不成立 ⇒ 每次都走「退回 queued」⇒ 发一次、退一次、**无限重发**。
+     * 指纹把「文本 + 图」一起纳入，两种消息（纯文字 / 纯图 / 图文）都落在同一条路径上。
+     */
+    const fingerprint = (text: string, images: string[] | undefined): string =>
+      text.trim() + '\u0000' + JSON.stringify(images ?? [])
     const delivered = new Set(
-      record.turns.filter((t) => t.role === 'user').map((t) => t.text.trim()),
+      record.turns.filter((t) => t.role === 'user').map((t) => fingerprint(t.text, t.images)),
     )
     const queue = await this.deps.store.updateQueue(canvasId, sessionId, (q) => {
       const next: QueueItem[] = []
@@ -138,21 +147,18 @@ export class QueueScheduler {
           next.push(it)
           continue
         }
-        const text = it.text.trim()
-        if (text && delivered.has(text)) {
+        // 带目标的条目：调度器走的是 `startGoal(objective)`，落进转录的正文是
+        // **objective**（不是 item.text）—— 拿 item.text 比会恒不成立 ⇒ 退回 queued ⇒
+        // 目标被反复重启。所以对账文本要按「这一条实际发出去的是什么」取。
+        const sentText = it.goal ? it.goal.objective : it.text
+        if (delivered.has(fingerprint(sentText, it.images))) {
           // 已送达：标成 sent 留在列表里（界面画成"已发送"，随后自己收起）。
           // 真正移除交给下一次 tick —— 见上面函数头对"为什么要留一拍"的说明。
-          if (it.state === 'sending') {
-            next.push({ ...it, state: 'sent' as QueueItemState })
-            continue
-          }
+          next.push({ ...it, state: 'sent' as QueueItemState })
           continue
         }
-        if (!text && it.images?.length) {
-          // 纯图条目没法按文本比对：保守地退回 queued（宁可重发一次也不吞掉用户的东西）
-          next.push({ ...it, state: 'queued' })
-          continue
-        }
+        // 没送达（进程重启 / 启动失败 / 转录里确实没有）：退回 queued 重排。
+        // 宁可把一条退回去重发**一次**（它确实没送达），也绝不吞掉用户的东西。
         next.push({ ...it, state: 'queued' })
       }
       return { ...q, items: next }

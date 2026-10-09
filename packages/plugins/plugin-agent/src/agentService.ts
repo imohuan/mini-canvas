@@ -262,6 +262,8 @@ export interface AgentService {
   beginEditQueueItem(itemId: string): Promise<{ text: string; images?: string[] } | null>
   /** 取消编辑（状态回 queued，内容不变） */
   cancelEditQueueItem(itemId: string): Promise<void>
+  /** 放弃这条会话里**所有**编辑（切会话前兜底，防 editing 永久阻塞队列） */
+  cancelAllEdits(sessionId: string): Promise<void>
   /** 保存编辑（**原位替换**，位置不变） */
   saveEditedQueueItem(itemId: string, text: string, images?: string[]): Promise<void>
   pauseQueue(): Promise<void>
@@ -280,6 +282,14 @@ export interface AgentService {
   endGoal(): Promise<void>
   /** 带目标标记发送（目标模式的第一轮） */
   sendGoal(text: string, images?: string[]): Promise<void>
+  /**
+   * 写当前目标的**参考图**（迷你预览用；空数组 = 清掉）。
+   *
+   * 启动目标时 sendGoal 内部已经写过一次；这里单独开门是给**编辑运行中目标**用
+   * （组件 submit 里改了图要跟着更新）。此前这个口子没暴露，组件却调了它 ——
+   * 运行时抛「agent.setGoalImages is not a function」，图片静默不落盘（真 bug）。
+   */
+  setGoalImages(images: string[]): Promise<void>
   setModel(provider: string, modelId: string): void
   /** 审批：用户点允许 / 拒绝 */
   decide(approvalId: string, decision: 'allow' | 'deny'): Promise<void>
@@ -432,6 +442,21 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
    * 转录里已有的内容在界面上重复显示一遍。
    */
   let streamSince = 0
+  /**
+   * 帧级水位：**任何**帧到过这里（send 响应或常驻流），都把它推进到最大 seq。
+   *
+   * 为什么必须记它（真机实测的洞）：send 响应与常驻流订阅的是**同一个** hub 通道，
+   * 同一条事件会到两次；且常驻流断开重连时若只拿 `streamSince`（转录水位，很久不更新），
+   * 已应用过的事件会被整体重放 ⇒ 助手正文 / 工具卡片重复一次。
+   * 有了它，两条通道互为去重：谁先到谁应用，后到的同 seq 直接丢。
+   */
+  let lastAppliedSeq = 0
+  /** 该不该应用这条 seq（重复投递 / 重连回放 → false） */
+  function acceptSeq(seq: number): boolean {
+    if (seq <= lastAppliedSeq) return false
+    lastAppliedSeq = seq
+    return true
+  }
   /** 常驻流的重连计数（成功连上后归零；见 attachStream 的退避） */
   let streamRetry = 0
   /** 重连的定时器（换会话 / 卸载时要清掉） */
@@ -505,11 +530,19 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     const ac = new AbortController()
     streamAbort = ac
     streamSessionId = sessionId
-    const since = streamSince
+    // 起点取**较新**的那个：转录水位与帧级水位谁大用谁。
+    // 帧级水位才是"这一屏真正应用过到哪里"；只用转录水位会重放已应用的事件。
+    const since = Math.max(streamSince, lastAppliedSeq)
     void api
       // follow=常驻：会话页开着就一直连着，后台**空闲时自动起轮**（队列发下一条）
       // 的事件也能收到 —— 不连就永远不知道后台在动。
-      .streamSession(canvasId(), sessionId, since, applyEvent, ac.signal, { follow: true })
+      .streamSession(canvasId(), sessionId, since, applyEvent, ac.signal, {
+        follow: true,
+        acceptSeq,
+        onSeq: (n) => {
+          if (n > lastAppliedSeq) lastAppliedSeq = n
+        },
+      })
       .catch((err) => {
         // 主动断开不算错误（组件卸载 / 换会话）
         if (!ac.signal.aborted) {
@@ -688,6 +721,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
 
   async function openSession(id: string): Promise<void> {
     try {
+      // 切会话前把**上一条**会话遗留的编辑态清掉（见 cancelAllEdits 的说明）：
+      // 不到这里清，服务端那条 editing 会永久阻塞它的队列。
+      const leaving = state.sessionId
+      if (leaving && leaving !== id) await cancelAllEdits(leaving)
       // 用 sessionState（不是 getSession）：一次拿全转录 + 队列 + 目标 + 运行态 ——
       // 刷新后整个输入区（队列列表、暂停标记、目标状态）都靠这一条恢复（设计 §3.2/§3.3）。
       const full = await api.sessionState(canvasId(), id)
@@ -702,8 +739,11 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.goalPaused = full.goalPaused === true
       // running 以后台为准（托管模式下它才是唯一真相）
       state.running = full.running === true
-      // 接流的水位：转录里已有的不算，只接"还没落转录的那部分"
+      // 接流的水位：转录里已有的不算，只接"还没落转录的那部分"。
+      // 帧级水位**必须一起重置**：seq 是每会话独立的（新会话从 1 开始），
+      // 沿用上一条会话的水位会把新会话的事件全部误判成"已应用"而丢掉。
       streamSince = typeof full.seq === 'number' ? full.seq : 0
+      lastAppliedSeq = streamSince
       // 上一轮的订阅随会话切换作废（新会话的流由 attachStream 接管）
       detachStream()
       // 重新连（新会话 / 刚装载完）：重连计数归零
@@ -977,6 +1017,17 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
   }
 
   /**
+   * 放弃这条会话里**所有**编辑（不传 itemId 的 cancel-edit）。
+   *
+   * 调用点：界面切换会话前调一次 —— 编辑态有一部分记在发起编辑的那个客户端（进面板
+   * 时会重建），切走后服务端那条 `editing` 没人取消，等它排到队头会**永久阻塞队列**。
+   * 失败静默（清不掉的编辑不该拦住切会话）。
+   */
+  async function cancelAllEdits(sessionId: string): Promise<void> {
+    await api.queueOp(canvasId(), sessionId, { op: 'cancel-edit' }).catch(() => undefined)
+  }
+
+  /**
    * 保存编辑后的队列消息：**原位替换**（位置不变 —— 用户口径 G3）。
    */
   async function saveEditedQueueItem(itemId: string, text: string, images?: string[]): Promise<void> {
@@ -1062,6 +1113,18 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     await api.goalOp(canvasId(), sid, { op: 'end' })
     state.goal = null
     state.goalPaused = false
+  }
+
+  /**
+   * 写当前目标的参考图（编辑运行中目标时用；空数组 = 清掉）。
+   *
+   * 失败静默：参考图是可选装饰，写不进去不该打断"改目标"这件事。
+   * 本地 state 先更新的那一份由调用方负责（组件里改了 s.goalImages）。
+   */
+  async function setGoalImages(images: string[]): Promise<void> {
+    const sid = currentSessionId()
+    if (!sid) return
+    await api.setGoalImages(canvasId(), sid, images).catch(() => undefined)
   }
 
   /**
@@ -1431,6 +1494,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     closeQueueItem,
     beginEditQueueItem,
     cancelEditQueueItem,
+    cancelAllEdits,
     saveEditedQueueItem,
     pauseQueue,
     resumeQueue,
@@ -1442,6 +1506,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     resumeGoal,
     endGoal,
     sendGoal,
+    setGoalImages,
     toggle: () => {
       state.open = !state.open
       if (state.open) void refresh()

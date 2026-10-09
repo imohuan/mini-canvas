@@ -1,0 +1,160 @@
+/* 文档专用样式的统一入口。默认主题的变量在上面，这里只加我们自己的组件样式。 */
+
+/* —— 通用：卡片外壳 —— */
+.mc-card {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  padding: 16px;
+}
+
+/* —— 插件功能表 —— */
+.mc-plugin-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.mc-plugin-toolbar input {
+  flex: 1 1 220px;
+  min-width: 180px;
+  padding: 8px 12px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-1);
+}
+
+.mc-plugin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.mc-plugin-card {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  padding: 14px;
+}
+
+.mc-plugin-card h4 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.mc-plugin-card p {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: var(--vp-c-text-2);
+}
+
+.mc-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mc-badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--vp-c-divider);
+  color: var(--vp-c-text-2);
+  background: var(--vp-c-bg);
+}
+
+.mc-badge--on {
+  color: var(--vp-c-green-1);
+  border-color: var(--vp-c-green-1);
+}
+
+.mc-badge--off {
+  opacity: 0.5;
+}
+
+.mc-code {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: var(--vp-c-brand-1);
+}
+
+.mc-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--vp-c-text-2);
+  border: 1px dashed var(--vp-c-divider);
+  border-radius: 12px;
+}
+
+/* —— 组件预览台 —— */
+.mc-preview {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 16px 0;
+  background: var(--vp-c-bg);
+}
+
+.mc-preview__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-bg-soft);
+  font-size: 12px;
+}
+
+.mc-preview__title {
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+
+.mc-preview__spacer {
+  flex: 1;
+}
+
+.mc-preview__btn {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mc-preview__btn:hover {
+  color: var(--vp-c-brand-1);
+  border-color: var(--vp-c-brand-1);
+}
+
+.mc-preview__stage {
+  padding: 16px;
+  overflow: auto;
+}
+
+.mc-preview__stage--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--vp-c-bg);
+  padding: 24px;
+}
+
+.mc-preview__frame {
+  width: 100%;
+  border: 0;
+  display: block;
+}
+
+.mc-preview__code {
+  border-top: 1px solid var(--vp-c-divider);
+  margin: 0;
+}

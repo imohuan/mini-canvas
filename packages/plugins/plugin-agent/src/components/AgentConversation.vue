@@ -559,7 +559,23 @@ function resetViewCaches(): void {
   openTools.value = {}
   openToolGroups.value = {}
 }
-watch(() => s.sessionId, () => resetViewCaches())
+watch(() => s.sessionId, () => {
+  resetViewCaches()
+  resetEditStates()
+})
+
+/**
+ * 换会话（含新建 / 删当前会话）时把三种编辑态归零。
+ *
+ * 为什么必须做（代码审查发现的洞）：`editingItems` / `editingGoal` 是**组件本地**状态，
+ * 而 `s.editingId` 由 sessionModel 管（model.load / reset 会清）。不清的话，在 A 会话里
+ * 点了「编辑排队消息 / 编辑目标」，切到 B 会话后那两条编辑标记还挂着 —— 输入框继续回填着
+ * A 的内容，发送反而去改 B 的队列/目标（编辑互斥的前提是「同一会话内最多一个」，跨会话必须归零）。
+ */
+function resetEditStates(): void {
+  if (editingItems.value.length) editingItems.value = []
+  editingGoal.value = false
+}
 
 /**
  * 用户消息 hover 操作条（用户口径 2026-10-06，照参考图 2）。
@@ -2037,7 +2053,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-queue-row.is-sending { opacity: 0.7; }
 .ac-queue-thumb { flex: none; width: 16px; height: 16px; border-radius: 4px; object-fit: cover; cursor: zoom-in; background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
 /* 白图与容器背景同色会「看不见」—— 加一圈低对比发丝边 + 微阴影（用户口径 2026-10-09，
-   「边框颜色不能太突出」：用 ink 的 22% 而不是强调色/警示色）。 */
+   「边框颜色不能太突出」：用 ink 的 22% 而不是强调色/警示色）。
+   主题色白名单: 缩略图那圈微阴影是「无关主题的微弱遮挡环」，亮暗两套主题都要它才看得见白图，与裁剪框描边同类。 */
 .ac-queue-thumb, .ac-goal-ratio ~ .ac-queue-thumb { border: 1px solid color-mix(in srgb, var(--ui-ink, #f7f7f7) 22%, transparent); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06); }
 .ac-queue-thumb-more { flex: none; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--ui-ink-dim, #919191); }
 .ac-queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--ui-ink, #f7f7f7); }
