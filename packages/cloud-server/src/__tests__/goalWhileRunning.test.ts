@@ -56,6 +56,7 @@ it('在跑的会话上发目标 ⇒ 进队列（带 goal），不调 beginGoal',
       store, fakeRuntime() as never, { dataDir: root, modelContextWindow: async () => undefined } as never,
       undefined, undefined, hub as never,
       () => { ticked++ },
+      undefined,
       goalRuntime as never,
     ))
 

@@ -41,13 +41,6 @@ export async function readGoalState(scratchpadDir: string): Promise<GoalState | 
   return null
 }
 
-/** 目标是否处于暂停态（文件被挪走 ⇒ 插件那边读不到就会停） */
-export async function isGoalPausedOnDisk(scratchpadDir: string): Promise<boolean> {
-  const paused = await exists(path.join(scratchpadDir, GOAL_FILE_PAUSED))
-  const live = await exists(path.join(scratchpadDir, GOAL_FILE))
-  return paused && !live
-}
-
 /**
  * 暂停：把 GOAL.json 改名挪走（内容原样保留）。
  * 效果（已实测插件代码）：下一轮结束时插件 readGoal 读不到文件 ⇒ 什么都不输出 ⇒

@@ -3,8 +3,8 @@ import type { Theme } from 'vitepress'
 import PluginCapabilityTable from './components/PluginCapabilityTable.vue'
 import ComponentPreview from './components/ComponentPreview.vue'
 import ComponentPreviewFrame from './components/ComponentPreviewFrame.vue'
-import RuntimeCapabilities from './components/RuntimeCapabilities.vue'
 import SurfaceReport from './components/SurfaceReport.vue'
+import RegistryPlayground from './components/RegistryPlayground.vue'
 import './styles.css'
 
 /**
@@ -17,7 +17,7 @@ export default {
     app.component('PluginCapabilityTable', PluginCapabilityTable)
     app.component('ComponentPreview', ComponentPreview)
     app.component('ComponentPreviewFrame', ComponentPreviewFrame)
-    app.component('RuntimeCapabilities', RuntimeCapabilities)
     app.component('SurfaceReport', SurfaceReport)
+    app.component('RegistryPlayground', RegistryPlayground)
   },
 } satisfies Theme

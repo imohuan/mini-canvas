@@ -1,0 +1,4217 @@
+{
+  "capturedAt": "2026-10-09T12:59:35.043Z",
+  "source": "window.MiniCanvasUI.getContext().surface()",
+  "state": "started",
+  "services": [
+    {
+      "name": "nodeLayout",
+      "source": "<host>",
+      "methods": [
+        "absolutePosition",
+        "childrenOf",
+        "clearMeasuredSize",
+        "getAllRects",
+        "getNodeRect",
+        "nodeSize",
+        "reset",
+        "setMeasuredSize"
+      ]
+    },
+    {
+      "name": "viewport",
+      "source": "<host>",
+      "methods": [
+        "animateViewport",
+        "attachBackend",
+        "fitView",
+        "flowToScreen",
+        "getPaneEl",
+        "getRendererEl",
+        "getRootEl",
+        "getViewport",
+        "queryNodeEl",
+        "requireBackend",
+        "screenToFlow",
+        "setCenter",
+        "setViewport",
+        "zoomIn",
+        "zoomOut",
+        "zoomTo"
+      ]
+    },
+    {
+      "name": "pluginManager",
+      "source": "<host>",
+      "methods": [
+        "applyManifest",
+        "diagnose",
+        "install",
+        "list",
+        "manifestReport",
+        "reload",
+        "uninstall"
+      ]
+    },
+    {
+      "name": "save",
+      "source": "canvas-base",
+      "methods": [
+        "adapterOf",
+        "dispose",
+        "flush",
+        "get",
+        "isDirty",
+        "notifyAdapterChange",
+        "onAdapterChange",
+        "remove",
+        "scheduleFlush",
+        "set",
+        "useAdapter",
+        "useAdapterForAll"
+      ]
+    },
+    {
+      "name": "doc",
+      "source": "canvas-base",
+      "methods": [
+        "addEdge",
+        "addNodes",
+        "canRedo",
+        "canUndo",
+        "childNodesOf",
+        "connectEdge",
+        "createNode",
+        "getEdge",
+        "getEdges",
+        "getNode",
+        "getNodes",
+        "hasPendingCommit",
+        "moveNode",
+        "moveNodes",
+        "nextEdgeId",
+        "nextNodeId",
+        "nextTypeName",
+        "onCommit",
+        "redo",
+        "registerType",
+        "removeEdges",
+        "removeNodes",
+        "replaceAll",
+        "setNodeLabel",
+        "setNodeParent",
+        "setNodeSize",
+        "snapshot",
+        "subscribe",
+        "transaction",
+        "undo",
+        "unregisterType",
+        "updateNode",
+        "updateNodeData",
+        "updateNodeRuntime",
+        "updateNodes",
+        "updateTypeSize"
+      ]
+    },
+    {
+      "name": "resources",
+      "source": "canvas-base",
+      "methods": [
+        "adapter",
+        "alive",
+        "backendResolver",
+        "dispose",
+        "disposeUnreferenced",
+        "flush",
+        "get",
+        "ids",
+        "put",
+        "register",
+        "resolve",
+        "restore",
+        "revoke",
+        "revokeByKind",
+        "revokeByResource",
+        "url"
+      ]
+    },
+    {
+      "name": "nodeRegistry",
+      "source": "canvas-base",
+      "methods": [
+        "contributionIds",
+        "contributionOccupants",
+        "get",
+        "has",
+        "notify",
+        "register",
+        "registerContribution",
+        "set",
+        "subscribe",
+        "types",
+        "unregister",
+        "unregisterContribution",
+        "unsubContributions"
+      ]
+    },
+    {
+      "name": "themeRegistry",
+      "source": "canvas-base",
+      "methods": [
+        "addOccupant",
+        "get",
+        "has",
+        "hasOccupant",
+        "occupantIds",
+        "occupants",
+        "register",
+        "removeOccupant",
+        "set",
+        "slots",
+        "subscribe",
+        "unregister",
+        "winner"
+      ]
+    },
+    {
+      "name": "selection",
+      "source": "canvas-base",
+      "methods": [
+        "add",
+        "addEdge",
+        "clear",
+        "clearEdges",
+        "clearNodes",
+        "has",
+        "hasEdge",
+        "notify",
+        "onChange",
+        "remove",
+        "removeEdge",
+        "set",
+        "setEdges"
+      ]
+    },
+    {
+      "name": "command",
+      "source": "canvas-base",
+      "methods": [
+        "execute",
+        "get",
+        "has",
+        "isRemapped",
+        "list",
+        "originalKeys",
+        "register",
+        "remapKeys",
+        "resetKeys",
+        "setContext",
+        "unregister"
+      ]
+    },
+    {
+      "name": "nodeFactory",
+      "source": "canvas-base",
+      "methods": [
+        "creatableTypes",
+        "create",
+        "register",
+        "unregister"
+      ]
+    },
+    {
+      "name": "settingsPersist",
+      "source": "canvas-base",
+      "methods": [
+        "dispose",
+        "persistNow",
+        "resetKey",
+        "restore"
+      ]
+    },
+    {
+      "name": "hot-reload",
+      "source": "ui-hot-reload",
+      "methods": [
+        "addSource",
+        "clearLogs",
+        "reconnect",
+        "reload",
+        "removeSource",
+        "stopAll",
+        "updateSource"
+      ]
+    },
+    {
+      "name": "nodeBar",
+      "source": "bottom-bar",
+      "methods": [
+        "applierOf",
+        "field",
+        "get",
+        "list",
+        "publishTools",
+        "register",
+        "registerApplier",
+        "state"
+      ]
+    },
+    {
+      "name": "nodeTask",
+      "source": "bottom-bar",
+      "methods": [
+        "cancel",
+        "deps",
+        "doc",
+        "lookup",
+        "restoreAll",
+        "run"
+      ]
+    },
+    {
+      "name": "text",
+      "source": "text",
+      "methods": [
+        "addTextNode",
+        "doc",
+        "duplicateTextNode",
+        "editText"
+      ]
+    },
+    {
+      "name": "image",
+      "source": "image",
+      "methods": [
+        "addImageNode",
+        "removeNode"
+      ]
+    },
+    {
+      "name": "video",
+      "source": "video",
+      "methods": [
+        "addVideoNode",
+        "doc",
+        "removeNode",
+        "setVideoUrl"
+      ]
+    },
+    {
+      "name": "audio",
+      "source": "audio",
+      "methods": [
+        "addAudioNode"
+      ]
+    },
+    {
+      "name": "panorama3d",
+      "source": "3d-preview",
+      "methods": [
+        "addPreviewNode",
+        "doc",
+        "removeNode",
+        "setImageUrl"
+      ]
+    },
+    {
+      "name": "agent",
+      "source": "agent",
+      "methods": [
+        "activePromptText",
+        "addMcp",
+        "attachStream",
+        "beginEdit",
+        "beginEditQueueItem",
+        "cancelAllEdits",
+        "cancelEdit",
+        "cancelEditQueueItem",
+        "clearGoalMark",
+        "clearNodeRefs",
+        "clearPendingResource",
+        "clearPendingResources",
+        "closeQueueItem",
+        "decide",
+        "deleteModel",
+        "deleteSession",
+        "detachStream",
+        "endGoal",
+        "hide",
+        "importSkill",
+        "listSessions",
+        "loadPrompts",
+        "loadSkillCandidates",
+        "loadTitleModel",
+        "loadUpstreamModels",
+        "newSession",
+        "openSession",
+        "pauseGoal",
+        "pauseQueue",
+        "probeMcp",
+        "reconnectMcp",
+        "referenceAsset",
+        "referenceAssets",
+        "refresh",
+        "removeMcp",
+        "removeQueueItem",
+        "removeSkill",
+        "renameSession",
+        "requestNodeRefs",
+        "resumeGoal",
+        "resumeQueue",
+        "retry",
+        "saveEditedQueueItem",
+        "saveModel",
+        "saveModelsBulk",
+        "savePolicy",
+        "savePrompts",
+        "saveSystemPrompt",
+        "saveTitleModel",
+        "send",
+        "sendGoal",
+        "sendToQueue",
+        "setActivePrompt",
+        "setCanvasId",
+        "setDefaultModel",
+        "setGoalImages",
+        "setGoalMark",
+        "setModel",
+        "show",
+        "steerQueueItem",
+        "stop",
+        "toggle",
+        "updateGoal"
+      ]
+    },
+    {
+      "name": "plugin-manager",
+      "source": "plugin-manager",
+      "methods": [
+        "browseNpmPlugins",
+        "checkNpmUpdates",
+        "install",
+        "installAll",
+        "installFromNpm",
+        "listNpmInstalled",
+        "refresh",
+        "reinstall",
+        "searchNpmPlugins",
+        "uninstall",
+        "uninstallFromNpm",
+        "updateFromNpm"
+      ]
+    },
+    {
+      "name": "gen-history",
+      "source": "cloud-client",
+      "methods": [
+        "query",
+        "subscribe"
+      ]
+    },
+    {
+      "name": "cloud-client",
+      "source": "cloud-client",
+      "methods": [
+        "refreshActions",
+        "status"
+      ]
+    },
+    {
+      "name": "cloud-save",
+      "source": "cloud-client",
+      "methods": [
+        "status",
+        "sync"
+      ]
+    },
+    {
+      "name": "clipboard",
+      "source": "clipboard",
+      "methods": [
+        "absProvider",
+        "copy",
+        "cut",
+        "duplicate",
+        "flowAnchor",
+        "paste",
+        "selectedNodes",
+        "trackClientPoint"
+      ]
+    },
+    {
+      "name": "file-drop",
+      "source": "file-drop",
+      "methods": [
+        "addFiles",
+        "addPastedText",
+        "canHandle",
+        "commitPayloads",
+        "flowAnchor",
+        "toFlow",
+        "trackClientPoint",
+        "typeRegistered"
+      ]
+    },
+    {
+      "name": "mini-map",
+      "source": "mini-map"
+    },
+    {
+      "name": "group",
+      "source": "group",
+      "methods": [
+        "allRects",
+        "applyDragMembership",
+        "createGroup",
+        "currentPaddingOf",
+        "getGroupBounds",
+        "getGroupDepth",
+        "getGroupNodeIds",
+        "groupRects",
+        "groupSizePatch",
+        "groupSubtreeDepth",
+        "recalculateBounds",
+        "rectOf",
+        "ungroup"
+      ]
+    },
+    {
+      "name": "multi-select",
+      "source": "multi-select",
+      "methods": [
+        "clearSelection",
+        "getSelectedNodeIds",
+        "getSelectedNodes",
+        "hasSelectedEdges",
+        "hasSelection",
+        "selectAll"
+      ]
+    },
+    {
+      "name": "imageCompare",
+      "source": "image-compare",
+      "methods": [
+        "addCompareNode",
+        "doc",
+        "getDividerPosition",
+        "removeNode",
+        "setDividerPosition",
+        "trimOverflow"
+      ]
+    },
+    {
+      "name": "style-library",
+      "source": "style-library",
+      "methods": [
+        "close",
+        "loadMore",
+        "loadRoot",
+        "open",
+        "refresh",
+        "rescan",
+        "saveRoot",
+        "setCategory",
+        "setPageSize",
+        "setQuery",
+        "setSort",
+        "setZoom",
+        "toggle"
+      ]
+    },
+    {
+      "name": "effect-library",
+      "source": "style-library",
+      "methods": [
+        "close",
+        "loadMore",
+        "loadRoot",
+        "open",
+        "refresh",
+        "rescan",
+        "saveRoot",
+        "setCategory",
+        "setPageSize",
+        "setQuery",
+        "setSort",
+        "setZoom",
+        "toggle"
+      ]
+    },
+    {
+      "name": "slots",
+      "source": "<builtin>",
+      "methods": [
+        "add",
+        "clear",
+        "clearByPrefix",
+        "ensure",
+        "first",
+        "genId",
+        "get",
+        "has",
+        "ids",
+        "list",
+        "notify",
+        "remove",
+        "slots",
+        "subscribe"
+      ]
+    },
+    {
+      "name": "settings",
+      "source": "<builtin>",
+      "methods": [
+        "clamp",
+        "clearSavedKeys",
+        "define",
+        "entries",
+        "get",
+        "getSavedSnapshot",
+        "groupOf",
+        "groups",
+        "has",
+        "notify",
+        "notifySchema",
+        "onChange",
+        "onSchemaChange",
+        "removeByScope",
+        "set",
+        "setDefault",
+        "setSavedSnapshot"
+      ]
+    },
+    {
+      "name": "tools",
+      "source": "<builtin>",
+      "methods": [
+        "get",
+        "has",
+        "invoke",
+        "list",
+        "register",
+        "unregister"
+      ]
+    }
+  ],
+  "registries": [
+    {
+      "kind": "capability",
+      "keys": [
+        {
+          "key": "node",
+          "count": 1
+        },
+        {
+          "key": "selected",
+          "count": 1
+        },
+        {
+          "key": "selection",
+          "count": 1
+        },
+        {
+          "key": "tools",
+          "count": 1
+        },
+        {
+          "key": "zoom",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "theme",
+      "keys": [
+        {
+          "key": "background",
+          "count": 1
+        },
+        {
+          "key": "bottomBar",
+          "count": 1
+        },
+        {
+          "key": "connectionLine",
+          "count": 1
+        },
+        {
+          "key": "edge",
+          "count": 1
+        },
+        {
+          "key": "edgeDefaultType",
+          "count": 1
+        },
+        {
+          "key": "nodeShell",
+          "count": 1
+        },
+        {
+          "key": "nodeShell:connection-menu",
+          "count": 1
+        },
+        {
+          "key": "settingsPanel",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "kind": "ui",
+      "keys": [
+        {
+          "key": "audioPreview",
+          "count": 1
+        },
+        {
+          "key": "button",
+          "count": 1
+        },
+        {
+          "key": "color",
+          "count": 1
+        },
+        {
+          "key": "connectionLine",
+          "count": 1
+        },
+        {
+          "key": "dropdown",
+          "count": 2
+        },
+        {
+          "key": "effectLibraryOverlay",
+          "count": 1
+        },
+        {
+          "key": "mediaViewer",
+          "count": 1
+        },
+        {
+          "key": "movingHandle",
+          "count": 1
+        },
+        {
+          "key": "select",
+          "count": 1
+        },
+        {
+          "key": "slider",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryCard",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryDetail",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryGallery",
+          "count": 1
+        },
+        {
+          "key": "styleLibraryOverlay",
+          "count": 1
+        },
+        {
+          "key": "textPreview",
+          "count": 1
+        },
+        {
+          "key": "toolParamField",
+          "count": 1
+        },
+        {
+          "key": "toolParamGrid",
+          "count": 1
+        },
+        {
+          "key": "toolParamGroup",
+          "count": 1
+        },
+        {
+          "key": "toolParamRatio",
+          "count": 1
+        },
+        {
+          "key": "toolParamSlider",
+          "count": 1
+        },
+        {
+          "key": "tooltip",
+          "count": 1
+        },
+        {
+          "key": "videoPreview",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "slot",
+      "keys": [
+        {
+          "key": "agent-conversation",
+          "count": 1
+        },
+        {
+          "key": "mini-map",
+          "count": 1
+        },
+        {
+          "key": "overlay",
+          "count": 10
+        },
+        {
+          "key": "settingsGroup/Agent",
+          "count": 1
+        },
+        {
+          "key": "settingsGroup/光标",
+          "count": 1
+        },
+        {
+          "key": "settingsGroup/插件",
+          "count": 1
+        },
+        {
+          "key": "settingsGroup/热重载",
+          "count": 1
+        },
+        {
+          "key": "settingsNav",
+          "count": 4
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "keys": [
+        {
+          "key": "3d-preview:fullscreen",
+          "count": 1
+        },
+        {
+          "key": "3d-preview:reset",
+          "count": 1
+        },
+        {
+          "key": "agent:reference-node",
+          "count": 1
+        },
+        {
+          "key": "agent:toggle",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:align-bottom",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:align-left",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:align-right",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:align-top",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:compact-arrowdown",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:compact-arrowleft",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:compact-arrowright",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:compact-arrowup",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:distribute-h",
+          "count": 1
+        },
+        {
+          "key": "align-arrange:distribute-v",
+          "count": 1
+        },
+        {
+          "key": "audio.download",
+          "count": 1
+        },
+        {
+          "key": "audio.reanalyze",
+          "count": 1
+        },
+        {
+          "key": "audio.upload",
+          "count": 1
+        },
+        {
+          "key": "auto-layout:fit-view",
+          "count": 1
+        },
+        {
+          "key": "auto-layout:focus-selected",
+          "count": 1
+        },
+        {
+          "key": "auto-layout:run",
+          "count": 1
+        },
+        {
+          "key": "canvas-export:full",
+          "count": 1
+        },
+        {
+          "key": "canvas-export:selected",
+          "count": 1
+        },
+        {
+          "key": "clipboard:copy",
+          "count": 1
+        },
+        {
+          "key": "clipboard:cut",
+          "count": 1
+        },
+        {
+          "key": "clipboard:duplicate",
+          "count": 1
+        },
+        {
+          "key": "clipboard:paste",
+          "count": 1
+        },
+        {
+          "key": "context-menu:delete-edge",
+          "count": 1
+        },
+        {
+          "key": "context-menu:delete-node",
+          "count": 1
+        },
+        {
+          "key": "effect-library:open",
+          "count": 1
+        },
+        {
+          "key": "group:create",
+          "count": 1
+        },
+        {
+          "key": "group:ungroup",
+          "count": 1
+        },
+        {
+          "key": "image.crop",
+          "count": 1
+        },
+        {
+          "key": "image.cropCancel",
+          "count": 1
+        },
+        {
+          "key": "image.cropConfirm",
+          "count": 1
+        },
+        {
+          "key": "image.download",
+          "count": 1
+        },
+        {
+          "key": "image.expand",
+          "count": 1
+        },
+        {
+          "key": "image.expandCancel",
+          "count": 1
+        },
+        {
+          "key": "image.expandConfirm",
+          "count": 1
+        },
+        {
+          "key": "image.rotate",
+          "count": 1
+        },
+        {
+          "key": "image.upload",
+          "count": 1
+        },
+        {
+          "key": "mini-map:toggle",
+          "count": 1
+        },
+        {
+          "key": "multi-select:clear",
+          "count": 1
+        },
+        {
+          "key": "multi-select:select-all",
+          "count": 1
+        },
+        {
+          "key": "node-find:open",
+          "count": 1
+        },
+        {
+          "key": "style-library:open",
+          "count": 1
+        },
+        {
+          "key": "text.delete",
+          "count": 1
+        },
+        {
+          "key": "text.duplicate",
+          "count": 1
+        },
+        {
+          "key": "ui:node-save-to-assets",
+          "count": 1
+        },
+        {
+          "key": "video.captureFrame",
+          "count": 1
+        },
+        {
+          "key": "video.clip",
+          "count": 1
+        },
+        {
+          "key": "video.clipCancel",
+          "count": 1
+        },
+        {
+          "key": "video.clipConfirm",
+          "count": 1
+        },
+        {
+          "key": "video.crop",
+          "count": 1
+        },
+        {
+          "key": "video.cropCancel",
+          "count": 1
+        },
+        {
+          "key": "video.cropConfirm",
+          "count": 1
+        },
+        {
+          "key": "video.download",
+          "count": 1
+        },
+        {
+          "key": "video.resetClip",
+          "count": 1
+        },
+        {
+          "key": "video.resetCrop",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "selection/region",
+      "keys": [
+        {
+          "key": "out:top",
+          "count": 3
+        }
+      ]
+    },
+    {
+      "kind": "node/region",
+      "keys": [
+        {
+          "key": "*/over:inset",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "keys": [
+        {
+          "key": "image.download",
+          "count": 1
+        },
+        {
+          "key": "image.rotate",
+          "count": 1
+        },
+        {
+          "key": "text.delete",
+          "count": 1
+        },
+        {
+          "key": "text.duplicate",
+          "count": 1
+        },
+        {
+          "key": "video.clip",
+          "count": 1
+        },
+        {
+          "key": "web2api:apimart-image",
+          "count": 1
+        },
+        {
+          "key": "web2api:chatgpt-image",
+          "count": 1
+        },
+        {
+          "key": "web2api:dola-image-seedream45",
+          "count": 1
+        },
+        {
+          "key": "web2api:dola-image-seedream50pro",
+          "count": 1
+        },
+        {
+          "key": "web2api:dola-video-seedance10",
+          "count": 1
+        },
+        {
+          "key": "web2api:dola-video-seedance20",
+          "count": 1
+        },
+        {
+          "key": "web2api:dola-video-seedance25",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-image-seedream40",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-image-seedream45",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-image-seedream50lite",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-tts",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-video-api-fast",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-video-api-mini",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-video-fast",
+          "count": 1
+        },
+        {
+          "key": "web2api:doubao-video-mini",
+          "count": 1
+        },
+        {
+          "key": "web2api:seedance-video-20",
+          "count": 1
+        },
+        {
+          "key": "web2api:seedance-video-fast",
+          "count": 1
+        },
+        {
+          "key": "web2api:volcengine-audio",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/bar-applier",
+      "keys": [
+        {
+          "key": "audio",
+          "count": 1
+        },
+        {
+          "key": "image",
+          "count": 1
+        },
+        {
+          "key": "text",
+          "count": 1
+        },
+        {
+          "key": "video",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/type",
+      "keys": [
+        {
+          "key": "3d-preview",
+          "count": 1
+        },
+        {
+          "key": "audio",
+          "count": 1
+        },
+        {
+          "key": "connection-menu",
+          "count": 1
+        },
+        {
+          "key": "group",
+          "count": 1
+        },
+        {
+          "key": "image",
+          "count": 1
+        },
+        {
+          "key": "image-compare",
+          "count": 1
+        },
+        {
+          "key": "text",
+          "count": 1
+        },
+        {
+          "key": "video",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/creator",
+      "keys": [
+        {
+          "key": "3d-preview",
+          "count": 1
+        },
+        {
+          "key": "audio",
+          "count": 1
+        },
+        {
+          "key": "image",
+          "count": 1
+        },
+        {
+          "key": "image-compare",
+          "count": 1
+        },
+        {
+          "key": "text",
+          "count": 1
+        },
+        {
+          "key": "video",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "kind": "node/shell",
+      "keys": []
+    }
+  ],
+  "registryEntries": [
+    {
+      "kind": "capability",
+      "key": "node",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
+    {
+      "kind": "capability",
+      "key": "selected",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
+    {
+      "kind": "capability",
+      "key": "selection",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
+    {
+      "kind": "capability",
+      "key": "tools",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
+    {
+      "kind": "capability",
+      "key": "zoom",
+      "id": "host:standard",
+      "order": 100,
+      "source": "<host>"
+    },
+    {
+      "kind": "theme",
+      "key": "background",
+      "id": "theme-default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "theme",
+      "key": "bottomBar",
+      "id": "bottom-bar",
+      "order": 0,
+      "source": "bottom-bar"
+    },
+    {
+      "kind": "theme",
+      "key": "connectionLine",
+      "id": "theme-default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "theme",
+      "key": "edge",
+      "id": "theme-default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "theme",
+      "key": "edgeDefaultType",
+      "id": "theme-default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "theme",
+      "key": "nodeShell",
+      "id": "theme-default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "theme",
+      "key": "nodeShell:connection-menu",
+      "id": "context-menu",
+      "order": 0,
+      "source": "context-menu"
+    },
+    {
+      "kind": "theme",
+      "key": "settingsPanel",
+      "id": "ui-settings-panel",
+      "order": -1,
+      "source": "ui-settings-panel"
+    },
+    {
+      "kind": "theme",
+      "key": "settingsPanel",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "audioPreview",
+      "id": "node-audio",
+      "order": 0,
+      "source": "audio"
+    },
+    {
+      "kind": "ui",
+      "key": "button",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "color",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "connectionLine",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "dropdown",
+      "id": "ui-dropdown",
+      "order": -1,
+      "source": "ui-dropdown"
+    },
+    {
+      "kind": "ui",
+      "key": "dropdown",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "effectLibraryOverlay",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "mediaViewer",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "movingHandle",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "select",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "slider",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryCard",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryDetail",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryGallery",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "styleLibraryOverlay",
+      "id": "default",
+      "order": 0,
+      "source": "style-library"
+    },
+    {
+      "kind": "ui",
+      "key": "textPreview",
+      "id": "node-text",
+      "order": 0,
+      "source": "text"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamField",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamGrid",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamGroup",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamRatio",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "toolParamSlider",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "tooltip",
+      "id": "default",
+      "order": 0,
+      "source": "theme-default"
+    },
+    {
+      "kind": "ui",
+      "key": "videoPreview",
+      "id": "node-video",
+      "order": 0,
+      "source": "video"
+    },
+    {
+      "kind": "slot",
+      "key": "agent-conversation",
+      "id": "agent-conversation",
+      "order": 60,
+      "source": "agent"
+    },
+    {
+      "kind": "slot",
+      "key": "mini-map",
+      "id": "mini-map",
+      "order": 80,
+      "source": "mini-map"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "multi-select-box",
+      "order": 30,
+      "source": "multi-select"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "group-top-toolbar",
+      "order": 35,
+      "source": "group"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "bottom-bar/host",
+      "order": 40,
+      "source": "bottom-bar"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "multi-select-frame",
+      "order": 40,
+      "source": "multi-select"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "bottom-bar/reference-select",
+      "order": 41,
+      "source": "bottom-bar"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "bottom-bar/media-preview",
+      "order": 42,
+      "source": "bottom-bar"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "cursor-effect-overlay",
+      "order": 45,
+      "source": "cursor-effect"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "style-library/overlay",
+      "order": 46,
+      "source": "style-library"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "effect-library/overlay",
+      "order": 47,
+      "source": "style-library"
+    },
+    {
+      "kind": "slot",
+      "key": "overlay",
+      "id": "align-guide",
+      "order": 60,
+      "source": "align-guide"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsGroup/Agent",
+      "id": "agent-page",
+      "order": 5,
+      "source": "agent"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsGroup/光标",
+      "id": "cursor-effect-page",
+      "order": 7,
+      "source": "cursor-effect"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsGroup/插件",
+      "id": "plugin-manager-page",
+      "order": 6,
+      "source": "plugin-manager"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsGroup/热重载",
+      "id": "ui-hot-reload-page",
+      "order": 90,
+      "source": "ui-hot-reload"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsNav",
+      "id": "Agent",
+      "order": 5,
+      "source": "agent"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsNav",
+      "id": "插件",
+      "order": 6,
+      "source": "plugin-manager"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsNav",
+      "id": "光标",
+      "order": 7,
+      "source": "cursor-effect"
+    },
+    {
+      "kind": "slot",
+      "key": "settingsNav",
+      "id": "热重载",
+      "order": 90,
+      "source": "ui-hot-reload"
+    },
+    {
+      "kind": "command",
+      "key": "3d-preview:fullscreen",
+      "id": "3d-preview:fullscreen#0",
+      "order": 0,
+      "source": "3d-preview",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "3d-preview:reset",
+      "id": "3d-preview:reset#0",
+      "order": 0,
+      "source": "3d-preview",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "agent:reference-node",
+      "id": "agent:reference-node#0",
+      "order": 0,
+      "source": "agent",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "agent:toggle",
+      "id": "agent:toggle#0",
+      "order": 0,
+      "source": "agent",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:align-bottom",
+      "id": "align-arrange:align-bottom#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:align-left",
+      "id": "align-arrange:align-left#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:align-right",
+      "id": "align-arrange:align-right#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:align-top",
+      "id": "align-arrange:align-top#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:compact-arrowdown",
+      "id": "align-arrange:compact-arrowdown#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:compact-arrowleft",
+      "id": "align-arrange:compact-arrowleft#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:compact-arrowright",
+      "id": "align-arrange:compact-arrowright#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:compact-arrowup",
+      "id": "align-arrange:compact-arrowup#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:distribute-h",
+      "id": "align-arrange:distribute-h#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "align-arrange:distribute-v",
+      "id": "align-arrange:distribute-v#0",
+      "order": 0,
+      "source": "align-arrange",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "audio.download",
+      "id": "audio.download#0",
+      "order": 0,
+      "source": "audio",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "audio.reanalyze",
+      "id": "audio.reanalyze#0",
+      "order": 0,
+      "source": "audio",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "audio.upload",
+      "id": "audio.upload#0",
+      "order": 0,
+      "source": "audio",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "auto-layout:fit-view",
+      "id": "auto-layout:fit-view#0",
+      "order": 0,
+      "source": "auto-layout",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "auto-layout:focus-selected",
+      "id": "auto-layout:focus-selected#0",
+      "order": 0,
+      "source": "auto-layout",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "auto-layout:run",
+      "id": "auto-layout:run#0",
+      "order": 0,
+      "source": "auto-layout",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "canvas-export:full",
+      "id": "canvas-export:full#0",
+      "order": 0,
+      "source": "canvas-export",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "canvas-export:selected",
+      "id": "canvas-export:selected#0",
+      "order": 0,
+      "source": "canvas-export",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "clipboard:copy",
+      "id": "clipboard:copy#0",
+      "order": 0,
+      "source": "clipboard",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "clipboard:cut",
+      "id": "clipboard:cut#0",
+      "order": 0,
+      "source": "clipboard",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "clipboard:duplicate",
+      "id": "clipboard:duplicate#0",
+      "order": 0,
+      "source": "clipboard",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "clipboard:paste",
+      "id": "clipboard:paste#0",
+      "order": 0,
+      "source": "clipboard",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "context-menu:delete-edge",
+      "id": "context-menu:delete-edge#0",
+      "order": 0,
+      "source": "context-menu",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "context-menu:delete-node",
+      "id": "context-menu:delete-node#0",
+      "order": 0,
+      "source": "context-menu",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "effect-library:open",
+      "id": "effect-library:open#0",
+      "order": 0,
+      "source": "style-library",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "group:create",
+      "id": "group:create#0",
+      "order": 0,
+      "source": "group",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "group:ungroup",
+      "id": "group:ungroup#0",
+      "order": 0,
+      "source": "group",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.crop",
+      "id": "image.crop#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.cropCancel",
+      "id": "image.cropCancel#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.cropConfirm",
+      "id": "image.cropConfirm#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.download",
+      "id": "image.download#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.expand",
+      "id": "image.expand#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.expandCancel",
+      "id": "image.expandCancel#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.expandConfirm",
+      "id": "image.expandConfirm#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.rotate",
+      "id": "image.rotate#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "image.upload",
+      "id": "image.upload#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "mini-map:toggle",
+      "id": "mini-map:toggle#0",
+      "order": 0,
+      "source": "mini-map",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "multi-select:clear",
+      "id": "multi-select:clear#0",
+      "order": 0,
+      "source": "multi-select",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "multi-select:select-all",
+      "id": "multi-select:select-all#0",
+      "order": 0,
+      "source": "multi-select",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "node-find:open",
+      "id": "node-find:open#0",
+      "order": 0,
+      "source": "node-find",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "style-library:open",
+      "id": "style-library:open#0",
+      "order": 0,
+      "source": "style-library",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "text.delete",
+      "id": "text.delete#0",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "text.duplicate",
+      "id": "text.duplicate#0",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "ui:node-save-to-assets",
+      "id": "ui:node-save-to-assets#0",
+      "order": 0,
+      "source": "ui-asset-upload",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.captureFrame",
+      "id": "video.captureFrame#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.clip",
+      "id": "video.clip#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.clipCancel",
+      "id": "video.clipCancel#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.clipConfirm",
+      "id": "video.clipConfirm#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.crop",
+      "id": "video.crop#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.cropCancel",
+      "id": "video.cropCancel#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.cropConfirm",
+      "id": "video.cropConfirm#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.download",
+      "id": "video.download#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.resetClip",
+      "id": "video.resetClip#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "command",
+      "key": "video.resetCrop",
+      "id": "video.resetCrop#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "def"
+      ]
+    },
+    {
+      "kind": "selection/region",
+      "key": "out:top",
+      "id": "multi-select:group",
+      "order": 10,
+      "source": "multi-select",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "selection/region",
+      "key": "out:top",
+      "id": "ui-asset-upload",
+      "order": 20,
+      "source": "ui-asset-upload",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "selection/region",
+      "key": "out:top",
+      "id": "agent-refer-selection",
+      "order": 30,
+      "source": "agent",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/region",
+      "key": "*/over:inset",
+      "id": "bottom-bar/overlay",
+      "order": 0,
+      "source": "bottom-bar",
+      "fields": [
+        "component",
+        "needs",
+        "props"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "image.download",
+      "id": "image.download",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "image.rotate",
+      "id": "image.rotate",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "text.delete",
+      "id": "text.delete",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "text.duplicate",
+      "id": "text.duplicate",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "apply",
+        "order",
+        "description",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "video.clip",
+      "id": "video.clip",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "panel",
+        "needsPrompt",
+        "apply",
+        "description",
+        "onSelect",
+        "onDeselect",
+        "run"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:apimart-image",
+      "id": "web2api:apimart-image",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:chatgpt-image",
+      "id": "web2api:chatgpt-image",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:dola-image-seedream45",
+      "id": "web2api:dola-image-seedream45",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:dola-image-seedream50pro",
+      "id": "web2api:dola-image-seedream50pro",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:dola-video-seedance10",
+      "id": "web2api:dola-video-seedance10",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:dola-video-seedance20",
+      "id": "web2api:dola-video-seedance20",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:dola-video-seedance25",
+      "id": "web2api:dola-video-seedance25",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-image-seedream40",
+      "id": "web2api:doubao-image-seedream40",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-image-seedream45",
+      "id": "web2api:doubao-image-seedream45",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-image-seedream50lite",
+      "id": "web2api:doubao-image-seedream50lite",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-tts",
+      "id": "web2api:doubao-tts",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-video-api-fast",
+      "id": "web2api:doubao-video-api-fast",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-video-api-mini",
+      "id": "web2api:doubao-video-api-mini",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-video-fast",
+      "id": "web2api:doubao-video-fast",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:doubao-video-mini",
+      "id": "web2api:doubao-video-mini",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:seedance-video-20",
+      "id": "web2api:seedance-video-20",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:seedance-video-fast",
+      "id": "web2api:seedance-video-fast",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar",
+      "key": "web2api:volcengine-audio",
+      "id": "web2api:volcengine-audio",
+      "order": 0,
+      "source": "web2api-tools",
+      "fields": [
+        "id",
+        "types",
+        "title",
+        "description",
+        "group",
+        "needsPrompt",
+        "fields",
+        "order",
+        "pollIntervalMs",
+        "pollTimeoutMs",
+        "run",
+        "resume",
+        "onCancel"
+      ]
+    },
+    {
+      "kind": "node/bar-applier",
+      "key": "audio",
+      "id": "audio",
+      "order": 0,
+      "source": "cloud-client"
+    },
+    {
+      "kind": "node/bar-applier",
+      "key": "image",
+      "id": "image",
+      "order": 0,
+      "source": "image"
+    },
+    {
+      "kind": "node/bar-applier",
+      "key": "text",
+      "id": "text",
+      "order": 0,
+      "source": "text"
+    },
+    {
+      "kind": "node/bar-applier",
+      "key": "video",
+      "id": "video",
+      "order": 0,
+      "source": "cloud-client"
+    },
+    {
+      "kind": "node/type",
+      "key": "3d-preview",
+      "id": "3d-preview#0",
+      "order": 0,
+      "source": "3d-preview",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "audio",
+      "id": "audio#0",
+      "order": 0,
+      "source": "audio",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "connection-menu",
+      "id": "connection-menu#0",
+      "order": 0,
+      "source": "context-menu",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "group",
+      "id": "group#0",
+      "order": 0,
+      "source": "group",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "image",
+      "id": "image#0",
+      "order": 0,
+      "source": "image",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "image-compare",
+      "id": "image-compare#0",
+      "order": 0,
+      "source": "image-compare",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "text",
+      "id": "text#0",
+      "order": 0,
+      "source": "text",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/type",
+      "key": "video",
+      "id": "video#0",
+      "order": 0,
+      "source": "video",
+      "fields": [
+        "type",
+        "label"
+      ]
+    },
+    {
+      "kind": "node/creator",
+      "key": "3d-preview",
+      "id": "3d-preview#0",
+      "order": 0,
+      "source": "3d-preview"
+    },
+    {
+      "kind": "node/creator",
+      "key": "audio",
+      "id": "audio#0",
+      "order": 0,
+      "source": "audio"
+    },
+    {
+      "kind": "node/creator",
+      "key": "image",
+      "id": "image#0",
+      "order": 0,
+      "source": "image"
+    },
+    {
+      "kind": "node/creator",
+      "key": "image-compare",
+      "id": "image-compare#0",
+      "order": 0,
+      "source": "image-compare"
+    },
+    {
+      "kind": "node/creator",
+      "key": "text",
+      "id": "text#0",
+      "order": 0,
+      "source": "text"
+    },
+    {
+      "kind": "node/creator",
+      "key": "video",
+      "id": "video#0",
+      "order": 0,
+      "source": "video"
+    }
+  ],
+  "commands": [
+    {
+      "id": "ui:node-save-to-assets",
+      "title": "加入资产库",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 21,
+      "source": "ui-asset-upload",
+      "origin": "field"
+    },
+    {
+      "id": "text.duplicate",
+      "title": "复制文本节点",
+      "source": "text",
+      "origin": "field"
+    },
+    {
+      "id": "text.delete",
+      "title": "删除文本节点",
+      "source": "text",
+      "origin": "field"
+    },
+    {
+      "id": "image.upload",
+      "title": "上传图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.crop",
+      "title": "裁剪图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.cropConfirm",
+      "title": "确认裁剪",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.cropCancel",
+      "title": "取消裁剪",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.expand",
+      "title": "扩展图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.expandConfirm",
+      "title": "确认扩展",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.expandCancel",
+      "title": "取消扩展",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.rotate",
+      "title": "旋转图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "image.download",
+      "title": "下载图片",
+      "source": "image",
+      "origin": "field"
+    },
+    {
+      "id": "video.crop",
+      "title": "裁剪视频画面",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.cropConfirm",
+      "title": "确认裁剪",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.cropCancel",
+      "title": "取消裁剪",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.resetCrop",
+      "title": "恢复整幅画面",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.clip",
+      "title": "剪辑视频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.clipConfirm",
+      "title": "确认剪辑",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.clipCancel",
+      "title": "取消剪辑",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.resetClip",
+      "title": "恢复整段时长",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.captureFrame",
+      "title": "截取当前帧为图片节点",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "video.download",
+      "title": "下载视频",
+      "source": "video",
+      "origin": "field"
+    },
+    {
+      "id": "audio.upload",
+      "title": "上传音频",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
+      "id": "audio.download",
+      "title": "下载音频",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
+      "id": "audio.reanalyze",
+      "title": "刷新波形与时长",
+      "source": "audio",
+      "origin": "field"
+    },
+    {
+      "id": "3d-preview:fullscreen",
+      "title": "3D 预览：全屏切换",
+      "keys": [
+        "f"
+      ],
+      "group": "node-3d-preview",
+      "order": 5,
+      "source": "3d-preview",
+      "origin": "field"
+    },
+    {
+      "id": "3d-preview:reset",
+      "title": "3D 预览：重置视角",
+      "keys": [
+        "r"
+      ],
+      "group": "node-3d-preview",
+      "order": 5,
+      "source": "3d-preview",
+      "origin": "field"
+    },
+    {
+      "id": "agent:toggle",
+      "title": "切换 Agent 面板",
+      "keys": [
+        "mod+j"
+      ],
+      "order": 60,
+      "source": "agent",
+      "origin": "field"
+    },
+    {
+      "id": "agent:reference-node",
+      "title": "引用到 Agent",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 20,
+      "source": "agent",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:align-left",
+      "title": "左对齐",
+      "keys": [
+        "mod+shift+arrowleft"
+      ],
+      "group": "align-arrange",
+      "order": 10,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:align-right",
+      "title": "右对齐",
+      "keys": [
+        "mod+shift+arrowright"
+      ],
+      "group": "align-arrange",
+      "order": 11,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:align-top",
+      "title": "顶对齐",
+      "keys": [
+        "mod+shift+arrowup"
+      ],
+      "group": "align-arrange",
+      "order": 12,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:align-bottom",
+      "title": "底对齐",
+      "keys": [
+        "mod+shift+arrowdown"
+      ],
+      "group": "align-arrange",
+      "order": 13,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:distribute-h",
+      "title": "水平等距分布",
+      "group": "align-arrange",
+      "order": 20,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:distribute-v",
+      "title": "垂直等距分布",
+      "group": "align-arrange",
+      "order": 21,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:compact-arrowleft",
+      "title": "向左紧凑排列",
+      "keys": [
+        "ctrl+arrowleft"
+      ],
+      "group": "align-arrange",
+      "order": 30,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:compact-arrowright",
+      "title": "向右紧凑排列",
+      "keys": [
+        "ctrl+arrowright"
+      ],
+      "group": "align-arrange",
+      "order": 31,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:compact-arrowup",
+      "title": "向上紧凑排列",
+      "keys": [
+        "ctrl+arrowup"
+      ],
+      "group": "align-arrange",
+      "order": 32,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "align-arrange:compact-arrowdown",
+      "title": "向下紧凑排列",
+      "keys": [
+        "ctrl+arrowdown"
+      ],
+      "group": "align-arrange",
+      "order": 33,
+      "source": "align-arrange",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:run",
+      "title": "自动布局",
+      "keys": [
+        "mod+l"
+      ],
+      "group": "auto-layout",
+      "order": 10,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:focus-selected",
+      "title": "聚焦选中节点",
+      "keys": [
+        "f"
+      ],
+      "group": "auto-layout",
+      "order": 20,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "auto-layout:fit-view",
+      "title": "适应视图",
+      "keys": [
+        "r"
+      ],
+      "group": "auto-layout",
+      "order": 30,
+      "source": "auto-layout",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:copy",
+      "title": "复制选中节点",
+      "keys": [
+        "mod+c"
+      ],
+      "areas": [
+        "node"
+      ],
+      "group": "clipboard",
+      "order": 10,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:paste",
+      "title": "粘贴",
+      "keys": [
+        "mod+v"
+      ],
+      "areas": [
+        "pane"
+      ],
+      "group": "clipboard",
+      "order": 20,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:cut",
+      "title": "剪切选中节点",
+      "keys": [
+        "mod+x"
+      ],
+      "group": "clipboard",
+      "order": 30,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "clipboard:duplicate",
+      "title": "复制一份选中节点",
+      "keys": [
+        "mod+d"
+      ],
+      "areas": [
+        "node"
+      ],
+      "group": "clipboard",
+      "order": 40,
+      "source": "clipboard",
+      "origin": "field"
+    },
+    {
+      "id": "canvas-export:full",
+      "title": "导出画布",
+      "keys": [
+        "mod+e"
+      ],
+      "group": "export",
+      "order": 10,
+      "source": "canvas-export",
+      "origin": "field"
+    },
+    {
+      "id": "canvas-export:selected",
+      "title": "导出选中节点",
+      "keys": [
+        "mod+shift+e"
+      ],
+      "group": "export",
+      "order": 20,
+      "source": "canvas-export",
+      "origin": "field"
+    },
+    {
+      "id": "context-menu:delete-node",
+      "title": "删除节点",
+      "areas": [
+        "node"
+      ],
+      "group": "节点",
+      "order": 10,
+      "source": "context-menu",
+      "origin": "field"
+    },
+    {
+      "id": "context-menu:delete-edge",
+      "title": "删除连线",
+      "areas": [
+        "edge"
+      ],
+      "group": "连线",
+      "order": 10,
+      "source": "context-menu",
+      "origin": "field"
+    },
+    {
+      "id": "mini-map:toggle",
+      "title": "切换小地图",
+      "keys": [
+        "mod+m"
+      ],
+      "order": 80,
+      "icon": "minimap",
+      "source": "mini-map",
+      "origin": "field"
+    },
+    {
+      "id": "group:create",
+      "title": "创建分组",
+      "keys": [
+        "ctrl+g"
+      ],
+      "source": "group",
+      "origin": "field"
+    },
+    {
+      "id": "group:ungroup",
+      "title": "解散分组",
+      "keys": [
+        "ctrl+shift+g"
+      ],
+      "source": "group",
+      "origin": "field"
+    },
+    {
+      "id": "multi-select:select-all",
+      "title": "全选节点",
+      "keys": [
+        "mod+a"
+      ],
+      "order": 10,
+      "source": "multi-select",
+      "origin": "field"
+    },
+    {
+      "id": "multi-select:clear",
+      "title": "清除选中",
+      "keys": [
+        "Escape"
+      ],
+      "order": 20,
+      "source": "multi-select",
+      "origin": "field"
+    },
+    {
+      "id": "node-find:open",
+      "title": "搜索节点",
+      "keys": [
+        "mod+f"
+      ],
+      "order": 30,
+      "source": "node-find",
+      "origin": "field"
+    },
+    {
+      "id": "style-library:open",
+      "title": "打开风格库",
+      "order": 46,
+      "source": "style-library",
+      "origin": "field"
+    },
+    {
+      "id": "effect-library:open",
+      "title": "打开特效库",
+      "order": 47,
+      "source": "style-library",
+      "origin": "field"
+    },
+    {
+      "id": "command:delete",
+      "title": "删除选中",
+      "keys": [
+        "Delete",
+        "Backspace"
+      ],
+      "source": "<service>",
+      "origin": "service"
+    },
+    {
+      "id": "command:create-node",
+      "title": "创建节点",
+      "source": "<service>",
+      "origin": "service"
+    },
+    {
+      "id": "command:undo",
+      "title": "撤销",
+      "keys": [
+        "mod+z"
+      ],
+      "source": "<service>",
+      "origin": "service"
+    },
+    {
+      "id": "command:redo",
+      "title": "重做",
+      "keys": [
+        "mod+shift+z"
+      ],
+      "source": "<service>",
+      "origin": "service"
+    }
+  ],
+  "tools": [
+    {
+      "name": "image.generate:apimart-gpt-image-2",
+      "title": "GPT Image 2（APIMart）",
+      "description": "APIMart GPT Image 2，支持比例 + 分辨率档位，可带参考图",
+      "group": "图片生成",
+      "produces": "image",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "ratio",
+          "label": "比例",
+          "description": "生成图片的画幅比例（原值直接传给后台）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "1:1",
+              "value": "1:1"
+            },
+            {
+              "label": "3:2",
+              "value": "3:2"
+            },
+            {
+              "label": "2:3",
+              "value": "2:3"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            },
+            {
+              "label": "3:4",
+              "value": "3:4"
+            },
+            {
+              "label": "5:4",
+              "value": "5:4"
+            },
+            {
+              "label": "4:5",
+              "value": "4:5"
+            },
+            {
+              "label": "16:9",
+              "value": "16:9"
+            },
+            {
+              "label": "9:16",
+              "value": "9:16"
+            },
+            {
+              "label": "2:1",
+              "value": "2:1"
+            },
+            {
+              "label": "1:2",
+              "value": "1:2"
+            },
+            {
+              "label": "3:1",
+              "value": "3:1"
+            },
+            {
+              "label": "1:3",
+              "value": "1:3"
+            },
+            {
+              "label": "21:9",
+              "value": "21:9"
+            },
+            {
+              "label": "9:21",
+              "value": "9:21"
+            }
+          ],
+          "default": "1:1"
+        },
+        {
+          "key": "resolution",
+          "label": "分辨率",
+          "description": "生成图片的分辨率档位（只有部分模型支持）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "1k",
+              "value": "1k"
+            },
+            {
+              "label": "2k",
+              "value": "2k"
+            },
+            {
+              "label": "4k",
+              "value": "4k"
+            }
+          ],
+          "default": "1k"
+        }
+      ],
+      "templates": [
+        {
+          "id": "clear",
+          "name": "通用·高清写实",
+          "prompt": "高清写实风格，主体突出，细节丰富，自然光照"
+        },
+        {
+          "id": "blank",
+          "name": "留白极简",
+          "prompt": "极简留白构图，大面积纯色背景，主体居中"
+        },
+        {
+          "id": "poster",
+          "name": "海报感",
+          "prompt": "电影海报构图，戏剧化光影，居中主体，两侧留白放文字"
+        }
+      ]
+    },
+    {
+      "name": "image.generate:chatgpt-gpt-image-2",
+      "title": "GPT Image 2（ChatGPT）",
+      "description": "ChatGPT 账号版 GPT Image 2，无分辨率档位，可带参考图",
+      "group": "图片生成",
+      "produces": "image",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "ratio",
+          "label": "比例",
+          "description": "生成图片的画幅比例（原值直接传给后台）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "1:1",
+              "value": "1:1"
+            },
+            {
+              "label": "2:3",
+              "value": "2:3"
+            },
+            {
+              "label": "3:4",
+              "value": "3:4"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            },
+            {
+              "label": "9:16",
+              "value": "9:16"
+            },
+            {
+              "label": "16:9",
+              "value": "16:9"
+            }
+          ],
+          "default": "1:1"
+        }
+      ],
+      "templates": [
+        {
+          "id": "clear",
+          "name": "通用·高清写实",
+          "prompt": "高清写实风格，主体突出，细节丰富，自然光照"
+        },
+        {
+          "id": "blank",
+          "name": "留白极简",
+          "prompt": "极简留白构图，大面积纯色背景，主体居中"
+        },
+        {
+          "id": "poster",
+          "name": "海报感",
+          "prompt": "电影海报构图，戏剧化光影，居中主体，两侧留白放文字"
+        }
+      ]
+    },
+    {
+      "name": "image.generate:doubao-seedream-5lite",
+      "title": "Seedream 5.0 Lite（豆包）",
+      "description": "豆包 Seedream 5.0 Lite，智能升级、细节丰富",
+      "group": "图片生成",
+      "produces": "image",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "ratio",
+          "label": "比例",
+          "description": "生成图片的画幅比例（原值直接传给后台）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "自动",
+              "value": "auto"
+            },
+            {
+              "label": "1:1",
+              "value": "1:1"
+            },
+            {
+              "label": "2:3",
+              "value": "2:3"
+            },
+            {
+              "label": "3:4",
+              "value": "3:4"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            },
+            {
+              "label": "9:16",
+              "value": "9:16"
+            },
+            {
+              "label": "16:9",
+              "value": "16:9"
+            }
+          ],
+          "default": "auto"
+        }
+      ],
+      "templates": [
+        {
+          "id": "clear",
+          "name": "通用·高清写实",
+          "prompt": "高清写实风格，主体突出，细节丰富，自然光照"
+        },
+        {
+          "id": "blank",
+          "name": "留白极简",
+          "prompt": "极简留白构图，大面积纯色背景，主体居中"
+        },
+        {
+          "id": "poster",
+          "name": "海报感",
+          "prompt": "电影海报构图，戏剧化光影，居中主体，两侧留白放文字"
+        }
+      ]
+    },
+    {
+      "name": "image.generate:doubao-seedream-45",
+      "title": "Seedream 4.5（豆包）",
+      "description": "豆包 Seedream 4.5，多图参考、人像自然",
+      "group": "图片生成",
+      "produces": "image",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "ratio",
+          "label": "比例",
+          "description": "生成图片的画幅比例（原值直接传给后台）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "自动",
+              "value": "auto"
+            },
+            {
+              "label": "1:1",
+              "value": "1:1"
+            },
+            {
+              "label": "2:3",
+              "value": "2:3"
+            },
+            {
+              "label": "3:4",
+              "value": "3:4"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            },
+            {
+              "label": "9:16",
+              "value": "9:16"
+            },
+            {
+              "label": "16:9",
+              "value": "16:9"
+            }
+          ],
+          "default": "auto"
+        }
+      ],
+      "templates": [
+        {
+          "id": "clear",
+          "name": "通用·高清写实",
+          "prompt": "高清写实风格，主体突出，细节丰富，自然光照"
+        },
+        {
+          "id": "blank",
+          "name": "留白极简",
+          "prompt": "极简留白构图，大面积纯色背景，主体居中"
+        },
+        {
+          "id": "poster",
+          "name": "海报感",
+          "prompt": "电影海报构图，戏剧化光影，居中主体，两侧留白放文字"
+        }
+      ]
+    },
+    {
+      "name": "image.generate:doubao-seedream-40",
+      "title": "Seedream 4.0（豆包）",
+      "description": "豆包 Seedream 4.0，精准编辑、特征保持",
+      "group": "图片生成",
+      "produces": "image",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "ratio",
+          "label": "比例",
+          "description": "生成图片的画幅比例（原值直接传给后台）。",
+          "type": "select",
+          "options": [
+            {
+              "label": "自动",
+              "value": "auto"
+            },
+            {
+              "label": "1:1",
+              "value": "1:1"
+            },
+            {
+              "label": "2:3",
+              "value": "2:3"
+            },
+            {
+              "label": "3:4",
+              "value": "3:4"
+            },
+            {
+              "label": "4:3",
+              "value": "4:3"
+            },
+            {
+              "label": "9:16",
+              "value": "9:16"
+            },
+            {
+              "label": "16:9",
+              "value": "16:9"
+            }
+          ],
+          "default": "auto"
+        }
+      ],
+      "templates": [
+        {
+          "id": "clear",
+          "name": "通用·高清写实",
+          "prompt": "高清写实风格，主体突出，细节丰富，自然光照"
+        },
+        {
+          "id": "blank",
+          "name": "留白极简",
+          "prompt": "极简留白构图，大面积纯色背景，主体居中"
+        },
+        {
+          "id": "poster",
+          "name": "海报感",
+          "prompt": "电影海报构图，戏剧化光影，居中主体，两侧留白放文字"
+        }
+      ]
+    },
+    {
+      "name": "text.generate:gpt-text-reasoning",
+      "title": "GPT 文本（深度思考）",
+      "description": "支持思考程度与长度调节，适合需要推理与长文输出的场景",
+      "group": "文本生成",
+      "produces": "text",
+      "accepts": [
+        "text",
+        "image"
+      ],
+      "params": [
+        {
+          "key": "thinking",
+          "label": "思考程度",
+          "description": "模型推理投入的程度：越高越慢但更稳，越低越快。",
+          "type": "select",
+          "options": [
+            {
+              "label": "低",
+              "value": "low"
+            },
+            {
+              "label": "中",
+              "value": "medium"
+            },
+            {
+              "label": "高",
+              "value": "high"
+            }
+          ],
+          "default": "medium"
+        },
+        {
+          "key": "length",
+          "label": "回复长度",
+          "description": "期望的输出长度档位。",
+          "type": "select",
+          "options": [
+            {
+              "label": "短",
+              "value": "short"
+            },
+            {
+              "label": "适中",
+              "value": "normal"
+            },
+            {
+              "label": "长",
+              "value": "long"
+            }
+          ],
+          "default": "normal"
+        }
+      ],
+      "templates": [
+        {
+          "id": "polish",
+          "name": "润色改写",
+          "prompt": "把下面的内容润色得更通顺自然，保持原意与信息量，输出正文即可：\n",
+          "description": "语气更顺、用词更准，不改变原意"
+        },
+        {
+          "id": "summarize",
+          "name": "总结要点",
+          "prompt": "把下面的内容总结成要点，分条列出，每条不超过一行：\n",
+          "description": "压缩成长度可控的条目"
+        },
+        {
+          "id": "ask",
+          "name": "追问提问",
+          "prompt": "针对下面这段内容，提出三个能引出关键信息的问题：\n",
+          "description": "用提问继续挖内容"
+        },
+        {
+          "id": "translate",
+          "name": "翻译成英文",
+          "prompt": "把下面的内容翻译成地道的英文，只输出译文：\n"
+        }
+      ]
+    },
+    {
+      "name": "text.generate:gpt-text-fast",
+      "title": "GPT 文本（快速）",
+      "description": "低延迟直出，不提供思考程度；适合润色、翻译这类即时任务",
+      "group": "文本生成",
+      "produces": "text",
+      "accepts": [
+        "text"
+      ],
+      "params": [
+        {
+          "key": "length",
+          "label": "回复长度",
+          "description": "期望的输出长度档位。",
+          "type": "select",
+          "options": [
+            {
+              "label": "短",
+              "value": "short"
+            },
+            {
+              "label": "适中",
+              "value": "normal"
+            }
+          ],
+          "default": "normal"
+        }
+      ],
+      "templates": [
+        {
+          "id": "polish",
+          "name": "润色改写",
+          "prompt": "把下面的内容润色得更通顺自然，保持原意与信息量，输出正文即可：\n",
+          "description": "语气更顺、用词更准，不改变原意"
+        },
+        {
+          "id": "summarize",
+          "name": "总结要点",
+          "prompt": "把下面的内容总结成要点，分条列出，每条不超过一行：\n",
+          "description": "压缩成长度可控的条目"
+        },
+        {
+          "id": "ask",
+          "name": "追问提问",
+          "prompt": "针对下面这段内容，提出三个能引出关键信息的问题：\n",
+          "description": "用提问继续挖内容"
+        },
+        {
+          "id": "translate",
+          "name": "翻译成英文",
+          "prompt": "把下面的内容翻译成地道的英文，只输出译文：\n"
+        }
+      ]
+    },
+    {
+      "name": "text.generate:doubao-text",
+      "title": "豆包文本",
+      "description": "支持思考程度，中文表达自然；长度固定为模型默认",
+      "group": "文本生成",
+      "produces": "text",
+      "accepts": [
+        "text"
+      ],
+      "params": [
+        {
+          "key": "thinking",
+          "label": "思考程度",
+          "description": "模型推理投入的程度：越高越慢但更稳，越低越快。",
+          "type": "select",
+          "options": [
+            {
+              "label": "自动",
+              "value": "auto"
+            },
+            {
+              "label": "低",
+              "value": "low"
+            },
+            {
+              "label": "高",
+              "value": "high"
+            }
+          ],
+          "default": "auto"
+        }
+      ],
+      "templates": [
+        {
+          "id": "polish",
+          "name": "润色改写",
+          "prompt": "把下面的内容润色得更通顺自然，保持原意与信息量，输出正文即可：\n",
+          "description": "语气更顺、用词更准，不改变原意"
+        },
+        {
+          "id": "summarize",
+          "name": "总结要点",
+          "prompt": "把下面的内容总结成要点，分条列出，每条不超过一行：\n",
+          "description": "压缩成长度可控的条目"
+        },
+        {
+          "id": "ask",
+          "name": "追问提问",
+          "prompt": "针对下面这段内容，提出三个能引出关键信息的问题：\n",
+          "description": "用提问继续挖内容"
+        },
+        {
+          "id": "translate",
+          "name": "翻译成英文",
+          "prompt": "把下面的内容翻译成地道的英文，只输出译文：\n"
+        }
+      ]
+    }
+  ],
+  "modelTools": [],
+  "events": [
+    "ctx:ready",
+    "ctx:plugin-installed",
+    "ctx:plugin-uninstalled",
+    "ctx:lifecycle-change",
+    "tools/registered",
+    "tools/unregistered",
+    "tools/result",
+    "canvas:node:drag-start",
+    "canvas:node:drag",
+    "canvas:node:drag-end",
+    "canvas:viewport:move-start",
+    "canvas:viewport:move-end",
+    "canvas:node:click",
+    "canvas:edge:click",
+    "canvas:pane:click",
+    "canvas:selection:change",
+    "canvas:connection:drop-blank",
+    "canvas:context-menu:pane",
+    "canvas:context-menu:node",
+    "canvas:context-menu:edge",
+    "settings:ui-close",
+    "agent:ref-click",
+    "clipboard:copy",
+    "clipboard:cut",
+    "clipboard:paste",
+    "canvas-export:exported",
+    "canvas:connection-menu:pick",
+    "canvas:connection-menu:cancel",
+    "edge-cutting:cut"
+  ],
+  "plugins": [
+    {
+      "name": "canvas-base",
+      "state": "active",
+      "missingDeps": [],
+      "core": true
+    },
+    {
+      "name": "theme-default",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "ui-settings-panel",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "ui-dropdown",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "ui-hot-reload",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "ui-asset-upload",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "bottom-bar",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "text",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "image",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "video",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "audio",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "3d-preview",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "agent",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "plugin-manager",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "cloud-client",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "align-arrange",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "align-guide",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "auto-layout",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "clipboard",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "canvas-export",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "context-menu",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "cursor-effect",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "edge-cutting",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "file-drop",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "mini-map",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "group",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "multi-select",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "node-find",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "image-compare",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "style-library",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "tool-image-generation",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "tool-text-generation",
+      "state": "active",
+      "missingDeps": []
+    },
+    {
+      "name": "web2api-tools",
+      "state": "active",
+      "missingDeps": []
+    }
+  ]
+}

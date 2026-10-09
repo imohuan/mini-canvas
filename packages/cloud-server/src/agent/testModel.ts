@@ -266,6 +266,14 @@ export function fakeReplyFor(body: unknown): string {
 const sleep = (ms: number): Promise<void> => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve())
 
 /**
+ * 并发上限（review 指出的 DoS 面）：端点无鉴权，虽然只绑 127.0.0.1，
+ * 但每个请求都会占一个 120s 级别的定时器；不设上限的话脚本一开几十条并发就能把进程拖住。
+ * 超限直接 429 —— test 模型本来就是本机调试用的，拒绝比排队诚实。
+ */
+const MAX_CONCURRENCY = 4
+let activeStreams = 0
+
+/**
  * 挂载假端点（返回 Hono，由 server.ts 注册；必须在 ui 静态兜底之前）。
  *
  * 按指令**逐片 + 逐片等待**输出，这样界面上能看到「流慢慢出来」——
@@ -274,6 +282,14 @@ const sleep = (ms: number): Promise<void> => (ms > 0 ? new Promise((r) => setTim
 export function testModelRoutes(): Hono {
   const app = new Hono()
   app.post("/api/test-model/v1/chat/completions", async (c) => {
+    // 并发上限：超了直接 429（test 模型是本机调试用的，拒绝比拖死进程诚实）
+    if (activeStreams >= MAX_CONCURRENCY) {
+      return c.json(
+        { ok: false, error: { message: "test 模型并发已达上限（" + MAX_CONCURRENCY + "），请等前一个流结束", type: "too_many_requests" } },
+        429,
+      )
+    }
+    activeStreams++
     let body: unknown = {}
     try {
       body = await c.req.json()
@@ -286,6 +302,7 @@ export function testModelRoutes(): Hono {
     const plan = planStream(model, reply, directive)
     const frames = sseFrames(model, reply)
     const encoder = new TextEncoder()
+    // 计数在流真正收尾时归还（start 里抛错也要归还，用 finally 兜住）
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         let i = 0
@@ -299,6 +316,11 @@ export function testModelRoutes(): Hono {
         // 收尾帧（stop / usage / [DONE]）一起补上
         while (i < frames.length) controller.enqueue(encoder.encode(frames[i++] ?? ""))
         controller.close()
+        activeStreams--
+      },
+      cancel() {
+        // 客户端中断（AbortError / 页面关闭）也要归还名额
+        activeStreams--
       },
     })
     return new Response(stream, {

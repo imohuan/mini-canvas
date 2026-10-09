@@ -35,7 +35,12 @@ it('goal op=end ⇒ 调运行时 endGoal 并回 {ended:true}', async () => {
       endGoal: async () => { called++; return true },
     }
     const app = new Hono()
-    app.route('/', agentSessionRoutes(store, fakeRuntime() as never, { dataDir: root } as never, undefined, undefined, undefined, undefined, goalRuntime as never))
+    app.route('/', agentSessionRoutes(
+      store,
+      fakeRuntime() as never,
+      { dataDir: root, modelContextWindow: async () => undefined } as never,
+      undefined, undefined, undefined, undefined, undefined, goalRuntime as never,
+    ))
     const res = await app.request('/api/agent/canvases/c1/sessions/s1/goal', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

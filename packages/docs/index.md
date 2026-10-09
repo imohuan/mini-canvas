@@ -3,32 +3,37 @@ layout: home
 
 hero:
   name: mini-canvas
-  text: 文档与插件展示
-  tagline: 用 MD 写文档，自动列出插件注册的功能，还能在页面里直接打开组件
+  text: 插件系统文档
+  tagline: 画布本身几乎什么都不做，功能全靠插件装上去 —— 这套系统怎么运转，这里说清楚
   actions:
     - theme: brand
-      text: 开始看
-      link: /guide/
+      text: 从项目介绍开始
+      link: /intro/
     - theme: alt
-      text: 插件功能
-      link: /plugins/
+      text: 看活快照
+      link: /plugins/live
 
 features:
-  - icon: 📄
-    title: MD 就是页面
-    details: 文档直接写成 .md 文件，和代码放同一个仓库，跟着版本走。
-  - icon: 🧩
-    title: 功能自动展示
-    details: 扫插件自己的声明，装一个新插件，文档自动多一行，不用手写目录。
-  - icon: 👀
-    title: 组件在线预览
-    details: 文档里可以直接跑真实 Vue 组件，点开就能看、就能用。
+  - icon: 🧱
+    title: 三层分工
+    details: 框架只装插件、数据层只管数据、渲染层只管画面。谁擅长什么谁来做。
+  - icon: 🔌
+    title: 七个原语
+    details: 写插件只用学七样东西，其余全靠注册场往里放。
+  - icon: 👁
+    title: 看得见
+    details: 活快照直接读运行中的画布，谁注册了什么，当场看得到。
 ---
 
 ## 这个站是干什么的
 
-它是给你项目的**文档站**，也是一个**插件功能展示台**。写文档的人只写 MD，
-插件功能列表和组件预览会自动生成、直接可用。
+它讲清楚一件事：**mini-canvas 的插件系统是怎么运转的**，
+以及**你当前这台画布上到底装了什么、注册了什么**。
 
-想马上动手，看 [指南](/guide/)；想看有哪些插件，看 [插件功能](/plugins/)；
-想试组件，看 [组件预览](/preview/)。
+不知道从哪看起，就按这个顺序：
+
+1. [这个项目是什么](/intro/) —— 两分钟理解它像什么。
+2. [三层是怎么分工的](/intro/three-layers) —— 后面所有内容的地基。
+3. [插件系统：七个原语](/intro/plugin-system) —— 写插件要会的东西。
+4. [注册场：加功能不用加服务](/intro/registries) —— 这套设计最核心的一招。
+5. [活快照](/plugins/live) —— 看你自己的画布。

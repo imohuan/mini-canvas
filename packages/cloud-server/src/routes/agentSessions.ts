@@ -80,6 +80,8 @@ export function agentSessionRoutes(
    * 与 preTurn 同一套注入风格。
    */
   onQueueChanged?: (canvasId: string, sessionId: string) => void,
+  /** 会话被删除（宿主借此清调度器的内存表：inflight / hadPending / lastFailureAt） */
+  onSessionDeleted?: (canvasId: string, sessionId: string) => void,
   /** 目标运行时（不注入 = 目标端点回 503；单测与老宿主不受影响） */
   goalRuntime?: GoalRuntimePort,
 ): Hono {
@@ -201,6 +203,7 @@ export function agentSessionRoutes(
     if (!p.ok) return p.res
     // 先放掉内存态（否则那条会话对象会一直挂着、甚至继续跑）
     runtime.forget(p.canvasId, p.sessionId!)
+    onSessionDeleted?.(p.canvasId, p.sessionId!)
     const removed = await store.remove(p.canvasId, p.sessionId!)
     // 分支登记表也要清：留着已删会话的引用，界面上会出现「点了没反应」的死分支
     if (removed && branches) await branches.unregister(p.canvasId, p.sessionId!)

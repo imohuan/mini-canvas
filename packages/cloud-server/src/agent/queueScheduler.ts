@@ -109,6 +109,16 @@ export class QueueScheduler {
       })
   }
 
+  /** 会话被删除：清掉本会话的三张内存表（inflight / hadPending / lastFailureAt）。
+   *  不清的后果（review 指出）：hadPending 残留会让 queue_idle 判错；
+   *  lastFailureAt 残留会让新会话被旧会话的 30 秒失败冷却挡住自动发送。 */
+  forget(canvasId: string, sessionId: string): void {
+    const k = this.key(canvasId, sessionId)
+    this.inflight.delete(k)
+    this.hadPending.delete(k)
+    this.lastFailureAt.delete(k)
+  }
+
   /**
    * 对账 + 结算（设计 §3.3.1 的重启对账）：
    *

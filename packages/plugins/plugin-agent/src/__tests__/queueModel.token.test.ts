@@ -1,6 +1,6 @@
 /** token 单位换算 / 口径（用户口径 2026-10-09）—— 两态「已用预算 ⇄ 剩余预算」+ 单位缩写。 */
 import { describe, it, expect } from 'vitest'
-import { formatToken, budgetTokenText, parseTokenText, tokenDisplay, goalProgress } from '../queueModel'
+import { formatToken, budgetTokenText, parseTokenText } from '../queueModel'
 
 describe('formatToken：按量级缩写', () => {
   it('国际单位 k / M / B / T', () => {
@@ -55,35 +55,6 @@ describe('parseTokenText：把用户输入解析成数字', () => {
     expect(parseTokenText('')).toBe(-1)
     expect(parseTokenText('   ')).toBe(-1)
     expect(Number.isNaN(parseTokenText('abc'))).toBe(true)
-  })
-})
-
-describe('tokenDisplay：两态「已用预算 / 剩余预算」', () => {
-  const B = 1000000
-  const U = 3700
-  it('used ⇒ 已用预算', () => {
-    expect(tokenDisplay('used', B, U)).toEqual({ prefix: '已用预算', value: '3.7k' })
-  })
-  it('left ⇒ 剩余预算 = 预算 − 已用', () => {
-    expect(tokenDisplay('left', B, U)).toEqual({ prefix: '剩余预算', value: '996k' })
-  })
-  it('预算不限 ⇒ 强制回落「已用预算」（剩余没意义）', () => {
-    expect(tokenDisplay('left', -1, U)).toEqual({ prefix: '已用预算', value: '3.7k' })
-    expect(tokenDisplay('left', 0, U).prefix).toBe('已用预算')
-  })
-  it('剩余不会为负（已用 > 预算时按 0）', () => {
-    expect(tokenDisplay('left', 1000, 5000)).toEqual({ prefix: '剩余预算', value: '0' })
-  })
-})
-
-describe('goalProgress', () => {
-  it('预算不限 ⇒ 0（没有分母）', () => {
-    expect(goalProgress(-1, 5000)).toBe(0)
-    expect(goalProgress(0, 5000)).toBe(0)
-  })
-  it('正常取整、夹在 0-100', () => {
-    expect(goalProgress(1000, 370)).toBe(37)
-    expect(goalProgress(1000, 5000)).toBe(100)
   })
 })
 

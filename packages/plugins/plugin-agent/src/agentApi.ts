@@ -297,6 +297,11 @@ export class AgentApi {
     })
   }
 
+  /** 读队列快照（GET）：steer 落空后拉一次，让界面立即看到条目还在 */
+  getQueue(canvasId: string, sessionId: string): Promise<{ ok: boolean; queue?: QueueStateView; error?: string }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/queue')
+  }
+
   /**
    * 引导（插队）：把这条送进**正在跑**的那一轮的下一次请求。
    * 返回 steered=false 表示那一刻没在跑 —— 条目会留在队列里按序发（不丢）。

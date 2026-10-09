@@ -966,8 +966,11 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
           void nextTickScroll()
         }
       } else {
-        // 没在跑（轮刚好结束）：条目留在队列，调度器会按序发它
-        setError('')
+        // 没在跑 / 轮刚好结束：条目留在队列，调度器会按序发它。
+        // 后端在 steer 失败分支已广播 queue 快照 —— 但本响应不是 SSE 订阅者收不到，
+        // 这里主动拉一次队列快照，让界面立即看到「条目还在队首」而不是以为丢了。
+        const q = await api.getQueue(canvasId(), sid)
+        if (q.queue) state.queue = q.queue
       }
     } catch (err) {
       setError('引导失败：' + (err instanceof Error ? err.message : String(err)))

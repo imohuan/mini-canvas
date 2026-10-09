@@ -41,8 +41,6 @@ import {
   usedText,
   budgetTokenText,
   formatToken,
-  tokenDisplay,
-  goalProgress,
   parseTokenText,
   type TokenUnit,
 } from '../queueModel.js'

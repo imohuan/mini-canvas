@@ -4,9 +4,15 @@ import { computed, onMounted, ref } from 'vue'
 /**
  * 活快照：把「当前这台画布上注册了什么」直接摊出来。
  *
- * 数据来源有两条路，按优先级自动选：
- *   1. 传了 url（例如 MCP 服务器或后台的 /api/.../surface）→ 直接 fetch；
- *   2. 页面同源跑着画布应用（window.MiniCanvasUI / window.MiniCanvas）→ 当场调 ctx.surface()。
+ * 数据来源按优先级依次尝试，第一个成功即用：
+ *   1. 传了 url → 直接 fetch（后台的快照接口、或自建 JSON）；
+ *   2. 同页跑着画布应用（window.MiniCanvasUI / window.MiniCanvas）→ 当场调 ctx.surface()；
+ *   3. 仓库存的快照文件 public/surface-snapshot.json —— **真实采集**、随仓库走，
+ *      页面因此永远有真数据可看；想更新就用「重新采集」下载当次快照、覆盖这个文件。
+ *
+ * 为什么不直接跨源读运行中的应用：浏览器不允许跨源（或跨标签页）读别的窗口的全局变量，
+ * 实测报 "Blocked a frame ... from accessing a cross-origin frame"。
+ * 所以"看实时"要么同源注入，要么由后台把快照转成 JSON 下发，两者都需要一点配合。
  *
  * 所以：本地开着画布应用时，这一页显示的就是**你那台画布的真实情况**，不是示例数据。
  */
@@ -15,8 +21,17 @@ const props = withDefaults(
     url?: string
     /** 运行中应用暴露 API 的全局名（ui 应用用 MiniCanvasUI，裸宿主用 MiniCanvas） */
     windowKey?: string
+    /** 额外探测的候选地址（顺序即优先级）；传空数组可关掉自动探测 */
+    autoProbe?: string[]
   }>(),
-  { windowKey: 'MiniCanvasUI' },
+  {
+    windowKey: 'MiniCanvasUI',
+    // 只试同源桥。/mcapp 由 dev server 代理到本机画布应用（cloud-server :8865）。
+   // 想换成别的地址（例如后台的快照接口）就传 autoProbe 覆盖它。
+    // 兜底数据源：仓库存的真实快照（随仓库走，保证这一页永远有真数据）。
+    // 想换成后台接口 / 其它地址就传 autoProbe 覆盖它。
+    autoProbe: () => ['/surface-snapshot.json'],
+  },
 )
 
 interface ServiceSurface {
@@ -58,6 +73,8 @@ interface PluginStatus {
 }
 interface Report {
   state?: string
+  /** 快照采集时间（内置快照文件里带的） */
+  capturedAt?: string
   services?: ServiceSurface[]
   registries?: RegistryKindSurface[]
   registryEntries?: RegistryEntrySurface[]
@@ -73,28 +90,82 @@ const errorMsg = ref('')
 const source = ref('')
 const report = ref<Report>({})
 const tab = ref<'plugins' | 'services' | 'registries' | 'tree' | 'commands' | 'tools' | 'events'>('plugins')
+/** 探测失败过的地址（错误提示里列出来，方便排查） */
+const tried = ref<string[]>([])
+/** 快照采集时间（内置快照才带；实时读时为采集那一刻） */
+const capturedAt = ref('')
 
 const w = (): any => globalThis as any
+
+/** 读一个"已就绪的 API 门面"：自带 getContext + surface 才算数 */
+function readFromApi(api: any): Report | null {
+  if (!api?.getContext) return null
+  const ctx = api.getContext()
+  if (!ctx?.surface) return null
+  return { ...ctx.surface(), plugins: ctx.inspectPlugins?.() }
+}
+
+/** 从某个地址 fetch 一份快照 JSON（快照文件 / 后台接口都走这条） */
+async function fetchReport(url: string): Promise<Report> {
+  const res = await fetch(url, { cache: 'no-store' })
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  const raw = await res.json()
+  // 快照文件是 { capturedAt, source, ...surface, plugins }；接口可能直接给 surface
+  return raw && typeof raw === 'object' ? raw : {}
+}
+
+/** 「重新采集」：当前页跑着应用时，采一份快照并下载成 JSON（覆盖 public/surface-snapshot.json 即更新数据） */
+function recapture() {
+  const direct = readFromApi(w()[props.windowKey] ?? w().MiniCanvas)
+  if (!direct) {
+    errorMsg.value = '当前页没有运行中的画布应用，采不了新快照（' + w().location?.href + '）'
+    status.value = 'error'
+    return
+  }
+  const snap = { capturedAt: new Date().toISOString(), source: 'window.MiniCanvasUI.getContext().surface()', ...direct }
+  const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = 'surface-snapshot.json'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
 
 async function load() {
   status.value = 'loading'
   errorMsg.value = ''
+  tried.value = []
   try {
     let r: Report
     if (props.url) {
       source.value = props.url
-      const res = await fetch(props.url)
-      if (!res.ok) throw new Error('HTTP ' + res.status)
-      r = await res.json()
+      r = await fetchReport(props.url)
     } else {
-      const api = w()[props.windowKey] ?? w().MiniCanvas
-      if (!api?.getContext) {
-        throw new Error('页面里没找到 window.' + props.windowKey + '（本地画布应用要先跑起来）')
+      // ① 优先：同页就挂着的 API（文档站与画布应用同源同页时才成立）
+      const direct = readFromApi(w()[props.windowKey] ?? w().MiniCanvas)
+      if (direct) {
+        source.value = '实时 · window.' + props.windowKey + '.getContext().surface()'
+        r = direct
+      } else {
+        // ② 退一步：读仓库存的真实快照（autoProbe 可覆盖成后台接口）
+        let got: Report | null = null
+        for (const url of props.autoProbe ?? []) {
+          tried.value.push(url)
+          try {
+            got = await fetchReport(url)
+            source.value = '内置快照 · ' + url
+            if (got?.capturedAt) capturedAt.value = String(got.capturedAt)
+            break
+          } catch {
+            /* 试下一个 */
+          }
+        }
+        if (!got) {
+          throw new Error('读不到快照（没传 url、同页也没有 window.' + props.windowKey + '）')
+        }
+        r = got
       }
-      source.value = 'window.' + props.windowKey + '.getContext().surface()'
-      const ctx = api.getContext()
-      const s = ctx.surface()
-      r = { ...s, plugins: ctx.inspectPlugins?.() }
     }
     report.value = r
     status.value = 'ok'
@@ -147,14 +218,20 @@ const stateBadgeClass = (s: string) =>
   <div class="mc-live">
     <div class="mc-plugin-toolbar">
       <span class="mc-badge">数据源 {{ source || '（未取到）' }}</span>
+      <span v-if="capturedAt" class="mc-badge">采集于 {{ capturedAt.replace('T', ' ').slice(0, 19) }}</span>
       <button class="mc-preview__btn" @click="load">刷新</button>
+      <button class="mc-preview__btn" title="把当前运行中的画布采一份快照并下载（用来更新 public/surface-snapshot.json）" @click="recapture">
+        重新采集
+      </button>
     </div>
 
     <div v-if="status === 'loading'" class="mc-empty">正在读取画布的自省快照…</div>
 
     <div v-else-if="status === 'error'" class="mc-empty">
-      读不到：{{ errorMsg }}<br />
-      这一页要在**跑着画布应用**的环境里打开；纯静态预览会看不到数据，属正常。
+      <p>读不到：{{ errorMsg }}</p>
+      <p v-if="tried.length" class="mc-dim">试过这些地址：{{ tried.join('、') }}</p>
+      <p>正常情况下这一页会显示内置的真实快照（public/surface-snapshot.json）。<br />
+      没看到数据，多半是快照文件没随站点发布 —— 检查它是否在 public/ 下。</p>
     </div>
 
     <template v-else>

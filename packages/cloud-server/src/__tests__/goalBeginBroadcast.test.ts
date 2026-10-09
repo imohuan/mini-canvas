@@ -58,7 +58,7 @@ it('beginGoal 之后：推一条 goal_state（界面据此画出目标行）', a
       store,
       fakeRuntime() as never,
       { dataDir: root, modelContextWindow: async () => undefined } as never,
-      undefined, undefined, hub as never, undefined, goalRuntime as never,
+      undefined, undefined, hub as never, undefined, undefined, goalRuntime as never,
     ))
     const res = await app.request('/api/agent/canvases/c1/sessions/s1/messages', {
       method: 'POST',
