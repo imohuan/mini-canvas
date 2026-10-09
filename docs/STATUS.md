@@ -5,6 +5,32 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-09 九续，子代理 code review：目标队列系统 6 处严重/中档修复）
+
+功能完成后派子代理对目标队列系统做了一轮深入审查。**发现 6 个严重 + 5 个中档问题，全部修完**。
+
+**严重（会造成数据损坏/功能失效）**：
+1. **纯图消息整条不进转录**（runtime.ts:515 落盘条件只看 `input.text`）→ 图丢失 + 队列纯图条目对账恒不成立 ⇒ **无限重发**。修：`text || images?.length`。
+2. **队列对账指纹只看 text**（queueScheduler.ts:138）→ 纯图条目、带 goal 的条目（实际发出的是 objective）恒不成立 ⇒ 同样无限重发/目标反复重启。修：指纹 = 文本 + 图 + 实发文本。
+3. **每次发消息重放整条通道缓冲**（agentSessions.ts since 恒 0）→ 探针实测第 2 条响应帧 11→21、正文重复（AAABBBBBB）。修：起点改 `hub.lastSeq()`。
+4. **同一事件被投递两次**（send 响应流与常驻流双订阅、不看 seq）→ 助手正文与工具卡片写重。修：帧带 `id:<seq>`，客户端 `acceptSeq` 去重 + 水位推进；**换会话必须重置水位**（否则新会话 seq 更小被整段丢）。
+5. **`agent.setGoalImages` 不存在** → 编辑目标的图静默不落盘（运行时报错）。修：服务开出口子。
+6. **跑着的时候发目标**：写了一份没人用的 GOAL.json、objective 从没发出去却回 `{steered:true}`。修：与普通消息一致进队列（条目带 goal），轮到时调度器走 startGoal。
+
+**中档**：失败冷却 30s 挡住用户操作（恢复队列加 forced）；编辑态（组件本地）换会话不归零；
+editing 状态部分记在客户端、用户编辑中切走会话会永久卡队列（新增无 itemId 的 cancel-edit 兜底清全会话）；
+goal-images 无上限（设 4 张/单张 6M 字符）；一行写死颜色让 ui 色净化测试本来就红（加白名单标记）。
+
+**低档（只列未改）**：`isGoalPausedOnDisk` 死代码且与 goalPaused 双源；queueModel 的 tokenDisplay/TokenMode/
+goalProgress/budgetText/usedText 无 UI 消费者；queueScheduler 的 hadPending/lastFailureAt 不清理；
+testModel 端点无并发上限（本机绑定风险有限）；引导空闲时前端略沉默。
+
+**测试缺口（建议补）**：goalRoundBroadcast（每轮 goal_round→goal_state 时序含中途停止）、goalEditVsStopAccounting、
+goalCorruptFile 四条路径、goalPauseWhileIdleFlag、goalImagesRoute 的 .paused 态、sendGoalQueuedState、sseGapDetected。
+
+**验证**：cloud-server **555**、plugin-agent **239**、ui **239** 全绿；三包 typecheck 干净；
+cloud-server/ui 已重建；真服务探针 ALL PASS。已提交 e7380f2c。
+
 ### 追记（2026-10-09 十一续，Agent 面板「停靠/浮窗」按钮的图标随状态变）
 
 用户口径（附截图，红框圈住右上角那颗按钮）：「这个按钮应该换一个，这个时候应该是打开成为
@@ -90,6 +116,19 @@ hover 只把箭头颜色变深变亮；点击区域从 16×16 放大到 **24×24
 （走 --ui-chip 中性填充，亮暗自动翻转）、**不要边框**（border/outline 皆 0），一级/二级/合并项共用
 同一条 .asp-row.is-current 规则；点二级时它的一级同时高亮。实测：箭头 24×24、背景 rgba(0,0,0,0)、
 hover 图标 rgb(168,168,168)→rgb(247,247,247)；点「控制栏」后「布局」「控制栏」两行各有一层灰底、无边框。
+
+**用户第六轮（同日，重要教训：看到的是过期构建产物）**：用户报"完全没高亮"。
+排查结论 —— 源码一直是好的：dev（:5288，直读源码）亮/暗两套都量到 is-current 背景 + 主题色文字；
+而 cloud-server（:8865）托管的是 packages/ui/dist 构建产物，那份 dist 是 19:49 打的包，
+正好卡在"合并单节点 + 放大箭头"之后、"加回高亮"之前，所以里面根本没有 is-current 背景规则
+（实测该页 CSS 里 asp-row.is-current 规则数 0、当前项背景 rgba(0,0,0,0)）。
+处置：pnpm -C packages/ui build 重建 dist（新产物 scope id 67ab93b3、含
+.asp-row.is-current，background 走 var(--ui-accent-soft)），8865 硬刷新后高亮正常。
+
+**教训（写死进流程）**：改了 packages/ui 的界面后，dev :5288 与 cloud-server 托管的 :8865
+是两份不同的东西 —— 前者直读源码、后者读 packages/ui/dist。只验 dev 会漏掉"用户看的是旧 dist"。
+以后交付 UI 改动必须 pnpm -C packages/ui build 重建一次 dist；用户报"源码有样式、界面没效果"时，
+先怀疑 dist 过期 / 浏览器缓存，不要反复改源码。
 
 **验证**：ui 包（新增 settingsPanelTree.test.ts 10 条：注册顶替默认皮 + 两级树/折叠/缩进 +
 点选滚动 + scroll-spy + 只消费 settingsGroup、不消费 nav/tab + 无卡片 + 无高亮）除 **plugin-agent 的预先失败**外全绿；
