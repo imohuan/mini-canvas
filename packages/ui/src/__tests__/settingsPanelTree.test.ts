@@ -118,6 +118,15 @@ describe('AppSettingsPanel 交互：点左侧滚到对应位置', () => {
     expect(hoverAt, '找不到 :hover 规则').toBeGreaterThan(-1)
     expect(currentAt, 'is-current 规则应排在 :hover 之后').toBeGreaterThan(hoverAt)
   })
+
+  it('二级亮的时候一级不亮（高亮只落在"当前那一段"）', () => {
+    // 一级行不带任何 is-current 绑定
+    expect(SRC).toMatch(/<div class="asp-row asp-row--l1">/)
+    expect(SRC).not.toMatch(/asp-row--l1"\s*:class="\{\s*'is-current'/)
+    // 二级行与合并项才带 is-current
+    expect(SRC).toMatch(/asp-row asp-row--l2"\s*\n?\s*:class="\{ 'is-current': currentKey === leaf \}"/)
+    expect(SRC).toMatch(/asp-row--solo"[\s\S]{0,80}'is-current': currentKey === soloLeafOf\(nav\)/)
+  })
 })
 
 describe('AppSettingsPanel 右侧：字段不套卡片、直接铺开', () => {

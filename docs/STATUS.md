@@ -130,6 +130,10 @@ hover 图标 rgb(168,168,168)→rgb(247,247,247)；点「控制栏」后「布�
 以后交付 UI 改动必须 pnpm -C packages/ui build 重建一次 dist；用户报"源码有样式、界面没效果"时，
 先怀疑 dist 过期 / 浏览器缓存，不要反复改源码。
 
+**用户第七轮（同日）**：用户口径"二级菜单亮的时候一级菜单就不要亮了"。改：一级行**不带**
+is-current 绑定，高亮只落在"当前那一段"（有子节点的分组里当前段永远是某个二级）；
+合并项（solo）仍亮它自己。实测点「自动布局间距」时只有该二级亮（一级 is-current 数 0）。
+
 **验证**：ui 包（新增 settingsPanelTree.test.ts 10 条：注册顶替默认皮 + 两级树/折叠/缩进 +
 点选滚动 + scroll-spy + 只消费 settingsGroup、不消费 nav/tab + 无卡片 + 无高亮）除 **plugin-agent 的预先失败**外全绿；
 **真机（Chrome MCP + dev :5288）DOM 几何逐条量过**：左树 aside padding=6px、一级文字 18px / 二级文字 38px（差 20px）；

@@ -279,8 +279,9 @@ function blocksOf(groupKey: string): ContentBlock[] {
 
           <!-- 有多个子节点：一级 + 可折叠的二级 -->
           <template v-else>
-            <!-- 一级行：画折叠箭头 -->
-            <div class="asp-row asp-row--l1" :class="{ 'is-current': currentNav === nav }">
+            <!-- 一级行：画折叠箭头。**它自己不参与高亮**（用户口径 2026-10-09：二级亮的时候一级不要亮）——
+                 高亮只落在"当前那一段"，有子节点的分组里当前段永远是某个二级。 -->
+            <div class="asp-row asp-row--l1">
               <button
                 class="asp-caret"
                 :aria-expanded="!isCollapsed(nav)"

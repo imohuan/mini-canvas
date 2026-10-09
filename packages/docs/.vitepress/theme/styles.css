@@ -78,6 +78,11 @@
   opacity: 0.5;
 }
 
+.mc-badge--bad {
+  color: var(--vp-c-danger-1);
+  border-color: var(--vp-c-danger-1);
+}
+
 .mc-code {
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
