@@ -1,0 +1,17 @@
+{
+  "name": "plugin-note-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "便签节点",
+    "description": "演示 content 组件的写法：props 收数据、nodeWrite 写回",
+    "pluginName": "note-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
+  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+}

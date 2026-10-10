@@ -1,0 +1,25 @@
+{
+  "name": "plugin-demo-badge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "缩放角标",
+    "description": "往 overlay 槽挂一个小角标，显示当前画布缩放",
+    "pluginName": "demo-badge",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*"
+  },
+  "peerDependencies": {
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  }
+}
+

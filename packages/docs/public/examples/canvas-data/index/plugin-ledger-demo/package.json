@@ -1,0 +1,35 @@
+{
+  "name": "@mini-canvas/plugin-ledger-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "演示：账本（只数据层）",
+    "description": "不装渲染层，把数据层单独跑起来：建节点、连边、撤销、落盘，并有 Node 单测",
+    "pluginName": "ledger-demo",
+    "installable": true
+  },
+  "main": "./src/host.ts",
+  "types": "./src/host.ts",
+  "exports": {
+    ".": {
+      "types": "./src/host.ts",
+      "default": "./src/host.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0"
+  }
+}
+

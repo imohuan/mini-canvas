@@ -27,7 +27,7 @@ const { host, api, exposeToWindow } = await createMiniCanvasHost({
 exposeToWindow()   // 顺手把 api 挂到 window.MiniCanvas
 ```
 
-它内部做的就是：建 `ctx` → 装基础服务 → 补渲染层两件 → 装插件 → `start`。
+它内部做的就是：建 `ctx` → 装基础服务 → 补渲染层那几件服务 → 装插件 → `start`。
 
 ### 身份二：插件系统暴露给画布的那一面
 
@@ -40,14 +40,15 @@ window.MiniCanvasUI.listPlugins()           // 已装插件
 window.MiniCanvasUI.installPlugin(mod)      // 热装
 ```
 
-## 它注入的两件服务
+## 它注入的三件服务
 
-这是渲染层最核心的贡献。数据层给不了这两样，因为一个要量 DOM、一个要抓绘图后端：
+这是渲染层最核心的贡献。数据层给不了这几样，因为它们要量 DOM、要抓绘图后端、要管插件装卸：
 
 | 服务 | 为什么必须由它提供 | 插件拿它能干什么 |
 | --- | --- | --- |
 | `nodeLayout` | 节点的**实际**渲染尺寸只能量 DOM | 拿节点真实宽高、绝对坐标、兄弟节点 |
 | `viewport` | 视口要 attach VueFlow 后端才能动 | 缩放、定位、聚焦某节点、屏幕坐标↔画布坐标 |
+| `pluginManager` | 装卸插件要经统一句柄（带来源与清单） | 装/卸/重载插件、按清单装配、诊断 |
 
 ```ts
 const layout = ctx.get('nodeLayout')

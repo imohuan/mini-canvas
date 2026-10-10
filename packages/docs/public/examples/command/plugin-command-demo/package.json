@@ -1,0 +1,24 @@
+{
+  "name": "plugin-command-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "演示：命令注册表",
+    "description": "跟着 command 服务学：注册带快捷键/使能条件的命令，界面只按 id 调它",
+    "pluginName": "command-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  }
+}

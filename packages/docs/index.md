@@ -4,14 +4,14 @@ layout: home
 hero:
   name: mini-canvas
   text: 插件系统文档
-  tagline: 画布本身几乎什么都不做，功能全靠插件装上去 —— 这套系统怎么运转，这里说清楚
+  tagline: 画布本身几乎什么都不做，功能全靠插件装上去 —— 从一个极简的前后端插件开始
   actions:
     - theme: brand
-      text: 从项目介绍开始
-      link: /intro/
+      text: ★ 极简实战：前后端写一个插件
+      link: /start/quickstart-fullstack
     - theme: alt
-      text: 看活快照
-      link: /plugins/live
+      text: 先看看这是什么
+      link: /start/about
 
 features:
   - icon: 🧱
@@ -30,10 +30,10 @@ features:
 它讲清楚一件事：**mini-canvas 的插件系统是怎么运转的**，
 以及**你当前这台画布上到底装了什么、注册了什么**。
 
-不知道从哪看起，就按这个顺序：
+不知道从哪看起 → 走 [入门](/start/) 的路线：
+[这是什么](/start/about) → [本地环境](/start/dev-setup) →
+[★ 极简实战](/start/quickstart-fullstack)（前后端各写一个插件）→
+[核心概念](/intro/three-layers) → [深入各层](/kernel/)。
 
-1. [这个项目是什么](/intro/) —— 两分钟理解它像什么。
-2. [三层是怎么分工的](/intro/three-layers) —— 后面所有内容的地基。
-3. [插件系统：七个原语](/intro/plugin-system) —— 写插件要会的东西。
-4. [注册场：加功能不用加服务](/intro/registries) —— 这套设计最核心的一招。
-5. [活快照](/plugins/live) —— 看你自己的画布。
+写的时候手边开两样：[示例](/examples/recipe-map)（我想做 X 抄哪个）和
+[API 参考](/api/)（按名查签名）。想看这台画布真实装了什么 → [活快照](/plugins/live)。

@@ -1,0 +1,21 @@
+{
+  "name": "topo-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "依赖拓扑演示",
+    "description": "跟着 topo 篇学：topoSort 排序 + 四种错误的报错现场（重名/自依赖/缺依赖/成环）",
+    "pluginName": "topo-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  }
+}
+

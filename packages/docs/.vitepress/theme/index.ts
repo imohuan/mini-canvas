@@ -4,7 +4,7 @@ import PluginCapabilityTable from './components/PluginCapabilityTable.vue'
 import ComponentPreview from './components/ComponentPreview.vue'
 import ComponentPreviewFrame from './components/ComponentPreviewFrame.vue'
 import SurfaceReport from './components/SurfaceReport.vue'
-import RegistryPlayground from './components/RegistryPlayground.vue'
+import ServiceTopology from './components/ServiceTopology.vue'
 import './styles.css'
 
 /**
@@ -18,6 +18,6 @@ export default {
     app.component('ComponentPreview', ComponentPreview)
     app.component('ComponentPreviewFrame', ComponentPreviewFrame)
     app.component('SurfaceReport', SurfaceReport)
-    app.component('RegistryPlayground', RegistryPlayground)
+    app.component('ServiceTopology', ServiceTopology)
   },
 } satisfies Theme

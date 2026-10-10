@@ -1,0 +1,20 @@
+{
+  "name": "plugin-measure-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "演示：按实测尺寸排列",
+    "description": "跟着 nodeLayout 学：用真实 DOM 尺寸把选中节点排成一行",
+    "pluginName": "measure-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*"
+  }
+}

@@ -1,11 +1,12 @@
 # @mini-canvas/docs
 
-mini-canvas 的**插件系统文档站**。讲清三件事：
+mini-canvas 的**插件系统文档站**。四类：
 
-1. **项目逻辑** —— 三层怎么分工、插件系统有哪些原语、注册场怎么让"加功能不用加服务"。
-2. **核心 API** —— 服务清单、注册场清单、语法糖、命令、自省。
-3. **看得见的数据** —— 「活快照」页直接读运行中画布的 `ctx.surface()`，
-   谁注册了什么当场看得到，不是手写的。
+1. **入门** —— 从这是什么到动手写出前后端各一个插件，再深挖内核/数据层/渲染层/主题/后台。
+2. **示例** —— 9 个可照抄的插件案例（含完整上下文与逐行注释）。
+3. **插件** —— 插件总览、活快照（读运行中画布的真数据）、核心插件与桥接插件。
+4. **API** —— **纯 API 参考**：前端服务（每篇只有签名表 + 用法 + 注意事项）、
+   `ctx` / 注册场、后端 cloud-server 的 `routes` / `store` / `jobs` / `mcp` / `agent`。
 
 ## 跑起来
 
@@ -22,6 +23,8 @@ pnpm -C packages/docs preview  # 预览静态站（:5291）
 | 写一篇文档 | 在对应目录新建 .md；想让菜单出现就改 .vitepress/config.ts 的 sidebar |
 | 让某个插件出现在总览表 | 该插件的 package.json 里声明 miniCanvas.title/description + builtin 或 installable |
 | 让文档能内联预览某个组件 | .vitepress/theme/preview-registry.ts 加一条 |
+| 给某个内置服务写文档 | 在 services/ 新建 <服务名>.md，按 API 两节结构（一句话定位 + 用法表 + 注意事项）写；文件头路径用相对路径，别指向不存在的 public/examples |
+| 更新活快照的真实数据 | 在跑着画布应用的页面点「重新采集」，用它覆盖 public/surface-snapshot.json |
 | 调站点外观/导航 | .vitepress/config.ts 与 .vitepress/theme/styles.css |
 
 ## 目录
@@ -30,8 +33,13 @@ pnpm -C packages/docs preview  # 预览静态站（:5291）
 packages/docs/
 ├── index.md                     首页
 ├── intro/                       项目介绍（是什么 / 三层 / 七个原语 / 注册场 / 生命周期）
-├── core/                        核心 API（总览 / 自省）
+├── api/                         API 参考（总览 / ctx / 注册场 / 后端 cloud-server 6 篇）
+├── core/                        前端 API 清单 / 自省
+├── services/                    前端服务（15 个服务，每个一篇：签名表 + 用法 + 注意事项）
 ├── plugins/                     插件（总览 / 活快照 / 默认主题 / 渲染宿主）
+├── public/
+│   ├── surface-snapshot.json    真实采集的自省快照（活快照 / 服务分布用它）
+│   └── examples/                服务文档里“完整例子”的配套源码
 └── .vitepress/
     ├── config.ts                站点配置
     ├── data/plugins.data.ts     构建期扫插件，生成列表

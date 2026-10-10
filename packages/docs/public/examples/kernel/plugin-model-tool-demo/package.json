@@ -1,0 +1,21 @@
+{
+  "name": "plugin-model-tool-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "模型工具演示",
+    "description": "跟着模型工具篇学：defineTool 注册进 registryOf('tool')、runToolCall 调用、tools/* 事件观察",
+    "pluginName": "model-tool-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "name": "plugin-fiber-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "Fiber 诊断演示",
+    "description": "跟着 Fiber 篇学：pending 缺依赖 / failed 配置错 / failed 运行抛错，三种情形逐个诊断",
+    "pluginName": "fiber-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  }
+}
+

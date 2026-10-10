@@ -1,0 +1,21 @@
+{
+  "name": "plugin-hello",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "内核快速上手：hello",
+    "description": "跟着内核总览页学：三种插件写法各来一个（对象 / 类 / 函数）",
+    "pluginName": "hello",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  }
+}
+

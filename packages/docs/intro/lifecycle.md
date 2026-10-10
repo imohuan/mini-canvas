@@ -31,8 +31,10 @@ export function apply(ctx, config) {
 
 ### 写法二：类形态（继承 Service）
 
-如果插件的主要工作就是"提供一个服务"，继承 `Service` 最省事 ——
-`super(ctx, name)` 顺手把它挂上服务表：
+**只有"这个插件的主要工作就是提供一项服务"时才用这种写法。** 它是少数派 ——
+大多数插件用的是写法一（对象形态）+ 注册场，**根本不提供任何服务**。
+
+继承 `Service`，`super(ctx, name)` 会顺手把它挂上服务表：
 
 ```ts
 import { Service } from '@mini-canvas/kernel'
@@ -47,6 +49,10 @@ export class GreeterService extends Service {
 // 装配：直接传类
 ctx.plugin(GreeterService)
 ```
+
+> **别把它当默认写法。** 判断标准还是那句：这是"一个能手"（将来会换实现）才做服务；
+"一张表"就老老实实放注册场。像 `theme-default` 这种只往主题槽放组件、
+一个服务都不提供的插件，才是常态。
 
 ### 写法三：函数形态
 

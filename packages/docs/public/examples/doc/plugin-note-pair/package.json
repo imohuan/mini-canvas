@@ -1,0 +1,39 @@
+{
+  "name": "@mini-canvas/plugin-note-pair",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "双便签",
+    "description": "一次事务建两个便签并连起来；另一条命令报告当前画布情况",
+    "pluginName": "note-pair",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/kernel": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34"
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "name": "plugin-events-demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "事件演示",
+    "description": "跟着事件篇学：on/once 监听、多参广播、serial 抢答、dev 未登记 warn",
+    "pluginName": "events-demo",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
+  },
+  "dependencies": {
+    "@mini-canvas/kernel": "workspace:*"
+  }
+}
+

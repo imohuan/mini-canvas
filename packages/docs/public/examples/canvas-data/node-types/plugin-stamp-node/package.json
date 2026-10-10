@@ -1,0 +1,34 @@
+{
+  "name": "@mini-canvas/plugin-stamp-node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "演示：邮票节点",
+    "description": "注册一种新节点 + 往标题位叠角标 + 给图片节点和多选框挂按钮",
+    "pluginName": "stamp-node",
+    "installable": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vue": "^3.5.34"
+  }
+}
+
