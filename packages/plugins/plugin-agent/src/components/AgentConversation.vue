@@ -28,6 +28,7 @@ import type { ResourceItem } from 'prosemirror-editor-bundle'
 import { useAgent } from '../useAgent.js'
 import { useStickyScroll } from '../useStickyScroll.js'
 import { groupTurnBlocks, type TurnRow } from '../turnBlocks.js'
+import { scrollTopForVisibleItem } from '../selectionScroll.js'
 // ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。
 import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
@@ -820,7 +821,6 @@ const goalRow = computed(() => {
   return {
     badge,
     round: g.round,
-    progress: goalProgress(g.budget, g.tokensUsed),
     resumed: s.goalPaused,
   }
 })
@@ -970,6 +970,47 @@ function onKeydown(e: KeyboardEvent): void {
 
 /** 只有带密钥的模型能选 */
 const usableModels = computed(() => s.models.filter((m) => m.hasKey))
+
+/**
+ * 模型列表的滚动区（`.ac-menu-scroll`）。
+ *
+ * 为什么打开时要滚一下（用户口径 2026-10-10，附截图）：模型可能几十条（自建网关几十上百个
+ * 模型 ID），列表限高只露几行 —— 当前选中的那条多半在可视区外，点开根本看不到"现在用的是哪个"，
+ * 得自己往下翻。于是打开那一刻把它滚进可视区。
+ *
+ * 为什么用 ref 而不是进 DOM 里 querySelector：ref 直接拿到就是这个容器的元素，
+ * 不用猜结构、也不会误伤别的下拉（技能 / MCP 也长着 .ac-menu-scroll）。
+ */
+const modelScrollRef = ref<HTMLElement | null>(null)
+
+/**
+ * 把选中的那条滚进列表的可视区（打开下拉时调一次）。
+ *
+ * 几何量法：用 `offsetTop` 而不是 `getBoundingClientRect()` —— 浮层入场带 0.14s 的
+ * `scale(.96)` 动画，rect 会被动画等比缩过、量出来的顶边偏小（真机实测偏 4%），
+ * 直接拿它算会滚不到底；offsetTop 是布局值，不吃 transform。
+ * 选中态认 `aria-selected="true"` —— 那是选中项的唯一真相，不再另造一个类名当第二处真相。
+ */
+function scrollSelectedModelIntoView(): void {
+  const box = modelScrollRef.value
+  if (!box || box.clientHeight <= 0) return
+  const item = box.querySelector<HTMLElement>('[aria-selected="true"]')
+  if (!item) return
+  // 项与滚动区同一个 offsetParent（都在浮层里），直接相减就是它在内容里的顶边
+  const top = item.offsetTop - box.offsetTop
+  box.scrollTop = scrollTopForVisibleItem(
+    { scrollTop: box.scrollTop, scrollHeight: box.scrollHeight, clientHeight: box.clientHeight },
+    { top, height: item.offsetHeight },
+    4,
+  )
+}
+
+// 打开时才滚：那一刻面板与列表才挂在 DOM 上，ref 才有值（v-if 是懒渲染的）。
+watch(modelOpen, (open) => {
+  if (open) void nextTick(() => scrollSelectedModelIntoView())
+})
+
+/** 点一项 = 切模型并收起（滚不滚是打开那一刻的事，这里不用管） */
 function pickModel(m: { provider: string; modelId: string }, close: () => void): void {
   agent.setModel(m.provider, m.modelId)
   close()
@@ -1704,8 +1745,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <span class="ac-menu-head-count">{{ usableModels.length }}</span>
                 </div>
                 <div v-if="!usableModels.length" class="ac-menu-empty">没有可用模型（先去设置里配一个）</div>
-                <!-- 滚动区：长列表在这里滚，分组头固定在上方不动 -->
-                <div class="ac-menu-scroll">
+                <!-- 滚动区：长列表在这里滚，分组头固定在上方不动。
+                     ref 挂它是为了「打开时把选中项滚进可视区」（见 scrollSelectedModelIntoView） -->
+                <div class="ac-menu-scroll" ref="modelScrollRef">
                   <button v-for="m in usableModels" :key="m.provider + '/' + m.modelId" class="ac-menu-card"
                     role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
                     <span class="ac-menu-card-icon"><Box :size="15" /></span>

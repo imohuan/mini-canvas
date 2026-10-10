@@ -1,0 +1,92 @@
+/**
+ * 打开下拉时「把选中项滚进可视区」的契约（用户口径 2026-10-10）。
+ *
+ * 用户口径（附截图）：模型下拉里可能有几十条（自建网关几十上百个模型 ID），列表限高只露几行，
+ * 而**当前选中的那一条**多半在可视区外 —— 点开根本看不到"我现在用的是哪个"，得自己往下翻。
+ * 要求：点开就把选中的那条滚进可视区。
+ *
+ * 为什么分两头测（照 stickToBottomCore.test.ts / queueUi.test.ts 的先例）：
+ *   ① 「该滚到哪」这件事有口径（已可见就不动、从上面被裁对齐上缘、从下面被裁对齐下缘……），
+ *      抽成纯函数 scrollTopForVisibleItem 真跑一遍 —— 这是本功能唯一的业务逻辑；
+ *   ② 「接线有没有接上」（打开时滚的是列表的滚动区、认的是 aria-selected、量几何用 offsetTop）
+ *      只能在源码里看，因为本包 vitest 跑在 node（挂不起整只 AgentConversation）。
+ */
+import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { scrollTopForVisibleItem } from '../selectionScroll'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
+
+/** 造一份滚动状态：内容总高 scrollHeight、视口 clientHeight、当前 scrollTop */
+const box = (scrollTop: number, scrollHeight: number, clientHeight: number) => ({
+  scrollTop,
+  scrollHeight,
+  clientHeight,
+})
+
+describe('scrollTopForVisibleItem：选中项该滚到哪', () => {
+  // 40 条、每条 58px、视口 270px → 可滚范围 [0, 2050]，一次露 4 条多一点
+  const ROW = 58
+  const item = (index: number) => ({ top: index * ROW, height: ROW })
+
+  it('已经完整可见 → 原样不动（打开就跳一下很吵）', () => {
+    // 视口停在顶部（第 0 条）：第 1 条完整落在 [0, 270) 里
+    expect(scrollTopForVisibleItem(box(0, 40 * ROW, 270), item(1))).toBe(0)
+  })
+
+  it('被裁在下方 → 下缘对齐容器下缘（选中项露出来，不是"刚露一角"）', () => {
+    // 第 37 条（末条）：停在顶部时它远在下方，应滚到底、下缘正好贴容器下缘
+    expect(scrollTopForVisibleItem(box(0, 40 * ROW, 270), item(37))).toBe(38 * ROW - 270)
+  })
+
+  it('被裁在上方 → 上缘对齐容器上缘', () => {
+    // 当前停在第 30 条处，选中项却是第 2 条（在视口上方）
+    expect(scrollTopForVisibleItem(box(30 * ROW, 40 * ROW, 270), item(2))).toBe(2 * ROW)
+  })
+
+  it('返回值永远夹在可滚范围内（不会滚出内容外）', () => {
+    const b = box(0, 40 * ROW, 270)
+    expect(scrollTopForVisibleItem(b, item(99))).toBe(40 * ROW - 270)
+    expect(scrollTopForVisibleItem(box(100, 40 * ROW, 270), { top: -500, height: ROW })).toBe(0)
+  })
+
+  it('内容不足以滚动 → 0（本来全都看得见）', () => {
+    expect(scrollTopForVisibleItem(box(0, 200, 270), item(3))).toBe(0)
+  })
+
+  it('项比可视区还高 → 对齐上缘（露开头比露结尾有用）', () => {
+    expect(scrollTopForVisibleItem(box(0, 40 * ROW, 40), { top: 300, height: 200 })).toBe(300)
+  })
+
+  it('pad 给上下留白；负值按 0 处理', () => {
+    expect(scrollTopForVisibleItem(box(0, 40 * ROW, 270), item(37), 8)).toBe(38 * ROW - 270 + 8)
+    expect(scrollTopForVisibleItem(box(0, 40 * ROW, 270), item(37), -8)).toBe(38 * ROW - 270)
+  })
+})
+
+describe('AgentConversation 接线：打开模型下拉时滚选中项', () => {
+  it('模型列表的滚动区挂着 ref（有它才找得到要滚的容器）', () => {
+    expect(host).toMatch(/class="ac-menu-scroll"\s+ref="modelScrollRef"/)
+  })
+
+  it('打开时才滚（那一刻面板与列表才在 DOM 里，ref 才有值）', () => {
+    expect(host).toMatch(/watch\(modelOpen,[\s\S]{0,240}scrollSelectedModelIntoView/)
+    expect(host).toMatch(/function scrollSelectedModelIntoView\(\): void/)
+  })
+
+  it('认的是 aria-selected="true"（选中态的唯一真相，不另造一个标记）', () => {
+    expect(host).toMatch(/querySelector<HTMLElement>\('\[aria-selected="true"\]'\)/)
+  })
+
+  it('几何用 offsetTop 量（不吃入口动画 scale 的影响，量出来的顶边才准）', () => {
+    const at = host.indexOf('function scrollSelectedModelIntoView')
+    const body = host.slice(at, host.indexOf('\nfunction ', at + 10))
+    expect(body).toMatch(/offsetTop/)
+    expect(body).toMatch(/scrollTopForVisibleItem\(/)
+    // 落点直接写回 scrollTop（打开即到位，不做平滑动画）
+    expect(body).toMatch(/box\.scrollTop\s*=/)
+  })
+})
