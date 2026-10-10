@@ -13,6 +13,31 @@ export { createCanvasCapabilityLayer } from './capabilityLayer'
 export { buildCapabilities } from './capabilities'
 export type { NodeRegisterDef, ThemeOccupantOpts, SlotRegisterReq } from './capabilities'
 
+// 剪贴板多路仲裁（注册场 clipboard/copy|cut|paste）：复制/粘贴按 order 仲裁的纯逻辑契约。
+// 宿主绑各一个原生 copy/cut/paste 监听，按 order 问各处理器谁接管（见 clipboardActions 头注释）。
+export {
+  CLIPBOARD_COPY_KIND,
+  CLIPBOARD_COPY_KEY,
+  CLIPBOARD_CUT_KEY,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  CANVAS_CLIPBOARD_MIME,
+  CANVAS_CLIPBOARD_TEXT_PREFIX,
+  buildClipboardWritePayload,
+  buildClipboardPastePayload,
+  dispatchClipboardWrite,
+  dispatchClipboardPaste,
+  hasCanvasClipboardMarker,
+  canvasClipboardMarker,
+} from './clipboardActions'
+export type {
+  ClipboardEntry,
+  ClipboardWriteHandler,
+  ClipboardWritePayload,
+  ClipboardPasteHandler,
+  ClipboardPastePayload,
+} from './clipboardActions'
+
 // 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
 import './serviceTypes'
 

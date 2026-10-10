@@ -57,6 +57,8 @@ export interface NodeTypeDef {
   frameless?: boolean
   /** 表面透明（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 容器型类型（分组）用它让连接线透出卡片区域。 */
   transparent?: boolean
+  /** 加载态用类型默认尺寸（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 媒体型类型（图片/视频）重新生成时按默认宽高显示，不跟着媒体比例变竖。 */
+  loadingDefaultSize?: boolean
 }
 
 /**
@@ -84,6 +86,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     resizable: def.resizable,
     frameless: def.frameless,
     transparent: def.transparent,
+    loadingDefaultSize: def.loadingDefaultSize,
   })
   const revokers: Array<() => void> = [() => doc.unregisterType(def.type)]
 

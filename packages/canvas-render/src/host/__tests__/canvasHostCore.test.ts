@@ -87,6 +87,47 @@ describe('nodesFromStore', () => {
     expect(c.style).toBeUndefined()
   })
 
+  /**
+   * 图片/视频：加载态包裹尺寸投影**类型默认尺寸**。
+   *
+   * 用户口径（2026-10-10）：重新生成时卡片先回到设置里配的默认宽高，跑完再跟随新产物比例。
+   * 这里锁"包裹尺寸"这一半（另一半是卡片壳 useNodeCardSize，见 theme-default 测试）。
+   *
+   * 为什么是**投影默认尺寸**而不是抹掉 style：VueFlow 的节点更新是合并语义，去掉 style
+   * 不会把上一次写进 DOM 的宽高抹掉（实测包裹停在旧比例）；必须显式给值才改写。
+   */
+  it('loadingDefaultSize 类型：running 投影类型默认尺寸，非 running 投影 node.size', () => {
+    const s = makeStore()
+    s.registerType({ type: 'media', label: '媒体', defaultSize: { w: 200, h: 120 }, loadingDefaultSize: true })
+    const id = s.addNode('media', { x: 0, y: 0 })
+    s.updateNode(id, { size: { w: 169, h: 300 } })
+    // 非 running：照常按 node.size 投 style（就是媒体真实比例）
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
+    // running：投影类型默认尺寸（200×120）—— 重新生成时不沿用上一张图的 169×300 竖版比例
+    s.updateNodeData(id, { runState: { status: 'running' } })
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '200px', height: '120px' })
+    // 跑完：比例回来
+    s.updateNodeData(id, { runState: { status: 'done' } })
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
+  })
+
+  it('loadingDefaultSize 类型但节点没有 size：running 仍给默认尺寸（空节点加载态也一致）', () => {
+    const s = makeStore()
+    s.registerType({ type: 'media2', label: '媒体2', defaultSize: { w: 200, h: 120 }, loadingDefaultSize: true })
+    const id = s.addNode('media2', { x: 0, y: 0 })
+    s.updateNodeData(id, { runState: { status: 'running' } })
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '200px', height: '120px' })
+  })
+
+  it('没声明 loadingDefaultSize 的类型：running 期间照常投影 size（行为不变）', () => {
+    const s = makeStore()
+    s.registerType({ type: 'plain', label: '普通', defaultSize: { w: 200, h: 120 } })
+    const id = s.addNode('plain', { x: 0, y: 0 })
+    s.updateNode(id, { size: { w: 169, h: 300 } })
+    s.updateNodeData(id, { runState: { status: 'running' } })
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
+  })
+
   it('transparent 类型（容器/分组）z 按嵌套深度分层：外层组-3、内层组-2（VueFlow computed 后 -1，仍在边之下）', () => {
     const s = makeStore()
     s.registerType({ type: 'group', label: '分组', defaultSize: { w: 300, h: 200 }, transparent: true })

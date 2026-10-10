@@ -328,6 +328,31 @@ export type { DragEventPayload, MoveEventPayload, ClickPayload, SelectionChangeP
 export type { ContextMenuPanePayload, ContextMenuNodePayload, ContextMenuEdgePayload } from './host/renderEvents'
 export type { ConnectionDropPayload } from './host/renderEvents'
 
+// 剪贴板多路仲裁：契约住在上游 canvas-data（纯逻辑，逻辑插件不必 import 渲染包），
+// 这里转发一份，渲染层/成品应用按习惯从 canvas-render 也能取到。
+export {
+  CLIPBOARD_COPY_KIND,
+  CLIPBOARD_COPY_KEY,
+  CLIPBOARD_CUT_KEY,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  CANVAS_CLIPBOARD_MIME,
+  CANVAS_CLIPBOARD_TEXT_PREFIX,
+  buildClipboardWritePayload,
+  buildClipboardPastePayload,
+  dispatchClipboardWrite,
+  dispatchClipboardPaste,
+  hasCanvasClipboardMarker,
+  canvasClipboardMarker,
+} from '@mini-canvas/canvas-data'
+export type {
+  ClipboardEntry,
+  ClipboardWriteHandler,
+  ClipboardWritePayload,
+  ClipboardPasteHandler,
+  ClipboardPastePayload,
+} from '@mini-canvas/canvas-data'
+
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
 export { createMiniCanvasHost } from './host/createMiniCanvasHost'
 export type {

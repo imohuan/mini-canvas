@@ -18,6 +18,19 @@ export interface CommandDef {
   keys?: string[]
   /** 可选使能条件（false → execute 直接 no-op） */
   when?: (ctx: unknown) => boolean
+  /**
+   * 该命令的键**由平台原生事件接管**（如粘贴 Ctrl/Cmd+V）：宿主键盘分发命中它时
+   * **既不 preventDefault、也不执行 run**，放行给浏览器派发原生剪贴板事件。
+   *
+   * 为什么需要它：在 keydown 里 preventDefault 会让浏览器**根本不派发**对应的原生事件
+   * （真机实测：对 Ctrl+V 调 preventDefault 后 paste 事件不再出现）。而剪贴板内容只有原生
+   * 事件能读到，所以"粘贴"这类键不能被 keydown 吞掉，必须显式声明让位。
+   *
+   * run 仍可在菜单/程序化调用时使用；keys 仍进快捷键面板（用户看得到 Ctrl+V）。
+   * 实际"谁接管这次粘贴"由剪贴板仲裁场按 order 决定（见 canvas-data
+   * canvas/clipboardActions）。
+   */
+  deferToNative?: boolean
   // —— v2 可选 UI 元数据（纯声明，菜单/工具栏插件读；不影响 run 语义）——
   /** 图标（字符串标识或 svg 路径，UI 插件自行解析） */
   icon?: string

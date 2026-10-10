@@ -59,6 +59,19 @@ import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
+import {
+  CLIPBOARD_COPY_KIND,
+  CLIPBOARD_COPY_KEY,
+  CLIPBOARD_CUT_KEY,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  buildClipboardWritePayload,
+  buildClipboardPastePayload,
+  dispatchClipboardWrite,
+  dispatchClipboardPaste,
+  type ClipboardWriteHandler,
+  type ClipboardPasteHandler,
+} from '@mini-canvas/canvas-data'
 import CanvasSurface from './CanvasSurface.vue'
 import {
   assembleTheme,
@@ -940,10 +953,54 @@ function onKeydown(e: KeyboardEvent): void {
   // f/r 归节点用，没选中时仍走画布的聚焦/适应视图），同键多个可用命令按 order 定优先级。
   const hit = findCommandByKeys(h.command.list(), e, h.ctx)
   if (hit) {
+    // deferToNative：该键交给平台原生事件（如 Ctrl/Cmd+V → paste）。
+    // 不 preventDefault、不 execute —— preventDefault 会让浏览器不再派发原生 paste
+    // （真机实测），而剪贴板内容只有原生事件读得到。真正的工由下面的 onPaste 仲裁场派发。
+    if ((hit as { deferToNative?: boolean }).deferToNative) return
     e.preventDefault()
     h.command.execute(hit.id)
     syncFromStore()
   }
+}
+
+/**
+ * 原生 paste 仲裁：一次粘贴只有一个赢家（按注册场 order）。
+ *
+ * 为什么由宿主收这一个事件：插件的"粘贴"动作要经过统一分发（铁律 7，插件不自绑 window）。
+ * 宿主读一次原生事件、归一成 payload，按 order 升序问各处理器，第一个接管的赢。
+ * 谁注册、谁先：file-drop 的图片/视频(10) > clipboard 的内存节点(20) > file-drop 的纯文本(30)。
+ */
+function onPaste(e: ClipboardEvent): void {
+  const t = e.target as HTMLElement | null
+  // 输入框/可编辑区内的粘贴归它们自己（与 onKeydown、各插件的 isEditableTarget 同规则）
+  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
+  const h = hostRef.value
+  if (!h) return
+  const entries = h.ctx
+    .registryOf<ClipboardPasteHandler>(CLIPBOARD_PASTE_KIND)
+    .list(CLIPBOARD_PASTE_KEY)
+  if (entries.length === 0) return
+  dispatchClipboardPaste(entries, buildClipboardPastePayload(e))
+  syncFromStore()
+}
+
+/** 原生 copy/cut 仲裁：命中 deferToNative 的命令键由这里统一接管写剪贴板（见 onKeydown 注释） */
+function onClipboardWrite(e: ClipboardEvent, key: string): void {
+  const t = e.target as HTMLElement | null
+  if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
+  const h = hostRef.value
+  if (!h) return
+  const entries = h.ctx
+    .registryOf<ClipboardWriteHandler>(CLIPBOARD_COPY_KIND)
+    .list(key)
+  if (entries.length === 0) return
+  dispatchClipboardWrite(entries, buildClipboardWritePayload(e))
+}
+function onCopy(e: ClipboardEvent): void {
+  onClipboardWrite(e, CLIPBOARD_COPY_KEY)
+}
+function onCut(e: ClipboardEvent): void {
+  onClipboardWrite(e, CLIPBOARD_CUT_KEY)
 }
 
 // 右键菜单：内部统一 preventDefault，把坐标透给父级弹业务菜单。
@@ -989,6 +1046,8 @@ function onPaneContextMenu(e: MouseEvent): void {
 
 let subs: Disposable[] = []
 let keydownBound = false
+let pasteBound = false
+let clipboardWriteBound = false
 
 onMounted(async () => {
   try {
@@ -1088,6 +1147,14 @@ onMounted(async () => {
     // 键盘
     window.addEventListener('keydown', onKeydown)
     keydownBound = true
+    // 原生粘贴（仲裁场）：插件经 registryOf('clipboard/paste') 声明粘贴动作，宿主统一派发
+    window.addEventListener('paste', onPaste)
+    pasteBound = true
+    // 原生复制/剪切（仲裁场）：插件经 registryOf('clipboard/copy') 声明"复制画布节点"，
+    // 命中时写一个"来自画布"的标记进系统剪贴板（粘贴仲裁据此判"该贴节点还是贴外部媒体"）。
+    window.addEventListener('copy', onCopy)
+    window.addEventListener('cut', onCut)
+    clipboardWriteBound = true
     // 全局按下点（capture）：拖线开始时作为"拖拽起点"，用于算拖了多远
     document.addEventListener('mousedown', onGlobalPointerDown, true)
 
@@ -1169,6 +1236,11 @@ onBeforeUnmount(() => {
   viewportTimers = []
   for (const s of subs) s.dispose()
   if (keydownBound) window.removeEventListener('keydown', onKeydown)
+  if (pasteBound) window.removeEventListener('paste', onPaste)
+  if (clipboardWriteBound) {
+    window.removeEventListener('copy', onCopy)
+    window.removeEventListener('cut', onCut)
+  }
   document.removeEventListener('mousedown', onGlobalPointerDown, true)
   window.removeEventListener('visibilitychange', onVisibilityChange)
   window.removeEventListener('pagehide', flushSave)

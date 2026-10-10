@@ -7,7 +7,7 @@
  * 边界：不 import @vue-flow/core，不 import Vue 运行时；类型用最小结构接口避免拉运行时。
  */
 
-import { isTransient, type NodeStoreService, type CanvasNode } from '@mini-canvas/canvas-data'
+import { isTransient, isNodeRunning, type NodeStoreService, type CanvasNode } from '@mini-canvas/canvas-data'
 import type { ThemeRegistry } from '@mini-canvas/canvas-data'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
@@ -114,8 +114,18 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
       }
       out.zIndex = depth === 0 ? -3 : -2
     }
-    // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑
-    if (n.size) out.style = { width: n.size.w + 'px', height: n.size.h + 'px' }
+    // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑。
+    //
+    // 例外：声明 loadingDefaultSize 的类型（图片/视频）在跑任务时投影**类型默认尺寸** ——
+    // 包裹尺寸与卡片实测尺寸一起落到用户在设置里配的默认宽高，加载态那张卡就是横屏默认态，
+    // 而不是上一次那张图/视频的比例。只影响渲染，不动 node.size：任务结束 runState 一变比例就回来。
+    //
+    // 为什么投影默认尺寸、而不是干脆不给 style：VueFlow 对节点更新是**合并**语义，
+    // 去掉 style 不会把上一次写进 DOM 的 width/height 抹掉（实测：包裹仍停在旧比例）；
+    // 显式给一个值才会真正改写。
+    const loadingSize = store.types.get(n.type)?.loadingDefaultSize === true && isNodeRunning(n) ? store.types.get(n.type)?.defaultSize : undefined
+    const styleSize = loadingSize ?? n.size
+    if (styleSize) out.style = { width: styleSize.w + 'px', height: styleSize.h + 'px' }
     // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：
     //   draggable/selectable/deletable 全关 → pane click 的 removeSelectedElements 摸不到它、
     //   不会拖动、不会进 VueFlow 内部选中集。判定读内核通用契约，不认识具体插件。
