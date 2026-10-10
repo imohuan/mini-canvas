@@ -17,7 +17,11 @@ export type AgentChatEvent =
   | { type: 'notice'; message: string }
   | { type: 'error'; message: string }
   | { type: 'usage'; usedTokens: number; limitTokens: number | null }
-  | { type: 'approval_request'; approval: { id: string; toolName: string; arguments: string; createdAt: number } }
+  | {
+      type: 'approval_request'
+      /** toolCallId = SDK 的 tool_call_id（界面据此把卡片和它的工具调用对上） */
+      approval: { id: string; toolName: string; arguments: string; createdAt: number; toolCallId?: string }
+    }
   | { type: 'approval_result'; id: string; decision: 'allow' | 'deny' }
   | { type: 'done' }
   /**
