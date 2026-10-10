@@ -56,6 +56,13 @@ export interface PendingApproval {
   toolName: string
   arguments: string
   createdAt: number
+  /**
+   * 这条审批对应的工具调用 id（SDK 的 `tool_call_id`）。
+   *
+   * 界面靠它把「审批卡片」和它的那条工具调用对上（不再按工具名猜 —— 同一轮里
+   * 可能有好几个同名工具，按名字找会标错那条）。刷新后补渲染也用它落点。
+   */
+  toolCallId?: string
 }
 
 export interface SessionPrefs {
@@ -166,6 +173,14 @@ interface LiveSession {
   state: TranslateState
   running: boolean
   abort?: AbortController
+  /**
+   * 这一轮已经被用户终止过（abort 置位）。
+   *
+   * 用在 approve 里：用户点「终止」与点「允许」几乎同时到达时，allow 可能已经
+   * 先一步 resolve（工具随即开跑），这个位让 approve 在返回前再检查一次 ——
+   * 已经终止就改答 deny，缩小「点了终止、危险命令还是跑了一下」的窗口。
+   */
+  stopped?: boolean
   /** 挂起的审批：id → 解开回调 */
   pending: Map<string, (decision: 'allow' | 'deny') => void>
   /** 挂起项的快照（推给界面） */
@@ -179,6 +194,13 @@ interface LiveSession {
 
 export class AgentRuntime {
   private readonly live = new Map<string, LiveSession>()
+  /**
+   * 正在**装载**（ensureSession 还没返回）的那一轮的取消令牌。
+   *
+   * 只在「装载窗口」里用：那时 hub 还没有 running 条目、runtime 也还没挂 entry，
+   * abort 找不到任何东西可停（见 startRun 的说明）。abort 会来置位这里的 cancelled。
+   */
+  private readonly starting = new Map<string, { cancelled: boolean }>()
   private policy: ApprovalPolicy = normalizePolicy(undefined)
 
   constructor(private readonly deps: AgentRuntimeDeps) {}
@@ -390,31 +412,71 @@ export class AgentRuntime {
   async startRun(canvasId: string, input: StartRunInput): Promise<{ started: boolean; sessionId?: string }> {
     const hub = this.deps.hub
     if (!hub) throw new Error('startRun 需要注入 hub（托管模式）；否则请用 run()')
-    // 先解析会话 id（与 run() 同一条路径：可能有 sessionId、也可能要新建）
-    const probe = await this.ensureSession(canvasId, {
-      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
-      title: input.text,
-      prefs: mergeMarkupPrefs(input.prefs, input.text),
-    })
-    if (hub.isRunning(canvasId, probe.id)) return { started: false, sessionId: probe.id }
-    // 后台跑：hub.start 会消费生成器；这里不 await（HTTP 不等它）
-    void hub
-      .start(canvasId, probe.id, {
+    /**
+     * 装载窗口的「停」要记住（真机实测的洞，代码审查复核）。
+     *
+     * 首次发送这条会话时，`ensureSession` 会先说走 `resumeSession`（可能几百毫秒到几秒），
+     * 而**界面在按下发送那一刻就把按钮变成了停止**。用户在这个窗口里点停止时：
+     * hub 还没有 running 条目（`hub.abort` 返回 false）、runtime 也还没挂 entry ——
+     * 两边都没人接，这个「停」就丢了，装载完那一轮照样从头跑到尾。
+     * 用一个 per-session 的令牌记住它，装载完先看令牌再决定跑不跑。
+     */
+    const token = { cancelled: false }
+    /** 请求里带了会话 id 就能提前登记（abort 在那段窗口里才找得到这个令牌） */
+    const requestKey = input.sessionId ? this.key(canvasId, input.sessionId) : null
+    /** 令牌当前挂在哪个 key 下（会话 id 可能因 resume 兜底而变）—— finally 按它清 */
+    let tokenKey = requestKey
+    if (requestKey) this.starting.set(requestKey, token)
+    try {
+      // 先解析会话 id（与 run() 同一条路径：可能有 sessionId、也可能要新建）
+      const probe = await this.ensureSession(canvasId, {
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+        title: input.text,
+        prefs: mergeMarkupPrefs(input.prefs, input.text),
+      })
+      const key = this.key(canvasId, probe.id)
+      // 会话 id 变了（resume 兜底新建）⇒ 令牌跟着搬到新 id 下
+      if (requestKey && requestKey !== key) {
+        this.starting.delete(requestKey)
+        this.starting.set(key, token)
+        tokenKey = key
+      }
+      // 装载期间用户点过停止 ⇒ 不跑（并把这条已经作废的「停」消费掉）
+      if (token.cancelled) return { started: false, sessionId: probe.id }
+      if (hub.isRunning(canvasId, probe.id)) return { started: false, sessionId: probe.id }
+      // 后台跑：hub.start 会消费生成器；这里不 await（HTTP 不等它）。
+      /**
+       * hub.start 的「已经在跑」是**同步抛**（它第一行就查 running 表）——
+       * 但它是 async 函数，抛出来是一个立刻 rejected 的 promise，不是同步异常，
+       * 所以要单独认这个错误：那是并发发送，不是失败，交给上层按队列处理
+       *（此前它会漏进 catch 被记成 "managed run failed"，消息静默丢失）。
+       */
+      const started = hub.start(canvasId, probe.id, {
         run: (signal) => this.run(canvasId, { ...input, sessionId: probe.id }, signal),
       })
-      .catch((err) => {
-        this.log('managed run failed', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
-      })
-      .finally(() => {
-        // 一轮彻底结束（hub 的 running 已清）之后才通知队列调度器 ——
-        // 顺序至关重要：早一步通知，调度器会看到"还在跑"而拒绝发下一条（队列就卡住了）。
-        try {
-          this.deps.onRunFinished?.(canvasId, probe.id)
-        } catch (err) {
-          this.log('onRunFinished threw', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
-        }
-      })
-    return { started: true, sessionId: probe.id }
+      /**
+       * 「已经在跑」是并发发送（不是错误）：那一轮跑完由队列接手，不能通知调度器
+       * 「刚跑完」—— 那会让调度器以为可以立刻发下一条，而其实还在跑。
+       * 只有**真正开跑**的那一次才在结束时通知 onRunFinished。
+       */
+      void started
+        .then(() => {
+          // 一轮彻底结束（hub 的 running 已清）之后才通知队列调度器 ——
+          // 顺序至关重要：早一步通知，调度器会看到"还在跑"而拒绝发下一条（队列就卡住了）。
+          try {
+            this.deps.onRunFinished?.(canvasId, probe.id)
+          } catch (err) {
+            this.log('onRunFinished threw', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
+          }
+        })
+        .catch((err) => {
+          this.log('managed run failed', { session: probe.id, err: err instanceof Error ? err.message : String(err) })
+        })
+      return { started: true, sessionId: probe.id }
+    } finally {
+      // 只清自己那一条：同一个 key 上可能已经挂了别的请求的令牌（并发），别误删
+      if (tokenKey && this.starting.get(tokenKey) === token) this.starting.delete(tokenKey)
+    }
   }
 
   /** 当前挂起的审批（界面渲染审批卡片用） */
@@ -490,6 +552,8 @@ export class AgentRuntime {
     }
 
     entry.running = true
+    // 新的一轮开始：清掉上一轮的「已终止」位（否则上一轮按过终止会让这一轮的审批被误拒）
+    entry.stopped = false
     entry.abort = new AbortController()
     const own = entry.abort
     signal.addEventListener('abort', () => own.abort(), { once: true })
@@ -532,6 +596,9 @@ export class AgentRuntime {
       const approve = async (toolCall: unknown): Promise<'allow' | 'deny'> => {
         const payload = (toolCall as { payload?: Record<string, unknown> })?.payload ?? {}
         const name = String(payload.name ?? '')
+        // 这一轮已经被终止 ⇒ 一律拒（用户点了停止之后不该再有工具被放行开跑；
+        // 见 LiveSession.stopped 的说明）
+        if (entry.stopped) return 'deny'
         // 用**实时**策略：用户在设置里改了规则列表，应当下一句就生效，
         // 而不是等新会话（规则列表页的名字就叫「监听并设置哪些工具需要审批」）。
         const decision = decideTool(entry.policyOverridden ? entry.policy : this.policy, name)
@@ -539,22 +606,31 @@ export class AgentRuntime {
         if (decision !== 'ask') return 'allow'
         // 需要询问：挂起，把卡片推给界面，等用户点允许 / 拒绝
         const approvalId = 'ap-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
+        // 工具调用 id 用 SDK 的**真字段** tool_call_id（此前读的是 payload.id —— 它不存在，
+        // 于下面的 patchTool(card:true) 永远不执行：刷新后命中审批的工具会缩成一行，
+        // 与刚才看到的卡片样式对不上）。translate.ts 用的也是这个字段。
+        const callId = String((payload as { tool_call_id?: unknown }).tool_call_id ?? '')
         const info: PendingApproval = {
           id: approvalId,
           toolName: name,
           arguments: typeof payload.arguments === 'string' ? payload.arguments : JSON.stringify(payload.arguments ?? null),
           createdAt: Date.now(),
+          ...(callId ? { toolCallId: callId } : {}),
         }
         entry.pendingInfo.set(approvalId, info)
         const answer = new Promise<'allow' | 'deny'>((resolve) => entry.pending.set(approvalId, resolve))
         // 命中审批的工具在界面里是**卡片**（不是紧凑一行）。这个标记也要落盘，
         // 否则刷新后它会缩成一行，与刚才看到的样子不一致。
-        const callId = String((payload as { id?: unknown }).id ?? '')
         if (callId) await this.deps.store.patchTool(canvasId, id, callId, { card: true }).catch(() => undefined)
         emitApproval({ type: 'approval_request', approval: info })
         const result = await answer
-        emitApproval({ type: 'approval_result', id: approvalId, decision: result })
-        return result
+        /**
+         * 等到用户答复之后再检查一次「已终止」：allow 可能与终止几乎同时到达，
+         * 这一拍把它翻成 deny —— 缩小「点了终止、命令还是跑了一下」的窗口。
+         */
+        const final = entry.stopped ? 'deny' : result
+        emitApproval({ type: 'approval_result', id: approvalId, decision: final })
+        return final
       }
 
       for await (const msg of entry.session.run(userMessages, { signal: own.signal, approve })) {
@@ -699,8 +775,15 @@ export class AgentRuntime {
 
   /** 中止当前轮：会话本身留着（用户只是停下，不是删掉） */
   abort(canvasId: string, sessionId: string): void {
+    // 装载还没完成就点了停止：hub 与 entry 都还没就位，只能记在令牌上
+    //（不记的话这一轮装载完会照跑到底 —— 真机实测的洞，见 startRun）
+    const token = this.starting.get(this.key(canvasId, sessionId))
+    if (token) token.cancelled = true
     const entry = this.live.get(this.key(canvasId, sessionId))
     if (!entry) return
+    // 置「已终止」位：approve 的回调在返回前会再查一次，避免终止与允许撞车时
+    // 还把工具放行（见 LiveSession.stopped 的说明）
+    entry.stopped = true
     entry.abort?.abort()
     /**
      * 挂着的审批必须一起解开（真机实测的洞）。

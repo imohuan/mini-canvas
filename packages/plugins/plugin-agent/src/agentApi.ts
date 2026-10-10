@@ -12,7 +12,10 @@ export type ChatEvent =
   | { type: 'notice'; message: string }
   | { type: 'error'; message: string }
   | { type: 'usage'; usedTokens: number; limitTokens: number | null }
-  | { type: 'approval_request'; approval: { id: string; toolName: string; arguments: string; createdAt: number } }
+  | {
+      type: 'approval_request'
+      approval: { id: string; toolName: string; arguments: string; createdAt: number; toolCallId?: string }
+    }
   | { type: 'approval_result'; id: string; decision: 'allow' | 'deny' }
   | { type: 'done' }
   /** 这条会话有没有一轮在跑（托管模式由后端广播；空闲时队列自动起轮也靠它） */

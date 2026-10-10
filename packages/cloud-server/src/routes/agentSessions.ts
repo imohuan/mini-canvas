@@ -759,8 +759,30 @@ export function agentSessionRoutes(
       }
       const outcome = await runtime.startRun(p.canvasId, input)
       if (!outcome.started) {
-        // 已经在跑：这一句当 steering 送进去（与旧行为一致，但不并发开第二个 run）
-        return c.json({ ok: true, steered: true, sessionId: outcome.sessionId })
+        /**
+         * 已经在跑：这一句**进队列**（设计 G2「跑着发消息进队列」）。
+         *
+         * 此前这里回一句 `{steered:true}` 就完了 —— 而 runtime 在「已经在跑」时
+         * **什么都没做**（既没 steer 也没落盘）：消息不进模型、不进转录、也不进队列，
+         * 静默消失。多标签页 / 双客户端 / 常驻流断线期间的并发发送都会命中（代码审查实测）。
+         * 落进队列后由调度器按序发，走的是与「跑着发普通消息」同一条路。
+         */
+        const queued = await store.updateQueue(p.canvasId, outcome.sessionId!, (q) => ({
+          ...q,
+          items: [
+            ...q.items,
+            {
+              id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+              text,
+              ...(images?.length ? { images: images.map(String) } : {}),
+              state: 'queued' as const,
+              createdAt: Date.now(),
+            },
+          ],
+        }))
+        hub.append(p.canvasId, outcome.sessionId!, { type: 'queue', queue: queued })
+        onQueueChanged?.(p.canvasId, outcome.sessionId!)
+        return c.json({ ok: true, queued: true, sessionId: outcome.sessionId })
       }
       return streamSSE(c, async (stream) => {
         // 订阅这一会话的常驻通道：起点是**开跑前**的水位（只收这一轮的事件，

@@ -34,6 +34,12 @@ export interface ApprovalCard {
   id: string
   toolName: string
   arguments: string
+  /**
+   * 对应的工具调用 id（SDK 的 tool_call_id）。
+   *
+   * 有它就能精确找到这条工具（同名工具可能有好几个）；没有（老数据）才退回按名字找。
+   */
+  toolCallId?: string
   decision?: 'allow' | 'deny'
 }
 
@@ -307,24 +313,7 @@ export class ChatModel {
         // 同一张卡片只画一次：刷新 / SSE 重连会把 approval_request 回放一遍
         //（它不落转录，所以重连水位推不过它），不判重就会出现两张一模一样的审批卡片。
         if (this.turns.some((t) => t.approval?.id === ev.approval.id)) return
-        // 审批卡片单独一条，插在当前回复之后；同时把对应工具标成「要显示成卡片」
-        const turn = this.lastAssistant()
-        const tool = turn?.tools.find((t) => t.name === ev.approval.toolName && !t.card)
-        if (tool) tool.card = true
-        this.turns.push({
-          id: nextId(),
-          kind: 'approval',
-          text: '',
-          thinking: '',
-          steps: [],
-          tools: [],
-          streaming: true,
-          approval: {
-            id: ev.approval.id,
-            toolName: ev.approval.toolName,
-            arguments: ev.approval.arguments,
-          },
-        })
+        this.pushApprovalCard(ev.approval)
         return
       }
       case 'approval_result': {
@@ -445,7 +434,9 @@ export class ChatModel {
    * 不补回来，这一轮永远结束不了（右下角按钮永远停在「停止」，点它也没用）。
    * GET 会话返回的 approvals 就是为这一步准备的。
    */
-  restoreApprovals(list: Array<{ id: string; toolName: string; arguments: string; createdAt?: number }>): void {
+  restoreApprovals(
+    list: Array<{ id: string; toolName: string; arguments: string; createdAt?: number; toolCallId?: string }>,
+  ): void {
     for (const a of list) {
       this.apply({
         type: 'approval_request',
@@ -454,9 +445,54 @@ export class ChatModel {
           toolName: a.toolName,
           arguments: a.arguments,
           createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now(),
+          ...(a.toolCallId ? { toolCallId: a.toolCallId } : {}),
         },
       })
     }
+  }
+
+  /**
+   * 画一张审批卡片：把对应工具标成卡片，并把它插到**那条工具所属的助手回合之后**。
+   *
+   * 为什么不直接 push 到末尾：刷新补渲染时，审批挂起期间可能又有新消息进了转录
+   *（最典型是用户在审批挂着时插队引导）—— 直接追加会让卡片跑到最后一条消息之后，
+   * 与它对应的工具调用分家（代码审查实测）。按 tool_call_id 找到那条工具，
+   * 卡片就插在它所在的回合后面，位置始终对得上。
+   */
+  private pushApprovalCard(a: { id: string; toolName: string; arguments: string; toolCallId?: string }): void {
+    let ownerIdx = -1
+    let tool: ToolCard | undefined
+    for (let i = this.turns.length - 1; i >= 0; i--) {
+      const t = this.turns[i]
+      if (t.kind !== 'assistant') continue
+      const hit = a.toolCallId
+        ? t.tools.find((x) => x.id === a.toolCallId)
+        : t.tools.find((x) => x.name === a.toolName && !x.card)
+      if (hit) {
+        ownerIdx = i
+        tool = hit
+        break
+      }
+    }
+    if (tool) tool.card = true
+    const card: AgentTurnView = {
+      id: nextId(),
+      kind: 'approval',
+      text: '',
+      thinking: '',
+      steps: [],
+      tools: [],
+      streaming: true,
+      approval: {
+        id: a.id,
+        toolName: a.toolName,
+        arguments: a.arguments,
+        ...(a.toolCallId ? { toolCallId: a.toolCallId } : {}),
+      },
+    }
+    // 找到归属回合就插在它后面；找不到（老数据没有 id、工具也对不上）才追加到末尾
+    if (ownerIdx >= 0) this.turns.splice(ownerIdx + 1, 0, card)
+    else this.turns.push(card)
   }
 
   /** 进入编辑：这条消息高亮「正在编辑」，输入框联动标记点它可滚回这里 */

@@ -37,6 +37,38 @@ describe('审批卡片的补渲染与去重', () => {
     m.apply({ type: 'approval_request', approval: { id: 'ap-3', toolName: 'exec_command', arguments: '{}', createdAt: 1 } })
     expect(m.turns.filter((t) => t.kind === 'approval')).toHaveLength(1)
   })
+
+  /**
+   * 真缺陷（代码审查实测）：审批挂起期间用户**插队引导** ⇒ 转录里多了一条更新的消息。
+   * restoreApprovals 若直接 push 到末尾，卡片会跑到那条引导之后，与它对应的工具调用分家。
+   * 按 toolCallId 找到归属回合，卡片就该插在**那条工具所在回合**的后面。
+   */
+  it('restoreApprovals 按 toolCallId 落点（卡片不跑到后面那条消息之后）', () => {
+    const m = new ChatModel()
+    m.send('先跑个命令')
+    m.apply({ type: 'tool_call', id: 'call-1', name: 'exec_command', arguments: '{}' })
+    // 审批挂起期间，用户又插队说了一句 ⇒ 转录末尾是新的助手回合
+    m.acceptUserMessage('插队的一句', undefined, true)
+    m.apply({ type: 'tool_call', id: 'call-2', name: 'read_file', arguments: '{}' })
+    m.restoreApprovals([{ id: 'ap-9', toolName: 'exec_command', arguments: '{}', toolCallId: 'call-1' }])
+    const cardIdx = m.turns.findIndex((t) => t.kind === 'approval')
+    const ownerIdx = m.turns.findIndex((t) => t.tools.some((x) => x.id === 'call-1'))
+    expect(cardIdx).toBe(ownerIdx + 1)
+    // 卡片一定在「插队那条」之前
+    expect(cardIdx).toBeLessThan(m.turns.findIndex((t) => t.kind === 'user' && t.text === '插队的一句'))
+  })
+
+  /** 精确落到那条工具上（同名工具有好几个时不标错） */
+  it('同名工具：卡片标记给 toolCallId 命中的那一条，不碰别的', () => {
+    const m = new ChatModel()
+    m.send('跑两个命令')
+    m.apply({ type: 'tool_call', id: 'c-1', name: 'exec_command', arguments: '{"a":1}' })
+    m.apply({ type: 'tool_call', id: 'c-2', name: 'exec_command', arguments: '{"b":2}' })
+    m.restoreApprovals([{ id: 'ap-10', toolName: 'exec_command', arguments: '{"b":2}', toolCallId: 'c-2' }])
+    const turn = m.turns.find((t) => t.kind === 'assistant')!
+    expect(turn.tools.find((x) => x.id === 'c-1')?.card).toBeUndefined()
+    expect(turn.tools.find((x) => x.id === 'c-2')?.card).toBe(true)
+  })
 })
 
 describe('基本形态', () => {

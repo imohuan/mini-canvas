@@ -884,6 +884,11 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     const ac = new AbortController()
     abort = ac
     try {
+      /**
+       * 这条 send 响应与常驻流订阅的是**同一个** hub 通道 ⇒ 同一条事件会到两次。
+       * 只给常驻流去重是不够的（真机实测：正文变成「收到收到」、工具卡片重复）——
+       * 这里也带上同一套帧级水位，两条通道互为去重。
+       */
       await api.sendMessage(
         canvasId(),
         id,
@@ -891,6 +896,12 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
         { ...sendOptions(), ...(pics.length ? { images: pics } : {}) },
         applyEvent,
         ac.signal,
+        {
+          acceptSeq,
+          onSeq: (n) => {
+            if (n > lastAppliedSeq) lastAppliedSeq = n
+          },
+        },
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -1161,6 +1172,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     const ac = new AbortController()
     abort = ac
     try {
+      // 同上（sendGoal）：send 响应与常驻流是同一条通道，必须一起按 seq 去重
       await api.sendMessage(
         canvasId(),
         sid,
@@ -1172,6 +1184,12 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
         } as SendOptions,
         applyEvent,
         ac.signal,
+        {
+          acceptSeq,
+          onSeq: (n) => {
+            if (n > lastAppliedSeq) lastAppliedSeq = n
+          },
+        },
       )
     } catch (err) {
       if (!ac.signal.aborted) {

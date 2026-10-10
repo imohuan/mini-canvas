@@ -203,9 +203,14 @@ export const agentSessionPlugin: PluginModule = {
         // 不该挡住用户 —— 不传 forced 的话，上一次派发失败后用户点「恢复队列」也会在 30 秒内
         // 毫无反应（真机表现：点了没动静，只能等）。
         (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').tick(canvasId, sessionId, { forced: true }),
-        // 会话删除 → 清调度器的内存表（inflight / hadPending / lastFailureAt），
-        // 否则残留的 hadPending/冷却会污染后续会话（review 指出）
-        (canvasId, sessionId) => need<QueueScheduler>(ctx, 'agentQueue').forget(canvasId, sessionId),
+        // 会话删除 → 清掉**所有**按会话记账的内存表：
+        //  - 调度器（inflight / hadPending / lastFailureAt）：否则残留的冷却会污染后续会话；
+        //  - hub 的通道与 running（review 指出这里从前一直漏着）：不清则缓冲事件、订阅者
+        //    与「正在跑」标记会随每次删会话累积，进程长跑就是内存泄漏。
+        (canvasId, sessionId) => {
+          need<QueueScheduler>(ctx, 'agentQueue').forget(canvasId, sessionId)
+          need<SessionHub>(ctx, 'agentHub').forget(canvasId, sessionId)
+        },
         // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动
         need<GoalRuntimePort>(ctx, 'agentGoal'),
       ),
