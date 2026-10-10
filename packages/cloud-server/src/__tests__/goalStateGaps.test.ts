@@ -20,7 +20,6 @@ import {
   updateGoalFile,
   GOAL_FILE_BROKEN,
   GOAL_FILE_PAUSED,
-  writeGoalFile,
 } from '../agent/goalState.js'
 
 let scratch: string
