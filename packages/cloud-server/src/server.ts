@@ -37,6 +37,7 @@ import { HistoryStore } from './tasks/history.js'
 import { TaskManager } from './tasks/taskManager.js'
 import { DEFAULT_CANVAS_ID } from './store/canvasPaths.js'
 import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
+import { makeFetchSelfBytes } from './tasks/selfFetch.js'
 import { AgentConfigService } from './agent/config.js'
 import { AgentSessionStore } from './agent/sessionStore.js'
 import { branchStore } from './agent/branchStore.js'
@@ -299,6 +300,21 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   // ==================== 任务与历史 ====================
   const history = new HistoryStore(dataDir)
+  /**
+   * 实际监听端口（start() 之后才有真值；port=0 时由系统分配）。
+   * 「自己取字节」要靠它判断"是不是本服务的地址"，所以延迟到调用时再读。
+   */
+  let actualPort: number | undefined
+  /**
+   * 「服务器自己把画布里的地址取回来」（见 tasks/selfFetch 的说明）。
+   *
+   * 在 TaskManager 之前建：参考图解析要用它。app 与真实端口都在后面才就绪，
+   * 所以这里是**延迟取值**的闭包（真正调用时早就齐了）。
+   */
+  const fetchSelfBytes = makeFetchSelfBytes({
+    fetch: (req) => host.app.fetch(req),
+    origin: () => `http://${hostname}:${actualPort ?? port}`,
+  })
   // 参考图交给 web2api 时要转成 **data URL**（它自己会落盘）——
   // 两个服务可能不在同一台机器，地址（尤其 127.0.0.1）它够不到；内嵌字节则与网络无关。
   const tasks = new TaskManager({
@@ -334,20 +350,19 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       }
     },
     /**
-     * 节点里存的是画布内引用 res:<hash>；provider 拿不到"相对引用"，
-     * 这里按**当前画布**换成它真能取到的内容（data URL）。
+     * 参考图要变成 provider 真能取到的内容（data URL）—— 它拿不到我们的相对地址。
      *
-     * 参考图有**三种**形态，全都要转成 data URL：
-     *   - `res:<hash>`                    数据层原样存的
-     *   - `/api/canvases/<id>/resources/<hash>`   渲染层展开过、UI 就是这么传上来的
-     *   - `/api/assets/files/<hash>`      资产库（上传的素材）里的地址
-     * 第三种以前落到"原样返回"，相对路径被直接发给 web2api —— 它当自己 uploads 下的相对文件找，
-     * 报「图片不存在…\api\assets\files\…」（用户实测）。解析逻辑收在 tasks/resourceResolver，
-     * 单独可测；认不出 / 读不到的地址仍然原样返回。
+     * 解析逻辑收在 tasks/resourceResolver（单独可测）。两条快路读磁盘（画布资源 / 上传资产），
+     * 其余**本服务自己的地址**（风格库 `/api/style-library/file?name=…` 这类）走**通用自请求**；
+     * 别的域名不碰（SSRF 边界）。认不出 / 取不到就原样返回，让上游自己报错。
+     *
+     * 为什么是"通用"而不是枚举：枚举就会漏 —— 已经漏过三次（资产 → 画布资源 → 风格库），
+     * 每次都要回来加一条。现在新增任何资源路由都自动能用（用户口径）。
      */
     resolveResourceUrl: makeResolveResourceUrl({
       canvasResources,
       readAssetBytes: (name) => assetStore.readFile(name),
+      fetchSelfBytes: (url) => fetchSelfBytes(url),
     }),
     onError: (message, err) => console.warn(message, err),
   })
@@ -571,6 +586,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         let listening = false
         const s = serve({ fetch: app.fetch, port, hostname }, (info) => {
           listening = true
+          // 真实端口记下来：「自己取字节」判断"是不是本服务地址"要用它
+          actualPort = info.port
           // 真实端口定了，纠正内置画布 MCP 的地址：
           //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
           //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。
