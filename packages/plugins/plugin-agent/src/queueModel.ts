@@ -165,6 +165,36 @@ export function usedText(used: number | null | undefined): string {
   return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
 }
 
+/** 目标结束后状态徽章的类名（配合 goalEndedBadge 一起用） */
+export type GoalBadgeClass = 'is-done' | 'is-paused'
+
+/**
+ * 目标**已结束**时的状态徽章。
+ *
+ * 为什么不能只要「ended 就是已完成」：用户点了「终止」时，SDK 的 stop hook 会把目标
+ * 写成 `status:'aborted' + ended:true` —— 那是**中止**不是完成，界面却一直显示「已完成」
+ * （代码审查指出）。这里按真实的结束原因给文案：
+ *   complete      → 已完成
+ *   budget_limited→ 预算用尽
+ *   aborted       → 已中止
+ *   blocked       → 受阻
+ * 其它（协议外的 status / 老数据）退回中性的「已结束」，不再谎报「已完成」。
+ */
+export function goalEndedBadge(status: string | null | undefined): { text: string; cls: GoalBadgeClass } {
+  switch (status) {
+    case 'complete':
+      return { text: '已完成', cls: 'is-done' }
+    case 'budget_limited':
+      return { text: '预算用尽', cls: 'is-done' }
+    case 'aborted':
+      return { text: '已中止', cls: 'is-paused' }
+    case 'blocked':
+      return { text: '受阻', cls: 'is-paused' }
+    default:
+      return { text: '已结束', cls: 'is-done' }
+  }
+}
+
 // ============================================================ token 单位与口径
 
 /**

@@ -4,7 +4,7 @@
  * 这些口径大多来自设计 §3.6 与用户点名的 G1-G3；改这里的断言 = 改用户口径，先对设计。
  */
 import { describe, it, expect } from 'vitest'
-import { queuePanelView, sendButtonMode, budgetText, goalMarkText, usedText } from '../queueModel'
+import { queuePanelView, sendButtonMode, budgetText, goalMarkText, usedText, goalEndedBadge } from '../queueModel'
 import type { QueueItemView, QueueStateView } from '../agentApi'
 
 /** 小工厂：造一条队列条目（只写关心的字段，其余走默认） */
@@ -174,5 +174,27 @@ describe('goalMarkText', () => {
     expect(goalMarkText('', 0)).toBe('输入目标内容 · 预算 不限')
     expect(goalMarkText(null, null)).toBe('输入目标内容 · 预算 不限')
     expect(goalMarkText('   ', 12345)).toBe('输入目标内容 · 预算 12.3k')
+  })
+})
+
+describe('goalEndedBadge：按真实结束原因给徽章（不再一律「已完成」）', () => {
+  it('complete ⇒ 已完成', () => {
+    expect(goalEndedBadge('complete')).toEqual({ text: '已完成', cls: 'is-done' })
+  })
+
+  /**
+   * 真缺陷（代码审查）：用户点「终止」时 stop hook 写 status:'aborted' + ended:true，
+   * 界面此前一律显示「已完成」—— 把中止谎报成完成。
+   */
+  it('aborted ⇒ 已中止（不是「已完成」）', () => {
+    expect(goalEndedBadge('aborted')).toEqual({ text: '已中止', cls: 'is-paused' })
+  })
+
+  it('budget_limited / blocked / 其它 status 各有说法', () => {
+    expect(goalEndedBadge('budget_limited').text).toBe('预算用尽')
+    expect(goalEndedBadge('blocked')).toEqual({ text: '受阻', cls: 'is-paused' })
+    // 协议外的 status / 老数据：中性的「已结束」，不谎报完成
+    expect(goalEndedBadge('weird').text).toBe('已结束')
+    expect(goalEndedBadge(undefined).text).toBe('已结束')
   })
 })

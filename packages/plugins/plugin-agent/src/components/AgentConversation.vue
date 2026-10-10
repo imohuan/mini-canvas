@@ -39,6 +39,7 @@ import {
   sendButtonMode,
   budgetText,
   goalMarkText,
+  goalEndedBadge,
   usedText,
   budgetTokenText,
   formatToken,
@@ -817,7 +818,7 @@ const goalRow = computed(() => {
   if (!g) return null
   const badge = s.goalPaused
     ? { text: '已暂停', cls: 'is-paused' }
-    : (g.ended ? { text: '已完成', cls: 'is-done' } : { text: '运行中', cls: '' })
+    : (g.ended ? goalEndedBadge(g.status) : { text: '运行中', cls: '' })
   return {
     badge,
     round: g.round,
