@@ -25,7 +25,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
 import { createResizeDragSession, type PointerEventTargetLike } from "./resizeDragSession";
-import { nodeSizePatch } from "@mini-canvas/canvas-data";
+import { nodeSizePatch, isNodeRunning } from "@mini-canvas/canvas-data";
 
 export interface NodeCardSizeOptions {
   nodeId: string;
@@ -85,13 +85,29 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
   /** 当前 data（响应式：依赖 props.data 变化） */
   const data = computed(() => opts.data() ?? {});
 
-  // 初值：data 显式尺寸 ?? 类型 defaultSize
-  const cardWidth = ref<number>(
-    (data.value.cardWidth as number) || capability.defaultSize.value.w,
+  /**
+   * 是否处于"加载态按默认尺寸显示"：类型声明了该能力 **且** 节点正在跑任务。
+   *
+   * 用户口径（2026-10-10）：图片/视频节点重新生成时，卡片先回到设置里配的默认宽高（横屏），
+   * 生成完成再跟随新产物的真实比例。这里只影响**渲染**，绝不改 node.size / data —— 因此
+   * 生成失败或取消时，上一次的图与尺寸都原样还在（把图删掉再让它回落默认尺寸的写法会把作品弄丢）。
+   *
+   * 与 canvas-render 的 nodesFromStore 同一条判定（都读 loadingDefaultSize + isNodeRunning），
+   * 保证包裹尺寸与卡片实测尺寸一致，端口/连线端点不会错位。
+   */
+  const loadingDefaultSize = computed(
+    () => capability.loadingDefaultSize.value && isNodeRunning({ data: data.value }),
   );
-  const cardHeight = ref<number>(
-    (data.value.cardHeight as number) || capability.defaultSize.value.h,
-  );
+
+  /** 加载态取类型默认尺寸；否则取 data 显式尺寸；再退到类型默认尺寸 */
+  const sizeFrom = (key: 'cardWidth' | 'cardHeight', fallback: number): number => {
+    if (loadingDefaultSize.value) return fallback;
+    return (data.value[key] as number) || fallback;
+  };
+
+  // 初值：加载态 → 类型 defaultSize；否则 data 显式尺寸 ?? 类型 defaultSize
+  const cardWidth = ref<number>(sizeFrom('cardWidth', capability.defaultSize.value.w));
+  const cardHeight = ref<number>(sizeFrom('cardHeight', capability.defaultSize.value.h));
 
   /**
    * **实时跟随类型默认尺寸**：只有「没有显式尺寸」（没被 resize 过、data.cardWidth 缺失）的节点才跟。
@@ -102,6 +118,11 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     () => capability.defaultSize.value,
     (d) => {
       if (isResizing.value) return;
+      if (loadingDefaultSize.value) {
+        cardWidth.value = d.w;
+        cardHeight.value = d.h;
+        return;
+      }
       const hasOwnW = Number.isFinite(data.value?.cardWidth);
       const hasOwnH = Number.isFinite(data.value?.cardHeight);
       if (!hasOwnW) cardWidth.value = d.w;
@@ -110,18 +131,37 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     { deep: true },
   );
 
-  // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值
+  /**
+   * 进出加载态时整体重算尺寸：
+   * - 进（开始生成）→ 立刻回到类型默认宽高（重新生成不再沿用上张图的竖版比例）；
+   * - 出（跑完/失败/取消）→ 回到 data 里的显式尺寸（就是刚写回的真实产物比例）。
+   * 拖拽中不覆盖本地拖拽值（与下面两条 watch 同一规矩）。
+   */
+  watch(loadingDefaultSize, (on) => {
+    if (isResizing.value) return;
+    if (on) {
+      cardWidth.value = capability.defaultSize.value.w;
+      cardHeight.value = capability.defaultSize.value.h;
+      return;
+    }
+    const w = Number.isFinite(data.value?.cardWidth) ? (data.value.cardWidth as number) : capability.defaultSize.value.w;
+    const h = Number.isFinite(data.value?.cardHeight) ? (data.value.cardHeight as number) : capability.defaultSize.value.h;
+    cardWidth.value = w;
+    cardHeight.value = h;
+  });
+
+  // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值；加载态不覆盖（那时按默认尺寸）
   const isResizing = ref(false);
   watch(
     () => data.value?.cardWidth as number | undefined,
     (w) => {
-      if (w !== undefined && !isResizing.value) cardWidth.value = w;
+      if (w !== undefined && !isResizing.value && !loadingDefaultSize.value) cardWidth.value = w;
     },
   );
   watch(
     () => data.value?.cardHeight as number | undefined,
     (h) => {
-      if (h !== undefined && !isResizing.value) cardHeight.value = h;
+      if (h !== undefined && !isResizing.value && !loadingDefaultSize.value) cardHeight.value = h;
     },
   );
 

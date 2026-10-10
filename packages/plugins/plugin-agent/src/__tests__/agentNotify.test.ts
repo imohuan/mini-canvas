@@ -222,10 +222,21 @@ describe('playNotifySound', () => {
 })
 
 describe('loadNotifyPrefs', () => {
-  it('路径钉死 /api/kv/config/agentNotify', async () => {
+  it('走 config 批量口（不再逐键 GET，避免没存过时刷 404）', async () => {
     const { f, urls } = fakeFetch(200, { value: { notify: true, sound: false } })
     await loadNotifyPrefs({ fetchImpl: f })
-    expect(urls[0]).toBe('/api/kv/config/agentNotify')
+    expect(urls[0]).toBe('/api/kv/config?values=1')
+  })
+
+  it('批量口的 { values: { agentNotify } } → 正常解析', async () => {
+    const { f } = fakeFetch(200, { values: { agentNotify: { notify: true, sound: true } } })
+    expect(await loadNotifyPrefs({ fetchImpl: f })).toEqual({ notify: true, sound: true })
+  })
+
+  it('批量口里没有这个键（从没保存过）→ 全 false，且没产生 404 请求', async () => {
+    const { f, urls } = fakeFetch(200, { values: {} })
+    expect(await loadNotifyPrefs({ fetchImpl: f })).toEqual({ notify: false, sound: false })
+    expect(urls[0]).not.toContain('agentNotify')
   })
 
   it('404（从没保存过）→ 全 false', async () => {
@@ -248,6 +259,6 @@ describe('loadNotifyPrefs', () => {
   it('baseUrl 拼在路径前面（云端托管时用）', async () => {
     const { f, urls } = fakeFetch(200, { value: true })
     await loadNotifyPrefs({ fetchImpl: f, baseUrl: 'http://127.0.0.1:5210/' })
-    expect(urls[0]).toBe('http://127.0.0.1:5210/api/kv/config/agentNotify')
+    expect(urls[0]).toBe('http://127.0.0.1:5210/api/kv/config?values=1')
   })
 })

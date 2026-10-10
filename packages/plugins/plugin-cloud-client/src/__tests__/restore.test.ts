@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { restoreOrSeed, type RestoreDeps } from '../restore'
+import { restoreMediaUrls } from '../keys'
 
 function deps(over: Partial<RestoreDeps> & Pick<RestoreDeps, 'readServer' | 'readLocal'>): {
   d: RestoreDeps
@@ -94,5 +95,45 @@ describe('云端优先', () => {
     })
     await restoreOrSeed(d)
     expect(replaced[0].edges).toHaveLength(1)
+  })
+
+  it('服务器那份里节点只有 resourceId（引用）→ 覆盖本地前必须重建可显示地址', async () => {
+    // 用户 2026-10-10 报的「刷新后图片/视频变空白」。
+    //
+    // 根因：服务器存的是节点 data.resourceId（引用），而渲染层只认 imageUrl/videoUrl（地址）。
+    // 本地加载路径有「按引用重建地址」这一步，但云端恢复发生在那之后、且只做整包覆盖 ——
+    // 覆盖完没有重建，节点就只剩引用，图片/视频节点渲染成空白。
+    const serverNode = {
+      id: 'img-1',
+      type: 'image',
+      position: { x: 0, y: 0 },
+      data: { resourceId: '/api/canvases/default/resources/abc.jpeg', label: '图片 22' },
+    }
+    const restored: Array<{ id: string; data: Record<string, unknown> }> = []
+    const { d, replaced } = deps({
+      readServer: async () => ({ nodes: [serverNode], edges: [], view: null }),
+      readLocal: () => ({ nodes: [], edges: [] }),
+      restoreMediaUrls: async (nodes) => {
+        // 走插件里那份真实实现（不是测试自己造一遍），确保守住的是产品代码
+        await restoreMediaUrls(
+          nodes as Array<{ type?: string; data?: Record<string, unknown> }>,
+          async (resourceId) => resourceId,
+        )
+        for (const n of nodes as Array<{ id: string; data: Record<string, unknown> }>) restored.push(n)
+      },
+    })
+    await restoreOrSeed(d)
+    // 交给 replaceLocal 的那份必须已经带上可显示地址（否则渲染层拿不到图）
+    expect(replaced[0].nodes[0]).toMatchObject({ data: { imageUrl: '/api/canvases/default/resources/abc.jpeg' } })
+    expect(restored).toHaveLength(1)
+  })
+
+  it('没有 restoreMediaUrls 钩子时行为不变（老调用方不受影响）', async () => {
+    const { d, replaced } = deps({
+      readServer: async () => ({ nodes: [node('s1')], edges: [], view: null }),
+      readLocal: () => ({ nodes: [], edges: [] }),
+    })
+    expect((await restoreOrSeed(d)).phase).toBe('restored')
+    expect(replaced[0].nodes).toHaveLength(1)
   })
 })

@@ -9,6 +9,7 @@ import {
   HISTORY_REV_KEY,
   CANVAS_ID,
   RESOURCE_URL_FIELDS,
+  restoreMediaUrls,
 } from '../keys'
 import {
   GRAPH_KEY as DATA_GRAPH_KEY,
@@ -16,6 +17,7 @@ import {
   GRAPH_VIEWPORT_KEY as DATA_VIEWPORT_KEY,
   SAVE_TYPES,
   scopedKey,
+  restoreNodeMediaUrls,
 } from '@mini-canvas/canvas-data'
 
 describe('与 canvas-data 逐字一致', () => {
@@ -31,6 +33,27 @@ describe('与 canvas-data 逐字一致', () => {
 
   it('scopedKey 的产物（adapter 摘前缀时按它算）', () => {
     expect(scopedKey('canvas', GRAPH_KEY)).toBe('canvas:graph')
+  })
+  it('就地版 restoreMediaUrls 与数据层同口径（云端恢复重建地址靠它，漂移=图又变空白）', async () => {
+    // 本插件产物必须零 import，所以就地实现了一份最小版；这里拿同一份输入分别跑两边，结果必须一致。
+    const makeNodes = () => [
+      { id: 'v1', type: 'video', data: { resourceId: '/api/canvases/c1/resources/a.mp4' } },
+      { id: 'i1', type: 'image', data: { resourceId: '/api/canvases/c1/resources/b.png' } },
+      { id: 'a1', type: 'audio', data: { resourceId: '/api/canvases/c1/resources/c.mp3' } },
+      // 已有持久地址 → 不该被重建覆盖
+      { id: 'i2', type: 'image', data: { resourceId: '/api/canvases/c1/resources/d.png', imageUrl: '/keep.png' } },
+      // 资源取不到 → 应清掉失效地址
+      { id: 'i3', type: 'image', data: { resourceId: 'gone', imageUrl: 'blob:dead' } },
+    ]
+    const local = makeNodes()
+    const dataLayer = makeNodes()
+    const restore = async (resourceId: string, kind: string): Promise<string | undefined> =>
+      resourceId === 'gone' ? undefined : '/resolved/' + kind + '/' + resourceId.split('/').pop()
+
+    await restoreMediaUrls(local, restore)
+    await restoreNodeMediaUrls(dataLayer, restore)
+
+    expect(local).toEqual(dataLayer)
   })
 })
 

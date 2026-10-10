@@ -54,3 +54,61 @@ export const RESOURCE_URL_FIELDS = [
   'leftImageUrl',
   'rightImageUrl',
 ] as const
+
+/**
+ * 各类节点的媒体字段（与 canvas-data 的 MEDIA_URL_FIELDS_BY_TYPE 同口径）—— 「重建地址该写回哪个键」。
+ * 判据与节点自身一致：node.type 优先。
+ *
+ * 注意**没有** audio 一项：数据层那边也没有（音频靠"类型未知 → 扫 data 里现有的 audioUrl"兜底）。
+ * 两边故意保持逐字一致，免得同一份输入在两条路径上算出不同结果。
+ */
+const MEDIA_URL_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
+  video: ['videoUrl'],
+  image: ['imageUrl'],
+  panorama: ['panoUrl'],
+  '3d-preview': ['imageUrl'],
+  'image-compare': ['leftImageUrl', 'rightImageUrl'],
+}
+
+/**
+ * 按节点 data.resourceId（引用）重建可显示地址（imageUrl / videoUrl …），写回 data。
+ *
+ * 为什么插件里要有这一份：云端恢复时服务器只存引用，而渲染层只认真地址；少这一步图片/视频节点
+ * 就是空白（用户 2026-10-10 报的「刷新后图/视频变空白」）。
+ *
+ * 为什么不定 import 数据层的 restoreNodeMediaUrls：本插件产物必须**零 import 自包含**
+ * （见 vite.config.ts）。故就地实现最小版，并由 constants.test 与数据层逐字比对防漂移。
+ *
+ * 「该写哪个字段」不能只看 data 里现有的键：保存会清掉失效的临时地址，字段可能已经不在 data 里，
+ * 只按现有键恢复等于什么都没恢复（视频就是这样变成「无视频」的）。所以先按类型给字段，类型未知才扫 data。
+ */
+export async function restoreMediaUrls(
+  nodes: Array<{ type?: string; data?: Record<string, unknown> }>,
+  restore: (resourceId: string, kind: string) => Promise<string | undefined>,
+): Promise<number> {
+  let restored = 0
+  for (const node of nodes) {
+    const data = node.data
+    const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : undefined
+    if (!resourceId || !data) continue
+    const declared = MEDIA_URL_FIELDS_BY_TYPE[String(node.type ?? '')]
+    const fields = declared
+      ? [...declared]
+      : RESOURCE_URL_FIELDS.filter((k) => typeof data[k] === 'string')
+    const pending = fields.filter((k) => {
+      const v = data[k]
+      return v === undefined || (typeof v === 'string' && /^(blob:|data:)/i.test(v))
+    })
+    if (pending.length === 0) continue
+    // 与数据层同口径：只把 video 单独分出来，其余一律按 image 取（后端也这么分流）
+    const kind = node.type === 'video' ? 'video' : 'image'
+    const url = await restore(resourceId, kind)
+    for (const k of pending) {
+      if (url) data[k] = url
+      else delete data[k]
+    }
+    if (url) restored += 1
+  }
+  return restored
+}
+

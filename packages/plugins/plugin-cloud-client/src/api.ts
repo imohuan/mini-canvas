@@ -216,13 +216,35 @@ export class CloudApi {
    */
   subscribeChanges(onChange: (e: ChangeEvent) => void, onError?: (msg: string) => void): () => void {
     const factory = this.opts.createEventSource
+    const url = this.absolute('/api/kv/events')
+
+    // 先复用宿主（@mini-canvas/ui）挂在全局上的**共享连接**：本应用里首页 / 画布 /
+    // 本插件都在订阅同一条 /api/kv/events，各开各的会让一个页面上出现好几条
+    // **永不关闭**的长连接。浏览器对单个域名的并发上限是 6 条，占满之后页面里
+    // 所有普通请求只能排队（用户报的"网页卡住、请求停在待处理"）。
+    //
+    // 只在没有自定义 SSE 工厂时走这条路：工厂是测试/宿主注入的确定性替身，
+    // 绕过它会让那些用例失去意义。
+    const shared = factory ? undefined : sharedKvEvents()
+    if (shared) {
+      try {
+        return shared.subscribe(url, (e) => {
+          if (e && typeof e.key === 'string' && typeof e.type === 'string') onChange(e)
+        })
+      } catch (err) {
+        onError?.('无法订阅实时通道：' + (err instanceof Error ? err.message : String(err)))
+        return () => {}
+      }
+    }
+
     if (!factory && typeof EventSource === 'undefined') return () => {}
+
     const create =
       factory ?? ((url: string) => new EventSource(url) as unknown as EventSourceLike)
 
     let source: EventSourceLike | null = null
     try {
-      source = create(this.absolute('/api/kv/events'))
+      source = create(url)
       source.addEventListener('message', (e) => {
         // 事件内容只用来判断"哪个 (type,key) 变了"；真数据一律现读（服务器只报 key，不带值）
         try {
@@ -243,4 +265,26 @@ export class CloudApi {
       source = null
     }
   }
+}
+
+/**
+ * 宿主提供的共享 KV 实时通道（见 ui 的 composables/kvEvents）。
+ *
+ * 本插件是**独立打包**的（产物自包含、零 import），拿不到 ui 的模块导出，
+ * 所以约定走全局键。取不到（别的宿主 / 单测 / 纯 Node）就返回 undefined，
+ * 调用方退回自己开一条 —— 行为不因缺这个全局而坏掉。
+ */
+const KV_EVENTS_GLOBAL_KEY = '__miniCanvasKvEvents'
+
+interface SharedKvEvents {
+  subscribe(path: string, onEvent: (e: ChangeEvent) => void): () => void
+}
+
+function sharedKvEvents(): SharedKvEvents | undefined {
+  const bag = globalThis as unknown as Record<string, unknown>
+  const v = bag[KV_EVENTS_GLOBAL_KEY]
+  if (!v || typeof v !== 'object') return undefined
+  const subscribe = (v as { subscribe?: unknown }).subscribe
+  if (typeof subscribe !== 'function') return undefined
+  return v as SharedKvEvents
 }

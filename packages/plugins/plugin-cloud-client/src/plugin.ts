@@ -19,7 +19,7 @@ import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
 import { restoreOrSeed } from './restore.js'
 import { Config, configFrom } from './config.js'
-import { CANVAS_ID, canvasId } from './keys.js'
+import { CANVAS_ID, canvasId, restoreMediaUrls as restoreMediaUrlsList } from './keys.js'
 import { createCloudResourceAdapter } from './cloudResourceAdapter.js'
 import { createCloudKvAdapter } from './cloudKvAdapter.js'
 import type { ServerAction, ServerHistoryPage } from './apiTypes.js'
@@ -84,6 +84,12 @@ interface SaveLike {
 interface SettingsLike {
   get(key: string): unknown
   onChange?(fn: (key: string, value: unknown) => void): { dispose(): void }
+}
+
+/** 宿主资源服务里本插件用到的那一点（按结构取，不 import 数据层类型） */
+interface ResourcesLike {
+  /** 按资源引用重建当前可显示地址；资源已不在时返回 undefined */
+  restore?(resourceId: string, kind: string): Promise<string | undefined>
 }
 
 /**
@@ -221,6 +227,18 @@ const adapter = new CanvasDiffAdapter(api, CID)
         replaceLocal: (nodes, edges) => {
           // 覆盖本地用 replaceAll：它表达得出"删掉你没提到的那些"（增量写表达不出）
           doc.replaceAll(nodes, edges)
+        },
+        // 覆盖本地之前，按节点里的 resourceId 重建可显示地址（imageUrl / videoUrl …）。
+        // 服务器只存引用，渲染层只认真地址 —— 少这一步，云端恢复出来的图片/视频节点就是空白
+        // （用户 2026-10-10 报的「刷新后图片/视频变空白」）。判定与本地加载路径同源，
+        // 收在 canvas-data 的 restoreNodeMediaUrls 里，本插件不重复实现一份。
+        restoreMediaUrls: async (nodes) => {
+          const resources = ctx.tryGet<ResourcesLike>('resources')
+          if (!resources?.restore) return
+          await restoreMediaUrlsList(
+            nodes as Array<{ type?: string; data?: Record<string, unknown> }>,
+            (resourceId, kind) => resources.restore!(resourceId, kind),
+          )
         },
         pushLocal: async (nodes, edges) => {
           // 首次上云要把**本地已有的图**也搬上去：节点里存的还是本地引用（res-…），

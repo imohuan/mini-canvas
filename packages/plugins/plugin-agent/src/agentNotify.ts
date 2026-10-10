@@ -48,12 +48,21 @@ export function parseNotifyPrefs(raw: unknown): AgentNotifyPrefs {
   return { notify, sound }
 }
 
-/** 通知开关在后台 KV 里的路径（与 packages/ui/src/composables/agentSettings.ts 钉死同一份，别自创） */
-const NOTIFY_PATH = '/api/kv/config/agentNotify'
+/** 通知开关的键名（与 packages/ui/src/composables/agentSettings.ts 钉死同一份，别自创） */
+const NOTIFY_KEY = 'agentNotify'
 
 /**
- * 读后台 KV：GET /api/kv/config/agentNotify。
- * 404（从没保存过）/ 网络错 / 没有 fetch（node）→ 全 false，绝不抛 ——
+ * config 作用域的批量读口（cloud-server routes/kv.ts 的 ?values=1）。
+ *
+ * 为什么不用单项 GET /api/kv/config/agentNotify：这个开关**用户一次都没动过时从未保存过**，
+ * 单项 GET 必然回一个 404 —— 控制台里就是一条“加载资源失败：404”，用户什么都没做错却看到报错。
+ * 批量口一次拿回整个 config 域，缺键只是“桶里没有”，不再产生 404。
+ */
+const CONFIG_BUCKET_PATH = '/api/kv/config?values=1'
+
+/**
+ * 读后台 KV 里的通知开关（经 config 批量口）。
+ * 没这个键（从没保存过）/ 网络错 / 没有 fetch（node）→ 全 false，绝不抛 ——
  * 首屏不能因为后台没起就报错。
  */
 export async function loadNotifyPrefs(opts: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): Promise<AgentNotifyPrefs> {
@@ -61,11 +70,16 @@ export async function loadNotifyPrefs(opts: { fetchImpl?: typeof fetch; baseUrl?
   const f = opts.fetchImpl ?? fetch
   const base = (opts.baseUrl ?? '').replace(/\/+$/, '')
   try {
-    const res = await f(base + NOTIFY_PATH, { headers: { accept: 'application/json' } })
+    const res = await f(base + CONFIG_BUCKET_PATH, { headers: { accept: 'application/json' } })
     if (!res.ok) return off()
     const body = (await res.json()) as unknown
-    // KV 接口的体是 { value }（cloud-server 的 routes/kv.ts，404 = 没存过）；
-    // 同时也接受「直接把值当体」的形状，两种都能解析
+    // 批量口的体是 { values: { key: value } }；缺这个键 = 从没保存过 → 全 false。
+    // 也接受“直接把值当体”的老形状（宿主/测试注入的替身可能这么给）。
+    const values =
+      body && typeof body === 'object' && 'values' in body
+        ? (body as { values?: Record<string, unknown> }).values
+        : undefined
+    if (values && typeof values === 'object') return parseNotifyPrefs(values[NOTIFY_KEY])
     const raw = body && typeof body === 'object' && 'value' in body ? (body as { value: unknown }).value : body
     return parseNotifyPrefs(raw)
   } catch {

@@ -210,6 +210,40 @@ function inCanvasId(argsText: string | undefined): string {
   return args ? String(args.canvasId ?? '') : ''
 }
 
+/**
+ * 折叠行后面那截「这工具到底干了什么」的人话（用户口径 2026-10-11）。
+ *
+ * 为什么需要它：默认工具（exec_command 这类）收起时只显示一个工具名，
+ * 而同一种工具能跑千千万万条命令 —— 光看名字根本分不清哪个是哪个。
+ * 用户口径：后面要跟一截**执行内容**的截断（命令本身 / 动的哪个文件），
+ * 而不是输出结果。
+ *
+ * 为什么不复用卡片摘要（ToolView.summary）：那是**输出**侧的人话
+ *（「25 节点 · 11 连线」），而工具收起时你更想知道「它执行了什么」。
+ * 取不到执行内容时返回空串，调用方自己回退（绝不编内容）。
+ */
+export function toolBrief(name: string, argsText: string | undefined): string {
+  const bare = name.replace(/^mcp__[a-zA-Z0-9_-]+__/, '')
+  const a = safeJson(argsText)
+  if (!a) return ''
+  const clip = (s: string, n = 60): string => (s.length > n ? s.slice(0, n) + '…' : s)
+  const one = (v: unknown): string => String(v ?? '').replace(/\s+/g, ' ').trim()
+  // 执行命令类：给命令本身（描述是次选 —— 没命令时至少说明它要干什么）
+  if (bare === 'exec_command' || bare === 'input_command') {
+    const cmd = one(a.cmd ?? a.input ?? a.command)
+    if (cmd) return clip(cmd)
+    const desc = one(a.description ?? a.prompt)
+    return desc ? clip(desc) : ''
+  }
+  // 文件类：给动的哪个文件（全路径太长，只留文件名）
+  if (bare === 'read_file' || bare === 'write_file' || bare === 'edit_file') {
+    const p = one(a.file_path ?? a.path)
+    const base = p.split(/[\\/]/).pop() ?? ''
+    return base ? clip(base) : ''
+  }
+  return ''
+}
+
 const note = (text: string, tone: 'ok' | 'error' | 'info' = 'info'): CardBlock => ({ kind: 'note', text, tone })
 
 /** 空卡片（什么块都没提炼出来）时返回 null，让调用方走 fallback */

@@ -55,6 +55,13 @@ export function useNodeCapability(type: string) {
    */
   const transparent = computed(() => nodeDef.value?.transparent === true);
 
+  /**
+   * 该 type 是否声明"加载态用类型默认尺寸"（缺省 false）。
+   * 媒体型类型（图片/视频）用它：跑任务时卡片按类型默认宽高显示，不跟着上次那张图的比例变竖。
+   * 判定"是否在跑"由消费方读 data.runState 完成（见 canvas-data 的 isNodeRunning），本 composable 只报类型声明。
+   */
+  const loadingDefaultSize = computed(() => nodeDef.value?.loadingDefaultSize === true);
+
   /** 该 type 声明的图标（opaque 句柄：SVG 字符串或 Vue 组件；缺省 undefined = 标题不显示图标） */
   const icon = computed(() => nodeDef.value?.icon);
 
@@ -64,5 +71,5 @@ export function useNodeCapability(type: string) {
    */
   const label = computed(() => nodeDef.value?.label);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent, label };
+  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent, loadingDefaultSize, label };
 }

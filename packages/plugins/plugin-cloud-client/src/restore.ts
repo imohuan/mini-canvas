@@ -16,6 +16,15 @@ export interface RestoreDeps {
   readLocal(): { nodes: unknown[]; edges: unknown[] }
   /** 用服务器那份覆盖本地 */
   replaceLocal(nodes: unknown[], edges: unknown[]): void
+  /**
+   * 覆盖本地**之前**，按节点里的资源引用重建可显示地址（imageUrl / videoUrl …）。
+   *
+   * 为什么必须有：服务器存的是节点 data.resourceId（一个引用），而渲染层只认 imageUrl/videoUrl
+   * （真地址）。本地加载路径本来就有一遍「按引用重建地址」，但云端恢复发生在那之后、且只做整包
+   * 覆盖 —— 没有这一步时，覆盖完的节点只剩引用，图片/视频节点渲染成空白（用户 2026-10-10 报的
+   * 「刷新后图/视频变空白」）。缺省不传 = 老行为不变。
+   */
+  restoreMediaUrls?(nodes: unknown[]): void | Promise<void>
   /** 把本地那份推上去（服务器还没有画布时） */
   pushLocal(nodes: unknown[], edges: unknown[]): Promise<void>
   /** 视图状态（视口）恢复 */
@@ -55,6 +64,11 @@ export async function restoreOrSeed(deps: RestoreDeps): Promise<RestoreResult> {
   // 节点数据是用户的，宁可先留着（渲染层对未注册类型本来就有 orphan 兜底），
   // 也不能因为时序问题把它从画布里抹掉。
   const nodes = server.nodes.filter((n) => !!n && typeof n === 'object')
+
+  // 覆盖本地之前先把「引用」翻成「可显示地址」：服务器只存 data.resourceId，
+  // 而渲染层只认 imageUrl/videoUrl。少这一步，图片/视频节点在本机就是空白
+  // （用户 2026-10-10 报的「刷新后图片/视频变空白」）。
+  if (deps.restoreMediaUrls) await deps.restoreMediaUrls(nodes)
 
   deps.replaceLocal(nodes, server.edges)
 

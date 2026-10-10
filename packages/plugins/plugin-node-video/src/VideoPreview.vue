@@ -30,9 +30,30 @@ const props = withDefaults(
     name?: string
     /** 大舞台模式（全屏预览）：控件条略大、自动播放 */
     tall?: boolean
+    /**
+     * 小屏态是否在右下角给一个「进入预览」按钮。
+     * 宿主能接 expand 事件（去开全屏预览）时传 true；没人接就不给死按钮。
+     */
+    expandable?: boolean
   }>(),
-  { url: "", name: "", tall: false },
+  { url: "", name: "", tall: false, expandable: false },
 )
+
+/** 点「进入预览」：组件自己不开窗，交给宿主（它才知道全屏预览挂在哪） */
+const emit = defineEmits<{ (e: "expand"): void }>()
+
+/**
+ * 按**实测宽度**在两种 UI 之间切换（用户口径 2026-10-11）。
+ *
+ * 为什么必须按宽度分：同一个组件既长在生成历史的小卡片里（实测 237px 宽），又长在
+ * 全屏预览的大舞台里。而控件条内容实测要 263px 才排得下 —— 237px 的卡片里进度条被裁得
+ * 只剩几十像素、基本看不见（用户报的"进度条被遮挡"就是这个）。窄的时候只留一个居中播放键，
+ * 宽了才给完整控制栏。全屏舞台（tall）永远给完整栏，不看宽度。
+ */
+const width = ref(0)
+/** 小屏阈值：窄于它 = 小屏态。360px 约等于一张 3 列卡片再宽一点 */
+const DENSE_MAX_WIDTH = 360
+const dense = computed(() => width.value > 0 && width.value < DENSE_MAX_WIDTH && !props.tall)
 
 /** tall（全屏预览）时**自动播放**：用户点开就是看视频，不该还要再点一次播放。
  *  卡片里的小尺寸件不自动播（一屏几十张，全自动播会很吵、也费资源）。 */
@@ -226,6 +247,28 @@ onBeforeUnmount(() => {
   if (el) el.pause()
 })
 
+/**
+ * 量自己的宽度：ResizeObserver 盯着根元素，宽度变化就重算 dense。
+ * 没有 ResizeObserver（极老环境 / SSR）就退化成"量一次，量不到当大屏"，不会崩。
+ */
+let widthObserver: ResizeObserver | null = null
+onMounted(() => {
+  const el = rootEl.value
+  if (!el) return
+  width.value = el.clientWidth
+  if (typeof ResizeObserver === "function") {
+    widthObserver = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width
+      if (typeof w === "number") width.value = w
+    })
+    widthObserver.observe(el)
+  }
+})
+onBeforeUnmount(() => {
+  widthObserver?.disconnect()
+  widthObserver = null
+})
+
 watch(
   () => props.url,
   () => {
@@ -262,8 +305,24 @@ watch(
         @click.stop="togglePlay"
       />
 
-      <!-- 控件条：居中悬浮胶囊（不再铺满屏幕宽 —— 那样小窗口里会被裁切） -->
-      <div class="vpv-bar" @click.stop @mousedown.stop @dblclick.stop>
+      <!-- ===== 小屏态：只留一个居中播放/暂停键 =====
+           窄容器里完整控件条排不下（进度条实测被裁得只剩几十像素），只保留必需的这一个交互。 -->
+      <div v-if="dense" class="vpv-dense" :class="{ 'is-playing': playing }">
+        <button class="vpv-dense-play" type="button" :title="playing ? '暂停' : '播放'"
+          :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
+          <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
+        </button>
+        <button v-if="expandable" class="vpv-dense-expand" type="button" title="进入预览" aria-label="进入预览"
+          @click.stop="emit('expand')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M15 3h6v6" /><path d="M9 21H3v-6" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 大屏态：完整控制栏（居中悬浮胶囊；不再铺满屏幕宽 —— 那样小窗口里会被裁切） -->
+      <div v-else class="vpv-bar" @click.stop @mousedown.stop @dblclick.stop>
         <button class="vpv-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
           <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="7,4 19,12 7,20" /></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
@@ -381,6 +440,62 @@ watch(
 }
 .vpv-media { width: 100%; height: 100%; object-fit: contain; display: block; cursor: pointer; }
 .vpv-empty { display: grid; place-items: center; width: 100%; min-height: 120px; color: var(--vpv-ink-dim); font-size: 12px; }
+
+/* ===== 小屏态：只有一个居中播放键（+ 可选右下角「进入预览」） =====
+   为什么单独一套而不是把控制栏缩小：窄容器里进度条是**排不下**的（实测控件条内容要 263px，
+   而历史卡片只有 237px），硬缩会把进度条挤没。小屏只给必需的播放/暂停。 */
+.vpv-dense {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.vpv-dense-play {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  /* 主题色白名单: 播放键压在任意画面上，用固定中性黑底 + 白色图标（同下面的按钮） */
+  background: rgb(0 0 0 / 0.45);
+  color: var(--vpv-ink);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+.vpv-dense-play svg { width: 18px; height: 18px; margin-left: 1px; }
+.vpv-dense-play:hover { transform: scale(1.06); background: var(--vpv-panel); }
+.vpv-dense-play:focus-visible { outline: 2px solid var(--vpv-ring); outline-offset: 2px; }
+/* 正在播放且鼠标不在画面上：把播放键收起来（别一直挡着画面）；悬停或暂停时显形 */
+.vpv-root.is-dense:not(:hover) .vpv-dense.is-playing .vpv-dense-play { opacity: 0; pointer-events: none; }
+
+.vpv-dense-expand {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  /* 主题色白名单: 同上，压在画面上的固定中性色 */
+  background: rgb(0 0 0 / 0.42);
+  color: var(--vpv-ink);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.16s ease;
+}
+.vpv-dense-expand svg { width: 14px; height: 14px; }
+.vpv-dense-expand:hover { background: var(--vpv-panel); }
+.vpv-dense-expand:focus-visible { outline: 2px solid var(--vpv-ring); outline-offset: 2px; }
 
 /* ===== 控件条：居中悬浮胶囊 =====
    为什么居中而不铺满：铺满（left/right:8px）在窄舞台里会被左右裁切、按钮挤成一团（用户实测报过）。 */

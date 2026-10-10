@@ -12,14 +12,23 @@
  * - 建节点前检测 nodeStore.types 是否注册了对应类型（node-image / node-video / node-text 装配才有）；
  *   缺类型则该文件类别跳过（console.warn）——插件可与节点插件独立装配，不硬耦合（masterplan 铁律 8）。
  *
- * 事件挂载：window 级 dragover/drop + paste 监听，ctx.effect 绑定 → 随插件 scope 自动回收；
+ * 事件挂载：window 级 dragover/drop 监听，ctx.effect 绑定 → 随插件 scope 自动回收；
  * 浏览器环境守卫(typeof window !== 'undefined')，node 测试/装配安全跳过。
  * 坐标：drop/paste 的 clientX/Y 经 ctx.get('viewport').screenToFlow 转 flow 坐标作节点 position
  * （对齐老版"放到鼠标处"）；无 viewport 服务/无鼠标锚点退级联默认。
- * 快捷键：不走 DOM 按键，粘贴由命令 keys(mod+v) 统一分发会与剪贴板冲突——见下方说明。
+ * 粘贴：不再自绑 window paste（宿主 keydown 对 mod+v preventDefault 会掐掉原生 paste）。
+ * 改为向宿主统一仲裁场 registryOf('clipboard/paste') 注册处理器，按 order 抢这次粘贴
+ * （媒体 20 > 纯文本 30；若剪贴板带"来自画布"标记则让位给 clipboard 插件）。
  */
 import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
+import {
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  hasCanvasClipboardMarker,
+  type ClipboardPasteHandler,
+  type ClipboardPastePayload,
+} from '@mini-canvas/canvas-data'
 import {
   classifyFile,
   clampText,
@@ -168,11 +177,6 @@ const defaultReaders: FileDropReaders = {
   createObjectURL: (b) => URL.createObjectURL(b),
 }
 
-/** 剪贴板 string 项读文本（老版 readClipboardString 同款） */
-function readClipboardString(item: DataTransferItem): Promise<string> {
-  return new Promise((resolve) => item.getAsString(resolve))
-}
-
 export class FileDropServiceImpl extends Service implements FileDropService {
   /** 最近一次画布内鼠标位置（屏幕坐标；供粘贴锚点） */
   private lastClient: { x: number; y: number } | null = null
@@ -309,6 +313,78 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     const ids = this.commitPayloads([payload], '粘贴文本')
     return ids[0] ?? null
   }
+
+  // ===== 粘贴仲裁用的同步判定 / 异步落地（见 canvas-data/canvas/clipboardActions）=====
+
+  /**
+   * 剪贴板里有没有"能建节点"的图片/视频文件（同步判定，供粘贴仲裁当场认领）。
+   *
+   * 判据用**每个文件自己的 MIME/名字**，不是 clipboardData.types —— 真机实测：
+   * 粘贴一张图片时 types 往往只有 ['Files']（不是 'image/png'），真实类型在 files 上。
+   */
+  claimsMediaPaste(files: readonly { name: string; type: string }[]): boolean {
+    return files.some((f) => {
+      const kind = classifyFile(f)
+      return (kind === 'image' || kind === 'video') && this.typeRegistered(kind)
+    })
+  }
+
+  /** 剪贴板里有没有可建文本节点的纯文本（同步判定） */
+  claimsTextPaste(stringTypes: readonly string[]): boolean {
+    if (!this.typeRegistered('text')) return false
+    return stringTypes.some((t) => t === 'text/plain' || t === 'text/markdown' || t === 'text/x-markdown')
+  }
+
+  /** 从粘贴载荷里的图片/视频建立节点（异步；返回创建数量） */
+  async pasteMedia(files: File[], atFlow: { x: number; y: number } | null): Promise<number> {
+    const media = files.filter((f) => {
+      const kind = classifyFile(f)
+      return (kind === 'image' || kind === 'video') && this.typeRegistered(kind)
+    })
+    if (media.length === 0) return 0
+    return this.addFiles(media, atFlow)
+  }
+
+  /** 从粘贴载荷里的纯文本建立文本节点（异步；返回是否创建） */
+  async pasteTextAsync(
+    payload: { readText(mime: string): Promise<string>; stringTypes: readonly string[] },
+    atFlow: { x: number; y: number } | null,
+  ): Promise<boolean> {
+    const mime = payload.stringTypes.find((t) => t === 'text/plain')
+      ?? payload.stringTypes.find((t) => t === 'text/markdown' || t === 'text/x-markdown')
+    if (!mime) return false
+    const text = await payload.readText(mime)
+    return this.addPastedText(text, atFlow) !== null
+  }
+}
+
+/**
+ * 造 file-drop 的两条粘贴处理器（媒体 20 / 文本 30），供装配与测试共用一个事实源。
+ *
+ * 判据要点（真机实测）：
+ * - 图片粘贴时 clipboardData.types 常只有 ['Files']，真实类型在 files 上 —— 故媒体判定看 files；
+ * - 两条都**先看画布剪贴板标记**：若这次粘贴是"刚在画布上复制的节点"，让位给 clipboard 插件（order 10）。
+ */
+export function createFileDropPasteHandlers(
+  svc: FileDropServiceImpl,
+  pluginName = name,
+): Array<{ key: string; handler: ClipboardPasteHandler; id: string; order: number }> {
+  const mediaHandler: ClipboardPasteHandler = (payload: ClipboardPastePayload): boolean => {
+    if (hasCanvasClipboardMarker(payload)) return false // 画布节点复制 → 让位
+    if (!svc.claimsMediaPaste(payload.files)) return false
+    void svc.pasteMedia(payload.files, svc.flowAnchor())
+    return true
+  }
+  const textHandler: ClipboardPasteHandler = (payload: ClipboardPastePayload): boolean => {
+    if (hasCanvasClipboardMarker(payload)) return false
+    if (!svc.claimsTextPaste(payload.stringTypes)) return false
+    void svc.pasteTextAsync(payload, svc.flowAnchor())
+    return true
+  }
+  return [
+    { key: CLIPBOARD_PASTE_KEY, handler: mediaHandler, id: pluginName + ':media', order: 20 },
+    { key: CLIPBOARD_PASTE_KEY, handler: textHandler, id: pluginName + ':text', order: 30 },
+  ]
 }
 
 /** 装配入口（cordis 形态） */
@@ -357,48 +433,11 @@ export function apply(ctx: Context, options: FileDropOptions = {}): void {
   }
 
   if (opts.enablePaste) {
-    ctx.effect(() => {
-      if (typeof window === 'undefined') return
-      async function onPaste(e: ClipboardEvent): Promise<void> {
-        if (isEditableTarget(e.target)) return
-        const items = e.clipboardData?.items
-        if (!items || items.length === 0) return
-
-        type PasteItem = { kind: 'image' | 'text'; blob: File } | { kind: 'text'; text: string }
-        const pasteItems: PasteItem[] = []
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i]
-          const kind = classifyFile({ name: 'clipboard', type: item.type })
-          if (kind === 'image') {
-            const blob = item.getAsFile()
-            if (blob) pasteItems.push({ kind: 'image', blob })
-          } else if (item.kind === 'string') {
-            pasteItems.push({ kind: 'text', text: await readClipboardString(item) })
-          }
-        }
-        if (pasteItems.length === 0) return
-        e.preventDefault()
-
-        const anchor = svc.flowAnchor() ?? { x: 200, y: 200 }
-        const images = pasteItems.filter((p): p is { kind: 'image'; blob: File } => p.kind === 'image')
-        const texts = pasteItems.filter((p): p is { kind: 'text'; text: string } => p.kind === 'text')
-        // 文本先建（中心），图片随后级联（避免重叠）
-        let created = 0
-        for (const t of texts) {
-          if (svc.addPastedText(t.text, anchor)) created += 1
-        }
-        if (images.length > 0) {
-          const offset = texts.length > 0 ? 60 : 0
-          created += await svc.addFiles(
-            images.map((p) => p.blob),
-            { x: anchor.x + offset, y: anchor.y + offset },
-          )
-        }
-        if (created === 0) console.warn('[file-drop] 粘贴未创建任何节点')
-      }
-      window.addEventListener('paste', onPaste)
-      return () => window.removeEventListener('paste', onPaste)
-    })
+    // 粘贴走宿主统一仲裁（不再自绑 window paste —— 铁律 7；且宿主 keydown 现放行原生 paste）。
+    // 处理器由工厂给出（媒体 20 / 文本 30），测试直接复用同一份逻辑。
+    for (const h of createFileDropPasteHandlers(svc)) {
+      ctx.registryOf<ClipboardPasteHandler>(CLIPBOARD_PASTE_KIND).add(h.key, h.handler, { id: h.id, order: h.order })
+    }
   }
 }
 

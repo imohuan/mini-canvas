@@ -163,6 +163,64 @@ describe('实时通道', () => {
     const api = new CloudApi({})
     expect(() => api.subscribeChanges(() => {})()).not.toThrow()
   })
+
+  /**
+   * 复用宿主的**共享连接** —— 用户报的"后台怎么这么卡"的直接原因锁。
+   *
+   * 背景：宿主（@mini-canvas/ui）把一条 /api/kv/events 共享给全应用。本插件是独立
+   * 打包的外部 bundle，拿不到宿主的模块导出，所以约定走全局键取共享订阅。
+   * 不复用它就会多一条**永不关闭**的长连接；浏览器对单个域名的并发上限是 6 条，
+   * 占满之后页面里所有普通请求只能排队（用户看到"请求停在待处理"）。
+   *
+   * 只在**没有自定义 SSE 工厂**时走共享（工厂是测试/宿主注入的替身，必须继续生效）。
+   */
+  it('有宿主共享连接时复用它，不再自己开一条（避免占满浏览器并发额度）', () => {
+    const bag = globalThis as unknown as Record<string, unknown>
+    const key = '__miniCanvasKvEvents'
+    const prev = bag[key]
+    try {
+      const subs: Array<{ path: string; fn: (e: { type: string; key: string }) => void }> = []
+      bag[key] = { subscribe: (path: string, fn: (e: { type: string; key: string }) => void) => {
+        subs.push({ path, fn })
+        return () => void subs.splice(subs.indexOf(subs[subs.length - 1]), 1)
+      } }
+
+      let openedOwn = false
+      const api = new CloudApi({ baseUrl: 'http://srv' })
+      const got: Array<{ type: string; key: string }> = []
+      const off = api.subscribeChanges((e) => got.push(e))
+
+      expect(openedOwn).toBe(false)
+      expect(subs).toHaveLength(1)
+      expect(subs[0].path).toBe('http://srv/api/kv/events')
+
+      subs[0].fn({ type: 'canvas', key: 'graph' })
+      expect(got).toEqual([{ type: 'canvas', key: 'graph' }])
+
+      off()
+    } finally {
+      if (prev === undefined) delete bag[key]
+      else bag[key] = prev
+    }
+  })
+
+  it('宿主没挂共享连接时退回自己开（别的宿主 / 单测照样能跑）', () => {
+    const bag = globalThis as unknown as Record<string, unknown>
+    const key = '__miniCanvasKvEvents'
+    const prev = bag[key]
+    delete bag[key]
+    try {
+      const src = fakeSource()
+      let called = false
+      const api = new CloudApi({ createEventSource: () => ((called = true), src) })
+      const off = api.subscribeChanges(() => {})
+      expect(called).toBe(true)
+      off()
+      expect(src.closed).toBe(true)
+    } finally {
+      if (prev !== undefined) bag[key] = prev
+    }
+  })
 })
 
 describe('资源上传', () => {

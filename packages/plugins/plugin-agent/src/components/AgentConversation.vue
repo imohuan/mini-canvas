@@ -48,7 +48,7 @@ import {
 } from '../queueModel.js'
 import type { QueueStateView } from '../agentApi.js'
 import { loadNotifyPrefs, notifyPayload, playNotifySound, showNotify, type AgentNotifyPrefs } from '../agentNotify.js'
-import { toolView, type ToolView } from '../toolViews.js'
+import { toolView, toolBrief, type ToolView } from '../toolViews.js'
 import type { AgentTurnView, ToolCard } from '../sessionModel.js'
 import AgentMarkdown from './AgentMarkdown.vue'
 import ToolViewBody from './ToolViewBody.vue'
@@ -533,6 +533,20 @@ function toolSummary(tool: ToolCard): string {
   if (card.summary) return card.summary.length > 60 ? card.summary.slice(0, 60) + '…' : card.summary
   const one = (tool.output ?? '').replace(/\s+/g, ' ').trim()
   return one.length > 60 ? one.slice(0, 60) + '…' : one
+}
+
+/**
+ * **折叠行**后面那截描述：优先给「执行内容」（跑的那条命令 / 读写的那个文件），
+ * 没有才退回卡片摘要、再退回输出截断。
+ *
+ * 用户口径（2026-10-11）：「exec_command 后面应该跟一些执行命令的文本信息」——
+ * 只显示一个工具名分不清是哪个（同一种工具能跑无数条命令）。
+ * 为什么顺序是这样：收起时最想知道「它干了什么」，输出结果是展开后的事。
+ */
+function toolRowSummary(tool: ToolCard): string {
+  const brief = toolBrief(tool.name, tool.arguments)
+  if (brief) return brief
+  return toolSummary(tool)
 }
 
 /**
@@ -1325,7 +1339,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     @click="toggleTool(row.tools[0].id)">
                     <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[row.tools[0].id] }" />
                     <code>{{ row.tools[0].name }}</code>
-                    <span v-if="row.tools[0].output" class="ac-tf-summary">{{ toolSummary(row.tools[0]) }}</span>
+                    <span v-if="toolRowSummary(row.tools[0])" class="ac-tf-summary">{{ toolRowSummary(row.tools[0]) }}</span>
                   </button>
                   <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
                     <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
@@ -1359,7 +1373,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         @click="toggleTool(tool.id)">
                         <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
                         <code>{{ tool.name }}</code>
-                        <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
+                        <span v-if="toolRowSummary(tool)" class="ac-tf-summary">{{ toolRowSummary(tool) }}</span>
                       </button>
                       <div v-if="openTools[tool.id]" class="ac-tf-body">
                         <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"

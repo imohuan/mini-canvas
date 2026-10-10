@@ -182,6 +182,10 @@ export function apply(ctx: Context) {
     // 等于给了用户一个按不住的选择。所以视频节点不提供 resize。
     resizable: false,
     frameless: true,
+    // 加载态用默认尺寸（用户口径 2026-10-10）：视频一旦有内容，node.size 就按画面比例写死，
+    // 重新生成时卡片仍是上一次的比例。声明本能力后：跑任务期间按设置里配的「默认宽/默认高」显示
+    // （用户要的"保持横屏的视频节点默认状态"），跑完再跟随新视频比例。只改渲染、不动 node.size。
+    loadingDefaultSize: true,
     in: VideoContent,
     segments: {
       'out:top': VideoTopToolbar,

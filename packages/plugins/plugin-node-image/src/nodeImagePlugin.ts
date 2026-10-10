@@ -170,6 +170,11 @@ export function apply(ctx: Context) {
     // 只会变成内容边缘多余的一圈缝（用户实测报的"图片边上还有一像素边距"就是它）。
     // 选中环不受影响：环是 ::after 的 box-shadow，与边框互相独立。
     frameless: true,
+    // 加载态用默认尺寸（用户口径 2026-10-10）：图片节点一旦有图，node.size 就被按那张图的真实比例
+    // 写死（9:16 竖图 → 169×300）。于是**重新生成**时卡片仍是竖版，用户看到"重新生成就变竖屏"。
+    // 声明本能力后：跑任务期间卡片按设置里配的「默认宽/默认高」显示，跑完立刻回到新图比例。
+    // 只改渲染、不动 node.size —— 生成失败/取消时原图与尺寸原样还在。
+    loadingDefaultSize: true,
     in: ImageContent,
     segments: {
       'out:top': ImageTopToolbar,

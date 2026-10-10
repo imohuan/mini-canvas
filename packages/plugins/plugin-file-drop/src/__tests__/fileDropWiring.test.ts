@@ -12,6 +12,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
+import { CLIPBOARD_PASTE_KIND, CLIPBOARD_PASTE_KEY } from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
 import { fileDropPlugin } from '../fileDropPlugin'
@@ -84,13 +85,25 @@ afterEach(() => {
 })
 
 describe('拖放/粘贴的事件接线（"没反应"就出在这一层）', () => {
-  it('装插件后 window 上真的挂上了 dragover / drop / paste 三个监听', async () => {
+  it('装插件后 window 上真的挂上了 dragover / drop 两个监听', async () => {
     const { ctx } = boot()
     ctx.plugin(fileDropPlugin)
     await ctx.start()
     expect(registered.dragover?.length ?? 0).toBeGreaterThan(0)
     expect(registered.drop?.length ?? 0).toBeGreaterThan(0)
-    expect(registered.paste?.length ?? 0).toBeGreaterThan(0)
+    // 粘贴不再自绑 window（铁律 7 + 宿主 keydown 会掐掉原生 paste）：改为登记进仲裁场。
+    expect(registered.paste?.length ?? 0).toBe(0)
+    ctx.stop()
+  })
+
+  it('粘贴改为登记进 clipboard/paste 仲裁场（媒体 + 文本两条，带 order）', async () => {
+    const { ctx } = boot()
+    ctx.plugin(fileDropPlugin)
+    await ctx.start()
+    const entries = ctx.registryOf(CLIPBOARD_PASTE_KIND).list(CLIPBOARD_PASTE_KEY)
+    expect(entries.length).toBe(2)
+    // 媒体优先于文本（order 小者先）
+    expect(entries[0].order).toBeLessThan(entries[1].order)
     ctx.stop()
   })
 

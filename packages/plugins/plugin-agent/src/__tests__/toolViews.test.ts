@@ -8,7 +8,34 @@
  * 图片节点/文件预览用 media 单行（40px 缩略图），资源列表只铺图、音频视频折成一句统计。
  */
 import { describe, it, expect } from 'vitest'
-import { toolFamily, toolView } from '../toolViews'
+import { toolFamily, toolView, toolBrief } from '../toolViews'
+
+describe('toolBrief：折叠行后面那截「执行内容」（用户口径 2026-10-11）', () => {
+  it('exec_command ⇒ 给**命令本身**（不是输出、也不是工具名）', () => {
+    const args = JSON.stringify({ description: '列目录', cmd: 'Get-ChildItem -Path "D:\\x" -Recurse -File' })
+    expect(toolBrief('exec_command', args)).toBe('Get-ChildItem -Path "D:\\x" -Recurse -File')
+  })
+
+  it('命令为空时退回 description（至少说明它要干什么）', () => {
+    expect(toolBrief('exec_command', JSON.stringify({ description: '查找文件位置' }))).toBe('查找文件位置')
+  })
+
+  it('命令过长 ⇒ 截断加省略号（收起行只有一行）', () => {
+    const long = 'echo ' + 'a'.repeat(200)
+    const out = toolBrief('exec_command', JSON.stringify({ cmd: long }))
+    expect(out.length).toBeLessThanOrEqual(61)
+    expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('read_file ⇒ 给文件名（全路径太长）', () => {
+    expect(toolBrief('read_file', JSON.stringify({ file_path: 'D:\\a\\b\\pic.png' }))).toBe('pic.png')
+  })
+
+  it('入参坏了 / 认不出 ⇒ 返回空串（调用方回退，不编内容）', () => {
+    expect(toolBrief('exec_command', 'not json')).toBe('')
+    expect(toolBrief('mcp__other__whatever', JSON.stringify({ x: 1 }))).toBe('')
+  })
+})
 
 describe('toolFamily', () => {
   it('按前缀分族（带 mcp__canvas__ 前缀）', () => {

@@ -19,6 +19,19 @@ import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-ba
 import { registerEventName } from '@mini-canvas/canvas-base'
 import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
 import {
+  CLIPBOARD_COPY_KIND,
+  CLIPBOARD_COPY_KEY,
+  CLIPBOARD_CUT_KEY,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  CANVAS_CLIPBOARD_MIME,
+  CANVAS_CLIPBOARD_TEXT_PREFIX,
+  canvasClipboardMarker,
+  hasCanvasClipboardMarker,
+  type ClipboardPasteHandler,
+  type ClipboardWriteHandler,
+} from '@mini-canvas/canvas-data'
+import {
   makeSnapshot,
   internalEdgesOf,
   touchingEdgesOf,
@@ -124,7 +137,42 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
     this.shared = makeSnapshot(nodes, toClipboardEdges(edges), Date.now(), this.absProvider())
     this.pasteCount = 0
     this.ctx.emit('clipboard:copy', { nodeCount: nodes.length, edgeCount: edges.length })
+    // 程序化路径（右键菜单 / ui.duplicateNode / duplicate）也要打标记：
+    // 否则"菜单里复制 → 键盘 Ctrl+V"会因剪贴板无标记而让位给 file-drop，粘不出节点。
+    // 键盘路径随后由 copy 命令处理器再写一次（同步 setData，无需权限、不竞态），两者不冲突。
+    this.markSystemClipboard()
     return true
+  }
+
+  /**
+   * 把"这次复制来自画布"的标记写进系统剪贴板（仲裁用，见 canvas-data/canvas/clipboardActions）。
+   *
+   * 只写**标记**（节点数/边数的小 JSON + 带前缀的 text/plain），真正的节点数据仍在内存快照里。
+   * 粘贴时据标记判定"该贴画布节点，还是贴外部拷来的图片/文本"。
+   *
+   * @param write 可选同步写口（原生 copy 事件里用 setData，同步、无权限、不竞态）。
+   *   缺省走 navigator.clipboard.writeText（菜单/程序化复制用；用户手势内允许，尽力而为）。
+   *   自定义 MIME 与 text/plain 都写：真机实测两者都能经 copy→paste 往返，text/plain 兜底更稳。
+   */
+  markSystemClipboard(write?: (mime: string, data: string) => boolean): void {
+    const nodeCount = this.shared?.nodes.length ?? 0
+    const edgeCount = this.shared?.edges.length ?? 0
+    const marker = canvasClipboardMarker(nodeCount, edgeCount)
+    const text = CANVAS_CLIPBOARD_TEXT_PREFIX + marker
+    if (write) {
+      write(CANVAS_CLIPBOARD_MIME, marker)
+      write('text/plain', text)
+      return
+    }
+    // 程序化路径：navigator.clipboard 只在安全上下文与用户手势内可用，缺失就静默跳过
+    // （标记写不上时粘贴退化为"贴内存快照"，与改造前行为一致，不会更糟）。
+    try {
+      const clip = (globalThis as { navigator?: { clipboard?: { writeText?(t: string): Promise<void> } } })
+        .navigator?.clipboard
+      void clip?.writeText?.(text)
+    } catch {
+      /* 尽力而为：写不上不影响内存快照可用 */
+    }
   }
 
   /** 粘贴：克隆快照 + 重映射 + 偏移 + 原子写入 + 选中新节点 */
@@ -242,6 +290,43 @@ export function apply(ctx: Context): void {
     return () => window.removeEventListener('pointermove', onPointerMove)
   })
 
+  // ===== 剪贴板仲裁（注册场，见 canvas-data/canvas/clipboardActions）=====
+  // 复制/剪切/粘贴三个键都声明了 deferToNative（见下方命令），宿主不再在 keydown 里
+  // preventDefault，而是放行原生 copy/cut/paste 事件到宿主，再由宿主按 order 问各处理器。
+  // 本插件在这里认领"画布节点"这一类：
+  // - copy/cut：把选中节点快照存内存 + 往系统剪贴板写"来自画布"标记；
+  // - paste：**仅当**剪贴板带画布标记（= 最后一次复制来自画布）才粘贴内存快照，否则让位给
+  //   file-drop（外部拷来的图片/文本）。这正是修掉"复制的图片贴不进来、反倒贴出旧节点"的关键。
+  ctx.registryOf<ClipboardWriteHandler>(CLIPBOARD_COPY_KIND).add(
+    CLIPBOARD_COPY_KEY,
+    (payload) => {
+      if (!svc.copy()) return false // 无选中 → 不认领，放行浏览器默认复制
+      svc.markSystemClipboard(payload.write)
+      return true
+    },
+    { id: name, order: 10 },
+  )
+  ctx.registryOf<ClipboardWriteHandler>(CLIPBOARD_COPY_KIND).add(
+    CLIPBOARD_CUT_KEY,
+    (payload) => {
+      if (!svc.cut()) return false
+      svc.markSystemClipboard(payload.write)
+      return true
+    },
+    { id: name, order: 10 },
+  )
+  ctx.registryOf<ClipboardPasteHandler>(CLIPBOARD_PASTE_KIND).add(
+    CLIPBOARD_PASTE_KEY,
+    (payload) => {
+      // 贴画布节点的前提：内存里有快照，且最后一次复制来自画布（系统剪贴板带标记）。
+      // 否则让位 —— 剪贴板里若是刚拷来的图片/文本，就该由 file-drop 建对应节点。
+      if (!svc.hasData) return false
+      if (!hasCanvasClipboardMarker(payload)) return false
+      return svc.paste()
+    },
+    { id: name, order: 10 },
+  )
+
   // 命令：快捷键 keys 由渲染层 CanvasHost 统一分发（不插件自绑 window）
   ctx.commands.register({
     id: 'clipboard:copy',
@@ -252,6 +337,8 @@ export function apply(ctx: Context): void {
     areas: ['node'],
     group: 'clipboard',
     order: 10,
+    // 键交给原生 copy 事件（否则 keydown preventDefault 会掐掉它）；工由仲裁场做。
+    deferToNative: true,
     run: () => svc.copy(),
   })
   ctx.commands.register({
@@ -261,6 +348,8 @@ export function apply(ctx: Context): void {
     areas: ['pane'],
     group: 'clipboard',
     order: 20,
+    // 键交给原生 paste 事件（同上）；工由仲裁场按 order 决定贴节点还是贴外部媒体。
+    deferToNative: true,
     run: () => svc.paste(),
   })
   ctx.commands.register({
@@ -269,6 +358,7 @@ export function apply(ctx: Context): void {
     keys: ['mod+x'],
     group: 'clipboard',
     order: 30,
+    deferToNative: true,
     run: () => svc.cut(),
   })
   ctx.commands.register({
