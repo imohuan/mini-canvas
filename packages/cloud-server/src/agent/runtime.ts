@@ -699,7 +699,20 @@ export class AgentRuntime {
 
   /** 中止当前轮：会话本身留着（用户只是停下，不是删掉） */
   abort(canvasId: string, sessionId: string): void {
-    this.live.get(this.key(canvasId, sessionId))?.abort?.abort()
+    const entry = this.live.get(this.key(canvasId, sessionId))
+    if (!entry) return
+    entry.abort?.abort()
+    /**
+     * 挂着的审批必须一起解开（真机实测的洞）。
+     *
+     * 审批是 SDK 在 await 中途回调我们、由**我们**握住的那个 promise（见 approve）。
+     * 只 abort 信号，SDK 可能根本没在听（它正卡在等这张卡片），run() 的循环于是永远
+     * 出不来，finally 也跑不到 —— 这一轮就"停不住"：刷新后 running 恒为 true、
+     * 输入框右下角按钮永远显示停止（用户实测）。按「拒绝」把它放行，循环才能收尾。
+     */
+    for (const [, resolve] of entry.pending) resolve('deny')
+    entry.pending.clear()
+    entry.pendingInfo.clear()
   }
 
   /**

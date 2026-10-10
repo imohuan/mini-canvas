@@ -732,6 +732,15 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
       sync()
       state.sessionId = id
+      // 挂起中的审批补渲染成卡片（刷新 / 切会话的洞）：
+      // 审批只在「发生的那一刻」经 SSE 推一次，刷新后事件早没了，界面就把它丢了；
+      // 而后台仍停在原地等这张卡片 —— 不补回来，这一轮永远结束不了
+      // （用户实测：输入框右下角按钮永远停在「停止」，点了也没用）。
+      // 放在 model.load() 之后：卡片要追加在已恢复的转录末尾。
+      if (Array.isArray(full.approvals) && full.approvals.length) {
+        model.restoreApprovals(full.approvals)
+        sync()
+      }
       // 队列 / 目标 / 运行态：刷新后原样恢复
       state.queue = full.queue ?? { paused: false, items: [] }
       state.goal = (full.goal ?? null) as GoalStateView | null

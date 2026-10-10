@@ -2,6 +2,43 @@
 import { describe, it, expect } from 'vitest'
 import { ChatModel } from '../sessionModel'
 
+describe('审批卡片的补渲染与去重', () => {
+  /**
+   * 真 bug（用户实测 2026-10-10）：审批只在「发生的那一刻」经 SSE 推一次，
+   * 页面刷新后事件早没了 ⇒ 后端还挂着等审批，界面上却没有卡片，
+   * 这一轮永远结束不了（右下角按钮永远停在「停止」）。
+   * GET 会话返回的 approvals 必须能补出一张卡片。
+   */
+  it('restoreApprovals：把挂起审批补成卡片（刷新后能看见）', () => {
+    const m = new ChatModel()
+    m.send('跑个命令')
+    m.apply({ type: 'tool_call', id: 't1', name: 'exec_command', arguments: '{}' })
+    m.restoreApprovals([{ id: 'ap-1', toolName: 'exec_command', arguments: '{"cmd":"ls"}', createdAt: 5 }])
+    const card = m.turns.find((t) => t.kind === 'approval')
+    expect(card?.approval).toMatchObject({ id: 'ap-1', toolName: 'exec_command' })
+    // 没有决定 = 仍然可点（界面靠 decision 变结果态）
+    expect(card?.approval?.decision).toBeUndefined()
+  })
+
+  /** 重连回放会把 approval_request 再推一遍；同一张卡片不能画两次 */
+  it('同一 approval id 只画一张卡片（重连回放不重复）', () => {
+    const m = new ChatModel()
+    m.send('跑个命令')
+    const ev = { type: 'approval_request' as const, approval: { id: 'ap-2', toolName: 'exec_command', arguments: '{}', createdAt: 1 } }
+    m.apply(ev)
+    m.apply(ev)
+    expect(m.turns.filter((t) => t.kind === 'approval')).toHaveLength(1)
+  })
+
+  it('restoreApprovals 与随后的事件叠加也不会重复', () => {
+    const m = new ChatModel()
+    m.send('跑个命令')
+    m.restoreApprovals([{ id: 'ap-3', toolName: 'exec_command', arguments: '{}' }])
+    m.apply({ type: 'approval_request', approval: { id: 'ap-3', toolName: 'exec_command', arguments: '{}', createdAt: 1 } })
+    expect(m.turns.filter((t) => t.kind === 'approval')).toHaveLength(1)
+  })
+})
+
 describe('基本形态', () => {
   /**
    * 用户口径（2026-10-05）：工具与文本有先后顺序。

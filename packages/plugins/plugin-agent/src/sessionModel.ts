@@ -304,6 +304,9 @@ export class ChatModel {
         return
       }
       case 'approval_request': {
+        // 同一张卡片只画一次：刷新 / SSE 重连会把 approval_request 回放一遍
+        //（它不落转录，所以重连水位推不过它），不判重就会出现两张一模一样的审批卡片。
+        if (this.turns.some((t) => t.approval?.id === ev.approval.id)) return
         // 审批卡片单独一条，插在当前回复之后；同时把对应工具标成「要显示成卡片」
         const turn = this.lastAssistant()
         const tool = turn?.tools.find((t) => t.name === ev.approval.toolName && !t.card)
@@ -432,6 +435,28 @@ export class ChatModel {
   /** 有没有任何一条助手消息里有「卡片级」的工具（界面据此决定要不要留白/分组） */
   hasCard(): boolean {
     return this.turns.some((t) => t.tools.some((x) => x.card) || t.kind === 'approval')
+  }
+
+  /**
+   * 补渲染**挂起中**的审批（刷新 / 切会话后）。
+   *
+   * 审批卡片平时是随 approval_request 事件当场画出来的，可那一路只在「审批发生的那一刻」
+   * 有效 —— 页面一刷新，事件早就过去了，界面就把它丢了。而后台还停在原地等这张卡片：
+   * 不补回来，这一轮永远结束不了（右下角按钮永远停在「停止」，点它也没用）。
+   * GET 会话返回的 approvals 就是为这一步准备的。
+   */
+  restoreApprovals(list: Array<{ id: string; toolName: string; arguments: string; createdAt?: number }>): void {
+    for (const a of list) {
+      this.apply({
+        type: 'approval_request',
+        approval: {
+          id: a.id,
+          toolName: a.toolName,
+          arguments: a.arguments,
+          createdAt: typeof a.createdAt === 'number' ? a.createdAt : Date.now(),
+        },
+      })
+    }
   }
 
   /** 进入编辑：这条消息高亮「正在编辑」，输入框联动标记点它可滚回这里 */

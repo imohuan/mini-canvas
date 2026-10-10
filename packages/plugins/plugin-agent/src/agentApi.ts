@@ -265,6 +265,8 @@ export class AgentApi {
   async sessionState(canvasId: string, sessionId: string): Promise<{
     session: SessionRecordView
     running: boolean
+    /** 挂起中的审批（刷新后补渲染审批卡片用；没有时后端可能不返回这个字段） */
+    approvals?: Array<{ id: string; toolName: string; arguments: string; createdAt: number }>
     queue: QueueStateView
     goal?: GoalStateView
   goalPaused?: boolean
