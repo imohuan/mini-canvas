@@ -58,16 +58,21 @@ describe('审批卡片的补渲染与去重', () => {
     expect(cardIdx).toBeLessThan(m.turns.findIndex((t) => t.kind === 'user' && t.text === '插队的一句'))
   })
 
-  /** 精确落到那条工具上（同名工具有好几个时不标错） */
-  it('同名工具：卡片标记给 toolCallId 命中的那一条，不碰别的', () => {
+  /**
+   * 同名工具要按 toolCallId 精确对上（用户口径 2026-10-10：审批不再改工具样式，
+   * 但卡片仍要落在**它那条**工具调用后面，不能认错兄弟）。
+   */
+  it('同名工具：卡片落在 toolCallId 命中的那一条工具所属回合之后', () => {
     const m = new ChatModel()
     m.send('跑两个命令')
     m.apply({ type: 'tool_call', id: 'c-1', name: 'exec_command', arguments: '{"a":1}' })
     m.apply({ type: 'tool_call', id: 'c-2', name: 'exec_command', arguments: '{"b":2}' })
     m.restoreApprovals([{ id: 'ap-10', toolName: 'exec_command', arguments: '{"b":2}', toolCallId: 'c-2' }])
+    // 卡片只插了一条，且两个工具都**没有**被改成卡片级（不再改工具样式）
+    expect(m.turns.filter((t) => t.kind === 'approval')).toHaveLength(1)
     const turn = m.turns.find((t) => t.kind === 'assistant')!
     expect(turn.tools.find((x) => x.id === 'c-1')?.card).toBeUndefined()
-    expect(turn.tools.find((x) => x.id === 'c-2')?.card).toBe(true)
+    expect(turn.tools.find((x) => x.id === 'c-2')?.card).toBeUndefined()
   })
 })
 
@@ -141,7 +146,12 @@ describe('工具与审批', () => {
     expect(m.hasCard()).toBe(false)
   })
 
-  it('审批请求：插一条审批卡片，并把对应工具标成卡片级', () => {
+  /**
+   * 用户口径（2026-10-10）：审批有**自己独立的卡片 UI**（.ac-approval），
+   * 不该顺手把底层工具顶成卡片 —— 那会让 exec_command 这类默认工具丢掉折叠箭头、
+   * 输入输出一直摊开。所以审批请求只插一条审批卡，工具自己保持折叠行。
+   */
+  it('审批请求：只插一条审批卡片，**不**把对应工具标成卡片级', () => {
     const m = new ChatModel()
     m.send('跑个命令')
     m.apply({ type: 'tool_call', id: 't1', name: 'exec_command', arguments: '{"cmd":"ls"}' })
@@ -150,7 +160,9 @@ describe('工具与审批', () => {
       approval: { id: 'ap1', toolName: 'exec_command', arguments: '{"cmd":"ls"}', createdAt: 1 },
     })
     expect(m.turns.filter((t) => t.kind === 'approval')).toHaveLength(1)
-    expect(m.turns.find((t) => t.kind === 'assistant')?.tools[0].card).toBe(true)
+    // 底层工具仍是普通折叠行（没有 card 标记）
+    expect(m.turns.find((t) => t.kind === 'assistant')?.tools[0].card).toBeFalsy()
+    // 但有审批卡在场（界面据此知道要渲染审批）
     expect(m.hasCard()).toBe(true)
   })
 

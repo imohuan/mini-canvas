@@ -194,11 +194,34 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
     expect(media && media.kind === 'media' && media.thumb).toBe('/api/canvases/430c8f1f00bd4aba/resources/abc123.jpeg')
   })
 
+  /**
+   * 真缺陷（用户实测 2026-10-10，截图：读图片只显示一行文件名、看不到图）：
+   * read_file 的入参**只有 file_path、没有 canvasId** —— 早先画布 id 只从入参取，
+   * 于是恒为空 ⇒ 永远拼不出地址 ⇒ 永远退化成纯文本（图片永远出不来）。
+   * 而画布资源的真实路径里**写着画布 id**（…/canvases/<id>/resources/<hash>）。
+   */
+  it('入参里没有 canvasId 时，从**路径**里认出画布 id（否则图片永远不显示）', () => {
+    const p = 'D:\\Code\\Git\\mini-canvas\\packages\\cloud-server\\.mini-canvas\\canvases\\e5860e437dd04d51\\resources\\fd389505047498e5.png'
+    const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/png, 2.1 MB')
+    const media = v.blocks.find((b) => b.kind === 'media')
+    expect(media && media.kind === 'media' && media.thumb).toBe(
+      '/api/canvases/e5860e437dd04d51/resources/fd389505047498e5.png',
+    )
+  })
+
   it('映射不到（磁盘别处的图）→ **不给** 缩略图，只显示文件名（宁可不预览也不给裂图）', () => {
     const v = toolView('read_file', JSON.stringify({ file_path: 'C:\\Users\\me\\Desktop\\pic.png' }), 'image/png, 12 KB')
     const media = v.blocks.find((b) => b.kind === 'media')
     expect(media && media.kind === 'media' && media.thumb).toBeUndefined()
     expect(media && media.kind === 'media' && media.title).toBe('pic.png')
+  })
+
+  /** 别处的 /resources/（如 node_modules）不能被误认成画布资源、拼出一张必然 404 的图 */
+  it('路径里的 /resources/ 不挨着 /canvases/ ⇒ 不认（不给裂图）', () => {
+    const p = 'D:\\proj\\node_modules\\some-pkg\\resources\\logo.png'
+    const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/png, 8 KB')
+    const media = v.blocks.find((b) => b.kind === 'media')
+    expect(media && media.kind === 'media' && media.thumb).toBeUndefined()
   })
 
   it('再也不出现已废弃的 /api/agent/file 地址', () => {

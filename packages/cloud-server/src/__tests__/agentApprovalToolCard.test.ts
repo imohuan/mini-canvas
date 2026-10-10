@@ -1,9 +1,15 @@
 /**
- * 审批命中时要把**那条工具**标成卡片（刷新后才不会缩成一行）—— 回归测试。
+ * 审批请求要带上**那条工具**的调用 id（toolCallId）—— 回归测试。
  *
- * 真缺陷（代码审查实测）：approve 回调从 payload 里读的是 `id`，而 SDK 的真字段是
- * `tool_call_id`（translate.ts 用的也是它）—— 于是 patchTool(card:true) 永远不执行，
- * 刷新后命中审批的工具缩成折叠行，与刚才看到的卡片样式对不上。
+ * 为什么必须有 toolCallId：界面靠它把「审批卡片」与它那条工具调用精确对上
+ *（同一轮里可能有好几个同名工具；按名字找会认错兄弟）。
+ *
+ * 为什么**不再**标 card=true（用户口径 2026-10-10）：早先给命中审批的工具打 card，
+ * 本意是让它显眼，副作用是把 exec_command / read_file 这类默认工具从**折叠行**顶成
+ * 常驻展开的卡片（折叠箭头没了、输入输出一直摊着）。审批本来就有自己独立的卡片 UI
+ *（.ac-approval），不需要再改底层工具的样子 —— 除了自带卡片的画布 MCP 工具，其余一律折叠行。
+ *
+ * 另锁一个字段名：SDK 的真字段是 `tool_call_id`（不是 `payload.id`）—— 读错了 toolCallId 就恒为空。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
@@ -24,8 +30,8 @@ afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true })
 })
 
-describe('审批命中 ⇒ 那条工具被标成卡片', () => {
-  it('patchTool 用的是 SDK 的 tool_call_id（不是 payload.id）', async () => {
+describe('审批请求 ⇒ 带 toolCallId，但不改工具的折叠样式', () => {
+  it('挂起信息里带 tool_call_id；落盘的转录里那条工具**没有** card 标记', async () => {
     const session = {
       sessionId: 's-card',
       provider: 'p',
@@ -70,9 +76,10 @@ describe('审批命中 ⇒ 那条工具被标成卡片', () => {
     rt.resolveApproval('c1', 's-card', pending[0].id, 'allow')
     await drain
 
-    // 落盘的转录里，那条工具应当是 card=true
+    // 落盘的转录里，那条工具**不应**被标成卡片（要保持在默认折叠行里）
     const rec = await store.get('c1', 's-card')
     const toolTurn = rec!.turns.find((t) => t.tool?.id === 'call-xyz')
-    expect(toolTurn?.tool?.card).toBe(true)
+    expect(toolTurn?.tool).toBeTruthy()
+    expect(toolTurn?.tool?.card).toBeFalsy()
   })
 })

@@ -731,10 +731,14 @@ function toggleTokenUnit(): void {
 }
 /**
  * 目标默认预算：读全局设置（KV `config/agentGoalDefaults`，由设置弹窗那一路维护；
- * 体是 `{ value: { budget } }`，与 packages/ui 的 agentSettings 同一个键 —— 别自创路径）。
+ * 与 packages/ui 的 agentSettings 同一个键 —— 别自创路径）。
+ *
+ * 为什么经**批量口**而不是单项 GET：这个键用户没改过时从未保存过，单项 GET 必然回 404
+ * （控制台里多一条“加载资源失败”，而用户什么都没做错）。批量口一次拿回整个 config 域，
+ * 缺键只是“桶里没有”，不再产生 404。
  *
  * 三种情况要分清（与 ui 侧 budgetFromKv 同口径）：
- *   · 整键没存过（404）⇒ 用默认 50000（设计 §3.6.3）；
+ *   · 桶里没这个键（从未保存过）⇒ 用默认 50000（设计 §3.6.3）；
  *   · 存了 `{ budget: 0 }` ⇒ 用户明确选了"不限"，就用 0，**不能**被默认值盖回去；
  *   · 坏数据 ⇒ 回落默认。
  */
@@ -742,10 +746,10 @@ const goalDefaultBudget = ref(50000)
 async function loadGoalDefaults(): Promise<void> {
   try {
     const base = (s.baseUrl ?? '').replace(/\/+$/, '')
-    const res = await fetch(base + '/api/kv/config/agentGoalDefaults', { headers: { accept: 'application/json' } })
+    const res = await fetch(base + '/api/kv/config?values=1', { headers: { accept: 'application/json' } })
     if (!res.ok) return
-    const body = (await res.json()) as { value?: { budget?: unknown } } | null
-    const raw = body?.value
+    const body = (await res.json()) as { values?: Record<string, unknown> } | null
+    const raw = body?.values?.['agentGoalDefaults']
     if (!raw || typeof raw !== 'object' || !('budget' in raw)) return
     const b = Number(raw.budget)
     if (Number.isFinite(b) && b >= 0) goalDefaultBudget.value = Math.floor(b)
@@ -1296,25 +1300,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             <template v-for="row in assistantRows(t)" :key="row.key">
               <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
 
-              <!-- 审批卡（要审批的重活）：一直展开，审批与参数必须直接可见 -->
-              <template v-else-if="row.type === 'tools' && row.tools.length === 1 && row.tools[0].card">
-                <div :class="row.tools[0].card ? 'ac-tool-card' : 'ac-tool-fold'">
-                    <div class="ac-tool-head">
-                      <Loader2 v-if="!row.tools[0].settled" :size="13" class="ac-spin" /><strong>{{ row.tools[0].name }}</strong>
-                    </div>
-                    <pre class="ac-tool-args">{{ row.tools[0].arguments }}</pre>
-                    <pre v-if="row.tools[0].output" class="ac-tool-out">{{ row.tools[0].output }}</pre>
-                </div>
-              </template>
-              <!-- 单工具（非审批）：有自定义卡片（画布 MCP）= 直接展示卡片；
-                   没有卡片的默认工具 = 保持原来的**折叠行**（用户口径 2026-10-07：只删 hover）。 -->
+              <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
+                   其余全部走默认折叠行（用户口径 2026-10-10：审批有自己的卡片 UI，
+                   不该给底层工具再打「卡片」标记把它顶成常驻展开 —— exec_command 这类
+                   要恢复成折叠行，对齐 docs/tmp/tool-card-demo-v3.html 的做法）。 -->
               <template v-else-if="row.type === 'tools' && row.tools.length === 1 && hasCardView(row.tools[0])">
                 <div class="ac-tool-card">
-                  <!-- 运行中才显示一行转圈 + 摘要；跑完后卡片自己的头行（图标 + 标题 + 标记）
-                       已经是头部，再叠一行就重复了（用户口径 2026-10-08：卡片就是紧凑两行） -->
+                  <!-- 运行中才给一行转圈（卡片还没内容时的进度指示）。
+                       跑完就整行收掉：卡片自己的头行（图标 + 标题 + 角标）已经是头部，
+                       再叠一行摘要（如「+1 ~ 0 -0」）与下面的「1 新增 / 0 更新 / 0 删除」纯属重复
+                       （用户口径 2026-10-10：删掉那行没意义的文字）。 -->
                   <div v-if="!row.tools[0].settled" class="ac-tool-head">
-                    <Loader2 v-if="!row.tools[0].settled" :size="13" class="ac-spin" />
-                    <span v-if="row.tools[0].output" class="ac-tf-summary">{{ toolSummary(row.tools[0]) }}</span>
+                    <Loader2 :size="13" class="ac-spin" />
                   </div>
                   <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
                     :output="row.tools[0].output" :name="row.tools[0].name"
@@ -1347,36 +1344,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 </button>
                 <div v-if="openToolGroups[row.key]" class="ac-tg-body">
                   <div v-for="tool in row.tools" :key="tool.id"
-                    :class="(tool.card || hasCardView(tool)) ? 'ac-tool-card' : 'ac-tool-fold'">
-                    <template v-if="tool.card">
+                    :class="hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'">
+                    <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ 折叠行 -->
+                    <template v-if="hasCardView(tool)">
                       <div class="ac-tool-head">
-                        <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" /><strong>{{ tool.name }}</strong>
+                        <!-- 同上：只留运行中的转圈，跑完不再叠一行与卡片自身重复的摘要 -->
+                        <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
                       </div>
-                      <pre class="ac-tool-args">{{ tool.arguments }}</pre>
-                      <pre v-if="tool.output" class="ac-tool-out">{{ tool.output }}</pre>
+                      <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
+                        @preview="previewImage = $event" />
                     </template>
                     <template v-else>
-                      <!-- 有卡片（画布 MCP）→ 直接展示；默认工具 → 折叠行 -->
-                      <template v-if="hasCardView(tool)">
-                        <div class="ac-tool-head">
-                          <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
-                          <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
-                        </div>
+                      <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
+                        @click="toggleTool(tool.id)">
+                        <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
+                        <code>{{ tool.name }}</code>
+                        <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
+                      </button>
+                      <div v-if="openTools[tool.id]" class="ac-tf-body">
                         <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
                           @preview="previewImage = $event" />
-                      </template>
-                      <template v-else>
-                        <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
-                          @click="toggleTool(tool.id)">
-                          <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
-                          <code>{{ tool.name }}</code>
-                          <span v-if="tool.output" class="ac-tf-summary">{{ toolSummary(tool) }}</span>
-                        </button>
-                        <div v-if="openTools[tool.id]" class="ac-tf-body">
-                          <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
-                            @preview="previewImage = $event" />
-                        </div>
-                      </template>
+                      </div>
                     </template>
                   </div>
                 </div>

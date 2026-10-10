@@ -619,9 +619,17 @@ export class AgentRuntime {
         }
         entry.pendingInfo.set(approvalId, info)
         const answer = new Promise<'allow' | 'deny'>((resolve) => entry.pending.set(approvalId, resolve))
-        // 命中审批的工具在界面里是**卡片**（不是紧凑一行）。这个标记也要落盘，
-        // 否则刷新后它会缩成一行，与刚才看到的样子不一致。
-        if (callId) await this.deps.store.patchTool(canvasId, id, callId, { card: true }).catch(() => undefined)
+        /**
+         * 这里**不再**给工具打 `card: true`（用户口径 2026-10-10）。
+         *
+         * 早先的用意是「要审批的工具显示成卡片、更显眼」，但它把底层工具（exec_command /
+         * read_file 这类默认工具）从**折叠行**顶成了常驻展开的卡片：折叠箭头没了、输入输出
+         * 一直摊着。而审批本来就有一套**独立的卡片 UI**（.ac-approval，等你点允许/拒绝），
+         * 不需要再改底层工具的样子。用户口径：除了自带卡片的画布 MCP 工具与审批卡，
+         * 其余一律走默认折叠行。
+         *
+         * callId 仍要留着：界面靠它把「审批卡片」与它那条工具调用对上（见 toolCallId）。
+         */
         emitApproval({ type: 'approval_request', approval: info })
         const result = await answer
         /**

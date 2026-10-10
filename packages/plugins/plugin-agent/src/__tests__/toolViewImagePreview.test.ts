@@ -274,7 +274,10 @@ describe('结构与接线守卫（源码级）', () => {
     // 早先这条规则同时命中 .ac-tool-fold —— 每条收起行都被灰底 + 8px 内边距裹住。
     expect(host).toMatch(/\.ac-tg-body \.ac-tool-card \{[^}]*\}/)
     expect(host).not.toMatch(/\.ac-tg-body \.ac-tool-fold[,\s]/)
-    // 「画布 MCP 自定义卡片」在分组里也走卡片壳（:class 分流要认 hasCardView），普通折叠行不加壳
-    expect(host).toContain(":class=\"(tool.card || hasCardView(tool)) ? 'ac-tool-card' : 'ac-tool-fold'\"")
+    // 「画布 MCP 自定义卡片」在分组里也走卡片壳（:class 分流要认 hasCardView），普通折叠行不加壳。
+    // 用户口径 2026-10-10：**只认 hasCardView** —— 审批不再给底层工具打 card 标记，
+    // 所以分流里不该再出现 tool.card（否则 exec_command 又被顶成常驻卡片、丢掉折叠箭头）。
+    expect(host).toContain(":class=\"hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'\"")
+    expect(host).not.toContain("tool.card || hasCardView(tool)")
   })
 })

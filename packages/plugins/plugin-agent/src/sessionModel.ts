@@ -461,20 +461,17 @@ export class ChatModel {
    */
   private pushApprovalCard(a: { id: string; toolName: string; arguments: string; toolCallId?: string }): void {
     let ownerIdx = -1
-    let tool: ToolCard | undefined
     for (let i = this.turns.length - 1; i >= 0; i--) {
       const t = this.turns[i]
       if (t.kind !== 'assistant') continue
       const hit = a.toolCallId
         ? t.tools.find((x) => x.id === a.toolCallId)
-        : t.tools.find((x) => x.name === a.toolName && !x.card)
+        : t.tools.find((x) => x.name === a.toolName)
       if (hit) {
         ownerIdx = i
-        tool = hit
         break
       }
     }
-    if (tool) tool.card = true
     const card: AgentTurnView = {
       id: nextId(),
       kind: 'approval',

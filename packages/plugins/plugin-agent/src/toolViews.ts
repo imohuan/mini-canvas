@@ -157,6 +157,13 @@ function resUrl(canvasId: unknown, name: unknown): string {
  *     /api/canvases/<canvasId>/resources/<hash>    ← 画布资源目录下的字节
  *   路径对得上就翻成对应地址；对不上（用户在磁盘上别处的图）返回 null，由调用方退化成
  *   纯文本卡片（宁可不显示预览，也不给一个必然裂掉的 <img>）。
+ *
+ * 关键一步：**画布 id 优先从路径里认**（用户实测 2026-10-10）。
+ *   read_file 的入参只有 file_path，**没有** canvasId —— 所以按参数取恒为空，
+ *   图片永远退化成一行文件名（用户报的「读图片看不到图、只有文件名」）。
+ *   而画布资源的真实路径长这样：
+ *     …/.mini-canvas/canvases/<canvasId>/resources/<hash>.png
+ *   画布 id 就写在里面，直接认出来即可，不必依赖入参。
  */
 function fileUrlFromPath(p: string, canvasId: unknown): string | null {
   const norm = String(p ?? '').replace(/\\/g, '/')
@@ -167,13 +174,34 @@ function fileUrlFromPath(p: string, canvasId: unknown): string | null {
     return hash && !hash.includes('/') ? '/api/assets/files/' + hash : null
   }
   const resAt = norm.lastIndexOf('/resources/')
-  const canvas = String(canvasId ?? '')
+  // 画布 id：先认入参，没有就从路径里认（read_file 只有路径、没有 canvasId）
+  const canvas = String(canvasId ?? '') || canvasIdFromPath(norm, resAt)
   if (resAt >= 0 && canvas) {
     const segs = norm.slice(resAt + '/resources/'.length).split('/')
     const hash = segs[segs.length - 1]
     return hash ? '/api/canvases/' + canvas + '/resources/' + hash : null
   }
   return null
+}
+
+/**
+ * 从画布资源的绝对路径里认出画布 id，形状必须**严格**是 `…/canvases/<id>/resources/…`。
+ *
+ * 为什么要连 `/canvases/` 一起认、而不是「随便一段 /resources/ 前面的东西」：
+ * 别处的路径也可能带 `/resources/`（如 node_modules 里的某个包）—— 那种情况按「前一段」
+ * 猜出来的 id 是错的，拼出的地址必然 404，等于凭空造一张裂图。认不出就返回空串，
+ * 让调用方退化成纯文本卡片（宁可不预览，也不给裂图）。
+ */
+function canvasIdFromPath(norm: string, resAt: number): string {
+  if (resAt < 0) return ''
+  const before = norm.slice(0, resAt)
+  const at = before.lastIndexOf('/')
+  if (at < 0) return ''
+  const id = before.slice(at + 1)
+  // 前一段必须是 `canvases`（`…/canvases/<id>/resources/…`），否则不认
+  const parent = before.slice(0, at)
+  if (!parent.endsWith('/canvases')) return ''
+  return /^[A-Za-z0-9_-]+$/.test(id) ? id : ''
 }
 
 /** 从输入 JSON 里拿 canvasId（各工具入参字段同名） */
