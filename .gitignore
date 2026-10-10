@@ -39,6 +39,8 @@ packages/mcp-server/workspace
 # cloud-server 的数据目录（画布数据 + 上传资源，运行时生成，不入库）
 # 注：dist/ 与 *.tgz 已在上面被忽略，这里不重复列
 .mini-canvas/
+# cloud-server 数据目录的备份（手动/脚本备份出来的运行时快照，可能几百 MB，不入库）
+.mini-canvas-backup-*/
 
 # cloud-server 打包时收集的随包产物（由 scripts/bundle-assets.mjs 生成，不入库）
 packages/cloud-server/assets/

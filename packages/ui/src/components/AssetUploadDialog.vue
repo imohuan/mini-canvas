@@ -19,6 +19,11 @@ const props = defineProps<{
    */
   prefill?: { url: string; name: string }[]
   /**
+   * 预填的**本地文件**（底栏「+ → 上传」选好的一批）：与「+」格亲手选的文件
+   * 走同一条加入逻辑（addLocalFile），所以尺寸限制 / 类型图标 / 预览完全一致。
+   */
+  prefillFiles?: File[]
+  /**
    * 打开时预选的**保存位置**（空 = 个人资产库）。可选：
    * 左侧抽屉 / 画布贴图入口不传 → 默认个人资产库（原行为不变）；
    * 「资产管理」弹窗传当前所在层 —— 与它的「新建文件夹」同一落点口径。
@@ -49,6 +54,8 @@ const items = ref<PickItem[]>([])
 for (const p of props.prefill ?? []) {
   items.value.push({ url: p.url, state: 'pending', preview: p.url, name: p.name })
 }
+// 预填的本地文件（底栏「上传」选的）：同一条加入逻辑，落库口径与手选完全一致
+for (const f of props.prefillFiles ?? []) addLocalFile(f)
 const assetName = ref('')
 const targetFolderId = ref<string>(props.initialFolderId ?? '')
 const tagsOpen = ref(false)
@@ -71,21 +78,36 @@ function kindOf(f: File): 'image' | 'video' | 'audio' | 'other' {
   return 'other'
 }
 const kindIcon = (k: string) => (k === 'video' ? VideoIcon : k === 'audio' ? AudioIcon : FileIcon)
+/** 字节 → 人看的（多文件批量上传时用来标每件大小；只保留一位小数） */
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB'
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB'
+}
 
 function chooseFiles(): void {
   fileInput.value?.click()
 }
+/**
+ * 把一个本地文件加进待传清单（**唯一入口**）：
+ * 「+」格手选与外部送来的 prefillFiles 都走这里，上限/超限提示只此一份。
+ * @returns 是否真的加进去了（超限 / 文件过大 → false）
+ */
+function addLocalFile(f: File): boolean {
+  if (items.value.length >= MAX_FILES) return false
+  if (f.size > MAX_MB * 1024 * 1024) {
+    console.warn('[上传资产] 超过 ' + MAX_MB + 'MB 已忽略: ' + f.name)
+    return false
+  }
+  const item: PickItem = { file: f, state: 'pending', name: f.name }
+  if (kindOf(f) === 'image') item.preview = URL.createObjectURL(f)
+  items.value.push(item)
+  return true
+}
 function onPick(e: Event): void {
   const input = e.target as HTMLInputElement
   for (const f of Array.from(input.files ?? [])) {
-    if (items.value.length >= MAX_FILES) break
-    if (f.size > MAX_MB * 1024 * 1024) {
-      console.warn('[上传资产] 超过 ' + MAX_MB + 'MB 已忽略: ' + f.name)
-      continue
-    }
-    const item: PickItem = { file: f, state: 'pending', name: f.name }
-    if (kindOf(f) === 'image') item.preview = URL.createObjectURL(f)
-    items.value.push(item)
+    if (!addLocalFile(f)) break
   }
   input.value = ''
 }
@@ -157,6 +179,8 @@ function save(): void {
                 </span>
               </div>
               <span class="mt-1 w-full truncate text-center text-[11px] text-ink">{{ it.name }}</span>
+              <!-- 本地文件显示本条的实际大小（多文件批量上传时，一眼看出哪个是大件） -->
+              <span v-if="it.file" class="text-center text-[10px] text-ink-dim">{{ humanSize(it.file.size) }}</span>
               <button class="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-panel text-ink-dim opacity-0 shadow transition-opacity group-hover/p:opacity-100" :aria-label="'移除 ' + it.name" @click="removeItem(i)"><XIcon :size="11" /></button>
             </div>
           </div>

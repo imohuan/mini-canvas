@@ -20,6 +20,13 @@ export interface PendingUpload {
   url: string
   /** 建议文件名 */
   name: string
+  /**
+   * **本地文件**（底栏「+ → 上传」选的）：有它就优先用这一个，url 只是展示用的预览地址。
+   *
+   * 为什么要多一种荷载：弹窗同时支持"贴画布图"（拉地址再传）与"选本地文件"
+   * （字节直接在手，不用先落成地址再取回来）；两者在弹窗里长得一样、保存时各走各的通道。
+   */
+  file?: File
 }
 
 /** 待贴入的图（宿主消费后清空） */
@@ -37,6 +44,23 @@ export function queueUploads(items: PendingUpload[]): void {
   const list = items.filter((x) => x.url)
   if (!list.length) return
   pendingUploads.value = [...pendingUploads.value, ...list]
+  notify?.()
+}
+
+/**
+ * 底栏「+ → 上传」：把**本地选的一批文件**交给同一个上传弹窗（用户口径 2026-10-11
+ * 「这边可以上传多个文件，支持图片、视频、音频批量上传」）。
+ *
+ * 为什么并到这条总线：上传弹窗 + 落库口径只该有一份。底栏菜单、节点右键、多选上控制栏
+ * 三条入口都只负责"把要传的东西放进来"，弹窗宿主（AssetUploadHost，常驻挂载）负责开窗。
+ * 这里不造预览地址：弹窗对**本地文件**会自己 createObjectURL（同「+」格手选那一条），
+ * 不重复造一个没人回收的 blob:。
+ */
+export function queueUploadFiles(files: File[]): void {
+  const items: PendingUpload[] = []
+  for (const f of files) if (f.size > 0) items.push({ url: '', name: f.name, file: f })
+  if (!items.length) return
+  pendingUploads.value = [...pendingUploads.value, ...items]
   notify?.()
 }
 

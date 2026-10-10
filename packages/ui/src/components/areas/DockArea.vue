@@ -4,7 +4,10 @@
 // （nodesDraggable / panOnDrag），详见 composables/ui.ts 的「画布开关」段。
 import {
   Plus, Hand, FolderOpen, Shapes, History, Keyboard, CircleQuestionMark, Sparkles,
-  Type, Image as ImageIcon, Video, Film, Box, Images, AudioLines, ScrollText,
+  Type, Image as ImageIcon, Video, AudioLines,
+  // 下面四个只给「智能剪辑 / 导演台 / 逐帧拉片 / 脚本」用 —— 这几项按用户口径（2026-10-11）暂时隐藏，
+  // 图标一并注释掉；日后恢复菜单项时把这行也一起放开。
+  // Film, Box, Images, ScrollText,
   Upload, Search, Move,
 } from 'lucide-vue-next'
 import AxDropdown from '../AxDropdown.vue'
@@ -13,14 +16,43 @@ import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AgentOrb from '../AgentOrb.vue'
 import { useUi } from '../../composables/ui'
+import { queueUploadFiles } from '../../composables/assetUploadBus'
+import { ref } from 'vue'
 
 const ui = useUi()
 const s = ui.state
+
+/**
+ * 「+ → 上传」：挑本地文件（可多选，图片 / 视频 / 音频）→ 交给上传弹窗预填。
+ *
+ * 为什么要绕一步进弹窗（用户口径 2026-10-11「这边可以上传多个文件，支持图片、视频、音频批量上传」）：
+ * 批量上传必须还能**改名 / 选保存位置 / 打标签**，静默直传就没有这些了；
+ * 所以走的是与「+ → 上传资产」同一个弹窗、同一条落库路径
+ * （经 assetUploadBus → 常驻的 AssetUploadHost 开窗）。
+ */
+const uploadInput = ref<HTMLInputElement | null>(null)
+function pickUploadFiles(): void {
+  uploadInput.value?.click()
+}
+function onUploadPick(e: Event): void {
+  const input = e.target as HTMLInputElement
+  const list = Array.from(input.files ?? []).filter((f) => f.size > 0)
+  input.value = ''
+  if (!list.length) return
+  queueUploadFiles(list)
+}
 </script>
 
 <template>
   <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
     @pointerdown.stop>
+    <!--
+      隐藏的文件选择器：菜单项「上传」触发它。
+      放在**下拉之外**（菜单会被 Teleport 且点完就关）—— 若放进菜单里，
+      关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
+    -->
+    <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
+      accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/wav" @change="onUploadPick" />
     <AxDropdown v-model="s.addMenuOpen" placement="top" align="center" :offset="10" menu-width="240px">
       <template #trigger>
         <AxTooltip content="添加节点" placement="top">
@@ -43,6 +75,9 @@ const s = ui.state
           <ImageIcon :size="15" /> 图片
         </AxMenuItem>
         <AxMenuItem @click="ui.createNode('video'); close()"><Video :size="15" /> 视频</AxMenuItem>
+        <!--
+          以下四项（智能剪辑 / 导演台 / 逐帧拉片 / 脚本）按用户口径（2026-10-11）暂时先注释掉，
+          恢复时删掉这一对注释标记即可（对应的图标导入也一并注释在 script 里）。
         <AxMenuItem @click="ui.createNode('text'); close()">
           <Film :size="15" /> 智能剪辑 <em
             class="ml-auto rounded border border-gold/40 px-1.5 py-px text-[9px] not-italic text-gold">Beta</em>
@@ -55,17 +90,20 @@ const s = ui.state
           <Images :size="15" /> 逐帧拉片 <em
             class="ml-auto rounded border border-line px-1.5 py-px text-[9px] not-italic text-ink-dim">SD 2.5</em>
         </AxMenuItem>
+        -->
         <AxMenuItem @click="ui.showToast('音频节点即将支持'); close()">
           <AudioLines :size="15" /> 音频
         </AxMenuItem>
+        <!-- 脚本（同样暂时隐藏）
         <AxMenuItem @click="ui.showToast('脚本节点即将支持'); close()">
           <ScrollText :size="15" /> 脚本
         </AxMenuItem>
+        -->
         <div class="px-2 py-1.5 text-[10px] font-bold tracking-wider text-ink-dim">素材库</div>
         <AxMenuItem @click="ui.openDrawer('left')">
           <FolderOpen :size="15" /> 添加资源
         </AxMenuItem>
-        <AxMenuItem @click="ui.showToast('上传资源'); close()">
+        <AxMenuItem @click="pickUploadFiles(); close()">
           <Upload :size="15" /> 上传
         </AxMenuItem>
         <AxMenuItem @click="ui.toggleHistory()">

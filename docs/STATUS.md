@@ -5,6 +5,193 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-11 二续，底栏「+ 添加节点」菜单：隐藏四项 + 「上传」接通批量上传）
+
+用户口径（附截图，红框圈出菜单区）：「优化一下 package UI 里面的这几个按钮，隐藏一部分；然后优化一下
+上传按钮，实现它的功能……这个上传功能，这边可以上传多个文件，支持图片、视频、音频批量上传」。
+
+**改了什么**（都在 `packages/ui/`）：
+
+1. **暂时隐藏四项**（`components/areas/DockArea.vue`）：「智能剪辑 / 导演台 / 逐帧拉片」与「脚本」
+   整块用 HTML 注释包住（**原文保留**，恢复只需删掉那对标记；对应的 `Film / Box / Images / ScrollText`
+   图标导入一并注释）。保留：文本 / 图片 / 视频 / 音频 / 素材库三项。
+2. **「上传」不再是死按钮**（原来只弹 `showToast('上传资源')`）：菜单项改为触发底栏里一个隐藏的
+   `input type=file multiple`，选完把文件交给**上传弹窗**。
+   - 这个 input 必须放在**下拉之外**：菜单会被 Teleport 且点完就关，放进菜单里的话，关菜单会把 input
+     连同卸载，用户选完文件时 change 已经没人接了（这条也是守卫测试钉住的点）。
+3. **复用唯一那条上传通路**：新入口沿 `assetUploadBus.queueUploadFiles(files)` 把本地文件挂到
+   常驻的 `AssetUploadHost`（与节点右键「加入资产库」、多选上控制栏同一条总线），弹出的是
+   左侧那个上传弹窗 —— 于是**改名 / 选保存位置 / 打标签 / 上限提示**全都自动具备，落库走
+   `ui.uploadAssetsTo`（后台 `/api/assets?name=&folderId=`）。
+4. `AssetUploadDialog` 新增可选 prop **prefillFiles**：本地文件与「+」格手选收敛到同一个
+   `addLocalFile()`（20MB / 50 个的上限只此一份），并给本地文件多显示一行实际大小
+   （批量上传时一眼看出哪个是大件）。`AssetUploadHost` 把总线荷载拆成两路：带 file 的走本地直传，
+   只有 url 的仍按地址取字节（画布图那条老路径行为不变）。
+
+**验证**：packages/ui **269** 单测（新增 5 条结构守卫 `__tests__/dockAddMenu.test.ts`：四项不在可见
+菜单里但原文保留 / 保留项未受影响 / 「上传」接 queueUploadFiles + 真 file input / 总线荷载带 file 且
+宿主两路拆分 / 弹窗 addLocalFile 一处定义两处调用）全绿；`pnpm -C packages/ui typecheck` 干净。
+Chrome MCP 真机（dev :5288 + 真后台 :8865）：菜单只剩「文本/图片/视频/音频/添加资源/上传/从生成历史选择」；
+点「上传」实测触发文件选择框且菜单正常关闭；选 2 个文件（png+mp3）→ 弹窗预填 2 张卡
+（含 blob: 预览与大小标注）、保存按钮可用；点保存 → 弹窗关闭，`/api/assets` 里两条新记录
+（source=upload，kind 分别 image / audio）确实落库；控制台无新报错。测试数据已清理。
+
+### 追记（2026-10-11 一续，生成历史的视频/音频卡：按宽度自适应 + 去掉独立标签条）
+
+用户口径：「生成面板中有一个视频可视，还有一个音频可视，我希望你能够优化一下」+「做一个视频的
+预览图，其实有两种状态：一个是小屏状态，一个是全屏状态……他这边可以自己在这个组件中进行判断，
+看它的宽度」+「音频就不需要了，只需要把它的标签删了就行」+「你的效果可以，就根据这个来」。
+
+**先做的 demo**（用户确认"效果可以"后再落到真代码、随后删除）：
+`packages/ui/src/components/VideoPreviewDemo.vue` + 一条仅 dev 的 `#/video-preview-demo` 路由，
+挂**真组件**（VideoPreview）+ 真视频产物 + 宽度滑杆，让人亲手拖宽度看两套 UI 怎么切。
+确认后 demo 与那条路由已删除（`git status` 里没有残留）。
+
+**改了什么**：
+1. **VideoPreview 按实测宽度切两套 UI**（组件内 `ResizeObserver` 量自己的宽度，阈值 360px）：
+   - **小屏态**（< 360px 且不是全屏舞台）：只有一个**居中**播放/暂停键；正在播放且鼠标不在画面上时
+     自动收起，别一直挡着画面；
+   - **大屏态**（≥ 360px 或传了 `tall`）：原来是完整控制栏（播放/时间/进度/倍速/循环/音量），
+     全屏预览永远走这一套。
+   - 为什么必须按宽度分（实测根因）：历史卡片只有 **237px** 宽，而控制条内容要 **263px** 才排得下 ——
+     进度条被裁得只剩 **48px**（几乎不可见），这就是用户报的「进度条被完全遮挡」。
+2. 新增可选 prop `expandable` + `expand` 事件：小屏态右下角（8px 内缩）给小方块「进入预览」，
+   **组件自己不开窗**，事件交给宿主（宿主才知道全屏预览挂在哪）。没人接就不给死按钮。
+   历史卡片这一侧**接上了**：`buildMediaCard` 给视频件传 `expandable: true` +
+   `onExpand: () => openHistoryItem(item)` —— 点小方块即进全屏预览（用户实测反馈的
+   「右下角那个进入全屏的按钮没有」，根因就是这里当时只做了组件能力、没接线）。
+3. **生成历史卡片**（`ModalsArea.vue` 的 `buildMediaCard`）：**卡面保持完全干净** ——
+   媒体件自己已经带播放键/时间/进度，外面**不加任何标签或信息浮层**：
+   - 先删掉组件**下方那条独立标签条**（`.hist-card-foot`，实测 30px 高）；
+   - 中途试过"改成压在右下角的时间浮层"（`.hist-card-tags--media`），用户实测**它正好压住小屏态的
+     「进入预览」按钮**（两者矩形相交：浮层 291×44、按钮 28×28，`elementFromPoint` 命中的是浮层）
+     —— 于是**连浮层一起删掉**，卡面只剩媒体本身；
+   - 插件没注册时的静态回退路径也一并统一（不再显示「♪ 音频 / ▶ 视频」标签，也不再放时间浮层）。
+
+**验证**：plugin-node-video 105 单测、plugin-node-audio 94 单测、ui **257** 单测全绿；
+三个包 typecheck 干净；ui 产物已重建。
+Chrome MCP 真机（:8865）实测：视频卡 226px → `mode=dense`、只有居中播放键（实测 x/y 中心与卡片中心
+**完全重合**）、旧标签条**不存在**、**卡面文字为空**（无任何浮层）；
+音频卡同样干净（卡面上只有播放器自带的「0:00 / 0:01 | 8 KB | 豆包·语音合成」）；
+右下角「进入预览」小方块在位（实测距卡片右/下各 **8px**，aria-label「进入预览」），
+且 `elementFromPoint` 在按钮中心命中的就是按钮本身（**没有任何东西压着它**），
+点它 → `.mv-root` **0 → 1**（预览确实打开）；
+点卡片开全屏 → `vpv-root is-tall`、完整控制栏、进度条 **129px**（不再被裁）。
+主题色守卫（themeColorHygiene）拦住新写的裸色，改用组件自带 `--vpv-panel`。
+
+### 追记（2026-10-10 八续，修「生成历史」的"加载更多"没效果：滚动事件被组件吞掉）
+
+用户口径：「你的这个生成历史界面，'加载更多'功能好像没有效果。这个页面在 package UI 里面」。
+
+**复现（Chrome MCP 真机，:8865 真产物 / 真后台）**：打开「生成历史」，首屏 20 张卡只渲染了
+可见的 8 张；把滚动区拖到底，卡片数**纹丝不动**（8/20 → 8），网络面板里从头到尾只有
+`page=1` 一条历史请求，没有任何 `page=2`。
+
+**根因（一个通用的 Vue 坑）**：AxScrollArea 的真正滚动层是**内部的** `.ax-sa-view`
+（根 `.ax-sa` 是 `overflow: hidden`，永远不滚）。而 ModalsArea 把 `@scroll="onHistScroll"`
+写在 `<AxScrollArea>` **组件**上 —— Vue 把写在组件上的 `@scroll` 当作**组件自定义事件**消费
+（不再 fallthrough 到根元素），组件没 `defineEmits` 声明 `scroll` 就被**静默吞掉**：
+不报错、不触发，触底加载函数 `onHistScroll` 一次都没跑过。
+
+**决定性实验**：给 `.ax-sa-view` 滚动 → `.ax-sa` 收到 **0 次** scroll；手动给 `.ax-sa`
+派发一个 `scroll` 事件 → 卡片立刻 **20 → 34**。证明分页逻辑本身是好的，只是事件从没送到。
+
+**修法**：`AxScrollArea` 用 `defineEmits` 声明 `scroll`，并在内部滚动层
+`@scroll="$emit('scroll', $event)"` 转发**原生事件**（外层 `onHistScroll` 要读 `e.target`
+的 `scrollHeight/scrollTop/clientHeight` 判触底）。
+
+**验证**：ui 单测 **257**（新增 4 条源码结构契约 `scrollAreaScrollForward.test.ts`：声明 emit /
+内部层转发 `$event` / ModalsArea 绑在组件上 / onHistScroll 几何判触底接到 loadMoreHistory）
+全绿；`pnpm -C packages/ui typecheck` 干净；ui 产物已重建。
+Chrome MCP 真机复验：滚动到底卡片 **8 → 14**（该筛选 34 条记录里 20 条无产物、默认隐藏），
+网络面板出现 `page=2/3/4` 历史请求，**控制台 0 报错**；切「视频」页签 → 空态正常、
+切回「图片」→ 仍能从首屏滚到 14 张。
+
+**顺带钉住的通用点**（值得记）：给自定义组件绑 `@scroll` / `@wheel` / `@keydown` 这类原生
+事件时，组件没声明同名 emit，Vue 会**静默吞掉**监听器。排查「事件像没绑定」先看监听挂在哪一层、
+真正的事件源在哪一层；滚动尤其容易踩（滚动在内层 overflow 容器时，外层监听一无所获）。
+
+### 追记（2026-10-10 七续，修「网页打开就报错 + 后台很卡」：共享一条 SSE + 改批量读）
+
+用户口径：「服务器启动之后，你的网页打开会存在几个报错，请修复它们」+「你这个后台为什么会这么卡？」
+「我的 A 点操作会不会导致你的网络变得阻塞？……我的页面访问得很慢很慢」。
+
+**报错（截图实证：控制台 5 条 `404`）**：`agentRunMode` / `agentNotify` / `agentGoalDefaults` 三个键
+被**逐键 GET**。这三个键用户一次都没改过 ⇒ 从未保存过 ⇒ 每个都必然回一个 404。
+服务端本来就有批量口（`GET /api/kv/config?values=1`，见 routes/kv.ts 的说明：那条注释就是为
+「客户端安装时一次读回、不再刷无意义 404」写的），只是客户端没用它。
+
+**卡顿（决定性实验）**：在**同一个页面**里，`http://127.0.0.1:8865/...` 请求超时 6 秒，
+把主机名换成 `http://localhost:8865/...` 只要 **3~5ms**；同一接口用 curl 直连只要 3ms。
+⇒ 服务端不慢，是**浏览器对该域名的连接池被占满**（Chrome 每个域名上限 6 条）。
+实测：**单个标签页就稳定占满 6 条**；关掉多余标签页后，同一请求立刻从「超时 6 秒」变成「2ms 成功」。
+
+**根因（三条永不关闭的长连接）**：`/api/kv/events` 被三处各自 `new EventSource` 各开一条 ——
+① 首页主题（appTheme.watchCloudSettings）② Agent 设置（agentSettings.watchAgentSettings）
+③ cloud-client 插件（CloudApi.subscribeChanges）；每条都常驻整个页面生命周期。
+另加 Agent 会话常驻流（`/stream?follow=1`）一条。**光首页一个标签页就把 6 条额度占满 4 条以上**，
+于是保存画布 / 拉会话 / 轮询动作清单全部排队 —— 用户看到「请求永远停在待处理、网页很慢」。
+这解释了他问的「我的操作会不会导致网络阻塞」：**不是他的操作，是页面自己开的长连接**。
+
+**修法**：
+1. 新增 `packages/ui/src/composables/kvEvents.ts`：全应用**共享一条** `/api/kv/events`（引用计数：
+   第一个订阅者开、最后一个退订才关），按路径分桶（插件可能连别的 cloud-server，不能混用）。
+   经全局键 `__miniCanvasKvEvents` 暴露给外部 bundle（cloud-client 产物自包含、拿不到模块导出）。
+2. `appTheme` / `agentSettings` 改走该共享订阅；`CloudApi.subscribeChanges` 先找全局共享订阅复用，
+   找不到才自己开一条（别的宿主 / 单测行为不变 —— 自定义 SSE 工厂仍然优先）。
+3. 三处读 KV 改走批量口：ui 的 `agentSettings`、plugin-agent 的 `agentNotify` 与目标默认预算。
+   批量口少了请求数，也不再产生 404。
+
+**验证（Chrome MCP 真机 + 真产物 :8865）**：
+单标签页：console 报错 **5 条 → 0 条**；`/api/kv/events` **2 条 → 1 条**；
+`/api/kv/config/settings` 等普通请求 **超时 6008ms → 2~3ms（200）**。
+反复切页面（首页↔画布 ×4）连接数稳定 **3 条不增长**（修前会涨）。
+跨 bundle 也吃到修复：关闭面板的常驻流不再多开。
+单测：ui **252**（新增 5 条：批量口一次请求 / 无 404 / 旧后台回落 / 多订阅者只 1 条连接 / 事件分发全员）、
+plugin-cloud-client **135**（新增 2 条：复用宿主共享连接 / 无宿主时自己开）、
+plugin-agent **258**（agentNotify 3 条改到批量口口径）全绿；三包 typecheck 干净。产物已重建。
+
+**已知遗留（非本次引入，不动别人的在途改动）**：
+· 每个标签页仍各占 1 条 Agent 会话常驻流 —— 这是「后台对话」的语义（页面订阅后台那一轮）；
+  它意味着**同时开 3 个标签页**仍会触到 6 条上限。彻底解决需要把「一个浏览器一份订阅」，
+  属于会话流的设计变更，未在本轮动。
+· `plugin-cloud-client` 工作区里有**别人在途**的改动（restore.ts / plugin.ts / keys.ts，
+  「刷新后图片视频变空白」那条线）；其 `restore.test.ts` 与 `plugin.ts` 的 typecheck 报错与本次无关，
+  我原样保留、未改。
+
+### 追记（2026-10-10 六续，修复制粘贴：外部复制的图片贴不出来，反倒贴出旧节点）
+
+用户口径：「我复制了一张图片，想粘贴到画布，但粘贴的时候，它粘贴的是我之前复制的一个节点」。
+
+**根因（一个键、两套机制，互相踩）**：clipboard 把 Ctrl/Cmd+V 注册成命令（keys: mod+v），宿主
+CanvasHost.onKeydown 命中后 preventDefault()；而 file-drop 的粘贴只能靠浏览器**原生 paste 事件**。
+真机实测：在 keydown 里对 Ctrl+V 调 preventDefault，浏览器**根本不派发**原生 paste 事件 ⇒ file-drop 的路被
+彻底掐死，Ctrl+V 永远只粘内存里的旧节点快照（复制的图片根本没机会被读到）。
+
+**修法（用户要求："让一个快捷键可以有多种功能，可注册先后顺序"）**：
+1. **内核 CommandDef.deferToNative**：命令可声明"这个键交给平台原生事件"。宿主命中带该标记的命令时
+   **不 preventDefault、不 execute**，放行原生 copy/cut/paste（packages/kernel/src/command.ts）。
+2. **剪贴板仲裁场**（新契约 packages/canvas-data/src/canvas/clipboardActions.ts，纯逻辑零 Vue/DOM）：
+   registryOf('clipboard/paste') 值 = (payload) => boolean（同步"归不归我"），按 order 小者先仲裁，
+   第一个接管的赢。宿主只绑**各一个** window copy/cut/paste 监听，读一次事件归一成 payload 后依次问。
+3. **写标记**：clipboard 复制时往系统剪贴板写"来自画布"标记（自定义 MIME application/x-mini-canvas-nodes
+   + 带前缀的 text/plain —— 真机实测两者都能经 copy→paste 往返）。粘贴时据标记判"该贴画布节点，还是贴
+   外部拷来的图片/文本"，避免节点快照与系统剪贴板内容互相打架。
+4. **order 分工**：clipboard 画布节点(10) > file-drop 媒体(20) > file-drop 纯文本(30)。
+   插件不再自绑 window paste（铁律 7），改向仲裁场注册。
+
+**踩到的第二层坑（记下来）**：粘贴系统剪贴板里的图片时，clipboardData.types 往往只有 ['Files']
+（不是 'image/png'），真实类型在 files[0].type 上；媒体判定必须看 files（真机实测才发现，
+已补单测 "types 只有 ['Files']" 钉死）。
+
+**验证**：kernel 220 / canvas-data 386 / canvas-render 421 / clipboard 28 / file-drop 43 / ui 248 全绿；
+新测 3 处：仲裁纯逻辑 11 条（canvas-data）、file-drop 接线改判（媒体进仲裁场 / 不自绑 paste）、
+ui 端到端 5 条（外部图片→建 image 而非贴旧 text / 画布标记→贴节点 / 纯文本→建 text / ['Files'] 形状 / 优先级）。
+**守卫有效性自查**：去掉粘贴处理器的标记判定再跑 → 端到端第 1 条当场红（已试过并还原）。
+**真机（8865 真产物，两插件都装）**：外部复制图片 Ctrl+V → 9→10 节点、由 file-drop:media 接管；
+画布内复制节点 Ctrl+V → 由 clipboard 接管贴快照；验证痕迹已撤销清理（11→9，0 残留）。
+
+
 ### 追记（2026-10-10 五续，目标/队列/审批链路：子代理审查 + 两轮修复）
 
 背景：用户报「刷新后输入框右下角按钮停在停止状态」。诊断确认不是按钮画错，而是**一轮真的卡在后台**：
