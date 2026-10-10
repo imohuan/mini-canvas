@@ -16,6 +16,7 @@
  * 改动只活在内存里，刷新后回到默认值 —— 这是说真话的降级。
  */
 import { reactive } from 'vue'
+import { subscribeKvEvents } from './kvEvents'
 
 /** 三个键的裸 key（KV 路径由它拼出来，与 appTheme 同一套命名习惯） */
 export const AGENT_RUN_MODE_KEY = 'agentRunMode'
@@ -25,6 +26,13 @@ export const AGENT_GOAL_DEFAULTS_KEY = 'agentGoalDefaults'
 export const AGENT_RUN_MODE_PATH = '/api/kv/config/' + AGENT_RUN_MODE_KEY
 export const AGENT_NOTIFY_PATH = '/api/kv/config/' + AGENT_NOTIFY_KEY
 export const AGENT_GOAL_DEFAULTS_PATH = '/api/kv/config/' + AGENT_GOAL_DEFAULTS_KEY
+/**
+ * config 作用域的**批量读**口（一次拿回该域全部 key/值）。
+ *
+ * 三个键逐条 GET 时，没保存过的会各回一个 404，浏览器控制台就多几条"加载资源失败"
+ * （用户截图里报的就是它）。走批量口一次拿齐，既少两次往返，也不再刷无意义的 404。
+ */
+export const CONFIG_KEYS_PATH = '/api/kv/config?values=1'
 
 /** 「后台对话」两种模式：background=开（连接断了这一轮也跑完）；followTab=关（旧行为，断线 abort） */
 export type AgentRunMode = 'background' | 'followTab'
@@ -58,15 +66,26 @@ export const AGENT_SETTINGS_DEFAULTS: AgentSettings = {
  * 未保存过（404）/ 后台没起 / 坏数据 → undefined，由调用方各自回落默认值；
  * 任何情况下**不抛** —— 首屏不能因为后台没起就白屏。
  */
-async function readKvValue(path: string): Promise<unknown> {
-  if (typeof fetch === 'undefined') return undefined
+/**
+ * 一次把 config 作用域整个读回来（服务端的批量口，见 cloud-server routes/kv.ts 的 ?values=1）。
+ *
+ * 为什么不是逐键 GET：这三个键**用户一次都没改过时全都从未保存过**，逐键读会各回一个 404 ——
+ * 控制台里就是三条"加载资源失败：404"，而用户什么都没做错。批量口一次拿齐需要的那几把 key，
+ * 少两次往返，也不再刷无意义的 404（那正是用户截图里报的错）。
+ *
+ * 后台没起 / 坏数据 → 空对象：所有键都回落各自默认值，绝不抛（首屏不能白屏）。
+ */
+async function readConfigBucket(): Promise<Record<string, unknown>> {
+  if (typeof fetch === 'undefined') return {}
   try {
-    const res = await fetch(path, { headers: { accept: 'application/json' } })
-    if (!res.ok) return undefined
-    const body = (await res.json()) as { value?: unknown }
-    return body && typeof body === 'object' && 'value' in body ? body.value : undefined
+    const res = await fetch(CONFIG_KEYS_PATH, { headers: { accept: 'application/json' } })
+    if (!res.ok) return {}
+    const body = (await res.json()) as { values?: unknown }
+    return body && typeof body.values === 'object' && body.values !== null
+      ? (body.values as Record<string, unknown>)
+      : {}
   } catch {
-    return undefined
+    return {}
   }
 }
 
@@ -103,15 +122,11 @@ function budgetFromKv(raw: unknown): number {
 
 /** 读齐三个键（各自容错、各自回落默认）。任何失败都不抛。 */
 export async function loadAgentSettings(): Promise<AgentSettings> {
-  const [rawRunMode, rawNotify, rawGoal] = await Promise.all([
-    readKvValue(AGENT_RUN_MODE_PATH),
-    readKvValue(AGENT_NOTIFY_PATH),
-    readKvValue(AGENT_GOAL_DEFAULTS_PATH),
-  ])
+  const bucket = await readConfigBucket()
   return {
-    runMode: normalizeRunMode(rawRunMode),
-    notify: normalizeNotify(rawNotify),
-    goalBudget: budgetFromKv(rawGoal),
+    runMode: normalizeRunMode(bucket[AGENT_RUN_MODE_KEY]),
+    notify: normalizeNotify(bucket[AGENT_NOTIFY_KEY]),
+    goalBudget: budgetFromKv(bucket[AGENT_GOAL_DEFAULTS_KEY]),
   }
 }
 
@@ -147,35 +162,27 @@ export async function saveAgentGoalBudget(budget: unknown): Promise<number> {
 /** 这三个键任一变了都要重读（别的 config 键与这个弹窗无关） */
 const AGENT_KV_KEYS: readonly string[] = [AGENT_RUN_MODE_KEY, AGENT_NOTIFY_KEY, AGENT_GOAL_DEFAULTS_KEY]
 
-/** 服务端 KV 变更广播的事件形状（cloud-server /api/kv/events） */
-interface KvChangeEventLike {
-  type: string
-  key: string
-}
-
 /**
  * 订阅云端变更：别的标签页/别处改了这三个键，这里重读一份并回调（跨标签页同步）。
+ *
+ * 连接由 `subscribeKvEvents` 统一持有（全应用**共享一条**）：各读者自己 `new EventSource`
+ * 会让每条订阅各占一条**永不关闭**的长连接，几条叠加就把浏览器对单个域名的并发额度
+ * （Chrome 为 6）占满 —— 之后页面里所有普通请求都只能排队（用户报的"网页卡住、请求停在待处理"）。
+ *
  * 无 EventSource（node 测试/极端环境）或后台没连 → 返回 no-op dispose，不抛错。
  */
 export function watchAgentSettings(onChange: (settings: AgentSettings) => void): () => void {
-  if (typeof EventSource === 'undefined') return () => {}
-  const es = new EventSource('/api/kv/events')
   let closed = false
-  es.onmessage = (e: MessageEvent<string>): void => {
+  const off = subscribeKvEvents((event): void => {
     if (closed) return
-    try {
-      const event = JSON.parse(e.data) as KvChangeEventLike
-      if (event.type !== 'config' || !AGENT_KV_KEYS.includes(event.key)) return
-      void loadAgentSettings().then((s) => {
-        if (!closed) onChange(s)
-      })
-    } catch {
-      /* 坏数据/断线：安静收场，下次广播再试 */
-    }
-  }
+    if (event.type !== 'config' || !AGENT_KV_KEYS.includes(event.key)) return
+    void loadAgentSettings().then((s) => {
+      if (!closed) onChange(s)
+    })
+  })
   return () => {
     closed = true
-    es.close()
+    off()
   }
 }
 

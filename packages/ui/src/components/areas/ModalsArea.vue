@@ -243,13 +243,25 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       const mount = document.createElement('div')
       mount.className = isAudio ? 'hist-card-audio-plugin' : 'hist-card-video-plugin'
       card.appendChild(mount)
-      const app = createApp({ render: () => h(PluginPreview, isAudio ? { url, name: item.title, compact: true } : { url, name: item.title }) })
+      // 视频件自带「按宽度自适应」：小卡片走小屏态（只有一个居中播放键），宽了给完整控制栏。
+      // 颜色/时间浮层由这里加（与图片卡同一套 hist-card-tags），不再另起一条独立信息栏。
+      //
+      // 视频卡额外给 expandable + 接 expand：小屏态右下角出现「进入预览」小方块，
+      // 点它打开全屏预览（用户口径：视频可以点进全屏）。组件自己不开窗 —— 它不知道
+      // MediaViewer 挂在哪，所以由这里把事件接到 openHistoryItem 上。
+      const app = createApp({
+        render: () =>
+          h(
+            PluginPreview,
+            isAudio
+              ? { url, name: item.title, compact: true }
+              : { url, name: item.title, expandable: true, onExpand: () => openHistoryItem(item) },
+          ),
+      })
       app.mount(mount)
-      // 上下布局：上面组件，下面同级信息条（fixed 高度）—— 不再压在组件上，彻底不重叠
-      const foot = document.createElement('div')
-      foot.className = 'hist-card-foot'
-      foot.innerHTML = '<span class="hist-tag">' + (isAudio ? '♪ 音频' : '▶ 视频') + '</span><span class="hist-tag hist-tag--dim">' + esc(item.time) + '</span>'
-      card.appendChild(foot)
+      // 不再加任何信息浮层（用户口径 2026-10-11）：视频右下角那个「时间」会压住
+      // 小屏态的「进入预览」按钮（实测两者矩形相交），而且标签本身就是多余的。
+      // 媒体件自己已经带播放键/时间/进度，卡面保持干净。
       card.addEventListener('click', () => { if (!s.histBatchMode) openHistoryItem(item) })
       if (s.histBatchMode && item.id) card.appendChild(buildCheckOverlay(item.id))
       return card
@@ -260,7 +272,6 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       ? '<div class="hist-card-audio"><span class="hist-card-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>'
       : '<img src="' + esc(url) + '" alt="" loading="lazy" />') +
     '<div class="hist-card-play">▶</div>' +
-    '<div class="hist-card-tags"><span class="hist-tag">' + (isAudio ? '♪ 音频' : '▶ 视频') + '</span><span class="hist-tag hist-tag--dim">' + esc(item.time) + '</span></div>' +
     '</div>'
   if (!isAudio) {
     const img = card.querySelector('img')!
@@ -814,7 +825,6 @@ watch(() => s.shortcutsOpen, async (open) => {
 .hist-card-audio-plugin .apv-wave { min-height: 0; flex: 1 1 auto; }
 .hist-card-video-plugin { position: relative; width: 100%; height: 180px; overflow: hidden; background: var(--ui-scrim, #000); /* 主题色白名单: 视频黑边属媒体底色，不随主题 */ }
 .hist-card-video-plugin .vpv-root { height: 100%; }
-.hist-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex: none; height: 30px; padding: 0 8px; }
 /* 异常卡：警示圆圈 + 「生成异常 · 无产物」说明 */
 .hist-card-fallback { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 130px; padding: 16px 12px; cursor: pointer; text-align: center; }
 .hist-card-fallback.is-error .hist-card-fallback-icon { display: grid; place-items: center; width: 32px; height: 32px; margin-bottom: 2px; border-radius: 50%; border: 1.5px solid var(--ui-danger, #ef4444); color: var(--ui-danger, #ef4444); font-size: 15px; font-weight: 700; }

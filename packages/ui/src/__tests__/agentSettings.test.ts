@@ -8,6 +8,11 @@
  *   路径 = /api/kv/config/{agentRunMode, agentNotify, agentGoalDefaults}
  *   默认 = background / { browser: true, sound: true } / 50000
  *   后台没起 → 安静回落默认，绝不抛（首屏不能因为后台没起就白屏）
+ *
+ * 读法（2026-10-10 改）：三个键**一次批量读回**（GET /api/kv/config?values=1），
+ * 不再逐键 GET。逐键读在"用户从没改过"时必然各回一个 404，控制台里就是几条
+ * "加载资源失败：404"——用户什么都没做错却看到报错。批量口本来就有
+ * （见 cloud-server routes/kv.ts 的 ?values=1），这里把"必须走批量口、不许刷 404"钉死。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -17,6 +22,7 @@ import {
   AGENT_RUN_MODE_PATH,
   AGENT_NOTIFY_PATH,
   AGENT_GOAL_DEFAULTS_PATH,
+  CONFIG_KEYS_PATH,
   DEFAULT_AGENT_GOAL_BUDGET,
   DEFAULT_AGENT_NOTIFY,
   DEFAULT_AGENT_RUN_MODE,
@@ -28,12 +34,23 @@ import {
   saveAgentRunMode,
   watchAgentSettings,
 } from '../composables/agentSettings'
+import { __resetKvEventsForTests } from '../composables/kvEvents'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
-/** 假后台：GET 按路径给值（没登记的路径回 404 = 从未保存过）；PUT 记账 */
-function kvFetch(routes: Record<string, unknown> = {}, opts: { failAll?: boolean } = {}) {
+/**
+ * 假后台：GET /api/kv/config?values=1 回整桶值；PUT 记账。
+ *
+ * `notFoundGets` 记录所有**回了 404** 的 GET —— 用来钉死"读设置不该刷 404"。
+ * 传 `legacy: true` 可模拟"批量口不存在"的旧后台（那几个键各回 404），
+ * 确认调用方仍然安静回落默认值、不抛。
+ */
+function kvFetch(
+  routes: Record<string, unknown> = {},
+  opts: { failAll?: boolean; legacy?: boolean } = {},
+) {
   const puts: Array<{ url: string; body: unknown }> = []
+  const notFoundGets: string[] = []
   vi.stubGlobal('fetch', async (url: string, init?: { method?: string; body?: string }) => {
     const u = String(url)
     if (opts.failAll) throw new Error('offline')
@@ -41,10 +58,17 @@ function kvFetch(routes: Record<string, unknown> = {}, opts: { failAll?: boolean
       puts.push({ url: u, body: JSON.parse(String(init.body)) })
       return { ok: true, status: 200, json: async () => ({ ok: true }) }
     }
+    // 批量读：把 routes 里登记的键名（取最后一段）折成 values 桶
+    if (u === CONFIG_KEYS_PATH && !opts.legacy) {
+      const values: Record<string, unknown> = {}
+      for (const [path, v] of Object.entries(routes)) values[path.split('/').pop()!] = v
+      return { ok: true, status: 200, json: async () => ({ ok: true, type: 'config', keys: Object.keys(values), values }) }
+    }
+    notFoundGets.push(u)
     if (!(u in routes)) return { ok: false, status: 404, json: async () => ({ ok: false, error: '未保存过' }) }
     return { ok: true, status: 200, json: async () => ({ value: routes[u] }) }
   })
-  return puts
+  return { puts, notFoundGets }
 }
 
 describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', () => {
@@ -60,7 +84,7 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
   })
 
   it('默认值：后台对话默认开（background）、通知与声音默认开、默认预算 50000', async () => {
-    kvFetch() // 三个键都没保存过 → 全 404
+    const { notFoundGets } = kvFetch() // 三个键都没保存过
 
     const s = await loadAgentSettings()
 
@@ -70,6 +94,32 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
     expect(DEFAULT_AGENT_NOTIFY).toEqual({ browser: true, sound: true })
     expect(s.goalBudget).toBe(50000)
     expect(DEFAULT_AGENT_GOAL_BUDGET).toBe(50000)
+    // 没保存过 ≠ 报错：读设置必须走批量口，一个 404 都不该产生
+    // （用户截图里那几条"加载资源失败：404"就是逐键读留下的）
+    expect(notFoundGets).toEqual([])
+  })
+
+  it('读设置走一次批量口，不再逐键 GET（3 条请求 → 1 条，且无 404）', async () => {
+    const urls: string[] = []
+    vi.stubGlobal('fetch', async (url: string, init?: { method?: string }) => {
+      urls.push(String(url) + (init?.method === 'PUT' ? ' [PUT]' : ''))
+      return { ok: true, status: 200, json: async () => ({ ok: true, type: 'config', keys: [], values: {} }) }
+    })
+
+    await loadAgentSettings()
+
+    expect(urls).toEqual([CONFIG_KEYS_PATH])
+    expect(urls.some((u) => u.includes('/agentRunMode'))).toBe(false)
+  })
+
+  it('旧后台没有批量口时安静回落默认（不抛、不白屏）', async () => {
+    kvFetch({}, { legacy: true })
+
+    await expect(loadAgentSettings()).resolves.toEqual({
+      runMode: 'background',
+      notify: { browser: true, sound: true },
+      goalBudget: 50000,
+    })
   })
 
   it('后台读不到（没起/断网）→ 回落默认，不抛异常', async () => {
@@ -124,7 +174,7 @@ describe('写：PUT 到正确的路径与体（体契约 { value }）', () => {
   })
 
   it('后台对话：PUT config/agentRunMode，值就是 background / followTab', async () => {
-    const puts = kvFetch()
+    const { puts } = kvFetch()
 
     await saveAgentRunMode('followTab')
     await saveAgentRunMode('background')
@@ -135,7 +185,7 @@ describe('写：PUT 到正确的路径与体（体契约 { value }）', () => {
   })
 
   it('通知：PUT config/agentNotify，体是 { browser, sound } 整份', async () => {
-    const puts = kvFetch()
+    const { puts } = kvFetch()
 
     await saveAgentNotify({ browser: false, sound: true })
 
@@ -145,7 +195,7 @@ describe('写：PUT 到正确的路径与体（体契约 { value }）', () => {
   })
 
   it('目标预算：PUT config/agentGoalDefaults，体是 { budget }；留空/非法收成 0（不限）', async () => {
-    const puts = kvFetch()
+    const { puts } = kvFetch()
 
     await saveAgentGoalBudget(50000)
     await saveAgentGoalBudget('')
@@ -208,7 +258,7 @@ describe('store：弹窗绑的响应式快照 + 写入口', () => {
   })
 
   it('三个写入口：先翻本地快照（界面立刻响应），再 PUT 到各自的路经', async () => {
-    const puts = kvFetch()
+    const { puts } = kvFetch()
     const store = createAgentSettingsStore()
     await store.reload()
 
@@ -251,10 +301,14 @@ describe('跨标签页同步：订阅 /api/kv/events，只认这三个键', () =
   beforeEach(() => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource as unknown)
+    // 共享连接是**模块级状态**，跨用例存活：不清掉的话本用例会复用到上一个用例
+    // 留下的那条连接，FakeEventSource.instances[0] 就成了 undefined
+    __resetKvEventsForTests()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    __resetKvEventsForTests()
   })
 
   it('agentRunMode 变了 → 重读一份并回调；别的 config 键不打扰', async () => {
@@ -294,6 +348,47 @@ describe('跨标签页同步：订阅 /api/kv/events，只认这三个键', () =
     await vi.waitFor(() => expect(seen).toHaveLength(1))
     expect(seen[0]).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000 })
     dispose()
+  })
+
+  /**
+   * 共享一条连接 —— 用户报的"后台怎么这么卡"的直接原因锁。
+   *
+   * 背景：首页主题、Agent 设置、cloud-client 插件各自 new EventSource('/api/kv/events')，
+   * 一个页面上就有好几条**永不关闭**的长连接。浏览器对单个域名的并发上限是 6 条，
+   * 长连接占满之后，页面里所有普通请求（保存画布 / 拉会话 / 拉动作清单）只能排队 ——
+   * 用户看到的是"请求永远停在待处理、网页很慢"。
+   *
+   * 所以：**同一条路径只能有一条连接**，无论几个订阅者。最后一个人退订才关。
+   */
+  it('多个订阅者只开一条连接；最后一个退订才关（不再各开一条长连接）', () => {
+    const off1 = watchAgentSettings(() => {})
+    const off2 = watchAgentSettings(() => {})
+    const off3 = watchAgentSettings(() => {})
+
+    expect(FakeEventSource.instances).toHaveLength(1)
+    const es = FakeEventSource.instances[0]
+
+    off1()
+    off2()
+    expect(es.closed).toBe(false) // 还有人在听，连接不能关
+
+    off3()
+    expect(es.closed).toBe(true) // 最后一个走了才关
+  })
+
+  it('事件分发给**所有**订阅者（共享连接不能吞掉别人的事件）', async () => {
+    kvFetch({ [AGENT_GOAL_DEFAULTS_PATH]: { budget: 4242 } })
+    const a: number[] = []
+    const b: number[] = []
+    const offA = watchAgentSettings((s) => void a.push(s.goalBudget))
+    const offB = watchAgentSettings((s) => void b.push(s.goalBudget))
+
+    FakeEventSource.instances[0].emit('config', 'agentGoalDefaults')
+
+    await vi.waitFor(() => expect(a).toEqual([4242]))
+    await vi.waitFor(() => expect(b).toEqual([4242]))
+    offA()
+    offB()
   })
 })
 

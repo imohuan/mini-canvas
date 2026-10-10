@@ -24,6 +24,7 @@ import {
   clearLegacyThemeModeKey,
   watchCloudSettings,
 } from '../composables/appTheme'
+import { __resetKvEventsForTests } from '../composables/kvEvents'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
@@ -224,6 +225,38 @@ describe('两套配置的老路不许复活', () => {
 })
 
 /**
+ * 源码守卫：全应用**只允许一处** `new EventSource('/api/kv/events')`。
+ *
+ * 为什么值得钉死（用户报的「后台怎么这么卡、请求停在待处理」）：曾经首页主题、Agent 设置、
+ * cloud-client 插件各开一条**永不关闭**的长连接，一个页面就占掉浏览器对单个域名的并发额度
+ * 一大半（Chrome 上限 6 条），普通请求全部排队 —— 表现为「网页很慢很慢」。
+ * 光靠读代码挡不住它慢慢长回来，用一条扫描钉死：新读者必须走共享订阅。
+ */
+describe('KV 实时通道只许有一条连接（共享订阅）', () => {
+  it('除 kvEvents.ts 外，没有任何模块自己 new EventSource 连 /api/kv/events', () => {
+    const offenders: string[] = []
+    const walk = (dir: string): void => {
+      for (const name of readdirSync(dir)) {
+        if (name === 'node_modules' || name === 'dist' || name === '__tests__') continue
+        const full = path.join(dir, name)
+        if (statSync(full).isDirectory()) walk(full)
+        // kvEvents.ts 是**唯一**允许持有这条连接的地方（它就是共享订阅本身）
+        else if (name === 'kvEvents.ts') continue
+        else if (/\.(vue|ts)$/.test(name)) {
+          const src = readFileSync(full, 'utf-8')
+          // 只盯「自己连 KV 实时通道」这一件事，别的 EventSource 用途不受影响
+          if (/new\s+EventSource\([^)]*kv\/events/.test(src)) {
+            offenders.push(path.relative(PKG_ROOT, full).replace(/\\/g, '/'))
+          }
+        }
+      }
+    }
+    walk(path.join(PKG_ROOT, 'src'))
+    expect(offenders, `这些文件自己开了 /api/kv/events 长连接，请改用 subscribeKvEvents（共享一条）：\n${offenders.join('\n')}`).toEqual([])
+  })
+})
+
+/**
  * 跨标签页实时同步：别的页面（画布页/另一个首页标签）改了配置，已打开的首页要**立刻**跟上，
  * 不该等用户手动刷新。
  *
@@ -253,9 +286,12 @@ describe('首页订阅配置变更（跨标签页实时同步）', () => {
   beforeEach(() => {
     FakeEventSource.instances = []
     vi.stubGlobal('EventSource', FakeEventSource as unknown)
+    // 共享连接是**模块级状态**，跨用例存活：不清掉会复用到上一条（instances[0] 成 undefined）
+    __resetKvEventsForTests()
   })
   afterEach(() => {
     vi.unstubAllGlobals()
+    __resetKvEventsForTests()
   })
 
   it('config/settings 变了 → 重新读一份并回调（带上最新值）', async () => {

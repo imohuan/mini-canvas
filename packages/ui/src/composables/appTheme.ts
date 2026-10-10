@@ -26,6 +26,8 @@ import {
   type ThemeMode,
 } from '@mini-canvas/canvas-render'
 
+import { subscribeKvEvents } from './kvEvents'
+
 // 主题模式设置项的 key 直接用渲染层的真源（THEME_MODE_KEY），不在这里另写一份常量 ——
 // 两处各写一份正是本模块要消灭的那类漂移。
 export { THEME_MODE_KEY }
@@ -160,12 +162,6 @@ export async function clearLegacyThemeModeKey(): Promise<void> {
   }
 }
 
-/** 服务端 KV 变更广播的事件形状（cloud-server /api/kv/events） */
-interface KvChangeEventLike {
-  type: string
-  key: string
-}
-
 /**
  * 订阅云端配置变更：别的页面/别的标签改了 `config/settings`，这里重新读一份并回调。
  *
@@ -173,27 +169,24 @@ interface KvChangeEventLike {
  * 另一个标签的首页会一直显示旧颜色，直到手动刷新。接上后台的 KV 变更广播
  * （cloud-server 的 `/api/kv/events`，SSE）后闭环：谁改了都立刻同步。
  *
+ * 连接由 `subscribeKvEvents` 统一持有（全应用**共享一条**）：本模块自己 `new EventSource`
+ * 会让每个读者各占一条**永不关闭**的长连接，几条叠加就把浏览器对单个域名的并发额度
+ * （Chrome 为 6）占满 —— 之后页面里所有普通请求都只能排队，表现为"网页卡住、请求停在待处理"。
+ *
  * 无 EventSource（node 测试/极端环境）或后台没连 → 返回 no-op dispose，不抛错。
  */
 export function watchCloudSettings(onChange: (values: AppSettings) => void): () => void {
-  if (typeof EventSource === 'undefined') return () => {}
-  const es = new EventSource('/api/kv/events')
   let closed = false
-  es.onmessage = (e: MessageEvent<string>): void => {
+  const off = subscribeKvEvents((event): void => {
     if (closed) return
-    try {
-      const event = JSON.parse(e.data) as KvChangeEventLike
-      // 只认「配置总表」这一条：别的 key（插件清单等）变了与主题无关
-      if (event.type !== 'config' || event.key !== SETTINGS_KV_KEY) return
-      void loadAppSettings().then((r) => {
-        if (!closed && r.source === 'cloud') onChange(r.values)
-      })
-    } catch {
-      /* 坏数据/断线：安静收场，下次广播再试 */
-    }
-  }
+    // 只认「配置总表」这一条：别的 key（插件清单等）变了与主题无关
+    if (event.type !== 'config' || event.key !== SETTINGS_KV_KEY) return
+    void loadAppSettings().then((r) => {
+      if (!closed && r.source === 'cloud') onChange(r.values)
+    })
+  })
   return () => {
     closed = true
-    es.close()
+    off()
   }
 }
