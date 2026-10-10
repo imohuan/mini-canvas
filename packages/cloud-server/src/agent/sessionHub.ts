@@ -71,6 +71,14 @@ export interface HubStartOptions {
 export class SessionHub {
   private readonly channels = new Map<string, SessionChannel>()
   private readonly running = new Map<string, { abort: AbortController; startedAt: number }>()
+  /**
+   * 已删会话的「墓碑」：删掉之后到**应用层解禁**之前，一律拒绝再建通道。
+   *
+   * 为什么必须有：删会话时那一轮可能还在跑，它的 finally 一定会再 append 一次
+   * `run_state:false`（runtime 还会 append `done`）—— 光删 channels 项没用，
+   * channel() 是懒建的，一 append 就把它建回来（内存泄漏没止住）。
+   */
+  private readonly tombstones = new Set<string>()
 
   constructor(private readonly deps: { log?: (message: string, extra?: unknown) => void } = {}) {}
 
@@ -90,6 +98,8 @@ export class SessionHub {
 
   /** 追加一条事件：进缓冲（超限裁剪）+ 推给所有订阅者 */
   append(canvasId: string, sessionId: string, ev: AgentChatEvent): void {
+    // 会话已删：这条是「正在跑的那一轮」的收尾事件，丢掉即可（别把通道建回来）
+    if (this.tombstones.has(this.key(canvasId, sessionId))) return
     const ch = this.channel(canvasId, sessionId)
     const item: HubEvent = { seq: ch.nextSeq++, ev }
     ch.events.push(item)
@@ -173,6 +183,8 @@ export class SessionHub {
    */
   async start(canvasId: string, sessionId: string, opts: HubStartOptions): Promise<void> {
     const k = this.key(canvasId, sessionId)
+    // 会话已删：拒绝再开一轮（否则 channel() 会把刚删掉的通道又建回来）
+    if (this.tombstones.has(k)) throw new Error('会话已删除，不能开新的一轮')
     if (this.running.has(k)) {
       throw new Error('这一轮已经在跑了（同一会话不能并发两个 run）')
     }
@@ -214,9 +226,20 @@ export class SessionHub {
   /** 删会话时放掉这条通道（缓冲与订阅一起丢） */
   forget(canvasId: string, sessionId: string): void {
     const k = this.key(canvasId, sessionId)
+    this.tombstones.add(k)
     this.running.get(k)?.abort.abort()
     this.channels.delete(k)
     this.running.delete(k)
+  }
+
+  /**
+   * 解禁（复用同一个会话 id 时调）。
+   *
+   * 正常路径用不到：删会话后新建会拿新 id。留着它是为了「删了又拿同一个 id 建回来」
+   * （恢复/测试）不至于被墓碑永久拒掉。
+   */
+  revive(canvasId: string, sessionId: string): void {
+    this.tombstones.delete(this.key(canvasId, sessionId))
   }
 
   /** 进程退出时全部中止 */

@@ -321,10 +321,17 @@ export class AgentSessionStore {
     const idx = await this.readIndex(canvasId)
     const next = idx.sessions.filter((s) => s.id !== sessionId)
     if (next.length === idx.sessions.length) return false
+    // 记墓碑：删会话的那一刻可能还有一轮在跑，它的收尾会 appendTurn / 写队列 ——
+    // 那些写会把文件**复活**（磁盘上留下半截脏会话）。只有本进程内记得住；
+    // 服务重启后墓碑丢失，但那时正在跑的轮也早没了。
+    this.removed.add(this.key(canvasId, sessionId))
     await writeJson(canvasSessionsFile(this.root, canvasId), { sessions: next })
     await fs.rm(canvasSessionFile(this.root, canvasId, sessionId), { force: true })
     return true
   }
+
+  /** 已删会话的墓碑（同进程内拒绝再写；ensure / appendTurn / 队列写都查它） */
+  private readonly removed = new Set<string>()
 
   /** 删整张画布的 agent 目录（删画布时调用；目录不存在也当成功） */
   async removeCanvas(canvasId: string): Promise<void> {
@@ -376,11 +383,16 @@ export class AgentSessionStore {
   }
 
   private async writeRecord(canvasId: string, record: AgentSessionRecord): Promise<void> {
+    // 已删会话：**不落盘**（正在跑的那一轮收尾时会来写，走了就把它删掉；
+    // 不拦的话删会话后磁盘上会重新长出一条只留半截的脏会话）
+    if (this.removed.has(this.key(canvasId, record.id))) return
     await fs.mkdir(canvasSessionsDir(this.root, canvasId), { recursive: true })
     await writeJson(canvasSessionFile(this.root, canvasId, record.id), record)
   }
 
   private async upsertIndex(canvasId: string, record: AgentSessionRecord): Promise<void> {
+    // 已删会话：不重新登记进索引（否则列表里会冒出一条已删会话）
+    if (this.removed.has(this.key(canvasId, record.id))) return
     const idx = await this.readIndex(canvasId)
     const meta: AgentSessionMeta = {
       id: record.id,

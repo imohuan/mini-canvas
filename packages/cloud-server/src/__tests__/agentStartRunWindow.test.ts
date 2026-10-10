@@ -119,3 +119,24 @@ describe('startRun：已经在跑返回 started:false（交给上层进队列）
     for (let i = 0; i < 200 && hub.isRunning('c1', 's1'); i++) await new Promise((r) => setTimeout(r, 10))
   })
 })
+
+describe('startRun：并发请求各自的「停止」都不失联（世代号，不是单槽令牌）', () => {
+  it('两个并发 startRun：终止一次，两个都看到（不会互相盖掉）', async () => {
+    const { session, agent } = makeSession({ resumeDelayMs: 80 })
+    const hub = new SessionHub()
+    const rt = makeRuntime(agent, hub)
+    await store.ensure('c1', { id: 's1', title: 't', createdAt: 1, provider: 'p', modelId: 'm' })
+
+    // 两个请求同时进入装载窗口
+    const a = rt.startRun('c1', { canvasId: 'c1', sessionId: 's1', text: '一' })
+    const b = rt.startRun('c1', { canvasId: 'c1', sessionId: 's1', text: '二' })
+    await new Promise((r) => setTimeout(r, 20))
+    rt.abort('c1', 's1')
+    const [ra, rb] = await Promise.all([a, b])
+    // 两个都不该跑（停止在装载窗口里生效）
+    expect(ra.started).toBe(false)
+    expect(rb.started).toBe(false)
+    await new Promise((r) => setTimeout(r, 80))
+    expect(session.seenSignals).toHaveLength(0)
+  })
+})

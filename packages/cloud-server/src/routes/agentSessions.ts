@@ -706,7 +706,29 @@ export function agentSessionRoutes(
         }
         const outcome = await goalRuntime.beginGoal(p.canvasId, p.sessionId!, goalSpec.objective, goalSpec.budget)
         if (!outcome.started) {
-          return c.json({ ok: true, steered: true, sessionId: p.sessionId!, goal: true })
+          /**
+           * beginGoal 返回 false = 恰好在这两步之间有一轮开跑了（竞态）。
+           * 此前只回一句 `{steered:true}` —— 其实什么都没送进去（GOAL.json 已被
+           * start.mjs 写好，可 objective 文本从没作为消息发出，用户看到「点了没反应」）。
+           * 与上面「跑着发目标」同一条路：**进队列**（条目带 goal），调度器轮到它时按目标起。
+           */
+          const queued = await store.updateQueue(p.canvasId, p.sessionId!, (q) => ({
+            ...q,
+            items: [
+              ...q.items,
+              {
+                id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                text,
+                ...(Array.isArray(body?.images) && body.images.length ? { images: body.images.map(String) } : {}),
+                goal: { objective: goalSpec.objective, budget: goalSpec.budget },
+                state: 'queued' as const,
+                createdAt: Date.now(),
+              },
+            ],
+          }))
+          hub.append(p.canvasId, p.sessionId!, { type: 'queue', queue: queued })
+          onQueueChanged?.(p.canvasId, p.sessionId!)
+          return c.json({ ok: true, queued: true, sessionId: p.sessionId!, goal: true })
         }
         // 目标的**参考图**落进宿主记录（界面目标行画迷你图用；GOAL.json 是插件协议，不塞私有字段）
         const goalImages = Array.isArray(body?.images) ? (body!.images as unknown[]).map(String).filter(Boolean) : []
@@ -775,6 +797,9 @@ export function agentSessionRoutes(
               id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
               text,
               ...(images?.length ? { images: images.map(String) } : {}),
+              // 带 goal 的请求（目标功能未注入时才会走到这）也把目标带上：
+              // 调度器轮到它时按目标起，绝不把用户的「目标」意图降级成一句普通提问。
+              ...(goalSpec ? { goal: { objective: goalSpec.objective, budget: goalSpec.budget } } : {}),
               state: 'queued' as const,
               createdAt: Date.now(),
             },
