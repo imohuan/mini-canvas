@@ -5,6 +5,183 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-10 五续，目标/队列/审批链路：子代理审查 + 两轮修复）
+
+背景：用户报「刷新后输入框右下角按钮停在停止状态」。诊断确认不是按钮画错，而是**一轮真的卡在后台**：
+后端挂着一条待审批，刷新后界面没有渲染审批卡片（审批只在发生那一刻经 SSE 推一次）⇒ 没人批 ⇒ 永远跑不完。
+
+**第一轮修复（`1dfc5c54`）**：
+- `openSession` 消费 GET 会话返回的 `approvals`，经 `ChatModel.restoreApprovals` 补渲染审批卡片；
+- `approval_request` 按 id 判重（SSE 重连会回放它，不判重会画出两张相同卡片）；
+- `AgentRuntime.abort` 一并把挂起审批按 'deny' 放行 —— 否则 SDK 卡在等卡片、run 的 finally 跑不到，这一轮「停不住」。
+
+**第二轮：子代理只读审查又抓 7 个真缺陷（`64c2fd9e` / `cb9620f8` / `1f4d96ca`）**：
+1【高】send 响应没按 seq 去重 ⇒ 助手正文/工具卡片重复（两条发送路径都补 acceptSeq）；
+2【高】装载窗口里点停止被丢掉（per-session 取消令牌）；
+3【中】审批工具卡片标记读错字段（`payload.id` → SDK 真字段 `tool_call_id`）；
+4【中】`restoreApprovals` 落点错位（改按 toolCallId 找到归属回合插入）；
+5【中】并发发送静默丢失（`started:false` ⇒ 落进队列，不再谎报 steered）；
+6【低】approve/abort 竞态（entry.stopped 位，approve 前后各查一次）；
+7【低】`SessionHub.forget` 从未接线（删会话一并清 hub，止住内存泄漏）。
+另修：目标中止后徽章谎报「已完成」（新增 `goalEndedBadge`）；模型下拉打开时把选中项滚进可视区；
+删掉 `goalRow` 里引用不到的 `goalProgress`（曾在 HEAD 挡 vue-tsc）。
+
+**验证**：cloud-server 586、plugin-agent 256、ui 243 全绿；新增 6 个用例（装载窗口停止 / 审批工具落卡片 /
+并发发送进队列 / send 响应去重 / 审批卡片落点与同名工具 / 目标结束徽章），每处都验证过「去掉修复即失败」。
+三包 typecheck 干净；产物重建、8865 重启。
+
+**已知遗留**：`queueScheduler.test.ts` 有偶发假红（固定时长等待在满载下不够）—— 单跑必过，与本次改动无关。
+
+### 追记（2026-10-10 四续，图片/视频节点加载态回默认宽高 + 保持横屏）
+
+用户口径：「图片和视频节点的加载态，希望改成图片默认的宽高（已在设置里配好无内容时的默认宽高）」；
+「重新生成图片时它会变成竖屏，希望保持横屏的视频节点默认状态」。
+
+**根因**：图片/视频一旦有内容，`node.size` 就被按媒体真实比例写死（9:16 竖图 → 169×300）。
+于是**重新生成**时那张竖版卡片不会重置，整卡加载覆盖层（`plugin-bottom-bar` 的 `NodeTaskOverlay`）
+也铺在竖版上 —— 用户看到的"重新生成就变竖屏"。空节点本来就落类型默认尺寸，所以只有"有内容再重生成"这一档不对。
+
+**改法（只改渲染，不动数据）**：新增类型级能力 `loadingDefaultSize`（`canvas-data/nodeStore.ts` 的
+`CanvasNodeType`，经 `registerNodeType` / `capabilities` 两条注册路径逐字段透传）。
+图片 / 视频类型声明它；运行中（`data.runState.status === 'running'`，判定收敛到 `canvas-data/nodeRunState.ts` 的
+`isNodeRunning`）时，**两处**渲染都取类型默认尺寸：
+- `canvas-render` 的 `nodesFromStore`：VueFlow 包裹尺寸投影类型默认尺寸（**必须显式给值**——
+  VueFlow 更新是合并语义，抹掉 style 不会把上一次写进 DOM 的宽高改回去，实测包裹会停在旧比例）；
+- `plugin-theme-default` 的 `useNodeCardSize`：卡片实测尺寸同样回落类型默认尺寸。
+
+任务结束（done / error / 取消）立刻回到 `node.size` 的真实产物比例。**为什么不按用户最初设想的"进加载态
+把图删掉"**：生成起点帧走 `doc.updateNodeRuntime`（故意不进撤销栈），删图删尺寸在生成失败/取消时会把用户作品弄丢；
+只改渲染则原图与尺寸原样保留（实测：失败后仍 169×300，图片还在）。
+
+**验证（Chrome MCP + 真 dev server）**：图片节点 47 从 9:16（169×300）→ running 期间 320×240（设置里配的
+图片默认宽高）→ 失败后回到 169×300 且图还在；视频 203×360 → running 期间 480×320（视频默认宽高）→ 完成回 203×360；
+未声明能力的类型行为不变。单测：canvas-data **375** / canvas-render **421** / theme-default **252** / ui **243** /
+image **113** / video **105** / text **31** / audio **94** / 3d **71** / compare **46** / kernel **220** 全绿；
+相关包 tsc 干净（ui 的 vue-tsc 仅剩 `plugin-agent/AgentConversation.vue` 一处**既有**报错，与本轮无关）。
+
+### 追记（2026-10-10 三续，API 分类重做：去废话成纯参考 + 补后端 cloud-server + 侧边栏展开/短名）
+
+用户口径：「API 文档废话太多，这里只需要介绍 API 的使用方式并一一罗列有哪些 API；另外需要提供前后端的，后端是 cloud server」；
+「左侧侧边栏全部展开、不要折叠」；「名称精简到 2~10 字、不要换行」。
+
+**改法**：
+- **前端服务 15 篇**（`packages/docs/services/*.md`）：从「它是什么 / 为什么需要 / 会在哪里用到 / 完整例子 / 常见坑」
+  裁成**两节纯参考**——`## 用法`（怎么拿 + 方法表〔方法 / 签名 / 干什么 / 什么时候用〕+ 关键形状）
+  + `## 注意事项`。标题改短（如「服务：生成工具注册表（tools）」→「`tools` · 工具表」）。
+- **新增 API 分类页**：`api/ctx.md`（Context 全部方法：装载/服务/事件/作用域/自省）、`api/registry.md`（Registry 写/读/组合/订阅 + Entry 形状 + 两条语义）、
+  `api/index.md`（API 总览，前端 + 后端对照）。
+- **补后端 6 篇**（`api/server*.md`）：`ctx.routes` / `ctx.store` / `ctx.jobs` / `ctx.mcp` / `ctx.agent` 逐个罗列真实签名，
+  签名取自 `packages/cloud-server/src/serverFramework/*.ts`，另加后端总览。
+- **`core/index.md`** 由教学文改成纯清单（服务清单 + 注册场清单 + 语法糖 + 命令）。
+- **`services/index.md`** 重写为索引（三种依赖写法 + 三档来源 + 全部服务一句话表）。
+- **侧边栏**（`.vitepress/config.ts`）：全部分组 `collapsed: false`（全展开）；名称一律压到 2~10 字、单行不换行
+  （服务项直接用 `ctx.get('名字')` 里的英文标识；`Cloud Client`→`Cloud 客户端`）。
+
+**验证**：`pnpm -C packages/docs build` 通过；`node packages/docs/.vitepress/audit.mjs` 六项全绿；
+**Chrome MCP 实测**（:5291 产物）：右上角四项平级、API 分类三组全展开、入门分类 7 组全展开且 51 项侧边栏条目
+**0 处换行**、各页 h1/h2/表格数量正确、**0 条 console 报错**；临时脚本已清、`codegraph` 已跑。
+
+### 追记（2026-10-10 二续，文档站审计：补 3 类「查漏补缺」缺陷 + 审计脚本加 2 项）
+
+背景：线程「文档系统」的目标是「审核 目录 结构 查漏补缺，让文档有效且规范」，上一轮因模型容量中断，
+本轮接着做完了。现场四项旧审计（内链 / 侧边栏覆盖 / 占位 / 示例文件头）本就全绿，于是往更深一层查，
+抓到并修掉 3 类旧审计覆盖不到的缺陷：
+
+1. **页面标题重复（11 篇）** —— cloud-server 的 5 篇 capabilities-*、hot-load、quickstart、server-plugins、
+   bridge-agent、bridge-cloud-client、showcase-walkthrough 的**第一行与第二行都是同一个一级标题**，
+   VitePress 渲染出两个 h1（模板复制粘贴所致）。删掉重复那行。
+2. **代码块「文件：」头指向不存在的路径（27 处）** —— 示例/对接页的代码块头写死
+   `packages/docs/public/examples/<案例>/...`，但对应文件**从未落盘**（读者按路径去找会扑空，即「阴阳文档」）。
+   修法：这些页**自带目录树用的是相对路径**（`my-note-plugin/` 这类），把代码块头统一成同一相对路径，
+   头部与页面目录树一致，不再造一个不存在的绝对路径。涉及 examples 的 8 篇 + cloud-server 的 2 篇 bridge。
+3. **语法错误小节名（12 篇）** ——「## 这个篇能让你做什么」改为「## 这篇能让你做什么」。
+
+另修一处**回归**：`plugins/index.md` 曾把自动扫描的插件总表（PluginCapabilityTable）删掉，
+页面却在「清单与快照」表里**自己链自己**并承诺「装新插件自动多一行」——表已不存在。已恢复该表与字段说明。
+
+**验证**：`pnpm -C packages/docs build` 通过（22s）；`node packages/docs/.vitepress/audit.mjs` 六项全绿
+（新增第⑤项「每篇恰好一个 H1、无标题重复」、第⑥项「示例文件头里的 public/examples 路径全部存在」）；
+构建产物抽查 h1count=1、插件表渲染 28 张卡片；`codegraph sync` 已跑；临时脚本已清理。
+（对照复核：`registry-playground` 演示页、`/handbook/` 旧导览的移除均为用户当轮明示「算了吧」后的主动删除，非丢失。）
+
+### 追记（2026-10-10，修「参考图第三种地址又漏了」—— 改成通用自请求，不再枚举）
+
+用户口径（原话）：「你这边图片地址还存在一些 bug…还是之前那个效果，你没有把这个链接转换成图片进行上传，
+导致它直接上传了 URL 地址」+「如果是这种 URL 地址，就直接用自己的服务器去请求，不管它是什么请求，
+也不管它是远程的还是当前的；如果地址不全，就使用当前的后台服务去拼接完整地址，然后去请求图片。
+是这个意思吧？但是你这边好像只针对了这两个地址进行了处理，对吗？」
+
+**日志证据**：任务 `3a39ad7f` 的 `referenceImages` 里混进了一条
+`/api/style-library/file?name=821707893_e3f8d738aefc41d6b3368b2df39cadd6.png` ——
+**风格库地址**（第四种来源）没被翻成字节，裸相对地址直接发给了 web2api。
+
+**根因**：`resourceResolver` 是**按地址前缀枚举**的（只认画布资源 + 上传资产两条）。
+枚举就会漏 —— 这是**第三次**同类事故：资产地址 → 画布资源地址 → 风格库地址。
+
+**修法（用户口径：不再枚举）**：
+- 新增 `tasks/selfFetch.ts`：**通用自请求** —— 相对地址用本服务地址拼全，然后调自己的 `app.fetch`
+  把字节取回来（同进程内部往返，不真出网）。新增任何资源路由都自动能用。
+- `resourceResolver` 变成三段：① 画布资源读盘（快路）→ ② 上传资产读盘（快路）→ ③ **通用自请求**
+  → 都取不到就原样返回（让上游报错，不编假地址）。
+- `fileNameOf`：mime 判定要认**查询参数里的文件名**（`?name=xxx.png`；只按路径会得到 "file"）。
+- **安全边界（必须有）**：只允许本服务自己的地址（相对路径 / 同 host:port 绝对地址）；
+  别的域名一律不碰（SSRF 面：画布可能来自导入/分享）。另加 30s 超时 + 64MB 上限。
+- **媒体校验（实测发现的连环坑）**：路由不存在 / 插件没加载时，静态兜底会把 **index.html**
+  返回给任何 GET —— 于是"取字节成功"拿到一段 HTML，内嵌成 data URL 发出去，上游当图片解 → 报错。
+  现在按 **Content-Type + 文件头**双把关（`looksLikeMedia`：PNG/JPEG/GIF/BMP/WEBP/MP4/OGG/MP3/WebM/SVG），
+  不是媒体就判"没取到"。
+
+**验证**：cloud-server **578**（新增 selfFetch 15 条 + 媒体校验自有断言；另 queueScheduler/pluginWatch 各一次
+并发偶发、单跑即过）全绿 + typecheck 干净；产物重建、8865 重启。
+真实场景复核（真数据目录 + 风格库插件在跑）：`/api/style-library/file?name=…` → 200 + image/png +
+5,864,564 字节 + 文件头是 PNG → 判定「会被翻成 data URL 交给 provider」。
+隔离目录复核（插件不在）：兜底 index.html 被**正确拒绝**，退回原地址（不再发 HTML 假图）。
+
+**补充（用户追问：完整地址可行吗？相对地址是拼自己后台吗？）**：
+
+回答分两层，都**实测过**（用运行中的 8865 + 真实风格库地址）：
+
+| 地址形态 | 取字节 | 说明 |
+|---|---|---|
+| 相对地址 `/api/style-library/file?name=…` | ✅ 5,864,564 字节 | **是**用本服务 origin 拼全后自请求 |
+| 完整地址 `http://127.0.0.1:8865/…` | ✅ 同上 | 认（同 host:port） |
+| 完整地址 `http://localhost:8865/…` | ✅ 同上 | **本轮修了**（见下） |
+| 完整地址换端口 `:9999` | ❌ 不取 | 正确：同机不同服务不等于「自己」 |
+| 外部图床 `https://cdn...` | ❌ 不取 | 有意：SSRF 边界，交给 provider 自己下载 |
+
+**这一轮实测抓到的缺陷（已修）**：`isSelfUrl` 原来只做**字符串严格比对** hostname，
+于是 `http://localhost:8865/...`（前端存进画布的完整地址就可能是这种写法）被判成「别人」，
+参考图又退回裸地址发出去 —— 同一类 bug 换个马甲。现在改成**本机别名等价**：
+`127.0.0.1 ≡ localhost ≡ ::1`（两边都是别名才互相认），端口仍必须一致。
+新增 1 条守卫（localhost/::1 双向、换端口仍拒、别的 host 仍拒）。
+
+
+### 追记（2026-10-10 一续，模型下拉：打开时把选中项滚进可视区）
+
+用户口径（附截图）：「这个 Agent 面板……里面有一个模型的下拉列表。列表里的模型有很多，其中有一个是
+选中的。我希望点击之后，能自动滚动到选中的这个模型，让选中的模型直接滚到可视区域。」
+
+**根因（真机实测）**：模型下拉是 `layout="inner-scroll"`（限高 320，只有 `.ac-menu-scroll` 这一区滚），
+而打开时没有任何东西动过它的 scrollTop —— 它从 0 开始。于是选中项一旦排在可视区外（真机：38 条、选中项在第 37 条、列表 clientHeight 270 / scrollHeight 2280、scrollTop=0），点开根本看不到"现在用的是哪个"。
+
+**改法**（`packages/plugins/plugin-agent`）：
+- 新增 `src/selectionScroll.ts`：纯函数 `scrollTopForVisibleItem(box, item, pad)` —— 与浏览器
+  `scrollIntoView({block:'nearest'})` 同一套直觉，但**只**动这一个容器（不牵连外层滚动容器）：
+  已完整可见就不动、被裁在下方对齐下缘、被裁在上方对齐上缘、最后夹进 `[0, scrollHeight-clientHeight]`。
+  与 `stickToBottomCore.ts` 同一套做法（唯一有口径的部分抽成纯函数、可单测）。
+- `AgentConversation.vue`：模型列表的 `.ac-menu-scroll` 挂 `ref`；`watch(modelOpen)` 打开时
+  `nextTick` 调 `scrollSelectedModelIntoView()`。
+  * 几何用 `offsetTop - box.offsetTop` 量，不用 `getBoundingClientRect()` —— 浮层入场带 0.14s 的
+    `scale(.96)` 动画，rect 被动画等比缩过（真机实测顶边偏 4%），直接拿它算会滚不到底；offsetTop 是
+    布局值、不吃 transform。
+  * 选中态认 `aria-selected="true"`（选中项的唯一真相，不另造类名当第二处真相）。
+
+**验证**：plugin-agent **244**（新增 selectionScroll.test.ts 11 条：7 条纯函数口径 + 4 条接线结构）全绿；
+typecheck 干净；ui 包 **243** 全绿。**真机（Chrome MCP）**：dev :5288 与重建后的产物 :8865 两处，38 条里
+选中第 37 条 → 打开即 `scrollTop=2010`（= maxScroll）且下缘贴容器下缘、完整可见；选中间第 20 条再开 →
+`scrollTop=992`、完整可见（下缘留 4px 白）；已手动滚走后关闭重开 → 又被拉回选中项；选第一条 → `scrollTop=0`
+（已可见就不动）；0 新增 console 错误。**已 `pnpm -C packages/ui build` 重建 dist**（:8865 读的是它）。
+
 ### 追记（2026-10-09 九续，子代理 code review：目标队列系统 6 处严重/中档修复）
 
 功能完成后派子代理对目标队列系统做了一轮深入审查。**发现 6 个严重 + 5 个中档问题，全部修完**。
