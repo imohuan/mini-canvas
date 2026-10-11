@@ -127,6 +127,8 @@ describe('goal 安装器：插件缺席不拦启动', () => {
   it('libraryPlugin 返回空 → 不抛错，installed:false（真 SDK 端口注入）', async () => {
     const sdk = await import('@prismshadow/penguin-core')
     const result = await ensureGoalInstalled(root, PROJECT_ID, AGENT_ID, {
+      // 这条测的是「回落 SDK 库」那条路 ⇒ 显式把 vendor 关掉
+      vendoredPlugin: async () => null,
       libraryPlugin: () => undefined,
       listInstalledHooks: (r, p, a) => sdk.listInstalledHooks(r, p, a),
       installHook: (r, p, a, m, f, i) => sdk.installHook(r, p, a, m, f, i),
@@ -140,6 +142,7 @@ describe('goal 安装器：插件缺席不拦启动', () => {
 
   it('插件不带 hook 包 → 不抛错，installed:false', async () => {
     const result = await ensureGoalInstalled(root, PROJECT_ID, AGENT_ID, {
+      vendoredPlugin: async () => null,
       libraryPlugin: () =>
         ({
           name: GOAL_HOOK_NAME,
@@ -194,10 +197,63 @@ describe('goal 安装器：不碰别的 hook', () => {
   })
 })
 
+/**
+ * 仓库内来源（vendor/plugins/goal）—— 用户口径 2026-10-11 的核心诉求。
+ *
+ * 背景：SDK 那份 goal 是 node_modules 里的**外部资源**，打包产物换环境就找不到。
+ * 现在把脚本签进仓库、启动时优先从 vendor 装，所以这里要钉住两件事：
+ *   1. vendor 有货 ⇒ **根本不碰 SDK 库**（libraryPlugin 会抛错，能证明没被调用）；
+ *   2. vendor 的脚本内容真的是 start/stop/lib（会话要能真执行）。
+ */
+describe('goal 安装器：优先用仓库内那份（vendor）', () => {
+  it('vendor 有货 ⇒ 完全不碰 SDK 库（哪怕 libraryPlugin 炸了也照装成功）', async () => {
+    const written: { manifest: any; files: Record<string, string>; icon?: string }[] = []
+    const result = await ensureGoalInstalled(root, PROJECT_ID, AGENT_ID, {
+      // vendor 走真实现（读 vendor/plugins/goal）
+      libraryPlugin: () => {
+        throw new Error('不该碰 SDK 库：vendor 已经够用了')
+      },
+      listInstalledHooks: async () => [],
+      installHook: async (_r, _p, _a, manifest, files, icon) => {
+        written.push({ manifest, files, ...(icon !== undefined ? { icon } : {}) })
+      },
+    })
+    expect(result).toMatchObject({ installed: true, status: 'installed', version: '2026.09.01.1' })
+    expect(written).toHaveLength(1)
+    // 三个脚本都来自 vendor，且是**可执行的真脚本**（不是空串）
+    expect(Object.keys(written[0].files).sort()).toEqual(['lib.mjs', 'start.mjs', 'stop.mjs'])
+    expect(written[0].files['start.mjs']).toContain('writeGoal')
+    expect(written[0].files['stop.mjs']).toContain('decision')
+    expect(written[0].files['lib.mjs']).toContain('roundMessage')
+    // user_prompt 仍补了 trigger:host（与 SDK 那条路同一套补丁）
+    expect(written[0].manifest.user_prompt[0].trigger).toBe('host')
+    expect(written[0].manifest.stop).toEqual([{ command: 'stop.mjs', timeout: 60 }])
+    expect(written[0].icon).toContain('<svg')
+  })
+
+  it('真装一遍：落盘的就是 vendor 那三个脚本（内容一致）', async () => {
+    const sdk = await import('@prismshadow/penguin-core')
+    await ensureGoalInstalled(root, PROJECT_ID, AGENT_ID)
+    const dir = path.join(hooksDir, GOAL_HOOK_NAME)
+    const start = await fs.readFile(path.join(dir, 'start.mjs'), 'utf8')
+    const stop = await fs.readFile(path.join(dir, 'stop.mjs'), 'utf8')
+    // 脚本能被 Node 真跑（语法/导入没问题）—— 只看头部特征，不实际执行
+    expect(start.startsWith('#!/usr/bin/env node')).toBe(true)
+    expect(stop.startsWith('#!/usr/bin/env node')).toBe(true)
+    expect(start).toContain('from "./lib.mjs"')
+    expect(stop).toContain('from "./lib.mjs"')
+    // SDK 读回来也认（名字/版本对）
+    const names = (await sdk.listInstalledHooks(root, PROJECT_ID, AGENT_ID)).map((h) => h.name)
+    expect(names).toContain(GOAL_HOOK_NAME)
+  })
+})
+
 describe('goal 安装器：注入端口', () => {
   it('端口可注入（测试不必依赖真实插件库）', async () => {
     const written: { manifest: unknown; files: Record<string, string> }[] = []
     const deps: GoalInstallDeps = {
+      // 注入端口这条路：关掉 vendor，专测 SDK 库那份能被读出来
+      vendoredPlugin: async () => null,
       libraryPlugin: () => ({
         name: GOAL_HOOK_NAME,
         description: 'fake',

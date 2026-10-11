@@ -22,6 +22,7 @@ import type { HookCommand, HookManifest, InstalledHook, LibraryPlugin } from '@p
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { GOAL_FILE, GOAL_FILE_PAUSED, endGoalFile, readGoalState, type GoalState } from './goalState.js'
+import { readVendoredPlugin, type VendoredPlugin } from './vendorPlugins.js'
 
 /** 插件名（SDK 插件库里的目录名，也是 `hooks/<name>/` 的那一段） */
 export const GOAL_HOOK_NAME = 'goal'
@@ -41,6 +42,12 @@ export interface GoalInstallResult {
 
 /** 可注入的 SDK 端口（缺省走真 SDK；测试用来造「库里没有 goal」这类分支） */
 export interface GoalInstallDeps {
+  /**
+   * 仓库内那份插件（缺省读 `vendor/plugins/<name>`）。
+   *
+   * 可注入是为了让单测能分别覆盖**两个来源**：返回 null 模拟「vendor 里没有，回落 SDK 库」。
+   */
+  vendoredPlugin?: (name: string) => Promise<VendoredPlugin | null>
   /** SDK 的 `libraryPlugin`：从插件库读一份 goal 插件 */
   libraryPlugin?: (name: string) => LibraryPlugin | undefined
   /** SDK 的 `listInstalledHooks`：读 Agent 已装的 hook 包 */
@@ -76,14 +83,19 @@ function withHostTrigger(manifest: HookManifest): HookManifest {
   return { ...manifest, user_prompt: userPrompt }
 }
 
-/** 没注入的端口走真 SDK（懒 import，与 server.ts 的 loadSdk 同一条口径）；三个都注入时连 import 都不发生 */
+/**
+ * 把没注入的端口补齐：SDK 那份懒 import（与 server.ts 的 loadSdk 同一条口径），
+ * vendor 那份直接读仓库目录。三个 SDK 端口都注入时连 import 都不发生。
+ */
 async function goalSdkPorts(deps: GoalInstallDeps): Promise<Required<GoalInstallDeps>> {
   const { libraryPlugin, listInstalledHooks, installHook } = deps
+  const vendoredPlugin = deps.vendoredPlugin ?? readVendoredPlugin
   if (libraryPlugin && listInstalledHooks && installHook) {
-    return { libraryPlugin, listInstalledHooks, installHook }
+    return { libraryPlugin, listInstalledHooks, installHook, vendoredPlugin }
   }
   const sdk = await import('@prismshadow/penguin-core')
   return {
+    vendoredPlugin,
     libraryPlugin: libraryPlugin ?? ((name) => sdk.libraryPlugin(name)),
     listInstalledHooks:
       listInstalledHooks ?? ((root, projectId, agentId) => sdk.listInstalledHooks(root, projectId, agentId)),
@@ -118,11 +130,22 @@ export async function ensureGoalInstalled(
 ): Promise<GoalInstallResult> {
   try {
     const sdk = await goalSdkPorts(deps)
-    const plugin = sdk.libraryPlugin(GOAL_HOOK_NAME)
-    if (!plugin) return unavailable(`插件库里没有 ${GOAL_HOOK_NAME}（libraryPlugin 返回空）`)
-    if (!plugin.hooks) return unavailable(`${GOAL_HOOK_NAME} 插件不带 hook 包`)
-    const manifest = plugin.hooks.manifest
-
+    /**
+     * 插件从哪来：**优先仓库内那份**（vendor/plugins/goal），取不到才回落 SDK 插件库。
+     *
+     * 为什么优先 vendor（用户口径 2026-10-11）：SDK 那份是 node_modules 里的外部资源 ——
+     * 打包产物换环境 / 只发 JS / 依赖没装全，脚本就找不到，目标功能直接缺席。
+     * vendor 那份跟着代码走，可 review、可改，是可靠来源；SDK 只当后备。
+     */
+    const vendored = await sdk.vendoredPlugin(GOAL_HOOK_NAME)
+    const fromSdk = vendored ? null : sdk.libraryPlugin(GOAL_HOOK_NAME)
+    const manifest = vendored?.manifest ?? fromSdk?.hooks?.manifest
+    if (!manifest) {
+      if (!fromSdk) return unavailable(`插件库里没有 ${GOAL_HOOK_NAME}（libraryPlugin 返回空）`)
+      return unavailable(`${GOAL_HOOK_NAME} 插件不带 hook 包`)
+    }
+    const files = vendored?.files ?? fromSdk?.hooks?.files ?? {}
+    const icon = vendored?.icon ?? fromSdk?.icon
     const installed = (await sdk.listInstalledHooks(root, projectId, agentId)).find(
       (hook) => hook.name === GOAL_HOOK_NAME,
     )
@@ -135,7 +158,7 @@ export async function ensureGoalInstalled(
       }
     }
 
-    await sdk.installHook(root, projectId, agentId, withHostTrigger(manifest), plugin.hooks.files, plugin.icon)
+    await sdk.installHook(root, projectId, agentId, withHostTrigger(manifest), files, icon)
     const status: GoalInstallStatus = installed ? 'updated' : 'installed'
     return {
       installed: true,
