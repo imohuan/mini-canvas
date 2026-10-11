@@ -165,7 +165,16 @@ export class GoalRuntime implements GoalRuntimePort {
    *    （绝不因为脚本失败就让"启动"变成"点了没反应"）。
    */
   async resumeGoal(canvasId: string, sessionId: string): Promise<{ started: boolean }> {
-    const restored = await this.files(canvasId, sessionId).resume()
+    const files = this.files(canvasId, sessionId)
+    // 先走「暂停 → 恢复」（文件在 .paused 下）。
+    let restored = await files.resume()
+    /**
+     * 没在 .paused 里、但目标**被中止过**（`aborted` + `ended`）时也要能接着跑
+     *（用户口径 2026-10-11）：那种情形文件仍以 live 名躺着，只调 resume() 什么也做不了 ——
+     * 于是「启动」变成点了没反应。这里把终态标记清掉（只对 aborted 这一种，真完成的不管）。
+     */
+    // reopen() 自己只处理「live 名 + 未真完成」，真完成的会原样返回 false，不必在这里再判一次
+    if (!restored) restored = await files.reopen()
     await this.deps.setPausedFlag(canvasId, sessionId, false)
     if (!restored) return { started: false }
     // 当前轮还在跑：等它到边界时官方循环会自己接着走（文件已经回来了），不必踢

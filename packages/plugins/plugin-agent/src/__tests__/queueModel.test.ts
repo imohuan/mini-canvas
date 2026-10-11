@@ -4,7 +4,15 @@
  * 这些口径大多来自设计 §3.6 与用户点名的 G1-G3；改这里的断言 = 改用户口径，先对设计。
  */
 import { describe, it, expect } from 'vitest'
-import { queuePanelView, sendButtonMode, budgetText, goalMarkText, usedText, goalEndedBadge } from '../queueModel'
+import {
+  queuePanelView,
+  sendButtonMode,
+  budgetText,
+  goalMarkText,
+  usedText,
+  goalEndedBadge,
+  goalIsFinished,
+} from '../queueModel'
 import type { QueueItemView, QueueStateView } from '../agentApi'
 
 /** 小工厂：造一条队列条目（只写关心的字段，其余走默认） */
@@ -196,5 +204,33 @@ describe('goalEndedBadge：按真实结束原因给徽章（不再一律「已�
     // 协议外的 status / 老数据：中性的「已结束」，不谎报完成
     expect(goalEndedBadge('weird').text).toBe('已结束')
     expect(goalEndedBadge(undefined).text).toBe('已结束')
+  })
+})
+
+/**
+ * 真 bug（用户实测 2026-10-11）：点「终止」后暂停/播放按钮消失，目标看起来「无法恢复」。
+ *
+ * 根因：插件的 stop hook 把两种完全不同的情形都写成 `ended: true` ——
+ *   · 真完成 / 受阻 / 预算用尽 ⇒ 确实完了；
+ *   · **只是这一轮被中止**（status='aborted'）⇒ 目标还在、文件也在，用户必须还能点播放接着跑。
+ * 早先界面的按钮条件是 `!ended`，于是中止之后按钮被藏掉。
+ */
+describe('goalIsFinished：只有真收尾才算完（被中止不算）', () => {
+  it('complete / blocked / budget_limited ⇒ 真完了（收按钮）', () => {
+    expect(goalIsFinished('complete')).toBe(true)
+    expect(goalIsFinished('blocked')).toBe(true)
+    expect(goalIsFinished('budget_limited')).toBe(true)
+  })
+
+  it('**aborted 不算完** ⇒ 仍要给暂停/播放键（用户口径：没完成就显示按钮）', () => {
+    expect(goalIsFinished('aborted')).toBe(false)
+  })
+
+  it('active / wrapping_up / 协议外的 status / 空 ⇒ 一律当没完（宁可不收按钮）', () => {
+    expect(goalIsFinished('active')).toBe(false)
+    expect(goalIsFinished('wrapping_up')).toBe(false)
+    expect(goalIsFinished('weird')).toBe(false)
+    expect(goalIsFinished(null)).toBe(false)
+    expect(goalIsFinished(undefined)).toBe(false)
   })
 })

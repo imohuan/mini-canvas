@@ -16,7 +16,21 @@ export type AgentChatEvent =
   | { type: 'tool_output'; id: string; output: string }
   | { type: 'notice'; message: string }
   | { type: 'error'; message: string }
-  | { type: 'usage'; usedTokens: number; limitTokens: number | null }
+  | {
+      type: 'usage'
+      /** 当前上下文用量（request.total）—— 顶部那个「剩余百分比」用它 */
+      usedTokens: number
+      limitTokens: number | null
+      /**
+       * **这次请求**花掉的 token（uncached input + output）。
+       *
+       * 为什么单独给（用户口径 2026-10-11）：目标的「已用」原先只在**每轮结束**由插件
+       * 累加一次（写进 GOAL.json），所以一轮里发了多次请求数字也纹丝不动。
+       * 带上每次请求的花费，界面就能实时往上加，轮末再由插件的记账对齐。
+       * 公式与插件 lib.mjs 的 uncachedTokens 一致（total − cache_read），两边才对得上。
+       */
+      spent?: number
+    }
   | {
       type: 'approval_request'
       /** toolCallId = SDK 的 tool_call_id（界面据此把卡片和它的工具调用对上） */
@@ -149,12 +163,18 @@ function eventNotice(p: Record<string, unknown>, state: TranslateState, log?: Lo
       // 所以到 0% 正好是它要压缩的那一刻，对用户比模型窗口更有意义。
       const request = (p.request ?? {}) as Record<string, unknown>
       const used = Number(request.total ?? 0)
+      /**
+       * 这次请求的**实际花费**：与 goal 插件 lib.mjs 的 uncachedTokens 同一公式
+       *（total − cache_read）—— 两边同口径，「界面实时加的数」与「插件轮末记的数」才一致。
+       */
+      const spentRaw = used - Number(request.cache_read ?? 0)
+      const spent = Number.isFinite(spentRaw) && spentRaw > 0 ? Math.round(spentRaw) : 0
       const window = state.contextWindow
       // 模型窗口不知道时用压缩阈值兜底：含义仍是「到 0% 正好触发压缩」，
       // 比整个不显示更有用（用户点名要这个指示器）。
       const limit = Math.min(window ?? COMPACTION_MAX_CONTEXT_LENGTH, COMPACTION_MAX_CONTEXT_LENGTH)
       if (!Number.isFinite(used) || used <= 0) return []
-      return [{ type: 'usage', usedTokens: used, limitTokens: limit }]
+      return [{ type: 'usage', usedTokens: used, limitTokens: limit, spent }]
     }
     case 'mcp_connect_end': {
       const results = Array.isArray(p.results) ? (p.results as Array<Record<string, unknown>>) : []

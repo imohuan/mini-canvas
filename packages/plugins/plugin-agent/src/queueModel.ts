@@ -195,6 +195,22 @@ export function goalEndedBadge(status: string | null | undefined): { text: strin
   }
 }
 
+/**
+ * 这个目标**是不是真的完了**（用户口径 2026-10-11）。
+ *
+ * 为什么不能只看 `ended`：插件的 stop hook 把两种完全不同的情形都写成 `ended: true` ——
+ *   · 目标真做完了 / 受阻了 / 预算用尽 ⇒ 确实完了，不该再给暂停/播放键；
+ *   · **只是这一轮被中止**（用户点了终止，status='aborted'）⇒ 目标本身没完成、文件也在，
+ *     用户随时应该能点播放接着跑。
+ * 早先把两者混为一谈（`ended` 就藏按钮），于是中止之后按钮消失、目标"无法恢复"（用户实测）。
+ *
+ * 所以：只有 complete / blocked / budget_limited 才算真完；aborted 与协议外的 status
+ * 一律当"没完"（宁可不收按钮，也不能让用户点不到）。
+ */
+export function goalIsFinished(status: string | null | undefined): boolean {
+  return status === 'complete' || status === 'blocked' || status === 'budget_limited'
+}
+
 // ============================================================ token 单位与口径
 
 /**

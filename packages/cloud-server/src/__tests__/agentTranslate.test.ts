@@ -107,9 +107,20 @@ describe('上下文用量', () => {
       event({ type: 'token_usage', session: { total: 999 }, request: { total: 256_000 } }),
       st,
     )
-    expect(out).toEqual([{ type: 'usage', usedTokens: 256_000, limitTokens: 256_000 }])
+    // spent = 这次请求的**实际花费**（total − cache_read）；没给 cache_read 就当 0 ⇒ 等于 total。
+    // 界面靠它把目标的「已用」跟着每次请求实时加上（用户口径 2026-10-11）。
+    expect(out).toEqual([{ type: 'usage', usedTokens: 256_000, limitTokens: 256_000, spent: 256_000 }])
     expect(contextLeftPercent(256_000, 256_000)).toBe(0)
     expect(contextLeftPercent(128_000, 256_000)).toBe(50)
     expect(contextLeftPercent(1, null)).toBeNull()
+  })
+
+  it('spent 扣掉 cache_read（与 goal 插件的记账同口径）', () => {
+    const st = createTranslateState()
+    const out = translateMessage(
+      event({ type: 'token_usage', session: { total: 1 }, request: { total: 10_000, cache_read: 6_000 } }),
+      st,
+    )
+    expect(out).toEqual([{ type: 'usage', usedTokens: 10_000, limitTokens: 256_000, spent: 4_000 }])
   })
 })

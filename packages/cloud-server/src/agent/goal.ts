@@ -21,11 +21,26 @@
 import type { HookCommand, HookManifest, InstalledHook, LibraryPlugin } from '@prismshadow/penguin-core'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { GOAL_FILE, GOAL_FILE_PAUSED, endGoalFile, readGoalState, type GoalState } from './goalState.js'
+import {
+  GOAL_FILE,
+  GOAL_FILE_PAUSED,
+  endGoalFile,
+  readGoalState,
+  writeGoalFile,
+  type GoalState,
+} from './goalState.js'
 import { readVendoredPlugin, type VendoredPlugin } from './vendorPlugins.js'
 
 /** 插件名（SDK 插件库里的目录名，也是 `hooks/<name>/` 的那一段） */
 export const GOAL_HOOK_NAME = 'goal'
+
+/**
+ * 目标**真的收尾**的三种 status（用户口径 2026-10-11）。
+ *
+ * 与 `aborted` 的区别：aborted 只是「这一轮被中止」，目标本身还在、可以接着跑；
+ * 这三种是插件按协议收的尾，不该被「启动」复活。
+ */
+const REALLY_FINISHED = new Set(['complete', 'blocked', 'budget_limited'])
 
 /** 本次调用做成的事：首装 / 版本不一致重装 / 已是最新跳过 / 库里没有 / 装的时候出错 */
 export type GoalInstallStatus = 'installed' | 'updated' | 'up-to-date' | 'unavailable' | 'failed'
@@ -297,6 +312,33 @@ export class GoalFiles {
     if (!(await fileExists(this.paused))) return false
     await fs.rm(this.live, { force: true })
     await fs.rename(this.paused, this.live)
+    return true
+  }
+
+  /**
+   * 把「被中止」的目标**重新打开**（用户口径 2026-10-11）。
+   *
+   * 为什么需要：用户在界面上点「终止」时，插件的 stop hook 会把 GOAL.json 写成
+   * `status:'aborted' + ended:true` —— 那是「**这一轮**结束了，别再自动续轮」，
+   * 不是「目标作废」。文件仍以 **live 名**躺着（不是 .paused），所以只调 resume()
+   * 什么也做不了（它只认 .paused）。
+   *
+   * 这里的口径：把终态标记清掉（`ended` 去掉、`status` 回 active），让插件下一轮
+   * 重新把它当成进行中的目标。**只处理"中止"这一种**：真完成 / 受阻 / 预算用尽
+   * 属于真收尾，不在这里复活（调用方负责判断）。
+   *
+   * 返回 true = 确实改写了文件（原本就是可续跑状态时返回 false，调用方按"无需重开"处理）。
+   */
+  async reopen(): Promise<boolean> {
+    const current = await this.read()
+    if (!current) return false
+    // 只在 live 那份上改：暂停态（.paused）走 resume() 那条路
+    if (!(await fileExists(this.live))) return false
+    // 真完成 / 受阻 / 预算用尽属于真收尾，不在这儿复活（只重开"被中止"这一种）
+    if (REALLY_FINISHED.has(current.status)) return false
+    const next: GoalState = { ...current, status: 'active' }
+    delete next.ended
+    await writeGoalFile(this.live, next)
     return true
   }
 

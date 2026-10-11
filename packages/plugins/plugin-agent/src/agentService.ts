@@ -511,6 +511,19 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
           ? Math.max(0, Math.min(100, Math.round((1 - ev.usedTokens / ev.limitTokens) * 100)))
           : null
       state.contextLeft = left
+      /**
+       * 目标的「已用」**跟着每次请求实时涨**（用户口径 2026-10-11）。
+       *
+       * 为什么不能只等 goal_state：那个数字由插件在**每轮结束**写进 GOAL.json，
+       * 一轮里发了好几次请求它也纹丝不动（真机实测的滞后）。
+       * 所以每次请求完成，把**这次的花费**加到当前显示值上；轮末 goal_state 一到，
+       * 就用插件记的权威值覆盖（那时我们加的增量已经被它算进去了，不会重复）。
+       * 代价：轮中间若因改预算等原因推来一次 goal_state，会短暂抹掉这段增量 —— 可接受，
+       * 轮末自动对齐（插件那份才是账本）。
+       */
+      if (state.goal && ev.spent && ev.spent > 0) {
+        state.goal = { ...state.goal, tokensUsed: state.goal.tokensUsed + ev.spent }
+      }
     }
     sync()
   }

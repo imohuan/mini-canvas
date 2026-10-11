@@ -33,6 +33,7 @@ import { scrollTopForVisibleItem } from '../selectionScroll.js'
 import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
+import { isSubmitShortcut } from '../composerKeys.js'
 import { pagerAnchors, type PagerGroup } from '../branchNav.js'
 import {
   queuePanelView,
@@ -40,6 +41,7 @@ import {
   budgetText,
   goalMarkText,
   goalEndedBadge,
+  goalIsFinished,
   usedText,
   budgetTokenText,
   formatToken,
@@ -442,6 +444,19 @@ function insertRef(item: ResourceItem, close: () => void): void {
   close()
 }
 
+/**
+ * 输入框提交键：**Ctrl / Cmd + Enter 才提交**，单独 Enter 只换行（用户口径 2026-10-11）。
+ *
+ * 为什么不再用模板上的 `@keydown.enter.exact`：那条读起来像「回车就发」，
+ * 实际行为是「任何没按修饰键的回车都发」——用户按错一下就把半截话送出去了。
+ * 判定收进 composerKeys.isSubmitShortcut（含输入法合成态），这里只做转发。
+ */
+function onEditorKeydown(e: KeyboardEvent): void {
+  if (!isSubmitShortcut(e)) return
+  e.preventDefault()
+  submit()
+}
+
 function submit(): void {
   const text = prompt.value.trim()
   const pics = [...attached.value]
@@ -834,13 +849,21 @@ const goalText = computed(() => goalMarkText(goalMark.value?.objective, goalMark
 const goalRow = computed(() => {
   const g = s.goal
   if (!g) return null
+  /**
+   * 徽章：暂停优先；否则看**是不是真完了**（用户口径 2026-10-11）。
+   * `ended` 有两种情形（真完成 / 只是这轮被中止），拿它当"已完成"会谎报，
+   * 所以改问 goalIsFinished —— 中止仍显示「已中止」，只有真完成才「已完成」。
+   */
+  const finished = goalIsFinished(g.status)
   const badge = s.goalPaused
     ? { text: '已暂停', cls: 'is-paused' }
-    : (g.ended ? goalEndedBadge(g.status) : { text: '运行中', cls: '' })
+    : (g.ended || finished ? goalEndedBadge(g.status) : { text: '运行中', cls: '' })
   return {
     badge,
     round: g.round,
     resumed: s.goalPaused,
+    /** 真完了才收按钮；中止（aborted）仍要给播放键，用户才能接着跑 */
+    finished,
   }
 })
 
@@ -1116,7 +1139,10 @@ async function refreshNotifyPrefs(): Promise<void> {
  */
 function notifySummary(): { title: string; summary: string } {
   const last = [...s.turns].reverse().find((t) => t.kind === 'assistant' && (t.text ?? '').trim())
-  const raw = (last?.text ?? '').replace(/s+/g, ' ').trim()
+  // 摘要要把换行 / 连续空白压成一个空格（通知正文只显示一行）——
+  // 这里原本写成了 /s+/g（丢了反斜杠）：它匹配的是「一个或多个字母 s」，
+  // 于是换行原样留在正文里、而且正文里所有 s 都被换成了空格（真机实测）。
+  const raw = (last?.text ?? '').replace(/\s+/g, ' ').trim()
   return { title: s.title || 'Agent', summary: raw.length > 80 ? raw.slice(0, 80) + '…' : raw }
 }
 
@@ -1144,6 +1170,11 @@ function onQueueIdle(): void {
  * 两个时刻在这里都能可靠地观测到，且不依赖数据层把事件转发出来。
  *
  * 摘要必须在**变化之后**取：这时最后一条助手消息已是这一轮的答案。
+ *
+ * 一条附带纪律：**每轮开跑时重读一次开关**（见下面 `refreshNotifyPrefs` 的调用）。
+ * 开关只在组件挂载时读过一次，用户中途在设置里关了它、当前页面却不知道 ——
+ * 表现是「关掉了照样弹」（实测）。读一次是一次轻量请求，且发生在几秒～几分钟的
+ * 一轮开始处，等这一轮结束时用的一定是新值。
  */
 let roundDoneTimer: ReturnType<typeof setTimeout> | null = null
 /** 这一轮开始时队列里还有几条：> 0 且这一轮跑完时队列空了 = **队列全部跑完**（G11 的第二个时机） */
@@ -1153,6 +1184,9 @@ watch(
   (now, before) => {
     if (!before && now) {
       queueAtRunStart = queue.value.count
+      // 这一轮开跑时把开关读新：用户在设置里刚改的开关要能马上生效，
+      // 不必刷新页面（否则「关掉了照样弹 / 打开了还是不弹」）。
+      void refreshNotifyPrefs()
       return
     }
     if (!(before && !now)) return
@@ -1490,58 +1524,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
            宽 90% 居中、紧贴输入框（零间隔、边框重叠 1px）；**只有外层有圆角，内部行一律方角**。 -->
       <div v-if="pending.hasAny" class="ac-pending-box">
         <div class="ac-pending-list" role="list" aria-label="目标与排队消息">
-            <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）——
-                 UI 与队列行刻意不同：强调色底 + 进度条 + 「第 N 轮」+ 口径值 + 口径开关 + 暂停/结束。 -->
-            <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
-              <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
-              <!-- 已完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。 -->
-              <button v-if="!s.goal?.ended" class="ac-pending-lead ac-goal-lead" type="button"
-                :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
-                :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
-                <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
-                <Target :size="14" class="ac-goal-lead-target" />
-                <Pencil :size="14" class="ac-goal-lead-edit" />
-              </button>
-              <span v-else class="ac-pending-lead" aria-hidden="true"><Target :size="14" /></span>
-              <!-- 目标参考图迷你预览：**放文字前面**（与队列行同位——lead 图标之后、正文之前）。
-                   淡边框 + 多图「+N」，与队列缩略图同一套样式（用户口径 2026-10-09）。 -->
-              <template v-if="s.goalImages?.length">
-                <img class="ac-queue-thumb" :src="s.goalImages[0]" alt="" role="button"
-                  :aria-label="'查看目标图片'" :title="'这个目标带 ' + s.goalImages.length + ' 张图'"
-                  @click="openPreview(s.goalImages[0], s.goalImages)" />
-                <span v-if="s.goalImages.length > 1" class="ac-queue-thumb-more" role="status"
-                  :title="'共 ' + s.goalImages.length + ' 张图'">+{{ s.goalImages.length - 1 }}</span>
-              </template>
-              <span class="ac-goal-row-text" :title="s.goal?.objective">{{ goalMarkText(s.goal?.objective, s.goal?.budget) }}</span>
-              <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
-              <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
-              <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status"><Pencil :size="11" /><span>正在编辑</span></span>
-              <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
-                   进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
-              <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
-              <!-- 「已用/总预算」一体式（用户口径 2026-10-09）：形如 5.2k/5k，左右两段**各自可点着改**。
-                   左边是已用、右边是总预算；两段都能点着改，**回车才生效**。 -->
-              <span class="ac-goal-ratio" :title="'已用 / 总预算' + '（点数字可改，回车生效）'">
-                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
-                  aria-label="已用 token，点击编辑（回车生效）"
-                  @focus="onGoalEditFocus($event)"
-                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'used')"
-                  @blur="onGoalBudgetBlur($event)">{{ formatToken(s.goal?.tokensUsed, tokenUnit) }}</span>
-                <span class="ac-goal-ratio-sep">/</span>
-                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
-                  aria-label="总预算，点击编辑（回车生效）"
-                  @focus="onGoalEditFocus($event)"
-                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'row')"
-                  @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(s.goal?.budget, tokenUnit) }}</span>
-              </span>
-              <button v-if="!s.goal?.ended" class="ac-goal-btn"
-                :aria-label="s.goalPaused ? '启动目标' : '暂停目标'" :title="s.goalPaused ? '启动目标' : '暂停目标'"
-                @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
-                <Play v-if="s.goalPaused" :size="12" /><Pause v-else :size="12" />
-              </button>
-              <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）"
-                @click="agent.endGoal()"><X :size="12" /></button>
-            </div>
+            <!-- 排队消息在上、**目标在最下**（用户口径 2026-10-11）：
+                 目标是一个持续进行的循环，队列排它前面 —— 每轮跑完先清队列，
+                 队列清空后才轮到目标下一轮。展示顺序跟执行顺序保持一致。 -->
             <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
             <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
               :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
@@ -1558,7 +1543,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 @click="openPreview(row.thumbs[0], row.images)" />
               <span v-if="row.images.length > 1" class="ac-queue-thumb-more" role="status"
                 :title="'共 ' + row.images.length + ' 张图'">+{{ row.images.length - 1 }}</span>
-              <span class="ac-queue-text" :title="row.text">{{ row.display || '（图片）' }}</span>
+              <span class="ac-queue-text" :title="row.text">
+                <!-- 队列条目也是**用户消息**：@节点 / @技能 标记同样要渲染成标签，
+                     否则那串 <ref …> XML 原样露出（用户口径 2026-10-11：气泡/目标/队列三处都要认）。 -->
+                <template v-if="row.text">
+                  <template v-for="(seg, si) in userSegments(row.text)" :key="si">
+                    <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact" :title="segTitle(seg)">{{ seg.name }}</span>
+                    <span v-else>{{ seg.value }}</span>
+                  </template>
+                </template>
+                <template v-else>（图片）</template>
+              </span>
               <!-- 编辑中：队列**整体阻塞**（后端保证不发下一条），行上直接说明，用户不用猜为什么不动 -->
               <span v-if="row.editing" class="ac-queue-flag" role="status">编辑中</span>
               <span v-else-if="row.goal" class="ac-queue-flag is-goal" :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</span>
@@ -1595,6 +1590,69 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   </template>
                 </ThemedDropdown>
               </span>
+            </div>
+            <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）—— 排在**队列之后、最下面**。
+                 UI 与队列行刻意不同：强调色底 + 「第 N 轮」+ 已用/总预算 + 暂停/结束。 -->
+            <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
+              <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
+              <!-- 真完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。
+                   注意判据是 goalRow.finished（不是 ended）—— 「被中止」仍可编辑/可续跑。 -->
+              <button v-if="!goalRow.finished" class="ac-pending-lead ac-goal-lead" type="button"
+                :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
+                :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
+                <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
+                <Target :size="14" class="ac-goal-lead-target" />
+                <Pencil :size="14" class="ac-goal-lead-edit" />
+              </button>
+              <span v-else class="ac-pending-lead" aria-hidden="true"><Target :size="14" /></span>
+              <!-- 目标参考图迷你预览：**放文字前面**（与队列行同位——lead 图标之后、正文之前）。
+                   淡边框 + 多图「+N」，与队列缩略图同一套样式（用户口径 2026-10-09）。 -->
+              <template v-if="s.goalImages?.length">
+                <img class="ac-queue-thumb" :src="s.goalImages[0]" alt="" role="button"
+                  :aria-label="'查看目标图片'" :title="'这个目标带 ' + s.goalImages.length + ' 张图'"
+                  @click="openPreview(s.goalImages[0], s.goalImages)" />
+                <span v-if="s.goalImages.length > 1" class="ac-queue-thumb-more" role="status"
+                  :title="'共 ' + s.goalImages.length + ' 张图'">+{{ s.goalImages.length - 1 }}</span>
+              </template>
+              <span class="ac-goal-row-text" :title="s.goal?.objective">
+                <!-- 目标是**用户消息**：正文里的 @节点 / @技能 标记要跟气泡同一套解析渲染成标签，
+                     否则那串 <ref …> XML 会原样露出来（用户实测 2026-10-11）。 -->
+                <template v-for="(seg, si) in userSegments(s.goal?.objective ?? '')" :key="si">
+                  <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact"
+                    :title="segTitle(seg)">{{ seg.name }}</span>
+                  <span v-else>{{ seg.value }}</span>
+                </template>
+              </span>
+              <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
+              <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
+              <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status"><Pencil :size="11" /><span>正在编辑</span></span>
+              <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
+                   进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
+              <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
+              <!-- 「已用/总预算」一体式（用户口径 2026-10-09）：形如 5.2k/5k，左右两段**各自可点着改**。
+                   左边是已用、右边是总预算；两段都能点着改，**回车才生效**。 -->
+              <span class="ac-goal-ratio" :title="'已用 / 总预算' + '（点数字可改，回车生效）'">
+                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                  aria-label="已用 token，点击编辑（回车生效）"
+                  @focus="onGoalEditFocus($event)"
+                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'used')"
+                  @blur="onGoalBudgetBlur($event)">{{ formatToken(s.goal?.tokensUsed, tokenUnit) }}</span>
+                <span class="ac-goal-ratio-sep">/</span>
+                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                  aria-label="总预算，点击编辑（回车生效）"
+                  @focus="onGoalEditFocus($event)"
+                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'row')"
+                  @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(s.goal?.budget, tokenUnit) }}</span>
+              </span>
+              <!-- 暂停 / 播放：**只要目标没真完成就给**（用户口径 2026-10-11）。
+                   被中止（aborted）不是完成 —— 那时必须还能点播放接着跑。 -->
+              <button v-if="!goalRow.finished" class="ac-goal-btn"
+                :aria-label="s.goalPaused ? '启动目标' : '暂停目标'" :title="s.goalPaused ? '启动目标' : '暂停目标'"
+                @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
+                <Play v-if="s.goalPaused" :size="12" /><Pause v-else :size="12" />
+              </button>
+              <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）"
+                @click="agent.endGoal()"><X :size="12" /></button>
             </div>
         </div>
       </div>
@@ -1654,7 +1712,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             ref="editorRef"
             v-model="prompt"
             :resources="editorResources"
-            @keydown.enter.exact.prevent="submit"
+            @keydown="onEditorKeydown"
             @paste="onPaste"
           />
         </div>
@@ -1935,14 +1993,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
    底色用 --ui-hover-strong（用户口径 2026-10-06：原来太淡、不好区分）：它亮暗各一档、
    比旧值 --ui-hover-soft 深两三倍；而**旧值正是用户气泡本身的底色**，标签与气泡同色
    所以糊在一起，加深后才分得开。 */
-.ac-sent-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; margin: 0 2px; padding: 0 6px 0 4px; border-radius: 6px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.10)); vertical-align: bottom; }
+.ac-sent-tag { display: inline-flex; align-items: center; gap: 4px; max-width: 200px; height: 22px; margin: 0 2px; padding: 0 6px 0 4px; border-radius: 6px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.10)); vertical-align: bottom; }
 /* 可聚焦的节点标签：给 hover 态与 focus 环（用户口径：对话里的标签也要能点开聚焦） */
 .ac-sent-tag.is-clickable { cursor: pointer; transition: background 0.14s ease; }
 .ac-sent-tag.is-clickable:hover { background: var(--ui-accent-soft, rgb(8 145 178 / 0.16)); }
 .ac-sent-tag.is-clickable:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-.ac-sent-tag-icon { display: grid; place-items: center; color: var(--ui-ink-dim, #919191); }
+.ac-sent-tag-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
 .ac-sent-tag-icon :deep(svg) { width: 13px; height: 13px; }
-.ac-sent-tag-label { font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
+.ac-sent-tag-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); }
+  /* 目标行 / 队列行是**单行 dense 布局**（min-height 36）：标签收小一点，别把行撑高 */
+  .ac-sent-tag.is-compact { height: 18px; padding: 0 5px; font-size: 11px; }
 /* 用户消息 hover 操作条（时间 · 复制 · 编辑）：右下角浮出，不占布局空间。
    位置参照参考图 2 —— 时间在消息气泡外右下角，按钮跟在旁边。 */
 .ac-msg { position: relative; }
@@ -2300,6 +2360,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* 名字可能非常长（技能 / MCP / 节点名都没有长度上限）：限宽收住，
+     否则一颗标签就能把整行撑出输入框（用户口径 2026-10-11）。
+     200px 的取法：一颗标签最多占输入框（约 364px）一半多点，
+     同一行还能并排放下第二颗；再宽就在窄面板里顶出去了。 */
+  max-width: 200px;
   height: 22px;
   padding: 0 6px 0 4px;
   margin: 0 2px;
@@ -2314,9 +2379,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
    我们的标签自带底色块，再叠一条下划线就成了"带线的胶囊"（实测参考图里没有线）。
    用 .resource-node 一起限定，靠更高的选择器权重压过后加载的库样式。 */
 .prose-mirror-editor .ac-tag.resource-node { border-bottom: 0; padding: 0 6px 0 4px; height: 22px; }
-.prose-mirror-editor .ac-tag .ac-tag-icon { display: grid; place-items: center; color: var(--ui-ink-dim, #919191); }
+.prose-mirror-editor .ac-tag .ac-tag-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
 .prose-mirror-editor .ac-tag .ac-tag-icon svg { width: 13px; height: 13px; }
-.prose-mirror-editor .ac-tag .ac-tag-label { font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
+/* 图标固定、名字让位：`min-width: 0` 不能省 —— flex 子项的默认 min-width 是「内容宽」，
+   只写 max-width 的话它会把标签顶回去，省略号永远不出现。 */
+.prose-mirror-editor .ac-tag .ac-tag-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); }
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag,
 .prose-mirror-editor .ac-tag.resource-node-selected { background: var(--ui-accent, #0891b2); }
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-label,
@@ -2329,8 +2396,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .mention-menu .ac-mrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mention-menu .ac-mrow-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 6px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
 .mention-menu .ac-mrow-icon svg { width: 14px; height: 14px; }
-.mention-menu .ac-mrow-text { display: flex; flex-direction: column; min-width: 0; }
-.mention-menu .ac-mrow-name { font-size: 13px; line-height: 18px; color: var(--ui-ink, #f7f7f7); }
+.mention-menu .ac-mrow-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+/* 名字超长时单行省略：不省略的话行会被名字撑宽（浮层跟着变长），
+   而在窄屏上触发翻边后名字又会把描述行挤没（用户口径 2026-10-11）。 */
+.mention-menu .ac-mrow-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--ui-ink, #f7f7f7); }
 /* 描述行：默认高度收起（0），hover/active 展开 —— 行高跟着**平滑过渡**，不是啪一下跳出来。
    为什么不用 display:none：display 不参与过渡（none ↔ block 之间没有中间态），
    展开只能是一瞬间的跳变（用户实测报的：「高度变化很突兀」）。
