@@ -68,7 +68,9 @@ describe('6 个基础交互插件 = 自带件', () => {
   it('反向：冷启动清单里不该混进仍声明 installable 的插件（否则同一插件两个身份）', () => {
     // 判据：清单里每个插件只要能在插件目录里找到同名包，那它就必须**不是** installable。
     // 覆盖的是"清单里加了、包声明忘了从 installable 改成 builtin"这种反向漂移。
-    const byPluginName = new Map(
+    // 显式标成 Map<string, string>：不写的话键会被推断成 BUILTIN_INTERACTIVE 那些字面量的联合，
+    // 后面用清单里的任意字符串去 get，tsc 就会拦（拦得住，但不该拦在这）。
+    const byPluginName = new Map<string, string>(
       Object.entries(BUILTIN_INTERACTIVE).map(([dir, name]) => [name, dir]),
     )
     for (const plugin of APP_PLUGINS) {

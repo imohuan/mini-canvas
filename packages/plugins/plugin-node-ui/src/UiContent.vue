@@ -28,7 +28,8 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { buildSrcdoc, normalizeInputs, normalizeUpstream, type UpstreamItem } from './uiData'
+import { buildPalette, buildSrcdoc, normalizeInputs, normalizeUpstream, type PaletteToken, type UpstreamItem } from './uiData'
+import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues, resolveInputValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
 import { fetchBackendOrigin } from './uiOrigin'
@@ -83,10 +84,60 @@ const inputs = computed(() => normalizeInputs(props.data?.uiInputs))
 const manual = computed(() => normalizeManualValues(props.data?.uiValues))
 
 /**
- * 上游素材。底栏把「连进来什么」算好后放进节点 data（`uiUpstream`）——
- * 本组件只是**读**它，不去碰边、也不认识节点类型。
+ * 上游素材：**从连线上现算**。
+ *
+ * ## 为什么不读节点 data 里那份（踩过的坑）
+ *
+ * 原来只读 `data.uiUpstream` —— 那是「前端自己调模型生成」那条路写进去的。可 Agent 是经
+ * **MCP** 写的，它只写 uiHtml，不会顺手写素材；于是节点上真连着图/视频，页面里
+ * `window.__CANVAS_UPSTREAM__` 却是 `[]`（2026-10-12 实测）。
+ * 现在两边都认：data 里有就用它（那是生成当时的快照），否则**现算**——只要边在，素材就在。
  */
-const upstream = computed<UpstreamItem[]>(() => normalizeUpstream(props.data?.uiUpstream))
+const NODE_KIND_FIELDS: Array<[string, string]> = [
+  ['imageUrl', 'image'],
+  ['videoUrl', 'video'],
+  ['audioUrl', 'audio'],
+  ['panoUrl', 'image'],
+]
+
+const upstream = computed<UpstreamItem[]>(() => {
+  const stored = normalizeUpstream(props.data?.uiUpstream)
+  if (stored.length > 0) return stored
+  // 真实 doc 的节点一定带 id（要拿它标出这条素材来自哪个节点），
+  // 所以这里把 id 也声明上；类型写窄了会在用 n.id 时被 tsc 拦住。
+  const doc = ctx.tryGet<{
+    getNode(id: string): { id?: string; type?: string; data?: Record<string, unknown> } | undefined
+    getEdges(): Array<{ source: string; target: string }>
+  }>('doc')
+  if (!doc) return []
+  const raw: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+  for (const e of doc.getEdges()) {
+    if (e.target !== props.id || seen.has(e.source)) continue
+    const n = doc.getNode(e.source)
+    if (!n) continue
+    seen.add(e.source)
+    const d = (n.data ?? {}) as Record<string, unknown>
+    const hit = NODE_KIND_FIELDS.find(([f]) => typeof d[f] === 'string' && d[f])
+    const url = hit ? (d[hit[0]] as string) : undefined
+    const text = typeof d.text === 'string' ? d.text : undefined
+    // 既没地址也没文字 = 空素材（例如还没生成的图片节点），别塞给生成物当噪音
+    if (!url && !text) continue
+    raw.push({
+      id: n.id,
+      kind: hit ? hit[1] : (n.type ?? 'other'),
+      ...(typeof d.label === 'string' ? { name: d.label } : {}),
+      ...(url ? { url } : {}),
+      ...(text ? { value: text } : {}),
+    })
+  }
+  return normalizeUpstream(raw)
+})
+
+/** 画布主题色板（亮/暗两套）——只提供，用不用由生成的界面自己决定 */
+const palette = computed(() =>
+  buildPalette(THEME_COLOR_TOKENS as readonly PaletteToken[], ctx.tryGet('settings') as { get(k: string): unknown } | undefined),
+)
 
 /** 注入给生成页面的数据 */
 const inputValues = computed(() => resolveInputValues(inputs.value, upstream.value, manual.value))
@@ -116,6 +167,7 @@ const srcdoc = computed(() => {
     // 允许联网 = 生成的界面可以调画布接口（这个节点的价值所在）。
     // 关掉它就是「纯展示」，连不上任何地方 —— 见 uiData.buildCsp 的说明。
     allowNetwork: pluginConfig.netEnabled,
+    palette: palette.value,
   })
 })
 

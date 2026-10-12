@@ -354,6 +354,82 @@ export function buildCsp(allow: readonly string[] = []): string {
   ].join('; ')
 }
 
+/**
+ * 一个色板 token 的登记项。
+ *
+ * 字段取名照抄 canvas-render 的 ThemeColorToken（真实来源），所以它**没有** name ——
+ * 语义名（accent / danger …）是从 cssVar 推出来的：--ui-accent-hover → accentHover。
+ */
+export interface PaletteToken {
+  /** settings 里的键基名（如 accentColor），亮/暗两格是 <key>Light / <key>Dark */
+  key: string
+  /** 消费方的 CSS 变量名（如 --ui-accent），语义名由它派生 */
+  cssVar: string
+  /** 一句话说明它用在哪 */
+  description: string
+  /** 亮色默认值 */
+  light: string
+  /** 暗色默认值 */
+  dark: string
+}
+
+/** --ui-accent-hover → accentHover（生成物里用的英文语义名） */
+export function paletteNameOf(cssVar: string): string {
+  const bare = cssVar.replace(/^--(ui-)?/, '')
+  return bare.replace(/-([a-z0-9])/g, (_m, c: string) => c.toUpperCase())
+}
+
+/**
+ * 把画布的主题色板读出来（亮 / 暗两套），交给生成物。
+ *
+ * 读法：每个 token 有两格 settings（<key>Light / <key>Dark），用户可能改过、也可能留空；
+ * 留空就回落到 token 表里的默认值。
+ *
+ * 含结构性颜色（背景 / 文字 / 边框）—— 用户口径是提供完善的配置。
+ * 注意：这里只**提供**，不强制 —— 生成的界面用不用由它自己决定。
+ */
+export function buildPalette(
+  tokens: readonly PaletteToken[],
+  settings?: { get(key: string): unknown },
+): UiPalette {
+  const light: Record<string, string> = {}
+  const dark: Record<string, string> = {}
+  const read = (key: string, fallback: string): string => {
+    const v = settings?.get(key)
+    return typeof v === 'string' && v.trim() ? v : fallback
+  }
+  for (const t of tokens) {
+    const name = paletteNameOf(t.cssVar)
+    light[name] = read(t.key + 'Light', t.light)
+    dark[name] = read(t.key + 'Dark', t.dark)
+  }
+  // 结构性颜色：不做成可配置项，但生成物需要它们才能跟画布一个调。
+  // 这几组值目视对齐 node-theme.css 的 --canvas-node-* 与 ui-theme.css 的灰阶；
+  // 改主题色板时这几行要跟着看一眼。
+  //
+  // 为什么写成字面量而不是 var()：它们要**跨过沙箱边界**送给生成物（沙箱是不透明源，
+  // 读不到宿主 html 上的 CSS 变量），所以只能是实际色值 —— 与 iframe 外壳样式同一个理由。
+  const structural = {
+    light: {
+      background: '#ffffff', // 主题色白名单: 跨沙箱边界送给生成物的色板，取不到宿主 CSS 变量
+      surface: '#f9fafb', // 主题色白名单: 同上
+      text: '#111827', // 主题色白名单: 同上
+      textMuted: '#6b7280', // 主题色白名单: 同上
+      textFaint: '#9ca3af', // 主题色白名单: 同上
+      border: '#e5e7eb', // 主题色白名单: 同上
+    },
+    dark: {
+      background: '#16181d', // 主题色白名单: 同上，暗色那一套
+      surface: '#1e2026', // 主题色白名单: 同上
+      text: '#f3f4f6', // 主题色白名单: 同上
+      textMuted: '#9ca3af', // 主题色白名单: 同上
+      textFaint: '#6b7280', // 主题色白名单: 同上
+      border: '#2c2f36', // 主题色白名单: 同上
+    },
+  }
+  return { light: { ...structural.light, ...light }, dark: { ...structural.dark, ...dark } }
+}
+
 /** 注入给生成页面的全局变量名（写在提示词里那份契约的落实处，改这里就要一起改提示词） */
 export const INPUTS_GLOBAL = '__CANVAS_INPUTS__'
 export const UPSTREAM_GLOBAL = '__CANVAS_UPSTREAM__'
@@ -367,6 +443,20 @@ const SHELL_STYLE = [
   "html[data-theme='dark'] body { color: #d1d5db; background: transparent; }", // 主题色白名单: 同上，暗色那一套
   '* { box-sizing: border-box; }',
 ].join('\n')
+
+/**
+ * 当前画布的**主题色板**（亮 / 暗两套值都带上）。
+ *
+ * 为什么要给：生成物住在沙箱里，**读不到宿主 html 上的 CSS 变量**（不透明源 + 另一个文档），
+ * 所以「跟着画布配色」这件事只能由宿主把值送进去。
+ *
+ * 给了**不等于**必须用 —— 与用户口径一致：「你提供是一回事，AI 参不参考又是另外一回事」。
+ * 手册里写的是「想跟画布一致就用这些；想自己配色也行」。
+ */
+export interface UiPalette {
+  light: Record<string, string>
+  dark: Record<string, string>
+}
 
 /** 渲染 iframe 时的运行参数 */
 export interface SrcdocOptions {
@@ -382,6 +472,8 @@ export interface SrcdocOptions {
   allowNetwork?: boolean
   /** 允许额外的源（一般不用；留给将来别的后台） */
   extraOrigins?: readonly string[]
+  /** 画布主题色板（亮/暗两套）；缺省 = 不给（生成物自己配色） */
+  palette?: UiPalette
 }
 
 /**
@@ -432,6 +524,8 @@ export function buildSrcdoc(
     baseUrl: options.baseUrl ?? '',
     canvasId: options.canvasId ?? 'default',
     nodeId: options.nodeId ?? '',
+    // 画布主题色板（亮/暗两套）。给了不代表必须用 —— 手册里是「想跟画布一致就用这些」。
+    ...(options.palette ? { palette: options.palette } : {}),
   }
   const bootstrap =
     '<script>window[' + JSON.stringify(INPUTS_GLOBAL) + ']=' + serializeForScript(inputs) + ';' +

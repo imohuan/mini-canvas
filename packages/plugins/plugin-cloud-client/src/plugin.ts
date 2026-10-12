@@ -90,6 +90,10 @@ interface SettingsLike {
 interface ResourcesLike {
   /** 按资源引用重建当前可显示地址；资源已不在时返回 undefined */
   restore?(resourceId: string, kind: string): Promise<string | undefined>
+  /** 收字节进资源库，返回持久引用（写入器要把产物落进本画布用） */
+  put?(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>
+  /** 引用 → 当前可显示地址 */
+  resolve?(ref: string): Promise<string | undefined>
 }
 
 /**
@@ -338,13 +342,20 @@ const adapter = new CanvasDiffAdapter(api, CID)
   // 注意：registerApplier 对同一个 kind 重复注册会抛错，所以只补这两个。
   const nodeBarForApplier = ctx.tryGet<BarService>('nodeBar')
   if (nodeBarForApplier) {
+    // 产物地址要先落进**本画布资源目录**再写节点（用户口径：统统转成自己的 URL）。
+    // resources 是可选服务：拿不到就按原样写地址（保住产物是底线）。
+    const writeDeps = {
+      resources: ctx.tryGet<ResourcesLike>('resources') as
+        | { put(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>; resolve(ref: string): Promise<string | undefined> }
+        | undefined,
+    }
     for (const [kind, write] of [
       ['video', writeVideoResult],
       ['audio', writeAudioResult],
     ] as const) {
       try {
         nodeBarForApplier.registerApplier(ctx, kind, (nodeId: string, result: { urls?: string[]; text?: string }) =>
-          write(doc, nodeId, result),
+          write(doc, nodeId, result, writeDeps),
         )
       } catch {
         // 已经有人注册（老路径）：不重复注册、也不报错

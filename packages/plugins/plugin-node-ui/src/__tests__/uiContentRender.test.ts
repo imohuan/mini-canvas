@@ -18,12 +18,12 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canva
 import UiContent from '../UiContent.vue'
 
 /** 最小渲染上下文：UiContent 要用 ctx.tryGet('doc'/'settings'/'selection') */
-function renderCtx(): CanvasRenderContext {
+function renderCtx(doc?: Record<string, unknown>): CanvasRenderContext {
   return {
     ctx: {
       tryGet: (name: string) =>
         name === 'doc'
-          ? { getNode: () => undefined }
+          ? { getNode: () => undefined, getEdges: () => [], ...(doc ?? {}) }
           : name === 'settings'
             ? { get: () => undefined }
             : undefined,
@@ -32,12 +32,12 @@ function renderCtx(): CanvasRenderContext {
   } as unknown as CanvasRenderContext
 }
 
-function render(data: Record<string, unknown>): Promise<string> {
+function render(data: Record<string, unknown>, doc?: Record<string, unknown>): Promise<string> {
   const app = createSSRApp({
     render: () =>
       h(UiContent as Component, { id: '7', data }),
   })
-  app.provide(RENDER_CONTEXT_KEY, renderCtx())
+  app.provide(RENDER_CONTEXT_KEY, renderCtx(doc))
   return renderToString(app)
 }
 
@@ -81,6 +81,49 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     })
     expect(html).toContain('__CANVAS_UPSTREAM__')
     expect(html).toContain('__CANVAS_UI__')
+  })
+
+  it('上游素材：data 里没有时**从连线现算**（Agent 经 MCP 写入那条路不写 uiUpstream）', async () => {
+    const doc = {
+      // 真实 doc 里的节点**一定带 id**（现算上游时要靠它标出"这条素材来自哪个节点"）
+      getNode: (id: string) =>
+        id === 'img1'
+          ? { id, type: 'image', data: { label: '封面', imageUrl: '/api/a.png' } }
+          : id === 'txt1'
+            ? { id, type: 'text', data: { text: '一段说明' } }
+            : undefined,
+      getEdges: () => [
+        { source: 'img1', target: '7' },
+        { source: 'txt1', target: '7' },
+      ],
+    }
+    const html = await render({ uiHtml: '<div>x</div>' }, doc)
+    // 两条素材都进了 __CANVAS_UPSTREAM__（HTML 属性里被转义，所以按裸片段断言）
+    expect(html).toContain('封面')
+    expect(html).toContain('/api/a.png')
+    expect(html).toContain('一段说明')
+    // 且带上了各自节点的 id（要改那条上游时用）
+    expect(html).toContain('img1')
+  })
+
+  it('上游素材：空的连（例如还没生成的图片节点）不进清单，不塞噪音', async () => {
+    const doc = {
+      getNode: () => ({ type: 'image', data: {} }),
+      getEdges: () => [{ source: 'empty', target: '7' }],
+    }
+    const html = await render({ uiHtml: '<div>x</div>' }, doc)
+    // 空的连不给内容（HTML 属性里引号被转义，按片段断言）
+    expect(html).toContain('__CANVAS_UPSTREAM__')
+    expect(html).not.toContain('empty')
+  })
+
+  it('注入色板：__CANVAS_UI__ 里带上 palette（亮/暗两套，给不给用由生成物决定）', async () => {
+    const html = await render({ uiHtml: '<div>x</div>' })
+    expect(html).toContain('palette')
+    expect(html).toContain('accent')
+    // 亮/暗两套都要有
+    expect(html).toContain('light')
+    expect(html).toContain('dark')
   })
 
   it('没内容时：显示空态、不画 iframe（空 iframe 是个吃事件的透明块）', async () => {

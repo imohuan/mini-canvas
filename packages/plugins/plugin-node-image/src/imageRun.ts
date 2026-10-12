@@ -23,11 +23,25 @@ export interface ImageRunDeps {
   /** 图片预览上限（配置 imageFitMaxWidth/imageFitMaxHeight）；不注入则回落 420×300 */
   fitLimits?(): ImageFitLimits
   /**
-   * 把一段内嵌字节（dataURL/blobURL）收进资源库，返回可写进节点的引用。
-   * 生成工具常直接回 dataURL；不注入或转换失败时返回 undefined ——
-   * 那就按原样写地址（保住图，不退化成 base64 是尽力而为，不是硬要求）。
+   * 把一个**还不属于本画布**的地址收进资源库，返回可写进节点的引用。
+   *
+   * 覆盖三种：内嵌字节（dataURL / blobURL）、**外部 http(s) 地址**、以及别的相对地址。
+   * 不注入或转换失败时返回 undefined —— 那就按原样写地址
+   *（保住图是底线：宁可留个外链，也不要让用户看到空白）。
    */
   persistImage?(url: string): Promise<{ url: string; resourceId: string } | undefined>
+}
+
+/**
+ * 这个地址**已经在本画布资源目录里**了吗（是的话不必再落一次）。
+ *
+ * 判据两条，对应两种后端：
+ *   · 云端：`/api/canvases/<画布>/resources/<哈希>`（相对地址）
+ *   · 本地：`res-<序号>` 这种资源引用
+ * 都不匹配 = 还没落地（外链 / dataURL / blobURL），交给 persistImage 去收。
+ */
+export function isLocalResourceUrl(url: string): boolean {
+  return /^\/api\/canvases\/[^/]+\/resources\//.test(url) || /^res-/.test(url)
 }
 
 /**
@@ -40,11 +54,21 @@ export interface ImageRunDeps {
  * 尺寸量不到就一并清空（宁可状态栏不显示，也不显示错的）。
  */
 export async function writeGeneratedImage(nodeId: string, url: string, deps: ImageRunDeps, resourceId?: string): Promise<void> {
-  // 内嵌字节（data:/blob:）先收进资源库：节点里只留引用，别再让 base64 进画布 JSON
+  // 把「还不属于本画布」的地址统一收进资源库，节点里只留本画布地址。
+  //
+  // 覆盖三类（2026-10-12 用户实测报的问题）：
+  //   · dataURL / blobURL —— 别让 base64 进画布 JSON；
+  //   · **外部 http(s) 地址** —— 生成产物常先以 provider 的外链形式回来
+  //     （如 http://localhost:8033/...），那是另一个服务的地址，换机器/换端口就取不到；
+  //   · 别的相对地址。
+  //
+  // 之前这里只认 data:/blob:，于是**外链被原样写进节点**：换台机器打不开，
+  // 而且会把后台刚落地好的本画布地址盖掉（后台的 taskManager 是下了字节的）。
   let finalUrl = url
   let finalResourceId = resourceId
-  if (!finalResourceId && /^(data:|blob:)/i.test(url) && deps.persistImage) {
-    const persisted = await deps.persistImage(url)
+  const needsLocalize = !finalResourceId && !!deps.persistImage && !isLocalResourceUrl(url)
+  if (needsLocalize) {
+    const persisted = await deps.persistImage!(url)
     if (persisted) {
       finalUrl = persisted.url
       finalResourceId = persisted.resourceId

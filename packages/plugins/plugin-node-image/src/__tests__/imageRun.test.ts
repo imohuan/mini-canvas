@@ -64,3 +64,61 @@ describe('writeGeneratedImage：单独写回的规矩', () => {
     expect(order).toEqual(['measure', 'write'])
   })
 })
+
+describe('产物地址本地化：不该把外链留在画布上（2026-10-12 用户实测）', () => {
+  it('外部 http 地址 → 先落地，写进节点的是本画布地址', async () => {
+    const seen: string[] = []
+    const deps = fakeDeps({
+      persistImage: async (url) => {
+        seen.push(url)
+        return { url: '/api/canvases/default/resources/abc123.jpeg', resourceId: 'res-abc' }
+      },
+    })
+    await writeGeneratedImage('n1', 'http://localhost:8033/api/resources/images/doubao/x.jpeg', deps)
+    // 外链被收进去了
+    expect(seen).toEqual(['http://localhost:8033/api/resources/images/doubao/x.jpeg'])
+    // 节点上写的是本画布地址（换机器也打得开）
+    expect(deps.writes[0]!.data.imageUrl).toBe('/api/canvases/default/resources/abc123.jpeg')
+    expect(deps.writes[0]!.data.resourceId).toBe('res-abc')
+  })
+
+  it('**已经是本画布地址** → 不再重复落地（否则每写一次就多存一份字节）', async () => {
+    let called = 0
+    const deps = fakeDeps({ persistImage: async () => { called++; return undefined } })
+    await writeGeneratedImage('n1', '/api/canvases/default/resources/exists.jpeg', deps)
+    expect(called).toBe(0)
+    expect(deps.writes[0]!.data.imageUrl).toBe('/api/canvases/default/resources/exists.jpeg')
+  })
+
+  it('本地资源引用（res-…）同样不重复落地', async () => {
+    let called = 0
+    const deps = fakeDeps({ persistImage: async () => { called++; return undefined } })
+    await writeGeneratedImage('n1', 'res-7', deps)
+    expect(called).toBe(0)
+  })
+
+  it('落地失败 → 回落到原地址（保住图是底线，不给用户看空白）', async () => {
+    const deps = fakeDeps({ persistImage: async () => undefined })
+    await writeGeneratedImage('n1', 'http://localhost:8033/x.jpeg', deps)
+    expect(deps.writes[0]!.data.imageUrl).toBe('http://localhost:8033/x.jpeg')
+  })
+
+  it('没注入 persistImage（不含资源服务的宿主）→ 原样写，不炸', async () => {
+    const deps = fakeDeps()
+    await writeGeneratedImage('n1', 'http://localhost:8033/x.jpeg', deps)
+    expect(deps.writes[0]!.data.imageUrl).toBe('http://localhost:8033/x.jpeg')
+  })
+
+  it('dataURL 仍然要落地（别让 base64 进画布 JSON）', async () => {
+    const seen: string[] = []
+    const deps = fakeDeps({
+      persistImage: async (url) => {
+        seen.push(url)
+        return { url: '/api/canvases/default/resources/d.png', resourceId: 'res-d' }
+      },
+    })
+    await writeGeneratedImage('n1', 'data:image/png;base64,AAA', deps)
+    expect(seen).toHaveLength(1)
+    expect(deps.writes[0]!.data.imageUrl).toBe('/api/canvases/default/resources/d.png')
+  })
+})
