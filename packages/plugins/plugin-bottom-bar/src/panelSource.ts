@@ -55,22 +55,17 @@ function nonEmptyString(v: unknown): string {
  * @param edges    画布的边（至少含 source/target）
  * @param targetId 本节点 id
  * @param getNode  按 id 取上游节点（渲染层用 renderNodes 查表）
+ * @param refOrder 用户拖出来的素材顺序（节点 id 序列，可选）。见 resolveMaterialOrder。
  */
 export function collectUpstreamMaterials(
   edges: ReadonlyArray<{ source: string; target: string }>,
   targetId: string,
   getNode: (nodeId: string) => UpstreamNodeLike | undefined,
+  refOrder?: readonly string[],
 ): UpstreamMaterial[] {
   const out: UpstreamMaterial[] = []
   // 同一个上游节点可能有多条边连过来（重复连），只算一次：素材行不该出现两张一样的卡片
   const seen = new Set<string>()
-  // 按类型各自编号（图片1 / 图片2 / 视频1 …）—— 用户要的就是这种引用名
-  const seq: Record<string, number> = { image: 0, video: 0, audio: 0, text: 0 }
-  const CN: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
-  const nextRef = (kind: ToolResourceKind): string => {
-    seq[kind] = (seq[kind] ?? 0) + 1
-    return (CN[kind] ?? '素材') + seq[kind]
-  }
 
   for (const edge of edges) {
     if (edge.target !== targetId) continue
@@ -88,7 +83,9 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'image',
         name: label || nonEmptyString(data.imageName) || '图片素材',
-        refName: nextRef('image'),
+        // refName 由 numberRefNames 在**排完序之后**统一分配（角标/@ 名/纯文本 token 三处
+        // 必须与最终顺序一致，否则「图片2」会指到另一张图）
+        refName: '',
         url: imageUrl,
       })
       continue
@@ -101,7 +98,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'video',
         name: label || nonEmptyString(data.videoName) || '视频',
-        refName: nextRef('video'),
+        refName: '',
         url: videoUrl,
       })
       continue
@@ -115,7 +112,7 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'audio',
         name: label || nonEmptyString(data.audioName) || '音频',
-        refName: nextRef('audio'),
+        refName: '',
         url: audioUrl,
       })
       continue
@@ -128,12 +125,91 @@ export function collectUpstreamMaterials(
         id: edge.source,
         kind: 'text',
         name: label || '文本',
-        refName: nextRef('text'),
+        refName: '',
         value: typeof data.text === 'string' ? data.text : '',
       })
     }
   }
-  return out
+
+  // 顺序 + 引用名：两件事必须一起做（引用名是按**最终顺序**编的）
+  return numberRefNames(resolveMaterialOrder(out, refOrder))
+}
+
+/**
+ * 把「连线顺序」按用户拖出来的顺序重排。
+ *
+ * 用户口径（2026-10-12）：「参考图的顺序是如何决定的？好像是根据连接的先后顺序来做的。
+ * 我希望这个顺序可以进行拖拽改变。」
+ *
+ * 三条规则（都是「不给顺序时行为一个字不变」为前提）：
+ * 1. 没给顺序 / 空顺序 → 原样返回（= 连线先后，老画布与从没拖过的节点都走这条）；
+ * 2. 顺序里列到的排前面，按顺序里的位置；
+ * 3. 顺序里没列到的（用户拖完之后新连进来的）垫在最后，**它们之间仍保持连线先后** ——
+ *    新素材只会追加到末尾，不会插到中间乱跳。
+ * 死 id（那条边已经被断开）与重复 id 自动忽略（重复只认第一次）。
+ */
+export function resolveMaterialOrder<T extends { id: string }>(
+  materials: ReadonlyArray<T>,
+  refOrder?: readonly string[],
+): T[] {
+  const list = [...materials]
+  if (!refOrder || refOrder.length === 0) return list
+
+  const rank = new Map<string, number>()
+  for (let i = 0; i < refOrder.length; i++) {
+    const id = refOrder[i]
+    // 重复 id 只认第一次；空串不当 id（脏数据防御）
+    if (typeof id === 'string' && id !== '' && !rank.has(id)) rank.set(id, i)
+  }
+  if (rank.size === 0) return list
+
+  // 稳定排序：有名次的按名次，没名次的一律排到有名次的后面（相同名次/无名次时保持原序）
+  const fallback = rank.size
+  return list
+    .map((item, index) => ({ item, index }))
+    .sort((x, y) => {
+      const rx = rank.get(x.item.id) ?? fallback
+      const ry = rank.get(y.item.id) ?? fallback
+      return rx - ry || x.index - y.index
+    })
+    .map((e) => e.item)
+}
+
+/**
+ * 按**最终顺序**重编引用名：同类型各自从 1 开始（图片1 / 图片2 / 视频1 …）。
+ *
+ * 为什么必须在排完序之后才编：素材卡左下角的序号角标、@ 下拉/卡片上的名字、
+ * 以及纯文本里序列化出来的 token，三处看到的都是这个 refName —— 顺序换了编号不换，
+ * 用户写的「图片2」就会指到另一张图。
+ */
+export function numberRefNames(materials: ReadonlyArray<UpstreamMaterial>): UpstreamMaterial[] {
+  const seq: Record<string, number> = { image: 0, video: 0, audio: 0, text: 0 }
+  const CN: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
+  return materials.map((m) => {
+    seq[m.kind] = (seq[m.kind] ?? 0) + 1
+    return { ...m, refName: (CN[m.kind] ?? '素材') + seq[m.kind] }
+  })
+}
+
+/**
+ * 拖拽结束后该把什么写进 `data.refOrder`（纯函数；写盘与否、怎么写盘由调用方决定）。
+ *
+ * 收下拖拽库回调给的新顺序 `dragged`（**排好的那份**），不自己去读「从 data 派生的 computed」——
+ * 后者在这一帧还没回灌，读到的是旧顺序（实测：拖了不动、也不存盘）。
+ * 拿不到合法数组时（库版本差异 / 异常 / 长度对不上）退回 `current`，至少不写坏。
+ *
+ * @returns 需要落盘的新顺序；**没有变化 / 空** → null（调用方据此跳过写盘，不进撤销栈）
+ */
+export function nextRefOrder<T extends { id: string }>(
+  current: readonly string[],
+  currentCards: ReadonlyArray<T>,
+  dragged?: ReadonlyArray<T>,
+): string[] | null {
+  const list = Array.isArray(dragged) && dragged.length === currentCards.length ? dragged : currentCards
+  const ids = list.map((c) => c.id)
+  if (ids.length === 0) return null
+  if (ids.length === current.length && ids.every((id, i) => id === current[i])) return null
+  return ids
 }
 
 /** 素材 → 生成请求里的资源（只带工具需要的字段，避免把 UI 用的东西塞进请求） */
@@ -278,6 +354,31 @@ export function materialCards(materials: ReadonlyArray<UpstreamMaterial>): Mater
     value: m.value,
     isText: m.kind === 'text',
   }))
+}
+
+/**
+ * 点开一张素材卡时要交给全屏预览（MediaViewer）的 `list` / `index`。
+ *
+ * 用户口径（2026-10-12）：「我有多个图片，需要按左右快捷键进行切换。我这个组件本身是支持的
+ * （useUiComponent("mediaViewer")）」—— MediaViewer 本来就认 `list` + `index`（← / → 键、
+ * 左右按钮、页码，取模循环），此前底栏只传了单张，所以切不了。
+ *
+ * 只收**同一类、有地址**的卡：文本卡没有地址，混进 list 会切出一页空白。
+ * 结果不足两张时返回 null —— 单张不必出翻页按钮与页码。
+ */
+export function previewListFor(
+  cards: ReadonlyArray<MaterialCard>,
+  card: MaterialCard,
+): { list: string[]; index: number; ids: string[]; names: string[] } | null {
+  const same = cards.filter((c) => !c.isText && c.kind === card.kind && !!c.url)
+  const list = same.map((c) => c.url as string)
+  if (list.length < 2) return null
+  return {
+    list,
+    index: Math.max(list.indexOf(card.url ?? ''), 0),
+    ids: same.map((c) => c.id),
+    names: same.map((c) => c.name),
+  }
 }
 
 /** 文本素材在 @ 引用里的图标（插入后显示的小图标） */

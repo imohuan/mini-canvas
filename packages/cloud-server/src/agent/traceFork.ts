@@ -148,6 +148,19 @@ export async function seedForkTrace(root: string, seed: ForkTraceSeed): Promise<
   let meta: MetaPayload
   if (parent) {
     meta = { ...parent, session_id: seed.forkSessionId }
+    /**
+     * 种子里给了模型引用就用它**覆盖**父 meta 的 provider / model_id。
+     *
+     * 为什么必须有这一步（code review 2026-10-11 抓到的 P1）：切换模型也走这条种子路，
+     * 而切模型的前提恰恰是「模型要换」。父 meta 里钉的是**旧模型** —— 不覆盖的话，
+     * 宿主记录、界面分段、模型下拉都显示新模型，SDK resume 出来的会话却仍向旧模型发请求，
+     * 用户眼里就是「切了没效果」。
+     *
+     * 为什么对 fork（编辑重发）无害：fork 路由传的就是父记录的 provider/modelId，
+     * 与父 meta 相同 —— 覆盖等于 no-op，语义不变。
+     */
+    if (seed.provider) meta.provider = seed.provider
+    if (seed.modelId) meta.model_id = seed.modelId
   } else {
     seed.log?.('parent trace missing; seed minimal meta', { parent: seed.parentSessionId, fork: seed.forkSessionId })
     meta = {

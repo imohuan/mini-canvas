@@ -7,7 +7,7 @@
     "title": "文件拖入",
     "description": "把图片/视频/文本拖到画布或粘贴进来即建节点",
     "pluginName": "file-drop",
-    "installable": true
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

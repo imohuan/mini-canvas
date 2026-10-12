@@ -679,7 +679,7 @@ watch(() => s.shortcutsOpen, async (open) => {
         <X :size="15" />
       </AxButton>
     </div>
-    <div class="mx-4 mb-3 rounded-lg bg-veil px-3 py-2 text-xs text-gold">非会员每天免费对话 3 轮，即刻体验！</div>
+    <!-- <div class="mx-4 mb-3 rounded-lg bg-veil px-3 py-2 text-xs text-gold">非会员每天免费对话 3 轮，即刻体验！</div> -->
     <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-2">
       <div class="mb-4 rounded-xl border border-line p-3">
         <div class="flex items-center justify-between gap-3 py-2">
@@ -714,7 +714,7 @@ watch(() => s.shortcutsOpen, async (open) => {
             class="h-8 w-28 rounded-lg border border-line bg-veil px-2 text-xs text-ink outline-none"
             aria-label="目标默认预算" @change="agentBudgetOnChange" />
         </div>
-        <div class="flex items-center justify-between gap-3 py-2">
+        <!-- <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">积分预算管理</strong>
             <p class="text-xs text-ink-dim">开启后，当本项目累计消耗积分达到设置阈值时，会提醒你留意用量</p>
           </div>
@@ -723,7 +723,7 @@ watch(() => s.shortcutsOpen, async (open) => {
             :class="{ 'after:translate-x-4 bg-brand': s.director.budget }" role="switch"
             :aria-checked="s.director.budget" aria-label="积分预算管理"
             @click="s.director.budget = !s.director.budget"></button>
-        </div>
+        </div> -->
         <div v-if="s.director.budget" class="flex items-center justify-between gap-3 border-t border-line pt-2">
           <span class="text-xs text-ink-dim">提醒阈值设置</span>
           <input v-model.number="s.director.budgetLimit" type="number" min="100" step="100"

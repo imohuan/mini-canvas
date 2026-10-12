@@ -7,6 +7,10 @@
  * 这条分档由 paramKind.ts 的 resolvePresetKind 纯函数决定，可单测。
  *
  * 视觉沿用本包设置界面的滑块（PrecisionSlider），只是把 label/值/单位排成一行。
+ *
+ * 配色**不用主题色**（用户口径 2026-10-12「这里其实不需要使用主题颜色，直接使用默认的黑白
+ * 两个主题就行，就和你的右键菜单一样」）：轨道灰、填充与圆球走主按钮那档深墨
+ * （黑白两套主题各有一格），与右键菜单「只用灰阶 + 黑/白」同一口径。
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
@@ -52,6 +56,14 @@ const numberValue = computed(() => {
   </section>
 </template>
 
+<style>
+/* 滑块的黑白配色（见组件头注释；用户口径 2026-10-12）。 */
+.tps-block {
+  --ps-accent: var(--ui-primary-bg, #1f2937);
+  --ps-accent-hover: var(--ui-primary-bg-hover, #111827);
+}
+</style>
+
 <style scoped>
 .tps-block {
   display: flex;
@@ -70,9 +82,10 @@ const numberValue = computed(() => {
   height: 20px;
   display: flex;
   align-items: center;
-  color: var(--ui-ink-mute, #8c95a3);
+  /* 标题按参考稿（font-bold text-gray-700）：比正文重、比正文深 */
+  color: var(--ui-ink, #18202b);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 20px;
 }
 .tps-value {

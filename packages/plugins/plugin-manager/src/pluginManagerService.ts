@@ -222,6 +222,33 @@ export function createPluginManagerService(
   function hostManager(): HostPluginManager | undefined {
     return ctx.tryGet<HostPluginManager>('pluginManager')
   }
+
+  /**
+   * 按清单声明的**产物形态**把插件装进内核，返回它的运行时名。
+   *
+   * 两条路（不可互换，故由清单的 format 显式决定，见 catalogTypes 的说明）：
+   * - 'esm'：交给宿主的统一安装句柄 manager.install({ url }) —— 内部是 fetch 文本 →
+   *   import(data:text/javascript)。适合零裸模块名 import 的自包含产物（如云端客户端）。
+   * - 'umd'（缺省，向后兼容）：<script> 注入 + 从 window 全局取插件对象。仓库里多数插件是这种。
+   *
+   * 两条路都在本函数里完成安装（而不是"取模块、由调用方再装"）——
+   * 因为 esm 那条**本身就是安装动作**，若再让调用方装一次会变成"装完立刻卸了重装"。
+   *
+   * @param opts.bust 是否加时间戳破浏览器缓存（重装用；首次装不必）
+   */
+  async function installEntryModule(
+    row: PluginRow,
+    env: { document: Document; win: Record<string, unknown> },
+    opts: { bust: boolean; manager: HostPluginManager },
+  ): Promise<string> {
+    const abs = absolutize(row.entry.url, baseOfCatalogUrl(state.catalogUrl))
+    const url = opts.bust ? bustCache(abs, Date.now()) : abs
+    if (row.entry.format === 'esm') {
+      return await opts.manager.install({ url })
+    }
+    const mod = (await createUmdLoader({ document: env.document, win: env.win })(url, row.entry.globalName)) as LoadedPluginModule as unknown as PluginModule
+    return await opts.manager.install(mod)
+  }
   /** 存储（可选探测）；用来记住「哪些装过」 */
   function save() {
     return ctx.tryGet<{ get<T>(k: string, t?: string): Promise<T | undefined>; set(k: string, v: unknown, t?: string): void }>('save')
@@ -275,12 +302,18 @@ export function createPluginManagerService(
    * state.intent 还是初始的 []；旧代码会把这个空数组写进云端 → refresh 随后读回 []（非 undefined）
    * 当成"用户选择不装" → 所有插件显示未装，且空名单已落盘，反复刷新也回不来。
    * 现在：没就绪就只触发一次 refresh，等它就绪后再对齐。
+   *
+   * 另一条实测修正（装云端连接时）：新后端里那份**可能是我们自己刚写的**（见 intentWrittenAt）。
+   * 那种情况不能回灌 —— 否则刚装上的插件会被旧名单立刻卸掉（点了安装没反应）。
    */
   async function reloadFromBackend(): Promise<void> {
     if (!state.ready) {
       await refresh()
       if (!state.ready) return // 拉清单失败：宁可不动，也不要用不确定的名单覆盖后端
     }
+    // 本服务在这次切换之前刚写过名单 → 新后端里承载的就是我们那份，不必（也不能）回灌。
+    // 只在"从没写过"（真正换台机器 / 首次上云）时才以新后端为准。
+    if (intentWrittenAt > 0) return
     const saved = await save()?.get<string[]>(INSTALLED_KEY, 'config')
     if (saved === undefined) {
       // 全新后端：把当前意图搬过去（不重装，现有状态已符合意图），别让后端的空抹掉已装插件。
@@ -357,7 +390,21 @@ export function createPluginManagerService(
   }
   function persistIntent(): void {
     save()?.set(INSTALLED_KEY, [...state.intent], 'config')
+    intentWrittenAt = Date.now()
   }
+
+  /**
+   * 本服务最近一次**写**安装名单的时刻。
+   *
+   * 为什么需要它（实测踩到的死循环）：点「安装云端连接」时，那个插件会把 config 域后端切到
+   * 云端；切完触发 reloadFromBackend → 用**云端里那份旧名单**回灌，而旧名单当然不含刚装的
+   * 云端连接自己 → 刚装上的插件又被卸掉，看起来就是"点了安装没反应、装了立刻消失"。
+   *
+   * 判据：切换后若**已经**有「用户/服务刚写的名单」（intentWrittenAt 晚于这次订阅建立），
+   * 说明后端里那份是我们自己的写入被承载过去的结果，不必回灌——回灌反而会把刚装上的抹掉。
+   * 反之（真正换台机器 / 首次上云）没写过，就照旧以新后端为准。
+   */
+  let intentWrittenAt = 0
 
   /** 意图里加/减一个 id（去重） */
   function setIntent(id: string, want: boolean): void {
@@ -516,10 +563,7 @@ export function createPluginManagerService(
       const m = hostManager()
       if (!m) throw new Error('宿主没有提供 pluginManager 服务（插件管理需要一个能装插件的宿主）')
       if (!doc || typeof doc.createElement !== 'function') throw new Error('当前环境没有 document，无法用 <script> 加载插件')
-      const abs = absolutize(row.entry.url, baseOfCatalogUrl(state.catalogUrl))
-      const mod = (await createUmdLoader({ document: doc, win })(abs, row.entry.globalName)) as LoadedPluginModule as unknown as PluginModule
-      row.realName = mod.name
-      await m.install(mod)
+      row.realName = await installEntryModule(row, { document: doc, win }, { bust: false, manager: m })
       row.installed = true
       // 前端装上了 → 顺带装后台那一半（成对安装；后台失败不影响前端已装成的事实）
       // 除非调用方说明后台半已由别处处理（NPM 安装那条路）。
@@ -586,11 +630,7 @@ export function createPluginManagerService(
     try {
       // 先卸（若在装；尽力而为，本来就没装也不影响）；再用带时间戳的地址重拉（破浏览器缓存 → 拿到改过的产物）
       tryUninstall(row)
-      const abs = absolutize(row.entry.url, baseOfCatalogUrl(state.catalogUrl))
-      const loader = createUmdLoader({ document: doc, win })
-      const mod = (await loader(bustCache(abs, Date.now()), row.entry.globalName)) as LoadedPluginModule as unknown as PluginModule
-      row.realName = mod.name
-      await m.install(mod)
+      row.realName = await installEntryModule(row, { document: doc, win }, { bust: true, manager: m })
       row.installed = true
       // 重装也顺带重装后台那一半
       await installServerHalf(row)

@@ -35,6 +35,7 @@ import {
   spreadPositions,
   buildImagePayload,
   buildVideoPayload,
+  buildAudioPayload,
   buildTextPayload,
   buildPastedTextPayload,
   MAX_TEXT_LENGTH,
@@ -199,7 +200,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
   }
 
   /** 类型是否已注册（node-image / node-video / node-text 插件装配才 true；缺则跳过该类文件） */
-  private typeRegistered(type: 'image' | 'video' | 'text'): boolean {
+  private typeRegistered(type: 'image' | 'video' | 'audio' | 'text'): boolean {
     return this.doc.types.has(type)
   }
 
@@ -288,6 +289,17 @@ export class FileDropServiceImpl extends Service implements FileDropService {
           const resources = this.ctx.tryGet('resources')
           if (resources) {
             const resourceId = await resources.put(file, { kind: 'video', name: file.name })
+            payload.data.resourceId = resourceId
+          }
+          payloads.push(payload)
+        } else if (kind === 'audio' && this.typeRegistered('audio')) {
+          const url = this.readers.createObjectURL(file)
+          const payload = buildAudioPayload(file, url, positions[i])
+          // 与图片/视频同一条：字节进宿主资源库、节点写持久引用（刷新不丢、云端有文件）。
+          // 音频波形/时长由节点内容组件按 audioUrl 自己分析，这里不需要额外元数据。
+          const resources = this.ctx.tryGet('resources')
+          if (resources) {
+            const resourceId = await resources.put(file, { kind: 'audio', name: file.name })
             payload.data.resourceId = resourceId
           }
           payloads.push(payload)

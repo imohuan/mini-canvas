@@ -34,6 +34,16 @@ export interface PluginCatalogEntry {
   description?: string
   /** 浏览器可直接请求的地址（**相对本服务**，如 /plugins/<pkg>/<file>） */
   url: string
+  /**
+   * 产物形态 —— 决定面板用哪条路装它。
+   *
+   * - 'umd'（缺省）：external 掉 vue/内核、靠 window 全局取依赖，用 <script> 加载；
+   * - 'esm'：自包含 ES 模块（零裸模块名 import），交宿主 manager.install({ url }) 走 import 加载。
+   *
+   * 为什么必须显式区分：两条路不通用（UMD 走 import 会炸；ESM 走 <script> 取不到全局对象）。
+   * 缺省 'umd' 保持既有插件（全是 UMD）行为不变。
+   */
+  format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名（加载后从这里取插件对象） */
   globalName: string
   /** 该产物运行时需要哪些 window 全局（Vue / MiniCanvasCore / …）；缺了会加载失败 */
@@ -112,6 +122,64 @@ export function parseUmdGlobalName(text: string): string | undefined {
 }
 
 /**
+ * 只剥掉**注释**（等长空白替换，保留换行），字符串字面量原样保留。
+ *
+ * 为什么这里不能连字符串一起剥（踩过）：判断"有没有裸模块名 import"必须**看得到引号里的
+ * specifier**（如 from "vue"）。若把字符串也抹掉，所有 import 都会因为找不到引号而漏判 →
+ * 一份明明 import 'vue' 的产物会被误认成"自包含 ESM"，装到 data: URL 上直接炸。
+ */
+function stripComments(src: string): string {
+  let out = ''
+  let i = 0
+  const n = src.length
+  while (i < n) {
+    const c = src[i]
+    const next = src[i + 1]
+    if (c === '/' && next === '/') {
+      while (i < n && src[i] !== '\n') { out += ' '; i++ }
+      continue
+    }
+    if (c === '/' && next === '*') {
+      out += '  '
+      i += 2
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { out += src[i] === '\n' ? '\n' : ' '; i++ }
+      if (i < n) { out += '  '; i += 2 }
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
+}
+
+/**
+ * 是不是**自包含 ESM**（能安全交给 manager.install({ url }) 加载）。
+ *
+ * 两个条件都要：
+ * 1. 有顶层 export（否则不是模块）；
+ * 2. **没有任何裸模块名 import / export-from** —— 加载路是 fetch 文本 → import(data:text/javascript)，
+ *    裸模块名（'vue' / '@mini-canvas/...'）在 data: URL 里解析不了，会直接抛
+ *    "Failed to resolve module specifier"。相对路径（./x.js）与 data:/http(s): 地址是允许的
+ *    （那种产物不是单文件，走 data: 也会缺兄弟文件，故这里同样按"不安全"处理 —— 只放行真正的单文件自包含件）。
+ */
+export function isSelfContainedEsm(text: string): boolean {
+  const code = stripComments(text)
+  if (!/(^|[\n;{}(])\s*export\b/.test(code)) return false
+  // 动态 import('...') 也算裸模块名风险；静态 import 与 export ... from 一起扫
+  const BARE = /(?:^|[\n;{}(])\s*(?:import|export)\b[^;\n]*?from\s*['"]([^'"]+)['"]/g
+  const DYNAMIC = /\bimport\s*\(\s*['"]([^'"]+)['"]/g
+  for (const re of [BARE, DYNAMIC]) {
+    let m: RegExpExecArray | null
+    while ((m = re.exec(code))) {
+      const spec = m[1] ?? ''
+      // 相对 / 绝对 / 协议地址之外的一律算裸模块名
+      if (!/^(\.\/|\.\.\/|\/|data:|https?:|blob:)/.test(spec)) return false
+    }
+  }
+  return true
+}
+
+/**
  * 读产物运行时需要的 window 全局名。
  * 只认 UMD 头那段参数列表里的 e.Vue 形态（require 分支里是字符串 'vue'，不算）——
  * 锚定到全局名之后 800 字符内，避免正文里的字符串误命中。
@@ -158,6 +226,14 @@ interface PkgJson {
     serverPermissions?: string[]
     /** 是否自带（随应用冷启动、不可装卸）；见 PluginCatalogEntry.builtin */
     builtin?: boolean
+    /**
+     * web 产物信息（作者在 package.json 里显式声明，比让服务端猜更稳）。
+     * format 缺省时服务端按产物自己认（UMD 全局 / 自包含 ESM）。
+     */
+    web?: {
+      entry?: string
+      format?: 'umd' | 'esm'
+    }
     /**
      * 自带插件是否**配套一个后台半**（已在 cloud-server 内置跑着）。
      *
@@ -245,7 +321,8 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       continue
     }
 
-    // 可装卸插件：必须有**能被 script 直接加载的 UMD 产物**（否则列出来也装不上）。
+    // 可装卸插件：产物必须能被面板装进内核 —— UMD（script + 全局）或自包含 ESM（import）都行。
+    // 两条路必须**明确区分**（看下面的 format）：混着猜就会"列出来了却装不上"。
     const distDir = path.join(pkgDir, 'dist')
     let files: string[]
     try {
@@ -254,23 +331,48 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       skipped.push({ file: pkgName, reason: '没有 dist（先跑 pnpm -C packages/plugins/' + pkgName + ' build）' })
       continue
     }
-    const file = files.sort()[0]
-    if (!file) {
+    // 判形态：先看作者有没有在 package.json 里写明（miniCanvas.web.format），
+    // 没写就按产物自己认 —— UMD 有 MiniCanvasPlugin* 全局；否则看是不是**自包含 ESM**。
+    // 「自包含」= 有顶层 export 且**没有任何裸模块名 import**（ESM 走 manager.install({ url }) 时，
+    // fetch 文本 → import(data:text/javascript)，裸模块名在 data: URL 里解析不了）。
+    const candidates = files.sort()
+    if (!candidates.length) {
       skipped.push({ file: pkgName, reason: 'dist 里没有 .js' })
       continue
     }
-    let text: string
-    try {
-      text = await fs.readFile(path.join(distDir, file), 'utf8')
-    } catch (err) {
-      skipped.push({ file: pkgName, reason: '读产物失败：' + (err as Error).message })
+    let file = ''
+    let text = ''
+    let format: 'umd' | 'esm' | undefined
+    for (const candidate of candidates) {
+      let candidateText: string
+      try {
+        candidateText = await fs.readFile(path.join(distDir, candidate), 'utf8')
+      } catch {
+        continue
+      }
+      const declared = pkg.miniCanvas?.web?.format
+      const isEsm = declared === 'esm' || (declared === undefined && isSelfContainedEsm(candidateText))
+      if (isEsm) {
+        file = candidate
+        text = candidateText
+        format = 'esm'
+        break
+      }
+      if (parseUmdGlobalName(candidateText)) {
+        file = candidate
+        text = candidateText
+        format = 'umd'
+        break
+      }
+    }
+    if (!file || !format) {
+      skipped.push({
+        file: pkgName,
+        reason: '产物既不是可脚本加载的 UMD（无 MiniCanvasPlugin* 全局）、也不是自包含 ESM（有裸模块名 import 或没有顶层 export）',
+      })
       continue
     }
-    const globalName = parseUmdGlobalName(text)
-    if (!globalName) {
-      skipped.push({ file: pkgName, reason: '不是可脚本加载的 UMD 产物（没有 MiniCanvasPlugin* 全局）' })
-      continue
-    }
+    const globalName = format === 'umd' ? parseUmdGlobalName(text) : undefined
     // 后台产物：同一个包的 dist/server.js（有就是「前后端成对」的插件）。
     // 缺了不报错——很多插件只有前端。
     const serverFile = files.find((f) => f === 'server.js' || f === 'plugin-server.js')
@@ -298,9 +400,11 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       ...(pkg.miniCanvas?.description ? { description: pkg.miniCanvas.description } : {}),
       // 相对地址：与 ui 同源时直接能用；跨源时前端按清单地址的 origin 补全。
       url: '/plugins/' + pkgName + '/' + file,
-      globalName,
-      requiresGlobals: parseRequiresGlobals(text),
-      defaultInstalled: pkg.miniCanvas?.defaultInstalled ?? true,
+      format,
+      ...(globalName ? { globalName } : { globalName: '' }),
+      requiresGlobals: format === 'umd' ? parseRequiresGlobals(text) : [],
+      // 默认安装改为**显式 opt-in**（缺省 false）：用户要求面板首次一个都不自动装。
+      defaultInstalled: pkg.miniCanvas?.defaultInstalled === true,
       ...(server ? { server } : {}),
         ...(isNpmCopy ? { npmInstalled: true } : {}),
       ...(pkg.version ? { version: pkg.version } : {}),

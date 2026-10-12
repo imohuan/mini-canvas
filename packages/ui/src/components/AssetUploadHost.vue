@@ -6,10 +6,10 @@
  * 所以不是"静默传完就完事"，而是**把图预填进上传弹窗**（能改名 / 选文件夹 / 打标签），
  * 用户确认后才落库；与左侧「+ → 上传资产」同一个组件、同一条 API。
  *
- * 图从 assetUploadBus 来（节点右键 / 多选上控制栏 / 底栏「+ → 上传」三条入口都写那里）；
+ * 图从 assetUploadBus 来（节点右键 / 多选上控制栏两条入口都写那里）；
  * 保存时本地文件走 uploadAssetsTo、画布图走 uploadAssetsFromUrls。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import AssetUploadDialog from './AssetUploadDialog.vue'
 import { useUi } from '../composables/ui'
 import { drainUploads, onUploadRequested, type PendingUpload } from '../composables/assetUploadBus'
@@ -17,17 +17,10 @@ import { drainUploads, onUploadRequested, type PendingUpload } from '../composab
 const ui = useUi()
 /** 打开中的弹窗内容：null = 关闭 */
 const prefill = ref<PendingUpload[] | null>(null)
-/** 弹窗要预填的本地文件（底栏「上传」送来的那批；画布图那条通路不带 file） */
-const prefillFiles = computed(() => (prefill.value ?? []).map((p) => p.file).filter((f): f is File => Boolean(f)))
-/** 弹窗要预填的画布图（有 file 的项走本地文件通道，不再按地址重取一遍） */
-const prefillUrls = computed(() =>
-  (prefill.value ?? []).filter((p) => !p.file && p.url).map((p) => ({ url: p.url, name: p.name })),
-)
 
 /** 有人请求传图（节点右键 / 多选按钮）→ 取图并开弹窗 */
 function open(): void {
   const items = drainUploads()
-  if (!items.length) return
   // 「保存位置 / 设置标签」的数据在这里现拉：
   // 资产文件夹清单原先只在**打开左侧「资产」tab**时才拉（见 ui.ts），
   // 而这两个入口在抽屉关着时也能用 —— 不拉就出现"下拉里只有个人资产库、后台的文件夹全不见"
@@ -64,8 +57,7 @@ async function onSave(p: { files: File[]; folderId?: string; tags: string[]; url
     v-if="prefill"
     :folders="ui.flatFoldersForUpload.value"
     :tag-options="ui.assetTagOptions.value"
-    :prefill="prefillUrls"
-    :prefill-files="prefillFiles"
+    :prefill="prefill"
     @close="prefill = null"
     @save="onSave"
   />

@@ -13,8 +13,8 @@
  * 不放本文件，由 fileDropPlugin 里的 Service 在浏览器环境调用这些纯函数组装载荷。
  */
 
-/** 文件归类结果（v2 建 image / video / text 三类节点） */
-export type FileKind = 'image' | 'video' | 'text' | 'unsupported'
+/** 文件归类结果（v2 建 image / video / audio / text 四类节点） */
+export type FileKind = 'image' | 'video' | 'audio' | 'text' | 'unsupported'
 
 /** 判定只需的文件最小形状（File 的结构子集；测试可传假对象） */
 export interface FileLike {
@@ -31,7 +31,7 @@ export interface ImageDims {
 
 /** 一个待建节点的载荷（对齐 v2 AddNodeInput 的最小字段；id 由调用方生成） */
 export interface NodePayload {
-  type: 'image' | 'video' | 'text'
+  type: 'image' | 'video' | 'audio' | 'text'
   position: { x: number; y: number }
   data: Record<string, unknown>
   /** image/video 节点带声明尺寸（卡片贴近画面比例）；text 缺省走类型默认尺寸 */
@@ -53,19 +53,23 @@ const IMAGE_MIME = /^image\//
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
 const VIDEO_MIME = /^video\//
 const VIDEO_EXT = /\.(mp4|webm|ogg|mov|avi|mkv|wmv|m4v)$/i
+const AUDIO_MIME = /^audio\//
+const AUDIO_EXT = /\.(mp3|wav|m4a|aac|flac|ogg|oga|opus|weba|wma)$/i
 const TEXT_EXT = /\.(txt|md|markdown)$/i
 const TEXT_MIME = /^text\/(plain|markdown|x-markdown)$/
 
 /**
  * 判定一个文件该建什么节点。
  *
- * 判定顺序有讲究：**先看图片再看视频最后看文本**。
+ * 判定顺序有讲究：**先看图/视频，再音频，最后文本**。
  * `.svg` 这类文件在部分系统上会带 `text/xml` 之类的类型，若先判文本就会被误收成文本节点；
+ * `.ogg` 既可能装音频也可能装视频，先判视频再判音频，与节点类型判定同序；
  * 扩展名与 MIME **任一命中即算**（用户从某些程序拖出来的文件 type 是空串，只有名字可用）。
  */
 export function classifyFile(file: FileLike): FileKind {
   if (IMAGE_MIME.test(file.type) || IMAGE_EXT.test(file.name)) return 'image'
   if (VIDEO_MIME.test(file.type) || VIDEO_EXT.test(file.name)) return 'video'
+  if (AUDIO_MIME.test(file.type) || AUDIO_EXT.test(file.name)) return 'audio'
   if (TEXT_MIME.test(file.type) || TEXT_EXT.test(file.name)) return 'text'
   return 'unsupported'
 }
@@ -131,6 +135,23 @@ export function spreadPositions(
     x: Math.round(baseX + i * gap),
     y: Math.round(baseY + i * gap),
   }))
+}
+
+/**
+ * 音频节点载荷（url 为 objectURL）。
+ *
+ * 字段名与 plugin-node-audio 的 data 约定对齐（audioUrl / audioName / audioSize）——
+ * 与在音频节点里「上传音频」得到的是同一形状，波形分析与时长由节点内容组件自己算。
+ * 不给 size：音频卡片走类型默认尺寸（与在节点里上传音频一致）。
+ */
+export function buildAudioPayload(
+  file: FileLike,
+  url: string,
+  position: { x: number; y: number },
+): NodePayload {
+  const data: Record<string, unknown> = { audioUrl: url, audioName: file.name }
+  if (file.size !== undefined) data.audioSize = file.size
+  return { type: 'audio', position, data }
 }
 
 /** 图片节点载荷（url 为 objectURL；dims 缺省则用默认卡片尺寸） */

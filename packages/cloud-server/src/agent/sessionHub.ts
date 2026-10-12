@@ -96,10 +96,16 @@ export class SessionHub {
     return ch
   }
 
-  /** 追加一条事件：进缓冲（超限裁剪）+ 推给所有订阅者 */
-  append(canvasId: string, sessionId: string, ev: AgentChatEvent): void {
+  /**
+   * 追加一条事件：进缓冲（超限裁剪）+ 推给所有订阅者。
+   *
+   * 返回这条事件被分到的 seq：调用方若要**自己**再写一份到别的响应流上（如压缩路由），
+   * 必须带上同一个 seq —— 否则前端的按-seq 去重认不出"这两条是同一件事"，
+   * 界面上同一条事件会应用两遍（正文重复 / 状态翻转）。
+   */
+  append(canvasId: string, sessionId: string, ev: AgentChatEvent): number {
     // 会话已删：这条是「正在跑的那一轮」的收尾事件，丢掉即可（别把通道建回来）
-    if (this.tombstones.has(this.key(canvasId, sessionId))) return
+    if (this.tombstones.has(this.key(canvasId, sessionId))) return 0
     const ch = this.channel(canvasId, sessionId)
     const item: HubEvent = { seq: ch.nextSeq++, ev }
     ch.events.push(item)
@@ -118,6 +124,7 @@ export class SessionHub {
         ch.log?.('hub subscriber threw', { err: err instanceof Error ? err.message : String(err) })
       }
     }
+    return item.seq
   }
 
   /**

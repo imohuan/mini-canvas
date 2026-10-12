@@ -217,7 +217,15 @@ export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[],
   turns.forEach((t, i) => { if (t.kind === 'user') userIdx.push(i) })
   for (const p of pagers) {
     const k = p.userOrdinal
-    if (k < 0 || k >= userIdx.length) continue
+    /**
+     * k 越界不再一律丢弃（切模型分页消失的根因，2026-10-11）：
+     * 切模型的分叉点在**转录末尾** —— root 会话只有 1 条用户消息（userOrdinal=1），
+     * 旧判据 k >= userIdx.length 直接 continue，分页器整个消失（真机："返回后分页不见"）。
+     * k === userIdx.length 意为「分叉点在最后一条用户消息之后」＝切模型：
+     * 锚到最后一条 turn（对话末尾），分页器照样显示、可切回其它模型分支。
+     * k > userIdx.length 才是真越界（数据错位），丢弃。
+     */
+    if (k < 0 || k > userIdx.length) continue
     const end = k + 1 < userIdx.length ? userIdx[k + 1] - 1 : turns.length - 1
     const anchor = turns[end]?.id
     if (anchor) map.set(anchor, p)

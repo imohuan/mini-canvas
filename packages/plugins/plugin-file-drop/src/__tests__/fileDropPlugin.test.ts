@@ -17,6 +17,7 @@ function makeCtx() {
   nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 300, h: 200 } })
   nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 } })
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
+  nodeStore.registerType({ type: 'audio', label: '音频', defaultSize: { w: 320, h: 120 } })
   const edgeStore = new EdgeStore()
   const selection = new Selection()
   ctx.inject('selection', selection)
@@ -118,6 +119,23 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(node.data.videoHeight).toBe(720)
     // 1280×720 → 560×315（fitVideoSize）
     expect(node.size).toEqual({ w: 560, h: 315 })
+  })
+
+  it('addFiles 音频文件 → 建 audio 节点（字段与音频节点同形 + 字节进资源库写 resourceId）', async () => {
+    const { ctx, svc, nodeStore } = makeService({ createObjectURL: () => 'blob:aud' })
+    // 宿主资源服务（真实环境由 canvas-base 注入）：字节进库、节点只写持久引用
+    const put = async (): Promise<string> => 'res-audio-1'
+    ctx.inject('resources', { put } as never)
+    const count = await svc.addFiles([makeFile('song.mp3', 'audio/mpeg', 'x')], { x: 12, y: 34 })
+    expect(count).toBe(1)
+    const node = nodeStore.getNodes()[0]
+    expect(node.type).toBe('audio')
+    expect(node.position).toEqual({ x: 12, y: 34 })
+    expect(node.data.audioUrl).toBe('blob:aud')
+    expect(node.data.audioName).toBe('song.mp3')
+    expect(node.data.resourceId).toBe('res-audio-1')
+    // 音频卡片走类型默认尺寸（不在载荷里另写 size）
+    expect(node.size).toBeUndefined()
   })
 
   it('视频元数据读不出来 → 仍建节点，用默认卡片尺寸（不因读不到就丢弃用户拖进来的文件）', async () => {

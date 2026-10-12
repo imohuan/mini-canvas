@@ -148,6 +148,17 @@ export class ChatModel {
       tools: [],
       streaming: false,
     })
+    /**
+     * 开新助手占位前，先把**上一条**还没收尾的助手消息收掉。
+     *
+     * 为什么（真机实测 2026-10-12）：引导（steer）是在**一轮还在跑**的时候插队的 ——
+     * 那时上一条助手消息的 streaming 还是 true。这里再开一条 streaming 的新占位，
+     * 界面上就同时出现两个「正在思考」（用户截图报的重复加载）。
+     * 一轮只该有一个加载指示：新的一拍开始时，旧的必须关掉。
+     * 注意只关**加载指示**：正文与工具内容一个字都不动（它们还要继续显示）。
+     */
+    const prev = this.lastAssistant()
+    if (prev) prev.streaming = false
     this.turns.push({
       id: replyId,
       kind: 'assistant',
@@ -221,6 +232,10 @@ export class ChatModel {
     // （用户实测：回答显示在了 AI 那一侧的上一条里）。
     const tail = this.turns[this.turns.length - 1]
     if (!tail || tail.kind !== 'assistant') {
+      // 同理（真机 2026-10-12）：开新占位前收掉上一条的加载态 —— 队列在跑着的时候自动发下一条，
+      // 不收就会出现两个「正在思考」。
+      const prev = this.lastAssistant()
+      if (prev) prev.streaming = false
       this.turns.push({
         id: nextId(),
         kind: 'assistant',

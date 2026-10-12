@@ -119,6 +119,13 @@ export const DEFAULT_THEME_DEBUG = {
 export const DEFAULT_THEME_TITLE = {
   titleOffset: 12,
   titleScaleMinZoom: 0.5,
+  /**
+   * 是否显示节点标题条（节点上缘外那条浮标题）。
+   * 关掉 = 整块标题不画（标题文字、类型图标、标题右侧附加文本一起收起），
+   * 画面更干净（图片/视频这类"内容即全部"的节点常用）。
+   * 缺省 true：与历史行为逐字一致 —— 没碰过这个开关的用户看不出任何变化。
+   */
+  titleVisible: true,
 } as const;
 
 /**
@@ -296,6 +303,14 @@ export const Config: ConfigSchema = {
     ],
   },
   // —— 节点标题：BaseNode 卡片上缘外浮标题条的外观（位置偏移 + 缩放阈值；对齐 v1 core 同名项）——
+  titleVisible: {
+    type: "boolean",
+    default: DEFAULT_THEME_TITLE.titleVisible,
+    label: "显示节点标题",
+    group: "节点/标题",
+    description:
+      "关闭后所有节点都不画标题（标题文字、类型图标、标题右侧的尺寸等附加文本一起收起）。图片/视频这类\"内容即全部\"的节点常用。",
+  },
   titleOffset: {
     type: "number",
     default: DEFAULT_THEME_TITLE.titleOffset,

@@ -10,7 +10,7 @@
 import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
 import { SlotHost } from '@mini-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
-import { APP_PLUGINS, createDefaultStorageAdapter, seedDefaultCanvas } from './assembly'
+import { createDefaultStorageAdapter, resolveAppPlugins, seedDefaultCanvas } from './assembly'
 import CanvasShell from './components/CanvasShell.vue'
 import TopLeftArea from './components/areas/TopLeftArea.vue'
 import TopRightArea from './components/areas/TopRightArea.vue'
@@ -26,7 +26,8 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const ui = useUi()
 const s = ui.state
-const plugins = APP_PLUGINS
+// 装载清单 = 静态装配 + 按运行环境追加的自带件（cloud-server 托管时含云端连接，见 assembly）
+const plugins = resolveAppPlugins()
 
 // ===== 小地图跟随定位：每帧读状态栏「切换小地图」按钮的屏幕矩形，把地图贴在它正上方 =====
 // 为什么要逐帧（而不是监听事件）：抽屉开合走 transform 过渡（getBoundingClientRect 每帧都变），

@@ -10,6 +10,8 @@
   /* 节点正文文字色（文本节点内容区消费；对齐 v1 TextNode 的 text-gray-700） */
   --canvas-node-text-body: #374151;
   --canvas-node-text-strong: #111827;
+  /* 节点标题右侧附加文本（尺寸这类元信息）：比标题正文更弱一档，不跟节点名字抢注意力 */
+  --canvas-node-text-faint: #9ca3af;
   --canvas-node-border: #e5e7eb;
   --canvas-node-border-subtle: #e5e7eb;
   --canvas-node-border-hover: #d1d5db;

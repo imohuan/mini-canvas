@@ -9,10 +9,10 @@ const s = ui.state
 
 <template>
   <div class="flex items-center gap-2">
-    <button
+    <!-- <button
       class="flex h-8 items-center gap-1 rounded-lg border border-line bg-panel/80 px-2.5 text-[13px] text-ink transition-colors hover:bg-hover"
       aria-label="积分余额" @click="ui.showToast('积分余额')"
-    ><Zap :size="14" /> 20</button>
+    ><Zap :size="14" /> 20</button> -->
     <button
       class="grid size-8 place-items-center rounded-lg border border-line bg-panel/80 text-ink-dim transition-colors hover:bg-hover hover:text-ink"
       aria-label="主题切换" @click="ui.toggleTheme()"

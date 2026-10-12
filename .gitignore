@@ -59,6 +59,7 @@ packages/plugins/mini-canvas-plugin-*
 vendor/
 
 # 调试残留：截图 / 探针脚本 / 临时快照目录，都不是源码，不入库
+.tmp-probe/
 _snap_tmp/
 packages/ui/_snap_tmp/
 packages/ui/e2e/_shots/

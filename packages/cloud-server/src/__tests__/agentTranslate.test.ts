@@ -124,3 +124,31 @@ describe('上下文用量', () => {
     expect(out).toEqual([{ type: 'usage', usedTokens: 10_000, limitTokens: 256_000, spent: 4_000 }])
   })
 })
+
+/**
+ * 压缩事件（用户口径 2026-10-11）。
+ *
+ * 为什么必须有这条翻译：SDK 的 compaction 默认开着（阈值 256k），它会在用户没打招呼的
+ * 时候自己把历史总结掉；主动压缩（「压缩」命令）更是点了就要有回音 ——
+ * 不翻这两个事件，界面上两种情况都是"毫无动静"，用户只会觉得对话忽然失忆。
+ */
+describe('上下文压缩事件', () => {
+  it('compaction_begin 翻成 compact/begin（带 reason 与 mode）', () => {
+    const st = createTranslateState()
+    expect(
+      translateMessage(event({ type: 'compaction_begin', reason: 'manual', mode: 'summarize', context: 180_000, turns: 12 }), st),
+    ).toEqual([{ type: 'compact', phase: 'begin', reason: 'manual', mode: 'summarize', context: 180_000 }])
+  })
+
+  it('compaction_end 翻成 compact/end（completed = 压成功；其它 = 放弃并带原因）', () => {
+    const st = createTranslateState()
+    expect(translateMessage(event({ type: 'compaction_end', reason: 'manual', mode: 'summarize', status: 'completed' }), st)).toEqual([
+      { type: 'compact', phase: 'end', reason: 'manual', mode: 'summarize', status: 'completed' },
+    ])
+    const failed = translateMessage(
+      event({ type: 'compaction_end', reason: 'context', mode: 'summarize', status: 'retryable', error_message: '超时' }),
+      st,
+    )
+    expect(failed[0]).toMatchObject({ type: 'compact', phase: 'end', status: 'retryable', error: '超时' })
+  })
+})

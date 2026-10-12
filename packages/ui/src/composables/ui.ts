@@ -66,7 +66,6 @@ export function setReadyHost(h: unknown): void {
 type FullHost = HostApi & { command: { execute(id: string, payload?: unknown): void }; nodeStore: { getNodes(): unknown[] } }
 interface ManagerApi { install(opts: { url: string }, cfg?: { config?: unknown }): Promise<void> }
 interface HostLike { host?: HostApi; manager?: ManagerApi }
-interface ManifestEntry { id: string; url: string; disabled?: boolean }
 
 export interface TreeNode {
   id: string
@@ -928,7 +927,8 @@ function createUi() {
     title: string
     /** 当前会话 id（历史列表高亮「我现在在哪条」要它；null = 还没开聊） */
     sessionId: string | null
-    sessions: Array<{ id: string; title: string; preview?: string }>
+    /** 会话列表（updatedAt 供历史列表挑"最后使用"的那条成员） */
+    sessions: Array<{ id: string; title: string; preview?: string; updatedAt: number }>
     /** 历史列表行：一个对话一行（分支树聚合；rootId = 点击目标） */
     conversations: Array<{
       rootId: string
@@ -964,7 +964,7 @@ function createUi() {
     get title(): string {
       return agentSvc()?.state.title ?? '新会话'
     },
-    get sessions(): Array<{ id: string; title: string; preview?: string }> {
+    get sessions(): Array<{ id: string; title: string; preview?: string; updatedAt: number }> {
       return agentSvc()?.state.sessions ?? []
     },
     get sessionId(): string | null {
@@ -1003,12 +1003,25 @@ function createUi() {
   }
   /**
    * 打开一个「对话」：优先停在当前会话（若它属于这棵树 —— 分支里任意一条），
-   * 否则打开最新更新的那条成员。这样点历史列表不会把用户从当前分支踢走。
+   * 否则打开**最后使用**的那条成员。
+   *
+   * 为什么是「最后使用」而不是 members[0]（code review 2026-10-11 抓到的 bug）：
+   * members[0] 是 **id 字母序**的第一个 —— 往往是最老的那条（模型也是老的）。
+   * 用户切到一个对话，期待的是「接着上次继续」：模型下拉要跟的是**这个对话最后一次用的模型**，
+   * 也就是 updatedAt 最新的那条成员（切模型 / 编辑重发都会新开一条成员，updatedAt 最新 = 最后用的）。
+   * memberIds 来自会话列表（带 updatedAt），排序一次即可。
    */
   function openAgentConversation(rootId: string, memberIds: string[]): void {
     const current = agentSvc()?.state.sessionId
-    const target = current && memberIds.includes(current) ? current : memberIds[0] ?? rootId
-    openAgentSession(target)
+    if (current && memberIds.includes(current)) {
+      openAgentSession(current)
+      return
+    }
+    const sessions = agentSvc()?.state.sessions ?? []
+    const byTime = new Map(sessions.map((s) => [s.id, s.updatedAt]))
+    const latest = [...memberIds]
+      .sort((a, b) => (byTime.get(b) ?? 0) - (byTime.get(a) ?? 0))[0]
+    openAgentSession(latest ?? rootId)
   }
   /** 删一个「对话」= 删整棵树（分支一起删；用户口径：一个对话就是一份历史） */
   function deleteAgentConversation(memberIds: string[]): void {
@@ -1275,28 +1288,19 @@ function createUi() {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function showToast(_message: string): void { /* 已停用：不渲染任何提示 */ }
 
+  /**
+   * 外部插件**不再自动装载**（用户要求 2026-10-11：全部由我在「设置 → 插件」面板里自己挑）。
+   *
+   * 以前这里读 /plugin-manifest.json 挨个 install，后果是"用户没点过装什么，就被装上了"——
+   * 尤其云端客户端（plugin-cloud-client）会立刻接管画布存档并连后台。现在改成 opt-in：
+   * 想连后台就去面板里点「云端连接」那一行的安装（清单里由 /plugin-catalog.json 提供）。
+   *
+   * 为什么保留函数而不是直接删：onReady 的调用点与顺序语义（"外部插件装完再拉历史"）不变，
+   * 将来若要恢复"按清单自动装"只需把实现填回来。
+   */
   async function installExternalPlugins(): Promise<void> {
-    const manager = hostEl.value?.manager
-    if (!manager) return
-    const manifest = await fetch('/plugin-manifest.json')
-      .then((r) => (r.ok ? r.json() : { plugins: [] }))
-      .catch(() => ({ plugins: [] }))
-    const entries: ManifestEntry[] = Array.isArray(manifest?.plugins) ? manifest.plugins : []
-    const cloudBase = (import.meta.env?.VITE_CLOUD_BASE_URL as string | undefined) ?? ''
-    for (const entry of entries) {
-      if (entry.disabled) continue
-      try {
-        // 把「服务地址」注入给云端插件。
-        // ★ 这里按**服务名**判断，不看目录名 —— 插件改过名（plugin-cloud-client），
-        //   按老目录名匹配会静默失效：dev 下（ui 在 5288、后台在别处）插件拿不到地址，
-        //   画布存档与动作会一起失效，而且不报错。
-        const conf = cloudBase && entry.id.includes('cloud') ? { cloudClientBaseUrl: cloudBase } : undefined
-        await manager.install({ url: entry.url }, conf ? { config: conf } : undefined)
-        log.log('外部插件已装载: ' + entry.id)
-      } catch (err) {
-        console.warn('[ui] 外部插件装载失败: ' + entry.id, err)
-      }
-    }
+    // 有意空实现：装载入口在「插件管理」面板（plugin-manager 插件）。
+    return
   }
 
   function bindThemeSettings(): void {
@@ -1680,6 +1684,50 @@ function createUi() {
   function dropAssetToCanvas(asset: { name?: string; url: string; kind?: string; assetKind?: string }, client: { x: number; y: number }): string | null {
     const flow = screenToFlow(client.x, client.y) ?? undefined
     return createAssetNode(asset, flow)
+  }
+
+  /** file-drop 服务的最小用面（契约见 plugin-file-drop 的 FileDropService） */
+  type FileDropLike = {
+    addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
+    canHandle(file: { name: string; type: string }): boolean
+  }
+  /**
+   * 本地上传的文件**直接落画布**（底栏「+ → 上传」用）。
+   *
+   * 用户口径（2026-10-11）：「点击『上传』时，它是直接把你选中的东西放置在画布中」——
+   * 就是「把文件拖进画布」那件事，所以不自己另写一套建节点，而是把文件交给
+   * file-drop 插件的 addFiles（同一份识别 / 尺寸 / 资源落盘 / 选中逻辑）。
+   *   · 图片 → image 节点（带真实比例）、视频 → video 节点、文本 → text 节点；
+   *   · 多文件在锚点处依次排开，一次历史提交，建完选中。
+   *
+   * 落点：**视口中心**（而不是"最近一次鼠标位置"）—— 这条入口是点菜单触发的，
+   * 用户这时多半在盯着底栏，用鼠标位置会把节点甩到上次路过的角落；中心一定看得见。
+   * 视口服务拿不到（宿主没就绪）就传 null，交给 addFiles 用它的默认锚点。
+   *
+   * 插件没装（拿不到 file-drop 服务）→ 明确提示，不静默什么都不做。
+   */
+  async function addFilesToCanvas(files: File[]): Promise<number> {
+    const list = files.filter((f) => f.size > 0)
+    if (!list.length) return 0
+    const svc = hostCtx()?.get<FileDropLike>('file-drop')
+    if (!svc?.addFiles) {
+      showToast('文件拖放插件未启用，无法把文件加到画布')
+      return 0
+    }
+    // 视口中心（client 坐标）→ flow：pane 矩形的一半即屏幕中心；两者都拿不到就 null
+    const vp = hostCtx()?.get<ViewportLike & { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }>('viewport')
+    let atFlow: { x: number; y: number } | null = null
+    const pane = vp?.getPaneEl?.()
+    if (pane && vp?.screenToFlow) {
+      const r = pane.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) atFlow = vp.screenToFlow(r.left + r.width / 2, r.top + r.height / 2)
+    }
+    // canHandle 不认的文件（比如占了多个的其它类型）：先挑出来明确说一句，剩下的照建
+    const handled = list.filter((f) => svc.canHandle(f))
+    const skipped = list.length - handled.length
+    const made = handled.length ? await svc.addFiles(handled, atFlow) : 0
+    if (skipped > 0 && made === 0) showToast('这些文件类型暂不支持放到画布')
+    return made
   }
 
   /**
@@ -2082,6 +2130,7 @@ function createUi() {
     hostEl, setHostEl, showToast, onReady, createNode, toggleTheme, applyTheme, openDrawer, closeSettings,
     runCommand,
     addAssetToCanvas, dropAssetToCanvas, addAssetToAgent, addFolderToAgent, addFolderAssetsToCanvas, screenToFlow, createAssetNode,
+    addFilesToCanvas,
     uploadAssets, uploadAssetsTo, uploadAssetsFromUrls, deleteAssetById, assetFolders, assetFolderTree, flatFoldersForUpload, assetTagOptions, loadAssetFolders, newAssetFolder, moveAssetTo,
     renameAssetById,
     renameAssetFolderById, removeAssetFolder, moveSelectedAssets, tagsForAsset,

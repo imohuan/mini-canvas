@@ -18,6 +18,20 @@ export interface ImageMeta {
   size?: number
 }
 
+/**
+ * 节点标题右侧那一格显示什么（`1280×720`；尺寸拿不到 → 空串，标题那一格就不渲染）。
+ *
+ * 为什么只给尺寸、不带文件大小：那一格是"一眼扫过"的元信息，标题条右侧只有 20% 宽，
+ * 塞进"· 1.2 MB"会被省略号截成半截。完整信息（名字/体积）仍在底部状态栏里。
+ *
+ * 这是节点类型声明 `titleExtra` 时用的纯函数：**读 data 现算，不写回 data**。
+ */
+export function imageTitleExtra(data: Record<string, unknown> | undefined): string {
+  const w = Number(data?.imageWidth)
+  const h = Number(data?.imageHeight)
+  return isPositive(w) && isPositive(h) ? `${w}×${h}` : ''
+}
+
 /** 字节数 → 人类可读（B/KB/MB/GB）；非法值返回空串（调用方据此决定不渲染这一段） */
 export function formatFileSize(bytes?: number): string {
   if (typeof bytes !== 'number' || !Number.isFinite(bytes) || bytes < 0) return ''

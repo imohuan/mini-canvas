@@ -42,12 +42,13 @@ describe('@mini-canvas/ui 出口契约', () => {
   })
 
   it('装配清单自洽：插件数、无重名、含画布基础件', () => {
-    // 20 个源码插件（含音频节点插件）+ 本应用自己的一个（ui-settings-panel 设置面板换皮）= 24。
     // 2026-10-03：批量把插件改为经「插件管理」从云服务清单安装（默认已装），不再冷启动：
     //   image-compare / tool-image-generation / tool-text-generation / web2api-tools +
-    //   edge-cutting / multi-select / align-guide / auto-layout / align-arrange /
-    //   group / context-menu / clipboard / canvas-export / node-find / mini-map / file-drop。
-    // 冷启动只剩画布骨架（主题皮 / 设置面板 / 下拉）+ 底栏 + 节点类型 + Agent + 插件管理本身。
+    //   align-guide / auto-layout / align-arrange / canvas-export / node-find / mini-map。
+    // 2026-10-12：用户要求把 6 个「基础交互」插件改回**自带**（冷启动装配、面板只读展示）：
+    //   clipboard / context-menu / file-drop / group / multi-select / edge-cutting。
+    // 冷启动 = 画布骨架（主题皮 / 设置面板 / 下拉）+ 底栏 + 这 6 个交互件 + 节点类型
+    //          + Agent + 插件管理本身。
     // 主题色配置**不在清单里**了：色板已上移进渲染层（canvas-render 的 themePalette），
     // 由宿主 createMiniCanvasHost 直接声明与落值，任一宿主都自带。
     // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea 按钮 + ModalsArea 浮层），
@@ -59,7 +60,8 @@ describe('@mini-canvas/ui 出口契约', () => {
     // +1：ui-asset-upload（「加入资产库」：节点右键 + 多选上控制栏 → 贴进上传弹窗）。
     // 注：「引用标签被点了」走的是**系统事件**（agent:ref-click），没有对应的插件/服务 ——
     //     监听与浮层都在 AssetUiSlot（挂在 CanvasHost #ui 槽里），故不占清单名额。
-    expect(APP_PLUGINS).toHaveLength(13)
+    // +1（2026-10-12）：node-ui（AI 可视化节点：声明输入参数 → AI 生成 HTML 在节点里渲染）。
+    expect(APP_PLUGINS).toHaveLength(20)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

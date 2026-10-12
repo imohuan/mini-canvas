@@ -42,6 +42,21 @@ export interface AgentSessionLike {
    * 返回 null = 包没装 / 没这条命令（宿主据此拒绝启动目标）。
    */
   runUserPromptHook?(name: string, prompt: string, extras?: Record<string, string | number | boolean>): Promise<{ context?: string } | null>
+  /**
+   * 用户主动压缩上下文（「压缩」命令；SDK 的 Session.compact()）。
+   *
+   * 返回 generator：串出成对的 compaction_begin / compaction_end 事件（可能有多次重试）。
+   * 可选：老测试的假会话没有它 —— 没它时宿主要如实说「这条会话不支持压缩」，
+   * 不要静默什么都不做（用户点了按钮却毫无反应）。
+   */
+  compact?(opts?: { signal?: AbortSignal }): AsyncGenerator<unknown>
+  /**
+   * 现在能不能压缩，不能时给出原因。
+   *
+   * SDK 的原话：不是 ok 时 compact() 是 no-op、一条消息都不产出 —— 所以调用方必须先问它，
+   * 否则用户看到的是「点了没反应」。可选：老假会话没有它就按 ok 处理。
+   */
+  compactability?(): 'ok' | 'unsupported' | 'empty' | 'just_compacted'
   dispose?(): void
 }
 
@@ -192,6 +207,22 @@ interface LiveSession {
   policyOverridden: boolean
   notify: (event: AgentChatEvent) => void
   contextLeft: number | null
+  /**
+   * 上一次把用量写盘的时刻（节流用，见 run() 里 usage 分支）。
+   *
+   * 为什么需要节流：token_usage 是**每次模型请求**都发一条（一轮里十几次），
+   * 而每次写盘都是"读整个会话文件 → 改 → 整写"。中间值没有读者，只有最新那份有用。
+   */
+  lastUsageSavedAt: number
+  /**
+   * 压缩进行中（code review 2026-10-11 抓到的并发窗口）。
+   *
+   * SDK 的原话：compact 只能在 **Task 边界**调用 —— 压缩进行时再 run 一轮，
+   * 两条模型请求会同时读写同一份上下文，结果不可预期。isRunning 不含 compact
+   * （它只标记 run），所以单独记一位：compact() 开头置位、finally 清掉；
+   * run() 与 switch-model 看到它就拒绝（「正在压缩」）。
+   */
+  compacting: boolean
 }
 
 export class AgentRuntime {
@@ -320,6 +351,8 @@ export class AgentRuntime {
       policyOverridden: !!prefs.policy,
       notify: () => undefined,
       contextLeft: null,
+      lastUsageSavedAt: 0,
+      compacting: false,
     })
   }
 
@@ -484,6 +517,80 @@ export class AgentRuntime {
     return entry ? [...entry.pendingInfo.values()] : []
   }
 
+  /** 压缩是否正在进行（switch-model 等需要 Task 边界的动作据此拒绝） */
+  isCompactActive(canvasId: string, sessionId: string): boolean {
+    return this.live.get(this.key(canvasId, sessionId))?.compacting ?? false
+  }
+
+  /**
+   * 用户主动压缩上下文（「压缩」命令）。
+   *
+   * 三个前置条件，缺一条都**如实拒绝**（不静默 no-op）：
+   *   1. 会话在内存里（先 ensureSession 装载 —— 服务重启后第一条命令也能用）；
+   *   2. 现在没在跑（SDK 原话：只有 Task 边界能压；跑着时压会把正在写的一轮搅乱）；
+   *   3. SDK 的 compactability() 说 ok（unsupported / empty / just_compacted 各有各的话说）。
+   *
+   * 返回的事件流由**调用方**（路由）转发给界面：它成对给出 compaction_begin / compaction_end。
+   */
+  async *compact(canvasId: string, sessionId: string, signal: AbortSignal): AsyncGenerator<AgentChatEvent> {
+    if (this.isRunning(canvasId, sessionId)) {
+      yield { type: 'error', message: '这一轮还在跑，等它结束再压缩' }
+      return
+    }
+    let entry = this.live.get(this.key(canvasId, sessionId))
+    if (!entry) {
+      try {
+        const resolved = await this.ensureSession(canvasId, { sessionId })
+        entry = this.live.get(this.key(canvasId, resolved.id))
+      } catch (err) {
+        yield { type: 'error', message: '装载会话失败：' + (err instanceof Error ? err.message : String(err)) }
+        return
+      }
+    }
+    if (!entry?.session.compact) {
+      yield { type: 'error', scope: 'compact', message: '这条会话不支持压缩' }
+      return
+    }
+    /**
+     * 从这里开始是**压缩窗口**：标记与 finally 必须成对，中间任何一条提前返回
+     * 都不能把它漏掉 —— 漏了这条会话就永久拒绝 run()/切模型（code review 抓到的锁死）。
+     * 所以「能不能压」的检查也放进 try 里，不再在标记之后裸 return。
+     */
+    entry.compacting = true
+    try {
+      const availability = entry.session.compactability?.() ?? 'ok'
+      if (availability !== 'ok') {
+        const why =
+          availability === 'empty' ? '还没有对话内容，不用压缩'
+          : availability === 'just_compacted' ? '刚压过（上下文已经干净），暂时不用再压'
+          : '这条会话不支持压缩'
+        yield { type: 'notice', message: why }
+        return
+      }
+      for await (const msg of entry.session.compact({ signal })) {
+        for (const ev of translateMessage(msg, entry.state, (m, extra) => this.log(m, extra))) {
+          if (ev.type === 'usage') {
+            // 压缩也是「这一轮的输出」：usage 里的上下文用量要更新缓存值，
+            // 否则压缩刚把上下文清空、界面上的剩余百分比还停在压之前那个数。
+            entry.contextLeft = contextLeftPercent(ev.usedTokens, ev.limitTokens)
+            // 并且**落盘**：不落盘的话刷新后环又回到压缩前的旧值（code review 抓到）。
+            entry.lastUsageSavedAt = Date.now()
+            void this.deps.store
+              .setLastUsage(canvasId, entry.id, { usedTokens: ev.usedTokens, limitTokens: ev.limitTokens })
+              .catch(() => undefined)
+          }
+          yield ev
+        }
+      }
+    } catch (err) {
+      // scope:'compact' 让错误落在压缩那条提示上，而不是当成某一轮对话失败
+      yield { type: 'error', scope: 'compact', message: '压缩失败：' + (err instanceof Error ? err.message : String(err)) }
+    } finally {
+      // 中途抛错 / 调用方 abort / 提前 return 都要走到这里
+      entry.compacting = false
+    }
+  }
+
   /** 用户点了允许 / 拒绝：解开挂起的那次审批 */
   resolveApproval(canvasId: string, sessionId: string, id: string, decision: 'allow' | 'deny'): boolean {
     const entry = this.live.get(this.key(canvasId, sessionId))
@@ -530,7 +637,13 @@ export class AgentRuntime {
       else this.deps.hub?.append(canvasId, id, event)
     }
 
-    // 已经有会话在跑：这一句当 steering 送进去，不并发开第二个 run
+    // 已经有会话在跑：这一句当 steering 送进去，不并发开第二个 run。
+    // 压缩进行中**不能**当 steering 送：compact 只在 Task 边界合法（SDK 原话），
+    // 这时再喂 steering 等于两条模型请求并发 —— 拒绝并把消息退还（调用方按失败处理）。
+    if (entry.compacting) {
+      yield { type: 'error', message: '正在压缩上下文，等它结束再发消息' }
+      return
+    }
     if (entry.running) {
       const steered = entry.session.steer?.(userMessages) ?? false
       this.log('steered into running task', { session: id, steered })
@@ -651,6 +764,16 @@ export class AgentRuntime {
           }
           if (ev.type === 'usage') {
             entry.contextLeft = contextLeftPercent(ev.usedTokens, ev.limitTokens)
+            // 落盘（节流）：刷新 / 切会话后界面靠它把上下文指示器画回来 ——
+            // usage 不在转录里、重连也不重放，不落盘就等于"一刷新就消失"（用户报的问题 1）。
+            // 一轮里会来十几次，只写最新那份，2 秒内的重复写丢掉（代价可控、信息等价）。
+            const now = Date.now()
+            if (now - entry.lastUsageSavedAt > 2000) {
+              entry.lastUsageSavedAt = now
+              void this.deps.store
+                .setLastUsage(canvasId, id, { usedTokens: ev.usedTokens, limitTokens: ev.limitTokens })
+                .catch(() => undefined)
+            }
             yield ev
             continue
           }

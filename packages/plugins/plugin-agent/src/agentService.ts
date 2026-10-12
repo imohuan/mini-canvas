@@ -115,6 +115,42 @@ export interface AgentServiceState {
   offline: boolean
   error: string
   contextLeft: number | null
+  /**
+   * 上下文用量的**绝对值**（最近一次 token_usage 的 used / limit）。
+   *
+   * 为什么除了百分比还要绝对值：用户点名要在面板最下面显示"上下文统计信息"——
+   * 只有百分比看不出还剩多少 tokens。两个值一起给，UI 想显示哪种都有。
+   */
+  contextUsed: number | null
+  contextLimit: number | null
+  /**
+   * 压缩进行中（begin 收到、end 未到）。
+   *
+   * 为什么要它：压缩要跑一次模型（几秒到几十秒），中间界面必须有"正在压缩"的常驻提示，
+   * 否则用户以为点了没反应（用户点名的问题之一）。
+   */
+  compacting: boolean
+  /**
+   * 最近一次压缩的结果提示（成功 / 放弃 / 失败），显示在消息流里。
+   *
+   * 为什么不用 state.error：错误条是"出事了"的通道；压缩成功也是一条**要说得清**的结果
+   * （"已压缩，上下文从 180k 降到 12k"），两者语义不同，各自有自己的位置。
+   */
+  compactNotice: string
+  /**
+   * 最近一次失败（留给界面画常驻错误条）。
+   *
+   * 与 state.error 的分工：error 是"整块内容不可用"（连不上后台 / 没配模型）；
+   * lastError 是"这一轮失败了"（上下文超出、密钥无效…）—— 对话区要能一直看见它，
+   * 而不是只挂在最后一条助手消息上（挂不上就彻底看不见，用户报的问题 2）。
+   */
+  lastError: string
+  /**
+   * 当前会话的模型分段（换过模型的会话才有，见后端 ModelSegment）。
+   *
+   * 界面在消息流里按 fromUser 画分割线并标注这一段用的模型（用户口径 2026-10-11）。
+   */
+  segments: Array<{ fromUser: number; provider: string; modelId: string }>
 
   // ---------------------------------------------------------------- 队列（设计 §3.3）
   /**
@@ -290,7 +326,16 @@ export interface AgentService {
    * 运行时抛「agent.setGoalImages is not a function」，图片静默不落盘（真 bug）。
    */
   setGoalImages(images: string[]): Promise<void>
-  setModel(provider: string, modelId: string): void
+  /**
+   * 切换模型。
+   *
+   * SDK 里模型钉在会话上（改不了），所以这不是"改一个字段"，而是**换一条会话**：
+   * 后端把整段历史接过去 + 记一条模型分段，界面据此画分割线（与分支同款）。
+   * 这才对得上用户的期待："换了模型之后，接着聊，但从这里开始换了脑子"。
+   */
+  setModel(provider: string, modelId: string): Promise<void>
+  /** 主动压缩上下文（「压缩」命令；@ 菜单与 + 菜单共用） */
+  compact(): Promise<void>
   /** 审批：用户点允许 / 拒绝 */
   decide(approvalId: string, decision: 'allow' | 'deny'): Promise<void>
   savePolicy(policy: ApprovalPolicyView): Promise<void>
@@ -380,6 +425,12 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     offline: false,
     error: '',
     contextLeft: null,
+    contextUsed: null,
+    contextLimit: null,
+    compacting: false,
+    compactNotice: '',
+    lastError: '',
+    segments: [],
     queue: { paused: false, items: [] },
     goalMark: null,
     goal: null,
@@ -504,13 +555,67 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     if (ev.type === 'round_done') {
       return
     }
+    /**
+     * 压缩进度：begin / end 成对，界面据此显示"正在压缩"与结果。
+     *
+     * 不进 ChatModel（它不是对话内容）：它是会话的运行状态。
+     */
+    if (ev.type === 'compact') {
+      if (ev.phase === 'begin') {
+        state.compacting = true
+        state.compactNotice = ''
+      } else {
+        state.compacting = false
+        if (ev.status === 'completed') {
+          state.compactNotice = ev.reason === 'manual' ? '已压缩：历史已总结成摘要' : '上下文已自动压缩'
+          // 压完上下文变小了 —— 下一轮 usage 才有新数，这里先把百分比清掉重算前的误导
+          // （保留绝对值：用户至少知道压之前用过多少）
+        } else {
+          state.compactNotice = '压缩没成功（' + (ev.error || ev.status || '未知原因') + '），原上下文保留'
+        }
+      }
+      return
+    }
+    /**
+     * 压缩期间流出来的正文**不是回复**（真机实测踩到的坑）。
+     *
+     * SDK 的注释写得明白：compaction_begin 与 compaction_end 之间，流上只有
+     * token_usage 和"摘要正在写"的 partial_text —— 那段摘要会被原样当成助手正文，
+     * 在对话里冒出一大段没人要的文字（而且压缩不落转录，刷新后又消失，前后更明显）。
+     * 所以压缩进行中一律丢掉 text / thinking；end 一到（compacting=false）恢复正常。
+     */
+    if (state.compacting && (ev.type === 'text' || ev.type === 'thinking')) return
     model.apply(ev)
+    /**
+     * 出错的**副本**留在 state 上：界面据此画一条常驻错误条。
+     *
+     * 为什么不能只靠 turn.error（用户报的问题 2）：那条错误只挂在"最后一条助手消息"上 ——
+     * 如果出错时还没建出助手消息（比如请求在 bootstrap 阶段就失败、或错误发生在轮与轮之间），
+     * 它就落在空气里，用户什么也看不到。
+     */
+    /**
+     * 错误按**来源**分流（code review 抓到压缩失败看不见）：
+     *   · scope 'compact' = 压缩失败 —— 放进压缩提示里。压缩不产生助手消息，
+     *     挂到 ChatModel 等于落在空气里（用户看不到任何提示）；
+     *   · 其它 = 某一轮失败 —— 常驻错误条 + 消息上的红字（原行为）。
+     */
+    if (ev.type === 'error') {
+      if (ev.scope === 'compact') {
+        state.compacting = false
+        state.compactNotice = ev.message
+        return
+      }
+      state.lastError = ev.message
+    }
     if (ev.type === 'usage') {
       const left =
         ev.limitTokens && ev.limitTokens > 0
           ? Math.max(0, Math.min(100, Math.round((1 - ev.usedTokens / ev.limitTokens) * 100)))
           : null
       state.contextLeft = left
+      // 绝对值一起存：面板最下面那行"上下文统计"要显示真实 token 数，不只百分比。
+      state.contextUsed = Number.isFinite(ev.usedTokens) ? Math.max(0, Math.round(ev.usedTokens)) : null
+      state.contextLimit = ev.limitTokens && ev.limitTokens > 0 ? Math.round(ev.limitTokens) : null
       /**
        * 目标的「已用」**跟着每次请求实时涨**（用户口径 2026-10-11）。
        *
@@ -726,8 +831,14 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     state.sessionPromptText = ''
     state.promptKnown = false
     state.title = '新会话'
+    state.segments = []
     state.error = ''
     state.contextLeft = null
+    state.contextUsed = null
+    state.contextLimit = null
+    state.compacting = false
+    state.compactNotice = ''
+    state.lastError = ''
     state.pagers = []
     await listSessions()
   }
@@ -743,6 +854,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       const full = await api.sessionState(canvasId(), id)
       const rec = full.session
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
+      // 模型分段随转录一起装载：界面按它画"从这里换了模型"的分割线
+      state.segments = Array.isArray(rec.modelSegments) ? rec.modelSegments : []
       sync()
       state.sessionId = id
       // 挂起中的审批补渲染成卡片（刷新 / 切会话的洞）：
@@ -759,6 +872,26 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.goal = (full.goal ?? null) as GoalStateView | null
       state.goalImages = Array.isArray(full.goalImages) ? (full.goalImages as string[]) : []
       state.goalPaused = full.goalPaused === true
+      /**
+       * 上下文用量从磁盘恢复（用户报的问题 1 的根因修复）。
+       *
+       * 为什么必须在这里补：token_usage 事件既不落转录、重连也不重放 ——
+       * 刷新 / 切会话后面板上那个指示器就永远是空的，直到用户再发一条消息。
+       * 后端把最近一次用量随会话记录存下来了，这里一次性画回来。
+       */
+      const u = full.lastUsage
+      if (u && Number.isFinite(u.usedTokens)) {
+        state.contextUsed = Math.max(0, Math.round(u.usedTokens))
+        state.contextLimit = u.limitTokens && u.limitTokens > 0 ? Math.round(u.limitTokens) : null
+        state.contextLeft = state.contextLimit
+          ? Math.max(0, Math.min(100, Math.round((1 - state.contextUsed / state.contextLimit) * 100)))
+          : null
+      } else {
+        // 老会话（没有这份记录）：如实清空，不要拿上一条会话的数字充数
+        state.contextUsed = null
+        state.contextLimit = null
+        state.contextLeft = null
+      }
       // running 以后台为准（托管模式下它才是唯一真相）
       state.running = full.running === true
       // 接流的水位：转录里已有的不算，只接"还没落转录的那部分"。
@@ -777,6 +910,16 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.promptKnown = false
       state.title = rec.title || '新会话'
       state.error = ''
+      // 错误条与压缩提示是**这一条会话**的状态：切过去时要重来（否则上一条会话的
+      // 报错会挂在另一条对话下面，用户以为刚切的这条出问题了）。
+      state.lastError = ''
+      state.compactNotice = ''
+      state.compacting = false
+      /**
+       * 上下文的绝对值**不重置**：它属于"模型窗口还剩多少"，切会话后由后端下一次
+       * token_usage 补上；这里若清成 null，用户切回来看不到任何指示器，
+       * 又变成他报的"进度莫名其妙消失"。百分比同理保留。
+       */
       if (rec.provider && rec.modelId) state.model = { provider: rec.provider, modelId: rec.modelId }
       // 内联分页器随会话一起拉（跟随消息：每个在对应消息块后渲染）
       await refreshPagers()
@@ -855,6 +998,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     // 只有图、没有字也算一条合法消息（用户常直接丢图问"这是什么"）
     if ((!value && !pics.length) || state.running) return
     setError('')
+    // 新的一轮开始：把上一条错误条收掉（它属于上一次失败，用户已经看到了）
+    state.lastError = ''
     // 发送前再校一次提示词新鲜度：用户可能刚在设置里改了模式正文、没动过模式下拉，
     // 这条会话就得换成新提示词的那条（见 ensurePromptFresh）。
     // **编辑重发必须跳过它**：新鲜度检查会 newSession() 清掉 turns/sessionId，
@@ -1226,8 +1371,62 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     if (lastText || lastImages?.length) await send(lastText, lastImages)
   }
 
-  function setModel(provider: string, modelId: string): void {
+  /**
+   * 切换模型 = **换一条会话**（SDK 的模型钉在会话上，改不了）。
+   *
+   * 做法与"编辑重发"出来的分支完全一样：后端 branchFromEnd 把整段历史拷进新会话、
+   * 在末尾登记分叉点，再补一条模型分段；界面这边按 openSession 重新装载
+   * （新会话的转录含全量历史，分页器也会认出这条新分支）。
+   *
+   * 三条边界：
+   *   · 没有会话（还没说过话）：只改本地选择，下一句建会话时自然带上新模型；
+   *   · 选的就是当前模型：后端返回 unchanged，什么也不做（否则每点一次长一条会话）；
+   *   · 这一轮在跑：后端拒绝（409），如实告诉用户等它跑完。
+   */
+  async function setModel(provider: string, modelId: string): Promise<void> {
     state.model = { provider, modelId }
+    const sid = state.sessionId
+    if (!sid) return
+    try {
+      const r = await api.switchModel(canvasId(), sid, provider, modelId)
+      if (r.unchanged || !r.sessionId) return
+      // 装载新会话：转录（全量历史 + 新分段）、id、标题、分页器一次到位。
+      await openSession(r.sessionId)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setError(message)
+      state.lastError = '切换模型失败：' + message
+    }
+  }
+
+  /**
+   * 主动压缩上下文（「压缩」命令）。
+   *
+   * 走独立 SSE：后端的 compaction_begin / 摘要 / compaction_end 一路推回来，
+   * 同一条事件也可能从常驻流到一次 —— 所以照样带上帧级水位一起去重。
+   */
+  async function compact(): Promise<void> {
+    const sid = state.sessionId
+    if (!sid) {
+      state.lastError = '还没有对话内容，不用压缩'
+      return
+    }
+    if (state.compacting) return
+    state.lastError = ''
+    const ac = new AbortController()
+    try {
+      await api.compact(canvasId(), sid, applyEvent, ac.signal, {
+        acceptSeq,
+        onSeq: (n) => {
+          if (n > lastAppliedSeq) lastAppliedSeq = n
+        },
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      // 流断了也要把"正在压缩"收掉，否则界面会一直转圈（后台其实早结束了）
+      state.compacting = false
+    }
   }
 
   function activePromptText(): string {
@@ -1575,6 +1774,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     stop,
     retry,
     setModel,
+    compact,
     decide,
     savePolicy,
     importSkill,

@@ -54,6 +54,7 @@ const disposers: Array<{ dispose(): void }> = [
 ]
 onBeforeUnmount(() => {
   for (const d of disposers) d.dispose()
+  cancelScrollAnimation()
 })
 
 // ———— 树：一级 → 该一级下的完整分组 key 列表（保持 groups() 的原序）————
@@ -123,13 +124,67 @@ function sectionElOf(key: string): HTMLElement | null {
 }
 
 /**
- * 程序化滚动锁：smooth 滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
+ * 程序化滚动的时长（毫秒）。
+ *
+ * **为什么不用原生 `behavior: 'smooth'`**：那条路的时长由浏览器自己定，且大致随距离增长 ——
+ * 点一个远一点的分类，动画能拖到一秒上下，用户实测「太慢」。这里自己补间，时长收成常量，
+ * 近跳远跳同一个节奏。240ms = 设计 token 的动效上限（ui-style-guide §2.7）。
+ */
+const SCROLL_DURATION_MS = 240
+
+let scrollRaf = 0
+
+/** 掐掉上一段滚动补间（连点两个分类时，后一次点击立刻接管，不与前一次抢 scrollTop） */
+function cancelScrollAnimation(): void {
+  if (scrollRaf === 0) return
+  cancelAnimationFrame(scrollRaf)
+  scrollRaf = 0
+}
+
+/** 用户要求少动效时直接落位（与样式层的 prefers-reduced-motion 降级同一口径） */
+function prefersReducedMotion(): boolean {
+  const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia
+  return typeof mm === 'function' ? mm('(prefers-reduced-motion: reduce)').matches : false
+}
+
+const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3)
+
+/** 从当前位置逐帧补间到 top（速度由 SCROLL_DURATION_MS 决定，与距离无关） */
+function animateScrollTop(cont: HTMLElement, top: number): void {
+  cancelScrollAnimation()
+  const from = cont.scrollTop
+  const delta = top - from
+  if (!delta) return
+  if (prefersReducedMotion()) {
+    cont.scrollTop = top
+    return
+  }
+  const start = performance.now()
+  const step = (now: number): void => {
+    const t = Math.min(1, (now - start) / SCROLL_DURATION_MS)
+    cont.scrollTop = from + delta * easeOutCubic(t)
+    scrollRaf = t < 1 ? requestAnimationFrame(step) : 0
+  }
+  scrollRaf = requestAnimationFrame(step)
+}
+
+function scrollToEl(el: HTMLElement): void {
+  const cont = scrollEl.value
+  if (!cont) return
+  const top = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
+  const max = cont.scrollHeight - cont.clientHeight
+  lockScrollUntilSettles(cont)
+  animateScrollTop(cont, Math.max(0, Math.min(max, top)))
+}
+
+/**
+ * 程序化滚动锁：滚动期间 scroll 事件会连续触发，若任由 scroll-spy 覆盖，
  * 高亮会在途经的段之间闪来闪去。锁未解前不重算高亮，保证落点即所选。
  * 解锁时机：容器 scrollend（动画真正结束），或兜底超时。
  */
 let scrollLocked = false
 let scrollLockTimer: ReturnType<typeof setTimeout> | null = null
-const SCROLL_LOCK_MAX_MS = 1200
+const SCROLL_LOCK_MAX_MS = SCROLL_DURATION_MS + 200
 
 function releaseScrollLock(): void {
   scrollLocked = false
@@ -147,13 +202,6 @@ function lockScrollUntilSettles(el: HTMLElement): void {
     releaseScrollLock()
   }
   el.addEventListener('scrollend', onEnd)
-}
-function scrollToEl(el: HTMLElement): void {
-  const cont = scrollEl.value
-  if (!cont) return
-  const top = el.getBoundingClientRect().top - cont.getBoundingClientRect().top + cont.scrollTop
-  cont.scrollTo({ top, behavior: 'smooth' })
-  lockScrollUntilSettles(cont)
 }
 
 /** 点一级：展开它、滚到该一级的标题锚点（没标题时退到它第一段） */

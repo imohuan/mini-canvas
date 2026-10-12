@@ -7,7 +7,7 @@
     "title": "分组",
     "description": "选中多个 Ctrl+G 打组 / Ctrl+Shift+G 解组",
     "pluginName": "group",
-    "installable": true
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

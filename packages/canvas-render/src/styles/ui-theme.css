@@ -128,9 +128,18 @@
   --ps-accent-hover: var(--ui-accent-hover);
   --ps-thumb: #ffffff;
   /* 下拉浮层（Dropdown / Select） */
-  --dd-bg: var(--ui-panel);
+  /* 底色用**不透光档**（与节点控制栏同一档）：下拉压在画布节点/图片上，
+     半透明会让底下的内容透出来、字读不清（用户口径 2026-10-04 起，与右键菜单同口径）。 */
+  --dd-bg: var(--ui-overlay-solid);
   --dd-line: var(--ui-line);
   --dd-ink: var(--ui-ink);
+  /* 浮层外观：**数值与右键菜单 .ctx-menu 逐条对齐**（用户口径 2026-10-12
+     「下拉完全参考右键菜单」）——16 圆角、6px 内边距。
+     两处实现在这里共用同一份：主题默认件（plugin-theme-default 的 Dropdown，scoped 规则）
+     与注册件（ui 包的 AxDropdown，全局规则）。消费方要改只改这一个 token，
+     不必再去两个文件里对数值（此前每个消费方各自写 bodyClass 变量，已经开始重复）。 */
+  --dd-padding: 6px;
+  --dd-radius: 16px;
 }
 
 /* ===== 暗色：`<html class="dark">`（兼容 data-canvas-theme='dark' 旧写法，同规则共享值）

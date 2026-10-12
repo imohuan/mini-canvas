@@ -84,6 +84,18 @@ const componentIcon = computed<Component | null>(() =>
   display: block;
 }
 
+/*
+ * 标签（左）与附加内容（右）的分宽规则：**右侧按自己要的宽度先拿，左侧拿剩下的、超出就省略**。
+ *
+ * 为什么不是"左 80% / 右 ≤20%"（旧写法）：那个比例在**窄节点**上会把右侧压到只剩几十像素，
+ * 尺寸文字被迫省略成 `20...`（用户实测截图，红框里就是它）。而右侧装的是"看一眼就行"的短元信息
+ * （分辨率 1280×720 这类，最多 9 个字符），它比左侧的长标题更"缺一个就不能读"；
+ * 左侧是名字，省略号截断后仍认得出是谁。所以优先级给右侧。
+ *
+ * flex: 0 0 auto = 不伸长也不收缩（就用自己的内容宽）；左侧 flex: 1 1 auto + min-width: 0 =
+ * 把剩余宽度全吃掉、放不下就缩到 0 并省略 —— 两侧因此不会互相顶出去。
+ * 右侧另留一个上限（55%）：右侧内容不该独吞整条标题，左侧至少还看得见一截名字。
+ */
 .base-title-label {
   /* 块级居中 + 行内块基线修正：
      flex 的 align-items:center 只管到"块"，块内部的行内盒仍按基线对齐，
@@ -91,19 +103,17 @@ const componentIcon = computed<Component | null>(() =>
      display:flex + align-items:center 把行内盒也真正压到中线。 */
   display: flex;
   align-items: center;
-  flex: 0 0 80%;
-  width: 80%;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 80%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .base-title__extra {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
-  max-width: 20%;
+  max-width: 55%;
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -111,8 +121,9 @@ const componentIcon = computed<Component | null>(() =>
   white-space: nowrap;
 }
 
+/* 附加内容自己也不收缩：它只有几个字符，被压缩就变成读不出来的残缺文本 */
 .base-title__extra> :deep(span) {
-  flex-shrink: 1;
+  flex: 0 0 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

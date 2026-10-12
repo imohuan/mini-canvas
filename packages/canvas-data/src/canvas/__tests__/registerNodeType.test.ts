@@ -108,6 +108,27 @@ describe('registerNodeType（插件"一次自描述"节点注册接缝）', () =
   })
 
   /**
+   * titleExtra（标题右侧附加文本）：与 icon 同一条链、同一个理由 —— 类型自己声明。
+   * 字符串（静态文案）与函数（按 data 现算，如图片/视频的宽高）两种形态都要活着到类型表。
+   */
+  it('titleExtra 随类型注册落入 nodeStore（字符串与函数句柄原样透传）', async () => {
+    const compute = (d: Record<string, unknown>): string => `${d.imageWidth}×${d.imageHeight}`
+    const { nodeStore } = await bootWithSetup((ctx) => {
+      registerNodeType(ctx, { type: 'with-extra', label: '带附加文本', defaultSize: { w: 10, h: 10 }, titleExtra: '预览' })
+      registerNodeType(ctx, { type: 'fn-extra', label: '现算', defaultSize: { w: 10, h: 10 }, titleExtra: compute })
+    })
+    expect(nodeStore.types.get('with-extra')?.titleExtra).toBe('预览')
+    expect(nodeStore.types.get('fn-extra')?.titleExtra).toBe(compute)
+  })
+
+  it('未声明 titleExtra 时字段为 undefined（标题右侧那一格据此不渲染）', async () => {
+    const { nodeStore } = await bootWithSetup((ctx) => {
+      registerNodeType(ctx, { type: 'no-extra', label: '无', defaultSize: { w: 1, h: 1 } })
+    })
+    expect(nodeStore.types.get('no-extra')?.titleExtra).toBeUndefined()
+  })
+
+  /**
    * 类型级「不要卡片边框」能力（frameless）。
    *
    * 背景：卡片边框来自共享外壳（BaseNode），本意是让节点从画布背景上浮起来。

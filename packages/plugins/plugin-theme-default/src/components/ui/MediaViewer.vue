@@ -51,7 +51,12 @@ const props = withDefaults(
   { item: null, onDelete: undefined, previewComponents: null },
 )
 
-const emit = defineEmits<{ (e: "close"): void; (e: "remove", item: MediaViewerItem): void }>()
+const emit = defineEmits<{
+  (e: "close"): void
+  (e: "remove", item: MediaViewerItem): void
+  /** 当前看的是 list 里的第几张（宿主传了 list 时才有意义；删除要按它算） */
+  (e: "index", index: number): void
+}>()
 
 const item = computed(() => props.item ?? null)
 const canRemove = computed(() => typeof props.onDelete === "function")
@@ -144,11 +149,13 @@ function prevImage(): void {
   if (!isMultiple.value) return
   currentIdx.value = (currentIdx.value - 1 + list.value.length) % list.value.length
   resetTransform()
+  emit("index", currentIdx.value)
 }
 function nextImage(): void {
   if (!isMultiple.value) return
   currentIdx.value = (currentIdx.value + 1) % list.value.length
   resetTransform()
+  emit("index", currentIdx.value)
 }
 
 // ===== 下载（AxImageViewer 同款：fetch 转 blob；跨域失败退开新窗口） =====
@@ -200,6 +207,7 @@ watch(item, (v) => {
   if (typeof document === "undefined") return
   if (v) {
     currentIdx.value = Math.min(Math.max(v.index ?? 0, 0), Math.max(list.value.length - 1, 0))
+    emit("index", currentIdx.value)
     resetTransform()
     document.body.style.overflow = "hidden"
   } else {

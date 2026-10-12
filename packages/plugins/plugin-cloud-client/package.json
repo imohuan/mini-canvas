@@ -3,11 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "miniCanvas": {
+    "title": "云端连接",
+    "description": "连上 cloud-server 后台：画布存档 / 生成动作 / 生成历史 / 实时跟随（不装它则画布只有本地能力）",
+    "pluginName": "cloud-client",
+    "installable": true,
+    "web": { "format": "esm" },
+    "defaultInstalled": false
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
-    "./manager": { "types": "./src/manager/index.ts", "default": "./src/manager/index.ts" },
     "./*": "./src/*"
   },
   "scripts": {

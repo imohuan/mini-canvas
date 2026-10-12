@@ -9,7 +9,9 @@
  * 为什么按 kind 自动选它：这是用户要求的"识别到固定类型参数就用预设组件"的第一号例子。
  * 工具作者只要声明 kind:'ratio'，不必自己画这套图标。
  *
- * 主题无关：颜色走 token；宽高比是几何，不是配色。
+ * 配色**不用主题色**（用户口径 2026-10-12「这里其实不需要使用主题颜色……就和你的右键菜单一样」）：
+   底色只用灰阶 —— 未选透明底 + 发丝边，选中 = 浅灰底 + 粗体 + 无边框。
+   宽高比是几何（按真实比例画的描边小矩形），不是配色。
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
@@ -106,16 +108,18 @@ function pick(value: string | number): void {
   height: 20px;
   display: flex;
   align-items: center;
-  color: var(--ui-ink-mute, #8c95a3);
+  /* 标题按参考稿（text-xs font-bold text-gray-800）：比正文重、比正文深 */
+  color: var(--ui-ink, #18202b);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 20px;
 }
 .trg-grid {
   display: grid;
   gap: 8px;
 }
-/* 比例格：比普通格高（有图标 + 文字两行），参考站实测 57×63、padding 12px 4px */
+/* 比例格：比普通格高（有图标 + 文字两行）。数值照参数面板参考稿 h-14（56 高）、
+   rounded-xl（12 圆角，在 16 圆角的面板里正是嵌套阶梯的下一级）、p-2（8 内边距）。 */
 .trg-cell {
   display: inline-flex;
   flex-direction: column;
@@ -124,10 +128,10 @@ function pick(value: string | number): void {
   gap: 4px;
   box-sizing: border-box;
   min-width: 0;
-  min-height: 63px;
-  padding: 12px 4px;
+  min-height: 56px;
+  padding: 8px;
   border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   color: var(--ui-ink, #18202b);
   font-family: inherit;
@@ -140,8 +144,11 @@ function pick(value: string | number): void {
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
 }
 .trg-cell.is-active {
-  border-color: transparent;
-  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
+  /* 选中 = 深色描边 + 浅灰底 + 粗体（参考稿的"选中格"结构，只是不用主题色）。
+     深色走 --ui-ink：亮色主题下是近黑、暗色主题下是近白 —— 一档变量吃两套主题。 */
+  border-color: var(--ui-ink, #18202b);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+  color: var(--ui-ink, #18202b);
   font-weight: 600;
 }
 .trg-cell:disabled {
@@ -149,7 +156,8 @@ function pick(value: string | number): void {
   cursor: not-allowed;
 }
 .trg-cell:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  /* 焦点环也走灰阶（与右键菜单同口径：整块面板不用主题色） */
+  outline: 2px solid color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
   outline-offset: 1px;
 }
 /* 图标位：固定 17×17，内部矩形居中 */

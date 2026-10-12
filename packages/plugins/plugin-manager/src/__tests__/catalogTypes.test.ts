@@ -40,9 +40,21 @@ describe('resolveDesiredIds —— 「这次该装哪些」', () => {
     { id: 'c', name: 'c', url: '/c.js' },
   ]
 
-  it('首次（没有存档）→ 默认装全部 defaultInstalled≠false 的', () => {
-    expect(defaultInstalledIds(entries)).toEqual(['a', 'c'])
-    expect(resolveDesiredIds(entries, undefined)).toEqual(['a', 'c'])
+  it('首次（没有存档）→ 一个都不自动装（用户要求：全部由用户在面板里自己挑）', () => {
+    // 默认策略是**显式 opt-in**：只有作者写了 defaultInstalled: true 才自动装。
+    // 这三条都没写 → 首次为空。旧的"没写就装"会让用户在自己没点过的情况下被装上插件。
+    expect(defaultInstalledIds(entries)).toEqual([])
+    expect(resolveDesiredIds(entries, undefined)).toEqual([])
+  })
+
+  it('显式声明 defaultInstalled: true 的才进"首次默认装"（opt-in）', () => {
+    const optIn = [
+      { id: 'a', name: 'a', url: '/a.js', defaultInstalled: true },
+      { id: 'b', name: 'b', url: '/b.js' },
+      { id: 'c', name: 'c', url: '/c.js', defaultInstalled: false },
+    ]
+    expect(defaultInstalledIds(optIn)).toEqual(['a'])
+    expect(resolveDesiredIds(optIn, undefined)).toEqual(['a'])
   })
 
   it('有存档 → 用存档（用户卸过的不自动装回来）', () => {
@@ -56,10 +68,11 @@ describe('resolveDesiredIds —— 「这次该装哪些」', () => {
 
   it('自带插件（builtin）不进"待装"集合 —— 插件管理不碰它们', () => {
     const withBuiltin = [
-      { id: 'a', name: 'a', url: '/a.js' },
-      { id: 'b', name: 'b', url: '/b.js', builtin: true },
-      { id: 'c', name: 'c', url: '/c.js' },
+      { id: 'a', name: 'a', url: '/a.js', defaultInstalled: true },
+      { id: 'b', name: 'b', url: '/b.js', builtin: true, defaultInstalled: true },
+      { id: 'c', name: 'c', url: '/c.js', defaultInstalled: true },
     ]
+    // builtin 即使声明了 defaultInstalled 也不进（它由应用冷启动装配，插件管理不碰）
     expect(defaultInstalledIds(withBuiltin)).toEqual(['a', 'c'])
     expect(resolveDesiredIds(withBuiltin, undefined)).toEqual(['a', 'c'])
     // 存档里即便写了 builtin 的 id，也不认（它不可装卸）

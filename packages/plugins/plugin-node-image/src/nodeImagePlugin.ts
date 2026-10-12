@@ -14,6 +14,7 @@
 import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
+import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
@@ -160,6 +161,9 @@ export function apply(ctx: Context) {
     nameTemplate: '图片 {{ID}}',
     description: '在画布中添加一张图片',
     icon: NODE_ICON,
+    // 标题右侧显示原图分辨率（1920×1080）：派生值按 data 现算，不写进 data ——
+    // 尺寸一变就写一次 data 会让每次裁剪/旋转多出一条撤销记录。
+    titleExtra: imageTitleExtra,
     size: { w: 320, h: 240 },
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考），
     // 底部生成面板的素材行本就是按「所有连进来的上游」渲染的（见 panelSource 的 collectUpstreamMaterials）。

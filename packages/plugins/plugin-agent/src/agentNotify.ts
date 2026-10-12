@@ -7,12 +7,14 @@
  * 抽出来、浏览器对象全部可注入，就能在 node 里单测；主组件
  * （AgentConversation.vue）只在 SSE 事件到来时调这里。
  *
- * 两条底线：
+ * 三条底线：
  *   1. 任何异常都吞掉 —— 通知失败绝不能影响对话本身；
- *   2. 缺省 / 垃圾值一律当「关」—— 宁可安静，不要误弹。
+ *   2. **缺省（用户从没动过开关）回落设置弹窗的同一份默认值** —— 两处默认值不一致，
+ *      就是「设置里显示开着、实际一条都不弹」（见 DEFAULT_NOTIFY_PREFS 的说明）；
+ *   3. 读不到 / 读失败（后台没起、网络错）当「关」—— 不知道用户设什么时不要乱弹。
  */
 
-/** 通知的两个开关（KV 键 agentNotify 的值）；缺省都是关 */
+/** 通知的两个开关（KV 键 agentNotify 的值）；**用户从没动过（缺省）时与设置弹窗一致：都开** */
 export interface AgentNotifyPrefs {
   /** 浏览器系统通知（走操作系统通知中心） */
   notify: boolean
@@ -20,13 +22,30 @@ export interface AgentNotifyPrefs {
   sound: boolean
 }
 
+/**
+ * 缺省（KV 里没这个键 / 字段不是布尔）时回落的默认值 —— **必须与设置弹窗对齐**。
+ *
+ * 对齐的是 packages/ui/src/composables/agentSettings.ts 的 `DEFAULT_AGENT_NOTIFY`：
+ * 那个弹窗读不到键时显示的是「开」（绿色开关）。曾经这里回落「关」，于是用户看到
+ * 开关本来就是开的、没有理由再去点它，后台就**永远**没有这个键，这里就**永远**读到关，
+ * 通知一次都不弹（用户报的「通知没效果」正是它）。
+ *
+ * 跨包不能共享常量（依赖方向是 ui → plugins，插件反向 import 不到 ui），所以两处各写一份。
+ * 为防止再次漂移，__tests__/agentNotify.test.ts 里有一条直接读 ui 源码比对的护栏测试。
+ */
+export const DEFAULT_NOTIFY_PREFS: AgentNotifyPrefs = { notify: true, sound: true }
+
 /** 只认布尔：字符串 'true'、数字 1 这类「看着像」的值一律不算（宁可安静，不要误弹） */
 function boolOf(v: unknown): boolean | undefined {
   return typeof v === 'boolean' ? v : undefined
 }
 
-/** 全关：读数失败 / 从没保存过 / 垃圾值的统一回落值（每次给一份新对象，调用方改了也不影响别人） */
-function off(): AgentNotifyPrefs {
+/**
+ * 读不到 / 读失败时的兜底：**全关**。
+ * 与「缺省」刻意分开 —— 缺省有确定答案（用默认值）；这里是「后台没起 / 网络错」，
+ * 压根不知道用户设的是什么，按「静默」处理（首屏也不能因为后台没起就报错）。
+ */
+function silent(): AgentNotifyPrefs {
   return { notify: false, sound: false }
 }
 
@@ -35,16 +54,17 @@ function off(): AgentNotifyPrefs {
  *   true                              → { notify: true, sound: true }（整键就是一个布尔的旧形状）
  *   { notify: boolean, sound: boolean }
  *   { browser: boolean, sound: boolean }（设置弹窗可能用 browser 这个词）
- * 显式 false 必须尊重（不能因为另一个字段就变 true）；缺省 / 垃圾值一律回落 false。
- * 两个字段都没有时回落到顶层布尔（有的话）。
+ * 显式 false 必须尊重（不能因为另一个字段就变 true）；
+ * 缺省 / 非布尔值一律回落 DEFAULT_NOTIFY_PREFS —— 与设置弹窗的归一化口径逐字对齐。
+ * 两个字段都没有时先看顶层布尔（老形状），再回落默认值。
  */
 export function parseNotifyPrefs(raw: unknown): AgentNotifyPrefs {
   // 顶层布尔 = 老形状（整键就是一个 true/false）：一个值同时当两个开关
-  const topLevel = boolOf(raw) ?? false
+  const topLevel = boolOf(raw)
   const o: Record<string, unknown> = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   // notify / browser 是同一格的两种叫法；都没有就回落顶层布尔
-  const notify = boolOf(o.notify) ?? boolOf(o.browser) ?? topLevel
-  const sound = boolOf(o.sound) ?? topLevel
+  const notify = boolOf(o.notify) ?? boolOf(o.browser) ?? topLevel ?? DEFAULT_NOTIFY_PREFS.notify
+  const sound = boolOf(o.sound) ?? topLevel ?? DEFAULT_NOTIFY_PREFS.sound
   return { notify, sound }
 }
 
@@ -62,18 +82,22 @@ const CONFIG_BUCKET_PATH = '/api/kv/config?values=1'
 
 /**
  * 读后台 KV 里的通知开关（经 config 批量口）。
- * 没这个键（从没保存过）/ 网络错 / 没有 fetch（node）→ 全 false，绝不抛 ——
+ * 两种「读不到」刻意分开处理：
+ *   · **键不存在 / 字段不是布尔**（用户从没动过开关）→ 回落 DEFAULT_NOTIFY_PREFS
+ *     （与设置弹窗显示的一致：都开）—— 这正是「显示开着却不弹」那个 bug 的修法；
+ *   · **网络错 / 没 fetch / HTTP 不 ok**（不知道后台状态）→ 全关（silent），绝不抛。
  * 首屏不能因为后台没起就报错。
  */
 export async function loadNotifyPrefs(opts: { fetchImpl?: typeof fetch; baseUrl?: string } = {}): Promise<AgentNotifyPrefs> {
-  if (!opts.fetchImpl && typeof fetch === 'undefined') return off()
+  if (!opts.fetchImpl && typeof fetch === 'undefined') return silent()
   const f = opts.fetchImpl ?? fetch
   const base = (opts.baseUrl ?? '').replace(/\/+$/, '')
   try {
     const res = await f(base + CONFIG_BUCKET_PATH, { headers: { accept: 'application/json' } })
-    if (!res.ok) return off()
+    if (!res.ok) return silent()
     const body = (await res.json()) as unknown
-    // 批量口的体是 { values: { key: value } }；缺这个键 = 从没保存过 → 全 false。
+    // 批量口的体是 { values: { key: value } }；缺这个键 = 从没保存过 → 回落默认值
+    // （parseNotifyPrefs(undefined) 就是「缺省」那一支）。
     // 也接受“直接把值当体”的老形状（宿主/测试注入的替身可能这么给）。
     const values =
       body && typeof body === 'object' && 'values' in body
@@ -83,7 +107,7 @@ export async function loadNotifyPrefs(opts: { fetchImpl?: typeof fetch; baseUrl?
     const raw = body && typeof body === 'object' && 'value' in body ? (body as { value: unknown }).value : body
     return parseNotifyPrefs(raw)
   } catch {
-    return off()
+    return silent()
   }
 }
 

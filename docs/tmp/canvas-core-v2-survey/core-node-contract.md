@@ -292,15 +292,15 @@
 
 ### 3.1 是什么 / 谁用
 
-节点标题条，移植自 v1 Decoration/BaseTitle，纯展示组件（文件头 :2-5）。三段布局：图标 → 标签（80%）
-→ extra（≤20%）。仅 BaseNode 默认标题条使用（BaseNode.vue:753-763，自定义 title 段注册时不走它）。
+节点标题条，移植自 v1 Decoration/BaseTitle，纯展示组件（文件头 :2-5）。三段布局：图标 → 标签（吞掉剩余宽）
+→ extra（按内容宽，上限 55%）。仅 BaseNode 默认标题条使用（BaseNode.vue:753-763，自定义 title 段注册时不走它）。
 
 ### 3.2 对外接口
 
 - **props**：`label?: string`、`titleIcon?: unknown`（opaque 句柄）、`titleStyle?: CSSProperties`、
   `interactive?: boolean`（开 pointer-events）、`editing?: boolean`（样式钩子）。
 - **slots**：`title-icon`（默认图标渲染）、`title-label`（默认 label 文本；BaseNode 在这里放 TitleLabel）、
-  `title-extra`（右侧附加内容，max-width 20%）。
+  `title-extra`（右侧附加内容；按内容宽先拿，上限 55%）。
 - **emits：无**。**注入：无**（唯一 import 是 kernel 的 iconRenderMode）。
 
 ### 3.3 不变量
@@ -310,6 +310,10 @@
    其它 → `<component :is>`。baseTitleIcon.test.ts 锁死五种输入。
 2. **标签槽宽恒 80% / extra ≤20%**（CSS :88-103/105-116）：文字省略 + 单行；extra 里多个 span
    也可收缩省略（:118-124）。
+    **2026-10-11 改为**：extra 按内容宽先拿（`flex:0 0 auto`，上限 55%），标签拿剩余宽
+    （`flex:1 1 auto` + `min-width:0`）放不下才省略。原因：旧比例在窄节点上把 extra 压到几十像素，
+    尺寸文字被截成 `20...`（用户实测截图）；右侧最多 9 个字符且"缺一个就读不出"，
+    优先级应高于可省略的左侧名称。
 3. **默认不可交互**：根元素 `pointer-events:none`，interactive 才 auto（CSS :68-79）；
    BaseNode 传 interactive=true。
 4. **纯展示**：无状态、无副作用；编辑态样式（base-title--editing）只是视觉钩子，真正编辑逻辑

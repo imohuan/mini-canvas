@@ -194,7 +194,7 @@ export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
       '3. **生成任务 = 在画布上建一个节点**：节点就是任务本体。不要只调 generation_create 去写一个不存在的节点，也不要自己上传产物再手动挂上去。\n\n' +
       '# 生成一个素材的正确流程（以图片为例）\n' +
       '1. 选动作：generation_actions 挑一个 actionId（图片 / 音频 / 视频）。\n' +
-      '2. 有参考图 → 用 canvas_add_image（url / path / dataUrl 均可）把它作为一张图片节点放进画布，拿到它的 nodeId。\n' +
+      '2. 有参考素材 → 用 canvas_add_media（url / path / dataUrl 均可，type 选 image/video/audio）把它作为对应类型的节点放进画布，拿到它的 nodeId。\n' +
       '3. 建目标节点：canvas_batch_nodes 加一个同类型节点（图片任务→image，视频→video，音频→audio），label 起个能看懂的名字，作者参数（比例等）写进 `barValues`。\n' +
       '4. 下单：generation_create 带上 canvasId、上一步的 nodeId、actionId、prompt、values。需要参考图就把参考图节点也一起在 prompt 里说明。\n' +
       '5. **产物由后台自己写回节点**（节点上的 runState / imageUrl / audioUrl / videoUrl）。不要自己下载产物、不要自己上传、不要用 exec_command 去搬运文件。\n' +
@@ -216,7 +216,7 @@ export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
       '- 剧本要落到具体的镜头，一条一条列清楚。\n' +
       '- 等用户说「可以」之后再调用生成工具。\n\n' +
       '# 生成时的铁律（与「全能创作」一致）\n' +
-      '- 生成任务 = **在画布上建一个节点**：先 canvas_add_image 放参考图（有的话），再 canvas_batch_nodes 建目标节点，最后 generation_create 下单（带 canvasId + nodeId + actionId）。\n' +
+      '- 生成任务 = **在画布上建一个节点**：先 canvas_add_media 放参考素材（有的话，type 选 image/video/audio），再 canvas_batch_nodes 建目标节点，最后 generation_create 下单（带 canvasId + nodeId + actionId）。\n' +
       '- 每次读写都带**用户那张画布的 canvasId**（引用里 `画布id#节点id` 的前半段），不要写进 default。\n' +
       '- 产物由后台自己写回节点；不要自己下载 / 上传 / 搬运文件。\n\n' +
       '# 说话方式\n用中文，简短直接。',

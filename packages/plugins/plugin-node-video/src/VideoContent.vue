@@ -26,7 +26,7 @@ import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePat
 function positiveNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
-import { createVideoOps, displaySizeOf } from './videoOps'
+import { createVideoOps } from './videoOps'
 import { endOverlay, isCropping } from './videoSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -292,13 +292,6 @@ onBeforeUnmount(() => {
   endOverlay(props.id)
 })
 
-/** 卡片上显示的元信息（裁剪中显示原画面尺寸 —— 那时调的是整幅画面） */
-const stageLabel = computed(() => {
-  const d = displaySizeOf(props.data)
-  const w = cropping.value ? videoWidth.value : d.width
-  const h = cropping.value ? videoHeight.value : d.height
-  return w > 0 && h > 0 ? `${w}×${h}` : ''
-})
 </script>
 
 <template>
@@ -367,8 +360,6 @@ const stageLabel = computed(() => {
       </button>
     </div>
 
-    <!-- 右上角元信息（裁剪时显示原画面尺寸） -->
-    <div v-if="stageLabel && !cropping" class="video-badge">{{ stageLabel }}</div>
   </div>
 
   <!-- 全屏层：刻意纯黑无装饰，Esc / 双击 / 点背景退出。 -->
@@ -559,21 +550,6 @@ const stageLabel = computed(() => {
   margin: 0;
   opacity: 0;
   cursor: pointer;
-}
-
-/* 右上角元信息小标签（灰阶、发丝边，不抢画面） */
-.video-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 8;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: var(--ui-tip, rgba(17, 24, 39, 0.66));
-  color: color-mix(in srgb, var(--ui-tip-ink, #fff) 85%, transparent);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  pointer-events: none;
 }
 
 /* 空态 / 失效态：站在灰底上，所以用节点文字色而不是白字（图片节点同一套） */

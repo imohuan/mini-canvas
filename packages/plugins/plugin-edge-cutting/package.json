@@ -7,7 +7,7 @@
     "title": "连线切割",
     "description": "按住 Alt 拖拽划过连线即可删除",
     "pluginName": "edge-cutting",
-    "installable": true
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

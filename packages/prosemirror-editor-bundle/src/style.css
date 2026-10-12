@@ -122,7 +122,7 @@
 /* 终极修复：选中背景 */
 /* 1. 当 ProseMirror 将其标记为选中节点时 */
 .prose-mirror-editor .ProseMirror-selectednode.resource-node {
-  background-color: #2b6df2 !important;
+  background-color: var(--ui-accent, #0891b2) !important;
   color: #ffffff !important;
   outline: none;
   /* 确保选中时也保持正确的高度和对齐 */
@@ -136,7 +136,7 @@
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: #2b6df2 !important;
+  background-color: var(--ui-accent, #0891b2) !important;
   color: #ffffff !important;
   outline: none;
   height: 24px;
@@ -166,7 +166,7 @@
 
 /* 2. 处理原生拖拽选中时的背景覆盖 */
 .prose-mirror-editor .ProseMirror ::selection {
-  background-color: #2b6df2 !important;
+  background-color: var(--ui-accent, #0891b2) !important;
   color: #ffffff !important;
 }
 
@@ -266,7 +266,7 @@
 
 .mention-menu .menu-item.active {
   background-color: var(--ui-accent-soft, #eff6ff);
-  color: var(--ui-accent, #2b6df2);
+  color: var(--ui-accent, var(--ui-accent, #0891b2));
 }
 
 .mention-menu .menu-item img {
@@ -288,7 +288,7 @@
 }
 
 .mention-menu .menu-item.active span {
-  color: var(--ui-accent, #2b6df2);
+  color: var(--ui-accent, var(--ui-accent, #0891b2));
 }
 
 /* 变量菜单项样式 */

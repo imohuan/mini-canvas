@@ -94,6 +94,17 @@ async function main(): Promise<void> {
    console.log("--- 打开真浏览器，等插件装好 ---")
     await sleep(8000)
 
+   // 云端客户端不再自动装载（用户要求手动装）—— 模拟用户点安装，e2e 才验得到实时跟随。
+   await page.ev(
+     `(async () => {
+        const ctx = window.MiniCanvasUI.getContext()
+        const pm = ctx.tryGet('plugin-manager')
+        if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
+      })()`,
+     true,
+   )
+   await sleep(4000)
+
     const ready = await page.ev<{ hasHost: boolean; realtime: boolean; ids: string[] }>(PROBE)
     check('画布跑起来且插件已装上', ready.hasHost, { ids: ready.ids })
     check('★ 插件已连上实时通道（画布会自己跟着 AI 的改动变）', ready.realtime, ready)

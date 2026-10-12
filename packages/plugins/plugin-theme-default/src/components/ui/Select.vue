@@ -6,16 +6,21 @@
  * 支持：v-model(string|number)、options(含 disabled)、placeholder、searchable、键盘上下选择/Enter/Esc。
  *
  * 与老版差异：不依赖 Tailwind / material-symbols / @floating-ui，
- * 视觉改用仓库 UI 规范（灰阶填充、青色强调、内联 SVG、宽松选项节奏）。
- * 动画：与 Dropdown 同步，0.12s ease-out。
+ * 视觉改用仓库 UI 规范（灰阶填充、内联 SVG）。
+ *
+ * 下拉容器走**注册场里登记的那一份**（见 useCatalogDropdown）：成品应用顶替了 dropdown
+ * 就会用那一份，只装主题包时回落本包自带的 Dropdown.vue（用户口径 2026-10-12）。
  *
  * 用法：
  *   <Select v-model="v" :options="[{value:'lr',label:'左→右'},…]" placeholder="请选择" searchable />
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { iconRenderMode } from '@mini-canvas/kernel'
-import Dropdown from './Dropdown.vue'
+import { useCatalogDropdown } from './useCatalogDropdown'
 import type { SelectOption } from './types'
+
+/** 下拉容器：优先用注册场登记的那一份，取不到才回落本包自带 */
+const Dropdown = useCatalogDropdown()
 
 /** 图标形态：html=svg 字符串（v-html）/ component=Vue 组件 / none=无 */
 function iconMode(icon: unknown): 'html' | 'component' | 'none' {
@@ -153,6 +158,19 @@ watch(open, (v) => {
 const dropdownMenuWidth = computed(() =>
   props.dropdownWidth === 'match' ? props.dropdownMinWidth : props.dropdownWidth === 'auto' ? '' : props.dropdownWidth,
 )
+
+/**
+ * 某一行**前面**要不要画一条分隔线：相邻选项的 group 不同就画（与右键菜单的分块同款）。
+ *
+ * 没声明 group 的选项归一为空串 —— 于是「有分组的模型」下面接「没有分组的旋转/下载」也会
+ * 分出一条线（右键菜单里不同类型之间就是这样分开的，用户要求「完全参考」）。
+ * 整个列表都没声明 group 时两边都是空串、一条线都不画，与改造前逐像素一致。
+ */
+function groupBreakAt(index: number): boolean {
+  const list = filteredOptions.value
+  if (index <= 0) return false
+  return (list[index - 1]?.group ?? '') !== (list[index]?.group ?? '')
+}
 </script>
 
 <template>
@@ -217,11 +235,13 @@ const dropdownMenuWidth = computed(() =>
           role="option"
           :aria-selected="modelValue === opt.value"
           class="sel-option"
+          :style="{ '--item-index': index }"
           :class="{
             'is-active': modelValue === opt.value,
             'is-highlight': !(modelValue === opt.value) && highlightIndex === index,
             'is-disabled': opt.disabled,
             hasDescription: !!opt.description,
+            'is-group-start': groupBreakAt(index),
           }"
           @click="selectOption(opt)"
           @mouseenter="highlightIndex = index"
@@ -346,34 +366,32 @@ const dropdownMenuWidth = computed(() =>
   font-weight: 400;
 }
 
-/* ===== 浮层（经 Teleport 到 body，Dropdown 提供底色/圆角/阴影）===== */
-.sel-menu-body {
-  padding: 4px;
-}
-
 .sel-list {
   min-width: 120px;
 }
 
-/* 选项节奏：上下 padding 8px + 选项之间 gap 2px，浮层 4px padding 共同形成清晰分块 */
+/* 行：数值照 .ctx-menu-item（44 高 / 6px 内边距 / 10 行内间距 / 10 圆角）。
+   行与行之间**不留空隙**（右键菜单也是紧挨着的），分块感由内边距给。 */
 .sel-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  min-height: 38px;
+  min-height: 44px;
   box-sizing: border-box;
-  margin-top: 2px;
-  padding: 8px 10px;
+  padding: 6px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--dd-ink, #374151);
   font-size: 13px;
   font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s ease-out, color 0.1s ease-out;
+  transition: background 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 入场：逐项上滑淡入，按索引交错（照右键菜单 .ctx-menu-item） */
+  animation: sel-item-in 0.2s ease both;
+  animation-delay: calc(var(--item-index, 0) * 18ms);
 }
 
 /* 图标托（照右键菜单）：28×28、圆角 8、淡底、次要前景色 */
@@ -398,25 +416,32 @@ const dropdownMenuWidth = computed(() =>
   width: 16px;
   height: 16px;
 }
-/* 有图标时该行至少 44px 高（图标托 28 + 上下 padding），与右键菜单同节奏 */
-.sel-option:has(.sel-option-icon) {
-  min-height: 44px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-.sel-option:first-child {
-  margin-top: 0;
-}
-
 .sel-option:hover,
 .sel-option.is-highlight {
-  background: var(--sf-input-bg-hover, rgba(0, 0, 0, 0.05));
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
 
+/* 分组分隔线（照右键菜单 .ctx-menu-divider 的数值：1px、上下 5px）。
+   相邻选项的 group 不同才画（见 groupBreakAt）；整个列表都没分组时一条都不画。 */
+.sel-option.is-group-start {
+  margin-top: 11px;
+  position: relative;
+}
+.sel-option.is-group-start::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  top: -6px;
+  height: 1px;
+  background: var(--ui-line, rgba(0, 0, 0, 0.06));
+}
+
+/* 当前项：**灰阶**（用户口径 2026-10-12：「这里其实不需要使用主题颜色……就和你的右键菜单一样」）。
+   右键菜单整张卡没有一处强调色；这里同样不铺底色 —— 靠**字重 + 右侧那枚 ✓** 说明「就是它」，
+   而底色只表示"鼠标/键盘停在这一行"。两者分开，键盘上下选时才不会分不清 Enter 会选中哪一行。 */
 .sel-option.is-active {
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12));
-  color: var(--ui-accent, #0e7490);
+  color: var(--ui-ink, #111827);
   font-weight: 600;
 }
 
@@ -436,6 +461,11 @@ const dropdownMenuWidth = computed(() =>
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 行高必须钉在 1：本元素是 .sel-option-copy 的绝对定位子元素，
+     行高若走继承（宿主给了 1.6 → 13px 正文 = 20.8px 行盒），hover 时"名称上移 +
+     描述浮出"这两行就会互相压住（实测：名称下缘 521 压到描述上缘 519，重合 2px）。
+     右键菜单那本（.ctx-menu-label）本来就写着 line-height: 1，这里补齐同一档。 */
+  line-height: 1;
 }
 
 /* ===== 名称/描述区（照右键菜单 .ctx-menu-copy 的 hover 动效）=====
@@ -494,7 +524,8 @@ const dropdownMenuWidth = computed(() =>
   justify-content: center;
   width: 16px;
   height: 16px;
-  color: var(--ui-accent, #0891b2);
+  /* 勾也走灰阶（与右键菜单同口径：整张菜单不用主题色） */
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 .sel-check svg {
@@ -518,5 +549,44 @@ const dropdownMenuWidth = computed(() =>
 }
 .sel-list::-webkit-scrollbar-thumb:hover {
   background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
+}
+
+/* 逐项入场（与右键菜单 .ctx-menu-item 的同名动画逐条对齐） */
+@keyframes sel-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sel-trigger,
+  .sel-arrow,
+  .sel-option,
+  .sel-option-label,
+  .sel-option-description {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>
+
+<style>
+/* 浮层外观（经 Teleport 到 body，必须用全局样式）。
+   数值照右键菜单 .ctx-menu 逐条对齐（用户要求「下拉完全参考右键菜单」）：
+   16 圆角、6px 内边距、**不透明白底**（--ui-overlay-solid，与节点控制栏同一档 ——
+   菜单压在画布节点/图片上，半透明会让底下的内容透出来、字读不清）。
+
+   这里只给变量：浮层元素是 Dropdown 渲染的（带它的 scope id），本组件的 scoped 规则
+   命不中它；而 Dropdown 那条 .dd-menu 规则是 scoped、特异性更高，直接写 padding /
+   border-radius 也盖不住。变量不参与特异性比较，交给那边消费。 */
+.sel-menu-body {
+  --dd-padding: 6px;
+  --dd-radius: 16px;
+  --dd-bg: var(--ui-overlay-solid, #fff);
 }
 </style>

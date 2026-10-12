@@ -6,10 +6,26 @@ import type { PluginModule } from '@mini-canvas/canvas-base'
 /** 假宿主：记着装过哪些插件，支持 install/uninstall/reload/list（与 canvas-render 的 PluginManager 同子集） */
 function fakeHost() {
   const installed = new Map<string, { name: string; state: string; missingDeps: string[] }>()
+  /** 记下每次安装收到的**来源形态**：umd 走模块对象、esm 走 { url } */
+  const sources: Array<{ kind: 'module' | 'url'; value: string }> = []
   return {
     installed,
+    sources,
     manager: {
-      async install(mod: PluginModule) { installed.set(mod.name, { name: mod.name, state: 'active', missingDeps: [] }); return mod.name },
+      async install(source: PluginModule | { url: string }) {
+        if (typeof (source as { url?: unknown }).url === 'string') {
+          const url = (source as { url: string }).url
+          sources.push({ kind: 'url', value: url })
+          // 真实宿主会把 URL 模块 import 进来并用它 export 的 name 注册；这里按 URL 末段模拟一个名字
+          const name = url.split('/').pop()!.replace(/\.js$/, '')
+          installed.set(name, { name, state: 'active', missingDeps: [] })
+          return name
+        }
+        const mod = source as PluginModule
+        sources.push({ kind: 'module', value: mod.name })
+        installed.set(mod.name, { name: mod.name, state: 'active', missingDeps: [] })
+        return mod.name
+      },
       uninstall(name: string) { return installed.delete(name) },
       async reload() { /* noop */ },
       list() { return [...installed.values()] },
@@ -90,15 +106,28 @@ const CATALOG_WITH_SERVER = {
   ],
 }
 
-describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
-  it('首次（没有存档）→ 默认全部装上（用户要求）', async () => {
-    const { svc, host, kv } = boot({ catalog: CATALOG })
+describe('plugin-manager 服务：装 / 卸 / 重装 / 默认策略', () => {
+  it('首次（没有存档）→ 一个都不自动装（用户要求：全部由我在面板里自己挑）', async () => {
+    const { svc, host } = boot({ catalog: CATALOG })
+    await svc.refresh()
+    expect(host.installed.size).toBe(0)
+    expect(svc.state.rows.every((r) => !r.installed)).toBe(true)
+    // 清单照样拉到（面板要能列出它们，用户才好挑）
+    expect(svc.state.rows.map((r) => r.entry.id)).toEqual(['plugin-a', 'plugin-b'])
+  })
+
+  it('作者显式声明 defaultInstalled: true 的才自动装（opt-in）', async () => {
+    const catalog = {
+      ok: true,
+      plugins: [
+        { id: 'plugin-a', name: 'a', title: 'A', url: '/plugins/plugin-a/a.js', defaultInstalled: true },
+        { id: 'plugin-b', name: 'b', title: 'B', url: '/plugins/plugin-b/b.js' },
+      ],
+    }
+    const { svc, host } = boot({ catalog })
     await svc.refresh()
     expect(host.installed.has('plugin-a')).toBe(true)
-    expect(host.installed.has('plugin-b')).toBe(true)
-    expect(svc.state.rows.every((r) => r.installed)).toBe(true)
-    // 存档写回（下次照旧）
-    expect(kv.get(INSTALLED_KEY)).toEqual(['plugin-a', 'plugin-b'])
+    expect(host.installed.has('plugin-b')).toBe(false)
   })
 
   it('有存档 → 只装存档里、此刻未装的（用户卸过的不自动回来）', async () => {
@@ -112,8 +141,10 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
   })
 
   it('卸载 → 内核里消失，存档更新', async () => {
-    const { svc, host, kv } = boot({ catalog: CATALOG })
+    // 先显式装上两个（新策略下首次不自动装，故用"存档 = 已装"表达用户此前装过它们）
+    const { svc, host, kv } = boot({ catalog: CATALOG, savedInstalled: ['plugin-a', 'plugin-b'] })
     await svc.refresh()
+    expect(host.installed.has('plugin-a')).toBe(true)
     await svc.uninstall('plugin-a')
     expect(host.installed.has('plugin-a')).toBe(false)
     expect(kv.get(INSTALLED_KEY)).toEqual(['plugin-b'])
@@ -121,11 +152,20 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
   })
 
   it('重装 → 先卸再按（破缓存的）地址重新装上', async () => {
-    const { svc, host } = boot({ catalog: CATALOG })
+    const { svc, host } = boot({ catalog: CATALOG, savedInstalled: ['plugin-a'] })
     await svc.refresh()
     await svc.reinstall('plugin-a')
     expect(host.installed.has('plugin-a')).toBe(true)
     expect(svc.state.rows.find((r) => r.entry.id === 'plugin-a')?.installed).toBe(true)
+  })
+
+  it('面板手动装一个（用户点击「安装」）→ 装进内核并记进存档', async () => {
+    const { svc, host, kv } = boot({ catalog: CATALOG })
+    await svc.refresh()
+    expect(host.installed.size).toBe(0)
+    await svc.install('plugin-a')
+    expect(host.installed.has('plugin-a')).toBe(true)
+    expect(kv.get(INSTALLED_KEY)).toEqual(['plugin-a'])
   })
 
   it('拉清单失败 → state.error 有说明、ready=false（界面能显示，不静默）', async () => {
@@ -151,12 +191,14 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
       win: {},
     })
     await svc.refresh()
+    // 新策略下首次不自动装 → 必须显式点安装才会去要宿主句柄，故这里手动触发一次
+    await svc.install('plugin-a')
     const row = svc.state.rows.find((r) => r.entry.id === 'plugin-a')
     expect(row?.error).toContain('pluginManager')
   })
 
   it('并发 refresh 只跑一趟（后一次复用前一次的 Promise，不把 rows 换成孤儿）', async () => {
-    const { svc, host } = boot({ catalog: CATALOG })
+    const { svc, host } = boot({ catalog: CATALOG, savedInstalled: ['plugin-a', 'plugin-b'] })
     // 同时发起两次：若各建一批 rows，先发起那次写在孤儿行上 → 有的插件永远「未装」
     await Promise.all([svc.refresh(), svc.refresh()])
     expect(host.installed.has('plugin-a')).toBe(true)
@@ -164,9 +206,9 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
     expect(svc.state.rows.every((r) => r.installed)).toBe(true)
   })
 
-  it('默认全装时某条装失败 → 意图仍记着它（下次启动补装，不会永远丢）', async () => {
+  it('补装时某条装失败 → 意图仍记着它（下次启动补装，不会永远丢）', async () => {
     // 让 plugin-b 的脚本加载失败
-    const { svc, host, kv } = boot({ catalog: CATALOG, failUrls: ['plugin-b'] })
+    const { svc, host, kv } = boot({ catalog: CATALOG, failUrls: ['plugin-b'], savedInstalled: ['plugin-a', 'plugin-b'] })
     await svc.refresh()
     expect(host.installed.has('plugin-a')).toBe(true)
     expect(host.installed.has('plugin-b')).toBe(false)
@@ -206,6 +248,28 @@ describe('plugin-manager 服务：装 / 卸 / 重装 / 默认全装', () => {
     await new Promise((r) => setTimeout(r, 0))
     await new Promise((r) => setTimeout(r, 0))
     expect(host.installed.has('plugin-a')).toBe(true)
+  })
+
+  it('format=esm 的插件走宿主 install({ url })（不走 <script>）—— 面板才能装云端客户端那种自包含 ESM', async () => {
+    const catalog = {
+      ok: true,
+      plugins: [
+        { id: 'plugin-cloud-client', name: 'cloud-client', title: '云端连接', url: '/plugins/plugin-cloud-client/plugin-cloud-client.js', format: 'esm' },
+      ],
+    }
+    const { svc, host } = boot({ catalog })
+    await svc.refresh()
+    await svc.install('plugin-cloud-client')
+    // 关键：交给宿主的是 **URL 来源**（宿主内部 import(data:) 加载），不是 UMD 模块对象
+    expect(host.sources).toEqual([{ kind: 'url', value: 'http://127.0.0.1:5320/plugins/plugin-cloud-client/plugin-cloud-client.js' }])
+    expect(svc.state.rows.find((r) => r.entry.id === 'plugin-cloud-client')?.installed).toBe(true)
+  })
+
+  it('format 缺省的插件仍走 UMD（<script>）—— 既有插件行为不变', async () => {
+    const { svc, host } = boot({ catalog: CATALOG })
+    await svc.refresh()
+    await svc.install('plugin-a')
+    expect(host.sources).toEqual([{ kind: 'module', value: 'plugin-a' }])
   })
 })
 

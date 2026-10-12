@@ -278,6 +278,32 @@ describe('素材卡：图片卡（正方形 + cover + 图片本身模糊）', ()
     expect(html).toContain('nb-card-text')
     expect(html).not.toContain('nb-card-img')
   })
+
+  /**
+   * 用户口径（2026-10-12）：「在右上角区域 hover 时，应该显示一个关闭按钮……点击该按钮后
+   * 可以进行关闭，即删除与该图片相关的连接线」。
+   *
+   * 这里锁 DOM 结构：卡片里「预览命中区」与「关闭按钮」是两个**兄弟**按钮
+   * （按钮里套按钮是非法 HTML），关闭按钮带可读的 aria-label + title。
+   * 「点它真的断连线」靠真机核对（SSR 没有 DOM 事件）。
+   */
+  it('素材卡带右上角关闭按钮（aria-label/title 齐，且与卡片命中区是兄弟不是嵌套）', async () => {
+    const ctx = makeCtx()
+    ;(ctx as unknown as { renderEdges: { value: unknown[] } }).renderEdges.value = [{ source: 'n1', target: 'n2' }]
+    ;(ctx as unknown as { renderNodes: { value: unknown[] } }).renderNodes.value = [
+      { id: 'n1', type: 'image', data: { imageUrl: 'https://x/a.png', label: '图A' } },
+      { id: 'n2', type: 'image', data: {} },
+    ]
+    const html = await render(NodeBottomBar as Component, { id: 'n2', data: {} }, ctx)
+    // 关闭按钮：类名 + 语义标签都在
+    expect(html).toContain('nb-remove')
+    expect(html).toMatch(/aria-label="移除素材[^"]*"/)
+    expect(html).toContain('移除素材（断开连线）')
+    // 整卡点击预览仍是原生按钮（键盘 Enter/Space 可达）
+    expect(html).toContain('nb-card-hit')
+    // 结构：关闭按钮不是嵌在命中按钮里（`<button ...><button` 这个形态不许出现）
+    expect(html).not.toMatch(/<button[^>]*nb-card-hit[^>]*>\s*<button/)
+  })
 })
 
 describe('展开按钮：变成 dialog（用户要求）', () => {

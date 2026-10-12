@@ -146,6 +146,22 @@ export interface CanvasNodeType {
   /** 节点类型图标（opaque 句柄：SVG 字符串或 Vue 组件；内核不解析）。菜单"新建节点"与节点标题共用。 */
   icon?: unknown
   /**
+   * 节点标题右侧的附加文本（节点类型自述；缺省 = 不显示）。
+   *
+   * 为什么放在类型声明里（与 icon 同层、同一个理由）：标题右上角该不该有字、显示什么，
+   * **最清楚的是类型自己** —— 图片/视频节点要显示"1280×720"，文本节点可能要显示字数。
+   * 默认壳（BaseNode）不认识任何业务类型，只按声明渲染，不给节点类型写分支。
+   *
+   * 两种形态：
+   * - 字符串：静态文案（"预览" / "草稿"）；
+   * - 函数：按节点 data 现算（见 TitleExtraSource）。派生值（宽高、字数、时长）走函数形态 ——
+   *   它们**不该写进 data**：写进去就成了落盘字段，每次尺寸变化多一条历史噪音，
+   *   还会被后台/MCP 复制粘贴带跑。
+   *
+   * 函数返回空串/undefined 时该节点不渲染这一格（拿不到尺寸就什么都不显示）。
+   */
+  titleExtra?: TitleExtraSource
+  /**
    * 一句话说明这个节点是干什么的（可选）。菜单"新建节点"项的 hover 小字读它。
    *
    * 与 icon 同一条链、同一个理由：类型自己最清楚自己是什么，声明在本处即免去
@@ -182,6 +198,12 @@ export interface CanvasNodeType {
    */
   loadingDefaultSize?: boolean
 }
+
+/**
+ * 标题右侧附加文本的来源：静态字符串，或按节点 data 现算的函数。
+ * 见 CanvasNodeType.titleExtra —— 函数形态专供派生值（宽高/字数/时长），不落盘。
+ */
+export type TitleExtraSource = string | ((data: Record<string, unknown>) => string | undefined)
 
 /** NodeStore 作为 ctx 服务暴露的接口 */
 export interface NodeStoreService {

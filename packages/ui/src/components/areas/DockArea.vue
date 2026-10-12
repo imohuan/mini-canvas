@@ -16,19 +16,20 @@ import AxMenu from '../AxMenu.vue'
 import AxMenuItem from '../AxMenuItem.vue'
 import AgentOrb from '../AgentOrb.vue'
 import { useUi } from '../../composables/ui'
-import { queueUploadFiles } from '../../composables/assetUploadBus'
+import { openUploadDialog } from '../../composables/assetUploadBus'
 import { ref } from 'vue'
 
 const ui = useUi()
 const s = ui.state
 
 /**
- * 「+ → 上传」：挑本地文件（可多选，图片 / 视频 / 音频）→ 交给上传弹窗预填。
+ * 「+ → 上传」：挑本地文件（可多选，图片 / 视频 / 音频）→ **直接落画布**成节点。
  *
- * 为什么要绕一步进弹窗（用户口径 2026-10-11「这边可以上传多个文件，支持图片、视频、音频批量上传」）：
- * 批量上传必须还能**改名 / 选保存位置 / 打标签**，静默直传就没有这些了；
- * 所以走的是与「+ → 上传资产」同一个弹窗、同一条落库路径
- * （经 assetUploadBus → 常驻的 AssetUploadHost 开窗）。
+ * 用户口径（2026-10-11）：「点击『上传』时，它是直接把你选中的东西放置在画布中」
+ * —— 与把文件拖进画布同一个效果，不是进资产库、也不弹窗。
+ * 所以走的正是 file-drop 插件那条 addFiles（同一份识别/尺寸/落盘/选中逻辑）：
+ * 图片→image 节点、视频→video 节点、文本→text 节点，多个文件会依次排开。
+ * 「进资产库」那条路仍然只有「添加资源」（左侧抽屉的「+ → 上传资产」）。
  */
 const uploadInput = ref<HTMLInputElement | null>(null)
 function pickUploadFiles(): void {
@@ -36,10 +37,12 @@ function pickUploadFiles(): void {
 }
 function onUploadPick(e: Event): void {
   const input = e.target as HTMLInputElement
-  const list = Array.from(input.files ?? []).filter((f) => f.size > 0)
+  const list = Array.from(input.files ?? [])
   input.value = ''
   if (!list.length) return
-  queueUploadFiles(list)
+  // 落点：与拖拽一致，交给 file-drop 用「最近一次鼠标位置」当锚点；
+  // 没有锚点（如键盘触发）它会退到视口中心/默认位，不需要在这里另算。
+  void ui.addFilesToCanvas(list)
 }
 </script>
 
@@ -47,12 +50,12 @@ function onUploadPick(e: Event): void {
   <div class="flex h-[50px] items-center gap-2 rounded-xl border border-line bg-panel px-2" aria-label="画布工具栏"
     @pointerdown.stop>
     <!--
-      隐藏的文件选择器：菜单项「上传」触发它。
+      隐藏的文件选择器：菜单项「上传」触发它（选完直接建节点，见 script 里 pickUploadFiles）。
       放在**下拉之外**（菜单会被 Teleport 且点完就关）—— 若放进菜单里，
       关掉菜单会把 input 一起卸载，用户选完文件时 change 已经没人接了。
     -->
     <input ref="uploadInput" type="file" multiple class="hidden" aria-hidden="true"
-      accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/wav" @change="onUploadPick" />
+      accept="image/*,video/*,audio/*,text/plain,.md,.txt" @change="onUploadPick" />
     <AxDropdown v-model="s.addMenuOpen" placement="top" align="center" :offset="10" menu-width="240px">
       <template #trigger>
         <AxTooltip content="添加节点" placement="top">
@@ -100,7 +103,9 @@ function onUploadPick(e: Event): void {
         </AxMenuItem>
         -->
         <div class="px-2 py-1.5 text-[10px] font-bold tracking-wider text-ink-dim">素材库</div>
-        <AxMenuItem @click="ui.openDrawer('left')">
+        <!-- 「添加资源」= 打开上传资产弹窗（改名 / 选保存位置 / 打标签 → 存进资产库）。
+             与「上传」（选完直接落画布成节点）是两件事，别再互相顶替。 -->
+        <AxMenuItem @click="openUploadDialog(); close()">
           <FolderOpen :size="15" /> 添加资源
         </AxMenuItem>
         <AxMenuItem @click="pickUploadFiles(); close()">
@@ -175,11 +180,13 @@ function onUploadPick(e: Event): void {
         :class="{ 'bg-chip': s.shortcutsOpen }" aria-label="快捷键" @click="ui.toggleShortcuts()">
         <Keyboard :size="16" />
       </button></AxTooltip>
-    <AxTooltip content="教程" placement="top"><button
+    <!-- 
+      <AxTooltip content="教程" placement="top"><button
         class="grid size-8 place-items-center rounded-lg text-ink transition-colors hover:bg-hover" aria-label="教程"
         @click="ui.showToast('教程')">
         <CircleQuestionMark :size="16" />
       </button></AxTooltip>
+    -->
     <AxTooltip content="Agent 对话" placement="left"><button
         class="absolute left-full top-1/2 ml-1.5 grid size-12 -translate-y-1/2 place-items-center rounded-full border border-line bg-panel text-ink"
         aria-label="Agent 对话" :class="{ 'bg-panel-active': ui.agent.open }" @click="ui.toggleAgent()">

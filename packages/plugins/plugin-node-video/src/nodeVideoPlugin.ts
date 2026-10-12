@@ -20,6 +20,7 @@
 import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { DEFAULT_VIDEO_FIT_LIMITS } from './videoFit'
+import { videoTitleExtra } from './videoOps'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
 import VideoPreview from './VideoPreview.vue'
@@ -172,6 +173,8 @@ export function apply(ctx: Context) {
     nameTemplate: '视频 {{ID}}',
     description: '在画布中添加一个视频节点',
     icon: NODE_ICON,
+    // 标题右侧显示画面分辨率（1280×720；裁过就是裁框尺寸）——派生值按 data 现算，不写进 data。
+    titleExtra: videoTitleExtra,
     // 尺寸与 v1 NODE_SIZES.video 同：一点元数据都读不到时的兜底
     size: { w: 480, h: 320 },
     inputs: [{ port: 'target', acceptsTypes: ['image', 'text', 'video'] }],

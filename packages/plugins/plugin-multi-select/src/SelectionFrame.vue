@@ -735,8 +735,14 @@ watch([() => sel().ids, frameConfig, () => viewport.value.zoom], () => refreshFr
 //   收拢成 lastClient 后同样必须先声明后使用 —— 单测 dragZoomFollow 锁着这条。）
 /**
 * 指针是否按下中 —— 批量连线端口的**主压制门**。
-/** 拖动起始时各可动节点的绝对位置（flow） */
-const dragStartPositions = ref<Map<string, { x: number; y: number }>>(new Map())
+/**
+ * 拖动起始时各可动节点的坐标基准：
+ *   abs  = 绝对位置（flow，供事件 payload 与归属判定）
+ *   base = 写回坐标系的起始基准（无父 = 绝对；带父 = 相对父）
+ * 载入时与 onDragMove 里赋的都是这个形状 —— 旧写法只写了 { x, y }，
+ * 与本插件真实用法不符（此前本包是外部插件、不在 ui 的编译图里，故未曾暴露）。
+ */
+const dragStartPositions = ref<Map<string, { abs: { x: number; y: number }; base: { x: number; y: number } }>>(new Map())
 /** 拖动中最新视觉位置（松手落盘用） */
 const livePositions = ref<Map<string, { x: number; y: number }>>(new Map())
 // ====== 在画布层接管"框内拖动"======

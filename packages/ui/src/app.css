@@ -84,6 +84,8 @@ html.dark {
   --canvas-node-text: #d0d0d0;
   --canvas-node-text-body: #e5e5e5;
   --canvas-node-text-strong: #ffffff;
+  /* 标题右侧附加文本（尺寸这类元信息）：暗色下比 muted 再亮一点的灰 */
+  --canvas-node-text-faint: #8a8a8a;
   --canvas-node-border: #3a3a3a;
   --canvas-node-border-subtle: #333333;
   --canvas-node-border-hover: #4a4a4a;

@@ -79,9 +79,10 @@ function pick(value: string | number): void {
   height: 20px;
   display: flex;
   align-items: center;
-  color: var(--ui-ink-mute, #8c95a3);
+  /* 标题按参考稿（text-xs font-bold text-gray-800）：比正文重、比正文深 */
+  color: var(--ui-ink, #18202b);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 20px;
 }
 /* 网格：默认 3 列（按钮 100×32 的形态由 1fr + 高 32 表现；面板宽 342 时每格约 100） */
@@ -110,10 +111,12 @@ function pick(value: string | number): void {
 .tog-cell:hover:not(:disabled) {
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
 }
-/* 选中态：参考站是浅色底 + 无边框；底色走 token（暗色下即 rgba(255,255,255,.1) 那一档） */
+/* 选中态：**灰阶**（用户口径 2026-10-12「这里其实不需要使用主题颜色……就和你的右键菜单一样」）。
+   同比例网格的写法：深色描边 + 浅灰底 + 粗体。深色走 --ui-ink —— 亮色主题下近黑、
+   暗色主题下近白，一档变量吃两套主题。 */
 .tog-cell.is-active {
-  border-color: transparent;
-  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
+  border-color: var(--ui-ink, #18202b);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
   color: var(--ui-ink, #18202b);
   font-weight: 600;
 }
@@ -122,7 +125,8 @@ function pick(value: string | number): void {
   cursor: not-allowed;
 }
 .tog-cell:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  /* 焦点环也走灰阶（与右键菜单同口径：整块面板不用主题色） */
+  outline: 2px solid color-mix(in srgb, var(--ui-ink, #18202b) 55%, transparent);
   outline-offset: 1px;
 }
 /* 超长文案省略（模型名可能很长） */

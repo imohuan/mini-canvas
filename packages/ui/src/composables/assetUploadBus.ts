@@ -8,6 +8,7 @@
  *   · 入口 A：节点右键「加入资产库」（uiAssetUploadPlugin 注册的命令）→ 贴 1 张；
  *   · 入口 B：多选上控制栏「加入资产库」（SelectionSaveAssetsToolbar）→ 贴 N 张；
  *   · 宿主：AssetUploadHost（挂在 App 里）→ 打开上传弹窗并消费这些图。
+ *   · 入口 C：底栏「+ → 添加资源」→ **不开预填、直接开窗**让用户自己选（见 openUploadDialog）。
  *
  * 为什么需要一条总线：两个入口分别在"插件上下文"和"多选框浮层"里，而上传弹窗与资产清单是
  * 成品应用的（只有 packages/ui 拿得到 assets 服务）。总线是三者唯一共享的通道 ——
@@ -20,13 +21,6 @@ export interface PendingUpload {
   url: string
   /** 建议文件名 */
   name: string
-  /**
-   * **本地文件**（底栏「+ → 上传」选的）：有它就优先用这一个，url 只是展示用的预览地址。
-   *
-   * 为什么要多一种荷载：弹窗同时支持"贴画布图"（拉地址再传）与"选本地文件"
-   * （字节直接在手，不用先落成地址再取回来）；两者在弹窗里长得一样、保存时各走各的通道。
-   */
-  file?: File
 }
 
 /** 待贴入的图（宿主消费后清空） */
@@ -48,19 +42,16 @@ export function queueUploads(items: PendingUpload[]): void {
 }
 
 /**
- * 底栏「+ → 上传」：把**本地选的一批文件**交给同一个上传弹窗（用户口径 2026-10-11
- * 「这边可以上传多个文件，支持图片、视频、音频批量上传」）。
+ * 底栏「+ → 添加资源」：**不开预填**，直接把上传资产弹窗打开，让用户在里面自己选文件。
  *
- * 为什么并到这条总线：上传弹窗 + 落库口径只该有一份。底栏菜单、节点右键、多选上控制栏
- * 三条入口都只负责"把要传的东西放进来"，弹窗宿主（AssetUploadHost，常驻挂载）负责开窗。
- * 这里不造预览地址：弹窗对**本地文件**会自己 createObjectURL（同「+」格手选那一条），
- * 不重复造一个没人回收的 blob:。
+ * 用户口径（2026-10-11）：「点击『添加资源』= 打开上传资产弹窗」——与「上传」是两件事：
+ * 「上传」选完直接落画布（见 ui.addFilesToCanvas），「添加资源」走这个弹窗（改名 / 选保存位置 /
+ * 打标签 → 存进资产库）。宿主（AssetUploadHost）收到通知后按空清单开窗，
+ * 于是弹窗里就是那个熟悉的「+」格 + 名称 / 位置 / 标签，与左侧抽屉「+ → 上传资产」完全一致。
  */
-export function queueUploadFiles(files: File[]): void {
-  const items: PendingUpload[] = []
-  for (const f of files) if (f.size > 0) items.push({ url: '', name: f.name, file: f })
-  if (!items.length) return
-  pendingUploads.value = [...pendingUploads.value, ...items]
+export function openUploadDialog(): void {
+  // 先把可能残留的旧预填清掉：这次要的是干净开窗（不贴任何画布图）
+  pendingUploads.value = []
   notify?.()
 }
 

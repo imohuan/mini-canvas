@@ -285,14 +285,18 @@ describe('队列行（G2/G4/G8/G10）：结构与接线', () => {
     expect(host).toMatch(/\.ac-pending-row \{[^}]*border-radius: 0;/)
   })
 
-  it('「+」菜单两项（目标 / 上传文件），点目标直接加标记、不弹框（G12）', () => {
+  it('「+」菜单三项（目标 / 上传文件 / 压缩），点目标直接加标记、不弹框（G12）', () => {
     const start = host.indexOf('aria-label="更多添加"')
     const menu = host.slice(start, host.indexOf('</ThemedDropdown>', start))
-    expect((menu.match(/role="menuitem"/g) ?? []).length).toBe(2)
+    // 用户口径 2026-10-11 加了第三项「压缩」：Agent 的压缩功能要有入口
+    // （@ 菜单里也有一份，两处走同一条命令 agent.compact）。
+    expect((menu.match(/role="menuitem"/g) ?? []).length).toBe(3)
     expect(menu).toContain('addGoalMark()')
     expect(menu).toContain('pickImages()')
+    expect(menu).toContain('compactNow()')
     expect(menu).toContain('目标')
     expect(menu).toContain('上传文件')
+    expect(menu).toContain('压缩')
     // 点「目标」只是加标记（agent.setGoalMark），不该顺手把编辑框打开
     expect(menu).not.toContain('openGoalEditor')
   })

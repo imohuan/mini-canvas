@@ -5,6 +5,450 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-12 四续，6 个「基础交互」插件改为**自带件**）
+
+用户口径：「关于你的插件管理，我希望你把一些插件作为默认插件进行安装。把以下几个插件作为自带插件：
+1. 复制粘贴插件 2. 右键菜单 3. 文件拖入分组 4. 多选 5. 连线切割」
+（「文件拖入分组」对应「文件拖入」与「分组」两个插件，故实际共 **6** 个。）
+
+**背景**：这 6 个在 2026-10-03 那轮被批量改成「可装卸」（经插件管理从云服务清单装、默认已装），
+冷启动装配里只剩注释。用户现在要求它们回到「自带」分类。
+
+**改法（三处，缺一不可）**：
+1. **包声明**（6 个 `package.json`）：`miniCanvas.installable: true` → `miniCanvas.builtin: true`。
+   这是 cloud-server 的 `buildPluginCatalog` 分类的唯一判据 —— 不改它会同时出现在「本地清单」
+   （带安装/卸载按钮）与「自带」两页。
+2. **冷启动装配**（`packages/ui/src/assembly.ts`）：加回 import + `APP_PLUGINS` 里插 6 行
+   （放在 `uiAssetUploadPlugin` 之后、`pluginBottomBar` 之前）。顺序有讲究：
+   `ui-asset-upload` 注册的节点右键命令要先在命令表里（context-menu 按 areas 收），
+   `ui-asset-upload` 经 `selectionRegion.attach` 往多选上控制栏挂的按钮由后到的 multi-select 接手。
+3. **清单数量断言**（`packages/ui/src/__tests__/entrypoint.test.ts`）：14 → **20**。
+
+**顺带修掉一个被这轮改动**暴露**的既有类型错误**：`plugin-multi-select/src/SelectionFrame.vue`
+的 `dragStartPositions` 声明成 `Map<string, {x,y}>`，实际存的是 `{abs, base}`。
+它此前是外部插件、不在 ui 的编译图里，所以从来没被 vue-tsc 编译过；改自带后进了编译图就红了。
+按真实用法收口成 `{ abs: {x,y}; base: {x,y} }`（纯类型修正，行为零变化）。
+
+**验证**：ui **282**（新增 `builtinInteractivePlugins.test.ts` 3 条：包声明 builtin 非 installable /
+6 个都在 APP_PLUGINS / 清单里不混进仍 installable 的插件）、cloud-server **618**、
+6 个插件各自全绿（clipboard 28 / context-menu 57 / file-drop 47 / group 57 / multi-select 153 /
+edge-cutting 30）、plugin-manager 47；ui（vue-tsc）与 canvas-render（tsc）typecheck 干净。
+（`themeColorHygiene` 那 1 条红是用户既有 WIP —— `plugin-bottom-bar/src/NodeBottomBar.vue` 的
+裸色 `rgb(15 23 42 / 0.28)`，HEAD 里没有这行，与本次无关。）
+
+**真机 Chrome MCP（dev :5288）**：`listPlugins()` 含这 6 个；插件管理服务里 `builtin` 列表含它们、
+`installable` 列表**不含**；服务 `clipboard / multi-select / group / file-drop` 全在，
+命令 `clipboard:copy|paste|cut|duplicate`、`multi-select:select-all|clear`、
+`group:create|ungroup`、`context-menu:delete-node|delete-edge` 全在；控制台零新增报错。
+另跑了一次「真宿主冷启动整份 APP_PLUGINS」探针：**21 个插件全 active、零缺依赖**。
+
+---
+
+### 追记（2026-10-12 二续，下拉改走注册场那一份 + 修「标题/描述重合」）
+
+用户口径（两条）：「你底部下拉菜单可以使用我插件系统注册的那个组件啊，我的 plugin-theme-default
+他不是注册了一个下拉组件吗 select 还是 dropdown 来着，你直接使用他作为下拉菜单的组件，然后
+在里面写内容」；「你的下拉菜单中标题和描述都重合了，没有间隔，这需要你修复」（附截图）。
+
+**一、下拉容器改走注册场登记的那一份**（新 `plugin-theme-default/src/components/ui/useCatalogDropdown.ts`）：
+
+- 病灶：`Select.vue` 与 `ToolParamGroup.vue` 直接 `import Dropdown from './Dropdown.vue'` ——
+  成品应用在注册场里用 ui 包的 `AxDropdown` **顶替**了 dropdown（order -1，见 uiDropdownPlugin），
+  这两处却仍跑主题包那份私有实现，注册等于没生效（真机实测：底栏下拉没有注册件那条小箭头）。
+- 做法：取件钩子三档 —— 树内 `useUiComponent('dropdown')`（响应式，热替换当场换）、
+  树外（SSR 单测 / 独立渲染）`uiComponentOutside('dropdown')`（useUiComponent 没有 provide 会抛）、
+  注册场里没有 dropdown → 回落本包自带 `Dropdown.vue`（只装主题包时与改造前逐像素一致）。
+- 浮层外观数值收成 token 真源（`canvas-render/src/styles/ui-theme.css`）：
+  `--dd-padding: 6px` / `--dd-radius: 16px` / `--dd-bg: var(--ui-overlay-solid)`（不透光档）。
+  两处实现都读它：注册件 `AxDropdown`（全局规则）与主题自带件 `Dropdown.vue`（scoped 规则）。
+  顺带把 AxDropdown 的 `backdrop-filter: blur(20px)` 与 `background: var(--ui-panel)` 去掉 ——
+  它此前是**毛玻璃半透明**，压在画布上字读不清（与右键菜单 2026-10-04 那条同口径）。
+
+**二、修「标题与描述重合」**（`Select.vue`）：
+
+- 病灶（真机实测量出来的）：`.sel-option-label` 是 `.sel-option-copy` 的绝对定位子元素，
+  而行高走**继承**（宿主 1.6 → 13px 正文 = 19.5px 行盒）—— hover 时「名称上移 + 描述浮出」
+  那两行于是叠在一起（名称下缘 521 压到描述上缘 519，重合 2px，正是截图那个样子）。
+  右键菜单那本（`.ctx-menu-label`）本来就写着 `line-height: 1`，本包漏了。
+- 修法：`.sel-option-label` 补 `line-height: 1`。**实测**：hover 时名称下缘 560 / 描述上缘 562，
+  留出 2px 间隙，不再重合。
+
+**验证**：theme-default **283**（contextMenuParity 从 12 条增到 19 条：名称/描述行高必须为 1、
+两处必须走 useCatalogDropdown、token 真源与消费方一致）、ui 279、plugin-node-image 116 全绿；
+theme-default、ui 两个 typecheck 干净。
+Chrome MCP 真机（dev :5288）实测：底栏模型下拉的浮层 `data-floating-chain` 属性在（= 注册件 AxDropdown）、
+`backdrop-filter: none`、`background rgb(255,255,255)`、`padding 6px` / `border-radius 16px`、
+行高 13px（= line-height 1）、`.axd-arrow` 在、勾在；参数下拉（比例网格 + 滑块）照旧 288 宽 / 16 内边距 /
+比例格选中近黑描边 / 滑块黑色。
+
+### 追记（2026-10-12 二续，plugin-bottom-bar：配置能恢复了 + 参考图顺序可拖拽）
+
+用户口径（两条）：「① 配置无法恢复（问题很严重）：(a) 节点下拉选项，选了之后点别处隐藏控制栏、
+再点开又回默认；(b) 我用了其中一个模型来生成，重新点击之后又恢复成默认模型，我配置的这些参数
+全部都会消失。② 参考图的顺序是如何决定的？好像是根据连接的先后顺序。我希望这个顺序可以进行
+拖拽改变，你可以使用 Vue 的 Vue Draggable Plus 插件（他的那个动画效果挺好的）。」
+
+**问题①的根因（真机 Chrome MCP 复现，非猜测）**：`NodeBottomBar.vue` 挂载时无条件
+`selectAction(defaultActionId())`（第一条 needsPrompt 的动作），**从不读** `data.barValues.actionId`
+——而 `storedActionId` 那个记事本写好了却只被动作列表变化时的 watch 用到。于是「显示的」永远回默认；
+更严重的是底栏一收起（卸载 → `persistValues`）会把「默认动作 + 只保留默认动作声明过的参数」
+**写回节点**：用户选的模型与它带的参数被真删掉（实测：存 `apimart-image` + `resolution:2K` + `n:4`，
+点开显示第一条模型、离开后 `barValues` 只剩 `{ratio, actionId: 第一条}`）。
+**改法**：新增 `initialActionId()` —— 存过且那条动作还在就用它，否则回默认第一条；
+配合既有 `selectAction` 的「只保留新动作声明过的 key」，参数一并复原。
+
+**问题②的语义定案**：顺序**本来就是**「连线先后」（`collectUpstreamMaterials` 按 `getEdges()` 数组序）。
+新增 `data.refOrder`（用户拖出来的节点 id 序列，落节点 data 与 barValues 同一个记事本）：
+没列到的垫最后、之间保持连线先后（稳定排序，新连进来的不会插到中间乱跳），死 id/重复 id 忽略。
+**引用名（图片1/图片2）改成排完序之后统一重编号** —— 角标、@ 名、纯文本 token 三处必须指同一张图。
+拖拽用 `vue-draggable-plus`（组件式 `<VueDraggable v-model>`），`forceFallback` + 三态
+（ghost/chosen/drag）样式，动画由库补间；落盘写「排好的那份 id 数组」，且只有真变了才写（不进撤销栈）。
+
+**踩到并修掉的坑**：`onReorder` 一开始读 `cards.value`（从 `data.refOrder` 派生的 computed）——
+拖拽那一帧它还没回灌，读到旧顺序 → **拖了不动也不存盘**。改成收下库回调给的数组，
+并抽成纯函数 `nextRefOrder()`（拿不到合法数组时退回渲染那份，至少不写坏）。
+
+**验证**：plugin-bottom-bar **118**（新增 panelSourceOrder 11 / bottomBarRestore 5 / bottomBarOrder 6）、
+ui **279**、plugin-theme-default **277** 全绿；两包 typecheck 干净；产物重建。
+Chrome MCP 真机（5288 独立探针画布）：
+- 「选 Dola → 点空白处收起 → 再点节点」→ 下拉显示 **Dola**（修前显示默认条）；
+- `refOrder` 共存 `barValues`，切走切回顺序都在；
+- 真实指针拖拽：DOM 顺序变成 图B/图C/图A、角标重编 1/2/3、`refOrder` 落盘 `['5','6','4']`，
+  刷新后仍在（挂载时按 `refOrder` 排）。
+
+### 追记（2026-10-12 三续，素材卡拖拽「跟不上鼠标，有种缩放阻尼感」）
+
+用户口径（带截图）：「一号标是我的鼠标位置，我都拖到这个位置了，但是你的这个元素只移动了一点点
+距离。我感觉你这边有种缩放阻尼的感觉，它没有跟随我的鼠标。」
+
+**根因（真机实测 + 对照实验定位，两层坑叠在一起）**：
+1. `.nb-card` 上有 `transition: transform 0.15s`（原来给「按下回弹」用的），而拖拽库每一帧都在给
+   这张卡写 `transform: matrix(..., tx, 0)` —— **写进去的值本身是精确 1:1 的**，但过渡把这串
+   逐帧变化的位移**补间**起来：移动越快落后越多。实测鼠标走 250px 时元素只走 100px。
+   （对照：临时 `transition: none` 后比例立刻接近 1:1。）
+2. 给被拖拽的那张卡**任何形式的放大**都会把库写的位移一起放大：`translate/rotate/scale` 是
+   独立属性，与 `transform` **复合**（`translate·rotate·scale·transform`）—— `scale: 1.06`
+   会把 translate 的 dx 也乘 1.06（实测 mouseDx=300 时位置跑到 317）。
+
+**改法**：`.nb-card` 的过渡只留 `border-color / scale / box-shadow`（**不含 transform**）；
+按下回弹改用独立的 `scale: 0.96`（不是 `transform: scale`，免得与库抢同一个属性）；
+拖拽三态（ghost/chosen/drag）**只给虚线框、描边、阴影**，一律不做缩放。
+
+**验证**：plugin-bottom-bar **122**（新增 bottomBarCardCss 4 条守卫：transition 不许含 transform /
+三态不许 transform 或 scale / 回弹走 scale 属性 / chosen 与 drag 合写一个块）、ui 279、
+plugin-theme-default 283 全绿；typecheck 干净；产物重建。
+**真机 Chrome MCP（5288 探针画布，对照实验同法）**：拖拽跟随比例 **zoom=1 与 zoom=0.6 都是精确 1:1**
+（鼠标 150px → 元素 150px；修前同口径是 250px → 100px）；ghost 空位、阴影拎起态都在；
+拖完落盘 `refOrder` 与角标重编号不受影响。
+
+### 追记（2026-10-12，底栏下拉「完全参考右键菜单」+ 参数面板照参考稿重做 + 去主题色）
+
+用户口径（三条）：「我希望你的这个 plugin-bottom-bar 下拉完全参考 plugin-context-menu 来实现」；
+「plugin-bottom-bar 第二个下拉框（比例 还有 滑块的那个）参考」附的参考稿 HTML；
+「这里其实不需要使用主题颜色，直接使用默认的黑白两个主题就行，就和你的右键菜单一样，
+它里面根本就没有使用到主题颜色，而且也没有必要」。
+
+**一、底栏两个下拉与右键菜单同款**（`plugin-theme-default/src/components/ui/`，两处底栏共用）：
+
+- 容器照 `.ctx-menu`：**不透明白底** `--ui-overlay-solid`（不再走 `--ui-panel` + 毛玻璃）、
+  16 圆角、6px 内边距。浮层元素由 `Dropdown` 渲染（带它的 scope id），消费方 scoped 的类命不中它，
+  而 `.dd-menu` 那条规则是 scoped、特异性更高 —— 所以加 `--dd-padding/--dd-radius/--dd-bg` 三个变量，
+  由 `Dropdown` 读（变量不参与特异性比较，这是唯一干净的通道）。
+- 行照 `.ctx-menu-item`：44 高 / 6 内边距 / 10 圆角 / 行内间距 10，**行间不留空隙**（原来是 38 高 + 2px 间隙）；
+  过渡换 `0.18s cubic-bezier(.34,1.56,.64,1)`；补上逐项入场（`--item-index` 驱动、18ms 交错）；
+  浮层加 0.18s 弹出（scale .96 + 上移 4px），与 `ctx-pop` 同款。
+- 分隔线：`SelectOption` 加可选 `group`，相邻 group 不同就画一条（照分块；未声明 group 的
+  「旋转/下载」与模型之间也会分开，与右键菜单里不同类型之间分开一致）。
+
+**二、参数下拉（比例 + 滑块）照参考稿重做**（`ToolParamGroup` / `ToolRatioGrid` / `ToolOptionGrid` / `ToolParamSlider`）：
+
+- 面板宽 342 → **288**（参考稿 `w-72`）、内边距 12 → **16**（`p-4`）、块间距 8 → **12**（`gap-3`）、
+  块与块之间一条分割线（参考稿在比例网格与滑块之间就是 `border-t`）。
+- 比例格：63 高 / 12×4 内边距 / 8 圆角 → **56 高（`h-14`）/ 8 内边距（`p-2`）/ 12 圆角（`rounded-xl`）**；
+  小节标题 12px/600 弱化色 → **12px/700 深色**（参考稿 `text-xs font-bold text-gray-800`）。
+
+**三、去掉主题色（只用黑白两套主题）** —— 右键菜单整张卡本来就没有一处强调色，照它办：
+
+- 下拉选中行：不再铺 `--ui-accent-soft`、文字不再走强调色 —— 靠**字重 + 右侧那枚勾**说明"就是它"，
+  底色只留给"鼠标/键盘停在这一行"（两者分开，键盘上下选时才分得清 Enter 会选哪一行）；勾改 `--ui-ink-dim`。
+- 参数网格选中：描边 `--ui-ink`（亮色近黑、暗色近白，一档变量吃两套主题）+ 浅灰底 + 粗体；
+  焦点环也从强调色改灰阶。
+- 参数滑块：`--ps-accent` 从 `--ui-accent`（青）改 `--ui-primary-bg`（亮色近黑 / 暗色近白）。
+  两个消费处都定义（参数合并下拉的浮层 `.tpg-menu-body`、底栏直排的参数区 `.tps-block`）——
+  浮层里的滑块读不到 `.tps-block`，只在后者定义会漏。
+
+**验证**：theme-default 277（新增 `contextMenuParity.test.ts` 12 条：token/数值/动画/无强调色/面板版式）、
+bottom-bar 105、ui 279、context-menu 57、canvas-render 421 全绿；theme-default、bottom-bar、ui 三个 typecheck 干净。
+Chrome MCP 真机（dev :5288，注入一批探针动作看真实 DOM 尺寸）：
+模型下拉 —— 容器 `border-radius 16px` / `padding 6px` / `background rgb(255,255,255)`（无 blur）、
+行 `44px` / `padding 6px` / `gap 10px` / `radius 10px`、选中行 `background rgba(0,0,0,0)`（无强调色底）+ 勾 `rgb(107,114,128)`、
+hover 描述 `top 3.97px` / `opacity 0.92`（动效在跑）、第 5 行「旋转」前面一条 1px `rgb(226,229,234)` 分隔线（分块生效）；
+参数下拉 —— 容器 `radius 16px` / `padding 16px` / 宽 `288`、比例格选中 `border rgb(24,32,43)` + `bg rgba(0,0,0,.035)`、
+滑块填充 `rgb(31,41,55)`（黑）；暗色下容器 `rgb(33,33,33)`、比例格描边 `rgb(247,247,247)`（白）、滑块填充 `rgba(255,255,255,.9)`。
+
+### 追记（2026-10-11 十续，cloud-server 托管时「云端连接」作为自带件开机直接启动）
+
+用户口径：「如果是 cloud-server 启动的服务，那这个 cloud-client 应该放在自带中直接启动」。
+
+**做法**：判据不用 URL/端口（dev 走 vite 代理、端口会顺延，同源时分不出谁在托管），
+改成**服务端自报身份** —— cloud-server 在它发出去的 index.html 里插一行
+`<meta name="mini-canvas-host" content="cloud-server">`（static.ts 的 uiRoutes，幂等，
+落点 </head> 前 → <body 前 → 文首 三级兜底）；前端 assembly.ts 读这行标记，
+命中就把 cloud-client 追加进启动清单（resolveAppPlugins = 静态 APP_PLUGINS + 按环境追加）。
+
+**两个方向都锁住**：托管 → 开机直接连后台（active=true、phase=restored）；
+ui 单独 dev / 别人自己托管（没有这行标记）→ **一个都不多**，仍由用户在「设置 → 插件」里装，
+免得本地单跑画布去连一个不存在的后台。
+
+**为什么不做成直接塞进 APP_PLUGINS**：那份数组是静态的，本地 dev 也会跟着装；
+要「只在托管时启动」，这个判断只能放在运行期。
+
+**验证**：ui 279（新增 hostBuiltinPlugins.test.ts 4 条：无 document 不追加 / 有标记必追加 cloud-client /
+标记内容不符不认 / 静态清单本身不含它）、cloud-server 592（routes 测试新增：发出去的 index.html 带标记且只插一次）、
+plugin-manager 47、plugin-cloud-client 99，全绿；ui（vue-tsc）、cloud-server typecheck 干净。
+Chrome MCP 真机：**托管版 :8865** 打开即 cloud-client 在核心里、phase=restored、历史 46 条；
+**dev :5288** 无标记 → 不自动装（列表里没有 cloud-client），面板里可选装。
+
+**注意**：cloud-client 仍留在「本地清单」里（托管时那行显示「已安装」），所以用户随时能点卸载退回本地存储。
+改动仍需 **build cloud-server + 重启**才生效（又踩了一次：源码改了不 build，线上跑的还是旧产物）。
+
+### 追记（2026-10-11 九续，修「面板里找不到云端连接 / 插件管理」+ 生产端加载不了 cloud-client）
+
+用户口径：「为什么这些插件没有被注册到这个本地清单中呢」「本地清单和自带里都没有 cloud 插件，也没有 plugin manager，
+你可以把 plugin manager 设置为自带的」「我打开这个后台版本的话，它都没有加载 cloud-client 插件了，无法接入后台」。
+
+**三个真问题（都已复现并修掉）**：
+
+1. **生产端（cloud-server/dist）加载不了 cloud-client** —— 根因是**打包产物过期**：上一轮改了
+   src/plugins/catalog.ts（新增 ESM 判定）却没重新打包，而当时只对源码跑过测试，
+   服务端一直跑着旧 dist/cli.js，按旧规则把 cloud-client 当成「不是可脚本加载的 UMD 产物」拒掉。
+   **教训：改 cloud-server 的 src 后必须重新 build 并重启，否则服务行为与源码/测试会分叉**
+   （测试跑源码、服务跑产物）。
+2. **「插件管理」不在自带分类里** —— 它当时是 plugin-cloud-client 包内部的 src/manager/ 目录，
+   而服务端只扫插件目录的**顶层子目录**，扫不到它，于是面板列不出面板自己。
+   修法：**拆成独立包 packages/plugins/plugin-manager**，package.json 声明 builtin: true 与
+   pluginName: 'plugin-manager'；plugin-cloud-client 去掉 ./manager 出口；ui 的装配与 pluginReload 改指新包。
+3. **「云端连接」不在本地清单里**（截图里也没有）—— 同 1：服务端旧产物不认 ESM 插件。
+   重新打包后它出现在本地清单，format=esm，用户可在面板里安装它接入后台。
+
+**验证**：ui 275、cloud-server 592、plugin-manager **47**（3 个老文件 44 + 新增 builtinManifest.test.ts 3 条：
+builtin 与 installable 语义互斥 / pluginName 与源码 export const name 一致 / 是独立包）、
+plugin-cloud-client 99，全绿；ui（vue-tsc）、cloud-server、plugin-manager 三个 typecheck 干净。
+Chrome MCP 真机（**生产端 :8865**，真后台）：面板「本地清单 19 / 自带 9」——
+自带里含「插件管理」，本地清单里含「云端连接」；点安装云端连接 → 装进内核、status.active=true、
+actions=11、phase=restored（画布从后台恢复），**接入后台成功**。
+
+**注意（上线步骤）**：这次改了 cloud-server/src，所以必须重新 build 并**重启服务**才生效；
+新包 plugin-manager 已加进 ui 的 dependencies（pnpm install 已跑，链接已建）。
+
+### 追记（2026-10-11 八续，内联标签限宽 + Agent 提交键改 Ctrl+Enter）
+
+用户口径：「这个标签的名称可能非常长，导致了一些问题。你需要限制一下，给它设置一个最大宽度」+
+「它这边是按回车进行提交，我希望改成按 Ctrl+回车进行提交」。
+
+**一、内联标签长名字收口**（`packages/plugins/plugin-agent`）：
+
+- `.ac-tag`（输入框内那颗，ProseMirror 直造 DOM）加 `max-width: 200px`；名字那一格
+  `.ac-tag-label` 补 `min-width: 0; overflow: hidden; text-overflow: ellipsis`。
+  **`min-width: 0` 是关键**：flex 子项默认 `min-width: auto`（= 内容宽），只写 `max-width`
+  时它会把标签顶回去、省略号永远不出现。图标那侧补 `flex: none` 保证图标不被压扁。
+- 同一套口径覆盖三处孪生样式：输入框里的 `.ac-tag`、用户气泡里的 `.ac-sent-tag`、
+  @ 菜单的 `.ac-mrow-name`（后两者此前完全没有收口，菜单行还会被长名字整行撑宽）。
+- `agentResources.ts` 的 `renderTag` 给标签加 `title=原名`：截断之后鼠标停上去还能看全名。
+
+**实测（改前/改后，dev :5288，输入框宽 364px）**：
+
+| | 长名字标签宽度 | 是否撑破输入框 | 名字那一格 |
+|---|---|---|---|
+| 改前 | **407px** | 是（右缘 407 > 364） | `max-width:none`、`min-width:auto` |
+| 改后 | **200px** | 否 | `min-width:0`+`ellipsis`，`scrollWidth 372 > clientWidth 165`（真截断） |
+
+**二、提交键改 Ctrl / Cmd + Enter**（同包）：
+
+- 原来模板上写的是 `@keydown.enter.exact.prevent="submit"` —— 读起来像「回车就发」，
+  实际是**任何没带修饰键的回车**都发，用户按错一下就把半截话送出去。
+- 新增 `src/composerKeys.ts` 的纯函数 `isSubmitShortcut(e)`：只认 **Enter + Ctrl/Cmd**，
+  并排除输入法合成态（`isComposing`，中文打字时的回车是在选词）；组件新增
+  `onEditorKeydown` 作为唯一入口，命中才 `preventDefault()` + `submit()`。
+
+**验证**：plugin-agent **287** 全绿（新增 `composerKeys.test.ts` 9 条 + `composerChip.test.ts` 6 条）、
+`typecheck` 干净；`prosemirror-editor-bundle` 36 全绿。
+Chrome MCP 真机（dev :5288，真实按键）：单独 Enter → 编辑器换行、消息数不变（**不提交**）；
+Ctrl+Enter → 发出消息（消息数 30→32）且输入框清空；@ 菜单打开时 Enter 只选菜单项、
+不误提交（消息数仍 32）；超长名字的标签 200px + 省略号 + `title` 全名，
+已发送标签（`.ac-sent-tag`）同样 200px + 截断。
+
+**注意**：`pnpm -C packages/ui test` 当前有 3 个文件加载失败，原因是仓库里另一处未提交改动
+（`packages/ui/src/pluginReload.ts` 引用 `@mini-canvas/plugin-manager`，而该目录不存在）——
+与本次两处改动无关（agent 包 + ui 其余 29 个测试文件全绿）。
+
+### 追记（2026-10-11 七续，标题条左右分宽：右侧尺寸不再被截成 `20...`）
+
+用户口径（附两张截图，第二张是极端情况）：「你这边好像限制了它的宽度……再缩放一下之后，
+宽度就被限制掉了」「主要希望左右两侧不要"打架"就行。右侧最多也就是 9 个字符的样子，
+左侧文字可能会多一些。**我希望右侧的 size 可以完整显示**」。
+
+**根因**：`BaseTitle.vue` 的三段布局把两侧写死了 —— 标签 `flex: 0 0 80%`、
+右侧 `flex: 1 1 auto` + `max-width: 20%`。节点一窄（卡片宽 × 缩放），20% 只剩几十像素，
+`1280×720` 必然被 `text-overflow: ellipsis` 吃成 `20...`（正是用户截图红框里那一格）。
+
+**改了什么**：把分宽规则反转为「**右侧按自己要的宽度先拿，左侧拿剩下的、超出才省略**」：
+右侧 `flex: 0 0 auto`（不伸长不收缩 = 内容多宽就多宽，另留上限 55% 免得独吞整条标题）、
+左侧 `flex: 1 1 auto` + `min-width: 0`（吞剩余宽，放不下自己省略）。理由：右侧装的是
+"缺一个就读不出"的短元信息（分辨率，最多 9 个字符），左侧是名字，截断后仍认得出是谁。
+
+**验证**：`plugin-theme-default` **265**（新增 5 条 `baseTitleLayout.test.ts`，锁 flex 规则本身
+—— SSR 看不见 CSS 布局；旧样式会让其中 3 条红）、`ui` **275** 全绿，两个包 typecheck 干净。
+Chrome MCP 真机（dev :5290）：把标题改成超长中文名 + 1280×720 尺寸，实测
+**卡片 120 / 160 / 200 / 420 宽**四档（极限窄到 120 下限）：右侧那一格**始终 58px 完整显示、
+零截断**（`Range` 量到的渲染宽 == 盒子宽），左侧 32~112px 正常省略，两侧间隔恒 8px 不重叠；
+右侧右缘与卡片右缘**逐像素重合**；`9 字符`（`1280×7200`）也不截断（65px 完整）；
+缩放到 40% / 300% 同样完整。空标题时右侧也不漂移。探针节点已清理。
+
+### 追记（2026-10-11 六续，节点标题：可关开关 + 标题右侧附加文本）
+
+用户口径（附截图，红框圈标题右侧）：「我希望你可以在这个插件的 config 中配置一个开关选项，
+用来控制是否显示这里的标题。关闭之后，就隐藏这里上面的标题内容」以及「我希望在标题的右侧插入内容，
+比如我的图片和视频节点，我希望把它们的宽高插入到该节点的右上角……最好的方式就是你这边提供一个接口、
+一个插槽，或者说提供一个属性，然后 UI 就直接读取这个属性……我觉得直接提供一个属性会方便许多」。
+
+**改了什么**：
+
+1. **标题总开关**（`plugin-theme-default` 的 Config，分组 `节点/标题`，key `titleVisible`，默认 `true`）：
+   关掉 = 整块标题不画（标题文字 + 类型图标 + 右侧附加文本一起收起）。
+   BaseNode 里接在 `showTitle` 的**最前**一道门：它是用户的显式选择，不该被低细节/多选等条件翻转回来。
+   设置面板改它实时生效（走既有 `settings.onChange` 窄更新，不整图重建）。
+2. **标题右侧附加文本的接口**（用户要的"给个属性"）：新增**类型级声明** `titleExtra`
+   （`packages/canvas-data` 的 `CanvasNodeType`），两种形态 ——
+   `string`（静态文案）/ `(data) => string`（按节点 data 现算）。
+   默认壳 BaseNode 只按声明渲染，**不认识任何业务类型**（不给图片/视频写分支）。
+   函数返回空串/抛错都收敛成"那一格不渲染"：宁可少一格，也不显示 `undefined×undefined`。
+   为什么走函数而不是写进 `data`：宽高是派生值，写进 data 就成了落盘字段 ——
+   每次裁剪/旋转多一条撤销记录，还会被后台/MCP 复制粘贴带跑。
+3. **图片/视频节点接上**：`imageTitleExtra`（读取 `imageWidth/Height`）、
+   `videoTitleExtra`（复用 `displaySizeOf` 的"裁过按裁框"口径）。
+   视频**原来在内容区右上角的那个尺寸角标删掉了** —— 同一件事（尺寸）不该出现两次；
+   图片本来就没有角标，所以两个节点现在都是"尺寸只在标题右上角一处"。
+4. **透传链路两条都补**：`registerNodeType` 与 `ctx.nodes.register`（capabilities）都加 `titleExtra`
+   —— 这正是历史上 `frameless` 漏过的那条路，故两个文件的测试各补一条同形态断言。
+5. 新增主题变量 `--canvas-node-text-faint`（亮/暗各一份）：右侧那一格比标题正文弱一档，
+   不跟节点名字抢注意力。
+6. **导出不留空带**（`plugin-canvas-export`）：导出范围上方那段"标题带"
+   （`EXPORT_TITLE_BAND + titleOffset`）本来是为了不把卡片上缘外的标题切掉；
+   标题关了之后那儿没有标题，再留就只是一条多余的空白边 —— 现在读同一个 `titleVisible`，
+   关掉时 `topPadding` 归 0。
+
+**验证**：`canvas-data` **391**（新增 3 条 titleExtra 透传/缺省）；`plugin-theme-default` **260**
+（新增 8 条 `baseNodeTitleExtra.test.ts`：开关默认/关掉/打开、字符串/函数/空串/抛错三态）；
+`plugin-node-image` **116**（新增 3 条 `imageTitleExtra`）；`plugin-node-video` **104**（新增 2 条，
+并删掉已随角标一起失效的那条断言）；`ui` **275**（含 themeColorHygiene / stylesCompile）全绿；
+五个包 typecheck 干净。
+Chrome MCP 真机（dev :5290，真后端页面）：标题实测 `图片 1 | 800×450`、`视频 1 | 1280×720`
+（右侧文本的 `right` 边与卡片 `right` 边**逐像素相等** —— 确实贴在右上角）；
+设置面板里「显示节点标题」开关在位（默认开），点一下 → `.v2-title` 4→**0**、再点 → 4；
+暗色下右侧文本 `rgb(138,138,138)`（比标题 `rgb(208,208,208)` 弱一档）；控制台无新增报错。
+探针节点已清理。
+
+### 追记（2026-10-11 五续，修「光标在标签后面按退格没反应」）
+
+用户口径：「删除的时候，如果删除前面的是一个节点，它无法进行删除……我的光标在这个标签后面，
+点击删除根本没有任何反应。只有我点击左键选中这个节点，然后才能删除」（附截图）。
+
+**根因**（`packages/prosemirror-editor-bundle/src/useEditor.ts`）：`createCursorFixPlugin` 会给每个
+标签（`resource` atom 节点）两侧垫**不可见零宽空格** `\u200B`。光标停在标签后面时，按退格先删掉的是那个
+看不见的垫片 —— 用户眼里什么都没变；而插件在文档变化后**立刻又把垫片补回来**，于是表现为「按了没反应」，
+标签始终不动。不是按键被谁吞了（`preventDefault` 的调用栈显示画布宿主与 ProseMirror 各自只是放行/走默认）。
+
+**修法**：新增两条显式命令，排在 `baseKeymap` 之前（同一 keymap 里，`Backspace` / `Delete`）：
+
+- `deleteAtomBackward`（绑 `Backspace`）：光标与标签之间**只有垫片**时，把「标签左侧垫片 → 光标」整段删掉。
+- `deleteAtomForward`（绑 `Delete`）：对称处理光标在标签前的情形。
+
+判定的两个要点（都是踩出来的）：① **不能只看 `$head.nodeBefore`** —— 光标紧贴标签时它是标签本身、
+落在垫片后时它是垫片、落在 `"\u200Babc"` 这种混排文本里时它是被切过的文本，三种形态都得认，
+所以按父块孩子从光标向外扫，要求「除零宽空格外没有真实字符」才接管；中间有真实文字时**让位**给原生命令。
+② 删除范围要**连标签旁的垫片一起清掉**，否则残留的那半截垫片就是下一次「按了没反应」。
+
+**验证**：新增 `src/__tests__/atomDelete.test.ts` **11** 条（含 4 条「不该接管」的反例：光标在标签前、
+前面是普通文字、纯文字段落、有选区）；包内 **36** 全绿 + `typecheck` 干净；`pnpm -C packages/ui test` **275** 全绿。
+Chrome MCP 真机（dev :5288，真实鼠标点标签右侧 + 真实退格）：标签一次删除（`tags` 1→0），
+「标签后面还有 abc」时只删标签、文字保留；纯文字退格仍逐字删（`hello`→`hell`）；
+向前删（Delete）对称验证通过。
+
+**排查手法（可复用）**：先用「hook `Event.prototype.preventDefault` 抓调用栈」定位按键是被谁拦的；
+复现必须用**真实鼠标点击 + 真实按键** —— 合成 `MouseEvent` / `KeyboardEvent` 的 `isTrusted=false`，
+ProseMirror 的处理路径不同，会得出错误结论（本次踩过）。
+
+### 追记（2026-10-11 四续，插件改为「全部由用户自己装」+ 云端连接进面板）
+
+用户口径：「我希望是我自己进行安装，而不是强制安装自带的那种」+「云端连接这个东西放在插件面板中不就行了吗」。
+
+**改了什么**（四处，一条线：默认策略 + 两种产物的装载路 + 登记）：
+
+1. **默认不再自动装**（`plugin-cloud-client/src/manager/catalogTypes.ts`）：`defaultInstalledIds`
+   从「没声明就装」翻转成「**只有作者显式写 `defaultInstalled: true` 才装**」（`isOptInDefault`）。
+   首次打开面板、没有任何存档时，17 个可装卸插件一个都不装，用户自己挑。
+2. **清单支持 ESM 插件**（`cloud-server/src/plugins/catalog.ts` 与 `ui/catalogPlugin.mjs` 同口径）：
+   新增 `format: 'umd' | 'esm'` 字段判定；ESM 判据 = 有顶层 export **且没有裸模块名 import**
+   （`isSelfContainedEsm`）。踩过一个坑并写进注释：判裸模块名必须**保留字符串**、只剥注释 ——
+   把字符串一起剥掉会让所有 import 漏判，一份 `import 'vue'` 的产物会被误当成自包含件。
+3. **面板能装 ESM**（`pluginManagerService.ts` 的 `installEntryModule`）：按行上的 `format` 分两条路 ——
+   `esm` 交宿主 `manager.install({ url })`（内部 fetch 文本 → `import(data:)`）；`umd`（缺省）仍走
+   `<script>` + window 全局。既有 UMD 插件行为不变。
+4. **云端连接登记进面板**（`plugin-cloud-client/package.json` 加 `miniCanvas.installable: true` +
+   `web.format: 'esm'`）：它出现在「设置 → 插件」列表里（标题「云端连接」，`format=esm`），用户点了才连后台。
+   同时 **ui 侧不再自动装载**（`ui/src/composables/ui.ts` 的 `installExternalPlugins` 改成空实现）：
+   以前读 `/plugin-manifest.json` 挨个 install 的行为去掉，装载入口只剩面板。
+
+**顺手修掉的真 bug（实测踩到）**：装云端连接时它会切 config 后端到云端 → 触发 `reloadFromBackend`
+   用**云端那份旧名单**回灌 → 旧名单不含刚装的云端连接自己 → 刚装上就被卸掉，表现是「点了安装没反应」。
+   修法：`intentWrittenAt` 记本服务最近写入时刻，切后端后若已经写过就不回灌（只有真正换机器 / 首次上云
+   才以新后端为准）。
+
+**验证**：ui **275**（新增 `manualPluginInstall.test.ts` 2 条 + `devPluginRoutes.test.ts` 4 条）、
+plugin-cloud-client **143**（新增 esm/umd 两条装载路守卫 + opt-in 三条）、cloud-server **592**、
+plugin-style-library 17，全绿；ui（vue-tsc）/ cloud-server / cloud-client 三个 typecheck 干净。
+Chrome MCP 真机（dev :5288 + 真后台 :8865）：**首次一个都不装**（内核里没有 cloud-client、面板 17 个显示未安装）；
+面板点「云端连接」安装 → 装进内核、`status.active=true`、`actions=11`、`phase=restored`（画布从后台恢复）；
+UMD 那条路抽查 `align-guide` 也照常装上。探针数据已清理，`.mini-canvas/` 的名单与画布数据已比对还原。
+
+**注意**：这条改动**推翻了**此前「首次默认全部设为已装」的口径（前面几轮注释里还留着那句话）；
+风格库那条遗留的 `defaultInstalled: true` 也一并去掉了，现在没有任何插件声明自动装。
+
+### 追记（2026-10-11 三续，dev 直连后台：`packages/ui` 补上 `/plugin-manifest.json`）
+
+用户口径：「开发时要用 cloud server 后台，但它跑的是打包后的 UI 产物 —— 我改一点东西就得整套
+重启，很麻烦。能不能直接在 package ui 里调试？我看本地 ui 没装 cloud 插件，装了是否有效，帮我
+查一下」。
+
+**调查结论（真机实测，不是推断）**：dev 里其实只差**一条路由**，其它条件都已具备 ——
+vite 的 `/api` 代理（含 SSE）已把画布数据 / 动作 / 历史 / 实时通道打到后台（:8865）；
+`catalogPlugin.mjs` 已就地提供 `/plugin-catalog.json` 与 `/plugins/**`；本地源码插件本就是
+vite HMR。缺的 `/plugin-manifest.json` 让宿主拿不到外部插件清单，请求回落到 `index.html`
+→ 当 JSON 解析失败 → 空清单 → **后台客户端 `plugin-cloud-client` 永远装不上**（这就是
+「本地 ui 没有 cloud 插件」的机理；手动装它是有效的，实测装上后 `status.active=true`、
+`phase=restored`、从 8865 恢复了画布）。
+
+**改了什么**：`packages/ui/catalogPlugin.mjs` 补一条 dev 路由 `/plugin-manifest.json`，
+判定口径与 cloud-server 的 `buildManifest` 逐条对齐（只收**非自带、且有顶层 export 的 ESM**
+产物：自带件与 UMD 产物都不进，后者走 `import(data:)` 必炸）；并 `export` 出 `buildManifest`
+供测试直接断言。生产形态不受影响（该路由只在 `apply: 'serve'` 生效）。
+
+**用法**：`pnpm -C packages/ui dev`（:5288）→ 前端改代码即 HMR，画布数据 / 生成 / 历史照常走真后台。
+想连**别的**后台，改设置里 `cloudClientBaseUrl` 或设 `VITE_CLOUD_BASE_URL` 即可（不同源时
+`/api` 走**绝对地址**直达，SSE 也在该地址上，cloud-server 已回 CORS `*`）。
+
+**验证**：`packages/ui` 单测 **273**（新增 4 条 `__tests__/devPluginRoutes.test.ts`：清单只收
+非自带 ESM / 该路由直回 JSON 不回落到 HTML / 带查询串也认 / 其它路径不被劫持）全绿；
+`pnpm -C packages/ui typecheck` 干净。Chrome MCP 真机（dev :5288 + 真后台 :8865）：
+刷新页面即自动装上 `cloud-client`；`/plugin-manifest.json`、`/api/actions`、`/api/history`
+全 200；后台增量写入节点 3 秒内出现在页面上（实时跟随生效）。探针数据已清理，
+`.mini-canvas/` 已比对还原（canvas / view 与 plugin-manager:installed 三者均与备份逐字一致）。
+
+**注意**：dev 与生产的插件清单**故意不同** —— prod 下 `/plugin-manifest.json` 只列
+`plugin-cloud-client` 一个，其余 17 个布局 / 工具类插件是经「插件管理」从 `/plugin-catalog.json`
+装的（dev 同样是这条，故两边行为一致）。
+
 ### 追记（2026-10-11 二续，底栏「+ 添加节点」菜单：隐藏四项 + 「上传」接通批量上传）
 
 用户口径（附截图，红框圈出菜单区）：「优化一下 package UI 里面的这几个按钮，隐藏一部分；然后优化一下

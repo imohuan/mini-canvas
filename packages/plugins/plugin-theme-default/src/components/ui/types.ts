@@ -25,4 +25,9 @@ export interface SelectOption {
    * 有图标时该行自动变「图标 + 名称（+ hover 描述）」两段式。
    */
   icon?: unknown
+  /**
+   * 可选分组名：相邻选项的 group 不同时，中间插一条分隔线（与右键菜单的分块同款）。
+   * 不给 group 的列表**完全不受影响**（一条线都不画）。
+   */
+  group?: string
 }

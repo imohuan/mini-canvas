@@ -15,12 +15,13 @@
  *  ② 技能 / MCP / 节点是**输入框内联标签**：点下拉里的一项 = 往正文插一个标记 chip，
  *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowUp, ChevronDown, ChevronLeft, ChevronRight, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
+  Minimize2, AlertCircle,
 } from 'lucide-vue-next'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
@@ -35,6 +36,7 @@ import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSe
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
 import { isSubmitShortcut } from '../composerKeys.js'
 import { pagerAnchors, type PagerGroup } from '../branchNav.js'
+import { segmentAnchors } from '../modelSegments.js'
 import {
   queuePanelView,
   sendButtonMode,
@@ -67,6 +69,16 @@ const { ctx } = useCanvasRender()
  */
 const CONTEXT_R = 5.25
 const CONTEXT_CIRCUMFERENCE = 2 * Math.PI * CONTEXT_R
+
+/**
+ * 「压缩」动作项的图标（Lucide minimize-2 同款：两条向内的箭头）。
+ *
+ * 为什么内联 SVG 而不是从 lucide 组件取：@ 菜单的行是由编辑器直接造 DOM 渲染的
+ * （renderItem 返回 VNode，但图标在菜单里就是一段 innerHTML），与技能 / MCP 的
+ * ICON_SKILL / ICON_MCP 同一条路 —— 那两枚也在 agentResources 里以字符串形式存着。
+ */
+const ICON_COMPACT =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>'
 
 /**
  * 已用弧的 dashoffset = 周长 × 剩余比例 —— dashoffset 越大弧越短。
@@ -169,11 +181,11 @@ function openPreview(url: string, list?: string[] | null): void {
 const previewItem = computed(() =>
   previewImage.value
     ? {
-        name: "图片预览",
-        kind: "image",
-        url: previewImage.value,
-        ...(previewList.value ? { list: previewList.value, index: Math.max(0, previewList.value.indexOf(previewImage.value)) } : {}),
-      }
+      name: "图片预览",
+      kind: "image",
+      url: previewImage.value,
+      ...(previewList.value ? { list: previewList.value, index: Math.max(0, previewList.value.indexOf(previewImage.value)) } : {}),
+    }
     : null,
 )
 
@@ -380,10 +392,40 @@ function focusNode(nodeId: string): void {
  * 资产清单用于「回填复用」；@ 下拉里按名字过滤也能顺带搜到资产，是加分项。
  */
 const editorResources = computed<ResourceItem[]>(() => [
+  // **命令组排最前**（用户口径 2026-10-11 的截图反馈）：@ 菜单打开时"能做什么"先于
+  // "引用谁" —— 不用滚到列表最底下才能按到「压缩」。
+  ...compactActionItems(),
   ...nodeResources(nodeList.value, s.canvasId, focusNode),
   ...skillResources(s.skills),
   ...mcpResources(s.mcpServers),
 ])
+
+/**
+ * @ 菜单里的「压缩」动作项。
+ *
+ * 为什么用 category「命令」单独一组：它和节点 / 技能 / MCP 不是一类东西
+ * （那些是"引用谁"，这个是"现在做什么"），混在一组里读起来会错。
+ */
+function compactActionItems(): ResourceItem[] {
+  return [
+    {
+      id: 'command:compact',
+      name: '压缩上下文',
+      category: '命令',
+      value: '把历史总结成摘要，腾出上下文空间',
+      renderItem: () =>
+        h('span', { class: 'ac-mrow' }, [
+          h('span', { class: 'ac-mrow-icon', innerHTML: ICON_COMPACT }),
+          h('span', { class: 'ac-mrow-text' }, [
+            h('span', { class: 'ac-mrow-name' }, '压缩上下文'),
+            h('span', { class: 'ac-mrow-hint' }, '把历史总结成摘要，腾出上下文空间'),
+          ]),
+        ]),
+      // 动作项：onPick 一给，编辑器就**不往正文插任何东西**（见 useEditor 的说明）
+      onPick: () => void agent.compact(),
+    },
+  ]
+}
 
 /**
  * 「引用到 Agent」→ 把那些节点插成标签（两个入口共用：右键菜单给一个、多选上控制栏给一批）。
@@ -442,6 +484,16 @@ onMounted(() => insertPendingResources())
 function insertRef(item: ResourceItem, close: () => void): void {
   editorRef.value?.insertResource(item)
   close()
+}
+
+/**
+ * 「压缩」的两个入口（+ 菜单 / @ 菜单）共用这一个动作。
+ *
+ * 为什么收成一处：压缩是有前置条件的长动作（没有会话 / 正在跑 / 正在压都要有交代），
+ * 两个入口各写一遍必然漂移 —— 用户会看到一个入口能点、另一个点了没反应。
+ */
+function compactNow(): void {
+  void agent.compact()
 }
 
 /**
@@ -669,8 +721,8 @@ function scrollToEditing(): void {
   // 三种编辑各自的目标元素不同：谁在编辑就滚到谁（类名挂在外层 .ac-msg 上，选择器对准真身）
   const sel =
     editingKind.value === 'message' ? '.ac-msg.is-editing'
-    : editingKind.value === 'queue' ? '.ac-queue-row.is-editing'
-    : '.ac-goal-row.is-editing'
+      : editingKind.value === 'queue' ? '.ac-queue-row.is-editing'
+        : '.ac-goal-row.is-editing'
   document.querySelector(sel)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 }
 /** 当前在编辑哪一种（消息 / 队列 / 目标）；都没有则 null —— 三者互斥，最多一个 */
@@ -682,8 +734,8 @@ const editingKind = computed<'message' | 'queue' | 'goal' | null>(() => {
 })
 const editingKindText = computed(() =>
   editingKind.value === 'queue' ? '正在编辑排队消息'
-  : editingKind.value === 'goal' ? '正在编辑目标'
-  : '正在编辑',
+    : editingKind.value === 'goal' ? '正在编辑目标'
+      : '正在编辑',
 )
 /** 那条黄色标记上的 ✕：按当前是哪种编辑去取消 */
 function cancelEditing(): void {
@@ -693,6 +745,33 @@ function cancelEditing(): void {
     editingItems.value = []
   } else if (editingKind.value === 'goal') cancelEditGoal()
 }
+
+/**
+ * 模型分割线：第 N 个用户消息之前，换成了哪个模型（用户口径 2026-10-11）。
+ *
+ * 为什么从前端现算而不是后端给 turnId：转录是后端的，而"第几个用户消息"这件事
+ * 前端本来就按渲染顺序数得出来（与分页器的 userOrdinal 同一口径）——
+ * 后端只给 fromUser 这个稳定坐标，位置由渲染层钉，改渲染不会让后端数据失配。
+ *
+ * 返回 turnId -> 分段；只给**分叉点那一条**上标（第一段 fromUser=0 也要画，
+ * 否则用户不知道这个对话一开始用的是哪个模型）。
+ */
+// 定位规则住在 ../modelSegments.ts（纯函数，有单测）—— 这里只把状态喂给它。
+const segmentByAnchor = computed(() => segmentAnchors(s.turns, s.segments))
+
+/** 分割线上的模型名：有 displayName 就用它（界面上的模型列表是这么叫的） */
+function segmentModelLabel(seg: { provider: string; modelId: string }): string {
+  const hit = s.models.find((m) => m.provider === seg.provider && m.modelId === seg.modelId)
+  return hit?.displayName || seg.modelId
+}
+
+/**
+ * 这条错误是不是已经显示在消息流里了（挂在某条助手消息上）。
+ *
+ * 为什么要判：同一条错误两个地方都画就成了两条 —— 用户看到重复的报错会以为出了两次事。
+ * 优先信消息里那条（它就在出错的那个位置旁边，读起来最连贯），没有才画底部那条常驻条。
+ */
+const hasInlineError = computed(() => s.turns.some((t) => !!t.error))
 
 /** 分页器切到上/下一条（越界返回 null，按钮同时是 disabled 状态） */
 function pagerTarget(p: PagerGroup, delta: number): string | null {
@@ -1054,7 +1133,9 @@ watch(modelOpen, (open) => {
 
 /** 点一项 = 切模型并收起（滚不滚是打开那一刻的事，这里不用管） */
 function pickModel(m: { provider: string; modelId: string }, close: () => void): void {
-  agent.setModel(m.provider, m.modelId)
+  // 切模型 = 换一条会话（SDK 的模型钉在会话上）：服务那边会把历史接过去、
+  // 补一条模型分段，界面上就出现"从这里换了模型"的分割线（用户口径 2026-10-11）。
+  void agent.setModel(m.provider, m.modelId)
   close()
 }
 
@@ -1289,220 +1370,264 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
     <!-- ③ 消息流 -->
     <div v-else class="ac-scroll-wrap">
-    <!-- 「回到底部」（用户口径 2026-10-09）：放在**消息区内部、底部居中**。
+      <!-- 「回到底部」（用户口径 2026-10-09）：放在**消息区内部、底部居中**。
          有滚动条且未滚到底时才出现（原语义不变）。 -->
-    <button v-if="showScrollToBottom" class="ac-to-bottom" aria-label="回到底部" title="回到底部"
-      @click="smoothScrollToBottom()"><ChevronDown :size="16" /></button>
-    <div ref="scroller" class="ac-scroll" role="log" aria-live="polite">
-      <!-- 稳定的**内容容器**：空态与消息流都在它里面。
+      <button v-if="showScrollToBottom" class="ac-to-bottom" aria-label="回到底部" title="回到底部"
+        @click="smoothScrollToBottom()">
+        <ChevronDown :size="16" />
+      </button>
+      <div ref="scroller" class="ac-scroll" role="log" aria-live="polite">
+        <!-- 稳定的**内容容器**：空态与消息流都在它里面。
            为什么必须有一层稳定的壳：ResizeObserver 只能盯住一个具体的 DOM 节点，
            而空态与消息流是 v-if/v-else 互换的（挂载时看到的那个节点随后会被换掉），
            盯它就会盯到已被丢弃的节点上 —— 内容再长也不触发。 -->
-      <div class="ac-inner">
-      <!-- 空态：中心欢迎 + 三行建议（照参考图） -->
-      <div v-if="!s.turns.length" class="ac-welcome">
-        <div v-if="!hintDismissed" class="ac-hint-card">
-          <p class="ac-hint-text"><strong>我能帮你做很多事</strong>，比如回答问题、写文章、编剧本、生成图片/视频/音频…</p>
-          <button class="ac-hint-close" aria-label="我知道了" @click="dismissHint"><X :size="13" /></button>
-        </div>
-        <div class="ac-welcome-orb"></div>
-        <p class="ac-welcome-title">让 Agent 辅助你的无限创意</p>
-        <div class="ac-suggestions">
-          <button v-for="g in SUGGESTIONS" :key="g.text" class="ac-suggestion" @click="useSuggestion(g.text)">
-            <component :is="g.icon" :size="15" />
-            <span>{{ g.text }}</span>
-            <ChevronRight :size="14" class="ac-suggestion-arrow" />
-          </button>
-        </div>
-      </div>
+        <div class="ac-inner">
+          <!-- 空态：中心欢迎 + 三行建议（照参考图） -->
+          <div v-if="!s.turns.length" class="ac-welcome">
+            <div v-if="!hintDismissed" class="ac-hint-card">
+              <p class="ac-hint-text"><strong>我能帮你做很多事</strong>，比如回答问题、写文章、编剧本、生成图片/视频/音频…</p>
+              <button class="ac-hint-close" aria-label="我知道了" @click="dismissHint">
+                <X :size="13" />
+              </button>
+            </div>
+            <div class="ac-welcome-orb"></div>
+            <p class="ac-welcome-title">让 Agent 辅助你的无限创意</p>
+            <div class="ac-suggestions">
+              <button v-for="g in SUGGESTIONS" :key="g.text" class="ac-suggestion" @click="useSuggestion(g.text)">
+                <component :is="g.icon" :size="15" />
+                <span>{{ g.text }}</span>
+                <ChevronRight :size="14" class="ac-suggestion-arrow" />
+              </button>
+            </div>
+          </div>
 
-      <template v-for="t in s.turns" :key="t.id">
-        <!-- 审批卡片：**只在等你决定时出现**。点过允许/拒绝之后这张卡就消失
+          <template v-for="t in s.turns" :key="t.id">
+            <!-- 模型分割线（用户口径 2026-10-11）：切换模型 = 换一条会话（SDK 的模型钉在会话上），
+             所以在"这边的第一句话"之前横一条线，标明这一段用的是哪个模型。
+             div 不能省：用 template 包两层兄弟节点时 v-for 的 key 会落到顶层节点上，
+             而分割线要先于消息渲染。 -->
+            <div v-if="segmentByAnchor.get(t.id)" class="ac-model-split" role="separator"
+              :aria-label="'从这里开始使用模型 ' + segmentModelLabel(segmentByAnchor.get(t.id)!)">
+              <span class="ac-model-split-line"></span>
+              <span class="ac-model-split-badge">
+                <Box :size="12" />
+                <span class="ac-model-split-name">{{ segmentModelLabel(segmentByAnchor.get(t.id)!) }}</span>
+              </span>
+              <span class="ac-model-split-line"></span>
+            </div>
+            <!-- 审批卡片：**只在等你决定时出现**。点过允许/拒绝之后这张卡就消失
              （用户口径：「都授权了 就不显示」）—— 已经放行、工具也跑完了，
              再挂一张「已允许」的死卡片只是挡着看下面的内容。 -->
-        <div v-if="t.kind === 'approval' && !t.approval?.decision" class="ac-approval">
-          <div class="ac-approval-head">
-            <Loader2 :size="14" class="ac-spin" />
-            <strong>需要审批：{{ t.approval?.toolName }}</strong>
-          </div>
-          <pre class="ac-approval-args">{{ t.approval?.arguments }}</pre>
-          <div class="ac-approval-actions">
-            <button class="ac-btn ac-btn-primary" @click="agent.decide(t.approval!.id, 'allow')">允许</button>
-            <button class="ac-btn" @click="agent.decide(t.approval!.id, 'deny')">拒绝</button>
-          </div>
-        </div>
+            <div v-if="t.kind === 'approval' && !t.approval?.decision" class="ac-approval">
+              <div class="ac-approval-head">
+                <Loader2 :size="14" class="ac-spin" />
+                <strong>需要审批：{{ t.approval?.toolName }}</strong>
+              </div>
+              <pre class="ac-approval-args">{{ t.approval?.arguments }}</pre>
+              <div class="ac-approval-actions">
+                <button class="ac-btn ac-btn-primary" @click="agent.decide(t.approval!.id, 'allow')">允许</button>
+                <button class="ac-btn" @click="agent.decide(t.approval!.id, 'deny')">拒绝</button>
+              </div>
+            </div>
 
-        <!-- 用户靠右 / 助手靠左（照参考图，都没有头像） -->
-        <div v-else class="ac-msg" :class="[t.kind, { 'is-editing': t.editing }]">
-          <div class="ac-bubble">
-            <button v-if="t.thinking" class="ac-think-toggle" @click="toggleThinking(t.id)">
-              <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id] }" />思考过程
-            </button>
-            <pre v-if="t.thinking && openThinking[t.id]" class="ac-think">{{ t.thinking }}</pre>
+            <!-- 用户靠右 / 助手靠左（照参考图，都没有头像） -->
+            <div v-else class="ac-msg" :class="[t.kind, { 'is-editing': t.editing }]">
+              <div class="ac-bubble">
+                <button v-if="t.thinking" class="ac-think-toggle" @click="toggleThinking(t.id)">
+                  <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id] }" />思考过程
+                </button>
+                <pre v-if="t.thinking && openThinking[t.id]" class="ac-think">{{ t.thinking }}</pre>
 
-            <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
+                <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
                  文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
                  以前这里是「先把所有工具画完、再画正文」，所以工具永远堆在最上面、看不出时序。
                  注意：这里只接 text / tools 两种行；thinking 行**不在这里画** ——
                  思考仍由上面那条「思考过程」折叠行统一展示（它仍是工具组的分界，见 groupTurnBlocks）。 -->
-            <template v-for="row in assistantRows(t)" :key="row.key">
-              <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
+                <template v-for="row in assistantRows(t)" :key="row.key">
+                  <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
 
-              <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
+                  <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
                    其余全部走默认折叠行（用户口径 2026-10-10：审批有自己的卡片 UI，
                    不该给底层工具再打「卡片」标记把它顶成常驻展开 —— exec_command 这类
                    要恢复成折叠行，对齐 docs/tmp/tool-card-demo-v3.html 的做法）。 -->
-              <template v-else-if="row.type === 'tools' && row.tools.length === 1 && hasCardView(row.tools[0])">
-                <div class="ac-tool-card">
-                  <!-- 运行中才给一行转圈（卡片还没内容时的进度指示）。
+                  <template v-else-if="row.type === 'tools' && row.tools.length === 1 && hasCardView(row.tools[0])">
+                    <div class="ac-tool-card">
+                      <!-- 运行中才给一行转圈（卡片还没内容时的进度指示）。
                        跑完就整行收掉：卡片自己的头行（图标 + 标题 + 角标）已经是头部，
                        再叠一行摘要（如「+1 ~ 0 -0」）与下面的「1 新增 / 0 更新 / 0 删除」纯属重复
                        （用户口径 2026-10-10：删掉那行没意义的文字）。 -->
-                  <div v-if="!row.tools[0].settled" class="ac-tool-head">
-                    <Loader2 :size="13" class="ac-spin" />
-                  </div>
-                  <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                    :output="row.tools[0].output" :name="row.tools[0].name"
-                    @preview="previewImage = $event" />
-                </div>
-              </template>
-              <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
-              <template v-else-if="row.type === 'tools' && row.tools.length === 1">
-                <div class="ac-tool-fold">
-                  <button class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
-                    @click="toggleTool(row.tools[0].id)">
-                    <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[row.tools[0].id] }" />
-                    <code>{{ row.tools[0].name }}</code>
-                    <span v-if="toolRowSummary(row.tools[0])" class="ac-tf-summary">{{ toolRowSummary(row.tools[0]) }}</span>
-                  </button>
-                  <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
-                    <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                      :output="row.tools[0].output" :name="row.tools[0].name"
-                      @preview="previewImage = $event" />
-                  </div>
-                </div>
-              </template>
-
-              <!-- 多个工具：折成一组（用户口径：中间没有文字的工具要合并），标题点开看逐个明细 -->
-              <div v-else-if="row.type === 'tools'" class="ac-tool-group">
-                <button class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
-                  @click="toggleToolGroup(row.key)">
-                  <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openToolGroups[row.key] }" />
-                  {{ toolGroupTitle(row.tools) }}
-                </button>
-                <div v-if="openToolGroups[row.key]" class="ac-tg-body">
-                  <div v-for="tool in row.tools" :key="tool.id"
-                    :class="hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'">
-                    <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ 折叠行 -->
-                    <template v-if="hasCardView(tool)">
-                      <div class="ac-tool-head">
-                        <!-- 同上：只留运行中的转圈，跑完不再叠一行与卡片自身重复的摘要 -->
-                        <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
+                      <div v-if="!row.tools[0].settled" class="ac-tool-head">
+                        <Loader2 :size="13" class="ac-spin" />
                       </div>
-                      <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
-                        @preview="previewImage = $event" />
-                    </template>
-                    <template v-else>
-                      <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
-                        @click="toggleTool(tool.id)">
-                        <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
-                        <code>{{ tool.name }}</code>
-                        <span v-if="toolRowSummary(tool)" class="ac-tf-summary">{{ toolRowSummary(tool) }}</span>
+                      <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewImage = $event" />
+                    </div>
+                  </template>
+                  <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
+                  <template v-else-if="row.type === 'tools' && row.tools.length === 1">
+                    <div class="ac-tool-fold">
+                      <button class="ac-tf-toggle" :aria-expanded="!!openTools[row.tools[0].id]"
+                        @click="toggleTool(row.tools[0].id)">
+                        <ChevronRight :size="13" class="ac-tf-caret"
+                          :class="{ 'is-open': openTools[row.tools[0].id] }" />
+                        <code>{{ row.tools[0].name }}</code>
+                        <span v-if="toolRowSummary(row.tools[0])" class="ac-tf-summary">{{ toolRowSummary(row.tools[0])
+                          }}</span>
                       </button>
-                      <div v-if="openTools[tool.id]" class="ac-tf-body">
-                        <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output" :name="tool.name"
-                          @preview="previewImage = $event" />
+                      <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
+                        <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
+                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewImage = $event" />
                       </div>
-                    </template>
-                  </div>
-                </div>
-              </div>
-            </template>
+                    </div>
+                  </template>
 
-            <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），
+                  <!-- 多个工具：折成一组（用户口径：中间没有文字的工具要合并），标题点开看逐个明细 -->
+                  <div v-else-if="row.type === 'tools'" class="ac-tool-group">
+                    <button class="ac-tg-toggle" :aria-expanded="!!openToolGroups[row.key]"
+                      @click="toggleToolGroup(row.key)">
+                      <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openToolGroups[row.key] }" />
+                      {{ toolGroupTitle(row.tools) }}
+                    </button>
+                    <div v-if="openToolGroups[row.key]" class="ac-tg-body">
+                      <div v-for="tool in row.tools" :key="tool.id"
+                        :class="hasCardView(tool) ? 'ac-tool-card' : 'ac-tool-fold'">
+                        <!-- 有卡片（画布 MCP）→ 直接展示；其余（含要审批的默认工具）→ 折叠行 -->
+                        <template v-if="hasCardView(tool)">
+                          <div class="ac-tool-head">
+                            <!-- 同上：只留运行中的转圈，跑完不再叠一行与卡片自身重复的摘要 -->
+                            <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
+                          </div>
+                          <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
+                            :name="tool.name" @preview="previewImage = $event" />
+                        </template>
+                        <template v-else>
+                          <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
+                            @click="toggleTool(tool.id)">
+                            <ChevronRight :size="13" class="ac-tf-caret" :class="{ 'is-open': openTools[tool.id] }" />
+                            <code>{{ tool.name }}</code>
+                            <span v-if="toolRowSummary(tool)" class="ac-tf-summary">{{ toolRowSummary(tool) }}</span>
+                          </button>
+                          <div v-if="openTools[tool.id]" class="ac-tf-body">
+                            <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
+                              :name="tool.name" @preview="previewImage = $event" />
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），
                  其余文字照常显示。为什么不直接存结构化引用：会话历史里只有纯文本（后端只存
                  getPlainText 的结果），靠"@名字 + 已装清单"回推，刷新/切会话也得到同一份渲染。 -->
-            <p v-if="t.kind === 'user'" class="ac-user-line">
-              <template v-for="(seg, si) in userSegments(t.text)" :key="si">
-                <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
+                <p v-if="t.kind === 'user'" class="ac-user-line">
+                  <template v-for="(seg, si) in userSegments(t.text)" :key="si">
+                    <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
                      用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
-                <span v-if="seg.type === 'tag'" class="ac-sent-tag" :class="{ 'is-clickable': segClickable(seg) }"
-                  :title="segTitle(seg)"
-                  :role="segClickable(seg) ? 'button' : undefined"
-                  :tabindex="segClickable(seg) ? 0 : undefined"
-                  @click="onSegClick(seg)"
-                  @keydown.enter.prevent="onSegClick(seg)">
-                  <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
-                  <span class="ac-sent-tag-label">{{ seg.name }}</span>
+                    <span v-if="seg.type === 'tag'" class="ac-sent-tag" :class="{ 'is-clickable': segClickable(seg) }"
+                      :title="segTitle(seg)" :role="segClickable(seg) ? 'button' : undefined"
+                      :tabindex="segClickable(seg) ? 0 : undefined" @click="onSegClick(seg)"
+                      @keydown.enter.prevent="onSegClick(seg)">
+                      <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
+                      <span class="ac-sent-tag-label">{{ seg.name }}</span>
+                    </span>
+                    <span v-else class="ac-user-text">{{ seg.value }}</span>
+                  </template>
+                </p>
+                <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
+                <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
+                  <button v-for="(src, ii) in t.images" :key="ii" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
+                    @click="openPreview(src, t.images)">
+                    <img :src="src" alt="" />
+                  </button>
+                </div>
+                <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
+                <span v-if="t.editing" class="ac-editing-badge" role="status">
+                  <Pencil :size="12" />正在编辑
+                  <button class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()">
+                    <X :size="12" />
+                  </button>
                 </span>
-                <span v-else class="ac-user-text">{{ seg.value }}</span>
-              </template>
-            </p>
-            <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
-            <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
-              <button v-for="(src, ii) in t.images" :key="ii" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
-                @click="openPreview(src, t.images)">
-                <img :src="src" alt="" />
-              </button>
-            </div>
-            <!-- 「正在编辑」徽标（用户口径 2026-10-06：语义是正在编辑，不是已编辑；带高亮） -->
-            <span v-if="t.editing" class="ac-editing-badge" role="status">
-              <Pencil :size="12" />正在编辑
-              <button class="ac-editing-x" aria-label="取消编辑" @click="agent.cancelEdit()"><X :size="12" /></button>
-            </span>
-            <!-- 助手消息才走 Markdown。
+                <!-- 助手消息才走 Markdown。
                  这里**必须**是独立的 v-if，不能接在用户那条的 v-else-if 链上：
                  中间隔着「用户图片」那个 div 时，链会被打断，导致用户消息既渲染标签行、
                  又再渲染一遍原始 Markdown 文本（实测文本重复出现两次，还带出字面 @名字）。 -->
-            <!-- 「正在思考」就是个**加载指示**（用户口径 2026-10-06）：只要这轮还没结束（t.streaming）
+                <!-- 「正在思考」就是个**加载指示**（用户口径 2026-10-06）：只要这轮还没结束（t.streaming）
                  就一直显示在回复区底部 —— 不管它此刻在打字、在调工具，还是真在思考。
                  以前只在「还没出正文」时显示，模型一开始吐字它就没了 —— 那正是用户报的「加载状态没了」。 -->
-            <p v-if="t.streaming && t.kind === 'assistant'" class="ac-pending" role="status" aria-live="polite">
-              <!-- 图标是**一段开口的圆弧**（照参考图：3/4 圈转圈），不是整圈的 Loader2 ——
+                <p v-if="t.streaming && t.kind === 'assistant'" class="ac-pending" role="status" aria-live="polite">
+                  <!-- 图标是**一段开口的圆弧**（照参考图：3/4 圈转圈），不是整圈的 Loader2 ——
                    整圈转起来几乎看不出在动，开口的弧才有"在转"的观感。 -->
-              <span class="ac-pending-spin" aria-hidden="true"></span>
-              <span>正在思考</span>
-            </p>
-            <!-- 过程提示（主要是「已连接 MCP：smart(3 个工具)」这类）**暂时隐藏**。
+                  <span class="ac-pending-spin" aria-hidden="true"></span>
+                  <span>正在思考</span>
+                </p>
+                <!-- 过程提示（主要是「已连接 MCP：smart(3 个工具)」这类）**暂时隐藏**。
                  用户口径：不要删除，只是先不显示 —— 每次对话都冒一条、又说不清什么时候会出现，
                  反而干扰阅读；MCP 的真实状态改在下拉里实时看（见 MCP 下拉里的「检测」）。
                  数据仍在 turn.notice 上，想放回来把 SHOW_PROCESS_NOTICE 改 true 即可。 -->
-            <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
-            <p v-if="t.error" class="ac-error">{{ t.error }}</p>
-          </div>
-          <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
+                <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
+                <p v-if="t.error" class="ac-error">{{ t.error }}</p>
+              </div>
+              <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
                不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
-          <div v-if="t.kind === 'user'" class="ac-msg-actions">
-            <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
-            <button class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
-              @click="copyMessage(t.text, t.id)">
-              <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" /><Copy v-else :size="13" />
-            </button>
-            <button class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑"
-              @click="beginEditMessage(t)"><Pencil :size="13" /></button>
-          </div>
-        </div>
-        <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
+              <div v-if="t.kind === 'user'" class="ac-msg-actions">
+                <span class="ac-msg-time" :title="msgTimeTitle(t.ts)">{{ msgTimeText(t.ts) }}</span>
+                <button class="ac-msg-btn" :aria-label="copied[t.id] ? '已复制' : '复制消息'" title="复制"
+                  @click="copyMessage(t.text, t.id)">
+                  <CircleCheck v-if="copied[t.id]" :size="13" class="is-ok" />
+                  <Copy v-else :size="13" />
+                </button>
+                <button class="ac-msg-btn" aria-label="编辑消息（回填到输入框）" title="编辑" @click="beginEditMessage(t)">
+                  <Pencil :size="13" />
+                </button>
+              </div>
+            </div>
+            <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
              回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
              切过去后不含当前版本后来的消息。 -->
-        <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
-          <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0"
-            aria-label="上一个版本" title="上一个版本"
-            @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
-            <ChevronLeft :size="14" />
-          </button>
-          <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
-            {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
-          </span>
-          <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1"
-            aria-label="下一个版本" title="下一个版本"
-            @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
-            <ChevronRight :size="14" />
-          </button>
+            <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
+              <button class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
+                title="上一个版本"
+                @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
+                <ChevronLeft :size="14" />
+              </button>
+              <span class="ac-branch-pos" :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
+                {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
+              </span>
+              <button class="ac-branch-arrow"
+                :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1" aria-label="下一个版本"
+                title="下一个版本"
+                @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
+                <ChevronRight :size="14" />
+              </button>
+            </div>
+          </template>
+          <!-- 压缩进度 / 结果（用户口径 2026-10-11）：压缩要跑一次模型，几十秒内必须有回音。
+           放在消息流末尾而不是顶部：它是"刚发生的事"，跟着最新内容一起看最自然。 -->
+          <div v-if="s.compacting" class="ac-compact-note" role="status" aria-live="polite">
+            <Loader2 :size="13" class="ac-spin" />
+            <span>正在压缩上下文…</span>
+          </div>
+          <div v-else-if="s.compactNotice" class="ac-compact-note" role="status">
+            <Minimize2 :size="14" />
+            <span>{{ s.compactNotice }}</span>
+            <button class="ac-note-x" aria-label="知道了" @click="s.compactNotice = ''">
+              <X :size="12" />
+            </button>
+          </div>
+          <!-- 常驻错误条（用户口径 2026-10-11 的问题 2）：这一轮失败时**必须**看得见。
+           为什么要一条独立的条：错误以前只挂在"最后一条助手消息"上 —— 出错时若那条
+           还没建出来（请求在 bootstrap 阶段就失败），错误就落在空气里，用户什么也看不到。
+           若这条错误已经挂在某条消息上（不重复显示），这条就不画。 -->
+          <div v-if="s.lastError && !hasInlineError" class="ac-error-bar" role="alert">
+            <AlertCircle :size="14" class="ac-error-bar-icon" />
+            <span class="ac-error-bar-text">{{ s.lastError }}</span>
+            <button class="ac-note-x" aria-label="关闭错误提示" @click="s.lastError = ''">
+              <X :size="12" />
+            </button>
+          </div>
         </div>
-      </template>
       </div>
-    </div>
     </div>
 
     <!-- ④ 输入区（照参考图：整块圆角 16 的框，里面上编辑器、下工具条） -->
@@ -1512,7 +1637,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
         <BellRing :size="14" class="ac-notify-icon" />
         <span class="ac-notify-text">开启浏览器通知，及时获取最新消息</span>
         <button class="ac-notify-btn" @click="enableNotify">开启</button>
-        <button class="ac-notify-close" aria-label="不再提示" @click="notifyDismissed = true"><X :size="13" /></button>
+        <button class="ac-notify-close" aria-label="不再提示" @click="notifyDismissed = true">
+          <X :size="13" />
+        </button>
       </div>
       <!-- 排队列表（设计 §3.6.1）：**紧贴**输入框上缘、宽 80%、靠左；右侧 36px 一列放
            暂停 / 启动按钮（G9）。
@@ -1524,136 +1651,149 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
            宽 90% 居中、紧贴输入框（零间隔、边框重叠 1px）；**只有外层有圆角，内部行一律方角**。 -->
       <div v-if="pending.hasAny" class="ac-pending-box">
         <div class="ac-pending-list" role="list" aria-label="目标与排队消息">
-            <!-- 排队消息在上、**目标在最下**（用户口径 2026-10-11）：
+          <!-- 排队消息在上、**目标在最下**（用户口径 2026-10-11）：
                  目标是一个持续进行的循环，队列排它前面 —— 每轮跑完先清队列，
                  队列清空后才轮到目标下一轮。展示顺序跟执行顺序保持一致。 -->
-            <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
-            <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
-              :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
-              <!-- 左侧图标（参考 HTML 的 .prow .lead，内联 SVG 逐字对齐）：与目标行的图标列对齐 -->
-              <span class="ac-pending-lead" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" />
-                </svg>
-              </span>
-              <!-- 迷你图 + 「+N」：白图与背景同色会看不见，加一圈淡边框（不抢眼）；多于 1 张显示 +N -->
-              <img v-if="row.thumbs.length" class="ac-queue-thumb" :src="row.thumbs[0]" alt=""
-                role="button" :aria-label="'查看排队图片'"
-                :title="'这条消息带 ' + row.images.length + ' 张图'"
-                @click="openPreview(row.thumbs[0], row.images)" />
-              <span v-if="row.images.length > 1" class="ac-queue-thumb-more" role="status"
-                :title="'共 ' + row.images.length + ' 张图'">+{{ row.images.length - 1 }}</span>
-              <span class="ac-queue-text" :title="row.text">
-                <!-- 队列条目也是**用户消息**：@节点 / @技能 标记同样要渲染成标签，
+          <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
+          <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
+            :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
+            <!-- 左侧图标（参考 HTML 的 .prow .lead，内联 SVG 逐字对齐）：与目标行的图标列对齐 -->
+            <span class="ac-pending-lead" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3v12" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            </span>
+            <!-- 迷你图 + 「+N」：白图与背景同色会看不见，加一圈淡边框（不抢眼）；多于 1 张显示 +N -->
+            <img v-if="row.thumbs.length" class="ac-queue-thumb" :src="row.thumbs[0]" alt="" role="button"
+              :aria-label="'查看排队图片'" :title="'这条消息带 ' + row.images.length + ' 张图'"
+              @click="openPreview(row.thumbs[0], row.images)" />
+            <span v-if="row.images.length > 1" class="ac-queue-thumb-more" role="status"
+              :title="'共 ' + row.images.length + ' 张图'">+{{ row.images.length - 1 }}</span>
+            <span class="ac-queue-text" :title="row.text">
+              <!-- 队列条目也是**用户消息**：@节点 / @技能 标记同样要渲染成标签，
                      否则那串 <ref …> XML 原样露出（用户口径 2026-10-11：气泡/目标/队列三处都要认）。 -->
-                <template v-if="row.text">
-                  <template v-for="(seg, si) in userSegments(row.text)" :key="si">
-                    <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact" :title="segTitle(seg)">{{ seg.name }}</span>
-                    <span v-else>{{ seg.value }}</span>
-                  </template>
-                </template>
-                <template v-else>（图片）</template>
-              </span>
-              <!-- 编辑中：队列**整体阻塞**（后端保证不发下一条），行上直接说明，用户不用猜为什么不动 -->
-              <span v-if="row.editing" class="ac-queue-flag" role="status">编辑中</span>
-              <span v-else-if="row.goal" class="ac-queue-flag is-goal" :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</span>
-              <span v-if="row.sending" class="ac-queue-flag is-sending">发送中</span>
-              <span v-else-if="row.sent" class="ac-queue-flag is-sent">已发送</span>
-
-              <span class="ac-queue-actions">
-                <!-- 编辑中：这一条是"停住队列"的那条，行上给一个取消编辑（状态回 queued） -->
-                <button v-if="row.editing" class="ac-queue-btn" aria-label="取消编辑这条排队消息" title="取消编辑"
-                  @click="cancelEditQueue(row.id)"><X :size="12" /></button>
-                <!-- 引导 ↳：跑着时 = 插队（插进当前轮的下一次请求）；没跑时后端直接当一次发送 -->
-                <button v-else class="ac-queue-btn" aria-label="引导（插队发送）" title="引导：插到当前这一轮的下一次请求"
-                  @click="steerItem(row.id)"><CornerUpRight :size="12" /></button>
-                <button class="ac-queue-btn is-danger" aria-label="删除这条排队消息" title="删除"
-                  @click="removeItem(row.id)"><Trash2 :size="12" /></button>
-                <!-- ⋯ 只有两项：编辑消息 / 关闭排队（设计 §3.6.2），用目录里的 dropdown -->
-                <ThemedDropdown placement="top-end" :offset="6" menu-width="180px"
-                  :model-value="rowMenuId === row.id" @update:model-value="(v: boolean) => (rowMenuId = v ? row.id : null)">
-                  <template #trigger>
-                    <button class="ac-queue-btn" :aria-expanded="rowMenuId === row.id"
-                      aria-label="更多操作"><MoreHorizontal :size="12" /></button>
-                  </template>
-                  <template #default="{ close }">
-                    <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
-                      <button class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); close()">
-                        <span class="ac-menu-name">编辑消息</span>
-                        <span class="ac-menu-hint">改完发送，位置不变</span>
-                      </button>
-                      <button class="ac-menu-item" role="menuitem" @click="closeItem(row.id); close()">
-                        <span class="ac-menu-name">关闭排队</span>
-                        <span class="ac-menu-hint">内容回到输入框，不再自动发</span>
-                      </button>
-                    </div>
-                  </template>
-                </ThemedDropdown>
-              </span>
-            </div>
-            <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）—— 排在**队列之后、最下面**。
-                 UI 与队列行刻意不同：强调色底 + 「第 N 轮」+ 已用/总预算 + 暂停/结束。 -->
-            <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
-              <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
-              <!-- 真完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。
-                   注意判据是 goalRow.finished（不是 ended）—— 「被中止」仍可编辑/可续跑。 -->
-              <button v-if="!goalRow.finished" class="ac-pending-lead ac-goal-lead" type="button"
-                :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
-                :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
-                <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
-                <Target :size="14" class="ac-goal-lead-target" />
-                <Pencil :size="14" class="ac-goal-lead-edit" />
-              </button>
-              <span v-else class="ac-pending-lead" aria-hidden="true"><Target :size="14" /></span>
-              <!-- 目标参考图迷你预览：**放文字前面**（与队列行同位——lead 图标之后、正文之前）。
-                   淡边框 + 多图「+N」，与队列缩略图同一套样式（用户口径 2026-10-09）。 -->
-              <template v-if="s.goalImages?.length">
-                <img class="ac-queue-thumb" :src="s.goalImages[0]" alt="" role="button"
-                  :aria-label="'查看目标图片'" :title="'这个目标带 ' + s.goalImages.length + ' 张图'"
-                  @click="openPreview(s.goalImages[0], s.goalImages)" />
-                <span v-if="s.goalImages.length > 1" class="ac-queue-thumb-more" role="status"
-                  :title="'共 ' + s.goalImages.length + ' 张图'">+{{ s.goalImages.length - 1 }}</span>
-              </template>
-              <span class="ac-goal-row-text" :title="s.goal?.objective">
-                <!-- 目标是**用户消息**：正文里的 @节点 / @技能 标记要跟气泡同一套解析渲染成标签，
-                     否则那串 <ref …> XML 会原样露出来（用户实测 2026-10-11）。 -->
-                <template v-for="(seg, si) in userSegments(s.goal?.objective ?? '')" :key="si">
-                  <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact"
-                    :title="segTitle(seg)">{{ seg.name }}</span>
+              <template v-if="row.text">
+                <template v-for="(seg, si) in userSegments(row.text)" :key="si">
+                  <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact" :title="segTitle(seg)">{{ seg.name
+                    }}</span>
                   <span v-else>{{ seg.value }}</span>
                 </template>
-              </span>
-              <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
-              <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
-              <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status"><Pencil :size="11" /><span>正在编辑</span></span>
-              <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
-                   进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
-              <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
-              <!-- 「已用/总预算」一体式（用户口径 2026-10-09）：形如 5.2k/5k，左右两段**各自可点着改**。
-                   左边是已用、右边是总预算；两段都能点着改，**回车才生效**。 -->
-              <span class="ac-goal-ratio" :title="'已用 / 总预算' + '（点数字可改，回车生效）'">
-                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
-                  aria-label="已用 token，点击编辑（回车生效）"
-                  @focus="onGoalEditFocus($event)"
-                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'used')"
-                  @blur="onGoalBudgetBlur($event)">{{ formatToken(s.goal?.tokensUsed, tokenUnit) }}</span>
-                <span class="ac-goal-ratio-sep">/</span>
-                <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
-                  aria-label="总预算，点击编辑（回车生效）"
-                  @focus="onGoalEditFocus($event)"
-                  @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'row')"
-                  @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(s.goal?.budget, tokenUnit) }}</span>
-              </span>
-              <!-- 暂停 / 播放：**只要目标没真完成就给**（用户口径 2026-10-11）。
-                   被中止（aborted）不是完成 —— 那时必须还能点播放接着跑。 -->
-              <button v-if="!goalRow.finished" class="ac-goal-btn"
-                :aria-label="s.goalPaused ? '启动目标' : '暂停目标'" :title="s.goalPaused ? '启动目标' : '暂停目标'"
-                @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
-                <Play v-if="s.goalPaused" :size="12" /><Pause v-else :size="12" />
+              </template>
+              <template v-else>（图片）</template>
+            </span>
+            <!-- 编辑中：队列**整体阻塞**（后端保证不发下一条），行上直接说明，用户不用猜为什么不动 -->
+            <span v-if="row.editing" class="ac-queue-flag" role="status">编辑中</span>
+            <span v-else-if="row.goal" class="ac-queue-flag is-goal"
+              :title="'目标：' + goalMarkText(row.goal.objective, row.goal.budget)">目标</span>
+            <span v-if="row.sending" class="ac-queue-flag is-sending">发送中</span>
+            <span v-else-if="row.sent" class="ac-queue-flag is-sent">已发送</span>
+
+            <span class="ac-queue-actions">
+              <!-- 编辑中：这一条是"停住队列"的那条，行上给一个取消编辑（状态回 queued） -->
+              <button v-if="row.editing" class="ac-queue-btn" aria-label="取消编辑这条排队消息" title="取消编辑"
+                @click="cancelEditQueue(row.id)">
+                <X :size="12" />
               </button>
-              <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）"
-                @click="agent.endGoal()"><X :size="12" /></button>
-            </div>
+              <!-- 引导 ↳：跑着时 = 插队（插进当前轮的下一次请求）；没跑时后端直接当一次发送 -->
+              <button v-else class="ac-queue-btn" aria-label="引导（插队发送）" title="引导：插到当前这一轮的下一次请求"
+                @click="steerItem(row.id)">
+                <CornerUpRight :size="12" />
+              </button>
+              <button class="ac-queue-btn is-danger" aria-label="删除这条排队消息" title="删除" @click="removeItem(row.id)">
+                <Trash2 :size="12" />
+              </button>
+              <!-- ⋯ 只有两项：编辑消息 / 关闭排队（设计 §3.6.2），用目录里的 dropdown -->
+              <ThemedDropdown placement="top-end" :offset="6" menu-width="180px" :model-value="rowMenuId === row.id"
+                @update:model-value="(v: boolean) => (rowMenuId = v ? row.id : null)">
+                <template #trigger>
+                  <button class="ac-queue-btn" :aria-expanded="rowMenuId === row.id" aria-label="更多操作">
+                    <MoreHorizontal :size="12" />
+                  </button>
+                </template>
+                <template #default="{ close }">
+                  <div class="ac-ddmenu" role="menu" aria-label="排队消息操作">
+                    <button class="ac-menu-item" role="menuitem" @click="beginEditQueue(row.id); close()">
+                      <span class="ac-menu-name">编辑消息</span>
+                      <span class="ac-menu-hint">改完发送，位置不变</span>
+                    </button>
+                    <button class="ac-menu-item" role="menuitem" @click="closeItem(row.id); close()">
+                      <span class="ac-menu-name">关闭排队</span>
+                      <span class="ac-menu-hint">内容回到输入框，不再自动发</span>
+                    </button>
+                  </div>
+                </template>
+              </ThemedDropdown>
+            </span>
+          </div>
+          <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）—— 排在**队列之后、最下面**。
+                 UI 与队列行刻意不同：强调色底 + 「第 N 轮」+ 已用/总预算 + 暂停/结束。 -->
+          <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
+            <!-- 左侧图标：hover 时从「目标」变成「编辑」（用户口径 2026-10-09），点它进入编辑 -->
+            <!-- 真完成的目标**不需要编辑**（用户口径 2026-10-09）：那时只画一个纯图标、不可点。
+                   注意判据是 goalRow.finished（不是 ended）—— 「被中止」仍可编辑/可续跑。 -->
+            <button v-if="!goalRow.finished" class="ac-pending-lead ac-goal-lead" type="button"
+              :aria-label="editingGoal ? '正在编辑目标' : '编辑目标'" :title="editingGoal ? '正在编辑目标' : '编辑目标'"
+              :class="{ 'is-editing': editingGoal }" @click="startEditGoalRow()">
+              <!-- 图标尺寸与队列行的 lead 完全一致（14×14，内联 SVG）—— 两行左列才对得齐 -->
+              <Target :size="14" class="ac-goal-lead-target" />
+              <Pencil :size="14" class="ac-goal-lead-edit" />
+            </button>
+            <span v-else class="ac-pending-lead" aria-hidden="true">
+              <Target :size="14" />
+            </span>
+            <!-- 目标参考图迷你预览：**放文字前面**（与队列行同位——lead 图标之后、正文之前）。
+                   淡边框 + 多图「+N」，与队列缩略图同一套样式（用户口径 2026-10-09）。 -->
+            <template v-if="s.goalImages?.length">
+              <img class="ac-queue-thumb" :src="s.goalImages[0]" alt="" role="button" :aria-label="'查看目标图片'"
+                :title="'这个目标带 ' + s.goalImages.length + ' 张图'" @click="openPreview(s.goalImages[0], s.goalImages)" />
+              <span v-if="s.goalImages.length > 1" class="ac-queue-thumb-more" role="status"
+                :title="'共 ' + s.goalImages.length + ' 张图'">+{{ s.goalImages.length - 1 }}</span>
+            </template>
+            <span class="ac-goal-row-text" :title="s.goal?.objective">
+              <!-- 目标是**用户消息**：正文里的 @节点 / @技能 标记要跟气泡同一套解析渲染成标签，
+                     否则那串 <ref …> XML 会原样露出来（用户实测 2026-10-11）。 -->
+              <template v-for="(seg, si) in userSegments(s.goal?.objective ?? '')" :key="si">
+                <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact" :title="segTitle(seg)">{{ seg.name
+                  }}</span>
+                <span v-else>{{ seg.value }}</span>
+              </template>
+            </span>
+            <span class="ac-goal-flag" :class="goalRow.badge.cls" role="status">{{ goalRow.badge.text }}</span>
+            <!-- 编辑目标时在右侧打「正在编辑」标签（与消息/队列编辑同一套黄色语义，用户口径 2026-10-09） -->
+            <span v-if="editingGoal" class="ac-editing-badge is-compact" role="status">
+              <Pencil :size="11" /><span>正在编辑</span>
+            </span>
+            <!-- 右侧一组（用户口径 2026-10-09）：迷你图 → 第 N 轮 → 已用/总预算 → 按钮，**整体右对齐**（spacer 顶开）。
+                   进度条删掉了 —— 「已用/总预算」数字本身就是进度。 -->
+            <span class="ac-goal-round">第 {{ goalRow.round }} 轮</span>
+            <!-- 「已用/总预算」一体式（用户口径 2026-10-09）：形如 5.2k/5k，左右两段**各自可点着改**。
+                   左边是已用、右边是总预算；两段都能点着改，**回车才生效**。 -->
+            <span class="ac-goal-ratio" :title="'已用 / 总预算' + '（点数字可改，回车生效）'">
+              <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                aria-label="已用 token，点击编辑（回车生效）" @focus="onGoalEditFocus($event)"
+                @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'used')"
+                @blur="onGoalBudgetBlur($event)">{{ formatToken(s.goal?.tokensUsed, tokenUnit) }}</span>
+              <span class="ac-goal-ratio-sep">/</span>
+              <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
+                aria-label="总预算，点击编辑（回车生效）" @focus="onGoalEditFocus($event)"
+                @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'row')"
+                @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(s.goal?.budget, tokenUnit) }}</span>
+            </span>
+            <!-- 暂停 / 播放：**只要目标没真完成就给**（用户口径 2026-10-11）。
+                   被中止（aborted）不是完成 —— 那时必须还能点播放接着跑。 -->
+            <button v-if="!goalRow.finished" class="ac-goal-btn" :aria-label="s.goalPaused ? '启动目标' : '暂停目标'"
+              :title="s.goalPaused ? '启动目标' : '暂停目标'" @click="s.goalPaused ? agent.resumeGoal() : agent.pauseGoal()">
+              <Play v-if="s.goalPaused" :size="12" />
+              <Pause v-else :size="12" />
+            </button>
+            <button class="ac-goal-btn" aria-label="结束目标" title="结束目标（不会自动再跑）" @click="agent.endGoal()">
+              <X :size="12" />
+            </button>
+          </div>
         </div>
       </div>
       <div class="ac-input-box">
@@ -1661,9 +1801,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
              位置口径与参考 HTML 一致 —— 挂在 **composer** 里（不是容器里）：容器要 overflow:hidden
              才能把内部方角按外层圆角裁掉；按钮若放进容器会被一起裁掉半个。 -->
         <button v-if="queue.hasItems" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
-          :aria-label="queue.paused ? '恢复队列' : '暂停队列自动发送'"
-          :title="queue.pauseTitle" @click="toggleQueuePause()">
-          <Play v-if="queue.paused" :size="12" /><Pause v-else :size="12" />
+          :aria-label="queue.paused ? '恢复队列' : '暂停队列自动发送'" :title="queue.pauseTitle" @click="toggleQueuePause()">
+          <Play v-if="queue.paused" :size="12" />
+          <Pause v-else :size="12" />
           <span>{{ queue.paused ? '队列恢复' : '队列暂停' }}</span>
           <span class="ac-queue-pause-cnt">{{ queue.count }}</span>
         </button>
@@ -1678,8 +1818,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <span class="ac-goal-token">
             <span class="ac-goal-token-prefix">预算</span>
             <span class="ac-goal-token-val" contenteditable="true" spellcheck="false" role="textbox"
-              aria-label="总预算，点击编辑"
-              @focus="onGoalEditFocus($event)"
+              aria-label="总预算，点击编辑" @focus="onGoalEditFocus($event)"
               @keydown="onGoalBudgetKeydown($event, $event.target as HTMLElement, 'mark')"
               @blur="onGoalBudgetBlur($event)">{{ budgetTokenText(goalMark?.budget, tokenUnit) }}</span>
           </span>
@@ -1694,27 +1833,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                谁在编辑就说谁；三者互斥，所以这里最多出现一条。 -->
         <div v-if="editingKind" class="ac-editing-mark" role="status">
           <Pencil :size="12" />
-          <button class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText }}</button>
+          <button class="ac-editing-mark-btn" :aria-label="editingKindText" @click="scrollToEditing">{{ editingKindText
+            }}</button>
           <span class="ac-editing-mark-spacer"></span>
-          <button class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing"><X :size="12" /></button>
+          <button class="ac-editing-x" aria-label="取消编辑" @click="cancelEditing">
+            <X :size="12" />
+          </button>
         </div>
         <!-- 待发送的图片：贴在输入框上方，可单张移除；点图本体看全屏预览 -->
         <div v-if="attached.length" class="ac-attach-list">
           <div v-for="(src, i) in attached" :key="i" class="ac-attach">
-            <img :src="src" alt="" role="button" :aria-label="'查看图片 ' + (i + 1)" style="cursor: zoom-in" @click="openPreview(src, attached)" />
-            <button class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)"><X :size="12" /></button>
+            <img :src="src" alt="" role="button" :aria-label="'查看图片 ' + (i + 1)" style="cursor: zoom-in"
+              @click="openPreview(src, attached)" />
+            <button class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)">
+              <X :size="12" />
+            </button>
           </div>
         </div>
         <div class="ac-editor">
           <span v-if="!prompt" class="ac-placeholder" aria-hidden="true">开始你的创作，或者 @ 引用技能 / MCP</span>
-          <ProseMirrorEditor
-            v-if="!s.needsModel"
-            ref="editorRef"
-            v-model="prompt"
-            :resources="editorResources"
-            @keydown="onEditorKeydown"
-            @paste="onPaste"
-          />
+          <ProseMirrorEditor v-if="!s.needsModel" ref="editorRef" v-model="prompt" :resources="editorResources"
+            @keydown="onEditorKeydown" @paste="onPaste" />
         </div>
 
         <div class="ac-toolbar">
@@ -1723,34 +1862,55 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                只有点那个标签本身才弹目标编辑框。 -->
           <ThemedDropdown v-model="plusOpen" placement="top-start" :offset="8" menu-width="210px" menu-role="menu">
             <template #trigger>
-              <button class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加"><Plus :size="17" /></button>
+              <button class="ac-plus" :aria-expanded="plusOpen" aria-label="更多添加">
+                <Plus :size="17" />
+              </button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="menu" aria-label="添加">
                 <button class="ac-menu-item" role="menuitem" @click="addGoalMark(); close()">
                   <span class="ac-menu-title-row">
-                    <span class="ac-menu-icon"><Target :size="14" /></span>
+                    <span class="ac-menu-icon">
+                      <Target :size="14" />
+                    </span>
                     <span class="ac-menu-name">目标</span>
                   </span>
                   <span class="ac-menu-hint">给这条消息挂一个目标（可改预算）</span>
                 </button>
                 <button class="ac-menu-item" role="menuitem" @click="pickImages(); close()">
                   <span class="ac-menu-title-row">
-                    <span class="ac-menu-icon"><Upload :size="14" /></span>
+                    <span class="ac-menu-icon">
+                      <Upload :size="14" />
+                    </span>
                     <span class="ac-menu-name">上传文件</span>
                   </span>
                   <span class="ac-menu-hint">选图片，跟这条消息一起发</span>
                 </button>
+                <!-- 「压缩」（用户口径 2026-10-11）：把历史总结成摘要、腾出上下文。
+                     与 @ 菜单里的那一项走同一条命令（agent.compact）—— 两个入口，
+                     一处实现，行为只会一起改。压缩只对**已有对话**有意义：
+                     没会话时后端会如实拒绝（不装作成功）。 -->
+                <button class="ac-menu-item" role="menuitem" :disabled="s.compacting" @click="compactNow(); close()">
+                  <span class="ac-menu-title-row">
+                    <span class="ac-menu-icon">
+                      <Minimize2 :size="14" />
+                    </span>
+                    <span class="ac-menu-name">压缩</span>
+                  </span>
+                  <span class="ac-menu-hint">{{ s.compacting ? '正在压缩…' : '把历史总结成摘要，腾出上下文空间' }}</span>
+                </button>
               </div>
             </template>
           </ThemedDropdown>
-          <input ref="fileInput" class="ac-file" type="file" accept="image/*" multiple aria-hidden="true" tabindex="-1" @change="onFilesPicked" />
+          <input ref="fileInput" class="ac-file" type="file" accept="image/*" multiple aria-hidden="true" tabindex="-1"
+            @change="onFilesPicked" />
 
           <!-- 模式：圆角胶囊 + 下拉（向上弹，贴左对齐） -->
           <ThemedDropdown v-model="modeOpen" placement="top-start" :offset="8" menu-width="220px" menu-role="listbox">
             <template #trigger>
               <button class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
-                {{ modeLabel }}<ChevronDown :size="13" />
+                {{ modeLabel }}
+                <ChevronDown :size="13" />
               </button>
             </template>
             <template #default="{ close }">
@@ -1780,7 +1940,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   :aria-selected="authMode === m.value" @click="setAuthMode(m.value); close()">
                   <span class="ac-menu-title-row">
                     <!-- 图标与文字同染一个语义色（只"完全自动授权"上琥珀；"接受审核"走默认无色） -->
-                    <span class="ac-menu-icon" :class="'is-' + m.tone"><component :is="m.icon" :size="14" /></span>
+                    <span class="ac-menu-icon" :class="'is-' + m.tone">
+                      <component :is="m.icon" :size="14" />
+                    </span>
                     <span class="ac-menu-name" :class="'is-' + m.tone">{{ m.label }}</span>
                     <CircleCheck v-if="authMode === m.value" :size="14" class="ac-menu-check" />
                   </span>
@@ -1792,11 +1954,12 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <!-- 模型：多供应商场景下可能是几十条，长列表必须限高 + 滚（照参考图） -->
-          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="300px" menu-max-width="320px"
-            menu-max-height="320px" menu-role="listbox" layout="inner-scroll">
+          <ThemedDropdown v-model="modelOpen" placement="top-start" :offset="8" menu-width="300px"
+            menu-max-width="320px" menu-max-height="320px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
-              <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen"
-                aria-label="选择模型"><Box :size="16" /></button>
+              <button class="ac-tb-icon" :class="{ 'is-on': !!s.model }" :aria-expanded="modelOpen" aria-label="选择模型">
+                <Box :size="16" />
+              </button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择模型">
@@ -1811,7 +1974,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <div class="ac-menu-scroll" ref="modelScrollRef">
                   <button v-for="m in usableModels" :key="m.provider + '/' + m.modelId" class="ac-menu-card"
                     role="option" :aria-selected="s.model?.modelId === m.modelId" @click="pickModel(m, close)">
-                    <span class="ac-menu-card-icon"><Box :size="15" /></span>
+                    <span class="ac-menu-card-icon">
+                      <Box :size="15" />
+                    </span>
                     <span class="ac-menu-card-text">
                       <span class="ac-menu-card-name">{{ m.modelId }}</span>
                       <span class="ac-menu-card-hint">{{ m.provider }}{{ m.isDefault ? ' · 默认' : '' }}</span>
@@ -1829,8 +1994,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             <template #trigger>
               <!-- 不给「已开启」高亮：引用与否以**输入框里的标签**为准（用户口径）。
                    这里再亮一个开关态会变成第二处真相，和「点一下即插入」的语义冲突。 -->
-              <button class="ac-tb-icon" :aria-expanded="skillOpen"
-                aria-label="选择技能"><WandSparkles :size="16" /></button>
+              <button class="ac-tb-icon" :aria-expanded="skillOpen" aria-label="选择技能">
+                <WandSparkles :size="16" />
+              </button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择技能">
@@ -1839,8 +2005,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                   <span class="ac-menu-head-count">{{ s.skills.length }}</span>
                 </div>
                 <div class="ac-menu-scroll">
-                  <button v-for="item in skillResources(s.skills)" :key="item.id" class="ac-menu-card"
-                    role="option" :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
+                  <button v-for="item in skillResources(s.skills)" :key="item.id" class="ac-menu-card" role="option"
+                    :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
                     <span class="ac-menu-card-icon" v-html="ICON_SKILL" aria-hidden="true"></span>
                     <span class="ac-menu-card-text">
                       <span class="ac-menu-card-name">{{ item.name }}</span>
@@ -1857,8 +2023,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             menu-width="320px" menu-max-width="340px" menu-max-height="340px" menu-role="listbox" layout="inner-scroll">
             <template #trigger>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
-              <button class="ac-tb-icon" :aria-expanded="mcpOpen"
-                aria-label="选择 MCP"><Plug :size="16" /></button>
+              <button class="ac-tb-icon" :aria-expanded="mcpOpen" aria-label="选择 MCP">
+                <Plug :size="16" />
+              </button>
             </template>
             <template #default="{ close }">
               <div class="ac-ddmenu" role="listbox" aria-label="选择 MCP">
@@ -1870,16 +2037,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                        为什么要它：SDK 的 MCP 是懒连接的（每开一条会话才连一次），
                        消息流里那条「已连接 MCP」提示已经隐藏，状态得有个地方能看。 -->
                   <button class="ac-menu-head-btn" :disabled="mcpProbing"
-                    :aria-label="mcpProbing ? '正在检测 MCP' : '检测 MCP 连接'"
-                    @click.stop="runMcpProbe">
+                    :aria-label="mcpProbing ? '正在检测 MCP' : '检测 MCP 连接'" @click.stop="runMcpProbe">
                     <Loader2 v-if="mcpProbing" :size="12" class="ac-spin" />
                     <RefreshCw v-else :size="12" />
                     {{ mcpProbing ? '检测中' : '检测' }}
                   </button>
                 </div>
                 <div class="ac-menu-scroll">
-                  <button v-for="item in mcpResources(s.mcpServers)" :key="item.id" class="ac-menu-card"
-                    role="option" :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
+                  <button v-for="item in mcpResources(s.mcpServers)" :key="item.id" class="ac-menu-card" role="option"
+                    :aria-selected="false" :title="item.value" @click="insertRef(item, close)">
                     <span class="ac-menu-card-icon" v-html="ICON_MCP" aria-hidden="true"></span>
                     <span class="ac-menu-card-text">
                       <span class="ac-menu-card-name">{{ item.name }}</span>
@@ -1887,8 +2053,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                     </span>
                     <!-- 检测结果：每行右侧一个小徽章（连上几个工具 / 失败） -->
                     <span v-if="mcpStatusOf(item.name)" class="ac-menu-card-badge"
-                      :class="{ 'is-bad': !mcpStatusOf(item.name)!.ok }"
-                      :title="mcpStatusOf(item.name)!.text">{{ mcpStatusOf(item.name)!.text }}</span>
+                      :class="{ 'is-bad': !mcpStatusOf(item.name)!.ok }" :title="mcpStatusOf(item.name)!.text">{{
+                        mcpStatusOf(item.name)!.text }}</span>
                   </button>
                   <p v-if="mcpProbeHint" class="ac-menu-empty">{{ mcpProbeHint }}</p>
                 </div>
@@ -1897,33 +2063,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           </ThemedDropdown>
 
           <span class="ac-tb-spacer"></span>
-          <!-- 上下文剩余：照参考页实测做成一枚环形 SVG（12×12 viewBox、r=5.25、描边 1.5）。
-               底圈整圈淡显（25% 透明），上面叠一段**已用**弧（剩余百分比 = 空出来的那段）——
-               所以弧长 = 已用比例，剩余越多圈越空。hover 出提示气泡。 -->
-          <!-- 目录里没有 tooltip 时退回普通 span 包一层：环照常显示，只是少了提示气泡。
-               （不这么写的话，换一套没登记 tooltip 的主题会让整个环消失 —— 那是可见的功能退化。） -->
-          <component
-            :is="ThemedTooltip || 'span'"
-            v-if="s.contextLeft !== null"
-            :content="ThemedTooltip ? '上下文剩余 ' + s.contextLeft + '%' : undefined"
-            :placement="ThemedTooltip ? 'top' : undefined"
-          >
-            <span class="ac-context" role="img" :aria-label="'上下文剩余 ' + s.contextLeft + '%'">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" class="ac-ctx-track" />
-                <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                  :stroke-dasharray="CONTEXT_CIRCUMFERENCE" :stroke-dashoffset="contextArcOffset"
-                  transform="rotate(-90 6 6)" />
-              </svg>
-            </span>
-          </component>
-          <button
-            class="ac-send"
-            :class="{ 'is-running': sendMode === 'stop' }"
-            :aria-label="sendMode === 'stop' ? '停止' : '发送'"
-            :disabled="sendMode === 'disabled'"
-            @click="sendMode === 'stop' ? agent.stop() : submit()"
-          >
+          <!-- 上下文统计：**回到发送键左侧**（用户口径 2026-10-11：恢复之前的位置）。
+               hover 气泡给剩余百分比；有绝对值时把「已用 / 上限」一起标在环旁边
+               （只有百分比看不出还剩多少 tokens）。什么都不知道时整块不画。 -->
+          <span v-if="s.contextLeft !== null || s.contextUsed !== null" class="ac-ctxwrap">
+            <component :is="ThemedTooltip || 'span'"
+              :content="ThemedTooltip && s.contextLeft !== null ? '上下文剩余 ' + s.contextLeft + '%' : undefined"
+              :placement="ThemedTooltip ? 'top' : undefined">
+              <span class="ac-context" role="img"
+                :aria-label="s.contextLeft !== null ? '上下文剩余 ' + s.contextLeft + '%' : '上下文用量'">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" class="ac-ctx-track" />
+                  <circle cx="6" cy="6" r="5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                    :stroke-dasharray="CONTEXT_CIRCUMFERENCE" :stroke-dashoffset="contextArcOffset"
+                    transform="rotate(-90 6 6)" />
+                </svg>
+              </span>
+            </component>
+          </span>
+          <button class="ac-send" :class="{ 'is-running': sendMode === 'stop' }"
+            :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
+            @click="sendMode === 'stop' ? agent.stop() : submit()">
             <!-- 三态（设计 G1）：有内容 ⇒ 发送（**跑着也是发送**，点了进队列）；
                  空 + 跑着 ⇒ 红方块「终止」；空 + 空闲 ⇒ 禁用（灰色箭头）。
                  方块用 CSS 画（不受 lucide 线性图标 stroke 影响），颜色随 currentColor。 -->
@@ -1935,7 +2095,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     </div>
 
     <!-- 关闭 .ac-scroll-wrap（消息区容器；「回到底部」挂在它里面） -->
-    </div>
+  </div>
 
   <!-- 看大图：主题注册的 MediaViewer（Esc / 点遮罩 / 右上角关闭；与全站预览同款交互） -->
   <MediaViewer :item="previewItem" @close="previewImage = null" />
@@ -1944,349 +2104,1775 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 <style scoped>
 /* 数值全部来自 Chrome MCP 对参考页的实测；颜色一律走 --ui-*（实测与本项目暗色主题同值）。 */
 /* position: relative 是给「回到底部」的绝对定位做参照（它挂在消息区右下角） */
-.ac-root { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; color: var(--ui-ink, #f7f7f7); }
- /* 顶部留白（用户口径 2026-10-07）：第一条消息是内容的第一个元素，
+.ac-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 顶部留白（用户口径 2026-10-07）：第一条消息是内容的第一个元素，
     滚到它时（点「编辑」会 scrollIntoView）它会贴死容器顶 —— 琥珀色描边被
     overflow 裁掉、看起来「顶端被遮住」。给容器顶部留 12px，
     滚到顶时首条消息的描边与圆角都能完整露出来。 */
-.ac-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 0; }
+.ac-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 16px 0;
+}
+
 /* 内容容器：滚动容器里那层稳定的壳（空态与消息流都在里面）。
    它的高度才是真正随消息增长的那个 —— useStickyScroll 盯它做「吐多少都跟到底」。 */
-.ac-inner { display: flex; flex-direction: column; }
+.ac-inner {
+  display: flex;
+  flex-direction: column;
+  user-select: text;
+}
 
 /* —— 空态（照参考图）—— */
-.ac-welcome { display: flex; flex-direction: column; align-items: center; gap: 20px; padding-top: 32px; }
+.ac-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding-top: 32px;
+}
+
 /* 间距统一交给 .ac-welcome 的 gap（照参考页：整块 gap 20px），这里不再单独留 margin */
-.ac-hint-card { position: relative; width: 100%; padding: 10px 28px 10px 12px; border-radius: 12px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); font-size: 12px; line-height: 1.6; color: var(--ui-ink-dim, #919191); }
-.ac-hint-text { margin: 0; }
-.ac-hint-text strong { color: var(--ui-ink, #f7f7f7); }
-.ac-hint-close { position: absolute; right: 6px; top: 6px; display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-hint-close:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
+.ac-hint-card {
+  position: relative;
+  width: 100%;
+  padding: 10px 28px 10px 12px;
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-hint-text {
+  margin: 0;
+}
+
+.ac-hint-text strong {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-hint-close {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-hint-close:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
 /* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
-.ac-welcome-orb { width: 44px; height: 44px; flex: none; border-radius: 999px; background: linear-gradient(160deg, #7dd3fc, #0891b2 55%, #0e7490); box-shadow: 0 0 30px rgb(8 145 178 / 0.45); }
-.ac-welcome-title { margin: 0; padding: 0 6px; font-size: 16px; font-weight: 500; line-height: 24px; color: var(--ui-ink, #f7f7f7); }
-.ac-suggestions { width: 100%; display: flex; flex-direction: column; }
+.ac-welcome-orb {
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 999px;
+  /* 主题色白名单: 空态那颗渐变球是品牌装饰（照参考图的三段青渐变），不是主题 UI 色 */
+  background: linear-gradient(160deg, #7dd3fc, #0891b2 55%, #0e7490);
+  /* 主题色白名单: 同上（品牌装饰的辉光） */
+  box-shadow: 0 0 30px rgb(8 145 178 / 0.45);
+}
+
+.ac-welcome-title {
+  margin: 0;
+  padding: 0 6px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-suggestions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 /* 建议行照参考页实测：39 高 / 圆角 12 / 内边距 0 12 / 间距 10 / 正文 14px，文字用 60% 白 */
-.ac-suggestion { display: flex; align-items: center; gap: 10px; width: 100%; height: 39px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 14px; text-align: left; cursor: pointer; transition: background 0.16s ease; }
-.ac-suggestion:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-suggestion span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-suggestion-arrow { color: var(--ui-ink-dim, #919191); }
+.ac-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 39px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.ac-suggestion:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-suggestion span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-suggestion-arrow {
+  color: var(--ui-ink-dim, #919191);
+}
 
 /* —— 消息（照参考图：用户靠右灰底、助手靠左无底、都无头像、正文 14px）—— */
-.ac-msg { display: flex; margin-bottom: 16px; }
-.ac-msg.user { justify-content: flex-end; }
-.ac-msg.assistant { justify-content: flex-start; }
-.ac-bubble { min-width: 0; }
+.ac-msg {
+  display: flex;
+  margin-bottom: 16px;
+}
+
+/* —— 模型分割线（用户口径 2026-10-11）——
+   切换模型 = 换一条会话（SDK 的模型钉在会话上），所以画一条横线把"换脑子"这件事说清楚。
+   「中间一枚标签、两侧各一条发丝线」：与分支分页器同一族的"分隔"语义，不抢眼但要看得见。
+   颜色走 --ui-*（与面板其它线一致）；只动 opacity/transform，不吃 layout。 */
+.ac-model-split {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 间距只用 4/6/8/10/12 档（ui-style-guide §2.4） */
+  margin: 4px 0 12px;
+}
+
+.ac-model-split-line {
+  flex: 1;
+  min-width: 8px;
+  height: 1px;
+  background: var(--ui-line, #363636);
+}
+
+.ac-model-split-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.ac-model-split-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* —— 压缩提示 / 错误条（用户口径 2026-10-11）——
+   两条都是"刚发生的事"的常驻交代，挂在消息流末尾。错误条用危险色，压缩提示用中性色。 */
+.ac-compact-note,
+.ac-error-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ac-compact-note {
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-error-bar {
+  background: color-mix(in srgb, var(--ui-danger, #ef4444) 12%, transparent);
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-error-bar-icon {
+  flex: none;
+  margin-top: 2px;
+}
+
+.ac-error-bar-text {
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.ac-note-x {
+  flex: none;
+  display: grid;
+  place-items: center;
+  /* 交互目标不得小于 32px（ui-style-guide §5.4）；图标仍按 12 档，靠内边距撑到 32 */
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  margin-top: -6px;
+  margin-bottom: -6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ac-note-x:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-msg.user {
+  justify-content: flex-end;
+}
+
+.ac-msg.assistant {
+  justify-content: flex-start;
+}
+
+.ac-bubble {
+  min-width: 0;
+}
+
 /* 助手消息占满整行：之前留了 84px 右内边距（照参考图早期版本量到的"正文右缘距面板 84px"），
    但那是把面板宽度量错造成的空档 —— 现在内容区左右各 16px 已经给足呼吸，
    再留 84px 就变成右边一条明显空白（用户实测点名）。 */
-.ac-msg.assistant .ac-bubble { width: 100%; }
-.ac-msg.user .ac-bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; background: var(--ui-hover-soft, rgb(255 255 255 / 0.05)); }
+.ac-msg.assistant .ac-bubble {
+  width: 100%;
+}
+
+.ac-msg.user .ac-bubble {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--ui-hover-soft, rgb(255 255 255 / 0.05));
+}
+
 /* 用户消息正文：文字与标签在同一行内自然换行 */
-.ac-user-line { display: block; margin: 0; font-size: 14px; line-height: 24px; color: var(--ui-ink, #f7f7f7); word-break: break-word; }
-.ac-user-text { white-space: pre-wrap; }
+.ac-user-line {
+  display: block;
+  margin: 0;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+  word-break: break-word;
+}
+
+.ac-user-text {
+  white-space: pre-wrap;
+}
+
 /* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */
-.ac-msg.user { flex-direction: column; align-items: flex-end; }
+.ac-msg.user {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
 /* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。
    之所以单独一套类名：输入框里那颗是 ProseMirror 直接造 DOM 的（.ac-tag），
    这颗是 Vue 模板渲染的（.ac-sent-tag）—— 两边选择器作用域不同，但视觉值必须一致。
    底色用 --ui-hover-strong（用户口径 2026-10-06：原来太淡、不好区分）：它亮暗各一档、
    比旧值 --ui-hover-soft 深两三倍；而**旧值正是用户气泡本身的底色**，标签与气泡同色
    所以糊在一起，加深后才分得开。 */
-.ac-sent-tag { display: inline-flex; align-items: center; gap: 4px; max-width: 200px; height: 22px; margin: 0 2px; padding: 0 6px 0 4px; border-radius: 6px; background: var(--ui-hover-strong, rgb(0 0 0 / 0.10)); vertical-align: bottom; }
+.ac-sent-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  height: 22px;
+  margin: 0 2px;
+  padding: 0 6px 0 4px;
+  border-radius: 6px;
+  background: var(--ui-hover-strong, rgb(0 0 0 / 0.10));
+  vertical-align: bottom;
+}
+
 /* 可聚焦的节点标签：给 hover 态与 focus 环（用户口径：对话里的标签也要能点开聚焦） */
-.ac-sent-tag.is-clickable { cursor: pointer; transition: background 0.14s ease; }
-.ac-sent-tag.is-clickable:hover { background: var(--ui-accent-soft, rgb(8 145 178 / 0.16)); }
-.ac-sent-tag.is-clickable:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-.ac-sent-tag-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
-.ac-sent-tag-icon :deep(svg) { width: 13px; height: 13px; }
-.ac-sent-tag-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); }
-  /* 目标行 / 队列行是**单行 dense 布局**（min-height 36）：标签收小一点，别把行撑高 */
-  .ac-sent-tag.is-compact { height: 18px; padding: 0 5px; font-size: 11px; }
+.ac-sent-tag.is-clickable {
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.ac-sent-tag.is-clickable:hover {
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.16));
+}
+
+.ac-sent-tag.is-clickable:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+.ac-sent-tag-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-sent-tag-icon :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+
+.ac-sent-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 目标行 / 队列行是**单行 dense 布局**（min-height 36）：标签收小一点，别把行撑高 */
+.ac-sent-tag.is-compact {
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+}
+
 /* 用户消息 hover 操作条（时间 · 复制 · 编辑）：右下角浮出，不占布局空间。
    位置参照参考图 2 —— 时间在消息气泡外右下角，按钮跟在旁边。 */
-.ac-msg { position: relative; }
-.ac-msg.user .ac-bubble { position: relative; }
-.ac-msg-actions { display: flex; align-items: center; gap: 2px; justify-content: flex-end; height: 22px; margin-top: 2px; opacity: 0; pointer-events: none; transition: opacity 0.16s ease; }
-.ac-msg.user:hover .ac-msg-actions, .ac-msg-actions:focus-within { opacity: 1; pointer-events: auto; }
-.ac-msg-time { font-size: 11px; color: var(--ui-ink-dim, #919191); margin-right: 4px; }
-.ac-msg-btn { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-msg-btn:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-msg-btn .is-ok { color: var(--ui-accent, #0891b2); }
+.ac-msg {
+  position: relative;
+}
+
+.ac-msg.user .ac-bubble {
+  position: relative;
+}
+
+.ac-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  justify-content: flex-end;
+  height: 22px;
+  margin-top: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.ac-msg.user:hover .ac-msg-actions,
+.ac-msg-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ac-msg-time {
+  font-size: 11px;
+  color: var(--ui-ink-dim, #919191);
+  margin-right: 4px;
+}
+
+.ac-msg-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-msg-btn:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-msg-btn .is-ok {
+  color: var(--ui-accent, #0891b2);
+}
+
 /* 「正在编辑」：消息高亮（琥珀警示语义，与语义色表一致）+ 徽标 + 输入框联动标记。
    高亮只描边不填底，避免盖住用户消息气泡本来的层次。 */
-.ac-msg.is-editing .ac-bubble { box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f); border-radius: 12px; }
-.ac-editing-badge { display: inline-flex; align-items: center; gap: 4px; align-self: flex-end; height: 20px; margin-top: 4px; padding: 0 4px 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); color: var(--ui-warn, #e3a25f); font-size: 11px; font-weight: 600; }
+.ac-msg.is-editing .ac-bubble {
+  box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f);
+  border-radius: 12px;
+}
+
+.ac-editing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  height: 20px;
+  margin-top: 4px;
+  padding: 0 4px 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent);
+  color: var(--ui-warn, #e3a25f);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* 行内版：不换行（`white-space:nowrap`）—— 否则空间不够时「正在编辑」会被逐字竖排（真机踩到）。
    真挤不下时由文字先省略；图标与标签本体始终在。 */
-  .ac-editing-badge.is-compact { flex: none; align-self: center; margin-top: 0; height: 18px; white-space: nowrap; }
-  .ac-editing-badge.is-compact span { white-space: nowrap; }
-.ac-editing-mark { display: flex; align-items: center; gap: 4px; width: 100%; height: 26px; margin: 0; padding: 0 4px 0 10px; border-radius: 8px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); color: var(--ui-warn, #e3a25f); font-size: 12px; font-weight: 600; }
-.ac-editing-mark-btn { padding: 0; border: 0; background: transparent; color: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
-.ac-editing-mark-btn:hover { text-decoration: underline; }
-.ac-editing-mark-spacer { flex: 1; }
-.ac-editing-x { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
-.ac-editing-x:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-bubble :deep(.md) { font-size: 14px; line-height: 24px; color: var(--ui-ink, #f7f7f7); }
-.ac-bubble :deep(.md .md-p) { margin: 0 0 10px; }
-.ac-bubble :deep(.md .md-p:last-child) { margin-bottom: 0; }
-.ac-bubble :deep(.md .md-h) { margin: 14px 0 8px; font-size: 14px; font-weight: 700; }
-.ac-bubble :deep(.md .md-list) { margin: 6px 0 10px; padding-left: 24px; list-style: disc outside; }
-.ac-bubble :deep(.md .md-list li) { margin: 4px 0; }
+.ac-editing-badge.is-compact {
+  flex: none;
+  align-self: center;
+  margin-top: 0;
+  height: 18px;
+  white-space: nowrap;
+}
 
-.ac-think-toggle { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 6px; padding: 0; border: 0; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; cursor: pointer; }
-.ac-rot { transform: rotate(90deg); }
-.ac-think { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); font-size: 12px; line-height: 20px; white-space: pre-wrap; color: var(--ui-ink-dim, #919191); font-family: inherit; }
+.ac-editing-badge.is-compact span {
+  white-space: nowrap;
+}
+
+.ac-editing-mark {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 26px;
+  margin: 0;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent);
+  color: var(--ui-warn, #e3a25f);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ac-editing-mark-btn {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ac-editing-mark-btn:hover {
+  text-decoration: underline;
+}
+
+.ac-editing-mark-spacer {
+  flex: 1;
+}
+
+.ac-editing-x {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ac-editing-x:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-bubble :deep(.md) {
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-bubble :deep(.md .md-p) {
+  margin: 0 0 10px;
+}
+
+.ac-bubble :deep(.md .md-p:last-child) {
+  margin-bottom: 0;
+}
+
+.ac-bubble :deep(.md .md-h) {
+  margin: 14px 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ac-bubble :deep(.md .md-list) {
+  margin: 6px 0 10px;
+  padding-left: 24px;
+  list-style: disc outside;
+}
+
+.ac-bubble :deep(.md .md-list li) {
+  margin: 4px 0;
+}
+
+.ac-think-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ac-rot {
+  transform: rotate(90deg);
+}
+
+.ac-think {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  color: var(--ui-ink-dim, #919191);
+  font-family: inherit;
+}
+
 /* 等首个 token 的加载行（照参考图）：转圈 + 「正在思考」，整行用次要文字色。 */
-.ac-pending { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: 14px; line-height: 24px; color: var(--ui-ink-dim, #919191); }
+.ac-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink-dim, #919191);
+}
+
 /* 开口圆弧 = 一个圆 + 透明上边框：转起来能看清缺口在走。
    颜色随 currentColor，所以这行整体改色时图标自动跟随。 */
-.ac-pending-spin { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: ac-rotate 0.8s linear infinite; }
-.ac-tool-line { display: flex; align-items: baseline; gap: 6px; margin: 6px 0; font-size: 12px; color: var(--ui-ink-dim, #919191); }
-.ac-tool-line code { padding: 2px 6px; border-radius: 6px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); }
-.ac-tool-line-out { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-tool-group { margin: 6px 0; }
-.ac-tg-toggle { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; cursor: pointer; }
-.ac-tg-toggle:hover { color: var(--ui-ink, #f7f7f7); }
-.ac-tg-body { margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--ui-line, #363636); }
+.ac-pending-spin {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ac-rotate 0.8s linear infinite;
+}
+
+.ac-tool-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tool-line code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+}
+
+.ac-tool-line-out {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-tool-group {
+  margin: 6px 0;
+}
+
+.ac-tg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ac-tg-toggle:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-tg-body {
+  margin-top: 4px;
+  padding-left: 10px;
+  border-left: 2px solid var(--ui-line, #363636);
+}
+
 /* 可折叠工具行（单工具与组内工具同一套）：收起一行，展开看输入/输出（用户口径 2026-10-06）。
    展开块 max-width 到气泡全宽、pre 自身滚动 —— 「提供最大的范围 + 滚动条」。 */
-.ac-tool-fold { margin: 4px 0; }
+.ac-tool-fold {
+  margin: 4px 0;
+}
+
 /* 默认工具行（用户口径 2026-10-08 定稿）：悬停**不加任何背景**，只让左侧折叠箭头变亮。
    早先悬停给整行加 rgba(255,255,255,.06) 的底色 —— 用户明确不要背景条。 */
-.ac-tf-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 4px; margin: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 12px; text-align: left; cursor: pointer; }
- .ac-tf-toggle:hover { color: var(--ui-ink, #f7f7f7); }
-.ac-tf-caret { flex: none; color: var(--ui-ink-dim, #919191); }
- .ac-tf-toggle:hover .ac-tf-caret { color: var(--ui-ink, #f7f7f7); }
- /* 折叠箭头动画（用户口径 2026-10-07）：旋转要有过渡，不是啪一下跳 */
- .ac-tf-caret { transition: transform 0.18s ease; }
- .ac-tf-caret.is-open { transform: rotate(90deg); }
-.ac-tf-toggle code { padding: 2px 6px; border-radius: 6px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); flex: none; }
-.ac-tf-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.85; }
- .ac-tf-body { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 2px; padding: 8px 10px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
-.ac-tf-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.ac-tf-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--ui-ink-dim, #919191); }
-.ac-tf-body .ac-tool-args, .ac-tf-body .ac-tool-out { margin: 0; max-width: 100%; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
-.ac-tool-card { margin: 8px 0; padding: 6px 8px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
+.ac-tf-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 4px;
+  margin: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-tf-toggle:hover {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-tf-caret {
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tf-toggle:hover .ac-tf-caret {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+/* 折叠箭头动画（用户口径 2026-10-07）：旋转要有过渡，不是啪一下跳 */
+.ac-tf-caret {
+  transition: transform 0.18s ease;
+}
+
+.ac-tf-caret.is-open {
+  transform: rotate(90deg);
+}
+
+.ac-tf-toggle code {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  flex: none;
+}
+
+.ac-tf-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.ac-tf-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-tf-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ac-tf-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-tf-body .ac-tool-args,
+.ac-tf-body .ac-tool-out {
+  margin: 0;
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.ac-tool-card {
+  margin: 8px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
 /* 分组里的**卡片**沿用同一只卡片壳（用户口径 2026-10-07：分界线要好找）；
    收起状态的折叠行不加壳（用户口径 2026-10-08）：单工具长什么样，组里就长什么样 ——
    早先的规则把每条折叠行也包了灰底 + 8px 内边距，收起行被灰底裹住、上下很空。 */
-.ac-tg-body .ac-tool-card { margin: 6px 0; padding: 6px 8px; border: 1px solid var(--ui-line, #363636); border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
-.ac-tool-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.ac-tool-args, .ac-tool-out { margin: 6px 0 0; font-size: 12px; white-space: pre-wrap; word-break: break-all; color: var(--ui-ink-dim, #919191); font-family: ui-monospace, Menlo, Consolas, monospace; }
-.ac-notice { margin: 6px 0 0; font-size: 12px; color: var(--ui-ink-dim, #919191); }
-.ac-error { margin: 6px 0 0; font-size: 12px; color: var(--ui-danger, #ef4444); }
-.ac-approval { margin: 8px 0 16px; padding: 12px 14px; border: 1px solid var(--ui-warn, #b45309); border-radius: 12px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
-.ac-approval-head { display: flex; align-items: center; gap: 6px; font-size: 13px; }
-.ac-approval-args { margin: 8px 0 10px; padding: 8px 10px; border-radius: 8px; background: var(--ui-code-bg, rgb(0 0 0 / 0.25)); font-size: 12px; white-space: pre-wrap; word-break: break-all; font-family: ui-monospace, Menlo, Consolas, monospace; }
-.ac-approval-actions { display: flex; align-items: center; gap: 8px; }
-.ac-spin { animation: ac-rotate 0.9s linear infinite; }
-@keyframes ac-rotate { to { transform: rotate(360deg); } }
-.ac-btn { height: 30px; padding: 0 12px; border: 1px solid var(--ui-line, #363636); border-radius: 8px; background: transparent; color: var(--ui-ink, #f7f7f7); font-size: 12px; cursor: pointer; }
-.ac-btn-primary { border-color: transparent; background: var(--ui-accent, #0891b2); color: var(--ui-primary-ink, #141414); }
-.ac-onboard { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; }
-.ac-onboard strong { font-size: 15px; }
-.ac-onboard p { margin: 0; font-size: 13px; color: var(--ui-ink-dim, #919191); }
-.ac-onboard-icon { color: var(--ui-accent, #0891b2); }
-.ac-onboard-path { font-size: 12px; opacity: 0.75; word-break: break-all; }
+.ac-tg-body .ac-tool-card {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ac-tool-args,
+.ac-tool-out {
+  margin: 6px 0 0;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ui-ink-dim, #919191);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.ac-notice {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-approval {
+  margin: 8px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-warn, #b45309);
+  border-radius: 12px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-approval-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.ac-approval-args {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--ui-code-bg, rgb(0 0 0 / 0.25));
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.ac-approval-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ac-spin {
+  animation: ac-rotate 0.9s linear infinite;
+}
+
+@keyframes ac-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ac-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink, #f7f7f7);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ac-btn-primary {
+  border-color: transparent;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-primary-ink, #141414);
+}
+
+.ac-onboard {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+}
+
+.ac-onboard strong {
+  font-size: 15px;
+}
+
+.ac-onboard p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-onboard-icon {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-onboard-path {
+  font-size: 12px;
+  opacity: 0.75;
+  word-break: break-all;
+}
 
 /* 分支分页器（AI 回复结束下面一条）：左箭头 / 第 N / 共 M / 右箭头。
    居中、紧凑、不抢内容视线；到底/到顶的那侧箭头置灰不可点。 */
-.ac-branch-nav { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 4px 0 12px; }
-.ac-branch-arrow { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-branch-arrow:hover:not(:disabled) { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-branch-arrow:disabled { opacity: 0.35; cursor: default; }
-.ac-branch-pos { min-width: 48px; padding: 0 2px; text-align: center; font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ui-ink-dim, #919191); }
+.ac-branch-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 4px 0 12px;
+}
+
+.ac-branch-arrow {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-branch-arrow:hover:not(:disabled) {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-branch-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.ac-branch-pos {
+  min-width: 48px;
+  padding: 0 2px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-ink-dim, #919191);
+}
 
 /* —— 输入区（照参考图：外块圆角 16 + 1px 边框 + 内边距 8 + 间距 8）—— */
 /* position: relative 是给「回到底部」的绝对定位做参照（它浮在输入框正上方右侧） */
-.ac-composer { position: relative; flex: none; padding: 4px 8px 12px; }
+.ac-composer {
+  position: relative;
+  flex: none;
+  padding: 4px 8px 12px;
+}
+
 /* 通知提示条：照参考页实测 40 高 / 圆角 12 / 强调色 20% 底；底色用 --ui-accent-soft 现算，
    用户改强调色后这里自动跟随，不会出现"主色改了、提示条还是青的"。 */
-.ac-notify { display: flex; align-items: center; gap: 8px; height: 40px; margin-bottom: 8px; padding: 0 6px 0 10px; border-radius: 12px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.2)); color: var(--ui-ink, #f7f7f7); }
-.ac-notify-icon { flex: none; color: var(--ui-accent, #0891b2); }
-.ac-notify-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.ac-notify-btn { flex: none; padding: 0 6px; border: 0; background: transparent; color: var(--ui-ink, #f7f7f7); font-size: 13px; font-weight: 600; cursor: pointer; }
-.ac-notify-btn:hover { color: var(--ui-accent, #0891b2); }
-.ac-notify-close { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-notify-close:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-input-box { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--ui-line, #363636); border-radius: 16px; background: var(--ui-overlay-solid, #212121); }
+.ac-notify {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  margin-bottom: 8px;
+  padding: 0 6px 0 10px;
+  border-radius: 12px;
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.2));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-notify-icon {
+  flex: none;
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-notify-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.ac-notify-btn {
+  flex: none;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink, #f7f7f7);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ac-notify-btn:hover {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-notify-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-notify-close:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-input-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 16px;
+  background: var(--ui-overlay-solid, #212121);
+}
+
 /* —— 「回到底部」：消息区**内部**、底部居中（用户口径 2026-10-09）——
    外层 .ac-scroll-wrap 是定位参照（它固定占满消息区，内容在里面的 .ac-scroll 滚）。 */
-  /* 注意：包了一层 wrap 之后，**必须也是 flex 容器** —— 里面的 .ac-scroll 靠 flex:1 撑高、
+/* 注意：包了一层 wrap 之后，**必须也是 flex 容器** —— 里面的 .ac-scroll 靠 flex:1 撑高、
      自己 overflow-y:auto 滚。wrap 若只是普通块级，.ac-scroll 会按内容高度长出去、溢出到输入区，
      表现就是「消息文字压在队列行/输入框上」（真机踩到）。 */
-  .ac-scroll-wrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.ac-to-bottom { position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px; z-index: 5; display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: var(--ui-overlay-solid, #212121); color: var(--ui-ink-dim, #919191); cursor: pointer; box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16)); transition: color 0.15s ease, transform 0.15s ease; }
-.ac-to-bottom:hover { color: var(--ui-ink, #f7f7f7); transform: translateX(-50%) translateY(-1px); }
-.ac-to-bottom:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) { .ac-to-bottom { transition: none; } }
+.ac-scroll-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ac-to-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 12px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+  box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16));
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.ac-to-bottom:hover {
+  color: var(--ui-ink, #f7f7f7);
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.ac-to-bottom:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-to-bottom {
+    transition: none;
+  }
+}
 
 /* —— 聚合容器（目标行 + 队列行，同一个容器）——
    几何（RULES §1）：宽 90% 居中；**紧贴输入框、零间隔**（底部去掉圆角 + 边框重叠 1px）；
    **只有这个外层有圆角，内部行一律方角**；四边 1px 描边。
    它有 .ac-composer 内的正常流定位（position:relative 供「骑线」暂停键参照）。 */
-  /* 注意：**不能 overflow:hidden** —— 「骑线」的暂停胶囊有一半在容器外，会被裁掉。
+/* 注意：**不能 overflow:hidden** —— 「骑线」的暂停胶囊有一半在容器外，会被裁掉。
      内部行的方角靠 .ac-pending-row 自己 border-radius:0 保证（不依赖裁切）。 */
-  /* 类名刻意不叫 .ac-pending —— 那个名字被上面的「正在思考」加载行占用了，
+/* 类名刻意不叫 .ac-pending —— 那个名字被上面的「正在思考」加载行占用了，
      同名会把它的 font-size:14/line-height:24 混进来，把行内文字撑成两行（真机踩到）。 */
-  /* overflow:hidden **必须有** —— 里面每一行都是矩形（方角），只有容器是圆角；
+/* overflow:hidden **必须有** —— 里面每一行都是矩形（方角），只有容器是圆角；
      不裁切的话行底色会在四个角上「顶破」圆角，露出方块（真机截图看到过）。
      底部两角去圆角 + 与输入框重叠 1px，是为了和输入框拼成一体。 */
-  /* 宽 90% 居中（用户口径 2026-10-09）：比输入框窄一圈、居中，不铺满整个输入框宽度。 */
-  .ac-pending-box { position: relative; width: 90%; margin: 0 auto -1px; border: 1px solid var(--ui-line, #363636); border-radius: 14px 14px 0 0; background: var(--ui-veil, rgb(255 255 255 / 0.04)); overflow: hidden; }
-  /* 极端防护（RULES §9）：容器变窄时，**进度条先让位**，保证目标文案/按钮不被挤没。
+/* 宽 90% 居中（用户口径 2026-10-09）：比输入框窄一圈、居中，不铺满整个输入框宽度。 */
+.ac-pending-box {
+  position: relative;
+  width: 90%;
+  margin: 0 auto -1px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 14px 14px 0 0;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  overflow: hidden;
+}
+
+/* 极端防护（RULES §9）：容器变窄时，**进度条先让位**，保证目标文案/按钮不被挤没。
      用容器查询而不是媒体查询 —— 让位要看的是「这个容器多宽」，不是「窗口多宽」。 */
-.ac-pending-box { container-type: inline-size; }
+.ac-pending-box {
+  container-type: inline-size;
+}
+
 /*
  * 极端防护（RULES §9）：容器装不下时**按优先级让位** —— 进度条先走，其次状态徽章，
  * 文案与按钮永不让位。真实面板宽约 400（容器 90% ≈ 344），本来就装不下「进度条 + 徽章」。
  * 阈值必须够大到覆盖真实宽度，否则行内元素之和超出容器、最后一个按钮被挤出去（真机量到 +8px 溢出）。
  * 用容器查询而不是媒体查询：要看的是「这个容器多宽」。
  */
-@container (max-width: 300px) { .ac-goal-bar { display: none; } }
-@container (max-width: 250px) { .ac-goal-flag { display: none; } }
-.ac-pending-list { display: flex; flex-direction: column; min-width: 0; }
-  /* 行几何与参考 HTML 的 .prow 一致：gap 8、padding 0 8 0 10、min-height 36 */
-  .ac-pending-row { display: flex; align-items: center; gap: 8px; min-height: 36px; min-width: 0; padding: 0 8px 0 10px; border-radius: 0; }
-.ac-pending-row + .ac-pending-row { border-top: 1px solid var(--ui-line-soft, #2a2a2a); }
-.ac-pending-row:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-pending-lead { flex: none; display: grid; place-items: center; color: var(--ui-ink-mute, #a8a8a8); }
-  .ac-queue-row.is-editing { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 12%, transparent); }
-.ac-queue-row.is-sending { opacity: 0.7; }
-.ac-queue-thumb { flex: none; width: 16px; height: 16px; border-radius: 4px; object-fit: cover; cursor: zoom-in; background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
+@container (max-width: 300px) {
+  .ac-goal-bar {
+    display: none;
+  }
+}
+
+@container (max-width: 250px) {
+  .ac-goal-flag {
+    display: none;
+  }
+}
+
+.ac-pending-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* 行几何与参考 HTML 的 .prow 一致：gap 8、padding 0 8 0 10、min-height 36 */
+.ac-pending-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  border-radius: 0;
+}
+
+.ac-pending-row+.ac-pending-row {
+  border-top: 1px solid var(--ui-line-soft, #2a2a2a);
+}
+
+.ac-pending-row:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-pending-lead {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ui-ink-mute, #a8a8a8);
+}
+
+.ac-queue-row.is-editing {
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 12%, transparent);
+}
+
+.ac-queue-row.is-sending {
+  opacity: 0.7;
+}
+
+.ac-queue-thumb {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+  cursor: zoom-in;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+}
+
 /* 白图与容器背景同色会「看不见」—— 加一圈低对比发丝边 + 微阴影（用户口径 2026-10-09，
    「边框颜色不能太突出」：用 ink 的 22% 而不是强调色/警示色）。
    主题色白名单: 缩略图那圈微阴影是「无关主题的微弱遮挡环」，亮暗两套主题都要它才看得见白图，与裁剪框描边同类。 */
-.ac-queue-thumb, .ac-goal-ratio ~ .ac-queue-thumb { border: 1px solid color-mix(in srgb, var(--ui-ink, #f7f7f7) 22%, transparent); box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06); }
-.ac-queue-thumb-more { flex: none; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 4px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); display: grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--ui-ink-dim, #919191); }
-.ac-queue-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--ui-ink, #f7f7f7); }
-.ac-queue-row.is-editing .ac-queue-text { color: var(--ui-ink-dim, #919191); }
-.ac-queue-flag { flex: none; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent); color: var(--ui-warn, #e3a25f); font-size: 10px; font-weight: 700; line-height: 14px; }
-.ac-queue-flag.is-sending { background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink-dim, #919191); }
-.ac-queue-actions { display: flex; align-items: center; gap: 2px; flex: none; }
-.ac-queue-btn { display: grid; place-items: center; width: 24px; height: 24px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-queue-btn:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.14)); color: var(--ui-ink, #f7f7f7); }
-.ac-queue-btn.is-danger:hover { background: var(--ui-danger-veil, rgb(239 68 68 / 0.1)); color: var(--ui-danger, #ef4444); }
-.ac-queue-btn:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-  /* 队列暂停/恢复：**骑在容器与输入框分界线上**、水平居中。
+.ac-queue-thumb,
+.ac-goal-ratio~.ac-queue-thumb {
+  border: 1px solid color-mix(in srgb, var(--ui-ink, #f7f7f7) 22%, transparent);
+  /* 主题色白名单: 同上（那条微阴影本身） */
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+}
+
+.ac-queue-thumb-more {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-queue-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-queue-row.is-editing .ac-queue-text {
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-queue-flag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent);
+  color: var(--ui-warn, #e3a25f);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.ac-queue-flag.is-sending {
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-queue-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.ac-queue-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-queue-btn:hover {
+  background: var(--ui-hover-strong, rgb(255 255 255 / 0.14));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-queue-btn.is-danger:hover {
+  background: var(--ui-danger-veil, rgb(239 68 68 / 0.1));
+  color: var(--ui-danger, #ef4444);
+}
+
+.ac-queue-btn:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+/* 队列暂停/恢复：**骑在容器与输入框分界线上**、水平居中。
      它是 .ac-input-box 的子元素（不是容器的）—— 容器 overflow:hidden 会把它裁掉半个；
      挂输入框上、top:0 + translateY(-50%)，正好压在输入框上边框 = 两块的接缝。 */
-  .ac-queue-pause { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); z-index: 6; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px 0 9px; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: var(--ui-overlay-solid, #212121); color: var(--ui-ink-dim, #919191); font: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16)); cursor: pointer; transition: color 0.15s ease; }
-.ac-queue-pause:hover { color: var(--ui-ink, #f7f7f7); background: linear-gradient(var(--ui-hover-strong, rgb(255 255 255 / 0.15)), var(--ui-hover-strong, rgb(255 255 255 / 0.15))), var(--ui-overlay-solid, #212121); }
-  /* 主题色白名单: 暂停态是琥珀实心底，字必须是白 —— 与发送键红色实心底同款口径 */
-  .ac-queue-pause.is-paused { border-color: transparent; background: var(--ui-warn, #e3a25f); color: #fff; }
-  .ac-queue-pause-cnt { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); display: grid; place-items: center; font-size: 10px; color: var(--ui-ink-dim, #919191); }
-  /* 主题色白名单: 琥珀实心底上的计数胶囊也走白字（同上） */
-  .ac-queue-pause.is-paused .ac-queue-pause-cnt { background: rgb(255 255 255 / 0.28); color: #fff; }
-.ac-queue-pause:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-@media (prefers-reduced-motion: reduce) { .ac-queue-pause { transition: none; } }
+.ac-queue-pause {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px 0 9px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: var(--ui-overlay-solid, #212121);
+  color: var(--ui-ink-dim, #919191);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--ui-shadow-md, 0 18px 44px rgb(0 0 0 / 0.16));
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.ac-queue-pause:hover {
+  color: var(--ui-ink, #f7f7f7);
+  background: linear-gradient(var(--ui-hover-strong, rgb(255 255 255 / 0.15)), var(--ui-hover-strong, rgb(255 255 255 / 0.15))), var(--ui-overlay-solid, #212121);
+}
+
+/* 主题色白名单: 暂停态是琥珀实心底，字必须是白 —— 与发送键红色实心底同款口径 */
+.ac-queue-pause.is-paused {
+  border-color: transparent;
+  background: var(--ui-warn, #e3a25f);
+  /* 主题色白名单: 同上（琥珀实心底上的白字） */
+  color: #fff;
+}
+
+.ac-queue-pause-cnt {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+/* 主题色白名单: 琥珀实心底上的计数胶囊也走白字（同上） */
+.ac-queue-pause.is-paused .ac-queue-pause-cnt {
+  /* 主题色白名单: 同上（琥珀实心底上的计数胶囊） */
+  background: rgb(255 255 255 / 0.28);
+  /* 主题色白名单: 同上（胶囊里的白字） */
+  color: #fff;
+}
+
+.ac-queue-pause:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-queue-pause {
+    transition: none;
+  }
+}
 
 /* —— 目标行（**已发送**，在聚合容器里）—— UI 与队列行刻意不同 —— */
-  /* 目标行用**中性灰阶**（用户口径 2026-10-09：这里用不到主题强调色）——
+/* 目标行用**中性灰阶**（用户口径 2026-10-09：这里用不到主题强调色）——
      靠底色深浅 + 字重与队列行区分，不再染青色。 */
-  .ac-goal-row { background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
-  .ac-goal-row:hover { background: var(--ui-hover-strong, rgb(255 255 255 / 0.15)); }
-  /* 编辑中的目标行：**统一成黄色**（与消息 / 队列编辑同一套语义，用户口径 2026-10-09）。 */
-  .ac-goal-row.is-editing { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent); }
-  .ac-goal-row.is-editing:hover { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 20%, transparent); }
-  .ac-goal-row .ac-pending-lead { color: var(--ui-ink-dim, #919191); }
-  /* 目标行左侧那颗图标：平时画「目标」，hover / 编辑中画「编辑」—— 两枚图标叠在同一格。
+.ac-goal-row {
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+}
+
+.ac-goal-row:hover {
+  background: var(--ui-hover-strong, rgb(255 255 255 / 0.15));
+}
+
+/* 编辑中的目标行：**统一成黄色**（与消息 / 队列编辑同一套语义，用户口径 2026-10-09）。 */
+.ac-goal-row.is-editing {
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 16%, transparent);
+}
+
+.ac-goal-row.is-editing:hover {
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 20%, transparent);
+}
+
+.ac-goal-row .ac-pending-lead {
+  color: var(--ui-ink-dim, #919191);
+}
+
+/* 目标行左侧那颗图标：平时画「目标」，hover / 编辑中画「编辑」—— 两枚图标叠在同一格。
      点击进入编辑（进入后按钮带 is-editing，图标保持铅笔，一眼看出「正在编辑目标」）。 */
-  /* 几何与队列行的 .ac-pending-lead 完全一致：不另设宽高（图标 14×14 决定格子大小），
+/* 几何与队列行的 .ac-pending-lead 完全一致：不另设宽高（图标 14×14 决定格子大小），
      不用负 margin、不用绝对定位 —— 那两样会让两行左列的基线对不上（真机量到 13 vs 14）。 */
-  .ac-goal-lead { flex: none; display: grid; place-items: center; padding: 0; border: 0;
-    border-radius: 4px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-  .ac-goal-lead:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-  .ac-goal-lead:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
-  .ac-goal-lead .ac-goal-lead-edit { display: none; }
-  .ac-goal-lead:hover .ac-goal-lead-target { display: none; }
-  .ac-goal-lead:hover .ac-goal-lead-edit { display: block; }
-  .ac-goal-lead.is-editing .ac-goal-lead-target { display: none; }
-  .ac-goal-lead.is-editing .ac-goal-lead-edit { display: block; }
-  /* 目标文案：给它一个**可伸展但有下限**的宽度（min-width 太小会被同行的进度条/轮次挤成 0，
+.ac-goal-lead {
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-goal-lead:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-goal-lead:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
+.ac-goal-lead .ac-goal-lead-edit {
+  display: none;
+}
+
+.ac-goal-lead:hover .ac-goal-lead-target {
+  display: none;
+}
+
+.ac-goal-lead:hover .ac-goal-lead-edit {
+  display: block;
+}
+
+.ac-goal-lead.is-editing .ac-goal-lead-target {
+  display: none;
+}
+
+.ac-goal-lead.is-editing .ac-goal-lead-edit {
+  display: block;
+}
+
+/* 目标文案：给它一个**可伸展但有下限**的宽度（min-width 太小会被同行的进度条/轮次挤成 0，
      真机踩到「文字只剩 6px」）。flex:1 1 auto + min-width:6em 保证至少能看到一小段。 */
-  /* 文案是**唯一可压缩**的元素（min-width:0 + flex:1）：装不下时它先缩，绝不让按钮被挤出去。
+/* 文案是**唯一可压缩**的元素（min-width:0 + flex:1）：装不下时它先缩，绝不让按钮被挤出去。
      但**不能无上限占满** —— flex:1 会让它把进度条挤成 0（真机量到 bar 只有 6px）。
      改成「占比上限」：最多吃容器的 40%，剩余空间自然分给进度条等次要信息。 */
-  /* 文案 **flex:1**（吃掉剩余空间）：这样右侧一组（图 / 轮次 / 已用/总预算 / 按钮）才会
+/* 文案 **flex:1**（吃掉剩余空间）：这样右侧一组（图 / 轮次 / 已用/总预算 / 按钮）才会
      **顶到容器右缘**（用户口径：目标行是左右布局，右侧贴右）。
      文案自身 min-width:0 + 省略号 —— 空间不够时它先缩，按钮永不被挤走（RULES §9）。 */
-  .ac-goal-row-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
-  .ac-goal-flag { flex: none; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 14px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink-dim, #919191); }
-.ac-goal-flag.is-paused { background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent); color: var(--ui-warn, #e3a25f); }
-.ac-goal-flag.is-done { background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink-dim, #919191); }
-.ac-goal-round { flex: none; font-size: 12px; color: var(--ui-ink-dim, #919191); white-space: nowrap; }
+.ac-goal-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-goal-flag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-goal-flag.is-paused {
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 18%, transparent);
+  color: var(--ui-warn, #e3a25f);
+}
+
+.ac-goal-flag.is-done {
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-goal-round {
+  flex: none;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+  white-space: nowrap;
+}
 
 /* —— token 数字（预算 / 已用 / 剩余）：前缀 + **可编辑数值**。
    下划线用 CSS text-decoration（不是 border —— 边框会把文字压偏，见 RULES §8）；
    数值用 contenteditable，宽度天然跟着文字走。 */
-  .ac-goal-token { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
-.ac-goal-token-prefix { flex: none; color: var(--ui-ink-dim, #919191); font-weight: 600; }
-  .ac-goal-token-val { flex: none; min-width: 2.2ch; padding: 0; font-size: 12px; font-weight: 600; line-height: 16px; white-space: pre; cursor: text; outline: none; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; text-decoration-color: var(--ui-ink-mute, #a8a8a8); }
-  .ac-goal-token-val:hover { text-decoration-color: var(--ui-ink, #f7f7f7); }
-  .ac-goal-token-val:focus { text-decoration-style: solid; text-decoration-color: var(--ui-ink, #f7f7f7); }
+.ac-goal-token {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+  white-space: nowrap;
+}
+
+.ac-goal-token-prefix {
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+  font-weight: 600;
+}
+
+.ac-goal-token-val {
+  flex: none;
+  min-width: 2.2ch;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: pre;
+  cursor: text;
+  outline: none;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--ui-ink-mute, #a8a8a8);
+}
+
+.ac-goal-token-val:hover {
+  text-decoration-color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-goal-token-val:focus {
+  text-decoration-style: solid;
+  text-decoration-color: var(--ui-ink, #f7f7f7);
+}
+
 /* 「已用」只读：不画下划线、不改光标 —— 一眼能区分「这个不能改」 */
-.ac-goal-token-val.is-readonly { text-decoration: none; cursor: default; }
+.ac-goal-token-val.is-readonly {
+  text-decoration: none;
+  cursor: default;
+}
+
 /* 「已用/总预算」一体式：两个可编辑数字 + 中间一个斜杠，整体一块、样式统一 */
-  .ac-goal-ratio { flex: none; display: inline-flex; align-items: center; gap: 1px; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); white-space: nowrap; }
-  .ac-goal-ratio .ac-goal-token-val { min-width: 2.6ch; text-align: center; }
-  .ac-goal-ratio-sep { flex: none; padding: 0 1px; color: var(--ui-ink-mute, #a8a8a8); font-weight: 600; }
+.ac-goal-ratio {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+  white-space: nowrap;
+}
+
+.ac-goal-ratio .ac-goal-token-val {
+  min-width: 2.6ch;
+  text-align: center;
+}
+
+.ac-goal-ratio-sep {
+  flex: none;
+  padding: 0 1px;
+  color: var(--ui-ink-mute, #a8a8a8);
+  font-weight: 600;
+}
 
 /* —— 未发送目标的标签（**输入框内侧顶部**，用户口径 2026-10-09）—— */
-  .ac-goal-mark { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 4px 0 8px; border-radius: 8px; background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink, #f7f7f7); }
-.ac-goal-icon { flex: none; }
+.ac-goal-mark {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border-radius: 8px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-goal-icon {
+  flex: none;
+}
+
 /* 标签只写「目标」二字；预算（口径 + 值）紧跟其后，右端留白由 spacer 顶开 */
-.ac-goal-mark-label, .ac-goal-mark .ac-goal-token-prefix, .ac-goal-mark .ac-goal-token-val { font-size: 12px; font-weight: 600; line-height: 20px; }
-  .ac-goal-mark .ac-goal-token { color: var(--ui-ink, #f7f7f7); }
-.ac-goal-btn { display: grid; place-items: center; width: 22px; height: 22px; flex: none; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
-.ac-goal-btn:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-goal-btn:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+.ac-goal-mark-label,
+.ac-goal-mark .ac-goal-token-prefix,
+.ac-goal-mark .ac-goal-token-val {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.ac-goal-mark .ac-goal-token {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-goal-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ac-goal-btn:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-goal-btn:focus-visible {
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: 1px;
+}
+
 /* 口径开关的图标：已用 = 实心、剩余 = 空心 */
-.ac-goal-btn .is-hollow { opacity: 0.55; }
+.ac-goal-btn .is-hollow {
+  opacity: 0.55;
+}
 
 /* 极端防护（RULES §9）：面板变窄时次要信息逐级让位，操作按钮永不被挤走 */
-  .ac-goal-row.is-narrow .ac-goal-bar { display: none; }
+.ac-goal-row.is-narrow .ac-goal-bar {
+  display: none;
+}
 
-.ac-editor { position: relative; min-height: 64px; max-height: min(45vh, 15rem); overflow-y: auto; }
-.ac-placeholder { position: absolute; top: 0; left: 0; font-size: 14px; line-height: 24px; color: var(--ui-ink-dim, #919191); pointer-events: none; }
-.ac-toolbar { display: flex; align-items: center; gap: 3px; min-width: 0; }
-.ac-plus { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-plus:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
+.ac-editor {
+  position: relative;
+  min-height: 64px;
+  max-height: min(45vh, 15rem);
+  overflow-y: auto;
+}
+
+.ac-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-size: 14px;
+  line-height: 24px;
+  color: var(--ui-ink-dim, #919191);
+  pointer-events: none;
+}
+
+.ac-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ac-plus {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-plus:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
 /* 原生 file input 只是「被点」的载体，视觉由上面的 + 按钮承担 */
-.ac-file { display: none; }
-.ac-tb-icon { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink-dim, #919191); cursor: pointer; }
-.ac-tb-icon:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-tb-icon.is-on { color: var(--ui-accent, #0891b2); }
+.ac-file {
+  display: none;
+}
+
+.ac-tb-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  cursor: pointer;
+}
+
+.ac-tb-icon:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-tb-icon.is-on {
+  color: var(--ui-accent, #0891b2);
+}
+
 /* 授权方式 = 完全自动授权时用警示色（琥珀）：这是唯一需要用户留意的状态，图标染上提醒留意 */
-.ac-tb-icon.is-warn { color: var(--ui-warn, #e3a25f); }
-.ac-pill { display: inline-flex; align-items: center; gap: 1px; height: 32px; padding: 0 4px 0 8px; border: 0; border-radius: 9999px; background: transparent; color: var(--ui-ink, #f7f7f7); font-size: 13px; cursor: pointer; white-space: nowrap; }
-.ac-pill:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-tb-spacer { flex: 1; min-width: 8px; }
+.ac-tb-icon.is-warn {
+  color: var(--ui-warn, #e3a25f);
+}
+
+.ac-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: 32px;
+  padding: 0 4px 0 8px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--ui-ink, #f7f7f7);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ac-pill:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-tb-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
 /* 上下文环：照参考页实测占 32×32 的触发区（图标 12×12 居中），图标色 --ui-ink-dim。
    外面再包一层 tooltip 时也要保持这个尺寸，不然工具条按钮的基线会跳。 */
-.ac-context { display: grid; place-items: center; width: 32px; height: 32px; margin-right: 2px; color: var(--ui-ink-dim, #919191); cursor: default; }
+.ac-context {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 2px;
+  color: var(--ui-ink-dim, #919191);
+  cursor: default;
+}
+
+/* —— 上下文统计（用户口径 2026-10-11：恢复到发送键左侧）——
+   只留环形进度（hover 气泡给剩余百分比）：环已经表达了用量，旁边再写「已…」
+   是重复信息，且 32px 的工具条里放不下 —— 用户口径：有环就不要文字。 */
+.ac-ctxwrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
 
 /* —— 图片：待发送缩略图 / 已发送缩略图 / 看大图 —— */
 /* 待发送（在输入框里，图片上方） */
-.ac-attach-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 0; }
-.ac-attach { position: relative; width: 56px; height: 56px; flex: none; border: 1px solid var(--ui-line, #363636); border-radius: 10px; overflow: hidden; background: var(--ui-veil, rgb(255 255 255 / 0.04)); }
-.ac-attach img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ac-attach-del { position: absolute; top: 2px; right: 2px; display: grid; place-items: center; width: 18px; height: 18px; border: 0; border-radius: 999px; background: var(--ui-scrim, rgb(0 0 0 / 0.6)); color: var(--ui-tip-ink, #fff); cursor: pointer; }
-.ac-attach-del:hover { background: var(--ui-danger, #ef4444); }
+.ac-attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 2px 0;
+}
+
+.ac-attach {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+}
+
+.ac-attach img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ac-attach-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ui-scrim, rgb(0 0 0 / 0.6));
+  color: var(--ui-tip-ink, #fff);
+  cursor: pointer;
+}
+
+.ac-attach-del:hover {
+  background: var(--ui-danger, #ef4444);
+}
+
 /* 已发送（在用户气泡里）：按原比例排，点开看大图 */
-.ac-user-images { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.ac-user-image { display: block; width: 96px; height: 96px; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: transparent; cursor: zoom-in; }
-.ac-user-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ac-user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ac-user-image {
+  display: block;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.ac-user-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 /* 看大图：铺满面板的遮罩（z-index 要在下拉/浮层之上） */
 /* 底圈：整圈淡显（照参考页 opacity .25），提供"盘面"感 */
-.ac-ctx-track { opacity: 0.25; }
-.ac-send { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border: 0; border-radius: 12px; background: var(--ui-primary-bg, #f7f7f7); color: var(--ui-primary-ink, #141414); cursor: pointer; transition: opacity 0.16s ease; }
-.ac-send:disabled { opacity: 0.45; cursor: default; }
-.ac-send.is-running { background: var(--ui-danger, #ef4444); color: var(--ui-primary-ink, #141414); }
+.ac-ctx-track {
+  opacity: 0.25;
+}
+
+.ac-send {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 12px;
+  background: var(--ui-primary-bg, #f7f7f7);
+  color: var(--ui-primary-ink, #141414);
+  cursor: pointer;
+  transition: opacity 0.16s ease;
+}
+
+.ac-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ac-send.is-running {
+  background: var(--ui-danger, #ef4444);
+  color: var(--ui-primary-ink, #141414);
+}
+
 /* 停止键里的实心方块：走 currentColor（与按钮文字色同一套 token），
    不引线框图标，圆角 2 让方角不至于太生硬。 */
-.ac-stop-square { width: 11px; height: 11px; border-radius: 2px; background: currentColor; }
+.ac-stop-square {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+}
 
 /* —— 下拉内容（浮层本体由目录里的 dropdown 提供：定位/翻边/出屏/互斥它负责）——
    层次结构（照参考图）：上下 flex 分栏 ——
@@ -2295,57 +3881,285 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
      │   └ 行卡片：图标托 + 标题/说明 + 选中勾
    浮层用 dropdown 的 layout="inner-scroll"：它只当外框，滚动由下面的列表区负责，
    所以顶部标题天然不滚，不需要 sticky 去补。 */
-.ac-ddmenu { display: flex; flex-direction: column; min-height: 0; flex: 1; padding: 2px; }
+.ac-ddmenu {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 2px;
+}
 
 /* 分组头：普通 flex 行。它不滚是因为**滚动发生在下面的列表区**，不是靠定位吸住。 */
-.ac-menu-head { display: flex; align-items: center; gap: 8px; flex: none; padding: 8px 10px 6px; }
-.ac-menu-head-title { font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
-.ac-menu-head-count { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 11px; line-height: 16px; text-align: center; color: var(--ui-ink-dim, #919191); }
+.ac-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 8px 10px 6px;
+}
+
+.ac-menu-head-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-menu-head-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--ui-ink-dim, #919191);
+}
+
 /* 分组头右侧的操作（MCP 的「检测」）：把计数推到左边、按钮贴右 */
-.ac-menu-head-spacer { flex: 1; min-width: 4px; }
-.ac-menu-head-btn { display: inline-flex; align-items: center; gap: 4px; flex: none; height: 22px; padding: 0 8px; border: 1px solid var(--ui-line, #363636); border-radius: 999px; background: transparent; color: var(--ui-ink-dim, #919191); font-size: 11px; cursor: pointer; }
-.ac-menu-head-btn:hover:not(:disabled) { background: var(--ui-hover, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.ac-menu-head-btn:disabled { opacity: 0.6; cursor: default; }
+.ac-menu-head-spacer {
+  flex: 1;
+  min-width: 4px;
+}
+
+.ac-menu-head-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-line, #363636);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.ac-menu-head-btn:hover:not(:disabled) {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-menu-head-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* 每行右侧的检测徽章 */
-.ac-menu-card-badge { flex: none; margin-top: 3px; max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: 999px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-size: 11px; line-height: 15px; }
-.ac-menu-card-badge.is-bad { background: var(--ui-danger-veil, rgb(239 68 68 / 0.1)); color: var(--ui-danger, #ef4444); }
+.ac-menu-card-badge {
+  flex: none;
+  margin-top: 3px;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+  color: var(--ui-accent-hover, #0e7490);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.ac-menu-card-badge.is-bad {
+  background: var(--ui-danger-veil, rgb(239 68 68 / 0.1));
+  color: var(--ui-danger, #ef4444);
+}
 
 /* 列表区：**唯一会滚的那层**。flex:1 + min-height:0 才能在限高的浮层里正确收缩 */
-.ac-menu-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; padding: 0 2px 2px; }
+.ac-menu-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px 2px;
+}
 
 /* 行卡片：图标托 + 两行文字 + 选中勾。整行有底色/描边，才有"一条一条"的结构感 */
-.ac-menu-card { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--ui-veil, rgb(255 255 255 / 0.04)); text-align: left; cursor: pointer; transition: background 0.14s ease, border-color 0.14s ease; }
-.ac-menu-card:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-menu-card[aria-selected='true'] { border-color: var(--ui-accent, #0891b2); background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); }
-.ac-menu-card-icon { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 8px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink-dim, #919191); }
-.ac-menu-card-icon :deep(svg) { width: 15px; height: 15px; }
-.ac-menu-card[aria-selected='true'] .ac-menu-card-icon { color: var(--ui-accent, #0891b2); }
-.ac-menu-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.ac-menu-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ui-ink, #f7f7f7); }
-.ac-menu-card[aria-selected='true'] .ac-menu-card-name { color: var(--ui-accent, #0891b2); font-weight: 600; }
-.ac-menu-card-hint { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #919191); }
-.ac-menu-card-check { flex: none; margin-top: 5px; color: var(--ui-accent, #0891b2); }
+.ac-menu-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ac-menu-card:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-menu-card[aria-selected='true'] {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgb(8 145 178 / 0.12));
+}
+
+.ac-menu-card-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-menu-card-icon :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.ac-menu-card[aria-selected='true'] .ac-menu-card-icon {
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-menu-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ac-menu-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-menu-card[aria-selected='true'] .ac-menu-card-name {
+  color: var(--ui-accent, #0891b2);
+  font-weight: 600;
+}
+
+.ac-menu-card-hint {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-menu-card-check {
+  flex: none;
+  margin-top: 5px;
+  color: var(--ui-accent, #0891b2);
+}
 
 /* 简单两项式下拉（创作模式 / 授权方式）：标题一行 + 说明一行 */
-.ac-menu-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
-.ac-menu-item:hover { background: var(--ui-hover, rgb(255 255 255 / 0.1)); }
-.ac-menu-item[aria-selected='true'] .ac-menu-name { color: var(--ui-accent, #0891b2); font-weight: 600; }
-.ac-menu-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ui-ink, #f7f7f7); }
-.ac-menu-title-row { display: flex; align-items: center; gap: 6px; width: 100%; }
-.ac-menu-title-row .ac-menu-name { flex: 1; min-width: 0; }
+.ac-menu-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ac-menu-item:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+}
+
+.ac-menu-item[aria-selected='true'] .ac-menu-name {
+  color: var(--ui-accent, #0891b2);
+  font-weight: 600;
+}
+
+.ac-menu-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-menu-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.ac-menu-title-row .ac-menu-name {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 授权方式两个选项的配色（用户口径 2026-10-03）:
    ask  = 手掌 / **默认无色**（先停一下是常态，不用彩色喊）
    auto = 盾牌+感叹号 / **琥珀**（图标与文字都染，唯一需要留意的那个选项）
    底色是同色 12% 的浅托, 亮暗主题都由 token 现算 */
-.ac-menu-icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; color: var(--ui-ink-dim, #919191); background: var(--ui-chip, rgb(255 255 255 / 0.1)); }
-.ac-menu-icon.is-auto { color: var(--ui-warn, #e3a25f); background: color-mix(in srgb, var(--ui-warn, #e3a25f) 12%, transparent); }
+.ac-menu-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--ui-ink-dim, #919191);
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+}
+
+.ac-menu-icon.is-auto {
+  color: var(--ui-warn, #e3a25f);
+  background: color-mix(in srgb, var(--ui-warn, #e3a25f) 12%, transparent);
+}
+
 /* 完全自动授权那一行，文字也跟着图标染成琥珀（用户要求：不要只有图标有色） */
-.ac-menu-name.is-auto { color: var(--ui-warn, #e3a25f); }
-.ac-menu-item[aria-selected='true'] .ac-menu-name { color: var(--ui-ink, #f7f7f7); }
-.ac-menu-check { flex: none; color: var(--ui-accent, #0891b2); }
-.ac-menu-hint { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #919191); }
-.ac-menu-empty { margin: 8px 10px; font-size: 12px; color: var(--ui-ink-dim, #919191); }
-@media (prefers-reduced-motion: reduce) { .ac-spin, .ac-pending-spin { animation: none; } }
+.ac-menu-name.is-auto {
+  color: var(--ui-warn, #e3a25f);
+}
+
+.ac-menu-item[aria-selected='true'] .ac-menu-name {
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.ac-menu-check {
+  flex: none;
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-menu-hint {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.ac-menu-empty {
+  margin: 8px 10px;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #919191);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .ac-spin,
+  .ac-pending-spin {
+    animation: none;
+  }
+}
 </style>
 
 <!-- 输入框内联标签（.ac-tag / .ac-mrow）由 ProseMirror 直接造 DOM，拿不到 scoped 属性，
@@ -2355,7 +4169,10 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
    照参考页实测应是 64px（min-height 4rem）—— 不压下来的话整块输入区比目标高 56px。
    只作用在 Agent 面板内（都挂在 .ac-editor 下），不影响底栏等其它调用方。 */
 .ac-editor .prose-mirror-editor .ProseMirror,
-.ac-editor .prose-mirror-editor > div:first-child { min-height: 64px; }
+.ac-editor .prose-mirror-editor>div:first-child {
+  min-height: 64px;
+}
+
 .prose-mirror-editor .ac-tag {
   display: inline-flex;
   align-items: center;
@@ -2375,31 +4192,100 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   user-select: none;
   cursor: pointer;
 }
+
 /* 编辑器给资源节点默认画一条下划线（.resource-node 的 border-bottom），那是给"文字引用"用的。
    我们的标签自带底色块，再叠一条下划线就成了"带线的胶囊"（实测参考图里没有线）。
    用 .resource-node 一起限定，靠更高的选择器权重压过后加载的库样式。 */
-.prose-mirror-editor .ac-tag.resource-node { border-bottom: 0; padding: 0 6px 0 4px; height: 22px; }
-.prose-mirror-editor .ac-tag .ac-tag-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
-.prose-mirror-editor .ac-tag .ac-tag-icon svg { width: 13px; height: 13px; }
+.prose-mirror-editor .ac-tag.resource-node {
+  border-bottom: 0;
+  padding: 0 6px 0 4px;
+  height: 22px;
+}
+
+.prose-mirror-editor .ac-tag .ac-tag-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--ui-ink-dim, #919191);
+}
+
+.prose-mirror-editor .ac-tag .ac-tag-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
 /* 图标固定、名字让位：`min-width: 0` 不能省 —— flex 子项的默认 min-width 是「内容宽」，
    只写 max-width 的话它会把标签顶回去，省略号永远不出现。 */
-.prose-mirror-editor .ac-tag .ac-tag-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; line-height: 1; color: var(--ui-ink, #f7f7f7); }
+.prose-mirror-editor .ac-tag .ac-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--ui-ink, #f7f7f7);
+}
+
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag,
-.prose-mirror-editor .ac-tag.resource-node-selected { background: var(--ui-accent, #0891b2); }
+.prose-mirror-editor .ac-tag.resource-node-selected {
+  background: var(--ui-accent, #0891b2);
+}
+
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-label,
-.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-label { color: var(--ui-primary-ink, #141414); }
+.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-label {
+  color: var(--ui-primary-ink, #141414);
+}
+
 .prose-mirror-editor .ProseMirror-selectednode.ac-tag .ac-tag-icon,
-.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-icon { color: var(--ui-primary-ink, #141414); }
+.prose-mirror-editor .ac-tag.resource-node-selected .ac-tag-icon {
+  color: var(--ui-primary-ink, #141414);
+}
+
 /* @ 菜单里的行（富行外观与工具栏下拉保持一致） */
 /* @ 行：默认只显示**名称**一行；hover / 键盘选中时描述行展开（多出一行，行高自然撑开）。
    描述不再常显 —— 常显会把每行都拉成两行，列表看着发灰又挤（用户口径）。 */
-.mention-menu .ac-mrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mention-menu .ac-mrow-icon { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 6px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); color: var(--ui-ink, #f7f7f7); }
-.mention-menu .ac-mrow-icon svg { width: 14px; height: 14px; }
-.mention-menu .ac-mrow-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.mention-menu .ac-mrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mention-menu .ac-mrow-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--ui-chip, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
+}
+
+.mention-menu .ac-mrow-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mention-menu .ac-mrow-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 /* 名字超长时单行省略：不省略的话行会被名字撑宽（浮层跟着变长），
    而在窄屏上触发翻边后名字又会把描述行挤没（用户口径 2026-10-11）。 */
-.mention-menu .ac-mrow-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 18px; color: var(--ui-ink, #f7f7f7); }
+.mention-menu .ac-mrow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--ui-ink, #f7f7f7);
+}
+
 /* 描述行：默认高度收起（0），hover/active 展开 —— 行高跟着**平滑过渡**，不是啪一下跳出来。
    为什么不用 display:none：display 不参与过渡（none ↔ block 之间没有中间态），
    展开只能是一瞬间的跳变（用户实测报的：「高度变化很突兀」）。
@@ -2415,9 +4301,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-ink-dim, #919191);
   transition: max-height 0.18s ease, opacity 0.18s ease;
 }
+
 .mention-menu .menu-item:hover .ac-mrow-hint,
-.mention-menu .menu-item.active .ac-mrow-hint { max-height: 16px; opacity: 1; }
+.mention-menu .menu-item.active .ac-mrow-hint {
+  max-height: 16px;
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mention-menu .ac-mrow-hint { transition: none; }
+  .mention-menu .ac-mrow-hint {
+    transition: none;
+  }
 }
 </style>

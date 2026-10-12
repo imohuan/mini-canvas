@@ -212,6 +212,15 @@ describe('健康检查与静态兜底', () => {
       expect(spa.status).toBe(200)
       expect(await spa.text()).toContain('<div id="app">')
 
+      // 宿主标记：发出去的 index.html 里要有 mini-canvas-host —— 前端据此把「云端连接」
+      // 当自带件**开机直接启动**（用户口径：cloud-server 起的服务，cloud-client 应在自带里直接启动）。
+      // 少了这行，托管版就不会自动连后台，退化成「要用户先去面板点一次安装」。
+      const spaHtml = await (await s.app.fetch(new Request('http://localhost/'))).text()
+      expect(spaHtml).toContain('name="mini-canvas-host"')
+      expect(spaHtml).toContain('content="cloud-server"')
+      // 幂等：同一个响应里只插一次
+      expect(spaHtml.split('name="mini-canvas-host"').length - 1).toBe(1)
+
       // 路径穿越被挡下
       const evil = await s.app.fetch(new Request('http://localhost/../../package.json'))
       expect(await evil.text()).not.toContain('"name": "mini-canvas"')

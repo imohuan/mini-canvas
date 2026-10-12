@@ -373,10 +373,48 @@ export function uiRoutes(uiDist: string | undefined): Hono {
       if (bytes) return c.body(bytes, 200, { 'content-type': mimeFor(rel) })
     }
     const index = await readWithin(uiDist, '/index.html')
-    if (index) return c.body(index, 200, { 'content-type': MIME_BY_EXT['.html'] })
+    if (index) {
+      // 往 index.html 里插一行**宿主标记**：告诉这份界面"你是被 cloud-server 托管的"。
+      //
+      // 为什么要它：前端据此把「云端连接（cloud-client）」当**自带件开机直接启动**
+      // （用户口径：cloud-server 起的服务，cloud-client 应该在自带里直接启动）——
+      // 后台就在同源，这类部署本来就是要连后台的，不该让用户先去面板点一次安装。
+      // 而 ui 单独 dev / 别人自己托管时没有这行标记 → 不自动装，仍由用户在面板里选装。
+      //
+      // 为什么让服务端插而不是前端猜：看 URL/端口都不准（dev 走代理、端口会顺延，同源时分不出来），
+      // 只有"发页面的人"自己声明最可靠。html 里已有 </head> 用来插；没有（异常产物）就原样发。
+      return c.body(injectHostFlag(index), 200, { 'content-type': MIME_BY_EXT['.html'] })
+    }
     return c.html(NO_UI_PAGE, 200)
   })
   return app
+}
+
+/** 宿主标记的 meta（前端 assembly.ts 的 CLOUD_HOST_FLAG 与之同名，两处必须一致） */
+const HOST_FLAG_META = '<meta name="mini-canvas-host" content="cloud-server">'
+
+/**
+ * 把宿主标记插进 index.html 的 </head> 之前（幂等：已经有就不再插一次）。
+ * 用 TextDecoder/Encoder 过一遍 UTF-8，避免中文页面被截断。
+ */
+function injectHostFlag(html: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
+  const text = new TextDecoder().decode(html)
+  if (text.includes('name="mini-canvas-host"')) return html
+  // 落点优先级：</head> 前 → <body 前 → 最前面。
+  // 为什么要兜底：正常产物一定带 </head>，但极简/手写的 index.html（测试夹具就是这种）可能没有，
+  // 那种情况下也得让标记出现在响应里 —— 前端靠它判"是不是托管版"，缺了就等于托管版不自动连后台。
+  const at = pickInsertAt(text)
+  const next = text.slice(0, at) + HOST_FLAG_META + '\n' + text.slice(at)
+  return new TextEncoder().encode(next) as Uint8Array<ArrayBuffer>
+}
+
+/** 选插入点：</head> 前 / <body 前 / 文首 */
+function pickInsertAt(text: string): number {
+  const head = text.indexOf('</head>')
+  if (head >= 0) return head
+  const body = text.search(/<body\b/i)
+  if (body >= 0) return body
+  return 0
 }
 
 /** 插件路由：清单 + 插件产物（两者都要扫描磁盘，改完刷新即生效） */

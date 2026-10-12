@@ -22,7 +22,7 @@
 import type { PluginScope } from '@mini-canvas/kernel'
 // PortDef 是端口约束的**单一来源**（nodeStore 定义、connection 消费）。
 // 这里以前手抄了一份字段列表，于是新增字段（evictOnFull）时插件写了会被类型拦下 —— 直接复用，不再重复。
-import type { PortDef, CanvasNodeType } from '../../nodeStore'
+import type { PortDef, CanvasNodeType, TitleExtraSource } from '../../nodeStore'
 import type { NodeSegment } from './nodeRegistry'
 import type { NodeRegistry } from './nodeRegistry'
 
@@ -49,6 +49,11 @@ export interface NodeTypeDef {
   outputs?: PortDef[]
   /** 类型图标（opaque 句柄，同 content 语义；缺省 = 不显示图标） */
   icon?: unknown
+  /**
+   * 标题右侧附加文本（字符串或 `(data)=>string`；缺省 = 不显示）。
+   * 见 CanvasNodeType.titleExtra —— 类型自己声明，默认壳只按声明渲染。
+   */
+  titleExtra?: TitleExtraSource
   /** 一句话说明（可选）：菜单"新建节点"项 hover 小字；与 icon 同链，由类型自己声明 */
   description?: string
   /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */
@@ -80,6 +85,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     defaultSize: def.defaultSize,
     nameTemplate: def.nameTemplate,
     icon: def.icon,
+    titleExtra: def.titleExtra,
     description: def.description,
     inputs: def.inputs,
     outputs: def.outputs,

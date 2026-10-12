@@ -302,10 +302,18 @@ watch(isOpen, (v) => {
   position: fixed;
   z-index: 100000;
   box-sizing: border-box;
-  padding: 4px;
+  /* 内边距同样可由消费方用 --dd-padding 覆盖（右键菜单那一档是 6px）。
+     理由同下面的圆角：本规则 scoped（[data-v-xxx]，特异性 0,2,0），
+     消费方的全局类只写 padding 盖不住它，变量不参与特异性比较。 */
+  /* 兜底值 = 右键菜单那一档（6px），与注册件 AxDropdown 用同一组 token
+     （真源见 packages/canvas-render/src/styles/ui-theme.css）。 */
+  padding: var(--dd-padding, 6px);
   /* 主题变量（--dd-* 由画布主题提供；缺失时回落到改造前的亮色值） */
   border: 1px solid var(--dd-line, rgba(0, 0, 0, 0.08));
-  border-radius: 12px;
+  /* 圆角可由消费方的 bodyClass 用 --dd-radius 覆盖（右键菜单那一档是 16）。
+     为什么走变量而不是让消费方直接写 border-radius：本规则是 scoped（带 [data-v-xxx]，
+     特异性 0,2,0），消费方的全局类只写属性盖不住它 —— 变量不参与特异性比较。 */
+  border-radius: var(--dd-radius, 12px);
   background: var(--dd-bg, #fff);
   box-shadow: var(--ui-shadow-md, 0 20px 40px rgba(0, 0, 0, 0.08));
   color: var(--dd-ink, #374151);
@@ -314,6 +322,27 @@ watch(isOpen, (v) => {
   overflow-x: hidden;
   scrollbar-width: thin;
   font-size: 13px;
+  /* 入场：与右键菜单 .ctx-menu 的 ctx-pop 同款（scale .96 + 上移 4px，0.18s 回弹）。
+     写成 animation 而不是外层 Transition：浮层是 v-if 直接挂的，加 Transition 要改结构，
+     而这里要的只是"出现那一下"的观感。 */
+  animation: dd-pop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes dd-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-menu {
+    animation: none !important;
+  }
 }
 
 /* inner-scroll：浮层只当**外框**，自己不滚；由内容区（如 .ac-menu-scroll）滚。

@@ -66,10 +66,17 @@ export function useNodeCapability(type: string) {
   const icon = computed(() => nodeDef.value?.icon);
 
   /**
+   * 该 type 声明的"标题右侧附加文本"（字符串或 `(data)=>string`；缺省 undefined = 不显示）。
+   * 与 icon 同一条路：类型自己声明，默认壳只按声明渲染，不给节点类型写分支。
+   * 取值与回落（空串/未声明不渲染）在壳那一层做 —— 这里只报"类型声明了什么"。
+   */
+  const titleExtra = computed(() => nodeDef.value?.titleExtra);
+
+  /**
    * 该 type 的中文名（label）。标题条在没有 data.label 时用它兜底 ——
    * 以前回落成英文 type（text/image），界面上看着就不对。
    */
   const label = computed(() => nodeDef.value?.label);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, frameless, transparent, loadingDefaultSize, label };
+  return { hasTarget, hasSource, defaultSize, resizable, icon, titleExtra, frameless, transparent, loadingDefaultSize, label };
 }

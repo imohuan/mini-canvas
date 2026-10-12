@@ -14,6 +14,7 @@ import { streamSSE } from 'hono/streaming'
 import { isSafeCanvasId } from '../store/canvasPaths.js'
 import { isSafeSessionId } from '../agent/agentPaths.js'
 import type { AgentSessionStore, QueueItem } from '../agent/sessionStore.js'
+import { dedupeSegments } from '../agent/sessionStore.js'
 import type { AgentRuntime, SessionPrefs } from '../agent/runtime.js'
 import type { SessionHub } from '../agent/sessionHub.js'
 import type { AgentChatEvent } from '../agent/translate.js'
@@ -183,6 +184,9 @@ export function agentSessionRoutes(
       // 目标参考图（迷你预览用；有目标才带，避免无谓字段）
       ...(goal && session.goalImages?.length ? { goalImages: session.goalImages } : {}),
        ...(hub ? { seq: hub.commitSeq(p.canvasId, p.sessionId!), lastSeq: hub.lastSeq(p.canvasId, p.sessionId!) } : {}),
+       // 最近一次上下文用量：界面刷新 / 切会话后靠它把上下文指示器画回来。
+       // 注意**不能用内存态**（runtime 那边）：服务重启后内存是空的，而磁盘上这份还在。
+       ...(session.lastUsage ? { lastUsage: session.lastUsage } : {}),
     })
   })
 
@@ -551,6 +555,89 @@ export function agentSessionRoutes(
   })
 
   /**
+   * 切换模型：把当前对话**整体接到一条新会话**上，模型换成新的。
+   *
+   * 为什么必须是新会话（SDK 侧的事实，用户已确认）：模型在会话创建时钉死（session_meta 里），
+   * 之后改不了 —— 所以"切模型"在 SDK 眼里就是"开一条新对话"。
+   *
+   * 但我们不想让用户丢掉上下文，于是把整段转录拷过去（branchFromEnd，分叉点记在末尾），
+   * 再补一条模型分段（"从这里起换成 X"）。界面上渲染成一条分割线 —— 与"编辑重发"
+   * 出来的分支是同一套机制（同一个 branches.json 登记表 + 分页器）。
+   */
+  app.post('/api/agent/canvases/:canvasId/sessions/:sessionId/switch-model', async (c) => {
+    const p = guardParams(c)
+    if (!p.ok) return p.res
+    const body = await safeJson(c)
+    const provider = typeof body?.provider === 'string' ? body.provider : ''
+    const modelId = typeof body?.modelId === 'string' ? body.modelId : ''
+    if (!provider || !modelId) return c.json({ ok: false, error: '需要 provider 与 modelId（成对给出）' }, 400)
+    if (runtime.isRunning(p.canvasId, p.sessionId!)) {
+      return c.json({ ok: false, error: '这一轮还在跑，等它结束再切换模型' }, 409)
+    }
+    // 压缩进行中也不能切：切模型要开新会话 + 种 Trace，与压缩写同一份上下文会互相踩
+    if (runtime.isCompactActive(p.canvasId, p.sessionId!)) {
+      return c.json({ ok: false, error: '正在压缩上下文，等它结束再切换模型' }, 409)
+    }
+    if (!branches) return c.json({ ok: false, error: '分支功能未启用' }, 503)
+    try {
+      const parent = await store.get(p.canvasId, p.sessionId!)
+      if (!parent) return c.json({ ok: false, error: '会话不存在' }, 404)
+      // 已经是这个模型：不折腾（否则每点一次都长一条新会话）
+      if (parent.provider === provider && parent.modelId === modelId) {
+        return c.json({ ok: true, sessionId: p.sessionId!, unchanged: true })
+      }
+      // 新会话的历史 = 父的全部回合；分段 = 父的旧分段 + 这新的一段
+      const userCount = parent.turns.filter((t) => t.role === 'user').length
+      const segments = [
+        ...(parent.modelSegments ?? []),
+        { fromUser: userCount, provider, modelId },
+      ]
+      // 第一段的模型：父会话若没有分段记录，就用父当前的模型补一段（否则第一段没有标签）。
+      // dedupeSegments 折掉同起点的重复（同一位置连切两次模型时，只留最后一次的选择）。
+      const seeded = parent.modelSegments?.length
+        ? segments
+        : [{ fromUser: 0, provider: parent.provider, modelId: parent.modelId }, ...segments]
+      const finalSegments = dedupeSegments(seeded)
+      const branched = await store.branchFromEnd(p.canvasId, p.sessionId!, {
+        title: parent.title,
+        provider,
+        modelId,
+        modelSegments: finalSegments,
+      })
+      // SDK 侧：种一份 Trace（resume 才认这条会话）——与 fork 同一套，失败要回滚
+      try {
+        const created = await store.get(p.canvasId, branched.sessionId)
+        await seedForkTrace(config.dataDir, {
+          parentSessionId: p.sessionId!,
+          forkSessionId: branched.sessionId,
+          canvasId: p.canvasId,
+          turns: created?.turns ?? [],
+          provider,
+          modelId,
+        })
+      } catch (err) {
+        await store.remove(p.canvasId, branched.sessionId).catch(() => undefined)
+        throw new Error(
+          '切换模型的 Trace 种子写入失败（已回滚）: ' + (err instanceof Error ? err.message : String(err)),
+        )
+      }
+      await branches.register(p.canvasId, p.sessionId!, branched.point, branched.sessionId)
+      const created = await store.get(p.canvasId, branched.sessionId)
+      return c.json({
+        ok: true,
+        sessionId: branched.sessionId,
+        parentId: branched.parentId,
+        copied: branched.copied,
+        provider,
+        modelId,
+        ...(created ? { title: created.title, modelSegments: created.modelSegments ?? [] } : {}),
+      })
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 400)
+    }
+  })
+
+  /**
    * 分支信息：这条会话的分支点 + **整张画布的分叉点全表**。
    *
    * 为什么给全表而不只给兄弟：分页器需要「父 + 同点全部子会话」的完整视图
@@ -598,6 +685,49 @@ export function agentSessionRoutes(
     if (!p.ok) return p.res
     const released = runtime.reconnectMcp(p.canvasId, p.sessionId!)
     return c.json({ ok: true, released })
+  })
+
+  /**
+   * 「压缩」：用户主动把上下文压成摘要（SDK 的 Session.compact，reason=manual）。
+   *
+   * 为什么给一个**独立的 SSE 流**而不是走 send：压缩不是一轮对话（没有用户消息、
+   * 不进转录），但它是长动作、要能看见进度（begin → 摘要 → end）。
+   * 所以借与消息流同一套 SSE 形态：事件带 id、前端按 seq 去重 —— 页面订阅的常驻流
+   * 同时也收得到（hub.append 广播给所有订阅者），不会出现"只有点按钮的那个标签页看得见"。
+   */
+  app.post('/api/agent/canvases/:canvasId/sessions/:sessionId/compact', async (c) => {
+    const p = guardParams(c)
+    if (!p.ok) return p.res
+    if (!hub) {
+      // 旧直连模式：没有常驻通道可广播，压完了界面也收不到 —— 如实拒绝，别装作成功。
+      return c.json({ ok: false, error: '托管未启用，压缩不可用' }, 503)
+    }
+    const ac = new AbortController()
+    const subscribeSince = hub.lastSeq(p.canvasId, p.sessionId!)
+    return streamSSE(c, async (stream) => {
+      stream.onAbort(() => ac.abort())
+      // 与 messages 路由同款：这个响应只是订阅者，事件由 runtime 产出后进 hub。
+      // 起点在**压缩开始之前**取（subscribeSince）：之后 append 的事件都 > 它，一条不漏。
+      const { unsubscribe } = hub.subscribe(p.canvasId, p.sessionId!, subscribeSince, (item) => {
+        void stream.writeSSE({ id: String(item.seq), data: JSON.stringify(item.ev) })
+      })
+      try {
+        for await (const ev of runtime.compact(p.canvasId, p.sessionId!, ac.signal)) {
+          // 只 append 一次，让 hub 广播（订阅者=就是本响应）——不要既 append 又自己写，
+          // 那会让同一事件到两次（前端按 seq 去重，重复的那次会被丢掉，但白跑一趟）。
+          hub.append(p.canvasId, p.sessionId!, ev)
+        }
+      } catch (err) {
+        hub.append(p.canvasId, p.sessionId!, {
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        // 一帧收尾：与前端的 SSE 解析口径一致（流结束 = 这次压缩结束）。
+        hub.append(p.canvasId, p.sessionId!, { type: 'done' })
+        unsubscribe()
+      }
+    })
   })
 
   /** 用户点了允许 / 拒绝：解开这一轮挂起的审批 */

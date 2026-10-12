@@ -31,6 +31,9 @@ function iconSpan(svg: string): HTMLElement {
 function renderTag(svg: string, label: string): HTMLElement {
   const el = document.createElement('span')
   el.className = 'ac-tag'
+  // 名字超长时标签会被样式截断（.ac-tag 有限宽），全名靠 title 补回来：
+  // 悬停能看全，也不影响点击行为。
+  el.title = label
   const lb = document.createElement('span')
   lb.className = 'ac-tag-label'
   lb.textContent = label

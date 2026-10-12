@@ -21,6 +21,14 @@ export interface ResourceItem {
   ref?: { kind: string; name: string; value?: string; ext?: string; folderId?: string }
   renderItem?: (item: ResourceItem) => VNode   // MentionMenu 下拉菜单渲染
   renderEditor?: (item: ResourceItem) => [string, Record<string, any>, ...any[]] | HTMLElement  // 输入框内 DOM 渲染；数组=DOMOutputSpec（ProseMirror 创建），HTMLElement=直接返回
+  /**
+   * 这是一个**动作项**（命令），不是可插入的标签。
+   *
+   * 给了它，@ 菜单里选中这条**不会**往正文里插东西 —— 只调它一次（如「压缩」把上下文压成摘要）。
+   * 为什么要有这条通道：@ 菜单是用户已经熟悉的"命令入口"，往里放**不产出标签**的操作
+   * （压缩、清屏这类）时，缺了它就只能插一个假标签，正文里会多出脏文本。
+   */
+  onPick?: () => void
   // 编辑器内交互事件（不传 → 无默认行为）
   onClick?: (item: ResourceItem) => void       // 点击资源节点
   onMouseEnter?: (item: ResourceItem) => void  // 鼠标进入资源节点（默认：悬停预览）

@@ -344,7 +344,7 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
  * 真正调 reload 时才取，避免顶层 import 就把浏览器依赖拉进来。
  */
 async function defaultLoadUmd(url: string, globalName?: string): Promise<LoadedPluginLike> {
-  const { createUmdLoader, bustCache } = await import('@mini-canvas/plugin-cloud-client/manager')
+  const { createUmdLoader, bustCache } = await import('@mini-canvas/plugin-manager')
   const loader = createUmdLoader({
     document,
     win: globalThis as unknown as Record<string, unknown>,

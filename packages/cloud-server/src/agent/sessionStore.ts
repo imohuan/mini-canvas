@@ -52,6 +52,36 @@ export interface AgentSessionMeta {
 }
 
 /**
+ * 一段「用同一个模型说的话」。
+ *
+ * 为什么要有它（用户口径 2026-10-11）：切换模型在 SDK 里等于开一条新会话
+ * （模型在会话创建时钉死、改不了），而用户期待的是一条长对话里「从这里开始换了模型」——
+ * 所以他要求界面画出**分割线**，并标明每段用的是哪个模型。
+ *
+ * 会话记录里只有一份 provider/modelId（当前那条），历史那段是哪个模型就丢了；
+ * 这个数组把每段的起点与模型补回来，界面按 fromUser 在对应位置画分割线。
+ */
+export interface ModelSegment {
+  /** 这一段的第一个用户消息在转录里的**序号**（0 基；按 user 回合数） */
+  fromUser: number
+  provider: string
+  modelId: string
+}
+
+/**
+ * 折掉**同起点**的重复分段，只留最后一个（即用户在该位置的最后一次选择）。
+ *
+ * 为什么放在这里而不是路由里：这是这份记录自身的完整性规则 —— 任何写分段的地方
+ * （切模型、以后可能有的其它入口）都要满足它，写在数据结构旁边才不会漏。
+ * 起点相同时按写入顺序取后者：后写的那次才是"现在真正在用的模型"。
+ */
+export function dedupeSegments(segments: ModelSegment[]): ModelSegment[] {
+  const byStart = new Map<number, ModelSegment>()
+  for (const s of segments) byStart.set(s.fromUser, s)
+  return [...byStart.values()].sort((a, b) => a.fromUser - b.fromUser)
+}
+
+/**
  * 排队消息的状态：
  * - `queued`  等着发
  * - `editing` 正在编辑（阻塞队列，等用户点发送）
@@ -102,6 +132,19 @@ export interface AgentSessionRecord extends AgentSessionMeta {
    * 宿主往里塞私有字段可能被插件判成坏文件；参考图是「界面展示」用的宿主数据，放这里。
    */
   goalImages?: string[]
+  /**
+   * 本会话的模型分段（见 ModelSegment）。只有**换过模型**的会话才有它；
+   * 没换过的会话不写这个字段（老数据、单模型会话都照常渲染一条线到底）。
+   */
+  modelSegments?: ModelSegment[]
+  /**
+   * 最近一次模型请求的上下文用量（token_usage 的 used / limit）。
+   *
+   * 为什么必须落盘（用户口径 2026-10-11 报的"上下文进度莫名其妙消失"）：
+   * usage 事件不落转录、也不在重连时重放 —— 刷新 / 切会话 / 面板重开后界面上那个
+   * 指示器就彻底没了，只有再发一条消息才回来。把它存进会话记录，恢复会话时一并带回去。
+   */
+  lastUsage?: { usedTokens: number; limitTokens: number | null }
 }
 
 interface IndexFile {
@@ -375,6 +418,99 @@ export class AgentSessionStore {
     })
     for (const t of copied) await this.appendTurn(canvasId, sessionId, t)
     return { sessionId, parentId: parentSessionId, copied: copied.length, point: 'turn:' + at }
+  }
+
+  /**
+   * 在**末尾**开一条分支：把父会话的全部转录拷进新会话，分叉点 = 末尾（turn:N，N = 总回合数）。
+   *
+   * 用途只有一个（用户口径 2026-10-11）：**切换模型**。
+   * SDK 的模型钉在会话上、改不了，所以换模型只能开新会话；而用户要的是"接着聊、
+   * 从这里起换了模型"—— 于是把历史整段带过去，再在界面上画一条分割线。
+   *
+   * 与 forkFrom 的差别：那个按**用户消息文本**定位分叉点（编辑重发），这里固定在末尾。
+   * 分叉点用同一个 turn:N 形态登记进 branchStore —— 于是切换模型出来的新会话
+   * 天然与"编辑出来的分支"共用一套分页器 / 历史聚合（用户要求的效果与分支一致）。
+   */
+  async branchFromEnd(
+    canvasId: string,
+    parentSessionId: string,
+    opts: { title?: string; provider?: string; modelId?: string; modelSegments?: ModelSegment[] } = {},
+  ): Promise<{ sessionId: string; parentId: string; copied: number; point: string }> {
+    const parent = await this.get(canvasId, parentSessionId)
+    if (!parent) throw new Error('会话不存在: ' + parentSessionId)
+    const copied = parent.turns.map((t) => structuredClone(t))
+    const sessionId = 'session-' + new Date().toISOString().replace(/[:.]/g, '-') + '-' + Math.random().toString(36).slice(2, 10)
+    await this.ensure(canvasId, {
+      id: sessionId,
+      title: opts.title?.trim() || parent.title,
+      createdAt: Date.now(),
+      provider: opts.provider ?? parent.provider,
+      modelId: opts.modelId ?? parent.modelId,
+    })
+    for (const t of copied) await this.appendTurn(canvasId, sessionId, t)
+    // 模型分段随历史一起带过去；新的一段由路由追加 —— 追加前先**折掉同起点的旧分段**。
+    //
+    // 为什么要折（真机实测到的脏数据）：用户在同一位置连切两次模型（A → B → A）时，
+    // 第二段会与第一段共用同一个 fromUser（转录没变），于是记录里出现
+    // [A@0, B@1, A@1] 两条同起点的分段 —— 界面只能画一条线，另一条成了幽灵数据。
+    // 折掉同起点的旧值后，每个起点只剩最后一次选择（这才对得上"界面上显示的那条线"）。
+    if (opts.modelSegments?.length) {
+      await this.setModelSegments(canvasId, sessionId, dedupeSegments(opts.modelSegments))
+    }
+    /**
+     * 最近用量也带过去。
+     *
+     * 为什么不能只带转录：切模型后上下文没变（历史全在），界面上的"上下文用量"要是空的，
+     * 用户看到的就是**刚换完模型指示器就消失了** —— 正是他报的那个"进度莫名其妙消失"
+     * （这条会话是新 id，原来的用量记录留在父会话上）。
+     */
+    if (parent.lastUsage) {
+      await this.setLastUsage(canvasId, sessionId, parent.lastUsage)
+    }
+    return {
+      sessionId,
+      parentId: parentSessionId,
+      copied: copied.length,
+      point: 'turn:' + parent.turns.length,
+    }
+  }
+
+  /** 写模型分段（空数组 = 清掉）。分段是宿主侧记录，不塞进 SDK 那边。 */
+  async setModelSegments(
+    canvasId: string,
+    sessionId: string,
+    segments: ModelSegment[],
+  ): Promise<void> {
+    return this.serialize(this.key(canvasId, sessionId), async () => {
+      const record = await this.get(canvasId, sessionId)
+      if (!record) return
+      if (segments.length) record.modelSegments = segments
+      else delete record.modelSegments
+      await this.writeRecord(canvasId, record)
+    })
+  }
+
+  /**
+   * 记下最近一次请求的上下文用量（界面恢复会话时用它把指示器画回来）。
+   *
+   * 为什么要节流写盘：每个模型请求都会发一次 token_usage（一轮里可能十几次），
+   * 每次都"读整个会话文件 → 改 → 整写"代价不小，而且这些中间值没人要 ——
+   * 只保留最新的那个（见 shouldWriteUsage 的节流判定，调用方判断）。
+   */
+  async setLastUsage(
+    canvasId: string,
+    sessionId: string,
+    usage: { usedTokens: number; limitTokens: number | null },
+  ): Promise<void> {
+    return this.serialize(this.key(canvasId, sessionId), async () => {
+      const record = await this.get(canvasId, sessionId)
+      if (!record) return
+      record.lastUsage = {
+        usedTokens: Math.max(0, Math.round(usage.usedTokens)),
+        ...(usage.limitTokens && usage.limitTokens > 0 ? { limitTokens: Math.round(usage.limitTokens) } : { limitTokens: null }),
+      }
+      await this.writeRecord(canvasId, record)
+    })
   }
 
   private async readIndex(canvasId: string): Promise<IndexFile> {

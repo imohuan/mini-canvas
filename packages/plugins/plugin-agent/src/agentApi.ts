@@ -10,7 +10,8 @@ export type ChatEvent =
   | { type: 'tool_call'; id: string; name: string; arguments: string }
   | { type: 'tool_output'; id: string; output: string }
   | { type: 'notice'; message: string }
-  | { type: 'error'; message: string }
+  /** 出错。scope 'compact' = 压缩失败（不是某一轮对话失败，见后端注释） */
+  | { type: 'error'; message: string; scope?: 'compact' }
   | { type: 'usage'; usedTokens: number; limitTokens: number | null; spent?: number }
   | {
       type: 'approval_request'
@@ -30,6 +31,23 @@ export type ChatEvent =
   | { type: 'user_message'; text: string; images?: string[]; steered?: boolean }
   /** 目标状态更新（后端读 GOAL.json 后推；界面显示「第 N 轮 · 已用 / 预算」） */
   | { type: 'goal_state'; goal: GoalStateView | null }
+  /**
+   * 上下文压缩的边界（成对：begin → … → end）。
+   *
+   * 为什么单独一条而不是复用 notice：压缩是**长动作**（跑一次模型把历史总结成摘要），
+   * 界面需要一个"正在压缩"的常驻位置；跑完还要说明成功还是放弃。
+   * 复用 notice 会落进那条被隐藏的"过程提示"通道，用户就再也看不见压缩跑没跑成。
+   */
+  | {
+      type: 'compact'
+      phase: 'begin' | 'end'
+      reason: string
+      mode: string
+      /** 只有 end 有：completed = 压成功；其它 = 放弃（原上下文保留） */
+      status?: string
+      context?: number
+      error?: string
+    }
 
 /** 队列条目（与后端 sessionStore 的 QueueItem 同形；前后端各一份类型，字段名钉死） */
 export interface QueueItemView {
@@ -86,6 +104,12 @@ export interface TurnView {
 
 export interface SessionRecordView extends SessionMetaView {
   turns: TurnView[]
+  /**
+   * 模型分段（换过模型的会话才有）：从第 N 个用户消息起换成了哪个模型。
+   *
+   * 界面据此在消息流里画分割线并标注模型名（用户口径 2026-10-11）。
+   */
+  modelSegments?: Array<{ fromUser: number; provider: string; modelId: string }>
 }
 
 export interface SendOptions {
@@ -277,6 +301,8 @@ export class AgentApi {
   goalImages?: string[]
   seq?: number
     lastSeq?: number
+    /** 最近一次上下文用量（界面恢复会话时把上下文指示器画回来；见 store.lastUsage） */
+    lastUsage?: { usedTokens: number; limitTokens: number | null }
   }> {
     return this.json(this.sessionPath(canvasId, sessionId))
   }
@@ -358,6 +384,57 @@ export class AgentApi {
       method: 'POST',
       body: JSON.stringify({ afterText }),
     })
+  }
+
+  /**
+   * 切换模型：后端把整段历史接到**一条新会话**上（模型在建会话时钉死，换模型只能换会话），
+   * 并在记录里补一条模型分段 —— 界面据此画分割线。
+   */
+  switchModel(
+    canvasId: string,
+    sessionId: string,
+    provider: string,
+    modelId: string,
+  ): Promise<{
+    ok: boolean
+    sessionId?: string
+    parentId?: string
+    copied?: number
+    provider?: string
+    modelId?: string
+    title?: string
+    /** true = 当前已经是这个模型，什么都没做 */
+    unchanged?: boolean
+    modelSegments?: Array<{ fromUser: number; provider: string; modelId: string }>
+  }> {
+    return this.json(this.sessionPath(canvasId, sessionId) + '/switch-model', {
+      method: 'POST',
+      body: JSON.stringify({ provider, modelId }),
+    })
+  }
+
+  /**
+   * 主动压缩上下文（「压缩」命令）。
+   *
+   * 走 SSE：后端把 compaction_begin / 摘要 / compaction_end 一路推回来，
+   * 与消息流同一套按 seq 去重的口径（同一条事件也可能从常驻流到一次）。
+   */
+  async compact(
+    canvasId: string,
+    sessionId: string,
+    onEvent: (e: ChatEvent) => void,
+    signal?: AbortSignal,
+    sink?: SseFrameSink,
+  ): Promise<void> {
+    const res = await this.f(this.sessionPath(canvasId, sessionId) + '/compact', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+      ...(signal ? { signal } : {}),
+    })
+    if (!res.ok) throw new Error(await readError(res))
+    if (!res.body) return
+    await this.consumeSse(res.body, onEvent, sink)
   }
 
   /** 分支信息：本会话的分叉点 + 全画布分叉点全表（分页器用） */

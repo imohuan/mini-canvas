@@ -81,6 +81,20 @@ describe('插件 ctx 能力段收口（ctx.nodes/theme/commands/slots）', () =>
     expect(def?.loadingDefaultSize).toBe(true)
   })
 
+  /**
+   * titleExtra 也走这条手写枚举路 —— 历史上 frameless 正是漏在这条路上（单测全绿、浏览器无变化），
+   * 所以新字段必须补一条同形态的断言。
+   */
+  it('ctx.nodes.register 把 titleExtra（标题右侧附加文本）透传进 nodeStore', async () => {
+    const compute = (d: Record<string, unknown>): string => `${d.imageWidth}×${d.imageHeight}`
+    const { nodeStore } = await boot([
+      mk('extra-plugin', (c) => {
+        c.nodes.register({ type: 'extra', label: '附加', size: { w: 10, h: 10 }, titleExtra: compute })
+      }),
+    ])
+    expect(nodeStore.types.get('extra')?.titleExtra).toBe(compute)
+  })
+
   it('ctx.theme.register 叠主题槽 occupant；order 更小的顶替', async () => {
     const { theme } = await boot([
       mk('theme-a', (c) => c.theme.register('edge', MyEdge)),

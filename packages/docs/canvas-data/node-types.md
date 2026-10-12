@@ -71,6 +71,8 @@ export interface NodeRegisterDef extends Omit<NodeTypeDef, 'defaultSize'> {
 
   /** 类型图标（opaque 句柄；缺省 = 不显示图标） */
   icon?: unknown
+  /** 标题右侧附加文本：字符串或 (data) => string；缺省 = 不显示（见下方说明） */
+  titleExtra?: string | ((data: Record<string, unknown>) => string | undefined)
   /** 一句话说明：菜单里"新建节点"项的 hover 小字 */
   description?: string
   /** 新节点默认名称模板：{{ID}} = 该类型递增序号，{{NAME}} = label */
@@ -98,6 +100,12 @@ export interface NodeCreator {
 - **`size` 而不是 `defaultSize`** —— 数据侧叫 `defaultSize`，作者侧沿用 `size`，由注册助手做映射。
 - **`icon` / `description` 由类型自己声明**，因为类型最清楚自己是什么。让菜单层维护一份
   "type 名字 → 文案"的对照表，每加一个类型都得回去补，必漏。
+
+  `titleExtra` 同理，管的是**标题右侧那一格**（图片/视频节点用它显示 `1920×1080`）：
+  字符串 = 静态文案；函数 = 按节点 data 现算。派生值（宽高/字数/时长）一律走函数，
+  **不写进 data** —— 写进去就成了落盘字段，每次尺寸变化多一条撤销记录，
+  还会被后台/MCP 复制粘贴带跑。函数返回空串则那一格不渲染。
+  它受默认皮（plugin-theme-default）的配置 `titleVisible` 管控：关掉标题时这一格跟着一起收起。
 - **`resizable` / `frameless` / `transparent` 是类型级能力**，由渲染层读。曾经因为"两条注册路径只透传了一条"，
   出现过"单测全绿、浏览器里边框照旧"的事故，所以现在两条路都透传。
 

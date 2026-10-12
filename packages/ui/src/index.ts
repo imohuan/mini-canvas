@@ -5,7 +5,7 @@
  *
  * 1. **应用本体**：`CanvasApp`（= `App.vue`）是"已组装好的画布应用"，含顶部工具条与设置弹窗。
  *    装进任意 Vue 3 应用用 `<CanvasApp/>`，或整体挂载用 `mountCanvasApp(root)`。
- * 2. **装配决定**：`APP_PLUGINS` / `createDefaultStorageAdapter` / `seedDefaultCanvas` 是这一版
+ * 2. **装配决定**：`APP_PLUGINS` / `resolveAppPlugins` / `createDefaultStorageAdapter` / `seedDefaultCanvas` 是这一版
  *    装了哪些插件、用哪个存储、空画布塞什么。换一套组合不用改组件，改这里（或 `./assembly`）即可。
  *
  * 有意不从这里导出：`CanvasHost` / `SettingsHost` 等渲染层原语。想要"自己组装一套"的调用方
@@ -24,6 +24,10 @@ import CanvasApp from './App.vue'
 export { default as CanvasApp } from './App.vue'
 export {
   APP_PLUGINS,
+  resolveAppPlugins,
+  builtinPluginsForUiHost,
+  isCloudServerHosted,
+  CLOUD_HOST_FLAG,
   SAMPLE_IMAGE_URL,
   SAMPLE_TEXT,
   createDefaultStorageAdapter,

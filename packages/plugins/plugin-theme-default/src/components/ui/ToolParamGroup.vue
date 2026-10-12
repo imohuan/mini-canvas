@@ -12,9 +12,12 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
-import Dropdown from './Dropdown.vue'
+import { useCatalogDropdown } from './useCatalogDropdown'
 import ToolParamField from './ToolParamField.vue'
 import { resolvePresetKind } from './paramKind'
+
+/** 下拉容器：优先用注册场登记的那一份（成品应用顶替了就用它），取不到回落本包自带 */
+const Dropdown = useCatalogDropdown()
 
 const props = withDefaults(
   defineProps<{
@@ -67,7 +70,7 @@ const summary = computed(() => {
   <Dropdown
     :offset="4"
     :body-class="blocksMode ? 'tpg-menu-body tpg-menu-body--blocks' : 'tpg-menu-body'"
-    :menu-width="blocksMode ? '342px' : ''"
+    :menu-width="blocksMode ? '288px' : ''"
     class="tpg-root"
   >
     <template #trigger="{ open }">
@@ -204,14 +207,23 @@ const summary = computed(() => {
 </style>
 
 <style>
-/* 浮层内容（经 Teleport 到 body，必须用全局样式） */
+/* 浮层内容（经 Teleport 到 body，必须用全局样式）。
+   圆角/底色通过 --dd-* 交给 Dropdown 的浮层规则消费（那边是 scoped、特异性更高，
+   直接写属性盖不住），取值照右键菜单 .ctx-menu：16 圆角 + 不透明白底。 */
 .tpg-menu-body {
-  padding: 6px;
+  --dd-padding: 6px;
+  --dd-radius: 16px;
+  --dd-bg: var(--ui-overlay-solid, #fff);
 }
-/* 整块版式（有预设块时）：照参考站实测 —— 面板宽 342、圆角 16、内边距 12 */
+/* 整块版式（有预设块时）：面板宽 288（参考稿 w-72）、内边距 16（p-4）、块间 gap 12（gap-3） */
 .tpg-menu-body--blocks {
-  padding: 12px;
-  border-radius: 16px;
+  --dd-padding: 16px;
+}
+/* 参数面板里的滑块走**黑白**（用户口径 2026-10-12：这里不用主题色，与右键菜单同口径）：
+   填充与圆球改用主按钮那档深墨，白底黑轨一眼能看出进度，不再是一条青色的条。 */
+.tpg-menu-body {
+  --ps-accent: var(--ui-primary-bg, #1f2937);
+  --ps-accent-hover: var(--ui-primary-bg-hover, #111827);
 }
 .tpg-menu {
   display: flex;
@@ -221,11 +233,16 @@ const summary = computed(() => {
 }
 /* 块间 gap 8（参考站实测）；块内间距由各预设件自己给 */
 .tpg-menu--blocks {
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
 }
 .tpg-menu--blocks .tpg-block {
   display: block;
+}
+/* 预设块之间一条分割线（参考稿在「比例网格」与「参数滑块」之间就是一条 border-t） */
+.tpg-menu--blocks .tpg-block + .tpg-block {
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-line, #e2e5ea);
 }
 .tpg-menu .tpg-row {
   display: flex;

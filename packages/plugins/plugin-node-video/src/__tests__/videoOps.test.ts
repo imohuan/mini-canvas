@@ -23,6 +23,7 @@ import {
   createVideoOps,
   cropVideo,
   displaySizeOf,
+  videoTitleExtra,
   downloadVideoNode,
   loadVideo,
   readVideoSummary,

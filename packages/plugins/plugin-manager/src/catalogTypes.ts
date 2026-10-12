@@ -14,6 +14,16 @@ export interface CatalogEntry {
   description?: string
   /** 浏览器可直接请求的 js 地址 */
   url: string
+  /**
+   * 产物形态 —— 决定面板用哪条路把它装进内核。
+   *
+   * - 'umd'（缺省，向后兼容）：external 掉 vue/内核、靠 window 全局取依赖，只能用 <script> 加载；
+   * - 'esm'：自包含 ES 模块（零裸模块名 import），交给宿主 manager.install({ url }) 走 import 加载。
+   *
+   * 为什么必须显式区分：两种形态的加载机制不通用 —— UMD 走 import 会炸、ESM 走 <script>
+   * 取不到全局对象。混着猜就会"列出来了却装不上"。缺省按 UMD（既有插件全是 UMD）。
+   */
+  format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名 */
   globalName?: string
   /** 该产物运行时需要哪些 window 全局（Vue / MiniCanvasCore / …） */
@@ -77,6 +87,7 @@ export function normalizeCatalog(raw: unknown): CatalogEntry[] {
       ...(typeof e.title === 'string' ? { title: e.title } : {}),
       ...(typeof e.description === 'string' ? { description: e.description } : {}),
       url: typeof e.url === 'string' ? e.url : '',
+      ...(e.format === 'esm' || e.format === 'umd' ? { format: e.format } : {}),
       ...(typeof e.globalName === 'string' ? { globalName: e.globalName } : {}),
       ...(Array.isArray(e.requiresGlobals)
         ? { requiresGlobals: e.requiresGlobals.filter((g): g is string => typeof g === 'string') }
@@ -100,10 +111,24 @@ export function normalizeCatalog(raw: unknown): CatalogEntry[] {
   return out
 }
 
-/** 一条没有存档时该默认装哪些（用户要求：默认全部设为安装） */
+/**
+ * 一条清单条目**是否自愿**被"首次默认安装"。
+ *
+ * 用户要求（2026-10-11）：插件管理第一次打开时**一个都不自动装**，全部由用户在面板里自己挑。
+ * 所以默认策略从"没声明就装"翻转成"**只有作者显式写 defaultInstalled: true 才装**"——
+ * 这样"默认装什么"由插件作者明确声明，而不是系统替他决定；否则一旦自动装错，
+ * 用户在这个插件上的一切都要先卸掉才能重来。
+ *
+ * 注意与"自带件"的区别：builtin 是应用冷启动装配的（插件管理根本不碰），不走这条。
+ */
+export function isOptInDefault(entry: CatalogEntry): boolean {
+  return entry.defaultInstalled === true
+}
+
+/** 一条没有存档时该默认装哪些（用户要求：默认一个都不装，只有显式 opt-in 的才装） */
 export function defaultInstalledIds(entries: CatalogEntry[]): string[] {
   // 自带插件不算"要装"（它们由应用冷启动装配，插件管理不碰）—— 只列 installable 的那些。
-  return entries.filter((e) => e.builtin !== true && e.defaultInstalled !== false).map((e) => e.id)
+  return entries.filter((e) => e.builtin !== true && isOptInDefault(e)).map((e) => e.id)
 }
 
 /**

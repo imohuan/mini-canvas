@@ -476,7 +476,10 @@ export function apply(ctx: Context) {
     // 不给上方留一段，标题就会被裁掉（用户报的「右上角图片没有标题」）。这里把「标题带」
     // 也算进导出范围上方。取主题里那个 titleOffset（缺省 12，与 BaseNode 同键），再叠加标题高。
     const titleOffset = numOf('titleOffset', 12)
-    const topPadding = EXPORT_TITLE_BAND + Math.max(0, titleOffset)
+    // 用户把标题整个关了（主题的 titleVisible=false）时上面根本没有标题：再留这一段就只是
+    // 一条多余的空白边（用户把标题关了，却导出一圈空带，看着像 bug）。
+    const titleVisible = boolOf('titleVisible', true)
+    const topPadding = titleVisible ? EXPORT_TITLE_BAND + Math.max(0, titleOffset) : 0
 
     // 全量模式在图里一个节点都没有时，退到「当前可视区」，避免导出一张空图
     const saved = vp.getViewport()

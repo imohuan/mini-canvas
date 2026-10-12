@@ -203,6 +203,19 @@ export function displaySizeOf(data: Record<string, unknown> | undefined): { widt
 }
 
 /**
+ * 节点标题右侧那一格显示什么（`1280×720`；尺寸拿不到 → 空串，标题那一格就不渲染）。
+ *
+ * 复用 displaySizeOf 的"裁过就按裁框"口径：标题上写的就是用户此刻看到的画面尺寸，
+ * 与内容区右上角那个角标同源 —— 同一件事只有一份算法。
+ *
+ * 这是节点类型声明 `titleExtra` 时用的纯函数：**读 data 现算，不写回 data**。
+ */
+export function videoTitleExtra(data: Record<string, unknown> | undefined): string {
+  const { width, height } = displaySizeOf(data)
+  return width > 0 && height > 0 ? `${width}×${height}` : ''
+}
+
+/**
  * 换视频后的统一写回：data + 卡片尺寸**一次写完**。
  *
  * 尺寸算不出（元数据没读出来/非法）时只写 data 并**清掉旧尺寸** —— 不能留着上一段视频的

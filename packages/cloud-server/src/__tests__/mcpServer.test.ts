@@ -44,9 +44,10 @@ describe('MCP 工具清单', () => {
     }
   })
 
-  it('资源上传三件套都在（AI 要能往画布放图，不能只建空节点）', () => {
+  it('资源上传三件套都在（AI 要把媒体放进画布，不能只建空节点）', () => {
     const names = listTools().map((t) => t.name)
-    for (const n of ['resource_upload', 'resource_list', 'canvas_add_image']) {
+    // canvas_add_media 覆盖 image / video / audio（原来只有 image，用户指出视频没有）
+    for (const n of ['resource_upload', 'resource_list', 'canvas_add_media']) {
       expect(names).toContain(n)
     }
   })

@@ -20,7 +20,21 @@ export default defineConfig({
     // /api 转给 cloud-server（8865）：dev 下前端同源相对路径才能真正打到后台，
     // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
     proxy: {
-      '/api': 'http://localhost:8865',
+      '/api': {
+        target: 'http://localhost:8865',
+        changeOrigin: true,
+        // 把后台的 CORS 头原样带回来。
+        //
+        // 为什么需要：可视化节点里由 AI 生成的界面住在**不透明源**的 iframe 沙箱里
+        // （sandbox=allow-scripts，不给 allow-same-origin）。它的请求都算跨源，
+        // 读画布之类要先过 CORS 检查；vite 代理默认会把 CORS 头丢掉，于是 dev 下读接口
+        // 也会失败（实测）。后台自己已经回了 Access-Control-Allow-Origin: *，这里只是别丢。
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['access-control-allow-origin'] = '*'
+          })
+        },
+      },
     },
   },
   // 让应用能 import 同 workspace 的源码插件/内核，交由 vite 直接转换源码 .ts/.vue
@@ -32,6 +46,7 @@ export default defineConfig({
     '@mini-canvas/canvas-base',
     '@mini-canvas/plugin-theme-default',
     '@mini-canvas/plugin-node-text',
+    '@mini-canvas/plugin-node-ui',
     '@mini-canvas/plugin-node-image',
     '@mini-canvas/plugin-node-3d-preview',
     '@mini-canvas/plugin-node-image-compare',

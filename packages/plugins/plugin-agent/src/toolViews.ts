@@ -332,12 +332,17 @@ export function toolView(name: string, argsText: string | undefined, outputText:
       const v = card('画布全览', blocks, { icon: 'canvas' })!
       return { ...v, family, summary: nodes.length + ' 节点' }
     }
-    if (bare === 'canvas_add_image' && data?.ok) {
+    if (bare === 'canvas_add_media' && data?.ok) {
+      // 媒体类型决定卡片怎么说（image / video / audio）。认不出就按图片说，
+      // 与工具缺省值一致（不写 type 就是 image）。
+      const mediaType = data.type === 'video' || data.type === 'audio' ? String(data.type) : 'image'
+      const label = mediaType === 'video' ? '视频' : mediaType === 'audio' ? '音频' : '图片'
+      const iconName = mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'audio' : 'image'
       const blocks: CardBlock[] = []
       const ref = resName(data.ref)
       if (ref && canvasId) blocks.push({ kind: 'images', items: [{ src: resUrl(canvasId, ref), label: ref }] })
-      blocks.push({ kind: 'rows', items: [{ title: '新节点 #' + String(data.nodeId ?? ''), sub: String(data.mime ?? '') + (data.size ? ' · ' + String(data.size) : ''), icon: 'image' }] })
-      const v = card('图片已加入画布', blocks, { icon: 'image' })!
+      blocks.push({ kind: 'rows', items: [{ title: '新节点 #' + String(data.nodeId ?? ''), sub: String(data.mime ?? '') + (data.size ? ' · ' + String(data.size) : ''), icon: iconName }] })
+      const v = card(label + '已加入画布', blocks, { icon: iconName })!
       return { ...v, family, summary: '新节点 #' + String(data.nodeId ?? '') }
     }
     if (bare.startsWith('canvas_batch_') && data) {

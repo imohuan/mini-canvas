@@ -79,6 +79,8 @@ const boolOf = (key: string, fallback: boolean): boolean => {
 }
 const TITLE_OFFSET = ref(numOf('titleOffset', 12))
 const TITLE_MIN_ZOOM = ref(numOf('titleScaleMinZoom', 0.5))
+/** 是否显示标题条（本插件 Config 的 titleVisible；关掉 = 整块标题不画） */
+const TITLE_VISIBLE = ref(boolOf('titleVisible', true))
 const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
 /**
  * 画布是否处于「移动」工具（= 节点可拖拽）。抓手工具会把它按成 false。
@@ -108,6 +110,11 @@ const applyTitleSetting = (key: string, value: unknown): void => {
     CANVAS_NODES_DRAGGABLE.value = value !== false
     return
   }
+  // 标题总开关：布尔项，必须走在下面那道"只要数字"的门之前
+  if (key === 'titleVisible') {
+    TITLE_VISIBLE.value = value !== false
+    return
+  }
   // 多选标记的三项：只认识自己的键才动，别的键照旧往下走（互不干扰）
   if (MULTI_RADIO_KEY_SET.has(key)) {
     MULTI_RADIO.value = applyMultiRadioChange(MULTI_RADIO.value, key, value)
@@ -132,8 +139,13 @@ const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value)
 const hideTitleOnMulti = computed(
   () => HIDE_TITLES_ON_MULTI.value && isSelected.value && selectedCount.value > 1,
 )
-/** 标题条可见性：低细节不显示；开了"多选隐藏标题"且处于多选时也不显示 */
-const showTitle = computed(() => !lowDetail.value && !hideTitleOnMulti.value)
+/**
+ * 标题条可见性：总开关关掉 = 一律不画；低细节不画；开了"多选隐藏标题"且处于多选时也不画。
+ * 总开关（本插件 Config 的 titleVisible）排在最前 —— 它是用户的显式选择，不该被其它条件翻转回来。
+ */
+const showTitle = computed(
+  () => TITLE_VISIBLE.value && !lowDetail.value && !hideTitleOnMulti.value,
+)
 
 /**
  * 是否隐藏上下控制栏（NodeToolbar）。两部分：
@@ -507,6 +519,26 @@ const showSourceHandle = cap.hasSource
 // 标题左侧图标 = 类型注册时声明的 icon（opaque 句柄；未声明则为 undefined，BaseTitle 不渲染图标位）
 const titleIcon = cap.icon
 
+/**
+ * 标题右侧的附加文本（标题条最右那一格）。
+ *
+ * **来源只有一个**：节点类型注册时声明的 titleExtra（见 canvas-data 的 CanvasNodeType）。
+ * 字符串 = 静态文案；函数 = 按节点 data 现算（图片/视频的"1280×720"就走这条 ——
+ * 派生值不写进 data，免得每次改尺寸都多一条撤销记录）。壳只负责渲染，不认识任何业务类型。
+ *
+ * 空串 / 未声明 / 函数抛错都收敛成"这一格不渲染"：宁可少一格，也不要显示半截脏文案。
+ */
+const titleExtraText = computed(() => {
+  const src = cap.titleExtra.value
+  if (!src) return ''
+  if (typeof src === 'string') return src
+  try {
+    return src((props.data ?? {}) as Record<string, unknown>) ?? ''
+  } catch {
+    return ''
+  }
+})
+
 // ============ hover 状态（控制端口醒目与阴影）============
 /** 鼠标在卡片上（卡片根 enter/leave 单一权威，勿被端口 zone 覆写） */
 const isHovered = ref(false)
@@ -867,6 +899,11 @@ function clamp(value: number, min: number, max: number): number {
             <TitleLabel :label="nodeLabel" :editing="isEditingTitle" @commit="commitTitleEdit"
               @cancel="cancelTitleEdit" />
           </template>
+          <!-- 标题右侧附加文本：内容全部来自节点类型声明的 titleExtra（壳不认识业务类型）。
+               空串就不占位（BaseTitle 那一格本来就是 ≤20% 的收缩槽）。 -->
+          <template v-if="titleExtraText" #title-extra>
+            <span class="v2-title-extra">{{ titleExtraText }}</span>
+          </template>
         </BaseTitle>
       </div>
 
@@ -1217,6 +1254,19 @@ function clamp(value: number, min: number, max: number): number {
   display: flex;
   align-items: center;
   cursor: text;
+}
+
+/*
+ * 标题右侧附加文本（尺寸之类的派生信息）。
+ * 靠右：BaseTitle 里 label 固定占 80%、extra 是剩下那 ≤20% 的收缩槽，
+ * margin-left:auto 把这格推到标题条最右端（即卡片右上角）。
+ * 用比标题更弱的字色：它是"顺带看一眼"的元信息，不该跟节点名字抢注意力。
+ */
+.v2-title-extra {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--canvas-node-text-faint, #9ca3af);
+  font-variant-numeric: tabular-nums;
 }
 
 /* 选中态标题加深（文案元素在 TitleLabel 子组件内，需 :deep 穿透 scoped） */

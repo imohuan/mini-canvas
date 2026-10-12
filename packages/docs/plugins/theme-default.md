@@ -53,7 +53,7 @@ export function apply(ctx) {
 | --- | --- | --- |
 | 连线外观 | 线宽 / 虚线 / 箭头 / 流光 | `edgeLineWidth`、`edgeFlowEnabled`、`edgeFlowSpeed` |
 | 端口外观 | 半圆耳朵的几何 | `portZoneWidth`、`portZoneHeightRatio`、`handleButtonSize` |
-| 标题外观 | 浮标题离卡片多远 | `titleOffset`、`titleScaleMinZoom` |
+| 标题外观 | 标题显不显示、离卡片多远 | `titleVisible`、`titleOffset`、`titleScaleMinZoom` |
 | 控制栏布局 | 上/下控制栏离卡片多远 | `toolbarTopOffset`、`toolbarBottomOffset` |
 | 生成面板 | 输入框那一栏的尺寸 | `panelImageWidth`、`panelEditorMinHeight` |
 

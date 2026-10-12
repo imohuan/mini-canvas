@@ -76,6 +76,18 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   await pageA.goto(baseUrl + '/')
   await sleep(7000)
 
+  // 云端客户端不再由应用自动装载（用户要求：插件全部由用户自己在面板里装）。
+  // e2e 要验的是云端存档能力，故这里模拟"用户点了安装"这一步。
+  await pageA.ev(
+    `(async () => {
+       const ctx = window.MiniCanvasUI.getContext()
+       const pm = ctx.tryGet('plugin-manager')
+       if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
+     })()`,
+    true,
+  )
+  await sleep(4000)
+
   const basic = await pageA.ev<{ hasPane: boolean; nodes: number; title: string }>(
     `(() => ({ title: document.title, hasPane: !!document.querySelector('.vue-flow__pane'), nodes: document.querySelectorAll('.vue-flow__node').length }))()`,
   )
@@ -187,6 +199,17 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   const pageB = await openPage(chromeB.port)
   await pageB.goto(baseUrl + '/')
   await sleep(9000)
+
+  // 机器 B 同样是全新 profile：云端客户端也得手动装一次，才能读回云端的画布。
+  await pageB.ev(
+    `(async () => {
+       const ctx = window.MiniCanvasUI.getContext()
+       const pm = ctx.tryGet('plugin-manager')
+       if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
+     })()`,
+    true,
+  )
+  await sleep(4000)
 
   const restored = await pageB.ev<{ nodes: string[]; edges: number; status: unknown }>(
     `(() => {

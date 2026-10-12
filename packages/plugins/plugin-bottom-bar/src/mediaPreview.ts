@@ -19,6 +19,17 @@ export interface PreviewItem {
   text?: string
   /** 媒体种类（决定用 img / video / 纯文本渲染） */
   kind: 'image' | 'video' | 'audio' | 'text'
+  /**
+   * 同组素材的地址（同类、有 url 的按底栏当前顺序）。
+   * 交给 MediaViewer 的 `list` —— 预览里就自带 ← / → 切换与页码（它本来就支持）。
+   */
+  list?: string[]
+  /** 当前这张在 list 里的下标（MediaViewer 用它决定先从第几张看起） */
+  index?: number
+  /** 与 list 一一对应的素材节点 id（删除时按「当前正在看的那张」找连线；可不给） */
+  ids?: string[]
+  /** 与 list 一一对应的素材名（切换后标题跟着换；可不给） */
+  names?: string[]
 }
 
 const current = ref<PreviewItem | null>(null)
@@ -40,6 +51,33 @@ export function previewOwner(): string {
 export function closePreview(): void {
   current.value = null
   currentOwner = ''
+}
+
+/**
+ * 记下「用户切到了 list 里的第几张」（MediaViewer 的 index 事件）。
+ * 用户口径（2026-10-12）：多张图要能按 ← / → 切换 —— 切换后标题与删除按钮必须跟着当前那张走，
+ * 所以把下标写回会话（而不是留在浮层里各算一份）。
+ */
+export function setPreviewIndex(i: number): void {
+  const cur = current.value
+  if (!cur?.list?.length) return
+  const idx = Math.min(Math.max(i, 0), cur.list.length - 1)
+  if (idx === (cur.index ?? 0)) return
+  current.value = { ...cur, index: idx }
+}
+
+/** 当前正在看的那张（切换后就是新下标；没有 list 时就是它自己） */
+export function currentPreview(): PreviewItem | null {
+  const cur = current.value
+  if (!cur?.list?.length) return cur
+  const i = Math.min(Math.max(cur.index ?? 0, 0), cur.list.length - 1)
+  return {
+    ...cur,
+    index: i,
+    url: cur.list[i],
+    ...(cur.ids?.[i] ? { nodeId: cur.ids[i] } : {}),
+    ...(cur.names?.[i] ? { name: cur.names[i] } : {}),
+  }
 }
 
 /** 当前预览项（null = 没在预览） */

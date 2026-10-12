@@ -15,7 +15,15 @@ export type AgentChatEvent =
   | { type: 'tool_call'; id: string; name: string; arguments: string }
   | { type: 'tool_output'; id: string; output: string }
   | { type: 'notice'; message: string }
-  | { type: 'error'; message: string }
+  /**
+   * 出错。scope 'compact' = **压缩**失败（不是某一轮对话失败）。
+   *
+   * 为什么要分：在 ChatModel 里 error 一律挂到「最后一条助手消息」上 ——
+   * 而压缩不产生助手消息，挂在空气里就等于没提示；反过来若把压缩失败当成
+   * 「这一轮失败」，界面会在最后一次回答下面标红字，误导用户以为回答出错了。
+   * 界面据 scope 把它放进压缩提示里。
+   */
+  | { type: 'error'; message: string; scope?: 'compact' }
   | {
       type: 'usage'
       /** 当前上下文用量（request.total）—— 顶部那个「剩余百分比」用它 */
@@ -51,6 +59,24 @@ export type AgentChatEvent =
   | { type: 'queue_idle' }
   /** 目标状态更新（每次读 GOAL.json 后推；界面显示「第 N 轮 · 已用 / 预算」） */
   | { type: 'goal_state'; goal: unknown }
+  /**
+   * 上下文压缩的边界（成对出现：begin → … → end）。
+   *
+   * 为什么单独一条而不是复用 notice：压缩是**长动作**（要跑一次模型把历史总结成摘要），
+   * 界面上需要一个"正在压缩"的常驻位置，跑完还要说明成功还是放弃（放弃时原上下文照旧）。
+   * 复用 notice 会落进那条"过程提示"通道 —— 而那一条是隐藏的（见 UI 的 SHOW_PROCESS_NOTICE），
+   * 用户就再也看不到压缩到底跑没跑成。
+   */
+  | {
+      type: 'compact'
+      phase: 'begin' | 'end'
+      reason: string
+      mode: string
+      /** 只有 end 有：completed = 压成功；其它值 = 放弃（原上下文保留） */
+      status?: string
+      context?: number
+      error?: string
+    }
   /** 一轮结束（通知时机之一；由 server 的 onRunFinished 广播） */
   | { type: 'round_done' }
   /**
@@ -219,6 +245,34 @@ function eventNotice(p: Record<string, unknown>, state: TranslateState, log?: Lo
     }
     case 'abort':
       return []
+    /**
+     * 上下文压缩的边界事件（成对）。
+     *
+     * 为什么要翻它们（用户口径 2026-10-11）：SDK 的 compaction 默认**开着**（阈值 256k），
+     * 它会在你没打招呼的时候自己跑一轮摘要 —— 界面此前完全看不到，用户只知道"对话忽然失忆"。
+     * 主动压缩（「压缩」命令）更要有回音：不然点了按钮什么也不显示，等于没有这个功能。
+     */
+    case 'compaction_begin':
+      return [
+        {
+          type: 'compact',
+          phase: 'begin',
+          reason: String(p.reason ?? ''),
+          mode: String(p.mode ?? ''),
+          ...(typeof p.context === 'number' ? { context: p.context } : {}),
+        },
+      ]
+    case 'compaction_end':
+      return [
+        {
+          type: 'compact',
+          phase: 'end',
+          reason: String(p.reason ?? ''),
+          mode: String(p.mode ?? ''),
+          status: String(p.status ?? ''),
+          ...(typeof p.error_message === 'string' && p.error_message ? { error: p.error_message } : {}),
+        },
+      ]
     case 'hook': {
       // 目标插件的 stop hook 每轮结束都会跑一次 —— 这是**轮次边界**。
       // 原生翻成 goal_round（不带数据）：runtime 收到后读 GOAL.json 推 goal_state（见类型注释）。

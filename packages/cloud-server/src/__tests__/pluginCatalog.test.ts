@@ -73,21 +73,33 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     }
   })
 
-  it('未声明 installable 的插件不收录（避免与冷启动基础件撞名）', async () => {
+  it('未声明 installable 的插件不收录；声明了的 ESM 插件**要**收录（面板装云端客户端就靠它）', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
       'plugin-cold': { file: 'plugin-cold.js', content: UMD('MiniCanvasPluginCold'), pkg: { name: 'cold' } },
-      'plugin-esm': { file: 'plugin-esm.js', content: 'export const name = "esm"', pkg: { miniCanvas: { installable: true } } },
+      // 自包含 ESM + installable → 收（format 判成 esm，面板走 manager.install({ url })）
+      'plugin-esm': {
+        file: 'plugin-esm.js',
+        content: 'export const name = "esm\nexport function apply() {}',
+        pkg: { miniCanvas: { installable: true } },
+      },
+      // 有裸模块名 import 的"伪 ESM" → 不收（data: URL 里解析不了裸模块名，装必炸）
+      'plugin-bare': {
+        file: 'plugin-bare.js',
+        content: 'import { x } from "vue"\nexport const name = "bare"',
+        pkg: { miniCanvas: { installable: true } },
+      },
     })
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
     try {
       const json = (await (await s.app.fetch(new Request('http://localhost/plugin-catalog.json'))).json()) as {
-        plugins: unknown[]
+        plugins: Array<{ id: string; format?: string }>
         skipped: Array<{ file: string }>
       }
-      expect(json.plugins).toEqual([])
+      expect(json.plugins.map((p) => p.id)).toEqual(['plugin-esm'])
+      expect(json.plugins[0]?.format).toBe('esm')
       expect(json.skipped.some((x) => x.file === 'plugin-cold')).toBe(true)
-      expect(json.skipped.some((x) => x.file === 'plugin-esm')).toBe(true)
+      expect(json.skipped.some((x) => x.file === 'plugin-bare')).toBe(true)
     } finally {
       s.stop()
       await fs.rm(dir, { recursive: true, force: true })

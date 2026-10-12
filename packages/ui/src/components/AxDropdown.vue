@@ -430,13 +430,17 @@ defineExpose({ openAtPoint, isOpen, chainId })
   position: fixed;
   z-index: 100000;
   min-width: 180px;
-  padding: 6px;
+  /* 内边距 / 圆角 / 底色都走 --dd-* token（值见 canvas-render 的 ui-theme.css，
+     与右键菜单 .ctx-menu 对齐：6px / 16px / 不透明白底）。
+     为什么必须改成读 token 而不是写死：本组件是**注册件**（顶替主题默认件），
+     所有 useUiComponent('dropdown') 的调用方都落到这里 —— 数值写死的话，
+     各消费方就只能各自想办法覆盖，又要开始漂移。 */
+  padding: var(--dd-padding, 6px);
   color: var(--ui-ink);
   border: 1px solid var(--ui-line);
-  border-radius: 16px;
-  background: var(--ui-panel);
+  border-radius: var(--dd-radius, 16px);
+  background: var(--dd-bg, #fff);
   box-shadow: var(--ui-shadow-md);
-  backdrop-filter: blur(20px);
   overflow-y: auto;
   /* 横向一律不滚：浮层宽度由调用方定，内容不该把它撑出横向滚动条 */
   overflow-x: hidden;

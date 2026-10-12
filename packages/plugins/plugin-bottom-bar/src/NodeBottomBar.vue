@@ -25,6 +25,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
+// 素材卡拖拽排序（用户要求：「这个顺序可以进行拖拽改变，用 Vue Draggable Plus，动画效果挺好的」）
+import { VueDraggable } from 'vue-draggable-plus'
 import {
   useCanvasRender,
   useGenPanelMetrics,
@@ -36,10 +38,13 @@ import type { ToolParamDef } from '@mini-canvas/kernel'
 import type { BarAction } from './barTypes'
 import {
   collectUpstreamMaterials,
+  previewListFor,
   makeResourceResolver,
   materialCards,
+  nextRefOrder,
   toEditorResources,
   toToolResources,
+  type MaterialCard,
   type UpstreamMaterial,
 } from './panelSource'
 import { readRunState } from './runState'
@@ -127,6 +132,9 @@ const actionOptions = computed(() =>
     value: a.id,
     description: a.description,
     icon: iconOfType(a.types?.[0] ?? nodeType.value),
+    // 分组名原样带过去：相邻选项分组不同时下拉里画一条分隔线（与右键菜单的分块同款）。
+    // 没声明 group 的动作（旋转 / 下载这类）不参与分组，也就不会凭空多出线。
+    group: a.group,
   })),
 )
 
@@ -174,6 +182,25 @@ function defaultActionId(): string {
   return (list.find((a) => a.needsPrompt === true) ?? list[0])?.id ?? ''
 }
 
+/**
+ * 首次挂载该选中哪条动作：**优先上次用的那条**（`data.barValues.actionId`）。
+ *
+ * 用户报的「选了模型/参数，收起控制栏再点开又回默认、配置全没了」根因就在这里：
+ * 从前挂载时无条件 `selectAction(defaultActionId())`，从不读节点 data 里那个 actionId；
+ * 而底栏一收起（本组件卸载）就会 `persistValues()` 把「默认动作 + 只保留默认动作声明过的参数」
+ * 写回节点 —— 于是用户选的模型与它带的参数被真删掉（真机实测复现）。
+ *
+ * 三条口径（与下面 watch / selectAction 的「接着上次那套」同源）：
+ * 1. 没存过 / 存的不是字符串 → 默认第一条（既有行为一个字不变）；
+ * 2. 存的动作还在 → 用它，用户的配置恢复；
+ * 3. 存的动作找不到了（提供它的插件卸了）→ 回默认第一条，而不是什么都不选。
+ */
+function initialActionId(): string {
+  const remembered = storedActionId.value
+  if (remembered && actions.value.some((a) => a.id === remembered)) return remembered
+  return defaultActionId()
+}
+
 /** select 无 default 取第一项（与内核 resolveToolParams 同口径） */
 function defaultsOf(action: BarAction | undefined): Record<string, unknown> {
   const out: Record<string, unknown> = {}
@@ -214,7 +241,8 @@ function selectAction(id: string): void {
   currentAction.value?.onSelect?.(props.id)
 }
 
-if (hasActions.value && !currentId.value) selectAction(defaultActionId())
+// 首次选中：优先恢复正常挂载时在「动作列表」watch 里用的是 storedActionId。
+if (hasActions.value && !currentId.value) selectAction(initialActionId())
 
 /**
  * 把当前参数与输入落一份到节点 data，下次点开这个节点时接着用。
@@ -313,18 +341,61 @@ function onPromptUpdate(v: string): void {
 }
 
 // —— 上游素材（素材卡与 @ 引用共用） ——
+/**
+ * 用户拖出来的素材顺序（节点 id 序列），存节点 `data.refOrder`。
+ *
+ * 用户口径（2026-10-12）：「参考图的顺序是如何决定的？好像是根据连接的先后顺序来做的。
+ * 我希望这个顺序可以进行拖拽改变。」
+ *
+ * 为什么落在节点 data（与 barValues / barPrompt 同一个记事本）：它是「这个节点准备怎么出图」
+ * 的一部分（第 1 张参考图给谁），不是一个纯 UI 会话态 —— 收起再点开必须还在，落盘之后
+ * 刷新、换设备也必须还在。
+ */
+function stringArray(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x !== '') : []
+}
+const refOrder = computed<string[]>(() => stringArray(props.data?.refOrder))
+
 const materials = computed<UpstreamMaterial[]>(() =>
-  collectUpstreamMaterials(renderEdges.value, props.id, (nodeId) => {
-    const node = renderNodes.value.find((n) => n.id === nodeId)
-    return node ? { type: node.type, data: node.data } : undefined
-  }),
+  collectUpstreamMaterials(
+    renderEdges.value,
+    props.id,
+    (nodeId) => {
+      const node = renderNodes.value.find((n) => n.id === nodeId)
+      return node ? { type: node.type, data: node.data } : undefined
+    },
+    refOrder.value,
+  ),
 )
 const cards = computed(() => materialCards(materials.value))
 const editorResources = computed<ResourceItem[]>(() => toEditorResources(materials.value))
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
 
+/**
+ * 素材卡拖拽结束后落盘：写**已经排好的那份**（每张卡的 id 顺序），不是「移动指令」。
+ *
+ * 为什么收下 `next` 而不是自己再算一遍：库在 `update:modelValue` 里给的就是排好的新数组，
+ * 而 `cards` 是从 `data.refOrder` 派生的 computed —— 这一帧它**还没变**（要等写盘回灌），
+ * 从它身上读会永远读到旧顺序，于是「拖了不动也不存」（实测踩到的坑）。
+ * 拿不到数组时（库版本差异/异常）退回渲染中的那份，至少不会写坏。
+ *
+ * 顺带把顺序收敛成「只留还在的素材」，断开的旧 id 下次不再出现在 refOrder 里。
+ * 只有真的变了才写（拖动途中可能触发多次）：没变就不进撤销栈，也不写盘。
+ */
+function onReorder(next?: MaterialCard[]): void {
+  const ids = nextRefOrder(refOrder.value, cards.value, next)
+  if (!ids) return
+  try {
+    ctx.get('doc').updateNode(props.id, { data: { refOrder: ids } })
+  } catch {
+    /* 节点已不在等情况：忽略 */
+  }
+}
+
 /** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
-function openCard(card: (typeof cards.value)[number]): void {
+function openCard(card: MaterialCard): void {
+  // 多张同类素材：把地址列成 list 交给 MediaViewer —— 预览里就有 ← / → 切换与页码。
+  const multi = previewListFor(cards.value, card)
   // 全屏预览：用户要求「要的是全屏，是整个视图」
   openPreview({
     name: card.name,
@@ -332,7 +403,20 @@ function openCard(card: (typeof cards.value)[number]): void {
     kind: card.isText ? 'text' : (card.kind as 'image' | 'video' | 'audio'),
     url: card.url,
     text: card.value,
+    ...(multi ?? {}),
   }, props.id)
+}
+
+/**
+ * 素材卡右上角的关闭按钮 → **断开「这张素材 → 本节点」那条连线**（与全屏预览里的删除同一条语义）。
+ *
+ * 用户口径（2026-10-12）：「在右上角区域 hover 时，应该显示一个关闭按钮……点击该按钮后可以
+ * 进行关闭，即删除与该图片相关的连接线」。连线没了，卡片自然从底栏消失（卡是边派生的）。
+ */
+function removeCard(card: MaterialCard): void {
+  const edge = renderEdges.value.find((e) => e.source === card.id && e.target === props.id)
+  const doc = ctx.tryGet<{ removeEdges(ids: string[]): number }>('doc')
+  if (edge && doc) doc.removeEdges([edge.id])
 }
 
 // —— 参考：两态开关（用户实测反馈「点击之后就无法取消」——这里做成开/关切换） ——
@@ -582,23 +666,55 @@ function onGlobalLeave(el: Element): void {
       </button>
     </div>
 
-    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开 → 全屏预览 -->
-    <div v-if="cards.length > 0" class="nb-cards">
-      <button
+    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开 → 全屏预览。
+         顺序**可以拖拽改变**（用户要求：用 Vue Draggable Plus，动画效果挺好）—— 拖完把新顺序
+         写回节点 data.refOrder，于是角标序号、@ 引用名、发给后端的参考图顺序三处一起变。 -->
+    <VueDraggable
+      v-if="cards.length > 0"
+      class="nb-cards"
+      :model-value="cards"
+      :animation="180"
+      ghost-class="nb-card--ghost"
+      chosen-class="nb-card--chosen"
+      drag-class="nb-card--drag"
+      :force-fallback="true"
+      @update:model-value="onReorder"
+    >
+      <div
         v-for="(card, i) in cards"
         :key="card.id"
         class="nb-card"
-        type="button"
-        :title="card.name"
-        @click.stop="openCard(card)"
+        :title="card.name + '（可拖动调整顺序）'"
       >
         <!-- 图片素材卡：正方形 + cover 铺满，并对**图片本身**加模糊
              （用户要求：卡片是正方形、图片用 cover、给图片一个模糊效果）。 -->
-        <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" draggable="false" />
-        <span v-else class="nb-card-text">{{ (card.name || '文')[0] }}</span>
-        <span class="nb-card-index">{{ i + 1 }}</span>
-      </button>
-    </div>
+        <span class="nb-card-clip">
+          <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" draggable="false" />
+          <span v-else class="nb-card-text">{{ (card.name || '文')[0] }}</span>
+          <span class="nb-card-index">{{ i + 1 }}</span>
+        </span>
+        <!-- 卡片命中区（整张卡点开预览；与关闭按钮是**兄弟**，不是嵌套 —— 按钮里套按钮是非法 HTML） -->
+        <button
+          class="nb-card-hit"
+          type="button"
+          :aria-label="'预览素材 ' + card.name"
+          @click.stop="openCard(card)"
+        />
+        <!-- 右上角关闭（hover / 键盘聚焦才露）：断开「这张素材 → 本节点」的连线 =
+             把这张卡从底栏移除。按钮**一半在卡片外**，所以裁剪必须收在 .nb-card-clip 里，
+             卡片自己不再 overflow:hidden（用户点名提醒的坑）。 -->
+        <button
+          class="nb-remove"
+          type="button"
+          :aria-label="'移除素材 ' + card.name"
+          title="移除素材（断开连线）"
+          @click.stop="removeCard(card)"
+          @pointerdown.stop
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+        </button>
+      </div>
+    </VueDraggable>
 
     <!-- 动作专属面板（video 剪辑时间轴这类） -->
     <component :is="(currentAction as any).panel" v-if="currentAction?.panel" :id="props.id" :data="props.data" />
@@ -947,19 +1063,70 @@ function onGlobalLeave(el: Element): void {
   border: 1px solid var(--ui-line, #e2e5ea);
   border-radius: 8px;
   background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
-  overflow: hidden;
-  cursor: pointer;
-  transition: border-color 0.18s ease-out, transform 0.15s ease-out;
+  /*
+   * ⚠️ 卡片自己**不能** overflow:hidden（用户点名提醒）：右上角的关闭按钮有一半在卡片外面，
+   * 被裁掉就只剩半个、hover 也点不着。圆角裁剪挪到内层 .nb-card-clip 上做。
+   */
+  overflow: visible;
+  /* 用户要求：素材顺序可以拖拽改变 —— 告诉用户这张卡是可以拎起来挪的 */
+  cursor: grab;
+  /*
+   * ⚠️ 这里**绝不能**给 `transform` 加过渡（用户带截图报的「拖拽跟不上鼠标，有种缩放阻尼感」）：
+   * 拖拽库每一帧都在给这张卡写 `transform: matrix(... , tx, 0)`（写进去的值是 1:1 跟手的），
+   * 而 `transition: transform` 会把这串逐帧变化的 matrix **补间**起来 —— 移动越快落后越多，
+   * 表现就是「鼠标都到那儿了元素才挪一点点」。
+   * 缩放改用**独立的 `scale` 属性**（`translate/scale/rotate` 与 `transform` 是两套合成层，
+   * 各走各的、互不覆盖），于是卡片既能按下回弹，又不干扰库写的 translate。
+   */
+  transition: border-color 0.18s ease-out, scale 0.15s ease-out, box-shadow 0.18s ease-out;
 }
 .nb-card:hover {
   border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 55%, transparent);
 }
 .nb-card:active {
-  transform: scale(0.96);
+  cursor: grabbing;
+  scale: 0.96;
 }
-.nb-card:focus-visible {
+.nb-card:has(.nb-card-hit:focus-visible) {
   outline: 2px solid color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
   outline-offset: 1px;
+}
+/* 整张卡的可点区（点开全屏预览）。用**原生 button** 拿键盘可达与 Enter/Space，
+   外观全透明、铺满卡片 —— 卡片自己因此是 div（里面还有关闭按钮，按钮不能套按钮）。 */
+.nb-card-hit {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: inherit;
+  outline: none;
+}
+/*
+ * 拖拽三态（Vue Draggable Plus 的 ghost / chosen / drag 三个 class）。
+ *
+ * 用户要求「他的那个动画效果挺好的」——动画由库自己补间，我们只给「原位置留下的空位」
+ * 与「跟着手走的那张」两副面孔：
+ * - ghost：原位置的空位（虚线框，提示这里会空出来）；
+ * - chosen / drag：拎起来那张（提亮 + 轻微放大 + 投影，看得出「拿在手上了」）。
+ */
+.nb-card--ghost {
+  opacity: 0.4;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
+  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+}
+.nb-card--chosen,
+.nb-card--drag {
+  cursor: grabbing;
+  border-color: var(--ui-accent, #0891b2);
+  box-shadow: var(--ui-shadow-md, 0 8px 20px rgb(15 23 42 / 0.24));
+  /* 拎起来那张：**只给阴影与描边，绝不给缩放**。
+     实测（自己做的对照实验）：给被拖拽的这张卡任何形式的放大（transform: scale 或独立的
+     `scale` 属性都一样）都会把库写进来的位移一起放大 —— 独立属性与 `transform` 是
+     `translate·rotate·scale·transform` 复合，`scale: 1.06` 会把 translate 的 dx 也乘 1.06，
+     拖得越远越偏（量到 mouseDx=300 时位置到 317）。阴影已经足够表达「拿在手上了」。 */
 }
 .nb-card-img {
   width: 100%;
@@ -970,6 +1137,49 @@ function onGlobalLeave(el: Element): void {
      放一点点 scale 是为了 blur 不把卡片四周"啃"出一圈透明边。 */
   transform: scale(1.18);
   filter: blur(1px);
+}
+/* 内层裁剪：卡片本身的 overflow 必须留 visible（关闭按钮一半在外），
+   所以「正方形 + 圆角 + 把图片裁进来」这三件事挪到这一层做。 */
+.nb-card-clip {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
+  overflow: hidden;
+}
+/* 右上角关闭按钮：**有一半在卡片外**（所以内层这个 inset 是负的），
+   默认隐藏，hover / 键盘聚焦才露出；hover 时转成危险色（照 ui-style-guide §5）。 */
+.nb-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--ui-ink, #18202b);
+  color: var(--ui-panel, #fff);
+  box-shadow: 0 1px 4px rgb(15 23 42 / 0.28);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, background-color 0.15s ease-out;
+}
+.nb-remove svg {
+  width: 10px;
+  height: 10px;
+}
+.nb-card:hover .nb-remove,
+.nb-card:focus-within .nb-remove,
+.nb-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.nb-remove:hover {
+  background: var(--ui-danger, #ef4444);
 }
 .nb-card-text {
   display: flex;
@@ -1321,7 +1531,8 @@ function onGlobalLeave(el: Element): void {
   }
   .nb-card:active,
   .nb-run:active:not(:disabled) {
-    transform: none;
+    /* 缩放走独立的 `scale` 属性（不是 transform）——降级时也要按同一处关掉 */
+    scale: none;
   }
   .nb-spinner {
     animation: none;

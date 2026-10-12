@@ -7,6 +7,7 @@ import {
   spreadPositions,
   buildImagePayload,
   buildVideoPayload,
+  buildAudioPayload,
   buildTextPayload,
   buildPastedTextPayload,
   DEFAULT_VIDEO_SIZE,
@@ -42,8 +43,15 @@ describe('classifyFile（ext/mime → 类型）', () => {
   it('未知 → unsupported', () => {
     expect(classifyFile(file('x.bin', 'application/octet-stream'))).toBe('unsupported')
     expect(classifyFile(file('noext'))).toBe('unsupported')
-    // 音频不是视频：v2 没有音频节点，不给它建节点
-    expect(classifyFile(file('a.mp3', 'audio/mpeg'))).toBe('unsupported')
+  })
+
+  it('audio：按 mime（audio/*）与扩展名（mp3/wav/m4a/aac/flac/ogg/opus…）', () => {
+    expect(classifyFile(file('a.mp3', 'audio/mpeg'))).toBe('audio')
+    expect(classifyFile(file('b.wav'))).toBe('audio')
+    expect(classifyFile(file('c.M4A', 'audio/mp4'))).toBe('audio')
+    expect(classifyFile(file('d.flac'))).toBe('audio')
+    // .ogg 同时是视频与音频后缀：判定义序里视频优先（与老版一致），这里钉住这条规则
+    expect(classifyFile(file('e.ogg', 'audio/ogg'))).toBe('video')
   })
 })
 
@@ -188,5 +196,23 @@ describe('buildVideoPayload', () => {
     for (const key of ['videoUrl', 'videoName']) {
       expect(Object.prototype.hasOwnProperty.call(p.data, key)).toBe(true)
     }
+  })
+})
+
+describe('buildAudioPayload', () => {
+  it('带 objectURL 与文件名/大小，字段名与 plugin-node-audio 的 data 约定一致', () => {
+    const p = buildAudioPayload({ name: 'song.mp3', type: 'audio/mpeg', size: 4096 }, 'blob:aud1', { x: 5, y: 6 })
+    expect(p.type).toBe('audio')
+    expect(p.position).toEqual({ x: 5, y: 6 })
+    expect(p.data.audioUrl).toBe('blob:aud1')
+    expect(p.data.audioName).toBe('song.mp3')
+    expect(p.data.audioSize).toBe(4096)
+    // 不给 size：音频卡片走类型默认尺寸（与在节点里上传音频一致）
+    expect(p.size).toBeUndefined()
+  })
+
+  it('没有 size 的文件不写 audioSize（不编 0）', () => {
+    const p = buildAudioPayload({ name: 'a.wav', type: 'audio/wav' }, 'blob:x', { x: 0, y: 0 })
+    expect('audioSize' in p.data).toBe(false)
   })
 })

@@ -138,15 +138,6 @@ describe('播放控件与可达性', () => {
     expect(html).toContain('0:30')
   })
 
-  it('元信息标签显示尺寸（裁过显示裁框尺寸 —— 那就是用户看到的画面）', async () => {
-    const html = await render('v1', {
-      videoUrl: VIDEO,
-      videoWidth: 1280,
-      videoHeight: 720,
-      cropRect: { x: 0, y: 0, width: 640, height: 480 },
-    })
-    expect(html).toContain('640×480')
-  })
 })
 
 describe('空态与失效态', () => {

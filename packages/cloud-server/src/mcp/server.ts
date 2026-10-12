@@ -112,7 +112,7 @@ export const TOOL_LIST: McpTool[] = [
   { name: 'canvas_list_canvases', description: '列出所有画布（id + 名字），写画布前用它确认该往哪张画布写' },
   { name: 'canvas_get', description: '读取整张画布（节点/连线/视口全量），供 AI 掌握画布当前全貌' },
   { name: 'canvas_overview', description: '只读画布规模（节点数/边数/节点类型分布），大画布时先看这个再决定要不要读全量' },
-  { name: 'canvas_add_image', description: '一步往画布放一张图（上传字节 → 建图片节点），支持本地路径 / http(s) 链接 / dataURL' },
+  { name: 'canvas_add_media', description: '一步往画布放一份媒体（上传字节 → 建对应类型的节点）：type=image/video/audio，支持本地路径 / http(s) 链接 / dataURL' },
   { name: 'resource_upload', description: '把资源字节交给服务器（本地路径 / http(s) 链接 / base64 / 已有 dataURL），返回稳定 URL 供节点引用' },
   { name: 'resource_list', description: '列出本画布已存资源（名字 / 类型 / 访问地址），据此判断每个资源该当图、视频还是音频用' },
   { name: 'canvas_batch_nodes', description: '节点批量增删改（add/delete/update 合并一次执行）' },
@@ -129,6 +129,25 @@ export function listTools(): McpTool[] {
 
 /** 位置参数（多处复用） */
 const positionSchema = z.object({ x: z.number(), y: z.number() })
+
+/**
+ * 媒体类型 → 该类型节点存地址的字段名。
+ *
+ * 与 canvas-data 的 MEDIA_URL_FIELDS_BY_TYPE 同口径（前端只认自己那一种字段，
+ * 写错了节点就是一片空白）。改名/加类型时两边要一起改。
+ */
+const MEDIA_URL_FIELD_BY_TYPE: Record<'image' | 'video' | 'audio', string> = {
+  image: 'imageUrl',
+  video: 'videoUrl',
+  audio: 'audioUrl',
+}
+
+/** 媒体类型 → 原文件名落点（展示用；缺省就不写） */
+const MEDIA_NAME_FIELD_BY_TYPE: Record<'image' | 'video' | 'audio', string> = {
+  image: 'imageName',
+  video: 'videoName',
+  audio: 'audioName',
+}
 
 export function createCanvasMcpServer(
   doc: CanvasDocument | CanvasDocLike,
@@ -333,22 +352,29 @@ export function createCanvasMcpServer(
   )
 
   server.tool(
-    'canvas_add_image',
-    '一步往画布放一张图：先把字节存成画布资源，再建一个图片节点指向它。' +
-      '省掉"先 upload 再 batch_nodes 建节点"两次往返 —— AI 说"放张图"通常就是这个意图。' +
+    'canvas_add_media',
+    '一步往画布放一份媒体：先把字节存成画布资源，再建一个对应类型的节点指向它。' +
+      '省掉"先 upload 再 batch_nodes 建节点"两次往返 —— AI 说"放个东西进画布"通常就是这个意图。' +
+      'type 决定建什么节点：image（默认）/ video / audio；各自的地址写进该类型的媒体字段' +
+      '（imageUrl / videoUrl / audioUrl）。' +
       '来源同样是 path / url / dataUrl / base64 四选一。返回新节点 id 与资源地址（同源 URL）',
     {
       ...sourceSchema,
       canvasId: canvasIdSchema,
+      type: z
+        .enum(['image', 'video', 'audio'])
+        .optional()
+        .describe('要放的媒体类型（决定建 image / video / audio 节点），缺省 image'),
       position: positionSchema.optional().describe('可省略；省略则自动摆在现有节点右侧空位'),
       id: z.string().optional().describe('节点 id，可省略（服务端发一个自增数字号，并在 added 里返回）'),
       label: z.string().optional().describe('节点标题（写进 data.label，没有 title 的节点靠它辨认）'),
-      data: z.record(z.unknown()).optional().describe('额外写进节点 data 的字段（会与 imageUrl 合并）'),
+      data: z.record(z.unknown()).optional().describe('额外写进节点 data 的字段（会与媒体地址合并）'),
     },
     async (args) => {
       try {
         const picked = await pickDoc(args.canvasId)
         if ('error' in picked) return toText({ ok: false, error: picked.error })
+        const nodeType = args.type ?? 'image'
         const src = await readResourceSource(args)
         const stored = await picked.doc.saveResource(src.bytes, {
           ...(src.fileName !== undefined ? { fileName: src.fileName } : {}),
@@ -356,13 +382,18 @@ export function createCanvasMcpServer(
         })
         // 节点里写**同源 URL**（/api/canvases/<画布>/resources/<哈希>）：
         // 节点里存的东西就该是浏览器/下游能直接请求的地址。
-        const data: Record<string, unknown> = { ...(args.data ?? {}), imageUrl: stored.url }
-        if (src.fileName) data.imageName = src.fileName
+        //
+        // 字段名按类型走（与 canvas-data 的 MEDIA_URL_FIELDS_BY_TYPE 同口径）：
+        // 写错了节点会渲染成空白 —— 前端只认自己那一种字段。
+        const urlField = MEDIA_URL_FIELD_BY_TYPE[nodeType]
+        const nameField = MEDIA_NAME_FIELD_BY_TYPE[nodeType]
+        const data: Record<string, unknown> = { ...(args.data ?? {}), [urlField]: stored.url }
+        if (src.fileName) data[nameField] = src.fileName
         if (args.label) data.label = args.label
         const r = await picked.doc.batchNodes({
           add: [
             {
-              type: 'image',
+              type: nodeType,
               ...(args.id !== undefined ? { id: args.id } : {}),
               ...(args.position !== undefined ? { position: args.position } : {}),
               data,
@@ -372,7 +403,7 @@ export function createCanvasMcpServer(
         if (!r.ok) {
           return toText({ ...r, ok: false, error: r.errors.map((e) => e.message).join('; ') })
         }
-        return toText({ ok: true, nodeId: r.added[0], url: stored.url, size: stored.size, mime: stored.mime })
+        return toText({ ok: true, nodeId: r.added[0], type: nodeType, url: stored.url, size: stored.size, mime: stored.mime })
       } catch (err) {
         return toText({ ok: false, error: err instanceof Error ? err.message : String(err) })
       }

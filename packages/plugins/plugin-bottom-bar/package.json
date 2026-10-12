@@ -25,7 +25,8 @@
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
-    "prosemirror-editor-bundle": "workspace:*"
+    "prosemirror-editor-bundle": "workspace:*",
+    "vue-draggable-plus": "^0.6.1"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
