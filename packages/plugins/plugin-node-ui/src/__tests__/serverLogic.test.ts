@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { apply, selfOrigin } from '../server'
+import os from 'node:os'
+import path from 'node:path'
+
+/** 用例里用的空脚本目录（不存在 = 一个脚本都没有，正是 listScripts 的既定语义） */
+const EMPTY_SCRIPTS_DIR = path.join(os.tmpdir(), 'mc-node-ui-empty-scripts')
 
 /** 造一个最小的后台 ctx：收下注册的 MCP 工具/REST 路由，供断言 */
 function fakeServerCtx(opts: {
@@ -34,9 +39,17 @@ function fakeServerCtx(opts: {
           list: async () => ['default'],
         }
   const ctx = {
-    routes: { get: (p: string, h: (c: unknown) => unknown) => routes.set(p, h) },
+    routes: {
+      get: (p: string, h: (c: unknown) => unknown) => routes.set(p, h),
+      // 任务脚本那几条口是 POST（见 src/task/routes.ts）；这里假 ctx 也得给一个
+      post: (p: string, h: (c: unknown) => unknown) => routes.set(p, h),
+    },
     mcp: { tool: (def: { name: string }) => tools.set(def.name, def as never) },
-    tryGet: (n: string) => (n === 'doc' ? doc : n === 'canvasStore' ? store : undefined),
+    // taskScriptsDir 显式指到一个空目录：不指的话会回落到"插件包里那份样例脚本目录"
+    // （见 routes.ts 的目录解析），手册里的实时清单就会列出 demo —— 那是环境相关的结果，
+    // 不该让某个用例的通过与否取决于"这台机器上正好放着什么脚本"。
+    tryGet: (n: string) =>
+      n === 'doc' ? doc : n === 'canvasStore' ? store : n === 'taskScriptsDir' ? EMPTY_SCRIPTS_DIR : undefined,
   } as never
   return { ctx, tools, routes, writes }
 }
@@ -45,11 +58,22 @@ describe('后台半：给 AI 的工具（这是「它怎么画」的答案）', 
   const uiNode = { id: '2', type: 'ui', data: { label: '可视化 1' } }
   const imgNode = { id: '1', type: 'image', data: { label: '封面', imageUrl: '/api/a.png' } }
 
-  it('只注册三个工具 —— 改/删复用内置的 canvas_batch_nodes，不重复造', () => {
+  it('只注册这几个工具 —— 改/删复用内置的 canvas_batch_nodes，不重复造', () => {
     const s = fakeServerCtx({ nodes: [imgNode, uiNode] })
     apply(s.ctx)
     expect([...s.tools.keys()].sort()).toEqual([
+      // 后台功能函数：发现 / 查 schema / 调用（不必传 Canvas ID / Node ID）
+      'canvas_fn_call',
+      'canvas_fn_info',
+      'canvas_fn_list',
+      // 可视化节点：画界面 + 打包 + 说明书 + 收藏可复用
+      'canvas_ui_add_favorite',
+      'canvas_ui_describe',
+      // 导出到本机下载目录（用户 2026-10-14：节点删了也要能恢复）
+      'canvas_ui_export',
+      'canvas_ui_favorites',
       'canvas_ui_guide',
+      'canvas_ui_package',
       'canvas_ui_read',
       'canvas_ui_update',
       'canvas_ui_write',
@@ -80,6 +104,30 @@ describe('后台半：给 AI 的工具（这是「它怎么画」的答案）', 
     // 与内置工具的分工要写清：MCP 那侧 vs 页面里 HTTP 那侧
     expect(r.guide).toContain('canvas_get')
     expect(r.guide).toContain('/api/canvas/nodes')
+  })
+
+  it('手册讲了「怎么叫后台干活」：任务脚本那几条口与 runId 凭证', async () => {
+    const s = fakeServerCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const r = (await s.tools.get('canvas_ui_guide')!.handler({ canvasId: 'default' })) as { guide: string }
+    expect(r.guide).toContain('/api/task/call')
+    expect(r.guide).toContain('/api/task/events')
+    expect(r.guide).toContain('task-scripts')
+    expect(r.guide).toContain('runId')
+    // 必须说清"脚本是别人写好的文件、你改不了" —— 否则 AI 会以为自己能现写一个
+    expect(r.guide).toContain('改不了')
+  })
+
+  it('手册带**这台机器上的脚本实时清单**：AI 不必猜脚本名', async () => {
+    // 为什么要它：AI 拿到手册那一刻就要决定「这个界面能不能真的干活」。
+    // 没有清单，它只能在生成的 HTML 里写一段没人验证过的调用，或者干脆不敢用。
+    const s = fakeServerCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const r = (await s.tools.get('canvas_ui_guide')!.handler({ canvasId: 'default' })) as { guide: string }
+    expect(r.guide).toContain('这台机器上的任务脚本')
+    // 测试环境里没有那个目录（也不该有）→ 落到"一个脚本都没有"那句，并且要说清新功能怎么加
+    expect(r.guide).toContain('一个脚本都没有')
+    expect(r.guide).toContain('.mjs')
   })
 
   it('手册里列出这张画布现有的节点（AI 才知道画布上有什么）', async () => {

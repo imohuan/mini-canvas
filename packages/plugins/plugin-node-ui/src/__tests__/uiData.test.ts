@@ -8,8 +8,44 @@ import {
   normalizeUpstream,
   removeInputAt,
   serializeForScript,
+  toCloneableState,
   upsertInput,
 } from '../uiData'
+
+/**
+ * 交给 postMessage 之前必须「去代理」（2026-10-13 真机定位）。
+ *
+ * 节点 data 经 VueFlow 到组件 props 是 Vue 的响应式**代理**，而 postMessage 的
+ * 结构化克隆遇到代理对象会抛 DataCloneError，且是同步抛 —— 被外层空 catch 吞掉后，
+ * 表现就是「宿主以为发了、页面一条没收到、也没有任何报错」，
+ * 后果是刷新后笔迹回不来、还顺手把槽位图覆盖成空白的。
+ */
+describe('状态去代理（postMessage 之前）', () => {
+  it('把对象往返成普通对象（不再是原引用）', () => {
+    const src = { v: 1, strokes: [{ t: 'pen', c: '#e0342b', s: 12, p: [[0.1, 0.2]] }] }
+    const out = toCloneableState(src)
+    expect(out).toEqual(src)
+    expect(out).not.toBe(src)
+  })
+
+  it('嵌套的数组/对象也换新（浅拷贝不够：笔画里的点数组也得换）', () => {
+    const src = { strokes: [{ p: [[0, 0], [1, 1]] }] }
+    const out = toCloneableState(src)
+    expect(out.strokes).not.toBe(src.strokes)
+    expect(out.strokes[0].p).not.toBe(src.strokes[0].p)
+  })
+
+  it('代理对象也能落成普通对象', () => {
+    const prox = new Proxy({ strokes: [] as unknown[] }, {})
+    expect(toCloneableState(prox)).toEqual({ strokes: [] })
+  })
+
+  it('原始值原样返回', () => {
+    expect(toCloneableState(undefined)).toBeUndefined()
+    expect(toCloneableState(7)).toBe(7)
+    expect(toCloneableState('x')).toBe('x')
+  })
+})
 
 describe('输入参数声明（AI 靠这张表理解数据）', () => {
   it('有合法 key + type 才算一条，其余丢掉', () => {

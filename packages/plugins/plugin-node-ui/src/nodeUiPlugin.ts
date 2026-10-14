@@ -45,10 +45,15 @@ export const UI_DATA_KEYS = {
   by: 'uiBy',
   /** 后台自己的地址（生成的页面直连它；见下方 ensureBackendOrigin） */
   origin: 'uiBackendOrigin',
-  /** 输入参数声明（可选：不声明就只给原始数据，AI 自己理解） */
+  /**
+   * **这个节点的参数**（键 → 值）。
+   *
+   * 只有一个字段（2026-10-13 合并）：以前分成"声明清单 uiInputs + 值 uiValues"两个，
+   * 而声明清单**从来没人写过**（永远是空数组），却占着 uiInputs 这个名字 ——
+   * 结果就是「API 叫 setInputs、值却存在 uiValues」，读代码的人必然困惑（用户指出的）。
+   * 现在一条直线：前端 setInputs → 这个字段 → 页面里的 __CANVAS_INPUTS__。
+   */
   inputs: 'uiInputs',
-  /** 手工填的参数值（可选） */
-  values: 'uiValues',
   /** 上一次用到的上游素材（渲染时按它注入数据） */
   upstream: 'uiUpstream',
 } as const
@@ -56,7 +61,8 @@ export const UI_DATA_KEYS = {
 /** 本插件暴露给外部的服务形状（Agent / MCP / 别的插件经 ctx.get('uiNode') 使用） */
 export interface UiNodeService {
   /** 在画布上放一个可视化节点，返回短 id */
-  addNode(position: { x: number; y: number }): string
+  /** 在画布上放一个可视化节点；extra 是"建节点时一起写进去的 data"（导入节点包会用它带上界面代码与声明） */
+  addNode(position: { x: number; y: number }, extra?: unknown): string
   /**
    * 写一段 HTML 进节点（**这是 Agent 的主要入口**）。
    * @param source 谁写的（'agent' / 'mcp' / 'user'），只用于排查与展示
@@ -65,8 +71,8 @@ export interface UiNodeService {
   setHtml(id: string, html: string, source?: string): boolean
   /** 读某节点当前渲染的 HTML（空串 = 还没画） */
   htmlOf(id: string): string
-  /** 读某节点声明的输入参数 */
-  inputsOf(id: string): UiInputDecl[]
+  /** 这个节点的参数（键 → 值；就是页面 setInputs 交上来的那些） */
+  inputsOf(id: string): Record<string, unknown>
   /** 清掉内容（回到空态） */
   clear(id: string): boolean
 }
@@ -88,10 +94,15 @@ export class UiNodeService_ extends Service implements UiNodeService {
     return this.ctx.get('doc')
   }
 
-  addNode(position: { x: number; y: number }): string {
-    return this.doc().transaction('add-ui-node', (tx) =>
-      tx.createNode(UI_NODE_TYPE, position, { [UI_DATA_KEYS.inputs]: [], [UI_DATA_KEYS.values]: {} }),
-    )
+  addNode(position: { x: number; y: number }, extra?: unknown): string {
+    // 默认字段先铺，再让 extra 覆盖 —— extra 里是"这次建节点一并带进来的数据"
+    // （导入节点包会带 uiHtml / uiScripts）。**不合并 extra 的话导入出来就是空节点**（踩过）。
+    const data = {
+      // 参数从空对象起步（键 → 值）。不是空数组 —— 它现在装的是值，不是声明清单。
+      [UI_DATA_KEYS.inputs]: {},
+      ...((extra && typeof extra === 'object' ? extra : {}) as Record<string, unknown>),
+    }
+    return this.doc().transaction('add-ui-node', (tx) => tx.createNode(UI_NODE_TYPE, position, data))
   }
 
   setHtml(id: string, html: string, source = 'agent'): boolean {
@@ -114,8 +125,10 @@ export class UiNodeService_ extends Service implements UiNodeService {
     return typeof v === 'string' ? v : ''
   }
 
-  inputsOf(id: string): UiInputDecl[] {
-    return normalizeInputs(this.doc().getNode(id)?.data?.[UI_DATA_KEYS.inputs])
+  /** 这个节点的参数（键 → 值；就是页面 setInputs 交上来的那些） */
+  inputsOf(id: string): Record<string, unknown> {
+    const v = this.doc().getNode(id)?.data?.[UI_DATA_KEYS.inputs]
+    return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
   }
 
   clear(id: string): boolean {
@@ -180,17 +193,28 @@ export function apply(ctx: Context) {
     description: '一块画布：内容由 Agent 生成（HTML 就地渲染）',
     icon: NODE_ICON,
     size: { w: 420, h: 320 },
-    // 内容铺满整张卡：外壳那圈边框对它没有分层价值（与图片节点同一个理由）
-    frameless: true,
+    // 保留卡片边框（2026-10-12 与图片/视频节点同一条口径）：空的可视化节点是一块白面板，
+    // 没有边框就与画布背景分不出来。边框由共享外壳 BaseNode 画，本插件不自己画框。
     resizable: true,
     // 输入口收一切素材（文本/图片/视频/音频都能连进来当数据源）。
-    // outputs 显式声明为空数组 = 不产出、不往下游传东西 —— 与 3d-preview 的写法一致
-    // （那个预览节点也是终端节点，同样写 outputs: []）。
+    // 输出口声明为**图片**：这个节点可以把页面里的画面导出成图给下游用
+    // （典型用法：连到图片对比 / 图片生成，当参考图）。
+    //
+    // 为什么改成有输出（2026-10-13 用户实测需求）：原来是 outputs: []（纯展示、终端节点），
+    // 于是它连不到下游 —— 端口是**类型级**声明，改 HTML 改不出来这个口，必须改这里。
+    // 用默认字段 contentType: 'image'，与下游 image-compare 的 acceptsTypes: ['image'] 对得上。
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image', 'video', 'audio'] }],
-    outputs: [],
+    outputs: [{ port: 'source', contentType: 'image' }],
     in: UiContent,
-    create(position) {
-      return uiNode.addNode(position)
+    /**
+     * 必须把 extra 带进去（第二版才修）。
+     *
+     * 第一版只写 create(position) —— 于是所有"**带数据建节点**"的调用
+     * （command:create-node 传 uiHtml / uiScripts，比如导入节点包）都会**静默丢掉那些字段**：
+     * 节点建出来了，但是空的。2026-10-13 端到端验导入时撞到。
+     */
+    create(position, extra) {
+      return uiNode.addNode(position, extra)
     },
   })
 
@@ -259,8 +283,8 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
   baseUrl: string
   /** 连进本节点的素材（Agent 据此知道有哪些数据可画） */
   upstream: Array<{ refName: string; kind: string; url?: string; value?: string; nodeId?: string }>
-  /** 声明的输入参数（可选；没声明就是空数组，不影响） */
-  inputs: UiInputDecl[]
+  /** 这个节点的参数（键 → 值；没交过就是空对象） */
+  inputs: Record<string, unknown>
   /** 后台接口速查（写进提示词用；空 baseUrl 时为空串） */
   apiHint: string
 } {
@@ -300,7 +324,10 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
     canvasId: currentCanvasId(href),
     baseUrl,
     upstream: normalizeUpstream(raw),
-    inputs: normalizeInputs(data[UI_DATA_KEYS.inputs]),
+    // 这个节点的参数（键 → 值；以前这里读的是"声明清单"，现在声明清单没了，字段就是值本身）
+    inputs: data[UI_DATA_KEYS.inputs] && typeof data[UI_DATA_KEYS.inputs] === 'object'
+      ? (data[UI_DATA_KEYS.inputs] as Record<string, unknown>)
+      : {},
     apiHint: baseUrl
       ? 'base = ' + baseUrl + '；画布读写 /api/canvases/<canvasId>（GET 取全量、PUT 整体写回）；下单 POST /api/jobs'
       : '',

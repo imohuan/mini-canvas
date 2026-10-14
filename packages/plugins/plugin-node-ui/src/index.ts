@@ -15,7 +15,7 @@ export {
   UI_INPUT_TYPE_LABELS,
 } from './uiData'
 export type { UiInputDecl, UiInputType, UpstreamItem } from './uiData'
-export { normalizeManualValues, resolveInputValues } from './uiValues'
+export { normalizeManualValues } from './uiValues'
 export { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
 
 // —— 开发期热重载（HMR）：本包任一源码（逻辑 .ts 或组件 .vue）一改，vite 触发本 accept →

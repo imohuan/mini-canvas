@@ -60,7 +60,7 @@ describe('给 Agent 的上下文（一次拿齐"该画什么"）', () => {
     const c = buildNodeContext(fakeCtx(nodes, edges), 'nope')
     expect(c.nodeId).toBe('nope')
     expect(c.upstream).toEqual([])
-    expect(c.inputs).toEqual([])
+    expect(c.inputs).toEqual({})
   })
 
   it('连了多个同一素材只算一次（重复连线不该出现两条）', () => {

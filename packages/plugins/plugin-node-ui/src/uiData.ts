@@ -435,6 +435,191 @@ export const INPUTS_GLOBAL = '__CANVAS_INPUTS__'
 export const UPSTREAM_GLOBAL = '__CANVAS_UPSTREAM__'
 export const UI_GLOBAL = '__CANVAS_UI__'
 
+/** 注入给生成页面的**助手对象**名（它替页面处理「往外报」的那两件事，见 buildUiBridge） */
+export const BRIDGE_GLOBAL = 'CanvasUI'
+
+/**
+ * 把节点里存的 state 变成「能过 postMessage 的普通对象」。
+ *
+ * ## 为什么必须有这一步（2026-10-13 真机定位到的根因）
+ *
+ * 节点 data 经 VueFlow 传到组件 props 上时是 **Vue 响应式代理（Proxy）**。
+ * 而 postMessage 的**结构化克隆算法遇到 Proxy 会直接抛 DataCloneError**（规范如此，不是能力不足）。
+ * 更要命的是这个异常是**同步**抛的 —— 外层一个空 catch 一吞，表现就是「什么都没有发生」：
+ * 宿主以为发了、页面一条也没收到，没有任何报错可看。
+ * 「刷新后数据在、笔迹回不来、还顺手把槽位图覆盖成空白的」就是它。
+ *
+ * 做法用 JSON 往返：本状态是笔迹/参数（数字、字符串、数组、普通对象），
+ * JSON 往返既是深拷贝、又顺带剥掉所有层的代理，正好是要的语义。
+ * （不用 Vue 的 toRaw：它是**浅**的，嵌套笔画里的数组仍是代理。）
+ */
+export function toCloneableState<T>(state: T): T {
+  if (state === null || typeof state !== 'object') return state
+  try {
+    return JSON.parse(JSON.stringify(state)) as T
+  } catch {
+    // 极端情况（自引用等）宁可退回原值，也不要让整条上报链挂掉
+    return state
+  }
+}
+
+/**
+ * 注入给生成页面的助手 `window.CanvasUI`。
+ *
+ * ## 为什么要有它（两个「往外说」的通道，页面不用记协议）
+ *
+ * 1. **setInputs(params)** —— 把**参数**交出去（笔迹、选项、配置都是参数）。
+ *    外面走**可撤销**那条路写进节点，所以撤销退的是"你上一次交的参数"，而不是一张图。
+ * 2. **save(data, name)** —— 把「产物」（图 / 视频 / 音频 / 文本）交出去。外面走**不进历史**
+ *    那条路，并且**覆盖到本节点自己的槽位**（同一个节点永远一份文件）。
+ *
+ * 为什么上传由页面自己做、而不是把字节 postMessage 出去：
+ * 沙箱里的页面**本来就能直接请求后台**（CSP 已放行 base），少一次字节搬运、也少一份内存。
+ * 传出去的只是**地址**（很短）。
+ *
+ * 注意两端都要校验来源：宿主靠 ev.source 认这个 iframe，页面靠 ev.source===parent 认宿主。
+ *
+ * ## 页面主动报到（2026-10-13 修「刷新后笔迹回不来」）
+ *
+ * 原来恢复靠宿主在 iframe 的 load 事件里**猜时机**往里发指令（还试过发四次兜底）。
+ * 真机逐层取证的结论是：宿主那几次消息**一条都进不来** —— 页面刷新后 data.uiState
+ * 明明在、iframe 也活着，就是收不到；而同一个 iframe 上由父页面手动发的同一条指令
+ * **立刻就通**。
+ *
+ * 根因是「时序赌注」本身：消息**早于** iframe 文档建好监听就发出去，等于白发；宿主只看得见
+ * load，看不见「页面什么时候开始听」。多发几次只是把概率调大，不是修好。
+ *
+ * 现在把方向反过来 —— **页面报到，宿主应答**：
+ *   1) 页面脚本一跑起来就发 type:"ready" 报到。这一步在同步脚本里，报到发得出去，
+ *      就说明它必定已经能收消息；
+ *   2) 宿主收到报到（也认 load 做兜底）才把状态送回来。
+ * 「报到」永远发生在「能收消息」之后，时序赌注消失，重发链整条删掉。
+ *
+ * 报到在 DOMContentLoaded / load 时还会再发一次：两边都幂等（页面收到状态是
+ * 「清空 + 重放 + 出图」，重复收到只是白重放一遍，不丢东西）。
+ */
+export function buildUiBridge(): string {
+  const S = String.fromCharCode(39)
+  const D = String.fromCharCode(34)
+  return [
+    '<script>',
+    '(function(){',
+    '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
+    '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
+    '  var cmdHandlers = [];',
+    '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
+    '  var cmdHandlers = [];',
+    '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
+    // 订阅一次调用：日志 / 进度走回调；跑完把终局事件交出去。
+    // 用 EventSource —— 后台会先把已经发生的输出回放一遍再接着推，
+    // 所以"拿到 runId 到连上"之间跑掉的那几行日志也不会丢。
+    '  function watchRun(runId, opts){',
+    '    return new Promise(function(resolve, reject){',
+    '      var es = new EventSource(U.baseUrl + ' + S + '/api/task/events?runId=' + S + ' + encodeURIComponent(runId));',
+    '      var done = false;',
+    '      es.onmessage = function(ev){',
+    '        var d; try { d = JSON.parse(ev.data); } catch(e){ return; }',
+    '        if (d.type === ' + S + 'log' + S + ') { if (opts.onLog) opts.onLog(d.line); return; }',
+    '        if (d.type === ' + S + 'progress' + S + ') { if (opts.onProgress) opts.onProgress(d.value); return; }',
+    '        done = true; es.close();',
+    '        if (d.type === ' + S + 'done' + S + ') resolve({ ok: true, runId: runId, state: ' + S + 'done' + S + ', result: d.result });',
+    '        else if (d.type === ' + S + 'cancelled' + S + ') resolve({ ok: false, runId: runId, state: ' + S + 'cancelled' + S + ' });',
+    '        else reject(new Error(d.message || ' + S + '脚本跑失败了' + S + '));',
+    '      };',
+    '      es.onerror = function(){ if (done) return; es.close(); reject(new Error(' + S + '输出通道断了' + S + ')); };',
+    '      if (opts.signal) opts.signal.addEventListener(' + S + 'abort' + S + ', function(){',
+    '        if (done) return; done = true; es.close();',
+    '        resolve({ ok: false, runId: runId, state: ' + S + 'cancelled' + S + ' }); });',
+    '    });',
+    '  }',
+    '  window.addEventListener(' + S + 'message' + S + ', function(e){',
+    '    if(e.source !== parent) return;',
+    '    var d = e.data; if(!d || !d.__canvasUiCmd) return;',
+    '    for(var i = 0; i < cmdHandlers.length; i++){',
+    '      try { cmdHandlers[i](d); } catch(err) {}',
+    '    }',
+    '  });',
+    '  ready();',
+    '  if(document.readyState === ' + S + 'loading' + S + '){',
+    '    document.addEventListener(' + S + 'DOMContentLoaded' + S + ', ready);',
+    '  }',
+    '  window.addEventListener(' + S + 'load' + S + ', ready);',
+    '  window[' + JSON.stringify(BRIDGE_GLOBAL) + '] = {',
+  // ── 交参数 ────────────────────────────────────────────────────
+  // 用户 2026-10-13 定的口径（我绕了好几圈才懂）：**没有"状态"这个东西，
+  // 它就是参数**。所以你交上去的笔迹/选项，跟"上游给的素材"是同一类东西 ——
+  // 都是**这个节点的参数**，都会出现在 __CANVAS_INPUTS__ 里。
+  //
+  '    setInputs: function(params){ post({ __canvasUi: 1, type: ' + S + 'state' + S + ', state: params }); },',
+  // ── 参数变了，就一个监听 ────────────────────────────────────────
+  // 对界面来说永远是同一件事：**这个节点的参数变了，照着重画**。
+  // 不拆成 onUpstream / onState 那些 —— 那些都是同一个东西的不同叫法。
+  //
+  // 回调参数：
+  //   { upstream, inputs }   ← 上游素材 + 参数（含你自己交上去的那些）
+  '    onChange: function(fn){',
+  '      cmdHandlers.push(function(d){',
+  '        if (d.type === ' + S + 'data' + S + ') fn({ upstream: d.upstream, inputs: d.inputs });',
+  '      });',
+  '    },',
+    // ── 交产物 ────────────────────────────────────────────────
+    // 与脚本侧的 ctx.save **同名、同手感**：字节或字符串都收，默认落本节点槽位。
+    // 与脚本侧的 ctx.save **同名同手感**：一边叫 save、一边叫别的，手册得解释两遍、AI 也容易记混。
+    '    save: function(data, name){',
+    '      var bytes = data;',
+    '      if (typeof data === ' + S + 'string' + S + ') {',
+    '        bytes = new Blob([data], { type: ' + S + 'text/plain' + S + ' });',
+    '      }',
+    '      var fname = String(name || ' + S + 'out.png' + S + ');',
+    '      var withExt = /\\./.test(fname) ? fname : fname + ' + S + '.png' + S + ';',
+    '      var url = U.baseUrl + ' + S + '/api/canvases/' + S + ' + encodeURIComponent(U.canvasId)',
+    '        + ' + S + '/resources?slot=' + S + ' + encodeURIComponent(U.nodeId)',
+    '        + ' + S + '&name=' + S + ' + encodeURIComponent(withExt);',
+    '      return fetch(url, { method: ' + S + 'POST' + S + ',',
+    '          headers: { ' + S + 'content-type' + S + ': (bytes && bytes.type) || ' + S + 'application/octet-stream' + S + ' },',
+    '          body: bytes })',
+    '        .then(function(r){ return r.json(); })',
+    '        .then(function(j){',
+    '          if(!j || !j.ok) throw new Error((j && j.error) || ' + S + '保存产物失败' + S + ');',
+    // 文本把**正文**一起报上去：下游读的 data.text 一直是内容、不是地址（文本节点就是这样）。
+    // 与脚本侧 ctx.save 同一条规矩 —— 两边不一致的话，同一个界面用哪半边写法结果就不同。
+    "          post({ __canvasUi: 1, type: " + S + "output" + S + ", url: j.url, text: (typeof data === " + S + "string" + S + ") ? data : undefined });",
+    '          return j.url;',
+    '        });',
+    '    },',
+    // ── 叫后台干活 ────────────────────────────────────────────
+    // 为什么要包一层：直接 fetch 要自己拼三样东西，少一样就 403 或拿不到日志 ——
+    //   · canvasId / nodeId（nodeId 漏了直接被授权那道关挡下）；
+    //   · 长任务的 SSE 地址（还要自己处理 done / error）。
+    // 这里替调用方带上，并把日志 / 进度都接好。
+    '    task: function(name, methods, args, opts){',
+    '      opts = opts || {};',
+    '      var body = { type: ' + S + 'call' + S + ', name: String(name), methods: String(methods),',
+    '        args: args || [], canvasId: U.canvasId, nodeId: U.nodeId,',
+    '        wait: opts.wait === true };',
+    '      return fetch(U.baseUrl + ' + S + '/api/task/call' + S + ', {',
+    '        method: ' + S + 'POST' + S + ',',
+    '        headers: { ' + S + 'content-type' + S + ': ' + S + 'application/json' + S + ' },',
+    '        body: JSON.stringify(body) })',
+    '        .then(function(r){ return r.json(); })',
+    '        .then(function(j){',
+    '          if(!j || !j.ok) throw new Error((j && j.error) || ' + S + '起不了这个脚本' + S + ');',
+    '          if (!j.runId || opts.wait === true || !opts.onLog) return j;',
+    '          return watchRun(j.runId, opts);',
+    '        });',
+    '    },',
+    // 取消（要自己留 runId：它不写进节点，是这次调用的凭证）
+    '    cancel: function(runId){',
+    '      return fetch(U.baseUrl + ' + S + '/api/task/cancel' + S + ', { method: ' + S + 'POST' + S + ',',
+    '        headers: { ' + S + 'content-type' + S + ': ' + S + 'application/json' + S + ' },',
+    '        body: JSON.stringify({ runId: runId }) }).then(function(r){ return r.json(); });',
+    '    },',
+  '  };',
+    '})();',
+    '<\/script>',
+  ].join('\n')
+}
+
 /** 生成页面的外壳样式（铺满卡片、深浅色都对） */
 const SHELL_STYLE = [
   'html, body { margin: 0; padding: 0; width: 100%; height: 100%; }',
@@ -546,7 +731,9 @@ export function buildSrcdoc(
     '<meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
     (baseUrl ? '<base href="' + baseUrl + '">' : '') +
     '<style>' + SHELL_STYLE + '</style>' +
-    bootstrap
+    bootstrap +
+    // 助手（window.CanvasUI）：页面用它把「状态」与「产物」交出来，不必自己记 postMessage 协议。
+    buildUiBridge()
 
   const body = html.trim()
 

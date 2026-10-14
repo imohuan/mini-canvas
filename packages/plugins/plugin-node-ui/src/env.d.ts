@@ -15,3 +15,11 @@ declare module '*.css' {
   export default css
 }
 
+// `?raw` 文本导入：vite / vitest 原生支持（内容以字符串导出）。
+// 用户口径 2026-10-14：手册正文抽成独立 MD，用 `?raw` 加载到一个变量里。
+// 后台那半走 esbuild，由 scripts/build-server.mjs 的 raw-text 插件提供同一语义。
+declare module '*.md?raw' {
+  const text: string
+  export default text
+}
+
