@@ -19,17 +19,23 @@ import McpPage from './McpPage.vue'
 import RulesPage from './RulesPage.vue'
 import PromptPage from './PromptPage.vue'
 import TitleModelPage from './TitleModelPage.vue'
+import AgentPromptPage from './AgentPromptPage.vue'
+import TemplatePage from './TemplatePage.vue'
 
 const agent = useAgent()
 const s = agent.state
 
-type TabKey = 'models' | 'skills' | 'mcp' | 'rules' | 'prompt' | 'title'
+type TabKey = 'models' | 'skills' | 'mcp' | 'rules' | 'agentPrompt' | 'prompt' | 'template' | 'title'
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'models', label: 'Provider' },
   { key: 'skills', label: '技能' },
   { key: 'mcp', label: 'MCP' },
   { key: 'rules', label: '审批规则' },
-  { key: 'prompt', label: '系统提示词' },
+  // 三层的名字必须分清楚（用户口径 2026-10-14：从前只有「系统提示词」一个名字，
+  // 而它改的其实是模式清单 —— 名字指错了地方，比没有界面更坏）。
+  { key: 'agentPrompt', label: 'Agent 提示词' },
+  { key: 'prompt', label: '模式提示词' },
+  { key: 'template', label: '系统提示词模板' },
   { key: 'title', label: '会话标题模型' },
 ]
 const tab = ref<TabKey>('models')
@@ -52,7 +58,9 @@ onMounted(() => void agent.refresh())
       <SkillsPage v-else-if="tab === 'skills'" />
       <McpPage v-else-if="tab === 'mcp'" />
       <RulesPage v-else-if="tab === 'rules'" />
+      <AgentPromptPage v-else-if="tab === 'agentPrompt'" />
       <PromptPage v-else-if="tab === 'prompt'" />
+      <TemplatePage v-else-if="tab === 'template'" />
       <TitleModelPage v-else />
     </div>
   </div>

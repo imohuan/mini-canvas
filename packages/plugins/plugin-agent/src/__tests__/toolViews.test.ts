@@ -169,22 +169,82 @@ describe('toolView · fallback', () => {
     expect(v.heading).toBe('画布列表')
   })
 
-  it('file 图片：能映射到服务端资源路由时给媒体单行（缩略图 + 读数徽章）', () => {
-    // 用真实形态的路径（画布资源目录）—— 只有这种服务端才取得到字节
+  it('read_file 读图：「文件预览」卡片 + 一行缩略图（用户参考图的形态）', () => {
+    // 真实形态的路径（画布资源目录）—— 只有这种服务端才取得到字节
     const p = 'D:/x/.mini-canvas/canvases/c1/resources/pic.jpeg'
     const v = toolView('read_file', JSON.stringify({ file_path: p, canvasId: 'c1' }), 'image/png, 4.0 MB')
-    const media = v.blocks.find((x) => x.kind === 'media')
-    expect(media && media.kind === 'media' && media.thumb).toBe('/api/canvases/c1/resources/pic.jpeg')
+    // 用户口径 2026-10-13：图片做成卡片（有缩略图那版）
+    expect(v.family).toBe('file')
+    expect(v.heading).toBe('文件预览')
+    expect(v.icon).toBe('image')
     expect(v.badge).toBe('4.0 MB')
     expect(v.summary).toBe('pic.jpeg')
+    expect(v.blocks).toEqual([
+      { kind: 'media', mediaKind: 'image', thumb: '/api/canvases/c1/resources/pic.jpeg', title: 'pic.jpeg', sub: 'image · 4.0 MB' },
+    ])
   })
 
-  it('file 图片：路径映射不到服务端资源 → 退化成文件名行（不给必然裂图的 <img>）', () => {
+  it('read_file 读文本：**不造卡片**（回退默认折叠行，展开是标准的输入 / 输出）', () => {
+    const v = toolView(
+      'read_file',
+      JSON.stringify({ file_path: 'D:/Code/x/src/runner.ts' }),
+      '     1\t/** runner —— ...',
+    )
+    // 用户口径 2026-10-13：除了视频 / 图片 / 音频，其他都回退到默认状态
+    expect(v.family).toBe('fallback')
+    expect(v.blocks).toHaveLength(0)
+    // 输出原文进 raw（展开后「输出」那块就是它；早先卡片只截 400 字，还看不全）
+    expect(v.raw).toContain('runner')
+  })
+
+  it('read_file 读图：路径映射不到服务端资源 → 连卡片都不给（宁可回退折叠行，也不给裂图）', () => {
     const v = toolView('read_file', JSON.stringify({ file_path: 'D:/x/pic.jpeg' }), 'image/png, 4.0 MB')
-    const media = v.blocks.find((x) => x.kind === 'media')
-    expect(media && media.kind === 'media' && media.thumb).toBeUndefined()
-    expect(media && media.kind === 'media' && media.title).toBe('pic.jpeg')
-    expect(v.summary).toBe('pic.jpeg')
+    expect(v.family).toBe('fallback')
+  })
+
+  it('read_file 读视频：卡片 + 播放位（按扩展名判，不看输出文本）', () => {
+    /**
+     * 真机转录（会话 e5860e437dd04d51）：同一段 mp4 读三次三种输出 ——
+     * ① 模型把工具结果当描述： 「looks like a binary file (contains NUL bytes)…」
+     * ② 超限：「Image too large: 13.3 MB exceeds the 5.0 MB limit.」
+     * 所以判据只能是**扩展名**，拿输出文本判会让视频永远变成折叠行。
+     */
+    const p = 'D:/x/.mini-canvas/canvases/e5860e437dd04d51/resources/9360cd8573fc8abc.mp4'
+    const v = toolView('read_file', JSON.stringify({ file_path: p }), 'looks like a binary file (contains NUL bytes)')
+    expect(v.family).toBe('file')
+    expect(v.heading).toBe('文件预览')
+    expect(v.icon).toBe('video')
+    expect(v.blocks).toEqual([
+      {
+        kind: 'media',
+        mediaKind: 'video',
+        src: '/api/canvases/e5860e437dd04d51/resources/9360cd8573fc8abc.mp4',
+        title: '9360cd8573fc8abc.mp4',
+        sub: 'video',
+      },
+    ])
+  })
+
+  it('read_file 读音频：卡片 + 播放位（用户口径 2026-10-13 点名了音频）', () => {
+    const p = 'D:/x/.mini-canvas/canvases/c1/resources/voice.mp3'
+    const v = toolView('read_file', JSON.stringify({ file_path: p }), 'audio/mpeg, 1.2 MB')
+    expect(v.family).toBe('file')
+    expect(v.icon).toBe('audio')
+    expect(v.badge).toBe('1.2 MB')
+    expect(v.blocks).toEqual([
+      {
+        kind: 'media',
+        mediaKind: 'audio',
+        src: '/api/canvases/c1/resources/voice.mp3',
+        title: 'voice.mp3',
+        sub: 'audio · 1.2 MB',
+      },
+    ])
+  })
+
+  it('read_file 读其它二进制（.zip 等）：同样回退默认折叠行', () => {
+    const v = toolView('read_file', JSON.stringify({ file_path: 'D:/x/a.zip' }), 'PK\\x03\\x04 …')
+    expect(v.family).toBe('fallback')
   })
 })
 
@@ -198,6 +258,20 @@ describe('卡片 vs 默认工具的分流（组件按 family 判断）', () => {
     const v = toolView('exec_command', '{"cmd":"ls"}', 'file1\nfile2')
     expect(v.family).toBe('fallback')
   })
+
+  it('read_file 的分流只认**媒体类型**：图 / 视频 / 音频成卡片，其余一律折叠行', () => {
+    // 用户口径 2026-10-13：① 图片做成卡片；② 除了视频、图片、音频，其他都回退默认状态
+    const base = 'D:/x/.mini-canvas/canvases/c1/resources/'
+    const kindOf = (name: string): string =>
+      toolView('read_file', JSON.stringify({ file_path: base + name }), '').family
+    expect(kindOf('a.png')).toBe('file')
+    expect(kindOf('a.jpeg')).toBe('file')
+    expect(kindOf('a.mp4')).toBe('file')
+    expect(kindOf('a.mp3')).toBe('file')
+    for (const name of ['a.ts', 'a.md', 'a.json', 'a.zip', 'a.exe', 'Dockerfile']) {
+      expect(kindOf(name), name).toBe('fallback')
+    }
+  })
 })
 describe('toolView · read_file 的图片预览地址（用户实测报的裂图）', () => {
   /**
@@ -210,8 +284,6 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/jpeg, 3.7 MB')
     const media = v.blocks.find((b) => b.kind === 'media')
     expect(media && media.kind === 'media' && media.thumb).toBe('/api/assets/files/faaca433dafb2b75.jpeg')
-    // 读数（大小）进徽章（用户口径 2026-10-08：卡片紧凑两行，标记贴右上）
-    expect(v.badge).toBe('3.7 MB')
   })
 
   it('画布 resources 下的绝对路径 → /api/canvases/<canvasId>/resources/<hash>', () => {
@@ -236,19 +308,17 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
     )
   })
 
-  it('映射不到（磁盘别处的图）→ **不给** 缩略图，只显示文件名（宁可不预览也不给裂图）', () => {
+  it('映射不到（磁盘别处的图）→ **不给卡片**（回退默认折叠行，宁可不预览也不给裂图）', () => {
     const v = toolView('read_file', JSON.stringify({ file_path: 'C:\\Users\\me\\Desktop\\pic.png' }), 'image/png, 12 KB')
-    const media = v.blocks.find((b) => b.kind === 'media')
-    expect(media && media.kind === 'media' && media.thumb).toBeUndefined()
-    expect(media && media.kind === 'media' && media.title).toBe('pic.png')
+    expect(v.family).toBe('fallback')
+    expect(v.blocks).toHaveLength(0)
   })
 
   /** 别处的 /resources/（如 node_modules）不能被误认成画布资源、拼出一张必然 404 的图 */
   it('路径里的 /resources/ 不挨着 /canvases/ ⇒ 不认（不给裂图）', () => {
     const p = 'D:\\proj\\node_modules\\some-pkg\\resources\\logo.png'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/png, 8 KB')
-    const media = v.blocks.find((b) => b.kind === 'media')
-    expect(media && media.kind === 'media' && media.thumb).toBeUndefined()
+    expect(v.family).toBe('fallback')
   })
 
   it('再也不出现已废弃的 /api/agent/file 地址', () => {

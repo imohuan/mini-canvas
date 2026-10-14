@@ -27,8 +27,14 @@ export type CardBlock =
   | { kind: 'images'; items: Array<{ src: string; label?: string }>; summary?: string }
   /** 胶囊组（计数 / 类型分布 / 动作清单）—— 计数画在文字前（「4 新增」） */
   | { kind: 'chips'; label?: string; items: Array<{ text: string; count?: string }> }
-  /** 单条媒体行：缩略图 + 标题 + 副标题（节点详情 / 文件预览 —— 卡片内容就是这一行） */
-  | { kind: 'media'; thumb?: string; title?: string; sub?: string }
+  /**
+   * 单条媒体行：画面 + 标题 + 副标题（节点详情 / 文件预览 —— 卡片内容就是这一行）。
+   *
+   * 画面分两种（用户口径 2026-10-13）：图片给 thumb（一张缩略图）；
+   * 视频 / 音频给 src + mediaKind（组件画一个播放位 —— 把视频地址塞进 <img> 必然裂图）。
+   * 两者都可点开全屏预览（宿主那只注册的 MediaViewer）。
+   */
+  | { kind: 'media'; mediaKind?: 'image' | 'video' | 'audio'; thumb?: string; src?: string; title?: string; sub?: string }
   /** 带图标 / 副标题 / 尾标签的行（画布列表等清单；组件最多画 3 条 + 「还有 N 条…」） */
   | { kind: 'rows'; items: Array<{ title: string; sub?: string; tag?: string; icon?: CardIcon }> }
   /** 进度条（生成任务） */
@@ -245,6 +251,46 @@ export function toolBrief(name: string, argsText: string | undefined): string {
 }
 
 const note = (text: string, tone: 'ok' | 'error' | 'info' = 'info'): CardBlock => ({ kind: 'note', text, tone })
+
+/** 图片 / 视频 / 音频的扩展名 —— 只有这三类才配「文件预览」卡片（其它一律走默认折叠行） */
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|avif|ico)$/i
+const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv|ogv)$/i
+const AUDIO_EXT = /\.(mp3|wav|ogg|oga|m4a|aac|flac|opus|weba)$/i
+
+/**
+ * read_file 读到的**媒体**文件：图片走 media 缩略图块，视频 / 音频走注册件（media 字段）。
+ *
+ * 为什么按**扩展名**判、而不是按输出文本（用户口径 2026-10-13 的落地）：
+ * read_file 的输出五花八门 —— 图片是「image/png, 55.7 kB」、视频是
+ * 「looks like a binary file (contains NUL bytes)」、超限的图是
+ * 「Image too large: 13.3 MB exceeds the 5.0 MB limit.」（真机转录里三种都出现过）。
+ * 拿输出文本判会把后两种漏掉，读视频 / 音频永远变成默认折叠行。
+ *
+ * 为什么地址必须由 fileUrlFromPath 映射出来、映射不到就整个卡片都不给（返回 null）：
+ * 服务端能出字节的只有 /api/assets/files/<hash> 与 /api/canvases/<id>/resources/<hash>
+ * 两条路，别的地址一律 404。「文件预览」卡片的全部价值就是那张画面 ——
+ * 给不出画面就没有卡片的意义，宁可回退默认折叠行（输入 / 输出），也别摆一张裂开的图。
+ */
+function fileMediaOf(p: string, canvasId: unknown): { kind: 'image' | 'video' | 'audio'; src: string; name: string } | null {
+  const isImage = IMAGE_EXT.test(p)
+  const isVideo = !isImage && VIDEO_EXT.test(p)
+  const isAudio = !isImage && !isVideo && AUDIO_EXT.test(p)
+  if (!isImage && !isVideo && !isAudio) return null
+  const src = fileUrlFromPath(p, canvasId)
+  if (!src) return null
+  return { kind: isImage ? 'image' : isVideo ? 'video' : 'audio', src, name: p.split(/[\\/]/).pop() ?? p }
+}
+
+/**
+ * 从 read_file 的输出里抠出**读数**（「410.4 kB」这种），放卡片右上角的徽章。
+ *
+ * 为什么用这么松的匹配：真机转录里读数前的部分好几种形态 —— 图片是
+ * 「image/png, 55.7 kB」、有的带前缀；抠不到就不给徽章（宁可不显示，也不编一个数）。
+ */
+function sizeOf(outputText: string | undefined): string | undefined {
+  const m = /([0-9]+(?:\.[0-9]+)?)\s*([kKmMgG]?B)\b/.exec(outputText ?? '')
+  return m ? m[1] + ' ' + m[2] : undefined
+}
 
 /** 空卡片（什么块都没提炼出来）时返回 null，让调用方走 fallback */
 function card(heading: string, blocks: CardBlock[], extra: Partial<ToolView> = {}): ToolView | null {
@@ -464,22 +510,34 @@ export function toolView(name: string, argsText: string | undefined, outputText:
   }
 
   if (family === 'file') {
-    const out = (outputText ?? '').trim()
     const p = String(args.file_path ?? args.path ?? '')
-    if (/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(p)) {
-      const m = /^(image\/[a-z0-9.+-]+),\s*([0-9.]+)\s*([kKmMgG]?B)$/i.exec(out)
-      const label = m ? m[2] + " " + m[3] : undefined
-      const src = fileUrlFromPath(p, canvasId)
-      // 路径能映射到服务端资源路由才给预览；映射不到就只显示文件名与读数（不给必然裂图的 <img>）
-      const blocks: CardBlock[] = src
-        ? [{ kind: 'media', thumb: src, title: p.split(/[\\/]/).pop() ?? p, sub: 'image · ' + (label ?? '') }]
-        : [{ kind: 'media', title: p.split(/[\\/]/).pop() ?? p, sub: '本机文件 · ' + (label ?? '') }]
-      const v = card('文件预览', blocks, { icon: 'image', badge: label })!
-      return { ...v, family, summary: p.split(/[\\/]/).pop() ?? p }
-    }
-    if (out) {
-      const v = card('文件', [{ kind: 'note', text: out.length > 400 ? out.slice(0, 400) + '…' : out, tone: 'info' }], { icon: 'file' })!
-      return { ...v, family, summary: p.split(/[\\/]/).pop() ?? p }
+    const m = fileMediaOf(p, canvasId)
+    /**
+     * 读到**媒体**（图片 / 视频 / 音频）→「文件预览」卡片；读文本 / 其它 → 不造卡片，
+     * 掉到下面的 fallback（默认折叠行的「输入 / 输出」）。
+     *
+     * 用户口径（2026-10-13）：①「图片：根据我给你的参考图，做成卡片的效果」；
+     * ②「除了视频、图片、音频，其他的都回退到默认的状态」。
+     * 所以这一族**只有媒体才成卡片** —— 早先读一段代码也造「文件」卡片，
+     * 卡片族没有折叠箭头、整块摊开，正是用户报的问题。
+     */
+    if (m) {
+      const size = sizeOf(outputText)
+      const sub = [m.kind, size].filter(Boolean).join(' · ')
+      // 卡片内容就是一「行」媒体（用户参考图的形态）：
+      // 图片给 thumb（40px 缩略图）；视频 / 音频给 src + mediaKind（组件画播放位）。
+      const block: CardBlock =
+        m.kind === 'image'
+          ? { kind: 'media', mediaKind: 'image', thumb: m.src, title: m.name, sub }
+          : { kind: 'media', mediaKind: m.kind, src: m.src, title: m.name, sub }
+      return {
+        family,
+        heading: '文件预览',
+        icon: m.kind,
+        ...(size ? { badge: size } : {}),
+        blocks: [block],
+        summary: m.name,
+      }
     }
   }
 

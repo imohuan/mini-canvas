@@ -15,6 +15,8 @@ import {
   type SendOptions,
   type QueueStateView,
   type GoalStateView,
+  type AgentContextView,
+  type PromptSectionView,
 } from './agentApi.js'
 import { ChatModel, type AgentTurnView } from './sessionModel.js'
 import { groupConversations, inlinePagers, type ConversationGroup, type PagerGroup } from './branchNav.js'
@@ -92,6 +94,18 @@ export interface AgentServiceState {
 
   /** 当前会话 */
   sessionId: string | null
+  /**
+   * 「此刻的空白是用户**主动**点出来的新对话」（见 newSession / restoreCurrentSession）。
+   *
+   * 为什么需要它：sessionId=null 有两种意思 ——
+   *   ① 用户点了「新建对话」（要一条空白的新会话，下一句话才开始建）；
+   *   ② 刷新过页面，内存里的会话 id 丢了（要接着看**最近那条**历史）。
+   * 两种都表现为 sessionId=null，但期待的行为**相反**。分不清就会出现用户实测的这个 bug：
+   * 「新建对话」后打开面板 / 右键「引用到 Agent」，被 restoreCurrentSession 当成 ②，
+   * 又把上一条历史对话装载回来，用户的新对话凭空消失。
+   * 只有用户主动打开某条会话（openSession）或发出第一句话（ensureSession 建出会话）才清掉它。
+   */
+  draft: boolean
   title: string
   running: boolean
   turns: AgentTurnView[]
@@ -181,6 +195,23 @@ export interface AgentServiceState {
   clientTypes: string[]
   /** Agent 的系统提示词（agent_state/AGENTS.md） */
   systemPrompt: string
+
+  /**
+   * 提示词模板体检（后端给）。
+   *
+   * 为什么要在界面上说：模板坏了（{{AGENTS_MD}} 没了）时，用户在设置里写什么提示词都
+   * 进不去模型 —— 而模型端不报任何错。不提示的话他永远查不出来，只会觉得「这 AI 不太行」。
+   */
+  templateHealth: { ok: boolean; missing: string[] }
+
+  /** 模板正文（只读展示用；用户要看到容器长什么样，才知道 {{AGENTS_MD}} 在哪一段） */
+  templateText: string
+
+  /** 运行环境上下文（后台地址 + 目录 + 可用占位符）；null = 还没拉到 */
+  agentContext: AgentContextView | null
+
+  /** 后台自动附加的系统提示词小节（设置页列出来，让用户看到「多了什么」） */
+  promptSections: PromptSectionView[]
 
   /**
    * 模式提示词清单（全能创作 / 剧本创编 + 用户自建），住后台 KV。
@@ -276,6 +307,8 @@ export interface AgentService {
   }): Promise<{ ok: boolean; models: string[]; error?: string }>
   /** 保存系统提示词 */
   saveSystemPrompt(text: string): Promise<void>
+  /** 把提示词模板恢复成出厂模板（模板体检不通过时用；见 state.templateHealth） */
+  restoreTemplate(): Promise<void>
   /** 新建一个会话（清空消息区，不是删旧的） */
   newSession(): Promise<void>
   listSessions(): Promise<void>
@@ -410,6 +443,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     docked: false,
     width: 400,
     sessionId: null,
+    draft: false,
     title: '新会话',
     running: false,
     turns: [],
@@ -440,6 +474,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     upstreamModels: [],
     clientTypes: ['openai-chat', 'deepseek-v4'],
     systemPrompt: '',
+    templateHealth: { ok: true, missing: [] },
+    templateText: '',
+    agentContext: null,
+    promptSections: [],
     prompts: [],
     activePromptId: '',
     sessionPromptText: '',
@@ -709,6 +747,22 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.catalog = (Array.isArray(cfg.catalog) ? cfg.catalog : []) as AgentServiceState['catalog']
       if (Array.isArray(cfg.clientTypes)) state.clientTypes = cfg.clientTypes.map(String)
       if (typeof cfg.systemPrompt === 'string') state.systemPrompt = cfg.systemPrompt
+      // 提示词模板体检 + 运行环境上下文（后台地址 / 目录 / 可用占位符）
+      // 都在同一条配置响应里，一起落进 state —— 设置页据此提示与列清单。
+      const tpl = cfg.template as { ok?: boolean; missing?: unknown; template?: unknown } | undefined
+      if (tpl) {
+        state.templateHealth = {
+          ok: tpl.ok === true,
+          missing: Array.isArray(tpl.missing) ? tpl.missing.map(String) : [],
+        }
+        state.templateText = typeof tpl.template === 'string' ? tpl.template : ''
+      }
+      const ctxView = cfg.context as AgentContextView | undefined
+      if (ctxView && Array.isArray(ctxView.placeholders)) state.agentContext = ctxView
+      // 后台自动附加了哪些内容（运行环境 / 引用标记说明…）——设置页列给用户看
+      state.promptSections = Array.isArray(cfg.promptSections)
+        ? (cfg.promptSections as PromptSectionView[])
+        : []
       // 模式提示词清单也随这次 refresh 一起拉（列表不长，不必单独一趟）
       await loadPrompts()
       // 只有「带密钥的模型」才算配好：SDK 预置了一份目录（几十个模型、全无密钥），
@@ -752,6 +806,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
    */
   async function restoreCurrentSession(): Promise<void> {
     try {
+      // 主动点出来的「新对话」是**有意**的空白：这里必须原样留着。
+      // 否则 show() / refresh()（面板每次打开都走）会把它当成「刷新后丢了会话 id」，
+      // 又把最近一条历史装载回来（用户实测：右键「引用到 Agent」后跳回老对话）。
+      if (state.draft) return
       let id = state.sessionId
       if (!id) {
         const latest = state.sessions[0]
@@ -828,6 +886,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     state.queue = { paused: false, items: [] }
     state.running = false
     state.sessionId = null
+    // 标记「这是用户主动要的空白新对话」—— 见 state.draft 的说明。
+    state.draft = true
     state.sessionPromptText = ''
     state.promptKnown = false
     state.title = '新会话'
@@ -858,6 +918,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.segments = Array.isArray(rec.modelSegments) ? rec.modelSegments : []
       sync()
       state.sessionId = id
+      // 用户**主动**打开了这条会话：空白新对话的意图到此结束（见 state.draft）
+      state.draft = false
       // 挂起中的审批补渲染成卡片（刷新 / 切会话的洞）：
       // 审批只在「发生的那一刻」经 SSE 推一次，刷新后事件早没了，界面就把它丢了；
       // 而后台仍停在原地等这张卡片 —— 不补回来，这一轮永远结束不了
@@ -966,6 +1028,8 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       if (prompt) opts.systemPrompt = prompt
       const created = await api.createSession(canvasId(), { ...opts })
       state.sessionId = created.id
+      // 第一句话已经把这条件谈成了真会话：空白态结束（见 state.draft）
+      state.draft = false
       // 记下建这条会话时用的提示词正文（见 sessionPromptText 的说明）：
       // 之后发送前比对，正文变了就换会话，保证「改了提示词下一句就生效」。
       state.sessionPromptText = prompt
@@ -1644,6 +1708,27 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     state.systemPrompt = typeof r.text === 'string' ? r.text : text
   }
 
+  /**
+   * 把提示词模板恢复成出厂模板（用户点按钮才调）。
+   *
+   * 只在模板体检不通过时才有意义：那时 {{AGENTS_MD}} 丢了，用户在设置里写什么提示词都
+   * 进不去模型，而模型端不报错 —— 只能靠这个动作把链路接回来。
+   */
+  async function restoreTemplate(): Promise<void> {
+    try {
+      const r = await api.restoreTemplate()
+      const tpl = r.template
+      state.templateHealth = {
+        ok: tpl?.ok !== false,
+        missing: Array.isArray(tpl?.missing) ? tpl.missing.map(String) : [],
+      }
+      // 提示词正文没变（模板是另一处），但重拉一次让设置页的状态一致
+      await refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   async function removeSkill(name: string): Promise<void> {
     await api.removeSkill(name)
     await refresh()
@@ -1781,6 +1866,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     loadSkillCandidates,
     loadUpstreamModels,
     saveSystemPrompt,
+    restoreTemplate,
     removeSkill,
     addMcp,
     removeMcp,

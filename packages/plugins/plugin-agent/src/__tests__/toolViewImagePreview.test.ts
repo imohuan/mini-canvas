@@ -4,16 +4,17 @@
  * 用户原话：「Agent 里面读取文件的地方，点击时没有进行预览。希望你可以使用预览插件，
  * 添加一个预览组件（你可以参考 生成历史 弹出框的那个预览 api）。」
  *
- * 「读取文件」= read_file 读一张图片 → toolViews.ts 的 file 分支产出「文件预览」卡片，
- * 里面的 images 块由 ToolViewBody 画成 88px 缩略图。缺陷就在这里：那张 <img> 上没有任何
- * 点击处理 —— 点了没反应，只能盯着缩略图看。
+ * 「读取文件」= read_file 读一张图片 → toolViews.ts 的 file 分支给出**「文件预览」卡片**
+ * （用户口径 2026-10-13：图片按参考图做成卡片；视频 / 音频也成卡片，其余回退默认折叠行）。
+ * 缺陷的原始形态：那张 <img> 上没有任何点击处理 —— 点了没反应，只能盯着缩略图看。
  *
  * 本文件从两头锁死修好之后的契约：
  *   ① 组件行为（真挂载、真派发事件）：点图 → emit('preview', 那张图的 src)；
  *      Enter / Space 同样；别的键不响；带 role=button / tabindex=0 / aria-label
  *      （键盘可达、读屏能念出「查看图片 N」）；
  *   ② 宿主接线（源码级）：AgentConversation 的 4 处 ToolViewBody 都接了 @preview →
- *      previewImage，且预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）。
+ *      previewToolMedia（带媒体种类，视频 / 音频才不会被当成图片打开），
+ *      且预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）。
  *
  * 为什么 ① 不用 SSR 断言：本包 vitest 跑在 node 环境（没有 jsdom / @vue/test-utils），
  * 而且 .vue 经 SSR 变换后没有客户端 render 函数、挂不起来。这里改用 vue/compiler-sfc
@@ -35,9 +36,10 @@ const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf
 
 /* —————————————————— 被测组件：现场编译出客户端版本 —————————————————— */
 
-function loadBody(): unknown {
-  const { descriptor, errors } = parse(read('../components/ToolViewBody.vue'), { filename: 'ToolViewBody.vue' })
-  if (errors.length) throw new Error('ToolViewBody.vue 解析失败：' + errors.map(String).join('；'))
+function loadComponent(rel: string): unknown {
+  const file = path.basename(rel)
+  const { descriptor, errors } = parse(read(rel), { filename: file })
+  if (errors.length) throw new Error(file + ' 解析失败：' + errors.map(String).join('；'))
   const compiled = compileScript(descriptor, { id: 'toolview-test', inlineTemplate: true })
   // 组件源码是 TS，转成 JS 才能交给 new Function（类型导入会被抹掉）
   const js = ts.transpileModule(compiled.content, {
@@ -53,7 +55,7 @@ function loadBody(): unknown {
   return mod.exports.default
 }
 
-const Body = loadBody() as vue.Component
+const Body = loadComponent('../components/ToolViewBody.vue') as vue.Component
 
 /* —————————————————— 极小的内存节点宿主（够挖元素 + 派发事件） —————————————————— */
 
@@ -115,12 +117,18 @@ const { createApp } = vue.createRenderer<HNode, HNode>({
   },
 })
 
-/** 渲染 ToolViewBody，并收集它 emit 出来的 preview src */
+/**
+ * 渲染 ToolViewBody（卡片正文 / fallback 的输入输出），并收集它 emit 出来的预览。
+ * 第二个参数（媒体种类）一并收下 —— 视频 / 音频要靠它才不会被当成图片打开。
+ */
 function mountBody(view: ToolView): { root: HNode; emitted: string[] } {
   const root = hnode('#root')
   const emitted: string[] = []
+  const onPreview = (src: string, kind: string | undefined): void => {
+    emitted.push(kind ? src + '#' + kind : src)
+  }
   createApp({
-    render: () => vue.h(Body, { view, args: '{}', onPreview: (src: string) => emitted.push(src) }),
+    render: () => vue.h(Body, { view, args: '{}', onPreview }),
   }).mount(root)
   return { root, emitted }
 }
@@ -150,22 +158,30 @@ function fire(el: HNode, prop: 'onClick' | 'onKeydown' | 'onError', event: Recor
   throw new Error(`<${el.tag}> 上没有 ${prop} —— 点了不会响`)
 }
 
-/** 真机场景：read_file 读一张画布资源目录里的图 →「文件预览」卡片 */
+/** 真机场景：read_file 读一张资产目录里的图 →「文件预览」卡片（40px 缩略图） */
 const READ_FILE_VIEW = toolView(
   'read_file',
   JSON.stringify({ file_path: 'D:/p/.mini-canvas/assets/files/faaca433.jpeg', canvasId: 'c1' }),
   'image/jpeg, 3.7 MB',
 )
 
-describe('images 块的图可点开预览', () => {
-  it('read_file 的「文件预览」卡片：点图 → emit preview，带的就是这张图的 src', () => {
+describe('read_file 的图片卡片（用户参考图那版，2026-10-13）', () => {
+  it('数据层：图片走「文件预览」卡片，内容就是一行缩略图', () => {
+    expect(READ_FILE_VIEW.family).toBe('file')
+    expect(READ_FILE_VIEW.heading).toBe('文件预览')
+    const media = READ_FILE_VIEW.blocks[0]
+    expect(media.kind).toBe('media')
+    expect(media.kind === 'media' && media.thumb).toBe('/api/assets/files/faaca433.jpeg')
+  })
+
+  it('点缩略图 → emit preview（带 image 种类），带的就是这张图的 src', () => {
     const { root, emitted } = mountBody(READ_FILE_VIEW)
     const imgs = findAll(root, 'img')
     expect(imgs.length).toBe(1)
     expect(imgs[0].props.src).toBe('/api/assets/files/faaca433.jpeg')
 
     fire(imgs[0], 'onClick', keyEvent(''))
-    expect(emitted).toEqual(['/api/assets/files/faaca433.jpeg'])
+    expect(emitted).toEqual(['/api/assets/files/faaca433.jpeg#image'])
   })
 
   it('键盘也可达：Enter / Space 都 emit；别的键不响', () => {
@@ -199,6 +215,56 @@ describe('images 块的图可点开预览', () => {
 
     fire(imgs[1], 'onClick', keyEvent(''))
     expect(emitted).toEqual(['/api/b.png'])
+  })
+})
+
+describe('read_file 的视频 / 音频卡片（用户口径 2026-10-13）', () => {
+  /**
+   * 视频 / 音频没有静态画面：卡片里给一个 40px 的**播放位**（带播放角），
+   * 点它交给宿主那只 MediaViewer 全屏播放（里面有节点插件登记的真播放器）。
+   * 关键：emit 要带上媒体种类 —— 不带 kind 会被当图片打开，一片空白。
+   */
+  const VIDEO_VIEW = toolView(
+    'read_file',
+    JSON.stringify({ file_path: 'D:/p/.mini-canvas/canvases/c1/resources/clip.mp4' }),
+    'looks like a binary file (contains NUL bytes)',
+  )
+  const AUDIO_VIEW = toolView(
+    'read_file',
+    JSON.stringify({ file_path: 'D:/p/.mini-canvas/canvases/c1/resources/voice.mp3' }),
+    'audio/mpeg, 1.2 MB',
+  )
+
+  it('数据层：视频 / 音频都是「文件预览」卡片，内容带 src + mediaKind（不是 thumb）', () => {
+    expect(VIDEO_VIEW.family).toBe('file')
+    expect(VIDEO_VIEW.blocks).toEqual([
+      { kind: 'media', mediaKind: 'video', src: '/api/canvases/c1/resources/clip.mp4', title: 'clip.mp4', sub: 'video' },
+    ])
+    expect(AUDIO_VIEW.blocks).toEqual([
+      { kind: 'media', mediaKind: 'audio', src: '/api/canvases/c1/resources/voice.mp3', title: 'voice.mp3', sub: 'audio · 1.2 MB' },
+    ])
+  })
+
+  it('组件：画的是播放按钮（不是 <img> —— 媒体地址塞进图片标签必然裂图）', () => {
+    const { root } = mountBody(VIDEO_VIEW)
+    expect(findAll(root, 'img').length).toBe(0)
+    const btns = findAll(root, 'button').filter((b) => String(b.props.class ?? '').includes('tvc-media-play'))
+    expect(btns.length).toBe(1)
+    expect(btns[0].props['aria-label']).toBe('播放 clip.mp4')
+  })
+
+  it('点播放位 → emit preview 且带 video 种类（否则 MediaViewer 会当图片打开）', () => {
+    const { root, emitted } = mountBody(VIDEO_VIEW)
+    const btn = findAll(root, 'button').find((b) => String(b.props.class ?? '').includes('tvc-media-play'))!
+    fire(btn, 'onClick', keyEvent(''))
+    expect(emitted).toEqual(['/api/canvases/c1/resources/clip.mp4#video'])
+  })
+
+  it('音频同样带 audio 种类', () => {
+    const { root, emitted } = mountBody(AUDIO_VIEW)
+    const btn = findAll(root, 'button').find((b) => String(b.props.class ?? '').includes('tvc-media-play'))!
+    fire(btn, 'onClick', keyEvent(''))
+    expect(emitted).toEqual(['/api/canvases/c1/resources/voice.mp3#audio'])
   })
 })
 
@@ -262,12 +328,28 @@ describe('结构与接线守卫（源码级）', () => {
   it('宿主 AgentConversation：4 处 ToolViewBody 全部接上 @preview', () => {
     const sites = host.split('<ToolViewBody').slice(1)
     expect(sites.length).toBe(4)
-    for (const site of sites) expect(site).toContain('@preview="previewImage = $event"')
+    // 统一走 previewToolMedia：它按第二个参数（image / video / audio）决定 MediaViewer 挂哪只舞台
+    for (const site of sites) expect(site).toContain('@preview="previewToolMedia"')
   })
 
   it('预览仍只有一只 MediaViewer（复用主题注册的预览 API，不新增第二只）', () => {
     expect((host.match(/<MediaViewer/g) ?? []).length).toBe(1)
     expect(host).toMatch(/<MediaViewer\s+:item="previewItem"\s+@close="previewImage = null"\s*\/>/)
+    // 预览项要带上媒体种类，否则视频 / 音频会被当图片打开
+    expect(host).toMatch(/kind:\s*previewKind\.value/)
+  })
+
+  it('read_file 的媒体卡片：图片是缩略图、视频音频是播放位（都在卡片里，不走折叠行）', () => {
+    // 用户口径 2026-10-13：① 图片做成卡片（参考图那版）；② 视频 / 音频也要能看；
+    // ③ 其余（文本等）回退默认折叠行。三种媒体都在同一张「文件预览」卡片里出画面。
+    expect(body).toContain('tvc-media-play')
+    expect(body).toContain("emit('preview', b.src!,")
+    // 播放位与缩略图同尺寸（40px），且键盘可达
+    expect(body).toMatch(/\.tvc-media-play \{[^}]*width: 40px;[^}]*height: 40px;/)
+    expect(body).toContain('tvc-media-play:focus-visible')
+    // 图片缩略图保持可点开大图
+    expect(body).toContain('tabindex="0"')
+    expect(body).toContain('cursor: zoom-in')
   })
 
   it('工具分组：收起行不加壳（只有卡片才包灰底，用户口径 2026-10-08）', () => {

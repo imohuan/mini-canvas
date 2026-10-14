@@ -139,6 +139,49 @@ export interface AgentApiOptions {
 }
 
 /**
+ * 提示词模板的体检结果（后端 `templateMissing` 的产物）。
+ *
+ * `missing` 里每一条都是模板缺的记号；空了就健康。
+ * 最要紧的那条是 `{{AGENTS_MD}}` —— 少了它，设置里写的提示词一个字都进不了模型。
+ */
+export interface TemplateHealthView {
+  ok: boolean
+  missing: string[]
+  template?: string
+}
+
+/**
+ * 后台自动附加的一段系统提示词内容（后端 agent-prompt 注册场的读形态）。
+ *
+ * 给设置页列出来：用户能看到「我的提示词里到底多了什么」，而不是靠猜。
+ */
+export interface PromptSectionView {
+  id: string
+  title: string
+  /** 谁加的（插件名 / 'canvas-agent-prompt' 这类宿主件） */
+  source: string
+  /** 当前正文长度（界面只报字数，不贴全文 —— 那是模型看的东西，不是用户要读的） */
+  text: string
+}
+
+/** 一个可插入提示词正文的占位符（后端 agentContextPlaceholders 的产物） */
+export interface ContextPlaceholderView {
+  token: string
+  /** 当前值；空串 = 这行的值每轮不同（界面只显示说明） */
+  value: string
+  description: string
+  /** mini-canvas = 本服务自己展开的；harness = SDK 自带的（交给 SDK） */
+  source: 'mini-canvas' | 'harness'
+}
+
+/** 运行环境上下文（后台地址 + 目录 + 可用占位符） */
+export interface AgentContextView {
+  baseUrl: string
+  dirs: Array<{ label: string; path: string }>
+  placeholders: ContextPlaceholderView[]
+}
+
+/**
  * SSE 帧级回调（可选）：`acceptSeq` 返回 false = 这条 seq 已经应用过，跳过；
  * `onSeq` 收到**刚应用**的 seq（推进重连水位用）。
  */
@@ -214,6 +257,16 @@ export class AgentApi {
   /** 写 Agent 的系统提示词 */
   saveSystemPrompt(text: string): Promise<{ text?: string }> {
     return this.json('/api/agent/system-prompt', { method: 'PUT', body: JSON.stringify({ text }) })
+  }
+
+  /**
+   * 把提示词模板恢复成 SDK 出厂模板。
+   *
+   * 什么时候用：模板被覆盖成了纯文本（{{AGENTS_MD}} 没了），此时用户在设置里写什么
+   * 提示词都进不去模型 —— 体检结果在 `config()` 的 `template` 字段里（见 AgentConfigView）。
+   */
+  restoreTemplate(): Promise<{ ok?: boolean; template?: TemplateHealthView }> {
+    return this.json('/api/agent/template/restore', { method: 'POST' })
   }
 
   /** 读模式提示词清单（住后台 KV） */

@@ -26,8 +26,14 @@ import type { CardBlock, CardIcon, ToolView } from '../toolViews.js'
 
 const props = defineProps<{ view: ToolView; args: string; output?: string; name?: string }>()
 
-/** 点缩略图 / Enter / Space → 把这张图的 src 报给宿主（宿主用 MediaViewer 弹大图） */
-const emit = defineEmits<{ preview: [src: string] }>()
+/**
+ * 点画面 → 把「哪个地址 + 什么媒体」报给宿主（宿主用 MediaViewer 弹大图 / 播放）。
+ *
+ * 为什么要带 kind（用户口径 2026-10-13）：read_file 现在也读视频 / 音频 ——
+ * 宿主那只 MediaViewer 靠 kind 决定挂图片舞台还是插件登记的播放器。
+ * 只给一个地址的话，视频会被当图片打开。省略时按 image 处理（老调用点行为不变）。
+ */
+const emit = defineEmits<{ preview: [src: string, kind?: 'image' | 'video' | 'audio'] }>()
 
 /** 卡内「详情」折叠：展开 = 执行工具名 + 输入 + 输出 */
 const showDetails = ref(false)
@@ -108,18 +114,28 @@ function visibleRows<T>(items: T[]): T[] {
         </div>
       </div>
 
-      <!-- 单条媒体行：40px 缩略图 + 标题 + 副标题（节点详情 / 文件预览） -->
+      <!-- 单条媒体行：40px 画面 + 标题 + 副标题（节点详情 / 文件预览）。
+           画面两种：图片给缩略图；视频 / 音频给播放位（地址塞进 <img> 必然裂图）。
+           两者都点开全屏预览 —— 由宿主交给主题注册的 MediaViewer（视频 / 音频在那边真播） -->
       <div v-else-if="b.kind === 'media'" class="tvc-media">
         <img v-if="b.thumb && !failed[b.thumb]" class="tvc-media-thumb" :src="b.thumb"
           :alt="b.title || '缩略图'" loading="lazy" role="button" tabindex="0"
           :aria-label="'查看图片 ' + (b.title || '')"
-          @click="emit('preview', b.thumb!)"
-          @keydown.enter.prevent="emit('preview', b.thumb!)"
-          @keydown.space.prevent="emit('preview', b.thumb!)"
+          @click="emit('preview', b.thumb!, 'image')"
+          @keydown.enter.prevent="emit('preview', b.thumb!, 'image')"
+          @keydown.space.prevent="emit('preview', b.thumb!, 'image')"
           @error="markFailed(b.thumb!)" />
         <span v-else-if="b.thumb" class="tvc-media-broken" role="img" :aria-label="'图片加载失败：' + (b.title || '')" title="图片加载失败">
           <ImageOff :size="16" />
         </span>
+        <!-- 视频 / 音频：没有静态画面，给一个带播放角的媒体位，点开全屏播放
+             （全屏那只 MediaViewer 里有节点插件登记的真播放器） -->
+        <button v-else-if="b.src" class="tvc-media-play" type="button"
+          :aria-label="'播放 ' + (b.title || '')" :title="'播放 ' + (b.title || '')"
+          @click="emit('preview', b.src!, b.mediaKind === 'audio' ? 'audio' : 'video')">
+          <component :is="b.mediaKind === 'audio' ? Music : Video" :size="15" />
+          <span class="tvc-media-play-badge" aria-hidden="true">▶</span>
+        </button>
         <span class="tvc-media-text">
           <span v-if="b.title" class="tvc-media-title">{{ b.title }}</span>
           <span v-if="b.sub" class="tvc-media-sub">{{ b.sub }}</span>
@@ -222,6 +238,11 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-media-thumb { display: block; flex: none; width: 40px; height: 40px; object-fit: cover; border-radius: 8px; border: 1px solid var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.04)); cursor: zoom-in; }
 .tvc-media-thumb:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
 .tvc-media-broken { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 8px; border: 1px dashed var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.04)); color: var(--ui-ink-dim, #919191); }
+/* 视频 / 音频的播放位：与图片缩略图同尺寸（40px），一眼看出「这里点一下会播」 */
+.tvc-media-play { position: relative; display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border-radius: 8px; border: 1px solid var(--ui-line, #363636); background: var(--ui-veil, rgb(255 255 255 / 0.06)); color: var(--ui-ink-dim, #919191); cursor: pointer; }
+.tvc-media-play:hover { color: var(--ui-ink, #f7f7f7); border-color: var(--ui-ink-dim, #919191); }
+.tvc-media-play:focus-visible { outline: 2px solid var(--ui-accent, #0891b2); outline-offset: 1px; }
+.tvc-media-play-badge { position: absolute; right: 2px; bottom: 1px; font-size: 8px; line-height: 1; color: var(--ui-ink, #f7f7f7); }
 .tvc-media-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tvc-media-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ui-ink, #f7f7f7); }
 .tvc-media-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #919191); }

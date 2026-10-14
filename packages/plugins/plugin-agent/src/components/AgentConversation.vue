@@ -169,6 +169,12 @@ function removeAttachment(i: number): void {
  */
 const previewImage = ref<string | null>(null)
 /**
+ * 预览的是什么媒体（用户口径 2026-10-13）：read_file 现在也读视频 / 音频，
+ * MediaViewer 靠 kind 决定挂图片舞台还是节点插件登记的真播放器 ——
+ * 不带 kind 会把视频当图片打开（一片空白）。
+ */
+const previewKind = ref<'image' | 'video' | 'audio'>('image')
+/**
  * 预览所在的**整组图片**（用户口径 2026-10-09：预览时用 ← / → 轮播，循环）。
  * MediaViewer 本来就支持（list + index + 键盘 ←→ 取模循环），此前各调用点只传了单张。
  * 传了 list 的才有轮播；单图（如目标只有一张参考图）不显示翻页按钮。
@@ -177,12 +183,19 @@ const previewList = ref<string[] | null>(null)
 function openPreview(url: string, list?: string[] | null): void {
   previewImage.value = url
   previewList.value = list && list.length > 1 ? list : null
+  previewKind.value = 'image'
+}
+/** 工具卡里的画面：地址 + 媒体种类（视频 / 音频要 MediaViewer 挂对应播放器） */
+function previewToolMedia(url: string, kind?: 'image' | 'video' | 'audio'): void {
+  previewKind.value = kind ?? 'image'
+  previewList.value = null
+  previewImage.value = url
 }
 const previewItem = computed(() =>
   previewImage.value
     ? {
-      name: "图片预览",
-      kind: "image",
+      name: previewKind.value === 'image' ? '图片预览' : previewKind.value === 'video' ? '视频预览' : '音频预览',
+      kind: previewKind.value,
       url: previewImage.value,
       ...(previewList.value ? { list: previewList.value, index: Math.max(0, previewList.value.indexOf(previewImage.value)) } : {}),
     }
@@ -1460,7 +1473,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                         <Loader2 :size="13" class="ac-spin" />
                       </div>
                       <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewImage = $event" />
+                        :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
                     </div>
                   </template>
                   <!-- 默认工具（通用）：折叠行 —— 收起 = 箭头 + 名字 + 摘要；展开 = 输入/输出 -->
@@ -1476,7 +1489,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                       </button>
                       <div v-if="openTools[row.tools[0].id]" class="ac-tf-body">
                         <ToolViewBody :view="viewOf(row.tools[0])" :args="row.tools[0].arguments"
-                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewImage = $event" />
+                          :output="row.tools[0].output" :name="row.tools[0].name" @preview="previewToolMedia" />
                       </div>
                     </div>
                   </template>
@@ -1498,7 +1511,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                             <Loader2 v-if="!tool.settled" :size="13" class="ac-spin" />
                           </div>
                           <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
-                            :name="tool.name" @preview="previewImage = $event" />
+                            :name="tool.name" @preview="previewToolMedia" />
                         </template>
                         <template v-else>
                           <button class="ac-tf-toggle" :aria-expanded="!!openTools[tool.id]"
@@ -1509,7 +1522,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                           </button>
                           <div v-if="openTools[tool.id]" class="ac-tf-body">
                             <ToolViewBody :view="viewOf(tool)" :args="tool.arguments" :output="tool.output"
-                              :name="tool.name" @preview="previewImage = $event" />
+                              :name="tool.name" @preview="previewToolMedia" />
                           </div>
                         </template>
                       </div>
@@ -2470,7 +2483,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   gap: 2px;
   justify-content: flex-end;
   height: 22px;
-  margin-top: 2px;
+  margin-top: 4px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.16s ease;
@@ -2491,8 +2504,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-msg-btn {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: 8px;
   background: transparent;
