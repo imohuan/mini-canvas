@@ -10,8 +10,17 @@
     "preview": "vitepress preview --port 5291"
   },
   "devDependencies": {
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/canvas-render": "workspace:*",
     "@mini-canvas/kernel": "workspace:*",
+    "@mini-canvas/plugin-node-image": "workspace:*",
+    "@mini-canvas/plugin-node-text": "workspace:*",
+    "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@vue-flow/core": "^1.48.2",
+    "@vue/server-renderer": "3.5.38",
+    "mermaid": "^11.17.2",
     "vitepress": "^1.6.4",
+    "vitepress-plugin-mermaid": "^2.0.17",
     "vue": "^3.5.34"
   }
 }

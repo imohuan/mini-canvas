@@ -5,6 +5,1051 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-14 八续，逐个体检插件系统的 Agent 相关能力 —— 查出并修好一个真漏洞）
+
+用户口径（原话）：「现在请检查一下你这边 Agent 其他的一些功能，就是你提供插件系统可以，
+就是上下文里面 Agent 的一些相关工具是否有效」。
+
+**做法**：不靠读代码下结论，写探针插件把四个能力**真机跑一遍**（走真实 HTTP + 真实 MCP 端点）。
+
+| 能力 | 探针结论 |
+|---|---|
+| `ctx.agent.use()` 中间件 | ✅ 能改写、能拦截、order 生效 |
+| `ctx.agent.systemPrompt()` 加提示词小节 | ✅ 进得去，带 id / 标题 / 来源 |
+| `ctx.agent.tool()` 加 Agent 工具 | ✅ 走 MCP，**真能调用**（传参、返回都对） |
+| `ctx.mcp.tool()` | ✅ 与上面**同一张表**，不是两套 |
+| 卸载插件 | ✅ 四样都干净摘掉；宿主自己注册的两条留着（归属正确） |
+| 一个插件注册两个工具 | ✅ 两个都在（按工具名做键，不会互相顶掉） |
+
+**查出并修好的真漏洞：队列消息绕过中间件。**
+
+症状：`/messages`（直接发）过中间件，但 `QueueScheduler` → `runtime.startRun`（排队发）**不过**。
+于是**同一条消息，直接发和排队发行为不一样** —— 插件写的拦截 / 改写被排队整条绕过去。
+而队列是这个应用的常规用法（跑着的时候再发一条就进队列），不是边角路径。
+带 goal 的条目（走 startGoal）同样绕。
+
+修法：给 `QueueSchedulerDeps` 加 `preTurn`，调度器在**真正发之前**跑一遍（与 HTTP 同一套）；
+被拦下的条目**移出队列**（留在里面会每次 tick 重来一遍，队列永远动不了）。
+
+**修的时候自己踩了一个新坑，一并修掉**：跑着发消息这条路，HTTP 层已经跑过中间件了，
+再入队 → 调度器又跑一遍 ⇒ 有状态的中间件（配额、计数）会对同一条消息**记两次账**。
+加 `QueueItem.preTurned` 标记，调度器见到就跳过；入队时正文改用 `input.text`（**改写后**那份），
+否则会把中间件的改写丢掉。
+
+**顺带修的两处**：
+- `next()` 被调两次的报错从前是 `[agent] next() 被调用了多次` —— 插件作者既不知道是哪个插件、
+  也不知道怎么改（真机探针实测：界面上只剩 500 + 堆栈）。改成指名道姓 + 给做法。
+- `runAgentMiddleware` 里还留着一处读 `sys` 旧条目的代码 —— 上一轮把 `systemPrompt` 改成
+  注册小节之后那批条目已经不存在了，属死代码，清掉。
+
+**验证**：`cloud-server` **688/688**（新增 `queuePreTurn.test.ts` 4 条：中间件被调用 / 拦下移出队列 /
+不注入时行为不变 / preTurned 跳过不重复跑；`agentMiddleware.test.ts` 扩到 11 条）。
+真机探针：直接发 → `中间件被调用 = true`；排队发 → `中间件被调用 = true`（修复前是 false）。
+
+### 追记（2026-10-14 七续，系统提示词三层理清 —— 用户拿真实请求当场证伪）
+
+用户口径（原话）：①「你这边系统提示词根本就没有生效，你修改的并不是真实的系统提示词」；
+② 给了后台拦截到的**真实请求**（`/api/request-logs/cda70f5f…`）：「你可以看一下它的 message 里面的
+第一项，这个才是真实的系统提示词」；③「在我的项目中，Agent 提示词是插入在系统提示词内部的」；
+④「对于我们现在这个结构，直接插入到系统提示词中，就是提供一个 {{AGENT_MD}} 这样的形式」。
+
+**用户当场证伪了一条真的**：设置里那个叫「系统提示词」的页签，改的是**模式提示词清单**（存 KV），
+而真正的系统提示词模板住在 `agent_state/system_config.yaml` 的 `system_prompt` —— **界面上没有入口**；
+AGENTS.md 有写入接口，界面上也**没有入口**。名字指错了地方，比没有界面更坏（用户以为改的是它）。
+
+**拿用户给的真实请求逐条查**（`messages[0].content`，17547 字）：
+
+| 判据 | 结果 | 说明 |
+|---|---|---|
+| `# Role` / `[developer_instructions]` / `# Environment` | 在 | 模板机制本身是好的 |
+| 残留 `{{VAULT}}` 这类未替换记号 | 无 | 替换正常 |
+| `铁律`（模式提示词「全能创作」） | 在 | 模式提示词确实进模型了 |
+| **`你是 mini-canvas 画布助手`（用户写的 AGENTS.md）** | **不在** | ← 真 bug |
+
+**根因**：`withSystemPrompt` 把 AGENTS.md **整份替换**成了模式提示词 —— 于是「选着模式」时，
+用户在「Agent 提示词」里写的东西**一个字都进不去模型**。真机表现是「设置里改了 Agent 提示词，AI 毫无反应」。
+
+**做了什么**：
+
+| 改动 | 说明 |
+|---|---|
+| `config.ts` 的 `withSystemPrompt` | **合并**而不是替换：`<用户原文>\n\n<模式提示词>`，两者都进 `{{AGENTS_MD}}` |
+| 设置页页签改名 + 拆三个 | 「Agent 提示词」（AGENTS.md，可写）/「模式提示词」（原来那个）/「系统提示词模板」（新，只读 + 恢复） |
+| 新增 `AgentPromptPage.vue` | 写 AGENTS.md：22 个占位符可点插 + 列出「后台还会自动附加哪些内容」 |
+| 新增 `TemplatePage.vue` | 只读展示 7660 字的真模板（含 `{{AGENTS_MD}}`）+ 坏了才出恢复按钮 |
+| `ctx.agent.systemPrompt(text, opts)` | 从「往用户消息里塞字」（**语义错的旧实现**）改成**注册系统提示词小节**，带 id/title/order/source |
+| `AGENT_PROMPT_FIELD` = `server/agent-prompt` | 新的注册场：插件可往提示词加内容，卸载自动回收 |
+| 引用标记说明 + 运行环境 | 从「runtime 硬拼」改成**用同一个注册场注册**（宿主自己也是一个插件），设置页能列出「谁加了什么」 |
+| `renderSection` 去重 | 正文自带同名标题时不再叠一层（真机组装出来发现 `# 引用标记` 跟着 `## 引用标记`） |
+
+**真机验证（8865 + 5288，Chrome MCP）**：起服务 → 真 POST 建会话（带模式提示词）→ 读回 trace：
+system prompt **16467 字**，① Agent 提示词 ✅ ② 模式提示词 ✅ ③ 引用标记说明 ✅ ④ 运行环境 ✅ ⑤ 无残留 `{{` ✅，
+标题不再重复。设置页三个页签逐个点过：Agent 提示词页读到 `你是 mini-canvas 画布助手…` + 22 个占位符 +
+两条自动小节（引用标记 681 字 / 运行环境 1254 字）；模板页只读显示 7660 字且含 `{{AGENTS_MD}}`。
+
+**测试**：`cloud-server` **683/683**（新增 `agentPromptLayers.test.ts` 2 条——用 SDK 真的 `assembleSystemPrompt`
+组装一遍断言三层都在，这是最接近模型的判据；`agentMiddleware.test.ts` 扩到 10 条锁住注册表语义）。
+`plugin-agent` **327/327**；四个 typecheck 全过。
+
+**留的口子**：模板本体在界面上是**只读**的（改它要编辑 `system_config.yaml`）。理由：手改这个框很容易误删
+`{{AGENTS_MD}}`，而那种坏法是**静默**的（模型不报错，只是你写什么都进不去）。要开放编辑得有「保存前体检 +
+一键撤销」，那是另一件事。
+
+### 追记（2026-10-14 五续，Agent 补上「运行环境上下文」+ 发现并修好提示词链路的静默断裂）
+
+用户口径（原话）：①「优化我 cloud server 里的 Agent，我需要你添加一些我当前的上下文信息：
+1. 当前运行的后台 base URL（因为有些时候会用到它）；2. 一些目录信息」；
+② 贴了一张别的 Agent 的截图（system_prompt 模板 + 「可用占位符（点击插入）」列表，含 AGENTS_MD / VAULT /
+SKILLS / MEMORY / SCHEDULES / PLATFORM / CWD / SESSION_ID 等），问「我的这个项目中有没有办法这样实现」。
+
+**调查结论（好消息）**：截图里那套 SDK 就是本项目已经在用的 `@prismshadow/penguin-core`（PenguinHarness），
+占位符机制**本来就完整存在**：`assembleSystemPrompt` + `{{AGENTS_MD}}`/`{{CWD}}`/`{{SKILLS}}`… 一整套，
+官方文档 `packages/docs/content/configuration.zh.md § 系统提示词占位符` 有全表。
+
+**但查出真 bug（本次的主要价值）**：本项目 8865 数据目录的 `system_config.yaml` 里 `system_prompt` 被写成了
+**纯文本**（只剩「你是 mini-canvas 画布助手。」），`{{AGENTS_MD}}` / `{{CWD}}` / `{{SESSION_ID}}` 等记号全丢。
+实测（`assembleSystemPrompt` 直接调用）：坏模板下组装结果 **恰好 34 个字符**（就是那行纯文本 + `- Shell: pwsh`），
+**AGENTS.md 一个字都没进去**。于是：
+
+| 受影响的东西 | 后果 |
+|---|---|
+| 设置页写的系统提示词（AGENTS.md） | 进不去模型 |
+| 模式提示词（全能创作 / 剧本创编） | 进不去模型 |
+| 引用标记说明（REFERENCE_MARKUP_GUIDE） | 进不去模型 |
+| 技能 / 记忆 / 密钥保险柜小节、Environment 那几行 | 进不去模型 |
+
+而**模型端不报任何错** —— 表现只是「它好像不太懂画布」。真机证据：265 条会话 trace 里 259 条的系统提示词
+长度恒为 34 字符；按天看，2026-10-06 起断崖式掉到 34（那天正是 STATUS 里记过的「AGENTS.md 被并发写截断」事故，
+重建配置时把模板写成了纯文本）。
+
+**做了什么**：
+
+| 改动 | 说明 |
+|---|---|
+| `cloud-server/src/agent/runtimeContext.ts`（新） | 上下文情报模块：地址 / 目录 / 占位符清单 / 常驻小节渲染，纯函数 |
+| `cloud-server/src/server.ts` | 接线 `createAgent({ assembly: { promptSections } })` —— SDK 给宿主的正门，**每次建会话现读**，端口变了下句就对 |
+| `cloud-server/src/agent/config.ts` | `setRuntimeContext` / `contextInfo` / `expandContext`；`templateHealth` + `restoreTemplate`（模板体检与一键恢复） |
+| `cloud-server/src/agent/runtime.ts` | `withSystemPrompt` 写盘前展开自定义占位符（建会话那一刻，值最新） |
+| `cloud-server/src/routes/agent.ts` | `GET /api/agent/config` 带上 `context` 与 `template`；新增 `POST /api/agent/template/restore` |
+| `plugin-agent`：`agentApi.ts` / `agentService.ts` | 新类型 + state（`agentContext` / `templateHealth`）+ `restoreTemplate()` 动作 |
+| `plugin-agent`：`PromptPage.vue` | 「可用占位符」两组 chips（点一下插到光标处）+ 「运行环境」地址与目录表 + 模板坏了的琥珀提示与恢复按钮 |
+
+**设计取舍（记下来免得以后被改回去）**：
+
+1. **常驻小节走 `assembly.promptSections`，不写进 `system_config.yaml` 的模板** —— 写进模板会和用户的编辑打架
+   （模板是用户在设置里能看到、能改的东西），而且 `assembly` 每次建会话现读，天然跟得上端口变化。
+2. **自定义占位符只在「建会话那一刻」展开**，不落盘成值 —— 落盘就把地址冻死了，用户换端口后提示词里还是旧地址，
+   而他根本没改过。所以 `systemPrompt()` 读回的是**原文**（记号保留），界面另用 `context.placeholders[].value` 显示当前值。
+3. **不重复实现 SDK 自带的记号**（`{{CWD}}` / `{{SESSION_ID}}` / `{{SKILLS}}` …）：同名两套会互相抢，
+   而且 SDK 拿得到会话级的值（我们展开 `{{CWD}}` 会写出一个错的）。界面把两组分开列，标清谁提供。
+4. **模板恢复不自动做** —— 出厂模板带一大段 PenguinHarness 自己的角色设定（Role / Success criteria / Tool use…），
+   换回来会明显改变这个 Agent 的性格，必须让用户看见并自己点（他就是被一次「不知不觉的自动重建」坑过的）。
+5. **体检判据只认 `{{AGENTS_MD}}`**（另附 `{{CWD}}` / `{{SESSION_ID}}`）：它是整条链路的咽喉；
+   技能 / 记忆那些记号缺了模型照样干活，不该弹「恢复出厂模板」这么大的动作。
+
+**验证**：`cloud-server` **671/671**（新增 `runtimeContext.test.ts` 10 + `agentTemplate.test.ts` 6）+ tsc 干净；
+`plugin-agent` **327/327**（新增 `agentContext.test.ts` 2）+ tsc 干净。
+真机（8865 + 5289 dev，Chrome MCP）：设置 → Agent → 系统提示词页正确显示 7 个目录、22 个占位符（两组）、
+模板坏了时出现琥珀提示与「恢复出厂模板」按钮；
+**端到端最硬的一条**：真实 POST 建会话后读 trace，`system_prompt` 长度从 34 涨到 1303，
+含 `# 运行环境（本机后台）` 与 `http://127.0.0.1:8865/...` 真实端口，且**无残留 `{{`**、用户的 AGENTS.md 文本也在里面。
+
+**还没做（留给下一步）**：这个 8865 数据目录的模板仍是坏的（体检会一直报），需要用户在设置页点一次
+「恢复出厂模板」——恢复后角色设定会变回 PenguinHarness 出厂那份，那是用户的决定，不该替他做。
+
+### 追记（2026-10-14 二续，node-ui 解析重写为"前后端完整链路"）
+
+用户口径（原话）：① 我介绍的 node-ui 文档只写了前端，"后台一个没有，它的 MCP 呢？它提供的 MCP 工具啊，
+它的用法呢？整个流程是怎样的呢？啥也没有"；② 这文档要能**带一个小白从 0 到 1 理解它如何工作、核心逻辑**——
+"很多功能都是根据这个核心逻辑去增加的配套功能"；③ 提醒：docs 里已有一份**专门讲这个流程**的文档，去看一下。
+
+**找到并采用权威来源**：@@BT@@docs/plan/node-ui-api-guide.md@@BT@@（"可视化节点 API 手册（前后端）"，与代码同源）。
+本插件实际是**前后端成对**的：前端半（nodeUiPlugin.ts）+ 后台半（server.ts + task/ 一整套任务脚本系统）。
+
+**重写结果**：@@BT@@node-ui@@BT@@ 从 6 页扩到 **14 页**：
+
+| 新增页 | 讲什么 |
+|---|---|
+| @@BT@@flow.md@@BT@@ | **核心流程**（放最前）：三块组成、四个角色、四步流程（mermaid 图）、一条真实链路 |
+| @@BT@@ui-sandbox.md@@BT@@ | HTML 跑在沙箱哪、注入的 @@BT@@__CANVAS_*__@@BT@@ 与 @@BT@@CanvasUI@@BT@@ 五件事、五条硬约束、最小可跑例子、palette |
+| @@BT@@server-mcp.md@@BT@@ | **11 个 MCP 工具**逐个（参数/返回/用法），含 @@BT@@canvas_fn_list/info/call@@BT@@ 三件套与虚拟画布 |
+| @@BT@@task-scripts.md@@BT@@ | 后台脚本怎么写、ctx 六项与三助手、**产物落哪个字段**（四坑）、@@BT@@export const docs@@BT@@ |
+| @@BT@@declare.md@@BT@@ | 依赖声明 @@BT@@data.uiScripts@@BT@@ 与 403（为什么"不声明就调不动"、怎么自动补） |
+| @@BT@@routes.md@@BT@@ | 6 条任务路由 + 画布读写 + 资源 + 节点包 + 调模型 |
+| @@BT@@node-package.md@@BT@@ | @@BT@@.mcnode@@BT@@ 导出/导入/**冲突整包升版本**（四处一起改）+ 拖拽落点口径 |
+| @@BT@@pitfalls.md@@BT@@ | AI 写界面的七条坑 + 开发期撞出来的五个坑 |
+
+**顺带修的两件事**：
+- 文档站**没有 mermaid 渲染**（流程文档的图全成了代码块）→ 装 @@BT@@vitepress-plugin-mermaid@2.0.17@@BT@@ + @@BT@@mermaid@^11@@BT@@（插件 peer 要 10/11，降到 11），
+  在 @@BT@@config.ts@@BT@@ 用 @@BT@@withMermaid(defineConfig(...))@@BT@@ 包一层，并给 @@BT@@dayjs@@BT@@ 加 @@BT@@optimizeDeps.include@@BT@@（不加 dev 下报 "dayjs does not provide an export named 'default'"）。
+- 总览页重排：把「先读这一页」提到最前、落点表按**前端 / 沙箱 / 后台 / 复盘**分组标注。
+
+**验证**：@@BT@@docs build@@BT@@ 通过（中途修 1 处死链）；audit 六项全绿；
+真机（:5290）：@@BT@@/plugins/parsed/node-ui/flow@@BT@@ 渲染出 **2 张 mermaid 图**、H1 与目录正确。
+
+**教训**：写解析前先搜 @@BT@@docs/@@BT@@ 有没有现成的权威设计文档（@@BT@@docs/plan/*@@BT@@）——
+这次它一直在，白写了半轮。
+
+### 追记（2026-10-14 一续，插件解析范围收口 + 侧边栏去重）
+
+用户口径（三段）：① 不必所有插件都写 —— **只做典型**：可视化节点（最好的例子）、底部状态栏、再挑几个自带的；
+② 侧边栏「文本节点」**重复了**，删掉下面那份；③ 之前批量派出的 4 个代理要收口。
+
+**做了什么**：
+- **停掉并清理超范围产出**：打断 batch1/2/3 三个子代理；删掉它们已落盘的 14 个插件解析目录（agent / clipboard 等），
+  只留典型。磁盘上现在 5 组：@@BT@@bottom-bar@@BT@@ / @@BT@@clipboard@@BT@@ / @@BT@@context-menu@@BT@@ / @@BT@@node-text@@BT@@ / @@BT@@node-ui@@BT@@。
+- **新增两个典型解析**（原来没有的）：@@BT@@node-ui@@BT@@（可视化节点，6 页：总览/服务/节点类型/命令/事件/设置）、
+  @@BT@@bottom-bar@@BT@@（底部状态栏，4 页：总览/服务/注册糖/插槽与主题槽）。
+- **补 2 个自带件**：@@BT@@context-menu@@BT@@（5 页）、@@BT@@clipboard@@BT@@（4 页）。
+- **修侧边栏重复**：根因是"我手写了一组「文本节点 text」硬编码组，同时又有自动生成组"，两处撞名 → 删掉手写那份。
+- **侧边栏改成自动生成**：@@BT@@config.ts@@BT@@ 里 @@BT@@readParsedSidebar()@@BT@@ 扫 @@BT@@plugins/parsed/<目录>@@BT@@，
+  每个插件一组、子页按固定顺序罗列、显示名取各页 H1 —— 加一个插件目录就自动进侧边栏，不再手改。
+- **解析索引页也自动生成**：新增 @@BT@@.vitepress/data/parsed.data.ts@@BT@@（构建期扫目录），索引表随目录自动增减。
+
+**验证**：@@BT@@docs build@@BT@@ 通过（中途修了 5 处死链：index 里链的子页还没写）；audit 六项全绿；
+真机（已重启 dev server 清掉旧编译缓存）：侧边栏 5 组、每组子页齐、**无重复**；索引页 5 行自动列出。
+
+**教训**：手写侧边栏 + 自动生成侧边栏同时存在 = 必然重复。清单类结构一律走"扫目录生成"。
+
+### 追记（2026-10-13 十一续，默认主题组件文档体系 + 组件展厅插件 + 插件解析样板）
+
+用户口径（三段）：① 文档体系更新——默认主题注册了哪些组件要列清、按组件库标准补文档
+（功能 / Props / Slots / 事件方法 / 示例 / 注意事项），组件全局可用要讲清；② 插件能力要解析清楚
+（注册了哪些工具/服务/函数，先做一个样板再批量）；③ 文档与最新 commit 同步。
+
+**做了什么**：
+
+| 产物 | 位置 |
+|---|---|
+| 默认主题组件库总览 + 18 篇组件文档（6 渲染皮 + 12 设计系统件 + 参数族） | @@BT@@packages/docs/plugins/theme-components/@@BT@@ |
+| 插件解析样板（H1=插件名 + H2=分类：身份/服务/节点/命令/底栏/组件/设置/注意） | @@BT@@packages/docs/plugins/parsed/node-text.md@@BT@@ |
+| **组件展厅插件**（新自带件）：画布左下角按钮 → 浮层真渲染全部主题组件；画布件区块嵌一块真画布 | @@BT@@packages/plugins/plugin-theme-gallery/@@BT@@ |
+
+**渲染组件的结论（试了三条路）**：
+1. 文档站直接跑纯 UI 件 ✅（加 workspace 依赖即可）；
+2. 文档站造虚拟渲染上下文跑 BaseNode ❌（端口要 VueFlow 节点上下文，硬造桩太脆）；
+3. **画布上做展厅插件（用户提议）✅✅** —— 组件在真宿主里跑，点得动拖得开，文档解析页与组件库页都链到它。
+
+**展厅插件的实现要点**：
+- 往 overlay 槽挂可开关浮层；12 个设计系统件全部 @@BT@@useUiComponent@@BT@@ 按名取（顺带实证"全局可用"）；
+- 节点壳/连线/背景/浮动端口要 VueFlow 节点上下文 → 展厅内嵌一块真 @@BT@@CanvasHost@@BT@@
+  （内存 adapter + @@BT@@scopedKey('canvas', GRAPH_KEY)@@BT@@ 预置 2 节点 1 边）；
+- 附带示例节点插件注册 @@BT@@demo-basic@@BT@@ / @@BT@@demo-toolbar@@BT@@（后者带 out:top 控制栏区域）。
+
+**守卫测试的更新（三处）**：
+- T08 依赖方向：给 theme-gallery 开白名单（它是主题的"橱窗"，依赖主题包是职责本身）；
+- 配色卫生：展厅 9 处中性色加 @@BT@@主题色白名单@@BT@@ 行标记；
+- 装配清单计数 20 → 21。
+
+**验证**：theme-gallery 6 测全绿；ui 335/336（唯一红的 @@BT@@NodeBottomBar.vue:1165@@BT@@ 写死投影色，
+stash 全部改动后依然红——并行工作带入的既有失败，与本轮无关）；@@BT@@docs build@@BT@@ 通过、audit 全绿；
+真机（:5288）：展厅 16 个分区全部真渲染，含比例网格真实比例图标、嵌套真画布的端口/连线/背景。
+
+**遗留**：其余 32 个插件解析按样板批量（待确认样板格式后进行）；文档与 commit 同步的逐页核对进行中。
+
+### 追记（2026-10-14，可视化节点拖拽对齐 + 节点/后台函数 MCP 化）
+
+用户口径（原话分四处）：① 去掉可视化节点拖拽时的**聚焦效果**、修正**落点**，与图片/视频一致，
+缩放不变；② 每个可视化节点要有详细功能描述（含自己的输入输出），MCP 要能列收藏的节点、
+把收藏节点建成节点、查它能干什么；③ 每个后台接口/扩展函数要写清「做什么 / 参数 / 返回 / 示例」，
+MCP 能列出全部功能函数、调用指定函数、查参数与返回值 schema，**调用时不必传 Canvas ID / Node ID**；
+④ 总目标：可发现 / 可调用 / 可复用 / 可扩展。
+
+**一、拖拽（根因两个，都在「落点没一路传下去」）**
+
+| 症状 | 根因 | 修法 |
+|---|---|---|
+| 落点不对 | createAssetNode 的节点包分支调 importPackFromUrl(url, name) **没传 atFlow** → spawnPosition(undefined) 走级联默认位 | 补上 atFlow |
+| 有「聚焦效果」 | 同上：atFlow 为空 → 走 focusNewNode（执行 auto-layout:focus-selected = 按 F，会缩放平移视口） | 拖拽那条只 selectNewNode |
+
+另外两处一并拉齐：文件系统拖包（LeftDrawer 的 onCanvasDrop）没传指针落点 → 补
+ui.screenToFlow(e.clientX, e.clientY)；importPackFile 的默认落点从「级联位 + 聚焦」改成
+「视口中心 + 只选中」（与 addMediaFilesToCanvas 同一条口径）。新增 viewportCenterFlow()。
+媒体文件那条（file-drop 的 commitPayloads）本来就只 selection.set，不动视口 —— 现在三者一致。
+
+**二、节点说明书（data.uiNodeDoc）+ 收藏节点工具**
+
+新模块 task/nodeDoc.ts：说明书四件事（what / effect / inputs / outputs）。inputs/outputs
+每条**一行字或 {name,type,desc} 都认**；**what 是硬门槛**（没有就当没写，不留半空壳）。
+落点在**节点 data**：随节点包一起打包/导入，不另立索引（索引必然与实际漂移）。
+新工具：canvas_ui_describe（写说明书）、canvas_ui_favorites（列收藏节点 + 各自说明书 + 脚本清单）、
+canvas_ui_add_favorite（把收藏包落地成节点，复用 planImport 的整包升版本）。
+canvas_ui_read 顺带回说明书与声明脚本；手册的节点列表也把说明书摊在下面几行。
+
+**三、后台功能函数 MCP 化**
+
+新模块 task/fnDoc.ts：作者在脚本里 export const docs = { fn: { what, args, returns, example } }。
+inspect.ts 那趟子进程 import 顺手把 docs 带回来（零额外成本）；runs.ts 出 listFunctions / scriptDocs。
+新工具：canvas_fn_list（列全部函数）、canvas_fn_info（查参数/返回）、
+canvas_fn_call（直接调，**不必传 Canvas ID / Node ID**）。
+**虚拟画布**：canvas_fn_call 现造一张 fn-probe-default（脚本 ctx 需要 canvasId/nodeId
+来拼「回写画布」的地址）。CanvasStore.list() 按前缀过滤掉它 —— 否则用户画布下拉框里会
+凭空多出这张探针画布。前缀常量两边各一份（插件不能 import cloud-server），有测试盯着一致。
+
+**测试**：plugin-node-ui **239**（196 → +43：nodeDoc 13、fnDoc 10、nodeMcpTools 20）、
+cloud-server **652**（+4：virtualCanvas 3、canvasDoc 补 1）、ui **328**（+8：nodePackDrag；1 红是既有的
+plugin-bottom-bar 写死颜色，HEAD 里就是红的、与本次无关）。三包 typecheck 干净。
+
+### 追记（2026-10-14 二续，用户报「拖出来的节点名称重复」+ 审查收尾）
+
+**用户口径（原话）**：「你拖出来的这些节点，名称没有自动追加，导致了名称重复。
+我的画布里面添加节点的时候，名称是会自动累加的，你可以看一下」。
+
+**根因**：画布上「新建节点」的名字走数据层按类型计数（图片 1 / 图片 2…），不会撞；
+而**从资产库拖节点包进来**建节点时，名字是**照抄包里那份 data.label** ——
+拖两次同一个包就得到两个同名节点。与剪贴板粘贴那个先例同类
+（plugin-clipboard 的 renameClonedNodes，用户 2026-10-12 报的）。
+
+**修法**：新纯函数 uniqueLabel（两份：packages/ui/src/composables/nodeLabel.ts 与
+插件侧 task/uniqueLabel.ts —— ui 不能 import 插件、插件后台半是 data:URL 单文件，
+由测试盯着两份对同批输入同批输出）。规则：没撞名原样用；撞了追加序号（「跑一下 2」）；
+名字本身带号（「可视化 3」）从那个号往上接；纯数字名整体当序号。接到三条路：
+前端 importPackFile / importPackFromUrl、MCP canvas_ui_add_favorite（addNodeToCanvas 里
+按**目标画布**的现有名去重）。
+
+**审查（独立审查员实跑复现）**：通过，无阻塞。四个目标在真后台 + 真 MCP 全部复现成功。
+修掉它指出的：P2-1 虚拟画布可被删除/写穿（DELETE/PATCH meta/duplicate/PUT 整包写全部
+加 isVirtualCanvasId → 400，脚本回写用的增量写保留放行）、P2-2 手册第六节例子断链
+（引言补回、HTML 挪回名下）、P3-2 死代码（空 if 块）。P3-1（GET 空画布返回 ok）是既有行为未动。
+
+**测试**：plugin-node-ui **243**、cloud-server **655**（virtualCanvas 6）、ui 侧 nodeLabel **8**
+（两份实现一致性守卫在内）。真机复现：同一行拖三次 → 可视化 5/6/7、无重名、落点全对、视口不动。
+ui 包另有 4 条红来自另一线程并行开发的 plugin-theme-gallery（未跟踪目录，与本轮无关）。
+
+### 追记（2026-10-14 三续，用户报「工具没注册到 MCP 里」= 部署滞后，非代码缺失）
+
+**用户口径**：「你的这些工具好像并没有注册到这个 MCP 里面」（配图：MCP 工具列表只有那 5 个老三样）。
+
+**根因（证据在手）**：外挂后台插件的产物是 packages/cloud-server/.mini-canvas/server-plugins/plugin-node-ui.js，
+它**在服务启动那一刻**被加载。那个文件当时还是 10-13 22:30 的旧产物（113980 字节，
+canvas_ui_describe / canvas_fn_* 等 6 个新工具名**一个都不在里面**），而我构建的 dist/server.js 是
+146892 字节、6 个全在。也就是说：**代码写了、也构建了，但没装到你跑着的后台里**。
+实测证据：对 127.0.0.1:8860 的 /mcp 发 tools/list → 只有 16 个工具（内置 11 + 插件 5）；
+装好后 → 22 个。
+
+**修法与标准步骤（以后照这条走，别再漏最后一步）**：
+
+1. pnpm -C packages/plugins/plugin-node-ui build:server（打后台半 → dist/server.js）
+2. pnpm -C packages/cloud-server bundle（插件清单要现扫磁盘，才认得到新 sha256）
+3. MINI_CANVAS_URL=http://127.0.0.1:<端口> node packages/plugins/plugin-node-ui/scripts/deploy-server.mjs
+   （装进 server-plugins/；同名插件已在跑时会报 Duplicate plugin name，**属预期**）
+4. **重启后台** —— 不做这步，新工具永远不出现（这次就是漏了它，表现为"工具没注册"）。
+
+**顺带修的两处（审查发现，都会让人误判）**：
+
+· cli 的 `list-tools` **只列内置 11 个**（插件工具是运行期注册的），拿去自检会得出
+  「没有 canvas_ui_describe / canvas_fn_*」的错误结论、跑去翻源码。现在它明说"只含内置"，
+  并把核对全量的确切做法（对 /mcp 发 tools/list）打在下面。
+· canvas_ui_favorites 的 hint 原写「它自己会开一张虚拟画布取数据」——**是假的**：虚拟画布只有
+  canvas_fn_call 用（脚本 ctx 要 canvasId/nodeId 拼回写地址），建收藏节点走真实目标画布。已改。
+
+另：canvas_fn_list 现在对"没写说明书"的函数**点名 + 给出照着能改的做法**（在脚本里 export docs，
+照 demo.mjs 抄）—— 不然用户只看到一片「没写说明书」，无从下手。
+
+### 追记（2026-10-14 四续，手册抽成独立 MD + 脚本状态标识 + 导出到下载目录）
+
+**用户口径（三条）**：
+
+① 「这边需要修改一下你的这个 guide mcp 里面的文档……介绍一下整个流程：首先，如果他有后台的话，
+   先实现后台……之后再编写前端脚本」（顺序要写清）。
+② 「我希望你可以把这个文档单独作为一个 MD 文件，因为我当前使用的是 vite，
+   它可以直接加载这个文件到一个变量中 叫 ?raw」。
+③ 「在后台自动打包成一个 zip 文件，保存到默认的下载地址。不然的话，你的这个节点一删，
+   后台就完全没有意义了，还要重新写 HTML 代码」。
+
+**另有一条生产环境的真问题（用户原话）**：「他每次去写脚本的时候，都会去执行这个 canvas_fn_list
+获取之前的函数，但是之前的这些函数，有些是半成品，有些是老版本 API 下的脚本，会导致执行失败」。
+所以加**状态标识**，三条规则：初始创建文件名前加下划线（`_x.mjs`）；测试通过再去掉；
+工具列函数时**过滤掉**带下划线的。
+
+**做了什么**：
+
+1. **手册抽成独立 MD**：新建 `src/guide.md`（450 行），`server.ts` 里改成
+   `import GUIDE from './guide.md?raw'`。前端/测试走 vite 原生 `?raw`；
+   **后台那半是 esbuild 单文件**（不认识 `?raw`），在 `scripts/build-server.mjs` 里加了
+   `raw-text` 插件顶上 —— 少了它后台产物直接构建失败（实测）。`*.md?raw` 的类型声明进 `env.d.ts`。
+2. **流程段重写**（guide 的 〇之二）：从"先写界面"改成**后台优先**——
+   ① 判要不要后台 → ② 写脚本（**先带下划线**）→ ③ 用 canvas_fn_list/info/call 调通 →
+   ④ 去掉下划线 → ⑤ 写前端界面 → ⑥ 声明依赖 → ⑦ **canvas_ui_export 打包落盘**。
+   新增 0.3 节专门讲那三条状态规则。
+3. **脚本状态标识**：`scripts.ts` 加 `DRAFT_PREFIX` / `isDraftScriptName` / `toDraftName` /
+   `listAllScriptNames`；`runs.ts` 加 `listDraftScripts`（`listFunctions` 仍只列已验证的）。
+   `canvas_fn_list` 多回 `drafts` + `draftHint`（点名在建脚本，别让作者以为丢了）；
+   `canvas_fn_call` **允许**调带下划线的（否则作者没法测），并在结果里标 `draft` + `draftNote`。
+4. **导出到下载目录**：新 `task/downloadDir.ts`（跨平台找下载目录、文件名消毒、**不覆盖同名**——
+   旧那份是用户的保命符）；新 MCP 工具 `canvas_ui_export` + 新路由 `POST /api/node-packages/export`。
+   `MINI_CANVAS_DOWNLOAD_DIR` 可定向（**指定了就不回落**——踩过：不指定目录时会写到用户真实下载目录）。
+
+**验证**：plugin-node-ui **260** 绿（+15：draftScripts 6、downloadDir 6、接线 3）、
+cloud-server **655** 绿、两包 typecheck 干净。真机（用户数据目录 :8860）：23 个工具；
+`canvas_ui_export` 把节点打包到 `C:\Users\Administrator\Downloads\导出验证节点.mcnode`（615 字节，
+验完已删）；在建脚本 `_codex-verify.mjs` 不出现在可用清单、出现在 `drafts`、且能被 canvas_fn_call 调到
+（返回带 `draft: true`）；验证脚本已清。
+
+### 追记（2026-10-14 五续，右键「收藏到资产库」合并 + 预选 + 节点包预览）
+
+**用户口径（看图指出）**：
+
+① 「你的这里右键菜单有一个加入资源库，还有一个收藏资源库。首先，你的这个加入资源库没有任何实际意义，
+   点击没有任何反应。你这边两个只需要一个就行……我觉得还是收藏到资产库里面合适。
+   如果是你的这个视频的话，图片的话，你这边依然是一样的，将它做成那种上传资源的那个弹出框里面进行一个上传。
+   你可以参考一下可视化节点的一个收藏功能。」
+② 「如果是节点收藏资源库的话，打开这个弹出框，你这边的类型可以自动选择这个节点，另外两个的话就不进行一个选择」
+③ 「文件地址：默认选择根目录下的一个节点库，如果没有，则自动创建。」
+④ 「预览功能：我发现点击之后会进入全屏预览，但我当前的节点无法进行预览。
+   或者，可以在预览中添加一个 iframe 预览框。这个也可以啊」
+
+**根因（都有证据）**：
+
+· 「加入资产库」点了没反应 = `queueUploadsFromNodeIds` **只读 imageUrl / resourceUrl**，
+  而视频节点存 `videoUrl`、音频存 `audioUrl` —— 取到空串就静默什么都不做（图片没事，所以一直没显形）。
+  顺带：那条路给无媒体节点补的后缀恒为 `.png`，视频会被当成图。
+· 两条菜单项重复：「加入资产库」(order 21) 与「收藏到资产库」(order 24) 同 group，对同一节点做同一件事。
+· 节点包预览空白：它**没有可加载的媒体地址**，把 url 丢给 MediaViewer 就是一片空。
+
+**做了什么**：
+
+1. **合并成一条**：删掉「加入资产库」，只留「收藏到资产库」（`ui:node-save-to-assets`），按类型分流 ——
+   媒体节点 → 贴进上传弹窗；可视化节点 → 打包成 .mcnode 再贴进去；别的类型 → 明确反馈（不静默）。
+2. **三类媒体一次认全**：`pick('imageUrl')||pick('videoUrl')||pick('audioUrl')||pick('resourceUrl')`，
+   且扩展名按**真实类型**补（.mp4 / .mp3 / .png）。
+3. **预选**：节点包那条带上 `tags:['节点']` + `folderId`；总线 `PendingUpload` 加这两个字段，
+   `AssetUploadHost` 转给弹窗（弹窗新增 `initialTags`）。`ensureNodeLibraryFolder` 在**根目录**找
+   「节点库」，没有就用 `newAssetFolder` 现建（`newAssetFolder` 改成回 id —— 不回就没法可靠引用刚建那个）。
+4. **节点包预览**：新增 `peekPack`（走后台 `/api/node-packages/read` 取解好的 html —— 不在前端再写一份解压）
+   + `openAssetPreviewFromAsset`（分流；取包失败回一段能看懂的文字）。MediaViewer 新增 `kind='ui'` 分支：
+   用 `<iframe sandbox="allow-scripts" :srcdoc="item.html">`（用户点名的 iframe 预览框）；没画过给占位文案。
+
+**真机踩到并修掉的一个**：分流对了，但 `AssetUiSlot` 的 `previewItem` 只透传 name/kind/url → iframe 拿不到 html，
+  表现为"这个可视化节点还没有画过内容"（实际有 6889 字）。已补透传 + 守卫测试。
+
+**验证**：ui **360**（+23：assetUploadCollect 6、assetSaveMenu 10、assetUiPreview 8，减旧装配 1 条改判）；
+plugin-theme-default **283**、plugin-node-ui **260** 全绿；三个包 typecheck 干净。
+真机（用户数据目录 :8860，验完你在 :8865 起的新服务共用同一份数据）：
+· 节点右键只剩两条（收藏到资产库 / 导出节点包）；视频节点收藏 → 弹窗显示「视频 1.mp4」+ 真实 mp4 缩略图（以前点了没反应）；
+· 可视化节点收藏 → 弹窗自动「保存位置=节点库」（根目录已自动建）+「标签=节点」；保存后资产落在节点库、带节点标签；
+· 预览 → `.mv-ui-frame` iframe 渲染，srcdoc 6889 字（节点真实界面），900×620 可见。
+
+**⚠️ 本轮一个操作失误（已复原）**：清理验证数据时按 `kind === 'node-package'` 全删，
+  连带删掉了用户 Agent 10:46 收藏的「视频宫格图.mcnode」登记（id b0ae037b…）。
+  **字节一直在磁盘上没动**（16770 字节），已按原样把登记写回并验证可读（read ok / html 14890 字 / scripts video-grid）。
+  教训：破坏性清理只点**自己造的那些 id**，不要按类型全量删（与 2026-10-13 那次同一条教训）。
+
+### 追记（2026-10-14 六续，上传弹窗缩略图按类型画 + 名称框真填上）
+
+**用户口径（看图）**：「你这里视频和图片资源上传、收藏到这个资产库的时候，地址是错误的，这边 UI 显示错误」。
+
+**先复核了「地址错误」这个判断**（不能照着用户的话直接改）：实跑核过 ——
+· 视频节点收藏 → 存进库的是 `/api/assets/files/5f64b9d2458c965f.mp4`，取回 **200 + video/mp4**；
+· 节点包 → `/api/assets/files/ba23268ec93ded6b.mcnode`，取回 200 + application/x-mini-canvas-node。
+  也就是说**存下来的地址是对的**（上传链路通）。真正错的是**弹窗里的缩略图怎么画**：
+
+**根因（两处，都在 AssetUploadDialog）**：
+
+1. **缩略图一律用 `<img>`** —— 视频是 .mp4，`<img src="x.mp4">` 必然裂图（用户截图里那张裂的正是它）。
+   连带：本地选视频时还给它建了 objectURL 塞进 img（同样裂）。
+2. **名称框只显示灰色占位符**（`视频 1.mp4`），看着像"名字没带上"；保存时名字取的是框里的值，
+   空着就回落成占位符文本 —— 用户容易以为哪儿错了。
+
+**修法**：
+
+· `PickItem` 加 `kind`（image/video/audio/other）；本地文件按 **MIME** 认，画布媒体按**文件名后缀**认
+  （`kindOfName`：不看 query —— 节点产物地址常带 `?v=时间戳`）。
+· 模板按 kind 分别画：**图片 `<img>` / 视频 `<video preload=metadata muted playsinline>` / 其它图标**。
+· objectURL 只给图片（视频/音频给了也没法用 img 显示）。
+· 预填**只有一项**时把名字**填进名称框**（不再只当占位符）。
+
+**验证**：ui **366**（+6：assetUploadThumb），typecheck 干净。
+真机（:8860，硬刷新到新产物）：视频节点收藏 → 卡片里是 `<video>`，`videoWidth=1920 videoHeight=1080`
+（真解出首帧，不是裂图）、muted/不 autoplay；名称框值 = 「视频 1.mp4」（不再是灰占位符）；
+保存后库里 url 取回 200 + 正确 content-type。验完的临时资产已删（只删自己造的那条）。
+
+### 追记（2026-10-13 十续，单轮对话接口 /api/agent/chat/completion）
+
+用户口径：要一个**像 OpenAI /v1/chat/completions 那样的中转接口** —— 给 prompt 回一段文本，
+**不建会话、不建文件夹、不进任何列表**；「它支持的一些参数，你这边也就支持」；
+**要带重试**；凭据用**已配好的 provider**；路径用 /api/agent/chat/completion（单数，与配置那族统一）；
+并且**实现在 cloud-server 的 agent 里**（不是插件）。
+
+**查到的关键事实（决定了实现方式）**：
+
+- SDK 里有 **GenerativeModel**（它自己的 createBareLLM() 就用这个）：
+  tools: [] + thinkingLevel: none，**纯内存对象、没有 agentDir/session/trace** ——
+  所以"每轮建一个文件夹"那件事**不会发生**，不用手写。
+- 重试：SDK 的 streamGenerate 是**单次尝试、内部不重试**，跑完给终态
+  LLMOutcome.status（completed / aborted / **retryable** / **fatal**）。
+  所以退避重连由我们按它给的状态做 —— retryable 才退避重试，fatal 立刻交出去。
+
+**做了什么（三个新文件 + 一处配置补字段）**：
+
+| 文件 | 干什么 |
+|---|---|
+| agent/chatCompletion.ts | 归一化 / 摊平消息 / 帧解析 / 退避重试（纯逻辑，零 SDK 依赖） |
+| agent/chatSdk.ts | 接 SDK 的裸模型（只有这里 import SDK） |
+| routes/agentChat.ts | HTTP 面：非流式那个对象 + 流式那些帧 |
+| agent/config.ts | resolveModel 补回 **clientType / contextWindow**（见下） |
+
+**真机上撞出来并修掉的四个问题（都不是想出来的）**：
+
+1. **别名模型猜不出协议**：默认模型 deepseek-auto 是路由别名，不传 client_type 时
+   SDK 直接抛 "deepseek-auto is not supported. Supported client types: …"（第一次调用就 500）。
+   而配置里**本来就有** client_type: openai-chat —— 是我没把它传下去。修了。
+2. **帧形状猜错了**：我以为 role 在外层，真机打出来是
+   { type:'model_msg', payload:{ type:'partial_text', role:'assistant', event_type:'delta', text } }
+   —— 表现为"接口 200 了、回答是空的"。**当时的测试用了个编的形状，所以没照到**；
+   现在测试照着真帧写。
+3. **用量帧的外层是 event_msg 不是 model_msg**，字段名是 { output, total }（没有单独输入）
+   —— 我原来既认错外层、又猜错字段名，于是 usage 恒 0。修完真机拿到 {9, 1, 10}。
+4. **点名的模型不存在时会静默用默认模型**：回显的是用户写的名字、实际跑的是 default
+   —— 这种"静默换模型"最难查，现在明确 400 并说清去哪儿配。
+
+**真机验证（拿你真配好的 local/deepseek-auto）**：
+
+```
+非流式  200  model=deepseek-auto  回答=好  usage={prompt_tokens:9, completion_tokens:1, total_tokens:10}
+流式    200  SSE 21 帧；增量拼成完整回答；finish_reason=stop；以 data: [DONE] 收尾
+带历史  200  把历史一起发过去也能答（服务端不存任何东西）
+不支持  temperature → 400 invalid_request_error（**明说**而不是收下不用）
+没配的模型 → 400「配置里没有模型 X（现在配的是 deepseek-auto）」
+```
+
+**参数口径**：messages / model / provider / stream / max_tokens（含 camelCase）/ user 照 OpenAI；
+tools / tool_choice / functions / n / stop / logprobs / **temperature** 一律**明确报错** ——
+其中 temperature 是 SDK 的 GenerativeModelConfig 里**没有**这一项（它不支持），
+「它支持我就支持」⇒ 它不支持我就说，而不是收下参数却什么都不做。
+
+**没做的**：**没有把它写进 canvas_ui_guide** —— 用户这次没要求，
+而它属于"Agent 的模型直连"、不属于"可视化节点"那条链（要不要暴露给节点界面，等用户定）。
+
+**测试**：cloud-server **648**（+21：归一化/帧解析/重试/路由），node-ui 200、context-menu 66 全绿。
+
+### 追记（2026-10-13 六续，资源库批量勾选：勾文件夹连带内容 + Shift 区间 + 窄版 tooltip + 去掉计数图标）
+
+用户口径（原话分三段）：
+①「当开启批量操作时，支持多选功能的 UI」；②「在左侧面板时，这些按钮都没有文字说明；弹出框时因为宽度足够，
+所以有文字。你这边需要添加一个 tooltip 的提示效果」；③「你这边『什么巷几巷』的前面使用了一个主题颜色…
+直接使用默认的黑白亮色主题颜色就行，不要使用那种主题颜色，太花哨了」；
+④「我选择文件夹后面的多选框之后，文件夹里面的所有内容就应该被选中呀，但是当前没有任何效果」；
+⑤「这边就和文件夹一样，删除的时候需要将里面所有的文件也同步选择。如果你不想删除它们，可以取消选择」；
+⑥「根据你最后一次选择的一项，按 Shift 会选择该区间内的文件。这边不支持跨文件夹」；
+⑦「全选…这些功能不要了」+「选择文件夹的时候，不带上子文件夹」。
+
+**做了什么**（两条共用组件 + 一份纯函数判定）：
+
+1. **判定收成一份**：新增 `packages/ui/src/composables/assetSelection.ts`（纯函数，Node 可单测）——
+   `folderContentIds` / `rangeRowIds` / `expandIds` / `checkedRowIds` / `applyRowClick`。
+   两处宿主（`AssetTree` 的抽屉与弹窗）都调它，弹窗原来那份「就地 `toggleSelected`」删掉。
+2. **勾文件夹 = 连带它直属的内容**（用户报的「没有任何效果」）：`expandIds` 把文件夹行换成它的直属资产。
+   **子文件夹不进去**（用户口径 ⑦）。空文件夹点了不产生选中（没有可操作的条目）。
+   「已选」表里因此**只有资产 id** —— 批量移动 / 加标签 / 下载 / 删除拿到的永远是纯粹的资产清单
+   （「已选择 N 项」的 N 也就是真的会被操作的条目数）；文件夹自己的勾选态由内容推导
+   （`checkedRowIds`：直属资产非空且全在已选里 → 显示为勾上），所以取消里面任意一个，文件夹的勾就跟着掉。
+3. **Shift 区间**：以最后一次普通点选的那一项为起点，按行列表顺序取两端之间的行（含两端）；
+   **两端不同层就不划区间**（退化成普通点击，不跨文件夹）。区间里夹着文件夹时，按同一套口径把它直属内容带上。
+   区间内全部已选 → Shift 再点一次 = 取消这个区间。勾选框与「点整行」都把 `shiftKey` 传上去
+   （只测勾选框的话，按住 Shift 点行会落空）。
+4. **窄版补 tooltip**：`AssetBatchBar` 的 6 个图标按钮（退出 / 添加到 / 移动到 / 修改标签 / 下载 / 删除）各挂一条
+   `AxTooltip`，用 `:disabled="!compact"` 限定只在抽屉生效 —— 宽版弹窗本来就有文字，再挂气泡是重复。
+5. **计数区**:「已选择 N 项」前那颗对勾方块原先用主题色（青底白勾），先改中性色（`bg-ink text-panel`）**再整块删掉**——
+   用户随后追加口径 ⑧「我觉得你这个图标没有留下的必要，可以改为『已选多少项』」。现在抽屉窄版写「**已选 N 项**」，
+   宽版弹窗保持「已选择 N 项」；计数区一个 svg 都不剩。
+6. **删除失败不再静默**：`deleteAssetById` 在 DELETE 后补一句 `loadAssets()`，把画面收敛回**服务器真值**
+   （本地摘除只是乐观更新；批量删到一半失败时画面也不会与后台脱节）。
+   背景：用户报「选择之后我点击删除没有任何效果，刷新之后这些数据依然存在」。实测删除本身是通的
+   （抓包见 5~7 条 `DELETE /api/assets/<id>` 全 200、服务器数量同步下降），最可能是当时页面拿的是**旧构建产物**
+   （当时 8865 上那份 dist 还是上一轮代码，方块与主题青都还在）。这条兜底让两种情况观感都不再含糊。
+   注意 `showToast` 在成品壳里是空实现（`ui.ts` 已停用），失败路径只留 `console.warn`。
+7. **不做全选 / 反选 / 清空**（用户口径 ⑦：没地方放、放了也不好看）。「清空」靠再点一次已勾上的项，
+   或退出批量模式（两处宿主退出时都清空已选）。
+
+**验证**：`pnpm -C packages/ui test` **319 通过 / 1 失败**——失败的是 `themeColorHygiene`
+（`plugin-bottom-bar/NodeBottomBar.vue:1165` 写死 `box-shadow` 颜色），该文件 `git diff` 为空，是并行工作带入的、
+在本轮改动之前就红（见本文件 2026-10-13 那一则的注）。本轮新增 `assetSelection`（20 条纯函数）+
+`assetBatchSelect`（6 条接线守卫）两份测试全绿；`pnpm -C packages/ui typecheck`（vue-tsc）干净。
+真机（Chrome MCP，dev :5288 的 `#/canvas/50b52864f72b4d0e`）：抽屉勾「视频」文件夹 → 「已选 13 项」且文件夹显示勾上（计数区无方块、6 个按钮各一条 tooltip），
+取消里面一个 → 「12 项」且文件夹的勾掉了；同层首个资产 + Shift 点第 4 个 → 「4 项」正好是区间内的 4 行；
+弹窗同两条行为一致（「已选择 13 项」/「已选择 1 项 → 4 项」）；悬停下载按钮：抽屉弹「下载」气泡、弹窗**不弹**；
+删除路径实测：勾文件夹后点删除 → 5 条 `DELETE` 全 200、`/api/assets` 数量同步减少（真正的删除是通的）。
+
+**注（本轮教训）**：真机验证「删除」时，我用页面里的 `fetch` 删了工作区数据目录（`packages/cloud-server/.mini-canvas`）里的**真实资产** ——
+那是用户的库、不是测试沙箱。事后按「备份 + 画布引用 + 历史记录」三处证据把 17 条登记逐条重建
+（`assets/files/` 的字节一直没动，丢的只是 `index.json` 的条目）；只剩 2 条豆包**外链**（`3af7fb91…`、`e105dfe2…`）本机无副本，
+按原样登记回外链地址。教训：**破坏性验证只在自己造的数据上做**（临时文件夹 + 可辨识前缀），验完先清掉。
+
+### 追记（2026-10-13 五续，节点包五步做完：打包 / 导出收藏 / 导入升版本 / 脚本回写 / 资产库）
+
+用户口径：「完成你的这些任务」，并明确三处：双保险要做、第 4 步要做、**最后记得 code review**。
+计划见 `docs/plan/node-package-plan.md`（本则只记「做完之后实际长什么样」）。
+
+**五步都落地了**（真机都验过，下面是可复核的判据）：
+
+| 步 | 做了什么 | 真机判据 |
+|---|---|---|
+| 1 | 依赖声明 uiScripts + /api/task/call 授权（两级：读节点 → 查声明） | 没声明 → **403** + 可自愈文案；声明后 → 200；写界面时**顺手补声明**（declaredScripts 回报） |
+| 2 | 打包（自写 ZIP，零依赖）+ 导出下载 + 收藏进资产库 + MCP 工具 canvas_ui_package | build → `PK` 开头的字节、系统解压器能读出四份；save → 资产库里有 `.mcnode` |
+| 3 | 导入（文件系统拖 / 资产库拖）+ **整包升版本** | 同内容 → `as-is`；改过本机脚本 → `bump _v2`，**四处一起改**（文件/声明/界面引用/标题） |
+| 4 | 脚本 `ctx.baseUrl` + 手册里"产物怎么交回节点" | 脚本 fetch 槽位接口 → 节点槽位里取回内容正确 |
+| 5 | 资产 kind `node-package` + 「节点」标签 + 两处拖拽落到同一件事 | 新存的包 kind=node-package |
+
+**code review（用户点名）**：派了独立审查员（`review_node_pack`），实跑测试 + 逐文件审。
+查出 4 条真问题，**全部修掉并补了测试**：
+
+- **P0 升版本后界面被丢掉**：改写结果只放在 `plan.html`，而落地时前端只读 `node.data` ——
+  结果是"脚本叫 `_v2`、声明写 `_v2`、界面还在调老名字"，导入完一点就 403。
+  改成**界面只认 `data.uiHtml` 一处**（并把 `plan.html` 这个"没人读的第二份"移掉）。
+- **P1 解压炸弹可绕过**：原来的总量判断用的是包里**自己声明**的解压后大小，
+  攻击者写 0 就能绕过（而输入大小限制挡不住高压缩比）。改成按**实际解出的字节**累计判定。
+- **P1 导入口没有同源校验**（注释却说有）：补上（带 Origin 就必须是本机；
+  MCP/命令行不带 Origin 照过 —— 硬要求会把它们一起挡掉）。
+- **P1 收藏时预填名字恒为"节点包.mcnode"**：名字改走**响应头**带回
+  （字节响应没有 JSON 体可以放它），顺带把"含哪些脚本/缺哪些"也带出来。
+- P2 两条：后缀常量三处各写一份 → 收成一处 + 一条测试盯着两边一致；
+  规范里"三级校验"与实现的两级不符 → 改文档（`sha256` 只用于打包/导入判同，不参与授权）。
+
+**验证**：plugin-node-ui **175**、context-menu **65**、cloud-server **626** 全绿；
+ui **319**（1 红是既有的 `plugin-bottom-bar` 写死颜色，与本次无关）。
+
+### 追记（2026-10-13 六续，端到端验导入时撞到的两个真 bug）
+
+用户要求"完成最后 1 次"并且"记得 code review"。审查报告落地之后，我又做了一遍
+**端到端**（右键 → 资源库/节点包 → 点它 → 看画布上真的多没多出那个节点），
+撞到两个前面所有单测都没照到的 bug：
+
+1. **ui 节点类型的 `create(position, extra)` 把 extra 丢了** ——
+   于是所有"**带数据建节点**"的调用（`command:create-node` 传 uiHtml / uiScripts，
+   导入节点包正是这条路）都**静默建出空节点**：节点在、界面空、声明也没了。
+   修：`create(position, extra)` 把 extra 合并进首建 data（默认字段先铺、extra 覆盖），
+   并补 `nodeCreateExtra.test.ts` 钉死（这种静默丢弃最难查）。
+2. **装配期裸用 `window`**：往插件里加"监听资产变化"时没守卫 ——
+   非浏览器环境（单测 / SSR / 预渲染）apply 会抛，而**装配期抛一下整个界面就是白屏**。
+   修：加守卫，并补 `assetUploadPluginAssembly.test.ts`（apply 不许抛 + 命令都注册了）。
+
+**端到端复验（CDP 直连，绕开当时已不可靠的 Chrome MCP）**：
+右键画布空白 → 「节点包 ▸ 端到端包」→ 点击 → 画布 8 → 9 个节点，
+新节点**带界面（586 字）与声明 `{"demo":{}}`** —— 这一条是"这个功能真能用"的最终证据。
+
+**测试**：plugin-node-ui **177**（+2）、ui **320**（+1）、context-menu 65、cloud-server 626。
+
+### 追记（2026-10-13 七续，收尾：三条导入入口端到端 + 工作区清理）
+
+补验了**另外两条导入入口**（此前只端到端验过"右键菜单点包"那条）：
+
+- **从文件夹拖 `.mcnode` 进画布**（LeftDrawer 的 drop 分流 → ui.importPackFile）：
+  节点数 9→10，新节点带界面（586 字）与声明 `{"demo":{}}`。
+- **从左侧资产库拖那一项**（createAssetNode 认出 `node-package` → ui.importPackFromUrl）：
+  10→11，同样带界面与声明。
+
+三条入口（右键 / 文件夹拖 / 资产库拖）**都落到同一件事**，与用户口径一致
+（「拖拽之后和直接从文件夹中拖拽进来的效果是一样的」）。
+
+**工作区清理**（清掉本轮与更早几轮排查留下的死文件，源码里都无引用）：
+删了 `packages/ui/public/node2-paint.html`（它会随构建发到线上，与 `video-player-ui-demo.html`
+那条既有做法不一致）、`.codex-tmp/node2-paint.html`、`.tmp-ui-restore.html`、`.codex-tmp/sse.cjs`，
+并重建 ui（dist 里那份也清了）。**用户的画布已还原**：7 个节点、节点 2 是原来的画笔界面
+（15938 字、`uiScripts` 清空）、无悬挂边。
+
+**两条红，都与本轮无关，别误判**：
+1. ui 的 `themeColorHygiene` —— `plugin-bottom-bar/NodeBottomBar.vue` 里写死的
+   `rgb(15 23 42 / …)`，**HEAD 里就存在**（用户既有 WIP），我没碰过那个包。
+2. cloud-server 的 `npmRealE2E` 「install 未发布的包 → 404」—— 真打 npm registry，
+   现在回 **502**（网关错）说明是外部网络，与本轮改动无关（我没动 npm/provider 任何代码）。
+
+### 追记（2026-10-13 八续，用户实测报的两个问题）
+
+用户口径：「画布 4 这个地方出现了**导出失败**，有可能是相关的规则没有提供，比如依赖关系」，
+外加一条菜单排序：「**节点包要放在粘贴的上面**」。
+
+**导出失败的真因（两个，都在）**：
+
+1. **取节点只看默认画布**：打包那侧取节点用的是宿主那份"默认画布"文档
+   （`doc.read()`），而**画布 4（`50b52864f72b4d0e`）不在它里面** ——
+   于是导出直接 400「画布 X 上没有节点 Y」。
+   修：默认画布走 `doc`、其余走 `canvasStore`（**与授权那条路的取法统一**），
+   `getNode` 签名补上 `canvasId`。
+2. **那些节点没有依赖声明**：`grid1`（视频转宫格图）的界面调 `video-grid`，
+   但 `uiScripts` 是空的 —— 它是"双保险"之前写的，而**双保险当时扫不到非默认画布的脚本目录**。
+   于是就算能导出，包里也会**一个脚本都不带**。
+   修两头：
+   · `resolveTaskScriptsDir` 多一条**从画布存储问数据根**的兜底（`canvasStore.dataRoot()`，
+     新加的方法）—— 非默认画布从此也能扫到脚本目录，双保险对它们生效；
+   · 打包时若"界面里明显调了脚本、但声明为空"→ **400 + 一句能照做的提示**
+     （说清是 data.uiScripts 为空、怎么补），不再静默打个空包。
+
+**真机验证**：画布 4 的 `grid1` 导出 —— 补声明前 400 + 可自愈提示；补上后
+**200、名字「视频转宫格图」、脚本清单 `video-grid`、18038 字节、`PK` 开头**。
+另扫了**全部 5 张画布**：没有"调了脚本却没声明"的残留节点。
+
+**菜单排序**：`资源库` 的组优先级排在 `clipboard（粘贴）` **之前** ——
+用户的动作序列是"先放东西进来、再粘贴/复制"，所以"往画布加东西"那一族要连在一起。
+顺手修了 `topGroupOf` 的健壮性：没有 `path` 的裸项也按斜杠取首段（否则拿整串
+`资源库/节点包` 去查优先级表会查不到、一律排到最后）。真机确认顺序：
+… 图片对比 → **节点包** → 粘贴（Ctrl+V）。
+
+**测试**：plugin-node-ui **181**（+4）、context-menu **66**（+1）、ui **320**、
+cloud-server **626** 全绿。
+
+### 追记（2026-10-13 九续，ctx 三个助手 + 手册重写）
+
+用户口径（三条）：
+① 「保存的话是需要一个函数的」，并且「输入参数有可能是一个**相对地址**，应当提供 ctx.file」；
+② 「可视化节点的后台能不能对 Agent 做点处理，比如累加一段系统提示词」——
+   **但明确说：Agent 系统提示词那条先不做**（那个 Agent 还没测过）；
+③ 「**文档要清晰明了**：按请求说明是否需要前后端支持，**先和用户确认**，不要埋头瞎干；
+   并且要把前后端 API 都列在 MCP 里，不然它怎么知道有哪些接口」。
+另外用户解释了「Agent 为什么会去读源码」：**开发期源码就摆在项目里**，它忍不住；
+真实环境就不会。所以**在提示词里说一句就够**。
+
+**一、ctx 三个助手（做完，真机验过）**
+
+| 助手 | 干什么 |
+|---|---|
+| await ctx.save(字节或字符串, "名字.ext"[, { slot, mime }]) | 交产物到**本节点槽位**（默认就是调用它的那个节点），同址覆盖 |
+| ctx.file(地址或文件名) | 同源地址 → **本地路径**（喂 ffmpeg）；认 ?v= 时间戳；认不出**原样返回** |
+| ctx.temp("名字") | 工作目录里的路径 |
+
+ctx 另加了一个只读字段 dataRoot（ctx.file 要用它把地址翻成路径）。
+ctx.save 替你办好三件以前每个脚本都要各写一遍的事：拼 slot 地址、取扩展名、写 content-type。
+
+配套：**mime 白名单补了文本类**（.txt/.md/.json/.csv）—— 没有它，ctx.save("内容","note.txt")
+落出来的文件没有后缀（实测踩到）。
+
+**真机验证**：四种类型一次跑通 —— 文本 slot-t-text.txt、图片 slot-t-img.png、
+音频 slot-t-aud.mp3、视频 slot-t-vid.mp4（都是 ctx.save 产物）；ctx.file 把它们
+翻成了本地绝对路径；ctx.temp 写的文件也能被 ctx.file 找回来；默认槽位落本节点正确。
+（附带确认一条设计行为：**同一槽位只留一份产物** —— 换类型时旧扩展名那份会被清掉，这是对的。）
+
+**二、手册重写（canvas_ui_guide，用户点名要的）**
+
+- 开头加**两条边界**：**别去翻项目源码**（开发期源码在项目里，但那是实现、本手册才是契约）；
+  以及"一提可视化节点就先读本手册"。
+- 新增 **第〇节「动手之前：先跟用户把需求问清楚」**：只展示还是要干活 / 机器上有没有现成脚本 /
+  要不要收进库 —— **别埋头就写**。
+- 新增 **完整的接口清单一节**：界面能调的 HTTP 口（含"**非默认画布要用带画布 id 的那条**"
+  这条坑）、脚本的 ctx、节点包接口、以及 Agent 自己的 MCP 工具。
+- 补 **ctx.save / ctx.file / ctx.temp** 的说明；把"交产物"从"自己拼地址"改成"**优先 ctx.save**"。
+- 补 **?v= 时间戳那条规矩**：界面里去重要用**干净 URL**（去掉 query/hash），判类型按地址扩展名、
+  别按字段名 —— 这条来自用户给的 Agent 复盘（它踩过"预览重复出现"）。
+- 工具 description 也点明：先读手册、先确认需求、别翻源码。
+- 顺手修了 task-script-router-plan.md 里**自相矛盾**的一处：§四 示例用了 ctx.file，
+  正文却说"不给这类东西" —— 现在补了修订说明（给了三个**后勤**助手，仍然不给你 ffmpeg/http 这类）。
+
+**三、没做（用户明确说先不做）**：给 Agent 追加系统提示词（ctx.agent.systemPrompt）。
+查下来那个口子**现在是坏的**（它把文字拼到用户消息前面，不是系统提示词；且没人消费），
+真要做得单独一轮。
+
+**测试**：plugin-node-ui **194**（+13：路径翻译 7 条 + 助手形状 6 条）、cloud-server **627**（+1）、
+context-menu 66、ui 320（那条红仍是 plugin-bottom-bar 既有 WIP）。
+
+**没做的**：包里带媒体素材（用户说"后期再说"）。
+
+**右键二级菜单列出资源库里的包**（用户 2026-10-13 点名要的那条）也做了：
+资源库里的每个 `.mcnode` 会**动态注册**成一条命令（分组写 `资源库/节点包`），
+菜单那边一行没改（斜杠写法自动成二级菜单）；资产一变就重建，库里的包删掉菜单项也跟着消失。
+真机（CDP 直连，绕开当时已不可靠的 Chrome MCP）：右键画布空白 → 「节点包 ▸ 右键可用包」，有箭头、子项正确。
+顺带补上右键命令的 **flowPosition**（原来只有 nodeId/edgeId，导致"在哪儿右键就放哪儿"做不到）。
+
+**又抓到一个白屏级问题**：往装配里加"监听资产变化"时裸用了 `window` ——
+非浏览器环境（单测/SSR/预渲染）里 apply 会直接抛，而**装配期抛一下整个界面就是白屏**。
+补了守卫，并加了一条**装配冒烟测试**（`assetUploadPluginAssembly.test.ts`）：
+apply 不许抛 + 该注册的命令都注册了。以后这类"白屏"能被一次判掉。
+
+**已知的脏东西（不是本功能产出的，别误提交）**：工作区里还留着更早几轮排查的
+`.codex-tmp/`、`packages/ui/public/node2-paint.html`、`.tmp-ui-restore.html`。
+
+### 追记（2026-10-13，修「拖拽 / 粘贴 / 节点上传留临时地址」—— blob: 与 res- 取件码都不该进节点）
+
+用户口径（原话）：「你这边有一个复制插件和一个拖拽插件，这两个地方你都没有做处理。它们可以将图片粘贴到画布中，
+也可以拖拽到画布中。这个时候你并没有进行上传，而是直接使用了它的临时地址（以 blob 开头的地址），
+这就导致了一系列的问题存在」；随后补充：「节点的顶部控制栏有一个上传的按钮。视频节点好像也有，
+图片节点也有，这个问题也是同样的效果，依然没有正确上传」。
+
+**根因（同一类 bug 的三个变体）**：节点媒体字段（imageUrl / videoUrl / audioUrl）里写进了**只在当前浏览器页面有效**的值 ——
+① `blob:` 临时地址（`URL.createObjectURL`），② 资源库**取件码** `res-<n>`（`<img src="res-7">` 谁都打不开）。
+后果：存到服务器后别的标签页/别人打不开、刷新后失效、云端生成任务时服务器拿不到。
+
+**修法（统一规矩：字节进资源库 → `resolve` 拿地址 → 写节点）**：
+- **拖拽 / 粘贴**（`plugin-file-drop`）：新增 `storeAndResolve(file, kind)`，图片/视频/音频三个分支都改成
+  「put → resolve → 用解析出的地址建节点」；objectURL 只在**没有资源库服务**时兜底（那种环境节点数据本就只在本次会话有效）。
+  另加防御：宿主只给了 `put` 没有 `resolve`（老宿主形状）时也退兜底，**不让用户文件因为服务形状不全被丢掉**。
+- **视频 / 音频节点上传按钮 + 命令**（`plugin-node-video` / `plugin-node-audio`）：`persistVideo`/`persistAudio` 端口在
+  `createVideoOps`/`createAudioOps` 里接线，按钮与命令自动同一条路（音频命令此前**完全没登记资源**，一并修掉）。
+- **视频命令缺失**：`video.upload` 命令原本整条不存在（只有注释里的设计意图），按 audio 的形态补上。
+- **图片生成产物**（`plugin-node-image/imageRun.ts`）：`res-` 引用原样写进 imageUrl 的漏洞修掉（先 resolve 再写；
+  解析不出来就**不写节点**、保留原图），并加了「引用绝不进 imageUrl」的二次防御。
+- **video / audio 产物写入器**（`plugin-cloud-client/appliers.ts`）：`localizeUrl` 原来把 `res-` 当「已经是本画布地址」直接返回 ——
+  第三个变体。现在引用先 resolve；解析不出/仍是引用/没有资源服务 → **不写节点**（不落打不开的地址），调用处接住异常。
+
+**已核实本来就正确、未改**：`plugin-clipboard`（粘贴时按 `resourceId` 重建地址）、`imageOps` 的上传/裁剪/旋转/扩展、
+`nodeImagePlugin` 的命令路径、`plugin-node-image` 其余文件（不写地址或已走 persistImage）。
+
+**验证**：plugin-node-video **108**、plugin-node-audio **98**、plugin-file-drop **48**、plugin-cloud-client **109**、
+plugin-node-image **128**、plugin-clipboard **43**、canvas-data **395**、plugin-agent **325** 全绿（各包 typecheck 干净）；
+真实画布抽查 `blob:` 计数 **0**、`res-` 进 imageUrl **0**；ui 与 cloud-client 产物已重建。
+
+**注**：`packages/ui` 的 `themeColorHygiene` 有一条失败（`plugin-bottom-bar/NodeBottomBar.vue:1165` 写死颜色），
+该文件**不是本次改动**（`git diff` 为空），是并行工作引入的，属别人范围。
+
+### 追记（2026-10-13 四续，节点包第 1 步：依赖声明 + 后台强制校验）
+
+用户口径：「你提到的这两个双保险，还有第四步的存在感，你都需要做。」——即
+① 声明由 AI 写 + 后台强制校验；② 写界面时后台**顺手补声明**（兜底）；③ 补上后台脚本回写画布那条路。
+本轮做完 **①+②**（第 1 步），③ 属第 4 步，未开始。
+
+**做了什么**
+
+- 节点 data 新增 `uiScripts`：`{ "脚本名": { sha256?, at? } }`。只有一个**名字**也是合法声明。
+- `/api/task/call` 起进程**之前**加授权：按 canvasId+nodeId 读出节点声明，没有这次要跑的脚本名 → **403**，
+  报错里写清"已声明了哪些、该往 data.uiScripts 补什么"——AI 据此能自愈（不是卡死）。
+  缺 nodeId / 节点不存在同样 403：nodeId 是调用方自己填的，不能拿它当后门。
+- **双保险**：`canvas_ui_write` / `canvas_ui_update` 顺手扫一遍这段界面调了哪些脚本，
+  与 uiHtml **并进同一次写盘**，并把"替你补了哪些"放在返回值的 `declaredScripts` 里回给 AI。
+- MCP 手册（`canvas_ui_guide`）里把这条写成**硬规定**（规矩 1.2）。
+
+**验证**：plugin-node-ui **141**（+24：声明/授权/计划 三组）、`tsc --noEmit` 干净。
+真机（8865 重启后）：没声明 → **403** + 可自愈文案；声明后 → **200** 跑通；
+清空声明 → 写一段调 `demo` 的界面 → 返回 `declaredScripts:["demo"]`、节点上 `uiScripts` 已写入（含 sha256）。
+
+**两个踩坑（都记进代码注释了）**
+
+1. **宿主后台的 doc 没有 `updateNode`** —— 它的唯一写入口是 `batchNodes`（增量 + 带写锁）。
+   第一版按 updateNode 写，真机上静默补不上：逻辑全对、日志干净、节点上什么都没有。
+2. **"自己再去读一次 doc"那条路在真机上拿不到**（提示词里那条路拿得到）。
+   第一版让补声明模块自己去 `ctx.tryGet('doc')` 读节点 —— 真机静默返回空。
+   改成：**调用方把节点数据传进来、本模块只做纯计算**，写回与 uiHtml 同一次；
+   现在"读不到"这件事在真机上不可能再发生（那次读的就是刚写成功的同一个节点）。
+
+**没做的**：第 2 步（打包/导出/收藏）、第 3 步（导入/版本化）、第 4 步（脚本回写画布）、第 5 步（资产库那一类）。
+另：用户点名要的"右键菜单二级菜单显示资源库里的节点包"**已经注册好入口了**（见上一则追记），
+但菜单里还**没有内容** —— 要等第 3/5 步把库那一层做出来。
+
+### 追记（2026-10-13 三续，右键菜单「二级菜单」+ 节点包规范两条口径）
+
+用户口径（三条）：
+① 「**可以在右键菜单中添加一个二级菜单，里面显示我自定义添加的节点**……把所有检测到的
+节点标签内容都列在这里」；② 版本升级后的标题用 `_v2` 这种**下划线、不带空格**的写法；
+③ 「拖进来的话，直接使用，**不用点确认**」。
+
+**右键菜单二级菜单（已实现）**：`plugin-context-menu` 原本只有**平铺分组**（按 group
+分块 + 块间一条分割线），没有嵌套。现在支持**用斜杠表达层级** —— 与设置面板同一套写法：
+
+| 注册时怎么写 | 菜单里长什么样 |
+|---|---|
+| `group: '资源库/节点', title: '画笔'` | 资源库 ▸ 节点 ▸ 画笔（两级菜单） |
+| `group: '资源库', title: '节点/画笔'` | 同上（项名里写斜杠也认） |
+| `group: '节点', title: '复制一份'` | 平铺一行（**老写法行为完全不变**） |
+
+实现要点（都在 `plugin-context-menu` 内，其它插件**一行都不用改**）：
+- `menuBuilder.ts`：新增 `splitMenuPath()`（拆段/去空白/丢空段）、`topGroupOf()`
+  （排序按**首段**取优先级 —— 否则 `资源库/节点` 整串查不到、一律排到最后）；
+  `ContextMenuItem` 加 `path?: string[]`。
+- `ContextMenu.vue`：把平铺项折成「一级分组 → 行」，带子项的行渲染成**入口行**
+  （右侧一个箭头），悬停在其右侧展开子菜单（同一个浮层组件再渲染一份，贴着那一行）。
+  数值全走 ui-style-guide 的 token（外圆 16 / 行圆 10 / 同一档阴影与发丝边），
+  并写了 `prefers-reduced-motion` 降级。
+- 关键取舍：**只有 title 里真写了斜杠才延展路径**。无条件把项名并进路径的话，
+  几十条老命令会全部多出一层菜单（写完测试才发现，已纠正）。
+
+**验证**：plugin-context-menu **65**（+8：斜杠拆段 3 条、嵌套路径 3 条、首段排序 2 条）、
+`tsc --noEmit` 与 `vue-tsc --noEmit` 干净、`pnpm -C packages/ui build` 通过。
+⚠️ **真机未验**：构建后 Chrome MCP 无响应（`list_pages` 超时），本轮只到「离线 + 类型 + 构建」。
+恢复后应补一次：注册一条 `资源库/节点/画画` 的命令 → 右键节点 → 看到入口行与箭头 →
+悬停展开子菜单 → 点子项能执行、菜单关闭。
+
+**节点包规范**（`docs/plan/node-package-plan.md`，仍待评审）本轮按用户口径改了两处：
+升级标题一律 `_v2`（下划线、无空格，与脚本名同一套写法）；
+导入**不再多弹一次确认**（拖进来即用 —— 护栏改由「同源检查 + 冲突就整包升版本、
+不动本机已有脚本」承担）。
+
+### 追记（2026-10-13 二续，可视化节点的「任务脚本」后台：联调通过 + 修一个安装缺口）
+
+用户口径：「这边后台和你的前端是否可以进行搭配……现在做出来没有？进行一个测试。
+另外，你的 MCP 中的可视化文档概述也没有进行修改。」
+
+**结论：能搭，而且已经端到端跑通。** 之前看不到效果的原因不是前端坏了，而是**没部署**：
+后台插件是启动时从 `<数据根>/server-plugins/*.js` 加载的，跑着的后台还是 10-12 那版产物 ——
+`/api/task/list` 掉进 SPA 回落拿到 index.html、`canvas_ui_guide` 里也没有「任务脚本」那一段。
+
+**顺带修的真问题（自带插件装不上自己的后台半）**：`plugin-catalog.json` 里自带（builtin）
+插件那条**从来没算过后台产物的 sha256**（非自带那条会算），而安装路由拿清单里的哈希当唯一
+可信源 —— 清单不给，连自己的自带件都被「未列入清单，拒绝安装」挡掉。
+修法：`catalog.ts` 抽出 `readServerArtifact()` 两条路共用。装的时候 id 用**插件目录名
+`plugin-node-ui`**（不是 `node-ui`）。
+
+**新增的部署入口**：`plugin-node-ui` 加 `pnpm deploy:server`（`scripts/deploy-server.mjs`）——
+自动从后台清单取可信 sha 再调安装接口，省掉手算哈希/手带 confirm 那几步。
+改后台半之后的固定三步：`build:server` → `cloud-server bundle` → `deploy:server`，
+若提示「热装失败（重名）」就重启后台。
+
+**手册（用户点明的那件事）**：`canvas_ui_guide` 末尾现在附一段**实时**脚本清单
+（每次现读目录）——AI 不必猜这台机器上有什么脚本。空的会写「一个脚本都没有」并说清怎么加。
+
+**联调实测（8865 真机）**：后台侧 —— 列脚本(`demo: echo,tick,version`)、
+`wait:true` 拿到结果（ctx 的 canvasId/nodeId/workspace 都对）、SSE 依次收 log/progress/done、
+取消收敛成 cancelled 且脚本自己收到信号收摊、脚本 spawn ffmpeg 退出码 0（「不关笼子」真的能用）。
+前端侧 —— 往可视化节点写一段真界面，沙箱里列脚本 / 跑 echo / 跑 tick 收 9 帧 SSE 全通。
+前提是「允许联网」开着（默认开）。
+
+**验证**：plugin-node-ui **117**（+3）、`tsc --noEmit` 干净；cloud-server **625** 全绿。
+设计文与踩坑记在 `docs/plan/task-script-router-plan.md` 修订 5。
+
+### 追记（2026-10-13，可视化节点「刷新后笔迹回不来」的根因与修法）
+
+用户口径：「刚才不知道为什么，你的这个对比图片节点已经无法正常使用了，因为它里面已经报错了；
+我把它删除掉，重新创建了一个对比图片节点，现在功能一切正常。」
+
+**现象（两条，同根）**：① 可视化节点里画完笔迹，**刷新页面后笔迹消失**（数据还在、画面空）；
+② 那个节点的产出图被写成**没有笔迹的底图**，把下游「图片对比」里原本画好的那张覆盖掉 ——
+用户看到的就是「对比节点里面报错了」。
+
+**根因（真机逐层取证，非猜测）**：宿主把状态送进 iframe 那一步用的是
+`win.postMessage({... state}, '*')`，而 `state` 取自 `props.data.uiState` —— 它是 VueFlow 经
+props 传下来的 **Vue 响应式代理（Proxy）**。postMessage 的结构化克隆**遇到 Proxy 直接抛
+`DataCloneError`**，而且是**同步**抛；外层一个空 `catch {}` 一吞，表现就是「宿主以为发了、
+页面一条都没收到、控制台还没有任何报错」。取证方式：父页面里对同一条指令分「普通对象 /
+`Vue.reactive(...)` 代理 / 节点里存的那份」发三次，只有代理那次抛错。
+
+顺带查清的第二个坑：页面**没就绪时发的消息会被永久丢弃**（早期几条实测全丢）。原来靠 iframe 的
+`load` 里连发四次来赌「页面已经在监听了」，那四次一条都没进去。
+
+**修法（两处，缺一不可）**：
+1. `uiData.toCloneableState()`：发送前把状态 JSON 往返成普通对象（深拷贝 + 剥掉所有层代理）。
+   不用 Vue 的 `toRaw` —— 它是浅的，笔画里嵌套的点数组仍是代理。
+2. **页面报到，宿主应答**：注入的助手在**同步脚本**里就发 `{__canvasUi:1,type:'ready'}`
+   （发得出来就说明它必定已能收消息），宿主收到报到才回状态；`load` 保留作兜底。
+   原来的 `FRAME_RETRY_DELAYS = [400,1200,2600,5000]` 定时重发链整条删掉 —— 那不是修好，
+   只是把概率调大。
+3. 顺手：页面自己刚上报的 state 用 identity 判等，不再原样回推（否则每画一笔都多跑一次
+   「清空 + 重放 + 重导出」）。
+
+**验证**：plugin-node-ui **114**（+4，新增 `toCloneableState` 4 条与 ready 报到 2 条）、
+`tsc --noEmit` 干净；`pnpm -C packages/ui build` 通过。**真机 Chrome MCP（8865 构建产物）**：
+写入特征红线（红像素占比 0.98% → 12.91%）→ 刷新 → 仍是 12.91%；
+同位置改绿线 → 12.91% 红变 11.94% 绿；撤销 → 红 12.91% 回来（撤销链路也走同一条推送）。
+
+**留给用户确认的一件事**：节点 2（可视化 1）的笔迹在排查过程中被我清空过，
+资源 `slot-2.png` 现在是干净的底图，下游「图片对比 5」取的是这份。
+你重新画几笔即可恢复；如果你希望我原样复刻之前那张（需要你给一份原图），告诉我。
+
+### 追记（2026-10-12 七续，Agent「新建对话」被历史会话顶掉）
+
+用户口径：「我的 Agent 面板会默认选择最后一次对话的历史记录，然后我点击『创建新对话』的按钮，
+我对一个节点右键菜单点击『引入 Agent』，右侧的 Agent 面板又回到了之前的历史对话里面，
+而不是我新的这个对话」。
+
+**根因：`sessionId === null` 有两种含义，`restoreCurrentSession()` 把两者当成了同一种。**
+
+- `state.sessionId` 为空的两种来源：① 用户点了「新建对话」（要一条**空白的新会话**，
+  下一句话才开始建）；② 刷新过页面 / 面板刚挂载时内存里没有 id（要接着看**最近那条历史**）。
+- 两条路径期待的行为**相反**，但 `restoreCurrentSession()` 只判空，一律走 ②：取 `state.sessions[0]`
+  装载。而 `show()`（右键「引用到 Agent」的命令末尾就调它）与 `refresh()`（组件挂载时调）都会走到它 ——
+  于是用户刚点出来的空白新对话，在引用节点的那一刻被最近一条历史整体覆盖回来。
+- 顺带发现：`refresh()` 每次都会重装当前会话，`openSession` 里 `model.load()` 会 `reset()` 转录再回放
+  （不影响正确性，但这是「打开面板 = 重装一次」的成本来源，本次不动它）。
+
+**修法：给「主动新对话」一个显式标记，而不是靠 `sessionId` 是不是空来猜。**
+
+- `AgentServiceState` 新增 `draft: boolean`（默认 false）；`newSession()` 置 true。
+- `restoreCurrentSession()` 开头 `if (state.draft) return` —— 有意留白的空白就是空白，不装载任何历史。
+- 只有两个地方清掉它，都是「用户已经明确落到某条会话上」：`openSession()`（点了历史列表 / 分支分页器）
+  与 `ensureSession()`（第一句话建出了真会话）。发出去第一句之后行为与改前完全一致。
+
+**验证**：plugin-agent **314**（+4，新增 `agentDraftSession.test.ts`：刷新不被顶掉 / `show()` 后仍是空白
+新会话 / 回归「主动打开历史会话后刷新仍停在那条」/ 发出第一句话后 draft 结束且刷新停在新会话）；
+plugin-agent tsc --noEmit 干净；ui typecheck 干净；
+ui **281**（那 1 条红仍是用户既有 WIP：plugin-bottom-bar 的裸色，HEAD 里就有，与本次无关）。
+**真机 Chrome MCP（8865 托管产物，已重建）**：`Ctrl+J` 开面板默认落在最后一条历史（turns 8）→
+点「新建对话」（sessionId=null、draft=true、turns 0）→ 执行 `agent:reference-node`（等价右键「引用到 Agent」）
+→ 面板仍是「新会话」、sessionId 仍为 null、输入框插出节点标签；再验「新对话 → 打开历史 → 再新对话 + 刷新」
+仍停在空白新会话；console 无报错。
+
+### 追记（2026-10-12 六续，图片/视频/可视化三种类型恢复卡片边框）
+
+用户口径：「有些节点的边缘像是有一个边框，有些节点就没有。比如你的图片、视频，还有可视化节点，
+都没有这个边框。请检查你的文本、音频节点，看它们里面是如何实现的。我觉得这个边框应该交给基础的
+base node，而不是在指定节点上实现」；随后拍板：「我其实理解他为什么关闭，但是像没有图片，或者有图
+但背景是白色的情况下，它依然无法分辨。所以，你还是把这 3 个类型打开」。
+
+**结论：他的判断是对的 —— 边框一直是外壳画的，只是这三个类型把它关掉了。**
+
+- 边框的唯一来源：plugin-theme-default/src/components/node/BaseNode.vue 的 .v2-card +
+  纯函数 cardFrame.ts 的 resolveCardFrame（1px ÷ zoom 反向缩放，屏幕上恒为 1px）。
+  文本/音频节点**没有写过任何边框代码** —— 它们只是没声明 frameless，于是走外壳默认值。
+- 图片/视频/可视化在各自 nodes.register(...) 里声明了 frameless: true
+  （历史理由：内容铺满整张卡、图片边上还有一像素边距）。代价就是**空节点与白底内容
+  会和画布背景糊在一起**，看不出节点边界 —— 用户这次要修的正是这个。
+- 改法：三处声明删掉 frameless: true（不声明 = frameless 为假 = 外壳画边框），
+  说明注释按新口径重写；UiContent.vue 里那句「类型声明了 frameless」的注释同步改掉。
+  1px 边框由 border-box 吃掉，图片「铺满」的语义不变，不产生额外间隙。
+- 测试：nodeVideoSmoke 的能力断言由 frameless 为真翻成不成立；
+  nodeImageSmoke、新增 plugin-node-ui/src/__tests__/nodeUiType.test.ts 各加一条
+  「不声明 frameless」的回归钉子（防以后改回去）。
+
+**验证**：node-image **123**、node-video **104**、node-ui **86**、plugin-theme-default **283**
+全绿；三个插件包 tsc --noEmit 干净。
+**真机 Chrome MCP（dev :5288）**：用 command:create-node 建 text/audio/image/video/ui 五种类型，
+逐卡读计算样式 —— 五张全是 border-width: 1px（改前 image/video/ui 是 0px）；
+验证用的临时节点已删回原状（画布只剩原有的三张图节点）。
+
+### 追记（2026-10-12 五续，复制粘贴修两条：跨页面粘贴 + 粘贴重新取名）
+
+用户口径（两条）：「我复制一个节点时，无法在另一个浏览器页面中进行粘贴」；
+「粘贴时没有修改当前的标签名称。我不是有一个索引吗？每次新增节点时都会添加一个索引……
+导致复制粘贴之后，节点的名称完全一致」。
+
+**一、跨页面粘贴**（病灶与修法）：
+
+- 病灶：节点数据只活在**复制那个页面**的插件实例内存里（P2-4 按 Context 隔离，这是对的），
+  另一个页面根本没有它；而系统剪贴板里只写了一个「来自画布」的小标记（{\"v\":1,\"nodes\":n,\"edges\":m}），
+  标记里没有节点数据 —— 于是换个页面 Ctrl+V 什么也贴不出来。
+- 修法：写进系统剪贴板的改成**完整载荷**（v2：{v, copyTime, nodes, edges}）。
+  「两个页面之间共同存在的只有系统剪贴板」，跨页面只能靠它传数据。
+  自定义 MIME（application/x-mini-canvas-nodes）与 text/plain **两条都写同一份带前缀的载荷** ——
+  程序化复制（右键菜单 / 脚本）走 navigator.clipboard.writeText，那条路只能写 text/plain，
+  若 text/plain 里只有标记，「菜单里复制 → 另一个页面粘贴」就还是空的。
+- 外部数据一律当不可信：新增 coerceClipboardSnapshot（plugin-clipboard 引擎层）逐节点校验形状
+  （id/type 是 string、坐标是有限数、批内不重复），不合法的丢弃而不是抛错；父不在本批里就剥离
+  parentId 并把 position 重定基到绝对坐标（与 toClipboardNodes 同一条不变量，防悬挂）。
+- **媒体地址要重建**：节点里的 imageUrl/videoUrl 多是 blob: 地址，它只属于原来那个页面。
+  跨页面粘贴时按 data.resourceId 重建本页地址（新增 prepareSnapshotMedia，复用 canvas-data 的
+  pendingMediaRestoreFields，不自己抄一份字段表）；**本页自己刚复制的那份回来时不重建**
+  （载荷里的 copyTime 与内存快照比对即知，靠 isOwnSnapshot）。
+- 菜单/面板的「粘贴」命令那条路**没有原生事件**，故 pasteFromCommand 先贴本页内存快照，
+  没有再去 navigator.clipboard.readText() 找画布载荷（读不到/无权限就静默不响应）。
+- file-drop 的让位判据由剪贴板仲裁场的顺序天然满足（clipboard order 10 先问）；
+  clipboard 侧新增一条：载荷解析不出、只有旧标记、且本页也没内存快照时仍然**接管并吞掉**
+  这次粘贴（返回 true），避免「标记 JSON 被当成用户文本建成一个文本节点」（那比不响应更糟）。
+
+**二、粘贴重新取名**（病灶与修法）：
+
+- 病灶：默认名（「文本 3」）只在**建节点那一刻**由数据层按类型模板生成
+  （nodeStore.nextDefaultName），而粘贴走 addNodes + 显式 data —— 显式的 label 会原样保留
+  （那是刻意的：不能把用户改过的标题冲掉）。于是复制「文本 1」粘贴得到第二个「文本 1」。
+- 修法：新增 renameClonedNodes（引擎层纯函数），在 id 重映射之后、落节点之前，给**带名字**的
+  克隆节点换名；名字走注入的 nameProvider = **doc.nextTypeName** —— 与新建节点是
+  **同一份按类型计数**，所以号是连续的（文本 1/2/3），不会与图上已有的撞号、也不会两次粘贴取同一个号。
+  本来就没名字的节点（label 空/缺）不动它：数据层会按模板自动补名，这里再取一个反而多跳号。
+  父与子各按自己的类型取号（分组 1、文本 2 是正常结果）。
+
+**验证**：canvas-data **395**（+4：载荷读写四种形态）、plugin-clipboard **43**
+（引擎 27 = 原 18 + 改名 4 + 载荷校验 5；插件 16 = 原 10 + 跨页面 6 —— A 复制 B 粘贴 / 目标页
+有「文本 1」时贴出「文本 2」/ 图片按 resourceId 重建地址 / 菜单命令路径 / 菜单同页优先贴内存
+快照 / 旧标记且无快照时不建文本节点）、
+file-drop 47、context-menu 57、canvas-render 421、kernel 220、plugin-group 57、
+plugin-multi-select 153、plugin-edge-cutting 30、ui 281（那 1 条红是用户既有 WIP：
+plugin-bottom-bar/src/NodeBottomBar.vue 的裸色，HEAD 里没有这行，与本次无关）；
+canvas-data / canvas-render / plugin-clipboard / ui 四个 typecheck 干净；
+plugin-clipboard 的 UMD 产物（vite build，9.83 kB）里 canvas-data 仍是 external、
+六个依赖都从 window.MiniCanvasCore 取。
+
+**真机 Chrome MCP（dev，两个页面 A/B）**：A 选中「文本 1」Ctrl+C —— 原生 copy 事件的
+clipboardData 里两个 MIME 都带完整载荷（types: [application/x-mini-canvas-nodes, text/plain]）；
+B（内存剪贴板 hasData=false）Ctrl+V → 贴出节点「文本 1」；B 里 Ctrl+C 再 Ctrl+V →
+**「文本 2」**（序号在目标页续算）；A 复制图片节点贴到 B → 新节点拿到本页重建的 object URL，
+img 实测 naturalWidth 1614、complete=true（不是空白）；A 把图片标题清空后复制 → B 贴到的是
+数据层按模板补的「图片 2」（没名字的不跳号）；菜单命令路径（command.execute('clipboard:paste')
++ 剪贴板里只有载荷）→ 贴出「文本 3」并落进 localStorage 的 canvas:graph。两个页面控制台零报错；
+验证痕迹（两个临时画布）已清回默认空画布。
+
 ### 追记（2026-10-12 四续，6 个「基础交互」插件改为**自带件**）
 
 用户口径：「关于你的插件管理，我希望你把一些插件作为默认插件进行安装。把以下几个插件作为自带插件：

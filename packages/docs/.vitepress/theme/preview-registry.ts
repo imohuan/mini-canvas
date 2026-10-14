@@ -1,5 +1,8 @@
 import type { Component } from 'vue'
 import DemoCounter from './demos/DemoCounter.vue'
+import ThemeKitProbe from './demos/ThemeKitProbe.vue'
+import ThemeKitDemo from './demos/ThemeKitDemo.vue'
+import MiniCanvasStage from './demos/MiniCanvasStage.vue'
 
 /**
  * 组件预览注册表：把「名字」映射到「可跑的组件」。
@@ -23,6 +26,22 @@ export interface PreviewEntry {
 }
 
 export const previewRegistry: Record<string, PreviewEntry> = {
+  // 组件文档页的活演示台（按件展示；MD 里 <ThemeKitDemo name="button" /> 直接传组件用）
+  ThemeKitDemo: {
+    component: ThemeKitDemo,
+    title: '组件演示台',
+  },
+  // 真画布：节点壳 / 连线 / 背景 / 浮动端口的活演示
+  MiniCanvasStage: {
+    component: MiniCanvasStage,
+    title: '真画布（默认主题在跑）',
+  },
+  // 渲染实验：默认主题的纯 UI 件（验证文档站能否直接跑主题包组件）
+  ThemeKitProbe: {
+    component: ThemeKitProbe,
+    title: '渲染实验：默认主题纯 UI 件',
+    description: '这些是真的在跑的组件（按钮 / 气泡 / 下拉 / 滑块 / 取色器）。',
+  },
   // 示例条目：证明「按名字取组件」这条路是通的。
   DemoCounter: {
     component: DemoCounter,
