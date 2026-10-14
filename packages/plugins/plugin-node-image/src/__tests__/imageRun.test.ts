@@ -13,7 +13,7 @@ import type { ToolDef, ToolInput, ToolProgress, ToolResult } from '@mini-canvas/
  * （动作的 run + 写入器），这里的流程断言由 bottom-bar 的 taskRuntime.test.ts 覆盖。
  * 本文件只保留 writeGeneratedImage（image 写入器复用的写回函数）。
  */
-import { writeGeneratedImage, type ImageRunDeps } from '../imageRun'
+import { isCanvasResourceUrl, isResourceRef, writeGeneratedImage, type ImageRunDeps } from '../imageRun'
 
 /** 一个能出图的工具（声明了比例参数，尽量贴近真实工具插件注册的形状） */
 function imageTool(over: Partial<ToolDef> = {}): ToolDef {
@@ -90,11 +90,52 @@ describe('产物地址本地化：不该把外链留在画布上（2026-10-12 �
     expect(deps.writes[0]!.data.imageUrl).toBe('/api/canvases/default/resources/exists.jpeg')
   })
 
-  it('本地资源引用（res-…）同样不重复落地', async () => {
-    let called = 0
-    const deps = fakeDeps({ persistImage: async () => { called++; return undefined } })
+  it('本地资源引用（res-…）**不是显示地址**：先 resolve 再写 imageUrl，引用写进 resourceId（2026-10-13 修复）', async () => {
+    // 现场：写回的产物是本地引用时，早先原样写进 data.imageUrl —— <img src="res-7"> 谁都打不开，
+    // 刷新 / 换标签页 / 云端都取不到这张图。正确做法：字节已在资源库，resolve 换成当前可显示地址。
+    let localized = 0
+    const deps = fakeDeps({
+      persistImage: async () => { localized++; return undefined },
+      resolveRef: async (ref) => 'blob:resolved-' + ref,
+    })
     await writeGeneratedImage('n1', 'res-7', deps)
-    expect(called).toBe(0)
+    // 不重复落字节（引用已在库里），但必须换一次显示地址
+    expect(localized).toBe(0)
+    expect(deps.writes[0]!.data.imageUrl).toBe('blob:resolved-res-7')
+    expect(deps.writes[0]!.data.resourceId).toBe('res-7')
+  })
+
+  it('引用解析不出（资源已不在 / 后端换不动）→ **不写**，保留原图（写引用只会得到破图）', async () => {
+    const deps = fakeDeps({ resolveRef: async () => undefined })
+    await writeGeneratedImage('n1', 'res-gone', deps)
+    // 关键：不能把引用当地址写进去 —— 那正是本次要消灭的「打不开的地址」
+    expect(deps.writes).toHaveLength(0)
+  })
+
+  it('引用没注入 resolveRef（极简宿主）→ 同样不写，不炸', async () => {
+    const deps = fakeDeps()
+    await writeGeneratedImage('n1', 'res-7', deps)
+    expect(deps.writes).toHaveLength(0)
+  })
+
+  it('resolveRef 抛错（资源后端异常）→ 收敛成“不写”，不把异常甩给调用方', async () => {
+    const deps = fakeDeps({ resolveRef: async () => { throw new Error('backend down') } })
+    await expect(writeGeneratedImage('n1', 'res-7', deps)).resolves.toBeUndefined()
+    expect(deps.writes).toHaveLength(0)
+  })
+
+  it('resolve 结果仍是引用形态（后端异常回显）→ 也不写：「引用绝不进 imageUrl」是硬不变量', async () => {
+    const deps = fakeDeps({ resolveRef: async (ref) => ref })
+    await writeGeneratedImage('n1', 'res-7', deps)
+    expect(deps.writes).toHaveLength(0)
+  })
+
+  it('云端画布地址判据只认 /api/canvases/…（res- 引用不再算“已落地”）', () => {
+    expect(isCanvasResourceUrl('/api/canvases/c1/resources/abc.png')).toBe(true)
+    expect(isCanvasResourceUrl('res-7')).toBe(false)
+    expect(isCanvasResourceUrl('https://x/a.png')).toBe(false)
+    expect(isResourceRef('res-7')).toBe(true)
+    expect(isResourceRef('resolve-me')).toBe(false)
   })
 
   it('落地失败 → 回落到原地址（保住图是底线，不给用户看空白）', async () => {

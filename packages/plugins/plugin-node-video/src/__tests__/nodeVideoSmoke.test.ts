@@ -34,6 +34,20 @@ function boot() {
   ctx.inject('nodeRegistry', new NodeRegistry())
   ctx.inject('themeRegistry', new ThemeRegistry())
   ctx.inject('settings', { get: () => undefined })
+  // 资源库（内存版）：上传命令要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
+  const resourceBlobs = new Map<string, Blob>()
+  let resSeq = 0
+  ctx.inject('resources', {
+    async put(blob: Blob) {
+      resSeq += 1
+      const ref = 'res-' + resSeq
+      resourceBlobs.set(ref, blob)
+      return ref
+    },
+    async resolve(ref: string) {
+      return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
+    },
+  })
   ctx.plugin(nodeVideoPlugin)
   return { ctx, nodeStore }
 }
@@ -65,11 +79,12 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('九条视频命令都注册（按钮与命令共用同一批实现）', async () => {
+  it('十一条视频命令都注册（按钮与命令共用同一批实现）', async () => {
     const { ctx } = boot()
     await ctx.start()
     const ids = ctx.get<{ list(): Array<{ id: string }> }>('command').list().map((c) => c.id)
     for (const id of [
+      'video.upload',
       'video.crop',
       'video.cropConfirm',
       'video.cropCancel',
@@ -90,6 +105,7 @@ describe('node-video 装配 smoke', () => {
     const { ctx } = boot()
     await ctx.start()
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')
+    expect(await command.execute('video.upload', {})).toBe(false)
     expect(command.execute('video.crop', {})).toBe(false)
     expect(command.execute('video.cropConfirm', {})).toBe(false)
     expect(command.execute('video.cropConfirm', { nodeId: 'x' })).toBe(false)
@@ -99,6 +115,22 @@ describe('node-video 装配 smoke', () => {
     expect(await command.execute('video.captureFrame', {})).toBe(false)
     expect(command.execute('video.download', {})).toBe(false)
     expect(command.execute('video.resetCrop', {})).toBe(false)
+    ctx.stop()
+  })
+
+  it('video.upload 命令与按钮同一条路：给 file 时字节进资源库、节点写 resolve 出来的地址', async () => {
+    const { ctx, nodeStore } = boot()
+    await ctx.start()
+    const factory = ctx.get<{ create(t: string, p: { x: number; y: number }): string }>('nodeFactory')
+    const id = factory.create(VIDEO_NODE_TYPE, { x: 0, y: 0 })
+    const command = ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command')
+    const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
+    // 命令路径直接给 file（不开系统选文件框）；transform 不注入 = 用真实实现，非浏览器环境读元数据安全返回 null
+    expect(await command.execute('video.upload', { nodeId: id, file })).toBe(true)
+    const data = nodeStore.getNode(id)!.data
+    expect(data.videoUrl).toBe('blob:resolved-res-1')
+    expect(data.resourceId).toBe('res-1')
+    expect(data.videoName).toBe('clip.mp4')
     ctx.stop()
   })
 
@@ -168,11 +200,14 @@ describe('node-video 装配 smoke', () => {
     ctx.stop()
   })
 
-  it('类型级能力：frameless（画面铺满）+ 不支持 resize（与 v1 一致）', async () => {
+  it('类型级能力：保留卡片边框（不再 frameless）+ 不支持 resize（与 v1 一致）', async () => {
     const { ctx, nodeStore } = boot()
     await ctx.start()
     const def = nodeStore.types.get(VIDEO_NODE_TYPE)!
-    expect(def.frameless).toBe(true)
+    // 2026-10-12 用户口径：空视频 / 白底画面与画布背景糊在一起，必须靠外壳的 1px 边框看出节点边界。
+    // 以前这里声明 frameless: true（画面铺满、去掉那圈缝），现在不声明 = 走 BaseNode 的默认边框。
+    // 别改回 true：改了视频节点就又变成"看不见边界的一块白"。
+    expect(def.frameless).toBeFalsy()
     // 视频卡片尺寸由画面比例决定（进视频/裁剪/恢复各改一次），不提供手动拖柄：
     // 与 v1 VideoNodePlugin 的 `resizable: false` 对齐，别改回去。
     expect(def.resizable).toBe(false)

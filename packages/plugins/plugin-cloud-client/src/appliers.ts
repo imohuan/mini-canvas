@@ -48,8 +48,22 @@ async function localizeUrl(
     kind?: string
   },
 ): Promise<string> {
+  const res0 = deps.resources
+  /**
+   * `res-<n>` 是**资源库取件码**，不是能显示的地址（`<img src="res-7">` / `<video src="res-7">`
+   * 谁都打不开）。它只能出现在节点的 `resourceId` 字段，**绝不能进 videoUrl/audioUrl**。
+   *
+   * 早先这里把 `res-` 当成"已经是本画布地址"直接返回 —— 于是引用被写进了媒体字段（同型 bug
+   * 的第三个变体）。现在：是引用就**先解析成显示地址**再写；解析不出来就抛，
+   * 由调用方按"这次没拿到可用地址"处理（宁可保留原值，也不写一个打不开的引用）。
+   */
+  if (/^res-/.test(url)) {
+    const resolved = await res0?.resolve?.(url)
+    if (resolved && !/^res-/.test(resolved)) return resolved
+    throw new Error('[appliers] 资源引用解析不出可用地址：' + url)
+  }
   // 已经是本画布地址就不用再落一次（否则每写一次多存一份字节）
-  if (/^\/api\/canvases\/[^/]+\/resources\//.test(url) || /^res-/.test(url)) return url
+  if (/^\/api\/canvases\/[^/]+\/resources\//.test(url)) return url
   const res = deps.resources
   if (!res || typeof res.put !== 'function') return url
   try {
@@ -66,6 +80,9 @@ async function localizeUrl(
  * 视频：把产物落进本画布资源目录，再写 data.videoUrl。
  *
  * 落地是 async 的，所以这里返回 Promise —— 调用方（底栏的写入器契约）本来就 await 它。
+ *
+ * 写不进去（引用解析不出 / 取字节失败）→ **不写节点**（保留原值）。理由：与其写一个打不开的地址
+ * 让用户看到空白，不如什么都不动、让上一张图/上一段视频继续显示。
  */
 export async function writeVideoResult(
   doc: DocLike,
@@ -75,11 +92,15 @@ export async function writeVideoResult(
 ): Promise<void> {
   const url = result.urls?.[0]
   if (!url) return
-  const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'video' })
-  doc.updateNode?.(nodeId, { data: { videoUrl: local } })
+  try {
+    const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'video' })
+    doc.updateNode?.(nodeId, { data: { videoUrl: local } })
+  } catch (err) {
+    console.warn('[cloud-client] 视频产物地址不可用，保留节点原值：', err)
+  }
 }
 
-/** 音频：同上，写 data.audioUrl（顺带记个文件名，播放器/下载用得上） */
+/** 音频：同上，写 data.audioUrl（顺带记个文件名，播放器/下载用得上）；写不进去同样不写节点 */
 export async function writeAudioResult(
   doc: DocLike,
   nodeId: string,
@@ -88,7 +109,11 @@ export async function writeAudioResult(
 ): Promise<void> {
   const url = result.urls?.[0]
   if (!url) return
-  const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'audio' })
-  const name = local.split('/').pop() ?? ''
-  doc.updateNode?.(nodeId, { data: { audioUrl: local, ...(name ? { audioName: name } : {}) } })
+  try {
+    const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'audio' })
+    const name = local.split('/').pop() ?? ''
+    doc.updateNode?.(nodeId, { data: { audioUrl: local, ...(name ? { audioName: name } : {}) } })
+  } catch (err) {
+    console.warn('[cloud-client] 音频产物地址不可用，保留节点原值：', err)
+  }
 }

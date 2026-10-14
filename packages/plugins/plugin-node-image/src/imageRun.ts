@@ -30,18 +30,31 @@ export interface ImageRunDeps {
    *（保住图是底线：宁可留个外链，也不要让用户看到空白）。
    */
   persistImage?(url: string): Promise<{ url: string; resourceId: string } | undefined>
+  /**
+   * 本地资源库**引用**（`res-<n>`）→ 当前可显示地址。
+   *
+   * 引用不是显示地址（`<img src="res-7">` 浏览器根本解析不出来）——写进 imageUrl 前
+   * 必须换一次。不注入 / 换不出来时返回 undefined —— 调用方放弃这次写回
+   *（把引用当地址写进去只会得到一张打不开的破图，保留原图反而更好）。
+   */
+  resolveRef?(ref: string): Promise<string | undefined>
 }
 
 /**
- * 这个地址**已经在本画布资源目录里**了吗（是的话不必再落一次）。
+ * 这个地址**本身就是可显示的画布资源地址**吗（是的话不必再落一次）。
  *
- * 判据两条，对应两种后端：
- *   · 云端：`/api/canvases/<画布>/resources/<哈希>`（相对地址）
- *   · 本地：`res-<序号>` 这种资源引用
- * 都不匹配 = 还没落地（外链 / dataURL / blobURL），交给 persistImage 去收。
+ * 只认云端形态：`/api/canvases/<画布>/resources/<哈希>` —— 它跨会话 / 跨机器可取。
+ *
+ * 2026-10-13 修复：**不能**把 `res-<n>` 引用也算成"已经落地"——那是资源库的**引用**、
+ * 不是显示地址（写进 imageUrl 谁都打不开）。引用走 isResourceRef，先 resolve 再写。
  */
-export function isLocalResourceUrl(url: string): boolean {
-  return /^\/api\/canvases\/[^/]+\/resources\//.test(url) || /^res-/.test(url)
+export function isCanvasResourceUrl(url: string): boolean {
+  return /^\/api\/canvases\/[^/]+\/resources\//.test(url)
+}
+
+/** 本地资源库的引用（`res-<n>`）：字节已在库里，但写进节点前要先 resolve 成显示地址 */
+export function isResourceRef(url: string): boolean {
+  return /^res-/.test(url)
 }
 
 /**
@@ -64,11 +77,32 @@ export async function writeGeneratedImage(nodeId: string, url: string, deps: Ima
   //
   // 之前这里只认 data:/blob:，于是**外链被原样写进节点**：换台机器打不开，
   // 而且会把后台刚落地好的本画布地址盖掉（后台的 taskManager 是下了字节的）。
+  //
+  // 2026-10-13 再修一处：本地引用（res-…）**不是显示地址**，不能像早先那样当"已落地"
+  // 直接写进 imageUrl —— 先 resolve 成当前可用地址再写，引用本身写进 resourceId
+  //（刷新后由资源库按引用重建；与上传链路的规矩一致）。
   let finalUrl = url
   let finalResourceId = resourceId
-  const needsLocalize = !finalResourceId && !!deps.persistImage && !isLocalResourceUrl(url)
-  if (needsLocalize) {
-    const persisted = await deps.persistImage!(url)
+  if (isResourceRef(url)) {
+    // 本地引用：字节已在资源库，只差 resolve 成当前可用地址。
+    // 取不出来（资源已不在 / 资源库不可用 / 解析抛错）→ **什么都不写**、保留原图：
+    // 引用本身不是显示地址，写进去只会变成一张打不开的破图。
+    // try/catch 与 persistImage 的「失败即 undefined」口径对齐：写回不该整体炸掉
+    //（生产里 applier 是 void 调用，抛出去就是未捕获的 rejection）。
+    let resolved: string | undefined
+    try {
+      resolved = await deps.resolveRef?.(url)
+    } catch {
+      resolved = undefined
+    }
+    // 二次防御：resolve 结果本身仍是引用形态（资源后端实现异常的原样回显）也不写 ——
+    // 「引用绝不进 imageUrl」在这里收成硬不变量，任何一类后端实现都翻不了案。
+    if (!resolved || isResourceRef(resolved)) return
+    finalUrl = resolved
+    finalResourceId = finalResourceId ?? url
+  } else if (!finalResourceId && !!deps.persistImage && !isCanvasResourceUrl(url)) {
+    // 还没落地（dataURL / blobURL / 外链 / 别的相对地址）：先收进资源库再写
+    const persisted = await deps.persistImage(url)
     if (persisted) {
       finalUrl = persisted.url
       finalResourceId = persisted.resourceId

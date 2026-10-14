@@ -2,13 +2,14 @@
  * plugin-file-drop —— 文件拖入 & 粘贴插件（v2 复刻老版 canvas-core/src/plugins/file-drop）。
  *
  * 数据流（v2 铁律：只经内核服务读写，不碰 VueFlow/宿主内部；建节点原子进 history 一次撤销）：
- * - 拖文件到画布 / 粘贴图片、视频或文本 → 读 File → 图片与视频用 URL.createObjectURL 生成
- *   data.imageUrl / data.videoUrl、文本读成 data.text → 在 drop/粘贴位置建对应节点。
+ * - 拖文件到画布 / 粘贴图片、视频或文本 → 读 File → **媒体先落资源库、节点写解析出来的地址**
+ *   （见 addFiles 的说明）、文本读成 data.text → 在 drop/粘贴位置建对应节点。
  *
  * 边界：
  * - 建 image / video / text 三类节点；未知文件归 unsupported（忽略 + console.warn）。
- * - 不做 StoragePlugin 上传（backend-sync 不在本次复刻范围）；媒体只留 objectURL 本地会话可见，
- *   并登记进宿主 resources 供删除后回收。
+ * - 媒体字节经宿主 resources 落库（本地 IndexedDB / 云端画布文件夹），节点里写的是
+ *   **持久可取的地址**（云端同源 URL / 本地资源库地址）—— 不是 objectURL。
+ *   objectURL 只在**没有资源库服务**的极简宿主里兜底（那种环境下节点数据本就只在本次会话有效）。
  * - 建节点前检测 nodeStore.types 是否注册了对应类型（node-image / node-video / node-text 装配才有）；
  *   缺类型则该文件类别跳过（console.warn）——插件可与节点插件独立装配，不硬耦合（masterplan 铁律 8）。
  *
@@ -228,6 +229,35 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     return this.toFlow(this.lastClient)
   }
 
+  /**
+   * 把字节存进宿主资源库，并拿回「当前可用的显示地址」。
+   *
+   * 两步缺一不可（用户 2026-10-13 报的 bug 就出在只做了前一步）：
+   *   ① `put`    → 持久引用（写节点的 `resourceId`；本地是 `res-<n>`、云端就是那个 URL）；
+   *   ② `resolve` → **显示地址**（写节点的 `imageUrl`/`videoUrl`/`audioUrl`）。
+   * 只写 objectURL 的话，那个地址只在当前页面有效（刷新 / 换标签页 / 服务器都取不到）。
+   *
+   * @returns 拿得到地址 → `{ ref, url }`；没有资源库服务或解析不出 → `undefined`（调用方退 objectURL）
+   */
+  private async storeAndResolve(
+    file: File,
+    kind: 'image' | 'video' | 'audio',
+  ): Promise<{ ref: string; url: string } | undefined> {
+    const resources = this.ctx.tryGet<{
+      put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>
+      resolve(ref: string): Promise<string | undefined>
+    }>('resources')
+    if (!resources) return undefined
+    // 防御：宿主给的服务形状可能不全（老宿主 / 测试替身只有 put）——
+    // 缺 resolve 时**退 objectURL**，而不是让整个文件处理抛错失败（用户文件不该因为
+    // 服务端能力不全就被丢掉）。
+    if (typeof resources.resolve !== 'function') return undefined
+    const ref = await resources.put(file, { kind, name: file.name })
+    const url = await resources.resolve(ref)
+    // 解析不出地址（资源后端异常）→ 当没存过：调用方退 objectURL，至少本次会话能看
+    return url ? { ref, url } : undefined
+  }
+
   /** 建节点载荷批量写入（history 一次；选中新节点便于立刻拖动/删除） */
   private commitPayloads(payloads: NodePayload[], description: string): string[] {
    if (payloads.length === 0) return []
@@ -252,13 +282,23 @@ export class FileDropServiceImpl extends Service implements FileDropService {
 
   /**
    * 处理一批文件（drop 或粘贴图片 File）。返回实际创建节点数。
-   * 图片：读 objectURL → 读真实尺寸 → 建 image（带适配尺寸）；
-   * 视频：读 objectURL → 读元数据（宽高时长）→ 建 video（带适配尺寸）；
+   * 图片：读真实尺寸 → 建 image（带适配尺寸）；
+   * 视频：读元数据（宽高时长）→ 建 video（带适配尺寸）；
    * 文本：读内容截断 → 建 text。
    * 未知/未注册类型：跳过并 console.warn（不崩、不半建）。
    *
-   * 三类素材都登记进宿主 resources（写 resourceId）—— objectURL 是会话级的，
-   * 删除节点后由宿主的引用扫描延迟回收（撤销恢复节点时不会破图，与图片节点同语义）。
+   * ## 节点里写什么地址（用户 2026-10-13 报的 bug）
+   *
+   * **写资源库解析出来的地址，不写 objectURL**。
+   *
+   * 早先这里写的是 `URL.createObjectURL(file)` 的 `blob:` 地址 —— 它只在**当前这个浏览器页面**
+   * 里有效：存到服务器后别的标签页/别人打不开、刷新后失效、云端生成任务时服务器也拿不到。
+   * 用户的症状就是"拖/粘进来的图，刷新或换地方就没了"。
+   *
+   * 现在：`resources.put(file)` 把字节存进资源库（本地 IndexedDB / 云端画布文件夹）→
+   * `resources.resolve(ref)` 拿回**当前可用地址**（云端是同源 URL、本地是资源库地址）→ 写进节点。
+   * objectURL 只在**没有资源库服务**时兜底（极简宿主 / 单测）—— 那种情况下节点数据本来就只在
+   * 本次会话有意义，写 objectURL 是唯一选择，不会更糟。
    */
   async addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number> {
     const list = files.filter((f) => this.canHandle(f))
@@ -271,37 +311,26 @@ export class FileDropServiceImpl extends Service implements FileDropService {
       const kind = classifyFile(file)
       try {
         if (kind === 'image' && this.typeRegistered('image')) {
-          const url = this.readers.createObjectURL(file)
           const dims = await this.readers.readImageDims(file)
+          // 先落字节、再拿地址（见方法头的说明）；拿不到就退 objectURL（无资源库的极简环境）
+          const stored = await this.storeAndResolve(file, 'image')
+          const url = stored?.url ?? this.readers.createObjectURL(file)
           const payload = buildImagePayload(file, url, positions[i], dims)
-          // 把字节存进宿主资源库（本地 IndexedDB / 云端画布文件夹，由当前 adapter 决定），
-          // 节点里写持久引用（resourceId）—— 拖进来的图因此也能刷新不丢、云端也有文件。
-          const resources = this.ctx.tryGet('resources')
-          if (resources) {
-            const resourceId = await resources.put(file, { kind: 'image', name: file.name })
-            payload.data.resourceId = resourceId
-          }
+          if (stored) payload.data.resourceId = stored.ref
           payloads.push(payload)
         } else if (kind === 'video' && this.typeRegistered('video')) {
-          const url = this.readers.createObjectURL(file)
           const meta = await this.readers.readVideoMeta(file)
+          const stored = await this.storeAndResolve(file, 'video')
+          const url = stored?.url ?? this.readers.createObjectURL(file)
           const payload = buildVideoPayload(file, url, positions[i], meta)
-          const resources = this.ctx.tryGet('resources')
-          if (resources) {
-            const resourceId = await resources.put(file, { kind: 'video', name: file.name })
-            payload.data.resourceId = resourceId
-          }
+          if (stored) payload.data.resourceId = stored.ref
           payloads.push(payload)
         } else if (kind === 'audio' && this.typeRegistered('audio')) {
-          const url = this.readers.createObjectURL(file)
+          const stored = await this.storeAndResolve(file, 'audio')
+          const url = stored?.url ?? this.readers.createObjectURL(file)
           const payload = buildAudioPayload(file, url, positions[i])
-          // 与图片/视频同一条：字节进宿主资源库、节点写持久引用（刷新不丢、云端有文件）。
+          if (stored) payload.data.resourceId = stored.ref
           // 音频波形/时长由节点内容组件按 audioUrl 自己分析，这里不需要额外元数据。
-          const resources = this.ctx.tryGet('resources')
-          if (resources) {
-            const resourceId = await resources.put(file, { kind: 'audio', name: file.name })
-            payload.data.resourceId = resourceId
-          }
           payloads.push(payload)
         } else if (kind === 'text' && this.typeRegistered('text')) {
           const content = await this.readers.readText(file)

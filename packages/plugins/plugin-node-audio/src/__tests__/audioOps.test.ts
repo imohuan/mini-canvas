@@ -19,8 +19,14 @@ import {
   type AudioTransform,
 } from '../audioOps'
 
-/** 一个只认"按名取服务"的假宿主：data 存在一张表里，写回记录调用次数（验"只写一次 / 不重复分析"） */
-function fakeOps(initial: Record<string, Record<string, unknown>> = {}) {
+/**
+ * 一个只认"按名取服务"的假宿主：data 存在一张表里，写回记录调用次数（验"只写一次 / 不重复分析"）。
+ * @param opts.persistAudio 注入后 = "有资源库"的宿主（上传写资源库地址）；不注入 = 极简宿主（回落 objectURL）
+ */
+function fakeOps(
+  initial: Record<string, Record<string, unknown>> = {},
+  opts: { persistAudio?: (blob: Blob, name?: string) => Promise<{ resourceId: string; url: string } | undefined> } = {},
+) {
   const table: Record<string, Record<string, unknown>> = JSON.parse(JSON.stringify(initial))
   const writes: Array<{ id: string; data: Record<string, unknown> }> = []
   const runtimeWrites: Array<{ id: string; data: Record<string, unknown> }> = []
@@ -46,6 +52,7 @@ function fakeOps(initial: Record<string, Record<string, unknown>> = {}) {
       merge(id, data)
       runtimeWrites.push({ id, data })
     },
+    ...(opts.persistAudio ? { persistAudio: opts.persistAudio } : {}),
   }
   return { ops, table, writes, runtimeWrites }
 }
@@ -185,16 +192,31 @@ describe('audioOps · 波形与时长只补一次', () => {
 })
 
 describe('audioOps · 上传与重分析', () => {
-  it('上传把文件转成 objectURL 后走同一条载入路（文件名写进 audioName）', async () => {
-    const { ops, table } = fakeOps({ n1: {} })
+  it('有资源库时节点里写 resolve 出来的地址（不是 blob: 临时地址）+ 文件名写进 audioName', async () => {
+    const { ops, table } = fakeOps(
+      { n1: {} },
+      { persistAudio: async () => ({ resourceId: 'res-1', url: 'blob:resolved-res-1' }) },
+    )
     const { transform } = fakeTransform()
     const file = { name: 'voice.mp3', size: 1024 } as unknown as Blob
-    const ok = await uploadAudio(ops, 'n1', file, transform, async () => 'res-1')
+    const ok = await uploadAudio(ops, 'n1', file, transform)
     expect(ok).toBe(true)
-    expect(table.n1.audioUrl).toBe('blob:fake')
+    // 资源库地址；**不是** transform.objectUrl 的 blob: 兜底
+    expect(table.n1.audioUrl).toBe('blob:resolved-res-1')
+    expect(table.n1.audioUrl).not.toBe('blob:fake')
     expect(table.n1.audioName).toBe('voice.mp3')
     expect(table.n1.resourceId).toBe('res-1')
     expect(isValidWaveform(table.n1.audioWaveform)).toBe(true)
+  })
+
+  it('没有资源库服务（极简宿主）→ 回落 objectURL，不崩、不写 resourceId', async () => {
+    const { ops, table } = fakeOps({ n1: {} })
+    const { transform } = fakeTransform()
+    const file = { name: 'voice.mp3', size: 1024 } as unknown as Blob
+    const ok = await uploadAudio(ops, 'n1', file, transform)
+    expect(ok).toBe(true)
+    expect(table.n1.audioUrl).toBe('blob:fake')
+    expect(table.n1.resourceId).toBeUndefined()
   })
 
   it('没有给文件、也选不出文件时返回 false', async () => {
@@ -257,5 +279,33 @@ describe('audioOps · 从内核服务拼句柄', () => {
     expect(ops.read('x')).toBeUndefined()
     expect(() => ops.write('x', { audioUrl: 'y' })).not.toThrow()
     expect(() => ops.writeRuntime('x', { audioWaveform: [] })).not.toThrow()
+  })
+
+  it('createAudioOps 接资源库：persistAudio 返回 resolve 出来的地址；上传也就写这条地址', async () => {
+    const blobs = new Map<string, Blob>([[ 'res-7', new Blob(['a']) ]])
+    const services: Record<string, unknown> = {
+      doc: { getNode: () => ({ id: 'n1', data: {} }), updateNode: () => {}, updateNodeRuntime: () => {} },
+      resources: {
+        put: async () => 'res-7',
+        resolve: async (ref: string) => (blobs.has(ref) ? 'blob:resolved-' + ref : undefined),
+      },
+    }
+    const ops = createAudioOps({
+      get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
+    } as never)
+    const persisted = await ops.persistAudio?.(new Blob(['x']), 'v.mp3')
+    expect(persisted).toEqual({ resourceId: 'res-7', url: 'blob:resolved-res-7' })
+  })
+
+  it('createAudioOps 没资源库：persistAudio 返回 undefined（上传该回落 objectURL）', async () => {
+    const services: Record<string, unknown> = {
+      doc: { getNode: () => ({ id: 'n1', data: {} }), updateNode: () => {}, updateNodeRuntime: () => {} },
+    }
+    const ops = createAudioOps({
+      get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
+    } as never)
+    expect(await ops.persistAudio?.(new Blob(['x']))).toBeUndefined()
   })
 })

@@ -76,12 +76,8 @@ async function onPickFile(e: Event): Promise<void> {
   if (!file || uploading.value) return
   uploading.value = true
   try {
-    await uploadAudio(ops, props.id, file, defaultTransform, async (blob) => {
-      // 存进宿主资源库（本地 IndexedDB / 云端画布文件夹，由当前 adapter 决定）
-      const resources = ctx.tryGet<{ put(b: Blob, o?: { kind?: string; name?: string }): Promise<string> }>("resources")
-      if (!resources) return undefined
-      return resources.put(blob, { kind: "audio", ...(blob instanceof File && blob.name ? { name: blob.name } : {}) })
-    })
+    // 资源登记（put → resolve）在 createAudioOps 里接线，节点里写的是资源库地址、不是临时 objectURL
+    await uploadAudio(ops, props.id, file, defaultTransform)
   } finally {
     uploading.value = false
   }

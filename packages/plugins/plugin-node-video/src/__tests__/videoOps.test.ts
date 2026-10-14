@@ -43,8 +43,11 @@ const noServices: ServiceGetter = {
   tryGet: (() => undefined) as ServiceGetter['tryGet'],
 }
 
-/** 起一个带真实内核服务的 ctx（含 video/image 两个类型） */
-function makeCtx() {
+/**
+ * 起一个带真实内核服务的 ctx（含 video/image 两个类型）。
+ * @param opts.withResources 是否注入内存版资源库（默认注入）；false = 极简宿主（上传该回落 objectURL）
+ */
+function makeCtx(opts: { withResources?: boolean } = {}) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
@@ -67,20 +70,22 @@ function makeCtx() {
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('settings', { get: () => undefined })
-  // 资源库（内存版）：截图要把字节存进来、并拿回引用 —— 与真实宿主同一条路
-  const resourceBlobs = new Map<string, Blob>()
-  let resSeq = 0
-  ctx.inject('resources', {
-    async put(blob: Blob) {
-      resSeq += 1
-      const ref = 'res-' + resSeq
-      resourceBlobs.set(ref, blob)
-      return ref
-    },
-    async resolve(ref: string) {
-      return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
-    },
-  })
+  if (opts.withResources !== false) {
+    // 资源库（内存版）：上传/截图要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
+    const resourceBlobs = new Map<string, Blob>()
+    let resSeq = 0
+    ctx.inject('resources', {
+      async put(blob: Blob) {
+        resSeq += 1
+        const ref = 'res-' + resSeq
+        resourceBlobs.set(ref, blob)
+        return ref
+      },
+      async resolve(ref: string) {
+        return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
+      },
+    })
+  }
   return { ctx, nodeStore, edgeStore, history, graph }
 }
 
@@ -173,29 +178,43 @@ describe('loadVideo：载入视频', () => {
   })
 })
 
-describe('uploadVideo：文件 → objectURL → 载入', () => {
-  it('objectURL 与文件信息一次写完；resourceId 与本次载入同一条历史', async () => {
+describe('uploadVideo：文件 → 资源库地址 → 载入', () => {
+  it('有资源库时节点里写 resolve 出来的地址（不是 blob: 临时地址），文件信息一次写完', async () => {
     const id = makeNode(env.nodeStore)
     const ops = createVideoOps(env.ctx)
     const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
-    const ok = await uploadVideo(ops, id, file, fakeTransform(), async () => 'res-9')
+    const ok = await uploadVideo(ops, id, file, fakeTransform())
     expect(ok).toBe(true)
     const data = env.nodeStore.getNode(id)!.data
-    expect(data.videoUrl).toBe('blob:video-1')
+    // 资源库地址（本地是资源库重建的地址、云端是同源 URL）；**不是** transform.objectUrl 的 blob: 兜底
+    expect(data.videoUrl).toBe('blob:resolved-res-1')
+    expect(data.videoUrl).not.toBe('blob:video-1')
     expect(data.videoName).toBe('clip.mp4')
-    expect(data.resourceId).toBe('res-9')
+    expect(data.resourceId).toBe('res-1')
     // 一次撤销退回上传前（url 与 resourceId 一起退）
     env.history.undo()
     expect(env.nodeStore.getNode(id)!.data.videoUrl).toBeUndefined()
     expect(env.nodeStore.getNode(id)!.data.resourceId).toBeUndefined()
   })
 
-  it('拿不到 objectURL（非浏览器）→ false，不写库', async () => {
-    const id = makeNode(env.nodeStore)
-    const ops = createVideoOps(env.ctx)
-    const ok = await uploadVideo(ops, id, new File(['x'], 'a.mp4'), fakeTransform({ objectUrl: () => '' }))
+  it('没有资源库服务（极简宿主）→ 回落 objectURL，不崩、不写 resourceId', async () => {
+    const bare = makeCtx({ withResources: false })
+    bare.nodeStore.addNodes([{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: {} }])
+    const ops = createVideoOps(bare.ctx)
+    const ok = await uploadVideo(ops, 'v1', new File(['x'], 'a.mp4'), fakeTransform())
+    expect(ok).toBe(true)
+    const data = bare.nodeStore.getNode('v1')!.data
+    expect(data.videoUrl).toBe('blob:video-1')
+    expect(data.resourceId).toBeUndefined()
+  })
+
+  it('拿不到任何地址（无资源库且 objectURL 也拿不到）→ false，不写库', async () => {
+    const bare = makeCtx({ withResources: false })
+    bare.nodeStore.addNodes([{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: {} }])
+    const ops = createVideoOps(bare.ctx)
+    const ok = await uploadVideo(ops, 'v1', new File(['x'], 'a.mp4'), fakeTransform({ objectUrl: () => '' }))
     expect(ok).toBe(false)
-    expect(env.nodeStore.getNode(id)!.data.videoUrl).toBeUndefined()
+    expect(bare.nodeStore.getNode('v1')!.data.videoUrl).toBeUndefined()
   })
 })
 
@@ -387,5 +406,25 @@ describe('服务缺失时的安全降级（极简宿主 / 单测桩）', () => {
   it('settings 缺失时 fitLimits 回落 560×360', () => {
     const bare = createVideoOps(noServices)
     expect(bare.fitLimits?.()).toEqual({ maxWidth: 560, maxHeight: 360 })
+  })
+
+  it('没有资源库服务时 persistVideo/persistImage 返回 undefined（调用方各自兜底）', async () => {
+    const bare = createVideoOps(noServices)
+    expect(await bare.persistVideo?.(new Blob(['x']), 'a.mp4')).toBeUndefined()
+    expect(await bare.persistImage?.(new Blob(['x']), 'a.png')).toBeUndefined()
+  })
+
+  it('资源库 put 抛错时 persistVideo 也返回 undefined（不把上传整条路炸掉）', async () => {
+    const ctx = new Context()
+    ctx.inject('resources', {
+      async put() {
+        throw new Error('后端不可用')
+      },
+      async resolve() {
+        return 'blob:never'
+      },
+    })
+    const ops = createVideoOps(ctx)
+    expect(await ops.persistVideo?.(new Blob(['x']), 'a.mp4')).toBeUndefined()
   })
 })

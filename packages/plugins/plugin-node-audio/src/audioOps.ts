@@ -57,6 +57,12 @@ export interface AudioOpsContext {
   write(nodeId: string, data: Record<string, unknown>): void
   /** 写派生数据（= doc.updateNodeRuntime：落盘但不进撤销栈） */
   writeRuntime(nodeId: string, data: Record<string, unknown>): void
+  /**
+   * 把一段音频字节存进宿主资源库，返回持久引用 + 当前可用地址
+   * （云端是同源 URL、本地是资源库重建的地址）。上传的节点字段写这条地址，不写临时 objectURL。
+   * 未注入 / 存取失败 → undefined（调用方回落 objectURL 兜底）。
+   */
+  persistAudio?(blob: Blob, name?: string): Promise<{ resourceId: string; url: string } | undefined>
 }
 
 /**
@@ -89,6 +95,21 @@ export function createAudioOps(svc: ServiceGetter): AudioOpsContext {
     read: (nodeId) => doc()?.getNode(nodeId)?.data,
     write: (nodeId, data) => doc()?.updateNode(nodeId, { data }),
     writeRuntime: (nodeId, data) => doc()?.updateNodeRuntime(nodeId, { data }),
+    // 上传音频的字节存进资源库：节点写 resolve 出来的地址（不写临时 objectURL）
+    persistAudio: async (blob, name) => {
+      const store = svc.tryGet<{
+        put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>
+        resolve(ref: string): Promise<string | undefined>
+      }>('resources')
+      if (!store) return undefined
+      try {
+        const resourceId = await store.put(blob, { kind: 'audio', ...(name ? { name } : {}) })
+        const url = await store.resolve(resourceId)
+        return url ? { resourceId, url } : undefined
+      } catch {
+        return undefined
+      }
+    },
   }
 }
 
@@ -170,13 +191,19 @@ export async function loadAudio(
 }
 
 /**
- * 上传音频文件：File → objectURL → 载入。
+ * 上传音频文件：字节先进资源库（put → resolve 拿当前可用地址）→ 载入。
  *
  * 为什么音频不像图片那样转 dataURL：几分钟的音频转 base64 会膨胀约三分之一，
- * 写进 localStorage 直接撑爆配额、刷新反而丢数据。objectURL 当前会话可见，
- * 配合宿主 resources 服务登记回收（删除/撤销语义与图片、视频一致）。
+ * 写进 localStorage 直接撑爆配额、刷新反而丢数据。
  *
- * @param registerResource 可选：把文件存进宿主资源库并返回持久引用（本地进库 / 云端进文件夹）
+ * 节点里写的是**资源库解析出来的地址**（云端是同源 URL / 本地是资源库地址）：
+ * `URL.createObjectURL(file)` 的 `blob:` 只在当前页面有效 —— 存到服务器后别的标签页取不到、
+ * 刷新后失效、云端生成任务时服务器也拿不到。objectURL 只在**没有资源库 / 解析失败**时
+ * 兜底（极简宿主）—— 那种情况下节点数据本来就只在本次会话有效，写它不会更糟。
+ *
+ * 资源登记**先做、且不单独写库**：resourceId 随本次载入一起提交，
+ * 于是"换音频"对用户始终是**一次撤销**就退回原样（分两次写会让撤销只退半步）。
+ *
  * @param file 不给（命令触发）时开系统选文件框；用户取消 → false
  */
 export async function uploadAudio(
@@ -184,22 +211,20 @@ export async function uploadAudio(
   nodeId: string,
   file: Blob | undefined,
   transform: AudioTransform = defaultTransform,
-  registerResource?: (file: Blob) => Promise<string | undefined>,
 ): Promise<boolean> {
   if (!ops.read(nodeId)) return false
   const picked = file ?? (await transform.pickFile())
   if (!picked) return false
-  const url = transform.objectUrl(picked)
-  if (!url) return false
   const name = (picked as File).name
-  // 资源登记**先做、且不单独写库**：resourceId 随本次载入一起提交，
-  // 于是"换音频"对用户始终是**一次撤销**就退回原样（分两次写会让撤销只退半步）。
-  const resourceId = await registerResource?.(picked)
+  // 字节先进资源库、拿回可用地址（createAudioOps.persistAudio 装配）；拿不到才回落 objectURL
+  const persisted = await ops.persistAudio?.(picked, typeof name === 'string' && name ? name : undefined)
+  const url = persisted?.url || transform.objectUrl(picked)
+  if (!url) return false
   return loadAudio(
     ops,
     nodeId,
     url,
-    { ...(typeof name === 'string' && name ? { name } : {}), ...(resourceId ? { resourceId } : {}) },
+    { ...(typeof name === 'string' && name ? { name } : {}), ...(persisted ? { resourceId: persisted.resourceId } : {}) },
     transform,
   )
 }

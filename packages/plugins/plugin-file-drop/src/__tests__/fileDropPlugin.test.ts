@@ -121,21 +121,67 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(node.size).toEqual({ w: 560, h: 315 })
   })
 
-  it('addFiles 音频文件 → 建 audio 节点（字段与音频节点同形 + 字节进资源库写 resourceId）', async () => {
+  it('addFiles 音频文件 → 建 audio 节点（字段与音频节点同形 + 写资源库解析出的地址）', async () => {
     const { ctx, svc, nodeStore } = makeService({ createObjectURL: () => 'blob:aud' })
-    // 宿主资源服务（真实环境由 canvas-base 注入）：字节进库、节点只写持久引用
-    const put = async (): Promise<string> => 'res-audio-1'
-    ctx.inject('resources', { put } as never)
+    // 宿主资源服务（真实环境由 canvas-base 注入）：字节进库 → resolve 拿地址 → 写节点
+    ctx.inject('resources', {
+      put: async (): Promise<string> => 'res-audio-1',
+      resolve: async (): Promise<string> => '/api/canvases/c1/resources/abc.mp3',
+    } as never)
     const count = await svc.addFiles([makeFile('song.mp3', 'audio/mpeg', 'x')], { x: 12, y: 34 })
     expect(count).toBe(1)
     const node = nodeStore.getNodes()[0]
     expect(node.type).toBe('audio')
     expect(node.position).toEqual({ x: 12, y: 34 })
-    expect(node.data.audioUrl).toBe('blob:aud')
+    // ★ 关键（用户 2026-10-13 报的 bug）：audioUrl 必须是**解析出来的地址**，不是 blob: 临时地址
+    expect(node.data.audioUrl).toBe('/api/canvases/c1/resources/abc.mp3')
     expect(node.data.audioName).toBe('song.mp3')
     expect(node.data.resourceId).toBe('res-audio-1')
     // 音频卡片走类型默认尺寸（不在载荷里另写 size）
     expect(node.size).toBeUndefined()
+  })
+
+  /**
+   * 拖拽 / 粘贴进画布的媒体，节点里写的必须是**能跨会话取到的地址**（用户 2026-10-13 报的 bug）。
+   *
+   * 现场：早先写的是 `URL.createObjectURL(file)` 的 `blob:` 地址 —— 只在当前浏览器页面有效，
+   * 存到服务器后别人打不开、刷新后失效、云端生成任务时服务器也拿不到。
+   * 现在：`put` 拿引用 → `resolve` 拿地址 → 写节点；objectURL 只在**没有资源库**时兜底。
+   */
+  it('图片/视频/音频：节点里写 resolve 后的地址（不是 blob:）；无资源库时才退 objectURL', async () => {
+    const cases = [
+      { name: 'pic.png', type: 'image/png', field: 'imageUrl', kind: 'image' },
+      { name: 'clip.mp4', type: 'video/mp4', field: 'videoUrl', kind: 'video' },
+      { name: 'song.mp3', type: 'audio/mpeg', field: 'audioUrl', kind: 'audio' },
+    ] as const
+    for (const c of cases) {
+      // ① 有资源库：写 resolve 后的地址
+      const withStore = makeService({ createObjectURL: () => 'blob:tmp' })
+      withStore.ctx.inject('resources', {
+        put: async (): Promise<string> => 'ref-1',
+        resolve: async (): Promise<string> => '/api/canvases/c1/resources/hash.' + c.kind,
+      } as never)
+      await withStore.svc.addFiles([makeFile(c.name, c.type)], { x: 0, y: 0 })
+      const d1 = withStore.nodeStore.getNodes()[0].data as Record<string, unknown>
+      expect(d1[c.field], c.name).toBe('/api/canvases/c1/resources/hash.' + c.kind)
+      expect(String(d1[c.field]).startsWith('blob:'), c.name).toBe(false)
+      expect(d1.resourceId, c.name).toBe('ref-1')
+
+      // ② 没有资源库（极简宿主 / 单测）：退 objectURL，仍能建节点（不丢用户文件）
+      const noStore = makeService({ createObjectURL: () => 'blob:fallback' })
+      await noStore.svc.addFiles([makeFile(c.name, c.type)], { x: 0, y: 0 })
+      const d2 = noStore.nodeStore.getNodes()[0].data as Record<string, unknown>
+      expect(d2[c.field], c.name).toBe('blob:fallback')
+      expect(d2.resourceId, c.name).toBeUndefined()
+
+      // ③ 资源库只有 put、没有 resolve（老宿主形状）：也退 objectURL，且**不抛错丢掉文件**
+      const putOnly = makeService({ createObjectURL: () => 'blob:putonly' })
+      putOnly.ctx.inject('resources', { put: async (): Promise<string> => 'ref-x' } as never)
+      const n = await putOnly.svc.addFiles([makeFile(c.name, c.type)], { x: 0, y: 0 })
+      expect(n, c.name).toBe(1)
+      const d3 = putOnly.nodeStore.getNodes()[0].data as Record<string, unknown>
+      expect(d3[c.field], c.name).toBe('blob:putonly')
+    }
   })
 
   it('视频元数据读不出来 → 仍建节点，用默认卡片尺寸（不因读不到就丢弃用户拖进来的文件）', async () => {

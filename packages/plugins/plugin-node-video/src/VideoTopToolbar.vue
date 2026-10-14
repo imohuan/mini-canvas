@@ -94,12 +94,8 @@ async function onFileChange(e: Event): Promise<void> {
   if (!file || uploading.value) return
   uploading.value = true
   try {
-    await uploadVideo(ops, props.id, file, undefined, async (blob) => {
-      // 存进宿主资源库（本地 IndexedDB / 云端画布文件夹，由当前 adapter 决定）
-      const resources = ctx.tryGet('resources')
-      if (!resources) return undefined
-      return resources.put(blob, { kind: 'video', ...(blob instanceof File && blob.name ? { name: blob.name } : {}) })
-    })
+    // 资源登记（put → resolve）在 createVideoOps 里接线，节点里写的是资源库地址、不是临时 objectURL
+    await uploadVideo(ops, props.id, file)
   } finally {
     uploading.value = false
   }

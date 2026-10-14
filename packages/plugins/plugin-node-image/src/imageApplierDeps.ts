@@ -47,5 +47,12 @@ export function createImageOpsWriteDeps(svc: ServiceGetter): ImageRunDeps {
         return undefined
       }
     },
+    // 产物是**本地资源引用**（res-…）时换成当前可显示地址（2026-10-13）：
+    // 引用只是取件码、不是显示地址，写给 <img src> 浏览器打不开；字节已在库里，
+    // 这里只差一次 resolve（引用本身由写入器写进 resourceId）。
+    resolveRef: async (ref) => {
+      const resources = svc.get<{ resolve?(ref: string): Promise<string | undefined> } | undefined>('resources')
+      return typeof resources?.resolve === 'function' ? resources.resolve(ref) : undefined
+    },
   }
 }

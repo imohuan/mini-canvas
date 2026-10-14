@@ -40,6 +40,21 @@ async function boot() {
   ctx.inject('nodeRegistry', nodeRegistry)
   ctx.inject('themeRegistry', new ThemeRegistry())
 
+  // 资源库（内存版）：上传命令要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
+  const resourceBlobs = new Map<string, Blob>()
+  let resSeq = 0
+  ctx.inject('resources', {
+    async put(blob: Blob) {
+      resSeq += 1
+      const ref = 'res-' + resSeq
+      resourceBlobs.set(ref, blob)
+      return ref
+    },
+    async resolve(ref: string) {
+      return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
+    },
+  })
+
   ctx.plugin(nodeAudioPlugin)
   await ctx.start()
   return { ctx, nodeStore, nodeRegistry }
@@ -101,6 +116,21 @@ describe('音频节点插件整装', () => {
     expect(ids).toContain('audio.upload')
     expect(ids).toContain('audio.download')
     expect(ids).toContain('audio.reanalyze')
+    ctx.stop()
+  })
+
+  it('audio.upload 命令与按钮同一条路：给 file 时字节进资源库、节点写 resolve 出来的地址', async () => {
+    const { ctx } = await boot()
+    const service = ctx.get<AudioService>('audio')
+    const id = service.addAudioNode({ x: 0, y: 0 })
+    const command = ctx.get<{ execute(id: string, payload?: unknown): unknown }>('command')
+    const file = new File(['x'], 'voice.mp3', { type: 'audio/mpeg' })
+    // 命令路径直接给 file（不开系统选文件框）；transform 不注入 = 用真实实现，非浏览器环境分析安全返回 null
+    expect(await command.execute('audio.upload', { nodeId: id, file })).toBe(true)
+    const data = ctx.get<{ getNode(id: string): { data: Record<string, unknown> } | undefined }>('doc').getNode(id)!.data
+    expect(data.audioUrl).toBe('blob:resolved-res-1')
+    expect(data.resourceId).toBe('res-1')
+    expect(data.audioName).toBe('voice.mp3')
     ctx.stop()
   })
 

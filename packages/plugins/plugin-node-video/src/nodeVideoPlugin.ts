@@ -37,6 +37,7 @@ import {
   downloadVideoNode,
   resetClip,
   resetCrop,
+  uploadVideo,
 } from './videoOps'
 import type { Rect } from './videoCrop'
 
@@ -136,7 +137,8 @@ export const Config: ConfigSchema = {
  * 连接约束：输入口收 image（封面/首帧参考）与 video、输出口产 video ——
  * 对齐 v1 VideoNodePlugin 的 acceptsInputs: ['image', 'text', 'video']。
  * 不声明 capacity = 不限条数（视频节点可以接多个上游素材）。
- * frameless：视频画面铺满整张卡，外壳那圈 1px 边框只会变成画面边缘多余的一圈缝（与图片节点同理）。
+ * 卡片边框：保留外壳默认的 1px 边框（2026-10-12 与图片节点同一条口径）——
+ * 空视频 + 白底画面与画布背景糊在一起时，边框是唯一能看出节点边界的东西。
  */
 export function apply(ctx: Context) {
   const service = new VideoService(ctx)
@@ -184,7 +186,6 @@ export function apply(ctx: Context) {
     // 留一个手动拖柄会让"卡片贴着画面"这条规矩被拖歪，而且拖过之后换视频还会被覆盖，
     // 等于给了用户一个按不住的选择。所以视频节点不提供 resize。
     resizable: false,
-    frameless: true,
     // 加载态用默认尺寸（用户口径 2026-10-10）：视频一旦有内容，node.size 就按画面比例写死，
     // 重新生成时卡片仍是上一次的比例。声明本能力后：跑任务期间按设置里配的「默认宽/默认高」显示
     // （用户要的"保持横屏的视频节点默认状态"），跑完再跟随新视频比例。只改渲染、不动 node.size。
@@ -206,9 +207,19 @@ export function apply(ctx: Context) {
 
   // —— 命令：界面按钮与命令走**同一批实现**（cropVideo / clipVideo / captureFrameNode …）——
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
-  //   payload 约定：{ nodeId: string }；裁剪确认额外给 rect（视频像素矩形）。
+  //   payload 约定：{ nodeId: string }；上传额外给 file（不给则开系统选文件框）；
+  //   裁剪确认额外给 rect（视频像素矩形）。
   const ops = createVideoOps(ctx)
 
+  ctx.commands.register({
+    id: 'video.upload',
+    title: '上传视频',
+    run: async (_c, payload) => {
+      const { nodeId, file } = (payload ?? {}) as { nodeId?: string; file?: Blob }
+      if (!nodeId) return false
+      return uploadVideo(ops, nodeId, file)
+    },
+  })
   ctx.commands.register({
     id: 'video.crop',
     title: '裁剪视频画面',

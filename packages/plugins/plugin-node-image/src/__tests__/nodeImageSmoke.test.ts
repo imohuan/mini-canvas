@@ -58,6 +58,17 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
+  it('类型级能力：保留卡片边框（不声明 frameless）', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const def = ctx.get<DocService>('doc').types.get('image')
+    // 2026-10-12 用户口径：空图片节点与白底图片会和画布背景糊在一起，必须靠外壳（BaseNode 的 .v2-card）
+    // 那圈 1px 边框看出节点边界。以前这里声明 frameless: true（内容贴边、去掉那圈缝），现在不声明。
+    // 别改回 true —— 改了图片节点就又变成"看不见边界的一块白"。
+    expect(def?.frameless).toBeFalsy()
+    ctx.stop()
+  })
+
   it('六条图片命令都注册（按钮与命令共用同一批实现）', async () => {
     const ctx = boot()
     await ctx.start()
