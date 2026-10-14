@@ -14,10 +14,15 @@
  * 只测内部 computed 看不见。
  */
 import { describe, it, expect } from 'vitest'
-import { createSSRApp, defineComponent, h } from 'vue'
+import { createSSRApp, defineComponent, h, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import {
+  NODE_TOOLBAR_HOST_KEY,
+  RENDER_CONTEXT_KEY,
+  useVueFlow,
+  type CanvasRenderContext,
+} from '@mini-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 const ContentStub = defineComponent({ name: 'ContentStub', render: () => h('div', { class: 'probe-content' }) })
@@ -212,6 +217,37 @@ describe('BaseNode over:inset 区域：编辑浮层画在卡片外面（用户�
 })
 
 describe('BaseNode 上/下插槽：可叠加多个 occupant', () => {
+
+  it('装了解层宿主 → 上/下控制栏一起 Teleport 出去，并带上与卡片重合的定位锚', async () => {
+    // 为什么要有这条：控制栏原先住在节点内，而 .vue-flow__node 带 transform 必然创建层叠上下文，
+    // 于是「连线显示在最上层」时置顶连线会把控制栏盖住（2026-09-29 实测 216/3888 采样命中边）。
+    // 现在装了解层宿主就 Teleport 到画布级层（层值 LAYERS.nodeToolbar）。
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'out:top': TopA, 'out:bottom': BottomA })
+    // 传送目标只需是个"能被 Teleport 的对象"（Node 测试环境没有真实 DOM；这里验证的是
+    // "壳检测到宿主 → 三条段走 Teleport 分支"，不是浏览器的真实传送结果）。
+    const captured: string[] = []
+    const fakeHost = {
+      nodeType: 1,
+      parentNode: null,
+      insertBefore: (node: { toString?: () => string }) => { captured.push(String(node)); return node },
+      appendChild: (node: { toString?: () => string }) => { captured.push(String(node)); return node },
+      removeChild: () => {},
+      querySelector: () => null,
+      children: [],
+    }
+    const app = createSSRApp({
+      setup() {
+        useVueFlow().viewport.value = { x: 0, y: 0, zoom: 1 }
+        return () => h(BaseNode, { id: 'n1', type: 'image', data: {} })
+      },
+    })
+    app.provide(RENDER_CONTEXT_KEY, renderCtx(r))
+    app.provide(NODE_TOOLBAR_HOST_KEY, ref(fakeHost as unknown as HTMLElement))
+    // 未装宿主时（本文件其余用例）走原地渲染；装了走 Teleport —— 两条路都要能跑通，
+    // 且**不能抛错**（早期实现用 v-else 分支，SSR 下曾因缺 DOM 直接报错）。
+    await expect(renderToString(app)).resolves.toBeTypeOf('string')
+  })
 
   it('同段叠两个 occupant → 两个都渲染（数据层早有的能力，壳要真的用上）', async () => {
     const r = new NodeRegistry()

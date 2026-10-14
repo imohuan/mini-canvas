@@ -1,7 +1,8 @@
 # 画布 z-index 统一分层（2026-09-29）
 
 > 目标：把散在全仓的层级（z-index）数值收敛成**一份单一事实源**，并把「节点 / 连线 / 上下控制栏」三者的先后关系钉成契约。
-> 本文档先记录 **Chrome MCP 实测现状**，再给**目标语义**与**迁移步骤**。实现前请确认 §6 的那个结构性问题。
+> 本文档先记录 **Chrome MCP 实测现状**，再给**目标语义**与**迁移步骤**。
+> 2026-09-29 当天已全部落地（见 §3），原 §6 的结构性问题按 A 方案解决（见 §4）。
 
 ---
 
@@ -59,7 +60,7 @@
 2. **`edgeOnTop` 打开 → 边 svg 被写成 `z:1001`**，压过所有节点。
 3. **选中节点不抬层**：`elevate-nodes-on-select=false`（`CanvasSurface.vue`），所有节点恒 `z:0`。
 4. **置顶连线会盖住节点的上/下控制栏**（实测）：让边横穿图片节点的下控制栏，`edgeOnTop=false` 时 **0 / 3888** 个采样点命中边；`edgeOnTop=true` 时 **216 / 3888** 命中边 —— 控制栏被边压住。
-   - 根因：节点 `.vue-flow__node` 因 `z-index` 非 auto **创建层叠上下文**，节点内部的 `.v2-slot`（z:30）**再大也出不去**，而边 svg（z:1001）是它的兄弟。这正是分组控制栏当年被迫改挂 `.csurface-overlay` 的同一个坑（见 `GroupTopToolbarOverlay.vue` 文件头）。
+   - 根因：节点 `.vue-flow__node` 带 `transform`（VueFlow 定位用），**必然**创建层叠上下文，节点内部的 `.v2-slot`（z:30）**再大也出不去**，而边 svg（z:1001）是它的兄弟。这正是分组控制栏当年被迫改挂 `.csurface-overlay` 的同一个坑（见 `GroupTopToolbarOverlay.vue` 文件头）。
 
 ---
 
@@ -142,4 +143,42 @@ export const LAYERS = {
 
 - `BaseNode.vue` 在红线清单里：改动前须读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md`，改后六件 66 条不变量与 27 条易碎点必须全绿。
 - 目标层序一旦变动，视觉回归基线（现 6/6）与 e2e（现 50/50）都要重跑。
+---
+
+## 8. 落地记录（2026-09-29 当天已全部实现）
+
+§4/§5 的方案当天落地，§6 那个结构性问题按 **A 方案**解决 —— 全仓 30 包单测全绿、
+官方 e2e 连续 3 次 **50/50**、多选回归 29/29、视觉回归 6/6、主题色板 19/19。
+
+新增 `packages/canvas-render/src/contracts/layers.ts`（唯一事实源）+ `ui-theme.css` 的 `--layer-*`
+CSS 出口（两处由 `layerTokens.test.ts` 扫描比对，漂移即报错）。最终层序：
+
+```
+分组 50/60 < 连线 100 < 节点 200 < 选中节点 300 < 临时边 380 < 置顶连线 400
+  < 临时菜单卡 450 < 节点控制栏 500 < 画布浮层 600 < 应用浮标 650 < 外壳 UI 700
+  < 手势层 900 < 模态 100000 < 模态提示 100001
+```
+
+接线（全仓）：canvasHostCore（节点/分组/临时卡显式分层 + **选中抬层**）、CanvasHost（`edgeOnTop` 走
+`LAYERS.edgeTop`，不覆盖临时边自身层）、CanvasSurface（overlay 容器）、CanvasShell / AxDialog /
+AxDropdown / AxTooltip / SettingsShell / context-menu / shortcut-manager / theme Dropdown / node-find /
+3d-preview / node-video / node-image / canvas-export，以及 multi-select 框选与 edge-cutting 刀光（gesture 档）。
+
+两处隐式依赖改为显式：节点不再只靠 DOM 顺序压边；选中节点由 `nodesFromStore` 显式抬层。
+
+**§6 的硬骨头（控制栏压过置顶连线）也是当天做完的**，做法即 A 方案（只搬 DOM、不搬逻辑）：
+
+- CanvasSurface 新增画布级宿主层 `.csurface-node-toolbar-layer`（z = `LAYERS.nodeToolbar`，
+  压在置顶连线之上、画布浮层之下），内层跟随视口 transform 以便按 flow 坐标定位；
+- 新增注入令牌 `NODE_TOOLBAR_HOST_KEY`；BaseNode 取到宿主就把 `out:top`/`out:bottom` Teleport
+  过去，并补一块「与卡片同位置同尺寸」的定位锚（`calc(100% ± offset)` 才仍等于「离卡片这条边的距离」）；
+  区域条目、能力实例缓存、定位样式**全部仍在壳内**，所以同一节点上「按钮」与「它打开的面板」
+  照旧共享同一个能力实例（决策 9 第②条）。未装宿主（SSR 单测 / 极简宿主）→ 原地渲染，行为逐字不变。
+- 实测：置顶连线横穿下控制栏的命中点由 **216 → 0**，控制栏按钮仍可点；分组内子节点的控制栏锚点
+  与卡片精确重合。
+
+顺带修一处被这次改动暴露的既有问题：端口跟随区 `.port-follow-zone` 的命中盒是矩形，而可见形状是
+「贴卡边的矩形 + 外侧半椭圆」—— 那块看不见的矩形死区会吃 mousedown。节点一选中就抬层
+（`LAYERS.nodeSelected`），死区便压住紧邻节点、把点击整个吃掉（e2e 因此卡在「选中图片节点」）。
+改为用与可见形状逐点一致的 clip-path 裁剪命中区。
 

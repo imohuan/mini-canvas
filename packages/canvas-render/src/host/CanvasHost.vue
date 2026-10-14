@@ -84,6 +84,7 @@ import {
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
 } from './canvasHostCore'
+import { LAYERS } from '../contracts/layers'
 
 const log = createV2Logger('canvas-host')
 
@@ -337,9 +338,10 @@ function syncFromStore(): void {
   // B 项：DTO 保留端口句柄（edgesFromStore 也滤悬挂边，纯逻辑单测覆盖）
   const edgeOnTop = (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop ?? false
   edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
-    // 连线置顶：VueFlow 每边是独立 svg，zIndex 越高越盖过节点层（节点默认 z 0/auto）。
-    // 临时拖线有自己的 connectionline 层(z 1001)，无需参与。
-    edgeOnTop ? { ...e, zIndex: 1001 } : e,
+    // 连线分层：普通边走 LAYERS.edge（在节点之下），置顶边走 LAYERS.edgeTop（压过所有节点，
+    // 含选中节点）。临时边自己的 z 在 edgesFromStore 里按 LAYERS.tempEdge 给。
+    // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
+    edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
   nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
   canUndo.value = h.history.canUndo()

@@ -204,7 +204,7 @@ function previewImage(url: string): void {
   const layer = document.createElement('div')
   // 内联在真 DOM 里，CSS 变量可用；遮罩走主题 scrim（亮色浅、暗色深）
   layer.style.cssText =
-    'position:fixed;inset:0;background:var(--ui-scrim, rgba(15,23,42,.72));z-index:100000;display:flex;align-items:center;justify-content:center;cursor:zoom-out'
+    'position:fixed;inset:0;background:var(--ui-scrim, rgba(15,23,42,.72));z-index:var(--layer-modal, 100000);display:flex;align-items:center;justify-content:center;cursor:zoom-out'
   const img = document.createElement('img')
   img.src = url
   img.style.cssText = 'max-width:92vw;max-height:90vh;object-fit:contain;border-radius:12px'

@@ -253,7 +253,8 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
    半透明毛玻璃会让底下的内容透出来、字读不清（用户口径 2026-10-04：把这个透明度删掉）。 */
 .ctx-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   min-width: 252px;
   max-width: 340px;
   padding: 6px;

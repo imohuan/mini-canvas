@@ -595,7 +595,8 @@ onBeforeUnmount(() => {
 .pano-fullscreen {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal） */
+  z-index: var(--layer-modal, 100000);
   background: #000; /* 主题色白名单: 全屏查看层刻意纯黑无装饰 */
   touch-action: none;
 }

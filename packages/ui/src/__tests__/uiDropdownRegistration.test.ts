@@ -134,12 +134,22 @@ describe('箭头的位置契约（结构层）', () => {
     expect(at, '箭头必须在 </Transition> 之后（浮层外，做兄弟节点）').toBeGreaterThan(transitionClose)
   })
 
-  it('箭头 z-index 与浮层同层（100000），否则会被画布图层盖住', () => {
+  it('箭头 z-index 与浮层同层（--layer-modal / 100000），否则会被画布图层盖住', () => {
+    // 层叠带改造后两者都走 --layer-modal 变量（唯一事实源见 canvas-render/contracts/layers.ts）：
+    // 断言改成「两边用同一个值」。变量与兜底值都认，但**两边必须一致** —— 这才是本条的契约。
+    const zIndexOf = (rule: RegExpMatchArray): string => {
+      const m = /z-index:\s*([^;]+);/.exec(rule[1])
+      expect(m, '规则里没有 z-index').toBeTruthy()
+      return m![1].trim()
+    }
     const arrowRule = /\.axd-arrow\s*\{([^}]*)\}/.exec(src)
     expect(arrowRule, '没找到 .axd-arrow 规则').toBeTruthy()
-    expect(arrowRule![1]).toMatch(/z-index:\s*100000/)
     const menuRule = /\.dd-menu\s*\{([^}]*)\}/.exec(src)
-    expect(menuRule![1]).toMatch(/z-index:\s*100000/)
+    expect(menuRule, '没找到 .dd-menu 规则').toBeTruthy()
+    // 浮层这一层是「模态/菜单」档：写死或走变量都要落在这一档上
+    expect(zIndexOf(menuRule!)).toMatch(/100000/)
+    // 箭头必须与浮层**同一个值**（同层）——低了会被画布图层盖住（菜单看得见、箭头看不见）
+    expect(zIndexOf(arrowRule!)).toBe(zIndexOf(menuRule!))
   })
 
 

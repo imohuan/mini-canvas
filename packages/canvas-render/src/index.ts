@@ -105,6 +105,12 @@ export { reasonText, DEFAULT_REASON_TEXT } from './connection/reasonText'
 // 渲染宿主统一上下文：CanvasHost 内层(CanvasSurface) provide 单令牌，消费方走 useCanvasRender()（新代码首选）
 export { RENDER_CONTEXT_KEY, useCanvasRender } from './contracts/renderContext'
 export type { CanvasRenderContext } from './contracts/renderContext'
+// 画布层叠带（z-index 唯一事实源）：所有层级数值从这里取，别处不再写 z-index 字面量
+export { LAYERS } from './contracts/layers'
+export type { LayerName } from './contracts/layers'
+// 节点上/下控制栏的画布级宿主令牌：节点壳把控制栏 DOM Teleport 到它（脱离节点的层叠上下文，
+// 从而能压过置顶连线）；缺省不装则该令牌取不到，节点壳原地渲染（行为与改动前一致）。
+export { NODE_TOOLBAR_HOST_KEY } from './contracts/nodeToolbarHost'
 // 有就绪状态的画布 Flow/DOM 能力面（T04）：未挂载/已销毁时抛明确错误，不静默降级
 export { createCanvasFlowController, CanvasFlowNotReadyError } from './contracts/canvasFlowApi'
 export type {

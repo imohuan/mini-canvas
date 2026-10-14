@@ -120,7 +120,8 @@ function hide(): void {
 .axt-root { display: inline-flex; }
 .axt-bubble {
   position: fixed;
-  z-index: 100001;
+  /* z-index 走画布层叠带变量（--layer-modal-top）；modal 里也要能弹提示 */
+  z-index: var(--layer-modal-top, 100001);
   max-width: 260px;
   padding: 4px 8px;
   color: var(--ui-tip-ink);

@@ -5135,6 +5135,35 @@ moveNodes / setNodeParent / setNodeSize`（真实现，走唯一写入口 + 历�
 `canvas-render` 406、`ui` 64；图片 111 / 视频 105 / 对比 46 / 分组 48 / 自动布局 33 / 拖入 42 全绿；
 typecheck 过（canvas-data / canvas-render 业务码 / node-image / node-video / node-image-compare / group /
 auto-layout / file-drop / theme-default / mcp-server）。
+### 最近完成（2026-09-29，画布 z-index 统一分层）
+
+用户诉求：「优化画布里的 z-index 逻辑；节点/连线/上下控制栏的先后关系要理顺；
+我先单独设了一些样式，希望统一放到一个地方方便管理」。
+
+- **问题（Chrome 实测）**：层级数值散在 6+ 个文件各写一份（边 svg 1001、overlay 20、
+  分组 -3、外壳 30/60/100000…），没人说得清整体层序；且「连线显示在最上层」打开后
+  置顶连线会**盖住节点下控制栏**（边横穿下控制栏：216/3888 个采样点命中边）。
+  根因：节点 .vue-flow__node 带 transform，**必然**创建层叠上下文，节点内的 z-index
+  再大也出不去、越不过作为其兄弟的边层。
+- **50a062b** 层级收敛为单一事实源：新增 `canvas-render/contracts/layers.ts`（LAYERS）+
+  `ui-theme.css` 的 `--layer-*` CSS 出口（两处由 `layerTokens.test.ts` 扫描比对，漂移即报错）。
+  层序：分组 < 连线 < 节点 < 选中节点 < 临时边 < 置顶连线 < 临时卡 < 节点控制栏
+  < 画布浮层 < 应用浮标 < 外壳 UI < 手势层 < 模态 < 模态提示。
+  全仓落点接线；两处隐式依赖改显式：节点不再只靠 DOM 顺序压边、选中节点由
+  `nodesFromStore` 显式抬层。
+- **8ee3061** 规范登记：`docs/design/ui-style-guide.md` §2.8 重写为层叠带表（含两条层叠
+  上下文事实），§8 技术债第 6 条（z-index:100000 待收敛）标记已偿还；
+  新增 `docs/plans/2026-09-29-canvas-z-layers.md`（实测数据 + 方案）。
+- **ed06069** 节点上下控制栏移到画布级层：CanvasSurface 新增 `.csurface-node-toolbar-layer`
+  （z = LAYERS.nodeToolbar，压过置顶连线）+ 令牌 `NODE_TOOLBAR_HOST_KEY`；BaseNode 取到宿主
+  就把 `out:top`/`out:bottom` Teleport 过去，并补「与卡片同尺寸」的定位锚。只搬 DOM、不搬逻辑
+  —— 区域条目与能力实例缓存仍在壳内，同节点上「按钮」与「它打开的面板」照旧共享同一实例。
+  未装宿主（SSR 单测/极简宿主）原地渲染，行为逐字不变。
+  顺带修一处被暴露的既有问题：端口跟随区命中盒是矩形、可见形状是「矩形+半椭圆」，
+  看不见的矩形死区会吃 mousedown（选中抬层后压住邻节点）；改为同形状的 clip-path。
+- **验证**：全仓 30 包单测全绿；官方 e2e 连续 3 次 **50/50**、多选回归 29/29、
+  视觉回归 6/6、主题色板 19/19。实测：置顶连线横穿下控制栏的命中点由 **216 → 0**，
+  控制栏按钮仍可点；分组内子节点的控制栏锚点与卡片精确重合。
 
 ### 最近完成（2026-09-27，插件上下文与包边界 T01–T09）
 

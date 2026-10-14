@@ -162,10 +162,10 @@ const zoneStyle = computed(() => ({
 /**
  * 命中区裁剪路径：与**看得见的形状**（矩形 + 外侧半椭圆耳朵）逐点一致。
  *
- * 为什么必须裁（2026-09-30 实测）：这个 span 的盒子是**矩形**（宽 = 矩形 + 耳朵外凸 rx），
+ * 为什么必须裁（2026-09-29 实测）：这个 span 的盒子是**矩形**（宽 = 矩形 + 耳朵外凸 rx），
  * 但画出来的只有「紧贴卡边的矩形 + 外侧半椭圆」。不裁的话，矩形盒伸到卡外的那块
- * **看不见的死区**照样吃 mousedown —— 节点一被选中就抬层（见 canvasHostCore 的
- * NODE_SELECTED_Z），这块死区便压在紧邻节点之上，把本该属于邻居的点击整个吃掉
+ * **看不见的死区**照样吃 mousedown —— 节点一被选中就抬层（见 contracts/layers 的
+ * LAYERS.nodeSelected），这块死区便压在紧邻节点之上，把本该属于邻居的点击整个吃掉
  * （实测：选中左节点后点不到右节点，e2e 卡在「选中图片节点」）。
  * 裁成可见形状后，耳朵照常起手拖线（形状与视觉完全一致），死区不再拦截邻居。
  *
@@ -582,6 +582,7 @@ onBeforeUnmount(() => {
 .port-follow-zone--rect {
   border-radius: 0;
 }
+
 
 .moving-handle-button {
   position: absolute;

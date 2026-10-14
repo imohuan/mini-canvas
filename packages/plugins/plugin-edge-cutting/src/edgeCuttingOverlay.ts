@@ -43,7 +43,8 @@ function createOverlay(style: BladeStyle): SVGSVGElement {
     'height:100vh',
     'overflow:visible',
     'pointer-events:none',
-    'z-index:10000',
+    // z-index 走画布层叠带变量（--layer-gesture，唯一事实源见 canvas-render/contracts/layers.ts）
+    'z-index:var(--layer-gesture, 900)',
   ].join(';')
   applyThemeCssVars(svg, style)
   document.body.appendChild(svg)

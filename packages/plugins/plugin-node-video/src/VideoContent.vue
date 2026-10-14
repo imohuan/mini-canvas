@@ -572,7 +572,8 @@ onBeforeUnmount(() => {
 .video-fullscreen {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal） */
+  z-index: var(--layer-modal, 100000);
   display: flex;
   align-items: center;
   justify-content: center;

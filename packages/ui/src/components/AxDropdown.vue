@@ -428,7 +428,8 @@ defineExpose({ openAtPoint, isOpen, chainId })
 .axd-trigger { display: block; flex: 1 1 auto; min-width: 0; }
 .dd-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   min-width: 180px;
   /* 内边距 / 圆角 / 底色都走 --dd-* token（值见 canvas-render 的 ui-theme.css，
      与右键菜单 .ctx-menu 对齐：6px / 16px / 不透明白底）。
@@ -457,8 +458,10 @@ defineExpose({ openAtPoint, isOpen, chainId })
 }
 .dd-menu--inner-scroll > * { min-height: 0; }
 /* 与浮层同层（100000）：箭头挂在 body 下，层级低了会被画布图层盖住（菜单看得见、箭头看不见）。
-   DOM 在浮层之后 → 同层时压在浮层之上。 */
-.axd-arrow { z-index: 100000; pointer-events: none; }
+   DOM 在浮层之后 → 同层时压在浮层之上。
+   z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts）——
+   与 .dd-menu 同一份，改一处两个都变。 */
+.axd-arrow { z-index: var(--layer-modal, 100000); pointer-events: none; }
 .axd-enter-active { transition: opacity .14s ease-out, transform .14s ease-out; }
 .axd-leave-active { transition: opacity .1s ease-in, transform .1s ease-in; }
 .axd-enter-from, .axd-leave-to { opacity: 0; transform: scale(.96) translateY(-4px); }

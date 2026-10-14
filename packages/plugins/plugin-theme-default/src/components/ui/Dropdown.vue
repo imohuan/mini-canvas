@@ -300,7 +300,8 @@ watch(isOpen, (v) => {
 /* 浮层本体：直接显示 / 隐藏，不做入场/退场动画。 */
 .dd-menu {
   position: fixed;
-  z-index: 100000;
+  /* z-index 走画布层叠带变量（--layer-modal，唯一事实源见 canvas-render/contracts/layers.ts） */
+  z-index: var(--layer-modal, 100000);
   box-sizing: border-box;
   /* 内边距同样可由消费方用 --dd-padding 覆盖（右键菜单那一档是 6px）。
      理由同下面的圆角：本规则 scoped（[data-v-xxx]，特异性 0,2,0），
