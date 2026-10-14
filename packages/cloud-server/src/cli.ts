@@ -65,7 +65,7 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
 async function parseArgs(argv: string[]): Promise<CliOptions> {
   const args = argv.slice(2)
   const opts: CliOptions = {
-    port: DEFAULT_PORT,
+    port: Number(process.env.MINI_CANVAS_PORT ?? '') || DEFAULT_PORT,
     portExplicit: false,
     dir: DEFAULT_DATA_DIR,
     hostname: '127.0.0.1',
@@ -105,9 +105,23 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
       process.exit(0)
     } else if (a === 'list-tools') {
       // 打印 MCP 工具面（不启服务）—— 配 AI 客户端前先看它能干什么
+      //
+      // ⚠️ 这里**只列内置的工具**。插件注册的工具（ctx.mcp）是运行期才有的，
+      //    本命令不启服务就看不到它们 —— 所以下面会明说一句，别让人以为"没有那些工具"
+      //    就是代码没写（审查实测踩到过：配 AI 客户端前拿这个自检，被骗着去翻源码）。
+      //    真要核对全量，就查运行中的服务（下面的提示给了确切做法）。
       const { listTools } = await import('./mcp/server.js')
-      console.log('MCP 暴露的工具:')
-      for (const t of listTools()) console.log(`  - ${t.name}: ${t.description}`)
+      const builtin = listTools()
+      console.log('MCP 暴露的工具（**只含内置**）:')
+      for (const t of builtin) console.log(`  - ${t.name}: ${t.description}`)
+      console.log(
+        `\n共 ${builtin.length} 个内置工具。\n` +
+          '插件注册的工具（如 canvas_ui_* / canvas_fn_*）**不在这里**：它们是运行期才注册的。\n' +
+          '要核对全量，查运行中的服务（下面的 <端口> 换成实际端口）：\n' +
+          '  curl -s -X POST http://127.0.0.1:<端口>/mcp \\' +
+          '\n    -H "content-type: application/json" -H "accept: application/json, text/event-stream" \\' +
+          '\n    -d \'{"jsonrpc":"2.0","id":1,"method":"tools/list"}\'',
+      )
       process.exit(0)
     } else {
       throw new Error(`未知参数: ${a}（--help 看用法）`)
@@ -115,6 +129,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
   }
   return opts
 }
+
 
 /** 版本号取自本包 package.json（dist/cli.js 的上两级） */
 async function readVersion(): Promise<string> {

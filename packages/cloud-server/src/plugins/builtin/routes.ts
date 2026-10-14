@@ -47,6 +47,8 @@ import type { QueueScheduler } from '../../agent/queueScheduler.js'
 import type { GoalRuntimePort } from '../../routes/agentSessions.js'
 import type { ProjectStore } from '../../store/projectStore.js'
 import type { AssetStore } from '../../store/assetStore.js'
+import { agentChatRoutes, type ChatRunner } from '../../routes/agentChat.js'
+import { createSdkChatRunner } from '../../agent/chatSdk.js'
 
 /** 服务名常量（与 server.ts 的 inject 一一对应，改名要一起改） */
 export const S = {
@@ -63,6 +65,8 @@ export const S = {
   agentSessions: 'agentSessions',
   agentRuntime: 'agentRuntime',
   agentBranches: 'agentBranches',
+  /** 单轮对话用的「按需加载 SDK」函数（server.ts 里注入 loadSdk） */
+  agentLoadSdk: 'agentLoadSdk',
   pluginsDir: 'pluginsDir',
   serverPluginsDir: 'serverPluginsDir',
   selfOrigin: 'selfOrigin',
@@ -177,6 +181,24 @@ export const agentPluginRoutes: PluginModule = {
     ctx.routes.adopt(
       agentRoutes(need<AgentConfigService>(ctx, S.agentConfig), need<AgentRuntime>(ctx, S.agentRuntime)),
     )
+  },
+}
+
+/**
+ * agent-chat —— 单轮对话（`POST /api/agent/chat/completion`）。
+ *
+ * 与 agent-sessions（多轮）分开住，理由见 routes/agentChat.ts 文件头：
+ * 这条**不建会话、不进列表、不留痕迹**，是"模型直连"，不是"跟 Agent 聊天"。
+ */
+export const agentChatPlugin: PluginModule = {
+  name: 'agent-chat',
+  inject: [S.agentConfig, S.agentLoadSdk],
+  apply(ctx) {
+    const config = need<AgentConfigService>(ctx, S.agentConfig)
+    const loadSdk = need<() => Promise<never>>(ctx, S.agentLoadSdk)
+    // createSdkChatRunner 的返回值就是路由要的 runner 形状（单测可另注入假的）
+    const { run } = createSdkChatRunner({ config, loadSdk: loadSdk as never })
+    ctx.routes.adopt(agentChatRoutes({ config, run: run as unknown as ChatRunner }))
   },
 }
 
@@ -319,6 +341,7 @@ export const BUILTIN_PLUGINS: PluginModule[] = [
   canvasOpsPlugin,
   agentPluginRoutes,
   agentSessionPlugin,
+  agentChatPlugin,
   pluginCatalogPlugin,
   serverPluginsPlugin,
   npmPluginsPlugin,

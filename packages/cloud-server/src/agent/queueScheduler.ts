@@ -40,6 +40,18 @@ export interface QueueSchedulerDeps {
     objective: string,
     budget: number,
   ) => Promise<{ started: boolean }>
+  /**
+   * pre-turn 中间件（与 HTTP 的 /messages 同一套，见 serverFramework/agent.ts）。
+   *
+   * 为什么调度器也要跑它：队列是常规用法，不是边角路径。不跑的话，同一条消息
+   * 「直接发」与「排队发」行为不一样 —— 插件写的拦截 / 改写被排队绕过去（真机查出来的洞）。
+   * 不注入 = 老宿主 / 单测，退化成「没有中间件」（行为与从前一致）。
+   */
+  preTurn?: (turn: {
+    canvasId: string
+    input: { canvasId: string; sessionId?: string; text: string; images?: string[]; prefs?: unknown }
+    abortSignal: AbortSignal
+  }) => Promise<{ blocked?: true; response?: unknown }>
   log?: (message: string, extra?: unknown) => void
 }
 
@@ -278,12 +290,35 @@ export class QueueScheduler {
         const r = await this.deps.startGoal(canvasId, sessionId, item.goal.objective, item.goal.budget)
         started = r.started
       } else {
-        const r = await this.deps.startRun({
+        // ★ pre-turn 中间件：与 HTTP 的 /messages 走**同一套**（见 deps.preTurn 的说明）。
+        //   少了它，插件写的拦截 / 改写会被「排队发」整条绕过去 —— 同一条消息两种行为。
+        //   但 `preTurned` 的条目要跳过：它入队前已经在 HTTP 层跑过了（正文是改写后的），
+        //   再跑一遍会让有状态的中间件对同一条消息记两次账。
+        const turnInput = {
           canvasId,
           sessionId,
           text: item.text,
           ...(item.images?.length ? { images: item.images } : {}),
-        })
+        }
+        if (this.deps.preTurn && !item.preTurned) {
+          const verdict = await this.deps.preTurn({
+            canvasId,
+            input: turnInput,
+            abortSignal: new AbortController().signal,
+          })
+          if (verdict.blocked) {
+            // 被拦下：这一条不该进模型。标成 sent（已处理）并把它移出队列 ——
+            // 留在队列会每次 tick 都重来一遍（插件每轮拦一次，队列永远动不了）。
+            const dropped = await this.deps.store.updateQueue(canvasId, sessionId, (q) => ({
+              ...q,
+              items: q.items.filter((it) => it.id !== item.id),
+            }))
+            if (dropped) broadcastQueue(this.deps, canvasId, sessionId, dropped)
+            this.deps.log?.('queue item blocked by plugin', { session: sessionId, item: item.id })
+            return
+          }
+        }
+        const r = await this.deps.startRun(turnInput)
         started = r.started
       }
     } catch (err) {

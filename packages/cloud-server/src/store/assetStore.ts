@@ -17,7 +17,14 @@ import { atomicWriteJson } from './atomicWrite.js'
 import { ALLOWED_EXT } from './mime.js'
 import { assetsFilesDir, assetsIndexFile, canvasResourcesDir, isSafeAssetName, isSafeCanvasId } from './canvasPaths.js'
 
-export type AssetKind = 'image' | 'video' | 'audio' | 'other'
+/**
+ * 资产类型。
+ *
+ * node-package 是**节点包**（可视化节点 + 它依赖的后台脚本打成一个 .mcnode）。
+ * 单独一类而不是丢进 other：左侧抽屉据此知道它是"能拖出节点的东西"，
+ * 拖到画布时的落点是"还原节点 + 写脚本"，而不是"建一个媒体节点"。
+ */
+export type AssetKind = 'image' | 'video' | 'audio' | 'node-package' | 'other'
 export interface Asset {
   id: string
   name: string
@@ -68,6 +75,7 @@ function foldersFile(root: string): string {
 /** 由扩展名 / MIME 猜资产类型 */
 export function kindOfName(name: string): AssetKind {
   const ext = (name.split('?')[0].split('.').pop() ?? '').toLowerCase()
+  if (ext === 'mcnode') return 'node-package'
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return 'image'
   if (['mp4', 'webm', 'mov'].includes(ext)) return 'video'
   if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return 'audio'
@@ -95,8 +103,36 @@ export function parseAssetNameFromUrl(url: string): string | undefined {
 export class AssetStore {
   constructor(private readonly root: string) {}
 
+  /**
+   * 本店所有「读—改—写」的串行链。
+   *
+   * 为什么必须有（用户报的现场 2026-10-14）：「批量删除之后刷新页面，又会出现一些内容」。
+   * 前端「全选删除」的形状是 `for (id of ids) void deleteAssetById(id)` —— **并发**发 N 个 DELETE，
+   * 每个请求各自「读整张 index.json → 去掉一条 → 整份写回」。读改写不串行时，N 个请求读到的是
+   * **同一份旧账**，各自写回，后写的把先写的整条覆盖掉 —— 实测 12 条并发删只剩 1 条真被删掉
+   * （真机 HTTP 复现：5 条并发删只删掉 1 条）。
+   *
+   * 与 KvStore 的 `runExclusive` / CanvasStore 的 `writeChains` 同款解法（那边是为「写同一份配置」、
+   * 这边是为「同一份资产账」）。区别只在粒度：资产登记表 + 文件夹表都是小文件、都参与同一批
+   * 批量操作，合成**一条**链最简单也最不容易漏（按文件分链反而会漏掉「移文件夹同时改条目归属」
+   * 这种跨两个文件的组合操作）。
+   */
+  private chain: Promise<unknown> = Promise.resolve()
 
-  async list(): Promise<Asset[]> {
+  /** 把一次读改写排进链尾（链上任务抛错不卡住后面的） */
+  private runExclusive<T>(job: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(job, job)
+    this.chain = next.catch(() => undefined)
+    return next
+  }
+
+  /**
+   * 读整张登记表（**链内**用）。
+   *
+   * 名字带 Locked 是提醒：只能从 `runExclusive` 的任务里调。链内再调一次 `runExclusive` 会在等
+   * 自己那条链 —— 直接死锁（job 等自己）。所以对内一律用这一份，对外才用 `list()`。
+   */
+  private async listLocked(): Promise<Asset[]> {
     const raw = await readJson(assetsIndexFile(this.root))
     const arr = Array.isArray(raw) ? raw : []
     const assets = arr
@@ -114,9 +150,14 @@ export class AssetStore {
     }
     return assets
   }
+
+  async list(): Promise<Asset[]> {
+    return this.runExclusive(() => this.listLocked())
+  }
   // ===== 文件夹（树形，存 assets/folders.json）=====
 
-  async listFolders(): Promise<AssetFolder[]> {
+  /** 读文件夹表（**链内**用；只能从 runExclusive 的任务里调） */
+  private async listFoldersLocked(): Promise<AssetFolder[]> {
     const raw = await readJson(foldersFile(this.root))
     const arr = Array.isArray(raw) ? raw : []
     return arr.filter(
@@ -125,88 +166,104 @@ export class AssetStore {
     )
   }
 
+  async listFolders(): Promise<AssetFolder[]> {
+    return this.runExclusive(() => this.listFoldersLocked())
+  }
+
   private async writeFolders(folders: AssetFolder[]): Promise<void> {
     await atomicWriteJson(foldersFile(this.root), folders)
   }
 
   async createFolder(name: string, parentId?: string): Promise<AssetFolder> {
-    const clean = name.trim() || '新建文件夹'
-    const folder: AssetFolder = { id: randomUUID(), name: clean, createdAt: Date.now() }
-    if (parentId) folder.parentId = parentId
-    await this.writeFolders([...(await this.listFolders()), folder])
-    return folder
+    return this.runExclusive(async () => {
+      const clean = name.trim() || '新建文件夹'
+      const folder: AssetFolder = { id: randomUUID(), name: clean, createdAt: Date.now() }
+      if (parentId) folder.parentId = parentId
+      await this.writeFolders([...(await this.listFoldersLocked()), folder])
+      return folder
+    })
   }
 
   async renameFolder(id: string, name: string): Promise<AssetFolder | undefined> {
-    const folders = await this.listFolders()
-    const target = folders.find((f) => f.id === id)
-    if (!target) return undefined
-    target.name = name.trim() || target.name
-    await this.writeFolders(folders)
-    return target
+    return this.runExclusive(async () => {
+      const folders = await this.listFoldersLocked()
+      const target = folders.find((f) => f.id === id)
+      if (!target) return undefined
+      target.name = name.trim() || target.name
+      await this.writeFolders(folders)
+      return target
+    })
   }
 
   /** 更新文件夹图标（图标选择器「应用」；空串 = 清除回默认） */
   async setFolderIcon(id: string, icon: string): Promise<AssetFolder | undefined> {
-    const folders = await this.listFolders()
-    const target = folders.find((f) => f.id === id)
-    if (!target) return undefined
-    const clean = icon.trim()
-    if (clean) target.icon = clean
-    else delete target.icon
-    await this.writeFolders(folders)
-    return target
+    return this.runExclusive(async () => {
+      const folders = await this.listFoldersLocked()
+      const target = folders.find((f) => f.id === id)
+      if (!target) return undefined
+      const clean = icon.trim()
+      if (clean) target.icon = clean
+      else delete target.icon
+      await this.writeFolders(folders)
+      return target
+    })
   }
 
   /** 移动文件夹（检查环：不能挪进自己的子孙里） */
   async moveFolder(id: string, newParentId?: string): Promise<AssetFolder | undefined> {
-    const folders = await this.listFolders()
-    const target = folders.find((f) => f.id === id)
-    if (!target) return undefined
-    if (newParentId) {
-      // 沿 newParentId 往上爬，爬到自己 = 成环，拒绝
-      let cur: string | undefined = newParentId
-      const seen = new Set<string>()
-      while (cur) {
-        if (cur === id || seen.has(cur)) return undefined
-        seen.add(cur)
-        cur = folders.find((f) => f.id === cur)?.parentId
+    return this.runExclusive(async () => {
+      const folders = await this.listFoldersLocked()
+      const target = folders.find((f) => f.id === id)
+      if (!target) return undefined
+      if (newParentId) {
+        // 沿 newParentId 往上爬，爬到自己 = 成环，拒绝
+        let cur: string | undefined = newParentId
+        const seen = new Set<string>()
+        while (cur) {
+          if (cur === id || seen.has(cur)) return undefined
+          seen.add(cur)
+          cur = folders.find((f) => f.id === cur)?.parentId
+        }
+        target.parentId = newParentId
+      } else {
+        delete target.parentId
       }
-      target.parentId = newParentId
-    } else {
-      delete target.parentId
-    }
-    await this.writeFolders(folders)
-    return target
+      await this.writeFolders(folders)
+      return target
+    })
   }
 
   /** 删文件夹：里面的资产和子文件夹都上移到它的父级（不销毁数据） */
   async removeFolder(id: string): Promise<boolean> {
-    const folders = await this.listFolders()
-    const target = folders.find((f) => f.id === id)
-    if (!target) return false
-    const parentId = target.parentId
-    const kept = folders
-      .filter((f) => f.id !== id)
-      .map((f) => {
-        if (f.parentId !== id) return f
-        const moved = { ...f }
-        if (parentId) moved.parentId = parentId
-        else delete moved.parentId
-        return moved
-      })
-    await this.writeFolders(kept)
-    const assets = await this.list()
-    await this.write(
-      assets.map((a) => {
-        if (a.folderId !== id) return a
-        const moved = { ...a }
-        if (parentId) moved.folderId = parentId
-        else delete moved.folderId
-        return moved
-      }),
-    )
-    return true
+    // 文件夹表与资产登记表**一起改**，所以必须在同一次链内任务里完成 ——
+    // 分两次拿链会让中间插进来一个写，把上移结果盖掉。
+    return this.runExclusive(async () => {
+      const folders = await this.listFoldersLocked()
+      const target = folders.find((f) => f.id === id)
+      if (!target) return false
+      const parentId = target.parentId
+      const kept = folders
+        .filter((f) => f.id !== id)
+        .map((f) => {
+          if (f.parentId !== id) return f
+          const moved = { ...f }
+          if (parentId) moved.parentId = parentId
+          else delete moved.parentId
+          return moved
+        })
+      await this.writeFolders(kept)
+      const assets = await this.listLocked()
+      await this.write(
+        assets.map((a) => {
+          if (a.folderId !== id) return a
+          const moved = { ...a }
+          if (parentId) moved.folderId = parentId
+          else delete moved.folderId
+          return moved
+        }),
+      )
+      return true
+    })
   }
 
   private async write(assets: Asset[]): Promise<void> {
@@ -226,27 +283,29 @@ export class AssetStore {
     /** 本机绝对路径（有字节落盘时传；外部地址不传） */
     path?: string
   }): Promise<Asset> {
-    const assets = await this.list()
-    const dup = assets.find((a) => a.url === input.url)
-    if (dup) return dup
-    const name = input.name?.trim() || (input.url.split('/').pop() ?? 'asset')
-    // 本机绝对路径：调用方直接给了就用；没给但地址指向本机画布资源
-    // （/api/canvases/<id>/resources/<hash>）也从 url 推出来 —— 字节确实在那里
-    // （用户口径：与技能引用给 SKILL.md 绝对路径同一条规矩）。
-    const localPath = input.path ?? this.localPathFromUrl(input.url)
-    const asset: Asset = {
-      id: randomUUID(),
-      name,
-      kind: kindOfName(name),
-      url: input.url,
-      ...(localPath ? { path: localPath } : {}),
-      ...(input.folderId ? { folderId: input.folderId } : {}),
-      ...(input.canvasId ? { canvasId: input.canvasId } : {}),
-      source: input.source ?? 'generated',
-      createdAt: Date.now(),
-    }
-    await this.write([asset, ...assets])
-    return asset
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      const dup = assets.find((a) => a.url === input.url)
+      if (dup) return dup
+      const name = input.name?.trim() || (input.url.split('/').pop() ?? 'asset')
+      // 本机绝对路径：调用方直接给了就用；没给但地址指向本机画布资源
+      // （/api/canvases/<id>/resources/<hash>）也从 url 推出来 —— 字节确实在那里
+      // （用户口径：与技能引用给 SKILL.md 绝对路径同一条规矩）。
+      const localPath = input.path ?? this.localPathFromUrl(input.url)
+      const asset: Asset = {
+        id: randomUUID(),
+        name,
+        kind: kindOfName(name),
+        url: input.url,
+        ...(localPath ? { path: localPath } : {}),
+        ...(input.folderId ? { folderId: input.folderId } : {}),
+        ...(input.canvasId ? { canvasId: input.canvasId } : {}),
+        source: input.source ?? 'generated',
+        createdAt: Date.now(),
+      }
+      await this.write([asset, ...assets])
+      return asset
+    })
   }
 
   /**
@@ -300,63 +359,93 @@ export class AssetStore {
   }
 
   async remove(id: string): Promise<boolean> {
-    const assets = await this.list()
-    const target = assets.find((a) => a.id === id)
-    if (!target) return false
-    await this.write(assets.filter((a) => a.id !== id))
-    return true
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      const target = assets.find((a) => a.id === id)
+      if (!target) return false
+      await this.write(assets.filter((a) => a.id !== id))
+      return true
+    })
   }
 
   /** 资产挪到某个文件夹（folderId 传空 = 回根目录） */
   async setAssetFolder(id: string, folderId?: string): Promise<Asset | undefined> {
-    const assets = await this.list()
-    const target = assets.find((a) => a.id === id)
-    if (!target) return undefined
-    if (folderId) {
-      const folders = await this.listFolders()
-      if (!folders.some((f) => f.id === folderId)) return undefined
-      target.folderId = folderId
-    } else {
-      delete target.folderId
-    }
-    await this.write(assets)
-    return target
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      const target = assets.find((a) => a.id === id)
+      if (!target) return undefined
+      if (folderId) {
+        const folders = await this.listFoldersLocked()
+        if (!folders.some((f) => f.id === folderId)) return undefined
+        target.folderId = folderId
+      } else {
+        delete target.folderId
+      }
+      await this.write(assets)
+      return target
+    })
   }
 
-  /** 整组资产挪到某个文件夹（批量「移动到 / 添加到」共用） */
+  /**
+   * 整组资产挪到某个文件夹（批量「移动到 / 添加到」共用）。
+   *
+   * 整组**一次**读改写，而不是逐条 setAssetFolder：逐条会让「读—写」来回 N 趟，
+   * 中间夹进来的并发写照样能覆盖（与批量删除同一条病）。
+   */
   async setAssetsFolder(ids: string[], folderId?: string): Promise<number> {
-    let n = 0
-    for (const id of ids) if (await this.setAssetFolder(id, folderId)) n++
-    return n
+    const wanted = new Set(ids)
+    if (!wanted.size) return 0
+    return this.runExclusive(async () => {
+      if (folderId) {
+        const folders = await this.listFoldersLocked()
+        if (!folders.some((f) => f.id === folderId)) return 0
+      }
+      const assets = await this.listLocked()
+      let n = 0
+      for (const a of assets) {
+        if (!wanted.has(a.id)) continue
+        if (folderId) a.folderId = folderId
+        else delete a.folderId
+        n++
+      }
+      if (n) await this.write(assets)
+      return n
+    })
   }
 
   /** 覆盖式设置标签（固定清单，前端约束） */
   async setAssetTags(id: string, tags: string[]): Promise<Asset | undefined> {
-    const assets = await this.list()
-    const target = assets.find((a) => a.id === id)
-    if (!target) return undefined
-    const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))]
-    if (clean.length) target.tags = clean
-    else delete target.tags
-    await this.write(assets)
-    return target
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      const target = assets.find((a) => a.id === id)
+      if (!target) return undefined
+      const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))]
+      if (clean.length) target.tags = clean
+      else delete target.tags
+      await this.write(assets)
+      return target
+    })
   }
 
   /** 资产改名 */
   async renameAsset(id: string, name: string): Promise<Asset | undefined> {
-    const assets = await this.list()
-    const target = assets.find((a) => a.id === id)
-    if (!target) return undefined
-    const clean = name.trim()
-    if (clean) target.name = clean
-    await this.write(assets)
-    return target
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      const target = assets.find((a) => a.id === id)
+      if (!target) return undefined
+      const clean = name.trim()
+      if (clean) target.name = clean
+      await this.write(assets)
+      return target
+    })
   }
 
   /** 画布被删时，摘掉它名下的生成产物登记（上传的资产与画布无关，不动） */
   async removeByCanvas(canvasId: string): Promise<void> {
-    const assets = await this.list()
-    await this.write(assets.filter((a) => !(a.source === 'generated' && a.canvasId === canvasId)))
+    return this.runExclusive(async () => {
+      const assets = await this.listLocked()
+      await this.write(assets.filter((a) => !(a.source === 'generated' && a.canvasId === canvasId)))
+    })
   }
 }
 

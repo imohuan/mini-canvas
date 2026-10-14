@@ -23,6 +23,17 @@ export const MIME_BY_EXT: Record<string, string> = {
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.pdf': 'application/pdf',
+  // 文本类：任务脚本用 ctx.save("内容", "note.txt") 交产物时要走白名单，
+  // 否则扩展名被抹掉、落成没有后缀的文件（2026-10-13 实测）。
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.json': 'application/json',
+  '.csv': 'text/csv',
+  // 节点包（可视化节点 + 它依赖的后台脚本打包成一个文件，可拖回画布）。
+  // 为什么必须是"已知扩展名"：资产库的 saveUpload 会拿 safeExt 判安全后缀 ——
+  // 白名单外的一律落成空扩展名，那样左侧抽屉就看不出它是"能拖出节点的东西"，
+  // 只能当成一个普通文件（2026-10-13 加节点包时一并补上）。
+  '.mcnode': 'application/x-mini-canvas-node',
 }
 
 /** 允许的扩展名（上传时按它过滤，白名单外的回落空串） */

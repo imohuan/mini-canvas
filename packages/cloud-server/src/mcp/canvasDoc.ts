@@ -94,6 +94,14 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   group: '分组',
   '3d-preview': '3D 预览',
   'image-compare': '图片对比',
+  /**
+   * 可视化节点（plugin-node-ui 的 type）。
+   *
+   * 为什么不能漏：MCP 建的节点名字取这张表（见 defaultNodeName）。没有它，AI 建的
+   * 可视化节点在左侧树 / @ 菜单里就叫「ui 1」——用户口径「可视化节点描述不清晰」
+   * 里最直白的一条就是它。插件自己声明的名字是「可视化」，两边要一致。
+   */
+  ui: '可视化',
 }
 
 /** 批量增删改的结果（与 mcp-server 的 BatchResult 同形状，便于客户端迁移） */

@@ -11,7 +11,7 @@
  * 「从未保存过」与「保存过一张空画布」—— 空画布刷新后不该重新长出默认节点。
  */
 import { promises as fs } from 'node:fs'
-import { canvasDir, canvasFilePath, canvasResourcesDir, canvasesRoot } from './canvasPaths.js'
+import { canvasDir, canvasFilePath, canvasResourcesDir, canvasesRoot, isVirtualCanvasId } from './canvasPaths.js'
 import { atomicWriteJson, atomicWriteText } from './atomicWrite.js'
 
 /** 画布本体。name / createdAt 是画布信息，随节点边一起住 canvas.json */
@@ -49,6 +49,18 @@ export class CanvasStore {
   private readonly writeChains = new Map<string, Promise<unknown>>()
 
   constructor(private readonly root: string) {}
+
+  /**
+   * 数据根目录（`<root>/canvases/<id>` 的上一级）。
+   *
+   * 为什么暴露它：外挂后台插件（如可视化节点的任务脚本）要**与画布并列**地找自己的目录
+   * （`<root>/task-scripts`），而它拿不到服务注入的其它路径名 ——
+   * 少了这个入口，它就只能猜（猜错的后果是"非默认画布里的节点一个脚本都扫不到"，
+   * 表现为"导出这个节点，包里一个脚本都没有"，2026-10-13 用户实测）。
+   */
+  dataRoot(): string {
+    return this.root
+  }
 
   /** 把一次写排进「同文件串行」的链尾（不同文件互不影响） */
   private runFor(file: string, job: () => Promise<void>): Promise<void> {
@@ -132,7 +144,10 @@ export class CanvasStore {
   async list(): Promise<string[]> {
     try {
       const names = await fs.readdir(canvasesRoot(this.root))
-      return names.filter((n) => /^[A-Za-z0-9_-]{1,64}$/.test(n)).sort()
+      // ★ 过滤掉**虚拟画布**（canvas_fn_call 造的探针画布）：它们落在同一个数据目录里，
+      //   不过滤的话用户的画布下拉框 / 项目页里会凭空多出「fn-probe-default」，
+      //   而那是给函数调用取返回值用的临时画布，不该出现在用户界面上。
+      return names.filter((n) => /^[A-Za-z0-9_-]{1,64}$/.test(n) && !isVirtualCanvasId(n)).sort()
     } catch (err) {
       if (isNotFound(err)) return []
       throw err

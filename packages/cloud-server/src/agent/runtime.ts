@@ -17,7 +17,7 @@ import { createTranslateState, translateMessage, contextLeftPercent, type Transl
 import { decideTool, normalizePolicy, type ApprovalPolicy } from './approval.js'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, canvasWorkspaceDir } from './agentPaths.js'
 import type { AgentSessionStore } from './sessionStore.js'
-import { buildReferenceGuidance, namesOfKind, stripMarkupToPlain, REFERENCE_MARKUP_GUIDE } from './referenceMarkup.js'
+import { buildReferenceGuidance, namesOfKind, stripMarkupToPlain } from './referenceMarkup.js'
 
 /**
  * 会话的**即时名**（首轮首句剥标记后截 24 字）—— 这份公式全仓只有这一份。
@@ -128,6 +128,13 @@ export interface AgentRuntimeDeps {
   /** 临时把 AGENTS.md 换成这段文本，返回还原函数（模式系统提示词用） */
   withSystemPrompt?(text: string): Promise<() => Promise<void>>
   /**
+   * 取当前全部「插件加的系统提示词小节」（见 serverFramework/agent.ts）。
+   *
+   * 为什么是函数而不是快照：插件可以随时热装热卸，建会话那一刻现读才是最新的。
+   * 不注入 = 老宿主 / 单测，退化成「没有插件小节」（行为与从前一致）。
+   */
+  promptSections?(): Array<{ title: string; text: string }>
+  /**
    * 给一段对话**用模型起个标题**（宿主注入：走「会话标题模型」配置的模型）。
    * 返回 null = 没配 / 起名失败，调用方回落「首句截断」。
    */
@@ -167,6 +174,19 @@ export interface AgentHub {
 
 /** hub.start 在"已经在跑"时抛的错误信息前缀（runtime 用它区分"重复触发"与真错误） */
 export const HUB_ALREADY_RUNNING = '这一轮已经在跑了'
+
+/**
+ * 把一段小节渲染成 `# 标题 + 正文`，但**正文自带同名标题时不重复加**。
+ *
+ * 为什么要这一条：引用标记说明的正文第一行本来就是 `## 引用标记（引用元素）`，
+ * 再加一遍标题，模型会看到连着两行几乎一样的标题（真机组装出来实测到了）。
+ * 判据只认「第一行是标题且文字与 title 相同」—— 正文里别处出现同名标题不算。
+ */
+function renderSection(title: string, text: string): string {
+  const firstLine = text.split('\n', 1)[0] ?? ''
+  const headed = /^#{1,6}\s+/.test(firstLine) && firstLine.replace(/^#{1,6}\s+/, '').trim() === title.trim()
+  return headed ? text : '# ' + title + '\n' + text
+}
 
 export interface StartRunInput {
   canvasId: string
@@ -301,10 +321,18 @@ export class AgentRuntime {
     await fs.mkdir(canvasWorkspaceDir(this.deps.root, canvasId), { recursive: true })
     const restore = await this.applyMcpFilter(prefs.mcpServers)
     // 模式系统提示词：与 MCP 一样，卡在「建会话前换、建会话后还原」这一小段里。
-    // 系统提示词 = 模式提示词（若有）+ **引用标记说明**（恒有）。
-    // 标记说明放这里的原因：后端不再翻译标记（用户口径：要能原样复制到本机 Agent），
-    // 所以模型必须事先知道那套标记是什么意思 —— 一次说明，比每条消息翻译干净。
-    const promptText = [prefs.systemPrompt, REFERENCE_MARKUP_GUIDE].filter(Boolean).join('\n\n')
+    // 系统提示词 = 模式提示词（若有）+ **插件加的小节**（引用标记说明就是其中一节，
+    // 见 server.ts 的接线）。
+    //
+    // 为什么不在这里硬写引用标记说明：那是「往提示词加内容」这件事的一个特例，
+    // 走注册场之后任何插件都能加，也能在设置页看见、能关掉 —— 用户口径 2026-10-14：
+    // 「我希望你的插件系统在配置 Agent 的功能时，比如可以在其他插件中配置，
+    //  在系统提示词中新增一些内容，那么你这边的引用标记，就应该在可视化节点里面去做」。
+    const pluginSections = (this.deps.promptSections?.() ?? [])
+      .filter((s) => s.text.trim())
+      .map((s) => renderSection(s.title, s.text))
+      .join('\n\n')
+    const promptText = [prefs.systemPrompt, pluginSections].filter(Boolean).join('\n\n')
     const restorePrompt = this.deps.withSystemPrompt
       ? await this.deps.withSystemPrompt(promptText)
       : async () => undefined

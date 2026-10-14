@@ -20,9 +20,9 @@
  * 两者都收进 CanvasDocument 的同一把写锁，所以混着用也安全。
  */
 import { Hono } from 'hono'
-import { isSafeCanvasId } from '../store/canvasPaths.js'
+import { isSafeCanvasId, isVirtualCanvasId } from '../store/canvasPaths.js'
 import type { CanvasStore } from '../store/canvasStore.js'
-import { isSafeResourceName, type CanvasResourceStore } from '../store/canvasResources.js'
+import { isSafeResourceName, isSafeSlotId, isSlotName, type CanvasResourceStore } from '../store/canvasResources.js'
 import type { CanvasDocument } from '../mcp/canvasDoc.js'
 import { mimeFromName } from '../store/mime.js'
 
@@ -46,6 +46,9 @@ export function canvasesRoutes(
   app.put('/api/canvases/:id', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    // 虚拟画布（canvas_fn_call 的探针画布）不归用户管：整包写会把它清空，
+    // 正在跑的脚本回写产物就全丢了。列表里已过滤，这里挡的是直接打 API 的写。
+    if (isVirtualCanvasId(id)) return c.json({ ok: false, error: '虚拟画布不可写' }, 400)
     const body = await readJsonBody(c)
     if (!body.ok) return body.res
     const { nodes, edges } = body.value
@@ -74,7 +77,16 @@ export function canvasesRoutes(
     if (bytes.byteLength === 0) return c.json({ ok: false, error: '空文件' }, 400)
     const name = c.req.query('name') ?? ''
     const dot = name.lastIndexOf('.')
-    const saved = await resources.save(id, bytes, dot >= 0 ? name.slice(dot) : '')
+    const ext = dot >= 0 ? name.slice(dot) : ''
+    // 槽位上传：`?slot=<槽位id>` —— 固定命名、原地覆盖（可视化节点的输出走这条）。
+    // 不传 slot 就是老行为（内容寻址、只新增）。
+    const slot = c.req.query('slot')
+    if (slot !== undefined && slot !== '') {
+      if (!isSafeSlotId(slot)) return c.json({ ok: false, error: '非法槽位 id' }, 400)
+      const saved = await resources.saveSlot(id, slot, bytes, ext)
+      return c.json({ ok: true, ...saved })
+    }
+    const saved = await resources.save(id, bytes, ext)
     return c.json({ ok: true, ...saved })
   })
 
@@ -87,8 +99,13 @@ export function canvasesRoutes(
     if (!bytes) return c.json({ ok: false, error: '资源不存在' }, 404)
     return c.body(bytes, 200, {
       'content-type': mimeFromName(name),
-      // 内容寻址：地址与字节绑定，内容一变地址就变 → 可安全长缓存
-      'cache-control': 'public, max-age=31536000, immutable',
+      // 缓存策略按命名形态分流：
+      //  · 内容寻址（hash）：地址与字节绑定，内容一变地址就变 → 可安全长缓存；
+      //  · 覆盖槽位（slot-）：**地址不变而内容会变** → 必须禁缓存，否则一直给旧图
+      //    （用户画一笔、下游看到的还是上一张，且刷新也不变 —— 最难查的那种）。
+      'cache-control': isSlotName(name)
+        ? 'no-store, no-cache, must-revalidate'
+        : 'public, max-age=31536000, immutable',
     })
   })
 

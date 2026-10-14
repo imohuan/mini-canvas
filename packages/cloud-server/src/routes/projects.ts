@@ -17,7 +17,7 @@
 import { Hono } from 'hono'
 import type { CanvasStore } from '../store/canvasStore.js'
 import type { AssetStore } from '../store/assetStore.js'
-import { isSafeCanvasId } from '../store/canvasPaths.js'
+import { isSafeCanvasId, isVirtualCanvasId } from '../store/canvasPaths.js'
 import { DEFAULT_PROJECT_ID, ProjectStore } from '../store/projectStore.js'
 
 export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, assets: AssetStore): Hono {
@@ -91,6 +91,8 @@ export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, as
   app.patch('/api/canvases/:id/meta', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    // 虚拟画布（canvas_fn_call 的探针画布）不归用户管：改名/删除/复制都不该碰它
+    if (isVirtualCanvasId(id)) return c.json({ ok: false, error: '虚拟画布不可改名' }, 400)
     const body = await readJson(c)
     if (!body.ok) return body.res
     const name = typeof body.value.name === 'string' ? body.value.name : ''
@@ -104,6 +106,9 @@ export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, as
   app.delete('/api/canvases/:id', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    // ★ 虚拟画布不可删（审查 P2-1）：脚本的 ctx.save 正往它写产物，删了那次调用会静默 404。
+    //   它不在用户列表里（CanvasStore.list 已过滤），用户正常操作碰不到；这条挡的是直接打 API。
+    if (isVirtualCanvasId(id)) return c.json({ ok: false, error: '虚拟画布不可删除' }, 400)
     await canvases.remove(id)
     await projects.removeCanvas(id)
     await assets.removeByCanvas(id)
@@ -115,6 +120,7 @@ export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, as
   app.post('/api/canvases/:id/duplicate', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    if (isVirtualCanvasId(id)) return c.json({ ok: false, error: '虚拟画布不可复制' }, 400)
     const made = await projects.duplicateCanvas(id)
     if (!made) return c.json({ ok: false, error: '画布不存在' }, 404)
     await canvases.copyInto(id, made.id, made.name)

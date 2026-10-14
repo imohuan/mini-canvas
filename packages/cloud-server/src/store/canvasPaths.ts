@@ -13,6 +13,27 @@ import path from 'node:path'
 export const DEFAULT_CANVAS_ID = 'default'
 
 /**
+ * **虚拟画布**的 id 前缀（画布 id 的第一段）。
+ *
+ * 谁用它：可视化节点的 canvas_fn_call —— 调用后台功能函数时不必让调用方传 Canvas ID / Node ID，
+ * 于是工具自己造一张空画布顶上（脚本的 ctx 需要这两个字段来拼"回写画布"的地址）。
+ *
+ * 为什么要有这个前缀常量、而且**在列表里过滤掉它**：虚拟画布落在同一个数据目录里
+ * （和真画布同一种文件），不过滤的话用户的项目 / 画布下拉框里会凭空多出一张
+ * 「fn-probe-default」——那是给函数探针用的临时画布，不该出现在用户界面上。
+ *
+ * ⚠️ 这个常量在插件侧（plugin-node-ui）另有一份同名副本：插件是**外挂单文件后台**，
+ *    不能 import 本包（见 pluginLoader 的 data: URL 说明）。两份由一条测试盯着一致 ——
+ *    漂了的后果是"过滤不干净、虚拟画布冒进用户列表"，那是看得见的脏东西。
+ */
+export const VIRTUAL_CANVAS_PREFIX = 'fn-probe-'
+
+/** 是不是虚拟画布（列表过滤 / 路由守卫都用这一条判据） */
+export function isVirtualCanvasId(id: string): boolean {
+  return id.startsWith(VIRTUAL_CANVAS_PREFIX)
+}
+
+/**
  * 画布 id 白名单：字母 / 数字 / 下划线 / 连字符，1-64 位。
  *
  * 点号**不在**表内，所以 `.` 与 `..` 天然被拒；斜杠也不在，所以拼不出子目录。

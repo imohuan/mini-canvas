@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
 import { Context, setDefaultCapabilityLayerFactory } from '@mini-canvas/kernel'
 import { createServerCapabilityLayer } from '../serverFramework/capabilityLayer.js'
-import { runAgentMiddleware, type AgentTurn } from '../serverFramework/agent.js'
+import { runAgentMiddleware, listAgentPromptSections, type AgentTurn } from '../serverFramework/agent.js'
 
 function boot() {
   const app = new Hono()
@@ -82,14 +82,90 @@ describe('ctx.agent 中间件（用户点 2）', () => {
     ctx.stop()
   })
 
-  it('systemPrompt 把文本拼到提示词前面', async () => {
+  it('systemPrompt 登记成**提示词小节**，不再往用户消息里塞字', async () => {
     const { ctx } = boot()
     ctx.plugin({ name: 'sys', apply: (c) => { c.agent.systemPrompt('[规则] 只答十个字内') } })
     await ctx.start()
+    // 用户消息**原样不动**：老实现把它拼到 turn.input.text 前面，模型会把规则当成用户说的话。
     const t = turn('你好')
     await runAgentMiddleware(ctx, t)
-    expect(t.input.text).toContain('[规则]')
-    expect(t.input.text).toContain('你好')
+    expect(t.input.text).toBe('你好')
+    // 规则落进提示词小节表，供建会话时拼进系统提示词
+    const sections = listAgentPromptSections(ctx)
+    expect(sections).toHaveLength(1)
+    expect(sections[0]!.text).toContain('[规则]')
+    expect(sections[0]!.title).toBe('sys')
+    ctx.stop()
+  })
+
+  it('同一个 id 再注册 = 顶替（热重载不会越堆越多）', async () => {
+    const { ctx } = boot()
+    ctx.plugin({
+      name: 'p',
+      apply: (c) => {
+        c.agent.systemPrompt('第一版', { id: 'p:sec', title: 'P 小节' })
+        c.agent.systemPrompt('第二版', { id: 'p:sec', title: 'P 小节' })
+      },
+    })
+    await ctx.start()
+    const sections = listAgentPromptSections(ctx)
+    expect(sections).toHaveLength(1)
+    expect(sections[0]!.text).toBe('第二版')
+    ctx.stop()
+  })
+
+  it('systemPrompt 收函数：每次读都现算（地址 / 端口这类会变的值必须用它）', async () => {
+    const { ctx } = boot()
+    let port = 1
+    ctx.plugin({ name: 'p', apply: (c) => { c.agent.systemPrompt(() => 'port=' + port, { id: 'p:x' }) } })
+    await ctx.start()
+    expect(listAgentPromptSections(ctx)[0]!.text).toBe('port=1')
+    port = 2
+    // 不重注册，直接再读 —— 拿到的是新值（写死成字符串就把旧值冻住了）
+    expect(listAgentPromptSections(ctx)[0]!.text).toBe('port=2')
+    ctx.stop()
+  })
+
+  it('按 order 排序（小的在前），并带 source（设置页要显示谁加的）', async () => {
+    const { ctx } = boot()
+    ctx.plugin({
+      name: 'beta',
+      apply: (c) => { c.agent.systemPrompt('B', { id: 'beta:s', order: 20 }) },
+    })
+    ctx.plugin({
+      name: 'alpha',
+      apply: (c) => { c.agent.systemPrompt('A', { id: 'alpha:s', order: 10 }) },
+    })
+    await ctx.start()
+    const sections = listAgentPromptSections(ctx)
+    expect(sections.map((s) => s.text)).toEqual(['A', 'B'])
+    expect(sections.map((s) => s.source)).toEqual(['alpha', 'beta'])
+    ctx.stop()
+  })
+
+  it('卸载插件 → 它加的小节消失（注册场回收）', async () => {
+    const { ctx } = boot()
+    ctx.plugin({ name: 'temp', apply: (c) => { c.agent.systemPrompt('临时', { id: 'temp:s' }) } })
+    await ctx.start()
+    expect(listAgentPromptSections(ctx)).toHaveLength(1)
+    ctx.uninstallPlugin('temp')
+    expect(listAgentPromptSections(ctx)).toHaveLength(0)
+    ctx.stop()
+  })
+
+  it('next() 调两次：报错要说清是哪个插件（真机探针：从前只有 500 + 堆栈）', async () => {
+    const { ctx } = boot()
+    ctx.plugin({
+      name: 'careless-plugin',
+      apply: (c) => {
+        c.agent.use(async (_t, next) => {
+          await next()
+          return next() // 错在这里
+        })
+      },
+    })
+    await ctx.start()
+    await expect(runAgentMiddleware(ctx, turn('hi'))).rejects.toThrow(/careless-plugin/)
     ctx.stop()
   })
 })

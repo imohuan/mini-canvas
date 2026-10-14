@@ -87,6 +87,14 @@ describe('与网页界面共用同一份存储', () => {
     expect(byId.get(r1.added[2])!.data.label).toBe('图片 2')
   })
 
+  it('可视化节点（type=ui）也有中文默认名「可视化 N」（不是「ui N」）', async () => {
+    // 用户口径「可视化节点描述不清晰」里最直白的一条：MCP 建的 ui 节点在左侧树里
+    // 显示成「ui 1」纯属没名字 —— 这张表漏了 ui 这一条。
+    const r = await doc.batchNodes({ add: [{ type: 'ui' }] })
+    const snap = await doc.read()
+    expect(snap.nodes.find((n) => n.id === r.added[0])!.data.label).toBe('可视化 1')
+  })
+
   it('调用方显式给了 label 就尊重它，不覆盖', async () => {
     const r = await doc.batchNodes({ add: [{ type: 'image', data: { label: '我的图' } }] })
     const snap = await doc.read()

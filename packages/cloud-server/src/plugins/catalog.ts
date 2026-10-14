@@ -256,6 +256,39 @@ async function readPkgJson(dir: string): Promise<PkgJson> {
  * 扫插件目录，生成插件管理要的清单。
  * 目录不存在 → 空清单（不是错误：可能一个插件都还没构建）。
  */
+/**
+ * 读一个包的**后台产物**（dist/server.js 或 dist/plugin-server.js），算它的 sha256。
+ * 没有产物 / 读不出来 → undefined（缺了不报错：很多插件只有前端）。
+ *
+ * 为什么要抽出来：自带插件与可装卸插件**都要**这个哈希。
+ * 安装路由拿清单里的哈希当唯一可信源，清单不给就连自己的自带件也装不上
+ *（2026-10-13 实测：装可视化节点的后台半被「未列入清单，拒绝安装」挡掉）。
+ */
+export async function readServerArtifact(
+  pkgDir: string,
+  pkgName: string,
+  permissions: unknown,
+): Promise<PluginCatalogEntry["server"]> {
+  const distDir = path.join(pkgDir, "dist")
+  const candidate = ["server.js", "plugin-server.js"]
+  for (const file of candidate) {
+    let text: string
+    try {
+      text = await fs.readFile(path.join(distDir, file), "utf8")
+    } catch {
+      continue
+    }
+    return {
+      url: "/plugins/" + pkgName + "/" + file,
+      sha256: createHash("sha256").update(text, "utf8").digest("hex"),
+      ...(Array.isArray(permissions)
+        ? { permissions: permissions.filter((p): p is string => typeof p === "string") }
+        : {}),
+    }
+  }
+  return undefined
+}
+
 export async function buildPluginCatalog(pluginsDir: string | undefined): Promise<PluginCatalog> {
   const plugins: PluginCatalogEntry[] = []
   const skipped: Array<{ file: string; reason: string }> = []
@@ -303,6 +336,11 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
 
     // 自带插件：**只要 package.json 声明了就能列**（不必构建 UMD —— 它由应用冷启动装配，不靠清单加载）。
     if (isBuiltin) {
+      // 后台产物：自带插件也可能有 dist/server.js（如可视化节点）。
+      // 它的「安装」不是装前端产物，而是把后台半装进 server-plugins（见 routes/serverPlugins.ts）。
+      // 这里必须和「非自带」那条路一样算 sha256：安装路由拿清单里的哈希当唯一可信源，
+      // 清单不给 → 连自己的自带件都被「未列入清单，拒绝安装」挡掉（2026-10-13 实测踩到）。
+      const builtinServer = await readServerArtifact(pkgDir, pkgName, pkg.miniCanvas?.serverPermissions)
       plugins.push({
         id,
         name,
@@ -314,8 +352,13 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
         defaultInstalled: true,
         builtin: true,
         ...(isNpmCopy ? { npmInstalled: true } : {}),
-        // 自带件若声明了 serverBuiltin，标一个 server 段（url 空 —— 它是内置路由，不经 URL 装）
-        ...(pkg.miniCanvas?.serverBuiltin === true ? { server: { url: '' } } : {}),
+        // 自带件的 server 段：有后台产物就带它的 sha256（安装时的信任源）；
+        // 只声明 serverBuiltin（内置路由）的，仍标一个 url 空的段。
+        ...(builtinServer
+          ? { server: builtinServer }
+          : pkg.miniCanvas?.serverBuiltin === true
+            ? { server: { url: "" } }
+            : {}),
         ...(pkg.version ? { version: pkg.version } : {}),
       })
       continue
@@ -373,26 +416,8 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       continue
     }
     const globalName = format === 'umd' ? parseUmdGlobalName(text) : undefined
-    // 后台产物：同一个包的 dist/server.js（有就是「前后端成对」的插件）。
-    // 缺了不报错——很多插件只有前端。
-    const serverFile = files.find((f) => f === 'server.js' || f === 'plugin-server.js')
-    // 后台产物：算 sha256 作为**服务端信任源**（安装时用它校验，见 serverPlugins 路由）
-    let server: PluginCatalogEntry['server']
-    if (serverFile) {
-      try {
-        const serverText = await fs.readFile(path.join(distDir, serverFile), 'utf8')
-        server = {
-          url: '/plugins/' + pkgName + '/' + serverFile,
-          sha256: createHash('sha256').update(serverText, 'utf8').digest('hex'),
-          ...(Array.isArray(pkg.miniCanvas?.serverPermissions)
-            ? { permissions: pkg.miniCanvas.serverPermissions.filter((p): p is string => typeof p === 'string') }
-            : {}),
-        }
-      } catch {
-        // 读不出来就当作"没有后台产物"（远端安装会被 sha 检查拒掉，安全）
-        server = undefined
-      }
-    }
+    // 后台产物：同一个包的 dist/server.js（有就是「前后端成对」的插件）。缺了不报错。
+    const server = await readServerArtifact(pkgDir, pkgName, pkg.miniCanvas?.serverPermissions)
     plugins.push({
       id,
       name,

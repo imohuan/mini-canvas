@@ -925,13 +925,19 @@ export function agentSessionRoutes(
             ...q.items,
             {
               id: 'q-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
-              text,
-              ...(images?.length ? { images: images.map(String) } : {}),
+              // ⚠️ 用 `input.text` 而不是上面的 `text`：中间件可能刚改写它
+              //    （preTurn 收的就是 input 的引用），用 `text` 会把改写丢掉。
+              text: input.text,
+              ...(input.images?.length ? { images: input.images.map(String) } : {}),
               // 带 goal 的请求（目标功能未注入时才会走到这）也把目标带上：
               // 调度器轮到它时按目标起，绝不把用户的「目标」意图降级成一句普通提问。
               ...(goalSpec ? { goal: { objective: goalSpec.objective, budget: goalSpec.budget } } : {}),
               state: 'queued' as const,
               createdAt: Date.now(),
+              // ★ 上面已经跑过 pre-turn 了（这正是「跑着发」这条路）：调度器轮到它时
+              //   **不许再跑一遍**，否则有状态的中间件（配额、计数）会对同一条记两次账。
+              //   正文用的是 input.text（**改写后**的那份），不是原始 text。
+              preTurned: true,
             },
           ],
         }))

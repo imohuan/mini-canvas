@@ -35,9 +35,19 @@ import {
   removeSkill,
   McpToolProvider,
   MCP_TOOL_PREFIX,
+  defaultSystemConfig,
 } from '@prismshadow/penguin-core'
 import { AGENT_ID, AGENT_PROJECT_ID, agentRoot, agentSkillSources } from './agentPaths.js'
 import { KvStore } from '../store/kvStore.js'
+import {
+  agentContextPlaceholders,
+  agentContextInfo,
+  buildRuntimeContext,
+  expandAgentContext,
+  type AgentContextInfo,
+  type AgentRuntimeContext,
+} from './runtimeContext.js'
+import type { AgentPromptSectionView } from '../serverFramework/agent.js'
 
 /** 去重 + 保证内置项标记正确（写回前统一走一遍） */
 function normalizePrompts(list: PromptPreset[]): PromptPreset[] {
@@ -242,7 +252,12 @@ export class AgentConfigService {
   async systemPrompt(): Promise<string> {
     await this.ensureInit()
     try {
-      return await fs.readFile(sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID), 'utf8')
+      const raw = await fs.readFile(sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID), 'utf8')
+      // **返回原文**（不展开自定义占位符）：这个值会被界面拿去做「读 → 改 → 写回」的
+      // 往返编辑，展开一次就把记号冻成了当时的值 —— 端口一换、画布一挪，用户写的模板
+      // 就永远停在旧地址上，而他根本没改过。
+      // 展开后的样子走 contextInfo().placeholders 给界面显示，两件事分开。
+      return raw
     } catch {
       return ''
     }
@@ -257,11 +272,16 @@ export class AgentConfigService {
   }
 
   /**
-   * 临场把 AGENTS.md 换成这段文本，返回**还原函数**（模式系统提示词用）。
+   * 临场把 AGENTS.md 换成「**用户自己的 AGENTS.md + 这段文本**」，返回还原函数。
    *
    * 为什么用这个手法（与 subsetMcp 同款）：SDK 只在**建会话时**读一次 AGENTS.md
    * 来组装系统提示词。所以「建会话前换成模式提示词、建完立刻还原」正好卡在那个点上 ——
    * 既让这一条会话用上模式提示词，又不永久改动 AGENTS.md（用户自己的系统提示词还在）。
+   *
+   * ⚠️ **不能直接替换**（2026-10-14 用户实测的真 bug）：那样一来选着模式时，「Agent 提示词」
+   * 里写的东西**一个字都进不去模型** —— 真机上表现为「设置里改了 Agent 提示词，AI 毫无反应」。
+   * 模式提示词是**附加在用户自己的指令之上**（`<AGENTS.md 原文>\n\n<模式提示词>`），
+   * 不是替换掉它。两者都进 `{{AGENTS_MD}}` 那个位置。
    *
    * 还原失败不抛（宁可留下模式提示词，也不能让建会话这一步崩掉）。
    */
@@ -273,7 +293,12 @@ export class AgentConfigService {
     const target = sdkAgentsMdPath(this.sdkRoot, AGENT_PROJECT_ID, AGENT_ID)
     const previous = await fs.readFile(target, 'utf8').catch(() => '')
     await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(target, text, 'utf8')
+    // 展开自定义占位符（{{BACKEND_BASE_URL}} 等）——**卡在建会话这一刻**：
+    // 端口/目录是运行期才定下来的，写盘时就展开会把值冻死（换了端口还发旧地址）。
+    // 注意只展开本服务这套记号：SDK 自带的 {{CWD}} 等留给 SDK 自己展开。
+    // **用户自己的 AGENTS.md 排在最前**：模式提示词 / 插件小节都加在它后面，谁都不顶掉谁。
+    const combined = [previous.trim(), text].filter(Boolean).join('\n\n')
+    await fs.writeFile(target, this.expandContext(combined), 'utf8')
     return async () => {
       try {
         await fs.writeFile(target, previous, 'utf8')
@@ -380,9 +405,109 @@ export class AgentConfigService {
     return agentRoot(this.dataRoot)
   }
 
+  // ------------------------------------------------- 提示词模板体检与恢复
+
+  /**
+   * 提示词模板的体检结果。
+   *
+   * `missing` 里每一条都是「模板缺了什么」；空了就是健康。
+   */
+  async templateHealth(): Promise<{ ok: boolean; missing: string[]; template: string }> {
+    await this.ensureInit()
+    const cfg = await loadSystemConfig(this.sdkRoot)
+    const template = String((cfg as { system_prompt?: unknown }).system_prompt ?? '')
+    const missing = templateMissing(template)
+    return { ok: missing.length === 0, missing, template }
+  }
+
+  /**
+   * 把提示词模板恢复成 SDK 的出厂模板（**唯一会动到 system_prompt 的地方**）。
+   *
+   * ## 为什么必须留这个口子（根因）
+   *
+   * `system_prompt` 是 SDK **唯一**支持占位符替换的模板，而 {{AGENTS_MD}} 是它里面
+   * 唯一把用户提示词送进模型的那根线。2026-10-06 的事故（AGENTS.md 被并发写截断）
+   * 之后重建配置时，这份模板被写成了**纯文本**（只剩「你是 mini-canvas 画布助手。」），
+   * 于是：
+   *   - 设置页写的系统提示词（AGENTS.md）进不去模型；
+   *   - 模式提示词（全能创作 / 剧本创编）进不去模型；
+   *   - 引用标记说明、技能 / 记忆 / 密钥小节、Environment 那几行全都进不去。
+   * 而模型端**不报任何错** —— 表现只是「它好像不太懂画布」，极难定位。
+   * 真机证据：265 条会话里 259 条的系统提示词长度恒为 34 个字符。
+   *
+   * ## 为什么不自动修
+   *
+   * 出厂模板里有一大段 PenguinHarness 自己的角色设定（Role / Success criteria /
+   * Tool use …），换回来会**明显改变这个 Agent 的性格**。这种改动必须让用户看见并
+   * 自己点，不能在他没察觉时做（他就是被一次「不知不觉的自动重建」坑过的）。
+   * 所以这里只提供动作，体检结果走 templateHealth() 给界面提示。
+   */
+  async restoreTemplate(): Promise<{ ok: boolean; missing: string[] }> {
+    await this.ensureInit()
+    const cfg = await loadSystemConfig(this.sdkRoot)
+    const next = { ...cfg, system_prompt: defaultSystemConfig().system_prompt }
+    await writeSystemConfig(this.sdkRoot, next)
+    return { ok: true, missing: [] }
+  }
+
   /** 数据根（fork 写 Trace 种子要按它推 Trace 目录；只给服务内部用） */
   get dataDir(): string {
     return this.dataRoot
+  }
+
+  /**
+   * 运行环境上下文（后台地址 + 目录）。宿主在**监听端口确定后**注入。
+   *
+   * 为什么由宿主注入而不是这里自己算：端口是运行期才知道的（port:0 由系统分配、
+   * CLI 换端口兜底），算早了就会把一个错端口写进提示词 —— 那正是本次要修的毛病。
+   */
+  private context?: AgentRuntimeContext
+
+  setRuntimeContext(ctx: AgentRuntimeContext): void {
+    this.context = ctx
+  }
+
+  /** 当前上下文（没注入时用「地址还不知道 + 数据根」的兜底，保证目录照样能显示） */
+  private contextOrDefault(): AgentRuntimeContext {
+    return this.context ?? buildRuntimeContext({ baseUrl: '', dataRoot: this.dataRoot })
+  }
+
+  /** 界面要的上下文情报（地址 / 目录 / 可用占位符清单）。设置页的「插入占位符」用它 */
+  contextInfo(): AgentContextInfo {
+    return agentContextInfo(this.contextOrDefault())
+  }
+
+  /**
+   * 后台还会自动往提示词里附加哪些内容（给设置页列出来）。
+   *
+   * 为什么由宿主注入而不是这里直接读注册场：config 是「Agent 的配置面」，不认识插件系统
+   * （那是 serverFramework 的地盘）。跟 withSystemPrompt / promptSections 同一套注入风格。
+   * 没注入 = 老宿主 / 单测 → 返回空数组（界面就不显示那一块）。
+   */
+  private sectionViews?: () => AgentPromptSectionView[]
+
+  setPromptSectionViews(fn: () => AgentPromptSectionView[]): void {
+    this.sectionViews = fn
+  }
+
+  promptSectionViews(): AgentPromptSectionView[] {
+    try {
+      return this.sectionViews?.() ?? []
+    } catch {
+      // 取小节视图失败不该让整条配置接口挂掉（界面少一块而已）
+      return []
+    }
+  }
+
+  /**
+   * 把提示词正文里的自定义占位符（{{BACKEND_BASE_URL}} 等）展开成当前值。
+   *
+   * 只有一个调用点：`withSystemPrompt`（建会话前的临时替换）——**那一刻的值最新**，
+   * 也正是 SDK 唯一会读 AGENTS.md 的时刻。落在磁盘上的正式 AGENTS.md 永不展开，
+   * 所以记号一直保留着，端口变了下一句就对（见 systemPrompt 的说明）。
+   */
+  expandContext(text: string): string {
+    return expandAgentContext(text, agentContextPlaceholders(this.contextOrDefault()))
   }
 
   /** 保证 Agent 已经初始化（幂等、串行），之后所有读都可以安全并行 */
@@ -676,6 +801,17 @@ export class AgentConfigService {
     configured: boolean
     apiKey?: string
     baseUrl?: string
+    /**
+     * AgentHub 的客户端协议（如 `deepseek-v4` / `openai-chat` / `ant-messages`）。
+     *
+     * 为什么必须回传：配置里存了它，而**构造模型对象时它是要的** ——
+     * 模型名是"别名"时（如默认的 `deepseek-auto`）SDK 猜不出来，会直接抛
+     * "xxx is not supported. Supported client types: …"（2026-10-13 真机踩到：
+     * 单轮对话第一次调用就 500）。所以只要配置里有，就一路带下去。
+     */
+    clientType?: string
+    /** 模型的上下文窗口（配置里有就带，SDK 用它夹输出上限） */
+    contextWindow?: number
   }> {
     const cfg = await loadProjectConfig(this.sdkRoot, AGENT_PROJECT_ID)
     // 解析口径（顺序很重要）：
@@ -702,6 +838,9 @@ export class AgentConfigService {
       configured: !!apiKey,
       ...(apiKey ? { apiKey } : {}),
       ...(baseUrl ? { baseUrl } : {}),
+      // 协议与窗口一并带出去：构造模型对象时**必须有**（别名模型猜不出协议，见上面注释）
+      ...(entry?.client_type ? { clientType: entry.client_type } : {}),
+      ...(entry?.context_window ? { contextWindow: entry.context_window } : {}),
     }
   }
 
@@ -1200,4 +1339,25 @@ async function writeSystemConfig(root: string, cfg: unknown): Promise<void> {
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * 模板缺了哪些「把内容送进模型」的关键记号。
+ *
+ * 判据只有一个：**模板里有没有 {{AGENTS_MD}}**。
+ *
+ * 为什么只认这一条：它是整条链路的咽喉。AGENTS.md（用户写的提示词 + 模式提示词 +
+ * 引用标记说明）全靠它注入；而技能 / 记忆 / 密钥那几节的记号哪怕缺了，模型照样干活，
+ * 只是少了几段背景 —— 那种缺失不该弹「恢复出厂模板」这么大的动作（恢复模板会连
+ * 角色设定一起换掉）。{{AGENTS_MD}} 缺了则等于「设置里写的提示词一个字都进不去」，
+ * 用户怎么改都没反应，这才是必须报警的那一种。
+ *
+ * 同时把 shell / 环境那几行的缺失也报出来（同样是静默失效，且恢复模板就能一起修）。
+ */
+export function templateMissing(template: string): string[] {
+  const missing: string[] = []
+  if (!template.includes('{{AGENTS_MD}}')) missing.push('{{AGENTS_MD}}')
+  if (!template.includes('{{CWD}}')) missing.push('{{CWD}}')
+  if (!template.includes('{{SESSION_ID}}')) missing.push('{{SESSION_ID}}')
+  return missing
 }

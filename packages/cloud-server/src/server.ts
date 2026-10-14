@@ -50,6 +50,10 @@ import { QueueScheduler } from './agent/queueScheduler.js'
 import { GoalRuntime, goalHooksDir, findSessionTrace } from './agent/goalRuntime.js'
 import { sessionScratchpadPath } from './agent/agentPaths.js'
 import { tracesDirOf } from './agent/traceFork.js'
+import { buildRuntimeContext, runtimeContextSection } from './agent/runtimeContext.js'
+import { listAgentPromptSections } from './serverFramework/agent.js'
+import { runAgentMiddleware } from './serverFramework/agent.js'
+import { REFERENCE_MARKUP_GUIDE } from './agent/referenceMarkup.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
 export const DEFAULT_PORT = 8865
@@ -163,8 +167,20 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     hub: agentHub,
     agent: async () => {
       const sdk = await loadSdk()
-      return sdk.createAgent({ root: agentRoot(dataDir), projectId: AGENT_PROJECT_ID, agentId: AGENT_ID })
+      return sdk.createAgent({
+        root: agentRoot(dataDir),
+        projectId: AGENT_PROJECT_ID,
+        agentId: AGENT_ID,
+      })
     },
+    /**
+     * 插件加的系统提示词小节（见 serverFramework/agent.ts 的 AGENT_PROMPT_FIELD）。
+     *
+     * **每次建会话现读**：插件可热装热卸，运行期的地址 / 端口也在变，
+     * 快照一次就会把旧值冻进提示词。
+     */
+    promptSections: () =>
+      listAgentPromptSections(host.ctx).map((s) => ({ title: s.title, text: s.text })),
     makeUserMessage: (text, images) => {
       // 这里必须是同步的（运行时按需 await 不了），所以 SDK 的消息构造在首次 run 前
       // 已经由 loadSdk 预热过；构造器本身是纯函数，不碰网络。
@@ -242,6 +258,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     // 带目标的条目：先把目标文件与第 1 轮的协议文本备好，再起一轮
     startGoal: (canvasId, sessionId, objective, budget) =>
       goalRuntime.beginGoal(canvasId, sessionId, objective, budget),
+    // 队列里的消息也要过 pre-turn 中间件：与 HTTP 的 /messages 同一套（见 deps.preTurn 说明）。
+    // 少了它，插件写的拦截 / 改写会被「排队发」绕过去 —— 同一条消息两种行为（真机查出来的洞）。
+    preTurn: (turn) => runAgentMiddleware(host.ctx, turn),
     log: (message, extra) => console.log('[agent-queue] ' + message, extra ?? ''),
   })
   // 目标运行时（设计 §3.4.4）：改预算 / 暂停 / 启动。
@@ -305,6 +324,20 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * 「自己取字节」要靠它判断"是不是本服务的地址"，所以延迟到调用时再读。
    */
   let actualPort: number | undefined
+  /**
+   * 运行环境上下文（后台地址 + 目录），见 agent/runtimeContext.ts。
+   *
+   * 为什么是**闭包**而不是一个定值：真实端口要等 listen 回调才知道（port=0 由系统分配、
+   * CLI 换端口兜底），而 Agent 配置面在监听之前就会被读（设置页、单测）。
+   * 闭包让「读的时刻」决定用哪个端口，于是不需要「等端口定了再补写一次」这种时序技巧。
+   */
+  const runtimeContext = (): ReturnType<typeof buildRuntimeContext> =>
+    buildRuntimeContext({
+      baseUrl: 'http://' + (opts.hostname ?? '127.0.0.1') + ':' + String(actualPort ?? port),
+      dataRoot: dataDir,
+    })
+  // 先灌一次（此刻用的是请求端口）：监听前读配置也能拿到目录与占位符清单
+  if (agentEnabled) agentConfig.setRuntimeContext(runtimeContext())
   /**
    * 「服务器自己把画布里的地址取回来」（见 tasks/selfFetch 的说明）。
    *
@@ -391,6 +424,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // hotFallback：让运行期从 NPM 装进来的后台插件**无需重启**即可命中路由
   // （见 serverFramework/routes.ts ④）。真实服务开启；纯测试的 framework 默认不开。
   const host = createServerFramework({ root: dataDir, hotFallback: true })
+  // 设置页要列「后台自动附加了哪些内容」——把注册场的读口子交给 config（它不认识插件系统）。
+  // 必须**在 host 建好之后**：`host.ctx` 是 const，放前面会撞暂时性死区。
+  if (agentEnabled) agentConfig.setPromptSectionViews(() => listAgentPromptSections(host.ctx))
   const app = host.app
 
   // ---- 装配阶段（顺序即匹配优先级；全部必须在 start() 之前完成，Hono 首次 fetch 后冻结）----
@@ -409,6 +445,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('projectStore', projectStore)
   host.ctx.inject('assetStore', assetStore)
   host.ctx.inject('doc', doc)
+  // 单轮对话（/api/agent/chat/completion）按需加载 SDK 的入口。
+  // 为什么给"函数"而不是直接给 SDK 对象：SDK 是懒加载的（没配模型时启动照常成功），
+  // 而那条路由每次请求都要用它 —— 传函数就没有"启动时还没加载好"的时序问题。
+  host.ctx.inject('agentLoadSdk', () => loadSdk())
   host.ctx.inject('providerRegistry', registry)
   host.ctx.inject('taskManager', tasks)
   host.ctx.inject('history', history)
@@ -473,6 +513,41 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // （实测：从 NPM 装完 hello.plugins 为空）。hotLoad 会往这个数组里增删。
   host.ctx.inject('serverPluginsLoaded', registeredServerPlugins)
   bindHotLoadedTracking(registeredServerPlugins)
+
+  // ③.7 **cloud-server 自己也用插件那套能力**往 Agent 提示词里加内容（用户口径 2026-10-14：
+  //      「我希望你的插件系统在配置 Agent 的功能时…在系统提示词中新增一些内容」）。
+  //
+  //      为什么不直接拼字符串：拼在 runtime 里的那两段（引用标记说明 / 运行环境）**插件碰不到**，
+  //      用户也就没法知道「我的提示词里到底多了什么」。走注册场之后：
+  //        · 每一条都能在设置页列出来（谁加的、内容是什么）；
+  //        · 卸载 / 关掉即消失；
+  //        · 别的插件（含可视化节点）用同一个口子加，权利一致。
+  //
+  //      注册成**内核插件**而不是硬调 registerAgentPrompt：这样它与其它插件同寿、同回收，
+  //      将来想「关掉引用标记说明」也只是不装这一个插件。
+  //
+  //      注册成**内核插件**而不是硬调 registerAgentPrompt：这样它与其它插件同寿、同回收，
+  //      将来想「关掉引用标记说明」也只是不装这一个插件。
+  //
+  //      注：这里没有 `inject` —— 两段内容都用**本文件的闭包**（runtimeContext 要读真实端口，
+  //      它只在宿主作用域里），不需要任何服务。
+  host.ctx.plugin({
+    name: 'canvas-agent-prompt',
+    apply(ctx) {
+      // 引用标记说明：内容不变，只是从「runtime 硬拼」挪到「注册成一节」。
+      ctx.agent.systemPrompt(REFERENCE_MARKUP_GUIDE, {
+        id: 'canvas:reference-markup',
+        title: '引用标记（引用元素）',
+        order: 10,
+      })
+      // 运行环境：**给函数**——地址 / 端口是运行期才定的，写死就会冻住旧值。
+      ctx.agent.systemPrompt(() => runtimeContextSection(runtimeContext()).text, {
+        id: 'canvas:runtime-env',
+        title: '运行环境（本机后台）',
+        order: 20,
+      })
+    },
+  })
 
   // ④ MCP 直挂（**不收敛成插件**：SDK transport，与「代理 handler」模型不兼容）。
   //    ui 静态托管放在最后（见 ⑤ 的 afterRoutes）——它是兜底通配，必须排在插件路由之后。
@@ -588,6 +663,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           listening = true
           // 真实端口记下来：「自己取字节」判断"是不是本服务地址"要用它
           actualPort = info.port
+          // 端口定了 → 把运行环境上下文刷新成**真实地址**（提示词里的 {{BACKEND_BASE_URL}}
+          // 与常驻小节都读它）。下一次建会话就是对的，不必重启。
+          if (agentEnabled) agentConfig.setRuntimeContext(runtimeContext())
           // 真实端口定了，纠正内置画布 MCP 的地址：
           //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
           //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。

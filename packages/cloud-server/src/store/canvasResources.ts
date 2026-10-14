@@ -44,11 +44,34 @@ export function parseResourceNameFromUrl(url: string, canvasId: string): string 
   return undefined
 }
 
-/** 资源名白名单：16 位十六进制 + 可选扩展名（与既有 isSafeFileId 同口径） */
-const RESOURCE_NAME_RE = /^[0-9a-f]{16}(\.[a-z0-9]+)?$/i
+/** 资源名白名单（两种形态都合法）：
+ *  ① 内容寻址：16 位十六进制 + 可选扩展名（上传/生成产物走这条，同内容天然去重）
+ *  ② 覆盖槽位：slot-<槽位id> + 可选扩展名（见 saveSlot 的说明）
+ *
+ * 两条都是**单段、不含路径分隔符**，所以挡得住路径穿越；扩展名只收白名单字母数字。
+ */
+const HASH_NAME_RE = /^[0-9a-f]{16}(\.[a-z0-9]+)?$/i
+const SLOT_NAME_RE = /^slot-[A-Za-z0-9_-]{1,64}(\.[a-z0-9]+)?$/
 
 export function isSafeResourceName(name: string): boolean {
-  return RESOURCE_NAME_RE.test(name)
+  return HASH_NAME_RE.test(name) || SLOT_NAME_RE.test(name)
+}
+
+/** 槽位 id 白名单：字母数字下划线连字符，1-64 位 */
+const SLOT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/
+
+export function isSafeSlotId(id: string): boolean {
+  return SLOT_ID_RE.test(id)
+}
+
+/**
+ * 这个资源名是不是**覆盖槽位**（而不是内容寻址）。
+ *
+ * 用途：两者的缓存策略相反 —— 内容寻址可以长缓存（地址与内容绑定），
+ * 而槽位是**同一个地址内容会变**，必须禁缓存，否则浏览器一直给旧图。
+ */
+export function isSlotName(name: string): boolean {
+  return name.startsWith('slot-')
 }
 
 export interface SavedResource {
@@ -81,6 +104,42 @@ export class CanvasResourceStore {
       await fs.writeFile(tmp, bytes)
       await fs.rename(tmp, file)
     }
+    return { url: toResourceUrl(canvasId, hashName), hashName, size: bytes.byteLength }
+  }
+
+  /**
+   * **把字节覆盖到某个槽位**（同一个槽位永远同一份文件，内容直接被换掉）。
+   *
+   * ## 为什么要有它（与 save 的区别）
+   *
+   * `save` 是内容寻址：内容一变就是**新文件**，天然去重、地址可长缓存。
+   * 但「可视化节点的输出」不行 —— 用户画一笔就要出一份新图，内容寻址会让磁盘上
+   * 每笔多一个文件（画 100 笔 = 100 个文件，而这些历史版本一个都不需要）。
+   *
+   * 所以另开一条：**按槽位固定命名、原地覆盖**。一个节点一个槽位，永远只有最新一份。
+   * 参数化扩展名，图片 / 视频 / 音频共用同一条路（slot-<节点id>.png / .mp4 / .mp3）。
+   *
+   * 代价（必须知道）：URL 不变而内容会变 —— 所以读取侧**不能长缓存**，
+   * 见 routes/canvases.ts 里按 isSlotName 分流的 cache-control。
+   */
+  async saveSlot(canvasId: string, slotId: string, bytes: Uint8Array, ext = ''): Promise<SavedResource> {
+    if (!isSafeSlotId(slotId)) throw new Error('非法槽位 id: ' + slotId)
+    const dir = canvasResourcesDir(this.root, canvasId)
+    const safeExt = ALLOWED_EXT.includes(ext.toLowerCase()) ? ext.toLowerCase() : ''
+    // 换过扩展名（图片 → 视频）时把同槽位的旧扩展名文件清掉，免得两个文件同时存在、
+    // 「读的时候取哪个」变得不确定
+    const hashName = 'slot-' + slotId + safeExt
+    await fs.mkdir(dir, { recursive: true })
+    const otherExts = ALLOWED_EXT.filter((e) => e !== safeExt)
+    for (const e of otherExts) {
+      const stale = path.join(dir, 'slot-' + slotId + e)
+      await fs.rm(stale, { force: true }).catch(() => undefined)
+    }
+    const file = path.join(dir, hashName)
+    // 原地覆盖：同样先写临时文件再 rename（避免读到半截）
+    const tmp = file + '.tmp-' + process.pid + '-' + Date.now()
+    await fs.writeFile(tmp, bytes)
+    await fs.rename(tmp, file)
     return { url: toResourceUrl(canvasId, hashName), hashName, size: bytes.byteLength }
   }
 

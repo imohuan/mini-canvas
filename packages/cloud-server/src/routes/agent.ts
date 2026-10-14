@@ -42,6 +42,14 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
         mcpServers,
         tools,
         paths: { state: config.stateDir(), systemConfig: config.systemConfigPath() },
+        // 运行环境上下文（后台地址 + 目录 + 可用占位符）：设置页的「插入占位符」直接列它。
+        context: config.contextInfo(),
+        // 提示词模板体检：模板坏了会让「设置里写的提示词」一个字都进不去模型（见 config.ts
+        // 的 restoreTemplate 说明），而模型端不报错 —— 必须主动告诉用户。
+        template: await config.templateHealth(),
+        // 后台还会自动往提示词里附加哪些内容（运行环境、引用标记说明…）。
+        // 给界面列出来：用户能看到「我的提示词里到底多了什么」，而不是靠猜。
+        promptSections: config.promptSectionViews(),
       }
     })
     if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
@@ -207,6 +215,22 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     const r = await guard(() => config.setSystemPrompt(body.text as string))
     if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
     return c.json({ ok: true, text: await config.systemPrompt() })
+  })
+
+  /**
+   * 把提示词模板恢复成 SDK 出厂模板（**用户点按钮才做**）。
+   *
+   * 什么时候需要它：模板被别的东西覆盖成了纯文本（2026-10-06 的并发写事故就是这么留下
+   * 后遗症的），此时 {{AGENTS_MD}} 没了 —— 用户在设置里写什么提示词都没反应，
+   * 而模型端不报任何错。体检结果由 GET /api/agent/config 的 `template` 字段给出。
+   *
+   * 为什么不自动修：出厂模板带着一大段 PenguinHarness 自己的角色设定，换回来会明显
+   * 改变这个 Agent 的性格 —— 这种改动要让用户自己点（详见 config.ts 的注释）。
+   */
+  app.post('/api/agent/template/restore', async (c) => {
+    const r = await guard(() => config.restoreTemplate())
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, template: await config.templateHealth() })
   })
 
   /**
