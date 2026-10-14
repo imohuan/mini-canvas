@@ -69,6 +69,117 @@ export interface ClipboardSnapshot {
   copyTime: number
 }
 
+/** 快照节点里 data.label 是否算"有名字"：非空字符串才算（空串/缺键 = 没名字，粘贴时补默认名） */
+function hasLabel(data: Record<string, unknown> | undefined): boolean {
+  const label = data?.label
+  return typeof label === 'string' && label.trim().length > 0
+}
+
+/**
+ * 给**克隆出来**的节点改默认名。
+ *
+ * 为什么要这一步：节点默认名（"文本 3"）只在**建节点那一刻**由数据层按类型模板生成
+ * （nodeStore.nextDefaultName），而粘贴走的是 addNodes + 显式 data —— 显式的 label 会原样保留
+ * （那是刻意的：不能把用户改过的标题冲掉）。于是"复制一个「文本 1」粘贴"会得到第二个
+ * 「文本 1」，两个节点同名分不清（用户 2026-10-12 报的第二条缺陷）。
+ *
+ * 做法：只给**带名字**的克隆节点重新取号（走注入的 nameProvider = doc.nextTypeName，
+ * 与新建节点同一份按类型计数，所以"文本 1/2/3"是一条连续的号，不会撞号）。
+ * 本来就没名字的节点（label 空/缺）保持原样 —— 数据层 addNodes 会自动按模板补默认名，
+ * 这里再给一个反而会多跳一个号。
+ *
+ * @param nameProvider 取"该类型下一个默认名"的注入口（宿主给 doc.nextTypeName）。
+ *   缺省 = 不改名（单测/极简宿主不需服务也能跑）。
+ */
+export function renameClonedNodes(
+  nodes: ClipboardNode[],
+  nameProvider?: (type: string) => string,
+): ClipboardNode[] {
+  if (!nameProvider) return nodes
+  return nodes.map((n) => {
+    if (!hasLabel(n.data)) return n
+    return { ...n, data: { ...n.data, label: nameProvider(n.type) } }
+  })
+}
+
+/**
+ * 校验"从系统剪贴板读回来的快照"（跨窗口粘贴的唯一入口，数据来自外部，必须当不可信输入处理）。
+ *
+ * 判据只有"形状对不对"：节点要有 string 的 id/type、position 有两个有限数；边要有 id/source/target。
+ * 不合法的一律丢弃（**不是**抛错）—— 剪贴板里可能是别的应用塞的 JSON，画布不该因此炸掉。
+ * parentId 仍按"父也在本批里"收敛（与 toClipboardNodes 同一条不变量：父在批外就落顶层，防悬挂）。
+ */
+export function coerceClipboardSnapshot(
+  raw: { nodes: readonly unknown[]; edges: readonly unknown[] },
+  copyTime?: number,
+): ClipboardSnapshot {
+  const nodes: ClipboardNode[] = []
+  const seen = new Set<string>()
+  for (const item of raw.nodes) {
+    const n = item as Partial<ClipboardNode> | null
+    if (!n || typeof n !== 'object') continue
+    if (typeof n.id !== 'string' || typeof n.type !== 'string') continue
+    if (seen.has(n.id)) continue
+    const position = coercePoint(n.position)
+    if (!position) continue
+    seen.add(n.id)
+    const absPosition = coercePoint(n.absPosition) ?? position
+    nodes.push({
+      id: n.id,
+      type: n.type,
+      position,
+      absPosition,
+      // data 来自外部：深拷贝 + 只认普通对象（数组/字符串当空 data 处理）
+      data: n.data && typeof n.data === 'object' && !Array.isArray(n.data)
+        ? deepClone(n.data as Record<string, unknown>)
+        : {},
+      ...(typeof n.parentId === 'string' ? { parentId: n.parentId } : {}),
+      ...(coerceSize(n.size) ? { size: coerceSize(n.size)! } : {}),
+    })
+  }
+  // 父在批外 → 剥离 parentId，并把 position 重定基到绝对坐标（与 toClipboardNodes 同一口径）
+  for (const n of nodes) {
+    if (n.parentId !== undefined && !seen.has(n.parentId)) {
+      delete n.parentId
+      n.position = { x: n.absPosition.x, y: n.absPosition.y }
+    }
+  }
+  const edges: ClipboardEdge[] = []
+  for (const item of raw.edges) {
+    const e = item as Partial<ClipboardEdge> | null
+    if (!e || typeof e !== 'object') continue
+    if (typeof e.id !== 'string' || typeof e.source !== 'string' || typeof e.target !== 'string') continue
+    edges.push({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      ...(typeof e.type === 'string' ? { type: e.type } : {}),
+      ...(typeof e.sourceHandle === 'string' ? { sourceHandle: e.sourceHandle } : {}),
+      ...(typeof e.targetHandle === 'string' ? { targetHandle: e.targetHandle } : {}),
+    })
+  }
+  return { nodes, edges, copyTime: copyTime ?? Date.now() }
+}
+
+/** 坐标点校验（两个有限数才算） */
+function coercePoint(value: unknown): { x: number; y: number } | undefined {
+  const p = value as { x?: unknown; y?: unknown } | null
+  if (!p || typeof p !== 'object') return undefined
+  return typeof p.x === 'number' && Number.isFinite(p.x) && typeof p.y === 'number' && Number.isFinite(p.y)
+    ? { x: p.x, y: p.y }
+    : undefined
+}
+
+/** 尺寸校验（两个正有限数才算） */
+function coerceSize(value: unknown): { w: number; h: number } | undefined {
+  const s = value as { w?: unknown; h?: unknown } | null
+  if (!s || typeof s !== 'object') return undefined
+  return typeof s.w === 'number' && Number.isFinite(s.w) && s.w > 0 &&
+    typeof s.h === 'number' && Number.isFinite(s.h) && s.h > 0
+    ? { w: s.w, h: s.h }
+    : undefined
+}
+
 /** flow 坐标点（锚点/偏移用） */
 export interface ClipboardFlowPoint {
   x: number

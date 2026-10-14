@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
+import {
+  NodeStore,
+  EdgeStore,
+  Selection,
+  History,
+  type CanvasEdge,
+  GraphDocument,
+  createDocService,
+  ResourceStore,
+  canvasClipboardPayload,
+  parseCanvasClipboardText,
+  buildClipboardPastePayload,
+  dispatchClipboardPaste,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  type ClipboardEntry,
+  type ClipboardPasteHandler,
+} from '@mini-canvas/canvas-data'
 import { CommandRegistry } from '@mini-canvas/kernel'
 import { clipboardPlugin, type ClipboardService } from '../clipboardPlugin'
 
@@ -40,6 +57,37 @@ function makeCtx() {
 function addNode(ns: NodeStore, type: string, x: number, y: number, data?: Record<string, unknown>) {
   const id = ns.addNodes([{ type, position: { x, y }, data: data ?? { label: 'n' } }])
   return ns.getNodes().at(-1)!.id
+}
+
+/** 造一个模拟原生 paste 事件（只覆盖载荷归一用到的字段） */
+function pasteEvent(opts: { types?: string[]; data?: Record<string, string> }) {
+  const data = opts.data ?? {}
+  return {
+    preventDefault() {},
+    clipboardData: {
+      types: opts.types ?? [],
+      files: [],
+      items: Object.entries(data).map(([type, value]) => ({
+        kind: 'string',
+        type,
+        getAsString(cb: (s: string) => void) {
+          cb(value)
+        },
+      })),
+      getData(mime: string) {
+        return data[mime] ?? ''
+      },
+    },
+  } as unknown as ClipboardEvent
+}
+
+/** 装一个资源库（图片/视频按引用重建地址要用它） */
+function installResources(ctx: Context) {
+  const resources = new ResourceStore()
+  // 桩掉「按引用换地址」这一段（真实实现在 IndexedDB 里，单测不碰它）
+  resources.resolve = async (ref: string) => 'blob:resolved-' + ref
+  ctx.inject('resources', resources)
+  return resources
 }
 
 describe('clipboard 插件集成（真实内核服务）', () => {
@@ -129,7 +177,12 @@ describe('clipboard 插件集成（真实内核服务）', () => {
     expect(svc.hasData).toBe(true)
     expect(nodeStore.getNodes().length).toBe(2)
     const clone = nodeStore.getNodes().find((n) => n.id !== a)!
-    expect(clone.data).toEqual(nodeStore.getNode(a)!.data)
+    // 克隆节点内容一致，**只有名字是新取的**（用户 2026-10-12：粘贴后不能和原节点同名）
+    const { label: _cloneLabel, ...cloneRest } = clone.data
+    const { label: _origLabel, ...origRest } = nodeStore.getNode(a)!.data
+    expect(cloneRest).toEqual(origRest)
+    expect(clone.data.label).not.toBe(nodeStore.getNode(a)!.data.label)
+    expect(String(clone.data.label)).toMatch(/^文本 \d+$/)
   })
 
   it('粘贴后可再次 paste 级联偏移递增', async () => {
@@ -284,5 +337,191 @@ describe('复制带子节点的分组（父子坐标系，用户 2026-10-09 缺�
     // 父在批外 → 剥离父引用，按复制时刻的绝对坐标 (1030,1040) + 偏移 50 落顶层
     expect(clone.parentId).toBeUndefined()
     expect(clone.position).toEqual({ x: 1080, y: 1090 })
+  })
+})
+
+/**
+ * 用户 2026-10-12 报的缺陷①：**在一个浏览器页面复制，无法在另一个浏览器页面粘贴**。
+ *
+ * 根因：节点数据只活在复制那个页面插件实例的内存里（按画布实例隔离），另一个页面根本没有它。
+ * 修法：复制时把**完整载荷**（节点 + 边）写进系统剪贴板，粘贴页读它即可 —— 两个页面之间
+ * 共同的只有系统剪贴板。
+ */
+describe('跨页面粘贴（用户 2026-10-12 缺陷①：换个页面粘不了）', () => {
+  /** 另一个画布实例：不同的 nodeStore / selection / 插件实例（= 另一个浏览器页面的等价物） */
+  function otherPage() {
+    const page = makeCtx()
+    installResources(page.ctx)
+    return page
+  }
+
+  /** 读仲裁场里 clipboard 那条粘贴处理器（与宿主派发时拿到的是同一份） */
+  function pasteEntry(ctx: Context) {
+    const entries = ctx.registryOf(CLIPBOARD_PASTE_KIND).list(CLIPBOARD_PASTE_KEY) as unknown as Array<
+      ClipboardEntry<ClipboardPasteHandler>
+    >
+    return entries[0].value
+  }
+
+  it('页面 A 复制 → 页面 B 靠剪贴板载荷贴出节点（B 的内存剪贴板始终是空的）', async () => {
+    const a = makeCtx()
+    const b = otherPage()
+    await a.ctx.start()
+    await b.ctx.start()
+
+    // A：选中一个节点并复制（会往系统剪贴板写完整载荷）
+    const id = addNode(a.nodeStore, 'text', 100, 100, { label: '文本 1' })
+    a.selection.set([id])
+    let written = ''
+    expect(a.ctx.get<ClipboardService>('clipboard').copy()).toBe(true)
+    // 用原生 copy 事件的同步写口取回 A 实际写进剪贴板的文本（生产路径同一条）
+    a.ctx.get<ClipboardService>('clipboard').markSystemClipboard((mime, data) => {
+      if (mime === 'text/plain') written = data
+      return true
+    })
+    expect(written.startsWith('mini-canvas-nodes:')).toBe(true)
+    expect(parseCanvasClipboardText(written)?.nodes).toHaveLength(1)
+
+    // B：内存剪贴板是空的（另一个页面）—— 过去这里会直接让位，什么也贴不出来
+    expect(b.ctx.get<ClipboardService>('clipboard').hasData).toBe(false)
+
+    // B：宿主派发原生 paste（剪贴板里是 A 写的载荷）
+    const payload = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': written } }))
+    expect(pasteEntry(b.ctx)(payload)).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+
+    // B 画布上真的多了一个节点，且**名字重新取号**（不叫「文本 1」）
+    const nodes = b.nodeStore.getNodes()
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0].type).toBe('text')
+    expect(nodes[0].data.label).toBe('文本 1') // B 自己没建过别的文本节点，号从 1 起
+  })
+
+  it('B 页占着「文本 1」时粘过来的是「文本 2」（按类型的号在目标页重新算）', async () => {
+    const a = makeCtx()
+    const b = otherPage()
+    await a.ctx.start()
+    await b.ctx.start()
+    // A 与 B 各自都有一个自动补名的「文本 1」（两边号各自独立）
+    const id = addNode(a.nodeStore, 'text', 100, 100, { label: '文本 1' })
+    b.nodeStore.addNodes([{ type: 'text', position: { x: 0, y: 0 } }])
+    a.selection.set([id])
+    const svcA = a.ctx.get<ClipboardService>('clipboard')
+    svcA.copy()
+    let written = ''
+    svcA.markSystemClipboard((mime, data) => {
+      if (mime === 'text/plain') written = data
+      return true
+    })
+
+    const payload = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': written } }))
+    expect(pasteEntry(b.ctx)(payload)).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+
+    const labels = b.nodeStore.getNodes().map((n) => n.data.label)
+    expect(labels).toEqual(['文本 1', '文本 2'])
+  })
+
+  it('另一个页面复制的是图片：按 resourceId 重建本页地址（blob: 地址跨页面是死链）', async () => {
+    const a = makeCtx()
+    const b = makeCtx()
+    for (const page of [a, b]) {
+      page.nodeStore.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 }, nameTemplate: '图片 {{ID}}' })
+    }
+    installResources(b.ctx)
+    await a.ctx.start()
+    await b.ctx.start()
+
+    // A 上那张图的地址是 A 页面的 blob:（换页即失效），引用 resourceId 是持久的
+    const id = addNode(a.nodeStore, 'image', 10, 10, { label: '图片 1', resourceId: 'res-9', imageUrl: 'blob:page-a-only' })
+    a.selection.set([id])
+    const svcA = a.ctx.get<ClipboardService>('clipboard')
+    svcA.copy()
+    let raw = ''
+    svcA.markSystemClipboard((mime, data) => {
+      if (mime && mime === 'application/x-mini-canvas-nodes') raw = data
+      return true
+    })
+    const parsed = parseCanvasClipboardText(raw)
+    expect(parsed).toBeTruthy()
+
+    const payload = buildClipboardPastePayload(
+      pasteEvent({ types: ['application/x-mini-canvas-nodes'], data: { 'application/x-mini-canvas-nodes': canvasClipboardPayload(parsed!.nodes, parsed!.edges, parsed!.copyTime) } }),
+    )
+    expect(pasteEntry(b.ctx)(payload)).toBe(true)
+    await new Promise((r) => setTimeout(r, 30))
+
+    const pasted = b.nodeStore.getNodes().find((n) => n.type === 'image')!
+    // blob: 死链换成本页按引用重建出来的地址（否则图是空白）
+    expect(pasted.data.imageUrl).toBe('blob:resolved-res-9')
+    expect(pasted.data.resourceId).toBe('res-9')
+  })
+
+  it('菜单/面板的「粘贴」命令：没有原生事件，也能跨页面贴（异步读系统剪贴板）', async () => {
+    const a = makeCtx()
+    const b = otherPage()
+    await a.ctx.start()
+    await b.ctx.start()
+
+    const id = addNode(a.nodeStore, 'text', 40, 40, { label: '文本 1' })
+    a.selection.set([id])
+    const svcA = a.ctx.get<ClipboardService>('clipboard')
+    svcA.copy()
+    let clipText = ''
+    svcA.markSystemClipboard((mime, data) => {
+      if (mime === 'text/plain') clipText = data
+      return true
+    })
+
+    // 模拟系统剪贴板里就是 A 写的那一份：B 读剪贴板得到同一串文本
+    const original = (globalThis as { navigator?: unknown }).navigator
+    // navigator 在 Node 里只有 getter，用 defineProperty 顶替（测试环境补齐，产品代码不变）
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      writable: true,
+      value: { clipboard: { readText: async () => clipText } },
+    })
+    try {
+      const svcB = b.ctx.get<ClipboardService>('clipboard')
+      expect(svcB.hasData).toBe(false) // 另一个页面没有内存快照
+      expect(svcB.pasteFromCommand()).toBe(true)
+      await new Promise((r) => setTimeout(r, 30))
+      expect(b.nodeStore.getNodes()).toHaveLength(1)
+      expect(b.nodeStore.getNodes()[0].data.label).toBe('文本 1')
+
+      // 再点一次「粘贴」还能再贴一份（读剪贴板是异步的，若与事件路径共用一份内存快照，
+      // 第一次的异步落地会把内存快照覆盖成 1 个节点，这里就是那个回归点）
+      expect(svcB.pasteFromCommand()).toBe(true)
+      await new Promise((r) => setTimeout(r, 30))
+      expect(b.nodeStore.getNodes()).toHaveLength(2)
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: original })
+    }
+  })
+
+  it('菜单路径在同页复制时优先贴内存快照（不依赖剪贴板读权限）', async () => {
+    const { ctx, nodeStore, selection } = makeCtx()
+    installResources(ctx)
+    const a = addNode(nodeStore, 'text', 0, 0, { label: '文本 1' })
+    selection.set([a])
+    await ctx.start()
+    const svc = ctx.get<ClipboardService>('clipboard')
+    svc.copy()
+    // 没有 navigator.clipboard（读不到）也能贴 —— 内存快照在
+    expect(svc.pasteFromCommand()).toBe(true)
+    expect(nodeStore.getNodes()).toHaveLength(2)
+  })
+
+  it('旧格式（只有标记、没有载荷）且本页无快照 → 接管并吞掉，不让标记 JSON 被建成文本节点', async () => {
+    const b = otherPage()
+    await b.ctx.start()
+    // 老版本写的剪贴板：带前缀的 text/plain 里只有一个 {"v":1,"nodes":n,"edges":m} 标记
+    const marker = 'mini-canvas-nodes:' + JSON.stringify({ v: 1, nodes: 1, edges: 0 })
+    const payload = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': marker } }))
+    // 仍然认领（返回 true）→ 宿主 preventDefault，file-drop 的纯文本处理器不会被问到；
+    // 本页没有内存快照 → 不贴任何节点（过去这里会让位，标记 JSON 会被建成一个文本节点）
+    expect(pasteEntry(b.ctx)(payload)).toBe(true)
+    await new Promise((r) => setTimeout(r, 20))
+    expect(b.nodeStore.getNodes()).toHaveLength(0)
   })
 })

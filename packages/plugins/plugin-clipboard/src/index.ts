@@ -8,6 +8,8 @@ export {
   makeSnapshot,
   computePasteOffset,
   remapSnapshot,
+  renameClonedNodes,
+  coerceClipboardSnapshot,
   deepClone,
 } from './clipboardEngine'
 export type {

@@ -7,6 +7,8 @@ import {
   makeSnapshot,
   computePasteOffset,
   remapSnapshot,
+  renameClonedNodes,
+  coerceClipboardSnapshot,
   type ClipboardNodeInput,
 } from '../clipboardEngine'
 
@@ -191,5 +193,121 @@ describe('带父子的复制粘贴（绝对坐标 / 相对坐标不混算）', (
     // 根 g 绝对 (1000,1000) 尺寸 400x300 → 中心 (1200,1150)；锚点 (1200,1150) → 零偏移
     const offset = computePasteOffset(snap.nodes, { x: 1200, y: 1150 })
     expect(offset).toEqual({ offsetX: 0, offsetY: 0 })
+  })
+})
+
+/**
+ * 用户 2026-10-12 报的缺陷②：粘贴出来的节点与原节点**同名**（复制「文本 1」贴出第二个「文本 1」）。
+ *
+ * 默认名只在建节点那一刻生成（nodeStore.nextDefaultName），而粘贴走 addNodes + 显式 data ——
+ * 显式 label 会原样保留。故在重映射之后专门补一步改名，号走注入的 nameProvider（= doc.nextTypeName）。
+ */
+describe('renameClonedNodes（粘贴出来的节点要重新取号）', () => {
+  const clone = (id: string, type: string, label?: string) => ({
+    id,
+    type,
+    position: { x: 0, y: 0 },
+    absPosition: { x: 0, y: 0 },
+    data: label === undefined ? {} : { label },
+  })
+
+  it('带名字的克隆节点换成该类型的下一个默认名（与原节点不再同名）', () => {
+    let seq = 1
+    const out = renameClonedNodes([clone('n1', 'text', '文本 1')], () => '文本 ' + ++seq)
+    expect(out[0].data.label).toBe('文本 2')
+  })
+
+  it('每类型各自取号：按类型分别问一次 nameProvider', () => {
+    const asked: string[] = []
+    const out = renameClonedNodes([clone('a', 'text', '文本 1'), clone('b', 'image', '图片 1')], (type) => {
+      asked.push(type)
+      return type === 'text' ? '文本 7' : '图片 3'
+    })
+    expect(asked).toEqual(['text', 'image'])
+    expect(out.map((n) => n.data.label)).toEqual(['文本 7', '图片 3'])
+  })
+
+  it('本来就没名字的节点保持原样（交给数据层按模板补名，不在这里多跳一个号）', () => {
+    const out = renameClonedNodes([clone('a', 'text'), clone('b', 'text', '   ')], () => '文本 9')
+    expect(out[0]).toEqual(clone('a', 'text'))
+    expect(out[1].data.label).toBe('   ')
+  })
+
+  it('不注入 nameProvider 时原样返回（极简宿主/纯逻辑单测不必有服务）', () => {
+    const nodes = [clone('a', 'text', '文本 1')]
+    expect(renameClonedNodes(nodes)).toEqual(nodes)
+  })
+})
+
+/**
+ * 跨页面粘贴的入口：载荷来自**系统剪贴板**（外部数据），必须当不可信输入校验。
+ * 判据只有形状；不合法的一律丢弃而不是抛错 —— 剪贴板里可能是别的应用塞的 JSON。
+ */
+describe('coerceClipboardSnapshot（跨页面读回来的载荷）', () => {
+  it('合法节点/边原样收下，data 深拷贝（不共享剪贴板里的对象）', () => {
+    const raw = {
+      nodes: [
+        { id: '1', type: 'text', position: { x: 10, y: 20 }, absPosition: { x: 10, y: 20 }, data: { label: '文本 1' }, size: { w: 100, h: 50 } },
+      ],
+      edges: [{ id: 'e1', source: '1', target: '2' }],
+    }
+    const snap = coerceClipboardSnapshot(raw, 999)
+    expect(snap.copyTime).toBe(999)
+    expect(snap.nodes[0]).toEqual({
+      id: '1',
+      type: 'text',
+      position: { x: 10, y: 20 },
+      absPosition: { x: 10, y: 20 },
+      data: { label: '文本 1' },
+      size: { w: 100, h: 50 },
+    })
+    expect(snap.nodes[0].data).not.toBe(raw.nodes[0].data) // 深拷贝
+    expect(snap.edges).toEqual([{ id: 'e1', source: '1', target: '2' }])
+  })
+
+  it('缺 id/type、坐标不是有限数、重复 id 的节点全部丢弃（不抛错）', () => {
+    const snap = coerceClipboardSnapshot({
+      nodes: [
+        { type: 'text', position: { x: 0, y: 0 } },
+        { id: '2', position: { x: 0, y: 0 } },
+        { id: '3', type: 'text', position: { x: NaN, y: 0 } },
+        { id: '4', type: 'text', position: { x: 1, y: 2 } },
+        { id: '4', type: 'text', position: { x: 9, y: 9 } },
+        'not an object',
+      ],
+      edges: [{ id: 'e1', source: '4' }, { id: 'e2', source: '4', target: '5' }],
+    })
+    expect(snap.nodes.map((n) => n.id)).toEqual(['4'])
+    expect(snap.edges.map((e) => e.id)).toEqual(['e2'])
+  })
+
+  it('父不在本批里 → 剥离 parentId 并把 position 重定基到绝对坐标（防悬挂）', () => {
+    const snap = coerceClipboardSnapshot({
+      nodes: [{ id: 'c', type: 'text', position: { x: 30, y: 40 }, absPosition: { x: 1030, y: 1040 }, parentId: 'outside', data: {} }],
+      edges: [],
+    })
+    expect(snap.nodes[0].parentId).toBeUndefined()
+    expect(snap.nodes[0].position).toEqual({ x: 1030, y: 1040 })
+  })
+
+  it('父在本批里 → parentId 与局部坐标都保留（父子一块贴过来时关系不丢）', () => {
+    const snap = coerceClipboardSnapshot({
+      nodes: [
+        { id: 'g', type: 'group', position: { x: 1000, y: 1000 }, absPosition: { x: 1000, y: 1000 }, data: {} },
+        { id: 'c', type: 'text', position: { x: 30, y: 40 }, absPosition: { x: 1030, y: 1040 }, parentId: 'g', data: {} },
+      ],
+      edges: [],
+    })
+    expect(snap.nodes[1].parentId).toBe('g')
+    expect(snap.nodes[1].position).toEqual({ x: 30, y: 40 })
+  })
+
+  it('缺 absPosition / data 时退化为自身 position 与空 data（一个可选字段不该丢掉整个节点）', () => {
+    const snap = coerceClipboardSnapshot({
+      nodes: [{ id: '1', type: 'text', position: { x: 5, y: 6 }, data: undefined }],
+      edges: [],
+    })
+    expect(snap.nodes[0].absPosition).toEqual({ x: 5, y: 6 })
+    expect(snap.nodes[0].data).toEqual({})
   })
 })
