@@ -17,13 +17,20 @@ const props = defineProps<{
    * 预填的图（**从画布贴进来的**：节点右键 / 多选「加入资产库」）——不是本地 File，
    * 而是"画布上已经在显示、地址浏览器取得到"的图。它们与本地选的图并排显示、一起保存。
    */
-  prefill?: { url: string; name: string }[]
+  /** 预填项：画布图给 url，本地文件给 file（节点包「收藏到资产库」走 file 那条） */
+  prefill?: { url?: string; name: string; file?: File }[]
   /**
    * 打开时预选的**保存位置**（空 = 个人资产库）。可选：
    * 左侧抽屉 / 画布贴图入口不传 → 默认个人资产库（原行为不变）；
    * 「资产管理」弹窗传当前所在层 —— 与它的「新建文件夹」同一落点口径。
    */
   initialFolderId?: string
+  /**
+   * 打开时**预勾的标签**（默认空 = 用户自己选）。可选：
+   * 节点包「收藏到资产库」会预勾「节点」—— 用户口径 2026-10-14：
+   * 「如果是节点收藏资源库的话，打开这个弹出框，你这边的类型可以自动选择这个节点」。
+   */
+  initialTags?: string[]
 }>()
 const emit = defineEmits<{
   close: []
@@ -38,21 +45,37 @@ onMounted(() => document.addEventListener('keydown', onEscKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onEscKey))
 
 type PickState = 'pending' | 'uploading' | 'done' | 'failed'
-/** 一项待保存：本地文件（file）或画布图（url）——两者互斥，展示与保存一视同仁 */
-interface PickItem { file?: File; url?: string; state: PickState; preview?: string; name: string }
+/**
+ * 一项待保存：本地文件（file）或画布上的媒体（url）——两者互斥，展示与保存一视同仁。
+ *
+ * `kind` 是**缩略图该用什么画**的依据（用户 2026-10-14 报的「UI 显示错误」根因）：
+ * 早先不管什么类型都拿 `<img>` 去显示 —— 视频放进去就是一张裂图（.mp4 不是图片）。
+ */
+interface PickItem { file?: File; url?: string; state: PickState; preview?: string; name: string; kind: 'image' | 'video' | 'audio' | 'other' }
 const MAX_MB = 20
 const MAX_FILES = 50
 
 const fileInput = ref<HTMLInputElement | null>(null)
 const items = ref<PickItem[]>([])
-// 预填的图（画布贴进来的）直接进 items：与本地选的图同一套缩略图/删除/计数
+// 预填项（画布贴进来的图 / 刚打好的节点包）直接进 items：与本地选的文件同一套缩略图/删除/计数
 for (const p of props.prefill ?? []) {
-  items.value.push({ url: p.url, state: 'pending', preview: p.url, name: p.name })
+  items.value.push(
+    p.file
+      ? { file: p.file, state: 'pending', name: p.name, kind: kindOf(p.file) }
+      : // 画布上的媒体：类型**按地址扩展名**认（它有真实后缀），不是按来源猜
+        { url: p.url, state: 'pending', preview: p.url, name: p.name, kind: kindOfName(p.name) },
+  )
 }
 const assetName = ref('')
+// 预填项只有**一项**时，把它的名字**填进名称框**（而不是只当占位符）。
+//
+// 用户 2026-10-14 看截图时提的「UI 显示错误」：名称框里显示的是灰色占位符（视频 1.mp4），
+// 看着像"名字没带上"；而保存时名字取的是这个框的值 —— 空着就回落成占位符文本。
+// 直接填进去，用户一眼看到会存成什么名，也能立刻改。
+if (props.prefill?.length === 1 && props.prefill[0]?.name) assetName.value = props.prefill[0].name
 const targetFolderId = ref<string>(props.initialFolderId ?? '')
 const tagsOpen = ref(false)
-const pickedTags = ref<string[]>([])
+const pickedTags = ref<string[]>([...(props.initialTags ?? [])])
 
 const targetLabel = computed(
   () => props.folders.find((f) => f.id === targetFolderId.value)?.name ?? '个人资产库',
@@ -70,6 +93,20 @@ function kindOf(f: File): 'image' | 'video' | 'audio' | 'other' {
   if (f.type.startsWith('audio/')) return 'audio'
   return 'other'
 }
+
+/**
+ * 按**文件名后缀**认类型（画布上的媒体走这条 —— 预览项只有 url + 名字，没有 File 的 MIME）。
+ *
+ * 为什么不看 url 里的 query：画布资源地址常带 `?v=时间戳`（见节点产物那条约定），
+ * 而这里判类型只该看**扩展名**（用户 2026-10-14 那条口径：别按字段名/来源猜）。
+ */
+function kindOfName(name: string): 'image' | 'video' | 'audio' | 'other' {
+  const ext = (name.split('?')[0].split('#')[0].split('.').pop() ?? '').toLowerCase()
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return 'image'
+  if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) return 'video'
+  if (['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].includes(ext)) return 'audio'
+  return 'other'
+}
 const kindIcon = (k: string) => (k === 'video' ? VideoIcon : k === 'audio' ? AudioIcon : FileIcon)
 function chooseFiles(): void {
   fileInput.value?.click()
@@ -82,8 +119,11 @@ function onPick(e: Event): void {
       console.warn('[上传资产] 超过 ' + MAX_MB + 'MB 已忽略: ' + f.name)
       continue
     }
-    const item: PickItem = { file: f, state: 'pending', name: f.name }
-    if (kindOf(f) === 'image') item.preview = URL.createObjectURL(f)
+    const kind = kindOf(f)
+    const item: PickItem = { file: f, state: 'pending', name: f.name, kind }
+    // objectURL 只给**能画出来的**类型（图片）。视频/音频不给 —— 那不是 <img> 能显示的，
+    // 给了反而是裂图（用户 2026-10-14 报的「UI 显示错误」）。
+    if (kind === 'image') item.preview = URL.createObjectURL(f)
     items.value.push(item)
   }
   input.value = ''
@@ -147,8 +187,14 @@ function save(): void {
             />
             <div v-for="(it, i) in items" :key="it.name + i" class="group/p relative flex w-[104px] flex-none flex-col rounded-xl border border-line bg-veil/60 p-1.5">
               <div class="relative h-[72px] w-full overflow-hidden rounded-lg bg-thumb">
-                <img v-if="it.preview" :src="it.preview" alt="" class="h-full w-full object-cover" />
-                <span v-else class="grid h-full w-full place-items-center text-ink-mute"><component :is="kindIcon(it.file ? kindOf(it.file) : 'image')" :size="20" /></span>
+                <!--
+                  缩略图按**真实类型**画（用户 2026-10-14 报的「UI 显示错误」）：
+                  早先一律用 <img>，视频塞进去就是一张裂图。现在 —— 图片用 img、
+                  视频用 video（首帧当缩略图，不自动播放）、音频/其它用类型图标。
+                -->
+                <img v-if="it.kind === 'image' && it.preview" :src="it.preview" alt="" class="h-full w-full object-cover" />
+                <video v-else-if="it.kind === 'video' && it.preview" :src="it.preview" class="h-full w-full object-cover" preload="metadata" muted playsinline />
+                <span v-else class="grid h-full w-full place-items-center text-ink-mute"><component :is="kindIcon(it.kind)" :size="20" /></span>
                 <!-- 状态角标：上传失败 → 图标+重试；pending 无角标 -->
                 <span v-if="it.state === 'failed'" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-veil/80 text-[10px] text-danger">
                   <span class="flex items-center gap-0.5"><AlertIcon :size="11" /> 上传失败</span>

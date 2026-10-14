@@ -80,6 +80,18 @@ describe('资产树共用（AssetTree）', () => {
     expect(tree).toMatch(/const renameVal = computed\(\{[\s\S]{0,160}get: \(\) => props\.renameValue/)
   })
 
+  /**
+   * 资产树**自己不再画焦点环**（用户口径 2026-10-14：全界面关掉焦点环，见 ui-style-guide §5 第 1 条
+   * 与 app.css 那条全局 `*:focus-visible { outline: none !important }`）。
+   *
+   * 演进：先是浏览器默认黑框被用户报上来，改成这里画青色环；用户随后明确
+   * 「我是不太希望你显示这个焦点环的，能不能在全局把它给关掉」—— 所以环整条撤掉，
+   * 统一交给全局那条规则处理。这里留一条守卫，防止它被"顺手"加回来。
+   */
+  it('树里不再自己画焦点环（全界面已关掉，见 ui-style-guide §5 第 1 条）', () => {
+    expect(tree).not.toMatch(/\.asset-tree button:focus-visible/)
+  })
+
   /** 资源可以拖到画布建节点：树把资产 id 写进 dataTransfer（画布侧据此建对应类型的节点） */
   it('资产行拖拽时带上「这是资源树资产」的标记', () => {
     expect(tree).toContain('application/x-mini-canvas-asset')

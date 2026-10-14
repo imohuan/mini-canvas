@@ -13,7 +13,10 @@ import { SAMPLE_IMAGE_URL } from '../assembly'
 import { buildCanvasTree, filterTree } from './canvasTree'
 import { listCanvases as apiListCanvases, createCanvas as apiCreateCanvas, duplicateCanvas as apiDuplicateCanvas, deleteCanvas as apiDeleteCanvas, listAssets as apiListAssets, uploadAsset as apiUploadAsset, deleteAsset as apiDeleteAsset, renameAsset as apiRenameAsset, renameCanvas as apiRenameCanvas, renameProject as apiRenameProject, listAssetFolders as apiListAssetFolders, createAssetFolder as apiCreateAssetFolder, renameAssetFolder as apiRenameAssetFolder, moveAssetFolder as apiMoveAssetFolder, setAssetFolderIcon as apiSetAssetFolderIcon, deleteAssetFolder as apiDeleteAssetFolder, moveAssets as apiMoveAssets, setAssetTags as apiSetAssetTags, type CanvasSummary, type AssetFolderSummary } from './projectsApi'
 import { toAssetItems, assetKindOf, type AssetItem } from './assetModel'
+import { applyRowClick } from './assetSelection'
 import { registerPendingSave, unregisterPendingSave } from './pendingSave'
+import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from './nodePack'
+import { uniqueLabel } from './nodeLabel'
 
 const log = createV2Logger('config')
 
@@ -122,6 +125,12 @@ function createUi() {
     // 资产 tab：批量选择模式（开关 + 已选 id 集合，转数组用）
     assetBatchOn: false,
     assetSelectedIds: [] as string[],
+    /**
+     * 批量勾选的**起点**：Shift 区间从这一项算起（判定见 composables/assetSelection.ts）。
+     * 普通点击会把它换成刚点的那一项；Shift 点击不动它 —— 这样按住 Shift 连点几下
+     * 都是在同一段里增减（用户口径 2026-10-13：「根据你最后一次选择的一项，按 Shift 会选择该区间」）。
+     */
+    assetSelectAnchorId: null as string | null,
     // 底部 dock
     addMenuOpen: false,
     moveMenuOpen: false,
@@ -645,8 +654,13 @@ function createUi() {
       await apiDeleteAsset(id)
       assetItems.value = assetItems.value.filter((a) => a.id !== id)
     } catch (err) {
+      // 删失败不能悄悄吞掉（用户 2026-10-13 报「点了删除没效果、刷新数据还在」）。
+      // showToast 在成品壳里是空实现，所以这里只留下 console.warn —— 真正的兜底是下面那句
+      // loadAssets：它把画面收敛回服务器真值，删没删掉一眼看得出来。
       console.warn('[ui] 资产删除失败: ' + id, err)
     }
+    // 收敛到服务器真值：批量删多条时，某一条失败也能如实反映出来（本地摘除只是乐观更新）。
+    await loadAssets()
   }
   /** 资产改名 */
   async function renameAssetById(id: string, name: string): Promise<void> {
@@ -668,12 +682,21 @@ function createUi() {
     }
   }
   /** 建文件夹（parentId 空 = 根目录）；成功后刷新文件夹清单 */
-  async function newAssetFolder(name: string, parentId?: string): Promise<void> {
+  /**
+   * 新建资产文件夹。**返回新文件夹的 id**（拿不到 → undefined）。
+   *
+   * 为什么要回 id：节点包「收藏到资产库」需要"把包存进「节点库」这个文件夹，
+   * 没有就现建一个"（用户口径 2026-10-14）—— 不回 id 就得建完再按名字去清单里翻，
+   * 而同名文件夹可能有多个，翻出来的未必是刚建的那个。
+   */
+  async function newAssetFolder(name: string, parentId?: string): Promise<string | undefined> {
     try {
-      await apiCreateAssetFolder(name, parentId)
+      const made = await apiCreateAssetFolder(name, parentId)
       await loadAssetFolders()
+      return made?.id
     } catch (err) {
       console.warn('[ui] 新建文件夹失败: ' + name, err)
+      return undefined
     }
   }
   async function renameAssetFolderById(id: string, name: string): Promise<void> {
@@ -714,6 +737,9 @@ function createUi() {
    *
    * 成功给一句 toast（用户报过「移动到没生效」：其实挪成了，但列表里没明显变化、
    * 也没有任何反馈，看着像没反应）。loadAssets 之后 assetFolderTree 的 count 也会跟着重算。
+   *
+   * 传进来的 id 一律是**资产 id**（勾文件夹只会把它里面的文件放进已选，见 assetSelection
+   * 的文件头说明），所以这里不需要分辨文件夹。
    */
   async function moveSelectedAssets(folderId?: string, idList?: string[]): Promise<void> {
     const ids = idList ?? [...state.assetSelectedIds]
@@ -748,12 +774,32 @@ function createUi() {
   /** 批量选择开关：退出时清空已选 */
   function toggleAssetBatch(on?: boolean): void {
     state.assetBatchOn = on ?? !state.assetBatchOn
-    if (!state.assetBatchOn) state.assetSelectedIds = []
+    if (!state.assetBatchOn) {
+      state.assetSelectedIds = []
+      state.assetSelectAnchorId = null
+    }
   }
-  function toggleAssetSelected(id: string): void {
-    const i = state.assetSelectedIds.indexOf(id)
-    if (i >= 0) state.assetSelectedIds.splice(i, 1)
-    else state.assetSelectedIds.push(id)
+  /**
+   * 勾选一行（勾选框 / 资产行点击共用）：文件夹连带**直属**资产、Shift 划区间，
+   * 判定在 composables/assetSelection.ts（纯函数，有单测）。
+   *
+   * 这里只喂两样东西：行列表（决定区间与层级）与资产清单（决定文件夹直属内容），
+   * 所以抽屉与弹窗两处宿主的行为天然一致。
+   */
+  function toggleAssetSelected(
+    id: string,
+    opts?: { rows?: { kind: 'folder' | 'asset'; id: string; parentId?: string }[]; shift?: boolean },
+  ): void {
+    const next = applyRowClick({
+      rows: opts?.rows ?? [],
+      assets: assetItems.value,
+      selected: state.assetSelectedIds,
+      anchorId: state.assetSelectAnchorId,
+      id,
+      shift: Boolean(opts?.shift),
+    })
+    state.assetSelectedIds = next.selected
+    state.assetSelectAnchorId = next.anchorId
   }
 
   /** 资产文件夹树（含每层下的资产数量，供行尾角标） */
@@ -794,8 +840,13 @@ function createUi() {
     walk(assetFolderTree.value, 0)
     return out
   })
-  /** 标签固定清单（上传弹窗「设置标签」用；与 LeftDrawer 的 ASSET_TAGS 同一份口径） */
-  const assetTagOptions = computed(() => ['角色', '场景', '物品', '风格', '音效'])
+  /**
+   * 标签固定清单（上传弹窗「设置标签」用；与 LeftDrawer 的 ASSET_TAGS 同一份口径）。
+   *
+   * 「节点」是 2026-10-13 为节点包加的：收藏进来的包默认打这个标签，
+   * 筛起来一眼能找到"哪些是可复用的节点"。
+   */
+  const assetTagOptions = computed(() => ['角色', '场景', '物品', '风格', '音效', '节点'])
 
   /** 资产计数：按类型（喂给资产页顶部的小统计）—— 与 histCount 同一道中英转换 */
   const assetCount = (kind: string): number => state.historySummary.byKind[HIST_KIND[kind] ?? kind] ?? 0
@@ -1581,6 +1632,37 @@ function createUi() {
   }
 
   /**
+   * 画布上**现在已有的全部显示名**（判重用的那口锅）。
+   *
+   * 为什么读 nodeStore 而不是别处：它是"画布上现在有什么"的唯一真源，
+   * 而重名要防的正是"与画布上已有的撞"。
+   * 宿主没就绪 / 拿不到 → 空数组（此时谈不上撞名，照原样建）。
+   */
+  function existingLabels(): string[] {
+    const nodes = canvasHost()?.nodeStore?.getNodes() ?? []
+    const out: string[] = []
+    for (const raw of nodes) {
+      const label = (raw as { data?: { label?: unknown } } | null)?.data?.label
+      if (typeof label === 'string' && label.trim()) out.push(label.trim())
+    }
+    return out
+  }
+
+  /**
+   * 给**建进来的节点**定一个不撞的名字（用户 2026-10-14 报的「拖出来的节点名称没有自动追加」）。
+   *
+   * 为什么需要它：画布上「新建节点」的名字走数据层按类型计数（图片 1 / 图片 2…），不会撞；
+   * 而**从资产库拖节点包进来**、以及**来自包里那份 label**，是"收藏时那一刻的名字"原样再建一次 ——
+   * 拖两次同一个包就得到两个同名节点（左侧树 / 画面里分不清谁是谁）。
+   *
+   * want 为空 = 包本身就没名字 → 交回数据层按类型模板补（那里才是"图片 1"的出处，不在这重复一份）。
+   */
+  function dedupeNodeLabel(want: unknown): string | undefined {
+    if (typeof want !== 'string' || !want.trim()) return undefined
+    return uniqueLabel(want, existingLabels())
+  }
+
+  /**
    * 指定类型与地址建节点（资产「添加到画布」/ 拖拽落画布共用）。
    *
    * 为什么分类型走**插件自己的服务**而不是一条命令：image 有 command:create-node 的 extra 通道，
@@ -1592,6 +1674,20 @@ function createUi() {
     asset: { name?: string; url: string; kind?: string; assetKind?: string },
     atFlow?: { x: number; y: number },
   ): string | null {
+    // ★ 节点包（.mcnode）走导入那条路，不是"建一个媒体节点"。
+    //   为什么要在这里认：从**资源库**拖一个包到画布，与从**文件系统**拖一个包，
+    //   对用户来说是同一个动作（用户 2026-10-13 口径："拖拽之后和直接从文件夹中拖拽进来的效果是一样的"），
+    //   所以两条路必须落到同一件事：写脚本 + 还原节点。
+    if (assetKindOf(asset) === 'node-package') {
+      // ★ 落点必须一路传下去（与图片/视频那条路一致）。
+      //   漏了它的后果有两个，都是用户实测报的：
+      //     ① 位置不对 —— atFlow 为空 → spawnPosition 走「按已有节点数级联错开」，
+      //        包不会落在指针处；
+      //     ② 出现「聚焦效果」—— importPackFromUrl 里 atFlow 为空会走 focusNewNode
+      //        （= 按 F 聚焦选中，会缩放平移视口），而拖拽那条本该只 selectNewNode。
+      void importPackFromUrl(asset.url, asset.name, atFlow)
+      return null
+    }
     const type = nodeTypeOfAsset(asset)
     if (!type) {
       showToast('暂不支持把「' + assetKindOf(asset) + '」类型的资产添加到画布')
@@ -1654,6 +1750,28 @@ function createUi() {
     }
   }
 
+  /**
+   * 视口中心（flow 坐标）—— 「没有指针落点」那一类入口的默认落点。
+   *
+   * 为什么不用鼠标位置：点菜单/点上传这类入口触发时，用户多半在盯底栏，
+   * 用鼠标位置会把节点甩到上次路过的角落；中心一定看得见。
+   * 与 addMediaFilesToCanvas 里那段同一条口径（媒体文件拖进来也走它）。
+   */
+  function viewportCenterFlow(): { x: number; y: number } | null {
+    const vp = hostCtx()?.get<
+      { getPaneEl?(): HTMLElement | null; screenToFlow?(x: number, y: number): { x: number; y: number } }
+    >('viewport')
+    const pane = vp?.getPaneEl?.()
+    if (!pane || !vp?.screenToFlow) return null
+    const r = pane.getBoundingClientRect()
+    if (!(r.width > 0 && r.height > 0)) return null
+    try {
+      return vp.screenToFlow(r.left + r.width / 2, r.top + r.height / 2)
+    } catch {
+      return null
+    }
+  }
+
   // ===== 资产「服务动作」：把资产接到画布 / Agent =====
   // 为什么收进 ui 层当**服务**（用户口径：「我觉得你应该把这个功能做成一个服务」）：
   // 左侧抽屉、资产管理弹窗、将来的右键菜单/搜索面板都要干同一件事，散在各组件里必然走样。
@@ -1709,6 +1827,108 @@ function createUi() {
   async function addFilesToCanvas(files: File[]): Promise<number> {
     const list = files.filter((f) => f.size > 0)
     if (!list.length) return 0
+
+    // ★ 节点包（.mcnode）单独走一条：它不是媒体文件，而是"一个节点 + 它的脚本"。
+    //   为什么要在这里分流：拖进来的动作是同一个（拖到画布），但落点完全不同 ——
+    //   媒体文件是"建一个媒体节点"，包是"写脚本 + 还原节点"。
+    //   先挑出来落地，剩下的交给 file-drop（用户可能一次拖了包 + 图片）。
+    const packs = list.filter((f) => isNodePackFile(f.name))
+    const restFiles = list.filter((f) => !isNodePackFile(f.name))
+    // 节点包与媒体文件落到同一处：没有指针落点时用**视口中心**（与 addMediaFilesToCanvas 一致）
+    const packAnchor = viewportCenterFlow() ?? undefined
+    for (const p of packs) await importPackFile(p, packAnchor)
+    if (restFiles.length === 0) return packs.length
+    return (await addMediaFilesToCanvas(restFiles)) + packs.length
+  }
+
+  /**
+   * 把一个 .mcnode 交给后台落地（写脚本 + 还原节点），然后**在前端建出那个节点**。
+   *
+   * 为什么建节点这一步在前端：只有前端知道往哪张画布、落在哪个位置、建完选中谁。
+   * 后台只负责"把脚本写下去、把节点数据算好"（它算不了视口）。
+   */
+  async function importPackFile(file: File, atFlow?: { x: number; y: number }): Promise<boolean> {
+    const target = canvasHost()
+    const ctx = hostCtx()
+    if (!target?.command || !ctx) return false
+    try {
+      const base = await resolvePackBase()
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const result = await importPack({ base, bytes })
+      // 与「媒体文件拖进画布」同一条口径（见 addMediaFilesToCanvas）：
+      //   落点 = 指针位置（没给就用视口中心）；建完**只选中**、不取景。
+      //   原先这里是 spawnPosition(undefined) + focusNewNode —— 于是同一个「往画布拖东西」
+      //   的动作，图片/视频只是多一个节点，节点包却会让画布自己缩放平移（用户报的「聚焦效果」）。
+      const anchor = atFlow ?? viewportCenterFlow() ?? undefined
+      // 名字要跟着画布上的现状去重（否则拖两次同一个包 = 两个同名节点，左侧树里分不清）
+      const uniqueName = dedupeNodeLabel((result.node.data as { label?: unknown }).label)
+      const id = target.command.execute('command:create-node', {
+        type: result.node.type,
+        position: spawnPosition(anchor),
+        ...result.node.data,
+        ...(uniqueName !== undefined ? { label: uniqueName } : {}),
+      })
+      if (typeof id === 'string') selectNewNode(id)
+      // 升版本了要说一声：用户得知道"这是 v2、原来那个没动"
+      showToast(
+        result.action === 'bump'
+          ? '已导入（本机有同名脚本，整套升到 ' + VERSION_SEP + result.version + '）'
+          : '已导入：' + result.title,
+      )
+      return true
+    } catch (err) {
+      showToast('导入失败：' + (err instanceof Error ? err.message : String(err)))
+      return false
+    }
+  }
+
+  /**
+   * 从**资产库里的地址**导入一个包（拖抽屉里那一项到画布）。
+   *
+   * 与 importPackFile 的区别只有"字节从哪来"：那边是本地文件，这边要先取回来。
+   * 其余（交给后台落地 → 前端建节点 → 提示升版本）完全一样 —— 用户口径：
+   * 「拖拽之后，和直接从文件夹中拖拽进来的效果是一样的」。
+   */
+  async function importPackFromUrl(
+    url: string,
+    name?: string,
+    atFlow?: { x: number; y: number },
+  ): Promise<boolean> {
+    const target = canvasHost()
+    if (!target?.command) return false
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('取包失败（HTTP ' + res.status + '）')
+      const bytes = new Uint8Array(await res.arrayBuffer())
+      const base = await resolvePackBase()
+      const result = await importPack({ base, bytes })
+      // 与 importPackFile 同一条口径：名字跟着画布上已有的去重（拖两次同一个包会重名）
+      const uniqueName = dedupeNodeLabel((result.node.data as { label?: unknown }).label)
+      const id = target.command.execute('command:create-node', {
+        type: result.node.type,
+        // 右键菜单那条路会给落点（用户在哪儿右键就放哪儿）；资产库拖拽那条没有，走默认位置
+        position: spawnPosition(atFlow),
+        ...result.node.data,
+        ...(uniqueName !== undefined ? { label: uniqueName } : {}),
+      })
+      if (typeof id === 'string') {
+        if (atFlow) selectNewNode(id)
+        else focusNewNode(id)
+      }
+      showToast(
+        result.action === 'bump'
+          ? '已从资源库导入（本机有同名脚本，整套升到 ' + VERSION_SEP + result.version + '）'
+          : '已从资源库导入：' + (name || result.title),
+      )
+      return true
+    } catch (err) {
+      showToast('导入失败：' + (err instanceof Error ? err.message : String(err)))
+      return false
+    }
+  }
+
+  /** 媒体文件那条老路（原 addFilesToCanvas 的实现，原样搬过来） */
+  async function addMediaFilesToCanvas(list: File[]): Promise<number> {
     const svc = hostCtx()?.get<FileDropLike>('file-drop')
     if (!svc?.addFiles) {
       showToast('文件拖放插件未启用，无法把文件加到画布')
@@ -2131,6 +2351,8 @@ function createUi() {
     runCommand,
     addAssetToCanvas, dropAssetToCanvas, addAssetToAgent, addFolderToAgent, addFolderAssetsToCanvas, screenToFlow, createAssetNode,
     addFilesToCanvas,
+    importPackFile,
+    importPackFromUrl,
     uploadAssets, uploadAssetsTo, uploadAssetsFromUrls, deleteAssetById, assetFolders, assetFolderTree, flatFoldersForUpload, assetTagOptions, loadAssetFolders, newAssetFolder, moveAssetTo,
     renameAssetById,
     renameAssetFolderById, removeAssetFolder, moveSelectedAssets, tagsForAsset,

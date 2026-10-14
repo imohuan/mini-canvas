@@ -17,10 +17,31 @@
 import { ref } from 'vue'
 
 export interface PendingUpload {
-  /** 图地址（同源 /api/...，或跨域 http://...） */
-  url: string
+  /** 图地址（同源 /api/...，或跨域 http://...）；与 file 二选一 */
+  url?: string
+  /**
+   * 本地选好的一份文件（**不是从 URL 取的**）。
+   *
+   * 谁用它：节点包「收藏到资产库」—— 包是后台刚打出来的字节，
+   * 拼成 File 预填进弹窗（用户可改名/选位置/打标签），而不是先传一次再拉回来。
+   */
+  file?: File
   /** 建议文件名 */
   name: string
+  /**
+   * 打开弹窗时要**预选**的标签（可省）。
+   *
+   * 谁用它：节点包「收藏到资产库」—— 用户口径 2026-10-14：「如果是节点收藏资源库的话，
+   * 打开这个弹出框，你这边的类型可以自动选择这个节点」。所以那条路会把「节点」预勾上。
+   */
+  tags?: string[]
+  /**
+   * 打开弹窗时要**预选**的保存位置（可省；不传 = 个人资产库根）。
+   *
+   * 谁用它：节点包「收藏到资产库」—— 用户口径 2026-10-14：「文件地址：默认选择根目录下的
+   * 一个节点库，如果没有，则自动创建」。
+   */
+  folderId?: string
 }
 
 /** 待贴入的图（宿主消费后清空） */
@@ -35,7 +56,8 @@ export function onUploadRequested(cb: (() => void) | null): void {
 
 /** 贴入若干张图并请求打开弹窗 */
 export function queueUploads(items: PendingUpload[]): void {
-  const list = items.filter((x) => x.url)
+  // 有地址或**有本地文件**都算一项（节点包那条路只有 file）
+  const list = items.filter((x) => x.url || x.file)
   if (!list.length) return
   pendingUploads.value = [...pendingUploads.value, ...list]
   notify?.()
@@ -62,30 +84,43 @@ export function drainUploads(): PendingUpload[] {
   return out
 }
 
-/** 从节点 id 列表里提取可上传的图（图片节点），贴进总线 —— 两个入口共用这一段 */
+/**
+ * 从节点 id 列表里提取可上传的媒体，贴进总线 —— 节点右键 / 多选两条入口共用这一段。
+ *
+ * ⚠️ **必须认全三类媒体**（用户 2026-10-14 报的「加入资产库点击没有任何反应」就是这里）：
+ * 早先只读 `imageUrl` / `resourceUrl`，而视频节点存的是 `videoUrl`、音频存 `audioUrl` ——
+ * 于是右键一个视频节点时取的地址是空串、静默什么都不做。图片没事，所以这个 bug 一直没显形。
+ */
 export function queueUploadsFromNodeIds(
   ids: string[],
-  getNode: (id: string) => { id: string; data?: Record<string, unknown> } | undefined,
+  getNode: (id: string) => { id: string; type?: string; data?: Record<string, unknown> } | undefined,
 ): void {
   const items: PendingUpload[] = []
   for (const id of ids) {
     const node = getNode(id)
     // 节点的显示名住在 data.label（见 nodeStore.nextDefaultName；data.name 是另一回事）
-    const data = (node?.data ?? {}) as { imageUrl?: unknown; resourceUrl?: unknown; name?: unknown; label?: unknown }
-    const url = typeof data.imageUrl === 'string' && data.imageUrl
-      ? data.imageUrl
-      : typeof data.resourceUrl === 'string' && data.resourceUrl
-        ? data.resourceUrl
-        : ''
-    if (!url) continue
+    const data = (node?.data ?? {}) as Record<string, unknown>
+    // 三类媒体字段一次认全（图片 / 视频 / 音频）；resourceUrl 是历史别名，留着兜底
+    const pick = (k: string): string => (typeof data[k] === 'string' && data[k] ? (data[k] as string) : '')
+    const url = pick('imageUrl') || pick('videoUrl') || pick('audioUrl') || pick('resourceUrl')
+    // 没有媒体地址的节点（文本 / 可视化节点等）**贴不进去** —— 那就明确说一句，
+    // 别像以前那样静默什么都不做（用户以为"点了没反应"是坏的）。
+    if (!url) {
+      const label = typeof data.label === 'string' && data.label ? data.label : id
+      // eslint-disable-next-line no-console
+      console.warn('[资产] 节点「' + label + '」没有可上传的媒体地址（图片/视频/音频字段都为空），跳过')
+      continue
+    }
     const label = typeof data.label === 'string' && data.label
       ? data.label
       : typeof data.name === 'string' && data.name
         ? data.name
         : ''
-    // 名字里带扩展名更友好（上传弹窗拿它当文件名），没有扩展名就按图的类型补一个
-    const ext = /\.[a-z0-9]+$/i.test(label) || !label ? '' : '.png'
-    const name = label ? label + ext : 'node-' + id + '.png'
+    // 名字里带扩展名更友好（上传弹窗拿它当文件名）；没扩展名就按**媒体的真实类型**补一个 ——
+    // 早先一律补 .png，视频会被当成图（用户 2026-10-14 报的问题之一）。
+    const fallbackExt = pick('videoUrl') ? '.mp4' : pick('audioUrl') ? '.mp3' : '.png'
+    const ext = /\.[a-z0-9]+$/i.test(label) || !label ? '' : fallbackExt
+    const name = label ? label + ext : 'node-' + id + fallbackExt
     items.push({ url, name })
   }
   queueUploads(items)

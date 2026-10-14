@@ -57,6 +57,7 @@
     "@mini-canvas/plugin-node-video": "workspace:*",
     "@mini-canvas/plugin-shortcut-manager": "workspace:*",
     "@mini-canvas/plugin-theme-default": "workspace:*",
+    "@mini-canvas/plugin-theme-gallery": "workspace:*",
     "@mini-canvas/plugin-tool-image-generation": "workspace:*",
     "@mini-canvas/plugin-tool-text-generation": "workspace:*",
     "@mini-canvas/plugin-web2api-tools": "workspace:*",

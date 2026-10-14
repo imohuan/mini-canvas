@@ -22,6 +22,7 @@ import AssetTree, { type AssetTreeRow } from './AssetTree.vue'
 import AssetUploadDialog from './AssetUploadDialog.vue'
 import { useUi } from '../composables/ui'
 import { assetKindOf } from '../composables/assetModel'
+import { applyRowClick, checkedRowIds } from '../composables/assetSelection'
 import { folderIconComponent } from '../composables/folderIcons'
 
 const ui = useUi()
@@ -65,7 +66,8 @@ function onEscKey(e: KeyboardEvent): void {
 onMounted(() => document.addEventListener('keydown', onEscKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onEscKey))
 
-const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效'] as const
+// 「节点」= 节点包（.mcnode）用的标签；与 LeftDrawer / composables/ui.ts 同一份口径
+const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
 const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
 /** 当前浏览的文件夹（空 = 根=个人资产库） */
 const currentFolderId = ref<string | undefined>(undefined)
@@ -74,6 +76,14 @@ const kindOpen = ref(false)
 const plusOpen = ref(false)
 const batchOn = ref(false)
 const selectedIds = ref<string[]>([])
+/**
+ * Shift 区间的起点（最后一次普通点选的那一行）。
+ *
+ * 与抽屉的差异：抽屉那份住在共享状态（ui.state.assetSelectAnchorId）—— 两处宿主是同一个变量的
+ * 两个窗口，抽屉必须共享；弹窗是独立浮层、自成一份勾选，所以自己持一份。
+ * 判定逻辑两边共用（composables/assetSelection.ts），这里只存「从哪一项算区间」。
+ */
+const selectAnchorId = ref<string | null>(null)
 const searchQuery = ref('')
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
@@ -202,6 +212,11 @@ const rows = computed<AssetTreeRow[]>(() => {
 })
 /** 喂给共用树的两个只读派生：收起列表（它不持状态）与「移动到」目标 */
 const collapsedIds = computed(() => Object.keys(collapsed.value).filter((id) => collapsed.value[id]))
+/**
+ * 哪些行显示成勾上：已选表里只有资产 id，文件夹的勾选态由它的内容推导
+ * （勾了里面每一个文件 → 这个文件夹看起来就是勾上的；判定见 composables/assetSelection.ts）。
+ */
+const checkedIds = computed(() => checkedRowIds(rows.value, selectedIds.value, ui.assetItems.value))
 const flatFolders = computed(() => {
   const out: { id: string; name: string; depth: number }[] = []
   const walk = (list: typeof ui.assetFolderTree.value, depth: number): void => {
@@ -214,14 +229,10 @@ const flatFolders = computed(() => {
 const iconCmp = (n: string): unknown => folderIconComponent(n)
 const folderIconNameOf = (id: string): string => ui.assetFolders.value.find((f) => f.id === id)?.icon ?? ''
 
-function toggleSelected(id: string): void {
-  const i = selectedIds.value.indexOf(id)
-  if (i >= 0) selectedIds.value.splice(i, 1)
-  else selectedIds.value.push(id)
-}
 function exitBatch(): void {
   batchOn.value = false
   selectedIds.value = []
+  selectAnchorId.value = null
 }
 function toggleExpand(id: string): void {
   collapsed.value = { ...collapsed.value, [id]: !collapsed.value[id] }
@@ -304,10 +315,25 @@ function onBatchRemove(): void {
 }
 
 /** ===== 共用树（AssetTree）的事件处理：弹窗这一侧的行为（与重构前逐条一致）===== */
-/** 勾选：未进入批量模式时，点一下即进入批量并要求「这次点击就是选中它」 */
-function onTreeToggleSelect(id: string): void {
+/**
+ * 勾选：未进入批量模式时，点一下即进入批量并要求「这次点击就是选中它」。
+ *
+ * 行为与抽屉逐条对齐（用户 2026-10-13）：勾文件夹连带**直属**资产；Shift 以最后一次点的那项
+ * 为起点划区间、跨文件夹不划。判定在 composables/assetSelection.ts（两处宿主共用一份）。
+ */
+function onTreeToggleSelect(id: string, shift?: boolean): void {
   if (!batchOn.value) batchOn.value = true
-  toggleSelected(id)
+  const next = applyRowClick({
+    // rows 是 computed：文件夹行没有 parentId 字段（根层），资产行有 —— 判定那边按「空 = 根」比较
+    rows: rows.value,
+    assets: ui.assetItems.value,
+    selected: selectedIds.value,
+    anchorId: selectAnchorId.value,
+    id,
+    shift: Boolean(shift),
+  })
+  selectedIds.value = next.selected
+  selectAnchorId.value = next.anchorId
 }
 /** 「移动到 / 添加到」目标（排除自身所在行） */
 function dialogMoveTargets(row: AssetTreeRow): { id: string; name: string; depth: number }[] {
@@ -317,7 +343,13 @@ function dialogMoveTargets(row: AssetTreeRow): { id: string; name: string; depth
  * 点资产行：弹窗这一侧**不做预览**（原行为：只有多选/菜单）。
  * 保持一致（用户口径：弹窗里对文件的操作与侧边栏一样 —— 预览仍走侧边栏 / 底栏素材卡）。
  */
-function onOpenAsset(): void {
+function onOpenAsset(row: AssetTreeRow, e?: MouseEvent): void {
+  // 批量模式下「点整行」也是勾选（与抽屉同一条口径）—— 不这么做的话，用户在弹窗里
+  // 按住 Shift 点整行会没反应（勾选框在行尾，小目标）。
+  if (batchOn.value) {
+    onTreeToggleSelect(row.id, Boolean(e?.shiftKey))
+    return
+  }
   /* no-op：保留插槽语义 */
 }
 async function onTreeRenameCommit(payload: { kind: 'folder' | 'asset'; id: string; name: string }): Promise<void> {
@@ -479,7 +511,7 @@ function onBatchDownload(): void {
                 show-enter
                 :rows="rows"
                 :batch-on="batchOn"
-                :selected-ids="selectedIds"
+                :selected-ids="checkedIds"
                 :collapsed-ids="collapsedIds"
                 :renaming-id="renamingId"
                 :rename-value="renameValue"

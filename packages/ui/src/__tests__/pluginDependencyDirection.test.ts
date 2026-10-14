@@ -51,9 +51,14 @@ function collectSources(dir: string): string[] {
 describe('T08 · 业务插件不依赖默认主题当组件库', () => {
   it('没有任何业务插件在 dependencies 里声明 plugin-theme-default', () => {
     const offenders: string[] = []
+    // 白名单：组件展厅（theme-gallery）。它是默认主题的"橱窗"——职责就是把主题组件
+    // 真渲染出来给人看（含嵌真画布展示节点壳/连线/背景），所以它**必须**依赖主题包。
+    // 这不是"业务插件当组件库用"的违规，而是展览者与展品的关系（2026-10-13 用户要求）。
+    const GALLERY = '@mini-canvas/plugin-theme-gallery'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (pkg.name === GALLERY) continue
       if (pkg.dependencies?.['@mini-canvas/plugin-theme-default']) {
         offenders.push(pkg.name)
       }
@@ -63,9 +68,12 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
 
   it('业务插件生产源码不出现指向 plugin-theme-default 的运行时 import', () => {
     const offenders: string[] = []
+    // 同上白名单：展厅的运行时 import 是职责（见上一条用例的注释）
+    const GALLERY_PKG = '@mini-canvas/plugin-theme-gallery'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (pkg.name === '@mini-canvas/plugin-theme-default') continue
+      if (pkg.name === GALLERY_PKG) continue
       for (const sub of ['src']) {
         const root = join(dir, sub)
         if (!existsSync(root)) continue

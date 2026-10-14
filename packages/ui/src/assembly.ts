@@ -48,6 +48,8 @@ import { uiHotReloadPlugin } from './hotReloadPlugin'
 // 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
 import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@mini-canvas/plugin-agent'
+// 组件展厅：把默认主题的组件真渲染在画布 UI 上（用户口径 2026-10-13：直观看到样式与行为）
+import { themeGalleryPlugin } from '@mini-canvas/plugin-theme-gallery'
 // 插件管理是**独立包**（曾住在 plugin-cloud-client 包内部，2026-10-11 拆出来）：
 // 独立成包后它才是插件目录里的一个正经插件，能在「设置 → 插件 → 自带」里显示出来。
 import { pluginManagerPlugin } from '@mini-canvas/plugin-manager'
@@ -116,6 +118,7 @@ export const APP_PLUGINS = [
   // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea「快捷键」按钮 + ModalsArea 浮层），
   // 插件版的 Ctrl+/ 帮助面板会与之重复。键盘分发由 CanvasHost 按命令 keys 统一做，不依赖该插件。
   agentPlugin, // Agent 对话助手：内容组件（消息流 + 输入区）+ agent 服务 + 设置页（外壳在 packages/ui）
+  themeGalleryPlugin, // 组件展厅：左下角按钮 → 打开一个浮层，真渲染默认主题的每个组件
   pluginManagerPlugin, // 插件管理：设置面板「插件」页，安装/卸载/重装第三方插件（清单来自本地中转后台）
 ]
 

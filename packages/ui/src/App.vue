@@ -22,6 +22,7 @@ import ModalsArea from './components/areas/ModalsArea.vue'
 import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
 import { setReadyHost, useUi } from './composables/ui'
+import { handleTab } from './tabPageOnly'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 const ui = useUi()
@@ -70,6 +71,19 @@ const adapter = createDefaultStorageAdapter()
 const DEV = import.meta.env.DEV
 
 function onKeydown(event: KeyboardEvent): void {
+  /**
+   * Tab：只在浮层内循环，页面上不漫游（用户口径 2026-10-14，见 tabPageOnly.ts 的说明）。
+   *
+   * 为什么必须真的拦：用户的批评「你 CSS 是关闭了，看不见了，但是它的实际功能依然存在。
+   * 比如说 table 的时候，它依然会进行一个聚焦」—— focus-visible 的 outline 压掉只是**看不见**，
+   * Tab 照样满屏跳。这里把它拦下来，才是真的解决。
+   *
+   * 位置在本函数**最前**：Tab 的接管不该被后面的 Esc / Ctrl+/ 分支影响。
+   */
+  if (event.key === 'Tab' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    if (handleTab(document, document.activeElement, event.shiftKey)) event.preventDefault()
+    return
+  }
   if (event.key === 'Escape') {
     /**
      * 正在内联改名 / 正在拖拽时，Esc 只取消**那一件事**，不要顺带关掉整个抽屉。

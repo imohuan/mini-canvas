@@ -16,6 +16,10 @@ import { readFileSync } from 'node:fs'
 
 const css = readFileSync(new URL('../app.css', import.meta.url), 'utf-8')
 
+/* 注释里也会出现 `:focus-visible` / `:where(...)` 这样的字面文本（说明为什么这么写），
+   先整段剥掉，免得它们被当成选择器 —— 本文件只认真的 CSS 规则。 */
+const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, '')
+
 interface Block {
   selector: string
   body: string
@@ -26,7 +30,7 @@ function blocks(): Block[] {
   const out: Block[] = []
   const re = /([^{}]+)\{([^{}]*)\}/g
   let m: RegExpExecArray | null
-  while ((m = re.exec(css))) out.push({ selector: (m[1] ?? '').trim(), body: m[2] ?? '' })
+  while ((m = re.exec(cssNoComments))) out.push({ selector: (m[1] ?? '').trim(), body: m[2] ?? '' })
   return out
 }
 
@@ -42,5 +46,41 @@ describe('整页 select-none（不可选中文本）', () => {
       const hit = all.find((b) => b.selector.includes(sel) && /user-select:\s*text/.test(b.body))
       expect(hit, `没有为 ${sel} 放行 user-select: text`).toBeTruthy()
     }
+  })
+})
+
+/**
+ * 全界面关掉焦点环（用户口径 2026-10-14）。
+ *
+ * 现象（用户原话）：「这边去掉这个黑色的边框，这应该是那种按钮或 table 聚焦的效果，
+ * 是浏览器的一个默认行为。按理说，这边树状图里面的所有内容都不支持聚焦，应该说整个页面的
+ * 内容都不支持聚焦，除了弹出框最底下的几个按钮。」随后收口：
+ * 「我是不太希望你显示这个焦点环的，能不能在全局把它给关掉」。
+ *
+ * 那根黑框是浏览器自带的 UA 焦点环（深色主题下实测 `outline: rgb(16,16,16) auto 1px`）；
+ * 触发路径：点资产行开预览 → Esc 关掉 → 焦点还给行按钮，Esc 属键盘操作就判成 :focus-visible。
+ *
+ * 为什么必须是 `*` + `!important`：全仓约 30 处组件级 focus 样式
+ * （`.cf-trigger:focus-visible{outline:2px solid …}` 这类）特异性都高于 `*:focus-visible`，
+ * 不加 !important 就只关掉一半 —— 用户要的是全关。
+ *
+ * 这条测试就是防止有人"顺手"把它去掉或降级成低特异性选择器，
+ * 让黑框又从某个角落冒出来。
+ */
+describe('全界面关掉焦点环（去掉浏览器黑框）', () => {
+  const ring = () => blocks().find((b) => b.selector.includes(':focus-visible'))
+
+  it('app.css 里有一条把 outline 压掉的全局规则', () => {
+    const hit = ring()
+    expect(hit, 'app.css 里没有全局 :focus-visible 规则').toBeTruthy()
+    expect(hit!.body).toMatch(/outline:\s*none/)
+  })
+
+  it('压 outline 必须带 !important（否则组件级焦点样式会盖回来，只关一半）', () => {
+    expect(ring()!.body).toMatch(/outline:\s*none\s*!important/)
+  })
+
+  it('选择器是通配 `*`（要真的"全局"，不能只覆盖某几个标签）', () => {
+    expect(ring()!.selector.trim()).toMatch(/^\*\s*:focus-visible$/)
   })
 })

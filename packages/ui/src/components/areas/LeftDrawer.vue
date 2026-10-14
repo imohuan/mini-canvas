@@ -17,10 +17,11 @@ import AssetTree, { type AssetTreeRow } from '../AssetTree.vue'
 import CanvasRowMenu from '../CanvasRowMenu.vue'
 import AxDialog from '../AxDialog.vue'
 import { useUi, type TreeNode } from '../../composables/ui'
+import { checkedRowIds } from '../../composables/assetSelection'
 import { canvasTreeBlocks } from '../../composables/canvasTree'
 import { assetKindOf } from '../../composables/assetModel'
 import { folderIconComponent } from '../../composables/folderIcons'
-import { openAssetManager, openAssetPreview } from '../../composables/assetUiBus'
+import { openAssetManager, openAssetPreviewFromAsset } from '../../composables/assetUiBus'
 
 const ui = useUi()
 const s = ui.state
@@ -62,7 +63,8 @@ function closeAssetSearch(): void {
 /** 类型筛选：再点一次同一个 = 取消筛选（回到「全部」） */
 const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
 /** 标签固定清单（用户口径：暂时就这几个） */
-const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效'] as const
+// 「节点」= 节点包（.mcnode）用的标签；与 composables/ui.ts 的 assetTagOptions 同一份口径
+const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
 function pickAssetKind(k: string): void {
   s.assetFilterKind = s.assetFilterKind === k ? '全部' : (k as typeof s.assetFilterKind)
 }
@@ -241,13 +243,36 @@ async function onTreeRenameCommit(payload: { kind: 'folder' | 'asset'; id: strin
 }
 
 /** 资产行点击：批量模式下 = 勾选；否则预览 */
-function onTreeOpenAsset(row: AssetTreeRow): void {
+function onTreeOpenAsset(row: AssetTreeRow, e?: MouseEvent): void {
   if (s.assetBatchOn) {
-    ui.toggleAssetSelected(row.id)
+    // 点资产行本身也是勾选（Shift 划区间的判定与勾选框同一条路）
+    ui.toggleAssetSelected(row.id, { rows: assetRows.value, shift: Boolean(e?.shiftKey) })
     return
   }
   openAsset({ id: row.id, name: row.name, url: row.url ?? '', assetKind: row.assetKind })
 }
+
+/**
+ * 勾选框点击（共用树抛上来的是「行 id + 这一下有没有按 Shift」）。
+ *
+ * 行为口径（用户 2026-10-13）：勾文件夹连带它的**直属**资产；Shift 以最后一次点的那项为起点
+ * 划区间，跨文件夹不划（退化成普通点击）。判定全在 composables/assetSelection.ts。
+ */
+function onTreeToggleSelect(id: string, shift?: boolean): void {
+  ui.toggleAssetSelected(id, { rows: assetRows.value, shift: Boolean(shift) })
+}
+
+/**
+ * 喂给共用树的「哪些行显示成勾上」。
+ *
+ * 已选表里只有资产 id，所以文件夹的勾选态要从它的内容算出来（勾了里面每一个文件 →
+ * 这个文件夹看起来就是勾上的）。算法在 composables/assetSelection.ts（有单测）。
+ * 注意必须走 `[...assetRows.value]`：判定函数只读 kind/id/parentId 三个字段，
+ * 行对象上多出来的 url/tags 它不碰。
+ */
+const checkedIds = computed(() =>
+  checkedRowIds(assetRows.value, s.assetSelectedIds, ui.assetItems.value),
+)
 
 /** 拖拽落下：文件夹 → 嵌套进目标文件夹；资产 → 挪进目标文件夹（to = null 表示根目录） */
 async function onTreeDrop(payload: { from: AssetTreeRow; to: AssetTreeRow | null }): Promise<void> {
@@ -302,6 +327,27 @@ function onCanvasDragOver(e: DragEvent): void {
 /** 落在画布上：建节点（图片/视频/音频都支持；未知类型给明确反馈） */
 function onCanvasDrop(e: DragEvent): void {
   if (!overCanvas(e)) return
+
+  // ★ 从**文件系统**拖进来的东西：先把节点包(.mcnode)抽出来单独走导入，剩下的交给 file-drop。
+  //   为什么要在这拦一道：file-drop 只认图片/视频/文本，包会被它当成"不支持的文件"直接丢掉；
+  //   而包这条路的落点完全不同（写脚本 + 还原节点，见 ui.importPackFile）。
+  const dropped = Array.from(e.dataTransfer?.files ?? [])
+  const packs = dropped.filter((f) => f.name.toLowerCase().endsWith('.mcnode'))
+  if (packs.length) {
+    e.preventDefault()
+    e.stopPropagation()
+    const rest = dropped.filter((f) => !packs.includes(f))
+    // 落点 = 指针位置（与拖媒体文件、拖资产完全同一条口径）：
+    //   用户口径「拖拽之后和直接从文件夹中拖拽进来的效果是一样的」——
+    //   所以这里也把指针换算成 flow 坐标传下去，别再让包落到级联默认位。
+    const atFlow = ui.screenToFlow(e.clientX, e.clientY) ?? undefined
+    void (async () => {
+      for (const p of packs) await ui.importPackFile(p, atFlow)
+      if (rest.length) await ui.addFilesToCanvas(rest)
+    })()
+    return
+  }
+
   const asset = assetOfDrag(e)
   if (!asset) return
   e.preventDefault()
@@ -400,7 +446,9 @@ function onUploadChange(e: Event): void {
  * 类型经 assetKindOf 取（列表行是 assetKind、AssetItem 是 kind）—— 单一来源，别再各读各的。
  */
 function openAsset(item: { id: string; name: string; url: string; kind?: string; assetKind?: string }): void {
-  openAssetPreview({ id: item.id, name: item.name, kind: assetKindOf(item), url: item.url })
+  // 节点包没有可加载的媒体地址：它要先取回包、解出 HTML 再给 iframe 预览
+  //（用户口径 2026-10-14：「我当前的节点无法进行预览」）—— 分流收在 assetUiBus 里。
+  void openAssetPreviewFromAsset(item)
 }
 
 /**
@@ -691,7 +739,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           variant="drawer"
           :rows="assetRows"
           :batch-on="s.assetBatchOn"
-          :selected-ids="s.assetSelectedIds"
+          :selected-ids="checkedIds"
           :collapsed-ids="collapsedFolderIds"
           :renaming-id="renamingFolderId"
           :rename-value="renamingValue"
@@ -701,7 +749,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           :tag-options="[...ASSET_TAGS]"
           @toggle-expand="toggleFolderExpand"
           @open-asset="onTreeOpenAsset"
-          @toggle-select="ui.toggleAssetSelected"
+          @toggle-select="onTreeToggleSelect"
           @rename-input="renamingValue = $event"
           @rename-commit="onTreeRenameCommit"
           @rename-cancel="renamingFolderId = null"

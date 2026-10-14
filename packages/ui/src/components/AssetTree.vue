@@ -145,8 +145,12 @@ const emit = defineEmits<{
   toggleExpand: [id: string]
   /** 文件夹行：进入该文件夹（folderClick='open' 时单击整行发；showEnter 时由行尾「进入」按钮发） */
   openFolder: [id: string]
-  /** 资产行：点击（宿主决定 = 预览 / 勾选） */
-  openAsset: [row: AssetTreeRow]
+  /**
+   * 资产行：点击（宿主决定 = 预览 / 勾选）。
+   * 带上原始事件：批量模式下点整行也是勾选，Shift 划区间要读 shiftKey
+   * （只用勾选框选的话，用户想按住 Shift 点整行会落空）。
+   */
+  openAsset: [row: AssetTreeRow, e?: MouseEvent]
   /** 内联改名：开始 */
   startRename: [payload: { id: string; name: string }]
   /** 内联改名：输入变化 */
@@ -155,8 +159,14 @@ const emit = defineEmits<{
   renameCommit: [payload: { kind: 'folder' | 'asset'; id: string; name: string }]
   /** 内联改名：取消（Esc） */
   renameCancel: []
-  /** 批量勾选切换 */
-  toggleSelect: [id: string]
+  /**
+   * 批量勾选切换。
+   *
+   * 宿主收到的是「哪一行被点了」+「这一下按住 Shift 没有」，而不是一个孤零零的 id ——
+   * 因为「文件夹连带直属资产」与「Shift 划区间」都要看**行列表**（层级、顺序、同层两端），
+   * 组件这一侧有现成的 rows，推给宿主比让宿主再算一份可靠（判定见 composables/assetSelection.ts）。
+   */
+  toggleSelect: [id: string, shift: boolean]
   /** 拖拽落下：from 行拖到 to 行（to = null 表示拖到列表空白 = 根目录） */
   dropOn: [payload: { from: AssetTreeRow; to: AssetTreeRow | null }]
   /** 「⋯」/ 右键菜单动作（原样转发，宿主执行） */
@@ -351,9 +361,9 @@ const renameVal = computed({
       <button
         v-if="batchOn"
         class="absolute right-2 top-1/2 z-[1] grid size-4 -translate-y-1/2 place-items-center rounded-[4px] border transition-opacity"
-        :class="isSelected(row.id) ? 'border-brand bg-brand text-white' : 'border-line'"
+        :class="isSelected(row.id) ? 'border-transparent bg-ink text-panel' : 'border-line hover:border-ink-dim'"
         role="checkbox" :aria-checked="isSelected(row.id)" :aria-label="'选中 ' + row.name"
-        @click="emit('toggleSelect', row.id)"
+        @click="emit('toggleSelect', row.id, $event.shiftKey)"
       ><CheckIcon v-if="isSelected(row.id)" :size="10" /></button>
 
       <!-- 文件夹行 -->
@@ -434,7 +444,7 @@ const renameVal = computed({
           补一个等宽的空占位，缩略图就能落到文件夹图标的正下方。
         -->
         <span class="size-5 flex-none" aria-hidden="true"></span>
-        <button class="flex h-full min-w-0 flex-1 items-center gap-2 text-left" :aria-label="'预览 ' + row.name" @click="emit('openAsset', row)">
+        <button class="flex h-full min-w-0 flex-1 items-center gap-2 text-left" :aria-label="'预览 ' + row.name" @click="emit('openAsset', row, $event)">
           <span class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute">
             <img v-if="(row.assetKind ?? 'other') === 'image' && row.url" :src="row.url" alt="" class="h-full w-full object-cover" />
             <component v-else :is="assetIconOf(row.assetKind ?? 'other')" :size="15" />

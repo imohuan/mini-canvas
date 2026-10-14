@@ -1,0 +1,86 @@
+/**
+ * 预览：可视化节点（节点包）要能看 —— 用户 2026-10-14 口径：
+ *   「我发现点击之后会进入全屏预览，但我当前的节点无法进行预览。
+ *     或者，可以在预览中添加一个 iframe 预览框。这个也可以啊」。
+ *
+ * 根因：节点包没有"可加载的媒体地址"，把它的 url 丢给 MediaViewer 就是一片空白。
+ * 做法：取回包 → 解出里面的 HTML → 交给 MediaViewer 新增的 iframe 分支。
+ */
+import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { openAssetPreviewFromAsset, assetPreview } from '../composables/assetUiBus'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const read = (rel: string): string => readFileSync(path.resolve(HERE, rel), 'utf8')
+
+describe('预览分流：普通媒体直给 url，节点包要先解包', () => {
+  it('图片/视频/音频 → 原样开预览（带 id，可删）', async () => {
+    await openAssetPreviewFromAsset({ id: 'a1', name: '封面', url: '/api/a.png', kind: 'image' })
+    expect(assetPreview.value).toMatchObject({ id: 'a1', name: '封面', kind: 'image', url: '/api/a.png' })
+  })
+
+  it('★ 取包失败 → 回一段**能看懂的文字**（不是静默全屏空白）', async () => {
+    // 没起后台 → peekPack 会失败；这里就验证失败分支的兜底
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('offline')
+    })
+    await openAssetPreviewFromAsset({ id: 'p1', name: '演示节点.mcnode', url: '/api/assets/files/x.mcnode', kind: 'node-package' })
+    expect(assetPreview.value?.kind).toBe('text')
+    expect(String(assetPreview.value?.text)).toContain('读不出来')
+    vi.unstubAllGlobals()
+  })
+
+  it('★ 取包成功 → 走 ui 分支（把包里的 HTML 交给 iframe）', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (String(url).includes('/api/node-ui/info')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, origin: 'http://x' }) }
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, html: '<div id="paint">hi</div>', manifest: { name: '演示' }, scripts: { scale: 'x' } }),
+      }
+    })
+    await openAssetPreviewFromAsset({ id: 'p2', name: '演示.mcnode', url: '/api/assets/files/y.mcnode', kind: 'node-package' })
+    expect(assetPreview.value?.kind).toBe('ui')
+    expect(assetPreview.value?.html).toContain('id="paint"')
+    vi.unstubAllGlobals()
+  })
+})
+
+describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
+  const viewer = read('../../../plugins/plugin-theme-default/src/components/ui/MediaViewer.vue')
+
+  it('模板里有 iframe + srcdoc，绑的是 item.html', () => {
+    expect(viewer).toContain("kind === 'ui'")
+    expect(viewer).toMatch(/<iframe[\s\S]{0,300}:srcdoc="item\.html"/)
+    // 沙箱：只给脚本权限（节点界面本来就是一段自包含 HTML）
+    expect(viewer).toMatch(/sandbox="allow-scripts"/)
+  })
+
+  it('节点还没画过时给一句占位，不是一片空白', () => {
+    expect(viewer).toContain('还没有画过内容')
+  })
+
+  it('item 类型声明里有 html 字段', () => {
+    expect(viewer).toMatch(/html\?: string/)
+  })
+})
+
+describe('两处宿主都走统一入口', () => {
+  it('LeftDrawer 的 openAsset 用 openAssetPreviewFromAsset（不是直接把 url 丢给预览）', () => {
+    const drawer = read('../components/areas/LeftDrawer.vue')
+    expect(drawer).toContain('openAssetPreviewFromAsset(item)')
+    expect(drawer).not.toContain('openAssetPreview({ id: item.id, name: item.name, kind: assetKindOf(item), url: item.url })')
+  })
+
+  it('★ AssetUiSlot 要把 html / text 一起透传给 MediaViewer（漏了就永远是"还没画过"）', () => {
+    // 真机踩到：分流对了（走 ui 分支），但外壳只透传 name/kind/url，
+    // iframe 拿不到 html → 显示成"这个可视化节点还没有画过内容"。
+    const slot = read('../components/AssetUiSlot.vue')
+    expect(slot).toContain('...(p.html !== undefined ? { html: p.html } : {})')
+    expect(slot).toContain('...(p.text !== undefined ? { text: p.text } : {})')
+  })
+})

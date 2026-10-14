@@ -44,6 +44,38 @@ function close(): void {
 }
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.modelValue) close()
+  /**
+   * Tab 在面板内循环（ui-style-guide §5 第 6 条「模态三要素」里的焦点管理）。
+   *
+   * 为什么必须做：全壳的 Tab 已被 App.vue 接管成「只在这个浮层里循环」（见 tabPageOnly.ts）。
+   * 落到哪一层由**离焦点最近**的那个处理器说了算 —— 本组件是模态（aria-modal="true"），
+   * 关掉它的时候 focus 已经还给了打开它的按钮，这时候按 Tab 没人拦就会一路跑到 body，
+   * 于是「弹出框最底下那几个按钮」（用户口径里的例外）反而 Tab 不到了。
+   *
+   * 刻意**不**做焦点陷阱的另外半边（Tab 不许离开面板）：全局那条规则已经保证这一点，
+   * 这里再拦一次是为了让光标在面板内**循环**（到末尾回到第一个），符合模态的使用习惯。
+   */
+  if (e.key === 'Tab' && props.modelValue && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const items = panelRef.value?.querySelectorAll<HTMLElement>(
+      'a[href], button, input, select, textarea, [tabindex]',
+    )
+    if (items?.length) {
+      const list = Array.from(items).filter((el) => {
+        const el2 = el as HTMLInputElement
+        if (el2.disabled) return false
+        const idx = el.getAttribute('tabindex')
+        return !(idx !== null && Number(idx) < 0)
+      })
+      const i = list.indexOf(document.activeElement as HTMLElement)
+      if (list.length) {
+        e.preventDefault()
+        const next = e.shiftKey
+          ? list[i <= 0 ? list.length - 1 : i - 1]
+          : list[i < 0 || i === list.length - 1 ? 0 : i + 1]
+        next?.focus()
+      }
+    }
+  }
 }
 
 watch(

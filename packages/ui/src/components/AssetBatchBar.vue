@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // AssetBatchBar —— **通用**批量操作悬浮条（用户口径：抽屉窄、弹窗宽，同一套东西）。
-// 结构照图 1 / 图 3：× | ☑ 已选择 N 项 | 添加到▾ | 移动到 | 修改标签 | 下载 | 删除
+// 结构照图 1 / 图 3：× | 已选 N 项 | 添加到▾ | 移动到 | 修改标签 | 下载 | 删除
 // 定位由宿主决定（抽屉 = absolute 贴抽屉底；弹窗 = absolute 贴弹窗底），本组件只管长相与动作。
 import { computed, ref } from 'vue'
-import { X as XIcon, SquareCheck as CheckIcon, FolderPlus as AddIcon, FolderInput as MoveIcon,
+import { X as XIcon, FolderPlus as AddIcon, FolderInput as MoveIcon,
   Tags as TagIcon, Download as DownloadIcon, Trash2 as TrashIcon } from 'lucide-vue-next'
 import AxDropdown from './AxDropdown.vue'
 import AxMenu from './AxMenu.vue'
 import AxMenuItem from './AxMenuItem.vue'
+import AxTooltip from './AxTooltip.vue'
 
 const props = defineProps<{
   count: number
@@ -48,13 +49,24 @@ function applyTag(t: string, close: () => void): void {
     class="pointer-events-auto flex h-11 min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-xl border border-line bg-panel/95 px-2 shadow-[0_8px_28px_rgba(0,0,0,0.4)] backdrop-blur-xl"
     role="toolbar" aria-label="批量操作"
   >
-    <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="退出批量操作" @click="emit('exit')"><XIcon :size="15" /></button>
+    <!--
+      抽屉（compact）里按钮只留图标、没有文字，所以悬停必须能看出这是干什么的（用户口径 2026-10-13：
+      「在左侧面板时，这些按钮都没有文字说明；弹出框时因为宽度足够，所以有文字」，给抽屉这侧补提示）。
+      宽版（弹窗）本来就有文字，不再挂提示 —— 同一个按钮既有文字又有气泡是噪音。
+    -->
+    <AxTooltip content="退出批量操作" :disabled="!compact">
+      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="退出批量操作" @click="emit('exit')"><XIcon :size="15" /></button>
+    </AxTooltip>
+    <!--
+      这里原先还有一颗对勾方块（青底白勾 → 后来改的中性色）。用户口径 2026-10-13：
+      「我觉得你这个图标没有留下的必要，可以改为『已选多少项』」—— 抽屉窄，方块白占地方，
+      去掉它、文字写成「已选 N 项」就够（宽版弹窗保持「已选择 N 项」的原措辞）。
+    -->
     <span class="ml-1 flex flex-none items-center gap-1.5 text-[12px] text-ink" :class="compact ? 'mr-1' : 'mr-2'">
-      <span class="grid size-4 place-items-center rounded-[4px] bg-brand text-white"><CheckIcon :size="11" /></span>
-      <span class="whitespace-nowrap">{{ compact ? count + ' 项' : '已选择 ' + count + ' 项' }}</span>
+      <span class="whitespace-nowrap">{{ compact ? '已选 ' + count + ' 项' : '已选择 ' + count + ' 项' }}</span>
     </span>
     <AxDropdown v-model="addOpen" placement="top-end" :offset="8">
-      <template #trigger><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="addOpen" aria-label="添加到"><AddIcon :size="13" /><span v-if="!compact">添加到</span></button></template>
+      <template #trigger><AxTooltip content="添加到" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="addOpen" aria-label="添加到"><AddIcon :size="13" /><span v-if="!compact">添加到</span></button></AxTooltip></template>
       <template #default="{ close }">
         <AxMenu>
           <AxMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @click="emit('addTo', f.id); close()">{{ f.name }}</AxMenuItem>
@@ -62,7 +74,7 @@ function applyTag(t: string, close: () => void): void {
       </template>
     </AxDropdown>
     <AxDropdown v-model="moveOpen" placement="top-end" :offset="8">
-      <template #trigger><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="moveOpen" aria-label="移动到"><MoveIcon :size="13" /><span v-if="!compact">移动到</span></button></template>
+      <template #trigger><AxTooltip content="移动到" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="moveOpen" aria-label="移动到"><MoveIcon :size="13" /><span v-if="!compact">移动到</span></button></AxTooltip></template>
       <template #default="{ close }">
         <AxMenu>
           <AxMenuItem v-for="f in folderRows" :key="f.id" :style="f.pad" @click="emit('moveTo', f.id); close()">{{ f.name }}</AxMenuItem>
@@ -71,14 +83,18 @@ function applyTag(t: string, close: () => void): void {
       </template>
     </AxDropdown>
     <AxDropdown v-model="tagOpen" placement="top-end" :offset="8" menu-width="200px">
-      <template #trigger><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="tagOpen" aria-label="修改标签"><TagIcon :size="13" /><span v-if="!compact">修改标签</span></button></template>
+      <template #trigger><AxTooltip content="修改标签" :disabled="!compact"><button class="flex h-7 flex-none items-center gap-1 rounded-lg px-2 text-[12px] text-ink transition-colors hover:bg-hover" :aria-expanded="tagOpen" aria-label="修改标签"><TagIcon :size="13" /><span v-if="!compact">修改标签</span></button></AxTooltip></template>
       <template #default="{ close }">
         <AxMenu>
           <AxMenuItem v-for="t in tagOptions" :key="t" @click="applyTag(t, close)">{{ t }}</AxMenuItem>
         </AxMenu>
       </template>
     </AxDropdown>
-    <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="下载选中资产" @click="emit('download')"><DownloadIcon :size="14" /></button>
-    <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-danger-soft hover:text-danger" aria-label="删除选中资产" @click="emit('remove')"><TrashIcon :size="14" /></button>
+    <AxTooltip content="下载" :disabled="!compact">
+      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-hover hover:text-ink" aria-label="下载选中资产" @click="emit('download')"><DownloadIcon :size="14" /></button>
+    </AxTooltip>
+    <AxTooltip content="删除" :disabled="!compact">
+      <button class="grid size-7 place-items-center rounded-lg text-ink-dim transition-colors hover:bg-danger-soft hover:text-danger" aria-label="删除选中资产" @click="emit('remove')"><TrashIcon :size="14" /></button>
+    </AxTooltip>
   </div>
 </template>

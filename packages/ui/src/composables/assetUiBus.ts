@@ -10,6 +10,8 @@
  * 谁读它：左侧抽屉（挂在画布子树内，才拿得到主题注册件，见 LeftDrawer 的 AssetUiSlot）。
  */
 import { ref } from 'vue'
+import { assetKindOf } from './assetModel'
+import { peekPack } from './nodePack'
 
 /** 全屏预览要放的媒体（与主题 mediaViewer 的 item 同形） */
 export interface AssetPreviewItem {
@@ -17,6 +19,15 @@ export interface AssetPreviewItem {
   /** image / video / audio / text（中文别名由 MediaViewer 自己归一） */
   kind: string
   url?: string
+  /**
+   * 可视化节点（kind='ui'）的那段界面 HTML。
+   *
+   * 为什么不像别的类型那样给 url：节点内容不是"可加载的媒体"，本身就是一段 HTML。
+   * 用户口径 2026-10-14：「可以在预览中添加一个 iframe 预览框」—— 它进 iframe 的 srcdoc。
+   */
+  html?: string
+  /** 纯文本内容（kind='text' 用）—— 取包失败时把原因写在这里给用户看，别静默什么都不显示 */
+  text?: string
   /** 宿主自己的资产 id（预览右上角「删除」用；来自外部打开时不带，也就没有删除按钮） */
   id?: string
 }
@@ -45,6 +56,49 @@ export const assetManager = ref<{ open: boolean; folderId?: string; fromRef: boo
 /** 打开全屏预览（MediaViewer 由 AssetUiSlot 常驻渲染，只有一份实例） */
 export function openAssetPreview(item: AssetPreviewItem): void {
   assetPreview.value = item
+}
+
+/**
+ * 打开一份**资产**的预览（左侧抽屉 / 资产管理弹窗的行点击共用这一条）。
+ *
+ * 为什么要收成一个函数（用户口径 2026-10-14：「我当前的节点无法进行预览。
+ * 或者，可以在预览中添加一个 iframe 预览框」）：
+ * 节点包（.mcnode）**没有可加载的媒体地址** —— 照旧把它的 url 丢给 MediaViewer，
+ * 预览出来是一片空白（那就是用户看到的"无法预览"）。它得先**取回包、解出里面的 HTML**，
+ * 再交给 MediaViewer 的 iframe 分支渲染。
+ *
+ * 普通图片/视频/音频走原路（直接给 url）；取包失败回一条**说人话**的预览
+ * （而不是静默什么都不显示 —— 那又成了"点了没反应"）。
+ */
+export async function openAssetPreviewFromAsset(item: {
+  id?: string
+  name: string
+  url: string
+  kind?: string
+  assetKind?: string
+}): Promise<void> {
+  const kind = assetKindOf(item)
+  if (kind !== 'node-package') {
+    openAssetPreview({ ...(item.id ? { id: item.id } : {}), name: item.name, kind, url: item.url })
+    return
+  }
+  try {
+    const pack = await peekPack(item.url)
+    openAssetPreview({
+      ...(item.id ? { id: item.id } : {}),
+      name: item.name,
+      // 'ui' 是 MediaViewer 里那个 iframe 分支的 kind（见其模板）
+      kind: 'ui',
+      html: pack.html,
+    })
+  } catch (err) {
+    openAssetPreview({
+      ...(item.id ? { id: item.id } : {}),
+      name: item.name,
+      kind: 'text',
+      text: '这个节点包读不出来：' + (err instanceof Error ? err.message : String(err)),
+    })
+  }
 }
 
 /**

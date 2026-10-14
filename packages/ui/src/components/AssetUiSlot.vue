@@ -33,7 +33,18 @@ const dialogKey = computed(() => 'am-' + assetManager.value.focusToken)
 /** 预览项：外壳与 MediaViewer 的契约形状对齐 */
 const previewItem = computed(() => {
   const p = assetPreview.value
-  return p ? { name: p.name ?? '', kind: p.kind, url: p.url ?? '' } : null
+  // html / text 也要带上：可视化节点（kind='ui'）没有 url，它的内容是**一段 HTML**
+  // （用户口径 2026-10-14：「可以在预览中添加一个 iframe 预览框」）——
+  // 早先这里只透传 name/kind/url，于是 iframe 拿不到内容、显示成"还没画过"。
+  return p
+    ? {
+        name: p.name ?? '',
+        kind: p.kind,
+        url: p.url ?? '',
+        ...(p.html !== undefined ? { html: p.html } : {}),
+        ...(p.text !== undefined ? { text: p.text } : {}),
+      }
+    : null
 })
 
 /** 预览里点删除（只有带 id 的资产才有；从引用打开时没有 id，也就没有删除按钮） */

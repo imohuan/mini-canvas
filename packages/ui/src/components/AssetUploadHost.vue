@@ -17,6 +17,14 @@ import { drainUploads, onUploadRequested, type PendingUpload } from '../composab
 const ui = useUi()
 /** 打开中的弹窗内容：null = 关闭 */
 const prefill = ref<PendingUpload[] | null>(null)
+/**
+ * 这一趟的预选（来自预填项本身）：标签 / 保存位置。
+ *
+ * 用户口径（2026-10-14）：「如果是节点收藏资源库的话，打开这个弹出框，你这边的类型可以自动选择
+ * 这个节点」+「文件地址：默认选择根目录下的一个节点库」—— 由写总线的那一方带上，
+ * 宿主原样转给弹窗（它自己不该知道"哪些类型该预选什么"）。
+ */
+const preset = ref<{ tags: string[]; folderId?: string }>({ tags: [] })
 
 /** 有人请求传图（节点右键 / 多选按钮）→ 取图并开弹窗 */
 function open(): void {
@@ -27,6 +35,13 @@ function open(): void {
   // （用户报的「没有打开左侧侧边栏时，下拉菜单里的列表数据是错误的」）。
   void ui.loadAssetFolders()
   void ui.loadAssets()
+  // 预选取**所有**预填项里第一个带值的（同一次请求里的项来自同一个入口，口径一致）
+  preset.value = {
+    tags: items.find((x) => x.tags?.length)?.tags ?? [],
+    ...(items.find((x) => x.folderId)?.folderId ? { folderId: items.find((x) => x.folderId)!.folderId } : {}),
+  }
+  // 预选了位置就先确保文件夹清单已就绪（弹窗的"保存位置"要按 id 找名字）
+  if (preset.value.folderId) void ui.loadAssetFolders()
   prefill.value = items
 }
 
@@ -58,6 +73,8 @@ async function onSave(p: { files: File[]; folderId?: string; tags: string[]; url
     :folders="ui.flatFoldersForUpload.value"
     :tag-options="ui.assetTagOptions.value"
     :prefill="prefill"
+    :initial-folder-id="preset.folderId"
+    :initial-tags="preset.tags"
     @close="prefill = null"
     @save="onSave"
   />
