@@ -23,12 +23,16 @@ export {
   CLIPBOARD_PASTE_KEY,
   CANVAS_CLIPBOARD_MIME,
   CANVAS_CLIPBOARD_TEXT_PREFIX,
+  CANVAS_CLIPBOARD_PAYLOAD_VERSION,
   buildClipboardWritePayload,
   buildClipboardPastePayload,
   dispatchClipboardWrite,
   dispatchClipboardPaste,
   hasCanvasClipboardMarker,
   canvasClipboardMarker,
+  canvasClipboardPayload,
+  parseCanvasClipboardText,
+  readCanvasClipboardPayload,
 } from './clipboardActions'
 export type {
   ClipboardEntry,
@@ -36,6 +40,7 @@ export type {
   ClipboardWritePayload,
   ClipboardPasteHandler,
   ClipboardPastePayload,
+  CanvasClipboardPayload,
 } from './clipboardActions'
 
 // 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型

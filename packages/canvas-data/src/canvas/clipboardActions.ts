@@ -32,6 +32,10 @@
  * - clipboard 的画布节点（10）—— 剪贴板带画布标记时，一定是刚在画布上复制的；
  * - file-drop 的图片/视频（20）—— 外部拷来的媒体；
  * - file-drop 的纯文本（30）—— 最泛，最后兜底。
+ *
+ * 跨页面互粘（用户 2026-10-12 报的"复制一个节点，无法在另一个浏览器页面粘贴"）：
+ * 剪贴板载荷里带**完整节点/边**（见下方 canvasClipboardPayload），另一个页面读它即可贴出节点，
+ * 不依赖任何内存态。媒体地址按 data.resourceId 重建（blob: 地址只属于原来那个页面）。
  */
 
 // ---------------------------------------------------------------------------
@@ -53,12 +57,96 @@ export const CLIPBOARD_CUT_KEY = 'cut'
 /**
  * 画布节点快照写入系统剪贴板的标记 MIME（值是小 JSON：{v, nodes, edges}）。
  *
- * 只作**仲裁标记**（"最后这次复制来自画布"），真正的节点数据仍在插件内存快照里 ——
- * 跨窗口互通不是本设计目标（要另接资源/字节的跨端传递）。
+ * 它既是仲裁标记（"最后这次复制来自画布"），也是**跨窗口传数据的唯一通道**：
+ * v2 起值里带完整节点/边载荷（见 canvasClipboardPayload），另一个浏览器页面读它就能贴出节点。
  */
 export const CANVAS_CLIPBOARD_MIME = 'application/x-mini-canvas-nodes'
-/** 伴侣文本前缀：兜底让只认 text/plain 的场景也能识别这次复制来自画布 */
+/**
+ * 伴侣文本前缀：兜底让只认 text/plain 的场景也能识别这次复制来自画布。
+ *
+ * 为什么 text/plain 里也放**完整载荷**（不是只有标记）：程序化复制（右键菜单 / 脚本调
+ * clipboard.copy()）走的是 navigator.clipboard.writeText —— 那条路**只能写 text/plain**，
+ * 自定义 MIME 写不进去（浏览器只允许它经原生 copy 事件的 setData 落地）。若 text/plain 里
+ * 只有标记，菜单复制后在另一个页面粘贴就只剩个"来自画布"的空标记，什么也贴不出来。
+ */
 export const CANVAS_CLIPBOARD_TEXT_PREFIX = 'mini-canvas-nodes:'
+
+/** 画布快照载荷版本（v2 = 带完整节点/边，可跨窗口） */
+export const CANVAS_CLIPBOARD_PAYLOAD_VERSION = 2
+
+/** 从剪贴板读回的画布快照原始载荷（结构由消费方校验，见 plugin-clipboard 的 coerceClipboardSnapshot） */
+export interface CanvasClipboardPayload {
+  /** 快照节点（只要求是对象；字段校验交给消费方） */
+  nodes: unknown[]
+  /** 快照边（同上） */
+  edges: unknown[]
+  /**
+   * 复制时刻（写载荷的实例的 Date.now()）。
+   *
+   * 用途：同一页面里"自己刚复制的"与"从别的页面复制来的"要分开对待 —— 前者的内存快照与本页
+   * 同源（blob: 地址在本页有效、无需重建），后者必须按资源引用重建地址。靠它比对即可分辨。
+   */
+  copyTime?: number
+}
+
+/**
+ * 生成写进系统剪贴板的**完整载荷**（节点 + 边）。
+ *
+ * 为什么把节点数据本身放上剪贴板（而不是只放个标记、数据留在插件内存）：内存快照是
+ * **按画布实例**隔离的（P2-4），另一个浏览器页面 / 标签页里根本没有这份内存 —— 用户
+ * 2026-10-12 报的"复制一个节点，无法在另一个浏览器页面粘贴"就是它。系统剪贴板是唯一在
+ * 两个页面之间同时存在的东西，跨窗口互贴只能把数据放它上面。
+ */
+export function canvasClipboardPayload(
+  nodes: readonly unknown[],
+  edges: readonly unknown[],
+  copyTime?: number,
+): string {
+  return JSON.stringify({
+    v: CANVAS_CLIPBOARD_PAYLOAD_VERSION,
+    ...(copyTime !== undefined ? { copyTime } : {}),
+    nodes,
+    edges,
+  })
+}
+
+/**
+ * 解析剪贴板里的载荷文本（自定义 MIME 是裸 JSON；text/plain 带前缀）。
+ * 不是画布载荷（外部文本 / 标记 JSON）一律返回 undefined —— 判据是"带 nodes/edges 两个数组"。
+ */
+export function parseCanvasClipboardText(text: string | undefined | null): CanvasClipboardPayload | undefined {
+  if (typeof text !== 'string' || text.length === 0) return undefined
+  const body = text.startsWith(CANVAS_CLIPBOARD_TEXT_PREFIX)
+    ? text.slice(CANVAS_CLIPBOARD_TEXT_PREFIX.length)
+    : text
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(body)
+  } catch {
+    return undefined
+  }
+  if (!parsed || typeof parsed !== 'object') return undefined
+  const nodes = (parsed as { nodes?: unknown }).nodes
+  const edges = (parsed as { edges?: unknown }).edges
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) return undefined
+  const copyTime = (parsed as { copyTime?: unknown }).copyTime
+  return typeof copyTime === 'number' && Number.isFinite(copyTime)
+    ? { nodes, edges, copyTime }
+    : { nodes, edges }
+}
+
+/**
+ * 从一次粘贴载荷里读出画布快照（先自定义 MIME，再 text/plain 前缀兜底）。
+ *
+ * 两条都读不到 = 剪贴板里不是画布节点（外部拷来的图片/文本），调用方据此让位给 file-drop。
+ */
+export function readCanvasClipboardPayload(
+  payload: ClipboardPastePayload,
+): CanvasClipboardPayload | undefined {
+  const fromMime = parseCanvasClipboardText(payload.getData(CANVAS_CLIPBOARD_MIME))
+  if (fromMime) return fromMime
+  return parseCanvasClipboardText(payload.getData('text/plain'))
+}
 
 // ---------------------------------------------------------------------------
 // 复制/剪切载荷与处理器

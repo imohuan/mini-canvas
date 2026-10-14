@@ -9,6 +9,9 @@ import {
   CANVAS_CLIPBOARD_MIME,
   CANVAS_CLIPBOARD_TEXT_PREFIX,
   canvasClipboardMarker,
+  canvasClipboardPayload,
+  parseCanvasClipboardText,
+  readCanvasClipboardPayload,
   hasCanvasClipboardMarker,
   dispatchClipboardPaste,
   dispatchClipboardWrite,
@@ -87,6 +90,52 @@ describe('hasCanvasClipboardMarker（粘贴时判"最后这次复制来自画布
   })
 })
 
+/**
+ * 跨页面互粘（用户 2026-10-12 报的"复制一个节点，无法在另一个浏览器页面粘贴"）。
+ *
+ * 机制：剪贴板里带**完整载荷**（节点 + 边），另一个页面读它就能贴 —— 不依赖任何内存态。
+ */
+describe('画布载荷（跨页面粘贴的唯一通道）', () => {
+  const nodes = [{ id: '1', type: 'text', position: { x: 0, y: 0 }, absPosition: { x: 0, y: 0 }, data: { label: '文本 1' } }]
+
+  it('写出去的载荷能被读回来（自定义 MIME）', () => {
+    const text = canvasClipboardPayload(nodes, [], 1234)
+    const p = buildClipboardPastePayload(pasteEvent({ types: [CANVAS_CLIPBOARD_MIME], data: { [CANVAS_CLIPBOARD_MIME]: text } }))
+    const back = readCanvasClipboardPayload(p)
+    expect(back?.nodes).toEqual(nodes)
+    expect(back?.edges).toEqual([])
+    // copyTime 一起带回来："这份是不是本页自己复制的"靠它分辨（别的页面复制的才需要重建图地址）
+    expect(back?.copyTime).toBe(1234)
+  })
+
+  it('text/plain 那条也带完整数据（程序化复制只能写 text/plain）', () => {
+    // 右键菜单/脚本走 navigator.clipboard.writeText，自定义 MIME 写不进去 —— text/plain 必须自带数据，
+    // 否则"菜单里复制 → 另一个页面粘贴"什么也贴不出来。
+    const text = CANVAS_CLIPBOARD_TEXT_PREFIX + canvasClipboardPayload(nodes, [], 1)
+    const p = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': text } }))
+    expect(readCanvasClipboardPayload(p)?.nodes).toEqual(nodes)
+  })
+
+  it('外部文本 / 旧版纯标记 JSON 都读不成载荷（继续让位给 file-drop）', () => {
+    const plain = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': 'hello world' } }))
+    expect(readCanvasClipboardPayload(plain)).toBeUndefined()
+    const oldMarker = buildClipboardPastePayload(
+      pasteEvent({ types: ['text/plain'], data: { 'text/plain': CANVAS_CLIPBOARD_TEXT_PREFIX + canvasClipboardMarker(1, 0) } }),
+    )
+    // 老格式（只有 nodes/edges 的**计数**）不是载荷 —— 但它仍是"来自画布"的标记
+    expect(readCanvasClipboardPayload(oldMarker)).toBeUndefined()
+    expect(hasCanvasClipboardMarker(oldMarker)).toBe(true)
+  })
+
+  it('parseCanvasClipboardText 认裸 JSON 与带前缀两种形态，非法文本一律 undefined', () => {
+    const json = JSON.stringify({ v: 2, nodes: [], edges: [] })
+    expect(parseCanvasClipboardText(json)?.nodes).toEqual([])
+    expect(parseCanvasClipboardText(CANVAS_CLIPBOARD_TEXT_PREFIX + json)?.edges).toEqual([])
+    expect(parseCanvasClipboardText('not json')).toBeUndefined()
+    expect(parseCanvasClipboardText(JSON.stringify({ hello: 1 }))).toBeUndefined()
+    expect(parseCanvasClipboardText(undefined)).toBeUndefined()
+  })
+})
 describe('dispatchClipboardPaste（按 order 仲裁、第一个接管的赢）', () => {
   it('order 小者先被问；它接管后后面的不再被问', () => {
     const calls: string[] = []

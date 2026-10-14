@@ -338,12 +338,16 @@ export {
   CLIPBOARD_PASTE_KEY,
   CANVAS_CLIPBOARD_MIME,
   CANVAS_CLIPBOARD_TEXT_PREFIX,
+  CANVAS_CLIPBOARD_PAYLOAD_VERSION,
   buildClipboardWritePayload,
   buildClipboardPastePayload,
   dispatchClipboardWrite,
   dispatchClipboardPaste,
   hasCanvasClipboardMarker,
   canvasClipboardMarker,
+  canvasClipboardPayload,
+  parseCanvasClipboardText,
+  readCanvasClipboardPayload,
 } from '@mini-canvas/canvas-data'
 export type {
   ClipboardEntry,
@@ -351,6 +355,7 @@ export type {
   ClipboardWritePayload,
   ClipboardPasteHandler,
   ClipboardPastePayload,
+  CanvasClipboardPayload,
 } from '@mini-canvas/canvas-data'
 
 // 可复用画布宿主门面（window.MiniCanvas 装配点，热装/热卸/热重载插件）
