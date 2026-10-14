@@ -11,7 +11,7 @@ lerna-debug.log*
 .chrome-ctx
 .chrome-cmds
 
-
+.codex-tmp
 node_modules
 dist
 dist-ssr
