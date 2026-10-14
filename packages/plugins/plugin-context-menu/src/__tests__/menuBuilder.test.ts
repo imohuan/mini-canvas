@@ -3,9 +3,57 @@ import {
   buildMenuItems,
   commandVisibleInMode,
   sortMenuItems,
+  splitMenuPath,
+  topGroupOf,
   type MenuCommandLike,
   type MenuNodeTypeLike,
 } from '../menuBuilder'
+
+/**
+ * 二级菜单：注册方在 group / title 里写斜杠就落成嵌套。
+ *
+ * 为什么用"斜杠"当约定：注册方（插件、成品应用）最自然的写法就是给一个名字，
+ * 让它再学一套嵌套结构是多余的门槛；而斜杠写法的语义与设置面板的分组路径一致，
+ * 用户一看就懂"这是下一层"。
+ */
+describe('splitMenuPath —— 斜杠 = 下一层', () => {
+  it('按斜杠拆段', () => {
+    expect(splitMenuPath('资源库')).toEqual(['资源库'])
+    expect(splitMenuPath('资源库/节点')).toEqual(['资源库', '节点'])
+    expect(splitMenuPath('资源库/节点/画笔')).toEqual(['资源库', '节点', '画笔'])
+  })
+
+  it('空段丢掉、两端去空白（`资源库 // ` 不该多出一层空菜单）', () => {
+    expect(splitMenuPath(' 资源库 / 节点 ')).toEqual(['资源库', '节点'])
+    expect(splitMenuPath('资源库//节点/')).toEqual(['资源库', '节点'])
+  })
+
+  it('空/未给 → 空路径（调用方据此走"不嵌套"的老行为）', () => {
+    expect(splitMenuPath(undefined)).toEqual([])
+    expect(splitMenuPath('')).toEqual([])
+    expect(splitMenuPath('   ')).toEqual([])
+  })
+})
+
+describe('topGroupOf —— 排序与分组看首段', () => {
+  it('有 path 取首段；没有就看 group', () => {
+    expect(topGroupOf({ group: '资源库/节点', path: ['资源库', '节点'] })).toBe('资源库')
+    expect(topGroupOf({ group: '节点' })).toBe('节点')
+  })
+
+  it('嵌套项的排序按**首段**取优先级，不因为整串查不到而被扔到最后', () => {
+    const items = buildMenuItems(
+      'node',
+      [
+        { id: 'a', title: '某插件动作', areas: ['node'], group: '插件' },
+        { id: 'b', title: '画笔', areas: ['node'], group: '资源库/节点', order: 1 },
+      ],
+      [],
+    )
+    // 资源库不在优先级表里 → 与"插件"同为 999，组内按 order ⇒ b 在前
+    expect(items.map((i) => i.id)).toEqual(['b', 'a'])
+  })
+})
 
 const nodeTypes: MenuNodeTypeLike[] = [
   { type: 'text', label: '文本' },
@@ -113,6 +161,30 @@ describe('buildMenuItems', () => {
     const items = buildMenuItems('node', commands, nodeTypes)
     expect(items.map((i) => i.id)).toEqual(['node:copy', 'node:duplicate', 'node:delete'])
   })
+
+  it('组名写斜杠 → 落成嵌套路径（显示层据此做二级菜单）', () => {
+    const commands: MenuCommandLike[] = [
+      { id: 'pkg:paint', title: '画笔', areas: ['node'], group: '资源库/节点', order: 1 },
+      { id: 'pkg:video', title: '视频可视化', areas: ['node'], group: '资源库/节点', order: 2 },
+    ]
+    const items = buildMenuItems('node', commands, [])
+    expect(items[0].path).toEqual(['资源库', '节点'])
+    // label 只放叶子名（"节点"是第一层入口，由显示层画成带子菜单的行）
+    expect(items.map((i) => i.label)).toEqual(['画笔', '视频可视化'])
+  })
+
+  it('项名写斜杠也能嵌套（group 给外层、title 给下层）', () => {
+    const commands: MenuCommandLike[] = [{ id: 'pkg:x', title: '节点/画笔', areas: ['node'], group: '资源库' }]
+    const items = buildMenuItems('node', commands, [])
+    expect(items[0].path).toEqual(['资源库', '节点', '画笔'])
+  })
+
+  it('不写斜杠 = 路径只有一段（老注册方行为不变）', () => {
+    const commands: MenuCommandLike[] = [{ id: 'node:dup', title: '复制一份', areas: ['node'], group: '节点' }]
+    const items = buildMenuItems('node', commands, [])
+    expect(items[0].path).toEqual(['节点'])
+    expect(items[0].group).toBe('节点')
+  })
 })
 
 describe('sortMenuItems', () => {
@@ -123,5 +195,13 @@ describe('sortMenuItems', () => {
       { id: 'c', label: 'C', group: 'create', order: 0, kind: 'create-node', nodeType: 'text' },
     ])
     expect(items.map((i) => i.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('「资源库」排在「剪贴板（粘贴）」之前 —— 用户口径：加东西那一族要排在粘贴上面', () => {
+    const items = sortMenuItems([
+      { id: 'clipboard:paste', label: '粘贴', group: 'clipboard', order: 20, kind: 'command', commandId: 'clipboard:paste' },
+      { id: 'ui:import-pack:x', label: '某节点包', group: '资源库/节点包', order: 10, kind: 'command', commandId: 'ui:import-pack:x' },
+    ])
+    expect(items.map((i) => i.id)).toEqual(['ui:import-pack:x', 'clipboard:paste'])
   })
 })

@@ -38,8 +38,17 @@ export interface MenuNodeTypeLike {
 export interface ContextMenuItem {
   /** 稳定 id（命令 id 或新建节点 id） */
   id: string
-  /** 展示文案 */
+  /** 展示文案（分组路径的**最后一段**：带 path 时这里只放叶子名） */
   label: string
+  /**
+   * 分组路径（从顶层到本项所在层）。
+   *
+   * 为什么不是单个 group 字符串：注册方在 group / title 里写斜杠（`资源库/节点`）时，
+   * 这几段应当变成**层层嵌套的二级菜单**，而不是一个字面含斜杠的分组名。
+   * 显示层按它决定"渲染成一行"还是"渲染成一个带子菜单的入口行"。
+   * 长度 0/1 = 顶层行；长度 ≥2 = 它是叶子，前几段是它所在的菜单路径。
+   */
+  path?: string[]
   /** hover 描述（快捷键面板同款：行 hover 时 label 上移、下方浮现小字说明） */
   description?: string
   /** 分组名（显示层按组插分隔线） */
@@ -63,6 +72,27 @@ export interface ContextMenuItem {
 /** 组内默认 order（命令未声明 order 时的回退，排在声明了 order 的后面） */
 const DEFAULT_ORDER = 100
 
+/**
+ * 把「组名 / 项名」里写的斜杠拆成**菜单路径**。
+ *
+ * 约定（与设置面板同一套写法）：斜杠 = 下一层。
+ *   `资源库`            → ['资源库']
+ *   `资源库/节点`       → ['资源库', '节点']
+ *   `资源库/节点/paint` → ['资源库', '节点', 'paint']
+ *
+ * 三条细节都是踩过才会想到的：
+ * - 去空白并丢掉空段：`'资源库 / 节点'`、`'资源库//节点'`、末尾带斜杠都不该多出一层空菜单；
+ * - 分段**不再二次拆分**：项名自己带斜杠时它已经在上一步并进路径了，这里只做一次归一；
+ * - 没有斜杠就是单段路径（= 原来的"平铺分组"行为，老注册方一行都不用改）。
+ */
+export function splitMenuPath(raw: string | undefined): string[] {
+  if (typeof raw !== 'string') return []
+  return raw
+    .split('/')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+}
+
 /** 组间排序优先级（数字小越靠前）；未列出的组按组名出现顺序排在最后 */
 const GROUP_PRIORITY: Record<string, number> = {
   create: 0,
@@ -71,6 +101,10 @@ const GROUP_PRIORITY: Record<string, number> = {
   '连线': 2,
   action: 1,
   delete: 3,
+  // 「资源库」= 可复用的成品（节点包等）。排在剪贴板**之前**：
+  // 用户的动作序列是"先放一个东西进来、再粘贴/复制它"，所以"往画布加东西"那一族
+  // （新建节点 / 资源库）应当连在一起、都在粘贴上面（2026-10-13 用户口径）。
+  '资源库': 3.5,
   clipboard: 4,
   'align-arrange': 5,
   export: 6,
@@ -89,6 +123,21 @@ export function commandVisibleInMode(cmd: MenuCommandLike, mode: ContextMenuMode
 /** 取分组优先级；未登记组给 999（按其名排最后，稳定） */
 export function groupRank(group: string): number {
   return GROUP_PRIORITY[group] ?? 999
+}
+
+/**
+ * 取一项的**顶层组名**（排序与分组都用它）。
+ *
+ * 为什么要单独一个函数：带路径的项（`资源库/节点`）如果拿整串去查优先级表，
+ * 永远查不到（表里不可能穷举）→ 一律排到最后；而且同名顶层会被排散、菜单里
+ * 出现两个"资源库"段落。按**首段**取，嵌套组就与平铺组享受同一套排序规则。
+ */
+export function topGroupOf(item: { group: string; path?: string[] }): string {
+  if (item.path && item.path.length > 0) return item.path[0]!
+  // 没有 path 时也按斜杠取首段：调用方直接用 `sortMenuItems` 排裸项（不进 buildMenuItems）时，
+  // 拿整串 `资源库/节点包` 去查优先级表会查不到、一律排到最后 —— 分组就散了。
+  const seg = splitMenuPath(item.group)
+  return seg.length > 0 ? seg[0]! : item.group
 }
 
 /**
@@ -125,9 +174,25 @@ export function buildMenuItems(
   for (const cmd of commands) {
     if (!commandVisibleInMode(cmd, mode)) continue
     const group = cmd.group || (mode === 'node' ? '节点' : mode === 'edge' ? '连线' : '操作')
+    // 分组路径：**谁写了斜杠，谁才产生层级**。
+    //
+    //   group:'资源库/节点' + title:'画笔'        → 路径 [资源库, 节点]，项名「画笔」挂进去
+    //   group:'资源库'      + title:'节点/画笔'    → 同样 [资源库, 节点, 画笔]
+    //   group:'节点'        + title:'复制一份'      → 路径 [节点]（**只有一段**）
+    //
+    // 第三条是关键：不能把项名无条件并进路径 —— 那样每个命令都会变成"隔着两层才点到"，
+    // 老注册方（插件里几十条命令）全都会多出一层菜单。所以只有 title 里**真的写了斜杠**
+    // 才延展路径；否则路径就是 group 本身，项名照旧当 label。
+    const title = cmd.title || cmd.id
+    const groupPath = splitMenuPath(group)
+    const titlePath = splitMenuPath(title)
+    const titleNested = titlePath.length > 1
+    const path = titleNested ? [...groupPath, ...titlePath] : groupPath
     items.push({
       id: cmd.id,
-      label: cmd.title || cmd.id,
+      // label = 这一项自己的名字（叶子）；层级在 path 里，显示层照它嵌套
+      label: titleNested ? titlePath[titlePath.length - 1]! : title,
+      ...(path.length > 0 ? { path } : {}),
       description: cmd.description,
       group,
       order: cmd.order ?? DEFAULT_ORDER,
@@ -145,8 +210,8 @@ export function buildMenuItems(
 /** 排序：组优先级升序 → 组内 order 升序（稳定排序，同组保持插入序） */
 export function sortMenuItems(items: ContextMenuItem[]): ContextMenuItem[] {
   return [...items].sort((a, b) => {
-    const ga = groupRank(a.group)
-    const gb = groupRank(b.group)
+    const ga = groupRank(topGroupOf(a))
+    const gb = groupRank(topGroupOf(b))
     if (ga !== gb) return ga - gb
     return a.order - b.order
   })

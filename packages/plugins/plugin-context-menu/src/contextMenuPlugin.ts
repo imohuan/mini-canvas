@@ -363,6 +363,9 @@ export function apply(ctx: Context): void {
       const payload: Record<string, unknown> = {}
       if (current.nodeId) payload.nodeId = current.nodeId
       if (current.edgeId) payload.edgeId = current.edgeId
+      // 落点也带上：有些命令是"在右键处放点东西"（如从资源库导入一个节点包），
+      // 没有它就只能落到默认位置 —— 明明右键点了这里、东西却出现在别处，很别扭。
+      payload.flowPosition = current.flowPosition
       command.execute(item.commandId, payload)
     }
   }

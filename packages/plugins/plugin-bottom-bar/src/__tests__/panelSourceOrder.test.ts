@@ -64,6 +64,32 @@ describe('collectUpstreamMaterials：素材顺序', () => {
 })
 
 describe('nextRefOrder：拖拽后该写什么（写盘与否由调用方决定）', () => {
+  /**
+   * 文本上游按**字段名**认，不再额外要求 node.type==='text'。
+   *
+   * 由来：可视化节点（type='ui'）用 ctx.save('正文','note.txt') 交出来的文本
+   * 下游收不到 —— 它交的图/视频/音频都收得到，唯独文本被类型门槛挡掉。
+   */
+  it('★ 任何类型只要 data.text 是字符串就算文本上游', () => {
+    const g = (id: string) =>
+      id === 'u' ? { type: 'ui', data: { text: '可视化交出来的正文' } } : nodes[id]
+    const m = collectUpstreamMaterials([{ source: 'u', target: 't' }], 't', g)
+    expect(m).toHaveLength(1)
+    expect(m[0]).toMatchObject({ id: 'u', kind: 'text', value: '可视化交出来的正文' })
+  })
+
+  it('文本节点内容为空也收（先连上、再写内容）', () => {
+    const g = (id: string) => (id === 'x' ? { type: 'text', data: {} } : nodes[id])
+    const m = collectUpstreamMaterials([{ source: 'x', target: 't' }], 't', g)
+    expect(m).toHaveLength(1)
+    expect(m[0]).toMatchObject({ id: 'x', kind: 'text', value: '' })
+  })
+
+  it('既没有媒体地址、也不是文本节点 → 不收（空素材）', () => {
+    const g = (id: string) => (id === 'z' ? { type: 'unknown', data: {} } : nodes[id])
+    expect(collectUpstreamMaterials([{ source: 'z', target: 't' }], 't', g)).toHaveLength(0)
+  })
+
   const cardsOf = (ids: string[]) => ids.map((id) => ({ id }))
 
   it('拖拽库给了新顺序 → 返回它（这是唯一正确的来源，不能读派生 computed）', () => {

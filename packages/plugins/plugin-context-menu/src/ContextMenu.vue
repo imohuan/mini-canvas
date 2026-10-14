@@ -10,7 +10,7 @@
  * 其余行为不变：fixed(clientX,clientY) 翻折定位；按 group 连续分组 + 分隔线；
  * 点击 props.onSelect(item)；点外部/按 Esc/滚动关闭由宿主插件负责监听。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { iconRenderMode } from '@mini-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 import { splitComboChips } from './shortcutText'
@@ -29,16 +29,81 @@ const props = defineProps<{
   onClose: () => void
 }>()
 
-/** 分成连续组：遇到 group 变化就新开一组（items 已按组排序好） */
+/** 一行：叶子（点了就执行）或"带子菜单的入口"（悬停展开右栏） */
+interface MenuRow {
+  key: string
+  label: string
+  /** 叶子：点了执行它 */
+  item?: ContextMenuItem
+  /** 子菜单里的项（只有入口行才有） */
+  children?: Array<{ key: string; label: string; item: ContextMenuItem }>
+}
+
+/**
+ * 按**分组路径**折叠成「一级分组 → 行」。
+ *
+ * 为什么要按路径而不是按 group 字符串：注册方在 group / title 里写斜杠
+ * （`资源库/节点`）时，那几段应当变成嵌套菜单，而不是一个字面含斜杠的分组名。
+ * 路径长度 1 = 直接是一行；长度 ≥2 = 先出现一个入口行（同名只出现一次），
+ * 它的子项挂在右栏里。items 已按 order 排好，这里按**首次出现**顺序收集即可。
+ */
 const groups = computed(() => {
-  const out: Array<{ group: string; items: ContextMenuItem[] }> = []
+  const out: Array<{ group: string; rows: MenuRow[] }> = []
   for (const item of props.state.items) {
-    const last = out[out.length - 1]
-    if (last && last.group === item.group) last.items.push(item)
-    else out.push({ group: item.group, items: [item] })
+    const path = item.path && item.path.length > 0 ? item.path : [item.group]
+    const top = path[0]!
+    let g = out.find((x) => x.group === top)
+    if (!g) {
+      g = { group: top, rows: [] }
+      out.push(g)
+    }
+    if (path.length === 1) {
+      g.rows.push({ key: item.id, label: item.label, item })
+      continue
+    }
+    const key = 'sub:' + path.join('/')
+    let row = g.rows.find((r) => r.key === key)
+    if (!row) {
+      row = { key, label: path[1]!, children: [] }
+      g.rows.push(row)
+    }
+    // 子项文案 = 这一项自己的名字（叶子）；中间的层级只在"入口行"上体现（上面的 label）
+    row.children!.push({ key: item.id, label: item.label, item })
   }
-  return out
+  return out.filter((g) => g.rows.length > 0)
 })
+
+/** 当前展开的入口行（同一时刻只开一层，二级菜单够用；移开就收） */
+const openKey = ref<string | null>(null)
+/** 右栏的纵向位置（贴着那一行） */
+const openTop = ref(0)
+/** 当前展开行对应的子项 */
+const openChildren = computed(() => {
+  if (!openKey.value) return []
+  for (const g of groups.value) {
+    const row = g.rows.find((r) => r.key === openKey.value)
+    if (row?.children) return row.children
+  }
+  return []
+})
+
+/** 悬停入口行 → 展开右栏（贴着这一行）；移到普通行就收起来 */
+function onRowHover(row: MenuRow, e: MouseEvent): void {
+  if (!row.children) {
+    openKey.value = null
+    return
+  }
+  openKey.value = row.key
+  openTop.value = (e.currentTarget as HTMLElement).offsetTop
+}
+
+/** 菜单内容换了（重新打开/换模式）→ 收掉展开态，别留着上回的残余 */
+watch(
+  () => props.state.items,
+  () => {
+    openKey.value = null
+  },
+)
 
 /** 菜单左上角定位：fixed(clientX/clientY)，超出视口右/下边缘时收进视口 */
 const position = computed(() => {
@@ -84,18 +149,21 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
         <template v-for="(group, gi) in groups" :key="group.group">
           <div v-if="gi > 0" class="ctx-menu-divider" />
           <button
-            v-for="item in group.items"
-            :key="item.id"
+            v-for="row in group.rows"
+            :key="row.key"
             type="button"
             class="ctx-menu-item"
-            :class="{ 'is-danger': item.danger, hasDescription: hasDesc(item) }"
+            :class="{ 'is-danger': row.item?.danger, hasDescription: row.item ? hasDesc(row.item) : false, 'is-open': openKey === row.key }"
             role="menuitem"
-            @click.stop="onItemClick(item)"
+            :aria-haspopup="row.children ? 'menu' : undefined"
+            :aria-expanded="row.children ? openKey === row.key : undefined"
+            @mouseenter="onRowHover(row, $event)"
+            @click.stop="row.children ? undefined : onItemClick(row.item!)"
           >
             <!-- 图标托：恒渲染（无 icon 时给默认占位），与快捷键面板/CanvasMenu 一致 -->
             <span class="ctx-menu-icon">
-              <span v-if="iconMode(item) === 'html'" class="ctx-menu-icon-raw" v-html="item.icon" />
-              <component v-else-if="iconMode(item) === 'component'" :is="item.icon" class="ctx-menu-icon-raw" />
+              <span v-if="row.item && iconMode(row.item) === 'html'" class="ctx-menu-icon-raw" v-html="row.item.icon" />
+              <component v-else-if="row.item && iconMode(row.item) === 'component'" :is="row.item.icon" class="ctx-menu-icon-raw" />
               <svg
                 v-else
                 viewBox="0 0 24 24"
@@ -109,19 +177,70 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
 
             <!-- 名称 + hover 描述 -->
             <span class="ctx-menu-copy">
-              <span class="ctx-menu-label">{{ item.label }}</span>
-              <span v-if="item.description" class="ctx-menu-description">{{ item.description }}</span>
+              <span class="ctx-menu-label">{{ row.label }}</span>
+              <span v-if="row.item?.description" class="ctx-menu-description">{{ row.item.description }}</span>
             </span>
 
             <!-- 右侧键帽快捷键 -->
-            <span v-if="item.shortcut?.length" class="ctx-menu-shortcuts">
-              <template v-for="(chip, ci) in chipsOf(item)" :key="ci">
+            <span v-if="row.item?.shortcut?.length" class="ctx-menu-shortcuts">
+              <template v-for="(chip, ci) in chipsOf(row.item!)" :key="ci">
                 <span v-if="ci > 0" class="ctx-menu-shortcut-sep">/</span>
                 <span class="kbd-chip" v-for="(cap, pi) in chip.combo" :key="pi">{{ cap }}</span>
               </template>
             </span>
+            <!-- 入口行：右侧一个指向右的箭头（表示"里面有子菜单"） -->
+            <span v-else-if="row.children" class="ctx-menu-arrow" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 6l6 6-6 6" />
+              </svg>
+            </span>
           </button>
         </template>
+      </div>
+    </Transition>
+
+    <!-- 二级菜单：贴着展开的那一行、在主栏右侧；同一个浮层组件，跟着主菜单一起出现/消失 -->
+    <Transition name="ctx-pop">
+      <div
+        v-if="state.visible && openChildren.length"
+        class="ctx-menu ctx-submenu"
+        :style="{ left: position.left + 252 + 'px', top: position.top + openTop + 'px' }"
+        role="menu"
+        @contextmenu.prevent
+      >
+        <button
+          v-for="child in openChildren"
+          :key="child.key"
+          type="button"
+          class="ctx-menu-item"
+          :class="{ 'is-danger': child.item.danger, hasDescription: hasDesc(child.item) }"
+          role="menuitem"
+          @click.stop="onItemClick(child.item)"
+        >
+          <span class="ctx-menu-icon">
+            <span v-if="iconMode(child.item) === 'html'" class="ctx-menu-icon-raw" v-html="child.item.icon" />
+            <component v-else-if="iconMode(child.item) === 'component'" :is="child.item.icon" class="ctx-menu-icon-raw" />
+            <svg
+              v-else
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            ><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h10"/></svg>
+          </span>
+          <span class="ctx-menu-copy">
+            <span class="ctx-menu-label">{{ child.label }}</span>
+            <span v-if="child.item.description" class="ctx-menu-description">{{ child.item.description }}</span>
+          </span>
+          <span v-if="child.item.shortcut?.length" class="ctx-menu-shortcuts">
+            <template v-for="(chip, ci) in chipsOf(child.item)" :key="ci">
+              <span v-if="ci > 0" class="ctx-menu-shortcut-sep">/</span>
+              <span class="kbd-chip" v-for="(cap, pi) in chip.combo" :key="pi">{{ cap }}</span>
+            </template>
+          </span>
+        </button>
       </div>
     </Transition>
   </Teleport>
@@ -150,6 +269,44 @@ function iconMode(item: ContextMenuItem): 'html' | 'component' | 'none' {
   height: 1px;
   margin: 5px 6px;
   background: var(--ui-line, rgba(0, 0, 0, 0.06));
+}
+
+/* ===== 二级菜单（贴着展开那一行的右栏）=====
+   同一个浮层组件再渲染一份，锚点是**主菜单的左边缘 + 主菜单宽度**，纵向贴着入口行。
+   数值与主栏同一套 token：外圆 16、行圆 10、同一档阴影与发丝边。 */
+.ctx-submenu {
+  animation: ctx-sub-in 0.16s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes ctx-sub-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* 展开中的入口行：与 hover 同一底色 + 强调色文字（"当前开着的是它"） */
+.ctx-menu-item.is-open {
+  background: var(--ui-hover, rgba(0, 0, 0, 0.05));
+}
+.ctx-menu-item.is-open .ctx-menu-label {
+  color: var(--ui-accent, #0891b2);
+}
+
+/* 入口行右侧的"有子菜单"箭头 */
+.ctx-menu-arrow {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--ui-ink-dim, #9ca3af);
+}
+.ctx-menu-arrow svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ===== item（对齐快捷键面板 canvas-menu-item 数值）===== */

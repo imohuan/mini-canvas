@@ -118,8 +118,16 @@ export function collectUpstreamMaterials(
       continue
     }
 
-    // 文本节点：内容暂时为空也收（用户可能正打算先连再写），@ 时用名字占位
-    if (node?.type === 'text') {
+    // 文本：**按字段名认，与图片/视频/音频同一条规矩**（2026-10-13 统一）。
+    //
+    // 以前这里额外要求 `node.type === 'text'` —— 于是可视化节点（type='ui'）用
+    // `ctx.save('正文', 'note.txt')` / `CanvasUI.save(正文, 'note.txt')` 交出来的文本
+    // 下游**收不到**，而它交的图 / 视频 / 音频（走上面三条）却收得到。
+    // 同一个节点的产物一半能连、一半连不上，是纯粹的坑。
+    //
+    // 文本节点仍走这条（它的 data.text 就是正文），内容为空也收 ——
+    // 用户常是「先连上、再写内容」，@ 时先用名字占位。
+    if (node?.type === 'text' || typeof data.text === 'string') {
       seen.add(edge.source)
       out.push({
         id: edge.source,
