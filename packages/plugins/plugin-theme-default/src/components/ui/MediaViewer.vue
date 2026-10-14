@@ -29,6 +29,14 @@ export interface MediaViewerItem {
   url?: string
   /** 文本内容（kind="text" 用） */
   text?: string
+  /**
+   * 一段自包含 HTML（kind="ui" 用）—— 可视化节点的界面代码。
+   *
+   * 为什么不能像别的类型那样给 url：可视化节点的内容不是"可加载的媒体"，
+   * 而是一段 HTML（它没有独立的可访问地址）。用户口径 2026-10-14：
+   * 「可以在预览中添加一个 iframe 预览框」—— 这个字段就是给那个 iframe 的 srcdoc。
+   */
+  html?: string
   /** 宿主自带的同组媒体（给了就出 上一张/下一张 与页码；图片变换工具随当前张走） */
   list?: string[]
   /** 当前张在 list 里的下标（配合 list 用；默认 0） */
@@ -284,6 +292,26 @@ watch(item, (v) => {
           <div v-else-if="kind === 'text' && TextPreview" class="mv-plugin-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
             <component :is="TextPreview" :text="item.text" :name="item.name" class="mv-media-plugin" />
           </div>
+          <!--
+            可视化节点（kind='ui'）：没有"可加载的媒体地址"，它的内容是**一段 HTML**
+            （item.html）。用户口径 2026-10-14：「我的当前的节点无法进行预览。或者，
+            可以在预览中添加一个 iframe 预览框」—— 这里就是那个 iframe。
+
+            为什么用 srcdoc 而不是新建页面：节点内容本来就是自包含的一段 HTML
+            （与画布里节点内的沙箱同源约定，见 node-ui 的 uiData.buildSrcdoc）；空内容
+            给一句占位提示，别让用户看到一片什么都没有（那看起来像又坏了）。
+          -->
+          <div v-else-if="kind === 'ui'" class="mv-ui-stage" @click.stop @mousedown.stop @mouseup.stop @mousemove.stop @wheel.stop>
+            <iframe
+              v-if="item.html"
+              class="mv-ui-frame"
+              :srcdoc="item.html"
+              sandbox="allow-scripts"
+              referrerpolicy="no-referrer"
+              title="可视化节点预览"
+            ></iframe>
+            <p v-else class="mv-ui-empty">这个可视化节点还没有画过内容</p>
+          </div>
           <audio v-else-if="kind === 'audio' && item.url" class="mv-audio" :src="item.url" controls />
           <pre v-else-if="kind === 'text'" class="mv-text">{{ item.text || '（空）' }}</pre>
           <slot v-else name="stage" :item="item" />
@@ -442,6 +470,31 @@ watch(item, (v) => {
 .mv-video-stage { flex: 1 1 auto; width: 100%; height: 100%; min-width: 0; min-height: 0; border-radius: 8px; overflow: hidden; display: flex; }
 .mv-video { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; outline: none; background: transparent; }
 .mv-audio { width: min(560px, 100%); }
+/* 可视化节点预览（kind='ui'）：iframe 装节点那段 HTML。
+   尺寸比插件舞台更宽（它是"一整块界面"），上限用 vw/vh 免得在小屏上溢出。 */
+.mv-ui-stage {
+  width: min(900px, 90vw);
+  height: min(620px, 72vh);
+  border-radius: 16px;
+  background: var(--ui-overlay-solid, #fff);
+  box-shadow: var(--ui-shadow-lg, 0 18px 48px rgb(0 0 0 / 0.35));
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mv-ui-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+  background: transparent;
+}
+.mv-ui-empty {
+  margin: 0;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 13px;
+}
 /* 节点插件注册的预览组件舞台：有背景的卡片，限宽限高不铺满全屏（用户口径）。
    组件内部事件在此层被 stop（见模板），不会触发全屏查看器的拖拽/关闭。 */
 .mv-plugin-stage {

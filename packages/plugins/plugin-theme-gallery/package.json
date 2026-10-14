@@ -1,0 +1,44 @@
+{
+  "name": "@mini-canvas/plugin-theme-gallery",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "miniCanvas": {
+    "title": "组件展厅",
+    "description": "在画布里真渲染默认主题的每个组件：按钮 / 下拉 / 滑块 / 参数件 / 节点壳 / 连线 / 背景",
+    "pluginName": "theme-gallery",
+    "builtin": true
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@mini-canvas/canvas-base": "workspace:*",
+    "@mini-canvas/canvas-data": "workspace:*",
+    "@mini-canvas/plugin-theme-default": "workspace:*"
+  },
+  "peerDependencies": {
+    "@vue-flow/core": "^1.48.2",
+    "@mini-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@mini-canvas/kernel": "workspace:*",
+    "@vue-flow/core": "^1.48.2",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/server-renderer": "3.5.38",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}
+
