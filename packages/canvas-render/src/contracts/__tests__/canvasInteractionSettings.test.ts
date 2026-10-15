@@ -50,7 +50,8 @@ describe('canvasInteractionSettings schema 声明', () => {
     // —— 2026-10-15 自研可见剔除（hidden 路线，与库级开关无关）——
     expect(CANVAS_INTERACTION_DEFAULTS.visibleCullEnabled).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.visibleCullBuffer).toBe(300)
-    expect(CANVAS_INTERACTION_DEFAULTS.dragRapidMode).toBe(true)
+    // 默认关（2026-10-16）：大画布 will-change 位图超 GPU 限会导致整机卡死（见八续）
+    expect(CANVAS_INTERACTION_DEFAULTS.dragRapidMode).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.preventScrolling).toBe(true)
   })
 

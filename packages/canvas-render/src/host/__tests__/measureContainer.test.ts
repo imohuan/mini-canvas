@@ -89,7 +89,7 @@ describe('量测容器解析（Vue Flow 1.48 无 .vue-flow__renderer）', () => 
     const layout = new NodeLayoutService(store)
     const root = makeVueFlow148Dom([fakeNode('1', 1150, 451)])
 
-    const m = useNodeMeasure({ nodeLayout: layout, container: () => resolveMeasureContainer(root) })
+    const m = useNodeMeasure({ nodeLayout: layout, container: () => resolveMeasureContainer(root), scheduleImmediate: (fn) => fn() })
     m.start()
 
     expect(layout.nodeSize('1')).toEqual({ w: 1150, h: 451 })

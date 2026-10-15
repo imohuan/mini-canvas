@@ -89,7 +89,6 @@ export const APP_PLUGINS = [
   nodeUiPlugin,
   pluginBottomBar,
   node3dPreviewPlugin,
-  agentPlugin,
   pluginManagerPlugin,
   contextMenuPlugin,
   clipboardPlugin,

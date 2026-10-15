@@ -49,7 +49,7 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
     const nodeA = fakeNode('a', 320, 180)
     const root = { querySelectorAll: (sel: string) => (sel === '.vue-flow__node' ? [nodeA] : []) } as unknown as HTMLElement
 
-    const m = useNodeMeasure({ nodeLayout: layout, container: () => root })
+    const m = useNodeMeasure({ nodeLayout: layout, container: () => root, scheduleImmediate: (fn) => fn() })
     m.start()
 
     expect(FakeMO.instances.length).toBe(1)

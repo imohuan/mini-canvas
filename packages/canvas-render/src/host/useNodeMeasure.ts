@@ -45,8 +45,10 @@ export function useNodeMeasure(opts: {
   nodeLayout: NodeLayoutService
   /** 容器元素（VueFlow renderer 内层；应包含 .vue-flow__node 子元素） */
   container: () => HTMLElement | null
+  /** 立即量测的调度器（默认 rAF；测试可传同步执行以保持「立即注入」契约） */
+  scheduleImmediate?: (fn: () => void) => void
 }): NodeMeasureHandle {
-  const { nodeLayout, container } = opts
+  const { nodeLayout, container, scheduleImmediate = (fn) => requestAnimationFrame(fn) } = opts
   const observed = new Set<HTMLElement>()
   // P1-13：SSR/headless 无 ResizeObserver/MutationObserver/DOM → no-op 句柄，不抛错。
   // 惰性创建：observer 仅 start()（挂载后、容器就绪）时才 new，避免 setup 期即抛。
@@ -89,7 +91,7 @@ export function useNodeMeasure(opts: {
       // 卡死排查实验（2026-10-15）：同步读 offsetWidth 是强制回流；怀疑与剔除重灌交错
       // 形成布局风暴（Debugger.pause 无法中断原生布局 = 主线程卡原生的特征）。
       // 改为 rAF 延迟读取：挂载后下一帧再量，避开回流风暴。
-      requestAnimationFrame(() => {
+      scheduleImmediate(() => {
         const w = el.offsetWidth
         const h = el.offsetHeight
         if (w > 0 && h > 0) nodeLayout.setMeasuredSize(id, w, h)
