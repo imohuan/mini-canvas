@@ -99,6 +99,7 @@ export const APP_PLUGINS = [
   nodeImagePlugin,
   nodeVideoPlugin,
   nodeAudioPlugin,
+  agentPlugin,
   uiSettingsPanelPlugin,
   uiDropdownPlugin,
   uiHotReloadPlugin,
