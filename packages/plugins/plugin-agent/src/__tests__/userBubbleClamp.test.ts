@@ -38,7 +38,8 @@ describe('用户气泡高度夹层与展开按钮', () => {
   })
 
   it('测量用 ResizeObserver 兜底（内容变化 / 面板拖宽换行都会重测），卸载时清干净', () => {
-    expect(host).toContain('bubbleRO = new ResizeObserver(() => measureUserBubbles())')
+    // 回调走 scheduleMeasureUserBubbles（nextTick 合并），防渲染帧内写响应式状态自触发
+    expect(host).toContain('new ResizeObserver(() => scheduleMeasureUserBubbles())')
     expect(host).toContain('bubbleRO?.disconnect()')
     expect(host).toContain('userBubbleBodies.clear()')
   })
