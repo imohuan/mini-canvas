@@ -75,6 +75,18 @@ describe('nodesFromStore × cullIds（hidden 标记注入）', () => {
     expect(culled.find((n) => n.id === 'hid')!.hidden).toBe(true)
   })
 
+  it('临时节点（拖线菜单卡）永不剔除 —— 新建时不在 cullIds 里，若被 hidden 用户看不到菜单（2026-10-16 拖线弹菜单失效根因）', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'normal' },
+      { type: 'text', position: { x: 150, y: 150 }, id: 'temp', data: { transient: true } },
+    ])
+    // cullIds 只含 'normal'：temp 不在集合里，但它是 transient → 永不 hidden
+    const culled = nodesFromStore(s, undefined, new Set(['normal']))
+    expect(culled.find((n) => n.id === 'temp')!.hidden).toBe(false)
+    expect(culled.find((n) => n.id === 'normal')!.hidden).toBe(false) // 在集合内 = 可见
+  })
+
   it('全选场景：选中标记与 hidden 标记独立共存（选中不豁免剔除）', () => {
     const s = makeStore()
     s.addNodes([

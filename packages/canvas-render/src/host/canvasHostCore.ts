@@ -104,7 +104,9 @@ export function nodesFromStore(
     // 内部 store 里的 hidden:true 不会被不带该字段的新对象清掉，节点会永远消失。
     // 注意：即使调用方不传 cullIds（禁用剔除），也要显式写 hidden:false —— 否则上次剔除留下的
     // hidden:true 会在合并语义下永久残留（实测：关掉剔除后 DOM 停在 150 不回 160）。
-    out.hidden = cullIds ? !cullIds.has(n.id) : false
+    // 临时节点（拖线落空白的菜单卡片）不参与剔除：它随创建即时弹出，若落在 cullIds
+    // 计算之后（新建不在集合里）会被 hidden 而看不到 —— 2026-10-16 拖线弹菜单失效的根因。
+    out.hidden = isTransient(n) ? false : (cullIds ? !cullIds.has(n.id) : false)
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
     // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。
