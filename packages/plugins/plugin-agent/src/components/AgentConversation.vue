@@ -689,7 +689,12 @@ function scheduleMeasureUserBubbles(): void {
 }
 function measureUserBubbles(): void {
   const next: Record<string, boolean> = {}
-  for (const [id, el] of userBubbleBodies) next[id] = el.scrollHeight > el.clientHeight + 1
+  for (const [id, el] of userBubbleBodies) {
+    // 已展开的**保持原判**：展开态下夹层放开，scrollHeight == clientHeight，
+    // 再按"超出"量会把按钮判没（用户就没法收起了）。收起判定交给收起那一次测量。
+    if (openUserBubbles.value[id]) next[id] = overflowingUser.value[id] === true
+    else next[id] = el.scrollHeight > el.clientHeight + 1
+  }
   // 稳定态检测（2026-10-16 卡死修复）：与上次值相同就**不写** ref ——
   // 写相同的值 Vue 也会因引用变化触发重渲染 → ref 回调再触发 measure → 无限循环
   // （「一轮 AI 对话后整机卡死」的根因：滚动吸底动画/RO 每帧驱动 measure）。
@@ -1713,7 +1718,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                  超出的内容点左下角「展开」再看；收起按钮原地换「收起」。 -->
                 <template v-if="t.kind === 'user'">
                   <p v-if="t.text" class="ac-user-line" :ref="setUserBubbleBody(t.id)"
-                    :class="{ 'is-clamped': overflowingUser[t.id] && !openUserBubbles[t.id] }">
+                    :class="{ 'is-open': openUserBubbles[t.id] }">
                     <!-- user_steering 块（后台队列自动发的）剥掉标记只显示内文（用户口径 2026-10-15） -->
                     <template v-for="(seg, si) in userSegments(displayUserText(t.text))" :key="si">
                       <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
@@ -2610,11 +2615,16 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 /* 「前 8 行」夹层（用户口径 2026-10-15）：行高 24px × 8 = 192px。
-   正文元素同时是测量体 —— scrollHeight 是完整内容高、clientHeight 是被夹住的高，
-   差值超过 1px 就认为"内容超出"，在左下角给「展开」。 */
-.ac-user-line.is-clamped {
+   **常驻**而不是"判定超出后才挂" —— 挂上之前元素没被夹住，
+   scrollHeight == clientHeight，超出判定恒为否，折叠永远不生效（真机踩到的鸡生蛋）。
+   常驻后正文元素就是测量体：scrollHeight 是完整内容高、clientHeight 是被夹住的高，
+   差值超过 1px 即"超出"，左下角给「展开」。没超出的消息 max-height 不影响显示。 */
+.ac-user-line {
   max-height: 192px;
   overflow: hidden;
+}
+.ac-user-line.is-open {
+  max-height: none;
 }
 
 /* 展开 / 收起：文字 + 箭头，放气泡左下角。圆角 6、12px/600，走样式表的「文本按钮」档。 */

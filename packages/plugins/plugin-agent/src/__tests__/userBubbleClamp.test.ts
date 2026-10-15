@@ -19,12 +19,18 @@ const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vu
 describe('用户气泡高度夹层与展开按钮', () => {
   it('正文有测量壳：ref 回调按消息 id 注册，夹层类由「超出且未展开」驱动', () => {
     expect(host).toContain(':ref="setUserBubbleBody(t.id)"')
-    expect(host).toContain("'is-clamped': overflowingUser[t.id] && !openUserBubbles[t.id]")
+    // 2026-10-16 重构：夹层**常驻**（挂上之前测量恒判"没超出"，折叠永不生效的鸡生蛋），
+    // 展开态换 is-open 放开；overflowingUser 只驱动按钮显隐。
+    expect(host).toContain("'is-open': openUserBubbles[t.id]")
   })
 
   it('夹高 = 8 行 × 24px 行高（192px），写死在样式里并有注释说明来源', () => {
-    expect(host).toMatch(/.ac-user-line.is-clamped {[^}]*max-height: 192px;/)
+    expect(host).toMatch(/.ac-user-line {[^}]*max-height: 192px;/)
     expect(host).toContain('行高 24px × 8 = 192px')
+  })
+
+  it('测量对已展开的消息保持原判（否则展开后按钮消失，没法收起）', () => {
+    expect(host).toContain('if (openUserBubbles.value[id]) next[id] = overflowingUser.value[id] === true')
   })
 
   it('按钮只在「超出」时出现，带展开/收起图标，位于气泡左下角', () => {
