@@ -19,6 +19,7 @@
  */
 import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
+import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
 import { DEFAULT_VIDEO_FIT_LIMITS } from './videoFit'
 import { videoTitleExtra } from './videoOps'
 import { MIN_CLIP_DURATION } from './videoClip'
@@ -129,7 +130,19 @@ export const Config: ConfigSchema = {
     label: '剪辑最短时长', group: '节点/视频剪辑',
     description: '拖动剪辑端点时至少要保留的秒数。设得太小会因为一帧的误差而几乎剪掉整段。',
   },
+  // —— 「节点/缩略图」：视频帧图的三档（用户口径：视频这套**独立**配，与图片分开）——
+  //
+  // 视频的三档**全是帧图**（第 1 档 = 原生尺寸那一帧）：因为"不播放时不加载视频"，
+  // 第 1 档也必须是一张图 —— 这是与图片节点最大的差别（图片第 1 档是原图本身）。
+  //
+  // 帧图由**本插件自己用 canvas 抓帧**（见 videoThumbCanvas.ts）：起一个临时 video 解码、
+  // seek 到某一刻、按档位缩放画进画布 —— 不依赖后台、不动基础包，且三档**真的不同尺寸**
+  // （从前那条截帧路径建的是原像素画布，配置的尺寸对它毫无作用，用户实测报过）。
+  ...videoThumbTierFields('video', '节点/缩略图', '视频'),
 }
+
+/** 本插件声明的帧图设置键（内容组件按它过滤 settings 变更） */
+export const VIDEO_THUMB_KEYS = videoThumbTierKeys('video')
 
 /**
  * 插件主体：上架 'video' 服务 + 注册 'video' 节点类型（数据/尺寸/连接约束 + content + 上下操作栏 + create）。

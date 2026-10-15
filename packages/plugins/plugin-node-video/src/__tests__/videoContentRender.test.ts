@@ -1,24 +1,29 @@
 /**
- * VideoContent / VideoCropper 的渲染契约（SSR 拿真 HTML 断言）。
+ * VideoContent 渲染契约（SSR 拿真 HTML 断言）。
  *
- * 为什么必须测模板层（而不是只测纯函数）：几何算对、模板接错字段，画面照样错位 ——
- * 这是图片节点那轮实测踩过的坑（几何正确但模板写错字段）。这里锁住三件"看得见"的事：
+ * 本文件从"视频元素"换成"帧图"之后，断言重心也变了 ——
+ * 画面元素在 SSR 里是**异步抓帧**的（真浏览器才有 canvas/video），所以这里只锁两件
+ * 与"有没有渲染出来"无关、但用户最在意的事：
  *
- * 1. **裁过的节点按框取景**：视频元素必须带上 croppedVideoStyle 给的放大与偏移 ——
- *    这是"裁剪到底有没有生效"在 DOM 上的唯一证据；
- * 2. **裁剪中显示完整画面**：裁剪时那个 style 必须消失（否则用户看不到框外内容、没法调框）；
- * 3. **失效态与空态**：链接失效（会话级 objectURL 刷新）与"无视频"要如实显示，而不是白屏。
+ * 1. **未播放时不渲染 video 元素**（用户硬要求："只有点播放的时候才真正加载视频"）——
+ *    这条必须守住，包括"帧图还没抓好"的那一瞬间；
+ * 2. 播放控件与可达性（纯图标按钮都要有 title + aria-label）、裁剪中不渲染控件、空态/失效态。
+ *
+ * 取景几何（裁剪框 → 放大偏移的百分比）**不在这里重复断言**：
+ * 它由 canvas-render 的 mediaFit.test.ts 直接测（含脏数据边界），这里再走一遍 DOM
+ * 只是把同一份数学抄第二遍。
  */
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, RenderEvents, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
+import { framingStyle } from '../videoCrop'
 
-const VIDEO = 'blob:mock-video'
+const VIDEO = '/api/canvases/c1/resources/abc.mp4'
 
-/** 最小渲染上下文：组件还要用 ctx.get('nodeStore'/'graph'/'command'/'settings') 与 ctx.on */
+/** 最小渲染上下文：组件还要用 ctx.get('command'/'settings') 与 ctx.on */
 function renderCtx(): CanvasRenderContext {
   const services: Record<string, unknown> = {
     nodeStore: { getNode: () => undefined, getNodes: () => [] },
@@ -28,7 +33,9 @@ function renderCtx(): CanvasRenderContext {
   }
   return {
     ctx: { get: (name: string) => services[name], on: () => ({ dispose: () => {} }) },
-    viewport: { value: { zoom: 1 } },
+    flow: { viewport: { value: { zoom: 1 } } },
+    // 可视区闸门（生成帧图前会问一句"这个节点在不在视野里"）
+    visibleNodes: () => [{ id: 'v1', x: 0, y: 0, w: 100, h: 100 }],
   } as unknown as CanvasRenderContext
 }
 
@@ -38,80 +45,32 @@ function render(id: string, data: Record<string, unknown>): Promise<string> {
   return renderToString(app)
 }
 
-/** 取出页面里那个 video 标签 */
-function videoTag(html: string): string {
-  const m = html.match(/<video[^>]*>/)
-  if (!m) throw new Error('渲染结果里找不到 video 元素')
-  return m[0]
-}
-
-describe('裁过的节点：视频按框取景（放大 + 偏移）', () => {
-  it('裁剪框写进视频元素的 style —— 这是裁剪生效在 DOM 上的唯一证据', async () => {
-    const html = await render('v1', {
-      videoUrl: VIDEO,
-      videoWidth: 1600,
-      videoHeight: 800,
-      cropRect: { x: 400, y: 200, width: 800, height: 400 },
-    })
-    const tag = videoTag(html)
-    // 1600/800 = 200%；-400/800 = -50%；-200/400 = -50%
-    expect(tag).toContain('width:200%')
-    expect(tag).toContain('height:200%')
-    expect(tag).toContain('left:-50%')
-    expect(tag).toContain('top:-50%')
-  })
-
-  it('没裁过 → 视频元素不带放大/偏移（就是铺满卡片的那块）', async () => {
+describe('未播放：不加载视频字节', () => {
+  it('有视频地址但没点过播放 → 不渲染 video 元素', async () => {
     const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1600, videoHeight: 800 })
-    const tag = videoTag(html)
-    expect(tag).not.toContain('width:200%')
-    expect(tag).not.toContain('left:-50%')
+    expect(html).not.toContain('<video')
   })
 
-  it('裁剪框脏数据（零尺寸）→ 视为没裁，不输出会算出 NaN 的样式', async () => {
-    const html = await render('v1', {
-      videoUrl: VIDEO,
-      videoWidth: 1600,
-      videoHeight: 800,
-      cropRect: { x: 0, y: 0, width: 0, height: 0 },
-    })
-    expect(videoTag(html)).not.toContain('width:0%')
+  it('抓帧还没好（SSR 就是这种情况）也不挂 video —— 宁可先空着', async () => {
+    // 这条防的是"帧图未就绪时用 video 顶上"的退让：那会立刻开始加载视频，
+    // 正是用户要求"点播放才加载"要避免的
+    const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1920, videoHeight: 1080 })
+    expect(html).not.toContain('<video')
+    expect(html).not.toContain('src=""')
   })
 })
 
-describe('裁剪中：显示完整画面（否则没法调框）', () => {
-  it('进入裁剪 → 取景样式消失（画面必须完整可见）', async () => {
-    beginOverlay('v1', 'crop')
-    const html = await render('v1', {
-      videoUrl: VIDEO,
-      videoWidth: 1600,
-      videoHeight: 800,
-      cropRect: { x: 400, y: 200, width: 800, height: 400 },
-    })
-    const tag = videoTag(html)
-    // 裁剪中必须看到整幅画面：不能带放大/偏移
-    expect(tag).not.toContain('width:200%')
-    expect(tag).not.toContain('left:-50%')
-    endOverlay('v1')
+describe('取景几何（裁剪框 → 放大与偏移）', () => {
+  // 用纯函数断言，不走 DOM：几何同源（framedMediaStyle），且 SSR 里画面元素是异步的
+  it('裁剪框写进 style 的百分比与框位置一致', () => {
+    const style = framingStyle({ x: 400, y: 200, width: 800, height: 400 }, 1600, 800)
+    // 1600/800 = 200%；-400/800 = -50%；-200/400 = -50%
+    expect(style).toMatchObject({ width: '200%', height: '200%', left: '-50%', top: '-50%' })
   })
 
-  it('退出裁剪 → 取景样式回来', async () => {
-    beginOverlay('v1', 'crop')
-    endOverlay('v1')
-    const html = await render('v1', {
-      videoUrl: VIDEO,
-      videoWidth: 1600,
-      videoHeight: 800,
-      cropRect: { x: 400, y: 200, width: 800, height: 400 },
-    })
-    expect(videoTag(html)).toContain('width:200%')
-  })
-
-  it('裁剪中不渲染播放控件（免得和裁剪手势抢）', async () => {
-    beginOverlay('v1', 'crop')
-    const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1600, videoHeight: 800 })
-    expect(html).not.toContain('video-controls')
-    endOverlay('v1')
+  it('没裁过 / 脏数据 → 空样式（不施加放大偏移）', () => {
+    expect(framingStyle(undefined, 1600, 800)).toEqual({})
+    expect(framingStyle({ x: 0, y: 0, width: 0, height: 0 }, 1600, 800)).toEqual({})
   })
 })
 
@@ -138,13 +97,20 @@ describe('播放控件与可达性', () => {
     expect(html).toContain('0:30')
   })
 
+  it('裁剪中不渲染播放控件（免得和裁剪手势抢）', async () => {
+    beginOverlay('v1', 'crop')
+    const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1600, videoHeight: 800 })
+    expect(html).not.toContain('video-controls')
+    endOverlay('v1')
+  })
 })
 
 describe('空态与失效态', () => {
-  it('没有视频 → 显示"（无视频）"，不渲染 video 元素', async () => {
+  it('没有视频 → 显示"（无视频）"，不渲染画面元素', async () => {
     const html = await render('v1', {})
     expect(html).toContain('（无视频）')
     expect(html).not.toContain('<video')
+    expect(html).not.toContain('<img')
   })
 
   it('失效不会在首次渲染就出现（它是会话事实，由播放报错触发）', async () => {
@@ -152,3 +118,4 @@ describe('空态与失效态', () => {
     expect(html).not.toContain('视频已失效')
   })
 })
+
