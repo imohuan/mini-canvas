@@ -165,6 +165,7 @@ const surfaceRef = shallowRef<{
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
   queryNodeEl?: (nodeId: string) => HTMLElement | null
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
+  setCenter?: (x: number, y: number, zoom?: number) => void
 } | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
@@ -437,6 +438,8 @@ let unsubEdge: (() => void) | undefined
 let unsubSel: (() => void) | undefined
 let stopEdgeOnTopWatch: (() => void) | undefined
 
+/** 上一次 syncFromStore 时的节点 id 集合（检测「新增」用，视口跟随） */
+let prevNodeIds = new Set<string>()
 function syncFromStore(): void {
   const h = hostRef.value
   if (!h) return
@@ -451,6 +454,23 @@ function syncFromStore(): void {
     edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
   syncNodesFromStore()
+  // —— 新增节点视口跟随（2026-10-16）：右键/Agent/拖拽建节点时 position 可能在视口外，
+  //  可见剔除会把视口外节点 hidden —— 用户看不到刚建的节点。检测新增，视口自动平移过去（带动画）。
+  //  批量建只对最后一批的中心做一次 setCenter；boot 首次灌入（prev 为空）不跟随（走 fitView 基线）。
+  const nowIds = new Set(h.nodeStore.getNodes().map((n) => n.id))
+  if (prevNodeIds.size > 0) {
+    const added = [...nowIds].filter((id) => !prevNodeIds.has(id))
+    if (added.length > 0) {
+      const positions = h.nodeStore
+        .getNodes()
+        .filter((n) => added.includes(n.id))
+        .map((n) => n.position)
+      const cx = positions.reduce((s2, p) => s2 + p.x, 0) / positions.length
+      const cy = positions.reduce((s2, p) => s2 + p.y, 0) / positions.length
+      surfaceRef.value?.setCenter?.(cx, cy)
+    }
+  }
+  prevNodeIds = nowIds
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
   log.debug(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
@@ -1454,6 +1474,8 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
 
 
 
