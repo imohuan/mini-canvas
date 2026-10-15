@@ -50,6 +50,17 @@ pnpm -C packages/ui dev                    # 起画布应用看画面（:5288）
 
 **测试是唯一裁判**：全绿才前进。（数字为 2026-09-17 实测基线，会随开发变动；以 `docs/STATUS.md` 为准。）
 
+## 文件操作铁律（2026-10-16 事故后新增，必须遵守）
+
+1. **编辑文件后立即 commit**：每完成一个文件的修改（或一组相关修改），立刻 `git add` + `git commit`。
+   绝不允许把大量改动堆在工作区不提交 —— 未提交的改动一旦被 `git checkout` / `git restore` 破坏
+   就**永久丢失**（2026-10-15 VideoContent.vue 帧图系统因 checkout 丢失，靠用户备份才恢复）。
+2. **git checkout / git restore 是危险操作**：执行前必须确认目标文件的工作区改动已提交或已备份；
+   对未提交改动的文件执行 checkout 前必须先 `git stash` 或 `git add + commit`。
+3. **多轮实验后必提交**：调试/实验过程如果修改了源码，无论实验结论如何，结束时就地 commit
+   （实验失败就 revert commit，不要留着工作区不提交）。
+4. **用户提供的备份文件（如 `* copy.vue`）先提交再使用**。
+
 ## 写 UI 前必读
 
 任何浮层/菜单/面板/弹窗，先读 `docs/design/ui-style-guide.md`（设计 token、组件数值、动效、a11y 硬性规则），不自造颜色/圆角/字号数值。
