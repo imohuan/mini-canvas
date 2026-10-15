@@ -59,6 +59,7 @@ import { reasonText as reasonTextFrom } from '../connection/reasonText'
 import type { HoverDecision } from '../connection/resolveFeedback'
 import { DEFAULT_SNAP_ZONE_CONFIG, type NodeRect, type SnapZoneConfig } from '../connection/geometry'
 import { createV2Logger } from '../utils/log'
+import type { FlowRect } from '../geometry/visibleArea'
 import {
   CLIPBOARD_COPY_KIND,
   CLIPBOARD_COPY_KEY,
@@ -85,6 +86,8 @@ import {
   DEFAULT_DEBUG_VISUAL,
 } from './canvasHostCore'
 import { LAYERS } from '../contracts/layers'
+import { computeVisibleIds, type VisibleCullConfig } from './visibleCull'
+import { viewportRectInFlow } from '../geometry/visibleArea'
 
 const log = createV2Logger('canvas-host')
 
@@ -158,6 +161,7 @@ const managerRef = shallowRef<PluginManager | undefined>()
 const surfaceRef = shallowRef<{
   getViewport?: () => ViewportState
   getPaneRect?: () => DOMRect | null
+  getVisibleRect?: () => FlowRect | null
   screenToFlow?: (x: number, y: number) => { x: number; y: number }
   queryNodeEl?: (nodeId: string) => HTMLElement | null
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
@@ -198,6 +202,109 @@ const snapZoneDefaultR = reactive({ ...DEFAULT_SNAP_ZONE_CONFIG })
 // 画布交互配置（「常规/画布」）：boot 后从 settings 读初值 + 订阅实时更新（见 onMounted）。
 // boot 前给默认值占位（CanvasSurface boot 完成才挂载，模板绑定时实际值已就绪）。
 const interactionSettings = reactive<CanvasInteractionSettings>(resolveCanvasInteraction(() => undefined))
+
+// ==================== 可见剔除（2026-10-15 性能优化，docs/plan/2026-10-15-canvas-perf-diagnosis.md） ====================
+/**
+ * cullIds = 当前应渲染的节点 id 集合（视口 + 缓冲相交；null = 不剔除）。
+ * 为什么是 hidden 路线而非数组删除：见 visibleCull.ts 头注（边不断/原生拖拽不掉队）。
+ * 刷新时机：CanvasSurface 的 visibleRect 每帧变化回调（rAF 节流）+ store/选中重灌前现算，
+ * 保证两条重灌路径拿到的都是同一份最新集合（否则选中变化会把被剔节点灌回来）。
+ */
+const cullIds = shallowRef<ReadonlySet<string> | null>(null)
+let cullRaf = 0
+function cullConfigFromSettings(): VisibleCullConfig {
+  return {
+    enabled: interactionSettings.visibleCullEnabled !== false,
+    buffer: typeof interactionSettings.visibleCullBuffer === 'number' ? interactionSettings.visibleCullBuffer : 300,
+  }
+}
+function refreshCull(): void {
+  const h = hostRef.value
+  if (!h) return
+  const surface = surfaceRef.value
+  const rect = surface?.getVisibleRect?.() ?? null
+  if (!interactionSettings.visibleCullEnabled) {
+    cullIds.value = null
+    return
+  }
+  if (rect) {
+    cullIds.value = computeVisibleIds(h.nodeLayout, rect, cullConfigFromSettings())
+    return
+  }
+  // 视口还量不到（初始挂载窗口）：用**近似视口**先算一版剔除，别全量挂 160 个节点再剔。
+  // VueFlow 初始视口是 {0,0,zoom:1}，pane 尺寸回落到窗口尺寸 —— 偏差不大，rAF 到来后精确化。
+  // 没有这一步的话：打开大画布 = 全量挂载（含几十个媒体组件创建）→ 下一帧再整批卸载 ——
+  // 这一上一下就是打开页面 CPU 打满的原因（2026-10-15 卡死排查）。
+  if (typeof window === 'undefined') {
+    cullIds.value = null
+    return
+  }
+  const approx = viewportRectInFlow({ x: 0, y: 0, zoom: 1 }, window.innerWidth, window.innerHeight)
+  cullIds.value = computeVisibleIds(h.nodeLayout, approx, cullConfigFromSettings())
+}
+/** 视口帧回调（CanvasSurface 每次可视矩形变化都会调；rAF 节流防同一帧多次重灌） */
+function onVisibleRectFrame(): void {
+  if (cullRaf) return
+  cullRaf = requestAnimationFrame(() => {
+    cullRaf = 0
+    // 性能关键（LoAF trace 实测 27-134ms/帧）：视口每帧都变，但**可见集合**只在跨越
+    // 缓冲边界时才变。先重算集合，与旧集合 diff——相同就跳过重灌（syncNodesFromStore
+    // 是 160 节点 DTO 全量重建，每帧都做的话剔除本身反成瓶颈）。
+    const prev = cullIds.value
+    refreshCull()
+    const next = cullIds.value
+    const same = prev === next || (prev && next && prev.size === next.size && [...next].every((id) => prev.has(id)))
+    if (!same) syncNodesFromStore()
+  })
+}
+/** 统一的"从 store 重灌渲染节点"出口：两条路径（选中变化/store 变化）共用，保证同一份 cullIds */
+/**
+ * 分批挂载（2026-10-15 卡死排查兜底）：一次性把上百个节点灌给 VueFlow 时，若含
+ * 媒体/iframe 等重组件，挂载窗口的解码/布局会把主线程打满数秒到数十秒（实测打开
+ * default 画布即失去响应）。策略：目标列表一次算好；新增挂载超过 40 个时先挂前 40 个，
+ * 其余按每帧 30 个渐进追加（rAF 链）。已有节点的更新（props 变化）不受影响。
+ */
+let mountRaf = 0
+let publishedExtra = new Set<string>()
+let stagedTarget: ReturnType<typeof nodesFromStore> = []
+function syncNodesFromStore(): void {
+  const h = hostRef.value
+  if (!h) return
+  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value)
+  // 分批进行中：刷新目标引用（rAF step 会用最新数据继续），不重新计算批次
+  if (mountRaf) { stagedTarget = target; return }
+  const existingIds = new Set(nodes.value.map((n) => n.id))
+  const addedCount = target.filter((n) => !existingIds.has(n.id)).length
+  if (addedCount <= 40) {
+    publishedExtra = new Set<string>()
+    nodes.value = target
+    return
+  }
+  // 首批：可见节点优先，最多 40 个；其余进 rAF 队列渐进挂载
+  const visible = (id: string) => !cullIds.value || cullIds.value.has(id)
+  const firstIds = new Set(
+    target.filter((n) => !existingIds.has(n.id) && visible(n.id)).slice(0, 40).map((n) => n.id),
+  )
+  stagedTarget = target
+  publishedExtra = new Set<string>()
+  const pendingIds: string[] = []
+  for (const n of target) {
+    if (!existingIds.has(n.id) && !firstIds.has(n.id)) pendingIds.push(n.id)
+  }
+  nodes.value = target.filter((n) => existingIds.has(n.id) || firstIds.has(n.id))
+  let idx = 0
+  const step = (): void => {
+    for (const id of pendingIds.slice(idx, idx + 30)) publishedExtra.add(id)
+    idx += 30
+    nodes.value = stagedTarget.filter((n) => existingIds.has(n.id) || firstIds.has(n.id) || publishedExtra.has(n.id))
+    if (idx < pendingIds.length) {
+      mountRaf = requestAnimationFrame(step)
+    } else {
+      mountRaf = 0
+    }
+  }
+  mountRaf = requestAnimationFrame(step)
+}
 const edgeVisualToProvide = props.edgeVisual ?? edgeDefaultR
 const handleToProvide = props.handleVisual ?? handleDefaultR
 const debugToProvide = props.debugVisual ?? debugDefaultR
@@ -228,7 +335,7 @@ function syncSelected(): void {
   selectedIds.value = new Set(h.selection.ids)
   selectedEdgeSelRef.value = new Set(h.selection.edgeIds)
   // 重建渲染态节点并带 selected 标记：内核选中(单击/框选/Ctrl+A)驱动 VueFlow 节点高亮一致
-  nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
+  syncNodesFromStore()
   h.ctx.emit(RenderEvents.SelectionChange, {
     nodeIds: [...h.selection.ids],
     edgeIds: [...h.selection.edgeIds],
@@ -343,7 +450,7 @@ function syncFromStore(): void {
     // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
     edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
-  nodes.value = nodesFromStore(h.nodeStore, h.selection.ids)
+  syncNodesFromStore()
   canUndo.value = h.history.canUndo()
   canRedo.value = h.history.canRedo()
   log.debug(`syncFromStore nodes=${nodes.value.length} edges=${edges.value.length} undo=${canUndo.value}`)
@@ -1075,6 +1182,11 @@ onMounted(async () => {
       settingsStore.onChange((key, value) => {
         // 原地写回（引用不变，Vue 响应式可感知 → VueFlow 绑定实时跟随）
         applyCanvasInteractionChangeInto(interactionSettings, key, value)
+        // 可见剔除配置变化 → 立即重算集合并重灌（不等下一次视口变化，否则关掉剔除画面不恢复）
+        if (key === 'visibleCullEnabled' || key === 'visibleCullBuffer') {
+          refreshCull()
+          syncNodesFromStore()
+        }
       }),
     )
 
@@ -1195,6 +1307,11 @@ function flushSave(): void {
   if (!h) return
   // 资源引用扫描（P1-14）：落盘前回收"不再被任何存活节点引用"的 object URL。
   // 延迟到 flush 而非删除即时 revoke，保证 undo 恢复节点时 URL 仍有效。
+  //
+  // 派生资源（缩略图 / 视频帧图）不在此列：它们本来就不写进节点的 resourceId
+  // （只由插件按可推算的名字取用），拿"没被引用"当判据会把它们全清掉 ——
+  // 现象是"每次落盘都把刚生成的缩略图清掉、下次打开又重算一遍"。
+  // 由 ResourceStore 按条目的 derived 标记跳过（见那里的说明）。
   if (h.resources) {
     const alive = new Set<string>()
     for (const n of h.nodeStore.getNodes()) {
@@ -1229,6 +1346,7 @@ defineExpose({
 
 onBeforeUnmount(() => {
   if (dragEmitRaf) cancelAnimationFrame(dragEmitRaf)
+  if (mountRaf) { cancelAnimationFrame(mountRaf); mountRaf = 0 }
   unsubStore?.()
   unsubEdge?.()
   unsubSel?.()
@@ -1280,6 +1398,7 @@ onBeforeUnmount(() => {
         :connection-line-comp="connectionLineComp"
         :node-epoch="nodeEpoch"
         :interaction-settings="interactionSettings"
+      :on-visible-rect-change="onVisibleRectFrame"
         :is-valid-connection="isValidConnection"
         :connection-state="connectionState"
         :interaction="interaction"
@@ -1335,3 +1454,9 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 </style>
+
+
+
+
+
+

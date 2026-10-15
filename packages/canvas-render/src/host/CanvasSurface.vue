@@ -70,6 +70,8 @@ const props = defineProps<{
   nodeEpoch: number
   /** 画布交互配置（「常规/画布」；CanvasHost 从 settings 读成响应式对象，改值实时生效） */
   interactionSettings: CanvasInteractionSettings
+  /** 可视矩形变化回调（剔除刷新入口）：viewport/pane 每次变化都会带最新 FlowRect 调用（可为 null=不可用） */
+  onVisibleRectChange?: (rect: FlowRect | null) => void
   // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
   isValidConnection: (conn: Connection) => boolean
   onConnect: (conn: Connection) => void
@@ -183,6 +185,27 @@ function refreshVisibleRect(): void {
 // viewport / pane 变化时刷新可视矩形；onMounted 量到 pane 后也刷一次
 watch(viewportRef, refreshVisibleRect)
 watch(paneRectRef, refreshVisibleRect)
+// —— 拖拽快速模式（dragRapidMode，2026-10-15 性能优化 P1）——
+// Chrome：脚本改 transform scale 时每帧重光栅化，will-change:transform 让内容固定位图提升速度
+// （developer.chrome.com/blog/re-rastering-composite；实测节点层 96ms→24.8ms/帧）。
+// 代价：手势期间放大看略糊。挂在节点层（比 transformationpane 更省，见诊断报告 §三原因2）。
+// 开关时机：viewport 开始变化时加，停止 300ms 后摘（避免频繁开关本身的一次性成本）。
+let rapidOffTimer: ReturnType<typeof setTimeout> | null = null
+watch(viewportRef, () => {
+  if (!props.interactionSettings.dragRapidMode) return
+  const nodesLayer = rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes')
+  if (nodesLayer) nodesLayer.style.willChange = 'transform'
+  if (rapidOffTimer) clearTimeout(rapidOffTimer)
+  rapidOffTimer = setTimeout(() => {
+    rapidOffTimer = null
+    const el = rootEl.value?.querySelector<HTMLElement>('.vue-flow__nodes')
+    if (el) el.style.willChange = ''
+  }, 300)
+})
+// 可视矩形 → 宿主（剔除刷新入口；宿主侧 rAF 节流，这里直呼不节流）
+watch(visibleRectRef, (rect) => {
+  props.onVisibleRectChange?.(rect)
+})
 
 /** 屏幕 client → flow（官方换算，可靠） */
 function screenToFlow(clientX: number, clientY: number): { x: number; y: number } {
@@ -354,6 +377,8 @@ defineExpose({
       : (vfApi.viewport as unknown as { x: number; y: number; zoom: number })
   },
   getPaneRect: (): DOMRect | null => (paneEl.value ? paneEl.value.getBoundingClientRect() : null),
+  /** 当前可视区（flow 坐标矩形）：宿主做可见剔除判定用（visibleCull）；未挂载/量不到时 null */
+  getVisibleRect: (): FlowRect | null => visibleRectRef.value,
   /** 当前被 VueFlow 选中的节点 id（框选/多选后读；供宿主回写内核） */
   /** 当前选中节点的最新位置（多选拖动落盘用：VueFlow 已把位移应用到全部选中节点） */
   getSelectedNodePositions: () =>

@@ -2,8 +2,10 @@
  * canvasInteractionSettings.test —— 画布交互配置（「常规/画布」）的纯逻辑单测。
  *
  * 覆盖（对齐 v1 core 的 VueFlow 交互开关，全收进一组）：
- * - schema 声明：15 项（13 个开关 + 网格间距 X/Y 两项；onlyRenderVisibleElements 已移除，
- *   见 CANVAS_INTERACTION_DEFAULTS 注释）、分组恒为「常规/画布」、类型正确；
+ * - schema 声明：18 项（13 开关 + 网格间距 X/Y + 可见剔除三项 visibleCullEnabled/
+ *   visibleCullBuffer/dragRapidMode —— 2026-10-15 自研可见剔除上线，见
+ *   docs/plan/2026-10-15-canvas-perf-diagnosis.md；onlyRenderVisibleElements（库级）
+ *   仍移除，见 CANVAS_INTERACTION_DEFAULTS 注释）、分组恒为「常规/画布」、类型正确；
  * - resolve：从任意取值器解析出完整值对象（缺项/非法回落默认，一项坏不连坐）；
  * - apply：单项变更只动认识的键，无关键原样返回同一引用（不触发无谓重渲染）。
  */
@@ -19,9 +21,9 @@ import {
 } from '../canvasInteractionSettings'
 
 describe('canvasInteractionSettings schema 声明', () => {
-  it('15 项配置、分组恒为「常规/画布」', () => {
+  it('18 项配置、分组恒为「常规/画布」', () => {
     const keys = Object.keys(CANVAS_INTERACTION_SCHEMA)
-    expect(keys).toHaveLength(15)
+    expect(keys).toHaveLength(18)
     for (const key of keys) {
       expect(CANVAS_INTERACTION_SCHEMA[key].group).toBe(CANVAS_INTERACTION_GROUP)
     }
@@ -45,6 +47,10 @@ describe('canvasInteractionSettings schema 声明', () => {
     // v1 曾开（大画布性能），但 VueFlow 1.48 视口剔除对嵌套子节点用相对坐标判定 → 节点"消失"。
     // 嵌套组支持依赖关闭（VueFlow 库默认），且不再暴露进设置面板。
     expect(CANVAS_INTERACTION_DEFAULTS.onlyRenderVisibleElements).toBe(false)
+    // —— 2026-10-15 自研可见剔除（hidden 路线，与库级开关无关）——
+    expect(CANVAS_INTERACTION_DEFAULTS.visibleCullEnabled).toBe(true)
+    expect(CANVAS_INTERACTION_DEFAULTS.visibleCullBuffer).toBe(300)
+    expect(CANVAS_INTERACTION_DEFAULTS.dragRapidMode).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.preventScrolling).toBe(true)
   })
 

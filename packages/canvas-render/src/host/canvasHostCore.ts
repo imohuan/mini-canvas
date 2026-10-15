@@ -53,6 +53,9 @@ export interface FlowNode {
   data: Record<string, unknown>
   /** 选中态（来自内核 selection；VueFlow 据此高亮节点） */
   selected?: boolean
+  /** 可见剔除标记（2026-10-15）：true = 视口外不渲染。VueFlow NodeWrapper render null，
+   *  节点保留在内部 store（边不断/原生拖拽不掉队，见 docs/plan/2026-10-15-canvas-perf-diagnosis.md §9.3） */
+  hidden?: boolean
   /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 父子嵌套字段名是 parentNode，
    *  子 position 视为相对父的局部坐标，渲染层级自动排在父之上） */
   parentNode?: string
@@ -72,7 +75,18 @@ export interface FlowNode {
  * @param selectedIds 内核选中的节点 id 集（可选）：传入则给匹配节点打 selected=true，驱动 VueFlow 高亮；
  *   不传则不带 selected 字段（向后兼容）。
  */
-export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySet<string>): FlowNode[] {
+/**
+ * cullIds —— 可见剔除集合（2026-10-15 性能优化，docs/plan/2026-10-15-canvas-perf-diagnosis.md §九）。
+ * 语义：**不在集合内的节点 hidden=true**（VueFlow render null 不产出 DOM，但保留在内部 store）。
+ * 为什么 hidden 而不是从数组删：边解析不断、原生多选拖拽不掉队、updateNodeVisual 有效（§9.3）。
+ * null / undefined = 不剔除（全量渲染，未挂载/禁用时的安全兜底）。
+ * 零例外规则：选中/拖拽中/分组父节点一律走同一相交判定，不做特判（选中是数据态不依赖 DOM）。
+ */
+export function nodesFromStore(
+  store: NodeStoreService,
+  selectedIds?: ReadonlySet<string>,
+  cullIds?: ReadonlySet<string> | null,
+): FlowNode[] {
   return store.getNodes().map((n: CanvasNode) => {
     const selected = selectedIds ? selectedIds.has(n.id) : false
     const out: Record<string, unknown> = {
@@ -85,6 +99,12 @@ export function nodesFromStore(store: NodeStoreService, selectedIds?: ReadonlySe
       zIndex: selected ? LAYERS.nodeSelected : LAYERS.node,
     }
     if (selectedIds) out.selected = selected
+    // hidden 必须双向显式写：VueFlow 内部 store 对节点更新是**合并**语义（与 style 尺寸同一教训，
+    // 见下方 loadingSize 注释）——只写 true 不写 false 的话，节点从"剔除"恢复"可见"时，
+    // 内部 store 里的 hidden:true 不会被不带该字段的新对象清掉，节点会永远消失。
+    // 注意：即使调用方不传 cullIds（禁用剔除），也要显式写 hidden:false —— 否则上次剔除留下的
+    // hidden:true 会在合并语义下永久残留（实测：关掉剔除后 DOM 停在 150 不回 160）。
+    out.hidden = cullIds ? !cullIds.has(n.id) : false
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，
     // 且 z = 父 z + 1（getXYZPos），分组卡片永远垫在子节点下面。

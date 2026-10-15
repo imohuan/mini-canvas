@@ -50,6 +50,12 @@ export interface CanvasInteractionSettings {
   minZoom: number
   maxZoom: number
   onlyRenderVisibleElements: boolean
+  /** 可见节点剔除总开关（自研剔除，hidden 标记路线；与 onlyRenderVisibleElements 库级开关无关） */
+  visibleCullEnabled: boolean
+  /** 可见剔除缓冲距离（flow px）：视口外扩这么远的节点仍渲染 */
+  visibleCullBuffer: number
+  /** 拖拽快速模式：手势期间给节点层加 will-change: transform（快但略糊） */
+  dragRapidMode: boolean
   preventScrolling: boolean
   /** VueFlow 绑定用：snapGridX/Y 拼成的 [x, y] 元组 */
   snapGrid: [number, number]
@@ -75,6 +81,10 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   //（getNodesInside 未合并父 computedPosition）→ 嵌套组的子节点会被误判视口外而"消失"。
   // VueFlow 库默认关 —— 嵌套组支持依赖它关闭，改回库默认。
   onlyRenderVisibleElements: false,
+  // —— 自研可见剔除（2026-10-15 性能优化，见 docs/plan/2026-10-15-canvas-perf-diagnosis.md）——
+  visibleCullEnabled: true,
+  visibleCullBuffer: 300,
+  dragRapidMode: true,
   preventScrolling: true,
   snapGrid: [15, 15] as [number, number],
 })
@@ -110,7 +120,7 @@ function num(
   }
 }
 
-/** 17 项声明（宿主 createMiniCanvasHost 用 settings.define 一次登记） */
+/** 20 项声明（宿主 createMiniCanvasHost 用 settings.define 一次登记） */
 export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingSchema> = {
   nodesDraggable: bool('nodesDraggable', '节点可拖拽', '关闭后节点不能拖动（画布只读平移时常用）。'),
   nodesConnectable: bool('nodesConnectable', '节点可连线', '关闭后不能从端口拖出连线。'),
@@ -130,6 +140,24 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
     'preventScrolling',
     '阻止页面滚动',
     '鼠标在画布上滚动时不带动外层页面滚动（嵌入长页面时按需关）。',
+  ),
+  visibleCullEnabled: bool(
+    'visibleCullEnabled',
+    '只渲染可见节点',
+    '视口外（含缓冲带）的节点不渲染，节点多时拖动/缩放更流畅。选中状态不受影响（全选仍选中全部）。',
+  ),
+  visibleCullBuffer: num(
+    'visibleCullBuffer',
+    '剔除缓冲距离',
+    0,
+    2000,
+    50,
+    '视口外多远范围内的节点仍渲染（画布像素）。太小快速拖动会闪白，太大省不了多少。',
+  ),
+  dragRapidMode: bool(
+    'dragRapidMode',
+    '拖拽快速模式',
+    '拖动画布时画面略糊换流畅（松手恢复清晰）。节点多时建议开。',
   ),
 }
 

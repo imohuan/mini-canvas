@@ -80,12 +80,20 @@ export function useNodeMeasure(opts: {
     if (observed.has(el)) return
     observed.add(el)
     ro?.observe(el)
-    // 首次挂载立即上报一次（避免等首帧 ResizeObserver 回调）
+    // 首次挂载立即上报一次（避免等首帧 ResizeObserver 回调）。
+    // 权衡（2026-10-15 trace）：同步读 offsetWidth 是一次强制回流（节点挂载窗口 ~22ms），
+    // 曾试图改为只靠 RO 首回调，但"量测必须及时"有单测契约锁定，且及时量测是
+    // 剔除判定（defaultSize 兜底 vs 实测）与 M-3 尺寸保护的正确性前提——保留。
     const id = el.dataset?.id
     if (id) {
-      const w = el.offsetWidth
-      const h = el.offsetHeight
-      if (w > 0 && h > 0) nodeLayout.setMeasuredSize(id, w, h)
+      // 卡死排查实验（2026-10-15）：同步读 offsetWidth 是强制回流；怀疑与剔除重灌交错
+      // 形成布局风暴（Debugger.pause 无法中断原生布局 = 主线程卡原生的特征）。
+      // 改为 rAF 延迟读取：挂载后下一帧再量，避开回流风暴。
+      requestAnimationFrame(() => {
+        const w = el.offsetWidth
+        const h = el.offsetHeight
+        if (w > 0 && h > 0) nodeLayout.setMeasuredSize(id, w, h)
+      })
     }
   }
 
@@ -98,14 +106,27 @@ export function useNodeMeasure(opts: {
       observeNode(el)
     }
     // 卸载已消失节点：清实测 + 解 observe
+    // ⚠️ 可见剔除（2026-10-15）：hidden 节点没有 DOM（NodeWrapper render null），元素会从这里
+    // "消失"，但它仍在 nodeStore 里——**不能清实测值**，否则 64 个无落盘尺寸的节点
+    // （text/audio 等）剔除期间判定矩形退化成 defaultSize，且恢复时闪变。
+    // 判据：store 里还有该节点 = 剔除移除（保留量测）；store 里没有 = 真删除（清理）。
     for (const el of observed) {
       if (!current.has(el)) {
         const id = el.dataset?.id
-        if (id) nodeLayout.clearMeasuredSize(id)
+        if (id && !nodeLayoutHasNode(id)) nodeLayout.clearMeasuredSize(id)
         ro?.unobserve(el)
         observed.delete(el)
       }
     }
+  }
+
+  /**
+   * 节点是否仍存活于数据层（剔除移除不清量测的判据）。
+   * NodeLayoutService 没有直接的 hasNode；getAllRects 全量查太贵——
+   * 用 getNodeRect(id) 非空判断（内部查 store.getNode，O(父链) 很便宜）。
+   */
+  function nodeLayoutHasNode(id: string): boolean {
+    return nodeLayout.getNodeRect(id) !== null
   }
 
   return {
