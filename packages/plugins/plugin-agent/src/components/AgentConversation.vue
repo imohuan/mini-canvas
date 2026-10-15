@@ -386,7 +386,7 @@ onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-queue-prefs-
 
 onMounted(() => {
   if (typeof ResizeObserver === 'undefined') return
-  bubbleRO = new ResizeObserver(() => measureUserBubbles())
+  bubbleRO = new ResizeObserver(() => scheduleMeasureUserBubbles())
   measureUserBubbles()
 })
 
@@ -690,7 +690,13 @@ function scheduleMeasureUserBubbles(): void {
 function measureUserBubbles(): void {
   const next: Record<string, boolean> = {}
   for (const [id, el] of userBubbleBodies) next[id] = el.scrollHeight > el.clientHeight + 1
-  overflowingUser.value = next
+  // 稳定态检测（2026-10-16 卡死修复）：与上次值相同就**不写** ref ——
+  // 写相同的值 Vue 也会因引用变化触发重渲染 → ref 回调再触发 measure → 无限循环
+  // （「一轮 AI 对话后整机卡死」的根因：滚动吸底动画/RO 每帧驱动 measure）。
+  let changed = false
+  const prev = overflowingUser.value
+  for (const [id, v] of Object.entries(next)) if (prev[id] !== v) changed = true
+  if (changed || Object.keys(prev).length !== Object.keys(next).length) overflowingUser.value = next
 }
 function setUserBubbleBody(id: string): (el: unknown) => void {
   // ref 回调只登记 DOM（普通 Map，不碰响应式）：渲染期间零副作用，不会自触发。
