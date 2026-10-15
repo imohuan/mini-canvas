@@ -264,6 +264,13 @@ describe('组装渲染文档', () => {
     // 放行后台自己的源
     expect(doc).toContain('connect-src')
     expect(doc).toContain('http://localhost:8865')
+    // WebSocket 形态也放行（调试 SDK 从沙箱里连后台 ws）
+    expect(doc).toContain('ws://localhost:8865')
+    const docHttps = buildSrcdoc('<div>x</div>', inputs, upstream, {
+      baseUrl: 'https://mc.example.com',
+      allowNetwork: true,
+    })
+    expect(docHttps).toContain('wss://mc.example.com')
     // 但仍然不是"敞开"：default-src 'none' 还在
     expect(doc).toContain("default-src 'none'")
   })

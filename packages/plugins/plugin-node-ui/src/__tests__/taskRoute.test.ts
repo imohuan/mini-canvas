@@ -127,6 +127,7 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
     apply(s.ctx)
     expect([...s.routes.keys()].sort()).toEqual([
       'GET /api/node-packages/read',
+      'GET /api/node-ui/debug-events',
       'GET /api/node-ui/info',
       'GET /api/task/events',
       'GET /api/task/info',
@@ -138,6 +139,8 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
       'POST /api/node-packages/import',
       'POST /api/node-packages/inspect',
       'POST /api/node-packages/save',
+      'POST /api/node-ui/debug-accept',
+      'POST /api/node-ui/debug-result',
       'POST /api/task/call',
       'POST /api/task/cancel',
     ])

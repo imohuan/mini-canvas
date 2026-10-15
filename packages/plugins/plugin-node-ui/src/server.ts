@@ -69,6 +69,7 @@ import { PACK_EXT } from './task/pack.js'
 import { planDeclared, UI_SCRIPTS_KEY } from './task/declarePlan.js'
 import { registerPackRoutes } from './task/packRoutes.js'
 import { registerImportRoutes } from './task/importRoutes.js'
+import { UI_DEBUG_INVITE_KEY, isAcceptMatching, newSessionId, readInvite, type DebugAcceptPayload } from './debugSession.js'
 import { NODE_DOC_KEY, describeNodeDoc, nodeDocOf } from './task/nodeDoc.js'
 import { describeFunction } from './task/fnDoc.js'
 import { uniqueLabel } from './task/uniqueLabel.js'
@@ -1164,5 +1165,239 @@ export function apply(ctx: ServerCtx): void {
       }
     },
   })
+
+  // ==================== 调试连接（用户 2026-10-15 定的邀请制）====================
+  //
+  // 要解决的问题：Agent 想调试一个可视化节点的**运行实例**（读变量、执行脚本），
+  // 而同一张画布可能开着多个标签页 —— 必须让用户选一个，且后续重连认的还是同一个。
+  //
+  // 职责划分（与 debugSession.ts 的注释同口径）：
+  //   · 后台（这两个工具）：放邀请标记 / 收回执并记住「谁被选中」；不碰 HTML。
+  //   · 前端（UiContent）：看到标记弹确认框；被点中的标签页写 sessionStorage 凭据、
+  //     回执、清标记、进调试态（iframe 注入 SDK、拦截刷新）。
+  //
+  // 为什么 SDK 连接走 WebSocket 而后台不发 HTTP 给页面：页面在沙箱 iframe 里，
+  // 后台无法直接叫它 —— 只能由页面里的 SDK 主动拨过来（浏览器安全的常识约束）。
+  // 所以这里只「留名字」：连接建立后 SDK 报 hello（session / canvasId / nodeId），
+  // 后台按名字认识它。
+
+  /** 当前挂着的调试会话（每张画布同时最多一个 —— 调试是独占动作） */
+  const debugSessions = new Map<string, { session: string; nodeId: string }>()
+
+  /**
+   * eval 执行通道（SSE 下行 + HTTP POST 上行）。
+   *
+   * 为什么不是 WebSocket：cloud-server 没有 WS 设施，外挂插件也拿不到 http server 挂
+   * upgrade 监听；SSE 项目里已有成熟先例（任务日志 watchRun）。SDK 脚本里 EventSource
+   * 拨号到 debug-events，后台把 eval 任务塞进 pending 表；执行结果从 debug-result 回来，
+   * 由 waiter 的 resolve 送回 MCP 调用方。stop 同理：挂一个 promise，disconnect 时 resolve。
+   */
+  type DebugEval = { id: string; code: string }
+  type DebugWaiter = { resolve: (v: { ok: boolean; result?: unknown; error?: string; stopped?: boolean }) => void }
+  const debugEvals = new Map<string, DebugEval[]>() // session → 未被 SDK 取走的 eval 队列
+  const debugSse = new Map<string, (e: DebugEval | { type: 'stop' }) => void>() // session → SSE 投递口
+  const debugResults = new Map<string, DebugWaiter>() // evalId → 等结果的 resolve
+  const debugStops = new Map<string, DebugWaiter>() // session → 等 disconnect 的 resolve
+  let debugEvalSeq = 0
+
+  // ⑫ 发起调试连接：在节点上放邀请标记，等用户在某个标签页上确认
+  ctx.mcp.tool({
+    name: 'canvas_ui_connect',
+    description:
+      '对某个可视化节点发起**调试连接**（临时状态，不改节点 HTML）。' +
+      '调用后，所有打开这张画布的标签页都会弹一个确认对话框；用户点中哪个标签页，' +
+      '调试链接就建在哪个标签页的节点实例上（多标签页只认被点中的那一个）。' +
+      '用户确认后用 canvas_ui_debug_eval 在这个连接里执行脚本；' +
+      '调试完用 canvas_ui_disconnect 断开。连接只对**当前开着画布页面**的节点有效，' +
+      '页面没开 / 用户没确认都会让它一直挂着（返回里给了 session，可再次 connect 重发邀请）。',
+    input: { canvasId: 'string', nodeId: 'string' },
+    required: ['nodeId'],
+    handler: async (args) => {
+      const picked = await uiNodeOf(ctx, args)
+      if (!picked.ok) return picked
+      const { canvasId, nodeId } = picked
+      const session = newSessionId()
+      // 邀请写成**合并**进 data（batchNodes 的 update 是浅合并）：只添这一个字段，
+      // 不碰 uiHtml / uiInputs 等既有字段 —— 这是「临时状态」与「重写内容」的根本区别。
+      const res = await writeUiHtml(ctx, canvasId, nodeId, {
+        [UI_DEBUG_INVITE_KEY]: { session, at: Date.now() },
+      })
+      if (!res.ok) return { ok: false, error: res.error ?? '放邀请标记失败' }
+      debugSessions.set(canvasId, { session, nodeId })
+      return {
+        ok: true,
+        canvasId,
+        nodeId,
+        session,
+        hint: '邀请已发出：打开这张画布的每个标签页都会弹确认框，用户点中哪个就用哪个。' +
+          '用户确认后，前端会清掉邀请标记并连上后台（WebSocket hello 带 session）。' +
+          '如果标签页上没弹框，检查画布页面是否开着。',
+      }
+    },
+  })
+
+  // ⑬ 收回执：前端把「用户点了哪个标签页」报上来
+  ctx.routes.post('/api/node-ui/debug-accept', async (c) => {
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ ok: false, error: '请求体不是合法 JSON' }, 400)
+    }
+    const accept = body as DebugAcceptPayload | undefined
+    if (!accept || typeof accept.session !== 'string' || typeof accept.nodeId !== 'string' || typeof accept.canvasId !== 'string') {
+      return c.json({ ok: false, error: '缺少 session / nodeId / canvasId' }, 400)
+    }
+    // 回执必须配得上当前邀请：邀请没了（前端已清）或对不上号都拒绝。
+    // 为什么查节点 data 而不是内存 Map：Map 只在**这个**后台进程里，而邀请标记在
+    // 画布数据里（后台重启也能恢复判断）—— 用同一份事实，别养两套。
+    const node = (await nodesOf(ctx, accept.canvasId)).find((n) => String(n.id) === accept.nodeId)
+    const invite = readInvite(node?.data)
+    if (!isAcceptMatching(invite, accept)) {
+      return c.json({ ok: false, error: '回执与当前邀请不匹配（可能已被确认过或已过期）' }, 409)
+    }
+    // 邀请标记落盘清除（前端只是 updateNodeRuntime——不落盘，刷新后标记会复活）。
+    // 必须在记会话之前清：标记在 = 邀请还挂着，清掉才是「已被认领」的语义。
+    await writeUiHtml(ctx, accept.canvasId, accept.nodeId, { [UI_DEBUG_INVITE_KEY]: null })
+    // 记下被选中的标签页：后续 eval 只对它生效（eval 找的是 SSE 通道里的 session）
+    debugSessions.set(accept.canvasId, { session: accept.session, nodeId: accept.nodeId })
+    return c.json({ ok: true, wsPath: '/api/node-ui/debug-events', session: accept.session })
+  })
+
+  // SSE 下行通道：SDK 脚本拨进来，等 eval / stop。
+  ctx.routes.get('/api/node-ui/debug-events', (c) => {
+    const session = c.req.query?.('session') ?? ''
+    const owning = [...debugSessions.entries()].find(([, s]) => s.session === session)
+    if (!session || !owning) {
+      return c.json({ ok: false, error: '未知调试会话' }, 404)
+    }
+    // 手写 SSE 流（外挂插件产物零第三方依赖：不 import hono/streaming）。
+    // 格式：每条事件一行 data: <json> + 空行；每 20 秒一行注释帧保活。
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        let closed = false
+        let ping: ReturnType<typeof setInterval> | undefined
+        const send = (text: string): void => {
+          if (closed) return
+          try { controller.enqueue(encoder.encode(text)) } catch { closed = true }
+        }
+        const teardown = (): void => {
+          if (closed) return
+          closed = true
+          if (ping !== undefined) clearInterval(ping)
+          debugSse.delete(session)
+          try { controller.close() } catch { /* 已关 */ }
+        }
+        const push = (e: DebugEval | { type: 'stop' }): void => {
+          send('data: ' + JSON.stringify(e) + '\n\n')
+          if ('type' in e && e.type === 'stop') {
+            // stop 发完就收流：SDK 的 fetch 流读到的 done 会自然结束重连循环
+            setTimeout(teardown, 50)
+          }
+        }
+        // 重连恢复：把还没取走的 eval 立刻补发一遍
+        const backlog = debugEvals.get(session) ?? []
+        for (const e of backlog) push(e)
+        debugEvals.set(session, [])
+        debugSse.set(session, push)
+        // 保活 + 最长存活：调试会话不该无限挂着（长流会把 CDP/代理拖死）
+        ping = setInterval(() => send(': ping\n\n'), 20_000)
+        setTimeout(teardown, 15 * 60_000)
+        // 请求中断（页签关闭 / SDK 重连）时清理
+        const raw = (c as unknown as { req: { raw?: Request } }).req.raw
+        raw?.signal?.addEventListener('abort', teardown)
+      },
+    })
+    return new Response(body, {
+      headers: {
+        'content-type': 'text/event-stream',
+        'cache-control': 'no-cache',
+        connection: 'keep-alive',
+      },
+    })
+  })
+
+  // 上行回包：SDK 执行完 eval 从这里交结果
+  ctx.routes.post('/api/node-ui/debug-result', async (c) => {
+    let body: unknown
+    try { body = await c.req.json() } catch { return c.json({ ok: false, error: '请求体不是合法 JSON' }, 400) }
+    const m = body as { session?: unknown; id?: unknown; ok?: unknown; result?: unknown; error?: unknown } | null
+    if (!m || typeof m.id !== 'string') return c.json({ ok: false, error: '缺少 id' }, 400)
+    const waiter = debugResults.get(m.id)
+    if (!waiter) return c.json({ ok: false, error: '没有在等的 eval（可能已超时）' }, 404)
+    debugResults.delete(m.id)
+    waiter.resolve({
+      ok: m.ok === true,
+      ...(m.ok === true ? { result: m.result } : { error: typeof m.error === 'string' ? m.error : '执行失败' }),
+    })
+    return c.json({ ok: true })
+  })
+
+  // ⑭ 在调试连接里执行一段脚本（eval）
+  ctx.mcp.tool({
+    name: 'canvas_ui_debug_eval',
+    description:
+      '在**已建立的调试连接**里执行一段 JavaScript（跑在用户确认过的那个标签页的节点 iframe 里，' +
+      '与页面同上下文：能读 window、DOM、页面里的变量），把结果或报错拿回来。' +
+      '前提：先 canvas_ui_connect 且用户已在某个标签页上确认。结果不能结构化克隆的部分会被 JSON 化。',
+    input: { canvasId: 'string', code: 'string' },
+    required: ['canvasId', 'code'],
+    handler: async (args) => {
+      const canvasId = typeof args.canvasId === 'string' && args.canvasId ? args.canvasId : 'default'
+      const code = typeof args.code === 'string' ? args.code : ''
+      if (!code.trim()) return { ok: false, error: '缺少 code（要执行的 JavaScript）' }
+      const sess = debugSessions.get(canvasId)
+      if (!sess) return { ok: false, error: '这张画布没有挂着的调试会话：先 canvas_ui_connect' }
+      const push = debugSse.get(sess.session)
+      if (!push) return { ok: false, error: '标签页的 SDK 还没连上（确认对话框被点了吗？页面开着吗？）' }
+      const id = 'e' + ++debugEvalSeq
+      const result = await new Promise<{ ok: boolean; result?: unknown; error?: string; stopped?: boolean }>((resolve) => {
+        debugResults.set(id, { resolve })
+        push({ id, code })
+        // 30 秒兜底：SDK 挂了不该让 MCP 调用永远挂着
+        setTimeout(() => {
+          if (debugResults.has(id)) {
+            debugResults.delete(id)
+            resolve({ ok: false, error: '执行超时（30 秒没等到回包）' })
+          }
+        }, 30_000)
+      })
+      if (result.stopped) return { ok: false, error: '调试会话已被断开' }
+      return result.ok ? { ok: true, result: result.result } : { ok: false, error: result.error ?? '执行失败' }
+    },
+  })
+
+  // ⑮ 断开调试连接：给 SDK 发 stop，等它收线；清会话
+  ctx.mcp.tool({
+    name: 'canvas_ui_disconnect',
+    description:
+      '断开某个可视化节点的**调试连接**（canvas_ui_connect 建立的）。节点数据不动、' +
+      '页面不动 —— 只是停掉执行通道。断开后 sessionStorage 里的凭据由前端在组件卸载时清。',
+    input: { canvasId: 'string' },
+    handler: async (args) => {
+      const canvasId = typeof args.canvasId === 'string' && args.canvasId ? args.canvasId : 'default'
+      const sess = debugSessions.get(canvasId)
+      if (!sess) return { ok: false, error: '这张画布没有挂着的调试会话' }
+      const push = debugSse.get(sess.session)
+      push?.({ type: 'stop' })
+      // 等 stop 送达（最多 2 秒）再清，避免 SDK 还挂着就丢队列
+      await new Promise((r2) => setTimeout(r2, 300))
+      debugSessions.delete(canvasId)
+      debugEvals.delete(sess.session)
+      debugStops.delete(sess.session)
+      return { ok: true, canvasId, note: '调试连接已断开。' }
+    },
+  })
 }
+
+
+
+
+
+
+
+
+
+
 

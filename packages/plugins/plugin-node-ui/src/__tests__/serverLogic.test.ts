@@ -68,7 +68,12 @@ describe('后台半：给 AI 的工具（这是「它怎么画」的答案）', 
       'canvas_fn_list',
       // 可视化节点：画界面 + 打包 + 说明书 + 收藏可复用
       'canvas_ui_add_favorite',
+      // 调试连接（用户 2026-10-15：邀请制，后台只放标记 + 收回执）
+      'canvas_ui_connect',
+      // 调试连接（在连接里执行脚本 / 断开）
+      'canvas_ui_debug_eval',
       'canvas_ui_describe',
+      'canvas_ui_disconnect',
       // 导出到本机下载目录（用户 2026-10-14：节点删了也要能恢复）
       'canvas_ui_export',
       'canvas_ui_favorites',

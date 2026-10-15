@@ -33,6 +33,16 @@ import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
 import { fetchBackendOrigin } from './uiOrigin'
+import { buildDebugDoc } from './uiDebug'
+import {
+  UI_DEBUG_INVITE_KEY,
+  buildSdkScriptBody,
+  appendSdkScript,
+  readInvite,
+  readCredential,
+  writeCredential,
+  clearCredential,
+} from './debugSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -244,6 +254,146 @@ function pushDataToFrame(): void {
 // 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
 watch([upstream, inputValues], () => pushDataToFrame())
 
+// ======================================================================
+// 调试连接（用户 2026-10-15 定的流程：邀请 → 用户确认唯一标签页 → 注入 SDK）
+// ======================================================================
+//
+// 状态机（全部在前端，后台只存邀请标记与记住被选中的 session）：
+//   无标记 + 无凭据          → 平时，什么都不做
+//   data 有邀请标记          → 每个标签页都弹确认框
+//     用户点「同意」         → 本标签页写 sessionStorage 凭据 + 回执后台 + 清标记
+//                              （其他标签页看到标记消失，自动收起自己的框）
+//   有凭据 + 本节点          → 调试态：srcdoc 追加 SDK 脚本连后台 + 拦截刷新
+//   刷新后凭据还在           → 调试态自动恢复（SDK 的指数退避重连接住断线）
+//   清标记（disconnected）    → 清凭据，回到平时
+//
+// 为什么状态机放组件里：邀请标记在**节点 data** 上（props.data 就是它，经 SSE 同步
+// 天然多标签页广播）；凭据在 **sessionStorage** 上（每标签页一份）。组件同时看得到
+// 这两样，别的地方都看不到全貌。
+
+/** 本标签页正在调试的会话号（空 = 没在调试）——与凭据同步存在 */
+const debugSession = ref('')
+
+/** 邀请标记（从节点 data 读出来；没有 = undefined） */
+const pendingInvite = computed(() => readInvite(props.data))
+
+/** sessionStorage 的安全访问：SSR / 隐私模式里可能不存在或抛错 —— 一律按「没凭据」降级 */
+function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | undefined {
+  try {
+    return typeof sessionStorage !== 'undefined' ? sessionStorage : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 读凭据的环境安全版（storage 不在 = 没凭据） */
+function loadCred() {
+  const st = safeStorage()
+  return st ? readCredential(st) : undefined
+}
+
+/** 是否该弹确认框：有邀请、且本标签页还不是那个被选中的（凭据对不上这个邀请） */
+const showDebugPrompt = computed(() => {
+  const inv = pendingInvite.value
+  if (!inv) return false
+  const cred = loadCred()
+  // 凭据就是为这次会话写的 → 我就是被选中的那个，不弹（正在调试中）
+  if (cred && cred.session === inv.session && cred.nodeId === props.id && cred.canvasId === canvasId) return false
+  return true
+})
+
+/** 调试态 = 本标签页持有对得上当前节点的凭据（它存在与清理由 accept / disconnect 写） */
+const activeDebug = computed(() => {
+  // debugSession（响应式）参与依赖：点「同意」那一刻它被置位，frameDoc 立刻重算、
+  // iframe 重挂时带上 SDK。sessionStorage 本身不是响应式的，光靠它 computed 不会动。
+  void debugSession.value
+  const cred = loadCred()
+  return !!(cred && cred.nodeId === props.id && cred.canvasId === canvasId)
+})
+
+/** 用户在确认框点「同意」：写凭据 → 回执后台 → 清节点上的邀请标记 */
+async function acceptDebugInvite(): Promise<void> {
+  const inv = pendingInvite.value
+  if (!inv) return
+  const st = safeStorage()
+  if (!st) return
+  writeCredential(st, {
+    session: inv.session,
+    nodeId: props.id,
+    canvasId,
+    at: Date.now(),
+  })
+  debugSession.value = inv.session
+  // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
+  try {
+    await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ session: inv.session, nodeId: props.id, canvasId }),
+    })
+  } catch {
+    /* 后台不在也没关系：SDK 连不上 ws 时会自己重试 */
+  }
+  // 清邀请标记（节点 data 合并写空）：其他标签页看到标记消失，自动收起确认框。
+  // 为什么前端清而不是后台在回执里清：回执只来自被选中的标签页，让它顺手把标记
+  // 清掉，语义正好是「这个邀请已被某人认领」。writeUiHtml 在后台有写锁，安全。
+  try {
+    const doc = ctx.tryGet<{
+      updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
+    }>('doc')
+    doc?.updateNodeRuntime(props.id, { data: { [UI_DEBUG_INVITE_KEY]: null } })
+  } catch {
+    /* 节点可能刚被删：无妨，凭据已写，刷新恢复逻辑靠 sessionStorage */
+  }
+}
+
+/** 用户点「拒绝」：不写凭据。框的显隐跟着邀请标记走，标记在框就在（别催用户） */
+function dismissDebugInvite(): void {
+  /* 故意空：什么都不做，框随标记存在。用户想关掉只能让 Agent disconnect */
+}
+
+/**
+ * srcdoc 在调试态追加 SDK 连接脚本（不改 buildSrcdoc —— 平时零成本）。
+ * WebSocket 地址：后台地址的 http(s) 换成 ws(s)。SDK 自己带指数退避重连，
+ * 所以刷新后只要凭据还在，重挂的 iframe 会自动重连，不需要宿主做任何事。
+ */
+const frameDoc = computed(() => {
+  const base = srcdoc.value
+  if (!base || !activeDebug.value) return base
+  const cred = readCredential(sessionStorage)
+  if (!cred) return base
+  return appendSdkScript(base, buildSdkScriptBody({
+    baseUrl: baseUrl.value,
+    session: cred.session,
+    canvasId,
+    nodeId: props.id,
+  }))
+})
+
+/**
+ * 拦截刷新（调试态专用）：beforeunload 在调试会话存在时弹浏览器原生确认。
+ * 为什么用原生弹窗而不是自制：刷新是浏览器动作，宿主拦不住也没资格美化它 ——
+ * 原生确认是唯一可靠的「用户明确说了要刷新」凭证。
+ */
+function onDebugBeforeUnload(e: BeforeUnloadEvent): void {
+  if (!activeDebug.value) return
+  e.preventDefault()
+  // Chrome 要求 returnValue 有值才弹框
+  e.returnValue = ''
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', onDebugBeforeUnload)
+}
+
+// 组件卸载 = 节点删除或画布关闭：清凭据（调试会话没意义了），摘掉监听
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onDebugBeforeUnload)
+  if (activeDebug.value) {
+    const st = safeStorage()
+    if (st) clearCredential(st)
+  }
+})
+
 
 /**
  * 页面就绪 → 送状态（刷新恢复靠这条）。
@@ -361,6 +511,180 @@ const iframeEl = ref<HTMLIFrameElement | null>(null)
 //   2. 用户在设置面板里拨那个开关**根本没生效**（我当时的验证是手改 settings 造的假象），
 //      而实测「开着和关着画面完全一样」—— 留着就是个骗人的开关。
 // 需要时从 git 历史里找回（counterScale.ts + UiContent 的对应那段）。
+// 调试窗口用到的窗口形状。**不能写 Window**：与 DOM lib 的 Window 接口撞名，
+// 会把 addEventListener / postMessage 的签名搅乱（实测 typecheck 报
+// 「EventListener 只接受 1 个参数」）。所以这里只声明本文件真用到的那几个方法。
+interface DebugWindow {
+  document: { open(): void; write(s: string): void; close(): void; title: string }
+  postMessage(msg: unknown, target: string): void
+  addEventListener(t: string, fn: () => void): void
+  close(): void
+}
+
+/** 当前开着的调试窗口（空 = 没开） */
+const debugWin = ref<DebugWindow | null>(null)
+
+/**
+ * 打开**调试窗口**：把这份界面复制进一个普通窗口，让它能被调试。
+ *
+ * ## 为什么不是「直接调试画布上那个 iframe」
+ *
+ * 那个 iframe 故意**不给** allow-same-origin（沙箱是唯一的安全边界，见文件头），
+ * 于是父页面读不到它、DevTools 也点不进去 —— 这是**设计使然**，不是 bug。
+ * 所以调试走「另开一份副本」：副本是同源的普通页面，
+ * 控制台 / 断点 / 单步 / 读变量全都回来；而画布上那个节点一行代码都不改。
+ *
+ * ## 副本与节点的关系
+ *
+ * 副本是**另一份运行实例**，不是节点那个 iframe 的镜子。所以：
+ *   · 在副本里点的效果不会自动出现在画布上（要写回得走下面的桥）；
+ *   · 副本里报上来的「产物」由宿主落进节点（与沙箱那条链同一条），
+ *     于是「在副本里调 CanvasUI.save，画布上那个节点真的出图」成立。
+ *
+ * ## 为什么用 window.open 而不是新开一个同源 iframe
+ *
+ * 同源 iframe 也能读，但它仍然**长在画布页面里** —— 层级、事件、遮挡全是问题，
+ * 而且 DevTools 的 Sources 面板里它是折叠的一帧，打断点远不如独立窗口顺手。
+ * 独立窗口就是「正常写 UI」时那个调试环境，用户的学习成本为零。
+ */
+function openDebug(): void {
+  if (!hasHtml.value) return
+  const win = window.open('', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null
+  if (!win) {
+    // 被浏览器拦了（弹窗拦截）：说清楚该怎么办，别让用户以为按钮坏了
+    window.alert('调试窗口被浏览器拦住了。请允许这个站点弹窗，然后再点一次「调试」。')
+    return
+  }
+  const doc = buildDebugDoc({
+    html: html.value,
+    nodeId: props.id,
+    canvasId,
+    baseUrl: baseUrl.value,
+    theme: theme.value,
+    upstream: upstream.value,
+    inputs: inputValues.value,
+    palette: palette.value,
+  })
+
+  win.document.open()
+  win.document.write(doc)
+  win.document.close()
+  // 标题写清楚「这是副本 + 是哪个节点」：调试时一眼知道自己改的不是画布上那个
+  win.document.title = '调试 · 可视化节点 ' + props.id + '（副本，不影响画布）'
+
+  // 记住这个窗口：它报上来的「产物 / 参数」由本组件落进节点
+  debugWin.value = win
+  win.addEventListener('pagehide', () => {
+    if (debugWin.value === win) debugWin.value = null
+  })
+}
+
+/**
+ * 收调试副本「往外报」的两件事（参数 / 产物）。
+ *
+ * 为什么必须校验 ev.source：消息是广播的，不认来源的话页面里任何一段脚本
+ * 都能伪造一条消息往节点里写东西（与沙箱那条链同一套理由）。
+ */
+function onDebugMessage(ev: MessageEvent): void {
+  const win = debugWin.value
+  if (!win || ev.source !== win) return
+  const m = ev.data as { __canvasUiDebug?: unknown; type?: unknown } | null
+  if (!m || m.__canvasUiDebug !== 1) return
+  try {
+    if (m.type === 'state') {
+      // 与沙箱那条链同一套口径：界面交上来的就是**这个节点的参数**
+      const st = ev.data as { state?: unknown }
+      const patch = st.state && typeof st.state === 'object' ? (st.state as Record<string, unknown>) : { value: st.state }
+      const prev = (props.data?.uiInputs ?? {}) as Record<string, unknown>
+      ctx
+        .tryGet<{ updateNode(id: string, p: { data: Record<string, unknown> }): void }>('doc')
+        ?.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
+    } else if (m.type === 'output') {
+      const st = ev.data as { name?: unknown; text?: unknown; base64?: unknown }
+      const name = typeof st.name === 'string' ? st.name : 'out.png'
+      let bytes: Uint8Array | undefined
+      if (typeof st.text === 'string') {
+        bytes = new TextEncoder().encode(st.text)
+      } else if (typeof st.base64 === 'string') {
+        const bin = atob(st.base64)
+        bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+      }
+      if (!bytes) {
+        replyDebug(win, { __canvasUiDebugResult: 1, ok: false, error: '副本没有交出字节' })
+        return
+      }
+      void uploadDebugOutput(bytes, name, typeof st.text === 'string' ? st.text : undefined)
+        .then((url) => replyDebug(win, { __canvasUiDebugResult: 1, ok: true, url }))
+        .catch((err) =>
+          replyDebug(win, {
+            __canvasUiDebugResult: 1,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        )
+    }
+  } catch {
+    // 节点可能已被删掉：静默跳过（不该因为一次上报把调试搞崩）
+  }
+}
+
+/** 给副本回一句「产物我收了 / 没收」 */
+function replyDebug(win: DebugWindow, msg: unknown): void {
+  try {
+    win.postMessage(msg, '*')
+  } catch {
+    /* 窗口可能已经关了 */
+  }
+}
+
+/**
+ * 把副本交上来的产物传到**这个节点自己的槽位**。
+ *
+ * 与沙箱那份走**同一个槽位地址**（slot=节点id），所以「副本里存的图」
+ * 就是「画布上那个节点该显示的图」，不会出现两份。
+ */
+async function uploadDebugOutput(bytes: Uint8Array, name: string, text?: string): Promise<string> {
+  const ext = (name.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
+  const field =
+    ext === 'mp4' || ext === 'webm' || ext === 'mov' ? 'videoUrl'
+    : ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a' ? 'audioUrl'
+    : ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' ? 'text'
+    : 'imageUrl'
+
+  const mime = text !== undefined ? 'text/plain' : 'application/octet-stream'
+  const res = await fetch(
+    baseUrl.value +
+      '/api/canvases/' +
+      encodeURIComponent(canvasId) +
+      '/resources?slot=' +
+      encodeURIComponent(props.id) +
+      '&name=' +
+      encodeURIComponent(name),
+    { method: 'POST', headers: { 'content-type': mime }, body: bytes as unknown as BodyInit },
+  )
+  const j = (await res.json()) as { ok?: boolean; url?: string; error?: string }
+  if (!j.ok || !j.url) throw new Error(j.error || '保存产物失败')
+
+  // 落进节点：与沙箱那条链同一条路（产物不进历史，且带版本号让下游重新取）
+  const bust = j.url.indexOf('?') >= 0 ? '&v=' : '?v='
+  const patch: Record<string, unknown> = { uiOutputUrl: j.url }
+  if (field === 'text') {
+    if (text !== undefined) patch.text = text
+  } else {
+    patch[field] = j.url + bust + Date.now()
+  }
+  ctx
+    .tryGet<{ updateNodeRuntime(id: string, p: { data: Record<string, unknown> }): void }>('doc')
+    ?.updateNodeRuntime(props.id, { data: patch })
+  return j.url
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', onDebugMessage)
+}
+
+
 /** 双击进入交互态 */
 function enterInteractive(): void {
   if (!hasHtml.value) return
@@ -426,6 +750,16 @@ onBeforeUnmount(() => {
   selectionOff?.()
 })
 
+// 节点被卸载：把开着的调试窗口也关掉。
+// 不关的话它成了孤儿 —— 界面还在跑、还在往一个已消失的节点报产物，
+// 而用户看着那个窗口会以为画布上还有个节点在（2026-10-15）。
+onBeforeUnmount(() => {
+  window.removeEventListener('message', onDebugMessage)
+  debugWin.value?.close()
+  debugWin.value = null
+})
+
+
 /** 空态提示：只说一件事 —— 让 Agent 来画 */
 const hint = computed(() => {
   if (!ctx.tryGet('doc')) return '画布尚未就绪'
@@ -441,7 +775,7 @@ const hint = computed(() => {
         ref="iframeEl"
         :key="gen"
         class="ui-frame"
-        :srcdoc="srcdoc"
+        :srcdoc="frameDoc"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
         loading="lazy"
@@ -463,6 +797,46 @@ const hint = computed(() => {
         @dblclick.stop="enterInteractive"
       >
         <span class="ui-gate-badge">双击交互</span>
+        <!--
+          调试入口：把这份界面复制进一个**普通窗口**（同源），
+          于是 DevTools 能点进去、能读变量、能打断点。
+
+          ⚠️ 它**不碰**画布上那个沙箱 iframe —— 沙箱边界原样不动
+          原样不动。副本点坏了大不了重开，节点上那份不受影响。
+          2026-10-15 用户报「无法操作、无法调试」，根因就是沙箱本身（见 uiDebug.ts 文件头）。
+        -->
+        <button
+          type="button"
+          class="ui-gate-debug"
+          title="在新窗口里调试这份界面（可读变量 / 打断点）"
+          @mousedown.stop
+          @dblclick.stop
+          @click.stop="openDebug"
+        >
+          调试
+        </button>
+
+      </div>
+
+      <!--
+        调试确认框：Agent 发起连接后，每个打开这张画布的标签页都会看到它。
+        只有一个会被点中 —— 点中的那个写凭据进调试态；其他标签页看到邀请标记
+        被清掉（节点数据同步），这个框自动消失。
+        样式走 ui-style-guide：浮层材质、radius-panel、主按钮青底白字。
+      -->
+      <div v-if="showDebugPrompt" class="debug-prompt" role="dialog" aria-modal="true" aria-label="调试连接确认">
+        <div class="debug-prompt-card">
+          <div class="debug-prompt-title">调试连接请求</div>
+          <p class="debug-prompt-text">
+            Agent 想连接这个节点的界面进行调试。本画布开了多个标签页，
+            请只在<strong>你想用来调试的这个标签页</strong>点同意。同意后：
+            该节点会与后台建立调试连接，并阻止意外刷新（刷新前会再确认）。
+          </p>
+          <div class="debug-prompt-actions">
+            <button type="button" class="debug-btn-ghost" @click.stop="dismissDebugInvite">先不连</button>
+            <button type="button" class="debug-btn-primary" @click.stop="acceptDebugInvite">同意调试</button>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -550,5 +924,114 @@ const hint = computed(() => {
   line-height: 1.5;
   color: var(--canvas-node-text-faint, #9ca3af);
 }
+
+/*
+ * 调试按钮：开一份同源副本，让这份界面能被 DevTools 调试。
+ *
+ * 为什么放在遮罩层上、且只 hover 才露出来：遮罩平时是透明的（要把事件让回画布），
+ * 常驻一个按钮会挡视线；而「调试」是个低频动作，藏起来不影响日常使用。
+ *
+ * 为什么用 <button> 而不是 <span>：键盘要能 Tab 到它、回车要能触发
+ * （a11y 硬性规则，见 docs/design/ui-style-guide.md）。
+ */
+.ui-gate-debug {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fill-subtle, rgba(0, 0, 0, 0.04));
+  color: var(--text-faint, #9ca3af);
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+/* ==================== 调试确认框（ui-style-guide：浮层材质 + 主按钮唯一实心）==================== */
+.debug-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-overlay-scrim, rgba(0, 0, 0, 0.32));
+  border-radius: inherit;
+}
+.debug-prompt-card {
+  width: calc(100% - 32px);
+  max-width: 340px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
+  background: var(--ui-surface-glass, rgba(255, 255, 255, 0.92));
+  backdrop-filter: blur(20px);
+  box-shadow: var(--ui-shadow-panel, 0 20px 40px rgba(0, 0, 0, 0.08));
+}
+.debug-prompt-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-strong, #111827);
+  margin-bottom: 8px;
+}
+.debug-prompt-text {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-body, #374151);
+}
+.debug-prompt-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.debug-btn-ghost {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-hair, rgba(0, 0, 0, 0.08));
+  background: transparent;
+  color: var(--text-muted, #6b7280);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.debug-btn-ghost:hover {
+  background: var(--fill-hover, rgba(0, 0, 0, 0.05));
+}
+.debug-btn-primary {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 0;
+  background: var(--ui-accent, #0891b2);
+  color: var(--ui-accent-contrast, #fff);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.debug-btn-primary:hover {
+  background: var(--ui-accent-hover, #0e7490);
+}
+@media (prefers-reduced-motion: reduce) {
+  .debug-prompt-card {
+    transition: none;
+  }
+}
+.ui-gate:hover .ui-gate-debug,
+.ui-gate-debug:focus-visible {
+  opacity: 1;
+}
+.ui-gate-debug:hover {
+  color: var(--text-muted, #6b7280);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-gate-debug {
+    transition: none;
+  }
+}
+
+
 </style>
 

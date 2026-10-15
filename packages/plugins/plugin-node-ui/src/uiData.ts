@@ -342,13 +342,19 @@ export function serializeForScript(value: unknown): string {
  */
 export function buildCsp(allow: readonly string[] = []): string {
   const origins = allow.map((s) => s.trim()).filter(Boolean)
-  const connect = origins.length > 0 ? origins.join(' ') : "'none'"
+  // 每个源同时放行它的 WebSocket 形态（http→ws / https→wss）：调试连接的 SDK
+  // 从沙箱里连后台 ws，CSP 不放行的话连接会被静默掐掉（2026-10-15 调试链路新增）。
+  // 没有源 = 一律不许（纯展示，与旧行为一致）。
+  const wsOrigins = origins.map((o) => (o.startsWith('https://') ? o.replace(/^https/, 'wss') : o.replace(/^http/, 'ws')))
+  const connect = origins.length > 0 ? [...origins, ...wsOrigins].join(' ') : "'none'"
   return [
     "default-src 'none'",
     'img-src * data: blob:',
     'media-src * data: blob:',
     "style-src 'unsafe-inline'",
-    "script-src 'unsafe-inline'",
+    // 'unsafe-eval'：调试 SDK 要在连接里执行 Agent 传来的脚本 —— 这是本功能的全部意义；
+    // 界面本体是生成物（内联脚本，'unsafe-inline' 覆盖），eval 只在调试会话被注入 SDK 后发生。
+    "script-src 'unsafe-inline' 'unsafe-eval'",
     'font-src data:',
     'connect-src ' + connect,
   ].join('; ')
@@ -621,7 +627,7 @@ export function buildUiBridge(): string {
 }
 
 /** 生成页面的外壳样式（铺满卡片、深浅色都对） */
-const SHELL_STYLE = [
+export const SHELL_STYLE = [
   'html, body { margin: 0; padding: 0; width: 100%; height: 100%; }',
   'body { font: 13px/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; }',
   "html[data-theme='light'] body { color: #374151; background: transparent; }", // 主题色白名单: iframe 是不透明源，取不到宿主主题变量（见下方说明）
