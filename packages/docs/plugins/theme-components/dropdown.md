@@ -21,7 +21,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 - **三种触发方式**：`click`（左键）/ `hover`（悬停，带延迟关闭）/ `contextmenu`（右键）。
 - **两种滚法**：`overlay-scroll`（整个浮层滚，适合短菜单）/ `inner-scroll`（浮层只当外框，内容区自己滚）。
 - **定位**：`fixed` 加简单翻转防溢出（不引 floating-ui）；浮层最大高度取"调用方给的值"与"视口可用高度"的较小者。
-- **互斥**：全局同一张登记表，开一个下拉会通知别的下拉让位。
+- **互斥**：全局同一张登记表，开一个下拉会通知别的下拉让位。**但不关自己的祖先** ——
+  嵌在别人浮层面板里的下拉（如底栏参数面板里的「格式」）打开时，那块外层板子留着。
 - **受控非受控都行**：给 `v-model` 就是受控；不给就用内部状态。
 
 ## Props
@@ -99,3 +100,9 @@ function pick(label: string, close: () => void): void {
 3. **浮层最大高度受视口限制**：调用方给的 `menuMaxHeight` 会用 `min()` 与视口可用高度取小，所以"面板比屏幕还高"顶不出去。
 4. **`teleport` 默认开**：浮层挂在 body 上，样式与裁剪上下文（如祖先的 `overflow: hidden`）不再影响它；关掉要自己保证不被裁。
 5. **成品应用里按名取到的不是这一份**：`packages/ui` 注册了 `AxDropdown`（`order: -1`）；想拿主题包这份就具名 import。
+6. **嵌在另一个浮层里不用额外声明**：浮层根带 `data-floating-chain`，里层的下拉读一下自己的
+   祖先就知道「我是谁的儿子」，打开时不会把外层面板顶掉。
+   **两套下拉实现各有一份自己的判链与互斥代码**（本主题包的在 `components/ui/floatingChain.ts`
+   与 `dropdownRegistry.ts`；`@mini-canvas/ui` 的在它自己的 `components/hooks/` 下）——
+   插件相互独立，谁都不改核心层；两边**只共享 `data-floating-chain` 这个 DOM 契约**，
+   所以两套浮层混在同屏也认得出父子关系。

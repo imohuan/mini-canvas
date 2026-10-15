@@ -35,6 +35,7 @@ import { data } from '../../.vitepress/data/parsed.data.ts'
 
 ## 在画布里亲眼见这些组件
 
-装了自带插件 **组件展厅**（theme-gallery）的画布，左下角有一个"组件展厅"按钮 ——
-点开是一个浮层，把默认主题的每个组件**真的渲染出来**。源码 `packages/plugins/plugin-theme-gallery/`。
+装了 **组件展厅**（theme-gallery，**可装卸件**：到「设置 → 插件 → 本地清单」点安装）的画布，
+左下角有一个"组件展厅"按钮 —— 点开是一个浮层，把默认主题的每个组件**真的渲染出来**。
+源码 `packages/plugins/plugin-theme-gallery/`。
 

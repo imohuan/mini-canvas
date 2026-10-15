@@ -16,9 +16,10 @@ function memoryResourceAdapter(): ResourceAdapter & { blobs: Map<string, Blob> }
     id: 'memory-resource',
     capability: {},
     blobs,
-    async putResource(blob) {
+    async putResource(blob, opts) {
+      // 契约升级：调用方给了 ref 就用它（名字可推算 → 才能"先查有没有"）
       seq += 1
-      const ref = 'res-' + seq
+      const ref = opts?.ref ?? 'res-' + seq
       blobs.set(ref, blob)
       return ref
     },
@@ -156,5 +157,36 @@ describe('ResourceStore 资源生命周期', () => {
     rs.dispose()
     expect(calls.revoked).toHaveLength(2)
     expect(rs.ids()).toHaveLength(0)
+  })
+
+  describe('派生资源（缩略图 / 帧图）不受"未被引用即回收"影响', () => {
+    it('put(derived) 的资源不会被 disposeUnreferenced 清掉', async () => {
+      const { backend, calls } = fakeBackend()
+      // put 走的是**资源适配器**（不是 URL 后端）→ 这里用内存适配器
+      const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+      const keep = rs.register({ resource: { name: 'node' } })
+      // 派生资源不写进节点 resourceId → 回收时不应被算作"没人引用"
+      await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'img-a-t2', derived: true })
+      const n = rs.disposeUnreferenced(new Set([keep]))
+      expect(n).toBe(0) // 一个都不该回收
+      expect(calls.revoked).toHaveLength(0)
+      expect(rs.alive('img-a-t2')).toBe(true)
+    })
+
+    it('对照：没标 derived 的照旧被回收（证明上一条不是"什么都没回收"）', async () => {
+      const { backend, calls } = fakeBackend()
+      const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+      await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'img-b-t2' })
+      expect(rs.disposeUnreferenced(new Set())).toBe(1)
+      expect(calls.revoked).toHaveLength(1)
+    })
+
+    it('put 时传 ref → 就用它当引用（名字可推算，才能"先查有没有"）', async () => {
+      const { backend } = fakeBackend()
+      const rs = new ResourceStore(() => memoryResourceAdapter(), backend)
+      const ref = await rs.put(new Blob([new Uint8Array([1])]), { kind: 'image', ref: 'img-c-t3', derived: true })
+      expect(ref).toBe('img-c-t3')
+      expect(rs.alive('img-c-t3')).toBe(true)
+    })
   })
 })

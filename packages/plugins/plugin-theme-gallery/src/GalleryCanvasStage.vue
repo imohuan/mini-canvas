@@ -7,6 +7,11 @@
  * 所以这里挂一块真的小画布，装默认主题 + 本插件的示例节点类型。
  *
  * 安全性：存储用内存适配器（刷新即丢），绝不碰用户数据；persistViewport 关掉。
+ *
+ * 为什么不用 <ClientOnly>：那是 VitePress / Nuxt 一类 SSR 框架提供的全局组件，本插件跑在
+ * 纯浏览器画布宿主里，没有谁注册它 —— 写了只会让 Vue 报一句
+ * "Failed to resolve component: ClientOnly"，然后把它当成未知原生元素直接渲染出来
+ * （等于白写，还留一条控制台告警）。画布宿主本来就只在浏览器里跑，不需要这层 SSR 兜底。
  */
 import { CanvasHost } from '@mini-canvas/canvas-render'
 import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@mini-canvas/canvas-data'
@@ -42,16 +47,9 @@ const adapter = makeAdapter()
 </script>
 
 <template>
-  <ClientOnly>
-    <div class="gcs-stage" :style="{ height: (height ?? 300) + 'px' }">
-      <CanvasHost :plugins="plugins" :adapter="adapter" :persist-viewport="false" />
-    </div>
-    <template #fallback>
-      <div class="gcs-stage gcs-stage--loading" :style="{ height: (height ?? 300) + 'px' }">
-        画布在浏览器里挂载…
-      </div>
-    </template>
-  </ClientOnly>
+  <div class="gcs-stage" :style="{ height: (height ?? 300) + 'px' }">
+    <CanvasHost :plugins="plugins" :adapter="adapter" :persist-viewport="false" />
+  </div>
 </template>
 
 <style scoped>
@@ -61,13 +59,6 @@ const adapter = makeAdapter()
   border-radius: 12px;
   border: 1px solid rgba(0, 0, 0, 0.08); /* 主题色白名单: 展厅嵌画布的外框（展示容器） */
   background: #f8fafc; /* 主题色白名单: 画布底色（与 DefaultBackground 绘制基色同口径，暗色由 CSS invert 反相） */
-}
-.gcs-stage--loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #94a3b8; /* 主题色白名单: 挂载中提示文字（SSR 占位，非界面语义色） */
-  font-size: 13px;
 }
 </style>
 

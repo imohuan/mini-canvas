@@ -2,26 +2,13 @@
   <Teleport to="body">
     <div class="node-find-overlay" @pointerdown.self="$emit('close')">
       <div class="node-find-panel" @pointerdown.stop>
-        <input
-          ref="inputEl"
-          v-model="query"
-          class="node-find-input"
-          placeholder="搜索节点（名称/类型）..."
-          @keydown.down.prevent="moveSelection(1)"
-          @keydown.up.prevent="moveSelection(-1)"
-          @keydown.enter.prevent="confirmSelection"
-          @keydown.escape="$emit('close')"
-        />
+        <input ref="inputEl" v-model="query" class="node-find-input" placeholder="搜索节点（名称/类型）..."
+          @keydown.down.prevent="moveSelection(1)" @keydown.up.prevent="moveSelection(-1)"
+          @keydown.enter.prevent="confirmSelection" @keydown.escape="$emit('close')" />
         <div class="node-find-results">
-          <div
-            v-for="(node, index) in filtered"
-            :key="node.id"
-            class="node-find-item"
-            :class="{ 'is-selected': index === selectedIndex }"
-            :style="typeStyle(node.type)"
-            @click="focusNode(node.id)"
-            @mouseenter="selectedIndex = index"
-          >
+          <div v-for="(node, index) in filtered" :key="node.id" class="node-find-item"
+            :class="{ 'is-selected': index === selectedIndex }" :style="typeStyle(node.type)"
+            @click="focusNode(node.id)" @mouseenter="selectedIndex = index">
             <span class="node-find-label">{{ labelOf(node) }}</span>
             <span class="node-find-type">{{ typeMeta(node.type).label }}</span>
           </div>
@@ -117,7 +104,7 @@ onMounted(async () => {
   overflow: hidden;
   border: 1px solid var(--ui-line, rgba(0, 0, 0, 0.08));
   border-radius: 18px;
-  background: var(--ui-overlay, rgba(255, 255, 255, 0.98));
+  background: white;
   box-shadow: var(--ui-shadow-lg, 0 22px 70px rgba(0, 0, 0, 0.16));
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
@@ -134,6 +121,7 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 500;
 }
+
 .node-find-input::placeholder {
   color: var(--ui-ink-dim, #9ca3af);
 }
@@ -144,13 +132,16 @@ onMounted(async () => {
   overflow-y: auto;
   padding: 4px 10px 10px;
 }
+
 .node-find-results::-webkit-scrollbar {
   width: 8px;
 }
+
 .node-find-results::-webkit-scrollbar-thumb {
   border-radius: 4px;
   background: var(--ui-scroll-thumb, rgba(0, 0, 0, 0.12));
 }
+
 .node-find-results::-webkit-scrollbar-thumb:hover {
   background: var(--ui-scroll-thumb-hover, rgba(0, 0, 0, 0.2));
 }
@@ -165,12 +156,15 @@ onMounted(async () => {
   cursor: pointer;
   transition: background 0.18s ease;
 }
+
 .node-find-item:hover {
   background: var(--ui-hover, rgba(0, 0, 0, 0.05));
 }
+
 .node-find-item.is-selected {
   background: var(--ui-hover-strong, rgba(0, 0, 0, 0.08));
 }
+
 .node-find-item.is-selected:hover {
   background: var(--ui-hover-strong, rgba(0, 0, 0, 0.1));
 }
@@ -203,4 +197,3 @@ onMounted(async () => {
   font-size: 14px;
 }
 </style>
-

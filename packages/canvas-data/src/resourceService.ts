@@ -39,6 +39,13 @@ export interface ResourceEntry<T = unknown> {
   url: string
   /** 原始资源句柄（Blob/File/string…；可选） */
   resource?: T
+  /**
+   * 派生资源（缩略图 / 帧图这类"由别的资源加工而来"的）。
+   *
+   * 语义只有一条：**它不会写进任何节点的 `resourceId`**，所以"未被引用就回收"
+   * 的清理必须跳过它（否则刚生成就被清掉，下次打开又要重算一遍）。
+   */
+  derived?: boolean
 }
 
 /** 登记请求 */
@@ -249,8 +256,15 @@ export class ResourceStore implements ResourceService {
       throw new Error('[resources] 当前 resource 类型的 adapter 不支持存资源（未装资源后端？）')
     }
     const ref = await adapter.putResource(blob, opts)
-    // 登记进内存表：本会话内 resolve 快、也能被引用扫描回收
-    this.entries.set(ref, { id: ref, kind: opts.kind ?? 'blob', url: '', resource: blob })
+    // 登记进内存表：本会话内 resolve 快、也能被引用扫描回收。
+    // derived 要一起记：回收时按它跳过（派生资源不靠节点引用，见该字段说明）。
+    this.entries.set(ref, {
+      id: ref,
+      kind: opts.kind ?? 'blob',
+      url: '',
+      resource: blob,
+      ...(opts.derived ? { derived: true } : {}),
+    })
     return ref
   }
 
@@ -271,6 +285,7 @@ export class ResourceStore implements ResourceService {
       kind: remembered?.kind ?? 'blob',
       url,
       ...(remembered?.resource !== undefined ? { resource: remembered.resource } : {}),
+      ...(remembered?.derived ? { derived: true } : {}),
     })
     return url
   }
@@ -360,6 +375,9 @@ export class ResourceStore implements ResourceService {
   disposeUnreferenced(referenced: ReadonlySet<string>): number {
     let n = 0
     for (const [id, entry] of this.entries) {
+      // 派生资源（缩略图/帧图）不参与：它们本来就不写进节点的 resourceId，
+      // 拿"没被引用"当判据会把它们全部误杀（刚生成就被清、下次打开又重算）。
+      if (entry.derived) continue
       if (!referenced.has(id)) {
         this.entries.delete(id)
         this.backend.revokeUrl(entry.url)

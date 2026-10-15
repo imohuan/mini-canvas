@@ -12,15 +12,54 @@
  *    否则嵌的画布里一张卡都不会有（静默空画布，最难查）。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import path from 'node:path'
 import { apply, name, inject } from '../index'
 import { apply as applyDemoNodes, name as demoNodesName } from '../demoNodes'
+
+const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 describe('插件身份', () => {
   it('名字与依赖：theme-gallery，不依赖任何服务', () => {
     expect(name).toBe('theme-gallery')
     expect(inject).toEqual([])
+  })
+})
+
+/**
+ * 清单身份守卫（用户口径 2026-10-14：「组件展厅这个插件不应该是自带的，需要我自己安装」）。
+ *
+ * 「自带 / 可装卸」是两处声明同时成立的事，任一处漏了都静默出错：
+ * 1. package.json 声明 miniCanvas.installable —— 后台 /plugin-catalog.json 才会把它列进
+ *    「设置 → 插件 → 本地清单」，用户才有点安装的入口；
+ * 2. package.json **不**声明 miniCanvas.builtin —— 声明了就进「自带」页（只读、不给装卸按钮），
+ *    两个身份同时出现。
+ *
+ * 外加第三条：可装卸件必须打得出 UMD 产物（没有 dist 就会被清单标成"未构建"直接不列）。
+ * 这三条互为印证，靠肉眼看清单很难发现漏了哪一条 —— 面板照常工作，只是用户找不到这个插件。
+ */
+describe('清单身份：可装卸件（不是自带件）', () => {
+  const pkg = JSON.parse(readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as {
+    miniCanvas?: { installable?: boolean; builtin?: boolean; pluginName?: string }
+    scripts?: Record<string, string>
+  }
+
+  it('声明 installable，且不声明 builtin（两者语义互斥）', () => {
+    expect(pkg.miniCanvas?.installable).toBe(true)
+    expect(pkg.miniCanvas?.builtin).toBeUndefined()
+  })
+
+  it('pluginName 与源码导出的 name 一致（面板按它认「已装」）', () => {
+    expect(pkg.miniCanvas?.pluginName).toBe(name)
+  })
+
+  it('有 build 脚本，且构建出的 UMD 产物真在 dist 里（没有 dist 就不会被清单列出）', () => {
+    expect(typeof pkg.scripts?.build).toBe('string')
+    // dist 是构建产物（.gitignore 里），没构建过时跳过 —— 这条卡的是"构建过却产不出可装卸件"。
+    if (!existsSync(path.join(PKG_ROOT, 'dist'))) return
+    const js = readFileSync(path.join(PKG_ROOT, 'dist/plugin-theme-gallery.js'), 'utf8')
+    expect(js).toMatch(/\.MiniCanvasPluginThemeGallery\s*=\s*\{\}/)
   })
 })
 

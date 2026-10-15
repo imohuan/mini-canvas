@@ -26,10 +26,16 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
    - `quality` / `resolution` / `background` / `count` / `camera` → [选项网格](/plugins/theme-components/tool-option-grid)
    - `duration`（≤3 档）→ 选项网格；`duration`（连续或更多档）→ [参数滑块](/plugins/theme-components/tool-param-slider)
    - `speed` → 参数滑块
-   - `model` / `style` / `speaker` / `format` → **明确回落**下拉（选项多、名字长）
+   - `model` / `style` / `speaker` → **永远**回落下拉（名字长、可能很多档，与数量无关）
+   - **其它 kind 的 `select`，选项 ≤ 3 档 → 选项网格**（切换式，点一下就换，不必先点开下拉）；
+     选项更多则回落下拉
 3. **其余**（没声明 / 认不得）→ 回落内置 `type` 控件（`select` / `string` / `number` / `boolean`）。
 
 > 认不得的 `kind` **不猜、也不炸**，安静回落内置控件。
+
+> **选项少的下拉 = 一排切换按钮**（用户口径 2026-10-14）：「像这种选项很少的情况下，
+> 可以使用另外一种方式，就是以切换的方式进行」。典型例子是「格式」`WAV / MP3 / OGG Opus` ——
+> 三档全看得见，点一下直接换；`model` / `speaker` 这类长名字大名单不受影响（永远走下拉）。
 
 ## Props
 
@@ -110,5 +116,9 @@ const values = ref<Record<string, unknown>>({ ratio: '16:9', quality: 'standard'
 1. **`param.component` 优先级最高**：给了它就完全不认 `kind` ——
    想回落预设件就得把 `component` 去掉。
 2. **`kind` 是"语义"不是"控件名"**：写 `kind: 'grid'` 不会生效（认不得的 kind 一律回落内置控件）。
+2b. **选项少的 `select` 会变成一排切换按钮**（≤3 档；判定见 `paramKind.ts`）。
+    想强制它保持下拉：把它归进 `paramKind.ts` 的 `LONG_LIST_KINDS`（长名单大类永远走下拉）。
+2c. **在参数合并下拉（ToolParamGroup）里，若只有这一个参数且它是普通下拉**，
+    它会**被直接铺到外面**（不再套面板）—— 相关判定见 `resolveInlineSoleSelect`。
 3. **`idPrefix` 要传**：同一面板里有多份参数时，label 的 `for` 与输入框 id 会撞车。
 4. **想加新的 kind 判定**：改 `paramKind.ts` 那张判定表（有单测守着），不要在组件里散条件分支。

@@ -35,6 +35,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 | `dropdownWidth` | `string` | `'auto'` | `'match'` / `'auto'` / CSS 宽度 |
 | `dropdownMaxWidth` | `string` | `'320px'` | 浮层最大宽 |
 | `dropdownMinWidth` | `string` | `'200px'` | 浮层最小宽（**只在 `'match'` 时生效**；防止窄触发器把浮层挤成一条缝） |
+| `dropdownMaxHeight` | `string` | `'320px'` | 浮层最大高；超出在浮层内滚动（还会与视口可用高度取小） |
 | `inputId` | `string` | `''` | 给设置表单里的 `label for` 关联用 |
 
 选项 `SelectOption` 形状（定义在 `packages/plugins/plugin-theme-default/src/components/ui/types.ts`）：
@@ -102,3 +103,5 @@ const options = [
 3. **搜索只匹配 `label`**（不匹配 `description` 与 `value`）。
 4. **值可以是数字**：内部用严格相等比较，重开时按 `options` 找回 label；值不在列表里就原样字符串化显示。
 5. **它是"选一个"，不是多选**：多选得自己叠。
+6. **长名单有滚动**：缺省最大高 320px（`dropdownMaxHeight`），超出在浮层内滚 ——
+   音色这种 20+ 项不会把面板一路撑到屏幕底（用户口径 2026-10-14：「为下拉框提供最大高度，支持滚动」）。

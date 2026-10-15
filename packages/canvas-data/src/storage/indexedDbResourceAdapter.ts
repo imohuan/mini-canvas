@@ -70,13 +70,21 @@ export function createIndexedDbResourceAdapter(): ResourceAdapter | undefined {
     capability,
 
     async putResource(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {
-      const id = newId()
+      // 调用方指定了 ref 就用它（名字可推算的资源靠这个"先查有没有、没有才造"）；
+      // 没给或名字太长（IndexedDB 键没有硬上限，但太长的键不利于诊断）才自命名。
+      const id = opts.ref && opts.ref.length <= 200 ? opts.ref : newId()
       const record: StoredResource = {
         kind: opts.kind ?? 'blob',
         ...(opts.name !== undefined ? { name: opts.name } : {}),
         resource: blob,
       }
       await withStore('readwrite', (store) => store.put(record, id))
+      // 覆盖写要把旧的临时地址作废 —— 同一个 ref 内容变了，缓存的 objectURL 会指向旧字节
+      const stale = urlCache.get(id)
+      if (stale) {
+        if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(stale)
+        urlCache.delete(id)
+      }
       return id
     },
 
