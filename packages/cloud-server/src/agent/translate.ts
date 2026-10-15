@@ -146,11 +146,13 @@ export function translateMessage(msg: unknown, state: TranslateState, log?: Log)
         ? [{ type: 'thinking', delta: String(p.thinking ?? ''), partial: true }]
         : []
     case 'text':
-      // 非人类来源的用户文本（harness / server / parent_agent 注入）**不是助手说的话**：
-      // 目标模式的协议文本就带 sender:'harness'，原样翻成助手 text 会让转录和界面里
-      // 夹进一长串「This message was sent automatically by goal mode…」（真机实测）。
-      // 这类消息模型照样读得到（它在 SDK 的上下文里），只是不该进对话流给用户看。
-      if (p.role === 'user' && p.sender !== undefined) return []
+      // 用户文本（role:'user'）**不是助手说的话**，一律不进助手流：
+      // - 带 sender 的注入文本（harness / server / parent_agent 的协议块）此前已在挡（真机 2026-10-09）；
+      // - **没有 sender 戳的用户文本也要挡**（真机 2026-10-16 截图）：队列自动发的那条经 SDK
+      //   steering 投递后，trace 里是 [user_steering] 包裹的用户文本且无 sender 戳 ——
+      //   漏网就被当成助手正文，界面在错误卡片下面显示出一整块裸标记。
+      //   这类消息模型照样读得到（它在 SDK 的上下文里），只是不该翻给用户看。
+      if (p.role === 'user') return []
       return [{ type: 'text', text: String(p.text ?? ''), final: true }]
     case 'thinking':
       return [{ type: 'thinking', text: String(p.thinking ?? ''), final: true }]

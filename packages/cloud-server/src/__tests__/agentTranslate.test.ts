@@ -57,6 +57,22 @@ describe('模型消息', () => {
       expect(translateMessage(model({ type: 'text', role: 'user', sender, text: 'x' }), st)).toEqual([])
     }
   })
+
+  /**
+   * 真 bug（2026-10-16 真机截图）：队列自动发的那条经 SDK steering 投递后，
+   * trace 里的用户文本带 [user_steering] 块但没有 sender 戳（userText 不带第二参
+   * 时不写 sender）—— 旧条件只挡 sender!==undefined 的，这条漏网，
+   * 被当成助手正文追加到错误卡片下面显示（用户看到裸标记块）。
+   * 用户文本（role:user）不管有没有 sender 都不是助手说的话，一律不进助手流。
+   */
+  it('没有 sender 戳的用户文本（steering 块）也不当助手文本', () => {
+    const st = createTranslateState()
+    const out = translateMessage(
+      model({ type: 'text', role: 'user', text: '[user_steering]\n我已经点击了呀，为什么没反应\n[/user_steering]' }),
+      st,
+    )
+    expect(out).toEqual([])
+  })
 })
 
 describe('事件消息', () => {
