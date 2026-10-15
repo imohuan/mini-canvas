@@ -122,12 +122,13 @@ afterEach(async () => {
 })
 
 describe('任务脚本：三条路由（+ 三条配套）', () => {
-  it('注册了 call / list / info / events / status / cancel 六个口', () => {
+  it('注册了 call / list / info / events / status / cancel 六个口（+ 调试通道三条）', () => {
     const s = fakeCtx(dir)
     apply(s.ctx)
     expect([...s.routes.keys()].sort()).toEqual([
       'GET /api/node-packages/read',
       'GET /api/node-ui/debug-events',
+      'GET /api/node-ui/debug-poll',
       'GET /api/node-ui/info',
       'GET /api/task/events',
       'GET /api/task/info',

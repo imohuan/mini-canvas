@@ -97,7 +97,7 @@ describe('调试连接 · 后台半（邀请标记 + 回执路由）', () => {
     expect(r2.status).toBe(409)
   })
 
-  it('eval 全链路：SDK 挂 SSE → 工具投 eval → 回包 → MCP 调用拿到结果；disconnect 后报错', async () => {
+  it('eval 全链路：工具投挂起队列 → SDK 轮询取走 → 回包 → MCP 调用拿到结果；disconnect 后报错', async () => {
     const s = fakeCtx({ nodes: [uiNode] })
     apply(s.ctx)
     // 1. 发邀请 + 模拟用户确认
@@ -107,37 +107,34 @@ describe('调试连接 · 后台半（邀请标记 + 回执路由）', () => {
     const acceptRoute = s.routes.get('/api/node-ui/debug-accept')!
     await callRoute(acceptRoute, { session: res.session, nodeId: '7', canvasId: 'default' })
 
-    // 2. SDK 侧：挂 SSE（读流）——fake c 提供 query 与 req.raw（无 signal）
-    const eventsRoute = s.routes.get('/api/node-ui/debug-events')!
-    const stream = (await eventsRoute({
+    // 2. SDK 侧：轮询取走挂起队列（先调一次空轮询确认通）
+    const pollRoute = s.routes.get('/api/node-ui/debug-poll')!
+    const empty = (await pollRoute({
       req: { query: (n: string) => (n === 'session' ? res.session : undefined) },
       json: (d: unknown, st?: number) => Response.json(d, { status: st ?? 200 }),
     })) as Response
-    expect(stream.headers.get('content-type')).toContain('text/event-stream')
-    const reader = (stream.body as ReadableStream<Uint8Array>).getReader()
-    const decoder = new TextDecoder()
-    // 读第一块（eval 命令会在这里出现）
-    const readChunk = async (): Promise<string> => {
-      const { value } = await reader.read()
-      return decoder.decode(value)
-    }
+    expect(empty.status).toBe(200)
 
     // 3. MCP 调 eval（不等它 —— 先让投递发生）
     const evalTool = s.tools.get('canvas_ui_debug_eval')!
     const evalPromise = evalTool.handler({ canvasId: 'default', code: '1+1' }) as Promise<{ ok: boolean; result?: unknown }>
-    const chunk = await readChunk()
-    expect(chunk).toContain('"code":"1+1"')
-    const evalId = JSON.parse(chunk.slice('data: '.length)) as { id: string }
+    const batch = (await pollRoute({
+      req: { query: (n: string) => (n === 'session' ? res.session : undefined) },
+      json: (d: unknown, st?: number) => Response.json(d, { status: st ?? 200 }),
+    })) as Response
+    const body2 = (await batch.json()) as { evals: Array<{ id: string; code: string }> }
+    expect(body2.evals.length).toBe(1)
+    expect(body2.evals[0].code).toBe('1+1')
+    const evalId = body2.evals[0]
 
     // 4. SDK 侧回包（模拟执行结果）
     const resultRoute = s.routes.get('/api/node-ui/debug-result')!
     const back = await callRoute(resultRoute, { session: res.session, id: evalId.id, ok: true, result: 2 })
     expect(back.status).toBe(200)
+    if (back.status !== 200) console.warn('debug-result 404 body:', JSON.stringify(await back.json()))
     const evalRes = (await evalPromise) as { ok: boolean; result?: unknown }
     expect(evalRes.ok).toBe(true)
     expect(evalRes.result).toBe(2)
-    // 流还挂着（没 stop）—— 收尾关掉
-    await reader.cancel()
 
     // 5. disconnect 后：eval 再调 → 明确报错
     const disc = s.tools.get('canvas_ui_disconnect')!
@@ -148,16 +145,11 @@ describe('调试连接 · 后台半（邀请标记 + 回执路由）', () => {
     expect(after.error).toContain('没有挂着的调试会话')
   })
 
-  it('eval：没有会话 / SDK 未连上 → 人话报错，不挂死', async () => {
+  it('eval：没有会话 → 人话报错，不挂死', async () => {
     const s = fakeCtx({ nodes: [uiNode] })
     apply(s.ctx)
     const evalTool = s.tools.get('canvas_ui_debug_eval')!
     const r1 = (await evalTool.handler({ canvasId: 'default', code: 'x' })) as { ok: boolean; error?: string }
     expect(r1.ok).toBe(false)
-    // 有会话但 SDK 没拨 SSE → 也报错
-    await (s.tools.get('canvas_ui_connect')!.handler({ nodeId: '7' }))
-    const r2 = (await evalTool.handler({ canvasId: 'default', code: 'x' })) as { ok: boolean; error?: string }
-    expect(r2.ok).toBe(false)
-    expect(r2.error).toContain('SDK')
   })
 })

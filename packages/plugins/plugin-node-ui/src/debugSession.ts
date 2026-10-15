@@ -126,13 +126,17 @@ export function clearCredential(storage: Pick<Storage, 'removeItem'>): void {
 /**
  * 组装「SDK 连接脚本」的正文（纯字符串，不含 <script> 壳 —— 由 appendSdkScript 包）。
  *
- * 通道选型（2026-10-15 补全时定的）：**SSE 下行 + HTTP POST 上行**，不是 WebSocket。
+ * 通道选型（2026-10-16 真机自动化测试修订）：**轮询下行 + HTTP POST 上行**。
+ * 为什么不用 SSE：sandbox iframe（opaque origin）里 fetch 流式响应不可靠 ——
+ * 真机复现：后台写入成功、前端 reader 永远读不到帧（连接挂起、无错误无数据）；
+ * curl 同一端点却即时收到。轮询语义等价（GET 取走挂起队列），且与界面自身的
+ * fetch 用法完全一致（/api/task/call 那条路一直稳定）。
  * 为什么：后台（cloud-server）没有任何 WebSocket 设施，外挂插件也拿不到 http server
  * 实例挂 upgrade 监听；而 SSE 项目里已有成熟先例（任务日志的 watchRun 就是）。
  * 本脚本只做通信。协议：
- *   下行（SSE 事件 data JSON）：{ type:'eval', id, code } / { type:'stop' }
+ *   下行（GET debug-poll 的 JSON）：{ evals: [{ type:'eval', id, code } | { type:'stop' }] }
  *   上行（POST /api/node-ui/debug-result）：{ session, id, ok, result?, error? }
- * 连接断了由 EventSource 自动重连（浏览器内置重连）—— 刷新后凭据还在时正好接住恢复路径。
+ * 轮询由 setInterval 每秒一次（刷新后凭据还在时自动接住恢复路径）。
  */
 export interface SdkScriptOptions {
   /** 后台 http(s) 基地址（SSE 与 POST 都走它） */
@@ -151,48 +155,43 @@ export function buildSdkScriptBody(opts: SdkScriptOptions): string {
     '  function reply(id, ok, fields){',
     '    var body = Object.assign({ session: SESSION, id: id, ok: ok }, fields || {});',
     '    fetch(BASE + "/api/node-ui/debug-result", { method: "POST",',
-    '      headers: { "content-type": "application/json" },',
-    '      body: JSON.stringify(body) }).catch(function(){});',
-    '  }',
-    // 下行用 fetch 流式读 SSE —— 不用 EventSource：沙箱（无 allow-same-origin）里
-    // EventSource 的跨源连接行为不可靠（实测 2026-10-15：请求都不发出），而 fetch 在
-    // 同一沙箱里一直在用（界面调后台接口就是它）。SSE 帧解析只认 'data: ' 行，够用。
-    '  function listen(delay){',
-    '    if (stopped) return;',
-    '    fetch(BASE + "/api/node-ui/debug-events?session=" + encodeURIComponent(SESSION))',
-    '      .then(function(res){ if (!res.ok || !res.body) throw new Error("SSE " + res.status);',
-    '        var reader = res.body.getReader(); var dec = new TextDecoder(); var buf = "";',
-    '        function pump(){ return reader.read().then(function(step){',
-    '          if (step.done) throw new Error("stream end");',
-    '          buf += dec.decode(step.value, { stream: true });',
-    '          var at;',
-    '          while ((at = buf.indexOf("\\n\\n")) >= 0) {',
-    '            var frame = buf.slice(0, at); buf = buf.slice(at + 2);',
-    '            var line = frame.split("\\n").find(function(l){ return l.indexOf("data:") === 0; });',
-    '            if (!line) continue;',
-    '            var m; try { m = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }',
-    '            if (!m) continue;',
-    '            if (m.type === "stop") { stopped = true; return; }',
-    '            if (m.type !== "eval" || typeof m.id !== "string" || typeof m.code !== "string") continue;',
-    '            var fields;',
-    '            try { fields = { result: (0, eval)(m.code) }; }',
-    '            catch (err) { fields = { error: String((err && err.message) || err) }; reply(m.id, false, fields); continue; }',
-    '            reply(m.id, true, fields);',
-    '          }',
-    '          return pump();',
-    '        }); }',
-    '        return pump();',
-    '      })',
-    '      .catch(function(){',
-    '        if (stopped) return;',
-    '        var next = Math.min(15000, (delay || 1000) * 2);',
-    // 退避封顶后放弃：会话已失效（服务重启/超长闲置）时无限重试只是风暴；
-    // 放弃后等新一轮邀请（Agent 再 connect）才会重新监听。
-    '        if (next >= 15000) return;',
-    '        setTimeout(function(){ listen(next); }, next);',
+    '      headers: { "content-type": "text/plain" },',
+    '      body: JSON.stringify(body) }).catch(function(err){',
+    '        try { document.title = "REPLY-ERR:" + ((err && err.message) || err); } catch (e3) {}',
     '      });',
     '  }',
-    '  listen(1000);',
+    // 上行回包用 **text/plain 的 POST**（简单请求，不触发预检）—— 真机自动化 2026-10-16
+    // 抓到：application/json 的 POST 会预检，预检在 sandbox iframe 里静默失败，回包永远
+    // 到不了后台；后台 c.req.json() 不挑 content-type，text/plain 两相容。
+    // 下行用轮询（debug-poll）—— 流式读 SSE 在沙箱（无 allow-same-origin）里不可靠：
+    // EventSource 的跨源连接行为不可靠（实测 2026-10-15：请求都不发出），而 fetch 在
+    // 同一沙箱里一直在用（界面调后台接口就是它）。SSE 帧解析只认 'data: ' 行，够用。
+    '  function poll(){',
+    '    if (stopped) return;',
+    '    fetch(BASE + "/api/node-ui/debug-poll?session=" + encodeURIComponent(SESSION))',
+    '      .then(function(res){ if (!res.ok) throw new Error("poll " + res.status); return res.json(); })',
+    '      .then(function(body){',
+    '        var list = body.evals || [];',
+    '        for (var i = 0; i < list.length; i++) {',
+    '          var m = list[i];',
+    '          handle(m);',
+    '        }',
+    '      })',
+    '      .catch(function(err){',
+    '        try { document.title = "POLL-ERR:" + ((err && err.message) || err); } catch (e2) {}',
+    '        if (stopped) return;',
+    '      });',
+    '  }',
+    '  function handle(m){',
+    '    if (m.type === "stop") { stopped = true; return; }',
+    '    if (m.type !== "eval" || typeof m.id !== "string" || typeof m.code !== "string") return;',
+    '    var fields;',
+    '    try { fields = { result: (0, eval)(m.code) }; }',
+    '    catch (err) { fields = { error: String((err && err.message) || err) }; reply(m.id, false, fields); return; }',
+    '    reply(m.id, true, fields);',
+    '  }',
+    '  poll();',
+    '  setInterval(poll, 1000);',
     '})();',
   ].join('\n')
 }

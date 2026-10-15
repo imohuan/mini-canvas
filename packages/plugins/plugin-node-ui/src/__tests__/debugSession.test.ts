@@ -57,9 +57,10 @@ describe('调试连接 · 纯逻辑（邀请 / 凭据 / SDK 脚本）', () => {
     expect(newSessionId(1000)).not.toBe(newSessionId(1000))
   })
 
-  it('buildSdkScriptBody：是合法 JS、带 SSE 通道与回包地址、eval 协议完整', () => {
+  it('buildSdkScriptBody：是合法 JS、带轮询通道与回包地址、eval 协议完整', () => {
     const body = buildSdkScriptBody({ baseUrl: 'http://x', session: 's1', canvasId: 'c1', nodeId: '7' })
-    expect(body).toContain('debug-events?session=')
+    // 2026-10-16 真机测试：SSE 流式通道在 sandbox iframe 里不可靠（连接挂起读不到帧），改轮询
+    expect(body).toContain('debug-poll?session=')
     expect(body).toContain('debug-result')
     expect(body).toContain('"s1"')
     // 语法合法（Function 构造器会抛 SyntaxError 如果不是）

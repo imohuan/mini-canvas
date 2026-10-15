@@ -1322,6 +1322,7 @@ export function apply(ctx: ServerCtx): void {
   ctx.routes.post('/api/node-ui/debug-result', async (c) => {
     let body: unknown
     try { body = await c.req.json() } catch { return c.json({ ok: false, error: '请求体不是合法 JSON' }, 400) }
+    console.log('[node-ui][debug-result] HIT', JSON.stringify(body))
     const m = body as { session?: unknown; id?: unknown; ok?: unknown; result?: unknown; error?: unknown } | null
     if (!m || typeof m.id !== 'string') return c.json({ ok: false, error: '缺少 id' }, 400)
     const waiter = debugResults.get(m.id)
@@ -1332,6 +1333,20 @@ export function apply(ctx: ServerCtx): void {
       ...(m.ok === true ? { result: m.result } : { error: typeof m.error === 'string' ? m.error : '执行失败' }),
     })
     return c.json({ ok: true })
+  })
+
+
+  // 轮询下行（2026-10-16 自动化测试发现流式通道在 sandbox iframe 里不可靠——
+  // 后台写入成功、前端 reader 永远读不到帧；轮询是保底通道，语义与 SSE 相同：
+  // GET 一次 = 取走当前挂起的 eval 队列，逐条执行后照旧 POST debug-result）。
+  ctx.routes.get('/api/node-ui/debug-poll', (c) => {
+    const session = c.req.query?.('session') ?? ''
+    if (!session || ![...debugSessions.values()].some((s) => s.session === session)) {
+      return c.json({ ok: false, error: '未知调试会话' }, 404)
+    }
+    const pending = debugEvals.get(session) ?? []
+    debugEvals.set(session, [])
+    return c.json({ ok: true, evals: pending })
   })
 
   // ⑭ 在调试连接里执行一段脚本（eval）
@@ -1349,12 +1364,14 @@ export function apply(ctx: ServerCtx): void {
       if (!code.trim()) return { ok: false, error: '缺少 code（要执行的 JavaScript）' }
       const sess = debugSessions.get(canvasId)
       if (!sess) return { ok: false, error: '这张画布没有挂着的调试会话：先 canvas_ui_connect' }
-      const push = debugSse.get(sess.session)
-      if (!push) return { ok: false, error: '标签页的 SDK 还没连上（确认对话框被点了吗？页面开着吗？）' }
+      // 轮询通道（2026-10-16）：不再要求 SDK 挂着 SSE —— eval 进挂起队列，SDK 每秒
+      // GET debug-poll 取走执行。queueIdle 由 30 秒兜底超时照旧负责。
       const id = 'e' + ++debugEvalSeq
+      const backlog = debugEvals.get(sess.session) ?? []
+      backlog.push({ id, code })
+      debugEvals.set(sess.session, backlog)
       const result = await new Promise<{ ok: boolean; result?: unknown; error?: string; stopped?: boolean }>((resolve) => {
         debugResults.set(id, { resolve })
-        push({ id, code })
         // 30 秒兜底：SDK 挂了不该让 MCP 调用永远挂着
         setTimeout(() => {
           if (debugResults.has(id)) {

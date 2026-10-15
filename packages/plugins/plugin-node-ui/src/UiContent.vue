@@ -204,7 +204,14 @@ const srcdoc = computed(() => {
  */
 const gen = ref(0)
 watch(html, () => { gen.value += 1 })
-
+/**
+ * 调试态切换（首次同意 / 换会话）也要**重挂**（用户口径 2026-10-16 真机复现）：
+ * frameDoc 在 activeDebug 翻转时追加了 SDK 脚本，但只改 srcdoc 属性浏览器**不会重跑脚本**
+ * —— 表现就是「点了同意调试，SDK 还是连不上」（真机自动化测试抓到：srcdoc 里 SDK 在、
+ * session 是新的，可 iframe 里的脚本从未执行，后台 debugSse 一直没人拨）。
+ * frameDoc 只在「界面重建级」的变化（html / 主题 / 调试态）时才变 —— 上游与参数走
+ * postMessage 不经过它，这里重挂不会误伤用户正在输入的内容。
+ */
 /**
  * 文档里注入的那份「上游素材 / 输入参数」的**初值**。
  *
@@ -315,6 +322,7 @@ const activeDebug = computed(() => {
 async function acceptDebugInvite(): Promise<void> {
   const inv = pendingInvite.value
   if (!inv) return
+  console.log('[ui-debug] accept clicked, inv.session=' + inv.session)
   const st = safeStorage()
   if (!st) return
   writeCredential(st, {
@@ -324,6 +332,7 @@ async function acceptDebugInvite(): Promise<void> {
     at: Date.now(),
   })
   debugSession.value = inv.session
+  console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
   try {
     await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
@@ -369,6 +378,15 @@ const frameDoc = computed(() => {
     nodeId: props.id,
   }))
 })
+/**
+ * 调试态切换（首次同意 / 换会话）也要**重挂**（用户口径 2026-10-16 真机复现）：
+ * frameDoc 在 activeDebug 翻转时追加了 SDK 脚本，但只改 srcdoc 属性浏览器**不会重跑脚本**
+ * —— 表现就是「点了同意调试，SDK 还是连不上」（真机自动化测试抓到：srcdoc 里 SDK 在、
+ * session 是新的，可 iframe 里的脚本从未执行，后台 debugSse 一直没人拨）。
+ * frameDoc 只在「界面重建级」的变化（html / 主题 / 调试态）时才变 —— 上游与参数走
+ * postMessage 不经过它，这里重挂不会误伤用户正在输入的内容。
+ */
+watch(frameDoc, () => { gen.value += 1 })
 
 /**
  * 拦截刷新（调试态专用）：beforeunload 在调试会话存在时弹浏览器原生确认。
