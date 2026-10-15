@@ -21,6 +21,17 @@ function isRequestableUrl(ref: string): boolean {
   return /^https?:\/\//i.test(ref) || ref.startsWith('/api/')
 }
 
+/**
+ * 派生资源（固定名）的约定地址：`/api/canvases/<画布id>/resources/slot-<裸引用>.webp`。
+ *
+ * 字符集与服务端的槽位校验一致（`[A-Za-z0-9_-]`）：名字里带点号之类会被拒，
+ * 所以这里先收窄、拼不出就返回 undefined（调用方按"没有缓存"处理）。
+ */
+export function slotUrlOf(canvasId: string, ref: string): string | undefined {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(ref)) return undefined
+  return '/api/canvases/' + canvasId + '/resources/slot-' + ref + '.webp'
+}
+
 export function createCloudResourceAdapter(api: CloudApi, canvasId: string = CANVAS_ID): ResourceAdapter {
   const capability: StorageAdapterCapability = { list: false, transactional: false, offline: false }
   return {
@@ -30,8 +41,22 @@ export function createCloudResourceAdapter(api: CloudApi, canvasId: string = CAN
     /** 传字节 → 服务端按内容哈希落文件 → 回同源 URL（写进节点的就是它） */
     async putResource(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {
       const name = opts.name ?? (opts.kind ? opts.kind + '.bin' : 'asset.bin')
-      const uploaded = await api.uploadResource(canvasId, blob, name)
-      return uploaded.url
+      /**
+       * 调用方指定了 ref → 落成**固定名**（服务端的"槽位"上传口）。
+       *
+       * 为什么需要：名字可推算的资源（缩略图/帧图）要能"先查有没有、没有才生成"，
+       * 而内容哈希寻址做不到这一点 —— 要算哈希就得先把图造出来，白忙一场。
+       * 槽位名固定、原地覆盖，于是 `resolve(ref)` 能直接命中已存在的那份。
+       * 代价（服务端注释里有）：同址内容会变 → 这类资源的缓存策略是禁缓存。
+       */
+      const uploaded = opts.ref
+        ? await api.uploadResourceToSlot(canvasId, blob, opts.ref, name)
+        : await api.uploadResource(canvasId, blob, name)
+      // 指定了固定名 → 返回**裸引用**（`opts.ref`）而不是完整 URL：
+      // 这样 resolve(ref) 能认出"这是派生资源"、去服务端确认存在性（见 resolveResource）。
+      // 返回 URL 的话，resolve 会走"已是 URL 原样返回"那条 —— 存在性永远不查，
+      // 于是调用方每次都以为没缓存、白等一次生成（2026-10-15 实测踩到）。
+      return opts.ref ? opts.ref : uploaded.url
     },
 
     /**
@@ -41,7 +66,20 @@ export function createCloudResourceAdapter(api: CloudApi, canvasId: string = CAN
      */
     async resolveResource(ref: string): Promise<string | undefined> {
       if (ref === '') return undefined
-      return isRequestableUrl(ref) ? ref : undefined
+      if (isRequestableUrl(ref)) return ref
+      /**
+       * **裸引用**（不带 URL 形状）= 调用方指定的"固定名"派生资源
+       * （缩略图 / 视频帧图这类，见 putResource 里 opts.ref 那条路）。
+       *
+       * 这类资源的存在性**必须真去问服务端**：地址由"槽位名 + .webp"拼出来，
+       * 但文件在不在只有服务器知道。不查的后果很隐蔽 ——
+       * 调用方以为"命中缓存"，其实每次都白等一次生成，重算的钱照付。
+       * 查一次（HEAD）换来之后一直命中：ResourceStore 会把结果记进内存表。
+       */
+      const candidate = slotUrlOf(canvasId, ref)
+      if (!candidate) return undefined
+      const exists = await api.resourceExists(candidate).catch(() => false)
+      return exists ? candidate : undefined
     },
 
     /**

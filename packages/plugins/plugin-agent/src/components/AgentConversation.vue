@@ -17,7 +17,7 @@
  */
 import { computed, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
-  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, X, Loader2, Sparkles, Plus, Box,
+  ArrowUp, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, X, Loader2, Sparkles, Plus, Box,
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
@@ -33,6 +33,7 @@ import { scrollTopForVisibleItem } from '../selectionScroll.js'
 // ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。
 import { skillResources, mcpResources, nodeResources, assetResource, assetResources, ICON_SKILL, ICON_MCP, type AssetRefOpen, type CanvasNodeRow } from '../agentResources.js'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
+import { stripUserSteering } from '../userSteering.js'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
 import { isSubmitShortcut } from '../composerKeys.js'
 import { pagerAnchors, type PagerGroup } from '../branchNav.js'
@@ -52,6 +53,7 @@ import {
 } from '../queueModel.js'
 import type { QueueStateView } from '../agentApi.js'
 import { loadNotifyPrefs, notifyPayload, playNotifySound, showNotify, type AgentNotifyPrefs } from '../agentNotify.js'
+import { loadQueueShowSending } from '../queuePrefs.js'
 import { toolView, toolBrief, type ToolView } from '../toolViews.js'
 import type { AgentTurnView, ToolCard } from '../sessionModel.js'
 import AgentMarkdown from './AgentMarkdown.vue'
@@ -231,6 +233,71 @@ async function addFile(f: File): Promise<void> {
 }
 
 const scroller = ref<HTMLElement | null>(null)
+/**
+ * 顶部哨兵（对话分页，用户口径 2026-10-15）：它进入可视区域才调 loadEarlierTurns()。
+ * 两次加载之间的最小间隔 —— 哨兵常驻可视区（对话很短就占满首屏）时不会连发请求；
+ * 加载完成后内容从顶部插入，要把滚动位置补回去（否则画面会跳到顶部）。
+ */
+const earlierSentinel = ref<HTMLElement | null>(null)
+let earlierObserver: IntersectionObserver | null = null
+let lastEarlierLoadAt = 0
+let earlierRetryTimer: ReturnType<typeof setTimeout> | null = null
+/** 两次「加载更早」之间的最小间隔（毫秒），与生成历史的 1s 同款 */
+const EARLIER_INTERVAL_MS = 1000
+
+function teardownEarlierSentinel(): void {
+  earlierObserver?.disconnect()
+  earlierObserver = null
+  if (earlierRetryTimer) {
+    clearTimeout(earlierRetryTimer)
+    earlierRetryTimer = null
+  }
+}
+
+function maybeLoadEarlier(): void {
+  if (!s.turnsHaveBefore || s.turnsLoadingEarlier) return
+  const elapsed = Date.now() - lastEarlierLoadAt
+  if (elapsed < EARLIER_INTERVAL_MS) {
+    if (earlierRetryTimer) clearTimeout(earlierRetryTimer)
+    earlierRetryTimer = setTimeout(() => {
+      earlierRetryTimer = null
+      maybeLoadEarlier()
+    }, EARLIER_INTERVAL_MS - elapsed)
+    return
+  }
+  lastEarlierLoadAt = Date.now()
+  // 顶部插入会让浏览器把滚动锚点顶走：先记当前可视内容到顶部的距离，
+  // 装载完（DOM 更新后）把「内容顶到第一条」的增量补回 scrollLeft 无关、只补 scrollTop。
+  const el = scroller.value
+  const beforeHeight = el?.scrollHeight ?? 0
+  const beforeTop = el?.scrollTop ?? 0
+  void agent.loadEarlierTurns().then(() => {
+    nextTick(() => {
+      const after = scroller.value
+      if (after && after.scrollHeight > beforeHeight) after.scrollTop = beforeTop + (after.scrollHeight - beforeHeight)
+    })
+  })
+}
+
+function setupEarlierSentinel(): void {
+  teardownEarlierSentinel()
+  const sentinel = earlierSentinel.value
+  if (!sentinel || typeof IntersectionObserver === 'undefined') return
+  earlierObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) maybeLoadEarlier()
+    },
+    { root: scroller.value, rootMargin: '0px 600px 0px 0px' },
+  )
+  earlierObserver.observe(sentinel)
+}
+
+watch(
+  () => [s.turnsHaveBefore, s.turnsLoadingEarlier, s.turns.length, s.sessionId],
+  () => nextTick(setupEarlierSentinel),
+)
+
+onBeforeUnmount(teardownEarlierSentinel)
 const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
 const openThinking = ref<Record<string, boolean>>({})
 /** 顶部那条「我能帮你做很多事」提示；点 ✕ 后本次打开不再显示 */
@@ -302,10 +369,31 @@ onMounted(() => {
   void agent.refresh()
   // 两个全局设置都读一次（后台对话开关在这里只作"设置页"的值来源，退出时也不用它，
   // 反正组件不订阅别的 config 键）
-  void Promise.all([loadGoalDefaults(), refreshNotifyPrefs()])
+  void Promise.all([loadGoalDefaults(), refreshNotifyPrefs(), loadQueueShowSending({ baseUrl: s.baseUrl }).then((v) => (showSendingQueue.value = v))])
   // 常驻订阅不在这里接：refresh() → restoreCurrentSession() 装载完会话后自己会接
   // （那里拿到的才是"当前会话"的正确 id）。这里再接一次只会用**刷新前遗留的旧 id**
   // 先占住流句柄，后面真正该接的那次被 "已经有流了" 挡掉（真机实测踩到的坑）。
+})
+
+// 「发送中显示队列」设置页翻开关 ⇒ 同页立即生效（评审抓到：只在挂载时读一次，
+// 已打开的对话面板不会跟着变）。KV 的跨标签页同步归 agentSettings 管，这里只管本页。
+function onQueuePrefsChanged(e: Event): void {
+  const d = (e as CustomEvent).detail as { showSending?: unknown } | undefined
+  if (d && typeof d.showSending === 'boolean') showSendingQueue.value = d.showSending
+}
+onMounted(() => window.addEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
+onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
+
+onMounted(() => {
+  if (typeof ResizeObserver === 'undefined') return
+  bubbleRO = new ResizeObserver(() => measureUserBubbles())
+  measureUserBubbles()
+})
+
+onBeforeUnmount(() => {
+  bubbleRO?.disconnect()
+  bubbleRO = undefined
+  userBubbleBodies.clear()
 })
 
 /**
@@ -566,6 +654,61 @@ function toggleThinking(id: string): void {
 }
 
 /**
+ * 用户气泡「默认只显示前 8 行」（用户口径 2026-10-15）：
+ * 长消息会把对话列表的滚动区占掉一大块，默认收着、想看再点「展开」。
+ *
+ * 超没超出靠 DOM 量（scrollHeight > clientHeight），模板算不出来 ——
+ * 用 ResizeObserver 盯正文外壳：初次挂载、内容变化、面板拖宽换行都会触发。
+ * 展开状态按消息 id 记，切会话 / 刷新回到收起态。
+ */
+const USER_BUBBLE_MAX_LINES = 8
+const openUserBubbles = ref<Record<string, boolean>>({})
+const overflowingUser = ref<Record<string, boolean>>({})
+function toggleUserBubble(id: string): void {
+  openUserBubbles.value[id] = !openUserBubbles.value[id]
+}
+/**
+ * 测量本体挂哪：挂 <p> 本身会在 ref 回调里写响应式状态 —— 而写状态的当帧正是
+ * 渲染刚结束的时机，状态一变又要重渲染，形成「渲染 → ref → 写状态 → 重渲染」
+ * 的递归（真机报 Maximum recursive updates exceeded，实测踩到）。
+ *
+ * 改成渲染后统一量：ref 只把元素登记进普通 Map（零响应式），列表渲染完（nextTick）
+ * 再一次性量 scrollHeight / clientHeight。之后的高度变化（面板拖宽换行）由
+ * ResizeObserver 兜 —— RO 回调不在渲染帧里写状态，同样安全。
+ */
+const userBubbleBodies = new Map<string, HTMLElement>()
+let bubbleRO: ResizeObserver | undefined
+let measureScheduled = false
+function scheduleMeasureUserBubbles(): void {
+  if (measureScheduled) return
+  measureScheduled = true
+  void nextTick(() => {
+    measureScheduled = false
+    measureUserBubbles()
+  })
+}
+function measureUserBubbles(): void {
+  const next: Record<string, boolean> = {}
+  for (const [id, el] of userBubbleBodies) next[id] = el.scrollHeight > el.clientHeight + 1
+  overflowingUser.value = next
+}
+function setUserBubbleBody(id: string): (el: unknown) => void {
+  // ref 回调只登记 DOM（普通 Map，不碰响应式）：渲染期间零副作用，不会自触发。
+  return (el: unknown) => {
+    const node = el as HTMLElement | null
+    const old = userBubbleBodies.get(id)
+    if (old && old !== node) bubbleRO?.unobserve(old)
+    if (node) {
+      userBubbleBodies.set(id, node)
+      bubbleRO?.observe(node)
+    } else {
+      userBubbleBodies.delete(id)
+    }
+    scheduleMeasureUserBubbles()
+  }
+}
+
+/**
  * 助手一轮里的块**按到达顺序**排（用户口径 2026-10-05）。
  *
  * 以前模板固定「先工具、后正文」，于是所有工具都被堆到最上面、看不出时序；
@@ -804,11 +947,18 @@ function pagerTarget(p: PagerGroup, delta: number): string | null {
  * 折算时把那几条强制成 `editing`（queueModel 据此出琥珀行 + 队列阻塞提示）。
  */
 const editingItems = ref<string[]>([])
+/**
+ * 「发送中显示队列」开关（用户口径 2026-10-15，全局设置里配）：关 = sending 条目
+ * 不画出来（真实发送后就从列表消失的效果）。默认显示 —— 关闭是用户显式的选择。
+ */
+const showSendingQueue = ref(true)
 const queueView = computed<QueueStateView>(() => {
   const base = s.queue
-  if (!editingItems.value.length) return base
+  // 开关关闭：先把 sending 条目滤掉（编辑态映射在前 —— 别把用户正在改的那条滤丢）
+  const keep = showSendingQueue.value ? base.items : base.items.filter((it) => it.state !== 'sending')
+  if (!editingItems.value.length) return { ...base, items: keep }
   const ids = new Set(editingItems.value)
-  return { ...base, items: base.items.map((it) => (ids.has(it.id) ? { ...it, state: 'editing' as const } : it)) }
+  return { ...base, items: keep.map((it) => (ids.has(it.id) ? { ...it, state: 'editing' as const } : it)) }
 })
 /** 折算成一排排要画的行（纯函数在 queueModel，可单测） */
 const queue = computed(() => queuePanelView(queueView.value))
@@ -1327,6 +1477,15 @@ function useSuggestion(text: string): void {
 const userSegments = parseUserSegments
 
 /**
+ * 用户气泡的显示文本：剥掉 [user_steering] 块的标记只留内文（用户口径 2026-10-15）。
+ * 为什么不动 t.text 本身：编辑回填、复制消息要走原文（复制带标记无意义时再看，
+ * 先保证显示干净 —— 复制也走这里更符合直觉，一并处理）。
+ */
+function displayUserText(text: string): string {
+  return stripUserSteering(text)
+}
+
+/**
  * 点对话里的标签：
  *   · 节点 → 让画布聚焦到它（读起来最自然，也是老行为）；
  *   · 资产（文件或文件夹）→ 发一条 `agent:ref-click` 系统事件，由应用层决定怎么响应。
@@ -1395,6 +1554,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
            而空态与消息流是 v-if/v-else 互换的（挂载时看到的那个节点随后会被换掉），
            盯它就会盯到已被丢弃的节点上 —— 内容再长也不触发。 -->
         <div class="ac-inner">
+          <!-- 更早历史的加载哨兵（用户口径 2026-10-15）：对话只先装最后三四轮，
+               滚到顶、这个元素进入可视区域才拉更早的（每次之间有最小间隔）。
+               可视化元素：加载中显示转圈文案，还有更早但没加载时给一条淡提示。 -->
+          <div v-if="s.turns.length && (s.turnsHaveBefore || s.turnsLoadingEarlier)" ref="earlierSentinel"
+            class="ac-earlier" role="status">
+            <span v-if="s.turnsLoadingEarlier" class="ac-earlier-loading">
+              <Loader2 :size="13" class="ac-spin" />
+              <span>正在加载更早的对话…</span>
+            </span>
+            <span v-else class="ac-earlier-hint">向上滚动查看更早的对话</span>
+          </div>
           <!-- 空态：中心欢迎 + 三行建议（照参考图） -->
           <div v-if="!s.turns.length" class="ac-welcome">
             <div v-if="!hintDismissed" class="ac-hint-card">
@@ -1533,20 +1703,34 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <!-- 用户消息：把正文里出现的 @技能 / @MCP 还原成**标签**（与输入框里那颗 chip 同款），
                  其余文字照常显示。为什么不直接存结构化引用：会话历史里只有纯文本（后端只存
                  getPlainText 的结果），靠"@名字 + 已装清单"回推，刷新/切会话也得到同一份渲染。 -->
-                <p v-if="t.kind === 'user'" class="ac-user-line">
-                  <template v-for="(seg, si) in userSegments(t.text)" :key="si">
-                    <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
-                     用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
-                    <span v-if="seg.type === 'tag'" class="ac-sent-tag" :class="{ 'is-clickable': segClickable(seg) }"
-                      :title="segTitle(seg)" :role="segClickable(seg) ? 'button' : undefined"
-                      :tabindex="segClickable(seg) ? 0 : undefined" @click="onSegClick(seg)"
-                      @keydown.enter.prevent="onSegClick(seg)">
-                      <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
-                      <span class="ac-sent-tag-label">{{ seg.name }}</span>
-                    </span>
-                    <span v-else class="ac-user-text">{{ seg.value }}</span>
-                  </template>
-                </p>
+                <!-- 默认只显示前 8 行（用户口径 2026-10-15）：长消息夹在 max-height 里，
+                 超出的内容点左下角「展开」再看；收起按钮原地换「收起」。 -->
+                <template v-if="t.kind === 'user'">
+                  <p v-if="t.text" class="ac-user-line" :ref="setUserBubbleBody(t.id)"
+                    :class="{ 'is-clamped': overflowingUser[t.id] && !openUserBubbles[t.id] }">
+                    <!-- user_steering 块（后台队列自动发的）剥掉标记只显示内文（用户口径 2026-10-15） -->
+                    <template v-for="(seg, si) in userSegments(displayUserText(t.text))" :key="si">
+                      <!-- 节点标签**可点击聚焦**（节点存在且没被删时）：与输入框里的标签同一交互。
+                       用户口径 2026-10-06：对话里出现的节点标签也要能点。 -->
+                      <span v-if="seg.type === 'tag'" class="ac-sent-tag"
+                        :class="{ 'is-clickable': segClickable(seg) }" :title="segTitle(seg)"
+                        :role="segClickable(seg) ? 'button' : undefined"
+                        :tabindex="segClickable(seg) ? 0 : undefined" @click="onSegClick(seg)"
+                        @keydown.enter.prevent="onSegClick(seg)">
+                        <span class="ac-sent-tag-icon" v-html="seg.icon" aria-hidden="true"></span>
+                        <span class="ac-sent-tag-label">{{ seg.name }}</span>
+                      </span>
+                      <span v-else class="ac-user-text">{{ seg.value }}</span>
+                    </template>
+                  </p>
+                  <button v-if="overflowingUser[t.id]" class="ac-user-toggle"
+                    :aria-expanded="!!openUserBubbles[t.id]" aria-label="展开完整消息"
+                    :title="openUserBubbles[t.id] ? '收起' : '展开'" @click="toggleUserBubble(t.id)">
+                    {{ openUserBubbles[t.id] ? '收起' : '展开' }}
+                    <ChevronDown v-if="!openUserBubbles[t.id]" :size="13" />
+                    <ChevronUp v-else :size="13" />
+                  </button>
+                </template>
                 <!-- 用户消息带的图：按原比例排一行缩略图，点开看大图 -->
                 <div v-if="t.kind === 'user' && t.images?.length" class="ac-user-images">
                   <button v-for="(src, ii) in t.images" :key="ii" class="ac-user-image" :aria-label="'查看图片 ' + (ii + 1)"
@@ -1686,11 +1870,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               @click="openPreview(row.thumbs[0], row.images)" />
             <span v-if="row.images.length > 1" class="ac-queue-thumb-more" role="status"
               :title="'共 ' + row.images.length + ' 张图'">+{{ row.images.length - 1 }}</span>
-            <span class="ac-queue-text" :title="row.text">
+            <span class="ac-queue-text" :title="displayUserText(row.text)">
               <!-- 队列条目也是**用户消息**：@节点 / @技能 标记同样要渲染成标签，
                      否则那串 <ref …> XML 原样露出（用户口径 2026-10-11：气泡/目标/队列三处都要认）。 -->
               <template v-if="row.text">
-                <template v-for="(seg, si) in userSegments(row.text)" :key="si">
+                <template v-for="(seg, si) in userSegments(displayUserText(row.text))" :key="si">
                   <span v-if="seg.type === 'tag'" class="ac-sent-tag is-compact" :title="segTitle(seg)">{{ seg.name
                     }}</span>
                   <span v-else>{{ seg.value }}</span>
@@ -1813,12 +1997,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
         <!-- 队列暂停 / 恢复：**骑在队列容器与输入框的分界线上**、水平居中。
              位置口径与参考 HTML 一致 —— 挂在 **composer** 里（不是容器里）：容器要 overflow:hidden
              才能把内部方角按外层圆角裁掉；按钮若放进容器会被一起裁掉半个。 -->
-        <button v-if="queue.hasItems" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
+        <!-- 显示条件（用户口径 2026-10-15）：过滤掉「发送中」后还有排着的（或已暂停要恢复）才给 -->
+        <button v-if="queue.pauseVisible" class="ac-queue-pause" :class="{ 'is-paused': queue.paused }"
           :aria-label="queue.paused ? '恢复队列' : '暂停队列自动发送'" :title="queue.pauseTitle" @click="toggleQueuePause()">
           <Play v-if="queue.paused" :size="12" />
           <Pause v-else :size="12" />
           <span>{{ queue.paused ? '队列恢复' : '队列暂停' }}</span>
-          <span class="ac-queue-pause-cnt">{{ queue.count }}</span>
+          <span class="ac-queue-pause-cnt">{{ queue.pendingCount }}</span>
         </button>
         <!-- 未发送的目标：**输入框内侧顶部**（用户口径 2026-10-09）。
              标签只写「目标」二字（目标正文就是下面输入框里的内容，不重复）；
@@ -2145,6 +2330,27 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   user-select: text;
 }
 
+/* —— 顶部「更早对话」哨兵（对话分页，用户口径 2026-10-15）——
+   颜色/字号按 ui-style-guide 的次要文本口径；它只有内容流顶部一小条，不抢视线。 */
+.ac-earlier {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 8px;
+  padding: 6px 0 2px;
+  font-size: 11px;
+  color: var(--ui-ink-mute, #9aa3af);
+}
+.ac-earlier-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ac-earlier-hint {
+  user-select: none;
+}
+
 /* —— 空态（照参考图）—— */
 .ac-welcome {
   display: flex;
@@ -2395,6 +2601,38 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 
 .ac-user-text {
   white-space: pre-wrap;
+}
+
+/* 「前 8 行」夹层（用户口径 2026-10-15）：行高 24px × 8 = 192px。
+   正文元素同时是测量体 —— scrollHeight 是完整内容高、clientHeight 是被夹住的高，
+   差值超过 1px 就认为"内容超出"，在左下角给「展开」。 */
+.ac-user-line.is-clamped {
+  max-height: 192px;
+  overflow: hidden;
+}
+
+/* 展开 / 收起：文字 + 箭头，放气泡左下角。圆角 6、12px/600，走样式表的「文本按钮」档。 */
+.ac-user-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  margin: 6px 0 0;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ui-ink-dim, #919191);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.ac-user-toggle:hover {
+  background: var(--ui-hover, rgb(255 255 255 / 0.1));
+  color: var(--ui-ink, #f7f7f7);
 }
 
 /* 操作行在气泡外（右下角、贴气泡下缘）：.ac-msg 是 flex 容器，操作行要跟气泡组成一列 */

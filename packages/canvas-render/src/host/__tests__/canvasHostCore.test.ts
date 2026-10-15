@@ -38,6 +38,8 @@ describe('nodesFromStore', () => {
       data: { label: '文本 1', text: 'hi' },
       // 显式分层：普通节点落 LAYERS.node（不再靠 DOM 顺序）
       zIndex: LAYERS.node,
+      // 可见剔除（2026-10-15）总是显式写 hidden（VueFlow 合并语义，false 必须显式清除残留 true）
+      hidden: false,
     })
     // data 是浅拷贝：改 flow 的 data 不污染内核 store
     flow[0].data.text = 'MUTATED'

@@ -93,6 +93,15 @@ const LOW_DETAIL_ZOOM = ref(numOf('nodeLodLowDetailZoom', 0.4))
  */
 const CANVAS_NODES_DRAGGABLE = ref(boolOf('nodesDraggable', true))
 /**
+ * 是否处于「抓手工具」（= 关掉了节点拖拽）。
+ *
+ * 抓手模式下拖动是**平移画布**、节点根本不会被拖走，所以挂在节点上的那些「操作这个节点」的
+ * 浮层都是误导（用户要求：「抓手工具」下不显示上下两排状态栏）。判据与端口压制同源：
+ * 宿主级设置 `nodesDraggable`（底栏「移动 / 抓手」按钮与设置面板「节点可拖拽」改的都是它），
+ * 不存在第二份开关。
+ */
+const isHandTool = computed(() => !CANVAS_NODES_DRAGGABLE.value)
+/**
  * 多选标记的外观（大小 / 颜色 / 低缩放是否显示）。
  * 配置来自本插件 Config 的「节点/多选标记」一组；这里读一次做初值，之后靠 onChange 窄更新。
  */
@@ -176,9 +185,13 @@ const hideToolbars = computed(
  * 为什么不并进 hideToolbars：hideToolbars 同时管 `over:inset`（编辑浮层 + 生成任务的整卡加载态）。
  * 那些**不是控制栏**，是长在卡片上、该跟着卡片走的东西 —— 尤其任务进度，拖动节点时收掉进度显示是倒退。
  * 所以拖动这条只收"浮在卡片外面的那两排栏"。
+ *
+ * 抓手工具（isHandTool）也并进这条（用户要求：抓手模式下不显示上下两排状态栏）：
+ * 抓手模式下节点不可拖、端口也已整体压掉（见 handleBlocked），留在卡片外的操作栏只是噪音。
+ * 与拖动那条同理，它只收 out:top / out:bottom 两排栏，不动卡片上的编辑浮层与任务进度。
  */
 const hideSlotBars = computed(
-  () => hideToolbars.value || interaction?.isNodeDragging?.value === true,
+  () => hideToolbars.value || interaction?.isNodeDragging?.value === true || isHandTool.value,
 )
 
 /** 多选（选中 >=2）且本节点在其中：此时压掉自身端口，改用多选框上的批量连线端口 */
@@ -747,7 +760,7 @@ watch(
  */
 const handleBlocked = computed(
   () =>
-    !CANVAS_NODES_DRAGGABLE.value || // 抓手工具：拖动是平移画布，端口留着只会误导
+    isHandTool.value || // 抓手工具：拖动是平移画布，端口留着只会误导
     lowDetail.value || // 低细节：端口整体不画
     suppressHandles.value || // 拖线中全局压
     isCurrentConnectingNode.value || // 本节点是本次拖线源

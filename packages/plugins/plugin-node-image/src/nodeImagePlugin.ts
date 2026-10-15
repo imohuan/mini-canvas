@@ -13,6 +13,7 @@
  */
 import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
+import { thumbTierFields, thumbTierKeys } from './thumbTier'
 import { DEFAULT_IMAGE_FIT_LIMITS } from './imageFit'
 import { imageTitleExtra } from './imageNodeData'
 import ImageContent from './ImageContent.vue'
@@ -111,7 +112,19 @@ export const Config: ConfigSchema = {
     label: '图片预览上限高', group: '布局/图片节点尺寸',
     description: '上传/换图后，图片节点卡片的最大高度（px）。图片比这个高就等比缩小，不会放大。',
   },
+  // —— 「节点/缩略图」：三档显示（用户口径：三档全部可配；第 1 档是原图，不用配）——
+  //
+  // 第 2/3 档的**阈值 + 目标框 + 清晰度**都在这里。小图由**本插件用 canvas 现画**
+  // （见 thumbCanvas.ts：一份代码两种后端通吃，不依赖后台、不动基础包），
+  // 生成结果只放内存、不写节点数据 → 节点里不多存任何字段，旧节点自动具备三档。
+  //
+  // 键名由 thumbTierFields 统一生成（前缀 image）：图片与视频各一套、互不影响，
+  // 且**必须**带前缀 —— settings 是全局同一张表、先声明者独占，通用名会跟别的插件抢键。
+  ...thumbTierFields('image', '节点/缩略图', '图片'),
 }
+
+/** 本插件声明的缩略图设置键（内容组件按它过滤 settings 变更） */
+export const IMAGE_THUMB_KEYS = thumbTierKeys('image')
 
 export function apply(ctx: Context) {
   // 1. 构造即上架 'image' 服务（super(ctx,'image') → ctx.provide，随插件 scope 回收）

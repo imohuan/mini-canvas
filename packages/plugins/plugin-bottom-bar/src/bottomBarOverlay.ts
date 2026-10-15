@@ -26,11 +26,19 @@ export interface BottomBarSuppressInput {
    * 与 BaseNode 同一条规则 —— 拖任意节点，全画布的栏一起收，松手立刻恢复。
    */
   nodeDragging: boolean
+  /**
+   * 画布是否处于「抓手工具」（宿主级设置 nodesDraggable=false）。
+   *
+   * 用户要求：切到抓手工具后，节点上下两排状态栏都不显示。底栏住在画布 overlay 槽
+   * （BaseNode 之外），BaseNode 那条压制管不到它，所以必须在这里把同一条件补上。
+   * 判据与 BaseNode 的 isHandTool 同源：**同一个设置键**，不新开开关。
+   */
+  handTool: boolean
 }
 
 /**
  * 底栏该不该被压制（true = 收起）。任一成立即收起：
- * 框选进行中 / 多选（>=2） / 本节点正在被 resize / 画布上有节点正在被拖。
+ * 框选进行中 / 多选（>=2） / 本节点正在被 resize / 画布上有节点正在被拖 / 抓手工具。
  *
  * 注意 resize 那条只认本节点（拖 A 的尺寸不该吃掉 B 的底栏），拖动那条不认节点
  * （规则是画布级的，见 nodeDragging 的说明）——两者不对称是有意的，别统一。
@@ -40,6 +48,7 @@ export function resolveBottomBarSuppressed(input: BottomBarSuppressInput): boole
     input.selecting ||
     input.selectedCount > 1 ||
     input.resizingId === input.selectedId ||
-    input.nodeDragging
+    input.nodeDragging ||
+    input.handTool
   )
 }

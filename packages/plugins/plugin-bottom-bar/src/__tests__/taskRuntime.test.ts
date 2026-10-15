@@ -89,6 +89,48 @@ describe('runAction', () => {
     expect(h.runtime.at(-1)).toMatchObject({ status: 'done' })
   })
 
+  /**
+   * externalRunState（云端动作）：中间帧交给后台写，**终态必须自己写**。
+   *
+   * 现场（2026-10-14 用户实测）：两个视频任务后台都已 done，画布上却一直停在
+   * 「等待中（第 73 轮，generating）」60% 转圈 —— 底栏的轮询（SSE 丢帧后的兜底）
+   * 明明问到了 done，却因为 externalRunState 把这一帧也吞了，什么都没写。
+   */
+  it('externalRunState：中间帧不写（交给后台），但终态必须写下去', async () => {
+    let step = 0
+    const action = imageAction({
+      externalRunState: true,
+      run: () => () => {
+        step += 1
+        return step < 3
+          ? { status: 'running', progress: step * 30, message: '等后台' }
+          : { status: 'done', result: { ok: true, urls: ['cloud.mp4'] } }
+      },
+    })
+    const h = harness()
+    const out = await runAction(
+      { nodeId: 'n1', nodeType: 'image', action, input: {}, registry: registryOf([action]) },
+      h.deps,
+    )
+    expect(out.ok).toBe(true)
+    // 中间帧一帧都不写（后台负责）
+    expect(h.runtime.filter((s) => s.status === 'running')).toHaveLength(0)
+    // 终态写了 —— 这是本用例的存在意义
+    expect(h.runtime.at(-1)).toMatchObject({ status: 'done', progress: 100 })
+  })
+
+  it('externalRunState：结果失败时同样要写 error 终态', async () => {
+    const action = imageAction({
+      externalRunState: true,
+      run: () => () => ({ status: 'done', result: { ok: false, error: '上游挂了' } }),
+    })
+    const h = harness()
+    await runAction(
+      { nodeId: 'n1', nodeType: 'image', action, input: {}, registry: registryOf([action]) },
+      h.deps,
+    )
+    expect(h.runtime.at(-1)).toMatchObject({ status: 'error', message: '上游挂了' })
+  })
   it('失败：写 error 终态，不调写入器', async () => {
     const applied = vi.fn()
     const action = imageAction({

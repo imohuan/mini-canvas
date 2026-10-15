@@ -1,36 +1,46 @@
 <script setup lang="ts">
-// TextContent —— text 节点 content 组件（随 plugin-node-text 插件包发布，经 BaseNode 壳的 content 段渲染）。
-//
-// 职责：展示文本（带缩放分级 LOD：full → condensed 首行截断 → icon 缩略占位）；双击进入编辑，
-// 失焦把改动经 ctx.get('text').editText 写回内核并落盘。
-//
-// 两态由用户明确定义（原话："这里文本节点有 2 种状态，第一种是预览，只显示内容，超出隐藏就行，
-// 双击才进入编辑状态，提供滚动条，拦截画布的滚轮（缩放画布）"）：
-// - **预览态**（默认）：只显示内容，超出裁掉，不给滚动条、不抢滚轮；
-// - **编辑态**（双击进入）：给滚动条（内容长了能在框里滚），并把滚轮从画布手里抢过来，
-//   否则滚自己的文字会把画布缩放掉。
-// 两条判定都在 textViewMode.ts（纯函数、可单测），本组件只负责照结论渲染。
-//
-// 与 V1 的关系（packages/canvas-core/src/nodes/text/TextNode.vue）：
-// - 内容区语义等价 V1 的 p-4（16px 内边距）；
-// - 编辑态就是一个**透明底、无边框、无 outline**的 textarea（就地编辑，不是"输入框卡片"）；
-// - **回车是换行，不是提交**（V1 只绑 keydown.escape）；Esc 取消编辑、blur 提交；
-// - 唯一的差异：V1 缩到很小时**干脆不让进编辑**，这里允许进（用户双击就是想编辑），
-//   只是代价自负——所以编辑态在大缩放范围里一直可用。
-//
-// 编辑态放在 textEditSession（模块级、按 nodeId 记名）而不是本组件的 ref：
-// 这样"编辑态有没有滚动条、有没有拦滚轮"能被无头测试直接渲染出来验（项目铁律：渲染结果要有测试兜底）。
-//
-// 依赖方向：只 import 渲染层的 useCanvasRender()(收口函数)，不反向依赖 demo-web。
-// LOD 阈值从 theme-default 的 Config 单一数据源读（textLodIconZoom / titleScaleMinZoom，对齐 v1 core 同名项），
-// 经 onChange 订阅实时生效；读不到时回落默认（0.18 / 0.5）。
+/**
+ * TextContent —— text 节点 content 组件（随 plugin-node-text 插件包发布，经 BaseNode 壳的 content 段渲染）。
+ *
+ * 职责：展示文本（带缩放分级 LOD：预览全文 → 骨架横条 → 更小档骨架横条）；双击进入编辑，
+ * 失焦把改动经 ctx.get('text').editText 写回内核并落盘。
+ *
+ * 三态由用户明确定义：
+ * - **预览态**（默认）：只显示内容，超出裁掉，不给滚动条、不抢滚轮；
+ * - **编辑态**（双击进入）：给滚动条（内容长了能在框里滚），并把滚轮从画布手里抢过来，
+ *   否则滚自己的文字会把画布缩放掉；
+ * - **骨架横条**（缩到一定程度）：原话「当鼠标缩放到一定程度下，文本会发生一些改变。
+ *   我希望你可以改变成图片中的这种形式，使用不同长度的矩形色块」——就是骨架屏那类效果；
+ *   追问「两档都改吗」→「两档都改成横条」，所以两档（skeleton / skeleton-mini）都是横条，
+ *   差别只是条的厚度与行距（缩得越小越薄越密）。
+ *
+ * 判定都在 textViewMode.ts（纯函数、可单测），横条几何在 textSkeleton.ts，本组件只照结论渲染。
+ *
+ * 与 V1 的关系（packages/canvas-core/src/nodes/text/TextNode.vue）：
+ * - 内容区语义等价 V1 的 p-4（16px 内边距）；
+ * - 编辑态就是一个**透明底、无边框、无 outline**的 textarea（就地编辑，不是"输入框卡片"）；
+ * - **回车是换行，不是提交**（V1 只绑 keydown.escape）；Esc 取消编辑、blur 提交；
+ * - 唯一的差异：V1 缩到很小时**干脆不让进编辑**，这里允许进（用户双击就是想编辑），
+ *   只是代价自负——所以编辑态在大缩放范围里一直可用。
+ *
+ * 编辑态放在 textEditSession（模块级、按 nodeId 记名）而不是本组件的 ref：
+ * 这样"编辑态有没有滚动条、有没有拦滚轮"能被无头测试直接渲染出来验（项目铁律：渲染结果要有测试兜底）。
+ *
+ * 依赖方向：只 import 渲染层的 useCanvasRender()(收口函数)，不反向依赖 demo-web。
+ * LOD 阈值从 theme-default 的 Config 单一数据源读（textLodIconZoom / titleScaleMinZoom，对齐 v1 core 同名项），
+ * 经 onChange 订阅实时生效；读不到时回落默认（0.18 / 0.5）。
+ */
 import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import type { TextNodeService } from './nodeTextPlugin'
-import { resolveLodThresholds, resolveTextContentSpec } from './textViewMode'
+import { isSkeletonMode, resolveLodThresholds, resolveTextContentSpec } from './textViewMode'
 import { beginEdit, endEdit, isTextEditing } from './textEditSession'
+import TextSkeleton from './TextSkeleton.vue'
 
-const props = defineProps<{ id: string; data: { text?: string } }>()
+/** 内容区固定内边距（px）：横条要在这个框里排，所以外层与预览字共享同一组数值 */
+const CONTENT_PADDING = 16
+
+const props = defineProps<{ id: string; data: { text?: string; cardWidth?: number; cardHeight?: number } }>()
 
 // 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；ctx 是裸内核上下文(boot 后已就绪，见 CanvasSurface)。
 // 根 Context 没有服务属性 Proxy（declare module 只增强类型）；这里用 ctx.get 取 text 服务，避免 ctx.text 运行时为 undefined。
@@ -70,7 +80,7 @@ onBeforeUnmount(() => textSettingOff?.dispose())
 
 // 当前画布缩放（VueFlow viewport 经渲染上下文暴露，响应式）
 const zoom = computed(() => Math.max((viewport.value?.zoom ?? 1) || 1, 0.01))
-// 内容形态（预览 / 首行 / 缩略 / 编辑）+ 该形态下的滚动与滚轮策略，全部由纯函数判定
+// 内容形态（预览 / 骨架横条两档 / 编辑）+ 该形态下的滚动与滚轮策略，全部由纯函数判定
 const spec = computed(() =>
   resolveTextContentSpec({
     editing: editing.value,
@@ -79,10 +89,22 @@ const spec = computed(() =>
     iconZoom: lodThresholds.value.iconZoom,
   }),
 )
+// 骨架横条的档位：越缩越小 → 换更薄更密那档
+const skeletonDensity = computed<'body' | 'mini'>(() => (spec.value.mode === 'skeleton-mini' ? 'mini' : 'body'))
+// 估算用内容盒尺寸：卡片宽高（data 里的卡片镜像）减掉内边距。
+// 只用于 ResizeObserver 报到之前的首帧估算 —— 卡片被 resize 过就有值（否则类型默认尺寸兜 300×200）。
+const boxHint = computed(() => ({
+  width: Math.max(finiteOr(props.data.cardWidth, 300) - CONTENT_PADDING * 2, 0),
+  height: Math.max(finiteOr(props.data.cardHeight, 200) - CONTENT_PADDING * 2, 0),
+}))
+
+function finiteOr(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
 
 function startEdit(): void {
   if (editing.value) return // 已在编辑中就不要再进（否则会把用户正在敲的草稿重置掉）
-  if (spec.value.mode === 'icon') return // 极小缩放下内容已经看不清，不进编辑（避免误操作）
+  if (isSkeletonMode(spec.value.mode)) return // 极小缩放下内容已经看不清，不进编辑（避免误操作）
   beginEdit(props.id)
   draft.value = shown.value
   void nextTick(() => inputEl.value?.focus())
@@ -143,10 +165,18 @@ onBeforeUnmount(() => {
     :data-scrollable="String(spec.scrollable)"
   >
     <div class="body">
-      <!-- icon：极小缩放只显示灰色扫光缩略占位，零文本重绘 -->
-      <div v-if="spec.mode === 'icon'" class="text-node-skel" aria-hidden="true" />
+      <!-- 骨架横条（两档）：用长短不一的灰条把这整段文字的版式画成剪影，零文本重绘。
+           density 决定条的厚度/行距（mini 更薄更密）；行数与长短都由真实文本折算。 -->
+      <TextSkeleton
+        v-if="isSkeletonMode(spec.mode)"
+        class="skeleton"
+        :text="shown"
+        :density="skeletonDensity"
+        :width-hint="boxHint.width"
+        :height-hint="boxHint.height"
+      />
 
-      <!-- 编辑态：textarea（full / condensed 均显示真实文本）。透明底 / 无边框 / 无 outline，与 V1 一致。
+      <!-- 编辑态：textarea（预览态才显示真实文本）。透明底 / 无边框 / 无 outline，与 V1 一致。
            nodrag/nopan：在编辑框里按住拖动是"选字"，不该把节点拖走或拖动画布（老版同样有这个坑，这里补掉）。
            回车换行（不拦 keydown.enter），Esc 取消，blur 提交。 -->
       <textarea
@@ -163,12 +193,11 @@ onBeforeUnmount(() => {
         @mousedown.stop="stop"
       ></textarea>
 
-      <!-- 只读展示：随画布自然缩放；condensed 只显示首行截断。
+      <!-- 全文预览：随画布自然缩放。
            双击进入编辑（与 V1 一致：只读态才绑 dblclick；编辑态里双击是"选词"，不该被当成再进编辑）。 -->
       <div
         v-else
         class="preview"
-        :class="{ 'is-condensed': spec.mode === 'preview-condensed' }"
         title="双击编辑"
         @dblclick.stop="startEdit"
       >{{ shown || '（空）' }}</div>
@@ -204,7 +233,7 @@ onBeforeUnmount(() => {
   color: var(--canvas-node-text-body, #374151);
 }
 
-/* 只读态：透明底、可点、pre-wrap；双击进入编辑 */
+/* 全文预览：透明底、可点、pre-wrap；双击进入编辑 */
 .preview {
   width: 100%;
   height: 100%;
@@ -212,12 +241,11 @@ onBeforeUnmount(() => {
   overflow: hidden;
   cursor: text;
 }
-/* condensed：只显示首行，减少文字重排/绘制面积 */
-.preview.is-condensed {
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  white-space: normal;
+
+/* 骨架横条层：吃满内容盒（与上面那 16px 内边距对齐），自己不再加内边距 */
+.skeleton {
+  position: absolute;
+  inset: 0;
 }
 
 /* 编辑态：透明底、无边框、无 outline、撑满——就地编辑（不是"输入框卡片"），与 V1 一致；
@@ -252,29 +280,5 @@ onBeforeUnmount(() => {
 .editor:focus-visible {
   outline: none;
 }
-
-/* icon 模式：整块灰底扫光占位，几乎零重绘 */
-.text-node-skel {
-  width: 100%;
-  height: 100%;
-  background: var(--canvas-node-surface, rgba(0, 0, 0, 0.04));
-  position: relative;
-  overflow: hidden;
-  /* 扫光是"比底更亮一点"的高光：亮色要够白，暗色压低免得在暗底上过曝（组件私有色板，两套各一格） */
-  --tn-sweep: rgba(255, 255, 255, 0.65);
-}
-html.dark .text-node-skel {
-  --tn-sweep: rgba(255, 255, 255, 0.1);
-}
-.text-node-skel::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: -60%;
-  width: 45%;
-  background: linear-gradient(105deg, transparent 0%, var(--tn-sweep, rgba(255, 255, 255, 0.65)) 50%, transparent 100%);
-  transform: skewX(-18deg);
-  will-change: left, transform;
-}
 </style>
+

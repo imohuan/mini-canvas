@@ -53,6 +53,14 @@ export interface QueuePanelView {
   pauseLabel: '启动' | '暂停'
   /** 按钮 title（'启动队列自动发送' / '暂停队列自动发送'） */
   pauseTitle: string
+  /**
+   * 暂停/恢复按钮要不要显示（用户口径 2026-10-15）：过滤掉 sending 条目后
+   * 还有排着的（或已处于暂停态需要恢复入口）才显示 —— 队列里只剩一条
+   * 「发送中」时不给按钮（没有可停的东西）。
+   */
+  pauseVisible: boolean
+  /** 过滤掉 sending / sent 后真正在排队的条数（暂停胶囊上的计数用它） */
+  pendingCount: number
   hasItems: boolean
 }
 
@@ -95,6 +103,8 @@ function emptyPanelView(): QueuePanelView {
     // 空队列按「没暂停」的一套文案（paused = false）
     pauseLabel: '暂停',
     pauseTitle: '暂停队列自动发送',
+    pauseVisible: false,
+    pendingCount: 0,
     hasItems: false,
   }
 }
@@ -108,6 +118,9 @@ export function queuePanelView(queue: QueueStateView | null | undefined): QueueP
   // 编辑是单选（设计 §3.3.4）：正在编辑的那条 = 阻塞队列的那条
   const editing = items.find((i) => i.state === 'editing') ?? null
   const paused = queue.paused === true
+  // 暂停按钮的显示条件（用户口径 2026-10-15）：sending 是「已经在路上」的，不算可停的；
+  // editing 也在队列里等用户，算。已暂停时按钮留着（恢复入口）。
+  const pendingCount = rows.filter((r) => !r.sending && !r.sent).length
   return {
     rows,
     count: rows.length,
@@ -117,6 +130,8 @@ export function queuePanelView(queue: QueueStateView | null | undefined): QueueP
     blocked: editing !== null,
     pauseLabel: paused ? '启动' : '暂停',
     pauseTitle: paused ? '启动队列自动发送' : '暂停队列自动发送',
+    pauseVisible: paused || pendingCount > 0,
+    pendingCount,
     hasItems: rows.length > 0,
   }
 }

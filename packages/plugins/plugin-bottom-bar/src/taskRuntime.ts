@@ -112,19 +112,25 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
   /**
    * 写节点进度。
    *
-   * **外部管状态的动作不写**（如云端动作：后台自己会把进度写进节点）。
+  * **外部管状态的动作不写中间帧**（如云端动作：后台自己会把进度写进节点）。
    * 两支笔写同一张便利贴会来回跳 —— 后台一份时钟/文案，本地一份，谁也不服谁。
    * 不声明 externalRunState 的动作（今天全部）行为不变。
+  *
+  * **但终态必须写**（`force`）：底栏的轮询本来就是「SSE 丢了之后的兜底」
+  * （见 routes/jobs.ts 文件头）。若连终态也交给后台，那一拍就会「问到了 done 却
+  * 什么都不写」—— 推送丢一次，卡片就永远停在 60% 转圈（2026-10-14 用户实测：
+  * 两个任务后台都已 done，画布上还在「等待中（第 73 轮）」，消息再没动过）。
+  * 写的是**同一条终态**（后台也是 done/error），不会与后台的帧互相打架。
    */
-  const writeRuntime = (rs: NodeRunState): void => {
-    if (action.externalRunState) return
+  const writeRuntime = (rs: NodeRunState, force = false): void => {
+    if (action.externalRunState && !force) return
     deps.writeRuntime(nodeId, { runState: rs })
   }
 
   // ① 取消：直接收敛（不留悬挂 running）
   if (signal?.aborted) {
     const rs = errorState(action.id, '已取消')
-    writeRuntime(rs)
+    writeRuntime(rs, true) // 终态：外部管状态的动作也要落地（否则卡片永远转）
     return { ok: false, error: rs.message }
   }
 
@@ -154,7 +160,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
   while (true) {
     if (signal?.aborted) {
       const rs = errorState(action.id, '已取消')
-      writeRuntime(rs)
+      writeRuntime(rs, true) // 同上：用户点了取消必须立刻看到收敛
       await cancelUpstream()
       return { ok: false, error: rs.message }
     }
@@ -179,7 +185,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
     }
     if (t - startedAt > (actionTimeout ?? timeoutMs)) {
       const rs = errorState(action.id, '任务超时（未在预期时间内完成）')
-      writeRuntime(rs)
+      writeRuntime(rs, true) // 超时也是终态
       return { ok: false, error: rs.message, taskId: next.taskId }
     }
     await sleepOrAbort(actionInterval ?? interval, signal ?? new AbortController().signal)
@@ -188,7 +194,9 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
   /** 终态（不节流）：写 done/error，再交给写入器（除非动作声明了 self） */
   async function finish(action: BarAction, nodeType: string, result: ToolResult): Promise<ToolResult> {
     if (result.ok) {
-      writeRuntime(doneState(action.id, result.taskId))
+      // force：终态必须落盘。外部管状态的动作（云端）中间帧交给后台，
+      // 但兜底轮询问到的终态若也吞掉，SSE 丢一次帧卡片就永远停在 running。
+      writeRuntime(doneState(action.id, result.taskId), true)
       if (action.apply !== 'self') {
         const applier = registry.applierOf(nodeType)
         if (applier) await applier(nodeId, result, { nodeType })
@@ -197,7 +205,7 @@ export async function runAction(args: RunActionArgs, deps: TaskDeps): Promise<To
       return result
     }
     const rs = errorState(action.id, result.error ?? '任务失败')
-    writeRuntime(rs)
+    writeRuntime(rs, true)
     return result
   }
 }
@@ -233,15 +241,20 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
    *
    * 注意这行**必须在 action 取到之后**才定义：之前的写法把 writeRuntime 提到了
    * registry.get 前面，函数体里引用了一个还没赋值的 action —— 一进续查就抛。
+  *
+  * @param force 终态必须传 true —— 同 runAction：兜底轮询问到的终态若不落地，
+  *   刷新后（或 SSE 丢帧后）卡片会永远停在 running。
    */
-  const writeRuntime = (rs: NodeRunState): void => {
-    if (action?.externalRunState) return
+  const writeRuntime = (rs: NodeRunState, force = false): void => {
+    if (action?.externalRunState && !force) return
     deps.writeRuntime(nodeId, { runState: rs })
   }
 
   if (!action?.resume || !taskId) {
     const rs = errorState(actionId, '刷新后任务已中断')
-    writeRuntime(rs)
+    // 注意：这条是**同步写**（在第一个 await 之前）—— restoreAll 用 void 调它，
+    // 异步分支抛错会被吞掉，这里是刷新场景唯一的兜底显示。
+    writeRuntime(rs, true)
     return { resumed: false, state: rs }
   }
 
@@ -258,14 +271,14 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
     const poll = action.resume(taskId, runCtx)
     if (!poll) {
       const rs = errorState(actionId, '刷新后任务已中断')
-      writeRuntime(rs)
+      writeRuntime(rs, true)
       return { resumed: false, state: rs }
     }
     while (true) {
       // 取消：续查的任务同样要能被打断（覆盖层「取消」按钮），且要顺手清掉服务端任务
       if (signal?.aborted) {
         const rs = errorState(actionId, '已取消')
-        writeRuntime(rs)
+        writeRuntime(rs, true)
         try {
           if (typeof action.onCancel === 'function' && taskId) await action.onCancel(taskId, runCtx)
         } catch {
@@ -278,7 +291,7 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
         const result = state.result
         if (result.ok) {
           const rs = doneState(actionId, taskId)
-          writeRuntime(rs)
+          writeRuntime(rs, true)
           if (action.apply !== 'self') {
             const applier = registry.applierOf(nodeType)
             if (applier) await applier(nodeId, result, { nodeType })
@@ -286,7 +299,7 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
           return { resumed: true, state: rs }
         }
         const rs = errorState(actionId, result.error ?? '任务失败')
-        writeRuntime(rs)
+        writeRuntime(rs, true)
         return { resumed: true, state: rs }
       }
       lastState = progressState(lastState, state)
@@ -299,7 +312,7 @@ export async function resumeAction(args: ResumeActionArgs, deps: TaskDeps): Prom
     }
   } catch (err) {
     const rs = errorState(actionId, toError(err, '任务执行中断').error ?? '任务执行中断')
-    writeRuntime(rs)
+    writeRuntime(rs, true)
     return { resumed: true, state: rs }
   }
 }

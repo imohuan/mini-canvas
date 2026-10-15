@@ -128,17 +128,54 @@ const viewerStyle = computed(() => {
   }
 })
 
-/** 节点方块样式（用当前 mapState 现算） */
-function nodeStyle(rect: MiniMapRect): Record<string, string> | null {
+/**
+ * 节点方块改 canvas 绘制（2026-10-15 性能优化 P5）：
+ * 旧实现 v-for 渲染 160 个 div（诊断报告：.mini-map 161 个子元素每帧跟随重绘）。
+ * canvas 只在内容/视口变化时重画一次 2D 方块，DOM 恒为 1 个元素。
+ * 视口蓝框仍是独立 div（动画跟随、便宜）。命中判定改几何（原 class 判断不可用）。
+ */
+const nodeCanvas = ref<HTMLCanvasElement | null>(null)
+
+function drawNodes(): void {
+  const cv = nodeCanvas.value
   const ms = mapState.value
-  if (!ms) return null
-  const r = rectToMap(rect, ms)
-    return {
-    left: r.left + 'px',
-    top: r.top + 'px',
-    width: r.width + 'px',
-    height: r.height + 'px',
+  if (!cv || !ms) return
+  const dpr = window.devicePixelRatio || 1
+  const w = width.value
+  const h = height.value
+  // 只在尺寸/内容变化时重设分辨率（重设会清空画布）
+  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+    cv.width = Math.round(w * dpr)
+    cv.height = Math.round(h * dpr)
   }
+  const g = cv.getContext('2d')
+  if (!g) return
+  g.setTransform(dpr, 0, 0, dpr, 0, 0)
+  g.clearRect(0, 0, w, h)
+  // 节点方块颜色跟主题：读 CSS 变量（亮/暗各一套 --mm-node，scoped 样式里有定义；
+  // 不写字面量兜底——主题色卫生测试禁止插件内裸颜色）
+  const color = getComputedStyle(cv).getPropertyValue('--mm-node').trim()
+  if (!color) return
+  g.fillStyle = color
+  for (const rect of contentRects.value) {
+    const r = rectToMap(rect, ms)
+    g.fillRect(r.left, r.top, r.width, r.height)
+  }
+}
+
+/** canvas 版节点命中：点在任一节点方块的映射矩形内 → true（旧 class 判断的等价替代） */
+function hitNode(clientX: number, clientY: number): boolean {
+  const cv = nodeCanvas.value
+  const ms = mapState.value
+  if (!cv || !ms) return false
+  const cr = cv.getBoundingClientRect()
+  const px = clientX - cr.left
+  const py = clientY - cr.top
+  for (const rect of contentRects.value) {
+    const r = rectToMap(rect, ms)
+    if (px >= r.left && px <= r.left + r.width && py >= r.top && py <= r.top + r.height) return true
+  }
+  return false
 }
 
 // renderNodes / paneRect 变化 → 重收内容（非拖拽中）；视口变化由 computed 自动传导，无需手动 watch
@@ -152,6 +189,10 @@ watch(
     if (!dragging) syncContent()
   },
 )
+// 内容/视口/地图状态变化 → 重画 canvas（viewer 是独立 div 不进 canvas，其位置由 computed 驱动）
+watch([contentRects, mapState, width, height, visible], () => {
+  void Promise.resolve().then(() => drawNodes())
+})
 watch(paneRect, measurePane)
 
 function onWindowResize(): void {
@@ -251,7 +292,7 @@ function endPointer(e: PointerEvent, jumped: boolean): void {
   if (jumped && session && !session.moved && vp) {
     // 点击（无拖动）且不是点在视口框/缩略节点上 → 跳到该 flow 点（保留 zoom）
     const target = e.target as HTMLElement | null
-    if (!downOnViewer && !target?.classList.contains('mini-node') && elRect) {
+    if (!downOnViewer && !hitNode(e.clientX, e.clientY) && elRect) {
       const px = e.clientX - elRect.left
       const py = e.clientY - elRect.top
       const pt = mapPointToFlow(px, py, mapState.value)
@@ -288,12 +329,7 @@ function onPointerCancel(e: PointerEvent): void {
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
     >
-      <div
-        v-for="(rect, i) in contentRects"
-        :key="i"
-        class="mini-node"
-        :style="nodeStyle(rect)"
-      />
+      <canvas ref="nodeCanvas" class="mini-node-canvas" :style="{ width: width + 'px', height: height + 'px' }" />
       <div class="mini-viewer" :style="viewerStyle" />
     </div>
   </div>
@@ -344,6 +380,11 @@ html.dark .mini-map-overlay {
   overflow: hidden;
   cursor: crosshair;
   touch-action: none;
+}
+.mini-node-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 .mini-node {
   position: absolute;

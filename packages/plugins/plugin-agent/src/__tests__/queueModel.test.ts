@@ -69,6 +69,25 @@ describe('queuePanelView', () => {
     expect(v.rows[1].sending).toBe(true)
   })
 
+  it('暂停按钮显隐（用户口径 2026-10-15）：过滤 sending 后还有排着的才显示', () => {
+    // 只有一条且正在发送 ⇒ 不显示暂停按钮
+    const only = queuePanelView(queueOf([item({ id: 'a', state: 'sending' })]))
+    expect(only.hasItems).toBe(true)
+    expect(only.pauseVisible).toBe(false)
+    expect(only.pendingCount).toBe(0)
+    // sending + queued ⇒ 显示，计数只算 queued
+    const mix = queuePanelView(queueOf([item({ id: 'a', state: 'sending' }), item({ id: 'b', text: '排着' })]))
+    expect(mix.pauseVisible).toBe(true)
+    expect(mix.pendingCount).toBe(1)
+    // 已暂停 ⇒ 按钮留着（恢复入口），哪怕队列里只剩 sending
+    const paused = queuePanelView(queueOf([item({ id: 'a', state: 'sending' })], true))
+    expect(paused.pauseVisible).toBe(true)
+    // 全 queued ⇒ 显示
+    const all = queuePanelView(queueOf([item({ id: 'a' }), item({ id: 'b' })]))
+    expect(all.pauseVisible).toBe(true)
+    expect(all.pendingCount).toBe(2)
+  })
+
   it('sending / steered / goal 逐条透传；没有目标的那条 goal 为 null', () => {
     const v = queuePanelView(
       queueOf([

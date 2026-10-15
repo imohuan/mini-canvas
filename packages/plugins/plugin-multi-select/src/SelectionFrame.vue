@@ -1098,6 +1098,58 @@ const bottomRegionsStyle = computed(() =>
 )
 
 /**
+ * 状态栏屏幕内钳制（2026-10-15 M-7，用户实测发现 + 文档 §9.2）：
+ * 栏锚定在**外框**顶/底边中点——全选时外框巨大，平移画布后锚点跑出屏幕，
+ * 栏跟着消失（实测：向右平移后栏 x=2920 超出屏宽 1920）。
+ * 修法：算栏锚点（外框顶/底中点）的**屏幕坐标**，水平/垂直方向各自 clamp 到视口内
+ * （留 EDGE 边距），clamp 前后的屏幕位移换算回 flow 坐标，作为对原样式的像素修正。
+ * 框完全在屏幕外时栏仍贴边可见（"sticky"效果），不再跟着消失。
+ */
+/**
+ * 边距 = 屏幕安全边 12 + 栏自身半宽预留（栏宽约 300px，translateX(-50%) 以锚点为中心，
+ * clamp 中心点时必须把半宽算进去，否则栏仍有约半宽露在屏幕外——首轮实测 cx=1908 超边即此因）。
+ * 栏宽是插件自由决定的，这里用常量预留；极端超宽的栏仍可能部分出屏（可接受的近似）。
+ */
+const SCREEN_EDGE_MARGIN = 162
+const toolbarClampShift = computed(() => {
+  const g = frame.value
+  if (!g) return null
+  const paneRect = flow.paneRect.value
+  if (!flow.flowToScreen || !paneRect) return null
+  // 视口（屏幕坐标）：pane 即视口区域
+  const vpLeft = paneRect.left
+  const vpTop = paneRect.top
+  const vpRight = paneRect.right
+  const vpBottom = paneRect.bottom
+  // 栏锚点 = 外框顶/底边中点（flow 坜标）
+  const shift = (anchor: { x: number; y: number }, side: 'top' | 'bottom') => {
+    // flow → 屏幕：viewport 平移 + zoom（screen = flow*zoom + vp.x/y + pane.left/top 之外还要加 pane 偏移）
+    // 直接用 flowToScreen 换算最可靠：
+    const sp = flow.flowToScreen(anchor.x, anchor.y)
+    const clampedX = Math.min(Math.max(sp.x, vpLeft + SCREEN_EDGE_MARGIN), vpRight - SCREEN_EDGE_MARGIN)
+    const clampedY = Math.min(Math.max(sp.y, vpTop + SCREEN_EDGE_MARGIN), vpBottom - SCREEN_EDGE_MARGIN)
+    const dx = clampedX - sp.x
+    const dy = clampedY - sp.y
+    const zoom = viewport.value.zoom || 1
+    return { dx: dx / zoom, dy: dy / zoom } // 屏幕位移 → flow 位移
+  }
+  const top = shift({ x: g.outer.x + g.outer.w / 2, y: g.outer.y }, 'top')
+  const bottom = shift({ x: g.outer.x + g.outer.w / 2, y: g.outer.y + g.outer.h }, 'bottom')
+  return { top, bottom }
+})
+/** 顶栏钳制修正（px，flow 坐标；无钳制时 0） */
+const topClampStyle = computed(() => {
+  const s = toolbarClampShift.value
+  if (!s || (Math.abs(s.top.dx) < 0.5 && Math.abs(s.top.dy) < 0.5)) return {}
+  return { translate: `${s.top.dx}px ${s.top.dy}px` } // 独立 CSS translate 属性，不与 transform 冲突
+})
+const bottomClampStyle = computed(() => {
+  const s = toolbarClampShift.value
+  if (!s || (Math.abs(s.bottom.dx) < 0.5 && Math.abs(s.bottom.dy) < 0.5)) return {}
+  return { translate: `${s.bottom.dx}px ${s.bottom.dy}px` }
+})
+
+/**
  * 控制栏的定位锚：与外框同位置、同尺寸（纯定位层，不接事件）。
  * 这样两条栏的 calc(100% ± offset) 就等于"离外框这条边的距离" —— 与节点控制栏
  * "离卡片这条边的距离"逐字同义。
@@ -1323,7 +1375,7 @@ onBeforeUnmount(() => {
       <div
         v-if="topRegions.length > 0"
         class="selection-frame-slot selection-frame-slot--top nodrag nopan"
-        :style="topRegionsStyle"
+        :style="{ ...topRegionsStyle, ...topClampStyle }"
       >
         <RegionEntryHost
           v-for="seg in topRegions"
@@ -1337,7 +1389,7 @@ onBeforeUnmount(() => {
       <div
         v-if="bottomRegions.length > 0"
         class="selection-frame-slot selection-frame-slot--bottom nodrag nopan"
-        :style="bottomRegionsStyle"
+        :style="{ ...bottomRegionsStyle, ...bottomClampStyle }"
       >
         <RegionEntryHost
           v-for="seg in bottomRegions"

@@ -28,6 +28,7 @@ import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFr
 import { bindHotLoadedTracking } from './serverFramework/hotLoad.js'
 import { listPluginMcpTools } from './serverFramework/mcp.js'
 import { CanvasDocument } from './mcp/canvasDoc.js'
+import { CanvasDocumentPool } from './mcp/canvasDocPool.js'
 import { TOOL_LIST } from './mcp/server.js'
 import { ProviderRegistry } from './providers/registry.js'
 import { loadProvidersFromDir, DEFAULT_PROVIDERS_DIR } from './providers/load.js'
@@ -146,6 +147,16 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // MCP 与网页界面共用同一份画布（同一个 CanvasStore）→ 两边看到的是同一张画布
   // 资源也共用同一套画布资源目录：MCP 传的图和网页端上传的图落在同一处、同内容还会去重
   const doc = new CanvasDocument(canvasStore, canvasResources)
+  /**
+   * **一个画布一个文档实例**（写锁要跨请求有效，见 canvasDocPool 的说明）。
+   *
+   * 从前几处各自 `new CanvasDocument(...)`：实例不同 = 锁不同，于是「两者都收进同一把写锁」
+   * 在非默认画布上不成立 —— 后台写进度与网页端保存会互相覆盖，节点永远停在 60%。
+   * 默认画布那份照旧用上面这个 `doc`（预登记进池，避免出现两个实例）。
+   */
+  const docPool = new CanvasDocumentPool(canvasStore, canvasResources, [
+    { canvasId: DEFAULT_CANVAS_ID, doc },
+  ])
 
   // ==================== Agent（画布内的对话助手）====================
   // 全局配置（模型 / 技能 / MCP / 审批规则）住 agent/；会话按画布住在 canvases/<id>/agent/。
@@ -353,7 +364,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const tasks = new TaskManager({
     doc,
     // 多画布：任务的进度/终态写进**它所属的那张画布**（用默认 doc 会写错画布 → 进度卡 0）
-    docForCanvas: (canvasId) => (canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)),
+    docForCanvas: (canvasId) => docPool.for(canvasId),
     registry,
     history,
     /**
@@ -364,7 +375,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
      * 必须先把字节收进本画布资源目录，再登记**同源地址**。
      */
     onArtifact: (canvasId, urls) => {
-      const docFor = canvasId === DEFAULT_CANVAS_ID ? doc : new CanvasDocument(canvasStore, canvasResources, canvasId)
+      const docFor = docPool.for(canvasId)
       for (const url of urls) {
         void (async () => {
           try {
@@ -445,6 +456,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('projectStore', projectStore)
   host.ctx.inject('assetStore', assetStore)
   host.ctx.inject('doc', doc)
+  // 画布文档池：路由按 :id 取文档时用它，**不要各自 new**（那会让写锁失效，见 canvasDocPool）
+  host.ctx.inject('docPool', docPool)
   // 单轮对话（/api/agent/chat/completion）按需加载 SDK 的入口。
   // 为什么给"函数"而不是直接给 SDK 对象：SDK 是懒加载的（没配模型时启动照常成功），
   // 而那条路由每次请求都要用它 —— 传函数就没有"启动时还没加载好"的时序问题。
@@ -563,10 +576,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         // 按画布取文档：默认画布复用上面那个实例；别的画布现建一个（内部只是拼路径）。
         // 关键：AI 传了 canvasId 就必须写到那张画布，否则会全落进 default（就是用户报的「画布上什么都没有」）。
         // **先确认画布存在**：不存在就返回 undefined，让工具报「画布不存在」而不是凭空建一张空画布。
+        // 实例由 docPool 统一给（同一张画布永远同一个实例 = 同一把写锁，见 canvasDocPool 说明）。
         async (canvasId) => {
-          if (canvasId === DEFAULT_CANVAS_ID) return doc
           const ids = await canvasStore.list()
-          return ids.includes(canvasId) ? new CanvasDocument(canvasStore, canvasResources, canvasId) : undefined
+          return ids.includes(canvasId) ? docPool.for(canvasId) : undefined
         },
         // 画布清单：给 AI 发现「该往哪张画布写」的 id（用户看的那张）
         async () => {

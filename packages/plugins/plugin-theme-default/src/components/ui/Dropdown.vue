@@ -19,6 +19,9 @@ import type { DropdownTrigger } from './types'
 // 那样登记表在实例之间不通、排他失效。详见该文件注释。
 import { claimDropdownExclusive, releaseDropdown } from './dropdownRegistry'
 import { DROPDOWN_CLOSE_ALL_EVENT } from '@mini-canvas/canvas-render'
+// 浮层链判定走**本插件自己那一份**（用户口径 2026-10-15：插件各自独立，不动核心层）。
+// 与 @mini-canvas/ui 那份只共享 `data-floating-chain` 这个 DOM 契约。
+import { floatingChainOf, isInFloatingGroup } from './floatingChain'
 
 const props = withDefaults(
   defineProps<{
@@ -75,6 +78,19 @@ const containerRef = ref<HTMLElement | null>(null)
 const triggerRef = ref<HTMLElement | null>(null)
 const menuRef = ref<HTMLElement | null>(null)
 const closeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+/**
+ * 本实例的浮层链 id（父链 + 自己；一级浮层就是 [自己]）。
+ *
+ * 父链从**触发器所在 DOM** 读：触发器要是长在另一个浮层的面板里（如参数面板里的「格式」下拉），
+ * 这里就能认出「我是它的儿子」，claim 时把它放过 —— 否则内层一打开就把外层面板顶掉
+ * （用户报的「点内部的下拉时，它触发了外部下拉的关闭」）。
+ * 一级浮层读不到链 → 只有自己，行为与改造前一致。
+ */
+const selfChainId = 'dd-' + Math.random().toString(36).slice(2)
+const panelChainIds = computed<string[]>(() => [...floatingChainOf(containerRef.value), selfChainId])
+/** 写进面板的组链（与注册件同一契约：子浮层 = 父链 + 自己） */
+const panelChain = computed(() => panelChainIds.value.join(' '))
 
 // 内部状态：支持无 v-model 用法（uncontrolled 模式）
 const isOpen = ref(props.modelValue)
@@ -198,6 +214,11 @@ function onDocPointerDown(e: PointerEvent): void {
   const target = e.target as Node
   if (containerRef.value?.contains(target)) return
   if (menuRef.value?.contains(target)) return
+  // 组内也算「不是外面」：内层浮层（如参数面板里的「格式」下拉）是 teleport 到 body 的
+  // 独立元素，DOM 上不在本面板里 —— 只看上面两处，点内层菜单会被判成「点了外面」，
+  // 本面板先关、内层随父卸载，click 派发时目标已脱离文档（「嵌套菜单点不动」的老病）。
+  // 链里含本实例 id 就说明这一点还在我这一组里。
+  if (isInFloatingGroup(target, selfChainId)) return
   if (isOpen.value) close()
 }
 
@@ -214,7 +235,9 @@ watch(isOpen, (v) => {
   if (v) {
     // 排他：任何路径（click / hover / contextmenu / 受控 v-model）把它打开时，
     // 先把别的还开着的浮层全关掉 —— 同屏永远只留一个。
-    claimDropdownExclusive(close)
+    // 把自己那条链交给登记表：它会**放过自己的祖先**（嵌在别人面板里的内层下拉，
+    // 不该把外层面板一起关掉）。
+    claimDropdownExclusive(close, () => panelChainIds.value)
     nextTick(() => computePosition())
   } else {
     releaseDropdown(close)
@@ -260,6 +283,7 @@ watch(isOpen, (v) => {
         v-if="isOpen"
         ref="menuRef"
         class="dd-menu"
+        :data-floating-chain="panelChain"
         :class="[bodyClass, props.layout === 'inner-scroll' ? 'dd-menu--inner-scroll' : '']"
         :style="{
           left: pos.left + 'px',

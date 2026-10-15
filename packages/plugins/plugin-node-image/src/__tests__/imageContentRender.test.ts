@@ -37,7 +37,8 @@ function renderCtx(): CanvasRenderContext {
   }
   return {
     ctx: { get: (name: string) => services[name] },
-    viewport: { value: { zoom: 1 } },
+    // 视口经 flow 暴露（分档显示要读当前缩放）；1 = 第一档（不触发缩略图地址推导）
+    flow: { viewport: { value: { zoom: 1 } } },
   } as unknown as CanvasRenderContext
 }
 

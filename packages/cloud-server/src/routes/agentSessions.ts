@@ -171,11 +171,34 @@ export function agentSessionRoutes(
     if (!p.ok) return p.res
     const session = await store.get(p.canvasId, p.sessionId!)
     if (!session) return c.json({ ok: false, error: '会话不存在' }, 404)
+    /**
+     * 转录分页（用户口径 2026-10-15）：长对话不要一次全拉。
+     * - turnsLimit：只回最后 N 条 turn（一轮 = user+assistant+thinking+tool 好几条，
+     *   前端默认传 ~30 条，正好覆盖最后三四轮）。
+     * - turnsBefore：从「倒数第 K 条」再往前取 N 条 —— 顶部哨兵进可视区时拉更早历史用。
+     * - 切点对齐到用户消息边界（切片的第一条是 user turn）：一条 user 的内容
+     *   被切在两页里的话，前端重放会出现孤立的助手占位。
+     * 不带参数 = 全量（旧客户端行为不变）。返回带 turnsTotal / turnsHaveBefore。
+     */
+    const turnsLimit = Math.max(0, Math.floor(Number(c.req.query('turnsLimit') ?? '0')) || 0)
+    const turnsBefore = Math.max(0, Math.floor(Number(c.req.query('turnsBefore') ?? '0')) || 0)
+    let turns = session.turns
+    const turnsTotal = turns.length
+    if (turnsLimit > 0) {
+      const end = Math.max(0, turnsTotal - turnsBefore)
+      let start = Math.max(0, end - turnsLimit)
+      if (start > 0) {
+        while (start < end && turns[start].role !== 'user') start += 1
+      }
+      turns = turns.slice(start, end)
+    }
     // 队列 / 目标暂停标记 / 流序号一起给：界面刷新后靠这一条恢复全部状态
     const goal = await readGoalForSession(config, p.sessionId!)
     return c.json({
       ok: true,
-      session,
+      session: turnsLimit > 0 ? { ...session, turns } : session,
+      turnsTotal,
+      turnsHaveBefore: turnsLimit > 0 ? turnsTotal - turnsBefore > turns.length : false,
       running: runtime.isRunning(p.canvasId, p.sessionId!),
       approvals: runtime.pendingApprovals(p.canvasId, p.sessionId!),
        queue: await store.getQueue(p.canvasId, p.sessionId!),

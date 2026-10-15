@@ -10,6 +10,9 @@
  * 本文件锁两条：
  * 1. 正在被 resize 的就是本分组 → 整条浮层不渲染（松手恢复）；
  * 2. 正在被 resize 的是别人 → 本分组浮层照常（不做全局压制，免得resize A 把 B 的栏也吃掉）。
+ *
+ * 第三条（用户要求）：「抓手工具」下同样收起 —— 抓手模式下节点不可拖、端口都被压掉，
+ * 这条浮在卡片外的操作栏留着只是噪音。判据与 BaseNode / 底栏浮层同源：设置 nodesDraggable=false。
  */
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
@@ -33,7 +36,7 @@ const StubDropdown = defineComponent({
  * 最小渲染上下文：只桩出本组件真正读到的几项（selection / doc / nodeLayout / flow / interaction）。
  * 刻意给"恰好选中一个分组节点"的常态；本文件测的是 resize 维度的显隐，不是选中语义。
  */
-function renderCtx(opts: { resizingId?: string | null } = {}): CanvasRenderContext {
+function renderCtx(opts: { resizingId?: string | null; nodesDraggable?: boolean } = {}): CanvasRenderContext {
   const refOf = (v: unknown) => ({ value: v })
   const selectedIds = new Set<string>(['g1'])
   const groupNode = {
@@ -50,6 +53,11 @@ function renderCtx(opts: { resizingId?: string | null } = {}): CanvasRenderConte
       subscribe: () => () => {},
     },
     nodeLayout: { getNodeRect: () => ({ x: 0, y: 0, w: 200, h: 100 }) },
+    // 抓手工具判据读它（真机恒有；不传 = 未声明，按"可拖"默认）
+    settings: {
+      get: (key: string) => (key === 'nodesDraggable' ? opts.nodesDraggable : undefined),
+      onChange: () => ({ dispose: () => {} }),
+    },
   }
   return {
     ctx: {
@@ -74,7 +82,7 @@ function renderCtx(opts: { resizingId?: string | null } = {}): CanvasRenderConte
   } as unknown as CanvasRenderContext
 }
 
-function render(opts: { resizingId?: string | null } = {}): Promise<string> {
+function render(opts: { resizingId?: string | null; nodesDraggable?: boolean } = {}): Promise<string> {
   const app = createSSRApp({ render: () => h(GroupTopToolbarOverlay as Component) })
   app.provide(RENDER_CONTEXT_KEY, renderCtx(opts))
   return renderToString(app)
@@ -95,6 +103,22 @@ describe('分组上控制栏浮层：resize 时收起（用户要求）', () => 
 
   it('正在被 resize 的是别人 → 本分组浮层照常（不做全局压制）', async () => {
     const html = await render({ resizingId: 'other-node' })
+    expect(html).toContain('group-top-toolbar')
+  })
+
+  it('抓手工具（nodesDraggable=false）→ 整条浮层不渲染', async () => {
+    const html = await render({ nodesDraggable: false })
+    expect(html).not.toContain('group-top-toolbar-overlay')
+    expect(html).not.toContain('group-top-toolbar')
+  })
+
+  it('移动工具（nodesDraggable=true）→ 浮层照常（抓手那条不是"永久收起"）', async () => {
+    const html = await render({ nodesDraggable: true })
+    expect(html).toContain('group-top-toolbar')
+  })
+
+  it('未声明 nodesDraggable（宿主没装交互配置）→ 按可拖默认，浮层照常', async () => {
+    const html = await render()
     expect(html).toContain('group-top-toolbar')
   })
 })

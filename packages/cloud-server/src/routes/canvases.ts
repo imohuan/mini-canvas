@@ -20,7 +20,7 @@
  * 两者都收进 CanvasDocument 的同一把写锁，所以混着用也安全。
  */
 import { Hono } from 'hono'
-import { isSafeCanvasId, isVirtualCanvasId } from '../store/canvasPaths.js'
+import { DEFAULT_CANVAS_ID, isSafeCanvasId, isVirtualCanvasId } from '../store/canvasPaths.js'
 import type { CanvasStore } from '../store/canvasStore.js'
 import { isSafeResourceName, isSafeSlotId, isSlotName, type CanvasResourceStore } from '../store/canvasResources.js'
 import type { CanvasDocument } from '../mcp/canvasDoc.js'
@@ -30,8 +30,22 @@ export function canvasesRoutes(
   store: CanvasStore,
   resources: CanvasResourceStore,
   doc: CanvasDocument,
+  /**
+   * 按画布 id 取该画布的文档（多画布）。
+   *
+   * **不传 = 只服务默认画布**（老宿主 / 旧测试）：此时对别的 id 一律 404，
+   * 而不是静默写进默认画布 —— 那正是 2026-10-14 真机踩到的坑：
+   * `PUT /api/canvases/<别的画布>` 被当成了「写 default」，把用户那张默认画布整份覆盖掉。
+   */
+  docForCanvas?: (canvasId: string) => CanvasDocument | undefined,
 ): Hono {
   const app = new Hono()
+
+  /** 这个请求该动哪张画布：能取到文档就写它，取不到一律 404（绝不回落默认画布） */
+  function docOf(id: string): CanvasDocument | undefined {
+    if (id === DEFAULT_CANVAS_ID) return doc
+    return docForCanvas?.(id)
+  }
 
   app.get('/api/canvases', async (c) => c.json({ ok: true, canvases: await store.list() }))
 
@@ -52,8 +66,12 @@ export function canvasesRoutes(
     const body = await readJsonBody(c)
     if (!body.ok) return body.res
     const { nodes, edges } = body.value
+    // ★ 必须用 **:id 对应的那份文档**，不能固定用默认画布那份：
+    //   固定用 doc 等于「无论请求哪张画布，都写进 default」—— 实测把用户默认画布整份覆盖。
+    const target = docOf(id)
+    if (!target) return c.json({ ok: false, error: '画布不存在' }, 404)
     // 走 doc 的写锁（与增量口、AI 的写共用同一把锁）
-    await doc.replaceAll(nodes, edges)
+    await target.replaceAll(nodes, edges)
     return c.json({ ok: true })
   })
 
@@ -66,7 +84,9 @@ export function canvasesRoutes(
     } catch {
       return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     }
-    await doc.writeView(view)
+    const target = docOf(id)
+    if (!target) return c.json({ ok: false, error: '画布不存在' }, 404)
+    await target.writeView(view)
     return c.json({ ok: true })
   })
 

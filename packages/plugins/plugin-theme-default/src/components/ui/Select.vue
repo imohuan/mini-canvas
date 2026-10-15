@@ -48,6 +48,16 @@ const props = withDefaults(
      * 'auto' 仍按内容自适应（设置面板里的短选项不该被强行撑到 200px）。
      */
     dropdownMinWidth?: string
+    /**
+     * 浮层**最大高度**（超出就在浮层内滚动；缺省 320px）。
+     *
+     * 为什么要有一个缺省上限（用户口径 2026-10-14）：「为下拉框提供最大高度，支持滚动」。
+     * 不设上限时，长名单（音色 20+ 项）会把浮层一路撑到贴着视口下缘，一屏塞满、很难扫；
+     * 给一档上限 + 内部滚动，面板高度稳定、列表自己滚。
+     * 实际生效值还会与「视口可用高度」取小（见 Dropdown 的 menuMaxHeight 处理），
+     * 所以小窗口里也不会顶出屏幕。
+     */
+    dropdownMaxHeight?: string
     /** 供设置表单给输入框 id（label for 关联） */
     inputId?: string
   }>(),
@@ -61,6 +71,7 @@ const props = withDefaults(
     dropdownWidth: 'auto',
     dropdownMaxWidth: '320px',
     dropdownMinWidth: '200px',
+    dropdownMaxHeight: '320px',
     inputId: '',
   },
 )
@@ -181,6 +192,7 @@ function groupBreakAt(index: number): boolean {
     :match-width="dropdownWidth === 'match'"
     :menu-width="dropdownMenuWidth"
     :menu-max-width="dropdownMaxWidth"
+    :menu-max-height="dropdownMaxHeight"
     body-class="sel-menu-body"
     menu-role="listbox"
   >

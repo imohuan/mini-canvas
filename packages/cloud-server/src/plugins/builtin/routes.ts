@@ -36,6 +36,7 @@ import type { KvStore } from '../../store/kvStore.js'
 import type { CanvasStore } from '../../store/canvasStore.js'
 import type { CanvasResourceStore } from '../../store/canvasResources.js'
 import { CanvasDocument } from '../../mcp/canvasDoc.js'
+import type { CanvasDocumentPool } from '../../mcp/canvasDocPool.js'
 import type { ProviderRegistry } from '../../providers/registry.js'
 import type { TaskManager } from '../../tasks/taskManager.js'
 import type { HistoryStore } from '../../tasks/history.js'
@@ -58,6 +59,8 @@ export const S = {
   projectStore: 'projectStore',
   assetStore: 'assetStore',
   doc: 'doc',
+  /** 画布文档池（一个画布一个实例 → 写锁跨请求有效，见 mcp/canvasDocPool.ts） */
+  docPool: 'docPool',
   providerRegistry: 'providerRegistry',
   taskManager: 'taskManager',
   history: 'history',
@@ -92,13 +95,19 @@ export const eventsPlugin: PluginModule = {
 
 export const canvasesPlugin: PluginModule = {
   name: 'canvases',
-  inject: [S.canvasStore, S.canvasResources, S.doc],
+  inject: [S.canvasStore, S.canvasResources, S.doc, S.docPool],
   apply(ctx) {
+    const pool = need<CanvasDocumentPool>(ctx, S.docPool)
     ctx.routes.adopt(
       canvasesRoutes(
         need<CanvasStore>(ctx, S.canvasStore),
         need<CanvasResourceStore>(ctx, S.canvasResources),
         need<CanvasDocument>(ctx, S.doc),
+        // 多画布：整包写 / 写视口也要按 :id 落到那张画布上。
+        // 不传的话路由只服务默认画布，对别的 id 一律 404 —— 从前固定写 doc，
+        // 于是 `PUT /api/canvases/<别的画布>` 会静默覆盖默认画布（2026-10-14 实测）。
+        // 从池里取（**不要 new**：实例不同 = 写锁不同，见 canvasDocPool 的说明）。
+        (canvasId) => pool.for(canvasId),
       ),
     )
   },
@@ -162,14 +171,14 @@ export const kvPlugin: PluginModule = {
 
 export const canvasOpsPlugin: PluginModule = {
   name: 'canvas-ops',
-  inject: [S.doc, S.canvasStore, S.canvasResources],
+  inject: [S.doc, S.docPool],
   apply(ctx) {
-    const store = need<CanvasStore>(ctx, S.canvasStore)
-    const resources = need<CanvasResourceStore>(ctx, S.canvasResources)
-    // 多画布：按画布 id 现建一个 CanvasDocument（增量写接口写哪张由路由的 :id 决定）。
-    // 默认画布那份仍用宿主共享的实例（与 MCP / 网页读同一份、同一把写锁）。
+    const pool = need<CanvasDocumentPool>(ctx, S.docPool)
+    // 多画布：增量写接口写哪张由路由的 :id 决定。
+    // 文档从池里取（同一张画布永远同一个实例 = 同一把写锁）—— 从前每次请求 new 一个，
+    // 于是「与 MCP / 网页同一把写锁」这句话在非默认画布上不成立，并发写会互相覆盖。
     ctx.routes.adopt(
-      canvasOpsRoutes(need<CanvasDocument>(ctx, S.doc), (canvasId) => new CanvasDocument(store, resources, canvasId)),
+      canvasOpsRoutes(need<CanvasDocument>(ctx, S.doc), (canvasId) => pool.for(canvasId)),
     )
   },
 }

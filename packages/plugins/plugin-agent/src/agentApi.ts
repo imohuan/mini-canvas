@@ -341,8 +341,14 @@ export class AgentApi {
    * 会话全景（设计 §3.2 / §3.3）：转录之外的**运行态与队列**一次拿全。
    *
    * 刷新后靠这一条恢复：history 从 session.turns 来，队列/目标/暂停标记/流序号都在这。
+   * opts.turnsLimit / opts.turnsBefore：转录分页（用户口径 2026-10-15，长对话不要一次全拉）。
+   * 后端按用户消息边界切片，返回体带 turnsTotal / turnsHaveBefore。
    */
-  async sessionState(canvasId: string, sessionId: string): Promise<{
+  async sessionState(
+    canvasId: string,
+    sessionId: string,
+    opts?: { turnsLimit?: number; turnsBefore?: number },
+  ): Promise<{
     session: SessionRecordView
     running: boolean
     /** 挂起中的审批（刷新后补渲染审批卡片用；没有时后端可能不返回这个字段） */
@@ -356,8 +362,16 @@ export class AgentApi {
     lastSeq?: number
     /** 最近一次上下文用量（界面恢复会话时把上下文指示器画回来；见 store.lastUsage） */
     lastUsage?: { usedTokens: number; limitTokens: number | null }
+    /** 转录总条数（带 turnsLimit 请求时才有意义；全量时与 session.turns.length 相同） */
+    turnsTotal?: number
+    /** 切片之前还有没有更早的转录（顶部哨兵显示与续拉的依据） */
+    turnsHaveBefore?: boolean
   }> {
-    return this.json(this.sessionPath(canvasId, sessionId))
+    const q = new URLSearchParams()
+    if (opts && opts.turnsLimit && opts.turnsLimit > 0) q.set('turnsLimit', String(opts.turnsLimit))
+    if (opts && opts.turnsBefore && opts.turnsBefore > 0) q.set('turnsBefore', String(opts.turnsBefore))
+    const qs = q.toString()
+    return this.json(this.sessionPath(canvasId, sessionId) + (qs ? '?' + qs : ''))
   }
 
   // ------------------------------------------------------------------ 队列

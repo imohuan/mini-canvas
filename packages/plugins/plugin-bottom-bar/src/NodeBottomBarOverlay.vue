@@ -86,8 +86,27 @@ if (docSub) offs.push({ dispose: docSub })
 
 /**
  * 壳的压制条件（挂到画布层后读不到 BaseNode 局部状态，改读共享信号；逐条对齐 hideSlotBars）。
- * 判定本体在 bottomBarOverlay.ts 的纯函数里（Node 可测）：框选 / 多选 / 本节点 resize / 画布在拖。
+ * 判定本体在 bottomBarOverlay.ts 的纯函数里（Node 可测）：框选 / 多选 / 本节点 resize / 画布在拖 / 抓手工具。
  */
+/**
+ * 画布是否处于抓手工具：读宿主级设置 `nodesDraggable`（抓手 = false）。
+ * 与 BaseNode 的 isHandTool 同源、同一个键 —— 底栏挂画布层，BaseNode 那条压制管不到这里，
+ * 只能自己读一遍。settings 非响应式，故用 ref + onChange 订阅窄更新。
+ */
+const nodesDraggable = ref(true)
+const settingsSvc = ctx.tryGet<{
+  get(key: string): unknown
+  onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+}>('settings')
+if (settingsSvc && typeof settingsSvc.get === 'function') {
+  nodesDraggable.value = settingsSvc.get('nodesDraggable') !== false
+  const off = settingsSvc.onChange((key, value) => {
+    if (key === 'nodesDraggable') nodesDraggable.value = value !== false
+  })
+  offs.push({ dispose: () => off.dispose() })
+}
+const handTool = computed(() => nodesDraggable.value === false)
+
 const suppressed = computed(() =>
   resolveBottomBarSuppressed({
     selecting: interaction?.isSelecting?.value === true,
@@ -96,6 +115,8 @@ const suppressed = computed(() =>
     resizingId: interaction?.nodeResizeId?.value ?? null,
     // 画布级：拖任意节点都收（用户要求；与 BaseNode 的 hideSlotBars 同一条规则）
     nodeDragging: interaction?.isNodeDragging?.value === true,
+    // 抓手工具：节点上的操作栏都收了（BaseNode 的 hideSlotBars），底栏同理
+    handTool: handTool.value,
   }),
 )
 

@@ -20,8 +20,12 @@ import {
 } from './agentApi.js'
 import { ChatModel, type AgentTurnView } from './sessionModel.js'
 import { groupConversations, inlinePagers, type ConversationGroup, type PagerGroup } from './branchNav.js'
+import { matchSendingQueueItem } from './userSteering.js'
 
 export const CANVAS_ID = 'default'
+
+/** 首屏装载的转录条数（一轮对话占好几条；30 条约等于最后三四轮，用户口径 2026-10-15） */
+const TURNS_PAGE = 30
 
 export interface McpRow {
   name: string
@@ -174,6 +178,12 @@ export interface AgentServiceState {
    * 之后靠 SSE 的 `queue` 事件保持同步（多标签页也一致）。
    */
   queue: QueueStateView
+  /** 转录分页（用户口径 2026-10-15）：转录总条数 / 头部还有没有更早的 / 正在续拉 */
+  turnsTotal: number
+  turnsHaveBefore: boolean
+  turnsLoadingEarlier: boolean
+  /** 已装进界面的转录条数（本页 + 已续拉页；算下一页 turnsBefore 用） */
+  turnsLoaded: number
   /**
    * 目标标记（输入框上方那条）：非 null = 这一条要按目标模式发。
    *
@@ -325,6 +335,8 @@ export interface AgentService {
   steerQueueItem(itemId: string): Promise<void>
   /** 删除队列条目 */
   removeQueueItem(itemId: string): Promise<void>
+  /** 往头部续拉更早的转录（对话分页）。返回头部还有没有更早的 */
+  loadEarlierTurns(): Promise<boolean>
   /** 关闭排队：从队列移除 + 内容返回给调用方回填输入框 */
   closeQueueItem(itemId: string): Promise<{ text: string; images?: string[] } | null>
   /** 开始编辑某条排队消息（内容交给调用方回填输入框） */
@@ -463,6 +475,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     contextLimit: null,
     compacting: false,
     compactNotice: '',
+    turnsTotal: 0,
+    turnsHaveBefore: false,
+    turnsLoadingEarlier: false,
+    turnsLoaded: 0,
     lastError: '',
     segments: [],
     queue: { paused: false, items: [] },
@@ -582,7 +598,9 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     if (ev.type === 'user_message') {
       // 后端告诉我们"这一轮喂给模型的是这句"：补一个用户气泡 + 助手占位。
       // 队列自动发的那条前端没参与，没有这一步界面上就只有 AI 的回答（用户实测）。
+      // 顺带做「队列真发出去了」的联动：出现这条 = sending 条目已投递 ⇒ 从队列删除。
       model.acceptUserMessage(ev.text, ev.images, ev.steered)
+      retireSendingItemOnUserMessage(ev.text, ev.images)
       sync()
       return
     }
@@ -900,6 +918,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     state.compactNotice = ''
     state.lastError = ''
     state.pagers = []
+    // 转录分页状态一起清（新会话从零开始）
+    state.turnsTotal = 0
+    state.turnsHaveBefore = false
+    state.turnsLoaded = 0
     await listSessions()
   }
 
@@ -911,9 +933,16 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       if (leaving && leaving !== id) await cancelAllEdits(leaving)
       // 用 sessionState（不是 getSession）：一次拿全转录 + 队列 + 目标 + 运行态 ——
       // 刷新后整个输入区（队列列表、暂停标记、目标状态）都靠这一条恢复（设计 §3.2/§3.3）。
-      const full = await api.sessionState(canvasId(), id)
+      // 转录分页（用户口径 2026-10-15）：首屏只装最后 ~30 条 turn（约三四轮），
+      // 更早的历史由顶部哨兵进可视区时经 loadEarlierTurns 续拉。
+      const full = await api.sessionState(canvasId(), id, { turnsLimit: TURNS_PAGE })
       const rec = full.session
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
+      state.turnsTotal = full.turnsTotal ?? rec.turns.length
+      state.turnsHaveBefore = full.turnsHaveBefore === true
+      // 本页装进界面的转录条数（续拉时算 turnsBefore 用 —— UI 视图条数与转录条数
+      // 不是一回事，一轮 user 会展开成 tool/thinking 好几条，绝不能拿 model.turns 数）
+      state.turnsLoaded = Array.isArray(rec.turns) ? rec.turns.length : 0
       // 模型分段随转录一起装载：界面按它画"从这里换了模型"的分割线
       state.segments = Array.isArray(rec.modelSegments) ? rec.modelSegments : []
       sync()
@@ -1163,6 +1192,22 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
   }
 
   /**
+   * 监听「队列真的发出去了」（用户口径 2026-10-15）：后台队列自动发的那条，
+   * 到达模型时被 SDK 包成 [user_steering] 块 —— user_message 事件一到，就说明
+   * sending 条目已真实投递 ⇒ 立刻从队列列表里删掉（不必等轮末的 settleAsync）。
+   * 比对用归一指纹（剥块 + 折空白），图片清单也要一致，避免误删同文本的其它条目。
+   */
+  function retireSendingItemOnUserMessage(text: string, images?: string[]): void {
+    const hitId = matchSendingQueueItem(state.queue.items, text, images)
+    if (!hitId) return
+    const sid = currentSessionId()
+    if (!sid) return
+    void api.queueOp(canvasId(), sid, { op: 'remove', itemId: hitId })
+      .then((r) => { if (r.queue) state.queue = r.queue })
+      .catch(() => undefined) // 删失败不打扰用户：轮末的 settleAsync 仍会结算
+  }
+
+  /**
    * 跑着的时候再发一条 ⇒ 进队列（用户口径 G2：不丢弃、不改按钮状态）。
    * 空闲时**不进队**（直接发，保持原行为）—— 由组件层判断走哪条路。
    */
@@ -1225,6 +1270,32 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     if (!sid) return
     const r = await api.queueOp(canvasId(), sid, { op: 'remove', itemId })
     adoptQueue(r.queue)
+  }
+
+  /**
+   * 往头部续拉更早的转录（对话分页：顶部哨兵进可视区时调）。返回还有没有更早的。
+   */
+  async function loadEarlierTurns(): Promise<boolean> {
+    const sid = currentSessionId()
+    if (!sid || !state.turnsHaveBefore || state.turnsLoadingEarlier) return false
+    state.turnsLoadingEarlier = true
+    try {
+      // turnsBefore = 已装进界面的条数：后端 end = total - before 正好落在已载窗口的
+      // 开头，往前切一页就与已有内容**首尾相接**（评审抓到的 bug：此前误用
+      // total - loaded 会让 end 变成 loaded，跳过中间整整一页）。
+      const before = Math.max(0, state.turnsLoaded)
+      const full = await api.sessionState(canvasId(), sid, { turnsLimit: TURNS_PAGE, turnsBefore: before })
+      const rec = full.session
+      if (Array.isArray(rec.turns) && rec.turns.length) model.loadEarlier(rec.turns)
+      state.turnsLoaded += Array.isArray(rec.turns) ? rec.turns.length : 0
+      state.turnsHaveBefore = full.turnsHaveBefore === true
+      sync()
+      return state.turnsHaveBefore
+    } catch {
+      return false
+    } finally {
+      state.turnsLoadingEarlier = false
+    }
   }
 
   /**
@@ -1818,6 +1889,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     sendToQueue,
     steerQueueItem,
     removeQueueItem,
+    loadEarlierTurns,
     closeQueueItem,
     beginEditQueueItem,
     cancelEditQueueItem,

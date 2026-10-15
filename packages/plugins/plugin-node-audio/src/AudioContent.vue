@@ -5,10 +5,15 @@
  * 波形 + 播放头 + 整体进度条已抽成 AudioWavePlayer（与 AudioPreview 共用同一套实现，
  * 交接文档 P0-1：两份波形实现必然漂移）。本文件只剩节点特有的东西：
  *
- * - 空态占位与上传：「有没有音频」是节点的事 —— 预览组件无 url 时什么都不渲染；
+ * - 空态占位：「有没有音频」是节点的事 —— 预览组件无 url 时什么都不渲染；
  * - 节点设置：波形最低高度 / 竖条粗细从 settings 读，以 props 传给播放器；
  * - 元数据维护：ensureAudioMeta 补时长与整段概览；地址变化强制重算（reanalyzeAudio）；
  * - 底栏：播放 / 时间 / 文件名 / 刷新（刷新只属于节点 —— 重新分析并落盘波形）。
+ *
+ * **上传入口不在这里**（2026-10-14 用户口径：「我希望把上传按钮放在顶部菜单栏中。你可以参考一下
+ * 图片或视频的上传功能」）：图片/视频节点都是卡片里只显示空态文案、放素材的按钮固定在上控制栏
+ * （out:top 段，见 AudioTopToolbar.vue）。本组件照同一条规矩收掉了空态里那个带文字的上传按钮 ——
+ * 卡片内部只负责"显示素材"。
  *
  * 手势契约（别回退）：底栏两个按钮拦画布手势（nodrag nopan nowheel）；
  * 底栏本体、时间、文件名放行 —— 否则拖不动节点（实测 bug）。
@@ -18,7 +23,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useCanvasRender } from "@mini-canvas/canvas-render"
 import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
-import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio, uploadAudio } from "./audioOps"
+import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"
 import AudioWavePlayer from "./AudioWavePlayer.vue"
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -36,8 +41,6 @@ const barWidth = ref(2)
 /** 波形区最低高度（实际高度由 flex 撑满卡片剩余空间，不留空带） */
 const waveMinHeight = ref(28)
 
-const fileRef = ref<HTMLInputElement | null>(null)
-const uploading = ref(false)
 const refreshing = ref(false)
 
 const audioUrl = computed(() => (typeof props.data?.audioUrl === "string" ? props.data.audioUrl : ""))
@@ -67,25 +70,7 @@ function readSettings(): void {
   if (Number.isFinite(w) && w > 0) barWidth.value = w
 }
 
-// ==================== 上传 / 刷新 ====================
-
-async function onPickFile(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement
-  const file = input.files && input.files[0]
-  input.value = ""
-  if (!file || uploading.value) return
-  uploading.value = true
-  try {
-    // 资源登记（put → resolve）在 createAudioOps 里接线，节点里写的是资源库地址、不是临时 objectURL
-    await uploadAudio(ops, props.id, file, defaultTransform)
-  } finally {
-    uploading.value = false
-  }
-}
-
-function openPicker(): void {
-  fileRef.value?.click()
-}
+// ==================== 刷新 ====================
 
 /** 刷新：重新分析一次（重算整段概览 + 让播放器重建按需 source） */
 async function refreshMeta(): Promise<void> {
@@ -129,8 +114,6 @@ watch(
 
 <template>
   <div class="audio-node">
-    <input ref="fileRef" class="aw-file" type="file" accept="audio/*" @change="onPickFile" />
-
     <!-- 波形 + 播放头 + 整体进度条：共用播放器（截图红框部分），节点只负责把数据递进来 -->
     <AudioWavePlayer
       v-if="audioUrl"
@@ -176,6 +159,8 @@ watch(
       </button>
     </div>
 
+    <!-- 空态：只说"没有音频"。上传入口在上控制栏（AudioTopToolbar），与图片/视频节点一致 ——
+         卡片里不再长按钮，三种素材节点的空态长得一样。 -->
     <div v-else class="audio-empty">
       <svg
         class="audio-empty-icon"
@@ -194,21 +179,6 @@ watch(
         <path d="M19 10v4" />
       </svg>
       <span class="audio-empty-text">（无音频）</span>
-      <button
-        class="aw-btn aw-btn-upload"
-        type="button"
-        title="上传音频"
-        aria-label="上传音频"
-        :disabled="uploading"
-        @click.stop="openPicker"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-        <span class="aw-btn-text">上传音频</span>
-      </button>
     </div>
   </div>
 </template>
@@ -224,11 +194,6 @@ watch(
   gap: 6px;
   overflow: hidden;
   color: var(--canvas-node-text-body, #374151);
-}
-
-/* 文件选择器不显示：点按钮时由脚本 click 它 */
-.aw-file {
-  display: none;
 }
 
 /* —— 控件条 —— */
@@ -278,17 +243,6 @@ watch(
   background: var(--ui-hover, rgb(0 0 0 / 0.06));
   color: var(--canvas-node-text-body, #374151);
 }
-/* 空态的上传按钮：带文字，是这条空态的唯一出路 */
-.aw-btn-upload {
-  width: auto;
-  gap: 6px;
-  padding: 0 10px;
-  height: 28px;
-}
-.aw-btn-text {
-  font-size: 12px;
-}
-
 .aw-time {
   flex: none;
   color: var(--canvas-node-text-muted, #8c95a3);

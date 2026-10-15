@@ -15,6 +15,7 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { canvasResourcesDir } from './canvasPaths.js'
 import { ALLOWED_EXT } from './mime.js'
+import { renameWithRetry } from './renameRetry.js'
 
 /**
  * 资源地址（新写入的唯一形态）：`/api/canvases/<canvasId>/resources/<hashName>`。
@@ -102,7 +103,9 @@ export class CanvasResourceStore {
     if (!(await exists(file))) {
       const tmp = file + '.tmp-' + process.pid + '-' + Date.now()
       await fs.writeFile(tmp, bytes)
-      await fs.rename(tmp, file)
+      // 并发同内容保存会撞同一目标（都读到 exists=false）→ 第二个 rename 在 Windows 上 EPERM。
+      // 重试 + 「目标已被别人写好就算成功」都在 renameWithRetry 里（见那个文件的说明）。
+      await renameWithRetry(tmp, file)
     }
     return { url: toResourceUrl(canvasId, hashName), hashName, size: bytes.byteLength }
   }
@@ -137,9 +140,10 @@ export class CanvasResourceStore {
     }
     const file = path.join(dir, hashName)
     // 原地覆盖：同样先写临时文件再 rename（避免读到半截）
-    const tmp = file + '.tmp-' + process.pid + '-' + Date.now()
+    const tmp = file + '.tmp-' + process.pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
     await fs.writeFile(tmp, bytes)
-    await fs.rename(tmp, file)
+    // 槽位是 last-writer-wins：目标被占用/被并发写过都不该把这一笔产物丢掉。
+    await renameWithRetry(tmp, file)
     return { url: toResourceUrl(canvasId, hashName), hashName, size: bytes.byteLength }
   }
 

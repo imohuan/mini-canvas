@@ -304,6 +304,81 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
 })
 
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
+
+describe('参数区：唯一一个下拉参数直接铺到外面（不套二级面板）', () => {
+  const soleSpeaker: BarAction = {
+    id: 'test:sole-select',
+    types: ['audio'],
+    title: '豆包·语音合成',
+    needsPrompt: true,
+    fields: [
+      {
+        key: 'speaker',
+        kind: 'speaker',
+        label: '音色',
+        type: 'select',
+        default: 'a',
+        options: [
+          { label: '温柔桃子', value: 'a' },
+          { label: '磁性俊宇', value: 'b' },
+          { label: '阳光甜妹', value: 'c' },
+        ],
+      },
+    ],
+    run: () => ({ ok: true }),
+  }
+
+  /**
+   * 用户口径（2026-10-14，附图）：「集成在这个下拉菜单里面，没有必要做成这种二级菜单……
+   * 如果里面只有唯一的一项，并且它是下拉的话，就直接把它做成外部的形式」。
+   * 截图里那一格是「音色」（一个参数、普通下拉）。
+   */
+  it('只有一个下拉参数 → 底栏直接出现一个 Select，不出现参数摘要按钮（tpg-trigger）', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      {},
+      makeCtx({ selectedIds: ['35'], actions: [soleSpeaker], nodeType: 'audio' }),
+    )
+    // 铺出去之后里面就是一个普通下拉（与左边模型下拉同款的 .sel-trigger）
+    expect(html).toContain('tpg-inline')
+    // 不再有「参数摘要 + 箭头」那个二级入口
+    expect(html).not.toContain('tpg-trigger')
+    // 面板容器也不该出现
+    expect(html).not.toContain('tpg-menu')
+  })
+
+  it('两个参数 → 仍然收成参数面板（一个摘要按钮），不铺开', async () => {
+    const two: BarAction = {
+      ...soleSpeaker,
+      id: 'test:two-params',
+      fields: [
+        ...soleSpeaker.fields!,
+        {
+          key: 'format',
+          kind: 'format',
+          label: '格式',
+          type: 'select',
+          default: 'wav',
+          options: [
+            { label: 'WAV', value: 'wav' },
+            { label: 'MP3', value: 'mp3' },
+            { label: 'OGG Opus', value: 'ogg_opus' },
+            { label: 'FLAC', value: 'flac' },
+          ],
+        },
+      ],
+    }
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      {},
+      makeCtx({ selectedIds: ['35'], actions: [two], nodeType: 'audio' }),
+    )
+    expect(html).toContain('tpg-trigger')
+    expect(html).not.toContain('tpg-inline')
+  })
+})
   it('running + 有百分比 → 渲染超大百分比、耗时胶囊与文案（照参考稿的 3 元素版式）', async () => {
     const html = await render(
       NodeTaskOverlay as Component,

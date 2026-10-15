@@ -436,6 +436,41 @@ export class ChatModel {
     for (const t of this.turns) t.streaming = false
   }
 
+  /**
+   * 把更早的一段转录插到现有消息的头部（对话分页：顶部哨兵进可视区时续拉）。
+   *
+   * 与 load 的差别：不 reset —— 现有 turns（较新的那页）原样保留，重放更早批次得到
+   * 的列表整体放到前面。批次由后端按用户消息边界切：批次结尾可能正好停在一条
+   * user 之后、助手占位还没内容 —— 那条空占位与现有头部的助手占位是同一个，去掉一条
+   * （保留现有那条：它可能已经接上了流式内容）。
+   */
+  loadEarlier(
+    turns: Array<{
+      role: string
+      text: string
+      images?: string[]
+      ts?: number
+      tool?: { id: string; name: string; arguments: string; output?: string; card?: boolean }
+      done?: boolean
+    }>,
+  ): void {
+    if (!turns.length) return
+    const existing = this.turns.splice(0, this.turns.length)
+    // 复用 load 的重放逻辑（它会 reset —— 先把现有换出去再装批次）
+    this.load(turns)
+    const tail = this.turns[this.turns.length - 1]
+    const head = existing[0]
+    const tailIsEmptyPlaceholder =
+      tail && tail.kind === 'assistant' && tail.text === '' && tail.thinking === '' &&
+      tail.tools.length === 0 && !tail.streaming &&
+      // load 对 assistant('') 会 push 一条空文本步骤 —— 内容是空的就算占位
+      (tail.steps.length === 0 || (tail.steps.length === 1 && tail.steps[0].type === 'text' && tail.steps[0].text === ''))
+    if (tailIsEmptyPlaceholder && head && head.kind === 'assistant') {
+      this.turns.pop()
+    }
+    this.turns.push(...existing)
+  }
+
   /** 有没有任何一条助手消息里有「卡片级」的工具（界面据此决定要不要留白/分组） */
   hasCard(): boolean {
     return this.turns.some((t) => t.tools.some((x) => x.card) || t.kind === 'approval')

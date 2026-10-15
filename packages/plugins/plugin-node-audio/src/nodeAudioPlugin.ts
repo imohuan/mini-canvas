@@ -12,7 +12,9 @@
  * - audioTransform.ts 浏览器端口：解码音频 / 选文件 / 下载（唯一碰 Web Audio 与 DOM 的地方）；
  * - audioOps.ts     载入一条路：解码一次 → 波形与时长一起写回（界面按钮与命令共用同一实现）；
  * - 本文件           接线：注册节点类型 + 服务 + 命令（唯一碰 ctx 的地方）；
- * - AudioContent.vue 内容段：装配 AudioWavePlayer（波形/播放），管节点特有（上传/设置/刷新）。
+ * - AudioContent.vue 内容段：装配 AudioWavePlayer（波形/播放），管节点特有（设置/元数据/刷新）；
+ * - AudioTopToolbar.vue 上控制栏（out:top）：上传入口。与图片/视频节点同一条规矩 ——
+ *   卡片里只显示素材与空态，**放素材的按钮固定在上控制栏**（用户口径 2026-10-14）。
  *
  * 依赖方向：只依赖 canvas-base / canvas-data / canvas-render / kernel。
  * 不 import plugin-theme-default（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
@@ -21,6 +23,7 @@ import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDe
 import type { DocService } from '@mini-canvas/canvas-data'
 import AudioPreview from './AudioPreview.vue'
 import AudioContent from './AudioContent.vue'
+import AudioTopToolbar from './AudioTopToolbar.vue'
 import { createAudioOps, downloadAudioNode, reanalyzeAudio, uploadAudio } from './audioOps'
 
 /** 节点类型名：web2api 的动作（types: ['audio']）与写入器（kind: 'audio'）都按它对齐 */
@@ -122,6 +125,9 @@ export function apply(ctx: Context) {
     // 不支持拖拽改尺寸：波形是定长内容，拉伸只会变形（用户明确要求）
     resizable: false,
     in: AudioContent,
+    segments: {
+      'out:top': AudioTopToolbar,
+    },
     create(position) {
       return service.addAudioNode(position)
     },

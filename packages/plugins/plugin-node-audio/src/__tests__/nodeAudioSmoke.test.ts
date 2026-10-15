@@ -76,6 +76,14 @@ describe('音频节点插件整装', () => {
     ctx.stop()
   })
 
+  it('注册了 out:top 段（上传入口在上控制栏 —— 用户要求"上传按钮放到顶部菜单栏"）', async () => {
+    const { ctx, nodeRegistry } = await boot()
+    expect(nodeRegistry.get(AUDIO_NODE_TYPE)?.segments['out:top']).toBeTruthy()
+    // 底栏搬进 plugin-bottom-bar（T8），本包不自占 out:bottom
+    expect(nodeRegistry.get(AUDIO_NODE_TYPE)?.segments['out:bottom']).toBeUndefined()
+    ctx.stop()
+  })
+
   it('不支持拖拽改尺寸（resizable:false，用户指定：波形拉伸会变形）', async () => {
     const { ctx, nodeStore } = await boot()
     expect(nodeStore.types.get(AUDIO_NODE_TYPE)?.resizable).toBe(false)

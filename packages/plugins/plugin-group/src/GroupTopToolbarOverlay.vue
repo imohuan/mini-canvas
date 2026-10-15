@@ -127,6 +127,28 @@ const rect = computed(() => dragRect.value ?? storeRect.value)
  */
 const isSelfResizing = computed(() => interaction?.nodeResizeId?.value === groupNode.value?.id)
 
+/**
+ * 画布是否处于「抓手工具」（宿主级设置 nodesDraggable=false）。
+ *
+ * 抓手模式下节点不可拖、连端口都被整体压掉（BaseNode 的 handleBlocked），挂在卡片外的
+ * 那条操作栏同理该收（用户要求：抓手模式下不显示节点的上下状态栏）。本栏住在画布 overlay 槽
+ * （节点之外，见文件头），BaseNode 那条压制管不到这里，只能自己读同一个设置键。
+ * settings 非响应式 → ref + onChange 窄更新，切回「移动」立刻恢复。
+ */
+const nodesDraggable = ref(true)
+const settingsSvc = ctx.tryGet<{
+  get(key: string): unknown
+  onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
+}>('settings')
+if (settingsSvc && typeof settingsSvc.get === 'function') {
+  nodesDraggable.value = settingsSvc.get('nodesDraggable') !== false
+  const off = settingsSvc.onChange((key, value) => {
+    if (key === 'nodesDraggable') nodesDraggable.value = value !== false
+  })
+  onBeforeUnmount(() => off.dispose())
+}
+const handTool = computed(() => nodesDraggable.value === false)
+
 /** 贴边距离读**同一份**「布局/控制栏」配置（节点控制栏也读它）→ 两个宿主间距天然一致 */
 const offsets = useToolbarOffsets()
 
@@ -150,7 +172,7 @@ const innerStyle = computed(() =>
 </script>
 
 <template>
-  <div v-if="rect && !isSelfResizing" class="group-top-toolbar-overlay" :style="wrapperStyle">
+  <div v-if="rect && !isSelfResizing && !handTool" class="group-top-toolbar-overlay" :style="wrapperStyle">
     <div class="group-top-toolbar-overlay__anchor" :style="anchorStyle">
       <div class="group-top-toolbar-overlay__slot" :style="innerStyle">
         <!-- 与挂在节点里时**同一份**组件：按钮、色板、显隐门全复用，不重复实现 -->

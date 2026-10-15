@@ -192,7 +192,54 @@ describe('参数面板 = 右键菜单那一档', () => {
   })
 
   it('面板宽 288（参考稿 w-72）', () => {
-    expect(TOOL_GROUP).toMatch(/'288px'/)
+    expect(TOOL_GROUP).toMatch(/menu-width="288px"/)
+  })
+
+  /**
+   * 版式**只有一种**：一个参数 = 一整块（第一行标题、第二行控件，竖排）。
+   *
+   * 用户口径（2026-10-14，附两张截图）：「图 1 这种换行的形式变成了一行。请统一这里的 UI 样式，
+   * 统一参考图 2 的风格：第一行：label；第二行：添加下拉框」。
+   * 从前非预设件走「标签 + 控件」横排（.tpg-row / .tpg-label），与预设件的竖排块两种观感并存 ——
+   * 现在只留竖排这一种。
+   */
+  it('每个参数都竖排成块：块内 8 间距的纵向 flex（标题一行、控件一行）', () => {
+    const block = rule(TOOL_GROUP, '.tpg-menu--blocks .tpg-block')
+    expect(block).toMatch(/flex-direction:\s*column/)
+    expect(block).toMatch(/gap:\s*8px/)
+    // 旧的横排「标签 + 控件」不该再存在
+    expect(TOOL_GROUP).not.toMatch(/\.tpg-row\b/)
+    expect(TOOL_GROUP).not.toMatch(/\.tpg-label\b/)
+  })
+
+  it('非预设件的标题与预设件自己的 h4 同档（12px / 700 / 20 行高）', () => {
+    const title = rule(TOOL_GROUP, '.tpg-menu--blocks .tpg-title')
+    expect(title).toMatch(/font-size:\s*12px/)
+    expect(title).toMatch(/font-weight:\s*700/)
+    expect(title).toMatch(/line-height:\s*20px/)
+  })
+})
+
+/**
+ * 内层下拉框的**最大高度 + 滚动**（用户口径 2026-10-14：「第二行：添加下拉框，并为下拉框提供最大高度，支持滚动」）。
+ *
+ * 音色这种长名单（20+ 项）不给上限时，浮层会一路撑到贴着视口下缘、一屏塞满；
+ * 给一档「视口可用高度」与「调用方上限」取小，面板高度稳定、列表自己滚。
+ */
+describe('下拉框有最大高度（超出在浮层内滚动）', () => {
+  it('Select 声明 dropdownMaxHeight（缺省 320px）并接到浮层 menu-max-height', () => {
+    expect(SELECT).toMatch(/dropdownMaxHeight\?:\s*string/)
+    expect(SELECT).toMatch(/dropdownMaxHeight:\s*'320px'/)
+    expect(SELECT).toMatch(/:menu-max-height="dropdownMaxHeight"/)
+  })
+
+  it('两套 Dropdown 都真的消费 menuMaxHeight 并夹在视口内（内联 maxHeight + overflow）', () => {
+    // 主题默认件
+    expect(rule(DROPDOWN, '.dd-menu')).toMatch(/overflow-y:\s*auto/)
+    expect(DROPDOWN).toMatch(/min\(.*calc\(100vh - 16px\)\)/)
+    // 应用注册件
+    const ax = readFileSync(new URL('../../../../../../ui/src/components/AxDropdown.vue', import.meta.url), 'utf-8')
+    expect(ax).toMatch(/min\(.*calc\(100vh - 16px\)\)/)
   })
 })
 

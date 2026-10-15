@@ -201,6 +201,7 @@ const INSTALLABLE_PLUGIN_DIRS = [
   "plugin-node-find",
   "plugin-node-image-compare",
   "plugin-showcase",
+  "plugin-theme-gallery",
   "plugin-tool-image-generation",
   "plugin-tool-text-generation",
   "plugin-web2api-tools",

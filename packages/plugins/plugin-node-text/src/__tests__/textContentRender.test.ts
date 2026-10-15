@@ -4,10 +4,12 @@
  * 用户的原始要求（原话）：
  * - 文本节点默认显示文本，**超出这个空间应当显示滚动条** → 后来明确成两态：
  *   预览态超出**隐藏**就行，**双击**才进编辑态，编辑态**给滚动条**；
- * - 编辑态要**拦画布的滚轮**（不然滚自己的文字会把画布缩放掉）。
+ * - 编辑态要**拦画布的滚轮**（不然滚自己的文字会把画布缩放掉）；
+ * - 缩到一定程度后**两档都改成"长短不一的矩形色块"**（骨架屏），不再是"一块灰底"。
  *
  * 为什么要拿真 HTML 断言：光测内部 computed 是测不到"模板有没有把类名/属性接上"的 ——
- * 这里锁的正是那一步（data-mode 有没有落地、编辑态有没有 nowheel、预览态有没有被误加）。
+ * 这里锁的正是那一步（data-mode 有没有落地、编辑态有没有 nowheel、预览态有没有被误加、
+ * 缩略态到底渲染的是横条还是那块灰底 skel）。
  */
 import { describe, it, expect, afterEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
@@ -82,15 +84,68 @@ describe('编辑态（双击进入）', () => {
   })
 })
 
-describe('缩放分级', () => {
-  it('缩到中等 → preview-condensed（只显示首行）', async () => {
-    const html = await render('n1', { text: '一段文字' }, 0.3)
-    expect(html).toContain('data-mode="preview-condensed"')
+describe('缩略态（骨架横条，两档都改）', () => {
+  it('缩到中等 → skeleton：渲染骨架横条容器，不再渲染真字', async () => {
+    const html = await render('n1', { text: '一段足够长的文字内容用于折行', cardWidth: 400, cardHeight: 300 }, 0.3)
+    expect(html).toContain('data-mode="skeleton"')
+    expect(html).toContain('data-testid="text-skeleton"')
+    expect(html).not.toContain('一段足够长的文字内容用于折行')
   })
 
-  it('缩到极小 → icon 灰底占位，且不进编辑（双击也不进）', async () => {
-    const html = await render('n1', { text: '一段文字' }, 0.1)
-    expect(html).toContain('data-mode="icon"')
-    expect(html).not.toContain('一段文字')
+  it('缩到极小 → skeleton-mini：仍然是横条（不是那块灰底扫光占位）', async () => {
+    const html = await render('n1', { text: '一段足够长的文字内容用于折行', cardWidth: 400, cardHeight: 300 }, 0.1)
+    expect(html).toContain('data-mode="skeleton-mini"')
+    expect(html).toContain('data-testid="text-skeleton"')
+    expect(html).not.toContain('text-node-skel')
+  })
+
+  it('横条的条数来自真实文本（内容多 → 条多；内容少 → 条少）', async () => {
+    const line = '一'.repeat(19)
+    const many = await render(
+      'n1',
+      { text: [line, line, line, line].join('\n'), cardWidth: 400, cardHeight: 300 },
+      0.3,
+    )
+    const few = await render('n2', { text: line, cardWidth: 400, cardHeight: 300 }, 0.3)
+    expect(countBars(many)).toBe(4)
+    expect(countBars(few)).toBe(1)
+  })
+
+  it('太短的行不画条，但行位留着（换行依然保留）', async () => {
+    const html = await render(
+      'n1',
+      { text: '一'.repeat(19) + '\n短句', cardWidth: 400, cardHeight: 300 },
+      0.3,
+    )
+    expect(countBars(html)).toBe(2) // 两个行位
+    expect(countDrawn(html)).toBe(1) // 只画出来一条
+  })
+
+  it('空内容 → 退化成一块小色块（不留空白，也不假造横条）', async () => {
+    const html = await render('n1', { text: '', cardWidth: 400, cardHeight: 300 }, 0.3)
+    expect(html).toContain('data-mode="skeleton"')
+    expect(html).toContain('tns-chip')
+    // 只断言"没有真的画出横条"，不能写 not.toContain('tns-bar')：
+    // 条厚/圆角是 CSS 变量 --tns-bar-h（tns-bar 是它的子串），会误判。
+    expect(html).not.toContain('class="tns-bar"')
+  })
+
+  it('缩略态不给滚动条、也不抢滚轮，且不进编辑', async () => {
+    const html = await render('n1', { text: '一段文字', cardWidth: 400, cardHeight: 300 }, 0.1)
+    expect(html).toContain('data-scrollable="false"')
+    expect(html).not.toContain('nowheel')
   })
 })
+
+/** 数一数渲染出来的横条条数（data-bar-count 由组件直接给出，比分 HTML 更稳） */
+function countBars(html: string): number {
+  const m = html.match(/data-bar-count="(\d+)"/)
+  return m ? Number(m[1]) : 0
+}
+
+/** 数一数真画出来的条（行位里宽度为 0 的不算） */
+function countDrawn(html: string): number {
+  const m = html.match(/data-drawn-count="(\d+)"/)
+  return m ? Number(m[1]) : 0
+}
+

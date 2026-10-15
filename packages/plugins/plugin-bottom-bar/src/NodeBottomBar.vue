@@ -1162,7 +1162,7 @@ function onGlobalLeave(el: Element): void {
   border-radius: 999px;
   background: var(--ui-ink, #18202b);
   color: var(--ui-panel, #fff);
-  box-shadow: 0 1px 4px rgb(15 23 42 / 0.28);
+  box-shadow: var(--ui-shadow-sm, 0 1px 4px rgb(15 23 42 / 0.28));
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
@@ -1400,6 +1400,16 @@ function onGlobalLeave(el: Element): void {
 }
 .nb-field--params :deep(.tpg-trigger) {
   width: auto;
+}
+/*
+ * 只有一个普通下拉参数时，ToolParamGroup 会**直接铺出那个下拉**（不再套一层参数面板，
+ * 用户口径 2026-10-14：「如果里面只有唯一的一项，并且它是下拉的话，就直接把它做成外部的形式」）。
+ * 那时里面是一个普通 Select —— 与左边的模型下拉同款：给一档最小宽，免得长名字（音色）
+ * 被压成一条缝，同时仍按内容收缩（不拉满整行）。
+ */
+.nb-field--params :deep(.tpg-inline) {
+  width: auto;
+  min-width: 96px;
 }
 
 .nb-actions {

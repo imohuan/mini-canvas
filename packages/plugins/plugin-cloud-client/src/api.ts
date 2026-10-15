@@ -152,6 +152,37 @@ export class CloudApi {
   async uploadResource(canvasId: string, bytes: Blob, name: string): Promise<{ hashName: string; url: string }> {
     const url =
       '/api/canvases/' + encodeURIComponent(canvasId) + '/resources?name=' + encodeURIComponent(name)
+    return await this.postResource(url, bytes, canvasId)
+  }
+
+  /**
+   * 传一个**固定名**资源（服务端的"槽位"口）：同名原地覆盖，地址可推算。
+   *
+   * 用于缩略图 / 视频帧图这类"名字由源和参数决定"的资源 ——
+   * 只有地址可推算，才能"先查有没有、没有才生成"（见 cloudResourceAdapter.putResource）。
+   */
+  async uploadResourceToSlot(
+    canvasId: string,
+    bytes: Blob,
+    slot: string,
+    name: string,
+  ): Promise<{ hashName: string; url: string }> {
+    const url =
+      '/api/canvases/' +
+      encodeURIComponent(canvasId) +
+      '/resources?slot=' +
+      encodeURIComponent(slot) +
+      '&name=' +
+      encodeURIComponent(name)
+    return await this.postResource(url, bytes, canvasId)
+  }
+
+  /** 上传资源这一步两个入口共用（差别只在查询串） */
+  private async postResource(
+    url: string,
+    bytes: Blob,
+    canvasId: string,
+  ): Promise<{ hashName: string; url: string }> {
     const res = await this.doFetch(this.absolute(url), {
       method: 'POST',
       headers: { 'content-type': 'application/octet-stream' },
@@ -163,6 +194,21 @@ export class CloudApi {
     return {
       hashName: body.hashName,
       url: '/api/canvases/' + canvasId + '/resources/' + body.hashName,
+    }
+  }
+
+  /**
+   * 这个资源地址**存在吗**（HEAD 探测）。
+   *
+   * 用途：派生资源（缩略图/帧图）用裸引用记名，要知道"之前生成过没有"只能问服务端。
+   * 不抛错：网络异常一律当"不存在"（调用方会重新生成一次，功能不受影响）。
+   */
+  async resourceExists(pathOrUrl: string): Promise<boolean> {
+    try {
+      const res = await this.doFetch(this.absolute(pathOrUrl), { method: 'HEAD' })
+      return res.ok
+    } catch {
+      return false
     }
   }
 

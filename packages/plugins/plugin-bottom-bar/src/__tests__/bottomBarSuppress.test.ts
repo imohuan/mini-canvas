@@ -17,6 +17,7 @@ const base = {
   selectedId: 'n1',
   resizingId: null as string | null,
   nodeDragging: false,
+  handTool: false,
 }
 
 describe('底栏压制条件（用户要求：拖拽时不显示）', () => {
@@ -47,5 +48,13 @@ describe('底栏压制条件（用户要求：拖拽时不显示）', () => {
 
   it('被 resize 的是别人 → 不压制（不做全局压制）', () => {
     expect(resolveBottomBarSuppressed({ ...base, resizingId: 'other' })).toBe(false)
+  })
+
+  it('抓手工具 → 压制（用户要求：抓手模式下节点上下状态栏都不显示）', () => {
+    expect(resolveBottomBarSuppressed({ ...base, handTool: true })).toBe(true)
+  })
+
+  it('切回移动工具 → 不压制（抓手那条不是"永久收起"）', () => {
+    expect(resolveBottomBarSuppressed({ ...base, handTool: false })).toBe(false)
   })
 })

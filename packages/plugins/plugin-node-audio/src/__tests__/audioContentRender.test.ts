@@ -100,12 +100,11 @@ describe('播放头与手势边界', () => {
     expect(bar![0]).not.toContain('nodrag')
   })
 
-  it('播放与刷新两个按钮各自拦手势', async () => {
+  it('播放与刷新两个按钮各自拦手势（卡片里就这两个按钮）', async () => {
     const html = await render('a1', { audioUrl: AUDIO, audioWaveform: waveform(), audioDuration: 30 })
     const btns = [...html.matchAll(/class="([^"]*aw-btn[^"]*)"/g)].map((m) => m[1])
-    const barBtns = btns.filter((c) => !c.includes('aw-btn-upload'))
-    expect(barBtns.length).toBe(2)
-    for (const c of barBtns) expect(c).toContain('nodrag')
+    expect(btns.length).toBe(2)
+    for (const c of btns) expect(c).toContain('nodrag')
   })
 })
 
@@ -126,10 +125,13 @@ describe('时长与文案', () => {
 })
 
 describe('空态', () => {
-  it('没有音频 → 显示「（无音频）」并给上传入口', async () => {
+  it('没有音频 → 显示「（无音频）」；上传入口**不在卡片里**（在上控制栏，见 audioToolbarRender）', async () => {
     const html = await render('a1', {})
     expect(html).toContain('（无音频）')
-    expect(html).toContain('aria-label="上传音频"')
+    // 2026-10-14 用户口径：放素材的按钮固定在上控制栏（与图片/视频节点一致），
+    // 卡片内部只负责显示素材与空态文案 —— 这里不该再有上传按钮。
+    expect(html).not.toContain('上传音频')
+    expect(html).not.toContain('type="file"')
     expect(html).not.toContain('<audio')
   })
 })

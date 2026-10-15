@@ -121,6 +121,14 @@ const isShown = computed(() => {
   if (props.disabled || !props.visible) return false
   return Boolean(props.selected) || keepVisible.value
 })
+/**
+ * 按钮 DOM 挂载门（2026-10-15 性能优化 P2，诊断报告 §三原因3）：
+ * 旧实现按钮恒渲染、靠 opacity:0 隐藏——320 个按钮（160 节点×2）每个带两层 box-shadow
+ * + 7 项 transition，低细节/多选/抓手常态下全部参与样式与布局计算（只是不画）。
+ * 改为：显示中或淡出动画进行中才挂载，其余情况 v-if 摘除。
+ * isRestoring 覆盖 180ms 淡出窗口（定时器复位见 restorePosition），淡出完才摘 → 动画不破坏。
+ */
+const buttonMounted = computed(() => isShown.value || isRestoring.value)
 
 // 连接拖拽会临时禁用源端口：必须同步清本地 hover，否则松开后圆球因残留 keepVisible 再显示
 watch(
@@ -483,7 +491,7 @@ onBeforeUnmount(() => {
       'port-follow-zone--rect': zoneShape === 'rect',
     }" :style="{ ...zoneStyle, clipPath: zoneClipPath }" @mouseenter="handleEnter" @mouseleave="handleLeave" @mousemove="updatePosition" />
 
-    <div class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
+    <div v-if="buttonMounted" class="moving-handle-button" :style="buttonStyle" @mousedown="handlePreviewMouseDown">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
         <path d="M12 5v14M5 12h14" stroke-linecap="round" stroke-linejoin="round" />
       </svg>

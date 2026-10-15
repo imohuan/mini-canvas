@@ -34,6 +34,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
+    "@mini-canvas/plugin-theme-default": "workspace:*",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vitest": "^3.0.0",

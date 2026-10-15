@@ -42,9 +42,9 @@ describe('画布手势：只有按钮与播放头拦，其它一律放行（用�
   it('播放与刷新两个按钮各自拦手势', async () => {
     const html = await render('a1', { audioUrl: AUDIO, audioWaveform: waveform(), audioDuration: 30 })
     const btns = [...html.matchAll(/class="([^"]*aw-btn[^"]*)"/g)].map((m) => m[1])
-    const barBtns = btns.filter((c) => !c.includes('aw-btn-upload'))
-    expect(barBtns.length).toBe(2)
-    for (const c of barBtns) {
+    // 卡片里只有两个按钮（播放 / 刷新）—— 上传已搬到上控制栏（out:top），不在这条里数
+    expect(btns.length).toBe(2)
+    for (const c of btns) {
       expect(c).toContain('nodrag')
       expect(c).toContain('nowheel')
     }

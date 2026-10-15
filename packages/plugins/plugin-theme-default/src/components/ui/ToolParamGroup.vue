@@ -8,13 +8,19 @@
  * 点击后在浮层里逐项改。放在设计系统目录里（ui 场按名 toolParamGroup 取），
  * 换主题时它跟着一起换。
  *
+ * **两种形态**（按参数内容自动选，见 `resolveInlineSoleSelect`）：
+ * 1. **收成面板**（默认）：≥2 个参数、或那一个是滑块/按钮网格这类预设件 —— 点开面板逐项改；
+ * 2. **直接铺一个下拉**：只有一个参数、且它就是普通下拉时不再套面板（用户口径 2026-10-14
+ *    「没有必要做成这种二级菜单……如果里面只有唯一的一项，并且它是下拉的话，
+ *    就直接把它做成外部的形式」）—— 省掉「先开面板、再开下拉」那一次点击。
+ *
  * 依赖方向：只 import 内核 ToolParamDef 类型 + 本包自家 UI 组件，不反向依赖节点插件。
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@mini-canvas/kernel'
 import { useCatalogDropdown } from './useCatalogDropdown'
 import ToolParamField from './ToolParamField.vue'
-import { resolvePresetKind } from './paramKind'
+import { resolvePresetKind, resolveInlineSoleSelect } from './paramKind'
 
 /** 下拉容器：优先用注册场登记的那一份（成品应用顶替了就用它），取不到回落本包自带 */
 const Dropdown = useCatalogDropdown()
@@ -37,19 +43,31 @@ const emit = defineEmits<{
 }>()
 
 /**
- * 哪些参数走「预设件区块」版式（标题 + 按钮网格 / 滑块，一列竖排），
- * 哪些走旧的「标签 + 控件」一行版式。
+ * 该参数是不是走「预设件」渲染（比例网格 / 按钮网格 / 滑块）。
  *
- * 为什么两种并存：参考站的面板是**整块竖排**的（画质/清晰度/比例…各占一块），
- * 那正是"按能力显隐"的观感 —— 该模型支持的块才有。但没声明 kind 的参数
- * （普通下拉/开关）在竖排里会很怪，所以它们仍走一行式。
+ * 用途只剩一个：**预设件自己在块内画标题**（各预设件的 h4），所以外层不再重复画一遍；
+ * 非预设件（普通下拉 / 开关 / 输入）没有标题，由外层补一行标题。
+ *
+ * 版式**只有一种**（2026-10-14 统一）：每个参数都占一整块 ——
+ * 第一行标题、第二行控件，块间 12 间距 + 一条分割线。
+ * 从前非预设件走「标签 + 控件」横排，与预设件的竖排块并排出现两种观感，用户要求统一。
  */
 const isPreset = (p: ToolParamDef): boolean => resolvePresetKind(p) !== undefined
-const presetParams = computed(() => (props.params ?? []).filter(isPreset))
-const rowParams = computed(() => (props.params ?? []).filter((p) => !isPreset(p)))
-/** 有预设块 → 面板按参考站的整块版式（宽 342 / padding 12 / 块间 gap 8） */
-const blocksMode = computed(() => presetParams.value.length > 0)
-const menuClass = computed(() => (blocksMode.value ? 'tpg-menu tpg-menu--blocks' : 'tpg-menu'))
+/**
+ * 全部参数（**按声明顺序**渲染）。
+ *
+ * 从前这里分成 presetParams / rowParams 两批、先渲染预设块再渲染横排行 —— 混合面板里
+ * 参数的先后会被打乱（声明在中间的那个下拉会被排到最后）。现在统一成一种块，就按声明顺序走。
+ */
+const blocks = computed(() => props.params ?? [])
+
+/**
+ * 铺到外面的那一个下拉（命中时不再套面板）。
+ *
+ * 判定在 `paramKind.ts` 的纯函数里（可单测）：恰好一项 + 是内置下拉 + 不是长名单大类。
+ * 命中时宿主（底栏）那格不再出现「参数摘要按钮」，直接就是一个和左边模型下拉并排的下拉。
+ */
+const inlineParam = computed(() => resolveInlineSoleSelect(props.params ?? []))
 
 /** 每项当前值的显示文案（有 options 就用 option 的 label，否则原样字符串化） */
 function labelOf(p: ToolParamDef): string {
@@ -67,10 +85,28 @@ const summary = computed(() => {
 </script>
 
 <template>
+  <!--
+    形态 2：**只有唯一一个普通下拉参数** → 直接铺到外面（不套面板）。
+
+    用户口径（2026-10-14）：「没有必要做成这种二级菜单……如果里面只有唯一的一项，
+    并且它是下拉的话，就直接把它做成外部的形式」。复用 ToolParamField 渲染，
+    于是它在底栏的外观与左边那个「模型下拉」完全同款（同一个 Select）。
+  -->
+  <div v-if="inlineParam" class="tpg-inline">
+    <ToolParamField
+      :param="inlineParam"
+      :model-value="(values?.[inlineParam.key] as string | number | boolean) ?? ''"
+      :disabled="disabled"
+      :id-prefix="idPrefix + '-inline'"
+      @update:model-value="(v: string | number | boolean) => emit('change', inlineParam!.key, v)"
+    />
+  </div>
+
   <Dropdown
+    v-else
     :offset="4"
-    :body-class="blocksMode ? 'tpg-menu-body tpg-menu-body--blocks' : 'tpg-menu-body'"
-    :menu-width="blocksMode ? '288px' : ''"
+    body-class="tpg-menu-body tpg-menu-body--blocks"
+    menu-width="288px"
     class="tpg-root"
   >
     <template #trigger="{ open }">
@@ -97,9 +133,15 @@ const summary = computed(() => {
       </button>
     </template>
 
-    <div :class="menuClass">
-      <!-- 预设块（照参考站：整块竖排，每块自带标题 + 按钮网格 / 滑块） -->
-      <div v-for="p in presetParams" :key="'b-' + p.key" class="tpg-block">
+    <div class="tpg-menu tpg-menu--blocks">
+      <!--
+        统一版式：一个参数 = 一整块（第一行标题、第二行控件），按声明顺序排。
+        预设件（比例网格 / 按钮网格 / 滑块）自己就画标题，所以这里只在**非预设件**
+        前面补一行标题 —— 从前非预设件走横排「标签 + 控件」，与预设件的竖排块两种观感并存，
+        用户要求统一成竖排这一种。
+      -->
+      <div v-for="p in blocks" :key="p.key" class="tpg-block">
+        <h4 v-if="!isPreset(p)" class="tpg-title">{{ p.label || p.key }}</h4>
         <ToolParamField
           :param="p"
           :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
@@ -108,22 +150,21 @@ const summary = computed(() => {
           @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
         />
       </div>
-      <div v-for="p in rowParams" :key="'r-' + p.key" class="tpg-row">
-        <span class="tpg-label">{{ p.label || p.key }}</span>
-        <ToolParamField
-          :param="p"
-          :model-value="(values?.[p.key] as string | number | boolean) ?? ''"
-          :disabled="disabled"
-          :id-prefix="idPrefix + '-g'"
-          @update:model-value="(v: string | number | boolean) => emit('change', p.key, v)"
-        />
-      </div>
-      <div v-if="(params ?? []).length === 0" class="tpg-empty">该动作没有额外参数</div>
+      <div v-if="blocks.length === 0" class="tpg-empty">该动作没有额外参数</div>
     </div>
   </Dropdown>
 </template>
 
 <style scoped>
+/*
+ * 形态 2（铺到外面）的根：与宿主那一格等宽，内部就是一个普通下拉。
+ * `display: block` + `width: 100%`：底栏给它多宽就多宽（与左边模型下拉对齐）。
+ */
+.tpg-inline {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
 .tpg-root {
   display: inline-flex;
   /* 填满宿主给的宽度（用户实测反馈：不填满时触发器按内容收缩，参数下拉只有 ~100px，
@@ -231,34 +272,32 @@ const summary = computed(() => {
   gap: 6px;
   min-width: 260px;
 }
-/* 块间 gap 8（参考站实测）；块内间距由各预设件自己给 */
+/* 块间 gap 12 + 块间分割线（参考稿在「比例网格」与「滑块」之间就是一条 border-t） */
 .tpg-menu--blocks {
   gap: 12px;
   min-width: 0;
 }
 .tpg-menu--blocks .tpg-block {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 /* 预设块之间一条分割线（参考稿在「比例网格」与「参数滑块」之间就是一条 border-t） */
 .tpg-menu--blocks .tpg-block + .tpg-block {
   padding-top: 12px;
   border-top: 1px solid var(--ui-line, #e2e5ea);
 }
-.tpg-menu .tpg-row {
+/* 非预设件（普通下拉 / 开关 / 输入）的标题：与各预设件自己的 h4 逐条对齐
+   （12px / 700 / 深墨 / 20 行高），这样两类块并排时标题看起来是同一档。 */
+.tpg-menu--blocks .tpg-title {
+  margin: 0;
+  height: 20px;
   display: flex;
   align-items: center;
-  gap: 8px;
-}
-.tpg-menu .tpg-label {
-  flex: none;
-  width: 56px;
-  color: var(--ui-ink-mute, #8c95a3);
+  color: var(--ui-ink, #18202b);
   font-size: 12px;
-  font-weight: 600;
-}
-.tpg-menu .tpg-row > *:not(.tpg-label) {
-  flex: 1;
-  min-width: 0;
+  font-weight: 700;
+  line-height: 20px;
 }
 .tpg-menu .tpg-empty {
   padding: 6px 4px;

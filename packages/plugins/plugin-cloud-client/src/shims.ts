@@ -44,6 +44,10 @@ export interface StorageAdapterCapability {
 export interface ResourcePutOptions {
   kind?: string
   name?: string
+  /** 指定的持久引用名（名字可推算时用；见 canvas-data/shims 同名类型的说明） */
+  ref?: string
+  /** 派生资源（缩略图/帧图）：不写进节点 resourceId，故不参与"未被引用即回收" */
+  derived?: boolean
 }
 
 export interface StorageAdapter {

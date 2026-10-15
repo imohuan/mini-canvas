@@ -12,8 +12,11 @@
  * - 加载失败与"正在裁剪"都经同包共享态广播给底部状态栏（不写进 data —— 避免落盘后刷新误报，
  *   也避免纯展示态占据撤销栈）。
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { ThumbCache, type ThumbResourcePort, type TierImage } from './thumbCanvas'
+import { makeThumbRef, thumbRefParam } from './thumbKey'
+import { readThumbTiers, resolveThumbTier, thumbTargetFor, thumbTierKeys, type ThumbTierConfig } from './thumbTier'
 import { endEdit, isEditing } from './cropSession'
 import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
 import { createImageOps } from './imageOps'
@@ -21,7 +24,7 @@ import { cardSizePatch, followedCardSizePatch, missingCardSizePatch, type CardSi
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, flow, visibleNodes } = useCanvasRender()
 
 /** 图片地址（只认字符串，其余视为无图） */
 const imageUrl = computed(() => (typeof props.data?.imageUrl === 'string' ? props.data.imageUrl : ''))
@@ -38,9 +41,135 @@ const broken = computed(() => isImageBroken(props.id))
  */
 const editing = computed(() => isEditing(props.id))
 
+// ==================== 分档显示（三档缩略图） ====================
+/**
+ * 第 1 档 = 原图；第 2 / 3 档 = **本插件用 canvas 现画的小图**（见 thumbCanvas）。
+ *
+ * 为什么在插件里现画而不是让后台生成：canvas 缩放是浏览器原生能力，
+ * 而资源库的 put 本来就"落到当前后端"（没装云→本地 IndexedDB；装了云→画布文件夹）——
+ * **一份代码两种后端通吃**，于是不需要后台参与，也不需要为基础包开后门（原则：插件只改自己）。
+ *
+ * 为什么档位是"渲染期选择"而不是节点属性：它跟当前缩放走；写进节点会让每次缩放都改动画布数据、
+ * 还占撤销栈。放在这里 = 不动画布数据、旧节点自动具备三档。
+ */
+const TIER_PREFIX = 'image'
+const tierCfg = ref<ThumbTierConfig>(readThumbTiers(TIER_PREFIX, ctx))
+// 设置面板改了档位参数要**实时**生效（与 BaseNode 订阅 titleOffset 是同一套方式）
+const tierSettingOff = ctx
+  ?.get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')
+  ?.onChange((key) => {
+    if (!thumbTierKeys(TIER_PREFIX).includes(key)) return
+    tierCfg.value = readThumbTiers(TIER_PREFIX, ctx)
+  })
+
+const zoom = computed(() => Math.max((flow.viewport.value?.zoom ?? 1) || 1, 0.01))
+/**
+ * 画布最小缩放（设置里的「最小缩放」）：作为**兜底**传给档位判定 ——
+ * 缩到画布能到的最小值时必须进第三档，否则用户把第三档阈值配得比它小就永远只有两档
+ * （用户实测踩过这个坑）。
+ */
+const canvasMinZoom = computed(() => ctx?.get<{ get(k: string): unknown }>('settings')?.get('minZoom'))
+const tier = computed(() => resolveThumbTier(zoom.value, tierCfg.value, canvasMinZoom.value))
+
+/**
+ * 本节点的小图缓存 + 当前展示地址。
+ *
+ * 流程：档位 > 1 且不在编辑态时，向缓存要一张小图（没有就现画一张）。
+ * 画好之前 displaySrc 仍是原图 —— 所以**不会出现空白**，只是晚几帧换成更省的那张。
+ * 画不出来（环境不支持 / 解码失败）就一直用原图，行为与这次改动之前一致。
+ *
+ * 缓存**只放内存**：不写节点数据（那是每次缩放都改画布数据），也不登记进资源服务
+ * （宿主会回收"没被节点 resourceId 引用"的资源，登记进去会被反复回收）。
+ */
+const thumbCache = new ThumbCache()
+const tierImage = ref<TierImage | null>(null)
+const displaySrc = computed(() => (editing.value ? imageUrl.value : tierImage.value?.url || imageUrl.value))
+
+/**
+ * 按当前档位取（或生成）小图。
+ *
+ * 三个刻意的跳过与保护：
+ * - **编辑态**（裁剪 / 扩展）不用也不生成：浮层按原图像素算框，垫小图会让框对不上；
+ * - **第 1 档**不生成：目标框就是原尺寸，画一张同样大的图纯属浪费内存（thumbTargetFor 返回 null）；
+ * - **可视区外**不生成：解码原图（几 MB）很贵，几十个节点同时解码会把主线程堵住 ——
+ *   滚进来再生成（与视频侧同一条保护）。
+ * - 生成是异步的，落值前要再确认"档位和源都没变"，否则快速缩放时会把过期的档位图挂上去
+ *   （表现为卡在某一档不跟着变）。
+ */
+watch(
+  // ★ **尺寸也必须进依赖**：用户改"最大宽高"时档位并没有变（还在第二档），
+  // 只盯档位的话这个 watch 根本不重跑，画面会一直停在改之前那张
+  // （2026-10-15 用户实测：「重新设置了最大宽高……它依然使用的是之前的图片」）。
+  // 质量同理：它变了也得重新编码一份。
+  [tier, imageUrl, editing, () => tierCfg.value.tier2Width, () => tierCfg.value.tier2Height,
+   () => tierCfg.value.tier3Width, () => tierCfg.value.tier3Height, () => tierCfg.value.quality],
+  () => {
+    const wantTier = tier.value
+    const src = imageUrl.value
+    const box = thumbTargetFor(wantTier, tierCfg.value)
+    if (editing.value || !src || !box) {
+      tierImage.value = null
+      return
+    }
+    // 可视区闸门（外扩一屏）：看不见的节点不急着解码原图
+    if (!visibleNodes(800).some((r) => r.id === props.id)) return
+    // 名字 = 「源 + 档位 + 尺寸 + 质量」。四样都进名字，改任何一样都会算出一个新名字，
+    // 于是资源库与内存两级缓存同时失效、该重算的重算（见 thumbKey.thumbRefParam 的说明）。
+    const ref = makeThumbRef(
+      'img',
+      src,
+      thumbRefParam(wantTier, box.width, box.height, tierCfg.value.quality),
+    )
+    // 先把旧的清掉：让画面立刻回到原图（而不是继续挂着旧缩略图），
+    // 等新的算好再换上去 —— 否则改完设置看起来"没反应"。
+    tierImage.value = null
+    void thumbCache
+      .resolveOrCreate({
+        src,
+        tier: wantTier,
+        box,
+        quality: tierCfg.value.quality,
+        ...(ref ? { ref } : {}),
+        ...(thumbResources() ? { resources: thumbResources()! } : {}),
+      })
+      .then((made) => {
+        // 落值前再确认一次"这一整套参数还是当前这一套"，避免把过期的那张挂上去
+        if (tier.value !== wantTier || imageUrl.value !== src || editing.value) return
+        const nowBox = thumbTargetFor(tier.value, tierCfg.value)
+        if (!nowBox || nowBox.width !== box.width || nowBox.height !== box.height) return
+        tierImage.value = made
+      })
+  },
+  { immediate: true },
+)
+
+/**
+ * 资源库端口（ctx 上的 'resources'）。
+ *
+ * 取不到（极简宿主 / 单测桩）→ 返回 undefined，缩略图退回"只放内存"：
+ * 功能照常，只是换会话要重算一遍 —— 与这次改动之前的行为一致。
+ */
+function thumbResources(): ThumbResourcePort | undefined {
+  const port = ctx?.get<ThumbResourcePort | undefined>('resources')
+  return port && typeof port.put === 'function' && typeof port.resolve === 'function' ? port : undefined
+}
+
+/** 图片地址一变：旧源的小图全部作废（释放 objectURL），失败标记也清掉 */
+watch(imageUrl, (prev) => {
+  if (prev) thumbCache.clearSource(prev)
+  tierImage.value = null
+  clearImageBroken(props.id)
+})
+
 /** 读/写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createImageOps(ctx)
 
+/**
+ * 加载失败：小图是本地现画的、不走网络 —— 能走到这里的一定是原图本身（源地址失效），如实标出来。
+ *
+ * 之所以不再需要"先判断失败的是不是小图"：画不出来时 displaySrc 压根不会切过去
+ * （见上面 watch 里的 made 判空），所以没有"小图 404 被误报成图片失效"这条路。
+ */
 function onImgError(): void {
   markImageBroken(props.id)
 }
@@ -62,9 +191,6 @@ function onImgLoad(e: Event): void {
     patch.size,
   )
 }
-
-// 图片地址一变就重置失败标记（否则换图后状态栏还停在"已失效"）
-watch(imageUrl, () => clearImageBroken(props.id))
 
 // ==================== 卡片尺寸兜底 ====================
 /**
@@ -106,7 +232,12 @@ onMounted(() => {
 watch(imageUrl, () => syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.())))
 
 // 节点被删/卸载时清掉编辑态，避免共享态留下幽灵 id
-onBeforeUnmount(() => endEdit(props.id))
+onBeforeUnmount(() => {
+  tierSettingOff?.dispose()
+  // 本节点的小图全部释放（objectURL 不还回去就是内存泄漏，而这类泄漏从界面上看不出来）
+  thumbCache.dispose()
+  endEdit(props.id)
+})
 </script>
 
 <template>
@@ -114,7 +245,7 @@ onBeforeUnmount(() => endEdit(props.id))
     <div class="frame">
       <img
         v-if="imageUrl && !broken"
-        :src="imageUrl"
+        :src="displaySrc"
         alt="节点图片"
         class="img"
         :class="editing ? 'is-fill-contain' : 'is-fill-cover'"
