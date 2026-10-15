@@ -34,19 +34,20 @@ describe('AxScrollArea 转发内部滚动层的 scroll 事件', () => {
   })
 })
 
-describe('生成历史的「加载更多」链路接在转发事件上', () => {
-  it('历史滚动容器用 @scroll 绑到 onHistScroll（不是绑在不会滚动的根元素上白写）', () => {
-    expect(modalsArea).toMatch(/<AxScrollArea[^>]*@scroll="onHistScroll"/)
+describe('生成历史的「加载更多」改走哨兵元素（用户口径 2026-10-15：禁止滚动触发）', () => {
+  it('不再用 @scroll 触发加载（历史滚动容器上没有滚动监听）', () => {
+    expect(modalsArea, '历史弹窗还在用滚动事件触发加载').not.toMatch(/@scroll=/)
+    expect(modalsArea, 'onHistScroll 已按用户口径删除').not.toMatch(/function onHistScroll/)
   })
 
-  it('onHistScroll 靠原生 e.target 的几何判触底，并接到 ui.loadMoreHistory()', () => {
-    const fn = modalsArea.match(/function onHistScroll[\s\S]*?\n\}/)?.[0] ?? ''
-    expect(fn, '找不到 onHistScroll 实现').not.toBe('')
-    expect(fn, 'onHistScroll 必须读原生事件的 e.target').toMatch(/e\.target/)
-    expect(fn, '触底必须触发加载下一页').toMatch(/onScrollReachBottom\(\)/)
+  it('滚动内容最底部放哨兵元素，进入可视区才拉下一页', () => {
+    expect(modalsArea, '找不到哨兵元素').toMatch(/ref="loadSentinelEl"/)
+    expect(modalsArea, '哨兵没有挂 IntersectionObserver').toMatch(/loadMoreObserver\.observe\(sentinel\)/)
+    expect(modalsArea, '哨兵观察没有接到 ui.loadMoreHistory()').toMatch(/ui\.loadMoreHistory\(\)/)
+  })
 
-    const reach = modalsArea.match(/function onScrollReachBottom[\s\S]*?\n\}/)?.[0] ?? ''
-    expect(reach, '找不到 onScrollReachBottom 实现').not.toBe('')
-    expect(reach, '触底最终要走到 ui.loadMoreHistory()').toMatch(/ui\.loadMoreHistory\(\)/)
+  it('两次拉页之间至少隔 1 秒（哨兵常驻可视区也不会连发请求）', () => {
+    expect(modalsArea, '找不到最小拉页间隔').toMatch(/LOAD_MORE_INTERVAL_MS = 1000/)
+    expect(modalsArea, '没有按间隔节流').toMatch(/elapsed < LOAD_MORE_INTERVAL_MS/)
   })
 })

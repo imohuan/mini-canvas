@@ -9,9 +9,13 @@
  *
  * 契约：每个浮层根写 data-floating-chain = 「父链 + 自己 id」；
  * 「这一点算不算我这一组」= 命中的链里有没有我的 id。
+ *
+ * 本文件测的是 **`@mini-canvas/ui` 自己那一份实现**（用户口径 2026-10-15：插件各自独立，
+ * 不跨包共享、更不动核心层）。主题默认件里另有一份等价的实现，两边只共享
+ * `data-floating-chain` 这个 DOM 契约。
  */
 import { describe, it, expect } from 'vitest'
-import { floatingChainOf, isInFloatingGroup, childChainFor } from '../components/hooks/floatingGroup'
+import { floatingChainOf, isInFloatingGroup, childChainFor, isChainAncestorOf } from '../components/hooks/floatingGroup'
 
 /**
  * 最小假 DOM：只实现本模块用到的两件事 —— closest(选择器) 与 dataset.floatingChain。
@@ -112,6 +116,31 @@ describe('childChainFor', () => {
   it('锚点不在任何浮层里 → 只有自己（一级浮层/独立使用都不崩）', () => {
     expect(childChainFor(el('div'), 'dd-c')).toBe('dd-c')
     expect(childChainFor(null, 'dd-c')).toBe('dd-c')
+  })
+})
+
+/**
+ * 祖先判定 —— 下拉互斥的「祖先豁免」就靠它。
+ *
+ * 用户报的症状（2026-10-14）：「当我点击内部的下拉时，它触发了外部下拉的关闭」。
+ * 内层下拉打开时不该把**自己所在的那块父面板**关掉（那是它的祖先）。
+ */
+describe('isChainAncestorOf：谁是祖先', () => {
+  it('真祖先：链是我链的严格前缀', () => {
+    expect(isChainAncestorOf(['dd-parent'], ['dd-parent', 'dd-child'])).toBe(true)
+    expect(isChainAncestorOf(['dd-g'], ['dd-g', 'dd-p', 'dd-l'])).toBe(true)
+  })
+
+  it('平级 / 后代 / 不相干 → 都不是祖先', () => {
+    expect(isChainAncestorOf(['dd-b'], ['dd-a'])).toBe(false)
+    expect(isChainAncestorOf(['dd-x'], ['dd-a', 'dd-b'])).toBe(false)
+    // 后代比我还长 → 不是我的祖先
+    expect(isChainAncestorOf(['dd-a', 'dd-b'], ['dd-a'])).toBe(false)
+  })
+
+  it('空链永远不算祖先（没声明链的老调用方谁都不豁免）', () => {
+    expect(isChainAncestorOf([], ['dd-a'])).toBe(false)
+    expect(isChainAncestorOf([], [])).toBe(false)
   })
 })
 

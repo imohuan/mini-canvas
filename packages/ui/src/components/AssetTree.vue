@@ -167,6 +167,15 @@ const emit = defineEmits<{
    * 组件这一侧有现成的 rows，推给宿主比让宿主再算一份可靠（判定见 composables/assetSelection.ts）。
    */
   toggleSelect: [id: string, shift: boolean]
+  /**
+   * 点**缩略图**（行左端的图片标识）：用户口径 2026-10-14
+   * 「弹出框里左侧的图片 logo，就是文件左侧的图片 logo。点击它没有预览效果，请修复」。
+   *
+   * 为什么单独开一条事件而不是复用 openAsset：右侧的名字/整行点击在**两个宿主里语义不同**
+   * （抽屉 = 预览，弹窗 = 不预览，见 AssetManageDialog.onOpenAsset 的说明）；
+   * 而缩略图这一处的期望是**两边一致**的 —— 它就是「我想看看这张图」，点了就该开预览。
+   */
+  openThumb: [row: AssetTreeRow, e?: MouseEvent]
   /** 拖拽落下：from 行拖到 to 行（to = null 表示拖到列表空白 = 根目录） */
   dropOn: [payload: { from: AssetTreeRow; to: AssetTreeRow | null }]
   /** 「⋯」/ 右键菜单动作（原样转发，宿主执行） */
@@ -325,6 +334,49 @@ const renameVal = computed({
   get: () => props.renameValue,
   set: (v: string) => emit('renameInput', v),
 })
+
+/**
+ * 行点击是否该被吃掉：**这一行正在内联改名**时。
+ *
+ * 为什么必须有（用户报的现场 2026-10-14）：「在重命名文件时，我点空格会触发全屏预览效果」。
+ * 真机实测的事件链：`keydown(空格) → keyup(空格) → click 落在「预览 <名字>」按钮上`。
+ * 根因是**改名输入框被套在行按钮内部**：空格在按钮的子元素上按下再抬起，浏览器就按
+ * 「激活这个按钮」处理（原生 button 的键盘激活语义），于是打开全屏预览。
+ *
+ * 两道防线（都要，缺一不可）：
+ *   ① 输入框自己 `@keyup.space.stop.prevent` —— 从源头掐掉那次激活（结构性修法）；
+ *   ② 就是这个状态守卫 —— 万一还有别的路径合成出点击（或将来把输入框换成 contenteditable），
+ *      改名态下整行的点击一律不派发。
+ *
+ * 注意不会误伤「点别处提交改名」：点行上别的地方会先让输入框失焦（宿主收到 blur 就把
+ * renamingId 清空），等 click 派发时这里已经是 false 了。所以守卫只拦得住「改名中、焦点还在
+ * 输入框里」的那些合成点击 —— 正是要拦的那一批。
+ */
+function rowClickBlocked(row: AssetTreeRow): boolean {
+  return props.renamingId === row.id
+}
+/** 资产行整行点击：改名中吃掉，否则照旧派发（宿主决定 = 预览 / 勾选） */
+function onAssetRowClick(row: AssetTreeRow, e: MouseEvent): void {
+  if (rowClickBlocked(row)) return
+  emit('openAsset', row, e)
+}
+/** 文件夹行整行点击：改名中吃掉，否则按 folderClick 语义展开/折叠或进入 */
+function onFolderRowClick(row: AssetTreeRow): void {
+  if (rowClickBlocked(row)) return
+  if (props.folderClick === 'open') emit('openFolder', row.id)
+  else emit('toggleExpand', row.id)
+}
+/**
+ * 点缩略图：等价于「预览这份资产」。
+ *
+ * 为什么不是直接调 onAssetRowClick：右边那个整行按钮的语义由宿主定（弹窗刻意不预览），
+ * 而缩略图的期望是两边一致（见 openThumb 的说明）。所以这一处单独派发，
+ * 但仍然走同一个改名态守卫（改名中点它不该开预览）。
+ */
+function onThumbClick(row: AssetTreeRow, e: MouseEvent): void {
+  if (rowClickBlocked(row)) return
+  emit('openThumb', row, e)
+}
 </script>
 
 <template>
@@ -373,7 +425,7 @@ const renameVal = computed({
         </button>
         <button
           class="flex h-full min-w-0 flex-1 items-center gap-2 text-left"
-          @click="folderClick === 'open' ? emit('openFolder', row.id) : emit('toggleExpand', row.id)"
+          @click="onFolderRowClick(row)"
         >
           <span class="relative grid size-8 flex-none place-items-center">
             <img :src="folderImg" alt="" class="size-8 object-contain" draggable="false" />
@@ -388,6 +440,7 @@ const renameVal = computed({
             aria-label="文件夹名称"
             @keydown.enter="emit('renameCommit', { kind: 'folder', id: row.id, name: renameVal })"
             @keydown.esc.stop="emit('renameCancel')"
+            @keyup.space.stop.prevent
             @blur="emit('renameCommit', { kind: 'folder', id: row.id, name: renameVal })"
             @click.stop
           />
@@ -444,8 +497,18 @@ const renameVal = computed({
           补一个等宽的空占位，缩略图就能落到文件夹图标的正下方。
         -->
         <span class="size-5 flex-none" aria-hidden="true"></span>
-        <button class="flex h-full min-w-0 flex-1 items-center gap-2 text-left" :aria-label="'预览 ' + row.name" @click="emit('openAsset', row, $event)">
-          <span class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute">
+        <button class="flex h-full min-w-0 flex-1 items-center gap-2 text-left" :aria-label="'预览 ' + row.name" @click="onAssetRowClick(row, $event)">
+          <!--
+            缩略图（用户口径 2026-10-14：「弹出框里左侧的图片 logo…点击它没有预览效果，请修复」）：
+            它就是「我想看看这张图」，两处宿主都该开预览 —— 所以自己 @click.stop 派发 openThumb，
+            不再依赖右侧那个「整行」按钮的宿主语义（弹窗那侧刻意不预览）。
+            @click.stop 也顺手把这次点击留在缩略图上，不连带触发整行的动作（勾选 / 展开）。
+          -->
+          <span
+            class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
+            :title="'预览 ' + row.name"
+            @click.stop="onThumbClick(row, $event)"
+          >
             <img v-if="(row.assetKind ?? 'other') === 'image' && row.url" :src="row.url" alt="" class="h-full w-full object-cover" />
             <component v-else :is="assetIconOf(row.assetKind ?? 'other')" :size="15" />
           </span>
@@ -458,6 +521,7 @@ const renameVal = computed({
             aria-label="资产名称"
             @keydown.enter="emit('renameCommit', { kind: 'asset', id: row.id, name: renameVal })"
             @keydown.esc.stop="emit('renameCancel')"
+            @keyup.space.stop.prevent
             @blur="emit('renameCommit', { kind: 'asset', id: row.id, name: renameVal })"
             @click.stop
           />

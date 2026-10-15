@@ -22,6 +22,7 @@ import {
   AGENT_RUN_MODE_PATH,
   AGENT_NOTIFY_PATH,
   AGENT_GOAL_DEFAULTS_PATH,
+  AGENT_QUEUE_PREFS_PATH,
   CONFIG_KEYS_PATH,
   DEFAULT_AGENT_GOAL_BUDGET,
   DEFAULT_AGENT_NOTIFY,
@@ -83,6 +84,24 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
     expect(AGENT_GOAL_DEFAULTS_PATH).toBe('/api/kv/config/agentGoalDefaults')
   })
 
+  it('队列显示偏好（用户口径 2026-10-15）：键 / 路径 / 默认显示；关掉后保存与回读一致', async () => {
+    expect(AGENT_QUEUE_PREFS_PATH).toBe('/api/kv/config/agentQueuePrefs')
+    // 键没保存过 ⇒ 默认显示（保持现有行为，关闭是用户显式的选择）
+    kvFetch()
+    const def = await loadAgentSettings()
+    expect(def.queueShowSending).toBe(true)
+    // 存了 { showSending: false } ⇒ 用户明确选了关，不能被默认盖回去
+    const { puts } = kvFetch({ '/api/kv/config/agentQueuePrefs': { showSending: false } })
+    const off = await loadAgentSettings()
+    expect(off.queueShowSending).toBe(false)
+    // set 入口：翻开关就 PUT 该键
+    const store = createAgentSettingsStore()
+    await store.setQueueShowSending(false)
+    const put = puts.find((p) => p.url === AGENT_QUEUE_PREFS_PATH)
+    expect(put?.body).toEqual({ value: { showSending: false } })
+    store.dispose()
+  })
+
   it('默认值：后台对话默认开（background）、通知与声音默认开、默认预算 50000', async () => {
     const { notFoundGets } = kvFetch() // 三个键都没保存过
 
@@ -119,6 +138,7 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
       runMode: 'background',
       notify: { browser: true, sound: true },
       goalBudget: 50000,
+      queueShowSending: true,
     })
   })
 
@@ -127,7 +147,7 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
 
     const s = await loadAgentSettings()
 
-    expect(s).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000 })
+    expect(s).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000, queueShowSending: true })
   })
 
   it('读 KV 的值能覆盖默认值（刷新后保持）', async () => {
@@ -346,7 +366,7 @@ describe('跨标签页同步：订阅 /api/kv/events，只认这三个键', () =
     // 真广播但后台读不到：安静回落默认值，不抛
     es.emit('config', 'agentNotify')
     await vi.waitFor(() => expect(seen).toHaveLength(1))
-    expect(seen[0]).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000 })
+    expect(seen[0]).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000, queueShowSending: true })
     dispose()
   })
 

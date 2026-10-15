@@ -19,6 +19,7 @@ import { computed } from 'vue'
 import AssetManageDialog from './AssetManageDialog.vue'
 import { MediaViewer } from '@mini-canvas/plugin-theme-default'
 import { assetManager, assetPreview, closeAssetManager } from '../composables/assetUiBus'
+import { currentAssetPreview, setAssetPreviewIndex } from '../composables/assetUiBus'
 import { useAssetRefOpen } from '../composables/useAssetRefOpen'
 import { useUi } from '../composables/ui'
 
@@ -32,7 +33,10 @@ const dialogKey = computed(() => 'am-' + assetManager.value.focusToken)
 
 /** 预览项：外壳与 MediaViewer 的契约形状对齐 */
 const previewItem = computed(() => {
-  const p = assetPreview.value
+  // 取「当前正在看的那一张」：← / → 切过之后 index 变了，url / name / id 都要跟着它走。
+  // 为什么必须在这里解好再传：MediaViewer 的标题读 item.name、音频分支读 item.url
+  //（它内部的 currentUrl 只喂图片分支）—— 底栏 MediaPreviewOverlay 也是在外面解好再传。
+  const p = currentAssetPreview()
   // html / text 也要带上：可视化节点（kind='ui'）没有 url，它的内容是**一段 HTML**
   // （用户口径 2026-10-14：「可以在预览中添加一个 iframe 预览框」）——
   // 早先这里只透传 name/kind/url，于是 iframe 拿不到内容、显示成"还没画过"。
@@ -43,13 +47,22 @@ const previewItem = computed(() => {
         url: p.url ?? '',
         ...(p.html !== undefined ? { html: p.html } : {}),
         ...(p.text !== undefined ? { text: p.text } : {}),
+        // 同层清单原样透传：MediaViewer 认 list / index，自带 ← / → 与页码
+        //（用户口径 2026-10-14：「全局预览都提供一个列表，可以通过左右快捷键来回切换」）。
+        ...(p.list && p.list.length > 1
+          ? { list: p.list, index: Math.min(Math.max(p.index ?? 0, 0), p.list.length - 1) }
+          : {}),
       }
     : null
 })
 
+/** 右上角删除按钮只在「当前这张是宿主自己的资产」时出现（从引用打开的不带 id） */
+const canDelete = computed(() => Boolean(currentAssetPreview()?.id))
+
 /** 预览里点删除（只有带 id 的资产才有；从引用打开时没有 id，也就没有删除按钮） */
 function onPreviewDelete(): void {
-  const id = assetPreview.value?.id
+  // 按**当前正在看的那张**删（← / → 切过之后，删的必须是当前这张）
+  const id = currentAssetPreview()?.id
   if (id) void ui.deleteAssetById(id)
   assetPreview.value = null
 }
@@ -69,7 +82,8 @@ function onPreviewDelete(): void {
   <!-- 全屏预览：与底栏素材卡 / 生成历史是同一只组件 -->
   <MediaViewer
     :item="previewItem"
-    :on-delete="assetPreview?.id ? onPreviewDelete : undefined"
+    :on-delete="canDelete ? onPreviewDelete : undefined"
+    @index="setAssetPreviewIndex"
     @close="assetPreview = null"
   />
 </template>

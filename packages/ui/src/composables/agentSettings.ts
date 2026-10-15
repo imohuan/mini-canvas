@@ -22,10 +22,15 @@ import { subscribeKvEvents } from './kvEvents'
 export const AGENT_RUN_MODE_KEY = 'agentRunMode'
 export const AGENT_NOTIFY_KEY = 'agentNotify'
 export const AGENT_GOAL_DEFAULTS_KEY = 'agentGoalDefaults'
+/** 「发送中显示队列」开关的键（队列里 sending 条目要不要画出来；用户口径 2026-10-15） */
+export const AGENT_QUEUE_PREFS_KEY = 'agentQueuePrefs'
 /** 云端 KV 路径：config 作用域，接口见 cloud-server 的 routes/kv.ts（GET/PUT /api/kv/:type/:key） */
 export const AGENT_RUN_MODE_PATH = '/api/kv/config/' + AGENT_RUN_MODE_KEY
 export const AGENT_NOTIFY_PATH = '/api/kv/config/' + AGENT_NOTIFY_KEY
 export const AGENT_GOAL_DEFAULTS_PATH = '/api/kv/config/' + AGENT_GOAL_DEFAULTS_KEY
+export const AGENT_QUEUE_PREFS_PATH = '/api/kv/config/' + AGENT_QUEUE_PREFS_KEY
+/** 设置页翻「发送中显示队列」后向同页其它读者（Agent 面板）广播的事件名 */
+export const AGENT_QUEUE_PREFS_EVENT = 'mini-canvas:agent-queue-prefs-changed'
 /**
  * config 作用域的**批量读**口（一次拿回该域全部 key/值）。
  *
@@ -43,22 +48,30 @@ export interface AgentNotifySettings {
 export interface AgentGoalDefaults {
   budget: number
 }
+/** 队列显示偏好：发送状态（sending）下的条目要不要显示在队列列表里 */
+export interface AgentQueuePrefs {
+  showSending: boolean
+}
 /** 一份完整设置快照（设置弹窗绑的就是它） */
 export interface AgentSettings {
   runMode: AgentRunMode
   notify: AgentNotifySettings
   /** 目标默认预算；0 = 不限 */
   goalBudget: number
+  /** 队列里「发送中」条目的显示开关（默认显示） */
+  queueShowSending: boolean
 }
 
 /** 默认值：后台对话默认开（§3.2）；两个通知默认开；默认预算 50000 */
 export const DEFAULT_AGENT_RUN_MODE: AgentRunMode = 'background'
 export const DEFAULT_AGENT_NOTIFY: AgentNotifySettings = { browser: true, sound: true }
 export const DEFAULT_AGENT_GOAL_BUDGET = 50000
+export const DEFAULT_QUEUE_SHOW_SENDING = true
 export const AGENT_SETTINGS_DEFAULTS: AgentSettings = {
   runMode: DEFAULT_AGENT_RUN_MODE,
   notify: { ...DEFAULT_AGENT_NOTIFY },
   goalBudget: DEFAULT_AGENT_GOAL_BUDGET,
+  queueShowSending: DEFAULT_QUEUE_SHOW_SENDING,
 }
 
 /**
@@ -120,6 +133,12 @@ function budgetFromKv(raw: unknown): number {
   return normalizeGoalBudget((raw as AgentGoalDefaults).budget)
 }
 
+/** 队列偏好归一：只认 boolean，缺/坏回落默认（显示） */
+function queuePrefsFromKv(raw: unknown): boolean {
+  const o = raw && typeof raw === 'object' ? (raw as Partial<AgentQueuePrefs>) : {}
+  return typeof o.showSending === 'boolean' ? o.showSending : DEFAULT_QUEUE_SHOW_SENDING
+}
+
 /** 读齐三个键（各自容错、各自回落默认）。任何失败都不抛。 */
 export async function loadAgentSettings(): Promise<AgentSettings> {
   const bucket = await readConfigBucket()
@@ -127,6 +146,7 @@ export async function loadAgentSettings(): Promise<AgentSettings> {
     runMode: normalizeRunMode(bucket[AGENT_RUN_MODE_KEY]),
     notify: normalizeNotify(bucket[AGENT_NOTIFY_KEY]),
     goalBudget: budgetFromKv(bucket[AGENT_GOAL_DEFAULTS_KEY]),
+    queueShowSending: queuePrefsFromKv(bucket[AGENT_QUEUE_PREFS_KEY]),
   }
 }
 
@@ -159,8 +179,13 @@ export async function saveAgentGoalBudget(budget: unknown): Promise<number> {
   return n
 }
 
+/** 存队列显示偏好 */
+export async function saveAgentQueuePrefs(prefs: AgentQueuePrefs): Promise<void> {
+  await putKvValue(AGENT_QUEUE_PREFS_PATH, { showSending: prefs.showSending === true })
+}
+
 /** 这三个键任一变了都要重读（别的 config 键与这个弹窗无关） */
-const AGENT_KV_KEYS: readonly string[] = [AGENT_RUN_MODE_KEY, AGENT_NOTIFY_KEY, AGENT_GOAL_DEFAULTS_KEY]
+const AGENT_KV_KEYS: readonly string[] = [AGENT_RUN_MODE_KEY, AGENT_NOTIFY_KEY, AGENT_GOAL_DEFAULTS_KEY, AGENT_QUEUE_PREFS_KEY]
 
 /**
  * 订阅云端变更：别的标签页/别处改了这三个键，这里重读一份并回调（跨标签页同步）。
@@ -196,6 +221,8 @@ export interface AgentSettingsStore {
   setNotify(patch: Partial<AgentNotifySettings>): Promise<void>
   /** 传输入框的原始值（string/number 都收）；返回归一化后的预算（0 = 不限） */
   setGoalBudget(value: unknown): Promise<number>
+  /** 「发送中显示队列」开关 */
+  setQueueShowSending(show: boolean): Promise<void>
   /** 停掉订阅（单测/宿主重建用；应用里长驻不必调） */
   dispose(): void
 }
@@ -206,6 +233,7 @@ export function createAgentSettingsStore(): AgentSettingsStore {
     runMode: AGENT_SETTINGS_DEFAULTS.runMode,
     notify: { ...AGENT_SETTINGS_DEFAULTS.notify },
     goalBudget: AGENT_SETTINGS_DEFAULTS.goalBudget,
+    queueShowSending: AGENT_SETTINGS_DEFAULTS.queueShowSending,
   })
   let disposed = false
 
@@ -215,6 +243,7 @@ export function createAgentSettingsStore(): AgentSettingsStore {
     state.notify.browser = s.notify.browser
     state.notify.sound = s.notify.sound
     state.goalBudget = s.goalBudget
+    state.queueShowSending = s.queueShowSending
   }
 
   async function reload(): Promise<void> {
@@ -243,6 +272,12 @@ export function createAgentSettingsStore(): AgentSettingsStore {
       state.goalBudget = n
       await saveAgentGoalBudget(n)
       return n
+    },
+    async setQueueShowSending(show) {
+      state.queueShowSending = show // 界面立刻翻，不等后台往返
+      await saveAgentQueuePrefs({ showSending: show })
+      // 同页其它读者（Agent 面板）立刻生效：它们不订阅 KV 事件，靠这条本地广播重读
+      if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(AGENT_QUEUE_PREFS_EVENT, { detail: { showSending: show } }))
     },
     dispose() {
       disposed = true

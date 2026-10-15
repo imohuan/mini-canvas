@@ -1,5 +1,52 @@
 import { createApp } from "vue";
 import "./app.css";
+
+// ===== 性能探针（2026-10-15 卡死排查后留档：lt=长任务数 ms=总毫秒 wall=运行秒）=====
+// longtask 观察器 + 每 5 秒把最近任务统计写 localStorage（主线程卡死前的数据已落，
+// 同源任意标签页可读；下一个打开的页面把上一轮统计写进 document.title（PERF 前缀），
+// 供 CDP 不可用时取证。attribution 带容器名，尽量指认来源组件。
+(function () {
+  try {
+    const last = localStorage.getItem('mc-perf-probe-last');
+    if (last) document.title = 'PERF ' + last;
+  } catch { /* 忽略 */ }
+})();
+(function perfProbe() {
+  try {
+    const KEY = 'mc-perf-probe';
+    const state = { tasks: [] as Array<{ t: number; d: number; who: string }>, win0: performance.now() };
+    const po = new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        const anyE = e as unknown as { attribution?: Array<{ containerName?: string; containerSrc?: string }> };
+        const a = anyE.attribution?.[0];
+        state.tasks.push({ t: Math.round(e.startTime), d: Math.round(e.duration), who: a?.containerName || a?.containerSrc || '?' });
+      }
+      if (state.tasks.length > 400) state.tasks = state.tasks.slice(-200);
+    });
+    po.observe({ entryTypes: ['longtask'] });
+    (window as unknown as Record<string, unknown>).__readPerfProbe = () => {
+      const now = performance.now();
+      const total = state.tasks.reduce((s2, t) => s2 + t.d, 0);
+      const byWho: Record<string, { count: number; ms: number }> = {};
+      for (const t of state.tasks) {
+        const k = byWho[t.who] ?? (byWho[t.who] = { count: 0, ms: 0 });
+        k.count++; k.ms += t.d;
+      }
+      const top = Object.entries(byWho).sort((x, y) => y[1].ms - x[1].ms).slice(0, 8);
+      return JSON.stringify({ wallSec: Math.round(now / 1000), longTasks: state.tasks.length, longMs: Math.round(total), top });
+    };
+    setInterval(() => {
+      try {
+        const now = performance.now();
+        const total = state.tasks.reduce((s2, t) => s2 + t.d, 0);
+        const snapshot = 'lt=' + state.tasks.length + ' ms=' + Math.round(total) + ' wall=' + Math.round(now / 1000) + 's';
+        localStorage.setItem(KEY, snapshot);
+        localStorage.setItem('mc-perf-probe-last', snapshot);
+      } catch { /* 忽略 */ }
+    }, 5000);
+  } catch { /* 探针失败不影响应用 */ }
+})();
+// ===== 探针结束 =====
 import "@vue-flow/core/dist/style.css";
 import "@vue-flow/core/dist/theme-default.css";
 import Root from "./Root.vue";

@@ -72,7 +72,9 @@ describe('MediaViewer 有 kind="ui" 的 iframe 分支', () => {
 describe('两处宿主都走统一入口', () => {
   it('LeftDrawer 的 openAsset 用 openAssetPreviewFromAsset（不是直接把 url 丢给预览）', () => {
     const drawer = read('../components/areas/LeftDrawer.vue')
-    expect(drawer).toContain('openAssetPreviewFromAsset(item)')
+    // 2026-10-14 起多带一个「同层文件清单」参数（全局预览的 ← / → 列表），
+    // 落点没变：仍然是这条统一入口，不是把 url 直接丢给预览。
+    expect(drawer).toContain('openAssetPreviewFromAsset(item, group)')
     expect(drawer).not.toContain('openAssetPreview({ id: item.id, name: item.name, kind: assetKindOf(item), url: item.url })')
   })
 

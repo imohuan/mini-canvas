@@ -59,6 +59,7 @@ pnpm -C packages/ui dev                    # 起画布应用看画面（:5288）
 - 项目进度 / 当前该做什么：`docs/STATUS.md`
 - 架构与分层设计（终态 + 迁移步骤 + 决策记录）：`docs/design/core-layers-and-registry.md`
 - 插件作者教程（7 篇，照抄能跑）：`docs/plugin-dev/`
+- 改插件身份（自带件 ⇄ 可装卸件）或插件面板里找不到某插件：`docs/规则/插件身份切换手册.md`
 - 各包 API 手册（按现行包结构分层：kernel / canvas-data / canvas-render / plugins）：`docs/代码开发/00-总览与架构.md` 及其子目录
 - 插件系统目标与验收：`docs/goal/plugin-system-goal.md`
 - 架构决策记录：`docs/adr/`

@@ -92,6 +92,26 @@ describe('资产树共用（AssetTree）', () => {
     expect(tree).not.toMatch(/\.asset-tree button:focus-visible/)
   })
 
+  /**
+   * 缩略图点了要开预览（用户口径 2026-10-14：「弹出框里左侧的图片 logo，就是文件左侧的图片 logo。
+   * 点击它没有预览效果，请修复」）。
+   *
+   * 它与右侧那个「整行」按钮**语义不同**：整行按钮在两个宿主里行为不一样
+   * （抽屉 = 预览、弹窗 = 刻意不预览），而缩略图的意图两边一致 = 看看这张图。
+   * 所以树自己 @click.stop 派发 openThumb，两个宿主都必须接上 —— 漏掉任何一边，
+   * 那边的缩略图又会变成"点了没反应"。
+   */
+  it('缩略图自己派发 openThumb，且两处宿主都接上了', () => {
+    // 树：缩略图容器上 click.stop + onThumbClick（不再依赖右侧整行按钮的宿主语义）
+    expect(tree).toMatch(/@click\.stop="onThumbClick\(row, \$event\)"/)
+    expect(tree).toMatch(/function onThumbClick\(row: AssetTreeRow, e: MouseEvent\)[\s\S]{0,160}emit\('openThumb', row, e\)/)
+    // 两处宿主各接一次
+    expect(drawer).toContain('@open-thumb=')
+    expect(dialog).toContain('@open-thumb=')
+    // 弹窗那侧真的开了预览（不是又一个空实现）
+    expect(dialog).toMatch(/function onOpenThumb\(row: AssetTreeRow\)[\s\S]{0,400}openAssetPreviewFromAsset\(/)
+  })
+
   /** 资源可以拖到画布建节点：树把资产 id 写进 dataTransfer（画布侧据此建对应类型的节点） */
   it('资产行拖拽时带上「这是资源树资产」的标记', () => {
     expect(tree).toContain('application/x-mini-canvas-asset')

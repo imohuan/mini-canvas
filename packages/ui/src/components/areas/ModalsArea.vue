@@ -63,6 +63,8 @@ const GUTTER = 16
 const BATCH_SIZE = 24
 const renderedCount = ref(BATCH_SIZE)
 const masonryEl = ref<HTMLElement | null>(null)
+/** 下一页加载哨兵（用户口径 2026-10-15：禁止滚动触发 —— 哨兵进可视区才拉下一页） */
+const loadSentinelEl = ref<HTMLElement | null>(null)
 let sentinelObserver: IntersectionObserver | null = null
 let lastBatchTime = 0
 let lastItemVisible = false
@@ -134,17 +136,55 @@ function loadMoreBatch(): void {
   nextTick(() => appendMasonryItems(previousCount, renderedCount.value))
 }
 
-/** 滚动容器触底：还有下一页就先拉数据（loadHistory 追加），数据到位后由 watch 续接瀑布流 */
-function onScrollReachBottom(): void {
+/** 两次「拉下一页」之间的最小间隔（毫秒）—— 哨兵常驻可视区时也不会连发请求 */
+const LOAD_MORE_INTERVAL_MS = 1000
+let loadMoreObserver: IntersectionObserver | null = null
+let lastLoadMoreAt = 0
+let loadMoreRetryTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 哨兵进了可视区：离上次拉页超过间隔才真的拉（否则定时到点补拉一次）。
+ * 数据到位后由 histDataVersion 的 watch 续接瀑布流（appendMasonryItems）。
+ */
+function maybeLoadMorePage(): void {
+  if (!s.historyOpen || !s.histHasMore || s.histLoadingMore) return
+  const elapsed = Date.now() - lastLoadMoreAt
+  if (elapsed < LOAD_MORE_INTERVAL_MS) {
+    if (loadMoreRetryTimer) clearTimeout(loadMoreRetryTimer)
+    loadMoreRetryTimer = setTimeout(() => {
+      loadMoreRetryTimer = null
+      maybeLoadMorePage()
+    }, LOAD_MORE_INTERVAL_MS - elapsed)
+    return
+  }
+  lastLoadMoreAt = Date.now()
   ui.loadMoreHistory()
 }
 
-/** 滚动事件：距底部 400px 内 → 触发加载下一页（与参考组件的「最后一张卡进入可视区即追加」同一体验） */
-function onHistScroll(e: Event): void {
-  const el = e.target as HTMLElement | null
-  if (!el) return
-  const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  if (distToBottom < 400) onScrollReachBottom()
+/**
+ * 监听底部哨兵。真正的滚动层是 AxScrollArea 内部的 .ax-sa-view（根元素本身不滚），
+ * root 必须指到它 —— 否则哨兵相对 viewport 永远"在视口外"（弹窗内容超出视口），一次都不会触发。
+ */
+function setupLoadSentinel(): void {
+  teardownLoadSentinel()
+  const sentinel = loadSentinelEl.value
+  if (!sentinel) return
+  loadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) maybeLoadMorePage()
+    },
+    { root: sentinel.closest('.ax-sa-view') ?? null, rootMargin: '0px 0px 600px 0px' },
+  )
+  loadMoreObserver.observe(sentinel)
+}
+
+function teardownLoadSentinel(): void {
+  loadMoreObserver?.disconnect()
+  loadMoreObserver = null
+  if (loadMoreRetryTimer) {
+    clearTimeout(loadMoreRetryTimer)
+    loadMoreRetryTimer = null
+  }
 }
 
 /** 进入/退出批量模式：卡片要重画（出现/移除勾选层），退出时清空选择 */
@@ -420,12 +460,14 @@ watch(() => s.historyOpen, (open) => {
   if (!open) {
     masonry.destroy()
     sentinelObserver?.disconnect()
+    teardownLoadSentinel()
     if (resizeObserver && masonryEl.value) resizeObserver.unobserve(masonryEl.value)
     return
   }
   renderedCount.value = Math.min(renderedCount.value > 0 ? renderedCount.value : BATCH_SIZE, Math.max(ui.histVisible.value.length, 1))
   nextTick(() => {
     rebuildMasonry()
+    setupLoadSentinel()
     if (masonryEl.value) resizeObserver?.observe(masonryEl.value)
   })
 })
@@ -478,6 +520,7 @@ watch(() => s.histShowError, () => {
 onBeforeUnmount(() => {
   masonry.destroy()
   sentinelObserver?.disconnect()
+  teardownLoadSentinel()
   resizeObserver?.disconnect()
   if (relayoutTimer) clearTimeout(relayoutTimer)
 })
@@ -636,11 +679,15 @@ watch(() => s.shortcutsOpen, async (open) => {
           </button>
         </div>
       </div>
-      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6" @scroll="onHistScroll">
+      <AxScrollArea class="min-h-0 flex-1" direction="y" body-class="px-10 pb-6">
         <!-- masonry 瀑布流：卡片按图片原始宽高比展示，列数随容器宽自适应（照 TaskResultGalleryView）。
              卡片 DOM 由 createMasonryElement 手工构建（骨架屏/裂图回退/底部信息栏都在那里）。 -->
         <div v-if="ui.histVisible.value.length" :id="MASONRY_ID" ref="masonryEl" class="hist-masonry"></div>
         <p v-if="ui.state.histLoadingMore" class="hist-loading text-center text-[12px] text-ink/50 pb-4">加载中…</p>
+        <!-- 加载下一页哨兵（用户口径 2026-10-15：禁止滚动触发）：它在滚动区最底部，
+             进入可视区才拉下一页；两次拉页之间至少隔 1 秒，不会无限连发。 -->
+        <div v-if="ui.histVisible.value.length && s.histHasMore" ref="loadSentinelEl" class="hist-load-sentinel"
+          aria-hidden="true"></div>
         <!-- 没有后台：说清楚"去哪开"，而不是装作没有历史 -->
         <p v-else-if="!s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
           未连接云端服务 —— 生成历史由后台记录<br />
@@ -704,6 +751,17 @@ watch(() => s.shortcutsOpen, async (open) => {
             :class="{ 'after:translate-x-4 bg-brand': agent.state.runMode === 'background' }" role="switch"
             :aria-checked="agent.state.runMode === 'background'" aria-label="后台对话"
             @click="agent.setRunMode(agent.state.runMode === 'background' ? 'followTab' : 'background')"></button>
+        </div>
+        <!-- 发送中显示队列（config/agentQueuePrefs）：队列里「发送中」条目要不要画出来（用户口径 2026-10-15） -->
+        <div class="flex items-center justify-between gap-3 py-2">
+          <div><strong class="text-[13px] text-ink">发送中显示队列</strong>
+            <p class="text-xs text-ink-dim">开启后，排队消息在真实发送期间仍显示「发送中」状态；关闭则发送后立即从列表消失</p>
+          </div>
+          <button
+            class="relative h-6 w-10 flex-none rounded-full bg-hover-strong transition-colors after:absolute after:left-0.5 after:top-0.5 after:size-5 after:rounded-full after:bg-white after:transition-transform"
+            :class="{ 'after:translate-x-4 bg-brand': agent.state.queueShowSending }" role="switch"
+            :aria-checked="agent.state.queueShowSending" aria-label="发送中显示队列"
+            @click="agent.setQueueShowSending(!agent.state.queueShowSending)"></button>
         </div>
         <!-- 目标设置的默认预算（config/agentGoalDefaults）：点 + 选目标时取这里的值，0 = 不限 -->
         <div class="flex items-center justify-between gap-3 py-2">
@@ -783,6 +841,9 @@ watch(() => s.shortcutsOpen, async (open) => {
 
 /* 加载下一页指示 */
 .hist-loading { pointer-events: none; }
+
+/* 下一页加载哨兵：滚动区最底部的一小块占位（IntersectionObserver 只认几何，不需要可见样式） */
+.hist-load-sentinel { height: 1px; width: 100%; }
 </style>
 
 <!--

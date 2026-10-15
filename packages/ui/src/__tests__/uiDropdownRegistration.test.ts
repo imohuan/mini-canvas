@@ -6,15 +6,14 @@
  * 1. 同一个场（registryOf('ui') 的 dropdown 键）里两份都登记着 —— 主题默认件没被删掉，
  *    用户移除本插件即可回退；
  * 2. `top('dropdown')` 是**包 UI 这一份**（order -1 比默认件 0 小，谁小谁赢）；
- * 3. 两处下拉的互斥登记表**是同一份**。
- *
- * 第 3 条为什么单独钉：`dropdownRegistry` 此前是本插件内一份、主题插件内一份。两份表 →
- * 用不同实现的两个下拉会同时开着。真源收进 canvas-render 后，这条测试就是防止它再裂开。
+ * 3. 本包下拉的互斥登记表是**本包自己那一份**（用户口径 2026-10-15：插件各自独立，
+ *    不跨包共享、不动核心层）；与主题默认件那份只共享 `data-floating-chain` DOM 契约。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { Context } from '@mini-canvas/canvas-data'
-import { claimDropdownExclusive, openDropdownCount, releaseDropdown } from '@mini-canvas/canvas-render'
+// 本包自己的那份（不是核心层、也不是主题包的）
+import { claimDropdownExclusive, openDropdownCount, releaseDropdown } from '../components/hooks/dropdownExclusive'
 import { Dropdown as ThemeDefaultDropdown, themeDefaultPlugin } from '@mini-canvas/plugin-theme-default'
 import { uiDropdownPlugin, DROPDOWN_ID } from '../uiDropdownPlugin'
 import AxDropdown from '../components/AxDropdown.vue'
@@ -50,7 +49,7 @@ describe('ui-dropdown 注册件：包 UI 这一份顶替主题默认件', () => 
   })
 })
 
-describe('下拉互斥登记表：两种实现共用同一份', () => {
+describe('下拉互斥登记表：本包自带一份', () => {
   it('claim 会把别的先关掉；release 幂等', () => {
     const a = () => {}
     const b = () => {}
@@ -64,15 +63,24 @@ describe('下拉互斥登记表：两种实现共用同一份', () => {
     releaseDropdown(a)
     expect(openDropdownCount()).toBe(0)
   })
+
+  it('不来自核心层：实现住在本包内（改动不动 canvas-render）', () => {
+    const src = readFileSync(new URL('../components/hooks/dropdownExclusive.ts', import.meta.url), 'utf-8')
+    expect(src).toMatch(/export function claimDropdownExclusive/)
+    expect(src).not.toMatch(/from '@mini-canvas\/canvas-render'/)
+  })
 })
 
 /**
- * 子浮层（`nestedIn`）—— 「两个下拉并存」的唯一合法例外。
+ * 子浮层 —— 「两个下拉并存」的合法情形。两条来源：
+ *   ① 显式 `nestedIn`（2026-10-09，画布行尾的操作菜单：锚点不在父面板里，只能由调用方告知）；
+ *   ② **DOM 祖先**（2026-10-14，嵌在父浮层面板里的下拉，如底栏参数面板里的「格式」）。
  *
  * 用户口径（2026-10-09）：「触发这个菜单的时候，你的画布的这个菜单消失了，有没有办法」。
- * 默认的「同屏只留一个浮层」会把父菜单（画布列表）当场顶掉；子浮层要的恰恰相反 ——
- * 列表留着、操作菜单挂在它旁边。三条判据缺一都会退回到「一开子菜单父菜单就消失」：
- *   ① 子浮层打开时**不 claim 排他**；
+ * 用户口径（2026-10-14）：「当我点击内部的下拉时，它触发了外部下拉的关闭」。
+ *
+ * 两条都要满足同一组判据，缺一条就退回「一开内层，外层当场消失」：
+ *   ① 打开时把**自己的组链**交给互斥登记表（登记表据它**放过自己的祖先**，只关平级/无关的）；
  *   ② 面板组链写成「父链 + 自己」（父菜单的点外判定才知道点的是自己人）；
  *   ③ 自己判「点外」只认自己的 id（否则点父列表时以为还在组内、菜单赖着不关）。
  */
@@ -84,14 +92,22 @@ describe('子浮层（nestedIn）：两个菜单并存', () => {
     expect(src).toMatch(/nestedIn: undefined,/)
   })
 
-  it('① 打开时对子浮层**不 claim 排他**（claim 会把父菜单关掉）', () => {
-    expect(src).toMatch(/if \(v && !isNested\.value\) claimDropdownExclusive\(close\)/)
+  it('① 打开时把**自己的组链**交给互斥登记表（登记表据它放过祖先）', () => {
+    // 关键：claim 必须带上组链，否则内层一开就把外层（它自己的父面板）关掉
+    expect(src).toMatch(/claimDropdownExclusive\(close, \(\) => panelChainIds\.value\)/)
   })
 
   it('② 面板组链 = 父链 + 自己（父菜单借它认出「点的是自己人」）', () => {
-    expect(src).toMatch(/isNested\.value \? parentChain\.value \+ ' ' \+ chainId : chainId/)
+    expect(src).toMatch(/const panelChainIds = computed<string\[\]>\(\(\) => \[\.\.\.parentChainIds\.value, chainId\]\)/)
     // 链要真写进面板
     expect(src).toMatch(/:data-floating-chain="panelChain"/)
+  })
+
+  it('②b 父链有**两条来源**：显式 nestedIn 优先，其次读自己的 DOM 祖先', () => {
+    // 显式声明（锚点不在父面板里，如画布行尾的操作菜单）
+    expect(src).toMatch(/const explicit = nestedCtx\.value\?\.chain/)
+    // DOM 祖先（触发器就长在父浮层面板里 —— 用户报的「点内部下拉关掉外部」正是这条）
+    expect(src).toMatch(/return floatingChainOf\(containerRef\.value\)/)
   })
 
   it('③ 自己判点外只认自己的 id（点父列表才关得掉子菜单）', () => {

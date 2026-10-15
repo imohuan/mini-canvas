@@ -64,10 +64,63 @@ function subscribePath(path: string, onEvent: KvEventListener): () => void {
   }
 }
 
+/**
+ * 页面隐藏（切标签 / 最小化）超过 30 秒 → 断开本页所有共享 SSE；回到前台立即重连。
+ *
+ * 为什么（2026-10-15 卡死排查）：多个画布标签页同时开着时，每页一条（或几条）SSE 长连接，
+ * Chrome 对同源 HTTP/1.1 只有 6 个并发连接 —— 长连接把额度占满后，该标签页的**所有**普通请求
+ * （页面资源、会话、资产）都要排队，表现为「打开页面就卡死、什么也动不了」。
+ * 后台标签页不需要实时推送；回前台立即重连，断开期间的事件不丢 —— 订阅方按 key 变更后自行读值，
+ * 丢失的只是「变更铃声」，回前台后的首次变更会再响。
+ */
+const VISIBILITY_DISCONNECT_MS = 30_000
+let visibilityTimer: ReturnType<typeof setTimeout> | null = null
+
+function handleVisibility(): void {
+  if (typeof document === "undefined") return
+  if (document.visibilityState === "hidden") {
+    if (visibilityTimer) clearTimeout(visibilityTimer)
+    visibilityTimer = setTimeout(() => {
+      for (const entry of sharedByPath.values()) {
+        try {
+          entry.source.close()
+        } catch {
+          /* 已关 */
+        }
+      }
+    }, VISIBILITY_DISCONNECT_MS)
+  } else {
+    if (visibilityTimer) {
+      clearTimeout(visibilityTimer)
+      visibilityTimer = null
+    }
+    for (const [path, entry] of [...sharedByPath]) {
+      try {
+        entry.source.close()
+      } catch {
+        /* 已关 */
+      }
+      const fresh = openSource(path, () => sharedByPath.get(path))
+      entry.source = fresh
+    }
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", handleVisibility)
+}
 /** 取（或建）某路径的共享连接；建不起来返回 undefined */
 function entryFor(path: string): { source: EventSource; listeners: Set<KvEventListener> } | undefined {
   const existing = sharedByPath.get(path)
-  if (existing) return existing
+  // 隐藏期断开后的死连接不能复用（CLOSED）——重开一条，listeners 原样保留
+  if (existing) {
+    // FakeEventSource 等测试替身没有 readyState（undefined）—— undefined === CLOSED 会让
+    // 每个订阅者都误判为死连接而重开（实测破坏「共享一条连接」契约）。只在**数值 2** 时重开。
+    if ((existing.source as { readyState?: unknown }).readyState === 2) {
+      existing.source = openSource(path, () => sharedByPath.get(path))
+    }
+    return existing
+  }
   try {
     const listeners = new Set<KvEventListener>()
     const entry = { source: openSource(path, () => sharedByPath.get(path)), listeners }
@@ -141,4 +194,6 @@ export function __resetKvEventsForTests(): void {
   }
   sharedByPath.clear()
 }
+
+
 

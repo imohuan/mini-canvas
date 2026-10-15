@@ -36,8 +36,12 @@ const plugins = resolveAppPlugins()
 // 摆位是无状态重放（按钮左缘 x + 顶边 y → translate 平移自身 0%/100%），不累计差量：
 // 窗口变化、配置改宽高都直接落到正确位置。
 const miniMapEl = ref<HTMLElement | null>(null)
-let miniMapRaf = 0
 let miniMapLast = ''
+/** 是否已完成首次摆位：未就位前元素保持不可见（防止闪现在 (0,0) 再跳到正确位置——用户实测报障） */
+const miniMapPlaced = ref(false)
+let miniMapResizeOb: ResizeObserver | null = null
+let miniMapMutationOb: MutationObserver | null = null
+let miniMapRetryTimer: ReturnType<typeof setInterval> | null = null
 function onCanvasReady(host: unknown): void {
   setReadyHost(host)
   void ui.onReady()
@@ -54,18 +58,51 @@ function placeMiniMap(): void {
         if (t !== miniMapLast) {
           miniMapLast = t
           root.style.transform = t
+          if (!miniMapPlaced.value) miniMapPlaced.value = true // 首次就位 → 放行显示（同帧无闪现）
         }
       }
     }
   }
-  miniMapRaf = requestAnimationFrame(placeMiniMap) // 常驻循环：下一帧继续贴
 }
 onMounted(() => {
-  miniMapRaf = requestAnimationFrame(placeMiniMap)
+  placeMiniMap()
+  // 事件驱动摆位（原常驻 rAF 每帧强制回流 17ms/帧，trace 实测 → 33.3ms 空闲帧）。
+  // 坑（2026-10-15 用户实测）：onMounted 时锚点按钮往往**还没渲染**（canvas boot 完才出
+  // 工具栏），旧 rAF 版每帧重查所以最终会贴上；改事件驱动后若只查一次就永远停在 (0,0) 左上角。
+  // 修复：按钮未出现 → MutationObserver 监听 DOM 变化等它出现；出现后 RO 观察**按钮自身**
+  // （显示/隐藏也触发回调）+ 父容器；另留 2s 低频兜底轮询（成本可忽略），不再逐帧。
+  const anchor = document.querySelector('button[aria-label="切换小地图"]')
+  if (anchor && anchor.parentElement) {
+    miniMapResizeOb = new ResizeObserver(() => placeMiniMap())
+    miniMapResizeOb.observe(anchor)
+    miniMapResizeOb.observe(anchor.parentElement)
+  } else {
+    miniMapMutationOb = new MutationObserver(() => {
+      const el = document.querySelector('button[aria-label="切换小地图"]')
+      if (el && el.parentElement) {
+        miniMapMutationOb?.disconnect()
+        miniMapMutationOb = null
+        placeMiniMap()
+        miniMapResizeOb = new ResizeObserver(() => placeMiniMap())
+        miniMapResizeOb.observe(el)
+        miniMapResizeOb.observe(el.parentElement)
+      }
+    })
+    miniMapMutationOb.observe(document.body, { childList: true, subtree: true })
+  }
+  miniMapRetryTimer = setInterval(placeMiniMap, 2000)
+  window.addEventListener('resize', placeMiniMap)
 })
 onBeforeUnmount(() => {
-  if (miniMapRaf) cancelAnimationFrame(miniMapRaf)
-  miniMapRaf = 0
+  miniMapResizeOb?.disconnect()
+  miniMapResizeOb = null
+  miniMapMutationOb?.disconnect()
+  miniMapMutationOb = null
+  if (miniMapRetryTimer) {
+    clearInterval(miniMapRetryTimer)
+    miniMapRetryTimer = null
+  }
+  window.removeEventListener('resize', placeMiniMap)
 })
 const adapter = createDefaultStorageAdapter()
 const DEV = import.meta.env.DEV
@@ -191,7 +228,7 @@ onBeforeUnmount(() => {
                  组件自己用 fixed 定位，所以放哪一层不影响它出现在哪。 -->
             <AgentPanel />
             <!-- 小地图：插件注册在 mini-map 专用槽；这里只给它一个宿主选择的位置（逐帧跟随状态栏按钮） -->
-            <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" style="pointer-events: none">
+            <div ref="miniMapEl" class="fixed left-0 top-0 z-[25]" :style="{ pointerEvents: 'none', visibility: miniMapPlaced ? 'visible' : 'hidden' }">
               <div style="pointer-events: auto">
                 <SlotHost slot="mini-map" />
               </div>

@@ -30,7 +30,10 @@ describe('批量勾选：两处宿主同一份判定', () => {
 
   it('勾选框与「点整行」都把 Shift 传上去', () => {
     expect(tree).toContain("emit('toggleSelect', row.id, $event.shiftKey)")
-    expect(tree).toContain("emit('openAsset', row, $event)")
+    // 「点整行」的派发搬进了 onAssetRowClick（那里要在改名态吃掉合成点击，见 2026-10-14
+    // 的空格触发预览修复）；原始事件必须原样传下去 —— 宿主靠 $event.shiftKey 划区间。
+    expect(tree).toContain('onAssetRowClick(row, $event)')
+    expect(tree).toMatch(/function onAssetRowClick\(row: AssetTreeRow, e: MouseEvent\)[\s\S]{0,160}emit\('openAsset', row, e\)/)
     expect(drawer).toContain('shiftKey')
     expect(dialog).toContain('onTreeToggleSelect(row.id, Boolean(e?.shiftKey))')
   })

@@ -84,43 +84,28 @@ import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
  * 云端保存那条路走的是运行期外部清单（cloud-server 的 `/plugin-manifest.json`），见 App.vue。
  */
 export const APP_PLUGINS = [
-  themeDefaultPlugin, // 画布默认皮：节点壳 / 边 / 背景 / 设置面板(settingsPanel 默认赢家)
-  uiSettingsPanelPlugin, // 设置面板换皮：order -1 顶替默认皮，渲染本应用风格的设置界面
-  uiDropdownPlugin, // 全局下拉：order -1 顶替主题默认件（全应用唯一一份 dropdown 实现）
-  uiHotReloadPlugin, // 设置面板「热重载」分类：登记链接，产物变了自动重装（开发工具）
-  uiAssetUploadPlugin, // 「加入资产库」：节点右键 + 多选上控制栏 → 贴进上传弹窗（注册式，不改 multi-select/context-menu）
-  // —— 6 个自带「基础交互」插件（2026-10-12 用户要求：作为默认插件安装）——
-  // 顺序说明：context-menu 借「右键按 areas 收命令」接缝，uiAssetUploadPlugin 注册的命令要在它
-  // **之前**就在命令表里（故 ui-asset-upload 排在更前）；multi-select 的 out:top 控制栏由
-  // uiAssetUploadPlugin 经 selectionRegion.attach 挂上（它排在前，multi-select 后到即接手）。
-  contextMenuPlugin, // 右键菜单：空白新建节点 / 节点删除 / 边删除
-  clipboardPlugin, // 复制粘贴：Ctrl/Cmd+C/V/X/D
-  multiSelectPlugin, // 多选：Shift+拖框选 / Ctrl+A 全选 / Escape 清除
-  groupPlugin, // 分组：选中多个 Ctrl+G 打组 / Ctrl+Shift+G 解组
-  edgeCuttingPlugin, // 连线切割：按住 Alt 拖拽划过连线即可删除
-  fileDropPlugin, // 文件拖入：把图片/视频/文本拖到画布或粘贴进来即建节点
-  // 底栏插件必须在三个节点插件**之前**装载：节点插件 apply 时 nodeBar 已在，走「取得到就注册」快路径
-  pluginBottomBar, // 节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度覆盖层
-  nodeTextPlugin, // text 节点
-  nodeImagePlugin, // image 节点
-  nodeVideoPlugin, // video 节点：播放 / 裁剪画面 / 剪辑时长 / 截图 / 下载 / 全屏
-  nodeAudioPlugin, // audio 节点：波形当进度条（可拖拽 seek）+ 播放动画；生成动作由 web2api 提供
-  nodeUiPlugin, // 可视化节点：声明输入参数 → AI 生成 HTML 在节点里渲染（生成需后台）
-  // web2api（把自建 MCP 服务的能力做成底栏动作）—— 改由「插件管理」安装（默认已装）。
-  node3dPreviewPlugin, // 3D 预览节点：接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）
-  // nodeImageComparePlugin, // 图片对比节点 —— 改由「插件管理」安装（默认已装）
-  // pluginImageGenerationTools, // 图片生成工具 —— 改由「插件管理」安装（默认已装）
-  // pluginTextGenerationTools, // 文本生成工具 —— 改由「插件管理」安装（默认已装）
-  // —— 以下「布局 / 画布工具」类插件改由「插件管理」从云服务清单安装（默认已装）：
-  //    align-guide / auto-layout / align-arrange / canvas-export / node-find / mini-map
-  //    （edge-cutting / multi-select / group / context-menu / clipboard / file-drop
-  //      已于 2026-10-12 改为**自带件**，不在这批里，见上面那 6 行。）
-  // 不装 shortcut-manager：成品 UI 自带快捷键面板（DockArea「快捷键」按钮 + ModalsArea 浮层），
-  // 插件版的 Ctrl+/ 帮助面板会与之重复。键盘分发由 CanvasHost 按命令 keys 统一做，不依赖该插件。
-  agentPlugin, // Agent 对话助手：内容组件（消息流 + 输入区）+ agent 服务 + 设置页（外壳在 packages/ui）
-  themeGalleryPlugin, // 组件展厅：左下角按钮 → 打开一个浮层，真渲染默认主题的每个组件
-  pluginManagerPlugin, // 插件管理：设置面板「插件」页，安装/卸载/重装第三方插件（清单来自本地中转后台）
+  themeDefaultPlugin,
+  nodeTextPlugin,
+  nodeUiPlugin,
+  pluginBottomBar,
+  node3dPreviewPlugin,
+  agentPlugin,
+  pluginManagerPlugin,
+  contextMenuPlugin,
+  clipboardPlugin,
+  multiSelectPlugin,
+  groupPlugin,
+  edgeCuttingPlugin,
+  fileDropPlugin,
+  nodeImagePlugin,
+  nodeVideoPlugin,
+  nodeAudioPlugin,
+  uiSettingsPanelPlugin,
+  uiDropdownPlugin,
+  uiHotReloadPlugin,
+  uiAssetUploadPlugin,
 ]
+
 
 /**
  * 判断「这一版界面是不是被 cloud-server 托管的」。
@@ -197,3 +182,5 @@ export function seedDefaultCanvas(): CanvasNode[] {
     { id: '2', type: 'image', position: { x: 560, y: 160 }, data: { imageUrl: SAMPLE_IMAGE_URL } },
   ]
 }
+
+

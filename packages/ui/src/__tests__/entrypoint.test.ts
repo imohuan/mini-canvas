@@ -61,8 +61,9 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 注：「引用标签被点了」走的是**系统事件**（agent:ref-click），没有对应的插件/服务 ——
     //     监听与浮层都在 AssetUiSlot（挂在 CanvasHost #ui 槽里），故不占清单名额。
     // +1（2026-10-12）：node-ui（AI 可视化节点：声明输入参数 → AI 生成 HTML 在节点里渲染）。
-    // +1（2026-10-13）：theme-gallery（组件展厅：把默认主题的组件真渲染在画布 UI 上）。
-    expect(APP_PLUGINS).toHaveLength(21)
+    // -1（2026-10-14）：theme-gallery（组件展厅）移出冷启动清单 —— 用户要求它"不该自带、要自己装"，
+    //   改由「插件管理」从云服务清单装卸（见 assembly.ts 对应注释）。
+    expect(APP_PLUGINS).toHaveLength(20)
     // 第一项必须是默认主题皮：它提供节点壳 / 边 / 背景 / 设置面板默认皮，缺了画布就是白屏
     expect(APP_PLUGINS[0]).toBeTruthy()
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查

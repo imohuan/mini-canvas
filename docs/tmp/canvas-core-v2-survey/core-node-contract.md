@@ -167,6 +167,16 @@
     `isResizing`——分组控制栏挂在**节点之外**的 overlay 槽，两条路径必须读同一份信号）；
     baseNodeSlotsRender.test.ts 锁"被 resize 的就收起、resize 别人时不收起"两条。
     标题另受 `multiSelectHideTitles`（multi-select 插件声明的 key，:76-78）与 LOD 控制（:109）。
+
+     **21b. 抓手工具整层收起上/下插槽（2026-10-14 用户要求）**：`hideSlotBars` 再并一条
+     `isHandTool`（= 宿主级设置 `nodesDraggable === false`，:95-101）。抓手模式下拖动是平移画布、
+     节点不会被拖走，卡片外那两排"操作这个节点"的栏只是噪音 → `out:top` / `out:bottom` 整层不渲染。
+     与"画布上有节点在拖"那条并列，**同样只收这两排栏**：`over:inset`（编辑浮层）与任务进度照常
+     （长在卡片上、该跟着卡片走，收掉会让正在跑的生成任务看不见进度）。
+     同一个设置键还有两处独立消费者（都不在 BaseNode 之下，壳那条管不到）：
+     `plugin-bottom-bar` 的底栏浮层（`bottomBarOverlay.ts` 的 `handTool` 位）、
+     `plugin-group` 的分组上栏（`GroupTopToolbarOverlay.vue`）—— 三处判据同源，别各写一份开关。
+     handToolSlotBars.test.ts 锁"移动态出栏 / 抓手态整层不出 / 不吃 over:inset"三条形态。
 22. **设置订阅按 key 过滤**（:94-97）：全局平面 key 表，不按插件 scope 过滤（避免命名/装配差异
     导致不触发）。键名带前缀防撞（multiRadio.ts:29-40）。
 

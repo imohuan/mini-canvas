@@ -22,13 +22,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import {
-  claimDropdownExclusive,
-  releaseDropdown,
   DROPDOWN_CLOSE_ALL_EVENT,
 } from '@mini-canvas/canvas-render'
+// 互斥登记表走**本包自己那一份**（用户口径 2026-10-15：插件各自独立，不跨包共享、更不动核心层）。
+// 与主题默认件那份只共享 `data-floating-chain` 这个 DOM 契约，见 hooks/dropdownExclusive.ts。
+import { claimDropdownExclusive, releaseDropdown } from './hooks/dropdownExclusive'
 import { useFloating } from './hooks/useFloating'
 import { useTeleportTarget } from './hooks/useTeleportTarget'
-import { isInFloatingGroup } from './hooks/floatingGroup'
+import { isInFloatingGroup, floatingChainOf } from './hooks/floatingGroup'
 
 export type DropdownTrigger = 'click' | 'hover' | 'contextmenu'
 
@@ -152,16 +153,34 @@ function openAtPoint(x: number, y: number): void {
  */
 const chainId = 'dd-' + Math.random().toString(36).slice(2)
 
-// ===== 子浮层（挂在另一个浮层旁边）=====
+// ===== 子浮层（挂在另一个浮层旁边，或就长在另一个浮层的面板里）=====
 const nestedCtx = computed(() => props.nestedIn?.())
-/** 父浮层的组链（空 = 这不是子浮层） */
-const parentChain = computed(() => nestedCtx.value?.chain ?? '')
-const isNested = computed(() => parentChain.value !== '')
+/**
+ * 父浮层的组链 id 列表（空 = 这是一级浮层）。两条来源，先显式、后 DOM：
+ *
+ * 1. **显式**（`nestedIn`）：锚点落在父面板**外**的场景 —— 如画布行尾的操作菜单，
+ *    它的触发器藏起来、改挂鼠标点锚，DOM 上根本不在父列表里，只能由调用方告知；
+ * 2. **DOM 祖先**（`data-floating-chain`）：触发器**就长在父浮层面板里**的场景 ——
+ *    底栏参数面板里的参数控件（「格式」这类下拉）、Select 挂进别人的面板，
+ *    调用方不必声明，读一下自己的祖先就知道自己是谁的儿子。
+ *
+ * 为什么把第 2 条补上：只认显式声明时，这类「内嵌下拉」被当成一级浮层，
+ * 一打开就把自己所在的那块面板（它的父）顶掉 —— 用户报的
+ * 「点内部的下拉时，它触发了外部下拉的关闭」正是这条。
+ */
+const parentChainIds = computed<string[]>(() => {
+  const explicit = nestedCtx.value?.chain
+  if (explicit) return explicit.split(' ').filter(Boolean)
+  return floatingChainOf(containerRef.value)
+})
+const isNested = computed(() => parentChainIds.value.length > 0)
+/** 自己的完整组链（父链 + 自己）：写进面板，也交给互斥登记表做祖先判定 */
+const panelChainIds = computed<string[]>(() => [...parentChainIds.value, chainId])
 /**
  * 写进面板的组链：子浮层 = 「父链 + 自己」。
  * 父浮层的点外判定读到的就是这条链 —— 含父 id 就说明「这点还在我这一组里」，父菜单不关。
  */
-const panelChain = computed(() => (isNested.value ? parentChain.value + ' ' + chainId : chainId))
+const panelChain = computed(() => panelChainIds.value.join(' '))
 
 // 支持无 v-model 的 uncontrolled 用法
 const isOpen = ref(props.modelValue)
@@ -328,12 +347,16 @@ function onCloseAll(): void {
   if (isOpen.value) close()
 }
 
-// 同屏只留一个浮层：打开时先把别的关掉。登记表与主题默认件共用同一份
-// （@mini-canvas/canvas-render 的 contracts/dropdownExclusive）。
+// 同屏只留一个浮层：打开时先把别的关掉。用本包自己的登记表（hooks/dropdownExclusive）。
 watch(isOpen, (v) => {
-  // 子浮层**不 claim 排他**：claim 会把「别的还开着的」全关掉，而它旁边那个父浮层
-  // （画布列表）正是要留着的那个 —— 那正是用户报的「触发这个菜单时画布菜单消失了」。
-  if (v && !isNested.value) claimDropdownExclusive(close)
+  // 排他登记（所有下拉实现共用一份表）：开的时候把**平级/无关**的浮层关掉，同屏只留一个。
+  //
+  // 关键：把自己的组链交给登记表 —— 它会**放过自己的祖先**。为什么必须这样：
+  //   底栏参数面板本身是一个下拉，里面那个「格式」参数控件又是一个下拉。
+  //   内层一打开就去 claim，而外层（它的父面板）还开着 —— 不豁免的话外层当场被关，
+  //   内层也跟着消失（用户报的「点内部的下拉时，它触发了外部下拉的关闭」）。
+  //   祖先豁免后，内外一起留着，点内层只关真正无关的浮层。
+  if (v) claimDropdownExclusive(close, () => panelChainIds.value)
   else releaseDropdown(close)
 })
 

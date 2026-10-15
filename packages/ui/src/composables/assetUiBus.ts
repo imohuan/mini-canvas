@@ -30,6 +30,20 @@ export interface AssetPreviewItem {
   text?: string
   /** 宿主自己的资产 id（预览右上角「删除」用；来自外部打开时不带，也就没有删除按钮） */
   id?: string
+  /**
+   * 同层文件清单（用户口径 2026-10-14：「全局预览都提供一个列表，可以通过左右快捷键来回切换。
+   * 比如在文件夹里，它只处理同一级别的文件夹中的文件预览」）。
+   *
+   * 直接交给主题的 MediaViewer —— 它本来就认 list / index 并自带 ← / → 与页码，
+   * 我们不必在资产这边再写一套切换。
+   */
+  list?: string[]
+  /** 与 list 一一对应的名字（切张后标题跟着换） */
+  names?: string[]
+  /** 与 list 一一对应的资产 id（切张后删除按钮要按当前这张算） */
+  ids?: string[]
+  /** 当前张在 list 里的下标 */
+  index?: number
 }
 
 /** 当前要预览的媒体（null = 不显示） */
@@ -59,6 +73,40 @@ export function openAssetPreview(item: AssetPreviewItem): void {
 }
 
 /**
+ * 记下「用户用 ← / → 切到了 list 里的第几张」（MediaViewer 的 index 事件）。
+ *
+ * 与底栏 mediaPreview.setPreviewIndex 同一套做法：切换后标题与删除按钮都要跟着当前那张走，
+ * 所以把下标写回总线（而不是留在浮层里各算一份）。
+ */
+export function setAssetPreviewIndex(i: number): void {
+  const cur = assetPreview.value
+  if (!cur?.list?.length) return
+  const idx = Math.min(Math.max(i, 0), cur.list.length - 1)
+  if (idx === (cur.index ?? 0)) return
+  assetPreview.value = { ...cur, index: idx }
+}
+
+/**
+ * 当前正在看的那一张（← / → 切过之后就是新下标那张）。
+ *
+ * 为什么要有它：预览右上角的「删除」得删**当前这张**，不是当初点开的那张 ——
+ * 底栏那边为同一件事写了 currentPreview()（见 plugin-bottom-bar/mediaPreview.ts），
+ * 资产这边同理。名字/地址/id 都跟着下标走。
+ */
+export function currentAssetPreview(): AssetPreviewItem | null {
+  const cur = assetPreview.value
+  if (!cur?.list?.length) return cur
+  const i = Math.min(Math.max(cur.index ?? 0, 0), cur.list.length - 1)
+  return {
+    ...cur,
+    index: i,
+    url: cur.list[i],
+    ...(cur.names?.[i] ? { name: cur.names[i] } : {}),
+    ...(cur.ids?.[i] ? { id: cur.ids[i] } : {}),
+  }
+}
+
+/**
  * 打开一份**资产**的预览（左侧抽屉 / 资产管理弹窗的行点击共用这一条）。
  *
  * 为什么要收成一个函数（用户口径 2026-10-14：「我当前的节点无法进行预览。
@@ -70,16 +118,39 @@ export function openAssetPreview(item: AssetPreviewItem): void {
  * 普通图片/视频/音频走原路（直接给 url）；取包失败回一条**说人话**的预览
  * （而不是静默什么都不显示 —— 那又成了"点了没反应"）。
  */
-export async function openAssetPreviewFromAsset(item: {
-  id?: string
-  name: string
-  url: string
-  kind?: string
-  assetKind?: string
-}): Promise<void> {
+export async function openAssetPreviewFromAsset(
+  item: {
+    id?: string
+    name: string
+    url: string
+    kind?: string
+    assetKind?: string
+  },
+  /**
+   * 同层列表（可选）：用户口径 2026-10-14「全局预览都提供一个列表，可以通过左右快捷键来回切换」。
+   * 由 composables/assetSiblings.ts 从树的可见行里算出来（只收同一层的文件），
+   * 这里原样转交给 MediaViewer —— 它自带 ← / → 与页码，不必在资产这边另写切换。
+   * 单张时调用方不必传（或传了也进不去，见下面的 length > 1 判定）。
+   */
+  group?: { list: string[]; names?: string[]; ids?: string[]; index?: number },
+): Promise<void> {
+  const { list, names, ids, index } = group ?? {}
   const kind = assetKindOf(item)
   if (kind !== 'node-package') {
-    openAssetPreview({ ...(item.id ? { id: item.id } : {}), name: item.name, kind, url: item.url })
+    openAssetPreview({
+      ...(item.id ? { id: item.id } : {}),
+      name: item.name,
+      kind,
+      url: item.url,
+      ...(list && list.length > 1
+        ? {
+            list,
+            ...(names && names.length === list.length ? { names } : {}),
+            ...(ids && ids.length === list.length ? { ids } : {}),
+            index: Math.min(Math.max(index ?? 0, 0), list.length - 1),
+          }
+        : {}),
+    })
     return
   }
   try {

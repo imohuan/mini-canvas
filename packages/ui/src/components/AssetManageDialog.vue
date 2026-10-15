@@ -24,6 +24,8 @@ import { useUi } from '../composables/ui'
 import { assetKindOf } from '../composables/assetModel'
 import { applyRowClick, checkedRowIds } from '../composables/assetSelection'
 import { folderIconComponent } from '../composables/folderIcons'
+import { openAssetPreviewFromAsset } from '../composables/assetUiBus'
+import { siblingPreview } from '../composables/assetSiblings'
 
 const ui = useUi()
 const s = ui.state
@@ -352,6 +354,27 @@ function onOpenAsset(row: AssetTreeRow, e?: MouseEvent): void {
   }
   /* no-op：保留插槽语义 */
 }
+/**
+ * 点**缩略图**（行左端的图片标识）→ 打开全屏预览。
+ *
+ * 用户口径 2026-10-14：「弹出框里左侧的图片 logo，就是文件左侧的图片 logo。点击它没有预览效果，请修复」。
+ * 与「点右侧名字 / 整行」的刻意不预览不同（那条是 2026-10-08 定的，弹窗里行点击留给多选与菜单）：
+ * 缩略图的意图明确就是「看看这张图」，所以这里开预览 —— 与左侧抽屉那侧的行为一致。
+ * 批量模式下仍然让位给勾选（与整行点击同一口径，免得选东西时误开预览挡视线）。
+ */
+function onOpenThumb(row: AssetTreeRow): void {
+  if (batchOn.value) {
+    onTreeToggleSelect(row.id, false)
+    return
+  }
+  // 与 LeftDrawer 的 openAsset 同一条：节点包要先取包解出 HTML，普通媒体直接给 url
+  // 同层清单（用户口径 2026-10-14：「它只处理同一级别的文件夹中的文件预览」）：
+  // 由树当前可见的行算出来，← / → 就在这个文件夹里的文件之间走。
+  void openAssetPreviewFromAsset(
+    { id: row.id, name: row.name, url: row.url ?? '', assetKind: row.assetKind },
+    siblingPreview(rows.value, row),
+  )
+}
 async function onTreeRenameCommit(payload: { kind: 'folder' | 'asset'; id: string; name: string }): Promise<void> {
   renamingId.value = null
   if (!payload.name.trim()) return
@@ -527,6 +550,7 @@ function onBatchDownload(): void {
                 @toggle-expand="toggleExpand"
                 @open-folder="goToFolder($event)"
                 @open-asset="onOpenAsset"
+                @open-thumb="onOpenThumb"
                 @toggle-select="onTreeToggleSelect"
                 @rename-input="renameValue = $event"
                 @rename-commit="onTreeRenameCommit"

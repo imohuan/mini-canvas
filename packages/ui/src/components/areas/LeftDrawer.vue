@@ -22,6 +22,7 @@ import { canvasTreeBlocks } from '../../composables/canvasTree'
 import { assetKindOf } from '../../composables/assetModel'
 import { folderIconComponent } from '../../composables/folderIcons'
 import { openAssetManager, openAssetPreviewFromAsset } from '../../composables/assetUiBus'
+import { siblingPreview } from '../../composables/assetSiblings'
 
 const ui = useUi()
 const s = ui.state
@@ -249,7 +250,14 @@ function onTreeOpenAsset(row: AssetTreeRow, e?: MouseEvent): void {
     ui.toggleAssetSelected(row.id, { rows: assetRows.value, shift: Boolean(e?.shiftKey) })
     return
   }
-  openAsset({ id: row.id, name: row.name, url: row.url ?? '', assetKind: row.assetKind })
+  //
+  // 带上**同层文件**清单（用户口径 2026-10-14：「全局预览都提供一个列表，可以通过左右快捷键
+  // 来回切换。比如在文件夹里，它只处理同一级别的文件夹中的文件预览」）。
+  // 清单来自树当前可见的行（assetRows）：折叠/筛选之后左右键走的范围与眼睛看到的一致。
+  openAsset(
+    { id: row.id, name: row.name, url: row.url ?? '', assetKind: row.assetKind },
+    siblingPreview(assetRows.value, row),
+  )
 }
 
 /**
@@ -445,10 +453,14 @@ function onUploadChange(e: Event): void {
  * 是同一只 MediaViewer，只有一份实例）—— 这里只把「要看哪一份」写进总线。
  * 类型经 assetKindOf 取（列表行是 assetKind、AssetItem 是 kind）—— 单一来源，别再各读各的。
  */
-function openAsset(item: { id: string; name: string; url: string; kind?: string; assetKind?: string }): void {
+function openAsset(
+  item: { id: string; name: string; url: string; kind?: string; assetKind?: string },
+  /** 同层文件清单（只处理同一级文件夹里的文件，见 composables/assetSiblings.ts） */
+  group?: { list: string[]; names: string[]; index: number },
+): void {
   // 节点包没有可加载的媒体地址：它要先取回包、解出 HTML 再给 iframe 预览
   //（用户口径 2026-10-14：「我当前的节点无法进行预览」）—— 分流收在 assetUiBus 里。
-  void openAssetPreviewFromAsset(item)
+  void openAssetPreviewFromAsset(item, group)
 }
 
 /**
@@ -749,6 +761,7 @@ function openCanvasMenu(_kind: 'group' | 'node', rowId: string, e: MouseEvent): 
           :tag-options="[...ASSET_TAGS]"
           @toggle-expand="toggleFolderExpand"
           @open-asset="onTreeOpenAsset"
+          @open-thumb="onTreeOpenAsset"
           @toggle-select="onTreeToggleSelect"
           @rename-input="renamingValue = $event"
           @rename-commit="onTreeRenameCommit"

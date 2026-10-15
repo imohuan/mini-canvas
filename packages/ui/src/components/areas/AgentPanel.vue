@@ -309,7 +309,7 @@ function startCornerResize(e: PointerEvent): void {
    早期照参考页实测做过半透明底 + 毛玻璃（rgba(31,31,31,.75) / blur(5px)），
    但实测在画布上**读不下去**：底下的节点与网格会透上来，正文和它糊在一起（用户点名）。
    面板是阅读界面，底色必须实心；圆角/边框/阴影保留，浮起来的层次感不靠透明。 */
-.agent-shell { position: fixed; z-index: 62; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ui-shell-line, var(--ui-line, #e2e5ea)); border-radius: 28px; background: var(--ui-overlay-solid, var(--ui-panel, #fff)); color: var(--ui-ink, #18202b); box-shadow: var(--ui-shadow-md, 0 20px 40px rgb(0 0 0 / 0.08)); }
+.agent-shell { position: fixed; z-index: 1000; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--ui-shell-line, var(--ui-line, #e2e5ea)); border-radius: 28px; background: var(--ui-overlay-solid, var(--ui-panel, #fff)); color: var(--ui-ink, #18202b); box-shadow: var(--ui-shadow-md, 0 20px 40px rgb(0 0 0 / 0.08)); }
 /* 停靠态：去圆角、去阴影，左缘留一条普通分隔线
    （--ui-line 而不是浮窗那条更亮的 --ui-shell-line：它不是浮起的卡片，是贴在画布边上的一条边）。 */
 .agent-shell.is-docked { top: 0; bottom: 0; right: 0; height: 100%; border-radius: 0; border-width: 0 0 0 1px; border-color: var(--ui-line, #e2e5ea); background: var(--ui-overlay-solid, var(--ui-panel, #fff)); box-shadow: none; }
