@@ -382,11 +382,13 @@ export class AgentApi {
     sessionId: string,
     body: {
       op: 'add' | 'update' | 'remove' | 'close' | 'cancel-edit' | 'pause' | 'resume'
-      | 'edit'
+      | 'edit' | 'reorder'
       itemId?: string
       text?: string
       images?: string[]
       goal?: { objective: string; budget: number }
+      /** reorder 专用：全量条目 id 的新顺序 */
+      order?: string[]
     },
   ): Promise<{ ok: boolean; queue?: QueueStateView; error?: string }> {
     return this.json(this.sessionPath(canvasId, sessionId) + '/queue', {

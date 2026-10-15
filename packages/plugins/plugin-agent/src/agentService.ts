@@ -335,6 +335,8 @@ export interface AgentService {
   steerQueueItem(itemId: string): Promise<void>
   /** 删除队列条目 */
   removeQueueItem(itemId: string): Promise<void>
+  /** 队列拖拽排序：全量 id 新顺序（sending/sent 由后端钉在原位） */
+  reorderQueue(order: string[]): Promise<void>
   /** 往头部续拉更早的转录（对话分页）。返回头部还有没有更早的 */
   loadEarlierTurns(): Promise<boolean>
   /** 关闭排队：从队列移除 + 内容返回给调用方回填输入框 */
@@ -1273,6 +1275,24 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
   }
 
   /**
+   * 拖拽排序（用户口径 2026-10-16）：把全量 id 的新顺序发到后台。乐观更新先贴本地
+   * （拖完立刻就位），服务端广播回来再校准 —— sending / sent 的位置由后端钉住。
+   */
+  async function reorderQueue(order: string[]): Promise<void> {
+    const sid = currentSessionId()
+    if (!sid || order.length !== state.queue.items.length) return
+    const byId = new Map(state.queue.items.map((it) => [it.id, it]))
+    if (order.some((id) => !byId.has(id))) return
+    state.queue = { ...state.queue, items: order.map((id) => byId.get(id)!) }
+    try {
+      const r = await api.queueOp(canvasId(), sid, { op: 'reorder', order })
+      if (r.queue) state.queue = r.queue
+    } catch {
+      /* 服务端没成：等下一次 SSE queue 快照校准，不弹错打扰 */
+    }
+  }
+
+  /**
    * 往头部续拉更早的转录（对话分页：顶部哨兵进可视区时调）。返回还有没有更早的。
    */
   async function loadEarlierTurns(): Promise<boolean> {
@@ -1889,6 +1909,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     sendToQueue,
     steerQueueItem,
     removeQueueItem,
+    reorderQueue,
     loadEarlierTurns,
     closeQueueItem,
     beginEditQueueItem,

@@ -21,8 +21,9 @@ import {
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
-  Minimize2, AlertCircle,
+  Minimize2, AlertCircle, GripVertical,
 } from 'lucide-vue-next'
+import { VueDraggable } from 'vue-draggable-plus'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
@@ -50,6 +51,7 @@ import {
   formatToken,
   parseTokenText,
   type TokenUnit,
+  type QueueRow,
 } from '../queueModel.js'
 import type { QueueStateView } from '../agentApi.js'
 import { loadNotifyPrefs, notifyPayload, playNotifySound, showNotify, type AgentNotifyPrefs } from '../agentNotify.js'
@@ -974,6 +976,14 @@ const queueView = computed<QueueStateView>(() => {
 /** 折算成一排排要画的行（纯函数在 queueModel，可单测） */
 const queue = computed(() => queuePanelView(queueView.value))
 /**
+ * 拖拽排序落地（用户口径 2026-10-16，Vue Draggable Plus）：拖完把全量 id 新顺序
+ * 发给 service（乐观更新 + 服务端钉住 sending/sent 的位置）。sending 行没有把手，
+ * 拖不动；被别的行拖动经过时由后端放回原位（前端顺序只作参考）。
+ */
+function onQueueReorder(nextRows: QueueRow[]): void {
+  void agent.reorderQueue(nextRows.map((r) => r.id))
+}
+/**
  * 有队列消息正在编辑 ⇒ **队列整体阻塞**（后端保证不发下一条，G7）。
  * 组件用它决定列表上方那条提示（用户得知道"为什么队列不动了"）。
  */
@@ -1863,10 +1873,18 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                  目标是一个持续进行的循环，队列排它前面 —— 每轮跑完先清队列，
                  队列清空后才轮到目标下一轮。展示顺序跟执行顺序保持一致。 -->
           <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
-          <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
-            :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
-            <!-- 左侧图标（参考 HTML 的 .prow .lead，内联 SVG 逐字对齐）：与目标行的图标列对齐 -->
-            <span class="ac-pending-lead" aria-hidden="true">
+          <VueDraggable :model-value="queue.rows" class="ac-queue-drag" :animation="180"
+            ghost-class="ac-queue-row--ghost" chosen-class="ac-queue-row--chosen" :force-fallback="true"
+            handle=".ac-queue-handle" @update:model-value="onQueueReorder">
+            <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
+              :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
+              <!-- 左侧把手（用户口径 2026-10-16：Vue Draggable Plus 拖拽排序）。
+                   发送中 / 已发送的行没有把手 —— 它们的位置由调度器钉住，不参与排序。 -->
+              <span v-if="!row.sending && !row.sent" class="ac-queue-handle" aria-hidden="true"
+                title="拖动调整发送顺序">
+                <GripVertical :size="12" />
+              </span>
+              <span v-else class="ac-pending-lead" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round">
                 <path d="M6 3v12" />
@@ -1937,6 +1955,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
               </ThemedDropdown>
             </span>
           </div>
+          </VueDraggable>
           <!-- 目标行（**已发送**的目标才进列表；未发送的在输入框内侧）—— 排在**队列之后、最下面**。
                  UI 与队列行刻意不同：强调色底 + 「第 N 轮」+ 已用/总预算 + 暂停/结束。 -->
           <div v-if="goalRow" class="ac-pending-row ac-goal-row" :class="{ 'is-editing': editingGoal }" role="listitem">
@@ -3546,6 +3565,34 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-queue-flag.is-sending {
   background: var(--ui-chip, rgb(255 255 255 / 0.1));
   color: var(--ui-ink-dim, #919191);
+}
+
+/* 拖拽排序（用户口径 2026-10-16，Vue Draggable Plus）：
+   把手默认淡显、hover 行才实；拖起来的影子半透明。 */
+.ac-queue-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  color: var(--ui-ink-mute, #8a8a8a);
+  opacity: 0.45;
+  cursor: grab;
+  transition: opacity 0.15s ease;
+}
+.ac-pending-row:hover .ac-queue-handle {
+  opacity: 1;
+}
+.ac-queue-handle:active {
+  cursor: grabbing;
+}
+.ac-queue-row--ghost {
+  opacity: 0.4;
+}
+.ac-queue-row--chosen {
+  background: var(--ui-hover, rgb(255 255 255 / 0.06));
 }
 
 .ac-queue-actions {

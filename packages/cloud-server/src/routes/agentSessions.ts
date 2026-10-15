@@ -337,8 +337,10 @@ export function agentSessionRoutes(
     const itemId = typeof body.itemId === 'string' ? body.itemId : ''
     const text = typeof body.text === 'string' ? body.text : ''
     const images = Array.isArray(body.images) ? body.images.map(String) : undefined
+    // reorder 的载荷是**全量 id 新顺序**（拖拽排序的结果）
+    const orderIds = Array.isArray(body.order) ? (body.order as unknown[]).map(String) : []
     // 这些 op 不需要正文（只有 add/update 要）—— 少列一个就会把合法操作挡成 400
-    const opsWithoutText = new Set(['remove', 'close', 'cancel-edit', 'edit', 'pause', 'resume'])
+    const opsWithoutText = new Set(['remove', 'close', 'cancel-edit', 'edit', 'pause', 'resume', 'reorder'])
     if (!text && !images?.length && !opsWithoutText.has(op)) {
       return c.json({ ok: false, error: '消息不能为空' }, 400)
     }
@@ -400,6 +402,28 @@ export function agentSessionRoutes(
         case 'remove':
         case 'close':
           return { ...q, items: q.items.filter((it) => it.id !== itemId) }
+        case 'reorder': {
+          // 拖拽排序（用户口径 2026-10-16：队列行左侧把手可上下拖动）。
+          // **sending / sent 条目不参与**：它们"已经在路上"，位置由调度器钉住 ——
+          // 前端传来的是全部 id 的新顺序，这里把不可动的条目放回**原索引位**，
+          // 其余可拖条目按新顺序填进剩下的空位。这样多端并发（一条正在发、另一端在拖）
+          // 也不会把发送中的挤乱。id 列表与现状对不上（漏了/多了）就放弃这次排序。
+          const byId = new Map(q.items.map((it) => [it.id, it]))
+          if (orderIds.length !== q.items.length || orderIds.some((id) => !byId.has(id))) return q
+          const movable = orderIds
+            .map((id) => byId.get(id)!)
+            .filter((it) => it.state === 'queued' || it.state === 'editing')
+          const out: typeof q.items = []
+          let m = 0
+          for (const original of q.items) {
+            if (original.state === 'sending' || original.state === 'sent') {
+              out.push(original)
+            } else {
+              out.push(movable[m++]!)
+            }
+          }
+          return { ...q, items: out }
+        }
         case 'pause':
           return { ...q, paused: true }
         case 'resume':
