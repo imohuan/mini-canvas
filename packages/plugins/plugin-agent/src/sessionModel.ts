@@ -319,7 +319,15 @@ export class ChatModel {
         const turn = this.lastAssistant()
         const tool = turn?.tools.find((t) => t.id === ev.id)
         if (tool) {
-          tool.output = ev.output
+          // 截断超长输出（2026-10-16 卡死排查）：Agent 读画布/节点时 tool_output 可达
+          // 数百 KB（整个 canvas.json），全量塞进 Vue 响应式 turns 后每次重渲染都
+          // 生成巨量 DOM —— 用户实测「一轮 AI 对话后整机卡死」。UI 只展示前 2000 字
+          // （完整数据已在服务端转录里，需要时可展开查看）。
+          const MAX_TOOL_OUTPUT = 2000
+          const raw = ev.output ?? ''
+          tool.output = raw.length > MAX_TOOL_OUTPUT
+            ? raw.slice(0, MAX_TOOL_OUTPUT) + '\n…（输出过长，已截断 ' + (raw.length - MAX_TOOL_OUTPUT) + ' 字符）'
+            : raw
           tool.settled = true
         }
         return
@@ -562,3 +570,5 @@ export class ChatModel {
     this.editingId = null
   }
 }
+
+

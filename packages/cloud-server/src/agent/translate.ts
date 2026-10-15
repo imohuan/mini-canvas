@@ -164,7 +164,15 @@ export function translateMessage(msg: unknown, state: TranslateState, log?: Log)
         },
       ]
     case 'tool_call_output':
-      return [{ type: 'tool_output', id: String(p.tool_call_id ?? ''), output: String(p.output ?? '') }]
+      // 输出截断（2026-10-16 卡死排查）：Agent 读画布/文件时 tool 输出可达数百 KB～数 MB，
+      // 原样进转录会让前端加载/渲染崩溃（64MB 转录实测把标签页打到崩溃）。
+      // UI 只展示前 4000 字；截断标记保留原长度信息。服务端转录也变小。
+      const output = String(p.output ?? '')
+      const MAX_OUTPUT = 4000
+      const trimmed = output.length > MAX_OUTPUT
+        ? output.slice(0, MAX_OUTPUT) + '\n…[output truncated, ' + (output.length - MAX_OUTPUT) + ' more chars]'
+        : output
+      return [{ type: 'tool_output', id: String(p.tool_call_id ?? ''), output: trimmed }]
     case 'partial_tool_call':
     case 'partial_tool_call_output':
       return []
