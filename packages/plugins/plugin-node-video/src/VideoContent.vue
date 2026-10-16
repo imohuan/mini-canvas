@@ -506,6 +506,7 @@ async function onPlayButton(): Promise<void> {
   if (!videoRequested.value) {
     videoRequested.value = true
     videoHasFrame.value = false
+    currentTime.value = clipRange.value.start
     await nextTick()
   }
   await togglePlay()
@@ -582,6 +583,7 @@ function onTimeUpdate(e: Event): void {
     v.pause()
     v.currentTime = end
     currentTime.value = end
+    resumeTime.value = start
   }
 }
 
