@@ -1174,7 +1174,6 @@ watch(videoUrl, (prev) => {
   pointer-events: none;
 }
 .vc-capture-menu {
-.vc-capture-menu {
   position: absolute;
   right: 0;
   bottom: 30px;
