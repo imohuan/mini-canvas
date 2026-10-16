@@ -6,24 +6,36 @@
  * 后台/Agent 有动静（收到 eval、执行完成、出错）要在标签上反映出来。
  * 做成插槽组件（titleExtraSlot），以后在标题右侧显示别的数据也能复用同一机制。
  */
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { lastUiDebugEvent, subscribeUiDebugEvents, type UiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ nodeId: string; data: Record<string, unknown> }>()
 
 const last = ref<UiDebugEvent | undefined>(lastUiDebugEvent(props.nodeId))
 const off = subscribeUiDebugEvents((e) => {
-  if (e.nodeId === props.nodeId) last.value = e
+  if (e.nodeId === props.nodeId) {
+    last.value = e
+    if (e.kind === 'connected') refreshDebugging()
+  }
 })
 
-const stillDebugging = computed(() => {
+/**
+ * 是否仍在调试中。sessionStorage 不是响应式的 —— 真机验证 2026-10-16 抓到：
+ * computed 读 sessionStorage 无响应式依赖，挂载时缓存死值（false），
+ * 标签永远不出现。改为：挂载读一次 + 总线 connected 置位 + 2 秒轻量轮询。
+ */
+const stillDebugging = ref(false)
+function refreshDebugging(): void {
   try {
     const cred = sessionStorage.getItem('mc-ui-debug-credential')
-    if (!cred) return false
+    if (!cred) { stillDebugging.value = false; return }
     const c = JSON.parse(cred) as { nodeId?: string }
-    return c.nodeId === props.nodeId
-  } catch { return false }
-})
+    stillDebugging.value = c.nodeId === props.nodeId
+  } catch { stillDebugging.value = false }
+}
+refreshDebugging()
+const pollTimer = setInterval(refreshDebugging, 2000)
+onBeforeUnmount(() => clearInterval(pollTimer))
 
 const text = computed(() => {
   if (!stillDebugging.value) return null

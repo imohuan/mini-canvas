@@ -384,6 +384,11 @@ function dismissDebugInvite(): void {
  */
 const frameDoc = computed(() => {
   const base = srcdoc.value
+  // 依赖 debugSession（session id 字符串）：第二次 connect/换会话时 id 必变，
+  // computed 立即重算并把**新 session** 注入 SDK（真机验证 2026-10-16 抓到：
+  // 依赖 activeDebug 布尔时 true→true 不触发重算，iframe 里残留旧 session，
+  // SDK 轮询 404、eval 全部超时）。
+  void debugSession.value
   if (!base || !activeDebug.value) return base
   const cred = readCredential(sessionStorage)
   if (!cred) return base
