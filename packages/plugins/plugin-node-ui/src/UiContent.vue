@@ -351,12 +351,14 @@ async function acceptDebugInvite(): Promise<void> {
   console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
   try {
-    await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
+    const res = await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ session: inv.session, nodeId: props.id, canvasId }),
     })
-  } catch {
+    console.log('[ui-debug] 回执后台: status=' + res.status, 'baseUrl=' + baseUrl.value)
+  } catch (err) {
+    console.log('[ui-debug] 回执后台失败:', (err as Error)?.message ?? err, 'baseUrl=' + baseUrl.value)
     /* 后台不在也没关系：SDK 连不上 ws 时会自己重试 */
   }
   // 清邀请标记（节点 data 合并写空）：其他标签页看到标记消失，自动收起确认框。
@@ -391,7 +393,11 @@ const frameDoc = computed(() => {
   void debugSession.value
   if (!base || !activeDebug.value) return base
   const cred = readCredential(sessionStorage)
-  if (!cred) return base
+  if (!cred) {
+    console.log('[ui-debug] 调试态但没有凭据，SDK 不注入')
+    return base
+  }
+  console.log('[ui-debug] 注入 SDK: session=' + cred.session, 'baseUrl=' + baseUrl.value)
   return appendSdkScript(base, buildSdkScriptBody({
     baseUrl: baseUrl.value,
     session: cred.session,

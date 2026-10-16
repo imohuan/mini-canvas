@@ -1199,6 +1199,11 @@ export function apply(ctx: ServerCtx): void {
   const debugResults = new Map<string, DebugWaiter>() // evalId → 等结果的 resolve
   const debugStops = new Map<string, DebugWaiter>() // session → 等 disconnect 的 resolve
   let debugEvalSeq = 0
+  /** 调试链路统一日志前缀（2026-10-17 排查通道失联时加的；后台控制台 grep 这个词） */
+  const DLOG = '[node-ui][debug]'
+  function dlog(...parts: unknown[]): void {
+    console.log(DLOG, ...parts)
+  }
 
   // ⑫ 发起调试连接：在节点上放邀请标记，等用户在某个标签页上确认
   ctx.mcp.tool({
@@ -1214,15 +1219,22 @@ export function apply(ctx: ServerCtx): void {
     required: ['nodeId'],
     handler: async (args) => {
       const picked = await uiNodeOf(ctx, args)
-      if (!picked.ok) return picked
+      if (!picked.ok) {
+        dlog('connect 失败：', JSON.stringify(picked))
+        return picked
+      }
       const { canvasId, nodeId } = picked
       const session = newSessionId()
+      dlog('connect 发起：canvasId=' + canvasId, 'nodeId=' + nodeId, 'session=' + session)
       // 邀请写成**合并**进 data（batchNodes 的 update 是浅合并）：只添这一个字段，
       // 不碰 uiHtml / uiInputs 等既有字段 —— 这是「临时状态」与「重写内容」的根本区别。
       const res = await writeUiHtml(ctx, canvasId, nodeId, {
         [UI_DEBUG_INVITE_KEY]: { session, at: Date.now() },
       })
-      if (!res.ok) return { ok: false, error: res.error ?? '放邀请标记失败' }
+      if (!res.ok) {
+        dlog('connect 放邀请标记失败：', JSON.stringify(res))
+        return { ok: false, error: res.error ?? '放邀请标记失败' }
+      }
       debugSessions.set(canvasId, { session, nodeId })
       return {
         ok: true,
@@ -1248,12 +1260,14 @@ export function apply(ctx: ServerCtx): void {
     if (!accept || typeof accept.session !== 'string' || typeof accept.nodeId !== 'string' || typeof accept.canvasId !== 'string') {
       return c.json({ ok: false, error: '缺少 session / nodeId / canvasId' }, 400)
     }
+    dlog('accept 收到回执：', JSON.stringify(accept))
     // 回执必须配得上当前邀请：邀请没了（前端已清）或对不上号都拒绝。
     // 为什么查节点 data 而不是内存 Map：Map 只在**这个**后台进程里，而邀请标记在
     // 画布数据里（后台重启也能恢复判断）—— 用同一份事实，别养两套。
     const node = (await nodesOf(ctx, accept.canvasId)).find((n) => String(n.id) === accept.nodeId)
     const invite = readInvite(node?.data)
     if (!isAcceptMatching(invite, accept)) {
+      dlog('accept 拒绝：邀请=' + JSON.stringify(invite), '回执=' + JSON.stringify(accept))
       return c.json({ ok: false, error: '回执与当前邀请不匹配（可能已被确认过或已过期）' }, 409)
     }
     // 邀请标记落盘清除（前端只是 updateNodeRuntime——不落盘，刷新后标记会复活）。
@@ -1261,6 +1275,7 @@ export function apply(ctx: ServerCtx): void {
     await writeUiHtml(ctx, accept.canvasId, accept.nodeId, { [UI_DEBUG_INVITE_KEY]: null })
     // 记下被选中的标签页：后续 eval 只对它生效（eval 找的是 SSE 通道里的 session）
     debugSessions.set(accept.canvasId, { session: accept.session, nodeId: accept.nodeId })
+    dlog('accept 成立：session=' + accept.session, 'nodeId=' + accept.nodeId, 'canvasId=' + accept.canvasId)
     return c.json({ ok: true, wsPath: '/api/node-ui/debug-events', session: accept.session })
   })
 
@@ -1269,8 +1284,10 @@ export function apply(ctx: ServerCtx): void {
     const session = c.req.query?.('session') ?? ''
     const owning = [...debugSessions.entries()].find(([, s]) => s.session === session)
     if (!session || !owning) {
+      dlog('debug-events 404：session=' + session, '已注册会话=' + JSON.stringify([...debugSessions.values()]))
       return c.json({ ok: false, error: '未知调试会话' }, 404)
     }
+    dlog('debug-events SSE 接入：session=' + session)
     // 手写 SSE 流（外挂插件产物零第三方依赖：不 import hono/streaming）。
     // 格式：每条事件一行 data: <json> + 空行；每 20 秒一行注释帧保活。
     const encoder = new TextEncoder()
@@ -1285,6 +1302,7 @@ export function apply(ctx: ServerCtx): void {
         const teardown = (): void => {
           if (closed) return
           closed = true
+          dlog('debug-events SSE 断开：session=' + session)
           if (ping !== undefined) clearInterval(ping)
           debugSse.delete(session)
           try { controller.close() } catch { /* 已关 */ }
@@ -1301,6 +1319,7 @@ export function apply(ctx: ServerCtx): void {
         for (const e of backlog) push(e)
         debugEvals.set(session, [])
         debugSse.set(session, push)
+        dlog('debug-events 补发积压 eval：session=' + session, '条数=' + backlog.length)
         // 保活 + 最长存活：调试会话不该无限挂着（长流会把 CDP/代理拖死）
         ping = setInterval(() => send(': ping\n\n'), 20_000)
         setTimeout(teardown, 15 * 60_000)
@@ -1322,11 +1341,14 @@ export function apply(ctx: ServerCtx): void {
   ctx.routes.post('/api/node-ui/debug-result', async (c) => {
     let body: unknown
     try { body = await c.req.json() } catch { return c.json({ ok: false, error: '请求体不是合法 JSON' }, 400) }
-    console.log('[node-ui][debug-result] HIT', JSON.stringify(body))
+    dlog('result 收到回包：', JSON.stringify(body))
     const m = body as { session?: unknown; id?: unknown; ok?: unknown; result?: unknown; error?: unknown } | null
     if (!m || typeof m.id !== 'string') return c.json({ ok: false, error: '缺少 id' }, 400)
     const waiter = debugResults.get(m.id)
-    if (!waiter) return c.json({ ok: false, error: '没有在等的 eval（可能已超时）' }, 404)
+    if (!waiter) {
+      dlog('result 无人在等（可能已超时）：id=' + m.id)
+      return c.json({ ok: false, error: '没有在等的 eval（可能已超时）' }, 404)
+    }
     debugResults.delete(m.id)
     waiter.resolve({
       ok: m.ok === true,
@@ -1342,10 +1364,12 @@ export function apply(ctx: ServerCtx): void {
   ctx.routes.get('/api/node-ui/debug-poll', (c) => {
     const session = c.req.query?.('session') ?? ''
     if (!session || ![...debugSessions.values()].some((s) => s.session === session)) {
+      dlog('debug-poll 404：session=' + session, '已注册会话=' + JSON.stringify([...debugSessions.values()]))
       return c.json({ ok: false, error: '未知调试会话' }, 404)
     }
     const pending = debugEvals.get(session) ?? []
     debugEvals.set(session, [])
+    if (pending.length > 0) dlog('debug-poll 取走 eval：session=' + session, '条数=' + pending.length, 'ids=' + pending.map((e) => e.id).join(','))
     return c.json({ ok: true, evals: pending })
   })
 
@@ -1363,10 +1387,14 @@ export function apply(ctx: ServerCtx): void {
       const code = typeof args.code === 'string' ? args.code : ''
       if (!code.trim()) return { ok: false, error: '缺少 code（要执行的 JavaScript）' }
       const sess = debugSessions.get(canvasId)
-      if (!sess) return { ok: false, error: '这张画布没有挂着的调试会话：先 canvas_ui_connect' }
+      if (!sess) {
+        dlog('eval 拒绝：画布没有调试会话 canvasId=' + canvasId)
+        return { ok: false, error: '这张画布没有挂着的调试会话：先 canvas_ui_connect' }
+      }
       // 轮询通道（2026-10-16）：不再要求 SDK 挂着 SSE —— eval 进挂起队列，SDK 每秒
       // GET debug-poll 取走执行。queueIdle 由 30 秒兜底超时照旧负责。
       const id = 'e' + ++debugEvalSeq
+      dlog('eval 入队：id=' + id, 'session=' + sess.session, 'code=' + code.slice(0, 200))
       const backlog = debugEvals.get(sess.session) ?? []
       backlog.push({ id, code })
       debugEvals.set(sess.session, backlog)
@@ -1376,10 +1404,12 @@ export function apply(ctx: ServerCtx): void {
         setTimeout(() => {
           if (debugResults.has(id)) {
             debugResults.delete(id)
+            dlog('eval 超时：id=' + id, 'session=' + sess.session)
             resolve({ ok: false, error: '执行超时（30 秒没等到回包）' })
           }
         }, 30_000)
       })
+      dlog('eval 完成：id=' + id, JSON.stringify(result).slice(0, 300))
       if (result.stopped) return { ok: false, error: '调试会话已被断开' }
       return result.ok ? { ok: true, result: result.result } : { ok: false, error: result.error ?? '执行失败' }
     },
