@@ -52,6 +52,7 @@ const { ctx, flow, visibleNodes } = useCanvasRender()
 const videoRef = ref<HTMLVideoElement | null>(null)
 const fullscreenRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
+const captureMenuRef = ref<HTMLElement | null>(null)
 const fullscreenOpen = ref(false)
 const playing = ref(false)
 /**
@@ -475,7 +476,13 @@ const playableLength = computed(() => {
 /** 进度按"剪辑段内已播多久"显示（用户看到的就该是自己剪出来的那段时间轴） */
 const playedInClip = computed(() => Math.max(0, Math.min(currentTime.value - clipRange.value.start, playableLength.value)))
 const progressPct = computed(() => (playableLength.value > 0 ? (playedInClip.value / playableLength.value) * 100 : 0))
-const timeLabel = computed(() => `${formatTime(playedInClip.value)} / ${formatTime(playableLength.value)}`)
+/** 左右分开显示（参考 liblib 控件）：进度条左边已播、右边总长 */
+const playedTimeLabel = computed(() => formatTime(playedInClip.value))
+const totalTimeLabel = computed(() => formatTime(playableLength.value))
+/** 静音开关（liblib 控件里的喇叭按钮；默认有声，点一下静音） */
+const muted = ref(false)
+/** 截帧菜单展开态：当前帧 / 首帧 / 尾帧 */
+const captureMenuOpen = ref(false)
 
 /** 裁剪中显示完整画面；平时按裁框取景（这是"裁剪"在视觉上落地的唯一一处） */
 const videoStyle = computed<Record<string, string>>(() => {
@@ -647,6 +654,34 @@ async function onCaptureFrame(): Promise<void> {
   }
 }
 
+/** 首帧/尾帧的取值：优先剪辑段的边界（用户剪过就该剪这段的首尾），没剪就整段首尾 */
+async function captureFrameAt(at: number): Promise<void> {
+  if (captureBusy.value || !videoUrl.value) return
+  captureBusy.value = true
+  try {
+    await captureFrameNode(at)
+  } finally {
+    captureBusy.value = false
+  }
+}
+
+/** 截帧菜单：当前帧（停在哪截哪）/ 首帧（剪辑段起点）/ 尾帧（剪辑段终点） */
+function onCaptureMenuPick(kind: 'current' | 'first' | 'last'): void {
+  captureMenuOpen.value = false
+  if (kind === 'current') { void onCaptureFrame(); return }
+  const { start, end } = clipRange.value
+  void captureFrameAt(kind === 'first' ? start : end > start ? end : duration.value)
+}
+function onCaptureMenuOutside(e: PointerEvent): void {
+  if (!captureMenuOpen.value) return
+  const host = captureMenuRef.value
+  if (host && !host.contains(e.target as Node)) captureMenuOpen.value = false
+}
+watch(captureMenuOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onCaptureMenuOutside, true)
+  else document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
+})
+
 async function captureFrameNode(at: number): Promise<void> {
   const command = ctx.get('command')
   command.execute('video.captureFrame', { nodeId: props.id, at })
@@ -789,6 +824,7 @@ onBeforeUnmount(() => {
   // 帧图的 objectURL 全还回去（不还就是内存泄漏，从界面上看不出来）
   frameCache.dispose()
   if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
+  document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
   releaseFrameTiers()
   window.removeEventListener('keydown', onKeydown)
   clearFsHideTimer()
@@ -839,7 +875,7 @@ watch(videoUrl, (prev) => {
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
-          @play="playing = true" @pause="playing = false" @error="onVideoError"
+          :muted="muted" @play="playing = true" @pause="playing = false" @error="onVideoError"
         />
 
       </template>
@@ -852,6 +888,8 @@ watch(videoUrl, (prev) => {
          三个 VueFlow 保留类名把画布手势挡在外面：nodrag 不拖节点、nopan 不拖画布、nowheel 不缩放画布。 -->
     <div v-if="videoUrl && !broken && !cropping" class="video-controls nodrag nopan nowheel"
       :class="{ 'is-hidden': !hovering }" @dblclick.stop>
+      <!-- 底部渐变衬底（liblib 同款）：文字图标压任何画面上都读得清，不再依赖逐个投影 -->
+      <div class="vc-scrim" aria-hidden="true"></div>
       <button class="vc-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
         @click.stop="onPlayButton">
         <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -863,7 +901,7 @@ watch(videoUrl, (prev) => {
         </svg>
       </button>
 
-      <span class="vc-time">{{ timeLabel }}</span>
+      <span class="vc-time vc-time-current">{{ playedTimeLabel }}</span>
 
       <label class="vc-progress" title="拖动调整进度">
         <input type="range" min="0" :max="playableLength" step="0.01" :value="playedInClip" aria-label="播放进度"
@@ -871,13 +909,37 @@ watch(videoUrl, (prev) => {
         <span class="vc-progress-fill" :style="{ width: progressPct + '%' }" />
       </label>
 
-      <button class="vc-btn" type="button" title="截取当前帧" aria-label="截取当前帧" :disabled="captureBusy"
-        @click.stop="onCaptureFrame">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-          <circle cx="12" cy="13" r="4" />
+      <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
+
+      <button class="vc-btn" type="button" :title="muted ? '取消静音' : '静音'" :aria-label="muted ? '取消静音' : '静音'"
+        @click.stop="muted = !muted">
+        <svg v-if="!muted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M3 9v6h4l5 4V5L7 9H3z" />
+          <path d="M16 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" />
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M3 9v6h4l5 4V5L7 9H3z" />
+          <path d="M16 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" />
         </svg>
       </button>
+
+      <div ref="captureMenuRef" class="vc-capture">
+        <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
+          :aria-expanded="captureMenuOpen" @click.stop="captureMenuOpen = !captureMenuOpen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+            <circle cx="12" cy="13" r="4" />
+          </svg>
+        </button>
+        <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
+        <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu">
+          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</button>
+          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</button>
+          <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
+        </div>
+      </div>
       <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放" @click.stop="openFullscreen">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">
@@ -991,6 +1053,55 @@ watch(videoUrl, (prev) => {
   height: 32px;
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
+.video-controls {
+  padding: 0 8px;
+}
+/* liblib 同款底部渐变衬底：压住画面下半部，控件文字不再依赖投影 */
+.vc-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  pointer-events: none;
+}
+.vc-capture {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.vc-capture-menu {
+  position: absolute;
+  right: 0;
+  bottom: 30px;
+  z-index: 12;
+  min-width: 112px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(17, 17, 17, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+}
+.vc-capture-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.vc-capture-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
 .video-controls.is-hidden {
   opacity: 0;
   transform: translateY(6px);
@@ -1013,6 +1124,10 @@ watch(videoUrl, (prev) => {
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease;
 }
+.video-media ~ .video-controls .vc-btn,
+.video-controls .vc-btn {
+  filter: none;
+}
 .vc-btn:hover:not(:disabled) {
   color: var(--ui-tip-ink, #fff);
 }
@@ -1029,8 +1144,7 @@ watch(videoUrl, (prev) => {
 }.vc-btn svg {
   width: 15px;
   height: 15px;
-  /* 图标压在画面上，投影取恒深色档才能把图标从任何底色里分出来 */
-  filter: drop-shadow(0 1px 2px var(--ui-tip, rgba(0, 0, 0, 0.65)));
+  /* 渐变衬底已保证可读性，图标不再单独投影 */
 }
 
 .vc-time {
@@ -1042,7 +1156,12 @@ watch(videoUrl, (prev) => {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-align: center;
-  text-shadow: 0 1px 2px var(--ui-tip, rgba(0, 0, 0, 0.65));
+  text-shadow: none;
+}
+/* liblib 布局：已播时间贴进度条左、总时长贴右，各占固定窄宽 */
+.vc-time-current,
+.vc-time-total {
+  min-width: 34px;
 }
 
 /* 进度条：轨道 3px + 已播填充；input 透明覆盖在上面接手势（自绘才能跟画布缩放匹配） */

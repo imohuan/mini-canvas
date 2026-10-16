@@ -80,7 +80,8 @@ describe('播放控件与可达性', () => {
     expect(html).toContain('video-controls')
     expect(html).toContain('aria-label="播放"')
     expect(html).toContain('aria-label="播放进度"')
-    expect(html).toContain('aria-label="截取当前帧"')
+    expect(html).toContain('aria-label="截取画面"')
+    expect(html).toContain('aria-label="静音"')
     expect(html).toContain('aria-label="全屏播放"')
   })
 
