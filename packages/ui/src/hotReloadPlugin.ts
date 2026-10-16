@@ -47,6 +47,8 @@ export const uiHotReloadPlugin: PluginModule = {
   Config,
   apply(ctx: {
     inject(name: string, impl: unknown): void
+    /** 副作用登记（卸载时回卷）—— 这里用来清掉声明源重扫定时器 */
+    effect(fn: () => () => void): unknown
     slots: {
       register(slot: string, req: { id: string; order?: number; component: unknown; meta?: unknown }): string
     }
@@ -65,6 +67,14 @@ export const uiHotReloadPlugin: PluginModule = {
 
     // 上架成服务：别的插件可 ctx.get('hot-reload') 拿同一份
     ctx.inject('hot-reload', manager)
+
+    // **插件声明源的自动登记/摘除**（用户口径：插件装上/服务起了自动进监听，卸了/停了自动摘）。
+    // 启动同步一次；之后 10s 重扫（watch 服务起了/停了，声明地址出现/消失就跟着变 ——
+    // 10s 对"起了服务要等一会儿"是可感知的节奏，扫描成本是每个插件一个 json 请求）。
+    // 失败静默：这只是开发便利，不该在控制台刷错误。
+    void manager.syncPluginSources().catch(() => {})
+    const syncTimer = setInterval(() => void manager.syncPluginSources().catch(() => {}), 10_000)
+    ctx.effect(() => () => clearInterval(syncTimer))
 
     // ① 左导航项
     ctx.slots.register('settingsNav', {

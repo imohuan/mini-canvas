@@ -81,6 +81,12 @@ export interface HotReload {
   stopAll(): void
   /** 清日志 */
   clearLogs(): void
+  /**
+   * 同步「插件声明源」（自动登记/摘除）。
+   * 启动时调一次 + 可定时重扫（服务起了/停了，地址出现/消失就跟着变）。
+   * 返回本轮新增/摘除的插件名（供日志/测试断言）。
+   */
+  syncPluginSources(): Promise<{ added: string[]; removed: string[] }>
 }
 
 /** 取"路径名"（去协议/主机/查询/哈希）——用于跨形态比较同一个产物（与 pluginReload 同口径） */
@@ -139,6 +145,13 @@ export interface HotReloadDeps {
   /** 存/取持久化（缺省 localStorage；测试可给内存版） */
   storage?: { getItem(k: string): string | null; setItem(k: string, v: string): void }
   /**
+   * 扫描「插件声明的热重载地址」并返回（自动登记用，见 syncPluginSources）。
+   * 缺省实现：拉 /plugin-catalog.json → 对每个产物地址在**同源**下取
+   * /plugins/<pkg>/hot-reload.json（构建时由 vite 插件 hotReloadManifest 生成）。
+   * 测试注入假实现。
+   */
+  scanPluginSources?: () => Promise<Array<{ plugin: string; sse: string; label: string }>>
+  /**
    * **重装提示**（视觉反馈）：某插件刚被自动重装了一遍就调它。
    *
    * 用户口径：「如果发生了热重载，希望能提供一个视觉上的提示，比如弹一个 notify」。
@@ -153,6 +166,15 @@ export interface HotReloadDeps {
 
 /** 持久化 key */
 export const SOURCES_KEY = 'hot-reload:sources'
+
+/**
+ * 「插件声明源」的来源标记（自动登记的源 label 前缀 / 摘除判据）。
+ *
+ * 为什么不和手填的混在一起：手填源是用户的选择，插件声明源跟着**清单**走 ——
+ * 插件卸了/声明没了 → 自动摘除；插件又装回来/声明又出现 → 自动登记回来。
+ * 用固定前缀识别"这类源是自动的"，同步时不碰用户手填的那些。
+ */
+export const AUTO_SOURCE_PREFIX = '插件声明'
 
 /**
  * 建一个热重载管理器（单例语义：宿主只建一个、挂 window）。
@@ -436,6 +458,86 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     state.logs = []
   }
 
+  /**
+   * 默认扫描：拉清单，对每个产物地址取同源的 dist/hot-reload.json。
+   *
+   * 为什么在热重载管理器里做而不是服务端清单加字段：服务端 /plugins/** 的解析规则
+   * 强拼 dist/（安全设计），声明文件放 dist/ 里构建时生成（vite 插件 hotReloadManifest），
+   * 服务端**零改动**；且"逐个取声明"让没跑 watch 服务的插件天然没有这条源（404 → 跳过）。
+   */
+  async function defaultScanPluginSources() {
+    const res = await fetch('/plugin-catalog.json', { headers: { accept: 'application/json' } })
+    if (!res.ok) return []
+    const body = (await res.json()) as { plugins?: Array<{ id?: string; name?: string; url?: string }> }
+    const found: Array<{ plugin: string; sse: string; label: string }> = []
+    for (const p of body.plugins ?? []) {
+      if (!p.id || !p.url) continue
+      // 声明文件与产物同目录（dist/）→ 产物地址同源同目录取 hot-reload.json
+      const url = new URL(p.url, location.origin)
+      const manifestUrl = url.origin + url.pathname.replace(/[^/]+\.js$/i, 'hot-reload.json')
+      try {
+        const mRes = await fetch(manifestUrl, { headers: { accept: 'application/json' } })
+        if (!mRes.ok) continue
+        const decl = (await mRes.json()) as { sse?: unknown }
+        if (typeof decl.sse !== 'string' || !decl.sse) continue
+        // 相对地址按清单同源补全（dev :5288 连 watch :5333 就是这种）
+        const sse = new URL(decl.sse, url.origin).href
+        found.push({ plugin: p.name ?? p.id, sse, label: AUTO_SOURCE_PREFIX + ' · ' + (p.name ?? p.id) })
+      } catch {
+        /* 单个插件取声明失败不影响其它（可能没跑 watch / 没构建） */
+      }
+    }
+    return found
+  }
+
+  /** 本轮同步已登记的自动源 id（摘除时用） */
+  let autoSourceIds = new Set<number>()
+
+  /**
+   **自动登记/摘除**（用户口径：服务启动自动加进监听，服务结束自动移除）。
+   *
+   * 同步语义（只动带 AUTO_SOURCE_PREFIX 的源，用户手填的不碰）：
+   * - 声明里有、现在没登记 → 登记（地址变了就更新）；
+   * - 声明里没有、但之前是自动登记的 → 摘除（插件卸了 / 服务没跑了）。
+   */
+  async function syncPluginSources(): Promise<{ added: string[]; removed: string[] }> {
+    const scan = deps.scanPluginSources ?? defaultScanPluginSources
+    let declared: Array<{ plugin: string; sse: string; label: string }>
+    try {
+      declared = await scan()
+    } catch {
+      return { added: [], removed: [] } // 清单拉不到：不动现有状态
+    }
+    const added: string[] = []
+    const removed: string[] = []
+
+    // 现有的自动源（按 url 对齐，label 只是展示）
+    const auto = state.sources.filter((s) => s.label.startsWith(AUTO_SOURCE_PREFIX))
+    const autoByUrl = new Map(auto.map((s) => [s.url, s]))
+    const wantedUrls = new Set(declared.map((d) => d.sse))
+
+    // ① 声明里有 → 补登记 / 更新
+    for (const d of declared) {
+      const existing = autoByUrl.get(d.sse)
+      if (existing) {
+        if (existing.label !== d.label) updateSource(existing.id, { label: d.label })
+      } else {
+        addSource({ url: d.sse, label: d.label, type: 'sse', enabled: true })
+        added.push(d.plugin)
+      }
+    }
+    // ② 声明里没有的自动源 → 摘除
+    for (const s of auto) {
+      if (!wantedUrls.has(s.url)) {
+        removeSource(s.id)
+        removed.push(s.label)
+      }
+    }
+
+    autoSourceIds = new Set(state.sources.filter((s) => s.label.startsWith(AUTO_SOURCE_PREFIX)).map((s) => s.id))
+    return { added, removed }
+  }
+
   return {
     state,
     addSource,
@@ -445,6 +547,7 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     reconnect,
     stopAll,
     clearLogs,
+    syncPluginSources,
   }
 }
 
