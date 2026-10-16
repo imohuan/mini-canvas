@@ -549,6 +549,21 @@ function onCardLeave(): void {
   stopAndRestorePoster()
 }
 
+/**
+ * 单击画面任意处 = 播放/暂停（2026-10-16 用户口径：整块节点区域都能点，不只左下角按钮）。
+ * 250ms 延迟缓冲：双击全屏会先来两次 click，等一下确认没有第二击再执行单击动作，
+ * 否则双击全屏前会先误触发一次暂停。
+ */
+let stageClickTimer: number | null = null
+function onStageClick(): void {
+  if (cropping.value || broken.value || !videoUrl.value) return
+  if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
+  stageClickTimer = window.setTimeout(() => {
+    stageClickTimer = null
+    void onPlayButton()
+  }, 250)
+}
+
 function onLoadedMetadata(e: Event): void {
   const v = e.target as HTMLVideoElement
   duration.value = Number.isFinite(v.duration) ? v.duration : duration.value
@@ -760,6 +775,11 @@ const paneClickSub = ctx.on(RenderEvents.PaneClick, () => {
 function onStageDblClick(e: MouseEvent): void {
   if (cropping.value) return
   e.stopPropagation()
+  // 双击优先于单击：取消还没执行的单击播放/暂停
+  if (stageClickTimer !== null) {
+    window.clearTimeout(stageClickTimer)
+    stageClickTimer = null
+  }
   openFullscreen()
 }
 
@@ -767,6 +787,7 @@ onBeforeUnmount(() => {
   tierSettingOff?.dispose()
   // 帧图的 objectURL 全还回去（不还就是内存泄漏，从界面上看不出来）
   frameCache.dispose()
+  if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
   releaseFrameTiers()
   window.removeEventListener('keydown', onKeydown)
   clearFsHideTimer()
@@ -794,7 +815,7 @@ watch(videoUrl, (prev) => {
   -->
   <div class="video-node" @pointerenter="onCardEnter" @pointerleave="onCardLeave">
     <div ref="stageRef" class="video-stage" :class="{ 'is-framed': isFramed, 'is-cropping': cropping }"
-      @dblclick="onStageDblClick">
+      @click="onStageClick" @dblclick="onStageDblClick">
       <template v-if="videoUrl && !broken">
         <!--
           帧图态（默认）：只画一张静态帧图 —— 页面里没有指向视频字节的 video 元素，
@@ -960,11 +981,13 @@ watch(videoUrl, (prev) => {
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 2px;
+  bottom: 8px;
   z-index: 9;
   display: flex;
   align-items: center;
   gap: 4px;
+  /* 32px 行高：按钮 26px 与文字 12px 都在其中垂直居中，时间文字与播放按钮严格同轴 */
+  height: 32px;
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .video-controls.is-hidden {
@@ -1012,6 +1035,8 @@ watch(videoUrl, (prev) => {
 .vc-time {
   flex: none;
   min-width: 74px;
+  /* 26px = 按钮高：文字基线随行盒垂直居中，与两侧按钮同一条中轴线 */
+  line-height: 26px;
   color: color-mix(in srgb, var(--ui-tip-ink, #fff) 92%, transparent);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
