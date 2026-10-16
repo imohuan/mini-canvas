@@ -214,6 +214,16 @@ export class AgentApi {
     return this.json('/api/agent/config')
   }
 
+  /** 后端是否还活着（transport 中断后的冤案排除用） */
+  async isBackendAlive(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/agent/config', { method: 'GET' })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
   saveModel(body: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.json('/api/agent/models', { method: 'POST', body: JSON.stringify(body) })
   }

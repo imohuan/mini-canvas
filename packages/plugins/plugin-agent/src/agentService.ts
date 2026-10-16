@@ -1196,6 +1196,24 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       const message = err instanceof Error ? err.message : String(err)
       // 主动中止不算错误（用户按了停止）
       if (ac.signal.aborted) applyEvent({ type: 'done' })
+      /**
+       * 页面刷新 / 关闭把 SSE 连带掐断时，fetch 会抛 "Failed to fetch"（Chrome）/
+       * "network error"（Firefox）。后台那一轮其实还在跑（托管模式），把这种
+       * 传输中断当「这一轮失败」写进 lastError 就是冤案 —— 刷新回来看到一条
+       * 与实际不符的错误条（真机 2026-10-16 复现）。判定：传输类错误 + 后端
+       * /health 还活着 ⇒ 视为导航中断，不落错误条、不落盘。
+       */
+      else if (/^(Failed to fetch|network error|fetch failed|Load failed)$/i.test(message.trim()) && !(await api.isBackendAlive().catch(() => false))) {
+        // 连 /health 都不通：这次传输错误有可能是真的后端挂了，如实报。
+        setError(message)
+        applyEvent({ type: 'error', message })
+        if (id) void api.setLastError(canvasId(), id, message).catch(() => undefined)
+      }
+      else if (/^(Failed to fetch|network error|fetch failed|Load failed)$/i.test(message.trim())) {
+        // 后端还活着 ⇒ 是本页导航/网络抖动掐断了 SSE：后台轮继续，界面交给
+        // 常驻流重连恢复，不渲染错误条。
+        applyEvent({ type: 'done' })
+      }
       else {
         setError(message)
         applyEvent({ type: 'error', message })
