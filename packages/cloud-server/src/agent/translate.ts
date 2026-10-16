@@ -269,7 +269,8 @@ function eventNotice(p: Record<string, unknown>, state: TranslateState, log?: Lo
       ]
     }
     case 'abort':
-      return []
+      // 用户按了终止（用户口径 2026-10-16）：对话里要有表示，不能静默收场。
+      return [{ type: 'notice', message: '已按停止，这一轮到此为止' }]
     /**
      * 上下文压缩的边界事件（成对）。
      *

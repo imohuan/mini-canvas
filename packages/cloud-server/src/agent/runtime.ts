@@ -827,6 +827,12 @@ export class AgentRuntime {
             // 结果补写到**同一条**工具记录上（按 id 找到它），不是新开一条 ——
             // 新开一条会让回放里出现「一个没结果的调用 + 一条孤立的结果」。
             await this.deps.store.patchTool(canvasId, id, ev.id, { output: ev.output })
+          } else if (ev.type === 'error') {
+            // 模型层失败落转录（用户口径 2026-10-16：错误留在对话流里，刷新后仍可见；
+            // 回放时画错误样式，见前端 error:true 的渲染）。
+            await this.deps.store
+              .appendTurn(canvasId, id, { role: 'assistant', text: ev.message, error: true, ts: Date.now() })
+              .catch(() => undefined)
           }
           yield ev
         }
@@ -843,6 +849,15 @@ export class AgentRuntime {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.log('run failed', { session: id, message, ms: Date.now() - started })
+      /**
+       * 失败落转录（用户口径 2026-10-16：错误必须在对话流里留下痕迹，刷新后也能看到。
+       * 只挂内存 turn.error 刷新即失；error:true 的 assistant 回合回放时画错误样式）。
+       * 只兜 runtime 自己抛的异常；模型层失败走事件流（fatal 翻译成 error 事件），
+       * 那条路由在下面的 request_end 翻译处落盘。
+       */
+      await this.deps.store
+        .appendTurn(canvasId, id, { role: 'assistant', text: message, error: true, ts: Date.now() })
+        .catch(() => undefined)
       yield { type: 'error', message }
     } finally {
       entry.running = false

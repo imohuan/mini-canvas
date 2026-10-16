@@ -85,6 +85,8 @@ export interface AgentTurnView {
   tools: ToolCard[]
   notice?: string
   error?: string
+  /** 这一轮被用户按了终止（界面在消息尾部画「已停止」小标，用户口径 2026-10-16） */
+  aborted?: boolean
   streaming: boolean
   /** 审批卡片（kind='approval' 时一定有） */
   approval?: ApprovalCard
@@ -355,7 +357,11 @@ export class ChatModel {
       }
       case 'notice': {
         const turn = this.lastAssistant()
-        if (turn) turn.notice = ev.message
+        if (turn) {
+          turn.notice = ev.message
+          // 终止标记：消息尾画「已停止」（与隐藏的过程 notice 区分，UI 单独渲染）
+          if (ev.message === '已按停止，这一轮到此为止') turn.aborted = true
+        }
         return
       }
       case 'error': {
@@ -387,6 +393,7 @@ export class ChatModel {
       role: string
       text: string
       images?: string[]
+      error?: boolean
       /** 转录里的时间戳（用户消息 hover 显示「发出时间」用）；老数据可能没有 */
       ts?: number
       tool?: { id: string; name: string; arguments: string; output?: string; card?: boolean }
@@ -411,9 +418,15 @@ export class ChatModel {
         this.turns.push(current)
       }
       if (t.role === 'assistant') {
-        current.text = current.text ? current.text + String.fromCharCode(10) + t.text : t.text
-        // 每一段助手文字各自成一步：回放时「文字 / 工具 / 文字」的顺序照样还原得出来
-        current.steps.push({ type: 'text', id: this.nextStepId(current), text: t.text, final: true })
+        if (t.error) {
+          // 失败记录（用户口径 2026-10-16）：错误要在对话流里留痕、刷新后仍可见。
+          current.error = t.text
+          current.steps.push({ type: 'text', id: this.nextStepId(current), text: t.text, final: true })
+        } else {
+          current.text = current.text ? current.text + String.fromCharCode(10) + t.text : t.text
+          // 每一段助手文字各自成一步：回放时「文字 / 工具 / 文字」的顺序照样还原得出来
+          current.steps.push({ type: 'text', id: this.nextStepId(current), text: t.text, final: true })
+        }
       } else if (t.role === 'thinking') {
         current.steps.push({ type: 'thinking', id: this.nextStepId(current), text: t.text, final: true })
         this.recomputeThinking(current)
@@ -466,6 +479,7 @@ export class ChatModel {
       ts?: number
       tool?: { id: string; name: string; arguments: string; output?: string; card?: boolean }
       done?: boolean
+      error?: boolean
     }>,
   ): void {
     if (!turns.length) return

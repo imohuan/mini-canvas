@@ -21,7 +21,7 @@ import {
   WandSparkles, Plug, BellRing, ShieldCheck, Zap, CircleCheck,
   RefreshCw, Hand, ShieldAlert, Copy, Pencil,
   Pause, Play, Target, Trash2, CornerUpRight, MoreHorizontal, Upload,
-  Minimize2, AlertCircle, GripVertical,
+  Minimize2, AlertCircle, GripVertical, CircleSlash,
 } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
@@ -1192,6 +1192,36 @@ function onGoalBudgetBlur(e: FocusEvent): void {
 const sendMode = computed(() => sendButtonMode(!!prompt.value.trim() || attached.value.length > 0, s.running))
 
 /**
+ * 「正在思考」加载指示的显示依据（用户口径 2026-10-16 二次澄清）：
+ * **输入框按钮处于「停止」状态（s.running）就显示**，与消息内容/streaming 标记解耦 ——
+ * 按钮状态本身就是"这一轮还在跑"的唯一真相，刷新后 openSession 也会把它恢复回来。
+ * 只挂在最后一条助手消息上（跟原来一致），避免历史消息里凭空出现加载行。
+ */
+function showPendingOn(t: { id: string; kind: string }): boolean {
+  if (!s.running || t.kind !== 'assistant') return false
+  const turns = s.turns
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    if (turns[i]!.kind === 'assistant') return turns[i]!.id === t.id
+  }
+  return false
+}
+
+/** 失败重试（用户口径 2026-10-16）：把这条失败回合对应的用户消息重发一遍 */
+function retryTurn(failedId: string): void {
+  if (s.running) return
+  const turns = s.turns
+  const idx = turns.findIndex((t) => t.id === failedId)
+  if (idx <= 0) return
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const t = turns[i]!
+    if (t.kind === 'user') {
+      void agent.send(t.text, t.images?.length ? t.images : undefined)
+      return
+    }
+  }
+}
+
+/**
  * 「引导」↳：表面上像直接发送，实际插队（G4/G13）。
  * 跑着时 = 插进当前轮的下一次请求；没跑时后端会把它按普通发送处理（设计 §3.3.3，
  * 三种情况全由后端裁决，前端照调即可）。
@@ -1781,21 +1811,31 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                  这里**必须**是独立的 v-if，不能接在用户那条的 v-else-if 链上：
                  中间隔着「用户图片」那个 div 时，链会被打断，导致用户消息既渲染标签行、
                  又再渲染一遍原始 Markdown 文本（实测文本重复出现两次，还带出字面 @名字）。 -->
-                <!-- 「正在思考」就是个**加载指示**（用户口径 2026-10-06）：只要这轮还没结束（t.streaming）
-                 就一直显示在回复区底部 —— 不管它此刻在打字、在调工具，还是真在思考。
-                 以前只在「还没出正文」时显示，模型一开始吐字它就没了 —— 那正是用户报的「加载状态没了」。 -->
-                <p v-if="t.streaming && t.kind === 'assistant'" class="ac-pending" role="status" aria-live="polite">
+                <!-- 「正在思考」就是个**加载指示**：显示依据 = 输入框按钮的「停止」状态
+                 （s.running，用户口径 2026-10-16 二次澄清：按钮状态就是加载状态）。
+                 与 t.streaming 解耦：streaming 标记会被 hub 重放/收尾逻辑翻转，
+                 而 s.running 由后端 run_state 驱动、刷新后由 openSession 恢复，是唯一真相。 -->
+                <p v-if="showPendingOn(t)" class="ac-pending" role="status" aria-live="polite">
                   <!-- 图标是**一段开口的圆弧**（照参考图：3/4 圈转圈），不是整圈的 Loader2 ——
                    整圈转起来几乎看不出在动，开口的弧才有"在转"的观感。 -->
                   <span class="ac-pending-spin" aria-hidden="true"></span>
                   <span>正在思考</span>
+                </p>
+                <!-- 用户按了终止（用户口径 2026-10-16：对话里要有表示，不能静默收场） -->
+                <p v-if="t.aborted" class="ac-stopped" role="status">
+                  <CircleSlash :size="13" aria-hidden="true" />
+                  <span>已停止</span>
                 </p>
                 <!-- 过程提示（主要是「已连接 MCP：smart(3 个工具)」这类）**暂时隐藏**。
                  用户口径：不要删除，只是先不显示 —— 每次对话都冒一条、又说不清什么时候会出现，
                  反而干扰阅读；MCP 的真实状态改在下拉里实时看（见 MCP 下拉里的「检测」）。
                  数据仍在 turn.notice 上，想放回来把 SHOW_PROCESS_NOTICE 改 true 即可。 -->
                 <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
-                <p v-if="t.error" class="ac-error">{{ t.error }}</p>
+                <template v-if="t.error">
+                  <p class="ac-error">{{ t.error }}</p>
+                  <!-- 失败重试（用户口径 2026-10-16）：重发本轮的用户消息 -->
+                  <button class="ac-retry" @click="retryTurn(t.id)">重试本轮</button>
+                </template>
               </div>
               <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
                不挤占气泡内边距）。编辑 = 把这条消息回填到底部输入框。 -->
@@ -2986,6 +3026,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-ink-dim, #919191);
 }
 
+/* 「已停止」小标（用户口径 2026-10-16）：终止后对话里要有表示 */
+.ac-stopped {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--ui-ink-dim, #919191);
+}
+
 /* 开口圆弧 = 一个圆 + 透明上边框：转起来能看清缺口在走。
    颜色随 currentColor，所以这行整体改色时图标自动跟随。 */
 .ac-pending-spin {
@@ -3188,6 +3239,23 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--ui-danger, #ef4444);
+}
+
+/* 失败重试（用户口径 2026-10-16）：错误行下的小按钮 */
+.ac-retry {
+  margin: 4px 0 0;
+  padding: 2px 10px;
+  border: 1px solid var(--ui-danger, #ef4444);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ui-danger, #ef4444);
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.ac-retry:hover {
+  background: var(--ui-danger-veil, rgb(239 68 68 / 0.08));
 }
 
 .ac-approval {

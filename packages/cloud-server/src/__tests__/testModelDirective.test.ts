@@ -37,7 +37,7 @@ describe('analyzeTestRequest：从消息里解析指令', () => {
 
   it('没有指令 → 全 null，正文原样', () => {
     const r = analyzeTestRequest(msg('随便说点什么'))
-    expect(r.directive).toEqual({ durationMs: null, gapMs: null, text: null })
+    expect(r.directive).toEqual({ durationMs: null, gapMs: null, text: null, error: null })
     expect(r.cleanText).toBe('随便说点什么')
   })
 
@@ -54,6 +54,14 @@ describe('analyzeTestRequest：从消息里解析指令', () => {
     const r = analyzeTestRequest(msg('::test 间隔=200ms 内容=我是自定义回复::'))
     expect(r.directive.gapMs).toBe(200)
     expect(r.directive.text).toBe('我是自定义回复')
+  })
+
+  it('错误模拟：断流 / 超时 / HTTP 状态码（用户口径 2026-10-16）', () => {
+    expect(analyzeTestRequest(msg('::test 错误=断流::')).directive.error).toBe('disconnect')
+    expect(analyzeTestRequest(msg('::test 错误=超时::')).directive.error).toBe('timeout')
+    expect(analyzeTestRequest(msg('::test 错误=400::')).directive.error).toBe(400)
+    expect(analyzeTestRequest(msg('::test 错误=500::')).directive.error).toBe(500)
+    expect(analyzeTestRequest(msg('::test error=timeout::')).directive.error).toBe('timeout')
   })
 
   it('指令会从回显正文里剥掉', () => {
@@ -91,7 +99,7 @@ describe('planStream：按指令把流拉长', () => {
   })
 
   it('都没给 ⇒ 默认间隔（肉眼能看清）', () => {
-    const plan = planStream('test模型', 'x'.repeat(12), { durationMs: null, gapMs: null, text: null })
+    const plan = planStream('test模型', 'x'.repeat(12), { durationMs: null, gapMs: null, text: null, error: null })
     expect(plan.gapMs).toBe(DEFAULT_GAP_MS)
     expect(plan.totalMs).toBeGreaterThan(0)
   })
@@ -99,10 +107,10 @@ describe('planStream：按指令把流拉长', () => {
 
 describe('buildReply：自定义内容优先', () => {
   it('有自定义内容 ⇒ 原样返回', () => {
-    expect(buildReply({ durationMs: null, gapMs: null, text: '我说了算' }, '忽略我')).toBe('我说了算')
+    expect(buildReply({ durationMs: null, gapMs: null, text: '我说了算', error: null }, '忽略我')).toBe('我说了算')
   })
   it('没有 ⇒ 回显（默认行为不变）', () => {
-    const r = buildReply({ durationMs: null, gapMs: null, text: null }, '你好呀')
+    const r = buildReply({ durationMs: null, gapMs: null, text: null, error: null }, '你好呀')
     expect(r).toContain('你好呀')
     expect(r).toContain('test模型')
   })

@@ -17,6 +17,8 @@
  *   - 时长 / duration / dur / time —— 整条流跑多久。无单位=秒；支持 ms / s / 秒 / 分 / m / min。
  *   - 间隔 / gap / interval —— 每片之间等多久（默认 120ms）。给了时长就按时长反推间隔，间隔让位。
  *   - 内容 / text / content / reply —— 自定义返回正文（放最后，可含空格）。
+ *   - 错误 / error —— 模拟错误（用户口径 2026-10-16）：断流（首帧后断开）、超时（挂住不吐）、
+ *     或 3 位 HTTP 状态码（如 400 / 401 / 500，直接回错误体）。例：::test 错误=断流::
  * 其它写法：`::test 8s::`（只给时长）、`::test::`（全默认）。指令会从回显正文里剥掉。
  *
  * ## 为什么做成「假端点」
@@ -57,6 +59,13 @@ export interface TestDirective {
   gapMs: number | null
   /** 自定义返回正文；null = 用默认的「回显」 */
   text: string | null
+  /**
+   * 模拟错误（用户口径 2026-10-16）：null = 正常返回。
+   *  - 'disconnect'：发完首帧直接断流（模拟网络中断 → 前端 "Failed to fetch"）
+   *  - 'timeout'：首帧后挂住不吐（模拟请求超时）
+   *  - 数字：返回对应 HTTP 状态码（如 400 / 401 / 500）
+   */
+  error: 'disconnect' | 'timeout' | number | null
 }
 
 export interface TestRequestPlan {
@@ -104,7 +113,7 @@ function userTexts(body: unknown): string[] {
 
 /** 把一段 `::test …::` 里的键值对拆出来 */
 function parseDirectiveBody(raw: string): TestDirective {
-  const directive: TestDirective = { durationMs: null, gapMs: null, text: null }
+  const directive: TestDirective = { durationMs: null, gapMs: null, text: null, error: null }
   const body = raw.trim()
   // 单值简写：::test 8s::（没有 = 号、也不含「内容」这类键）
   if (body && !body.includes("=")) {
@@ -130,6 +139,12 @@ function parseDirectiveBody(raw: string): TestDirective {
       directive.durationMs = parseTimeToken(val)
     } else if (key === "间隔" || key === "gap" || key === "interval") {
       directive.gapMs = parseTimeToken(val)
+    } else if (key === "错误" || key === "error") {
+      // 错误模拟（用户口径 2026-10-16）：断流 / 超时 / HTTP 状态码
+      const v = val.trim().toLowerCase()
+      if (v === "断流" || v === "disconnect") directive.error = "disconnect"
+      else if (v === "超时" || v === "timeout") directive.error = "timeout"
+      else if (/^\d{3}$/.test(v)) directive.error = Number(v)
     }
   }
   return directive
@@ -141,7 +156,7 @@ function extractDirective(body: unknown): { directive: TestDirective; found: boo
     const m = /::test\b([\s\S]*?)::/i.exec(text)
     if (m) return { directive: parseDirectiveBody(m[1] ?? ""), found: true }
   }
-  return { directive: { durationMs: null, gapMs: null, text: null }, found: false }
+  return { directive: { durationMs: null, gapMs: null, text: null, error: null }, found: false }
 }
 
 /**
@@ -299,6 +314,19 @@ export function testModelRoutes(): Hono {
     const { directive, cleanText } = analyzeTestRequest(body)
     const reply = buildReply(directive, cleanText)
     const model = String((body as { model?: unknown } | null)?.model ?? TEST_MODEL_ID)
+    /**
+     * 错误模拟（用户口径 2026-10-16）—— 各种错误形态都能真机复现：
+     *  - error=400 / 401 / 500 …：直接回对应状态码的 OpenAI 错误体（SDK 判 fatal/retryable）
+     *  - error=断流：SSE 只发首帧就断（前端报 "Failed to fetch" / "network error"）
+     *  - error=超时：首帧后挂住不吐（SDK 的 requestTimeoutMs 到点 abort）
+     */
+    if (typeof directive.error === "number") {
+      activeStreams--
+      return c.json(
+        { ok: false, error: { message: "test 模型模拟错误（error=" + directive.error + "）", type: "simulated_" + directive.error } },
+        directive.error as 400,
+      )
+    }
     const plan = planStream(model, reply, directive)
     const frames = sseFrames(model, reply)
     const encoder = new TextEncoder()
@@ -308,6 +336,20 @@ export function testModelRoutes(): Hono {
         let i = 0
         // 第一帧（role）立刻发，让前端马上知道「流开始了」
         controller.enqueue(encoder.encode(frames[i++] ?? ""))
+        if (directive.error === "disconnect") {
+          // 模拟断流：首帧后立刻关闭（客户端会看到流异常结束 → transport error）
+          controller.close()
+          activeStreams--
+          return
+        }
+        if (directive.error === "timeout") {
+          // 模拟超时：挂住不吐也不关 —— SDK 的 requestTimeoutMs 到点自己 abort。
+          // 上限 5 分钟兜底（与 chatSdk 的 requestTimeoutMs 对齐），防止把进程占死。
+          await sleep(300_000)
+          controller.close()
+          activeStreams--
+          return
+        }
         // 内容帧：一片一帧，每帧之后等 plan 指定的时间
         for (let k = 0; k < plan.chunkCount && i < frames.length - 2; k++) {
           await sleep(plan.waits[k] ?? 0)
