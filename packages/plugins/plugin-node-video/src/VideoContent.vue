@@ -438,6 +438,7 @@ async function freezeFrame(): Promise<void> {
  */
 function stopAndRestorePoster(): void {
   if (fullscreenOpen.value || !videoRequested.value) return
+  const epochAtLeave = freezeEpoch.value
   const v = videoRef.value
   if (v) {
     if (!v.paused) v.pause()
@@ -450,6 +451,10 @@ function stopAndRestorePoster(): void {
     endedLatch.value = false
     return
   } void freezeFrame().then(() => {
+    // 定格期间用户又 hover 回来（freezeEpoch 已变）→ 不要把 videoRequested 复位，
+    // 否则会把刚要求播放的 video 元素卸掉，第二轮播放就此卡死（画面停回帧图、
+    // 时间不动 —— 2026-10-16 真机复现的第二轮播放卡住）
+    if (epochAtLeave !== freezeEpoch.value) return
     videoRequested.value = false
     endedLatch.value = false
   })
