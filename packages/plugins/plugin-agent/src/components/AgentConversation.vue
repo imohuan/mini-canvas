@@ -642,6 +642,12 @@ function submit(): void {
   } else if (s.running) {
     // 跑着的时候发送 = **进队列**（设计 G1/G2），不再像以前那样把这条丢掉
     void agent.sendToQueue(text, pics.length ? pics : undefined)
+  } else if (queue.value.rows.some((r) => !r.sent)) {
+    // 队列里已有排着的任务（含**暂停**状态）⇒ 新消息**一律入队**（用户口径 2026-10-16）：
+    // 以前只看"有没有会话在跑" —— 暂停时没有会话在跑，新消息被直发到对话里，
+    // 插到已排任务的前面，打乱队列顺序。只要队列里还有排队条目（queued/editing/
+    // sending），新消息就排在它们后面按序走。
+    void agent.sendToQueue(text, pics.length ? pics : undefined)
   } else {
     // 空闲：和以前一样直接发
     void agent.send(text, pics.length ? pics : undefined)

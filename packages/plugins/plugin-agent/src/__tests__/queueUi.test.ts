@@ -23,6 +23,18 @@ import { sendButtonMode } from '../queueModel'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const host = readFileSync(path.resolve(HERE, '../components/AgentConversation.vue'), 'utf8')
 
+describe('队列分流口径（用户 2026-10-16）', () => {
+  it('队列里已有排队任务时，新消息一律入队（不再因"没在跑"直发对话）', () => {
+    // 分流顺序：编辑队列项 → 编辑目标 → 目标标记 → running → **队列有排队条目** → 空闲直发
+    const runningIdx = host.indexOf('} else if (s.running) {')
+    const queueIdx = host.indexOf("} else if (queue.value.rows.some((r) => !r.sent)) {")
+    const idleIdx = host.indexOf('// 空闲：和以前一样直接发')
+    expect(runningIdx).toBeGreaterThan(-1)
+    expect(queueIdx).toBeGreaterThan(runningIdx)
+    expect(idleIdx).toBeGreaterThan(queueIdx)
+  })
+})
+
 /* —————————————————— ① 发送键：真渲染、真点 —————————————————— */
 
 interface HNode {
