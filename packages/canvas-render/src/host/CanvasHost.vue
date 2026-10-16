@@ -166,6 +166,7 @@ const surfaceRef = shallowRef<{
   queryNodeEl?: (nodeId: string) => HTMLElement | null
   getSelectedNodePositions?: () => Array<{ id: string; x: number; y: number }>
   setCenter?: (x: number, y: number, zoom?: number) => void
+  animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
 } | undefined>()
 
 // ==================== 渲染子树的装配数据（经 props 交给内层 CanvasSurface 统一 provide） ====================
@@ -467,7 +468,7 @@ function syncFromStore(): void {
         .map((n) => n.position)
       const cx = positions.reduce((s2, p) => s2 + p.x, 0) / positions.length
       const cy = positions.reduce((s2, p) => s2 + p.y, 0) / positions.length
-      surfaceRef.value?.setCenter?.(cx, cy)
+      surfaceRef.value?.animateViewport?.({ x: vx, y: vy, zoom })
     }
   }
   prevNodeIds = nowIds
