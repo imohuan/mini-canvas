@@ -155,13 +155,15 @@ describe('引导端点', () => {
     expect((await readQueue()).items).toHaveLength(1) // 还在
   })
 
-  it('正在跑且 steer 成功 ⇒ 从队列移除', async () => {
+  it('正在跑且 steer 成功 ⇒ 条目置 sending 留在队列（用户口径 2026-10-16：发送中可见，消息真进入对话后由对账清除）', async () => {
     await setup({ isSteerable: () => true, steerInto: async () => true })
     await q({ op: 'add', text: 'a' })
     const id = (await readQueue()).items[0].id
     const res = await app.request('/api/agent/canvases/c1/sessions/s1/queue/' + id + '/steer', { method: 'POST' })
     expect(((await res.json()) as Record<string, unknown>).steered).toBe(true)
-    expect((await readQueue()).items).toEqual([])
+    const items = (await readQueue()).items
+    expect(items).toHaveLength(1)
+    expect(items[0].state).toBe('sending')
   })
 
   it('steer 恰好失败（轮刚结束）⇒ 条目**留在队列**（绝不丢）', async () => {

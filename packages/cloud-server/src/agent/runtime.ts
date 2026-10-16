@@ -475,14 +475,10 @@ export class AgentRuntime {
         steered: true,
         ts: Date.now(),
       })
-      // 广播给所有订阅者（真机自动化 2026-10-16 抓到：steer 投递的 user_message 只落
-      // 转录不进 hub —— 队列自动发的气泡在界面上不出现，前端"steering 剥标记转气泡"
-      // 的链路也就没有输入）。形状与 run() 里那条 user_message 一致。
-      this.deps.hub?.append(canvasId, sessionId, {
-        type: 'user_message',
-        text,
-        ...(images?.length ? { images } : {}),
-      })
+      // 注意：这里**不广播** user_message（用户口径 2026-10-16：引导后条目要先停在
+      // 「发送中」，等消息真的被模型消费 —— trace 里出现 [user_steering] 块、
+      // translate 翻出 user_message 事件 —— 气泡才替换出现、队列条目才删除。
+      // 立即广播会让「发送中」一闪而过、气泡先于投递出现）。
     }
     return steered
   }

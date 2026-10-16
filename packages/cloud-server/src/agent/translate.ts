@@ -99,6 +99,14 @@ export type AgentChatEvent =
 
 type Log = (message: string, extra?: unknown) => void
 
+/** [user_steering] 块识别（与 SDK 的 STEERING_TEXT_RE 同形；兼容尖括号变体） */
+const STEERING_RE_SQUARE = /^\[user_steering\]\n?([\s\S]*?)\n?\[\/user_steering\]\s*$/
+const STEERING_RE_ANGLE = /^<user_steering>\n?([\s\S]*?)\n?<\/user_steering>\s*$/
+function parseUserSteeringBlock(text: string): string | null {
+  const m = STEERING_RE_SQUARE.exec(text) ?? STEERING_RE_ANGLE.exec(text)
+  return m ? m[1] : null
+}
+
 export interface TranslateState {
   /** 该会话模型的上下文窗口（session_meta.model_context_window；拿不到时 null） */
   contextWindow: number | null
@@ -152,7 +160,14 @@ export function translateMessage(msg: unknown, state: TranslateState, log?: Log)
       //   steering 投递后，trace 里是 [user_steering] 包裹的用户文本且无 sender 戳 ——
       //   漏网就被当成助手正文，界面在错误卡片下面显示出一整块裸标记。
       //   这类消息模型照样读得到（它在 SDK 的上下文里），只是不该翻给用户看。
-      if (p.role === 'user') return []
+      if (p.role === 'user') {
+        // 例外：**steering 投递块**（[user_steering] 包裹、无 sender 戳）要翻成
+        // user_message 事件 —— 它是队列/引导消息"真实进入对话"的信号（前端据此把
+        // 「发送中」条目替换成气泡，用户口径 2026-10-16）。剥掉标记只留内文。
+        const steerBody = parseUserSteeringBlock(String(p.text ?? ''))
+        if (steerBody !== null) return [{ type: 'user_message', text: steerBody, steered: true }]
+        return []
+      }
       return [{ type: 'text', text: String(p.text ?? ''), final: true }]
     case 'thinking':
       return [{ type: 'thinking', text: String(p.thinking ?? ''), final: true }]

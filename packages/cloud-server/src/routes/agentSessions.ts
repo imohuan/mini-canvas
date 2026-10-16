@@ -464,17 +464,34 @@ export function agentSessionRoutes(
       return q // 先读不改；真正删除在 steer 成功后
     })
     if (!item) return c.json({ ok: false, error: '这条排队消息不存在' }, 404)
+    /**
+     * steer 成功：条目置 **sending** 留在队列里（用户口径 2026-10-16：「发送中显示队列」
+     * 开启时要能看到「发送中」状态；消息真的进入对话 —— user_message 事件到达 ——
+     * 前端按指纹从队列删掉，气泡替换出现。轮末 settleAsync 的对账也会按转录
+     * "已送达 → sent → 清除"兜底收尾，两条路都收得干净）。
+     *
+     * 顺序至关重要：**先置 sending 并广播，再执行 steer** —— steerInto 内部会广播
+     * user_message，前端收到事件的同一拍要按指纹从队列删条目；若此刻条目还不是
+     * sending，指纹匹配（只认 sending）不会命中，「发送中」行就永远挂着（真机复现）。
+     */
+    const marked = await store.updateQueue(p.canvasId, p.sessionId!, (q) => ({
+      ...q,
+      items: q.items.map((it) =>
+        it.id === itemId ? { ...it, state: 'sending' as const, sentAt: Date.now() } : it,
+      ),
+    }))
+    if (marked) hub?.append(p.canvasId, p.sessionId!, { type: 'queue', queue: marked })
     const steered = await runtime.steerInto(p.canvasId, p.sessionId!, item.text, item.images)
     if (!steered) {
-      // 轮刚好结束：条目原样留在队列（调度器接手）
+      // 轮刚好结束：sending 退回 queued（条目原样留在队列，调度器接手）
+      const back = await store.updateQueue(p.canvasId, p.sessionId!, (q) => ({
+        ...q,
+        items: q.items.map((it) => (it.id === itemId ? { ...it, state: 'queued' as const } : it)),
+      }))
+      if (back) hub?.append(p.canvasId, p.sessionId!, { type: 'queue', queue: back })
       onQueueChanged?.(p.canvasId, p.sessionId!)
       return c.json({ ok: true, steered: false, reason: 'finished' })
     }
-    const queue = await store.updateQueue(p.canvasId, p.sessionId!, (q) => ({
-      ...q,
-      items: q.items.filter((it) => it.id !== itemId),
-    }))
-    hub?.append(p.canvasId, p.sessionId!, { type: 'queue', queue })
     onQueueChanged?.(p.canvasId, p.sessionId!)
     return c.json({ ok: true, steered: true })
   })

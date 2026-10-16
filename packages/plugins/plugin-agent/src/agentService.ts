@@ -1253,14 +1253,18 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     try {
       const r = await api.steerQueueItem(canvasId(), sid, itemId)
       if (r.steered) {
-        // 成了：从队列移除 + 立刻在对话流里显示这条（"像直接发送"）
-        adoptQueue({ ...state.queue, items: state.queue.items.filter((i) => i.id !== itemId) })
-        if (item) {
-          // 与用户气泡同一形状；标 steered 让界面画"引导"小标
-          model.send(item.text, item.images)
-          sync()
-          void nextTickScroll()
-        }
+        /**
+         * 成了：条目置「发送中」**留在队列里**（用户口径 2026-10-16：引导不是立即弹气泡
+         * —— 消息要先以「发送中」呈现，等它真的进入对话（user_message 事件到达，
+         * 内容以 [user_steering] 包裹）才由 retireSendingItemOnUserMessage 从队列删掉、
+         * 气泡替换出现。「发送中显示队列」开关控制此刻它是否可见。
+         */
+        adoptQueue({
+          ...state.queue,
+          items: state.queue.items.map((i) =>
+            i.id === itemId ? { ...i, state: 'sending' as const, sentAt: Date.now() } : i,
+          ),
+        })
       } else {
         // 没在跑 / 轮刚好结束：条目留在队列，调度器会按序发它。
         // 后端在 steer 失败分支已广播 queue 快照 —— 但本响应不是 SSE 订阅者收不到，

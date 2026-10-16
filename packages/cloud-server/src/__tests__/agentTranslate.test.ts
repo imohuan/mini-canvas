@@ -65,13 +65,15 @@ describe('模型消息', () => {
    * 被当成助手正文追加到错误卡片下面显示（用户看到裸标记块）。
    * 用户文本（role:user）不管有没有 sender 都不是助手说的话，一律不进助手流。
    */
-  it('没有 sender 戳的用户文本（steering 块）也不当助手文本', () => {
+  it('没有 sender 戳的用户文本（steering 块）翻成 user_message（前端替换「发送中」气泡的信号）', () => {
     const st = createTranslateState()
     const out = translateMessage(
       model({ type: 'text', role: 'user', text: '[user_steering]\n我已经点击了呀，为什么没反应\n[/user_steering]' }),
       st,
     )
-    expect(out).toEqual([])
+    expect(out).toEqual([{ type: 'user_message', text: '我已经点击了呀，为什么没反应', steered: true }])
+    // 非 steering 块的用户文本仍然不进对话流
+    expect(translateMessage(model({ type: 'text', role: 'user', text: '普通用户文本' }), st)).toEqual([])
   })
 })
 
