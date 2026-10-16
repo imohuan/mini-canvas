@@ -960,6 +960,21 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
         model.restoreApprovals(full.approvals)
         sync()
       }
+      /**
+       * 刷新后恢复「正在思考」加载态（用户口径 2026-10-16）：托管模式的轮在后台
+       * 继续跑，但转录里的回合 streaming 恒为 false —— 刷新后加载 UI 就消失了，
+       * 用户不知道任务还在进行。GET 会话的 running=true 时，把最后一条助手消息
+       * 重新置为 streaming（与 send()/队列自动发时的形态一致）。
+       */
+      if (full.running === true) {
+        const lastAssistant = [...model.turns].reverse().find((t) => t.kind === 'assistant')
+        if (lastAssistant) {
+          lastAssistant.streaming = true
+          // 正文已被转录覆盖到最后一拍；streaming 置位后 UI 显示加载指示，
+          // 后续 text 增量由常驻流（attachStream）继续喂进来。
+        }
+        state.running = true
+      }
       // 队列 / 目标 / 运行态：刷新后原样恢复
       state.queue = full.queue ?? { paused: false, items: [] }
       state.goal = (full.goal ?? null) as GoalStateView | null
@@ -1006,6 +1021,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       // 错误条与压缩提示是**这一条会话**的状态：切过去时要重来（否则上一条会话的
       // 报错会挂在另一条对话下面，用户以为刚切的这条出问题了）。
       state.lastError = ''
+      // 最近一次发送失败的提示（用户口径 2026-10-16）：错误不在转录里，
+      // 刷新后从会话记录恢复 —— 否则失败信息彻底消失，用户不知道发没发成功。
+      // 注意放在上面的清空**之后**（这条错误就属于这一条会话）。
+      state.lastError = full.lastError ?? ''
       state.compactNotice = ''
       state.compacting = false
       /**
@@ -1163,6 +1182,10 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       else {
         setError(message)
         applyEvent({ type: 'error', message })
+        // 落盘到会话记录（用户口径 2026-10-16：刷新后错误信息看不到 —— 错误是
+        // 运行态，之前只存在内存里，刷新就没了）。恢复会话时 GET 带回 lastError，
+        // 界面错误条据此还原。
+        if (id) void api.setLastError(canvasId(), id, message).catch(() => undefined)
       }
     } finally {
       state.running = false

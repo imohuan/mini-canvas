@@ -210,6 +210,8 @@ export function agentSessionRoutes(
        // 最近一次上下文用量：界面刷新 / 切会话后靠它把上下文指示器画回来。
        // 注意**不能用内存态**（runtime 那边）：服务重启后内存是空的，而磁盘上这份还在。
        ...(session.lastUsage ? { lastUsage: session.lastUsage } : {}),
+      // 最近一次发送失败的提示（刷新后错误条据此还原；用户口径 2026-10-16）
+      ...(session.lastError ? { lastError: session.lastError } : {}),
     })
   })
 
@@ -222,6 +224,19 @@ export function agentSessionRoutes(
     }
     const done = await store.rename(p.canvasId, p.sessionId!, body.title.trim())
     if (!done) return c.json({ ok: false, error: '会话不存在' }, 404)
+    return c.json({ ok: true })
+  })
+
+  /**
+   * 记录/清除最近一次发送失败的提示（用户口径 2026-10-16：刷新后错误信息看不到）。
+   * message 为空串 = 清除（新一轮开始/用户关闭提示时调用）。
+   */
+  app.post('/api/agent/canvases/:canvasId/sessions/:sessionId/last-error', async (c) => {
+    const p = guardParams(c)
+    if (!p.ok) return p.res
+    const body = await safeJson(c)
+    const message = typeof body?.message === 'string' ? body.message : ''
+    await store.setLastError(p.canvasId, p.sessionId!, message || null)
     return c.json({ ok: true })
   })
 

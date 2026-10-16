@@ -153,6 +153,12 @@ export interface AgentSessionRecord extends AgentSessionMeta {
    * 指示器就彻底没了，只有再发一条消息才回来。把它存进会话记录，恢复会话时一并带回去。
    */
   lastUsage?: { usedTokens: number; limitTokens: number | null }
+  /**
+   * 最近一次**发送失败/轮错误**的提示（2026-10-16 用户口径：刷新后错误信息看不到）。
+   * 错误不在转录里（错误是运行态，不该进模型上下文），落盘到会话记录，
+   * 恢复会话时随 GET 返回，界面的错误条据此还原。
+   */
+  lastError?: string
 }
 
 interface IndexFile {
@@ -517,6 +523,17 @@ export class AgentSessionStore {
         usedTokens: Math.max(0, Math.round(usage.usedTokens)),
         ...(usage.limitTokens && usage.limitTokens > 0 ? { limitTokens: Math.round(usage.limitTokens) } : { limitTokens: null }),
       }
+      await this.writeRecord(canvasId, record)
+    })
+  }
+
+  /** 记录/清除最近一次发送失败的提示（刷新后错误条据此还原） */
+  async setLastError(canvasId: string, sessionId: string, message: string | null): Promise<void> {
+    return this.serialize(this.key(canvasId, sessionId), async () => {
+      const record = await this.get(canvasId, sessionId)
+      if (!record) return
+      if (message) record.lastError = message
+      else delete record.lastError
       await this.writeRecord(canvasId, record)
     })
   }

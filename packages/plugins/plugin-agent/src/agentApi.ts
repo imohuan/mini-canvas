@@ -337,6 +337,14 @@ export class AgentApi {
     return r.session
   }
 
+  /** 记录/清除最近一次发送失败的提示（刷新后错误条据此还原；message 空 = 清除） */
+  async setLastError(canvasId: string, sessionId: string, message: string): Promise<void> {
+    await this.json(this.sessionPath(canvasId, sessionId) + '/last-error', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    })
+  }
+
   /**
    * 会话全景（设计 §3.2 / §3.3）：转录之外的**运行态与队列**一次拿全。
    *
@@ -362,6 +370,8 @@ export class AgentApi {
     lastSeq?: number
     /** 最近一次上下文用量（界面恢复会话时把上下文指示器画回来；见 store.lastUsage） */
     lastUsage?: { usedTokens: number; limitTokens: number | null }
+    /** 最近一次发送失败的提示（刷新后错误条据此还原；用户口径 2026-10-16） */
+    lastError?: string
     /** 转录总条数（带 turnsLimit 请求时才有意义；全量时与 session.turns.length 相同） */
     turnsTotal?: number
     /** 切片之前还有没有更早的转录（顶部哨兵显示与续拉的依据） */
