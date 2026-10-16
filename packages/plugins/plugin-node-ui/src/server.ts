@@ -1192,7 +1192,7 @@ export function apply(ctx: ServerCtx): void {
    * 拨号到 debug-events，后台把 eval 任务塞进 pending 表；执行结果从 debug-result 回来，
    * 由 waiter 的 resolve 送回 MCP 调用方。stop 同理：挂一个 promise，disconnect 时 resolve。
    */
-  type DebugEval = { id: string; code: string }
+  type DebugEval = { type: 'eval'; id: string; code: string }
   type DebugWaiter = { resolve: (v: { ok: boolean; result?: unknown; error?: string; stopped?: boolean }) => void }
   const debugEvals = new Map<string, DebugEval[]>() // session → 未被 SDK 取走的 eval 队列
   const debugSse = new Map<string, (e: DebugEval | { type: 'stop' }) => void>() // session → SSE 投递口
@@ -1396,7 +1396,10 @@ export function apply(ctx: ServerCtx): void {
       const id = 'e' + ++debugEvalSeq
       dlog('eval 入队：id=' + id, 'session=' + sess.session, 'code=' + code.slice(0, 200))
       const backlog = debugEvals.get(sess.session) ?? []
-      backlog.push({ id, code })
+      // 协议形状：SDK（debugSession.buildSdkScriptBody）按 m.type === 'eval' 分发，
+      // 入队必须带 type 字段（2026-10-17 真机抓到：缺 type 导致 SDK 收到后静默丢弃，
+      // eval 全部 30 秒超时）。SSE 与轮询两条下行通道同用这张表，形状必须一致。
+      backlog.push({ type: 'eval', id, code })
       debugEvals.set(sess.session, backlog)
       const result = await new Promise<{ ok: boolean; result?: unknown; error?: string; stopped?: boolean }>((resolve) => {
         debugResults.set(id, { resolve })

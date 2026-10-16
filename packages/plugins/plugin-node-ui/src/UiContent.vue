@@ -316,7 +316,12 @@ const activeDebug = computed(() => {
   // iframe 重挂时带上 SDK。sessionStorage 本身不是响应式的，光靠它 computed 不会动。
   void debugSession.value
   const cred = loadCred()
-  return !!(cred && cred.nodeId === props.id && cred.canvasId === canvasId)
+  // 只认**当前邀请**或**后台仍记着的会话**的凭据：旧调试的残留凭据不再让组件停在调试态
+  // （2026-10-17 真机抓到：connect 后节点重挂不弹确认框，就是这个旧凭据在作怪）。
+  if (!cred || cred.nodeId !== props.id || cred.canvasId !== canvasId) return false
+  const inv = readInvite(props.data)
+  if (inv) return cred.session === inv.session
+  return debugSession.value === cred.session
 })
 
 /** 用户在确认框点「同意」：写凭据 → 回执后台 → 清节点上的邀请标记 */
