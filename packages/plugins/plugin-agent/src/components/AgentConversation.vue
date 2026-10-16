@@ -3613,25 +3613,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 .ac-queue-lead-swap > * {
   grid-area: 1 / 1;
 }
-.ac-queue-lead-swap .ac-queue-handle {
-  opacity: 0;
+/* 交换规则（合成/打包顺序不稳 → 用 !important 钉死优先级；scoped 下这是
+   少数合理的场景 —— 视觉交换是用户点名要的核心交互） */
+.ac-pending-row .ac-queue-lead-swap .ac-queue-handle {
+  opacity: 0 !important;
   pointer-events: none;
 }
-.ac-pending-row:hover .ac-queue-lead-swap .ac-pending-lead {
-  opacity: 0;
+.ac-pending-row:hover .ac-queue-lead-swap .ac-queue-handle,
+.ac-pending-row.is-hover .ac-queue-lead-swap .ac-queue-handle {
+  opacity: 1 !important;
+  pointer-events: auto;
+  cursor: grab;
 }
+.ac-pending-row:hover .ac-queue-lead-swap .ac-pending-lead,
 .ac-pending-row.is-hover .ac-queue-lead-swap .ac-pending-lead {
   opacity: 0;
-}
-.ac-pending-row:hover .ac-queue-lead-swap .ac-queue-handle {
-  opacity: 1;
-  pointer-events: auto;
-  cursor: grab;
-}
-.ac-pending-row.is-hover .ac-queue-lead-swap .ac-queue-handle {
-  opacity: 1;
-  pointer-events: auto;
-  cursor: grab;
 }
 .ac-queue-lead-swap .ac-pending-lead {
   transition: opacity 0.15s ease;
