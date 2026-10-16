@@ -150,12 +150,17 @@ function parseDirectiveBody(raw: string): TestDirective {
   return directive
 }
 
-/** 找消息里的 `::test …::` 指令（从新到旧扫 user 消息，取第一条带指令的） */
+/** 找消息里的 ::test 指令：只认最新一条 user 消息（不跨消息沿用 —— 失败重试会
+ * 带着同一条旧指令反复失败并污染后续消息；错误模拟必须一条一清，真机 2026-10-16 教训） */
 function extractDirective(body: unknown): { directive: TestDirective; found: boolean } {
-  for (const text of userTexts(body)) {
-    const m = /::test\b([\s\S]*?)::/i.exec(text)
-    if (m) return { directive: parseDirectiveBody(m[1] ?? ""), found: true }
-  }
+  const newest = userTexts(body)[0] ?? ""
+  // 同一条 content 可能被 SDK 拼进多条历史 user 文本（数组 content join）——
+  // 正则取**最后一个** ::test…:: 段（用户最新意图），而不是第一个。
+  const re = /::test\b([\s\S]*?)::/gi
+  let m: RegExpExecArray | null = null
+  let last: RegExpExecArray | null = null
+  while ((m = re.exec(newest)) !== null) last = m
+  if (last) return { directive: parseDirectiveBody(last[1] ?? ""), found: true }
   return { directive: { durationMs: null, gapMs: null, text: null, error: null }, found: false }
 }
 

@@ -70,7 +70,7 @@ describe('analyzeTestRequest：从消息里解析指令', () => {
     expect(r.cleanText).toContain('真正的正文')
   })
 
-  it('指令在多条消息里也能找到（取带指令的那条）', () => {
+  it('指令只认最新一条 user 消息：最新没带指令就不沿用（真机 2026-10-16 教训）', () => {
     const r = analyzeTestRequest({
       messages: [
         { role: 'user', content: '::test 3s:: 干活' },
@@ -78,14 +78,14 @@ describe('analyzeTestRequest：从消息里解析指令', () => {
         { role: 'user', content: '继续' },
       ],
     })
-    expect(r.directive.durationMs).toBe(3000)
+    expect(r.directive.durationMs).toBeNull()
   })
 })
 
 describe('planStream：按指令把流拉长', () => {
   it('给了时长 ⇒ 所有分片等待之和 ≈ 时长', () => {
     const reply = 'x'.repeat(60) // 10 片（每片 6 字）
-    const plan = planStream('test模型', reply, { durationMs: 1000, gapMs: null, text: null })
+    const plan = planStream('test模型', reply, { durationMs: 1000, gapMs: null, text: null, error: null })
     expect(plan.chunkCount).toBe(10)
     expect(plan.totalMs).toBeCloseTo(1000, 0)
     const waited = plan.waits.reduce((a, b) => a + b, 0)
@@ -93,7 +93,7 @@ describe('planStream：按指令把流拉长', () => {
   })
 
   it('只给间隔 ⇒ 每片都等那么久', () => {
-    const plan = planStream('test模型', 'x'.repeat(24), { durationMs: null, gapMs: 50, text: null })
+    const plan = planStream('test模型', 'x'.repeat(24), { durationMs: null, gapMs: 50, text: null, error: null })
     expect(plan.gapMs).toBe(50)
     expect(plan.totalMs).toBe(200)
   })
