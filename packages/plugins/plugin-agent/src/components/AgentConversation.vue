@@ -1206,20 +1206,6 @@ function showPendingOn(t: { id: string; kind: string }): boolean {
   return false
 }
 
-/** 失败重试（用户口径 2026-10-16）：把这条失败回合对应的用户消息重发一遍 */
-function retryTurn(failedId: string): void {
-  if (s.running) return
-  const turns = s.turns
-  const idx = turns.findIndex((t) => t.id === failedId)
-  if (idx <= 0) return
-  for (let i = idx - 1; i >= 0; i -= 1) {
-    const t = turns[i]!
-    if (t.kind === 'user') {
-      void agent.send(t.text, t.images?.length ? t.images : undefined)
-      return
-    }
-  }
-}
 
 /**
  * 「引导」↳：表面上像直接发送，实际插队（G4/G13）。
@@ -1833,8 +1819,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                 <p v-if="SHOW_PROCESS_NOTICE && t.notice" class="ac-notice">{{ t.notice }}</p>
                 <template v-if="t.error">
                   <p class="ac-error">{{ t.error }}</p>
-                  <!-- 失败重试（用户口径 2026-10-16）：重发本轮的用户消息 -->
-                  <button class="ac-retry" @click="retryTurn(t.id)">重试本轮</button>
                 </template>
               </div>
               <!-- hover 操作条在**气泡外**（用户口径 2026-10-06 参考图：时间/复制/编辑贴着消息右下角，
@@ -3239,23 +3223,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   margin: 6px 0 0;
   font-size: 12px;
   color: var(--ui-danger, #ef4444);
-}
-
-/* 失败重试（用户口径 2026-10-16）：错误行下的小按钮 */
-.ac-retry {
-  margin: 4px 0 0;
-  padding: 2px 10px;
-  border: 1px solid var(--ui-danger, #ef4444);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--ui-danger, #ef4444);
-  font-size: 12px;
-  line-height: 20px;
-  cursor: pointer;
-}
-
-.ac-retry:hover {
-  background: var(--ui-danger-veil, rgb(239 68 68 / 0.08));
 }
 
 .ac-approval {
