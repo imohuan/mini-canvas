@@ -60,7 +60,6 @@ const playing = ref(false)
  * 直到这一位翻真才撤掉 —— 否则 video 挂上到首帧解码完成之间会闪出一片黑。
  * （loadeddata 在 seek 后也会再发，任何时刻画面在，它就跟着翻真；离开时随 videoRequested 一起复位。）
  */
-const videoHasFrame = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const broken = ref(false)
@@ -165,8 +164,13 @@ const tierFrame = ref<TierFrame | null>(null)
  * 全屏是独立的另一个 UI（用户口径），有自己的 video 元素，所以这里不涉及它。
  */
 const showPoster = computed(() => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0))
-/** 帧图要不要还叠着：video 还没画出第一帧时必须顶住，撤早了就是黑屏闪烁 */
-const keepPosterOverVideo = computed(() => showPoster.value || !videoHasFrame.value)
+/**
+ * 帧图要不要还盖着（用户口径 2026-10-16）：
+ * video 在**真正开始播放**（play 事件）之前一律让帧图顶着 ——
+ * 加载中、解码中画面都还是帧图，直到 play 才把帧图藏掉。
+ * play → false；pause/离开定格 → 回 true。
+ */
+const keepPosterOverVideo = computed(() => showPoster.value || !playing.value)
 
 /**
  * 取帧时刻：第 0 帧常是黑场 / 片头，取第 1 秒更有代表性；
@@ -505,7 +509,6 @@ async function togglePlay(): Promise<void> {
 async function onPlayButton(): Promise<void> {
   if (!videoRequested.value) {
     videoRequested.value = true
-    videoHasFrame.value = false
     currentTime.value = clipRange.value.start
     await nextTick()
   }
@@ -565,12 +568,6 @@ function onLoadedMetadata(e: Event): void {
     const max = end > start ? end : v.duration
     v.currentTime = Number.isFinite(max) ? Math.min(resumeTime.value, max) : resumeTime.value
   }
-}
-
-/** video 当前位置解码出第一帧了（loadeddata / seeked / loadedmetadata 就绪时都会走到） */
-function onVideoHasData(): void {
-  const v = videoRef.value
-  if (v && v.readyState >= 2) videoHasFrame.value = true
 }
 
 function onTimeUpdate(e: Event): void {
@@ -795,19 +792,17 @@ watch(videoUrl, (prev) => {
           帧图还没生成好时不渲染 img：留空由 stage 的底色顶着，**不挂 video**
           （挂了就违背"点播放才加载视频"）。生成通常在几十毫秒内完成。
         -->
-        <!-- 帧图与 video 是"叠放"不是"二选一"：请求播放后两者同时挂载，
-             帧图盖在上面等首帧解码完才撤（keepPosterOverVideo）。
-             之前写成 v-if/v-else-if 的二选一，帧图压住期间 video 根本不在 DOM，
-             播放按钮点下去 togglePlay 拿不到元素、完全没反应（2026-10-16 用户实测）。 -->
+        <!-- 帧图与 video 是"叠放"：请求播放后两者同时挂载，
+             video **开始真正播放**（play 事件 → playing=true）才把帧图藏掉，
+             加载/解码期间用户看到的始终是帧图，不闪黑。 -->
         <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
           :class="{ 'is-framed': isFramed, 'is-cropping': cropping }" :style="videoStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
-        <!-- 两个独立 v-if（不是 v-else）：video 只看"请求播放"，与帧图在不在无关，
-             否则帧图未生成时会把 video 顶出来，违背"点播放才加载视频"。 -->
+        <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
           @play="playing = true" @pause="playing = false" @error="onVideoError"
-          @loadeddata="onVideoHasData" @seeked="onVideoHasData" />
+        />
 
       </template>
 
