@@ -221,6 +221,7 @@ watch(
   [
     tier,
     videoUrl,
+    frameGateOpen,
     () => videoWidth.value,
     () => videoHeight.value,
     cropping,
