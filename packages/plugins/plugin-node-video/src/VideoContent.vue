@@ -486,6 +486,25 @@ const volume = ref(1)
 const volumeEffectiveMuted = computed(() => muted.value || volume.value <= 0)
 const volumeOpen = ref(false)
 let volumeDragging = false
+/** 悬浮层延迟关闭（音量滑块/截帧菜单通用）：给鼠标从按钮移进面板留时间，不至于半路就收走 */
+function delayedClose(kind: 'volume' | 'capture'): void {
+  if (kind === 'volume') {
+    if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
+    volumeCloseTimer = window.setTimeout(() => { volumeOpen.value = false; volumeCloseTimer = null }, 350)
+  } else {
+    if (captureCloseTimer !== null) window.clearTimeout(captureCloseTimer)
+    captureCloseTimer = window.setTimeout(() => { captureMenuOpen.value = false; captureCloseTimer = null }, 350)
+  }
+}
+function cancelDelayedClose(kind: 'volume' | 'capture'): void {
+  if (kind === 'volume') {
+    if (volumeCloseTimer !== null) { window.clearTimeout(volumeCloseTimer); volumeCloseTimer = null }
+  } else {
+    if (captureCloseTimer !== null) { window.clearTimeout(captureCloseTimer); captureCloseTimer = null }
+  }
+}
+let volumeCloseTimer: number | null = null
+let captureCloseTimer: number | null = null
 /** 竖向音量轨道：按住/划过都设值（pointer capture 保证拖出轨道也不丢） */
 function setVolumeFromEvent(e: PointerEvent): void {
   const track = e.currentTarget as HTMLElement
@@ -848,6 +867,8 @@ onBeforeUnmount(() => {
   // 帧图的 objectURL 全还回去（不还就是内存泄漏，从界面上看不出来）
   frameCache.dispose()
   if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
+  if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
+  if (captureCloseTimer !== null) window.clearTimeout(captureCloseTimer)
   document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
   releaseFrameTiers()
   window.removeEventListener('keydown', onKeydown)
@@ -875,6 +896,8 @@ watch(videoUrl, (prev) => {
     @pointerenter 则相反：悬停上来就自动播放（用户口径：不用先点按钮）。
   -->
   <div class="video-node" @pointerenter="onCardEnter" @pointerleave="onCardLeave">
+    <!-- 底部渐变衬底：贴满节点底边（挂在节点层而不是控件条上，控件条的左右边距不会再把渐变截短） -->
+    <div class="vc-scrim" aria-hidden="true"></div>
     <div ref="stageRef" class="video-stage" :class="{ 'is-framed': isFramed, 'is-cropping': cropping }"
       @click="onStageClick" @dblclick="onStageDblClick">
       <template v-if="videoUrl && !broken">
@@ -912,8 +935,6 @@ watch(videoUrl, (prev) => {
          三个 VueFlow 保留类名把画布手势挡在外面：nodrag 不拖节点、nopan 不拖画布、nowheel 不缩放画布。 -->
     <div v-if="videoUrl && !broken && !cropping" class="video-controls nodrag nopan nowheel"
       :class="{ 'is-hidden': !hovering }" @dblclick.stop>
-      <!-- 底部渐变衬底（liblib 同款）：文字图标压任何画面上都读得清，不再依赖逐个投影 -->
-      <div class="vc-scrim" aria-hidden="true"></div>
       <button class="vc-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
         @click.stop="onPlayButton">
         <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -936,7 +957,8 @@ watch(videoUrl, (prev) => {
       <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
 
       <!-- 音量组（liblib 同款）：hover 展开竖向滑块，离开即收 -->
-      <div class="vc-volume" @mouseenter="volumeOpen = true" @mouseleave="volumeOpen = false">
+      <div class="vc-volume" @mouseenter="cancelDelayedClose('volume'); volumeOpen = true"
+        @mouseleave="delayedClose('volume')">
         <button class="vc-btn" type="button" :title="volumeEffectiveMuted ? '取消静音' : '静音'" :aria-label="volumeEffectiveMuted ? '取消静音' : '静音'"
           @click.stop="muted = !muted">
           <svg v-if="!volumeEffectiveMuted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -951,7 +973,8 @@ watch(videoUrl, (prev) => {
           </svg>
         </button>
         <!-- 竖向音量滑块：顶部数字 + 轨道（从下往上填充）+ 圆点滑块 -->
-        <div v-if="volumeOpen" class="vc-volume-pop nodrag nopan nowheel">
+        <div v-if="volumeOpen" class="vc-volume-pop nodrag nopan nowheel"
+          @mouseenter="cancelDelayedClose('volume')" @mouseleave="delayedClose('volume')">
           <span class="vc-volume-value">{{ Math.round(volume * 100) }}</span>
           <div class="vc-volume-track" role="slider" :aria-label="'音量 ' + Math.round(volume * 100) + '%'"
             :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="Math.round(volume * 100)" tabindex="0"
@@ -966,14 +989,16 @@ watch(videoUrl, (prev) => {
 
       <div ref="captureMenuRef" class="vc-capture">
         <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
-          :aria-expanded="captureMenuOpen" @click.stop="captureMenuOpen = !captureMenuOpen">
+          :aria-expanded="captureMenuOpen" @click.stop="cancelDelayedClose('capture'); captureMenuOpen = !captureMenuOpen"
+          @mouseenter="cancelDelayedClose('capture')" @mouseleave="captureMenuOpen && delayedClose('capture')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
             <circle cx="12" cy="13" r="4" />
           </svg>
         </button>
         <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
-        <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu">
+        <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu"
+          @mouseenter="cancelDelayedClose('capture')" @mouseleave="delayedClose('capture')">
           <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('current')">截取当前帧</button>
           <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('first')">截取首帧</button>
           <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
@@ -1105,6 +1130,10 @@ watch(videoUrl, (prev) => {
   background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
   pointer-events: none;
 }
+/* 衬底挂在节点层（贴满底边，不再被控件条的左右边距截短） */
+.video-node > .vc-scrim {
+  z-index: 8;
+}
 .vc-capture {
   position: relative;
   display: flex;
@@ -1219,19 +1248,16 @@ watch(videoUrl, (prev) => {
   height: 26px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 50%;
   background: transparent;
   /* 控件叠在视频画面上（不是面板底色），用恒浅色前景保证任何画面上都读得清 */
   color: color-mix(in srgb, var(--ui-tip-ink, #fff) 88%, transparent);
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.18s ease;
 }
-.video-media ~ .video-controls .vc-btn,
-.video-controls .vc-btn {
-  filter: none;
-}
 .vc-btn:hover:not(:disabled) {
-  color: var(--ui-tip-ink, #fff);
+  /* 参考图 2：hover 出圆形浅底（参考 liblib 播放钮的白圈），白图标压上去依然清晰 */
+  background: rgba(255, 255, 255, 0.18);
 }
 .vc-btn:active:not(:disabled) {
   transform: scale(0.97);
@@ -1247,6 +1273,8 @@ watch(videoUrl, (prev) => {
   width: 15px;
   height: 15px;
   /* 渐变衬底已保证可读性，图标不再单独投影 */
+  /* 线条稍收细 + 圆角端点：观感更接近 liblib 的细线图标 */
+  stroke-width: 1.6;
 }
 
 .vc-time {
