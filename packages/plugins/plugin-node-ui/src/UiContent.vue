@@ -495,7 +495,13 @@ function onBridgeMessage(ev: MessageEvent): void {
       // 不用再等一条单独的"恢复"消息。
       const prev = (props.data?.uiInputs ?? {}) as Record<string, unknown>
       const patch = m.state && typeof m.state === 'object' ? (m.state as Record<string, unknown>) : { value: m.state }
-      doc.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
+      // 值没变就不写（2026-10-16 用户实测修复：页面 img.onload → publish → setInputs →
+      // 写节点 → onChange 回推 → applyInputs → showResult 新时间戳 → onload → publish
+      // …… 无限循环，同一张 jpg 刷出几百个请求）。逐键对比，**URL 类的值去掉
+      // ?v= 版本号再比**（iframe 每次上报都会带新时间戳，裸比永远"变了"），全等就跳过。
+      const stripV = (v: unknown) => (typeof v === 'string' ? v.split('?v=')[0] : v)
+      const changed = Object.keys(patch).some((k) => JSON.stringify(stripV(prev[k])) !== JSON.stringify(stripV(patch[k])))
+      if (changed) doc.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
     } else if (m.type === 'output' && typeof m.url === 'string' && m.url) {
       // 产物不进历史：它每次都覆盖同一个槽位地址，存进撤销栈只是白占内存。
       //
@@ -530,6 +536,11 @@ function onBridgeMessage(ev: MessageEvent): void {
       } else {
         patch[field] = versioned
       }
+      // 地址与节点现值"去版本号后"相同 ⇒ 只是同一份产物又一次上报（循环末梢），
+      // 不写节点 —— 写了就会触发 onChange 再推回页面，形成刷新风暴
+      // （2026-10-16 用户实测：一张 jpg 刷出几百个请求）。
+      const cur = (props.data?.[field] as string | undefined) ?? ''
+      if (field !== 'text' && cur.split('?')[0] === m.url.split('?')[0]) return
       doc.updateNodeRuntime(props.id, { data: patch })
     }
   } catch {
