@@ -267,8 +267,11 @@ export class ChatModel {
           this.recomputeText(turn)
         } else if (ev.final && typeof ev.text === 'string') {
           const last = turn.steps[turn.steps.length - 1]
+          // 同一条 final 重放（刷新后 hub 回放 + 常驻流各来一遍）：末块已是
+          // 同内容的 final 就直接跳过，否则会追加出第二份全文（真机 2026-10-16）。
+          if (last && last.type === 'text' && last.final && last.text === ev.text) return
           // 有开着的块 → 整块替换（delta 已经加过，再追加就显示两遍）；否则新开一块
-          if (marks.text && last && last.type === 'text' && !last.final) {
+          if (last && last.type === 'text' && !last.final) {
             last.text = ev.text
             last.final = true
           } else {
