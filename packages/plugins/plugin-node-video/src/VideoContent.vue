@@ -37,6 +37,7 @@ import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
+import { Play, Pause, Volume2, VolumeX, Camera, Maximize2 } from 'lucide-vue-next'
 
 /** 正有限数才算有值（与 videoFit 内同口径） */
 function positiveNum(v: unknown): number | null {
@@ -505,6 +506,16 @@ function cancelDelayedClose(kind: 'volume' | 'capture'): void {
 }
 let volumeCloseTimer: number | null = null
 let captureCloseTimer: number | null = null
+/** 两组下拉互斥：开一组就立刻收另一组（用户口径：同时只能有一个下拉） */
+function openExclusive(kind: 'volume' | 'capture'): void {
+  if (kind === 'volume') {
+    captureMenuOpen.value = false
+    volumeOpen.value = true
+  } else {
+    volumeOpen.value = false
+    captureMenuOpen.value = true
+  }
+}
 /** 竖向音量轨道：按住/划过都设值（pointer capture 保证拖出轨道也不丢） */
 function setVolumeFromEvent(e: PointerEvent): void {
   const track = e.currentTarget as HTMLElement
@@ -937,13 +948,8 @@ watch(videoUrl, (prev) => {
       :class="{ 'is-hidden': !hovering }" @dblclick.stop>
       <button class="vc-btn" type="button" :title="playing ? '暂停' : '播放'" :aria-label="playing ? '暂停' : '播放'"
         @click.stop="onPlayButton">
-        <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <polygon points="7,4 19,12 7,20" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <rect x="6" y="5" width="4" height="14" rx="1" />
-          <rect x="14" y="5" width="4" height="14" rx="1" />
-        </svg>
+        <Pause v-if="playing" class="vc-ico" :size="15" aria-hidden="true" />
+        <Play v-else class="vc-ico" :size="15" aria-hidden="true" />
       </button>
 
       <span class="vc-time vc-time-current">{{ playedTimeLabel }}</span>
@@ -958,20 +964,12 @@ watch(videoUrl, (prev) => {
       <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
 
       <!-- 音量组（liblib 同款）：hover 展开竖向滑块，离开即收 -->
-      <div class="vc-volume" @mouseenter="cancelDelayedClose('volume'); volumeOpen = true"
+      <div class="vc-volume" @mouseenter="cancelDelayedClose('volume'); openExclusive('volume')"
         @mouseleave="delayedClose('volume')">
         <button class="vc-btn" type="button" :title="volumeEffectiveMuted ? '取消静音' : '静音'" :aria-label="volumeEffectiveMuted ? '取消静音' : '静音'"
           @click.stop="muted = !muted">
-          <svg v-if="!volumeEffectiveMuted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M3 9v6h4l5 4V5L7 9H3z" />
-            <path d="M16 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M3 9v6h4l5 4V5L7 9H3z" />
-            <path d="M16 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8"
-              stroke-linecap="round" />
-          </svg>
+          <VolumeX v-if="volumeEffectiveMuted" class="vc-ico" :size="15" aria-hidden="true" />
+          <Volume2 v-else class="vc-ico" :size="15" aria-hidden="true" />
         </button>
         <!-- 竖向音量滑块：顶部数字 + 轨道（从下往上填充）+ 圆点滑块 -->
         <div v-if="volumeOpen" class="vc-volume-pop nodrag nopan nowheel"
@@ -991,12 +989,9 @@ watch(videoUrl, (prev) => {
       <div ref="captureMenuRef" class="vc-capture">
         <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
           :aria-expanded="captureMenuOpen" :aria-haspopup="'menu'"
-          @mouseenter="cancelDelayedClose('capture'); captureMenuOpen = true"
+          @mouseenter="cancelDelayedClose('capture'); openExclusive('capture')"
           @mouseleave="captureMenuOpen && delayedClose('capture')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-            <circle cx="12" cy="13" r="4" />
-          </svg>
+          <Camera class="vc-ico" :size="15" aria-hidden="true" />
         </button>
         <!-- 截帧菜单（liblib 同款三项）：向上弹出 -->
         <div v-if="captureMenuOpen" class="vc-capture-menu nodrag nopan nowheel" role="menu"
@@ -1007,13 +1002,7 @@ watch(videoUrl, (prev) => {
         </div>
       </div>
       <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放" @click.stop="openFullscreen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">
-          <polyline points="15 3 21 3 21 9" />
-          <polyline points="9 21 3 21 3 15" />
-          <line x1="21" y1="3" x2="14" y2="10" />
-          <line x1="3" y1="21" x2="10" y2="14" />
-        </svg>
+        <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />
       </button>
     </div>
 
@@ -1117,10 +1106,8 @@ watch(videoUrl, (prev) => {
   gap: 4px;
   /* 32px 行高：按钮 26px 与文字 12px 都在其中垂直居中，时间文字与播放按钮严格同轴 */
   height: 32px;
+  padding: 0 6px;
   transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.video-controls {
-  padding: 0 8px;
 }
 /* liblib 同款底部渐变衬底：压住画面下半部，控件文字不再依赖投影 */
 .vc-scrim {
@@ -1275,8 +1262,10 @@ watch(videoUrl, (prev) => {
   width: 15px;
   height: 15px;
   /* 渐变衬底已保证可读性，图标不再单独投影 */
-  /* 线条稍收细 + 圆角端点：观感更接近 liblib 的细线图标 */
-  stroke-width: 1.6;
+}
+.vc-btn .vc-ico {
+  /* lucide 线宽对齐 liblib 的细线观感 */
+  stroke-width: 1.75;
 }
 
 .vc-time {
@@ -1312,8 +1301,9 @@ watch(videoUrl, (prev) => {
   position: absolute;
   left: 0;
   right: 0;
-  /* 轨道压在热区垂直中心 */
-  top: 9.5px;
+  /* 轨道压在热区垂直中心：(22-3)/2 */
+  top: 50%;
+  margin-top: -1.5px;
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：liblib 的轨道是恒白低透明 */
@@ -1322,7 +1312,8 @@ watch(videoUrl, (prev) => {
 .vc-progress-fill {
   position: absolute;
   left: 0;
-  top: 9.5px;
+  top: 50%;
+  margin-top: -1.5px;
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：已播填充恒白（liblib 同款） */
@@ -1330,7 +1321,9 @@ watch(videoUrl, (prev) => {
   pointer-events: none;
 }
 .vc-progress-thumb {
-  top: 7px;
+  /* 圆球骑在轨道正中：(22-11)/2 */
+  top: 50%;
+  margin-top: -5.5px;
 }
 .vc-progress input {
   position: absolute;

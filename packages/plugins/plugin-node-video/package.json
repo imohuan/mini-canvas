@@ -27,7 +27,8 @@
     "@mini-canvas/canvas-base": "workspace:*",
     "@mini-canvas/canvas-data": "workspace:*",
     "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@mini-canvas/kernel": "workspace:*",
+    "lucide-vue-next": "^1.0.0"
     ,"@mini-canvas/plugin-bottom-bar": "workspace:*"
   },
   "peerDependencies": {
