@@ -2520,6 +2520,13 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   margin-bottom: 16px;
 }
 
+/* 用户消息间距收紧（用户口径 2026-10-16）：user 气泡自带 actions 行（时间/复制/编辑），
+   再叠 16px 下间距，连续气泡之间空得能塞下一条消息 —— 用户要求缩小。
+   助手消息保持 16px（阅读节奏不变）。 */
+.ac-msg.user {
+  margin-bottom: 4px;
+}
+
 /* —— 模型分割线（用户口径 2026-10-11）——
    切换模型 = 换一条会话（SDK 的模型钉在会话上），所以画一条横线把"换脑子"这件事说清楚。
    「中间一枚标签、两侧各一条发丝线」：与分支分页器同一族的"分隔"语义，不抢眼但要看得见。
