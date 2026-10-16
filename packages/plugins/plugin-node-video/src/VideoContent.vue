@@ -505,8 +505,9 @@ async function togglePlay(): Promise<void> {
     await v.play().catch(() => { })
   } else {
     v.pause()
-    // 暂停即离开：把画面切回帧图（用户口径是"离开就不再显示视频元素"）
-    stopAndRestorePoster()
+    // 单击暂停：画面**停在当前帧**（用户口径 2026-10-16：点画面=播放/暂停）。
+    // 不再立刻回帧图 —— 那会让"暂停"看起来像"消失"；只有鼠标真正离开节点
+    // （onCardLeave → stopAndRestorePoster）才定格回帧图。
   }
 }
 
