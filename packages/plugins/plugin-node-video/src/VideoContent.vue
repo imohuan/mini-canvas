@@ -167,14 +167,25 @@ const tierFrame = ref<TierFrame | null>(null)
  *
  * 全屏是独立的另一个 UI（用户口径），有自己的 video 元素，所以这里不涉及它。
  */
-const showPoster = computed(() => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0))
 /**
- * 帧图要不要还盖着（用户口径 2026-10-16）：
- * video 在**真正开始播放**（play 事件）之前一律让帧图顶着 ——
- * 加载中、解码中画面都还是帧图，直到 play 才把帧图藏掉。
- * play → false；pause/离开定格 → 回 true。
+ * 显隐状态机（用户口径 2026-10-17，三条硬规则）：
+ * ① 触发显示：鼠标落在节点上 → 立刻挂 video 并自动播放；
+ * ② 延迟关闭：video 开始播放 500ms 后才把帧图藏掉（黑帧由帧图盖住）；
+ * ③ 保持显示：鼠标不离开，video 元素**永不消失**——暂停、拖进度条、seek 都不回图片，
+ *    回图片只由「鼠标真正离开节点」触发（那时先定格抓帧、抓完再撤 video）。
  */
-const keepPosterOverVideo = computed(() => showPoster.value || !playing.value)
+const posterHideTimer: { value: number | null } = { value: null }
+/** true = 帧图还盖着；video 首次 play 后 500ms 翻 false */
+const posterCovering = ref(true)
+function schedulePosterHide(): void {
+  if (posterHideTimer.value !== null) window.clearTimeout(posterHideTimer.value)
+  posterHideTimer.value = window.setTimeout(() => {
+    posterHideTimer.value = null
+    posterCovering.value = false
+  }, 500)
+}
+const keepPosterOverVideo = computed(() => posterCovering.value)
+const showPoster = computed(() => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0))
 
 /**
  * 取帧时刻：第 0 帧常是黑场 / 片头，取第 1 秒更有代表性；
@@ -596,10 +607,14 @@ async function onPlayButton(): Promise<void> {
  */
 async function onCardEnter(): Promise<void> {
   hovering.value = true
-  // 作废还在进行中的定格（用户已经回到节点上，要的是播放）
+  // 作废还在进行中的定格 + 清掉挂着的帧图隐藏定时器（规则①：进来就播）
   freezeEpoch.value += 1
+  if (posterHideTimer.value !== null) { window.clearTimeout(posterHideTimer.value); posterHideTimer.value = null }
+  // 重新把帧图盖上（上次离开定格时它已撤掉），等这次 play 后再延迟关闭
+  posterCovering.value = true
   if (cropping.value || broken.value || !videoUrl.value) return
-  if (videoRequested.value && playing.value) return
+  // 已经播着 → 只重排帧图延迟关闭，不打断播放
+  if (videoRequested.value && playing.value) { schedulePosterHide(); return }
   await onPlayButton()
 }
 
@@ -608,6 +623,10 @@ async function onCardEnter(): Promise<void> {
  */
 function onCardLeave(): void {
   hovering.value = false
+  // 离开 = 唯一允许 video 消失的时机（规则③）：取消挂着的定时器、帧图顶上，
+  // 由 stopAndRestorePoster 定格抓帧后撤 video
+  if (posterHideTimer.value !== null) { window.clearTimeout(posterHideTimer.value); posterHideTimer.value = null }
+  posterCovering.value = true
   stopAndRestorePoster()
 }
 
@@ -692,6 +711,12 @@ function onVideoError(): void {
   // 会话级 objectURL 刷新后必然失效，如实标出来（不写进 data —— 那是会话事实，不是节点属性）
   broken.value = true
   playing.value = false
+}
+
+/** 视频开始播放：500ms 后撤帧图（规则②）。seek 后 play 会再触发 → 重排定时器，幂等 */
+function onVideoPlay(): void {
+  playing.value = true
+  schedulePosterHide()
 }
 
 // ==================== 截图 ====================
@@ -880,6 +905,7 @@ onBeforeUnmount(() => {
   if (stageClickTimer !== null) window.clearTimeout(stageClickTimer)
   if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
   if (captureCloseTimer !== null) window.clearTimeout(captureCloseTimer)
+  if (posterHideTimer.value !== null) window.clearTimeout(posterHideTimer.value)
   document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
   releaseFrameTiers()
   window.removeEventListener('keydown', onKeydown)
@@ -924,16 +950,17 @@ watch(videoUrl, (prev) => {
           帧图还没生成好时不渲染 img：留空由 stage 的底色顶着，**不挂 video**
           （挂了就违背"点播放才加载视频"）。生成通常在几十毫秒内完成。
         -->
-        <!-- 帧图与 video 是"叠放"：请求播放后两者同时挂载，
-             video **开始真正播放**（play 事件 → playing=true）才把帧图藏掉，
-             加载/解码期间用户看到的始终是帧图，不闪黑。 -->
+        <!-- 帧图与 video 是"叠放"：鼠标进节点 → video 立刻挂载并自动播放，
+             首次 play 后 500ms 才把帧图藏掉（延迟关闭）；之后只要鼠标不离开，
+             video 永不消失（暂停/拖进度条都保持视频画面）。 -->
         <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
           :class="{ 'is-framed': isFramed, 'is-cropping': cropping }" :style="videoStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
-          :muted="volumeEffectiveMuted" :volume="volume" @play="playing = true" @pause="playing = false" @error="onVideoError"
+          :muted="volumeEffectiveMuted" :volume="volume"
+          @play="onVideoPlay" @pause="playing = false" @error="onVideoError"
         />
 
       </template>
