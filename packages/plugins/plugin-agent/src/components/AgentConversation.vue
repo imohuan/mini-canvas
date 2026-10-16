@@ -1876,8 +1876,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
                  队列清空后才轮到目标下一轮。展示顺序跟执行顺序保持一致。 -->
           <!-- 编辑中的那条会**停住整个队列**（G7）：说清楚原因，别让用户以为卡住了 -->
           <VueDraggable :model-value="queue.rows" class="ac-queue-drag" :animation="180"
-            ghost-class="ac-queue-row--ghost" chosen-class="ac-queue-row--chosen" :force-fallback="true"
-            handle=".ac-queue-handle" @update:model-value="onQueueReorder">
+            ghost-class="ac-queue-row--ghost" chosen-class="ac-queue-row--chosen"
+            handle=".ac-queue-lead-swap" @update:model-value="onQueueReorder">
             <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
               :class="{ 'is-editing': row.editing, 'is-sending': row.sending, 'is-hover': hoverRowId === row.id }"
               @pointerenter="hoverRowId = row.id" @pointerleave="hoverRowId === row.id && (hoverRowId = null)">
@@ -3581,27 +3581,6 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-ink-dim, #919191);
 }
 
-/* 拖拽排序（用户口径 2026-10-16，Vue Draggable Plus）：
-   把手默认淡显、hover 行才实；拖起来的影子半透明。 */
-.ac-queue-handle {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  color: var(--ui-ink-mute, #8a8a8a);
-  opacity: 0.45;
-  cursor: grab;
-  transition: opacity 0.15s ease;
-}
-.ac-pending-row:hover .ac-queue-handle {
-  opacity: 1;
-}
-.ac-queue-handle:active {
-  cursor: grabbing;
-}
 /* 图标 hover 交换（用户口径 2026-10-16）：默认显示原图标，hover 行换成把手。
    两枚图标同格叠放（grid 同格），用 opacity 切换，尺寸一致不跳动。 */
 .ac-queue-lead-swap {
@@ -3609,28 +3588,34 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   place-items: center;
   width: 16px;
   flex: none;
+  /* 命中区=整个父元素（用户实测修正：handle 绑在子元素时命中区错位，
+     鼠标放在图标上没反应）。拖拽绑定（SortableJS handle）也在父元素上。 */
+  height: 20px;
+  cursor: grab;
+  border-radius: 4px;
+}
+.ac-queue-lead-swap:active {
+  cursor: grabbing;
 }
 .ac-queue-lead-swap > * {
   grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-/* 交换规则（合成/打包顺序不稳 → 用 !important 钉死优先级；scoped 下这是
-   少数合理的场景 —— 视觉交换是用户点名要的核心交互） */
+.ac-queue-lead-swap .ac-pending-lead {
+  transition: opacity 0.15s ease;
+}
 .ac-pending-row .ac-queue-lead-swap .ac-queue-handle {
-  opacity: 0 !important;
-  pointer-events: none;
+  opacity: 0;
 }
 .ac-pending-row:hover .ac-queue-lead-swap .ac-queue-handle,
 .ac-pending-row.is-hover .ac-queue-lead-swap .ac-queue-handle {
-  opacity: 1 !important;
-  pointer-events: auto;
-  cursor: grab;
+  opacity: 1;
 }
 .ac-pending-row:hover .ac-queue-lead-swap .ac-pending-lead,
 .ac-pending-row.is-hover .ac-queue-lead-swap .ac-pending-lead {
   opacity: 0;
-}
-.ac-queue-lead-swap .ac-pending-lead {
-  transition: opacity 0.15s ease;
 }
 .ac-queue-row--ghost {
   opacity: 0.4;
