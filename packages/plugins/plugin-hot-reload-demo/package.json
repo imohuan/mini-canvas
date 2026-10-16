@@ -13,12 +13,16 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
     "./*": "./src/*"
   },
   "scripts": {
     "build": "vite build",
     "build:watch": "vite build --watch",
+    "watch": "node scripts/watch-server.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -31,6 +35,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
+    "chokidar": "^5.0.0",
+    "esbuild": "^0.28.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vitest": "^3.0.0",

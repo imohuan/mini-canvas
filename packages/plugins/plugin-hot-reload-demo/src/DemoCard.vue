@@ -6,9 +6,9 @@
  * → 几秒内这块卡片应自己变样，右上角还会弹一条「热重载完成」的通知。
  */
 // 版本号：改这里 = 最省事的"显眼变化"（卡片上的大字直接变）
-const VERSION = 'v4'
-const TITLE = '热重载 v4 + 通知'
-const HINT = '卡片变了 + 右下角弹了通知 = 全链路完成'
+const VERSION = 'v7'
+const TITLE = '免后台 + 通知 v7'
+const HINT = '观察器抓到 toast = 视觉反馈闭环'
 </script>
 
 <template>
@@ -35,3 +35,4 @@ const HINT = '卡片变了 + 右下角弹了通知 = 全链路完成'
 .hrdemo-title { font-size: 14px; font-weight: 800; letter-spacing: 0.02em; }
 .hrdemo-hint { font-size: 11px; opacity: 0.9; }
 </style>
+
