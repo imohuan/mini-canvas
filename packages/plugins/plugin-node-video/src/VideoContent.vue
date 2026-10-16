@@ -62,6 +62,8 @@ const playing = ref(false)
  */
 const currentTime = ref(0)
 const duration = ref(0)
+/** 播完一轮的闩锁：一轮里"到段尾暂停"只执行一次，防 seek/暂停残余的 timeupdate 重复触发 */
+const endedLatch = ref(false)
 const broken = ref(false)
 const captureBusy = ref(false)
 
@@ -444,9 +446,11 @@ function stopAndRestorePoster(): void {
   // 且**抓完再切** —— 顺序反了 video 元素已经卸载，抓不到画面。
   if (frameTiers.value.size > 0) {
     videoRequested.value = false
+    endedLatch.value = false
     return
   } void freezeFrame().then(() => {
     videoRequested.value = false
+    endedLatch.value = false
   })
 }
 
@@ -572,11 +576,17 @@ function onLoadedMetadata(e: Event): void {
 
 function onTimeUpdate(e: Event): void {
   const v = e.target as HTMLVideoElement
+  // 只认当前活跃元素的事件：视频元素重新实例化后，旧元素的残余 timeupdate
+ // （暂停/seek 也会发）不能再来写时间 —— 两个时间源交替写 currentTime 就是进度条闪烁
+  if (v !== activeVideo()) return
   currentTime.value = v.currentTime
   playing.value = !v.paused
   const { start, end } = clipRange.value
-  // 播到剪辑段末尾：停了，并把画面停在结尾（不要让用户看到被剪掉的画面）
-  if (end > start && v.currentTime >= end) {
+  // 播到剪辑段末尾：停了，并把画面停在结尾（不要让用户看到被剪掉的画面）。
+  // endedLatch：一轮只停一次 —— seek/暂停期间 timeupdate 还会来，没有闩锁的话
+  // "暂停→拉回末尾"会被重复触发，第二轮开始时进度条在段尾和当前进度之间来回跳
+  if (end > start && !endedLatch.value && v.currentTime >= end) {
+    endedLatch.value = true
     v.pause()
     v.currentTime = end
     currentTime.value = end
