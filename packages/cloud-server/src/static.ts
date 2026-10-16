@@ -383,7 +383,14 @@ export function uiRoutes(uiDist: string | undefined): Hono {
       //
       // 为什么让服务端插而不是前端猜：看 URL/端口都不准（dev 走代理、端口会顺延，同源时分不出来），
       // 只有"发页面的人"自己声明最可靠。html 里已有 </head> 用来插；没有（异常产物）就原样发。
-      return c.body(injectHostFlag(index), 200, { 'content-type': MIME_BY_EXT['.html'] })
+      // no-cache（用户口径 2026-10-16）：前端更新后用户浏览器还在用**缓存的旧
+      // index.html** —— 旧 hash 引用的资产早已不在，新功能"永远加载不出来"，
+      // 必须手动清缓存。index.html 本体不带 hash，本就该每次校验；资产文件名里
+      // 有 content hash，可以放心长缓存（浏览器默认策略即可）。
+      return c.body(injectHostFlag(index), 200, {
+        'content-type': MIME_BY_EXT['.html'],
+        'cache-control': 'no-cache',
+      })
     }
     return c.html(NO_UI_PAGE, 200)
   })
