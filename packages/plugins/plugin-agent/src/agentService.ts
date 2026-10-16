@@ -1266,8 +1266,20 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
         // 没在跑 / 轮刚好结束：条目留在队列，调度器会按序发它。
         // 后端在 steer 失败分支已广播 queue 快照 —— 但本响应不是 SSE 订阅者收不到，
         // 这里主动拉一次队列快照，让界面立即看到「条目还在队首」而不是以为丢了。
+        // 同时给一句可见提示（用户实测 2026-10-16：空闲时点引导"完全没反应"，
+        // 不知道消息去哪了 —— 其实它还在队列里等下一轮）。
         const q = await api.getQueue(canvasId(), sid)
         if (q.queue) state.queue = q.queue
+        setError('当前没有正在运行的回复，这条消息还排在队列里，等下一轮自动发送')
+        // 用户口径 2026-10-16（二次修正）：空闲/暂停时点引导 = **直接发送这条**，
+        // 不是"留在队列等下一轮"—— 空闲时起一轮立即发才是用户点的本意。
+        // 从队列移除 + 正常发送（内容仍在，气泡照常出现）。
+        await api.queueOp(canvasId(), sid, { op: 'remove', itemId })
+        const fresh = await api.getQueue(canvasId(), sid)
+        if (fresh.queue) state.queue = fresh.queue
+        if (item) {
+          void send(item.text, item.images)
+        }
       }
     } catch (err) {
       setError('引导失败：' + (err instanceof Error ? err.message : String(err)))
