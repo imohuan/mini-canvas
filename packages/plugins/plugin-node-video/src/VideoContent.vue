@@ -952,6 +952,7 @@ watch(videoUrl, (prev) => {
         <input type="range" min="0" :max="playableLength" step="0.01" :value="playedInClip" aria-label="播放进度"
           @input="onSeek" />
         <span class="vc-progress-fill" :style="{ width: progressPct + '%' }" />
+        <span v-if="playableLength > 0" class="vc-progress-thumb" :style="{ left: progressPct + '%' }" />
       </label>
 
       <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
@@ -989,8 +990,9 @@ watch(videoUrl, (prev) => {
 
       <div ref="captureMenuRef" class="vc-capture">
         <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
-          :aria-expanded="captureMenuOpen" @click.stop="cancelDelayedClose('capture'); captureMenuOpen = !captureMenuOpen"
-          @mouseenter="cancelDelayedClose('capture')" @mouseleave="captureMenuOpen && delayedClose('capture')">
+          :aria-expanded="captureMenuOpen" :aria-haspopup="'menu'"
+          @mouseenter="cancelDelayedClose('capture'); captureMenuOpen = true"
+          @mouseleave="captureMenuOpen && delayedClose('capture')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
             <circle cx="12" cy="13" r="4" />
@@ -1299,7 +1301,8 @@ watch(videoUrl, (prev) => {
   position: relative;
   flex: 1;
   min-width: 60px;
-  height: 16px;
+  /* 拖拽热区：视觉是 3px 细条，命中区加高到 22px（透明方块垫在下面），细条上好拖 */
+  height: 22px;
   display: flex;
   align-items: center;
   cursor: pointer;
@@ -1309,20 +1312,25 @@ watch(videoUrl, (prev) => {
   position: absolute;
   left: 0;
   right: 0;
-  top: 6px;
+  /* 轨道压在热区垂直中心 */
+  top: 9.5px;
   height: 3px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--ui-tip-ink, #fff) 35%, transparent);
+  /* 不走主题色：liblib 的轨道是恒白低透明 */
+  background: rgba(255, 255, 255, 0.35);
 }
 .vc-progress-fill {
   position: absolute;
   left: 0;
-  top: 6px;
+  top: 9.5px;
   height: 3px;
   border-radius: 999px;
-  /* 已播填充 = 画布强调色（用户改品牌色时进度条一起变） */
-  background: var(--ui-accent, #22d3ee);
+  /* 不走主题色：已播填充恒白（liblib 同款） */
+  background: #fff;
   pointer-events: none;
+}
+.vc-progress-thumb {
+  top: 7px;
 }
 .vc-progress input {
   position: absolute;
@@ -1331,6 +1339,18 @@ watch(videoUrl, (prev) => {
   margin: 0;
   opacity: 0;
   cursor: pointer;
+}
+/* 进度圆球（liblib 同款）：白色圆点骑在填充末端，压在原生 input 之下、轨道之上 */
+.vc-progress-thumb {
+  position: absolute;
+  top: 7.5px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
 }
 /* 空态 / 失效态：站在灰底上，所以用节点文字色而不是白字（图片节点同一套） */
 .video-empty {
