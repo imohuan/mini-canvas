@@ -11,6 +11,30 @@ Total output lines: 7252
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-17，插件声明源自动登记 —— 热重载免后台 + 免手填）
+
+用户口径：前端启动时自动把插件自带的 watch 服务加进热重载监听，服务停了自动摘除；
+插件侧用通用方法对接（每个插件都用 canvas-base / 相同的打包习惯）；服务端不要动。
+
+**实现（三件，服务端零改动）**：
+
+1. **声明生成**（vite-plugin-lib 加 hotReloadManifest(sse)）：构建时把 SSE 地址写进
+   dist/hot-reload.json。为什么放 dist：/plugins/** 解析规则强拼 dist/（安全设计），
+   包根的 package.json 取不到，而 dist 的 json 本就在白名单里 —— 服务端一行不用改。
+2. **自动登记/摘除**（热重载管理器 syncPluginSources）：启动拉清单 → 逐插件取
+   /plugins/<pkg>/hot-reload.json → 有声明就登记（带「插件声明 · 」前缀）、地址变了就更新、
+   声明消失就摘除；**只动自动源，用户手填的不碰**；扫描失败不动现有状态。
+3. **接线**（ui hotReloadPlugin）：启动同步一次 + 10s 重扫（watch 起了/停了声明地址出现/消失
+   就跟着变），effect 卸载清定时器。
+
+**插件作者侧（就两步）**：vite.config 加 hotReloadManifest('http://localhost:5333/sse')；
+package.json 加 "watch": "node scripts/watch-server.mjs"（脚本可从 demo 包复制）。
+
+**验证**：plugin-hot-reload 15（新增 4 条：登记/摘除/地址更新/扫描失败不动状态）、
+demo 2、typecheck 干净（ui 剩 1 个错 = 另一会话 VideoContent 的 timeLabel，与本轮无关）。
+真机：页面刷新后自动出现「插件声明 · hot-reload-demo」源；清掉手填源后改 DemoCard v8，
+自动 build + SSE + 重装 + 右下角通知全通（截图存档）。
+
 ### 追记（2026-10-16，热重载完善：自动重装弹通知 + 试验台 demo + 全链路真机验证）
 
 用户口径：「我没有测试过热重载是否真的有效……创建一个专门测试用的插件」「先启动 demo 拿链接，
