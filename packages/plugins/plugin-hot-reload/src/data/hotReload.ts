@@ -138,6 +138,17 @@ export interface HotReloadDeps {
   pluginsOnOrigin?: (origin: string) => Promise<string[]>
   /** 存/取持久化（缺省 localStorage；测试可给内存版） */
   storage?: { getItem(k: string): string | null; setItem(k: string, v: string): void }
+  /**
+   * **重装提示**（视觉反馈）：某插件刚被自动重装了一遍就调它。
+   *
+   * 用户口径：「如果发生了热重载，希望能提供一个视觉上的提示，比如弹一个 notify」。
+   * 缺省实现 = 右下角弹一条 vue-sonner 通知（不用设置面板的 toast —— showToast 已停用），
+   * 但**注入了 onReloaded 就完全用注入的**（测试给假实现、宿主想换样式也从这里换）。
+   *
+   * 为什么只提示"自动重装"：手动点"重装"按钮时用户自己就在屏幕前按着按钮，
+   * 结果直接写在按钮上（重装中/完成）与日志里，再弹通知是噪音。
+   */
+  onReloaded?: (info: { plugin: string; sourceLabel: string }) => void
 }
 
 /** 持久化 key */
@@ -200,6 +211,22 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     return (deps.reload ?? defaultReload)(target)
   }
 
+  /** 自动重装成功后的视觉提示（注入优先；缺省右下角 vue-sonner 通知） */
+  function notifyReloaded(plugin: string, sourceLabel: string): void {
+    if (deps.onReloaded) {
+      deps.onReloaded({ plugin, sourceLabel })
+      return
+    }
+    // 缺省实现：vue-sonner 弹一条（延迟 import：Node 单测没有 DOM，不能在模块顶层引入）。
+    try {
+      void import('vue-sonner').then(({ toast }) => {
+        toast.success('热重载完成：' + plugin, { description: '来源：' + (sourceLabel || '未知来源') })
+      })
+    } catch {
+      /* 通知弹不出来不影响重装本身（比如 Node 环境） */
+    }
+  }
+
   /** 默认反查：从 /plugin-catalog.json 里挑出"产物地址落在该 origin"的插件名 */
   async function defaultPluginsOnOrigin(origin: string): Promise<string[]> {
     const res = await fetch('/plugin-catalog.json', { headers: { accept: 'application/json' } })
@@ -243,7 +270,10 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       const target = e.name || e.id || ''
       if (!target) return
       void reloadOne(target)
-        .then(() => log({ sourceId: source.id, sourceLabel: source.label, action: 'reload', detail: target }))
+        .then(() => {
+          log({ sourceId: source.id, sourceLabel: source.label, action: 'reload', detail: target })
+          notifyReloaded(target, source.label)
+        })
         .catch((err) => log({ sourceId: source.id, sourceLabel: source.label, action: 'error', detail: String(err) }))
     }
     es.onerror = () => {
@@ -343,6 +373,7 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       try {
         await reloadOne(n)
         log({ sourceId: source.id, sourceLabel: source.label, action: 'reload', detail: n })
+        notifyReloaded(n, source.label)
       } catch (err) {
         log({ sourceId: source.id, sourceLabel: source.label, action: 'error', detail: n + '：' + String(err) })
       }

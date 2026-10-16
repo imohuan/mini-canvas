@@ -12,7 +12,10 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
     "./*": "./src/*"
   },
   "scripts": {
@@ -22,7 +25,8 @@
   },
   "dependencies": {
     "@mini-canvas/canvas-data": "workspace:*",
-    "lucide-vue-next": "^1.0.0"
+    "lucide-vue-next": "^1.0.0",
+    "vue-sonner": "^2.0.9"
   },
   "peerDependencies": {
     "@mini-canvas/canvas-render": "workspace:*",
@@ -35,4 +39,3 @@
     "vue-tsc": "^3.2.8"
   }
 }
-

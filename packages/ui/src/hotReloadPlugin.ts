@@ -53,7 +53,14 @@ export const uiHotReloadPlugin: PluginModule = {
   }) {
     // 单例：挂 window（幂等 —— 已挂就用那一个），别的面板/控制台共享同一份
     const w = globalThis as unknown as Record<string, unknown>
-    const manager = (w[HOT_RELOAD_WINDOW_KEY] as ReturnType<typeof createHotReload> | undefined) ?? createHotReload()
+    const manager =
+      (w[HOT_RELOAD_WINDOW_KEY] as ReturnType<typeof createHotReload> | undefined) ??
+      createHotReload({
+        // 视觉反馈：自动重装成功 → 右下角弹一条 vue-sonner 通知。
+        // 用户口径：「如果发生了热重载，希望能提供一个视觉上的提示，比如弹一个 notify」。
+        // 缺省实现（数据层里那个）已经在弹 toast；这里不注入，直接用缺省 ——
+        // 留这段注释是说明"想换成别的展示（如画布内横幅）就在这里注入 onReloaded"。
+      })
     if (w[HOT_RELOAD_WINDOW_KEY] === undefined) w[HOT_RELOAD_WINDOW_KEY] = manager
 
     // 上架成服务：别的插件可 ctx.get('hot-reload') 拿同一份
