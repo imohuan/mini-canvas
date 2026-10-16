@@ -54,6 +54,13 @@ const fullscreenRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 const fullscreenOpen = ref(false)
 const playing = ref(false)
+/**
+ * video 元素是否已经"真的有画面"（readyState >= HAVE_CURRENT_DATA，即当前播放位置
+ * 已经解码出第一帧）。hover 自动播放时用它压住切换：帧图叠在 video 上继续显示，
+ * 直到这一位翻真才撤掉 —— 否则 video 挂上到首帧解码完成之间会闪出一片黑。
+ * （loadeddata 在 seek 后也会再发，任何时刻画面在，它就跟着翻真；离开时随 videoRequested 一起复位。）
+ */
+const videoHasFrame = ref(false)
 const currentTime = ref(0)
 const duration = ref(0)
 const broken = ref(false)
@@ -158,6 +165,8 @@ const tierFrame = ref<TierFrame | null>(null)
  * 全屏是独立的另一个 UI（用户口径），有自己的 video 元素，所以这里不涉及它。
  */
 const showPoster = computed(() => !videoRequested.value || (!hovering.value && frameTiers.value.size > 0))
+/** 帧图要不要还叠着：video 还没画出第一帧时必须顶住，撤早了就是黑屏闪烁 */
+const keepPosterOverVideo = computed(() => showPoster.value || !videoHasFrame.value)
 
 /**
  * 取帧时刻：第 0 帧常是黑场 / 片头，取第 1 秒更有代表性；
@@ -496,6 +505,7 @@ async function togglePlay(): Promise<void> {
 async function onPlayButton(): Promise<void> {
   if (!videoRequested.value) {
     videoRequested.value = true
+    videoHasFrame.value = false
     await nextTick()
   }
   await togglePlay()
@@ -554,6 +564,12 @@ function onLoadedMetadata(e: Event): void {
     const max = end > start ? end : v.duration
     v.currentTime = Number.isFinite(max) ? Math.min(resumeTime.value, max) : resumeTime.value
   }
+}
+
+/** video 当前位置解码出第一帧了（loadeddata / seeked / loadedmetadata 就绪时都会走到） */
+function onVideoHasData(): void {
+  const v = videoRef.value
+  if (v && v.readyState >= 2) videoHasFrame.value = true
 }
 
 function onTimeUpdate(e: Event): void {
@@ -777,12 +793,13 @@ watch(videoUrl, (prev) => {
           帧图还没生成好时不渲染 img：留空由 stage 的底色顶着，**不挂 video**
           （挂了就违背"点播放才加载视频"）。生成通常在几十毫秒内完成。
         -->
-        <img v-if="showPoster && posterDisplaySrc" class="video-media is-poster"
+        <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
           :class="{ 'is-framed': isFramed, 'is-cropping': cropping }" :style="videoStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
         <video v-else-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
-          @play="playing = true" @pause="playing = false" @error="onVideoError" />
+          @play="playing = true" @pause="playing = false" @error="onVideoError"
+          @loadeddata="onVideoHasData" @seeked="onVideoHasData" />
 
       </template>
 
@@ -904,6 +921,8 @@ watch(videoUrl, (prev) => {
    造成的比例偏差下留出两条黑边（图片节点那条"横屏宽几像素/竖屏高几像素"的教训）。 */
 .video-media.is-poster {
   object-fit: cover;
+  /* 与 video 短暂共存时压在上面（hover 自动播放要等首帧解码完才撤帧图，防止闪黑） */
+  z-index: 1;
   -webkit-user-drag: none;
 }
 
