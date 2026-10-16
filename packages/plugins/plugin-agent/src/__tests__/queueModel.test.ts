@@ -79,9 +79,9 @@ describe('queuePanelView', () => {
     const mix = queuePanelView(queueOf([item({ id: 'a', state: 'sending' }), item({ id: 'b', text: '排着' })]))
     expect(mix.pauseVisible).toBe(true)
     expect(mix.pendingCount).toBe(1)
-    // 已暂停 ⇒ 按钮留着（恢复入口），哪怕队列里只剩 sending
+    // 已暂停但过滤后无排队 ⇒ 按钮也消失（用户口径 2026-10-16：严格按"过滤后有没有任务"）
     const paused = queuePanelView(queueOf([item({ id: 'a', state: 'sending' })], true))
-    expect(paused.pauseVisible).toBe(true)
+    expect(paused.pauseVisible).toBe(false)
     // 全 queued ⇒ 显示
     const all = queuePanelView(queueOf([item({ id: 'a' }), item({ id: 'b' })]))
     expect(all.pauseVisible).toBe(true)

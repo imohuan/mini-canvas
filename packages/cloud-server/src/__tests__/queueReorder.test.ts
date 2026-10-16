@@ -34,7 +34,7 @@ async function add(text: string, state = 'queued') {
     ...q,
     items: [...q.items, { id: 'q-' + text, text, state: state as 'queued', createdAt: Date.now() }],
   }))
-  return r.items.find((it) => it.text === text)!.id
+  return r!.items.find((it) => it.text === text)!.id
 }
 
 beforeEach(async () => {

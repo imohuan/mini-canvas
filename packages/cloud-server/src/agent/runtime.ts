@@ -475,6 +475,14 @@ export class AgentRuntime {
         steered: true,
         ts: Date.now(),
       })
+      // 广播给所有订阅者（真机自动化 2026-10-16 抓到：steer 投递的 user_message 只落
+      // 转录不进 hub —— 队列自动发的气泡在界面上不出现，前端"steering 剥标记转气泡"
+      // 的链路也就没有输入）。形状与 run() 里那条 user_message 一致。
+      this.deps.hub?.append(canvasId, sessionId, {
+        type: 'user_message',
+        text,
+        ...(images?.length ? { images } : {}),
+      })
     }
     return steered
   }

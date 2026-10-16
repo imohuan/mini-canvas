@@ -130,7 +130,9 @@ export function queuePanelView(queue: QueueStateView | null | undefined): QueueP
     blocked: editing !== null,
     pauseLabel: paused ? '启动' : '暂停',
     pauseTitle: paused ? '启动队列自动发送' : '暂停队列自动发送',
-    pauseVisible: paused || pendingCount > 0,
+    // 用户口径 2026-10-16（T5b 真机验证修正）：过滤后没有排队条目就**一律不显示**，
+    // 暂停态也不例外 —— 队列空时调度器本来就不动，恢复入口没有意义。
+    pauseVisible: pendingCount > 0,
     pendingCount,
     hasItems: rows.length > 0,
   }

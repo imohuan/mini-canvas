@@ -1168,6 +1168,13 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
       state.running = false
       abort = null
       applyEvent({ type: 'done' })
+      // 本轮跑完后，如果队列里还有排着的条目，调度器会自动起下一轮 —— 那一轮的
+      // 事件走 hub 常驻通道，而 send 响应流已经断了。这里主动接上常驻流
+      // （真机自动化 2026-10-16 抓到：新会话发一条长任务 + 排队消息，队列在后台
+      // 逐条发出，界面却一直显示 queued —— 因为没有任何订阅者收 queue/user_message）。
+      if (state.queue.items.some((it) => it.state === 'queued' || it.state === 'sending')) {
+        attachStream(state.sessionId!)
+      }
       await listSessions()
     }
   }
