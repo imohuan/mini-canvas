@@ -1113,10 +1113,24 @@ function onPaste(e: ClipboardEvent): void {
   syncFromStore()
 }
 
+/**
+ * 页面里是否有非折叠的文本选择（普通文本被用户选中时，copy/cut 应归浏览器默认行为，
+ * 画布不得把它覆盖成节点数据 —— 用户报的"在页面上选中文字复制也被拦截"就是这条）。
+ * 输入框/可编辑区的选择由 onKeydown/onPaste 的 tagName 检查放行，这里只兜普通文本。
+ */
+function hasPlainTextSelection(): boolean {
+  const sel = window.getSelection?.()
+  if (!sel || sel.isCollapsed) return false
+  // 空的 range（有些浏览器在画布空白处给 isCollapsed=false 但无文本）不算选中
+  return sel.rangeCount > 0 && sel.toString().length > 0
+}
+
 /** 原生 copy/cut 仲裁：命中 deferToNative 的命令键由这里统一接管写剪贴板（见 onKeydown 注释） */
 function onClipboardWrite(e: ClipboardEvent, key: string): void {
   const t = e.target as HTMLElement | null
   if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return
+  // 页面上有用户选中的普通文本 → 放行浏览器默认复制/剪切（拷走选中的文字）
+  if (hasPlainTextSelection()) return
   const h = hostRef.value
   if (!h) return
   const entries = h.ctx
