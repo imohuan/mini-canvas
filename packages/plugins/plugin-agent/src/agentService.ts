@@ -972,6 +972,23 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
           lastAssistant.streaming = true
           // 正文已被转录覆盖到最后一拍；streaming 置位后 UI 显示加载指示，
           // 后续 text 增量由常驻流（attachStream）继续喂进来。
+        } else {
+          /**
+           * 刷新落在「用户回合已落盘、助手还没有任何输出」的窗口里（真机复现
+           * 2026-10-16）：转录里根本没有 assistant 回合可以标 streaming，
+           * 上面 find 拿到 undefined，加载 UI 就没了。这里补一条**空的助手占位**
+           * （与 send()/acceptUserMessage 的形态一致）：后续 text 事件由
+           * lastAssistant() 定位到它，内容照常往里写。
+           */
+          model.turns.push({
+            id: 'restore-' + Date.now(),
+            kind: 'assistant',
+            text: '',
+            thinking: '',
+            steps: [],
+            tools: [],
+            streaming: true,
+          })
         }
         state.running = true
       }
