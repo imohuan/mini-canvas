@@ -43,6 +43,7 @@ import {
   writeCredential,
   clearCredential,
 } from './debugSession'
+import { emitUiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -332,6 +333,21 @@ async function acceptDebugInvite(): Promise<void> {
     at: Date.now(),
   })
   debugSession.value = inv.session
+  // 聚焦到本节点（用户口径 2026-10-16：调试请求弹出来时，节点先聚焦 —— 等效快捷键 F；
+  // 点「同意」即进入调试阶段，画布把视线带到这个节点上）。
+  try {
+    const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
+    const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
+    const rect = layout?.getNodeRect(props.id)
+    if (viewport) {
+      if (rect) viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
+      else {
+        const node = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')?.getNode(props.id)
+        if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
+      }
+    }
+  } catch { /* 聚焦失败不拦调试 */ }
+  emitUiDebugEvent({ nodeId: props.id, kind: 'connected' })
   console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
   try {
@@ -702,8 +718,24 @@ if (typeof window !== 'undefined') {
   window.addEventListener('message', onDebugMessage)
 }
 
+/**
+ * iframe 内 SDK 的调试动作上报（__uiDebugEvt）→ 调试事件总线。
+ * 标题右侧的「调试」标签（DebugBadge）据此实时反映：收到指令 / 已执行 / 出错。
+ * （用户口径 2026-10-16：否则用户根本不知道调试通道有没有在工作。）
+ */
+function onDebugSdkEvent(ev: MessageEvent): void {
+  const m = ev.data as { __uiDebugEvt?: { kind?: unknown; detail?: unknown } } | null
+  if (!m || !m.__uiDebugEvt || typeof m.__uiDebugEvt.kind !== 'string') return
+  emitUiDebugEvent({
+    nodeId: props.id,
+    kind: m.__uiDebugEvt.kind as 'eval' | 'result' | 'error',
+    ...(typeof m.__uiDebugEvt.detail === 'string' ? { detail: m.__uiDebugEvt.detail } : {}),
+  })
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', onDebugSdkEvent)
+}
 
-/** 双击进入交互态 */
 function enterInteractive(): void {
   if (!hasHtml.value) return
   interactive.value = true

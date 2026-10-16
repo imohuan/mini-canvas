@@ -54,6 +54,11 @@ export interface NodeTypeDef {
    * 见 CanvasNodeType.titleExtra —— 类型自己声明，默认壳只按声明渲染。
    */
   titleExtra?: TitleExtraSource
+  /**
+   * 标题右侧的**组件插槽**（Component）：调试标签这类运行态内容由声明方自持状态，
+   * 壳只以 nodeId/data 挂载。与 titleExtra 同链透传（capabilities 的手写枚举别忘了加）。
+   */
+  titleExtraSlot?: import('vue').Component
   /** 一句话说明（可选）：菜单"新建节点"项 hover 小字；与 icon 同链，由类型自己声明 */
   description?: string
   /** 是否支持 resize（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取。 */
@@ -86,6 +91,7 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     nameTemplate: def.nameTemplate,
     icon: def.icon,
     titleExtra: def.titleExtra,
+    titleExtraSlot: def.titleExtraSlot,
     description: def.description,
     inputs: def.inputs,
     outputs: def.outputs,

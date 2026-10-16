@@ -1245,6 +1245,8 @@ function toggleQueuePause(): void {
 
 /** 行内 ⋯ 菜单开合（同一时刻只留一个） */
 const rowMenuId = ref<string | null>(null)
+/** 当前 hover 的队列行（图标 ⇄ 拖拽把手交换的驱动；用户口径 2026-10-16） */
+const hoverRowId = ref<string | null>(null)
 
 /**
  * 分页器**跟随消息**的锚点（用户口径 2026-10-07）：
@@ -1877,12 +1879,24 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             ghost-class="ac-queue-row--ghost" chosen-class="ac-queue-row--chosen" :force-fallback="true"
             handle=".ac-queue-handle" @update:model-value="onQueueReorder">
             <div v-for="row in queue.rows" :key="row.id" class="ac-pending-row ac-queue-row" role="listitem"
-              :class="{ 'is-editing': row.editing, 'is-sending': row.sending }">
-              <!-- 左侧把手（用户口径 2026-10-16：Vue Draggable Plus 拖拽排序）。
+              :class="{ 'is-editing': row.editing, 'is-sending': row.sending, 'is-hover': hoverRowId === row.id }"
+              @pointerenter="hoverRowId = row.id" @pointerleave="hoverRowId === row.id && (hoverRowId = null)">
+              <!-- 左侧图标 + 拖拽把手（用户口径 2026-10-16 二次修正）：默认显示**原来的
+                   图标**，hover 这一行时才换成拖拽把手 —— 图标不变会显得突兀，要"有变化"。
                    发送中 / 已发送的行没有把手 —— 它们的位置由调度器钉住，不参与排序。 -->
-              <span v-if="!row.sending && !row.sent" class="ac-queue-handle" aria-hidden="true"
-                title="拖动调整发送顺序">
-                <GripVertical :size="12" />
+              <span v-if="!row.sending && !row.sent" class="ac-queue-lead-swap" aria-hidden="true">
+                <span class="ac-pending-lead is-rest">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 3v12" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                </span>
+                <span class="ac-queue-handle" title="拖动调整发送顺序" :aria-label="'拖动 ' + (row.text || '').slice(0, 20)">
+                  <GripVertical :size="12" />
+                </span>
               </span>
               <span v-else class="ac-pending-lead" aria-hidden="true">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -3587,6 +3601,40 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 .ac-queue-handle:active {
   cursor: grabbing;
+}
+/* 图标 hover 交换（用户口径 2026-10-16）：默认显示原图标，hover 行换成把手。
+   两枚图标同格叠放（grid 同格），用 opacity 切换，尺寸一致不跳动。 */
+.ac-queue-lead-swap {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  flex: none;
+}
+.ac-queue-lead-swap > * {
+  grid-area: 1 / 1;
+}
+.ac-queue-lead-swap .ac-queue-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+.ac-pending-row:hover .ac-queue-lead-swap .ac-pending-lead {
+  opacity: 0;
+}
+.ac-pending-row.is-hover .ac-queue-lead-swap .ac-pending-lead {
+  opacity: 0;
+}
+.ac-pending-row:hover .ac-queue-lead-swap .ac-queue-handle {
+  opacity: 1;
+  pointer-events: auto;
+  cursor: grab;
+}
+.ac-pending-row.is-hover .ac-queue-lead-swap .ac-queue-handle {
+  opacity: 1;
+  pointer-events: auto;
+  cursor: grab;
+}
+.ac-queue-lead-swap .ac-pending-lead {
+  transition: opacity 0.15s ease;
 }
 .ac-queue-row--ghost {
   opacity: 0.4;

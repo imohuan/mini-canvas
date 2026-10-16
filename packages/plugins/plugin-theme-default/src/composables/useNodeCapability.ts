@@ -73,10 +73,17 @@ export function useNodeCapability(type: string) {
   const titleExtra = computed(() => nodeDef.value?.titleExtra);
 
   /**
+   * 该 type 声明的"标题右侧组件插槽"（Component；缺省 undefined = 不挂载）。
+   * 与 titleExtra 同一条路 —— 声明方（业务插件）拿自己的 Vue 副本定义组件，
+   * 壳只负责以 nodeId/data 挂载，组件内部自持响应式状态（调试标签等）。
+   */
+  const titleExtraSlot = computed(() => nodeDef.value?.titleExtraSlot);
+
+  /**
    * 该 type 的中文名（label）。标题条在没有 data.label 时用它兜底 ——
    * 以前回落成英文 type（text/image），界面上看着就不对。
    */
   const label = computed(() => nodeDef.value?.label);
 
-  return { hasTarget, hasSource, defaultSize, resizable, icon, titleExtra, frameless, transparent, loadingDefaultSize, label };
+  return { hasTarget, hasSource, defaultSize, resizable, icon, titleExtra, titleExtraSlot, frameless, transparent, loadingDefaultSize, label };
 }

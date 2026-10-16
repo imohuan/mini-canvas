@@ -15,7 +15,7 @@
 // 类型表要能**实时改默认尺寸**（设置面板调默认尺寸，未 resize 的节点立刻跟着变），
 // 所以注册进类型表的对象包一层 shallowReactive：只让**顶层**可追踪（`updateTypeSize` 是整体替换
 // `defaultSize` 这个属性），不深包装 icon/segments 等句柄 —— 深包装会把它们变成代理、破坏引用相等。
-import { shallowReactive } from 'vue'
+import { shallowReactive, type Component } from 'vue'
 
 /** 画布节点数据的最小可持久化形状 */
 export interface CanvasNode {
@@ -161,6 +161,13 @@ export interface CanvasNodeType {
    * 函数返回空串/undefined 时该节点不渲染这一格（拿不到尺寸就什么都不显示）。
    */
   titleExtra?: TitleExtraSource
+  /**
+   * 标题右侧的**组件插槽**（2026-10-16 升级）：除文本外，节点类型还可以直接给一个
+   * **组件**（插件用自己的 Vue 副本定义的纯对象组件，宿主统一挂载）。组件内部自己
+   * 持响应式状态 —— 典型用途：调试连接建立后，标题右侧常驻"调试"标签并随调试事件
+   * 更新内容（收到了什么消息、执行了什么），壳不参与任何业务。
+   */
+  titleExtraSlot?: Component
   /**
    * 一句话说明这个节点是干什么的（可选）。菜单"新建节点"项的 hover 小字读它。
    *

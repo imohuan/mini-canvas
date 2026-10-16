@@ -7,7 +7,7 @@
 //   4. 拖线反馈(消费 useCanvasRender().connectionState)：3D 倾斜 / 非法气泡 / valid/invalid / 拖线时压源口。
 //   5. LOD：zoom 低时简化渲染。
 // 依赖最新 API：useCanvasRender() 统一上下文（registry/nodeWrite/handleParams/connectionState + flow facade）。
-import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import {
   Position,
   useCanvasRender,
@@ -585,6 +585,12 @@ const titleExtraText = computed(() => {
     return ''
   }
 })
+/**
+ * 标题右侧的**组件插槽**（2026-10-16）：节点类型注册的 titleExtraSlot（Component）——
+ * 典型用途是调试连接建立后常驻的"调试"标签。组件由声明方（业务插件）提供，
+ * 壳只负责挂载，并以 nodeId/data 注入初始 props —— 声明方内部自持响应式状态。
+ */
+const titleExtraSlotComp = computed(() => cap.titleExtraSlot?.value as Component | undefined)
 
 // ============ hover 状态（控制端口醒目与阴影）============
 /** 鼠标在卡片上（卡片根 enter/leave 单一权威，勿被端口 zone 覆写） */
@@ -966,9 +972,13 @@ function clamp(value: number, min: number, max: number): number {
             <TitleLabel :label="nodeLabel" :editing="isEditingTitle" @commit="commitTitleEdit"
               @cancel="cancelTitleEdit" />
           </template>
-          <!-- 标题右侧附加文本：内容全部来自节点类型声明的 titleExtra（壳不认识业务类型）。
-               空串就不占位（BaseTitle 那一格本来就是 ≤20% 的收缩槽）。 -->
-          <template v-if="titleExtraText" #title-extra>
+          <!-- 标题右侧插槽：优先渲染节点类型注册的 titleExtraSlot 组件（调试标签等
+               运行态内容由声明方自持）；否则回落到 titleExtra 文本。两者都空就不占位
+               （BaseTitle 那一格本来就是 ≤20% 的收缩槽）。 -->
+          <template v-if="titleExtraSlotComp" #title-extra>
+            <component :is="titleExtraSlotComp" :node-id="id" :data="data" />
+          </template>
+          <template v-else-if="titleExtraText" #title-extra>
             <span class="v2-title-extra">{{ titleExtraText }}</span>
           </template>
         </BaseTitle>

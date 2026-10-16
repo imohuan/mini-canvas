@@ -28,6 +28,7 @@
 import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { extractHtml, normalizeInputs, normalizeUpstream, type UiInputDecl } from './uiData'
+import DebugBadge from './DebugBadge.vue'
 import { fetchBackendOrigin } from './uiOrigin'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
 import UiContent from './UiContent.vue'
@@ -192,6 +193,9 @@ export function apply(ctx: Context) {
     nameTemplate: '可视化 {{ID}}',
     description: '一块画布：内容由 Agent 生成（HTML 就地渲染）',
     icon: NODE_ICON,
+    // 标题右侧的「调试」标签插槽（用户口径 2026-10-16）：调试连接建立后常驻显示，
+    // 并随调试事件（收到指令 / 已执行 / 出错）实时更新 —— 否则用户不知道通道是否工作。
+    titleExtraSlot: DebugBadge,
     size: { w: 420, h: 320 },
     // 保留卡片边框（2026-10-12 与图片/视频节点同一条口径）：空的可视化节点是一块白面板，
     // 没有边框就与画布背景分不出来。边框由共享外壳 BaseNode 画，本插件不自己画框。

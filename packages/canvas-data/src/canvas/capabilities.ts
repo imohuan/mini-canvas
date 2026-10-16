@@ -289,6 +289,7 @@ export function buildCapabilities(
           nameTemplate: def.nameTemplate,
           icon: def.icon,
           titleExtra: def.titleExtra,
+          titleExtraSlot: def.titleExtraSlot,
           description: def.description,
           inputs: def.inputs,
           outputs: def.outputs,
