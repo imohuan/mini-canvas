@@ -455,36 +455,14 @@ function syncFromStore(): void {
     edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
   syncNodesFromStore()
-  // —— 新增节点视口跟随（2026-10-16）：右键/Agent/拖拽建节点时 position 可能在视口外，
-  //  可见剔除会把视口外节点 hidden —— 用户看不到刚建的节点。检测新增，视口自动平移过去（带动画）。
-  //  批量建只对最后一批的中心做一次 setCenter；boot 首次灌入（prev 为空）不跟随（走 fitView 基线）。
+  // —— 新增节点重扫可视区域（2026-10-16 用户口径：**不要聚焦、不要移动视口**，
+  //  只需要新建节点时手动重扫一遍剔除集合，让新节点不被误隐藏）：
   const nowIds = new Set(h.nodeStore.getNodes().map((n) => n.id))
   if (prevNodeIds.size > 0) {
     const added = [...nowIds].filter((id) => !prevNodeIds.has(id))
     if (added.length > 0) {
-      const positions = h.nodeStore
-        .getNodes()
-        .filter((n) => added.includes(n.id))
-        .map((n) => n.position)
-      const cx = positions.reduce((s2, p) => s2 + p.x, 0) / positions.length
-      const cy = positions.reduce((s2, p) => s2 + p.y, 0) / positions.length
-      // 用户建议（2026-10-16）：新增节点后**手动重扫可视区域**（refreshCull 强制把新节点
-      // 纳入可见集合）—— 否则新节点不在 cullIds 里被 hidden，聚焦了也看不到。
       refreshCull()
       syncNodesFromStore()
-      const vp = surfaceRef.value?.getViewport?.()
-      const curZoom = vp?.zoom ?? 1
-      // 缩放下限：当前缩放低于此值时提到此值（节点太小看不清）；否则保持用户当前缩放不变
-      const FOCUS_MIN_ZOOM = 0.5
-      const zoom = Math.max(curZoom, FOCUS_MIN_ZOOM)
-      // 视口尺寸（pane 优先，回落窗口）
-      const pane = surfaceRef.value?.getPaneRect?.()
-      const vw = pane?.width || window.innerWidth
-      const vh = pane?.height || window.innerHeight
-      // F 键同款数学：视口中心对准新节点包围盒中心（zoom 保持/提下限）
-      const vx = vw / 2 - cx * zoom
-      const vy = vh / 2 - cy * zoom
-      surfaceRef.value?.animateViewport?.({ x: vx, y: vy, zoom })
     }
   }
   prevNodeIds = nowIds
