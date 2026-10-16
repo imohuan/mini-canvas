@@ -795,10 +795,16 @@ watch(videoUrl, (prev) => {
           帧图还没生成好时不渲染 img：留空由 stage 的底色顶着，**不挂 video**
           （挂了就违背"点播放才加载视频"）。生成通常在几十毫秒内完成。
         -->
+        <!-- 帧图与 video 是"叠放"不是"二选一"：请求播放后两者同时挂载，
+             帧图盖在上面等首帧解码完才撤（keepPosterOverVideo）。
+             之前写成 v-if/v-else-if 的二选一，帧图压住期间 video 根本不在 DOM，
+             播放按钮点下去 togglePlay 拿不到元素、完全没反应（2026-10-16 用户实测）。 -->
         <img v-if="keepPosterOverVideo && posterDisplaySrc" class="video-media is-poster"
           :class="{ 'is-framed': isFramed, 'is-cropping': cropping }" :style="videoStyle" :src="posterDisplaySrc"
           alt="视频帧" draggable="false" />
-        <video v-else-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
+        <!-- 两个独立 v-if（不是 v-else）：video 只看"请求播放"，与帧图在不在无关，
+             否则帧图未生成时会把 video 顶出来，违背"点播放才加载视频"。 -->
+        <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
           @play="playing = true" @pause="playing = false" @error="onVideoError"
           @loadeddata="onVideoHasData" @seeked="onVideoHasData" />
