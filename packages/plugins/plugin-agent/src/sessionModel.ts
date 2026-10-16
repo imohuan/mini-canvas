@@ -420,8 +420,9 @@ export class ChatModel {
       if (t.role === 'assistant') {
         if (t.error) {
           // 失败记录（用户口径 2026-10-16）：错误要在对话流里留痕、刷新后仍可见。
-          current.error = t.text
-          current.steps.push({ type: 'text', id: this.nextStepId(current), text: t.text, final: true })
+          // 只挂 current.error（红色 ac-error 渲染）——不要再 push text step，
+          // 否则错误会以黑字正文 + 红字错误各显示一遍（用户截图 2026-10-16）。
+          current.error = current.error ? current.error + String.fromCharCode(10) + t.text : t.text
         } else {
           current.text = current.text ? current.text + String.fromCharCode(10) + t.text : t.text
           // 每一段助手文字各自成一步：回放时「文字 / 工具 / 文字」的顺序照样还原得出来
