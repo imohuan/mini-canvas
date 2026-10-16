@@ -94,18 +94,15 @@ describe('groupTurnBlocks', () => {
   })
 
   /**
-   * 用户报（2026-10-06）：三个工具之间隔着思考，被拆成了三组 —— 但 UI 里思考
-   * 是并到顶部「思考过程」折叠块统一展示的，中间**不显示**，于是用户看到的是
-   * 「三个连续的工具调用」却没合并。
-   * 结论：**思考不是分界线** —— 只有正文文字才是。思考夹在工具中间不拆组。
+   * 用户口径修订（2026-10-16）：思考**也是分界线** —— 多轮思考按发生位置原位展示，
+   * 旧口径（全部堆到顶部）让第三轮的思考跑进了第一轮的思考块里，中间明明隔着工具。
    */
-  it('思考夹在工具中间不拆组（思考不是分界线）', () => {
+  it('思考夹在工具中间 → 原位成行（思考是分界线）', () => {
     const { steps, tools } = build(['t', { tool: 'a' }, 'k', { tool: 'b' }, 'k', { tool: 'c' }])
     const rows = groupTurnBlocks(steps, tools)
-    // 思考并成一块且**始终在最前**（UI 顶部「思考过程」折叠块）；三个工具一组
-    expect(rows.map((r) => r.type)).toEqual(['thinking', 'text', 'tools'])
-    expect(rows[0].type === 'thinking' && rows[0].text).toBe('K3K5')
-    expect(rows[2].type === 'tools' && rows[2].tools).toHaveLength(3)
+    expect(rows.map((r) => r.type)).toEqual(['text', 'tools', 'thinking', 'tools', 'thinking', 'tools'])
+    expect(rows[2].type === 'thinking' && rows[2].text).toBe('K3')
+    expect(rows[4].type === 'thinking' && rows[4].text).toBe('K5')
   })
 
   it('正文文字仍然是分界线（思考不改变这一点）', () => {

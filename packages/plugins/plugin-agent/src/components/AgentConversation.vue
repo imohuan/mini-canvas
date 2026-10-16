@@ -1639,18 +1639,21 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
             <!-- 用户靠右 / 助手靠左（照参考图，都没有头像） -->
             <div v-else class="ac-msg" :class="[t.kind, { 'is-editing': t.editing }]">
               <div class="ac-bubble">
-                <button v-if="t.thinking" class="ac-think-toggle" @click="toggleThinking(t.id)">
-                  <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id] }" />思考过程
-                </button>
-                <pre v-if="t.thinking && openThinking[t.id]" class="ac-think">{{ t.thinking }}</pre>
-
                 <!-- 助手内容**按到达顺序**逐块渲染（用户口径 2026-10-05）：
                  文字一段、中间没有文字隔开的多个工具合并成一组、再一段文字。
                  以前这里是「先把所有工具画完、再画正文」，所以工具永远堆在最上面、看不出时序。
-                 注意：这里只接 text / tools 两种行；thinking 行**不在这里画** ——
-                 思考仍由上面那条「思考过程」折叠行统一展示（它仍是工具组的分界，见 groupTurnBlocks）。 -->
+                 注意：思考现在也是分界线（用户口径 2026-10-16）：每段思考按发生位置
+                 原位渲染成折叠行（thinking 行），不再统一堆到顶部。 -->
                 <template v-for="row in assistantRows(t)" :key="row.key">
                   <AgentMarkdown v-if="row.type === 'text' && row.text" :text="row.text" />
+
+                  <!-- 原位思考折叠行：这一段思考发生在它所处的位置（用户口径 2026-10-16） -->
+                  <div v-else-if="row.type === 'thinking' && row.text" class="ac-think-inline">
+                    <button class="ac-think-toggle" @click="toggleThinking(t.id + ':' + row.key)">
+                      <ChevronRight :size="12" :class="{ 'ac-rot': openThinking[t.id + ':' + row.key] }" />思考过程
+                    </button>
+                    <pre v-if="openThinking[t.id + ':' + row.key]" class="ac-think">{{ row.text }}</pre>
+                  </div>
 
                   <!-- 单工具：**只有带自定义卡片的画布 MCP 工具**才直接展示卡片；
                    其余全部走默认折叠行（用户口径 2026-10-10：审批有自己的卡片 UI，
@@ -2936,6 +2939,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-ink-dim, #919191);
   font-size: 12px;
   cursor: pointer;
+}
+
+/* 原位思考折叠块（用户口径 2026-10-16）：每段思考独立成块、按发生位置展示 */
+.ac-think-inline {
+  margin: 2px 0 8px;
 }
 
 .ac-rot {
