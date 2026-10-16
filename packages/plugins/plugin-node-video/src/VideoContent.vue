@@ -481,6 +481,30 @@ const playedTimeLabel = computed(() => formatTime(playedInClip.value))
 const totalTimeLabel = computed(() => formatTime(playableLength.value))
 /** 静音开关（liblib 控件里的喇叭按钮；默认有声，点一下静音） */
 const muted = ref(false)
+/** 音量（0~1）：hover 喇叭弹出竖向滑块可调；音量为 0 视同静音 */
+const volume = ref(1)
+const volumeEffectiveMuted = computed(() => muted.value || volume.value <= 0)
+const volumeOpen = ref(false)
+let volumeDragging = false
+/** 竖向音量轨道：按住/划过都设值（pointer capture 保证拖出轨道也不丢） */
+function setVolumeFromEvent(e: PointerEvent): void {
+  const track = e.currentTarget as HTMLElement
+  const r = track.getBoundingClientRect()
+  const pct = 1 - Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+  volume.value = Math.round(pct * 100) / 100
+  if (volume.value > 0) muted.value = false
+}
+function onVolumeTrackDown(e: PointerEvent): void {
+  volumeDragging = true
+  ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  setVolumeFromEvent(e)
+}
+function onVolumeTrackMove(e: PointerEvent): void {
+  if (volumeDragging) setVolumeFromEvent(e)
+}
+function onVolumeTrackUp(): void {
+  volumeDragging = false
+}
 /** 截帧菜单展开态：当前帧 / 首帧 / 尾帧 */
 const captureMenuOpen = ref(false)
 
@@ -875,7 +899,7 @@ watch(videoUrl, (prev) => {
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
         <video v-if="!showPoster" ref="videoRef" class="video-media" :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
-          :muted="muted" @play="playing = true" @pause="playing = false" @error="onVideoError"
+          :muted="volumeEffectiveMuted" :volume="volume" @play="playing = true" @pause="playing = false" @error="onVideoError"
         />
 
       </template>
@@ -911,19 +935,34 @@ watch(videoUrl, (prev) => {
 
       <span class="vc-time vc-time-total">{{ totalTimeLabel }}</span>
 
-      <button class="vc-btn" type="button" :title="muted ? '取消静音' : '静音'" :aria-label="muted ? '取消静音' : '静音'"
-        @click.stop="muted = !muted">
-        <svg v-if="!muted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M3 9v6h4l5 4V5L7 9H3z" />
-          <path d="M16 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8"
-            stroke-linecap="round" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M3 9v6h4l5 4V5L7 9H3z" />
-          <path d="M16 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8"
-            stroke-linecap="round" />
-        </svg>
-      </button>
+      <!-- 音量组（liblib 同款）：hover 展开竖向滑块，离开即收 -->
+      <div class="vc-volume" @mouseenter="volumeOpen = true" @mouseleave="volumeOpen = false">
+        <button class="vc-btn" type="button" :title="volumeEffectiveMuted ? '取消静音' : '静音'" :aria-label="volumeEffectiveMuted ? '取消静音' : '静音'"
+          @click.stop="muted = !muted">
+          <svg v-if="!volumeEffectiveMuted" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3z" />
+            <path d="M16 8.5a4.5 4.5 0 0 1 0 7" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M3 9v6h4l5 4V5L7 9H3z" />
+            <path d="M16 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8"
+              stroke-linecap="round" />
+          </svg>
+        </button>
+        <!-- 竖向音量滑块：顶部数字 + 轨道（从下往上填充）+ 圆点滑块 -->
+        <div v-if="volumeOpen" class="vc-volume-pop nodrag nopan nowheel">
+          <span class="vc-volume-value">{{ Math.round(volume * 100) }}</span>
+          <div class="vc-volume-track" role="slider" :aria-label="'音量 ' + Math.round(volume * 100) + '%'"
+            :aria-valuemin="0" :aria-valuemax="100" :aria-valuenow="Math.round(volume * 100)" tabindex="0"
+            @pointerdown.stop="onVolumeTrackDown" @pointermove="onVolumeTrackMove" @pointerup="onVolumeTrackUp"
+            @keydown.down.stop.prevent="volume = Math.max(0, Math.round((volume - 0.05) * 100) / 100)"
+            @keydown.up.stop.prevent="volume = Math.min(1, Math.round((volume + 0.05) * 100) / 100)">
+            <span class="vc-volume-fill" :style="{ height: Math.round(volume * 100) + '%' }" />
+            <span class="vc-volume-thumb" :style="{ bottom: 'calc(' + Math.round(volume * 100) + '% - 6px)' }" />
+          </div>
+        </div>
+      </div>
 
       <div ref="captureMenuRef" class="vc-capture">
         <button class="vc-btn" type="button" title="截取画面" aria-label="截取画面" :disabled="captureBusy"
@@ -1071,14 +1110,78 @@ watch(videoUrl, (prev) => {
   display: flex;
   flex: none;
 }
+/* —— 音量组：hover 喇叭向上弹出竖向滑块（liblib 同款） —— */
+.vc-volume {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.vc-volume-pop {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  z-index: 12;
+  width: 34px;
+  padding: 8px 0 10px;
+  border-radius: 8px;
+  background: rgba(17, 17, 17, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.vc-volume-value {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 11px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.vc-volume-track {
+  position: relative;
+  width: 4px;
+  height: 76px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  /* 扩大命中区：轨道细但手能点中 */
+  touch-action: none;
+}
+.vc-volume-track::before {
+  content: '';
+  position: absolute;
+  inset: 0 -10px;
+}
+.vc-volume-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: #fff;
+}
+.vc-volume-thumb {
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.vc-capture-menu {
 .vc-capture-menu {
   position: absolute;
   right: 0;
   bottom: 30px;
   z-index: 12;
-  min-width: 112px;
-  padding: 4px;
-  border-radius: 10px;
+  min-width: 118px;
+  padding: 6px;
+  border-radius: 12px;
   background: rgba(17, 17, 17, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
@@ -1088,12 +1191,12 @@ watch(videoUrl, (prev) => {
 .vc-capture-item {
   display: block;
   width: 100%;
-  padding: 6px 10px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 18px;
   text-align: left;
   cursor: pointer;
