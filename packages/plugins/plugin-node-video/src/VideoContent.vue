@@ -1301,9 +1301,8 @@ watch(videoUrl, (prev) => {
   position: absolute;
   left: 0;
   right: 0;
-  /* 轨道压在热区垂直中心：(22-3)/2 */
-  top: 50%;
-  margin-top: -1.5px;
+  /* 轨道压在热区垂直中心：(22-3)/2 = 9.5px（用固定值，别用 50% —— 相对定位盒的高度解析有差异） */
+  top: 9.5px;
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：liblib 的轨道是恒白低透明 */
@@ -1312,18 +1311,12 @@ watch(videoUrl, (prev) => {
 .vc-progress-fill {
   position: absolute;
   left: 0;
-  top: 50%;
-  margin-top: -1.5px;
+  top: 9.5px;
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：已播填充恒白（liblib 同款） */
   background: #fff;
   pointer-events: none;
-}
-.vc-progress-thumb {
-  /* 圆球骑在轨道正中：(22-11)/2 */
-  top: 50%;
-  margin-top: -5.5px;
 }
 .vc-progress input {
   position: absolute;
@@ -1336,7 +1329,7 @@ watch(videoUrl, (prev) => {
 /* 进度圆球（liblib 同款）：白色圆点骑在填充末端，压在原生 input 之下、轨道之上 */
 .vc-progress-thumb {
   position: absolute;
-  top: 7.5px;
+  top: 5.5px;
   width: 11px;
   height: 11px;
   margin-left: -5.5px;
