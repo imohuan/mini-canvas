@@ -940,6 +940,12 @@ const hint = computed(() => {
   height: 100%;
   border: 0;
   background: transparent;
+  /*
+   * 为什么加 translateZ(0)：外层画布用 transform: scale() 缩放，iframe 是独立合成层，
+   * Chromium 缩放过程中/停稳在非整数 zoom 时偶发不重光栅 —— 用户看到的「有时模糊」。
+   * 提升到自己的合成层后跟随父层重采样，停稳即清晰（2026-10-17 真机验证 1.18x 清晰）。
+   */
+  transform: translateZ(0);
 }
 
 /* 交互遮罩：透明、盖满，负责"把事件让回画布" */
