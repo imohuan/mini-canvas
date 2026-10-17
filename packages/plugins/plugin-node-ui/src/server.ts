@@ -1431,6 +1431,11 @@ export function apply(ctx: ServerCtx): void {
       if (!sess) return { ok: false, error: '这张画布没有挂着的调试会话' }
       const push = debugSse.get(sess.session)
       push?.({ type: 'stop' })
+      // 轮询通道也要送 stop（2026-10-17 真机：SSE 在 sandbox iframe 里不可靠，
+      // 只 push SSE 的话 SDK 根本收不到 stop —— 徽标不熄、凭据不清、拦截不摘）。
+      const backlog = debugEvals.get(sess.session) ?? []
+      backlog.push({ type: 'stop' as never, id: '', code: '' })
+      debugEvals.set(sess.session, backlog)
       // 等 stop 送达（最多 2 秒）再清，避免 SDK 还挂着就丢队列
       await new Promise((r2) => setTimeout(r2, 300))
       debugSessions.delete(canvasId)
