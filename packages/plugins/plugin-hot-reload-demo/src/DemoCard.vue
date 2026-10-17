@@ -6,9 +6,9 @@
  * → 几秒内这块卡片应自己变样，右上角还会弹一条「热重载完成」的通知。
  */
 // 版本号：改这里 = 最省事的"显眼变化"（卡片上的大字直接变）
-const VERSION = 'v13'
-const TITLE = '签名对比修复 v13'
-const HINT = 'Content-Length 签名 + KV 门铃 = 真正全通'
+const VERSION = 'v15'
+const TITLE = '无 UI 版最终验证 v15'
+const HINT = '面板已删，KV 监听照常工作'
 </script>
 
 <template>
@@ -18,13 +18,16 @@ const HINT = 'Content-Length 签名 + KV 门铃 = 真正全通'
       <strong class="hrdemo-title">{{ TITLE }}</strong>
       <span class="hrdemo-hint">{{ HINT }}</span>
 
-       11123123
+       12312123
     </div>
   </div>
 </template>
 
-<style scoped>
+<style >
 .hrdemo {
+  position: absolute;
+  left: 0;
+  top: 100px;
   pointer-events: auto;
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; border-radius: 14px;

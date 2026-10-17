@@ -33,6 +33,14 @@ export interface CatalogEntry {
   /** 是否自带（随应用冷启动、只读展示，不给安装/卸载按钮） */
   builtin?: boolean
   /**
+   * 本插件**自带的**热重载 SSE 地址（可选）。
+   *
+   * 用户口径：插件作者在自己包里跑一个 watch 服务（盯 src → 自动 build → /sse 广播），
+   * 把地址声明在这里。前端热重载管理器启动时读清单，见到就**自动登记监听**，
+   * 清单里消失（插件卸载 / 服务没跑）就自动移除 —— 用户不用手动填链接。
+   */
+  hotReload?: string
+  /**
    * 后台插件产物（同一个包里若还有 dist/server.js 就有这一项）。
    *
    * 用户要的体验：**一个插件 = 前后端一起装**。前后端是同一个发布单元的两半，
@@ -94,6 +102,7 @@ export function normalizeCatalog(raw: unknown): CatalogEntry[] {
         : {}),
       ...(typeof e.defaultInstalled === 'boolean' ? { defaultInstalled: e.defaultInstalled } : {}),
       ...(e.builtin === true ? { builtin: true } : {}),
+      ...(typeof e.hotReload === 'string' && e.hotReload ? { hotReload: e.hotReload } : {}),
       ...(e.server && typeof e.server === 'object' && typeof e.server.url === 'string' && e.server.url
         ? {
             server: {
