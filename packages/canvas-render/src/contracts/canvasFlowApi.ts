@@ -108,6 +108,11 @@ export interface CanvasFlowController extends CanvasFlowApi {
   attachFlow(backend: ViewportBackend): void
   /** DOM 锚点就绪 → dom-ready（必须在 attachFlow 之后） */
   attachDom(dom: CanvasFlowDomApi, paneRect?: DOMRect | null): void
+  /**
+   * 更新 pane 实测矩形（窗口缩放 / 响应式布局变化后由 CanvasSurface 持续观测写入）。
+   * 与 attachDom 分开：DOM 锚点没换，只是尺寸变了，不必重走生命周期通知。
+   */
+  setPaneRect(rect: DOMRect | null): void
   /** 宿主停止 → disposed：后续任何调用都抛 NotReady */
   dispose(): void
   /** 节点视觉尺寸同步后端（CanvasSurface 把 VueFlow 的 updateNode* 适配进来） */
@@ -206,6 +211,12 @@ export function createCanvasFlowController(): CanvasFlowController {
       rootRef.value = next.rootEl()
       rendererRef.value = next.rendererEl()
       advanceTo('dom-ready')
+    },
+    setPaneRect(rect) {
+      // 只在 dom-ready 后可写：detached/flow-ready 阶段 paneRect 契约上是 null，
+      // 避免消费方在 DOM 锚点就绪前读到尺寸
+      if (ORDER[phase] < ORDER['dom-ready'] || phase === 'disposed') return
+      paneRectRef.value = rect
     },
     attachNodeVisual(api) {
       nodeVisual = api

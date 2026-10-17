@@ -30,6 +30,7 @@ import type { CanvasInteractionSettings } from '../contracts/canvasInteractionSe
 import SlotHost from '../components/SlotHost.vue'
 import ConnectionLineHost from './ConnectionLineHost.vue'
 import { useNodeMeasure, resolveMeasureContainer } from './useNodeMeasure'
+import { usePaneSizeObserver } from './paneSize'
 import { applyNodeVisualSize, type NodeVisualSyncApi } from './nodeVisualSync'
 import { createCanvasFlowController } from '../contracts/canvasFlowApi'
 import type { ViewportBackend } from '../viewport/viewportService'
@@ -132,6 +133,18 @@ watch(
 const paneRectRef = shallowRef<DOMRect | null>(null)
 const paneEl = ref<HTMLElement | null>(null)
 /**
+ * pane 尺寸持续观测（2026-10-17 修复）：可视区 = viewport 变换 + pane 像素尺寸。
+ * 以前只在挂载 / 插件重挂时量一次，窗口被拖动或响应式布局改变后 pane 已变、矩形还是旧的，
+ * 于是可见剔除按旧视口算 —— 该显示的节点被隐藏。现在交给 ResizeObserver 盯着。
+ */
+const paneSize = usePaneSizeObserver((rect) => {
+  paneRectRef.value = rect
+  // VueFlow 能力面同样读 paneRect（小地图 / 裁剪浮层等消费方），同步过去
+  flow.setPaneRect(rect)
+})
+// pane 尺寸按像素量；视口缩放变了也要重算 flow 坐标下的可视矩形
+watch(paneRectRef, refreshVisibleRect)
+/**
  * 重新捕获本画布实例的 DOM 锚点（pane / renderer / paneRect）。
  *
  * 为什么必须"重新"捕获：VueFlow 挂在 nodeEpoch 这个 key 上，而插件装/卸会 bump nodeEpoch
@@ -146,7 +159,8 @@ function refreshFlowDom(): void {
   const flowRoot = rootEl.value
   paneEl.value = (flowRoot?.querySelector('.vue-flow__pane') as HTMLElement | null) ?? null
   rendererEl.value = resolveMeasureContainer(flowRoot)
-  paneRectRef.value = paneEl.value ? paneEl.value.getBoundingClientRect() : null
+  // 交给持续观测：换元素时自动断开旧观测、立即量一次
+  paneSize.observe(paneEl.value)
 }
 /**
  * 节点上/下控制栏的画布级宿主（flow 坐标系）。
@@ -182,9 +196,8 @@ function refreshVisibleRect(): void {
   }
   visibleRectRef.value = viewportRectInFlow(viewportRef.value, pr.width, pr.height)
 }
-// viewport / pane 变化时刷新可视矩形；onMounted 量到 pane 后也刷一次
+// viewport 变化时刷新可视矩形；onMounted 量到 pane 后由 paneRectRef 的 watch 刷一次
 watch(viewportRef, refreshVisibleRect)
-watch(paneRectRef, refreshVisibleRect)
 // —— 拖拽快速模式（dragRapidMode，2026-10-15 性能优化 P1）——
 // Chrome：脚本改 transform scale 时每帧重光栅化，will-change:transform 让内容固定位图提升速度
 // （developer.chrome.com/blog/re-rastering-composite；实测节点层 96ms→24.8ms/帧）。
@@ -268,6 +281,7 @@ const measure = useNodeMeasure({
 })
 onBeforeUnmount(() => {
   measure.stop()
+  paneSize.stop()
   // 销毁 Flow 能力面：此后任何调用都抛 NotReady（不再指向已卸载的 VueFlow 实例）
   flow.dispose()
 })
