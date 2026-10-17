@@ -25,6 +25,7 @@ import { videoTitleExtra } from './videoOps'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
 import VideoPreview from './VideoPreview.vue'
+import VideoFullscreenOverlay from './VideoFullscreenOverlay.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
@@ -155,6 +156,15 @@ export const VIDEO_THUMB_KEYS = videoThumbTierKeys('video')
  */
 export function apply(ctx: Context) {
   const service = new VideoService(ctx)
+
+  // 视频节点全屏预览浮层（overlay 槽，Teleport 到 body）：双击视频节点时经 mediaPreviewBus 打开。
+  // 视觉整只交给主题注册的 MediaViewer —— 与生成历史 / 底栏素材卡同一只预览组件（用户口径 2026-10-17）。
+  ctx.slots.register('overlay', {
+    id: 'node-video/fullscreen-preview',
+    order: 43,
+    component: VideoFullscreenOverlay,
+    meta: { title: '视频全屏预览' },
+  })
 
   // 视频**预览**注册件（从 VideoContent 抽出的纯展示件）：登记进 ui 目录，
   // 任何宿主按名取用 —— 换实现一起换（与 audioPreview 同一条路）。

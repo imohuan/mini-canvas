@@ -38,6 +38,7 @@ import { readClipRange } from './videoClip'
 import { formatTime } from './videoNodeData'
 import { videoCardSizePatch, followedVideoCardSizePatch, missingVideoCardSizePatch, type CardSizePatch } from './videoFit'
 import { Play, Pause, Volume2, VolumeX, Camera, Maximize2 } from 'lucide-vue-next'
+import { openPreview } from './mediaPreviewBus'
 
 /** 正有限数才算有值（与 videoFit 内同口径） */
 function positiveNum(v: unknown): number | null {
@@ -51,10 +52,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, flow, visibleNodes } = useCanvasRender()
 
 const videoRef = ref<HTMLVideoElement | null>(null)
-const fullscreenRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
 const captureMenuRef = ref<HTMLElement | null>(null)
-const fullscreenOpen = ref(false)
 const playing = ref(false)
 /**
  * video 元素是否已经"真的有画面"（readyState >= HAVE_CURRENT_DATA，即当前播放位置
@@ -77,7 +76,6 @@ const cropRect = computed<Rect | undefined>(() => {
   return isCroppedRect(r) ? r : undefined
 })
 const cropping = computed(() => isCropping(props.id))
-const fullscreenActive = computed(() => fullscreenOpen.value)
 /** 鼠标是否停在卡片上：卡内播放控件只在此时显形（不常驻遮画面） */
 const hovering = ref(false)
 
@@ -458,7 +456,7 @@ async function freezeFrame(): Promise<void> {
  * 触发点：鼠标离开节点、点画布空白、播放按钮暂停。
  */
 function stopAndRestorePoster(): void {
-  if (fullscreenOpen.value || !videoRequested.value) return
+  if (!videoRequested.value) return
   const epochAtLeave = freezeEpoch.value
   const v = videoRef.value
   if (v) {
@@ -564,9 +562,9 @@ const videoStyle = computed<Record<string, string>>(() => {
 })
 const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value).length > 0)
 
-/** 当前该用哪个 video 元素（全屏时是搬到全屏层那个） */
+/** 当前该用的 video 元素（全屏预览由 MediaViewer 自己管，不在这份状态里） */
 function activeVideo(): HTMLVideoElement | null {
-  return fullscreenOpen.value ? fullscreenRef.value ?? videoRef.value : videoRef.value
+  return videoRef.value
 }// ==================== 播放控制 ====================
 
 /** 播放：起点不在剪辑段内时先跳到段首（否则会播到裁剪掉的画面） */
@@ -720,7 +718,7 @@ function onVideoError(): void {
   // 网络抖动（code=2 网络 / code=3 解码中断）——尤其是快速拖拽缩放时元素被反复卸载重挂
   // 打断加载——不标记：标记了 stage 就整个空掉（v-if videoUrl && !broken），
   // 用户看到白板，hover 重挂后才恢复（2026-10-17 用户实测）
-  const code = videoRef.value?.error?.code ?? fullscreenRef.value?.error?.code ?? 0
+  const code = videoRef.value?.error?.code ?? 0
   if (code === 4) {
     broken.value = true
     playing.value = false
@@ -787,84 +785,7 @@ async function captureFrameNode(at: number): Promise<void> {
   command.execute('video.captureFrame', { nodeId: props.id, at })
 }
 
-// ==================== 全屏 ====================
-
-/**
- * 全屏控制条：播放中默认隐藏，鼠标进底部热区才显示，离开 1 秒后收起。
- * 暂停时常显 —— 画面不动时藏起来只会让人找不到按钮。
- */
-const fsControlsVisible = ref(false)
-let fsHideTimer: ReturnType<typeof setTimeout> | null = null
-/** 底部热区高度：够宽就不用瞄准，也不至于吃掉画面中部 */
-const FS_HOTZONE = 140
-
-const fsControlsShown = computed(() => !playing.value || fsControlsVisible.value)
-
-function showFsControls(): void {
-  if (fsHideTimer) {
-    clearTimeout(fsHideTimer)
-    fsHideTimer = null
-  }
-  fsControlsVisible.value = true
-}
-
-/** 离开热区后延时 1 秒收起（缓冲够长，鼠标从热区划到按钮上不会闪没） */
-function scheduleFsHide(): void {
-  if (fsHideTimer) clearTimeout(fsHideTimer)
-  fsHideTimer = setTimeout(() => {
-    fsHideTimer = null
-    fsControlsVisible.value = false
-  }, 1000)
-}
-
-function clearFsHideTimer(): void {
-  if (fsHideTimer) {
-    clearTimeout(fsHideTimer)
-    fsHideTimer = null
-  }
-}
-
-function onFsPointerMove(e: MouseEvent): void {
-  if (window.innerHeight - e.clientY <= FS_HOTZONE) showFsControls()
-  else scheduleFsHide()
-}
-
-function openFullscreen(): void {
-  if (!videoUrl.value || fullscreenOpen.value) return
-  // 全屏播放当然要真视频：先挂 `<video>`（帧图态下这一步才开始加载视频字节）
-  videoRequested.value = true
-  fullscreenOpen.value = true
-  // 刚进来先亮一下，让人知道有控制条；播放中随后自动收起
-  showFsControls()
-  scheduleFsHide()
-  void nextTick(() => {
-    const from = videoRef.value
-    const to = fullscreenRef.value
-    if (!from || !to) return
-    to.currentTime = from.currentTime
-    if (!from.paused) void to.play().catch(() => { })
-    from.pause()
-  })
-}
-
-function closeFullscreen(): void {
-  if (!fullscreenOpen.value) return
-  clearFsHideTimer()
-  fsControlsVisible.value = false
-  const from = fullscreenRef.value
-  const to = videoRef.value
-  if (from && to) {
-    to.currentTime = from.currentTime
-    if (!from.paused) void to.play().catch(() => { })
-  }
-  from?.pause()
-  fullscreenOpen.value = false
-}
-
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key !== 'Escape') return
-  if (fullscreenOpen.value) closeFullscreen()
-}// ==================== 卡片尺寸兜底 ====================
+// ==================== 卡片尺寸兜底 ====================
 
 /**
  * 两张兜底牌（与图片节点同一套规矩）：
@@ -882,7 +803,6 @@ function syncCardSize(patch: CardSizePatch | null): void {
 
 onMounted(() => {
   void nextTick(() => syncCardSize(missingVideoCardSizePatch(props.data, ops.fitLimits?.())))
-  window.addEventListener('keydown', onKeydown)
   // 缓存里的 objectURL 不是挂载时创建的 → 必须显式 fetch + decode，
   // 否则"点播放 → video 出现"会出现几帧空白（对帧图同样适用）
   if (typeof fetch === 'function') {
@@ -916,7 +836,15 @@ function onStageDblClick(e: MouseEvent): void {
     window.clearTimeout(stageClickTimer)
     stageClickTimer = null
   }
-  openFullscreen()
+  // 全屏改用全局预览组件（用户口径 2026-10-17：不要自己实现预览，
+  // 生成历史 / 底栏素材卡都是主题注册的 MediaViewer）——把当前视频交给总线，
+  // 由 overlay 槽的 VideoFullscreenOverlay 渲染；本节点内先暂停，预览层自己播
+  if (videoRef.value) videoRef.value.pause()
+  openPreview({
+    name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览',
+    kind: 'video',
+    url: videoUrl.value,
+  })
 }
 
 onBeforeUnmount(() => {
@@ -929,8 +857,6 @@ onBeforeUnmount(() => {
   if (posterHideTimer.value !== null) window.clearTimeout(posterHideTimer.value)
   document.removeEventListener('pointerdown', onCaptureMenuOutside, true)
   releaseFrameTiers()
-  window.removeEventListener('keydown', onKeydown)
-  clearFsHideTimer()
   paneClickSub.dispose()
   endOverlay(props.id)
 })
@@ -1049,47 +975,14 @@ watch(videoUrl, (prev) => {
           <button class="vc-capture-item" type="button" role="menuitem" @click.stop="onCaptureMenuPick('last')">截取尾帧</button>
         </div>
       </div>
-      <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放" @click.stop="openFullscreen">
+      <button class="vc-btn" type="button" title="全屏播放" aria-label="全屏播放"
+        @click.stop="openPreview({ name: (typeof props.data?.videoName === 'string' && props.data.videoName) || '视频预览', kind: 'video', url: videoUrl })">
         <Maximize2 class="vc-ico" :size="15" aria-hidden="true" />
       </button>
     </div>
 
   </div>
 
-  <!-- 全屏层：刻意纯黑无装饰，Esc / 双击 / 点背景退出。 -->
-  <Teleport to="body">
-    <div v-if="fullscreenActive" class="video-fullscreen" @click.self="closeFullscreen" @mousemove="onFsPointerMove"
-      @mouseleave="scheduleFsHide" @dblclick.self="closeFullscreen">
-      <video ref="fullscreenRef" class="video-fullscreen-media" :style="videoStyle" :src="videoUrl" playsinline autoplay
-        @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate" @play="playing = true" @pause="playing = false" />
-      <div class="video-fullscreen-controls nodrag nopan nowheel" :class="{ 'is-hidden': !fsControlsShown }" @click.stop
-        @mouseenter="showFsControls">
-        <button class="vc-btn is-on-dark" type="button" :title="playing ? '暂停' : '播放'"
-          :aria-label="playing ? '暂停' : '播放'" @click.stop="togglePlay">
-          <svg v-if="!playing" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <polygon points="7,4 19,12 7,20" />
-          </svg>
-          <svg v-else viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <rect x="6" y="5" width="4" height="14" rx="1" />
-            <rect x="14" y="5" width="4" height="14" rx="1" />
-          </svg>
-        </button>
-        <span class="vc-time is-on-dark">{{ timeLabel }}</span>
-        <label class="vc-progress">
-          <input type="range" min="0" :max="playableLength" step="0.01" :value="playedInClip" aria-label="播放进度"
-            @input="onSeek" />
-          <span class="vc-progress-fill" :style="{ width: progressPct + '%' }" />
-        </label>
-        <button class="vc-btn is-on-dark" type="button" title="退出全屏" aria-label="退出全屏" @click.stop="closeFullscreen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round" aria-hidden="true">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-      </div>
-    </div>
-  </Teleport>
 </template>
 <style scoped>
 /* 数值照 docs/design/ui-style-guide.md：四档灰阶、圆角 8/6、交互目标 32px、
@@ -1402,49 +1295,6 @@ watch(videoUrl, (prev) => {
   color: var(--ui-warn, #b45309);
 }
 
-/* —— 全屏层 —— */
-.video-fullscreen {
-  position: fixed;
-  inset: 0;
-  /* z-index 走画布层叠带变量（--layer-modal） */
-  z-index: var(--layer-modal, 100000);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #000; /* 主题色白名单: 全屏播放层刻意纯黑无装饰 */
-}
-.video-fullscreen-media {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.video-fullscreen :deep(.video-media),
-.video-fullscreen-media[style] {
-  position: absolute;
-  max-width: none;
-  max-height: none;
-  object-fit: fill;
-}
-/* —— 全屏控制条：与卡内控制条同一套观感（无背景、贴底紧凑）。
-      播放中默认藏起来，鼠标进底部热区才淡入；is-hidden 只管透明度和一点位移，
-      隐藏时 pointer-events:none，免得挡住画面上的点击。 */
-.video-fullscreen-controls {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: min(760px, calc(100vw - 64px));
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-.video-fullscreen-controls.is-hidden {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
-  pointer-events: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .vc-btn {
     transition: none !important;
@@ -1458,13 +1308,6 @@ watch(videoUrl, (prev) => {
   }
   .video-controls.is-hidden {
     transform: none;
-  }
-  /* 淡入淡出去掉（直接显隐），位移也去掉 —— 只留"出现/消失"这件事本身 */
-  .video-fullscreen-controls {
-    transition: none !important;
-  }
-  .video-fullscreen-controls.is-hidden {
-    transform: translateX(-50%);
   }
 }
 </style>
