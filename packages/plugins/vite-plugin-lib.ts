@@ -39,6 +39,8 @@ export const HOST_GLOBALS: Record<string, string> = {
   '@mini-canvas/canvas-data': 'MiniCanvasCore',
   '@mini-canvas/canvas-render': 'MiniCanvasRender',
 }
+/**
+ * 生成 build 段（纯数据）。各插件的 vite.config.ts：
 
 /** 一律 external 的依赖（键即模块名） */
 export const HOST_EXTERNALS: string[] = Object.keys(HOST_GLOBALS)
@@ -51,7 +53,6 @@ export interface PluginLibOptions {
   /** 是否产 sourcemap（默认 true；发布到 NPM 的演示包可关掉减小体积） */
   sourcemap?: boolean
 }
-
 /**
  * 生成 build 段（纯数据）。各插件的 vite.config.ts：
  *   export default defineConfig({
@@ -76,5 +77,3 @@ export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {
     sourcemap: opts.sourcemap ?? true,
   }
 }
-
-/**
