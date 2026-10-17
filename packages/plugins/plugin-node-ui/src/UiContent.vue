@@ -27,11 +27,19 @@
  * 的时序，而这里只需要单向注一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
+import {
+  RASTER_TIER_PREFIX,
+  rasterScaleFor,
+  rasterTierKeys,
+  readRasterTiers,
+  resolveRasterTier,
+  type RasterTierConfig,
+} from './rasterTier'
 import { fetchBackendOrigin } from './uiOrigin'
 import { buildDebugDoc } from './uiDebug'
 import {
@@ -47,7 +55,7 @@ import { emitUiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 /**
  * 本插件的配置（后台地址 / 允不允许联网）。
@@ -55,6 +63,84 @@ const { ctx } = useCanvasRender()
  * 后台地址要现算成**绝对**地址：生成页面在 srcdoc 里，相对路径解析不出来。
  */
 const pluginConfig = readUiConfig(ctx.tryGet('settings') as { get(k: string): unknown } | undefined)
+
+/**
+ * 渲染清晰度：**按画布缩放自动分三档**（与图片插件 thumbTier 同一套做法）。
+ *
+ * 每档的阈值和倍数都在设置面板里配（「可视化节点/渲染清晰度」）：
+ *   一档（缩放 >= 二档阈值） 倍数 tier1Scale，默认 1
+ *   二档（三档阈值 <= 缩放 < 二档阈值） 倍数 tier2Scale，默认 2
+ *   三档（缩放 < 三档阈值） 倍数 tier3Scale，默认 4
+ *
+ * 为什么档位是「渲染期计算」而不是写进节点：它跟着缩放走；写进节点等于每次缩放
+ * 都改画布数据、还占撤销栈。
+ */
+const settingsSvc = ctx.tryGet<{ get(k: string): unknown; onChange?(cb: (k: string, v: unknown) => void): { dispose(): void } }>('settings')
+
+/**
+ * 每次现读一遍设置。
+ *
+ * readRasterTiers 要的是 **ctx 本身**（它内部自己 ctx.get('settings') 再 .get(key)）——
+ * 之前我把 settings 对象包成 { get } 传进去，结果它拿不到 settings，永远读默认值，
+ * 面板里改成 8 倍也不生效（用户 2026-10-17 截图实测）。
+ * 这里再套一层：ctx 不完整（测试夹具）时直接回默认，不抛错。
+ */
+const readCfg = (): RasterTierConfig => {
+  const safeCtx = typeof ctx?.get === 'function' ? ctx : ({ get: () => undefined } as never)
+  return readRasterTiers(RASTER_TIER_PREFIX, safeCtx)
+}
+const rasterCfg = ref<RasterTierConfig>(readCfg())
+const rasterSettingOff = settingsSvc?.onChange?.((key) => {
+  if (!rasterTierKeys(RASTER_TIER_PREFIX).includes(key)) return
+  rasterCfg.value = readCfg()
+})
+onBeforeUnmount(() => rasterSettingOff?.dispose())
+
+// flow 可能缺席（极简渲染上下文 / 测试夹具）：拿不到当 1，退回一档。
+const zoom = computed(() => (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1)
+/** 画布最小缩放：作为兜底传进档位判定，保证"缩到最小"能进第三档 */
+const canvasMinZoom = computed(() => settingsSvc?.get('minZoom'))
+const rasterTier = computed(() => resolveRasterTier(zoom.value, rasterCfg.value, canvasMinZoom.value))
+
+/**
+ * 当前档位对应的倍数。
+ *
+ * 注意它**只跟缩放档位走，不跟缩放连续变化** —— 区间内缩放时倍数不变，
+ * 所以画面不会一直重排、不会闪。
+ */
+const rasterScale = computed(() => rasterScaleFor(rasterTier.value, rasterCfg.value))
+
+/**
+ * iframe 的渲染倍数样式 —— **四个属性全部从同一个倍数 N 算出来**，不写死。
+ *
+ *   width/height: N × 100%
+ *   transform:    scale(1 / N)
+ *   zoom:         N
+ *   transform-origin: top left
+ *
+ * 为什么这四项要一起算：盒子撑成 N 倍 → 浏览器按 N 倍像素重画；
+ * zoom=N 让排版宽度回到原来的宽度（布局不变）；scale(1/N) 把屏幕尺寸缩回原来的大小。
+ * 缺一项就会变形（变小 / 溢出 / 挤出屏幕），所以只能成套出现。
+ *
+ * ⚠️ **N 小于 1 也必须生成样式**（2026-10-17 用户报「1/2、1/4、1/8 和 1 倍都没样式」）：
+ * 之前写成 `if (!(n > 1)) return undefined`，把 N ≤ 1 全跳过了 —— 缩小档（省性能）
+ * 和 1 倍一样什么都不做，面板里选了也看不出变化。只有 N 恰好等于 1 才是"完全不动"。
+ *
+ * 缩小档的算式示例（N = 0.5）：width 50%｜zoom 0.5｜transform scale(2)
+ * 盒子只有一半宽 → 按半分辨率绘制 → 再放大 2 倍回屏幕尺寸：省性能、略糊。
+ */
+const frameStyle = computed(() => {
+  const n = rasterScale.value
+  // 只有 1 倍（默认）才完全不写样式；小于 1 和大于 1 都要生成
+  if (!Number.isFinite(n) || Math.abs(n - 1) < 1e-6) return undefined
+  return {
+    width: n * 100 + '%',
+    height: n * 100 + '%',
+    transform: 'scale(' + 1 / n + ')',
+    zoom: String(n),
+    transformOrigin: 'top left',
+  }
+})
 
 /**
  * 生成页面该连的地址：**优先用节点上存的后台自报地址**。
@@ -877,6 +963,7 @@ const hint = computed(() => {
         ref="iframeEl"
         :key="gen"
         class="ui-frame"
+        :style="frameStyle"
         :srcdoc="frameDoc"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
@@ -966,17 +1053,12 @@ const hint = computed(() => {
   border: 0;
   background: transparent;
   /*
-   * ⚠️ 这里**只许有尺寸，不许有 transform / will-change / zoom**（2026-10-17 用户口径）。
+   * 清晰度倍数（1/2/4/8）由**内联 style** 给：盒子放大 N 倍 + scale(1/N) + zoom N。
+   * 见上方 frameStyle 与插件配置「渲染清晰度倍数」。
    *
-   * 用户要的和普通节点一样：**画布怎么缩放就怎么缩放，里面一个像素都不许动**。
-   * 一旦给 iframe 加 transform（哪怕是 translateZ(0)）或按缩放改宽高，它就会变成
-   * 独立合成层 / 重新排版 —— 缩放时布局跳动、画面闪，正好是用户最反感的。
-   *
-   * 曾经为了「放大后更清晰」在这里按 zoom 撑大再反向缩放，结果缩放过程中
-   * 内容一直在重排（用户原话：布局全是变化的），已经全部删掉。
-   * 放大后的清晰度另行处理，不能靠动这个 iframe 的盒子。
+   * 这里只留 1 倍时的兜底尺寸。注意它**只由配置决定、与画布缩放无关**：
+   * 缩放过程中这个 iframe 一个像素都不会变，不会闪。
    */
-  transform: none;
 }
 
 /* 交互遮罩：透明、盖满，负责"把事件让回画布" */

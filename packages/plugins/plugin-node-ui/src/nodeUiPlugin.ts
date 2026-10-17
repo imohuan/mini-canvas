@@ -31,6 +31,7 @@ import { extractHtml, normalizeInputs, normalizeUpstream, type UiInputDecl } fro
 import DebugBadge from './DebugBadge.vue'
 import { fetchBackendOrigin } from './uiOrigin'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
+import { rasterTierFields } from './rasterTier'
 import UiContent from './UiContent.vue'
 
 /** 本插件注册的节点类型名 */
@@ -180,6 +181,8 @@ export const Config: ConfigSchema = {
     group: '布局/可视化节点尺寸',
     description: '可视化节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
   },
+  // 渲染清晰度：按画布缩放自动分三档，每档的倍数可配（照图片插件 thumbTier 的做法）
+  ...rasterTierFields('uiNodeRaster', '可视化节点/渲染清晰度'),
 }
 
 export function apply(ctx: Context) {

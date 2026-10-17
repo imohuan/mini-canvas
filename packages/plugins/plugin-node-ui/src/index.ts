@@ -17,6 +17,15 @@ export {
 export type { UiInputDecl, UiInputType, UpstreamItem } from './uiData'
 export { normalizeManualValues } from './uiValues'
 export { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
+export {
+  RASTER_SCALES,
+  RASTER_TIER_PREFIX,
+  DEFAULT_RASTER_TIERS,
+  normalizeRasterScale,
+  resolveRasterTier,
+  rasterScaleFor,
+  readRasterTiers,
+} from './rasterTier'
 
 // —— 开发期热重载（HMR）：本包任一源码（逻辑 .ts 或组件 .vue）一改，vite 触发本 accept →
 //    经 window.MiniCanvas.reloadPlugin 先卸旧再装新，让改动在运行中的画布里实时生效。
