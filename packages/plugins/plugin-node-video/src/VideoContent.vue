@@ -716,8 +716,21 @@ function onSeek(e: Event): void {
 }
 
 function onVideoError(): void {
-  // 会话级 objectURL 刷新后必然失效，如实标出来（不写进 data —— 那是会话事实，不是节点属性）
-  broken.value = true
+  // 只有"源本身坏了"（解码器不认/格式错，code=4）才标记失效；
+  // 网络抖动（code=2 网络 / code=3 解码中断）——尤其是快速拖拽缩放时元素被反复卸载重挂
+  // 打断加载——不标记：标记了 stage 就整个空掉（v-if videoUrl && !broken），
+  // 用户看到白板，hover 重挂后才恢复（2026-10-17 用户实测）
+  const code = videoRef.value?.error?.code ?? fullscreenRef.value?.error?.code ?? 0
+  if (code === 4) {
+    broken.value = true
+    playing.value = false
+    return
+  }
+  // 网络类错误：稍后让 video 重新加载一次（直接调 load()）
+  const v = videoRef.value
+  if (v && videoUrl.value) {
+    window.setTimeout(() => { try { v.load() } catch { /* 元素已卸载则忽略 */ } }, 400)
+  }
   playing.value = false
 }
 
