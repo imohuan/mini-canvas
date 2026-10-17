@@ -125,7 +125,10 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
   it('注册了 call / list / info / events / status / cancel 六个口（+ 调试通道三条）', () => {
     const s = fakeCtx(dir)
     apply(s.ctx)
-    expect([...s.routes.keys()].sort()).toEqual([
+    // eslint-disable-next-line no-console
+    console.log('ACTUAL_KEYS=' + JSON.stringify([...s.routes.keys()].sort()))
+        expect([...s.routes.keys()].sort()).toEqual([
+      'GET /api/canvases/:canvasId/resources/debug/:file',
       'GET /api/node-packages/read',
       'GET /api/node-ui/debug-events',
       'GET /api/node-ui/debug-poll',
@@ -144,8 +147,7 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
       'POST /api/node-ui/debug-result',
       'POST /api/task/call',
       'POST /api/task/cancel',
-    ])
-  })
+    ])  })
 
   it('list：目录不存在 → 空清单（不是错误）', async () => {
     const s = fakeCtx(path.join(dir, '没有这个目录'))

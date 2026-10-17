@@ -76,6 +76,17 @@ import { uniqueLabel } from './task/uniqueLabel.js'
 import { readNodePack } from './task/pack.js'
 import { planImport } from './task/importPack.js'
 import { resolveScriptPath } from './task/scripts.js'
+import {
+  buildContextJs,
+  buildDebugHtml,
+  debugDirOf,
+  debugFileNames,
+  debugMime,
+  normalizeUpstreamShared,
+  readDebugFile,
+  writeDebugFile,
+} from './debugDocServer.js'
+import { renderSdkJs } from './debugDocAssets.js'
 
 /** 后台 ctx 的最小形状（就地声明，不 import 工作区包 —— 见文件头说明） */
 interface ServerCtx {
@@ -109,6 +120,8 @@ interface ServerCtxLike {
 
 /** 画布存储（宿主上架的服务；用来读任意画布的节点） */
 interface CanvasStoreLike {
+  /** 数据根目录（<root>/canvases/<id> 的上一级）—— 调试文件落盘要用 */
+  dataRoot?(): string
   readCanvas(id: string): Promise<{ nodes: unknown[]; edges: unknown[] } | undefined>
   writeCanvas(id: string, data: { nodes: unknown[]; edges: unknown[] }): Promise<void>
   list(): Promise<string[]>
@@ -157,6 +170,11 @@ interface DocLike {
   getNodes(): NodeLike[]
   getEdges(): Array<{ source: string; target: string }>
   batchNodes(input: unknown): Promise<PatchResult>
+}
+
+/** path.join 的极简替代（本文件只有正斜杠拼接需要） */
+function pathJoin(dir: string, name: string): string {
+  return dir.endsWith('\\') || dir.endsWith('/') ? dir + name : dir + '/' + name
 }
 
 /**
@@ -1443,6 +1461,86 @@ export function apply(ctx: ServerCtx): void {
       debugStops.delete(sess.session)
       return { ok: true, canvasId, note: '调试连接已断开。' }
     },
+  })
+
+  // ⑯ 独立调试页面：后台拼一份完整 HTML + 数据 JS，落到 resources/debug/（用户 2026-10-17 定）
+  //    供 Chrome MCP / 任何浏览器自动化直接打开 —— 普通页面，无沙箱，DevTools / CDP 全通。
+  ctx.mcp.tool({
+    name: 'canvas_ui_build_debug_doc',
+    description:
+      '为一个可视化节点生成「独立调试页面」：后台把节点 HTML + 上游数据 + 参数拼成三份文件' +
+      '（debug-*.html 壳 / context-*.js 数据 / sdk-*.js 桥），落到画布 resources/debug/ 目录，' +
+      '返回可直接打开的 URL 与本机绝对路径。Chrome MCP / 任何浏览器自动化打开 HTML URL 即可' +
+      '全自动调试（普通页面，无沙箱无 CSP）。数据更新 = 重跑本工具重写 context.js；' +
+      '窗口里的 sdk.js 每 5 秒轮询，context 一变界面自动重画（CanvasUI.onChange 触发）。' +
+      'version 可选：传了就生成带版本的独立文件（多版本并存）；不传则覆盖无版本那份。',
+    input: { canvasId: 'string', nodeId: 'string', version: 'string' },
+    required: ['nodeId'],
+    handler: async (args) => {
+      const picked = await uiNodeOf(ctx, args)
+      if (!picked.ok) return picked
+      const { canvasId, nodeId, node } = picked
+      const version = typeof args.version === 'string' && args.version.trim() ? args.version.trim() : undefined
+      try {
+        const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
+        if (!store) return { ok: false, error: '后台没有画布存储服务' }
+        const html = typeof node.data?.uiHtml === 'string' ? node.data.uiHtml : ''
+        if (!html.trim()) return { ok: false, error: '这个节点还没有内容（还没画过）。先 canvas_ui_write。' }
+        const inputs = (node.data?.uiInputs ?? {}) as Record<string, unknown>
+        const upstream = normalizeUpstreamShared(node.data?.uiUpstream)
+        const names = debugFileNames(nodeId, version)
+        const origin = ctx.tryGet<string>('selfOrigin') ?? ''
+        const resBase = origin + '/api/canvases/' + encodeURIComponent(canvasId) + '/resources/debug/'
+        const urls = { html: resBase + names.html, context: resBase + names.context, sdk: resBase + names.sdk }
+        const uiPayload = {
+          theme: 'light',
+          baseUrl: origin,
+          canvasId,
+          nodeId,
+          debug: 'standalone',
+        }
+        // 顺序：先写 sdk（HTML 引用它），再 context（数据），最后 HTML 壳
+        await writeDebugFile(store, canvasId, names.sdk, renderSdkJs(urls.context))
+        await writeDebugFile(store, canvasId, names.context, buildContextJs({ inputs, upstream, ui: uiPayload, contextUrl: urls.context }))
+        await writeDebugFile(store, canvasId, names.html, buildDebugHtml({ html, theme: 'light', baseUrl: origin, sdkFileUrl: urls.sdk, contextFileUrl: urls.context }))
+        const dataRoot = typeof store.dataRoot === 'function' ? store.dataRoot() : ''
+        const dir = dataRoot ? debugDirOf(store, canvasId) : ''
+        return {
+          ok: true,
+          canvasId,
+          nodeId,
+          ...(version ? { version } : {}),
+          files: names,
+          urls,
+          ...(dir ? { paths: { html: pathJoin(dir, names.html), context: pathJoin(dir, names.context), sdk: pathJoin(dir, names.sdk) } } : {}),
+          summary: { upstreamCount: upstream.length, inputKeys: Object.keys(inputs) },
+          hint: '用浏览器打开 urls.html 即可调试（普通页面，DevTools/CDP 全通）。' +
+            '改了上游/参数后重跑本工具，窗口 5 秒内自动刷新。' +
+            '想改界面？编辑 paths.html（或用 canvas_ui_write 改节点后重跑本工具）。'
+        }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    },
+  })
+
+  // 独立调试文件的读取（GET）—— 写入工具落盘，这里提供 URL。白名单见 canvasPathsShared。
+  ctx.routes.get('/api/canvases/:canvasId/resources/debug/:file', async (c) => {
+    const cc = c as unknown as { req: { param?(n: string): string | undefined; url: string } }
+    const canvasId = cc.req.param?.('canvasId') ?? ''
+    const file = cc.req.param?.('file') ?? ''
+    const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
+    if (!store) return c.json({ ok: false, error: '后台没有画布存储服务' }, 500)
+    try {
+      const content = await readDebugFile(store, canvasId, file)
+      if (content === undefined) return c.json({ ok: false, error: '调试文件不存在' }, 404)
+      return new Response(content, {
+        status: 200,
+        headers: { 'content-type': debugMime(file), 'cache-control': 'no-store, no-cache, must-revalidate' },
+      })
+    } catch {
+      return c.json({ ok: false, error: '读取出错' }, 500)
+    }
   })
 }
 
