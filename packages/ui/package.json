@@ -65,7 +65,8 @@
     "lucide-vue-next": "^1.0.0",
     "motion-v": "^2.4.4",
     "prosemirror-editor-bundle": "workspace:*",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
     "@types/imagesloaded": "4.1.7",
