@@ -335,8 +335,16 @@ function focusThisNode(): void {
     // 用 auto-layout 的聚焦命令（等效快捷键 F）：它按节点 bounds 计算**合适的缩放**
     // （keepZoom:false），节点小就放大、超界就缩小 —— 与用户手动按 F 同一套行为。
     // 之前自拼 setCenter(…, 当前zoom) 只平移不缩放，节点小时依旧看不清（用户 2026-10-17 指出）。
-    ctx.tryGet<{ execute(id: string): unknown }>('command')?.execute('auto-layout:focus-selected')
-  } catch { /* 聚焦失败不拦调试 */ }
+    const cmd = ctx.tryGet<{ execute(id: string): unknown }>('command')
+    if (cmd && typeof cmd.execute === 'function') {
+      // 带动画的视口过渡（auto-layout 内部 animateViewport），约 0.8s 到位
+      cmd.execute('auto-layout:focus-selected')
+    } else {
+      console.log('[ui-debug] command 服务不可用，cmd =', typeof cmd)
+    }
+  } catch (err) {
+    console.log('[ui-debug] 聚焦异常:', (err as Error)?.message ?? err)
+  }
 }
 // 邀请标记一出现就聚焦（pendingInvite 从无到有的那一次）
 watch(pendingInvite, (inv, old) => {
