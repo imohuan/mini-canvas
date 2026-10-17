@@ -27,7 +27,7 @@
  * 的时序，而这里只需要单向注一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
@@ -47,7 +47,7 @@ import { emitUiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 /**
  * 本插件的配置（后台地址 / 允不允许联网）。
@@ -230,6 +230,52 @@ watch(gen, () => {
 })
 
 /**
+ * 超采样倍数：画布放大到什么程度，就让 iframe 按几倍的**真实像素**重画一遍。
+ *
+ * ## 为什么需要它（2026-10-17 真机实验定位）
+ *
+ * 画布的缩放是给外层加一整个 `scale(zoom)`。iframe 是**独立渲染的文档**，Chrome 不会因为
+ * 外层放大了就按 zoom 倍分辨率重新排版——它只把已经画好的那层内容**拉伸**。于是：
+ *   · 卡片标题（普通 DOM）是矢量，放大依旧清晰；
+ *   · iframe 里的文字是一张被放大的位图，放大后发虚、边缘出现彩色条纹。
+ * 用户看到的「有时候模糊、有时候正常」，就是缩放倍率正好落在好/坏采样点的差别。
+ *
+ * ## 做法：撑大再缩回（外观完全不变，只提高绘制精度）
+ *
+ *   iframe 元素：宽高 ×Z，再 `transform: scale(1/Z)`
+ *   文档内部：  `zoom: Z`，并把 body 宽高设成 `100%/Z`
+ *
+ * 两步合起来：显示尺寸还是原来那么多，但内部是按 Z 倍尺寸**重新排版并重新栅格化**的，
+ * 所以文字是真的清晰。2026-10-17 真机验证 Z=2 时「行数 (rows)」彩色边缘消失、
+ * 节点外观与原来逐像素一致（iframe 外框坐标完全相同）。
+ *
+ * ## 为什么分档而不是每帧都跟
+ *
+ * 改一次就会让 iframe 重新排版一次，连续缩放时逐帧改会卡。所以按 1/1.5/2/3/4 分档，
+ * 只有跨过档位才改一次；缩小时回到 1（不做反向压缩，小尺寸本来就清楚）。
+ */
+const oversample = computed(() => {
+  // flow 可能缺席（极简渲染上下文/测试夹具）：拿不到就当 1 倍，退回普通渲染。
+  const z = (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1
+  if (!(z > 1)) return 1
+  if (z <= 1.75) return 2
+  if (z <= 2.5) return 3
+  return 4
+})
+
+/** iframe 元素自身的样式：撑大 + 反向缩放，屏幕上量出来的还是原来那块 */
+const frameStyle = computed(() => {
+  const z = oversample.value
+  if (z === 1) return undefined
+  return {
+    width: 100 * z + '%',
+    height: 100 * z + '%',
+    transform: 'scale(' + 1 / z + ')',
+    transformOrigin: '0 0',
+  }
+})
+
+/**
  * 把**这个节点的全部数据**发给页面（**不重挂**）。
  *
  * 发三样，都是"这个节点的 data 上、页面要读的东西"：
@@ -249,6 +295,8 @@ function pushDataToFrame(): void {
       {
         __canvasUiCmd: 1,
         type: 'data',
+        // 超采样倍数：页面自己要按它设 zoom 和 body 尺寸（见 buildUiBridge 的 applyScale）
+        scale: oversample.value,
         upstream: toCloneableState(upstream.value),
         inputs: toCloneableState(inputValues.value),
       },
@@ -261,6 +309,8 @@ function pushDataToFrame(): void {
 
 // 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
 watch([upstream, inputValues], () => pushDataToFrame())
+// 缩放跨档 → 把新倍数带给页面（只是重排版，不重挂 iframe）
+watch(oversample, () => pushDataToFrame())
 
 // ======================================================================
 // 调试连接（用户 2026-10-15 定的流程：邀请 → 用户确认唯一标签页 → 注入 SDK）
@@ -877,6 +927,7 @@ const hint = computed(() => {
         ref="iframeEl"
         :key="gen"
         class="ui-frame"
+        :style="frameStyle"
         :srcdoc="frameDoc"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
@@ -966,11 +1017,14 @@ const hint = computed(() => {
   border: 0;
   background: transparent;
   /*
-   * 为什么加 translateZ(0)：外层画布用 transform: scale() 缩放，iframe 是独立合成层，
-   * Chromium 缩放过程中/停稳在非整数 zoom 时偶发不重光栅 —— 用户看到的「有时模糊」。
-   * 提升到自己的合成层后跟随父层重采样，停稳即清晰（2026-10-17 真机验证 1.18x 清晰）。
+   * ⚠️ 这里**刻意不写** transform / will-change。
+   *
+   * iframe 是独立文档，Chrome **不会**因为外层画布 `scale(zoom)` 就按 zoom 倍分辨率重画，
+   * 只把已画好的内容拉伸 —— 放大后文字发虚、带彩色边缘（2026-10-17 真机定位）。
+   * 真正的修法不是加合成层（那样只会把它固定成一张位图），而是**提高它的绘制精度**：
+   * 元素撑大 + 反向缩放、文档内部 `zoom`，见上方 oversample / frameStyle。
+   * 这里的 width/height/transform 由内联 style 按当前缩放给，CSS 只留兜底尺寸。
    */
-  transform: translateZ(0);
 }
 
 /* 交互遮罩：透明、盖满，负责"把事件让回画布" */

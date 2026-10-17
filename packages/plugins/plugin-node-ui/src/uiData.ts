@@ -512,6 +512,23 @@ export function buildUiBridge(): string {
     '(function(){',
     '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
     '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
+    // 超采样：宿主按画布缩放把 iframe 撑大再反向缩放，这里让文档内容按同样倍数重排版，
+    // 于是外表看不出变化、内部却按更高分辨率重新画过（文字才真的清晰）。
+    // 只动两个东西：根节点 zoom（排版倍数）和 body 尺寸（占满 iframe 的 1/scale，
+    // 抵消 zoom 带来的放大，避免出现滚动条或内容被裁）。
+    '  function applyScale(sc){',
+    '    var z = Number(sc) > 0 ? Number(sc) : 1;',
+    '    var de = document.documentElement;',
+    '    if (z === 1) {',
+    '      de.style.zoom = ' + S + S + ';',
+    '      document.body.style.width = ' + S + S + ';',
+    '      document.body.style.height = ' + S + S + ';',
+    '      return;',
+    '    }',
+    '    de.style.zoom = String(z);',
+    '    document.body.style.width = (100 / z) + ' + S + '%' + S + ';',
+    '    document.body.style.height = (100 / z) + ' + S + '%' + S + ';',
+    '  }',
     '  var cmdHandlers = [];',
     '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
     '  var cmdHandlers = [];',
@@ -541,6 +558,7 @@ export function buildUiBridge(): string {
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
     '    if(e.source !== parent) return;',
     '    var d = e.data; if(!d || !d.__canvasUiCmd) return;',
+    '    if (typeof d.scale === ' + S + 'number' + S + ') { try { applyScale(d.scale); } catch(err) {} }',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',
     '    }',
