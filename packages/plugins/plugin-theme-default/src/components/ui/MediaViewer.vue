@@ -19,6 +19,15 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from "vue"
 import { useUiComponent, uiComponentOutside } from "@mini-canvas/canvas-render"
 
+/**
+ * 根节点是 Teleport：外层（SlotHost 的 overlay 槽 / 底栏 MediaPreviewOverlay）会下发
+ * class / data-slot-* / data-testid 等属性，Teleport 没有可继承的根元素 —— 不关掉属性继承
+ * Vue 每次渲染都打一条 "Extraneous non-props attributes ... teleport root nodes" 警告。
+ * 这里改成"手动继承"：关掉自动继承后把 $attrs 显式绑到真正的根 div 上，
+ * 外层传的 data-testid（底栏 e2e 用它找预览浮层）就不会丢。
+ */
+defineOptions({ inheritAttrs: false })
+
 /** 一个待预览的媒体（与底栏 mediaPreview.ts 的 PreviewItem 同构；这里是通用形状） */
 export interface MediaViewerItem {
   /** 标题（左上角悬浮显示；空则不显示） */
@@ -228,6 +237,7 @@ watch(item, (v) => {
   <Teleport to="body">
     <div
       v-if="item"
+      v-bind="$attrs"
       class="mv-root"
       role="dialog"
       aria-modal="true"

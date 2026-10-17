@@ -68,6 +68,14 @@ const s = agent.state
 const { ctx } = useCanvasRender()
 
 /**
+ * 根是多根（fragment）：对话本体 .ac-root + 一个全屏 MediaViewer。
+ * SlotHost 会下发 class / data-slot-* 等属性，fragment 根没有唯一元素可继承，
+ * Vue 每次渲染都会警告一条 "Extraneous non-props attributes ... fragment root nodes"。
+ * 这里关掉自动继承（这些属性对对话面板没有意义）。
+ */
+defineOptions({ inheritAttrs: false })
+
+/**
  * 上下文环的几何常量（照参考页实测：viewBox 12×12、半径 5.25、描边 1.5）。
  * 周长直接由 r 算，不写死数字 —— 以后想调大小只改半径，弧长自动跟上。
  */

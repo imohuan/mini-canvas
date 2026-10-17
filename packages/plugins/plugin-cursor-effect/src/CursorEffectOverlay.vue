@@ -32,6 +32,13 @@ import { loadCustomCursors, CUSTOM_CHANGED_EVENT, type CustomCursor } from './cu
 
 const { ctx } = useCanvasRender()
 
+/**
+ * 根节点是 Teleport：SlotHost 会下发 class / data-slot-* 等属性，Teleport 没有可继承的根元素，
+ * 不关掉属性继承 Vue 每次渲染都会警告一条 "Extraneous non-props attributes ... teleport root nodes"。
+ * 光标特效是贴满页面的 canvas 层，这些属性对它没有意义。
+ */
+defineOptions({ inheritAttrs: false })
+
 /** <html> 上挂这个类 = 原生光标被藏掉（全局 CSS 见文件末尾非 scoped 样式） */
 const HIDE_CLASS = 'mc-cursor-hidden'
 
