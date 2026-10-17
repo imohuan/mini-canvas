@@ -229,43 +229,87 @@ watch(gen, () => {
   frameSeed.value = { inputs: inputValues.value, upstream: upstream.value }
 })
 
+/** 画布当前缩放（flow 可能缺席：极简渲染上下文/测试夹具 → 当作 1） */
+const canvasZoom = computed(
+  () => (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1,
+)
+
 /**
- * 超采样倍数：画布放大到什么程度，就让 iframe 按几倍的**真实像素**重画一遍。
+ * 栅格倍数 Z：让 iframe **按屏幕上真实显示的像素**画一遍。
  *
- * ## 为什么需要它（2026-10-17 真机实验定位）
+ * ## 为什么需要它（2026-10-17 定位，与 Slidev 同一个问题）
  *
- * 画布的缩放是给外层加一整个 `scale(zoom)`。iframe 是**独立渲染的文档**，Chrome 不会因为
- * 外层放大了就按 zoom 倍分辨率重新排版——它只把已经画好的那层内容**拉伸**。于是：
- *   · 卡片标题（普通 DOM）是矢量，放大依旧清晰；
- *   · iframe 里的文字是一张被放大的位图，放大后发虚、边缘出现彩色条纹。
- * 用户看到的「有时候模糊、有时候正常」，就是缩放倍率正好落在好/坏采样点的差别。
+ * 画布的缩放是给外层加一整个 `scale(zoom)`。普通 DOM 会被浏览器重新栅格化，所以清晰；
+ * 但 iframe 是独立文档，浏览器只把它画好的那层内容**拉伸**。于是卡片标题清晰、
+ * iframe 里的字却发虚带彩边。
  *
- * ## 做法：撑大再缩回（外观完全不变，只提高绘制精度）
+ * 社区里同样的修复（slidevjs/slidev PR #2728，issue #2281）用的就是「按屏幕分辨率布局」：
+ *   iframe 宽高 ×Z，再 `transform: scale(1/Z)` —— 让它的 CSS 尺寸等于**最终屏幕尺寸**。
+ * 验证判据也一致：**净栅格倍数必须 ≈ 1**（渲染尺寸 ÷ 屏幕尺寸）。
  *
- *   iframe 元素：宽高 ×Z，再 `transform: scale(1/Z)`
- *   文档内部：  `zoom: Z`，并把 body 宽高设成 `100%/Z`
+ * ## ⚠️ 内部**绝对不要**再设 `documentElement.zoom`（2026-10-17 实测否决）
  *
- * 两步合起来：显示尺寸还是原来那么多，但内部是按 Z 倍尺寸**重新排版并重新栅格化**的，
- * 所以文字是真的清晰。2026-10-17 真机验证 Z=2 时「行数 (rows)」彩色边缘消失、
- * 节点外观与原来逐像素一致（iframe 外框坐标完全相同）。
+ * 我一度在 iframe 文档里补了 `zoom = Z`，想让它按 Z 倍尺寸重新排版。独立实验
+ * （同一个外框、分别跑 A 原样 / B 只撑大缩回 / C 再补内部 zoom）的结果是：
  *
- * ## 为什么分档而不是每帧都跟
+ *   同一次缩放，B 的字形高度 27px（与不处理时一致），C 变成 54px —— 字号被放大了两次，
+ *   只能靠外层反向缩放压回来，等于「先放大成位图再缩小」，比不处理还糊。
  *
- * 改一次就会让 iframe 重新排版一次，连续缩放时逐帧改会卡。所以按 1/1.5/2/3/4 分档，
- * 只有跨过档位才改一次；缩小时回到 1（不做反向压缩，小尺寸本来就清楚）。
+ * 所以这里只做元素级的撑大 + 反向缩放（B），内部文档保持默认。内容布局也因此
+ * 按真实的屏幕尺寸重排（与在独立浏览器窗口里打开同样宽度的页面一致）。
+ *
+ * ## 为什么 Z 用精确值、还要等缩放停下才改
+ *
+ * 上一版按 1/2/3/4 分档，导致净倍数不是 1 而是 0.5~0.98 —— 相当于先放大再缩小，
+ * 文字依旧发软（用户 2026-10-17 报「内部标题还是糊的」）。现在 Z 取**精确的当前缩放值**，
+ * 净倍数恒为 1，停下即为 1:1 像素。
+ *
+ * 但精确值不能每帧都写：改一次 Z 就要让 iframe 重新排版，连续缩放时逐帧改 =
+ * 画面一直闪、还卡（用户报「缩放时一直在闪」）。所以只在缩放**停下 ~180ms 后**改一次。
+ * 期间画布自己照常缩放，节点内容平滑跟随；停下后一次性变清晰。
+ *
+ * ## 每档只动一次（这是「不闪」的关键）
+ *
+ * 如果每换一档都**同时**改 width/height 和 transform，浏览器要在同一帧里既重排 iframe
+ * 又重算它的反向缩放，中间会出现「宽度已经变成 2 倍、反向缩放还没跟上」的一帧 ——
+ * 用户看到的就是「闪一下」。所以这里把两件事分开：
+ *   · **换档**（Z 变）：先写好宽高，**下一帧**再写 transform，避免半成品状态被画出来；
+ *   · 停下之后 Z 不再变，画面上只剩画布自己的缩放，内容跟着平滑放大/缩小。
+ * 另外宽度只在**换档**时变，画布连续缩放期间宽度是固定的，iframe 不会一直重排。
  */
-const oversample = computed(() => {
-  // flow 可能缺席（极简渲染上下文/测试夹具）：拿不到就当 1 倍，退回普通渲染。
-  const z = (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1
-  if (!(z > 1)) return 1
-  if (z <= 1.75) return 2
-  if (z <= 2.5) return 3
-  return 4
+const rasterScale = ref(1)
+/** 真正写进 DOM 的倍数（比 rasterScale 慢半帧，用来避免「宽高变了、transform 还没变」） */
+const appliedScale = ref(1)
+let rasterTimer: ReturnType<typeof setTimeout> | null = null
+let applyFrame = 0
+watch(
+  canvasZoom,
+  (z) => {
+    if (rasterTimer) clearTimeout(rasterTimer)
+    rasterTimer = setTimeout(() => {
+      rasterTimer = null
+      // 缩小不做反向压缩（小尺寸本来就清楚）；上限 3 防超大画布把内存吃光。
+      const next = z > 1.001 ? Math.min(z, 3) : 1
+      if (Math.abs(next - rasterScale.value) > 0.01) rasterScale.value = next
+    }, 180)
+  },
+  { immediate: true },
+)
+watch(rasterScale, () => {
+  if (applyFrame) cancelAnimationFrame(applyFrame)
+  applyFrame = requestAnimationFrame(() => {
+    applyFrame = 0
+    appliedScale.value = rasterScale.value
+  })
+})
+onBeforeUnmount(() => {
+  if (rasterTimer) clearTimeout(rasterTimer)
+  if (applyFrame) cancelAnimationFrame(applyFrame)
 })
 
 /** iframe 元素自身的样式：撑大 + 反向缩放，屏幕上量出来的还是原来那块 */
 const frameStyle = computed(() => {
-  const z = oversample.value
+  const z = appliedScale.value
   if (z === 1) return undefined
   return {
     width: 100 * z + '%',
@@ -295,8 +339,6 @@ function pushDataToFrame(): void {
       {
         __canvasUiCmd: 1,
         type: 'data',
-        // 超采样倍数：页面自己要按它设 zoom 和 body 尺寸（见 buildUiBridge 的 applyScale）
-        scale: oversample.value,
         upstream: toCloneableState(upstream.value),
         inputs: toCloneableState(inputValues.value),
       },
@@ -309,8 +351,6 @@ function pushDataToFrame(): void {
 
 // 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
 watch([upstream, inputValues], () => pushDataToFrame())
-// 缩放跨档 → 把新倍数带给页面（只是重排版，不重挂 iframe）
-watch(oversample, () => pushDataToFrame())
 
 // ======================================================================
 // 调试连接（用户 2026-10-15 定的流程：邀请 → 用户确认唯一标签页 → 注入 SDK）
@@ -1022,7 +1062,7 @@ const hint = computed(() => {
    * iframe 是独立文档，Chrome **不会**因为外层画布 `scale(zoom)` 就按 zoom 倍分辨率重画，
    * 只把已画好的内容拉伸 —— 放大后文字发虚、带彩色边缘（2026-10-17 真机定位）。
    * 真正的修法不是加合成层（那样只会把它固定成一张位图），而是**提高它的绘制精度**：
-   * 元素撑大 + 反向缩放、文档内部 `zoom`，见上方 oversample / frameStyle。
+   * 元素撑大 + 反向缩放、文档内部 `zoom`，见上方 rasterScale / frameStyle。
    * 这里的 width/height/transform 由内联 style 按当前缩放给，CSS 只留兜底尺寸。
    */
 }

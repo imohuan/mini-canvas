@@ -125,16 +125,16 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
   })
 
   /**
-   * 超采样只许调**根节点 zoom**，绝不许再动 body 宽高。
+   * 页面里**一律不许碰文档级缩放**（zoom / body 尺寸）。
    *
-   * 2026-10-17 真实事故：为了让文字清晰，iframe 被撑成 Z 倍再 scale(1/Z)，
-   * 当时顺手把 body 写成 100/Z%，结果内容只占节点的 1/Z、全挤在左上角
-   * （用户截图：节点很大，里面面板只占左边一条）。iframe 已经是 Z 倍宽，
-   * zoom 之后 html 的排版宽度正好回到节点原来的宽，body 用默认 100% 就铺满。
+   * 2026-10-17 两次真实事故，都是往这里加代码造成的：
+   *   ① 把 body 写成 100/Z% → 内容只占节点左上角一小块；
+   *   ② 把 documentElement.zoom 设成 Z → 字号被放大两次，比不处理还糊。
+   * 现在的做法只在宿主侧改 iframe **元素**的宽高与 transform（撑大再缩回），
+   * 文档内部保持默认，于是内容按真实屏幕尺寸排版、栅格 1:1（与 Slidev PR #2728 同一判据）。
    */
-  it('★ 超采样只设 zoom，不动 body 尺寸（改了就会让内容缩成左上角一小块）', () => {
-    expect(js).toContain('function applyScale(sc)')
-    expect(js).toContain('de.style.zoom')
+  it('★ 桥代码不许碰文档级缩放（zoom / body 尺寸）', () => {
+    expect(js).not.toContain('documentElement.style.zoom')
     expect(js).not.toContain('body.style.width')
     expect(js).not.toContain('body.style.height')
   })

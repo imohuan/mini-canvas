@@ -512,18 +512,6 @@ export function buildUiBridge(): string {
     '(function(){',
     '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
     '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
-    // 超采样：宿主按画布缩放把 iframe 撑成 Z 倍、再 scale(1/Z) 缩回原来的显示尺寸；
-    // 这里给根节点设同样的 zoom，让文档按 Z 倍的真实像素重排版一次（文字才真的清晰）。
-    //
-    // ⚠️ **不要再动 body 的宽高**（2026-10-17 改错过一次）：iframe 已经被撑成 Z 倍，
-    // zoom 之后 html 的排版宽度正好是"撑大后的宽 / Z" = 节点原来的宽，body 用默认的
-    // 100% 就正好铺满。曾经把 body 写成 100/Z%，内容就只占节点的 1/Z、全挤在左上角
-    // （用户截图看到的就是这个）。这里只调 zoom，别的一概不碰。
-    '  function applyScale(sc){',
-    '    var z = Number(sc) > 0 ? Number(sc) : 1;',
-    '    var de = document.documentElement;',
-    '    de.style.zoom = z > 1 ? String(z) : ' + S + S + ';',
-    '  }',
     '  var cmdHandlers = [];',
     '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
     '  var cmdHandlers = [];',
@@ -553,7 +541,6 @@ export function buildUiBridge(): string {
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
     '    if(e.source !== parent) return;',
     '    var d = e.data; if(!d || !d.__canvasUiCmd) return;',
-    '    if (typeof d.scale === ' + S + 'number' + S + ') { try { applyScale(d.scale); } catch(err) {} }',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',
     '    }',
