@@ -225,6 +225,8 @@ const posterDisplaySrc = computed(
  */
 const frameGateOpen = ref(false)
 onMounted(() => {
+  // 2000ms 只挡"重活"（起解码器抓帧）—— 纯缓存读取（资源库探测 / 内存命中）不解码、
+  // 不占 CPU，不在这 2 秒里干等，否则刷新后节点白屏 2-3 秒才出图（2026-10-17 用户实测）。
   setTimeout(() => { frameGateOpen.value = true }, 2000)
 })
 
@@ -247,7 +249,7 @@ watch(
   ],
   () => {
     const src = videoUrl.value
-    if (!src || cropping.value || !showPoster.value || !frameGateOpen.value) return
+    if (!src || cropping.value || !showPoster.value) return
     /**
      * 已经定格过 → 只有在**配置没变**的情况下才直接沿用。
      *
@@ -276,13 +278,19 @@ watch(
     // 第二次打开画布、换设备打开、刷新之后，都直接取已存的那张，
     // 不再为每个视频节点重跑一次"起解码器 + seek"（那正是"节点一多每次卡几秒"的根）。
     const resources = frameResources()
+    // 轻路先行：还没过门闩时也允许"纯读缓存"。缓存键先按当前档位算一份；
+    // 门闩后重跑时键一致 → 命中内存直接复用，不会重复生成。
+    const cacheOnly = !frameGateOpen.value
     void frameCache
       .resolveOrCreate({
         src,
         variant,
         ...(ref ? { ref } : {}),
         ...(resources ? { resources } : {}),
+        ...(cacheOnly ? { cacheOnly: true } : {}),
         make: async () => {
+          // cacheOnly 模式下不应走到 make（门闩内才允许解码重活），保险直接拒绝
+          if (cacheOnly) return null
           // 元素在（正在播/刚暂停）就从它身上直接抓，零额外解码
           const el = videoRef.value
           if (el && el.videoWidth) {

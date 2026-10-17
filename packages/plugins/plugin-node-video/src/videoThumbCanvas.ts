@@ -350,6 +350,11 @@ export class FrameCache {
     resources?: FrameResourcePort
     /** 生成字节；返回 null 表示这次生成失败（调用方继续显示原视频/上一张） */
     make: () => Promise<Blob | null>
+    /**
+     * 只读缓存模式（轻路）：只查内存/资源库，不进并发闸、不执行 make。
+     * 刷新后节点先用它立刻取缓存帧图（不解码、不占 CPU），重活等门闩开了再走全量路径。
+     */
+    cacheOnly?: boolean
   }): Promise<TierFrame | null> {
     const { src, variant, ref, resources, make } = input
     const memory = this.store.get(src)?.get(variant)
@@ -357,6 +362,20 @@ export class FrameCache {
     const key = this.key(src, variant)
     const inflight = this.pending.get(key)
     if (inflight) return await inflight
+    if (input.cacheOnly) {
+      // 轻路：内存已在上面查过；这里只做资源库探测（一次 HEAD/GET，不解码），
+      // 不进 thumbGate、不注册 pending —— 门闩后全量路径会再走一遍并接手
+      if (ref && resources) {
+        const hit = await this.probeOnce(ref, resources)
+        if (hit) {
+          const per = this.store.get(src) ?? new Map<string, TierFrame>()
+          per.set(variant, hit)
+          this.store.set(src, per)
+          return hit
+        }
+      }
+      return null
+    }
     const task = (async (): Promise<TierFrame | null> => {
       // 慢路径（可能起视频解码抓帧）过全局并发闸，防止几十个节点同时挂载时解码风暴
       // 卡死排查实验：暂时绕过并发闸（回滚验证 2026-10-15）
