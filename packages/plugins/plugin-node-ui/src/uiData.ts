@@ -512,26 +512,6 @@ export function buildUiBridge(): string {
     '(function(){',
     '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
     '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
-    // 超采样：宿主把 iframe 盒子撑成 Z 倍再 scale(1/Z) 缩回，屏幕尺寸不变；
-    // 这里把排版宽度钉回原来的宽度，于是布局一个像素都不变，只是按 Z 倍像素重画。
-    //
-    // 为什么两个都要设：
-    //   zoom = Z       → 排版宽度 = iframe 的 CSS 宽度 ÷ Z（回到原来的宽度）
-    //   body 宽高 100/Z% → zoom 会把百分比也放大 Z 倍，不除回去 body 就会溢出
-    // 只设其中一个，内容就会变小 / 溢出 / 挤在左上角（2026-10-17 三种错误都真出过）。
-    '  function applyRasterScale(sc){',
-    '    var z = Number(sc) > 0 ? Number(sc) : 1;',
-    '    var de = document.documentElement;',
-    '    if (z <= 1.001) {',
-    '      de.style.zoom = ' + S + S + ';',
-    '      document.body.style.width = ' + S + S + ';',
-    '      document.body.style.height = ' + S + S + ';',
-    '      return;',
-    '    }',
-    '    de.style.zoom = String(z);',
-    '    document.body.style.width = (100 / z) + ' + S + '%' + S + ';',
-    '    document.body.style.height = (100 / z) + ' + S + '%' + S + ';',
-    '  }',
     '  var cmdHandlers = [];',
     '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
     '  var cmdHandlers = [];',
@@ -561,7 +541,6 @@ export function buildUiBridge(): string {
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
     '    if(e.source !== parent) return;',
     '    var d = e.data; if(!d || !d.__canvasUiCmd) return;',
-    '    if (typeof d.raster === ' + S + 'number' + S + ') { try { applyRasterScale(d.raster); } catch(err) {} }',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',
     '    }',

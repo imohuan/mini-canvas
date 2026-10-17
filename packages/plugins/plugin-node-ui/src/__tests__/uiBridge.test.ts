@@ -125,23 +125,18 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
   })
 
   /**
-   * 超采样：`zoom` 和 `body 尺寸` **必须成对出现**。
+   * 页面里**一律不许碰文档级缩放**（zoom / body 尺寸）。
    *
-   * 2026-10-17 的三次真实事故都是「只改一半」造成的：
-   *   ① 只改 body 宽高 100/Z% → 内容只占节点左上角一小块；
-   *   ② 只设 documentElement.zoom → 排版宽度被放大了 Z 倍，内容看起来缩小、露出大片空白；
-   *   ③ 两者都不设 → 撑大 iframe 后页面按 Z 倍宽重排，布局整个变样。
-   *
-   * 两者配对后：排版宽度 = (原宽 × Z) ÷ Z = 原宽，布局逐像素不变，只是按 Z 倍像素重画。
-   * 这条测试锁的是「配对」，不是「禁止」—— 少一个就回退到上面三种错误之一。
+   * 2026-10-17 两次真实事故，都是往这里加代码造成的：
+   *   ① 把 body 写成 100/Z% → 内容只占节点左上角一小块；
+   *   ② 把 documentElement.zoom 设成 Z → 字号被放大两次，比不处理还糊。
+   * 现在的做法只在宿主侧改 iframe **元素**的宽高与 transform（撑大再缩回），
+   * 文档内部保持默认，于是内容按真实屏幕尺寸排版、栅格 1:1（与 Slidev PR #2728 同一判据）。
    */
-  it('★ 超采样必须成对：zoom=Z 与 body 100/Z% 同时存在', () => {
-    expect(js).toContain('function applyRasterScale(sc)')
-    expect(js).toContain('de.style.zoom = String(z)')
-    expect(js).toContain("document.body.style.width = (100 / z)")
-    expect(js).toContain("document.body.style.height = (100 / z)")
-    // 恢复 1 倍时两者都要清掉，否则留下半套状态
-    expect(js).toContain("de.style.zoom = ''")
+  it('★ 桥代码不许碰文档级缩放（zoom / body 尺寸）', () => {
+    expect(js).not.toContain('documentElement.style.zoom')
+    expect(js).not.toContain('body.style.width')
+    expect(js).not.toContain('body.style.height')
   })
 })
 
