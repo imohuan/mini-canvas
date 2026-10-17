@@ -27,7 +27,7 @@
  * 的时序，而这里只需要单向注一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, type CanvasRenderContext } from '@mini-canvas/canvas-render'
 import { buildPalette, buildSrcdoc, normalizeUpstream, toCloneableState, type PaletteToken, type UpstreamItem } from './uiData'
 import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
@@ -47,7 +47,7 @@ import { emitUiDebugEvent } from './debugEventBus'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx } = useCanvasRender()
+const { ctx, flow } = useCanvasRender()
 
 /**
  * 本插件的配置（后台地址 / 允不允许联网）。
@@ -230,6 +230,69 @@ watch(gen, () => {
 })
 
 /**
+ * 清晰度（超采样）—— 让 iframe 按**屏幕上最终显示的尺寸**重画一次。
+ *
+ * ## 为什么必须做，以及为什么之前的两种做法都不对
+ *
+ * 画布缩放 = 外层一整块 `scale(Z)`。外部卡片标题是普通 DOM，浏览器会按放大后的尺寸
+ * 重新栅格化，所以清晰；iframe 是独立文档，浏览器**只把它画好的那张图拉伸**，
+ * 放大越多越糊（2026-10-17 实测：内部标题屏幕尺寸恒为 65×18.8，不随缩放变化）。
+ *
+ * 社区里同一个问题的修法（slidevjs/slidev issue #2281 / PR #2728）是：
+ * iframe 盒子撑大 Z 倍，再 `transform: scale(1/Z)` 缩回 —— 让它的 CSS 尺寸等于屏幕尺寸，
+ * 浏览器就按真实像素重画了。
+ *
+ * 但只做这一步会**改变布局**：iframe 的 CSS 宽度变成了 Z 倍，页面按更宽的视口重排，
+ * 内容看起来变小（用户 2026-10-17 明确否决：「我缩放的时候你这边布局全是变化的」）。
+ *
+ * 所以还要把**排版宽度钉回原来的宽度**：
+ *   文档 `zoom = Z`  → 排版宽度 = iframe CSS 宽度 ÷ Z = 原来的宽度；
+ *   body 宽高 = `100/Z%` → 抵消 zoom 对百分比的放大，body 仍铺满同样的区域。
+ * 两者合起来：屏幕上的尺寸、位置、换行全部与 1 倍时一致，只是按 Z 倍像素重画了一遍。
+ * 2026-10-17 真机验证（Z=2）：标题、滑块、「生成宫格图」按钮位置与 1 倍逐像素一致，
+ * 文字边缘明显更实。
+ *
+ * ## 只在缩放停下后改一次
+ *
+ * 每改一次都要让 iframe 重新排版，缩放过程中逐帧改会闪、会卡（用户反复报过）。
+ * 所以缩放期间 iframe 一动不动（照常被画布拉伸），停下手（约 160ms）后再一次性
+ * 调到与当前缩放匹配的倍数。手一放，画面就是清晰的。
+ */
+const rasterScale = ref(1)
+let rasterTimer: ReturnType<typeof setTimeout> | null = null
+const canvasZoom = computed(
+  () => (flow as CanvasRenderContext['flow'] | undefined)?.viewport?.value?.zoom ?? 1,
+)
+watch(
+  canvasZoom,
+  (z) => {
+    if (rasterTimer) clearTimeout(rasterTimer)
+    rasterTimer = setTimeout(() => {
+      rasterTimer = null
+      // 缩小不需要超采样（小尺寸本来就清楚）；上限 3，避免超大画布把显存吃光。
+      const next = z > 1.02 ? Math.min(z, 3) : 1
+      if (Math.abs(next - rasterScale.value) > 0.02) rasterScale.value = next
+    }, 160)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  if (rasterTimer) clearTimeout(rasterTimer)
+})
+
+/** iframe 盒子：撑大 Z 倍 + 反向缩放，屏幕上占据的位置与大小完全不变 */
+const frameStyle = computed(() => {
+  const z = rasterScale.value
+  if (z === 1) return undefined
+  return {
+    width: 100 * z + '%',
+    height: 100 * z + '%',
+    transform: 'scale(' + 1 / z + ')',
+    transformOrigin: '0 0',
+  }
+})
+
+/**
  * 把**这个节点的全部数据**发给页面（**不重挂**）。
  *
  * 发三样，都是"这个节点的 data 上、页面要读的东西"：
@@ -249,6 +312,8 @@ function pushDataToFrame(): void {
       {
         __canvasUiCmd: 1,
         type: 'data',
+        // 超采样倍数：页面按它设 zoom 与 body 尺寸（见 uiData 的 applyRasterScale）
+        raster: rasterScale.value,
         upstream: toCloneableState(upstream.value),
         inputs: toCloneableState(inputValues.value),
       },
@@ -261,6 +326,8 @@ function pushDataToFrame(): void {
 
 // 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
 watch([upstream, inputValues], () => pushDataToFrame())
+// 缩放停下、倍数变了 → 通知页面重排版一次（不重挂 iframe）
+watch(rasterScale, () => pushDataToFrame())
 
 // ======================================================================
 // 调试连接（用户 2026-10-15 定的流程：邀请 → 用户确认唯一标签页 → 注入 SDK）
@@ -877,6 +944,7 @@ const hint = computed(() => {
         ref="iframeEl"
         :key="gen"
         class="ui-frame"
+        :style="frameStyle"
         :srcdoc="frameDoc"
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
