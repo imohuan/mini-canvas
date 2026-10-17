@@ -189,6 +189,7 @@ export function buildDebugHtml(input: {
   const head = [
     '<meta charset="utf-8">',
     ...(baseHref ? ['<base href="' + baseHref + '">'] : []),
+    // 主题色白名单: 独立调试页是脱离画布的普通文档，读不到宿主 CSS 变量，与 SHELL_STYLE 同一套理由
     '<style>html, body { margin: 0; padding: 0; width: 100%; height: 100%; } * { box-sizing: border-box; } body { font: 13px/1.5 system-ui, sans-serif; } html[data-theme=\'dark\'] body { background: #16181d; color: #d1d5db; } html[data-theme=\'light\'] body { background: #f9fafb; color: #374151; }</style>',
     '<script src="' + input.sdkFileUrl + '"></script>',
     '<script src="' + input.contextFileUrl + '"></script>',
