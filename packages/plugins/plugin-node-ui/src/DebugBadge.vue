@@ -37,23 +37,75 @@ refreshDebugging()
 const pollTimer = setInterval(refreshDebugging, 2000)
 onBeforeUnmount(() => clearInterval(pollTimer))
 
+/**
+ * 徽标状态机（用户口径 2026-10-17）：
+ *   收到指令 → 「收到指令」停留 500ms（不要一下就闪过）
+ *   → 「执行中」+ 秒表（执行可能超过 1 秒，让人知道它活着）
+ *   → 结束（result/error）→ 结果文案停留 500ms → 回「调试」常驻。
+ * 断开（disconnected 事件或凭据消失）→ 整个标签熄灭。
+ */
+type Phase =
+  | { name: 'idle' }
+  | { name: 'received'; until: number }
+  | { name: 'running'; since: number }
+  | { name: 'done'; until: number; text: string; error: boolean }
+const phase = ref<Phase>({ name: 'idle' })
+const BADGE_HOLD_MS = 500
+const now = ref(Date.now())
+let ticker: ReturnType<typeof setInterval> | null = null
+function ensureTicker(): void {
+  if (ticker !== null) return
+  ticker = setInterval(() => {
+    now.value = Date.now()
+    const p = phase.value
+    if (p.name === 'received' && now.value >= p.until) phase.value = { name: 'running', since: p.until }
+    else if (p.name === 'done' && now.value >= p.until) phase.value = { name: 'idle' }
+  }, 100)
+}
+ensureTicker()
+onBeforeUnmount(() => { if (ticker !== null) clearInterval(ticker) })
+
+function onDebugEvent(e: UiDebugEvent): void {
+  switch (e.kind) {
+    case 'eval':
+      phase.value = { name: 'received', until: Date.now() + BADGE_HOLD_MS }
+      break
+    case 'result':
+    case 'error':
+      phase.value = {
+        name: 'done',
+        until: Date.now() + BADGE_HOLD_MS,
+        text: e.kind === 'error' ? '调试 · 出错' : '调试 · 已执行',
+        error: e.kind === 'error',
+      }
+      break
+    case 'disconnected':
+      // 断开即熄：用户口径「断开连接的时候，把你的调试关闭掉」
+      phase.value = { name: 'idle' }
+      break
+  }
+}
+subscribeUiDebugEvents((e) => {
+  if (e.nodeId === props.nodeId) onDebugEvent(e)
+})
+
 const text = computed(() => {
   if (!stillDebugging.value) return null
-  switch (last.value?.kind) {
-    case 'eval': return '调试 · 收到指令'
-    case 'result': return '调试 · 已执行'
-    case 'error': return '调试 · 出错'
-    default: return '调试'
-  }
+  const p = phase.value
+  if (p.name === 'received') return '调试 · 收到指令'
+  if (p.name === 'running') return '调试 · 执行中 ' + Math.max(1, Math.round((now.value - p.since) / 1000)) + 's'
+  if (p.name === 'done') return p.text
+  return '调试'
 })
-const cls = computed(() => ({
-  'is-active': last.value?.kind === 'eval',
-  'is-error': last.value?.kind === 'error',
+const badgeCls = computed(() => ({
+  'is-active': phase.value.name === 'running' || phase.value.name === 'received',
+  'is-error': phase.value.name === 'done' && phase.value.error,
 }))
+
 </script>
 
 <template>
-  <span v-if="text" class="ui-debug-badge" :class="cls" role="status">
+    <span v-if="text" class="ui-debug-badge" :class="badgeCls" role="status">
     <span class="ui-debug-badge-dot" aria-hidden="true"></span>{{ text }}
   </span>
 </template>

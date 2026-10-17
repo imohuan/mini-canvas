@@ -325,6 +325,33 @@ const activeDebug = computed(() => {
 })
 
 /** 用户在确认框点「同意」：写凭据 → 回执后台 → 清节点上的邀请标记 */
+/**
+ * 画布把视线带到本节点（选中 + 居中）。用户口径 2026-10-17：**弹确认框时**就聚焦，
+ * 不要等到点「同意」—— 用户第一眼就该看到被调试的是哪个节点。
+ */
+function focusThisNode(): void {
+  try {
+    ctx.tryGet<{ set(ids: Iterable<string>): void }>('selection')?.set([props.id])
+    const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
+    const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
+    const rect = layout?.getNodeRect(props.id)
+    if (viewport) {
+      if (rect) viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
+      else {
+        const node = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')?.getNode(props.id)
+        if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
+      }
+    }
+  } catch { /* 聚焦失败不拦调试 */ }
+}
+// 邀请标记一出现就聚焦（pendingInvite 从无到有的那一次）
+watch(pendingInvite, (inv, old) => {
+  if (inv && !old) {
+    console.log('[ui-debug] 邀请出现，聚焦节点 ' + props.id)
+    focusThisNode()
+  }
+})
+
 async function acceptDebugInvite(): Promise<void> {
   const inv = pendingInvite.value
   if (!inv) return
@@ -338,20 +365,7 @@ async function acceptDebugInvite(): Promise<void> {
     at: Date.now(),
   })
   debugSession.value = inv.session
-  // 聚焦到本节点（用户口径 2026-10-16：调试请求弹出来时，节点先聚焦 —— 等效快捷键 F；
-  // 点「同意」即进入调试阶段，画布把视线带到这个节点上）。
-  try {
-    const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-    const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
-    const rect = layout?.getNodeRect(props.id)
-    if (viewport) {
-      if (rect) viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
-      else {
-        const node = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')?.getNode(props.id)
-        if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
-      }
-    }
-  } catch { /* 聚焦失败不拦调试 */ }
+  focusThisNode()
   emitUiDebugEvent({ nodeId: props.id, kind: 'connected' })
   console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
@@ -753,9 +767,19 @@ if (typeof window !== 'undefined') {
 function onDebugSdkEvent(ev: MessageEvent): void {
   const m = ev.data as { __uiDebugEvt?: { kind?: unknown; detail?: unknown } } | null
   if (!m || !m.__uiDebugEvt || typeof m.__uiDebugEvt.kind !== 'string') return
+  // disconnected：SDK 收到后台 stop。清凭据 + 摘刷新拦截（用户口径 2026-10-17：
+  // 「断开链接的时候，把你的调试关闭掉，还有把你的拦截也关闭掉」）。
+  if (m.__uiDebugEvt.kind === 'disconnected') {
+    console.log('[ui-debug] 后台断开：清凭据 + 摘刷新拦截')
+    const st2 = safeStorage()
+    if (st2) clearCredential(st2)
+    debugSession.value = ''
+    emitUiDebugEvent({ nodeId: props.id, kind: 'disconnected' })
+    return
+  }
   emitUiDebugEvent({
     nodeId: props.id,
-    kind: m.__uiDebugEvt.kind as 'eval' | 'result' | 'error',
+    kind: m.__uiDebugEvt.kind as 'eval' | 'result' | 'error' | 'disconnected',
     ...(typeof m.__uiDebugEvt.detail === 'string' ? { detail: m.__uiDebugEvt.detail } : {}),
   })
 }

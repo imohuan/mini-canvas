@@ -5,11 +5,11 @@
  * 调试过程实时变化 —— 连接建立、收到 eval、执行结果。UiContent（持有调试链路）
  * 在这些时机发事件；DebugBadge 组件订阅同一总线更新自己。
  *
- * 事件形状：{ nodeId, kind: 'connected' | 'eval' | 'error', detail?: string }
+ * 事件形状：{ nodeId, kind: 'connected' | 'eval' | 'error' | 'disconnected', detail?: string }
  */
 export type UiDebugEvent = {
   nodeId: string
-  kind: 'connected' | 'eval' | 'result' | 'error'
+  kind: 'connected' | 'eval' | 'result' | 'error' | 'disconnected'
   detail?: string
   at: number
 }
