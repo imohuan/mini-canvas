@@ -6,7 +6,8 @@
  * （与图片节点同约定）。本组件只负责「放哪些按钮、点了干什么」。
  *
  * **两套按钮，按会话态切换**（用户要求「确认按钮应该放在上下控制栏」）：
- * - 平时：上传 / 剪辑 / 裁剪 / 扩展 / 截图 / 下载（以及裁过/剪过后的「恢复」）；
+ * - 平时：上传 / 剪辑 / 截图 / 下载（以及剪过后的「恢复」）；
+ *   （裁剪入口 2026-10-17 移除：节点内已有等效的裁剪功能，重复入口反而困惑）
  * - 编辑态（正在裁剪或扩展）：只剩 **取消** 与 **确认** —— 编辑时其它入口都没有意义，
  *   留着反而容易误点（一边调框一边点到下载）。这一条同时解决了「浮层里不该有按钮」的问题：
  *   浮层只负责画框，按钮永远在控制栏这个固定位置上。
@@ -59,8 +60,6 @@ const ICON_UPLOAD =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
 const ICON_CLIP =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M4 17h16"/><path d="M8 4v16"/><path d="M16 4v16"/></svg>'
-const ICON_CROP =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>'
 const ICON_FRAME =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'
 const ICON_DOWNLOAD =
@@ -146,7 +145,6 @@ function cancelEdit(): void {
 
       <template v-if="hasVideo">
         <NodeToolbarButton title="剪辑时长" :icon="ICON_CLIP" @click="beginOverlay(props.id, 'clip')" />
-        <NodeToolbarButton title="裁剪画面" :icon="ICON_CROP" @click="beginOverlay(props.id, 'crop')" />
         <NodeToolbarButton title="截取当前帧" :icon="ICON_FRAME" @click="run('video.captureFrame')" />
         <NodeToolbarButton title="下载视频" :icon="ICON_DOWNLOAD" @click="run('video.download')" />
         <NodeToolbarButton v-if="cropped" title="恢复整幅画面" :icon="ICON_RESET" @click="run('video.resetCrop')" />
