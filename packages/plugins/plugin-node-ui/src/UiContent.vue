@@ -332,16 +332,10 @@ const activeDebug = computed(() => {
 function focusThisNode(): void {
   try {
     ctx.tryGet<{ set(ids: Iterable<string>): void }>('selection')?.set([props.id])
-    const layout = ctx.tryGet<{ getNodeRect(id: string): { x: number; y: number; w: number; h: number } | null }>('nodeLayout')
-    const viewport = ctx.tryGet<{ setCenter(x: number, y: number, zoom?: number): void; getViewport(): { zoom: number } }>('viewport')
-    const rect = layout?.getNodeRect(props.id)
-    if (viewport) {
-      if (rect) viewport.setCenter(rect.x + rect.w / 2, rect.y + rect.h / 2, viewport.getViewport().zoom)
-      else {
-        const node = ctx.tryGet<{ getNode(id: string): { position: { x: number; y: number } } | undefined }>('doc')?.getNode(props.id)
-        if (node) viewport.setCenter(node.position.x, node.position.y, viewport.getViewport().zoom)
-      }
-    }
+    // 用 auto-layout 的聚焦命令（等效快捷键 F）：它按节点 bounds 计算**合适的缩放**
+    // （keepZoom:false），节点小就放大、超界就缩小 —— 与用户手动按 F 同一套行为。
+    // 之前自拼 setCenter(…, 当前zoom) 只平移不缩放，节点小时依旧看不清（用户 2026-10-17 指出）。
+    ctx.tryGet<{ execute(id: string): unknown }>('command')?.execute('auto-layout:focus-selected')
   } catch { /* 聚焦失败不拦调试 */ }
 }
 // 邀请标记一出现就聚焦（pendingInvite 从无到有的那一次）
@@ -365,7 +359,6 @@ async function acceptDebugInvite(): Promise<void> {
     at: Date.now(),
   })
   debugSession.value = inv.session
-  focusThisNode()
   emitUiDebugEvent({ nodeId: props.id, kind: 'connected' })
   console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
