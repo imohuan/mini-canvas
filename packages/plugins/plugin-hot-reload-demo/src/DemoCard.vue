@@ -6,9 +6,9 @@
  * → 几秒内这块卡片应自己变样，右上角还会弹一条「热重载完成」的通知。
  */
 // 版本号：改这里 = 最省事的"显眼变化"（卡片上的大字直接变）
-const VERSION = 'v10'
-const TITLE = 'KV 门铃 v10 全通'
-const HINT = 'PUT → SSE → HEAD 对比 → 重装 → 通知'
+const VERSION = 'v13'
+const TITLE = '签名对比修复 v13'
+const HINT = 'Content-Length 签名 + KV 门铃 = 真正全通'
 </script>
 
 <template>

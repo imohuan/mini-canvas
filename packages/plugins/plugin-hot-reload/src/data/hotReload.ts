@@ -489,14 +489,18 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：清单里找不到产物地址' })
       return
     }
+    // 产物签名：服务端 /plugins/* 的静态响应**不带 Last-Modified/Content-Length**（实测），
+    // HEAD 对比不可用 —— 改用轻量 GET 的 Content-Length（构建产物每次 build 长度几乎必变；
+    // 真正的"内容是否一致"由 reload 后的产物完整性兜底，这里只求"明显变了才重装"）。
     try {
-      const head = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-      const lm = head.headers.get('last-modified') ?? String(head.headers.get('content-length') ?? '')
+      const probe = await fetch(url, { method: 'GET', headers: { range: 'bytes=0-0' }, cache: 'no-store' })
+      // 服务端对 range 的支持不定：拿不到就退回全量长度；两者都拿不到才放弃
+      const lm = probe.headers.get('content-range') ?? probe.headers.get('content-length') ?? 'unknown'
       const prev = lastModifiedBy.get(pluginName)
       if (prev !== undefined && prev === lm) return // 旧通知（乱序/重复）：产物没变，静默丢弃
       lastModifiedBy.set(pluginName, lm) // 记住这次见到的；reload 拉的就是这份
     } catch (err) {
-      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：HEAD 失败 ' + String(err) })
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：探测失败 ' + String(err) })
       return
     }
     try {
