@@ -512,22 +512,17 @@ export function buildUiBridge(): string {
     '(function(){',
     '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
     '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
-    // 超采样：宿主按画布缩放把 iframe 撑大再反向缩放，这里让文档内容按同样倍数重排版，
-    // 于是外表看不出变化、内部却按更高分辨率重新画过（文字才真的清晰）。
-    // 只动两个东西：根节点 zoom（排版倍数）和 body 尺寸（占满 iframe 的 1/scale，
-    // 抵消 zoom 带来的放大，避免出现滚动条或内容被裁）。
+    // 超采样：宿主按画布缩放把 iframe 撑成 Z 倍、再 scale(1/Z) 缩回原来的显示尺寸；
+    // 这里给根节点设同样的 zoom，让文档按 Z 倍的真实像素重排版一次（文字才真的清晰）。
+    //
+    // ⚠️ **不要再动 body 的宽高**（2026-10-17 改错过一次）：iframe 已经被撑成 Z 倍，
+    // zoom 之后 html 的排版宽度正好是"撑大后的宽 / Z" = 节点原来的宽，body 用默认的
+    // 100% 就正好铺满。曾经把 body 写成 100/Z%，内容就只占节点的 1/Z、全挤在左上角
+    // （用户截图看到的就是这个）。这里只调 zoom，别的一概不碰。
     '  function applyScale(sc){',
     '    var z = Number(sc) > 0 ? Number(sc) : 1;',
     '    var de = document.documentElement;',
-    '    if (z === 1) {',
-    '      de.style.zoom = ' + S + S + ';',
-    '      document.body.style.width = ' + S + S + ';',
-    '      document.body.style.height = ' + S + S + ';',
-    '      return;',
-    '    }',
-    '    de.style.zoom = String(z);',
-    '    document.body.style.width = (100 / z) + ' + S + '%' + S + ';',
-    '    document.body.style.height = (100 / z) + ' + S + '%' + S + ';',
+    '    de.style.zoom = z > 1 ? String(z) : ' + S + S + ';',
     '  }',
     '  var cmdHandlers = [];',
     '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',

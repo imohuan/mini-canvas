@@ -123,5 +123,20 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
     expect(js).toContain('e.source !== parent')
     expect(js).toContain('cmdHandlers.push(function(d)')
   })
+
+  /**
+   * 超采样只许调**根节点 zoom**，绝不许再动 body 宽高。
+   *
+   * 2026-10-17 真实事故：为了让文字清晰，iframe 被撑成 Z 倍再 scale(1/Z)，
+   * 当时顺手把 body 写成 100/Z%，结果内容只占节点的 1/Z、全挤在左上角
+   * （用户截图：节点很大，里面面板只占左边一条）。iframe 已经是 Z 倍宽，
+   * zoom 之后 html 的排版宽度正好回到节点原来的宽，body 用默认 100% 就铺满。
+   */
+  it('★ 超采样只设 zoom，不动 body 尺寸（改了就会让内容缩成左上角一小块）', () => {
+    expect(js).toContain('function applyScale(sc)')
+    expect(js).toContain('de.style.zoom')
+    expect(js).not.toContain('body.style.width')
+    expect(js).not.toContain('body.style.height')
+  })
 })
 
