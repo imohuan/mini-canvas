@@ -3018,7 +3018,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 22px;
-  color: var(--ui-ink-dim, #919191);
+  color: var(--ui-danger, #ef4444);
 }
 
 /* 开口圆弧 = 一个圆 + 透明上边框：转起来能看清缺口在走。

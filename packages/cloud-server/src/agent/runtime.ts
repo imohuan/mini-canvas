@@ -833,6 +833,12 @@ export class AgentRuntime {
             await this.deps.store
               .appendTurn(canvasId, id, { role: 'assistant', text: ev.message, error: true, ts: Date.now() })
               .catch(() => undefined)
+          } else if (ev.type === 'notice' && ev.message === '已按停止，这一轮到此为止') {
+            // 终止落转录（用户口径 2026-10-17：「已停止」标记刷新后仍要看得见）。
+            // aborted:true 回合回放时画「已停止」小标，不显示成正文。
+            await this.deps.store
+              .appendTurn(canvasId, id, { role: 'assistant', text: ev.message, aborted: true, ts: Date.now() })
+              .catch(() => undefined)
           }
           yield ev
         }

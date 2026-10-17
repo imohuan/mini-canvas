@@ -394,6 +394,7 @@ export class ChatModel {
       text: string
       images?: string[]
       error?: boolean
+      aborted?: boolean
       /** 转录里的时间戳（用户消息 hover 显示「发出时间」用）；老数据可能没有 */
       ts?: number
       tool?: { id: string; name: string; arguments: string; output?: string; card?: boolean }
@@ -418,7 +419,10 @@ export class ChatModel {
         this.turns.push(current)
       }
       if (t.role === 'assistant') {
-        if (t.error) {
+        if (t.aborted) {
+          // 终止标记（用户口径 2026-10-17）：只画「已停止」小标，不进正文不进错误。
+          current.aborted = true
+        } else if (t.error) {
           // 失败记录（用户口径 2026-10-16）：错误要在对话流里留痕、刷新后仍可见。
           // 只挂 current.error（红色 ac-error 渲染）——不要再 push text step，
           // 否则错误会以黑字正文 + 红字错误各显示一遍（用户截图 2026-10-16）。
@@ -481,6 +485,7 @@ export class ChatModel {
       tool?: { id: string; name: string; arguments: string; output?: string; card?: boolean }
       done?: boolean
       error?: boolean
+      aborted?: boolean
     }>,
   ): void {
     if (!turns.length) return
