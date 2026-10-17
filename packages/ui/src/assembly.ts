@@ -44,7 +44,7 @@ import { uiSettingsPanelPlugin } from './settingsPanelPlugin'
 // 详见该文件顶部注释：全应用只剩一份下拉实现，插件按名取到的也是它。
 import { uiDropdownPlugin } from './uiDropdownPlugin'
 // 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
-import { uiHotReloadPlugin } from './hotReloadPlugin'
+import { hotReloadPlugin } from '@mini-canvas/plugin-hot-reload'
 // 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
 import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@mini-canvas/plugin-agent'
@@ -102,7 +102,7 @@ export const APP_PLUGINS = [
   agentPlugin,
   uiSettingsPanelPlugin,
   uiDropdownPlugin,
-  uiHotReloadPlugin,
+  hotReloadPlugin,
   uiAssetUploadPlugin,
 ]
 
