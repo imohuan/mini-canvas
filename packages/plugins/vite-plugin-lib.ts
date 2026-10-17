@@ -78,35 +78,3 @@ export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {
 }
 
 /**
- * hotReloadManifest —— 构建**可选**插件：热重载声明生成器（写 dist/hot-reload.json）。
- *
- * 用户口径：插件作者在自己包里跑 watch 服务（盯 src → 自动 build → SSE 广播），
- * 前端热重载管理器**自动登记**这个地址 —— 插件装上就监听、清单里消失就摘除，不用手填链接。
- *
- * 为什么声明文件放 dist/ 而不是走 package.json：服务端 /plugins/<pkg>/** 的解析规则是
- * 「多段路径强拼 dist/」（安全设计，挡住任意文件读取），package.json 在包根取不到；
- * 而 dist/ 下的 json 本来就在白名单里。构建时把声明写进产物目录，服务端**零改动**就能发。
- *
- * 用法（插件 vite.config.ts）：
- *   plugins: [vue(), cssInjectedByJs(), hotReloadManifest('http://localhost:5333/sse')]
- *
- * @param sse 前端要登记的 SSE 地址。相对路径（如 /sse）= 与清单同源，前端登记时按清单 origin 补全。
- */
-export function hotReloadManifest(sse: string): {
-  name: string
-  /** rolldown 钩子签名：emitFile 在 this 上（PluginContext） */
-  generateBundle(this: { emitFile(asset: { type: 'asset'; fileName: string; source: string }): void }): void
-} {
-  return {
-    name: 'mini-canvas:hot-reload-manifest',
-    generateBundle() {
-      // emitFile 走产物目录（dist/），与 js/css 同级
-      const ctx = this as { emitFile(asset: { type: 'asset'; fileName: string; source: string }): void }
-      ctx.emitFile({
-        type: 'asset',
-        fileName: 'hot-reload.json',
-        source: JSON.stringify({ sse }, null, 2) + '\n',
-      })
-    },
-  }
-}
