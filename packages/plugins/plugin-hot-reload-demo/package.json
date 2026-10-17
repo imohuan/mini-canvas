@@ -22,7 +22,7 @@
   "scripts": {
     "build": "vite build",
     "build:watch": "vite build --watch",
-    "watch": "node scripts/watch-server.mjs",
+    "watch": "node scripts/watch.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

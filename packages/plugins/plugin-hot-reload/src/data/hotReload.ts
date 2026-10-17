@@ -82,11 +82,13 @@ export interface HotReload {
   /** 清日志 */
   clearLogs(): void
   /**
-   * 同步「插件声明源」（自动登记/摘除）。
-   * 启动时调一次 + 可定时重扫（服务起了/停了，地址出现/消失就跟着变）。
-   * 返回本轮新增/摘除的插件名（供日志/测试断言）。
+   * **监听 KV 通知通道**（热重载的主驱动，用户口径的最终形态）：
+   * 复用宿主共享的 /api/kv/events SSE，看到 `key` 以 `plugin-watch:` 开头就
+   * HEAD 对比该插件产物 —— 变了才拉新产物重装（防误报，也防旧通知覆盖新通知）。
+   *
+   * 返回停止函数（页面卸载时调；内部幂等，重复调用安全）。
    */
-  syncPluginSources(): Promise<{ added: string[]; removed: string[] }>
+  watchPluginChanges(): () => void
 }
 
 /** 取"路径名"（去协议/主机/查询/哈希）——用于跨形态比较同一个产物（与 pluginReload 同口径） */
@@ -145,13 +147,6 @@ export interface HotReloadDeps {
   /** 存/取持久化（缺省 localStorage；测试可给内存版） */
   storage?: { getItem(k: string): string | null; setItem(k: string, v: string): void }
   /**
-   * 扫描「插件声明的热重载地址」并返回（自动登记用，见 syncPluginSources）。
-   * 缺省实现：拉 /plugin-catalog.json → 对每个产物地址在**同源**下取
-   * /plugins/<pkg>/hot-reload.json（构建时由 vite 插件 hotReloadManifest 生成）。
-   * 测试注入假实现。
-   */
-  scanPluginSources?: () => Promise<Array<{ plugin: string; sse: string; label: string }>>
-  /**
    * **重装提示**（视觉反馈）：某插件刚被自动重装了一遍就调它。
    *
    * 用户口径：「如果发生了热重载，希望能提供一个视觉上的提示，比如弹一个 notify」。
@@ -168,13 +163,11 @@ export interface HotReloadDeps {
 export const SOURCES_KEY = 'hot-reload:sources'
 
 /**
- * 「插件声明源」的来源标记（自动登记的源 label 前缀 / 摘除判据）。
- *
- * 为什么不和手填的混在一起：手填源是用户的选择，插件声明源跟着**清单**走 ——
- * 插件卸了/声明没了 → 自动摘除；插件又装回来/声明又出现 → 自动登记回来。
- * 用固定前缀识别"这类源是自动的"，同步时不碰用户手填的那些。
+ * KV 通知 key 的约定前缀（watch 工具 PUT 的 key 必须用它开头）。
+ * key 其余部分 = 插件运行名（如 plugin-watch:hot-reload-demo）。
+ * 事件形状 = { type:'config', key:'plugin-watch:<名>' }（服务端 routes/events.ts 现成推送）。
  */
-export const AUTO_SOURCE_PREFIX = '插件声明'
+export const PLUGIN_WATCH_PREFIX = 'plugin-watch:'
 
 /**
  * 建一个热重载管理器（单例语义：宿主只建一个、挂 window）。
@@ -458,84 +451,100 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     state.logs = []
   }
 
-  /**
-   * 默认扫描：拉清单，对每个产物地址取同源的 dist/hot-reload.json。
-   *
-   * 为什么在热重载管理器里做而不是服务端清单加字段：服务端 /plugins/** 的解析规则
-   * 强拼 dist/（安全设计），声明文件放 dist/ 里构建时生成（vite 插件 hotReloadManifest），
-   * 服务端**零改动**；且"逐个取声明"让没跑 watch 服务的插件天然没有这条源（404 → 跳过）。
-   */
-  async function defaultScanPluginSources() {
-    const res = await fetch('/plugin-catalog.json', { headers: { accept: 'application/json' } })
-    if (!res.ok) return []
-    const body = (await res.json()) as { plugins?: Array<{ id?: string; name?: string; url?: string }> }
-    const found: Array<{ plugin: string; sse: string; label: string }> = []
-    for (const p of body.plugins ?? []) {
-      if (!p.id || !p.url) continue
-      // 声明文件与产物同目录（dist/）→ 产物地址同源同目录取 hot-reload.json
-      const url = new URL(p.url, location.origin)
-      const manifestUrl = url.origin + url.pathname.replace(/[^/]+\.js$/i, 'hot-reload.json')
-      try {
-        const mRes = await fetch(manifestUrl, { headers: { accept: 'application/json' } })
-        if (!mRes.ok) continue
-        const decl = (await mRes.json()) as { sse?: unknown }
-        if (typeof decl.sse !== 'string' || !decl.sse) continue
-        // 相对地址按清单同源补全（dev :5288 连 watch :5333 就是这种）
-        const sse = new URL(decl.sse, url.origin).href
-        found.push({ plugin: p.name ?? p.id, sse, label: AUTO_SOURCE_PREFIX + ' · ' + (p.name ?? p.id) })
-      } catch {
-        /* 单个插件取声明失败不影响其它（可能没跑 watch / 没构建） */
-      }
+  // ==================== 插件产物变更监听（KV 通知通道，最终形态） ====================
+  //
+  // 用户口径的完整链路（已实测可行）：
+  //   watch 工具：盯 src → 变了 build → build 成功后 PUT /api/kv/config/plugin-watch:<插件名>
+  //   后台：      kv 写 → /api/kv/events 推 {type:'config', key:'plugin-watch:<名>'}（现成，零改动）
+  //   画布：      这里监听该前缀 → HEAD 对比产物 Last-Modified（防误报/防旧通知）→ 变了才拉新重装
+  //
+  // 为什么不直接信通知：同一个 watch 进程的多次构建可能乱序到达（SSE 无序保证），
+  // HEAD 的 Last-Modified 是权威顺序 —— 旧通知到达时对比发现"没变"就静默丢弃。
+  // 为什么 value 不看：服务端事件**有意不带值**（见 routes/events.ts），key 本身已含全部信息
+  // （哪个插件变了），新内容在产物文件里，reload 时现拉。
+
+  /** 产物 HEAD 对比用的 Last-Modified 缓存：插件名 → 上次见到的值 */
+  const lastModifiedBy = new Map<string, string>()
+
+  /** 从清单按名字/目录名找产物地址（reload 的 target 可能是运行名，产物地址在清单里） */
+  async function catalogUrlOf(target: string): Promise<string | undefined> {
+    try {
+      const res = await fetch('/plugin-catalog.json', { headers: { accept: 'application/json' } })
+      if (!res.ok) return undefined
+      const body = (await res.json()) as { plugins?: Array<{ id?: string; name?: string; url?: string }> }
+      const hit = (body.plugins ?? []).find((p) => p.name === target || p.id === target)
+      return hit?.url || undefined
+    } catch {
+      return undefined
     }
-    return found
   }
 
-  /** 本轮同步已登记的自动源 id（摘除时用） */
-  let autoSourceIds = new Set<number>()
-
   /**
-   **自动登记/摘除**（用户口径：服务启动自动加进监听，服务结束自动移除）。
-   *
-   * 同步语义（只动带 AUTO_SOURCE_PREFIX 的源，用户手填的不碰）：
-   * - 声明里有、现在没登记 → 登记（地址变了就更新）；
-   * - 声明里没有、但之前是自动登记的 → 摘除（插件卸了 / 服务没跑了）。
+   * 收到某插件的变更通知：HEAD 对比 → 真变了才 reload。
+   * 对比基准是上次**自己拉的**那次（不是通知里的时间戳 —— SSE 无序，通知里的值不可信）。
    */
-  async function syncPluginSources(): Promise<{ added: string[]; removed: string[] }> {
-    const scan = deps.scanPluginSources ?? defaultScanPluginSources
-    let declared: Array<{ plugin: string; sse: string; label: string }>
+  async function handlePluginWatchEvent(pluginName: string): Promise<void> {
+    const url = await catalogUrlOf(pluginName)
+    if (!url) {
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：清单里找不到产物地址' })
+      return
+    }
     try {
-      declared = await scan()
-    } catch {
-      return { added: [], removed: [] } // 清单拉不到：不动现有状态
+      const head = await fetch(url, { method: 'HEAD', cache: 'no-store' })
+      const lm = head.headers.get('last-modified') ?? String(head.headers.get('content-length') ?? '')
+      const prev = lastModifiedBy.get(pluginName)
+      if (prev !== undefined && prev === lm) return // 旧通知（乱序/重复）：产物没变，静默丢弃
+      lastModifiedBy.set(pluginName, lm) // 记住这次见到的；reload 拉的就是这份
+    } catch (err) {
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：HEAD 失败 ' + String(err) })
+      return
     }
-    const added: string[] = []
-    const removed: string[] = []
+    try {
+      await reloadOne(pluginName)
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'reload', detail: pluginName })
+      notifyReloaded(pluginName, 'kv-plugin-watch')
+    } catch (err) {
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：' + String(err) })
+    }
+  }
 
-    // 现有的自动源（按 url 对齐，label 只是展示）
-    const auto = state.sources.filter((s) => s.label.startsWith(AUTO_SOURCE_PREFIX))
-    const autoByUrl = new Map(auto.map((s) => [s.url, s]))
-    const wantedUrls = new Set(declared.map((d) => d.sse))
+  /** KV 通知监听状态（幂等：多次 watchPluginChanges 只连一条） */
+  let kvWatchStarted = false
+  let kvWatchStop: (() => void) | null = null
 
-    // ① 声明里有 → 补登记 / 更新
-    for (const d of declared) {
-      const existing = autoByUrl.get(d.sse)
-      if (existing) {
-        if (existing.label !== d.label) updateSource(existing.id, { label: d.label })
-      } else {
-        addSource({ url: d.sse, label: d.label, type: 'sse', enabled: true })
-        added.push(d.plugin)
+  function watchPluginChanges(): () => void {
+    if (kvWatchStarted && kvWatchStop) return kvWatchStop
+    kvWatchStarted = true
+    const w = globalThis as unknown as {
+      __miniCanvasKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
+    }
+    const shared = w.__miniCanvasKvEvents
+    const KEY_PREFIX = 'plugin-watch:'
+    const onEvent = (e: { type: string; key: string }): void => {
+      if (e.type !== 'config') return
+      if (!e.key.startsWith(KEY_PREFIX)) return
+      const pluginName = e.key.slice(KEY_PREFIX.length)
+      if (pluginName) void handlePluginWatchEvent(pluginName)
+    }
+    if (shared && typeof shared.subscribe === 'function') {
+      // 复用宿主共享连接（cloud-client 同款做法，防连接爆表）
+      kvWatchStop = shared.subscribe('/api/kv/events', onEvent)
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'connected', detail: '共享 KV 通道' })
+    } else if (typeof EventSource !== 'undefined') {
+      // 没有共享宿主（独立使用）→ 自己开一条
+      const es = new EventSource('/api/kv/events')
+      es.onmessage = (ev) => {
+        try {
+          const e = JSON.parse((ev as MessageEvent).data) as { type?: string; key?: string }
+          if (e?.type && e?.key) onEvent(e as { type: string; key: string })
+        } catch { /* 坏帧忽略 */ }
       }
+      kvWatchStop = () => es.close()
+      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'connected', detail: '/api/kv/events' })
+    } else {
+      kvWatchStop = () => {} // Node 测试环境：no-op
     }
-    // ② 声明里没有的自动源 → 摘除
-    for (const s of auto) {
-      if (!wantedUrls.has(s.url)) {
-        removeSource(s.id)
-        removed.push(s.label)
-      }
-    }
-
-    autoSourceIds = new Set(state.sources.filter((s) => s.label.startsWith(AUTO_SOURCE_PREFIX)).map((s) => s.id))
-    return { added, removed }
+    return kvWatchStop
   }
 
   return {
@@ -547,7 +556,7 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     reconnect,
     stopAll,
     clearLogs,
-    syncPluginSources,
+    watchPluginChanges,
   }
 }
 

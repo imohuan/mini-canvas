@@ -6,9 +6,9 @@
  * → 几秒内这块卡片应自己变样，右上角还会弹一条「热重载完成」的通知。
  */
 // 版本号：改这里 = 最省事的"显眼变化"（卡片上的大字直接变）
-const VERSION = 'v8'
-const TITLE = '自动登记 + 免后台 v8'
-const HINT = '源是清单自动登记的，改我即验证全链'
+const VERSION = 'v10'
+const TITLE = 'KV 门铃 v10 全通'
+const HINT = 'PUT → SSE → HEAD 对比 → 重装 → 通知'
 </script>
 
 <template>
