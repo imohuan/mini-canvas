@@ -285,7 +285,7 @@ export type {
 // 能力袋注入令牌：RegionEntryHost 之外的消费方（如测试要在内存渲染器里模拟区域宿主）
 // 需要拿到**同一对象身份**才能 provide/inject 对上，故与 useCapability 一起导出。
 export { CAPABILITY_BAG_KEY, CAPABILITY_SCOPE_KEY } from './contracts/capabilities'
-// 宿主标准能力包四件（node/zoom/selected/tools）：工厂实现在这里，注册由 createMiniCanvasHost 做
+// 宿主标准能力包（node/zoom/selected/selection/tools/upstream/media）：工厂实现在这里，注册由 createMiniCanvasHost 做
 export { createStandardCapabilities } from './contracts/standardCapabilities'
 export type {
   NodeCapability,
@@ -293,7 +293,18 @@ export type {
   SelectedCapability,
   ToolsCapability,
   SelectionCapability,
+  UpstreamCapability,
+  UpstreamNode,
+  UpstreamMedia,
+  MediaCapability,
+  MediaKind,
+  MediaKindCreator,
+  MediaCreateRequest,
+  MediaApplyRequest,
+  MediaAddOptions,
 } from './contracts/standardCapabilities'
+// 媒体创建器注册场名（节点的媒体类型插件往这里注册 addNode/applyToNode）
+export { MEDIA_CREATOR_FIELD } from './contracts/standardCapabilities'
 // 区域条目宿主：渲染一条区域条目并把它 needs 的能力包 provide 给子树（BaseNode 的十个区域渲染位用它）
 export { default as RegionEntryHost } from './components/RegionEntryHost.vue'
 // 可替换设置面板宿主：提供外壳(遮罩/居中/✕/Esc/浮动窗) + 读 themeRegistry.winner('settingsPanel') 渲染内容区，把 ctx.settings 喂给它
