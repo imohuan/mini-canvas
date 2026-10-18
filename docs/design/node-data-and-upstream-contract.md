@@ -368,8 +368,8 @@ if (!image) return h(EmptyState, { text: '把图片节点连进来' })
 
 ## 十一、待决问题
 
-1. `image-compare` 的左右图是两个 `consumes.image` 槽，还是一个 `images[]`？建议两个槽：`left`/`right`。
-   **槽名是数据层的名字，端口名是连接层的名字**；左右槽仍可共用 `target` 端口，顺序按边数组（当前实现就是这样），不需要引入 `refOrder`。
+1. `image-compare` 的左右图是同一 `consumes.image` 槽的第 0/1 个候选（当前实现），不是两个独立字段。
+   **槽名是数据层的名字，端口名是连接层的名字**；左右共用 `target` 端口，顺序按边数组，不需要 `refOrder`。
 2. 视频帧图算 `image` 还是 `frame`？建议单独 `kind: 'frame'`，避免与用户上传图片混淆。
 3. 文本是否允许 `resourceId`？建议允许大文本走资源库，但 `text` 字段仍保留短文本。
 4. 分组节点是否需要有 `produces`？建议不需要；它是容器，不是数据源。

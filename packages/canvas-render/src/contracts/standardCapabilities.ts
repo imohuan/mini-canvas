@@ -138,7 +138,6 @@ export interface UpstreamCapability {
   /**
    * 取本节点某个 consumes 槽的媒体。
    * @param ordinal 同一槽有多个候选时取第几个（从 0 起；缺省 0 = 第一条连线）。
-   *   左右对比这类“一个 consumes 概念、多个实体”的场景用它区分，不必把槽拆成 left/right。
    */
   media(slot: string, ordinal?: number): UpstreamMedia | undefined
   /** 按边序拼接上游文本（节点类型声明了 produces.text 才读得到） */
