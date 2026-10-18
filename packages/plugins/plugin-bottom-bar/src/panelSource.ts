@@ -28,6 +28,13 @@ export interface UpstreamMaterial {
   refName: string
   /** 图片/视频类素材的地址 */
   url?: string
+  /**
+   * 持久资源引用（节点 data.resourceId）。
+   *
+   * 新节点只写这个字段；显示地址由调用方按当前环境 resolve 后补进 url。
+   * 只认 url 会把「只有 resourceId 的图片/视频/音频」当成空素材。
+   */
+  resourceId?: string
   /** 文本类素材的内容 */
   value?: string
 }
@@ -118,6 +125,25 @@ export function collectUpstreamMaterials(
       continue
     }
 
+    // 只有持久引用（新节点的标准形态）：类型由节点自己声明，这里按已知媒体类型认。
+    // 地址不在这里猜 —— 调用方拿到 resourceId 后交给资源服务 resolve。
+    const resourceId = nonEmptyString(data.resourceId)
+    if (resourceId) {
+      const kind: ToolResourceKind | '' =
+        node?.type === 'video' ? 'video' : node?.type === 'audio' ? 'audio' : node?.type === 'image' ? 'image' : ''
+      if (kind) {
+        seen.add(edge.source)
+        out.push({
+          id: edge.source,
+          kind,
+          name: label || (kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '图片素材'),
+          refName: '',
+          resourceId,
+        })
+        continue
+      }
+    }
+
     // 文本：**按字段名认，与图片/视频/音频同一条规矩**（2026-10-13 统一）。
     //
     // 以前这里额外要求 `node.type === 'text'` —— 于是可视化节点（type='ui'）用
@@ -141,6 +167,32 @@ export function collectUpstreamMaterials(
 
   // 顺序 + 引用名：两件事必须一起做（引用名是按**最终顺序**编的）
   return numberRefNames(resolveMaterialOrder(out, refOrder))
+}
+
+/**
+ * 把只有 resourceId 的素材解析成当前可显示地址。
+ *
+ * - 已经有 url 的（旧存档 / 外部地址）原样保留，不重复请求；
+ * - 没有资源服务、解析失败或解析结果为空 → 保留原素材（url 仍为空），
+ *   不能因此把素材丢掉 —— 用户至少还能看到卡片名与引用名；
+ * - 顺序与身份不变，解析只补 url 一个字段。
+ */
+export async function resolveMaterialUrls(
+  materials: ReadonlyArray<UpstreamMaterial>,
+  resolve: ((ref: string) => Promise<string | undefined>) | undefined,
+): Promise<UpstreamMaterial[]> {
+  if (typeof resolve !== 'function') return [...materials]
+  return Promise.all(
+    materials.map(async (m) => {
+      if (m.url || !m.resourceId) return m
+      try {
+        const url = await resolve(m.resourceId)
+        return url ? { ...m, url } : m
+      } catch {
+        return m
+      }
+    }),
+  )
 }
 
 /**
@@ -453,7 +505,7 @@ export function toEditorResources(
       mediaType: m.kind === 'video' ? 'video' : m.kind === 'audio' ? 'audio' : 'image',
       // @ 下拉里给图片/视频带缩略图（编辑器默认只画 icon + 名字，看不出是哪张图）
       renderItem: (self) => h('span', { class: 'mention-resource' }, [
-        h('img', { src: self.url, class: 'mention-thumb', draggable: false, alt: '' }),
+        h('img', { src: self.url ?? '', class: 'mention-thumb', draggable: false, alt: '' }),
         h('span', { class: 'mention-name' }, self.name),
       ]),
       renderEditor: resourceEditorSpec,

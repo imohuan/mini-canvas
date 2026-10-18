@@ -42,6 +42,7 @@ import {
   makeResourceResolver,
   materialCards,
   nextRefOrder,
+  resolveMaterialUrls,
   toEditorResources,
   toToolResources,
   type MaterialCard,
@@ -367,8 +368,33 @@ const materials = computed<UpstreamMaterial[]>(() =>
     refOrder.value,
   ),
 )
-const cards = computed(() => materialCards(materials.value))
-const editorResources = computed<ResourceItem[]>(() => toEditorResources(materials.value))
+
+/**
+ * 只有 resourceId 的素材（新节点）要先 resolve 成当前可显示地址，卡片/缩略图/预览才用得上。
+ *
+ * 为什么不能拿到素材就直接渲染：resourceId 不是地址（本地是 IndexedDB 的逻辑 id，云端是
+ * `<canvasId>/<hash>`），塞进 `<img src>` 一无所有。旧存档有 url 时原样保留，不会多请求。
+ *
+ * 解析是异步的：先显示已有内容，resolve 回来再换 —— 不阻塞底栏，也不把素材丢掉。
+ */
+const resolvedMaterials = ref<UpstreamMaterial[]>([])
+const materialEpoch = ref(0)
+async function refreshResolvedMaterials(): Promise<void> {
+  const epoch = ++materialEpoch.value
+  const next = await resolveMaterialUrls(materials.value, async (id) => {
+    const resources = ctx.tryGet<{ resolve(ref: string): Promise<string | undefined> }>('resources')
+    return resources ? resources.resolve(id) : undefined
+  })
+  // 期间又连了线 / 换了资源：这次结果作废，别把旧素材盖回来
+  if (epoch === materialEpoch.value) resolvedMaterials.value = next
+}
+watch(materials, () => void refreshResolvedMaterials(), { immediate: true })
+
+const shownMaterials = computed(() =>
+  resolvedMaterials.value.length === materials.value.length ? resolvedMaterials.value : materials.value,
+)
+const cards = computed(() => materialCards(shownMaterials.value))
+const editorResources = computed<ResourceItem[]>(() => toEditorResources(shownMaterials.value))
 const resolveResource = computed(() => makeResourceResolver(editorResources.value))
 
 /**
@@ -489,7 +515,7 @@ async function onRun(): Promise<void> {
 await ctx.get<{ run(nodeId: string, actionId: string, input?: unknown): Promise<unknown> }>('nodeTask').run(props.id, currentAction.value.id, {
     prompt: prompt.value,
     values: values.value,
-    resources: toToolResources(materials.value),
+    resources: toToolResources(shownMaterials.value),
   })
   resetSubmitted()
 }

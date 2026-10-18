@@ -12,7 +12,7 @@
  *   的 token 三处永远指同一张图（顺序变了编号不变会直接指错图）。
  */
 import { describe, expect, it } from 'vitest'
-import { collectUpstreamMaterials, materialCards, nextRefOrder, previewListFor } from '../panelSource'
+import { collectUpstreamMaterials, materialCards, nextRefOrder, previewListFor, resolveMaterialUrls } from '../panelSource'
 
 /** 三个图片节点（连谁进来只看边；这里给最小可判定形状） */
 const nodes: Record<string, { type: string; data: Record<string, unknown> }> = {
@@ -90,6 +90,45 @@ describe('nextRefOrder：拖拽后该写什么（写盘与否由调用方决定�
     expect(collectUpstreamMaterials([{ source: 'z', target: 't' }], 't', g)).toHaveLength(0)
   })
 
+  /**
+   * 新节点只写 resourceId（视频截图 / 生成结果 / 云端回写都是这条形态）。
+   *
+   * 以前这里只认 imageUrl/videoUrl/audioUrl，于是「只有引用」的图片连到底栏后
+   * 卡片、@ 引用、发给模型的上游素材全都消失 —— 用户看到的是「连了线却什么都没有」。
+   */
+  it('★ 只有 resourceId 的图片/视频/音频也要收（按节点类型认 kind）', () => {
+    const refNodes: Record<string, { type: string; data: Record<string, unknown> }> = {
+      i: { type: 'image', data: { resourceId: 'default/abc.png' } },
+      v: { type: 'video', data: { resourceId: 'default/abc.mp4' } },
+      a: { type: 'audio', data: { resourceId: 'default/abc.mp3' } },
+    }
+    const g = (id: string) => refNodes[id]
+    const m = collectUpstreamMaterials(
+      [
+        { source: 'i', target: 't' },
+        { source: 'v', target: 't' },
+        { source: 'a', target: 't' },
+      ],
+      't',
+      g,
+    )
+    expect(m.map((x) => [x.id, x.kind, x.resourceId])).toEqual([
+      ['i', 'image', 'default/abc.png'],
+      ['v', 'video', 'default/abc.mp4'],
+      ['a', 'audio', 'default/abc.mp3'],
+    ])
+    expect(m.every((x) => x.url === undefined)).toBe(true)
+  })
+
+  it('旧地址优先于引用（同一节点两者都有时，不重复解析、不换身份）', () => {
+    const g = (id: string) =>
+      id === 'b' ? { type: 'image', data: { resourceId: 'res-1', imageUrl: 'https://x/b.png' } } : nodes[id]
+    const m = collectUpstreamMaterials([{ source: 'b', target: 't' }], 't', g)
+    expect(m).toHaveLength(1)
+    expect(m[0]).toMatchObject({ kind: 'image', url: 'https://x/b.png' })
+    expect(m[0]).not.toHaveProperty('resourceId')
+  })
+
   const cardsOf = (ids: string[]) => ids.map((id) => ({ id }))
 
   it('拖拽库给了新顺序 → 返回它（这是唯一正确的来源，不能读派生 computed）', () => {
@@ -111,6 +150,51 @@ describe('nextRefOrder：拖拽后该写什么（写盘与否由调用方决定�
 
   it('没有素材 → null（不产出一个空 refOrder）', () => {
     expect(nextRefOrder([], [], [])).toBeNull()
+  })
+})
+
+/**
+ * resolveMaterialUrls：把「只有引用」的素材补成可显示地址。
+ *
+ * 它是底栏拿 resourceId 渲染的唯一桥：漏了它，卡片与缩略图的 src 会是空的。
+ */
+describe('resolveMaterialUrls：引用补地址', () => {
+  const material = (id: string, resourceId?: string, url?: string) => ({
+    id,
+    kind: 'image' as const,
+    name: id,
+    refName: id,
+    ...(resourceId ? { resourceId } : {}),
+    ...(url ? { url } : {}),
+  })
+
+  it('只有引用 → 调 resolve 补 url；已经有 url 的不再请求', async () => {
+    const asked: string[] = []
+    const out = await resolveMaterialUrls(
+      [material('a', 'res-a'), material('b', 'res-b', 'https://x/b.png')],
+      async (ref) => {
+        asked.push(ref)
+        return 'https://x/' + ref + '.png'
+      },
+    )
+    expect(asked).toEqual(['res-a'])
+    expect(out.map((m) => m.url)).toEqual(['https://x/res-a.png', 'https://x/b.png'])
+    expect(out.map((m) => m.id)).toEqual(['a', 'b'])
+  })
+
+  it('解析失败 / 返回空 / 没有资源服务 → 素材保留，url 仍为空（不能丢掉卡片）', async () => {
+    const list = [material('a', 'res-a'), material('b', 'res-b'), material('c', 'res-c')]
+    const out = await resolveMaterialUrls(list, async (ref) => {
+      if (ref === 'res-a') return undefined
+      if (ref === 'res-b') throw new Error('boom')
+      return 'https://x/c.png'
+    })
+    expect(out.map((m) => m.id)).toEqual(['a', 'b', 'c'])
+    expect(out.map((m) => m.url)).toEqual([undefined, undefined, 'https://x/c.png'])
+
+    const noService = await resolveMaterialUrls(list, undefined)
+    expect(noService.map((m) => m.id)).toEqual(['a', 'b', 'c'])
+    expect(noService.every((m) => m.url === undefined)).toBe(true)
   })
 })
 
