@@ -1343,9 +1343,17 @@ function flushSave(): void {
   // 由 ResourceStore 按条目的 derived 标记跳过（见那里的说明）。
   if (h.resources) {
     const alive = new Set<string>()
+    // 资源引用字段的完整清单：主引用 + 派生引用（帧图 / 左右图）。
+    // 只扫 resourceId 会把 frameResourceId / leftResourceId / rightResourceId 误判为“未引用”，
+    // 落盘后这些资源被回收，界面表现为“刷新后帧图/对比图消失”。
+    const REF_FIELDS = ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId'] as const
     for (const n of h.nodeStore.getNodes()) {
-      const rid = (n.data as { resourceId?: string } | undefined)?.resourceId
-      if (rid) alive.add(rid)
+      const data = n.data as Record<string, unknown> | undefined
+      if (!data) continue
+      for (const key of REF_FIELDS) {
+        const rid = data[key]
+        if (typeof rid === 'string' && rid) alive.add(rid)
+      }
     }
     h.resources.disposeUnreferenced(alive)
   }
