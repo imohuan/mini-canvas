@@ -42,6 +42,7 @@ import {
   uploadVideo,
 } from './videoOps'
 import type { Rect } from './videoCrop'
+import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 
 /** 本插件注册的节点类型名 */
 export const VIDEO_NODE_TYPE = 'video'
@@ -76,6 +77,13 @@ export class VideoService extends Service implements VideoNodeService {
   addVideoNode(position: { x: number; y: number }, videoUrl = ''): string {
     return this.doc().transaction('add-video-node', (tx) =>
       tx.createNode(VIDEO_NODE_TYPE, position, videoUrl ? { videoUrl } : {}),
+    )
+  }
+
+  /** 按持久引用建视频节点：节点里只有 resourceId（播放地址由内容组件 resolve） */
+  addVideoNodeFromResource(position: { x: number; y: number }, resourceId: string): string {
+    return this.doc().transaction('add-video-node', (tx) =>
+      tx.createNode(VIDEO_NODE_TYPE, position, resourceId ? { resourceId } : {}),
     )
   }
 
@@ -158,6 +166,24 @@ export const VIDEO_THUMB_KEYS = videoThumbTierKeys('video')
  */
 export function apply(ctx: Context) {
   const service = new VideoService(ctx)
+
+  // 媒体创建器：别的插件要“放一段视频”时经 media 能力路由到这里，
+  // 由视频插件自己写标准字段（resourceId），调用方不需要知道 video 服务。
+  ctx.registryOf<MediaKindCreator>(MEDIA_CREATOR_FIELD).add(
+    'video',
+    {
+      addNode: (request) =>
+        service.addVideoNodeFromResource(request.position, request.resourceId),
+      applyToNode: (request) => {
+        const doc = ctx.get('doc')
+        const node = doc.getNode(request.nodeId)
+        if (!node || node.type !== 'video') return false
+        doc.updateNode(request.nodeId, { data: { resourceId: request.resourceId } })
+        return true
+      },
+    },
+    { id: 'node-video' },
+  )
 
   // 视频节点全屏预览浮层（overlay 槽，Teleport 到 body）：双击视频节点时经 mediaPreviewBus 打开。
   // 视觉整只交给主题注册的 MediaViewer —— 与生成历史 / 底栏素材卡同一只预览组件（用户口径 2026-10-17）。

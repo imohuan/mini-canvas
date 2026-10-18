@@ -25,6 +25,7 @@ import AudioPreview from './AudioPreview.vue'
 import AudioContent from './AudioContent.vue'
 import AudioTopToolbar from './AudioTopToolbar.vue'
 import { createAudioOps, downloadAudioNode, reanalyzeAudio, uploadAudio } from './audioOps'
+import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 
 /** 节点类型名：web2api 的动作（types: ['audio']）与写入器（kind: 'audio'）都按它对齐 */
 export const AUDIO_NODE_TYPE = 'audio'
@@ -118,6 +119,24 @@ export const Config: ConfigSchema = {
 export function apply(ctx: Context) {
   const service = new AudioService(ctx)
   const ops = createAudioOps(ctx)
+
+  // 媒体创建器：别的插件要“放一段音频”时经 media 能力路由到这里，
+  // 由音频插件自己写标准字段（resourceId），调用方不需要知道 audio 服务。
+  ctx.registryOf<MediaKindCreator>(MEDIA_CREATOR_FIELD).add(
+    'audio',
+    {
+      addNode: (request) =>
+        service.addAudioNodeFromResource(request.position, request.resourceId),
+      applyToNode: (request) => {
+        const doc = ctx.get('doc')
+        const node = doc.getNode(request.nodeId)
+        if (!node || node.type !== 'audio') return false
+        doc.updateNode(request.nodeId, { data: { resourceId: request.resourceId } })
+        return true
+      },
+    },
+    { id: 'node-audio' },
+  )
 
   // 音频**预览**注册件：波形与进度条来自 AudioWavePlayer（与 AudioContent 共用同一套实现），
   // 这里只补预览壳（底部播放/时间/大小/文件名）。登记进 ui 目录，任何宿主按名取用。
