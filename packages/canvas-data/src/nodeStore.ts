@@ -204,6 +204,10 @@ export interface CanvasNodeType {
    * 所以生成失败/取消时原图与尺寸都原样还在（删图删尺寸的写法会把用户作品弄丢）。
    */
   loadingDefaultSize?: boolean
+  /** 数据契约：本节点对外产出的槽（只做声明与校验；读取走 upstream 能力） */
+  produces?: Record<string, import('./canvas/dataPorts').DataPortDef>
+  /** 数据契约：本节点从上游读取的槽 */
+  consumes?: Record<string, import('./canvas/dataPorts').DataPortDef>
 }
 
 /**

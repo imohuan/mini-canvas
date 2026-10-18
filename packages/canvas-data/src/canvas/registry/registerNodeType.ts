@@ -25,6 +25,8 @@ import type { PluginScope } from '@mini-canvas/kernel'
 import type { PortDef, CanvasNodeType, TitleExtraSource } from '../../nodeStore'
 import type { NodeSegment } from './nodeRegistry'
 import type { NodeRegistry } from './nodeRegistry'
+import type { NodeDataTypeDef } from '../dataPorts'
+import { assertDataPorts } from '../dataPorts'
 
 /**
  * doc 门面里"节点类型表写口"的那一小块（本助手只用得到它）。
@@ -36,7 +38,7 @@ interface NodeTypeStore {
 }
 
 /** 节点类型注册的完整定义：数据字段 + 展示段（作者一次给全） */
-export interface NodeTypeDef {
+export interface NodeTypeDef extends NodeDataTypeDef {
   type: string
   label: string
   defaultSize: { w: number; h: number }
@@ -83,6 +85,9 @@ export interface NodeTypeDef {
  */
 export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void {
   const doc = ctx.get<NodeTypeStore>('doc')
+  // 数据契约校验：refField / valueField / externalUrlField 恰好一个
+  assertDataPorts('produces', def.produces)
+  assertDataPorts('consumes', def.consumes)
   // ① 数据侧：type/label/defaultSize/图标/连接约束
   doc.registerType({
     type: def.type,
@@ -99,6 +104,8 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     frameless: def.frameless,
     transparent: def.transparent,
     loadingDefaultSize: def.loadingDefaultSize,
+    produces: def.produces,
+    consumes: def.consumes,
   })
   const revokers: Array<() => void> = [() => doc.unregisterType(def.type)]
 

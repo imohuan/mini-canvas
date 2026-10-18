@@ -78,6 +78,31 @@ export { RETIRED_SEGMENT_NAMES, RETIRED_CONTENT_FIELD, isRetiredSegmentName } fr
 export type { NodeRegion, NodeRegionAttachment } from './region'
 export { registerNodeType } from './registry/registerNodeType'
 export type { NodeTypeDef } from './registry/registerNodeType'
+
+// 节点数据契约（produces/consumes）与上游遍历（纯函数，前端/后台共用）
+export {
+  DataPortError,
+  assertDataPortDef,
+  assertDataPorts,
+  readDataPort,
+  isResourceRefValue,
+} from './dataPorts'
+export type { DataPortDef, NodeDataTypeDef } from './dataPorts'
+export {
+  GROUP_NODE_TYPE,
+  UpstreamCycleError,
+  buildParentIndex,
+  directUpstreamOf,
+  collectAncestors,
+  topoOrderFrom,
+  upstreamDepth,
+} from './upstreamGraph'
+export type {
+  GraphNodeLike,
+  GraphEdgeLike,
+  UpstreamGraphInput,
+  UpstreamTraversalOptions,
+} from './upstreamGraph'
 export { ThemeRegistry } from './registry/themeRegistry'
 export type { ThemeSlot, ThemePresentation, ThemeOccupantRequest } from './registry/themeRegistry'
 export { registerThemeSlot } from './registry/registerThemeSlot'

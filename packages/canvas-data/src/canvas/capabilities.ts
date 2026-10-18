@@ -297,6 +297,8 @@ export function buildCapabilities(
           frameless: def.frameless,
           transparent: def.transparent,
           loadingDefaultSize: def.loadingDefaultSize,
+          produces: def.produces,
+          consumes: def.consumes,
           segments: segRecord,
         })
         // ② 可选建节点实现 → nodeFactory.register + effect 回收
