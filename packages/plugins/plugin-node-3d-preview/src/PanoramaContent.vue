@@ -36,7 +36,8 @@ import {
   toSpherical,
   type ViewState,
 } from './panoramaView'
-import { findUpstreamImageUrl, pickTextureUrl } from './textureSource'
+import { findUpstreamImageRef } from './textureSource'
+import { resolveImageSrc } from './imageRefs'
 import { resolveEscapeAction, resolvePanoramaSpec } from './panoramaMode'
 import { beginInteract, endInteract, exitFullscreen, isFullscreen, isInteracting, resetViewToken } from './panoramaSession'
 
@@ -102,18 +103,40 @@ function themeColor(varName: string, fallback: string): string {
 /* 无 DOM 时的兜底色（= node-theme.css 亮色默认值，与各处 CSS 兜底同值） */
 const FALLBACK = { surface: '#f3f4f6', border: '#e5e7eb' } // 主题色白名单: 单测 SSR 无 DOM 读不到 CSS 变量，此处只是同值兜底
 
-/** 从画布边里找连到本节点的上游图片；没有就用节点自身的 imageUrl / panoUrl */
-const ownImageUrl = computed<string>(() => {
+/**
+ * 贴图来源：**上游优先**，没有上游才用节点自己的字段（与 v1 口径一致）。
+ *
+ * TODO(upstream): `upstream` 能力尚未落地。落地后这里改成 `upstream.media('image')`，
+ * 由本类型声明的 `consumes.image.refField` 决定读哪个字段；当前仍按边扫描（迁移期实现）。
+ *
+ * 地址与引用都接受：新节点只写 `resourceId`，旧节点只有 `imageUrl` —— 解析交给 imageRefs，
+ * 本组件不再各写一份回退。
+ */
+const ownImageUrl = ref('')
+let textureSourceToken = 0
+
+async function refreshTextureSource(): Promise<void> {
+  const token = ++textureSourceToken
   const d = props.data ?? {}
-  const own = (d.imageUrl as string) || (d.panoUrl as string) || ''
-  const edges = renderEdges.value
+  const ownData: Record<string, unknown> = {
+    resourceId: typeof d.resourceId === 'string' ? d.resourceId : typeof d.panoUrl === 'string' ? d.panoUrl : '',
+    imageUrl: typeof d.imageUrl === 'string' ? d.imageUrl : '',
+  }
   const nodes = renderNodes.value
-  const upstream = findUpstreamImageUrl(edges, props.id, (nodeId) => {
+  const upstream = findUpstreamImageRef(renderEdges.value, props.id, (nodeId) => {
     const n = nodes.find((item) => item.id === nodeId)
     return n?.data as Record<string, unknown> | undefined
   })
-  return pickTextureUrl(own, upstream)
-})
+  // 上游优先：它一旦有引用/地址就压过节点自身
+  const sourceData: Record<string, unknown> | undefined = upstream
+    ? { resourceId: upstream.resourceId, imageUrl: upstream.url }
+    : ownData
+  const resolved = sourceData ? await resolveImageSrc(ctx, sourceData) : ''
+  if (token !== textureSourceToken) return
+  ownImageUrl.value = resolved
+}
+
+watch(() => [props.data, renderEdges.value, renderNodes.value], refreshTextureSource, { immediate: true })
 
 /** 把贴图换成 url 指定的图；空 url 表示撤掉贴图回到占位态 */
 function updateTexture(url: string): void {

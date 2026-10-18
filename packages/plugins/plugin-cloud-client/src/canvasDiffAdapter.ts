@@ -75,8 +75,8 @@ export class CanvasDiffAdapter {
       await this.api.putView(this.cid(), value)
       return
     }
-    // 写出去的节点**原样**发：资源字段里就是同源 URL（/api/canvases/<id>/resources/<hash>），
-    // 不做任何转换。
+    // 写出去的节点**原样**发：资源字段里是逻辑 ID（`<canvasId>/<hashName>`）或迁移期的旧 URL，
+    // 不做任何转换 —— 地址由读取侧的 resolve 现拼。
     // 资源的**字节**在更早的时候就存好了（上传/生成时经 resource adapter 直接进画布文件夹），
     // 所以这里不做任何上传 —— 保存路径只负责"把节点原样发出去"。
     if (bare === GRAPH) return this.submitDelta('nodes', this.submittedNodes, value, (v) => (this.submittedNodes = v))

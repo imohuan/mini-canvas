@@ -26,13 +26,30 @@ import { beginCrop, beginExpand, endEdit } from './cropSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile } from './imageTransform'
 import type { Rect } from '@mini-canvas/canvas-render'
+import {
+  MEDIA_CREATOR_FIELD,
+  type MediaKindCreator,
+} from '@mini-canvas/canvas-render'
 
 /** image 插件暴露给外部的服务形状（content/宿主经 ctx.get('image') 使用；形状不变，.vue 零改动） */
 export interface ImageNodeService {
   /** 加一个显示指定图片的节点；imageUrl 可为 URL / dataURL / objectURL */
   addImageNode(position: { x: number; y: number }, imageUrl: string): string
+  /**
+   * 加一个由**持久资源引用**承载的图片节点：只写 resourceId，不写显示地址。
+   * 显示地址由内容组件按当前环境 resolve（本地 objectURL / 云端受控路由）。
+   * 拿到的是别的插件（视频截图、文件拖入、资产导入）的统一入口。
+   */
+  addImageNodeFromResource(position: { x: number; y: number }, resourceId: string, meta?: ImageNodeMeta): string
   /** 删除节点并落盘 */
   removeNode(id: string): void
+}
+
+/** 按引用建图片节点时可一并写入的元数据（由图片类型自己解释，调用方不拼内部字段） */
+export interface ImageNodeMeta {
+  name?: string
+  width?: number
+  height?: number
 }
 
 /** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.image 直访时类型为 ImageService */
@@ -51,7 +68,25 @@ export class ImageService extends Service implements ImageNodeService {
   /** 加一个 image 节点并写 imageUrl；返回短 id（统一走 graph 唯一写入口） */
   addImageNode(position: { x: number; y: number }, imageUrl: string): string {
     const doc = this.ctx.get('doc')
-    return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, { imageUrl }))
+    // 调用方给的是**资源引用**（res-…）时按引用建节点，不再把它当地址写进 imageUrl；
+    // 给的是真实地址（外链 / dataURL / 页面上可直接显示的地址）时保留旧行为。
+    // TODO(media): `media.put` 落地后，这里改成先存字节再建节点，彻底不写地址。
+    const data = /^res-/.test(imageUrl) ? { resourceId: imageUrl } : imageUrl ? { imageUrl } : {}
+    return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, data))
+  }
+
+  /** 按资源引用建节点：节点里只有 resourceId（迁移期不写显示地址） */
+  addImageNodeFromResource(
+    position: { x: number; y: number },
+    resourceId: string,
+    meta?: ImageNodeMeta,
+  ): string {
+    const doc = this.ctx.get('doc')
+    const data: Record<string, unknown> = { resourceId }
+    if (meta?.name) data.imageName = meta.name
+    if (typeof meta?.width === 'number' && meta.width > 0) data.imageWidth = meta.width
+    if (typeof meta?.height === 'number' && meta.height > 0) data.imageHeight = meta.height
+    return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, data))
   }
 
   /** 删除节点：连带清掉与它相连的边与选中态，包一次历史并落盘（统一走 graph）。
@@ -173,13 +208,16 @@ export function apply(ctx: Context) {
     label: '图片',
     nameTemplate: '图片 {{ID}}',
     description: '在画布中添加一张图片',
+    // 数据契约（docs/design/node-data-and-upstream-contract.md）：
+    // 对外产出 image 槽；节点数据只保存持久资源引用 resourceId，不保存显示地址。
+    produces: { image: { kind: 'image', refField: 'resourceId' } },
     icon: NODE_ICON,
     // 标题右侧显示原图分辨率（1920×1080）：派生值按 data 现算，不写进 data ——
     // 尺寸一变就写一次 data 会让每次裁剪/旋转多出一条撤销记录。
     titleExtra: imageTitleExtra,
     size: { w: 320, h: 240 },
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考），
-    // 底部生成面板的素材行本就是按「所有连进来的上游」渲染的（见 panelSource 的 collectUpstreamMaterials）。
+    // 底部生成面板的素材行本就是按「所有连进来的上游」渲染的（见 plugin-bottom-bar 的 panelSource.collectUpstreamMaterials）。
     // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
@@ -207,6 +245,28 @@ export function apply(ctx: Context) {
       return image.addImageNode(position, typeof url === 'string' ? url : '')
     },
   })
+
+  // 媒体创建器：别的插件（视频截图、文件拖入、资产导入、AI 工具）要“放一张图”时，
+  // 经 media 能力路由到这里，由图片插件自己写标准字段；调用方不需要知道 image 服务。
+  const mediaField = ctx.registryOf<MediaKindCreator>(MEDIA_CREATOR_FIELD)
+  mediaField.add(
+    'image',
+    {
+      addNode: (request) => image.addImageNodeFromResource(request.position, request.resourceId, {
+        name: typeof request.meta?.name === 'string' ? request.meta.name : undefined,
+        width: typeof request.meta?.width === 'number' ? request.meta.width : undefined,
+        height: typeof request.meta?.height === 'number' ? request.meta.height : undefined,
+      }),
+      applyToNode: (request) => {
+        const doc = ctx.get('doc')
+        const node = doc.getNode(request.nodeId)
+        if (!node || node.type !== 'image') return false
+        doc.updateNode(request.nodeId, { data: { resourceId: request.resourceId } })
+        return true
+      },
+    },
+    { id: 'node-image' },
+  )
 
   // 2b. 默认尺寸接设置面板：改完**实时**生效（没 resize 过的图片节点立刻跟着变）
   bindTypeDefaultSize(ctx, 'image', { w: 320, h: 240 }, { widthKey: 'imageDefaultWidth', heightKey: 'imageDefaultHeight' })

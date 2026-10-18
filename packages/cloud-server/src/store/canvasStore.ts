@@ -168,9 +168,12 @@ export class CanvasStore {
    * 复制的范围：节点 + 边 + 资源字节 + 生成历史。
    * **视口不复制** —— 复制是为了分享内容，不是分享「我当时看到哪儿」（设计文档已定）。
    *
-   * 关键一步是**改写资源地址里的画布 id**：节点里存的是同源 URL
-   * `/api/canvases/<画布id>/resources/<哈希>`，不换 id 的话副本里的图全都指回原画布
-   * （原画布一删，副本全裂）。换掉之后副本自包含，与「复制文件夹 = 复制画布」同义。
+   * 关键一步是**把资源引用改到新画布**，两种形态都要处理：
+   * - 新逻辑 ID `<画布id>/<哈希>`（节点 `data.resourceId` 的唯一形态）→ 换前缀；
+   * - 旧同源 URL `/api/canvases/<画布id>/resources/<哈希>`（迁移期存档）→ 换 URL 里的 id。
+   *
+   * 不换的话副本里的图全都指回原画布（原画布一删，副本全裂）。换掉之后副本自包含，
+   * 与「复制文件夹 = 复制画布」同义。
    */
   async copyInto(fromId: string, toId: string, name?: string): Promise<void> {
     const src = await this.readCanvas(fromId)
@@ -185,8 +188,12 @@ export class CanvasStore {
       if (!isNotFound(err)) throw err
     }
     // 节点/边：走 JSON 文本级替换（画布 id 是白名单字符，不会碰坏 JSON 结构）。
-    const rewrite = (value: unknown): unknown =>
-      JSON.parse(JSON.stringify(value ?? []).split(fromMarker).join(toMarker))
+    // 除旧 URL 外，还要把逻辑 ID 的画布前缀换掉 —— 顺序放在 URL 替换之后，
+    // 免得 `from/` 误伤 `/api/canvases/from/...` 里的同名片段。
+    const rewrite = (value: unknown): unknown => {
+      const json = JSON.stringify(value ?? []).split(fromMarker).join(toMarker)
+      return JSON.parse(rewriteResourceIdPrefix(json, fromId, toId))
+    }
     await this.writeCanvas(toId, {
       nodes: rewrite(src?.nodes) as unknown[],
       edges: rewrite(src?.edges) as unknown[],
@@ -194,15 +201,39 @@ export class CanvasStore {
       ...(name !== undefined ? { name } : src?.name !== undefined ? { name: src.name } : {}),
       createdAt: Date.now(),
     })
-    // 生成历史：同样换地址（历史里的产物地址也带画布 id）；读不到就当没有。
+    // 生成历史：同样换地址 / ID（历史里的产物地址也带画布 id）；读不到就当没有。
     const history = await readJson(canvasFilePath(this.root, fromId, 'history'))
     if (history !== undefined) {
+      const text = rewriteResourceIdPrefix(JSON.stringify(history), fromId, toId)
       await atomicWriteText(
         canvasFilePath(this.root, toId, 'history'),
-        JSON.stringify(history).split(fromMarker).join(toMarker),
+        text.split(fromMarker).join(toMarker),
       )
     }
   }
+}
+
+/**
+ * 把 JSON 文本里的逻辑资源 ID `"<fromId>/<哈希>"` 换成 `"<toId>/<哈希>"`。
+ *
+ * 只匹配**整个字符串值**（前后是引号），且第二段必须是内容哈希或槽位名 ——
+ * 与 cloudResourceAdapter 的 parseCloudResourceId 同口径。
+ * 这样不会误伤 `/api/canvases/<id>/resources/...`（以 `/api/` 开头，引号前不是开头）
+ * 或普通文本字段。
+ */
+export function rewriteResourceIdPrefix(json: string, fromId: string, toId: string): string {
+  const pattern = new RegExp(
+    '"' +
+      escapeRegExp(fromId) +
+      '/((?:[0-9a-f]{16}(?:\\.[a-z0-9]+)?)|(?:slot-[A-Za-z0-9_-]{1,64}(?:\\.[a-z0-9]+)?))"',
+    'gi',
+  )
+  return json.replace(pattern, '"' + toId + '/$1"')
+}
+
+/** 正则元字符转义（画布 id 是白名单字符，这里只是防御） */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /** 读 JSON；不存在返回 undefined（正常路径）。内容坏掉按缺失处理并出声（与 kvStore 同口径） */

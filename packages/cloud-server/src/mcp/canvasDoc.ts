@@ -8,8 +8,8 @@
   *   canvases/<id>/canvas.json   画布本体（节点 + 边 + 画布信息）
   *   canvases/<id>/view.json     视口
   *   canvases/<id>/history.json  任务记录
- *   canvases/<id>/resources/    本画布资源（节点里存同源 URL `/api/canvases/<id>/resources/<hash>`；
- *                               老数据里的 res:<hash> 读取时仍兼容）
+ *   canvases/<id>/resources/    本画布资源（节点里存逻辑 ID `<画布id>/<hash>`，地址由 resolve 现拼；
+ *                               迁移期老存档里的同源 URL 仍可读）
   *
   * 一个画布一个文件夹：复制文件夹 = 复制画布，删文件夹 = 删干净，AI 也能直接读文件。
  *
@@ -196,7 +196,7 @@ function edgeKey(e: { source: string; target: string; sourceHandle?: string; tar
 export class CanvasDocument {
   /**
    * @param store     画布文件夹（canvas.json / view.json）
-   * @param resources 本画布资源（节点里存同源 URL；老数据 `res:<hash>` 读取兼容）
+   * @param resources 本画布资源（节点里存逻辑 ID `<画布id>/<hash>`；迁移期旧同源 URL 仍可读）
    * @param canvasId  画布 id（前端界面当前只有一张，默认 default）
    */
   constructor(

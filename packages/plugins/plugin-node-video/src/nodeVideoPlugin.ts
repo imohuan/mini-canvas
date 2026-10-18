@@ -79,11 +79,13 @@ export class VideoService extends Service implements VideoNodeService {
     )
   }
 
+
   /** 换视频：清掉旧尺寸（新视频元数据还没量，留着旧尺寸会让卡片比例对不上） */
   setVideoUrl(id: string, videoUrl: string): void {
     // size: undefined 清正式尺寸（镜像由 nodeStore 一并清掉），新视频元数据读出来再按比例写回
     this.doc().updateNode(id, { data: { videoUrl }, size: undefined })
   }
+
 
   removeNode(id: string): void {
     this.doc().removeNodes([id])
@@ -197,6 +199,8 @@ export function apply(ctx: Context) {
     label: '视频',
     nameTemplate: '视频 {{ID}}',
     description: '在画布中添加一个视频节点',
+    // 数据契约：对外产出一段视频；节点数据只保存持久资源引用 resourceId。
+    produces: { video: { kind: 'video', refField: 'resourceId' } },
     icon: NODE_ICON,
     // 标题右侧显示画面分辨率（1280×720；裁过就是裁框尺寸）——派生值按 data 现算，不写进 data。
     titleExtra: videoTitleExtra,

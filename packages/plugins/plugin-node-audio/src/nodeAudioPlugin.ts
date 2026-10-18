@@ -36,6 +36,8 @@ export const AUDIO_NODE_TYPE = 'audio'
 export interface AudioNodeService {
   /** 放一个音频节点；audioUrl 可给初始音频（URL / dataURL / objectURL），不给则显示占位 */
   addAudioNode(position: { x: number; y: number }, audioUrl?: string): string
+  /** 放一个由持久资源引用承载的音频节点（只写 resourceId，不写播放地址） */
+  addAudioNodeFromResource(position: { x: number; y: number }, resourceId: string): string
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.audio 直访时类型为本服务 */
@@ -55,6 +57,14 @@ export class AudioService extends Service implements AudioNodeService {
     const doc = this.ctx.get<DocService>('doc')
     return doc.transaction('add-audio-node', (tx) =>
       tx.createNode(AUDIO_NODE_TYPE, position, audioUrl ? { audioUrl } : {}),
+    )
+  }
+
+  /** 按持久引用建音频节点：节点里只有 resourceId（播放地址由内容组件 resolve） */
+  addAudioNodeFromResource(position: { x: number; y: number }, resourceId: string): string {
+    const doc = this.ctx.get<DocService>('doc')
+    return doc.transaction('add-audio-node', (tx) =>
+      tx.createNode(AUDIO_NODE_TYPE, position, resourceId ? { resourceId } : {}),
     )
   }
 }
@@ -118,6 +128,8 @@ export function apply(ctx: Context) {
     label: '音频',
     nameTemplate: '音频 {{ID}}',
     description: '在画布中添加一个音频节点（语音合成 / 音频生成）',
+    // 数据契约：对外产出一段音频；节点数据只保存持久资源引用 resourceId。
+    produces: { audio: { kind: 'audio', refField: 'resourceId' } },
     icon: AUDIO_ICON,
     size: { w: 320, h: 120 },
     inputs: [{ port: 'target', acceptsTypes: ['text', 'audio'] }],

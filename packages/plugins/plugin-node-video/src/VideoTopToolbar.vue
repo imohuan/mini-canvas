@@ -17,6 +17,7 @@ import { beginOverlay, endOverlay, isCropping, isClipping, overlayDraft, setOver
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { createVideoOps, uploadVideo } from './videoOps'
+import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -28,7 +29,14 @@ const Select = useUiComponent('select')
 const selected = useSoleNodeSelected(props.id)
 
 /** 有没有视频：没有就只留「上传」 */
-const hasVideo = computed(() => typeof props.data?.videoUrl === 'string' && props.data.videoUrl !== '')
+/**
+ * 有没有视频：新写入只存 resourceId，只看 videoUrl 会把有视频的节点当成空节点。
+ * 判据 = 有引用或有旧地址（迁移期两个字段并存）。
+ */
+const hasVideo = computed(() => {
+  const { resourceId, legacyUrl } = readVideoSourceFields(props.data)
+  return resourceId !== '' || legacyUrl !== ''
+})
 /** 正在裁剪画面：此时顶栏换成确认/取消 */
 const editing = computed(() => isCropping(props.id))
 const clipping = computed(() => isClipping(props.id))

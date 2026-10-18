@@ -169,6 +169,8 @@ export function apply(ctx: Context) {
     label: '文本',
     nameTemplate: '文本 {{ID}}',
     description: '在画布中添加一个文本节点',
+    // 数据契约：对外产出一段文本；文本不是资源，声明字段而不是引用。
+    produces: { text: { kind: 'text', valueField: 'text' } },
     icon: NODE_ICON,
     size: { w: 300, h: 200 },
     // 不声明 capacity = 不限条数：文本节点同样可以接多个上游素材（见 panelSource 的 collectUpstreamMaterials）。

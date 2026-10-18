@@ -19,7 +19,7 @@ function fakeDoc() {
   return { doc, writes }
 }
 
-/** 造一个假资源服务：put 收字节、resolve 换回本画布地址 */
+/** 造一个假资源服务：put 收字节回逻辑 ID、resolve 换回本画布地址（云端行为） */
 function fakeResources() {
   const stored: Blob[] = []
   return {
@@ -27,7 +27,7 @@ function fakeResources() {
     resources: {
       async put(blob: Blob) {
         stored.push(blob)
-        return 'res-1'
+        return 'default/hash1.mp4'
       },
       async resolve() {
         return '/api/canvases/default/resources/hash1.mp4'
@@ -45,6 +45,8 @@ describe('产物地址本地化：不留外链在画布上', () => {
     await writeVideoResult(doc, 'n1', { urls: [EXT] }, { resources, fetchBytes: async () => new Blob(['V']) })
     expect(stored).toHaveLength(1)
     expect(writes[0]!.data.videoUrl).toBe('/api/canvases/default/resources/hash1.mp4')
+    // 主字段是逻辑 ID；地址只是迁移期副本。
+    expect(writes[0]!.data.resourceId).toBe('default/hash1.mp4')
   })
 
   it('音频：同样落地，并把文件名改成落盘后的名字', async () => {
@@ -53,6 +55,7 @@ describe('产物地址本地化：不留外链在画布上', () => {
     await writeAudioResult(doc, 'n1', { urls: [EXT] }, { resources, fetchBytes: async () => new Blob(['A']) })
     expect(writes[0]!.data.audioUrl).toBe('/api/canvases/default/resources/hash1.mp4')
     expect(writes[0]!.data.audioName).toBe('hash1.mp4')
+    expect(writes[0]!.data.resourceId).toBe('default/hash1.mp4')
   })
 
   it('**已经是本画布地址** → 不再重复落地（否则每写一次多存一份字节）', async () => {
@@ -62,6 +65,8 @@ describe('产物地址本地化：不留外链在画布上', () => {
     await writeVideoResult(doc, 'n1', { urls: [local] }, { resources, fetchBytes: async () => new Blob(['X']) })
     expect(stored).toHaveLength(0)
     expect(writes[0]!.data.videoUrl).toBe(local)
+    // 旧 URL 顺手拆成逻辑 ID，下次保存后节点里就有 ID 了。
+    expect(writes[0]!.data.resourceId).toBe('default/exists.mp4')
   })
 
   it('取字节失败 → 回落原地址（保住产物是底线，不给用户看空白）', async () => {
@@ -80,6 +85,8 @@ describe('产物地址本地化：不留外链在画布上', () => {
     const { doc, writes } = fakeDoc()
     await writeVideoResult(doc, 'n1', { urls: [EXT] }, {})
     expect(writes[0]!.data.videoUrl).toBe(EXT)
+    // 没落到资源库 → 不产生指向空资源的 ID
+    expect(writes[0]!.data.resourceId).toBeUndefined()
   })
 
   it('没有产物地址 → 一个字都不写', async () => {
@@ -133,6 +140,35 @@ describe('产物地址本地化：不留外链在画布上', () => {
   it('没有资源服务时给了 res- 引用 → 不写（无从解析，写引用必是破图）', async () => {
     const { doc, writes } = fakeDoc()
     await writeVideoResult(doc, 'n1', { urls: ['res-7'] }, {})
+    expect(writes).toHaveLength(0)
+  })
+
+  /**
+   * 云端逻辑 ID（`<canvasId>/<hashName>`）是引用、不是地址 —— 必须 resolve 后再写，
+   * 且 ID 本身进 resourceId（不能进 videoUrl）。
+   */
+  it('产物是逻辑 ID → resolve 成地址写 videoUrl，ID 写 resourceId', async () => {
+    const { doc, writes } = fakeDoc()
+    const resources = {
+      async put() { return 'default/not-used.mp4' },
+      async resolve(ref: string) {
+        return ref === 'default/abcdef0123456789.mp4'
+          ? '/api/canvases/default/resources/abcdef0123456789.mp4'
+          : undefined
+      },
+    }
+    await writeVideoResult(doc, 'n1', { urls: ['default/abcdef0123456789.mp4'] }, { resources })
+    expect(writes[0]!.data.resourceId).toBe('default/abcdef0123456789.mp4')
+    expect(writes[0]!.data.videoUrl).toBe('/api/canvases/default/resources/abcdef0123456789.mp4')
+  })
+
+  it('逻辑 ID 解析不出来 → 不写节点（不落打不开的地址，也不落空引用）', async () => {
+    const { doc, writes } = fakeDoc()
+    const resources = {
+      async put() { return 'default/x.mp4' },
+      async resolve() { return undefined },
+    }
+    await writeVideoResult(doc, 'n1', { urls: ['default/abcdef0123456789.mp4'] }, { resources })
     expect(writes).toHaveLength(0)
   })
 })

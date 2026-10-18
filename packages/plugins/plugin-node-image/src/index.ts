@@ -1,7 +1,7 @@
 // plugin-node-image —— image 节点插件包统一出口
 /// <reference types="vite/client" />
 export { nodeImagePlugin } from './nodeImagePlugin'
-export type { ImageNodeService } from './nodeImagePlugin'
+export type { ImageNodeService, ImageNodeMeta } from './nodeImagePlugin'
 
 // —— 开发期热重载（HMR）：本包源码一改，vite 触发本 accept →
 //    经 window.MiniCanvas.reloadPlugin 先卸旧再装新，让改动在运行中的画布里实时生效。

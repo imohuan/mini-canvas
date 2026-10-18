@@ -82,8 +82,8 @@ describe('resolveCompareEntries', () => {
       { id: 'e2', source: 'b', target: 'me' },
     ]
     expect(resolveCompareEntries(edges, 'me', getData)).toEqual([
-      { url: 'a.png', sourceId: 'a' },
-      { url: 'b.png', sourceId: 'b' },
+      { url: 'a.png', resourceId: '', sourceId: 'a' },
+      { url: 'b.png', resourceId: '', sourceId: 'b' },
     ])
   })
 
@@ -94,9 +94,24 @@ describe('resolveCompareEntries', () => {
       { id: 'e2', source: 'y', target: 'me' },
     ]
     expect(resolveCompareEntries(edges, 'me', sameData)).toEqual([
-      { url: 'same.png', sourceId: 'x' },
-      { url: 'same.png', sourceId: 'y' },
+      { url: 'same.png', resourceId: '', sourceId: 'x' },
+      { url: 'same.png', resourceId: '', sourceId: 'y' },
     ])
+  })
+
+  it('上游只有持久引用（新节点不写 imageUrl）也算有图，并带回 resourceId', () => {
+    const refData = (id: string): Record<string, unknown> | undefined =>
+      ({ a: { resourceId: 'res-1' }, b: { resourceId: 'res-2' } })[id]
+    const edges = [
+      { id: 'e1', source: 'a', target: 'me' },
+      { id: 'e2', source: 'b', target: 'me' },
+    ]
+    expect(resolveCompareEntries(edges, 'me', refData)).toEqual([
+      { url: '', resourceId: 'res-1', sourceId: 'a' },
+      { url: '', resourceId: 'res-2', sourceId: 'b' },
+    ])
+    // 只要引用、不要地址：对比窗口仍应认为“这一侧有图”，否则左右会空着
+    expect(incomingImageEdgeIds(edges, 'me', refData)).toEqual(['e1', 'e2'])
   })
 
   it('只取前两条、跳过没有图的上游', () => {

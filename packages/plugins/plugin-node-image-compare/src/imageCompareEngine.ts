@@ -32,8 +32,10 @@ export interface CompareEdge {
 
 /** 一条入边的解析结果：贴哪张图 + 来自哪个上游节点 */
 export interface CompareEntry {
-  /** 上游节点 data.imageUrl */
+  /** 上游节点 data.imageUrl（迁移期旧字段；新节点只有 resourceId） */
   url: string
+  /** 上游节点 data.resourceId（目标形态：节点只保存持久引用） */
+  resourceId: string
   /** 上游节点 id（左右小标签要指到"是哪个上游节点"，只按地址反查会同图认错人） */
   sourceId: string
 }
@@ -60,8 +62,11 @@ export function resolveCompareEntries(
   const list: CompareEntry[] = []
   for (const e of edges) {
     if (e.target !== targetId) continue
-    const url = getData(e.source)?.imageUrl
-    if (typeof url === 'string' && url.trim()) list.push({ url, sourceId: e.source })
+    const data = getData(e.source)
+    const url = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : ''
+    const resourceId = typeof data?.resourceId === 'string' ? data.resourceId.trim() : ''
+    // 地址与持久引用任一存在就算“有图”——新节点只写 resourceId，只看 imageUrl 会让对比窗口空着
+    if (url || resourceId) list.push({ url, resourceId, sourceId: e.source })
     if (list.length >= MAX_COMPARE_IMAGES) break
   }
   return list
@@ -107,8 +112,10 @@ export function incomingImageEdgeIds(
   return edges
     .filter((e) => e.target === targetId)
     .filter((e) => {
-      const url = getData(e.source)?.imageUrl
-      return typeof url === 'string' && url.trim().length > 0
+      const data = getData(e.source)
+      const url = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : ''
+      const ref = typeof data?.resourceId === 'string' ? data.resourceId.trim() : ''
+      return url.length > 0 || ref.length > 0
     })
     .map((e) => e.id)
 }

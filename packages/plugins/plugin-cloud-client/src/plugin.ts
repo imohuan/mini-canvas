@@ -124,8 +124,8 @@ interface ResolveCapable {
  * 为什么需要：本地节点存的是本地引用（`res-…`）配 `blob:` 地址，字节在浏览器库里。
  * 直接整包推上去，云端两样都拿不到 —— 用户的图就没了。
  * 做法：用**切换前抓住的本地资源后端**按引用取回字节（本地 resolve 会给一个临时 objectURL），
- * fetch 成 Blob → 传给云端资源后端 → 换回服务器 URL（`/api/canvases/<画布id>/resources/<哈希>`）
- * 写进对应媒体字段。
+ * fetch 成 Blob → 传给云端资源后端 → 换回**逻辑 ID**（`<画布id>/<哈希>`）写进 `resourceId`；
+ * 迁移期再把可显示地址写进对应媒体字段（目标形态只留 ID）。
  *
  * 取不到字节的字段原样保留（宁可少搬一张，也不要因为一张图失败把整次迁移搞崩）。
  */
@@ -139,6 +139,8 @@ export async function migrateLocalResources(
   const cloudResource = createCloudResourceAdapter(api, canvasIdArg)
   /** 本画布的资源地址前缀：用它认出"已经传过的图"，避免重复上云时又传一遍 */
   const resourceUrlPrefix = '/api/canvases/' + canvasIdArg + '/resources/'
+  /** 本画布逻辑 ID 的前缀（新形态）：`<画布id>/<哈希>` */
+  const resourceIdPrefix = canvasIdArg + '/'
   const uploaded = new Map<string, string>()
   const out: unknown[] = []
   for (const node of nodes) {
@@ -148,8 +150,9 @@ export async function migrateLocalResources(
       out.push(node)
       continue
     }
-    // 已是本画布的资源 URL（重复上云）→ 不动。认不出的话首次上云会把已上传的图再传一遍。
-    if (ref.startsWith(resourceUrlPrefix)) {
+    // 已是本画布的资源（旧 URL 或新逻辑 ID，重复上云）→ 不动。
+    // 认不出的话首次上云会把已上传的图再传一遍。
+    if (ref.startsWith(resourceUrlPrefix) || ref.startsWith(resourceIdPrefix)) {
       out.push(node)
       continue
     }
@@ -168,10 +171,12 @@ export async function migrateLocalResources(
       out.push(node)
       continue
     }
-    // 写进该节点类型对应的媒体字段（与数据层的 mediaUrlFieldsOf 同口径）
+    // resourceId 写逻辑 ID；媒体字段写迁移期地址（与数据层的 mediaUrlFieldsOf 同口径）。
+    // 地址由 ID 直接拼出 —— 刚上传成功，不必再 HEAD 一次。
+    const cloudUrl = resourceUrlPrefix + cloudRef.slice(resourceIdPrefix.length)
     const fields = MEDIA_FIELDS_BY_TYPE[String(node.type ?? '')] ?? ['imageUrl']
-    const next: Record<string, unknown> = { ...data }
-    for (const f of fields) next[f] = cloudRef
+    const next: Record<string, unknown> = { ...data, resourceId: cloudRef }
+    for (const f of fields) next[f] = cloudUrl
     out.push({ ...node, data: next })
   }
   return out
@@ -212,7 +217,8 @@ const adapter = new CanvasDiffAdapter(api, CID)
   const localResourceAdapter = save?.adapterOf?.('resource') as
     | { resolveResource?(ref: string): Promise<string | undefined> }
     | undefined
-  // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存同源 URL。
+  // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存**逻辑 ID**
+  // （`<画布id>/<哈希>`），地址由 resolve 现拼。
   // 与画布用同一个开关（用户最初的设计：一个 adapter 管文本 + 资源两种形式）。
   save?.useAdapter('resource', createCloudResourceAdapter(api, CID))
   // 配置与快捷键：走 cloud-server 的 KV 接口（服务端对这两类照常收，只有 canvas 被专属路由接管）

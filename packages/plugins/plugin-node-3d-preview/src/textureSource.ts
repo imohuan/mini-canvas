@@ -37,3 +37,32 @@ export function findUpstreamImageUrl(
   }
   return ''
 }
+
+/** 上游图片候选：显示地址（迁移期旧字段）与持久引用（目标形态）二选一 */
+export interface UpstreamImageRef {
+  /** 旧字段里的显示地址；没有则为空串 */
+  url: string
+  /** 上游节点的持久资源引用；没有则为空串 */
+  resourceId: string
+}
+
+/**
+ * 找连到本节点的**第一张上游图**，把“地址 / 引用”原样带回来。
+ *
+ * 与 findUpstreamImageUrl 的区别：新节点只写 `resourceId`，只认 `imageUrl` 会把有图的上游
+ * 当成空节点；调用方拿到引用后再按当前环境 resolve。
+ */
+export function findUpstreamImageRef(
+  edges: ReadonlyArray<{ source: string; target: string }>,
+  targetId: string,
+  getData: (nodeId: string) => Record<string, unknown> | undefined,
+): UpstreamImageRef | null {
+  for (const e of edges) {
+    if (e.target !== targetId) continue
+    const data = getData(e.source)
+    const url = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : ''
+    const resourceId = typeof data?.resourceId === 'string' ? data.resourceId.trim() : ''
+    if (url || resourceId) return { url, resourceId }
+  }
+  return null
+}

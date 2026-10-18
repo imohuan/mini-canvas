@@ -41,10 +41,26 @@ export interface VideoOpsContext {
   write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
   /** 视频预览上限（配置 videoFitMaxWidth/videoFitMaxHeight）；不注入则回落 560×360 */
   fitLimits?(): VideoFitLimits
-  /** 在某位置建一个节点（截图产出图片节点用）；未注入返回 null */
+  /**
+   * 【迁移期保留】在某位置建一个节点。
+   *
+   * 截图**不再**走这里：直接建 image 节点等于替图片插件写它的字段。
+   * 现在只有历史调用方可能用到，新代码请用 addImageNodeFromResource。
+   */
   createNode?(type: string, position: { x: number; y: number }, data: Record<string, unknown>): string | null
   /** 某类型是否已注册（截图要建 image 节点，而图片插件可能没装）；未注入返回 true */
   hasType?(type: string): boolean
+  /**
+   * 图片节点插件公开的“按资源引用建节点”入口。
+   *
+   * 优先走 `media` 能力（若宿主已提供），否则回落到 `image` 服务；
+   * 两者都拿不到 = 宿主没装图片节点 → 截图**明确失败**，不建孤儿节点。
+   */
+  addImageNodeFromResource?(
+    position: { x: number; y: number },
+    resourceId: string,
+    meta?: { name?: string; width?: number; height?: number },
+  ): string | null
   /** 读某节点位置（截图产出的新节点摆在它右边）；未注入返回 null */
   nodePosition?(nodeId: string): { x: number; y: number } | null
   /** 读某节点实测/声明宽度（决定新节点摆多远）；未注入返回 null */
@@ -132,6 +148,27 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
   const doc = (): VideoDocPort | undefined => svc.get<VideoDocPort | undefined>('doc')
   const layout = () => svc.tryGet('nodeLayout')
 
+  /** 媒体能力（宿主注册在 capability 场里；这里按服务名尝试，未落地时为 undefined） */
+  const media = () =>
+    svc.tryGet<{
+      addNode?(
+        kind: string,
+        id: string,
+        position: { x: number; y: number },
+        opts?: { nodeType?: string; meta?: Record<string, unknown> },
+      ): string | undefined
+    }>('media')
+
+  /** 图片节点服务（插件身份入口；未装图片插件时为 undefined） */
+  const imageService = () =>
+    svc.tryGet<{
+      addImageNodeFromResource?(
+        position: { x: number; y: number },
+        resourceId: string,
+        meta?: { name?: string; width?: number; height?: number },
+      ): string
+    }>('image')
+
   /**
    * 媒体字节 → 资源库：put 拿持久引用、resolve 换当前可用地址
    * （云端是同源 URL `/api/canvases/<画布id>/resources/<哈希>`、本地是资源库重建的地址）。
@@ -177,6 +214,27 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       if (!g) return null
       try {
         return g.transaction('video-create-node', (tx) => tx.createNode(type, position, data))
+      } catch {
+        return null
+      }
+    },
+    // 截图产出图片节点：只交“位置 + 资源引用 + 原始元数据”，字段由图片类型自己写。
+    // 两条入口都试过才判失败 —— 这样删掉图片插件时截图会明确返回 null，而不是留下孤儿节点。
+    addImageNodeFromResource: (position, resourceId, meta) => {
+      const capability = media()
+      if (typeof capability?.addNode === 'function') {
+        try {
+          const id = capability.addNode('image', resourceId, position, { nodeType: 'image', meta })
+          if (id) return id
+        } catch {
+          // 能力不可用时继续尝试服务入口
+        }
+      }
+      const service = imageService()
+      if (typeof service?.addImageNodeFromResource !== 'function') return null
+      try {
+        const id = service.addImageNodeFromResource(position, resourceId, meta)
+        return id || null
       } catch {
         return null
       }
@@ -448,8 +506,11 @@ export async function captureFrameNode(
   transform: VideoTransform = defaultTransform,
 ): Promise<string | null> {
   const data = asVideoData(ctx.read(nodeId))
-  if (!data.videoUrl || !ctx.createNode) return null
-  // 截图产出的是 image 节点：图片插件没装就别建（建了也渲染不出来，会变成孤儿类型）
+  if (!data.videoUrl) return null
+  // 截图产出的是 image 节点：必须由图片插件自己建（它才知道自己的字段）。
+  // 图片插件没装 → 明确失败，绝不替它写 data（那会变成孤儿类型 / 无人认领的字段）。
+  if (!ctx.addImageNodeFromResource) return null
+  // 二次保险：服务在、类型却没注册（热卸中间态）也不建 —— 建出来没人渲染。
   if (ctx.hasType && !ctx.hasType('image')) return null
   const frame = await transform.captureFrame(data.videoUrl, at, data.cropRect ?? null)
   if (!frame) return null
@@ -470,12 +531,11 @@ export async function captureFrameNode(
   const source = ctx.nodePosition?.(nodeId) ?? { x: 0, y: 0 }
   const width = ctx.nodeWidth?.(nodeId) ?? DEFAULT_NODE_WIDTH
   const position = { x: source.x + width + FRAME_NODE_GAP, y: source.y }
-  return ctx.createNode('image', position, {
-    imageUrl: persisted.url,
-    resourceId: persisted.resourceId,
-    imageName: frameFileName(data.videoName, at),
-    imageWidth: frame.width,
-    imageHeight: frame.height,
+  // 持久引用交给图片类型；显示地址不交给它（节点数据只存 resourceId）。
+  return ctx.addImageNodeFromResource(position, persisted.resourceId, {
+    name: frameFileName(data.videoName, at),
+    width: frame.width,
+    height: frame.height,
   })
 }
 

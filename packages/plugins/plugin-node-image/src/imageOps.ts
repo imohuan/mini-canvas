@@ -64,6 +64,17 @@ export interface ImageOpsContext {
    * 资源库不可用（极简宿主 / 单测）时返回 undefined —— 调用方按"这次操作没法持久化"处理，不猜。
    */
   persistImage?(blob: Blob): Promise<{ resourceId: string; url: string } | undefined>
+  /**
+   * 持久引用 → 当前可显示地址（裁剪/旋转/扩展/下载都要拿真实像素，不能只靠旧 `imageUrl`）。
+   * 资源库不可用时返回 undefined —— 调用方放弃这次操作，不猜地址。
+   */
+  resolveRef?(ref: string): Promise<string | undefined>
+  /**
+   * 取“现在能真正读到像素”的地址：
+   * 旧 `imageUrl` 有就直接用；只有引用时交给资源服务 resolve；都拿不到返回 undefined。
+   * 裁剪/旋转/扩展/下载只经这一个口径，不再各自判断字段。
+   */
+  displayUrlOf?(data: Record<string, unknown> | undefined): Promise<string | undefined>
 }
 
 /**
@@ -193,6 +204,25 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
       }
     },
     persistImage,
+    resolveRef: async (ref) => {
+      try {
+        return await resources()?.resolve(ref)
+      } catch {
+        return undefined
+      }
+    },
+    // 裁/转/扩/下载的取图口径：旧地址优先（可能还没迁移），否则按引用现取
+    displayUrlOf: async (data) => {
+      const direct = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
+      if (direct) return direct
+      const ref = typeof data?.resourceId === 'string' ? data.resourceId : ''
+      if (!ref) return undefined
+      try {
+        return (await resources()?.resolve(ref)) || undefined
+      } catch {
+        return undefined
+      }
+    },
   }
 }
 
@@ -203,6 +233,19 @@ interface ImageData {
   imageWidth?: number
   imageHeight?: number
   imageSize?: number
+}
+
+/**
+ * 写进节点 data 的图片来源字段（**唯一出口**）。
+ *
+ * 目标形态：只写 `resourceId`。
+ * // 迁移期：旧渲染路径 / 旧存档仍读 `imageUrl`，因此这里同时写一份显示地址；
+ * // 等内容组件全量走 resolve、旧存档下线后，删掉 imageUrl 这一行即可，不必逐处改调用方。
+ */
+export function imageSourceFields(resourceId: string, displayUrl?: string): Record<string, unknown> {
+  const fields: Record<string, unknown> = { resourceId }
+  if (displayUrl) fields.imageUrl = displayUrl
+  return fields
 }
 
 function asImageData(data: Record<string, unknown> | undefined): ImageData {
@@ -257,7 +300,8 @@ export async function uploadImage(
   const persisted = await ctx.persistImage(file)
   if (!persisted) return false
   const size = await transform.readImageSize(persisted.url)
-  const patch: Record<string, unknown> = { imageUrl: persisted.url, resourceId: persisted.resourceId }
+  // 唯一出口：resourceId 是主字段；迁移期同时写显示地址（见 imageSourceFields 注释）
+  const patch: Record<string, unknown> = imageSourceFields(persisted.resourceId, persisted.url)
   const name = (file as File).name
   if (typeof name === 'string' && name) patch.imageName = name
   if (typeof (file as File).size === 'number') patch.imageSize = (file as File).size
@@ -283,11 +327,14 @@ export async function cropImage(
   rect: Rect,
   transform: ImageTransform = defaultTransform,
 ): Promise<boolean> {
-  const data = asImageData(ctx.read(nodeId))
-  if (!data.imageUrl) return false
+  const current = ctx.read(nodeId)
+  const data = asImageData(current)
+  // 取图口径统一：有旧地址用它，只有引用时先 resolve —— 截图/后台建的节点只有 resourceId
+  const sourceUrl = ctx.displayUrlOf ? await ctx.displayUrlOf(current) : data.imageUrl
+  if (!sourceUrl) return false
   const pixels = toPixelRect(rect)
   if (pixels.width <= 0 || pixels.height <= 0) return false
-  const result = await transform.cropToBlob(data.imageUrl, pixels, data.imageWidth ?? 0, data.imageHeight ?? 0)
+  const result = await transform.cropToBlob(sourceUrl, pixels, data.imageWidth ?? 0, data.imageHeight ?? 0)
   if (!result) return false
   if (!ctx.persistImage) return false
   const persisted = await ctx.persistImage(result.blob)
@@ -306,8 +353,7 @@ export async function cropImage(
   )
   const cropData: Record<string, unknown> = {
     label,
-    imageUrl: persisted.url,
-    resourceId: persisted.resourceId,
+    ...imageSourceFields(persisted.resourceId, persisted.url),
     imageWidth: result.width,
     imageHeight: result.height,
     imageName: label,
@@ -328,9 +374,10 @@ export async function rotateImage(
   nodeId: string,
   transform: ImageTransform = defaultTransform,
 ): Promise<boolean> {
-  const data = asImageData(ctx.read(nodeId))
-  if (!data.imageUrl) return false
-  const result = await transform.rotateToBlob(data.imageUrl, 90)
+  const current = ctx.read(nodeId)
+  const sourceUrl = ctx.displayUrlOf ? await ctx.displayUrlOf(current) : asImageData(current).imageUrl
+  if (!sourceUrl) return false
+  const result = await transform.rotateToBlob(sourceUrl, 90)
   if (!result) return false
   if (!ctx.persistImage) return false
   const persisted = await ctx.persistImage(result.blob)
@@ -338,8 +385,7 @@ export async function rotateImage(
   // 90°/270° 宽高互换 → 卡片跟着新比例重算（旋转也该"节点宽高跟图片一致"）
   writeImageData(ctx, nodeId, {
     ...ctx.read(nodeId),
-    imageUrl: persisted.url,
-    resourceId: persisted.resourceId,
+    ...imageSourceFields(persisted.resourceId, persisted.url),
     imageWidth: result.width,
     imageHeight: result.height,
     imageSize: undefined,
@@ -355,10 +401,13 @@ export function downloadImageNode(
   ctx: ImageOpsContext,
   nodeId: string,
   transform: ImageTransform = defaultTransform,
-): boolean {
+): Promise<boolean> {
   const data = asImageData(ctx.read(nodeId))
-  if (!data.imageUrl) return false
-  return transform.downloadImage(data.imageUrl, downloadFileName(data.imageName))
+  return (async () => {
+    const sourceUrl = ctx.displayUrlOf ? await ctx.displayUrlOf(ctx.read(nodeId)) : data.imageUrl
+    if (!sourceUrl) return false
+    return transform.downloadImage(sourceUrl, downloadFileName(data.imageName))
+  })()
 }
 
 /** 状态栏文案（文件名 / 尺寸·大小）——组件直接用，避免文案散在模板里 */
@@ -429,11 +478,14 @@ export async function expandImageNode(
   rect: Rect,
   io: ExpandBitmapIO = defaultExpandIO,
 ): Promise<boolean> {
-  const data = asImageData(ctx.read(nodeId))
-  if (!data.imageUrl || !data.imageWidth || !data.imageHeight) return false
+  const current = ctx.read(nodeId)
+  const data = asImageData(current)
+  if (!data.imageWidth || !data.imageHeight) return false
+  const sourceUrl = ctx.displayUrlOf ? await ctx.displayUrlOf(current) : data.imageUrl
+  if (!sourceUrl) return false
   // 没实际扩大（框仍包着原图尺寸）→ 不写库，避免一条什么都没改的历史
   if (!isExpandEffective(rect, data.imageWidth, data.imageHeight)) return false
-  const result = await expandImage(data.imageUrl, rect, data.imageWidth, data.imageHeight, io)
+  const result = await expandImage(sourceUrl, rect, data.imageWidth, data.imageHeight, io)
   if (!result) return false
   if (!ctx.persistImage) return false
   const persisted = await ctx.persistImage(result.blob)
@@ -444,8 +496,7 @@ export async function expandImageNode(
     nodeId,
     {
       ...ctx.read(nodeId),
-      imageUrl: persisted.url,
-      resourceId: persisted.resourceId,
+      ...imageSourceFields(persisted.resourceId, persisted.url),
       imageWidth: result.width,
       imageHeight: result.height,
       imageSize: undefined,
@@ -482,7 +533,7 @@ export async function addSourceNode(
   if (!persisted) return null
 
   const size = await transform.readImageSize(persisted.url)
-  const data: Record<string, unknown> = { imageUrl: persisted.url, resourceId: persisted.resourceId }
+  const data: Record<string, unknown> = imageSourceFields(persisted.resourceId, persisted.url)
   const name = (file as File).name
   if (typeof name === 'string' && name) data.imageName = name
   if (typeof (file as File).size === 'number') data.imageSize = (file as File).size

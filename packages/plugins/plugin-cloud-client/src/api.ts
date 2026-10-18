@@ -147,7 +147,8 @@ export class CloudApi {
   /**
    * 上传一个资源（原始字节）→ 拿到画布内资源地址。
    *
-   * 关键字段只有 `hashName`（地址由它拼出）；节点里存的就是 `url`。
+   * 关键字段是 `hashName`：调用方据此拼**逻辑 ID** `<canvasId>/<hashName>`（见 cloudResourceAdapter），
+   * 地址只是 resolve 时现拼的产物，不进节点。
    */
   async uploadResource(canvasId: string, bytes: Blob, name: string): Promise<{ hashName: string; url: string }> {
     const url =

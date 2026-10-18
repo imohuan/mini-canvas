@@ -7,6 +7,7 @@
  * 这里只保留 writeGeneratedImage。
  */
 import { cardSizePatch, type ImageFitLimits } from './imageFit'
+import { imageSourceFields } from './imageOps'
 
 /** 写回要用到的外部能力（写入器注入真实现，测试注入假实现） */
 export interface ImageRunDeps {
@@ -113,8 +114,8 @@ export async function writeGeneratedImage(nodeId: string, url: string, deps: Ima
   const sizes = cardSizePatch(size?.width, size?.height, deps.fitLimits?.())
   const data: Record<string, unknown> = {
     ...(deps.readData(nodeId) ?? {}),
-    imageUrl: finalUrl,
-    ...(finalResourceId ? { resourceId: finalResourceId } : {}),
+    // 唯一出口：有引用就写引用（迁移期附带显示地址）；没有引用时保留可直接显示的地址
+    ...(finalResourceId ? imageSourceFields(finalResourceId, finalUrl) : { imageUrl: finalUrl }),
     imageName: undefined,
     imageSize: undefined,
     imageWidth: size?.width,

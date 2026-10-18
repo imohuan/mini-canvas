@@ -47,7 +47,7 @@ const noServices: ServiceGetter = {
  * 起一个带真实内核服务的 ctx（含 video/image 两个类型）。
  * @param opts.withResources 是否注入内存版资源库（默认注入）；false = 极简宿主（上传该回落 objectURL）
  */
-function makeCtx(opts: { withResources?: boolean } = {}) {
+function makeCtx(opts: { withResources?: boolean; withImage?: boolean } = {}) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   nodeStore.registerType({ type: 'video', label: '视频', defaultSize: { w: 480, h: 320 } })
@@ -70,6 +70,32 @@ function makeCtx(opts: { withResources?: boolean } = {}) {
   ctx.inject('doc', createDocService({ nodeStore, edgeStore, graph, history }))
   ctx.inject('command', new CommandRegistry())
   ctx.inject('settings', { get: () => undefined })
+  /**
+   * 图片节点插件（简化版）：只实现“按资源引用建节点”这一条公开入口。
+   *
+   * 截图不再自己往 image 的 data 里写字段 —— 它只递位置 + 引用 + 元数据，
+   * 由图片类型决定写什么。这个桩就是那条契约的对端。
+   */
+  if (opts.withImage !== false) {
+    ctx.inject('image', {
+      addImageNodeFromResource(
+        position: { x: number; y: number },
+        resourceId: string,
+        meta?: { name?: string; width?: number; height?: number },
+      ): string {
+        const doc = ctx.get<{
+          transaction<T>(reason: string, fn: (tx: {
+            createNode(t: string, p: { x: number; y: number }, d?: Record<string, unknown>): string
+          }) => T): T
+        }>('doc')
+        const data: Record<string, unknown> = { resourceId }
+        if (meta?.name) data.imageName = meta.name
+        if (meta?.width) data.imageWidth = meta.width
+        if (meta?.height) data.imageHeight = meta.height
+        return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, data))
+      },
+    })
+  }
   if (opts.withResources !== false) {
     // 资源库（内存版）：上传/截图要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
     const resourceBlobs = new Map<string, Blob>()
@@ -298,16 +324,18 @@ describe('clipVideo / resetClip：剪辑范围', () => {
 })
 
 describe('captureFrameNode：截图建图片节点', () => {
-  it('在视频节点右侧建一个 image 节点，写入资源引用与真实像素尺寸（不写 base64）', async () => {
+  it('在视频节点右侧建一个 image 节点，只写资源引用与真实像素尺寸（不写 base64、不写显示地址）', async () => {
     const id = makeNode(env.nodeStore, { videoUrl: 'blob:v', videoName: 'clip.mp4', cardWidth: 560 })
     const ops = createVideoOps(env.ctx)
     const newId = await captureFrameNode(ops, id, 65, fakeTransform())
     expect(newId).toBeTruthy()
     const node = env.nodeStore.getNode(newId!)!
     expect(node.type).toBe('image')
-    // 截图是**新的一张图**：必须走资源库，不能把 base64 写进节点（那会原样落进云端画布数据）
-    expect(node.data.imageUrl).not.toMatch(/^data:/)
+    // 截图是**新的一张图**：必须走资源库 —— 节点里只留引用与尺寸，
+    // 显示地址由图片节点按当前环境 resolve（不许把 base64 / 临时地址写进 data）。
+    expect(node.data.imageUrl).toBeUndefined()
     expect(typeof node.data.resourceId).toBe('string')
+    expect(String(node.data.resourceId)).toMatch(/^res-/)
     expect(node.data.imageName).toBe('clip_1-05.png')
     expect(node.data.imageWidth).toBe(640)
     expect(node.data.imageHeight).toBe(360)
@@ -328,6 +356,15 @@ describe('captureFrameNode：截图建图片节点', () => {
     nodeStore.addNodes([{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: { videoUrl: 'blob:v' } }])
     const ops = createVideoOps(ctx)
     expect(await captureFrameNode(ops, 'v1', 0, fakeTransform())).toBeNull()
+  })
+
+  it('没装图片插件（image 服务与 media 能力都取不到）→ null，且一条节点都不多', async () => {
+    // 用不带图片桩的宿主：截图必须“明确失败”，不能自己 createNode 写出孤儿 image 节点。
+    const { ctx, nodeStore } = makeCtx({ withImage: false })
+    nodeStore.addNodes([{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: { videoUrl: 'blob:v' } }])
+    const ops = createVideoOps(ctx)
+    expect(await captureFrameNode(ops, 'v1', 0, fakeTransform())).toBeNull()
+    expect(nodeStore.getNodes()).toHaveLength(1)
   })
 
   it('没有视频 → null（截不到帧，不建空节点）', async () => {

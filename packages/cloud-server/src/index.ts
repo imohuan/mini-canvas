@@ -7,7 +7,8 @@
  *   canvases/<id>/canvas.json    画布本体（节点 + 边 + 画布信息）
  *   canvases/<id>/view.json      视图状态（视口）
  *   canvases/<id>/history.json   任务记录 / 生成历史
- *   canvases/<id>/resources/     本画布资源（节点里存同源 URL；老数据的 `res:<hash>` 读取兼容）
+ *   canvases/<id>/resources/     本画布资源（节点里存逻辑 ID `<画布id>/<hash>`，地址由 resolve 现拼；
+ *                                迁移期老存档里的同源 URL 仍可读）
  *   providers/                   平台提供方（丢一个 .js 进去就是一个平台）
  * 另有 `kv/` 存"设置 / 快捷"这类按 key 的小数据。不依赖任何外部 SaaS。
  *

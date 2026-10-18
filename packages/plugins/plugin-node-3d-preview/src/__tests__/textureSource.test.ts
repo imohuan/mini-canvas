@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pickTextureUrl, findUpstreamImageUrl } from '../textureSource'
+import { pickTextureUrl, findUpstreamImageUrl, findUpstreamImageRef } from '../textureSource'
 
 describe('pickTextureUrl', () => {
   it('上游有图时优先用上游图', () => {
@@ -48,5 +48,34 @@ describe('findUpstreamImageUrl', () => {
 
   it('没有入边时返回空串', () => {
     expect(findUpstreamImageUrl([], 'me', getData)).toBe('')
+  })
+})
+
+describe('findUpstreamImageRef：新节点只有引用时也算有图', () => {
+  const data: Record<string, Record<string, unknown>> = {
+    legacy: { imageUrl: 'old.png' },
+    modern: { resourceId: 'res-9' },
+    empty: {},
+  }
+  const getData = (id: string) => data[id]
+
+  it('只有 resourceId 的上游也能被选中，并带回引用', () => {
+    expect(findUpstreamImageRef([{ source: 'modern', target: 'me' }], 'me', getData)).toEqual({
+      url: '',
+      resourceId: 'res-9',
+    })
+  })
+
+  it('旧节点带回地址；没有图的边跳过', () => {
+    const edges = [
+      { source: 'empty', target: 'me' },
+      { source: 'legacy', target: 'me' },
+    ]
+    expect(findUpstreamImageRef(edges, 'me', getData)).toEqual({ url: 'old.png', resourceId: '' })
+  })
+
+  it('没有入边 / 一条都没有图 → null', () => {
+    expect(findUpstreamImageRef([], 'me', getData)).toBeNull()
+    expect(findUpstreamImageRef([{ source: 'empty', target: 'me' }], 'me', getData)).toBeNull()
   })
 })

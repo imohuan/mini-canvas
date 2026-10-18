@@ -38,6 +38,8 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(1)
     expect(out[0].data.imageUrl).toBe('/api/canvases/default/resources/abc123.png')
+    // 主字段：逻辑 ID（带画布作用域）。地址只是迁移期副本。
+    expect(out[0].data.resourceId).toBe('default/abc123.png')
   })
 
   it('已是云端引用（资源 URL）→ 不重复上传', async () => {
@@ -46,6 +48,14 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     const nodes = [
       { id: 'n1', type: 'image', data: { resourceId: '/api/canvases/default/resources/abc123.png' } },
     ]
+    await migrateLocalResources(nodes, local, api)
+    expect(uploads).toHaveLength(0)
+  })
+
+  it('已是新逻辑 ID → 不重复上传', async () => {
+    const { api, uploads } = fakeApi()
+    const local = { async resolveResource() { return undefined } }
+    const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'default/abc123.png' } }]
     await migrateLocalResources(nodes, local, api)
     expect(uploads).toHaveLength(0)
   })

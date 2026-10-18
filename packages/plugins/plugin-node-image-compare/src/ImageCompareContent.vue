@@ -21,9 +21,14 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 import { clampDivider, resolveCompareEntries } from './imageCompareEngine'
 import { compareWidthPatch, DEFAULT_COMPARE_HEIGHT, resolveFollowWidth } from './compareFit'
+import { resolveImageSrc } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
+
+// TODO(upstream): `upstream` 能力尚未落地（见 docs/design/node-data-and-upstream-contract.md §六）。
+// 落地后改成 `upstream.media('left'/'right')`，由本类型声明的 consumes.left/right 决定读哪个字段；
+// 现在仍按边顺序扫描上游 data（迁移期实现），两边读的是同一份 image 数据契约。
 
 /** 按节点 id 取 data（renderNodes 是当前渲染快照） */
 function nodeData(nodeId: string): Record<string, unknown> | undefined {
@@ -38,8 +43,39 @@ function nodeData(nodeId: string): Record<string, unknown> | undefined {
  */
 const sources = computed(() => resolveCompareEntries(renderEdges.value, props.id, nodeData))
 
-const leftImage = computed(() => sources.value[0]?.url ?? '')
-const rightImage = computed(() => sources.value[1]?.url ?? '')
+/**
+ * 左右两张图的可用地址。
+ *
+ * 上游可能是新节点（只有 resourceId）或旧节点（只有 imageUrl）：
+ * 统一交给 resolveImageSrc —— 引用优先、旧地址兜底，组件里不再各写一份回退。
+ */
+const leftImage = ref('')
+const rightImage = ref('')
+let resolveToken = 0
+
+async function refreshSides(): Promise<void> {
+  const token = ++resolveToken
+  const [left, right] = sources.value
+  // 先用已知的旧地址顶上（不能让已显示的图在解析期间闪没）
+  leftImage.value = left?.url ?? ''
+  rightImage.value = right?.url ?? ''
+  const [l, r] = await Promise.all([
+    left ? resolveImageSrc(ctx, sourceDataOf(left.sourceId)) : Promise.resolve(''),
+    right ? resolveImageSrc(ctx, sourceDataOf(right.sourceId)) : Promise.resolve(''),
+  ])
+  if (token !== resolveToken) return
+  leftImage.value = l || leftImage.value
+  rightImage.value = r || rightImage.value
+}
+
+/** 按上游 id 取它当前的 data（引用解析要用原始字段，不用已解析的 url） */
+function sourceDataOf(nodeId: string): Record<string, unknown> | undefined {
+  return nodeData(nodeId)
+}
+
+watch(() => sources.value.map((e) => e.sourceId + '|' + e.resourceId + '|' + e.url).join(','), refreshSides, {
+  immediate: true,
+})
 const hasAny = computed(() => !!leftImage.value || !!rightImage.value)
 const hasTwo = computed(() => !!leftImage.value && !!rightImage.value)
 

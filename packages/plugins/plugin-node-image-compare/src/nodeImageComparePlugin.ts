@@ -118,6 +118,13 @@ export function apply(ctx: Context) {
     size: { w: 480, h: DEFAULT_COMPARE_HEIGHT },
     inputs: [{ port: 'target', acceptsTypes: ['image'], capacity: INPUT_CAPACITY }],
     outputs: [],
+    // 数据契约：对比节点按“连线先后”消费两张图片资源。
+    // 左右是两个槽；槽名是数据层的名字，端口名仍是连接层的 target（见契约 §十一.1）。
+    // 两槽共用 refField：节点数据只保存 resourceId，不保存显示地址。
+    consumes: {
+      left: { kind: 'image', refField: 'resourceId' },
+      right: { kind: 'image', refField: 'resourceId' },
+    },
     resizable: true,
     in: ImageCompareContent,
     create(position) {

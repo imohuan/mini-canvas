@@ -91,7 +91,16 @@ describe('projects 路由', () => {
     const resName = '0123456789abcdef.png'
     await canvases.writeCanvas(from, {
       name: '原画布',
-      nodes: [{ id: 'n1', type: 'image', position: { x: 1, y: 2 }, data: { imageUrl: '/api/canvases/' + from + '/resources/' + resName } }],
+      nodes: [{
+        id: 'n1',
+        type: 'image',
+        position: { x: 1, y: 2 },
+        data: {
+          // 迁移期两种形态同时存在：旧 URL 字段 + 新逻辑 ID
+          imageUrl: '/api/canvases/' + from + '/resources/' + resName,
+          resourceId: from + '/' + resName,
+        },
+      }],
       edges: [{ id: 'e1', source: 'n1', target: 'n1' }],
     })
     await canvases.writeView(from, { x: 9, y: 9, zoom: 2 })
@@ -110,6 +119,9 @@ describe('projects 路由', () => {
     // 关键：资源地址里的画布 id 换成新的（副本自包含，原画布删了也不裂图）
     expect(JSON.stringify(copy?.nodes)).toContain('/api/canvases/' + to + '/resources/' + resName)
     expect(JSON.stringify(copy?.nodes)).not.toContain('/api/canvases/' + from + '/resources/')
+    // 逻辑 ID 同样要换画布作用域：副本不能指回原画布的资源
+    expect(JSON.stringify(copy?.nodes)).toContain('"' + to + '/' + resName + '"')
+    expect(JSON.stringify(copy?.nodes)).not.toContain('"' + from + '/' + resName + '"')
     // 视口不复制
     expect(await canvases.readView(to)).toBeUndefined()
     // 原始画布不受影响

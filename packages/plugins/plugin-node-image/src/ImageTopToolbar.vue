@@ -13,6 +13,7 @@ import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isEx
 import { useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
+import { readImageSourceFields } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -25,8 +26,16 @@ const Select = useUiComponent('select')
 // 壳另外还会在框选手势/多选时整体压掉上插槽。
 const selected = useSoleNodeSelected(props.id)
 
-/** 有没有图：没有图时裁剪入口无意义，直接不渲染（而不是渲一个点了没反应的按钮） */
-const hasImage = computed(() => typeof props.data?.imageUrl === 'string' && props.data.imageUrl !== '')
+/**
+ * 有没有图：没有图时裁剪入口无意义，直接不渲染（而不是渲一个点了没反应的按钮）。
+ *
+ * 判据是“有资源引用或有旧地址” —— 新写入只存 resourceId，
+ * 只看 imageUrl 会把有图的节点当成空节点，裁剪/扩展入口凭空消失。
+ */
+const hasImage = computed(() => {
+  const { resourceId, legacyUrl } = readImageSourceFields(props.data)
+  return resourceId !== '' || legacyUrl !== ''
+})
 /** 裁剪中：入口按钮隐藏，避免重复进入 */
 const cropping = computed(() => isCropping(props.id))
 const expanding = computed(() => isExpanding(props.id))

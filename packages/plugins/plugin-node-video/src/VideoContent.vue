@@ -46,6 +46,7 @@ function positiveNum(v: unknown): number | null {
 }
 import { createVideoOps } from './videoOps'
 import { endOverlay, isCropping } from './videoSession'
+import { readVideoSourceFields, resolveVideoSrc } from './videoRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -68,7 +69,30 @@ const endedLatch = ref(false)
 const broken = ref(false)
 const captureBusy = ref(false)
 
-const videoUrl = computed(() => (typeof props.data?.videoUrl === 'string' ? props.data.videoUrl : ''))
+/**
+ * 播放地址：**优先按 resourceId 现取**（本地临时 objectURL / 云端资源路由），
+ * 迁移期没有可用引用时才用旧 `videoUrl` 兜底。
+ *
+ * 初值取旧地址：SSR / 首帧不能等异步 resolve；有引用时解析回来再替换。
+ * 解析结果只留在本组件内存里，不写回 data。
+ */
+const sourceFields = computed(() => readVideoSourceFields(props.data))
+const resolvedUrl = ref(sourceFields.value.legacyUrl)
+let resolveToken = 0
+
+async function refreshResolvedUrl(): Promise<void> {
+  const token = ++resolveToken
+  resolvedUrl.value = sourceFields.value.legacyUrl
+  const url = await resolveVideoSrc(ctx, props.data)
+  if (token !== resolveToken) return
+  resolvedUrl.value = url || sourceFields.value.legacyUrl
+}
+
+watch(() => [sourceFields.value.resourceId, sourceFields.value.legacyUrl], refreshResolvedUrl, {
+  immediate: true,
+})
+
+const videoUrl = computed(() => resolvedUrl.value)
 const videoWidth = computed(() => (typeof props.data?.videoWidth === 'number' ? props.data.videoWidth : 0))
 const videoHeight = computed(() => (typeof props.data?.videoHeight === 'number' ? props.data.videoHeight : 0))
 const cropRect = computed<Rect | undefined>(() => {
@@ -814,7 +838,8 @@ onMounted(() => {
 })
 
 watch(
-  () => props.data?.videoUrl,
+    // 引用变了也要重新取图（只盯旧地址会漏掉“同一地址换了资源”的场景）
+    () => sourceFields.value.resourceId + '|' + sourceFields.value.legacyUrl,
   () => {
     broken.value = false
     syncCardSize(followedVideoCardSizePatch(props.data, ops.fitLimits?.()))
@@ -1057,7 +1082,7 @@ watch(videoUrl, (prev) => {
   right: 0;
   bottom: 0;
   height: 56px;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)); /* 主题色白名单: 视频画面上的衬底，随画面恒定，与主题无关 */
   pointer-events: none;
 }
 /* 衬底挂在节点层（贴满底边，不再被控件条的左右边距截短） */
@@ -1084,16 +1109,16 @@ watch(videoUrl, (prev) => {
   width: 34px;
   padding: 8px 0 10px;
   border-radius: 8px;
-  background: rgba(17, 17, 17, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  background: rgba(17, 17, 17, 0.92); /* 主题色白名单: 叠在视频画面上的音量弹层，与主题无关 */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* 主题色白名单: 同上 */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); /* 主题色白名单: 同上 */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
 .vc-volume-value {
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(255, 255, 255, 0.95); /* 主题色白名单: 视频覆盖层上的恒浅色文字 */
   font-size: 11px;
   line-height: 14px;
   font-variant-numeric: tabular-nums;
@@ -1103,7 +1128,7 @@ watch(videoUrl, (prev) => {
   width: 4px;
   height: 76px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.28); /* 主题色白名单: 视频覆盖层里的音量轨道 */
   cursor: pointer;
   /* 扩大命中区：轨道细但手能点中 */
   touch-action: none;
@@ -1119,7 +1144,7 @@ watch(videoUrl, (prev) => {
   right: 0;
   bottom: 0;
   border-radius: 999px;
-  background: #fff;
+  background: #fff; /* 主题色白名单: 视频覆盖层上的音量填充，恒白 */
 }
 .vc-volume-thumb {
   position: absolute;
@@ -1128,8 +1153,8 @@ watch(videoUrl, (prev) => {
   height: 12px;
   margin-left: -6px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  background: #fff; /* 主题色白名单: 视频覆盖层上的音量圆点，恒白 */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); /* 主题色白名单: 同上 */
   pointer-events: none;
 }
 .vc-capture-menu {
@@ -1140,9 +1165,9 @@ watch(videoUrl, (prev) => {
   min-width: 118px;
   padding: 6px;
   border-radius: 12px;
-  background: rgba(17, 17, 17, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  background: rgba(17, 17, 17, 0.92); /* 主题色白名单: 叠在视频画面上的截图菜单，与主题无关 */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* 主题色白名单: 同上 */
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); /* 主题色白名单: 同上 */
   display: flex;
   flex-direction: column;
 }
@@ -1153,7 +1178,7 @@ watch(videoUrl, (prev) => {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.92);
+  color: rgba(255, 255, 255, 0.92); /* 主题色白名单: 视频覆盖层上的菜单文字 */
   font-size: 13px;
   line-height: 18px;
   text-align: left;
@@ -1161,7 +1186,7 @@ watch(videoUrl, (prev) => {
   white-space: nowrap;
 }
 .vc-capture-item:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.12); /* 主题色白名单: 视频覆盖层菜单 hover 底 */
 }
 .video-controls.is-hidden {
   opacity: 0;
@@ -1187,7 +1212,7 @@ watch(videoUrl, (prev) => {
 }
 .vc-btn:hover:not(:disabled) {
   /* 参考图 2：hover 出圆形浅底（参考 liblib 播放钮的白圈），白图标压上去依然清晰 */
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.18); /* 主题色白名单: 视频覆盖层按钮 hover 底 */
 }
 .vc-btn:active:not(:disabled) {
   transform: scale(0.97);
@@ -1247,7 +1272,7 @@ watch(videoUrl, (prev) => {
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：liblib 的轨道是恒白低透明 */
-  background: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.35); /* 主题色白名单: 视频覆盖层进度轨道 */
 }
 .vc-progress-fill {
   position: absolute;
@@ -1256,7 +1281,7 @@ watch(videoUrl, (prev) => {
   height: 3px;
   border-radius: 999px;
   /* 不走主题色：已播填充恒白（liblib 同款） */
-  background: #fff;
+  background: #fff; /* 主题色白名单: 视频覆盖层进度填充，恒白 */
   pointer-events: none;
 }
 .vc-progress input {
@@ -1275,8 +1300,8 @@ watch(videoUrl, (prev) => {
   height: 11px;
   margin-left: -5.5px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  background: #fff; /* 主题色白名单: 视频覆盖层进度圆点，恒白 */
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); /* 主题色白名单: 同上 */
   pointer-events: none;
 }
 /* 空态 / 失效态：站在灰底上，所以用节点文字色而不是白字（图片节点同一套） */

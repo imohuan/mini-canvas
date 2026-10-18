@@ -58,6 +58,21 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
+  it('media 创建器注册：按 kind=image 路由到 image 节点，只写 resourceId', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const field = ctx.registryOf<{ addNode?: (req: unknown) => string | undefined }>('media/creator')
+    expect(field.keys()).toContain('image')
+    const creator = field.top('image')?.value
+    expect(typeof creator?.addNode).toBe('function')
+    const id = creator!.addNode!({ kind: 'image', resourceId: 'res-42', position: { x: 10, y: 20 } })
+    expect(id).toBeTruthy()
+    const node = ctx.get<DocService>('doc').getNode(id!)!
+    expect(node.data.resourceId).toBe('res-42')
+    expect(node.data.imageUrl).toBeUndefined()
+    ctx.stop()
+  })
+
   it('类型级能力：保留卡片边框（不声明 frameless）', async () => {
     const ctx = boot()
     await ctx.start()
@@ -66,6 +81,38 @@ describe('node-image 装配 smoke', () => {
     // 那圈 1px 边框看出节点边界。以前这里声明 frameless: true（内容贴边、去掉那圈缝），现在不声明。
     // 别改回 true —— 改了图片节点就又变成"看不见边界的一块白"。
     expect(def?.frameless).toBeFalsy()
+    ctx.stop()
+  })
+
+  it('数据契约：声明 produces.image，且引用字段是 resourceId（不是 URL 字段）', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const def = ctx.get<DocService>('doc').types.get('image')
+    expect(def?.produces).toEqual({ image: { kind: 'image', refField: 'resourceId' } })
+    ctx.stop()
+  })
+
+  it('按资源引用建节点：只写 resourceId 与元数据，不写显示地址', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const svc = ctx.get<{
+      addImageNodeFromResource(
+        p: { x: number; y: number },
+        ref: string,
+        meta?: { name?: string; width?: number; height?: number },
+      ): string
+    }>('image')
+    const id = svc.addImageNodeFromResource({ x: 1, y: 2 }, 'res-42', {
+      name: '截图.png',
+      width: 640,
+      height: 360,
+    })
+    const data = ctx.get<DocService>('doc').getNode(id)!.data
+    expect(data.resourceId).toBe('res-42')
+    expect(data.imageUrl).toBeUndefined()
+    expect(data.imageName).toBe('截图.png')
+    expect(data.imageWidth).toBe(640)
+    expect(data.imageHeight).toBe(360)
     ctx.stop()
   })
 

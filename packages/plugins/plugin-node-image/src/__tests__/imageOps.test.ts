@@ -299,11 +299,11 @@ describe('rotateImage / downloadImageNode', () => {
     expect(data.imageHeight).toBe(100)
   })
 
-  it('下载用清洗后的文件名（脏后缀不会带进文件名）', () => {
+  it('下载用清洗后的文件名（脏后缀不会带进文件名）', async () => {
     const { ops, id, nodeStore } = boot()
     nodeStore.updateNodeData(id, { imageUrl: 'blob:mock-1', imageName: 'shot.png_crop' })
     let seenName = ''
-    const ok = downloadImageNode(ops, id, fakeTransform({
+    const ok = await downloadImageNode(ops, id, fakeTransform({
       downloadImage: (_url: string, name: string) => {
         seenName = name
         return true
@@ -313,9 +313,9 @@ describe('rotateImage / downloadImageNode', () => {
     expect(seenName).toBe('shot.png')
   })
 
-  it('没有图时不下载', () => {
+  it('没有图时不下载', async () => {
     const { ops, id } = boot()
-    expect(downloadImageNode(ops, id, fakeTransform())).toBe(false)
+    expect(await downloadImageNode(ops, id, fakeTransform())).toBe(false)
   })
 
   it('旋转后卡片宽高跟着互换后的比例重算', async () => {

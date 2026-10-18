@@ -101,6 +101,9 @@ export function apply(ctx: Context) {
     size: { w: 420, h: 280 },
     inputs: [{ port: 'target', acceptsTypes: ['image'], capacity: 1 }],
     outputs: [],
+    // 数据契约：本节点从上游读一张图片贴到球面。
+    // 只声明“读哪个字段”，不声明地址 —— 显示地址由消费方按 resourceId resolve。
+    consumes: { image: { kind: 'image', refField: 'resourceId' } },
     // 全景窗口要能拉大拉小；渲染层按容器实测尺寸重建画布（ResizeObserver）
     resizable: true,
     in: PanoramaContent,

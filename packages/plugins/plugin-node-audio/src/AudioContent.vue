@@ -25,6 +25,7 @@ import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
 import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"
 import AudioWavePlayer from "./AudioWavePlayer.vue"
+import { readAudioSourceFields, resolveAudioSrc } from "./audioRefs"
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -43,7 +44,29 @@ const waveMinHeight = ref(28)
 
 const refreshing = ref(false)
 
-const audioUrl = computed(() => (typeof props.data?.audioUrl === "string" ? props.data.audioUrl : ""))
+/**
+ * 播放地址：**优先按 resourceId 现取**，迁移期没有可用引用时才用旧 `audioUrl` 兜底。
+ *
+ * 初值取旧地址：首帧不能等异步 resolve；有引用时解析回来再替换。
+ * 解析结果只留在本组件内存里，不写回 data。
+ */
+const sourceFields = computed(() => readAudioSourceFields(props.data))
+const resolvedUrl = ref(sourceFields.value.legacyUrl)
+let resolveToken = 0
+
+async function refreshResolvedUrl(): Promise<void> {
+  const token = ++resolveToken
+  resolvedUrl.value = sourceFields.value.legacyUrl
+  const url = await resolveAudioSrc(ctx, props.data)
+  if (token !== resolveToken) return
+  resolvedUrl.value = url || sourceFields.value.legacyUrl
+}
+
+watch(() => [sourceFields.value.resourceId, sourceFields.value.legacyUrl], refreshResolvedUrl, {
+  immediate: true,
+})
+
+const audioUrl = computed(() => resolvedUrl.value)
 const audioName = computed(() => (typeof props.data?.audioName === "string" ? props.data.audioName : ""))
 const audioDuration = computed(() => {
   const stored = typeof props.data?.audioDuration === "number" ? props.data.audioDuration : 0

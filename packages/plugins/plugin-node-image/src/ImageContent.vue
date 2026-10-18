@@ -21,13 +21,43 @@ import { endEdit, isEditing } from './cropSession'
 import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
 import { createImageOps } from './imageOps'
 import { cardSizePatch, followedCardSizePatch, missingCardSizePatch, type CardSizePatch } from './imageFit'
+import { readImageSourceFields, resolveImageSrc } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, flow, visibleNodes } = useCanvasRender()
 
-/** 图片地址（只认字符串，其余视为无图） */
-const imageUrl = computed(() => (typeof props.data?.imageUrl === 'string' ? props.data.imageUrl : ''))
+/**
+ * 图片地址：**优先按 resourceId 现取**（本地临时 objectURL / 云端资源路由），
+ * 迁移期没有可用引用时才用旧 `imageUrl` 兜底。
+ *
+ * 解析结果只放在本组件内存里，不写回 data —— 节点数据长期只保存 resourceId。
+ */
+/**
+ * 初值直接用旧地址：SSR / 首帧不能等异步 resolve，否则会闪一下空态。
+ * 有 resourceId 时下面那次 resolve 回来再替换（旧地址只是过渡显示）。
+ */
+const resolvedUrl = ref(readImageSourceFields(props.data).legacyUrl)
+/** 作废标记：快速换图时，先发的 resolve 不许盖掉后发的 */
+let resolveToken = 0
+/** 节点上的引用与旧地址（同步可读，供空态判断） */
+const sourceFields = computed(() => readImageSourceFields(props.data))
+
+async function refreshResolvedUrl(): Promise<void> {
+  const token = ++resolveToken
+  // 先回到“当前已知可用地址”，避免解析期间继续显示上一张图
+  resolvedUrl.value = sourceFields.value.legacyUrl
+  const url = await resolveImageSrc(ctx, props.data)
+  if (token !== resolveToken) return
+  resolvedUrl.value = url || sourceFields.value.legacyUrl
+}
+
+watch(() => [sourceFields.value.resourceId, sourceFields.value.legacyUrl], refreshResolvedUrl, {
+  immediate: true,
+})
+
+/** 图片地址（解析中 / 都没有时为空串 → 走空态） */
+const imageUrl = computed(() => resolvedUrl.value)
 const imageWidth = computed(() => (typeof props.data?.imageWidth === 'number' ? props.data.imageWidth : 0))
 const imageHeight = computed(() => (typeof props.data?.imageHeight === 'number' ? props.data.imageHeight : 0))
 
