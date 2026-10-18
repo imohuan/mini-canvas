@@ -69,6 +69,17 @@ describe('ResourceStore 资源生命周期', () => {
     expect(nodes[0].data.videoUrl).toBeUndefined()
     expect(nodes[1].data.videoUrl).toBe('/uploads/ok.mp4')
   })
+
+  it('已有持久地址不被解析结果覆盖（只存 ID 目标形态）', async () => {
+    const nodes = [
+      { id: 'i1', type: 'image', data: { resourceId: 'res-i', imageUrl: '/stable/key.png' } as Record<string, unknown> },
+    ]
+    const count = await restoreNodeMediaUrls(nodes, async () => 'blob:new-temporary')
+    // 已有持久地址不需要重建 → 重建计数为 0（计数只统计真的补了地址的节点）
+    expect(count).toBe(0)
+    // 已有持久地址保留，不被会话内临时地址覆盖
+    expect(nodes[0].data.imageUrl).toBe('/stable/key.png')
+  })
   it('资源 id 可跨页面恢复 Blob，旧 blob URL 不参与保存', async () => {
     // 存字节 → 只拿回 ref（不拿 URL）；显示地址靠 resolve 现算
     const adapter = memoryResourceAdapter()
