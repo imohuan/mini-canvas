@@ -102,7 +102,7 @@ interface UpstreamCapability {
   /** 按内容类型过滤（与 PortDef.acceptsTypes 同词表） */
   ofType(kind: string): UpstreamNode[]
   /** 取某媒体槽的第一项（节点类型声明了 consumes 才能用） */
-  media(slot: string): UpstreamMedia | undefined
+  media(slot: string, ordinal?: number): UpstreamMedia | undefined
   /** 取上游文本，按边序拼接（可选分隔符） */
   text(separator?: string): string
   /** 订阅上游变化（节点/边变化时触发） */

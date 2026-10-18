@@ -254,6 +254,22 @@ describe('upstream 能力：按类型取值', () => {
     expect(consumer.media('nope')).toBeUndefined()
   })
 
+  it('media(slot, ordinal) 按边序区分同一槽的多个候选（左右对比不能取到同一张）', () => {
+    const twoImgs: TestNode[] = [
+      { id: 'a', type: 'image', data: { resourceId: 'res-a' } },
+      { id: 'b', type: 'image', data: { resourceId: 'res-b' } },
+      { id: 'cmp', type: 'output' },
+    ]
+    const twoEdges: TestEdge[] = [
+      { source: 'a', target: 'cmp' },
+      { source: 'b', target: 'cmp' },
+    ]
+    const up = upstreamOf(twoImgs, twoEdges, { id: 'cmp', type: 'output' })
+    expect(up.media('image', 0)?.resourceId).toBe('res-a')
+    expect(up.media('image', 1)?.resourceId).toBe('res-b')
+    expect(up.media('image', 2)).toBeUndefined()
+  })
+
   it('text() 按边序拼接，分隔符可换', () => {
     const up = upstreamOf(nodes, edges, { id: 'out', type: 'output' })
     expect(up.text()).toBe('第一句\n第二句')

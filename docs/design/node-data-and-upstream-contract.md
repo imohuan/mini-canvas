@@ -146,6 +146,8 @@ interface UpstreamTraversalOptions {
 ```ts
 interface UpstreamCapability {
   // ……原有 nodes()/ofType()/media()/text()/subscribe()
+  /** 同一槽多个候选时按边序取第 N 个（左右对比用 0/1；缺省 0） */
+  media(slot: string, ordinal?: number): UpstreamMedia | undefined
   /** 从当前节点倒推整个依赖闭包，返回拓扑序（最早依赖在前，当前节点最后） */
   closure(options?: UpstreamTraversalOptions): UpstreamNode[]
   /** 只拿 id 的拓扑序（执行器调度用，避免暴露 outputs） */

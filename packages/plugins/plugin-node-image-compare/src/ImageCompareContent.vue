@@ -44,11 +44,11 @@ function nodeData(nodeId: string): Record<string, unknown> | undefined {
  */
 const sources = computed(() => {
   const scanned = resolveCompareEntries(renderEdges.value, props.id, nodeData)
-  // 按槽名取 left/right；取不到槽（极简宿主 / 旧类型注册）时，用扫描结果里的前两张。
-  // 注意：media() 取的是**第一个**产出该 kind 的上游，因此左右两槽要按槽名分别取。
+  // 同一个 image 槽按边序取第 0 / 第 1 个；取不到（极简宿主 / 旧类型注册）时用扫描结果。
+  // 不要按 left/right 两个槽取 —— 它们会命中同一个上游。
   const up = upstreamOf()
-  const left = up.media('left')
-  const right = up.media('right')
+  const left = up.media('image', 0)
+  const right = up.media('image', 1)
   if (!left && !right) return scanned
   const toEntry = (m: { resourceId: string }, fallback?: { sourceId: string; url: string }) => ({
     sourceId: fallback?.sourceId ?? m.resourceId,

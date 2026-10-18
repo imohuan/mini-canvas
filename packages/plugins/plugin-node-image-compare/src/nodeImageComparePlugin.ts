@@ -121,10 +121,8 @@ export function apply(ctx: Context) {
     // 数据契约：对比节点按“连线先后”消费两张图片资源。
     // 左右是两个槽；槽名是数据层的名字，端口名仍是连接层的 target（见契约 §十一.1）。
     // 两槽共用 refField：节点数据只保存 resourceId，不保存显示地址。
-    consumes: {
-      left: { kind: 'image', refField: 'resourceId' },
-      right: { kind: 'image', refField: 'resourceId' },
-    },
+    // 左右两张图是同一个 image 槽的两个候选（按边序取第 0/1 个），不是两个独立的数据字段。
+    consumes: { image: { kind: 'image', refField: 'resourceId' } },
     resizable: true,
     in: ImageCompareContent,
     create(position) {

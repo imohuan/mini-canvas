@@ -135,7 +135,12 @@ export interface UpstreamCapability {
    * 取本节点某个 consumes 槽的第一项媒体。
    * 本节点类型没声明该槽、或上游没产出同 kind 的资源 → undefined。
    */
-  media(slot: string): UpstreamMedia | undefined
+  /**
+   * 取本节点某个 consumes 槽的媒体。
+   * @param ordinal 同一槽有多个候选时取第几个（从 0 起；缺省 0 = 第一条连线）。
+   *   左右对比这类“一个 consumes 概念、多个实体”的场景用它区分，不必把槽拆成 left/right。
+   */
+  media(slot: string, ordinal?: number): UpstreamMedia | undefined
   /** 按边序拼接上游文本（节点类型声明了 produces.text 才读得到） */
   text(separator?: string): string
   /** 节点/边变化时通知；返回取消订阅函数 */
@@ -408,10 +413,11 @@ export function createUpstreamCapability(
         .map((node) => makeNode(snap, node))
     },
 
-    media: (slot) => {
+    media: (slot, ordinal = 0) => {
       const snap = snapshot()
       const consume = snap.doc?.types?.get(self.type)?.consumes?.[slot]
       if (!consume) return undefined
+      let hit = 0
       for (const pid of directIds(snap, self.id)) {
         const node = snap.byId.get(pid)
         if (!node) continue
@@ -420,7 +426,8 @@ export function createUpstreamCapability(
           if (def.kind !== consume.kind || !def.refField) continue
           const value = readDataPort(node, def)
           if (typeof value === 'string' && value !== '') {
-            return { kind: def.kind, resourceId: value }
+            if (hit === ordinal) return { kind: def.kind, resourceId: value }
+            hit += 1
           }
         }
       }
