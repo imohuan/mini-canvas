@@ -26,7 +26,7 @@
  */
 import * as THREE from 'three'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { RenderEvents, useCanvasRender } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, createUpstreamCapability, type UpstreamCapability } from '@mini-canvas/canvas-render'
 import {
   DEFAULT_VIEW,
   applyDrag,
@@ -36,13 +36,21 @@ import {
   toSpherical,
   type ViewState,
 } from './panoramaView'
-import { findUpstreamImageRef } from './textureSource'
+import { findUpstreamImageRef } from './textureSource' // 迁移期保留：单测与旧调用方仍用
 import { resolveImageSrc } from './imageRefs'
 import { resolveEscapeAction, resolvePanoramaSpec } from './panoramaMode'
 import { beginInteract, endInteract, exitFullscreen, isFullscreen, isInteracting, resetViewToken } from './panoramaSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
+
+/**
+ * 上游读取：优先走宿主注册的 `upstream` 能力（按本类型的 consumes.image）；
+ * 没有能力包（极简宿主/单测）时，用同一个工厂按需造一份 —— 不重复实现扫边逻辑。
+ */
+function upstreamOf(): UpstreamCapability {
+  return createUpstreamCapability(ctx, { id: props.id, type: '3d-preview' })
+}
 
 /** 画布 DOM 容器（three 的 canvas 挂这里） */
 const hostRef = ref<HTMLDivElement | null>(null)
@@ -106,8 +114,8 @@ const FALLBACK = { surface: '#f3f4f6', border: '#e5e7eb' } // 主题色白名单
 /**
  * 贴图来源：**上游优先**，没有上游才用节点自己的字段（与 v1 口径一致）。
  *
- * TODO(upstream): `upstream` 能力尚未落地。落地后这里改成 `upstream.media('image')`，
- * 由本类型声明的 `consumes.image.refField` 决定读哪个字段；当前仍按边扫描（迁移期实现）。
+ * 优先走 `upstream` 能力（按本类型声明的 consumes.image 读上游）；
+ * 极简宿主/单测没有能力包时，回落到按边扫描（迁移期实现，集中在本文件一处）。
  *
  * 地址与引用都接受：新节点只写 `resourceId`，旧节点只有 `imageUrl` —— 解析交给 imageRefs，
  * 本组件不再各写一份回退。
@@ -122,15 +130,10 @@ async function refreshTextureSource(): Promise<void> {
     resourceId: typeof d.resourceId === 'string' ? d.resourceId : typeof d.panoUrl === 'string' ? d.panoUrl : '',
     imageUrl: typeof d.imageUrl === 'string' ? d.imageUrl : '',
   }
-  const nodes = renderNodes.value
-  const upstream = findUpstreamImageRef(renderEdges.value, props.id, (nodeId) => {
-    const n = nodes.find((item) => item.id === nodeId)
-    return n?.data as Record<string, unknown> | undefined
-  })
+  const upstream = upstreamOf().media('image')
+  const upstreamRef = upstream?.resourceId
   // 上游优先：它一旦有引用/地址就压过节点自身
-  const sourceData: Record<string, unknown> | undefined = upstream
-    ? { resourceId: upstream.resourceId, imageUrl: upstream.url }
-    : ownData
+  const sourceData: Record<string, unknown> | undefined = upstreamRef ? { resourceId: upstreamRef } : ownData
   const resolved = sourceData ? await resolveImageSrc(ctx, sourceData) : ''
   if (token !== textureSourceToken) return
   ownImageUrl.value = resolved

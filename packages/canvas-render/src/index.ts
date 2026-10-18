@@ -286,7 +286,7 @@ export type {
 // 需要拿到**同一对象身份**才能 provide/inject 对上，故与 useCapability 一起导出。
 export { CAPABILITY_BAG_KEY, CAPABILITY_SCOPE_KEY } from './contracts/capabilities'
 // 宿主标准能力包（node/zoom/selected/selection/tools/upstream/media）：工厂实现在这里，注册由 createMiniCanvasHost 做
-export { createStandardCapabilities } from './contracts/standardCapabilities'
+export { createStandardCapabilities, createUpstreamCapability, createMediaCapability } from './contracts/standardCapabilities'
 export type {
   NodeCapability,
   ZoomCapability,

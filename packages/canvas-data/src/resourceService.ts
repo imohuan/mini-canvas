@@ -189,8 +189,18 @@ export async function restoreNodeMediaUrls<T extends { type?: string; data?: Rec
     const kind = node.type === "video" ? "video" : "image"
     const url = await restore(resourceId, kind)
     for (const key of fields) {
-      if (url) data[key] = url
-      else delete data[key]
+      // 只存 ID 的目标形态：解析结果不写回 data。
+      // 但旧存档 / 旧组件仍可能读 xxxUrl（迁移期），这里只在字段**缺失或仍是失效 blob:/data:** 时
+      // 补一份会话内副本；已有的持久地址不动，解析失败时只清掉失效地址，不新增空字段。
+      if (!url) {
+        const current = data[key]
+        if (typeof current === "string" && /^(blob:|data:)/i.test(current)) delete data[key]
+        continue
+      }
+      const current = data[key]
+      if (current === undefined || (typeof current === "string" && /^(blob:|data:)/i.test(current))) {
+        data[key] = url
+      }
     }
     if (url) restored += 1
   }

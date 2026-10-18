@@ -18,7 +18,7 @@
  * 指针一旦移出把手元素就会"拖一半断掉"（同 useNodeCardSize 的既有结论）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender, createUpstreamCapability, type UpstreamCapability } from '@mini-canvas/canvas-render'
 import { clampDivider, resolveCompareEntries } from './imageCompareEngine'
 import { compareWidthPatch, DEFAULT_COMPARE_HEIGHT, resolveFollowWidth } from './compareFit'
 import { resolveImageSrc } from './imageRefs'
@@ -26,9 +26,10 @@ import { resolveImageSrc } from './imageRefs'
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const { ctx, renderEdges, renderNodes } = useCanvasRender()
 
-// TODO(upstream): `upstream` 能力尚未落地（见 docs/design/node-data-and-upstream-contract.md §六）。
-// 落地后改成 `upstream.media('left'/'right')`，由本类型声明的 consumes.left/right 决定读哪个字段；
-// 现在仍按边顺序扫描上游 data（迁移期实现），两边读的是同一份 image 数据契约。
+// 上游读取优先走 `upstream` 能力（consumes.left/right）；没有能力包的极简宿主回落到按边扫描。
+function upstreamOf(): UpstreamCapability {
+  return createUpstreamCapability(ctx, { id: props.id, type: 'image-compare' })
+}
 
 /** 按节点 id 取 data（renderNodes 是当前渲染快照） */
 function nodeData(nodeId: string): Record<string, unknown> | undefined {
@@ -41,7 +42,24 @@ function nodeData(nodeId: string): Record<string, unknown> | undefined {
  * 保留边本身（而不只是地址）：左右小标签要指到"是哪个上游节点"，
  * 只按图片地址反查会在两个上游用同一张图时认错人。
  */
-const sources = computed(() => resolveCompareEntries(renderEdges.value, props.id, nodeData))
+const sources = computed(() => {
+  const scanned = resolveCompareEntries(renderEdges.value, props.id, nodeData)
+  // 按槽名取 left/right；取不到槽（极简宿主 / 旧类型注册）时，用扫描结果里的前两张。
+  // 注意：media() 取的是**第一个**产出该 kind 的上游，因此左右两槽要按槽名分别取。
+  const up = upstreamOf()
+  const left = up.media('left')
+  const right = up.media('right')
+  if (!left && !right) return scanned
+  const toEntry = (m: { resourceId: string }, fallback?: { sourceId: string; url: string }) => ({
+    sourceId: fallback?.sourceId ?? m.resourceId,
+    resourceId: m.resourceId,
+    url: fallback?.url ?? '',
+  })
+  const out = []
+  if (left) out.push(toEntry(left, scanned[0]))
+  if (right) out.push(toEntry(right, scanned[1]))
+  return out
+})
 
 /**
  * 左右两张图的可用地址。

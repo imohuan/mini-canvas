@@ -302,8 +302,10 @@ function upstreamGraphOf(
   doc: UpstreamDoc,
   options: UpstreamTraversalOptions = {},
 ): UpstreamGraphInput {
-  const nodes = doc.getNodes() as GraphNodeLike[]
-  const rawEdges = doc.getEdges() as GraphEdgeLike[]
+  // 极简宿主/单测替身可能只实现了 getNode（没有 getNodes/getEdges）：
+  // 上游能力按“读不到图 = 没有上游”处理，不能让组件因为缺一个方法就崩。
+  const nodes = typeof doc.getNodes === 'function' ? (doc.getNodes() as GraphNodeLike[]) : []
+  const rawEdges = typeof doc.getEdges === 'function' ? (doc.getEdges() as GraphEdgeLike[]) : []
   if (options.includeTransient === true) return { nodes, edges: rawEdges }
   const transientIds = new Set<string>()
   for (const node of nodes) if (isTransient(node)) transientIds.add(node.id)
@@ -327,7 +329,7 @@ interface UpstreamSnapshot {
  * 所有遍历都复用 canvas-data 的纯函数（buildParentIndex / collectAncestors /
  * topoOrderFrom / upstreamDepth），前端与后台因此算出同一顺序；本文件不自己 DFS。
  */
-function createUpstreamCapability(
+export function createUpstreamCapability(
   ctx: Context,
   self: { id: string; type: string },
 ): UpstreamCapability {
@@ -474,7 +476,7 @@ function createUpstreamCapability(
  * 路由到 registryOf('media/creator') 里注册的节点创建器。所有服务都在调用时现取，
  * 于是热换资源后端/热装节点插件立刻生效。
  */
-function createMediaCapability(ctx: Context): MediaCapability {
+export function createMediaCapability(ctx: Context): MediaCapability {
   return {
     put: (blob, opts) => {
       const resources = resourceServiceOf(ctx)
