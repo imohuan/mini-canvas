@@ -210,6 +210,9 @@ if (res.ok) {
 
 ## 5. 声明式连接约束（写在节点类型上）
 
+> 这里只回答“能不能连”。连上之后读什么字段，属于节点数据契约，见
+> `docs/design/node-data-and-upstream-contract.md` 的 `produces/consumes`。
+
 端口约束的**单一来源**是 `packages/canvas-data/src/nodeStore.ts` 的 `PortDef`，
 `connection.ts` 直接复用（`export type { PortDef }` 再导出，不重复定义）。
 

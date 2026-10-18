@@ -181,6 +181,10 @@ factory.creatableTypes()                                   // 可创建的 type 
 
 ## 6. 坑与速记
 
+> **读上游不要自己扫边**：`doc.getEdges()` 只给连接关系。节点要读上游数据时，
+> 用能力场的 `upstream` 能力（见 `docs/design/node-data-and-upstream-contract.md`），
+> 不要在每个插件里重复 `filter(e => e.target === id)` 再猜 `data.imageUrl`。
+
 1. **数据只有一个名字 `doc`**：旧的四条名字已下线，`ctx.get` 取不到；`NodeStore`/`EdgeStore`/`GraphDocument`/`History` 是**类**，对象照用、服务名不认。
 2. 建节点是 `createNode`（单数没有 `addNode`）；批量是 `addNodes(AddNodeInput[])`。
 3. `updateNode` 的 patch 里**显式写 `undefined` 表示清该字段**（如 `parentId: undefined` 解除父子关系）。

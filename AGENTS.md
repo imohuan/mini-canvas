@@ -13,7 +13,7 @@
 @mini-canvas/canvas-render  渲染层（VueFlow/DOM/令牌 + nodeLayout/viewport）
 @mini-canvas/canvas-base    插件作者的薄入口（重导出 kernel + canvas-data 类型）
 @mini-canvas/ui             成品应用出口（一行 CanvasHost 出画布）
-packages/plugins/*          插件库（24 个）
+packages/plugins/*          插件库（36 个）
 packages/cloud-server       自托管云端（KV + 资源 + 静态托管 + MCP 控制画布）
 packages/mcp-server         AI 工具链后端（MCP/SSE + 生成任务）
 ```
@@ -69,7 +69,7 @@ pnpm -C packages/ui dev                    # 起画布应用看画面（:5288）
 
 - 项目进度 / 当前该做什么：`docs/STATUS.md`
 - 架构与分层设计（终态 + 迁移步骤 + 决策记录）：`docs/design/core-layers-and-registry.md`
-- 插件作者教程（7 篇，照抄能跑）：`docs/plugin-dev/`
+- 插件作者教程（篇数以入口为准，照抄能跑）：`docs/plugin-dev/index.md`
 - 改插件身份（自带件 ⇄ 可装卸件）或插件面板里找不到某插件：`docs/规则/插件身份切换手册.md`
 - 各包 API 手册（按现行包结构分层：kernel / canvas-data / canvas-render / plugins）：`docs/代码开发/00-总览与架构.md` 及其子目录
 - 插件系统目标与验收：`docs/goal/plugin-system-goal.md`

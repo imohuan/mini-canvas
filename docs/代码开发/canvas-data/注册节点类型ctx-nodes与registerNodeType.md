@@ -126,6 +126,10 @@ interface NodeTypeDef {
 
 `ctx.nodes.register` 把 `size` 映射成 `defaultSize`，把 `in` / `title` 合并进 `segments`。
 
+> **数据契约**：数据型节点还要声明 `produces/consumes`（我产出什么、从上游读什么），
+> 详见 `docs/design/node-data-and-upstream-contract.md`。只声明 `inputs/outputs` 时，
+> 下游只能知道“能连”，不知道“连上后读哪个字段”。
+
 > 一个真实踩过的坑：类型级能力（`resizable` / `frameless` / `transparent`）是**手写枚举逐字段透传**的。
 > 曾经给图片节点加 `frameless` 时只补了 `registerNodeType` 那条路、漏了 `ctx.nodes.register` 那条，
 > 结果单测全绿、浏览器里边框照旧。现在两条路都透传，并有测试锁住。

@@ -28,8 +28,8 @@
 | `restore(id: string, kind?): Promise<string \| undefined>` | 刷新后按引用重建显示地址（与 `resolve` 同一件事，名字强调"载入时重算"） | 打开画布时恢复媒体 |
 | `register(input: RegisterResourceInput): string` | **旧接口**：登记一个已经拿到的地址（不落字节） | 只在"地址已有、只想统一回收"时用 |
 
-`ResourcePutOptions` 只有两个字段：`kind?`（`'image'` / `'video'` / `'audio'` / `'text'` / 自定义）
-与 `name?`（原始文件名，供后端推断扩展名）。
+`ResourcePutOptions` 有四个字段：`kind?`（`'image'` / `'video'` / `'audio'` / `'text'` / 自定义）、
+`name?`（原始文件名）、`ref?`（可推算的稳定槽名，用于缩略图/帧图复用）、`derived?`（派生资源不参与“未引用即回收”）。
 
 ### 两条最重要的规矩
 

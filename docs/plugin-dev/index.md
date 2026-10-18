@@ -22,7 +22,11 @@ export function apply(ctx: Context, config: { /* 已校验、默认补齐 */ }) 
 
 不用手写 `unregister`、不用记一堆内核函数从哪 import——注册都自动回收。
 
-## 教程（按顺序读 7 篇）
+## 先读规范
+
+写任何跨插件协作前，先读 `docs/插件开发规范.md`：它规定插件之间只能经 `ctx` 调用、节点数据怎么写、加图片/读上游走哪条公开链路。教程讲“怎么跑”，规范讲“必须怎么做”。
+
+## 教程（按顺序读 9 篇）
 
 1. **《第一个插件》** — 建文件 → 写最小插件 → 在画布宿主里加一行装配 → 跑起来看到效果。
 2. **《生命周期与 effect（fiber）》** — 弄懂「经 ctx 建的注册会随插件卸载自动撤销」，
@@ -53,9 +57,9 @@ export function apply(ctx: Context, config: { /* 已校验、默认补齐 */ }) 
 - 你新建的插件文件放哪都行（演示最省事是放到 `packages/ui/src/` 下），
   关键是把它的导出加进装配清单 `packages/ui/src/assembly.ts` 的 `APP_PLUGINS`（第 1 篇教）。
   > 教程示例统一 `import type { Context } from '@mini-canvas/canvas-base'`（作者入口）。
-  > `packages/ui` 默认没装这个包：放进去前先给该包加依赖
-  > （`pnpm -C packages/ui add @mini-canvas/canvas-base`），或把插件文件建在
-  > `packages/plugins/` 下的独立插件包里（那里已依赖 `canvas-base`，见 `packages/plugins/README.md`）。
+  > `packages/ui` 已经依赖 `@mini-canvas/canvas-base`（`packages/ui/package.json:30`），不必再加；
+  > 也可以把插件文件建在 `packages/plugins/` 下的独立插件包里（见 `packages/plugins/README.md`）。
+  > `window.MiniCanvasUI` 是宿主 API；`window.MiniCanvasPlugin` 是给 UMD 插件用的重载器，两者不是同一个对象。
 - 仓库里已有一批**生产级插件**可当样板直接读：
   `packages/plugins/plugin-node-text`（节点 + 服务）、`plugin-node-image`、
   `plugin-theme-default`（主题 + 配置）、`plugin-mini-map`（命令 + 插槽 UI）。
