@@ -112,6 +112,17 @@ describe('上游素材归一', () => {
     expect(normalizeUpstream(undefined)).toEqual([])
     expect(normalizeUpstream({ a: 1 })).toEqual([])
   })
+
+  it('★ 只有 resourceId 的素材也要保留（新节点只写引用，地址现取）', () => {
+    const out = normalizeUpstream([
+      { refName: '图片1', kind: 'image', resourceId: 'default/abc.png' },
+      { kind: 'video', resourceId: 'res-7' },
+    ])
+    expect(out).toEqual([
+      { refName: '图片1', kind: 'image', resourceId: 'default/abc.png' },
+      { refName: '视频1', kind: 'video', resourceId: 'res-7' },
+    ])
+  })
 })
 
 describe('提示词（把数据契约讲清楚）', () => {

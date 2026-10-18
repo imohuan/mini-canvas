@@ -197,6 +197,14 @@ const NODE_KIND_FIELDS: Array<[string, string]> = [
   ['panoUrl', 'image'],
 ]
 
+/**
+ * 节点类型 → 媒体 kind（只有 resourceId 时靠它认类型）。
+ *
+ * 新节点（视频截图 / 云端生成 / 图片插件新写入）只有 resourceId，没有 imageUrl 那类地址；
+ * 不按类型认就会把它们当空素材，页面里的 __CANVAS_UPSTREAM__ 少一张图。
+ */
+const TYPE_KINDS: Record<string, string> = { image: 'image', video: 'video', audio: 'audio' }
+
 const upstream = computed<UpstreamItem[]>(() => {
   const stored = normalizeUpstream(props.data?.uiUpstream)
   if (stored.length > 0) return stored
@@ -217,14 +225,17 @@ const upstream = computed<UpstreamItem[]>(() => {
     const d = (n.data ?? {}) as Record<string, unknown>
     const hit = NODE_KIND_FIELDS.find(([f]) => typeof d[f] === 'string' && d[f])
     const url = hit ? (d[hit[0]] as string) : undefined
+    const refKind = hit ? hit[1] : (n.type && TYPE_KINDS[n.type]) || undefined
+    const resourceId = typeof d.resourceId === 'string' && d.resourceId ? d.resourceId : undefined
     const text = typeof d.text === 'string' ? d.text : undefined
-    // 既没地址也没文字 = 空素材（例如还没生成的图片节点），别塞给生成物当噪音
-    if (!url && !text) continue
+    // 既没地址、也没引用、也没文字 = 空素材（例如还没生成的图片节点），别塞给生成物当噪音
+    if (!url && !resourceId && !text) continue
     raw.push({
       id: n.id,
-      kind: hit ? hit[1] : (n.type ?? 'other'),
+      kind: refKind ?? (n.type ?? 'other'),
       ...(typeof d.label === 'string' ? { name: d.label } : {}),
       ...(url ? { url } : {}),
+      ...(resourceId ? { resourceId } : {}),
       ...(text ? { value: text } : {}),
     })
   }

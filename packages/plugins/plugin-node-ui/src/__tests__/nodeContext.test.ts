@@ -68,5 +68,16 @@ describe('给 Agent 的上下文（一次拿齐"该画什么"）', () => {
     const c = buildNodeContext(fakeCtx(nodes, dup), '3')
     expect(c.upstream.filter((u) => u.nodeId === '1')).toHaveLength(1)
   })
+
+  it('★ 只有 resourceId 的上游也带上引用（新节点没有 imageUrl 那类地址）', () => {
+    const refNodes = [
+      { id: 'i', type: 'image', data: { label: '封面', resourceId: 'default/abc.png' } },
+      { id: 'u', type: 'ui', data: { uiHtml: '<div>x</div>' } },
+    ]
+    const c = buildNodeContext(fakeCtx(refNodes, [{ source: 'i', target: 'u' }]), 'u')
+    expect(c.upstream).toHaveLength(1)
+    expect(c.upstream[0]).toMatchObject({ nodeId: 'i', kind: 'image', resourceId: 'default/abc.png' })
+    expect(c.upstream[0]).not.toHaveProperty('url')
+  })
 })
 

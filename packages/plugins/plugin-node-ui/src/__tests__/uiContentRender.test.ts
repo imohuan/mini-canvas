@@ -117,6 +117,15 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     expect(html).not.toContain('empty')
   })
 
+  it('★ 上游只有 resourceId 时也要进 __CANVAS_UPSTREAM__（带引用而不是当空素材）', async () => {
+    const doc = {
+      getNode: (id: string) => ({ id, type: 'image', data: { label: '封面', resourceId: 'default/abc.png' } }),
+      getEdges: () => [{ source: 'img1', target: '7' }],
+    }
+    const html = await render({ uiHtml: '<div>x</div>' }, doc)
+    expect(html).toContain('default/abc.png')
+  })
+
   it('注入色板：__CANVAS_UI__ 里带上 palette（亮/暗两套，给不给用由生成物决定）', async () => {
     const html = await render({ uiHtml: '<div>x</div>' })
     expect(html).toContain('palette')

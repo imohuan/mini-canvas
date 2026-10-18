@@ -212,6 +212,14 @@ export function apply(ctx: Context) {
     // 用默认字段 contentType: 'image'，与下游 image-compare 的 acceptsTypes: ['image'] 对得上。
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image', 'video', 'audio'] }],
     outputs: [{ port: 'source', contentType: 'image' }],
+    // 数据契约：本节点读上游的图片/视频/音频/文本（字段由各产出方声明；
+    // 这里只声明"我要读这些 kind"，具体读哪个字段走 upstream 能力）。
+    consumes: {
+      image: { kind: 'image', refField: 'resourceId' },
+      video: { kind: 'video', refField: 'resourceId' },
+      audio: { kind: 'audio', refField: 'resourceId' },
+      text: { kind: 'text', valueField: 'text' },
+    },
     in: UiContent,
     /**
      * 必须把 extra 带进去（第二版才修）。
@@ -289,7 +297,7 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
   canvasId: string
   baseUrl: string
   /** 连进本节点的素材（Agent 据此知道有哪些数据可画） */
-  upstream: Array<{ refName: string; kind: string; url?: string; value?: string; nodeId?: string }>
+  upstream: Array<{ refName: string; kind: string; url?: string; resourceId?: string; value?: string; nodeId?: string }>
   /** 这个节点的参数（键 → 值；没交过就是空对象） */
   inputs: Record<string, unknown>
   /** 后台接口速查（写进提示词用；空 baseUrl 时为空串） */
@@ -316,12 +324,15 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
     seen.add(e.source)
     const d = (src.data ?? {}) as Record<string, unknown>
     const url = [d.imageUrl, d.videoUrl, d.audioUrl, d.panoUrl].find((u): u is string => typeof u === 'string' && !!u)
+    // 新节点只写 resourceId：没有地址时也要把引用带上，否则 Agent 以为"没连素材"
+    const resourceId = typeof d.resourceId === 'string' && d.resourceId ? d.resourceId : undefined
     const text = typeof d.text === 'string' ? d.text : undefined
     raw.push({
       id: src.id,
       kind: src.type,
       ...(typeof d.label === 'string' ? { name: d.label } : {}),
       ...(url ? { url } : {}),
+      ...(resourceId ? { resourceId } : {}),
       ...(text ? { value: text } : {}),
     })
   }

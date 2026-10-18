@@ -111,6 +111,8 @@ export interface UpstreamItem {
   kind: string
   /** 图片/视频/音频类素材的地址 */
   url?: string
+  /** 持久资源引用；有它时地址由调用方按环境 resolve（新节点只写这个字段） */
+  resourceId?: string
   /** 文本类素材的内容 */
   value?: string
   /** 提供这条素材的节点 id（画布接口要用；底栏给了才有） */
@@ -129,9 +131,10 @@ export function normalizeUpstream(raw: unknown): UpstreamItem[] {
     const rec = item as Record<string, unknown>
     const kind = typeof rec.kind === 'string' && rec.kind ? rec.kind : 'other'
     const url = typeof rec.url === 'string' && rec.url ? rec.url : undefined
+    const resourceId = typeof rec.resourceId === 'string' && rec.resourceId ? rec.resourceId : undefined
     const value = typeof rec.value === 'string' && rec.value ? rec.value : undefined
-    // 既没地址又没内容 = 空素材，给 AI 只会变成一行废话
-    if (!url && !value) continue
+    // 既没地址、也没引用、也没内容 = 空素材，给 AI 只会变成一行废话
+    if (!url && !resourceId && !value) continue
     const name = typeof rec.name === 'string' && rec.name.trim() ? rec.name.trim() : ''
     const nodeId = typeof rec.id === 'string' && rec.id ? rec.id : undefined
     seq[kind] = (seq[kind] ?? 0) + 1
@@ -140,6 +143,7 @@ export function normalizeUpstream(raw: unknown): UpstreamItem[] {
       refName,
       kind,
       ...(url ? { url } : {}),
+      ...(resourceId ? { resourceId } : {}),
       ...(value ? { value } : {}),
       ...(nodeId ? { nodeId } : {}),
     })
@@ -247,7 +251,12 @@ export function buildUiPrompt(req: UiGenRequest): string {
     parts.push('（没有连任何素材。）')
   } else {
     for (const u of req.upstream) {
-      const payload = u.url ? '地址 ' + u.url : '内容：' + truncate(u.value ?? '', 400)
+      // 只给引用时也要说清楚：不是没数据，而是地址要现取
+      const payload = u.url
+        ? '地址 ' + u.url
+        : u.resourceId
+          ? '资源 ' + u.resourceId + '（不是地址；先把它换成可显示地址再用）'
+          : '内容：' + truncate(u.value ?? '', 400)
       const idPart = u.nodeId ? '，节点 id ' + u.nodeId : ''
       parts.push('- ' + u.refName + '（' + u.kind + idPart + '）—— ' + payload)
     }
