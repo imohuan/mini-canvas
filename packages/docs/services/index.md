@@ -35,6 +35,7 @@ const layout = ctx.tryGet('nodeLayout')  // 显式可选：缺了返回 undefine
 | `slots` | 通用 UI 槽：往画布的固定位置叠 UI | [看](/services/slots) |
 | `settings` | 配置的单一数据源：所有可调项登记在这里 | [看](/services/settings) |
 | `resources` | 资源生命周期：object URL 的登记与回收 | [看](/services/resources) |
+| `upstream` / `media` | 能力包（不是服务名）：读上游、加媒体；用 `useCapability('upstream' / 'media')` 取 | [看](/canvas-data/upstream) |
 | `nodeRegistry` | 节点展示注册表：哪种节点用哪个组件 | [看](/services/node-registry) |
 | `themeRegistry` | 主题槽注册表：壳/边/背景的"当前赢家" | [看](/services/theme-registry) |
 | `nodeFactory` | 建节点工厂：统一"建一个节点"的入口 | [看](/services/node-factory) |
@@ -47,6 +48,9 @@ const layout = ctx.tryGet('nodeLayout')  // 显式可选：缺了返回 undefine
 > 想看**你这台画布上实际有哪些服务、谁提供的、方法名是什么** → [活快照](/plugins/live)（真数据）。
 > 后台（cloud-server）的服务走 **`ctx.routes` / `ctx.store` / `ctx.jobs` / `ctx.mcp` / `ctx.agent`**，
 > 见 [后端 API](/api/server)。
+
+> `upstream` 与 `media` 是**能力包**（`registryOf('capability')` 里的条目），不是 `ctx.get` 的服务名；
+> 在节点区域组件里用 `useCapability('upstream')` / `useCapability('media')`，并在 `ctx.nodes.attach` 的 `needs` 里声明。
 
 ## 每篇的结构
 

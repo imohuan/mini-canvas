@@ -17,6 +17,9 @@
 | AI/节点面板能调我的生成能力 | [案例 6](/examples/register-tool) | `ctx.tools.register` | `plugin-tool-text-generation` |
 | 节点底栏多一个动作按钮 | [案例 7](/examples/bottom-bar) | `registerBarAction`（跨插件） | `plugin-node-text` |
 | 拖文件/粘贴进画布建节点 | [案例 8](/examples/file-drop) | `ctx.effect` 包 window 监听 | `plugin-file-drop` |
+| 给节点加图片/视频/音频，只存资源 ID | — | `useCapability('media')` → `put` 拿 ID、`addNode(kind, id, pos)` | `plugin-node-image` / `plugin-node-video` / `plugin-node-audio` |
+| 读上游数据（可继续往上，直到最早的依赖） | [上游与执行顺序](/canvas-data/upstream) | `useCapability('upstream')` 的 `nodes()` / `ancestors()` / `media()` / `order()` | `plugin-node-3d-preview` / `plugin-node-image-compare` |
+| 从最后一个节点倒推、按依赖顺序执行 | [上游与执行顺序](/canvas-data/upstream) | `upstream.order()` 返回拓扑序 | 执行类插件（ComfyUI 式） |
 | 定时任务/轮询 | 案例 8 | `ctx.effect` 包 `setInterval` | `plugin-auto-save` |
 | 换掉整个节点外壳/连线 | [主题手册](/theme/) | `ctx.theme.add(slot, comp, { order })` | `plugin-theme-default` |
 

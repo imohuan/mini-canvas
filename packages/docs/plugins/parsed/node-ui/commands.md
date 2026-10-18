@@ -8,9 +8,9 @@
 
 | 命令 id | 标题 | payload | 返回 | 干什么 |
 | --- | --- | --- | --- | --- |
-| `ui.getContext` | 读取可视化节点的上下文 | @@BT@{ nodeId: string }` | `boolean` | 组装"该画什么"的全部上下文，**经事件 `ui/context` 回给调用方** |
-| `ui.setHtml` | 写入可视化 HTML | @@BT@{ nodeId: string, html: string, source?: string }` | `boolean` | 调 `uiNode.setHtml` 把 HTML 写进节点 |
-| `ui.clear` | 清空可视化节点 | @@BT@{ nodeId: string }` | `boolean` | 调 `uiNode.clear` |
+| `ui.getContext` | 读取可视化节点的上下文 | `{ nodeId: string }` | `boolean` | 组装"该画什么"的全部上下文，**经事件 `ui/context` 回给调用方** |
+| `ui.setHtml` | 写入可视化 HTML | `{ nodeId: string, html: string, source?: string }` | `boolean` | 调 `uiNode.setHtml` 把 HTML 写进节点 |
+| `ui.clear` | 清空可视化节点 | `{ nodeId: string }` | `boolean` | 调 `uiNode.clear` |
 
 ## 为什么 `ui.getContext` 用事件回数据
 

@@ -69,6 +69,11 @@ export interface NodeRegisterDef extends Omit<NodeTypeDef, 'defaultSize'> {
   inputs?: PortDef[]
   outputs?: PortDef[]
 
+  /** 数据契约：本节点对外产出的槽（详见「上游与执行顺序」） */
+  produces?: Record<string, DataPortDef>
+  /** 数据契约：本节点从上游读取的槽 */
+  consumes?: Record<string, DataPortDef>
+
   /** 类型图标（opaque 句柄；缺省 = 不显示图标） */
   icon?: unknown
   /** 标题右侧附加文本：字符串或 (data) => string；缺省 = 不显示（见下方说明） */
@@ -108,6 +113,33 @@ export interface NodeCreator {
   它受默认皮（plugin-theme-default）的配置 `titleVisible` 管控：关掉标题时这一格跟着一起收起。
 - **`resizable` / `frameless` / `transparent` 是类型级能力**，由渲染层读。曾经因为"两条注册路径只透传了一条"，
   出现过"单测全绿、浏览器里边框照旧"的事故，所以现在两条路都透传。
+
+### 数据契约：`produces` / `consumes`
+
+`inputs` / `outputs` 只回答"能不能连"；`produces` / `consumes` 回答"连上之后读哪个字段"。
+
+~~~ts
+ctx.nodes.register({
+  type: 'image',
+  label: '图片',
+  size: { w: 320, h: 240 },
+  // 我对外产出一张图：持久引用在 data.resourceId（不是 URL）
+  produces: { image: { kind: 'image', refField: 'resourceId' } },
+  // 我从上游读文本：普通值在 data.text
+  consumes: { text: { kind: 'text', valueField: 'text' } },
+  inputs: [{ port: 'target', acceptsTypes: ['text', 'image'] }],
+  outputs: [{ port: 'source', contentType: 'image' }],
+  in: ImageContent,
+})
+~~~
+
+| 字段 | 含义 |
+|---|---|
+| `refField` | 资源持久引用字段（必须指向 `resourceId` 一类字段） |
+| `valueField` | 非资源的普通值字段（如 `text`） |
+| `externalUrlField` | 仅“没有资源实体的外部地址”才用；不参与资源回收 |
+
+**三者恰好给一个**；注册时校验，给两个或不给会当场抛 `DataPortError`。下游通过 `upstream` 能力读取，不直接猜 `data.imageUrl`。
 
 ### 十个区域词（闭合词表）
 

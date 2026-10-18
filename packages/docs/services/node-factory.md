@@ -28,6 +28,10 @@ export interface NodeCreator {
 
 注意 `extra`：它是**可选的附加材料**，不是随便塞东西的地方。真实的用法是"建图片节点时顺便把图片地址带上"——`packages/plugins/plugin-node-image/src/nodeImagePlugin.ts` 的 creator 会读 `extra.imageUrl`。你不处理 `extra` 也没关系，但处理了才能支持"带材料的建节点"。
 
+> **跨插件放媒体不要走这条口**：调用方不该认识"图片插件的 creator 读哪个字段"。
+> 用 `useCapability('media')` 的 `addNode(kind, resourceId, position)`，由目标节点类型自己写标准字段；
+> `extra.imageUrl` 只留给"已知是图片、且手上只有地址"的宿主内部路径（迁移期）。
+
 ### 两条注册路，用哪条
 
 | 写法 | 谁在用 | 说明 |
@@ -66,5 +70,6 @@ ctx.nodes.register({
 3. **creator 内部一定要走 `doc`**（`doc.transaction` / `tx.createNode`，或调用你自己的服务最终也走 `doc`）。绕过它直接改 store 的后果：不进撤销栈、不触发落盘——用户按 Ctrl+Z 撤不掉、刷新后节点消失。
 4. **`creatableTypes()` 与"已注册的节点类型"是两回事**。前者是"有建造师傅"的类型，后者是"有数据声明"的类型（`doc.types`）。菜单取的是**两者的交集**（`plugin-context-menu` 里写得很明确）——所以漏写 `create` 的类型不会进"新建节点"菜单，只能靠别的方式创建。
 5. **`extra` 是"附加材料"，没有约定就传不动**。工厂只把它原样递给 creator；creator 不读，它就等于不存在。想支持"带内容建节点"，记得在 creator 里读（图片插件读 `extra.imageUrl`、示例里读 `extra.text`）。
+6. **跨插件加媒体用 `media` 能力**：`addNode` 内部路由到目标节点类型的创建器，调用方不需要知道字段名，也不需要 `import` 别的插件。
 6. **缺服务返回 `undefined`，不抛错**。纯数据环境里没有 `nodeFactory`（它由 `canvas-base` 注入）。可选的建节点场景请用 `ctx.tryGet('nodeFactory')` 探测后再用。
 

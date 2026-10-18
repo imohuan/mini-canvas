@@ -23,6 +23,12 @@
 3. **门面** —— `doc` 服务把上面四个收成一个名字，大家只跟它说话。
 4. **存储** —— `SaveService` + 可插拔的 `StorageAdapter`（内存 / localStorage / IndexedDB / 云端）。
 
+另有两条跨插件契约也住在本包（纯逻辑、前后端共用）：
+
+- **数据契约** `produces` / `consumes`：节点类型声明“我产出什么、从上游读什么”，注册时校验。
+- **上游遍历** `upstreamGraph.ts`：直接上游、整条祖先链、从末端倒推的拓扑序（执行插件用）。
+  见 [上游与执行顺序](/canvas-data/upstream)。
+
 还有一层"画布语义"也住在本包（源码在 `packages/canvas-data/src/canvas/`）：
 节点类型的注册、**十个区域词**、连接规则、建节点工厂、主题槽注册表。它们同样是纯逻辑、零 Vue。
 

@@ -9,14 +9,14 @@
 
 ```js
 window.__CANVAS_INPUTS__   // 本节点参数 { 键: 值 }（含界面自己 setInputs 交上去的）
-window.__CANVAS_UPSTREAM__ // 连进来的素材 [{ refName, kind, url?, value?, nodeId? }]
+window.__CANVAS_UPSTREAM__ // 连进来的素材 [{ refName, kind, url?, resourceId?, value?, nodeId? }]
 window.__CANVAS_UI__       // { theme, baseUrl, canvasId, nodeId, palette }
 ```
 
 | 注入项 | 内容 |
 | --- | --- |
 | `__CANVAS_INPUTS__` | 本节点参数（键 → 值） |
-| `__CANVAS_UPSTREAM__` | 上游素材数组；`kind` 是 `image / video / audio / text`，媒体给 `url`（可直接放进 `<img>/<video>`），文本给 `value`；`refName` 是按类型编号的引用名（图片1 / 视频2 …） |
+| `__CANVAS_UPSTREAM__` | 上游素材数组；`kind` 是 `image / video / audio / text`；媒体可能给 `url`（可直接放进 `<img>/<video>`），也可能只给 `resourceId`（**不是地址**，要先换成可显示地址）；文本给 `value`；`refName` 是按类型编号的引用名（图片1 / 视频2 …） |
 | `__CANVAS_UI__` | `theme`（`light|dark`）、`baseUrl`（后台地址）、`canvasId`、`nodeId`、`palette`（主题色板 `{ light, dark }`，用不用随你） |
 
 > 页面基地址是 `about:srcdoc` —— **发请求必须写绝对地址**（用 `__CANVAS_UI__.baseUrl` 拼）。
@@ -124,6 +124,7 @@ window.__CANVAS_UI__       // { theme, baseUrl, canvasId, nodeId, palette }
 ## 注意事项
 
 1. **别跨源自己 POST**：产物一律走 `CanvasUI.save`，自己发请求当主路会**静默失败**（沙箱是不透明源）。
-2. **`setInputs` 保持小**（几 KB 级）：它进撤销栈，太大会让撤销变得很重。
-3. **参数与上游都在一次 `onChange` 里给你**：不用分别监听两件事。
+2. **`resourceId` 不能直接当 `src`**：新节点只存引用。要么先用 `CanvasUI` 交给你的地址，要么把它交回宿主换地址；把它塞进 `<img src>` 只会是一个打不开的相对路径。
+3. **`setInputs` 保持小**（几 KB 级）：它进撤销栈，太大会让撤销变得很重。
+4. **参数与上游都在一次 `onChange` 里给你**：不用分别监听两件事。
 

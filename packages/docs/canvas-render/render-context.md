@@ -85,7 +85,7 @@ nodeWrite(props.id, { cardWidth: 320, size: { w: 320, h: 180 } })  // ③ 两者
 
 **问题**：一个挂在节点上的小组件，常常需要「这个节点是谁 / 改它的数据 / 当前缩放 / 我在不在选中集 / 调生成工具」。如果每个组件都自己 `ctx.get(...)` 拼一遍，代码会到处重复；更要紧的是**没法整体换实现**。
 
-**做法**：宿主在 `registryOf('capability')` 里注册「标准四件 + selection」，组件在注册时声明 `needs`，然后用 `useCapabilities()` 取：
+**做法**：宿主在 `registryOf('capability')` 里注册标准能力包（`node` / `zoom` / `selected` / `selection` / `tools` / `upstream` / `media`），组件在注册时声明 `needs`，然后用 `useCapabilities()` 取：
 
 ```ts
 // 片段：在 ctx.nodes.attach(...) 里声明这条条目需要哪些能力
@@ -120,6 +120,8 @@ const selected = caps['selected'] as SelectedCapability
 | `selected` | `selected`（在不在选中集）与 `solo`（是不是**恰好**只选中我一个）—— 都是活引用 |
 | `tools` | 生成工具：`list()` 与 `invoke(name, input, options?)` |
 | `selection` | 选择集视角（不是某个节点）：`ids()` / `nodes()`，给多选框区域栏用 |
+| `upstream` | 读上游：`nodes()` / `ofType(kind)` / `media(slot, ordinal?)` / `text()` / `subscribe()` / `closure()` / `order()`；`UpstreamNode` 还能继续 `upstream()` / `ancestors()` / `depth()` |
+| `media` | 跨插件加媒体：`put(blob)` 只回 `resourceId`、`resolve(id)` 拿地址、`addNode(kind, id, pos)` / `applyToNode(...)` 按 kind 路由到节点插件的创建器 |
 
 **关键性质**（源码 `contracts/capabilities.ts` 的注释逐条写了）：
 
@@ -127,6 +129,8 @@ const selected = caps['selected'] as SelectedCapability
 - **热换自动重建**：主题插件放一条 `order` 更小的同名能力就顶替了它，缓存按「产出它的工厂」比对，工厂引用一变就重造（旧实例先回收）；
 - **缺项裁决看 `ctx.isDev`**：dev 下**当场抛错**，prod 下 `warn` 一次并把这一格留空；
 - **没声明 ≠ 没注册**：`useCapability('zoom')` 拿不到时会在 dev 提示「你这条条目的 needs 里没有 zoom」（这两类失效长得一样，是最难查的一类）。
+
+**上游是整条链，不是一层**：执行插件要从最后一个节点倒推依赖，用 `upstream.order()`；它返回“最早依赖在前、当前节点最后”的拓扑序。分叉/菱形去重，环可用 `{ cycle: 'error' | 'skip' }` 控制。详见 [上游与执行顺序](/canvas-data/upstream)。
 
 ### 四、`handleParams`：浮动端口的外观参数
 

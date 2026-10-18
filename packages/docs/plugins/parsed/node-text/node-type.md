@@ -19,7 +19,8 @@ ctx.nodes.register({ type: 'text', /* ... */ })
 | `nameTemplate` | `'文本 {{ID}}'`（`{{ID}}` 是同类递增序号） |
 | `description` | `'在画布中添加一个文本节点'` |
 | `icon` | 内联 SVG 字符串（T 字图标） |
-| `size` | @@BT@{ w: 300, h: 200 }` |
+| `size` | `{ w: 300, h: 200 }` |
+| `produces` | `{ text: { kind: 'text', valueField: 'text' } }`（对外产出一段文本） |
 | `inputs` | `[{ port: 'target', acceptsTypes: ['text'] }]` |
 | `outputs` | `[{ port: 'source', contentType: 'text' }]` |
 | `resizable` | `true`（右下拖柄；尺寸写回 `data.cardWidth/Height`） |
@@ -38,8 +39,10 @@ import MiniCanvasStage from '../../../.vitepress/theme/demos/MiniCanvasStage.vue
 
 ## 注意事项
 
-1. **`inputs` 不声明 `capacity` = 不限条数**：文本节点可以同时接多个上游素材。
-2. **区域内只挂了底部生成栏**（`out:bottom`）：顶部样式条已被用户要求删除（对文本节点没有意义）。
-3. **`create` 只收 `position`**：带数据建节点（导入）要靠调用方先建再调 `editText`。
-4. **尺寸默认值接了设置面板**：见 [设置项](/plugins/parsed/node-text/config)。
+1. **文本不是资源，声明的是值字段**：`produces.text.valueField = 'text'` 告诉下游“正文在 `data.text`”。
+   其它节点要读它，走 `upstream.text()`，不要直接猜字段名。见 [上游与执行顺序](/canvas-data/upstream)。
+2. **`inputs` 不声明 `capacity` = 不限条数**：文本节点可以同时接多个上游素材。
+3. **区域内只挂了底部生成栏**（`out:bottom`）：顶部样式条已被用户要求删除（对文本节点没有意义）。
+4. **`create` 只收 `position`**：带数据建节点（导入）要靠调用方先建再调 `editText`。
+5. **尺寸默认值接了设置面板**：见 [设置项](/plugins/parsed/node-text/config)。
 

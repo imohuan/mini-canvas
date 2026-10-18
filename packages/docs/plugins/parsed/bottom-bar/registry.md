@@ -58,7 +58,15 @@ const registerBar = (): boolean => {
   // 写入器：生成结果回来时怎么落到节点（一个 kind 只能注册一个）
   registerBarApplier(ctx, 'image', (nodeId, result) => {
     const url = result.urls?.[0]
-    if (url) ctx.get('doc').updateNode(nodeId, { data: { imageUrl: url } })
+    if (!url) return
+    // ① 先落资源库拿持久引用；② 节点只写 resourceId
+    //    （地址只用于本次渲染，不要写回 data）
+    void (async () => {
+      const resources = ctx.get('resources')
+      const blob = await fetch(url).then((r) => r.blob())
+      const resourceId = await resources.put(blob, { kind: 'image' })
+      ctx.get('doc').updateNode(nodeId, { data: { resourceId } })
+    })()
   })
   return true
 }
@@ -73,4 +81,6 @@ if (!registerBar()) {
 2. **同 id 重复注册 = 替换**：动作 id 是热更入口，不是追加。
 3. **`publishToolActions` 会跟着工具表自动增量同步**：装了新的工具插件，底栏自动多一个模型按钮 —— 这就是"加一个模型 = 装一个工具插件"的落地点。
 4. **写入器写数据要经 `doc`**：不要直接改 store（那样不进历史、不落盘）。
+5. **写入器只写 `resourceId`**：拿到的是外部生成的地址，先 `resources.put` 落成持久引用，再把 ID 写进节点；
+   把地址一起写进 `imageUrl` 会让"刷新后地址失效"重新出现，也让下游多一套要兼容的字段。
 

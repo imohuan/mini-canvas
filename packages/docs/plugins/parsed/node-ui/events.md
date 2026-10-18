@@ -20,7 +20,7 @@
   canvasId: string
   baseUrl: string
   /** 连进本节点的素材（Agent 据此知道有哪些数据可画） */
-  upstream: Array<{ refName: string; kind: string; url?: string; value?: string; nodeId?: string }>
+  upstream: Array<{ refName: string; kind: string; url?: string; resourceId?: string; value?: string; nodeId?: string }>
   /** 这个节点的参数（键 → 值；没交过就是空对象） */
   inputs: Record<string, unknown>
   /** 后台接口速查（写进提示词用；空 baseUrl 时为空串） */

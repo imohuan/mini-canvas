@@ -39,10 +39,11 @@
 // 对：引用是稳定的，地址要现取
 const resourceId = await resources.put(blob, { kind: 'image', name: file.name })
 const url = await resources.resolve(resourceId)
-doc.updateNode(id, { data: { resourceId, imageUrl: url } })
+// 节点里只写 resourceId；url 只用于本次渲染，不写回 data
+doc.updateNode(id, { data: { resourceId } })
 ~~~
 
-`imageUrl` 是给这一次渲染用的**临时**地址（本地是 object URL），`resourceId` 才是能跨刷新活下来的那个。
+`url` 是给这一次渲染用的**临时**地址（本地是 object URL、云端是资源路由），`resourceId` 才是能跨刷新活下来的那个。
 
 **规矩二：`register` 是旧接口，新代码用 `put`。**
 

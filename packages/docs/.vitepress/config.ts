@@ -51,6 +51,7 @@ const guideSidebar = [
       { text: '数据层总览', link: '/canvas-data/' },
       { text: '连接校验', link: '/canvas-data/connection' },
       { text: '节点类型', link: '/canvas-data/node-types' },
+      { text: '上游与执行顺序', link: '/canvas-data/upstream' },
       { text: '存储适配', link: '/canvas-data/storage' },
     ],
   },

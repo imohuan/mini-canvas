@@ -19,10 +19,11 @@ ctx.nodes.register({ type: 'ui', /* ... */ })
 | `nameTemplate` | `'可视化 {{ID}}'` |
 | `description` | `'一块画布：内容由 Agent 生成（HTML 就地渲染）'` |
 | `icon` | 内联 SVG 字符串（面板图标） |
-| `size` | @@BT@{ w: 420, h: 320 }` |
+| `size` | `{ w: 420, h: 320 }` |
 | `resizable` | `true` |
 | `inputs` | `[{ port: 'target', acceptsTypes: ['text', 'image', 'video', 'audio'] }]` —— 收一切素材当数据源 |
 | `outputs` | `[{ port: 'source', contentType: 'image' }]` —— 可把画面导成图给下游 |
+| `consumes` | `image / video / audio` 用 `refField: 'resourceId'`；`text` 用 `valueField: 'text'` |
 | `in` | `UiContent.vue`（把 `data.uiHtml` 渲染出来） |
 | `create(position, extra)` | 委托 `UiNodeService_.addNode(position, extra)`（**extra 必须带上**） |
 
@@ -42,4 +43,6 @@ import MiniCanvasStage from '../../../.vitepress/theme/demos/MiniCanvasStage.vue
 1. **边框保留**（与图片/视频节点同口径）：空的可视化节点是一块白面板，没有边框就与画布背景分不出来。边框由共享外壳 `BaseNode` 画，本插件不自己画框。
 2. **输出口是"类型级"声明**：2026-10-13 用户实测需求，从 `outputs: []` 改成声明图片输出 —— 改 HTML **改不出**这个口，必须改这里。
 3. **输入口不声明 `capacity` = 不限条数**：文本/图片/视频/音频都能连进来。
+4. **读上游只认 `resourceId`**：新节点（截图 / 云端生成 / 图片插件新写入）节点里只有引用，没有 `imageUrl`；
+   视图里要先把引用换成可显示地址（前端走 `resources.resolve`，页面里拿到的 `resourceId` 同样不是地址）。
 

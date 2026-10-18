@@ -228,8 +228,8 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 
 | | 本地资源后端（IndexedDB） | 云端资源后端（`plugin-cloud-client` 的 `cloudResourceAdapter.ts`） |
 | --- | --- | --- |
-| `putResource` 返回什么 | `res-<n>-<uuid>` 这样的 id | 同源 URL `/api/canvases/<画布id>/resources/<内容哈希>` |
-| `resolveResource` 怎么算地址 | 取回字节 → 新建 `objectURL`（并缓存，避免每次漏一个 URL） | 已是可请求地址就原样返回（内容哈希寻址，稳定） |
+| `putResource` 返回什么 | `res-<n>-<uuid>` 这样的逻辑 id | 逻辑 id `<canvasId>/<hashName>`（**不是 URL**） |
+| `resolveResource` 怎么算地址 | 取回字节 → 新建 `objectURL`（并缓存，避免每次漏一个 URL） | 拼 `/api/canvases/<canvasId>/resources/<hashName>`，HEAD 确认存在；迁移期也认旧 URL |
 | `removeResource` | 删库里的记录 + 撤销 objectURL | 暂时 no-op（服务端按内容哈希去重，单方面删会删坏别处的引用） |
 
 ### 谁在什么时候写什么
