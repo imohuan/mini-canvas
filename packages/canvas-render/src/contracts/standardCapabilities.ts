@@ -364,8 +364,7 @@ export function createUpstreamCapability(
       upstream: (options) => directNodes(node.id, options),
       ancestors: (options) => ancestorNodes(node.id, options),
       depth: (options) => {
-        const s = snapshot(options)
-        return upstreamDepth(s.graph, node.id, options)
+        return upstreamDepth(snapshot(options).graph, node.id, options)
       },
     }
   }
