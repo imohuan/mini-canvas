@@ -296,6 +296,7 @@ export async function createAdminAuth(opts: {
    # 这几条与「视觉节点沙箱」正面冲突，二选一，见 4.3 下方说明
    /api/canvases/            （仅 POST：nodes / edges / resources / duplicate）
    /api/canvas/              （仅 POST：nodes / edges；老接口，改默认画布）
+   /api/jobs                 （下单 = 花钱；/cancel 也一起）
    ```
 
 这些是「能引入可执行代码、执行命令、改变服务端出网目标、直接改画布、或花钱」的全部入口，共 42 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。其中：
