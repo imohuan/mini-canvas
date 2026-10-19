@@ -710,6 +710,8 @@ PUT  /api/effect-library/settings
 POST /api/effect-library/reload
 POST/PUT/DELETE /api/showcase/*
 POST/PUT/PATCH/DELETE /api/agent/canvases/*      ← 第十八节：间接执行命令 + 花钱
+POST /api/canvas/nodes                           ← 老接口，同样能改默认画布
+POST /api/canvas/edges
 POST /api/canvases/:id/nodes                     ← 第一节实测：简单请求可直接改
 POST /api/canvases/:id/edges
 POST /api/canvases/:id/resources
@@ -725,12 +727,14 @@ POST /api/canvases/:id/duplicate
            /api/agent/chat/completion  /api/task/  /api/node-packages/
            /api/node-ui/debug-  /api/style-library/  /api/effect-library/
            /api/showcase/  /api/agent/canvases/
-仅 POST：   /api/canvases/
+仅 POST：   /api/canvases/    /api/canvas/     ← 后者是老接口，同样能改默认画布
 ```
 
 > `/api/agent/canvases/` 与 `/api/canvases/` 的**读**请求不受影响（中间件只看写方法），所以会话列表、转录、SSE 流、画布读取照常；被拦的是写操作。
 
-> **注意 `/api/canvases/` 只保护 POST**，不要写成一整段前缀：`PUT /api/canvases/:id` 是整画布保存（前端高频），`GET` 是读；它们不在首版范围。前缀匹配表里对应的是 `POST /api/canvases/`，实现时要能按「方法 + 前缀」匹配，不能只看路径。
+> **注意 `/api/canvases/` 与 `/api/canvas/` 只保护 POST**，不要写成一整段前缀：`PUT /api/canvases/:id` 是整画布保存（前端高频），`GET` 是读；它们不在首版范围。实现时要按「方法 + 前缀」匹配，不能只看路径。
+
+> `/api/canvas/nodes`、`/api/canvas/edges`（没有 `s`）是同一份路由里针对默认画布的老接口（`canvasOps.ts:199/226`），和 `/api/canvases/:id/*` 干的是同一件事，别漏。
 
 > 同理 `/api/agent/canvases/` 虽然整段写成「任意写方法」，但它只覆盖 `POST/PATCH/DELETE`；`GET .../stream` 是 SSE 读，不受影响。
 
