@@ -14,6 +14,7 @@
 | `run9-csp.mjs` | CSP 各写法能否挡住 SVG 脚本、会不会弄坏 `<img>` | `sandbox` / `default-src 'none'` / `script-src 'none'` 都能挡，且不影响 `<img>` |
 | `run10-simple.mjs` | 哪些写方法能在无 CORS 时直达 | 简单请求（`text/plain`、form、FormData）直达；PUT 走预检 |
 | `run11-real-simple.mjs` | 对着真实 cloud-server 用简单请求改画布 | `POST /api/canvases/:id/nodes` 成功写入节点 |
+| `run12-real-put.mjs` | 跨源 `PUT /api/canvases/:id` | 预检通过，整张画布被覆盖成只有 `hacked` |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写/双斜杠/编码都会被 Hono 归一，未发现绕过 |
