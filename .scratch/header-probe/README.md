@@ -15,6 +15,7 @@
 | `run10-simple.mjs` | 哪些写方法能在无 CORS 时直达 | 简单请求（`text/plain`、form、FormData）直达；PUT 走预检 |
 | `run11-real-simple.mjs` | 对着真实 cloud-server 用简单请求改画布 | `POST /api/canvases/:id/nodes` 成功写入节点 |
 | `run12-real-put.mjs` | 跨源 `PUT /api/canvases/:id` | 预检通过，整张画布被覆盖成只有 `hacked` |
+| `run13-b-rebase.mjs` | 公网域名页面打 `127.0.0.1` | PNA 没拦；GET 读到、POST 写进去 |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
