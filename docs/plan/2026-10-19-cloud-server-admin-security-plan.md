@@ -643,6 +643,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 - [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
 - [ ] 带脚本的 SVG 从 `/api/canvases/*/resources/*` 打开后不执行（第十九节）
 - [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
+- [ ] 底栏生成按钮 / cloud-client 下单能正常工作（`/api/jobs` 带令牌；不带时 403）
 - [ ] 会话列表、转录、SSE 流**不需要**令牌（读请求不受影响）
 
 > 这几条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。首版给 `/api/task/` 加令牌之后，**这条 API 会坏**。两条路：
@@ -676,6 +677,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
 | `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传，走 `/api/canvases/:id/{nodes,edges,resources}`（`src/api.ts:155/218/228`） | ⚠️ **首版要带令牌**：这几条已进清单 |
 | `plugin-cloud-client` 的 KV 写 | `/api/kv/...`（`src/api.ts` 多处） | ⏸ 首版不需要（KV 不在清单里） |
+| `plugin-bottom-bar` 的生成按钮 / `plugin-cloud-client` 下单 | `POST /api/jobs`（`cloud-client/src/api.ts:76`） | ⚠️ **首版要带令牌**：`/api/jobs/` 已进清单（花钱） |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
