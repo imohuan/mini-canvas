@@ -694,6 +694,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 - [ ] `POST /api/agent/chat/completion` 无令牌返回 403
 - [ ] 视觉节点（沙箱 iframe）能正常加载并**保存产物**（第十六节：宿主代发上传）
 - [ ] 视觉节点里的 `CanvasUI.save()` 不再自己 fetch（检查 iframe 内 Network 面板无 `/api/canvases/*/resources` 请求）
+- [ ] 视觉节点的 `CanvasUI.task()` 一并改成宿主代发（或明确停用并在 guide 里写明）——首版给 `/api/task/` 加令牌后它会 403
 - [ ] `Origin: null` 请求一律 403（不设例外）
 - [ ] Host 头写成别的域名（如 `evil.test:8865`）被 403（DNS 重绑定，实测见 4.5）
 - [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
