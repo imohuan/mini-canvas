@@ -875,6 +875,18 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 | `POST /api/task/cancel` | 取消任务（可打断别人在跑的任务） | `task/routes.ts:329` |
 | `POST/PUT/DELETE /api/showcase/*` | 示例插件的 todo / store / heartbeat / middleware 写接口 | `plugin-showcase/src/server.ts:154-326` |
 
+### 顺手验过：NPM 包的 tar 解压有没有路径穿越
+
+`npmClient.extractTarball`（`npm/npmClient.ts:138-145`）用的是 `tar -xzf <tgz> -C <tmp> --strip-components=1`。手工构造一个含 `../escape.txt` 与 `../../escape2.txt` 条目的 tar（本机 bsdtar 3.8.4）：
+
+- `../escape.txt` 被 `--strip-components=1` 剥掉一层后落成 `<tmp>/escape.txt`，**没有**写到 tmp 之外；
+- `../../escape2.txt` 报错、没有落盘；
+- 目标目录的父目录里没有出现任何越界文件。
+
+结论：**这条不是路径穿越漏洞**（至少 bsdtar 如此）。真正的风险在「包内容本身是代码」——与第二节「用户自己确认安装的恶意插件」同一条。
+
+> 复现：`.scratch/header-probe/tar-probe2.mjs`（手写 tar 头，因为 bsdtar 打包时会自己拒绝 `../` 条目）。
+
 ### 风险等级
 
 `/api/task/call` 比 `/api/agent/mcp` **更危险**：
@@ -1356,6 +1368,7 @@ POST /api/canvases/default/resources?name=big.bin
 | Host 头读取与伪造 | `host-probe.mjs` |
 | 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
 | 前缀判定的边界与归一化 | `path-probe2.mjs` |
+| NPM tar 解压没有路径穿越（bsdtar） | `tar-probe2.mjs` |
 | Node 权限模型可用、越界写被拒 | 见第十七节命令（Node 24.15） |
 
 所有脚本在 `.scratch/header-probe/`，用法见该目录 README。
