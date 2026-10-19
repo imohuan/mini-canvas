@@ -99,6 +99,12 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 | 局域网其它机器（若监听 0.0.0.0） | Host 白名单 + 令牌 |
 | DNS 重绑定 | Host 头必须为本机/白名单 |
 | 跨站浏览器请求（CSRF） | Origin 必须等于 Host；`sec-fetch-site: cross-site` 拒绝。**JSON 写请求会被挡住，简单请求（`text/plain`）挡不住**（见第一节实测） |
+| 网页改画布 / 整张覆盖 | 画布 POST 走令牌；`PUT /api/canvases/:id` 靠 Host 白名单 + 收紧 CORS（第一节、4.5 实测） |
+| 网页匿名传 SVG 后执行脚本偷令牌 | 资源回读加 `CSP: sandbox`（第十九节，已实测挡得住） |
+| 网页让 Agent 跑命令、烧模型额度 | 会话写接口加令牌（第十八节） |
+| 网页间接执行代码（节点脚本 / MCP stdio） | `/api/task/`、`/api/agent/mcp` 加令牌 |
+
+这几条是「先封最贵的」：执行代码 > 改画布 > 花钱 > 读数据。不在表里的威胁要么代价小，要么挡不住（见下）。
 | 事后无法追溯 | JSONL 审计日志 |
 
 **防不住（与 DSH 同级，属行业现实）**
