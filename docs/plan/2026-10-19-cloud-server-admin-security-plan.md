@@ -118,7 +118,7 @@ POST /api/canvases/default/nodes                     → 200 {"ok":true,"added":
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节：34 个单条入口，另加 `/api/showcase/` 与 `/api/agent/canvases/` 两个前缀组），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」与「能改画布」两类路口**：首版对「会引入可执行代码 / 执行命令」的接口要令牌（第十三节：34 个单条入口，另加 `/api/showcase/`、`/api/agent/canvases/` 两个前缀组），**外加 `POST /api/canvases/:id/*`**（简单请求可达，见第一节实测）。不是对所有写接口一刀切：资产、项目、历史、KV 仍暂缓。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -222,7 +222,7 @@ export async function createAdminAuth(opts: {
    `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）。
    `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个。
    注意 `/api/showcase/` 是一条前缀组，覆盖 `plugin-showcase` 注册的 11 个写接口。
-5. **暂不保护**：`GET/HEAD` 读接口；画布 / 资产 / 项目 / 历史 / KV 等数据写接口（靠 4.5 的请求边界保护）；`/mcp`（单独议题）。升级到全量方法保护时，这些再一起加。
+5. **暂不保护**：`GET/HEAD` 读接口；资产 / 项目 / 历史 / KV 写接口（靠 4.5 的请求边界保护）；`/mcp`（单独议题）。升级到全量方法保护时，这些再一起加。
 
 覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改。**必须挂在 `await host.start()` 之前**——插件路由是在 `start()` 时一次性 flush 成 Hono 代理的，晚于它挂的 `use` 不会作用到那些代理上。
 
@@ -249,6 +249,8 @@ app.use('/api/*', async (c, next) => {
 - 选 B（不加）：画布写接口对任何网页开放（实测可改节点），必须靠请求边界兜底，而请求边界又会误伤视觉节点（第十六节）——等于把问题挪到第十六节。
 
 首版建议选 A，并把视觉节点的上传**改成宿主代发**（第十六节方案 ② 的最小切片：只代发 `resources` 上传这一条）。这条改动比整包代发小得多，却是「安全」与「视觉节点可用」之间唯一不打架的组合。
+
+**同一个冲突还有第二个调用方**：`plugin-cloud-client`（后台客户端）。它写画布也是走 `/api/canvases/:id/nodes`、`/edges`、`/resources`（`src/api.ts:155/218/228`）。它在**前端页面里**跑，同源，能读 localStorage，所以给它带令牌就行；但如果它在 `plugin-node-ui` 的沙箱里跑（目前不会），就会遇到同一个问题。实施时按「同源宿主代码」处理它。
 
 ### 4.4 令牌如何到达前端
 
@@ -556,7 +558,8 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写，全部走 `/api/canvases/...`、`/api/kv/...`（`src/api.ts:139/155/218/228/248`） | ⏸ 首版不需要改（都不在保护清单里）；升级全量保护时再加令牌 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传，走 `/api/canvases/:id/{nodes,edges,resources}`（`src/api.ts:155/218/228`） | ⚠️ **首版要带令牌**：这几条已进清单 |
+| `plugin-cloud-client` 的 KV 写 | `/api/kv/...`（`src/api.ts` 多处） | ⏸ 首版不需要（KV 不在清单里） |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
@@ -587,14 +590,14 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 **方案 C：按前缀分级保护（务实）**
 
 - 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/*`、`/api/node-packages/*`、`/api/node-ui/debug-*`、`/api/style-library/reload`；
-- 画布数据、资产、项目、KV 等高频写接口暂不加令牌，只靠请求边界（Host/Origin）保护；
-- 优点：改动小，不破坏视觉节点；缺点：仍留一条“网页可写画布数据”的路（危害远小于执行代码）。
+- 画布数据、资产、项目、KV 等高频写接口**暂不加令牌**（这一条已被第一节实测推翻一半：`POST /api/canvases/:id/nodes` 能被简单请求直接改，见 4.3 的二选一）；
+- 优点：改动小；缺点：**视觉节点保存会坏**（如果补上画布写保护），或**画布对任何网页开放**（如果不补）。两个缺点必须选一个，不存在「都不破坏」的版本。
 
 ### 建议
 
-**首版走方案 C**：先把「能执行代码」的口子全部封死（这是真正的投毒路径），画布数据类写接口暂缓。等方案 A 的宿主代发做好，再升级到按方法全保护。
+**首版走方案 C，但必须补一条**：在「能执行代码」的入口之外，把 `POST /api/canvases/:id/*` 也加上，同时把视觉节点的素材上传改成宿主代发（4.3 的二选一，选 A）。理由：只封执行代码、放着画布写不管，等于把「改你的画布」这条留在外面，而它正是视觉节点 XSS 的落点（第十九节也是走这条路上传）。
 
-这样第一步能在一两天内落地，且不会把现有画布功能打残。
+这样第一步大概 3~4 天，而不是一两天；但它是「要么安全、要么方便」的选择题里，唯一不会自相矛盾的组合。
 
 ### 首版受保护接口清单（方案 C 的准确范围）
 
@@ -635,11 +638,17 @@ PUT  /api/effect-library/settings
 POST /api/effect-library/reload
 POST/PUT/DELETE /api/showcase/*
 POST/PUT/PATCH/DELETE /api/agent/canvases/*      ← 第十八节：间接执行命令 + 花钱
+POST /api/canvases/:id/nodes                     ← 第一节实测：简单请求可直接改
+POST /api/canvases/:id/edges
+POST /api/canvases/:id/resources
+POST /api/canvases/:id/duplicate
 ```
 
 清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/`、`/api/effect-library/`、`/api/showcase/`、`/api/agent/canvases/`），不逐个写死方法。
 
-> `/api/agent/canvases/` 的**读**请求不受影响（中间件只看写方法），所以会话列表、转录、SSE 流照常；被拦的是发消息、改审批、加队列、设目标这些写操作。
+> `/api/agent/canvases/` 与 `/api/canvases/` 的**读**请求不受影响（中间件只看写方法），所以会话列表、转录、SSE 流、画布读取照常；被拦的是写操作。
+
+> **注意 `/api/canvases/` 只保护 POST**，不要写成一整段前缀：`PUT /api/canvases/:id` 是整画布保存（前端高频），`GET` 是读；它们不在首版范围。前缀匹配表里对应的是 `POST /api/canvases/`，实现时要能按「方法 + 前缀」匹配，不能只看路径。
 
 > 清单后一半来自后续两节：第十四节的插件运行时注册路由（`ctx.routes.*`，静态扫描看不到）与第十五节的 SSRF 入口。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 与 `PUT /api/effect-library/settings` 能把读取目录改到任意路径，是第二梯队。
 
@@ -650,7 +659,7 @@ POST/PUT/PATCH/DELETE /api/agent/canvases/*      ← 第十八节：间接执行
 - `plugin-manager` 面板的写请求带令牌；
 - `plugin-agent` 的 `agentApi.ts` 在 `json()` 里统一带头（一处覆盖所有会话写请求）；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
-- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在保护清单里。升级全量写保护时再加令牌。
+- `plugin-cloud-client` **首版必须改**：它写画布走 `/api/canvases/:id/nodes`、`/edges`、`/resources`（`src/api.ts:155/218/228`），而这几条现在要令牌了。它的 `CloudApi` 是唯一出口（`absolute()` 拼地址），在 `doFetch` 处统一带 `x-admin-token` 即可；令牌来源同插件面板（localStorage），拿不到时提示去设置。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
