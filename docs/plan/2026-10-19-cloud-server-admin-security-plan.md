@@ -1163,7 +1163,9 @@ iframe 里 CanvasUI.save(bytes) 不再 fetch，改成 postMessage({__canvasUi:1,
 - 视觉节点保存照常工作；
 - 不需要票据，也不需要给 `Origin: null` 开例外。
 
-`postMessage` 传字节：`Uint8Array` 可被结构化克隆，不需要 base64（当前 `uiData.ts` 里的注释也提到结构化克隆；传 `ArrayBuffer` 最省）。
+`postMessage` 传字节：实测（`run18-postmessage-bytes.mjs`，Chrome 153，`sandbox="allow-scripts"` 的 iframe → 宿主）三种载荷都能过去——`Uint8Array` 保留长度与内容、`ArrayBuffer` 原样、**`Blob` 也能传**（宿主拿到的是真 Blob）。所以 implementation 上可以让 iframe 直接发 `Blob`（`CanvasUI.save` 现在就是先包成 Blob），宿主用 `new Response(blob).arrayBuffer()` 取字节再上传，少一次 base64 / 手工拷贝。
+
+> 注意这与「跨源读不了 localStorage」不冲突：结构化克隆是 postMessage 自己的复制语义，不看源；能克隆不等于能读宿主的存储。
 
 改动点已经定位清楚（实施时照这两处改）：
 
