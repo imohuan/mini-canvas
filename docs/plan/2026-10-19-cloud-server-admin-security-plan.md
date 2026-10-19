@@ -1112,7 +1112,7 @@ node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> a.mjs
 
 ## 十八、Agent 会话也能间接执行命令（首版漏网的一条链）
 
-首版清单保护了「改配置」，但没保护 `agentSessions.ts` 里那批会话写接口。而它们能把命令跑起来：
+**没有这条，首版是有洞的**：清单保护了「改配置」，但没保护 `agentSessions.ts` 里那批会话写接口，而它们能把命令跑起来：
 
 **先确认工具面**：`@prismshadow/penguin-core` 的内置工具默认就包含 `exec_command`（跑 shell）与 `write_file`（写任意文件），见 `dist/index.js:721` 与 `:700`，二者 `permission: 'rw'`。所以「模型会不会用命令」不是理论问题——工具就在那儿，只有审批策略拦着。
 
