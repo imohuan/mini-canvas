@@ -168,12 +168,19 @@ export async function createAdminAuth(opts: {
 ```ts
 app.use('/api/*', async (c, next) => {
   if (!isAdminPath(c.req.path)) return next()      // 首版：只拦第十三节的后缀白名单
-  if (c.req.method === 'GET' || c.req.method === 'HEAD') return next()
+  // OPTIONS 必须放行：预检不带令牌，拦住它等于让所有带自定义头的跨源请求连预检都过不了
+  if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.req.method === 'OPTIONS') return next()
   const verdict = auth.verify(c.req.header('x-admin-token'))
   if (verdict !== 'ok') { await audit.append({ ...result:'rejected' }); return c.json({...}, 403) }
   await next()
 })
 ```
+
+> 两处实测确认（`.scratch/header-probe/guard-probe.mjs`，同版本 Hono）：
+> 1. **挂在业务路由之前能拦住插件代理路由**——`use` 先于路由注册时，跨源/无令牌的 `/api/task/call` 被 403，业务 handler 一次都没跑；
+> 2. **预检必须放行**，且 `cors()` 的 `allowHeaders` 要包含 `x-admin-token`；否则前端带令牌的跨源请求会在预检阶段就失败（浏览器只报 `Failed to fetch`，看不出原因）。
+
+还有一条容易写错的：**GET 放行意味着「用 GET 干写事」的接口完全没有保护**。本方案的首版清单里只列写方法，实施时要把这条当检查项：清单里每个路径下若存在「GET 但会改状态」的路由，必须单独处理（比如 `/api/task/events` 是 SSE 没问题，但插件新加的 GET 路由不一定）。
 
 ### 4.4 令牌如何到达前端
 
@@ -239,6 +246,16 @@ export function requestTrust(opts: {
 
 > 本轮实测还发现：`Server` 启动时如果监听 `0.0.0.0`，Host 头可以是任意内网 IP。Host 白名单要按「启动时实际绑定的 hostname + port」生成，并在 `--host 0.0.0.0` 时显式打印警告。
 
+**Host 头的读取方式已实测确认**（`.scratch/header-probe/host-probe.mjs`，`@hono/node-server` + 原生 http）：
+
+- `c.req.header('host')` 与 `new URL(c.req.url).host` 读到的是**同一个值**；
+- 用原生 http 伪造 `host: evil.test:8865`，两者都变成 `evil.test:8865`（说明**不能只信 URL**，要显式查 Host）；
+- Host 为空时，Node 会自动填成实际的 `127.0.0.1:<port>`，所以「空 Host」不是绕过口。
+
+结论：白名单判断写成 `trustedHosts.includes(c.req.header('host') ?? '')` 即可，不要用 `c.req.url` 里的 host 做同等判断（两者同源，但显式查 Host 更不容易被中间层改写影响）。
+
+还有一条实际部署时才会遇到的：**如果服务前面加了反向代理**（nginx/Caddy），Host 会变成域名，`x-forwarded-host` 才是原始值。方案要求「显式配置 trustedHosts」正是为了这个——不要为了省事写成「任意 Host 都放行」或「看 x-forwarded-host」。
+
 挂载：`server.ts` 第 445 行 `cors()` 之后。
 
 **dev 代理的处理**：
@@ -286,6 +303,9 @@ x-admin-token: <64 位 hex>
 | `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
 | `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
 | `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` | 只 PUT KV；**首版 KV 不在保护范围，无需改**。升级到全量写保护时，再改为从环境变量读取并带 `x-admin-token` |
+| `packages/plugins/plugin-manager/src/**` 的「市场」 | 它调 `/api/npm-plugins/browse`、`/search` 是 **GET**，首版不受影响；`install/update/uninstall` 是 POST，要带令牌 |
+| `packages/cloud-server/e2e/queue-goal-probe.mjs`、`src/__tests__/agentSessions*.test.ts` | 这些用的是 `/api/agent/canvases/...`（会话语）；首版要补令牌，否则测试会 403 |
+| `packages/ui/e2e/_check-*.mjs` | 页面里直接 `fetch('/api/agent/canvases/' + canvas + '/sessions')`；这些是浏览器内脚本，补令牌时一起改 |
 
 > 注意：`watch.mjs` 给 KV 写门铃。首版不保护 KV，所以热重载不受影响；**一旦升级到全量写保护，必须同步改它，否则热重载会 403**。这里提前记下，避免升级时漏改。
 
@@ -366,6 +386,7 @@ type .mini-canvas\audit.log
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
 | 回读 SVG 执行脚本 | 第十九节：CSP + nosniff，放进 commit 0 |
 | 审计日志被插件删除 | hash 链可发现；日志与数据目录分开可再加强 |
+| 令牌文件被插件读取 | **挡不住**：插件能 `ctx.store` 到 `plugin-data/`、能用完整 fs；令牌文件在同一数据根下。只能靠「不装不可信插件」 |
 
 回滚：`--no-admin-auth` + `MINI_CANVAS_ALLOW_INSECURE=1` 一次性关闭；按 commit revert。
 
