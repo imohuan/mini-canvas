@@ -820,7 +820,7 @@ POST /api/jobs                                    ← 下生成单（花钱）
 POST /api/jobs/:jobId/cancel
 ```
 
-清单靠**「方法 + 路径前缀」匹配**实现，不逐个写死完整路径：
+清单靠**「方法 + 路径前缀」匹配**实现，不逐个写死完整路径。**实现时以上面这份逐条清单为准**（它是需求），下面这份前缀表只是等价的实现形式（便于少写几十条）；两者出现分歧时，按逐条清单补齐前缀：
 
 ```
 任意写方法：/api/server-plugins/  /api/npm-plugins/  /api/agent/mcp  /api/agent/skills
