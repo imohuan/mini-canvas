@@ -1,8 +1,16 @@
-# cloud-server 管理面安全加固方案（最终版）
+# cloud-server 管理面安全加固方案（最终版 v2）
 
-> 状态：待实施。本文档是执行依据，不含已落地代码。
-> 适用：`packages/cloud-server`、`packages/plugins/plugin-manager`、`packages/ui`。
+> 状态：**待实施**。本文档是执行依据，不含已落地代码。
+> 适用：`packages/cloud-server`、`packages/plugins/plugin-manager`、`packages/plugins/plugin-agent`、`packages/plugins/plugin-node-ui`、`packages/ui`。
 > 参照：DeepSeek Harness（DSH）的浏览器令牌与请求信任边界（`deepseek-harness/packages/client/connection/README.zh.md`、`src/api-request-trust.ts`）。
+> **v2 的关键变化**（2026-10-19 用真浏览器 + 真服务复核后修订）：
+> 1. 原「给 `Origin: null` 开例外」的方案被实测推翻——沙箱 iframe 永远报 `cross-site`，且任何网页都能造出同样的请求。改为宿主代发；
+> 2. 新增 P0：匿名上传的 `.svg` 会在同源执行脚本，直接读走令牌；
+> 3. `POST /api/canvases/:id/*` 用 `text/plain` 简单请求就能打到（真服务实测写入成功），已并入首版清单；
+> 4. 跨源 `PUT /api/canvases/:id` 当前能整张覆盖画布，因此「收紧 CORS + Host 白名单」提前到 commit 3；
+> 5. 「任何网页都能装后台插件」被修正：安装接口有可信哈希把关，实测自造 code 被拒。
+>
+> 全部结论可用 `.scratch/header-probe/` 下的脚本复现（清单见该目录 README）。
 
 ## 一、为什么做这件事
 
@@ -576,7 +584,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 
 | 调用方 | 写请求 | 能否带令牌 |
 |---|---|---|
-| `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
+| `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带；但首版只有画布 POST 需要，其余暂缓 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
 | `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传，走 `/api/canvases/:id/{nodes,edges,resources}`（`src/api.ts:155/218/228`） | ⚠️ **首版要带令牌**：这几条已进清单 |
 | `plugin-cloud-client` 的 KV 写 | `/api/kv/...`（`src/api.ts` 多处） | ⏸ 首版不需要（KV 不在清单里） |
