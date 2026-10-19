@@ -198,6 +198,7 @@ export function requestTrust(opts: {
 
 1. `Host` 必须等于 `trustedHosts` 中一项（默认由启动时 `hostname:port` 生成，支持 port=0 实际端口）；
 2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；
+   **`Origin: null`（不透明源 iframe）默认拒绝**，只有显式开启 `allowOpaqueOrigin` 且 `Sec-Fetch-Site` 为 `same-origin`/`none` 时才放行——详见第十六节；
 3. `sec-fetch-site: cross-site` 一律 403；
 4. 只作用于 `/api/*`。
 
@@ -348,6 +349,8 @@ type .mini-canvas\audit.log
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
 - [ ] `POST /api/agent/chat/completion` 无令牌返回 403
+- [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：Origin 为 null 的例外）
+- [ ] 第三方网页伪装 `Origin: null` 仍被拒绝（不能只凭 null 放行）
 
 ## 十一、不在本次范围
 
@@ -578,3 +581,57 @@ POST   /api/agent/chat/completion
 ### 为什么这条之前没写
 
 之前只把 `/api/agent/*` 当成「配置类接口」，没意识到 `baseUrl` 直接决定服务端出网目标。配置类接口的价值不在它本身，而在它**改变了后续请求的去向**——这类间接影响需要单独列一节。
+
+## 十六、请求边界会误伤沙箱 iframe（必须处理）
+
+4.5 的请求边界规则是「带 Origin 时必须等于 Host」。但视觉节点的生成页面住在 `sandbox="allow-scripts"` 的 iframe 里——**不透明源**，它发出的请求 `Origin: null`。
+
+证据：`packages/plugins/plugin-node-ui/src/uiOrigin.ts:6` 明确写着「节点里渲染的页面住在**不透明源**的 iframe 沙箱里（`sandbox="allow-scripts"`），它发出的请求全算跨源（`Origin: null`）」；`uiData.ts:341` 也写着 CSP 的 `connect-src` 只放行「页面自己的源与后台的源」，说明它确实会直接请求后台。
+
+所以按 4.5 的字面规则，这些请求会被判成「跨源」而 403。会坏掉的功能：
+
+1. 视觉节点首次加载时 `GET /api/node-ui/info` 拿后台地址（`uiOrigin.ts:56`）；
+2. 生成页面自己上传素材、写节点字段；
+3. 调试 SDK 连后台 ws。
+
+### 怎么改规则
+
+不能简单地「Origin 为 null 就放行」——那等于把跨源防护关掉，因为普通网页在 `no-cors` 场景也会发 `Origin: null`。
+
+正确做法是**区分「同源页面的导航请求」与「不透明源 iframe 的请求」**，用 `Sec-Fetch-Site` 和 `Sec-Fetch-Mode`：
+
+| 请求特征 | 含义 | 处理 |
+|---|---|---|
+| `Origin: <同源>` | 同源页面发起的 fetch | 放行 |
+| `Origin: null` + `Sec-Fetch-Site: cross-site` | 第三方网页 / 沙箱 iframe | **默认拒绝** |
+| `Origin: null` + `Sec-Fetch-Site: same-origin` | 不透明源 iframe（沙箱） | 需要**显式开关**才放行 |
+| 无 `Origin`（curl / 非浏览器） | 本地工具 | 按 Host 校验放行 |
+
+### 推荐实现
+
+给 `requestTrust` 加一个显式选项 `allowOpaqueOrigin?: boolean`（默认 **false**）：
+
+- 关闭时（默认）：`Origin: null` 一律 403，视觉节点会坏；
+- 开启时：`Origin: null` 且 `Sec-Fetch-Site` 为 `same-origin`/`none` 才放行；
+- 视觉节点需要它，所以**部署时必须开启**，并在文档里写明这是「为沙箱 iframe 开的例外」。
+
+更稳的做法是给沙箱请求一个**专用标记**：在 `buildCsp` 或生成页面里加一个固定的 `X-MiniCanvas-Ui: 1` 头，服务端只对带这个头的 `Origin: null` 放行。这样第三方网页即使伪造 `Origin: null` 也进不来（它不知道这个约定，而且预检会失败）。
+
+### 对方案的影响
+
+1. **4.5 的规则要按上表细化**，不能只写「Origin 必须等于 Host」；
+2. **实施顺序**：请求边界（第三 commit）之前必须先确认视觉节点仍能工作，否则会把画布功能打坏；
+3. **验证清单**要加一条：视觉节点能正常加载并上传（用真机，不是单测）。
+
+### 一个绕不开的取舍
+
+沙箱 iframe 与后台之间必须有一条**可被不透明源访问的通路**。这本身就是攻击面：任何能在这个 iframe 里执行脚本的东西（包括 AI 生成的页面、调试 SDK）都能调后台。
+
+所以这条通路的权限必须最小：
+
+- 只允许 `GET /api/node-ui/info` 与素材上传，不允许调管理接口；
+- 上传走独立的、限大小的路径；
+- 生成页面永远拿不到管理令牌。
+
+这也是为什么第十四节推荐「给 `/api/task/call` 加独立脚本执行令牌」——沙箱里的页面可以上传素材，但不该能执行任意脚本。
+
