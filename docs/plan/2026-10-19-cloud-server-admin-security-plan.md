@@ -61,7 +61,7 @@
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，共 23 个入口，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，26 个入口，另加 /api/showcase/ 一组前缀，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -307,7 +307,7 @@ type .mini-canvas\audit.log
 
 | # | 内容 | 验收 |
 |---|---|---|
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 23 个入口无令牌 403；画布/资产写接口不受影响 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 26 个入口无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
 | 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + 改测试 | 面板能装插件，热重载不受影响 |
@@ -318,7 +318,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 23 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
+| 前端写请求被 403 | 首版只拦 26 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -370,7 +370,7 @@ type .mini-canvas\audit.log
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 23 个入口里）；升级全量保护时再加令牌 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 26 个入口里）；升级全量保护时再加令牌 |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
@@ -435,18 +435,21 @@ POST /api/node-packages/inspect
 POST /api/node-packages/import
 POST /api/node-ui/debug-accept
 POST /api/node-ui/debug-result
+POST /api/task/cancel
+PUT  /api/style-library/settings
 POST /api/style-library/reload
+POST/PUT/DELETE /api/showcase/*
 ```
 
-清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/reload`），不逐个写死方法。
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/settings`、`/api/style-library/reload`、`/api/showcase/`），不逐个写死方法。
 
-> 后 9 条来自第十四节：它们是**插件运行时注册**的路由（`ctx.routes.*`），静态扫描看不到。`/api/task/call` 能执行任意脚本，是这批里最危险的。
+> 后 14 条来自第十四节：它们是**插件运行时注册**的路由（`ctx.routes.*`），静态扫描看不到。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 能把读取目录改到任意路径，是第二个。
 
 同时必须改：
 
 - `plugin-manager` 面板的写请求带令牌；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
-- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 23 个入口里。升级全量写保护时再加令牌。
+- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 26 个入口里。升级全量写保护时再加令牌。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
@@ -465,7 +468,10 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 | `POST /api/node-packages/save` | 打包并写入资产库 | `task/packRoutes.ts:177` |
 | `POST /api/node-packages/import` | 导入包并落地 | `task/importRoutes.ts:106` |
 | `POST /api/node-ui/debug-accept` / `debug-result` | 调试会话通道 | `server.ts:1270/1359` |
-| `POST /api/style-library/reload` 等 | 后台插件自己的写接口 | `plugin-style-library/src/server.ts` |
+| `PUT /api/style-library/settings` | **把风格库根目录改成任意路径**（随后 `GET /file` 可从该目录读文件） | `plugin-style-library/src/server.ts:484` |
+| `POST /api/style-library/reload` | 重扫风格库目录 | `plugin-style-library/src/server.ts:505` |
+| `POST /api/task/cancel` | 取消任务（可打断别人在跑的任务） | `task/routes.ts:329` |
+| `POST/PUT/DELETE /api/showcase/*` | 示例插件的 todo / store / heartbeat / middleware 写接口 | `plugin-showcase/src/server.ts:154-326` |
 
 ### 风险等级
 
@@ -492,7 +498,7 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 对首版清单的修订
 
-第十三节的主清单已并入下面这些（共 23 个入口）：
+第十三节的主清单已并入下面这些（26 个入口，另加 /api/showcase/ 一组前缀）：
 
 ```
 现有 14 个
@@ -504,7 +510,10 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 + POST /api/node-packages/import
 + POST /api/node-ui/debug-accept
 + POST /api/node-ui/debug-result
++POST /api/task/cancel
++PUT  /api/style-library/settings
 + POST /api/style-library/reload
++POST/PUT/DELETE /api/showcase/*
 ```
 
 并加一条**长期机制**：插件注册后台路由时声明鉴权等级，避免今后新增插件又漏。
