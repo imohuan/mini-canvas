@@ -6,14 +6,27 @@
 
 ## 一、为什么做这件事
 
-后台跑在 `127.0.0.1:8865`，而**浏览器里任何一个网页**都能向这个地址发 POST。于是：
+后台默认跑在 `127.0.0.1:8865`，而 `app.use('*', cors())` 用的是 hono 默认的 `origin: '*'`。实测后果比「能发 POST」更重：**任何网页都能完整读写后台，包括读到响应体**（本地方案见下）。于是：
 
-1. 你开着画布、顺手点开一个恶意网页，它就能调 `POST /api/server-plugins/install`，把一段以服务端权限运行的 JS 写进 `server-plugins/`；
-2. 它还能调 `POST /api/agent/mcp`，用 `kind: 'stdio'` 直接让后台执行任意命令（比装插件更直接）；
-3. 现有 install 路由的“同源检查”读的是 **JSON body 里的 `origin` 字段**，那是调用方自己填的，伪造即可绕过；
-4. 装了什么、何时装的、代码哈希多少，装完没有任何记录。
+1. 恶意网页能改画布、删资产、列出你所有画布（`POST /api/canvases/:id/nodes`、`DELETE /api/assets/:id`、`GET /api/canvases`）；
+2. 它能匿名上传资源。上传的 `.svg` 会被后台当**同源文档**回读，脚本在后台自己的源上执行，进而读走前端存的令牌（第十九节，已实测）；
+3. 它能调 `POST /api/agent/mcp`，用 `kind: 'stdio'` 让后台执行任意命令；
+4. 它还能通过 `/mcp`（完全无鉴权）批量改画布；
+5. 装了什么、何时装的、代码哈希多少，装完没有任何记录。
 
-这套改动要堵住第 1、2、3 条，并为第 4 条留账。
+这套改动要堵住这五条。
+
+### 实测基线（2026-10-19，真实 `cloud-server` 8932 端口）
+
+| 请求 | 结果 |
+|---|---|
+| `GET /api/canvases`，`Origin: http://evil.test:9999` | 200，`access-control-allow-origin: *`，body 里直接列出画布 |
+| `POST /api/server-plugins/install`（无 Origin、无令牌、自造 code） | 400，**被可信哈希挡住**（这条比预想的更安全，见第三节修正） |
+| `POST /api/canvases/default/resources?name=probe.svg`（匿名） | 200，落盘 |
+| `GET` 该 SVG | 200，`content-type: image/svg+xml`，**无 CSP、无 nosniff**，脚本原样返回 |
+| `POST /mcp` `tools/list` | 200，返回全部 MCP 工具 |
+
+> 一条重要的现实修正：**「任何网页都能装后台插件」这个说法过重了**。`serverPlugins.ts:136-143` 会拿服务端自己的可信 sha256 比对，不传对的内容会被拒。真正没拦住的是「外部网页改画布/传资源/跑命令/调 MCP」。安装入口仍要令牌，因为它绕不过「插件目录里的文件被替换」这一类攻击，但不该被写成最危险的那条。
 
 ## 二、边界（先说清楚能防什么）
 
@@ -41,7 +54,7 @@
 
 | 位置 | 事实 |
 |---|---|
-| `routes/serverPlugins.ts:106` | `POST /api/server-plugins/install` 接受 `code` 文本写盘 |
+| `routes/serverPlugins.ts:106` | `POST /api/server-plugins/install` 接受 `code` 文本写盘，**但有可信哈希把关**（`:136-143`）——实测自造 code 会被 400 拒绝 |
 | 同上 `:111` | 仅要求 body `confirm === true` |
 | 同上 `:115-119` | “同源检查”读的是 **body.origin 字符串**，可伪造 |
 | 同上 `:123` | id 白名单 `[A-Za-z0-9_-]{1,64}`，防路径穿越 |
@@ -879,7 +892,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 5. 它能读 localStorage 里的管理令牌、能以同源身份调所有接口
 ```
 
-实测输出（Chrome 153，脚本 `.scratch/header-probe/run7-svg.mjs`）：
+实测输出（Chrome 153）。**两次都做了**：一次是对自建的等价 mock（`run7-svg.mjs`），一次是对**真实 cloud-server**（`real-browser-svg.mjs`，8932 端口，真实上传接口）：
 
 ```
 匿名上传 → 200
@@ -887,6 +900,16 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 打开该地址 → document.title 变成 XSS-RAN token=FAKE-TOKEN-ABCDEF
 同源脚本读到 localStorage: {"token":"FAKE-TOKEN-ABCDEF"}
 ```
+
+真实服务的输出（第二次）：
+
+```
+匿名上传: 200 {"ok":true,"url":"/api/canvases/default/resources/b24cf55614321569.svg",...}
+打开 SVG 后 document.title = PWNED:REAL-FAKE-TOKEN-1234
+同源上下文读到 = {"origin":"http://127.0.0.1:8932","token":"REAL-FAKE-TOKEN-1234"}
+```
+
+这说明它不是 mock 造出来的：真实服务的回读确实不带 CSP，脚本确实在 `127.0.0.1:8932` 这个源上执行，并能读到同源 localStorage。
 
 所以：**只要令牌存在 localStorage，任何能上传 SVG 的人都能把它读走**。而上传接口在首版清单之外（它属于画布数据写入，方案 C 不保护）。
 
