@@ -1230,9 +1230,11 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 | CSP `sandbox` 挡脚本且不影响 `<img>` | `run9-csp.mjs` |
 | 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
+| 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
 | Host 头读取与伪造 | `host-probe.mjs` |
 | 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
+| 前缀判定的边界与归一化 | `path-probe2.mjs` |
 | Node 权限模型可用、越界写被拒 | 见第十七节命令（Node 24.15） |
 
 所有脚本在 `.scratch/header-probe/`，用法见该目录 README。
