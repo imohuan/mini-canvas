@@ -268,14 +268,32 @@ export async function createAdminAuth(opts: {
 
 ```ts
 app.use('/api/*', async (c, next) => {
-  if (!isAdminPath(c.req.path)) return next()      // 首版：只拦第十三节的后缀白名单
   // OPTIONS 必须放行：预检不带令牌，拦住它等于让所有带自定义头的跨源请求连预检都过不了
   if (c.req.method === 'GET' || c.req.method === 'HEAD' || c.req.method === 'OPTIONS') return next()
+  // 注意要传 method：/api/canvases/ 与 /api/canvas/ 只拦 POST，PUT 是整画布保存、不在首版范围
+  if (!isAdminPath(c.req.method, c.req.path)) return next()
   const verdict = auth.verify(c.req.header('x-admin-token'))
   if (verdict !== 'ok') { await audit.append({ ...result:'rejected' }); return c.json({...}, 403) }
   await next()
 })
 ```
+
+`isAdminPath(method, path)` 的形状建议：
+
+```ts
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+const ALL_WRITE_PREFIXES = [/* 第十三节里「任意写方法」那批 */]
+const POST_ONLY_PREFIXES = ['/api/canvases/', '/api/canvas/']
+
+export function isAdminPath(method: string, path: string): boolean {
+  if (!WRITE_METHODS.has(method)) return false
+  if (ALL_WRITE_PREFIXES.some((p) => path === p.replace(/\/$/, '') || path.startsWith(p))) return true
+  if (method === 'POST' && POST_ONLY_PREFIXES.some((p) => path === p.replace(/\/$/, '') || path.startsWith(p))) return true
+  return false
+}
+```
+
+> 这里用 `startsWith` 而不是精确匹配，是为了让「新增子路由自动受保护」；代价是 `startsWith('/api/task/')` 也会匹配 `/api/taskfoo`——**不会**，因为前缀里带了结尾斜杠。写单测时要专门锁这一条（`path-probe.mjs` 已验证 Hono 会把各种路径写法归一成规范形式，所以这里不需要额外解码）。
 
 > 两处实测确认（`.scratch/header-probe/guard-probe.mjs`，同版本 Hono）：
 > 1. **挂在业务路由之前能拦住插件代理路由**——`use` 先于路由注册时，跨源/无令牌的 `/api/task/call` 被 403，业务 handler 一次都没跑；
