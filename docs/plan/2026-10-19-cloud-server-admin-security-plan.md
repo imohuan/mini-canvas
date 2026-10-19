@@ -1262,6 +1262,8 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 
 也就是说：**进程隔离解决「崩不崩」，不解决「能不能干坏事」**。脚本能读你的 SSH key、能改 `admin-token`、能删数据目录——只要当前用户有权限。
 
+这一条已实测：在临时实例里放一个 `evil.mjs`，内容是 `import { writeFileSync } from 'node:fs'` 并写到数据目录之外，通过 `/api/task/call` 调用后**真的写成功了**（跨源、无令牌）。见第十四节与 `.scratch/header-probe/task-call-e2e/README.md`。
+
 这与第二节「防不住：插件在进程内滥用宿主权限」是同一条根因，只是表现形式从「同进程」变成「子进程」。
 
 ### 对本次方案的含义
