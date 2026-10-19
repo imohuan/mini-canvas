@@ -86,6 +86,21 @@ POST /api/canvases/default/nodes                     → 200 {"ok":true,"added":
 
 > 简单请求清单（实测）：`POST text/plain`、`POST application/x-www-form-urlencoded`、`POST FormData` 都直达；`PUT`（任意 body 类型）与带自定义头的请求都会先发预检，预检不过就发不出去。也就是说，**POST 类写接口风险最高**。
 
+### 「暂缓」不等于安全：资产 / 项目 / 历史 / KV 同样能被简单请求改
+
+在真实服务（8938 端口）上逐条打了一遍，全部带 `Origin: http://evil.test:9999` + `content-type: text/plain`：
+
+```
+POST /api/projects {name:'evil'}      → 200，项目真的建出来了（返回了 id）
+POST /api/assets?name=x.txt           → 200，资产真的存进去了（返回了 url）
+POST /api/history/batch-delete {ids:[]} → 400（只是业务校验：ids 为空）
+PUT  /api/kv/config/k {value:1}       → 200，KV 真的写进去了
+```
+
+所以「首版暂缓保护资产/项目/历史/KV」这句话，**只有在 CORS + Host 白名单也生效的前提下才成立**。注意 `PUT /api/kv/...` 是 PUT：它会先发预检，CORS 放开就通、收紧就断；而 `POST /api/projects`、`POST /api/assets` 是简单请求，CORS 收紧也照打。
+
+结论：**简单请求这一层必须靠令牌解决，不能靠 CORS。** 首版清单里 `POST` 开头的写接口（画布、jobs、projects、assets、history）要么加令牌，要么明确写进「已知未覆盖」，不要用「暂缓」让它看起来没事。
+
 ### 更狠的一条：`PUT /api/canvases/:id` 能整张覆盖画布
 
 实测（`run12-real-put.mjs`，真实服务 8935 端口，`Origin: http://evil.test:9999`）：
