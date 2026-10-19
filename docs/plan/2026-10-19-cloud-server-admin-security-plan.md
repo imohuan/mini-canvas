@@ -65,6 +65,20 @@ POST /api/canvases/default/nodes                     → 200 {"ok":true,"added":
 
 > 简单请求清单（实测）：`POST text/plain`、`POST application/x-www-form-urlencoded`、`POST FormData` 都直达；`PUT`（任意 body 类型）与带自定义头的请求都会先发预检，预检不过就发不出去。也就是说，**POST 类写接口风险最高**。
 
+### 更狠的一条：`PUT /api/canvases/:id` 能整张覆盖画布
+
+实测（`run12-real-put.mjs`，真实服务 8935 端口，`Origin: http://evil.test:9999`）：
+
+```
+预检 OPTIONS → 204，allow-origin: *，allow-methods 含 PUT
+PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":true}
+回读 GET /api/canvases/default → 节点 id 只剩 ["hacked"]
+```
+
+也就是说，**当前状态下任何网页都能把你整张画布替换掉**，比「加一个节点」严重得多。它需要预检，所以**收紧 CORS 之后浏览器跨源就打不出去了**；但 DNS 重绑定页面（第十六节、4.5）会被浏览器当成同源，照样打得出去——所以 **Host 白名单是这条的实际防线**。
+
+首版把 `PUT /api/canvases/:id` 留在令牌之外是可行的，前提是 **Host 白名单 + 收紧 CORS 两件都做了**。这两件只要缺一件，整画布覆盖就是通的。
+
 ## 二、边界（先说清楚能防什么）
 
 > 先说一个**容易误以为是安全机制**的东西：插件 `package.json` 里的 `miniCanvas.serverPermissions`。它现在只是清单字段——`plugins/catalog.ts:267-290` 把它原样塞进目录条目，`:343/:420` 读出来展示，**没有任何地方据此限制能力**。`plugin-style-library` 写的是 `"serverPermissions": []`，它的后台照样能读任意文件、能把根目录改到任意路径。所以本轮方案不依赖它；真正要收紧权限，见第十七节末的三档手段。
@@ -506,6 +520,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 - [ ] 资产/项目/历史/KV 的写接口**不**要求令牌（首版）
 - [ ] `POST /api/canvases/:id/{nodes,edges,resources,duplicate}` 无令牌 403，带令牌通过
 - [ ] `PUT /api/canvases/:id`（整画布保存）仍**不**要求令牌（首版不在范围，注意它是 PUT 而非 POST）
+- [ ] 跨源 `PUT /api/canvases/:id` 被挡住（前提：CORS 收紧 + Host 白名单都已生效；实测它当前能整张覆盖）
 - [ ] GET 接口不需要令牌
 - [ ] `Origin: http://evil.example` 被 403
 - [ ] `sec-fetch-site: cross-site` 被 403
