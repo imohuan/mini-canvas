@@ -16,6 +16,7 @@
 | `run11-real-simple.mjs` | 对着真实 cloud-server 用简单请求改画布 | `POST /api/canvases/:id/nodes` 成功写入节点 |
 | `run12-real-put.mjs` | 跨源 `PUT /api/canvases/:id` | 预检通过，整张画布被覆盖成只有 `hacked` |
 | `run13-b-rebase.mjs` | 公网域名页面打 `127.0.0.1` | PNA 没拦；GET 读到、POST 写进去 |
+| `run14-real-others.mjs` | 真实服务上资产/项目/历史/KV 的写接口 | 项目、资产、KV 都能被简单请求写入 |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
@@ -31,6 +32,7 @@ node .scratch/header-probe/run2.mjs
 # 需要真实服务的：先起一个临时实例
 node packages/cloud-server/dist/cli.js serve -p 8934 -d ./.scratch/real-data2 --no-open
 node .scratch/header-probe/run11-real-simple.mjs
+# run14 用另一个端口（脚本默认 8938），起服务时 -p 改一下即可
 ```
 
 `run.mjs` 是最早的一版探针（srcdoc 拼接方式不严谨），保留作对照，结论以 `run2.mjs` 为准。

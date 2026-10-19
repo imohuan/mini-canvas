@@ -1268,6 +1268,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 | DNS 重绑定可绕过「Origin == Host」 | `run8-rebind.mjs` |
 | CSP `sandbox` 挡脚本且不影响 `<img>` | `run9-csp.mjs` |
 | 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
+| 简单请求也能改项目 / 资产 / KV | `run14-real-others.mjs`（真实服务） |
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
