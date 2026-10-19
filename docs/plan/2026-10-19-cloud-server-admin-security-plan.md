@@ -490,6 +490,10 @@ export function requestTrust(opts: {
 
 **还有一条不能忘**：收紧 CORS 之后，**错误响应也要带 CORS 头**。否则跨源请求被 403 时，浏览器不会把 403 交给前端脚本（前端只看到 `Failed to fetch`），插件面板就无法提示「请先填令牌」。实测（`guard-probe.mjs`）：同源请求被 403 时带 ACAO，跨源请求被 403 时**不带**——后者前端拿不到错误体。
 
+**`trustedOrigins` 里写的是什么，要精确**：Origin 是 `scheme://host:port`，**不带路径、不带尾斜杠**。`http://localhost:5288` 对，`http://localhost:5288/` 与 `localhost:5288` 都不对。Host 白名单同理（`127.0.0.1:8865`，不带 scheme）。这两处配错的表现都是「所有请求都 403」，查起来像中间件坏了。
+
+**启动时要打印实际生效的白名单**，而不是只打印配置项。用户把 `--trusted-origin` 写错了却看到「已启用」，比不打印更糟。
+
 ### 4.6 令牌的日常运维（泄露怎么换、丢了怎么找回）
 
 方案给了令牌一个文件和一个输入框，但没说「换了会怎样」。这三件事要在提交 2 里一起做，否则上线第一天就会卡住：
@@ -502,10 +506,6 @@ export function requestTrust(opts: {
 
 **忘了令牌**：`type .mini-canvas\admin-token` 直接读文件；或看启动日志。不要为了「找回」去关掉鉴权（`--no-admin-auth`），那等于把这一版的所有保护一起关掉。
 
-
-**`trustedOrigins` 里写的是什么，要精确**：Origin 是 `scheme://host:port`，**不带路径、不带尾斜杠**。`http://localhost:5288` 对，`http://localhost:5288/` 与 `localhost:5288` 都不对。Host 白名单同理（`127.0.0.1:8865`，不带 scheme）。这两处配错的表现都是「所有请求都 403」，查起来像中间件坏了。
-
-**启动时要打印实际生效的白名单**，而不是只打印配置项。用户把 `--trusted-origin` 写错了却看到「已启用」，比不打印更糟。
 
 ## 五、接口契约
 
