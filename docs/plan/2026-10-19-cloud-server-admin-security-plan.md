@@ -61,7 +61,7 @@
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，26 个入口，另加 /api/showcase/ 一组前缀，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，32 个入口，另加 /api/showcase/ 一组前缀，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -307,7 +307,7 @@ type .mini-canvas\audit.log
 
 | # | 内容 | 验收 |
 |---|---|---|
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 26 个入口无令牌 403；画布/资产写接口不受影响 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 32 个入口无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
 | 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + 改测试 | 面板能装插件，热重载不受影响 |
@@ -318,7 +318,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 26 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
+| 前端写请求被 403 | 首版只拦 32 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -345,6 +345,9 @@ type .mini-canvas\audit.log
 - [ ] plugin-hot-reload 的 watch 门铃仍能送达
 - [ ] 受保护入口清单（23 条）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
 - [ ] 新增插件注册后台路由时，能通过统一声明标记鉴权等级（长期机制，见第十四节）
+- [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
+- [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
+- [ ] `POST /api/agent/chat/completion` 无令牌返回 403
 
 ## 十一、不在本次范围
 
@@ -370,7 +373,7 @@ type .mini-canvas\audit.log
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 26 个入口里）；升级全量保护时再加令牌 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 32 个入口里）；升级全量保护时再加令牌 |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
@@ -427,6 +430,12 @@ POST /api/agent/template/restore
 PUT  /api/agent/prompts
 PUT  /api/agent/policy
 PUT  /api/agent/title-model
+POST   /api/agent/models
+DELETE /api/agent/models
+PUT    /api/agent/models/bulk
+POST   /api/agent/models/:kind
+POST   /api/agent/models/available
+POST   /api/agent/chat/completion
 POST /api/task/call
 POST /api/node-packages/build
 POST /api/node-packages/save
@@ -441,7 +450,7 @@ POST /api/style-library/reload
 POST/PUT/DELETE /api/showcase/*
 ```
 
-清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/settings`、`/api/style-library/reload`、`/api/showcase/`），不逐个写死方法。
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/settings`、`/api/style-library/reload`、`/api/showcase/`），不逐个写死方法。
 
 > 后 14 条来自第十四节：它们是**插件运行时注册**的路由（`ctx.routes.*`），静态扫描看不到。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 能把读取目录改到任意路径，是第二个。
 
@@ -449,7 +458,7 @@ POST/PUT/DELETE /api/showcase/*
 
 - `plugin-manager` 面板的写请求带令牌；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
-- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 26 个入口里。升级全量写保护时再加令牌。
+- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 32 个入口里。升级全量写保护时再加令牌。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
@@ -498,7 +507,7 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 对首版清单的修订
 
-第十三节的主清单已并入下面这些（26 个入口，另加 /api/showcase/ 一组前缀）：
+第十三节的主清单已并入下面这些（32 个入口，另加 /api/showcase/ 一组前缀）：
 
 ```
 现有 14 个
@@ -520,6 +529,54 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 为什么这条之前没写进文档
 
-之前的方案只扫了 `packages/cloud-server/src/routes`，没有扫 `packages/plugins/*/src` 里的 `ctx.routes.*`。这类路由是**运行时注册**的，静态清单不可能穷举——所以最终必须落到「注册时声明鉴权」，而不是继续补白名单。
+
+## 十五、SSRF 链路（补充确认）
+
+`/api/agent/models` 允许写入任意 `baseUrl`，而 `assertHttpUrl` 只检查协议是 http/https：
+
+```ts
+// packages/cloud-server/src/agent/config.ts:1295
+export function assertHttpUrl(raw: string): string {
+  const parsed = new URL(raw)              // 只校验能解析
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw ...
+  return raw                               // 不拦 127.0.0.1 / 169.254.169.254 / 内网段
+}
+```
+
+配合无鉴权的 `POST /api/agent/chat/completion`，形成完整 SSRF：
+
+```
+1. POST /api/agent/models { provider: 'evil', modelId: 'x', baseUrl: 'http://169.254.169.254/latest' }
+2. POST /api/agent/chat/completion { model: 'evil/x', messages: [...] }
+3. 服务端带着你的 API Key 去请求那个地址，把响应（或错误）回显出来
+```
+
+这能打到：云厂商元数据服务、内网管理面板、本机其它端口，也可以拿它做端口扫描（错误信息能区分连接拒绝/超时）。
+
+### 处理办法
+
+1. **首选：把 `/api/agent/models*` 和 `/api/agent/chat/completion` 都纳入令牌保护**（它们本来就应该在第十三节清单里——写模型配置等同于改服务端出网目标）；
+2. **同时给 `assertHttpUrl` 加内网拦截**：解析出 hostname 后，拒绝 `127.0.0.0/8`、`10/8`、`172.16/12`、`192.168/16`、`169.254/16`、`::1`、`fc00::/7`；注意还要处理 DNS 解析到内网与重定向（请求时二次校验或禁止跟随重定向）；
+3. 如果确实需要连本机模型（如本地 ollama），用一个显式白名单 `allowedLocalHosts`，而不是全放开。
+
+### 对首版清单的影响
+
+第十三节的 26 条要再加：
+
+```
+POST   /api/agent/models
+DELETE /api/agent/models
+PUT    /api/agent/models/bulk
+POST   /api/agent/models/:kind
+POST   /api/agent/models/available
+POST   /api/agent/chat/completion
+```
+
+共 32 条（另加 `/api/showcase/` 前缀组）。
+
+### 为什么这条之前没写
+
+之前只把 `/api/agent/*` 当成「配置类接口」，没意识到 `baseUrl` 直接决定服务端出网目标。配置类接口的价值不在它本身，而在它**改变了后续请求的去向**——这类间接影响需要单独列一节。
+
 
 
