@@ -185,6 +185,7 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 | `routes/mcp.ts:42` | `app.all('/mcp')` 无任何鉴权，MCP 工具可批量改画布 |
 | `routes/agentChat.ts:77` | `POST /api/agent/chat/completion` 无鉴权（可被网页当作免费模型代理） |
 | `cli.ts:184-206` | 启动日志位置，适合打印令牌 |
+| `routes/npmPlugins.ts:138-145`（`npm/npmClient.ts`） | NPM 包用 `tar -xzf --strip-components=1` 解压；实测 `../` 条目**不会**越界（bsdtar），这条不是漏洞 |
 
 ## 四、最终设计
 
@@ -679,7 +680,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 - [ ] 托管页面（同源）写请求正常
 - [ ] dev 页面（显式 trusted-origin）写请求正常
 - [ ] `audit.log` 记录 attempt / ok / auth-failed，hash 链连续
-- [ ] 启动日志打印令牌与文件位置
+- [ ] 启动日志打印令牌与文件位置，并**逐行列出实际生效的 Host/Origin 白名单**（配错时能一眼看出来，而不是等到请求 403 才猜）
 - [ ] `--no-admin-auth` 单独使用无效，必须配合 `MINI_CANVAS_ALLOW_INSECURE=1`
 - [ ] cloud-server 测试与 typecheck 全绿
 - [ ] ui 测试与 typecheck 全绿
