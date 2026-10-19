@@ -1457,6 +1457,7 @@ POST /api/canvases/default/resources?name=big.bin
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
 | 真实框架上的中间件顺序与 `/mcp` 边界 | `framework-guard.mjs`（tsx 跑源码） |
+| 沙箱 iframe 能通过 postMessage 传字节 | `run18-postmessage-bytes.mjs` |
 | Host 头读取与伪造 | `host-probe.mjs` |
 | 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
 | 前缀判定的边界与归一化 | `path-probe2.mjs` |

@@ -22,6 +22,7 @@
 | `tar-probe2.mjs` | NPM 包解压的路径穿越 | 手写 `../` 条目的 tar；bsdtar 剥一层后落在目标目录内，未越界 |
 | `run17-ssrf.mjs` | SSRF 端到端 | 写模型配置后触发补全，假端点收到 3 次带 Bearer 的请求 |
 | `framework-guard.mjs` | 真实 `createServerFramework` 上的中间件顺序 | start 前挂 `/api/*` 能拦住插件路由；start 后挂拦不住；`'*'` 能约束直挂的 `/mcp` |
+| `run18-postmessage-bytes.mjs` | 沙箱 iframe → 宿主传字节 | `Uint8Array`、`ArrayBuffer`、`Blob` 都能过 |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
