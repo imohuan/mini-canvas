@@ -414,6 +414,23 @@ curl -i http://127.0.0.1:8865/api/kv/config/settings
 
 # 6. 审计日志
 type .mini-canvas\audit.log
+
+# 7. SVG 不再执行脚本（第十九节；这一步不依赖令牌，commit 0 就能验）
+curl -s -X POST 'http://127.0.0.1:8865/api/canvases/default/resources?name=x.svg' \
+  -H 'content-type: image/svg+xml' \
+  --data-binary '<svg xmlns="http://www.w3.org/2000/svg"><script>document.title="PWNED"</script></svg>'
+# 打开返回的 url（用浏览器），标题不应变成 PWNED；响应头应含 content-security-policy
+
+# 8. DNS 重绑定面（Host 白名单）
+curl -i -H 'Host: evil.test:8865' http://127.0.0.1:8865/api/canvases
+# 期望 403，而不是 200
+
+# 9. 预检不被令牌拦住
+curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
+  -H 'Origin: http://127.0.0.1:8865' \
+  -H 'Access-Control-Request-Method: POST' \
+  -H 'Access-Control-Request-Headers: x-admin-token,content-type'
+# 期望 204，且 access-control-allow-headers 含 x-admin-token
 ```
 
 ## 八、实施步骤（五个 commit）
