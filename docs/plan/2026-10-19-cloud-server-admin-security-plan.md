@@ -81,6 +81,7 @@
 | `routes/agent.ts:210/230/248/269/298` | 改写系统提示词、模板、prompts、标题模型、策略 |
 | `routes/agentSessions.ts` | 会话创建/改/删/中止/队列/goal/审批等 15+ 个写接口 |
 | `routes/canvasOps.ts`、`routes/canvases.ts`、`routes/projects.ts`、`routes/assets.ts`、`routes/history.ts`、`routes/kv.ts` | 大量写接口（画布、项目、资产、历史、KV） |
+| `store/canvasResources.ts:97-111` + `routes/canvases.ts:120-129` | 上传只收白名单扩展名，但 `.svg` 在名单里（`store/mime.ts:17`）；回读时按扩展名给 `image/svg+xml`，**无 CSP**（第十九节） |
 | `server.ts:445` | `app.use('*', cors())` —— hono 默认 `origin: '*'`（见 `node_modules/.pnpm/hono@4.13.5/.../cors/index.js:4`），即当前**对所有来源开放 CORS** |
 | `routes/mcp.ts:42` | `app.all('/mcp')` 无任何鉴权，MCP 工具可批量改画布 |
 | `routes/agentChat.ts:77` | `POST /api/agent/chat/completion` 无鉴权（可被网页当作免费模型代理） |
@@ -328,6 +329,7 @@ x-admin-token: <64 位 hex>
 | `packages/plugins/plugin-manager/src/pluginManagerService.ts` | 对第十三节清单里的入口（install/uninstall/update、NPM 操作、Agent 配置写）带 `x-admin-token`；403 时提示“请先在设置里填写管理令牌” |
 | `packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue` | 新增令牌输入框（密码类型），存 localStorage |
 | `packages/plugins/plugin-agent/src/agentApi.ts` | 这个文件把**所有** Agent 请求都走 `json()`（`:202`）；对话面板的所有会话写请求都从这里出去。在 `json()` 里统一加 `x-admin-token` 即可一次覆盖，不用逐个调用点改 |
+| `packages/ui/src` 的画布页宿主 | 页面本身不需要令牌（它不调受保护入口）；但 `agentApi.ts` 的 `json()` 需要拿到令牌，来源同插件面板（localStorage） |
 | `packages/ui/src/**` 其它写请求 | 首版**不需要**令牌（不在第十三节清单里）；等升级到全量方法保护时，统一用 `adminFetch()` 加头 |
 | `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
 | `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
@@ -450,7 +452,7 @@ type .mini-canvas\audit.log
 - [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
 - [ ] 会话列表、转录、SSE 流**不需要**令牌（读请求不受影响）
 
-> 这两条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。
+> 最后六条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。
 > 第十六节给 sandbox 开的例外如果写成「`Origin: null` 就放行」，这条路径会顺带被放开——等于把第十四节最危险的洞又打开了。
 > 必须让「Origin 例外」只作用于读接口与素材上传，`/api/task/` 这类入口始终要令牌。
 
@@ -784,7 +786,7 @@ POST /api/canvases/:id/resources    免令牌，但只允许 slot 上传、限�
 ### 对方案的影响
 
 1. **4.5 的规则要删掉「`Origin: null` + `same-origin` 放行」这一行**，它不存在；
-2. **实施顺序**：请求边界（第三 commit）之前必须先确认视觉节点仍能工作；
+2. **实施顺序**：请求边界（第八节 commit 3）之前必须先确认视觉节点仍能工作；
 3. **验证清单**要加两条：视觉节点能加载并上传；第三方网页自造 sandbox iframe **仍被拒绝**。
 4. **不要**用 `X-MiniCanvas-Ui: 1` 这类自定义头当门槛——网页也能加，挡不住；它只能当「减少误伤」的提示，不能当鉴权。
 
@@ -879,7 +881,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 ### 这会打坏什么
 
-画布右侧的对话面板在 `packages/ui` 里，和页面同源，加令牌可行；但要改它所有会话写请求（约 15 处），属于第四个 commit 的增量工作。
+画布右侧的对话面板走 `plugin-agent/src/agentApi.ts`，和页面同源，加令牌可行；在它的 `json()` 里统一加头即可（不用改 15 处），属于第八节 commit 4 的工作。
 
 **如果这一版不做**：至少要承认「任何人仍能让你的 Agent 跑命令、烧你的 token」，并在文档和启动日志里写明。这与第二节「防不住：用户自己确认安装的恶意插件」不是一回事，不要混在一条里。
 
@@ -940,7 +942,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 - HttpOnly cookie 能挡住「读」，挡不住「用它发请求」（XSS 可以直接 fetch）；
 - 所以真正的分界不是「令牌放哪」，而是**有没有同源 XSS**。
 
-结论：第 1 条应当**提到第一个 commit**，与令牌同批上线。否则令牌只是把「别人装插件」换成「别人先偷令牌再装插件」。
+结论：第 1 条应当**提到 commit 0**（第八节），与令牌同批上线。否则令牌只是把「别人装插件」换成「别人先偷令牌再装插件」。
 
 ### 同类位置要一起查
 
