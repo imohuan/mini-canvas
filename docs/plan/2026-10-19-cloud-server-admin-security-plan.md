@@ -851,6 +851,10 @@ POST /api/canvases/:id/resources    免令牌，但只允许 slot 上传、限�
 
 首版清单保护了「改配置」，但没保护 `agentSessions.ts` 里那批会话写接口。而它们能把命令跑起来：
 
+**先确认工具面**：`@prismshadow/penguin-core` 的内置工具默认就包含 `exec_command`（跑 shell）与 `write_file`（写任意文件），见 `dist/index.js:721` 与 `:700`，二者 `permission: 'rw'`。所以「模型会不会用命令」不是理论问题——工具就在那儿，只有审批策略拦着。
+
+而审批策略默认是「`exec_command` / `write_file` 要问」（`agent/approval.ts:37-45`），但那条「问」是**通过无鉴权的 HTTP 回答的**：
+
 ```
 1. POST /api/agent/canvases/:id/sessions              → 建一个会话（无鉴权）
 2. POST /api/agent/canvases/:id/sessions/:sid/messages → 让模型干活（无鉴权）
@@ -858,7 +862,7 @@ POST /api/canvases/:id/resources    免令牌，但只允许 slot 上传、限�
 4. POST /api/agent/canvases/:id/sessions/:sid/approvals/:aid → 允许（无鉴权）
 ```
 
-第 4 步不需要知道审批内容，`decision` 缺省就是 `allow`（`agentSessions.ts:818`）。整条链的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响。
+第 4 步不需要知道审批内容：`decision` 只要不是 `'deny'` 就是 `allow`（`agentSessions.ts:818`）。整条链的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响，提示词又能通过 `PUT /api/agent/system-prompt`、`/api/agent/prompts` 改（这两条在清单里，会话那几条不在）。
 
 另外两个副作用不需要模型配合：
 
