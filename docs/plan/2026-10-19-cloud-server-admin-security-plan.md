@@ -379,6 +379,8 @@ type .mini-canvas\audit.log
 - [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：Origin 为 null 的例外）
 - [ ] 视觉节点里的 `CanvasUI.task()` **仍被 `/api/task/call` 的令牌挡住**（它走的是同一路径，不能因为加例外而放行）
 - [ ] 第三方网页伪装 `Origin: null` 仍被拒绝（不能只凭 null 放行）
+- [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
+- [ ] 会话列表、转录、SSE 流**不需要**令牌（读请求不受影响）
 
 > 这两条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。
 > 第十六节给 sandbox 开的例外如果写成「`Origin: null` 就放行」，这条路径会顺带被放开——等于把第十四节最危险的洞又打开了。
@@ -486,9 +488,12 @@ POST /api/style-library/reload
 PUT  /api/effect-library/settings
 POST /api/effect-library/reload
 POST/PUT/DELETE /api/showcase/*
+POST/PUT/PATCH/DELETE /api/agent/canvases/*      ← 第十八节：间接执行命令 + 花钱
 ```
 
-清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/`、`/api/effect-library/`、`/api/showcase/`），不逐个写死方法。
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/`、`/api/effect-library/`、`/api/showcase/`、`/api/agent/canvases/`），不逐个写死方法。
+
+> `/api/agent/canvases/` 的**读**请求不受影响（中间件只看写方法），所以会话列表、转录、SSE 流照常；被拦的是发消息、改审批、加队列、设目标这些写操作。
 
 > 清单后一半来自后续两节：第十四节的插件运行时注册路由（`ctx.routes.*`，静态扫描看不到）与第十五节的 SSRF 入口。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 与 `PUT /api/effect-library/settings` 能把读取目录改到任意路径，是第二梯队。
 
@@ -497,6 +502,7 @@ POST/PUT/DELETE /api/showcase/*
 同时必须改：
 
 - `plugin-manager` 面板的写请求带令牌；
+- `plugin-agent` 的 `agentApi.ts` 在 `json()` 里统一带头（一处覆盖所有会话写请求）；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
 - `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在保护清单里。升级全量写保护时再加令牌。
 
