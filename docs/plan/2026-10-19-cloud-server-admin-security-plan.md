@@ -52,6 +52,18 @@ GET                       → 直接到达（但读不到响应）
 
 结论：**收紧 CORS 挡不住「简单请求」**，而简单请求恰恰能改到东西。JSON 写请求只在 `origin: '*'` 这种放开状态下才发得出去（因为预检会通过）；一旦收紧 CORS，JSON 写就发不出了，但 `text/plain` / form / FormData 这类不需要预检的写请求照样直达。所以 CORS 是必要的一层，但**不能当唯一防线**。
 
+### 关于「浏览器会自动拦公网打本机」的澄清
+
+Private Network Access（PNA）在 2026 年的 Chrome 里**并没有拦住这条**。实测（`.scratch/header-probe/run13-b-rebase.mjs`，Chrome 153，页面在 `http://evil.test:<端口>`，目标 `http://127.0.0.1:8936`）：
+
+```
+GET  /api/canvases       → 200，读到 body
+POST /api/canvas/nodes   → 200（写进去了）
+请求头里没有 Access-Control-Request-Private-Network
+```
+
+所以第一节的「任何网页都能打本机后台」在当前浏览器上成立，不能指望浏览器兜底。**Host 白名单 + 令牌**是不可省的。
+
 > 实施时要把「哪些写接口能用简单请求打通」逐条过一遍（`content-type` 不是 `application/json` 的 POST、以及所有 PUT 的预检行为）。实测里 `text/plain` 的 POST 确实直达。
 
 **这条已在真实服务上验完，不是理论**（`.scratch/header-probe/run11-real-simple.mjs`，8934 端口，`Origin: http://evil.test:9999` + `content-type: text/plain`）：
