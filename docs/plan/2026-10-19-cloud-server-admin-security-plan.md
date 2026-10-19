@@ -870,7 +870,7 @@ POST   /api/agent/chat/completion
 
 **视觉节点的请求必须带一个只有宿主能造的凭证，不能靠 Origin 判断。** 三条路，按推荐顺序：
 
-**① 短时票据（推荐）**
+**① 短时票据（中长期推荐，首版不做）**
 
 - 宿主渲染 iframe 时，向后台要一个 `uiTicket`（绑定 `canvasId + nodeId`，有效期几分钟，一次性或限次）；
 - 票据通过 `srcdoc` 里的 `window.__CANVAS_UI__.ticket` 注进去（本来就有一个 `__CANVAS_UI__` 全局，见 `uiData.ts:451`）；
@@ -879,7 +879,7 @@ POST   /api/agent/chat/completion
 
 这样恶意页面即使造出同样的 iframe，也拿不到票据——票据是宿主在渲染时注入的，不是猜出来的。
 
-**② 宿主代发（最彻底，工作量大）**
+**② 宿主代发（最彻底；首版做它的最小切片）**
 
 - iframe 不发 HTTP，全走 `postMessage` 交给宿主；宿主带令牌代发；
 - 好处：iframe 永远碰不到网络层，也就不存在「它能不能自己请求」的问题；
