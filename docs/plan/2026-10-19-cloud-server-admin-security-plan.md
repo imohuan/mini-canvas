@@ -966,7 +966,7 @@ POST   /api/agent/chat/completion
 
 ### 改后的做法
 
-**视觉节点的请求必须带一个只有宿主能造的凭证，不能靠 Origin 判断。** 三条路，按推荐顺序：
+**视觉节点不该再自己发请求。** 三条路，按推荐顺序：
 
 **① 短时票据（中长期推荐，首版不做）**
 
@@ -981,7 +981,9 @@ POST   /api/agent/chat/completion
 
 - iframe 不发 HTTP，全走 `postMessage` 交给宿主；宿主带令牌代发；
 - 好处：iframe 永远碰不到网络层，也就不存在「它能不能自己请求」的问题；
-- 代价：`plugin-node-ui` 的桥接层要重写，且视觉节点的调试 SDK 也要跟着改。
+- 代价：`plugin-node-ui` 的桥接层要重写，且视觉节点的调试 SDK 也要跟着改；**但不需要改 `buildSrcdoc` 的 CSP**（它本来就在 `connect-src` 里放行了后台，改完之后那条可以收紧）。
+
+> 顺带说明当前 CSP 的实际形状（`uiData.ts:352-370`）：`default-src 'none'`、`img-src * data: blob:`、`script-src 'unsafe-inline' 'unsafe-eval'`、`connect-src` 只列允许的源。也就是说沙箱页**只能连被放行的后台源**，这一点已经比「什么都不限」好——但它挡不住「页面自己主动 fetch 后台」，因为后台就在放行列表里。代发做完之后，`connect-src` 可以缩到 `'none'`。
 
 **③ 把视觉节点挪到独立源（结构最优，改动最大）**
 
