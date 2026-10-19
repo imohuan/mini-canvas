@@ -331,6 +331,19 @@ x-admin-token: <64 位 hex>
 | `--no-admin-auth` + `MINI_CANVAS_ALLOW_INSECURE=1` | 关闭令牌与请求边界（审计仍记），启动警告 |
 | `MINI_CANVAS_ADMIN_TOKEN` | 固定令牌 |
 | `MINI_CANVAS_TRUSTED_ORIGINS` | 额外 Origin 白名单（逗号分隔） |
+| `--trusted-host <host:port>` | 额外 Host 白名单（反代 / dev 代理实例用），可重复 |
+
+具体命令（dev 起前端时）：
+
+```bash
+# 终端 1：后台。同时信任 127.0.0.1 与 localhost 两种写法（vite 代理把 Host 改成 localhost）
+pnpm -C packages/cloud-server serve \
+  --trusted-host localhost:8865 \
+  --trusted-origin http://localhost:5288
+
+# 终端 2：前端
+pnpm -C packages/ui dev
+```
 
 ## 六、要同步修改的调用方
 
@@ -422,7 +435,7 @@ type .mini-canvas\audit.log
 | 风险 | 缓解 |
 |---|---|
 | 前端写请求被 403 | 首版只拦 34 个入口加 showcase、agent-canvases 两组，画布数据与 watch 门铃都不受影响；插件面板与对话面板需要带令牌 |
-| dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
+| dev 代理被 Origin/Host 拦 | 显式 `--trusted-origin` + `--trusted-host`，5.3 有命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
 | 回读 SVG 执行脚本 | 第十九节：`CSP: sandbox`（实测挡得住且不影响 `<img>`），放进 commit 0 |
