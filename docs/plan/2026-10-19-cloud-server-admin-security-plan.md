@@ -223,10 +223,21 @@ export function requestTrust(opts: {
 规则（任一失败 403）：
 
 1. `Host` 必须等于 `trustedHosts` 中一项（默认由启动时 `hostname:port` 生成，支持 port=0 实际端口）；
-2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；
-   **`Origin: null`（不透明源 iframe）默认拒绝**，只有显式开启 `allowOpaqueOrigin` 且 `Sec-Fetch-Site` 为 `same-origin`/`none` 时才放行——详见第十六节；
+2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；**`Origin: null` 一律拒绝**——详见第十六节（实测证明「给 null 开例外」等于对所有网页开例外）；
 3. `sec-fetch-site: cross-site` 一律 403；
 4. 只作用于 `/api/*`。
+
+**第 1 条（Host 白名单）和令牌是仅有的两道承重墙。** 第 2、3 条只能挡「懒得伪装」的浏览器请求，因为：
+
+- 攻击者可以从一个**恶意域名**发起，再用 `Host` 头声称自己是 `127.0.0.1:8865`——非浏览器程序发 HTTP 时可以随便写 Host；
+- 或者做 DNS 重绑定：让 `evil.test` 先解析到自己的服务器（页面正常加载），再解析到 `127.0.0.1`。浏览器认为「同源」，服务端看到的 Host 就是 `evil.test:8865`。
+
+实测（`.scratch/header-probe/run8-rebind.mjs`，Chrome 153 + `--host-resolver-rules`）：把 `rebind.test` 指到 `127.0.0.1`，页面用相对路径 fetch，服务端收到的 `host: rebind.test:<端口>`，请求**成功**。
+说明只写「Origin 必须等于 Host」时，重绑定页面的 Origin 也是 `rebind.test`，两者相等，规则通过。
+
+所以 Host 白名单不能写成「等于 `127.0.0.1:8865` 或 `localhost:8865`」再附加「其它也放行」；它必须是**白名单**：不认识的 Host 直接 403。这一条不做，DNS 重绑定就是通的路。
+
+> 本轮实测还发现：`Server` 启动时如果监听 `0.0.0.0`，Host 头可以是任意内网 IP。Host 白名单要按「启动时实际绑定的 hostname + port」生成，并在 `--host 0.0.0.0` 时显式打印警告。
 
 挂载：`server.ts` 第 445 行 `cors()` 之后。
 
@@ -380,9 +391,10 @@ type .mini-canvas\audit.log
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
 - [ ] `POST /api/agent/chat/completion` 无令牌返回 403
-- [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：Origin 为 null 的例外）
+- [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：靠票据，不是靠 Origin 例外）
 - [ ] 视觉节点里的 `CanvasUI.task()` **仍被 `/api/task/call` 的令牌挡住**（它走的是同一路径，不能因为加例外而放行）
-- [ ] 第三方网页伪装 `Origin: null` 仍被拒绝（不能只凭 null 放行）
+- [ ] 无票据的 `Origin: null` 请求一律 403（给 null 开例外 = 对所有网页开例外）
+- [ ] Host 头写成别的域名（如 `evil.test:8865`）被 403（DNS 重绑定，实测见 4.5）
 - [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
 - [ ] 带脚本的 SVG 从 `/api/canvases/*/resources/*` 打开后不执行（第十九节）
 - [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
@@ -859,7 +871,10 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 ### 三条独立的修法，必须至少做第一条
 
-1. **回读时禁止 SVG 当文档执行**：给 `/api/canvases/:id/resources/*` 与 `/api/assets/files/*` 加 `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` 与 `X-Content-Type-Options: nosniff`。这一条最省事：不改存储、不改上传，只改响应头。SVG 常被 `<img>` 引用，`sandbox` 不影响 `<img>` 渲染，只影响直接打开。
+1. **回读时禁止 SVG 当文档执行**：给 `/api/canvases/:id/resources/*` 与 `/api/assets/files/*` 加 `Content-Security-Policy: sandbox`（可再加 `script-src 'none'`）。这一条最省事：不改存储、不改上传，只改响应头。
+
+> 实测（`run9-csp.mjs`，Chrome 153）：`sandbox`、`default-src 'none'`、`script-src 'none'` 三种写法都能挡住内联脚本；且**它们都不影响 `<img src="x.svg">` 的正常显示**（120×40 正常渲染）。
+> 注意别把 `nosniff` 当成这一条的主力：`nosniff` 只影响浏览器「要不要按声明类型解析」，对已经声明成 `image/svg+xml` 的响应没有额外帮助。它该加，但不是这里的解法。
 2. **把 `.svg` 从「可直接回读为文档」的名单里摘出来**：回读统一给 `application/octet-stream` + `Content-Disposition: attachment`；需要显示时由前端用 `<img src>` 引用（`<img>` 不执行脚本）。
 3. **上传分离到独立源**：与第十六节第 ③ 条同思路，资源从另一个端口提供，天然隔离。
 
