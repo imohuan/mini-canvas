@@ -883,6 +883,8 @@ iframe 里 CanvasUI.save(bytes) 不再 fetch，改成 postMessage({__canvasUi:1,
 
 宿主那条 fetch 需要一个令牌来源。`UiContent.vue` 跑在 `packages/ui` 里，和令牌输入框同源，读 localStorage 即可。
 
+另有一处不在 iframe 里、但也直连后台：后台任务脚本的 `ctx.save`。它跑在 Node 子进程里（`task/runner.ts:137` 拼 `/resources?slot=`），用 `fetch` 直接打后台。加令牌之后脚本侧也要带——但**不要把管理令牌传给子进程**（那等于把最高权限交给每个脚本）。做法：给脚本发一个只允许写本节点槽位的短时令牌，或让脚本把字节回传给父进程、由父进程带管理令牌写盘。这是第十七节「权限隔离」的同一个问题，首版至少要先选一条。
+
 **剩下要单独放行的只有一条**：
 
 ```
