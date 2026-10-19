@@ -346,3 +346,79 @@ type .mini-canvas\audit.log
 2. **`chat/completion` 限流/鉴权**：防止被网页当免费模型代理；
 3. **后端插件 worker 隔离**：缩小爆炸半径；
 4. **审计日志与数据目录分离**：插件拿不到日志文件。
+
+## 十三、实施前必须解决的一个冲突（重要）
+
+按方法保护（所有 POST/PUT/PATCH/DELETE 要令牌）能堵住所有洞，但会**打断一批正常功能**。这些写请求来自不同位置，令牌不一定拿得到：
+
+| 调用方 | 写请求 | 能否带令牌 |
+|---|---|---|
+| `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
+| `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⚠️ 需改，它是独立打包的插件 |
+| 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
+| 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
+| `watch.mjs` | KV 门铃 | ✅ 需从环境变量读令牌 |
+
+### 瓶颈：不透明源 iframe
+
+`packages/plugins/plugin-node-ui/src/uiOrigin.ts` 的注释写明：节点里的页面住在 `sandbox="allow-scripts"` 的 iframe 里，请求全算跨源（`Origin: null`）。这类请求：
+
+1. 读不到 `localStorage`（不透明源）；
+2. 带不上 HttpOnly cookie（跨源，且 SameSite=Strict 会拒）；
+3. 只能走 `postMessage` 让宿主代发。
+
+所以若严格按方法保护，**视觉节点里的上传和写操作会全部 403**。
+
+### 三个可选解法
+
+**方案 A：宿主代发（推荐）**
+
+- iframe 通过 `postMessage` 把请求交给宿主，宿主用令牌代发；
+- 优点：安全模型完整，iframe 永远拿不到令牌；
+- 代价：要改 `plugin-node-ui` 的桥接层，工作量中等。
+
+**方案 B：给 iframe 一类只读/受限令牌**
+
+- 服务端签发短期、限路径的令牌给 iframe；
+- 复杂度高，容易做错，不推荐首版。
+
+**方案 C：按前缀分级保护（务实）**
+
+- 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`；
+- 画布数据、资产、项目、KV 等高频写接口暂不加令牌，只靠请求边界（Host/Origin）保护；
+- 优点：改动小，不破坏视觉节点；缺点：仍留一条“网页可写画布数据”的路（危害远小于执行代码）。
+
+### 建议
+
+**首版走方案 C**：先把「能执行代码」的口子全部封死（这是真正的投毒路径），画布数据类写接口暂缓。等方案 A 的宿主代发做好，再升级到按方法全保护。
+
+这样第一步能在一两天内落地，且不会把现有画布功能打残。
+
+### 首版受保护接口清单（方案 C 的准确范围）
+
+```
+POST /api/server-plugins/install
+POST /api/server-plugins/uninstall
+POST /api/npm-plugins/install
+POST /api/npm-plugins/update
+POST /api/npm-plugins/uninstall
+POST /api/agent/mcp
+DELETE /api/agent/mcp
+POST /api/agent/skills/import
+DELETE /api/agent/skills/:name
+PUT  /api/agent/system-prompt
+POST /api/agent/template/restore
+PUT  /api/agent/prompts
+PUT  /api/agent/policy
+PUT  /api/agent/title-model
+```
+
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`），不逐个写死方法。
+
+同时必须改：
+
+- `plugin-manager` 面板的写请求带令牌；
+- `watch.mjs` 的 KV PUT 带令牌（或者把门铃 key 换成一个不需要令牌的专用读接口——但那是新接口，本版先带令牌）；
+- `plugin-cloud-client` 如涉及上述受保护路径才需要改（它写的是画布数据，不在首版范围内，无需改）。
+
