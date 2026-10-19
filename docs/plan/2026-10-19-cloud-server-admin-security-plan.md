@@ -61,11 +61,12 @@
 
 ### 4.1 总原则
 
-1. **按方法保护，而不是按路由清单**：所有 `POST/PUT/PATCH/DELETE` 一律要求令牌；`GET/HEAD/OPTIONS` 放行。理由：路由会持续增加（本次扫出 70+ 个写接口），白名单式保护必然漏；按方法拦没有漏项。
-2. **读接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
+1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有 `POST/PUT/PATCH/DELETE` 都要令牌」，那时先做宿主代发。
+2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
 5. **令牌不出现在页面可读的位置**：不用 `<meta>` 注入，改 HttpOnly cookie 或手动输入。
+6. **首版与终态分开写清楚**：第十三节给出首版范围，升级路径在第十二节之后说明。
 
 ### 4.2 审计日志（P0）
 
@@ -73,7 +74,7 @@
 
 ```ts
 export type AuditAction =
-  | 'write'            // 任一写请求
+  | 'write'            // 受保护入口的写请求（首版只记第十三节那些）
   | 'server-plugin/install'
   | 'server-plugin/uninstall'
   | 'npm-plugin/install'   | 'npm-plugin/update' | 'npm-plugin/uninstall'
@@ -134,14 +135,25 @@ export async function createAdminAuth(opts: {
 1. 文件 `{dataDir}/admin-token`，内容 64 位 hex（`randomBytes(32)`）；存在则读，长度不足 32 或非 hex 则重新生成并警告；
 2. 比较用 `crypto.timingSafeEqual`；
 3. 请求头 `x-admin-token`；
-4. 保护范围：**所有非 GET/HEAD/OPTIONS 的 `/api/*`**，包括 `/api/agent/*`、`/api/npm-plugins/*`、`/api/server-plugins/*`、`/api/kv/*`、`/api/canvases/*`、`/api/projects/*`、`/api/assets/*`、`/api/history/*`、`/api/jobs/*`。
-5. **不保护**：`GET/HEAD` 读接口、`/mcp`（见 4.5，单独处理）、静态资源。
+4. **首版保护范围**（方案 C，见第十三节）：只匹配下列前缀，一律要令牌：
+
+   ```
+   /api/server-plugins/     /api/npm-plugins/
+   /api/agent/mcp           /api/agent/skills
+   /api/agent/system-prompt /api/agent/template/
+   /api/agent/prompts       /api/agent/policy
+   /api/agent/title-model
+   ```
+
+   这些是「能引入可执行代码或执行命令」的全部入口（第十三节有逐条依据）。
+5. **暂不保护**：`GET/HEAD` 读接口；画布 / 资产 / 项目 / 历史 / KV 等数据写接口（靠 4.5 的请求边界保护）；`/mcp`（单独议题）。升级到全量方法保护时，这些再一起加。
 
 覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改：
 
 ```ts
 app.use('/api/*', async (c, next) => {
-  if (!WRITE_METHODS.has(c.req.method)) return next()
+  if (!isAdminPath(c.req.path)) return next()      // 首版：只拦第十三节的后缀白名单
+  if (c.req.method === 'GET' || c.req.method === 'HEAD') return next()
   const verdict = auth.verify(c.req.header('x-admin-token'))
   if (verdict !== 'ok') { await audit.append({ ...result:'rejected' }); return c.json({...}, 403) }
   await next()
@@ -155,7 +167,7 @@ app.use('/api/*', async (c, next) => {
 **A. 手动输入（安全，推荐默认）**
 
 - 插件管理页新增「管理令牌」输入框，存 `localStorage`；
-- 所有写请求带 `x-admin-token`。
+- 访问第十三节清单里那些入口时带 `x-admin-token`（其余请求不需要）。
 
 **B. 托管页写入 HttpOnly cookie（自动，需服务端配合）**
 
@@ -207,7 +219,7 @@ export function requestTrust(opts: {
 x-admin-token: <64 位 hex>
 ```
 
-所有写接口必需（除非 `--no-admin-auth` + `ALLOW_INSECURE`）。
+第十三节清单里的入口必需（除非 `--no-admin-auth` + `ALLOW_INSECURE`）。
 
 ### 5.2 错误响应
 
@@ -229,9 +241,9 @@ x-admin-token: <64 位 hex>
 
 | 位置 | 改什么 |
 |---|---|
-| `packages/plugins/plugin-manager/src/pluginManagerService.ts` | 所有写请求（install/uninstall/update、NPM 操作）带 `x-admin-token`；403 时提示“请先在设置里填写管理令牌” |
+| `packages/plugins/plugin-manager/src/pluginManagerService.ts` | 对第十三节清单里的入口（install/uninstall/update、NPM 操作、Agent 配置写）带 `x-admin-token`；403 时提示“请先在设置里填写管理令牌” |
 | `packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue` | 新增令牌输入框（密码类型），存 localStorage |
-| `packages/ui/src/**` 其它写请求 | 画布保存、资产、Agent 会话等所有写请求都要带令牌；建议抽一个 `adminFetch()` 统一加头 |
+| `packages/ui/src/**` 其它写请求 | 首版**不需要**令牌（不在第十三节清单里）；等升级到全量方法保护时，统一用 `adminFetch()` 加头 |
 | `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
 | `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
 | `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` | 只 PUT KV，属写接口 → 需要令牌；改为从环境变量读取并带 `x-admin-token` |
@@ -295,7 +307,7 @@ type .mini-canvas\audit.log
 
 | # | 内容 | 验收 |
 |---|---|---|
-| 1 | `adminAuth.ts` + 中间件 + `--no-admin-auth` + 单测 | 写接口 403/放行符合预期 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节那 14 个入口无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
 | 4 | 前端 `adminFetch()` + 面板令牌输入 + watch.mjs 带令牌 + 改测试 | 面板能装插件，热重载不断 |
@@ -306,7 +318,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端大量写请求被 403 | 统一 `adminFetch()`；先在 dev 用 `--no-admin-auth` 排障 |
+| 前端写请求被 403 | 首版只拦 14 个入口，画布数据不受影响；插件面板与 watch 工具需带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -316,8 +328,9 @@ type .mini-canvas\audit.log
 
 ## 十、验收清单
 
-- [ ] 无令牌调任一写接口返回 403
-- [ ] 正确令牌调写接口通过校验
+- [ ] 无令牌调第十三节清单里的任一入口返回 403
+- [ ] 正确令牌调这些入口通过校验
+- [ ] 画布/资产/项目/KV 的写接口**不**要求令牌（首版）
 - [ ] GET 接口不需要令牌
 - [ ] `Origin: http://evil.example` 被 403
 - [ ] `sec-fetch-site: cross-site` 被 403
