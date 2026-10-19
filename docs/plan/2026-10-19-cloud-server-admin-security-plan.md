@@ -599,6 +599,20 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
   -H 'Access-Control-Request-Method: POST' \
   -H 'Access-Control-Request-Headers: x-admin-token,content-type'
 # 期望 204，且 access-control-allow-headers 含 x-admin-token
+
+# 10. 简单请求改画布（第一节的手法；加令牌后应当 403）
+curl -i -X POST http://127.0.0.1:8865/api/canvases/default/nodes \
+  -H 'Origin: http://evil.test:9999' -H 'content-type: text/plain' \
+  --data-binary '{"add":[{"id":"x","type":"text","position":{"x":0,"y":0},"data":{}}]}'
+
+# 11. 上传超限（第二十节；commit 0 之后应当是 413）
+# Windows 没有 /dev/zero，用 PowerShell 生成 100MB 再传：
+#   fsutil file createnew big.bin 104857600
+curl -i -X POST 'http://127.0.0.1:8865/api/canvases/default/resources?name=big.bin' \
+  -H 'content-type: application/octet-stream' --data-binary @big.bin
+
+# 12. 审计链校验（有了 audit-verify 之后）
+#   node packages/cloud-server/dist/cli.js audit-verify -d .mini-canvas
 ```
 
 ## 八、实施步骤（六个 commit，顺序是硬约束）
