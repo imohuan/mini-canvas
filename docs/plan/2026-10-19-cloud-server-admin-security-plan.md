@@ -1275,6 +1275,8 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 资源上传路由把整个请求体读进内存再写盘（`routes/canvases.ts:96` 的 `await c.req.arrayBuffer()`），**没有任何大小检查**；`server.ts` 也没挂 body limit，`@hono/node-server` 默认同样不限制。
 
+> 注意别和另一条混淆：画布的**节点增量写**（`canvasOps.ts`）是有上限的——`MAX_BODY_BYTES = 16MB`（`:37`），17MB 实测返回 `413 body 过大`。**只有资源/资产上传这条路没有上限。** 修复时也要分别处理：节点写那条已经够了，不用动。
+
 实测（`.scratch/header-probe/run16-upload-limit.mjs`，真实服务，写的是临时数据目录）：
 
 ```
@@ -1297,7 +1299,7 @@ POST /api/canvases/default/resources?name=big.bin
 1. **先看 `content-length`**：超过上限直接 `413`，连 body 都不读；
 2. **读的时候也计数**：`content-length` 可以撒谎（或分块传输没有它），要边读边累加，超了立刻中断连接；
 3. **边读边写临时文件**，不要 `arrayBuffer()` 全量进内存；写完再 rename（现有 `saveSlot` 已经是这个模式，上传路由可以复用）；
-4. **给默认上限**（例如 50MB），并允许环境变量覆盖；`assets` 上传（`routes/assets.ts:31-37`）同样处理；
+4. **给默认上限**（例如 50MB），并允许环境变量覆盖；`assets` 上传（`routes/assets.ts:31-37`）同样没有上限——实测 50MB 返回 200、资产真的建出来了；
 5. **可选但建议**：每张画布的总占用设一个配额，防止「每个文件都不超上限、加起来把盘写满」。
 
 ### 验收
