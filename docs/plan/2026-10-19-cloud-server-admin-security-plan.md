@@ -988,11 +988,21 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 
 | 手段 | 挡住什么 | 代价 |
 |---|---|---|
-| Node 24 `--experimental-permission --allow-fs-read=... --allow-fs-write=...` | 越界读写文件 | 小；但子进程启动参数要改，且部分依赖会报错 |
+| Node 24 `--permission --allow-fs-read=... --allow-fs-write=...` | 越界读写文件 | 小；但子进程启动参数要改，且部分依赖会报错 |
 | 禁 `child_process` + 限制出网（`--allow-net` 或防火墙规则） | 再起进程、外联 | 中；可能影响需要联网的任务 |
 | 独立系统用户 / 容器 / microVM | 上面全部 | 大；部署与调试复杂度上一个台阶 |
 
 这三条都**不在本次范围**（第十一节第 1 条已列）。这里写清楚是为了避免实施时误以为「加了令牌就安全了」。
+
+**第一档已在本机实测可用**（Node v24.15.0）：
+
+```
+node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> a.mjs
+  → 目录内写：WROTE OK
+  → 目录外写（同一脚本写到父目录）：BLOCKED ERR_ACCESS_DENIED
+```
+
+注意标志名是 `--permission`（不是早先的 `--experimental-permission`）。本机 Node 24.15 的 `--help` 里**没有** `--allow-net`，但有 `--allow-child-process`、`--allow-worker`、`--allow-addons`——也就是说这一版能用它挡住「再起进程、开线程、加载原生模块」，**出网仍要靠系统防火墙或容器**。实施前先跑 `node --help | findstr allow-` 确认版本支持面，不要照抄别的版本的参数。
 
 ### 验收时怎么区分
 
