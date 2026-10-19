@@ -370,6 +370,10 @@ export function requestTrust(opts: {
 
 **还有一条不能忘**：收紧 CORS 之后，**错误响应也要带 CORS 头**。否则跨源请求被 403 时，浏览器不会把 403 交给前端脚本（前端只看到 `Failed to fetch`），插件面板就无法提示「请先填令牌」。实测（`guard-probe.mjs`）：同源请求被 403 时带 ACAO，跨源请求被 403 时**不带**——后者前端拿不到错误体。
 
+**`trustedOrigins` 里写的是什么，要精确**：Origin 是 `scheme://host:port`，**不带路径、不带尾斜杠**。`http://localhost:5288` 对，`http://localhost:5288/` 与 `localhost:5288` 都不对。Host 白名单同理（`127.0.0.1:8865`，不带 scheme）。这两处配错的表现都是「所有请求都 403」，查起来像中间件坏了。
+
+**启动时要打印实际生效的白名单**，而不是只打印配置项。用户把 `--trusted-origin` 写错了却看到「已启用」，比不打印更糟。
+
 ## 五、接口契约
 
 ### 5.1 新增请求头
