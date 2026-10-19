@@ -1268,8 +1268,8 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 **第一档已在本机实测可用**（Node v24.15.0）：
 
 ```bash
-# 脚本内容：import fs from "node:fs"; fs.writeFileSync("<dir>/out.txt", "x")
-node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> probe.mjs
+# 被测脚本（自己建一个即可）：import fs from "node:fs"; fs.writeFileSync("<dir>/out.txt", "x")
+node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> <脚本>
 #   → 写 <dir>/out.txt：成功
 #   → 把路径换成 <dir>/../outside.txt：BLOCKED ERR_ACCESS_DENIED
 ```
