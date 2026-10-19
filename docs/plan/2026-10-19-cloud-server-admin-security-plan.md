@@ -457,7 +457,7 @@ export function requestTrust(opts: {
 
 规则（任一失败 403）：
 
-1. `Host` 必须等于 `trustedHosts` 中一项（默认由启动时 `hostname:port` 生成，支持 port=0 实际端口）；
+1. `Host` 必须等于 `trustedHosts` 中一项。白名单必须用**实际监听端口**生成：CLI 在 8865 被占用时会自动顺延（实测占住 8865 后，服务起到 8866，日志有「自动改用」提示），而 `server.ts:471` 注入的 `selfOrigin` 用的是**请求端口**（会被写成 `...:8865`）。如果照它生成白名单，顺延后所有请求都会被自己拒绝。要么在 `start()` 回调里用 `info.port` 重算并覆盖，要么让 `requestTrust` 读运行时端口而不是构造时端口。
 2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；**`Origin: null` 一律拒绝**——详见第十六节（实测证明「给 null 开例外」等于对所有网页开例外）；
 3. `sec-fetch-site: cross-site` 一律 403；
 4. 作用于 `/api/*` **与 `/mcp`**（后者不要求令牌，但要做 Host/Origin 判定——否则 DNS 重绑定页面仍能调 MCP）。
@@ -1455,6 +1455,7 @@ POST /api/canvases/default/resources?name=big.bin
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
 | `/mcp` 跨源可调、简单请求打不进 | `run15-mcp.mjs`（真实服务） |
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
+| 端口顺延后实际监听在 8866（白名单必须用实际端口） | `run19-port-fallback.mjs`（真实 CLI） |
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
 | 真实框架上的中间件顺序与 `/mcp` 边界 | `framework-guard.mjs`（tsx 跑源码） |
 | 沙箱 iframe 能通过 postMessage 传字节 | `run18-postmessage-bytes.mjs` |
