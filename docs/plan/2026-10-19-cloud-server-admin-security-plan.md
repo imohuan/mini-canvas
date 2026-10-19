@@ -1267,10 +1267,11 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 
 **第一档已在本机实测可用**（Node v24.15.0）：
 
-```
-node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> a.mjs
-  → 目录内写：WROTE OK
-  → 目录外写（同一脚本写到父目录）：BLOCKED ERR_ACCESS_DENIED
+```bash
+# 脚本内容：import fs from "node:fs"; fs.writeFileSync("<dir>/out.txt", "x")
+node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> probe.mjs
+#   → 写 <dir>/out.txt：成功
+#   → 把路径换成 <dir>/../outside.txt：BLOCKED ERR_ACCESS_DENIED
 ```
 
 注意标志名是 `--permission`（不是早先的 `--experimental-permission`）。本机 Node 24.15 的 `--help` 里**没有** `--allow-net`，但有 `--allow-child-process`、`--allow-worker`、`--allow-addons`——也就是说这一版能用它挡住「再起进程、开线程、加载原生模块」，**出网仍要靠系统防火墙或容器**。实施前先跑 `node --help | findstr allow-` 确认版本支持面，不要照抄别的版本的参数。
