@@ -400,7 +400,7 @@ type .mini-canvas\audit.log
 
 **方案 C：按前缀分级保护（务实）**
 
-- 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`；
+- 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/*`、`/api/node-packages/*`、`/api/node-ui/debug-*`、`/api/style-library/reload`；
 - 画布数据、资产、项目、KV 等高频写接口暂不加令牌，只靠请求边界（Host/Origin）保护；
 - 优点：改动小，不破坏视觉节点；缺点：仍留一条“网页可写画布数据”的路（危害远小于执行代码）。
 
