@@ -443,6 +443,9 @@ pnpm -C packages/ui dev
 | `src/__tests__/audit.test.ts` | JSONL 追加；目录自动创建；hash 链连续；写失败不抛；不含令牌 |
 | `src/__tests__/requestTrust.test.ts` | 合法 Host 放行；非法 Host 403；Origin≠Host 403；cross-site 403；trustedOrigins 放行；非 /api 不拦 |
 | `src/__tests__/adminGuard.test.ts` | GET 放行；POST/PUT/PATCH/DELETE 无令牌 403；有令牌放行 |
+| `src/__tests__/adminGuard.canvas.test.ts` | `/api/canvases/` 只拦 POST：PUT/GET 放行；`/api/agent/canvases/` 拦 POST 但不拦 GET stream |
+| `src/__tests__/svgReadback.test.ts` | 回读 SVG 带 `content-security-policy: sandbox`；带脚本的 SVG 响应体原样，但头不变 |
+| `plugin-node-ui/src/__tests__/hostProxyUpload.test.ts` | iframe 发 `type:'save'` → 宿主代发被调用；失败时回 `output` 带错误 |
 
 ### 7.2 路由测试（改）
 
