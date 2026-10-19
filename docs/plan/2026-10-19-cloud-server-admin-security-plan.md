@@ -722,6 +722,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 ## 十、验收清单
 
 - [ ] 无令牌调第十三节清单里的任一入口返回 403（含 `/api/task/call`）
+- [ ] `/api/canvas/nodes`、`/api/canvas/edges`（老接口）无令牌 403
 - [ ] 正确令牌调这些入口通过校验
 - [ ] 资产/项目/历史/KV 的写接口**不**要求令牌（首版；前提是 CORS + Host 白名单生效，见第一节「暂缓不等于安全」）
 - [ ] `POST /api/canvases/:id/{nodes,edges,resources,duplicate}` 无令牌 403，带令牌通过
