@@ -19,6 +19,7 @@
 | `run14-real-others.mjs` | 真实服务上资产/项目/历史/KV 的写接口 | 项目、资产、KV 都能被简单请求写入 |
 | `run15-mcp.mjs` | `/mcp` 的跨源与简单请求边界 | 跨源 JSON 可调（200）；`text/plain` 被 415 拒 |
 | `run16-upload-limit.mjs` | 上传有没有大小上限 | 200MB 被完整接收（200） |
+| `tar-probe2.mjs` | NPM 包解压的路径穿越 | 手写 `../` 条目的 tar；bsdtar 剥一层后落在目标目录内，未越界 |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
