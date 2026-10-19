@@ -246,9 +246,9 @@ x-admin-token: <64 位 hex>
 | `packages/ui/src/**` 其它写请求 | 首版**不需要**令牌（不在第十三节清单里）；等升级到全量方法保护时，统一用 `adminFetch()` 加头 |
 | `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
 | `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
-| `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` | 只 PUT KV，属写接口 → 需要令牌；改为从环境变量读取并带 `x-admin-token` |
+| `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` | 只 PUT KV；**首版 KV 不在保护范围，无需改**。升级到全量写保护时，再改为从环境变量读取并带 `x-admin-token` |
 
-> 注意：`watch.mjs` 会给 KV 写门铃，而 KV 的 PUT 也是写接口。如果不带令牌，热重载会直接 403。这是方案里必须一起改的调用方，之前的文档漏了。
+> 注意：`watch.mjs` 给 KV 写门铃。首版不保护 KV，所以热重载不受影响；**一旦升级到全量写保护，必须同步改它，否则热重载会 403**。这里提前记下，避免升级时漏改。
 
 ## 七、测试计划
 
@@ -310,7 +310,7 @@ type .mini-canvas\audit.log
 | 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 23 个入口无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
-| 4 | 前端 `adminFetch()` + 面板令牌输入 + watch.mjs 带令牌 + 改测试 | 面板能装插件，热重载不断 |
+| 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + 改测试 | 面板能装插件，热重载不受影响 |
 
 先做 1（真正堵洞），再做 2（留痕），3 与 4 紧随。
 
@@ -318,7 +318,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 23 个入口，画布数据不受影响；插件面板与 watch 工具需带令牌 |
+| 前端写请求被 403 | 首版只拦 23 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -343,6 +343,8 @@ type .mini-canvas\audit.log
 - [ ] ui 测试与 typecheck 全绿
 - [ ] 插件管理面板能装/卸后台插件
 - [ ] plugin-hot-reload 的 watch 门铃仍能送达
+- [ ] 受保护入口清单（23 条）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
+- [ ] 新增插件注册后台路由时，能通过统一声明标记鉴权等级（长期机制，见第十四节）
 
 ## 十一、不在本次范围
 
@@ -368,10 +370,10 @@ type .mini-canvas\audit.log
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⚠️ 需改，它是独立打包的插件 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 23 个入口里）；升级全量保护时再加令牌 |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
-| `watch.mjs` | KV 门铃 | ✅ 需从环境变量读令牌 |
+| `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
 
 ### 瓶颈：不透明源 iframe
 
@@ -443,8 +445,8 @@ POST /api/style-library/reload
 同时必须改：
 
 - `plugin-manager` 面板的写请求带令牌；
-- `watch.mjs` 的 KV PUT 带令牌（或者把门铃 key 换成一个不需要令牌的专用读接口——但那是新接口，本版先带令牌）；
-- `plugin-cloud-client` 如涉及上述受保护路径才需要改（它写的是画布数据，不在首版范围内，无需改）。
+- `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
+- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 23 个入口里。升级全量写保护时再加令牌。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
