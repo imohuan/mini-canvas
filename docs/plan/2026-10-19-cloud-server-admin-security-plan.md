@@ -387,6 +387,16 @@ export function isAdminPath(method: string, path: string): boolean {
 > 1. **挂在业务路由之前能拦住插件代理路由**——`use` 先于路由注册时，跨源/无令牌的 `/api/task/call` 被 403，业务 handler 一次都没跑；
 > 2. **预检必须放行**，且 `cors()` 的 `allowHeaders` 要包含 `x-admin-token`；否则前端带令牌的跨源请求会在预检阶段就失败（浏览器只报 `Failed to fetch`，看不出原因）。
 
+**这三条已在真实的 `createServerFramework` 上复验过**（`.scratch/header-probe/framework-guard.mjs`，用 `tsx` 跑源码，不依赖 `dist`）：
+
+| 做法 | 结果 |
+|---|---|
+| `app.use('/api/*', guard)` 放在 `host.start()` **之前** | 插件 `ctx.routes` 注册的 `/api/task/call`、`/api/canvases/:id/nodes` 无令牌 → **403**；GET `/api/task/events` 放行 |
+| 同一个 guard 放在 `start()` **之后** | 全部 **200**（拦不住）——证实「必须在 start 之前」不是猜的 |
+| `app.use('*', hostOriginCheck)` | 直挂的 `/mcp` 也受约束：恶意 Host → 403，恶意 Origin → 403，正常 → 200 |
+
+所以实现上要**两条中间件**：`app.use('*', requestTrust)` 负责 Host/Origin（含 `/mcp`），`app.use('/api/*', adminGuard)` 负责令牌。两条都放在 `start()` 之前，顺序是先信任边界、后令牌（来源不可信时不必再比令牌）。
+
 还有一条容易写错的：**GET 放行意味着「用 GET 干写事」的接口完全没有保护**。本方案的首版清单里只列写方法，实施时要把这条当检查项：清单里每个路径下若存在「GET 但会改状态」的路由，必须单独处理（比如 `/api/task/events` 是 SSE 没问题，但插件新加的 GET 路由不一定）。
 
 **`/api/canvases/` 这一条是二选一，必须当场定**：
