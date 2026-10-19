@@ -26,6 +26,8 @@
 | `framework-guard.mjs` | 真实 `createServerFramework` 上的中间件顺序 | start 前挂 `/api/*` 能拦住插件路由；start 后挂拦不住；`'*'` 能约束直挂的 `/mcp` |
 | `run18-postmessage-bytes.mjs` | 沙箱 iframe → 宿主传字节 | `Uint8Array`、`ArrayBuffer`、`Blob` 都能过 |
 | `run19-port-fallback.mjs` | CLI 端口顺延 | 占住 8865 后服务起在 8866，日志有「自动改用」；说明白名单要用实际端口 |
+| `run20-task-call.mjs` | `/api/task/call` 的授权与形状校验 | 缺 nodeId/节点不存在 → 403；缺 methods、args 非数组 → 400（未被绕过） |
+| `task-call-e2e/README.md` | 完整链：改节点声明 → 执行脚本 → 越界写文件 | 已跑通（真实服务，无令牌、跨源） |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |

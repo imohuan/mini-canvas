@@ -956,6 +956,20 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 这意味着：**只要能改画布节点数据**（`POST /api/canvases/:id/nodes` 目前不需要令牌），攻击者就能先给某个节点写上 `uiScripts` 声明，再调 `/api/task/call` 执行。这条链绕过了我们首版的所有保护。
 
+**这条链已在真实服务上跑通**（8946 端口，临时数据目录，`Origin: http://evil.test:9999`）：
+
+```
+1. 无令牌 PUT /api/canvases/default 写入节点 n1，data.uiScripts={demo:{}}   → 200
+2. 无令牌 POST /api/task/call {name:'demo', methods:'echo', nodeId:'n1'}    → 200，真的执行了
+3. 放入 evil.mjs（写数据目录外的文件），把 n1 声明改成 {evil:{}}
+4. 无令牌 POST /api/task/call {name:'evil', methods:'pwn', nodeId:'n1'}     → 200
+   → 越界文件真的出现
+```
+
+同时确认了授权检查**没有形状绕过口**：缺 `nodeId` → 403，节点不存在 → 403，缺 `methods` / `args` 不是数组 → 400（被 `runScript` 自己拒掉，走不到执行）。所以它的问题不在「校验能被绕过」，而在「校验依赖的数据本身可被改」。
+
+> 复现步骤见 `.scratch/header-probe/task-call-e2e/README.md`。
+
 ### 处理办法（按务实程度排序）
 
 **首版（必须做）**：把 `/api/task/call`、`/api/node-packages/*/*` 加进第十三节的白名单。它们都是「能执行代码或写本机文件」的入口。
@@ -1462,6 +1476,7 @@ POST /api/canvases/default/resources?name=big.bin
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
 | 真实框架上的中间件顺序与 `/mcp` 边界 | `framework-guard.mjs`（tsx 跑源码） |
 | 沙箱 iframe 能通过 postMessage 传字节 | `run18-postmessage-bytes.mjs` |
+| `/api/task/call` 链（改节点声明 → 执行脚本 → 越界写文件） | `run20-task-call.mjs` + `task-call-e2e/README.md`（真实服务） |
 | Host 头读取与伪造 | `host-probe.mjs` |
 | 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
 | 前缀判定的边界与归一化 | `path-probe2.mjs` |
