@@ -1152,7 +1152,7 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 子进程跑的仍然是**同一个 Node、同一个用户、同一份文件系统权限**：
 
 1. `runner.ts:58` 已经 import 了完整的 `node:fs`，脚本自己也能 `import('node:fs')`；
-2. 没有 Node 的 `--experimental-permission`，也没有 `--allow-fs-read` / `--allow-fs-write` 限制；
+2. 没有 Node 的权限模型（`--permission` + `--allow-fs-read` / `--allow-fs-write`）；
 3. 子进程里可以再 `spawn` 别的程序，可以随意出网；
 4. 没有容器、没有 microVM、没有单独的系统用户。
 
