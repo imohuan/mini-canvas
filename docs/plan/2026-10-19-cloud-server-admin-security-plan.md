@@ -314,6 +314,8 @@ app.use('/api/*', async (c, next) => {
 
 首版建议：按 A 做（简单、dev 也能用），并在插件管理页写明「令牌存在本机浏览器，装了不可信插件等于把令牌交给它」。
 
+**令牌的存储键要定死一处**：方案里用 `mc_admin_token`，`plugin-manager`（输入框）、`agentApi.ts`、`cloud-client` 三处都必须读同一个键。散成三个名字的话，用户填了面板却在对话里 403，表现是「有时候能用」。建议加一个极小模块 `packages/ui/src/adminToken.ts`（或在 `canvas-base` 里导出），只做 `get/set/clear`，三处都 import 它。
+
 ### 4.5 请求边界（P1）
 
 新增 `packages/cloud-server/src/requestTrust.ts`：
