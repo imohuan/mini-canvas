@@ -331,16 +331,19 @@ curl -i http://127.0.0.1:8865/api/kv/config/settings
 type .mini-canvas\audit.log
 ```
 
-## 八、实施步骤（四个 commit）
+## 八、实施步骤（五个 commit）
 
 | # | 内容 | 验收 |
 |---|---|---|
+| 0 | 资源回读加 `CSP: sandbox` + `X-Content-Type-Options: nosniff`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
 | 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 34 个入口 + `/api/showcase/`、`/api/agent/canvases/` 两组无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
-| 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
+| 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403；第三方站点自造 sandbox iframe 仍被拒；视觉节点的处理按第十六节结论 |
 | 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + **对话面板会话写请求** + 改测试 | 面板能装插件、能对话，热重载不受影响 |
 
-先做 1（真正堵洞），再做 2（留痕），3 与 4 紧随。
+顺序理由：**commit 0 最先**。只要同源 SVG 还能执行脚本，令牌就是「偷得到的东西」，后面的加固等于白做。然后做 1（堵洞）、2（留痕）、3 与 4。
+
+> 3 与 1 的先后可以换，但**不要**在视觉节点还没处理的前提下先上线 3：它会让视觉节点直接坏掉。第十六节给了三条路，首版建议按「只放行 `/api/node-ui/info` 与素材上传」那一段做最小集。
 
 ## 九、风险与回滚
 
@@ -350,6 +353,7 @@ type .mini-canvas\audit.log
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
+| 回读 SVG 执行脚本 | 第十九节：CSP + nosniff，放进 commit 0 |
 | 审计日志被插件删除 | hash 链可发现；日志与数据目录分开可再加强 |
 
 回滚：`--no-admin-auth` + `MINI_CANVAS_ALLOW_INSECURE=1` 一次性关闭；按 commit revert。
@@ -379,6 +383,8 @@ type .mini-canvas\audit.log
 - [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：Origin 为 null 的例外）
 - [ ] 视觉节点里的 `CanvasUI.task()` **仍被 `/api/task/call` 的令牌挡住**（它走的是同一路径，不能因为加例外而放行）
 - [ ] 第三方网页伪装 `Origin: null` 仍被拒绝（不能只凭 null 放行）
+- [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
+- [ ] 带脚本的 SVG 从 `/api/canvases/*/resources/*` 打开后不执行（第十九节）
 - [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
 - [ ] 会话列表、转录、SSE 流**不需要**令牌（读请求不受影响）
 
@@ -649,21 +655,76 @@ POST   /api/agent/chat/completion
 |---|---|---|
 | `Origin: <同源>` | 同源页面发起的 fetch | 放行 |
 | `Origin: null` + `Sec-Fetch-Site: cross-site` | 第三方网页 / 沙箱 iframe | **默认拒绝** |
-| `Origin: null` + `Sec-Fetch-Site: same-origin` | 不透明源 iframe（沙箱） | 需要**显式开关**才放行 |
+| （不存在）`Origin: null` + `Sec-Fetch-Site: same-origin` | —— | 实测没有这种组合，见下 |
 | 无 `Origin`（curl / 非浏览器） | 本地工具 | 按 Host 校验放行 |
 
-### 推荐实现
+### 实测结论（2026-10-19，Chrome 153）
 
-给 `requestTrust` 加一个显式选项 `allowOpaqueOrigin?: boolean`（默认 **false**）：
+上面那张表的第三行是**错的**。用真浏览器抓了四种请求：
 
-- 关闭时（默认）：`Origin: null` 一律 403，视觉节点会坏；
-- 开启时：`Origin: null` 且 `Sec-Fetch-Site` 为 `same-origin`/`none` 才放行；
-- 视觉节点需要它，所以**部署时必须开启**，并在文档里写明这是「为沙箱 iframe 开的例外」。
+| 场景 | Origin | Sec-Fetch-Site | Sec-Fetch-Mode |
+|---|---|---|---|
+| 画布页自己 fetch（同源） | `http://127.0.0.1:<端口>` | `same-origin` | `cors` |
+| 视觉节点：`sandbox="allow-scripts"` + `srcdoc` | `null` | **`cross-site`** | `cors` |
+| 第三方站点自己造一个同样的 sandbox iframe | `null` | **`cross-site`** | `cors` |
+| 第三方站点直接 fetch | 它自己的源 | `same-site`（同为 127.0.0.1 时） | `cors` |
 
-更稳的做法是给沙箱请求一个**专用标记**：在 `buildCsp` 或生成页面里加一个固定的 `X-MiniCanvas-Ui: 1` 头，服务端只对带这个头的 `Origin: null` 放行。这样第三方网页即使伪造 `Origin: null` 也进不来（它不知道这个约定，而且预检会失败）。
+三点结论：
 
-> 上表里「`Origin: null` + `Sec-Fetch-Site: same-origin`」这一行是**推断**，不是实测：不透明源的 `Sec-Fetch-Site` 具体取什么值跟浏览器版本和请求模式有关。实施第一步应当先在真机上抓一次视觉节点的请求头（Chrome DevTools → Network → 右键该请求 → Copy as cURL），按实际值写判断，别照抄这张表。
-> 专用头比 `Sec-Fetch-Site` 可靠：这个头是浏览器自己生成的，网页伪造不了；但 `X-MiniCanvas-Ui` 是自定义头，网页也能加——它只能挡「不知道这个约定的随手攻击」，挡不住专门针对本项目的攻击。真正的门槛还是令牌。
+1. **不透明源永远报 `cross-site`**，不会出现 `same-origin`。所以「`Origin: null` + `same-origin` 才放行」这条判断一次都不会命中，视觉节点照样 403。
+2. **沙箱 iframe 不是视觉节点独有的**。任何网页都能 `document.createElement('iframe')` + `sandbox="allow-scripts"` + srcdoc，打出来的请求头和视觉节点一模一样。实测里恶意页面通过这个手法拿到了目标接口的完整 JSON 响应。
+3. 因此「按 `Origin: null` 给例外」= **对所有网页开例外**，等于没做防护。
+
+> 复现脚本：`.scratch/header-probe/run2.mjs`（同源 vs 沙箱 vs 第三方）、`run3.mjs`（恶意页面自造 sandbox iframe）。这两个目录不入库，跑法见文件头注释。
+
+### 改后的做法
+
+**视觉节点的请求必须带一个只有宿主能造的凭证，不能靠 Origin 判断。** 三条路，按推荐顺序：
+
+**① 短时票据（推荐）**
+
+- 宿主渲染 iframe 时，向后台要一个 `uiTicket`（绑定 `canvasId + nodeId`，有效期几分钟，一次性或限次）；
+- 票据通过 `srcdoc` 里的 `window.__CANVAS_UI__.ticket` 注进去（本来就有一个 `__CANVAS_UI__` 全局，见 `uiData.ts:451`）；
+- 沙箱页面所有请求带 `x-mc-ui-ticket: <票据>`；
+- 服务端只放行「票据有效」的不透明源请求，且**只放行读接口与素材上传**，不放行 `/api/task/*`、`/api/agent/*`、`/api/server-plugins/*`。
+
+这样恶意页面即使造出同样的 iframe，也拿不到票据——票据是宿主在渲染时注入的，不是猜出来的。
+
+**② 宿主代发（最彻底，工作量大）**
+
+- iframe 不发 HTTP，全走 `postMessage` 交给宿主；宿主带令牌代发；
+- 好处：iframe 永远碰不到网络层，也就不存在「它能不能自己请求」的问题；
+- 代价：`plugin-node-ui` 的桥接层要重写，且视觉节点的调试 SDK 也要跟着改。
+
+**③ 把视觉节点挪到独立源（结构最优，改动最大）**
+
+- 给生成页面一个独立域名/端口（如 `127.0.0.1:8866`），与后台不同源；
+- 这样它天然是跨源，可以直接用正常 CORS 白名单管理，不必给「null 源」开洞；
+- 代价：要再起一个静态服务，部署与打包都变复杂。
+
+### 首版怎么办
+
+首版不做视觉节点的票据（工作量与风险都不小），而是**明确接受一个已知缺口**：
+
+- 请求边界（Host/Origin）**只用于挡住「第三方站点直接打接口」**，对沙箱 iframe 一律拒绝；
+- 视觉节点在首版会**失去直接请求后台的能力**——它的上传、写节点字段会失败；
+- 这让视觉节点暂时不可用（或只能显示、不能保存），必须在上线前说清楚。
+
+如果首版必须保住视觉节点，就**只给它一条专用通路**：
+
+```
+GET  /api/node-ui/info              免令牌（只回 origin 字符串，不含敏感信息）
+POST /api/canvases/:id/resources    免令牌，但只允许 slot 上传、限大小、限扩展名
+```
+
+并在服务端对这两条做**来源判定升级**：不认 `Origin: null`，改认「请求里带的 `slot` 值属于该画布真实存在的节点」。这是业务校验，不是来源校验——伪造者得先知道节点 id，而节点 id 需要读画布才能拿到，读画布又需要同源。
+
+### 对方案的影响
+
+1. **4.5 的规则要删掉「`Origin: null` + `same-origin` 放行」这一行**，它不存在；
+2. **实施顺序**：请求边界（第三 commit）之前必须先确认视觉节点仍能工作；
+3. **验证清单**要加两条：视觉节点能加载并上传；第三方网页自造 sandbox iframe **仍被拒绝**。
+4. **不要**用 `X-MiniCanvas-Ui: 1` 这类自定义头当门槛——网页也能加，挡不住；它只能当「减少误伤」的提示，不能当鉴权。
 
 ### 对方案的影响
 
@@ -765,4 +826,66 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 画布右侧的对话面板在 `packages/ui` 里，和页面同源，加令牌可行；但要改它所有会话写请求（约 15 处），属于第四个 commit 的增量工作。
 
 **如果这一版不做**：至少要承认「任何人仍能让你的 Agent 跑命令、烧你的 token」，并在文档和启动日志里写明。这与第二节「防不住：用户自己确认安装的恶意插件」不是一回事，不要混在一条里。
+
+## 十九、同源上传的 SVG 会执行脚本（实测确认，优先级 P0）
+
+这一条比前面所有「外部网页打后台」更严重：它**不需要跨源**，也不需要令牌。
+
+### 复现（本地实测通过）
+
+后台允许上传资源，回读时按扩展名给 `content-type`。`.svg` 在白名单里（`store/mime.ts:17`），回读时设 `image/svg+xml`（`routes/canvases.ts:120-129`），且**没有任何** `Content-Security-Policy` 或 `X-Content-Type-Options`。
+
+于是：
+
+```
+1. 匿名 POST /api/canvases/default/resources?name=payload.svg
+   请求体 = 一段带 <script> 的 SVG（不需要令牌，不需要 confirm）
+2. 拿到返回的 /api/canvases/default/resources/<hash>.svg
+3. 用户打开这个地址（或它被嵌进画布资源预览）
+4. SVG 里的脚本在**后台自己的源**上执行
+5. 它能读 localStorage 里的管理令牌、能以同源身份调所有接口
+```
+
+实测输出（Chrome 153，脚本 `.scratch/header-probe/run7-svg.mjs`）：
+
+```
+匿名上传 → 200
+回读 content-type: image/svg+xml；CSP: 无；X-Content-Type-Options: 无
+打开该地址 → document.title 变成 XSS-RAN token=FAKE-TOKEN-ABCDEF
+同源脚本读到 localStorage: {"token":"FAKE-TOKEN-ABCDEF"}
+```
+
+所以：**只要令牌存在 localStorage，任何能上传 SVG 的人都能把它读走**。而上传接口在首版清单之外（它属于画布数据写入，方案 C 不保护）。
+
+### 三条独立的修法，必须至少做第一条
+
+1. **回读时禁止 SVG 当文档执行**：给 `/api/canvases/:id/resources/*` 与 `/api/assets/files/*` 加 `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; sandbox` 与 `X-Content-Type-Options: nosniff`。这一条最省事：不改存储、不改上传，只改响应头。SVG 常被 `<img>` 引用，`sandbox` 不影响 `<img>` 渲染，只影响直接打开。
+2. **把 `.svg` 从「可直接回读为文档」的名单里摘出来**：回读统一给 `application/octet-stream` + `Content-Disposition: attachment`；需要显示时由前端用 `<img src>` 引用（`<img>` 不执行脚本）。
+3. **上传分离到独立源**：与第十六节第 ③ 条同思路，资源从另一个端口提供，天然隔离。
+
+### 与令牌方案的关系（很重要）
+
+这一条说明 **localStorage 存令牌有实际后果**，不只是理论风险：
+
+- 只要有一个 XSS（SVG，或任何同源注入），令牌就会被读走；
+- HttpOnly cookie 能挡住「读」，挡不住「用它发请求」（XSS 可以直接 fetch）；
+- 所以真正的分界不是「令牌放哪」，而是**有没有同源 XSS**。
+
+结论：第 1 条应当**提到第一个 commit**，与令牌同批上线。否则令牌只是把「别人装插件」换成「别人先偷令牌再装插件」。
+
+### 同类位置要一起查
+
+- `/api/assets/files/:name`：`routes/assets.ts:45` 同样用 `mimeFromName`，白名单同样含 `.svg`；
+- 风格库 `/api/style-library/file`：`plugin-style-library/src/server.ts:457`，`MEDIA_EXTS` 也含 `svg`（`:60`），同样直接 `c.body(...)`；
+- 画布资源槽位：`slot-*.svg` 同样可上传（扩展名走 `ALLOWED_EXT`）。
+
+三处受同一条影响，修法一致。
+
+### 验收
+
+- [ ] 上传一个带 `<script>document.title='x'</script>` 的 SVG，直接打开该地址，标题**不变**、控制台报 CSP 拦截；
+- [ ] 同一地址的响应头包含 `content-security-policy` 与 `x-content-type-options: nosniff`；
+- [ ] 用 `<img src="...svg">` 引用同一文件，仍能正常显示；
+- [ ] `/api/assets/files/*`、`/api/style-library/file` 同上。
+
 
