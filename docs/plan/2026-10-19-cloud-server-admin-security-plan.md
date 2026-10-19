@@ -232,6 +232,8 @@ export interface AuditEntry {
 
 export function createAuditLog(filePath: string): {
   append(e: Omit<AuditEntry, 'at' | 'prev' | 'hash'>): Promise<void>
+  /** 校验整条链：返回第一处断裂（没有断就 undefined）。只读，供测试与排查用。 */
+  verify(): Promise<{ ok: true } | { ok: false; line: number; reason: string }>
 }
 ```
 
@@ -242,6 +244,8 @@ export function createAuditLog(filePath: string): {
 - `fs.appendFile` 失败只 `console.warn`，不阻断；
 - 绝不记录令牌原文；
 - 写入顺序：**进入写路由先记 attempt → 执行 → 成功后补一条 ok**（失败补 rejected）。
+
+`verify()` 是这套机制的价值所在——只写不验，链就只是「多算了几次 hash」。它要能回答三件事：某行 hash 与内容不符（被改）、某行 `prev` 与上一行 `hash` 不衔接（被删或被插）、以及首行 `prev` 不为空（文件被截断重写）。CLI 加一个 `audit-verify` 子命令（不开服务、只读文件），比让人手算 sha256 现实得多。
 
 **必须串行写，否则链会分叉**：`prev` 依赖「上一条的 hash」，而 HTTP 请求是并发的。两个请求同时进来、各自读到同一个 `lastHash`，就会写出两条 `prev` 相同的记录——链结构从那一刻起不再是一条线，后面再也验不出「哪条被删了」。实现上要有一个**单写者**：把所有 `append` 丢进一个 promise 链（`this.tail = this.tail.then(() => write(e))`），保证「读上一跳 → 算 hash → 落盘」三步不交错。这条不加，hash 链等于白做。
 
