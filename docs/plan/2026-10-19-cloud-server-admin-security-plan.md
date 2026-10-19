@@ -529,6 +529,7 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 为什么这条之前没写进文档
 
+之前的方案只扫了 `packages/cloud-server/src/routes`，没有扫 `packages/plugins/*/src` 里的 `ctx.routes.*`。这类路由是**运行时注册**的，静态清单不可能穷举——所以最终必须落到「注册时声明鉴权」，而不是继续补白名单。
 
 ## 十五、SSRF 链路（补充确认）
 
@@ -561,7 +562,7 @@ export function assertHttpUrl(raw: string): string {
 
 ### 对首版清单的影响
 
-第十三节的 26 条要再加：
+第十三节的 26 条要再加下面 6 条：
 
 ```
 POST   /api/agent/models
@@ -577,6 +578,3 @@ POST   /api/agent/chat/completion
 ### 为什么这条之前没写
 
 之前只把 `/api/agent/*` 当成「配置类接口」，没意识到 `baseUrl` 直接决定服务端出网目标。配置类接口的价值不在它本身，而在它**改变了后续请求的去向**——这类间接影响需要单独列一节。
-
-
-
