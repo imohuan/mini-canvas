@@ -874,6 +874,15 @@ iframe 里 CanvasUI.save(bytes) 不再 fetch，改成 postMessage({__canvasUi:1,
 
 `postMessage` 传字节：`Uint8Array` 可被结构化克隆，不需要 base64（当前 `uiData.ts` 里的注释也提到结构化克隆；传 `ArrayBuffer` 最省）。
 
+改动点已经定位清楚（实施时照这两处改）：
+
+| 文件 | 现在做什么 | 改成 |
+|---|---|---|
+| `plugin-node-ui/src/uiData.ts:583-604`（`CanvasUI.save`） | 自己 `fetch(.../resources?slot=...)` 上传，成功后 `post({type:'output', url})` | 不 fetch；`post({__canvasUi:1, type:'save', bytes, name})`，等宿主回传 `output` |
+| `plugin-node-ui/src/UiContent.vue:599`（`onBridgeMessage`） | 只处理 `ready` / `state` / `output` | 增加分支 `type === 'save'`：取 `m.bytes`，用带令牌的 fetch 上传，成功后走原有的 `output` 写入逻辑 |
+
+宿主那条 fetch 需要一个令牌来源。`UiContent.vue` 跑在 `packages/ui` 里，和令牌输入框同源，读 localStorage 即可。
+
 **剩下要单独放行的只有一条**：
 
 ```
