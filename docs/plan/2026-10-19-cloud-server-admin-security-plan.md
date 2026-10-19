@@ -61,11 +61,11 @@
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，37 个入口，另加 /api/showcase/ 一组前缀，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节：34 个单条入口，另加 `/api/showcase/` 与 `/api/agent/canvases/` 两个前缀组），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
-5. **令牌不出现在页面可读的位置**：不用 `<meta>` 注入，改 HttpOnly cookie 或手动输入。
+5. **令牌不做被动泄露**：不用 `<meta>` 注入、不写进任何接口响应。首版用手动输入存 `localStorage`——注意它挡得住「别的网站」，挡不住「同源的前端插件」（见 4.4 末尾）；真要做到页面读不到，只有 HttpOnly cookie 一条路。
 6. **首版与终态分开写清楚**：第十三节给出首版范围，升级路径在第十二节之后说明。
 
 ### 4.2 审计日志（P0）
@@ -138,17 +138,32 @@ export async function createAdminAuth(opts: {
 4. **首版保护范围**（方案 C，见第十三节）：只匹配下列前缀，一律要令牌：
 
    ```
-   /api/server-plugins/     /api/npm-plugins/
-   /api/agent/mcp           /api/agent/skills
-   /api/agent/system-prompt /api/agent/template/
-   /api/agent/prompts       /api/agent/policy
-   /api/agent/title-model
+   # 安装 / 执行代码
+   /api/server-plugins/      /api/npm-plugins/
+   /api/agent/mcp            /api/agent/skills
+   /api/task/                /api/node-packages/
+
+   # 改服务端行为（提示词 / 模板 / 策略 / 出网目标）
+   /api/agent/system-prompt  /api/agent/template/
+   /api/agent/prompts        /api/agent/policy
+   /api/agent/title-model    /api/agent/models
+   /api/agent/chat/completion
+
+   # 写本机文件 / 改读取根目录 / 调试通道
+   /api/node-ui/debug-       /api/style-library/
+   /api/effect-library/      /api/showcase/
+
+   # Agent 会话（间接执行命令 + 花钱）
+   /api/agent/canvases/
    ```
 
-   这些是「能引入可执行代码或执行命令」的全部入口（第十三节有逐条依据）。
+   这些是「能引入可执行代码、执行命令、或改变服务端出网目标」的全部入口，共 34 条具体路由（第十三节有逐条清单，第十四、十五节有来源说明）。
+   `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）。
+   `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个。
+   注意 `/api/showcase/` 是一条前缀组，覆盖 `plugin-showcase` 注册的 11 个写接口。
 5. **暂不保护**：`GET/HEAD` 读接口；画布 / 资产 / 项目 / 历史 / KV 等数据写接口（靠 4.5 的请求边界保护）；`/mcp`（单独议题）。升级到全量方法保护时，这些再一起加。
 
-覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改：
+覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改。**必须挂在 `await host.start()` 之前**——插件路由是在 `start()` 时一次性 flush 成 Hono 代理的，晚于它挂的 `use` 不会作用到那些代理上。
 
 ```ts
 app.use('/api/*', async (c, next) => {
@@ -182,6 +197,17 @@ app.use('/api/*', async (c, next) => {
 - 前端 `VITE_ADMIN_TOKEN` 在 dev 下写入请求头。
 
 **明确不做**：把令牌注入 `<meta>` 标签。画布里加载的任何第三方前端插件都能读到它。
+
+**A 方案也有同一个弱点，要说清楚**：`localStorage` 是**同源共享**的。任何装进画布的前端插件都和画布页面同源，都能 `localStorage.getItem('mc_admin_token')` 把令牌读走，然后自己去装后台插件。
+
+所以「不注入 meta」只挡住了「随手就能读到的被动泄露」，挡不住「主动去读」。真正的分界在第二节那张表：
+
+- 防得住：**别的网站**（不同源，读不到 localStorage）；
+- 防不住：**已经装进画布的插件**（同源，能做页面能做的一切）。
+
+想把这一层也收紧，只有 B（HttpOnly cookie）能做到——JS 读不到，只能由浏览器自动带上。代价是要多一层 CSRF 校验（Origin/Host 检查已经在 4.5 里了，正好够用），且 dev :5288 跨源拿不到 cookie，仍得回落到 A。
+
+首版建议：按 A 做（简单、dev 也能用），并在插件管理页写明「令牌存在本机浏览器，装了不可信插件等于把令牌交给它」。
 
 ### 4.5 请求边界（P1）
 
@@ -308,10 +334,10 @@ type .mini-canvas\audit.log
 
 | # | 内容 | 验收 |
 |---|---|---|
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 37 个入口无令牌 403；画布/资产写接口不受影响 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 34 个入口 + `/api/showcase/`、`/api/agent/canvases/` 两组无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
-| 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + 改测试 | 面板能装插件，热重载不受影响 |
+| 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + **对话面板会话写请求** + 改测试 | 面板能装插件、能对话，热重载不受影响 |
 
 先做 1（真正堵洞），再做 2（留痕），3 与 4 紧随。
 
@@ -319,7 +345,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 37 个入口，画布数据与 watch 门铃都不受影响；只有插件面板需要带令牌 |
+| 前端写请求被 403 | 首版只拦 34 个入口加 showcase、agent-canvases 两组，画布数据与 watch 门铃都不受影响；插件面板与对话面板需要带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -344,13 +370,18 @@ type .mini-canvas\audit.log
 - [ ] ui 测试与 typecheck 全绿
 - [ ] 插件管理面板能装/卸后台插件
 - [ ] plugin-hot-reload 的 watch 门铃仍能送达
-- [ ] 受保护入口清单（23 条）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
+- [ ] 受保护入口清单（34 条，另加 `/api/showcase/` 前缀组共 11 个写接口）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
 - [ ] 新增插件注册后台路由时，能通过统一声明标记鉴权等级（长期机制，见第十四节）
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
 - [ ] `POST /api/agent/chat/completion` 无令牌返回 403
 - [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：Origin 为 null 的例外）
+- [ ] 视觉节点里的 `CanvasUI.task()` **仍被 `/api/task/call` 的令牌挡住**（它走的是同一路径，不能因为加例外而放行）
 - [ ] 第三方网页伪装 `Origin: null` 仍被拒绝（不能只凭 null 放行）
+
+> 这两条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。
+> 第十六节给 sandbox 开的例外如果写成「`Origin: null` 就放行」，这条路径会顺带被放开——等于把第十四节最危险的洞又打开了。
+> 必须让「Origin 例外」只作用于读接口与素材上传，`/api/task/` 这类入口始终要令牌。
 
 ## 十一、不在本次范围
 
@@ -376,7 +407,7 @@ type .mini-canvas\audit.log
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在 37 个入口里）；升级全量保护时再加令牌 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在保护清单里）；升级全量保护时再加令牌 |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
@@ -426,6 +457,7 @@ POST /api/npm-plugins/update
 POST /api/npm-plugins/uninstall
 POST /api/agent/mcp
 DELETE /api/agent/mcp
+POST /api/agent/mcp/probe
 POST /api/agent/skills/import
 DELETE /api/agent/skills/:name
 PUT  /api/agent/system-prompt
@@ -450,18 +482,22 @@ POST /api/node-ui/debug-result
 POST /api/task/cancel
 PUT  /api/style-library/settings
 POST /api/style-library/reload
+PUT  /api/effect-library/settings
+POST /api/effect-library/reload
 POST/PUT/DELETE /api/showcase/*
 ```
 
-清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/settings`、`/api/style-library/reload`、`/api/showcase/`），不逐个写死方法。
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/agent/models`、`/api/agent/chat/completion`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/`、`/api/effect-library/`、`/api/showcase/`），不逐个写死方法。
 
-> 末尾 15 条来自后续两节：第十四节的插件运行时注册路由（`ctx.routes.*`，静态扫描看不到）与第十五节的 SSRF 入口。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 能把读取目录改到任意路径，是第二个。
+> 清单后一半来自后续两节：第十四节的插件运行时注册路由（`ctx.routes.*`，静态扫描看不到）与第十五节的 SSRF 入口。`/api/task/call` 能执行任意脚本，是这批里最危险的；`PUT /api/style-library/settings` 与 `PUT /api/effect-library/settings` 能把读取目录改到任意路径，是第二梯队。
+
+> 两处按前缀匹配而不是按单条路由匹配：`/api/agent/mcp` 会一并保护 `/api/agent/mcp/probe`（探测会拉起已配置的 stdio 命令）；`/api/style-library/` 与 `/api/effect-library/` 整段保护，避免以后新增子路由漏掉。
 
 同时必须改：
 
 - `plugin-manager` 面板的写请求带令牌；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
-- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在 37 个入口里。升级全量写保护时再加令牌。
+- `plugin-cloud-client` 首版不用改：它写的是画布数据与 KV，都不在保护清单里。升级全量写保护时再加令牌。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
@@ -510,23 +546,25 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 对首版清单的修订
 
-第十三节的主清单已并入下面这些（37 个入口，另加 /api/showcase/ 一组前缀）：
+第十三节的主清单是这三块合并的结果：
 
 ```
-第十二节之前的 14 条基础入口
-+ POST /api/task/call
-+ POST /api/node-packages/build
-+ POST /api/node-packages/save
-+ POST /api/node-packages/export
-+ POST /api/node-packages/inspect
-+ POST /api/node-packages/import
-+ POST /api/node-ui/debug-accept
-+ POST /api/node-ui/debug-result
-+POST /api/task/cancel
-+PUT  /api/style-library/settings
-+ POST /api/style-library/reload
-+POST/PUT/DELETE /api/showcase/*
+14 条固定路由（server-plugins 2 + npm-plugins 3 + agent 配置 9）
++ 6 条 SSRF 入口（agent/models 5 + chat/completion 1）        → 20
++ 14 条（13 条插件运行时路由 + 1 条固定路由）：
+    /api/task/call、/api/task/cancel
+    /api/node-packages/{build,save,export,inspect,import}
+    /api/node-ui/debug-{accept,result}
+    /api/style-library/{settings,reload}
+    /api/effect-library/{settings,reload}
+    /api/agent/mcp/probe（固定路由，但会拉起已配置的 stdio 命令）
+                                                              → 34
++ /api/showcase/ 前缀组（plugin-showcase 的 11 个写接口）
 ```
+
+`/api/agent/mcp/probe` 容易被漏掉：它只是「检查连接」，但实现是真的去连一次——配置里若有 `stdio` 服务，这一步就会把那个命令跑起来。
+
+`/api/effect-library/*` 容易被漏掉：它和 `/api/style-library/*` 是同一段代码用两份规格注册的（`LIBRARIES` 数组），扫代码时只看到一个前缀名。
 
 并加一条**长期机制**：插件注册后台路由时声明鉴权等级，避免今后新增插件又漏。
 
@@ -576,7 +614,7 @@ POST   /api/agent/models/available
 POST   /api/agent/chat/completion
 ```
 
-合计 37 条（另加 `/api/showcase/` 前缀组）。
+合计 34 条（另加 `/api/showcase/` 前缀组）。
 
 ### 为什么这条之前没写
 
@@ -634,4 +672,87 @@ POST   /api/agent/chat/completion
 - 生成页面永远拿不到管理令牌。
 
 这也是为什么第十四节推荐「给 `/api/task/call` 加独立脚本执行令牌」——沙箱里的页面可以上传素材，但不该能执行任意脚本。
+
+## 十七、`/api/task/call` 的隔离边界（补充确认）
+
+第十四节说 `/api/task/call` 能执行任意脚本。这里补一句容易被误解的地方：它**已经有进程隔离，但没有权限隔离**。两件事经常被混为一谈。
+
+### 已有什么
+
+`packages/plugins/plugin-node-ui/src/task/runner.ts:344` 用 `spawn(process.execPath, ...)` 起一个**独立子进程**（非 Windows 上 `detached: true` 自成进程组，`stdio` 第四条是 `ipc`，结果经 `process.send` 回传），`:258` 在收尾时用 `taskkill /PID <pid> /T /F` 结束整棵进程树。
+
+所以：
+
+- 脚本死循环、崩溃、把 CPU 打满，不会把后台主进程带死；
+- 取消任务时能把子进程和它再起的孙进程一起收掉。
+
+### 没有什么
+
+子进程跑的仍然是**同一个 Node、同一个用户、同一份文件系统权限**：
+
+1. `runner.ts:58` 已经 import 了完整的 `node:fs`，脚本自己也能 `import('node:fs')`；
+2. 没有 Node 的 `--experimental-permission`，也没有 `--allow-fs-read` / `--allow-fs-write` 限制；
+3. 子进程里可以再 `spawn` 别的程序，可以随意出网；
+4. 没有容器、没有 microVM、没有单独的系统用户。
+
+也就是说：**进程隔离解决「崩不崩」，不解决「能不能干坏事」**。脚本能读你的 SSH key、能改 `admin-token`、能删数据目录——只要当前用户有权限。
+
+这与第二节「防不住：插件在进程内滥用宿主权限」是同一条根因，只是表现形式从「同进程」变成「子进程」。
+
+### 对本次方案的含义
+
+1. 首版把 `/api/task/call` 纳入令牌保护，挡住的是「外部网页偷偷调它」；挡不住「已授权的调用方传一个恶意脚本」；
+2. 第十四节建议的「独立脚本执行令牌」只解决调用方身份，不解决脚本能力；
+3. 真正收紧要另开一版，手段（按代价从低到高）：
+
+| 手段 | 挡住什么 | 代价 |
+|---|---|---|
+| Node 24 `--experimental-permission --allow-fs-read=... --allow-fs-write=...` | 越界读写文件 | 小；但子进程启动参数要改，且部分依赖会报错 |
+| 禁 `child_process` + 限制出网（`--allow-net` 或防火墙规则） | 再起进程、外联 | 中；可能影响需要联网的任务 |
+| 独立系统用户 / 容器 / microVM | 上面全部 | 大；部署与调试复杂度上一个台阶 |
+
+这三条都**不在本次范围**（第十一节第 1 条已列）。这里写清楚是为了避免实施时误以为「加了令牌就安全了」。
+
+### 验收时怎么区分
+
+- 令牌测试：不带 `x-admin-token` 调 `/api/task/call` → 403。这验证的是「门锁上了」；
+- 隔离测试（本版不做）：带正确令牌提交一个 `import('node:fs').writeFileSync('C:/temp/pwn.txt','x')` 的脚本 → 应当失败。现在会成功。
+
+## 十八、Agent 会话也能间接执行命令（首版漏网的一条链）
+
+首版清单保护了「改配置」，但没保护 `agentSessions.ts` 里那批会话写接口。而它们能把命令跑起来：
+
+```
+1. POST /api/agent/canvases/:id/sessions              → 建一个会话（无鉴权）
+2. POST /api/agent/canvases/:id/sessions/:sid/messages → 让模型干活（无鉴权）
+3. 模型决定调 exec_command                            → 触发审批
+4. POST /api/agent/canvases/:id/sessions/:sid/approvals/:aid → 允许（无鉴权）
+```
+
+第 4 步不需要知道审批内容，`decision` 缺省就是 `allow`（`agentSessions.ts:818`）。整条链的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响。
+
+另外两个副作用不需要模型配合：
+
+- `POST /messages` 每调一次就是一轮真实模型调用，**花的是你的钱**；
+- `POST /sessions/:sid/queue`、`/goal`、`/compact`、`/fork` 都能反复触发运行。
+
+### 怎么办
+
+**首版的最小补法**：把下面几条也加进清单（它们是「花钱」与「间接执行命令」的关键）：
+
+```
+POST   /api/agent/canvases/:canvasId/sessions
+POST   /api/agent/canvases/:canvasId/sessions/:sessionId/messages
+POST   /api/agent/canvases/:canvasId/sessions/:sessionId/approvals/:approvalId
+POST   /api/agent/canvases/:canvasId/sessions/:sessionId/queue
+POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
+```
+
+全部 `/api/agent/canvases/` 下的写方法一起保护更简单，且这里没有沙箱 iframe 的麻烦——会话面板和画布同源，能带令牌。
+
+### 这会打坏什么
+
+画布右侧的对话面板在 `packages/ui` 里，和页面同源，加令牌可行；但要改它所有会话写请求（约 15 处），属于第四个 commit 的增量工作。
+
+**如果这一版不做**：至少要承认「任何人仍能让你的 Agent 跑命令、烧你的 token」，并在文档和启动日志里写明。这与第二节「防不住：用户自己确认安装的恶意插件」不是一回事，不要混在一条里。
 
