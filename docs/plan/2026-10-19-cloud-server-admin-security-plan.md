@@ -32,13 +32,19 @@
 
 实测（`run5-pna.mjs`，Chrome 153，从 `http://evil.test:<端口>` 打 `127.0.0.1:<后台>`）：
 
-- 目标服务**完全不放 CORS** 时，恶意页面里三个 `fetch` 全部报 `Failed to fetch`，但服务端**收到了全部请求**（`sec-fetch-site: cross-site`）；
+- 目标服务**完全不放 CORS** 时，恶意页面里三个 `fetch` 全部报 `Failed to fetch`，但服务端收到了**全部三个**请求（含带 `application/json` 那个）。其中 `text/plain` 和 `GET` 不触发预检；带 `application/json` 的只发了预检 `OPTIONS`，预检未通过，所以真正的 POST **没有发出**——这个区别很重要：
+
+```
+simple POST (text/plain)  → 直接到达服务端，副作用发生
+json POST                 → 只到一个 OPTIONS，预检失败，POST 没发
+GET                       → 直接到达（但读不到响应）
+```
 - 也就是说：`POST /api/canvases/:id/nodes` 这类写接口，**副作用已经发生**，浏览器只是不让脚本读响应；
-- 本项目现在是 `origin: '*'`，所以连响应也读得到。
+- 本项目现在是 `origin: '*'`，预检会通过，所以 **JSON 写请求也能完整发出并读到响应**（`run6-wildcard.mjs` 实测：写接口 200 且读到 body）。
 
-推断（未在浏览器里逐条验证，但协议层面成立）：`text/plain` 的「简单请求」不发预检，天然就能打到；带 `application/json` 的请求需要预检通过才能发出，而 `origin: '*'` 会通过。
+结论：**收紧 CORS 能挡住「JSON 写请求」，挡不住「简单请求」**。而简单请求恰恰能改到东西（`POST /api/canvases/:id/resources` 直接收字节、`PUT /api/kv/:type/:key` 是 PUT 但同样可能被简单请求覆盖）。所以 CORS 是必要的一层，但**不能当唯一防线**；真正拦住「别人让后台做事」靠令牌与 Host 白名单。
 
-结论：**收紧 CORS 只能减少情报泄露，不能阻止写操作**。想真正拦住「别人让后台做事」，靠的是令牌与 Host 白名单；请求边界是补充，不是主力。
+> 实施时要把「哪些写接口能用简单请求打通」逐条过一遍（`content-type` 不是 `application/json` 的 POST、以及所有 PUT 的预检行为）。实测里 `text/plain` 的 POST 确实直达。
 
 ## 二、边界（先说清楚能防什么）
 
@@ -51,7 +57,7 @@
 | 任意网页向本机后台投递代码/命令 | 管理令牌 + 请求边界 |
 | 局域网其它机器（若监听 0.0.0.0） | Host 白名单 + 令牌 |
 | DNS 重绑定 | Host 头必须为本机/白名单 |
-| 跨站浏览器请求（CSRF） | Origin 必须等于 Host；`sec-fetch-site: cross-site` 拒绝。**注意它挡不住「副作用」**，只挡读响应（见第一节实测） |
+| 跨站浏览器请求（CSRF） | Origin 必须等于 Host；`sec-fetch-site: cross-site` 拒绝。**JSON 写请求会被挡住，简单请求（`text/plain`）挡不住**（见第一节实测） |
 | 事后无法追溯 | JSONL 审计日志 |
 
 **防不住（与 DSH 同级，属行业现实）**
