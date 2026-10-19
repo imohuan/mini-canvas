@@ -1334,8 +1334,8 @@ node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> <脚本>
 
 另外两个副作用不需要模型配合：
 
-- `POST /messages` 每调一次就是一轮真实模型调用，**花的是你的钱**（这也是为什么这组接口必须进首版清单：即使模型拒绝用命令，钱也已经花了）；
-- `POST /sessions/:sid/queue`、`/goal`、`/compact`、`/fork` 都能反复触发运行。
+- `POST /messages` 每调一次就是一轮真实模型调用，**花的是你的钱**（已复现，见上）；
+- `POST /sessions/:sid/queue`、`/goal`、`/compact`、`/fork` 都能反复触发运行（代码路径，未逐个复现）。
 
 ### 怎么办
 
