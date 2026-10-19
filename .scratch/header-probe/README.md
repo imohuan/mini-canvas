@@ -1,0 +1,33 @@
+# cloud-server 安全方案的实测脚本（2026-10-19）
+
+配合 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md` 使用。每个脚本只做只读或写到临时目录的事，不需要联网。
+
+| 脚本 | 验证什么 | 结论（已写进文档） |
+|---|---|---|
+| `run2.mjs` | 同源 / 沙箱 srcdoc / 第三方三种请求的 `Origin`、`Sec-Fetch-*` | 不透明源永远是 `cross-site`，不存在 doc 里原先假设的 `same-origin` |
+| `run3.mjs` | 恶意页面自己造 sandbox iframe 能不能打后台 | 能，请求头与视觉节点完全一致 |
+| `run5-pna.mjs` | 公网域名页面打 `127.0.0.1` | 简单请求能送达，JSON 请求被预检拦住 |
+| `run6-wildcard.mjs` | 后台用 `cors()` 默认 `origin: '*'` 时 | 公网页面能读写，连响应体都拿得到 |
+| `run7-svg.mjs` | 匿名上传 SVG 再打开 | 脚本执行，能读同源 localStorage（mock 服务） |
+| `real-browser-svg.mjs` | 同上，但打**真实 cloud-server** | 真实服务同样复现 |
+| `run8-rebind.mjs` | DNS 重绑定 | `Host` 变成恶意域名，请求成功；只比 Origin==Host 不够 |
+| `run9-csp.mjs` | CSP 各写法能否挡住 SVG 脚本、会不会弄坏 `<img>` | `sandbox` / `default-src 'none'` / `script-src 'none'` 都能挡，且不影响 `<img>` |
+| `run10-simple.mjs` | 哪些写方法能在无 CORS 时直达 | 简单请求（`text/plain`、form、FormData）直达；PUT 走预检 |
+| `run11-real-simple.mjs` | 对着真实 cloud-server 用简单请求改画布 | `POST /api/canvases/:id/nodes` 成功写入节点 |
+| `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
+| `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
+| `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写/双斜杠/编码都会被 Hono 归一，未发现绕过 |
+| `real-probe.mjs` | 真实服务的 CORS、安装接口、SVG 回读、`/mcp` | 安装接口有可信哈希把关；`/mcp` 无鉴权 |
+
+## 怎么跑
+
+```bash
+# 需要 chrome 的：脚本里写死了本机路径，可用 CHROME_EXE 覆盖
+node .scratch/header-probe/run2.mjs
+
+# 需要真实服务的：先起一个临时实例
+node packages/cloud-server/dist/cli.js serve -p 8934 -d ./.scratch/real-data2 --no-open
+node .scratch/header-probe/run11-real-simple.mjs
+```
+
+`run.mjs` 是最早的一版探针（srcdoc 拼接方式不严谨），保留作对照，结论以 `run2.mjs` 为准。

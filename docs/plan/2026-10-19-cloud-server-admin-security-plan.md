@@ -824,7 +824,7 @@ POST   /api/agent/chat/completion
 2. **沙箱 iframe 不是视觉节点独有的**。任何网页都能 `document.createElement('iframe')` + `sandbox="allow-scripts"` + srcdoc，打出来的请求头和视觉节点一模一样。实测里恶意页面通过这个手法拿到了目标接口的完整 JSON 响应。
 3. 因此「按 `Origin: null` 给例外」= **对所有网页开例外**，等于没做防护。
 
-> 复现脚本：`.scratch/header-probe/run2.mjs`（同源 vs 沙箱 vs 第三方）、`run3.mjs`（恶意页面自造 sandbox iframe）。这两个目录不入库，跑法见文件头注释。
+> 复现脚本：`.scratch/header-probe/run2.mjs`（同源 vs 沙箱 vs 第三方）、`run3.mjs`（恶意页面自造 sandbox iframe）。脚本已随本方案提交，跑法见文件头注释。
 
 ### 改后的做法
 
