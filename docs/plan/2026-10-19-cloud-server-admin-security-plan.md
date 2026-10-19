@@ -42,6 +42,8 @@
 
 ## 二、边界（先说清楚能防什么）
 
+> 先说一个**容易误以为是安全机制**的东西：插件 `package.json` 里的 `miniCanvas.serverPermissions`。它现在只是清单字段——`plugins/catalog.ts:267-290` 把它原样塞进目录条目，`:343/:420` 读出来展示，**没有任何地方据此限制能力**。`plugin-style-library` 写的是 `"serverPermissions": []`，它的后台照样能读任意文件、能把根目录改到任意路径。所以本轮方案不依赖它；真正要收紧权限，见第十七节末的三档手段。
+
 **能防住**
 
 | 威胁 | 手段 |
@@ -294,7 +296,13 @@ export function requestTrust(opts: {
 - 需要时用 `--trusted-origin http://localhost:5288` 显式开启，或设置 `MINI_CANVAS_TRUSTED_ORIGINS`；
 - 文档给出启动命令示例。
 
+**dev 代理多了一个主机名**（实测读 `packages/ui/vite.config.ts`）：vite 的 `/api` 代理 target 是 `http://localhost:8865`，且 `changeOrigin: true`。也就是说，从 `:5288` 发起的请求，到了后台时 `Origin` 是 `http://localhost:5288`，而 `Host` 会变成 `localhost:8865`（不是 `127.0.0.1:8865`）。所以 dev 场景下 `trustedHosts` 必须同时包含 `127.0.0.1:<port>` 与 `localhost:<port>`，`trustedOrigins` 要显式加 `http://localhost:5288`。
+
+> 顺带一个与安全无关、但实施时必踩的点：vite dev 的 `configure` 里手动把 `access-control-allow-origin` 改成了 `'*'`。收紧 CORS 之后，这段必须一起改，否则 dev 会把后台的严格头覆盖成 `*`，看起来像「改了没生效」。
+
 **CORS 也要收紧**：当前 `cors()` 默认 `origin: '*'`。改为同源（与 Host 一致）或显式白名单；`allowMethods` 保留需要的集合。
+
+**还有一条不能忘**：收紧 CORS 之后，**错误响应也要带 CORS 头**。否则跨源请求被 403 时，浏览器不会把 403 交给前端脚本（前端只看到 `Failed to fetch`），插件面板就无法提示「请先填令牌」。实测（`guard-probe.mjs`）：同源请求被 403 时带 ACAO，跨源请求被 403 时**不带**——后者前端拿不到错误体。
 
 ## 五、接口契约
 
@@ -313,6 +321,8 @@ x-admin-token: <64 位 hex>
 | 缺令牌 | 403 | `{ ok:false, error:'需要管理令牌（x-admin-token）；见启动日志或 <dataDir>/admin-token' }` |
 | 令牌错 | 403 | 与上同（不区分缺失/错误，避免探测） |
 | Host/Origin 不可信 | 403 | `{ ok:false, error:'请求来源不受信任' }` |
+
+> 前端怎么区分「令牌没填」和「服务没起」：403 + 这批固定文案 = 要令牌；网络错误或 5xx = 服务问题。插件面板按这个判断提示。
 
 ### 5.3 开关
 
