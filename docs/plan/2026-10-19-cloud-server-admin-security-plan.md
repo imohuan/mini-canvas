@@ -133,8 +133,18 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 | 网页下生成单（消耗平台额度） | `POST /api/jobs` 同样没有鉴权；实测跨源简单请求能到路由（`400 未找到动作` = 已进 handler），配上真实 actionId 就会消耗额度 |
 | 网页间接执行代码（节点脚本 / MCP stdio） | `/api/task/`、`/api/agent/mcp` 加令牌 |
 | 事后无法追溯 | JSONL 审计日志 |
+| 网页调 `/mcp` 批量改画布 | 首版**不做**（第十一节第 3 条）；能挡它的只有 Host 白名单 + 收紧 CORS。实测见下 |
 
 这几条是「先封最贵的」：执行代码 > 改画布 > 花钱 > 读数据。不在表里的威胁要么代价小，要么挡不住（见下）。
+
+**`/mcp` 的实测边界**（`.scratch/header-probe/run15-mcp.mjs`，真实服务）：
+
+- 跨源预检：`204`，`access-control-allow-origin: *`；
+- 跨源 + `application/json`：**200，工具列表直接返回**；
+- 跨源 + `text/plain`（简单请求）：`415`，因为它强制要求 `application/json`；
+- 无 Origin（curl）：200。
+
+也就是说：`/mcp` 不能用「简单请求」偷打，但它对**任何网页**开放（只要 CORS 放开）。收紧 CORS + Host 白名单之后，浏览器跨源与 DNS 重绑定都会被挡住，`/mcp` 这一侧才算有基本边界；独立的令牌鉴权仍留到下一版。
 
 **防不住（与 DSH 同级，属行业现实）**
 
@@ -1271,6 +1281,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 | 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
 | 简单请求也能改项目 / 资产 / KV | `run14-real-others.mjs`（真实服务） |
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
+| `/mcp` 跨源可调、简单请求打不进 | `run15-mcp.mjs`（真实服务） |
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
 | 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
 | Host 头读取与伪造 | `host-probe.mjs` |
