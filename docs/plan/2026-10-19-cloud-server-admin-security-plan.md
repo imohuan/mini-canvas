@@ -847,20 +847,34 @@ ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可�
 
 ### 对首版清单的修订
 
-第十三节的主清单是这三块合并的结果：
+第十三节的 42 条主清单，按来源可以拆成四块：
 
 ```
-14 条固定路由（server-plugins 2 + npm-plugins 3 + agent 配置 9）
-+ 6 条 SSRF 入口（agent/models 5 + chat/completion 1）        → 20
-+ 14 条（13 条插件运行时路由 + 1 条固定路由）：
-    /api/task/call、/api/task/cancel
-    /api/node-packages/{build,save,export,inspect,import}
-    /api/node-ui/debug-{accept,result}
-    /api/style-library/{settings,reload}
-    /api/effect-library/{settings,reload}
-    /api/agent/mcp/probe（固定路由，但会拉起已配置的 stdio 命令）
-                                                              → 34
-+ /api/showcase/ 前缀组（plugin-showcase 的 11 个写接口）
+A. cloud-server 固定路由 21 条
+   /api/server-plugins/{install,uninstall}            2
+   /api/npm-plugins/{install,update,uninstall}        3
+   /api/agent/mcp（POST、DELETE、probe）               3
+   /api/agent/skills/{import, DELETE :name}            2
+   /api/agent/{system-prompt,template/restore,prompts,policy,title-model}  5
+   /api/agent/models（POST、DELETE、bulk、:kind、available） 5
+   /api/agent/chat/completion                          1
+
+B. 插件运行时注册的路由 13 条（第十四节）
+   /api/task/{call,cancel}                             2
+   /api/node-packages/{build,save,export,inspect,import} 5
+   /api/node-ui/debug-{accept,result}                  2
+   /api/style-library/{settings,reload}                2
+   /api/effect-library/{settings,reload}               2
+
+C. 画布写接口 6 条（第一节实测：简单请求可直达）
+   /api/canvas/{nodes,edges}                           2
+   /api/canvases/:id/{nodes,edges,resources,duplicate}  4
+
+D. 生成任务 2 条（同样能花钱）
+   /api/jobs、/api/jobs/:jobId/cancel                  2
+
+合计 21 + 13 + 6 + 2 = 42
+另加两个前缀组：/api/showcase/（11 个写接口）、/api/agent/canvases/（会话语）
 ```
 
 `/api/agent/mcp/probe` 容易被漏掉：它只是「检查连接」，但实现是真的去连一次——配置里若有 `stdio` 服务，这一步就会把那个命令跑起来。
