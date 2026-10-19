@@ -587,6 +587,11 @@ pnpm -C packages/ui typecheck
 
 ### 7.4 真机验收（逐条执行）
 
+> 两条前提，否则测的可能是旧代码：
+> 1. **先重新构建**：`pnpm -C packages/cloud-server build`（`serve` 跑的是 `dist/cli.js`，`dist` 落后于 `src` 时，改完看不出变化）。临时验证也可以直接跑源码：`tsx packages/cloud-server/src/cli.ts`。
+> 2. **用临时数据目录**：`-d ./.tmp-verify`，不要拿 `.mini-canvas` 真数据做破坏性验证（下面第 10、11 条会真的写东西）。
+> 另外：本文里的行号（如 `server.ts:445`、`uiData.ts:590`）是 2026-10-19 的快照，实施时以符号名/函数名为准，行号只用来快速定位。
+
 ```bash
 # 1. 起服务，记录令牌
 pnpm -C packages/cloud-server serve
