@@ -9,6 +9,7 @@
 > 3. `POST /api/canvases/:id/*` 用 `text/plain` 简单请求就能打到（真服务实测写入成功），已并入首版清单；
 > 4. 跨源 `PUT /api/canvases/:id` 当前能整张覆盖画布，因此「收紧 CORS + Host 白名单」必须与令牌同批完成（第八节 commit 4）；
 > 5. 「任何网页都能装后台插件」被修正：安装接口有可信哈希把关，实测自造 code 被拒。
+> 6. 运行期生成的图/视频也受影响：`POST /api/jobs` 无鉴权，跨源简单请求实测能进 handler（配真实 actionId 就会消耗额度），已并入清单。
 >
 > 全部结论可用 `.scratch/header-probe/` 下的脚本复现（清单见该目录 README）。
 
