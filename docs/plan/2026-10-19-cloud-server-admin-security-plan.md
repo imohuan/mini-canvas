@@ -624,7 +624,7 @@ curl -i -X POST 'http://127.0.0.1:8865/api/canvases/default/resources?name=big.b
 | 序 | 内容 | 验收 |
 |---|---|---|
 | 0 | 资源回读加 `CSP: sandbox`（第十九节）+ 上传大小上限（第二十节） | 带脚本的 SVG 打开后不执行、`<img>` 仍正常；超限上传返回 413 且无残留 |
-| 1 | **视觉节点上传改宿主代发**（`save`；顺带 `task` 也走桥）+ `UiContent.vue` 代发实现 | 视觉节点保存正常；iframe 内 Network 面板看不到 `/api/canvases/*/resources` |
+| 1 | **视觉节点改宿主代发**（`save` + `task`/`cancel` + 任务日志订阅；调试 SDK 另给限节点短时凭证）+ `UiContent.vue` 代发实现 | 视觉节点保存/调脚本正常；iframe 内 Network 面板看不到 `/api/canvases/*` 与 `/api/task/*` 请求 |
 | 2 | `adminAuth.ts` + 中间件（首版白名单）+ `--no-admin-auth` + 单测 | 第十三节的 42 个入口 + 两组前缀无令牌 403；资产/项目/KV 写接口不受影响 |
 | 3 | 前端带令牌：`plugin-manager`、`plugin-agent` 的 `json()`、`plugin-cloud-client` 的 `doFetch`、面板输入框 | 面板能装插件、能对话、cloud-client 能写画布 |
 | 4 | `requestTrust.ts` + 收紧 CORS + 单测（**放在 1 之后**） | 恶意 Origin 403；DNS 重绑定 Host 403；视觉节点仍可保存 |
@@ -695,6 +695,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 - [ ] 视觉节点（沙箱 iframe）能正常加载并**保存产物**（第十六节：宿主代发上传）
 - [ ] 视觉节点里的 `CanvasUI.save()` 不再自己 fetch（检查 iframe 内 Network 面板无 `/api/canvases/*/resources` 请求）
 - [ ] 视觉节点的 `CanvasUI.task()` 一并改成宿主代发（或明确停用并在 guide 里写明）——首版给 `/api/task/` 加令牌后它会 403
+- [ ] 视觉节点的任务日志（SSE）与调试 SDK（debug-poll/debug-result）也不再由 iframe 直连
 - [ ] `Origin: null` 请求一律 403（不设例外）
 - [ ] Host 头写成别的域名（如 `evil.test:8865`）被 403（DNS 重绑定，实测见 4.5）
 - [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
@@ -1117,6 +1118,21 @@ iframe 里 CanvasUI.save(bytes) 不再 fetch，改成 postMessage({__canvasUi:1,
 |---|---|---|
 | `plugin-node-ui/src/uiData.ts:583-604`（`CanvasUI.save`） | 自己 `fetch(.../resources?slot=...)` 上传，成功后 `post({type:'output', url})` | 不 fetch；`post({__canvasUi:1, type:'save', bytes, name})`，等宿主回传 `output` |
 | `plugin-node-ui/src/UiContent.vue:599`（`onBridgeMessage`） | 只处理 `ready` / `state` / `output` | 增加分支 `type === 'save'`：取 `m.bytes`，用带令牌的 fetch 上传，成功后走原有的 `output` 写入逻辑 |
+
+**别漏了另外三处直连**（同一个 iframe 里还有别的东西在发请求）：
+
+| 位置 | 现在做什么 | 加令牌后会怎样 |
+|---|---|---|
+| `uiData.ts:610-630`（`CanvasUI.task` / `cancel`） | 直接 POST `/api/task/call`、`/api/task/cancel` | **403**（`/api/task/` 在首版清单） |
+| `uiData.ts:533`（`watchRun`） | `new EventSource(.../api/task/events)` | 这是 **GET**，中间件放行；但如果 commit 4 的请求边界拒绝 `Origin: null`，它会被 403 |
+| `debugSession.ts:160/177`（调试 SDK） | POST `/api/node-ui/debug-result`、GET `/api/node-ui/debug-poll` | **403**（`/api/node-ui/debug-` 在清单） |
+| `uiDebug.ts:229/236`（调试副本里的 `CanvasUI.task` 变体） | 同 `uiData` 的 task/cancel | **403** |
+
+所以「代发」不是只做 `save` 一条就够。首版最小可行的做法：
+
+1. `save` 与 `task`/`cancel` 都走 `postMessage` 代发（`task` 变体也一样）；
+2. `watchRun` 的 SSE 也由宿主代订阅，再通过 `postMessage` 把日志/进度转进 iframe（或者让 `task` 直接在宿主侧等结束、只把终局回传——`wait: true` 的语义现在就有）；
+3. 调试 SDK 只对「已同意调试」的节点启用，可以给它单独一条**限节点**的短时凭证，而不是把整段 `/api/node-ui/debug-` 放开。
 
 宿主那条 fetch 需要一个令牌来源。`UiContent.vue` 跑在 `packages/ui` 里，和令牌输入框同源，读 localStorage 即可。
 
