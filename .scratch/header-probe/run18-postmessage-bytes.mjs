@@ -14,12 +14,14 @@ const CHROME = process.env.CHROME_EXE ??
   'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe'
 
 const sandboxDoc = `<!doctype html><meta charset="utf-8"><body><script>
+  // 注意：iframe 自己捕获了异常，宿主侧「没收到」也是一种结果，所以这里额外发一条 done
   function send(kind) {
     try {
       var payload;
       if (kind === 'u8') payload = new Uint8Array([1,2,3,4,5]);
       else if (kind === 'ab') payload = new Uint8Array([9,8,7,6]).buffer;
-      else payload = new Blob(['hello']);
+      else if (kind === 'blob') payload = new Blob(['hello'], { type: 'text/plain' });
+      else payload = new Uint8Array([0]);
       parent.postMessage({ __probe: 1, kind: kind, payload: payload }, '*');
       parent.postMessage({ __probe: 1, kind: kind, stage: 'posted' }, '*');
     } catch (e) {
