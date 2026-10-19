@@ -1274,6 +1274,8 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 所以：**只要令牌存在 localStorage，任何能上传 SVG 的人都能把它读走**。上传接口 `POST /api/canvases/:id/resources` 在首版清单里（见第十三节），所以首版上线后这条路会先被令牌挡住；但**commit 0 必须独立于令牌先做**——因为 `POST` 之外还有别的同源写入点（例如 `slot` 覆盖、以及任何人只要拿到过一次令牌），把令牌当成唯一防线是不够的。
 
+**这条也说明「令牌一开始就不该放 localStorage」**：一旦存在同源 XSS，localStorage 的令牌就是明牌。HttpOnly cookie 也挡不住「用它发请求」，但它至少挡住「读出来带走、以后再慢慢用」。这两件事要一起评估，不要只做一件。
+
 ### 三条独立的修法，必须至少做第一条
 
 1. **回读时禁止 SVG 当文档执行**：给 `/api/canvases/:id/resources/*` 与 `/api/assets/files/*` 加 `Content-Security-Policy: sandbox`（可再加 `script-src 'none'`）。这一条最省事：不改存储、不改上传，只改响应头。
