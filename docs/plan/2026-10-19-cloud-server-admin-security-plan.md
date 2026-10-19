@@ -61,7 +61,7 @@
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有 `POST/PUT/PATCH/DELETE` 都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」的路口**：首版只对「会引入可执行代码或执行命令」的接口要令牌（清单见第十三节，共 23 个入口，含插件运行时注册的路由），而不是对所有写接口。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -307,7 +307,7 @@ type .mini-canvas\audit.log
 
 | # | 内容 | 验收 |
 |---|---|---|
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节那 14 个入口无令牌 403；画布/资产写接口不受影响 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 23 个入口无令牌 403；画布/资产写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
 | 4 | 前端 `adminFetch()` + 面板令牌输入 + watch.mjs 带令牌 + 改测试 | 面板能装插件，热重载不断 |
@@ -318,7 +318,7 @@ type .mini-canvas\audit.log
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 14 个入口，画布数据不受影响；插件面板与 watch 工具需带令牌 |
+| 前端写请求被 403 | 首版只拦 23 个入口，画布数据不受影响；插件面板与 watch 工具需带令牌 |
 | dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -328,7 +328,7 @@ type .mini-canvas\audit.log
 
 ## 十、验收清单
 
-- [ ] 无令牌调第十三节清单里的任一入口返回 403
+- [ ] 无令牌调第十三节清单里的任一入口返回 403（含 `/api/task/call`）
 - [ ] 正确令牌调这些入口通过校验
 - [ ] 画布/资产/项目/KV 的写接口**不**要求令牌（首版）
 - [ ] GET 接口不需要令牌
@@ -425,13 +425,90 @@ POST /api/agent/template/restore
 PUT  /api/agent/prompts
 PUT  /api/agent/policy
 PUT  /api/agent/title-model
+POST /api/task/call
+POST /api/node-packages/build
+POST /api/node-packages/save
+POST /api/node-packages/export
+POST /api/node-packages/inspect
+POST /api/node-packages/import
+POST /api/node-ui/debug-accept
+POST /api/node-ui/debug-result
+POST /api/style-library/reload
 ```
 
-清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`），不逐个写死方法。
+清单靠**路径前缀匹配**实现（`/api/server-plugins/`、`/api/npm-plugins/`、`/api/agent/mcp`、`/api/agent/skills`、`/api/agent/system-prompt`、`/api/agent/template/`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/`、`/api/node-packages/`、`/api/node-ui/debug-`、`/api/style-library/reload`），不逐个写死方法。
+
+> 后 9 条来自第十四节：它们是**插件运行时注册**的路由（`ctx.routes.*`），静态扫描看不到。`/api/task/call` 能执行任意脚本，是这批里最危险的。
 
 同时必须改：
 
 - `plugin-manager` 面板的写请求带令牌；
 - `watch.mjs` 的 KV PUT 带令牌（或者把门铃 key 换成一个不需要令牌的专用读接口——但那是新接口，本版先带令牌）；
 - `plugin-cloud-client` 如涉及上述受保护路径才需要改（它写的是画布数据，不在首版范围内，无需改）。
+
+## 十四、动态攻击面：插件自己注册的后台路由（补充）
+
+前面第十三节只扫了 `packages/cloud-server/src` 里的固定路由。但后台插件可以**在运行时注册自己的路由**，这部分对静态扫描不可见：
+
+```ts
+ctx.routes.post('/api/xxx', handler)   // 插件后台半，热装后立刻可用
+```
+
+实际扫到的例子（`plugin-node-ui` 的后台半）：
+
+| 路由 | 能力 | 证据 |
+|---|---|---|
+| `POST /api/task/call` | **执行节点脚本**：`import(scriptURL)` 跑任意 Node 代码，脚本里可 `import('node:fs')` 读写本机文件 | `task/routes.ts:243`、`task/runner.ts:58/114` |
+| `POST /api/node-packages/export` | 打包并**写到本机下载目录** | `task/packRoutes.ts:199` |
+| `POST /api/node-packages/save` | 打包并写入资产库 | `task/packRoutes.ts:177` |
+| `POST /api/node-packages/import` | 导入包并落地 | `task/importRoutes.ts:106` |
+| `POST /api/node-ui/debug-accept` / `debug-result` | 调试会话通道 | `server.ts:1270/1359` |
+| `POST /api/style-library/reload` 等 | 后台插件自己的写接口 | `plugin-style-library/src/server.ts` |
+
+### 风险等级
+
+`/api/task/call` 比 `/api/agent/mcp` **更危险**：
+
+1. 它不需要改配置，一条 POST 就能执行脚本；
+2. 脚本子进程里 `import('node:fs')` 是**完整 fs**，不限于 dataRoot；
+3. 唯一的门是 `authorizeScriptCall`：要求调用方**自己填的 nodeId** 对应的节点，其 `data.uiScripts` 里声明了要跑的脚本名。
+
+这意味着：**只要能改画布节点数据**（`POST /api/canvases/:id/nodes` 目前不需要令牌），攻击者就能先给某个节点写上 `uiScripts` 声明，再调 `/api/task/call` 执行。这条链绕过了我们首版的所有保护。
+
+### 处理办法（按务实程度排序）
+
+**首版（必须做）**：把 `/api/task/call`、`/api/node-packages/*/*` 加进第十三节的白名单。它们都是「能执行代码或写本机文件」的入口。
+
+**同时**：由于 `authorizeScriptCall` 依赖节点数据，而节点数据可被网页改，需要在首版里把「写节点数据」也纳入保护，否则链仍然通。两个选择：
+
+- 让 `POST /api/canvases/:id/nodes` 也要求令牌（会打断视觉节点的自动写回，需同步做宿主代发）；
+- 或者给 `/api/task/call` 加一个**独立的脚本执行令牌**（只允许持令牌的宿主调用，iframe 永远拿不到）。
+
+推荐第二个：影响面小，且和「视觉节点不该能执行任意脚本」的设计意图一致。
+
+**升级版**：给插件注册的路由加**统一的注册时声明**（如 `ctx.routes.post(path, handler, { auth: 'admin' })`），由内核统一套鉴权，而不是每个插件自己记得。这需要改 `serverFramework/routes.ts`，属于架构改动。
+
+### 对首版清单的修订
+
+第十三节的主清单已并入下面这些（共 23 个入口）：
+
+```
+现有 14 个
++ POST /api/task/call
++ POST /api/node-packages/build
++ POST /api/node-packages/save
++ POST /api/node-packages/export
++ POST /api/node-packages/inspect
++ POST /api/node-packages/import
++ POST /api/node-ui/debug-accept
++ POST /api/node-ui/debug-result
++ POST /api/style-library/reload
+```
+
+并加一条**长期机制**：插件注册后台路由时声明鉴权等级，避免今后新增插件又漏。
+
+### 为什么这条之前没写进文档
+
+之前的方案只扫了 `packages/cloud-server/src/routes`，没有扫 `packages/plugins/*/src` 里的 `ctx.routes.*`。这类路由是**运行时注册**的，静态清单不可能穷举——所以最终必须落到「注册时声明鉴权」，而不是继续补白名单。
+
 
