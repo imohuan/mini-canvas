@@ -798,6 +798,7 @@ POST /api/jobs/:jobId/cancel
 - `plugin-agent` 的 `agentApi.ts` 在 `json()` 里统一带头（一处覆盖所有会话写请求）；
 - `watch.mjs` 首版不用改（KV 不在保护范围）。升级到全量写保护时，再给它加令牌；
 - `plugin-cloud-client` **首版必须改**：它写画布走 `/api/canvases/:id/nodes`、`/edges`、`/resources`（`src/api.ts:155/218/228`），而这几条现在要令牌了。它的 `CloudApi` 是唯一出口（`absolute()` 拼地址），在 `doFetch` 处统一带 `x-admin-token` 即可；令牌来源同插件面板（localStorage），拿不到时提示去设置。
+- 下单也要带：同一个 `CloudApi` 里的 `createJob`（`src/api.ts:76`）打 `/api/jobs`，现在在清单里。**一处 `doFetch` 统一加头就全覆盖**，不要逐方法改（否则漏一个就变成"偶尔 403"）。
 
 ## 十四、动态攻击面：插件自己注册的后台路由（补充）
 
