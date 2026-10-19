@@ -46,6 +46,25 @@ GET                       → 直接到达（但读不到响应）
 
 > 实施时要把「哪些写接口能用简单请求打通」逐条过一遍（`content-type` 不是 `application/json` 的 POST、以及所有 PUT 的预检行为）。实测里 `text/plain` 的 POST 确实直达。
 
+**这条已在真实服务上验完，不是理论**（`.scratch/header-probe/run11-real-simple.mjs`，8934 端口，`Origin: http://evil.test:9999` + `content-type: text/plain`）：
+
+```
+POST /api/canvases/default/resources?name=simple.txt → 200，文件落盘
+POST /api/canvases/default/nodes                     → 200 {"ok":true,"added":["evil-1"]}
+回读 /api/canvases/default                            → 真的包含 evil-1
+```
+
+也就是说：**攻击者可以把一段 `text/plain` 的 JSON 文本 POST 到节点写接口，节点就进了你的画布**。路由只 `JSON.parse` body，不看 `content-type`（`canvasOps.ts:253-277`）。
+
+这一条直接影响首版范围，并且要纠正一个直觉：**收紧 CORS 并不能阻止它**。CORS 只决定「脚本能不能读响应」，简单请求照样送达、副作用照样发生。能挡住它的是两样东西：
+
+- **请求边界**（`requestTrust` 在 handler 之前直接 403）——但这条路会连带打坏视觉节点的沙箱 iframe（第十六节）；
+- **令牌**（写接口要求 `x-admin-token`）——简单请求带不上自定义头（带了就触发预检，预检不过就发不出去），所以令牌对简单请求是有效的。
+
+结论：方案 C 里「画布数据写接口暂缓」这条**不能原样保留**。要么把 `POST /api/canvases/:id/nodes`、`POST /api/canvases/:id/resources` 这类「简单请求可达」的写接口一起加令牌，要么先把请求边界做完并解决视觉节点的例外。**两样都不做，等于画布谁都能改。**
+
+> 简单请求清单（实测）：`POST text/plain`、`POST application/x-www-form-urlencoded`、`POST FormData` 都直达；`PUT`（任意 body 类型）与带自定义头的请求都会先发预检，预检不过就发不出去。也就是说，**POST 类写接口风险最高**。
+
 ## 二、边界（先说清楚能防什么）
 
 > 先说一个**容易误以为是安全机制**的东西：插件 `package.json` 里的 `miniCanvas.serverPermissions`。它现在只是清单字段——`plugins/catalog.ts:267-290` 把它原样塞进目录条目，`:343/:420` 读出来展示，**没有任何地方据此限制能力**。`plugin-style-library` 写的是 `"serverPermissions": []`，它的后台照样能读任意文件、能把根目录改到任意路径。所以本轮方案不依赖它；真正要收紧权限，见第十七节末的三档手段。
@@ -193,6 +212,10 @@ export async function createAdminAuth(opts: {
 
    # Agent 会话（间接执行命令 + 花钱）
    /api/agent/canvases/
+
+   # 简单请求可直达的画布写接口（第一节实测：text/plain POST 能直接改节点）
+   # 这几条与「视觉节点沙箱」正面冲突，二选一，见 4.3 下方说明
+   /api/canvases/            （仅 POST：nodes / edges / resources / duplicate）
    ```
 
    这些是「能引入可执行代码、执行命令、或改变服务端出网目标」的全部入口，共 34 条具体路由（第十三节有逐条清单，第十四、十五节有来源说明）。
@@ -219,6 +242,13 @@ app.use('/api/*', async (c, next) => {
 > 2. **预检必须放行**，且 `cors()` 的 `allowHeaders` 要包含 `x-admin-token`；否则前端带令牌的跨源请求会在预检阶段就失败（浏览器只报 `Failed to fetch`，看不出原因）。
 
 还有一条容易写错的：**GET 放行意味着「用 GET 干写事」的接口完全没有保护**。本方案的首版清单里只列写方法，实施时要把这条当检查项：清单里每个路径下若存在「GET 但会改状态」的路由，必须单独处理（比如 `/api/task/events` 是 SSE 没问题，但插件新加的 GET 路由不一定）。
+
+**`/api/canvases/` 这一条是二选一，必须当场定**：
+
+- 选 A（加令牌）：简单请求被挡住，画布安全；但视觉节点的 `CanvasUI.save()`（正是 `POST /api/canvases/:id/resources`）会 403，视觉节点**保存产物**功能坏掉；
+- 选 B（不加）：画布写接口对任何网页开放（实测可改节点），必须靠请求边界兜底，而请求边界又会误伤视觉节点（第十六节）——等于把问题挪到第十六节。
+
+首版建议选 A，并把视觉节点的上传**改成宿主代发**（第十六节方案 ② 的最小切片：只代发 `resources` 上传这一条）。这条改动比整包代发小得多，却是「安全」与「视觉节点可用」之间唯一不打架的组合。
 
 ### 4.4 令牌如何到达前端
 
