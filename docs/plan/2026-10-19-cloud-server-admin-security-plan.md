@@ -334,7 +334,7 @@ export function isAdminPath(method: string, path: string): boolean {
 }
 ```
 
-> 这里用 `startsWith` 而不是精确匹配，是为了让「新增子路由自动受保护」；代价是 `startsWith('/api/task/')` 也会匹配 `/api/taskfoo`——**不会**，因为前缀里带了结尾斜杠。写单测时要专门锁这一条（`path-probe.mjs` 已验证 Hono 会把各种路径写法归一成规范形式，所以这里不需要额外解码）。
+> 这里用 `startsWith` 而不是精确匹配，是为了让「新增子路由自动受保护」；前缀里带结尾斜杠，所以 `/api/tasks`、`/api/taskfoo` 不会命中（`path-probe2.mjs` 已逐条验过）。写单测时把这两条锁住。
 
 **路径归一化的实测结果**（`.scratch/header-probe/path-probe2.mjs`，同版本 Hono）：
 
