@@ -270,6 +270,7 @@ x-admin-token: <64 位 hex>
 |---|---|
 | `packages/plugins/plugin-manager/src/pluginManagerService.ts` | 对第十三节清单里的入口（install/uninstall/update、NPM 操作、Agent 配置写）带 `x-admin-token`；403 时提示“请先在设置里填写管理令牌” |
 | `packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue` | 新增令牌输入框（密码类型），存 localStorage |
+| `packages/plugins/plugin-agent/src/agentApi.ts` | 这个文件把**所有** Agent 请求都走 `json()`（`:202`）；对话面板的所有会话写请求都从这里出去。在 `json()` 里统一加 `x-admin-token` 即可一次覆盖，不用逐个调用点改 |
 | `packages/ui/src/**` 其它写请求 | 首版**不需要**令牌（不在第十三节清单里）；等升级到全量方法保护时，统一用 `adminFetch()` 加头 |
 | `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
 | `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
@@ -407,7 +408,7 @@ type .mini-canvas\audit.log
 |---|---|---|
 | `packages/ui` 自身的画布保存、主题、项目、资产 | `method: 'POST/PUT/DELETE'`（约 12 处，已扫描） | ✅ 同源，能带 |
 | `plugin-manager` 面板 | 插件安装/卸载、NPM 操作 | ✅ 同源，能带 |
-| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写（`/n/...` 为 `/api/...` 的别名） | ⏸ 首版不需要改（都不在保护清单里）；升级全量保护时再加令牌 |
+| `plugin-cloud-client`（后台客户端） | 画布增量写、资源上传、KV 写，全部走 `/api/canvases/...`、`/api/kv/...`（`src/api.ts:139/155/218/228/248`） | ⏸ 首版不需要改（都不在保护清单里）；升级全量保护时再加令牌 |
 | 视觉节点 iframe（`sandbox="allow-scripts"`，不透明源） | AI 生成的界面里的上传/写请求 | ❌ **拿不到令牌**（跨源、读不到 localStorage、也没有同源 cookie） |
 | 外部 MCP 客户端 | `/mcp` 的写工具 | ❌ 不在 `/api` 下，当前无鉴权 |
 | `watch.mjs` | KV 门铃 | ⏸ 首版不受影响；升级全量保护时才需要令牌 |
@@ -654,6 +655,9 @@ POST   /api/agent/chat/completion
 - 视觉节点需要它，所以**部署时必须开启**，并在文档里写明这是「为沙箱 iframe 开的例外」。
 
 更稳的做法是给沙箱请求一个**专用标记**：在 `buildCsp` 或生成页面里加一个固定的 `X-MiniCanvas-Ui: 1` 头，服务端只对带这个头的 `Origin: null` 放行。这样第三方网页即使伪造 `Origin: null` 也进不来（它不知道这个约定，而且预检会失败）。
+
+> 上表里「`Origin: null` + `Sec-Fetch-Site: same-origin`」这一行是**推断**，不是实测：不透明源的 `Sec-Fetch-Site` 具体取什么值跟浏览器版本和请求模式有关。实施第一步应当先在真机上抓一次视觉节点的请求头（Chrome DevTools → Network → 右键该请求 → Copy as cURL），按实际值写判断，别照抄这张表。
+> 专用头比 `Sec-Fetch-Site` 可靠：这个头是浏览器自己生成的，网页伪造不了；但 `X-MiniCanvas-Ui` 是自定义头，网页也能加——它只能挡「不知道这个约定的随手攻击」，挡不住专门针对本项目的攻击。真正的门槛还是令牌。
 
 ### 对方案的影响
 
