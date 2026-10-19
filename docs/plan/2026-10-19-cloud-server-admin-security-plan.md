@@ -7,7 +7,7 @@
 > 1. 原「给 `Origin: null` 开例外」的方案被实测推翻——沙箱 iframe 永远报 `cross-site`，且任何网页都能造出同样的请求。改为宿主代发；
 > 2. 新增 P0：匿名上传的 `.svg` 会在同源执行脚本，直接读走令牌；
 > 3. `POST /api/canvases/:id/*` 用 `text/plain` 简单请求就能打到（真服务实测写入成功），已并入首版清单；
-> 4. 跨源 `PUT /api/canvases/:id` 当前能整张覆盖画布，因此「收紧 CORS + Host 白名单」提前到 commit 3；
+> 4. 跨源 `PUT /api/canvases/:id` 当前能整张覆盖画布，因此「收紧 CORS + Host 白名单」必须与令牌同批完成（第八节 commit 4）；
 > 5. 「任何网页都能装后台插件」被修正：安装接口有可信哈希把关，实测自造 code 被拒。
 >
 > 全部结论可用 `.scratch/header-probe/` 下的脚本复现（清单见该目录 README）。
@@ -503,21 +503,28 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 # 期望 204，且 access-control-allow-headers 含 x-admin-token
 ```
 
-## 八、实施步骤（五个 commit）
+## 八、实施步骤（六个 commit，顺序是硬约束）
 
-| # | 内容 | 验收 |
+顺序不是随便排的：**有两处「一上线就会立刻打坏功能」的依赖**，必须按这个次序做。
+
+| 序 | 内容 | 验收 |
 |---|---|---|
-| 0 | 资源回读加 `CSP: sandbox` + `X-Content-Type-Options: nosniff`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 38 个入口 + `/api/showcase/`、`/api/agent/canvases/` 两组无令牌 403；资产/项目/KV 写接口不受影响 |
-| 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
-| 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403；第三方站点自造 sandbox iframe 仍被拒；视觉节点的处理按第十六节结论 |
-| 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + **对话面板会话写请求** + **视觉节点上传改宿主代发** + 改测试 | 面板能装插件、能对话、视觉节点能保存，热重载不受影响 |
+| 0 | 资源回读加 `CSP: sandbox`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
+| 1 | **视觉节点上传改宿主代发**（`save`；顺带 `task` 也走桥）+ `UiContent.vue` 代发实现 | 视觉节点保存正常；iframe 内 Network 面板看不到 `/api/canvases/*/resources` |
+| 2 | `adminAuth.ts` + 中间件（首版白名单）+ `--no-admin-auth` + 单测 | 第十三节的 38 个入口 + 两组前缀无令牌 403；资产/项目/KV 写接口不受影响 |
+| 3 | 前端带令牌：`plugin-manager`、`plugin-agent` 的 `json()`、`plugin-cloud-client` 的 `doFetch`、面板输入框 | 面板能装插件、能对话、cloud-client 能写画布 |
+| 4 | `requestTrust.ts` + 收紧 CORS + 单测（**放在 1 之后**） | 恶意 Origin 403；DNS 重绑定 Host 403；视觉节点仍可保存 |
+| 5 | `audit.ts` + 接入 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 
-顺序理由：**commit 0 最先**。只要同源 SVG 还能执行脚本，令牌就是「偷得到的东西」，后面的加固等于白做。紧接着是 3（请求边界 + CORS），因为整画布覆盖靠它兜底。然后 1 + 4 同批（加令牌 + 前端带令牌 + 视觉节点代发），最后 2（留痕）。
+为什么是这个顺序：
 
-> 关键约束：commit 1 把 `/api/canvases/:id/resources` 加进令牌后，**视觉节点的保存会立刻坏**。所以 commit 4 里那项「上传改宿主代发」必须**与 commit 1 同一个 PR 上线**（或把 commit 1 拆成「先代发、再加令牌」两步）。不要等到最后再补，中间这段时间视觉节点是坏的。
+1. **0 最先**：只要同源 SVG 还能执行脚本，令牌就是「偷得到的东西」，后面的加固等于白做；
+2. **1 在 2 之前**：commit 2 给 `/api/canvases/:id/resources` 加令牌，视觉节点的保存会立刻 403。必须先把上传改成宿主代发，再加令牌。反过来做，两个 commit 之间视觉节点是坏的；
+3. **4 在 1 之后**：请求边界会拒绝 `Origin: null`，而视觉节点的所有请求都是 `Origin: null`。commit 1 做完之后它已经不发请求了，4 才安全；
+4. **4 不能拖到最后**：它是 `PUT /api/canvases/:id`（整画布覆盖）的实际防线（第一节实测：当前跨源可整张覆盖）。0→1→2→3 之后必须紧接着做 4；
+5. **5（审计）最后**：它只记录、不改变权限，放最后不阻塞任何东西。
 
-> 另一条顺序约束：**commit 3（CORS + Host 白名单）不能推到很后面**。它是 `PUT /api/canvases/:id`（整画布覆盖）的实际防线（第一节实测：当前跨源可整张覆盖）。如果先上 1、4，把 3 拖到下一版，那么这一版上线之后，整画布覆盖仍然是通的。建议顺序：0 → 3 → 1+4 → 2。
+> 如果只想上一部分：**0 + 1 + 2 + 4** 是最小的「能防住主要威胁」组合；3 不做的话功能会坏（面板/对话/cloud-client 全 403），所以 3 实际上也省不掉。5 可以下一版补，代价是这段时间没有审计。
 
 ## 九、风险与回滚
 
@@ -948,7 +955,7 @@ GET  /api/node-ui/info              免令牌（只回一个 origin 字符串，
 ### 对方案的影响
 
 1. **4.5 的规则要删掉「`Origin: null` + `same-origin` 放行」这一行**，它不存在；
-2. **实施顺序**：请求边界（第八节 commit 3）之前必须先确认视觉节点仍能工作；
+2. **实施顺序**：请求边界（第八节 commit 4）之前必须先确认视觉节点仍能工作；
 3. **验证清单**要加两条：视觉节点能加载并上传；第三方网页自造 sandbox iframe **仍被拒绝**。
 4. **不要**用 `X-MiniCanvas-Ui: 1` 这类自定义头当门槛——网页也能加，挡不住；它只能当「减少误伤」的提示，不能当鉴权。
 
@@ -1057,7 +1064,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 ### 这会打坏什么
 
-画布右侧的对话面板走 `plugin-agent/src/agentApi.ts`，和页面同源，加令牌可行；在它的 `json()` 里统一加头即可（不用改 15 处），属于第八节 commit 4 的工作。
+画布右侧的对话面板走 `plugin-agent/src/agentApi.ts`，和页面同源，加令牌可行；在它的 `json()` 里统一加头即可（不用改 15 处），属于第八节 commit 3 的工作。
 
 **如果这一版不做**：至少要承认「任何人仍能让你的 Agent 跑命令、烧你的 token」，并在文档和启动日志里写明。这与第二节「防不住：用户自己确认安装的恶意插件」不是一回事，不要混在一条里。
 
