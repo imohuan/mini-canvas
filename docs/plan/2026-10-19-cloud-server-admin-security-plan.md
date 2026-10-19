@@ -10,6 +10,7 @@
 > 4. 跨源 `PUT /api/canvases/:id` 当前能整张覆盖画布，因此「收紧 CORS + Host 白名单」必须与令牌同批完成（第八节 commit 4）；
 > 5. 「任何网页都能装后台插件」被修正：安装接口有可信哈希把关，实测自造 code 被拒。
 > 6. 运行期生成的图/视频也受影响：`POST /api/jobs` 无鉴权，跨源简单请求实测能进 handler（配真实 actionId 就会消耗额度），已并入清单。
+> 7. 新增第二十节：上传没有大小上限，200MB 文件被匿名写入成功（会打满磁盘/内存）。
 >
 > 全部结论可用 `.scratch/header-probe/` 下的脚本复现（清单见该目录 README）。
 
@@ -129,6 +130,7 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 | 跨站浏览器请求（CSRF） | Origin 必须等于 Host；`sec-fetch-site: cross-site` 拒绝。**JSON 写请求会被挡住，简单请求（`text/plain`）挡不住**（见第一节实测） |
 | 网页改画布 / 整张覆盖 | 画布 POST 走令牌；`PUT /api/canvases/:id` 靠 Host 白名单 + 收紧 CORS（第一节、4.5 实测） |
 | 网页匿名传 SVG 后执行脚本偷令牌 | 资源回读加 `CSP: sandbox`（第十九节，已实测挡得住） |
+| 网页灌大文件打满磁盘 / 内存 | 上传大小上限（第二十节，实测 200MB 可写入） |
 | 网页让 Agent 跑命令、烧模型额度 | 会话写接口加令牌（第十八节） |
 | 网页下生成单（消耗平台额度） | `POST /api/jobs` 同样没有鉴权；实测跨源简单请求能到路由（`400 未找到动作` = 已进 handler），配上真实 actionId 就会消耗额度 |
 | 网页间接执行代码（节点脚本 / MCP stdio） | `/api/task/`、`/api/agent/mcp` 加令牌 |
@@ -597,7 +599,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 
 | 序 | 内容 | 验收 |
 |---|---|---|
-| 0 | 资源回读加 `CSP: sandbox`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
+| 0 | 资源回读加 `CSP: sandbox`（第十九节）+ 上传大小上限（第二十节） | 带脚本的 SVG 打开后不执行、`<img>` 仍正常；超限上传返回 413 且无残留 |
 | 1 | **视觉节点上传改宿主代发**（`save`；顺带 `task` 也走桥）+ `UiContent.vue` 代发实现 | 视觉节点保存正常；iframe 内 Network 面板看不到 `/api/canvases/*/resources` |
 | 2 | `adminAuth.ts` + 中间件（首版白名单）+ `--no-admin-auth` + 单测 | 第十三节的 42 个入口 + 两组前缀无令牌 403；资产/项目/KV 写接口不受影响 |
 | 3 | 前端带令牌：`plugin-manager`、`plugin-agent` 的 `json()`、`plugin-cloud-client` 的 `doFetch`、面板输入框 | 面板能装插件、能对话、cloud-client 能写画布 |
@@ -1269,6 +1271,42 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 - [ ] 用 `<img src="...svg">` 引用同一文件，仍能正常显示；
 - [ ] `/api/assets/files/*`、`/api/style-library/file` 同上。
 
+## 二十、上传没有大小上限（实测确认，资源耗尽风险）
+
+资源上传路由把整个请求体读进内存再写盘（`routes/canvases.ts:96` 的 `await c.req.arrayBuffer()`），**没有任何大小检查**；`server.ts` 也没挂 body limit，`@hono/node-server` 默认同样不限制。
+
+实测（`.scratch/header-probe/run16-upload-limit.mjs`，真实服务，写的是临时数据目录）：
+
+```
+POST /api/canvases/default/resources?name=big.bin
+  Origin: http://evil.test:9999
+  content-length: 209715200（200MB）
+→ 200 {"ok":true,"size":209715200,...}
+```
+
+也就是说，匿名请求可以往磁盘写任意大的文件；内存在读取阶段会有一个约等于文件大小的峰值。
+
+### 为什么这是安全问题（不只是性能）
+
+1. **磁盘占满**：写满数据盘之后，画布保存、历史、审计日志一起失败——这是拒绝服务，不是「慢一点」；
+2. **内存峰值**：`arrayBuffer()` 把整个文件读进内存，几个并发大文件就能把后台顶到 OOM；
+3. **和其他缺口叠加**：上传接口对跨源简单请求开放（`text/plain` 体可以是任意字节），配合「没有令牌」就是「谁都能灌」。
+
+### 怎么修（建议放进 commit 0，与 CSP 同批）
+
+1. **先看 `content-length`**：超过上限直接 `413`，连 body 都不读；
+2. **读的时候也计数**：`content-length` 可以撒谎（或分块传输没有它），要边读边累加，超了立刻中断连接；
+3. **边读边写临时文件**，不要 `arrayBuffer()` 全量进内存；写完再 rename（现有 `saveSlot` 已经是这个模式，上传路由可以复用）；
+4. **给默认上限**（例如 50MB），并允许环境变量覆盖；`assets` 上传（`routes/assets.ts:31-37`）同样处理；
+5. **可选但建议**：每张画布的总占用设一个配额，防止「每个文件都不超上限、加起来把盘写满」。
+
+### 验收
+
+- [ ] 上传超过上限的文件返回 413，且磁盘上没有残留文件；
+- [ ] 正常大小的文件上传仍成功，回读正常；
+- [ ] `content-length` 撒谎（声明小、实际大）时也会被中断；
+- [ ] `/api/assets` 上传同样受限。
+
 ---
 
 ## 附：本文结论的证据清单
@@ -1283,6 +1321,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 | CSP `sandbox` 挡脚本且不影响 `<img>` | `run9-csp.mjs` |
 | 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
 | 简单请求也能改项目 / 资产 / KV | `run14-real-others.mjs`（真实服务） |
+| 上传没有大小上限（200MB 被接受） | `run16-upload-limit.mjs`（真实服务） |
 | 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
 | `/mcp` 跨源可调、简单请求打不进 | `run15-mcp.mjs`（真实服务） |
 | 公网页面打 127.0.0.1 未被 PNA 拦 | `run13-b-rebase.mjs` |
