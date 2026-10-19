@@ -503,7 +503,9 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 
 - [ ] 无令牌调第十三节清单里的任一入口返回 403（含 `/api/task/call`）
 - [ ] 正确令牌调这些入口通过校验
-- [ ] 画布/资产/项目/KV 的写接口**不**要求令牌（首版）
+- [ ] 资产/项目/历史/KV 的写接口**不**要求令牌（首版）
+- [ ] `POST /api/canvases/:id/{nodes,edges,resources,duplicate}` 无令牌 403，带令牌通过
+- [ ] `PUT /api/canvases/:id`（整画布保存）仍**不**要求令牌（首版不在范围，注意它是 PUT 而非 POST）
 - [ ] GET 接口不需要令牌
 - [ ] `Origin: http://evil.example` 被 403
 - [ ] `sec-fetch-site: cross-site` 被 403
@@ -521,18 +523,19 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
 - [ ] `POST /api/agent/chat/completion` 无令牌返回 403
-- [ ] 视觉节点（沙箱 iframe）能正常加载并上传素材（第十六节：靠票据，不是靠 Origin 例外）
-- [ ] 视觉节点里的 `CanvasUI.task()` **仍被 `/api/task/call` 的令牌挡住**（它走的是同一路径，不能因为加例外而放行）
-- [ ] 无票据的 `Origin: null` 请求一律 403（给 null 开例外 = 对所有网页开例外）
+- [ ] 视觉节点（沙箱 iframe）能正常加载并**保存产物**（第十六节：宿主代发上传）
+- [ ] 视觉节点里的 `CanvasUI.save()` 不再自己 fetch（检查 iframe 内 Network 面板无 `/api/canvases/*/resources` 请求）
+- [ ] `Origin: null` 请求一律 403（不设例外）
 - [ ] Host 头写成别的域名（如 `evil.test:8865`）被 403（DNS 重绑定，实测见 4.5）
 - [ ] 第三方网页**自造 sandbox iframe** 打 `/api/*` 仍被拒绝（实测手法，见第十六节）
 - [ ] 带脚本的 SVG 从 `/api/canvases/*/resources/*` 打开后不执行（第十九节）
 - [ ] 对话面板能发消息、能点审批（`/api/agent/canvases/` 写请求带令牌）
 - [ ] 会话列表、转录、SSE 流**不需要**令牌（读请求不受影响）
 
-> 最后六条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。
-> 第十六节给 sandbox 开的例外如果写成「`Origin: null` 就放行」，这条路径会顺带被放开——等于把第十四节最危险的洞又打开了。
-> 必须让「Origin 例外」只作用于读接口与素材上传，`/api/task/` 这类入口始终要令牌。
+> 这几条互相牵制，实施时要一起验：视觉节点的 `CanvasUI.task()`（`plugin-node-ui/src/uiData.ts:610-630`）是**从沙箱 iframe 直接 POST `/api/task/call`** 的。首版给 `/api/task/` 加令牌之后，**这条 API 会坏**。两条路：
+> ① 一并改成宿主代发（和 `save` 同一套机制，`type:'task'` 分支）；
+> ② 接受它坏掉，并在 `guide.md` 里写明「首版请用 MCP / 宿主侧调用，不要用 `CanvasUI.task`」。
+> 首版建议选 ①：同一套桥已经为 `save` 做了，顺手加一个 `task` 分支成本很低。**不要**为了保住它给 `Origin: null` 开例外。
 
 ## 十一、不在本次范围
 
