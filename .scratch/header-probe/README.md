@@ -20,6 +20,8 @@
 | `run15-mcp.mjs` | `/mcp` 的跨源与简单请求边界 | 跨源 JSON 可调（200）；`text/plain` 被 415 拒 |
 | `run16-upload-limit.mjs` | 上传有没有大小上限 | 200MB 被完整接收（200） |
 | `tar-probe2.mjs` | NPM 包解压的路径穿越 | 手写 `../` 条目的 tar；bsdtar 剥一层后落在目标目录内，未越界 |
+| `tar-probe.mjs` | 同上，第一版（对照用） | 用 `tar -T` 打包时 bsdtar 自己拒绝 `../` 条目，造不出恶意包；结论以 `tar-probe2.mjs` 为准 |
+| `check-plan-coverage.mjs` | 文档自检 | 第十三节逐条清单与「方法+前缀」表是否互相覆盖（只读文档） |
 | `run17-ssrf.mjs` | SSRF 端到端 | 写模型配置后触发补全，假端点收到 3 次带 Bearer 的请求 |
 | `framework-guard.mjs` | 真实 `createServerFramework` 上的中间件顺序 | start 前挂 `/api/*` 能拦住插件路由；start 后挂拦不住；`'*'` 能约束直挂的 `/mcp` |
 | `run18-postmessage-bytes.mjs` | 沙箱 iframe → 宿主传字节 | `Uint8Array`、`ArrayBuffer`、`Blob` 都能过 |
