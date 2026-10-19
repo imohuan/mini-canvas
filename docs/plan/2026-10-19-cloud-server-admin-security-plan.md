@@ -539,7 +539,19 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 4. **4 不能拖到最后**：它是 `PUT /api/canvases/:id`（整画布覆盖）的实际防线（第一节实测：当前跨源可整张覆盖）。0→1→2→3 之后必须紧接着做 4；
 5. **5（审计）最后**：它只记录、不改变权限，放最后不阻塞任何东西。
 
-> 如果只想上一部分：**0 + 1 + 2 + 4** 是最小的「能防住主要威胁」组合；3 不做的话功能会坏（面板/对话/cloud-client 全 403），所以 3 实际上也省不掉。5 可以下一版补，代价是这段时间没有审计。
+> 如果只想上一部分：**0 + 1 + 2 + 3 + 4** 是最小的「能防住主要威胁」组合。2 不加 3 的话功能会坏（面板/对话/cloud-client 全 403），所以两个必须一起；5 可以下一版补，代价是这段时间没有审计。
+
+每一 commit 完成后都要跑的四条（全绿才算过）：
+
+```bash
+pnpm -C packages/cloud-server test && pnpm -C packages/cloud-server typecheck
+pnpm -C packages/plugins/plugin-node-ui test && pnpm -C packages/ui typecheck
+```
+
+commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎么处理 CSP」和「postMessage 传不传得动字节」）：
+
+- 0：上传带脚本的 SVG，直接打开，标题不变；再用 `<img>` 引用，能显示；
+- 1：打开一个视觉节点，画一笔，确认产物保存成功、且 iframe 自己的 Network 里没有 `/resources` 请求。
 
 ## 九、风险与回滚
 
