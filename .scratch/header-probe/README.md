@@ -21,6 +21,7 @@
 | `run16-upload-limit.mjs` | 上传有没有大小上限 | 200MB 被完整接收（200） |
 | `tar-probe2.mjs` | NPM 包解压的路径穿越 | 手写 `../` 条目的 tar；bsdtar 剥一层后落在目标目录内，未越界 |
 | `run17-ssrf.mjs` | SSRF 端到端 | 写模型配置后触发补全，假端点收到 3 次带 Bearer 的请求 |
+| `framework-guard.mjs` | 真实 `createServerFramework` 上的中间件顺序 | start 前挂 `/api/*` 能拦住插件路由；start 后挂拦不住；`'*'` 能约束直挂的 `/mcp` |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
 | `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
@@ -37,6 +38,9 @@ node .scratch/header-probe/run2.mjs
 node packages/cloud-server/dist/cli.js serve -p 8934 -d ./.scratch/real-data2 --no-open
 node .scratch/header-probe/run11-real-simple.mjs
 # run14 用另一个端口（脚本默认 8938），起服务时 -p 改一下即可
+
+# 用真实框架源码跑（dist 可能落后）；需要 tsx
+node_modules/.bin/tsx .scratch/header-probe/framework-guard.mjs
 ```
 
 `run.mjs` 是最早的一版探针（srcdoc 拼接方式不严谨），保留作对照，结论以 `run2.mjs` 为准。
