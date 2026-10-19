@@ -301,8 +301,8 @@ export function isAdminPath(method: string, path: string): boolean {
 |---|---|---|
 | `/api/./task/call` | `/api/task/call` | ✅ |
 | `/api/task/%63all` | `/api/task/call` | ✅（已解码） |
-| `/api/task//call` | `/api/task//call` | ✅（双斜杠**不会**折叠，但前缀仍匹配） |
-| `/API/task/call` | `/API/task/call` | ❌ 不命中；但业务路由本身也区分大小写，这条请求会 404 |
+| `/api/task//call` | `/api/task//call` | ✅ 前缀是 `/api/task/`，`/api/task//call` 仍以它开头，能命中（双斜杠不折叠，但不影响前缀判定） |
+| `/API/task/call` | `/API/task/call` | ❌ 不命中；业务路由本身也区分大小写，这条请求会 404 |
 
 结论：**不需要自己做 URL 解码或 path 归一化**，也不要用小写化去「兼容」——那会和 Hono 的路由匹配语义打架（`/API/...` 本来就没有对应路由，放行它也不会执行任何东西）。
 
