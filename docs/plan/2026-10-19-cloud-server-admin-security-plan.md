@@ -438,7 +438,7 @@ export function requestTrust(opts: {
 
 还有一条实际部署时才会遇到的：**如果服务前面加了反向代理**（nginx/Caddy），Host 会变成域名，`x-forwarded-host` 才是原始值。方案要求「显式配置 trustedHosts」正是为了这个——不要为了省事写成「任意 Host 都放行」或「看 x-forwarded-host」。
 
-挂载：`server.ts` 第 445 行 `cors()` 之后。
+挂载：`server.ts` 第 445 行 `cors()` 之后。`/mcp` 是直挂在 `app.route('/', mcpRoutes(...))`（`server.ts:569-571`），不是插件路由，所以**也必须在 `host.start()` 之前挂**；`app.use` 对随后 `app.route` 注册上去的路由生效。
 
 **dev 代理的处理**：
 
