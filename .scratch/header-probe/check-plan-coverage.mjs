@@ -17,8 +17,10 @@ const routes = singleBlock
   .filter((l) => /^(POST|PUT|DELETE)/.test(l.trim()))
   .map((l) => {
     const clean = l.trim().split(/\s{2,}#|\s+←/)[0].trim()
-    const m = /^(POST|PUT|DELETE)(\/PUT\/PATCH\/DELETE)?\s+(\S+)/.exec(clean)
-    return m ? { methods: (m[1] + (m[2] ?? '')).split('/'), path: m[3] } : null
+    // 方法段可能是 POST、PUT、DELETE，也可能是 POST/PUT/DELETE 这种组合
+    const m = /^([A-Z]+(?:\/[A-Z]+)*)\s+(\S+)/.exec(clean)
+    if (!m) return null
+    return { methods: m[1].split('/'), path: m[2], raw: clean }
   })
   .filter(Boolean)
 
