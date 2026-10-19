@@ -506,7 +506,7 @@ export function requestTrust(opts: {
 
 ### 4.6 令牌的日常运维（泄露怎么换、丢了怎么找回）
 
-方案给了令牌一个文件和一个输入框，但没说「换了会怎样」。这三件事要在提交 2 里一起做，否则上线第一天就会卡住：
+方案给了令牌一个文件和一个输入框，但没说「换了会怎样」。这三件事要在 commit 2（令牌中间件）里一起做，否则上线第一天就会卡住：
 
 1. **换令牌**：删掉 `{dataDir}/admin-token` 再重启，会生成新的；旧令牌立刻失效。**所有前端**（插件面板、对话面板、cloud-client 各存的 localStorage）都要重新填一次。要给出这个提示，不然表现是「插件面板能装、对话 403」，很难查。
 2. **固定令牌优先**：如果设了 `MINI_CANVAS_ADMIN_TOKEN`，启动时**不要**再去读/生成文件（两处来源会让「我改了文件为什么没用」变成日常问题）。启动日志要说清楚当前用的是哪一种。
@@ -1163,7 +1163,7 @@ iframe 里 CanvasUI.save(bytes) 不再 fetch，改成 postMessage({__canvasUi:1,
 - 视觉节点保存照常工作；
 - 不需要票据，也不需要给 `Origin: null` 开例外。
 
-`postMessage` 传字节：实测（`run18-postmessage-bytes.mjs`，Chrome 153，`sandbox="allow-scripts"` 的 iframe → 宿主）三种载荷都能过去——`Uint8Array` 保留长度与内容、`ArrayBuffer` 原样、**`Blob` 也能传**（宿主拿到的是真 Blob）。所以 implementation 上可以让 iframe 直接发 `Blob`（`CanvasUI.save` 现在就是先包成 Blob），宿主用 `new Response(blob).arrayBuffer()` 取字节再上传，少一次 base64 / 手工拷贝。
+`postMessage` 传字节：实测（`run18-postmessage-bytes.mjs`，Chrome 153，`sandbox="allow-scripts"` 的 iframe → 宿主）三种载荷都能过去——`Uint8Array` 保留长度与内容、`ArrayBuffer` 原样、**`Blob` 也能传**（宿主拿到的是真 Blob）。所以实现上可以让 iframe 直接发 `Blob`（`CanvasUI.save` 现在就是先包成 Blob），宿主用 `new Response(blob).arrayBuffer()` 取字节再上传，少一次 base64 / 手工拷贝。
 
 > 注意这与「跨源读不了 localStorage」不冲突：结构化克隆是 postMessage 自己的复制语义，不看源；能克隆不等于能读宿主的存储。
 
