@@ -118,7 +118,7 @@ POST /api/canvases/default/nodes                     → 200 {"ok":true,"added":
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」与「能改画布」两类路口**：首版对「会引入可执行代码 / 执行命令」的接口要令牌（第十三节：34 个单条入口，另加 `/api/showcase/`、`/api/agent/canvases/` 两个前缀组），**外加 `POST /api/canvases/:id/*`**（简单请求可达，见第一节实测）。不是对所有写接口一刀切：资产、项目、历史、KV 仍暂缓。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」与「能改画布」两类路口**：首版对「会引入可执行代码 / 执行命令」的接口要令牌（第十三节：38 个单条入口，另加 `/api/showcase/`、`/api/agent/canvases/` 两个前缀组），**外加 `POST /api/canvases/:id/*`**（简单请求可达，见第一节实测）。不是对所有写接口一刀切：资产、项目、历史、KV 仍暂缓。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与画布数据写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -218,7 +218,7 @@ export async function createAdminAuth(opts: {
    /api/canvases/            （仅 POST：nodes / edges / resources / duplicate）
    ```
 
-   这些是「能引入可执行代码、执行命令、或改变服务端出网目标」的全部入口，共 34 条具体路由（第十三节有逐条清单，第十四、十五节有来源说明）。
+这些是「能引入可执行代码、执行命令、改变服务端出网目标、或直接改画布」的全部入口，共 38 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。
    `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）。
    `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个。
    注意 `/api/showcase/` 是一条前缀组，覆盖 `plugin-showcase` 注册的 11 个写接口。
@@ -476,7 +476,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 | # | 内容 | 验收 |
 |---|---|---|
 | 0 | 资源回读加 `CSP: sandbox` + `X-Content-Type-Options: nosniff`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
-| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 34 个入口 + `/api/showcase/`、`/api/agent/canvases/` 两组无令牌 403；画布/资产写接口不受影响 |
+| 1 | `adminAuth.ts` + 中间件（**首版路径白名单**）+ `--no-admin-auth` + 单测 | 第十三节的 38 个入口 + `/api/showcase/`、`/api/agent/canvases/` 两组无令牌 403；资产/项目/KV 写接口不受影响 |
 | 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
 | 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403；第三方站点自造 sandbox iframe 仍被拒；视觉节点的处理按第十六节结论 |
 | 4 | 前端 `adminFetch()`（仅受保护入口）+ 面板令牌输入 + **对话面板会话写请求** + 改测试 | 面板能装插件、能对话，热重载不受影响 |
@@ -489,7 +489,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版只拦 34 个入口加 showcase、agent-canvases 两组，画布数据与 watch 门铃都不受影响；插件面板与对话面板需要带令牌 |
+| 前端写请求被 403 | 首版拦 38 个入口加两组前缀；插件面板、对话面板、cloud-client 画布写都要带令牌。watch 门铃（KV）不受影响 |
 | dev 代理被 Origin/Host 拦 | 显式 `--trusted-origin` + `--trusted-host`，5.3 有命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -516,7 +516,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 - [ ] ui 测试与 typecheck 全绿
 - [ ] 插件管理面板能装/卸后台插件
 - [ ] plugin-hot-reload 的 watch 门铃仍能送达
-- [ ] 受保护入口清单（34 条，另加 `/api/showcase/` 前缀组共 11 个写接口）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
+- [ ] 受保护入口清单（38 条，另加 `/api/showcase/` 前缀组共 11 个写接口）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
 - [ ] 新增插件注册后台路由时，能通过统一声明标记鉴权等级（长期机制，见第十四节）
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
@@ -763,9 +763,9 @@ export function assertHttpUrl(raw: string): string {
 2. **同时给 `assertHttpUrl` 加内网拦截**：解析出 hostname 后，拒绝 `127.0.0.0/8`、`10/8`、`172.16/12`、`192.168/16`、`169.254/16`、`::1`、`fc00::/7`；注意还要处理 DNS 解析到内网与重定向（请求时二次校验或禁止跟随重定向）；
 3. 如果确实需要连本机模型（如本地 ollama），用一个显式白名单 `allowedLocalHosts`，而不是全放开。
 
-### 对首版清单的影响
+### 属于首版清单的 6 条（SSRF 入口）
 
-在第十三节的清单上追加下面 6 条（SSRF 入口）：
+下面这 6 条已经并进第十三节的总清单，单独列出来是为了说明它们的来源：
 
 ```
 POST   /api/agent/models
@@ -776,7 +776,7 @@ POST   /api/agent/models/available
 POST   /api/agent/chat/completion
 ```
 
-合计 34 条（另加 `/api/showcase/` 前缀组）。
+它们属于第十三节 38 条中的一部分，不额外增加计数。
 
 ### 为什么这条之前没写
 
@@ -1014,7 +1014,7 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 
 这说明它不是 mock 造出来的：真实服务的回读确实不带 CSP，脚本确实在 `127.0.0.1:8932` 这个源上执行，并能读到同源 localStorage。
 
-所以：**只要令牌存在 localStorage，任何能上传 SVG 的人都能把它读走**。而上传接口在首版清单之外（它属于画布数据写入，方案 C 不保护）。
+所以：**只要令牌存在 localStorage，任何能上传 SVG 的人都能把它读走**。上传接口 `POST /api/canvases/:id/resources` 在首版清单里（见第十三节），所以首版上线后这条路会先被令牌挡住；但**commit 0 必须独立于令牌先做**——因为 `POST` 之外还有别的同源写入点（例如 `slot` 覆盖、以及任何人只要拿到过一次令牌），把令牌当成唯一防线是不够的。
 
 ### 三条独立的修法，必须至少做第一条
 
