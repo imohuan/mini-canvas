@@ -905,8 +905,11 @@ watch(videoUrl, (prev) => {
     @pointerenter 则相反：悬停上来就自动播放（用户口径：不用先点按钮）。
   -->
   <div class="video-node" @pointerenter="onCardEnter" @pointerleave="onCardLeave">
-    <!-- 底部渐变衬底：贴满节点底边（挂在节点层而不是控件条上，控件条的左右边距不会再把渐变截短） -->
-    <div class="vc-scrim" aria-hidden="true"></div>
+    <!-- 底部渐变衬底：只给"悬停时露出的播放控件"当背景。
+         没有视频（或视频失效、正在裁剪）时不渲染；鼠标离开卡片时淡出 ——
+         空节点必须保持卡片本身的底色，否则底部会挂着一条没来由的灰带（用户实测报的）。 -->
+    <div v-if="videoUrl && !broken && !cropping" class="vc-scrim" :class="{ 'is-hidden': !hovering }"
+      aria-hidden="true"></div>
     <div ref="stageRef" class="video-stage" :class="{ 'is-framed': isFramed, 'is-cropping': cropping }"
       @click="onStageClick" @dblclick="onStageDblClick">
       <template v-if="videoUrl && !broken">
@@ -1083,7 +1086,13 @@ watch(videoUrl, (prev) => {
   bottom: 0;
   height: 56px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0)); /* 主题色白名单: 视频画面上的衬底，随画面恒定，与主题无关 */
+  /* 与播放控件同一节奏淡入淡出：鼠标离开就一起走，不在画面上留一块灰底 */
+  opacity: 1;
+  transition: opacity 0.18s ease;
   pointer-events: none;
+}
+.vc-scrim.is-hidden {
+  opacity: 0;
 }
 /* 衬底挂在节点层（贴满底边，不再被控件条的左右边距截短） */
 .video-node > .vc-scrim {
@@ -1329,6 +1338,10 @@ watch(videoUrl, (prev) => {
   }
   /* 卡内控制条的 hover 淡入也去掉动效（直接显隐，不位移） */
   .video-controls {
+    transition: none !important;
+  }
+  /* 底部衬底的淡入淡出同样去掉（直接显隐） */
+  .vc-scrim {
     transition: none !important;
   }
   .video-controls.is-hidden {

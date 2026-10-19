@@ -114,6 +114,21 @@ describe('空态与失效态', () => {
     expect(html).not.toContain('<img')
   })
 
+  it('没有视频 → 不渲染底部渐变衬底（空节点保持白板底色）', async () => {
+    // 用户实测：没有视频时底部挂着一块灰渐变，看着像没加载完的画面。
+    // 衬底只是播放控件的背景，空节点不该有它。
+    const html = await render('v1', {})
+    const htmlNoVideo = await render('v1', { videoWidth: 1280, videoHeight: 720 })
+    expect(html).not.toContain('vc-scrim')
+    expect(htmlNoVideo).not.toContain('vc-scrim')
+  })
+
+  it('有视频 → 衬底与控件一起渲染，但默认是收起态（未 hover 不显示渐变）', async () => {
+    const html = await render('v1', { videoUrl: VIDEO, videoWidth: 1280, videoHeight: 720 })
+    expect(html).toContain('vc-scrim')
+    expect(html).toContain('is-hidden')
+  })
+
   it('失效不会在首次渲染就出现（它是会话事实，由播放报错触发）', async () => {
     const html = await render('v1', { videoUrl: VIDEO })
     expect(html).not.toContain('视频已失效')
