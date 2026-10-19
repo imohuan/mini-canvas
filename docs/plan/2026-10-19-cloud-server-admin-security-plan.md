@@ -1317,7 +1317,20 @@ node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> <脚本>
 
 第 4 步不需要知道审批内容：`decision` 只要不是 `'deny'` 就是 `allow`（`agentSessions.ts:818`）。整条链剩下的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响，提示词又能通过 `PUT /api/agent/system-prompt`、`/api/agent/prompts` 改。这两条在首版清单里，所以**首版上线后，攻击者改不了提示词**；但第 1、2、4 步的会话接口如果在首版没保护，链条里的「新会话 → 发消息 → 点允许」仍然通。
 
-> 这一条只做了代码级确认（工具清单、审批默认值、路由都核对过），**没有跑端到端**：需要一个可用的模型凭据，才能真正让模型去调 `exec_command`。所以文中的判断是「链在代码上成立」，不是「已复现」。与第十四节那条已跑通的 `/api/task/call` 链相比，这条多一个「模型愿不愿意」的概率因素，但「烧钱」那一半是确定的。
+**已复现的是「烧钱」那一半**（`.scratch/header-probe/run21-agent-session.mjs`，真实服务 8947，`Origin: http://evil.test:9999`，用项目自带的本地 test 模型，不请求外网）：
+
+```
+无令牌 POST /api/agent/canvases/default/sessions        → 200，会话建出来了
+无令牌 POST .../sessions/<sid>/messages                 → 200，模型真的跑完一轮
+  （SSE 里能看到 text delta「【test模型 · 本地伪造回复】」）
+```
+
+**「模型去调 exec_command」那一半没有复现**：test 模型不支持 `tool_calls`（源码里没有），要验证它需要真实模型凭据。所以这条链的结论是分层的：
+
+- 外部网页能无鉴权地消耗你的模型额度 —— **已复现**；
+- 外部网页能一路走到 `exec_command` 的审批并按「允许」—— **代码路径成立，未端到端复现**（工具就在内置清单里、审批缺省即放行、审批接口无鉴权，三处都核对过）。
+
+与第十四节那条已完整跑通的 `/api/task/call` 链相比，这条多一个「模型愿不愿意」的概率因素。
 
 另外两个副作用不需要模型配合：
 
@@ -1482,6 +1495,7 @@ POST /api/canvases/default/resources?name=big.bin
 | 真实框架上的中间件顺序与 `/mcp` 边界 | `framework-guard.mjs`（tsx 跑源码） |
 | 沙箱 iframe 能通过 postMessage 传字节 | `run18-postmessage-bytes.mjs` |
 | `/api/task/call` 链（改节点声明 → 执行脚本 → 越界写文件） | `run20-task-call.mjs` + `task-call-e2e/README.md`（真实服务） |
+| 无令牌会话接口会真实烧模型（用 test 模型跑完一轮） | `run21-agent-session.mjs`（真实服务） |
 | Host 头读取与伪造 | `host-probe.mjs` |
 | 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
 | 前缀判定的边界与归一化 | `path-probe2.mjs` |
