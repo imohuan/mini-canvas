@@ -254,12 +254,14 @@ export async function createAdminAuth(opts: {
    # 简单请求可直达的画布写接口（第一节实测：text/plain POST 能直接改节点）
    # 这几条与「视觉节点沙箱」正面冲突，二选一，见 4.3 下方说明
    /api/canvases/            （仅 POST：nodes / edges / resources / duplicate）
+   /api/canvas/              （仅 POST：nodes / edges；老接口，改默认画布）
    ```
 
-这些是「能引入可执行代码、执行命令、改变服务端出网目标、或直接改画布」的全部入口，共 40 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。
-   `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）。
-   `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个。
-   注意 `/api/showcase/` 是一条前缀组，覆盖 `plugin-showcase` 注册的 11 个写接口。
+这些是「能引入可执行代码、执行命令、改变服务端出网目标、或直接改画布」的全部入口，共 40 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。其中：
+
+   - `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）；
+   - `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个；
+   - `/api/showcase/` 是一条前缀组，覆盖 `plugin-showcase` 注册的 11 个写接口。
 5. **暂不保护**：`GET/HEAD` 读接口；资产 / 项目 / 历史 / KV 写接口（靠 4.5 的请求边界保护）；`/mcp`（单独议题）。升级到全量方法保护时，这些再一起加。
 
 覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改。**必须挂在 `await host.start()` 之前**——插件路由是在 `start()` 时一次性 flush 成 Hono 代理的，晚于它挂的 `use` 不会作用到那些代理上。
@@ -1173,4 +1175,23 @@ POST   /api/agent/canvases/:canvasId/sessions/:sessionId/goal
 - [ ] 用 `<img src="...svg">` 引用同一文件，仍能正常显示；
 - [ ] `/api/assets/files/*`、`/api/style-library/file` 同上。
 
+---
 
+## 附：本文结论的证据清单
+
+| 结论 | 证据 |
+|---|---|
+| 不透明源报 `cross-site`，不存在 `same-origin` | `run2.mjs` |
+| 恶意页可自造 sandbox iframe 打后台 | `run3.mjs` |
+| `cors()` 默认 `origin: '*'` 时能读写 | `run6-wildcard.mjs` |
+| 匿名 SVG 同源执行脚本、读 localStorage | `run7-svg.mjs`（mock）+ `real-browser-svg.mjs`（真实服务） |
+| DNS 重绑定可绕过「Origin == Host」 | `run8-rebind.mjs` |
+| CSP `sandbox` 挡脚本且不影响 `<img>` | `run9-csp.mjs` |
+| 简单请求（`text/plain`）可改画布 | `run10-simple.mjs` + `run11-real-simple.mjs`（真实服务） |
+| 跨源 `PUT /api/canvases/:id` 能整张覆盖 | `run12-real-put.mjs`（真实服务） |
+| 中间件顺序 / 预检 / 403 的 CORS 头 | `guard-probe.mjs` |
+| Host 头读取与伪造 | `host-probe.mjs` |
+| 前缀白名单没有被路径写法绕过 | `path-probe.mjs` |
+| Node 权限模型可用、越界写被拒 | 见第十七节命令（Node 24.15） |
+
+所有脚本在 `.scratch/header-probe/`，用法见该目录 README。
