@@ -1,278 +1,205 @@
-# cloud-server 管理面安全加固方案（Token + 请求边界 + 审计）
+# cloud-server 管理面安全加固方案（最终版）
 
-> 状态：待实施（本文档是执行依据，不含已落地代码）
-> 适用范围：`packages/cloud-server`，以及调用它的 `packages/plugins/plugin-manager`、`packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs`
-> 参考：DeepSeek Harness（DSH）的浏览器令牌 + Host/Origin 校验 + 安装显式授权，见 `deepseek-harness/packages/client/connection/README.zh.md`
+> 状态：待实施。本文档是执行依据，不含已落地代码。
+> 适用：`packages/cloud-server`、`packages/plugins/plugin-manager`、`packages/ui`。
+> 参照：DeepSeek Harness（DSH）的浏览器令牌与请求信任边界（`deepseek-harness/packages/client/connection/README.zh.md`、`src/api-request-trust.ts`）。
 
-## 一、目标
+## 一、为什么做这件事
 
-把「任意网页 / 任意本地脚本都能调用后台管理接口」这个敞口收掉，按性价比分三层：
+后台跑在 `127.0.0.1:8865`，而**浏览器里任何一个网页**都能向这个地址发 POST。于是：
 
-| 层 | 解决什么 | 改动量 | 优先级 |
-|---|---|---|---|
-| 1. 审计日志 | 出了事查得到：谁、何时、装了什么、哈希多少 | 约 60 行 | P0 |
-| 2. 管理令牌（Token） | 非授权来源不能装/卸后台插件 | 约 90 行 | P0 |
-| 3. 请求边界（Host/Origin） | 恶意网页的跨站请求直接 403 | 约 60 行 | P1 |
+1. 你开着画布、顺手点开一个恶意网页，它就能调 `POST /api/server-plugins/install`，把一段以服务端权限运行的 JS 写进 `server-plugins/`；
+2. 它还能调 `POST /api/agent/mcp`，用 `kind: 'stdio'` 直接让后台执行任意命令（比装插件更直接）；
+3. 现有 install 路由的“同源检查”读的是 **JSON body 里的 `origin` 字段**，那是调用方自己填的，伪造即可绕过；
+4. 装了什么、何时装的、代码哈希多少，装完没有任何记录。
 
-完成后能防住：
+这套改动要堵住第 1、2、3 条，并为第 4 条留账。
 
-1. 任意网页向 `127.0.0.1:8865` 发 POST 安装恶意后台插件；
-2. 局域网内其它机器（服务若监听 `0.0.0.0`）直接调管理接口；
-3. DNS 重绑定攻击（攻击者域名解析到 127.0.0.1）；
-4. 事后无法追溯安装行为。
+## 二、边界（先说清楚能防什么）
 
-仍然防不住（与 DSH 同级，行业现实）：
+**能防住**
 
-1. 用户亲手确认安装恶意插件；
-2. 已取得本机文件读写权限的攻击者（能同时改 token 文件与审计日志）；
+| 威胁 | 手段 |
+|---|---|
+| 任意网页向本机后台投递代码/命令 | 管理令牌 + 请求边界 |
+| 局域网其它机器（若监听 0.0.0.0） | Host 白名单 + 令牌 |
+| DNS 重绑定 | Host 头必须为本机/白名单 |
+| 跨站浏览器请求（CSRF） | Origin 必须等于 Host；`sec-fetch-site: cross-site` 拒绝 |
+| 事后无法追溯 | JSONL 审计日志 |
+
+**防不住（与 DSH 同级，属行业现实）**
+
+1. 用户自己确认安装的恶意插件；
+2. 已获得本机文件读写权限的攻击者（可同时改令牌文件与审计日志）；
 3. 插件在进程内滥用宿主权限（没有插件级沙箱）；
-4. 第三方依赖供应链投毒。
+4. 第三方依赖供应链投毒；
+5. 已授权的插件通过合法 API 读取画布数据（越权之外的行为管不了）。
 
-## 二、现状与证据（改之前的事实）
+> 结论：这套改动把“别人塞进来”这条路堵死；“装进来之后能干什么”要靠后续的进程隔离与能力收窄。
 
-### 2.1 攻击面最大的路由
+## 三、现状证据（改动前的真实代码）
 
-`packages/cloud-server/src/routes/serverPlugins.ts`
+| 位置 | 事实 |
+|---|---|
+| `routes/serverPlugins.ts:106` | `POST /api/server-plugins/install` 接受 `code` 文本写盘 |
+| 同上 `:111` | 仅要求 body `confirm === true` |
+| 同上 `:115-119` | “同源检查”读的是 **body.origin 字符串**，可伪造 |
+| 同上 `:123` | id 白名单 `[A-Za-z0-9_-]{1,64}`，防路径穿越 |
+| 同上 `:136-143` | 服务端可信 sha256 比对（防传输篡改） |
+| `routes/npmPlugins.ts:366/379/410` | NPM 安装/更新/卸载，同样只需 `confirm: true` |
+| `routes/agent.ts:161` | `POST /api/agent/mcp` 支持 `kind: 'stdio'` + `command` + `args` → **执行任意命令**（`agent/config.ts:969-972`） |
+| `routes/agent.ts:144` | `POST /api/agent/skills/import` 按路径读目录并落盘技能 |
+| `routes/agent.ts:210/230/248/269/298` | 改写系统提示词、模板、prompts、标题模型、策略 |
+| `routes/agentSessions.ts` | 会话创建/改/删/中止/队列/goal/审批等 15+ 个写接口 |
+| `routes/canvasOps.ts`、`routes/canvases.ts`、`routes/projects.ts`、`routes/assets.ts`、`routes/history.ts`、`routes/kv.ts` | 大量写接口（画布、项目、资产、历史、KV） |
+| `server.ts:445` | `app.use('*', cors())` —— hono 默认 `origin: '*'`（见 `node_modules/.pnpm/hono@4.13.5/.../cors/index.js:4`），即当前**对所有来源开放 CORS** |
+| `routes/mcp.ts:42` | `app.all('/mcp')` 无任何鉴权，MCP 工具可批量改画布 |
+| `routes/agentChat.ts:77` | `POST /api/agent/chat/completion` 无鉴权（可被网页当作免费模型代理） |
+| `cli.ts:184-206` | 启动日志位置，适合打印令牌 |
 
-- `POST /api/server-plugins/install`（第 106 行）接受 `code` 文本并写入 `server-plugins/` 目录；
-- `POST /api/server-plugins/uninstall`（第 161 行）删除对应文件；
-- 已有防线：`confirm: true`（第 111 行）、origin 检查（第 115 行，靠 body 里的 `origin` 字段）、id 白名单（第 123 行）、服务端可信 sha256 比对（第 136-143 行）；
-- **缺口**：`body.origin` 是调用方自己填的字符串，不是 HTTP 头的 `Origin`，伪造即可绕过；没有任何调用方身份校验。
+## 四、最终设计
 
-### 2.2 全局中间件位置
+### 4.1 总原则
 
-`packages/cloud-server/src/server.ts`
+1. **按方法保护，而不是按路由清单**：所有 `POST/PUT/PATCH/DELETE` 一律要求令牌；`GET/HEAD/OPTIONS` 放行。理由：路由会持续增加（本次扫出 70+ 个写接口），白名单式保护必然漏；按方法拦没有漏项。
+2. **读接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要），只对同源浏览器与 curl 本机放行。
+3. **失败关闭**：校验拿不到结论一律 403。
+4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
+5. **令牌不出现在页面可读的位置**：不用 `<meta>` 注入，改 HttpOnly cookie 或手动输入。
 
-```ts
-// 第 445 行
-app.use('*', cors())
-```
-
-所有路由在这之后注册（Hono 首次 fetch 后冻结，见第 443 行注释）。新的请求边界中间件必须紧跟在 `cors()` 之后。
-
-### 2.3 前端调用点
-
-`packages/plugins/plugin-manager/src/pluginManagerService.ts` 第 501 行发起 `POST /api/server-plugins/install`，body 为 `{ id, code, sha256, confirm: true, origin }`。加 token 后这里要带上请求头。
-
-### 2.4 启动日志位置
-
-`packages/cloud-server/src/cli.ts` 第 184-206 行打印服务信息，适合在这里打印一次 token。
-
-## 三、总体设计
-
-```
-浏览器/脚本请求
-   │
-   ├─ ① 请求边界中间件（所有 /api）
-   │     Host 必须是 loopback/白名单；带 Origin 时必须是同源；cross-site 一律 403
-   │
-   ├─ ② 管理鉴权（仅管理类路由）
-   │     校验 x-admin-token 头，失败 403 并记审计
-   │
-   └─ ③ 业务路由（保持现状）
-         kv / canvases / assets / agent / mcp …
-```
-
-设计原则：
-
-1. **最小权限**：token 只保护「会引入可执行代码」的接口，不保护普通读写（否则前端每个请求都要带 token，改动面过大）。
-2. **失败关闭**：任何校验拿不到结论都拒绝（403），不放行。
-3. **默认安全、可显式关闭**：默认开启；提供 `--no-admin-auth` / `MINI_CANVAS_NO_ADMIN_AUTH=1` 作为逃生口（测试与本地排障用），启动时打印警告。
-4. **先记账再执行**：审计写入在动作之前，避免中途崩溃导致无痕。
-
-## 四、详细设计
-
-### 4.1 审计日志（先做）
-
-#### 文件
+### 4.2 审计日志（P0）
 
 新增 `packages/cloud-server/src/audit.ts`：
 
 ```ts
 export type AuditAction =
+  | 'write'            // 任一写请求
   | 'server-plugin/install'
   | 'server-plugin/uninstall'
-  | 'admin/auth-failed'
-  | 'admin/auth-ok'
+  | 'npm-plugin/install'   | 'npm-plugin/update' | 'npm-plugin/uninstall'
+  | 'agent/mcp-add'    | 'agent/mcp-remove'
+  | 'auth-failed'
 
 export interface AuditEntry {
-  at: string          // ISO 时间
+  at: string        // ISO8601
   action: AuditAction
-  id?: string         // 插件 id
-  sha256?: string     // 插件代码哈希（完整）
-  size?: number       // 代码字节数
-  origin?: string     // HTTP Origin 头（有则记）
-  host?: string       // HTTP Host 头
-  remote?: string     // 连接来源地址（取得到则记）
-  token?: 'ok' | 'missing' | 'bad'
-  result?: 'attempt' | 'ok' | 'rejected'
+  method: string
+  path: string
+  id?: string
+  sha256?: string
+  size?: number
+  origin?: string
+  host?: string
+  token: 'ok' | 'missing' | 'bad' | 'disabled'
+  result: 'attempt' | 'ok' | 'rejected'
   reason?: string
+  prev?: string     // 上一条记录的 hash（防篡改链）
+  hash?: string     // 本条记录内容的 sha256
 }
 
 export function createAuditLog(filePath: string): {
-  append(entry: Omit<AuditEntry, 'at'>): Promise<void>
+  append(e: Omit<AuditEntry, 'at' | 'prev' | 'hash'>): Promise<void>
 }
 ```
 
 实现要点：
 
-- 路径：`{dataDir}/audit.log`，JSONL（一行一条 JSON）；
-- `append` 用 `fs.appendFile`，失败只 `console.warn`，**不阻断主流程**；
-- 目录不存在时 `mkdir -p`；
-- token 绝不写入日志（只写 `ok/missing/bad`）。
+- 路径 `{dataDir}/audit.log`，JSONL；
+- 每条记录计算 `hash = sha256(去掉 hash 字段后的 JSON)`，`prev` 取上一条的 `hash`，形成链；被删改后链会断，可检测（但不能阻止）；
+- `fs.appendFile` 失败只 `console.warn`，不阻断；
+- 绝不记录令牌原文；
+- 写入顺序：**进入写路由先记 attempt → 执行 → 成功后补一条 ok**（失败补 rejected）。
 
-#### 记录点
+不提供 HTTP 读取接口——那等于把日志暴露给网页。查看方式写进文档：`type .mini-canvas\audit.log`。
 
-| 事件 | 时机 | 字段 |
-|---|---|---|
-| `server-plugin/install` | 进路由后、校验前，`result:'attempt'` | id、sha256（算出的）、size、origin、host |
-| 同上 | 校验失败 | `result:'rejected'`、`reason` |
-| 同上 | 落盘成功后 | `result:'ok'` |
-| `server-plugin/uninstall` | 删除前/后 | id |
-| `admin/auth-failed` | token 缺失或不符 | path、origin、host、token |
-
-#### 查看方式
-
-文档给用户：`type .mini-canvas\audit.log`（Windows）或 `tail -f .mini-canvas/audit.log`。不提供 HTTP 接口——那等于把日志暴露给网页。
-
-### 4.2 管理令牌（Token）
-
-#### 文件与生命周期
+### 4.3 管理令牌（P0）
 
 新增 `packages/cloud-server/src/adminAuth.ts`：
 
 ```ts
-export interface AdminAuthOptions {
-  dataDir: string
-  /** false 时整体关闭鉴权（逃生口），启动时必须打印警告 */
-  enabled: boolean
-}
-
 export interface AdminAuth {
-  /** 当前 token（启动时生成或从文件读取） */
   readonly token: string
-  /** 校验一个请求头值；恒定时间比较 */
-  verify(headerValue: string | undefined): 'ok' | 'missing' | 'bad'
-  /** 文件路径（供日志/诊断） */
   readonly tokenFile: string
+  verify(v: string | undefined): 'ok' | 'missing' | 'bad'
 }
-
-export async function createAdminAuth(opts: AdminAuthOptions): Promise<AdminAuth>
+export async function createAdminAuth(opts: {
+  dataDir: string
+  enabled: boolean
+  fixedToken?: string   // MINI_CANVAS_ADMIN_TOKEN
+}): Promise<AdminAuth>
 ```
 
 规则：
 
-1. token 文件：`{dataDir}/admin-token`，内容为 64 位十六进制（32 字节 `crypto.randomBytes`）；
-2. 文件存在则读取（trim）；不存在则生成并写入，权限尽量 `0o600`（Windows 上忽略）；
-3. 内容长度不合法（少于 32 字符）时**重新生成**并记一条警告；
-4. 比较用 `crypto.timingSafeEqual`（长度不等先返回 `bad`）；
-5. 请求头名：`x-admin-token`。
+1. 文件 `{dataDir}/admin-token`，内容 64 位 hex（`randomBytes(32)`）；存在则读，长度不足 32 或非 hex 则重新生成并警告；
+2. 比较用 `crypto.timingSafeEqual`；
+3. 请求头 `x-admin-token`；
+4. 保护范围：**所有非 GET/HEAD/OPTIONS 的 `/api/*`**，包括 `/api/agent/*`、`/api/npm-plugins/*`、`/api/server-plugins/*`、`/api/kv/*`、`/api/canvases/*`、`/api/projects/*`、`/api/assets/*`、`/api/history/*`、`/api/jobs/*`。
+5. **不保护**：`GET/HEAD` 读接口、`/mcp`（见 4.5，单独处理）、静态资源。
 
-#### 保护哪些路由
-
-| 路由 | 是否要 token | 理由 |
-|---|---|---|
-| `POST /api/server-plugins/install` | ✅ | 引入可执行代码 |
-| `POST /api/server-plugins/uninstall` | ✅ | 删除/热卸代码 |
-| `POST /api/npm-plugins/install|uninstall|update` | ✅ | 同上 |
-| `POST /api/server-plugins/register`（若后续新增） | ✅ | 注册路径读取权 |
-| `PUT/DELETE /api/kv/*` | ❌ | 画布前端高频调用 |
-| `POST /api/canvases/*` | ❌ | 画布数据写入 |
-| `GET *` | ❌ | 读操作 |
-| MCP `/mcp` | ❌（建议后续单独加） | 已有独立鉴权设计空间 |
-
-实现方式：不改每个路由的内部逻辑，而是在路由注册时包一层：
+覆盖方式：在 `server.ts` 的 `cors()` 之后挂一个中间件，而不是逐个路由改：
 
 ```ts
-// 在 serverPlugins.ts 的 app 内，或统一的 guard 包装器
-app.use('/api/server-plugins/*', adminGuard(auth, audit))
-app.use('/api/npm-plugins/*', adminGuard(auth, audit))
+app.use('/api/*', async (c, next) => {
+  if (!WRITE_METHODS.has(c.req.method)) return next()
+  const verdict = auth.verify(c.req.header('x-admin-token'))
+  if (verdict !== 'ok') { await audit.append({ ...result:'rejected' }); return c.json({...}, 403) }
+  await next()
+})
 ```
 
-`adminGuard` 只拦 POST；GET 放行。
+### 4.4 令牌如何到达前端
 
-#### 前端如何拿到 token（三选一）
+三选一，**推荐 A 为主 + B 兜底**：
 
-推荐 **B + C 兜底**：
+**A. 手动输入（安全，推荐默认）**
 
-**A. 设置面板手动粘贴（保底）**
+- 插件管理页新增「管理令牌」输入框，存 `localStorage`；
+- 所有写请求带 `x-admin-token`。
 
-- 插件管理页新增一个输入框「管理令牌」，存 `localStorage`；
-- 安装后台插件时把值放进 `x-admin-token` 请求头。
+**B. 托管页写入 HttpOnly cookie（自动，需服务端配合）**
 
-**B. 托管页面自动注入（推荐，零操作）**
+- 服务端在 `GET /` 返回时设置 `Set-Cookie: mc_admin=...; HttpOnly; SameSite=Strict; Path=/`；
+- 前端 JS 读不到，但浏览器自动带上；
+- 服务端校验时先看 `x-admin-token`，没有再看 cookie；
+- 前提：画布页与接口同源（托管模式满足；dev :5288 不满足，走 A）。
 
-- `server.ts` 的 `uiRoutes(uiDist)` 目前已经会往 `index.html` 注入 `<meta name="mini-canvas-host">`（见 `static.ts` 的 `injectHostFlag`）；
-- 在同一处再注入一行 `<meta name="mini-canvas-admin-token" content="<token>">`；
-- 前端读这个 meta，放进请求头；
-- 安全性：只有能读到这个 HTML 的人才拿得到 token，而能读到就说明它已经在你同源页面里；跨源网页读不到响应体。
-- 注意：**只有托管模式注入**；`packages/ui dev`（:5288）不是 cloud-server 托管，拿不到 meta，走 A 或 C。
+**C. 环境变量（dev / CI）**
 
-**C. 环境变量（给 dev / 脚本）**
+- 服务端 `MINI_CANVAS_ADMIN_TOKEN` 指定固定令牌；
+- 前端 `VITE_ADMIN_TOKEN` 在 dev 下写入请求头。
 
-- cloud-server 支持 `MINI_CANVAS_ADMIN_TOKEN` 指定固定 token（不生成文件），方便 dev 与 CI；
-- 前端 dev 用 `VITE_ADMIN_TOKEN`，写进请求头。
+**明确不做**：把令牌注入 `<meta>` 标签。画布里加载的任何第三方前端插件都能读到它。
 
-#### 启动打印
-
-`cli.ts` 第 184 行之后加：
-
-```
-  管理令牌  <token>
-            已写入 <dataDir>/admin-token（安装后台插件时使用）
-```
-
-`--no-admin-auth` 时改为打印黄色警告：`管理鉴权已关闭（仅限本地排障）`。
-
-### 4.3 请求边界（Host / Origin）
+### 4.5 请求边界（P1）
 
 新增 `packages/cloud-server/src/requestTrust.ts`：
 
 ```ts
-export interface RequestTrustOptions {
-  /** 允许的 Host authority，如 ['127.0.0.1:8865', 'localhost:8865']；端口由调用方拼 */
-  trustedHosts: string[]
-  /** 额外允许的 Origin（dev 代理场景，如 http://localhost:5288） */
-  trustedOrigins?: string[]
-}
-
-export function requestTrust(opts: RequestTrustOptions) {
-  // 返回 Hono 中间件
-}
+export function requestTrust(opts: {
+  trustedHosts: string[]      // 如 ['127.0.0.1:8865', 'localhost:8865']
+  trustedOrigins?: string[]   // 显式追加，如 dev 代理
+})
 ```
 
-规则（按顺序，任一失败即 403）：
+规则（任一失败 403）：
 
-1. `Host` 头必须存在，且（去掉默认端口后）等于 `trustedHosts` 中任一项，或等于 `127.0.0.1` / `localhost` 的任意端口（本机）;
-2. 若请求带 `Origin`，其 authority 必须等于 Host，或在 `trustedOrigins` 白名单里；
-3. 若 `sec-fetch-site` 头等于 `cross-site`，一律 403；
-4. 规则只作用于 `/api/*`；静态资源与 `/mcp` 先保持现状。
+1. `Host` 必须等于 `trustedHosts` 中一项（默认由启动时 `hostname:port` 生成，支持 port=0 实际端口）；
+2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；
+3. `sec-fetch-site: cross-site` 一律 403；
+4. 只作用于 `/api/*`。
 
-挂载位置（`server.ts` 第 445 行之后）：
+挂载：`server.ts` 第 445 行 `cors()` 之后。
 
-```ts
-app.use('*', cors())
-app.use('/api/*', requestTrust({ trustedHosts: [...], trustedOrigins: [...] }))
-```
+**dev 代理的处理**：
 
-#### dev 代理的坑（必须写进实现）
+- 默认**不**把 5288 写进白名单（避免任意本地项目占端口就获得权限）；
+- 需要时用 `--trusted-origin http://localhost:5288` 显式开启，或设置 `MINI_CANVAS_TRUSTED_ORIGINS`；
+- 文档给出启动命令示例。
 
-`packages/ui/vite.config.ts` 的 `/api` 代理默认不改写 Host。dev 页面在 `localhost:5288`，请求到 8865 时：
+**CORS 也要收紧**：当前 `cors()` 默认 `origin: '*'`。改为同源（与 Host 一致）或显式白名单；`allowMethods` 保留需要的集合。
 
-```
-Host: localhost:5288      ← vite 透传
-Origin: http://localhost:5288
-```
-
-按规则 1 会被拒。两种做法：
-
-**做法一（推荐）**：vite 代理加 `changeOrigin: true`，并让 cloud-server 把 `http://localhost:5288` 加入 `trustedOrigins`（通过环境变量或检测端口）。
-
-**做法二**：cloud-server 启动时把 `trustedOrigins` 默认包含 `http://localhost:5288` 与 `http://127.0.0.1:5288`。
-
-文档选定：**做法二**（零配置，dev 开箱可用），并在实现里写注释说明边界（只放行本机 dev 端口）。
-
-## 五、接口契约变化
+## 五、接口契约
 
 ### 5.1 新增请求头
 
@@ -280,69 +207,58 @@ Origin: http://localhost:5288
 x-admin-token: <64 位 hex>
 ```
 
-只对管理类 POST 必需。
+所有写接口必需（除非 `--no-admin-auth` + `ALLOW_INSECURE`）。
 
 ### 5.2 错误响应
 
-| 情况 | 状态码 | body |
+| 情况 | 状态 | body |
 |---|---|---|
-| 缺 token | 403 | `{ ok:false, error:'需要管理令牌（x-admin-token）；见服务启动日志或 <dataDir>/admin-token' }` |
-| token 错 | 403 | 同上（不提示“错了”与“缺失”的区别，避免探测） |
-| Host/Origin 不合法 | 403 | `{ ok:false, error:'请求来源不受信任' }` |
+| 缺令牌 | 403 | `{ ok:false, error:'需要管理令牌（x-admin-token）；见启动日志或 <dataDir>/admin-token' }` |
+| 令牌错 | 403 | 与上同（不区分缺失/错误，避免探测） |
+| Host/Origin 不可信 | 403 | `{ ok:false, error:'请求来源不受信任' }` |
 
-### 5.3 兼容性开关
+### 5.3 开关
 
 | 开关 | 作用 |
 |---|---|
-| `--no-admin-auth` / `MINI_CANVAS_NO_ADMIN_AUTH=1` | 关闭 token 与 Host/Origin 校验（审计仍记录），启动打印警告 |
-| `MINI_CANVAS_ADMIN_TOKEN` | 指定固定 token（不读/写文件） |
-| `MINI_CANVAS_TRUSTED_ORIGINS` | 逗号分隔的额外 Origin 白名单 |
+| `--no-admin-auth` + `MINI_CANVAS_ALLOW_INSECURE=1` | 关闭令牌与请求边界（审计仍记），启动警告 |
+| `MINI_CANVAS_ADMIN_TOKEN` | 固定令牌 |
+| `MINI_CANVAS_TRUSTED_ORIGINS` | 额外 Origin 白名单（逗号分隔） |
 
-## 六、需要同步修改的调用方
+## 六、要同步修改的调用方
 
-### 6.1 插件管理面板（必改）
+| 位置 | 改什么 |
+|---|---|
+| `packages/plugins/plugin-manager/src/pluginManagerService.ts` | 所有写请求（install/uninstall/update、NPM 操作）带 `x-admin-token`；403 时提示“请先在设置里填写管理令牌” |
+| `packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue` | 新增令牌输入框（密码类型），存 localStorage |
+| `packages/ui/src/**` 其它写请求 | 画布保存、资产、Agent 会话等所有写请求都要带令牌；建议抽一个 `adminFetch()` 统一加头 |
+| `packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` | 全部写请求补令牌；新增缺失/错误 403 用例 |
+| `packages/cloud-server/e2e/*.ts` | 起服务时传入固定令牌 |
+| `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` | 只 PUT KV，属写接口 → 需要令牌；改为从环境变量读取并带 `x-admin-token` |
 
-`packages/plugins/plugin-manager/src/pluginManagerService.ts`：
-
-1. 新增 `adminToken` 状态（从 `localStorage` 或注入 meta 读取）；
-2. `installServerHalf` / `uninstallServerHalf` 的 `doFetch` 加 `x-admin-token` 头；
-3. 403 时把错误文案翻译成「请先在设置里填写管理令牌」；
-4. 设置面板加一个密码输入框（`PluginManagerPage.vue`），只存本地。
-
-### 6.2 watch 工具（不改）
-
-`plugin-hot-reload-demo/scripts/watch.mjs` 只 PUT KV，不属于管理接口，无需 token。
-
-### 6.3 测试与 e2e（必改）
-
-`packages/cloud-server/src/__tests__/serverPluginsRoute.test.ts` 的所有 install/uninstall 请求需要：
-
-1. 创建服务时传入固定 token（`createAdminAuth` 可注入），或使用 `--no-admin-auth` 等价选项；
-2. 断言缺 token 时 403；
-3. 新增「带 token 成功」与「token 错 403」两条用例。
-
-`packages/cloud-server/e2e/*.ts` 若调用管理接口，同样处理。
+> 注意：`watch.mjs` 会给 KV 写门铃，而 KV 的 PUT 也是写接口。如果不带令牌，热重载会直接 403。这是方案里必须一起改的调用方，之前的文档漏了。
 
 ## 七、测试计划
 
-### 7.1 单元测试（新增）
+### 7.1 新增单测
 
 | 文件 | 用例 |
 |---|---|
-| `src/__tests__/adminAuth.test.ts` | 首次生成并落盘 / 二次读取一致 / token 缺失→missing / 错值→bad / 长度异常重新生成 / 恒定时间比较不回显 |
-| `src/__tests__/audit.test.ts` | 追加一行 JSONL / 目录不存在自动建 / 写入失败不抛 / 不含 token 原文 |
-| `src/__tests__/requestTrust.test.ts` | 合法 Host 放行 / 非法 Host 403 / Origin≠Host 403 / cross-site 403 / trustedOrigins 放行 / 非 /api 不拦 |
+| `src/__tests__/adminAuth.test.ts` | 生成/读取一致；长度异常重建；`timingSafeEqual` 分支；不泄露令牌 |
+| `src/__tests__/audit.test.ts` | JSONL 追加；目录自动创建；hash 链连续；写失败不抛；不含令牌 |
+| `src/__tests__/requestTrust.test.ts` | 合法 Host 放行；非法 Host 403；Origin≠Host 403；cross-site 403；trustedOrigins 放行；非 /api 不拦 |
+| `src/__tests__/adminGuard.test.ts` | GET 放行；POST/PUT/PATCH/DELETE 无令牌 403；有令牌放行 |
 
 ### 7.2 路由测试（改）
 
-`serverPluginsRoute.test.ts` 增加：
+`serverPluginsRoute.test.ts` 与 `npmPluginsRoute.test.ts`：
 
-1. 无 token → 403，且文件未写入；
-2. 错 token → 403；
-3. 正确 token → 200 且文件写入；
-4. 审计日志出现 attempt/ok 两条。
+1. 无令牌 → 403，文件未写入；
+2. 错令牌 → 403；
+3. 正确令牌 → 200；
+4. 审计日志出现 attempt/ok。
 
-### 7.3 回归
+### 7.3 回归命令
 
 ```bash
 pnpm -C packages/cloud-server test
@@ -351,79 +267,82 @@ pnpm -C packages/ui test
 pnpm -C packages/ui typecheck
 ```
 
-### 7.4 真机验证
+### 7.4 真机验收（逐条执行）
 
-1. 启动服务，记下 token；
-2. `curl` 不带 token 调 install → 403；
-3. 带正确 token → 200；
-4. `curl -H 'Origin: http://evil.example'` → 403；
-5. 看 `audit.log` 有完整记录；
-6. 画布面板装后台插件（注入 token）→ 成功；
-7. `--no-admin-auth` 启动 → 打印警告且接口可用。
+```bash
+# 1. 起服务，记录令牌
+pnpm -C packages/cloud-server serve
 
-## 八、实施步骤（建议分三个 commit）
+# 2. 无令牌写接口 → 403
+curl -i -X POST http://127.0.0.1:8865/api/server-plugins/install -d '{}'
 
-### 步骤 1：审计日志
+# 3. 带令牌 → 非 403（缺 confirm 等业务 400 也算通过校验）
+curl -i -X POST http://127.0.0.1:8865/api/server-plugins/install \
+  -H 'x-admin-token: <TOKEN>' -d '{}'
 
-1. 新建 `src/audit.ts` + 单测；
-2. 在 `server.ts` 创建 `audit = createAuditLog(path.join(dataDir, 'audit.log'))`，挂到 `CloudServer` 返回对象或通过 `ctx.inject('audit')`；
-3. 在 `serverPlugins.ts` 的 install/uninstall 写入 attempt/rejected/ok；
-4. 跑测试、提交。
+# 4. 恶意 Origin → 403
+curl -i -X POST http://127.0.0.1:8865/api/server-plugins/install \
+  -H 'Origin: http://evil.example' -d '{}'
 
-验收：审计文件出现，安装/卸载各有一条记录，token 不落盘。
+# 5. 读接口不要求令牌
+curl -i http://127.0.0.1:8865/api/kv/config/settings
 
-### 步骤 2：管理令牌
+# 6. 审计日志
+type .mini-canvas\audit.log
+```
 
-1. 新建 `src/adminAuth.ts` + 单测；
-2. `createCloudServer` 里创建（读 `opts.adminAuth ?? true`）；
-3. `server.ts` 在 `/api/server-plugins/*`、`/api/npm-plugins/*` 挂 `adminGuard`；
-4. `cli.ts` 打印 token；
-5. 改 `serverPluginsRoute.test.ts`；
-6. 前端插件管理面板加 token 输入与请求头；
-7. 跑测试、提交。
+## 八、实施步骤（四个 commit）
 
-验收：不带 token 403，带 token 200，面板能装插件。
+| # | 内容 | 验收 |
+|---|---|---|
+| 1 | `adminAuth.ts` + 中间件 + `--no-admin-auth` + 单测 | 写接口 403/放行符合预期 |
+| 2 | `audit.ts` + 接入写路由 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
+| 3 | `requestTrust.ts` + 收紧 CORS + 单测 | 恶意 Origin 403，正常浏览器通过 |
+| 4 | 前端 `adminFetch()` + 面板令牌输入 + watch.mjs 带令牌 + 改测试 | 面板能装插件，热重载不断 |
 
-### 步骤 3：请求边界
-
-1. 新建 `src/requestTrust.ts` + 单测；
-2. `server.ts` 在 `cors()` 后挂 `/api/*` 中间件；
-3. 默认 `trustedOrigins` 包含 `http://localhost:5288`、`http://127.0.0.1:5288`；
-4. 跑测试与真机验证（含 dev 代理）；
-5. 提交。
-
-验收：恶意 Origin 403，正常浏览器与 dev 页面正常。
+先做 1（真正堵洞），再做 2（留痕），3 与 4 紧随。
 
 ## 九、风险与回滚
 
-| 风险 | 影响 | 缓解 |
-|---|---|---|
-| 前端 dev 被 Origin 校验误拦 | 画布打不开数据 | 默认白名单 5288；失败时用 `--no-admin-auth` 排障 |
-| 旧脚本/测试未带 token | CI 变红 | 测试统一传入固定 token；文档列出调用点 |
-| token 泄露到页面 HTML | 同源页面可读 | 只在本机 loopback 托管时注入；不监听 0.0.0.0 |
-| 审计日志变大 | 占磁盘 | JSONL 文本，单条几百字节；后续可加按大小滚动 |
-| 用户忘记 token | 装不了后台插件 | 启动日志打印 + 文件位置提示 + 面板引导 |
+| 风险 | 缓解 |
+|---|---|
+| 前端大量写请求被 403 | 统一 `adminFetch()`；先在 dev 用 `--no-admin-auth` 排障 |
+| dev 代理被 Origin 拦 | 显式 `--trusted-origin`，文档给命令 |
+| 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
+| 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
+| 审计日志被插件删除 | hash 链可发现；日志与数据目录分开可再加强 |
 
-回滚：三层都可用 `--no-admin-auth` 一次性关闭；代码按 commit 粒度可单独 revert。
+回滚：`--no-admin-auth` + `MINI_CANVAS_ALLOW_INSECURE=1` 一次性关闭；按 commit revert。
 
 ## 十、验收清单
 
-- [ ] 无 token 调 install 返回 403，文件未写入
-- [ ] 正确 token 调 install 返回 200，文件写入并热装
-- [ ] 错误 token 返回 403，审计记 `admin/auth-failed`
+- [ ] 无令牌调任一写接口返回 403
+- [ ] 正确令牌调写接口通过校验
+- [ ] GET 接口不需要令牌
 - [ ] `Origin: http://evil.example` 被 403
 - [ ] `sec-fetch-site: cross-site` 被 403
-- [ ] `http://localhost:5288`（dev 代理）正常
-- [ ] `audit.log` 能看到每次安装的 id / sha256 / 来源 / 结果
-- [ ] 启动日志打印 token 与文件位置
-- [ ] `--no-admin-auth` 打印警告且接口恢复可用
-- [ ] cloud-server 全量测试与 typecheck 通过
-- [ ] ui 全量测试与 typecheck 通过
+- [ ] 托管页面（同源）写请求正常
+- [ ] dev 页面（显式 trusted-origin）写请求正常
+- [ ] `audit.log` 记录 attempt / ok / auth-failed，hash 链连续
+- [ ] 启动日志打印令牌与文件位置
+- [ ] `--no-admin-auth` 单独使用无效，必须配合 `MINI_CANVAS_ALLOW_INSECURE=1`
+- [ ] cloud-server 测试与 typecheck 全绿
+- [ ] ui 测试与 typecheck 全绿
+- [ ] 插件管理面板能装/卸后台插件
+- [ ] plugin-hot-reload 的 watch 门铃仍能送达
 
-## 十一、明确不在本次范围
+## 十一、不在本次范围
 
-1. 后端插件 worker/子进程隔离（见对话中的评估，等功能变多再做）；
-2. 插件权限声明字段的强制执行；
-3. MCP 端点的独立鉴权；
-4. 依赖/供应链扫描；
-5. 审计日志的 Web 查看界面。
+1. 后端插件 worker / 子进程隔离；
+2. 插件权限声明与能力注入；
+3. `/mcp` 独立鉴权（建议下一步单独做：MCP 工具能批量改画布，且当前完全无鉴权）；
+4. `/api/agent/chat/completion` 的成本控制（当前可被网页当免费代理）；
+5. 审计日志 Web 查看界面；
+6. 依赖与供应链扫描。
+
+## 十二、后续建议（按价值排序）
+
+1. **`/mcp` 鉴权**：它现在无任何校验，能改任意画布，暴露面比安装接口更大；
+2. **`chat/completion` 限流/鉴权**：防止被网页当免费模型代理；
+3. **后端插件 worker 隔离**：缩小爆炸半径；
+4. **审计日志与数据目录分离**：插件拿不到日志文件。
