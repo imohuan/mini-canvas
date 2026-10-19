@@ -160,6 +160,10 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 ```ts
 export type AuditAction =
   | 'write'            // 受保护入口的写请求（首版只记第十三节那些）
+  | 'canvas/write'     // POST /api/canvases/:id/*
+  | 'canvas/overwrite' // PUT /api/canvases/:id（首版只记，不拦）
+  | 'agent/session-write'
+  | 'task/call'
   | 'server-plugin/install'
   | 'server-plugin/uninstall'
   | 'npm-plugin/install'   | 'npm-plugin/update' | 'npm-plugin/uninstall'
@@ -195,6 +199,12 @@ export function createAuditLog(filePath: string): {
 - `fs.appendFile` 失败只 `console.warn`，不阻断；
 - 绝不记录令牌原文；
 - 写入顺序：**进入写路由先记 attempt → 执行 → 成功后补一条 ok**（失败补 rejected）。
+
+**`result` 的三个值要按实际语义用**：
+
+- `attempt`：已经通过校验、准备执行；
+- `ok`：执行完成；
+- `rejected`：**没通过校验**（令牌/来源）。不要用它表示「业务层拒绝了请求」（比如画布不存在），那种是 `ok` + `reason`——混在一起会让「攻击尝试」和「用户操作失误」看起来一样。
 
 不提供 HTTP 读取接口——那等于把日志暴露给网页。查看方式写进文档：`type .mini-canvas\audit.log`。
 
