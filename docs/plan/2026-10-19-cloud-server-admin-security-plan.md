@@ -146,6 +146,8 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 
 也就是说：`/mcp` 不能用「简单请求」偷打，但它对**任何网页**开放（只要 CORS 放开）。收紧 CORS + Host 白名单之后，浏览器跨源与 DNS 重绑定都会被挡住，`/mcp` 这一侧才算有基本边界；独立的令牌鉴权仍留到下一版。
 
+**但这条边界有个前提要写清楚**：`/mcp` 不在 `/api/*` 下，`requestTrust` 只作用于 `/api/*`。所以 commit 4 的中间件**必须把 `/mcp` 也纳入**（按 Host 判定，不要求令牌），否则收紧 CORS 之后 `/mcp` 的 Host 检查仍然缺位，DNS 重绑定页面照样能调它。
+
 **防不住（与 DSH 同级，属行业现实）**
 
 1. 用户自己确认安装的恶意插件；
@@ -412,7 +414,7 @@ export function requestTrust(opts: {
 1. `Host` 必须等于 `trustedHosts` 中一项（默认由启动时 `hostname:port` 生成，支持 port=0 实际端口）；
 2. 带 `Origin` 时，必须等于 Host 的 origin 或在 `trustedOrigins`；**`Origin: null` 一律拒绝**——详见第十六节（实测证明「给 null 开例外」等于对所有网页开例外）；
 3. `sec-fetch-site: cross-site` 一律 403；
-4. 只作用于 `/api/*`。
+4. 作用于 `/api/*` **与 `/mcp`**（后者不要求令牌，但要做 Host/Origin 判定——否则 DNS 重绑定页面仍能调 MCP）。
 
 **第 1 条（Host 白名单）和令牌是仅有的两道承重墙。** 第 2、3 条只能挡「懒得伪装」的浏览器请求，因为：
 
