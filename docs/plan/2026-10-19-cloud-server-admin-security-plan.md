@@ -114,6 +114,7 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 | 网页改画布 / 整张覆盖 | 画布 POST 走令牌；`PUT /api/canvases/:id` 靠 Host 白名单 + 收紧 CORS（第一节、4.5 实测） |
 | 网页匿名传 SVG 后执行脚本偷令牌 | 资源回读加 `CSP: sandbox`（第十九节，已实测挡得住） |
 | 网页让 Agent 跑命令、烧模型额度 | 会话写接口加令牌（第十八节） |
+| 网页下生成单（消耗平台额度） | `POST /api/jobs` 同样没有鉴权；实测跨源简单请求能到路由（`400 未找到动作` = 已进 handler），配上真实 actionId 就会消耗额度 |
 | 网页间接执行代码（节点脚本 / MCP stdio） | `/api/task/`、`/api/agent/mcp` 加令牌 |
 | 事后无法追溯 | JSONL 审计日志 |
 
@@ -158,7 +159,7 @@ PUT /api/canvases/default {nodes:[{id:'hacked',...}], edges:[]} → 200 {"ok":tr
 
 ### 4.1 总原则
 
-1. **分级保护，先封「能执行代码」与「能改画布」两类路口**：首版对「会引入可执行代码 / 执行命令」的接口要令牌（第十三节：40 个单条入口，另加 `/api/showcase/`、`/api/agent/canvases/` 两个前缀组），**外加 `POST /api/canvases/:id/*` 与 `POST /api/canvas/*`**（简单请求可达，见第一节实测）。不是对所有写接口一刀切：资产、项目、历史、KV 仍暂缓。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
+1. **分级保护，先封「能执行代码」「能改画布」「能花钱」三类路口**：首版对「会引入可执行代码 / 执行命令」的接口要令牌（第十三节：42 个单条入口，另加 `/api/showcase/`、`/api/agent/canvases/` 两个前缀组），**外加 `POST /api/canvases/:id/*`、`POST /api/canvas/*`、`POST /api/jobs*`**（简单请求可达，见第一节实测）。不是对所有写接口一刀切：资产、项目、历史、KV 仍暂缓。原因见第十三节：视觉节点的沙箱 iframe 拿不到令牌，全量按方法保护会打断正常功能。后续升级到「所有写方法都要令牌」，那时先做宿主代发。
 2. **读接口与暂未加令牌的写接口用请求边界保护**：`/api/*` 全部经过 Host/Origin 检查（GET 也要）。要注意请求边界**挡不住简单请求之外的副作用**（第一节实测），所以它只是补充；真正的门槛是 Host 白名单 + 令牌。
 3. **失败关闭**：校验拿不到结论一律 403。
 4. **逃生口要显式**：`--no-admin-auth` 仅在同时设置 `MINI_CANVAS_ALLOW_INSECURE=1` 时生效，且启动打印醒目警告。
@@ -269,7 +270,7 @@ export async function createAdminAuth(opts: {
    /api/canvas/              （仅 POST：nodes / edges；老接口，改默认画布）
    ```
 
-这些是「能引入可执行代码、执行命令、改变服务端出网目标、或直接改画布」的全部入口，共 40 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。其中：
+这些是「能引入可执行代码、执行命令、改变服务端出网目标、直接改画布、或花钱」的全部入口，共 42 条具体路由（第十三节有逐条清单，第十四、十五节与第一节有来源说明）。其中：
 
    - `/api/agent/mcp` 这条前缀同时覆盖 `POST /api/agent/mcp/probe`（它会去拉起已配置的 stdio 命令）；
    - `/api/effect-library/` 与 `/api/style-library/` 是**同一段代码用两份规格各注册一遍**（`LIBRARIES` 数组，`plugin-style-library/src/server.ts:80-97`），只保护一个会漏掉另一个；
@@ -569,7 +570,7 @@ curl -i -X OPTIONS http://127.0.0.1:8865/api/server-plugins/install \
 |---|---|---|
 | 0 | 资源回读加 `CSP: sandbox`（第十九节） | 带脚本的 SVG 打开后不执行；`<img>` 引用仍正常 |
 | 1 | **视觉节点上传改宿主代发**（`save`；顺带 `task` 也走桥）+ `UiContent.vue` 代发实现 | 视觉节点保存正常；iframe 内 Network 面板看不到 `/api/canvases/*/resources` |
-| 2 | `adminAuth.ts` + 中间件（首版白名单）+ `--no-admin-auth` + 单测 | 第十三节的 40 个入口 + 两组前缀无令牌 403；资产/项目/KV 写接口不受影响 |
+| 2 | `adminAuth.ts` + 中间件（首版白名单）+ `--no-admin-auth` + 单测 | 第十三节的 42 个入口 + 两组前缀无令牌 403；资产/项目/KV 写接口不受影响 |
 | 3 | 前端带令牌：`plugin-manager`、`plugin-agent` 的 `json()`、`plugin-cloud-client` 的 `doFetch`、面板输入框 | 面板能装插件、能对话、cloud-client 能写画布 |
 | 4 | `requestTrust.ts` + 收紧 CORS + 单测（**放在 1 之后**） | 恶意 Origin 403；DNS 重绑定 Host 403；视觉节点仍可保存 |
 | 5 | `audit.ts` + 接入 + hash 链 + 单测 | 日志出现 attempt/ok，链连续 |
@@ -600,7 +601,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 
 | 风险 | 缓解 |
 |---|---|
-| 前端写请求被 403 | 首版拦 40 个入口加两组前缀；插件面板、对话面板、cloud-client 画布写都要带令牌。watch 门铃（KV）不受影响 |
+| 前端写请求被 403 | 首版拦 42 个入口加两组前缀；插件面板、对话面板、cloud-client 画布写都要带令牌。watch 门铃（KV）不受影响 |
 | dev 代理被 Origin/Host 拦 | 显式 `--trusted-origin` + `--trusted-host`，5.3 有命令 |
 | 旧脚本/测试未带令牌 | 测试统一固定令牌；文档列全调用点 |
 | 令牌泄露 | 不注入 meta；cookie 用 HttpOnly；不写日志 |
@@ -630,7 +631,7 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 - [ ] ui 测试与 typecheck 全绿
 - [ ] 插件管理面板能装/卸后台插件
 - [ ] plugin-hot-reload 的 watch 门铃仍能送达
-- [ ] 受保护入口清单（40 条，另加 `/api/showcase/` 前缀组共 11 个写接口）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
+- [ ] 受保护入口清单（42 条，另加 `/api/showcase/` 前缀组共 11 个写接口）与 `adminAuth` 里的前缀表逐条一致（有测试锁住）
 - [ ] 新增插件注册后台路由时，能通过统一声明标记鉴权等级（长期机制，见第十四节）
 - [ ] `POST /api/agent/models` 无令牌返回 403（SSRF 入口）
 - [ ] `baseUrl` 指向 `169.254.169.254` / `127.0.0.1` / 内网段时被拒绝（若本版实现内网拦截）
@@ -759,6 +760,8 @@ POST /api/canvases/:id/nodes                     ← 第一节实测：简单请
 POST /api/canvases/:id/edges
 POST /api/canvases/:id/resources
 POST /api/canvases/:id/duplicate
+POST /api/jobs                                    ← 下生成单（花钱）
+POST /api/jobs/:jobId/cancel
 ```
 
 清单靠**「方法 + 路径前缀」匹配**实现，不逐个写死完整路径：
@@ -770,6 +773,7 @@ POST /api/canvases/:id/duplicate
            /api/agent/chat/completion  /api/task/  /api/node-packages/
            /api/node-ui/debug-  /api/style-library/  /api/effect-library/
            /api/showcase/  /api/agent/canvases/
+           /api/jobs/        ← 下生成单 = 花钱；跨源简单请求实测能进 handler
 仅 POST：   /api/canvases/    /api/canvas/     ← 后者是老接口，同样能改默认画布
 ```
 
@@ -907,7 +911,7 @@ POST   /api/agent/models/available
 POST   /api/agent/chat/completion
 ```
 
-它们属于第十三节 40 条中的一部分，不额外增加计数。
+它们属于第十三节 42 条中的一部分，不额外增加计数。
 
 ### 为什么这条之前没写
 
