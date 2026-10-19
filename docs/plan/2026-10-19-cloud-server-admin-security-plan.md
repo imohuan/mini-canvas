@@ -708,8 +708,8 @@ commit 0 与 1 还要各跑一次真机确认（单测测不出「浏览器怎�
 
 **方案 C：按前缀分级保护（务实）**
 
-- 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/*`、`/api/node-packages/*`、`/api/node-ui/debug-*`、`/api/style-library/reload`；
-- 画布数据、资产、项目、KV 等高频写接口**暂不加令牌**（这一条已被第一节实测推翻一半：`POST /api/canvases/:id/nodes` 能被简单请求直接改，见 4.3 的二选一）；
+- 只保护**会引入代码/执行命令**的接口：`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/mcp*`、`/api/agent/skills/*`、`/api/agent/system-prompt`、`/api/agent/template/*`、`/api/agent/prompts`、`/api/agent/policy`、`/api/agent/title-model`、`/api/task/*`、`/api/node-packages/*`、`/api/node-ui/debug-*`、`/api/style-library/*`；
+- 画布数据、资产、项目、KV 等高频写接口**首版一律不加令牌**——这一条**不成立**：实测（第一节）`POST /api/canvases/:id/nodes` 用 `text/plain` 简单请求就能改，所以画布 POST 已并入清单（见 4.3 的二选一）；
 - 优点：改动小；缺点：**视觉节点保存会坏**（如果补上画布写保护），或**画布对任何网页开放**（如果不补）。两个缺点必须选一个，不存在「都不破坏」的版本。
 
 ### 建议
