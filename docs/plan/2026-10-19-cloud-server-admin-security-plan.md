@@ -1024,11 +1024,11 @@ node --permission --allow-fs-read=<dir> --allow-fs-write=<dir> a.mjs
 4. POST /api/agent/canvases/:id/sessions/:sid/approvals/:aid → 允许（无鉴权）
 ```
 
-第 4 步不需要知道审批内容：`decision` 只要不是 `'deny'` 就是 `allow`（`agentSessions.ts:818`）。整条链的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响，提示词又能通过 `PUT /api/agent/system-prompt`、`/api/agent/prompts` 改（这两条在清单里，会话那几条不在）。
+第 4 步不需要知道审批内容：`decision` 只要不是 `'deny'` 就是 `allow`（`agentSessions.ts:818`）。整条链剩下的「门」只有第 3 步那个模型要不要用命令——而模型会被提示词影响，提示词又能通过 `PUT /api/agent/system-prompt`、`/api/agent/prompts` 改。这两条在首版清单里，所以**首版上线后，攻击者改不了提示词**；但第 1、2、4 步的会话接口如果在首版没保护，链条里的「新会话 → 发消息 → 点允许」仍然通。
 
 另外两个副作用不需要模型配合：
 
-- `POST /messages` 每调一次就是一轮真实模型调用，**花的是你的钱**；
+- `POST /messages` 每调一次就是一轮真实模型调用，**花的是你的钱**（这也是为什么这组接口必须进首版清单：即使模型拒绝用命令，钱也已经花了）；
 - `POST /sessions/:sid/queue`、`/goal`、`/compact`、`/fork` 都能反复触发运行。
 
 ### 怎么办
