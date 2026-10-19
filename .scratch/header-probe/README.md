@@ -17,7 +17,8 @@
 | `run12-real-put.mjs` | 跨源 `PUT /api/canvases/:id` | 预检通过，整张画布被覆盖成只有 `hacked` |
 | `guard-probe.mjs` | 令牌中间件 + cors 的顺序、预检、403 是否带 CORS 头 | 先挂 cors 再挂中间件可行；OPTIONS 必须放行 |
 | `host-probe.mjs` | `@hono/node-server` 下 Host 头怎么读 | `c.req.header('host')` 与 URL 同值；原生 http 能伪造 |
-| `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写/双斜杠/编码都会被 Hono 归一，未发现绕过 |
+| `path-probe.mjs` | 前缀白名单能不能用路径写法绕过 | 大小写不归一（会 404）；编码段与`.`段会被归一；双斜杠不折叠，但前缀仍命中。未发现绕过 |
+| `path-probe2.mjs` | 前缀判定的边界（`/api/task` vs `/api/tasks`）与归一化 | `%63all` 被解码、`/api/./task` 被折叠、双斜杠不折叠但前缀仍匹配 |
 | `real-probe.mjs` | 真实服务的 CORS、安装接口、SVG 回读、`/mcp` | 安装接口有可信哈希把关；`/mcp` 无鉴权 |
 
 ## 怎么跑
