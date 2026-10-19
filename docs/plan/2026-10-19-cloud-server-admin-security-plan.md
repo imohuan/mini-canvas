@@ -295,6 +295,17 @@ export function isAdminPath(method: string, path: string): boolean {
 
 > 这里用 `startsWith` 而不是精确匹配，是为了让「新增子路由自动受保护」；代价是 `startsWith('/api/task/')` 也会匹配 `/api/taskfoo`——**不会**，因为前缀里带了结尾斜杠。写单测时要专门锁这一条（`path-probe.mjs` 已验证 Hono 会把各种路径写法归一成规范形式，所以这里不需要额外解码）。
 
+**路径归一化的实测结果**（`.scratch/header-probe/path-probe2.mjs`，同版本 Hono）：
+
+| 请求路径 | `c.req.path` | 是否被 `startsWith` 命中 |
+|---|---|---|
+| `/api/./task/call` | `/api/task/call` | ✅ |
+| `/api/task/%63all` | `/api/task/call` | ✅（已解码） |
+| `/api/task//call` | `/api/task//call` | ✅（双斜杠**不会**折叠，但前缀仍匹配） |
+| `/API/task/call` | `/API/task/call` | ❌ 不命中；但业务路由本身也区分大小写，这条请求会 404 |
+
+结论：**不需要自己做 URL 解码或 path 归一化**，也不要用小写化去「兼容」——那会和 Hono 的路由匹配语义打架（`/API/...` 本来就没有对应路由，放行它也不会执行任何东西）。
+
 > 两处实测确认（`.scratch/header-probe/guard-probe.mjs`，同版本 Hono）：
 > 1. **挂在业务路由之前能拦住插件代理路由**——`use` 先于路由注册时，跨源/无令牌的 `/api/task/call` 被 403，业务 handler 一次都没跑；
 > 2. **预检必须放行**，且 `cors()` 的 `allowHeaders` 要包含 `x-admin-token`；否则前端带令牌的跨源请求会在预检阶段就失败（浏览器只报 `Failed to fetch`，看不出原因）。
