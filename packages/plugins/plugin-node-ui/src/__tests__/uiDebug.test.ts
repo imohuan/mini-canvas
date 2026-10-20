@@ -112,26 +112,36 @@ describe('调试副本的桥（window.CanvasUI）', () => {
   })
 
   /**
-   * ★ 副本是**另一份运行实例**。它的 save 若自己 fetch 上传，就会：
+   * ★ 副本是**另一份运行实例**。它的 save 若自己发请求，就会：
    *   · 覆盖画布上那个节点的槽位图；
    *   · 绕过 updateNode，撤销栈 / 落盘 / 云端同步全不认这笔写入。
-   * 所以副本的 save **只往宿主报**，由宿主决定落不落。
+   * 现在副本与沙箱页统一走「宿主代发」：自己一个请求都不发。
    */
-  it('★ save 只往宿主报（__canvasUiDebug 标记），不自己 fetch 上传', () => {
+  it('★ save 只往宿主报（__canvasUiDebug 标记 + reqId），不自己请求后台', () => {
     expect(js).toContain('__canvasUiDebug: 1')
-    expect(js).toContain("type: 'output'")
-    // 副本的 save 里不该出现 resources?slot= 那种上传地址
+    expect(js).toContain("type: 'save'")
+    expect(js).toContain('reqId: reqId')
     expect(js).not.toContain('/resources?slot=')
+    expect(js).not.toContain('fetch(')
+    expect(js).not.toContain('new EventSource')
   })
 
-  it('字符串与二进制都交得出去（文本传正文，二进制传 base64）', () => {
-    expect(js).toContain('btoa(bin)')
-    expect(js).toContain('fr.readAsArrayBuffer(data)')
+  it('字符串与二进制都交得出去（Blob 直接结构化克隆，不再 base64）', () => {
+    expect(js).toContain('new Blob([data]')
+    expect(js).toContain('payload: data')
+    expect(js).not.toContain('btoa(')
+    expect(js).not.toContain('FileReader')
   })
 
-  it('等宿主回执（__canvasUiDebugResult）—— 否则副本不知道该算成功还是失败', () => {
+  it('等宿主回执（__canvasUiDebugResult 按 reqId 对上）', () => {
     expect(js).toContain('__canvasUiDebugResult')
+    expect(js).toContain('d.reqId !== reqId')
     expect(js).toContain('if (d.ok) resolve(d.url)')
+  })
+
+  it('★ 不再留一条 output 直写路径（副本只发 save 请求）', () => {
+    expect(js).not.toContain("type: 'output'")
+    expect(js).not.toContain('base64')
   })
 
   it('只认来自 parent 的指令（不认别人的消息）', () => {
@@ -145,9 +155,12 @@ describe('调试副本的桥（window.CanvasUI）', () => {
     expect(js).toContain('DOMContentLoaded')
   })
 
-  it('叫后台干活自己就能调（副本同源 + 手册要求写绝对地址）', () => {
-    expect(js).toContain("type: 'call'")
-    expect(js).toContain('canvasId: U.canvasId, nodeId: U.nodeId')
+  it('★ task / cancel 也走宿主（统一令牌，副本不再自己拼 /api/task/*）', () => {
+    expect(js).toContain("hostCall('task'")
+    expect(js).toContain("hostCall('task-cancel'")
+    expect(js).toContain('subscribe:')
+    expect(js).not.toContain('/api/task/call')
+    expect(js).not.toContain('/api/task/cancel')
   })
 
   it('★ 生成的桥代码是**合法 JS**（拼字符串最容易写出语法错，真机上只会白屏）', () => {

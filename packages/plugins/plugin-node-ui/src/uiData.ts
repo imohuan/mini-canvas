@@ -488,9 +488,11 @@ export function toCloneableState<T>(state: T): T {
  * 2. **save(data, name)** —— 把「产物」（图 / 视频 / 音频 / 文本）交出去。外面走**不进历史**
  *    那条路，并且**覆盖到本节点自己的槽位**（同一个节点永远一份文件）。
  *
- * 为什么上传由页面自己做、而不是把字节 postMessage 出去：
- * 沙箱里的页面**本来就能直接请求后台**（CSP 已放行 base），少一次字节搬运、也少一份内存。
- * 传出去的只是**地址**（很短）。
+ * 为什么上传由**宿主**做、页面不自己请求后台：
+ * 沙箱页是不透明源，所有请求都是 `Origin: null`，请求边界根本没法把它和恶意网页区分开。
+ * 所以页面只把字节 / 参数 postMessage 给宿主（UiContent.vue，同源、带管理令牌），
+ * 由宿主代发并回一条结果。页面永远碰不到网络层。
+ * 三种载荷（Blob / Uint8Array / ArrayBuffer）都走结构化克隆，不需要 base64。
  *
  * 注意两端都要校验来源：宿主靠 ev.source 认这个 iframe，页面靠 ev.source===parent 认宿主。
  *
@@ -515,41 +517,56 @@ export function toCloneableState<T>(state: T): T {
  */
 export function buildUiBridge(): string {
   const S = String.fromCharCode(39)
-  const D = String.fromCharCode(34)
   return [
     '<script>',
     '(function(){',
-    '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
     '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
     '  var cmdHandlers = [];',
-    '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
-    '  var cmdHandlers = [];',
-    '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
-    // 订阅一次调用：日志 / 进度走回调；跑完把终局事件交出去。
-    // 用 EventSource —— 后台会先把已经发生的输出回放一遍再接着推，
-    // 所以"拿到 runId 到连上"之间跑掉的那几行日志也不会丢。
-    '  function watchRun(runId, opts){',
+    // 请求-回包：每条代发请求带一个 reqId，宿主回 {__canvasUi:1, type:'*-result', reqId}。
+    // 页面这边只留 pending 表，按 reqId 结算；不再自己 fetch。
+    '  var seq = 0, pending = {};',
+    '  function call(type, fields, hooks){',
+    '    hooks = hooks || {};',
     '    return new Promise(function(resolve, reject){',
-    '      var es = new EventSource(U.baseUrl + ' + S + '/api/task/events?runId=' + S + ' + encodeURIComponent(runId));',
-    '      var done = false;',
-    '      es.onmessage = function(ev){',
-    '        var d; try { d = JSON.parse(ev.data); } catch(e){ return; }',
-    '        if (d.type === ' + S + 'log' + S + ') { if (opts.onLog) opts.onLog(d.line); return; }',
-    '        if (d.type === ' + S + 'progress' + S + ') { if (opts.onProgress) opts.onProgress(d.value); return; }',
-    '        done = true; es.close();',
-    '        if (d.type === ' + S + 'done' + S + ') resolve({ ok: true, runId: runId, state: ' + S + 'done' + S + ', result: d.result });',
-    '        else if (d.type === ' + S + 'cancelled' + S + ') resolve({ ok: false, runId: runId, state: ' + S + 'cancelled' + S + ' });',
-    '        else reject(new Error(d.message || ' + S + '脚本跑失败了' + S + '));',
-    '      };',
-    '      es.onerror = function(){ if (done) return; es.close(); reject(new Error(' + S + '输出通道断了' + S + ')); };',
-    '      if (opts.signal) opts.signal.addEventListener(' + S + 'abort' + S + ', function(){',
-    '        if (done) return; done = true; es.close();',
-    '        resolve({ ok: false, runId: runId, state: ' + S + 'cancelled' + S + ' }); });',
+    '      var id = ' + S + 'q' + S + ' + (++seq);',
+    '      var p = pending[id] = { resolve: resolve, reject: reject, onTaskEvent: hooks.onTaskEvent };',
+    // 中止语义沿用旧版：只结束等待、resolve 成 cancelled，不替调用方去取消后台任务。
+    '      if (hooks.signal) {',
+    '        var onAbort = function(){',
+    '          if (!pending[id]) return; delete pending[id];',
+    '          resolve({ ok: false, state: ' + S + 'cancelled' + S + ' });',
+    '        };',
+    '        if (hooks.signal.aborted) { onAbort(); return; }',
+    '        hooks.signal.addEventListener(' + S + 'abort' + S + ', onAbort);',
+    '        p.cleanup = function(){ hooks.signal.removeEventListener(' + S + 'abort' + S + ', onAbort); };',
+    '      }',
+    '      fields = fields || {};',
+    '      fields.__canvasUi = 1; fields.type = type; fields.reqId = id;',
+    '      post(fields);',
     '    });',
     '  }',
+    '  function settle(m){',
+    '    var p = pending[m.reqId];',
+    // 取消不是错误：旧实现 resolve({ok:false,state:'cancelled'})，这里保持一致。
+    '    if (p) { delete pending[m.reqId]; if (p.cleanup) p.cleanup();',
+    '      if (m.ok === false && m.state !== ' + S + 'cancelled' + S + ') p.reject(new Error(m.error || ' + S + '宿主代发失败' + S + '));',
+    '      else p.resolve(m); }',
+    '  }',
+    '  function ready(){ post({ __canvasUi: 1, type: ' + S + 'ready' + S + ' }); }',
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
     '    if(e.source !== parent) return;',
-    '    var d = e.data; if(!d || !d.__canvasUiCmd) return;',
+    '    var d = e.data; if(!d) return;',
+    // 代发回包（save-result / task-result / task-event）
+    '    if (d.__canvasUi === 1 && d.reqId) {',
+    '      if (d.type === ' + S + 'task-event' + S + ') {',
+    '        var pe = pending[d.reqId];',
+    '        if (pe && pe.onTaskEvent) pe.onTaskEvent(d.event || {});',
+    '        return;',
+    '      }',
+    '      settle(d);',
+    '      return;',
+    '    }',
+    '    if(!d.__canvasUiCmd) return;',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',
     '    }',
@@ -587,15 +604,8 @@ export function buildUiBridge(): string {
     '      }',
     '      var fname = String(name || ' + S + 'out.png' + S + ');',
     '      var withExt = /\\./.test(fname) ? fname : fname + ' + S + '.png' + S + ';',
-    '      var url = U.baseUrl + ' + S + '/api/canvases/' + S + ' + encodeURIComponent(U.canvasId)',
-    '        + ' + S + '/resources?slot=' + S + ' + encodeURIComponent(U.nodeId)',
-    '        + ' + S + '&name=' + S + ' + encodeURIComponent(withExt);',
-    '      return fetch(url, { method: ' + S + 'POST' + S + ',',
-    '          headers: { ' + S + 'content-type' + S + ': (bytes && bytes.type) || ' + S + 'application/octet-stream' + S + ' },',
-    '          body: bytes })',
-    '        .then(function(r){ return r.json(); })',
+    '      return call(' + S + 'save' + S + ', { payload: bytes, name: withExt })',
     '        .then(function(j){',
-    '          if(!j || !j.ok) throw new Error((j && j.error) || ' + S + '保存产物失败' + S + ');',
     // 文本把**正文**一起报上去：下游读的 data.text 一直是内容、不是地址（文本节点就是这样）。
     // 与脚本侧 ctx.save 同一条规矩 —— 两边不一致的话，同一个界面用哪半边写法结果就不同。
     "          post({ __canvasUi: 1, type: " + S + "output" + S + ", url: j.url, text: (typeof data === " + S + "string" + S + ") ? data : undefined });",
@@ -603,31 +613,29 @@ export function buildUiBridge(): string {
     '        });',
     '    },',
     // ── 叫后台干活 ────────────────────────────────────────────
-    // 为什么要包一层：直接 fetch 要自己拼三样东西，少一样就 403 或拿不到日志 ——
-    //   · canvasId / nodeId（nodeId 漏了直接被授权那道关挡下）；
-    //   · 长任务的 SSE 地址（还要自己处理 done / error）。
-    // 这里替调用方带上，并把日志 / 进度都接好。
+    // 为什么还要包一层：canvasId / nodeId、等待语义、日志订阅都在宿主那边拼好；
+    // 页面只用说「跑哪个脚本、要不要日志」。
+    // subscribe=true 时宿主订阅 SSE，用 task-event 把日志/进度转回来，终局走 task-result。
     '    task: function(name, methods, args, opts){',
     '      opts = opts || {};',
-    '      var body = { type: ' + S + 'call' + S + ', name: String(name), methods: String(methods),',
-    '        args: args || [], canvasId: U.canvasId, nodeId: U.nodeId,',
-    '        wait: opts.wait === true };',
-    '      return fetch(U.baseUrl + ' + S + '/api/task/call' + S + ', {',
-    '        method: ' + S + 'POST' + S + ',',
-    '        headers: { ' + S + 'content-type' + S + ': ' + S + 'application/json' + S + ' },',
-    '        body: JSON.stringify(body) })',
-    '        .then(function(r){ return r.json(); })',
-    '        .then(function(j){',
-    '          if(!j || !j.ok) throw new Error((j && j.error) || ' + S + '起不了这个脚本' + S + ');',
-    '          if (!j.runId || opts.wait === true || !opts.onLog) return j;',
-    '          return watchRun(j.runId, opts);',
-    '        });',
+    '      var wantEvents = !!(opts.onLog || opts.onProgress) && opts.wait !== true;',
+    '      var onEvent = function(ev){',
+    '        if (ev.type === ' + S + 'log' + S + ' && opts.onLog) opts.onLog(ev.line);',
+    '        else if (ev.type === ' + S + 'progress' + S + ' && opts.onProgress) opts.onProgress(ev.value);',
+    '      };',
+    '      var body = { name: String(name), methods: String(methods), args: args || [],',
+    '        wait: opts.wait === true, subscribe: wantEvents };',
+    '      var hooks = { onTaskEvent: wantEvents ? onEvent : undefined, signal: opts.signal };',
+    '      return call(' + S + 'task' + S + ', body, hooks).then(function(j){',
+    '        if (j.state === ' + S + 'cancelled' + S + ') return j;',
+    '        if (j.ok === false) throw new Error(j.error || ' + S + '脚本跑失败了' + S + ');',
+    '        return j;',
+    '      });',
     '    },',
     // 取消（要自己留 runId：它不写进节点，是这次调用的凭证）
     '    cancel: function(runId){',
-    '      return fetch(U.baseUrl + ' + S + '/api/task/cancel' + S + ', { method: ' + S + 'POST' + S + ',',
-    '        headers: { ' + S + 'content-type' + S + ': ' + S + 'application/json' + S + ' },',
-    '        body: JSON.stringify({ runId: runId }) }).then(function(r){ return r.json(); });',
+    '      return call(' + S + 'task-cancel' + S + ', { runId: runId })',
+    '        .catch(function(err){ return { ok: false, error: err.message }; });',
     '    },',
   '  };',
     '})();',

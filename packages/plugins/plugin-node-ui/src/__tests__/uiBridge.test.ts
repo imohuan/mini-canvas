@@ -7,7 +7,7 @@
  * 这两条是「撤销不违和」「磁盘不爆炸」的唯一保证，所以拿测试钉住。
  */
 import { describe, it, expect } from 'vitest'
-import { buildUiBridge, BRIDGE_GLOBAL, UI_GLOBAL } from '../uiData'
+import { buildUiBridge, BRIDGE_GLOBAL } from '../uiData'
 
 describe('注入给页面的助手（window.CanvasUI）', () => {
   const js = buildUiBridge()
@@ -30,14 +30,27 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
     expect(js).toContain('type: ' + "'" + 'state' + "'")
   })
 
-  it('saveOutput 走**槽位**上传（slot=节点id）—— 这是「一个节点一份文件」的落点', () => {
-    expect(js).toContain('/resources?slot=')
-    expect(js).toContain('encodeURIComponent(U.nodeId)')
+  /**
+   * ★ 沙箱 iframe 不再自己请求后台（2026-10-20 commit 1）。
+   *
+   * 不透明源的请求全是 `Origin: null`，后台的请求边界没法把它和恶意网页区分开；
+   * 管理令牌也不能交给生成物。所以 save 只把字节交给宿主，由宿主带令牌上传。
+   */
+  it('★ save 不再自己上传：没有 /api/canvases/、没有 fetch，只发 save 请求', () => {
+    expect(js).not.toContain('/api/canvases/')
+    expect(js).not.toContain('/resources?slot=')
+    expect(js).not.toContain('fetch(')
+    expect(js).toContain("call('save'")
+    expect(js).toContain('payload: bytes')
+    expect(js).toContain('reqId')
   })
 
-  it('saveOutput 成功后把地址报给宿主（宿主才知道往节点里写什么）', () => {
+  it('save 成功后把地址报给宿主（宿主才知道往节点里写什么）', () => {
     expect(js).toContain('type: ' + "'" + 'output' + "'")
     expect(js).toContain('url: j.url')
+    // 回包按 reqId 结算：宿主回 save-result / task-result 都走同一个 settle
+    expect(js).toContain('function settle(m)')
+    expect(js).toContain('pending[m.reqId]')
   })
 
   /**
@@ -57,9 +70,11 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
   })
 
   it('读的是同一份注入数据（baseUrl / canvasId / nodeId 都从 __CANVAS_UI__ 取）', () => {
-    expect(js).toContain('window[' + JSON.stringify(UI_GLOBAL) + ']')
-    expect(js).toContain('U.baseUrl')
-    expect(js).toContain('U.canvasId')
+    // 页面侧不再需要 baseUrl / canvasId / nodeId —— 宿主代发时自己带。
+    // UI_GLOBAL 仍由 bootstrap 注入，页面数据照旧从它读。
+    expect(js).not.toContain('U.baseUrl')
+    expect(js).not.toContain('U.canvasId')
+    expect(js).not.toContain('U.nodeId')
   })
 
   it('页面一跑起来就主动报到（type:ready）—— 宿主靠它决定什么时候送状态', () => {
@@ -87,17 +102,34 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
     expect(js).toContain('new Blob([data]')
   })
 
-  it('★ 叫后台干活包成 task()：canvasId/nodeId 自动带上（漏了就 403）', () => {
+  it('★ 叫后台干活包成 task()：canvasId/nodeId 由宿主带上（漏了就 403）', () => {
     expect(js).toContain('task: function(name, methods, args, opts)')
-    expect(js).toContain('canvasId: U.canvasId, nodeId: U.nodeId')
+    expect(js).toContain("call('task'")
+    expect(js).not.toContain('/api/task/call')
   })
 
-  it('★ task 能自己订阅长任务（日志/进度回调 + 终局），并支持取消', () => {
-    expect(js).toContain('function watchRun(runId, opts)')
-    expect(js).toContain('/api/task/events?runId=')
+  it('★ task 的日志/进度由宿主订阅 SSE 转回（页面不收 EventSource）', () => {
+    expect(js).not.toContain('new EventSource')
+    expect(js).not.toContain('/api/task/events')
+    expect(js).toContain("d.type === 'task-event'")
+    expect(js).toContain('onTaskEvent')
     expect(js).toContain('opts.onLog')
     expect(js).toContain('opts.onProgress')
+  })
+
+  it('★ cancel 也走宿主（task-cancel），不再自己 POST', () => {
     expect(js).toContain('cancel: function(runId)')
+    expect(js).toContain("call('task-cancel'")
+    expect(js).not.toContain('/api/task/cancel')
+  })
+
+  /**
+   * 旧版 task 的 opts.signal 只有一个语义：**不再等这次调用**（resolve 成 cancelled），
+   * 不替调用方去杀后台进程（真要杀得自己调 cancel）。改了实现也要保住这条。
+   */
+  it('★ opts.signal 中止仍然 resolve 成 cancelled（不 reject、不假装成功）', () => {
+    expect(js).toContain("hooks.signal.addEventListener('abort'")
+    expect(js).toContain("state: 'cancelled'")
   })
 
   /**

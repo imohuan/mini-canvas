@@ -126,17 +126,16 @@ export function clearCredential(storage: Pick<Storage, 'removeItem'>): void {
 /**
  * 组装「SDK 连接脚本」的正文（纯字符串，不含 <script> 壳 —— 由 appendSdkScript 包）。
  *
- * 通道选型（2026-10-16 真机自动化测试修订）：**轮询下行 + HTTP POST 上行**。
- * 为什么不用 SSE：sandbox iframe（opaque origin）里 fetch 流式响应不可靠 ——
- * 真机复现：后台写入成功、前端 reader 永远读不到帧（连接挂起、无错误无数据）；
- * curl 同一端点却即时收到。轮询语义等价（GET 取走挂起队列），且与界面自身的
- * fetch 用法完全一致（/api/task/call 那条路一直稳定）。
- * 为什么：后台（cloud-server）没有任何 WebSocket 设施，外挂插件也拿不到 http server
- * 实例挂 upgrade 监听；而 SSE 项目里已有成熟先例（任务日志的 watchRun 就是）。
- * 本脚本只做通信。协议：
- *   下行（GET debug-poll 的 JSON）：{ evals: [{ type:'eval', id, code } | { type:'stop' }] }
- *   上行（POST /api/node-ui/debug-result）：{ session, id, ok, result?, error? }
- * 轮询由 setInterval 每秒一次（刷新后凭据还在时自动接住恢复路径）。
+ * 通道选型（2026-10-20 宿主代发）：**SDK 自己不碰网络**。
+ *
+ * 沙箱页是不透明源，请求全是 `Origin: null`；管理令牌也不能交给它。所以上行/下行
+ * 都改成 postMessage 给宿主，由 UiContent.vue 带令牌代发：
+ *   下行：页面发 {__uiDebugCmd:1, kind:'poll', reqId, session}
+ *         宿主回 {__uiDebugReply:1, reqId, ok, body?: { evals: [...] } | { error }}
+ *   上行：页面发 {__uiDebugCmd:1, kind:'result', reqId, body:{ session, id, ok, result?, error? }}
+ *         宿主回 {__uiDebugReply:1, reqId, ok}
+ * 轮询仍是每秒一次（刷新后凭据还在时自动接住恢复路径），只是换了一条通道。
+ * 后台协议本身不变：evals 里是 {type:'eval', id, code} 或 {type:'stop'}。
  */
 export interface SdkScriptOptions {
   /** 后台 http(s) 基地址（SSE 与 POST 都走它） */
@@ -154,28 +153,41 @@ export function buildSdkScriptBody(opts: SdkScriptOptions): string {
     '  var stopped = false;',
     '  function log(){ try { console.log.apply(console, ["[ui-sdk]"].concat([].slice.call(arguments))); } catch (e0) {} }',
     '  log("SDK 启动: session=" + SESSION, "base=" + BASE);',
+    // 请求-回包：宿主把后台的答复原样放进 body，按 reqId 对上。
+    '  var seq = 0, pending = {};',
+    '  function ask(kind, fields){',
+    '    return new Promise(function(resolve, reject){',
+    '      var id = "d" + (++seq);',
+    '      pending[id] = { resolve: resolve, reject: reject };',
+    '      fields = fields || {};',
+    '      fields.__uiDebugCmd = 1; fields.kind = kind; fields.reqId = id;',
+    '      try { parent.postMessage(fields, "*"); } catch (e1) { delete pending[id]; reject(e1); }',
+    '    });',
+    '  }',
+    '  window.addEventListener("message", function(e){',
+    '    if (e.source !== parent) return;',
+    '    var d = e.data; if (!d || !d.__uiDebugReply || !d.reqId) return;',
+    '    var p = pending[d.reqId]; if (!p) return;',
+    '    delete pending[d.reqId];',
+    '    if (d.ok === false) p.reject(new Error(d.error || "宿主代发失败")); else p.resolve(d.body || {});',
+    '  });',
     '  function reply(id, ok, fields){',
     '    var body = Object.assign({ session: SESSION, id: id, ok: ok }, fields || {});',
     '    log("回包开始: id=" + id, "ok=" + ok, JSON.stringify(body).slice(0, 200));',
-    '    fetch(BASE + "/api/node-ui/debug-result", { method: "POST",',
-    '      headers: { "content-type": "text/plain" },',
-    '      body: JSON.stringify(body) }).then(function(res){',
-    '        log("回包响应: id=" + id, "status=" + res.status);',
+    '    ask("result", { body: body }).then(function(){',
+    '        log("回包完成: id=" + id);',
     '      }).catch(function(err){',
     '        log("回包失败: id=" + id, (err && err.message) || err);',
     '        try { document.title = "REPLY-ERR:" + ((err && err.message) || err); } catch (e3) {}',
     '      });',
     '  }',
-    // 上行回包用 **text/plain 的 POST**（简单请求，不触发预检）—— 真机自动化 2026-10-16
-    // 抓到：application/json 的 POST 会预检，预检在 sandbox iframe 里静默失败，回包永远
-    // 到不了后台；后台 c.req.json() 不挑 content-type，text/plain 两相容。
-    // 下行用轮询（debug-poll）—— 流式读 SSE 在沙箱（无 allow-same-origin）里不可靠：
-    // EventSource 的跨源连接行为不可靠（实测 2026-10-15：请求都不发出），而 fetch 在
-    // 同一沙箱里一直在用（界面调后台接口就是它）。SSE 帧解析只认 'data: ' 行，够用。
+    // 下行用轮询：宿主取到 evals 后按原样交回来；这里只负责执行。
+    // 每次轮询串行（上一条没回就不发下一条），避免请求堆积。
+    '  var polling = false;',
     '  function poll(){',
-    '    if (stopped) return;',
-    '    fetch(BASE + "/api/node-ui/debug-poll?session=" + encodeURIComponent(SESSION))',
-    '      .then(function(res){ if (!res.ok) throw new Error("poll " + res.status); return res.json(); })',
+    '    if (stopped || polling) return;',
+    '    polling = true;',
+    '    ask("poll", { session: SESSION })',
     '      .then(function(body){',
     '        var list = body.evals || [];',
     '        if (list.length > 0) log("poll 取到 eval: " + list.length + " 条");',
@@ -188,8 +200,8 @@ export function buildSdkScriptBody(opts: SdkScriptOptions): string {
     '      .catch(function(err){',
     '        log("poll 失败: " + ((err && err.message) || err));',
     '        try { document.title = "POLL-ERR:" + ((err && err.message) || err); } catch (e2) {}',
-    '        if (stopped) return;',
-    '      });',
+    '      })',
+    '      .then(function(){ polling = false; });',
     '  }',
     '  function handle(m){',
     '    if (m.type === "stop") {',

@@ -52,6 +52,7 @@ import {
   clearCredential,
 } from './debugSession'
 import { emitUiDebugEvent } from './debugEventBus'
+import { createHostProxy, errText, isSavePayload, type SavePayload } from './hostFetch'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -171,6 +172,16 @@ void (async () => {
 })()
 
 const canvasId = currentCanvasId(typeof location !== 'undefined' ? location.href : undefined)
+
+/**
+ * 宿主代发器。
+ *
+ * 每次请求现建一个：后台地址是 computed（可能先空后到）、管理令牌也可能刚在设置里填上，
+ * 建对象时把两者冻住就会「填了令牌还要刷新」。创建本身不花钱。
+ */
+function hostProxy() {
+  return createHostProxy({ baseUrl: baseUrl.value, canvasId, nodeId: props.id })
+}
 
 /** 生成的 HTML（空 = 还没画，显示空态而不是一个白框） */
 const html = computed(() => (typeof props.data?.uiHtml === 'string' ? (props.data.uiHtml as string) : ''))
@@ -599,11 +610,34 @@ const interactive = ref(false)
 function onBridgeMessage(ev: MessageEvent): void {
   const win = iframeEl.value?.contentWindow
   if (!win || ev.source !== win) return
-  const m = ev.data as { __canvasUi?: unknown; type?: unknown; state?: unknown; url?: unknown; text?: unknown } | null
+  const m = ev.data as
+    | ({
+        __canvasUi?: unknown
+        type?: unknown
+        state?: unknown
+        url?: unknown
+        text?: unknown
+        reqId?: unknown
+        payload?: unknown
+        name?: unknown
+        runId?: unknown
+        args?: unknown
+        wait?: unknown
+        subscribe?: unknown
+        methods?: unknown
+      } & Record<string, unknown>)
+    | null
   if (!m || m.__canvasUi !== 1) return
   // 报到：页面已就绪 → 把存下来的状态送过去（刷新恢复）。同步返回，不走下面的 doc 写入。
   if (m.type === 'ready') {
     pushDataToFrame()
+    return
+  }
+  // 代发：沙箱页不再自己请求后台，全部交给宿主（同源 + 管理令牌）。
+  // reqId 原样带回，页面按它结算自己的 pending promise。
+  if (m.type === 'save' || m.type === 'task' || m.type === 'task-cancel') {
+    if (typeof m.reqId !== 'string' || !m.reqId) return
+    void handleProxyRequest(win, m.reqId, m)
     return
   }
   const doc = ctx.tryGet<{
@@ -673,6 +707,60 @@ function onBridgeMessage(ev: MessageEvent): void {
     }
   } catch {
     // 节点可能已被删掉：静默跳过（不该因为一次上报把页面搞崩）
+  }
+}
+
+/** 给沙箱页回一条代发结果（reqId 必须原样带回） */
+function replyProxy(win: Window, msg: Record<string, unknown>): void {
+  try {
+    win.postMessage({ __canvasUi: 1, ...msg }, '*')
+  } catch {
+    /* iframe 可能已经重挂：这条回包没人收了 */
+  }
+}
+
+/**
+ * 处理一条代发请求：save / task / task-cancel。
+ *
+ * 所有错误都变成 `ok:false + error` 回给页面，让它自己的 promise 能 reject；
+ * 403 的原文照实带回去（用户填错令牌时能看到后台到底说了什么）。
+ */
+async function handleProxyRequest(win: Window, reqId: string, m: Record<string, unknown>): Promise<void> {
+  const proxy = hostProxy()
+  // save 的失败也必须回 save-result：页面侧按类型读 url，混成 task-result 会让协议表失真
+  // （虽然两边都靠 reqId 结算，功能暂时不坏，但下一个人会照着协议写错）。
+  const failType = m.type === 'save' ? 'save-result' : 'task-result'
+  try {
+    if (m.type === 'save') {
+      const payload = m.payload
+      if (!isSavePayload(payload)) {
+        throw new Error('save 的 payload 必须是 Blob / Uint8Array / ArrayBuffer')
+      }
+      const { url } = await proxy.save(payload as SavePayload, typeof m.name === 'string' ? m.name : 'out.png')
+      replyProxy(win, { type: 'save-result', reqId, ok: true, url })
+      return
+    }
+    if (m.type === 'task') {
+      const subscribe = m.subscribe === true
+      const result = await proxy.task(
+        {
+          name: String(m.name ?? ''),
+          methods: String(m.methods ?? ''),
+          args: Array.isArray(m.args) ? m.args : [],
+          wait: m.wait === true,
+          events: subscribe,
+        },
+        (event) => replyProxy(win, { type: 'task-event', reqId, event }),
+      )
+      replyProxy(win, { type: 'task-result', reqId, ...result })
+      return
+    }
+    const runId = typeof m.runId === 'string' ? m.runId : ''
+    if (!runId) throw new Error('缺少 runId')
+    const result = await proxy.cancel(runId)
+    replyProxy(win, { type: 'task-result', reqId, ...result })
+  } catch (err) {
+    replyProxy(win, { type: failType, reqId, ok: false, error: errText(err) })
   }
 }
 
@@ -761,9 +849,73 @@ function openDebug(): void {
 function onDebugMessage(ev: MessageEvent): void {
   const win = debugWin.value
   if (!win || ev.source !== win) return
-  const m = ev.data as { __canvasUiDebug?: unknown; type?: unknown } | null
+  const m = ev.data as
+    | ({
+        __canvasUiDebug?: unknown
+        type?: unknown
+        reqId?: unknown
+        payload?: unknown
+        bytes?: unknown
+        name?: unknown
+        text?: unknown
+        args?: unknown
+        methods?: unknown
+        wait?: unknown
+        subscribe?: unknown
+        runId?: unknown
+      } & Record<string, unknown>)
+    | null
   if (!m || m.__canvasUiDebug !== 1) return
   try {
+    // 副本是同源普通页面，直接调宿主代发器（不再自己拼 URL / 不再裸 fetch）。
+    // 这里回包带 reqId：副本的 save 现在按 reqId 结算。
+    if (m.type === 'save' && typeof m.reqId === 'string') {
+      const payload = m.payload
+      if (!isSavePayload(payload)) {
+        replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: false, error: '副本没有交出字节' })
+        return
+      }
+      const name = typeof m.name === 'string' ? m.name : 'out.png'
+      const text = typeof m.text === 'string' ? m.text : undefined
+      void hostProxy()
+        .save(payload as SavePayload, name)
+        .then(({ url }) => {
+          applyOutput(url, name, text)
+          replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: true, url })
+        })
+        .catch((err) =>
+          replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: false, error: errText(err) }),
+        )
+      return
+    }
+    // 副本的 task / cancel 也交给宿主：统一令牌、统一错误话术。
+    if ((m.type === 'task' || m.type === 'task-cancel') && typeof m.reqId === 'string') {
+      const reqId = m.reqId
+      const finish = (msg: Record<string, unknown>): void =>
+        replyDebug(win, { __canvasUiDebugResult: 1, reqId, ...msg })
+      if (m.type === 'task-cancel') {
+        const runId = typeof m.runId === 'string' ? m.runId : ''
+        void hostProxy()
+          .cancel(runId)
+          .then((r) => finish(r))
+          .catch((err) => finish({ ok: false, error: errText(err) }))
+        return
+      }
+      void hostProxy()
+        .task(
+          {
+            name: String(m.name ?? ''),
+            methods: String(m.methods ?? ''),
+            args: Array.isArray(m.args) ? m.args : [],
+            wait: m.wait === true,
+            events: m.subscribe === true,
+          },
+          (event) => replyDebug(win, { __canvasUiDebugResult: 1, type: 'task-event', reqId, event }),
+        )
+        .then((r) => finish(r))
+        .catch((err) => finish({ ok: false, error: errText(err) }))
+      return
+    }
     if (m.type === 'state') {
       // 与沙箱那条链同一套口径：界面交上来的就是**这个节点的参数**
       const st = ev.data as { state?: unknown }
@@ -772,30 +924,6 @@ function onDebugMessage(ev: MessageEvent): void {
       ctx
         .tryGet<{ updateNode(id: string, p: { data: Record<string, unknown> }): void }>('doc')
         ?.updateNode(props.id, { data: { uiInputs: { ...prev, ...patch } } })
-    } else if (m.type === 'output') {
-      const st = ev.data as { name?: unknown; text?: unknown; base64?: unknown }
-      const name = typeof st.name === 'string' ? st.name : 'out.png'
-      let bytes: Uint8Array | undefined
-      if (typeof st.text === 'string') {
-        bytes = new TextEncoder().encode(st.text)
-      } else if (typeof st.base64 === 'string') {
-        const bin = atob(st.base64)
-        bytes = new Uint8Array(bin.length)
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-      }
-      if (!bytes) {
-        replyDebug(win, { __canvasUiDebugResult: 1, ok: false, error: '副本没有交出字节' })
-        return
-      }
-      void uploadDebugOutput(bytes, name, typeof st.text === 'string' ? st.text : undefined)
-        .then((url) => replyDebug(win, { __canvasUiDebugResult: 1, ok: true, url }))
-        .catch((err) =>
-          replyDebug(win, {
-            __canvasUiDebugResult: 1,
-            ok: false,
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        )
     }
   } catch {
     // 节点可能已被删掉：静默跳过（不该因为一次上报把调试搞崩）
@@ -811,46 +939,25 @@ function replyDebug(win: DebugWindow, msg: unknown): void {
   }
 }
 
-/**
- * 把副本交上来的产物传到**这个节点自己的槽位**。
- *
- * 与沙箱那份走**同一个槽位地址**（slot=节点id），所以「副本里存的图」
- * 就是「画布上那个节点该显示的图」，不会出现两份。
- */
-async function uploadDebugOutput(bytes: Uint8Array, name: string, text?: string): Promise<string> {
+/** 按产物名字认类型，写进节点（产物不进历史，且带版本号让下游重新取） */
+function applyOutput(url: string, name: string, text?: string): string {
   const ext = (name.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
   const field =
     ext === 'mp4' || ext === 'webm' || ext === 'mov' ? 'videoUrl'
     : ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a' ? 'audioUrl'
     : ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' ? 'text'
     : 'imageUrl'
-
-  const mime = text !== undefined ? 'text/plain' : 'application/octet-stream'
-  const res = await fetch(
-    baseUrl.value +
-      '/api/canvases/' +
-      encodeURIComponent(canvasId) +
-      '/resources?slot=' +
-      encodeURIComponent(props.id) +
-      '&name=' +
-      encodeURIComponent(name),
-    { method: 'POST', headers: { 'content-type': mime }, body: bytes as unknown as BodyInit },
-  )
-  const j = (await res.json()) as { ok?: boolean; url?: string; error?: string }
-  if (!j.ok || !j.url) throw new Error(j.error || '保存产物失败')
-
-  // 落进节点：与沙箱那条链同一条路（产物不进历史，且带版本号让下游重新取）
-  const bust = j.url.indexOf('?') >= 0 ? '&v=' : '?v='
-  const patch: Record<string, unknown> = { uiOutputUrl: j.url }
+  const bust = url.indexOf('?') >= 0 ? '&v=' : '?v='
+  const patch: Record<string, unknown> = { uiOutputUrl: url }
   if (field === 'text') {
     if (text !== undefined) patch.text = text
   } else {
-    patch[field] = j.url + bust + Date.now()
+    patch[field] = url + bust + Date.now()
   }
   ctx
     .tryGet<{ updateNodeRuntime(id: string, p: { data: Record<string, unknown> }): void }>('doc')
     ?.updateNodeRuntime(props.id, { data: patch })
-  return j.url
+  return url
 }
 
 if (typeof window !== 'undefined') {
@@ -863,6 +970,9 @@ if (typeof window !== 'undefined') {
  * （用户口径 2026-10-16：否则用户根本不知道调试通道有没有在工作。）
  */
 function onDebugSdkEvent(ev: MessageEvent): void {
+  // 只认本节点这个 iframe：__uiDebugEvt 会清凭据、摘刷新拦截，不能听别人的。
+  const win = iframeEl.value?.contentWindow
+  if (!win || ev.source !== win) return
   const m = ev.data as { __uiDebugEvt?: { kind?: unknown; detail?: unknown } } | null
   if (!m || !m.__uiDebugEvt || typeof m.__uiDebugEvt.kind !== 'string') return
   // disconnected：SDK 收到后台 stop。清凭据 + 摘刷新拦截（用户口径 2026-10-17：
@@ -883,6 +993,48 @@ function onDebugSdkEvent(ev: MessageEvent): void {
 }
 if (typeof window !== 'undefined') {
   window.addEventListener('message', onDebugSdkEvent)
+}
+
+/**
+ * 调试 SDK 的代发请求（__uiDebugCmd）。
+ *
+ * SDK 住在沙箱 iframe 里，自己发请求就是 `Origin: null`，还会把管理令牌暴露给生成物。
+ * 所以上行回包、下行轮询都交给宿主；回包按 reqId 对上，body 原样交回 SDK。
+ *
+ * 来源校验是硬要求：只认**本节点这个 iframe**，别的窗口伪造一条就能冒充调试回包。
+ */
+function onDebugProxyMessage(ev: MessageEvent): void {
+  const win = iframeEl.value?.contentWindow
+  if (!win || ev.source !== win) return
+  const m = ev.data as { __uiDebugCmd?: unknown; kind?: unknown; reqId?: unknown; session?: unknown; body?: unknown } | null
+  if (!m || m.__uiDebugCmd !== 1 || typeof m.reqId !== 'string' || !m.reqId) return
+
+  const reply = (msg: Record<string, unknown>): void => {
+    try {
+      win.postMessage({ __uiDebugReply: 1, reqId: m.reqId, ...msg }, '*')
+    } catch {
+      /* iframe 已重挂 */
+    }
+  }
+
+  const proxy = hostProxy()
+  if (m.kind === 'poll') {
+    const session = typeof m.session === 'string' ? m.session : ''
+    void proxy
+      .debugPoll(session)
+      .then((body) => reply({ ok: true, body }))
+      .catch((err) => reply({ ok: false, error: errText(err) }))
+    return
+  }
+  if (m.kind === 'result') {
+    void proxy
+      .debugResult(m.body)
+      .then((body) => reply({ ok: true, body }))
+      .catch((err) => reply({ ok: false, error: errText(err) }))
+  }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('message', onDebugProxyMessage)
 }
 
 function enterInteractive(): void {
@@ -954,6 +1106,7 @@ onBeforeUnmount(() => {
 // 而用户看着那个窗口会以为画布上还有个节点在（2026-10-15）。
 onBeforeUnmount(() => {
   window.removeEventListener('message', onDebugMessage)
+  window.removeEventListener('message', onDebugProxyMessage)
   debugWin.value?.close()
   debugWin.value = null
 })

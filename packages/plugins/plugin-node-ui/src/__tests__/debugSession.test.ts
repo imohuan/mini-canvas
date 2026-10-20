@@ -57,14 +57,26 @@ describe('调试连接 · 纯逻辑（邀请 / 凭据 / SDK 脚本）', () => {
     expect(newSessionId(1000)).not.toBe(newSessionId(1000))
   })
 
-  it('buildSdkScriptBody：是合法 JS、带轮询通道与回包地址、eval 协议完整', () => {
+  it('buildSdkScriptBody：是合法 JS、上下行都走宿主的 __uiDebugCmd / __uiDebugReply', () => {
     const body = buildSdkScriptBody({ baseUrl: 'http://x', session: 's1', canvasId: 'c1', nodeId: '7' })
-    // 2026-10-16 真机测试：SSE 流式通道在 sandbox iframe 里不可靠（连接挂起读不到帧），改轮询
-    expect(body).toContain('debug-poll?session=')
-    expect(body).toContain('debug-result')
+    // 2026-10-20：SDK 自己不碰网络，上行回包/下行轮询都交给宿主代发
+    expect(body).toContain('__uiDebugCmd')
+    expect(body).toContain('__uiDebugReply')
+    expect(body).toContain('ask("poll"')
+    expect(body).toContain('ask("result"')
+    expect(body).toContain('reqId')
+    expect(body).not.toContain('fetch(')
+    expect(body).not.toContain('/api/node-ui/debug-poll')
+    expect(body).not.toContain('/api/node-ui/debug-result')
     expect(body).toContain('"s1"')
     // 语法合法（Function 构造器会抛 SyntaxError 如果不是）
     expect(() => new Function(body)).not.toThrow()
+  })
+
+  it('收到 stop 仍然 post __uiDebugEvt disconnected（宿主靠它清凭据、摘刷新拦截）', () => {
+    const body = buildSdkScriptBody({ baseUrl: 'http://x', session: 's1', canvasId: 'c1', nodeId: '7' })
+    expect(body).toContain('__uiDebugEvt: { kind: "disconnected" }')
+    expect(body).toContain('stopped = true')
   })
 
   it('appendSdkScript：挂到 </body> 前；没有 body 就追加文末；脚本内容转义 </', () => {
