@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createServerFramework } from '../serverFramework/index.js'
 import { createNpmPluginsRoutes } from '../routes/npmPlugins.js'
+import type { AuditAppendInput } from '../audit.js'
 
 const run = promisify(execFile)
 
@@ -77,7 +78,13 @@ async function makePkg(
   return tgz
 }
 
-async function boot(registryUrl: string) {
+/** 假审计出口：收集写进来的条目，用来断言 attempt 一定有结局。 */
+function collector() {
+  const entries: AuditAppendInput[] = []
+  return { entries, audit: async (e: AuditAppendInput) => void entries.push(e) }
+}
+
+async function boot(registryUrl: string, audit?: (e: AuditAppendInput) => Promise<void>) {
   const routes = createNpmPluginsRoutes({
     registry: registryUrl,
     pluginsDir,
@@ -85,6 +92,7 @@ async function boot(registryUrl: string) {
     recordFile: path.join(dir, '.npm-installed.json'),
     // 测试用 @mini-canvas/ 前缀（默认白名单是 @imohuan/ + mini-canvas-）
     scopeAllowlist: ['@mini-canvas/'],
+    ...(audit ? { audit } : {}),
   })
   const host = createServerFramework({ root: dir })
   host.ctx.routes.adopt(routes)
@@ -102,6 +110,64 @@ const call = (host: { app: Hono }, p: string, method?: string, body?: unknown) =
 const j = async (r: Response) => (await r.json()) as Record<string, unknown>
 
 describe('NPM 插件路由（假 registry 全流程）', () => {
+  it('审计成对：install 缺 confirm → attempt + rejected', async () => {
+    const { entries, audit } = collector()
+    const host = await boot('http://127.0.0.1:1', audit)
+    const res = await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo' })
+    expect(res.status).toBe(400)
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
+    expect(entries[1].reason).toBe('missing-confirm')
+    host.stop()
+  })
+
+  it('审计成对：update 未安装 → 404 + rejected；已是最新 → ok', async () => {
+    const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
+    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
+      version: '1.0.0',
+      dist: { tarball: registry.url + '/demo.tgz' },
+      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+    }
+
+    const { entries, audit } = collector()
+    const host = await boot(registry.url, audit)
+    const missing = await call(host, '/api/npm-plugins/update', 'POST', {
+      package: '@mini-canvas/plugin-demo',
+      confirm: true,
+    })
+    expect(missing.status).toBe(404)
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
+    expect(entries[1].reason).toBe('not-installed')
+
+    entries.length = 0
+    await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true })
+    const same = await call(host, '/api/npm-plugins/update', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true })
+    expect(same.status).toBe(200)
+    // 第二条是 install 的 ok，之后是 update 的 attempt + ok
+    expect(entries.map((e) => e.action + ':' + e.result)).toEqual([
+      'npm-plugin/install:attempt',
+      'npm-plugin/install:ok',
+      'npm-plugin/update:attempt',
+      'npm-plugin/update:ok',
+    ])
+    host.stop()
+  })
+
+  it('审计成对：install 下载异常也有 rejected（不会留下悬空的 attempt）', async () => {
+    const { entries, audit } = collector()
+    // 没有 registry 在跑：packument 请求会失败 → doInstall 返回 502
+    const host = await boot('http://127.0.0.1:1', audit)
+    const res = await call(host, '/api/npm-plugins/install', 'POST', {
+      package: '@mini-canvas/plugin-demo',
+      confirm: true,
+    })
+    expect(res.status).toBe(502)
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
+    expect(entries[1].reason).toBe('status-502')
+    host.stop()
+  })
+
   it('browse：按前缀列出全部可安装插件（不传搜索词也能列）', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
     const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }

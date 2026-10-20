@@ -25,6 +25,8 @@ import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { safeJson } from './agent.js'
+import { withAudit, type AuditBase } from '../auditPair.js'
+import type { AuditAppendInput } from '../audit.js'
 
 /** id 白名单：字母数字下划线连字符，1-64 位（点号不在表内，故 `..` 天然被拒） */
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
@@ -67,16 +69,7 @@ export interface ServerPluginsRoutesOptions {
   hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
   hotUninstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
   /** 审计日志（可选）。给了就记 attempt / ok / rejected，见 audit.ts。 */
-  audit?: (e: {
-    action: 'server-plugin/install' | 'server-plugin/uninstall'
-    method: string
-    path: string
-    id: string
-    sha256?: string
-    result: 'attempt' | 'ok' | 'rejected'
-    reason?: string
-    token: 'ok' | 'missing' | 'bad' | 'disabled'
-  }) => Promise<void>
+  audit?: (e: AuditAppendInput) => Promise<void>
 }
 
 export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hono {
@@ -118,102 +111,118 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
 
-    /** 本路由的审计：进入即记 attempt，结尾按结果补 ok/rejected。 */
+    /** 本路由的审计：withAudit 保证每个分支都有结局（见 auditPair.ts）。 */
     const auditId = typeof body.id === 'string' ? body.id : ''
-    const auditBase = {
+    const auditBase: AuditBase = {
       action: 'server-plugin/install' as const,
       method: 'POST',
       path: c.req.path,
       id: auditId,
       token: 'ok' as const,
     }
-    const reject = async (status: 400 | 403 | 500, error: string) => {
-      await opts.audit?.({ ...auditBase, result: 'rejected', reason: error })
-      return c.json({ ok: false, error }, status)
-    }
-    await opts.audit?.({ ...auditBase, result: 'attempt' })
 
-    // ① 显式确认（界面必须让用户知道"这东西以服务端权限运行"）
-    if (body.confirm !== true) {
-      return reject(400, '需要 confirm: true（安装后台插件等于以服务端权限运行外部代码）')
-    }
-    // ② origin 白名单（跨源默认拒）
-    if (!opts.allowRemote && opts.origin !== undefined) {
-      const from = typeof body.origin === 'string' ? body.origin : ''
-      if (from && from !== opts.origin) {
-        return reject(400, '跨源安装被拒（只允许同源 ' + opts.origin + '）')
+    return withAudit(opts.audit, auditBase, async (settle) => {
+      /** 被拒：先给审计一个结局，再回错误。 */
+      const reject = (status: 400 | 403 | 500, error: string) => {
+        settle({ result: 'rejected', reason: error })
+        return c.json({ ok: false, error }, status)
       }
-    }
-    // ③ id 白名单（防路径穿越）
-    const id = typeof body.id === 'string' ? body.id : ''
-    if (!ID_RE.test(id)) {
-      return reject(400, '非法插件 id（只允许字母数字下划线连字符，1-64 位）')
-    }
-    // ④ 代码与**可信哈希**校验
-    const code = typeof body.code === 'string' ? body.code : ''
-    if (!code) return reject(400, '需要 code（插件源码文本）')
-    // 没有可信源就拒绝：宁可不装，也不要"假装校验过"（审查发现的真问题）
-    if (!opts.trustedShaOf) {
-      return reject(400, '服务端未配置可信哈希来源，无法校验完整性（拒绝安装）')
-    }
-    const trusted = (await opts.trustedShaOf(id))?.toLowerCase()
-    if (!trusted) {
-      return reject(400, '清单里没有这个插件的可信哈希（未列入清单，拒绝安装）')
-    }
-    const gotSha = createHash('sha256').update(code, 'utf8').digest('hex')
-    if (gotSha !== trusted) {
-      return reject(400, 'sha256 与清单声明不符（内容被改动，拒绝安装）')
-    }
 
-    // ⑤ 落盘（**只写、不执行**；下次启动由加载器统一加载）
-    try {
-      await fs.mkdir(opts.dir, { recursive: true })
-      await fs.writeFile(path.join(opts.dir, id + '.js'), code, 'utf8')
-    } catch (err) {
-      return reject(500, '写入失败：' + (err instanceof Error ? err.message : String(err)))
-    }
-    await opts.audit?.({ ...auditBase, id, sha256: gotSha, result: 'ok' })
-    // ⑥ 热装：宿主当场 import + 登记内核 → 路由即时可用（没配 hotInstall 就退化成重启生效）
-    if (opts.hotInstall) {
-      const hot = await opts.hotInstall(id)
-      if (!hot.ok) return c.json({ ok: true, id, note: '已落盘；热装失败（重启后生效）', hotError: hot.error }, 200)
-      return c.json({ ok: true, id, note: '已安装并即时生效' })
-    }
-    return c.json({ ok: true, id, note: '已安装；重启服务后生效' })
+      // ① 显式确认（界面必须让用户知道"这东西以服务端权限运行"）
+      if (body.confirm !== true) {
+        return reject(400, '需要 confirm: true（安装后台插件等于以服务端权限运行外部代码）')
+      }
+      // ② origin 白名单（跨源默认拒）
+      if (!opts.allowRemote && opts.origin !== undefined) {
+        const from = typeof body.origin === 'string' ? body.origin : ''
+        if (from && from !== opts.origin) {
+          return reject(400, '跨源安装被拒（只允许同源 ' + opts.origin + '）')
+        }
+      }
+      // ③ id 白名单（防路径穿越）
+      const id = typeof body.id === 'string' ? body.id : ''
+      if (!ID_RE.test(id)) {
+        return reject(400, '非法插件 id（只允许字母数字下划线连字符，1-64 位）')
+      }
+      // ④ 代码与**可信哈希**校验
+      const code = typeof body.code === 'string' ? body.code : ''
+      if (!code) return reject(400, '需要 code（插件源码文本）')
+      // 没有可信源就拒绝：宁可不装，也不要"假装校验过"（审查发现的真问题）
+      if (!opts.trustedShaOf) {
+        return reject(400, '服务端未配置可信哈希来源，无法校验完整性（拒绝安装）')
+      }
+      const trusted = (await opts.trustedShaOf(id))?.toLowerCase()
+      if (!trusted) {
+        return reject(400, '清单里没有这个插件的可信哈希（未列入清单，拒绝安装）')
+      }
+      const gotSha = createHash('sha256').update(code, 'utf8').digest('hex')
+      if (gotSha !== trusted) {
+        return reject(400, 'sha256 与清单声明不符（内容被改动，拒绝安装）')
+      }
+
+      // ⑤ 落盘（**只写、不执行**；下次启动由加载器统一加载）
+      try {
+        await fs.mkdir(opts.dir, { recursive: true })
+        await fs.writeFile(path.join(opts.dir, id + '.js'), code, 'utf8')
+      } catch (err) {
+        return reject(500, '写入失败：' + (err instanceof Error ? err.message : String(err)))
+      }
+
+      // ⑥ 热装：宿主当场 import + 登记内核 → 路由即时可用（没配 hotInstall 就退化成重启生效）
+      // 热装失败不影响「已安装」这个事实（文件已经在），所以记 ok，把热装结果写进 reason。
+      settle({ result: 'ok', sha256: gotSha })
+      if (opts.hotInstall) {
+        const hot = await opts.hotInstall(id)
+        if (!hot.ok) {
+          settle({ result: 'ok', sha256: gotSha, reason: '已落盘；热装失败：' + (hot.error ?? '未知原因') })
+          return c.json({ ok: true, id, note: '已落盘；热装失败（重启后生效）', hotError: hot.error }, 200)
+        }
+        return c.json({ ok: true, id, note: '已安装并即时生效' })
+      }
+      return c.json({ ok: true, id, note: '已安装；重启服务后生效' })
+    })
   })
 
   app.post('/api/server-plugins/uninstall', async (c) => {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     const id = typeof body.id === 'string' ? body.id : ''
-    const auditBase = {
+    const auditBase: AuditBase = {
       action: 'server-plugin/uninstall' as const,
       method: 'POST',
       path: c.req.path,
       id,
       token: 'ok' as const,
     }
-    await opts.audit?.({ ...auditBase, result: 'attempt' })
-    if (!ID_RE.test(id)) return c.json({ ok: false, error: '非法插件 id' }, 400)
-    try {
-      await fs.unlink(path.join(opts.dir, id + '.js'))
-    } catch (err) {
-      const code = (err as { code?: string }).code
-      if (code === 'ENOENT') {
-        await opts.audit?.({ ...auditBase, result: 'rejected', reason: 'not-found' })
-        return c.json({ ok: false, error: '插件不存在：' + id }, 404)
+
+    return withAudit(opts.audit, auditBase, async (settle) => {
+      if (!ID_RE.test(id)) {
+        settle({ result: 'rejected', reason: '非法插件 id' })
+        return c.json({ ok: false, error: '非法插件 id' }, 400)
       }
-      await opts.audit?.({ ...auditBase, result: 'rejected', reason: 'unlink-failed' })
-      return c.json({ ok: false, error: String(err) }, 500)
-    }
-    await opts.audit?.({ ...auditBase, result: 'ok' })
-    // 热卸：宿主当场从内核摘掉 → 路由即时失效（没配 hotUninstall 就退化成重启生效）
-    if (opts.hotUninstall) {
-      const hot = await opts.hotUninstall(id)
-      if (!hot.ok) return c.json({ ok: true, id, note: '已删文件；热卸失败（重启后消失）', hotError: hot.error }, 200)
-      return c.json({ ok: true, id, note: '已卸载并即时失效' })
-    }
-    return c.json({ ok: true, id, note: '已卸载；重启服务后生效' })
+      try {
+        await fs.unlink(path.join(opts.dir, id + '.js'))
+      } catch (err) {
+        const code = (err as { code?: string }).code
+        if (code === 'ENOENT') {
+          settle({ result: 'rejected', reason: 'not-found' })
+          return c.json({ ok: false, error: '插件不存在：' + id }, 404)
+        }
+        settle({ result: 'rejected', reason: 'unlink-failed' })
+        return c.json({ ok: false, error: String(err) }, 500)
+      }
+      // 热卸：宿主当场从内核摘掉 → 路由即时失效（没配 hotUninstall 就退化成重启生效）
+      // 文件已删，即使热卸失败也记 ok，把失败原因写进 reason。
+      if (opts.hotUninstall) {
+        const hot = await opts.hotUninstall(id)
+        if (!hot.ok) {
+          settle({ result: 'ok', reason: '已删文件；热卸失败：' + (hot.error ?? '未知原因') })
+          return c.json({ ok: true, id, note: '已删文件；热卸失败（重启后消失）', hotError: hot.error }, 200)
+        }
+        return c.json({ ok: true, id, note: '已卸载并即时失效' })
+      }
+      return c.json({ ok: true, id, note: '已卸载；重启服务后生效' })
+    })
   })
 
   return app

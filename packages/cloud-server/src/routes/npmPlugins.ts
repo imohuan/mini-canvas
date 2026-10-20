@@ -23,6 +23,8 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { safeJson } from './agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
+import { withAudit, type AuditBase } from '../auditPair.js'
+import type { AuditAppendInput } from '../audit.js'
 
 /**
  * 允许安装的包名前缀（装 NPM 包 = 服务端执行代码，所以白名单起步）。
@@ -48,15 +50,7 @@ export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
   hotUninstall?: (id: string) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string }
   /** 审计日志（可选）。装/卸/更新各记一条 attempt + 结果。 */
-  audit?: (e: {
-    action: 'npm-plugin/install' | 'npm-plugin/update' | 'npm-plugin/uninstall'
-    method: string
-    path: string
-    id: string
-    result: 'attempt' | 'ok' | 'rejected'
-    reason?: string
-    token: 'ok' | 'missing' | 'bad' | 'disabled'
-  }) => Promise<void>
+  audit?: (e: AuditAppendInput) => Promise<void>
 }
 
 interface InstallRecord {
@@ -377,52 +371,68 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     const pkg0 = typeof body.package === 'string' ? body.package : ''
-    const base = { action: 'npm-plugin/install' as const, method: 'POST', path: c.req.path, id: pkg0, token: 'ok' as const }
-    await opts.audit?.({ ...base, result: 'attempt' })
-    // confirm 必填：装 NPM 包 = 服务端代码执行（与手动安装同一确认语义）
-    if (body.confirm !== true) {
-      await opts.audit?.({ ...base, result: 'rejected', reason: 'missing-confirm' })
-      return c.json({ ok: false, error: '需要 confirm: true（安装 NPM 插件等于以服务端权限运行其后台半）' }, 400)
-    }
-    const pkg = typeof body.package === 'string' ? body.package : ''
-    const version = typeof body.version === 'string' ? body.version : undefined
-    const r = await doInstall(pkg, version)
-    await opts.audit?.({ ...base, id: pkg, result: r.status === 200 ? 'ok' : 'rejected', ...(r.status === 200 ? {} : { reason: 'status-' + r.status }) })
-    return c.json(r.body, r.status as 200)
+    const base: AuditBase = { action: 'npm-plugin/install', method: 'POST', path: c.req.path, id: pkg0, token: 'ok' }
+    return withAudit(opts.audit, base, async (settle) => {
+      // confirm 必填：装 NPM 包 = 服务端代码执行（与手动安装同一确认语义）
+      if (body.confirm !== true) {
+        settle({ result: 'rejected', reason: 'missing-confirm' })
+        return c.json({ ok: false, error: '需要 confirm: true（安装 NPM 插件等于以服务端权限运行其后台半）' }, 400)
+      }
+      const pkg = typeof body.package === 'string' ? body.package : ''
+      const version = typeof body.version === 'string' ? body.version : undefined
+      const r = await doInstall(pkg, version)
+      settle(
+        r.status === 200
+          ? { result: 'ok' }
+          : { result: 'rejected', reason: 'status-' + r.status },
+      )
+      return c.json(r.body, r.status as 200)
+    })
   })
 
   app.post('/api/npm-plugins/update', async (c) => {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     const pkg0 = typeof body.package === 'string' ? body.package : ''
-    const base = { action: 'npm-plugin/update' as const, method: 'POST', path: c.req.path, id: pkg0, token: 'ok' as const }
-    await opts.audit?.({ ...base, result: 'attempt' })
-    if (body.confirm !== true) {
-      await opts.audit?.({ ...base, result: 'rejected', reason: 'missing-confirm' })
-      return c.json({ ok: false, error: '需要 confirm: true（更新 NPM 插件等于替换服务端运行的代码）' }, 400)
-    }
-    const pkg = typeof body.package === 'string' ? body.package : ''
-    const recs = await readRecords()
-    const rec = recs[pkg]
-    if (!rec) return c.json({ ok: false, error: '这个包不是从 NPM 装的（无来源记录）' }, 404)
-    try {
-      const pk = await client.packument(pkg)
-      const latest = pk['dist-tags'].latest
-      if (!latest) return c.json({ ok: false, error: '该包没有 latest 标签' }, 502)
-      if (latest === rec.version) {
-        return c.json({ ok: true, pkg, version: rec.version, updated: false, note: '已是最新版本' })
+    const base: AuditBase = { action: 'npm-plugin/update', method: 'POST', path: c.req.path, id: pkg0, token: 'ok' }
+    return withAudit(opts.audit, base, async (settle) => {
+      if (body.confirm !== true) {
+        settle({ result: 'rejected', reason: 'missing-confirm' })
+        return c.json({ ok: false, error: '需要 confirm: true（更新 NPM 插件等于替换服务端运行的代码）' }, 400)
       }
-      const r = await doInstall(pkg, latest)
-      if (r.status !== 200) {
-        await opts.audit?.({ ...base, result: 'rejected', reason: 'status-' + r.status })
-        return c.json(r.body, r.status as 200)
+      const pkg = typeof body.package === 'string' ? body.package : ''
+      const recs = await readRecords()
+      const rec = recs[pkg]
+      if (!rec) {
+        settle({ result: 'rejected', reason: 'not-installed' })
+        return c.json({ ok: false, error: '这个包不是从 NPM 装的（无来源记录）' }, 404)
       }
-      await opts.audit?.({ ...base, result: 'ok' })
-      return c.json({ ok: true, pkg, from: rec.version, to: latest, updated: true })
-    } catch (err) {
-      await opts.audit?.({ ...base, result: 'rejected', reason: 'exception' })
-      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
-    }
+      try {
+        const pk = await client.packument(pkg)
+        const latest = pk['dist-tags'].latest
+        if (!latest) {
+          settle({ result: 'rejected', reason: 'no-latest-tag' })
+          return c.json({ ok: false, error: '该包没有 latest 标签' }, 502)
+        }
+        if (latest === rec.version) {
+          settle({ result: 'ok', reason: '已是最新版本' })
+          return c.json({ ok: true, pkg, version: rec.version, updated: false, note: '已是最新版本' })
+        }
+        const r = await doInstall(pkg, latest)
+        if (r.status !== 200) {
+          settle({ result: 'rejected', reason: 'status-' + r.status })
+          return c.json(r.body, r.status as 200)
+        }
+        settle({ result: 'ok' })
+        return c.json({ ok: true, pkg, from: rec.version, to: latest, updated: true })
+      } catch (err) {
+        settle({
+          result: 'rejected',
+          reason: 'exception：' + (err instanceof Error ? err.message : String(err)),
+        })
+        return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
+      }
+    })
   })
 
   app.get('/api/npm-plugins/installed', async (c) => {
@@ -435,43 +445,44 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     const pkg = typeof body.package === 'string' ? body.package : ''
-    const base = { action: 'npm-plugin/uninstall' as const, method: 'POST', path: c.req.path, id: pkg, token: 'ok' as const }
-    await opts.audit?.({ ...base, result: 'attempt' })
-    const recs = await readRecords()
-    if (!recs[pkg]) {
-      await opts.audit?.({ ...base, result: 'rejected', reason: 'not-installed' })
-      return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
-    }
-    delete recs[pkg]
-    await writeRecords(recs)
-    const pkgDirName = dirNameOf(pkg)
-    const serverId = pkgDirName
-    // 只删"NPM 安装副本"目录。护栏：目录名必须与**我们落盘时用的名字**一致（dirNameOf(pkg)），
-    // 且位于插件目录下 —— 绝不会误删作者的仓库源码包（它的目录名是 plugin-showcase 这种，
-    // 与本函数算出的 pkgDirName 不同名时一律不动）。
-    const pluginsRoot = opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins')
-    const target = path.join(pluginsRoot, pkgDirName)
-    // 真护栏：只有当这个目录**确实是我们从 NPM 装进来的**（package.json 的 name === 该包名）才删。
-    // 这样万一目录名与作者的仓库源码包撞名（如 plugin-showcase），也绝不会误删源码。
-    let isOurInstall = false
-    try {
-      const pj = JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8')) as { name?: string }
-      isOurInstall = pj.name === pkg
-    } catch {
-      isOurInstall = false
-    }
-    if (isOurInstall) {
-      await fs.rm(target, { recursive: true, force: true })
-    }
-    await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
-    // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）
-    let hotMsg = '并即时失效'
-    if (opts.hotUninstall) {
-      const hot = await opts.hotUninstall(serverId)
-      hotMsg = hot.ok ? '并即时失效' : '（热卸失败，重启后消失：' + hot.error + '）'
-    }
-    await opts.audit?.({ ...base, result: 'ok' })
-    return c.json({ ok: true, pkg, note: '已卸载；前端半刷新即可见，后台半' + hotMsg })
+    const base: AuditBase = { action: 'npm-plugin/uninstall', method: 'POST', path: c.req.path, id: pkg, token: 'ok' }
+    return withAudit(opts.audit, base, async (settle) => {
+      const recs = await readRecords()
+      if (!recs[pkg]) {
+        settle({ result: 'rejected', reason: 'not-installed' })
+        return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
+      }
+      delete recs[pkg]
+      await writeRecords(recs)
+      const pkgDirName = dirNameOf(pkg)
+      const serverId = pkgDirName
+      // 只删"NPM 安装副本"目录。护栏：目录名必须与**我们落盘时用的名字**一致（dirNameOf(pkg)），
+      // 且位于插件目录下 —— 绝不会误删作者的仓库源码包（它的目录名是 plugin-showcase 这种，
+      // 与本函数算出的 pkgDirName 不同名时一律不动）。
+      const pluginsRoot = opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins')
+      const target = path.join(pluginsRoot, pkgDirName)
+      // 真护栏：只有当这个目录**确实是我们从 NPM 装进来的**（package.json 的 name === 该包名）才删。
+      // 这样万一目录名与作者的仓库源码包撞名（如 plugin-showcase），也绝不会误删源码。
+      let isOurInstall = false
+      try {
+        const pj = JSON.parse(await fs.readFile(path.join(target, 'package.json'), 'utf8')) as { name?: string }
+        isOurInstall = pj.name === pkg
+      } catch {
+        isOurInstall = false
+      }
+      if (isOurInstall) {
+        await fs.rm(target, { recursive: true, force: true })
+      }
+      await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
+      // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）
+      let hotMsg = '并即时失效'
+      if (opts.hotUninstall) {
+        const hot = await opts.hotUninstall(serverId)
+        hotMsg = hot.ok ? '并即时失效' : '（热卸失败，重启后消失：' + hot.error + '）'
+        settle({ result: 'ok', ...(hot.ok ? {} : { reason: '已删文件；热卸失败：' + (hot.error ?? '未知原因') }) })
+      }
+      return c.json({ ok: true, pkg, note: '已卸载；前端半刷新即可见，后台半' + hotMsg })
+    })
   })
 
   return app

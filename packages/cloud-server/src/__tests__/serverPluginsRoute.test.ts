@@ -15,6 +15,7 @@ import path from 'node:path'
 import { createServerFramework } from '../serverFramework/index.js'
 import { createServerPluginsRoutes } from '../routes/serverPlugins.js'
 import { createHash } from 'node:crypto'
+import type { AuditAppendInput } from '../audit.js'
 
 let dir: string
 beforeEach(async () => {
@@ -40,7 +41,75 @@ function boot(routes: ReturnType<typeof createServerPluginsRoutes>) {
  */
 const trusted = (id: string, hash: string) => async (want: string) => (want === id ? hash : undefined)
 
+/** 假审计出口：收集写进来的条目，用来断言 attempt 一定有结局。 */
+function collector() {
+  const entries: AuditAppendInput[] = []
+  return { entries, audit: async (e: AuditAppendInput) => void entries.push(e) }
+}
+
 describe('server-plugins 安装路由（安全收口）', () => {
+  it('审计成对：缺 confirm 的安装有 attempt + rejected', async () => {
+    const { entries, audit } = collector()
+    const host = boot(
+      createServerPluginsRoutes({ dir, origin: 'http://x', trustedShaOf: trusted('ext', sha256(SRC)), audit }),
+    )
+    await host.start()
+    await host.app.fetch(
+      new Request('http://x/api/server-plugins/install', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'ext', code: SRC, sha256: sha256(SRC) }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
+    expect(entries[1].reason).toContain('confirm')
+    expect(entries.every((e) => e.id === 'ext')).toBe(true)
+    host.ctx.stop()
+  })
+
+  it('审计成对：卸载非法 id 也有 rejected（不再只有 attempt）', async () => {
+    const { entries, audit } = collector()
+    const host = boot(createServerPluginsRoutes({ dir, audit }))
+    await host.start()
+    const res = await host.app.fetch(
+      new Request('http://x/api/server-plugins/uninstall', {
+        method: 'POST',
+        body: JSON.stringify({ id: '../evil' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(res.status).toBe(400)
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
+    expect(entries[1].reason).toBe('非法插件 id')
+    host.ctx.stop()
+  })
+
+  it('审计成对：热装失败仍记 ok，并把失败原因写进 reason', async () => {
+    const { entries, audit } = collector()
+    const host = boot(
+      createServerPluginsRoutes({
+        dir,
+        origin: 'http://x',
+        trustedShaOf: trusted('ext', sha256(SRC)),
+        hotInstall: async () => ({ ok: false, error: 'import 炸了' }),
+        audit,
+      }),
+    )
+    await host.start()
+    const res = await host.app.fetch(
+      new Request('http://x/api/server-plugins/install', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'ext', code: SRC, sha256: sha256(SRC), confirm: true }),
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    expect(res.status).toBe(200)
+    expect(entries.map((e) => e.result)).toEqual(['attempt', 'ok'])
+    expect(entries[1].reason).toContain('import 炸了')
+    expect(entries[1].sha256).toBe(sha256(SRC))
+    host.ctx.stop()
+  })
+
   it('缺 confirm → 400', async () => {
     const host = boot(
       createServerPluginsRoutes({ dir, origin: 'http://x', trustedShaOf: trusted('ext', sha256(SRC)) }),

@@ -105,6 +105,104 @@ describe('verify', () => {
     expect(await createAuditLog(path.join(dir, 'none.log')).verify()).toEqual({ ok: true })
   })
 
+  it('删掉末行：行数与头文件对不上，verify 失败', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await log.append({ ...base, id: 'second' })
+    const entries = await readEntries()
+    await fs.writeFile(file, JSON.stringify(entries[0]) + '\n')
+    expect(await log.verify()).toEqual({ ok: false, line: 2, reason: '日志行数与头文件不符' })
+  })
+
+  it('改掉末行（行数不变）：hash 对不上，verify 失败', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await log.append({ ...base, id: 'second' })
+    const entries = await readEntries()
+    entries[1].id = 'tampered'
+    await fs.writeFile(file, entries.map((e) => JSON.stringify(e)).join('\n') + '\n')
+    expect(await log.verify()).toEqual({ ok: false, line: 2, reason: 'hash 与内容不符' })
+  })
+
+  it('截断到 0 行：头文件还记着旧行数，verify 失败', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await fs.writeFile(file, '')
+    expect(await log.verify()).toEqual({ ok: false, line: 1, reason: '日志行数与头文件不符' })
+  })
+
+  it('正常追加后 verify ok，头文件与日志行数一致', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await log.append({ ...base, id: 'second' })
+    expect(await log.verify()).toEqual({ ok: true })
+    const head = JSON.parse(await fs.readFile(file + '.head', 'utf8')) as { count: number; lastHash: string }
+    const entries = await readEntries()
+    expect(head.count).toBe(entries.length)
+    expect(head.lastHash).toBe(entries[entries.length - 1].hash)
+  })
+
+  it('末尾被整体替换成另一条自洽的假记录：末行 hash 对不上头文件', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await log.append({ ...base, id: 'second' })
+    const entries = await readEntries()
+    // 攻击者把最后一行换成一条「自洽」的新记录（hash 由它自己的内容正确算出）
+    const forgedBody = { ...entries[1] } as Record<string, unknown>
+    delete forgedBody.hash
+    forgedBody.id = 'forged'
+    const forged = { ...forgedBody, hash: sha(JSON.stringify(forgedBody)) }
+    await fs.writeFile(file, [entries[0], forged].map((e) => JSON.stringify(e)).join('\n') + '\n')
+    expect(await log.verify()).toEqual({ ok: false, line: 2, reason: '末行被截断' })
+  })
+
+  it('并发 append 后头文件不落后（count/lastHash 与文件一致）', async () => {
+    const log = createAuditLog(file)
+    await Promise.all(Array.from({ length: 30 }, (_, i) => log.append({ ...base, id: 'c' + i })))
+    const head = JSON.parse(await fs.readFile(file + '.head', 'utf8')) as { count: number; lastHash: string }
+    const entries = await readEntries()
+    expect(head.count).toBe(30)
+    expect(entries).toHaveLength(30)
+    expect(head.lastHash).toBe(entries[entries.length - 1].hash)
+    expect(await log.verify()).toEqual({ ok: true })
+  })
+
+  it('头文件缺失但有日志：按末行 hash 重建，之后 verify 仍 ok', async () => {
+    const first = createAuditLog(file)
+    await first.append(base)
+    await fs.rm(file + '.head')
+    // 新实例读到无头文件 → 按末行重建
+    const second = createAuditLog(file)
+    await second.append({ ...base, result: 'ok' })
+    const head = JSON.parse(await fs.readFile(file + '.head', 'utf8')) as { count: number }
+    expect(head.count).toBe(2)
+    expect(await second.verify()).toEqual({ ok: true })
+  })
+
+  it('有日志但头文件缺失：verify 直接报缺少头文件', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    await fs.rm(file + '.head')
+    expect(await log.verify()).toEqual({ ok: false, line: 1, reason: '缺少头文件（日志可能被整体替换）' })
+  })
+
+  it('崩在「日志已写、头文件没写」之间：新实例按日志修补头文件后继续接链', async () => {
+    const first = createAuditLog(file)
+    await first.append(base)
+    await first.append({ ...base, id: 'second' })
+    const entries = await readEntries()
+    // 模拟头文件落后一行（日志已追加，进程在写 head 前退出）
+    await fs.writeFile(file + '.head', JSON.stringify({ count: 1, lastHash: entries[0].hash }), 'utf8')
+
+    const second = createAuditLog(file)
+    await second.append({ ...base, id: 'third' })
+    const after = await readEntries()
+    expect(after[2].prev).toBe(entries[1].hash)
+    const head = JSON.parse(await fs.readFile(file + '.head', 'utf8')) as { count: number }
+    expect(head.count).toBe(3)
+    expect(await second.verify()).toEqual({ ok: true })
+  })
+
   it('内容被改：报告该行 hash 不符', async () => {
     const log = createAuditLog(file)
     await log.append(base)
