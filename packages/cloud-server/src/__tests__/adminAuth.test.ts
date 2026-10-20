@@ -157,4 +157,39 @@ describe('isAdminPath', () => {
     expect(isAdminPath('PUT', '/api/projects/x')).toBe(false)
     expect(isAdminPath('PUT', '/api/kv/x')).toBe(false)
   })
+
+  /**
+   * ★ 每个前缀都要有一个**真实存在的路由形态**能命中。
+   *
+   * 这条挡的是「改了匹配规则，某个前缀悄悄失效」—— 上面那条 debug- 的回归就是这么漏出去的
+   * （当时只有个 scratch 脚本能发现）。这里用具体路径逐个过一遍。
+   */
+  it('★ 每个白名单前缀都有真实路径能命中（前缀表不会悄悄失效）', () => {
+    const samples: Record<string, string> = {
+      '/api/server-plugins/': '/api/server-plugins/install',
+      '/api/npm-plugins/': '/api/npm-plugins/install',
+      '/api/agent/mcp': '/api/agent/mcp',
+      '/api/agent/skills': '/api/agent/skills',
+      '/api/agent/system-prompt': '/api/agent/system-prompt',
+      '/api/agent/template/': '/api/agent/template/x',
+      '/api/agent/prompts': '/api/agent/prompts',
+      '/api/agent/policy': '/api/agent/policy',
+      '/api/agent/title-model': '/api/agent/title-model',
+      '/api/agent/models': '/api/agent/models',
+      '/api/agent/chat/completion': '/api/agent/chat/completion',
+      '/api/task/': '/api/task/call',
+      '/api/node-packages/': '/api/node-packages/import',
+      '/api/node-ui/debug-': '/api/node-ui/debug-accept',
+      '/api/style-library/': '/api/style-library/settings',
+      '/api/effect-library/': '/api/effect-library/settings',
+      '/api/showcase/': '/api/showcase/install',
+      '/api/agent/canvases/': '/api/agent/canvases/x',
+      '/api/jobs': '/api/jobs',
+    }
+    for (const prefix of ADMIN_WRITE_PREFIXES) {
+      const sample = samples[prefix]
+      expect(sample, '前缀表新增了 ' + prefix + '，请补一个真实路径样本').toBeTruthy()
+      expect(isAdminPath('POST', sample), prefix).toBe(true)
+    }
+  })
 })
