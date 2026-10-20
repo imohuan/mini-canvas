@@ -27,6 +27,12 @@ interface CliOptions {
   open: boolean
   /** 是否提供 MCP 接口（缺省开） */
   mcp: boolean
+  /** 关闭管理令牌鉴权（必须配合 MINI_CANVAS_ALLOW_INSECURE=1） */
+  noAdminAuth: boolean
+  /** 额外信任的 Host（可重复） */
+  trustedHosts: string[]
+  /** 额外信任的 Origin（可重复） */
+  trustedOrigins: string[]
 }
 
 const HELP = `mini-canvas-cloud —— 自托管画布服务
@@ -36,6 +42,7 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
   mini-canvas-cloud list-tools        列出 MCP 暴露的工具
   mini-canvas-cloud --help            看这份帮助
   mini-canvas-cloud --version         看版本
+  mini-canvas-cloud audit-verify      校验 <数据目录>/audit.log 的 hash 链（不开服务）
 
 选项:
   -p, --port <号>     监听端口（默认 ${DEFAULT_PORT}；被占用时自动往后找）
@@ -46,6 +53,9 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
       --providers <目录> 平台提供方目录（后台的"投递箱"；默认 <数据目录>/providers）
       --server-plugins <目录> 后台插件目录（丢 .js 进去即多一个后台插件；默认 <数据目录>/server-plugins）
       --no-mcp        不提供 MCP 接口（默认提供）
+      --no-admin-auth 关闭管理令牌与来源边界（**必须**同时设 MINI_CANVAS_ALLOW_INSECURE=1）
+      --trusted-host <host:port>   额外信任的 Host（反代 / 另一个主机名；可重复）
+      --trusted-origin <origin>    额外信任的 Origin（如 dev 的 http://localhost:5288；可重复）
       --open          启动后自动打开浏览器（默认开）
       --no-open       不自动打开浏览器
 
@@ -71,6 +81,9 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     hostname: '127.0.0.1',
     open: true,
     mcp: true,
+    noAdminAuth: false,
+    trustedHosts: [],
+    trustedOrigins: [],
   }
 
   for (let i = 0; i < args.length; i++) {
@@ -95,6 +108,9 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--server-plugins') opts.serverPlugins = takeValue(a)
     else if (a === '--mcp') opts.mcp = true
     else if (a === '--no-mcp') opts.mcp = false
+    else if (a === '--no-admin-auth') opts.noAdminAuth = true
+    else if (a === '--trusted-host') opts.trustedHosts.push(takeValue(a))
+    else if (a === '--trusted-origin') opts.trustedOrigins.push(takeValue(a))
     else if (a === '--open') opts.open = true
     else if (a === '--no-open') opts.open = false
     else if (a === '-h' || a === '--help') {
@@ -103,6 +119,18 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     } else if (a === '-v' || a === '--version') {
       console.log(await readVersion())
       process.exit(0)
+    } else if (a === 'audit-verify') {
+      // 只读日志、不开服务：让「链有没有断」不用手算 sha256
+      const { createAuditLog } = await import('./audit.js')
+      const target = path.join(path.resolve(opts.dir), 'audit.log')
+      const verdict = await createAuditLog(target).verify()
+      if (verdict.ok) {
+        console.log('审计链完整：' + target)
+        process.exit(0)
+      }
+      console.error('审计链在第 ' + verdict.line + ' 行断裂：' + verdict.reason)
+      console.error(target)
+      process.exit(1)
     } else if (a === 'list-tools') {
       // 打印 MCP 工具面（不启服务）—— 配 AI 客户端前先看它能干什么
       //
@@ -149,6 +177,13 @@ function isPortBusy(err: unknown): boolean {
 
 /** 起服务：端口被占用且用户没写死端口时，往后找最多 10 个端口 */
 async function startWithPortFallback(opts: CliOptions) {
+  // 关鉴权必须显式二次确认：裸跑等于把「装插件 / 执行脚本 / 改画布」的入口对外开放。
+  if (opts.noAdminAuth && process.env.MINI_CANVAS_ALLOW_INSECURE !== '1') {
+    throw new Error(
+      '--no-admin-auth 需要同时设置环境变量 MINI_CANVAS_ALLOW_INSECURE=1。\n' +
+        '这是有意的二次确认：关掉之后任何网页都能装插件、跑脚本、改画布。',
+    )
+  }
   const maxTries = opts.portExplicit ? 1 : 10
   for (let i = 0; i < maxTries; i++) {
     const port = opts.port + i
@@ -160,6 +195,9 @@ async function startWithPortFallback(opts: CliOptions) {
       ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
       ...(opts.providers ? { providersDir: opts.providers } : {}),
       ...(opts.serverPlugins ? { serverPluginsDir: opts.serverPlugins } : {}),
+      ...(opts.noAdminAuth ? { adminAuth: false } : {}),
+      ...(opts.trustedHosts.length ? { trustedHosts: opts.trustedHosts } : {}),
+      ...(opts.trustedOrigins.length ? { trustedOrigins: opts.trustedOrigins } : {}),
       mcp: opts.mcp,
     })
     try {
@@ -194,6 +232,18 @@ async function main(): Promise<void> {
   for (const p of manifest) console.log(`         - ${p.id}  → ${p.url}`)
   console.log(`  平台   ${srv.paths.providers}（丢 .js 进去即多一个平台）`)
   console.log(`  后台插件 ${srv.paths.serverPlugins}（丢 .js 进去即多一个后台插件；重启生效）`)
+  // ---- 管理面安全：令牌与白名单**逐行**打印（配错时能一眼看出来，而不是等 403 才猜）----
+  if (srv.adminTokenSource === 'disabled') {
+    console.log('')
+    console.log('  ⚠️  管理鉴权已关闭（--no-admin-auth）—— 任何网页都能装插件 / 跑脚本 / 改画布')
+  } else {
+    console.log('')
+    console.log('  管理令牌 ' + (srv.adminTokenSource === 'env' ? '（来自 MINI_CANVAS_ADMIN_TOKEN）' : srv.adminTokenFile))
+    console.log('           ' + srv.adminToken)
+    console.log('           前端在「设置 → 插件」里填一次；删掉令牌文件重启即轮换')
+  }
+  console.log('  信任来源 ' + srv.trust.hosts.join(' · '))
+  if (srv.trust.origins.length) console.log('           额外 Origin: ' + srv.trust.origins.join(' · '))
   if (srv.mcpEnabled) {
     // MCP 地址一定要显眼：用户是拿这行去配 AI 客户端的
     console.log('')

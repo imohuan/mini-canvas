@@ -53,6 +53,7 @@ import {
 } from './debugSession'
 import { emitUiDebugEvent } from './debugEventBus'
 import { createHostProxy, errText, isSavePayload, type SavePayload } from './hostFetch'
+import { withAdminToken } from '@mini-canvas/canvas-base'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -479,9 +480,10 @@ async function acceptDebugInvite(): Promise<void> {
   console.log('[ui-debug] debugSession set to ' + debugSession.value)
   // 回执后台（失败不拦调试：后台只是记个名字，eval 找的是 hello 里报的 session）
   try {
+    // 这条也在首版的令牌白名单里（`/api/node-ui/debug-`），宿主同源，直接带头。
     const res = await fetch(baseUrl.value + '/api/node-ui/debug-accept', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: withAdminToken({ 'content-type': 'application/json' }),
       body: JSON.stringify({ session: inv.session, nodeId: props.id, canvasId }),
     })
     console.log('[ui-debug] 回执后台: status=' + res.status, 'baseUrl=' + baseUrl.value)

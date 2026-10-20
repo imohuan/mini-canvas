@@ -279,6 +279,8 @@ export const serverPluginsPlugin: PluginModule = {
         // 热装/热卸：装完/卸完当场生效，用户不必重启服务（见 serverFramework/hotLoad.ts）
         hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
         hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
+        // 审计：服务端装配时把 audit 注入进 ctx（见 server.ts），没注入就是 no-op
+        audit: (e) => ctx.tryGet<{ append(x: unknown): Promise<void> }>('auditLog')?.append(e) ?? Promise.resolve(),
       }),
     )
   },
@@ -330,6 +332,7 @@ export const npmPluginsPlugin: PluginModule = {
         // 热装/热卸：装完当场生效（见 serverFramework/hotLoad.ts）
         hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
         hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
+        audit: (e) => ctx.tryGet<{ append(x: unknown): Promise<void> }>('auditLog')?.append(e) ?? Promise.resolve(),
       }),
     )
   },

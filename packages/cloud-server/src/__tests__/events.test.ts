@@ -186,7 +186,12 @@ describe('GET /api/kv/events（实时通道）', () => {
 
     expect(await waitFor(() => configStream.events.length > 0)).toBe(true)
     expect(await waitFor(() => canvasStream.events.length > 0)).toBe(true)
-    expect(configStream.events).toEqual([{ type: 'config', key: 'theme' }])
-    expect(canvasStream.events).toEqual([{ type: 'canvas', key: 'graph' }])
+    // 这条用例的目的是**作用域隔离**（config 流收不到画布事件，反之亦然），
+    // 不是「恰好几条」。一次 putCanvas 会顺带产生 graph-edges，
+    // 原来等到 length>0 就做全等断言，第二个事件晚到一拍就会假失败。
+    expect(configStream.events).toContainEqual({ type: 'config', key: 'theme' })
+    expect(canvasStream.events).toContainEqual({ type: 'canvas', key: 'graph' })
+    expect(configStream.events.every((e) => e.type === 'config')).toBe(true)
+    expect(canvasStream.events.every((e) => e.type === 'canvas')).toBe(true)
   })
 })

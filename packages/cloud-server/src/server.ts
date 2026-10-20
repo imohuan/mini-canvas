@@ -54,6 +54,9 @@ import { tracesDirOf } from './agent/traceFork.js'
 import { buildRuntimeContext, runtimeContextSection } from './agent/runtimeContext.js'
 import { listAgentPromptSections } from './serverFramework/agent.js'
 import { runAgentMiddleware } from './serverFramework/agent.js'
+import { createAdminAuth, isAdminPath } from './adminAuth.js'
+import { createAuditLog } from './audit.js'
+import { createRequestTrust } from './requestTrust.js'
 import { REFERENCE_MARKUP_GUIDE } from './agent/referenceMarkup.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
@@ -98,6 +101,24 @@ export interface CloudServerOptions {
    * 测试里可关掉 —— 那些用例要验「用户没配 MCP 时是什么样」的行为。
    */
   builtinCanvasMcp?: boolean
+  /**
+   * 管理令牌鉴权（缺省**开**）。
+   *
+   * 关掉要配合 `MINI_CANVAS_ALLOW_INSECURE=1`（命令行 `--no-admin-auth` 也是这条规则），
+   * 否则任何人都能用一个环境变量把整个管理面敞开。
+   */
+  adminAuth?: boolean
+  /** 固定管理令牌（缺省读 `MINI_CANVAS_ADMIN_TOKEN`；都没有就生成/复用 <数据根>/admin-token） */
+  adminToken?: string
+  /**
+   * 请求来源边界（Host/Origin）。缺省**开**。
+   * 测试里关掉（`app.fetch` 造出来的 Request 没有可信 Host），真机必须开。
+   */
+  requestTrust?: boolean
+  /** 额外信任的 Host（如 `localhost:8865`、反代域名），与启动时的 hostname:port 一并生效 */
+  trustedHosts?: string[]
+  /** 额外信任的 Origin（如 dev 的 `http://localhost:5288`） */
+  trustedOrigins?: string[]
 }
 
 export interface CloudServer {
@@ -127,6 +148,14 @@ export interface CloudServer {
   mcpEnabled: boolean
   /** 开放的 MCP 工具清单（关闭时为空数组） */
   tools: readonly { name: string; description: string }[]
+  /** 管理令牌（启动日志与前端手填用；`adminAuthEnabled=false` 时为空串） */
+  adminToken: string
+  /** 令牌来源：env 固定 / 数据根文件 / 已关闭 */
+  adminTokenSource: 'env' | 'file' | 'disabled'
+  /** 令牌文件路径（env 固定令牌时为 null） */
+  adminTokenFile: string | null
+  /** 实际生效的 Host / Origin 白名单（启动日志要逐行打印，配错时能一眼看出来） */
+  trust: { hosts: string[]; origins: string[] }
   /** 重扫 provider 目录（目录变了由 watcher 调；也可手动触发） */
   reloadProviders(): Promise<{ count: number; version: number }>
 }
@@ -136,6 +165,23 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
   const uiDist = await resolveUiDist(opts.uiDist)
   const pluginsDir = await resolvePluginsDir(opts.pluginsDir)
+
+  // ---- 管理面安全：令牌 / 审计 / 来源边界（方案 commit 2/4/5）----
+  // 三条都在建 app 之前准备好：中间件要在装配阶段（host.start 之前）挂上。
+  // 关鉴权必须显式配合 ALLOW_INSECURE —— 防止一个环境变量就把管理面敞开。
+  // 单测里默认关掉：`app.fetch(new Request('http://localhost/...'))` 没有真实 Host，
+  // 而且用例本身就是在测业务语义。**生产环境（非 VITEST）默认全开**，
+  // 命令行若显式 `--no-admin-auth`，仍要求 MINI_CANVAS_ALLOW_INSECURE=1（见 cli.ts）。
+  const testEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
+  const adminAuthEnabled = opts.adminAuth ?? !testEnv
+  const adminAuth = await createAdminAuth({
+    dataDir,
+    enabled: adminAuthEnabled,
+    ...(opts.adminToken ?? process.env.MINI_CANVAS_ADMIN_TOKEN
+      ? { fixedToken: opts.adminToken ?? process.env.MINI_CANVAS_ADMIN_TOKEN }
+      : {}),
+  })
+  const audit = createAuditLog(path.join(dataDir, 'audit.log'))
 
   // KV 只剩「设置 / 快捷」这类小数据；画布数据走「一个画布一个文件夹」
   const kvStore = new KvStore(dataDir)
@@ -441,8 +487,76 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const app = host.app
 
   // ---- 装配阶段（顺序即匹配优先级；全部必须在 start() 之前完成，Hono 首次 fetch 后冻结）----
-  // ① 跨域：**必须最先**（实测：cors 后注册对已注册路由不生效）
-  app.use('*', cors())
+  // ① 跨域：**必须最先**（实测：cors 后注册对已注册路由不生效）。
+  //    收紧成同源 + 显式白名单：默认 `origin: '*'` 等于任何网页都能读写（2026-10-19 实测）。
+  //    注意 `Origin: null`（沙箱 iframe）不在这里放行 —— 视觉节点已改宿主代发（commit 1）。
+  const trustedHosts = Array.from(
+    new Set([
+      `${opts.hostname ?? '127.0.0.1'}:${port}`,
+      `localhost:${port}`,
+      ...(opts.trustedHosts ?? []),
+      ...(process.env.MINI_CANVAS_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    ]),
+  )
+  const trustedOrigins = Array.from(
+    new Set([
+      ...(opts.trustedOrigins ?? []),
+      ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+    ]),
+  )
+  const trustEnabled = opts.requestTrust ?? !testEnv
+  app.use(
+    '*',
+    cors({
+      // 只有明确认识的来源才回 ACAO；不认识的（含跨源恶意页）连预检都过不了。
+      origin: (origin) => {
+        if (!trustEnabled) return origin || '*'
+        if (!origin) return ''
+        if (trustedOrigins.includes(origin)) return origin
+        try {
+          const u = new URL(origin)
+          return trustedHosts.includes(u.host) ? origin : ''
+        } catch {
+          return ''
+        }
+      },
+      allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['content-type', 'accept', 'x-admin-token'],
+      maxAge: 600,
+    }),
+  )
+
+  // ①.2 来源边界（Host/Origin，含 /mcp）—— 挂在 '*' 上：/mcp 是直挂路由，不在 /api/* 下。
+  //      必须在 host.start() 之前：插件路由是 start() 时一次性 flush 成代理的。
+  if (trustEnabled) {
+    const trust = createRequestTrust({ trustedHosts, trustedOrigins, allowOpaqueOrigin: false })
+    app.use('*', trust as never)
+  }
+
+  // ①.3 管理令牌：只拦「能执行代码 / 改画布 / 花钱」的入口（白名单在 adminAuth.ts）。
+  //      OPTIONS 放行（预检不带令牌）；GET/HEAD 放行（读接口靠来源边界）。
+  app.use('/api/*', async (c, next) => {
+    const method = c.req.method.toUpperCase()
+    if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next()
+    if (!isAdminPath(method, c.req.path)) return next()
+    const verdict = adminAuth.verify(c.req.header('x-admin-token'))
+    if (verdict !== 'ok') {
+      await audit.append({
+        action: 'auth-failed',
+        method,
+        path: c.req.path,
+        token: verdict,
+        result: 'rejected',
+        ...(c.req.header('origin') ? { origin: c.req.header('origin')! } : {}),
+        ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
+      })
+      return c.json(
+        { ok: false, error: '需要管理令牌（x-admin-token）；见启动日志或 ' + (adminAuth.tokenFile ?? '<MINI_CANVAS_ADMIN_TOKEN>') },
+        403,
+      )
+    }
+    await next()
+  })
 
    // ①.5 本地 test 模型端点（用户口径 2026-10-09）：一个假的 OpenAI 兼容端点，
    //      命中「test模型」时由它就地伪造回复，完全不请求真实后台。
@@ -467,6 +581,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('history', history)
   host.ctx.inject('pluginsDir', pluginsDir)
   host.ctx.inject('serverPluginsDir', serverPluginsDir)
+  // 审计日志：插件路由（server-plugins / npm-plugins）经 ctx 取它，装配时注入一次。
+  // 没注入就是 no-op —— 那些路由在纯框架单测里照样能跑。
+  host.ctx.inject('auditLog', audit)
   // 服务自己的 origin：用于后台插件安装的跨源检查（不传等于关掉该检查）
   host.ctx.inject('selfOrigin', `http://${opts.hostname ?? '127.0.0.1'}:${port}`)
   if (agentEnabled) {
@@ -668,6 +785,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     mcpEnabled,
     tools: mcpEnabled ? TOOL_LIST : [],
+    adminToken: adminAuth.token,
+    adminTokenSource: adminAuth.source,
+    adminTokenFile: adminAuth.tokenFile,
+    trust: { hosts: trustedHosts, origins: trustedOrigins },
     reloadProviders,
     start() {
       return new Promise((resolve, reject) => {

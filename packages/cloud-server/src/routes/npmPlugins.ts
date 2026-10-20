@@ -47,6 +47,16 @@ export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   /** 热装/热卸钩子：装完/卸完当场生效（见 serverFramework/hotLoad.ts）；缺省不调 */
   hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
   hotUninstall?: (id: string) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string }
+  /** 审计日志（可选）。装/卸/更新各记一条 attempt + 结果。 */
+  audit?: (e: {
+    action: 'npm-plugin/install' | 'npm-plugin/update' | 'npm-plugin/uninstall'
+    method: string
+    path: string
+    id: string
+    result: 'attempt' | 'ok' | 'rejected'
+    reason?: string
+    token: 'ok' | 'missing' | 'bad' | 'disabled'
+  }) => Promise<void>
 }
 
 interface InstallRecord {
@@ -366,20 +376,29 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   app.post('/api/npm-plugins/install', async (c) => {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    const pkg0 = typeof body.package === 'string' ? body.package : ''
+    const base = { action: 'npm-plugin/install' as const, method: 'POST', path: c.req.path, id: pkg0, token: 'ok' as const }
+    await opts.audit?.({ ...base, result: 'attempt' })
     // confirm 必填：装 NPM 包 = 服务端代码执行（与手动安装同一确认语义）
     if (body.confirm !== true) {
+      await opts.audit?.({ ...base, result: 'rejected', reason: 'missing-confirm' })
       return c.json({ ok: false, error: '需要 confirm: true（安装 NPM 插件等于以服务端权限运行其后台半）' }, 400)
     }
     const pkg = typeof body.package === 'string' ? body.package : ''
     const version = typeof body.version === 'string' ? body.version : undefined
     const r = await doInstall(pkg, version)
+    await opts.audit?.({ ...base, id: pkg, result: r.status === 200 ? 'ok' : 'rejected', ...(r.status === 200 ? {} : { reason: 'status-' + r.status }) })
     return c.json(r.body, r.status as 200)
   })
 
   app.post('/api/npm-plugins/update', async (c) => {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    const pkg0 = typeof body.package === 'string' ? body.package : ''
+    const base = { action: 'npm-plugin/update' as const, method: 'POST', path: c.req.path, id: pkg0, token: 'ok' as const }
+    await opts.audit?.({ ...base, result: 'attempt' })
     if (body.confirm !== true) {
+      await opts.audit?.({ ...base, result: 'rejected', reason: 'missing-confirm' })
       return c.json({ ok: false, error: '需要 confirm: true（更新 NPM 插件等于替换服务端运行的代码）' }, 400)
     }
     const pkg = typeof body.package === 'string' ? body.package : ''
@@ -394,9 +413,14 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         return c.json({ ok: true, pkg, version: rec.version, updated: false, note: '已是最新版本' })
       }
       const r = await doInstall(pkg, latest)
-      if (r.status !== 200) return c.json(r.body, r.status as 200)
+      if (r.status !== 200) {
+        await opts.audit?.({ ...base, result: 'rejected', reason: 'status-' + r.status })
+        return c.json(r.body, r.status as 200)
+      }
+      await opts.audit?.({ ...base, result: 'ok' })
       return c.json({ ok: true, pkg, from: rec.version, to: latest, updated: true })
     } catch (err) {
+      await opts.audit?.({ ...base, result: 'rejected', reason: 'exception' })
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
     }
   })
@@ -411,8 +435,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     const body = await safeJson(c)
     if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
     const pkg = typeof body.package === 'string' ? body.package : ''
+    const base = { action: 'npm-plugin/uninstall' as const, method: 'POST', path: c.req.path, id: pkg, token: 'ok' as const }
+    await opts.audit?.({ ...base, result: 'attempt' })
     const recs = await readRecords()
-    if (!recs[pkg]) return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
+    if (!recs[pkg]) {
+      await opts.audit?.({ ...base, result: 'rejected', reason: 'not-installed' })
+      return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
+    }
     delete recs[pkg]
     await writeRecords(recs)
     const pkgDirName = dirNameOf(pkg)
@@ -441,6 +470,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       const hot = await opts.hotUninstall(serverId)
       hotMsg = hot.ok ? '并即时失效' : '（热卸失败，重启后消失：' + hot.error + '）'
     }
+    await opts.audit?.({ ...base, result: 'ok' })
     return c.json({ ok: true, pkg, note: '已卸载；前端半刷新即可见，后台半' + hotMsg })
   })
 
