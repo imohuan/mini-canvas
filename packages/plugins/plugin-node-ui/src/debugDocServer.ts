@@ -3,8 +3,22 @@
  *
  * 它解决什么：画布内沙箱不可调试（安全设计使然），画布内调试副本拿不到上游实时数据。
  * 这套东西走第三条路：后台直接拼出一份完整独立的 HTML + 数据 JS，落到画布的
- * resources/debug/ 目录 —— Chrome MCP / 任何浏览器自动化可以直接打开那个 URL，
- * 一个普通页面，无沙箱、无 CSP，DevTools / CDP / 断点全通。
+ * resources/debug/ 目录，再由**另一个端口**（`debugOrigin`）只读地提供给浏览器 ——
+ * Chrome MCP / 任何浏览器自动化可以直接打开那个 URL，一个普通页面，
+ * 无沙箱、无 CSP，DevTools / CDP / 断点全通。
+ *
+ * ## 为什么必须换一个源（2026-10-20 审查 S1）
+ *
+ * 之前这些文件由后台自己的 `/api/canvases/:id/resources/debug/:file` 以 text/html 回读。
+ * 那等于让"用户写的 HTML"在**后台的源**上执行：它能读 `localStorage` 里的管理令牌，
+ * 也能直接调 `/api/*`。沙箱 iframe 辛苦守住的那条边界，被调试页从后门整个绕开。
+ * 现在调试产物走独立端口，浏览器眼里是另一个源 —— 读不到画布页的令牌，
+ * 它自己的 localStorage 是空的，也就无所谓"泄露"。
+ *
+ * ## 令牌
+ *
+ * 调试页要写产物，但不能给管理令牌。所以只塞一张"绑定本画布本节点、10 分钟"
+ * 的短令牌（`taskTokens.issue`）。它只能写自己那个资源槽位，泄露了也只影响这一次调试。
  *
  * 三份文件的分工（用户定的：变量、SDK 分开，HTML 只是个壳）：
  *   debug-<nodeId>[-vN].html   壳：主题色板 + <base> + 引两份 JS + 节点原文
@@ -178,6 +192,13 @@ export function buildDebugHtml(input: {
   baseUrl: string
   sdkFileUrl: string
   contextFileUrl: string
+  /**
+   * 写产物用的短令牌（绑定本画布本节点）。
+   *
+   * 为什么放在这里而不是 context.js 里：context.js 是"数据快照"，每次改数据都重写；
+   * 令牌跟着 HTML 走，重写数据时不必重签。留空 = 这个页不能保存（sdk 会给人话错误）。
+   */
+  debugToken?: string
 }): string {
   let baseHref = ''
   try {
@@ -193,6 +214,14 @@ export function buildDebugHtml(input: {
     '<style>html, body { margin: 0; padding: 0; width: 100%; height: 100%; } * { box-sizing: border-box; } body { font: 13px/1.5 system-ui, sans-serif; } html[data-theme=\'dark\'] body { background: #16181d; color: #d1d5db; } html[data-theme=\'light\'] body { background: #f9fafb; color: #374151; }</style>',
     '<script src="' + input.sdkFileUrl + '"></script>',
     '<script src="' + input.contextFileUrl + '"></script>',
+    // 令牌在 context 之后补上：context.js 每次数据更新都重写，令牌不该跟着它一起变。
+    ...(input.debugToken
+      ? [
+          '<script>window.__CANVAS_UI__ = Object.assign({}, window.__CANVAS_UI__ || {}, { debugToken: ' +
+            serializeForScriptShared(input.debugToken) +
+            ' });</script>',
+        ]
+      : []),
   ]
   const body = input.html.trim()
   const injectAt = (re: RegExp, fallback: () => string): string => {

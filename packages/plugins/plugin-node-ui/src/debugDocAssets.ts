@@ -1,30 +1,47 @@
 /**
- * debugDocAssets —— 调试窗口 sdk.js 的正文模板（纯字符串，零逻辑）。
+ * debugDocAssets —— 独立调试页 sdk.js 的正文模板（纯字符串，零逻辑）。
  * 为什么单独一个文件：这是「JS 里嵌 JS」的字符串，塞主文件会把引号转义搅成粥。
  * CONTEXT_URL 占位符 __CONTEXT_URL__ 由调用方替换。
+ *
+ * ## 这个页面住在**另一个源**上（2026-10-20 审查 S1）
+ *
+ * 调试产物不再由后台的 `/api/...` 以 text/html 回读，而是另起一个端口（`debugOrigin`）。
+ * 于是这个页面读不到画布页的 localStorage、cookie，也调不了后台的管理接口 ——
+ * 节点 HTML 里的任意脚本只能在调试源里折腾自己。
+ *
+ * 代价是**所有请求都跨源**，所以这里有两处跟着改：
+ *
+ *   1. 数据不再用 `fetch` 拉（会被 CORS 挡），改成动态 `<script src>` 重载 ——
+ *      script 标签不受同源策略限制，加载完就重新执行那几个 window 赋值；
+ *   2. 上传产物带 `x-task-token`（绑定本画布本节点的短时令牌，由宿主机签发）。
+ *      这里**不碰管理令牌**：调试页是用户代码，管理令牌一旦落进它就等于全开。
  */
 export const SDK_JS_TEMPLATE = [
 "/* 由 mini-canvas 自动生成 —— 调试窗口的 CanvasUI 桥。 */",
 "(function(){",
 "  var CONTEXT_URL = \"__CONTEXT_URL__\";",
-"  var lastRaw = null;",
+"  var seq = 0;",
 "  var changeFns = [];",
 "  function collect(){ return { upstream: window.__CANVAS_UPSTREAM__ || [], inputs: window.__CANVAS_INPUTS__ || {} }; }",
 "  function fireChange(){ var p = collect(); for (var i = 0; i < changeFns.length; i++) { try { changeFns[i](p); } catch (e) {} } }",
-"  function apply(force){",
-"    return fetch(CONTEXT_URL + (CONTEXT_URL.indexOf(\"?\") >= 0 ? \"&\" : \"?\") + \"t=\" + Date.now(), { cache: \"no-store\" })",
-"      .then(function(r){ if (!r.ok) throw new Error(\"context \" + r.status); return r.text(); })",
-"      .then(function(text){",
-"        if (!force && text === lastRaw) return false;",
-"        lastRaw = text;",
-"        try { new Function(text)(); } catch (e) { console.error(\"[ui-debug-doc] context.js 执行失败\", e); return false; }",
-"        return true;",
-"      })",
-"      .then(function(changed){ if (changed) fireChange(); })",
-"      .catch(function(err){ console.warn(\"[ui-debug-doc] 拉取 context 失败\", err); });",
+"  /* 数据靠 <script> 重载：调试页与后台跨源，fetch 会被 CORS 挡；script 不受限。 */",
+"  function reloadContext(){",
+"    var s = document.createElement(\"script\");",
+"    var sep = CONTEXT_URL.indexOf(\"?\") >= 0 ? \"&\" : \"?\";",
+"    s.src = CONTEXT_URL + sep + \"t=\" + Date.now() + \"-\" + (++seq);",
+"    s.async = true;",
+"    s.onload = function(){",
+"      if (s.parentNode) s.parentNode.removeChild(s);",
+"      fireChange();",
+"    };",
+"    s.onerror = function(){",
+"      if (s.parentNode) s.parentNode.removeChild(s);",
+"      console.warn(\"[ui-debug-doc] 重新加载 context 失败（下次轮询再试）\", s.src);",
+"    };",
+"    (document.head || document.documentElement).appendChild(s);",
 "  }",
-"  apply(true);",
-"  setInterval(function(){ apply(false); }, 5000);",
+"  reloadContext();",
+"  setInterval(reloadContext, 5000);",
 "  window.CanvasUI = {",
 "    setInputs: function(params){",
 "      var cur = window.__CANVAS_INPUTS__ || {};",
@@ -36,6 +53,10 @@ export const SDK_JS_TEMPLATE = [
 "    onChange: function(fn){ if (typeof fn === \"function\") changeFns.push(fn); },",
 "    save: function(data, name){",
 "      var U = window.__CANVAS_UI__ || {};",
+"      var token = U.debugToken || \"\";",
+"      if (!token) {",
+"        return Promise.reject(new Error(\"这个调试页没有写入令牌（可能已过期，或工具没签成）。请重跑 canvas_ui_build_debug_doc。\"));",
+"      }",
 "      var bytes = data;",
 "      if (typeof data === \"string\") bytes = new Blob([data], { type: \"text/plain\" });",
 "      var fname = String(name || \"out.png\");",
@@ -43,8 +64,21 @@ export const SDK_JS_TEMPLATE = [
 "      var url = (U.baseUrl || \"\") + \"/api/canvases/\" + encodeURIComponent(U.canvasId || \"default\")",
 "        + \"/resources?slot=\" + encodeURIComponent(U.nodeId || \"\")",
 "        + \"&name=\" + encodeURIComponent(withExt);",
-"      return fetch(url, { method: \"POST\", headers: { \"content-type\": (bytes && bytes.type) || \"application/octet-stream\" }, body: bytes })",
-"        .then(function(r){ return r.json(); })",
+"      /* 跨源写：带绑定本画布本节点的短时令牌（不是管理令牌）。 */",
+"      return fetch(url, {",
+"        method: \"POST\",",
+"        headers: {",
+"          \"content-type\": (bytes && bytes.type) || \"application/octet-stream\",",
+"          \"x-task-token\": token,",
+"        },",
+"        body: bytes,",
+"      })",
+"        .then(function(r){",
+"          return r.json().then(function(j){",
+"            if (!r.ok) throw new Error((j && j.error) || (\"保存产物失败 HTTP \" + r.status));",
+"            return j;",
+"          });",
+"        })",
 "        .then(function(j){ if (!j || !j.ok) throw new Error((j && j.error) || \"保存产物失败\"); return j.url; });",
 "    },",
 "  };",

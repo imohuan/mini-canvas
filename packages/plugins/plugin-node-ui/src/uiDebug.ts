@@ -146,29 +146,32 @@ function baseHref(raw?: string): string {
 
 
 /**
- * 调试副本里的助手 window.CanvasUI。
+ * 调试副本（离线预览用）里的助手 window.CanvasUI。
  *
- * ## 为什么要有它（而不是让副本直接去连画布）
+ * ## 现状：这不是产品里那个「调试」按钮走的路
+ *
+ * 2026-10-20 起，画布上的「调试」按钮打开的是**独立调试页**（另起一个端口，
+ * 见 `debugDocServer.ts` / `debugDocAssets.ts`），不再是这里拼出来的同源副本。
+ * 原因很直接：`about:blank` 副本继承画布页的源，节点 HTML 里的脚本能读走管理令牌。
+ *
+ * `buildDebugDoc` / `buildDebugBridge` 保留下来，是给**离线预览**和单测用的
+ * （`uiDebug.test.ts` 靠它钉住"数据与沙箱那份一致"）。不要再拿它开产品入口。
+ *
+ * ## 为什么副本的 save 要让宿主代传
  *
  * 副本与画布上那个沙箱节点是**两份独立的运行实例**。如果副本里的 CanvasUI.save
  * 直接往后端写，它会：
  *   · 把产物写进同一个槽位，覆盖掉画布上那份；
  *   · 绕过宿主的 updateNode，于是撤销栈、落盘、云端同步全不认这笔写入。
  *
- * 所以副本里的桥**只往宿主报**（__canvasUiDebug 标记），由宿主决定要不要
- * 真的落进节点。宿主那条链与沙箱那份共用，于是「副本里调 save，画布上
- * 那个节点真的出图」这件事才成立。
+ * 所以桥**只往宿主报**（__canvasUiDebug 标记），由宿主决定要不要真的落进节点。
  *
- * ## 与沙箱里那份（buildUiBridge）的差别
+ * ## 与沙箱那份（buildUiBridge）的差别
  *
- *   · 往宿主发用 __canvasUiDebug（宿主靠它认出「这是副本说的」）；
- *     收宿主的回包要认 __canvasUiDebugResult（与 save 那条链同一个标记）；
- *   · save 的字节由**宿主代传**（副本自己不 fetch 上传）；
- *   · 其余方法形状一致，生成物不必为「在副本里跑」改一行代码。
- *
- * 2026-10-20：副本与沙箱页都改成「宿主代发」。副本把字节 postMessage 给宿主
- * （Blob 可直接结构化克隆），宿主带令牌上传；task / cancel 也走宿主。
- * 副本是同源普通页面，但它仍在画布里，统一走一条路能少一套令牌与错误处理。
+ *   · 目标不是 parent（副本窗口里没有 iframe），而是 **window.opener**；
+ *     opener 不存在（例如直接把文档存成文件打开）就**不发**，也不等回包；
+ *   · 收宿主的回包要认 __canvasUiDebugResult（与 save 那条链同一个标记）；
+ *   · save 的字节由**宿主代传**（副本自己不 fetch 上传）。
  */
 export function buildDebugBridge(): string {
   const S = String.fromCharCode(39)
@@ -176,7 +179,9 @@ export function buildDebugBridge(): string {
     '<script>',
     '(function(){',
     '  var U = window[' + JSON.stringify(UI_GLOBAL) + '] || {};',
-    '  function post(msg){ parent.postMessage(msg, ' + S + '*' + S + '); }',
+    // 副本是 window.open 出来的普通窗口：宿主是 opener，不是 parent。
+    '  var HOST = window.opener || null;',
+    '  function post(msg){ if (HOST) { try { HOST.postMessage(msg, ' + S + '*' + S + '); } catch (e) {} } }',
     '  var cmdHandlers = [];',
     // 副本也走宿主代发：每条请求带 reqId，宿主回 __canvasUiDebugResult / task-event。
     '  var seq = 0, pending = {};',
@@ -204,7 +209,7 @@ export function buildDebugBridge(): string {
     '  }',
     '  function ready(){ post({ __canvasUiDebug: 1, type: ' + S + 'ready' + S + ' }); }',
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
-    '    if(e.source !== parent) return;',
+    '    if(!HOST || e.source !== HOST) return;',
     '    var d = e.data; if(!d) return;',
     // 宿主回包用的标记是 __canvasUiDebugResult（save 那条链一直是它）；
     // 两个标记都要认，否则 task / cancel 的 Promise 永远不结算。
@@ -239,11 +244,17 @@ export function buildDebugBridge(): string {
     '      return new Promise(function(resolve, reject){',
     '        var reqId = ' + S + 'r' + S + ' + Date.now() + Math.random();',
     '        var onMsg = function(ev){',
-    '          if (ev.source !== parent) return;',
+    '          if (!HOST || ev.source !== HOST) return;',
     '          var d = ev.data;',
     '          if (!d || !d.__canvasUiDebugResult || d.reqId !== reqId) return;',
     '          window.removeEventListener(' + S + 'message' + S + ', onMsg);',
-    '          if (d.ok) resolve(d.url); else reject(new Error(d.error || ' + S + '宿主没有接收这次产物' + S + '));',
+    '          if (d.ok) {',
+    // 宿主已经落进节点了：再报一条 saved，让宿主那边能弹提示 / 做 UI 反应。
+    '            var done = { __canvasUiDebug: 1, type: ' + S + 'saved' + S + ', url: d.url, name: withExt };',
+    '            if (typeof data === ' + S + 'string' + S + ') done.text = data;',
+    '            post(done);',
+    '            resolve(d.url);',
+    '          } else reject(new Error(d.error || ' + S + '宿主没有接收这次产物' + S + '));',
     '        };',
     '        window.addEventListener(' + S + 'message' + S + ', onMsg);',
     '        if (typeof data === ' + S + 'string' + S + ') {',

@@ -458,6 +458,121 @@ export async function waitRun(
   }
 }
 
+/** 一次「生成调试产物」的入参（MCP 工具与画布内按钮共用） */
+interface BuildDebugDocsInput {
+  canvasId: string
+  nodeId: string
+  html: string
+  inputs: Record<string, unknown>
+  /** 上游素材（未规整；builder 内部按同一套规则归一） */
+  upstream?: unknown
+  version?: string
+  /** 要不要回本机绝对路径（MCP 工具要，HTTP 路由不要 —— 路径对前端没用） */
+  withPaths: boolean
+  hint: string
+}
+
+/**
+ * 生成一份独立调试产物（html / context / sdk 三份），返回可打开的 URL。
+ *
+ * 为什么抽出来：`canvas_ui_build_debug_doc`（Agent 走 MCP）和
+ * `POST /api/canvases/:id/debug-docs`（画布上的「调试」按钮）要做的事完全一样。
+ * 抄两份的下场是"工具里修好的 bug，按钮那条路还留着"。
+ *
+ * 两处地址的区别：
+ *   · 页面 URL 走**调试源**（`debugOrigin`，另一个端口）—— 用户 HTML 在后台同源执行 = 令牌可被读走；
+ *   · `__CANVAS_UI__.baseUrl` 仍是**后台地址**—— 产物要写回画布，那是后台的接口。
+ */
+async function buildDebugDocs(
+  ctx: ServerCtx,
+  input: BuildDebugDocsInput,
+): Promise<
+  | ({ ok: true } & Record<string, unknown>)
+  | { ok: false; error: string }
+> {
+  const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
+  if (!store) return { ok: false, error: '后台没有画布存储服务' }
+  let names: ReturnType<typeof debugFileNames>
+  try {
+    names = debugFileNames(input.nodeId, input.version)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+  const backend = ctx.tryGet<string>('selfOrigin') ?? ''
+  if (!backend) return { ok: false, error: '拿不到后台地址（selfOrigin 是空的）' }
+  const debugOrigin = ctx.tryGet<{ url: string }>('debugOrigin')
+  const warnings: string[] = []
+  let resBase: string
+  if (debugOrigin && debugOrigin.url) {
+    // 独立源：/<canvasId>/<file>
+    resBase = debugOrigin.url.replace(/\/+$/, '') + '/' + encodeURIComponent(input.canvasId) + '/'
+  } else {
+    // 兜底：老宿主没注入调试源时退回后台同源。这条路上页面能读到管理令牌 —— 只该在本机临时用。
+    warnings.push('调试源不可用，已退回后台同源（这个页面里的脚本能读到管理令牌，仅本机临时调试）')
+    resBase = backend + '/api/canvases/' + encodeURIComponent(input.canvasId) + '/resources/debug/'
+  }
+  const urls = { html: resBase + names.html, context: resBase + names.context, sdk: resBase + names.sdk }
+  const upstream = normalizeUpstreamShared(input.upstream)
+  // 短令牌：只允许写「本画布本节点」的槽位，10 分钟后失效。签不出来就留空（sdk 会给人话错误）。
+  let token = ''
+  try {
+    const taskTokens = ctx.tryGet<{ issue(canvasId: string, nodeId: string, ttlMs?: number): string }>('taskTokens')
+    if (taskTokens) token = taskTokens.issue(input.canvasId, input.nodeId, 10 * 60 * 1000)
+  } catch {
+    token = ''
+  }
+  if (!token) warnings.push('没签出调试写入令牌：这个页面里 CanvasUI.save 会报错（其它调试照常）')
+  const uiPayload = {
+    theme: 'light',
+    baseUrl: backend,
+    canvasId: input.canvasId,
+    nodeId: input.nodeId,
+    debug: 'standalone',
+  }
+  try {
+    // 顺序：先写 sdk（HTML 引用它），再 context（数据），最后 HTML 壳
+    await writeDebugFile(store, input.canvasId, names.sdk, renderSdkJs(urls.context))
+    await writeDebugFile(
+      store,
+      input.canvasId,
+      names.context,
+      buildContextJs({ inputs: input.inputs, upstream, ui: uiPayload, contextUrl: urls.context }),
+    )
+    await writeDebugFile(
+      store,
+      input.canvasId,
+      names.html,
+      buildDebugHtml({
+        html: input.html,
+        theme: 'light',
+        baseUrl: backend,
+        sdkFileUrl: urls.sdk,
+        contextFileUrl: urls.context,
+        debugToken: token,
+      }),
+    )
+  } catch (err) {
+    return { ok: false, error: '写调试文件失败：' + (err instanceof Error ? err.message : String(err)) }
+  }
+  const dataRoot = typeof store.dataRoot === 'function' ? store.dataRoot() : ''
+  const dir = dataRoot ? debugDirOf(store, input.canvasId) : ''
+  return {
+    ok: true,
+    canvasId: input.canvasId,
+    nodeId: input.nodeId,
+    ...(input.version ? { version: input.version } : {}),
+    files: names,
+    urls,
+    token,
+    ...(input.withPaths && dir
+      ? { paths: { html: pathJoin(dir, names.html), context: pathJoin(dir, names.context), sdk: pathJoin(dir, names.sdk) } }
+      : {}),
+    ...(warnings.length ? { warnings } : {}),
+    summary: { upstreamCount: upstream.length, inputKeys: Object.keys(input.inputs) },
+    hint: input.hint,
+  }
+}
+
 export function apply(ctx: ServerCtx): void {
   // ① 「我是谁」：前端靠它拿后台真实地址（见 selfOrigin 的说明）
   ctx.routes.get('/api/node-ui/info', (c) => c.json({ ok: true, origin: selfOrigin(c) }))
@@ -1465,6 +1580,7 @@ export function apply(ctx: ServerCtx): void {
 
   // ⑯ 独立调试页面：后台拼一份完整 HTML + 数据 JS，落到 resources/debug/（用户 2026-10-17 定）
   //    供 Chrome MCP / 任何浏览器自动化直接打开 —— 普通页面，无沙箱，DevTools / CDP 全通。
+  //    2026-10-20：文件不再由后台同源回读，改由独立端口（debugOrigin）提供，见 buildDebugDocs。
   ctx.mcp.tool({
     name: 'canvas_ui_build_debug_doc',
     description:
@@ -1481,47 +1597,56 @@ export function apply(ctx: ServerCtx): void {
       if (!picked.ok) return picked
       const { canvasId, nodeId, node } = picked
       const version = typeof args.version === 'string' && args.version.trim() ? args.version.trim() : undefined
-      try {
-        const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
-        if (!store) return { ok: false, error: '后台没有画布存储服务' }
-        const html = typeof node.data?.uiHtml === 'string' ? node.data.uiHtml : ''
-        if (!html.trim()) return { ok: false, error: '这个节点还没有内容（还没画过）。先 canvas_ui_write。' }
-        const inputs = (node.data?.uiInputs ?? {}) as Record<string, unknown>
-        const upstream = normalizeUpstreamShared(node.data?.uiUpstream)
-        const names = debugFileNames(nodeId, version)
-        const origin = ctx.tryGet<string>('selfOrigin') ?? ''
-        const resBase = origin + '/api/canvases/' + encodeURIComponent(canvasId) + '/resources/debug/'
-        const urls = { html: resBase + names.html, context: resBase + names.context, sdk: resBase + names.sdk }
-        const uiPayload = {
-          theme: 'light',
-          baseUrl: origin,
-          canvasId,
-          nodeId,
-          debug: 'standalone',
-        }
-        // 顺序：先写 sdk（HTML 引用它），再 context（数据），最后 HTML 壳
-        await writeDebugFile(store, canvasId, names.sdk, renderSdkJs(urls.context))
-        await writeDebugFile(store, canvasId, names.context, buildContextJs({ inputs, upstream, ui: uiPayload, contextUrl: urls.context }))
-        await writeDebugFile(store, canvasId, names.html, buildDebugHtml({ html, theme: 'light', baseUrl: origin, sdkFileUrl: urls.sdk, contextFileUrl: urls.context }))
-        const dataRoot = typeof store.dataRoot === 'function' ? store.dataRoot() : ''
-        const dir = dataRoot ? debugDirOf(store, canvasId) : ''
-        return {
-          ok: true,
-          canvasId,
-          nodeId,
-          ...(version ? { version } : {}),
-          files: names,
-          urls,
-          ...(dir ? { paths: { html: pathJoin(dir, names.html), context: pathJoin(dir, names.context), sdk: pathJoin(dir, names.sdk) } } : {}),
-          summary: { upstreamCount: upstream.length, inputKeys: Object.keys(inputs) },
-          hint: '用浏览器打开 urls.html 即可调试（普通页面，DevTools/CDP 全通）。' +
-            '改了上游/参数后重跑本工具，窗口 5 秒内自动刷新。' +
-            '想改界面？编辑 paths.html（或用 canvas_ui_write 改节点后重跑本工具）。'
-        }
-      } catch (err) {
-        return { ok: false, error: err instanceof Error ? err.message : String(err) }
-      }
+      const html = typeof node.data?.uiHtml === 'string' ? node.data.uiHtml : ''
+      if (!html.trim()) return { ok: false, error: '这个节点还没有内容（还没画过）。先 canvas_ui_write。' }
+      return buildDebugDocs(ctx, {
+        canvasId,
+        nodeId,
+        html,
+        inputs: (node.data?.uiInputs ?? {}) as Record<string, unknown>,
+        upstream: node.data?.uiUpstream,
+        version,
+        withPaths: true,
+        hint:
+          '用浏览器打开 urls.html 即可调试（普通页面，DevTools/CDP 全通）。' +
+          '改了上游/参数后重跑本工具，窗口 5 秒内自动刷新。' +
+          '想改界面？编辑 paths.html（或用 canvas_ui_write 改节点后重跑本工具）。',
+      })
     },
+  })
+
+  // ⑯b 画布内「调试」按钮用：把当前这份界面写到独立源，返回可打开的 URL。
+  //     与上面的 MCP 工具共用 buildDebugDocs（一次实现，两处入口）。
+  //     管理令牌由 cloud-server 的中间件统一校验（这条是 POST）。
+  ctx.routes.post('/api/canvases/:canvasId/debug-docs', async (c) => {
+    const cc = c as unknown as {
+      req: { param?(n: string): string | undefined; json(): Promise<unknown> }
+    }
+    const canvasId = cc.req.param?.('canvasId') ?? ''
+    let body: Record<string, unknown>
+    try {
+      const raw = await cc.req.json()
+      body = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+    } catch {
+      return c.json({ ok: false, error: '请求体不是合法 JSON' }, 400)
+    }
+    const nodeId = typeof body.nodeId === 'string' ? body.nodeId : ''
+    const html = typeof body.html === 'string' ? body.html : ''
+    const version = typeof body.version === 'string' && body.version.trim() ? body.version.trim() : undefined
+    if (!canvasId) return c.json({ ok: false, error: '缺少画布 id' }, 400)
+    if (!nodeId) return c.json({ ok: false, error: '缺少 nodeId' }, 400)
+    if (!html.trim()) return c.json({ ok: false, error: '这份界面还是空的，没什么可调试的' }, 400)
+    const built = await buildDebugDocs(ctx, {
+      canvasId,
+      nodeId,
+      html,
+      inputs: (body.inputs && typeof body.inputs === 'object' ? body.inputs : {}) as Record<string, unknown>,
+      upstream: body.upstream,
+      version,
+      withPaths: false,
+      hint: '把这个 URL 开在独立窗口里调试；改了参数后本组件会重发一次，页面 5 秒内跟上。',
+    })
+    return built.ok ? c.json(built) : c.json(built, 400)
   })
 
   // 独立调试文件的读取（GET）—— 写入工具落盘，这里提供 URL。白名单见 canvasPathsShared。

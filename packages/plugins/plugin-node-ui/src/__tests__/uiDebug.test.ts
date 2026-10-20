@@ -136,7 +136,8 @@ describe('调试副本的桥（window.CanvasUI）', () => {
   it('等宿主回执（__canvasUiDebugResult 按 reqId 对上）', () => {
     expect(js).toContain('__canvasUiDebugResult')
     expect(js).toContain('d.reqId !== reqId')
-    expect(js).toContain('if (d.ok) resolve(d.url)')
+    expect(js).toContain('if (d.ok)')
+    expect(js).toContain('resolve(d.url)')
   })
 
   it('★ 不再留一条 output 直写路径（副本只发 save 请求）', () => {
@@ -144,8 +145,10 @@ describe('调试副本的桥（window.CanvasUI）', () => {
     expect(js).not.toContain('base64')
   })
 
-  it('只认来自 parent 的指令（不认别人的消息）', () => {
-    expect(js).toContain('e.source !== parent')
+  it('只认来自 opener 的指令（副本是 window.open 出来的，没有 parent）', () => {
+    expect(js).toContain('e.source !== HOST')
+    expect(js).toContain('window.opener')
+    expect(js).not.toContain('parent.postMessage')
     expect(js).toContain('__canvasUiCmd')
   })
 
@@ -182,12 +185,14 @@ describe('调试副本的桥：与宿主的往返（真跑一遍）', () => {
     const body = js.replace(/^<script>\n?/, '').replace(/<\/script>$/, '')
     const listeners: Array<(e: { source: unknown; data: unknown }) => void> = []
     const posted: Array<Record<string, unknown>> = []
-    const parent = {
+    // 副本窗口的宿主是 opener（不是 parent）
+    const host = {
       postMessage(msg: Record<string, unknown>) {
         posted.push(msg)
       },
     }
     const window: Record<string, unknown> = {
+      opener: host,
       addEventListener(type: string, fn: (e: { source: unknown; data: unknown }) => void) {
         if (type === 'message') listeners.push(fn)
       },
@@ -198,17 +203,18 @@ describe('调试副本的桥：与宿主的往返（真跑一遍）', () => {
       },
     }
     const document = { readyState: 'complete', addEventListener() {} }
-    // 桥里用的是裸名 window / parent / document
-    new Function('window', 'parent', 'document', body)(window, parent, document)
+    // 桥里用的是裸名 window / document（宿主从 window.opener 取）
+    new Function('window', 'document', body)(window, document)
     /** 宿主往副本回一条消息 */
     const reply = (data: Record<string, unknown>) => {
-      for (const fn of [...listeners]) fn({ source: parent, data })
+      for (const fn of [...listeners]) fn({ source: host, data })
     }
     const bridge = window[BRIDGE_GLOBAL] as {
       task(name: string, methods: string, args: unknown[], opts?: Record<string, unknown>): Promise<unknown>
       cancel(runId: string): Promise<unknown>
+      save(data: unknown, name?: string): Promise<unknown>
     }
-    return { bridge, posted, reply }
+    return { bridge, posted, reply, listeners }
   }
 
   it('★ 宿主回 __canvasUiDebugResult，task 的 Promise 会结算', async () => {
@@ -253,6 +259,41 @@ describe('调试副本的桥：与宿主的往返（真跑一遍）', () => {
     const reqId = posted.find((m) => m.type === 'task-cancel')!.reqId as string
     reply({ __canvasUiDebugResult: 1, reqId, ok: true })
     await expect(p).resolves.toMatchObject({ ok: true })
+  })
+
+  /**
+   * 没有 opener（例如把文档另存后直接打开）时，桥不该往 parent 乱发消息 ——
+   * 那会打到 window 自己身上。save 也就永远等不到回包，所以直接 reject 说清楚。
+   */
+  it('没有 opener：不发消息（也不会把消息发给自己）', async () => {
+    const js = buildDebugBridge()
+    const body = js.replace(/^<script>\n?/, '').replace(/<\/script>$/, '')
+    const posted: unknown[] = []
+    const window: Record<string, unknown> = {
+      opener: null,
+      postMessage(msg: unknown) {
+        posted.push(msg)
+      },
+      addEventListener() {},
+      removeEventListener() {},
+    }
+    const document = { readyState: 'complete', addEventListener() {} }
+    new Function('window', 'document', body)(window, document)
+    // 桥在装载时报一条 ready（没有宿主就丢掉）
+    expect(posted.length).toBe(0)
+  })
+
+  /** save 成功后要补一条 saved（宿主要靠它做提示 / 更新徽标） */
+  it('★ save：宿主收下后补发一条 saved（带 url 与文件名）', async () => {
+    const { bridge, posted, reply } = runBridge()
+    const p = bridge.save('hello', 'note.txt')
+    await Promise.resolve()
+    const sent = posted.find((m) => m.type === 'save')!
+    expect(sent).toBeTruthy()
+    reply({ __canvasUiDebugResult: 1, reqId: sent.reqId, ok: true, url: 'http://x/a.txt' })
+    await expect(p).resolves.toBe('http://x/a.txt')
+    const saved = posted.find((m) => m.type === 'saved')!
+    expect(saved).toMatchObject({ url: 'http://x/a.txt', name: 'note.txt', text: 'hello' })
   })
 })
 
