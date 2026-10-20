@@ -14,6 +14,7 @@
  * 打包本身**只能在后台做**（脚本内容在服务器上），所以这里只有"调接口 + 拼数据"。
  */
 import { fetchBackendOrigin } from '@mini-canvas/plugin-node-ui'
+import { withAdminToken } from '@mini-canvas/canvas-base'
 
 /** 本模块用到的 fetch 最小形状（便于测试注入假货） */
 export interface FetchResponseLike {
@@ -75,7 +76,8 @@ export async function buildPack(
   if (!fetchImpl) throw new Error('这个环境没有 fetch')
   const res = await fetchImpl(input.base + '/api/node-packages/build', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    // `/api/node-packages/` 在受保护清单里（能读脚本源码，也能落文件）
+    headers: withAdminToken({ 'content-type': 'application/json' }),
     body: JSON.stringify({ canvasId: input.canvasId, nodeId: input.nodeId }),
   })
   const ct = res.headers?.get?.('content-type') ?? ''
@@ -211,7 +213,8 @@ export async function importPack(
   if (!fetchImpl) throw new Error('这个环境没有 fetch')
   const res = await fetchImpl(input.base + '/api/node-packages/import', {
     method: 'POST',
-    headers: { 'content-type': 'application/x-mini-canvas-node' },
+    // 导入会往后台写脚本文件 —— 同样要令牌
+    headers: withAdminToken({ 'content-type': 'application/x-mini-canvas-node' }),
     body: input.bytes,
   })
   if (!res.json) throw new Error('后台没回结果')

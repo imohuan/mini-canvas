@@ -5,7 +5,7 @@
  * 真正的打包逻辑在后台（那里有脚本文件），所以这儿的测试全是"接口约定"。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { base64ToBytes, buildPack, packFileName, resolvePackBase, PACK_EXT } from '../composables/nodePack'
+import { base64ToBytes, buildPack, importPack, packFileName, resolvePackBase, PACK_EXT } from '../composables/nodePack'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
@@ -42,6 +42,39 @@ describe('resolvePackBase —— 先问后台，问不到回落同源', () => {
 })
 
 describe('buildPack —— 拿后台打好的字节', () => {
+  /**
+   * ★ 两条路都要带管理令牌。
+   *
+   * `/api/node-packages/` 整段在受保护清单里（build 能读脚本源码、import 会往后台写脚本文件）。
+   * 漏了的表现就是「导出节点包」「导入包」点下去 403，而这在单测里不报错 —— 只能靠断言头。
+   */
+  it('★ build / import 都带 x-admin-token（漏了就是 403）', async () => {
+    const g = globalThis as { localStorage?: unknown }
+    g.localStorage = {
+      m: new Map<string, string>([['mc_admin_token', 'tok-123']]),
+      getItem(k: string) { return (this as unknown as { m: Map<string, string> }).m.get(k) ?? null },
+      setItem(k: string, v: string) { (this as unknown as { m: Map<string, string> }).m.set(k, v) },
+      removeItem(k: string) { (this as unknown as { m: Map<string, string> }).m.delete(k) },
+    }
+    const calls: Array<{ url: string; headers?: Record<string, string> }> = []
+    const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
+      calls.push({ url, headers: init?.headers })
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/x-mini-canvas-node' },
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+        json: async () => ({ ok: true }),
+      }
+    }
+    await buildPack({ base: 'http://x', canvasId: 'default', nodeId: '2' }, { fetchImpl })
+    await importPack({ base: 'http://x', bytes: new Uint8Array([1]) }, { fetchImpl })
+    expect(calls.map((c) => c.headers?.['x-admin-token'])).toEqual(['tok-123', 'tok-123'])
+    expect(calls[0]!.url).toContain('/api/node-packages/build')
+    expect(calls[1]!.url).toContain('/api/node-packages/import')
+    delete g.localStorage
+  })
+
   it('二进制响应：原样转成 Uint8Array', async () => {
     const bytes = new Uint8Array([1, 2, 3, 4])
     const r = await buildPack(

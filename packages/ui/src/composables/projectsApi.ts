@@ -4,6 +4,7 @@
  * 为什么单独一层：项目页与画布工作台都要读同一批数据（项目清单、某项目的画布清单），
  * 集中在这里，两边不各写一份 fetch（地址、错误处理、形状只维护一处）。
  */
+import { withAdminToken } from '@mini-canvas/canvas-base'
 
 export interface ProjectSummary {
   id: string
@@ -41,10 +42,20 @@ export interface AssetFolderSummary {
 
 /** 后端地址：与 cloud-client 同一口径（留空 = 同源）——这里只管相对路径，由同源托管提供 */
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init)
+  /*
+   * 写接口要管理令牌（`POST /api/canvases/*` 在清单里，`/duplicate` 也在）。
+   * 统一加在 `req` 这个出口上：GET 带了无害，写请求不会漏。
+   * 以前这里裸 fetch —— 「复制画布」点下去就是 403，而且报错只说「请求失败」。
+   */
+  const res = await fetch(path, init ? { ...init, headers: withAdminToken(headersOf(init)) } : init)
   const body = (await res.json().catch(() => ({}))) as T & { ok?: boolean; error?: string }
   if (!res.ok || body?.ok === false) throw new Error(body?.error || '请求失败（HTTP ' + res.status + '）')
   return body
+}
+
+/** 把 RequestInit.headers 归一成普通对象（Headers / 数组 / 对象三种写法都可能有） */
+function headersOf(init: RequestInit): Record<string, string> {
+  return Object.fromEntries(new Headers(init.headers).entries())
 }
 
 // ==================== 项目 ====================

@@ -8,7 +8,7 @@
  * 代码块 = 在线文档：每组折叠一段 fetch 示例，看文档即测试。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { apiUrl, resolveApiBase } from '../apiBase'
+import { apiUrl, resolveApiBase, showcaseHeaders } from '../apiBase'
 import { useCanvasRender } from '@mini-canvas/canvas-render'
 
 interface Endpoint {
@@ -63,8 +63,8 @@ const loadIndex = async (): Promise<void> => {
   indexError.value = undefined
   try {
     const [metaRes, idxRes] = await Promise.all([
-      fetch(apiUrl(apiBase, '/api/showcase/meta')),
-      fetch(apiUrl(apiBase, '/api/showcase/endpoints')),
+      fetch(apiUrl(apiBase, '/api/showcase/meta'), { headers: showcaseHeaders() }),
+      fetch(apiUrl(apiBase, '/api/showcase/endpoints'), { headers: showcaseHeaders() }),
     ])
     if (!metaRes.ok || !idxRes.ok) throw new Error('后台接口不可达（meta ' + metaRes.status + ' / endpoints ' + idxRes.status + '）')
     meta.value = (await metaRes.json()) as Record<string, unknown>
@@ -82,7 +82,7 @@ const ensureRealId = async (path: string): Promise<string | null> => {
   if (path.includes('todos/:id')) {
     const res = await fetch(apiUrl(apiBase, '/api/showcase/todos'), {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: showcaseHeaders({ 'content-type': 'application/json' }),
       body: JSON.stringify({ title: '演示条目（测试台自动创建）' }),
     })
     const body = (await res.json()) as { todo?: { id: string } }
@@ -116,7 +116,9 @@ const runOne = async (e: Endpoint): Promise<void> => {
     }
     const res = await fetch(apiUrl(apiBase, path), {
       method: e.method,
-      ...(body !== undefined ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      // 写接口（POST/PUT/DELETE）要令牌；GET 带上也无害
+      headers: body !== undefined ? showcaseHeaders({ 'content-type': 'application/json' }) : showcaseHeaders(),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
     const text = await res.text()
     results[key] = {

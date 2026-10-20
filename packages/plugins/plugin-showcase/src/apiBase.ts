@@ -17,6 +17,7 @@
  *
  * 这样"同源托管"和"跨源独立界面"两种部署都不用手填地址。
  */
+import { withAdminToken } from '@mini-canvas/canvas-base'
 
 /** 从 settings 读 cloud-server 根地址（缺省/未就绪 → 空串 = 同源） */
 export function resolveApiBase(ctx: { tryGet<T>(name: string): T | undefined }): string {
@@ -45,4 +46,14 @@ function stripSlash(u: string): string {
 export function apiUrl(base: string, path: string): string {
   if (/^https?:/i.test(path)) return path
   return base ? base + (path.startsWith('/') ? path : '/' + path) : path
+}
+
+/**
+ * 在线测试台发请求时用的头。
+ *
+ * 为什么要有：`/api/showcase/` 整段在管理令牌清单里（它们能写插件私有 store、起定时器、
+ * 注册 MCP 工具）—— 不带令牌的点一下就是 403。GET 带了也无害（服务端不校验读接口）。
+ */
+export function showcaseHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return withAdminToken(extra)
 }
