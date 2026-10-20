@@ -61,6 +61,7 @@ http://127.0.0.1:8865/mcp     MCP 接口（配置给 AI 客户端）
 | 给 AI 加一个可调用工具 | [mcp](/cloud-server/capabilities-mcp) |
 | 拦截/改写 AI 对话轮次 | [agent](/cloud-server/capabilities-agent) |
 | 不重启就装/卸插件、从 NPM 装 | [热装热卸](/cloud-server/hot-load) |
+| 管理令牌、来源边界、审计日志（谁能改后台） | [管理鉴权与请求边界](/cloud-server/admin-auth) |
 | 内置服务与磁盘上存了什么 | [内置服务与存储布局](/cloud-server/builtin-services) |
 | 看一个用到全部五种能力的完整插件 | [showcase 精读](/cloud-server/showcase-walkthrough) |
 
