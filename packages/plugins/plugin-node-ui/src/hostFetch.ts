@@ -298,7 +298,33 @@ export function createHostProxy(options: HostProxyOptions): HostProxy {
       if (!path.startsWith('/api/') || path.startsWith('//') || path.includes('://')) {
         throw new Error('只允许转发 /api/ 下的同源路径')
       }
+      /*
+       * 最小权限：这个代理是**沙箱页面**借宿主的身份在发请求，不能让它变成万能代理。
+       * 允许的只有「画布本身」那几类：
+       *   · 读：/api/canvases、/api/canvases/:id、/api/actions、/api/assets、/api/asset-folders
+       *   · 写：/api/canvases/:id(+ /nodes /edges /view /resources)、/api/canvas/(nodes|edges)、
+       *         /api/jobs（下单）、/api/assets（上传）、/api/asset-folders
+       * 明确**不允许**：/api/task/*（能跑脚本）、/api/node-packages/*、/api/server-plugins/*、
+       * /api/npm-plugins/*、/api/agent/*、/api/node-ui/debug-*、/api/style-library/*、
+       * /api/kv/*（含用户设置）、/api/history/*（删除历史）。
+       * 这些即使带了宿主令牌也不该由沙箱页面触发。
+       */
+      const ALLOWED_READ = [/^\/api\/canvases(\?|$)/, /^\/api\/canvases\/[^/?#]+$/, /^\/api\/actions(\?|$)/, /^\/api\/assets(\?|$)/, /^\/api\/asset-folders(\?|$)/]
+      const ALLOWED_WRITE = [
+        /^\/api\/canvases(\?|$)/,
+        /^\/api\/canvases\/[^/?#]+$/,
+        /^\/api\/canvases\/[^/]+\/(nodes|edges|view|resources)(\?|$)/,
+        /^\/api\/canvas\/(nodes|edges)(\?|$)/,
+        /^\/api\/jobs(\?|$)/,
+        /^\/api\/jobs\/[^/]+\/cancel$/,
+        /^\/api\/assets(\?|$)/,
+        /^\/api\/asset-folders(\?|$)/,
+      ]
       const method = String(req.method ?? 'GET').toUpperCase()
+      const list = method === 'GET' || method === 'HEAD' ? ALLOWED_READ : ALLOWED_WRITE
+      if (!list.some((re) => re.test(path))) {
+        throw new Error('这个接口不在沙箱页面的允许范围内：' + path)
+      }
       const res = await fetchImpl(base + path, {
         method,
         headers: authHeaders({ ...(req.headers ?? {}) }),

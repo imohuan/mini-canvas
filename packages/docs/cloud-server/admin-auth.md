@@ -82,8 +82,16 @@ await CanvasUI.api('/api/canvas/nodes', {
 })
 ```
 
-`CanvasUI.api(path, init)` 只接受 `/api/` 开头的同源路径，回包形状接近 `fetch`：
-`{ ok, status, headers.get(), text(), json(), arrayBuffer() }`。
+`CanvasUI.api(path, init)` 只接受 `/api/` 开头的同源路径，而且只放行**画布相关**的那几类：
+
+- 读：`/api/canvases`、`/api/canvases/:id`、`/api/actions`、`/api/assets`、`/api/asset-folders`；
+- 写：`/api/canvases/:id`（含 `/nodes` `/edges` `/view` `/resources`）、`/api/canvas/(nodes|edges)`、
+  `/api/jobs`、`/api/assets`、`/api/asset-folders`。
+
+`/api/task/*`、`/api/server-plugins/*`、`/api/npm-plugins/*`、`/api/agent/*`、
+`/api/node-packages/*`、`/api/node-ui/debug-*`、`/api/style-library/*`、`/api/kv/*`、`/api/history/*`
+一律拒绝 —— 这个代理是给「界面画布操作」用的，不能变成沙箱页的万能开关。
+回包形状接近 `fetch`：`{ ok, status, headers.get(), text(), json(), arrayBuffer() }`。
 
 保存产物仍用 `CanvasUI.save(bytes, name)`，调任务脚本仍用 `CanvasUI.task(...)` —— 它们也走宿主代发。
 

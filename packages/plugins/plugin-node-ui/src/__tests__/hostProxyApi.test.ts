@@ -60,10 +60,59 @@ describe('宿主通用转发', () => {
     expect(calls.length).toBe(0)
   })
 
+  it('★ 最小权限：沙箱页面不能借宿主令牌调危险接口', async () => {
+    const { calls, impl } = recorder()
+    const proxy = createHostProxy({ fetchImpl: impl, baseUrl: 'http://x', canvasId: 'c1', nodeId: 'n1', token: 'tok' })
+    const forbidden = [
+      '/api/task/call',
+      '/api/task/cancel',
+      '/api/agent/chat/completion',
+      '/api/agent/models',
+      '/api/server-plugins/install',
+      '/api/npm-plugins/install',
+      '/api/node-packages/import',
+      '/api/node-ui/debug-accept',
+      '/api/style-library/settings',
+      '/api/kv/config/x',
+      '/api/history/batch-delete',
+    ]
+    for (const path of forbidden) {
+      await expect(proxy.fetchApi({ path, method: 'POST' })).rejects.toThrow('允许范围')
+    }
+    // 非 /api/ 路径走的是另一条拒绝（同样的目的，不同的文案）
+    await expect(proxy.fetchApi({ path: '/mcp' })).rejects.toThrow('/api/')
+    expect(calls.length).toBe(0)
+  })
+
+  it('★ 允许的那几类仍然放行（读画布 / 改节点 / 下单 / 传资产）', async () => {
+    const { calls, impl } = recorder()
+    const proxy = createHostProxy({ fetchImpl: impl, baseUrl: 'http://x', canvasId: 'c1', nodeId: 'n1', token: 'tok' })
+    for (const path of [
+      '/api/canvases',
+      '/api/canvases/c1',
+      '/api/canvases/c1/nodes',
+      '/api/canvases/c1/edges',
+      '/api/canvases/c1/view',
+      '/api/canvases/c1/resources?name=a.png',
+      '/api/canvas/nodes',
+      '/api/canvas/edges',
+      '/api/jobs',
+      '/api/assets',
+      '/api/asset-folders',
+      '/api/canvases/c1/resources',
+    ]) {
+      await expect(proxy.fetchApi({ path, method: 'POST' })).resolves.toBeTruthy()
+    }
+    expect(calls.length).toBe(12)
+    // 只读接口用 GET 测（用 POST 去读会被最小权限挡下，这是有意的）
+    await expect(proxy.fetchApi({ path: '/api/actions', method: 'GET' })).resolves.toBeTruthy()
+    await expect(proxy.fetchApi({ path: '/api/canvases', method: 'GET' })).resolves.toBeTruthy()
+  })
+
   it('非 2xx 也原样返回（不抛），由页面自己判断', async () => {
     const { impl } = recorder({ status: 403, body: '{"ok":false,"error":"no"}' })
     const proxy = createHostProxy({ fetchImpl: impl, baseUrl: 'http://x', canvasId: 'c1', nodeId: 'n1', token: 'tok' })
-    const res = await proxy.fetchApi({ path: '/api/x' })
+    const res = await proxy.fetchApi({ path: '/api/canvases' })
     expect(res.status).toBe(403)
     expect(new TextDecoder().decode(res.body)).toContain('no')
   })
