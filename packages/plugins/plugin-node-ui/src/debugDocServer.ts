@@ -184,7 +184,9 @@ export interface DebugDocResult {
 
 /**
  * 组装 HTML 壳正文（不改节点数据 —— html / sdk 两次构建间不变，context 才是数据）。
- * 产物无 CSP（调试副本口径，与 uiDebug.ts 文件头同款理由）。
+ *
+ * 产物**不带 CSP**：它跑在独立的调试源上，源本身就是那道边界；加了 CSP 只会让
+ * DevTools 的连接面板 / 断点 / 改写请求失效（那是这个页面存在的理由）。
  */
 export function buildDebugHtml(input: {
   html: string
