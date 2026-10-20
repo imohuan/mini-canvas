@@ -972,6 +972,17 @@ function onDebugMessage(ev: MessageEvent): void {
     | null
   if (!m || m.__canvasUiDebug !== 1) return
   try {
+    /*
+     * 调试页里的 `CanvasUI.api / task / cancel` 也交给宿主代发。
+     *
+     * 为什么复用 handleProxyRequest：调试页与沙箱页面对的是同一套权限表。
+     * 另写一份白名单，迟早会出现「画布里能调、调试页不能调」这种只有真机能发现的差异。
+     * 回包走 replyProxy（`__canvasUi` 标记），调试页那边的监听器两个标记都认。
+     */
+    if ((m.type === 'api' || m.type === 'task' || m.type === 'task-cancel') && typeof m.reqId === 'string') {
+      void handleProxyRequest(win as unknown as Window, m.reqId, m)
+      return
+    }
     if (m.type === 'saved' && typeof m.url === 'string' && m.url) {
       // 调试页现在是**另一个源**，它说什么都只能当"提示"。产物地址必须是本画布的资源路径，
       // 否则页面里一段脚本就能把节点的 imageUrl 指到任意地址（例如收集访问）。

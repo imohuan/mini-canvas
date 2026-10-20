@@ -73,3 +73,38 @@ describe('调试页 sdk：数据靠 <script> 重载（跨源不能 fetch）', ()
     expect(() => new Function(js)).not.toThrow()
   })
 })
+
+/**
+ * 审查 N3：调试页的 CanvasUI 少了 api / task / cancel。
+ *
+ * 这个页面的意义就是「同一份节点代码、可断点」；少这三个方法，很多节点
+ * 拷过来第一行就是 `TypeError: CanvasUI.task is not a function`。
+ * 它们都走宿主代发（与画布里的沙箱页共用同一套权限表），这里只验形状。
+ */
+describe('调试页 sdk：与画布里同一套方法', () => {
+  it('★ 有 api / task / cancel，且都走宿主（不自己打后台）', () => {
+    expect(js).toContain('api: function(path, init)')
+    expect(js).toContain('task: function(name, methods, args, opts)')
+    expect(js).toContain('cancel: function(runId)')
+    expect(js).toContain('hostCall("api"')
+    expect(js).toContain('hostCall("task"')
+    expect(js).toContain('hostCall("task-cancel"')
+    // 关键：不自己拼后台地址（那会绕过来源边界与令牌）
+    expect(js).not.toContain('/api/task/call')
+    // api / task 的请求体只可能是消息，不该出现 fetch 的 init 形状
+    expect(js).not.toContain('method: "POST", headers: { "content-type": "application/json" }')
+  })
+
+  it('★ api 的回包形状接近 fetch（ok / status / headers.get / text / json / arrayBuffer）', () => {
+    for (const k of ['ok:', 'status:', 'headers:', 'text:', 'json:', 'arrayBuffer:']) {
+      expect(js).toContain(k)
+    }
+    expect(js).toContain('headers: { get: function(k)')
+  })
+
+  it('★ task 的日志/进度走 onEvent（与画布里那份同名）', () => {
+    expect(js).toContain('opts.onLog')
+    expect(js).toContain('opts.onProgress')
+    expect(js).toContain('task-event')
+  })
+})
