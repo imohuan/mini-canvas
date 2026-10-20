@@ -74,6 +74,8 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
 /** 解析参数；遇到 --help/--version 直接打印退出 */
 async function parseArgs(argv: string[]): Promise<CliOptions> {
   const args = argv.slice(2)
+  /** 子命令（先记下、解析完参数再执行） */
+  let subcommand: 'list-tools' | 'audit-verify' | undefined
   const opts: CliOptions = {
     port: Number(process.env.MINI_CANVAS_PORT ?? '') || DEFAULT_PORT,
     portExplicit: false,
@@ -119,19 +121,30 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     } else if (a === '-v' || a === '--version') {
       console.log(await readVersion())
       process.exit(0)
-    } else if (a === 'audit-verify') {
-      // 只读日志、不开服务：让「链有没有断」不用手算 sha256
-      const { createAuditLog } = await import('./audit.js')
-      const target = path.join(path.resolve(opts.dir), 'audit.log')
-      const verdict = await createAuditLog(target).verify()
-      if (verdict.ok) {
-        console.log('审计链完整：' + target)
-        process.exit(0)
-      }
-      console.error('审计链在第 ' + verdict.line + ' 行断裂：' + verdict.reason)
-      console.error(target)
-      process.exit(1)
-    } else if (a === 'list-tools') {
+    } else if (a === 'audit-verify' || a === 'list-tools') {
+      // 子命令先记下、**继续解析后面的参数**（`-d` 可能写在子命令之后），
+      // 解析完再执行。早退会让 `audit-verify -d X` 悄悄校验默认目录（实测踩过）。
+      subcommand = a
+    } else {
+      throw new Error(`未知参数: ${a}（--help 看用法）`)
+    }
+  }
+
+  if (subcommand === 'audit-verify') {
+    // 只读日志、不开服务：让「链有没有断」不用手算 sha256
+    const { createAuditLog } = await import('./audit.js')
+    const target = path.join(path.resolve(opts.dir), 'audit.log')
+    const verdict = await createAuditLog(target).verify()
+    if (verdict.ok) {
+      console.log('审计链完整：' + target)
+      process.exit(0)
+    }
+    console.error('审计链在第 ' + verdict.line + ' 行断裂：' + verdict.reason)
+    console.error(target)
+    process.exit(1)
+  }
+
+  if (subcommand === 'list-tools') {
       // 打印 MCP 工具面（不启服务）—— 配 AI 客户端前先看它能干什么
       //
       // ⚠️ 这里**只列内置的工具**。插件注册的工具（ctx.mcp）是运行期才有的，
@@ -150,10 +163,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
           '\n    -H "content-type: application/json" -H "accept: application/json, text/event-stream" \\' +
           '\n    -d \'{"jsonrpc":"2.0","id":1,"method":"tools/list"}\'',
       )
-      process.exit(0)
-    } else {
-      throw new Error(`未知参数: ${a}（--help 看用法）`)
-    }
+    process.exit(0)
   }
   return opts
 }
