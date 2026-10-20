@@ -171,7 +171,7 @@ describe('isAdminPath', () => {
       '/api/agent/mcp': '/api/agent/mcp',
       '/api/agent/skills': '/api/agent/skills',
       '/api/agent/system-prompt': '/api/agent/system-prompt',
-      '/api/agent/template/': '/api/agent/template/x',
+      '/api/agent/template/': '/api/agent/template/restore',
       '/api/agent/prompts': '/api/agent/prompts',
       '/api/agent/policy': '/api/agent/policy',
       '/api/agent/title-model': '/api/agent/title-model',
@@ -182,8 +182,8 @@ describe('isAdminPath', () => {
       '/api/node-ui/debug-': '/api/node-ui/debug-accept',
       '/api/style-library/': '/api/style-library/settings',
       '/api/effect-library/': '/api/effect-library/settings',
-      '/api/showcase/': '/api/showcase/install',
-      '/api/agent/canvases/': '/api/agent/canvases/x',
+      '/api/showcase/': '/api/showcase/echo',
+      '/api/agent/canvases/': '/api/agent/canvases/x/sessions',
       '/api/jobs': '/api/jobs',
     }
     for (const prefix of ADMIN_WRITE_PREFIXES) {

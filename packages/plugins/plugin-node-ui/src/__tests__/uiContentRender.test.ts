@@ -169,6 +169,39 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
   })
 
   /**
+   * ★ 组件必须把流程交给 openDebugWindow，而不是自己再写一遍。
+   *
+   * 这条是为了补上一个假绿：上一版只断言「源码里出现过 openDebugWindow」这个字符串。
+   * 把旧的打开流程整段写回组件里，那条断言照样通过 —— 等于没测。
+   * 所以这里把 openDebug 的函数体抠出来，逐条看它有没有自己开窗 / 自己导航 / 自己关窗。
+   */
+  it('★ openDebug 只做注入，不自己开窗/导航/关窗（把流程交给被测函数）', async () => {
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+    )
+    // 去掉注释后再抠函数体，避免注释里的解释被当成实现
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const start = code.indexOf('async function openDebug(')
+    expect(start, '找不到 openDebug（改名了就要同步改这条测试）').toBeGreaterThan(-1)
+    const end = code.indexOf('function clearDebugWindow(')
+    expect(end).toBeGreaterThan(start)
+    const body = code.slice(start, end)
+
+    // 必须把决策交给那个函数
+    expect(body).toContain('await openDebugWindow({')
+    // 三条分支的副作用都该由它做，组件里不该再出现
+    expect(body).not.toContain('.location.href')
+    expect(body).not.toContain('win.close()')
+    // 但成功之后那两件「接管窗口」的事必须还在（否则窗口关了不会清引用）
+    expect(body).toContain('debugWin.value = win')
+    expect(body).toContain("addEventListener('pagehide'")
+    expect(body).toContain('clearDebugWindow(win)')
+    // 开窗动作只出现在注入进去的回调里（同步执行，不能等 await 之后）
+    expect(body).toMatch(/openWindow:\s*\(\)\s*=>/)
+    expect(body).toContain('window.open(')
+  })
+
+  /**
    * ★ 沙箱 iframe 的消息只认「不透明源」。
    *
    * 只比 `ev.source` 不够：如果那个 iframe 被导航到一个同源页面，`ev.source` 仍然是
