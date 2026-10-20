@@ -25,6 +25,8 @@ import type { CanvasStore } from '../store/canvasStore.js'
 import { isSafeResourceName, isSafeSlotId, isSlotName, type CanvasResourceStore } from '../store/canvasResources.js'
 import type { CanvasDocument } from '../mcp/canvasDoc.js'
 import { mimeFromName } from '../store/mime.js'
+import { maxUploadBytes, readBodyLimited, uploadErrorBody } from '../uploads.js'
+import { inlineAssetHeaders } from '../inlineAsset.js'
 
 export function canvasesRoutes(
   store: CanvasStore,
@@ -93,8 +95,15 @@ export function canvasesRoutes(
   app.post('/api/canvases/:id/resources', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
-    const bytes = new Uint8Array(await c.req.arrayBuffer())
-    if (bytes.byteLength === 0) return c.json({ ok: false, error: '空文件' }, 400)
+    const read = await readBodyLimited(
+      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer() },
+      maxUploadBytes(),
+    )
+    if (!read.ok) {
+      const e = uploadErrorBody(read)
+      return c.json(e.body, e.status)
+    }
+    const bytes = read.bytes
     const name = c.req.query('name') ?? ''
     const dot = name.lastIndexOf('.')
     const ext = dot >= 0 ? name.slice(dot) : ''
@@ -118,7 +127,7 @@ export function canvasesRoutes(
     const bytes = await resources.read(id, name)
     if (!bytes) return c.json({ ok: false, error: '资源不存在' }, 404)
     return c.body(bytes, 200, {
-      'content-type': mimeFromName(name),
+      ...inlineAssetHeaders(mimeFromName(name)),
       // 缓存策略按命名形态分流：
       //  · 内容寻址（hash）：地址与字节绑定，内容一变地址就变 → 可安全长缓存；
       //  · 覆盖槽位（slot-）：**地址不变而内容会变** → 必须禁缓存，否则一直给旧图

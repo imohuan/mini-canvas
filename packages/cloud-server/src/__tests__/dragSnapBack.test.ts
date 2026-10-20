@@ -15,6 +15,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { CanvasDocumentPool } from '../mcp/canvasDocPool'
+import type { CanvasDocument } from '../mcp/canvasDoc'
 import { CanvasStore } from '../store/canvasStore'
 import { CanvasResourceStore } from '../store/canvasResources'
 
@@ -33,11 +34,13 @@ async function setup() {
 }
 
 /** 后台那一拍：写进度帧（读全量 → 只改 runState → 写全量） */
-const writeProgress = (doc: { batchNodes: (i: unknown) => Promise<unknown> }, progress: number) =>
+type BatchDoc = Pick<CanvasDocument, 'batchNodes'>
+
+const writeProgress = (doc: BatchDoc, progress: number) =>
   doc.batchNodes({ update: [{ id: NODE, data: { runState: { status: 'running', progress } } }] })
 
 /** 网页端那一拍：用户拖完，把新位置存上去 */
-const writePosition = (doc: { batchNodes: (i: unknown) => Promise<unknown> }, x: number, y: number) =>
+const writePosition = (doc: BatchDoc, x: number, y: number) =>
   doc.batchNodes({ update: [{ id: NODE, position: { x, y } }] })
 
 describe('拖拽后被弹回原位', () => {

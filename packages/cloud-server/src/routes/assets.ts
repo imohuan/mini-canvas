@@ -22,6 +22,8 @@ import { Hono } from 'hono'
 import type { AssetStore } from '../store/assetStore.js'
 import { isSafeAssetName } from '../store/canvasPaths.js'
 import { mimeFromName } from '../store/mime.js'
+import { maxUploadBytes, readBodyLimited, uploadErrorBody } from '../uploads.js'
+import { inlineAssetHeaders } from '../inlineAsset.js'
 
 export function assetsRoutes(store: AssetStore): Hono {
   const app = new Hono()
@@ -29,8 +31,15 @@ export function assetsRoutes(store: AssetStore): Hono {
   app.get('/api/assets', async (c) => c.json({ ok: true, assets: await store.list() }))
 
   app.post('/api/assets', async (c) => {
-    const bytes = new Uint8Array(await c.req.arrayBuffer())
-    if (bytes.byteLength === 0) return c.json({ ok: false, error: '空文件' }, 400)
+    const read = await readBodyLimited(
+      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer() },
+      maxUploadBytes(),
+    )
+    if (!read.ok) {
+      const e = uploadErrorBody(read)
+      return c.json(e.body, e.status)
+    }
+    const bytes = read.bytes
     const name = c.req.query('name') ?? ''
     const folderId = c.req.query('folderId') || undefined
     return c.json({ ok: true, asset: await store.saveUpload(bytes, name, folderId) })
@@ -42,7 +51,7 @@ export function assetsRoutes(store: AssetStore): Hono {
     const bytes = await store.readFile(name)
     if (!bytes) return c.json({ ok: false, error: '资产不存在' }, 404)
     return c.body(bytes, 200, {
-      'content-type': mimeFromName(name),
+      ...inlineAssetHeaders(mimeFromName(name)),
       // 内容寻址：地址与字节绑定 → 可安全长缓存
       'cache-control': 'public, max-age=31536000, immutable',
     })

@@ -471,6 +471,12 @@ function makeLibrary(ctx: ServerCtx, settings: ReturnType<ServerCtx['store']['na
     }
     return c.body(new Uint8Array(buf), 200, {
       'content-type': MIME[extOf(name)] ?? 'application/octet-stream',
+      // 这里发的是**用户目录里的文件**，`svg` 在白名单里（见 MEDIA_EXTS）。
+      // 不带 CSP 的话，打开一个带 <script> 的 svg 就会在后台源上执行脚本
+      // （2026-10-19 实测：匿名上传 svg → 打开 → 读到同源 localStorage）。
+      // 与 cloud-server 的 `inlineAsset.ts` 保持同一套头。
+      'content-security-policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:",
+      'x-content-type-options': 'nosniff',
       'cache-control': 'public, max-age=31536000, immutable',
     })
   })
