@@ -843,13 +843,13 @@ async function openDebug(): Promise<void> {
     return
   }
   debugWin.value = win
-  win.addEventListener('pagehide', () => {
-    if (debugWin.value === win) debugWin.value = null
-    if (debugTimer) {
-      clearTimeout(debugTimer)
-      debugTimer = null
-    }
-  })
+  // 导航到调试源之后这个窗口就是**跨源**的了，跨源 Window 上不能再 addEventListener
+  // （只能 postMessage / close / 读 closed）。所以这里只做一次尽力监听，关窗靠 closed 兜底。
+  try {
+    win.addEventListener('pagehide', () => clearDebugWindow(win))
+  } catch {
+    /* 已经跨源：靠 win.closed 判断 */
+  }
   const r = await pushDebugDocs()
   if (!r.ok) {
     try {
@@ -865,6 +865,15 @@ async function openDebug(): Promise<void> {
     win.location.href = r.url
   } catch {
     window.alert('调试页打不开（窗口可能被关掉了）。再点一次「调试」试试。')
+  }
+}
+
+/** 窗口没了：清掉引用与待发的重发任务 */
+function clearDebugWindow(win: DebugWindow): void {
+  if (debugWin.value === win) debugWin.value = null
+  if (debugTimer) {
+    clearTimeout(debugTimer)
+    debugTimer = null
   }
 }
 
