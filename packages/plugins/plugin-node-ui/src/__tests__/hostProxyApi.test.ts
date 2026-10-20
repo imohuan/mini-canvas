@@ -110,9 +110,27 @@ describe('宿主通用转发', () => {
   })
 
   it('非 2xx 也原样返回（不抛），由页面自己判断', async () => {
-    const { impl } = recorder({ status: 403, body: '{"ok":false,"error":"no"}' })
+    // ★ 沙箱页交上来的 origin / host / cookie 一律丢掉：那是浏览器与宿主说了算的
+    const { calls, impl } = recorder()
     const proxy = createHostProxy({ fetchImpl: impl, baseUrl: 'http://x', canvasId: 'c1', nodeId: 'n1', token: 'tok' })
-    const res = await proxy.fetchApi({ path: '/api/canvases' })
+    await proxy.fetchApi({
+      path: '/api/canvases',
+      method: 'GET',
+      headers: { origin: 'http://evil.test', host: 'evil.test', cookie: 'a=1', referer: 'http://evil.test/', 'sec-fetch-site': 'same-origin', 'x-extra': 'ok' },
+    })
+    const h = calls[0]!.init?.headers as Record<string, string>
+    expect(h.origin).toBeUndefined()
+    expect(h.host).toBeUndefined()
+    expect(h.cookie).toBeUndefined()
+    expect(h.referer).toBeUndefined()
+    expect(h['sec-fetch-site']).toBeUndefined()
+    // 无关的自定义头照常透传；令牌由宿主统一给
+    expect(h['x-extra']).toBe('ok')
+    expect(h['x-admin-token']).toBe('tok')
+
+    const second = recorder({ status: 403, body: '{"ok":false,"error":"no"}' })
+    const proxy2 = createHostProxy({ fetchImpl: second.impl, baseUrl: 'http://x', canvasId: 'c1', nodeId: 'n1', token: 'tok' })
+    const res = await proxy2.fetchApi({ path: '/api/canvases' })
     expect(res.status).toBe(403)
     expect(new TextDecoder().decode(res.body)).toContain('no')
   })

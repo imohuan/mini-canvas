@@ -152,6 +152,17 @@ export function createHostProxy(options: HostProxyOptions): HostProxy {
     const headers = withAdminToken(extra)
     // 测试 / 特殊调用方可以显式给一个；显式值覆盖 localStorage 里的旧值。
     if (options.token) headers[ADMIN_TOKEN_HEADER] = options.token
+    // 沙箱页交上来的头是**不可信输入**：`origin` / `host` / `cookie` 之类由浏览器自己定，
+    // 让它改写等于给它一条伪造来源的路（后台的来源边界会认错）。令牌由这里统一覆盖，
+    // 页面也覆盖不了。
+    for (const k of Object.keys(headers)) {
+      const lower = k.toLowerCase()
+      if (lower === 'origin' || lower === 'host' || lower === 'cookie' || lower === 'referer' || lower === 'sec-fetch-site') {
+        delete headers[k]
+      }
+    }
+    // 页面可以传 `x-admin-token`（上面循环没删它），所以必须在删完之后再写一次真值。
+    if (options.token) headers[ADMIN_TOKEN_HEADER] = options.token
     return headers
   }
 
