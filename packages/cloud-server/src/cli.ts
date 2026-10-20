@@ -124,6 +124,10 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     } else if (a === 'audit-verify' || a === 'list-tools') {
       // 子命令先记下、**继续解析后面的参数**（`-d` 可能写在子命令之后），
       // 解析完再执行。早退会让 `audit-verify -d X` 悄悄校验默认目录（实测踩过）。
+      // 两个子命令不能同时给：后一个会把前一个静默覆盖掉（实测），让人以为两个都跑了。
+      if (subcommand && subcommand !== a) {
+        throw new Error(`子命令 ${subcommand} 与 ${a} 不能同时使用（一次只做一件事）`)
+      }
       subcommand = a
     } else {
       throw new Error(`未知参数: ${a}（--help 看用法）`)
