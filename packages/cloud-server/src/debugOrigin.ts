@@ -61,6 +61,15 @@ export function createDebugOrigin(opts: { dataRoot: string; hostname?: string; p
   let server: Server | undefined
   let url = ''
 
+  /**
+   * 允许的 Host（端口起来后才能定）。
+   *
+   * 为什么必须校验：不校验的话，`Host: evil.example` 照样能读到调试产物 ——
+   * 配合 DNS 重绑定，一个网页就能把某个域名解析到 127.0.0.1，然后读走节点 HTML 与
+   * `context-*.js`（里面有上游数据与那张 10 分钟短令牌）。短令牌跨源带不上，但内容泄露是真的。
+   */
+  const allowedHosts = new Set<string>()
+
   /** 把 URL 路径拆成 [canvasId, file]，任何不合白名单的输入都返回 undefined */
   function routeOf(rawUrl: string): { canvasId: string; file: string; abs: string } | undefined {
     let pathname: string
@@ -95,6 +104,13 @@ export function createDebugOrigin(opts: { dataRoot: string; hostname?: string; p
             res.end('not found')
           }
           if (req.method !== 'GET') return notFound()
+          // Host 白名单先看（防 DNS 重绑定读走调试产物）
+          const reqHost = String(req.headers.host ?? '').toLowerCase()
+          if (!allowedHosts.has(reqHost)) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+            res.end('host not allowed')
+            return
+          }
           const hit = routeOf(req.url ?? '/')
           if (!hit) return notFound()
           fs.readFile(hit.abs).then(
@@ -123,6 +139,10 @@ export function createDebugOrigin(opts: { dataRoot: string; hostname?: string; p
           }
           server = s
           url = 'http://' + hostname + ':' + addr.port
+          // Host 白名单：本机两种写法 + 显式配置的 hostname（反代场景由它自己加）
+          allowedHosts.add(('127.0.0.1:' + addr.port).toLowerCase())
+          allowedHosts.add(('localhost:' + addr.port).toLowerCase())
+          allowedHosts.add((hostname + ':' + addr.port).toLowerCase())
           resolve(url)
         })
       })
@@ -132,6 +152,7 @@ export function createDebugOrigin(opts: { dataRoot: string; hostname?: string; p
       const s = server
       server = undefined
       url = ''
+      allowedHosts.clear()
       if (!s) return Promise.resolve()
       return new Promise<void>((resolve) => s.close(() => resolve()))
     },

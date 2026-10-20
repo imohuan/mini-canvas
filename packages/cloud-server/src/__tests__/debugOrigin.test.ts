@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { createServer } from 'node:http'
+import { createServer, request as httpRequest } from 'node:http'
 import { createDebugOrigin, isSafeDebugFileName, type DebugOrigin } from '../debugOrigin.js'
 
 let root = ''
@@ -118,4 +118,44 @@ describe('调试源：只读静态服务', () => {
     expect(isSafeDebugFileName('x.html')).toBe(false)
     expect(isSafeDebugFileName('../debug-7.html')).toBe(false)
   })
+
+  /**
+   * ★ Host 白名单：防 DNS 重绑定读走调试产物。
+   *
+   * 不校验 Host 的话，`Host: evil.example` 照样 200；一个网页可以把域名解析到 127.0.0.1
+   * 然后读走节点 HTML 与 `context-*.js`（含上游数据与那张 10 分钟短令牌）。
+   */
+  it('★ 别的 Host 一律 403（只认 127.0.0.1 / localhost 的那个端口）', async () => {
+    const origin = createDebugOrigin({ dataRoot: root })
+    const url = await origin.start()
+    try {
+      const port = new URL(url).port
+      await fs.mkdir(path.join(root, 'canvases', 'c1', 'resources', 'debug'), { recursive: true })
+      await fs.writeFile(path.join(root, 'canvases', 'c1', 'resources', 'debug', 'debug-7.html'), 'x', 'utf8')
+      const ok = await fetch('http://127.0.0.1:' + port + '/c1/debug-7.html', { headers: { host: '127.0.0.1:' + port } })
+      expect(ok.status).toBe(200)
+      // fetch 的 host 是禁止改写的头，这里必须用 node:http 才能真的伪造 Host
+      expect(await statusWithHost(Number(port), 'evil.example')).toBe(403)
+      expect(await statusWithHost(Number(port), 'evil.example:' + port)).toBe(403)
+      // localhost 这一种写法要认（浏览器里两种都可能出现）
+      expect(await statusWithHost(Number(port), 'localhost:' + port)).toBe(200)
+    } finally {
+      await origin.stop()
+    }
+  })
 })
+
+/** 用指定的 Host 头发一次 GET，返回状态码（fetch 改不了 Host，只能用 node:http） */
+function statusWithHost(port: number, host: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      { host: '127.0.0.1', port, path: '/c1/debug-7.html', method: 'GET', headers: { host } },
+      (res) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}

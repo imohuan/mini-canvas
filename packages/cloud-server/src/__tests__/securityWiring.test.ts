@@ -108,6 +108,25 @@ describe('写操作的审计成对：attempt → ok / rejected（M3）', () => {
     expect(mine[mine.length - 1]!.result).toBe('rejected')
     expect(String(mine[mine.length - 1]!.reason)).toMatch(/^http-4/)
   })
+
+  /**
+   * ★ 整画布覆盖（PUT）不要令牌（首版取舍），但它必须留审计。
+   *
+   * 审查 N2 实测：写完整张画布后 audit.log 一行没多 —— 而它是最彻底的一种改法。
+   */
+  it('★ PUT 整画布覆盖：不要求令牌，但记 attempt + ok（canvas/overwrite）', async () => {
+    const { port } = await boot()
+    const res = await fetch('http://127.0.0.1:' + port + '/api/canvases/default', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ nodes: [], edges: [] }),
+    })
+    expect(res.status).toBe(200)
+    const lines = await readAudit()
+    const mine = lines.filter((l) => l.action === 'canvas/overwrite' && l.method === 'PUT')
+    expect(mine.map((l) => l.result)).toEqual(['attempt', 'ok'])
+    expect(mine[0]!.token).toBe('missing')
+  })
 })
 
 describe('任务令牌只能写本节点的产物字段（M1）', () => {

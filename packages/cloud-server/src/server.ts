@@ -630,6 +630,36 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     )
   })
 
+  // ①.4 整画布覆盖（`PUT /api/canvases/:id` 与 `/view`）：**不要令牌**（首版取舍，
+  //      靠来源边界），但必须留审计 —— 它是最彻底的一种改法（少一个节点它就没了），
+  //      不留痕等于「谁把整张画布换掉了」这个问题永远答不出来。
+  //      审查 N2 的实测就是这条：写完整张画布，audit.log 一行没多。
+  app.use('/api/canvases/*', async (c, next) => {
+    if (c.req.method.toUpperCase() !== 'PUT' || isAdminPath('PUT', c.req.path)) return next()
+    const base = {
+      action: 'canvas/overwrite' as const,
+      method: 'PUT',
+      path: c.req.path,
+      token: (adminAuth.source === 'disabled' ? 'disabled' : 'missing') as 'disabled' | 'missing',
+      ...(c.req.header('origin') ? { origin: c.req.header('origin')! } : {}),
+      ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
+    }
+    await audit.append({ ...base, result: 'attempt' })
+    let status = 0
+    try {
+      await next()
+      status = c.res?.status ?? 0
+    } catch (err) {
+      await audit.append({ ...base, result: 'rejected', reason: 'threw' })
+      throw err
+    }
+    await audit.append(
+      status >= 200 && status < 400
+        ? { ...base, result: 'ok' }
+        : { ...base, result: 'rejected', reason: 'http-' + status },
+    )
+  })
+
    // ①.5 本地 test 模型端点（用户口径 2026-10-09）：一个假的 OpenAI 兼容端点，
    //      命中「test模型」时由它就地伪造回复，完全不请求真实后台。
    //      必须排在 ui 静态兜底（⑤ 的 get('*')）之前，否则会被通配吃掉。
