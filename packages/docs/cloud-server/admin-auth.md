@@ -186,6 +186,8 @@ MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 | 同源 XSS | 资源回读已加 CSP、调试页已换独立源，但其它同源注入点仍需逐个排查 |
 | 沙箱页能借宿主做什么 | `CanvasUI.api` 仍允许整画布覆盖、下单、写资产（宿主代发） |
 | 审计的 head 文件 | 与日志同目录；整目录一起被换掉时发现不了 |
+| 调试页能往外发数据 | 独立源页面上是你自己写的 HTML，没有 CSP；它能联网。换源挡住的是"读画布令牌"，不是"把内容发出去" |
+| 资源回读的 CORP | `cross-origin-resource-policy: same-site`：同站（含换端口）能嵌，跨站不能。要跨站分享资源得单独放开 |
 | 网络与子进程限制 | 任务脚本可随意出网、可 spawn |
 
 完整分析与实测证据见 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md`。
