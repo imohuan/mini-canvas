@@ -9,6 +9,7 @@
  *   ③ 空串 = 同源（界面由 cloud-server 托管时的正常情况）。
  */
 import type { StyleMeta, StylePage, StyleSort } from './types'
+import { withAdminToken } from '@mini-canvas/canvas-base'
 
 /**
  * 素材库种类：「风格库」与「特效库」共用同一套后台逻辑（路由前缀不同）。
@@ -116,7 +117,8 @@ export async function fetchSettings(base: string, kind: LibraryKind): Promise<{ 
 export async function putRoot(base: string, kind: LibraryKind, root: string): Promise<{ ok: boolean; root: string; itemCount?: number }> {
   const res = await fetch(apiUrl(base, prefixOf(kind) + '/settings'), {
     method: 'PUT',
-    headers: { 'content-type': 'application/json' },
+    // `PUT /api/style-library/settings` 在首版令牌清单里（能改读取根目录）
+    headers: withAdminToken({ 'content-type': 'application/json' }),
     body: JSON.stringify({ root }),
   })
   const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; root?: string; itemCount?: number }
@@ -126,7 +128,8 @@ export async function putRoot(base: string, kind: LibraryKind, root: string): Pr
 
 /** 重扫目录 */
 export async function reload(base: string, kind: LibraryKind): Promise<{ ok: boolean; itemCount: number }> {
-  const res = await fetch(apiUrl(base, prefixOf(kind) + '/reload'), { method: 'POST' })
+  // `POST .../reload` 同样在清单里；两个库（style / effect）共用这一段，前缀由 kind 决定
+  const res = await fetch(apiUrl(base, prefixOf(kind) + '/reload'), { method: 'POST', headers: withAdminToken() })
   const body = (await res.json().catch(() => ({}))) as { ok?: boolean; itemCount?: number; error?: string }
   if (!res.ok) throw new Error(body.error || '重扫失败 HTTP ' + res.status)
   return { ok: body.ok === true, itemCount: body.itemCount ?? 0 }
