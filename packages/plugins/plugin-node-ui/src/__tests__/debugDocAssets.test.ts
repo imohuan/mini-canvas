@@ -50,6 +50,10 @@ describe('调试页 sdk：数据靠 <script> 重载（跨源不能 fetch）', ()
     expect(js).toContain('console.warn')
   })
 
+  it('★ 数据没变就不触发 onChange（否则每 5 秒白重绘一次）', () => {
+    expect(js).toContain('JSON.stringify(collect()) !== before')
+  })
+
   it('5 秒轮询还在（这是"改完内容自动刷新"的唯一来源）', () => {
     expect(js).toContain('setInterval(reloadContext, 5000)')
   })
