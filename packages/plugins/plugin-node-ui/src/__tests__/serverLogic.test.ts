@@ -102,6 +102,23 @@ describe('后台半：给 AI 的工具（这是「它怎么画」的答案）', 
     expect(r.guide).toContain('/api/canvases/')
   })
 
+  /**
+   * 手册不能教作者走一条**已经被关掉**的路。
+   *
+   * 7.5 节原来写的是 `CanvasUI.api('/api/agent/chat/completion')`，但宿主代发的白名单
+   * 明确拒绝 `/api/agent/*`（页面不该能花用户的模型额度）。作者照着抄只会拿到
+   * 「这个接口不在沙箱页面的允许范围内」，而且看不出是文档错了。
+   */
+  it('★ 手册不教界面直接调 /api/agent/*（那条已经被宿主代发拒了）', async () => {
+    const s = fakeServerCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const r = (await s.tools.get('canvas_ui_guide')!.handler({ canvasId: 'default' })) as { guide: string }
+    expect(r.guide).not.toContain("CanvasUI.api('/api/agent/")
+    expect(r.guide).not.toContain('CanvasUI.api("/api/agent/')
+    // 替代做法要写清楚：交给任务脚本
+    expect(r.guide).toContain('CanvasUI.task')
+  })
+
   it('手册说明：改字段是「替换」语义，而且改/删用内置的 canvas_batch_nodes', async () => {
     const s = fakeServerCtx({ nodes: [uiNode] })
     apply(s.ctx)

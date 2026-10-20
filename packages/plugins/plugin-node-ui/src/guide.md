@@ -382,39 +382,20 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   GET  {base}/api/node-packages/read?assetUrl=…                   // 从库里取包
 
 
-### 7.5 让界面能问 AI（单轮对话，不建会话）
+### 7.5 界面里要问 AI：走任务脚本，别直接调 `/api/agent/*`
 
-界面上要是有「让 AI 总结 / 分类 / 改写」这类需求，用这条 —— 它**问一句答一句**，
-**不建会话、不进对话列表、不留任何文件**（凭据用画布已配好的 provider，传个模型名即可）。
+**界面里调不到 `/api/agent/chat/completion`**：`CanvasUI.api` 是给「界面画布操作」用的，
+`/api/agent/*` 一律不在它的允许范围里（那等于把「花你的模型额度」的能力交给页面）。
+这是有意的，不是漏配。
 
-  CanvasUI.api('/api/agent/chat/completion', { method:'POST', headers:{'content-type':'application/json'},
-    body: JSON.stringify({ model?, messages: [{ role: "system" | "user" | "assistant", content }], stream?, max_tokens? }) })
+要「让 AI 总结 / 分类 / 改写」，让**任务脚本**去问，界面只调脚本：
 
-  非流式（不给 stream）→ OpenAI 那个形状：
-    { id, object: "chat.completion", model,
-      choices: [{ message: { role: "assistant", content: "…" }, finish_reason: "stop" }],
-      usage: { prompt_tokens, completion_tokens, total_tokens } }
+  1. 脚本（`scripts/<名>.mjs`）里 `fetch` 后台的 `/api/agent/chat/completion`，带上
+     脚本自己那份 `process.env` / 参数里的 key —— 这属于后台代码，不在沙箱里；
+  2. 界面 `await CanvasUI.task('脚本名', 'run', [文本])` 拿结果；
+  3. 节点的 `data.uiScripts` 里声明脚本名（不声明会 403）。
 
-  流式（stream: true）→ SSE：每帧 data: {object:"chat.completion.chunk", choices:[{delta}]}，末帧 data: [DONE]
-
-  // 例：把上游的文本素材丢给 AI 总结
-  var U = window.__CANVAS_UI__
-  var up = window.__CANVAS_UPSTREAM__ || []
-  var text = up.filter(function (x) { return x.kind === "text" })    .map(function (x) { return x.value }).join("\n")
-  var r = await CanvasUI.api("/api/agent/chat/completion", {
-    method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ messages: [
-      { role: "system", content: "你是编辑，只输出一句摘要。" },
-      { role: "user", content: text } ] }) })
-  var j = await r.json()
-  var answer = j.choices[0].message.content
-
-  规矩：
-   1. **要接着上文，就自己把上文拼进 messages** —— 服务端不存东西。
-   2. **不支持的参数会明确回 400**（tools / n / stop / logprobs / temperature…）；
-      尤其 temperature：SDK 那层没有这个开关，传了会被拒（不是静默忽略）。
-   3. 模型名不传 = 用画布默认；**传了但没配过会 400**（不会偷偷换一个）。
-   4. 想边写边看就加 stream: true 走 SSE；只要完整答案就别管它。
+后台那条接口本身（OpenAI 兼容形状、`stream: true` 走 SSE）没变，只是**不该由页面直接调**。
    5. 这条是**单轮**。要带工具、能自己干活的对话，那是 Agent 多轮那套
       （/api/agent/canvases/<画布>/sessions/…），不在本手册范围。
 
