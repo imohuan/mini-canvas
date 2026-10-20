@@ -50,6 +50,31 @@ async function readAudit(): Promise<Array<Record<string, unknown>>> {
 }
 
 describe('port: 0 时 Host 白名单跟着真实端口走（M2）', () => {
+  /**
+   * trustedOrigins 写成大写 scheme / 带尾斜杠时，预检也要回 ACAO。
+   *
+   * 实请求靠来源边界（那边已经归一了）能过，预检却按原样字符串比 —— 结果是浏览器
+   * 只报一句 `Failed to fetch`，看不出是配置笔误。
+   */
+  it('★ trustedOrigins 归一后再比（大写 / 尾斜杠不会让预检失效）', async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'security-wiring-'))
+    srv = await createCloudServer({
+      dir,
+      port: 0,
+      watchProviders: false,
+      adminAuth: true,
+      adminToken: TOKEN,
+      requestTrust: true,
+      trustedOrigins: ['HTTP://LocalHost:5288/'],
+    })
+    const { port } = await srv.start()
+    const pre = await fetch('http://127.0.0.1:' + port + '/api/canvas/nodes', {
+      method: 'OPTIONS',
+      headers: { origin: 'http://localhost:5288', 'access-control-request-method': 'POST' },
+    })
+    expect(pre.headers.get('access-control-allow-origin')).toBe('http://localhost:5288')
+  })
+
   it('真实端口上的写请求能过来源边界；selfOrigin 也是真实端口', async () => {
     const { port } = await boot()
     expect(port).toBeGreaterThan(0)
@@ -163,6 +188,7 @@ describe('任务令牌只能写本节点的产物字段（M1）', () => {
     })
     expect(pre.status).toBeLessThan(400)
     expect((pre.headers.get('access-control-allow-headers') ?? '').toLowerCase()).toContain('x-task-token')
+
 
     // 同一个来源打别的接口：来源边界直接拒（不是靠令牌兜底）
     for (const [path, method] of [

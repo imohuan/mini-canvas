@@ -103,7 +103,7 @@ export function matchPath(pattern: string, pathname: string): boolean {
  *
  * 解析不了就原样返回（交给后面的白名单去拒）。`null` 原样返回 —— 它是特殊值，不是 URI。
  */
-function normalizeOrigin(raw: string): string {
+export function normalizeOriginEntry(raw: string): string {
   const s = raw.trim()
   if (s.toLowerCase() === 'null') return 'null'
   try {
@@ -113,6 +113,9 @@ function normalizeOrigin(raw: string): string {
     return s
   }
 }
+
+/** 同上的别名（内部调用点用这个名字读起来更顺） */
+const normalizeOrigin = normalizeOriginEntry
 
 export function createRequestTrust(
   opts: RequestTrustOptions,

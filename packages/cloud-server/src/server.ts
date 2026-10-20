@@ -57,7 +57,7 @@ import { runAgentMiddleware } from './serverFramework/agent.js'
 import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
 import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
-import { createRequestTrust } from './requestTrust.js'
+import { createRequestTrust, normalizeOriginEntry } from './requestTrust.js'
 import { createTaskTokens } from './taskToken.js'
 import { REFERENCE_MARKUP_GUIDE } from './agent/referenceMarkup.js'
 
@@ -522,8 +522,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    */
   const trustedOrigins: string[] = Array.from(
     new Set([
-      ...(opts.trustedOrigins ?? []),
-      ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+      ...(opts.trustedOrigins ?? []).map(normalizeOriginEntry),
+      ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean).map(normalizeOriginEntry),
     ]),
   )
   /**
@@ -539,9 +539,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       origin: (origin) => {
         if (!trustEnabled) return origin || '*'
         if (!origin) return ''
-        if (trustedOrigins.includes(origin)) return origin
         try {
           const u = new URL(origin)
+          // 归一后再比：配置里写成大写 scheme / 带尾斜杠（`http://localhost:5288/`）时，
+          // 实请求能过来源边界，预检却回不了 ACAO —— 表现是「Failed to fetch」，最难查的一类。
+          if (trustedOrigins.includes(u.origin)) return u.origin
           if (trustedHosts.includes(u.host.toLowerCase())) return origin
           // 调试源：它要跨源读自己的产物上传回执，所以回 ACAO。
           // 注意 CORS 回调拿不到路径，真正的门在下面的 requestTrust（scopedOrigins
