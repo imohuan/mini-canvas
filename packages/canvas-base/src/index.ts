@@ -58,5 +58,14 @@ export type {
 } from '@mini-canvas/canvas-data'
 
 export * from './define'
+/** 管理令牌的本机存取（面板 / 对话 / 云端连接 / 视觉节点代发共用一处键名） */
+export {
+  ADMIN_TOKEN_KEY,
+  ADMIN_TOKEN_HEADER,
+  getAdminToken,
+  setAdminToken,
+  clearAdminToken,
+  withAdminToken,
+} from './adminToken'
 /** 把一个「数值型设置」实时绑到某节点类型的默认尺寸（设置面板调它，未 resize 的节点立刻跟着变） */
 export { bindTypeDefaultSize, type TypeSizeConfigKeys } from './bindTypeDefaultSize'
