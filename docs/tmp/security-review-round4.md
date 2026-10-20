@@ -10,6 +10,19 @@
 调试写接口重新受令牌保护、来源边界拒绝只记写请求、调试页 `api`/`cancel` 超时真的释放、
 抽函数后的三条分支与原实现逐条等价。
 
+## 收尾（审查后已修）
+
+下面点名的两处测试问题已在 `8dab3bdf` 修掉：
+
+1. `uiContentRender.test.ts` 那条回归线改成抠出 `openDebug` 的函数体逐条断言
+   （必须 `await openDebugWindow`，且函数体里不能再出现 `.location.href` / `win.close()`，
+   同时仍保留 `debugWin.value = win`、`pagehide`、`clearDebugWindow` 三条接管逻辑）。
+   验证方式：临时往函数体里加一行 `win.location.href = ...`，测试立刻红；撤掉后全绿。
+2. `f6407702` 的 3 条编造样本换成真实路由：`/api/agent/template/restore`、
+   `/api/showcase/echo`、`/api/agent/canvases/x/sessions`。
+
+修完后：plugin-node-ui 369、cloud-server 834、ui 393、style-library 19 全绿。
+
 但 `574f63c1` 里那条“防止流程写回组件”的回归线挡不住回归。我临时把整段旧流程写回 `openDebug`，
 `uiContentRender.test.ts` 仍然 12/12 全绿；它现在只检查组件里出现过 `openDebugWindow` 这个字符串。
 这是一个**测试问题**（严重度中），不影响当前运行行为。另一个是 `f6407702` 的“真实路径”样本里有 3 条并不存在，
