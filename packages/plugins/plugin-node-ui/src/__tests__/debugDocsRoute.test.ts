@@ -175,6 +175,15 @@ describe('POST /api/canvases/:canvasId/debug-docs', () => {
     expect(res.status).toBe(400)
     await expect(fs.readdir(debugDir('c1'))).rejects.toBeTruthy()
   })
+
+  it('非法画布 id → 400（不靠路径拼接兜底）', async () => {
+    const s = fakeCtx({ debugUrl: 'http://127.0.0.1:9123' })
+    apply(s.ctx)
+    const route = s.routes.get('POST /api/canvases/:canvasId/debug-docs')!
+    const res = await post(route, { canvasId: '..' }, { nodeId: '7', html: '<p>x</p>' })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { error: string }).error).toContain('非法画布')
+  })
 })
 
 describe('旧的同源调试文件通道', () => {

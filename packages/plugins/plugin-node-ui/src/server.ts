@@ -87,6 +87,7 @@ import {
   writeDebugFile,
 } from './debugDocServer.js'
 import { renderSdkJs } from './debugDocAssets.js'
+import { isSafeCanvasId } from './canvasPathsShared.js'
 
 /** 后台 ctx 的最小形状（就地声明，不 import 工作区包 —— 见文件头说明） */
 interface ServerCtx {
@@ -1637,6 +1638,7 @@ export function apply(ctx: ServerCtx): void {
     const html = typeof body.html === 'string' ? body.html : ''
     const version = typeof body.version === 'string' && body.version.trim() ? body.version.trim() : undefined
     if (!canvasId) return c.json({ ok: false, error: '缺少画布 id' }, 400)
+    if (!isSafeCanvasId(canvasId)) return c.json({ ok: false, error: '非法画布 id' }, 400)
     if (!nodeId) return c.json({ ok: false, error: '缺少 nodeId' }, 400)
     if (!html.trim()) return c.json({ ok: false, error: '这份界面还是空的，没什么可调试的' }, 400)
     const built = await buildDebugDocs(ctx, {
