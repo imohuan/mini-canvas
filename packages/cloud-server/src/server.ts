@@ -524,6 +524,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
     ]),
   )
+  /**
+   * 「只放行一条窄通道」的来源（见 RequestTrustOptions.scopedOrigins）。
+   * 现在只有独立调试源：它上面的页面是用户 HTML，只该能写回产物。
+   */
+  const scopedOrigins: Array<{ origin: string; paths: string[] }> = []
   const trustEnabled = opts.requestTrust ?? !testEnv
   app.use(
     '*',
@@ -535,7 +540,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         if (trustedOrigins.includes(origin)) return origin
         try {
           const u = new URL(origin)
-          return trustedHosts.includes(u.host) ? origin : ''
+          if (trustedHosts.includes(u.host.toLowerCase())) return origin
+          // 调试源：它要跨源读自己的产物上传回执，所以回 ACAO。
+          // 注意 CORS 回调拿不到路径，真正的门在下面的 requestTrust（scopedOrigins
+          // 只放行 `/api/canvases/*/resources`）；别的路径即使预检过了，实请求也是 403。
+          const scoped = scopedOrigins.find((s) => s.origin === u.origin)
+          return scoped ? origin : ''
         } catch {
           return ''
         }
@@ -551,7 +561,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // ①.2 来源边界（Host/Origin，含 /mcp）—— 挂在 '*' 上：/mcp 是直挂路由，不在 /api/* 下。
   //      必须在 host.start() 之前：插件路由是 start() 时一次性 flush 成代理的。
   if (trustEnabled) {
-    const trust = createRequestTrust({ trustedHosts, trustedOrigins, allowOpaqueOrigin: false })
+    const trust = createRequestTrust({ trustedHosts, trustedOrigins, scopedOrigins, allowOpaqueOrigin: false })
     app.use('*', trust as never)
   }
 
@@ -943,9 +953,17 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       // 只是不让失败拖垮主服务（调试是开发工具）。
       try {
         const debugUrl = await debugOrigin.start()
-        // 调试页与后台不同源：它要带短令牌写回本节点，必须进 Origin 白名单。
+        // 调试页与后台不同源：它要带短令牌把产物写回本节点。
+        // 但**只放行这一条路**（resources 上传），不能把它当可信来源 —— 那上面的页面
+        // 是用户 HTML，一旦进 trustedOrigins，它连读 KV、整画布覆盖都能做。
         // 端口是系统分配的，只有 start() 之后才知道，所以在这里追加。
-        if (debugUrl && !trustedOrigins.includes(debugUrl)) trustedOrigins.push(debugUrl)
+        if (debugUrl && !scopedOrigins.some((s) => s.origin === debugUrl)) {
+          scopedOrigins.push({
+            origin: debugUrl,
+            // 只放行「往本画布写资源」这一条：调试页交产物就只做这件事。
+            paths: ['/api/canvases/*/resources'],
+          })
+        }
       } catch (err) {
         console.warn('[cloud-server] 独立调试源启动失败（调试页退回后台同源，仅本机临时用）：' + String(err))
       }

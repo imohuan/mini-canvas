@@ -127,11 +127,12 @@ describe('任务令牌只能写本节点的产物字段（M1）', () => {
     expect(mine.some((l) => l.result === 'ok' || l.result === 'rejected')).toBe(true)
   })
 
-  it('独立调试源起来后自动进 Origin 白名单（跨源写产物才不会被挡）', async () => {
+  it('独立调试源只拿到「写产物」这一条窄通道，不是可信来源', async () => {
     const { port } = await boot()
     const debugUrl = (srv.ctx.tryGet<{ url: string }>('debugOrigin') ?? { url: '' }).url
     expect(debugUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
-    expect(srv.trust.origins).toContain(debugUrl)
+    // 关键：它**不在** trustedOrigins 里 —— 那上面的页面是用户 HTML
+    expect(srv.trust.origins).not.toContain(debugUrl)
     // 预检必须放行 x-task-token，否则调试页只会看到 Failed to fetch
     const pre = await fetch('http://127.0.0.1:' + port + '/api/canvases/default/resources?slot=n1', {
       method: 'OPTIONS',
@@ -143,6 +144,22 @@ describe('任务令牌只能写本节点的产物字段（M1）', () => {
     })
     expect(pre.status).toBeLessThan(400)
     expect((pre.headers.get('access-control-allow-headers') ?? '').toLowerCase()).toContain('x-task-token')
+
+    // 同一个来源打别的接口：来源边界直接拒（不是靠令牌兜底）
+    for (const [path, method] of [
+      ['/api/canvas/nodes', 'POST'],
+      ['/api/kv/settings', 'PUT'],
+      ['/api/canvases/default/nodes', 'POST'],
+      ['/api/task/call', 'POST'],
+      ['/api/server-plugins/install', 'POST'],
+    ] as const) {
+      const res = await fetch('http://127.0.0.1:' + port + path, {
+        method,
+        headers: { 'content-type': 'application/json', origin: debugUrl },
+        body: '{}',
+      })
+      expect(res.status, path).toBe(403)
+    }
   })
 
   it('★ 调试页（另一个端口）能用短令牌真把产物写回本节点', async () => {

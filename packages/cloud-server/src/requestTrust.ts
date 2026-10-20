@@ -11,6 +11,14 @@ export interface RequestTrustOptions {
   /** 如 ['http://localhost:5288']，不带尾斜杠。 */
   trustedOrigins?: string[]
   /**
+   * 只对**指定路径**放行的来源（精确前缀 → 允许的路径前缀）。
+   *
+   * 为什么需要它：独立调试源上跑的是**用户写的 HTML**。它能带短令牌把产物写回自己那个
+   * 节点，但**不该**因此被当成可信来源 —— 否则它读 KV、整画布覆盖全都能做。
+   * 所以它只出现在这条窄通道里，而不是 `trustedOrigins`。
+   */
+  scopedOrigins?: Array<{ origin: string; paths: string[] }>
+  /**
    * 保留参数，默认 false。文档已实测：不透明源（Origin: null）永远报
    * cross-site，不存在 same-origin/none 的组合；打开它等于对任意网页开例外。
    */
@@ -58,12 +66,36 @@ export function checkRequestTrust(req: TrustRequestLike, opts: RequestTrustOptio
       }
     } else if (origin !== 'http://' + host && origin !== 'https://' + host) {
       if (!(opts.trustedOrigins ?? []).map(normalizeOrigin).includes(origin)) {
-        return { ok: false, reason: 'origin-not-trusted' }
+        // 兜底：只在「这条来源 + 这个路径前缀」同时命中时才放行（调试页写产物那条窄通道）。
+        const scoped = (opts.scopedOrigins ?? []).find((s) => normalizeOrigin(s.origin) === origin)
+        if (!scoped || !scoped.paths.some((p) => matchPath(p, req.path))) {
+          return { ok: false, reason: 'origin-not-trusted' }
+        }
       }
     }
   }
 
   return { ok: true }
+}
+
+/**
+ * 窄通道的路径匹配：`*` 匹配**一段**（不含 `/`），其余按字面比。
+ *
+ * 例：模式 `/api/canvases/<任意一段>/resources` 命中 `/api/canvases/c1/resources`，
+ * 不命中 `/api/canvases/c1/nodes`，也不命中深一层的路径。
+ */
+export function matchPath(pattern: string, pathname: string): boolean {
+  const pp = pattern.split('/')
+  const sp = pathname.split('/')
+  if (pp.length !== sp.length) return false
+  for (let i = 0; i < pp.length; i++) {
+    if (pp[i] === '*') {
+      if (!sp[i]) return false
+      continue
+    }
+    if (pp[i] !== sp[i]) return false
+  }
+  return true
 }
 
 /**
