@@ -32,7 +32,7 @@ export function assetsRoutes(store: AssetStore): Hono {
 
   app.post('/api/assets', async (c) => {
     const read = await readBodyLimited(
-      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer() },
+      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer(), stream: c.req.raw.body },
       maxUploadBytes(),
     )
     if (!read.ok) {

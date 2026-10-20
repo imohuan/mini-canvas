@@ -29,20 +29,34 @@ export type ReadBodyResult =
   | { ok: true; bytes: Uint8Array } 
   | { ok: false; reason: 'too-large' | 'empty' | 'unreadable'; limit: number }
 
+/** 请求对象的最小形状（Hono 的 c.req 满足它；测试可以传替身） */
+export interface LimitedBodySource {
+  header(name: string): string | undefined
+  arrayBuffer(): Promise<ArrayBuffer>
+  /** 原始 Web ReadableStream（Hono 的 c.req.raw.body）；有它就**边读边计数** */
+  stream?: ReadableStream<Uint8Array> | null
+}
+
 /**
- * 读请求体，超过 `limit` 立刻停止（不再往内存里堆）。
+ * 读请求体，超过 `limit` **立刻**停止。
  *
- * 先看 content-length：明显超限时连 body 都不读，省得白白传几十 MB。
- * 再看实际读取量：`content-length` 可以撒谎，或根本不存在。
+ * 三种来源按优先级：
+ *   1. `content-length` 已经超限 → 连 body 都不读，直接 413；
+ *   2. 有原始流（`c.req.raw.body`）→ 逐块读、累计，超了立刻 `cancel()`；
+ *   3. 只有 `arrayBuffer()`（老宿主 / 测试替身）→ 读完再判断（兜底）。
+ *
+ * 为什么 2 很重要：分块传输可以不带 content-length，也可以声明一个小的、
+ * 实际发一个大的。只靠 arrayBuffer() 的话，整个 body 会先被读进内存才进这个函数，
+ * 413 来得太晚（进程可能已经 OOM）。
  */
-export async function readBodyLimited(
-  req: { header(name: string): string | undefined; arrayBuffer(): Promise<ArrayBuffer> },
-  limit: number,
-): Promise<ReadBodyResult> {
-  const declared = Number(req.header('content-length') ?? '')
-  if (Number.isFinite(declared) && declared > limit) {
-    return { ok: false, reason: 'too-large', limit }
+export async function readBodyLimited(req: LimitedBodySource, limit: number): Promise<ReadBodyResult> {
+  const rawLen = req.header('content-length')
+  if (rawLen !== undefined && rawLen !== '') {
+    const declared = Number(rawLen)
+    if (Number.isFinite(declared) && declared > limit) return { ok: false, reason: 'too-large', limit }
   }
+
+  if (req.stream) return readStreamLimited(req.stream, limit)
 
   let buf: ArrayBuffer
   try {
@@ -53,6 +67,38 @@ export async function readBodyLimited(
   if (buf.byteLength > limit) return { ok: false, reason: 'too-large', limit }
   if (buf.byteLength === 0) return { ok: false, reason: 'empty', limit }
   return { ok: true, bytes: new Uint8Array(buf) }
+}
+
+/** 逐块读流；累计超过上限立刻取消，后续块不再收 */
+async function readStreamLimited(stream: ReadableStream<Uint8Array>, limit: number): Promise<ReadBodyResult> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      total += value.byteLength
+      if (total > limit) {
+        // 主动断开：不把剩下的几十 MB 继续收进内存，也让对端知道别再发了
+        await reader.cancel().catch(() => undefined)
+        return { ok: false, reason: 'too-large', limit }
+      }
+      chunks.push(value)
+    }
+  } catch {
+    await reader.cancel().catch(() => undefined)
+    return { ok: false, reason: 'unreadable', limit }
+  }
+  if (total === 0) return { ok: false, reason: 'empty', limit }
+  const out = new Uint8Array(total)
+  let at = 0
+  for (const c of chunks) {
+    out.set(c, at)
+    at += c.byteLength
+  }
+  return { ok: true, bytes: out }
 }
 
 /** 统一的上传错误响应（413 / 400）。调用方原样返回即可。 */

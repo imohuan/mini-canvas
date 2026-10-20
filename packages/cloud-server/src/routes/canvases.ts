@@ -118,7 +118,7 @@ export function canvasesRoutes(
       if (!ok) return c.json({ ok: false, error: '任务令牌无效，或没有绑定到这个节点的槽位' }, 403)
     }
     const read = await readBodyLimited(
-      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer() },
+      { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer(), stream: c.req.raw.body },
       maxUploadBytes(),
     )
     if (!read.ok) {
