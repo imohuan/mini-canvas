@@ -11,6 +11,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { RefreshCw, Download, Trash2, RotateCcw, Puzzle } from 'lucide-vue-next'
+import { getAdminToken, setAdminToken } from '@mini-canvas/canvas-base'
 import { usePluginManager } from '../../usePluginManager'
 
 const svc = usePluginManager()
@@ -19,6 +20,13 @@ const s = svc.state
 
 /** 地址输入框绑一份本地草稿：改完点「刷新」才写到服务（避免边打字边重拉） */
 const urlDraft = ref(s.catalogUrl)
+
+/** 管理令牌：本机浏览器里存一份，受保护的安装/卸载请求会带上它 */
+const tokenDraft = ref(getAdminToken() ?? '')
+
+function onTokenInput(): void {
+  setAdminToken(tokenDraft.value)
+}
 
 onMounted(() => {
   urlDraft.value = s.catalogUrl
@@ -248,6 +256,18 @@ onMounted(() => { void loadMarket() })
       <span class="pmp-count">{{ installedCount }} / {{ s.rows.length }} 已装</span>
     </div>
 
+    <!-- 管理令牌：受保护的安装/卸载请求带它；说明为什么只能存在本机浏览器 -->
+    <div class="pmp-token">
+      <label class="pmp-token-field">
+        <span class="pmp-url-label">管理令牌</span>
+        <input v-model="tokenDraft" class="pmp-input" type="password" autocomplete="off" spellcheck="false"
+          aria-label="管理令牌" placeholder="粘贴后台启动日志或 admin-token 文件里的令牌" @input="onTokenInput" />
+      </label>
+      <p class="pmp-token-hint">
+        令牌在后台启动日志或 &lt;数据目录&gt;/admin-token 里。它存在本机浏览器里，装了不可信插件等于把它交出去。
+      </p>
+    </div>
+
 
     <!-- 页签：市场 / 已装 / 本地清单 / 自带（表格形态，一屏可比可扫） -->
     <div class="pmp-tabs" role="tablist">
@@ -394,6 +414,9 @@ onMounted(() => { void loadMarket() })
 .pmp-url-label { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: var(--ui-ink-mute, #9ca3af); }
 .pmp-input { height: 30px; padding: 0 9px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: var(--ui-panel, #fff); color: var(--ui-ink, #18202b); font-size: 12px; outline: none; box-sizing: border-box; width: 100%; }
 .pmp-input:focus-visible { border-color: var(--ui-accent, #0891b2); }
+.pmp-token { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.pmp-token-field { display: flex; flex-direction: column; gap: 4px; flex: 0 1 280px; min-width: 220px; }
+.pmp-token-hint { flex: 1 1 320px; margin: 0 0 7px; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #6b7280); }
 
 .pmp-btn { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.18s ease, color 0.18s ease; }
 .pmp-btn:hover:not(:disabled) { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }

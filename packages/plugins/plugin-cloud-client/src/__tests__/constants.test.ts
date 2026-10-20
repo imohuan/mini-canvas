@@ -1,6 +1,8 @@
 // 常量防漂移：这些字面量在本插件里是**就地内联**的（产物要自包含），
 // 与数据层 / 后端各有一份。改了一边没改另一边，这里立刻红。
 import { describe, it, expect } from 'vitest'
+import { ADMIN_TOKEN_KEY, ADMIN_TOKEN_HEADER, setAdminToken } from '@mini-canvas/canvas-base'
+import { CloudApi } from '../api'
 import {
   GRAPH_KEY,
   GRAPH_EDGES_KEY,
@@ -71,5 +73,33 @@ describe('自身约定', () => {
     expect([...RESOURCE_URL_FIELDS].sort()).toEqual(
       ['audioUrl', 'imageUrl', 'leftImageUrl', 'maskUrl', 'panoUrl', 'posterUrl', 'rightImageUrl', 'thumbUrl', 'videoUrl'].sort(),
     )
+  })
+})
+
+describe('管理令牌：就地内联与 canvas-base 不漂移', () => {
+  it('用 canvas-base 的 setAdminToken 写入后，CloudApi 必须读到同一个键并送出同一个头名', async () => {
+    class MemoryStorage {
+      private m = new Map<string, string>()
+      getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null }
+      setItem(k: string, v: string) { this.m.set(k, v) }
+      removeItem(k: string) { this.m.delete(k) }
+    }
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    try {
+      setAdminToken('shared-token')
+      expect(ADMIN_TOKEN_KEY).toBe('mc_admin_token')
+      let sent: Headers | undefined
+      const api = new CloudApi({
+        baseUrl: 'http://srv',
+        fetchImpl: async (_url, init) => {
+          sent = new Headers(init?.headers)
+          return new Response('{}', { status: 200 })
+        },
+      })
+      await api.patchNodes('c1', { add: [] })
+      expect(sent?.get(ADMIN_TOKEN_HEADER)).toBe('shared-token')
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage
+    }
   })
 })

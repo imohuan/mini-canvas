@@ -9,7 +9,7 @@
  * 边界：本服务不认识具体插件，只认清单行的「地址 + 全局名」。装什么、从哪装由清单决定。
  */
 import { reactive } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import { withAdminToken, type Context, type PluginModule } from '@mini-canvas/canvas-base'
 import {
   normalizeCatalog,
   resolveDesiredIds,
@@ -148,6 +148,13 @@ export const DEFAULT_CATALOG_URL = '/plugin-catalog.json'
 const SERVER_CONFIRM_TEXT =
   '本批插件中有包含后台插件（以服务端权限运行，可读写文件、发起网络请求）。\n\n' +
   '只在你信任插件来源时才继续。是否确认安装？'
+
+/** 403 时给用户的动作提示（保留服务端原文，方便排查是缺令牌还是来源不受信任） */
+const ADMIN_TOKEN_HINT = '请先在设置 → 插件里填写管理令牌'
+
+function readableServerError(message: string, status: number): string {
+  return status === 403 ? `${ADMIN_TOKEN_HINT}（${message}）` : message
+}
 
 export interface CreateServiceOptions {
   /** 中转后台清单地址（含 /catalog.json） */
@@ -500,7 +507,7 @@ export function createPluginManagerService(
       const origin = baseOfCatalogUrl(state.catalogUrl)
       const r = await doFetch(origin + '/api/server-plugins/install', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: withAdminToken({ 'content-type': 'application/json' }),
         body: JSON.stringify({
           id: row.entry.id,
           code,
@@ -512,7 +519,7 @@ export function createPluginManagerService(
         }),
       })
       const j = (await r.json()) as { ok?: boolean; error?: string }
-      if (!r.ok || j.ok !== true) throw new Error(j.error ?? '后台安装失败：' + r.status)
+      if (!r.ok || j.ok !== true) throw new Error(readableServerError(j.error ?? '后台安装失败：' + r.status, r.status))
       row.serverInstalled = true
     } catch (err) {
       row.serverError = err instanceof Error ? err.message : String(err)
@@ -527,11 +534,11 @@ export function createPluginManagerService(
       const origin = baseOfCatalogUrl(state.catalogUrl)
       const r = await doFetch(origin + '/api/server-plugins/uninstall', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: withAdminToken({ 'content-type': 'application/json' }),
         body: JSON.stringify({ id: row.entry.id }),
       })
       const j = (await r.json()) as { ok?: boolean; error?: string }
-      if (!r.ok || j.ok !== true) throw new Error(j.error ?? '后台卸载失败：' + r.status)
+      if (!r.ok || j.ok !== true) throw new Error(readableServerError(j.error ?? '后台卸载失败：' + r.status, r.status))
       row.serverInstalled = false
     } catch (err) {
       row.serverError = err instanceof Error ? err.message : String(err)
@@ -762,11 +769,11 @@ export function createPluginManagerService(
     const origin = baseOfCatalogUrl(state.catalogUrl)
     const res = await doFetch(origin + '/api/npm-plugins/install', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: withAdminToken({ 'content-type': 'application/json' }),
       body: JSON.stringify({ package: pkg, confirm: opts?.serverConfirm === true }),
     })
     const json = (await res.json()) as { ok?: boolean; error?: string }
-    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 安装失败：' + res.status)
+    if (!res.ok || json.ok !== true) throw new Error(readableServerError(json.error ?? 'NPM 安装失败：' + res.status, res.status))
     // 装完重拉本地清单（新插件的前端半这时才出现在 rows 里），并把它的**前端半立刻装进内核**——
     // 用户点一次「安装」就该看到插件活，而不是还要在本地列表里再点一次（实测踩过：装完是"未安装"）。
     await refresh()
@@ -789,11 +796,11 @@ export function createPluginManagerService(
     const origin = baseOfCatalogUrl(state.catalogUrl)
     const res = await doFetch(origin + '/api/npm-plugins/update', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: withAdminToken({ 'content-type': 'application/json' }),
       body: JSON.stringify({ package: pkg, confirm: true }),
     })
     const json = (await res.json()) as { ok?: boolean; updated?: boolean; to?: string; error?: string }
-    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 更新失败：' + res.status)
+    if (!res.ok || json.ok !== true) throw new Error(readableServerError(json.error ?? 'NPM 更新失败：' + res.status, res.status))
     // 更新后同样把前端半刷成新产物：先卸内核里的旧版，再重装（地址带破缓存参数，见 reinstall）
     await refresh()
     if (json.updated === true) {
@@ -808,11 +815,11 @@ export function createPluginManagerService(
     const origin = baseOfCatalogUrl(state.catalogUrl)
     const res = await doFetch(origin + '/api/npm-plugins/uninstall', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: withAdminToken({ 'content-type': 'application/json' }),
       body: JSON.stringify({ package: pkg }),
     })
     const json = (await res.json()) as { ok?: boolean; error?: string }
-    if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'NPM 卸载失败：' + res.status)
+    if (!res.ok || json.ok !== true) throw new Error(readableServerError(json.error ?? 'NPM 卸载失败：' + res.status, res.status))
     // 卸载前先把内核里的**前端半**摘掉 —— 后端只删磁盘文件，不会动浏览器里已装载的插件
     // （实测踩过：文件删了但面板还活着）。用卸前的 rows 找它的 id（refresh 后行就没了）。
     const wantId = pkg.replace(/^@/, '').replace('/', '__')

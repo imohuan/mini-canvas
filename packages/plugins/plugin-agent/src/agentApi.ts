@@ -3,6 +3,8 @@
  *
  * baseUrl 缺省空串 = 与画布同源（cloud-server 托管界面时就是这样）。
  */
+import { withAdminToken } from '@mini-canvas/canvas-base'
+
 export type ChatEvent =
   | { type: 'session'; sessionId: string; title: string }
   | { type: 'text'; delta?: string; text?: string; partial?: boolean; final?: boolean }
@@ -199,13 +201,19 @@ export class AgentApi {
     this.f = opts.fetchImpl ?? ((...args) => fetch(...args))
   }
 
+  /**
+   * Agent 的唯一请求出口：所有 JSON 调用、会话写、SSE 拉流都从这里出去，
+   * 令牌头只在这一处合并，避免某个新端点漏带。
+   */
+  private request(p: string, init?: RequestInit): Promise<Response> {
+    const headers = new Headers(init?.headers)
+    if (init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
+    const merged = withAdminToken(Object.fromEntries(headers.entries()))
+    return this.f(this.base + p, { ...init, headers: merged })
+  }
+
   private async json<T>(p: string, init?: RequestInit): Promise<T> {
-    const res = await this.f(this.base + p, {
-      ...init,
-      headers: init?.body
-        ? { 'content-type': 'application/json', ...(init.headers ?? {}) }
-        : init?.headers,
-    })
+    const res = await this.request(p, init)
     if (!res.ok) throw new Error(await readError(res))
     return (await res.json()) as T
   }
@@ -217,7 +225,7 @@ export class AgentApi {
   /** 后端是否还活着（transport 中断后的冤案排除用） */
   async isBackendAlive(): Promise<boolean> {
     try {
-      const res = await fetch('/api/agent/config', { method: 'GET' })
+      const res = await this.request('/api/agent/config', { method: 'GET' })
       return res.ok
     } catch {
       return false
@@ -515,7 +523,7 @@ export class AgentApi {
     signal?: AbortSignal,
     sink?: SseFrameSink,
   ): Promise<void> {
-    const res = await this.f(this.sessionPath(canvasId, sessionId) + '/compact', {
+    const res = await this.request(this.sessionPath(canvasId, sessionId) + '/compact', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: '{}',
@@ -599,7 +607,7 @@ export class AgentApi {
     if (opts.systemPrompt) payload.systemPrompt = opts.systemPrompt
     if (opts.images?.length) payload.images = opts.images
     if (opts.goal) payload.goal = opts.goal
-    const res = await this.f(this.sessionPath(canvasId, sessionId) + '/messages', {
+    const res = await this.request(this.sessionPath(canvasId, sessionId) + '/messages', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
@@ -627,7 +635,7 @@ export class AgentApi {
     signal?: AbortSignal,
     opts: { follow?: boolean } & SseFrameSink = {},
   ): Promise<void> {
-    const res = await this.f(
+    const res = await this.request(
       this.sessionPath(canvasId, sessionId) +
         '/stream?since=' +
         Math.max(0, Math.floor(since)) +

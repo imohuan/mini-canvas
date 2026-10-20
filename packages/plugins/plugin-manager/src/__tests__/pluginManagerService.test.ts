@@ -1,7 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
 import { Context, SaveServiceImpl, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
 import { createPluginManagerService, INSTALLED_KEY, absolutize, baseOfCatalogUrl } from '../pluginManagerService'
-import type { PluginModule } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@mini-canvas/canvas-base'
+
+/** 最小的 localStorage 替身（Node 里没有 DOM；令牌读写走全局 localStorage） */
+class MemoryStorage {
+  private m = new Map<string, string>()
+  getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null }
+  setItem(k: string, v: string) { this.m.set(k, v) }
+  removeItem(k: string) { this.m.delete(k) }
+}
+
+afterEach(() => { delete (globalThis as { localStorage?: unknown }).localStorage })
 
 /** 假宿主：记着装过哪些插件，支持 install/uninstall/reload/list（与 canvas-render 的 PluginManager 同子集） */
 function fakeHost() {
@@ -582,5 +592,110 @@ describe('plugin-manager 服务：从 NPM 安装只调一次后台安装（与�
     const serverInstallCalls = calls.filter((u) => u.includes('/api/server-plugins/install'))
     expect(serverInstallCalls, '不该再调 /api/server-plugins/install（NPM 安装已装过后台半）').toEqual([])
     expect(calls.some((u) => u.includes('/api/npm-plugins/install'))).toBe(true)
+  })
+})
+
+describe('plugin-manager 服务：管理令牌', () => {
+  /** 记录每个请求的 URL / 方法 / 值头（Headers 或普通对象都归一成对象） */
+  function tokenProbe(token?: string) {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    if (token !== undefined) setAdminToken(token)
+    const calls: Array<{ url: string; method: string; headers: Record<string, string> }> = []
+    const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
+      const headers: Record<string, string> = {}
+      new Headers(init?.headers).forEach((v, k) => { headers[k] = v })
+      calls.push({ url: String(url), method: init?.method ?? 'GET', headers })
+      const u = String(url)
+      if (u.endsWith('/catalog.json')) {
+        return { ok: true, status: 200, json: async () => CATALOG_WITH_SERVER, text: async () => '' } as Response
+      }
+      if (u.includes('/api/server-plugins/install')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response
+      }
+      if (u.includes('/api/server-plugins')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
+      }
+      if (u.includes('/api/npm-plugins/')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, results: [], plugins: [], updated: false }),
+          text: async () => '',
+        } as Response
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    return { calls, fetchImpl }
+  }
+
+  function bootProbe(fetchImpl: typeof fetch) {
+    const ctx = new Context()
+    const host = fakeHost()
+    const { save } = fakeSave()
+    ctx.inject('pluginManager', host.manager)
+    ctx.inject('save', save)
+    const win: Record<string, unknown> = {}
+    const svc = createPluginManagerService(ctx, {
+      catalogUrl: 'http://127.0.0.1:5320/catalog.json',
+      fetchImpl,
+      document: fakeDom(win),
+      win,
+    })
+    return { svc, host }
+  }
+
+  it('server-plugins install / uninstall 与 npm-plugins install / update / uninstall 都带令牌', async () => {
+    const { calls, fetchImpl } = tokenProbe('tok-123')
+    const { svc } = bootProbe(fetchImpl)
+    await svc.refresh()
+    await svc.install('plugin-srv', { serverConfirm: true })
+    await svc.uninstall('plugin-srv')
+    await svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: true })
+    await svc.updateFromNpm('@mini-canvas/plugin-demo')
+    await svc.uninstallFromNpm('@mini-canvas/plugin-demo')
+
+    const protectedPaths = [
+      '/api/server-plugins/install',
+      '/api/server-plugins/uninstall',
+      '/api/npm-plugins/install',
+      '/api/npm-plugins/update',
+      '/api/npm-plugins/uninstall',
+    ]
+    for (const path of protectedPaths) {
+      const hit = calls.filter((c) => c.url.endsWith(path))
+      expect(hit.length, path + ' 应至少发一次').toBeGreaterThan(0)
+      expect(hit.every((c) => c.headers[ADMIN_TOKEN_HEADER] === 'tok-123'), path + ' 每个请求都要带令牌').toBe(true)
+    }
+    // GET 类（清单 / 服务端实况 / NPM 列表浏览搜索）不需要令牌，即使本机已经存了一份
+    expect(calls.filter((c) => c.method === 'GET').every((c) => !(ADMIN_TOKEN_HEADER in c.headers))).toBe(true)
+  })
+
+  it('没有令牌时不带该头（不是空串头）；GET 类列表 / 浏览 / 搜索 / 已装也不带', async () => {
+    const { calls, fetchImpl } = tokenProbe(undefined)
+    const { svc } = bootProbe(fetchImpl)
+    await svc.refresh()
+    await svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: true })
+    await svc.searchNpmPlugins('demo')
+    await svc.browseNpmPlugins()
+    await svc.listNpmInstalled()
+
+    expect(calls.filter((c) => c.method === 'POST').length).toBeGreaterThan(0)
+    expect(calls.every((c) => !(ADMIN_TOKEN_HEADER in c.headers)), '没令牌时任何请求都不该出现该头').toBe(true)
+  })
+
+  it('403 时错误里出现可读提示，同时保留服务端原文', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const fetchImpl = (async (url: string | URL) => {
+      const u = String(url)
+      if (u.endsWith('/catalog.json')) {
+        return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [] }), text: async () => '' } as Response
+      }
+      if (u.includes('/api/npm-plugins/install')) {
+        return { ok: false, status: 403, json: async () => ({ ok: false, error: '需要管理令牌' }), text: async () => '' } as Response
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
+    }) as unknown as typeof fetch
+    const { svc } = bootProbe(fetchImpl)
+    await expect(svc.installFromNpm('@mini-canvas/plugin-demo')).rejects.toThrow(/设置 → 插件里填写管理令牌.*需要管理令牌/)
   })
 })

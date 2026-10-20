@@ -1,6 +1,23 @@
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect } from 'vitest'
+import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
+
+/** 最小的 localStorage 替身（Node 里没有 DOM；令牌走全局 localStorage） */
+class MemoryStorage {
+  private m = new Map<string, string>()
+  getItem(k: string) { return this.m.has(k) ? this.m.get(k)! : null }
+  setItem(k: string, v: string) { this.m.set(k, v) }
+  removeItem(k: string) { this.m.delete(k) }
+}
+
+afterEach(() => { delete (globalThis as { localStorage?: unknown }).localStorage })
+
+function headersOf(init?: RequestInit): Record<string, string> {
+  const out: Record<string, string> = {}
+  new Headers(init?.headers).forEach((v, k) => { out[k] = v })
+  return out
+}
 
 /** 记录请求的假 fetch（不起真服务） */
 function fakeFetch(handler: (url: string, init?: RequestInit) => { status?: number; body?: unknown }): {
@@ -245,5 +262,57 @@ describe('资源上传', () => {
     const { fetchImpl } = fakeFetch(() => ({ body: { ok: true } }))
     const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
     await expect(api.uploadResource('c1', new Blob([new Uint8Array([1])]), 'a.png')).rejects.toThrow()
+  })
+})
+
+describe('管理令牌', () => {
+  it('this.doFetch 一处覆盖所有 HTTP 写：patchNodes/patchEdges/uploadResource/postResource/createJob/cancelJob/replaceCanvas/putView 都带令牌', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    localStorage.setItem(ADMIN_TOKEN_KEY, 'cloud-tok')
+    const { fetchImpl, calls } = fakeFetch((url) => {
+      if (url.includes('/resources')) return { body: { ok: true, hashName: 'h.png' } }
+      if (url.endsWith('/api/jobs')) return { body: { ok: true, jobId: 'j1' } }
+      return { body: { ok: true } }
+    })
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+
+    await api.patchNodes('c1', { add: [] })
+    await api.patchEdges('c1', { add: [] })
+    await api.uploadResource('c1', new Blob(['x']), 'a.png')
+    await api.uploadResourceToSlot('c1', new Blob(['x']), 'thumb', 'a.png')
+    await api.createJob({ canvasId: 'c1', nodeId: 'n1', actionId: 'a' })
+    await api.cancelJob('j1')
+    await api.replaceCanvas('c1', [], [])
+    await api.putView('c1', { x: 0, y: 0, zoom: 1 })
+
+    expect(calls).toHaveLength(8)
+    expect(calls.every((c) => headersOf(c.init)[ADMIN_TOKEN_HEADER] === 'cloud-tok')).toBe(true)
+    // 原有 content-type 不能被令牌合并弄丢（上传/JSON 写都靠它）
+    expect(headersOf(calls[0].init)['content-type']).toBe('application/json')
+    expect(headersOf(calls[2].init)['content-type']).toBe('application/octet-stream')
+  })
+
+  it('没令牌时不带该头（不是空串头）；GET 也不带', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { fetchImpl, calls } = fakeFetch(() => ({ body: { ok: true, version: 1, actions: [] } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await api.fetchActions()
+    await api.patchNodes('c1', { add: [] })
+    expect(calls.length).toBe(2)
+    expect(calls.every((c) => !(ADMIN_TOKEN_HEADER in headersOf(c.init)))).toBe(true)
+  })
+
+  it('SSE 不带令牌（EventSource 不能带头），地址与订阅行为不变', () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    localStorage.setItem(ADMIN_TOKEN_KEY, 'cloud-tok')
+    let url = ''
+    const api = new CloudApi({
+      baseUrl: 'http://srv',
+      createEventSource: (u) => { url = u; return { close() {}, addEventListener() {} } },
+    })
+    api.subscribeChanges(() => {})
+    expect(url).toBe('http://srv/api/kv/events')
+    expect(url).not.toContain('x-admin-token')
+    expect(url).not.toContain('cloud-tok')
   })
 })

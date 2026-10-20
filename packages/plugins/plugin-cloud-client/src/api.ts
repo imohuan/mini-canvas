@@ -18,13 +18,42 @@ import {
   type ServerJob,
 } from './apiTypes.js'
 
+/**
+ * 管理令牌的键名与头名（就地内联 —— 本插件产物必须零 import）。
+ *
+ * 与 `@mini-canvas/canvas-base` 的 ADMIN_TOKEN_KEY / ADMIN_TOKEN_HEADER 必须一致，
+ * `constants.test` 会用那边的 setAdminToken 写一份、这里读到的必须是同一个值。
+ */
+const ADMIN_TOKEN_KEY = 'mc_admin_token'
+const ADMIN_TOKEN_HEADER = 'x-admin-token'
+
+/** 读本机浏览器里存的管理令牌；没有/读不到就返回 undefined（与 canvas-base 同口径） */
+function readAdminToken(): string | undefined {
+  try {
+    if (typeof localStorage === 'undefined') return undefined
+    const token = (localStorage.getItem(ADMIN_TOKEN_KEY) ?? '').trim()
+    return token || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export class CloudApi {
   private baseUrl: string
   private readonly doFetch: FetchLike
 
   constructor(private readonly opts: CloudApiOptions = {}) {
     this.baseUrl = opts.baseUrl ?? ''
-    this.doFetch = opts.fetchImpl ?? ((url, init) => fetch(url, init))
+    const rawFetch = opts.fetchImpl ?? ((url, init) => fetch(url, init))
+    // 唯一请求出口：所有 HTTP 方法都在这里补令牌（一处覆盖画布写 / 资源 / 任务）。
+    // SSE 不走这里（EventSource 不能带头），见 subscribeChanges。
+    this.doFetch = (url, init) => {
+      const token = readAdminToken()
+      if (!token) return rawFetch(url, init)
+      const headers = new Headers(init?.headers)
+      headers.set(ADMIN_TOKEN_HEADER, token)
+      return rawFetch(url, { ...init, headers })
+    }
   }
 
   /** 换服务地址（设置改了立刻生效，不用重装插件） */
