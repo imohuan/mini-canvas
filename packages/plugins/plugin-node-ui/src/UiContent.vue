@@ -611,6 +611,16 @@ const interactive = ref(false)
 function onBridgeMessage(ev: MessageEvent): void {
   const win = iframeEl.value?.contentWindow
   if (!win || ev.source !== win) return
+  /*
+   * 还要看 Origin：沙箱 iframe（`sandbox="allow-scripts"`、不给 allow-same-origin）
+   * 是不透明源，消息的 origin 是字符串 `'null'`。只比 `ev.source` 的话，哪天这个 iframe
+   * 被导航到一个同源页面（`ev.source` 仍然是同一个 window），那条页面里的脚本就能冒充
+   * 沙箱页往节点里写东西。
+   *
+   * 放宽一种情况：某些浏览器在 `srcdoc` 上给的是 `about:srcdoc` 或空串 —— 那种仍是同一个
+   * 不可信文档，按沙箱页对待即可。真正该拒的是「有自己源的同源页面」。
+   */
+  if (ev.origin && ev.origin !== 'null' && ev.origin === window.location.origin) return
   const m = ev.data as
     | ({
         __canvasUi?: unknown

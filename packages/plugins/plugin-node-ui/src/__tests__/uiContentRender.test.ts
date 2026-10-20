@@ -162,5 +162,20 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     expect(src).toContain('/debug-docs')
     expect(src).toContain('win.location.href')
   })
+
+  /**
+   * ★ 沙箱 iframe 的消息只认「不透明源」。
+   *
+   * 只比 `ev.source` 不够：如果那个 iframe 被导航到一个同源页面，`ev.source` 仍然是
+   * 同一个 window，页面里的脚本就能冒充沙箱页往节点里写东西。
+   */
+  it('★ 收沙箱消息时同时校验 origin（同源导航不能冒充沙箱页）', async () => {
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+    )
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '')
+    expect(code).toContain("ev.origin !== 'null'")
+    expect(code).toContain('window.location.origin')
+  })
 })
 
