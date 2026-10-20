@@ -54,7 +54,8 @@ import { tracesDirOf } from './agent/traceFork.js'
 import { buildRuntimeContext, runtimeContextSection } from './agent/runtimeContext.js'
 import { listAgentPromptSections } from './serverFramework/agent.js'
 import { runAgentMiddleware } from './serverFramework/agent.js'
-import { createAdminAuth, isAdminPath } from './adminAuth.js'
+import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
+import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
 import { createRequestTrust } from './requestTrust.js'
 import { createTaskTokens } from './taskToken.js'
@@ -493,14 +494,26 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // ① 跨域：**必须最先**（实测：cors 后注册对已注册路由不生效）。
   //    收紧成同源 + 显式白名单：默认 `origin: '*'` 等于任何网页都能读写（2026-10-19 实测）。
   //    注意 `Origin: null`（沙箱 iframe）不在这里放行 —— 视觉节点已改宿主代发（commit 1）。
-  const trustedHosts = Array.from(
-    new Set([
-      `${opts.hostname ?? '127.0.0.1'}:${port}`,
-      `localhost:${port}`,
-      ...(opts.trustedHosts ?? []),
-      ...(process.env.MINI_CANVAS_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
-    ]),
-  )
+  /**
+   * Host 白名单。**故意用可变数组**：`port: 0` 时真实端口要等 listen 回调才知道，
+   * 而白名单在装配阶段（host.start 之前）就被 cors 与 requestTrust 捕获了。
+   * 原地替换内容（而不是换一个新数组）让那两处闭包都跟着更新 ——
+   * 否则 `createCloudServer({ port: 0 })` 起来后所有请求都会因为 `host: 127.0.0.1:0` 被拒。
+   */
+  const trustedHosts: string[] = []
+  const fillTrustedHosts = (listenPort: number): void => {
+    trustedHosts.splice(
+      0,
+      trustedHosts.length,
+      ...new Set([
+        `${opts.hostname ?? '127.0.0.1'}:${listenPort}`,
+        `localhost:${listenPort}`,
+        ...(opts.trustedHosts ?? []),
+        ...(process.env.MINI_CANVAS_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+      ]),
+    )
+  }
+  fillTrustedHosts(port)
   const trustedOrigins = Array.from(
     new Set([
       ...(opts.trustedOrigins ?? []),
@@ -538,6 +551,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   // ①.3 管理令牌：只拦「能执行代码 / 改画布 / 花钱」的入口（白名单在 adminAuth.ts）。
   //      OPTIONS 放行（预检不带令牌）；GET/HEAD 放行（读接口靠来源边界）。
+  //      审计成对：令牌通过 → 记 attempt，路由跑完 → 补 ok（非 2xx/3xx 记 rejected）。
+  //      没有成功记录的话，令牌泄露后根本回答不了「它被用来做了什么」。
   app.use('/api/*', async (c, next) => {
     const method = c.req.method.toUpperCase()
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next()
@@ -548,9 +563,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     // 脚本另一件要干的事：把产物字段写回本节点（`POST /api/canvases/:id/nodes`）。
     // 路由层那边会再核对「只能改自己这个节点」。
     if (
+      method === 'POST' &&
       (c.req.path.startsWith('/api/canvases/') && (c.req.path.endsWith('/resources') || c.req.path.endsWith('/nodes'))) &&
       c.req.header('x-task-token')
     ) {
+      // 只放行 POST：将来给这两条路径加 DELETE 时，不能让脚本令牌顺带进去。
       return next()
     }
     const verdict = adminAuth.verify(c.req.header('x-admin-token'))
@@ -569,7 +586,30 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         403,
       )
     }
-    await next()
+    const base = {
+      action: adminActionFor(method, c.req.path),
+      method,
+      path: c.req.path,
+      token: 'ok' as const,
+      ...(c.req.header('origin') ? { origin: c.req.header('origin')! } : {}),
+      ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
+    }
+    await audit.append({ ...base, result: 'attempt' })
+    let status = 0
+    try {
+      await next()
+      // 路由已经跑完：状态码决定结局。注意这里拿到的是**响应头已经写好**的状态码。
+      status = c.res?.status ?? 0
+    } catch (err) {
+      // 路由抛异常 = 这次写没有成功；记下结局再把错误抛回去，别吞掉。
+      await audit.append({ ...base, result: 'rejected', reason: 'threw' })
+      throw err
+    }
+    await audit.append(
+      status >= 200 && status < 400
+        ? { ...base, result: 'ok' }
+        : { ...base, result: 'rejected', reason: 'http-' + status },
+    )
   })
 
    // ①.5 本地 test 模型端点（用户口径 2026-10-09）：一个假的 OpenAI 兼容端点，
@@ -604,27 +644,51 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('allowTaskUpload', (input: { token?: string; canvasId: string; slot?: string }) =>
     input.slot !== undefined && taskTokens.verify(input.token, input.canvasId, input.slot),
   )
-  // 节点写同理：脚本只能改它自己那个节点（add/delete/update 三批的 id 都要等于绑定节点）。
+  /**
+   * 任务脚本能写进节点的字段白名单。
+   *
+   * 这几项是「产物」：脚本跑完把图/视频/音频/文本交回来。`uiHtml` / `uiScripts` 不在里面 ——
+   * 那是界面本身，让脚本改它等于让脚本给自己换一套代码（审查 M1）。
+   */
+  const TASK_WRITABLE_NODE_FIELDS = new Set(['uiOutputUrl', 'imageUrl', 'videoUrl', 'audioUrl', 'text'])
   host.ctx.inject(
     'verifyTaskWrite',
     (input: { token?: string; canvasId: string; body: Record<string, unknown> }) => {
-      const ids: string[] = []
-      for (const key of ['add', 'delete', 'update'] as const) {
-        const list = input.body[key]
-        if (!Array.isArray(list)) continue
-        for (const item of list) {
-          if (typeof item === 'string') ids.push(item)
-          else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
-            ids.push((item as { id: string }).id)
-          }
+      /*
+       * 只允许**更新自己这个节点的产物字段**。
+       *
+       * 原来的实现是「把所有 add/delete/update 里的 id 收集起来，全等于绑定节点就放行」。
+       * 两个洞：① add 一个 id 等于自己的「新节点」可以覆盖自己节点全部字段（含 uiHtml）；
+       * ② 只要有一批 id 对上，请求体里就能夹带别的键。脚本本来就只该交产物，用不上增删。
+       */
+      const body = input.body
+      for (const key of Object.keys(body)) {
+        if (key !== 'update') return false
+      }
+      const list = body.update
+      if (!Array.isArray(list) || list.length === 0) return false
+      for (const item of list) {
+        if (!item || typeof item !== 'object') return false
+        const rec = item as { id?: unknown; data?: unknown }
+        if (typeof rec.id !== 'string') return false
+        if (!taskTokens.verify(input.token, input.canvasId, rec.id)) return false
+        if (!rec.data || typeof rec.data !== 'object' || Array.isArray(rec.data)) return false
+        for (const field of Object.keys(rec.data as Record<string, unknown>)) {
+          if (!TASK_WRITABLE_NODE_FIELDS.has(field)) return false
         }
       }
-      if (ids.length === 0) return false
-      return ids.every((id) => taskTokens.verify(input.token, input.canvasId, id))
+      return true
     },
   )
   // 服务自己的 origin：用于后台插件安装的跨源检查（不传等于关掉该检查）
-  host.ctx.inject('selfOrigin', `http://${opts.hostname ?? '127.0.0.1'}:${port}`)
+  // 先按请求端口灌一次；真实端口在 listen 回调里再覆盖（port=0 / 端口顺延）。
+  // 记住撤销句柄：服务名不能重复 inject，覆盖 = 先撤再注。
+  let releaseSelfOrigin = host.ctx.inject('selfOrigin', `http://${opts.hostname ?? '127.0.0.1'}:${port}`)
+  // 独立调试源：节点 HTML 不再由后台同源托管（同源脚本能读走 localStorage 令牌）。
+  // 这里只把「按画布取目录」的能力交出去，听哪个端口由 debugOrigin 自己分配，
+  // 装配阶段 start() 一次（端口起来后 url 才有值）。
+  const debugOrigin = createDebugOrigin({ dataRoot: dataDir })
+  host.ctx.inject('debugOrigin', debugOrigin)
   if (agentEnabled) {
     host.ctx.inject('agentConfig', agentConfig)
     host.ctx.inject('agentSessions', agentSessions)
@@ -829,13 +893,26 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     adminTokenFile: adminAuth.tokenFile,
     trust: { hosts: trustedHosts, origins: trustedOrigins },
     reloadProviders,
-    start() {
+    async start() {
+      // 独立调试源先起来再听主端口：插件的 canvas_ui_build_debug_doc 在拿到 url 之前
+      // 会退回后台同源（那条路页面能读管理令牌）。所以这里 **await** 它，
+      // 只是不让失败拖垮主服务（调试是开发工具）。
+      try {
+        await debugOrigin.start()
+      } catch (err) {
+        console.warn('[cloud-server] 独立调试源启动失败（调试页退回后台同源，仅本机临时用）：' + String(err))
+      }
       return new Promise((resolve, reject) => {
         let listening = false
         const s = serve({ fetch: app.fetch, port, hostname }, (info) => {
           listening = true
           // 真实端口记下来：「自己取字节」判断"是不是本服务地址"要用它
           actualPort = info.port
+          // 真实端口定了 → Host 白名单跟着改（port:0 / 端口顺延都会走到这里）。
+          // 必须原地改，见 fillTrustedHosts 的说明。
+          fillTrustedHosts(info.port)
+          releaseSelfOrigin()
+          releaseSelfOrigin = host.ctx.inject('selfOrigin', `http://${hostname}:${info.port}`)
           // 端口定了 → 把运行环境上下文刷新成**真实地址**（提示词里的 {{BACKEND_BASE_URL}}
           // 与常驻小节都读它）。下一次建会话就是对的，不必重启。
           if (agentEnabled) agentConfig.setRuntimeContext(runtimeContext())
@@ -864,6 +941,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     stop() {
       watcher?.stop()
+      void debugOrigin.stop().catch(() => undefined)
     agentRuntime.disposeAll()
     agentHub.disposeAll()
       void tasks.dispose()

@@ -7,6 +7,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import type { AuditAction } from './audit.js'
 
 export interface AdminAuth {
   readonly token: string
@@ -43,8 +44,16 @@ export const ADMIN_POST_ONLY_PREFIXES = ['/api/canvases/', '/api/canvas/'] as co
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
+/**
+ * 前缀匹配：带尾斜杠的前缀按「目录」算；不带尾斜杠的必须**整段相等**或后面接 `/`。
+ *
+ * 2026-10-20 审查：原来对不带的直接 `startsWith`，`/api/jobs` 会连带保护 `/api/jobsfoo`、
+ * `/api/agent/mcp` 会连带 `/api/agent/mcpfoo`。方向是「多保护」，不会漏，但会和注释说的
+ * 「避免误伤兄弟路径」相反，也让排查 403 时多一层困惑。
+ */
 function matchesPrefix(pathname: string, prefix: string): boolean {
-  return pathname === prefix.replace(/\/$/, '') || pathname.startsWith(prefix)
+  if (prefix.endsWith('/')) return pathname.startsWith(prefix) || pathname === prefix.slice(0, -1)
+  return pathname === prefix || pathname.startsWith(prefix + '/')
 }
 
 /** method + path 判断是否受令牌保护（首版白名单）。 */
@@ -53,6 +62,22 @@ export function isAdminPath(method: string, pathname: string): boolean {
   if (ADMIN_WRITE_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix))) return true
   if (method === 'POST' && ADMIN_POST_ONLY_PREFIXES.some((prefix) => matchesPrefix(pathname, prefix))) return true
   return false
+}
+
+/**
+ * 把「受保护的写入口」归类成审计里的 action（审计日志用它回答「谁改了什么」）。
+ *
+ * 只做路径归类，不判断令牌：调用方拿到 action 后自己记 attempt / ok / rejected。
+ */
+export function adminActionFor(method: string, pathname: string): AuditAction {
+  if (pathname.startsWith('/api/canvases/')) return method.toUpperCase() === 'PUT' ? 'canvas/overwrite' : 'canvas/write'
+  if (pathname.startsWith('/api/canvas/')) return 'canvas/write'
+  if (pathname.startsWith('/api/task/')) return 'task/call'
+  if (pathname.startsWith('/api/agent/canvases/')) return 'agent/session-write'
+  if (pathname.startsWith('/api/agent/mcp')) return pathname.includes('/remove') ? 'agent/mcp-remove' : 'agent/mcp-add'
+  if (pathname.startsWith('/api/server-plugins/')) return 'server-plugin/install'
+  if (pathname.startsWith('/api/npm-plugins/')) return 'npm-plugin/install'
+  return 'write'
 }
 
 const TOKEN_RE = /^[0-9a-f]{64}$/i
