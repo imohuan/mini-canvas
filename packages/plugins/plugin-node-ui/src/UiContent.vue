@@ -812,6 +812,15 @@ const debugWin = ref<DebugWindow | null>(null)
 let debugTimer: ReturnType<typeof setTimeout> | null = null
 
 /**
+ * 上一次真正发出去的调试数据指纹。
+ *
+ * 为什么需要：调试页会把 `CanvasUI.setInputs` 回报给宿主，宿主再写回节点；
+ * 如果页面在 `onChange` 里回写同一份值，就会「宿主发 → 页面回 → 宿主再发」来回打。
+ * 内容没变就不发，这个环自动断掉。
+ */
+let lastDebugSig = ''
+
+/**
  * 打开**独立调试页**。
  *
  * ## 为什么不再是「同源副本 + document.write」（2026-10-20 审查 S1b）
@@ -853,7 +862,8 @@ async function openDebug(): Promise<void> {
   } catch {
     /* 跨源之后挂不上：靠下面 watch 里的 closed 判断兜底 */
   }
-  const r = await pushDebugDocs()
+  // 打开窗口时**总是**发一次（哪怕内容和上次一样：窗口是新开的，得把文件刷成最新的）
+  const r = await pushDebugDocs(true)
   if (!r.ok) {
     try {
       win.close()
@@ -886,17 +896,23 @@ function clearDebugWindow(win: DebugWindow): void {
  * 这条 POST 带管理令牌（它要写文件、签短令牌）。但**调试页自己拿不到管理令牌** ——
  * 页面里只有一张"只能写本节点这个槽位"的短令牌。
  */
-async function pushDebugDocs(): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+async function pushDebugDocs(
+  force = false,
+): Promise<{ ok: true; url: string } | { ok: false; error: string; skip?: boolean }> {
+  const payload = {
+    nodeId: props.id,
+    html: html.value,
+    inputs: inputValues.value,
+    upstream: upstream.value,
+  }
+  const sig = JSON.stringify(payload)
+  // 内容没变：直接跳过（不是错误，调用方不必打日志）
+  if (!force && sig === lastDebugSig) return { ok: false, error: '', skip: true }
   try {
     const res = await fetch(baseUrl.value + '/api/canvases/' + encodeURIComponent(canvasId) + '/debug-docs', {
       method: 'POST',
       headers: withAdminToken({ 'content-type': 'application/json' }),
-      body: JSON.stringify({
-        nodeId: props.id,
-        html: html.value,
-        inputs: inputValues.value,
-        upstream: upstream.value,
-      }),
+      body: sig,
     })
     const json = (await res.json().catch(() => ({}))) as { ok?: unknown; urls?: { html?: unknown }; error?: unknown }
     if (!res.ok || json.ok !== true) {
@@ -905,6 +921,7 @@ async function pushDebugDocs(): Promise<{ ok: true; url: string } | { ok: false;
     }
     const url = json.urls && typeof json.urls.html === 'string' ? json.urls.html : ''
     if (!url) return { ok: false, error: '调试页没生成出来：后台没给地址' }
+    lastDebugSig = sig
     return { ok: true, url }
   } catch (err) {
     return { ok: false, error: '调试页没生成出来：' + errText(err) }
@@ -927,7 +944,7 @@ watch([upstream, inputValues, html], () => {
   debugTimer = setTimeout(() => {
     debugTimer = null
     void pushDebugDocs().then((r) => {
-      if (!r.ok) console.warn('[ui-debug] 重发调试数据失败：' + r.error)
+      if (!r.ok && !r.skip) console.warn('[ui-debug] 重发调试数据失败：' + r.error)
     })
   }, 300)
 })
