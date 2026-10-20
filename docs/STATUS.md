@@ -5,6 +5,33 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-20，cloud-server 管理面安全加固）
+
+按 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md` 落地，四轮子代理审查
+（`docs/tmp/security-implementation-review.md`、`security-review-round{2,3,4}.md`）。
+
+**三道边界**：写入口要 `x-admin-token`（白名单在 `adminAuth.ts`）；`/api/*` 与 `/mcp`
+过 Host/Origin 边界（`requestTrust.ts`，`Origin: null` 一律拒）；审计写 `<数据目录>/audit.log`
+（hash 链 + `.head` 记行数与末行，能发现删末行）。
+
+**几条容易踩的**：
+
+- **调试页搬到了另一个端口**（`debugOrigin.ts`，启动日志有「调试页」那一行）。节点 HTML
+  不再由后台同源回读；同源 `resources/debug/*` 现在无条件 404。调试源起不来就**不生成**
+  调试页（不回退同源）。调试源只拿到一条窄通道：`POST /api/canvases/*/resources`。
+- **任务脚本**用的是「只绑本画布本节点」的短令牌（`taskToken.ts`），且只能 `update`
+  自己节点的五个产物字段 —— 夹带 `uiHtml` / `add` / `delete` 一律 403。
+- **可视节点**（沙箱 iframe）不再自己 fetch，全走宿主代发（`hostFetch.ts`）。
+  `CanvasUI.api` 只放行画布相关的那几类，`/api/agent/*`、`/api/task/*` 一律拒。
+- **整画布覆盖**（`PUT /api/canvases/:id`）不要令牌，但记 `canvas/overwrite`；
+  被来源边界拒掉的**写**请求也记一条 `auth-failed`（带 reason）。
+- **改前先看 `packages/docs/cloud-server/admin-auth.md`**：接口清单、前缀的三种匹配形态、
+  调试页流程、已知未解决，都在那一篇。
+
+验证：cloud-server 834、plugin-node-ui 369、ui 393、style-library 19 全绿；
+四个包 typecheck 干净；真机（Chrome 真点击）验过调试页独立源、短令牌写产物、沙箱保存、
+恶意 Origin / Host / 路径穿越全部被拒。
+
 ### 追记（2026-10-17，插件声明源自动登记 —— 热重载免后台 + 免手填）
 
 用户口径：前端启动时自动把插件自带的 watch 服务加进热重载监听，服务停了自动摘除；
