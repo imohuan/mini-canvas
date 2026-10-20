@@ -983,6 +983,17 @@ function onDebugMessage(ev: MessageEvent): void {
       )
       return
     }
+    // 页面说「令牌不好使了」（403）：重新签一张发过去。它下个 5 秒周期就拿到新的。
+    if (m.type === 'token-stale') {
+      if (debugTimer) clearTimeout(debugTimer)
+      debugTimer = setTimeout(() => {
+        debugTimer = null
+        void pushDebugDocs(true).then((r) => {
+          if (!r.ok) console.warn('[ui-debug] 重签调试令牌失败：' + r.error)
+        })
+      }, 0)
+      return
+    }
     if (m.type === 'state') {
       // 与沙箱那条链同一套口径：界面交上来的就是**这个节点的参数**
       const st = ev.data as { state?: unknown }

@@ -28,7 +28,12 @@ describe('调试页 sdk：上传只带节点令牌', () => {
 
   it('HTTP 非 2xx 会抛带状态码的错误（不再把 403 当成功）', () => {
     expect(js).toContain('HTTP ')
-    expect(js).toContain('if (!r.ok) throw')
+    expect(js).toContain('if (!r.ok) {')
+  })
+
+  it('★ 403 时通知画布重签令牌（页面开久了令牌会过期）', () => {
+    expect(js).toContain('r.status === 403')
+    expect(js).toContain('token-stale')
   })
 })
 

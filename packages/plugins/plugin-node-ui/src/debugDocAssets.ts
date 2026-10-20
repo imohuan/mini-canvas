@@ -83,7 +83,11 @@ export const SDK_JS_TEMPLATE = [
 "      })",
 "        .then(function(r){",
 "          return r.json().then(function(j){",
-"            if (!r.ok) throw new Error((j && j.error) || (\"保存产物失败 HTTP \" + r.status));",
+"            if (!r.ok) {",
+              // 403 = 短令牌过期（或换了个槽位）：通知画布重新签一张，页面 5 秒内自动拿到新的。
+"              if (r.status === 403) tell({ type: \"token-stale\" });",
+"              throw new Error((j && j.error) || (\"保存产物失败 HTTP \" + r.status));",
+"            }",
 "            return j;",
 "          });",
 "        })",
