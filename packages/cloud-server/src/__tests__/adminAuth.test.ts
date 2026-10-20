@@ -138,6 +138,20 @@ describe('isAdminPath', () => {
     expect(isAdminPath('POST', '/api/taskfoo')).toBe(false)
   })
 
+  /**
+   * ★ 名字前缀（以 `-` 结尾）必须命中 —— 它们没有「目录」语义。
+   *
+   * 2026-10-20：有人给 matchesPrefix 加 `/` 边界时，`/api/node-ui/debug-` 就不匹配
+   * `debug-accept` / `debug-result` 了 —— 这两条调试写接口等于凭空放开令牌校验。
+   */
+  it('★ /api/node-ui/debug- 是名字前缀：debug-accept / debug-result 都要保护', () => {
+    expect(isAdminPath('POST', '/api/node-ui/debug-accept')).toBe(true)
+    expect(isAdminPath('POST', '/api/node-ui/debug-result')).toBe(true)
+    // GET 调试下行仍然放行（SSE / 轮询）
+    expect(isAdminPath('GET', '/api/node-ui/debug-events')).toBe(false)
+    expect(isAdminPath('GET', '/api/node-ui/debug-poll')).toBe(false)
+  })
+
   it('不在清单里的写接口放行（资产/项目/历史/KV）', () => {
     expect(isAdminPath('POST', '/api/assets')).toBe(false)
     expect(isAdminPath('PUT', '/api/projects/x')).toBe(false)

@@ -53,6 +53,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
  */
 function matchesPrefix(pathname: string, prefix: string): boolean {
   if (prefix.endsWith('/')) return pathname.startsWith(prefix) || pathname === prefix.slice(0, -1)
+  // 例外：以 `-` 结尾的前缀是**名字前缀**（`/api/node-ui/debug-accept`、`debug-result`），
+  // 它们本来就没有「目录」语义，硬加 `/` 边界会把这两条漏掉。
+  if (prefix.endsWith('-')) return pathname.startsWith(prefix)
   return pathname === prefix || pathname.startsWith(prefix + '/')
 }
 

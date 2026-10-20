@@ -49,6 +49,6 @@ const shouldPass = [
 ]
 for (const [m, p] of shouldPass) {
   const got = isAdminPath(m, p)
-  const want = !['/api/canvases', '/api/canvases/default', '/api/assets', '/api/projects', '/api/kv/config/x'].includes(p) || m === 'POST' && p === '/api/assets'
-  if (got !== want) console.log('⚠️ 放行表不一致:', m, p, '→', got)
+  // 这 9 条全都是「不该要令牌」的：读接口、整画布 PUT、资产/项目/KV 写、/health。
+  if (got) console.log('⚠️ 不该保护却保护了:', m, p)
 }
