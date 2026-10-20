@@ -20,12 +20,17 @@
 flowchart LR
   A[Agent MCP] -- canvas_ui_write --> B[节点 data.uiHtml]
   B -- srcdoc 渲染 --> C[沙箱 iframe]
-  C -- HTTP /api/task/call --> D[后台脚本 .mjs]
+  C -- postMessage（宿主代发） --> C2[宿主 UiContent]
+  C2 -- HTTP /api/task/call + 令牌 --> D[后台脚本 .mjs]
   D -- ctx.save 槽位 + 写节点字段 --> B
   B -- ?v= 时间戳 --> E[下游节点]
 ``````
 
 > 判断准则：**界面管「长什么样」，脚本管「干什么活」，声明把两者绑在一起。**
+
+> 2026-10-20 起：沙箱 iframe **不再自己发 HTTP**。`save` / `task` / `cancel` / 读画布 / 下单
+> 全部经 `postMessage` 交给宿主（同源、带管理令牌）；任务日志由宿主订阅 SSE 再转回来。
+> 界面里写 `CanvasUI.api('/api/…')`，不要写 `fetch`。
 
 ## 为什么后台半非有不可
 

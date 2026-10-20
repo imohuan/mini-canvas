@@ -44,6 +44,7 @@ export async function run(width, ctx) {   // ctx 永远在最后一个参数
 | `ctx.log(msg)` | 往实时通道写一行 |
 | `ctx.progress(0..1)` | 报进度（界面能看到） |
 | `ctx.signal` | `AbortSignal`，取消时 `aborted` |
+| `ctx.taskToken` | 只允许写本画布本节点槽位的短时令牌（`ctx.save` 已自动带上，一般不用手动碰） |
 
 ### 三个助手
 
