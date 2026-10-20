@@ -49,15 +49,21 @@ describe('buildPack —— 拿后台打好的字节', () => {
    * 漏了的表现就是「导出节点包」「导入包」点下去 403，而这在单测里不报错 —— 只能靠断言头。
    */
   it('★ build / import 都带 x-admin-token（漏了就是 403）', async () => {
-    const g = globalThis as { localStorage?: unknown }
-    g.localStorage = {
+    // 必须用 vi.stubGlobal：Node 24 自带一个 localStorage 访问器，直接赋值可能被忽略
+    vi.stubGlobal('localStorage', {
       m: new Map<string, string>([['mc_admin_token', 'tok-123']]),
       getItem(k: string) { return (this as unknown as { m: Map<string, string> }).m.get(k) ?? null },
       setItem(k: string, v: string) { (this as unknown as { m: Map<string, string> }).m.set(k, v) },
       removeItem(k: string) { (this as unknown as { m: Map<string, string> }).m.delete(k) },
-    }
+    })
+    // buildPack 里会先问一次后台地址（fetchBackendOrigin），它同样走 fetch ——
+    // 所以这里的假 fetch 必须同时应付「问 origin」和「真打包」两种调用。
+    // 之前只认打包那条，问 origin 时返回的形状不对，导致第一条断言拿到 undefined。
     const calls: Array<{ url: string; headers?: Record<string, string> }> = []
     const fetchImpl = async (url: string, init?: { headers?: Record<string, string> }) => {
+      if (!url.includes('/api/node-packages/')) {
+        return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => ({ ok: true, origin: 'http://x' }) }
+      }
       calls.push({ url, headers: init?.headers })
       return {
         ok: true,
@@ -72,7 +78,7 @@ describe('buildPack —— 拿后台打好的字节', () => {
     expect(calls.map((c) => c.headers?.['x-admin-token'])).toEqual(['tok-123', 'tok-123'])
     expect(calls[0]!.url).toContain('/api/node-packages/build')
     expect(calls[1]!.url).toContain('/api/node-packages/import')
-    delete g.localStorage
+    vi.unstubAllGlobals()
   })
 
   it('二进制响应：原样转成 Uint8Array', async () => {
