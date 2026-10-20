@@ -188,9 +188,8 @@ export function createAuditLog(filePath: string): {
         }
 
         // 剩下的两种：行数相等（正常），或日志反而更少（被截断）。
-        // 链接续接一律用日志末行（否则写出一条 prev 对不上的链），但 count 取较大者：
-        // 被截断时不把大数降下来，这样后面即使继续追加，verify 仍会一直报「行数与头文件不符」，
-        // 删掉的那几行不会被「下一条 append」悄悄抹平。
+        // 链接续接一律用日志末行（否则写出一条 prev 对不上的链）。count 取头文件里的大数，
+        // 让被截断这件事在 verify 里一直能被看见。
         count = head.count
         lastHash = fileHash ?? head.lastHash
       })()
@@ -223,16 +222,25 @@ export function createAuditLog(filePath: string): {
   }
 
   async function verify(): Promise<{ ok: true } | { ok: false; line: number; reason: string }> {
-    let text: string | undefined
-    try {
-      text = await fs.readFile(filePath, 'utf8')
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-        text = undefined
-      } else {
-        return { ok: false, line: 1, reason: '读取审计日志失败' }
+    /** 读日志文件；不存在返回 undefined。 */
+    async function readText(): Promise<string | undefined> {
+      try {
+        return await fs.readFile(filePath, 'utf8')
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+        throw err
       }
     }
+
+    // 服务还活着的时候也可能跑来 verify（CLI 对着正在写入的日志跑）。
+    let text: string | undefined
+    try {
+      text = await readText()
+    } catch {
+      return { ok: false, line: 1, reason: '读取审计日志失败' }
+    }
+    const head = await readHead()
+
     const lines = text === undefined ? [] : text.split(/\r?\n/)
     while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
 
@@ -268,20 +276,29 @@ export function createAuditLog(filePath: string): {
     // 链内自洽还不够：删掉末尾几行，剩下的链照样是自洽的。拿头文件对总数和末行 hash。
     // 文件根本不存在 = 从没记过审计，视为 ok；文件存在（哪怕是空的）却没有头文件，
     // 说明日志或头文件被单独动过，不能放过。
-    const head = await readHead()
     if (!head) {
       if (text === undefined) return { ok: true }
       return { ok: false, line: 1, reason: '缺少头文件（日志可能被整体替换）' }
     }
-    if (head.count !== lines.length) {
+    // 行数比头文件少 = 一定有记录被删（正常写入只会让日志变长）。
+    if (lines.length < head.count) {
       return {
         ok: false,
-        line: Math.min(head.count, lines.length) + 1,
-        reason: '日志行数与头文件不符',
+        line: lines.length + 1,
+        reason: '日志行数与头文件不符（少 ' + (head.count - lines.length) + ' 行）',
+      }
+    }
+    // 行数比头文件多：多半是「日志已 append、头文件还没写完」的瞬间窗口，
+    // 但也可能是有人往后面追加了记录。如实报出来，并提示停止服务后重跑。
+    if (lines.length > head.count) {
+      return {
+        ok: false,
+        line: head.count + 1,
+        reason: '日志比头文件多 ' + (lines.length - head.count) + ' 行（服务正在写入时可能短暂出现，请停止服务后重跑）',
       }
     }
     if (head.count === 0) return { ok: true }
-    // count 相同但末行 hash 对不上：最后一行被换成了另一条自洽的假记录。
+    // 行数相同但末行 hash 对不上：最后一行被换成了另一条自洽的假记录。
     if (prevHash !== head.lastHash) {
       return { ok: false, line: lines.length, reason: '末行被截断' }
     }

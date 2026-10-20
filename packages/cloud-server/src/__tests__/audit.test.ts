@@ -111,7 +111,13 @@ describe('verify', () => {
     await log.append({ ...base, id: 'second' })
     const entries = await readEntries()
     await fs.writeFile(file, JSON.stringify(entries[0]) + '\n')
-    expect(await log.verify()).toEqual({ ok: false, line: 2, reason: '日志行数与头文件不符' })
+    const v = await log.verify()
+    expect(v.ok).toBe(false)
+    if (!v.ok) {
+      expect(v.line).toBe(2)
+      expect(v.reason).toContain('日志行数与头文件不符')
+      expect(v.reason).toContain('少 1 行')
+    }
   })
 
   it('改掉末行（行数不变）：hash 对不上，verify 失败', async () => {
@@ -128,7 +134,9 @@ describe('verify', () => {
     const log = createAuditLog(file)
     await log.append(base)
     await fs.writeFile(file, '')
-    expect(await log.verify()).toEqual({ ok: false, line: 1, reason: '日志行数与头文件不符' })
+    const v = await log.verify()
+    expect(v.ok).toBe(false)
+    if (!v.ok) expect(v.reason).toContain('日志行数与头文件不符')
   })
 
   it('正常追加后 verify ok，头文件与日志行数一致', async () => {
@@ -201,6 +209,23 @@ describe('verify', () => {
     const head = JSON.parse(await fs.readFile(file + '.head', 'utf8')) as { count: number }
     expect(head.count).toBe(3)
     expect(await second.verify()).toEqual({ ok: true })
+  })
+
+  it('边写边 verify 不会误报「行数与头文件不符」', async () => {
+    const log = createAuditLog(file)
+    await log.append(base)
+    // 20 条并发写在跑的同时反复 verify：要么读到一致快照（ok），要么明说「服务正在写入」，
+    // 绝不能把「正常写入」误报成「被删了行」。
+    const writes = Promise.all(Array.from({ length: 20 }, (_, i) => log.append({ ...base, id: 'w' + i })))
+    for (let i = 0; i < 10; i++) {
+      const v = await log.verify()
+      if (!v.ok) {
+        expect(v.reason).toContain('请停止服务后重跑')
+        expect(v.reason).not.toContain('少 ')
+      }
+    }
+    await writes
+    expect(await log.verify()).toEqual({ ok: true })
   })
 
   it('内容被改：报告该行 hash 不符', async () => {
