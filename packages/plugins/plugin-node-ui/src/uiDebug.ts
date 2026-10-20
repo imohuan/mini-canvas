@@ -161,7 +161,8 @@ function baseHref(raw?: string): string {
  *
  * ## 与沙箱里那份（buildUiBridge）的差别
  *
- *   · 消息标记是 __canvasUiDebug（宿主靠它认出「这是副本说的」）；
+ *   · 往宿主发用 __canvasUiDebug（宿主靠它认出「这是副本说的」）；
+ *     收宿主的回包要认 __canvasUiDebugResult（与 save 那条链同一个标记）；
  *   · save 的字节由**宿主代传**（副本自己不 fetch 上传）；
  *   · 其余方法形状一致，生成物不必为「在副本里跑」改一行代码。
  *
@@ -205,7 +206,9 @@ export function buildDebugBridge(): string {
     '  window.addEventListener(' + S + 'message' + S + ', function(e){',
     '    if(e.source !== parent) return;',
     '    var d = e.data; if(!d) return;',
-    '    if (d.__canvasUiDebug === 1 && d.reqId) {',
+    // 宿主回包用的标记是 __canvasUiDebugResult（save 那条链一直是它）；
+    // 两个标记都要认，否则 task / cancel 的 Promise 永远不结算。
+    '    if ((d.__canvasUiDebug === 1 || d.__canvasUiDebugResult === 1) && d.reqId) {',
     '      if (d.type === ' + S + 'task-event' + S + ') {',
     '        var pe = pending[d.reqId]; if (pe && pe.onTaskEvent) pe.onTaskEvent(d.event || {});',
     '        return;',

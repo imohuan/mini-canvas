@@ -170,6 +170,93 @@ describe('调试副本的桥（window.CanvasUI）', () => {
 })
 
 /**
+ * ★ 真的把桥跑起来，而不是只看字符串。
+ *
+ * 2026-10-20 审查发现的 S4：宿主回包标的是 __canvasUiDebugResult，
+ * 桥只认 __canvasUiDebug，于是 task / cancel 的 Promise 永远挂着。
+ * 只断言「桥里有这个字符串」的测试抓不到，必须让宿主真的回一条消息。
+ */
+describe('调试副本的桥：与宿主的往返（真跑一遍）', () => {
+  function runBridge() {
+    const js = buildDebugBridge()
+    const body = js.replace(/^<script>\n?/, '').replace(/<\/script>$/, '')
+    const listeners: Array<(e: { source: unknown; data: unknown }) => void> = []
+    const posted: Array<Record<string, unknown>> = []
+    const parent = {
+      postMessage(msg: Record<string, unknown>) {
+        posted.push(msg)
+      },
+    }
+    const window: Record<string, unknown> = {
+      addEventListener(type: string, fn: (e: { source: unknown; data: unknown }) => void) {
+        if (type === 'message') listeners.push(fn)
+      },
+      removeEventListener(type: string, fn: (e: { source: unknown; data: unknown }) => void) {
+        if (type !== 'message') return
+        const i = listeners.indexOf(fn)
+        if (i >= 0) listeners.splice(i, 1)
+      },
+    }
+    const document = { readyState: 'complete', addEventListener() {} }
+    // 桥里用的是裸名 window / parent / document
+    new Function('window', 'parent', 'document', body)(window, parent, document)
+    /** 宿主往副本回一条消息 */
+    const reply = (data: Record<string, unknown>) => {
+      for (const fn of [...listeners]) fn({ source: parent, data })
+    }
+    const bridge = window[BRIDGE_GLOBAL] as {
+      task(name: string, methods: string, args: unknown[], opts?: Record<string, unknown>): Promise<unknown>
+      cancel(runId: string): Promise<unknown>
+    }
+    return { bridge, posted, reply }
+  }
+
+  it('★ 宿主回 __canvasUiDebugResult，task 的 Promise 会结算', async () => {
+    const { bridge, posted, reply } = runBridge()
+    const p = bridge.task('t', 'm', [1], { wait: true })
+    // 先等一拍，让 hostCall 把消息 post 出去
+    await Promise.resolve()
+    const sent = posted.find((m) => m.type === 'task')
+    expect(sent).toBeTruthy()
+    expect(sent!.__canvasUiDebug).toBe(1)
+    const reqId = sent!.reqId as string
+
+    reply({ __canvasUiDebugResult: 1, reqId, ok: true, runId: 'r1', outputs: [] })
+    await expect(p).resolves.toMatchObject({ runId: 'r1' })
+  })
+
+  it('★ 失败回包会 reject（不再永远挂着）', async () => {
+    const { bridge, posted, reply } = runBridge()
+    const p = bridge.task('t', 'm', [], {})
+    await Promise.resolve()
+    const reqId = posted.find((m) => m.type === 'task')!.reqId as string
+    reply({ __canvasUiDebugResult: 1, reqId, ok: false, error: '脚本跑失败了' })
+    await expect(p).rejects.toThrow('脚本跑失败了')
+  })
+
+  it('★ task-event 也能按 reqId 送到 onLog / onProgress', async () => {
+    const { bridge, posted, reply } = runBridge()
+    const logs: string[] = []
+    const p = bridge.task('t', 'm', [], { onLog: (l: string) => logs.push(l) })
+    await Promise.resolve()
+    const reqId = posted.find((m) => m.type === 'task')!.reqId as string
+    reply({ __canvasUiDebugResult: 1, type: 'task-event', reqId, event: { type: 'log', line: 'hello' } })
+    reply({ __canvasUiDebugResult: 1, reqId, ok: true, runId: 'r1' })
+    await p
+    expect(logs).toEqual(['hello'])
+  })
+
+  it('★ cancel 走同一个回包标记', async () => {
+    const { bridge, posted, reply } = runBridge()
+    const p = bridge.cancel('run-9')
+    await Promise.resolve()
+    const reqId = posted.find((m) => m.type === 'task-cancel')!.reqId as string
+    reply({ __canvasUiDebugResult: 1, reqId, ok: true })
+    await expect(p).resolves.toMatchObject({ ok: true })
+  })
+})
+
+/**
  * 整份副本文档也必须是合法 HTML/JS：
  * 只验桥那一小段不够 —— bootstrap 与外壳是拼在一起的，
  * 任一处转义错了，真机上表现就是白屏，而单测看不出来。
