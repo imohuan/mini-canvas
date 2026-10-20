@@ -69,7 +69,10 @@ describe('上传上限：真实 socket', () => {
         else reject(err)
       })
       const pump = (): void => {
-        if (sent >= total) return req.end()
+        if (sent >= total) {
+          req.end()
+          return
+        }
         sent++
         if (req.write(chunk)) setImmediate(pump)
         else req.once('drain', pump)
