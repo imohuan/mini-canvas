@@ -1,9 +1,3 @@
-<<<<<<< ours
-=======
-Warning: truncated output (original token count: 170513)
-Total output lines: 7252
-
->>>>>>> theirs
 # mini-canvas 项目指挥入口（每次开工先读这里）
 
 > **我是项目的"当前该干什么"入口。** 读法：先看下面【一、现在该做什么】，再按需查【二、验证命令】
@@ -60,7 +54,6 @@ demo 2、typecheck 干净（ui 剩 1 个错 = 另一会话 VideoContent 的 time
 **验证**：ui 393（其中 1 失败 = 另一会话 VideoContent.vue 的 6 处裸色，与本轮无关）、
 plugin-hot-reload 11、plugin-hot-reload-demo 2，相关 typecheck 干净。已提交 f45fd6c9。
 
-<<<<<<< ours
 ### 追记（2026-10-14 八续，逐个体检插件系统的 Agent 相关能力 —— 查出并修好一个真漏洞）
 
 用户口径（原话）：「现在请检查一下你这边 Agent 其他的一些功能，就是你提供插件系统可以，
@@ -6165,7 +6158,6 @@ in-place 语义必须有测试锁，纯函数绿 ≠ 链路通）。修复：新
 ### 上一轮：批量连线补齐"N 条线 + 目标反馈"（用户指定，2026-09-15）
 - 用户反馈（原话）：「我要的连接线是 从多选中每一个节点 对饮端口创建一条连接线到鼠标位置 / 你没有get到这一点而且当前 他移动到目标节点上的时候 没有任何效果？？ 比如这里的3d 动效，什么模糊（失败检测什么的）你这里都没有实现」。
 - **确认了两处缺失**：① 上一轮只画了**一条**线（从多选框边缘出发），不是"每个选中节点各一条"；② 完全没写渲染层的连接反馈状态，所以目标节点上没有 3D 倾斜 / 模糊 / 气泡。
-=======
 ### 追记（2026-10-15 六续，调试连接走「邀请制」：多标签页唯一确认 + sessionStorage 认人 + 不改 HTML）
 
 用户口径（原话大意）：同一张画布会开多个标签页，Agent 调试时**只需要其中一个**建立连接；
@@ -6969,8 +6961,7 @@ minZoom 兜底生效、非法 minZoom 不参与判定。
 |---|---|---|
 | 新增上控制栏组件 | `plugin-node-audio/src/AudioTopToolbar.vue` | 图标上传按钮 + 隐藏的 file input；`useSoleNodeSelected` 判显隐、`useUiComponent('button')` 按名取设计系统按钮；不自己写 position（定位归壳的上插槽层） |
 | 注册 `out:top` 段 | `nodeAudioPlugin.ts` | `segments: {{ 'out:top': AudioTopToolbar }}`，与 image/video 逐字同形 |
-| 卡片空态收掉上传按钮 | `AudioContent.vue` | 删掉 `.aw-btn-upload` / `.aw-file` 与 `onPickFile` / `openPicker…140513 tokens truncated…泡。
->>>>>>> theirs
+| 卡片空态收掉上传按钮 | `AudioContent.vue` | 删掉 `.aw-btn-upload` / `.aw-file` 与 `onPickFile` / `openPicker`；换素材改走顶栏 |
 
 #### ① N 条临时线（每个选中节点各一条）
 - 新增纯函数 `buildBatchGuideLines(side, selectedIds, rects, cursor, snap?)`：每个选中节点**从他自己的外侧端口锚点**连到鼠标（或吸附点）。右侧拖出从各节点右缘中点出、左侧反之；吸附时所有线都指向目标端口锚点。拿不到矩形的节点跳过（不瞎猜位置）。
@@ -7299,8 +7290,6 @@ UI e2e **50/50**；三个 typecheck 全过。
 **注意**：`packages/ui/e2e/canvas-e2e.mjs` 的 `BASE` 现支持 `CANVAS_PORT` 环境变量
 （`vite.config` 是 `strictPort:false`，多个 worktree 同起时 5288 归属不定，写死会打到别人的代码上）。
 ### 最近完成（2026-10-06，Agent 对话「顺序 + 合并」+ 自带画布 MCP 锁）
-<<<<<<< ours
-=======
 **三条观感规则的落点**（都写在 textSkeleton.ts 顶部注释里）：
 
 - **短行顶到 50% 照画**（第三次修正后的规则）：10%~50% 之间的行顶到半行宽画出来，
@@ -7320,24 +7309,3 @@ UI e2e **50/50**；三个 typecheck 全过。
 | 19 字 / 短句 / 空行 / 19 字 / 空行 / 8 字段 / 19 字 / 1 字 | 8 | 4 | 96.2(0) / **50**(21) / 88.5(84) / **50**(147) |
 | 19 字 + 1 字 + 19 字 | 5 | 2 | 96.2(0) / 76.9(63) —— 被隐藏的 1 字行没把下面那行顶上来 |
 | 「短的一行」（5 字） | 1 | 1 | **50**（不再退化成色块，也不会留一片空白） |
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
->>>>>>> theirs
