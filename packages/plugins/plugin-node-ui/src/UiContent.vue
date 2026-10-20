@@ -41,7 +41,6 @@ import {
   type RasterTierConfig,
 } from './rasterTier'
 import { fetchBackendOrigin } from './uiOrigin'
-import { buildDebugDoc } from './uiDebug'
 import {
   UI_DEBUG_INVITE_KEY,
   buildSdkScriptBody,
@@ -800,72 +799,128 @@ const iframeEl = ref<HTMLIFrameElement | null>(null)
 // 会把 addEventListener / postMessage 的签名搅乱（实测 typecheck 报
 // 「EventListener 只接受 1 个参数」）。所以这里只声明本文件真用到的那几个方法。
 interface DebugWindow {
-  document: { open(): void; write(s: string): void; close(): void; title: string }
+  readonly closed: boolean
   postMessage(msg: unknown, target: string): void
   addEventListener(t: string, fn: () => void): void
   close(): void
+  location: { href: string }
 }
 
 /** 当前开着的调试窗口（空 = 没开） */
 const debugWin = ref<DebugWindow | null>(null)
 
+/** 参数 / 上游变了以后，攒一下再重发（不然拖一次滑杆能发几十次请求） */
+let debugTimer: ReturnType<typeof setTimeout> | null = null
+
 /**
- * 打开**调试窗口**：把这份界面复制进一个普通窗口，让它能被调试。
+ * 打开**独立调试页**。
  *
- * ## 为什么不是「直接调试画布上那个 iframe」
+ * ## 为什么不再是「同源副本 + document.write」（2026-10-20 审查 S1b）
  *
- * 那个 iframe 故意**不给** allow-same-origin（沙箱是唯一的安全边界，见文件头），
- * 于是父页面读不到它、DevTools 也点不进去 —— 这是**设计使然**，不是 bug。
- * 所以调试走「另开一份副本」：副本是同源的普通页面，
- * 控制台 / 断点 / 单步 / 读变量全都回来；而画布上那个节点一行代码都不改。
+ * 原来那个副本是 `about:blank`，**继承画布页的源**：节点 HTML 里的脚本能读
+ * `localStorage.mc_admin_token`、能直接调 `/api/*` 改画布。沙箱 iframe 好不容易
+ * 守住的那条线，被这个"方便调试"的按钮从后门绕开了。
  *
- * ## 副本与节点的关系
+ * 现在调试产物由后台写到 `resources/debug/`，再由**另一个端口**（调试源）只读提供。
+ * 浏览器眼里它是另一个源，读不到画布页的令牌。DevTools / CDP / 断点照旧全通。
  *
- * 副本是**另一份运行实例**，不是节点那个 iframe 的镜子。所以：
- *   · 在副本里点的效果不会自动出现在画布上（要写回得走下面的桥）；
- *   · 副本里报上来的「产物」由宿主落进节点（与沙箱那条链同一条），
- *     于是「在副本里调 CanvasUI.save，画布上那个节点真的出图」成立。
+ * ## 时序
  *
- * ## 为什么用 window.open 而不是新开一个同源 iframe
+ * 先同步开窗口（躲过弹窗拦截），再 POST 让后台生成三份文件，成功后才导航到调试 URL。
+ * 空白窗口里不执行任何用户代码，所以这段等待没有安全问题。
  *
- * 同源 iframe 也能读，但它仍然**长在画布页面里** —— 层级、事件、遮挡全是问题，
- * 而且 DevTools 的 Sources 面板里它是折叠的一帧，打断点远不如独立窗口顺手。
- * 独立窗口就是「正常写 UI」时那个调试环境，用户的学习成本为零。
+ * ## 参数 / 上游变了怎么办
+ *
+ * 调试页每 5 秒用 <script> 重载 context.js，所以这里只要把新数据重发一遍，
+ * 页面自己会跟上 —— 不用用户关掉重开。
  */
-function openDebug(): void {
+async function openDebug(): Promise<void> {
   if (!hasHtml.value) return
-  const win = window.open('', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null
+  const win = window.open('about:blank', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null
   if (!win) {
     // 被浏览器拦了（弹窗拦截）：说清楚该怎么办，别让用户以为按钮坏了
     window.alert('调试窗口被浏览器拦住了。请允许这个站点弹窗，然后再点一次「调试」。')
     return
   }
-  const doc = buildDebugDoc({
-    html: html.value,
-    nodeId: props.id,
-    canvasId,
-    baseUrl: baseUrl.value,
-    theme: theme.value,
-    upstream: upstream.value,
-    inputs: inputValues.value,
-    palette: palette.value,
-  })
-
-  win.document.open()
-  win.document.write(doc)
-  win.document.close()
-  // 标题写清楚「这是副本 + 是哪个节点」：调试时一眼知道自己改的不是画布上那个
-  win.document.title = '调试 · 可视化节点 ' + props.id + '（副本，不影响画布）'
-
-  // 记住这个窗口：它报上来的「产物 / 参数」由本组件落进节点
   debugWin.value = win
   win.addEventListener('pagehide', () => {
     if (debugWin.value === win) debugWin.value = null
+    if (debugTimer) {
+      clearTimeout(debugTimer)
+      debugTimer = null
+    }
   })
+  const r = await pushDebugDocs()
+  if (!r.ok) {
+    try {
+      win.close()
+    } catch {
+      /* 已经关了 */
+    }
+    debugWin.value = null
+    window.alert(r.error)
+    return
+  }
+  try {
+    win.location.href = r.url
+  } catch {
+    window.alert('调试页打不开（窗口可能被关掉了）。再点一次「调试」试试。')
+  }
 }
 
 /**
- * 收调试副本「往外报」的两件事（参数 / 产物）。
+ * 把当前这份界面 + 数据写到调试源，返回可打开的 URL。
+ *
+ * 这条 POST 带管理令牌（它要写文件、签短令牌）。但**调试页自己拿不到管理令牌** ——
+ * 页面里只有一张"只能写本节点这个槽位"的短令牌。
+ */
+async function pushDebugDocs(): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(baseUrl.value + '/api/canvases/' + encodeURIComponent(canvasId) + '/debug-docs', {
+      method: 'POST',
+      headers: withAdminToken({ 'content-type': 'application/json' }),
+      body: JSON.stringify({
+        nodeId: props.id,
+        html: html.value,
+        inputs: inputValues.value,
+        upstream: upstream.value,
+      }),
+    })
+    const json = (await res.json().catch(() => ({}))) as { ok?: unknown; urls?: { html?: unknown }; error?: unknown }
+    if (!res.ok || json.ok !== true) {
+      const why = typeof json.error === 'string' && json.error ? json.error : 'HTTP ' + res.status
+      return { ok: false, error: '调试页没生成出来：' + why }
+    }
+    const url = json.urls && typeof json.urls.html === 'string' ? json.urls.html : ''
+    if (!url) return { ok: false, error: '调试页没生成出来：后台没给地址' }
+    return { ok: true, url }
+  } catch (err) {
+    return { ok: false, error: '调试页没生成出来：' + errText(err) }
+  }
+}
+
+/**
+ * 调试窗口开着时，参数 / 上游 / 界面一变就把新数据重发过去（攒 300ms）。
+ *
+ * 为什么窗口关着就不发：那等于每次改参数都往磁盘写三份文件，纯浪费。
+ */
+watch([upstream, inputValues, html], () => {
+  const win = debugWin.value
+  if (!win || win.closed) return
+  if (debugTimer) clearTimeout(debugTimer)
+  debugTimer = setTimeout(() => {
+    debugTimer = null
+    void pushDebugDocs().then((r) => {
+      if (!r.ok) console.warn('[ui-debug] 重发调试数据失败：' + r.error)
+    })
+  }, 300)
+})
+
+/**
+ * 收调试页「往外报」的两件事：**已保存**通知，和参数变更。
+ *
+ * 为什么还要收「已保存」：独立调试页自己带短令牌把产物写进槽位，
+ * 但节点上的 `uiOutputUrl` / `imageUrl` 还得宿主补一笔（否则下游节点不知道有新产物）。
  *
  * 为什么必须校验 ev.source：消息是广播的，不认来源的话页面里任何一段脚本
  * 都能伪造一条消息往节点里写东西（与沙箱那条链同一套理由）。
@@ -877,67 +932,19 @@ function onDebugMessage(ev: MessageEvent): void {
     | ({
         __canvasUiDebug?: unknown
         type?: unknown
-        reqId?: unknown
-        payload?: unknown
-        bytes?: unknown
         name?: unknown
         text?: unknown
-        args?: unknown
-        methods?: unknown
-        wait?: unknown
-        subscribe?: unknown
-        runId?: unknown
+        url?: unknown
       } & Record<string, unknown>)
     | null
   if (!m || m.__canvasUiDebug !== 1) return
   try {
-    // 副本是同源普通页面，直接调宿主代发器（不再自己拼 URL / 不再裸 fetch）。
-    // 这里回包带 reqId：副本的 save 现在按 reqId 结算。
-    if (m.type === 'save' && typeof m.reqId === 'string') {
-      const payload = m.payload
-      if (!isSavePayload(payload)) {
-        replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: false, error: '副本没有交出字节' })
-        return
-      }
-      const name = typeof m.name === 'string' ? m.name : 'out.png'
-      const text = typeof m.text === 'string' ? m.text : undefined
-      void hostProxy()
-        .save(payload as SavePayload, name)
-        .then(({ url }) => {
-          applyOutput(url, name, text)
-          replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: true, url })
-        })
-        .catch((err) =>
-          replyDebug(win, { __canvasUiDebugResult: 1, reqId: m.reqId, ok: false, error: errText(err) }),
-        )
-      return
-    }
-    // 副本的 task / cancel 也交给宿主：统一令牌、统一错误话术。
-    if ((m.type === 'task' || m.type === 'task-cancel') && typeof m.reqId === 'string') {
-      const reqId = m.reqId
-      const finish = (msg: Record<string, unknown>): void =>
-        replyDebug(win, { __canvasUiDebugResult: 1, reqId, ...msg })
-      if (m.type === 'task-cancel') {
-        const runId = typeof m.runId === 'string' ? m.runId : ''
-        void hostProxy()
-          .cancel(runId)
-          .then((r) => finish(r))
-          .catch((err) => finish({ ok: false, error: errText(err) }))
-        return
-      }
-      void hostProxy()
-        .task(
-          {
-            name: String(m.name ?? ''),
-            methods: String(m.methods ?? ''),
-            args: Array.isArray(m.args) ? m.args : [],
-            wait: m.wait === true,
-            events: m.subscribe === true,
-          },
-          (event) => replyDebug(win, { __canvasUiDebugResult: 1, type: 'task-event', reqId, event }),
-        )
-        .then((r) => finish(r))
-        .catch((err) => finish({ ok: false, error: errText(err) }))
+    if (m.type === 'saved' && typeof m.url === 'string' && m.url) {
+      applyOutput(
+        m.url,
+        typeof m.name === 'string' && m.name ? m.name : 'out.png',
+        typeof m.text === 'string' ? m.text : undefined,
+      )
       return
     }
     if (m.type === 'state') {
@@ -951,15 +958,6 @@ function onDebugMessage(ev: MessageEvent): void {
     }
   } catch {
     // 节点可能已被删掉：静默跳过（不该因为一次上报把调试搞崩）
-  }
-}
-
-/** 给副本回一句「产物我收了 / 没收」 */
-function replyDebug(win: DebugWindow, msg: unknown): void {
-  try {
-    win.postMessage(msg, '*')
-  } catch {
-    /* 窗口可能已经关了 */
   }
 }
 

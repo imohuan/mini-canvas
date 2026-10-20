@@ -137,6 +137,8 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
       'GET /api/task/info',
       'GET /api/task/list',
       'GET /api/task/status',
+      // 画布内「调试」按钮走这条：把当前界面写到调试源（管理令牌由后台中间件校验）
+      'POST /api/canvases/:canvasId/debug-docs',
       'POST /api/node-packages/build',
       // 导出到本机下载目录（用户 2026-10-14）
       'POST /api/node-packages/export',
