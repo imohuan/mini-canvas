@@ -27,6 +27,7 @@ export type AuditAction =
   | 'npm-plugin/uninstall'
   | 'agent/mcp-add'
   | 'agent/mcp-remove'
+  | 'mcp/call'
   | 'auth-failed'
 
 export interface AuditEntry {

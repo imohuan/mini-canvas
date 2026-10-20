@@ -111,6 +111,22 @@ describe('写操作的审计成对：attempt → ok / rejected（M3）', () => {
 })
 
 describe('任务令牌只能写本节点的产物字段（M1）', () => {
+  it('/mcp 没有令牌，但每次调用都留 attempt + 工具名（M6 的最低要求）', async () => {
+    const { port } = await boot()
+    const res = await fetch('http://127.0.0.1:' + port + '/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'canvas_list_canvases', arguments: {} } }),
+    })
+    // 只要不是被来源边界拒掉就行（这里验的是审计，不验业务结果）
+    expect(res.status).toBeLessThan(500)
+    await res.text()
+    const lines = await readAudit()
+    const mine = lines.filter((l) => l.action === 'mcp/call')
+    expect(mine[0]).toMatchObject({ result: 'attempt', path: '/mcp#canvas_list_canvases', token: 'disabled' })
+    expect(mine.some((l) => l.result === 'ok' || l.result === 'rejected')).toBe(true)
+  })
+
   it('独立调试源起来后自动进 Origin 白名单（跨源写产物才不会被挡）', async () => {
     const { port } = await boot()
     const debugUrl = (srv.ctx.tryGet<{ url: string }>('debugOrigin') ?? { url: '' }).url

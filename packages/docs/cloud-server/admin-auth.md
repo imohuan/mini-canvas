@@ -155,6 +155,10 @@ node packages/cloud-server/dist/cli.js audit-verify -d .mini-canvas
 会提示「服务正在写入时可能短暂出现，请停止服务后重跑」；行数**比头文件少**则一定是被删了。
 日志不提供 HTTP 读取接口 —— 那等于把它暴露给网页。
 
+`/mcp` 这一版仍然没有令牌（只靠 Host / Origin），但它**现在有审计**：每次调用记
+`attempt` 与结局，`path` 形如 `/mcp#canvas_update_node`（工具名拼在后面），
+`token` 记 `disabled`。查「谁在什么时候调了哪个工具」靠这一列。
+
 ## 六、关闭鉴权
 
 ```bash

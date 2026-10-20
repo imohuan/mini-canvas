@@ -792,6 +792,44 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   //    ui 静态托管放在最后（见 ⑤ 的 afterRoutes）——它是兜底通配，必须排在插件路由之后。
   const mcpEnabled = opts.mcp !== false
   if (mcpEnabled) {
+    /**
+     * `/mcp` 没有令牌（首版取舍：SDK transport 只认 Host/Origin）。
+     * 那就至少留一条审计：谁在什么时候调了哪个工具。
+     *
+     * 读工具名要碰 body，但 transport 还要用同一个请求 —— 所以 clone 一份来解析，
+     * 原请求原样往下交。克隆失败（不是 JSON-RPC、例如 GET 的 SSE 流）就只记路径。
+     */
+    app.use('/mcp', async (c, next) => {
+      const method = c.req.method.toUpperCase()
+      let tool: string | undefined
+      if (method === 'POST') {
+        try {
+          const body = (await c.req.raw.clone().json()) as { method?: unknown; params?: { name?: unknown } }
+          if (body?.method === 'tools/call' && typeof body.params?.name === 'string') tool = body.params.name
+        } catch {
+          /* 不是 JSON-RPC：不记工具名 */
+        }
+      }
+      const base = {
+        action: 'mcp/call' as const,
+        method,
+        path: tool ? '/mcp#' + tool : '/mcp',
+        token: 'disabled' as const,
+        ...(c.req.header('origin') ? { origin: c.req.header('origin')! } : {}),
+        ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
+      }
+      await audit.append({ ...base, result: 'attempt' })
+      try {
+        await next()
+      } catch (err) {
+        await audit.append({ ...base, result: 'rejected', reason: 'threw' })
+        throw err
+      }
+      const status = c.res?.status ?? 0
+      await audit.append(
+        status >= 200 && status < 400 ? { ...base, result: 'ok' } : { ...base, result: 'rejected', reason: 'http-' + status },
+      )
+    })
     app.route(
       '/',
       mcpRoutes(
