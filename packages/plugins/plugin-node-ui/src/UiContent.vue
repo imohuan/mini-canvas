@@ -52,6 +52,7 @@ import {
 } from './debugSession'
 import { emitUiDebugEvent } from './debugEventBus'
 import { createHostProxy, errText, isSavePayload, type SavePayload } from './hostFetch'
+import { openDebugWindow } from './debugWindow'
 import { withAdminToken } from '@mini-canvas/canvas-base'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -854,12 +855,23 @@ let lastDebugSig = ''
  */
 async function openDebug(): Promise<void> {
   if (!hasHtml.value) return
-  const win = window.open('about:blank', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null
-  if (!win) {
-    // 被浏览器拦了（弹窗拦截）：说清楚该怎么办，别让用户以为按钮坏了
-    window.alert('调试窗口被浏览器拦住了。请允许这个站点弹窗，然后再点一次「调试」。')
-    return
-  }
+  /*
+   * 三条分支（被拦 / 后台没生成出来 / 导航失败）都在 openDebugWindow 里，那边有单测。
+   * 这里只负责把副作用接进来：真开窗、真 alert、真取地址。
+   */
+  const r = await openDebugWindow({
+    openWindow: () =>
+      window.open('about:blank', 'mc-ui-debug-' + props.id, 'width=960,height=720') as unknown as DebugWindow | null,
+    fetchDocUrl: async () => {
+      // 打开窗口时**总是**发一次（窗口是新开的，得把文件刷成最新的）
+      const made = await pushDebugDocs(true)
+      return made.ok ? made : { ok: false as const, error: made.error }
+    },
+    alert: (m) => window.alert(m),
+  })
+  if (!r.ok) return
+
+  const win = r.win as unknown as DebugWindow
   debugWin.value = win
   // pagehide 在这里有两次：① 我们把 about:blank 导航到调试源（不是关窗）；
   // ② 用户真的关掉窗口。**只有 closed 为真才算关**，否则会把刚打开的窗口误清掉。
@@ -871,23 +883,6 @@ async function openDebug(): Promise<void> {
     })
   } catch {
     /* 跨源之后挂不上：靠下面 watch 里的 closed 判断兜底 */
-  }
-  // 打开窗口时**总是**发一次（哪怕内容和上次一样：窗口是新开的，得把文件刷成最新的）
-  const r = await pushDebugDocs(true)
-  if (!r.ok) {
-    try {
-      win.close()
-    } catch {
-      /* 已经关了 */
-    }
-    debugWin.value = null
-    window.alert(r.error)
-    return
-  }
-  try {
-    win.location.href = r.url
-  } catch {
-    window.alert('调试页打不开（窗口可能被关掉了）。再点一次「调试」试试。')
   }
 }
 

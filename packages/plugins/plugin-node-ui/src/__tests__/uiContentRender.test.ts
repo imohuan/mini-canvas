@@ -160,7 +160,12 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     expect(code).not.toContain('buildDebugDoc')
     // 走的是后台生成接口，页面地址由后台给
     expect(src).toContain('/debug-docs')
-    expect(src).toContain('win.location.href')
+    // 导航那一行现在在 debugWindow.ts（抽出去是为了能单测三条分支）
+    expect(src).toContain('openDebugWindow')
+    const helper = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('../debugWindow.ts', import.meta.url), 'utf8'),
+    )
+    expect(helper).toContain('win.location.href = made.url')
   })
 
   /**
