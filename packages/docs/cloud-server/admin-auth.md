@@ -48,6 +48,11 @@ x-admin-token: <64 位 hex>
 读接口（GET / HEAD）不要令牌；**资产、项目、历史、KV 的写接口这一版也还没有令牌**，
 它们靠来源边界兜底 —— 这是已知的取舍，不要以为它们已经安全了。
 
+前缀里有两种形态，规则不一样：带**尾斜杠**的按「目录」算（`/api/task/` 命中
+`/api/task/call`）；以 **`-`** 结尾的是「名字前缀」（`/api/node-ui/debug-` 命中
+`debug-accept`、`debug-result`）。其余不带斜杠的必须整段相等或后面接 `/` ——
+所以 `/api/jobs` 不会连累 `/api/jobsfoo`。
+
 ## 二、请求边界（Host / Origin）
 
 `/api/*` 与 `/mcp` 都要过这一关：
