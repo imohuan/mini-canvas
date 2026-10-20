@@ -514,7 +514,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     )
   }
   fillTrustedHosts(port)
-  const trustedOrigins = Array.from(
+  /**
+   * Origin 白名单。同样**可变**：独立调试源是另一个端口，起来之后才知道地址，
+   * 而调试页要带短令牌把产物写回本节点（跨源 POST），不放行它就 403。
+   */
+  const trustedOrigins: string[] = Array.from(
     new Set([
       ...(opts.trustedOrigins ?? []),
       ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -537,7 +541,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         }
       },
       allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowHeaders: ['content-type', 'accept', 'x-admin-token'],
+      // x-task-token：独立调试页（另一个端口）用它把产物写回本节点。
+      // 不列在这里，跨源预检就会失败，页面上只剩一句「Failed to fetch」。
+      allowHeaders: ['content-type', 'accept', 'x-admin-token', 'x-task-token'],
       maxAge: 600,
     }),
   )
@@ -898,7 +904,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       // 会退回后台同源（那条路页面能读管理令牌）。所以这里 **await** 它，
       // 只是不让失败拖垮主服务（调试是开发工具）。
       try {
-        await debugOrigin.start()
+        const debugUrl = await debugOrigin.start()
+        // 调试页与后台不同源：它要带短令牌写回本节点，必须进 Origin 白名单。
+        // 端口是系统分配的，只有 start() 之后才知道，所以在这里追加。
+        if (debugUrl && !trustedOrigins.includes(debugUrl)) trustedOrigins.push(debugUrl)
       } catch (err) {
         console.warn('[cloud-server] 独立调试源启动失败（调试页退回后台同源，仅本机临时用）：' + String(err))
       }

@@ -111,6 +111,55 @@ describe('写操作的审计成对：attempt → ok / rejected（M3）', () => {
 })
 
 describe('任务令牌只能写本节点的产物字段（M1）', () => {
+  it('独立调试源起来后自动进 Origin 白名单（跨源写产物才不会被挡）', async () => {
+    const { port } = await boot()
+    const debugUrl = (srv.ctx.tryGet<{ url: string }>('debugOrigin') ?? { url: '' }).url
+    expect(debugUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
+    expect(srv.trust.origins).toContain(debugUrl)
+    // 预检必须放行 x-task-token，否则调试页只会看到 Failed to fetch
+    const pre = await fetch('http://127.0.0.1:' + port + '/api/canvases/default/resources?slot=n1', {
+      method: 'OPTIONS',
+      headers: {
+        origin: debugUrl,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type,x-task-token',
+      },
+    })
+    expect(pre.status).toBeLessThan(400)
+    expect((pre.headers.get('access-control-allow-headers') ?? '').toLowerCase()).toContain('x-task-token')
+  })
+
+  it('★ 调试页（另一个端口）能用短令牌真把产物写回本节点', async () => {
+    const { port } = await boot()
+    const debugUrl = (srv.ctx.tryGet<{ url: string }>('debugOrigin') ?? { url: '' }).url
+    const tokens = srv.ctx.tryGet<{ issue(c: string, n: string): string }>('taskTokens')!
+    const token = tokens.issue('default', 'n1')
+    // 这条请求的 Origin 是调试源（与后台不同源）：来源边界、CORS、令牌、上传四关全过才 200
+    const res = await fetch('http://127.0.0.1:' + port + '/api/canvases/default/resources?slot=n1&name=out.png', {
+      method: 'POST',
+      headers: { 'content-type': 'image/png', origin: debugUrl, 'x-task-token': token },
+      body: new Uint8Array([137, 80, 78, 71]),
+    })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('access-control-allow-origin')).toBe(debugUrl)
+    const body = (await res.json()) as { ok?: boolean; url?: string }
+    expect(body.ok).toBe(true)
+    expect(body.url).toBe('/api/canvases/default/resources/slot-n1.png')
+  })
+
+  it('同样的短令牌，换个画布 / 换个槽位一律 403', async () => {
+    const { port } = await boot()
+    const debugUrl = (srv.ctx.tryGet<{ url: string }>('debugOrigin') ?? { url: '' }).url
+    const tokens = srv.ctx.tryGet<{ issue(c: string, n: string): string }>('taskTokens')!
+    const token = tokens.issue('default', 'n1')
+    const bad = await fetch('http://127.0.0.1:' + port + '/api/canvases/default/resources?slot=n2&name=out.png', {
+      method: 'POST',
+      headers: { 'content-type': 'image/png', origin: debugUrl, 'x-task-token': token },
+      body: new Uint8Array([1, 2, 3]),
+    })
+    expect(bad.status).toBe(403)
+  })
+
   type Verify = (input: { token?: string; canvasId: string; body: Record<string, unknown> }) => boolean
 
   it('update 自己的产物字段放行；夹带 uiHtml / 改别的节点 / add 一律拒', async () => {
