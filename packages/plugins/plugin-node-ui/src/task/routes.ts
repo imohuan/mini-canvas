@@ -278,6 +278,7 @@ export function registerTaskRoutes(ctx: TaskServerCtx, dir: string): void {
       dataRoot: ctx.tryGet<{ dataRoot?(): string }>('canvasStore')?.dataRoot?.() ?? '',
       canvasId,
       nodeId,
+      taskToken: ctx.tryGet<{ issue(canvasId: string, nodeId: string): string }>('taskTokens')?.issue(canvasId, nodeId) ?? '',
       onEvent: (runId, e) => publish(runId, e),
       ...(wait
         ? {

@@ -51,6 +51,8 @@ export interface TaskContext {
   canvasId: string
   nodeId: string
   name: string
+  /** 只允许写本节点槽位的短时令牌（见 TaskContextData.taskToken 的说明） */
+  taskToken: string
   /** 往实时通道写一行 */
   log(s: string): void
   /** 取消信号 */
@@ -66,6 +68,14 @@ export interface TaskContextData {
   canvasId: string
   nodeId: string
   name: string
+  /**
+   * 「只允许写本节点槽位」的短时令牌（首版管理鉴权之后新增）。
+   *
+   * 为什么不是管理令牌：脚本是用户写的外部代码，把最高权限交给它等于把
+   * 「装插件 / 改画布 / 跑命令」全交出去（方案第十七节）。这个令牌只对
+   * `POST /api/canvases/<本画布>/resources?slot=<本节点>` 有效，几分钟过期。
+   */
+  taskToken: string
 }
 
 /**
@@ -92,6 +102,7 @@ export function contextDataOf(input: {
   canvasId: string
   nodeId: string
   name: string
+  taskToken: string
 }): TaskContextData {
   return {
     workspace: input.workspace,
@@ -101,5 +112,6 @@ export function contextDataOf(input: {
     canvasId: input.canvasId,
     nodeId: input.nodeId,
     name: input.name,
+    taskToken: input.taskToken,
   }
 }

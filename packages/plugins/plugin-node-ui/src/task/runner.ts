@@ -136,7 +136,9 @@ export const BOOTSTRAP = [
   '      const to = info.ctx.baseUrl + "/api/canvases/" + encodeURIComponent(info.ctx.canvasId) +',
   '        "/resources?slot=" + encodeURIComponent(slot) + (ext ? "&name=" + encodeURIComponent(fileName) : "")',
   "      const type = (opts && opts.mime) || guessMime(ext)",
-  '      const r = await fetch(to, { method: "POST", headers: { "content-type": type }, body: bytes })',
+  // 带「只允许写本节点槽位」的短时令牌（首版管理鉴权之后新增）。
+  // 没有它这条会被 403；子进程里也不该有管理令牌。
+  '      const r = await fetch(to, { method: "POST", headers: { "content-type": type, "x-task-token": info.ctx.taskToken }, body: bytes })',
   "      const j = await r.json().catch(() => null)",
   '      if (!j || !j.ok) throw new Error("\u4FDD\u5B58\u4EA7\u7269\u5931\u8D25\uFF1A" + ((j && j.error) || r.status))',
   // 顺手把**节点字段**写上（imageUrl / videoUrl / audioUrl / text）：下游是按字段名认类型的。
@@ -156,8 +158,9 @@ export const BOOTSTRAP = [
   // 交字节也认得出来：按 UTF-8 解一次（把地址当正文写进去更糟）。
   "        if (field === \"text\") patch.text = typeof data === \"string\" ? data : new TextDecoder().decode(bytes)",
   "        else patch[field] = versioned",
+  // 写节点字段也要令牌：`/api/canvases/:id/nodes` 在首版清单里。
   "        const r2 = await fetch(info.ctx.baseUrl + \"/api/canvases/\" + encodeURIComponent(info.ctx.canvasId) + \"/nodes\", {",
-  "          method: \"POST\", headers: { \"content-type\": \"application/json\" },",
+  "          method: \"POST\", headers: { \"content-type\": \"application/json\", \"x-task-token\": info.ctx.taskToken },",
   "          body: JSON.stringify({ update: [{ id: info.ctx.nodeId, data: patch }] }) })",
   "        if (!r2.ok) logLine(\"产物已存，但写节点字段没成功（HTTP \" + r2.status + \"）\")",
   "      }",

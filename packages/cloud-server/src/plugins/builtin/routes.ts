@@ -108,6 +108,9 @@ export const canvasesPlugin: PluginModule = {
         // 于是 `PUT /api/canvases/<别的画布>` 会静默覆盖默认画布（2026-10-14 实测）。
         // 从池里取（**不要 new**：实例不同 = 写锁不同，见 canvasDocPool 的说明）。
         (canvasId) => pool.for(canvasId),
+        // 任务脚本的产物上传：子进程只有限节点短时令牌（没有管理令牌）。
+        // 没注入就是 undefined → 行为与旧版一致。
+        ctx.tryGet<(input: { token?: string; canvasId: string; slot?: string }) => boolean>('allowTaskUpload'),
       ),
     )
   },
@@ -178,7 +181,12 @@ export const canvasOpsPlugin: PluginModule = {
     // 文档从池里取（同一张画布永远同一个实例 = 同一把写锁）—— 从前每次请求 new 一个，
     // 于是「与 MCP / 网页同一把写锁」这句话在非默认画布上不成立，并发写会互相覆盖。
     ctx.routes.adopt(
-      canvasOpsRoutes(need<CanvasDocument>(ctx, S.doc), (canvasId) => pool.for(canvasId)),
+      canvasOpsRoutes(
+        need<CanvasDocument>(ctx, S.doc),
+        (canvasId) => pool.for(canvasId),
+        // 任务脚本的节点写：只允许改它自己那个节点（没注入就是 undefined）。
+        ctx.tryGet<(input: { token?: string; canvasId: string; body: Record<string, unknown> }) => boolean>('verifyTaskWrite'),
+      ),
     )
   },
 }

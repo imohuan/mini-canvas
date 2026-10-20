@@ -71,6 +71,19 @@ export interface HostProxy {
   cancel(runId: string): Promise<TaskResult>
   debugPoll(session: string): Promise<unknown>
   debugResult(body: unknown): Promise<unknown>
+  /**
+   * 通用转发：生成页面里写的那句 `fetch(base + '/api/...')` 会落到这里。
+   *
+   * 为什么需要它：沙箱页**本来就会**直接调画布接口（读画布、下单、改节点），
+   * 那是它的核心价值；但请求边界会拒绝 `Origin: null`。所以把「目标路径 + 方法 + 头 + 体」
+   * 交上来，由宿主带令牌与同源身份代发，再把状态码/头/字节原样带回去。
+   * 只允许 `/api/` 下的路径 —— 否则它就成了一个能打任意地址的代理。
+   */
+  fetchApi(req: { path: string; method?: string; headers?: Record<string, string>; body?: BodyInit | null }): Promise<{
+    status: number
+    headers: Record<string, string>
+    body: ArrayBuffer
+  }>
 }
 
 /** 后台各类错误统一成一句能看懂的话（403 必须带上后台原文） */
@@ -273,6 +286,30 @@ export function createHostProxy(options: HostProxyOptions): HostProxy {
         body: JSON.stringify(body),
       })
       return readJson(res, '调试回包')
+    },
+
+    /**
+     * 通用 `/api/*` 转发。只允许同源路径，防止被当成任意地址的代理。
+     * 返回原始字节与少量头（页面要读 content-type / 自己解析 JSON）。
+     */
+    async fetchApi(req) {
+      const path = String(req.path ?? '')
+      // 必须是 /api/ 下的同源路径：不接受绝对地址、不接 protocol-relative、不接 //
+      if (!path.startsWith('/api/') || path.startsWith('//') || path.includes('://')) {
+        throw new Error('只允许转发 /api/ 下的同源路径')
+      }
+      const method = String(req.method ?? 'GET').toUpperCase()
+      const res = await fetchImpl(base + path, {
+        method,
+        headers: authHeaders({ ...(req.headers ?? {}) }),
+        ...(method === 'GET' || method === 'HEAD' || req.body == null ? {} : { body: req.body }),
+      })
+      const headers: Record<string, string> = {}
+      for (const k of ['content-type', 'content-length', 'cache-control']) {
+        const v = res.headers.get(k)
+        if (v) headers[k] = v
+      }
+      return { status: res.status, headers, body: await res.arrayBuffer() }
     },
   }
 }

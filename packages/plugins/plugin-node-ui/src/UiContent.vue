@@ -637,7 +637,7 @@ function onBridgeMessage(ev: MessageEvent): void {
   }
   // 代发：沙箱页不再自己请求后台，全部交给宿主（同源 + 管理令牌）。
   // reqId 原样带回，页面按它结算自己的 pending promise。
-  if (m.type === 'save' || m.type === 'task' || m.type === 'task-cancel') {
+  if (m.type === 'save' || m.type === 'task' || m.type === 'task-cancel' || m.type === 'api') {
     if (typeof m.reqId !== 'string' || !m.reqId) return
     void handleProxyRequest(win, m.reqId, m)
     return
@@ -731,7 +731,7 @@ async function handleProxyRequest(win: Window, reqId: string, m: Record<string, 
   const proxy = hostProxy()
   // save 的失败也必须回 save-result：页面侧按类型读 url，混成 task-result 会让协议表失真
   // （虽然两边都靠 reqId 结算，功能暂时不坏，但下一个人会照着协议写错）。
-  const failType = m.type === 'save' ? 'save-result' : 'task-result'
+  const failType = m.type === 'save' ? 'save-result' : m.type === 'api' ? 'api-result' : 'task-result'
   try {
     if (m.type === 'save') {
       const payload = m.payload
@@ -755,6 +755,28 @@ async function handleProxyRequest(win: Window, reqId: string, m: Record<string, 
         (event) => replyProxy(win, { type: 'task-event', reqId, event }),
       )
       replyProxy(win, { type: 'task-result', reqId, ...result })
+      return
+    }
+    if (m.type === 'api') {
+      // 通用转发：只接受 /api/ 下的同源路径（hostFetch 里再校验一次）。
+      const path = String(m.path ?? '')
+      const method = String(m.method ?? 'GET')
+      const headers = (m.headers && typeof m.headers === 'object' ? m.headers : {}) as Record<string, string>
+      const body = m.body
+      const res = await proxy.fetchApi({
+        path,
+        method,
+        headers,
+        ...(body == null ? {} : { body: body as BodyInit }),
+      })
+      replyProxy(win, {
+        type: 'api-result',
+        reqId,
+        ok: true,
+        status: res.status,
+        headers: res.headers,
+        body: res.body,
+      })
       return
     }
     const runId = typeof m.runId === 'string' ? m.runId : ''

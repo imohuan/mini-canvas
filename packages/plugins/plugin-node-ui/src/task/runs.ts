@@ -145,6 +145,8 @@ export interface RunScriptInput {
   dataRoot: string
   canvasId: string
   nodeId: string
+  /** 只允许写本节点槽位 / 本节点的短时令牌（由宿主签发；拿不到就空串） */
+  taskToken?: string
   timeoutMs?: number
   onEvent?: (runId: string, e: TaskEvent) => void
   onFinish?: (run: TaskRun) => void
@@ -187,6 +189,7 @@ export async function runScript(input: RunScriptInput): Promise<RunScriptResult>
       canvasId: input.canvasId,
       nodeId: input.nodeId,
       name: String(input.name),
+      taskToken: input.taskToken ?? '',
     }),
     ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs }),
     ...(input.onEvent ? { onEvent: input.onEvent } : {}),

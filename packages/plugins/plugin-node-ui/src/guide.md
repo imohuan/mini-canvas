@@ -220,17 +220,27 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 ## 五、沙箱里（你自己写的 HTML 里）能调什么
 
 注意：上面三条是**你**（Agent）通过 MCP 调的工具。而**你写出来的那个界面**在浏览器里跑，
-它走的是 HTTP，不是 MCP。它能用的只有这几条（都实测可用）：
+它走的是 HTTP，不是 MCP。
 
-  读整张画布   GET  {base}/api/canvases/{canvasId}     → { ok, nodes, edges, view }
-  增量改节点   POST {base}/api/canvas/nodes   body { add?, delete?, update? }
-               ⚠️ **改一个节点就用这条**（同样只动点名那个，不搬整张画布）
-  增量改连线   POST {base}/api/canvas/edges   body { add?, delete?, update? }
-  整体写回     PUT  {base}/api/canvases/{canvasId}   body { nodes, edges }
+> ⚠️ **2026-10-20 起，界面里不要直接 `fetch` 后台**。界面住在 `sandbox="allow-scripts"`
+> 的 iframe 里（不透明源，`Origin: null`），后台的请求边界会拒绝它；而令牌也不能交给它。
+> 一律改用 **`CanvasUI.api(path, init)`**：它把请求交给宿主（同源、带管理令牌）代发，
+> 回包形状接近 `fetch`（`{ ok, status, headers.get(), text(), json(), arrayBuffer() }`）。
+
+  读整张画布   CanvasUI.api('/api/canvases/' + __CANVAS_UI__.canvasId)      → { ok, nodes, edges, view }
+  增量改节点   CanvasUI.api('/api/canvas/nodes', { method:'POST', headers:{'content-type':'application/json'},
+                                              body: JSON.stringify({ add?, delete?, update? }) })
+               ⚠️ **改一个节点就用这条**（只动点名那个，不搬整张画布）
+  增量改连线   CanvasUI.api('/api/canvas/edges', { method:'POST', ... })      body { add?, delete?, update? }
+  整体写回     CanvasUI.api('/api/canvases/' + __CANVAS_UI__.canvasId, { method:'PUT', ... })
                ⚠️ 整体替换：少一个节点它就没了。只有真要换掉整张画布时才用。
-  画布清单     GET  {base}/api/canvases               → { canvases: [{id,name}] }
-  下单生成     POST {base}/api/jobs   body { canvasId, nodeId, actionId, prompt?, values? }
-               （先 GET {base}/api/actions 看有哪些 actionId 与参数）
+  画布清单     CanvasUI.api('/api/canvases')                                 → { canvases: [{id,name}] }
+  下单生成     CanvasUI.api('/api/jobs', { method:'POST', headers:{'content-type':'application/json'},
+                                         body: JSON.stringify({ canvasId, nodeId, actionId, prompt?, values? }) })
+               （先 CanvasUI.api('/api/actions') 看有哪些 actionId 与参数）
+
+`path` 必须以 `/api/` 开头（宿主只转发这一类，防止被当成任意地址的代理）。
+不想自己拼 JSON 也行：`CanvasUI.api` 透传 `body`，字符串 / Blob 都收。
 
 ## 五·补、让界面能叫后台干活（任务脚本）
 
@@ -377,8 +387,8 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 界面上要是有「让 AI 总结 / 分类 / 改写」这类需求，用这条 —— 它**问一句答一句**，
 **不建会话、不进对话列表、不留任何文件**（凭据用画布已配好的 provider，传个模型名即可）。
 
-  POST {base}/api/agent/chat/completion
-    { model?, messages: [{ role: "system" | "user" | "assistant", content }], stream?, max_tokens? }
+  CanvasUI.api('/api/agent/chat/completion', { method:'POST', headers:{'content-type':'application/json'},
+    body: JSON.stringify({ model?, messages: [{ role: "system" | "user" | "assistant", content }], stream?, max_tokens? }) })
 
   非流式（不给 stream）→ OpenAI 那个形状：
     { id, object: "chat.completion", model,
@@ -391,7 +401,7 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   var U = window.__CANVAS_UI__
   var up = window.__CANVAS_UPSTREAM__ || []
   var text = up.filter(function (x) { return x.kind === "text" })    .map(function (x) { return x.value }).join("\n")
-  var r = await fetch(U.baseUrl + "/api/agent/chat/completion", {
+  var r = await CanvasUI.api("/api/agent/chat/completion", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ messages: [
       { role: "system", content: "你是编辑，只输出一句摘要。" },

@@ -57,6 +57,7 @@ import { runAgentMiddleware } from './serverFramework/agent.js'
 import { createAdminAuth, isAdminPath } from './adminAuth.js'
 import { createAuditLog } from './audit.js'
 import { createRequestTrust } from './requestTrust.js'
+import { createTaskTokens } from './taskToken.js'
 import { REFERENCE_MARKUP_GUIDE } from './agent/referenceMarkup.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
@@ -182,6 +183,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       : {}),
   })
   const audit = createAuditLog(path.join(dataDir, 'audit.log'))
+  // 任务脚本（子进程）只能拿这一种令牌：绑定 canvas+node，只允许写自己那一格。
+  const taskTokens = createTaskTokens()
 
   // KV 只剩「设置 / 快捷」这类小数据；画布数据走「一个画布一个文件夹」
   const kvStore = new KvStore(dataDir)
@@ -539,6 +542,17 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     const method = c.req.method.toUpperCase()
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next()
     if (!isAdminPath(method, c.req.path)) return next()
+    // 任务脚本的产物上传：子进程没有管理令牌，只带一个「绑定 canvas+node 的短时令牌」。
+    // 这里只做「看起来像脚本上传」的放行；真正的严格校验在路由里（必须带 slot、签名/过期/归属都要对）。
+    // 也就是说：伪造 x-task-token 只能把请求送进路由，不能绕过路由那道关。
+    // 脚本另一件要干的事：把产物字段写回本节点（`POST /api/canvases/:id/nodes`）。
+    // 路由层那边会再核对「只能改自己这个节点」。
+    if (
+      (c.req.path.startsWith('/api/canvases/') && (c.req.path.endsWith('/resources') || c.req.path.endsWith('/nodes'))) &&
+      c.req.header('x-task-token')
+    ) {
+      return next()
+    }
     const verdict = adminAuth.verify(c.req.header('x-admin-token'))
     if (verdict !== 'ok') {
       await audit.append({
@@ -584,6 +598,31 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 审计日志：插件路由（server-plugins / npm-plugins）经 ctx 取它，装配时注入一次。
   // 没注入就是 no-op —— 那些路由在纯框架单测里照样能跑。
   host.ctx.inject('auditLog', audit)
+  // 任务令牌：`task/routes.ts` 调它签一个绑定 canvas+node 的短时令牌给脚本子进程。
+  host.ctx.inject('taskTokens', taskTokens)
+  // 资源上传的第二层校验：只有「带 slot 且令牌正好绑定这个 canvas+slot」才放行脚本上传。
+  host.ctx.inject('allowTaskUpload', (input: { token?: string; canvasId: string; slot?: string }) =>
+    input.slot !== undefined && taskTokens.verify(input.token, input.canvasId, input.slot),
+  )
+  // 节点写同理：脚本只能改它自己那个节点（add/delete/update 三批的 id 都要等于绑定节点）。
+  host.ctx.inject(
+    'verifyTaskWrite',
+    (input: { token?: string; canvasId: string; body: Record<string, unknown> }) => {
+      const ids: string[] = []
+      for (const key of ['add', 'delete', 'update'] as const) {
+        const list = input.body[key]
+        if (!Array.isArray(list)) continue
+        for (const item of list) {
+          if (typeof item === 'string') ids.push(item)
+          else if (item && typeof item === 'object' && typeof (item as { id?: unknown }).id === 'string') {
+            ids.push((item as { id: string }).id)
+          }
+        }
+      }
+      if (ids.length === 0) return false
+      return ids.every((id) => taskTokens.verify(input.token, input.canvasId, id))
+    },
+  )
   // 服务自己的 origin：用于后台插件安装的跨源检查（不传等于关掉该检查）
   host.ctx.inject('selfOrigin', `http://${opts.hostname ?? '127.0.0.1'}:${port}`)
   if (agentEnabled) {

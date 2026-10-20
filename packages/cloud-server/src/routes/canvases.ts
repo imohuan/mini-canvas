@@ -40,6 +40,15 @@ export function canvasesRoutes(
    * `PUT /api/canvases/<别的画布>` 被当成了「写 default」，把用户那张默认画布整份覆盖掉。
    */
   docForCanvas?: (canvasId: string) => CanvasDocument | undefined,
+  /**
+   * 资源上传的额外放行判定（可选）。
+   *
+   * 任务脚本（`plugin-node-ui` 的子进程）写产物就是走这条路由；子进程拿不到管理令牌，
+   * 也不该拿。所以由宿主注入一个「只允许写本节点槽位」的判定：看 `x-task-token`，
+   * 校验它是否等于本节点脚本执行令牌，并且请求必须带 `slot`。
+   * 不传 = 不额外放行（行为与旧版一致）。
+   */
+  allowTaskUpload?: (input: { token: string | undefined; canvasId: string; slot: string | undefined }) => boolean,
 ): Hono {
   const app = new Hono()
 
@@ -95,6 +104,19 @@ export function canvasesRoutes(
   app.post('/api/canvases/:id/resources', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    /*
+     * 两层放行，缺一不可：
+     *   ① 中间件：管理令牌（页面上传）或「脚本令牌预检」（子进程产物）；
+     *   ② 这里：如果是靠脚本令牌进来的，必须**确实带 slot**，且令牌对该 canvas+slot 有效。
+     * 只有 ① 没有 ② 的话，脚本令牌就能拿来往任意资源目录塞文件（它本来只该写自己那一格）。
+     */
+    const slotParam = c.req.query('slot')
+    const taskToken = c.req.header('x-task-token')
+    if (taskToken !== undefined && taskToken !== '') {
+      const ok = typeof slotParam === 'string' && slotParam !== '' &&
+        allowTaskUpload?.({ token: taskToken, canvasId: id, slot: slotParam }) === true
+      if (!ok) return c.json({ ok: false, error: '任务令牌无效，或没有绑定到这个节点的槽位' }, 403)
+    }
     const read = await readBodyLimited(
       { header: (n) => c.req.header(n), arrayBuffer: () => c.req.arrayBuffer() },
       maxUploadBytes(),

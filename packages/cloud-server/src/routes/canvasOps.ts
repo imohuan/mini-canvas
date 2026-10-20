@@ -154,6 +154,11 @@ function checkList(v: unknown, check: (entry: unknown) => string | null): string
 export function canvasOpsRoutes(
   defaultDoc: CanvasDocument,
   docForCanvas?: (canvasId: string) => CanvasDocument,
+  /**
+   * 任务脚本的节点写校验（可选）：带 `x-task-token` 进来时，只允许改它绑定的那个节点。
+   * 返回 false → 403。不传表示「没有这条通路」（普通宿主）。
+   */
+  verifyTaskWrite?: (input: { token: string | undefined; canvasId: string; body: Record<string, unknown> }) => boolean,
 ): Hono {
   const app = new Hono()
 
@@ -256,6 +261,15 @@ export function canvasOpsRoutes(
     const { body } = read
     const doc = resolveDoc(c)
     if (!doc) return c.json({ ok: false, error: '画布不存在' }, 404)
+
+    // 任务脚本只允许改自己那个节点：它没有管理令牌，只有限节点短时令牌。
+    // 校验的是「请求里所有 add/delete/update 的 id 都等于令牌绑定的 node」。
+    const taskTok = c.req.header('x-task-token')
+    if (taskTok) {
+      const id = c.req.param('id') ?? DEFAULT_CANVAS_ID
+      const ok = verifyTaskWrite?.({ token: taskTok, canvasId: id, body }) === true
+      if (!ok) return c.json({ ok: false, error: '任务令牌无效，或试图修改别的节点' }, 403)
+    }
 
     const segErr = checkSegments(body)
     if (segErr) return c.json({ ok: false, error: segErr }, 400)
