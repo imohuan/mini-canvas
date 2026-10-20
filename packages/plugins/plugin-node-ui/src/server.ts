@@ -1649,11 +1649,25 @@ export function apply(ctx: ServerCtx): void {
     return built.ok ? c.json(built) : c.json(built, 400)
   })
 
-  // 独立调试文件的读取（GET）—— 写入工具落盘，这里提供 URL。白名单见 canvasPathsShared。
+  /**
+   * 独立调试文件的读取（GET）。白名单见 canvasPathsShared。
+   *
+   * 2026-10-20（审查 S1）：这条路由是**后台同源**的 text/html 通道 —— 节点 HTML 里的脚本
+   * 在这里执行就能读走 `localStorage` 里的管理令牌。所以只要独立调试源起来了，
+   * 这条就读不到东西（404）。它只保留给"老宿主没注入 debugOrigin"的降级场景，
+   * 那条路上的返回值会带 warnings 明确写风险。
+   */
   ctx.routes.get('/api/canvases/:canvasId/resources/debug/:file', async (c) => {
     const cc = c as unknown as { req: { param?(n: string): string | undefined; url: string } }
     const canvasId = cc.req.param?.('canvasId') ?? ''
     const file = cc.req.param?.('file') ?? ''
+    const debugOrigin = ctx.tryGet<{ url: string }>('debugOrigin')
+    if (debugOrigin && debugOrigin.url) {
+      return c.json(
+        { ok: false, error: '调试页在独立源上，请用 urls.html 那个地址（这条同源通道已关闭）' },
+        404,
+      )
+    }
     const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
     if (!store) return c.json({ ok: false, error: '后台没有画布存储服务' }, 500)
     try {

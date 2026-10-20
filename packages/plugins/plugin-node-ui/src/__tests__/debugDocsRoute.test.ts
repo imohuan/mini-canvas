@@ -174,3 +174,36 @@ describe('POST /api/canvases/:canvasId/debug-docs', () => {
     await expect(fs.readdir(debugDir('c1'))).rejects.toBeTruthy()
   })
 })
+
+describe('旧的同源调试文件通道', () => {
+  /** 调 GET 路由（这条只用 param + json） */
+  async function getFile(route: (c: unknown) => unknown, canvasId: string, file: string) {
+    const c = {
+      req: { param: (n: string) => (n === 'canvasId' ? canvasId : file), url: 'http://x/' },
+      json: (data: unknown, status?: number) => Response.json(data, { status: status ?? 200 }),
+    }
+    return (await route(c)) as Response
+  }
+
+  it('★ 独立调试源在的时候，同源通道必须 404（否则页面里的脚本又能读走令牌）', async () => {
+    const s = fakeCtx({ debugUrl: 'http://127.0.0.1:9123' })
+    apply(s.ctx)
+    await fs.mkdir(debugDir('c1'), { recursive: true })
+    await fs.writeFile(path.join(debugDir('c1'), 'debug-7.html'), '<p>x</p>', 'utf8')
+    const route = s.routes.get('GET /api/canvases/:canvasId/resources/debug/:file')!
+    const res = await getFile(route, 'c1', 'debug-7.html')
+    expect(res.status).toBe(404)
+    expect(((await res.json()) as { error: string }).error).toContain('独立源')
+  })
+
+  it('老宿主没调试源时才回读（降级路径）', async () => {
+    const s = fakeCtx({})
+    apply(s.ctx)
+    await fs.mkdir(debugDir('c1'), { recursive: true })
+    await fs.writeFile(path.join(debugDir('c1'), 'debug-7.html'), '<p>x</p>', 'utf8')
+    const route = s.routes.get('GET /api/canvases/:canvasId/resources/debug/:file')!
+    const res = await getFile(route, 'c1', 'debug-7.html')
+    expect(res.status).toBe(200)
+    expect(await res.text()).toBe('<p>x</p>')
+  })
+})
