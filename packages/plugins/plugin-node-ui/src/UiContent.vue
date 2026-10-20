@@ -800,6 +800,7 @@ const iframeEl = ref<HTMLIFrameElement | null>(null)
 // 「EventListener 只接受 1 个参数」）。所以这里只声明本文件真用到的那几个方法。
 interface DebugWindow {
   readonly closed: boolean
+  addEventListener(t: string, fn: () => void): void
   close(): void
   location: { href: string }
 }
@@ -841,8 +842,17 @@ async function openDebug(): Promise<void> {
     return
   }
   debugWin.value = win
-  // 不监听 pagehide：这里把窗口导航到调试源，about:blank 那份文档会立刻 pagehide，
-  // 监听器反而会把刚打开的窗口当成"已关闭"。窗口关没关一律看 win.closed。
+  // pagehide 在这里有两次：① 我们把 about:blank 导航到调试源（不是关窗）；
+  // ② 用户真的关掉窗口。**只有 closed 为真才算关**，否则会把刚打开的窗口误清掉。
+  try {
+    win.addEventListener('pagehide', () => {
+      setTimeout(() => {
+        if (win.closed) clearDebugWindow(win)
+      }, 0)
+    })
+  } catch {
+    /* 跨源之后挂不上：靠下面 watch 里的 closed 判断兜底 */
+  }
   const r = await pushDebugDocs()
   if (!r.ok) {
     try {
@@ -858,6 +868,15 @@ async function openDebug(): Promise<void> {
     win.location.href = r.url
   } catch {
     window.alert('调试页打不开（窗口可能被关掉了）。再点一次「调试」试试。')
+  }
+}
+
+/** 窗口真的没了：清引用 + 撤掉还没发的重发任务 */
+function clearDebugWindow(win: DebugWindow): void {
+  if (debugWin.value === win) debugWin.value = null
+  if (debugTimer) {
+    clearTimeout(debugTimer)
+    debugTimer = null
   }
 }
 
@@ -899,7 +918,11 @@ async function pushDebugDocs(): Promise<{ ok: true; url: string } | { ok: false;
  */
 watch([upstream, inputValues, html], () => {
   const win = debugWin.value
-  if (!win || win.closed) return
+  if (!win) return
+  if (win.closed) {
+    clearDebugWindow(win)
+    return
+  }
   if (debugTimer) clearTimeout(debugTimer)
   debugTimer = setTimeout(() => {
     debugTimer = null
