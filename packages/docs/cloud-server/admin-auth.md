@@ -103,6 +103,30 @@ await CanvasUI.api('/api/canvas/nodes', {
 - `POST /api/canvases/<本画布>/resources?slot=<本节点>` —— 放行；
 - 写别的槽位、别的画布、调用其它受保护接口 —— 403。
 
+## 四·补 可视化节点的「调试」页（跑在独立源上）
+
+画布上的「调试」按钮打开的不是画布页里的副本，而是后台另开一个端口提供的**独立页面**。
+
+为什么要换源：调试页要执行节点里的 HTML，而那份 HTML 可能带着任意脚本。如果它跟后台
+同一个源，脚本就能读走 localStorage 里的管理令牌、直接调 /api/* —— 沙箱 iframe 守住的
+那条边界等于白守。换到另一个端口就简单了：浏览器的同源策略替你挡住这一切。
+
+流程：
+
+1. 画布点「调试」→ POST /api/canvases/:id/debug-docs（**带管理令牌**），
+   后台把 debug-*.html / context-*.js / sdk-*.js 写进 canvases/<id>/resources/debug/；
+2. 返回的 urls.html 指向调试源（启动日志里的 127.0.0.1:<另一个端口>），窗口导航过去；
+3. 页面里调 CanvasUI.save(...) 时，用的是**绑定本画布本节点、10 分钟**的短令牌（x-task-token），
+   只能写自己那个资源槽位。管理令牌从不进这个页面；
+4. 参数 / 上游变了，画布那边 300ms 去抖后重发一次；调试页每 5 秒重载 context.js 自动跟上。
+
+调试源默认绑 127.0.0.1、端口由系统分配，只认 /<画布id>/<debug|context|sdk>-<节点>[-vN].(html|js)
+这一种路径，其它一律 404。它**不读环境变量、不列目录、不写文件**。端口起不来时会退回后台
+同源（返回值的 warnings 里会写明"这个页面里的脚本能读到管理令牌"），那种状态只适合本机临时看一眼。
+
+调试页要跨源把产物 POST 回后台，所以后台的预检必须放行 x-task-token 头、并把调试源
+写进受信任来源；否则保存会被预检拦下（表现为 Failed to fetch，不是 403）。
+
 脚本作者不需要自己拼它：`ctx.save(...)` 已经带上。
 
 ## 五、审计日志
@@ -141,6 +165,7 @@ MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 | `/mcp` 独立鉴权 | 只靠 Host/Origin，没有令牌 |
 | 资产 / 项目 / 历史 / KV 写接口 | 没有令牌，靠来源边界 |
 | 同源 XSS | 回读资源已加 CSP，但其它同源注入点仍需逐个排查 |
+| 调试页跨源保存 | 需要后台预检放行 x-task-token 并把调试源加入受信任来源（见四·补） |
 | 网络与子进程限制 | 任务脚本可随意出网、可 spawn |
 
 完整分析与实测证据见 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md`。
