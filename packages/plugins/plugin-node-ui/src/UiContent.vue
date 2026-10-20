@@ -949,6 +949,9 @@ function onDebugMessage(ev: MessageEvent): void {
   if (!m || m.__canvasUiDebug !== 1) return
   try {
     if (m.type === 'saved' && typeof m.url === 'string' && m.url) {
+      // 调试页现在是**另一个源**，它说什么都只能当"提示"。产物地址必须是本画布的资源路径，
+      // 否则页面里一段脚本就能把节点的 imageUrl 指到任意地址（例如收集访问）。
+      if (!isOwnResourceUrl(m.url)) return
       applyOutput(
         m.url,
         typeof m.name === 'string' && m.name ? m.name : 'out.png',
@@ -968,6 +971,19 @@ function onDebugMessage(ev: MessageEvent): void {
   } catch {
     // 节点可能已被删掉：静默跳过（不该因为一次上报把调试搞崩）
   }
+}
+
+/**
+ * 这个地址是不是本画布的资源（调试页回报产物时用；防止把节点指到别处）。
+ *
+ * 后台回的是**同源相对路径**（`/api/canvases/<id>/resources/<hash>`），所以两种形态都要认：
+ * 相对的那一份，和带后台地址的绝对形态。
+ */
+function isOwnResourceUrl(url: string): boolean {
+  const rel = '/api/canvases/' + encodeURIComponent(canvasId) + '/resources/'
+  if (url.startsWith(rel)) return true
+  const base = baseUrl.value
+  return !!base && url.startsWith(base + rel)
 }
 
 /** 按产物名字认类型，写进节点（产物不进历史，且带版本号让下游重新取） */
