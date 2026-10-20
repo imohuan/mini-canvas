@@ -54,6 +54,23 @@ describe('checkRequestTrust', () => {
     expect(r).toEqual({ ok: false, reason: 'origin-not-trusted' })
   })
 
+  it('大小写不敏感：大写 scheme/host 的 Origin 与 Host 都能认（反代 / 自定义客户端）', () => {
+    expect(checkRequestTrust(req('GET', '/api/x', {
+      host: '127.0.0.1:8865', origin: 'HTTP://LOCALHOST:5288',
+    }), OPTS).ok).toBe(true)
+    expect(checkRequestTrust(req('GET', '/api/x', {
+      host: '127.0.0.1:8865', origin: 'HTTP://127.0.0.1:8865',
+    }), OPTS).ok).toBe(true)
+    // 白名单里带尾斜杠 / 大写也照样认
+    expect(checkRequestTrust(req('GET', '/api/x', {
+      host: 'localhost:8865', origin: 'http://localhost:5288/',
+    }), { ...OPTS, trustedOrigins: ['HTTP://LocalHost:5288'] }).ok).toBe(true)
+    // 但大写不能变成绕过：别的源仍然拒
+    expect(checkRequestTrust(req('GET', '/api/x', {
+      host: '127.0.0.1:8865', origin: 'HTTP://EVIL.EXAMPLE',
+    }), OPTS).ok).toBe(false)
+  })
+
   it('Origin: null 默认拒绝；即使打开 allowOpaqueOrigin，cross-site 也拒绝', () => {
     const base = { host: '127.0.0.1:8865', origin: 'null' }
     expect(checkRequestTrust(req('GET', '/api/x', base), OPTS).ok).toBe(false)

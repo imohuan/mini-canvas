@@ -34,7 +34,8 @@ export function checkRequestTrust(req: TrustRequestLike, opts: RequestTrustOptio
   if (method === 'OPTIONS') return { ok: true }
   if (!inScope(req.path)) return { ok: true }
 
-  const host = (req.header('host') ?? '').trim()
+  // Host 头大小写不敏感（RFC 7230），这里统一小写再比：白名单里存的都是小写。
+  const host = (req.header('host') ?? '').trim().toLowerCase()
   if (!host || !opts.trustedHosts.includes(host)) {
     return { ok: false, reason: 'host-not-trusted' }
   }
@@ -44,22 +45,41 @@ export function checkRequestTrust(req: TrustRequestLike, opts: RequestTrustOptio
     return { ok: false, reason: 'cross-site' }
   }
 
-  const origin = req.header('origin')
-  if (origin !== undefined) {
-    if (origin.trim().toLowerCase() === 'null') {
+  const rawOrigin = req.header('origin')
+  if (rawOrigin !== undefined) {
+    // Origin 的 **scheme 与 host 都大小写不敏感**（`HTTP://LOCALHOST:8865` 是合法的）。
+    // 原来直接字符串比，反代 / 自定义客户端发大写就会被当成恶意来源拒掉。
+    const origin = normalizeOrigin(rawOrigin)
+    if (origin === 'null') {
       // 文档实测：不透明源只会是 cross-site，下面这条例外实际上不会命中。
       // 保留它只是为了让参数语义完整，默认关闭。
       if (!opts.allowOpaqueOrigin || (fetchSite !== 'same-origin' && fetchSite !== 'none')) {
         return { ok: false, reason: 'opaque-origin' }
       }
     } else if (origin !== 'http://' + host && origin !== 'https://' + host) {
-      if (!(opts.trustedOrigins ?? []).includes(origin)) {
+      if (!(opts.trustedOrigins ?? []).map(normalizeOrigin).includes(origin)) {
         return { ok: false, reason: 'origin-not-trusted' }
       }
     }
   }
 
   return { ok: true }
+}
+
+/**
+ * 把 Origin 归一成 `scheme://host[:port]`（scheme 与 host 小写、去掉尾斜杠）。
+ *
+ * 解析不了就原样返回（交给后面的白名单去拒）。`null` 原样返回 —— 它是特殊值，不是 URI。
+ */
+function normalizeOrigin(raw: string): string {
+  const s = raw.trim()
+  if (s.toLowerCase() === 'null') return 'null'
+  try {
+    const u = new URL(s)
+    return u.origin
+  } catch {
+    return s
+  }
 }
 
 export function createRequestTrust(
