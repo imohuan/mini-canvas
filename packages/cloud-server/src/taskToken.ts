@@ -76,7 +76,8 @@ export function createTaskTokens(opts: { secret?: Buffer; now?: () => number } =
         return false
       }
       if (!claims || typeof claims.c !== 'string' || typeof claims.n !== 'string') return false
-      if (typeof claims.exp !== 'number' || claims.exp < now()) return false
+      // 到期时刻本身也算过期（`exp < now()` 会让令牌多活一毫秒）。
+      if (typeof claims.exp !== 'number' || claims.exp <= now()) return false
       return claims.c === canvasId && claims.n === slot
     },
   }

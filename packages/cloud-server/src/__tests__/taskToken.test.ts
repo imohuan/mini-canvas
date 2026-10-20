@@ -19,6 +19,9 @@ describe('任务令牌（只允许写本节点槽位）', () => {
   it('过期即失效', () => {
     const t = tokens.issue('c1', 'n1', 1000)
     expect(tokens.verify(t, 'c1', 'n1')).toBe(true)
+    // 到期那一刻也算过期（`exp < now()` 会让它多活一毫秒）
+    const atExpiry = createTaskTokens({ secret: Buffer.alloc(32, 7), now: () => fixedNow + 1000 })
+    expect(atExpiry.verify(t, 'c1', 'n1')).toBe(false)
     const later = createTaskTokens({ secret: Buffer.alloc(32, 7), now: () => fixedNow + 2000 })
     expect(later.verify(t, 'c1', 'n1')).toBe(false)
   })
