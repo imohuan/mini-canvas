@@ -23,7 +23,22 @@ export interface RequestTrustOptions {
    * cross-site，不存在 same-origin/none 的组合；打开它等于对任意网页开例外。
    */
   allowOpaqueOrigin?: boolean
+  /**
+   * 来源边界拒掉一个**写请求**时回调（宿主用它写审计）。
+   *
+   * 为什么在这里：这条中间件在令牌中间件之前就返回 403，后面的审计根本不会跑；
+   * 而真实场景里最该留痕的恰好是这一类（恶意 Origin、伪造 Host、不透明源）。
+   */
+  onReject?: (input: {
+    method: string
+    path: string
+    reason: string
+    header: (n: string) => string | undefined
+  }) => Promise<void>
 }
+
+/** 会被来源边界拦下的写方法（读请求被拒不记，免得刷屏） */
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export interface TrustRequestLike {
   method: string
@@ -128,6 +143,15 @@ export function createRequestTrust(
     }
     const verdict = checkRequestTrust(req, opts)
     if (!verdict.ok) {
+      /*
+       * 记一条审计：这条链在**令牌中间件之前**就断了，所以 ①.3 / ①.4 都不会跑。
+       * 不记的话，「谁在尝试从网页里改我的画布」这个问题永远答不出来 ——
+       * 而恰好这类请求（恶意 Origin / 伪造 Host / 不透明源）最该被记下来。
+       * 只在写方法上记：读请求被拒（DNS 重绑定探路）不值得刷屏。
+       */
+      if (WRITE_METHODS.has(req.method.toUpperCase())) {
+        await opts.onReject?.({ ...req, reason: verdict.reason })
+      }
       return c.json({ ok: false, error: '请求来源不受信任' }, 403)
     }
     await next()

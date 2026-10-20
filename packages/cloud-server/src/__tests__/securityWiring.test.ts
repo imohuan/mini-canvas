@@ -155,6 +155,31 @@ describe('写操作的审计成对：attempt → ok / rejected（M3）', () => {
 })
 
 describe('任务令牌只能写本节点的产物字段（M1）', () => {
+  /**
+   * ★ 被来源边界拒掉的写请求也要留审计。
+   *
+   * 这条中间件在令牌关之前就返回 403，后面的审计根本不会跑 ——
+   * 而「谁在尝试从网页里改我的画布」恰好就是这一类。
+   */
+  it('★ 恶意 Origin / 伪造 Host 的写请求：403 且留一条 rejected 审计', async () => {
+    const { port } = await boot()
+    const bad = await fetch('http://127.0.0.1:' + port + '/api/canvas/nodes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'http://evil.example' },
+      body: JSON.stringify({ update: [] }),
+    })
+    expect(bad.status).toBe(403)
+    // 读请求被拒不留痕（DNS 重绑定探路不值得刷屏）
+    await fetch('http://127.0.0.1:' + port + '/api/canvases', { headers: { origin: 'http://evil.example' } })
+
+    const lines = await readAudit()
+    const mine = lines.filter((l) => l.path === '/api/canvas/nodes')
+    expect(mine).toHaveLength(1)
+    expect(mine[0]).toMatchObject({ action: 'auth-failed', result: 'rejected', origin: 'http://evil.example' })
+    expect(String(mine[0]!.reason)).toBe('origin-not-trusted')
+    expect(lines.some((l) => l.path === '/api/canvases' && l.result === 'rejected')).toBe(false)
+  })
+
   it('/mcp 没有令牌，但每次调用都留 attempt + 工具名（M6 的最低要求）', async () => {
     const { port } = await boot()
     const res = await fetch('http://127.0.0.1:' + port + '/mcp', {

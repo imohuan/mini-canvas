@@ -565,7 +565,26 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // ①.2 来源边界（Host/Origin，含 /mcp）—— 挂在 '*' 上：/mcp 是直挂路由，不在 /api/* 下。
   //      必须在 host.start() 之前：插件路由是 start() 时一次性 flush 成代理的。
   if (trustEnabled) {
-    const trust = createRequestTrust({ trustedHosts, trustedOrigins, scopedOrigins, allowOpaqueOrigin: false })
+    const trust = createRequestTrust({
+      trustedHosts,
+      trustedOrigins,
+      scopedOrigins,
+      allowOpaqueOrigin: false,
+      // 来源边界先于令牌中间件返回，所以这里的拒绝要自己留痕：
+      // 恶意 Origin / 伪造 Host / 不透明源 是最该被记下来的一类请求。
+      onReject: async (r) => {
+        await audit.append({
+          action: 'auth-failed',
+          method: r.method.toUpperCase(),
+          path: r.path,
+          token: 'missing',
+          result: 'rejected',
+          reason: r.reason,
+          ...(r.header('origin') ? { origin: r.header('origin')! } : {}),
+          ...(r.header('host') ? { host: r.header('host')! } : {}),
+        })
+      },
+    })
     app.use('*', trust as never)
   }
 
