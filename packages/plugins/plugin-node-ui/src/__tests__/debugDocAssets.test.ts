@@ -107,4 +107,16 @@ describe('调试页 sdk：与画布里同一套方法', () => {
     expect(js).toContain('opts.onProgress')
     expect(js).toContain('task-event')
   })
+
+  /**
+   * 宿主不回包（画布页崩了 / 没人在听）时，api / cancel 不能永远挂着。
+   * task 不设超时是有意的：脚本本来就可能跑十分钟。
+   */
+  it('★ api / cancel 有 30 秒超时，task 不设（长脚本要跑十分钟）', () => {
+    expect(js).toContain('timeoutMs: 30000')
+    expect(js).toContain('宿主 30 秒没有回包')
+    // task 那次调用不带 timeoutMs
+    const taskCall = js.slice(js.indexOf('hostCall("task"'), js.indexOf('hostCall("task"') + 400)
+    expect(taskCall).not.toContain('timeoutMs')
+  })
 })

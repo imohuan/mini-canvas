@@ -204,5 +204,6 @@ MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 | 调试页能往外发数据 | 独立源页面上是你自己写的 HTML，没有 CSP；它能联网。换源挡住的是"读画布令牌"，不是"把内容发出去" |
 | 资源回读的 CORP | `cross-origin-resource-policy: same-site`：同站（含换端口）能嵌，跨站不能。要跨站分享资源得单独放开 |
 | 网络与子进程限制 | 任务脚本可随意出网、可 spawn |
+| 调试页 `CanvasUI.task` 没有超时 | 它可能在跑十分钟的脚本，所以不设超时；`api` / `cancel` 有 30 秒兜底。宿主整页崩掉时 task 会一直等 |
 
 完整分析与实测证据见 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md`。
