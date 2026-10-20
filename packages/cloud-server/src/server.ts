@@ -158,6 +158,8 @@ export interface CloudServer {
   adminTokenFile: string | null
   /** 实际生效的 Host / Origin 白名单（启动日志要逐行打印，配错时能一眼看出来） */
   trust: { hosts: string[]; origins: string[] }
+  /** 独立调试源的地址（未启用 / 没起来时为空串；文档里让用户去启动日志找它） */
+  debugOriginUrl: string
   /** 重扫 provider 目录（目录变了由 watcher 调；也可手动触发） */
   reloadProviders(): Promise<{ count: number; version: number }>
 }
@@ -946,6 +948,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     adminTokenSource: adminAuth.source,
     adminTokenFile: adminAuth.tokenFile,
     trust: { hosts: trustedHosts, origins: trustedOrigins },
+    get debugOriginUrl() {
+      return debugOrigin.url
+    },
     reloadProviders,
     async start() {
       // 独立调试源先起来再听主端口：插件的 canvas_ui_build_debug_doc 在拿到 url 之前

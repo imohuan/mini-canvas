@@ -254,6 +254,11 @@ async function main(): Promise<void> {
   }
   console.log('  信任来源 ' + srv.trust.hosts.join(' · '))
   if (srv.trust.origins.length) console.log('           额外 Origin: ' + srv.trust.origins.join(' · '))
+  if (srv.debugOriginUrl) {
+    // 可视化节点的「调试」页跑在这上面（另一个端口）：它只读、只认调试文件，
+    // 不算可信来源。单独打一行，用户排查「调试页打不开」时一眼能看到。
+    console.log('  调试页 ' + srv.debugOriginUrl + '（独立源，只能读调试产物）')
+  }
   if (srv.mcpEnabled) {
     // MCP 地址一定要显眼：用户是拿这行去配 AI 客户端的
     console.log('')
