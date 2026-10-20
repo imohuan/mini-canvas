@@ -800,8 +800,6 @@ const iframeEl = ref<HTMLIFrameElement | null>(null)
 // 「EventListener 只接受 1 个参数」）。所以这里只声明本文件真用到的那几个方法。
 interface DebugWindow {
   readonly closed: boolean
-  postMessage(msg: unknown, target: string): void
-  addEventListener(t: string, fn: () => void): void
   close(): void
   location: { href: string }
 }
@@ -843,13 +841,8 @@ async function openDebug(): Promise<void> {
     return
   }
   debugWin.value = win
-  // 导航到调试源之后这个窗口就是**跨源**的了，跨源 Window 上不能再 addEventListener
-  // （只能 postMessage / close / 读 closed）。所以这里只做一次尽力监听，关窗靠 closed 兜底。
-  try {
-    win.addEventListener('pagehide', () => clearDebugWindow(win))
-  } catch {
-    /* 已经跨源：靠 win.closed 判断 */
-  }
+  // 不监听 pagehide：这里把窗口导航到调试源，about:blank 那份文档会立刻 pagehide，
+  // 监听器反而会把刚打开的窗口当成"已关闭"。窗口关没关一律看 win.closed。
   const r = await pushDebugDocs()
   if (!r.ok) {
     try {
@@ -865,15 +858,6 @@ async function openDebug(): Promise<void> {
     win.location.href = r.url
   } catch {
     window.alert('调试页打不开（窗口可能被关掉了）。再点一次「调试」试试。')
-  }
-}
-
-/** 窗口没了：清掉引用与待发的重发任务 */
-function clearDebugWindow(win: DebugWindow): void {
-  if (debugWin.value === win) debugWin.value = null
-  if (debugTimer) {
-    clearTimeout(debugTimer)
-    debugTimer = null
   }
 }
 
