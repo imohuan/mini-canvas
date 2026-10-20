@@ -81,9 +81,7 @@ import {
   buildDebugHtml,
   debugDirOf,
   debugFileNames,
-  debugMime,
   normalizeUpstreamShared,
-  readDebugFile,
   writeDebugFile,
 } from './debugDocServer.js'
 import { renderSdkJs } from './debugDocAssets.js'
@@ -503,15 +501,24 @@ async function buildDebugDocs(
   if (!backend) return { ok: false, error: '拿不到后台地址（selfOrigin 是空的）' }
   const debugOrigin = ctx.tryGet<{ url: string }>('debugOrigin')
   const warnings: string[] = []
-  let resBase: string
-  if (debugOrigin && debugOrigin.url) {
-    // 独立源：/<canvasId>/<file>
-    resBase = debugOrigin.url.replace(/\/+$/, '') + '/' + encodeURIComponent(input.canvasId) + '/'
-  } else {
-    // 兜底：老宿主没注入调试源时退回后台同源。这条路上页面能读到管理令牌 —— 只该在本机临时用。
-    warnings.push('调试源不可用，已退回后台同源（这个页面里的脚本能读到管理令牌，仅本机临时调试）')
-    resBase = backend + '/api/canvases/' + encodeURIComponent(input.canvasId) + '/resources/debug/'
+  if (!debugOrigin || !debugOrigin.url) {
+    /*
+     * 调试源没起来就**不生成**调试页。
+     *
+     * 曾经这里会退回后台同源（`/api/canvases/:id/resources/debug/*`），只往返回值塞一条
+     * warnings。但画布上那个「调试」按钮从不读 warnings —— 用户拿到的就是一个
+     * 能在后台源上执行自己 HTML、能读走管理令牌的页面，而界面上一个字都不提示。
+     * 现在改成明确失败：宁可没有调试页，也不给一个会泄露令牌的页面。
+     */
+    return {
+      ok: false,
+      error:
+        '调试源没起来（独立调试页要另开一个端口）。为了不把节点 HTML 放到后台同源执行，这次不生成调试页；' +
+        '重启后台时看启动日志里「调试页」那一行，端口被占用就换一个。',
+    }
   }
+  // 独立源：/<canvasId>/<file>
+  const resBase = debugOrigin.url.replace(/\/+$/, '') + '/' + encodeURIComponent(input.canvasId) + '/'
   const urls = { html: resBase + names.html, context: resBase + names.context, sdk: resBase + names.sdk }
   const upstream = normalizeUpstreamShared(input.upstream)
   // 短令牌：只允许写「本画布本节点」的槽位，10 分钟后失效。签不出来就留空（sdk 会给人话错误）。
@@ -1665,28 +1672,18 @@ export function apply(ctx: ServerCtx): void {
    * 那条路上的返回值会带 warnings 明确写风险。
    */
   ctx.routes.get('/api/canvases/:canvasId/resources/debug/:file', async (c) => {
-    const cc = c as unknown as { req: { param?(n: string): string | undefined; url: string } }
-    const canvasId = cc.req.param?.('canvasId') ?? ''
-    const file = cc.req.param?.('file') ?? ''
-    const debugOrigin = ctx.tryGet<{ url: string }>('debugOrigin')
-    if (debugOrigin && debugOrigin.url) {
-      return c.json(
-        { ok: false, error: '调试页在独立源上，请用 urls.html 那个地址（这条同源通道已关闭）' },
-        404,
-      )
-    }
-    const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
-    if (!store) return c.json({ ok: false, error: '后台没有画布存储服务' }, 500)
-    try {
-      const content = await readDebugFile(store, canvasId, file)
-      if (content === undefined) return c.json({ ok: false, error: '调试文件不存在' }, 404)
-      return new Response(content, {
-        status: 200,
-        headers: { 'content-type': debugMime(file), 'cache-control': 'no-store, no-cache, must-revalidate' },
-      })
-    } catch {
-      return c.json({ ok: false, error: '读取出错' }, 500)
-    }
+    /*
+     * 这条通道**永远**关着。
+     *
+     * 它曾经是调试页的读取口：`text/html`、与后台同源，节点 HTML 里的脚本能直接读走
+     * `localStorage.mc_admin_token`。现在调试产物只由另一个端口的只读服务提供。
+     * 保留这条路由（而不是删掉）是为了给旧链接一个明确的 404 说明，而不是落到 SPA 兜底
+     * 回一份 index.html 让调用方误以为拿到了页面。
+     */
+    return c.json(
+      { ok: false, error: '调试页在独立源上（启动日志里的「调试页」地址）。这条同源通道已永久关闭。' },
+      404,
+    )
   })
 }
 

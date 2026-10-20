@@ -131,15 +131,21 @@ describe('POST /api/canvases/:canvasId/debug-docs', () => {
     expect(html).toContain('http://127.0.0.1:9123/c1/sdk-7.js')
   })
 
-  it('没注入调试源 → 退回后台同源，并在 warnings 里明说风险', async () => {
+  /**
+   * ★ 调试源没起来就**不生成**，不回退同源。
+   *
+   * 回退那条路会把节点 HTML 放到后台的源上执行，页面里的脚本能读走
+   * `localStorage.mc_admin_token`；而画布上的「调试」按钮从不读 warnings，
+   * 用户完全看不出自己在跑一个会泄露令牌的页面。所以这里必须是明确的失败。
+   */
+  it('★ 没有调试源 → 直接拒绝生成（不回退后台同源）', async () => {
     const s = fakeCtx({})
     apply(s.ctx)
     const route = s.routes.get('POST /api/canvases/:canvasId/debug-docs')!
     const res = await post(route, { canvasId: 'c1' }, { nodeId: '7', html: '<div>x</div>' })
-    const body = (await res.json()) as { ok: boolean; urls: { html: string }; warnings?: string[] }
-    expect(body.ok).toBe(true)
-    expect(body.urls.html).toBe('http://127.0.0.1:8865/api/canvases/c1/resources/debug/debug-7.html')
-    expect((body.warnings ?? []).join(' ')).toContain('管理令牌')
+    const body = (await res.json()) as { ok: boolean; error?: string }
+    expect(body.ok).toBe(false)
+    expect(String(body.error)).toContain('调试源')
   })
 
   it('签不出短令牌 → 页面照常生成，但警告 + 空令牌', async () => {
@@ -207,14 +213,20 @@ describe('旧的同源调试文件通道', () => {
     expect(((await res.json()) as { error: string }).error).toContain('独立源')
   })
 
-  it('老宿主没调试源时才回读（降级路径）', async () => {
+  /**
+   * 即使调试源没起来，同源通道也**不能**回读。
+   *
+   * 这条以前是「老宿主的降级路径」；降级本身就是那个洞（同源执行节点 HTML）。
+   * 现在无论调试源在不在，同源都只回一句 404 说明。
+   */
+  it('★ 没有调试源时同源通道也不回读（降级路径已删除）', async () => {
     const s = fakeCtx({})
     apply(s.ctx)
     await fs.mkdir(debugDir('c1'), { recursive: true })
     await fs.writeFile(path.join(debugDir('c1'), 'debug-7.html'), '<p>x</p>', 'utf8')
     const route = s.routes.get('GET /api/canvases/:canvasId/resources/debug/:file')!
     const res = await getFile(route, 'c1', 'debug-7.html')
-    expect(res.status).toBe(200)
-    expect(await res.text()).toBe('<p>x</p>')
+    expect(res.status).toBe(404)
+    expect(((await res.json()) as { error: string }).error).toContain('独立')
   })
 })
