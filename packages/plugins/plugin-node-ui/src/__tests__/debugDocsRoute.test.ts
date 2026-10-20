@@ -121,6 +121,8 @@ describe('POST /api/canvases/:canvasId/debug-docs', () => {
     // 短令牌在页面里，且 sdk 会带 x-task-token
     expect(html).toContain('tok-123')
     expect(html).toContain('debugToken')
+    // ★ 令牌也必须在 context.js 里：页面每 5 秒重载它，它会整体重写 __CANVAS_UI__
+    expect(context).toContain('tok-123')
     expect(sdk).toContain('x-task-token')
     // 绝不下发管理令牌
     expect(html).not.toContain('x-admin-token')

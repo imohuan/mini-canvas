@@ -528,6 +528,9 @@ async function buildDebugDocs(
     canvasId: input.canvasId,
     nodeId: input.nodeId,
     debug: 'standalone',
+    // 令牌**必须**跟着数据走：页面每 5 秒用 <script> 重载一次 context.js，
+    // 而 context.js 会整体重写 __CANVAS_UI__ —— 只写在 HTML 里的话，5 秒后就被冲掉了。
+    debugToken: token,
   }
   try {
     // 顺序：先写 sdk（HTML 引用它），再 context（数据），最后 HTML 壳
