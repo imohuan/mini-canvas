@@ -142,5 +142,25 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     expect(html).not.toContain('<iframe')
     expect(html).not.toContain('ui-gate-badge')
   })
+
+  /**
+   * 调试入口的回归线（2026-10-20 审查 S1b）。
+   *
+   * 那一版是「开 about:blank + document.write」，副本继承画布页的源，
+   * 节点 HTML 里的脚本能读走管理令牌。现在必须是「先问后台要 URL，再导航过去」，
+   * 而且组件里不该再出现任何 document.write。
+   */
+  it('★ 调试入口不再往窗口里写文档（同源副本已换成独立源页面）', async () => {
+    const src = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('../UiContent.vue', import.meta.url), 'utf8'),
+    )
+    // 只看代码，不看注释（注释里会解释"为什么不再用 document.write"）
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(code).not.toContain('document.write')
+    expect(code).not.toContain('buildDebugDoc')
+    // 走的是后台生成接口，页面地址由后台给
+    expect(src).toContain('/debug-docs')
+    expect(src).toContain('win.location.href')
+  })
 })
 
