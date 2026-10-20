@@ -23,17 +23,13 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8865',
         changeOrigin: true,
-        // 把后台的 CORS 头原样带回来。
+        // 把后台的 CORS 头**原样**带回来。
         //
-        // 为什么需要：可视化节点里由 AI 生成的界面住在**不透明源**的 iframe 沙箱里
-        // （sandbox=allow-scripts，不给 allow-same-origin）。它的请求都算跨源，
-        // 读画布之类要先过 CORS 检查；vite 代理默认会把 CORS 头丢掉，于是 dev 下读接口
-        // 也会失败（实测）。后台自己已经回了 Access-Control-Allow-Origin: *，这里只是别丢。
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes) => {
-            proxyRes.headers['access-control-allow-origin'] = '*'
-          })
-        },
+        // 这里曾经是写死 `'*'` 的：那时可视化节点的沙箱页自己发请求，需要放宽 CORS。
+        // 2026-10-20 之后沙箱页改成宿主代发，后台也把 CORS 收紧成同源白名单；
+        // 再写死 `*` 会把后台的严格头覆盖掉，dev 与生产行为不一致（表现为
+        // 「生产挡住了，dev 没挡住」）—— 所以只透传，不加工。
+        // 需要的额外 Origin 由后台的 --trusted-origin 显式放行（见 docs/cloud-server/admin-auth）。
       },
     },
   },
