@@ -1590,8 +1590,10 @@ export function apply(ctx: ServerCtx): void {
     description:
       '为一个可视化节点生成「独立调试页面」：后台把节点 HTML + 上游数据 + 参数拼成三份文件' +
       '（debug-*.html 壳 / context-*.js 数据 / sdk-*.js 桥），落到画布 resources/debug/ 目录，' +
-      '返回可直接打开的 URL 与本机绝对路径。Chrome MCP / 任何浏览器自动化打开 HTML URL 即可' +
-      '全自动调试（普通页面，无沙箱无 CSP）。数据更新 = 重跑本工具重写 context.js；' +
+      '返回可直接打开的 URL 与本机绝对路径。页面由**独立的调试源**（另一个端口）提供，' +
+      '读不到画布页的令牌；Chrome MCP / 任何浏览器自动化打开 HTML URL 即可全自动调试' +
+      '（普通页面，无沙箱无 CSP）。页面里 CanvasUI.save 用的是只限本节点的短令牌（10 分钟）。' +
+      '数据更新 = 重跑本工具重写 context.js；' +
       '窗口里的 sdk.js 每 5 秒轮询，context 一变界面自动重画（CanvasUI.onChange 触发）。' +
       'version 可选：传了就生成带版本的独立文件（多版本并存）；不传则覆盖无版本那份。',
     input: { canvasId: 'string', nodeId: 'string', version: 'string' },
