@@ -1664,12 +1664,10 @@ export function apply(ctx: ServerCtx): void {
   })
 
   /**
-   * 独立调试文件的读取（GET）。白名单见 canvasPathsShared。
+   * 旧调试文件的读取口（GET）—— **已永久关闭**，见下面的说明。
    *
    * 2026-10-20（审查 S1）：这条路由是**后台同源**的 text/html 通道 —— 节点 HTML 里的脚本
-   * 在这里执行就能读走 `localStorage` 里的管理令牌。所以只要独立调试源起来了，
-   * 这条就读不到东西（404）。它只保留给"老宿主没注入 debugOrigin"的降级场景，
-   * 那条路上的返回值会带 warnings 明确写风险。
+   * 在这里执行就能读走 `localStorage` 里的管理令牌。现在没有任何降级路径会用到它。
    */
   ctx.routes.get('/api/canvases/:canvasId/resources/debug/:file', async (c) => {
     /*

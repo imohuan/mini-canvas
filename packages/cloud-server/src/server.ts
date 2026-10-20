@@ -1004,9 +1004,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     reloadProviders,
     async start() {
-      // 独立调试源先起来再听主端口：插件的 canvas_ui_build_debug_doc 在拿到 url 之前
-      // 会退回后台同源（那条路页面能读管理令牌）。所以这里 **await** 它，
-      // 只是不让失败拖垮主服务（调试是开发工具）。
+      // 独立调试源先起来再听主端口：插件在拿到 url 之前**不会**生成调试页
+      // （退回同源那条路已经删掉 —— 它会让页面读到管理令牌）。
+      // 起不来不拖垮主服务（调试是开发工具），只是这一轮没有调试页。
       try {
         const debugUrl = await debugOrigin.start()
         // 调试页与后台不同源：它要带短令牌把产物写回本节点。
@@ -1021,7 +1021,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           })
         }
       } catch (err) {
-        console.warn('[cloud-server] 独立调试源启动失败（调试页退回后台同源，仅本机临时用）：' + String(err))
+        console.warn('[cloud-server] 独立调试源启动失败（这一轮没有调试页；画布本身不受影响）：' + String(err))
       }
       return new Promise((resolve, reject) => {
         let listening = false
