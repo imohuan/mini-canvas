@@ -98,10 +98,19 @@ await CanvasUI.api('/api/canvas/nodes', {
 ## 四、任务脚本的令牌
 
 任务脚本跑在**独立子进程**里，`ctx.save` 要把产物 POST 回后台。它拿到的不是管理令牌，
-而是一枚**只允许写本画布本节点槽位**的短时令牌（10 分钟，进程重启即失效）：
+而是一枚**只允许写本画布本节点**的短时令牌（10 分钟，进程重启即失效）：
 
 - `POST /api/canvases/<本画布>/resources?slot=<本节点>` —— 放行；
-- 写别的槽位、别的画布、调用其它受保护接口 —— 403。
+- `POST /api/canvases/<本画布>/nodes`，body **只能**是
+  `{ update: [{ id: <本节点>, data: {…} }] }`，而 `data` 里的键只能是产物字段：
+  `uiOutputUrl` / `imageUrl` / `videoUrl` / `audioUrl` / `text`；
+- 写别的槽位、别的画布、改 `uiHtml` / `uiScripts`、`add` / `delete` 节点、
+  调用其它受保护接口 —— 全部 403。
+
+为什么连字段也要限：脚本是**用户代码**。只校验节点 id 的话，它可以用 `update` 给自己那个
+节点塞一段新的 `uiHtml` —— 跑完一次脚本就换了一套界面，那不是「交产物」。
+
+脚本作者不需要自己拼它：`ctx.save(...)` 已经带上。
 
 ## 四·补 可视化节点的「调试」页（跑在独立源上）
 
@@ -126,8 +135,6 @@ await CanvasUI.api('/api/canvas/nodes', {
 
 调试页要跨源把产物 POST 回后台，所以后台的预检必须放行 x-task-token 头、并把调试源
 写进受信任来源；否则保存会被预检拦下（表现为 Failed to fetch，不是 403）。
-
-脚本作者不需要自己拼它：`ctx.save(...)` 已经带上。
 
 ## 五、审计日志
 
@@ -164,8 +171,9 @@ MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 | 装进来的插件能干什么 | 完整 fs、可再起进程（没有权限沙箱） |
 | `/mcp` 独立鉴权 | 只靠 Host/Origin，没有令牌 |
 | 资产 / 项目 / 历史 / KV 写接口 | 没有令牌，靠来源边界 |
-| 同源 XSS | 回读资源已加 CSP，但其它同源注入点仍需逐个排查 |
-| 调试页跨源保存 | 需要后台预检放行 x-task-token 并把调试源加入受信任来源（见四·补） |
+| 同源 XSS | 资源回读已加 CSP、调试页已换独立源，但其它同源注入点仍需逐个排查 |
+| 沙箱页能借宿主做什么 | `CanvasUI.api` 仍允许整画布覆盖、下单、写资产（宿主代发） |
+| 审计的 head 文件 | 与日志同目录；整目录一起被换掉时发现不了 |
 | 网络与子进程限制 | 任务脚本可随意出网、可 spawn |
 
 完整分析与实测证据见 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md`。
