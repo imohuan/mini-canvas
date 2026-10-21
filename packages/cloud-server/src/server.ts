@@ -943,7 +943,16 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   await host.start(() => {
     // 本机访问时顺手把管理令牌注进页面（远程不注）：否则用户要先手抄一遍，
     // 忘了抄的表现是「所有写操作 403、节点上只写执行失败」。
-    app.route('/', uiRoutes(uiDist, () => (adminAuthEnabled ? adminAuth.token : undefined)))
+    // MINI_CANVAS_NO_TOKEN_INJECTION=1：反代被配成透传 Host / 删转发头时，令牌注入
+    // 的三个判定会被骗过 —— 部署者声明后一刀切不注入，所有用户都手填。
+    app.route(
+      '/',
+      uiRoutes(
+        uiDist,
+        () => (adminAuthEnabled ? adminAuth.token : undefined),
+        process.env.MINI_CANVAS_NO_TOKEN_INJECTION === '1',
+      ),
+    )
   })
 
   let server: ServerType | undefined

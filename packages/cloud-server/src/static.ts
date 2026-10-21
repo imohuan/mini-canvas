@@ -375,6 +375,15 @@ export function uiRoutes(
    * 否则等于把令牌发给任何能打开这个页面的人。
    */
   adminTokenForLocal?: () => string | undefined,
+  /**
+   * **彻底关闭注入**的开关。
+   *
+   * 为什么需要：「有转发头就不注入」的分界只能挡住**标准**反代。反代若被配成
+   * `--reset-headers`（透传 Host、删掉所有转发头），三个条件会同时成立，令牌照样泄露。
+   * 部署者知道自己要挂反代时，设 `MINI_CANVAS_NO_TOKEN_INJECTION=1` 一刀切 ——
+   * 所有用户都去「设置 → 插件」手填，代价只是多一次粘贴。
+   */
+  noTokenInjection?: boolean,
 ): Hono {
   const app = new Hono()
   app.get('*', async (c) => {
@@ -389,7 +398,8 @@ export function uiRoutes(
     const index = await readWithin(uiDist, '/index.html')
     if (index) {
       // 本机访问：把令牌一起注进去（见参数说明）；非本机返回空串 → 不注
-      const token = isLoopbackRequest(c) ? adminTokenForLocal?.() : undefined
+      const token =
+        !noTokenInjection && isLoopbackRequest(c) ? adminTokenForLocal?.() : undefined
       // 往 index.html 里插一行**宿主标记**：告诉这份界面"你是被 cloud-server 托管的"。
       //
       // 为什么要它：前端据此把「云端连接（cloud-client）」当**自带件开机直接启动**

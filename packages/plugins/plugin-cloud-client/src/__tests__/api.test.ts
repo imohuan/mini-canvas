@@ -153,6 +153,27 @@ describe('实时通道', () => {
     expect(url).not.toContain('type=')
   })
 
+  /**
+   * ★ SSE 断线时不只说「断开」：补一发探测问出状态码。
+   * EventSource 拿不到状态码，403（来源边界拒）与网络抖动在里面长得一样，
+   * 只报「会自动重连」用户永远查不出原因（真实踩到）。
+   */
+  it('★ 断线时探测到 403 → 说来源问题，不说「自动重连」', async () => {
+    const src = fakeSource() as ReturnType<typeof fakeSource> & { onerror?: () => void }
+    const errors: string[] = []
+    const api = new CloudApi({
+      baseUrl: 'http://srv',
+      createEventSource: () => src,
+      fetchImpl: (async () => new Response('', { status: 403 })) as unknown as typeof fetch,
+    })
+    api.subscribeChanges(() => {}, (m) => errors.push(m))
+    src.onerror?.()
+    // 探测是异步的：等一拍
+    await new Promise((r) => setTimeout(r, 10))
+    expect(errors.join(' ')).toContain('403')
+    expect(errors.join(' ')).toContain('来源')
+  })
+
   it('收到的帧转发给回调；坏帧忽略（不该打断订阅）', () => {
     const src = fakeSource()
     const got: Array<{ type: string; key: string }> = []
@@ -303,6 +324,21 @@ describe('管理令牌', () => {
     const { fetchImpl } = fakeFetch(() => ({ status: 403, body: {} }))
     const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
     await expect(api.cancelJob('j1')).rejects.toThrow(/设置 → 插件/)
+  })
+
+  /**
+   * ★ activeJob：只有 404 才降级成「没有在跑的任务」。
+   * 403（没令牌）如果也返回 null，「发送」按钮不会禁用，用户连点就重复下单。
+   */
+  it('★ activeJob 404 → null；403 → 抛', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const notFound = fakeFetch(() => ({ status: 404, body: {} }))
+    const api404 = new CloudApi({ baseUrl: 'http://srv', fetchImpl: notFound.fetchImpl })
+    await expect(api404.activeJob('c1', 'n1')).resolves.toBeNull()
+
+    const forbidden = fakeFetch(() => ({ status: 403, body: {} }))
+    const api403 = new CloudApi({ baseUrl: 'http://srv', fetchImpl: forbidden.fetchImpl })
+    await expect(api403.activeJob('c1', 'n1')).rejects.toThrow(/来源|设置 → 插件/)
   })
 
   it('非 403 的失败保持原来的说法（别把业务错误也改成令牌提示）', async () => {

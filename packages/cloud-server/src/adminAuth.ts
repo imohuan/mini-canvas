@@ -117,11 +117,22 @@ export async function createAdminAuth(opts: {
 
   const fixed = opts.fixedToken ?? process.env.MINI_CANVAS_ADMIN_TOKEN
   if (fixed) {
+    /*
+     * 固定令牌**不强制** hex：有人用长随机串 / 带前缀的都行。
+     * 但要去掉首尾空白（复制粘贴最常见的事故），并且拒绝空串 ——
+     * 空串会让 verify('') 变成「缺令牌」，等于鉴权被悄悄关掉。
+     */
+    const token = fixed.trim()
+    if (!token) {
+      throw new Error(
+        'MINI_CANVAS_ADMIN_TOKEN 是空串。要么给它一个非空值，要么删掉它让服务自己生成文件令牌。',
+      )
+    }
     return {
-      token: fixed,
+      token,
       tokenFile: null,
       source: 'env',
-      verify: (v) => verifyWith(fixed, v),
+      verify: (v) => verifyWith(token, v),
     }
   }
 

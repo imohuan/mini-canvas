@@ -163,7 +163,13 @@ export class CloudApi {
       this.absolute('/api/jobs/active?canvasId=' + encodeURIComponent(canvasId) + '&nodeId=' + encodeURIComponent(nodeId)),
       { headers: { accept: 'application/json' } },
     )
-    if (!res.ok) return null
+    /*
+     * 404 当「没有在跑的任务」是合理的；**其它失败不能也吞掉**。
+     * 以前任何非 2xx 都返回 null —— 令牌缺失（403）时「发送」按钮不会被禁用，
+     * 用户连点就会重复下单。现在只有 404 走这个降级，其它照抛。
+     */
+    if (res.status === 404) return null
+    if (!res.ok) throw httpError('查进行中的任务', res.status, 'GET')
     const body = (await res.json()) as { active?: { jobId: string; progress?: number } | null }
     return body.active ?? null
   }
@@ -326,6 +332,29 @@ export class CloudApi {
   // ==================== 实时通道 ====================
 
   /**
+   * 探一下 SSE 端点的**状态码**（EventSource 自己拿不到）。
+   *
+   * 为什么要有它：`EventSource.onerror` 只会说「断了」，403（来源边界）与网络抖动在里面长得一样。
+   * 用一次普通 GET 问出状态码，才能给用户一句能照做的提示。
+   * 不读正文、立刻取消流 —— 它只用来拿状态码，不该多占一条长连接。
+   */
+  private async probeEventsStatus(): Promise<number | undefined> {
+    try {
+      const res = await this.doFetch(this.absolute('/api/kv/events'), {
+        headers: { accept: 'text/event-stream' },
+      })
+      try {
+        await res.body?.cancel()
+      } catch {
+        /* 没有 body / 已经关了 */
+      }
+      return res.status
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
    * 订阅"哪个 (type,key) 变了"。
    *
    * 有意**不带 type 过滤**：一条连接要同时听画布（canvas 域）与清单/历史（config 域）——
@@ -371,8 +400,32 @@ export class CloudApi {
           /* 解析不了就当没收到：宁可漏一次通知，也不要因为坏帧把订阅打断 */
         }
       })
-      // 断线交给 EventSource 自己重连（浏览器内置，带退避）
-      source.onerror = () => onError?.('实时通道断开，浏览器会自动重连')
+      /*
+       * 断线交给 EventSource 自己重连（浏览器内置，带退避），但**别只说「断开」**。
+       *
+       * EventSource 拿不到状态码，所以这里在头两次失败时补一发探测请求，把真实原因问出来：
+       *   · 403 → 来源边界拒了（后台不认这个页面的 Host/Origin），重连一万次也不会好；
+       *   · 404/500 → 端点或后台有问题。
+       * 只探头两次：之后就是纯网络抖动，交给浏览器退避，不该每 3 秒打一次探测。
+       */
+      let errorCount = 0
+      source.onerror = () => {
+        errorCount += 1
+        if (errorCount > 2) return
+        void this.probeEventsStatus().then((status) => {
+          if (status === 403) {
+            onError?.(
+              '实时通道被拒（403）：后台不认这个页面的来源。' +
+                '常见原因是页面不是从后台地址打开的（换了端口 / 用了别的域名），' +
+                '或后台的 --trusted-host / --trusted-origin 没配对。',
+            )
+          } else if (status !== undefined && status >= 400) {
+            onError?.('实时通道连不上（HTTP ' + status + '），后台可能没起来或该端点不可用。')
+          } else {
+            onError?.('实时通道断开，浏览器会自动重连')
+          }
+        })
+      }
     } catch (err) {
       onError?.('无法订阅实时通道：' + (err instanceof Error ? err.message : String(err)))
       return () => {}

@@ -139,11 +139,28 @@ describe('调试源：只读静态服务', () => {
       expect(await statusWithHost(Number(port), 'evil.example:' + port)).toBe(403)
       // localhost 这一种写法要认（浏览器里两种都可能出现）
       expect(await statusWithHost(Number(port), 'localhost:' + port)).toBe(200)
+      // ★ 带转发头 → 403：调试源只该被本机直连（挂反代等于把产物给远程访客）
+      expect(await statusWithHostAndHeader(Number(port), '127.0.0.1:' + port, 'x-forwarded-for', '1.2.3.4')).toBe(403)
     } finally {
       await origin.stop()
     }
   })
 })
+
+/** 用指定的 Host 头（可再加一个额外头）发一次 GET，返回状态码 */
+function statusWithHostAndHeader(port: number, host: string, key: string, value: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      { host: '127.0.0.1', port, path: '/c1/debug-7.html', method: 'GET', headers: { host, [key]: value } },
+      (res) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      },
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}
 
 /** 用指定的 Host 头发一次 GET，返回状态码（fetch 改不了 Host，只能用 node:http） */
 function statusWithHost(port: number, host: string): Promise<number> {

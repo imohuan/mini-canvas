@@ -104,9 +104,17 @@ export function createDebugOrigin(opts: { dataRoot: string; hostname?: string; p
             res.end('not found')
           }
           if (req.method !== 'GET') return notFound()
-          // Host 白名单先看（防 DNS 重绑定读走调试产物）
+          /*
+           * Host 白名单先看（防 DNS 重绑定读走调试产物）。
+           *
+           * 另外**拒绝任何转发头**：调试源本该只被本机浏览器直连。
+           * 如果它被人挂到反代后面，远程访客能读到节点 HTML 与 context.js
+           * （里面有上游数据与那张 10 分钟短令牌）—— 转发头的存在就说明「不是直连」。
+           */
           const reqHost = String(req.headers.host ?? '').toLowerCase()
-          if (!allowedHosts.has(reqHost)) {
+          const forwarded = ['x-forwarded-for', 'x-real-ip', 'forwarded', 'x-forwarded-host']
+            .some((h) => String(req.headers[h] ?? '').trim() !== '')
+          if (forwarded || !allowedHosts.has(reqHost)) {
             res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
             res.end('host not allowed')
             return

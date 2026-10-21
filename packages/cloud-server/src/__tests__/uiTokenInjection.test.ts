@@ -72,6 +72,18 @@ describe('托管页：管理令牌注入（判定逻辑）', () => {
     expect(r.text).not.toContain('__MC_ADMIN_TOKEN__')
   })
 
+  /**
+   * ★ noTokenInjection 开关：反代被配成透传 Host / 删转发头时，三个判定会被骗过，
+   * 部署者声明后要一刀切不注入。
+   */
+  it('★ noTokenInjection=true 时本机也不注入（一刀切）', async () => {
+    const dist = await bootIndex()
+    const app = uiRoutes(dist, () => TOKEN, true)
+    const res = await app.request('http://127.0.0.1:8865/', { headers: { host: '127.0.0.1:8865' } })
+    expect(res.status).toBe(200)
+    expect(await res.text()).not.toContain(TOKEN)
+  })
+
   it('幂等：index.html 里已经有这个变量时不再插第二次', async () => {
     const dist = await bootIndex(
       '<!doctype html><html><head><script>window.__MC_ADMIN_TOKEN__="x"</script></head><body></body></html>',
