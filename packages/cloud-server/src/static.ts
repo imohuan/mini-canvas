@@ -441,7 +441,16 @@ function injectAdminToken(html: Uint8Array<ArrayBuffer>, token: string | undefin
   if (!token) return html
   const text = new TextDecoder().decode(html)
   if (text.includes('__MC_ADMIN_TOKEN__')) return html
-  const script = '<script>window.__MC_ADMIN_TOKEN__=' + JSON.stringify(token) + '</script>\n'
+  /*
+   * 把值安全地放进 `<script>`。
+   *
+   * 为什么要额外转义：`JSON.stringify` 不会转义 `<`，令牌万一含 `</script>`
+   * （`MINI_CANVAS_ADMIN_TOKEN` 是**不校验格式**的，任何人都能设）就会提前闭合脚本标签，
+   * 后面的内容变成真脚本 —— 等于给本机管理页注入任意同源脚本。
+   * 把 `<` 写成 `\u003c` 之后，字符串在 JS 里的值不变，但 HTML 解析器看不到 `</script>`。
+   */
+  const literal = JSON.stringify(token).split('<').join('\\u003c')
+  const script = '<script>window.__MC_ADMIN_TOKEN__=' + literal + '</script>\n'
   const at = pickInsertAt(text)
   return new TextEncoder().encode(text.slice(0, at) + script + text.slice(at)) as Uint8Array<ArrayBuffer>
 }
@@ -476,8 +485,32 @@ function isLoopbackRequest(c: unknown): boolean {
   const addr = remote.toLowerCase().replace(/^::ffff:/, '')
   if (addr !== '127.0.0.1' && addr !== '::1') return false
 
-  // 第二道：Host 也必须是回环（挡住同机反代）
-  const host = ((c as { req?: { header?(n: string): string | undefined } }).req?.header?.('host') ?? '').toLowerCase()
+  const header = (n: string): string | undefined => {
+    try {
+      return (c as { req?: { header?(k: string): string | undefined } }).req?.header?.(n)
+    } catch {
+      return undefined
+    }
+  }
+
+  /*
+   * 第三道：**任何转发头都不能有**。
+   *
+   * 前两道挡不住同机反代：nginx 默认 `proxy_set_header Host $proxy_host` 会把 Host
+   * 改写成本服务的回环地址，此时「对端是 127.0.0.1」+「Host 是 127.0.0.1」同时成立，
+   * 但请求其实来自公网（审查用真实代理复现过，令牌直接泄露）。
+   *
+   * 反代一定会留下转发头（`X-Forwarded-For` / `X-Real-IP` / `Forwarded` 至少一个），
+   * 而本机浏览器直连不会带这些头 —— 所以「有任意一个就不注入」是可靠的分界。
+   * 反代用户要是没配转发头：那种部署本身就拿不到真实来源，宁可让他手填一次令牌。
+   */
+  for (const name of ['x-forwarded-for', 'x-real-ip', 'forwarded', 'x-forwarded-host', 'x-forwarded-proto']) {
+    const v = header(name)
+    if (v !== undefined && v.trim() !== '') return false
+  }
+
+  // 第二道：Host 也必须是回环
+  const host = (header('host') ?? '').toLowerCase()
   if (!host) return false
   const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
   return name === '127.0.0.1' || name === 'localhost' || name === '[::1]' || name === '::1'

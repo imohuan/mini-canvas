@@ -170,7 +170,14 @@ export class CloudApi {
 
   /** 取消任务（进后台 → 后台再去服务端真取消） */
   async cancelJob(jobId: string): Promise<void> {
-    await this.doFetch(this.absolute('/api/jobs/' + encodeURIComponent(jobId) + '/cancel'), { method: 'POST' })
+    const res = await this.doFetch(this.absolute('/api/jobs/' + encodeURIComponent(jobId) + '/cancel'), {
+      method: 'POST',
+    })
+    /*
+     * 以前不看状态码 —— 403 / 404 都被当成「取消成功」，用户以为停了，其实还在跑烧额度。
+     * 这里按写请求处理：失败要抛，让调用方（节点的「取消」按钮）能显示出来。
+     */
+    if (!res.ok) throw httpError('取消任务', res.status)
   }
 
   // ==================== 历史 ====================

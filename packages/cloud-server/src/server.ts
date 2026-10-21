@@ -514,7 +514,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         // 不把这两个补进来，`--host 0.0.0.0` 之后浏览器打开 127.0.0.1 会被来源边界 403 ——
         // 而页面上只写着「请求来源不受信任」，看不出是白名单少了本机回环（实测踩到）。
         ...(opts.hostname === '0.0.0.0' || opts.hostname === '::'
-          ? [`127.0.0.1:${listenPort}`, `[::1]:${listenPort}`, `[::1]:${listenPort}`.replace('[::1]', '::1')]
+          // IPv6 的 Host 必须带方括号（浏览器就是这么发的），不要加无方括号的写法
+          ? [`127.0.0.1:${listenPort}`, `[::1]:${listenPort}`]
           : []),
         ...(opts.trustedHosts ?? []),
         ...(process.env.MINI_CANVAS_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),

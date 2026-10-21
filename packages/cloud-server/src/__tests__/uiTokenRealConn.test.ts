@@ -43,10 +43,15 @@ afterEach(async () => {
 })
 
 /** 用指定 Host 头发一次 GET（连到 urlHost 那个地址），返回正文 */
-function get(port: number, urlHost: string, hostHeader: string): Promise<string> {
+function get(
+  port: number,
+  urlHost: string,
+  hostHeader: string,
+  extra: Record<string, string> = {},
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = httpRequest(
-      { host: urlHost, port, path: '/', method: 'GET', headers: { host: hostHeader } },
+      { host: urlHost, port, path: '/', method: 'GET', headers: { host: hostHeader, ...extra } },
       (res) => {
         const chunks: Buffer[] = []
         res.on('data', (d) => chunks.push(d as Buffer))
@@ -97,6 +102,34 @@ describe('令牌注入：只认真实对端地址', () => {
     expect(html).not.toContain(TOKEN)
     expect(html).not.toContain('__MC_ADMIN_TOKEN__')
     expect(html).toContain('mini-canvas-host')
+  })
+
+  /**
+   * ★★ 同机反代：nginx 默认会把 Host 改写成 $proxy_host（回环地址），
+   * 于是「对端回环 + Host 回环」两个条件同时成立，但请求其实来自公网。
+   *
+   * 分界是**转发头**：反代一定会留下 X-Forwarded-For / X-Real-IP / Forwarded，
+   * 本机浏览器直连不会带。有任意一个就不注入。
+   */
+  it('★★ 对端回环 + Host 回环，但带 X-Forwarded-For（同机反代）→ 不注入', async () => {
+    const port = await boot()
+    const html = await get(port, '127.0.0.1', '127.0.0.1:' + port, { 'x-forwarded-for': '203.0.113.9' })
+    expect(html).not.toContain(TOKEN)
+    expect(html).not.toContain('__MC_ADMIN_TOKEN__')
+    expect(html).toContain('mini-canvas-host')
+  })
+
+  it('★★ X-Real-IP / Forwarded 同样挡住（不只认 X-Forwarded-For）', async () => {
+    const port = await boot()
+    const cases: Array<[string, string]> = [
+      ['x-real-ip', '203.0.113.9'],
+      ['forwarded', 'for=203.0.113.9'],
+      ['x-forwarded-host', 'public.example'],
+    ]
+    for (const [k, v] of cases) {
+      const html = await get(port, '127.0.0.1', '127.0.0.1:' + port, { [k]: v })
+      expect(html, k).not.toContain(TOKEN)
+    }
   })
 })
 

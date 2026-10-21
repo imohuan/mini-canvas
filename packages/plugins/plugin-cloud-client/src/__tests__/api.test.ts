@@ -294,6 +294,17 @@ describe('管理令牌', () => {
     expect(String(err)).not.toContain('设置 → 插件')
   })
 
+  /**
+   * ★ 取消任务失败必须抛：以前不看状态码，403/404 都被当成「取消成功」，
+   * 用户以为停了，其实还在跑（继续烧额度）。
+   */
+  it('★ 取消任务 403 会抛（不再当成取消成功）', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { fetchImpl } = fakeFetch(() => ({ status: 403, body: {} }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.cancelJob('j1')).rejects.toThrow(/设置 → 插件/)
+  })
+
   it('非 403 的失败保持原来的说法（别把业务错误也改成令牌提示）', async () => {
     ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
     const { fetchImpl } = fakeFetch(() => ({ status: 500, body: {} }))
