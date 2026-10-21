@@ -55,6 +55,34 @@ import { exposePluginReloader } from "./pluginReload";
 import { exposeSharedKvEvents } from "./composables/kvEvents";
 import { router } from "./router";
 
+/**
+ * 托管版后台会把管理令牌注进页面（`window.__MC_ADMIN_TOKEN__`）。
+ *
+ * 为什么在这里接：令牌是全站写入口的凭证，插件（cloud-client / 节点宿主代发 /
+ * 插件管理）都从 localStorage 的同一个键读它。在挂载**之前**写进去，
+ * 任何插件第一次发请求就已经带上 —— 用户不必先去「设置 → 插件」抄一遍。
+ *
+ * 只有本机访问才注（服务端判 Host，见 cloud-server 的 uiRoutes）；远程访问时
+ * 这个变量不存在，行为与以前一致。写完立刻删掉，避免留在全局被页面脚本读到。
+ */
+function adoptInjectedAdminToken(): void {
+  const holder = window as unknown as { __MC_ADMIN_TOKEN__?: unknown }
+  try {
+    const injected = holder.__MC_ADMIN_TOKEN__
+    if (typeof injected === 'string' && injected.trim()) {
+      localStorage.setItem('mc_admin_token', injected.trim())
+    }
+  } catch {
+    /* 存储被禁：照常启动，写请求会 403（提示里会说去哪填） */
+  }
+  try {
+    delete holder.__MC_ADMIN_TOKEN__
+  } catch {
+    /* 冻结核：删不掉也不影响功能 */
+  }
+}
+adoptInjectedAdminToken();
+
 // 先挂共享运行时全局（Vue / MiniCanvasCore / …），再挂载应用 ——
 // 外部 UMD 插件（经「插件管理」安装）靠这些全局取依赖，必须在它们加载前就位。
 exposeSharedGlobals();

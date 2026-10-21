@@ -361,7 +361,20 @@ pnpm build</code></pre>
 </body></html>`
 
 /** 画布界面路由：托管 ui 产物（SPA：找不到的路径回落 index.html） */
-export function uiRoutes(uiDist: string | undefined): Hono {
+export function uiRoutes(
+  uiDist: string | undefined,
+  /**
+   * 托管页要不要**顺手把管理令牌写进页面**（缺省不写）。
+   *
+   * 为什么需要：后台默认给写入口加了令牌，而令牌要用户自己去「设置 → 插件」粘贴一次。
+   * 同机打开画布的人，本来就从启动日志里能看到那串 —— 让他再抄一遍纯属多余；
+   * 忘了抄的表现是「所有写操作 403、节点上写着执行失败」，且看不出原因（真实踩到）。
+   *
+   * 只在**本机回环地址**访问时才允许：远程访问（局域网 / 反代）不注入，
+   * 否则等于把令牌发给任何能打开这个页面的人。
+   */
+  adminTokenForLocal?: () => string | undefined,
+): Hono {
   const app = new Hono()
   app.get('*', async (c) => {
     if (!uiDist) {
@@ -374,6 +387,8 @@ export function uiRoutes(uiDist: string | undefined): Hono {
     }
     const index = await readWithin(uiDist, '/index.html')
     if (index) {
+      // 本机访问：把令牌一起注进去（见参数说明）；非本机返回空串 → 不注
+      const token = isLoopbackRequest(c) ? adminTokenForLocal?.() : undefined
       // 往 index.html 里插一行**宿主标记**：告诉这份界面"你是被 cloud-server 托管的"。
       //
       // 为什么要它：前端据此把「云端连接（cloud-client）」当**自带件开机直接启动**
@@ -387,7 +402,7 @@ export function uiRoutes(uiDist: string | undefined): Hono {
       // index.html** —— 旧 hash 引用的资产早已不在，新功能"永远加载不出来"，
       // 必须手动清缓存。index.html 本体不带 hash，本就该每次校验；资产文件名里
       // 有 content hash，可以放心长缓存（浏览器默认策略即可）。
-      return c.body(injectHostFlag(index), 200, {
+      return c.body(injectHostFlag(injectAdminToken(index, token)), 200, {
         'content-type': MIME_BY_EXT['.html'],
         'cache-control': 'no-cache',
       })
@@ -413,6 +428,33 @@ function injectHostFlag(html: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> 
   const at = pickInsertAt(text)
   const next = text.slice(0, at) + HOST_FLAG_META + '\n' + text.slice(at)
   return new TextEncoder().encode(next) as Uint8Array<ArrayBuffer>
+}
+
+/**
+ * 把管理令牌写进页面（`window.__MC_ADMIN_TOKEN__`）。
+ *
+ * 前端启动时读它、存进 localStorage，与「设置 → 插件」里手填的那份同一个键 ——
+ * 于是同机打开画布的人不用再抄一遍令牌。只在本机回环访问时调用（见 uiRoutes）。
+ */
+function injectAdminToken(html: Uint8Array<ArrayBuffer>, token: string | undefined): Uint8Array<ArrayBuffer> {
+  if (!token) return html
+  const text = new TextDecoder().decode(html)
+  if (text.includes('__MC_ADMIN_TOKEN__')) return html
+  const script = '<script>window.__MC_ADMIN_TOKEN__=' + JSON.stringify(token) + '</script>\n'
+  const at = pickInsertAt(text)
+  return new TextEncoder().encode(text.slice(0, at) + script + text.slice(at)) as Uint8Array<ArrayBuffer>
+}
+
+/**
+ * 这个请求是不是来自**本机**（127.0.0.1 / ::1 / localhost）。
+ *
+ * 只用于「要不要把令牌写进页面」这一件事：远程访问一律不写。
+ * 判 `Host` 而不是 `X-Forwarded-For`：后者在反代下可被伪造，而 Host 已经过白名单校验。
+ */
+function isLoopbackRequest(c: { req: { header(n: string): string | undefined } }): boolean {
+  const host = (c.req.header('host') ?? '').toLowerCase()
+  const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
+  return name === '127.0.0.1' || name === 'localhost' || name === '[::1]' || name === '::1'
 }
 
 /** 选插入点：</head> 前 / <body 前 / 文首 */

@@ -934,7 +934,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // ⑤ 装载插件 + 把插件路由翻成代理；**插件路由挂好之后**再挂 ui 兜底。
   //    顺序不可调换：ui 的 get('*') 若先挂，会把 /health、/api/* 全吃掉（实测）。
   await host.start(() => {
-    app.route('/', uiRoutes(uiDist))
+    // 本机访问时顺手把管理令牌注进页面（远程不注）：否则用户要先手抄一遍，
+    // 忘了抄的表现是「所有写操作 403、节点上只写执行失败」。
+    app.route('/', uiRoutes(uiDist, () => (adminAuthEnabled ? adminAuth.token : undefined)))
   })
 
   let server: ServerType | undefined

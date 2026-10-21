@@ -266,6 +266,29 @@ describe('资源上传', () => {
 })
 
 describe('管理令牌', () => {
+  /**
+   * ★ 403 必须说清「去填令牌」，不能只抛一个状态码。
+   *
+   * 真实踩到：没填令牌时，节点上只显示「执行失败 / 刷新后任务已中断」，
+   * 用户完全看不出要去「设置 → 插件」填一次令牌。
+   */
+  it('★ 403 换成能照着做的提示（写节点 / 下单都算）', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { fetchImpl } = fakeFetch(() => ({ status: 403, body: { ok: false, error: '需要管理令牌' } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.patchNodes('c1', { add: [] })).rejects.toThrow(/设置 → 插件/)
+    await expect(api.createJob({ canvasId: 'c1', nodeId: 'n1', actionId: 'a' })).rejects.toThrow(/设置 → 插件/)
+  })
+
+  it('非 403 的失败保持原来的说法（别把业务错误也改成令牌提示）', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { fetchImpl } = fakeFetch(() => ({ status: 500, body: {} }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const err = await api.patchNodes('c1', { add: [] }).catch((e: Error) => e)
+    expect(String(err)).toContain('500')
+    expect(String(err)).not.toContain('设置 → 插件')
+  })
+
   it('this.doFetch 一处覆盖所有 HTTP 写：patchNodes/patchEdges/uploadResource/postResource/createJob/cancelJob/replaceCanvas/putView 都带令牌', async () => {
     ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
     localStorage.setItem(ADMIN_TOKEN_KEY, 'cloud-tok')

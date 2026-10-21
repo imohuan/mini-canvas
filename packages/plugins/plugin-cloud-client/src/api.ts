@@ -38,6 +38,25 @@ function readAdminToken(): string | undefined {
   }
 }
 
+/**
+ * 403 时的人话。
+ *
+ * 为什么需要：后台给写入口加了管理令牌，而令牌要用户自己去「设置 → 插件」填一次。
+ * 没填时后台只回一句 `需要管理令牌（x-admin-token）`，云插件这边再包一层就只剩
+ * `[cloud-client] 写节点失败 403` —— 用户看到的是节点上「执行失败 / 刷新后任务已中断」，
+ * 完全猜不到是没填令牌（真实踩到过）。
+ *
+ * 所以凡是 403，都换成这句能照着做的提示；其它状态码保持原样。
+ */
+const TOKEN_HINT =
+  '后台要求管理令牌。请打开「设置 → 插件 → 管理令牌」，粘贴后台启动日志或 <数据目录>/admin-token 里的那串，再重试。'
+
+/** 把「HTTP 状态」翻译成能照着做的错误（只有 403 需要翻译，别的原样） */
+function httpError(what: string, status: number): Error {
+  if (status === 403) return new Error('[cloud-client] ' + what + '被拒绝（403）：' + TOKEN_HINT)
+  return new Error('[cloud-client] ' + what + '失败 ' + status)
+}
+
 export class CloudApi {
   private baseUrl: string
   private readonly doFetch: FetchLike
@@ -82,7 +101,7 @@ export class CloudApi {
   async fetchActions(ifVersion?: number): Promise<{ version: number; changed: boolean; actions: ServerAction[] }> {
     const qs = ifVersion === undefined ? '' : '?ifVersion=' + encodeURIComponent(String(ifVersion))
     const res = await this.doFetch(this.absolute('/api/actions' + qs), { headers: { accept: 'application/json' } })
-    if (!res.ok) throw new Error('[cloud-client] 拉动作清单失败 ' + res.status)
+    if (!res.ok) throw httpError('拉动作清单', res.status)
     const body = (await res.json()) as { version?: number; changed?: boolean; actions?: ServerAction[] }
     return {
       version: typeof body.version === 'number' ? body.version : 0,
@@ -108,7 +127,8 @@ export class CloudApi {
       body: JSON.stringify(input),
     })
     const body = (await res.json().catch(() => ({}))) as { ok?: boolean; jobId?: string; error?: string }
-    if (!res.ok || !body.jobId) throw new Error(body.error ?? '[cloud-client] 下单失败 ' + res.status)
+    // 403 优先翻译成「去填令牌」（后台原文太抽象，用户看不出要做什么）
+    if (!res.ok || !body.jobId) throw res.status === 403 ? httpError('下单', 403) : new Error(body.error ?? '[cloud-client] 下单失败 ' + res.status)
     return body.jobId
   }
 
@@ -118,7 +138,7 @@ export class CloudApi {
       headers: { accept: 'application/json' },
     })
     if (res.status === 404) return undefined
-    if (!res.ok) throw new Error('[cloud-client] 查任务失败 ' + res.status)
+    if (!res.ok) throw httpError('查任务', res.status)
     const body = (await res.json()) as { job?: ServerJob }
     return body.job
   }
@@ -150,7 +170,7 @@ export class CloudApi {
     const res = await this.doFetch(this.absolute('/api/history' + (qs ? '?' + qs : '')), {
       headers: { accept: 'application/json' },
     })
-    if (!res.ok) throw new Error('[cloud-client] 拉历史失败 ' + res.status)
+    if (!res.ok) throw httpError('拉历史', res.status)
     const body = (await res.json()) as Partial<ServerHistoryPage>
     return {
       items: body.items ?? [],
@@ -168,7 +188,7 @@ export class CloudApi {
     const res = await this.doFetch(this.absolute('/api/canvases/' + encodeURIComponent(canvasId)), {
       headers: { accept: 'application/json' },
     })
-    if (!res.ok) throw new Error('[cloud-client] 读画布失败 ' + res.status)
+    if (!res.ok) throw httpError('读画布', res.status)
     const body = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; view?: unknown }
     return { nodes: body.nodes ?? [], edges: body.edges ?? [], view: body.view ?? null }
   }
@@ -218,7 +238,7 @@ export class CloudApi {
       headers: { 'content-type': 'application/octet-stream' },
       body: bytes as unknown as BodyInit,
     })
-    if (!res.ok) throw new Error('[cloud-client] 上传资源失败 ' + res.status)
+    if (!res.ok) throw httpError('上传资源', res.status)
     const body = (await res.json()) as { hashName?: string }
     if (!body.hashName) throw new Error('[cloud-client] 上传资源返回异常')
     return {
@@ -249,7 +269,7 @@ export class CloudApi {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('[cloud-client] 写节点失败 ' + res.status)
+    if (!res.ok) throw httpError('写节点', res.status)
   }
 
   /** 增量写边（同上） */
@@ -259,7 +279,7 @@ export class CloudApi {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (!res.ok) throw new Error('[cloud-client] 写连线失败 ' + res.status)
+    if (!res.ok) throw httpError('写连线', res.status)
   }
 
   /** 写视口 */
@@ -269,7 +289,7 @@ export class CloudApi {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(view),
     })
-    if (!res.ok) throw new Error('[cloud-client] 写视口失败 ' + res.status)
+    if (!res.ok) throw httpError('写视口', res.status)
   }
 
   /** 整包写画布（"以这份为准"：首次上云时把本地推上去） */
@@ -279,7 +299,7 @@ export class CloudApi {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ nodes, edges }),
     })
-    if (!res.ok) throw new Error('[cloud-client] 写画布失败 ' + res.status)
+    if (!res.ok) throw httpError('写画布', res.status)
   }
 
   // ==================== 实时通道 ====================
