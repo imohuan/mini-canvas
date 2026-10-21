@@ -35,21 +35,22 @@ async function fetchIndex(dist: string, host: string, token?: string) {
   return { status: res.status, text: await res.text() }
 }
 
-describe('托管页：管理令牌注入', () => {
-  it('★ 本机访问 → 页面带上 __MC_ADMIN_TOKEN__，值就是后台那串', async () => {
+describe('托管页：管理令牌注入（判定逻辑）', () => {
+  /**
+   * 本文件用的是 `app.request(...)`（没有真实 TCP 连接），拿不到对端地址。
+   * 按「拿不到对端地址 → 当作不是本机」的保守策略，这里**不注入** ——
+   * 这是有意为之：宁可让用户手填一次令牌，也不要把令牌发给身份不明的一方。
+   *
+   * 真正的「本机注入」由 `uiTokenRealConn.test.ts` 用真 socket 覆盖。
+   */
+  it('★ 没有真实对端地址（裸 request）→ 不注入', async () => {
     const dist = await bootIndex()
     const r = await fetchIndex(dist, '127.0.0.1:8865', TOKEN)
     expect(r.status).toBe(200)
-    expect(r.text).toContain('__MC_ADMIN_TOKEN__')
-    expect(r.text).toContain(TOKEN)
-    // 仍然要带宿主标记（cloud-client 靠它开机直接启动）
+    expect(r.text).not.toContain('__MC_ADMIN_TOKEN__')
+    expect(r.text).not.toContain(TOKEN)
+    // 页面本身照常返回，并且仍带宿主标记（cloud-client 靠它开机直接启动）
     expect(r.text).toContain('name="mini-canvas-host"')
-  })
-
-  it('localhost 也算本机', async () => {
-    const dist = await bootIndex()
-    const r = await fetchIndex(dist, 'localhost:8865', TOKEN)
-    expect(r.text).toContain(TOKEN)
   })
 
   it('★ 远程 Host → 不注入（令牌不能发给能打开这个页面的任何人）', async () => {

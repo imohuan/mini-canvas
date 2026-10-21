@@ -280,6 +280,20 @@ describe('管理令牌', () => {
     await expect(api.createJob({ canvasId: 'c1', nodeId: 'n1', actionId: 'a' })).rejects.toThrow(/设置 → 插件/)
   })
 
+  /**
+   * ★ 读请求 403 是**来源边界**拒的，不是缺令牌。
+   *
+   * 读接口本来不要令牌，跟用户说「去填令牌」会把人引到死胡同（填多少次都没用）。
+   */
+  it('★ 读请求 403 → 说来源问题，不说令牌', async () => {
+    ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
+    const { fetchImpl } = fakeFetch(() => ({ status: 403, body: {} }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const err = await api.readCanvas('c1').catch((e: Error) => e)
+    expect(String(err)).toContain('来源')
+    expect(String(err)).not.toContain('设置 → 插件')
+  })
+
   it('非 403 的失败保持原来的说法（别把业务错误也改成令牌提示）', async () => {
     ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
     const { fetchImpl } = fakeFetch(() => ({ status: 500, body: {} }))

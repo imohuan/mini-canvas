@@ -51,6 +51,35 @@ async function readAudit(): Promise<Array<Record<string, unknown>>> {
 
 describe('port: 0 时 Host 白名单跟着真实端口走（M2）', () => {
   /**
+   * ★ `--host 0.0.0.0` 时，白名单必须把本机回环也补进去。
+   *
+   * 真实踩到：监听 0.0.0.0 之后，浏览器打开 127.0.0.1:端口 会被来源边界 403，
+   * 而页面上只写「请求来源不受信任」——看不出是白名单里少了 127.0.0.1。
+   */
+  it('★ --host 0.0.0.0 时，127.0.0.1 与 localhost 都在白名单里', async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), 'security-wiring-'))
+    srv = await createCloudServer({
+      dir,
+      port: 0,
+      hostname: '0.0.0.0',
+      watchProviders: false,
+      adminAuth: true,
+      adminToken: TOKEN,
+      requestTrust: true,
+    })
+    const { port } = await srv.start()
+    expect(srv.trust.hosts).toContain('127.0.0.1:' + port)
+    expect(srv.trust.hosts).toContain('localhost:' + port)
+    // 真的用 127.0.0.1 发一次写请求：来源边界放行 + 令牌正确 → 200
+    const res = await fetch('http://127.0.0.1:' + port + '/api/canvas/nodes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-admin-token': TOKEN },
+      body: JSON.stringify({ update: [] }),
+    })
+    expect(res.status).toBe(200)
+  })
+
+  /**
    * trustedOrigins 写成大写 scheme / 带尾斜杠时，预检也要回 ACAO。
    *
    * 实请求靠来源边界（那边已经归一了）能过，预检却按原样字符串比 —— 结果是浏览器

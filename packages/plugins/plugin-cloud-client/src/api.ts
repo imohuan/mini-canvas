@@ -51,9 +51,23 @@ function readAdminToken(): string | undefined {
 const TOKEN_HINT =
   '后台要求管理令牌。请打开「设置 → 插件 → 管理令牌」，粘贴后台启动日志或 <数据目录>/admin-token 里的那串，再重试。'
 
-/** 把「HTTP 状态」翻译成能照着做的错误（只有 403 需要翻译，别的原样） */
-function httpError(what: string, status: number): Error {
-  if (status === 403) return new Error('[cloud-client] ' + what + '被拒绝（403）：' + TOKEN_HINT)
+/**
+ * 把「HTTP 状态」翻译成能照着做的错误。
+ *
+ * 403 的成因分两种，说法必须分开 —— 否则会把人引到错误的方向：
+ *   · **写请求** 403：多半是没填管理令牌（后台只拦写入口带令牌）；
+ *   · **读请求** 403：读接口本来不要令牌，那是**来源边界**（Host / Origin）拒的，
+ *     让它去填令牌纯属误导（永远填不好）。
+ */
+function httpError(what: string, status: number, method: 'GET' | 'WRITE' = 'WRITE'): Error {
+  if (status === 403) {
+    return method === 'GET'
+      ? new Error(
+          '[cloud-client] ' + what + '被拒绝（403）：后台不认这个请求的来源。' +
+            '常见原因是页面不是从后台地址打开的（换了端口 / 用了别的域名），或后台的 --trusted-host / --trusted-origin 没配对。',
+        )
+      : new Error('[cloud-client] ' + what + '被拒绝（403）：' + TOKEN_HINT)
+  }
   return new Error('[cloud-client] ' + what + '失败 ' + status)
 }
 
@@ -101,7 +115,7 @@ export class CloudApi {
   async fetchActions(ifVersion?: number): Promise<{ version: number; changed: boolean; actions: ServerAction[] }> {
     const qs = ifVersion === undefined ? '' : '?ifVersion=' + encodeURIComponent(String(ifVersion))
     const res = await this.doFetch(this.absolute('/api/actions' + qs), { headers: { accept: 'application/json' } })
-    if (!res.ok) throw httpError('拉动作清单', res.status)
+    if (!res.ok) throw httpError('拉动作清单', res.status, 'GET')
     const body = (await res.json()) as { version?: number; changed?: boolean; actions?: ServerAction[] }
     return {
       version: typeof body.version === 'number' ? body.version : 0,
@@ -138,7 +152,7 @@ export class CloudApi {
       headers: { accept: 'application/json' },
     })
     if (res.status === 404) return undefined
-    if (!res.ok) throw httpError('查任务', res.status)
+    if (!res.ok) throw httpError('查任务', res.status, 'GET')
     const body = (await res.json()) as { job?: ServerJob }
     return body.job
   }
@@ -170,7 +184,7 @@ export class CloudApi {
     const res = await this.doFetch(this.absolute('/api/history' + (qs ? '?' + qs : '')), {
       headers: { accept: 'application/json' },
     })
-    if (!res.ok) throw httpError('拉历史', res.status)
+    if (!res.ok) throw httpError('拉历史', res.status, 'GET')
     const body = (await res.json()) as Partial<ServerHistoryPage>
     return {
       items: body.items ?? [],
@@ -188,7 +202,7 @@ export class CloudApi {
     const res = await this.doFetch(this.absolute('/api/canvases/' + encodeURIComponent(canvasId)), {
       headers: { accept: 'application/json' },
     })
-    if (!res.ok) throw httpError('读画布', res.status)
+    if (!res.ok) throw httpError('读画布', res.status, 'GET')
     const body = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; view?: unknown }
     return { nodes: body.nodes ?? [], edges: body.edges ?? [], view: body.view ?? null }
   }

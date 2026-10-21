@@ -12,6 +12,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
+import { getConnInfo } from '@hono/node-server/conninfo'
 import { buildPluginCatalog } from './plugins/catalog.js'
 
 /**
@@ -446,13 +447,38 @@ function injectAdminToken(html: Uint8Array<ArrayBuffer>, token: string | undefin
 }
 
 /**
- * 这个请求是不是来自**本机**（127.0.0.1 / ::1 / localhost）。
+ * 这次请求是不是**真正的本机直连**（可以放心把令牌给它）。
  *
- * 只用于「要不要把令牌写进页面」这一件事：远程访问一律不写。
- * 判 `Host` 而不是 `X-Forwarded-For`：后者在反代下可被伪造，而 Host 已经过白名单校验。
+ * 两个条件**同时**满足才算：
+ *
+ *   1. TCP 对端是回环地址（`getConnInfo`）。
+ *      —— 不能只看 `Host`：那是客户端自己写的。`--host 0.0.0.0` 时局域网里任何一台机器
+ *      发个 `Host: 127.0.0.1` 就能骗过去（审查时真机复现过）。
+ *   2. `Host` 也是回环写法。
+ *      —— 防**同机反代**：nginx 与服务跑在同一台机器时，对端也是 127.0.0.1，
+ *      但外面访问的人 Host 是域名。只看第 1 条会把令牌发给所有通过反代来的人。
+ *
+ * 两者都满足只可能是「本机浏览器直连本服务」。代价是：用户用自定义本机域名
+ * （如 `mycanvas.local`）访问时不会自动注入，得自己填一次 —— 宁可多填一次，
+ * 也不要把令牌发给身份不明的一方。
+ *
+ * 拿不到对端地址（非 Node 适配器 / 测试里的裸 request）→ 一律当作**不是**本机。
  */
-function isLoopbackRequest(c: { req: { header(n: string): string | undefined } }): boolean {
-  const host = (c.req.header('host') ?? '').toLowerCase()
+function isLoopbackRequest(c: unknown): boolean {
+  let remote: string | undefined
+  try {
+    remote = getConnInfo(c as never).remote.address
+  } catch {
+    return false
+  }
+  if (!remote) return false
+  // Node 会把 IPv4 映射成 ::ffff:127.0.0.1，两种写法都要认
+  const addr = remote.toLowerCase().replace(/^::ffff:/, '')
+  if (addr !== '127.0.0.1' && addr !== '::1') return false
+
+  // 第二道：Host 也必须是回环（挡住同机反代）
+  const host = ((c as { req?: { header?(n: string): string | undefined } }).req?.header?.('host') ?? '').toLowerCase()
+  if (!host) return false
   const name = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
   return name === '127.0.0.1' || name === 'localhost' || name === '[::1]' || name === '::1'
 }
