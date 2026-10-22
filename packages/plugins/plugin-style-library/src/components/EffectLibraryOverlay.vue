@@ -15,6 +15,8 @@ import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
+import { useStyleItem } from '../useStyleItem'
+import { styleItemDepsOf } from '../useStyleItemPorts'
 
 const { ctx } = useCanvasRender()
 
@@ -61,6 +63,46 @@ function onPreview(item: StyleCard): void {
   previewItem.value = item
 }
 
+/** 正在加入画布的素材（防连点） */
+const using = ref(false)
+/** 正在提交的那条素材 id（只让那张卡的按钮变灰） */
+const usingIds = ref<Array<number | string>>([])
+/** 加入失败的原因（面板里可见 —— 规范 §1.2） */
+const useError = ref('')
+
+/**
+ * 加入画布（用户口径 2026-10-22）：与风格库**同一套逻辑**，只是 UI 不同 ——
+ * 特效库点卡片仍是全屏预览，加入走卡片右下角的「+」按钮。
+ *
+ * 落进画布的是**封面图**（videos 是这条特效的效果演示，不是可编辑的素材本体）；
+ * 有图就取第一张图，没有才退回预览视频的地址。
+ */
+async function onUse(item: StyleCard): Promise<void> {
+  const url = item.images[0] ?? item.cover ?? item.videos[0] ?? ''
+  if (!url) {
+    useError.value = '这条素材没有可加入画布的文件'
+    return
+  }
+  if (using.value) return
+  using.value = true
+  usingIds.value = [item.id]
+  useError.value = ''
+  const position = { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+  try {
+    const result = await useStyleItem(styleItemDepsOf(ctx), { url, label: item.name }, position)
+    if (!result.ok) {
+      console.warn('[effect-library] 加入画布失败：' + result.reason + '（' + url + '）')
+      useError.value = result.message
+      return
+    }
+    previewItem.value = null
+    svc.close()
+  } finally {
+    using.value = false
+    usingIds.value = []
+  }
+}
+
 /**
  * 交给全屏预览的媒体：有预览视频就放视频（特效演示），没有就放封面图。
  * MediaViewer 认 { name, kind, url, list, index }；list 给同一条的多张，支持左右切换。
@@ -89,7 +131,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey, true))
 
 // 关闭时收起预览与最小化态
 watch(() => s.open, (v) => {
-  if (!v) { previewItem.value = null; minimized.value = false }
+  if (!v) { previewItem.value = null; minimized.value = false; useError.value = '' }
 })
 </script>
 
@@ -109,9 +151,12 @@ watch(() => s.open, (v) => {
           </div>
         </header>
 
+        <!-- 加入画布失败：必须看得见（规范 §1.2） -->
+        <p v-if="useError" class="elol-use-error" role="alert">{{ useError }}</p>
+
         <div class="elol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            mode="preview" @toggle-star="onToggleStar" @preview="onPreview" />
+            mode="preview" :using-ids="usingIds" @toggle-star="onToggleStar" @preview="onPreview" @use="onUse" />
         </div>
       </div>
 
@@ -158,6 +203,15 @@ watch(() => s.open, (v) => {
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
 }
 .elol-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--ui-ink, #18202b); }
+.elol-use-error {
+  flex: none;
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-danger, #ef4444);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ui-danger, #ef4444);
+}
 .elol-head-actions { display: flex; gap: 4px; }
 .elol-icon {
   display: grid;

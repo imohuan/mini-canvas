@@ -17,7 +17,8 @@ import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
-import { useStyleItem, type StyleItemMedia } from '../useStyleItem'
+import { useStyleItem } from '../useStyleItem'
+import { styleItemDepsOf } from '../useStyleItemPorts'
 
 const { ctx } = useCanvasRender()
 
@@ -65,6 +66,8 @@ function onOpenDetail(item: StyleCard): void {
 
 /** 正在提交的素材（防连点重复建节点） */
 const using = ref(false)
+/** 正在提交的那条素材 id（只让那张卡的按钮变灰，不影响别的卡） */
+const usingIds = ref<Array<number | string>>([])
 /** 加入失败的原因（显示在面板里 —— 规范 §1.2：只在控制台 warn 不算降级） */
 const useError = ref('')
 
@@ -85,20 +88,11 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
   if (using.value) return
   using.value = true
+  usingIds.value = [item.id]
   useError.value = ''
   try {
-    const result = await useStyleItem(
-      {
-        // 规范 §3.1：字节 → media.put → media.addNode；节点字段由图片插件自己写
-        media: ctx.tryGet<StyleItemMedia>('media'),
-        setLabel: (id, text) =>
-          (ctx.tryGet<{ setLabel(id: string, label: string | undefined): void }>('nodes'))
-            ?.setLabel(id, text),
-        onError: (msg, err) => console.warn(msg, err),
-      },
-      { url, label },
-      position,
-    )
+    // 规范 §3.1：字节 → media.put → media.addNode；节点字段由图片插件自己写
+    const result = await useStyleItem(styleItemDepsOf(ctx), { url, label }, position)
     if (!result.ok) {
       // 不退回"写素材库地址"：那会让节点依赖素材库目录与插件在线。
       // 原因显示在面板里（见模板的 slol-use-error），用户知道该修什么。
@@ -110,6 +104,7 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
     svc.close()
   } finally {
     using.value = false
+    usingIds.value = []
   }
 }
 
@@ -150,7 +145,7 @@ watch(() => s.open, (v) => {
 
         <div class="slol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
-            @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
+            :using-ids="usingIds" @toggle-star="onToggleStar" @open-detail="onOpenDetail" @use="onUse" />
         </div>
       </div>
 

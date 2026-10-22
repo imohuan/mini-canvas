@@ -23,20 +23,6 @@ import { UI_CARD } from '../names'
  */
 const CardFromRegistry = useUiComponent(UI_CARD)
 
-const props = defineProps<{
-  service: LibraryService
-  /** 收藏集合（受控；父组件持有并持久化） */
-  starred: Array<number | string>
-  /** 可用列数（视觉密度） */
-  columns?: number
-  /**
-   * 交互模式：
-   * - 'detail'（缺省，风格库）：点卡片/放大按钮 → 打开详情页
-   * - 'preview'（特效库）：点卡片/放大按钮 → 全屏预览（没有详情页）
-   */
-  mode?: 'detail' | 'preview'
-}>()
-
 const emit = defineEmits<{
   (e: 'toggle-star', item: StyleCard): void
   (e: 'open-detail', item: StyleCard): void
@@ -44,6 +30,31 @@ const emit = defineEmits<{
   (e: 'preview', item: StyleCard): void
   (e: 'use', item: StyleCard): void
 }>()
+
+/**
+ * 正在加入画布的素材 id（父组件在提交期间通过 v-model 传下来）。
+ *
+ * 为什么放在广场：卡片是「按名从 ui 目录取」的可替换件，父组件拿不到它的内部状态；
+ * 把「谁的按钮该转圈」放在这里，换卡片外观也不用重写这段。
+ */
+const props = withDefaults(
+  defineProps<{
+    service: LibraryService
+    /** 收藏集合（受控；父组件持有并持久化） */
+    starred: Array<number | string>
+    /** 可用列数（视觉密度） */
+    columns?: number
+    /**
+     * 交互模式：
+     * - 'detail'（缺省，风格库）：点卡片/放大按钮 → 打开详情页
+     * - 'preview'（特效库）：点卡片/放大按钮 → 全屏预览（没有详情页）
+     */
+    mode?: 'detail' | 'preview'
+    /** 正在加入画布的素材 id（只影响那一张的按钮态） */
+    usingIds?: Array<number | string>
+  }>(),
+  { columns: 4, mode: 'detail', usingIds: () => [] },
+)
 
 const svc = props.service
 const s = svc.state
@@ -87,6 +98,12 @@ function onUse(item: StyleCard): void {
 /** 卡片上的星标按钮 → 转给父组件（受控收藏集合在父组件） */
 function onToggleStar(item: StyleCard): void {
   emit('toggle-star', item)
+}
+
+/** 卡片上的「加入画布」→ 与详情页的「使用」同一个出口（父组件落库并建节点） */
+function onCardUse(item: StyleCard): void {
+  markRecent(item)
+  emit('use', item)
 }
 
 /** 当前页签下要显示的条目 */
@@ -214,7 +231,8 @@ defineExpose({ markRecent })
       <div v-else-if="visible.length" class="sg-grid" :style="gridStyle">
         <component :is="CardFromRegistry ?? 'div'" v-for="it in visible" :key="it.id" :item="it"
           :starred="starred.includes(it.id)" :show-commercial="mode !== 'preview'"
-          @open="onOpen" @toggle-star="onToggleStar" />
+          :busy="usingIds.includes(it.id)"
+          @open="onOpen" @toggle-star="onToggleStar" @use="onCardUse" />
       </div>
 
       <div v-else class="sg-empty">

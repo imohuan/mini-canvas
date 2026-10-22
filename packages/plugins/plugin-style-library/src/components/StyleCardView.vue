@@ -20,7 +20,7 @@
  * 视频就绪前先显示封面图（当 poster 用），就绪后淡入替换 —— 不闪、不跳布局。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { CheckCircle2, Star, Expand, Flame, Film } from 'lucide-vue-next'
+import { CheckCircle2, Star, Expand, Flame, Film, Plus } from 'lucide-vue-next'
 import type { StyleCard } from '../data/types'
 
 const props = defineProps<{
@@ -29,11 +29,15 @@ const props = defineProps<{
   starred?: boolean
   /** 是否显示"商用"徽章（特效库传 false 隐藏） */
   showCommercial?: boolean
+  /** 正在加入画布（父组件在提交期间置 true，避免连点重复建节点） */
+  busy?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'open', item: StyleCard): void
   (e: 'toggle-star', item: StyleCard): void
+  /** 把这条素材加到画布（两个库共用；父组件决定落素材库里第一张） */
+  (e: 'use', item: StyleCard): void
 }>()
 
 const loaded = ref(false)
@@ -182,6 +186,18 @@ function human(n: number): string {
         @click.stop="emit('open', props.item)"
       >
         <Expand :size="14" />
+      </button>
+      <!-- 右下：加入画布（两个库都有；素材走 media.put → media.addNode） -->
+      <button
+        class="sc-iconbtn sc-add"
+        :class="{ 'is-busy': busy }"
+        :disabled="busy"
+        type="button"
+        :aria-label="busy ? '正在加入画布' : '加入画布'"
+        title="加入画布"
+        @click.stop="emit('use', props.item)"
+      >
+        <Plus :size="14" />
       </button>
       <!-- 左下：多图数量角标（常显；挪到左下角后与左上角的标签不再叠加） -->
       <span v-if="item.images.length > 1" class="sc-count" aria-hidden="true">{{ item.images.length }}</span>
@@ -352,6 +368,10 @@ function human(n: number): string {
 .sc-star { top: 8px; right: 8px; }
 .sc-star.is-on { color: var(--ui-warn, #e3a25f); }
 .sc-expand { right: 8px; bottom: 8px; }
+/* 加入画布：与放大按钮同排（放大在右、加入在它左侧） */
+/* 常显（不跟着悬停淡出）：这是两个库唯一的"落到画布"入口，触屏也要点得到 */
+.sc-add { right: 42px; bottom: 8px; opacity: 1; }
+.sc-add.is-busy { opacity: 0.5; cursor: progress; }
 
 /* 多图数量角标：**左下角**（曾经在左上角，与悬停显示的标签重叠 —— 用户实测报的） */
 .sc-count {
