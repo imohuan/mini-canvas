@@ -13,7 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Search, Star, History, LayoutGrid, Sparkles, RefreshCw, X } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
-import type { StyleLibraryService } from '../data/store'
+import type { LibraryService } from '../data/store'
 import { UI_CARD } from '../names'
 
 /**
@@ -24,7 +24,7 @@ import { UI_CARD } from '../names'
 const CardFromRegistry = useUiComponent(UI_CARD)
 
 const props = defineProps<{
-  service: StyleLibraryService
+  service: LibraryService
   /** 收藏集合（受控；父组件持有并持久化） */
   starred: Array<number | string>
   /** 可用列数（视觉密度） */
@@ -82,6 +82,11 @@ function onOpen(item: StyleCard): void {
 function onUse(item: StyleCard): void {
   markRecent(item)
   emit('use', item)
+}
+
+/** 卡片上的星标按钮 → 转给父组件（受控收藏集合在父组件） */
+function onToggleStar(item: StyleCard): void {
+  emit('toggle-star', item)
 }
 
 /** 当前页签下要显示的条目 */
@@ -209,7 +214,7 @@ defineExpose({ markRecent })
       <div v-else-if="visible.length" class="sg-grid" :style="gridStyle">
         <component :is="CardFromRegistry ?? 'div'" v-for="it in visible" :key="it.id" :item="it"
           :starred="starred.includes(it.id)" :show-commercial="mode !== 'preview'"
-          @open="onOpen" @toggle-star="(x) => emit('toggle-star', x)" />
+          @open="onOpen" @toggle-star="onToggleStar" />
       </div>
 
       <div v-else class="sg-empty">

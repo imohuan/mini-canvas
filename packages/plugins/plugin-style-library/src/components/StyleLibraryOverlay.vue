@@ -15,8 +15,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
-import type { StyleLibraryService } from '../data/store'
+import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
+import { useStyleItem, type StyleItemDoc, type StyleItemResources } from '../useStyleItem'
 
 const { ctx } = useCanvasRender()
 
@@ -25,7 +26,7 @@ const GalleryComp = useUiComponent(UI_GALLERY)
 const DetailComp = useUiComponent(UI_DETAIL)
 
 /** 取服务（组件在画布渲染子树内，能用 useCanvasRender 拿 ctx） */
-const svc = ctx.get<StyleLibraryService>('style-library')
+const svc = ctx.get<LibraryService>('style-library')
 const s = svc.state
 
 /** 收藏集合：全局持久化（localStorage）—— 与具体画布无关 */
@@ -62,47 +63,53 @@ function onOpenDetail(item: StyleCard): void {
   detailItem.value = item
 }
 
+/** 正在提交的素材（防连点重复建节点） */
+const using = ref(false)
+
 /**
- * 使用：把选中的图放到画布上，并用**选中那条风格的标题**给节点命名。
+ * 使用：把选中的图**存进画布资源库**（resources.put）再建节点，并用风格名命名。
  *
- * 命名写法：不走 image 服务的 addImageNode（它建出节点后标题是自动的"图片 N"，
- * 要再补一次 setLabel = 两次历史）；改走 doc.createNode(type, pos, data) 把
- * imageUrl 与 label **一次写入、单条历史**，标题就是风格名（用户口径）。
- * 多图风格在标题后加序号（"名称 2"），避免同一风格的多张图在画布上同名分不清。
+ * 为什么不直接写风格库地址（2026-10-22 用户口径）：
+ * 素材库目录一改 / 插件没装，画布上的图就全裂；且节点本来只该保存持久资源引用。
+ * 落进资源库后，图片字节归本画布所有，与素材库是否在线无关。
+ *
+ * 命名：createNode 把 resourceId / imageUrl / label 一次写入 → 单条历史；
+ * 多图风格在标题后加序号（第 1 张不加），避免同名分不清。
  */
-function onUse(item: StyleCard, index: number): void {
+async function onUse(item: StyleCard, index: number): Promise<void> {
   const url = item.images[index] ?? item.cover
   const position = { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   // 多图时带序号（第 1 张不加，避免"名 1"这种啰嗦标题）
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
-  // 优先走 **doc.createNode**：imageUrl 与 label 一次写入、单条历史（不走 image 服务的
-  // addImageNode —— 它建出的是自动标题"图片 N"，要再补一次 setLabel = 两条历史）。
-  const doc = ctx.tryGet<{
-    createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
-  }>('doc')
-  if (doc && typeof doc.createNode === 'function') {
-    try {
-      doc.createNode('image', position, { imageUrl: url, label })
-      detailItem.value = null
-      svc.close()
+  if (using.value) return
+  using.value = true
+  try {
+    const result = await useStyleItem(
+      {
+        doc: ctx.tryGet<StyleItemDoc>('doc'),
+        resources: ctx.tryGet<StyleItemResources>('resources'),
+        fetchBlob: (u) =>
+          fetch(u).then((r) => {
+            if (!r.ok) throw new Error('HTTP ' + r.status)
+            return r.blob()
+          }),
+        onError: (msg, err) => console.warn(msg, err),
+      },
+      { url, label },
+      position,
+    )
+    if (!result.ok) {
+      // 不退回"写素材库地址"：那会让节点依赖素材库目录与插件在线。
+      // 拿不到就明确告警并打开原图，用户仍能看到素材。
+      console.warn('[style-library] 加入画布失败：' + result.reason + '（' + url + '）')
+      window.open(url, '_blank', 'noopener')
       return
-    } catch {
-      /* 掉到命令回退 */
     }
+    detailItem.value = null
+    svc.close()
+  } finally {
+    using.value = false
   }
-  const host = (globalThis as { MiniCanvasUI?: { getHost?: () => { command: { execute(id: string, payload?: unknown): void } } } }).MiniCanvasUI
-  if (host?.getHost) {
-    try {
-      // 回退路径同样带上 label（宿主命令把额外字段透传给 nodeFactory.create 的 extra）
-      host.getHost().command.execute('command:create-node', { type: 'image', position, imageUrl: url, label })
-      detailItem.value = null
-      svc.close()
-      return
-    } catch {
-      /* 拿不到宿主：退化成"打开新窗口看原图" */
-    }
-  }
-  window.open(url, '_blank', 'noopener')
 }
 
 /** 最小化：只收起面板（不关，保留状态） */

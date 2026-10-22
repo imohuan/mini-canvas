@@ -13,7 +13,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
 import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
-import type { StyleLibraryService } from '../data/store'
+import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
 
 const { ctx } = useCanvasRender()
@@ -26,7 +26,7 @@ const GalleryComp = useUiComponent(UI_GALLERY)
  */
 const MediaViewerComp = useUiComponent(UI_MEDIA_VIEWER)
 
-const svc = ctx.get<StyleLibraryService>('effect-library')
+const svc = ctx.get<LibraryService>('effect-library')
 const s = svc.state
 
 /** 收藏集合：全局持久化（与风格库分开存，免得分不清） */
