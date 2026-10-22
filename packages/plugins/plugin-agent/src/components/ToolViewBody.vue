@@ -218,11 +218,14 @@ function visibleRows<T>(items: T[]): T[] {
 /* —— 自定义卡片（紧凑两行，用户口径 2026-10-08 定稿）—— */
 .tvc { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
  .tvc-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; max-height: 200px; overflow: auto; }
-.tvc-head { display: flex; align-items: center; gap: 6px; }
+.tvc-head { display: flex; align-items: center; gap: 6px; min-width: 0; }
 /* 头行左侧的小图标（语义色走次要文字色，不抢标题） */
 .tvc-head-icon { display: grid; place-items: center; flex: none; color: var(--ui-ink-dim, #919191); }
-.tvc-title { font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
-.tvc-badge { padding: 1px 7px; border-radius: 999px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-size: 11px; line-height: 16px; }
+.tvc-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--ui-ink, #f7f7f7); }
+/* 徽章 = 单行胶囊（用户口径 2026-10-22）：名字可能是一整句，必须限宽 + 省略号，
+   否则它会把标题挤成两行、自己越出卡片右缘（截图里那团紫色）。
+   flex-shrink 保留：极端窄卡片里先缩徽章，标题至少还能看到开头。 */
+.tvc-badge { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 7px; border-radius: 999px; background: var(--ui-accent-soft, rgb(8 145 178 / 0.12)); color: var(--ui-accent-hover, #0e7490); font-size: 11px; line-height: 16px; }
 /* 徽章靠右（与 demo 一致）：标题在前、标记贴右缘 */
 .tvc-badge { margin-left: auto; }
 
@@ -254,7 +257,7 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-row-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
 .tvc-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ui-ink, #f7f7f7); }
 .tvc-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #919191); font-family: ui-monospace, Menlo, Consolas, monospace; }
-.tvc-row-tag { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 11px; line-height: 16px; color: var(--ui-ink-dim, #919191); }
+.tvc-row-tag { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 7px; border-radius: 999px; background: var(--ui-chip, rgb(255 255 255 / 0.1)); font-size: 11px; line-height: 16px; color: var(--ui-ink-dim, #919191); }
 .tvc-more { margin: 0; padding: 0 4px; font-size: 11px; color: var(--ui-ink-dim, #919191); }
 
 /* 缩略图条（最多 3 张 40px + 「+N」+ 类型统计） */
@@ -273,7 +276,8 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-progress-wrap { display: flex; align-items: center; gap: 8px; }
 .tvc-progress { flex: 1; height: 6px; border-radius: 999px; background: var(--ui-veil, rgb(255 255 255 / 0.08)); overflow: hidden; }
 .tvc-progress-fill { height: 100%; border-radius: 999px; background: var(--ui-accent, #0891b2); transition: width 0.24s ease; }
-.tvc-progress-text { flex: none; font-size: 11px; color: var(--ui-ink-dim, #919191); font-variant-numeric: tabular-nums; }
+/* 进度文字来自任务的 message，可能是一整句：限宽单行省略，不能把进度条挤成 0 */
+.tvc-progress-text { flex: 0 1 auto; min-width: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--ui-ink-dim, #919191); font-variant-numeric: tabular-nums; }
 
 /* 提示行 */
 .tvc-note { margin: 0; font-size: 12px; line-height: 20px; white-space: pre-wrap; word-break: break-word; }

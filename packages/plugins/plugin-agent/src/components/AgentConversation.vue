@@ -3139,7 +3139,14 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   padding: 2px 6px;
   border-radius: 6px;
   background: var(--ui-veil, rgb(255 255 255 / 0.06));
-  flex: none;
+  /* 工具名没有长度上限（MCP 名可能很长）：限宽单行省略，
+     否则整条折叠行会被它撑出气泡（极端长文本复查，2026-10-22）。 */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ac-tf-summary {
