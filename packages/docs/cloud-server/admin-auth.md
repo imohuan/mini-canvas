@@ -82,6 +82,26 @@ x-admin-token: <64 位 hex>
 读接口（GET / HEAD）不要令牌；**资产、项目、历史、KV 的写接口这一版也还没有令牌**，
 它们靠来源边界兜底 —— 这是已知的取舍，不要以为它们已经安全了。
 
+### 资源读取永远不带令牌（硬规则）
+
+凡是「取字节当图片 / 视频 / 音频用」的地址，**读的时候不要令牌**，也不要把令牌拼进 URL：
+
+```
+/api/style-library/file?name=<文件名>      风格库
+/api/effect-library/file?name=<文件名>     特效库
+/api/canvases/<画布id>/resources/<名字>    画布资源（上传后拿到的 URL）
+/api/assets/files/<名字>                    上传资产
+```
+
+为什么是硬规则：这些地址会进 `<img src>`、参考图、导出和第三方生成工具，
+挂上令牌（或需要自定义请求头）后浏览器加载不到，用户看到的就是「图片失效」。
+它们靠**来源边界**（Host / Origin）保护；其中画布资源与资产已经是内容寻址（地址随内容变），
+风格库 / 特效库由插件后台半用白名单扩展名 + 防穿越兜住。
+
+对应的实现口径：`isAdminPath` 先按方法过滤，GET / HEAD 永远返回 false ——
+所以上面那几个前缀虽然出现在写白名单里，也不会拦读取。回归测试见
+`packages/cloud-server/src/__tests__/resourceReadNoToken.test.ts`。
+
 前缀里有两种形态，规则不一样：带**尾斜杠**的按「目录」算（`/api/task/` 命中
 `/api/task/call`）；以 **`-`** 结尾的是「名字前缀」（`/api/node-ui/debug-` 命中
 `debug-accept`、`debug-result`）。其余不带斜杠的必须整段相等或后面接 `/` ——

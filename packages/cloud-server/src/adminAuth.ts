@@ -16,7 +16,18 @@ export interface AdminAuth {
   verify(v: string | undefined): 'ok' | 'missing' | 'bad'
 }
 
-/** 任意写方法都保护的路径前缀（结尾带斜杠，避免误伤同名前缀的兄弟路径）。 */
+/**
+ * 任意写方法都保护的路径前缀（结尾带斜杠，避免误伤同名前缀的兄弟路径）。
+ *
+ * **只影响写方法**。资源读取（GET / HEAD）一律不在这里拦：
+ *   - 风格库 `/api/style-library/file?name=…`
+ *   - 特效库 `/api/effect-library/file?name=…`
+ *   - 画布资源 `/api/canvases/:id/resources/:name`（上传后拿到的 URL）
+ *   - 资产文件 `/api/assets/files/:name`
+ * 这几类地址会进 `<img src>`、参考图、导出，挂上令牌就全变成「图片失效」。
+ * 下面虽然列了 `/api/style-library/` 等前缀，但 `isAdminPath` 先按方法过滤，
+ * GET / HEAD 永远返回 false。
+ */
 export const ADMIN_WRITE_PREFIXES = [
   '/api/server-plugins/',
   '/api/npm-plugins/',
