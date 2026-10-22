@@ -410,6 +410,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const fetchSelfBytes = makeFetchSelfBytes({
     fetch: (req) => host.app.fetch(req),
     origin: () => `http://${hostname}:${actualPort ?? port}`,
+    // 用**同一份** Host 白名单：局域网 IP / 反代域名访问时，画布里存的绝对地址
+    // 才能被认成「自己」（否则又退回裸地址，web2api 报图片不存在）。
+    trustedHosts: () => trustedHosts,
   })
   // 参考图交给 web2api 时要转成 **data URL**（它自己会落盘）——
   // 两个服务可能不在同一台机器，地址（尤其 127.0.0.1）它够不到；内嵌字节则与网络无关。

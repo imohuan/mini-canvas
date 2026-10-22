@@ -15,6 +15,12 @@
  * 本进程里直接调自己的 Hono app.fetch —— 一条内部往返，不出网卡、不依赖端口 / 防火墙，
  * 也不受「服务还在启动中」影响。资源路由本来就是把文件字节读出来回给调用方，走内部调用等价。
  *
+ * **内部请求必须自己带 `Host` 头**（2026-10-22 实测）：Node 的 `new Request(url)` 只解析 URL，
+ * 不会像真实网络栈那样补 `Host`。而 cloud-server 的来源边界（requestTrust）把 `/api/*`
+ * 的 Host 当安全判据 —— 缺了就按 `host-not-trusted` 回 403。于是「自请求取字节」永远失败，
+ * 风格库地址退回裸相对路径发给 web2api，又报「图片不存在」。
+ * 这里用目标 URL 的 host 补上（它已经在 isSelfUrl 里验过是本服务，不会伪造别的来源）。
+ *
  * ## 安全边界（**必须有**）
  *
  * 「按画布里的字符串发请求」= 典型 SSRF 面。这里只允许**本服务自己的地址**：
@@ -36,6 +42,14 @@ export interface SelfFetchDeps {
   fetch: (req: Request) => Response | Promise<Response>
   /** 本服务的监听地址（用于判断"是不是自己的地址"），如 `http://127.0.0.1:8865` */
   origin(): string
+  /**
+   * 额外的可信 Host（与来源边界同一份白名单）；写成 `host:port`，也容忍完整 origin。
+   *
+   * 为什么需要：`--host 0.0.0.0` / 局域网 IP / 反向代理域名访问时，画布里存进节点的
+   * 绝对地址是那个域名，而 `origin()` 只报监听地址（127.0.0.1）—— 不认它就会退回裸地址。
+   * 这里跟随**已经配置好的** Host 白名单，不额外放开任何域名（SSRF 边界不变）。
+   */
+  trustedHosts?(): readonly string[]
 }
 
 /** 本机别名：这些名字指的是**同一台机器**（用户浏览器里存的地址可能是其中任意一个） */
@@ -49,9 +63,12 @@ const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
  *     为什么不能只比字符串：前端存进画布的完整地址可能是 `http://localhost:8865/...`，
  *     而服务自报的 origin 是 `http://127.0.0.1:8865` —— 字符串比就把它当成"别人"，
  *     于是这条参考图又退回裸地址发出去（实测踩到）。
- *   - **端口**：必须一致（省略即默认端口）。别的主机一律拒绝（SSRF 边界）。
+ *   - **端口**：必须一致（省略即默认端口）。
+ *   - **白名单**：`trustedHosts`（来源边界用的同一份）里明确列出的 `host:port` 也认 ——
+ *     局域网 IP / 反向代理域名访问时，画布里存的就是那个地址。
+ *   其余一律拒绝（SSRF 边界）。
  */
-function isSelfUrl(url: string, selfOrigin: string): boolean {
+function isSelfUrl(url: string, selfOrigin: string, trustedHosts: readonly string[] = []): boolean {
   let target: URL
   let self: URL
   try {
@@ -61,6 +78,8 @@ function isSelfUrl(url: string, selfOrigin: string): boolean {
     return false
   }
   if (target.protocol !== 'http:' && target.protocol !== 'https:') return false
+  // 白名单里明确列出的 Host：直接认（它本来就是「本服务的入口」）
+  if (trustedHostIncludes(trustedHosts, target)) return true
   // 主机：相等，或两边都是本机别名（localhost ≡ 127.0.0.1 ≡ ::1）
   const sameHost =
     target.hostname === self.hostname ||
@@ -70,6 +89,34 @@ function isSelfUrl(url: string, selfOrigin: string): boolean {
   const targetPort = target.port || (target.protocol === 'https:' ? '443' : '80')
   const selfPort = self.port || (self.protocol === 'https:' ? '443' : '80')
   return targetPort === selfPort
+}
+
+/**
+ * Host 白名单条目归一后比较。
+ *
+ * 条目常见三种写法：`127.0.0.1:8865`、`example.com`（默认端口）、
+ * `https://example.com`（手滑写成完整 origin）。都归一成 `hostname:port` 再比。
+ */
+function trustedHostIncludes(list: readonly string[], target: URL): boolean {
+  const key = hostPortOf(target)
+  for (const raw of list) {
+    const s = (raw ?? '').trim().toLowerCase()
+    if (!s) continue
+    try {
+      const u = new URL(s.includes('://') ? s : 'http://' + s)
+      if (hostPortOf(u) === key) return true
+    } catch {
+      // 解析不了就当普通字符串比
+      if (s === key) return true
+    }
+  }
+  return false
+}
+
+/** `hostname:port`（默认端口补齐），用于白名单比较 */
+function hostPortOf(u: URL): string {
+  const port = u.port || (u.protocol === 'https:' ? '443' : '80')
+  return (u.hostname.toLowerCase() + ':' + port)
 }
 
 /**
@@ -112,14 +159,17 @@ export function makeFetchSelfBytes(deps: SelfFetchDeps): (url: string) => Promis
     if (raw.startsWith('/')) {
       target = deps.origin().replace(/\/+$/, '') + raw
     } else if (/^https?:\/\//i.test(raw)) {
-      if (!isSelfUrl(raw, deps.origin())) return undefined
+      if (!isSelfUrl(raw, deps.origin(), deps.trustedHosts?.() ?? [])) return undefined
       target = raw
     } else {
       // 其它形态（data: / blob: / 裸文件名）不归这里管
       return undefined
     }
     try {
-      const res = await deps.fetch(new Request(target, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }))
+      // 内部 Request 不会自动带 Host（真实网络请求才会）—— 来源边界要靠它判「是不是自己」。
+      const req = new Request(target, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+      req.headers.set('host', new URL(target).host)
+      const res = await deps.fetch(req)
       if (!res.ok) return undefined
       /**
        * **必须校验拿回来的是不是媒体**。

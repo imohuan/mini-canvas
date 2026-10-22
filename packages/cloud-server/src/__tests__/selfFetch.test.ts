@@ -13,8 +13,10 @@
  *   ② resolver 接线：风格库那种地址真的能被翻成 data URL（用假 fetch 模拟自请求）。
  */
 import { describe, it, expect } from 'vitest'
+import { Hono } from 'hono'
 import { makeFetchSelfBytes } from '../tasks/selfFetch'
 import { makeResolveResourceUrl, fileNameOf } from '../tasks/resourceResolver'
+import { createRequestTrust } from '../requestTrust'
 import { CanvasResourceStore } from '../store/canvasResources'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -39,6 +41,32 @@ function fakeApp(routes: Record<string, { status?: number; body?: Uint8Array }>)
 }
 
 describe('selfFetch：把本服务自己的地址取回字节', () => {
+  /**
+   * 2026-10-22 回归：来源边界上线后，内部自请求**不带 Host 头**，
+   * 被自己的 requestTrust 判成 host-not-trusted → 403 → 字节取不到，
+   * 风格库地址又退回裸相对路径发给 web2api（报「图片不存在」）。
+   *
+   * 这条用例把 selfFetch 接到**真的来源边界**上，红/绿直接对应用户口径。
+   */
+  it('内部自请求能过自己的来源边界（带 Host 头）', async () => {
+    const app = new Hono()
+    app.use(
+      '*',
+      createRequestTrust({ trustedHosts: ['127.0.0.1:8865', 'localhost:8865'] }) as never,
+    )
+    app.get('/api/style-library/file', (c) =>
+      c.body(PNG, 200, { 'content-type': 'image/png' }),
+    )
+    const fetchSelfBytes = makeFetchSelfBytes({
+      fetch: (req) => app.fetch(req),
+      origin: () => SELF,
+    })
+
+    const bytes = await fetchSelfBytes('/api/style-library/file?name=a.png')
+    expect(bytes).toBeTruthy()
+    expect(new Uint8Array(bytes!)).toEqual(PNG)
+  })
+
   it('相对地址 → 用本服务 origin 拼全后请求（风格库那种带查询串的也照取）', async () => {
     const app = fakeApp({ '/api/style-library/file': {} })
     const fetchSelfBytes = makeFetchSelfBytes({ fetch: app.fetch, origin: () => SELF })
@@ -92,6 +120,25 @@ describe('selfFetch：把本服务自己的地址取回字节', () => {
     expect(await fetchSelfBytes('http://localhost:9999/api/x')).toBeUndefined()
     // 一条都没真发出去
     expect(app.seen.length).toBe(0)
+  })
+
+  /**
+   * 局域网 / 反代域名访问（2026-10-22）：白名单里明确列出的 Host 也算「自己」。
+   * 不认它的话，`--host 0.0.0.0` 或反代部署时参考图会退回裸地址。
+   */
+  it('Host 白名单里列出的局域网 IP / 域名也认；没列的仍拒', async () => {
+    const app = fakeApp({ '/api/style-library/file': {} })
+    const fetchSelfBytes = makeFetchSelfBytes({
+      fetch: app.fetch,
+      origin: () => SELF,
+      trustedHosts: () => ['192.168.1.20:8865', 'canvas.example.com', 'https://cdn.me:8443'],
+    })
+    expect(await fetchSelfBytes('http://192.168.1.20:8865/api/style-library/file?name=a.png')).toBeTruthy()
+    expect(await fetchSelfBytes('http://canvas.example.com/api/style-library/file?name=a.png')).toBeTruthy()
+    expect(await fetchSelfBytes('https://cdn.me:8443/api/style-library/file?name=a.png')).toBeTruthy()
+    // 白名单外的地址：依然不碰
+    expect(await fetchSelfBytes('http://192.168.1.21:8865/api/style-library/file')).toBeUndefined()
+    expect(await fetchSelfBytes('http://evil.example.com/api/style-library/file')).toBeUndefined()
   })
 
   it('取不到 / 非 2xx / 空体 → undefined（不抛）', async () => {
