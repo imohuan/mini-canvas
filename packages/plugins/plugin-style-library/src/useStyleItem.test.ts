@@ -1,98 +1,105 @@
 /**
- * 「素材库 → 画布」必须走资源库（用户口径 2026-10-22）。
+ * 「素材库 → 画布」必须走 media 能力（用户口径 2026-10-22 + 插件开发规范 §3.1）。
  *
- * 锁的是这条顺序：取字节 → resources.put → resources.resolve → doc.createNode。
- * 回归点：早先直接把 `/api/style-library/file?name=…` 写进节点的 imageUrl，
- * 素材库目录一改 / 插件没装，画布上的图就全裂了。
+ * 锁的是这条顺序：取字节 → media.put → media.addNode（由图片插件写字段）。
+ * 回归点有两个：
+ *   1. 早先直接把 `/api/style-library/file?name=…` 写进 imageUrl —— 素材库目录一改就全裂；
+ *   2. 只把地址换成 resourceId、仍由本插件手写节点 data 并塞 resolve 出来的地址 ——
+ *      违反 §2.2/§3.3（临时地址不写回节点），也绕过了图片插件的尺寸/缩略图逻辑。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { useStyleItem, fileNameOf, type StyleItemResources } from './useStyleItem'
+import { useStyleItem, fileNameOf, type StyleItemMedia } from './useStyleItem'
 
 const URL_STYLE = '/api/style-library/file?name=abc_123.png'
 
-function fakeResources(over: Partial<StyleItemResources> = {}): StyleItemResources & {
+function fakeMedia(over: Partial<StyleItemMedia> = {}): StyleItemMedia & {
   put: ReturnType<typeof vi.fn>
-  resolve: ReturnType<typeof vi.fn>
+  addNode: ReturnType<typeof vi.fn>
 } {
   const put = vi.fn(async () => 'default/deadbeefdeadbeef.png')
-  const resolve = vi.fn(async () => '/api/canvases/default/resources/deadbeefdeadbeef.png')
-  return { put, resolve, ...over } as never
+  const addNode = vi.fn(() => 'n1')
+  return { put, addNode, ...over } as never
 }
 
-describe('useStyleItem：先存资源、再建节点', () => {
-  it('★ 顺序正确：put 在 createNode 之前，节点写的是 resourceId', async () => {
+describe('useStyleItem：先存资源、再交给图片插件建节点', () => {
+  it('★ 顺序正确：put 在 addNode 之前；只传引用与文件名，不传任何地址', async () => {
     const calls: string[] = []
-    const resources = fakeResources({
+    const media = fakeMedia({
       put: vi.fn(async () => {
         calls.push('put')
         return 'default/deadbeefdeadbeef.png'
       }),
-      resolve: vi.fn(async () => {
-        calls.push('resolve')
-        return '/api/canvases/default/resources/deadbeefdeadbeef.png'
-      }),
-    })
-    const doc = {
-      createNode: vi.fn((_t: string, _p: { x: number; y: number }, data?: Record<string, unknown>) => {
-        calls.push('createNode')
-        expect(data?.resourceId).toBe('default/deadbeefdeadbeef.png')
-        // 迁移期仍写显示地址，旧渲染路径能直接显示
-        expect(data?.imageUrl).toBe('/api/canvases/default/resources/deadbeefdeadbeef.png')
-        // 绝不能把素材库地址当资源引用写进去
-        expect(data?.resourceId).not.toContain('/api/style-library/')
+      addNode: vi.fn((kind: string, resourceId: string, _p: unknown, opts?: { meta?: Record<string, unknown> }) => {
+        calls.push('addNode')
+        expect(kind).toBe('image')
+        expect(resourceId).toBe('default/deadbeefdeadbeef.png')
+        // 只有文件名，没有任何地址字段（临时地址不写回节点）
+        expect(opts?.meta).toEqual({ name: 'abc_123.png' })
+        expect(JSON.stringify(opts)).not.toContain('/api/')
         return 'n1'
       }),
-    }
+    })
+    const setLabel = vi.fn()
 
     const r = await useStyleItem(
-      { doc, resources, fetchBlob: async () => new Blob(['x'], { type: 'image/png' }) },
+      { media, setLabel, fetchBlob: async () => new Blob(['x'], { type: 'image/png' }) },
       { url: URL_STYLE, label: '风格 A' },
       { x: 10, y: 20 },
     )
 
     expect(r).toMatchObject({ ok: true, nodeId: 'n1' })
-    expect(calls).toEqual(['put', 'resolve', 'createNode'])
+    expect(calls).toEqual(['put', 'addNode'])
+    // 标题走公开入口，不往 data 里手塞
+    expect(setLabel).toHaveBeenCalledWith('n1', '风格 A')
     // 落库时带上素材文件名与图片类型
-    expect(resources.put).toHaveBeenCalledWith(expect.any(Blob), {
+    expect(media.put).toHaveBeenCalledWith(expect.any(Blob), {
       kind: 'image',
       name: 'abc_123.png',
     })
   })
 
-  it('取字节失败 → 不建节点（不退回写素材库地址）', async () => {
-    const resources = fakeResources()
-    const doc = { createNode: vi.fn(() => 'n1') }
+  it('取字节失败 → 不落库、不建节点，并给可见文案', async () => {
+    const media = fakeMedia()
     const r = await useStyleItem(
-      { doc, resources, fetchBlob: async () => { throw new Error('404') } },
+      { media, fetchBlob: async () => { throw new Error('404') } },
       { url: URL_STYLE, label: 'A' },
       { x: 0, y: 0 },
     )
-    expect(r).toEqual({ ok: false, reason: 'fetch-failed' })
-    expect(resources.put).not.toHaveBeenCalled()
-    expect(doc.createNode).not.toHaveBeenCalled()
+    expect(r).toMatchObject({ ok: false, reason: 'fetch-failed' })
+    expect((r as { message: string }).message).toBeTruthy()
+    expect(media.put).not.toHaveBeenCalled()
+    expect(media.addNode).not.toHaveBeenCalled()
   })
 
-  it('没有资源服务 → 不建节点（不写临时地址）', async () => {
-    const doc = { createNode: vi.fn(() => 'n1') }
+  it('没有 media 能力 → 不建节点（不写临时地址）', async () => {
     const r = await useStyleItem(
-      { doc, resources: undefined, fetchBlob: async () => new Blob(['x']) },
+      { media: undefined, fetchBlob: async () => new Blob(['x']) },
       { url: URL_STYLE, label: 'A' },
       { x: 0, y: 0 },
     )
-    expect(r).toEqual({ ok: false, reason: 'no-resources' })
-    expect(doc.createNode).not.toHaveBeenCalled()
+    expect(r).toMatchObject({ ok: false, reason: 'no-media' })
+  })
+
+  it('宿主没装 image 创建器（addNode 返回 undefined）→ 报可见错误', async () => {
+    const media = fakeMedia({ addNode: vi.fn(() => undefined) } as never)
+    const r = await useStyleItem(
+      { media, fetchBlob: async () => new Blob(['x']) },
+      { url: URL_STYLE, label: 'A' },
+      { x: 0, y: 0 },
+    )
+    expect(r).toMatchObject({ ok: false, reason: 'add-node-failed' })
+    expect((r as { message: string }).message).toContain('图片节点')
   })
 
   it('资源库落盘失败 → 不建节点', async () => {
-    const resources = fakeResources({ put: vi.fn(async () => { throw new Error('disk full') }) } as never)
-    const doc = { createNode: vi.fn(() => 'n1') }
+    const media = fakeMedia({ put: vi.fn(async () => { throw new Error('disk full') }) } as never)
     const r = await useStyleItem(
-      { doc, resources, fetchBlob: async () => new Blob(['x']) },
+      { media, fetchBlob: async () => new Blob(['x']) },
       { url: URL_STYLE, label: 'A' },
       { x: 0, y: 0 },
     )
-    expect(r).toEqual({ ok: false, reason: 'put-failed' })
-    expect(doc.createNode).not.toHaveBeenCalled()
+    expect(r).toMatchObject({ ok: false, reason: 'put-failed' })
+    expect(media.addNode).not.toHaveBeenCalled()
   })
 })
 

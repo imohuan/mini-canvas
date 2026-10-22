@@ -9,14 +9,18 @@
  *   2. 素材库插件没装 / 后台半没起，历史画布也裂；
  *   3. 与项目既定的「节点只保存持久资源引用」不符 —— 图片节点本来就读 `resourceId`。
  *
- * 现在：取字节 → `resources.put()` 落进**本画布资源目录** → 拿 `resourceId` →
- * 与 `imageUrl`（显示地址）**一次写入**节点，历史只有一条。
+ * ## 为什么走 media 能力、而不是自己写节点字段
  *
- * ## 为什么要 `resolve` 再写 imageUrl
+ * 规范（`docs/插件开发规范.md` §2.1 / §3.1 / §3.3）要求：
+ *   字节 → `media.put` → 持久 ID → `media.addNode('image', id, pos)` → 图片插件自己落笔。
+ * 节点 data 的字段归**节点类型插件**所有；素材库不是 image 节点的作者，手写 `resourceId` /
+ * `imageUrl` 等于绕过它的尺寸、缩略图与字段规则（§3.3 明确禁止 `createNode` 直接塞 URL）。
  *
- * 迁移期旧的渲染路径 / 导出仍读 `imageUrl`（见 plugin-node-image 的 imageSourceFields）。
- * resolve 不出来（极简宿主没有资源服务）→ 不建节点，退化成调用方给的回退动作，
- * 而不是写一个只有本机才有效的临时地址。
+ * 另外：**resolve 出来的地址绝不写回节点**（§2.2：用完即弃）。显示地址由图片组件自己
+ * `resolve(resourceId)` 现取 —— 这里写一份只会变成刷新后失效的旧地址。
+ *
+ * 失败一律**不建节点**：半成品节点比没有节点更难查。失败原因交给调用方做可见提示
+ * （§1.2：只在控制台 warn 不算降级）。
  */
 
 export interface StyleItemSource {
@@ -26,79 +30,104 @@ export interface StyleItemSource {
   label: string
 }
 
-/** 资源服务的最小形状（宿主可能没装 —— 那些字段都可选） */
-export interface StyleItemResources {
+/**
+ * media 能力的最小形状（`canvas-render` 的公开出口；宿主默认已注册）。
+ *
+ * `addNode` 由**图片插件**注册的创建器实现：它自己决定写哪些字段（resourceId / 名称 / 宽高）。
+ * 返回 undefined = 本宿主没装 image 创建器（图片节点插件没启用）。
+ */
+export interface StyleItemMedia {
   put(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>
-  resolve(ref: string): Promise<string | undefined>
-}
-
-/** doc 门面里只用到的那一个方法 */
-export interface StyleItemDoc {
-  createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
+  addNode(
+    kind: 'image',
+    resourceId: string,
+    position: { x: number; y: number },
+    opts?: { nodeType?: string; meta?: Record<string, unknown> },
+  ): string | undefined
 }
 
 export interface UseStyleItemDeps {
-  doc: StyleItemDoc | undefined
-  resources: StyleItemResources | undefined
-  /** 取字节（浏览器 fetch；测试注入假货） */
-  fetchBlob(url: string): Promise<Blob>
+  /** media 能力；宿主没装 / 能力未注册时是 undefined */
+  media: StyleItemMedia | undefined
+  /** 设节点标题（宿主公开入口 `ctx.nodes.setLabel`；缺了就不设标题，不加假字段） */
+  setLabel?(nodeId: string, label: string): void
+  /** 取字节（默认全局 fetch；测试注入假货） */
+  fetchBlob?(url: string): Promise<Blob>
   onError?(msg: string, err?: unknown): void
 }
 
 export type UseStyleItemResult =
-  | { ok: true; nodeId: string; resourceId: string; url: string }
-  | { ok: false; reason: 'no-doc' | 'no-resources' | 'fetch-failed' | 'put-failed' | 'resolve-failed' }
+  | { ok: true; nodeId: string; resourceId: string }
+  | {
+      ok: false
+      reason: 'no-media' | 'fetch-failed' | 'put-failed' | 'add-node-failed'
+      /** 给用户看的一句话（调用方显示在面板里） */
+      message: string
+    }
 
 /**
  * 把一条素材存进资源库并在 `position` 建图片节点。
  *
- * 失败原因分得细一点：调用方据此决定是「退回到直接写地址」还是「提示用户」。
- * 不抛异常 —— 一个素材打不开不该把整个面板带崩。
+ * 失败时带一句能显示给用户的话（`message`），并且**一律不建节点**
+ * —— 半成品节点比没有节点更难查，而且会把 resolve 出来的临时地址固化进存档。
+ * 不抛异常：一个素材打不开不该把整个面板带崩。
  */
 export async function useStyleItem(
   deps: UseStyleItemDeps,
   item: StyleItemSource,
   position: { x: number; y: number },
 ): Promise<UseStyleItemResult> {
-  const { doc, resources } = deps
-  if (!doc) return { ok: false, reason: 'no-doc' }
-  // 没有资源服务：不写临时地址（那正是这次要摆脱的形态）
-  if (!resources) return { ok: false, reason: 'no-resources' }
+  const { media } = deps
+  // 没有 media：不退回"直接写素材库地址"（那正是这次要摆脱的形态）
+  if (!media) {
+    return { ok: false, reason: 'no-media', message: '当前画布没有资源服务，无法把素材加入画布' }
+  }
 
   const name = fileNameOf(item.url) || 'style-item'
   let blob: Blob
   try {
-    blob = await deps.fetchBlob(item.url)
+    blob = await (deps.fetchBlob ?? defaultFetchBlob)(item.url)
     if (!blob || blob.size === 0) throw new Error('取到空字节')
   } catch (err) {
     deps.onError?.('[style-library] 素材取字节失败：' + item.url, err)
-    return { ok: false, reason: 'fetch-failed' }
+    return { ok: false, reason: 'fetch-failed', message: '素材取不到（文件可能已被移动或删除）' }
   }
 
   let resourceId: string
   try {
-    resourceId = await resources.put(blob, { kind: 'image', name })
+    resourceId = await media.put(blob, { kind: 'image', name })
     if (!resourceId) throw new Error('资源库没有返回引用')
   } catch (err) {
     deps.onError?.('[style-library] 素材存进资源库失败：' + item.url, err)
-    return { ok: false, reason: 'put-failed' }
+    return { ok: false, reason: 'put-failed', message: '保存素材到资源库失败' }
   }
 
-  let url: string | undefined
   try {
-    url = await resources.resolve(resourceId)
+    // 字段由图片插件自己写：这里只给资源引用与文件名（不传任何地址）
+    const nodeId = media.addNode('image', resourceId, position, { meta: { name } })
+    if (!nodeId) throw new Error('没有注册 image 创建器')
+    // 标题走公开入口（节点 data 的 label 由 doc 管，不手拼字段）；失败不影响这次加入
+    try {
+      deps.setLabel?.(nodeId, item.label)
+    } catch (err) {
+      deps.onError?.('[style-library] 设置节点标题失败：' + nodeId, err)
+    }
+    return { ok: true, nodeId, resourceId }
   } catch (err) {
-    deps.onError?.('[style-library] 资源引用解析地址失败：' + resourceId, err)
+    deps.onError?.('[style-library] 建节点失败：' + resourceId, err)
+    return {
+      ok: false,
+      reason: 'add-node-failed',
+      message: '画布没有启用图片节点，无法加入素材',
+    }
   }
-  if (!url) return { ok: false, reason: 'resolve-failed' }
+}
 
-  try {
-    const nodeId = doc.createNode('image', position, { resourceId, imageUrl: url, label: item.label })
-    return { ok: true, nodeId, resourceId, url }
-  } catch (err) {
-    deps.onError?.('[style-library] 建节点失败', err)
-    return { ok: false, reason: 'no-doc' }
-  }
+/** 默认取字节（浏览器 fetch） */
+async function defaultFetchBlob(url: string): Promise<Blob> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('HTTP ' + res.status)
+  return res.blob()
 }
 
 /** 从地址里取文件名（风格库是 `?name=…` 的查询串形态） */

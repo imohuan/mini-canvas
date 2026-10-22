@@ -17,7 +17,7 @@ import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
-import { useStyleItem, type StyleItemDoc, type StyleItemResources } from '../useStyleItem'
+import { useStyleItem, type StyleItemMedia } from '../useStyleItem'
 
 const { ctx } = useCanvasRender()
 
@@ -65,6 +65,8 @@ function onOpenDetail(item: StyleCard): void {
 
 /** 正在提交的素材（防连点重复建节点） */
 const using = ref(false)
+/** 加入失败的原因（显示在面板里 —— 规范 §1.2：只在控制台 warn 不算降级） */
+const useError = ref('')
 
 /**
  * 使用：把选中的图**存进画布资源库**（resources.put）再建节点，并用风格名命名。
@@ -83,16 +85,15 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
   if (using.value) return
   using.value = true
+  useError.value = ''
   try {
     const result = await useStyleItem(
       {
-        doc: ctx.tryGet<StyleItemDoc>('doc'),
-        resources: ctx.tryGet<StyleItemResources>('resources'),
-        fetchBlob: (u) =>
-          fetch(u).then((r) => {
-            if (!r.ok) throw new Error('HTTP ' + r.status)
-            return r.blob()
-          }),
+        // 规范 §3.1：字节 → media.put → media.addNode；节点字段由图片插件自己写
+        media: ctx.tryGet<StyleItemMedia>('media'),
+        setLabel: (id, text) =>
+          (ctx.tryGet<{ setLabel(id: string, label: string | undefined): void }>('nodes'))
+            ?.setLabel(id, text),
         onError: (msg, err) => console.warn(msg, err),
       },
       { url, label },
@@ -100,9 +101,9 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
     )
     if (!result.ok) {
       // 不退回"写素材库地址"：那会让节点依赖素材库目录与插件在线。
-      // 拿不到就明确告警并打开原图，用户仍能看到素材。
+      // 原因显示在面板里（见模板的 slol-use-error），用户知道该修什么。
       console.warn('[style-library] 加入画布失败：' + result.reason + '（' + url + '）')
-      window.open(url, '_blank', 'noopener')
+      useError.value = result.message
       return
     }
     detailItem.value = null
@@ -124,7 +125,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKey, true))
 
 // 关闭时收起详情与最小化态，下次打开是干净的面板
 watch(() => s.open, (v) => {
-  if (!v) { detailItem.value = null; minimized.value = false }
+  if (!v) { detailItem.value = null; minimized.value = false; useError.value = '' }
 })
 </script>
 
@@ -143,6 +144,9 @@ watch(() => s.open, (v) => {
             </button>
           </div>
         </header>
+
+        <!-- 加入画布失败：必须看得见（规范 §1.2） -->
+        <p v-if="useError" class="slol-use-error" role="alert">{{ useError }}</p>
 
         <div class="slol-body">
           <component :is="GalleryComp" v-if="GalleryComp" :service="svc" :starred="starred" :columns="s.zoom + 2"
@@ -194,6 +198,15 @@ watch(() => s.open, (v) => {
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
 }
 .slol-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--ui-ink, #18202b); }
+.slol-use-error {
+  flex: none;
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-danger, #ef4444);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--ui-danger, #ef4444);
+}
 .slol-head-actions { display: flex; gap: 4px; }
 .slol-icon {
   display: grid;
