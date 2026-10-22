@@ -2192,8 +2192,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
           <ThemedDropdown v-model="modeOpen" placement="top-start" :offset="8" menu-width="220px" menu-role="listbox">
             <template #trigger>
               <button class="ac-pill" :aria-expanded="modeOpen" aria-label="选择创作模式">
-                {{ modeLabel }}
-                <ChevronDown :size="13" />
+                <span class="ac-pill-text">{{ modeLabel }}</span>
+                <ChevronDown :size="13" class="ac-pill-caret" />
               </button>
             </template>
             <template #default="{ close }">
@@ -2582,6 +2582,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 模型 id 没有长度上限：标签可缩、名字单行省略，极端窄面板里也不越界 */
+  min-width: 0;
+  max-width: 100%;
   padding: 2px 8px;
   border: 1px solid var(--ui-line, #363636);
   border-radius: 999px;
@@ -2592,6 +2595,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
 }
 
 .ac-model-split-name {
+  min-width: 0;
   max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3003,6 +3007,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   font-size: 12px;
   line-height: 20px;
   white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--ui-ink-dim, #919191);
   font-family: inherit;
 }
@@ -3252,7 +3258,20 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font-size: 13px;
+}
+
+/* 审批标题带工具名（MCP 名可能很长）：单行省略，别把卡片撑宽 */
+.ac-approval-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ac-approval-head svg {
+  flex: none;
 }
 
 .ac-approval-args {
@@ -4135,6 +4154,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   align-items: center;
   gap: 1px;
   height: 32px;
+  /* 提示词名是用户自建的（没有长度上限）：胶囊可缩、单行省略，
+     保证右侧的授权 / 模型 / 发送按钮永远不被挤出工具条（RULES §9）。 */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 160px;
   padding: 0 4px 0 8px;
   border: 0;
   border-radius: 9999px;
@@ -4142,7 +4166,17 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   color: var(--ui-ink, #f7f7f7);
   font-size: 13px;
   cursor: pointer;
+}
+
+.ac-pill-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ac-pill-caret {
+  flex: none;
 }
 
 .ac-pill:hover {
