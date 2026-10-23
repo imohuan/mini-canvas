@@ -62,8 +62,12 @@ vendor/
 .tmp-probe/
 _snap_tmp/
 packages/ui/_snap_tmp/
+.scratch/
+.penguin-patch-tmp/
+cdp-*.txt
 packages/ui/e2e/_shots/
 packages/ui/e2e/_probe-*.mjs
+packages/plugins/plugin-node-ui/scripts/cdp-*.txt
 docs/tmp/_scan/
 /_*.png
 
