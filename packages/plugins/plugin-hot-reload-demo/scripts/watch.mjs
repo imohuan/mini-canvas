@@ -129,4 +129,6 @@ watch(SRC_DIR, { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 80
 
 console.log('[watch] 盯着 src/（插件: ' + PLUGIN_NAME + '）')
 console.log('[watch] 变更 → 自动 build → 通知 ' + KV_URL)
+console.log('[watch] 上报地址：front=' + frontUrlNow() + (serverPathNow() ? ' | server=' + serverPathNow() : ''))
+console.log('[watch] 改地址：--front <浏览器可访问的地址> / --server <后台产物绝对路径>')
 console.log('[watch] Ctrl+C 停止')
