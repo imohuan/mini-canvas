@@ -49,6 +49,21 @@ export interface ServerPluginsRoutesOptions {
    */
   trustedShaOf?: (id: string) => Promise<string | undefined>
   /**
+   * **调试用**：允许从本机磁盘路径读后台产物并安装（`/install-from-path`）。
+   *
+   * 这是给「watch 上报 `server` 绝对路径」那条链用的（见 plugin-hot-reload）。
+   * 缺省 **undefined = 整条路由不挂**（生产上等同于不存在，不会变成任意读文件的后门）。
+   * 打开时必须同时满足：只收本机回环请求（Host 必须是 127.0.0.1/localhost/[::1]）、
+   * 管理令牌已开启（管理面鉴权在 server.ts 中间件里，缺令牌 403）、
+   * 路径后缀必须是 `.js`、文件大小有上限。
+   */
+  debugInstall?: {
+    /** 允许读取的根目录（只接受落在这里面的文件；防任意读盘） */
+    allowRoots: string[]
+    /** 单文件大小上限（字节，缺省 2MB） */
+    maxBytes?: number
+  }
+  /**
    * 取某个插件声明的**权限清单**（来自清单，只用于展示）。
    * 计划要求 permissions 必须有消费点 —— 这就是：诊断接口把它列出来给界面看。
    */
@@ -224,6 +239,82 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
       return c.json({ ok: true, id, note: '已卸载；重启服务后生效' })
     })
   })
+
+  // ===== 调试用：按本机磁盘路径安装后台产物（watch 上报 server 路径这条链） =====
+  //
+  // 只在 debugInstall 配置存在时挂载。未配置 = 404（路由根本不存在），生产默认不受影响。
+  // 请求体：{ id, path, confirm: true }
+  if (opts.debugInstall) {
+    const allowRoots = opts.debugInstall.allowRoots.map((r) => path.resolve(r))
+    const maxBytes = opts.debugInstall.maxBytes ?? 2 * 1024 * 1024
+
+    app.post('/api/server-plugins/install-from-path', async (c) => {
+      // ① 只允许本机回环：Host 头必须是 127.0.0.1 / localhost / [::1]
+      const host = (c.req.header('host') ?? '').trim().toLowerCase()
+      const hostname = host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : (host.split(':')[0] ?? '')
+      if (!['127.0.0.1', 'localhost', '[::1]', '::1'].includes(hostname)) {
+        return c.json({ ok: false, error: '按路径安装只允许本机调试（Host 不是回环地址）' }, 403)
+      }
+      const body = await safeJson(c)
+      if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+      if (body.confirm !== true) {
+        return c.json({ ok: false, error: '需要 confirm: true（安装后台插件等于以服务端权限运行外部代码）' }, 400)
+      }
+      const id = typeof body.id === 'string' ? body.id : ''
+      if (!ID_RE.test(id)) return c.json({ ok: false, error: '非法插件 id（只允许字母数字下划线连字符，1-64 位）' }, 400)
+      const rawPath = typeof body.path === 'string' ? body.path.trim() : ''
+      if (!rawPath) return c.json({ ok: false, error: '需要 path（后台产物的磁盘路径）' }, 400)
+      if (!/\.[cm]?js$/i.test(rawPath)) return c.json({ ok: false, error: '只接受 .js / .mjs / .cjs 产物' }, 400)
+      if (rawPath.includes('\0')) return c.json({ ok: false, error: '非法路径' }, 400)
+
+      const abs = path.resolve(rawPath)
+      // ② 目录锁：必须落在允许的根目录里（防任意读文件）
+      const inside = allowRoots.some((root) => abs === root || abs.startsWith(root + path.sep))
+      if (!inside) {
+        return c.json({ ok: false, error: '路径不在允许的调试目录内：' + allowRoots.join(', ') }, 403)
+      }
+      let code: string
+      try {
+        const st = await fs.stat(abs)
+        if (!st.isFile()) return c.json({ ok: false, error: '路径不是文件' }, 400)
+        if (st.size > maxBytes) return c.json({ ok: false, error: '文件过大（上限 ' + maxBytes + ' 字节）' }, 400)
+        code = await fs.readFile(abs, 'utf8')
+      } catch (err) {
+        return c.json({ ok: false, error: '读取失败：' + (err instanceof Error ? err.message : String(err)) }, 400)
+      }
+
+      // ③ 落盘（**先写**：热装失败也要保住文件，重启后仍能生效）
+      //
+      // 先摘同名旧实现：内核同名会直接拒装，不先卸就是"文件新、内存旧"。
+      // 必须在写文件**之前**卸：内核卸载时若读到旧文件，这中间不会有新文件被当成旧实现。
+      if (opts.hotUninstall) {
+        const removed = await opts.hotUninstall(id)
+        // 第一次装时内核里没有它，这不是失败；真失败才停下（不能出现两个版本同时跑）。
+        if (!removed.ok && !/没有该插件|not.?found|从未装载/i.test(removed.error ?? '')) {
+          return c.json(
+            { ok: false, error: '同名后台插件卸载失败，已停止安装（避免两个版本同时跑）：' + (removed.error ?? '未知原因') },
+            409,
+          )
+        }
+      }
+      try {
+        await fs.mkdir(opts.dir, { recursive: true })
+        await fs.writeFile(path.join(opts.dir, id + '.js'), code, 'utf8')
+      } catch (err) {
+        return c.json({ ok: false, error: '写入失败：' + (err instanceof Error ? err.message : String(err)) }, 500)
+      }
+
+      // ④ 热装：文件已经落盘，宿主 import 它并登记进内核
+      if (opts.hotInstall) {
+        const hot = await opts.hotInstall(id)
+        if (!hot.ok) {
+          return c.json({ ok: true, id, note: '已落盘；热装失败（重启后生效）', hotError: hot.error }, 200)
+        }
+        return c.json({ ok: true, id, note: '已按路径安装并即时生效' })
+      }
+      return c.json({ ok: true, id, note: '已按路径安装；重启服务后生效' })
+    })
+  }
 
   return app
 }

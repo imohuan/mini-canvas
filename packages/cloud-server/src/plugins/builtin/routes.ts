@@ -287,6 +287,19 @@ export const serverPluginsPlugin: PluginModule = {
         // 热装/热卸：装完/卸完当场生效，用户不必重启服务（见 serverFramework/hotLoad.ts）
         hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
         hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
+        // 调试用「按路径安装」：只有显式设置 MINI_CANVAS_DEBUG_PLUGIN_INSTALL=1 才挂这条路由。
+        // 为什么不默认开：它按**本机磁盘路径**读文件，等于给一条"读文件 + 执行"的通道，
+        // 生产环境不该存在。允许的根目录是插件目录（真正的插件产物都在各自 dist/ 下）。
+        ...(process.env.MINI_CANVAS_DEBUG_PLUGIN_INSTALL === '1'
+          ? {
+              debugInstall: {
+                allowRoots: [
+                  ctx.tryGet<string>(S.serverPluginsDir),
+                  ctx.tryGet<string | undefined>(S.pluginsDir),
+                ].filter((p): p is string => typeof p === 'string' && p.length > 0),
+              },
+            }
+          : {}),
         // 审计：服务端装配时把 audit 注入进 ctx（见 server.ts），没注入就是 no-op
         audit: (e) => ctx.tryGet<{ append(x: unknown): Promise<void> }>('auditLog')?.append(e) ?? Promise.resolve(),
       }),

@@ -159,3 +159,141 @@ describe('createHotReload', () => {
   })
 })
 
+/** 假 KV 通道：模拟宿主挂的 __miniCanvasKvEvents，测试里手动触发一次通知 */
+function fakeKvChannel() {
+  let handler: ((e: { type: string; key: string }) => void) | undefined
+  const registry = {
+    subscribe(_path: string, onEvent: (e: { type: string; key: string }) => void) {
+      handler = onEvent
+      return () => { handler = undefined }
+    },
+  }
+  return {
+    registry,
+    fire(e: { type: string; key: string }) { handler?.(e) },
+  }
+}
+
+describe('watch 上报地址（value 里的 front）', () => {
+  it('收到通知 → 读 value 的 front → 按地址重装（不再查清单）', async () => {
+    const w = globalThis as Record<string, unknown>
+    const kv = fakeKvChannel()
+    w.__miniCanvasKvEvents = kv.registry
+    const calls: Array<{ url: string; name?: string }> = []
+    try {
+      // 清单：故意给一个**不同**的地址。若代码还在查清单，这里就会被用到 → 测试失败。
+      const fetchImpl = (async (input: string | URL) => {
+        const u = String(input)
+        // key 里的冒号会被 encodeURIComponent 编码成 %3A
+        if (decodeURIComponent(u).includes('/api/kv/config/plugin-watch:demo')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ value: { t: 1, front: 'http://other:9000/plugins/demo/dist.js' } }),
+            headers: new Headers(),
+            text: async () => '',
+          } as Response
+        }
+        if (u.includes('/plugin-catalog.json')) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ plugins: [{ id: 'demo', name: 'demo', url: '/plugins/demo/old.js' }] }),
+            headers: new Headers(),
+            text: async () => '',
+          } as Response
+        }
+        // 产物探测：给一个长度，模拟"确实变了"
+        return { ok: true, status: 200, headers: new Headers({ 'content-length': '123' }), json: async () => ({}), text: async () => '' } as Response
+      }) as unknown as typeof fetch
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = fetchImpl
+      try {
+        const hr = createHotReload({
+          storage: memStorage(),
+          reloadByUrl: async (name, url) => void calls.push({ name, url }),
+          onReloaded: () => {},
+        })
+        hr.watchPluginChanges()
+        kv.fire({ type: 'config', key: 'plugin-watch:demo' })
+        await tick(30)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
+      expect(calls, '必须用 value 里的 front，而不是清单里的地址').toHaveLength(1)
+      expect(calls[0]).toEqual({ name: 'demo', url: 'http://other:9000/plugins/demo/dist.js' })
+    } finally {
+      delete w.__miniCanvasKvEvents
+    }
+  })
+
+  it('老格式（value 只有 t，没有地址）→ 退回清单反查，行为不变', async () => {
+    const w = globalThis as Record<string, unknown>
+    const kv = fakeKvChannel()
+    w.__miniCanvasKvEvents = kv.registry
+    const calls: string[] = []
+    try {
+      const fetchImpl = (async (input: string | URL) => {
+        const u = String(input)
+        if (decodeURIComponent(u).includes('/api/kv/config/plugin-watch:demo')) {
+          return { ok: true, status: 200, headers: new Headers(), json: async () => ({ value: { t: 1 } }), text: async () => '' } as Response
+        }
+        if (u.includes('/plugin-catalog.json')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            json: async () => ({ plugins: [{ id: 'demo', name: 'demo', url: '/plugins/demo/demo.js' }] }),
+            text: async () => '',
+          } as Response
+        }
+        return { ok: true, status: 200, headers: new Headers({ 'content-length': '9' }), json: async () => ({}), text: async () => '' } as Response
+      }) as unknown as typeof fetch
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = fetchImpl
+      try {
+        const hr = createHotReload({
+          storage: memStorage(),
+          reload: async (t) => void calls.push(t),
+          onReloaded: () => {},
+        })
+        hr.watchPluginChanges()
+        kv.fire({ type: 'config', key: 'plugin-watch:demo' })
+        await tick(30)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
+      expect(calls).toEqual(['demo'])
+    } finally {
+      delete w.__miniCanvasKvEvents
+    }
+  })
+
+  it('value 读取失败（404）→ 退回清单；两者都没有 → 记一条 error，不重装', async () => {
+    const w = globalThis as Record<string, unknown>
+    const kv = fakeKvChannel()
+    w.__miniCanvasKvEvents = kv.registry
+    const calls: string[] = []
+    try {
+      const fetchImpl = (async () => ({ ok: false, status: 404, headers: new Headers(), json: async () => ({}), text: async () => '' } as Response)) as unknown as typeof fetch
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = fetchImpl
+      const hr = createHotReload({ storage: memStorage(), reload: async (t) => void calls.push(t) })
+      try {
+        hr.watchPluginChanges()
+        // 两条都失败：value 404 + 清单 404
+        const catalogHit = hr.state.logs.find((l) => l.detail.includes('清单'))
+        void catalogHit
+        kv.fire({ type: 'config', key: 'plugin-watch:demo' })
+        await tick(30)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
+      expect(calls).toEqual([])
+      expect(hr.state.logs.some((l) => l.action === 'error')).toBe(true)
+    } finally {
+      delete w.__miniCanvasKvEvents
+    }
+  })
+})
+

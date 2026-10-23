@@ -71,6 +71,14 @@ export interface ReloadOptions {
   url?: string
   /** UMD 全局名（清单里有则自动带；手填 url 时可一起给，取件更稳） */
   globalName?: string
+  /**
+   * 明确要卸的旧插件名（给了它就不按 target 反查名字）。
+   *
+   * 为什么需要：watch 上报的地址可能**不在清单里**（插件在别处构建），
+   * 这时 target 只是地址，没法知道旧实现的运行名。调用方（热重载插件）从 key 里已经知道名字，
+   * 直接传进来最准。
+   */
+  name?: string
   /** 装完之后要执行的命令 id（可选）。例：`'style-library:open'` = 重装并打开面板 */
   then?: string
 }
@@ -261,7 +269,11 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     }
 
     // ③ 卸旧 + 装新（reloadPlugin 内部就是这两步；核心插件会明确抛错，原样透出）
-    facade.reloadPlugin(mod.name, mod)
+    //
+    // 旧实现的名字优先用调用方显式给的（opts.name）。为什么：按地址装（watch 上报 front）时，
+    // 地址可能不在清单里，no url 反查只能得到加载出来的 mod.name；若新旧实现名字不同（改名/换包），
+    // 旧的那个就卸不掉。由上报方从 key 带来的名字是最权威的卸旧依据。
+    facade.reloadPlugin(opts.name || mod.name, mod)
 
     // ④ 可选：装完顺手跑一条命令（如打开该插件的面板）
     if (opts.then) {

@@ -234,3 +234,159 @@ describe('server-plugins 安装路由（安全收口）', () => {
     host.ctx.stop()
   })
 })
+
+describe('server-plugins：调试用的按路径安装（install-from-path）', () => {
+  /** 在允许的根目录里写一个后台产物，返回它的绝对路径 */
+  async function writeArtifact(root: string, rel: string, code: string): Promise<string> {
+    const abs = path.join(root, rel)
+    await fs.mkdir(path.dirname(abs), { recursive: true })
+    await fs.writeFile(abs, code, 'utf8')
+    return abs
+  }
+
+  /** 走真实 Host（本机回环），否则会被 403 拦掉 */
+  function loopback(pathname: string, body: unknown): Request {
+    return new Request('http://127.0.0.1:8865' + pathname, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'content-type': 'application/json', host: '127.0.0.1:8865' },
+    })
+  }
+
+  it('没配 debugInstall → 路由不存在（生产默认关闭）', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    const host = boot(createServerPluginsRoutes({ dir: path.join(dir, 'sp') }))
+    await host.start()
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: file, confirm: true }))
+    expect(res.status).toBe(404)
+    host.ctx.stop()
+  })
+
+  it('合法：读磁盘文件 → 落盘到 server-plugins → 先卸同名再热装', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const spDir = path.join(dir, 'sp')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    const events: string[] = []
+    const host = boot(
+      createServerPluginsRoutes({
+        dir: spDir,
+        debugInstall: { allowRoots: [allowed] },
+        hotUninstall: async (id) => {
+          events.push('uninstall:' + id)
+          return { ok: true }
+        },
+        hotInstall: async (id) => {
+          events.push('install:' + id)
+          return { ok: true }
+        },
+      }),
+    )
+    await host.start()
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: file, confirm: true }))
+    expect(res.status).toBe(200)
+    expect(await fs.readFile(path.join(spDir, 'ext.js'), 'utf8')).toBe(SRC)
+    // 关键顺序：先卸载旧同名，再装新 —— 否则内核同名会拒装（= 文件新、内存旧）
+    expect(events).toEqual(['uninstall:ext', 'install:ext'])
+    host.ctx.stop()
+  })
+
+  it('同名卸载失败 → 停止安装（不能两个版本同时跑）', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    const host = boot(
+      createServerPluginsRoutes({
+        dir: path.join(dir, 'sp'),
+        debugInstall: { allowRoots: [allowed] },
+        hotUninstall: async () => ({ ok: false, error: 'dispose 炸了' }),
+        hotInstall: async () => ({ ok: true }),
+      }),
+    )
+    await host.start()
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: file, confirm: true }))
+    expect(res.status).toBe(409)
+    host.ctx.stop()
+  })
+
+  it('第一次装（内核里没有）→ 卸载报"没有该插件"不算失败，照常安装', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    let installed = false
+    const host = boot(
+      createServerPluginsRoutes({
+        dir: path.join(dir, 'sp'),
+        debugInstall: { allowRoots: [allowed] },
+        hotUninstall: async () => ({ ok: false, error: '内核里没有该插件（可能从未装载）：ext' }),
+        hotInstall: async () => {
+          installed = true
+          return { ok: true }
+        },
+      }),
+    )
+    await host.start()
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: file, confirm: true }))
+    expect(res.status).toBe(200)
+    expect(installed).toBe(true)
+    host.ctx.stop()
+  })
+
+  it('路径不在允许的根目录内 → 403（不能变成任意读盘）', async () => {
+    const allowed = path.join(dir, 'allowed')
+    await fs.mkdir(allowed, { recursive: true })
+    const outside = await writeArtifact(path.join(dir, 'outside'), 'evil.js', SRC)
+    const host = boot(
+      createServerPluginsRoutes({ dir: path.join(dir, 'sp'), debugInstall: { allowRoots: [allowed] } }),
+    )
+    await host.start()
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: outside, confirm: true }))
+    expect(res.status).toBe(403)
+    host.ctx.stop()
+  })
+
+  it('用 .. 穿越出允许目录 → 403', async () => {
+    const allowed = path.join(dir, 'allowed')
+    await fs.mkdir(allowed, { recursive: true })
+    await writeArtifact(path.join(dir, 'outside'), 'evil.js', SRC)
+    const host = boot(
+      createServerPluginsRoutes({ dir: path.join(dir, 'sp'), debugInstall: { allowRoots: [allowed] } }),
+    )
+    await host.start()
+    const sneaky = path.join(allowed, '..', 'outside', 'evil.js')
+    const res = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: sneaky, confirm: true }))
+    expect(res.status).toBe(403)
+    host.ctx.stop()
+  })
+
+  it('非本机 Host → 403（局域网/反代过来的请求不能读本机文件）', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    const host = boot(
+      createServerPluginsRoutes({ dir: path.join(dir, 'sp'), debugInstall: { allowRoots: [allowed] } }),
+    )
+    await host.start()
+    const res = await host.app.fetch(
+      new Request('http://evil.example/api/server-plugins/install-from-path', {
+        method: 'POST',
+        body: JSON.stringify({ id: 'ext', path: file, confirm: true }),
+        headers: { 'content-type': 'application/json', host: 'evil.example' },
+      }),
+    )
+    expect(res.status).toBe(403)
+    host.ctx.stop()
+  })
+
+  it('缺 confirm / 非法 id / 非 js 后缀 → 400', async () => {
+    const allowed = path.join(dir, 'allowed')
+    const file = await writeArtifact(allowed, 'server.js', SRC)
+    const txt = await writeArtifact(allowed, 'notes.txt', 'hi')
+    const host = boot(
+      createServerPluginsRoutes({ dir: path.join(dir, 'sp'), debugInstall: { allowRoots: [allowed] } }),
+    )
+    await host.start()
+    const noConfirm = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: file }))
+    const badId = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: '../evil', path: file, confirm: true }))
+    const badExt = await host.app.fetch(loopback('/api/server-plugins/install-from-path', { id: 'ext', path: txt, confirm: true }))
+    expect([noConfirm.status, badId.status, badExt.status]).toEqual([400, 400, 400])
+    host.ctx.stop()
+  })
+})

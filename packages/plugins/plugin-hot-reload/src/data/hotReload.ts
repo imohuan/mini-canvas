@@ -142,6 +142,13 @@ export interface HotReloadDeps {
   }
   /** 重装一个插件（缺省转发 window.MiniCanvasPlugin.reload） */
   reload?: (target: string) => Promise<void>
+  /**
+   * 按**产物地址**重装一个插件（缺省转发 window.MiniCanvasPlugin.reload(target, { url })）。
+   *
+   * 为什么需要它：watch 上报的 value 里已经带了前端产物地址，直接照这个地址拉新产物，
+   * 不必再去清单里按名字猜位置 —— 插件放在哪个目录、从哪个后台构建，都由上报方说了算。
+   */
+  reloadByUrl?: (name: string, url: string) => Promise<void>
   /** 取清单里"某个 origin 上有哪些插件"（vite 反查用）。缺省查 /plugin-catalog.json */
   pluginsOnOrigin?: (origin: string) => Promise<string[]>
   /** 存/取持久化（缺省 localStorage；测试可给内存版） */
@@ -166,8 +173,30 @@ export const SOURCES_KEY = 'hot-reload:sources'
  * KV 通知 key 的约定前缀（watch 工具 PUT 的 key 必须用它开头）。
  * key 其余部分 = 插件运行名（如 plugin-watch:hot-reload-demo）。
  * 事件形状 = { type:'config', key:'plugin-watch:<名>' }（服务端 routes/events.ts 现成推送）。
+ *
+ * **值里带地址**（用户口径：地址由上报方给出，读取方不再猜）：
+ *
+ *   PUT /api/kv/config/plugin-watch:my-plugin
+ *   { "value": { "t": 1760000000000,
+ *                "front":  "http://127.0.0.1:8865/plugins/my-plugin/my-plugin.js",
+ *                "server": "D:\\work\\my-plugin\\dist\\server.js" } }
+ *
+ * 事件本身**只带 key**（见 routes/events.ts），所以收到通知后再 GET 这个 key 读值。
+ * `front` 是浏览器能直接请求的地址，用来重装前端半；`server` 是后台能读的磁盘路径，
+ * 由后台的调试安装入口消费（见 routes/serverPlugins.ts 的 `/install-from-path`）。
+ * 老格式（只有 `t`）继续可用：那时退回清单反查，行为与以前一致。
  */
 export const PLUGIN_WATCH_PREFIX = 'plugin-watch:'
+
+/** watch 上报的值（键可缺省；缺了就退回老路径） */
+export interface PluginWatchReport {
+  /** 上报时间戳（只用于诊断/日志，不用于判断先后） */
+  t?: number
+  /** 前端产物地址（浏览器可直接请求；可以是绝对地址或同源相对地址） */
+  front?: string
+  /** 后台产物路径（后台机器上的绝对路径；只对同一台机器有意义） */
+  server?: string
+}
 
 /**
  * 建一个热重载管理器（单例语义：宿主只建一个、挂 window）。
@@ -221,6 +250,24 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     const w = globalThis as unknown as { MiniCanvasPlugin?: { reload(t: string): Promise<unknown> } }
     if (!w.MiniCanvasPlugin?.reload) throw new Error('window.MiniCanvasPlugin 不在（宿主未挂热重载器）')
     await w.MiniCanvasPlugin.reload(target)
+  }
+
+  /**
+   * 默认「按地址重装」：把地址交给宿主的 reload，让加载器直接照它拉产物。
+   *
+   * 为什么要按名字 + 地址分开传：宿主需要知道**卸哪个**（name）与**从哪装**（url）。
+   * 只传地址时，宿主也能从产物里读出名字，但那份清单反查就绕回来了 —— 名字由 key 已经给出，没必要。
+     * 老宿主不认识这个选项时退回"把地址当 target"的旧用法（它本来就支持按地址重装）。
+   */
+  async function defaultReloadByUrl(name: string, url: string): Promise<void> {
+    const w = globalThis as unknown as {
+      MiniCanvasPlugin?: {
+        reload(t: string, opts?: { url?: string; name?: string }): Promise<unknown>
+      }
+    }
+    if (!w.MiniCanvasPlugin?.reload) throw new Error('window.MiniCanvasPlugin 不在（宿主未挂热重载器）')
+    // 名字 + 地址一起给：名字用来卸旧（内核按名字索引），地址用来拿新产物。
+    await w.MiniCanvasPlugin.reload(url, { url, name })
   }
   function reloadOne(target: string): Promise<void> {
     return (deps.reload ?? defaultReload)(target)
@@ -455,16 +502,46 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   //
   // 用户口径的完整链路（已实测可行）：
   //   watch 工具：盯 src → 变了 build → build 成功后 PUT /api/kv/config/plugin-watch:<插件名>
+  //             值 = { t, front, server }（**地址由上报方给出**，见 PLUGIN_WATCH_PREFIX）
   //   后台：      kv 写 → /api/kv/events 推 {type:'config', key:'plugin-watch:<名>'}（现成，零改动）
-  //   画布：      这里监听该前缀 → HEAD 对比产物 Last-Modified（防误报/防旧通知）→ 变了才拉新重装
+  //   画布：      这里监听该前缀 → GET 该 key 读值 → 有 front 就按它重装（不再查清单）
   //
   // 为什么不直接信通知：同一个 watch 进程的多次构建可能乱序到达（SSE 无序保证），
   // HEAD 的 Last-Modified 是权威顺序 —— 旧通知到达时对比发现"没变"就静默丢弃。
-  // 为什么 value 不看：服务端事件**有意不带值**（见 routes/events.ts），key 本身已含全部信息
-  // （哪个插件变了），新内容在产物文件里，reload 时现拉。
+  // 为什么先 GET 再判断：事件**有意不带值**（见 routes/events.ts，避免大 payload 在通道里搬），
+  // 所以地址只能收到通知后现读一次。读回来的值里既有地址也有 t。
 
   /** 产物 HEAD 对比用的 Last-Modified 缓存：插件名 → 上次见到的值 */
   const lastModifiedBy = new Map<string, string>()
+
+  /**
+   * 读 watch 上报的那条记录（key = plugin-watch:<插件名>）。
+   *
+   * 返回 undefined 表示读不到（未保存 / 网络失败）。值里的 front/server 可能是缺省的
+   * —— 老版本 watch 只写 t，这里必须能继续跑。
+   */
+  async function readWatchReport(pluginName: string): Promise<PluginWatchReport | undefined> {
+    try {
+      const res = await fetch('/api/kv/config/' + encodeURIComponent(PLUGIN_WATCH_PREFIX + pluginName), {
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+      })
+      if (!res.ok) return undefined
+      const body = (await res.json()) as { value?: unknown }
+      const v = body?.value
+      if (!v || typeof v !== 'object') return undefined
+      const r = v as PluginWatchReport
+      const front = typeof r.front === 'string' ? r.front : undefined
+      const server = typeof r.server === 'string' ? r.server : undefined
+      return {
+        ...(typeof r.t === 'number' ? { t: r.t } : {}),
+        ...(front ? { front } : {}),
+        ...(server ? { server } : {}),
+      }
+    } catch {
+      return undefined
+    }
+  }
 
   /** 从清单按名字/目录名找产物地址（reload 的 target 可能是运行名，产物地址在清单里） */
   async function catalogUrlOf(target: string): Promise<string | undefined> {
@@ -480,13 +557,23 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   }
 
   /**
-   * 收到某插件的变更通知：HEAD 对比 → 真变了才 reload。
+   * 收到某插件的变更通知：先读上报值，再决定按哪个地址重装。
+   *
+   * 优先级：值里的 `front`（上报方声明的地址）> 清单反查（老格式兼容）。
    * 对比基准是上次**自己拉的**那次（不是通知里的时间戳 —— SSE 无序，通知里的值不可信）。
    */
   async function handlePluginWatchEvent(pluginName: string): Promise<void> {
-    const url = await catalogUrlOf(pluginName)
+    const report = await readWatchReport(pluginName)
+    const declared = report?.front?.trim()
+    // 有上报地址就用它；没有（老格式 / 读取失败）才退回清单 —— 老插件不受影响。
+    const url = declared || (await catalogUrlOf(pluginName))
     if (!url) {
-      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：清单里找不到产物地址' })
+      log({
+        sourceId: 0,
+        sourceLabel: 'kv-plugin-watch',
+        action: 'error',
+        detail: pluginName + '：通知里没有地址，清单里也找不到产物地址',
+      })
       return
     }
     // 产物签名：服务端 /plugins/* 的静态响应**不带 Last-Modified/Content-Length**（实测），
@@ -504,9 +591,21 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       return
     }
     try {
-      await reloadOne(pluginName)
-      log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'reload', detail: pluginName })
-      notifyReloaded(pluginName, 'kv-plugin-watch')
+      // 有上报地址 → 直接照它拉新产物（不看清单、不看名字对应的目录）
+      if (declared) {
+        if (deps.reloadByUrl) await deps.reloadByUrl(pluginName, declared)
+        else if (deps.reload) await reloadOne(declared)
+        else await defaultReloadByUrl(pluginName, declared)
+      } else {
+        await reloadOne(pluginName)
+      }
+      log({
+        sourceId: 0,
+        sourceLabel: 'kv-plugin-watch',
+        action: 'reload',
+        detail: pluginName + (declared ? '（按上报地址）' : '（清单反查）'),
+      })
+      notifyReloaded(pluginName, declared ? 'watch 上报地址' : 'kv-plugin-watch')
     } catch (err) {
       log({ sourceId: 0, sourceLabel: 'kv-plugin-watch', action: 'error', detail: pluginName + '：' + String(err) })
     }
