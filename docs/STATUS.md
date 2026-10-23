@@ -5,6 +5,35 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-23，热重载：地址由上报方写进 KV value）
+
+用户口径：插件的产物地址应该由**上报方**（watch 构建脚本）直接写进 value，画布读取方不该去
+`/plugin-catalog.json` 里猜目录；前后端两个半都要能按地址装上。
+
+**契约（watch → KV）**：
+
+```
+PUT /api/kv/config/plugin-watch:<插件名>
+{ "value": { "t": 1760000000000,
+             "front":  "http://127.0.0.1:8865/plugins/<包目录>/<产物>.js",
+             "server": "D:\\work\\my-plugin\\dist\\server.js" } }
+```
+
+- 事件本身仍只带 key（`routes/events.ts` 有意不带值），所以**收到通知后再 GET 一次该 key**。
+- 有 `front` → 直接按它重装（`reload(url, { url, name })`，名字来自 key，用来卸旧）。
+- 没有 `front` 的老格式（只有 `t`）→ 继续退回清单反查，老插件不受影响。
+- `server` 是后台机器上的磁盘路径；插件与后台不在同一台机器时没有意义，只能走原来的上传路径。
+
+**后台按路径安装（仅调试）**：`POST /api/server-plugins/install-from-path`，body
+`{ id, path, confirm: true }`。**默认不挂载**，需 `MINI_CANVAS_DEBUG_PLUGIN_INSTALL=1`；
+只收本机回环 Host、必须 `confirm`、路径必须落在允许根目录（server-plugins / plugins 目录）内、
+后缀 `.js/.mjs/.cjs`、有大小上限。同名插件**先卸再装**，卸载失败则 409 中止。
+
+**验证**：plugin-hot-reload 14（新增 3：按上报地址重装 / 老格式退回清单 / 两者都没有记错误）、
+cloud-server 864（新增 8 条按路径安装：默认 404、先卸后装、卸载失败 409、首次装、目录外 403、
+`..` 穿越 403、非本机 Host 403、参数校验）、ui 403；三个包 typecheck 干净。
+提交 `b0506aa8`、`95965d21`。
+
 ### 追记（2026-10-20，cloud-server 管理面安全加固）
 
 按 `docs/plan/2026-10-19-cloud-server-admin-security-plan.md` 落地，四轮子代理审查
