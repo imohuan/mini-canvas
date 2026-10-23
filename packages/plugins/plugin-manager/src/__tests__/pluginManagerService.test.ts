@@ -117,6 +117,19 @@ const CATALOG_WITH_SERVER = {
 }
 
 describe('plugin-manager 服务：装 / 卸 / 重装 / 默认策略', () => {
+  it('调试入口已装同名插件 → 管理页不再装第二遍（内核按名字唯一）', async () => {
+    const { ctx, svc, host } = boot({ catalog: CATALOG, savedInstalled: [] })
+    // 模拟：先用调试入口装了运行时名 a（清单里的 plugin-a 与它同名）
+    await host.manager.install({ name: 'a', apply() {} } as PluginModule)
+    await svc.refresh()
+    const before = host.sources.length
+    await svc.install('plugin-a')
+    const row = svc.state.rows.find((r) => r.entry.id === 'plugin-a')!
+    expect(row.installed, '内核里已有同名 → 显示已安装').toBe(true)
+    expect(host.sources.length, '不该再装载第二份').toBe(before)
+    ctx.stop()
+  })
+
   it('首次（没有存档）→ 一个都不自动装（用户要求：全部由我在面板里自己挑）', async () => {
     const { svc, host } = boot({ catalog: CATALOG })
     await svc.refresh()

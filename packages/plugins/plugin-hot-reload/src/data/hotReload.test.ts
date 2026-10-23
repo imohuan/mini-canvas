@@ -297,3 +297,149 @@ describe('watch 上报地址（value 里的 front）', () => {
   })
 })
 
+describe('调试插件清单：是否已装只看内核里的唯一名字', () => {
+  /** 造一份上报记录 + 假内核状态；不碰网络 */
+  function boot(opts: { installed?: string[]; reports?: Record<string, unknown>; states?: Record<string, string> }) {
+    const values = opts.reports ?? {}
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => opts.installed ?? [],
+      fetchJson: async (url) => {
+        const u = String(url)
+        if (u.includes('/api/kv/config?values=1')) return { ok: true, type: 'config', keys: Object.keys(values), values }
+        return { ok: true }
+      },
+    })
+    return { hr, values }
+  }
+
+  it('上报里有、内核里没有 → 未安装', async () => {
+    const { hr } = boot({ installed: [], reports: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } })
+    const rows = await hr.listDebugPlugins()
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.name).toBe('demo')
+    expect(rows[0]!.installed).toBe(false)
+    expect(rows[0]!.front).toBe('http://h/demo.js')
+  })
+
+  it('内核里已有同名 → 已安装（名字就是唯一判据，不看谁装的）', async () => {
+    const { hr } = boot({
+      installed: ['demo', 'other'],
+      reports: { 'plugin-watch:demo': { front: 'http://h/demo.js', t: 1 } },
+    })
+    const rows = await hr.listDebugPlugins()
+    expect(rows[0]!.installed).toBe(true)
+    expect(rows[0]!.at).toBe(1)
+  })
+
+  it('没有上报记录的插件不出现（调试清单只列上报过的）', async () => {
+    const { hr } = boot({ installed: ['builtin-a', 'builtin-b'], reports: {} })
+    expect(await hr.listDebugPlugins()).toEqual([])
+  })
+
+  it('非 plugin-watch: 前缀的 key 不混进来', async () => {
+    const { hr } = boot({
+      installed: [],
+      reports: {
+        'plugin-watch:demo': { front: 'http://h/demo.js' },
+        'some-other-setting': { value: 1 },
+      },
+    })
+    const rows = await hr.listDebugPlugins()
+    expect(rows.map((r) => r.name)).toEqual(['demo'])
+  })
+
+  it('按名字排序（清单稳定，界面不跳来跳去）', async () => {
+    const { hr } = boot({
+      installed: [],
+      reports: { 'plugin-watch:zeta': { front: 'http://h/z.js' }, 'plugin-watch:alpha': { front: 'http://h/a.js' } },
+    })
+    expect((await hr.listDebugPlugins()).map((r) => r.name)).toEqual(['alpha', 'zeta'])
+  })
+
+  it('同名只保留一行（就算上报记录写重了）', async () => {
+    const { hr } = boot({ installed: [], reports: { 'plugin-watch:demo': { front: 'http://h/a.js' } } })
+    const rows = await hr.listDebugPlugins()
+    expect(rows.filter((r) => r.name === 'demo')).toHaveLength(1)
+  })
+
+  it('卸载：内核里有 → 先卸内核，再删上报记录', async () => {
+    const w = globalThis as Record<string, unknown>
+    const calls: string[] = []
+    const { hr, values } = boot({ installed: ['demo'], reports: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } })
+    // 换一个带卸载钩子的实例（判据仍只看名字）
+    const hr2 = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => (values['plugin-watch:demo'] ? ['demo'] : []),
+      uninstall: (n) => {
+        calls.push('uninstall:' + n)
+        delete values['plugin-watch:demo']
+        return true
+      },
+      fetchJson: async (url, init) => {
+        const u = String(url)
+        if ((init?.method ?? 'GET') === 'DELETE') {
+          calls.push('delete-record')
+          delete values['plugin-watch:demo']
+          return { ok: true }
+        }
+        return { ok: true, values }
+      },
+    })
+    void hr
+    // 前端卸完再删记录（顺序有意义：先卸再清，失败时记录还在，能重试）
+    await hr2.uninstallDebugPlugin('demo')
+    expect(calls).toEqual(['uninstall:demo', 'delete-record'])
+    void w
+  })
+
+  it('卸载：内核里没有 → 不硬卸，也照样清记录（目标状态已达成）', async () => {
+    const calls: string[] = []
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => [],
+      uninstall: (n) => {
+        calls.push('uninstall:' + n)
+        return true
+      },
+      fetchJson: async (url, init) => {
+        if ((init?.method ?? 'GET') === 'DELETE') calls.push('delete-record')
+        return { ok: true, values: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } }
+      },
+    })
+    await hr.uninstallDebugPlugin('demo')
+    expect(calls).toEqual(['delete-record'])
+  })
+
+  it('重装：已装同名 → 走「卸旧装新」这一条路（不会装出第二份）', async () => {
+    const calls: Array<{ name: string; url: string }> = []
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      reloadByUrl: async (name, url) => void calls.push({ name, url }),
+      onReloaded: () => {},
+      fetchJson: async () => ({ ok: true, values: { 'plugin-watch:demo': { front: 'http://h/demo.js' } } }),
+    })
+    await hr.reinstallDebugPlugin('demo')
+    expect(calls).toEqual([{ name: 'demo', url: 'http://h/demo.js' }])
+  })
+
+  it('重装：上报里没有前端地址 → 明确报错，不装半成品', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => [],
+      fetchJson: async () => ({ ok: true, values: { 'plugin-watch:demo': { t: 1 } } }),
+    })
+    await expect(hr.reinstallDebugPlugin('demo')).rejects.toThrow(/没有前端地址/)
+  })
+
+  it('重装：没有上报记录 → 明确报错（不按名字瞎猜）', async () => {
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      fetchJson: async () => ({ ok: true, values: {} }),
+    })
+    await expect(hr.reinstallDebugPlugin('demo')).rejects.toThrow(/没有这个插件的上报记录/)
+  })
+})
+

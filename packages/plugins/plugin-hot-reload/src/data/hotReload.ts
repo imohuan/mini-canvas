@@ -89,6 +89,32 @@ export interface HotReload {
    * 返回停止函数（页面卸载时调；内部幂等，重复调用安全）。
    */
   watchPluginChanges(): () => void
+  /**
+   * **调试插件清单**（设置页用）：读 watch 上报的记录 + 核对内核真实状态。
+   *
+   * 不读插件管理页的名单 —— 两个插件各自独立，是否已装只看内核里有没有这个唯一名字。
+   */
+  listDebugPlugins(): Promise<DebugPluginRow[]>
+  /** 重装一个调试插件：按它上报的地址卸旧装新（前端）；后台有产物时按路径装 */
+  reinstallDebugPlugin(name: string): Promise<void>
+  /** 卸载一个调试插件：内核卸载 + 后台卸载 + 删掉它的上报记录 */
+  uninstallDebugPlugin(name: string): Promise<void>
+}
+
+/** 调试插件清单里的一行 */
+export interface DebugPluginRow {
+  /** 插件唯一名字（内核按它索引，也是上报 key 的后半段） */
+  name: string
+  /** 已装进内核（唯一判据，来自内核自己的插件表） */
+  installed: boolean
+  /** 运行态（active / pending / failed…）；未装为 undefined */
+  state?: string
+  /** 前端产物地址（上报值里的 front） */
+  front?: string
+  /** 后台产物路径（上报值里的 server） */
+  server?: string
+  /** 上报时间（毫秒时间戳） */
+  at?: number
 }
 
 /** 取"路径名"（去协议/主机/查询/哈希）——用于跨形态比较同一个产物（与 pluginReload 同口径） */
@@ -149,6 +175,23 @@ export interface HotReloadDeps {
    * 不必再去清单里按名字猜位置 —— 插件放在哪个目录、从哪个后台构建，都由上报方说了算。
    */
   reloadByUrl?: (name: string, url: string) => Promise<void>
+  /**
+   * 内核当前已装插件名（缺省读 window.MiniCanvasUI.listPlugins）。
+   *
+   * 这是「是否已安装」的唯一判据：**按插件自己的唯一名字**，不看插件管理页的名单。
+   * 两个插件各自独立，谁也不读谁的记录。
+   */
+  listInstalled?: () => string[]
+  /** 从内核卸载一个插件（缺省 window.MiniCanvasUI.uninstallPlugin）；返回是否卸到 */
+  uninstall?: (name: string) => boolean
+  /** 拉调试插件清单（缺省读 /api/kv/config?values=1 里 plugin-watch: 前缀的项） */
+  fetchJson?: (url: string, init?: RequestInit) => Promise<unknown>
+  /**
+   * 调试这一侧的后台地址（缺省 = 画布同源）。
+   *
+   * 只影响读取/清理 watch 上报记录与「按路径装后台半」，与插件管理那边的清单地址无关。
+   */
+  backendUrl?: string
   /** 取清单里"某个 origin 上有哪些插件"（vite 反查用）。缺省查 /plugin-catalog.json */
   pluginsOnOrigin?: (origin: string) => Promise<string[]>
   /** 存/取持久化（缺省 localStorage；测试可给内存版） */
@@ -187,6 +230,23 @@ export const SOURCES_KEY = 'hot-reload:sources'
  * 老格式（只有 `t`）继续可用：那时退回清单反查，行为与以前一致。
  */
 export const PLUGIN_WATCH_PREFIX = 'plugin-watch:'
+
+/**
+ * 给受保护的写请求补管理令牌（与 canvas-base 的同名工具同一份约定）。
+ *
+ * 为什么不直接 import 那一份：热重载插件要保持对 canvas-base 零依赖（可能被别的宿主单独装），
+ * 而令牌的存储键与请求头在仓库里是**定死的契约**（mc_admin_token / x-admin-token）。
+ * 名字保持一致，好让「管理令牌覆盖」那条守卫能追溯到这里。
+ */
+export function withAdminToken(headers: Record<string, string> = {}): Record<string, string> {
+  let token = ''
+  try {
+    token = (typeof localStorage !== 'undefined' ? localStorage.getItem('mc_admin_token') : '')?.trim() ?? ''
+  } catch {
+    token = ''
+  }
+  return token ? { ...headers, 'x-admin-token': token } : headers
+}
 
 /** watch 上报的值（键可缺省；缺了就退回老路径） */
 export interface PluginWatchReport {
@@ -245,11 +305,48 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     state.logs = [{ at: Date.now(), ...entry }, ...state.logs].slice(0, 200)
   }
 
+  /** 调试这一侧的后台基地址（空 = 同源）；拼路径时去掉尾斜杠 */
+  function backend(path: string): string {
+    const base = (deps.backendUrl ?? '').trim().replace(/\/+$/, '')
+    return base ? base + path : path
+  }
+
   /** 默认重装：转发 window.MiniCanvasPlugin.reload */
   async function defaultReload(target: string): Promise<void> {
     const w = globalThis as unknown as { MiniCanvasPlugin?: { reload(t: string): Promise<unknown> } }
     if (!w.MiniCanvasPlugin?.reload) throw new Error('window.MiniCanvasPlugin 不在（宿主未挂热重载器）')
     await w.MiniCanvasPlugin.reload(target)
+  }
+
+  /** 内核里当前装了哪些插件（唯一名字）。缺省读宿主门面。 */
+  function installedList(): string[] {
+    if (deps.listInstalled) return deps.listInstalled()
+    const w = globalThis as unknown as { MiniCanvasUI?: { listPlugins?(): string[] } }
+    try {
+      return w.MiniCanvasUI?.listPlugins?.() ?? []
+    } catch {
+      return []
+    }
+  }
+
+  /** 内核运行态（active / pending / failed） */
+  function runtimeStateOf(name: string): string | undefined {
+    const w = globalThis as unknown as {
+      MiniCanvasUI?: { inspectPlugins?(): Array<{ name: string; state?: string }> }
+    }
+    try {
+      return w.MiniCanvasUI?.inspectPlugins?.().find((p) => p.name === name)?.state
+    } catch {
+      return undefined
+    }
+  }
+
+  /** 从内核卸一个插件；缺省走宿主门面（核心插件会抛错，原样透出） */
+  function uninstallOne(name: string): boolean {
+    if (deps.uninstall) return deps.uninstall(name)
+    const w = globalThis as unknown as { MiniCanvasUI?: { uninstallPlugin?(n: string): boolean } }
+    if (!w.MiniCanvasUI?.uninstallPlugin) throw new Error('window.MiniCanvasUI 不在（宿主未就绪）')
+    return w.MiniCanvasUI.uninstallPlugin(name)
   }
 
   /**
@@ -650,6 +747,189 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     return kvWatchStop
   }
 
+  // ==================== 调试插件清单（设置页） ====================
+  //
+  // 两个插件各自独立：本清单只看两件事 ——
+  //   ① watch 上报了哪些插件（key = plugin-watch:<名字>，值里带地址）；
+  //   ② 内核里此刻有没有这个**唯一名字**的插件。
+  // 不读插件管理页的名单，也不往那边写。
+
+  /** 拉一份上报记录（缺省读 KV 批量接口；失败返回空，不假装有） */
+  async function readWatchReports(): Promise<Array<{ name: string; report: PluginWatchReport }>> {
+    try {
+      const raw = deps.fetchJson
+        ? await deps.fetchJson(backend('/api/kv/config?values=1'))
+        : await (await fetch(backend('/api/kv/config?values=1'), { cache: 'no-store' })).json()
+      const body = raw as { values?: Record<string, unknown> }
+      const values = body?.values ?? {}
+      const out: Array<{ name: string; report: PluginWatchReport }> = []
+      for (const [key, v] of Object.entries(values)) {
+        if (!key.startsWith(PLUGIN_WATCH_PREFIX)) continue
+        const name = key.slice(PLUGIN_WATCH_PREFIX.length)
+        if (!name || !v || typeof v !== 'object') continue
+        const r = v as PluginWatchReport
+        out.push({
+          name,
+          report: {
+            ...(typeof r.t === 'number' ? { t: r.t } : {}),
+            ...(typeof r.front === 'string' && r.front ? { front: r.front } : {}),
+            ...(typeof r.server === 'string' && r.server ? { server: r.server } : {}),
+          },
+        })
+      }
+      return out
+    } catch {
+      return []
+    }
+  }
+
+  async function listDebugPlugins(): Promise<DebugPluginRow[]> {
+    const installed = new Set(installedList())
+    const reports = await readWatchReports()
+    return reports
+      .map(({ name, report }) => ({
+        name,
+        installed: installed.has(name),
+        ...(runtimeStateOf(name) ? { state: runtimeStateOf(name) } : {}),
+        ...(report.front ? { front: report.front } : {}),
+        ...(report.server ? { server: report.server } : {}),
+        ...(report.t ? { at: report.t } : {}),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /** 删掉某个插件的上报记录（卸载时顺手清；失败不致命） */
+  async function deleteWatchReport(name: string): Promise<void> {
+    try {
+      const url = '/api/kv/config/' + encodeURIComponent(PLUGIN_WATCH_PREFIX + name)
+      if (deps.fetchJson) await deps.fetchJson(backend(url), { method: 'DELETE' })
+      else await fetch(backend(url), { method: 'DELETE' })
+    } catch {
+      /* 记录删不掉不影响卸载本身 */
+    }
+  }
+
+  /**
+   * 重装一个调试插件。
+   *
+   * 名字来自上报 key（内核按它索引），地址来自上报值（不从清单猜）。
+   * 后台有 server 路径时交给后台的调试安装入口；它没开 → 明确记一条错误，不假装成功。
+   */
+  async function reinstallDebugPlugin(name: string): Promise<void> {
+    const reports = await readWatchReports()
+    const hit = reports.find((r) => r.name === name)
+    if (!hit) throw new Error('没有这个插件的上报记录：' + name)
+    const { front, server } = hit.report
+    if (!front) throw new Error(name + '：上报里没有前端地址（front），无法重装')
+    // 同名只该有一份：内核里已经有这个**唯一名字**，重装就是「卸旧 → 装新」，
+    // 不会出现两份并存（内核按名字索引，第二份会被拒）。
+    try {
+      if (deps.reloadByUrl) await deps.reloadByUrl(name, front)
+      else if (deps.reload) await reloadOne(front)
+      else await defaultReloadByUrl(name, front)
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'reload', detail: name + '（按上报地址）' })
+      notifyReloaded(name, '调试插件 · 手动重装')
+    } catch (err) {
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: name + '：' + String(err) })
+      throw err
+    }
+    if (server) await installServerFromPath(name, server)
+  }
+
+  /**
+   * 按路径装后台半（调试入口）。
+   *
+   * 失败不抛给前端重装流程（前端已经装好了），但**必须记日志**：
+   * 后台没开调试安装时，这里会明确告诉你原因，而不是静默成功。
+   */
+  async function installServerFromPath(id: string, serverPath: string): Promise<void> {
+    try {
+      // 管理令牌走仓库统一出口 withAdminToken（守卫测试要求可追溯，别手拼头）。
+      const headers = withAdminToken({ 'content-type': 'application/json' })
+      const body = { id, path: serverPath, confirm: true }
+      const res = deps.fetchJson
+        ? (await deps.fetchJson(backend('/api/server-plugins/install-from-path'), {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+          })) as { ok?: boolean; error?: string; note?: string }
+        : ((await (
+            await fetch(backend('/api/server-plugins/install-from-path'), {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(body),
+            })
+          ).json()) as { ok?: boolean; error?: string; note?: string })
+      if (body && res?.ok !== true) {
+        log({
+          sourceId: 0,
+          sourceLabel: '调试插件',
+          action: 'error',
+          detail: id + '：后台半未装上（' + (res?.error ?? '未知原因') + '）',
+        })
+        return
+      }
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'reload', detail: id + '：后台半已按路径安装' })
+    } catch (err) {
+      log({
+        sourceId: 0,
+        sourceLabel: '调试插件',
+        action: 'error',
+        detail: id + '：后台半安装请求失败 ' + String(err),
+      })
+    }
+  }
+
+  /**
+   * 卸载一个调试插件。
+   *
+   * 顺序：前端（内核按唯一名字卸）→ 后台（有 server 路径才卸）→ 删上报记录。
+   * 前端都没装时不算失败（可能刚被别处卸过），最后照样清记录。
+   */
+  async function uninstallDebugPlugin(name: string): Promise<void> {
+    const installed = new Set(installedList())
+    if (installed.has(name)) {
+      try {
+        uninstallOne(name)
+        log({ sourceId: 0, sourceLabel: '调试插件', action: 'disconnected', detail: name + '：已从内核卸载' })
+      } catch (err) {
+        // 核心插件等不允许卸：明确记错误并停止（不能把记录删了、插件还在）
+        log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: name + '：卸载失败 ' + String(err) })
+        throw err
+      }
+    }
+    const reports = await readWatchReports()
+    if (reports.find((r) => r.name === name)?.report.server) {
+      await uninstallServerHalf(name)
+    }
+    await deleteWatchReport(name)
+  }
+
+  /** 卸后台半（按 id；后台没有这个 id 也算成功，因为目标状态已经达成） */
+  async function uninstallServerHalf(id: string): Promise<void> {
+    try {
+      const headers = withAdminToken({ 'content-type': 'application/json' })
+      const init: RequestInit = {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ id }),
+      }
+      const res = deps.fetchJson
+        ? ((await deps.fetchJson(backend('/api/server-plugins/uninstall'), init)) as { ok?: boolean; error?: string })
+        : ((await (await fetch(backend('/api/server-plugins/uninstall'), init)).json()) as {
+            ok?: boolean
+            error?: string
+          })
+      if (res?.ok !== true) {
+        log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: id + '：后台半未卸（' + (res?.error ?? '未知原因') + '）' })
+        return
+      }
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'disconnected', detail: id + '：后台半已卸载' })
+    } catch (err) {
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: id + '：后台半卸载失败 ' + String(err) })
+    }
+  }
+
   return {
     state,
     addSource,
@@ -660,6 +940,9 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     stopAll,
     clearLogs,
     watchPluginChanges,
+    listDebugPlugins,
+    reinstallDebugPlugin,
+    uninstallDebugPlugin,
   }
 }
 

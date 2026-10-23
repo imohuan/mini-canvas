@@ -352,6 +352,9 @@ export function createPluginManagerService(
       }
       row.state = info?.state
       row.missingDeps = info?.missingDeps
+      // 是否已装只看**内核里有没有这个唯一名字**，与谁装的无关：
+      // 调试插件先装过同一个名字时，这里也必须显示「已安装」，否则再点安装就会重复装载。
+      // （真正的去重由内核按名字保证；这里只是让界面不撒谎。）
       row.installed = !!info
     }
   }
@@ -556,6 +559,13 @@ export function createPluginManagerService(
     const row = state.rows.find((r) => r.entry.id === id)
     if (!row) return
     if (row.entry.builtin === true) return // 自带插件不可装卸（页面上也不给按钮，这里是兜底）
+    // 同名只该有一份：内核里已经有这个唯一名字（可能是调试入口装的），就不再装第二遍。
+    // 判据现查内核，不看安装记录 —— 两个插件各自独立，谁也不读谁的本子。
+    if (hostManager()?.list().some((p) => p.name === row.entry.name)) {
+      row.installed = true
+      row.realName = row.entry.name
+      return
+    }
     if (row.installed) return
     // **在途去重锁**：refresh 与 adapter 切换后的 applyIntent 可能交叠，同一插件被两条链各调一次
     // → UMD script 注入两份、插件重复装载（实测：启动爆发 200+ 条校验日志 / 画布闪烁）。
