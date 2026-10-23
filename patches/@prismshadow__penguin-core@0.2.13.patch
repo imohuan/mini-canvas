@@ -1,0 +1,24 @@
+diff --git a/dist/index.js b/dist/index.js
+index 3e40931aa648b2dea76fd3d505a3a93dd530d970..6cb12948a06f6d06f7bc67e170da473fa1dcac8f 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -2826,6 +2826,19 @@ var EventTranslator = class {
+    * structure on interruption" by stop_reason, and dispatch only the former.
+    */
+   *emitCompleteTool(acc, stopReason = "completed") {
++    // mini-canvas patch: 中断收尾（stopReason != "completed"）时，连名字都没收到的
++    // tool_call 是流被截断留下的残片 —— 完整内容（含 function.name）从未到达。
++    // 把它 finalize 成 {name:""} 的消息会写进会话历史，之后每一轮请求都带着它，
++    // 上游模型校验直接拒绝（400 input_invalid），会话从此卡死只能重建。
++    // 丢弃是安全的：这个调用本来就不该被分派执行（无名字无法路由），且
++    // partial_tool_call(start) 事件帧只在内存事件流里，不写 trace。
++    if (stopReason !== "completed" && !acc.name) {
++      acc.emitted = true;
++      if (this.activeToolCallId === acc.providerKey) {
++        this.activeToolCallId = null;
++      }
++      return;
++    }
+     acc.emitted = true;
+     if (this.toolStarted.has(acc.toolCallId)) {
+       yield partialToolCall({
