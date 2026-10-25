@@ -27,11 +27,6 @@ export interface LocalGraphHandlers {
    */
   applyPlan(plan: RemoteMergePlan): void
   /**
-   * 合并成功后把**同一份云端快照**同步给保存适配器作提交基准。
-   * 不传 = 旧宿主只做实时合并（兼容）；新接线必须传，否则下一次保存会重发已合入的节点。
-   */
-  noteServerSnapshot?(snapshot: CanvasGraphSnapshot): void
-  /**
    * 此刻用户是否正在编辑某节点：返回被占用的字段（position / data / size）或空集。
    * 合并层对“正在编辑的字段”只延迟应用，其他节点与字段照常同步。
    * 不传 = 旧宿主没有这个信号，按“没有正在编辑”处理。
@@ -212,10 +207,7 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (held.size > 0) holdEditingFields(plan, held)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
         hasDeferredUpdates = held.size > 0
-        appliedSnapshot = theirs
-        // ★ 保存基准与合并基准由同一份完整快照推进：远端已合入本地后，
-        // 下一次保存不能把该节点当成“本地新增”再发一次。
-        opts.graph.noteServerSnapshot?.(theirs)
+        appliedSnapshot = held.size > 0 ? snapshotWithHeldAtBaseline(theirs, held, baseline) : theirs
         // 基准跟着**应用成功的那一版**走：正在编辑的节点还没落地，
         // 这一版不能记为已同步（否则下一轮 sameNode 会以为已经合过而不重试）。
         // 延迟节点不能从基准里删掉：删掉会让下一轮把它当成“云端新增”，

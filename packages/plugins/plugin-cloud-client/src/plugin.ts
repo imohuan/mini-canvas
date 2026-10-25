@@ -454,9 +454,6 @@ const adapter = new CanvasDiffAdapter(api, CID)
       getNodes: () => doc.getNodes() as never,
       getEdges: () => doc.getEdges() as never,
       applyPlan: (plan) => applyMergePlan(doc, plan),
-      // 远端合并成功后同步推进保存基准：否则下一次本地保存会把刚合进来的
-      // 远端节点当成“新增”再发一次（本地与云端来回打架）。
-      noteServerSnapshot: (snapshot) => adapter.primeFromSnapshot(snapshot),
       onRevision: (revision) => {
         status.knownRevision = revision
       },
@@ -483,9 +480,9 @@ const adapter = new CanvasDiffAdapter(api, CID)
   void ready.then(async () => {
     try {
       await sync.refreshBase()
-      const initialSnapshot = sync.serverSnapshot()
-      if (initialSnapshot) adapter.primeFromSnapshot(initialSnapshot)
       sync.start()
+      const finalSnapshot = sync.serverSnapshot()
+      if (finalSnapshot) adapter.primeFromSnapshot(finalSnapshot)
       // 启动时把版本同步进状态（设置页 / 诊断用）
       status.knownRevision = sync.status().knownRevision
     } catch (err) {
