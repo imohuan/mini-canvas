@@ -422,6 +422,9 @@ const adapter = new CanvasDiffAdapter(api, CID)
       getNodes: () => doc.getNodes() as never,
       getEdges: () => doc.getEdges() as never,
       applyPlan: (plan) => applyMergePlan(doc, plan),
+      // 远端合并成功后同步推进保存基准：否则下一次本地保存会把刚合进来的
+      // 远端节点当成“新增”再发一次（本地与云端来回打架）。
+      noteServerSnapshot: (snapshot) => adapter.primeFromSnapshot(snapshot),
     },
     knownType: (type) => (doc.types ? doc.types.has(type) : true),
     subscribe: (onChange, onError) => api.subscribeChanges(onChange, onError),

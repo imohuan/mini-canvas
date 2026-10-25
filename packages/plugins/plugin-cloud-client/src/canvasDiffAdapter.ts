@@ -105,6 +105,21 @@ export class CanvasDiffAdapter {
   }
 
   /**
+   * 把「刚确认过的云端快照」记为提交基准（实时合并成功后调用）。
+   *
+   * 为什么必须与 remoteSync 的合并基准同步推进：远端节点已经合进本地后再保存，
+   * 若 adapter 还停在旧基准，就会把这些已同步的节点当成“本地新增”重发；
+   * 极端情况下更新/删除还会与远端再打一次架。两份基准必须来自同一份服务端快照。
+   *
+   * 只记录**云端已有的那份**，不改本地的待提交内容；用户此刻的本地编辑仍由
+   * 下一次 set 与这份基准做 diff，正常发出。
+   */
+  primeFromSnapshot(snapshot: { nodes: unknown[]; edges: unknown[] }): void {
+    this.submittedNodes = Array.isArray(snapshot.nodes) ? snapshot.nodes : []
+    this.submittedEdges = Array.isArray(snapshot.edges) ? snapshot.edges : []
+  }
+
+  /**
    * 读服务器那份（恢复路径：装载时以云端为准覆盖本地）。
    *
    * 存的就是同源 URL，渲染组件拿去直接塞 `<img src>` 就能用，这里原样给。

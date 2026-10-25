@@ -26,6 +26,11 @@ export interface LocalGraphHandlers {
    * （不进撤销栈 —— 否则用户按一次 Ctrl+Z 只退一格进度条）。
    */
   applyPlan(plan: RemoteMergePlan): void
+  /**
+   * 合并成功后把**同一份云端快照**同步给保存适配器作提交基准。
+   * 不传 = 旧宿主只做实时合并（兼容）；新接线必须传，否则下一次保存会重发已合入的节点。
+   */
+  noteServerSnapshot?(snapshot: CanvasGraphSnapshot): void
 }
 
 export interface RemoteSyncOptions {
@@ -187,6 +192,9 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         const baseline = base ?? { nodes: [], edges: [] }
         const plan = planRemoteMerge(baseline, mine, theirs, opts.knownType)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
+        // ★ 保存基准与合并基准由同一份完整快照推进：远端已合入本地后，
+        // 下一次保存不能把该节点当成“本地新增”再发一次。
+        opts.graph.noteServerSnapshot?.(theirs)
         // 基准永远跟到云端最新：下次才知道"云端这回改了没有"
         base = theirs
         // 补一次订阅前漏掉的通知：跑完再看一眼版本，避免“核对时正好又变了一次”漏掉。

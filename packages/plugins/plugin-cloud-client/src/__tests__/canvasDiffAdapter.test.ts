@@ -41,7 +41,16 @@ function fakeBackend(initial: { nodes?: unknown[]; edges?: unknown[]; view?: unk
     }
     return new Response(JSON.stringify({ ok: true }), { status: 200 })
   }
-  return { api: new CloudApi({ baseUrl: 'http://srv', fetchImpl }), writes, uploads, get nodes() { return nodes } }
+  return {
+    api: new CloudApi({ baseUrl: 'http://srv', fetchImpl }),
+    writes,
+    uploads,
+    seed(nextNodes: unknown[], nextEdges: unknown[]) {
+      nodes = nextNodes
+      edges = nextEdges
+    },
+    get nodes() { return nodes },
+  }
 }
 
 describe('读：节点原样返回（资源字段里就是同源 URL）', () => {
@@ -176,6 +185,37 @@ describe('失败时不丢改动', () => {
     await adapter.set('canvas:graph', [node])
     expect(writes).toHaveLength(2)
     expect((writes[1].add as unknown[]).length).toBe(1)
+  })
+})
+
+describe('远端合并后的保存基准', () => {
+  it('primeFromSnapshot 后，已合入的远端节点不会被再当新增重发', async () => {
+    const b = fakeBackend({ nodes: [{ id: 'local', type: 'text', position: { x: 0, y: 0 }, data: {} }] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+
+    // 远端新增一个节点，客户端合并后调用 primeFromSnapshot 记录同一份快照。
+    const merged = [
+      { id: 'local', type: 'text', position: { x: 0, y: 0 }, data: {} },
+      { id: 'remote', type: 'text', position: { x: 60, y: 0 }, data: {} },
+    ]
+    b.seed(merged, [])
+    adapter.primeFromSnapshot({ nodes: merged, edges: [] })
+
+    // 再保存本地当前这份：不应把 remote 这条重新作为 add 发出去
+    await adapter.set('canvas:graph', merged)
+    expect(b.writes).toHaveLength(0)
+  })
+
+  it('primeFromSnapshot 只更新云端基准，用户本地新编辑仍会被提交', async () => {
+    const b = fakeBackend({ nodes: [{ id: 'local', type: 'text', position: { x: 0, y: 0 }, data: {} }] })
+    const adapter = new CanvasDiffAdapter(b.api)
+    await adapter.primeFromServer()
+    adapter.primeFromSnapshot({ nodes: [], edges: [] })
+
+    await adapter.set('canvas:graph', [{ id: 'local', type: 'text', position: { x: 0, y: 0 }, data: {} }])
+    expect(b.writes).toHaveLength(1)
+    expect((b.writes[0].body.add as unknown[]).length).toBe(1)
   })
 })
 
