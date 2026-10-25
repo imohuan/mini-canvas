@@ -180,6 +180,75 @@ describe('多画布 / 防叠加', () => {
   })
 })
 
+describe('正在编辑的字段：延迟落地、其他变化照常', () => {
+  it('被拖动节点的 position 不在本轮覆盖，但新增节点与其他节点照常合并', async () => {
+    const server = fakeServer(1, {
+      nodes: [node('edited'), node('plain')],
+      edges: [],
+    })
+    const edited = { ...node('edited'), position: { x: 0, y: 0 } }
+    const graph = localGraph([edited, node('plain')])
+    const { sync } = makeSync(server, graph, true)
+    ;(graph.handlers as { editingFields?: (id: string) => ReadonlySet<string> }).editingFields = (id) =>
+      id === 'edited' ? new Set(['position']) : new Set()
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+
+    // 远端同时改了被拖动节点位置、另一个节点、并新增一个
+    server.advance({
+      nodes: [
+        { ...edited, position: { x: 999, y: 999 } },
+        { ...node('plain'), data: { text: 'remote-changed' } },
+        node('new-node'),
+      ],
+      edges: [],
+    })
+    await sync.check()
+    const deadline = Date.now() + 500
+    while (Date.now() < deadline && !graph.nodes.some((n) => n.id === 'new-node')) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
+
+    expect(graph.nodes.find((n) => n.id === 'edited')?.position).toEqual({ x: 0, y: 0 })
+    expect(graph.nodes.find((n) => n.id === 'plain')?.data.text).toBe('remote-changed')
+    expect(graph.nodes.some((n) => n.id === 'new-node')).toBe(true)
+    expect(sync.status().deferred).toBe(true)
+    sync.stop()
+  })
+
+  it('编辑结束后再核对，被延迟的远端更新会补上', async () => {
+    const server = fakeServer(1, { nodes: [node('edited')], edges: [] })
+    const graph = localGraph([node('edited')])
+    const { sync } = makeSync(server, graph, true)
+    let editing = true
+    ;(graph.handlers as { editingFields?: (id: string) => ReadonlySet<string> }).editingFields = () =>
+      editing ? new Set(['position']) : new Set()
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+
+    server.advance({
+      nodes: [{ ...node('edited'), position: { x: 100, y: 100 } }],
+      edges: [],
+    })
+    await sync.check()
+    await new Promise((r) => setTimeout(r, 40))
+    expect(graph.nodes[0].position).toEqual({ x: 0, y: 0 })
+
+    editing = false
+    // 版本没再变，但编辑结束后仍需把上次延迟的那一版重新核对。
+    await sync.check()
+    const deadline2 = Date.now() + 500
+    while (Date.now() < deadline2 && graph.nodes[0].position.x !== 100) {
+      await new Promise((r) => setTimeout(r, 10))
+    }
+    expect(graph.nodes[0].position).toEqual({ x: 100, y: 100 })
+    expect(sync.status().deferred).toBe(false)
+    sync.stop()
+  })
+})
+
 /** 轮询本地状态直到节点数达到期望（替代固定 sleep，避免测试依赖机器速度） */
 async function waitForSynced(graph: { nodes: MergeNode[] }, count: number): Promise<void> {
   const deadline = Date.now() + 500

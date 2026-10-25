@@ -31,6 +31,14 @@ export interface LocalGraphHandlers {
    * 不传 = 旧宿主只做实时合并（兼容）；新接线必须传，否则下一次保存会重发已合入的节点。
    */
   noteServerSnapshot?(snapshot: CanvasGraphSnapshot): void
+  /**
+   * 此刻用户是否正在编辑某节点：返回被占用的字段（position / data / size）或空集。
+   * 合并层对“正在编辑的字段”只延迟应用，其他节点与字段照常同步。
+   * 不传 = 旧宿主没有这个信号，按“没有正在编辑”处理。
+   */
+  editingFields?(nodeId: string): ReadonlySet<'position' | 'data' | 'size'>
+  /** 已经确认过的云端图版本（供诊断/状态展示；不参与合并） */
+  onRevision?(revision: number): void
 }
 
 export interface RemoteSyncOptions {
@@ -81,7 +89,7 @@ export interface RemoteSync {
   /** 立即向后台核对一次版本（用户点“立即核对”/测试用） */
   check(): Promise<void>
   /** 诊断状态：已确认版本（旧服务端为 undefined） */
-  status(): { knownRevision: number | undefined; revisionSupported?: boolean }
+  status(): { knownRevision: number | undefined; revisionSupported?: boolean; deferred?: boolean }
 }
 
 /** 三种形态都认（旧数组只存节点 / 信封含边 / 空），与后端恢复逻辑同款 */
@@ -157,6 +165,8 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   let inflight = false
   /** 定时核对已安排在跑：避免每 15 秒叠加一轮 */
   let reconcileInflight: Promise<void> | null = null
+  /** 上一轮有节点因“正在编辑”被延迟：编辑结束后要补核对，不能等云端再变一次 */
+  let hasDeferredUpdates = false
 
   async function readCloudSnapshot(): Promise<{ graph: CanvasGraphSnapshot; revision?: number }> {
     if (opts.readSnapshot) {
@@ -188,15 +198,25 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         const theirs = read.graph
         // 同一轮只认一份完整快照：版本与节点/边一起推进，绝不拼接。
         if (typeof read.revision === 'number') knownRevision = read.revision
+        if (typeof read.revision === 'number') opts.graph.onRevision?.(read.revision)
         const mine: CanvasGraphSnapshot = { nodes: opts.graph.getNodes(), edges: opts.graph.getEdges() }
         const baseline = base ?? { nodes: [], edges: [] }
         const plan = planRemoteMerge(baseline, mine, theirs, opts.knownType)
+        // 定时核对可能正好撞上用户拖拽/输入：只延迟被占用节点的对应字段，
+        // 不禁用整张画布的同步（新增节点、其他节点变化仍然立即落地）。
+        const held = opts.graph.editingFields ? collectEditingFields(plan, opts.graph.editingFields) : new Set<string>()
+        if (held.size > 0) holdEditingFields(plan, held)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
+        hasDeferredUpdates = held.size > 0
         // ★ 保存基准与合并基准由同一份完整快照推进：远端已合入本地后，
         // 下一次保存不能把该节点当成“本地新增”再发一次。
         opts.graph.noteServerSnapshot?.(theirs)
-        // 基准永远跟到云端最新：下次才知道"云端这回改了没有"
-        base = theirs
+        // 基准跟着**应用成功的那一版**走：正在编辑的节点还没落地，
+        // 这一版不能记为已同步（否则下一轮 sameNode 会以为已经合过而不重试）。
+        // 延迟节点不能从基准里删掉：删掉会让下一轮把它当成“云端新增”，
+        // 已有本地节点时反而永远不更新。正确做法是保留**修改前**的那一版，
+        // 下轮 sameNode(base, theirs) 仍判为“云端改了”，于是继续重试。
+        base = held.size > 0 ? snapshotWithHeldAtBaseline(theirs, held, baseline) : theirs
         // 补一次订阅前漏掉的通知：跑完再看一眼版本，避免“核对时正好又变了一次”漏掉。
         if (opts.readRevision) {
           const latest = await opts.readRevision()
@@ -232,7 +252,7 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (opts.readRevision) {
           const remote = await opts.readRevision()
           if (typeof remote === 'number') {
-            if (knownRevision !== undefined && remote <= knownRevision) return
+            if (knownRevision !== undefined && remote <= knownRevision && !hasDeferredUpdates) return
             // 版本不同（或首次没有基线）→ 拉完整快照合并；不会用事件跳版。
             // 同一轮失败不推进 knownRevision；下一次定时核对会再次看到版本落后并重试。
             schedule()
@@ -339,7 +359,44 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
       return {
         knownRevision,
         ...(typeof knownRevision === 'number' ? { revisionSupported: true } : {}),
+        deferred: hasDeferredUpdates,
       }
     },
+  }
+}
+
+/**
+ * 从计划里摘掉“用户正在编辑的那几个字段”，避免核对结果覆盖当前操作。
+ *
+ * 只处理 updateNodes（已有节点）；add/remove 不碰用户输入框。
+ * 摘字段后如果该节点只剩同值数据，planRemoteMerge 的后续比较会自然不再产出更新；
+ * 这里保守处理：字段被占用就把该更新整条延后到下一轮。
+ */
+function collectEditingFields(
+  plan: RemoteMergePlan,
+  editingFields: (nodeId: string) => ReadonlySet<'position' | 'data' | 'size'>,
+): Set<string> {
+  const held = new Set<string>()
+  for (const node of plan.updateNodes) {
+    if (editingFields(node.id).size > 0) held.add(node.id)
+  }
+  return held
+}
+
+/** 把仍在编辑的节点从“已应用基准”里去掉，保留其他已合并节点的新版本 */
+function holdEditingFields(plan: RemoteMergePlan, held: ReadonlySet<string>): void {
+  plan.updateNodes = plan.updateNodes.filter((node) => !held.has(node.id))
+}
+
+/** 把仍在编辑的节点回退到“上一轮基准里的版本”，保留其他节点的最新版 */
+function snapshotWithHeldAtBaseline(
+  snapshot: CanvasGraphSnapshot,
+  held: ReadonlySet<string>,
+  previous: CanvasGraphSnapshot,
+): CanvasGraphSnapshot {
+  const prevById = new Map(previous.nodes.map((node) => [node.id, node]))
+  return {
+    nodes: snapshot.nodes.map((node) => (held.has(node.id) ? (prevById.get(node.id) ?? node) : node)),
+    edges: snapshot.edges,
   }
 }

@@ -56,6 +56,8 @@ export interface CloudClientStatus {
   serverRevision?: number
   /** 后台是否支持版本核对（旧服务端为 false） */
   revisionSupported?: boolean
+  /** 是否有远端更新因“用户正在编辑”而延迟（编辑结束后会自动补） */
+  deferred?: boolean
 }
 
 export interface CloudClientService {
@@ -210,6 +212,35 @@ export function apply(ctx: Context): void {
   const doc = ctx.get<HostDoc>('doc')
 const adapter = new CanvasDiffAdapter(api, CID)
   const status: CloudClientStatus = { active: true, baseUrl: cfg.baseUrl, actions: 0 }
+
+  /**
+   * 当前是否正在编辑某节点（只用于“哪些字段先别覆盖”）。
+   *
+   * 宿主可以在装配时提供 `cloud-client/edit-guard`（返回某节点当前被占用的字段）。
+   * 没有这个服务时用 DOM 焦点兜底；都取不到就返回空集（宁可同步，也不整体停更）。
+   */
+  function editingFieldsOf(nodeId: string): ReadonlySet<'position' | 'data' | 'size'> {
+    const out = new Set<'position' | 'data' | 'size'>()
+    const guard = ctx.tryGet<(nodeId: string) => ReadonlySet<'position' | 'data' | 'size'>>('cloud-client/edit-guard')
+    if (typeof guard === 'function') {
+      for (const field of guard(nodeId)) out.add(field)
+    }
+    // 文本/可视化编辑没有统一事件：用 DOM 焦点所在的节点兜底。
+    if (typeof document !== 'undefined') {
+      const active = document.activeElement
+      const nodeEl = active instanceof HTMLElement ? active.closest('.vue-flow__node') : null
+      if (nodeEl instanceof HTMLElement) {
+        // VueFlow 的节点外壳通常是 `data-id` / `id` 两者之一；只认精确 id，
+        // 不用 endsWith（'1' 会误配 '11'，正好把别人的输入当成这个节点的）。
+        const dataId = nodeEl.getAttribute('data-id')
+        const domId = nodeEl.id
+        const matches =
+          dataId === nodeId || domId === nodeId || domId === 'vue-flow__node-' + nodeId
+        if (matches) out.add('data')
+      }
+    }
+    return out
+  }
 
   // ==================== 1. 存档：画布域换成走后台的 adapter ====================
   //
@@ -415,6 +446,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
       const rev = await api.readCanvasRevision(CID)
       if (typeof rev === 'number') status.serverRevision = rev
       status.revisionSupported = typeof rev === 'number'
+      status.deferred = sync.status().deferred
       return rev
     },
     canvasId: CID,
@@ -425,6 +457,12 @@ const adapter = new CanvasDiffAdapter(api, CID)
       // 远端合并成功后同步推进保存基准：否则下一次本地保存会把刚合进来的
       // 远端节点当成“新增”再发一次（本地与云端来回打架）。
       noteServerSnapshot: (snapshot) => adapter.primeFromSnapshot(snapshot),
+      onRevision: (revision) => {
+        status.knownRevision = revision
+      },
+      // 用户正在拖节点时，不覆盖它的 position（其他字段/节点照常同步）。
+      // 输入框正在编辑的节点整条 data 更新也暂缓——避免把打了一半的字换回旧值。
+      editingFields: (nodeId) => editingFieldsOf(nodeId),
     },
     knownType: (type) => (doc.types ? doc.types.has(type) : true),
     subscribe: (onChange, onError) => api.subscribeChanges(onChange, onError),

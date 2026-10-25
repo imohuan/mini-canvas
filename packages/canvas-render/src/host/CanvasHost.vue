@@ -1290,6 +1290,22 @@ onMounted(async () => {
     // 键盘
     window.addEventListener('keydown', onKeydown)
     keydownBound = true
+    /*
+     * 把“某节点此刻正被编辑哪些字段”暴露给云端同步插件（只读探针）。
+     *
+     * 为什么由宿主提供：拖拽/框选是 canvas-render 维护的交互状态，插件按服务名取不到；
+     * 但云端合并需要它来决定“哪些字段先别覆盖”。宿主提供窄接口，插件只需 tryGet，
+     * 没有这份服务时安全降级（不同步暂停整张画布）。
+     */
+    subs.push({
+      dispose: host.ctx.inject('cloud-client/edit-guard', (nodeId: string): ReadonlySet<'position' | 'data' | 'size'> => {
+        const held = new Set<'position' | 'data' | 'size'>()
+        const act = interaction.activity.value
+        if (act.nodeDragging && act.nodeDragId === nodeId) held.add('position')
+        if (act.nodeResizing && act.nodeResizeId === nodeId) held.add('size')
+        return held
+      }),
+    })
     // 原生粘贴（仲裁场）：插件经 registryOf('clipboard/paste') 声明粘贴动作，宿主统一派发
     window.addEventListener('paste', onPaste)
     pasteBound = true
