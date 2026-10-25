@@ -292,6 +292,61 @@ describe('本地保存成功、合并基准还没推进的窗口', () => {
   })
 })
 
+describe('落地失败后的版本重试', () => {
+  it('applyPlan 抛错时不推进 knownRevision，下一次核对仍会重试这一版', async () => {
+    // 旧实现读到快照就先 knownRevision=2；applyPlan 抛错后版本核对看到“服务器没再涨”，
+    // 于是永远跳过这一版 —— 表现为后台已变、页面不变，刷新才恢复。
+    const server = fakeServer(1, { nodes: [node('a')], edges: [] })
+    const graph = localGraph([node('a')])
+    let failNext = false
+    let applyCalls = 0
+    const handlers = graph.handlers as {
+      applyPlan: (plan: { addNodes: MergeNode[]; updateNodes: MergeNode[] }) => void
+    }
+    const apply = handlers.applyPlan
+    handlers.applyPlan = (plan) => {
+      applyCalls += 1
+      if (failNext) {
+        failNext = false
+        throw new Error('boom')
+      }
+      apply(plan)
+    }
+    const errors: string[] = []
+    const sync = createRemoteSync({
+      readCloud: async () => undefined,
+      readSnapshot: () => server.readSnapshot(),
+      readRevision: () => server.readRevision(),
+      graph: graph.handlers,
+      knownType: () => true,
+      subscribe: () => () => {},
+      debounceMs: 1,
+      revisionPollMs: 0,
+      onError: (message) => errors.push(message),
+    })
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+
+    failNext = true
+    server.advance({ nodes: [node('a'), node('b')], edges: [] })
+    await sync.check()
+    await new Promise((r) => setTimeout(r, 40))
+    expect(errors.length).toBeGreaterThan(0)
+    expect(sync.status().knownRevision).toBe(1) // 失败不能把 2 记成已确认
+    expect(graph.nodes.map((n) => n.id)).toEqual(['a'])
+
+    // 下一次核对：服务器版本没再上涨，也必须重试 2 这一版并把节点补进来。
+    await sync.check()
+    const deadline = Date.now() + 500
+    while (Date.now() < deadline && graph.nodes.length < 2) await new Promise((r) => setTimeout(r, 10))
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual(['a', 'b'])
+    expect(sync.status().knownRevision).toBe(2)
+    expect(applyCalls).toBeGreaterThanOrEqual(2)
+    sync.stop()
+  })
+})
+
 /** 轮询本地状态直到节点数达到期望（替代固定 sleep，避免测试依赖机器速度） */
 async function waitForSynced(graph: { nodes: MergeNode[] }, count: number): Promise<void> {
   const deadline = Date.now() + 500

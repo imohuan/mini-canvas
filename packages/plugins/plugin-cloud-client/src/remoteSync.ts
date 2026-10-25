@@ -220,9 +220,8 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         dirty = false
         const read = await readCloudSnapshot()
         const theirs = read.graph
-        // 同一轮只认一份完整快照：版本与节点/边一起推进，绝不拼接。
-        if (typeof read.revision === 'number') knownRevision = read.revision
-        if (typeof read.revision === 'number') opts.graph.onRevision?.(read.revision)
+        // 读到快照不等于已落地：这一版要等 applyPlan 成功后才记进 knownRevision。
+        // 先记会让失败的一版被当成已确认，之后版本没再上涨就永远不重试（页面一直不更新）。
         const mine: CanvasGraphSnapshot = { nodes: opts.graph.getNodes(), edges: opts.graph.getEdges() }
         const baseline = withSubmittedSnapshot(
           base ?? { nodes: [], edges: [] },
@@ -254,6 +253,18 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         // 合并完成后再把保存基准推到后台真实快照：放在 base 之后，保证调用顺序
         // 永远是“先算下一轮合并基准、再对齐提交基准”。
         opts.graph.noteServerSnapshot?.(theirs)
+        /*
+         * 版本只能在**应用成功之后**推进。
+         *
+         * 以前在读到快照的最开头就记下 revision：只要 applyPlan 抛错（例如换号时撞号、
+         * 宿主接口形状不符），这一版就被当成“已确认”，下一轮版本核对看到服务器版本没再涨，
+         * 于是直接返回、永远不再重试这一版。现象正是“后台已经变了、页面没变，刷新才恢复”。
+         * 放在 noteServerSnapshot 之后：保存基准推进了才代表这一轮真的落地了。
+         */
+        if (typeof read.revision === 'number') {
+          knownRevision = read.revision
+          opts.graph.onRevision?.(read.revision)
+        }
         // 补一次订阅前漏掉的通知：跑完再看一眼版本，避免“核对时正好又变了一次”漏掉。
         if (opts.readRevision) {
           const latest = await opts.readRevision()
