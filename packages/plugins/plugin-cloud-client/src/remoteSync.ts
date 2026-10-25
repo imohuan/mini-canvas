@@ -90,6 +90,8 @@ export interface RemoteSync {
   check(): Promise<void>
   /** 诊断状态：已确认版本（旧服务端为 undefined） */
   status(): { knownRevision: number | undefined; revisionSupported?: boolean; deferred?: boolean }
+  /** 最近一次实际应用过的云端快照；未合并过为 undefined */
+  serverSnapshot(): CanvasGraphSnapshot | undefined
 }
 
 /** 三种形态都认（旧数组只存节点 / 信封含边 / 空），与后端恢复逻辑同款 */
@@ -152,6 +154,8 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   const revisionPollMs = opts.revisionPollMs ?? 15_000
   const report = opts.onError ?? ((msg: string) => console.warn('[cloud-client] ' + msg))
   let base: CanvasGraphSnapshot | null = null
+  /** 最近一次实际应用的云端快照（供保存适配器同步基准；与 base 区分延迟节点） */
+  let appliedSnapshot: CanvasGraphSnapshot | undefined
   /** 已确认的云端图版本；undefined = 旧服务端没有版本接口（兼容模式） */
   let knownRevision: number | undefined
   let unsubscribe: (() => void) | null = null
@@ -208,6 +212,7 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (held.size > 0) holdEditingFields(plan, held)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
         hasDeferredUpdates = held.size > 0
+        appliedSnapshot = theirs
         // ★ 保存基准与合并基准由同一份完整快照推进：远端已合入本地后，
         // 下一次保存不能把该节点当成“本地新增”再发一次。
         opts.graph.noteServerSnapshot?.(theirs)
@@ -350,6 +355,7 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
     async refreshBase() {
       const read = await readCloudSnapshot()
       base = read.graph
+      appliedSnapshot = read.graph
       knownRevision = read.revision
     },
     async check() {
@@ -361,6 +367,9 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         ...(typeof knownRevision === 'number' ? { revisionSupported: true } : {}),
         deferred: hasDeferredUpdates,
       }
+    },
+    serverSnapshot() {
+      return appliedSnapshot
     },
   }
 }

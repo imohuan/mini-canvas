@@ -100,8 +100,7 @@ export class CanvasDiffAdapter {
   /** 把"服务器现有的这份"记成基准（装载时先读一次，免得第一次保存把已有的全当成新增） */
   async primeFromServer(): Promise<void> {
     const snap = await this.api.readCanvas(this.cid())
-    this.submittedNodes = Array.isArray(snap.nodes) ? snap.nodes : []
-    this.submittedEdges = Array.isArray(snap.edges) ? snap.edges : []
+    this.primeFromSnapshot({ nodes: snap.nodes, edges: snap.edges })
   }
 
   /**

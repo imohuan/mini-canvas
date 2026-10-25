@@ -483,6 +483,8 @@ const adapter = new CanvasDiffAdapter(api, CID)
   void ready.then(async () => {
     try {
       await sync.refreshBase()
+      const initialSnapshot = sync.serverSnapshot()
+      if (initialSnapshot) adapter.primeFromSnapshot(initialSnapshot)
       sync.start()
       // 启动时把版本同步进状态（设置页 / 诊断用）
       status.knownRevision = sync.status().knownRevision
