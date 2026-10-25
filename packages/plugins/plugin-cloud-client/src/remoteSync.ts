@@ -32,6 +32,15 @@ export interface LocalGraphHandlers {
    */
   wasSubmitted?(nodeId: string): boolean
   /**
+   * 本地保存适配器已确认写入服务器的整份快照（缺省 = 没有）。
+   *
+   * 合并基准在两次同步之间可能落后于真实服务器：本地刚保存成功，通知先到，
+   * 这时 base 里还没有新节点。若只拿旧 base 比较，会把已保存的节点当成撞号复制副本，
+   * 或者把服务器随后对它的修改当成“新增”忽略掉。用这份快照补齐 base 的缺口，
+   * 才能继续走正常的三方比较。
+   */
+  submittedSnapshot?(): CanvasGraphSnapshot | undefined
+  /**
    * 把一轮合并结果落到本地画布。
    * 调用方应把「作品字段」包进事务（一条撤销记录），把「只改 runState 的进度帧」单独落
    * （不进撤销栈 —— 否则用户按一次 Ctrl+Z 只退一格进度条）。
@@ -215,7 +224,10 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (typeof read.revision === 'number') knownRevision = read.revision
         if (typeof read.revision === 'number') opts.graph.onRevision?.(read.revision)
         const mine: CanvasGraphSnapshot = { nodes: opts.graph.getNodes(), edges: opts.graph.getEdges() }
-        const baseline = base ?? { nodes: [], edges: [] }
+        const baseline = withSubmittedSnapshot(
+          base ?? { nodes: [], edges: [] },
+          opts.graph.submittedSnapshot?.(),
+        )
         const plan = planRemoteMerge(
           baseline,
           mine,
@@ -391,6 +403,28 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
     serverSnapshot() {
       return appliedSnapshot
     },
+  }
+}
+
+/**
+ * 把保存适配器确认过的快照补进合并基准。
+ *
+ * 只补 base 里没有的 id：base 代表更早的服务器状态，submitted 代表更晚的写入结果；
+ * 同 id 时以 base 为“变更前”的版本，才能判断服务器在这之后到底改了什么。
+ */
+function withSubmittedSnapshot(
+  base: CanvasGraphSnapshot,
+  submitted: CanvasGraphSnapshot | undefined,
+): CanvasGraphSnapshot {
+  if (!submitted) return base
+  const baseNodeIds = new Set(base.nodes.map((node) => node.id))
+  const baseEdgeIds = new Set(base.edges.map((edge) => edge.id))
+  const extraNodes = submitted.nodes.filter((node) => !baseNodeIds.has(node.id))
+  const extraEdges = submitted.edges.filter((edge) => !baseEdgeIds.has(edge.id))
+  if (extraNodes.length === 0 && extraEdges.length === 0) return base
+  return {
+    nodes: [...base.nodes, ...extraNodes],
+    edges: [...base.edges, ...extraEdges],
   }
 }
 

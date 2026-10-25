@@ -250,6 +250,48 @@ describe('正在编辑的字段：延迟落地、其他变化照常', () => {
   })
 })
 
+describe('本地保存成功、合并基准还没推进的窗口', () => {
+  it('服务器随后修改了本地刚保存的同 id 节点：修改要落地，不能复制副本', async () => {
+    // 真机路径：本地新建 id=1 → 保存成功 → SSE 先到 → base 还停在保存前。
+    // 若只看旧 base，会把 1 当成“本地新增撞号”，复制出 2、3 两份；
+    // 若只按“已提交”跳过碰撞，又会忽略 AI 随后对 1 的内容修改。
+    const server = fakeServer(1, { nodes: [node('1')], edges: [] })
+    const graph = localGraph([node('1')])
+    const submitted = { nodes: [node('1')], edges: [] }
+    ;(graph.handlers as { wasSubmitted?: (id: string) => boolean }).wasSubmitted = (id) => id === '1'
+    ;(graph.handlers as { submittedSnapshot?: () => CanvasGraphSnapshot }).submittedSnapshot = () => submitted
+    const sync = createRemoteSync({
+      readCloud: async () => undefined,
+      readSnapshot: () => server.readSnapshot(),
+      readRevision: () => server.readRevision(),
+      graph: graph.handlers,
+      knownType: () => true,
+      subscribe: () => () => {},
+      debounceMs: 1,
+      revisionPollMs: 0,
+    })
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+
+    // 服务器一侧：同一个 id 的内容被 AI 改了
+    server.advance({
+      nodes: [{ ...node('1'), data: { text: 'AI 改过' } }],
+      edges: [],
+    })
+    await sync.check()
+    const deadline = Date.now() + 500
+    // 等“内容真的落地”，不能只等节点数：节点数一开始就已经是 1。
+    while (Date.now() < deadline && graph.nodes[0]?.data.text !== 'AI 改过') {
+      await new Promise((r) => setTimeout(r, 10))
+    }
+
+    expect(graph.nodes.map((n) => n.id)).toEqual(['1'])
+    expect(graph.nodes[0].data.text).toBe('AI 改过')
+    sync.stop()
+  })
+})
+
 /** 轮询本地状态直到节点数达到期望（替代固定 sleep，避免测试依赖机器速度） */
 async function waitForSynced(graph: { nodes: MergeNode[] }, count: number): Promise<void> {
   const deadline = Date.now() + 500

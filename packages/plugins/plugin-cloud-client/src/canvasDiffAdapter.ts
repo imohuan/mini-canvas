@@ -132,6 +132,18 @@ export class CanvasDiffAdapter {
   }
 
   /**
+   * 保存适配器确认过的服务器快照（没有完整确认过时为 undefined）。
+   *
+   * 合并基准只在收到同步时推进，而本地保存会先写服务器；两者之间的窗口里，
+   * 基准仍停留在保存前。把这份快照交给合并层补缺口，才能同时避免“复制副本”
+   * 与“服务器随后改了同 id 节点却被当成新增忽略”。
+   */
+  submittedSnapshot(): { nodes: unknown[]; edges: unknown[] } | undefined {
+    if (!Array.isArray(this.submittedNodes) || !Array.isArray(this.submittedEdges)) return undefined
+    return { nodes: [...this.submittedNodes], edges: [...this.submittedEdges] }
+  }
+
+  /**
    * 读服务器那份（恢复路径：装载时以云端为准覆盖本地）。
    *
    * 存的就是同源 URL，渲染组件拿去直接塞 `<img src>` 就能用，这里原样给。

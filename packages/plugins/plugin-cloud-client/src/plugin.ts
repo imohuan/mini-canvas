@@ -13,7 +13,7 @@ import type { Context, PluginModule } from './shims.js'
 import { CloudApi } from './api.js'
 import { toBarAction, diffActions, staleActionIds, type BarActionLike } from './actions.js'
 import { CanvasDiffAdapter } from './canvasDiffAdapter.js'
-import { createRemoteSync } from './remoteSync.js'
+import { createRemoteSync, toSnapshot } from './remoteSync.js'
 import { makeJobPoll, submitJob, type ResourceLike, type RunDeps } from './jobRunner.js'
 import { writeAudioResult, writeVideoResult } from './appliers.js'
 import { applyMergePlan, type DocLike } from './applyMerge.js'
@@ -462,6 +462,11 @@ const adapter = new CanvasDiffAdapter(api, CID)
       localEdges: () => doc.getEdges() as never,
       childNodesOf: (nodeId) => doc.childNodesOf?.(nodeId) as never ?? [],
       wasSubmitted: (nodeId) => adapter.wasSubmittedNode(nodeId),
+      submittedSnapshot: () => {
+        const snap = adapter.submittedSnapshot()
+        // 适配器存的是服务器原始条目；这里用与同步相同的归一化，形状不合法的不进基准。
+        return snap ? toSnapshot(snap.nodes, snap.edges) : undefined
+      },
       noteServerSnapshot: (snapshot) => adapter.primeFromSnapshot(snapshot),
       onRevision: (revision) => {
         status.knownRevision = revision
