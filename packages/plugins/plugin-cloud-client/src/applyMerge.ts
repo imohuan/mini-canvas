@@ -14,10 +14,30 @@ export interface MergePlanLike {
   addEdges: unknown[]
   removeEdgeIds: string[]
   updateEdges: unknown[]
+  reassignNodeIds?: Array<{ from: string; to: string }>
 }
 
 export interface DocLike {
-  getNode(id: string): { data?: Record<string, unknown> } | undefined
+  getNode(id: string): {
+    id?: string
+    type?: string
+    position?: unknown
+    data?: Record<string, unknown>
+    size?: unknown
+    parentId?: string
+  } | undefined
+  /** 当前本地边（改 id 时要一起重连；旧宿主可缺省） */
+  localEdges?(): Array<{
+    id: string
+    source: string
+    target: string
+    sourceHandle?: string
+    targetHandle?: string
+    type?: string
+    data?: Record<string, unknown>
+  }>
+  /** 某节点的子节点（换 id 时要改它们的 parentId） */
+  childNodesOf?(id: string): Array<{ id: string }>
   removeEdges(ids: string[]): unknown
   removeNodes(ids: string[]): unknown
   addNodes(inputs: unknown[]): unknown
@@ -64,16 +84,42 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
 
   for (const r of runtimeOnly) doc.updateNodeRuntime(r.id, { data: { runState: r.runState } })
 
+  const renames = plan.reassignNodeIds ?? []
+
   const nothingElse =
     structural.length === 0 &&
     plan.addNodes.length === 0 &&
     plan.removeNodeIds.length === 0 &&
     plan.addEdges.length === 0 &&
     plan.removeEdgeIds.length === 0 &&
-    plan.updateEdges.length === 0
+    plan.updateEdges.length === 0 &&
+    renames.length === 0
   if (nothingElse) return
 
   doc.transaction('云端/AI 改动', () => {
+    /*
+     * 同 id 碰撞：先把本地节点换成新 id（保留本地内容），再让云端节点用原 id 接入。
+     * 不能只改节点 id：边端点与子节点 parentId 指向它时都要同步改，否则线断、分组散。
+     */
+    for (const r of renames) {
+      const node = doc.getNode(r.from)
+      if (!node) continue
+      const localEdges = (doc.localEdges?.() ?? []).filter((e) => e.source === r.from || e.target === r.from)
+      doc.removeEdges(localEdges.map((e) => e.id))
+      doc.removeNodes([r.from])
+      doc.addNodes([{ ...node, id: r.to }])
+      for (const e of localEdges) {
+        doc.connectEdge({
+          ...e,
+          source: e.source === r.from ? r.to : e.source,
+          target: e.target === r.from ? r.to : e.target,
+        })
+      }
+      // 子节点的 parentId 也要指向新 id；不能只保留父节点本身。
+      for (const child of doc.childNodesOf?.(r.from) ?? []) {
+        doc.updateNode(child.id, { parentId: r.to })
+      }
+    }
     doc.removeEdges(plan.removeEdgeIds)
     doc.removeNodes(plan.removeNodeIds)
     if (plan.addNodes.length > 0) doc.addNodes(plan.addNodes)

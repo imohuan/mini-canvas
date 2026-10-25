@@ -20,6 +20,10 @@ import type { ChangeEvent, EventSourceLike } from './apiTypes.js'
 export interface LocalGraphHandlers {
   getNodes(): MergeNode[]
   getEdges(): MergeEdge[]
+  /** 当前本地边（仅换 id 时需要完整端点；缺省 = 旧宿主不改边） */
+  localEdges?(): MergeEdge[]
+  /** 某节点的直接子节点（换 id 时要改 parentId；缺省 = 旧宿主不改父子） */
+  childNodesOf?(nodeId: string): Array<{ id: string }>
   /**
    * 把一轮合并结果落到本地画布。
    * 调用方应把「作品字段」包进事务（一条撤销记录），把「只改 runState 的进度帧」单独落

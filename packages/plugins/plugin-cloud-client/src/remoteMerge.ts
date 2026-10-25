@@ -77,6 +77,24 @@ export interface RemoteMergePlan {
   addEdges: MergeEdge[]
   removeEdgeIds: string[]
   updateEdges: MergeEdge[]
+  /**
+   * 同 id 碰撞：把本地尚未提交、但云端已经占用了同一 id 的节点换一个 id。
+   * 只给出映射，由落地层统一改节点、边端点、子节点 parentId；这里不直接改节点对象。
+   */
+  reassignNodeIds: Array<{ from: string; to: string }>
+}
+
+/** 生成本地节点的新 id：避开已有、云端已有与本次已分配的所有 id（纯函数，便于单测） */
+function allocateLocalId(taken: Set<string>, numericSeed: number): string {
+  let n = numericSeed
+  for (;;) {
+    n += 1
+    const candidate = String(n)
+    if (!taken.has(candidate)) {
+      taken.add(candidate)
+      return candidate
+    }
+  }
 }
 
 /**
@@ -182,17 +200,42 @@ export function planRemoteMerge(
     addEdges: [],
     removeEdgeIds: [],
     updateEdges: [],
+    reassignNodeIds: [],
   }
   const baseNodes = byId(base.nodes)
   const mineNodes = byId(mine.nodes)
   const theirsNodes = byId(theirs.nodes)
 
+  /*
+   * 同 id 碰撞：本地有、基准没有（= 本地尚未成功提交）、云端也有同 id（= 云端已拥有）。
+   * 旧实现直接 continue，把云端节点静默丢掉；刷新走整包恢复才“正常”。
+   * 现在先给**本地节点**换一个未占用的 id（保留用户编辑），再把云端节点接入。
+   * 只改映射，不在这里动边；落地层负责同步改端点与 parentId。
+   */
+  const takenIds = new Set<string>([...mineNodes.keys(), ...theirsNodes.keys(), ...baseNodes.keys()])
+  const collisions = new Map<string, string>()
+  let numericSeed = 0
+  for (const id of takenIds) {
+    const parsed = Number.parseInt(id, 10)
+    if (!Number.isNaN(parsed) && parsed > numericSeed) numericSeed = parsed
+  }
+  for (const [id] of theirsNodes) {
+    if (baseNodes.has(id) || !mineNodes.has(id)) continue
+    const to = allocateLocalId(takenIds, numericSeed)
+    numericSeed = Math.max(numericSeed, Number.parseInt(to, 10) || numericSeed)
+    collisions.set(id, to)
+    plan.reassignNodeIds.push({ from: id, to })
+  }
+
   for (const [id, t] of theirsNodes) {
     const b = baseNodes.get(id)
     const m = mineNodes.get(id)
     if (!b) {
-      // 云端新增：本地没有才加（本地已有同 id 视为本地的东西，不覆盖）
-      if (!m && knownType(t.type)) plan.addNodes.push({ ...t, position: { ...t.position }, data: { ...t.data } })
+      // 云端新增：本地没有才加。本地有同 id 的碰撞已在上面换成新 id（本地内容保留），
+      // 这里把云端节点正常接入，不再静默丢一半。
+      if ((!m || collisions.has(id)) && knownType(t.type)) {
+        plan.addNodes.push({ ...t, position: { ...t.position }, data: { ...t.data } })
+      }
       continue
     }
     if (sameNode(b, t)) continue // 云端没动这个节点
@@ -225,6 +268,12 @@ export function planRemoteMerge(
   const aliveNodeIds = new Set<string>()
   for (const id of mineNodes.keys()) if (!removedNodes.has(id)) aliveNodeIds.add(id)
   for (const n of plan.addNodes) aliveNodeIds.add(n.id)
+  // 碰撞节点换 id 后，本地旧 id 不再存活；但如果云端本轮也新增了这个 id，
+  // 它要作为云端节点继续存活。因此先补 addNodes、再删旧 id，顺序不能反。
+  for (const c of plan.reassignNodeIds) {
+    aliveNodeIds.delete(c.from)
+    aliveNodeIds.add(c.to)
+  }
 
   for (const [id, t] of theirsEdges) {
     const b = baseEdges.get(id)
