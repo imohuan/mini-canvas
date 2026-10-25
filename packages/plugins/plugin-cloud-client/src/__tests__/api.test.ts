@@ -125,6 +125,27 @@ describe('地址管理', () => {
   })
 })
 
+describe('画布版本核对', () => {
+  it('新服务端、画布尚未落盘 → 版本 0（不能误判为“旧服务端”）', async () => {
+    const { fetchImpl, calls } = fakeFetch(() => ({ status: 404, body: { ok: false, error: '画布不存在' } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.readCanvasRevision('default')).resolves.toBe(0)
+    expect(calls[0].url).toContain('/api/canvases/default/revision')
+  })
+
+  it('旧服务端没有版本路由（普通 404）→ undefined，客户端进入兼容模式', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ status: 404, body: {} }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.readCanvasRevision('default')).resolves.toBeUndefined()
+  })
+
+  it('版本接口返回 no-store 的当前版本', async () => {
+    const { fetchImpl } = fakeFetch(() => ({ status: 200, body: { ok: true, revision: 7 } }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    await expect(api.readCanvasRevision('default')).resolves.toBe(7)
+  })
+})
+
 describe('实时通道', () => {
   /** 假 EventSource：手动喂帧 */
   function fakeSource() {

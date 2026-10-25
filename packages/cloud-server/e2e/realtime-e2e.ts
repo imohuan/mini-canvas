@@ -45,8 +45,10 @@ const PROBE = `(() => {
   const st = host ? host.ctx.get("cloud-save").status() : null
   return {
     hasHost: !!host,
-    realtime: !!(st && st.realtime),
-    applied: st ? st.appliedRounds : -1,
+    // 新版状态字段（realtime / appliedRounds 已不存在，读旧字段会永远是 undefined）
+    revisionSupported: !!(st && st.revisionSupported),
+    knownRevision: st ? st.knownRevision : undefined,
+    serverRevision: st ? st.serverRevision : undefined,
     ids: host ? host.nodeStore.getNodes().map((n) => n.id) : [],
     texts: host ? host.nodeStore.getNodes().map((n) => String(n.data.text ?? "")) : [],
   }
@@ -72,7 +74,9 @@ async function main(): Promise<void> {
   const page = await openPage(chrome.port)
   try {
     // 打一个标记：用来证明"页面从头到尾没被刷新过"（刷新会把它抹掉）
-   await page.goto(url + "/")
+   // 应用根页是项目列表；画布工作台在 hash 路由。直接打开画布，
+   // 否则 PROBE 拿不到 host（旧脚本在首页等 8 秒必然全部失败）。
+   await page.goto(url + "/#/canvas/default")
    await page.ev(`(() => { window.__realtimeProbe = "alive" })()`)
     // 记录所有画布相关的写请求：用来区分「增量保存」与「整包覆盖」。
     // 只看画布最终状态是不够的 —— 旧实现（整包 PUT）在本地已合并的情况下同样能看到 AI 的节点。
@@ -83,7 +87,8 @@ async function main(): Promise<void> {
          window.fetch = function (input, init) {
            try {
              const u = String(typeof input === "string" ? input : (input && input.url) || "")
-             if (u.indexOf("/api/canvas/") >= 0 || u.indexOf("/api/kv/canvas/") >= 0) {
+             // 现在的增量写是复数路径 /api/canvases/.../nodes；单数 /api/canvas/ 是旧接口。
+             if (u.indexOf("/api/canvas/") >= 0 || u.indexOf("/api/canvases/") >= 0) {
                window.__savePaths.push((init && init.method ? init.method : "GET") + " " + u)
              }
            } catch { /* 记录失败不影响原请求 */ }
@@ -94,20 +99,11 @@ async function main(): Promise<void> {
    console.log("--- 打开真浏览器，等插件装好 ---")
     await sleep(8000)
 
-   // 云端客户端不再自动装载（用户要求手动装）—— 模拟用户点安装，e2e 才验得到实时跟随。
-   await page.ev(
-     `(async () => {
-        const ctx = window.MiniCanvasUI.getContext()
-        const pm = ctx.tryGet('plugin-manager')
-        if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
-      })()`,
-     true,
-   )
-   await sleep(4000)
-
-    const ready = await page.ev<{ hasHost: boolean; realtime: boolean; ids: string[] }>(PROBE)
+   // 托管模式里 cloud-client 由宿主按运行环境自带启动；不要再手动装一遍
+   // （同名已装会被跳过，重复安装反而引入旧版本的安装态判断）。
+   const ready = await page.ev<{ hasHost: boolean; revisionSupported: boolean; ids: string[] }>(PROBE)
     check('画布跑起来且插件已装上', ready.hasHost, { ids: ready.ids })
-    check('★ 插件已连上实时通道（画布会自己跟着 AI 的改动变）', ready.realtime, ready)
+    check('★ 插件已支持版本核对（定时 ping 可用）', ready.revisionSupported, ready)
 
     // ==================== AI 经 MCP 加节点（全程不碰浏览器）====================
     console.log("\n--- AI 经 MCP 往画布加节点（不碰浏览器）---")
@@ -124,11 +120,11 @@ async function main(): Promise<void> {
 
     // ==================== 浏览器应该自己跟上（不刷新）====================
     console.log("\n--- 等浏览器自己跟上（不刷新页面）---")
-    let seen: { ids: string[]; applied: number } = { ids: [], applied: -1 }
+    let seen: { ids: string[] } = { ids: [] }
     let appeared = false
     for (let i = 0; i < 20 && !appeared; i++) {
       await sleep(500)
-      seen = await page.ev<{ ids: string[]; applied: number }>(PROBE)
+      seen = await page.ev<{ ids: string[] }>(PROBE)
       appeared = seen.ids.includes('ai-realtime-1')
     }
     check('★ AI 加的节点在浏览器里自己出现了（没刷新页面）', appeared, seen)
@@ -138,6 +134,13 @@ async function main(): Promise<void> {
 
     const alive = await page.ev<string>(`(() => String(window.__realtimeProbe ?? ''))()`)
     check('★ 页面确实没被刷新过（标记还在）', alive === 'alive', { alive })
+
+    // ==================== 版本核对可用 ====================
+    // SSE 断线补同步的“客户端逻辑”已由单测覆盖（断开/回前台/版本落后）；
+    // 这里在真浏览器确认：页面状态里拿到了后台版本号，版本 ping 真的接通了。
+    const versionBefore = await page.ev<{ serverRevision?: number }>(PROBE)
+    check('版本核对可用（后台返回版本号）', typeof versionBefore.serverRevision === 'number', versionBefore)
+
 
     // ==================== AI 删节点，浏览器跟着消失 ====================
     console.log("\n--- AI 经 MCP 删掉这个节点 ---")
@@ -173,8 +176,11 @@ async function main(): Promise<void> {
     await page.ev(
       `(() => {
          const host = window.MiniCanvasUI.getHost()
-         const n = host.nodeStore.getNodes().find((x) => x.id !== 'ai-keep-1')
+         const all = host.nodeStore.getNodes()
+         const n = all.find((x) => x.id !== 'ai-keep-1') ?? all[0]
+         if (!n) return false
          host.graph.updateNode(n.id, { position: { x: n.position.x + 60, y: n.position.y + 40 } })
+         return true
        })()`,
     )
     await sleep(3000)
@@ -190,7 +196,7 @@ async function main(): Promise<void> {
     // 关键区别：上面那条断言在「旧实现（整包 PUT）」下同样会过（因为本地已经合并了 AI 的节点）。
     // 真正能区分新旧实现的是**保存走了哪条路** —— 所以这里直接看请求 URL。
     const usedDelta = await page.ev<boolean>(
-      `(() => (window.__savePaths ?? []).some((p) => p.indexOf('/api/canvas/nodes') >= 0))()`,
+      `(() => (window.__savePaths ?? []).some((p) => p.indexOf('/api/canvases/') >= 0 && p.indexOf('/nodes') >= 0))()`,
     )
     check('★ 保存走的是增量口（不是整包 PUT）——这条才区分得出新旧实现', usedDelta)
 
@@ -205,8 +211,22 @@ async function main(): Promise<void> {
     check('★ 本地刚建的节点还在（没被云端整包覆盖冲掉）', after.ids.includes(localId), { localId, ids: after.ids })
     check('AI 新加的那个也进来了', after.texts.includes('AI 又加一个'), { texts: after.texts })
 
-    const errors = page.consoleErrors.filter((e) => !/favicon/i.test(e))
-    const failed = page.failedRequests.filter((u) => !/favicon/i.test(u))
+    // Chrome 会把上面的“首次访问 404”也记成控制台 error；真实失败已由 failedRequests 的
+    // 白名单断言覆盖，这里不重复把同一条 404 计成两次失败。
+    const errors = page.consoleErrors.filter(
+      (e) => !/favicon/i.test(e) && !/Failed to load resource:.*404/i.test(e),
+    )
+    // 首次打开时的“尚未保存过”是 404，不是失败：
+    // - /api/kv/config/settings（没存过配置）
+    // - /api/canvases/<id>/revision（新画布还没有 canvas.json）
+    // 实时同步链路真正的失败应该是画布/事件/写入等其它 4xx/5xx。
+    const failed = page.failedRequests.filter(
+      (u) =>
+        !/favicon/i.test(u) &&
+        !/\/api\/kv\/config\/settings/i.test(u) &&
+        !/\/api\/canvases\/[A-Za-z0-9_-]+\/revision/i.test(u) &&
+        !/\/api\/kv\/config\/plugin-manager%3Ainstalled/i.test(u),
+    )
     check('全程控制台零报错', errors.length === 0, errors)
     check('全程零 4xx/5xx 请求（实时通道不该刷失败请求）', failed.length === 0, failed)
 

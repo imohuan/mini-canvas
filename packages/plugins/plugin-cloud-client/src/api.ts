@@ -278,8 +278,17 @@ export class CloudApi {
       this.absolute('/api/canvases/' + encodeURIComponent(canvasId) + '/revision'),
       { headers: { accept: 'application/json', 'cache-control': 'no-cache' } },
     )
-    // 旧服务端会 404 这条路由：当作“不支持版本核对”，不是“画布不存在”。
-    if (res.status === 404) return undefined
+    /*
+     * 404 有两种含义，必须分开：
+     * - 新服务端：路由在，但**画布还没有落盘**（新建的空画布）→ 版本应为 0，不能降级；
+     * - 旧服务端：整条路由不存在 → 返回 undefined，客户端进入兼容模式。
+     * 两者都只能看到状态码，所以再读一次正文里有没有明确的「画布不存在」。
+     */
+    if (res.status === 404) {
+      const body = (await res.json().catch(() => ({}))) as { error?: unknown }
+      if (typeof body.error === 'string' && body.error.includes('画布不存在')) return 0
+      return undefined
+    }
     if (!res.ok) throw httpError('核对画布版本', res.status, 'GET')
     const body = (await res.json()) as { ok?: boolean; revision?: number }
     if (body.ok === false) throw new Error('[cloud-client] 核对画布版本失败：后台返回 ok:false')
