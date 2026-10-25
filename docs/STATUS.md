@@ -5,6 +5,23 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-25，Agent 对话：展开内容统一限高）
+
+用户口径（附截图）：「优化一下 Agent 插件对话里的工具预览，在展开折叠之后，为内容提供一个最大高度，
+不然你的展开内容就会无限地自适应」。
+
+根因：思考块、默认工具展开区、工具分组展开区、卡片详情四处的外层容器都没有 max-height，
+内容按自然高度一路长高；只有内层 <pre> 各自有 320px 上限，外层叠起来仍然很长，
+一支长日志就能把整段对话撑出面板。
+
+改动：`.ac-root` 新增统一变量 `--ac-expand-max-height: min(360px, 50vh)`，四处展开区共用；
+超出后在各自块内滚动。外层限高后，内层 pre 不再保留 320px 的独立滚动条（同一份内容只出现一个滚动条）。
+
+验证：plugin-agent **381** 全绿（新增 `expandedContentMaxHeight` 6 条）、typecheck 干净；
+Chrome 真机（:5289）：长思考块 `max-height=360px / overflow-y:auto`、`clientHeight=360`
+而 `scrollHeight=3216`，对话面板高度保持 590、消息区 404 不变；工具展开区实测
+`max-height=360px`、内层 pre `max-height:none`，长输出只在展开区内滚动。
+
 ### 追记（2026-10-25，连线 MCP 收口为两个节点 id）
 
 用户口径：`canvas_batch_edges` 是底部中心连线的根源；连线只需要 `source` / `target` 两个节点 id，

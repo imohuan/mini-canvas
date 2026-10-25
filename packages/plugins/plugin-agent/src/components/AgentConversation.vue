@@ -2414,6 +2414,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   height: 100%;
   min-height: 0;
   color: var(--ui-ink, #f7f7f7);
+  /* 展开内容的统一高度上限（用户口径 2026-10-25）：思考过程、工具输入 /
+     输出、工具分组、卡片详情共用一个值。不设上限时，长日志会把整段对话
+     一路撑长；超出上限后在各自块内滚动，面板高度保持稳定。
+     面板本身很矮时按视口收缩，别把输入框挤出可视区。 */
+  --ac-expand-max-height: min(360px, 50vh);
 }
 
 /* 顶部留白（用户口径 2026-10-07）：第一条消息是内容的第一个元素，
@@ -3031,6 +3036,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   overflow-wrap: anywhere;
   color: var(--ui-ink-dim, #919191);
   font-family: inherit;
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
 }
 
 /* 等首个 token 的加载行（照参考图）：转圈 + 「正在思考」，整行用次要文字色。 */
@@ -3113,6 +3120,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   margin-top: 4px;
   padding-left: 10px;
   border-left: 2px solid var(--ui-line, #363636);
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
 }
 
 /* 可折叠工具行（单工具与组内工具同一套）：收起一行，展开看输入/输出（用户口径 2026-10-06）。
@@ -3192,6 +3201,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   border: 1px solid var(--ui-line, #363636);
   border-radius: 10px;
   background: var(--ui-veil, rgb(255 255 255 / 0.04));
+  max-height: var(--ac-expand-max-height, min(360px, 50vh));
+  overflow-y: auto;
 }
 
 .ac-tf-block {
@@ -3216,6 +3227,15 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* 外层已经有统一上限并在滚动：内层 pre 别再叠一层小滚动框，
+   否则同一份输入 / 输出会出现两个滚动条（用户口径 2026-10-25）。 */
+.ac-tf-body .ac-tool-args,
+.ac-tf-body .ac-tool-out,
+.ac-tf-body :deep(.tvc-pre),
+.ac-tf-body :deep(.tvb-pre) {
+  max-height: none;
 }
 
 .ac-tool-card {

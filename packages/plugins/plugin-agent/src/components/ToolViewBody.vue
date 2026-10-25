@@ -290,7 +290,14 @@ function visibleRows<T>(items: T[]): T[] {
 .tvc-details-toggle:hover { color: var(--ui-ink, #f7f7f7); }
 .tvc-details-caret { flex: none; transition: transform 0.18s ease; }
 .tvc-details-caret.is-open { transform: rotate(90deg); }
-.tvc-details { display: flex; flex-direction: column; gap: 8px; }
+/* 详情展开后的整体高度上限（用户口径 2026-10-25）：工具名 + 输入 + 输出三块
+   合计限高，超出在块内滚动。变量由 AgentConversation 的 .ac-root 提供；
+   独立使用本组件时退回同一数值。 */
+.tvc-details { display: flex; flex-direction: column; gap: 8px; max-height: var(--ac-expand-max-height, min(360px, 50vh)); overflow-y: auto; }
+/* 外层详情已经限高并在滚动：里面的两段 pre 只跟随外层滚动。
+   不能把 max-height 直接设 none —— 外层一旦被放到普通块（不是 flex 容器）里，
+   内容仍会撑开它；这里只放开内层滚动，外层仍有 360px 上下的硬上限。 */
+.tvc-details .tvc-pre { max-height: max(240px, calc(var(--ac-expand-max-height, min(360px, 50vh)) - 60px)); }
 .tvc-details-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .tvc-details-block { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .tvc-details-label { flex: none; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--ui-ink-dim, #919191); }
