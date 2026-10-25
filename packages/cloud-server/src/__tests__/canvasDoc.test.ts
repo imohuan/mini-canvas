@@ -224,6 +224,57 @@ describe('batchEdges', () => {
     expect((await doc.read()).edges).toHaveLength(1)
   })
 
+  it('拒绝猜出来的端口名 out/in（否则 VueFlow 会把端点落到顶部/底部）', async () => {
+    await doc.batchNodes({ add: [{ type: 'image', id: 'from' }, { type: 'image', id: 'to' }] })
+
+    const r = await doc.batchEdges({
+      add: [{ source: 'from', target: 'to', sourceHandle: 'out', targetHandle: 'in' }],
+    })
+
+    expect(r.ok).toBe(false)
+    expect(r.errors.map((e) => e.message).join('\n')).toContain('sourceHandle')
+    expect((await doc.read()).edges).toEqual([])
+  })
+
+  it('省略端口或显式写 source/target 都能正常建边', async () => {
+    await doc.batchNodes({ add: [{ type: 'image', id: 'a' }, { type: 'image', id: 'b' }] })
+
+    const implicit = await doc.batchEdges({ add: [{ source: 'a', target: 'b' }] })
+    const explicit = await doc.batchEdges({
+      add: [{ source: 'b', target: 'a', sourceHandle: 'source', targetHandle: 'target' }],
+    })
+
+    expect(implicit.ok).toBe(true)
+    expect(explicit.ok).toBe(true)
+    expect((await doc.read()).edges).toHaveLength(2)
+  })
+
+  it('反向写 target→source 也被拒（这一层不做端点翻正）', async () => {
+    await doc.batchNodes({ add: [{ type: 'image', id: 'a' }, { type: 'image', id: 'b' }] })
+
+    const r = await doc.batchEdges({
+      add: [{ source: 'a', target: 'b', sourceHandle: 'target', targetHandle: 'source' }],
+    })
+
+    expect(r.ok).toBe(false)
+    expect(r.errors[0].message).toContain('sourceHandle')
+    expect((await doc.read()).edges).toEqual([])
+  })
+
+  it('update 改端口时同样按右出左入校验（不能把正确的边改回 out/in）', async () => {
+    await doc.batchNodes({ add: [{ type: 'image', id: 'a' }, { type: 'image', id: 'b' }] })
+    const added = await doc.batchEdges({ add: [{ source: 'a', target: 'b' }] })
+    const id = added.added[0]
+
+    const r = await doc.batchEdges({ update: [{ id, sourceHandle: 'out' }] })
+
+    expect(r.ok).toBe(false)
+    expect(r.errors[0].message).toContain('sourceHandle')
+    const edge = (await doc.read()).edges[0]
+    expect(edge.sourceHandle).toBeUndefined()
+    expect(edge.targetHandle).toBeUndefined()
+  })
+
   it('两端节点不存在 / 自连 都被拦下', async () => {
     await doc.batchNodes({ add: [{ type: 'text', id: 'a' }] })
     const missing = await doc.batchEdges({ add: [{ source: 'a', target: '没有这个' }] })

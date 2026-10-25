@@ -456,7 +456,10 @@ export function createCanvasMcpServer(
   server.tool(
     'canvas_batch_edges',
     '连线批量增删改，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?}], delete:[edgeId...], update:[{id,...}] }。' +
-      'add 的两端必须是已存在的节点 id。边 id 可省略，服务端按 `e-{source}-{target}` 生成（同一条边重复添加会被去重）',
+       'add 的两端必须是已存在的节点 id。边 id 可省略，服务端按 `e-{source}-{target}` 生成（同一条边重复添加会被去重）' +
+       '或直接省略 sourceHandle/targetHandle（默认就是右出左入）。' +
+       "**不要猜端口名**：网页端只有 sourceHandle='source'（节点右侧输出口）与 targetHandle='target'（左侧输入口）。" +
+       "写 out / in / output / input 等不存在的名字会让线从卡片底部中心画到另一个节点顶部中心。",
     {
       canvasId: canvasIdSchema,
       add: z
@@ -465,8 +468,14 @@ export function createCanvasMcpServer(
             source: z.string().describe('源节点 id'),
             target: z.string().describe('目标节点 id'),
             id: z.string().optional(),
-            sourceHandle: z.string().optional(),
-            targetHandle: z.string().optional(),
+            sourceHandle: z
+              .string()
+              .optional()
+              .describe("源端口 id；只有 'source'（右侧输出口）。通常省略即可"),
+            targetHandle: z
+              .string()
+              .optional()
+              .describe("目标端口 id；只有 'target'（左侧输入口）。通常省略即可"),
             data: z.record(z.unknown()).optional(),
           }),
         )

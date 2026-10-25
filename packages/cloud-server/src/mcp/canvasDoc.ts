@@ -193,6 +193,49 @@ function edgeKey(e: { source: string; target: string; sourceHandle?: string; tar
   return `${e.source}|${e.target}|${sh}|${th}`
 }
 
+/**
+ * 网页端节点壳真实渲染的端口 id：左侧输入 target、右侧输出 source。
+ *
+ * 为什么要挡住别的名字：VueFlow 画边时按 handle id 在节点的 handleBounds 里找锚点，
+ * 找不到就回落到 source=Bottom / target=Top。于是 AI 写一个看起来合理的
+ * sourceHandle:'out' / targetHandle:'in'，边照常落盘、不报错，画面上却从图片底部中心
+ * 连到另一个节点顶部中心。端口名不是自由文本：它由 plugin-theme-default 的 BaseNode
+ * 固定为 id="target"/"source"，数据层也按同一套名字校验。
+ */
+/**
+ * 校验并归一一条边两端的 handle：省略 = 默认口；显式写了就必须是右出左入。
+ * 不接受反向写法（sourceHandle='target'）：云端这条口不做端点翻正，原样落盘后
+ * 渲染层仍会按 source 节点的 target 口找锚点，容易画出反向/底部线。
+ * 默认口不返回字段（与网页端拖出来的边同形：edgeStore 不存默认 handle）。
+ */
+function normalizeEdgeHandles(e: {
+  source: string
+  target: string
+  sourceHandle?: string
+  targetHandle?: string
+}): { sourceHandle?: string; targetHandle?: string; error?: string } {
+  const sourceHandle = e.sourceHandle || 'source'
+  const targetHandle = e.targetHandle || 'target'
+  if (sourceHandle !== 'source') {
+    return {
+      error:
+        'sourceHandle "' + sourceHandle + '" 不存在：网页端只有右侧输出口 source。' +
+        '不写这个字段就是默认输出口；不要猜 out / output / right，也别把 target 写在源端（会被画成底部中心）。',
+    }
+  }
+  if (targetHandle !== 'target') {
+    return {
+      error:
+        'targetHandle "' + targetHandle + '" 不存在：网页端只有左侧输入口 target。' +
+        '不写这个字段就是默认输入口；不要猜 in / input / left，也别把 source 写在目标端（会被画成顶部中心）。',
+    }
+  }
+  return {
+    ...(sourceHandle === 'source' ? {} : { sourceHandle }),
+    ...(targetHandle === 'target' ? {} : { targetHandle }),
+  }
+}
+
 export class CanvasDocument {
   /**
    * @param store     画布文件夹（canvas.json / view.json）
@@ -556,6 +599,8 @@ export class CanvasDocument {
       if (!nodeIds.has(a.source)) error('add', i, `源节点不存在: ${a.source}`)
       if (!nodeIds.has(a.target)) error('add', i, `目标节点不存在: ${a.target}`)
       if (a.source === a.target) error('add', i, '连线两端不能是同一节点')
+      const handles = normalizeEdgeHandles(a)
+      if (handles.error) error('add', i, handles.error)
       // 同 id 已存在：同步口（upsert）当成更新，MCP 口保持严格（对 AI 来说说重复了就该报错）
       if (a.id !== undefined && existing.has(a.id) && !input.upsert) error('add', i, `连线 id 重复: ${a.id}`)
     }
@@ -564,6 +609,16 @@ export class CanvasDocument {
     }
     for (const u of ups) {
       if (!existing.has(u.id) && !input.lenient) error('update', 0, `要更新的连线不存在: ${u.id}`)
+      if (u.sourceHandle !== undefined || u.targetHandle !== undefined) {
+        const current = snap.edges.find((e) => e.id === u.id)
+        const handles = normalizeEdgeHandles({
+          source: u.source ?? current?.source ?? '',
+          target: u.target ?? current?.target ?? '',
+          sourceHandle: u.sourceHandle ?? current?.sourceHandle,
+          targetHandle: u.targetHandle ?? current?.targetHandle,
+        })
+        if (handles.error) error('update', 0, `更新连线 ${u.id}：${handles.error}`)
+      }
     }
     if (result.errors.length > 0) {
       result.ok = false
@@ -578,7 +633,8 @@ export class CanvasDocument {
       // 去重看**连接本身**（端点 + 端口），不是 id —— id 已是自增数字，
       // 「同一条线再加一次」不再自动得到同一个 id，必须显式比端点，
       // 否则会写出两条端点相同的边（与数据层 addEdge 的去重语义对齐）。
-      const key = edgeKey(a)
+      const handles = normalizeEdgeHandles(a)
+      const key = edgeKey({ ...a, ...handles })
       const dup = edges.find((e) => edgeKey(e) === key)
       if (dup) {
         // upsert：已存在就按新内容更新它（端点/端口/data/type 都跟上）
@@ -586,8 +642,11 @@ export class CanvasDocument {
           dup.source = a.source
           dup.target = a.target
           dup.type = a.type ?? dup.type ?? 'custom'
-          if (a.sourceHandle !== undefined) dup.sourceHandle = a.sourceHandle
-          if (a.targetHandle !== undefined) dup.targetHandle = a.targetHandle
+          // 端口只接受 source/target（校验已过）；默认口不写字段，与拖拽出来的边同形。
+          if (handles.sourceHandle === undefined) delete dup.sourceHandle
+          else dup.sourceHandle = handles.sourceHandle
+          if (handles.targetHandle === undefined) delete dup.targetHandle
+          else dup.targetHandle = handles.targetHandle
           if (a.data) dup.data = { ...(dup.data ?? {}), ...a.data }
         }
         result.updated.push(id)
@@ -600,8 +659,8 @@ export class CanvasDocument {
         // type 必须落盘：数据层会给边补 'custom'，云端若留空，两边对同一条边的判定就不一致 ——
         // 表现为「AI 改了边本地看不到」与「AI 删了边本地删不掉」（本地把它当成「我改过的边」而保留）。
         type: a.type ?? 'custom',
-        ...(a.sourceHandle ? { sourceHandle: a.sourceHandle } : {}),
-        ...(a.targetHandle ? { targetHandle: a.targetHandle } : {}),
+        ...(handles.sourceHandle ? { sourceHandle: handles.sourceHandle } : {}),
+        ...(handles.targetHandle ? { targetHandle: handles.targetHandle } : {}),
         ...(a.data ? { data: { ...a.data } } : {}),
       })
       result.added.push(id)
@@ -612,8 +671,18 @@ export class CanvasDocument {
       if (!edge) continue
       if (u.source) edge.source = u.source
       if (u.target) edge.target = u.target
-      if (u.sourceHandle !== undefined) edge.sourceHandle = u.sourceHandle
-      if (u.targetHandle !== undefined) edge.targetHandle = u.targetHandle
+      if (u.sourceHandle !== undefined || u.targetHandle !== undefined) {
+        const handles = normalizeEdgeHandles({
+          source: u.source ?? edge.source,
+          target: u.target ?? edge.target,
+          sourceHandle: u.sourceHandle ?? edge.sourceHandle,
+          targetHandle: u.targetHandle ?? edge.targetHandle,
+        })
+        if (handles.sourceHandle === undefined) delete edge.sourceHandle
+        else edge.sourceHandle = handles.sourceHandle
+        if (handles.targetHandle === undefined) delete edge.targetHandle
+        else edge.targetHandle = handles.targetHandle
+      }
       if (u.data) edge.data = { ...(edge.data ?? {}), ...u.data }
       result.updated.push(u.id)
     }
