@@ -38,6 +38,11 @@ export interface TileCardLike {
   isText: boolean
 }
 
+/** 连线顺序编号（图片1 / 音频2 …）：住 UpstreamMaterial 上，卡片沿用 */
+interface WithRefName {
+  refName?: string
+}
+
 /** 素材名（图片2）→ 序号与种类 */
 export function refNameToSlot(refName: string): { index: number; kind: 'image' | 'video' | 'audio'; label: string } | null {
   const m = /^(图片|视频|音频)(\d+)$/.exec(refName)
@@ -64,7 +69,7 @@ export function mergeRefTiles(
     const map = new Map<number, TileCardLike>()
     let seq = 0
     for (const c of cards) {
-      const parsed = refNameToSlot(c.name)
+      const parsed = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
       if (!parsed || parsed.kind !== kind) continue
       seq += 1
       map.set(seq, c)
@@ -75,7 +80,7 @@ export function mergeRefTiles(
   // 出现在参考区的种类：素材自己的种类 + 正文声明的种类
   const kinds = new Set<'image' | 'video' | 'audio'>()
   for (const c of cards) {
-    const p = refNameToSlot(c.name)
+    const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
     if (p) kinds.add(p.kind)
   }
   for (const s of slots) {
@@ -106,7 +111,7 @@ export function mergeRefTiles(
   }
   // 没有可识别名字的素材（比如文本）照常补在最后（参考区一直支持显示它们）
   for (const card of cards) {
-    if (refNameToSlot(card.name)) continue
+    if (refNameToSlot((card as TileCardLike & WithRefName).refName || card.name)) continue
     tiles.push({
       key: 'card:' + card.id,
       index: tiles.length + 1,
@@ -136,7 +141,7 @@ export function findRefGap(
     const set = new Set<number>()
     let seq = 0
     for (const c of cards) {
-      const p = refNameToSlot(c.name)
+      const p = refNameToSlot((c as TileCardLike & WithRefName).refName || c.name)
       if (!p || p.kind !== kind) continue
       seq += 1
       set.add(seq)

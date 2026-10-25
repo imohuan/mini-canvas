@@ -86,9 +86,10 @@ function cardIndexes(html: string): string[] {
   return [...html.matchAll(/class="nb-card-index[^"]*"[^>]*>(\d+)</g)].map((m) => m[1])
 }
 
-/** 卡片 title（= 素材名）按 DOM 顺序 —— 用来验证「谁排在第几」 */
+/** 已就绪卡片的 title（= 素材名）按 DOM 顺序 —— 用来验证「谁排在第几」。
+ *  待输入格（is-pending）的 title 是操作提示，不是素材名，不能混进来。 */
 function cardTitles(html: string): string[] {
-  return [...html.matchAll(/class="nb-card[^"]*"[^>]*title="([^"]*)"/g)].map((m) => m[1])
+  return [...html.matchAll(/class="nb-card"[^>]*title="([^"]*)"/g)].map((m) => m[1])
 }
 
 describe('素材卡顺序：按用户拖出来的顺序渲染', () => {

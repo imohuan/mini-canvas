@@ -499,7 +499,12 @@ const canRun = computed(() => !running.value && !!currentAction.value && !refGap
  * 规则：正文里出现 `@图片N` 时，1..N 必须全部有内容。缺任何一格 = 引用悬空（模型会拿到空引用），
  * 发送按钮禁用并给出明确原因。没写任何 @ 标签时不受影响（普通参考图照旧）。
  */
-const refGap = computed(() => findRefGap(promptRefSlots.value, cards.value))
+const refGap = computed(() =>
+  findRefGap(
+    promptRefSlots.value,
+    shownMaterials.value.map((m) => ({ id: m.id, name: m.name, refName: m.refName, url: m.url, isText: m.kind === 'text' })),
+  ),
+)
 
 const refGapHint = computed(() => {
   const gap = refGap.value
@@ -654,7 +659,13 @@ const settingsOpen = ref(false)
  * 两边互相覆盖 —— 多出没有的格子、声明图片2 内容跑到图片3、正文删了标签格子还在。
  * 现在格子**完全由连线派生**：有连线 = 有内容，没连线 = 待输入，没有第三种状态。
  */
-const refTiles = computed(() => mergeRefTiles(promptRefSlots.value, cards.value))
+/** refName（图片1）是连线顺序编号 —— mergeRefTiles 靠它对齐「第 N 格 = 第 N 条连线」 */
+const refTiles = computed(() =>
+  mergeRefTiles(
+    promptRefSlots.value,
+    shownMaterials.value.map((m) => ({ id: m.id, name: m.name, refName: m.refName, url: m.url, isText: m.kind === 'text' })),
+  ),
+)
 
 /** 正文里的 @ 声明（只用来「标出哪个序号被点了」与算缺号，不产生内容） */
 const promptRefSlots = computed(() => parseRefSlots(prompt.value))
