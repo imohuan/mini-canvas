@@ -5,6 +5,7 @@
  *   config/agentRunMode      'background' | 'followTab'  —— 「后台对话」开关
  *   config/agentNotify       { browser, sound }          —— 「浏览器通知 / 通知声音」
  *   config/agentGoalDefaults { budget }                  —— 「目标设置」的默认预算
+ *   config/agentComposerPrefs { submitKeyMode }          —— 「发送键」Ctrl/Shift/裸回车（2026-10-25）
  *
  * 为什么收在一个模块里、而不是组件里就地 fetch：
  *   - 这三个键**后台也在读**（后台按 agentRunMode 决定断线时 abort 不 abort），
@@ -18,19 +19,37 @@
 import { reactive } from 'vue'
 import { subscribeKvEvents } from './kvEvents'
 
+/**
+ * 发送键三种取值（与 plugin-agent 的 composerKeys.ts 是同一套语义）。
+ *
+ * 为什么在这里再声明一次：这个值要跨「设置页（ui）」和「Agent 面板（plugin-agent）」两个包，
+ * 而 ui 包在单测环境里拿不到 plugin-agent 的运行时导出（只有类型）。判定函数仍由
+ * plugin-agent 提供（唯一一份），这里只放**字面量联合 + 归一化**，并用测试钉死两边一致。
+ */
+export type SubmitKeyMode = 'ctrl-enter' | 'shift-enter' | 'enter'
+export const DEFAULT_SUBMIT_KEY_MODE: SubmitKeyMode = 'ctrl-enter'
+export function normalizeSubmitKeyMode(v: unknown): SubmitKeyMode {
+  return v === 'shift-enter' || v === 'enter' || v === 'ctrl-enter' ? v : DEFAULT_SUBMIT_KEY_MODE
+}
+
 /** 三个键的裸 key（KV 路径由它拼出来，与 appTheme 同一套命名习惯） */
 export const AGENT_RUN_MODE_KEY = 'agentRunMode'
 export const AGENT_NOTIFY_KEY = 'agentNotify'
 export const AGENT_GOAL_DEFAULTS_KEY = 'agentGoalDefaults'
 /** 「发送中显示队列」开关的键（队列里 sending 条目要不要画出来；用户口径 2026-10-15） */
 export const AGENT_QUEUE_PREFS_KEY = 'agentQueuePrefs'
+/** 「发送键」设置：Ctrl+回车 / Shift+回车 / 回车（用户口径 2026-10-25） */
+export const AGENT_COMPOSER_PREFS_KEY = 'agentComposerPrefs'
 /** 云端 KV 路径：config 作用域，接口见 cloud-server 的 routes/kv.ts（GET/PUT /api/kv/:type/:key） */
 export const AGENT_RUN_MODE_PATH = '/api/kv/config/' + AGENT_RUN_MODE_KEY
 export const AGENT_NOTIFY_PATH = '/api/kv/config/' + AGENT_NOTIFY_KEY
 export const AGENT_GOAL_DEFAULTS_PATH = '/api/kv/config/' + AGENT_GOAL_DEFAULTS_KEY
 export const AGENT_QUEUE_PREFS_PATH = '/api/kv/config/' + AGENT_QUEUE_PREFS_KEY
+export const AGENT_COMPOSER_PREFS_PATH = '/api/kv/config/' + AGENT_COMPOSER_PREFS_KEY
 /** 设置页翻「发送中显示队列」后向同页其它读者（Agent 面板）广播的事件名 */
 export const AGENT_QUEUE_PREFS_EVENT = 'mini-canvas:agent-queue-prefs-changed'
+/** 设置页改「发送键」后向同页其它读者（Agent 面板）广播的事件名 */
+export const AGENT_COMPOSER_PREFS_EVENT = 'mini-canvas:agent-composer-prefs-changed'
 /**
  * config 作用域的**批量读**口（一次拿回该域全部 key/值）。
  *
@@ -52,6 +71,10 @@ export interface AgentGoalDefaults {
 export interface AgentQueuePrefs {
   showSending: boolean
 }
+/** 发送键偏好：选哪一种回车提交 */
+export interface AgentComposerPrefs {
+  submitKeyMode: SubmitKeyMode
+}
 /** 一份完整设置快照（设置弹窗绑的就是它） */
 export interface AgentSettings {
   runMode: AgentRunMode
@@ -60,6 +83,8 @@ export interface AgentSettings {
   goalBudget: number
   /** 队列里「发送中」条目的显示开关（默认显示） */
   queueShowSending: boolean
+  /** 发送键：ctrl-enter（默认）/ shift-enter / enter */
+  submitKeyMode: SubmitKeyMode
 }
 
 /** 默认值：后台对话默认开（§3.2）；两个通知默认开；默认预算 50000 */
@@ -72,6 +97,7 @@ export const AGENT_SETTINGS_DEFAULTS: AgentSettings = {
   notify: { ...DEFAULT_AGENT_NOTIFY },
   goalBudget: DEFAULT_AGENT_GOAL_BUDGET,
   queueShowSending: DEFAULT_QUEUE_SHOW_SENDING,
+  submitKeyMode: DEFAULT_SUBMIT_KEY_MODE,
 }
 
 /**
@@ -139,6 +165,12 @@ function queuePrefsFromKv(raw: unknown): boolean {
   return typeof o.showSending === 'boolean' ? o.showSending : DEFAULT_QUEUE_SHOW_SENDING
 }
 
+/** 发送键偏好归一：缺 / 坏一律回落默认（Ctrl+回车） */
+function submitKeyModeFromKv(raw: unknown): SubmitKeyMode {
+  const o = raw && typeof raw === 'object' ? (raw as Partial<AgentComposerPrefs>) : {}
+  return normalizeSubmitKeyMode(o.submitKeyMode)
+}
+
 /** 读齐三个键（各自容错、各自回落默认）。任何失败都不抛。 */
 export async function loadAgentSettings(): Promise<AgentSettings> {
   const bucket = await readConfigBucket()
@@ -147,6 +179,7 @@ export async function loadAgentSettings(): Promise<AgentSettings> {
     notify: normalizeNotify(bucket[AGENT_NOTIFY_KEY]),
     goalBudget: budgetFromKv(bucket[AGENT_GOAL_DEFAULTS_KEY]),
     queueShowSending: queuePrefsFromKv(bucket[AGENT_QUEUE_PREFS_KEY]),
+    submitKeyMode: submitKeyModeFromKv(bucket[AGENT_COMPOSER_PREFS_KEY]),
   }
 }
 
@@ -184,8 +217,19 @@ export async function saveAgentQueuePrefs(prefs: AgentQueuePrefs): Promise<void>
   await putKvValue(AGENT_QUEUE_PREFS_PATH, { showSending: prefs.showSending === true })
 }
 
+/** 存发送键偏好 */
+export async function saveSubmitKeyMode(mode: unknown): Promise<void> {
+  await putKvValue(AGENT_COMPOSER_PREFS_PATH, { submitKeyMode: normalizeSubmitKeyMode(mode) })
+}
+
 /** 这三个键任一变了都要重读（别的 config 键与这个弹窗无关） */
-const AGENT_KV_KEYS: readonly string[] = [AGENT_RUN_MODE_KEY, AGENT_NOTIFY_KEY, AGENT_GOAL_DEFAULTS_KEY, AGENT_QUEUE_PREFS_KEY]
+const AGENT_KV_KEYS: readonly string[] = [
+  AGENT_RUN_MODE_KEY,
+  AGENT_NOTIFY_KEY,
+  AGENT_GOAL_DEFAULTS_KEY,
+  AGENT_QUEUE_PREFS_KEY,
+  AGENT_COMPOSER_PREFS_KEY,
+]
 
 /**
  * 订阅云端变更：别的标签页/别处改了这三个键，这里重读一份并回调（跨标签页同步）。
@@ -223,6 +267,8 @@ export interface AgentSettingsStore {
   setGoalBudget(value: unknown): Promise<number>
   /** 「发送中显示队列」开关 */
   setQueueShowSending(show: boolean): Promise<void>
+  /** 发送键：Ctrl+回车 / Shift+回车 / 回车 */
+  setSubmitKeyMode(mode: unknown): Promise<void>
   /** 停掉订阅（单测/宿主重建用；应用里长驻不必调） */
   dispose(): void
 }
@@ -234,6 +280,7 @@ export function createAgentSettingsStore(): AgentSettingsStore {
     notify: { ...AGENT_SETTINGS_DEFAULTS.notify },
     goalBudget: AGENT_SETTINGS_DEFAULTS.goalBudget,
     queueShowSending: AGENT_SETTINGS_DEFAULTS.queueShowSending,
+    submitKeyMode: AGENT_SETTINGS_DEFAULTS.submitKeyMode,
   })
   let disposed = false
 
@@ -244,6 +291,7 @@ export function createAgentSettingsStore(): AgentSettingsStore {
     state.notify.sound = s.notify.sound
     state.goalBudget = s.goalBudget
     state.queueShowSending = s.queueShowSending
+    state.submitKeyMode = s.submitKeyMode
   }
 
   async function reload(): Promise<void> {
@@ -278,6 +326,15 @@ export function createAgentSettingsStore(): AgentSettingsStore {
       await saveAgentQueuePrefs({ showSending: show })
       // 同页其它读者（Agent 面板）立刻生效：它们不订阅 KV 事件，靠这条本地广播重读
       if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(AGENT_QUEUE_PREFS_EVENT, { detail: { showSending: show } }))
+    },
+    async setSubmitKeyMode(mode) {
+      const m = normalizeSubmitKeyMode(mode)
+      state.submitKeyMode = m // 界面立刻翻，不等后台往返
+      await saveSubmitKeyMode(m)
+      // 同页其它读者（Agent 面板）立刻生效：它们不订阅 KV 事件，靠这条本地广播重读
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(AGENT_COMPOSER_PREFS_EVENT, { detail: { submitKeyMode: m } }))
+      }
     },
     dispose() {
       disposed = true

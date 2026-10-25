@@ -139,6 +139,7 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
       notify: { browser: true, sound: true },
       goalBudget: 50000,
       queueShowSending: true,
+      submitKeyMode: 'ctrl-enter',
     })
   })
 
@@ -147,7 +148,13 @@ describe('三个键的路径与默认值（设计 §3.6.3 定死的契约）', (
 
     const s = await loadAgentSettings()
 
-    expect(s).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000, queueShowSending: true })
+    expect(s).toEqual({
+      runMode: 'background',
+      notify: { browser: true, sound: true },
+      goalBudget: 50000,
+      queueShowSending: true,
+      submitKeyMode: 'ctrl-enter',
+    })
   })
 
   it('读 KV 的值能覆盖默认值（刷新后保持）', async () => {
@@ -366,7 +373,13 @@ describe('跨标签页同步：订阅 /api/kv/events，只认这三个键', () =
     // 真广播但后台读不到：安静回落默认值，不抛
     es.emit('config', 'agentNotify')
     await vi.waitFor(() => expect(seen).toHaveLength(1))
-    expect(seen[0]).toEqual({ runMode: 'background', notify: { browser: true, sound: true }, goalBudget: 50000, queueShowSending: true })
+    expect(seen[0]).toEqual({
+      runMode: 'background',
+      notify: { browser: true, sound: true },
+      goalBudget: 50000,
+      queueShowSending: true,
+      submitKeyMode: 'ctrl-enter',
+    })
     dispose()
   })
 

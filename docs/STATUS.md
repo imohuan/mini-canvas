@@ -5,6 +5,43 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-25，「发送键」可配置 + 回车先归 @ 下拉）
+
+用户口径：「希望这里可以做一个开关……可以选择 Ctrl+回车，也可以设置为 Shift+回车，或者直接设置为回车」+
+「输入 @ 之后会弹出一个下拉菜单，此时我按回车是为了选择这个下拉菜单，但它却直接触发了输入框的发送……
+这就是最初使用 Ctrl+回车的原因」。
+
+**一、设置项**（全局设置 →「目标设置」下面一行）：
+
+- 键：`config/agentComposerPrefs = { submitKeyMode: 'ctrl-enter' | 'shift-enter' | 'enter' }`；
+  默认 **Ctrl+回车**（与 2026-10-11 改的口径一致，老用户行为不变）。
+- 读写入口：`packages/ui/src/composables/agentSettings.ts`（`loadAgentSettings` / `saveSubmitKeyMode` /
+  `store.setSubmitKeyMode`）。设置页项：`ModalsArea.vue` 的「发送键」下拉；改完向同页广播
+  `mini-canvas:agent-composer-prefs-changed`，Agent 面板立刻生效，不必刷新。
+- 判定只有一份：`plugin-agent/src/composerKeys.ts` 的 `isSubmitShortcut(e, mode)` ——
+  ctrl 模式只认 Ctrl/Cmd、shift 模式只认 Shift、enter 模式只认**裸回车**；
+  任何模式都排除输入法合成态（中文选词时的回车不能发送）。
+
+**二、回车先归 @ 下拉**（用户最初踩的坑）：
+
+- 编辑器（`prosemirror-editor-bundle/src/index.vue`）新增只读曝光 `menuOpen`（= 内部 `menuVisible`），
+  调用方不必去猜 DOM 里有没有 `.mention-menu`。
+- `composerKeys.shouldDeferEnterToMenu(e, menuOpen)`：**菜单开着时回车一律归菜单**，与用户选的
+  提交键无关 —— 菜单里回车的语义永远是「选这一项」。组件 `onEditorKeydown` 里这条判定排在提交判定之前。
+
+**验证**：plugin-agent **375** 全绿（新增 `composerKeys` 19 + `composerMenuGuard` 7）、
+prosemirror-editor-bundle **38**、ui **413**（新增 `agentComposerPrefs` 10，并同步更新
+`agentSettings` 里 3 处整份快照断言）；agent / ui 两个 typecheck 干净。
+Chrome MCP 真机（:8865 同源新构建）：设置页三选项都在、默认「Ctrl + 回车」；
+**Ctrl+回车** → 发出消息（6→8），单独回车只换行；**回车**模式裸回车发送（8→10）；
+**Shift+回车**模式裸回车换行、Shift+回车发送（10→12）；@ 下拉打开时按回车只选菜单项
+（消息数不变），菜单关着时才按设置发送。改成 Shift+回车后刷新页面，设置仍是 Shift+回车（持久化通过）。
+
+**环境注意**：`packages/ui` 的 dev server（:5288）跨端口写 `127.0.0.1:8865` 的 KV 会被后台
+来源白名单拒成 403（「请求来源不受信任」），同源 8865 正常。这是本机启动配置（
+`packages/cloud-server` 的 `trustedOrigins` 只有 `127.0.0.1:8865 / localhost:8865`），
+与本次改动无关；验证持久化时用的是 8865 同源构建。
+
 ### 追记（2026-10-23，调试插件独立设置页 + 按唯一名字判重）
 
 用户口径：**调试入口与「插件管理」是两个彻底独立的插件**，不互相调用、不共享安装记录；

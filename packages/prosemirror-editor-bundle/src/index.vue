@@ -98,6 +98,15 @@ defineExpose({
   focusEnd,
   setText,
   insertResource,
+  /**
+   * 编辑器内部的 @ 菜单是否开着（只读）。
+   *
+   * 为什么需要暴露它：回车在两处都有语义 —— 菜单里是「选这一项」，
+   * 输入框外是「提交」。调用方（Agent 面板）必须先知道菜单开没开，
+   * 才能决定这个回车该归谁。靠去查 DOM 里的 `.mention-menu` 也行，但那是猜结构；
+   * 这里给的是菜单自己的真实状态。
+   */
+  menuOpen: menuVisible,
 });
 </script>
 

@@ -36,7 +36,7 @@ import { skillResources, mcpResources, nodeResources, assetResource, assetResour
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf, type UserSegment } from '../userSegments.js'
 import { stripUserSteering } from '../userSteering.js'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../refClickEvents.js'
-import { isSubmitShortcut } from '../composerKeys.js'
+import { DEFAULT_SUBMIT_KEY_MODE, isSubmitShortcut, normalizeSubmitKeyMode, shouldDeferEnterToMenu, loadSubmitKeyMode, type SubmitKeyMode } from '../composerKeys.js'
 import { pagerAnchors, type PagerGroup } from '../branchNav.js'
 import { segmentAnchors } from '../modelSegments.js'
 import {
@@ -309,6 +309,11 @@ watch(
 
 onBeforeUnmount(teardownEarlierSentinel)
 const editorRef = ref<InstanceType<typeof ProseMirrorEditor> | null>(null)
+/**
+ * 提交键（全局设置 → 发送键；用户口径 2026-10-25）：默认 Ctrl+回车。
+ * 真源在后台 KV（config/agentComposerPrefs），这里只留一份**只读快照**给按键判定用。
+ */
+const submitKeyMode = ref<SubmitKeyMode>(DEFAULT_SUBMIT_KEY_MODE)
 const openThinking = ref<Record<string, boolean>>({})
 /** 顶部那条「我能帮你做很多事」提示；点 ✕ 后本次打开不再显示 */
 const hintDismissed = ref(false)
@@ -380,6 +385,7 @@ onMounted(() => {
   // 两个全局设置都读一次（后台对话开关在这里只作"设置页"的值来源，退出时也不用它，
   // 反正组件不订阅别的 config 键）
   void Promise.all([loadGoalDefaults(), refreshNotifyPrefs(), loadQueueShowSending({ baseUrl: s.baseUrl }).then((v) => (showSendingQueue.value = v))])
+  void loadSubmitKeyMode({ baseUrl: s.baseUrl }).then((m) => (submitKeyMode.value = m))
   // 常驻订阅不在这里接：refresh() → restoreCurrentSession() 装载完会话后自己会接
   // （那里拿到的才是"当前会话"的正确 id）。这里再接一次只会用**刷新前遗留的旧 id**
   // 先占住流句柄，后面真正该接的那次被 "已经有流了" 挡掉（真机实测踩到的坑）。
@@ -393,6 +399,15 @@ function onQueuePrefsChanged(e: Event): void {
 }
 onMounted(() => window.addEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
 onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
+
+// 「发送键」设置页改完 ⇒ 同页立即生效（与上面队列开关同一套：设置页发本地广播；
+// 跨标签页的那份由 agentSettings 自己的 KV 订阅负责）。
+function onComposerPrefsChanged(e: Event): void {
+  const d = (e as CustomEvent).detail as { submitKeyMode?: unknown } | undefined
+  if (d && d.submitKeyMode !== undefined) submitKeyMode.value = normalizeSubmitKeyMode(d.submitKeyMode)
+}
+onMounted(() => window.addEventListener('mini-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
+onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
 
 onMounted(() => {
   if (typeof ResizeObserver === 'undefined') return
@@ -615,7 +630,12 @@ function compactNow(): void {
  * 判定收进 composerKeys.isSubmitShortcut（含输入法合成态），这里只做转发。
  */
 function onEditorKeydown(e: KeyboardEvent): void {
-  if (!isSubmitShortcut(e)) return
+  // ① 回车先让给 @ 下拉：菜单里回车的语义是「选这一项」。
+  //    这一步必须排在提交判定之前 —— 用户在菜单里按回车，绝不该把半截话发出去
+  //    （用户 2026-10-25 报的就是这个：输入 @ 后回车直接发送了）。
+  if (shouldDeferEnterToMenu(e, !!editorRef.value?.menuOpen)) return
+  // ② 其余情况按「全局设置 → 发送键」里选的那一种回车提交。
+  if (!isSubmitShortcut(e, submitKeyMode.value)) return
   e.preventDefault()
   submit()
 }

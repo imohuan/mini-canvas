@@ -26,6 +26,21 @@ const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? Audio
 const agent = useAgentSettings()
 
 /**
+ * 「发送键」下拉：三种取值互斥（Ctrl+回车 / Shift+回车 / 回车），默认 Ctrl+回车。
+ * 文案与 hint 都放常量里 —— 判定在 plugin-agent 的 composerKeys，展示顺序在设置页，
+ * 两边共用同一组 value，改一处不会静默漂移。
+ */
+const sendKeyOpen = ref(false)
+const SUBMIT_KEY_MODE_OPTIONS = [
+  { value: 'ctrl-enter' as const, label: 'Ctrl + 回车', hint: '单独回车换行（默认）' },
+  { value: 'shift-enter' as const, label: 'Shift + 回车', hint: '单独回车换行' },
+  { value: 'enter' as const, label: '回车', hint: 'Shift + 回车换行' },
+]
+const sendKeyLabel = computed(
+  () => SUBMIT_KEY_MODE_OPTIONS.find((m) => m.value === agent.state.submitKeyMode)?.label ?? 'Ctrl + 回车',
+)
+
+/**
  * 目标默认预算输入框：改完（失焦 / 回车）归一化再落 KV，并把归一化结果写回输入框
  * （0 / 空 / 负数都收成 0 = 不限）。不用 v-model：默认预算的真源在后台，本地再绑一个变量就是第三份状态。
  */
@@ -771,6 +786,28 @@ watch(() => s.shortcutsOpen, async (open) => {
           <input :value="agent.state.goalBudget" type="number" min="0" step="1000" placeholder="0 = 不限"
             class="h-8 w-28 rounded-lg border border-line bg-veil px-2 text-xs text-ink outline-none"
             aria-label="目标默认预算" @change="agentBudgetOnChange" />
+        </div>
+        <!-- 发送键（用户口径 2026-10-25）：目标设置下面配「哪一种回车提交」。
+             为什么用下拉而不是开关：三种取值互斥，开关只能表达两态。 -->
+        <div class="flex items-center justify-between gap-3 py-2">
+          <div><strong class="text-[13px] text-ink">发送键</strong>
+            <p class="text-xs text-ink-dim">选哪一种回车发送消息；@ 下拉打开时回车始终用于选择菜单项</p>
+          </div>
+          <AxDropdown v-model="sendKeyOpen" placement="bottom-end" menu-width="180px">
+            <template #trigger><button
+                class="flex h-8 items-center gap-1 rounded-lg border border-line bg-veil px-2 text-xs text-ink transition-colors hover:bg-hover"
+                aria-label="发送键">{{ sendKeyLabel }}
+                <ChevronDown :size="13" />
+              </button></template>
+            <template #default="{ close }">
+              <AxMenu>
+                <AxMenuItem v-for="m in SUBMIT_KEY_MODE_OPTIONS" :key="m.value"
+                  :active="agent.state.submitKeyMode === m.value" :hint="m.hint"
+                  @click="agent.setSubmitKeyMode(m.value); close()">{{ m.label }}
+                </AxMenuItem>
+              </AxMenu>
+            </template>
+          </AxDropdown>
         </div>
         <!-- <div class="flex items-center justify-between gap-3 py-2">
           <div><strong class="text-[13px] text-ink">积分预算管理</strong>
