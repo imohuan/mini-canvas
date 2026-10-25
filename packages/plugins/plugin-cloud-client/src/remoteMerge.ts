@@ -82,6 +82,8 @@ export interface RemoteMergePlan {
    * 只给出映射，由落地层统一改节点、边端点、子节点 parentId；这里不直接改节点对象。
    */
   reassignNodeIds: Array<{ from: string; to: string }>
+  /** 远端删掉、本地没改的 data key（按节点 id 分组；落地层用 dataUnset 删除） */
+  unsetDataKeys: Record<string, string[]>
 }
 
 /** 生成本地节点的新 id：避开已有、云端已有与本次已分配的所有 id（纯函数，便于单测） */
@@ -153,21 +155,6 @@ function mergeNodeFields(base: MergeNode, mine: MergeNode, theirs: MergeNode): M
   for (const key of Object.keys(theirs.data)) {
     if (stable(theirs.data[key]) !== stable(base.data[key])) out.data[key] = theirs.data[key]
   }
-  // 有意**不删** data 里云端没有的 key —— 虽然「云端删了某字段」看起来该跟着删，但落不到本地：
-  // 数据层的 updateNode 对 data 是浅合并（packages/canvas-data 的 nodeStore.applyPatch），
-  // 没有「按 key 删除」的表达方式。合并产出一个删不掉的结果，只会让本地与云端静默不一致
-  // （不报错、不重试，谁也发现不了）。所以这里保持「只增改、不删」这个本地真能做到的语义。
-  //
-  // ⚠️ 这条是**已知会漏**的限制，别当成「不会发生」（审查时被指出过，这里如实记下）：
-  //   - 用户在另一台机器上装插件时走的是 `graph.replaceAll`（整体替换、不是浅合并），
-  //     云端那份若少了某 key，装一次插件本地就跟着少；
-  //   - 用户把画布删光再让 AI 加回同 id 的节点，云端那份没有老 key，本地还留着；
-  //   - AI 用 MCP 传的 data 是**整个 data 对象**（canvasDoc 里是 `node.data = a.data`，不是浅合并），
-  //     它不写某个 key 就等于云端少了那个 key；
-  //   - 同一账号开多个标签页时，各页各自维护基准，A 页删掉的 key 在 B 页看来仍是「本地有」。
-  // 要根治得让落地侧支持「字段级删除」（数据层 updateNode 目前表达不了）。当前取舍是：
-  // 宁可漏同步删除，也不要产出落不下去的合并结果造成静默漂移。
-  // 同一条限制在 remoteSync 的文件头也记了一笔，改的时候两边要一起看。
   if (stable(base.parentId ?? null) !== stable(theirs.parentId ?? null)) {
     // 只认「云端给了一个新的父」；云端没有父时保持本地不动（同上：本地表达不了「解除」）
     if (theirs.parentId !== undefined) out.parentId = theirs.parentId
@@ -201,6 +188,7 @@ export function planRemoteMerge(
     removeEdgeIds: [],
     updateEdges: [],
     reassignNodeIds: [],
+    unsetDataKeys: {},
   }
   const baseNodes = byId(base.nodes)
   const mineNodes = byId(mine.nodes)
@@ -244,10 +232,25 @@ export function planRemoteMerge(
     if (sameNode(b, m)) {
       // 只有云端改了：整份用云端的
       plan.updateNodes.push({ ...t, position: { ...t.position }, data: { ...t.data } })
+      // 但浅合并不会删除本地多出来的旧 key；显式列出“云端已没有、本地没改”的字段，
+      // 否则刷新前后不一致（这是远端删字段最常见的一条路径）。
+      const removedKeys: string[] = []
+      for (const key of Object.keys(b.data)) {
+        if (key in t.data) continue
+        if (stable(b.data[key]) === stable(m.data[key])) removedKeys.push(key)
+      }
+      if (removedKeys.length > 0) plan.unsetDataKeys[id] = removedKeys
     } else {
       // 两边都改过：按字段合（各自改的字段都保住）
       const merged = mergeNodeFields(b, m, t)
-      if (!sameNode(merged, m)) plan.updateNodes.push(merged)
+      // 远端删掉、本地没改过的 data key：合并函数保守地只增改；删除改用显式的 dataUnset 表达。
+      const removedKeys: string[] = []
+      for (const key of Object.keys(b.data)) {
+        if (key in t.data) continue
+        if (stable(b.data[key]) === stable(m.data[key])) removedKeys.push(key)
+      }
+      if (removedKeys.length > 0) plan.unsetDataKeys[id] = removedKeys
+      if (!sameNode(merged, m) || removedKeys.length > 0) plan.updateNodes.push(merged)
     }
   }
 
@@ -318,6 +321,8 @@ export function isPlanEmpty(plan: RemoteMergePlan): boolean {
     plan.updateNodes.length === 0 &&
     plan.addEdges.length === 0 &&
     plan.removeEdgeIds.length === 0 &&
-    plan.updateEdges.length === 0
+    plan.updateEdges.length === 0 &&
+    plan.reassignNodeIds.length === 0 &&
+    Object.keys(plan.unsetDataKeys).length === 0
   )
 }

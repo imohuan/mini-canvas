@@ -88,6 +88,18 @@ describe('NodeStore v2 写 API', () => {
     expect(s.getNode('c')!.parentId).toBeUndefined()
   })
 
+  it('dataUnset 显式删除字段（合并只增改，删字段必须走它）', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'a', data: { keep: 1, oldKey: 'gone' } },
+    ])
+    s.updateNode('a', { dataUnset: ['oldKey'] })
+    expect(s.getNode('a')!.data).toEqual({ keep: 1, label: '文本 1' })
+    // 同一批既覆盖又删除：删除为最终意图
+    s.updateNode('a', { data: { oldKey: 'new', next: 2 }, dataUnset: ['oldKey'] })
+    expect(s.getNode('a')!.data).toEqual({ keep: 1, label: '文本 1', next: 2 })
+  })
+
   it('updateNodes 批量改：不同节点不同 patch；只广播一次', () => {
     const s = makeStore()
     s.addNodes([

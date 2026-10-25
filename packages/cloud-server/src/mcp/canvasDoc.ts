@@ -165,6 +165,8 @@ export interface NodeBatchInput {
     id: string
     position?: { x: number; y: number }
     data?: Record<string, unknown>
+    /** 明确删除 data 的哪些 key（浅合并删不掉；网页同步与 MCP 都用它表达字段删除） */
+    dataUnset?: string[]
     /** 尺寸（网页端「图片跟随尺寸」这类改动会写它；增量写不能漏这个字段） */
     size?: { w: number; h: number }
     /** 父节点（分组嵌套）；显式 null 表示解除父子 */
@@ -607,6 +609,7 @@ export class CanvasDocument {
       if (!node) continue
       if (u.position) node.position = { x: u.position.x, y: u.position.y }
       if (u.data) node.data = { ...node.data, ...u.data }
+      if (u.dataUnset) for (const key of u.dataUnset) delete node.data[key]
       // 尺寸：给了就写（nil 之外的形状由 schema 保证）；没给就保持原样
       if (u.size) node.size = { w: u.size.w, h: u.size.h }
       // 父节点：null 是「解除父子」的显式表达，undefined 才是「没提这个字段」

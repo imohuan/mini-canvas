@@ -434,7 +434,7 @@ export function createCanvasMcpServer(
 
   server.tool(
     'canvas_batch_nodes',
-    '节点批量增删改，合并一次执行：{ add:[{type,position?,data?,id?,size?}], delete:[nodeId...], update:[{id,position?,data?}] }。' +
+    '节点批量增删改，合并一次执行：{ add:[{type,position?,data?,id?,size?}], delete:[nodeId...], update:[{id,position?,data?,dataUnset?}] }。' +
       'type 用画布注册的节点类型（如 text / image / 3d-preview / image-compare）。' +
       '删节点会连带删掉它的连线。整批先预校验，任一非法则一个都不改（返回 errors）。' +
       'id 可省略，服务端会发一个自增数字 id 并在 added 里返回',
@@ -459,6 +459,10 @@ export function createCanvasMcpServer(
             id: z.string(),
             position: positionSchema.optional(),
             data: z.record(z.unknown()).optional().describe('浅合并进节点 data'),
+            dataUnset: z
+              .array(z.string())
+              .optional()
+              .describe('要删除的 data key；浅合并只能覆盖不能删除，清字段必须用它'),
           }),
         )
         .optional(),

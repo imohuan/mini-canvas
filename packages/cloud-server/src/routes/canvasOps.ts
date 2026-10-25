@@ -113,6 +113,12 @@ function checkNodeEntry(entry: unknown, kind: "add" | "update"): string | null {
   if (entry.position !== undefined && !isPosition(entry.position)) return 'position 必须是 { x, y } 两个有限数'
   if (entry.size !== undefined && !isSize(entry.size)) return 'size 必须是 { w, h } 两个有限数'
   if (entry.data !== undefined && !isPlainObject(entry.data)) return 'data 必须是对象'
+  if (
+    entry.dataUnset !== undefined &&
+    (!Array.isArray(entry.dataUnset) || entry.dataUnset.some((key) => typeof key !== 'string' || key === ''))
+  ) {
+    return 'dataUnset 必须是非空字符串 key 的数组'
+  }
   // parentId 只认字符串或 null（null = 解除父子）；不给数字/对象，否则会原样落盘成脏数据
   if (entry.parentId !== undefined && entry.parentId !== null && typeof entry.parentId !== 'string') {
     return 'parentId 必须是字符串或 null'

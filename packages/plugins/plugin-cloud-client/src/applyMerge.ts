@@ -15,6 +15,7 @@ export interface MergePlanLike {
   removeEdgeIds: string[]
   updateEdges: unknown[]
   reassignNodeIds?: Array<{ from: string; to: string }>
+  unsetDataKeys?: Record<string, string[]>
 }
 
 export interface DocLike {
@@ -135,6 +136,7 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
         ...(n.data ? { data: { ...(n.data as Record<string, unknown>) } } : {}),
         ...(n.size ? { size: n.size } : {}),
         ...(n.parentId !== undefined ? { parentId: n.parentId } : {}),
+        ...(plan.unsetDataKeys?.[n.id]?.length ? { dataUnset: plan.unsetDataKeys[n.id] } : {}),
       })
     }
     for (const e of plan.updateEdges) {

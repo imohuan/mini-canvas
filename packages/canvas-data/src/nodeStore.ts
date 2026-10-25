@@ -42,6 +42,11 @@ export interface AddNodeInput {
 /** updateNode/updateNodes 的单条 patch：position/size/parentId/data 任意子集；显式 undefined 表示清该字段 */
 export type NodePatch = Partial<Pick<CanvasNode, 'position' | 'data' | 'size'>> & {
   parentId?: string | undefined
+  /**
+   * 明确删除 data 里的这些 key（浅合并只能新增/覆盖，删不掉字段）。
+   * 云端字段删除、插件清理派生字段都需要它；只在 data 合并之后执行。
+   */
+  dataUnset?: string[]
 }
 
 /** updateNodes 的批量条目：id + 该节点 patch */
@@ -491,6 +496,10 @@ export class NodeStore implements NodeStoreService {
   private applyPatch(node: CanvasNode, patch: NodePatch): boolean {
     if (patch.position !== undefined) node.position = { x: patch.position.x, y: patch.position.y }
     if (patch.data !== undefined) node.data = { ...node.data, ...patch.data }
+    // 先合并、后删除：同一批既写新值又想清掉的 key，以“删除”为最终意图。
+    if (patch.dataUnset !== undefined) {
+      for (const key of patch.dataUnset) delete node.data[key]
+    }
     if ('size' in patch) {
       if (patch.size === undefined) delete node.size
       else node.size = { w: patch.size.w, h: patch.size.h }

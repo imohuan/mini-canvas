@@ -171,6 +171,14 @@ describe('batchNodes', () => {
     expect(node.data).toEqual({ label: '文本 1', text: 'b', keep: 1 })
   })
 
+  it('dataUnset 能真正删除字段（浅合并没有删除语义）', async () => {
+    await doc.batchNodes({ add: [{ type: 'text', id: 'n1', data: { text: 'a', oldKey: 1 } }] })
+    await doc.batchNodes({ update: [{ id: 'n1', dataUnset: ['oldKey'] }] })
+    const node = (await doc.read()).nodes.find((n) => n.id === 'n1')!
+    expect(node.data.oldKey).toBeUndefined()
+    expect(node.data.text).toBe('a')
+  })
+
   it('删节点会连带删掉它的连线（不留悬挂边）', async () => {
     await doc.batchNodes({ add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     await doc.batchEdges({ add: [{ source: 'a', target: 'b' }] })
