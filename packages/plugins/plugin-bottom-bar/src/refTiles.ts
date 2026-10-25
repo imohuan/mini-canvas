@@ -1,14 +1,19 @@
 /**
  * refTiles —— 参考区的**展示与校验**（纯函数，零 DOM、零 Vue）。
  *
- * 用户口径（2026-10-25）：
- *   ① 参考区只有**一行**（从前槽位与素材卡各画一排，重复了）；
- *   ② 上传会建参考节点并连线，连线归到用户点的那个序号；
- *   ③ 序号有缺（声明了「图片2」却没有图片1）时**不许发送**。
+ * 唯一事实源 = **连线顺序**（collectUpstreamMaterials 按边收、按 refOrder 排、按顺序编号）：
+ * 「图片1」= 连线顺序里的第 1 张图。正文里的 @标签只是**指向**某个序号，不产生新的参考。
+ *
+ * 用户口径（2026-10-25 / 2026-10-26）：
+ *   ① 参考区只有一行；连了 3 条线就只有 3 格（不能凭空多出第 4、5 格）；
+ *   ② 声明了 @图片2 但只有第 1 格有内容 → 那一格**显示为待输入**，内容不该跑到「图片3」去；
+ *   ③ 上传 = 建参考节点 + 连线，连线归到用户点的那个序号；
+ *   ④ 序号有缺时**不许发送**。
  */
 
-/** 参考区里的一格：来源可能是正文槽位，也可能是已连素材 */
+/** 参考区里的一格 */
 export interface RefTile {
+  /** 稳定键：slot:image:2（正文声明）或 card:<节点id>（没被正文声明的连线素材） */
   key: string
   slotKey?: string
   index: number
@@ -19,64 +24,93 @@ export interface RefTile {
   isText: boolean
 }
 
-/** 合成依据：一个槽位（正文 @）或一条素材（连线）的最小形状 */
-interface TileSlotLike {
-  key: string
+/** 正文槽位（@ 标签）的最小形状 */
+export interface TileSlotLike {
   kind: 'image' | 'video' | 'audio' | 'av'
   index: number
-  status: 'pending' | 'ready'
-  name?: string
-  url?: string
 }
-interface TileCardLike {
+
+/** 一条连线素材的最小形状（name = 图片1 这种按连线顺序编的名字） */
+export interface TileCardLike {
   id: string
   name: string
   url?: string
   isText: boolean
 }
 
-/** 素材名（图片2）→ 槽位键 + 中文标签 */
-export function refNameToSlot(refName: string): { key: string; index: number; label: string } | null {
+/** 素材名（图片2）→ 序号与种类 */
+export function refNameToSlot(refName: string): { index: number; kind: 'image' | 'video' | 'audio'; label: string } | null {
   const m = /^(图片|视频|音频)(\d+)$/.exec(refName)
   if (!m) return null
   const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : 'audio'
-  return { key: kind + ':' + Number(m[2]), index: Number(m[2]), label: m[1] }
+  return { index: Number(m[2]), kind, label: m[1] }
 }
 
 /**
- * 参考区**只排一行**（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
+ * 参考区**只排一行**，格子身份 = **连线的序号**。
  *
- * 从前「待输入槽位」一排 + 「已连素材卡」一排，同一个参考出现两次。
- * 现在按参考序号合并成一串：槽位优先（用户点的就是它），没被槽位覆盖的素材补在后面。
+ * 规则（用户口径 2026-10-26）：
+ * - 格子数量 = max(连线素材数， 正文声明的最大序号) —— 连了 3 条就最多 3 格；
+ * - 第 N 格有内容 ⇔ 连线素材里存在序号 N（正文声明 @图片N **不**产生内容）；
+ * - 第 N 格没内容 → 虚线「待输入」；
+ * - 连线素材多于声明数时，多出来的照常显示（序号继续往后编）。
  */
 export function mergeRefTiles(
   slots: ReadonlyArray<TileSlotLike>,
   cards: ReadonlyArray<TileCardLike>,
 ): RefTile[] {
-  const tiles: RefTile[] = []
-  const used = new Set<string>()
-  for (const slot of slots) {
-    const card = cards.find((c) => refNameToSlot(c.name)?.key === slot.key)
-    if (card) used.add(card.id)
-    const label = slot.kind === 'image' ? '图片' : slot.kind === 'video' ? '视频' : slot.kind === 'audio' ? '音频' : '音视频'
-    tiles.push({
-      key: 'slot:' + slot.key,
-      slotKey: slot.key,
-      index: slot.index,
-      label: label + ' ' + slot.index,
-      pending: slot.status !== 'ready',
-      name: slot.name || card?.name || label + ' ' + slot.index,
-      url: slot.url || card?.url,
-      isText: false,
-    })
+  // 序号 → 素材（连线顺序里第 N 张图 / 第 N 段音频…）
+  const seqOf = (kind: 'image' | 'video' | 'audio'): Map<number, TileCardLike> => {
+    const map = new Map<number, TileCardLike>()
+    let seq = 0
+    for (const c of cards) {
+      const parsed = refNameToSlot(c.name)
+      if (!parsed || parsed.kind !== kind) continue
+      seq += 1
+      map.set(seq, c)
+    }
+    return map
   }
+
+  // 出现在参考区的种类：素材自己的种类 + 正文声明的种类
+  const kinds = new Set<'image' | 'video' | 'audio'>()
+  for (const c of cards) {
+    const p = refNameToSlot(c.name)
+    if (p) kinds.add(p.kind)
+  }
+  for (const s of slots) {
+    if (s.kind === 'image' || s.kind === 'video' || s.kind === 'audio') kinds.add(s.kind)
+  }
+
+  const tiles: RefTile[] = []
+  // 每个种类独立排：图片1/图片2…、音频1/音频2…（与 collectUpstreamMaterials 的编号同口径）
+  for (const kind of ['image', 'video', 'audio'] as const) {
+    if (!kinds.has(kind)) continue
+    const label = kind === 'image' ? '图片' : kind === 'video' ? '视频' : '音频'
+    const bySeq = seqOf(kind)
+    const declared = slots.filter((s) => s.kind === kind).map((s) => s.index)
+    const max = Math.max(bySeq.size, ...(declared.length ? declared : [0]), 0)
+    for (let index = 1; index <= max; index++) {
+      const card = bySeq.get(index)
+      tiles.push({
+        key: card ? 'card:' + card.id : 'slot:' + kind + ':' + index,
+        slotKey: card ? undefined : kind + ':' + index,
+        index,
+        label: label + ' ' + index,
+        pending: !card,
+        name: card?.name ?? (label + ' ' + index),
+        url: card?.url,
+        isText: false,
+      })
+    }
+  }
+  // 没有可识别名字的素材（比如文本）照常补在最后（参考区一直支持显示它们）
   for (const card of cards) {
-    if (used.has(card.id)) continue
-    const parsed = refNameToSlot(card.name)
+    if (refNameToSlot(card.name)) continue
     tiles.push({
       key: 'card:' + card.id,
-      index: parsed?.index ?? tiles.length + 1,
-      label: parsed ? parsed.label : card.name,
+      index: tiles.length + 1,
+      label: card.name,
       pending: false,
       name: card.name,
       url: card.url,
@@ -87,29 +121,33 @@ export function mergeRefTiles(
 }
 
 /**
- * 参考序号缺格的判定（用户口径 2026-10-25：「只传了一张图，并且声明的是\"图片 2\"…
+ * 参考序号缺格的判定（用户口径 2026-10-25：「只传了一张图，并且声明的是"图片 2"…
  * 是不允许你点击发送按钮的」）。
  *
- * 每种类型（图片/视频/音频）各自从 1 数到最大序号，缺任何一格就返回它。
- * 返回 null = 不缺，可以发送。
+ * 判定只看**连线素材**（有内容的格子）：声明了 @图片N 且 1..N-1 里存在没内容的格子 → 报缺。
+ * 正文没写任何 @ 时不受影响（普通参考图照旧）。
  */
 export function findRefGap(
-  slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'av'; index: number; status: 'pending' | 'ready' }>,
+  slots: ReadonlyArray<{ kind: 'image' | 'video' | 'audio' | 'av'; index: number }>,
+  cards: ReadonlyArray<TileCardLike>,
 ): { kind: 'image' | 'video' | 'audio' | 'av'; missing: number[] } | null {
-  const byKind = new Map<string, Set<number>>()
-  for (const s of slots) {
-    if (s.status !== 'ready') continue
-    const set = byKind.get(s.kind) ?? new Set<number>()
-    set.add(s.index)
-    byKind.set(s.kind, set)
+  // 每种类型已就绪的序号集合（来自连线素材的名字）
+  const haveBy = (kind: 'image' | 'video' | 'audio'): Set<number> => {
+    const set = new Set<number>()
+    let seq = 0
+    for (const c of cards) {
+      const p = refNameToSlot(c.name)
+      if (!p || p.kind !== kind) continue
+      seq += 1
+      set.add(seq)
+    }
+    return set
   }
   for (const s of slots) {
-    const have = byKind.get(s.kind) ?? new Set<number>()
-    // 规则：声明到第 N 格（正文里有 @图片N），1..N 就必须全有内容。
-    // 「没有内容」= 报给用户要补的那一格（pending 的也算，因为它确实空着）。
-    const max = Math.max(s.index, ...have)
+    if (s.kind === 'av') continue
+    const have = haveBy(s.kind)
     const missing: number[] = []
-    for (let i = 1; i <= max; i++) if (!have.has(i)) missing.push(i)
+    for (let i = 1; i < s.index; i++) if (!have.has(i)) missing.push(i)
     if (missing.length) return { kind: s.kind, missing }
   }
   return null
@@ -121,39 +159,28 @@ import { placeRefAtSlot } from './panelSource'
  * 上传一个文件到某个参考槽位（用户口径 2026-10-25：「点击上传时，这 4 个上传你需要
  * 添加一个参考节点然后进行连接，这样进行上传」）。
  *
- * 顺序是有讲究的，缺一步都会坏：
- *   ① 建节点并落资源（file-drop，返回建了几个）；
- *   ② **把选中还给原节点** —— file-drop 建完会选中新节点，底栏挂在原选中节点上，
- *      不还回去底栏当场消失；
+ * 顺序缺一不可（单测钉死）：
+ *   ① 建节点并落资源（file-drop）；
+ *   ② **把选中还给原节点** —— file-drop 建完会选中新节点，底栏挂在原节点上；
  *   ③ 等一拍再连线（节点没进 VueFlow store 时边会被丢掉）；
- *   ④ 按槽位序号把新素材排到对应位置（第 2 格 = 图片2）。
- *
- * 抽成注入式而不是写在组件里：这几步顺序正是最容易回归的地方，单测直接钉住调用次序。
+ *   ④ 连线（doc.addEdge）；
+ *   ⑤ 把新素材排到该槽位对应的连线序号（第 2 格 = 连线序列里的第 2 张）。
  */
 export interface UploadDeps {
-  /** 落资源 + 建节点，返回建了几个（0 = 没建成） */
   addFiles(files: File[], at: { x: number; y: number }): Promise<number>
-  /** 等一帧（节点进 VueFlow store） */
   waitTick(): Promise<unknown>
-  /** 建完之后、连线之前调（组件用它把选中还给原节点） */
   afterCreate(): void
-  /** 连边，返回边 id（不该连时返回 null） */
   addEdge(source: string, target: string): string | null
-  /** 当前参考顺序 */
   refOrder(): string[]
-  /** 写回参考顺序 */
   writeOrder(ids: string[]): void
-  /** 建完之后取新素材（id / name / url）；拿不到 → null */
+  /** 建完之后取新节点（id / name / url）；拿不到 → null */
   pickCreated(before: ReadonlySet<string>): { id: string; name: string; url?: string } | null
-  /** 建节点用的落点 */
   positionFor(index: number): { x: number; y: number }
 }
 
 export interface UploadResult {
   ok: boolean
-  /** 失败原因（给用户看的一句话） */
   error?: string
-  /** 新素材（成功了才有） */
   created?: { id: string; name: string; url?: string }
 }
 
@@ -169,6 +196,7 @@ export async function uploadToRefSlot(
   await deps.waitTick()
   const created = deps.pickCreated(before)
   if (!created) return { ok: false, error: '节点建好了但还没连上线，请稍后再试' }
+  // ④ 连线（真实流程；上一次实现里这里少了，导致只建节点没连线）
   const edge = deps.addEdge(created.id, input.targetId)
   if (edge === null) return { ok: false, error: '当前宿主没有连线能力' }
   deps.writeOrder(placeRefAtSlot(deps.refOrder(), input.kind, input.index, created.id))

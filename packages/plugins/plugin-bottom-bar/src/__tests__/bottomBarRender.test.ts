@@ -330,15 +330,15 @@ describe('「看图」参考区：一行、没连线也有槽位', () => {
     expect(html).not.toContain('nb-slot ')
   })
 
-  it('@音频1 / @音视频2 也会各出一个槽位（三种写法都认）', async () => {
+  it('@音频1 / @图片2 各出一个槽位（三种写法都认）', async () => {
     const html = await render(
       NodeBottomBar as Component,
       '35',
-      { barPrompt: '@音频1 和 @音视频2' },
+      { barPrompt: '@音频1 和 @图片2' },
       makeCtx({ selectedIds: ['35'] }),
     )
     expect(html).toContain('音频 1')
-    expect(html).toContain('音视频 2')
+    expect(html).toContain('图片 2')
   })
 
   it('正文里没有 @ 标签 → 不渲染槽位那一排（不占地方）', async () => {

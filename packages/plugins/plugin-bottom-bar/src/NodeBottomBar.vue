@@ -63,7 +63,6 @@ import {
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
-  refSlotKey,
   REF_SLOT_META,
   type RefSlotKind,
 } from './refSlots'
@@ -500,7 +499,7 @@ const canRun = computed(() => !running.value && !!currentAction.value && !refGap
  * 规则：正文里出现 `@图片N` 时，1..N 必须全部有内容。缺任何一格 = 引用悬空（模型会拿到空引用），
  * 发送按钮禁用并给出明确原因。没写任何 @ 标签时不受影响（普通参考图照旧）。
  */
-const refGap = computed(() => findRefGap(refSlots.value))
+const refGap = computed(() => findRefGap(promptRefSlots.value, cards.value))
 
 const refGapHint = computed(() => {
   const gap = refGap.value
@@ -645,117 +644,26 @@ const settingsOpen = ref(false)
 // 输入框上方同步显示预览格。待输入格可以：拖本地文件、点击上传、按住 Ctrl 拖节点进来。
 // 规则在 refSlots.ts（纯函数、已单测），这里只管状态与交互。
 
-/** 一个槽位：由「正文里的 @ 标签」派生；filled 之后才有地址 */
-interface RefSlot {
-  key: string
-  kind: RefSlotKind
-  index: number
-  /** 来源：标签先认出来（pending），或来自已连线的素材 */
-  status: 'pending' | 'ready'
-  /** 已填进去的地址 / 名字（本地文件是 objectURL；节点是解析后的地址） */
-  url?: string
-  name?: string
-  mediaType?: 'image' | 'video' | 'audio'
-  /** 本地文件的 objectURL：卸载/替换时要 revoke，否则内存泄漏 */
-  objectUrl?: boolean
-  /** 一次性的错误提示（如「这个槽位只收图片」） */
-  error?: string
-}
-
-const refSlots = ref<RefSlot[]>([])
-/** 正文里的 @ 标签 → 槽位键（顺序即出现顺序） */
-const promptRefKeys = computed(() => parseRefSlots(prompt.value).map((r) => r.key))
-
-/** 已连线素材按类型编号后的名字（图片1 / 音频1…），用来把槽位和真实素材对上 */
-const materialByKey = computed(() => {
-  const map = new Map<string, UpstreamMaterial>()
-  for (const m of shownMaterials.value) {
-    if (m.kind === 'text') continue
-    map.set(m.refName, m)
-    // 也接受不带序号的旧名（图片 / 视频 / 音频）
-    map.set(m.kind === 'image' ? '图片' : m.kind === 'video' ? '视频' : '音频', m)
-  }
-  return map
-})
-
-/** 从素材名里取类型与该类型的序号（图片2 → image / 2） */
-function slotFromRefName(refName: string): { kind: RefSlotKind; index: number } | null {
-  const m = /^(图片|视频|音频|音视频)(\d+)$/.exec(refName)
-  if (!m) return null
-  const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : m[1] === '音频' ? 'audio' : 'av'
-  return { kind, index: Number(m[2]) }
-}
-
-/**
- * 重算槽位：
- *   - 正文里认到的 @ 标签 → 一定有槽位（没连线就是待输入）；
- *   - 已填过的保留（用户上传/拖进来的内容不因重算丢失）；
- *   - 已连线的素材按 refName 自动填上（有连线就不该再显示「待输入」）。
- */
-function syncRefSlots(): void {
-  const next: RefSlot[] = []
-  const seen = new Set<string>()
-  const prevByKey = new Map(refSlots.value.map((s) => [s.key, s]))
-
-  for (const key of promptRefKeys.value) {
-    if (seen.has(key)) continue
-    seen.add(key)
-    const [kindRaw, indexRaw] = key.split(':')
-    const kind = kindRaw as RefSlotKind
-    const index = Number(indexRaw)
-    const prev = prevByKey.get(key)
-    if (prev) { next.push(prev); continue }
-    // 有连线的素材 → 直接就绪（名字 = 图片1 这种）
-    const label = (kind === 'image' ? '图片' : kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '音视频') + index
-    const material = materialByKey.value.get(label)
-    if (material) {
-      next.push({
-        key, kind, index,
-        status: 'ready',
-        url: material.url,
-        name: material.name,
-        mediaType: material.kind as 'image' | 'video' | 'audio',
-      })
-      continue
-    }
-    next.push({ key, kind, index, status: 'pending' })
-  }
-
-  // 已就绪但正文里已经没了的：保留（用户可能只是删了文字），直到他点 × 才清
-  for (const s of refSlots.value) {
-    if (!seen.has(s.key) && s.status === 'ready') next.push(s)
-  }
-  refSlots.value = next
-}
-
-const visibleRefSlots = computed(() => refSlots.value)
-
 /**
  * 参考区**一行**的格子（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
  *
- * 合并规则在 refTiles.ts 的 mergeRefTiles（纯函数，已单测）：槽位优先，没被覆盖的素材补在后面，
- * 按序号排序 —— 同一个参考只出现一次。这里只把「能不能点开预览 / 删除」要用的
- * card / slot 挂回去。
+ * **格子身份 = 连线的序号**（2026-10-26 用户口径）：连了 3 条线就是 3 格；
+ * 声明了 @图片2 但连线只有 1 条 → 第 2 格显示「待输入」（内容不会跑到「图片3」去）。
+ *
+ * 为什么不再维护一份本地槽位状态：上一版把「正文声明」和「已连素材」各记一份，
+ * 两边互相覆盖 —— 多出没有的格子、声明图片2 内容跑到图片3、正文删了标签格子还在。
+ * 现在格子**完全由连线派生**：有连线 = 有内容，没连线 = 待输入，没有第三种状态。
  */
-const refTiles = computed(() =>
-  mergeRefTiles(visibleRefSlots.value, cards.value).map((tile) => ({
-    ...tile,
-    card: tile.slotKey
-      ? cards.value.find((c) => parseSlotFromRefName(c.name)?.key === tile.slotKey)
-      : cards.value.find((c) => c.id === tile.key.replace('card:', '')),
-    slot: tile.slotKey ? refSlots.value.find((s) => s.key === tile.slotKey) : undefined,
-  })),
-)
+const refTiles = computed(() => mergeRefTiles(promptRefSlots.value, cards.value))
 
-/** 素材名（图片2）→ 槽位键（image:2）+ 中文标签 */
-function parseSlotFromRefName(refName: string): { key: string; index: number; label: string } | null {
-  const parsed = slotFromRefName(refName)
-  if (!parsed) return null
-  return {
-    key: refSlotKey(parsed.kind, parsed.index),
-    index: parsed.index,
-    label: parsed.kind === 'image' ? '图片' : parsed.kind === 'video' ? '视频' : parsed.kind === 'audio' ? '音频' : '音视频',
-  }
+/** 正文里的 @ 声明（只用来「标出哪个序号被点了」与算缺号，不产生内容） */
+const promptRefSlots = computed(() => parseRefSlots(prompt.value))
+
+/** 错误提示按「序号」记（格子由连线派生，键会随内容变化，不能按 key 存） */
+const slotErrors = ref<Record<string, string>>({})
+/** 某个待输入格的错误文案（按种类+序号查） */
+function slotErrorOf(tile: { slotKey?: string }): string {
+  return tile.slotKey ? (slotErrors.value[tile.slotKey] ?? '') : ''
 }
 
 /** 一行格子的拖拽排序（有槽位的按槽位顺序写回；纯素材沿用原来的 onReorder） */
@@ -765,67 +673,22 @@ function onReorderTiles(next?: Array<{ card?: MaterialCard; slot?: RefSlot }>): 
   if (cardsOnly.length) onReorder(cardsOnly)
 }
 
-/** 正文变了 → 重算槽位 */
-watch([prompt, shownMaterials], () => syncRefSlots(), { immediate: true })
-
-/** 槽位键 → 编辑器里的资源项（插入标签时用） */
-function slotEditorItem(slot: RefSlot): ResourceItem {
-  const meta = REF_SLOT_META[slot.kind]
-  const name = slot.name || (meta.label + slot.index)
-  const item: ResourceItem = {
-    id: 'ref-slot:' + slot.key,
-    name,
-    category: '素材',
-    url: slot.url,
-    mediaType: slot.mediaType,
-  }
-  if (slot.kind === 'audio' || slot.mediaType === 'audio') item.icon = SLOT_AUDIO_ICON
-  item.renderEditor = (self) => {
-    const span = document.createElement('span')
-    span.className = 'resource-node resource-chip' + (slot.status === 'pending' ? ' is-pending' : '')
-    span.dataset.id = self.id
-    span.dataset.name = self.name
-    if (self.url && self.mediaType === 'image') {
-      const img = document.createElement('img')
-      img.className = 'resource-chip-thumb'
-      img.src = self.url
-      img.alt = ''
-      span.append(img)
-    } else {
-      const ic = document.createElement('span')
-      ic.className = 'resource-chip-icon'
-      ic.innerHTML = self.mediaType === 'audio' ? SLOT_AUDIO_ICON : SLOT_ICON
-      span.append(ic)
-    }
-    const nm = document.createElement('span')
-    nm.className = 'resource-chip-name'
-    nm.textContent = self.name
-    span.append(nm)
-    return span
-  }
-  return item
-}
-
-const SLOT_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
-const SLOT_AUDIO_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>'
-
 const editorComponentRef = ref<{
   insertResource?(item: ResourceItem): void
   replaceResource?(item: ResourceItem): boolean
 } | null>(null)
 
 /** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
-function pickSlotFile(slot: RefSlot): void {
+function pickSlotFile(slotKey: string): void {
+  const [kind, indexRaw] = slotKey.split(':')
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = REF_SLOT_META[slot.kind].accept
+  input.accept = REF_SLOT_META[kind as RefSlotKind].accept
   input.style.display = 'none'
   document.body.appendChild(input)
   input.addEventListener('change', () => {
     const file = input.files?.[0]
-    if (file) fillSlotFromFile(slot, file)
+    if (file) fillSlotFromFile(kind as RefSlotKind, Number(indexRaw), file)
     input.remove()
   })
   input.addEventListener('cancel', () => input.remove())
@@ -840,17 +703,17 @@ function pickSlotFile(slot: RefSlot): void {
  * 连线进来的素材（collectUpstreamMaterials 按边收），只改本地状态的话：
  *   刷新就没了、生成时也拿不到这张图。所以必须建节点 + 连边。
  */
-async function fillSlotFromFile(slot: RefSlot, file: File): Promise<void> {
-  const verdict = judgeSlotDrop(slot.kind, { file })
+async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): Promise<void> {
+  const verdict = judgeSlotDrop(kind, { file })
   if (!verdict.ok) {
-    setSlotError(slot, dropVerdictMessage(slot.kind, verdict))
+    setSlotError(index, dropVerdictMessage(kind, verdict))
     return
   }
   const fileDrop = ctx.tryGet<{
     addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
   }>('file-drop')
   if (!fileDrop) {
-    setSlotError(slot, '当前宿主没有文件落库能力，无法建参考节点')
+    setSlotError(index, '当前宿主没有文件落库能力，无法建参考节点')
     return
   }
   const doc = ctx.tryGet<{
@@ -858,14 +721,14 @@ async function fillSlotFromFile(slot: RefSlot, file: File): Promise<void> {
     addEdge(input: { source: string; target: string }): string
     updateNode(id: string, patch: { data: Record<string, unknown> }): void
   }>('doc')
-  if (!doc) { setSlotError(slot, '当前宿主没有连线能力'); return }
+  if (!doc) { setSlotError(index, '当前宿主没有连线能力'); return }
   const me = doc.getNode(props.id)
   const base = me?.position ?? { x: 0, y: 0 }
   const w = Number(me?.width) || 320
   try {
     // 建节点 → 还选中 → 等一帧 → 连线 → 按序号排位；顺序在 uploadToRefSlot 里钉死（已单测）
     const result = await uploadToRefSlot(
-      { file, kind: slot.kind, index: slot.index, targetId: props.id },
+      { file, kind, index, targetId: props.id },
       {
         addFiles: (files, at) => fileDrop.addFiles(files, at),
         waitTick: () => nextTick(),
@@ -885,50 +748,27 @@ async function fillSlotFromFile(slot: RefSlot, file: File): Promise<void> {
         positionFor: (index) => ({ x: base.x - w - 24 - (index - 1) * (w + 24), y: base.y }),
       },
     )
-    if (!result.ok) { setSlotError(slot, result.error ?? '上传失败'); return }
-    slot.status = 'ready'
-    slot.mediaType = verdict.mediaType
-    slot.name = result.created?.name || file.name
-    slot.url = result.created?.url
-    slot.objectUrl = false
-    slot.error = undefined
-    refreshSlotChip(slot)
+    if (!result.ok) { setSlotError(index, result.error ?? '上传失败'); return }
+    // 内容已就位（连线进来了），正文里那颗虚线标签刷新成实线（名字/缩略图）
+    refreshSlotChips()
   } catch (err) {
     console.warn('[bottom-bar] 上传参考失败', err)
-    setSlotError(slot, '上传失败，请重试')
+    setSlotError(index, '上传失败，请重试')
   }
 }
 
-function setSlotError(slot: RefSlot, message: string): void {
-  slot.error = message
-  setTimeout(() => { slot.error = undefined }, 2600)
+/** 错误按「参考序号」记（格子由连线派生，键随内容变），几秒后自动消失 */
+function setSlotError(index: number, message: string): void {
+  slotErrors.value = { ...slotErrors.value, ['image:' + index]: message, ['video:' + index]: message, ['audio:' + index]: message, ['av:' + index]: message }
+  setTimeout(() => {
+    const next = { ...slotErrors.value }
+    delete next['image:' + index]; delete next['video:' + index]; delete next['audio:' + index]; delete next['av:' + index]
+    slotErrors.value = next
+  }, 2600)
 }
 
-/** 槽位变了 → 正文里那个标签也要跟着变（名字/缩略图/虚线→实线） */
-function refreshSlotChip(slot: RefSlot): void {
-  const item = slotEditorItem(slot)
-  // insertResource 会另起一个；这里要的是「原地替换同一个 id 的标签」，
-  // 于是先删掉旧的再插新的 —— 由编辑器自己维护文档一致性。
-  editorComponentRef.value?.replaceResource?.(item)
-}
-
-/** 点 × 把槽位退回「待输入」 */
-function resetSlot(slot: RefSlot): void {
-  if (slot.objectUrl && slot.url) URL.revokeObjectURL(slot.url)
-  slot.status = 'pending'
-  slot.url = undefined
-  slot.name = undefined
-  slot.mediaType = undefined
-  slot.objectUrl = false
-  slot.error = undefined
-  refreshSlotChip(slot)
-}
-
-onBeforeUnmount(() => {
-  for (const s of refSlots.value) {
-    if (s.objectUrl && s.url) URL.revokeObjectURL(s.url)
-  }
-})
+/** 正文标签刷新：内容来自连线（collectUpstreamMaterials），这里只触发一次整体刷新 */
+function refreshSlotChips(): void { editorComponentRef.value?.refreshChips?.() }
 
 // 松手时命中槽位：画布节点不是 HTML5 drag，收不到 drop 事件，只能等 pointerup。
 // 用 window 捕获阶段：VueFlow 自己也会处理松手，我们只读坐标、不改它的行为。
@@ -958,20 +798,17 @@ function onSlotDragLeave(_ev: DragEvent): void {
  *   (c) 画布节点 → 必须按住 Ctrl / ⌘，走画布自己的拖拽事件（见下面 beginDropCapture）。
  */
 function onSlotDrop(ev: DragEvent, slot: RefSlot): void {
+  void slot
   slotsDropHot.value = false
   const file = ev.dataTransfer?.files?.[0]
-  if (file) { fillSlotFromFile(slot, file); return }
-  // 画布节点不是走 dataTransfer 的（VueFlow 拖动不写 payload），
-  // 它由 beginDropCapture 在拖拽结束时按鼠标位置命中 —— 这里只兜底本地文件。
-  setSlotError(slot, '没识别到文件；拖节点请按住 Ctrl 再拖')
-}
-
-function slotLabelOf(slot: RefSlot): string {
-  return REF_SLOT_META[slot.kind].label + ' ' + slot.index
-}
-
-function slotIconOf(slot: RefSlot): string {
-  return slot.mediaType === 'audio' || slot.kind === 'audio' ? SLOT_AUDIO_ICON : SLOT_ICON
+  if (!file) return
+  // 落点是**真实 DOM 上的格子**：从格子上的键反查它代表哪个参考
+  const host = (ev.currentTarget as HTMLElement | null)?.closest('.nb-card') as HTMLElement | null
+  const tile = refTiles.value.find((t) => t.key === (host?.dataset.tileKey || ''))
+  if (!tile?.slotKey) return
+  const kind = tile.slotKey.split(':')[0] as RefSlotKind
+  const index = Number(tile.slotKey.split(':')[1])
+  void fillSlotFromFile(kind, index, file)
 }
 
 // ===== 规则 3(c)：按住 Ctrl 把画布节点拖进槽位 =====
@@ -983,19 +820,6 @@ function slotIconOf(slot: RefSlot): string {
 
 /** 正在被拖的画布节点（松手时用） */
 let draggingNode: { id: string; name: string; mediaType: 'image' | 'video' | 'audio' | null } | null = null
-
-/** 按鼠标点找它落在哪个槽位上（纯 DOM 命中，槽位是 teleport 到 body 的浮层） */
-function slotAtPoint(x: number, y: number): RefSlot | null {
-  // 用槽位自己的矩形做命中（槽位 teleport 在 body 下，和画布节点不在同一层；
-  // `elementFromPoint` 会被上层浮层挡住，矩形判定与真实位置一致且可单测）
-  const rects = visibleRefSlots.value.map((s) => {
-    const el = document.querySelector('.nb-slot[data-slot-key="' + s.key + '"]') as HTMLElement | null
-    const r = el?.getBoundingClientRect()
-    return { key: s.key, left: r?.left ?? 0, top: r?.top ?? 0, right: r?.right ?? -1, bottom: r?.bottom ?? -1 }
-  })
-  const key = hitSlotAtPoint({ x, y }, rects)
-  return key ? (refSlots.value.find((s) => s.key === key) ?? null) : null
-}
 
 function onCanvasNodeDragStart(p: { nodeId?: string }): void {
   const id = p?.nodeId
@@ -1026,15 +850,23 @@ function onCanvasNodeDragEnd(ev: PointerEvent | MouseEvent): void {
   const node = draggingNode
   draggingNode = null
   if (!node) return
-  const slot = slotAtPoint(ev.clientX, ev.clientY)
-  if (!slot) return
-  const verdict = judgeSlotDrop(slot.kind, { node: { name: node.name, mime: node.mediaType ? node.mediaType + '/*' : '' }, modifier: ev.ctrlKey || ev.metaKey })
-  if (!verdict.ok) { setSlotError(slot, dropVerdictMessage(slot.kind, verdict)); return }
-  slot.status = 'ready'
-  slot.mediaType = verdict.mediaType
-  slot.name = node.name
-  slot.error = undefined
-  refreshSlotChip(slot)
+  // 松手点 → 参考区里**待输入**的那一格（矩形命中，hitSlotAtPoint 已单测）
+  const rects = refTiles.value
+    .filter((t) => t.pending && t.slotKey)
+    .map((t) => {
+      const el = document.querySelector('.nb-card[data-tile-key="' + t.key + '"]') as HTMLElement | null
+      const r = el?.getBoundingClientRect()
+      return { key: t.slotKey as string, left: r?.left ?? 0, top: r?.top ?? 0, right: r?.right ?? -1, bottom: r?.bottom ?? -1 }
+    })
+  const slotKey = hitSlotAtPoint({ x: ev.clientX, y: ev.clientY }, rects)
+  if (!slotKey) return
+  const kind = slotKey.split(':')[0] as RefSlotKind
+  const index = Number(slotKey.split(':')[1])
+  const verdict = judgeSlotDrop(kind, { node: { name: node.name, mime: node.mediaType ? node.mediaType + '/*' : '' }, modifier: ev.ctrlKey || ev.metaKey })
+  if (!verdict.ok) { setSlotError(index, dropVerdictMessage(kind, verdict)); return }
+  // 拖节点进来同样走真实连线（有连线才有内容；与上传同一条规则）。
+  // 内容不落在本地状态里 —— fillSlotFromFile 会建节点+连边，格子随后由连线派生。
+  void fillSlotFromFile(kind, index, new File([new Uint8Array(0)], node.name || 'node', { type: node.mediaType ? node.mediaType + '/x' : '' }))
 }
 
 
@@ -1152,14 +984,14 @@ function onGlobalLeave(el: Element): void {
       <div
         v-for="tile in refTiles"
         :key="tile.key"
-        :data-slot-key="tile.slotKey || undefined"
+        :data-tile-key="tile.key"
         class="nb-card"
         :class="{ 'is-pending': tile.pending }"
         :title="tile.pending ? '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点' : tile.name + '（可拖动调整顺序）'"
-        @click.stop="tile.pending && tile.slot ? pickSlotFile(tile.slot) : undefined"
+        @click.stop="tile.pending && tile.slotKey ? pickSlotFile(tile.slotKey) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
-        @drop.stop.prevent="tile.slot ? onSlotDrop($event, tile.slot) : undefined"
+        @drop.stop.prevent="onSlotDrop($event)"
       >
         <span class="nb-card-clip">
           <img
@@ -1177,6 +1009,7 @@ function onGlobalLeave(el: Element): void {
           <span v-else class="nb-card-text">{{ (tile.name || '文')[0] }}</span>
           <span class="nb-card-index">{{ tile.index }}</span>
         </span>
+        <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
         <button
           v-if="!tile.pending"
           class="nb-card-hit"
@@ -1190,7 +1023,7 @@ function onGlobalLeave(el: Element): void {
           type="button"
           :aria-label="'移除素材 ' + tile.name"
           title="移除素材（断开连线）"
-          @click.stop="tile.card ? removeCard(tile.card) : resetSlot(tile.slot!)"
+          @click.stop="removeCard(tile.card!)"
           @pointerdown.stop
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1586,6 +1419,17 @@ function onGlobalLeave(el: Element): void {
   font-size: 8px;
   font-weight: 700;
   line-height: 1.2;
+}
+/* 待输入格上传/拖入失败的原因：贴在格子下方，几秒自动消失 */
+.nb-slot-error {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--ui-danger, #ef4444);
+  pointer-events: none;
 }
 /* 参考行整体拖放高亮 */
 .nb-cards.is-drop-hot {

@@ -69,78 +69,93 @@ describe('上传槽位：建节点 → 还选中 → 连线 → 排位', () => {
 })
 
 describe('参考区只排一行（不再重复）', () => {
-  it('同一个「图片1」：槽位与素材卡只出现一次', () => {
-    const tiles = mergeRefTiles(
-      [{ key: 'image:1', kind: 'image', index: 1, status: 'ready', name: '图片1', url: 'a.png' }],
-      [{ id: 'n1', name: '图片1', url: 'a.png', isText: false }],
-    )
-    expect(tiles).toHaveLength(1)
-    expect(tiles[0].key).toBe('slot:image:1')
-    expect(tiles[0].pending).toBe(false)
-  })
-
-  it('待输入槽位 + 已连素材：合并成一行并按序号排', () => {
+  /**
+   * 用户口径（2026-10-26，附两张截图）：
+   *   ① 连了 3 条线就只有 3 格，不能凭空多出第 4、5 格；
+   *   ② 声明了 @图片2、连线只有 1 条 → 内容在第 1 格，第 2 格显示「待输入」。
+   *   格子身份 = **连线的序号**（collectUpstreamMaterials 的 refName），正文声明不产生内容。
+   */
+  it('连了 3 条线 → 只有 3 格（正文声明再多也不加格子）', () => {
     const tiles = mergeRefTiles(
       [
-        { key: 'image:1', kind: 'image', index: 1, status: 'ready', name: '图片1', url: 'a.png' },
-        { key: 'image:2', kind: 'image', index: 2, status: 'pending' },
+        { kind: 'image', index: 1 },
+        { kind: 'image', index: 2 },
+        { kind: 'image', index: 3 },
       ],
-      [{ id: 'n1', name: '图片1', url: 'a.png', isText: false }],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'b', name: '图片2', url: 'b.png', isText: false },
+        { id: 'c', name: '图片3', url: 'c.png', isText: false },
+      ],
     )
-    expect(tiles.map((t) => t.key)).toEqual(['slot:image:1', 'slot:image:2'])
-    expect(tiles[1].pending).toBe(true)
-    expect(tiles[1].label).toBe('图片 2')
+    expect(tiles).toHaveLength(3)
+    expect(tiles.every((t) => !t.pending)).toBe(true)
   })
 
-  it('正文没写 @ 的已连素材也补成一格（参考不能凭空消失）', () => {
-    const tiles = mergeRefTiles([], [{ id: 'n1', name: '图片1', url: 'a.png', isText: false }])
+  it('连线 1 条、声明到图片2 → 第 1 格有内容，第 2 格「待输入」', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'image', index: 2 }],
+      [{ id: 'a', name: '图片1', url: 'a.png', isText: false }],
+    )
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]).toMatchObject({ index: 1, pending: false, name: '图片1' })
+    expect(tiles[1]).toMatchObject({ index: 2, pending: true, label: '图片 2' })
+  })
+
+  it('连线 1 条、正文没写任何 @ → 只有 1 格（参考不凭空消失）', () => {
+    const tiles = mergeRefTiles([], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }])
     expect(tiles).toHaveLength(1)
-    expect(tiles[0].key).toBe('card:n1')
     expect(tiles[0].pending).toBe(false)
   })
+
+  it('连线 3 条但只声明 @图片2 → 仍是 3 格（第 3 格照常显示）', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'image', index: 2 }],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'b', name: '图片2', url: 'b.png', isText: false },
+        { id: 'c', name: '图片3', url: 'c.png', isText: false },
+      ],
+    )
+    expect(tiles).toHaveLength(3)
+    expect(tiles.every((t) => !t.pending)).toBe(true)
+  })
+
+  it('图片与音频各自编号、按种类分格', () => {
+    const tiles = mergeRefTiles(
+      [{ kind: 'audio', index: 1 }],
+      [
+        { id: 'a', name: '图片1', url: 'a.png', isText: false },
+        { id: 'v', name: '音频1', url: 'v.mp3', isText: false },
+      ],
+    )
+    expect(tiles.map((t) => t.label)).toEqual(['图片 1', '音频 1'])
+    expect(tiles.every((t) => !t.pending)).toBe(true)
+  })
 })
 
-describe('参考缺号 → 不许发送', () => {
-  it('只声明图片2（还没上传）→ 1 与 2 都空，都算缺', () => {
+describe('参考缺号 → 不许发送（只看连线内容）', () => {
+  it('声明 @图片2、连线只有 1 张图 → 不缺（第 1 格有内容，第 2 格待输入）', () => {
     expect(
-      findRefGap([{ kind: 'image', index: 2, status: 'pending' }]),
-    ).toEqual({ kind: 'image', missing: [1, 2] })
-  })
-
-  it('只传了一张「图片1」 → 不缺，可以发送', () => {
-    expect(findRefGap([{ kind: 'image', index: 1, status: 'ready' }])).toBe(null)
-  })
-
-  it('图片1 + 图片3 → 缺 2', () => {
-    expect(
-      findRefGap([
-        { kind: 'image', index: 1, status: 'ready' },
-        { kind: 'image', index: 3, status: 'ready' },
-      ]),
-    ).toEqual({ kind: 'image', missing: [2] })
-  })
-
-  it('图片与音频各自从 1 连续（互不干扰）', () => {
-    expect(
-      findRefGap([
-        { kind: 'image', index: 1, status: 'ready' },
-        { kind: 'audio', index: 1, status: 'ready' },
-      ]),
+      findRefGap([{ kind: 'image', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
     ).toBe(null)
+  })
+
+  it('声明 @图片2、连线一张都没有 → 缺 1', () => {
+    expect(findRefGap([{ kind: 'image', index: 2 }], [])).toEqual({ kind: 'image', missing: [1] })
+  })
+
+  it('没写任何 @ → 不缺（普通参考图照旧）', () => {
+    expect(findRefGap([], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }])).toBe(null)
+  })
+
+  it('图片与音频各自判定', () => {
     expect(
-      findRefGap([{ kind: 'image', index: 1, status: 'ready' }, { kind: 'audio', index: 2, status: 'ready' }]),
+      findRefGap([{ kind: 'audio', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
     ).toEqual({ kind: 'audio', missing: [1] })
   })
-
-  it('待输入（还没上传）也算缺：图片2 没内容时不能发', () => {
-    expect(
-      findRefGap([
-        { kind: 'image', index: 1, status: 'ready' },
-        { kind: 'image', index: 2, status: 'pending' },
-      ]),
-    ).toEqual({ kind: 'image', missing: [2] })
-  })
 })
+
 
 
 describe('placeRefAtSlot：上传落到第几格，就是第几个参考', () => {
