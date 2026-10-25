@@ -149,6 +149,34 @@ describe('失败时不丢改动', () => {
     await adapter2.set('canvas:graph', [node])
     expect(sent).toBe(1)
   })
+
+  it('★ HTTP 200 + 业务 ok:false 不推进基准；下一次保存会重发同一批节点', async () => {
+    let rejectFirst = true
+    const writes: Array<Record<string, unknown>> = []
+    const fetchImpl: FetchLike = async (url, init) => {
+      const path = String(url).replace('http://srv', '')
+      if (!init || !init.method || init.method === 'GET') {
+        return new Response(JSON.stringify({ ok: true, nodes: [], edges: [], view: null }), { status: 200 })
+      }
+      const body = JSON.parse(String(init.body ?? '{}')) as Record<string, unknown>
+      writes.push(body)
+      // 后台的真实形状：预校验失败也回 HTTP 200，但正文 ok:false
+      if (rejectFirst && path.endsWith('/nodes')) {
+        rejectFirst = false
+        return new Response(JSON.stringify({ ok: false, errors: [{ message: '缺少节点 type' }] }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
+    }
+    const adapter = new CanvasDiffAdapter(new CloudApi({ baseUrl: 'http://srv', fetchImpl }))
+    await adapter.primeFromServer()
+    const node = { id: 'n1', type: 'text', position: { x: 0, y: 0 }, data: {} }
+
+    await expect(adapter.set('canvas:graph', [node])).rejects.toThrow(/缺少节点 type/)
+    // 第二次：基准没动，必须真的重发 add（否则刷新后改动消失）
+    await adapter.set('canvas:graph', [node])
+    expect(writes).toHaveLength(2)
+    expect((writes[1].add as unknown[]).length).toBe(1)
+  })
 })
 
 describe('恢复：服务器那份原样交给渲染层', () => {

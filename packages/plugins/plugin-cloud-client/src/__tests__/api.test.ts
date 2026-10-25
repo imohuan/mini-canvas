@@ -350,6 +350,25 @@ describe('管理令牌', () => {
     expect(String(err)).not.toContain('设置 → 插件')
   })
 
+  it('★ HTTP 200 + 业务 ok:false 必须抛（后台预校验失败时就是这种响应）', async () => {
+    const { fetchImpl } = fakeFetch(() => ({
+      status: 200,
+      body: { ok: false, errors: [{ op: 'add', index: 0, message: '缺少节点 type' }] },
+    }))
+    const api = new CloudApi({ baseUrl: 'http://srv', fetchImpl })
+    const err = await api.patchNodes('c1', { add: [{}] }).catch((e: Error) => e)
+    expect(String(err)).toContain('缺少节点 type')
+    // 边也必须同样处理：否则节点失败、边却推进了基准
+    await expect(api.patchEdges('c1', { add: [] })).rejects.toThrow()
+  })
+
+  it('HTTP 200 + ok:true 正常返回；没有正文也不误报失败（兼容旧后端）', async () => {
+    const ok = fakeFetch(() => ({ status: 200, body: { ok: true } }))
+    await new CloudApi({ baseUrl: 'http://srv', fetchImpl: ok.fetchImpl }).patchNodes('c1', { add: [] })
+    const empty = fakeFetch(() => ({ status: 200 }))
+    await new CloudApi({ baseUrl: 'http://srv', fetchImpl: empty.fetchImpl }).patchNodes('c1', { add: [] })
+  })
+
   it('this.doFetch 一处覆盖所有 HTTP 写：patchNodes/patchEdges/uploadResource/postResource/createJob/cancelJob/replaceCanvas/putView 都带令牌', async () => {
     ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
     localStorage.setItem(ADMIN_TOKEN_KEY, 'cloud-tok')

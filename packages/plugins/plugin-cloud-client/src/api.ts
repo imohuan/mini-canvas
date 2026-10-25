@@ -71,6 +71,32 @@ function httpError(what: string, status: number, method: 'GET' | 'WRITE' = 'WRIT
   return new Error('[cloud-client] ' + what + '失败 ' + status)
 }
 
+/**
+ * 批量写接口的业务结果。
+ *
+ * 关键事实（真机踩过）：后台在**预校验失败**时仍回 HTTP 200，正文是
+ * `{ ok:false, errors:[{ message }] }`。只看 `res.ok` 会把“一个都没写进去”
+ * 当成保存成功，随后把本地基准推进到现在这份，下一次保存不再重发 ——
+ * 刷新后改动就消失了。所以这里必须读正文，业务 `ok:false` 一律抛出。
+ *
+ * 兼容：老后端 / 极端代理可能不返回正文，此时按成功处理（HTTP 已是 2xx）。
+ */
+async function assertBatchOk(res: Response, what: string): Promise<void> {
+  let body: { ok?: unknown; errors?: Array<{ message?: unknown }>; error?: unknown }
+  try {
+    body = (await res.json()) as typeof body
+  } catch {
+    return
+  }
+  if (!body || body.ok !== false) return
+  const detail = Array.isArray(body.errors)
+    ? body.errors.map((e) => String(e?.message ?? '')).filter(Boolean).join('; ')
+    : typeof body.error === 'string'
+      ? body.error
+      : ''
+  throw new Error('[cloud-client] ' + what + '失败：' + (detail || '后台未接受这次写入'))
+}
+
 export class CloudApi {
   private baseUrl: string
   private readonly doFetch: FetchLike
@@ -339,6 +365,7 @@ export class CloudApi {
       body: JSON.stringify(body),
     })
     if (!res.ok) throw httpError('写节点', res.status)
+    await assertBatchOk(res, '写节点')
   }
 
   /** 增量写边（同上） */
@@ -349,6 +376,7 @@ export class CloudApi {
       body: JSON.stringify(body),
     })
     if (!res.ok) throw httpError('写连线', res.status)
+    await assertBatchOk(res, '写连线')
   }
 
   /** 写视口 */
