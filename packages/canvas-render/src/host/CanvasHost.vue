@@ -273,8 +273,22 @@ function syncNodesFromStore(): void {
   const h = hostRef.value
   if (!h) return
   const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value)
-  // 分批进行中：刷新目标引用（rAF step 会用最新数据继续），不重新计算批次
-  if (mountRaf) { stagedTarget = target; return }
+  /*
+   * 分批进行中：已有节点必须**立即**吃到新数据（远端改内容、进度帧、拖动位置），
+   * 只有尚未挂载的新节点继续排队。以前这里直接 return，分批窗口内所有更新都只写进
+   * stagedTarget，画面要等下一批 rAF 才变 —— 用户看到「数据改了但 UI 没动」。
+   */
+  if (mountRaf) {
+    stagedTarget = target
+    const publishedIds = new Set(nodes.value.map((n) => n.id))
+    const stagedById = new Map(target.map((n) => [n.id, n]))
+    nodes.value = nodes.value.map((n) => stagedById.get(n.id) ?? n)
+    // 新节点仍然只加已经发布过的（publishedExtra / 首批），不会因此把整批一次性挂上。
+    for (const n of target) {
+      if (!publishedIds.has(n.id) && publishedExtra.has(n.id)) nodes.value.push(n)
+    }
+    return
+  }
   const existingIds = new Set(nodes.value.map((n) => n.id))
   const addedCount = target.filter((n) => !existingIds.has(n.id)).length
   if (addedCount <= 40) {
