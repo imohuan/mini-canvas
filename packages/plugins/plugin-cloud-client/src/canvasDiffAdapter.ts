@@ -119,6 +119,19 @@ export class CanvasDiffAdapter {
   }
 
   /**
+   * 这个节点 id 是否已经成功写进服务器（保存基准里有它）。
+   *
+   * 合并层用它区分两种“本地有、云端也有同 id”：
+   * - 已提交 → 同一个节点，绝不能换号；
+   * - 未提交 → 真正的撞号，换号保住本地编辑。
+   * 只看合并基准会漏掉「保存成功、通知先到」的窗口，凭空复制一份节点。
+   */
+  wasSubmittedNode(id: string): boolean {
+    if (!Array.isArray(this.submittedNodes)) return false
+    return this.submittedNodes.some((n) => n && typeof n === 'object' && (n as CanvasNodeLike).id === id)
+  }
+
+  /**
    * 读服务器那份（恢复路径：装载时以云端为准覆盖本地）。
    *
    * 存的就是同源 URL，渲染组件拿去直接塞 `<img src>` 就能用，这里原样给。

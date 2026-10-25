@@ -461,6 +461,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
       applyPlan: (plan) => applyMergePlan(doc, plan),
       localEdges: () => doc.getEdges() as never,
       childNodesOf: (nodeId) => doc.childNodesOf?.(nodeId) as never ?? [],
+      wasSubmitted: (nodeId) => adapter.wasSubmittedNode(nodeId),
       noteServerSnapshot: (snapshot) => adapter.primeFromSnapshot(snapshot),
       onRevision: (revision) => {
         status.knownRevision = revision

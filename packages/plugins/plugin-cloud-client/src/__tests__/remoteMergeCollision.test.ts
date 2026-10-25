@@ -42,6 +42,38 @@ describe('同 id 碰撞：本地未提交节点 vs 云端新节点', () => {
     expect(plan.addNodes.map((n) => n.id)).toEqual(['1'])
   })
 
+  it('云端新增的 id 不能被本地换号抢走（给本地节点换到更大的号）', () => {
+    // 本地已有 1、2；云端本轮新增 2。若给本地 2 换号成 3，仍会与后续新增顺序错位。
+    // 关键是“换出的号不等于云端任何新增 id”。
+    const localOne = node('1', 'local-one')
+    const localTwo = node('2', 'local-two')
+    const plan = planRemoteMerge(
+      snap([]),
+      snap([localOne, localTwo]),
+      snap([node('2', 'cloud-two')]),
+    )
+    expect(plan.reassignNodeIds).toHaveLength(1)
+    expect(plan.reassignNodeIds[0].from).toBe('2')
+    expect(plan.reassignNodeIds[0].to).toBe('3')
+    expect(plan.addNodes.map((n) => n.id)).toEqual(['2'])
+  })
+
+  it('本地保存已成功、只是合并基准没跟上：同 id 同内容不算撞号，不能复制副本', () => {
+    // 真机路径：本地新建 1 → 保存先落服务器 → SSE 先到，合并基准还停在保存前。
+    // 若当成撞号换到 3，画布会多出一份一模一样的节点（实测 3、4 两份）。
+    const local = node('1', '本地建的')
+    const plan = planRemoteMerge(
+      snap([]),
+      snap([local]),
+      snap([local]),
+      () => true,
+      (id) => id === '1',
+    )
+    expect(plan.reassignNodeIds).toEqual([])
+    expect(plan.addNodes).toEqual([])
+    expect(plan.updateNodes).toEqual([])
+  })
+
   it('缺失 position 不被伪造成 0,0：无位置与在原点仍能区分', () => {
     const noPosition = { id: '1', type: 'text', data: { text: 'no-pos' } }
     const atOrigin = { id: '1', type: 'text', position: { x: 0, y: 0 }, data: { text: 'at-origin' } }

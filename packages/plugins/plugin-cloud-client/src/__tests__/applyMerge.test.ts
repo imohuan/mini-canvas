@@ -112,4 +112,45 @@ describe('落地一轮合并', () => {
     // 没有任何结构操作：旧宿主宁可保留旧行为，也不能把边/子节点引用改坏
     expect(calls).toEqual([])
   })
+
+  it('真实宿主只给 getEdges（DocService 的形状）也要换 id，否则同号新增会整轮回滚', () => {
+    // 生产宿主暴露的是 getEdges / childNodesOf；旧实现只认 localEdges，
+    // 于是碰撞轮次被跳过换号，addNodes 撞同 id 抛错，版本前进但节点没落地。
+    const nodes: Record<string, { data?: Record<string, unknown> }> = {
+      '1': { data: { text: '本地建的' } },
+    }
+    const calls: Array<{ op: string; arg: unknown }> = []
+    const doc: DocLike = {
+      getNode: (id) => nodes[id],
+      getEdges: () => [],
+      childNodesOf: () => [],
+      removeEdges: (ids) => calls.push({ op: 'removeEdges', arg: ids }),
+      removeNodes: (ids) => {
+        calls.push({ op: 'removeNodes', arg: ids })
+        for (const id of ids) delete nodes[id]
+      },
+      addNodes: (inputs) => {
+        calls.push({ op: 'addNodes', arg: inputs })
+        for (const raw of inputs as Array<{ id?: string; data?: Record<string, unknown> }>) {
+          if (raw.id && nodes[raw.id]) throw new Error(`[nodeStore] node id "${raw.id}" already exists`)
+          if (raw.id) nodes[raw.id] = { data: raw.data }
+        }
+      },
+      updateNode: (id, patch) => calls.push({ op: 'updateNode', arg: { id, patch } }),
+      updateNodeRuntime: () => {},
+      connectEdge: (e) => calls.push({ op: 'connectEdge', arg: e }),
+      transaction: (_r, fn) => fn(),
+    }
+
+    applyMergePlan(doc, {
+      ...empty,
+      reassignNodeIds: [{ from: '1', to: '2' }],
+      addNodes: [{ id: '1', type: 'text', position: { x: 0, y: 0 }, data: { text: '云端新节点' } }],
+    })
+
+    expect(calls).toContainEqual({ op: 'removeNodes', arg: ['1'] })
+    expect(calls.some((c) => c.op === 'addNodes' && JSON.stringify(c.arg).includes('"id":"2"'))).toBe(true)
+    expect(nodes['1']?.data?.text).toBe('云端新节点')
+    expect(nodes['2']?.data?.text).toBe('本地建的')
+  })
 })

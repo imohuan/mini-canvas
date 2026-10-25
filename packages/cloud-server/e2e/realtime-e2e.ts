@@ -205,11 +205,31 @@ async function main(): Promise<void> {
     const localId = await page.ev<string>(
       `(() => window.MiniCanvasUI.getHost().graph.createNode('text', { x: 700, y: 500 }, { text: '本地建的' }))()`,
     )
-    await client.callTool({ name: 'canvas_batch_nodes', arguments: { add: [{ type: 'text', data: { text: 'AI 又加一个' } }] } })
-    await sleep(2500)
-    const after = await page.ev<{ ids: string[]; texts: string[] }>(PROBE)
+    const localRound = await client.callTool({
+      name: 'canvas_batch_nodes',
+      arguments: { add: [{ type: 'text', data: { text: 'AI 又加一个' } }] },
+    })
+    const localRoundText = ((localRound as { content: { text?: string }[] }).content ?? [])
+      .map((c) => c.text ?? '')
+      .join('')
+    // 这条必须等够一次 15 秒定时核对：2.5 秒只能证明 SSE 及时，证明不了丢帧后的兜底。
+    const deadline = Date.now() + 20_000
+    let after = await page.ev<{ ids: string[]; texts: string[]; knownRevision?: number; serverRevision?: number }>(PROBE)
+    while (Date.now() < deadline && !after.texts.includes('AI 又加一个')) {
+      await sleep(500)
+      after = await page.ev<{ ids: string[]; texts: string[]; knownRevision?: number; serverRevision?: number }>(PROBE)
+    }
     check('★ 本地刚建的节点还在（没被云端整包覆盖冲掉）', after.ids.includes(localId), { localId, ids: after.ids })
-    check('AI 新加的那个也进来了', after.texts.includes('AI 又加一个'), { texts: after.texts })
+    check('AI 新加的那个也进来了', after.texts.includes('AI 又加一个'), {
+      localId,
+      localRound: localRoundText.slice(0, 300),
+      after,
+    })
+    // 同一份本地内容只能有一份：同步不该在换号/保存竞态里凭空复制节点。
+    check('本地节点没有被复制出副本', after.texts.filter((t) => t === '本地建的').length === 1, {
+      texts: after.texts,
+      ids: after.ids,
+    })
 
     // Chrome 会把上面的“首次访问 404”也记成控制台 error；真实失败已由 failedRequests 的
     // 白名单断言覆盖，这里不重复把同一条 404 计成两次失败。

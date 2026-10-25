@@ -27,7 +27,9 @@ export interface DocLike {
     size?: unknown
     parentId?: string
   } | undefined
-  /** 当前本地边（改 id 时要一起重连；旧宿主可缺省） */
+  /** 当前本地边（换 id 时要一起重连；与 localEdges 二选一，真实 doc 服务提供的是这个） */
+  getEdges?(): unknown[]
+  /** 当前本地边（换 id 时要一起重连；旧宿主可缺省） */
   localEdges?(): Array<{
     id: string
     source: string
@@ -46,6 +48,37 @@ export interface DocLike {
   updateNodeRuntime(id: string, patch: unknown): void
   connectEdge(input: unknown): unknown
   transaction<T>(reason: string, fn: () => T): T
+}
+
+/** 换 id 时要重连的边（从宿主原样拿到的最小形状） */
+type LocalEdge = {
+  id: string
+  source: string
+  target: string
+  sourceHandle?: string
+  targetHandle?: string
+  type?: string
+  data?: Record<string, unknown>
+}
+
+/** 只保留形状合格的边；坏条目跳过，不把 undefined 当端点传出去 */
+function normalizeLocalEdges(raw: unknown[]): LocalEdge[] {
+  const out: LocalEdge[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const e = item as Record<string, unknown>
+    if (typeof e.id !== 'string' || typeof e.source !== 'string' || typeof e.target !== 'string') continue
+    out.push({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      ...(typeof e.sourceHandle === 'string' ? { sourceHandle: e.sourceHandle } : {}),
+      ...(typeof e.targetHandle === 'string' ? { targetHandle: e.targetHandle } : {}),
+      ...(typeof e.type === 'string' ? { type: e.type } : {}),
+      ...(e.data && typeof e.data === 'object' ? { data: { ...(e.data as Record<string, unknown>) } } : {}),
+    })
+  }
+  return out
 }
 
 /** 两边的 data 有哪些 key 变了（用来判断"是不是只有 runState 动了"） */
@@ -87,7 +120,14 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
 
   const renames = plan.reassignNodeIds ?? []
   // 旧宿主没有关联信息时不做换 id；如果这一轮只剩换 id，直接返回，不留下空撤销记录。
-  const canRename = typeof doc.localEdges === 'function' && typeof doc.childNodesOf === 'function'
+  /*
+   * 真实宿主（DocService）暴露的是 getEdges，不是 localEdges —— 换号能力原先只认后者，
+   * 于是生产环境被误判成“旧宿主”：碰撞时不换号，紧接着新增云端同号节点抛
+   * "node id already exists"，整轮合并回滚，版本却已经推进。表现就是“版本对了，节点没出现”。
+   * 两种取边口都认，childNodesOf 仍必须有（否则改不了子节点的 parentId，宁可不动）。
+   */
+  const readEdges: (() => unknown[]) | undefined = doc.localEdges ?? doc.getEdges
+  const canRename = typeof readEdges === 'function' && typeof doc.childNodesOf === 'function'
   const effectiveRenames = canRename ? renames : []
 
   const nothingElse =
@@ -110,7 +150,9 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
     for (const r of effectiveRenames) {
       const node = doc.getNode(r.from)
       if (!node) continue
-      const localEdges = (doc.localEdges?.() ?? []).filter((e) => e.source === r.from || e.target === r.from)
+      const localEdges = normalizeLocalEdges(readEdges?.() ?? []).filter(
+        (e) => e.source === r.from || e.target === r.from,
+      )
       doc.removeEdges(localEdges.map((e) => e.id))
       doc.removeNodes([r.from])
       doc.addNodes([{ ...node, id: r.to }])

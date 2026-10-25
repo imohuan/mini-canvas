@@ -173,12 +173,15 @@ function mergeNodeFields(base: MergeNode, mine: MergeNode, theirs: MergeNode): M
  * @param theirs 云端当前状态
  * @param knownType 本地认不认识某个节点类型（不给 = 全认）。不认识的类型当作「云端没有」：
  *                  它是本地渲染不了的节点，加进来只会是空白/报错，不如不加。
+ * @param wasSubmitted 本地这个 id 是否已经成功提交过（不给 = 不知道）。
+ *                  已知提交过时，云端同 id 就是同一个节点，不能当成撞号换号。
  */
 export function planRemoteMerge(
   base: CanvasGraphSnapshot,
   mine: CanvasGraphSnapshot,
   theirs: CanvasGraphSnapshot,
   knownType: (type: string) => boolean = () => true,
+  wasSubmitted: (id: string) => boolean = () => false,
 ): RemoteMergePlan {
   const plan: RemoteMergePlan = {
     addNodes: [],
@@ -201,6 +204,11 @@ export function planRemoteMerge(
    * 只改映射，不在这里动边；落地层负责同步改端点与 parentId。
    */
   const takenIds = new Set<string>([...mineNodes.keys(), ...theirsNodes.keys(), ...baseNodes.keys()])
+  /*
+   * 本地新节点可能用了后台“还没发出去”的号（例如本地现有 1，AI 在云端新建了 2）。
+   * 给本地未提交节点换号时，要避开**云端新增**的 id，否则换出来的号会被云端这轮新增顶掉。
+   */
+  for (const [id] of theirsNodes) if (!baseNodes.has(id)) takenIds.add(id)
   const collisions = new Map<string, string>()
   let numericSeed = 0
   for (const id of takenIds) {
@@ -209,6 +217,21 @@ export function planRemoteMerge(
   }
   for (const [id] of theirsNodes) {
     if (baseNodes.has(id) || !mineNodes.has(id)) continue
+    /*
+     * 内容完全相同 = 这其实是同一个节点，只是本地的保存基准还没跟上：
+     * 本地已保存成功，服务器有同 id 同内容，而合并基准仍停在保存前。
+     * 这时换号会凭空多出一个副本（实测一次保存 + 一次 AI 新增后出现 3、4 两份“本地建的”）。
+     * 同 id 且同内容不构成碰撞，直接当作已同步；本轮结束会把 base 推到现在这份。
+     */
+    const local = mineNodes.get(id)
+    if (!local) continue
+    /*
+     * 已经成功提交过的 id，云端那份就是同一个节点：绝不换号。
+     * 以前只靠“基准里有它”判断，而本地保存成功与合并基准推进之间有一个窗口，
+     * 正好在窗口里收到通知时会把已保存的节点误当成本地新节点，复制出一份副本。
+     */
+    if (wasSubmitted(id)) continue
+    if (sameNode(local, theirsNodes.get(id))) continue
     const to = allocateLocalId(takenIds, numericSeed)
     numericSeed = Math.max(numericSeed, Number.parseInt(to, 10) || numericSeed)
     collisions.set(id, to)

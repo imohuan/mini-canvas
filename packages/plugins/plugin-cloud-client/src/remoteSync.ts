@@ -25,6 +25,13 @@ export interface LocalGraphHandlers {
   /** 某节点的直接子节点（换 id 时要改 parentId；缺省 = 旧宿主不改父子） */
   childNodesOf?(nodeId: string): Array<{ id: string }>
   /**
+   * 这个 id 是否已经成功提交到服务器（缺省 = 不知道）。
+   *
+   * 用于区分「本地新节点撞上云端 id」与「本地已保存、只是合并基准还没推进」：
+   * 后者是同一个节点，换号会凭空复制一份。保存适配器知道准确答案，合并层不该去猜。
+   */
+  wasSubmitted?(nodeId: string): boolean
+  /**
    * 把一轮合并结果落到本地画布。
    * 调用方应把「作品字段」包进事务（一条撤销记录），把「只改 runState 的进度帧」单独落
    * （不进撤销栈 —— 否则用户按一次 Ctrl+Z 只退一格进度条）。
@@ -209,7 +216,13 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (typeof read.revision === 'number') opts.graph.onRevision?.(read.revision)
         const mine: CanvasGraphSnapshot = { nodes: opts.graph.getNodes(), edges: opts.graph.getEdges() }
         const baseline = base ?? { nodes: [], edges: [] }
-        const plan = planRemoteMerge(baseline, mine, theirs, opts.knownType)
+        const plan = planRemoteMerge(
+          baseline,
+          mine,
+          theirs,
+          opts.knownType,
+          opts.graph.wasSubmitted ?? (() => false),
+        )
         // 定时核对可能正好撞上用户拖拽/输入：只延迟被占用节点的对应字段，
         // 不禁用整张画布的同步（新增节点、其他节点变化仍然立即落地）。
         const held = opts.graph.editingFields ? collectEditingFields(plan, opts.graph.editingFields) : new Set<string>()
