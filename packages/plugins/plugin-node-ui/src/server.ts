@@ -171,6 +171,20 @@ interface DocLike {
   batchNodes(input: unknown): Promise<PatchResult>
 }
 
+/** 宿主画布文档池（非默认画布也走同一个实例 → 同一把写锁 / 同一个版本发号点） */
+interface DocPoolLike {
+  for(canvasId: string): DocLike
+}
+
+/** 取某张画布的文档：默认画布直接用 doc；其它画布优先从宿主池里取同一个实例 */
+function docFor(ctx: ServerCtx, canvasId: string): DocLike | undefined {
+  const doc = ctx.tryGet<DocLike>('doc')
+  if (canvasId === 'default') return doc
+  const pool = ctx.tryGet<DocPoolLike>('canvasDocPool')
+  if (pool && typeof pool.for === 'function') return pool.for(canvasId)
+  return undefined
+}
+
 /** path.join 的极简替代（本文件只有正斜杠拼接需要） */
 function pathJoin(dir: string, name: string): string {
   return dir.endsWith('\\') || dir.endsWith('/') ? dir + name : dir + '/' + name
@@ -212,10 +226,8 @@ function describeNode(n: NodeLike): string {
 
 /** 读某张画布的节点（默认画布优先用宿主那份有写锁的 doc） */
 async function nodesOf(ctx: ServerCtx, canvasId: string): Promise<NodeLike[]> {
-  if (canvasId === 'default') {
-    const doc = ctx.tryGet<DocLike>('doc')
-    if (doc && typeof doc.getNodes === 'function') return doc.getNodes()
-  }
+  const doc = docFor(ctx, canvasId)
+  if (doc && typeof doc.getNodes === 'function') return doc.getNodes()
   const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
   if (!store) return []
   const data = await store.readCanvas(canvasId)
@@ -234,19 +246,17 @@ async function writeUiHtml(
   nodeId: string,
   data: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (canvasId === 'default') {
-    const doc = ctx.tryGet<DocLike>('doc')
-    if (doc && typeof doc.batchNodes === 'function') {
-      try {
-        const res = await doc.batchNodes({ update: [{ id: nodeId, data }] })
-        if (!res.ok) return { ok: false, error: (res.errors ?? []).map((e) => e.message).join('; ') || '写入失败' }
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, error: '写入失败：' + String(err) }
-      }
+  const doc = docFor(ctx, canvasId)
+  if (doc && typeof doc.batchNodes === 'function') {
+    try {
+      const res = await doc.batchNodes({ update: [{ id: nodeId, data }] })
+      if (!res.ok) return { ok: false, error: (res.errors ?? []).map((e) => e.message).join('; ') || '写入失败' }
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: '写入失败：' + String(err) }
     }
   }
-  // 非默认画布：宿主没给那张画布的 doc，只能自己读-改-写（只改这一个节点）。
+  // 宿主没给该画布文档（旧宿主 / 独立运行）：退回读-改-写；新宿主走上面的统一锁。
   const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
   if (!store) return { ok: false, error: '后台没有画布存储服务，无法写入' }
   const snap = await store.readCanvas(canvasId)
@@ -348,21 +358,19 @@ async function addNodeToCanvas(
     ...(data ? { data } : {}),
     ...(node.position ? { position: node.position } : {}),
   }
-  if (canvasId === 'default') {
-    const doc = ctx.tryGet<DocLike>('doc')
-    if (doc && typeof doc.batchNodes === 'function') {
-      try {
-        const res = await doc.batchNodes({ add: [entry] })
-        if (!res.ok) return { ok: false, error: (res.errors ?? []).map((e) => e.message).join('; ') || '建节点失败' }
-        const id = res.added?.[0]
-        if (!id) return { ok: false, error: '建节点没回 id（宿主实现可能不对）' }
-        return { ok: true, id }
-      } catch (err) {
-        return { ok: false, error: '建节点失败：' + (err instanceof Error ? err.message : String(err)) }
-      }
+  const doc = docFor(ctx, canvasId)
+  if (doc && typeof doc.batchNodes === 'function') {
+    try {
+      const res = await doc.batchNodes({ add: [entry] })
+      if (!res.ok) return { ok: false, error: (res.errors ?? []).map((e) => e.message).join('; ') || '建节点失败' }
+      const id = res.added?.[0]
+      if (!id) return { ok: false, error: '建节点没回 id（宿主实现可能不对）' }
+      return { ok: true, id }
+    } catch (err) {
+      return { ok: false, error: '建节点失败：' + (err instanceof Error ? err.message : String(err)) }
     }
   }
-  // 非默认画布：宿主没给那张画布的 doc，只能自己读-改-写（只追加）
+  // 宿主没给该画布文档（旧宿主 / 独立运行）：退回读-改-写（只追加）。
   const store = ctx.tryGet<CanvasStoreLike>('canvasStore')
   if (!store) return { ok: false, error: '后台没有画布存储服务，建不了节点' }
   const snap = await store.readCanvas(canvasId)

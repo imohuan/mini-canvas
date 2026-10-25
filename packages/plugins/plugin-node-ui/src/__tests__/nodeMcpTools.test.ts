@@ -62,6 +62,16 @@ function fakeCtx(opts: { nodes?: Array<Record<string, unknown>>; assets?: Array<
     list: async () => ['default'],
     dataRoot: () => dir,
   }
+  /** 非默认画布的 doc：与宿主池同形；用于验证“不再绕过统一锁” */
+  const otherDocWrites: unknown[] = []
+  const otherDoc = {
+    getNodes: () => [{ id: '2', type: 'ui', data: { label: '可视化 1' } }],
+    getEdges: () => [],
+    batchNodes: async (input: unknown) => {
+      otherDocWrites.push(input)
+      return { ok: true, added: ['88'], errors: [] }
+    },
+  }
   const assetStore = {
     list: async () => assets,
     readFile: async (name: string) => (name === 'pack1'
@@ -83,11 +93,13 @@ function fakeCtx(opts: { nodes?: Array<Record<string, unknown>>; assets?: Array<
             ? canvasStore
             : n === 'assetStore'
               ? assetStore
+              : n === 'canvasDocPool'
+                ? { for: (id: string) => (id === 'other' ? otherDoc : doc) }
               : n === 'selfOrigin'
                 ? 'http://127.0.0.1:8865'
                 : undefined,
   } as never
-  return { ctx, tools, writes, canvasWrites, nodes }
+  return { ctx, tools, writes, canvasWrites, nodes, otherDocWrites }
 }
 
 const call = async (tools: ReturnType<typeof fakeCtx>['tools'], name: string, args: Record<string, unknown> = {}) =>
@@ -95,6 +107,21 @@ const call = async (tools: ReturnType<typeof fakeCtx>['tools'], name: string, ar
 
 describe('① 节点说明书：写 / 读 / 进手册', () => {
   const uiNode = { id: '2', type: 'ui', data: { label: '可视化 1' } }
+
+  it('非默认画布也走宿主文档池（不再绕过统一写锁）', async () => {
+    const s = fakeCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_write', {
+      canvasId: 'other',
+      nodeId: '2',
+      html: '<div>other docs</div>',
+    })
+    expect(r.ok).toBe(true)
+    // 走 docPool.batchNodes，而不是 canvasStore.writeCanvas 整包写回
+    expect(s.otherDocWrites).toHaveLength(1)
+    expect(JSON.stringify(s.otherDocWrites[0])).toContain('other docs')
+    expect(s.canvasWrites).toHaveLength(0)
+  })
 
   it('canvas_ui_describe 把四件事写进节点 data', async () => {
     const s = fakeCtx({ nodes: [uiNode] })

@@ -705,6 +705,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   host.ctx.inject('doc', doc)
   // 画布文档池：路由按 :id 取文档时用它，**不要各自 new**（那会让写锁失效，见 canvasDocPool）
   host.ctx.inject('docPool', docPool)
+  // 外挂后台插件（如 plugin-node-ui）也要按任意画布取同一个文档实例。
+  // 服务名用 `canvasDocPool` 与插件侧的窄接口一致；值仍是同一个池，不产生第二把锁。
+  host.ctx.inject('canvasDocPool', docPool)
   // 单轮对话（/api/agent/chat/completion）按需加载 SDK 的入口。
   // 为什么给"函数"而不是直接给 SDK 对象：SDK 是懒加载的（没配模型时启动照常成功），
   // 而那条路由每次请求都要用它 —— 传函数就没有"启动时还没加载好"的时序问题。
