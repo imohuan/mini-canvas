@@ -5,6 +5,7 @@
 > 起因：画布数据已经变化，但前端偶尔不更新；刷新后又恢复正常。
 > 结论依据包含真实 cloud-server + 真实 SSE + 真实 MCP 写入实验，以及 2026-10-25 的代码核对。
 > 2026-10-25 修订：并入三方子代理审阅意见，补齐版本发号点、两份基准同步、核对期间编辑、验收门槛与落地顺序。
+> 2026-10-25 已落地第一版：`Commit 2a` 服务端 revision + `Commit 2b/2c` 客户端单次快照与自动核对；仍在实施：保存误判、合并漏项、字段编辑冲突、完整 e2e。
 
 ## 一页结论
 
@@ -424,3 +425,25 @@ cloud-server 定向测试按单文件执行，不要把“全量测试”当成�
 **问：缺少某一项增加项时，版本号是前后端累加，还是直接同步？**
 
 答：**直接同步最新全量。** 版本号只由后台递增，前端只记录最后确认值，不累加、不回放缺失项。读取最新快照后用三方合并补入缺项；冲突字段按第五节处理，绝不用“前端自己加版本号”来假装已经同步。
+
+## 十一、当前实现进度（2026-10-25）
+
+已提交：`feat(cloud): add canvas revision checks for missed realtime updates`（`c6bbc9d1`）。
+
+已完成：
+
+- 后台 `canvas.json` 保存 `revision`；**只有 `CanvasDocument` 图提交成功才 +1**，空提交、改名、视口不动它。
+- `GET /api/canvases/:id` 返回 `revision`；新增 `GET /api/canvases/:id/revision`（`no-store`，不存在 404）。
+- SSE 画布事件带 `canvasId` 与提交时捕获的 `revision`；改名不再误报图变更。
+- 客户端每 15 秒只问一次 revision；**版本没变不拉整张画布**。
+- 页面重新可见、浏览器 online、订阅建立后都会立即核对一次；断线漏帧后会自动补同步。
+- 客户端读完整画布改为一次请求，不再分两次拼节点/边；`ok:false` 不会当成空画布。
+
+已知仍缺（按本计划后续 commit 处理）：
+
+- 保存接口 HTTP 200 + `ok:false` 的误判（Commit 1a）。
+- 同 id 碰撞、缺失 position、远端字段删除（Commit 4）。
+- 正在编辑字段的冲突保护与可见提示（Commit 5）。
+- `plugin-node-ui` 非默认画布的旁路写、完整实时 e2e（Commit 2a 剩余 / Commit 0）。
+
+验证记录：`cloud-server` 定向 3 文件 43/43、并发/复制/兼容相关 3 文件 41/41；`plugin-cloud-client` 134/134、`typecheck` 干净；插件产物已确认包含 `/revision`、`visibilitychange`、`online`。真实服务验证：版本 1 → 2；改名仍为 2；不存在画布 404。
