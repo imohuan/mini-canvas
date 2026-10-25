@@ -56,6 +56,14 @@ import { referenceActive, referenceEpoch, referenceOwner, toggleReference as tog
 import { openPreview } from './mediaPreview'
 // 右侧图标按钮里"改提示词"的小动作（翻译提示词）
 import { hasTranslateInstruction, toggleTranslateInstruction } from './promptActions'
+// 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
+import {
+  parseRefSlots,
+  judgeSlotDrop,
+  dropVerdictMessage,
+  REF_SLOT_META,
+  type RefSlotKind,
+} from './refSlots'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -602,6 +610,264 @@ function toggleTranslate(): void {
  */
 const settingsOpen = ref(false)
 
+// ===== 「看图」@ 素材槽位（用户口径 2026-10-25）=====
+//
+// 输入框里 @图片1 / @音频1 / @音视频1 会变成标签；**没连线也要有槽位**（状态「待输入」），
+// 输入框上方同步显示预览格。待输入格可以：拖本地文件、点击上传、按住 Ctrl 拖节点进来。
+// 规则在 refSlots.ts（纯函数、已单测），这里只管状态与交互。
+
+/** 一个槽位：由「正文里的 @ 标签」派生；filled 之后才有地址 */
+interface RefSlot {
+  key: string
+  kind: RefSlotKind
+  index: number
+  /** 来源：标签先认出来（pending），或来自已连线的素材 */
+  status: 'pending' | 'ready'
+  /** 已填进去的地址 / 名字（本地文件是 objectURL；节点是解析后的地址） */
+  url?: string
+  name?: string
+  mediaType?: 'image' | 'video' | 'audio'
+  /** 本地文件的 objectURL：卸载/替换时要 revoke，否则内存泄漏 */
+  objectUrl?: boolean
+  /** 一次性的错误提示（如「这个槽位只收图片」） */
+  error?: string
+}
+
+const refSlots = ref<RefSlot[]>([])
+/** 正文里的 @ 标签 → 槽位键（顺序即出现顺序） */
+const promptRefKeys = computed(() => parseRefSlots(prompt.value).map((r) => r.key))
+
+/** 已连线素材按类型编号后的名字（图片1 / 音频1…），用来把槽位和真实素材对上 */
+const materialByKey = computed(() => {
+  const map = new Map<string, UpstreamMaterial>()
+  for (const m of shownMaterials.value) {
+    if (m.kind === 'text') continue
+    map.set(m.refName, m)
+    // 也接受不带序号的旧名（图片 / 视频 / 音频）
+    map.set(m.kind === 'image' ? '图片' : m.kind === 'video' ? '视频' : '音频', m)
+  }
+  return map
+})
+
+/** 从素材名里取类型与该类型的序号（图片2 → image / 2） */
+function slotFromRefName(refName: string): { kind: RefSlotKind; index: number } | null {
+  const m = /^(图片|视频|音频|音视频)(\d+)$/.exec(refName)
+  if (!m) return null
+  const kind = m[1] === '图片' ? 'image' : m[1] === '视频' ? 'video' : m[1] === '音频' ? 'audio' : 'av'
+  return { kind, index: Number(m[2]) }
+}
+
+/**
+ * 重算槽位：
+ *   - 正文里认到的 @ 标签 → 一定有槽位（没连线就是待输入）；
+ *   - 已填过的保留（用户上传/拖进来的内容不因重算丢失）；
+ *   - 已连线的素材按 refName 自动填上（有连线就不该再显示「待输入」）。
+ */
+function syncRefSlots(): void {
+  const next: RefSlot[] = []
+  const seen = new Set<string>()
+  const prevByKey = new Map(refSlots.value.map((s) => [s.key, s]))
+
+  for (const key of promptRefKeys.value) {
+    if (seen.has(key)) continue
+    seen.add(key)
+    const [kindRaw, indexRaw] = key.split(':')
+    const kind = kindRaw as RefSlotKind
+    const index = Number(indexRaw)
+    const prev = prevByKey.get(key)
+    if (prev) { next.push(prev); continue }
+    // 有连线的素材 → 直接就绪（名字 = 图片1 这种）
+    const label = (kind === 'image' ? '图片' : kind === 'video' ? '视频' : kind === 'audio' ? '音频' : '音视频') + index
+    const material = materialByKey.value.get(label)
+    if (material) {
+      next.push({
+        key, kind, index,
+        status: 'ready',
+        url: material.url,
+        name: material.name,
+        mediaType: material.kind as 'image' | 'video' | 'audio',
+      })
+      continue
+    }
+    next.push({ key, kind, index, status: 'pending' })
+  }
+
+  // 已就绪但正文里已经没了的：保留（用户可能只是删了文字），直到他点 × 才清
+  for (const s of refSlots.value) {
+    if (!seen.has(s.key) && s.status === 'ready') next.push(s)
+  }
+  refSlots.value = next
+}
+
+const visibleRefSlots = computed(() => refSlots.value)
+
+/** 正文变了 → 重算槽位 */
+watch([prompt, shownMaterials], () => syncRefSlots(), { immediate: true })
+
+/** 槽位键 → 编辑器里的资源项（插入标签时用） */
+function slotEditorItem(slot: RefSlot): ResourceItem {
+  const meta = REF_SLOT_META[slot.kind]
+  const name = slot.name || (meta.label + slot.index)
+  const item: ResourceItem = {
+    id: 'ref-slot:' + slot.key,
+    name,
+    category: '素材',
+    url: slot.url,
+    mediaType: slot.mediaType,
+  }
+  if (slot.kind === 'audio' || slot.mediaType === 'audio') item.icon = SLOT_AUDIO_ICON
+  item.renderEditor = (self) => {
+    const span = document.createElement('span')
+    span.className = 'resource-node resource-chip' + (slot.status === 'pending' ? ' is-pending' : '')
+    span.dataset.id = self.id
+    span.dataset.name = self.name
+    if (self.url && self.mediaType === 'image') {
+      const img = document.createElement('img')
+      img.className = 'resource-chip-thumb'
+      img.src = self.url
+      img.alt = ''
+      span.append(img)
+    } else {
+      const ic = document.createElement('span')
+      ic.className = 'resource-chip-icon'
+      ic.innerHTML = self.mediaType === 'audio' ? SLOT_AUDIO_ICON : SLOT_ICON
+      span.append(ic)
+    }
+    const nm = document.createElement('span')
+    nm.className = 'resource-chip-name'
+    nm.textContent = self.name
+    span.append(nm)
+    return span
+  }
+  return item
+}
+
+const SLOT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
+const SLOT_AUDIO_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>'
+
+const editorComponentRef = ref<{
+  insertResource?(item: ResourceItem): void
+  replaceResource?(item: ResourceItem): boolean
+} | null>(null)
+
+/** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
+function pickSlotFile(slot: RefSlot): void {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = REF_SLOT_META[slot.kind].accept
+  input.style.display = 'none'
+  document.body.appendChild(input)
+  input.addEventListener('change', () => {
+    const file = input.files?.[0]
+    if (file) fillSlotFromFile(slot, file)
+    input.remove()
+  })
+  input.addEventListener('cancel', () => input.remove())
+  input.click()
+}
+
+/** 把一个本地文件放进槽位（类型不对就提示，不改状态） */
+function fillSlotFromFile(slot: RefSlot, file: File): void {
+  const verdict = judgeSlotDrop(slot.kind, { file })
+  if (!verdict.ok) {
+    setSlotError(slot, dropVerdictMessage(slot.kind, verdict))
+    return
+  }
+  slot.status = 'ready'
+  slot.mediaType = verdict.mediaType
+  slot.name = file.name || REF_SLOT_META[slot.kind].label + slot.index
+  // 替换旧地址时回收旧的 objectURL
+  if (slot.objectUrl && slot.url) URL.revokeObjectURL(slot.url)
+  slot.url = URL.createObjectURL(file)
+  slot.objectUrl = true
+  slot.error = undefined
+  refreshSlotChip(slot)
+}
+
+function setSlotError(slot: RefSlot, message: string): void {
+  slot.error = message
+  setTimeout(() => { slot.error = undefined }, 2600)
+}
+
+/** 槽位变了 → 正文里那个标签也要跟着变（名字/缩略图/虚线→实线） */
+function refreshSlotChip(slot: RefSlot): void {
+  const item = slotEditorItem(slot)
+  // insertResource 会另起一个；这里要的是「原地替换同一个 id 的标签」，
+  // 于是先删掉旧的再插新的 —— 由编辑器自己维护文档一致性。
+  editorComponentRef.value?.replaceResource?.(item)
+}
+
+/** 点 × 把槽位退回「待输入」 */
+function resetSlot(slot: RefSlot): void {
+  if (slot.objectUrl && slot.url) URL.revokeObjectURL(slot.url)
+  slot.status = 'pending'
+  slot.url = undefined
+  slot.name = undefined
+  slot.mediaType = undefined
+  slot.objectUrl = false
+  slot.error = undefined
+  refreshSlotChip(slot)
+}
+
+onBeforeUnmount(() => {
+  for (const s of refSlots.value) {
+    if (s.objectUrl && s.url) URL.revokeObjectURL(s.url)
+  }
+})
+
+/** 拖放高亮：整排槽位一起亮（用户能看出「可以放在这儿」） */
+const slotsDropHot = ref(false)
+
+function onSlotDragOver(_ev: DragEvent): void {
+  slotsDropHot.value = true
+}
+
+function onSlotDragLeave(_ev: DragEvent): void {
+  // 子元素之间移动也会触发 leave；用下一帧再判断，避免闪一下
+  setTimeout(() => { slotsDropHot.value = false }, 60)
+}
+
+/**
+ * 落到槽位：
+ *   (a) 本地文件 → 直接看类型；
+ *   (c) 画布节点 → 必须按住 Ctrl / ⌘。
+ * 节点拖拽的 payload 用 `application/x-mini-canvas-node`（由插件自己的节点拖拽写入）。
+ */
+const NODE_DROP_MIME = 'application/x-mini-canvas-node'
+function onSlotDrop(ev: DragEvent, slot: RefSlot): void {
+  slotsDropHot.value = false
+  const dt = ev.dataTransfer
+  const nodeRaw = dt?.getData(NODE_DROP_MIME)
+  if (nodeRaw) {
+    let payload: { name?: string; mime?: string } | null = null
+    try { payload = JSON.parse(nodeRaw) } catch { payload = null }
+    const modifier = ev.ctrlKey || ev.metaKey
+    const verdict = judgeSlotDrop(slot.kind, { node: { name: payload?.name, mime: payload?.mime }, modifier })
+    if (!verdict.ok) { setSlotError(slot, dropVerdictMessage(slot.kind, verdict)); return }
+    slot.status = 'ready'
+    slot.mediaType = verdict.mediaType
+    slot.name = payload?.name || REF_SLOT_META[slot.kind].label + slot.index
+    slot.error = undefined
+    refreshSlotChip(slot)
+    return
+  }
+  const file = dt?.files?.[0]
+  if (file) { fillSlotFromFile(slot, file); return }
+  setSlotError(slot, '没识别到文件或节点')
+}
+
+function slotLabelOf(slot: RefSlot): string {
+  return REF_SLOT_META[slot.kind].label + ' ' + slot.index
+}
+
+function slotIconOf(slot: RefSlot): string {
+  return slot.mediaType === 'audio' || slot.kind === 'audio' ? SLOT_AUDIO_ICON : SLOT_ICON
+}
+
+
+
 /**
  * 全局设置区的展开/收起动画用**测量高度**做（不用 grid-template-rows）。
  *
@@ -692,6 +958,42 @@ function onGlobalLeave(el: Element): void {
       </button>
     </div>
 
+    <!--
+      「看图」待输入槽位（用户口径 2026-10-25）：输入框里 @图片1 / @音频1 / @音视频1
+      即使没有连线也要有槽位，状态「待输入」；点击上传 / 拖本地文件 / Ctrl 拖节点都能填。
+    -->
+    <div v-if="visibleRefSlots.length > 0" class="nb-slots" :class="{ 'is-drop-hot': slotsDropHot }">
+      <div
+        v-for="slot in visibleRefSlots"
+        :key="slot.key"
+        class="nb-slot"
+        :class="slot.status === 'ready' ? 'is-ready' : 'is-pending'"
+        :title="slot.status === 'ready' ? (slot.name || '') : '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点'"
+        @click.stop="slot.status === 'ready' ? undefined : pickSlotFile(slot)"
+        @dragover.stop.prevent="onSlotDragOver($event)"
+        @dragleave.stop="onSlotDragLeave($event)"
+        @drop.stop.prevent="onSlotDrop($event, slot)"
+      >
+        <template v-if="slot.status === 'ready'">
+          <img v-if="slot.url && slot.mediaType === 'image'" class="nb-slot-img" :src="slot.url" :alt="slot.name || ''" draggable="false" />
+          <span v-else class="nb-slot-icon" aria-hidden="true" v-html="slotIconOf(slot)" />
+          <span class="nb-slot-index">{{ slot.index }}</span>
+          <button
+            class="nb-slot-x"
+            type="button"
+            :aria-label="'把 ' + slot.key + ' 退回待输入'"
+            @click.stop="resetSlot(slot)"
+          >×</button>
+        </template>
+        <template v-else>
+          <span class="nb-slot-plus" aria-hidden="true">+</span>
+          <span class="nb-slot-label">{{ slotLabelOf(slot) }}</span>
+          <span class="nb-slot-pending">待输入</span>
+        </template>
+        <span v-if="slot.error" class="nb-slot-error">{{ slot.error }}</span>
+      </div>
+    </div>
+
     <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开 → 全屏预览。
          顺序**可以拖拽改变**（用户要求：用 Vue Draggable Plus，动画效果挺好）—— 拖完把新顺序
          写回节点 data.refOrder，于是角标序号、@ 引用名、发给后端的参考图顺序三处一起变。 -->
@@ -749,6 +1051,7 @@ function onGlobalLeave(el: Element): void {
     <div v-if="showEditor" class="nb-editor nodrag nopan nowheel" :style="editorStyle">
       <span v-if="prompt.length === 0" class="nb-placeholder" aria-hidden="true">描述你想要的内容，可用 @ 引用素材</span>
       <ProseMirrorEditor
+        ref="editorComponentRef"
         v-model="prompt"
         v-model:prompt-doc="promptDoc"
         :resources="editorResources"
@@ -1073,6 +1376,140 @@ function onGlobalLeave(el: Element): void {
 }
 
 /* —— 素材卡（常显；48×48，序号角标左下；参考图 size-12） —— */
+/*
+ * 「看图」待输入槽位（用户口径 2026-10-25）：输入框上方的预览框。
+ * 尺寸与素材卡同一档（48×48 圆角 8），但待输入时是虚线框 + 「待输入」角标。
+ */
+.nb-slots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 2px 8px;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.nb-slots.is-drop-hot {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #0891b2) 35%, transparent);
+}
+.nb-slot {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  overflow: visible;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+.nb-slot.is-pending {
+  border: 1px dashed color-mix(in srgb, var(--ui-ink, #18202b) 26%, transparent);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nb-slot.is-pending:hover {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+  color: var(--ui-accent, #0891b2);
+}
+.nb-slot.is-ready {
+  border: 1px solid var(--ui-line, #e2e5ea);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
+}
+.nb-slot-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+}
+.nb-slot-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nb-slot-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.nb-slot-plus {
+  font-size: 15px;
+  line-height: 1;
+}
+.nb-slot-label {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.nb-slot-pending {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid color-mix(in srgb, #b45309 30%, transparent);
+  color: #b45309;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.nb-slot-index {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: rgba(17, 24, 39, 0.78);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.nb-slot-x {
+  position: absolute;
+  right: -5px;
+  top: -5px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.nb-slot:hover .nb-slot-x,
+.nb-slot-x:focus-visible {
+  display: flex;
+}
+.nb-slot-error {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 3px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 10px;
+  color: #b91c1c;
+  pointer-events: none;
+}
+
 .nb-cards {
   display: flex;
   flex-wrap: wrap;

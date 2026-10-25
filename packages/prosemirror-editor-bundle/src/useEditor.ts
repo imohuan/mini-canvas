@@ -411,6 +411,79 @@ function createSelectionDecorationPlugin() {
 
 // 创建光标修复插件：在特殊情况下插入零宽空格文本节点
 // 只处理：1. 行首/行尾的标签 2. 两个标签相邻的情况
+/** 待输入标签的小图标（与底栏槽位同一套线性图标） */
+const SLOT_CHIP_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
+
+/**
+ * 把「刚打完的 @图片1」变成标签。
+ *
+ * 用户口径（2026-10-25）：「用正则检测到类似 @图片123 / @音频123 / @音视频123 这样的文本时，
+ * 就会将其解析成一个标签」。没连线也算标签（待输入），所以这里**不查 resolver**，
+ * 直接建一个 resource 节点；地址/名字由调用方后续 replaceResource 补上。
+ *
+ * 触发时机：用户打完数字后，敲空格 / 回车 / 标点。为什么不边打边换 —— 打到一半就换会把
+ * 光标顶走，用户没法继续输编号。
+ */
+function createSlotTagPlugin() {
+  return new Plugin({
+    key: new PluginKey('ref-slot-tag'),
+    props: {
+      handleTextInput(view: any, from: number, _to: number, text: string) {
+        if (!/^[\s\u3000,，.。;；:：!！?？]$/.test(text)) return false
+        const nodeType = mySchema.nodes.resource
+        if (!nodeType) return false
+        const $from = view.state.doc.resolve(from)
+        const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 16), $from.parentOffset, undefined, '\ufffc')
+        const m = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})$/i.exec(before)
+        if (!m) return false
+        const kind = m[1].toLowerCase()
+        const slotKind: 'image' | 'video' | 'audio' | 'av' =
+          kind === '图片' || kind === 'image' ? 'image'
+          : kind === '视频' || kind === 'video' ? 'video'
+          : kind === '音频' || kind === 'audio' ? 'audio'
+          : 'av'
+        const label =
+          slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+        const index = Number(m[2])
+        if (!index) return false
+        const id = 'ref-slot:' + slotKind + ':' + index
+        const item: ResourceItem = {
+          id,
+          name: label + index,
+          category: '素材',
+          mediaType: slotKind === 'av' ? undefined : (slotKind as 'image' | 'video' | 'audio'),
+        }
+        item.renderEditor = (self) => {
+          const span = document.createElement('span')
+          span.className = 'resource-node resource-chip is-pending'
+          span.dataset.id = self.id
+          span.dataset.name = self.name
+          const ic = document.createElement('span')
+          ic.className = 'resource-chip-icon'
+          ic.innerHTML = SLOT_CHIP_ICON
+          span.append(ic)
+          const nm = document.createElement('span')
+          nm.className = 'resource-chip-name'
+          nm.textContent = self.name
+          span.append(nm)
+          return span
+        }
+        itemRegistry.set(item.id, item)
+        // `from` 是**插入分隔符之前**的光标位置，此时 `@图片1` 原文已经完整躺在文档里，
+        // 所以起点就是 from - 原文长度（不能用 to：to 已经越过了分隔符）
+        const start = from - m[0].length
+        // 区间是 [start, from)：原文 `@图片1` 在 from 之前；to 是分隔符将落下的位置，
+        // 不能拿它当终点（会把还没插入的分隔符也算进去，残留半截原文）。
+        const tr = view.state.tr.replaceWith(start, from, buildResourceNode(nodeType, item))
+        tr.insertText(text)
+        view.dispatch(tr)
+        return true
+      },
+    },
+  })
+}
+
 function createCursorFixPlugin() {
   return new Plugin({
     key: new PluginKey("cursor-fix"),
@@ -1109,6 +1182,7 @@ export function useEditor(
         mentionKeymap,
         createSelectionDecorationPlugin(),
         createPasteHandlerPlugin(() => unref(props.resolveResource)),
+        createSlotTagPlugin(),
         createCursorFixPlugin(),
         createDropCursorPlugin({ color: "#2b6df2", width: 2 }),
         keymap(baseKeymap),
@@ -1309,6 +1383,39 @@ export function useEditor(
   }
 
   /**
+   * 找到正文里 id 相同的资源标签并**原地替换**它的样子（url / name / 状态）。
+   *
+   * 为什么需要它：底栏的「待输入」槽位填好内容后，正文里那个标签要立刻从虚线变实线、
+   * 显示缩略图/新名字 —— 删了重插会丢光标位置，而且用户的正文顺序会跳（标签会跑到文末）。
+   * 只在文档里那个节点存在时改属性，不碰选区。
+   *
+   * @returns 找到并替换了 → true；正文里没有这个 id → false（调用方自行决定要不要插入）
+   */
+  function replaceResource(item: ResourceItem): boolean {
+    if (!view) return false
+    const nodeType = mySchema.nodes.resource
+    if (!nodeType) return false
+    itemRegistry.set(item.id, item)
+    let found = false
+    const tr = view.state.tr
+    view.state.doc.descendants((node, pos) => {
+      if (found || node.type.name !== 'resource' || node.attrs.id !== item.id) return
+      found = true
+      tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        name: item.name,
+        url: item.url ?? '',
+        value: item.value ?? '',
+        category: item.category,
+      })
+    })
+    if (!found) return false
+    view.dispatch(tr)
+    return true
+  }
+
+
+  /**
    * 用纯文本整体覆盖编辑器内容（覆盖式，非追加）。
    * 供「模板选择」等外部场景直接替换输入框文字使用；
    * 会同步 @ 资源节点解析与 update:modelValue。
@@ -1347,5 +1454,6 @@ export function useEditor(
     focusEnd,
     setText,
     insertResource,
+    replaceResource,
   };
 }

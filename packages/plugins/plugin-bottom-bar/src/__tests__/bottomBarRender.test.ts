@@ -305,6 +305,46 @@ describe('输入框：用仓库富文本编辑器 + @ 引用上游素材', () =>
 
 describe('NodeTaskOverlay：整卡加载态（没有中间小卡片）', () => {
 
+describe('「看图」待输入槽位：没连线也要有槽位', () => {
+  /**
+   * 用户口径（2026-10-25）：输入框里 @图片1 这类文本要变成标签；
+   * **没有连线也要有槽位**，状态是「待输入」，输入框上方同步显示。
+   *
+   * SSR 里 ProseMirror 正文是客户端建的，所以这里直接给一个带 @标签 的 modelValue，
+   * 断言槽位那一排渲染出来（`nb-slot` + 「待输入」字样 + 类型名）。
+   */
+  it('正文里 @图片1 → 上方出现一个「待输入」的图片槽位', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      { barPrompt: '将 @图片1 中的女子，参照这张图' },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(html).toContain('nb-slots')
+    expect(html).toContain('nb-slot')
+    expect(html).toContain('is-pending')
+    expect(html).toContain('待输入')
+    expect(html).toContain('图片 1')
+  })
+
+  it('@音频1 / @音视频2 也会各出一个槽位（三种写法都认）', async () => {
+    const html = await render(
+      NodeBottomBar as Component,
+      '35',
+      { barPrompt: '@音频1 和 @音视频2' },
+      makeCtx({ selectedIds: ['35'] }),
+    )
+    expect(html).toContain('音频 1')
+    expect(html).toContain('音视频 2')
+  })
+
+  it('正文里没有 @ 标签 → 不渲染槽位那一排（不占地方）', async () => {
+    const html = await render(NodeBottomBar as Component, '35', {}, makeCtx({ selectedIds: ['35'] }))
+    expect(html).not.toContain('nb-slots')
+  })
+})
+
+
 describe('参数区：唯一一个下拉参数直接铺到外面（不套二级面板）', () => {
   const soleSpeaker: BarAction = {
     id: 'test:sole-select',

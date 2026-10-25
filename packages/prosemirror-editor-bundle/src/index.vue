@@ -83,6 +83,7 @@ const {
   focusEnd,
   setText,
   insertResource,
+  replaceResource,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   promptDoc: promptDocRef,
@@ -98,6 +99,7 @@ defineExpose({
   focusEnd,
   setText,
   insertResource,
+  replaceResource,
   /**
    * 编辑器内部的 @ 菜单是否开着（只读）。
    *
