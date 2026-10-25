@@ -17,8 +17,10 @@ import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
+import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 
-const { ctx } = useCanvasRender()
+/** ctx：服务与标题入口；flow：视口中心 / 坐标换算（未就绪时会抛，stylePlacementOf 内部兜住） */
+const { ctx, flow } = useCanvasRender()
 
 /** 广场正文：按名从 ui 目录取（树内 useUiComponent）——风格/特效共用同一件 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -87,7 +89,11 @@ async function onUse(item: StyleCard): Promise<void> {
   using.value = true
   usingIds.value = [item.id]
   useError.value = ''
-  const position = { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+  // 落点跟随视口中心（用户口径 2026-10-25）；拿不到视口才退回旧的固定偏移
+  const position = stylePlacementOf({
+    screenToFlow: flow.screenToFlow,
+    paneRect: flow.paneRect.value,
+  }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   try {
     const result = await useStyleItem(styleItemDepsOf(ctx), { url, label: item.name }, position)
     if (!result.ok) {
@@ -95,6 +101,16 @@ async function onUse(item: StyleCard): Promise<void> {
       useError.value = result.message
       return
     }
+    // 落完选中并聚焦（保留缩放）
+    focusStyleNode(
+      {
+        selection: ctx.tryGet('selection'),
+        nodeLayout: ctx.tryGet('nodeLayout'),
+        viewport: ctx.tryGet('viewport'),
+        doc: ctx.tryGet('doc'),
+      },
+      result.nodeId,
+    )
     previewItem.value = null
     svc.close()
   } finally {

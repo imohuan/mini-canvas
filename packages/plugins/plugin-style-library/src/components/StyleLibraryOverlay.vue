@@ -19,8 +19,10 @@ import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'
 import { useStyleItem } from '../useStyleItem'
 import { styleItemDepsOf } from '../useStyleItemPorts'
+import { stylePlacementOf, focusStyleNode } from '../stylePlacement'
 
-const { ctx } = useCanvasRender()
+/** ctx：服务与标题入口；flow：视口中心 / 坐标换算（未就绪时会抛，stylePlacementOf 内部兜住） */
+const { ctx, flow } = useCanvasRender()
 
 /** 广场正文 / 详情：按名从 ui 目录取（树内调用 useUiComponent）；缺件时退化为不渲染 */
 const GalleryComp = useUiComponent(UI_GALLERY)
@@ -83,7 +85,14 @@ const useError = ref('')
  */
 async function onUse(item: StyleCard, index: number): Promise<void> {
   const url = item.images[index] ?? item.cover
-  const position = { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
+  /**
+   * 落点：按**当前视口中心**（用户口径 2026-10-25）。
+   * 拿不到视口（未挂载 / 极简宿主）才退回原来的固定偏移。
+   */
+  const position = stylePlacementOf({
+    screenToFlow: flow.screenToFlow,
+    paneRect: flow.paneRect.value,
+  }) ?? { x: 160 + Math.round(Math.random() * 240), y: 120 + Math.round(Math.random() * 200) }
   // 多图时带序号（第 1 张不加，避免"名 1"这种啰嗦标题）
   const label = item.images.length > 1 && index > 0 ? item.name + ' ' + (index + 1) : item.name
   if (using.value) return
@@ -100,6 +109,16 @@ async function onUse(item: StyleCard, index: number): Promise<void> {
       useError.value = result.message
       return
     }
+    // 落完选中并聚焦（保留缩放）—— 用户不必自己找刚加的节点
+    focusStyleNode(
+      {
+        selection: ctx.tryGet('selection'),
+        nodeLayout: ctx.tryGet('nodeLayout'),
+        viewport: ctx.tryGet('viewport'),
+        doc: ctx.tryGet('doc'),
+      },
+      result.nodeId,
+    )
     detailItem.value = null
     svc.close()
   } finally {
