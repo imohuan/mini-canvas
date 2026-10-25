@@ -101,10 +101,10 @@
 
 ### P0-6：合并层会漏掉真实远端变化
 
-1. **同 id 本地旧节点挡住远端新增。** `packages/plugins/plugin-cloud-client/src/remoteMerge.ts:193-196` 在“基准没有、云端有、本地也有同 id”时直接忽略云端节点。用户本地尚未同步的数字 id 与后台新分配的 id 撞号时，后台节点会被静默丢掉；刷新走整包恢复，所以又正常。
-2. **缺失位置被伪造成 `{x:0,y:0}`。** `packages/plugins/plugin-cloud-client/src/remoteSync.ts:92-104` 把没有 `position` 的节点补成原点，导致“新增节点”的比较失真。
-3. **远端删除的 data 字段无法落地。** `packages/plugins/plugin-cloud-client/src/applyMerge.ts:82-87` 用浅合并写 `data`，`remoteMerge.ts:138-153` 也明确记录了“不删 key”的限制。刷新后按整包恢复才会消失。
-4. **批量挂载窗口可能延迟新节点显示。** `packages/canvas-render/src/host/CanvasHost.vue:296-308` 在分批挂载期间只更新 `stagedTarget`，新加入节点要等这一批结束或下一次同步才出现在 `nodes.value`。需要先写复现测试，再决定是否修。
+1. ~~**同 id 本地旧节点挡住远端新增。**~~（已在 `c1b35238` 修复；以下保留为当时证据）`packages/plugins/plugin-cloud-client/src/remoteMerge.ts:193-196` 在“基准没有、云端有、本地也有同 id”时直接忽略云端节点。用户本地尚未同步的数字 id 与后台新分配的 id 撞号时，后台节点会被静默丢掉；刷新走整包恢复，所以又正常。
+2. **缺失位置被伪造成 `{x:0,y:0}`。** `packages/plugins/plugin-cloud-client/src/remoteSync.ts:92-104` 把没有 `position` 的节点补成原点，导致“新增节点”的比较失真。（**仍待修**）
+3. ~~**远端删除的 data 字段无法落地。**~~（已在 `cbe64ecd` 修复；以下保留为当时证据）`packages/plugins/plugin-cloud-client/src/applyMerge.ts:82-87` 用浅合并写 `data`，`remoteMerge.ts:138-153` 也明确记录了“不删 key”的限制。刷新后按整包恢复才会消失。
+4. ~~**批量挂载窗口可能延迟新节点显示。**~~（已在 `4fc4e1cb` 修复：已挂载节点立即更新，新节点继续排队）`packages/canvas-render/src/host/CanvasHost.vue:296-308` 在分批挂载期间只更新 `stagedTarget`，新加入节点要等这一批结束或下一次同步才出现在 `nodes.value`。
 
 ## 四、版本号设计
 
@@ -442,9 +442,9 @@ cloud-server 定向测试按单文件执行，不要把“全量测试”当成�
 已知仍缺（按本计划后续 commit 处理）：
 
 - 保存接口 HTTP 200 + `ok:false` 的误判（Commit 1a）。
-- 同 id 碰撞、缺失 position、远端字段删除（Commit 4）。
+- ~~同 id 碰撞、远端字段删除~~（已由 `c1b35238`、`cbe64ecd` 处理）；缺失 position 仍待后续。
 - 正在编辑字段的冲突保护与可见提示（Commit 5）。
-- `plugin-node-ui` 非默认画布的旁路写、同 id 碰撞、远端删除 data key（Commit 2a 剩余 / Commit 4）。
+- ~~`plugin-node-ui` 非默认画布的旁路写、同 id 碰撞、远端删除 data key~~（已由 `d19d326a`、`c1b35238`、`cbe64ecd` 处理）。
 
 验证记录：`cloud-server` 定向 3 文件 43/43、并发/复制/兼容相关 3 文件 41/41；`plugin-cloud-client` 134/134、`typecheck` 干净；插件产物已确认包含 `/revision`、`visibilitychange`、`online`。真实服务验证：版本 1 → 2；改名仍为 2；不存在画布 404。
 
@@ -460,7 +460,7 @@ cloud-server 定向测试按单文件执行，不要把“全量测试”当成�
 1. **保存 HTTP 200 + `ok:false` 仍可能被当成成功**（Commit 1a）：这是独立于定时核对的丢数据路径，必须继续修。
 2. **两份基准尚未完全同源推进**：远端合并后，`CanvasDiffAdapter` 的提交基准还没有由同一份快照同步推进；下一次保存仍可能重发已合入的节点。
 3. **编辑中的冲突字段尚未延迟**：核对会随时落地，拖拽/输入冲突保护还是计划项。
-4. **`plugin-node-ui` 非默认画布仍有直接读改写旁路**；后台版本号只覆盖当前 `CanvasDocument` 路径，别把它当成“所有写入口都已纳入”。（**截至 `e55c722d` 仍未完成**。）
+4. ~~**`plugin-node-ui` 非默认画布仍有直接读改写旁路**~~：已在 `d19d326a` 改走 `canvasDocPool`（旧宿主仍回退读改写，兼容保留）。
 5. ~~**完整实时 e2e 尚未修复**~~：已在 `e55c722d` 修好并全绿；这条保留为当时的缺口记录。
 
 ### 继续修复（2026-10-25，`3db1ad84` … `e55c722d`）
@@ -475,4 +475,13 @@ cloud-server 定向测试按单文件执行，不要把“全量测试”当成�
 仍保留的边界（本轮不假装完成）：
 
 - 文本/可视化节点正在输入时没有全局“正在编辑”信号，只能用 DOM 焦点兜底；焦点取不到时不延迟（宁可同步，也不整体停更）。要真正做到字段级延迟，需要内容组件上报编辑会话。
-- `plugin-node-ui` 非默认画布的旁路写、同 id 碰撞、远端删除 data key 仍未处理；它们属于后续 Commit。
+
+### 继续落地（2026-10-25，`c1b35238` … `4fc4e1cb`）
+
+- **同 id 碰撞**：本地尚未提交的节点换新 id，边端点、子节点 `parentId` 一并改；云端节点正常接入，两边都不静默丢失（`c1b35238`、`9c08be86`）。旧宿主没有关联信息时不换 id，避免留下悬挂引用。
+- **字段删除**：数据层新增 `dataUnset`，后台批量写与 MCP 都能表达删除；合并层对“远端删了、本地没改”的 key 生成显式删除（`cbe64ecd`）。
+- **可视化节点非默认画布**：宿主暴露 `canvasDocPool`，`plugin-node-ui` 写入改走同一个文档实例（同一把锁 / 同一版本发号点），旧宿主才退回读改写（`d19d326a`）。
+- **启动基准统一**：`restoreOrSeed` 把服务器准信交回调用方，保存基准与合并基准用同一份快照初始化，不再二次 GET 造成错位（`4115f7c4`）。
+- **分批挂载窗口**：已挂载节点立即吃到新数据，新节点仍按批排队；解决“数据变了但 UI 没动”的显示延迟（`4fc4e1cb`）。
+
+当前验证：`plugin-cloud-client` 156/156、`canvas-data` 424/424、`plugin-node-ui` 370/370、`canvas-render` 482/482、`cloud-server` 882/882；相关 typecheck 全过；真实浏览器 `e2e:realtime` 全绿。
