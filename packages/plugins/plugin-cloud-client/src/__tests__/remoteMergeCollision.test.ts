@@ -42,6 +42,19 @@ describe('同 id 碰撞：本地未提交节点 vs 云端新节点', () => {
     expect(plan.addNodes.map((n) => n.id)).toEqual(['1'])
   })
 
+  it('缺失 position 不被伪造成 0,0：无位置与在原点仍能区分', () => {
+    const noPosition = { id: '1', type: 'text', data: { text: 'no-pos' } }
+    const atOrigin = { id: '1', type: 'text', position: { x: 0, y: 0 }, data: { text: 'at-origin' } }
+    const plan = planRemoteMerge(
+      { nodes: [], edges: [] },
+      { nodes: [noPosition as MergeNode], edges: [] },
+      { nodes: [atOrigin], edges: [] },
+    )
+    // 本地旧节点没有位置、云端同 id 有位置：两者不是同一份，必须进入碰撞处理而不是静默当成同一个。
+    expect(plan.reassignNodeIds).toHaveLength(1)
+    expect(plan.addNodes[0].position).toEqual({ x: 0, y: 0 })
+  })
+
   it('落地时连线端点与子节点 parentId 跟着换，不留悬挂引用', () => {
     const local = node('1', '本地')
     const child = { ...node('2', '子节点'), parentId: '1' }

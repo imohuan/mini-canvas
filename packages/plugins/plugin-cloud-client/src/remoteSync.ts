@@ -125,10 +125,13 @@ function normalizeNode(raw: unknown): MergeNode | undefined {
   const n = raw as Partial<MergeNode>
   if (typeof n.id !== 'string' || typeof n.type !== 'string') return undefined
   const pos = n.position as { x?: unknown; y?: unknown } | undefined
+  const x = pos?.x
+  const y = pos?.y
   return {
     id: n.id,
     type: n.type,
-    position: { x: Number(pos?.x ?? 0), y: Number(pos?.y ?? 0) },
+    // 保留“缺失”而不是伪造 0,0：新增比较必须能区分“没有位置”与“就在原点”。
+    ...(typeof x === 'number' && typeof y === 'number' ? { position: { x, y } } : {}),
     data: (n.data && typeof n.data === 'object' ? { ...n.data } : {}) as Record<string, unknown>,
     ...(typeof n.parentId === 'string' ? { parentId: n.parentId } : {}),
     ...(n.size && typeof n.size === 'object' ? { size: { ...n.size } } : {}),

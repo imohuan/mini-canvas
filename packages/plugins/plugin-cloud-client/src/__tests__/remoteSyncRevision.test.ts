@@ -241,7 +241,7 @@ describe('正在编辑的字段：延迟落地、其他变化照常', () => {
     // 版本没再变，但编辑结束后仍需把上次延迟的那一版重新核对。
     await sync.check()
     const deadline2 = Date.now() + 500
-    while (Date.now() < deadline2 && graph.nodes[0].position.x !== 100) {
+    while (Date.now() < deadline2 && graph.nodes[0].position?.x !== 100) {
       await new Promise((r) => setTimeout(r, 10))
     }
     expect(graph.nodes[0].position).toEqual({ x: 100, y: 100 })

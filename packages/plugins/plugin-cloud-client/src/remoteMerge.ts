@@ -44,7 +44,8 @@
 export interface MergeNode {
   id: string
   type: string
-  position: { x: number; y: number }
+  /** 缺失 = 数据里本来没有 position（不能伪造 0,0；落地时由调用方兜底） */
+  position?: { x: number; y: number }
   data: Record<string, unknown>
   parentId?: string
   size?: { w: number; h: number }
@@ -116,8 +117,7 @@ function sameNode(a: MergeNode | undefined, b: MergeNode | undefined): boolean {
   if (!a || !b) return a === b
   return (
     a.type === b.type &&
-    a.position.x === b.position.x &&
-    a.position.y === b.position.y &&
+    stable(a.position ?? null) === stable(b.position ?? null) &&
     stable(a.data) === stable(b.data) &&
     stable(a.parentId ?? null) === stable(b.parentId ?? null) &&
     stable(a.size ?? null) === stable(b.size ?? null)
@@ -147,9 +147,9 @@ function byId<T extends { id: string }>(list: T[]): Map<string, T> {
  * 用户正在拖位置、AI 在改内容 —— 这种「各改各的字段」是最常见的情形，字段级合并能让两者都活下来。
  */
 function mergeNodeFields(base: MergeNode, mine: MergeNode, theirs: MergeNode): MergeNode {
-  const out: MergeNode = { ...mine, position: { ...mine.position }, data: { ...mine.data } }
-  if (base.position.x !== theirs.position.x || base.position.y !== theirs.position.y) {
-    out.position = { x: theirs.position.x, y: theirs.position.y }
+  const out: MergeNode = { ...mine, position: mine.position ? { ...mine.position } : undefined, data: { ...mine.data } }
+  if (stable(base.position ?? null) !== stable(theirs.position ?? null)) {
+    if (theirs.position) out.position = { x: theirs.position.x, y: theirs.position.y }
   }
   // data 逐 key 比对：云端改过的 key 用云端的，没动过的 key 保留本地
   for (const key of Object.keys(theirs.data)) {
@@ -222,7 +222,7 @@ export function planRemoteMerge(
       // 云端新增：本地没有才加。本地有同 id 的碰撞已在上面换成新 id（本地内容保留），
       // 这里把云端节点正常接入，不再静默丢一半。
       if ((!m || collisions.has(id)) && knownType(t.type)) {
-        plan.addNodes.push({ ...t, position: { ...t.position }, data: { ...t.data } })
+        plan.addNodes.push({ ...t, ...(t.position ? { position: { ...t.position } } : {}), data: { ...t.data } })
       }
       continue
     }
@@ -231,7 +231,7 @@ export function planRemoteMerge(
     if (!knownType(t.type)) continue // 本地不认识这个类型 → 不试图改它
     if (sameNode(b, m)) {
       // 只有云端改了：整份用云端的
-      plan.updateNodes.push({ ...t, position: { ...t.position }, data: { ...t.data } })
+      plan.updateNodes.push({ ...t, ...(t.position ? { position: { ...t.position } } : {}), data: { ...t.data } })
       // 但浅合并不会删除本地多出来的旧 key；显式列出“云端已没有、本地没改”的字段，
       // 否则刷新前后不一致（这是远端删字段最常见的一条路径）。
       const removedKeys: string[] = []
