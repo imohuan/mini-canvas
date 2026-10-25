@@ -272,6 +272,33 @@ export function nextRefOrder<T extends { id: string }>(
   return ids
 }
 
+/**
+ * 把「某个槽位要用的素材」排到它对应该有的位置（用户口径 2026-10-25：
+ * 「点击第二个空区域进行上传，那么这个连接线就属于第二个参考」）。
+ *
+ * 背景：refName（图片1/图片2）是**按连线顺序**编的（numberRefNames）。
+ * 用户在第二个空格上传时，这条新边天然排在最末 —— 名字就会变成「图片N」。
+ * 这里把新素材插到 index 位置，其余顺延；于是「第 2 格」真的对应「图片2」。
+ *
+ * @param order  当前 refOrder（节点 id 序列）
+ * @param kind   槽位种类（同类型内部编号；视频/音频各自独立）
+ * @param index  目标序号（从 1 开始）
+ * @param nodeId 新素材的节点 id
+ * @returns 新的 refOrder（调用方写回节点 data.refOrder）
+ */
+export function placeRefAtSlot(
+  order: ReadonlyArray<string>,
+  kind: 'image' | 'video' | 'audio' | 'av',
+  index: number,
+  nodeId: string,
+): string[] {
+  // 同类型才能插位：图片2 的「位置」只在图片序列里有意义（视频/音频各自编号）。
+  void kind
+  const rest = order.filter((id) => id !== nodeId)
+  const at = Math.max(0, Math.min(index - 1, rest.length))
+  return [...rest.slice(0, at), nodeId, ...rest.slice(at)]
+}
+
 /** 素材 → 生成请求里的资源（只带工具需要的字段，避免把 UI 用的东西塞进请求） */
 export function toToolResources(materials: ReadonlyArray<UpstreamMaterial>): ToolResource[] {
   return materials.map((m) => {

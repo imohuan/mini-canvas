@@ -22,7 +22,7 @@
  * promptBinding:'text' 把输入框接到 data.text；没有可用动作时自身返回空。
  * 服务取值（§0.1）：组件里一律 ctx.get(...)，不直访 ctx.nodeBar。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 // 素材卡拖拽排序（用户要求：「这个顺序可以进行拖拽改变，用 Vue Draggable Plus，动画效果挺好的」）
@@ -42,6 +42,7 @@ import {
   makeResourceResolver,
   materialCards,
   nextRefOrder,
+  placeRefAtSlot,
   resolveMaterialUrls,
   toEditorResources,
   toToolResources,
@@ -62,9 +63,12 @@ import {
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
+  refSlotKey,
   REF_SLOT_META,
   type RefSlotKind,
 } from './refSlots'
+// 参考区合并 + 缺号校验（纯函数，已单测）
+import { mergeRefTiles, findRefGap, uploadToRefSlot } from './refTiles'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -486,7 +490,25 @@ const infoText = computed(() => {
 // —— 状态（从节点 data.runState 读，覆盖层与底栏同一数据源） ——
 const runState = computed(() => readRunState(props.data))
 const running = computed(() => runState.value.status === 'running')
-const canRun = computed(() => !running.value && !!currentAction.value)
+/** 能不能点发送：还在跑 / 没动作 / **参考序号有缺** 都不行（后两条见 refGap） */
+const canRun = computed(() => !running.value && !!currentAction.value && !refGap.value)
+
+/**
+ * 参考序号是否连续（用户口径 2026-10-25：「你只传了一张图，并且声明的是\"图片 2\"，这就存在问题…
+ * 在这种情况下，是不允许你点击发送按钮的」）。
+ *
+ * 规则：正文里出现 `@图片N` 时，1..N 必须全部有内容。缺任何一格 = 引用悬空（模型会拿到空引用），
+ * 发送按钮禁用并给出明确原因。没写任何 @ 标签时不受影响（普通参考图照旧）。
+ */
+const refGap = computed(() => findRefGap(refSlots.value))
+
+const refGapHint = computed(() => {
+  const gap = refGap.value
+  if (!gap) return ''
+  const label = REF_SLOT_META[gap.kind].label
+  return '还缺' + gap.missing.map((i) => ' ' + label + i).join('、') + '，补上后才能发送'
+})
+
 
 /**
  * 已经提交过 → 收起底栏（像下拉选完就收那样）。
@@ -708,6 +730,41 @@ function syncRefSlots(): void {
 
 const visibleRefSlots = computed(() => refSlots.value)
 
+/**
+ * 参考区**一行**的格子（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
+ *
+ * 合并规则在 refTiles.ts 的 mergeRefTiles（纯函数，已单测）：槽位优先，没被覆盖的素材补在后面，
+ * 按序号排序 —— 同一个参考只出现一次。这里只把「能不能点开预览 / 删除」要用的
+ * card / slot 挂回去。
+ */
+const refTiles = computed(() =>
+  mergeRefTiles(visibleRefSlots.value, cards.value).map((tile) => ({
+    ...tile,
+    card: tile.slotKey
+      ? cards.value.find((c) => parseSlotFromRefName(c.name)?.key === tile.slotKey)
+      : cards.value.find((c) => c.id === tile.key.replace('card:', '')),
+    slot: tile.slotKey ? refSlots.value.find((s) => s.key === tile.slotKey) : undefined,
+  })),
+)
+
+/** 素材名（图片2）→ 槽位键（image:2）+ 中文标签 */
+function parseSlotFromRefName(refName: string): { key: string; index: number; label: string } | null {
+  const parsed = slotFromRefName(refName)
+  if (!parsed) return null
+  return {
+    key: refSlotKey(parsed.kind, parsed.index),
+    index: parsed.index,
+    label: parsed.kind === 'image' ? '图片' : parsed.kind === 'video' ? '视频' : parsed.kind === 'audio' ? '音频' : '音视频',
+  }
+}
+
+/** 一行格子的拖拽排序（有槽位的按槽位顺序写回；纯素材沿用原来的 onReorder） */
+function onReorderTiles(next?: Array<{ card?: MaterialCard; slot?: RefSlot }>): void {
+  if (!next || next.length === 0) return
+  const cardsOnly = next.map((t) => t.card).filter((c): c is MaterialCard => !!c)
+  if (cardsOnly.length) onReorder(cardsOnly)
+}
+
 /** 正文变了 → 重算槽位 */
 watch([prompt, shownMaterials], () => syncRefSlots(), { immediate: true })
 
@@ -775,22 +832,71 @@ function pickSlotFile(slot: RefSlot): void {
   input.click()
 }
 
-/** 把一个本地文件放进槽位（类型不对就提示，不改状态） */
-function fillSlotFromFile(slot: RefSlot, file: File): void {
+/**
+ * 上传 = **在画布上建一个参考节点，再连到本节点**（用户口径 2026-10-25：
+ * 「点击上传时，这 4 个上传你需要添加一个参考节点然后进行连接，这样进行上传」）。
+ *
+ * 为什么不只是把文件塞进本地状态：槽位只是正文里那条 @ 的「指向」。真正喂给模型的是
+ * 连线进来的素材（collectUpstreamMaterials 按边收），只改本地状态的话：
+ *   刷新就没了、生成时也拿不到这张图。所以必须建节点 + 连边。
+ */
+async function fillSlotFromFile(slot: RefSlot, file: File): Promise<void> {
   const verdict = judgeSlotDrop(slot.kind, { file })
   if (!verdict.ok) {
     setSlotError(slot, dropVerdictMessage(slot.kind, verdict))
     return
   }
-  slot.status = 'ready'
-  slot.mediaType = verdict.mediaType
-  slot.name = file.name || REF_SLOT_META[slot.kind].label + slot.index
-  // 替换旧地址时回收旧的 objectURL
-  if (slot.objectUrl && slot.url) URL.revokeObjectURL(slot.url)
-  slot.url = URL.createObjectURL(file)
-  slot.objectUrl = true
-  slot.error = undefined
-  refreshSlotChip(slot)
+  const fileDrop = ctx.tryGet<{
+    addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
+  }>('file-drop')
+  if (!fileDrop) {
+    setSlotError(slot, '当前宿主没有文件落库能力，无法建参考节点')
+    return
+  }
+  const doc = ctx.tryGet<{
+    getNode(id: string): { position?: { x: number; y: number }; width?: number } | undefined
+    addEdge(input: { source: string; target: string }): string
+    updateNode(id: string, patch: { data: Record<string, unknown> }): void
+  }>('doc')
+  if (!doc) { setSlotError(slot, '当前宿主没有连线能力'); return }
+  const me = doc.getNode(props.id)
+  const base = me?.position ?? { x: 0, y: 0 }
+  const w = Number(me?.width) || 320
+  try {
+    // 建节点 → 还选中 → 等一帧 → 连线 → 按序号排位；顺序在 uploadToRefSlot 里钉死（已单测）
+    const result = await uploadToRefSlot(
+      { file, kind: slot.kind, index: slot.index, targetId: props.id },
+      {
+        addFiles: (files, at) => fileDrop.addFiles(files, at),
+        waitTick: () => nextTick(),
+        afterCreate: () => {
+          // file-drop 建完会把选中改成新节点；底栏挂在原节点上，必须还回去
+          try { ctx.tryGet<{ set(ids: string[]): void }>('selection')?.set([props.id]) } catch { /* 忽略 */ }
+        },
+        addEdge: (source, target) => {
+          try { return doc.addEdge({ source, target }) } catch { return null }
+        },
+        refOrder: () => refOrder.value,
+        writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
+        pickCreated: (before) => {
+          const fresh = shownMaterials.value.find((m) => !before.has(m.id))
+          return fresh ? { id: fresh.id, name: fresh.name, url: fresh.url } : null
+        },
+        positionFor: (index) => ({ x: base.x - w - 24 - (index - 1) * (w + 24), y: base.y }),
+      },
+    )
+    if (!result.ok) { setSlotError(slot, result.error ?? '上传失败'); return }
+    slot.status = 'ready'
+    slot.mediaType = verdict.mediaType
+    slot.name = result.created?.name || file.name
+    slot.url = result.created?.url
+    slot.objectUrl = false
+    slot.error = undefined
+    refreshSlotChip(slot)
+  } catch (err) {
+    console.warn('[bottom-bar] 上传参考失败', err)
+    setSlotError(slot, '上传失败，请重试')
+  }
 }
 
 function setSlotError(slot: RefSlot, message: string): void {
@@ -1025,85 +1131,66 @@ function onGlobalLeave(el: Element): void {
     </div>
 
     <!--
-      「看图」待输入槽位（用户口径 2026-10-25）：输入框里 @图片1 / @音频1 / @音视频1
-      即使没有连线也要有槽位，状态「待输入」；点击上传 / 拖本地文件 / Ctrl 拖节点都能填。
+      参考素材 = **一行**（用户口径 2026-10-25：「它只有一行的输入，你这边重复了」）。
+      每一格是同一个「槽位」：
+        · 已连线 / 已上传 → 显示图片（与素材卡同款：cover + 轻微模糊）
+        · 没有内容 → 虚线「待输入」，点它上传 / 拖文件 / Ctrl 拖节点
+      从前把「待输入槽」和「已有素材卡」画成两排，同一个参考就出现两次；现在合并成一条序列。
     -->
-    <div v-if="visibleRefSlots.length > 0" class="nb-slots" :class="{ 'is-drop-hot': slotsDropHot }">
-      <div
-        v-for="slot in visibleRefSlots"
-        :key="slot.key"
-        :data-slot-key="slot.key"
-        class="nb-slot"
-        :class="slot.status === 'ready' ? 'is-ready' : 'is-pending'"
-        :title="slot.status === 'ready' ? (slot.name || '') : '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点'"
-        @click.stop="slot.status === 'ready' ? undefined : pickSlotFile(slot)"
-        @dragover.stop.prevent="onSlotDragOver($event)"
-        @dragleave.stop="onSlotDragLeave($event)"
-        @drop.stop.prevent="onSlotDrop($event, slot)"
-      >
-        <template v-if="slot.status === 'ready'">
-          <img v-if="slot.url && slot.mediaType === 'image'" class="nb-slot-img" :src="slot.url" :alt="slot.name || ''" draggable="false" />
-          <span v-else class="nb-slot-icon" aria-hidden="true" v-html="slotIconOf(slot)" />
-          <span class="nb-slot-index">{{ slot.index }}</span>
-          <button
-            class="nb-slot-x"
-            type="button"
-            :aria-label="'把 ' + slot.key + ' 退回待输入'"
-            @click.stop="resetSlot(slot)"
-          >×</button>
-        </template>
-        <template v-else>
-          <span class="nb-slot-plus" aria-hidden="true">+</span>
-          <span class="nb-slot-label">{{ slotLabelOf(slot) }}</span>
-          <span class="nb-slot-pending">待输入</span>
-        </template>
-        <span v-if="slot.error" class="nb-slot-error">{{ slot.error }}</span>
-      </div>
-    </div>
-
-    <!-- 素材卡：**直接显示**（不用点「参考」），48×48 带序号角标，点开 → 全屏预览。
-         顺序**可以拖拽改变**（用户要求：用 Vue Draggable Plus，动画效果挺好）—— 拖完把新顺序
-         写回节点 data.refOrder，于是角标序号、@ 引用名、发给后端的参考图顺序三处一起变。 -->
     <VueDraggable
-      v-if="cards.length > 0"
+      v-if="refTiles.length > 0"
       class="nb-cards"
-      :model-value="cards"
+      :class="{ 'is-drop-hot': slotsDropHot }"
+      :model-value="refTiles"
       :animation="180"
       ghost-class="nb-card--ghost"
       chosen-class="nb-card--chosen"
       drag-class="nb-card--drag"
       :force-fallback="true"
-      @update:model-value="onReorder"
+      @update:model-value="onReorderTiles"
     >
       <div
-        v-for="(card, i) in cards"
-        :key="card.id"
+        v-for="tile in refTiles"
+        :key="tile.key"
+        :data-slot-key="tile.slotKey || undefined"
         class="nb-card"
-        :title="card.name + '（可拖动调整顺序）'"
+        :class="{ 'is-pending': tile.pending }"
+        :title="tile.pending ? '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点' : tile.name + '（可拖动调整顺序）'"
+        @click.stop="tile.pending && tile.slot ? pickSlotFile(tile.slot) : undefined"
+        @dragover.stop.prevent="onSlotDragOver($event)"
+        @dragleave.stop="onSlotDragLeave($event)"
+        @drop.stop.prevent="tile.slot ? onSlotDrop($event, tile.slot) : undefined"
       >
-        <!-- 图片素材卡：正方形 + cover 铺满，并对**图片本身**加模糊
-             （用户要求：卡片是正方形、图片用 cover、给图片一个模糊效果）。 -->
         <span class="nb-card-clip">
-          <img v-if="card.url && !card.isText" class="nb-card-img" :src="card.url" :alt="card.name" draggable="false" />
-          <span v-else class="nb-card-text">{{ (card.name || '文')[0] }}</span>
-          <span class="nb-card-index">{{ i + 1 }}</span>
+          <img
+            v-if="tile.url && !tile.pending && !tile.isText"
+            class="nb-card-img"
+            :src="tile.url"
+            :alt="tile.name"
+            draggable="false"
+          />
+          <span v-else-if="tile.pending" class="nb-card-pending">
+            <span class="nb-card-plus" aria-hidden="true">+</span>
+            <span class="nb-card-pending-label">{{ tile.label }}</span>
+            <span class="nb-card-pending-tag">待输入</span>
+          </span>
+          <span v-else class="nb-card-text">{{ (tile.name || '文')[0] }}</span>
+          <span class="nb-card-index">{{ tile.index }}</span>
         </span>
-        <!-- 卡片命中区（整张卡点开预览；与关闭按钮是**兄弟**，不是嵌套 —— 按钮里套按钮是非法 HTML） -->
         <button
+          v-if="!tile.pending"
           class="nb-card-hit"
           type="button"
-          :aria-label="'预览素材 ' + card.name"
-          @click.stop="openCard(card)"
+          :aria-label="'预览素材 ' + tile.name"
+          @click.stop="tile.card && openCard(tile.card)"
         />
-        <!-- 右上角关闭（hover / 键盘聚焦才露）：断开「这张素材 → 本节点」的连线 =
-             把这张卡从底栏移除。按钮**一半在卡片外**，所以裁剪必须收在 .nb-card-clip 里，
-             卡片自己不再 overflow:hidden（用户点名提醒的坑）。 -->
         <button
+          v-if="!tile.pending"
           class="nb-remove"
           type="button"
-          :aria-label="'移除素材 ' + card.name"
+          :aria-label="'移除素材 ' + tile.name"
           title="移除素材（断开连线）"
-          @click.stop="removeCard(card)"
+          @click.stop="tile.card ? removeCard(tile.card) : resetSlot(tile.slot!)"
           @pointerdown.stop
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -1187,11 +1274,14 @@ function onGlobalLeave(el: Element): void {
           <span aria-hidden="true" v-html="ICON_SETTINGS" />
         </button>
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
+        <!-- 参考序号有缺时，在发送按钮左边说清楚缺哪一格（不然用户只看到按钮点不动） -->
+        <span v-if="refGapHint" class="nb-gap-hint" :title="refGapHint">{{ refGapHint }}</span>
         <button
           class="nb-run"
           :class="{ 'is-running': running }"
           type="button"
           :disabled="!canRun || submitted"
+          :aria-disabled="!canRun || submitted"
           :title="currentAction?.title || '执行'"
           @click.stop="onRun"
         >
@@ -1443,139 +1533,6 @@ function onGlobalLeave(el: Element): void {
 }
 
 /* —— 素材卡（常显；48×48，序号角标左下；参考图 size-12） —— */
-/*
- * 「看图」待输入槽位（用户口径 2026-10-25）：输入框上方的预览框。
- * 尺寸与素材卡同一档（48×48 圆角 8），但待输入时是虚线框 + 「待输入」角标。
- */
-.nb-slots {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 2px 2px 8px;
-  border-radius: 12px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-.nb-slots.is-drop-hot {
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #0891b2) 35%, transparent);
-}
-.nb-slot {
-  position: relative;
-  flex: none;
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  overflow: visible;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-}
-.nb-slot.is-pending {
-  border: 1px dashed color-mix(in srgb, var(--ui-ink, #18202b) 26%, transparent);
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
-  color: var(--ui-ink-mute, #8c95a3);
-}
-.nb-slot.is-pending:hover {
-  border-color: var(--ui-accent, #0891b2);
-  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
-  color: var(--ui-accent, #0891b2);
-}
-.nb-slot.is-ready {
-  border: 1px solid var(--ui-line, #e2e5ea);
-  background: var(--ui-hover-soft, rgb(0 0 0 / 0.035));
-}
-.nb-slot-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 7px;
-}
-.nb-slot-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  color: var(--ui-ink-dim, #6b7280);
-}
-.nb-slot-icon svg {
-  width: 18px;
-  height: 18px;
-}
-.nb-slot-plus {
-  font-size: 15px;
-  line-height: 1;
-}
-.nb-slot-label {
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-}
-.nb-slot-pending {
-  position: absolute;
-  left: 3px;
-  bottom: 3px;
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid color-mix(in srgb, #b45309 30%, transparent);
-  color: #b45309;
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.nb-slot-index {
-  position: absolute;
-  left: 3px;
-  bottom: 3px;
-  padding: 1px 3px;
-  border-radius: 4px;
-  background: rgba(17, 24, 39, 0.78);
-  color: #fff;
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.nb-slot-x {
-  position: absolute;
-  right: -5px;
-  top: -5px;
-  width: 16px;
-  height: 16px;
-  padding: 0;
-  border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ui-ink-mute, #8c95a3);
-  font-size: 11px;
-  line-height: 1;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.nb-slot:hover .nb-slot-x,
-.nb-slot-x:focus-visible {
-  display: flex;
-}
-.nb-slot-error {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 3px);
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 10px;
-  color: #b91c1c;
-  pointer-events: none;
-}
 
 .nb-cards {
   display: flex;
@@ -1584,6 +1541,59 @@ function onGlobalLeave(el: Element): void {
   gap: 8px;
   padding-left: 2px;
 }
+/* 参考格：待输入（虚线） */
+.nb-card.is-pending {
+  border: 1px dashed color-mix(in srgb, var(--ui-ink, #18202b) 26%, transparent);
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.03));
+  cursor: pointer;
+}
+.nb-card.is-pending:hover {
+  border-color: var(--ui-accent, #0891b2);
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.1));
+}
+.nb-card-pending {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+.nb-card.is-pending:hover .nb-card-pending {
+  color: var(--ui-accent, #0891b2);
+}
+.nb-card-plus {
+  font-size: 15px;
+  line-height: 1;
+}
+.nb-card-pending-label {
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.nb-card-pending-tag {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: var(--ui-overlay-solid, #fff);
+  border: 1px solid color-mix(in srgb, var(--ui-warn, #b45309) 30%, transparent);
+  color: var(--ui-warn, #b45309);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+/* 参考行整体拖放高亮 */
+.nb-cards.is-drop-hot {
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.08));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent, #0891b2) 35%, transparent);
+  border-radius: 12px;
+}
+
 .nb-card {
   position: relative;
   flex: none;
@@ -1958,6 +1968,15 @@ function onGlobalLeave(el: Element): void {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--ui-ink-mute, #8c95a3);
+}
+/* 参考序号缺格提示：贴着发送按钮，短、能截断（详情在 title 里） */
+.nb-gap-hint {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ui-warn, #b45309);
 }
 
 /* 发送按钮：32×32、圆角 12（照参考站；浅色主题下白底深箭头，由 token 决定） */
