@@ -29,7 +29,8 @@ afterEach(async () => {
 
 describe('读画布', () => {
   it('从未保存过 → 空画布（不是错误）', async () => {
-    expect(await doc.read()).toEqual({ nodes: [], edges: [] })
+    // revision 0 = 旧文件没有版本字段 / 从未提交过；空画布仍是合法状态。
+    expect(await doc.read()).toEqual({ nodes: [], edges: [], revision: 0 })
   })
 
   it('读出来的是副本：调用方改了不会污染下一次读', async () => {
@@ -315,4 +316,38 @@ describe('并发写同一个画布文件：不能因为 rename 撞车而失败',
     }
     // 这是并发压力用例：负载高时单轮 fs 往返会明显变慢，给它足够余量（默认 5s 太紧）
   }, 30_000)
+})
+
+describe('画布图版本（定时核对用的 revision）', () => {
+  it('每次有效图提交 +1；空提交不涨', async () => {
+    const store2 = new CanvasStore(dir)
+    const doc2 = new CanvasDocument(store2, new CanvasResourceStore(dir), 'default')
+    // 从未保存过 = 画布不存在；版本接口由路由翻译成 404，而不是用 0 冒充空画布。
+    expect(await doc2.readRevision()).toBeUndefined()
+    await doc2.batchNodes({ add: [{ type: 'text', id: 'a' }] })
+    expect(await doc2.readRevision()).toBe(1)
+    // lenient 删除不存在的节点：业务成功但图没变，不能涨版本（否则客户端会白拉整张画布）
+    await doc2.batchEdges({ delete: ['missing'], lenient: true })
+    expect(await doc2.readRevision()).toBe(1)
+    await doc2.batchNodes({ add: [{ type: 'text', id: 'b' }] })
+    expect(await doc2.readRevision()).toBe(2)
+  })
+
+  it('并发图提交不丢版本：10 次成功写入 → revision 恰好 +10', async () => {
+    const store2 = new CanvasStore(dir)
+    const doc2 = new CanvasDocument(store2, new CanvasResourceStore(dir), 'default')
+    const before = (await doc2.readRevision()) ?? 0
+    await Promise.all(
+      Array.from({ length: 10 }, (_, i) => doc2.batchNodes({ add: [{ type: 'text', id: 'c' + i }] })),
+    )
+    expect(await doc2.readRevision()).toBe(before + 10)
+  }, 30_000)
+
+  it('旧文件没有 revision → 按 0 读；副本从 0 开始且一次复制只提交一次', async () => {
+    const store2 = new CanvasStore(dir)
+    await store2.writeCanvas('legacy', { nodes: [{ id: 'x', type: 'text', position: { x: 0, y: 0 } }], edges: [] })
+    expect((await store2.readCanvas('legacy'))?.revision).toBe(0)
+    await store2.copyInto('legacy', 'copy1', '副本')
+    expect((await store2.readCanvas('copy1'))?.revision).toBe(1)
+  })
 })

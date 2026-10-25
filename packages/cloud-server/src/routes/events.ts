@@ -24,6 +24,9 @@ import { streamSSE } from 'hono/streaming'
 import { isKvType, type KvChangeEvent, type KvStore } from '../store/kvStore.js'
 import type { CanvasStore } from '../store/canvasStore.js'
 
+/** 对外事件：kv 只有 type/key；画布事件额外带 canvasId 与图版本（客户端据此过滤与核对） */
+type StreamChangeEvent = KvChangeEvent & { canvasId?: string; revision?: number }
+
 /**
  * 保活间隔。
  *
@@ -44,9 +47,18 @@ export function eventsRoutes(store: KvStore, canvas?: CanvasStore): Hono {
    * - CanvasStore 的写（画布本体 / 视口）—— 画布数据已经不经过 kv 了，
    *   若只听 kv，AI 改完画布网页端就永远收不到通知（得手动刷新）。
    */
-  function collector(emit: (e: KvChangeEvent) => void): () => void {
+  function collector(emit: (e: StreamChangeEvent) => void): () => void {
     const offKv = store.onChange(emit)
-    const offCanvas = canvas?.onChange((e) => emit({ type: 'canvas', key: e.key }))
+    const offCanvas = canvas?.onChange((e) =>
+      emit({
+        type: 'canvas',
+        key: e.key,
+        // canvasId 不能丢：多画布时前端必须知道是哪一张变了；
+        // revision 只是提示，最终以完整快照返回的版本为准。
+        canvasId: e.canvasId,
+        ...(e.revision !== undefined ? { revision: e.revision } : {}),
+      }),
+    )
     return () => {
       offKv()
       offCanvas?.()
@@ -62,7 +74,7 @@ export function eventsRoutes(store: KvStore, canvas?: CanvasStore): Hono {
 
     return streamSSE(c, async (stream) => {
       let closed = false
-      const queue: KvChangeEvent[] = []
+      const queue: StreamChangeEvent[] = []
       let wake: (() => void) | null = null
 
       const off = collector((e) => {

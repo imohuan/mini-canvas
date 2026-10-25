@@ -20,6 +20,12 @@ export interface CanvasData {
   edges: unknown[]
   name?: string
   createdAt?: number
+  /**
+   * 画布**图**版本（只增不减）。前端定时核对靠它发现“漏了一帧通知”。
+   * 只在图（节点/边）真正提交时递增；改名 / 视口 / 纯读取都不动它。
+   * 旧文件没有这个字段时按 0 读（见 readCanvas）。
+   */
+  revision?: number
 }
 
 /**
@@ -32,6 +38,8 @@ export interface CanvasChangeEvent {
   canvasId: string
   /** 变了哪一块：本体（节点 + 边，一起住 canvas.json）还是视口 */
   key: 'graph' | 'graph-edges' | 'graph-viewport'
+  /** 本次图提交后的版本；视口事件不带（视口不是图内容） */
+  revision?: number
 }
 
 export class CanvasStore {
@@ -96,7 +104,7 @@ export class CanvasStore {
   /** 读画布本体；没存过返回 undefined */
   async readCanvas(id: string): Promise<CanvasData | undefined> {
     const raw = (await readJson(canvasFilePath(this.root, id, 'canvas'))) as
-      | { nodes?: unknown; edges?: unknown; name?: unknown; createdAt?: unknown }
+      | { nodes?: unknown; edges?: unknown; name?: unknown; createdAt?: unknown; revision?: unknown }
       | undefined
     if (raw === undefined) return undefined
     return {
@@ -104,6 +112,9 @@ export class CanvasStore {
       edges: Array.isArray(raw?.edges) ? raw.edges : [],
       ...(typeof raw?.name === 'string' ? { name: raw.name } : {}),
       ...(typeof raw?.createdAt === 'number' ? { createdAt: raw.createdAt } : {}),
+      revision: typeof raw?.revision === 'number' && Number.isFinite(raw.revision) && raw.revision >= 0
+        ? Math.floor(raw.revision)
+        : 0,
     }
   }
 
@@ -119,13 +130,24 @@ export class CanvasStore {
     const name = data.name ?? prev?.name
     if (name !== undefined) out.name = name
     out.createdAt = prev?.createdAt ?? data.createdAt ?? Date.now()
+    // 修订号由 CanvasDocument 的图提交点给出；通用写口只持久化，**不自行递增**。
+    // 不写 revision 的调用（名称 / 旧测试 / 复制等）沿用旧值，确保版本只由一处发号。
+    out.revision =
+      typeof data.revision === 'number' && Number.isFinite(data.revision) && data.revision >= 0
+        ? Math.floor(data.revision)
+        : (prev?.revision ?? 0)
     await this.runFor(canvasFilePath(this.root, id, 'canvas'), () =>
       atomicWriteJson(canvasFilePath(this.root, id, 'canvas'), out),
     )
-    // 节点与边住同一个文件，所以一次写要报两个 key —— 订阅方按 key 过滤，
-    // 只关心边的（如合并层）也能收到通知。
-    this.notify({ canvasId: id, key: 'graph' })
-    this.notify({ canvasId: id, key: 'graph-edges' })
+    // 只有“图真的存在”的写才广播图变更：没有 nodes/edges 的元数据写入（如改名）
+    // 不该让前端误以为节点变了。revision 由提交点带上，订阅方按 key 过滤。
+    if (Array.isArray(data.nodes) && Array.isArray(data.edges)) {
+      const revision = out.revision as number
+      // 节点与边住同一个文件，所以一次写要报两个 key —— 订阅方按 key 过滤，
+      // 只关心边的（如合并层）也能收到通知。
+      this.notify({ canvasId: id, key: 'graph', revision })
+      this.notify({ canvasId: id, key: 'graph-edges', revision })
+    }
   }
 
   /** 读视口；没存过返回 undefined */
@@ -138,6 +160,26 @@ export class CanvasStore {
       atomicWriteJson(canvasFilePath(this.root, id, 'view'), view),
     )
     this.notify({ canvasId: id, key: 'graph-viewport' })
+  }
+
+  /**
+   * 只改画布名（不读-改-写整张画布）。
+   *
+   * 为什么单开：改名与图提交是两条不同的业务。若先 readCanvas 再整包写回，
+   * 中间发生的图提交会被旧 nodes/edges 覆盖；而且 revision 不能因为改名而涨。
+   * 画布不存在返回 false（由路由决定是否 404）。
+   */
+  async writeName(id: string, name: string): Promise<boolean> {
+    let written = false
+    await this.runFor(canvasFilePath(this.root, id, 'canvas'), async () => {
+      const file = canvasFilePath(this.root, id, 'canvas')
+      const raw = (await readJson(file)) as Record<string, unknown> | undefined
+      if (raw === undefined) return
+      // 只动 name：nodes / edges / createdAt / revision 原样保留。
+      await atomicWriteJson(file, { ...raw, name })
+      written = true
+    })
+    return written
   }
 
   /** 列出全部画布 id（目录不存在 = 还没有画布，返回空数组而不是抛错） */
@@ -197,6 +239,8 @@ export class CanvasStore {
     await this.writeCanvas(toId, {
       nodes: rewrite(src?.nodes) as unknown[],
       edges: rewrite(src?.edges) as unknown[],
+      // 副本是**一次新的图提交**：从 0 开始，不继承原画布的版本。
+      revision: 1,
       // 名字用调用方给的（副本要叫「原名字 副本」）；没给才继承原画布的名字
       ...(name !== undefined ? { name } : src?.name !== undefined ? { name: src.name } : {}),
       createdAt: Date.now(),

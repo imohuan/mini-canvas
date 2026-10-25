@@ -50,6 +50,12 @@ export interface CloudClientStatus {
   /** 装载时的同步阶段：restored（用云端覆盖本地）/ seeded（首次上云）/ empty */
   phase?: 'restored' | 'seeded' | 'empty'
   error?: string
+  /** 已确认的云端画布版本（旧服务端没有版本接口时为 undefined） */
+  knownRevision?: number
+  /** 最近一次核对到的后台版本（诊断用） */
+  serverRevision?: number
+  /** 后台是否支持版本核对（旧服务端为 false） */
+  revisionSupported?: boolean
 }
 
 export interface CloudClientService {
@@ -395,6 +401,22 @@ const adapter = new CanvasDiffAdapter(api, CID)
       if (type === 'canvas') return adapter.get(key)
       return save ? save.get(key, type) : undefined
     },
+    // 一次完整快照：nodes/edges/revision 同一次读取，避免撕裂快照。
+    readSnapshot: async () => {
+      const snap = await api.readCanvas(CID)
+      return {
+        nodes: snap.nodes,
+        edges: snap.edges,
+        ...(typeof snap.revision === 'number' ? { revision: snap.revision } : {}),
+      }
+    },
+    // 定时 ping：只问版本，不拉画布。
+    readRevision: async () => {
+      const rev = await api.readCanvasRevision(CID)
+      if (typeof rev === 'number') status.serverRevision = rev
+      status.revisionSupported = typeof rev === 'number'
+      return rev
+    },
     graph: {
       getNodes: () => doc.getNodes() as never,
       getEdges: () => doc.getEdges() as never,
@@ -420,6 +442,8 @@ const adapter = new CanvasDiffAdapter(api, CID)
     try {
       await sync.refreshBase()
       sync.start()
+      // 启动时把版本同步进状态（设置页 / 诊断用）
+      status.knownRevision = sync.status().knownRevision
     } catch (err) {
       console.warn('[cloud-client] 实时通道建立失败（画布照常可用）', err)
     }

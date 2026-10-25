@@ -665,7 +665,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   //      靠来源边界），但必须留审计 —— 它是最彻底的一种改法（少一个节点它就没了），
   //      不留痕等于「谁把整张画布换掉了」这个问题永远答不出来。
   //      审查 N2 的实测就是这条：写完整张画布，audit.log 一行没多。
-  app.use('/api/canvases/*', async (c, next) => {
+    app.use('/api/canvases/*', async (c, next) => {
     if (c.req.method.toUpperCase() !== 'PUT' || isAdminPath('PUT', c.req.path)) return next()
     const base = {
       action: 'canvas/overwrite' as const,

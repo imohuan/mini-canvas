@@ -211,13 +211,50 @@ export class CloudApi {
   // ==================== 画布 ====================
 
   /** 读画布（节点 + 边 + 视口） */
-  async readCanvas(canvasId: string): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown }> {
+  async readCanvas(
+    canvasId: string,
+  ): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown; revision?: number }> {
     const res = await this.doFetch(this.absolute('/api/canvases/' + encodeURIComponent(canvasId)), {
       headers: { accept: 'application/json' },
     })
     if (!res.ok) throw httpError('读画布', res.status, 'GET')
-    const body = (await res.json()) as { nodes?: unknown[]; edges?: unknown[]; view?: unknown }
-    return { nodes: body.nodes ?? [], edges: body.edges ?? [], view: body.view ?? null }
+    const body = (await res.json()) as {
+      ok?: boolean
+      nodes?: unknown[]
+      edges?: unknown[]
+      view?: unknown
+      revision?: number
+    }
+    // HTTP 200 + 业务失败不能当成“空画布”：否则定时核对会把整张画布误判成被清空。
+    if (body.ok === false) throw new Error('[cloud-client] 读画布失败：后台返回 ok:false')
+    return {
+      nodes: Array.isArray(body.nodes) ? body.nodes : [],
+      edges: Array.isArray(body.edges) ? body.edges : [],
+      view: body.view ?? null,
+      ...(typeof body.revision === 'number' && Number.isFinite(body.revision)
+        ? { revision: Math.floor(body.revision) }
+        : {}),
+    }
+  }
+
+  /**
+   * 只读画布图版本（定时“ping”用）。
+   * 不解析整张画布；画布不存在抛 404（由调用方决定是否停用核对）。
+   * 旧服务端没有这个接口时返回 undefined，客户端降级为低频完整快照核对。
+   */
+  async readCanvasRevision(canvasId: string): Promise<number | undefined> {
+    const res = await this.doFetch(
+      this.absolute('/api/canvases/' + encodeURIComponent(canvasId) + '/revision'),
+      { headers: { accept: 'application/json', 'cache-control': 'no-cache' } },
+    )
+    // 旧服务端会 404 这条路由：当作“不支持版本核对”，不是“画布不存在”。
+    if (res.status === 404) return undefined
+    if (!res.ok) throw httpError('核对画布版本', res.status, 'GET')
+    const body = (await res.json()) as { ok?: boolean; revision?: number }
+    if (body.ok === false) throw new Error('[cloud-client] 核对画布版本失败：后台返回 ok:false')
+    return typeof body.revision === 'number' && Number.isFinite(body.revision)
+      ? Math.floor(body.revision)
+      : undefined
   }
 
   /**

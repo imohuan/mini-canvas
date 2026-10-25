@@ -31,6 +31,13 @@ export interface LocalGraphHandlers {
 export interface RemoteSyncOptions {
   /** 读云端某个 key（没保存过返回 undefined） */
   readCloud: (type: string, key: string) => Promise<unknown>
+  /**
+   * 一次读取完整画布快照（可选；给了就不会再用 readCloud 分两次读节点/边）。
+   * 返回里的 revision 必须与 nodes/edges 来自同一次服务端读取。
+   */
+  readSnapshot?: () => Promise<{ nodes: unknown; edges: unknown; revision?: number }>
+  /** 只读画布图版本（定时 ping）。无这个接口的旧服务端返回 undefined，降级为完整快照核对。 */
+  readRevision?: () => Promise<number | undefined>
   graph: LocalGraphHandlers
   /** 本地认不认识某个节点类型（不认识就跳过：本地渲染不了，塞进来只会是坏数据） */
   knownType: (type: string) => boolean
@@ -42,6 +49,8 @@ export interface RemoteSyncOptions {
   onHistoryChanged?: () => void
   /** 事件合并窗口（毫秒）：一次改动会连发几个 key 的通知，攒一下只跑一轮 */
   debounceMs?: number
+  /** 定时核对间隔（毫秒）；0 = 关闭。默认 15 秒，只在页面可见时运行 */
+  revisionPollMs?: number
   onError?: (message: string, err?: unknown) => void
 }
 
@@ -62,6 +71,10 @@ export interface RemoteSync {
    * 把云端所有节点都当成"新增"再插一遍。
    */
   refreshBase(): Promise<void>
+  /** 立即向后台核对一次版本（用户点“立即核对”/测试用） */
+  check(): Promise<void>
+  /** 诊断状态：已确认版本（旧服务端为 undefined） */
+  status(): { knownRevision: number | undefined; revisionSupported?: boolean }
 }
 
 /** 三种形态都认（旧数组只存节点 / 信封含边 / 空），与后端恢复逻辑同款 */
@@ -121,21 +134,35 @@ function normalizeEdge(raw: unknown): MergeEdge | undefined {
 
 export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   const debounceMs = opts.debounceMs ?? 200
+  const revisionPollMs = opts.revisionPollMs ?? 15_000
   const report = opts.onError ?? ((msg: string) => console.warn('[cloud-client] ' + msg))
   let base: CanvasGraphSnapshot | null = null
+  /** 已确认的云端图版本；undefined = 旧服务端没有版本接口（兼容模式） */
+  let knownRevision: number | undefined
   let unsubscribe: (() => void) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  let visibilityBound = false
+  let onlineBound = false
   let running = false
   /** 正在跑一轮时又来了通知 → 记个标记，跑完补一轮（不丢事件也不并发） */
   let dirty = false
   let inflight = false
 
-  async function readCloudSnapshot(): Promise<CanvasGraphSnapshot> {
+  async function readCloudSnapshot(): Promise<{ graph: CanvasGraphSnapshot; revision?: number }> {
+    if (opts.readSnapshot) {
+      const snap = await opts.readSnapshot()
+      return {
+        graph: toSnapshot(snap.nodes, snap.edges),
+        ...(typeof snap.revision === 'number' ? { revision: snap.revision } : {}),
+      }
+    }
+    // 兼容旧调用方：两次读取仍可能拼出撕裂快照；新接线一律走 readSnapshot。
     const [nodes, edges] = await Promise.all([
       opts.readCloud(CANVAS, GRAPH_KEY),
       opts.readCloud(CANVAS, GRAPH_EDGES_KEY),
     ])
-    return toSnapshot(nodes, edges)
+    return { graph: toSnapshot(nodes, edges) }
   }
 
   /** 跑一轮：读云端 → 三方合并 → 落地 → 刷新基准 */
@@ -148,22 +175,69 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
     try {
       do {
         dirty = false
-        const theirs = await readCloudSnapshot()
+        const read = await readCloudSnapshot()
+        const theirs = read.graph
+        // 同一轮只认一份完整快照：版本与节点/边一起推进，绝不拼接。
+        if (typeof read.revision === 'number') knownRevision = read.revision
         const mine: CanvasGraphSnapshot = { nodes: opts.graph.getNodes(), edges: opts.graph.getEdges() }
         const baseline = base ?? { nodes: [], edges: [] }
         const plan = planRemoteMerge(baseline, mine, theirs, opts.knownType)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
         // 基准永远跟到云端最新：下次才知道"云端这回改了没有"
         base = theirs
+        // 补一次订阅前漏掉的通知：跑完再看一眼版本，避免“核对时正好又变了一次”漏掉。
+        if (opts.readRevision) {
+          const latest = await opts.readRevision()
+          if (typeof latest === 'number' && (knownRevision === undefined || latest > knownRevision)) {
+            dirty = true
+          }
+        }
       } while (dirty)
     } catch (err) {
-      report('实时同步失败（下次事件会再试）', err)
+      // 不推进 knownRevision：失败后下一次定时核对会继续重试。
+      report('实时同步失败（稍后会自动重试）', err)
     } finally {
       inflight = false
       // 这轮失败时若正好有事件进来（dirty 被置位），while 已跳出、不会再跑，
       // 而"下次事件"可能永远不来（后台不再改动了）—— 那就漏了一次同步。这里补排一轮。
       if (dirty) schedule()
     }
+  }
+
+  /**
+   * 定时/重连核对：先只问版本，版本没变就结束；变了才拉完整画布合并。
+   *
+   * 这是针对「SSE 长时间不通讯自动断开、漏掉一帧通知」的兜底：
+   * 不依赖长连接一直活着，也不把整张画布反复搬。
+   */
+  async function reconcile(): Promise<void> {
+    if (!running) return
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+    try {
+      if (opts.readRevision) {
+        const remote = await opts.readRevision()
+        if (typeof remote === 'number') {
+          if (knownRevision !== undefined && remote <= knownRevision) return
+          // 版本不同（或首次没有基线）→ 拉完整快照合并；不会用事件跳版。
+          schedule()
+          return
+        }
+      }
+      // 旧服务端没有版本接口：低频完整快照核对（只在可见时）。
+      schedule()
+    } catch (err) {
+      report('定时核对失败（稍后重试）', err)
+    }
+  }
+
+  /** 页面回到前台：立即核对一次；隐藏期间暂停定时核对（由 reconcile 自行跳过） */
+  function onVisibility(): void {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') void reconcile()
+  }
+
+  /** 浏览器从离线恢复：长连接可能还没恢复，立即核对一次 */
+  function onOnline(): void {
+    void reconcile()
   }
 
   function schedule(): void {
@@ -192,6 +266,19 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
       if (running) return
       running = true
       unsubscribe = opts.subscribe(onEvent, (msg) => report(msg))
+      if (revisionPollMs > 0 && typeof setInterval === 'function') {
+        pollTimer = setInterval(() => void reconcile(), revisionPollMs)
+      }
+      if (typeof document !== 'undefined' && !visibilityBound) {
+        visibilityBound = true
+        document.addEventListener('visibilitychange', onVisibility)
+      }
+      if (typeof window !== 'undefined' && !onlineBound) {
+        onlineBound = true
+        window.addEventListener('online', onOnline)
+      }
+      // 订阅建立后再核对一次：恢复完成到订阅建立之间的窗口也不会漏。
+      void reconcile()
     },
     stop() {
       running = false
@@ -201,10 +288,33 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
       }
       unsubscribe?.()
       unsubscribe = null
+      if (pollTimer) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+      if (typeof document !== 'undefined' && visibilityBound) {
+        visibilityBound = false
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+      if (typeof window !== 'undefined' && onlineBound) {
+        onlineBound = false
+        window.removeEventListener('online', onOnline)
+      }
     },
     isRunning: () => running,
     async refreshBase() {
-      base = await readCloudSnapshot()
+      const read = await readCloudSnapshot()
+      base = read.graph
+      knownRevision = read.revision
+    },
+    async check() {
+      await reconcile()
+    },
+    status() {
+      return {
+        knownRevision,
+        ...(typeof knownRevision === 'number' ? { revisionSupported: true } : {}),
+      }
     },
   }
 }

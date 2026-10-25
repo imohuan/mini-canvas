@@ -84,6 +84,10 @@ export interface EventSourceLike {
 export interface ChangeEvent {
   type: string
   key: string
+  /** 画布事件额外带的画布 id（多画布过滤用）；kv 的 config/shortcut 事件没有 */
+  canvasId?: string
+  /** 画布图版本（提示用；最终以完整快照返回的 revision 为准） */
+  revision?: number
 }
 
 export interface CloudApiOptions {
@@ -97,4 +101,12 @@ export interface CloudApiOptions {
 /** 拼 URL：baseUrl 末尾斜杠去掉，避免出现双斜杠 */
 export function joinUrl(baseUrl: string, path: string): string {
   return baseUrl.replace(/\/+$/, '') + path
+}
+
+/** 完整画布快照（nodes/edges 与 revision 必须来自同一次服务端读取） */
+export interface CanvasSnapshotResponse {
+  nodes: unknown[]
+  edges: unknown[]
+  view: unknown
+  revision?: number
 }

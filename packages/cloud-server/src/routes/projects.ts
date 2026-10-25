@@ -97,8 +97,9 @@ export function projectsRoutes(projects: ProjectStore, canvases: CanvasStore, as
     if (!body.ok) return body.res
     const name = typeof body.value.name === 'string' ? body.value.name : ''
     if (!name.trim()) return c.json({ ok: false, error: '名字不能为空' }, 400)
-    const prev = (await canvases.readCanvas(id)) ?? { nodes: [], edges: [] }
-    await canvases.writeCanvas(id, { ...prev, name: name.trim() })
+    // 只改名，不重写 nodes/edges：否则中间发生的图提交会被旧快照盖回去，
+    // 而且改名不该涨图版本（revision 只由图提交点发号）。
+    await canvases.writeName(id, name.trim())
     await projects.renameCanvas(id, name.trim())
     return c.json({ ok: true })
   })

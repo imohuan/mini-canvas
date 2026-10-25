@@ -96,3 +96,38 @@ describe('PUT /api/canvases/:id 落到哪张画布', () => {
     expect((await store.readCanvas('default'))?.nodes).toHaveLength(1)
   })
 })
+
+describe('画布版本（定时核对 / revision）', () => {
+  it('图写入成功后 revision 递增；只读版本接口返回同一个值', async () => {
+    const { app } = buildApp(true)
+    // 通过真正会发号的图提交口（整包 PUT 在真实装配里走 replaceAll）写一次。
+    const doc = new CanvasDocument(new CanvasStore(root), new CanvasResourceStore(root), 'default')
+    await doc.replaceAll([{ id: 'a', type: 'text', position: { x: 0, y: 0 }, data: {} }], [])
+
+    const rev = await app.fetch(new Request('http://x/api/canvases/default/revision'))
+    expect(rev.status).toBe(200)
+    expect(rev.headers.get('cache-control')).toContain('no-store')
+    expect(((await rev.json()) as { revision: number }).revision).toBe(1)
+
+    const full = await app.fetch(new Request('http://x/api/canvases/default'))
+    expect(((await full.json()) as { revision: number }).revision).toBe(1)
+  })
+
+  it('无变化提交不涨版本；有新图内容才涨', async () => {
+    const store = new CanvasStore(root)
+    const doc = new CanvasDocument(store, new CanvasResourceStore(root), 'default')
+    const node = { id: 'a', type: 'text', position: { x: 0, y: 0 }, data: {} }
+    await doc.replaceAll([node], [])
+    const afterFirst = (await store.readCanvas('default'))?.revision
+    await doc.replaceAll([node], [])
+    expect((await store.readCanvas('default'))?.revision).toBe(afterFirst)
+    await doc.replaceAll([{ ...node, data: { text: 'changed' } }], [])
+    expect((await store.readCanvas('default'))?.revision).toBe((afterFirst ?? 0) + 1)
+  })
+
+  it('画布不存在时版本接口是 404，不用 0 冒充空画布', async () => {
+    const { app } = buildApp(true)
+    const res = await app.fetch(new Request('http://x/api/canvases/' + OTHER + '/revision'))
+    expect(res.status).toBe(404)
+  })
+})

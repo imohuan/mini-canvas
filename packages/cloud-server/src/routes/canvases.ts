@@ -63,9 +63,26 @@ export function canvasesRoutes(
   app.get('/api/canvases/:id', async (c) => {
     const id = c.req.param('id')
     if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    // nodes / edges / revision 来自**同一次** canvas.json 读取，不能拼缓存或分两次读。
     const data = (await store.readCanvas(id)) ?? { nodes: [], edges: [] }
     const view = (await store.readView(id)) ?? null
-    return c.json({ ok: true, nodes: data.nodes, edges: data.edges, view })
+    return c.json({ ok: true, nodes: data.nodes, edges: data.edges, view, revision: data.revision ?? 0 })
+  })
+
+  /**
+   * 只读图版本 —— 前端定时核对（“ping”）用。
+   *
+   * 为什么要单开一个小接口：正常没事时只需要一个整数，不能为了判断“有没有变”
+   * 把整张画布（可能含几十张图的引用）搬一遍。
+   * 画布不存在返回 404，**不要**用 revision 0 冒充空画布。
+   */
+  app.get('/api/canvases/:id/revision', async (c) => {
+    const id = c.req.param('id')
+    if (!isSafeCanvasId(id)) return c.json({ ok: false, error: '非法画布 id' }, 400)
+    const data = await store.readCanvas(id)
+    if (!data) return c.json({ ok: false, error: '画布不存在' }, 404)
+    c.header('cache-control', 'no-store')
+    return c.json({ ok: true, canvasId: id, revision: data.revision ?? 0 })
   })
 
   app.put('/api/canvases/:id', async (c) => {

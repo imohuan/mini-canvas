@@ -141,7 +141,9 @@ describe('GET /api/kv/events（实时通道）', () => {
     await putCanvas([{ id: 'n1' }])
 
     expect(await waitFor(() => events.length > 0)).toBe(true)
-    expect(events[0]).toEqual({ type: 'canvas', key: 'graph' })
+    // 画布事件带 canvasId + 提交时捕获的 revision：前端定时核对靠它过滤与补同步。
+    expect(events[0]).toMatchObject({ type: 'canvas', key: 'graph', canvasId: 'default' })
+    expect(typeof events[0].revision).toBe('number')
   })
 
   it('MCP 工具改画布也会惊动订阅者（这条才是这个接口存在的理由）', async () => {
@@ -173,7 +175,7 @@ describe('GET /api/kv/events（实时通道）', () => {
 
     await putCanvas([])
     expect(await waitFor(() => events.length > 0)).toBe(true)
-    expect(events[0]).toEqual({ type: 'canvas', key: 'graph' })
+    expect(events[0]).toMatchObject({ type: 'canvas', key: 'graph', canvasId: 'default' })
   })
 
   it('两个作用域各收各的', async () => {
@@ -190,7 +192,9 @@ describe('GET /api/kv/events（实时通道）', () => {
     // 不是「恰好几条」。一次 putCanvas 会顺带产生 graph-edges，
     // 原来等到 length>0 就做全等断言，第二个事件晚到一拍就会假失败。
     expect(configStream.events).toContainEqual({ type: 'config', key: 'theme' })
-    expect(canvasStream.events).toContainEqual({ type: 'canvas', key: 'graph' })
+    expect(canvasStream.events).toContainEqual(
+      expect.objectContaining({ type: 'canvas', key: 'graph', canvasId: 'default' }),
+    )
     expect(configStream.events.every((e) => e.type === 'config')).toBe(true)
     expect(canvasStream.events.every((e) => e.type === 'canvas')).toBe(true)
   })

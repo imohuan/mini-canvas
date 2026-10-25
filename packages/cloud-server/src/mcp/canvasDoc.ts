@@ -75,6 +75,8 @@ export interface CanvasSnapshot {
   nodes: CanvasNode[]
   edges: CanvasEdge[]
   viewport?: { x: number; y: number; zoom: number }
+  /** 画布图版本（旧文件没有时是 0）；前端定时核对靠它 */
+  revision: number
 }
 
 /**
@@ -184,6 +186,15 @@ export interface EdgeBatchInput {
 /** 深拷贝（快照隔离：读出去的数组被调用方改了也不能污染我们内部状态） */
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T
+}
+
+/** 稳定序列化：同一份数据换 key 顺序不算变化（用于判定“空提交”） */
+function stableJson(v: unknown): string {
+  if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null'
+  if (Array.isArray(v)) return '[' + v.map(stableJson).join(',') + ']'
+  const obj = v as Record<string, unknown>
+  const keys = Object.keys(obj).sort()
+  return '{' + keys.map((k) => JSON.stringify(k) + ':' + stableJson(obj[k])).join(',') + '}'
 }
 
 /** 连接身份键：端点 + 端口（默认 handle 视同未指定）。去重按它判定，不按 id。 */
@@ -342,7 +353,17 @@ export class CanvasDocument {
       nodes: clone(data.nodes) as CanvasNode[],
       edges: clone(data.edges) as CanvasEdge[],
       ...(viewport ? { viewport: clone(viewport) } : {}),
+      revision: data.revision ?? 0,
     }
+  }
+
+  /**
+   * 只读图版本（客户端定时核对用）。
+   * 画布不存在时返回 undefined，由路由翻译成 404 —— 不要用 0 冒充“存在但为空”。
+   */
+  async readRevision(): Promise<number | undefined> {
+    const data = await this.store.readCanvas(this.canvasId)
+    return data ? (data.revision ?? 0) : undefined
   }
 
   /**
@@ -350,7 +371,31 @@ export class CanvasDocument {
    * 只写 nodes/edges 两个 key（**不碰 viewport**：AI 编辑不该重置用户当前视野）。
    */
   async write(snapshot: { nodes: CanvasNode[]; edges: CanvasEdge[] }): Promise<void> {
-    await this.store.writeCanvas(this.canvasId, { nodes: snapshot.nodes, edges: snapshot.edges })
+    await this.commitGraph(snapshot)
+  }
+
+  /**
+   * 图提交的唯一入口（已持锁时调用）：先判断节点/边**确实变了**，再发 revision + 1，
+   * 并把 `{nodes, edges, revision}` 作为**同一次 canvas.json 原子写**落盘。
+   *
+   * 为什么必须在这里、而不是 CanvasStore.writeCanvas：
+   * - 那是通用写口，改名 / 复制也走它，无法判断“这是不是一次有效图变更”；
+   * - 版本号必须与图数据同一次原子写，且只由一个地方发号；
+   * - 空操作（如 lenient 删除不存在的边）不能涨版本，否则客户端会做无意义整包拉取。
+   *
+   * @returns 这次是否真的写盘（无变化时返回 false，调用方可据此跳过通知）
+   */
+  private async commitGraph(snapshot: { nodes: CanvasNode[]; edges: CanvasEdge[] }): Promise<boolean> {
+    const prev = await this.store.readCanvas(this.canvasId)
+    const nextNodes = snapshot.nodes ?? []
+    const nextEdges = snapshot.edges ?? []
+    // 无变化：不写文件、不涨版本（避免定时核对把“空操作”当成变化）
+    if (prev && stableJson(prev.nodes) === stableJson(nextNodes) && stableJson(prev.edges) === stableJson(nextEdges)) {
+      return false
+    }
+    const revision = (prev?.revision ?? 0) + 1
+    await this.store.writeCanvas(this.canvasId, { nodes: nextNodes, edges: nextEdges, revision })
+    return true
   }
 
   /**
@@ -362,7 +407,7 @@ export class CanvasDocument {
    */
   async replaceAll(nodes: unknown[], edges: unknown[]): Promise<void> {
     return this.runExclusive(async () => {
-      await this.store.writeCanvas(this.canvasId, { nodes, edges })
+      await this.commitGraph({ nodes: nodes as CanvasNode[], edges: edges as CanvasEdge[] })
     })
   }
 
@@ -570,7 +615,7 @@ export class CanvasDocument {
       result.updated.push(u.id)
     }
 
-    await this.write({ nodes: kept, edges })
+    await this.commitGraph({ nodes: kept, edges })
     result.deleted = dels.filter((id) => existing.has(id))
     return result
   }
@@ -687,7 +732,7 @@ export class CanvasDocument {
       result.updated.push(u.id)
     }
 
-    await this.write({ nodes: snap.nodes, edges })
+    await this.commitGraph({ nodes: snap.nodes, edges })
     result.deleted = dels.filter((id) => existing.has(id))
     return result
   }
