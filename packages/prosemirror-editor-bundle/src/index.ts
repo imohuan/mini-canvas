@@ -7,6 +7,7 @@ export * from './utils.ts';
 export * from './referenceMarkup.ts';
 export { parsePlainTextToContent } from './useEditor.ts';
 export { registeredItem } from './useEditor.ts';
+export { registerItem } from './useEditor.ts';
 export * from './mentionFilter.ts';
 import "./style.css"
 

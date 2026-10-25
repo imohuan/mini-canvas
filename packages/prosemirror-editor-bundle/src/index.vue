@@ -84,6 +84,7 @@ const {
   setText,
   insertResource,
   replaceResource,
+  refreshChips,
 } = useEditor(editorRef, {
   modelValue: modelValueRef,
   promptDoc: promptDocRef,
@@ -100,6 +101,7 @@ defineExpose({
   setText,
   insertResource,
   replaceResource,
+  refreshChips,
   /**
    * 编辑器内部的 @ 菜单是否开着（只读）。
    *

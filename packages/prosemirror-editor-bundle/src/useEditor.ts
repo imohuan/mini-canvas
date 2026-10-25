@@ -280,6 +280,16 @@ const itemRegistry = new Map<string, ResourceItem>()
 export function registeredItem(id: string): ResourceItem | undefined {
   return itemRegistry.get(id)
 }
+/**
+ * 往编辑器登记/更新一个资源项（toDOM 渲染时按 id 读它拿外观）。
+ *
+ * 为什么公开：底栏「待输入」标签的内容随**连线**变化（上传/替换/断开），
+ * 调用方在内容变化后把最新 item 登记进来、再调 refreshChips()，
+ * 两步合起来才能把正文里的虚线标签刷成实线（换名字/缩略图）。
+ */
+export function registerItem(item: ResourceItem): void {
+  itemRegistry.set(item.id, item)
+}
 
 // Schema 定义
 const mySchema = new Schema({
@@ -415,71 +425,66 @@ function createSelectionDecorationPlugin() {
 const SLOT_CHIP_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="1.6"/><path d="m21 15-4.5-4.5L6 21"/></svg>'
 
-/**
- * 把「刚打完的 @图片1」变成标签。
- *
- * 用户口径（2026-10-25）：「用正则检测到类似 @图片123 / @音频123 / @音视频123 这样的文本时，
- * 就会将其解析成一个标签」。没连线也算标签（待输入），所以这里**不查 resolver**，
- * 直接建一个 resource 节点；地址/名字由调用方后续 replaceResource 补上。
- *
- * 触发时机：用户打完数字后，敲空格 / 回车 / 标点。为什么不边打边换 —— 打到一半就换会把
- * 光标顶走，用户没法继续输编号。
- */
 function createSlotTagPlugin() {
   return new Plugin({
     key: new PluginKey('ref-slot-tag'),
-    props: {
-      handleTextInput(view: any, from: number, _to: number, text: string) {
-        if (!/^[\s\u3000,，.。;；:：!！?？]$/.test(text)) return false
-        const nodeType = mySchema.nodes.resource
-        if (!nodeType) return false
-        const $from = view.state.doc.resolve(from)
-        const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 16), $from.parentOffset, undefined, '\ufffc')
-        const m = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})$/i.exec(before)
-        if (!m) return false
-        const kind = m[1].toLowerCase()
-        const slotKind: 'image' | 'video' | 'audio' | 'av' =
-          kind === '图片' || kind === 'image' ? 'image'
-          : kind === '视频' || kind === 'video' ? 'video'
-          : kind === '音频' || kind === 'audio' ? 'audio'
-          : 'av'
-        const label =
-          slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
-        const index = Number(m[2])
-        if (!index) return false
-        const id = 'ref-slot:' + slotKind + ':' + index
-        const item: ResourceItem = {
-          id,
-          name: label + index,
-          category: '素材',
-          mediaType: slotKind === 'av' ? undefined : (slotKind as 'image' | 'video' | 'audio'),
-        }
-        item.renderEditor = (self) => {
-          const span = document.createElement('span')
-          span.className = 'resource-node resource-chip is-pending'
-          span.dataset.id = self.id
-          span.dataset.name = self.name
-          const ic = document.createElement('span')
-          ic.className = 'resource-chip-icon'
-          ic.innerHTML = SLOT_CHIP_ICON
-          span.append(ic)
-          const nm = document.createElement('span')
-          nm.className = 'resource-chip-name'
-          nm.textContent = self.name
-          span.append(nm)
-          return span
-        }
-        itemRegistry.set(item.id, item)
-        // `from` 是**插入分隔符之前**的光标位置，此时 `@图片1` 原文已经完整躺在文档里，
-        // 所以起点就是 from - 原文长度（不能用 to：to 已经越过了分隔符）
-        const start = from - m[0].length
-        // 区间是 [start, from)：原文 `@图片1` 在 from 之前；to 是分隔符将落下的位置，
-        // 不能拿它当终点（会把还没插入的分隔符也算进去，残留半截原文）。
-        const tr = view.state.tr.replaceWith(start, from, buildResourceNode(nodeType, item))
-        tr.insertText(text)
-        view.dispatch(tr)
-        return true
-      },
+    appendTransaction(transactions, _oldState, newState) {
+      if (!transactions.some((tr) => tr.docChanged)) return null
+      const tr = newState.tr
+      const nodeType = mySchema.nodes.resource
+      if (!nodeType) return null
+      // 先收集所有命中（含位置），再**从后往前**替换 —— 从前往后会让后面的位置随
+      // 前面的替换整体偏移，第二处开始就替换错位（实测：一段里只有第一个 @ 转成了标签）
+      const hits: Array<{ start: number; len: number; item: any }> = []
+      newState.doc.descendants((node, pos) => {
+        if (node.type.name !== 'paragraph' || !node.isTextblock) return
+        node.forEach((child, offset) => {
+          if (!child.isText || !child.text) return
+          const m = /@(图片|视频|音频|音视频|image|video|audio|media|av)\s*(\d{1,4})/i.exec(child.text)
+          if (!m) return
+          const kind = m[1].toLowerCase()
+          const slotKind: 'image' | 'video' | 'audio' | 'av' =
+            kind === '图片' || kind === 'image' ? 'image'
+            : kind === '视频' || kind === 'video' ? 'video'
+            : kind === '音频' || kind === 'audio' ? 'audio'
+            : 'av'
+          const label =
+            slotKind === 'image' ? '图片' : slotKind === 'video' ? '视频' : slotKind === 'audio' ? '音频' : '音视频'
+          const index = Number(m[2])
+          if (!index) return
+          const nodeType = mySchema.nodes.resource
+          if (!nodeType) return
+          const id = 'ref-slot:' + slotKind + ':' + index
+          const item: ResourceItem = {
+            id,
+            name: label + index,
+            category: '素材',
+            mediaType: slotKind === 'av' ? undefined : (slotKind as 'image' | 'video' | 'audio'),
+          }
+          item.renderEditor = (self) => {
+            const span = document.createElement('span')
+            span.className = 'resource-node resource-chip is-pending'
+            span.dataset.id = self.id
+            span.dataset.name = self.name
+            const ic = document.createElement('span')
+            ic.className = 'resource-chip-icon'
+            ic.innerHTML = SLOT_CHIP_ICON
+            span.append(ic)
+            const nm = document.createElement('span')
+            nm.className = 'resource-chip-name'
+            nm.textContent = self.name
+            span.append(nm)
+            return span
+          }
+          itemRegistry.set(item.id, item)
+          const start = pos + 1 + offset + m.index
+          hits.push({ start, len: m[0].length, item })
+        })
+      })
+      for (const h of hits.sort((a, b) => b.start - a.start)) {
+        tr.replaceWith(h.start, h.start + h.len, buildResourceNode(nodeType, h.item))
+      }
+      return hits.length ? tr : null
     },
   })
 }
@@ -1414,6 +1419,30 @@ export function useEditor(
     return true
   }
 
+  /**
+   * 把正文里所有 `ref-slot:*` 标签**就地重渲染**一遍（注册表里已是最新 item）。
+   *
+   * 为什么需要整体刷新：底栏的参考内容随连线变化（上传/替换/断开），同一颗「待输入」
+   * 标签要跟着从虚线变实线、换名字与缩略图。逐个 replaceResource 也可以，但调用方
+   * 得自己枚举 id；给一个"全刷"入口，调用方一行就够。只对 ref-slot:* 生效，
+   * 用户手工插入的其它引用不受影响。没有可刷的节点 → 不 dispatch。
+   */
+  function refreshChips(): void {
+    if (!view) return
+    // 注册表已更新（调用方先 itemRegistry.set），toDOM 每次渲染都会读 ——
+    // 这里用一行**无操作事务**（带标记）逼 ProseMirror 重画这些节点：
+    // setNodeMarkup 用原 attrs 也会触发 toDOM 重建（注册表已新，外观即为新）。
+    const tr = view.state.tr
+    view.state.doc.descendants((node, pos) => {
+      if (node.type.name !== 'resource') return
+      const id = String(node.attrs.id ?? '')
+      if (!id.startsWith('ref-slot:')) return
+      tr.setNodeMarkup(pos, undefined, { ...node.attrs })
+    })
+    view.dispatch(tr)
+  }
+
+
 
   /**
    * 用纯文本整体覆盖编辑器内容（覆盖式，非追加）。
@@ -1455,5 +1484,6 @@ export function useEditor(
     setText,
     insertResource,
     replaceResource,
+    refreshChips,
   };
 }

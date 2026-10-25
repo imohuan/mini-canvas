@@ -24,7 +24,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
 // 素材卡拖拽排序（用户要求：「这个顺序可以进行拖拽改变，用 Vue Draggable Plus，动画效果挺好的」）
 import { VueDraggable } from 'vue-draggable-plus'
 import {
@@ -68,6 +68,8 @@ import {
 } from './refSlots'
 // 参考区合并 + 缺号校验（纯函数，已单测）
 import { mergeRefTiles, findRefGap, uploadToRefSlot } from './refTiles'
+// Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
+import { nodeMediaOf, isDraggableTarget } from './refSlotDrag'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -530,11 +532,6 @@ if (typeof ctx.on === 'function') {
   })
   pluginOffs.push(clickOff)
 
-// 订阅画布节点拖拽：开始记下节点，松手时看落在哪个槽位上（见 onCanvasNodeDragEnd）
-if (typeof ctx.on === 'function') {
-  pluginOffs.push(ctx.on(RenderEvents.NodeDragStart, (p: { nodeId?: string }) => onCanvasNodeDragStart(p)))
-}
-
 }
 
 /** 执行（写盘走 nodeTask → doc.updateNodeRuntime） */
@@ -677,11 +674,21 @@ function slotErrorOf(tile: { slotKey?: string }): string {
   return tile.slotKey ? (slotErrors.value[tile.slotKey] ?? '') : ''
 }
 
-/** 一行格子的拖拽排序（有槽位的按槽位顺序写回；纯素材沿用原来的 onReorder） */
-function onReorderTiles(next?: Array<{ card?: MaterialCard; slot?: RefSlot }>): void {
+/**
+ * 一行格子的拖拽排序。
+ *
+ * 格子由连线派生：拖完把**有内容的那些**（即连线素材）按新顺序写回 data.refOrder，
+ * 待输入格跟着序号走（它没有 id，位置由相邻素材决定）。
+ */
+function onReorderTiles(next?: Array<{ key?: string; card?: MaterialCard }>): void {
   if (!next || next.length === 0) return
-  const cardsOnly = next.map((t) => t.card).filter((c): c is MaterialCard => !!c)
-  if (cardsOnly.length) onReorder(cardsOnly)
+  const ids = next.map((t) => t.card?.id).filter((id): id is string => !!id)
+  if (ids.length === 0) return
+  try {
+    ctx.get('doc').updateNode(props.id, { data: { refOrder: ids } })
+  } catch {
+    /* 节点已不在等情况：忽略 */
+  }
 }
 
 const editorComponentRef = ref<{
@@ -778,17 +785,145 @@ function setSlotError(index: number, message: string): void {
   }, 2600)
 }
 
-/** 正文标签刷新：内容来自连线（collectUpstreamMaterials），这里只触发一次整体刷新 */
-function refreshSlotChips(): void { editorComponentRef.value?.refreshChips?.() }
-
-// 松手时命中槽位：画布节点不是 HTML5 drag，收不到 drop 事件，只能等 pointerup。
-// 用 window 捕获阶段：VueFlow 自己也会处理松手，我们只读坐标、不改它的行为。
-function onWindowPointerUp(ev: PointerEvent): void {
-  if (!draggingNode) return
-  onCanvasNodeDragEnd(ev)
+/**
+ * 正文标签刷新：内容来自连线（collectUpstreamMaterials）。
+ * 两步：① 把每个 ref-slot 的最新 item 登记进编辑器；② 触发整体重渲染。
+ */
+function refreshSlotChips(): void {
+  for (const tile of refTiles.value) {
+    const key = tile.slotKey
+    if (!key || tile.pending) continue
+    const [kind, indexRaw] = key.split(':')
+    const label = REF_SLOT_META[kind as RefSlotKind].label
+    registerItem({
+      id: 'ref-slot:' + key,
+      name: tile.name || label + tile.index,
+      category: '素材',
+      url: tile.url,
+      mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
+    })
+  }
+  editorComponentRef.value?.refreshChips?.()
 }
-onMounted(() => window.addEventListener('pointerup', onWindowPointerUp, true))
-onBeforeUnmount(() => window.removeEventListener('pointerup', onWindowPointerUp, true))
+
+// ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
+
+/** Ctrl 拖拽会话（pointerdown 开始，pointerup 结束） */
+let ctrlDrag: {
+  nodeId: string
+  mediaType: 'image' | 'video' | 'audio'
+  url: string
+  name: string
+  /** 正被悬停的参考格 key（is-target 高亮 + 松手替换用） */
+  targetTileKey?: string
+  ghost?: HTMLElement
+} | null = null
+
+function moveGhost(x: number, y: number): void {
+  const g = ctrlDrag?.ghost
+  if (g) { g.style.left = x + 12 + 'px'; g.style.top = y + 12 + 'px' }
+}
+
+/** pointerdown（捕获）：底栏开着 + Ctrl + 鼠标下是图片/视频/音频节点 → 进入拖资源模式。
+ *  在捕获阶段拦掉，画布收不到这次按下 —— Ctrl 拖资源**不会**顺带选中节点。 */
+function onCtrlDragPointerDown(ev: PointerEvent): void {
+  if (!(ev.ctrlKey || ev.metaKey)) return
+  if (!isDraggableTarget(ev.target)) return
+  if (!document.querySelector('.nb-overlay')) return
+  const el = (ev.target as HTMLElement).closest('.vue-flow__node') as HTMLElement | null
+  const nodeId = el?.getAttribute('data-id')
+  if (!nodeId) return
+  const doc = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')
+  const media = nodeMediaOf(doc?.getNode(nodeId))
+  if (!media) return
+  ev.preventDefault()
+  ev.stopPropagation()
+  const ghost = document.createElement('div')
+  ghost.className = 'nb-drag-ghost'
+  ghost.textContent = media.name
+  document.body.appendChild(ghost)
+  ctrlDrag = { nodeId, mediaType: media.mediaType, url: media.url, name: media.name, ghost }
+  moveGhost(ev.clientX, ev.clientY)
+}
+
+function onCtrlDragPointerMove(ev: PointerEvent): void {
+  if (!ctrlDrag) return
+  moveGhost(ev.clientX, ev.clientY)
+  const host = (ev.target as HTMLElement | null)?.closest?.('.nb-card') as HTMLElement | null
+  const key = host?.dataset.tileKey
+  if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
+    document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
+    ctrlDrag.targetTileKey = undefined
+  }
+  if (key && key !== ctrlDrag.targetTileKey) {
+    host?.classList.add('is-target')
+    ctrlDrag.targetTileKey = key
+  }
+}
+
+/** pointerup：落在参考格 → 替换该格资源；落在画布上 → 什么都不做（节点留在原处） */
+function onCtrlDragPointerUp(ev: PointerEvent): void {
+  const drag = ctrlDrag
+  ctrlDrag = null
+  if (drag?.targetTileKey) document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
+  drag?.ghost?.remove()
+  if (!drag || !drag.targetTileKey) return
+  const tile = refTiles.value.find((t) => t.key === drag.targetTileKey)
+  if (!tile?.slotKey) return
+  const kind = tile.slotKey.split(':')[0] as RefSlotKind
+  const index = Number(tile.slotKey.split(':')[1])
+  void replaceSlotMaterial(kind, index, { nodeId: drag.nodeId, mediaType: drag.mediaType, url: drag.url, name: drag.name })
+}
+
+onMounted(() => {
+  window.addEventListener('pointerdown', onCtrlDragPointerDown, true)
+  window.addEventListener('pointermove', onCtrlDragPointerMove, true)
+  window.addEventListener('pointerup', onCtrlDragPointerUp, true)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('pointerdown', onCtrlDragPointerDown, true)
+  window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
+  window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
+})
+
+/**
+ * 把某个参考格的内容**替换**为指定资源（用户口径 2026-10-26：拖资源到槽位 = 替换）。
+ *
+ * 连线的三种情况：
+ *   · 该格已有连线（这条线来自「原序号那个素材」）→ 断开旧线、连新线（序号归属不变）；
+ *   · 该格是待输入（这个序号还没有连线）→ 直接连新线；
+ *   · 新资源已经在画布上（拖的就是它）→ 不建节点，只动连线；
+ *     新资源如果是本地文件（上传路径），先走 file-drop 建节点。
+ *
+ * 旧资源**不删节点**：删节点是破坏性操作，用户自己决定（这里只换连线归属）。
+ */
+async function replaceSlotMaterial(
+  kind: RefSlotKind,
+  index: number,
+  source: { nodeId: string; mediaType: 'image' | 'video' | 'audio'; url: string; name: string },
+): Promise<void> {
+  const doc = ctx.tryGet<{
+    getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined
+    addEdge(input: { source: string; target: string }): string
+    removeEdges(ids: string[]): number
+  }>('doc')
+  if (!doc) return
+  // 该格原本的连线 = 连到本节点、且素材序号正好是这个格子的那条
+  const material = shownMaterials.value.find((m) => parseSlotFromRefName(m.refName)?.index === index && parseSlotFromRefName(m.refName)?.label === REF_SLOT_META[kind].label)
+  const oldEdge = material ? renderEdges.value.find((e) => e.source === material.id && e.target === props.id) : undefined
+  try {
+    if (oldEdge) doc.removeEdges([oldEdge.id])
+    doc.addEdge({ source: source.nodeId, target: props.id })
+    // 顺序对齐：替换不改变该格的序号（仍排在原来的位置）
+    const order = placeRefAtSlot(refOrder.value, kind, index, source.nodeId)
+    doc.updateNode(props.id, { data: { refOrder: order } })
+    slotErrors.value = {}
+    refreshSlotChips()
+  } catch (err) {
+    console.warn('[bottom-bar] 替换参考失败', err)
+  }
+}
+
 
 
 /** 拖放高亮：整排槽位一起亮（用户能看出「可以放在这儿」） */
@@ -822,75 +957,6 @@ function onSlotDrop(ev: DragEvent, slot: RefSlot): void {
   void fillSlotFromFile(kind, index, file)
 }
 
-// ===== 规则 3(c)：按住 Ctrl 把画布节点拖进槽位 =====
-//
-// 为什么不用 HTML5 drag 的 dataTransfer：画布节点由 VueFlow 拖动，拖动时**不写**
-// dataTransfer（我们查过宿主与各插件，没有这个 payload），所以靠 dataTransfer.getData
-// 永远拿不到节点。改成监听画布自己的 NodeDragStart / NodeDragEnd，并在松手时用
-// 鼠标位置做命中测试 —— 这条链路用的是画布真实坐标，不依赖浏览器拖放实现差异。
-
-/** 正在被拖的画布节点（松手时用） */
-let draggingNode: { id: string; name: string; mediaType: 'image' | 'video' | 'audio' | null } | null = null
-
-function onCanvasNodeDragStart(p: { nodeId?: string }): void {
-  const id = p?.nodeId
-  if (!id) { draggingNode = null; return }
-  const node = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')?.getNode(id)
-  if (!node) { draggingNode = null; return }
-  const data = node.data ?? {}
-  const mediaType = mediaTypeOf({
-    name: typeof data.imageName === 'string' ? data.imageName : typeof data.videoName === 'string' ? data.videoName : typeof data.audioName === 'string' ? data.audioName : '',
-    type:
-      typeof data.imageUrl === 'string' ? 'image/*'
-        : typeof data.videoUrl === 'string' ? 'video/*'
-        : typeof data.audioUrl === 'string' ? 'audio/*'
-        : node.type === 'image' ? 'image/*' : node.type === 'video' ? 'video/*' : node.type === 'audio' ? 'audio/*' : '',
-  })
-  draggingNode = {
-    id,
-    name: typeof data.label === 'string' && data.label ? data.label : (mediaType === 'video' ? '视频' : mediaType === 'audio' ? '音频' : '图片'),
-    mediaType,
-  }
-}
-
-/**
- * 松手：如果鼠标正落在某个待输入槽位上，并且拖着的是画布节点，
- * 就按规则 3(c) 判定（必须按住 Ctrl）。没落上去就什么都不做。
- */
-function onCanvasNodeDragEnd(ev: PointerEvent | MouseEvent): void {
-  const node = draggingNode
-  draggingNode = null
-  if (!node) return
-  // 松手点 → 参考区里**待输入**的那一格（矩形命中，hitSlotAtPoint 已单测）
-  const rects = refTiles.value
-    .filter((t) => t.pending && t.slotKey)
-    .map((t) => {
-      const el = document.querySelector('.nb-card[data-tile-key="' + t.key + '"]') as HTMLElement | null
-      const r = el?.getBoundingClientRect()
-      return { key: t.slotKey as string, left: r?.left ?? 0, top: r?.top ?? 0, right: r?.right ?? -1, bottom: r?.bottom ?? -1 }
-    })
-  const slotKey = hitSlotAtPoint({ x: ev.clientX, y: ev.clientY }, rects)
-  if (!slotKey) return
-  const kind = slotKey.split(':')[0] as RefSlotKind
-  const index = Number(slotKey.split(':')[1])
-  const verdict = judgeSlotDrop(kind, { node: { name: node.name, mime: node.mediaType ? node.mediaType + '/*' : '' }, modifier: ev.ctrlKey || ev.metaKey })
-  if (!verdict.ok) { setSlotError(index, dropVerdictMessage(kind, verdict)); return }
-  // 拖节点进来同样走真实连线（有连线才有内容；与上传同一条规则）。
-  // 内容不落在本地状态里 —— fillSlotFromFile 会建节点+连边，格子随后由连线派生。
-  void fillSlotFromFile(kind, index, new File([new Uint8Array(0)], node.name || 'node', { type: node.mediaType ? node.mediaType + '/x' : '' }))
-}
-
-
-
-
-/**
- * 全局设置区的展开/收起动画用**测量高度**做（不用 grid-template-rows）。
- *
- * 为什么：grid-template-rows 的 0fr↔1fr 过渡在部分浏览器里会**不补间、直接跳变**，
- * 即使能补间也是逐帧改布局（reflow），视觉上就是"一卡一卡"。改成把元素高度从 0 显式过渡到
- * 量出来的 scrollHeight —— height 过渡在所有浏览器都稳，且只影响这一个盒子的布局。
- * 到位后 height 归 auto，避免内容变化（换行/字号）时被钉死。
- */
 const globalRef = ref<HTMLElement | null>(null)
 
 function onGlobalEnter(el: Element): void {
@@ -999,6 +1065,7 @@ function onGlobalLeave(el: Element): void {
         class="nb-card"
         :class="{ 'is-pending': tile.pending }"
         :title="tile.pending ? '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点' : tile.name + '（可拖动调整顺序）'"
+        :style="tile.pending ? 'cursor: pointer' : ''"
         @click.stop="tile.pending && tile.slotKey ? pickSlotFile(tile.slotKey) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
@@ -1441,6 +1508,29 @@ function onGlobalLeave(el: Element): void {
   font-size: 10px;
   color: var(--ui-danger, #ef4444);
   pointer-events: none;
+}
+/* Ctrl 拖资源时的「影子」：跟鼠标走，提示用户正拿着一个资源 */
+.nb-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--ui-overlay-solid, #fff);
+  border: 1px solid var(--ui-accent, #0891b2);
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--ui-shadow-md, 0 8px 20px rgb(15 23 42 / 0.24));
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Ctrl 拖资源悬停到的目标格：描边高亮（待输入/已填通用） */
+.nb-card.is-target {
+  border-color: var(--ui-accent, #0891b2) !important;
+  background: var(--ui-accent-soft, rgba(8, 145, 178, 0.12)) !important;
 }
 /* 参考行整体拖放高亮 */
 .nb-cards.is-drop-hot {
