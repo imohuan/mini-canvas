@@ -109,7 +109,9 @@ describe('模板接线：编辑器接的是这条判定', () => {
   })
 
   it('编辑器挂 onEditorKeydown 这一个入口', () => {
-    expect(editorBlock()).toContain('@keydown="onEditorKeydown"')
+    // 必须是捕获阶段（.capture）：冒泡阶段读 menuOpen 会被「选中后关菜单」骗过 ——
+    // 详见 composerMenuGuard.test.ts 的时序说明。
+    expect(editorBlock()).toContain('@keydown.capture="onEditorKeydown"')
   })
 
   it('该入口先问 isSubmitShortcut，命中才 preventDefault + submit', () => {

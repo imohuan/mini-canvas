@@ -71,3 +71,35 @@ describe('接线：回车交给菜单的判定排在提交判定之前', () => {
     expect(conversation).toContain('menuOpen')
   })
 })
+
+describe('接线：判定必须在**捕获阶段**跑（真机踩过的时序坑）', () => {
+  /**
+   * 为什么必须是 capture：ProseMirror 的菜单回车处理挂在编辑器内层，
+   * 组件的处理挂在外层 —— 冒泡阶段组件拿到的 menuOpen 已经被「选中后关菜单」改成 false，
+   * 「让给菜单」的判定落空，于是既选中又发送（用户 2026-10-26 报的重合）。
+   * 捕获阶段在 ProseMirror 之前跑，读到的是**按键那一刻**的菜单状态。
+   */
+  it('编辑器挂的是 @keydown.capture，不是普通 @keydown', () => {
+    expect(conversation).toContain('@keydown.capture="onEditorKeydown"')
+    expect(conversation).not.toContain('@keydown="onEditorKeydown"')
+  })
+
+  it('菜单开着时放行给菜单：不 preventDefault、不 stopPropagation（ProseMirror 还要收到回车去选中）', () => {
+    const start = conversation.indexOf('function onEditorKeydown')
+    const body = conversation.slice(start, conversation.indexOf('\n}', start))
+    const deferAt = body.indexOf('shouldDeferEnterToMenu')
+    const submitAt = body.indexOf('isSubmitShortcut')
+    const deferBranch = body.slice(deferAt, submitAt)
+    expect(deferBranch).not.toContain('preventDefault')
+    expect(deferBranch).not.toContain('stopPropagation')
+  })
+
+  it('提交时拦截事件：preventDefault + stopPropagation（不让 ProseMirror 再插一个空段落）', () => {
+    const start = conversation.indexOf('function onEditorKeydown')
+    const body = conversation.slice(start, conversation.indexOf('\n}', start))
+    const submitAt = body.indexOf('isSubmitShortcut')
+    const tail = body.slice(submitAt)
+    expect(tail).toContain('preventDefault')
+    expect(tail).toContain('stopPropagation')
+  })
+})

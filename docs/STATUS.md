@@ -5,6 +5,34 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-26，修「@ 下拉 + 回车」既选中又发送：判定必须走捕获阶段）
+
+用户口径（2026-10-25 选了「回车」提交后报）：「下拉选择和发送这两个事件重合了，
+也就是说，按下回车既进行了选择，又进行了发送。按理说，在有下拉菜单的情况下，
+按下回车应该只执行下拉选择」。
+
+**根因（时序）**：`AgentConversation.vue` 的 `onEditorKeydown` 挂在 `ProseMirrorEditor`
+这个 Vue 组件的根元素上，走**冒泡阶段**；而 ProseMirror 内部「回车选菜单项」的处理在**内层**，
+先跑 —— 它选中菜单项后**立刻把自己关掉**（`menuVisible = false`）。等事件冒到组件层再读
+`editorRef.menuOpen`，已经是 `false`，「让给菜单」的判定被时序骗过 → 选中照做、发送也照发。
+
+**修法（两处，都在 AgentConversation.vue）**：
+
+1. 模板改成 `@keydown.capture="onEditorKeydown"` —— 捕获阶段在 ProseMirror 之前跑，
+   读到的是**按键那一刻**的菜单状态：菜单开着就放行（不拦、不吞），ProseMirror 照常选中。
+2. 提交分支补 `stopPropagation()`：菜单关着且命中提交键时，在捕获阶段就把事件拦死，
+   不让 ProseMirror 再把这次回车处理成换行/空段落。
+
+**验证**：新增 `packages/ui/e2e/composer-enter-check.mjs`（真 Chromium，headless）4/4 ——
+① @ 下拉弹出（170 项）；② 菜单开着按回车：消息数不变（**没发送**）且菜单收起（被选中处理掉）；
+③ 菜单关着按回车：真的发出消息（6→8）；④ 结束时恢复默认 Ctrl+回车。
+plugin-agent **384** 全绿（`composerMenuGuard` 补 3 条捕获阶段守卫 + `composerKeys` 1 条同步），
+`typecheck` 干净；`pnpm -C packages/ui build` 通过（同源 :8865 已重启加载新构建）。
+
+**e2e 踩的坑（记一条，下次别再踩）**：e2e 里改完设置**必须 reload 再开面板** —— 组件只在
+挂载时读一次 `submitKeyMode`，不刷新就还是默认 `ctrl-enter`，表现为「设置了回车却不发送」
+（第一轮验证就是被这个假象骗住的，探针抓到 kv 里已是 enter 而行为仍是 ctrl）。
+
 ### 追记（2026-10-25，云画布同步：同号撞车导致的“版本对了、UI 没动”）
 
 用户报的现象是「画布数据更新了，但前端 UI 没更新，刷新后又正常」。本轮把最后一条真实浏览器用例

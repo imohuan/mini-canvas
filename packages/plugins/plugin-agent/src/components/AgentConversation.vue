@@ -630,13 +630,25 @@ function compactNow(): void {
  * 判定收进 composerKeys.isSubmitShortcut（含输入法合成态），这里只做转发。
  */
 function onEditorKeydown(e: KeyboardEvent): void {
-  // ① 回车先让给 @ 下拉：菜单里回车的语义是「选这一项」。
-  //    这一步必须排在提交判定之前 —— 用户在菜单里按回车，绝不该把半截话发出去
-  //    （用户 2026-10-25 报的就是这个：输入 @ 后回车直接发送了）。
+  /**
+   * 为什么这个处理器必须挂在**捕获阶段**（模板上是 @keydown.capture）：
+   *
+   * 回车有两个人抢 —— @ 下拉（选中一项）与提交。ProseMirror 的菜单处理在**内层**，
+   * 组件的处理在**外层**；若在冒泡阶段读 `menuOpen`，菜单选中后已把自己关掉，
+   * 组件读到的是 false，「让给菜单」的判定落空 → **既选中又发送**（用户 2026-10-26 报的重合）。
+   * 捕获阶段在 ProseMirror 之前跑，读到的是按键那一刻的真实状态：
+   *
+   *   ① 菜单开着 ⇒ 回车归菜单：放行（不 preventDefault / 不 stopPropagation），
+   *      让 ProseMirror 去选中当前项；
+   *   ② 菜单关着且命中提交键 ⇒ 在捕获阶段就拦下（preventDefault + stopPropagation），
+   *      不让 ProseMirror 再处理这次回车（否则会先插一个换行/空段落）。
+   */
   if (shouldDeferEnterToMenu(e, !!editorRef.value?.menuOpen)) return
   // ② 其余情况按「全局设置 → 发送键」里选的那一种回车提交。
+  if (e.key !== 'Enter') return
   if (!isSubmitShortcut(e, submitKeyMode.value)) return
   e.preventDefault()
+  e.stopPropagation()
   submit()
 }
 
@@ -2156,7 +2168,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
         <div class="ac-editor">
           <span v-if="!prompt" class="ac-placeholder" aria-hidden="true">开始你的创作，或者 @ 引用技能 / MCP</span>
           <ProseMirrorEditor v-if="!s.needsModel" ref="editorRef" v-model="prompt" :resources="editorResources"
-            @keydown="onEditorKeydown" @paste="onPaste" />
+            @keydown.capture="onEditorKeydown" @paste="onPaste" />
         </div>
 
         <div class="ac-toolbar">
