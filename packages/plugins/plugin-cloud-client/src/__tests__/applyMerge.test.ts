@@ -105,4 +105,11 @@ describe('落地一轮合并', () => {
     applyMergePlan(doc, empty)
     expect(calls).toEqual([])
   })
+
+  it('旧宿主没有关联信息（localEdges/childNodesOf）→ 不换 id，避免留下悬挂引用', () => {
+    const { doc, calls } = fakeDoc({ n1: { data: {} } })
+    applyMergePlan(doc, { ...empty, reassignNodeIds: [{ from: 'n1', to: '9' }] })
+    // 没有任何结构操作：旧宿主宁可保留旧行为，也不能把边/子节点引用改坏
+    expect(calls).toEqual([])
+  })
 })

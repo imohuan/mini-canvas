@@ -85,6 +85,9 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
   for (const r of runtimeOnly) doc.updateNodeRuntime(r.id, { data: { runState: r.runState } })
 
   const renames = plan.reassignNodeIds ?? []
+  // 旧宿主没有关联信息时不做换 id；如果这一轮只剩换 id，直接返回，不留下空撤销记录。
+  const canRename = typeof doc.localEdges === 'function' && typeof doc.childNodesOf === 'function'
+  const effectiveRenames = canRename ? renames : []
 
   const nothingElse =
     structural.length === 0 &&
@@ -93,7 +96,7 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
     plan.addEdges.length === 0 &&
     plan.removeEdgeIds.length === 0 &&
     plan.updateEdges.length === 0 &&
-    renames.length === 0
+    effectiveRenames.length === 0
   if (nothingElse) return
 
   doc.transaction('云端/AI 改动', () => {
@@ -101,7 +104,9 @@ export function applyMergePlan(doc: DocLike, plan: MergePlanLike): void {
      * 同 id 碰撞：先把本地节点换成新 id（保留本地内容），再让云端节点用原 id 接入。
      * 不能只改节点 id：边端点与子节点 parentId 指向它时都要同步改，否则线断、分组散。
      */
-    for (const r of renames) {
+    // 旧宿主没有 localEdges / childNodesOf 时不做换 id：只改节点 id、不改引用会留下悬挂线/分组。
+    // 这类宿主仍按旧行为（云端节点被忽略），但至少不产生静默坏引用。
+    for (const r of effectiveRenames) {
       const node = doc.getNode(r.from)
       if (!node) continue
       const localEdges = (doc.localEdges?.() ?? []).filter((e) => e.source === r.from || e.target === r.from)
