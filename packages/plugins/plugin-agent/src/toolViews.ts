@@ -403,8 +403,8 @@ export function toolView(name: string, argsText: string | undefined, outputText:
       const errs = Array.isArray(data.errors) ? (data.errors as Array<{ message?: unknown }>) : []
       for (const e of errs.slice(0, 5)) blocks.push(note(String(e.message ?? '错误'), 'error'))
       if (errs.length > 5) blocks.push(note('… 错误共 ' + errs.length + ' 条', 'error'))
-      const v = card(bare === 'canvas_batch_edges' ? '连线批量操作' : '节点批量操作', blocks, {
-        icon: bare === 'canvas_batch_edges' ? 'node' : 'node',
+      const v = card(bare === 'canvas_batch_edges' ? '连线操作' : '节点批量操作', blocks, {
+        icon: 'node',
         badge: '+' + n(data.added),
       })!
       return { ...v, family, summary: '+' + n(data.added) + ' ~' + n(data.updated) + ' -' + n(data.deleted) }

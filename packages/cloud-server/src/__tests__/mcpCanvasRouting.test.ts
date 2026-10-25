@@ -64,6 +64,12 @@ async function readCanvas(id: string): Promise<{ nodes: Array<{ id: string }> }>
   return JSON.parse(await fs.readFile(path.join(dir, 'canvases', id, 'canvas.json'), 'utf8'))
 }
 
+type SavedCanvas = { nodes: Array<{ id: string }>; edges?: Array<Record<string, unknown>> }
+
+async function readSavedCanvas(id: string): Promise<SavedCanvas> {
+  return JSON.parse(await fs.readFile(path.join(dir, 'canvases', id, 'canvas.json'), 'utf8')) as SavedCanvas
+}
+
 describe('MCP 按画布路由', () => {
   it('canvas_list_canvases 列出画布（AI 据此发现该写哪张）', async () => {
     const r = await mcpCall('canvas_list_canvases', {})
@@ -101,6 +107,68 @@ describe('MCP 按画布路由', () => {
     const r = await mcpCall('canvas_batch_nodes', { canvasId: 'deadbeefdeadbeef', add: [{ type: 'text' }] })
     expect(r.ok).toBe(false)
     expect(String(r.error)).toContain('画布不存在')
+  })
+})
+
+describe('canvas_batch_edges：只收节点 id', () => {
+  beforeEach(async () => {
+    // 每个用例都从空画布开始：外层 beforeEach 只建了空文件，不重复建节点（否则 id 冲突）
+  })
+
+  it('新增只传 source / target → 服务端自增连线 id，不带任何端口字段', async () => {
+    await mcpCall('canvas_batch_nodes', { canvasId: CANVAS, add: [{ type: 'image', id: 'ref' }, { type: 'image', id: 'out' }] })
+    const r = await mcpCall('canvas_batch_edges', {
+      canvasId: CANVAS,
+      add: [{ source: 'ref', target: 'out' }],
+    })
+    expect(r.ok).toBe(true)
+    expect(r.added).toEqual(['1'])
+    const saved = await readSavedCanvas(CANVAS)
+    expect(saved.edges).toEqual([{ id: '1', source: 'ref', target: 'out', type: 'custom' }])
+  })
+
+  it('旧字段 sourceHandle / targetHandle 不再被接受（明确报错，不静默丢掉）', async () => {
+    await mcpCall('canvas_batch_nodes', { canvasId: CANVAS, add: [{ type: 'image', id: 'ref' }, { type: 'image', id: 'out' }] })
+    const r = await mcpCall('canvas_batch_edges', {
+      canvasId: CANVAS,
+      add: [{ source: 'ref', target: 'out', sourceHandle: 'out', targetHandle: 'in' }],
+    })
+    expect(r.ok).toBe(false)
+    expect(JSON.stringify(r.errors)).toContain('sourceHandle')
+    const saved = await readSavedCanvas(CANVAS)
+    expect(saved.edges ?? []).toEqual([])
+  })
+
+  it('修改只改端点：id + source / target；不需要 type / 端口 / data', async () => {
+    await mcpCall('canvas_batch_nodes', { canvasId: CANVAS, add: [{ type: 'image', id: 'ref' }, { type: 'image', id: 'out' }] })
+    const added = await mcpCall('canvas_batch_edges', {
+      canvasId: CANVAS,
+      add: [{ source: 'ref', target: 'out' }],
+    })
+    const edgeId = String((added.added as string[])[0])
+    const r = await mcpCall('canvas_batch_edges', {
+      canvasId: CANVAS,
+      update: [{ id: edgeId, source: 'out', target: 'ref' }],
+    })
+    expect(r.ok).toBe(true)
+    const saved = await readSavedCanvas(CANVAS)
+    const edge = saved.edges?.[0]
+    expect(edge).toMatchObject({ id: edgeId, source: 'out', target: 'ref' })
+    expect(edge?.sourceHandle).toBeUndefined()
+    expect(edge?.targetHandle).toBeUndefined()
+  })
+
+  it('删除只传连线 id', async () => {
+    await mcpCall('canvas_batch_nodes', { canvasId: CANVAS, add: [{ type: 'image', id: 'ref' }, { type: 'image', id: 'out' }] })
+    const added = await mcpCall('canvas_batch_edges', {
+      canvasId: CANVAS,
+      add: [{ source: 'ref', target: 'out' }],
+    })
+    const edgeId = String((added.added as string[])[0])
+    const r = await mcpCall('canvas_batch_edges', { canvasId: CANVAS, delete: [edgeId] })
+    expect(r.ok).toBe(true)
+    expect(r.deleted).toEqual([edgeId])
+    expect((await readSavedCanvas(CANVAS)).edges ?? []).toEqual([])
   })
 })
 

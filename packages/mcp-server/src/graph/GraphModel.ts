@@ -233,8 +233,6 @@ export class GraphModel {
       id: input.id ?? randomUUID(),
       source: input.source,
       target: input.target,
-      sourceHandle: input.sourceHandle,
-      targetHandle: input.targetHandle,
       data: input.data,
     }
     canvas.edges.set(edge.id, edge)
@@ -371,6 +369,10 @@ export class GraphModel {
       const edge = canvas.edges.get(u.id)
       if (!edge) continue
       const { id: _id, ...rest } = u.patch
+      // 连线只有端点属于外部可写字段。端口由网页端节点壳固定为右侧出/左侧入；
+      // 放进来的 sourceHandle/targetHandle 会让线从卡片底部中心画到另一个节点顶部中心。
+      if ('sourceHandle' in rest) delete (rest as { sourceHandle?: unknown }).sourceHandle
+      if ('targetHandle' in rest) delete (rest as { targetHandle?: unknown }).targetHandle
       Object.assign(edge, rest)
       this.bump(canvas)
       this.emit({ type: 'graph:changed', canvasId: taskId, graphVersion: canvas.graphVersion })

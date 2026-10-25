@@ -5,6 +5,7 @@
  * - 读：`canvas_get` 一次给全量（节点+边），AI 先看清再动手。
  * - 写：全部收敛到 `canvas_batch_nodes` / `canvas_batch_edges`，三段式
  *   `{add, delete, update}` 一次合并执行 —— 不暴露单点原语，省得 AI 反复往返。
+ *   连线这条只收节点 id（没有端口/类型/自定 id 可填）：端口由网页端固定为右出左入。
  * - 另给 `canvas_overview` 一个"只看规模"的轻量读数，避免大画布每次读全量。
  *
  * 数据面：全部经 `CanvasDocument` 落到网页端同一份 `canvas:*` key 上，
@@ -116,7 +117,7 @@ export const TOOL_LIST: McpTool[] = [
   { name: 'resource_upload', description: '把资源字节交给服务器（本地路径 / http(s) 链接 / base64 / 已有 dataURL），返回稳定 URL 供节点引用' },
   { name: 'resource_list', description: '列出本画布已存资源（名字 / 类型 / 访问地址），据此判断每个资源该当图、视频还是音频用' },
   { name: 'canvas_batch_nodes', description: '节点批量增删改（add/delete/update 合并一次执行）' },
-  { name: 'canvas_batch_edges', description: '连线批量增删改（add/delete/update 合并一次执行）' },
+  { name: 'canvas_batch_edges', description: '连线增删改（只收节点 id；连线 id 自动生成）' },
   { name: 'generation_actions', description: '列出后台可用的生成动作（模型 + 要什么参数），AI 据此挑一个' },
   { name: 'generation_create', description: '提交一次生成任务（不开页面也能干活）；结果写回指定节点' },
   { name: 'generation_status', description: '查一次生成任务的状态与产物' },
@@ -129,6 +130,27 @@ export function listTools(): McpTool[] {
 
 /** 位置参数（多处复用） */
 const positionSchema = z.object({ x: z.number(), y: z.number() })
+
+/**
+ * 连线工具只认节点 id。旧字段（id/type/handle/data）不再对外暴露，但调用方塞进来时必须
+ * **明确报错**而不是静默丢掉：AI 若写了 sourceHandle:'out'，它会以为端口已按自己的意思配好，
+ * 而实际保存的是一条默认端口的线 —— 这正是 2026-10-25 用户报的底部中心连线问题的来源。
+ */
+function rejectLegacyEdgeFields(
+  entries: unknown[],
+  kind: 'add' | 'update',
+): { index: number; key: string } | null {
+  const allowed = kind === 'add' ? new Set(['source', 'target']) : new Set(['id', 'source', 'target'])
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i]
+    if (!e || typeof e !== 'object' || Array.isArray(e)) continue
+    for (const key of Object.keys(e)) {
+      if (allowed.has(key)) continue
+      return { index: i, key }
+    }
+  }
+  return null
+}
 
 /**
  * 媒体类型 → 该类型节点存地址的字段名。
@@ -455,11 +477,10 @@ export function createCanvasMcpServer(
 
   server.tool(
     'canvas_batch_edges',
-    '连线批量增删改，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?}], delete:[edgeId...], update:[{id,...}] }。' +
-       'add 的两端必须是已存在的节点 id。边 id 可省略，服务端按 `e-{source}-{target}` 生成（同一条边重复添加会被去重）' +
-       '或直接省略 sourceHandle/targetHandle（默认就是右出左入）。' +
-       "**不要猜端口名**：网页端只有 sourceHandle='source'（节点右侧输出口）与 targetHandle='target'（左侧输入口）。" +
-       "写 out / in / output / input 等不存在的名字会让线从卡片底部中心画到另一个节点顶部中心。",
+    '连线增删改，合并一次执行。只收节点 id：' +
+      'add 传 [{source,target}]（source=线从哪个节点出发，target=连到哪个节点，两端都必须已存在）；' +
+      'update 传 [{id,source?,target?}]（id=要改哪条线，只改端点）；delete 传连线 id 数组。' +
+      '连线 id 由服务端自动生成（added 里返回）；不用传 type、端口或 data。',
     {
       canvasId: canvasIdSchema,
       add: z
@@ -467,17 +488,7 @@ export function createCanvasMcpServer(
           z.object({
             source: z.string().describe('源节点 id'),
             target: z.string().describe('目标节点 id'),
-            id: z.string().optional(),
-            sourceHandle: z
-              .string()
-              .optional()
-              .describe("源端口 id；只有 'source'（右侧输出口）。通常省略即可"),
-            targetHandle: z
-              .string()
-              .optional()
-              .describe("目标端口 id；只有 'target'（左侧输入口）。通常省略即可"),
-            data: z.record(z.unknown()).optional(),
-          }),
+          }).passthrough(),
         )
         .optional(),
       delete: z.array(z.string()).optional(),
@@ -487,16 +498,33 @@ export function createCanvasMcpServer(
             id: z.string(),
             source: z.string().optional(),
             target: z.string().optional(),
-            sourceHandle: z.string().optional(),
-            targetHandle: z.string().optional(),
-            data: z.record(z.unknown()).optional(),
-          }),
+          }).passthrough(),
         )
         .optional(),
     },
     async ({ add, delete: del, update, canvasId }) => {
       const picked = await pickDoc(canvasId)
       if ('error' in picked) return toText({ ok: false, error: picked.error, added: [], deleted: [], updated: [], errors: [] })
+      // 旧字段在 zod 层会被剥掉，必须先对**原始参数**检查，否则会静默忽略（见 rejectLegacyEdgeFields 注释）。
+      // 这里拿不到原始 args 时（老 SDK/直调），只靠上面的 schema 已经把字段拒之门外，行为仍然安全。
+      const legacyAdd = rejectLegacyEdgeFields(add ?? [], 'add')
+      const legacyUpdate = legacyAdd ? null : rejectLegacyEdgeFields(update ?? [], 'update')
+      const legacy = legacyAdd ?? legacyUpdate
+      if (legacy) {
+        const op = legacyAdd ? 'add' : 'update'
+        const message =
+          `不支持字段 ${legacy.key}：连线只认节点 id。` +
+          'add 只需 source / target，update 只需 id / source / target；' +
+          '连线 id 由服务端自动生成，端口固定为右侧出、左侧入。'
+        // 明确列出行号、字段名与替代写法；不要只有一句泛泛的「参数错误」，AI 会继续猜。
+        return toText({
+          ok: false,
+          added: [],
+          deleted: [],
+          updated: [],
+          errors: [{ op, index: legacy.index, message }],
+        })
+      }
       const result = await picked.doc.batchEdges({
         ...(add ? { add } : {}),
         ...(del ? { delete: del } : {}),

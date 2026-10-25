@@ -44,6 +44,32 @@ describe('MCP 工具清单', () => {
     }
   })
 
+  it('canvas_batch_edges 的入参只留节点 id：不允许 AI 写 type / 端口 / 连线 id / data', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-edge-schema-'))
+    try {
+      const doc = new CanvasDocument(new CanvasStore(dir), new CanvasResourceStore(dir))
+      const server = createCanvasMcpServer(doc)
+      type ZodLike = { _def?: { typeName?: string; innerType?: ZodLike; type?: { shape?: Record<string, unknown> } } }
+      const tools = (server as unknown as { _registeredTools?: Record<string, { inputSchema?: { shape?: Record<string, unknown> } }> })._registeredTools ?? {}
+      const shape = tools.canvas_batch_edges?.inputSchema?.shape
+      expect(shape).toBeTruthy()
+      // 第一层只允许 canvasId + 三个动作
+      expect(Object.keys(shape!).sort()).toEqual(['add', 'canvasId', 'delete', 'update'])
+      // Zod 的 .optional() 包了一层 ZodOptional；先剥掉它，再取数组元素的 shape
+      const itemOf = (key: 'add' | 'update') => {
+        let field = shape![key] as ZodLike | undefined
+        while (field?._def?.typeName === 'ZodOptional') field = field._def.innerType
+        return field?._def?.type?.shape
+      }
+      // 新增：只有 source / target
+      expect(Object.keys(itemOf('add')!).sort()).toEqual(['source', 'target'])
+      // 修改：只有连线 id + 新的 source / target（同样不能改端口或类型）
+      expect(Object.keys(itemOf('update')!).sort()).toEqual(['id', 'source', 'target'])
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('资源上传三件套都在（AI 要把媒体放进画布，不能只建空节点）', () => {
     const names = listTools().map((t) => t.name)
     // canvas_add_media 覆盖 image / video / audio（原来只有 image，用户指出视频没有）

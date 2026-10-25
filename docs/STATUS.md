@@ -5,6 +5,34 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-25，连线 MCP 收口为两个节点 id）
+
+用户口径：`canvas_batch_edges` 是底部中心连线的根源；连线只需要 `source` / `target` 两个节点 id，
+连线 id 自增（不要求唯一），修改/删除也不要再让 AI 填 `type` / `sourceHandle` / `targetHandle`。
+
+**检查结论**：不是网页渲染错，也不是 VueFlow 默认值问题 —— 云端那条边写进了
+`sourceHandle:"out"` / `targetHandle:"in"`，但节点壳真实端口只有 `source`（右）/ `target`（左）。
+VueFlow 找不到 id 时回落 source=Bottom / target=Top，于是画成“底部中心 → 顶部中心”。
+Cloud 恢复与实时合并又按原样接收历史边，旧画布打开会一直错。
+
+**改动**：
+
+| 层 | 改动 |
+| --- | --- |
+| `cloud-server/mcp/server.ts` | `canvas_batch_edges` 入参收成 `add:[{source,target}]`、`update:[{id,source?,target?}]`、`delete:[edgeId]`；旧字段塞进来会明确报错（`passthrough` + 检查），不静默丢 |
+| `cloud-server/mcp/canvasDoc.ts` | 服务端兜底：端口只接受 `source`/`target`，缺省端口不落盘；修改同规则；连线 id 仍自增 |
+| `mcp-server/mcp/server.ts` + `GraphModel.ts` | 另一套独立后端同样只暴露节点 id；`GraphModel` 创建/更新不再把端口写进边 |
+| `plugin-agent/toolViews.ts` | 卡片标题由“连线批量操作”改为“连线操作”，与收口后的语义一致 |
+| 文档 | `docs/plan/node-ui-api-guide.md` 标出连线只写 source/target |
+
+**验证**：`cloud-server` 的 `mcpServer`（工具 schema）、`mcpCanvasRouting`（真实 MCP 协议增改删 + 旧字段拒绝）、
+`canvasDoc`、`canvasOps` 共 76 条全绿；`mcp-server` 的 `GraphModel` 23 条全绿；两个包 typecheck 干净；
+真实探针（`mcp-server` 的 `createMcpServer`）读到的 `add` 字段只有 `source,target`、`update` 只有 `id,source,target`，
+增/改/删真实调用全部成功。
+
+**当前画布（`824e779f34314f86`）**：用户要求自己删线重连，边 20 保持原样（仍是 `out`/`in`）；
+后台已重建并重启验证，新调用不会再生成这种边。
+
 ### 追记（2026-10-25，「发送键」可配置 + 回车先归 @ 下拉）
 
 用户口径：「希望这里可以做一个开关……可以选择 Ctrl+回车，也可以设置为 Shift+回车，或者直接设置为回车」+

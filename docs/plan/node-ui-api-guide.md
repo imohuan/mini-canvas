@@ -92,7 +92,7 @@ POST {base}/api/task/cancel  { runId }                          // 取消
 GET  {base}/api/canvases                                        // 画布清单
 GET  {base}/api/canvases/{canvasId}                             // → { ok, nodes, edges, view }
 POST {base}/api/canvases/{canvasId}/nodes  { add?,delete?,update? }   // 增量改（推荐）
-POST {base}/api/canvases/{canvasId}/edges  { add?,delete?,update? }
+POST {base}/api/canvases/{canvasId}/edges  { add?,delete?,update? }   // 连线只写 source/target（端口固定右出左入）
 PUT  {base}/api/canvases/{canvasId}  { nodes, edges }           // 整体替换（慎用：少一个节点它就没了）
 
 // 资源

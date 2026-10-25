@@ -176,24 +176,20 @@ export function createMcpServer(
 
   server.tool(
     'canvas.batch_edges',
-    '画布连线批量增删改，合并一次执行：{ add:[{source,target,sourceHandle?,targetHandle?,id?}], delete:[edgeId,...], update:[{id, source?/target?/sourceHandle?/targetHandle?/data?}] }。返回 added/deleted/updated ids',
+    '画布连线增删改，合并一次执行。只收节点 id：' +
+      'add 传 [{source,target}]；update 传 [{id,source?,target?}]；delete 传连线 id 数组。' +
+      '连线 id 由服务端自动生成（added 里返回），不要传 type / 端口 / data。',
     {
       canvasId: z.string(),
       add: z.array(z.object({
         source: z.string(),
         target: z.string(),
-        sourceHandle: z.string().optional(),
-        targetHandle: z.string().optional(),
-        id: z.string().optional(),
       })).optional(),
       delete: z.array(z.string()).optional(),
       update: z.array(z.object({
         id: z.string(),
         source: z.string().optional(),
         target: z.string().optional(),
-        sourceHandle: z.string().optional(),
-        targetHandle: z.string().optional(),
-        data: z.record(z.unknown()).optional(),
       })).optional(),
     },
     async ({ canvasId, add, delete: del, update }) => {
@@ -202,7 +198,7 @@ export function createMcpServer(
         delete: del,
         update: (update ?? []).map((u) => {
           const { id, ...rest } = u
-          return { id, patch: rest as any }
+          return { id, patch: rest }
         }),
       })
       return toText(result)

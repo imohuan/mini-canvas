@@ -220,6 +220,29 @@ describe('GraphModel', () => {
       expect(bad.ok).toBe(false)
     })
 
+    it('edge.batch 新增/修改都不写端口：连线只用节点 id，端口由网页端固定', () => {
+      model.createCanvas('t')
+      model.createNode('t', { type: 'image', id: 'a' })
+      model.createNode('t', { type: 'image', id: 'b' })
+      const r = model.applyBatchEdges('t', {
+        add: [{ source: 'a', target: 'b' }],
+      })
+      expect(r.ok).toBe(true)
+      const edge = model.listEdges('t')[0]!
+      expect(edge).toMatchObject({ source: 'a', target: 'b' })
+      expect(edge.sourceHandle).toBeUndefined()
+      expect(edge.targetHandle).toBeUndefined()
+
+      // 旧调用方即使塞进端口，也不能把它存下来（update 只改端点）
+      const up = model.applyBatchEdges('t', {
+        update: [{ id: edge.id, patch: { sourceHandle: 'out', targetHandle: 'in' } }],
+      })
+      expect(up.ok).toBe(true)
+      const after = model.listEdges('t')[0]!
+      expect(after.sourceHandle).toBeUndefined()
+      expect(after.targetHandle).toBeUndefined()
+    })
+
     it('node:updated 事件携带合并后的完整 node', () => {
       model.createCanvas('t')
       const n = model.createNode('t', { type: 'image', data: { label: 'L', options: { model: 'm' } } })
