@@ -26,6 +26,8 @@ export interface LocalGraphHandlers {
    * （不进撤销栈 —— 否则用户按一次 Ctrl+Z 只退一格进度条）。
    */
   applyPlan(plan: RemoteMergePlan): void
+  /** 把后台实际拥有的节点/边快照同步给保存适配器（合并后由调用方显式推进） */
+  noteServerSnapshot?(snapshot: CanvasGraphSnapshot): void
   /**
    * 此刻用户是否正在编辑某节点：返回被占用的字段（position / data / size）或空集。
    * 合并层对“正在编辑的字段”只延迟应用，其他节点与字段照常同步。
@@ -207,13 +209,19 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
         if (held.size > 0) holdEditingFields(plan, held)
         if (!isPlanEmpty(plan)) opts.graph.applyPlan(plan)
         hasDeferredUpdates = held.size > 0
-        appliedSnapshot = held.size > 0 ? snapshotWithHeldAtBaseline(theirs, held, baseline) : theirs
+        // 保存基准记录**后台真实拥有**的那一版（延迟的是“合并基准”，不是后台事实）。
+        // 两者若混用，用户正在拖拽的节点会被误标成“尚未提交”，下一次保存又把它本地的
+        // 位置当成新改动发上去 —— 这正是两份基准要分开维护的原因。
+        appliedSnapshot = theirs
         // 基准跟着**应用成功的那一版**走：正在编辑的节点还没落地，
         // 这一版不能记为已同步（否则下一轮 sameNode 会以为已经合过而不重试）。
         // 延迟节点不能从基准里删掉：删掉会让下一轮把它当成“云端新增”，
         // 已有本地节点时反而永远不更新。正确做法是保留**修改前**的那一版，
         // 下轮 sameNode(base, theirs) 仍判为“云端改了”，于是继续重试。
         base = held.size > 0 ? snapshotWithHeldAtBaseline(theirs, held, baseline) : theirs
+        // 合并完成后再把保存基准推到后台真实快照：放在 base 之后，保证调用顺序
+        // 永远是“先算下一轮合并基准、再对齐提交基准”。
+        opts.graph.noteServerSnapshot?.(theirs)
         // 补一次订阅前漏掉的通知：跑完再看一眼版本，避免“核对时正好又变了一次”漏掉。
         if (opts.readRevision) {
           const latest = await opts.readRevision()

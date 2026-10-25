@@ -93,6 +93,7 @@ describe('定时版本核对（Ping）', () => {
     await sync.check()
     expect(server.stats().revisionReads).toBeGreaterThan(0)
     expect(server.stats().snapshotReads).toBe(initialSnapshotReads)
+    expect(sync.serverSnapshot()?.nodes.map((n) => n.id)).toEqual(['a'])
     sync.stop()
   })
 
