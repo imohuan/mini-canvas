@@ -136,4 +136,29 @@ describe('云端优先', () => {
     expect((await restoreOrSeed(d)).phase).toBe('restored')
     expect(replaced[0].nodes).toHaveLength(1)
   })
+
+  it('恢复成功后交出同一份服务器快照（启动基准不再二次拉取）', async () => {
+    const got: Array<{ nodes: unknown[]; edges: unknown[]; revision?: number }> = []
+    const { d } = deps({
+      readServer: async () => ({ nodes: [node('s1')], edges: [{ id: 'e1', source: 's1', target: 's1' }], view: null, revision: 9 }),
+      readLocal: () => ({ nodes: [], edges: [] }),
+      onServerSnapshot: (s) => got.push({ nodes: s.nodes, edges: s.edges, revision: s.revision }),
+    })
+    await restoreOrSeed(d)
+    expect(got).toHaveLength(1)
+    expect(got[0].nodes.map((n) => (n as { id: string }).id)).toEqual(['s1'])
+    expect(got[0].revision).toBe(9)
+  })
+
+  it('首次上云成功后也交出本地那份快照（与已提交基准同源）', async () => {
+    const got: Array<{ nodes: unknown[] }> = []
+    const { d } = deps({
+      readServer: async () => ({ nodes: [], edges: [], view: null }),
+      readLocal: () => ({ nodes: [node('l1')], edges: [] }),
+      onServerSnapshot: (s) => got.push({ nodes: s.nodes }),
+    })
+    await restoreOrSeed(d)
+    expect(got).toHaveLength(1)
+    expect(got[0].nodes.map((n) => (n as { id: string }).id)).toEqual(['l1'])
+  })
 })

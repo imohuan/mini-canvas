@@ -268,6 +268,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
   const ready = (async () => {
     try {
       const viewport = ctx.tryGet<ViewportLike>('viewport')
+      let startupSnapshot: { nodes: unknown[]; edges: unknown[]; revision?: number } | undefined
       const r = await restoreOrSeed({
         readServer: () => adapter.getRaw(),
         readLocal: () => ({ nodes: doc.getNodes(), edges: doc.getEdges() }),
@@ -298,12 +299,16 @@ const adapter = new CanvasDiffAdapter(api, CID)
           )
           await api.replaceCanvas(CID, migrated, edges)
         },
+        onServerSnapshot: (snapshot) => {
+          startupSnapshot = { nodes: snapshot.nodes, edges: snapshot.edges, ...(typeof snapshot.revision === 'number' ? { revision: snapshot.revision } : {}) }
+        },
         ...(viewport ? { setViewport: (v) => viewport.setViewport(v) } : {}),
         ...(doc.types ? { knownType: (t: string) => doc.types!.has(t) } : {}),
         onError: (msg, err) => console.warn(msg, err),
       })
       status.phase = r.phase
-      await adapter.primeFromServer()
+      if (startupSnapshot) adapter.primeFromSnapshot(startupSnapshot)
+      else await adapter.primeFromServer()
     } catch (err) {
       status.error = err instanceof Error ? err.message : String(err)
     }

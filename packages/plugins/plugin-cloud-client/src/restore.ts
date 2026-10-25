@@ -11,7 +11,7 @@
 
 export interface RestoreDeps {
   /** 读服务器那份（nodes / edges / view） */
-  readServer(): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown }>
+  readServer(): Promise<{ nodes: unknown[]; edges: unknown[]; view: unknown; revision?: number }>
   /** 本地当前那份 */
   readLocal(): { nodes: unknown[]; edges: unknown[] }
   /** 用服务器那份覆盖本地 */
@@ -29,6 +29,11 @@ export interface RestoreDeps {
   pushLocal(nodes: unknown[], edges: unknown[]): Promise<void>
   /** 视图状态（视口）恢复 */
   setViewport?(view: { x: number; y: number; zoom: number }): void
+  /**
+   * 恢复完成后的“服务器准信”：启动时用这一份同时初始化保存基准与合并基准。
+   * 缺省不调（旧宿主/测试兼容）。
+   */
+  onServerSnapshot?(snapshot: { nodes: unknown[]; edges: unknown[]; view: unknown; revision?: number }): void
   /** 认不认识某个节点类型（不认识的不塞进来：本地渲染不了） */
   knownType?(type: string): boolean
   onError?(msg: string, err?: unknown): void
@@ -52,6 +57,8 @@ export async function restoreOrSeed(deps: RestoreDeps): Promise<RestoreResult> {
     }
     // 首次上云：把本地这份推上去
     await deps.pushLocal(local.nodes, local.edges)
+    // 首云成功后就是“服务器已有这份”的准信；调用方用它同时初始化两份基准。
+    deps.onServerSnapshot?.({ nodes: local.nodes, edges: local.edges, view: null })
     return { phase: 'seeded', nodes: local.nodes.length, edges: local.edges.length }
   }
 
@@ -71,6 +78,17 @@ export async function restoreOrSeed(deps: RestoreDeps): Promise<RestoreResult> {
   if (deps.restoreMediaUrls) await deps.restoreMediaUrls(nodes)
 
   deps.replaceLocal(nodes, server.edges)
+
+  // 把“服务器那份（已重建媒体地址后的节点）”交回调用方：启动时必须与 save 基准同源，
+  // 不能再单独 GET 一次（那可能拿到更新的一版，两份基准就错位了）。
+  deps.onServerSnapshot?.({
+    nodes,
+    edges: server.edges,
+    view: server.view,
+    ...(typeof (server as { revision?: unknown }).revision === 'number'
+      ? { revision: Math.floor((server as { revision: number }).revision) }
+      : {}),
+  })
 
   const view = server.view
   if (
