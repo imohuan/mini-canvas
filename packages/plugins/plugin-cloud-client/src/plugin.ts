@@ -417,6 +417,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
       status.revisionSupported = typeof rev === 'number'
       return rev
     },
+    canvasId: CID,
     graph: {
       getNodes: () => doc.getNodes() as never,
       getEdges: () => doc.getEdges() as never,
@@ -445,6 +446,7 @@ const adapter = new CanvasDiffAdapter(api, CID)
       // 启动时把版本同步进状态（设置页 / 诊断用）
       status.knownRevision = sync.status().knownRevision
     } catch (err) {
+      status.error = err instanceof Error ? err.message : String(err)
       console.warn('[cloud-client] 实时通道建立失败（画布照常可用）', err)
     }
   })

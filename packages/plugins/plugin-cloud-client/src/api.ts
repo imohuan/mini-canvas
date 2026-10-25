@@ -98,6 +98,11 @@ export class CloudApi {
     return this.baseUrl
   }
 
+  /** 规范化后的服务根地址（空串 = 同源）；定时核对用它判断“这一页连的是哪个后台” */
+  get normalizedBase(): string {
+    return this.baseUrl.replace(/\/+$/, '')
+  }
+
   /** 相对地址补成完整地址（画布内引用由调用方按当前画布先解析） */
   absolute(pathOrUrl: string): string {
     if (/^https?:/i.test(pathOrUrl)) return pathOrUrl

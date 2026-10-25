@@ -21,6 +21,9 @@ import { canvasesRoutes } from '../routes/canvases'
 import { CanvasStore } from '../store/canvasStore'
 import { CanvasResourceStore } from '../store/canvasResources'
 import { CanvasDocument } from '../mcp/canvasDoc'
+import { ProjectStore } from '../store/projectStore'
+import { AssetStore } from '../store/assetStore'
+import { projectsRoutes } from '../routes/projects'
 
 let root: string
 const OTHER = 'othercanvas00001'
@@ -123,6 +126,32 @@ describe('画布版本（定时核对 / revision）', () => {
     expect((await store.readCanvas('default'))?.revision).toBe(afterFirst)
     await doc.replaceAll([{ ...node, data: { text: 'changed' } }], [])
     expect((await store.readCanvas('default'))?.revision).toBe((afterFirst ?? 0) + 1)
+  })
+
+  it('改名只动 name：不涨版本，也不会把图覆盖回旧快照', async () => {
+    const store = new CanvasStore(root)
+    const projects = new ProjectStore(root)
+    const assets = new AssetStore(root)
+    const doc = new CanvasDocument(store, new CanvasResourceStore(root), 'default')
+    const node = { id: 'a', type: 'text', position: { x: 0, y: 0 }, data: { text: 'old' } }
+    await doc.replaceAll([node], [])
+    // 先发生一次图提交，再改名：改名不能把中间那份新图写成旧快照。
+    await doc.replaceAll([{ ...node, data: { text: 'newer' } }], [])
+    const beforeRename = await store.readCanvas('default')
+    const app = new Hono()
+    app.route('/', projectsRoutes(projects, store, assets))
+    const res = await app.fetch(
+      new Request('http://x/api/canvases/default/meta', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '改名后' }),
+      }),
+    )
+    expect(res.status).toBe(200)
+    const after = await store.readCanvas('default')
+    expect(after?.name).toBe('改名后')
+    expect(after?.revision).toBe(beforeRename?.revision)
+    expect(((after?.nodes[0] as { data: { text: string } }).data.text)).toBe('newer')
   })
 
   it('画布不存在时版本接口是 404，不用 0 冒充空画布', async () => {

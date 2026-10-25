@@ -102,12 +102,14 @@ describe('定时版本核对（Ping）', () => {
     const { sync } = makeSync(server, graph, true)
     await sync.refreshBase()
     sync.start()
+    // start() 的启动核对在版本未变时应直接结束；先等它完成，避免与下面的 check() 重叠。
+    await new Promise((r) => setTimeout(r, 30))
 
     // 模拟 SSE 丢了一条通知：后台已经写成 6，但客户端没有收到事件。
     server.advance({ nodes: [node('a'), node('missed')], edges: [] })
     // 定时 ping 才发现版本不同 → 拉完整快照 → 合并
     await sync.check()
-    await new Promise((r) => setTimeout(r, 30))
+    await waitForSynced(graph, 2)
 
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(['a', 'missed'])
     expect(graph.applied.length).toBeGreaterThan(0)
@@ -123,9 +125,65 @@ describe('定时版本核对（Ping）', () => {
 
     server.advance({ nodes: [node('a'), node('legacy')], edges: [] })
     await sync.check()
-    await new Promise((r) => setTimeout(r, 30))
+    await waitForSynced(graph, 2)
 
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(['a', 'legacy'])
     sync.stop()
   })
 })
+
+describe('多画布 / 防叠加', () => {
+  it('别的画布的 SSE 事件不会触发当前画布的整包合并', async () => {
+    const server = fakeServer(5, { nodes: [node('a')], edges: [] })
+    const graph = localGraph([node('a')])
+    let deliver: ((e: { type: string; key: string; canvasId?: string; revision?: number }) => void) | undefined
+    const sync = createRemoteSync({
+      readCloud: async () => undefined,
+      readSnapshot: () => server.readSnapshot(),
+      readRevision: () => server.readRevision(),
+      graph: graph.handlers,
+      knownType: () => true,
+      canvasId: 'current',
+      subscribe: (onChange) => {
+        deliver = onChange
+        return () => {}
+      },
+      debounceMs: 1,
+      revisionPollMs: 0,
+    })
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+    const before = server.stats().snapshotReads
+    // 另一张画布变了：不能拉当前画布，也不能改本地
+    deliver?.({ type: 'canvas', key: 'graph', canvasId: 'other', revision: 99 })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(server.stats().snapshotReads).toBe(before)
+    expect(graph.nodes.map((n) => n.id)).toEqual(['a'])
+    sync.stop()
+  })
+
+  it('核对请求并发时只保留一轮（不会越堆越多）', async () => {
+    const server = fakeServer(5, { nodes: [node('a')], edges: [] })
+    const graph = localGraph([node('a')])
+    const { sync } = makeSync(server, graph, true)
+    await sync.refreshBase()
+    sync.start()
+    await new Promise((r) => setTimeout(r, 30))
+    const before = server.stats().revisionReads
+    // 连续触发多次：应共享同一轮核对，而不是每个调用都发一次版本请求。
+    await Promise.all([sync.check(), sync.check(), sync.check(), sync.check()])
+    const delta = server.stats().revisionReads - before
+    expect(delta).toBeGreaterThanOrEqual(1)
+    expect(delta).toBeLessThanOrEqual(2)
+    sync.stop()
+  })
+})
+
+/** 轮询本地状态直到节点数达到期望（替代固定 sleep，避免测试依赖机器速度） */
+async function waitForSynced(graph: { nodes: MergeNode[] }, count: number): Promise<void> {
+  const deadline = Date.now() + 500
+  while (Date.now() < deadline && graph.nodes.length < count) {
+    await new Promise((r) => setTimeout(r, 10))
+  }
+}

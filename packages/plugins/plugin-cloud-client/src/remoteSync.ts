@@ -38,6 +38,8 @@ export interface RemoteSyncOptions {
   readSnapshot?: () => Promise<{ nodes: unknown; edges: unknown; revision?: number }>
   /** 只读画布图版本（定时 ping）。无这个接口的旧服务端返回 undefined，降级为完整快照核对。 */
   readRevision?: () => Promise<number | undefined>
+  /** 画布过滤：SSE 会送来所有画布的事件，不能拿别的画布版本推进当前书签 */
+  canvasId?: string
   graph: LocalGraphHandlers
   /** 本地认不认识某个节点类型（不认识就跳过：本地渲染不了，塞进来只会是坏数据） */
   knownType: (type: string) => boolean
@@ -148,6 +150,8 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   /** 正在跑一轮时又来了通知 → 记个标记，跑完补一轮（不丢事件也不并发） */
   let dirty = false
   let inflight = false
+  /** 定时核对已安排在跑：避免每 15 秒叠加一轮 */
+  let reconcileInflight: Promise<void> | null = null
 
   async function readCloudSnapshot(): Promise<{ graph: CanvasGraphSnapshot; revision?: number }> {
     if (opts.readSnapshot) {
@@ -213,20 +217,31 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
   async function reconcile(): Promise<void> {
     if (!running) return
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-    try {
-      if (opts.readRevision) {
-        const remote = await opts.readRevision()
-        if (typeof remote === 'number') {
-          if (knownRevision !== undefined && remote <= knownRevision) return
-          // 版本不同（或首次没有基线）→ 拉完整快照合并；不会用事件跳版。
-          schedule()
-          return
+    // 已在核对：不再叠加。定时器每 15 秒一次，网络慢时不能把请求越堆越多。
+    if (reconcileInflight) return reconcileInflight
+    const job = (async () => {
+      try {
+        if (opts.readRevision) {
+          const remote = await opts.readRevision()
+          if (typeof remote === 'number') {
+            if (knownRevision !== undefined && remote <= knownRevision) return
+            // 版本不同（或首次没有基线）→ 拉完整快照合并；不会用事件跳版。
+            // 同一轮失败不推进 knownRevision；下一次定时核对会再次看到版本落后并重试。
+            schedule()
+            return
+          }
         }
+        // 旧服务端没有版本接口：低频完整快照核对（只在可见时）。
+        schedule()
+      } catch (err) {
+        report('定时核对失败（稍后重试）', err)
       }
-      // 旧服务端没有版本接口：低频完整快照核对（只在可见时）。
-      schedule()
-    } catch (err) {
-      report('定时核对失败（稍后重试）', err)
+    })()
+    reconcileInflight = job
+    try {
+      await job
+    } finally {
+      if (reconcileInflight === job) reconcileInflight = null
     }
   }
 
@@ -251,6 +266,8 @@ export function createRemoteSync(opts: RemoteSyncOptions): RemoteSync {
 
   function onEvent(e: ChangeEvent): void {
     if (e.type === CANVAS) {
+      // 多画布：别的画布的事件不能触发当前画布的整包合并。
+      if (opts.canvasId !== undefined && e.canvasId !== undefined && e.canvasId !== opts.canvasId) return
       // 只对画布本体那两类跑合并；视口变化不该触发节点重装
       if (WATCHED_KEYS.has(e.key)) schedule()
       return

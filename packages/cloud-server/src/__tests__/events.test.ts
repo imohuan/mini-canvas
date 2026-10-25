@@ -165,6 +165,16 @@ describe('GET /api/kv/events（实时通道）', () => {
     expect(await waitFor(() => events.some((e) => e.key === 'graph-viewport'))).toBe(true)
   })
 
+  it('画布事件带 canvasId；前端多画布时据此过滤（不是所有画布都触发同一份合并）', async () => {
+    await boot()
+    const { events } = await subscribe('?type=canvas')
+    await putCanvas([{ id: 'n1' }])
+    expect(await waitFor(() => events.some((e) => e.key === 'graph'))).toBe(true)
+    const graph = events.find((e) => e.key === 'graph')
+    expect(graph?.canvasId).toBe('default')
+    expect(typeof graph?.revision).toBe('number')
+  })
+
   it('按作用域过滤：订阅 canvas 的不该收到 config 的动静', async () => {
     await boot()
     const { events } = await subscribe('?type=canvas')
