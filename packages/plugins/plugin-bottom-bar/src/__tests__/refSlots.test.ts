@@ -13,6 +13,7 @@ import {
   slotAccepts,
   judgeSlotDrop,
   dropVerdictMessage,
+  hitSlotAtPoint,
 } from '../refSlots'
 
 describe('@ 标签解析', () => {
@@ -107,5 +108,27 @@ describe('待输入槽位的落点判定', () => {
     expect(dropVerdictMessage('image', { ok: false, reason: 'no-modifier' })).toContain('Ctrl')
     expect(dropVerdictMessage('image', { ok: false, reason: 'kind-mismatch' })).toBe('这个槽位只收图片')
     expect(dropVerdictMessage('av', { ok: false, reason: 'kind-mismatch' })).toBe('这个槽位只收视频或音频')
+  })
+})
+
+describe('拖拽落点：鼠标点 → 槽位', () => {
+  const rects = [
+    { key: 'image:1', left: 100, top: 100, right: 148, bottom: 148 },
+    { key: 'audio:1', left: 160, top: 100, right: 208, bottom: 148 },
+  ]
+
+  it('落在某个槽位矩形里 → 返回它的键（规则 3c 的命中判定）', () => {
+    expect(hitSlotAtPoint({ x: 120, y: 120 }, rects)).toBe('image:1')
+    expect(hitSlotAtPoint({ x: 200, y: 140 }, rects)).toBe('audio:1')
+  })
+
+  it('落在两个槽位之间的空隙 / 外面 → null（不许误填）', () => {
+    expect(hitSlotAtPoint({ x: 154, y: 120 }, rects)).toBe(null)
+    expect(hitSlotAtPoint({ x: 20, y: 20 }, rects)).toBe(null)
+  })
+
+  it('边界上算命中（贴边松手也是用户意图）', () => {
+    expect(hitSlotAtPoint({ x: 100, y: 100 }, rects)).toBe('image:1')
+    expect(hitSlotAtPoint({ x: 148, y: 148 }, rects)).toBe('image:1')
   })
 })

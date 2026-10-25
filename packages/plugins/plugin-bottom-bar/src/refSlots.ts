@@ -142,3 +142,19 @@ export function dropVerdictMessage(kind: RefSlotKind, verdict: DropVerdict): str
   if (verdict.reason === 'kind-mismatch') return '这个槽位只收' + want
   return '不支持的文件类型'
 }
+
+/**
+ * 松手时该落到哪个槽位：给定鼠标点与槽位矩形，返回命中的槽位键。
+ *
+ * 为什么要单独抽出来：真机里槽位是 teleport 到 body 的浮层，`elementFromPoint` 在
+ * 合成事件下不可靠；把「点 vs 矩形」的判定放进纯函数，能和真实拖拽用同一套逻辑单测。
+ */
+export function hitSlotAtPoint(
+  point: { x: number; y: number },
+  rects: ReadonlyArray<{ key: string; left: number; top: number; right: number; bottom: number }>,
+): string | null {
+  for (const r of rects) {
+    if (point.x >= r.left && point.x <= r.right && point.y >= r.top && point.y <= r.bottom) return r.key
+  }
+  return null
+}

@@ -61,6 +61,7 @@ import {
   parseRefSlots,
   judgeSlotDrop,
   dropVerdictMessage,
+  hitSlotAtPoint,
   REF_SLOT_META,
   type RefSlotKind,
 } from './refSlots'
@@ -502,6 +503,12 @@ if (typeof ctx.on === 'function') {
     if (p?.nodeId === props.id) resetSubmitted()
   })
   pluginOffs.push(clickOff)
+
+// 订阅画布节点拖拽：开始记下节点，松手时看落在哪个槽位上（见 onCanvasNodeDragEnd）
+if (typeof ctx.on === 'function') {
+  pluginOffs.push(ctx.on(RenderEvents.NodeDragStart, (p: { nodeId?: string }) => onCanvasNodeDragStart(p)))
+}
+
 }
 
 /** 执行（写盘走 nodeTask → doc.updateNodeRuntime） */
@@ -817,6 +824,16 @@ onBeforeUnmount(() => {
   }
 })
 
+// 松手时命中槽位：画布节点不是 HTML5 drag，收不到 drop 事件，只能等 pointerup。
+// 用 window 捕获阶段：VueFlow 自己也会处理松手，我们只读坐标、不改它的行为。
+function onWindowPointerUp(ev: PointerEvent): void {
+  if (!draggingNode) return
+  onCanvasNodeDragEnd(ev)
+}
+onMounted(() => window.addEventListener('pointerup', onWindowPointerUp, true))
+onBeforeUnmount(() => window.removeEventListener('pointerup', onWindowPointerUp, true))
+
+
 /** 拖放高亮：整排槽位一起亮（用户能看出「可以放在这儿」） */
 const slotsDropHot = ref(false)
 
@@ -831,31 +848,16 @@ function onSlotDragLeave(_ev: DragEvent): void {
 
 /**
  * 落到槽位：
- *   (a) 本地文件 → 直接看类型；
- *   (c) 画布节点 → 必须按住 Ctrl / ⌘。
- * 节点拖拽的 payload 用 `application/x-mini-canvas-node`（由插件自己的节点拖拽写入）。
+ *   (a) 本地文件 → 直接看类型（不需要 Ctrl）；
+ *   (c) 画布节点 → 必须按住 Ctrl / ⌘，走画布自己的拖拽事件（见下面 beginDropCapture）。
  */
-const NODE_DROP_MIME = 'application/x-mini-canvas-node'
 function onSlotDrop(ev: DragEvent, slot: RefSlot): void {
   slotsDropHot.value = false
-  const dt = ev.dataTransfer
-  const nodeRaw = dt?.getData(NODE_DROP_MIME)
-  if (nodeRaw) {
-    let payload: { name?: string; mime?: string } | null = null
-    try { payload = JSON.parse(nodeRaw) } catch { payload = null }
-    const modifier = ev.ctrlKey || ev.metaKey
-    const verdict = judgeSlotDrop(slot.kind, { node: { name: payload?.name, mime: payload?.mime }, modifier })
-    if (!verdict.ok) { setSlotError(slot, dropVerdictMessage(slot.kind, verdict)); return }
-    slot.status = 'ready'
-    slot.mediaType = verdict.mediaType
-    slot.name = payload?.name || REF_SLOT_META[slot.kind].label + slot.index
-    slot.error = undefined
-    refreshSlotChip(slot)
-    return
-  }
-  const file = dt?.files?.[0]
+  const file = ev.dataTransfer?.files?.[0]
   if (file) { fillSlotFromFile(slot, file); return }
-  setSlotError(slot, '没识别到文件或节点')
+  // 画布节点不是走 dataTransfer 的（VueFlow 拖动不写 payload），
+  // 它由 beginDropCapture 在拖拽结束时按鼠标位置命中 —— 这里只兜底本地文件。
+  setSlotError(slot, '没识别到文件；拖节点请按住 Ctrl 再拖')
 }
 
 function slotLabelOf(slot: RefSlot): string {
@@ -865,6 +867,70 @@ function slotLabelOf(slot: RefSlot): string {
 function slotIconOf(slot: RefSlot): string {
   return slot.mediaType === 'audio' || slot.kind === 'audio' ? SLOT_AUDIO_ICON : SLOT_ICON
 }
+
+// ===== 规则 3(c)：按住 Ctrl 把画布节点拖进槽位 =====
+//
+// 为什么不用 HTML5 drag 的 dataTransfer：画布节点由 VueFlow 拖动，拖动时**不写**
+// dataTransfer（我们查过宿主与各插件，没有这个 payload），所以靠 dataTransfer.getData
+// 永远拿不到节点。改成监听画布自己的 NodeDragStart / NodeDragEnd，并在松手时用
+// 鼠标位置做命中测试 —— 这条链路用的是画布真实坐标，不依赖浏览器拖放实现差异。
+
+/** 正在被拖的画布节点（松手时用） */
+let draggingNode: { id: string; name: string; mediaType: 'image' | 'video' | 'audio' | null } | null = null
+
+/** 按鼠标点找它落在哪个槽位上（纯 DOM 命中，槽位是 teleport 到 body 的浮层） */
+function slotAtPoint(x: number, y: number): RefSlot | null {
+  // 用槽位自己的矩形做命中（槽位 teleport 在 body 下，和画布节点不在同一层；
+  // `elementFromPoint` 会被上层浮层挡住，矩形判定与真实位置一致且可单测）
+  const rects = visibleRefSlots.value.map((s) => {
+    const el = document.querySelector('.nb-slot[data-slot-key="' + s.key + '"]') as HTMLElement | null
+    const r = el?.getBoundingClientRect()
+    return { key: s.key, left: r?.left ?? 0, top: r?.top ?? 0, right: r?.right ?? -1, bottom: r?.bottom ?? -1 }
+  })
+  const key = hitSlotAtPoint({ x, y }, rects)
+  return key ? (refSlots.value.find((s) => s.key === key) ?? null) : null
+}
+
+function onCanvasNodeDragStart(p: { nodeId?: string }): void {
+  const id = p?.nodeId
+  if (!id) { draggingNode = null; return }
+  const node = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')?.getNode(id)
+  if (!node) { draggingNode = null; return }
+  const data = node.data ?? {}
+  const mediaType = mediaTypeOf({
+    name: typeof data.imageName === 'string' ? data.imageName : typeof data.videoName === 'string' ? data.videoName : typeof data.audioName === 'string' ? data.audioName : '',
+    type:
+      typeof data.imageUrl === 'string' ? 'image/*'
+        : typeof data.videoUrl === 'string' ? 'video/*'
+        : typeof data.audioUrl === 'string' ? 'audio/*'
+        : node.type === 'image' ? 'image/*' : node.type === 'video' ? 'video/*' : node.type === 'audio' ? 'audio/*' : '',
+  })
+  draggingNode = {
+    id,
+    name: typeof data.label === 'string' && data.label ? data.label : (mediaType === 'video' ? '视频' : mediaType === 'audio' ? '音频' : '图片'),
+    mediaType,
+  }
+}
+
+/**
+ * 松手：如果鼠标正落在某个待输入槽位上，并且拖着的是画布节点，
+ * 就按规则 3(c) 判定（必须按住 Ctrl）。没落上去就什么都不做。
+ */
+function onCanvasNodeDragEnd(ev: PointerEvent | MouseEvent): void {
+  const node = draggingNode
+  draggingNode = null
+  if (!node) return
+  const slot = slotAtPoint(ev.clientX, ev.clientY)
+  if (!slot) return
+  const verdict = judgeSlotDrop(slot.kind, { node: { name: node.name, mime: node.mediaType ? node.mediaType + '/*' : '' }, modifier: ev.ctrlKey || ev.metaKey })
+  if (!verdict.ok) { setSlotError(slot, dropVerdictMessage(slot.kind, verdict)); return }
+  slot.status = 'ready'
+  slot.mediaType = verdict.mediaType
+  slot.name = node.name
+  slot.error = undefined
+  refreshSlotChip(slot)
+}
+
 
 
 
@@ -966,6 +1032,7 @@ function onGlobalLeave(el: Element): void {
       <div
         v-for="slot in visibleRefSlots"
         :key="slot.key"
+        :data-slot-key="slot.key"
         class="nb-slot"
         :class="slot.status === 'ready' ? 'is-ready' : 'is-pending'"
         :title="slot.status === 'ready' ? (slot.name || '') : '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点'"
