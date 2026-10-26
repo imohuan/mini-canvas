@@ -69,7 +69,7 @@ import {
   type RefSlotKind,
 } from './refSlots'
 // 参考区合并 + 缺号校验（纯函数，已单测）
-import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey } from './refTiles'
+import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey, type TileCardLike } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf } from './refSlotDrag'
 import { enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
@@ -452,21 +452,18 @@ function onReorder(next?: MaterialCard[]): void {
 }
 
 /** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
-function openCard(card: MaterialCard): void {
-  // 多张同类素材：把地址列成 list 交给 MediaViewer —— 预览里就有 ← / → 切换与页码。
-  // tile.card（mergeRefTiles 输出）只有 {id,name,url,isText}，没有 kind —— 直接传会让
-  // 预览的 kind 变 undefined → MediaViewer 认不出媒体类型 → stage 空白（真机踩过）。
-  // 从 shownMaterials 里补全成完整 MaterialCard 再开预览。
-  const full = cards.value.find((c) => c.id === card.id) ?? card
-  const multi = previewListFor(cards.value, full)
-  ;(window as any).__previewDbg = { cardId: card.id, url: (card.url || '').slice(0, 60), kind: card.kind, isText: card.isText, multiLen: multi?.list.length ?? null }
-  // 全屏预览：用户要求「要的是全屏，是整个视图」
+function openCard(card: TileCardLike): void {
+  // tile.card（mergeRefTiles 输出）只有 {id,name,url,isText}，没有 kind/value —— 从
+  // cards.value（MaterialCard 全量）补全：预览 kind 缺失会让 MediaViewer 认不出媒体
+  // 类型 → stage 空白（真机踩过）。找不到（理论上不可能）才用 tile 形状兜底。
+  const full = cards.value.find((c) => c.id === card.id)
+  const multi = previewListFor(cards.value, full ?? (card as MaterialCard))
   openPreview({
-    name: full.name,
-    nodeId: full.id,
-    kind: full.isText ? 'text' : (full.kind as 'image' | 'video' | 'audio'),
-    url: full.url,
-    text: full.value,
+    name: full?.name ?? card.name,
+    nodeId: card.id,
+    kind: (full?.isText ?? card.isText) ? 'text' : ((full?.kind ?? 'image') as 'image' | 'video' | 'audio'),
+    url: full?.url ?? card.url,
+    text: full?.value,
     ...(multi ?? {}),
   }, props.id)
 }
@@ -477,7 +474,7 @@ function openCard(card: MaterialCard): void {
  * 用户口径（2026-10-12）：「在右上角区域 hover 时，应该显示一个关闭按钮……点击该按钮后可以
  * 进行关闭，即删除与该图片相关的连接线」。连线没了，卡片自然从底栏消失（卡是边派生的）。
  */
-function removeCard(card: MaterialCard): void {
+function removeCard(card: TileCardLike): void {
   if (!card) {
     console.warn('[bottom-bar] removeCard: tile.card 为空（格子数据缺 card 字段）')
     return
@@ -1167,7 +1164,7 @@ function onCtrlDragEnd(): void {
 }
 
 /** pointerup：落在参考格 → 替换该格资源；落在画布上 → 什么都不做（节点留在原处） */
-function onCtrlDragPointerUp(ev: PointerEvent): void {
+function onCtrlDragPointerUp(ev: PointerEvent | DragEvent): void {
   const drag = ctrlDrag
   ctrlDrag = null
   if (drag?.targetTileKey) document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
@@ -1252,6 +1249,7 @@ async function replaceSlotMaterial(
     addEdge(input: { source: string; target: string }): string
     removeEdges(ids: string[]): number
     getEdges?(): Array<{ id: string; source: string; target: string }>
+    updateNode(id: string, patch: { data: Record<string, unknown> }): void
   }>('doc')
   if (!doc) return
   // 该格原本的连线 = 连到本节点、且素材 refName 正好对应这个槽位的那条
@@ -1306,8 +1304,8 @@ function onSlotDragLeave(_ev: DragEvent): void {
  *   (a) 本地文件 → 直接看类型（不需要 Ctrl）；
  *   (c) 画布节点 → 必须按住 Ctrl / ⌘，走画布自己的拖拽事件（见下面 beginDropCapture）。
  */
-function onSlotDrop(ev: DragEvent, slot: RefSlot): void {
-  void slot
+function onSlotDrop(ev: DragEvent, _slot?: unknown): void {
+  void _slot
   slotsDropHot.value = false
   const file = ev.dataTransfer?.files?.[0]
   if (!file) return
@@ -1435,7 +1433,7 @@ function onGlobalLeave(el: Element): void {
         @click.stop="tile.pending && tile.slotKey ? pickSlotFile(tile.slotKey) : undefined"
         @dragover.stop.prevent="onSlotDragOver($event)"
         @dragleave.stop="onSlotDragLeave($event)"
-        @drop.stop.prevent="onSlotDrop($event)"
+        @drop.stop.prevent="onSlotDrop($event, undefined)"
       >
         <span class="nb-card-clip">
           <img

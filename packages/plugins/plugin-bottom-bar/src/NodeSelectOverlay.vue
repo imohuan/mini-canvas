@@ -65,7 +65,7 @@ const EVENT = (m: 'reference' | 'ctrl-drag') =>
 
 function readSession(): { active: boolean; owner: string } {
   const key = FLAG(props.mode) as 'reference' | 'ctrl-drag'
-  const s = (globalThis as Record<string, { active: boolean; owner: string } | undefined>)[key]
+  const s = (globalThis as unknown as Record<string, { active: boolean; owner: string } | undefined>)[key]
   return s?.active ? { active: true, owner: s.owner } : { active: false, owner: '' }
 }
 function onModeChange(): void {
@@ -185,9 +185,8 @@ function onDragPointerDown(ev: PointerEvent): void {
     @pointerleave="onLeave"
     @click.stop="onPick()"
   >
-    <span v-if="state === 'selectable'" class="nso-badge">
-      {{ state === 'connected' ? '✓' : '+' }}
-    </span>
+    <span v-if="state === 'connected'" class="nso-badge">✓</span>
+    <span v-else-if="state === 'selectable'" class="nso-badge">+</span>
   </div>
 </template>
 
