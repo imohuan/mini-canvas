@@ -52,7 +52,7 @@ import {
 import { readRunState } from './runState'
 import { initialPromptText, promptPersistFields } from './promptPersist'
 // 参考：进入/退出画布选择态（会话状态在 referenceMode 里，浮层组件消费）
-import { referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
+import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
 // 右侧图标按钮里"改提示词"的小动作（翻译提示词）
@@ -1132,6 +1132,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   registerStartDragHandler(null)
+  // 底栏消失 = 两个选择态都收（用户口径 2026-10-26：覆盖层要跟底栏同步消失）。
+  // 参考选择与 Ctrl 拖是挂在节点上的覆盖层，底栏走了它们就失去操作对象。
+  exitCtrlDragMode()
+  exitReference()
+  // 顺带收掉可能残留的鼠标提示（与覆盖层同寿命）
+  ctx.tryGet<{ hide(): void }>('tip')?.hide()
   window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
   window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
   window.removeEventListener('dragover', onCtrlDragOver, true)
