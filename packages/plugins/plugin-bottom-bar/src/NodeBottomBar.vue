@@ -668,6 +668,9 @@ const refTiles = computed(() =>
 /** 正文里的 @ 声明（只用来「标出哪个序号被点了」与算缺号，不产生内容） */
 const promptRefSlots = computed(() => parseRefSlots(prompt.value))
 
+/** 连线变了（上传/替换/断开/初始载入）→ 正文里对应的标签跟着刷成已填状态 */
+watch(shownMaterials, () => refreshSlotChips(), { immediate: true })
+
 /** 错误提示按「序号」记（格子由连线派生，键会随内容变化，不能按 key 存） */
 const slotErrors = ref<Record<string, string>>({})
 /** 某个待输入格的错误文案（按种类+序号查） */
@@ -729,8 +732,10 @@ function pickSlotFile(slotKey: string): void {
  *   刷新就没了、生成时也拿不到这张图。所以必须建节点 + 连边。
  */
 async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): Promise<void> {
+  ;(window as any).__upDbg = { step: 'enter', kind, index, name: file.name }
   const verdict = judgeSlotDrop(kind, { file })
   if (!verdict.ok) {
+    ;(window as any).__upDbg.step = 'judge-fail'
     setSlotError(index, dropVerdictMessage(kind, verdict))
     return
   }
@@ -738,6 +743,7 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
     addFiles(files: File[], atFlow: { x: number; y: number } | null): Promise<number>
   }>('file-drop')
   if (!fileDrop) {
+    ;(window as any).__upDbg.step = 'no-file-drop'
     setSlotError(index, '当前宿主没有文件落库能力，无法建参考节点')
     return
   }
@@ -807,6 +813,9 @@ function setSlotError(index: number, message: string): void {
  * 两步：① 把每个 ref-slot 的最新 item 登记进编辑器；② 触发整体重渲染。
  */
 function refreshSlotChips(): void {
+  // SSR / 编辑器未挂载时跳过（只影响标签 UI，不影响数据）
+  if (typeof document === 'undefined') return
+  if (!editorComponentRef.value) return
   for (const tile of refTiles.value) {
     const key = tile.slotKey
     if (tile.pending) {
@@ -2114,3 +2123,5 @@ function onGlobalLeave(el: Element): void {
   }
 }
 </style>
+ 
+ 

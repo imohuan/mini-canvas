@@ -51,6 +51,14 @@ export function refNameToSlot(refName: string): { index: number; kind: 'image' |
   return { index: Number(m[2]), kind, label: m[1] }
 }
 
+/** refName（图片2）+ 槽位种类 → 槽位键（image:2）。对不上（种类不同）→ null */
+export function refNameToSlotKey(refName: string, slotKind: 'image' | 'video' | 'audio' | 'av'): string | null {
+  const parsed = refNameToSlot(refName)
+  if (!parsed) return null
+  if (slotKind !== 'av' && parsed.kind !== slotKind) return null
+  return parsed.kind + ':' + parsed.index
+}
+
 /**
  * 参考区**只排一行**，格子身份 = **连线的序号**。
  *
@@ -152,7 +160,8 @@ export function findRefGap(
     if (s.kind === 'av') continue
     const have = haveBy(s.kind)
     const missing: number[] = []
-    for (let i = 1; i < s.index; i++) if (!have.has(i)) missing.push(i)
+    // 「声明了但还没内容」的那一格本身也算缺（不然用户会发一个空引用给模型）
+    for (let i = 1; i <= s.index; i++) if (!have.has(i)) missing.push(i)
     if (missing.length) return { kind: s.kind, missing }
   }
   return null

@@ -136,13 +136,14 @@ describe('参考区只排一行（不再重复）', () => {
 
 describe('参考缺号 → 不许发送（只看连线内容）', () => {
   it('声明 @图片2、连线只有 1 张图 → 不缺（第 1 格有内容，第 2 格待输入）', () => {
+    // 第 2 格本身是待输入 → 也算缺（发出去会是空引用）
     expect(
       findRefGap([{ kind: 'image', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
-    ).toBe(null)
+    ).toEqual({ kind: 'image', missing: [2] })
   })
 
-  it('声明 @图片2、连线一张都没有 → 缺 1', () => {
-    expect(findRefGap([{ kind: 'image', index: 2 }], [])).toEqual({ kind: 'image', missing: [1] })
+  it('声明 @图片2、连线一张都没有 → 缺 1 和 2（两格都空）', () => {
+    expect(findRefGap([{ kind: 'image', index: 2 }], [])).toEqual({ kind: 'image', missing: [1, 2] })
   })
 
   it('没写任何 @ → 不缺（普通参考图照旧）', () => {
@@ -152,7 +153,7 @@ describe('参考缺号 → 不许发送（只看连线内容）', () => {
   it('图片与音频各自判定', () => {
     expect(
       findRefGap([{ kind: 'audio', index: 2 }], [{ id: 'a', name: '图片1', url: 'a.png', isText: false }]),
-    ).toEqual({ kind: 'audio', missing: [1] })
+    ).toEqual({ kind: 'audio', missing: [1, 2] })
   })
 })
 
