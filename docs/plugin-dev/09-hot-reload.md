@@ -1,195 +1,251 @@
-# 插件热重载（开发时改完即生效）
+# 插件调试（热重载）—— 改完源码，画布自己换新
 
-> 面向"正在写插件的人"。目标：**改插件源码 → `pnpm build` → 浏览器里的画布自己更新，不用刷新、不用手点。**
-
-## 一句话
-
-两条腿：
-
-1. **前端一条命令**：`window.MiniCanvasPlugin.reload('插件名')` —— 卸旧 + 拉最新产物 + 装新。
-2. **后端一个开关**：插件管理面板里的 **「热重载」**（或一行 `watch()`）—— 它连上 cloud-server 的
-   **SSE**（`/api/plugin-events`），产物一变就自动替你调第 1 条。
-
-连上之后，日常就是：**改代码 → 构建 → 看画布自己变**。
+> 面向「正在写插件的人」。目标只有一个：**改 `src/` → 保存 → 画布里那个插件自动换成新代码**，
+> 不刷新页面、不丢画布状态、不用手动点重装。
+>
+> 本文写的是**现在的实际链路**（KV 上报制，2026-10 落地）。
+> 老文章里的 SSE 声明文件、`hotReloadManifest`、「设置 → 热重载」面板都**已经下线**，别照抄。
 
 ---
 
-## 一、为什么需要它：改完为什么不会自动生效
+## 0. 全景：这条链上有谁
 
-浏览器里的插件是**已经加载进内存的模块**。你在磁盘上改了源码、甚至重新构建了产物，
-浏览器手上那份还是旧的 —— 它不会知道磁盘变了。这跟"网页打开后，服务器换了图片、
-网页不会自己变"是同一回事。
+```
+你（改 src/）
+   │
+   ▼
+watch 脚本（插件包里的 pnpm watch）
+   · 盯 src/，防抖 200ms
+   · 变了就 pnpm build（构建失败不通知）
+   · 成功后往后台写一条记录（KV）
+   ▼
+cloud-server 后台
+   · 把这条记录存下来
+   · 通过现成的 KV 实时通道（SSE）广播一句「plugin-watch:某插件 变了」
+   ▼
+画布里的「热重载插件」（随应用启动，不用装）
+   · 收到广播 → 读那条记录 → 拿到产物地址
+   · 探测产物确实变了 → 卸旧装新 → 右下角弹通知
+```
 
-所以"生效"总要人推一把。以前推的方式是刷新页面（整页重来、画布状态丢），
-或者手动重装插件（卸旧装新）。热的做法是**只重装那一个插件**，页面与画布状态都留着。
+一句话记住分工：**watch 负责「构建 + 告诉地址」，后台负责「存记录 + 喊一嗓子」，画布负责「换代码」。**
 
 ---
 
-## 二、手动：一条命令重装
+## 1. 你需要准备什么
 
-页面加载后就有一个全局函数（`packages/ui` 在启动时挂的）：
-
-```js
-// 按插件名 / 目录名 / 产物地址 —— 三种写法都认
-await window.MiniCanvasPlugin.reload('style-library')
-await window.MiniCanvasPlugin.reload('plugin-style-library')
-await window.MiniCanvasPlugin.reload('/plugins/plugin-style-library/plugin-style-library.js')
-
-// 装完顺手做一件事（可选）：比如把该插件的面板打开
-await window.MiniCanvasPlugin.reload('style-library', { then: 'style-library:open' })
-```
-
-**它内部做了四步**（这就是"手敲那几行"的封装）：
-
-1. **定位产物地址** —— 按名字去清单（`/plugin-catalog.json`）查；你直接给地址就跳过这步。
-2. **加载最新产物** —— 走 UMD 加载器（和插件管理装插件同一条路），带时间戳破浏览器缓存。
-3. **卸旧 + 装新** —— `reloadPlugin(name, 新模块)`：先卸（旧插件的注册/副作用全自动回收），再装。
-4. **（可选）执行一条命令** —— 你传了 `then` 就执行，比如打开面板。
-
-> 为什么不写 `uninstall` + `install` 两步：只装不卸会撞名报
-> `[core] Duplicate plugin name`；`reloadPlugin` 内部就是"先卸后装"，不会踩这个。
-
-**另外两个侦察函数**：
-
-```js
-await window.MiniCanvasPlugin.list()          // 列出可重装的插件（id / 名字 / 地址 / 现在装没装）
-await window.MiniCanvasPlugin.catalog(true)   // 强制刷新清单（改了插件目录后）
-```
+| 东西 | 怎么来 | 说明 |
+|---|---|---|
+| 后台服务 | `pnpm -C packages/cloud-server serve`（默认 `127.0.0.1:8865`） | 存调试记录、发产物、推通知 |
+| 画布页面 | 后台托管页（`:8865`）或 `pnpm -C packages/ui dev`（`:5288`） | dev 页的 `/api` 会代理到 8865 |
+| 一个插件包 | 见 `docs/plugin-dev/01-first-plugin.md` | 放 `packages/plugins/plugin-xxx/` |
+| watch 脚本 | `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs`，复制进你的包 | 这就是整条链的「本地半」 |
 
 ---
 
-## 三、自动：设置里的「热重载」分类（推荐）
+## 2. 插件包需要满足的三件事
 
-手动重装总要你记得敲。自动版是：**登记几条链接，产物一变就自己重装。**
-入口在 **设置 → 热重载**（左导航的一个分类），页面上四块：新增链接 / 已监听 / 手动重装一次 / 最近发生。
+### 2.1 `package.json`：声明插件的唯一名字
 
-### 3.1 为什么要"手动填链接"
-
-你的**后台地址不一定一样**（本机 8865、别的端口、别的机器），而且插件可以用
-**vite dev server** 单独跑（那条链一次就覆盖该源下的多个插件/组件）。
-所以这里不写死任何地址 —— 你填几条，它就听几条，**每条可以不同源**。
-
-### 3.2 两种来源（填进去自动判，也能手动切）
-
-| 类型 | 填什么 | 干什么 | 适合 |
-|---|---|---|---|
-| **SSE** | `http://127.0.0.1:8865/api/plugin-events` | cloud-server 盯**本机插件产物目录**，变了就推一条 `{id,name}` → 重装那个插件 | 改本仓库插件、走 `pnpm build` |
-| **Vite** | `http://localhost:5311`（dev server 根地址） | 连 vite 的 HMR；有更新就把**该地址上的插件全重装** | 插件单独 `pnpm dev`，一个源多个插件/组件 |
-
-> 填进去时按地址**自动判类型**（带 `/@vite/client` 或就是个裸 `host:port` → Vite；否则 SSE）。
-> 判错了点那一行的图标手动切。
-
-**Vite 那条为什么能"一个源支持多个插件"**：vite 的 HMR 只说"某模块变了"、不说插件名，
-所以做法是**按 dev 地址反查清单** —— 清单里产物地址落在同一个 origin 上的插件，全部重装。
-一个连接覆盖全源。
-
-### 3.3 页面上的东西
-
-- **已监听**：每行一条链接，可**开关**（临时停）、可**切换类型**、可**删除**。列表存在浏览器本地（localStorage），刷新还在。
-- **手动重装一次**：不靠监听，直接重装某个插件（填插件名 / 目录名 / 产物地址都认）。
-- **最近发生**：连接、重装、出错的流水（`connected` / `reload` / `error`），一眼看出"到底听没听、重没重"。
-
-### 3.4 代码里怎么用（同一个单例）
-
-页面用的是宿主挂的**单例** `window.MiniCanvasHotReload`，控制台与别的插件拿到的都是**同一份**
-（不会两处各连一遍、把同一插件重装两次）：
-
-```js
-const hr = window.MiniCanvasHotReload
-hr.addSource({ url: 'http://127.0.0.1:8865/api/plugin-events', label: '本机', type: 'sse', enabled: true })
-hr.addSource({ url: 'http://localhost:5311', label: '文本节点 dev', type: 'vite', enabled: true })
-hr.addSource({ url: 'http://其它机器:8865/api/plugin-events', label: '同事的服务', type: 'sse', enabled: true })
-
-await hr.reload('style-library')   // 手动重装一个
-hr.reconnect()                     // 改完地址后重连全部
-hr.stopAll()                       // 全停
+```jsonc
+{
+  "name": "@mini-canvas/plugin-my-thing",
+  "scripts": {
+    "build": "vite build",
+    "watch": "node scripts/watch.mjs"
+  },
+  "miniCanvas": {
+    "pluginName": "my-thing",
+    "installable": true
+  }
+}
 ```
 
-它内部**不重复实现重装** —— 只调用 `window.MiniCanvasPlugin.reload`（第二节那个），
-所以"怎么卸旧装新 / 怎么查清单 / 怎么纠错"只有一份实现。
+`pluginName` 是**唯一判据**：内核里已有同名插件就不再装第二份（内核按名字索引，重复装直接拒绝）。
+它同时也是调试记录的 key（`plugin-watch:my-thing`）。
 
-## 四、完整流程（从改代码到画布更新）
+### 2.2 打包：自包含 UMD + CSS 打进 JS
+
+照抄 demo 的 `vite.config.ts`（或用共享的 `pluginLibBuild`）：
+
+```ts
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
+
+export default defineConfig({
+  plugins: [vue(), cssInjectedByJs()],
+  build: {
+    lib: {
+      entry: 'src/index.ts',
+      name: 'MiniCanvasPluginMyThing',
+      formats: ['umd'],
+      fileName: () => 'plugin-my-thing.js',
+    },
+    rollupOptions: { external: ['vue'], output: { globals: { vue: 'Vue' } } },
+  },
+})
+```
+
+两个坑提前说：
+
+- **CSS 不打进 JS = 样式全部失效**。宿主只加载 `plugin-my-thing.js` 一个文件，
+  vite 默认拆出来的 `.css` 没人去加载（真机踩过：界面裸奔无样式）。
+- **external 只留 vue（及宿主全局）**。宿主只允许一份 Vue / MiniCanvas\*，
+  多余的打进产物会加载出第二份实例，直接炸。对照表见 `packages/plugins/vite-plugin-lib.ts`。
+
+### 2.3 复制 watch 脚本
+
+把 `plugin-hot-reload-demo/scripts/watch.mjs` 复制到你的包 `scripts/` 下即可，**零配置可用**：
+
+- 插件名：自动读 `package.json` 的 `miniCanvas.pluginName`（退回落包名去作用域）；
+- 前端地址：自动拼 `http://<后台>/plugins/<包目录>/<插件名>.js`（按后台的托管规则）；
+- 后台路径：`dist/server.js` 或 `dist/plugin-server.js` 存在就自动带上。
+
+启动时它会打印一次自己将要上报的地址，**先看这一行再开改**，地址不对就用参数改（见 §4）。
+
+---
+
+## 3. 日常调试流程
 
 ```bash
-# 1. 起服务（画布界面 + 插件清单 + SSE 都在这一个端口上）
-npx mini-canvas-cloud serve            # 或 pnpm -C packages/cloud-server serve
+# 终端 1：后台
+pnpm -C packages/cloud-server serve
 
-# 2. 起插件开发（可选：只改一个插件时，用它的 watch 构建）
-pnpm -C packages/plugins/plugin-style-library build -- --watch   # 产物一变就重新构建
+# 终端 2：你的插件（挂着别关）
+pnpm -C packages/plugins/plugin-my-thing watch
+
+# 浏览器：打开画布，把插件装一次（设置 → 插件 → 本地清单 → 安装）
 ```
 
-浏览器打开画布 → 设置 → 插件 → 打开 **「热重载」**。之后：
+然后：
 
-1. 改 `packages/plugins/plugin-style-library/src/...`
-2. 构建（`pnpm -C packages/plugins/plugin-style-library build`）
-3. → 后台在 2 秒内发现产物变了 → 推 SSE → 浏览器自动 `reload('style-library')`
-4. → 画布上那个插件的界面/行为更新，**页面没刷新、画布状态没丢**
-
----
-
-## 五、后台半（server.js）怎么热重载
-
-上面说的是**前端半**（浏览器加载的 `plugin-*.js`）。
-如果插件还有**后台半**（`dist/server.js`，由 cloud-server 跑），它是另一条路：
-
-- 后台插件**重启 cloud-server 才生效**（`server-plugins` 目录是启动时扫的）；
-- 想不重启就换，用 **插件管理的"重装"** —— 它会调 `/api/server-plugins/install`，
-  cloud-server 有**热装**能力（运行期 import 进内核，路由即时可用）。
-
-热重载 SSE **只管前端半**（产物目录里 `dist/*.js` 任一变都通知）。
-前后端成对的插件，改了后台半请点一次"重装"，或重启服务。
+1. 改 `src/` 里任何文件，保存；
+2. watch 打印 `[watch] built in … → 通知 OK | front=…`；
+3. 1–2 秒内画布右下角弹「热重载完成」，插件界面变成新代码；
+4. 页面没刷新，画布状态没丢；
+5. 构建失败时 watch 会打印错误、**不发通知**（半成品不进画布），改完错误再保存即可。
 
 ---
 
-## 六、想跳过 build？（插件自己的 vite dev server）
+## 4. watch 的三个可调参数
 
-上面整条链的前提是"改完要 build"。如果你想要**改源码直接生效、连 build 都省**，
-那是另一套做法 —— 让插件自己起一个 vite dev server，宿主直接 `import` 它的源码模块：
+| 想改什么 | 怎么给 | 缺省 |
+|---|---|---|
+| 后台地址 | `--backend http://…` 或环境变量 `MINI_CANVAS_BACKEND` | `http://127.0.0.1:8865` |
+| 前端产物地址 | `--front <浏览器能打开的地址>` 或 `MINI_CANVAS_PLUGIN_FRONT` | 按 `<后台>/plugins/<包目录>/<名>.js` 拼 |
+| 后台产物路径 | `--server <后台机器上的绝对路径>` 或 `MINI_CANVAS_PLUGIN_SERVER` | 自动找 `dist/server.js` / `dist/plugin-server.js` |
 
-- 插件侧：`vite.dev.config.ts`（样板见 `packages/plugins/plugin-node-text/vite.dev.config.ts`），
-  `pnpm dev:hmr` 起独立端口（如 5311）；关键是 **vue 单例**
-  （插件 dev 必须 alias 到宿主同一份 vue，否则浏览器里两份 vue、组件挂不上）。
-- 宿主侧：`import('http://localhost:5311/src/index.ts')` 拿模块 → `reloadPlugin`；
-  变更通知用 vite 自带的 HMR（插件 `index.ts` 里 `import.meta.hot.accept`）。
-
-权衡：**省了 build，但每个插件都要单独配 dev server、还得处理 vue 单例与跨端口**。
-本仓库的调研与落地计划见 `docs/plan/plugin-dev-hmr-reload-plan.md`。
-
-**结论（本项目的默认选择）**：统一走"**build + SSE 热重载**"这条 ——
-一个后端盯所有插件、前端零配置、没有双 vue 风险。真要极致热更再单独上 dev server。
+什么时候必须用 `--front`：**你的产物不在后台的插件目录里**（插件放在别的盘、别的项目），
+自动拼的地址浏览器打不开，就手动给一个能打开的。
+`--server` 只对「插件与后台在同一台机器」有意义，跨机器时省略它（走插件管理上传那条路）。
 
 ---
 
-## 七、排查
+## 5. 通知与记录：到底发生了什么
 
-| 现象 | 先查什么 |
+watch 构建成功后写这条 HTTP（整条链唯一的「上报」）：
+
+```
+PUT /api/kv/config/plugin-watch:my-thing
+{ "value": {
+    "t": 1760000000000,
+    "front":  "http://127.0.0.1:8865/plugins/plugin-my-thing/plugin-my-thing.js",
+    "server": "D:\\work\\my-plugin\\dist\\server.js"
+} }
+```
+
+- **地址由上报方给出**（build 的人最清楚产物在哪），画布不猜目录、不查清单。
+- 后台广播的 SSE 事件**只带 key 不带值**，画布收到后自己 GET 一次读地址。
+- 画布拿 `front` 做一次轻量探测（比上次长度变了才重装），防乱序旧通知误触发。
+- 插件卸载时这条记录会被一起删掉，不会在后台越积越多。
+
+---
+
+## 6. 设置 → 调试插件（你的调试面板）
+
+打开设置，左侧有独立的 **「调试插件」** 页（和「插件」页是两个东西，互不依赖）：
+
+- 列出**上报过**的插件，每行显示：名字、内核实际状态（已安装 / 待依赖 / 装载失败 / 未安装）、
+  前端地址、后台路径、上报时间；
+- **重装**：立刻按上报地址卸旧装新（想强制换版本时用）；后台有 `server` 时一并按路径装；
+- **卸载**：内核卸 → 后台卸 → 删上报记录，一步到位；
+- **刷新**：重新拉一次清单与内核状态；
+- 本插件有自己的配置项 `watchBackend`（调试服务地址，留空 = 同源），不借插件管理的配置。
+
+**判「装没装」只有一条**：内核里有没有这个**唯一名字**。谁装的、从哪装的都不影响——
+调试先装过，插件管理页就显示「已安装」；反过来也一样。不会装出两份同名插件。
+
+---
+
+## 7. 后台半（server.js）怎么生效
+
+前端半是自动的，后台半分两种情况：
+
+| 你的插件与后台 | 生效方式 |
 |---|---|
-| 改了没反应 | 是不是忘了 `pnpm build`？（SSE 只盯**产物**，不盯源码） |
-| `reload` 报"宿主还没就绪" | 页面刚加载、画布还没起；等一会再调 |
-| `reload` 报"清单里找不到插件" | 插件没构建（没有 `dist`）→ 清单里就没有它；先构建 |
-| 报 `[core] …` | 你重装的是**核心插件**（`core: true`），它不允许热替换，这是设计 |
-| 后台没推送 | `curl -N http://127.0.0.1:8865/api/plugin-events` 看连不连得上；再确认插件有 `dist` |
-| 重装成"别的插件" | 不该发生（有全局名反查 + 纠错兜底）；真遇到请报，附上 `list()` 输出 |
+| **同一台机器**（本机开发最常见） | watch 上报了 `server` 路径 → 画布重装前端半的同时，
+  调后台的调试安装入口，把磁盘上那份 `server.js` 落盘 + 热装，路由立刻生效，不用重启 |
+| **不同机器** | 不上报 `server`。改了后台半请走「插件管理 → 重装」（上传代码那条路），
+  或重启 cloud-server |
+
+**开启调试安装入口**（默认关闭，只在本机开发时开）：
+
+```powershell
+$env:MINI_CANVAS_DEBUG_PLUGIN_INSTALL = '1'
+pnpm -C packages/cloud-server serve
+```
+
+开了才有 `POST /api/server-plugins/install-from-path`（body: `{ id, path, confirm: true }`，
+带管理令牌）。不开时这条路 **404**，等于不存在。它的边界：只收本机回环请求、
+只读允许目录里的 `.js`、有大小上限；同名后台插件**先卸再装**，卸不掉就 409 中止（不会新旧并存）。
 
 ---
 
-## 八、相关代码在哪
+## 8. 想手动来一下（控制台命令）
+
+> `window.MiniCanvasUI` 是**画布宿主**挂上去的（`App.vue` 里 `window-key="MiniCanvasUI"`，
+> 画布就绪后才有）；`window.MiniCanvasPlugin` 是 `packages/ui/src/pluginReload.ts` 挂的**重装器**，
+> 两者不是同一个对象，别混。
+
+```js
+// 卸旧 + 按地址装新（地址来自调试页那一行，或你手填）
+await window.MiniCanvasPlugin.reload('/plugins/plugin-my-thing/plugin-my-thing.js')
+
+// 调试页那一套，控制台也能调（window.MiniCanvasHotReload 是同一个单例）
+const hr = window.MiniCanvasHotReload
+const rows = await hr.listDebugPlugins()          // 上报了哪些、装没装
+await hr.reinstallDebugPlugin('my-thing')         // 重装（前端 + 后台半）
+await hr.uninstallDebugPlugin('my-thing')         // 卸载（前端 + 后台半 + 删记录）
+hr.state.logs                                     // 最近发生了什么
+```
+
+---
+
+## 9. 排查表
+
+| 现象 | 原因 → 处理 |
+|---|---|
+| 改了完全没反应 | ① watch 没跑起来（看终端）；② 后台没起；③ 画布页没连上后台（dev 页看 `/api` 代理） |
+| watch 报 `build failed` | 构建错误，**不会通知**——按终端里的报错改代码，保存即重试 |
+| 通知来了但界面没变 | 浏览器缓存了旧产物：调试页点「重装」（带时间戳破缓存） |
+| 通知说「找不到地址」 | 上报值里没 `front`、清单里也没有 → 确认产物已构建、`--front` 给对地址 |
+| 后台半一直不生效 | ① 后台没开 `MINI_CANVAS_DEBUG_PLUGIN_INSTALL=1`；② 插件与后台不同机（改走插件管理上传）；③ 管理令牌没填（设置 → 插件页顶部那格） |
+| 报 `[core] …` | 你重装/卸载的是核心插件（`core: true`），按设计不允许热替换 |
+| 界面样式全丢 | vite 把 CSS 拆出去了 → 加 `cssInjectedByJs()`，见 §2.2 |
+| 加载后什么都没装上 | external 漏配/配错（Vue 或 MiniCanvas\* 被打了第二份）→ 对照 §2.2 与 `vite-plugin-lib.ts` |
+
+---
+
+## 10. 相关代码
 
 | 干什么 | 文件 |
 |---|---|
-| 前端重装 + watch（`window.MiniCanvasPlugin`） | `packages/ui/src/pluginReload.ts` |
-| 启动时挂 `window.MiniCanvasPlugin` | `packages/ui/src/main.ts` |
-| **热重载数据层**（链接列表 / SSE / Vite / 日志） | `packages/plugins/plugin-hot-reload/src/data/hotReload.ts` |
-| **热重载界面**（分类正文 / 导航项 / 容器） | `packages/plugins/plugin-hot-reload/src/components/` |
-| 设置分类注册（本应用侧） | `packages/ui/src/hotReloadPlugin.ts` |
-| 后台 SSE + 目录监视 | `packages/cloud-server/src/plugins/pluginWatch.ts` |
-| 注册进内置插件 | `packages/cloud-server/src/plugins/builtin/routes.ts` |
-| 单测 | `plugin-hot-reload/src/data/hotReload.test.ts`、`packages/ui/src/__tests__/pluginReload.test.ts`、`packages/cloud-server/src/__tests__/pluginWatch.test.ts` |
-| e2e（真起服务连 SSE） | `packages/cloud-server/e2e/plugin-watch-e2e.ts` |
-
-教程里与运行期装卸相关的另见：`docs/plugin-dev/06-composition-hmr.md`（manager / manifest / PENDING 诊断）。
-
-
-
-
-
+| watch 脚本（复制它） | `packages/plugins/plugin-hot-reload-demo/scripts/watch.mjs` |
+| 试验台插件（可当样板） | `packages/plugins/plugin-hot-reload-demo/` |
+| 热重载数据层（收通知 / 判重 / 清单 / 装卸） | `packages/plugins/plugin-hot-reload/src/data/hotReload.ts` |
+| 调试页 UI | `packages/plugins/plugin-hot-reload/src/components/settings/` |
+| 宿主重装器（`window.MiniCanvasPlugin`） | `packages/ui/src/pluginReload.ts` |
+| 后台 KV 上报接口 | `packages/cloud-server/src/routes/kv.ts` |
+| 后台按路径安装（调试） | `packages/cloud-server/src/routes/serverPlugins.ts`（`install-from-path`） |
+| 单测 | `plugin-hot-reload/src/data/hotReload.test.ts`、`src/__tests__/settingsWiring.test.ts` |
