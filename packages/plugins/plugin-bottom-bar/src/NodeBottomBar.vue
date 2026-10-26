@@ -994,15 +994,9 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
   ev.preventDefault()
   ev.stopPropagation()
   // 原生 HTML5 拖拽会接管指针（img 默认可拖），pointermove 从此不再派发 → 影子不动。
-  // 在同一次手势里拦掉 dragstart，才能让我们的影子跟住鼠标。
-  const blockNativeDrag = (e: Event) => { e.preventDefault() }
-  window.addEventListener('dragstart', blockNativeDrag, { capture: true, once: true })
-  // img 默认 draggable —— 直接把本次手势源头关掉，双保险（部分 Chrome 版本里
-  // dragstart preventDefault 之前影子会先僵住）。
-  if (ev.target instanceof HTMLElement) {
-    const img = ev.target.closest('img')
-    if (img) { img.setAttribute('draggable', 'false'); ;(ev.target as HTMLElement).setAttribute?.('draggable', 'false') }
-  }
+  // 允许原生 drag 启动（Chrome 对 img 的拖拽不受 pointerdown preventDefault 影响，
+  // 强行取消会让拖拽手势整个死掉）—— 影子改由 dragover 事件驱动（真机踩过：
+  // 只依赖 pointermove 时真实手势里影子不动）。dragover/drop 在会话监听里处理。
   // 影子 = 缩略图 + 名字（用户口径 2026-10-26：「可以做成图片的缩略图跟随鼠标」）
   const ghost = document.createElement('div')
   ghost.className = 'nb-drag-ghost'
@@ -1013,6 +1007,7 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
     ghost.appendChild(img)
   }
   const label = document.createElement('span')
+  label.className = 'nb-drag-ghost-name'
   label.textContent = media.name
   ghost.appendChild(label)
   document.body.appendChild(ghost)
@@ -1037,6 +1032,28 @@ function onCtrlDragPointerMove(ev: PointerEvent): void {
   }
 }
 
+/** 原生 drag 期间的坐标来源：即使 pointermove 被拖拽接管，dragover 仍持续派发。
+ *  双通道驱动影子 —— 哪个事件活着用哪个（真机踩过：真实手势里影子不动）。 */
+function onCtrlDragOver(ev: DragEvent): void {
+  if (!ctrlDrag) return
+  ev.preventDefault() // 允许 drop（参考格接收拖放）
+  moveGhost(ev.clientX, ev.clientY)
+  onCtrlDragPointerMove(ev as unknown as PointerEvent)
+}
+
+/** 原生 drop：落点在参考格 → 走替换（与 pointerup 同一条语义） */
+function onCtrlDragDrop(ev: DragEvent): void {
+  if (!ctrlDrag) return
+  ev.preventDefault()
+  onCtrlDragPointerUp(ev)
+}
+
+/** 原生 dragend（无论 drop 成败）：清理影子与高亮 —— pointerup 在 drag 会话里不会来 */
+function onCtrlDragEnd(): void {
+  if (!ctrlDrag) return
+  onCtrlDragPointerUp(new DragEvent('pointerup'))
+}
+
 /** pointerup：落在参考格 → 替换该格资源；落在画布上 → 什么都不做（节点留在原处） */
 function onCtrlDragPointerUp(ev: PointerEvent): void {
   const drag = ctrlDrag
@@ -1058,11 +1075,17 @@ onMounted(() => {
   window.addEventListener('pointerdown', onCtrlDragPointerDown, true)
   window.addEventListener('pointermove', onCtrlDragPointerMove, true)
   window.addEventListener('pointerup', onCtrlDragPointerUp, true)
+  window.addEventListener('dragover', onCtrlDragOver, true)
+  window.addEventListener('drop', onCtrlDragDrop, true)
+  window.addEventListener('dragend', onCtrlDragEnd, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', onCtrlDragPointerDown, true)
   window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
   window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
+  window.removeEventListener('dragover', onCtrlDragOver, true)
+  window.removeEventListener('drop', onCtrlDragDrop, true)
+  window.removeEventListener('dragend', onCtrlDragEnd, true)
 })
 
 /**
@@ -1717,11 +1740,14 @@ function onGlobalLeave(el: Element): void {
   border-width: 2px;
 }
 .nb-drag-ghost img {
-  width: 34px;
-  height: 34px;
+  width: 72px;
+  height: 72px;
   border-radius: 5px;
   object-fit: cover;
   flex: none;
+}
+.nb-drag-ghost .nb-drag-ghost-name {
+  max-width: 96px;
 }
 /* Ctrl 拖资源悬停到的目标格：描边高亮（待输入/已填通用） */
 .nb-card.is-target {
@@ -1986,15 +2012,11 @@ function onGlobalLeave(el: Element): void {
   font-weight: 600;
   color: var(--ui-ink, #18202b);
 }
-/* 选中态：反色黑底白字（用户选定方案 C，demo docs/demo/chip-select-demo.html） */
+/* 选中态：与文本选区同色（用户口径：和文本选中背景一致，不用黑色） */
 .nb-editor :deep(.resource-chip.ProseMirror-selectednode),
 .nb-editor :deep(.resource-chip.resource-node-selected) {
-  border-color: var(--ui-ink, #18202b);
-  background: var(--ui-ink, #18202b);
-}
-.nb-editor :deep(.resource-chip.ProseMirror-selectednode .resource-chip-name),
-.nb-editor :deep(.resource-chip.resource-node-selected .resource-chip-name) {
-  color: var(--ui-paper, #ffffff);
+  border-color: transparent;
+  background: rgb(178 205 245); /* 浏览器默认选区蓝 */
 }
 .nb-placeholder {
   position: absolute;
