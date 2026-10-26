@@ -23,7 +23,13 @@ import {
 } from './referenceMode'
 import { nodeMediaOf } from './refSlotDrag'
 import { requestStartDrag } from './ctrlDragMode'
-import { hideTip, showTip } from './tipBus'
+/**
+ * 提示走**默认主题提供的全局服务** ctx.get('tip')（与节点同级的基础设施，用户口径 2026-10-26）。
+ * 本插件不再自绘气泡 —— 位置/观感由主题统一（鼠标右下角、无间隔）。
+ */
+function tipService(): { show(m: string): void; hide(): void } | undefined {
+  return ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')
+}
 
 const props = defineProps<{
   id: string
@@ -123,10 +129,10 @@ const hintText = computed(() => {
 
 /** 悬停：显示通用鼠标提示（用户口径：底部文字标签不要，改成跟随鼠标的提示） */
 function onEnter(): void {
-  if (hintText.value) showTip(hintText.value)
+  if (hintText.value) tipService()?.show(hintText.value)
 }
 function onLeave(): void {
-  hideTip()
+  tipService()?.hide()
 }
 
 /** 点击行为（仅 reference 模式）：连上/取消；ctrl-drag 模式点击不动作（操作是拖拽） */

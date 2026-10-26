@@ -41,6 +41,8 @@ import {
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
+import MouseTipLayer from "./components/ui/MouseTipLayer.vue";
+import { tipService } from "./ui/tipService";
 import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
@@ -689,6 +691,16 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // P4：config 已经内核经 Config schema 校验 + 补默认；这里无需再手写 settings.define（声明即 Config 导出）。
   // 如需在插件内"就地订阅自己 config 的变化并窄更新"，可 ctx.settings.onChange(name, ...)（demo 侧已演示该链路）。
   void config;
+
+  // 全局鼠标跟随提示（基础设施服务）：其它插件 ctx.get('tip').show('...') 直接调用。
+  // 与节点同级别的默认主题能力 —— 不在各插件自绘气泡（用户口径 2026-10-26）。
+  ctx.provide('tip', tipService)
+  ctx.slots.register('overlay', {
+    id: 'theme-default/mouse-tip',
+    order: 90,
+    component: MouseTipLayer,
+    meta: { title: '鼠标提示' },
+  })
 
   // 渲染皮：nodeShell/edge/background/edgeDefaultType
   ctx.theme.register("nodeShell", BaseNode); // 完整节点壳（收编自 core）

@@ -28,7 +28,6 @@ import MediaPreviewOverlay from './MediaPreviewOverlay.vue'
 // Ctrl 拖选择态浮层（按住 Ctrl 时的画布选择态，视觉复刻参考选择）
 import CtrlDragOverlay from './CtrlDragOverlay.vue'
 import NodeSelectOverlay from './NodeSelectOverlay.vue'
-import TipLayer from './TipLayer.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
@@ -286,13 +285,6 @@ export function apply(ctx: Context) {
   // Ctrl 拖选择态的**节点覆盖层**：按住拖拽替换（同一套面孔，操作是拖拽）。
   ctx.nodes.attach('*', { region: 'over:inset', component: NodeSelectOverlay, props: { mode: 'ctrl-drag' }, id: 'bottom-bar/ctrl-drag-node' })
 
-  // 通用鼠标跟随提示（全站一个）：任何地方 tipBus.showTip('...') 即可显示
-  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
-    id: 'bottom-bar/tip-layer',
-    order: 60,
-    component: TipLayer,
-    meta: { title: '鼠标提示' },
-  })
 
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；
   // ready 之前必须排除自己的安装事件（否则在节点插件注册动作前就把可续查任务误判成中断），
