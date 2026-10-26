@@ -5,6 +5,28 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-26，视口外节点改「状态下发 + 壳自选绘制」，连线不再随剔除消失）
+
+用户口径：画布内节点的连线，另一端节点被可见剔除（hidden）后整条线不画了 —— VueFlow
+EdgeWrapper 源码对任一端 hidden 的边 render null（vue-flow-core.mjs:8892），这是 hidden 路线
+的先天缺陷。用户同时要求把"节点画到什么程度"做成节点状态，BaseNode 按状态自由选择绘制。
+
+**落地（hidden 路线退役，docs/plan/2026-10-26-node-visibility-states.md）**：
+
+1. 宿主不再给节点写 hidden:true（恒显式 false，清合并语义残留）；节点一律常驻渲染。
+2. 宿主灌渲染态时给每个节点注入 `data._cullState`：visible（视口+300px 缓冲带内）/
+   culled（视口外且无连线）/ culled-linked（视口外但有连线相连 —— 两端常驻成骨架，
+   连线端点锚在真实端口几何上，画布内节点的连线保持完整显示）；transient 永不下发（恒全量）。
+3. theme-default BaseNode 按 _cullState 自选绘制深度，新增设置项 `culledNodeRendering`：
+   skeleton（缺省，卡片隐身、标题/端口锚点保留、内容段/控制栏/区域条不挂载 —— 性能回收在
+   内容不渲染）/ full（全量，等同关闭降级）/ ghost（可见空心占位框）。
+4. linkedIds 顶点邻接表随 edgeStore 变化重建（syncFromStore），平移缩放只读不重建；
+   跨内外边两端都算 linked。
+
+**验证**：canvas-render 483 全绿（hidden 断言全部改写为 _cullState，新增跨内外边判定用例）、
+theme-default 313 全绿、ui 413 全绿；canvas-render / theme-default typecheck 干净
+（ui typecheck 当前红在 plugin-bottom-bar 的另一任务 WIP，与本改动无关）。
+
 ### 追记（2026-10-26，修「@ 下拉 + 回车」既选中又发送：判定必须走捕获阶段）
 
 用户口径（2026-10-25 选了「回车」提交后报）：「下拉选择和发送这两个事件重合了，
