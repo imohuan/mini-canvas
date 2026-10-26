@@ -56,8 +56,6 @@ import { initialPromptText, promptPersistFields } from './promptPersist'
 import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleReference as toggleReferenceMode } from './referenceMode'
 // 全屏预览（用户要求：素材卡点开要全屏看，不是缩在底栏里）
 import { openPreview } from './mediaPreview'
-// 右侧图标按钮里"改提示词"的小动作（翻译提示词）
-import { hasTranslateInstruction, toggleTranslateInstruction } from './promptActions'
 // AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
 import { loadAiActions, requestAiText, renderTemplate, DEFAULT_AI_ICON, type AiActionConfig } from './aiActions'
 // 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
@@ -684,10 +682,6 @@ const ICON_TAG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/></svg>'
 const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'
-const ICON_TRANSLATE =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7"/><path d="M7 3v2c0 4-2 7-5 8"/><path d="M5 9c1 3 3 5 6 6"/><path d="M14 20l4-9 4 9"/><path d="M15.5 17h5"/></svg>'
-const ICON_SPARKLE =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M18 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/></svg>'
 
 /**
  * 是否把整个底栏**展开成大弹窗**（用户要求：点右上角「展开」→ 变成 dialog 形式展示同一套 UI）。
@@ -705,16 +699,6 @@ function onExpandKeydown(e: KeyboardEvent): void {
 }
 onMounted(() => window.addEventListener('keydown', onExpandKeydown, true))
 onBeforeUnmount(() => window.removeEventListener('keydown', onExpandKeydown, true))
-/** 翻译提示词：有没有加过那句"翻成英文"的指令（按钮高亮态） */
-const translated = computed(() => hasTranslateInstruction(prompt.value))
-function toggleTranslate(): void {
-  // 程序化改文本时必须**清掉 promptDoc**：编辑器在 [modelValue, promptDoc] 变化时，
-  // 只要 promptDoc 还在就优先用它的旧 JSON 还原 —— 那会把这次追加的指令直接顶回去
-  // （实测：用户先打过字、promptDoc 已生成，再点「翻译」文字纹丝不动）。
-  // 清掉之后编辑器走「纯文本恢复」路径，按新的 modelValue 重建正文。
-  promptDoc.value = undefined
-  onPromptUpdate(toggleTranslateInstruction(prompt.value))
-}
 /**
  * 全局设置区是否展开。
  *
