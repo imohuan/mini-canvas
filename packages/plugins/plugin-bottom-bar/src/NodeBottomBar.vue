@@ -992,6 +992,9 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
   const doc = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')
   const media = nodeMediaOf(doc?.getNode(nodeId))
   if (!media) return
+  // 已连到当前节点的资源**禁止拖拽**（用户口径：连线不支持重复连接 —— 它已经在某个
+  // 格子里了，再拖到另一格会产生重复连线/抢格冲突）。只放行"还没连进来的"资源。
+  if (renderEdges.value.some((e) => e.source === nodeId && e.target === props.id)) return
   ev.preventDefault()
   ev.stopPropagation()
   // 原生 HTML5 拖拽会接管指针（img 默认可拖），pointermove 从此不再派发 → 影子不动。
@@ -1059,6 +1062,7 @@ function onCtrlDragOver(ev: DragEvent): void {
 
 /** 原生 drop：落点在参考格 → 走替换（与 pointerup 同一条语义） */
 function onCtrlDragDrop(ev: DragEvent): void {
+  ;(window as any).__dropDbg = { hasSession: !!ctrlDrag, target: (ev.target as HTMLElement)?.closest?.('.nb-card')?.getAttribute('data-tile-key') ?? null }
   if (!ctrlDrag) return
   ev.preventDefault()
   onCtrlDragPointerUp(ev)
@@ -1081,9 +1085,28 @@ function onCtrlDragPointerUp(ev: PointerEvent): void {
   const dropHost = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
   if (dropHost?.dataset.tileKey) drag.targetTileKey = dropHost.dataset.tileKey
   const tile = refTiles.value.find((t) => t.key === drag.targetTileKey)
-  if (!tile?.slotKey) return
-  const kind = tile.slotKey.split(':')[0] as RefSlotKind
-  const index = Number(tile.slotKey.split(':')[1])
+  ;(window as any).__upDbg2 = { key: drag.targetTileKey, tileFound: !!tile, slotKey: tile?.slotKey, tileName: tile?.name, allKeys: refTiles.value.map((t) => t.key) }
+  if (!tile) return
+  let kind: RefSlotKind
+  let index: number
+  if (tile.slotKey) {
+    // 待输入格：slotKey = image:2
+    const [k, i] = tile.slotKey.split(':')
+    kind = k as RefSlotKind
+    index = Number(i)
+  } else {
+    // **已填格**：slotKey 为空 —— 格子的序号从它当前素材的 refName 取
+    //（真机踩过：card 格 slotKey 为空导致替换被提前 return，拖新图替换已填格完全无效）
+    // 注意 tile.name 是**节点显示名**（如「图片 14」，带空格）不是 refName —— 解析必失败。
+    // refName 要从 shownMaterials 按节点 id 查（图片3 这种带序号的引用名）。
+    const matRefName = shownMaterials.value.find((m) => m.id === tile.key.replace(/^card:/, ''))?.refName
+    if (!matRefName) return
+    const parsed = refNameToSlotKey(matRefName, 'image') ?? refNameToSlotKey(matRefName, 'video') ?? refNameToSlotKey(matRefName, 'audio')
+    if (!parsed) return
+    const [k, i] = parsed.split(':')
+    kind = k as RefSlotKind
+    index = Number(i)
+  }
   void replaceSlotMaterial(kind, index, { nodeId: drag.nodeId, mediaType: drag.mediaType, url: drag.url, name: drag.name })
 }
 
@@ -1120,21 +1143,30 @@ async function replaceSlotMaterial(
   index: number,
   source: { nodeId: string; mediaType: 'image' | 'video' | 'audio'; url: string; name: string },
 ): Promise<void> {
+  ;(window as any).__replDbg = { step: 'enter', kind, index, src: source.nodeId }
   const doc = ctx.tryGet<{
     getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined
     addEdge(input: { source: string; target: string }): string
     removeEdges(ids: string[]): number
+    getEdges?(): Array<{ id: string; source: string; target: string }>
   }>('doc')
   if (!doc) return
   // 该格原本的连线 = 连到本节点、且素材 refName 正好对应这个槽位的那条
   const material = shownMaterials.value.find((m) => refNameToSlotKey(m.refName, kind) === refSlotKey(kind, index))
   const oldEdge = material ? renderEdges.value.find((e) => e.source === material.id && e.target === props.id) : undefined
+  // 兜底：renderEdges 回灌慢时用数据层再查一次（同 source+target 的线只有一条）
+  const oldEdgeFallback = material ? doc.getEdges?.().find?.((e) => e.source === material.id && e.target === props.id) : undefined
   try {
-    if (oldEdge) doc.removeEdges([oldEdge.id])
+    const stale = [oldEdge?.id, oldEdgeFallback?.id].filter((x): x is string => !!x)
+    if (stale.length) doc.removeEdges(stale)
     doc.addEdge({ source: source.nodeId, target: props.id })
     // 顺序对齐：替换不改变该格的序号（仍排在原来的位置）
+    // 同时把**被替换的旧素材**从 refOrder 里清掉（否则它的连线断了但 refOrder 还留着，
+    // 下一轮 numberRefNames 会把它编进序号，卡片/正文标签全错位——真机踩过）
     const order = placeRefAtSlot(refOrder.value, kind, index, source.nodeId)
-    doc.updateNode(props.id, { data: { refOrder: order } })
+    const oldId = material?.id
+    const cleaned = oldId && oldId !== source.nodeId ? order.filter((id) => id !== oldId) : order
+    doc.updateNode(props.id, { data: { refOrder: cleaned } })
     slotErrors.value = {}
     // 等一拍：shownMaterials 是「按边收集」的 computed，连线刚写入 doc 但渲染层
     // 还没回灌 —— 不等的话这里读到的是**旧素材**（没有刚连线的那格）→ 刷不上去
@@ -1998,7 +2030,7 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip.ProseMirror-selectednode),
 .nb-editor :deep(.resource-chip.resource-node-selected) {
   border-color: transparent;
-  background: rgb(178 205 245); /* 浏览器默认选区蓝 */
+  background: var(--ui-selection-bg, rgb(178 205 245)); /* 浏览器默认选区蓝 */
 }
 .nb-placeholder {
   position: absolute;
@@ -2286,7 +2318,7 @@ function onGlobalLeave(el: Element): void {
   height: auto;
   flex: none;
   display: block;
-  background: #000;
+  background: var(--ui-video-stage, #000);
 }
 .nb-drag-ghost .nb-drag-ghost-icon {
   width: 88px;

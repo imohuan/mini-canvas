@@ -125,7 +125,7 @@
   /* 用户口径（2026-10-26）：标签选中用默认黑白主题，不跟主题色 */
   /* 选中态保持 chip 原样可见（黑底会把缩略图整个盖成黑块，实测踩过），只用描边表达 */
   /* 与文本选区同色（浏览器默认选区蓝）—— 用户口径：和文本选中背景一致 */
-  background-color: rgb(178 205 245) !important;
+  background-color: var(--ui-selection-bg, rgb(178 205 245)) !important;
   color: inherit !important;
   /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
@@ -138,7 +138,7 @@
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: rgb(178 205 245) !important;
+  background-color: var(--ui-selection-bg, rgb(178 205 245)) !important;
   color: inherit !important;
   height: 24px;
   align-items: center;
