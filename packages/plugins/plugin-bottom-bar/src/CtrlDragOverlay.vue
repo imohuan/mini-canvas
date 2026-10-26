@@ -50,10 +50,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .cd-root { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+/* 主题色白名单: 紫底操作条上的白字与阴影，白与紫成对 */
 .cd-top { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 14px; background: var(--ui-accent); color: #ffffff; box-shadow: var(--ui-shadow-lg, 0 12px 32px rgb(15 23 42 / 0.28)); pointer-events: auto; }
 .cd-top-text { font-size: 13px; font-weight: 600; white-space: nowrap; }
+/* 主题色白名单: 紫底上的白色半透明按钮，白与紫成对 */
 .cd-top-close { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 10px; background: rgb(255 255 255 / 0.16); color: #ffffff; cursor: pointer; }
-.cd-top-close:hover { background: rgb(255 255 255 / 0.28); }
+.cd-top-close:hover { /* 主题色白名单: 同上 */ background: rgb(255 255 255 / 0.28); }
 .cd-top-close svg { width: 15px; height: 15px; }
 .cd-esc { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 8px; background: var(--ui-tip); color: var(--ui-tip-ink); font-size: 12px; }
 .cd-esc-key { font-weight: 700; }

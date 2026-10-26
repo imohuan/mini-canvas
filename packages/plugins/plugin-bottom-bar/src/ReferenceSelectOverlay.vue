@@ -254,8 +254,6 @@ onMounted(() => {
   window.addEventListener('keydown', onKeydown, true)
   window.addEventListener('pointermove', onPointerMove, { passive: true })
   rafId = requestAnimationFrame(function loop() {
-    refresh()
-    // 宿主掉出选中集就收选择态（逐帧比对，代价只是一次 Set.size/has）
     guardOwnerSelected()
     rafId = requestAnimationFrame(loop)
   })
@@ -300,34 +298,7 @@ const ICON_CLOSE =
         </button>
       </div>
 
-      <!-- 每个节点一张盖层：可点的出提示，灰掉的压一层灰罩 -->
-      <div
-        v-for="layer in layers"
-        :key="layer.id"
-        class="rs-layer"
-        :class="['is-' + layer.state, { 'is-hover': hoverId === layer.id }]"
-        :style="{
-          left: layer.rect.x + 'px',
-          top: layer.rect.y + 'px',
-          width: layer.rect.w + 'px',
-          height: layer.rect.h + 'px',
-        }"
-        :data-testid="'reference-layer-' + layer.id"
-        :data-state="layer.state"
-        @pointerenter="hoverId = layer.id"
-        @pointerleave="hoverId = null"
-        @click.stop="onPick(layer)"
-      >
-        <!-- 序号角标（照参考站：可选的节点上有个小圆号） -->
-        <span v-if="layer.state === 'selectable' || layer.state === 'connected'" class="rs-badge" aria-hidden="true">
-          {{ layer.state === 'connected' ? '✓' : '+' }}
-        </span>
-      </div>
-
-      <!--
-        悬停提示：**跟随鼠标**（用户要求：提示跟着鼠标走、保持偏移），
-        而不是钉在节点上。它不属于任何一张盖层，只跟着当前悬停的那个节点显示。
-      -->
+      <!-- 节点高亮/点击已移到 NodeReferenceSelectOverlay（overlay 槽组件，长在节点里跟随变换） -->
       <span
         v-if="hovered && hovered.hint"
         class="rs-hint"

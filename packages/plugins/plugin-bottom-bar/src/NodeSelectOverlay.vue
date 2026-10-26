@@ -1,0 +1,136 @@
+<script setup lang="ts">
+/**
+ * NodeSelectOverlay —— **通用的节点选择态覆盖层**（over:inset 挂载，长在节点里跟随变换）。
+ *
+ * 用户口径（2026-10-26）：Ctrl 拖选择态与参考选择态的覆盖层效果完全一样，
+ * 抽象成一个通用组件 —— 两种模式只是"操作方式"不同（拖拽 vs 点击），
+ * 面孔/角标/提醒/灰罩共用同一套。
+ *
+ * - mode='reference'：**点击**节点连上/取消；已连接悬停提醒"取消选择 图片N"。
+ * - mode='ctrl-drag'：从节点**按住拖拽**到参考格替换；已连接提醒"已连接 · 不可重复拖拽"。
+ *
+ * 状态读 globalThis（两个会话都同步写）：跨模块实例（热重载 UMD 拷贝 vs bundle 拷贝）
+ * 的模块 ref 不共享，靠 enter/exit 广播的事件 + tick 计数驱动重算。
+ */
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useCanvasRender } from '@mini-canvas/canvas-render'
+import {
+  referenceNodeState,
+  referenceHintText,
+  canReference,
+  type NodeTypeLike,
+  type ReferenceNodeState,
+} from './referenceMode'
+import { nodeMediaOf } from './refSlotDrag'
+
+const props = defineProps<{
+  id: string
+  data: Record<string, unknown>
+  /** 选择态种类：reference=点击连/断；ctrl-drag=按住拖拽替换 */
+  mode: 'reference' | 'ctrl-drag'
+}>()
+
+const { ctx } = useCanvasRender()
+
+/** 会话开关的全局事件驱动重算（globalThis 不是响应源，无 tick 触发 computed 永不重算） */
+const tick = ref(0)
+const FLAG = (m: 'reference' | 'ctrl-drag') =>
+  m === 'reference' ? '__miniCanvasRefSel' : '__miniCanvasCtrlDrag'
+const EVENT = (m: 'reference' | 'ctrl-drag') =>
+  m === 'reference' ? 'mini-canvas:reference-mode' : 'mini-canvas:ctrl-drag-mode'
+
+function readSession(): { active: boolean; owner: string } {
+  const key = FLAG(props.mode) as 'reference' | 'ctrl-drag'
+  const s = (globalThis as Record<string, { active: boolean; owner: string } | undefined>)[key]
+  return s?.active ? { active: true, owner: s.owner } : { active: false, owner: '' }
+}
+function onModeChange(): void {
+  tick.value += 1
+}
+onMounted(() => window.addEventListener(EVENT(props.mode), onModeChange))
+onBeforeUnmount(() => window.removeEventListener(EVENT(props.mode), onModeChange))
+
+type DocLike = {
+  getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined
+  getEdges(): Array<{ id: string; source: string; target: string }>
+  types: { get(type: string): NodeTypeLike | undefined }
+  connectEdge(input: { source: string; target: string }): unknown
+  removeEdges(ids: string[]): number
+}
+
+const state = computed<null | ReferenceNodeState>(() => {
+  void tick.value
+  const session = readSession()
+  if (!session.active) return null
+  const d = ctx.tryGet<DocLike>('doc')
+  if (!d) return null
+  const node = d.getNode(props.id)
+  if (!node) return null
+  const ownerNode = d.getNode(session.owner)
+  const ownerType = d.types.get(ownerNode?.type ?? '') as NodeTypeLike | undefined
+  const nodeType = d.types.get(node.type ?? '') as NodeTypeLike | undefined
+  // ctrl-drag 模式只认媒体节点（音频/视频/图片）；reference 沿用 canReference 判定
+  const canUse = props.mode === 'ctrl-drag' ? !!nodeMediaOf(node) : canReference(nodeType, ownerType)
+  const connected = d.getEdges().some((e) => e.source === props.id && e.target === session.owner)
+  return referenceNodeState({ isOwner: props.id === session.owner, canReference: canUse, connected })
+})
+
+const hint = computed(() => {
+  if (!state.value || state.value === 'owner' || state.value === 'blocked') return ''
+  if (props.mode === 'ctrl-drag') {
+    if (state.value === 'connected') return '已连接 · 不可重复拖拽'
+    return '按住拖到参考格'
+  }
+  const label = (props.data?.label as string) || props.id
+  return referenceHintText(state.value, label)
+})
+
+/** 点击行为（仅 reference 模式）：连上/取消；ctrl-drag 模式点击不动作（操作是拖拽） */
+function onPick(): void {
+  if (props.mode !== 'reference') return
+  const session = readSession()
+  if (!session.active) return
+  if (!state.value || state.value === 'owner' || state.value === 'blocked') return
+  const d = ctx.tryGet<DocLike>('doc')
+  if (!d) return
+  if (state.value === 'selectable') {
+    d.connectEdge({ source: props.id, target: session.owner })
+    return
+  }
+  const ids = d
+    .getEdges()
+    .filter((e) => e.source === props.id && e.target === session.owner)
+    .map((e) => e.id)
+  if (ids.length > 0) d.removeEdges(ids)
+}
+</script>
+
+<template>
+  <div
+    v-if="state"
+    class="nso-layer"
+    :class="['is-' + state, 'is-' + mode]"
+    data-testid="node-select-layer"
+    @click.stop="onPick()"
+  >
+    <span v-if="state === 'selectable' || state === 'connected'" class="nso-badge">
+      {{ state === 'connected' ? '✓' : '+' }}
+    </span>
+    <span v-if="hint" class="nso-hint" :class="{ 'is-connected': state === 'connected' }">{{ hint }}</span>
+  </div>
+</template>
+
+<style scoped>
+/* 通用面孔（两种模式一致）：紫描边/淡紫底/角标/灰罩，走 --ui-* token */
+.nso-layer { position: absolute; inset: 0; border-radius: inherit; }
+.nso-layer.is-reference { cursor: pointer; }
+.nso-layer.is-ctrl-drag { pointer-events: none; }
+.nso-layer.is-selectable { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ui-accent) 55%, transparent); }
+.nso-layer.is-reference.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 14%, transparent); box-shadow: inset 0 0 0 2px var(--ui-accent); }
+.nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); box-shadow: inset 0 0 0 1.5px var(--ui-accent); }
+.nso-layer.is-owner { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ui-accent) 40%, transparent); pointer-events: none; }
+.nso-layer.is-blocked { background: color-mix(in srgb, var(--ui-scrim) 42%, transparent); pointer-events: none; }
+.nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
+.nso-hint { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: var(--ui-tip); color: var(--ui-tip-ink); font-size: 12px; font-weight: 600; white-space: nowrap; z-index: 71; }
+.nso-hint.is-connected { background: var(--ui-accent); color: var(--ui-primary-ink, #fff); }
+</style>

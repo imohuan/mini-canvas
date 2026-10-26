@@ -130,11 +130,16 @@ export function enterReference(ownerId: string): void {
   if (!ownerId) return
   owner.value = ownerId
   epoch.value += 1
+  // 广播给节点内覆盖层（跨模块实例 —— 热重载 UMD 拷贝与 bundle 拷贝的模块 ref 不共享）
+  ;(globalThis as { __miniCanvasRefSel?: { active: boolean; owner: string } }).__miniCanvasRefSel = { active: true, owner: ownerId }
+  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:reference-mode'))
 }
 
 /** 退出选择态（再点一次「参考」、点「返回节点」、Esc、点 ✕ 都调它；幂等） */
 export function exitReference(): void {
   owner.value = null
+  ;(globalThis as { __miniCanvasRefSel?: { active: boolean; owner: string } }).__miniCanvasRefSel = { active: false, owner: '' }
+  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:reference-mode'))
 }
 
 /** 切换：正在为 ownerId 选参考 → 退出；否则进入（「参考」按钮的两态） */
