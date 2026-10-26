@@ -129,6 +129,19 @@ export const DEFAULT_THEME_TITLE = {
 } as const;
 
 /**
+ * 视口外节点的绘制深度（2026-10-26 节点可见状态，docs/plan/2026-10-26-node-visibility-states.md）。
+ * 宿主给每个节点下发 data._cullState（visible / culled / culled-linked / transient），
+ * 本项决定壳对 culled / culled-linked 两档怎么画：
+ * - skeleton：骨架 —— 标题条 + 端口锚点保留（连线端点锚在真实几何上），内容段/控制栏/多选标记
+ *   不挂载，卡片本体隐身占位（性能与连线正确性的平衡点，缺省）。
+ * - full：全量绘制（等价于关闭降级，回到 2026-10-15 之前的完整渲染）。
+ * - ghost：空心占位框 —— 内容不挂载，卡片画一个可见的细边框（远端连线走向一目了然，调试/大屏用）。
+ */
+export const DEFAULT_THEME_CULLED = {
+  culledNodeRendering: "skeleton",
+} as const;
+
+/**
  * 多选标记（节点左上角那个圆圈，多选时出现）的外观默认值。
  *
  * 三项各自独立：大小（屏幕量到的直径 px）/ 颜色 / 低缩放下是否显示。
@@ -341,6 +354,20 @@ export const Config: ConfigSchema = {
     label: "节点低细节阈值",
     group: "节点/低细节",
     description: "低于该缩放值后所有节点进入低细节模式（隐藏端口/标题条、去掉阴影）。",
+  },
+  // —— 视口外节点绘制深度：壳按宿主下发的 _cullState 自选画法（2026-10-26）——
+  culledNodeRendering: {
+    type: "select",
+    default: DEFAULT_THEME_CULLED.culledNodeRendering,
+    label: "视口外节点绘制",
+    group: "节点/低细节",
+    description:
+      "视口外（含缓冲带）节点画到什么程度：骨架=隐身占位（标题/端口保留，连线端点不变，缺省）；全量=等同关闭降级；占位框=画可见空心框（远端连线走向可见）。",
+    options: [
+      { value: "skeleton", label: "骨架（隐身占位）" },
+      { value: "full", label: "全量绘制" },
+      { value: "ghost", label: "占位框" },
+    ],
   },
   // —— 多选标记：多选时节点内容区左上角那个圆圈（大小 / 颜色 / 低缩放是否显示）——
   [MULTI_RADIO_KEYS.size]: {

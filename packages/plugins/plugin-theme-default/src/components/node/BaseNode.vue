@@ -142,6 +142,55 @@ const titleSettingOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) =>
 onBeforeUnmount(() => titleSettingOff?.dispose())
 
 const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM.value)
+
+// ============ 视口外节点状态与绘制深度（2026-10-26，docs/plan/2026-10-26-node-visibility-states.md）============
+/**
+ * 宿主下发的节点可见状态（data._cullState）：visible=画布内(+缓冲带)；culled=画布外且无连线；
+ * culled-linked=画布外但有连线（至少一端在画布内，连线必须保持完整显示）；
+ * transient 节点宿主不下发（永不剔除，走全量绘制）。
+ * 为什么壳常驻：VueFlow EdgeWrapper 对 hidden 端点的边整体不画 —— 剔除绝不能再用 hidden，
+ * 否则画布内节点的连线凭空断掉（用户实测）。壳在这里按状态决定"画多深"。
+ */
+type CullState = 'visible' | 'culled' | 'culled-linked'
+const CULLED_STATE_KEY = '_cullState'
+const rawCullState = computed(() => (props.data as Record<string, unknown> | undefined)?.[CULLED_STATE_KEY])
+const isCulledState = (v: unknown): v is CullState => v === 'visible' || v === 'culled' || v === 'culled-linked'
+const cullState = computed<CullState>(() => (isCulledState(rawCullState.value) ? rawCullState.value : 'visible'))
+const isCulled = computed(() => cullState.value !== 'visible')
+const isCulledLinked = computed(() => cullState.value === 'culled-linked')
+
+/**
+ * 视口外节点绘制深度（本插件 Config：culledNodeRendering）。
+ * skeleton = 骨架：卡片隐身占位，标题条与端口锚点保留（连线端点锚在真实几何上）；
+ *           内容段/控制栏/多选标记/区域条/编辑浮层全部不挂载 —— 性能回收在"内容不渲染"。
+ * full     = 全量绘制（等价关闭降级；回到 2026-10-15 之前的完整渲染）。
+ * ghost    = 占位框：内容不挂载，卡片画一个可见的空心细边框（远端连线走向一目了然）。
+ * culled 与 culled-linked 共用同一画法（默认主题不区分这两档；状态本身仍下发，
+ * 自定义壳可按 culled-linked 给更明显的提示 —— 比如沿连线方向的渐隐占位）。
+ */
+const CULLED_RENDERING_KEY = 'culledNodeRendering'
+type CulledRendering = 'skeleton' | 'full' | 'ghost'
+const CULLED_RENDERING_DEFAULT: CulledRendering = 'skeleton'
+const culledRendering = ref<CulledRendering>(CULLED_RENDERING_DEFAULT)
+const applyCulledRendering = (key: string, value: unknown): void => {
+  if (key !== CULLED_RENDERING_KEY) return
+  if (value === 'skeleton' || value === 'full' || value === 'ghost') culledRendering.value = value
+}
+const culledSettingsOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')?.onChange(
+  (key, value) => applyCulledRendering(key, value),
+)
+// 初值从 settings 读（settings 单一数据源；onChange 只管后续变化）
+{
+  const v = settingsStore()?.get(CULLED_RENDERING_KEY)
+  if (v === 'skeleton' || v === 'full' || v === 'ghost') culledRendering.value = v
+}
+onBeforeUnmount(() => culledSettingsOff?.dispose())
+
+/**
+ * 骨架/占位框生效门：culled 两档都降级（full 档不降级）。
+ * 降级 = 内容不挂载 + 卡片本体隐身(skeleton)或空心框(ghost)。
+ */
+const culledReduced = computed(() => isCulled.value && culledRendering.value !== 'full')
 const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
 // ============ 多选相关显隐（配置由 multi-select 插件声明）============
@@ -908,6 +957,9 @@ function clamp(value: number, min: number, max: number): number {
     'is-selected': showSelectionOutline,
     'is-pointer-hovered': isHovered,
     'is-low-detail': lowDetail,
+    'is-culled': isCulled,
+    'is-culled-linked': isCulledLinked,
+    'is-culled-ghost': culledReduced && culledRendering === 'ghost',
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
   }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
@@ -919,14 +971,14 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 与卡片同位置同尺寸的锚点盒：.v2-slot 的 calc(100% +/- offset) 才仍等于「离卡片这条边的距离」 -->
       <div class="v2-toolbar-anchor" :data-node-id="id" :style="toolbarAnchorStyle">
         <div
-          v-if="topSlots.length > 0 && !hideSlotBars"
+          v-if="topSlots.length > 0 && !hideSlotBars && !culledReduced"
           class="v2-slot v2-slot--top nodrag nopan"
           :style="topSlotsStyle"
         >
           <RegionEntryHost v-for="seg in topSlots" :key="'top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         </div>
         <div
-          v-if="bottomSlots.length > 0 && !hideSlotBars"
+          v-if="bottomSlots.length > 0 && !hideSlotBars && !culledReduced"
           class="v2-slot v2-slot--bottom nodrag nopan"
           :style="bottomSlotsStyle"
         >
@@ -935,7 +987,7 @@ function clamp(value: number, min: number, max: number): number {
       </div>
     </Teleport>
     <div
-      v-else-if="topSlots.length > 0 && !hideSlotBars"
+      v-else-if="topSlots.length > 0 && !hideSlotBars && !culledReduced"
       class="v2-slot v2-slot--top nodrag nopan"
       :style="topSlotsStyle"
     >
@@ -949,7 +1001,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 多选标记：内容区左上角的圆形单选点（只在多选时出现；大小/颜色/缩放都来自本插件 Config）。
            纯指示，不接事件 —— 点击行为交给卡片本身（Shift+点节点 = 从选中集里去掉它）。 -->
       <div
-        v-if="showMultiRadio"
+        v-if="showMultiRadio && !culledReduced"
         class="v2-multi-radio nodrag nopan mc-export-ignore"
         :style="radioStyle"
         role="presentation"
@@ -963,7 +1015,7 @@ function clamp(value: number, min: number, max: number): number {
         </svg>
       </div>
       <!-- 标题条：卡片内部、继承卡片 transform，反向缩放（BaseTitle / 就地改名） -->
-      <div v-if="showTitle" class="v2-title nodrag nopan" :style="titlePositionStyle"
+      <div v-if="showTitle && !culledReduced" class="v2-title nodrag nopan" :style="titlePositionStyle"
         @dblclick.stop="editable && startTitleEdit()" @pointerdown.stop>
       <RegionEntryHost v-if="customTitleEntry" :entry="customTitleEntry" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         <BaseTitle v-else :interactive="true" :editing="isEditingTitle" :title-icon="titleIcon">
@@ -1038,7 +1090,7 @@ function clamp(value: number, min: number, max: number): number {
         :debug="debugHandle && !isConnecting" @hover="onPortHover" />
 
       <!-- 内容裁剪层：overflow hidden 确保不溢出卡片圆角 -->
-      <div class="v2-content-clip">
+      <div v-if="!culledReduced" class="v2-content-clip">
         <!-- in 区域（老 content 段）：基座 + attach 场条目按 order 同摞渲染 -->
       <RegionEntryHost v-for="seg in contentStack" :key="'in-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
         <div v-if="contentStack.length === 0" class="v2-content-missing">（type "{{ type }}" 未注册 content 段）</div>
@@ -1047,7 +1099,7 @@ function clamp(value: number, min: number, max: number): number {
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
            反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
-      <div v-if="cardResizable" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
+      <div v-if="cardResizable && !culledReduced" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
         :style="{ transform: `scale(${resizeHandleScale})` }" @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -1067,7 +1119,7 @@ function clamp(value: number, min: number, max: number): number {
 
     <!-- 下插槽：装了解层宿主时已随上面一起 Teleport 过去；这里只在原地模式渲染。 -->
     <div
-      v-if="!toolbarHost && bottomSlots.length > 0 && !hideSlotBars"
+      v-if="!toolbarHost && bottomSlots.length > 0 && !hideSlotBars && !culledReduced"
       class="v2-slot v2-slot--bottom nodrag nopan"
       :style="bottomSlotsStyle"
     >
@@ -1075,18 +1127,18 @@ function clamp(value: number, min: number, max: number): number {
     </div>
 
     <!-- out:left / out:right（新增区域）：左右外侧，垂直居中；不参与卡片布局、不撑高节点 -->
-    <div v-if="leftRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-left nodrag nopan">
+    <div v-if="leftRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--out-left nodrag nopan">
       <RegionEntryHost v-for="seg in leftRegions" :key="'out-left-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
-    <div v-if="rightRegions.length > 0 && !lowDetail" class="v2-region v2-region--out-right nodrag nopan">
+    <div v-if="rightRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--out-right nodrag nopan">
       <RegionEntryHost v-for="seg in rightRegions" :key="'out-right-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
     <!-- on:top / on:bottom（新增区域）：贴在卡片边框线上（骑线居中，如进度条） -->
-    <div v-if="onTopRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-top nodrag nopan">
+    <div v-if="onTopRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--on-top nodrag nopan">
       <RegionEntryHost v-for="seg in onTopRegions" :key="'on-top-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
-    <div v-if="onBottomRegions.length > 0 && !lowDetail" class="v2-region v2-region--on-bottom nodrag nopan">
+    <div v-if="onBottomRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--on-bottom nodrag nopan">
       <RegionEntryHost v-for="seg in onBottomRegions" :key="'on-bottom-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
 
@@ -1094,7 +1146,7 @@ function clamp(value: number, min: number, max: number): number {
          尺寸与卡片严格一致（不反缩放）—— 浮层必须和底下的画面像素对齐，缩放会错位。
          z-index 高于卡片但低于上/下控制栏：编辑框盖住画面，但"确认/取消"按钮仍在最上层可点。 -->
     <div
-      v-if="overlaySlots.length > 0 && !hideToolbars"
+      v-if="overlaySlots.length > 0 && !hideToolbars && !culledReduced"
       class="v2-overlay nodrag nopan"
       :style="overlayLayerStyle"
     >
@@ -1103,7 +1155,7 @@ function clamp(value: number, min: number, max: number): number {
 
     <!-- over:outset（新增区域）：盖住整张卡且允许超出卡片边界；与卡片重合（不反缩放，画面像素对齐优先），
          overflow 交给组件自带样式（拖拽手柄/悬停放大会出界）。 -->
-    <div v-if="outsetRegions.length > 0 && !lowDetail" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
+    <div v-if="outsetRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
       <RegionEntryHost v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :data="data" :is-dev="capabilityIsDev" />
     </div>
   </div>
@@ -1116,6 +1168,26 @@ function clamp(value: number, min: number, max: number): number {
   display: flex;
   flex-direction: column;
   font-family: system-ui, sans-serif;
+}
+
+/* —— 视口外节点（culled / culled-linked）骨架态 ——
+   宿主常驻节点（VueFlow hidden 会连坐连线），壳把可见部分收干净：
+   卡片本体隐身但保留盒子（占位 + 端口锚点几何），标题条与 MovingHandle 留在 DOM
+   （连线端点读 handleBounds，隐身不影响）；内容/栏位/区域条已由模板不挂载。 */
+.v2-node.is-culled .v2-card {
+  visibility: hidden;
+}
+/* 骨架节点不响应指针：卡片隐身后不可点、不可框内起拖；端口锚点保留几何但不再起线 */
+.v2-node.is-culled .v2-card * {
+  pointer-events: none !important;
+}
+/* ghost 档：画一个可见的空心细边框（远端连线走向一目了然；随缩放反比保持屏幕 1px） */
+.v2-node.is-culled-ghost .v2-card {
+  visibility: visible;
+  background: transparent;
+  box-shadow: none;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 8px;
 }
 
 /* —— 上/下插槽定位层（位置由壳给，插件只放内容）——
