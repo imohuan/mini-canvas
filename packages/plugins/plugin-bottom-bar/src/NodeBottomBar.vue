@@ -976,13 +976,8 @@ let ctrlDrag: {
 
 function moveGhost(x: number, y: number): void {
   const g = ctrlDrag?.ghost
-  // 贴合鼠标：资源居中在指针上（不再右下偏移 —— 用户口径：定位与鼠标有间隔不对）
-  if (g) {
-    const w = g.offsetWidth || 100
-    const h = g.offsetHeight || 100
-    g.style.left = x - w / 2 + 'px'
-    g.style.top = y - h / 2 + 'px'
-  }
+  // 卡片**左上角对齐鼠标**（用户口径：不能居中 —— 会遮挡鼠标和插槽）
+  if (g) { g.style.left = x + 'px'; g.style.top = y + 'px' }
 }
 
 /** pointerdown（捕获）：底栏开着 + Ctrl + 鼠标下是图片/视频/音频节点 → 进入拖资源模式。
@@ -2269,26 +2264,33 @@ function onGlobalLeave(el: Element): void {
   box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.35));
   outline: 2px solid var(--ui-accent, #0891b2);
   outline-offset: -1px;
-  overflow: hidden;
+  /* 宽高比不裁切：图片按原始比例缩放，短边≥64、长边≤128（用户口径） */
+  max-width: 128px;
 }
 .nb-drag-ghost img {
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
+  min-width: 64px;
+  min-height: 64px;
+  max-width: 128px;
+  max-height: 128px;
+  width: auto;
+  height: auto;
   flex: none;
   display: block;
 }
 .nb-drag-ghost .nb-drag-ghost-media {
-  width: 96px;
-  height: 96px;
-  object-fit: cover;
+  min-width: 64px;
+  min-height: 64px;
+  max-width: 128px;
+  max-height: 128px;
+  width: auto;
+  height: auto;
   flex: none;
   display: block;
   background: #000;
 }
 .nb-drag-ghost .nb-drag-ghost-icon {
-  width: 96px;
-  height: 96px;
+  width: 88px;
+  height: 88px;
   display: flex;
   align-items: center;
   justify-content: center;
