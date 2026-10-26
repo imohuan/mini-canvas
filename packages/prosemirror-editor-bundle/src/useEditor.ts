@@ -1422,6 +1422,9 @@ export function useEditor(
         ...node.attrs,
         name: item.name,
         url: item.url ?? '',
+        // 缩略图必须跟着新 url 重算：留着旧 attrs 的话 toDOM 会继续用旧 thumbnail_url，
+        // 表现为「排序/替换后标签缩略图不更新」（真机踩过）。
+        thumbnail_url: item.thumbnail_url ?? '',
         value: item.value ?? '',
         category: item.category,
       })

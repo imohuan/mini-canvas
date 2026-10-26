@@ -544,7 +544,9 @@ const refGap = computed(() =>
 const refGapHint = computed(() => {
   const gap = refGap.value
   if (!gap) return ''
-  const label = REF_SLOT_META[gap.kind].label
+  const meta = REF_SLOT_META[gap.kind]
+  if (!meta) return ''
+  const label = meta.label
   return '还缺' + gap.missing.map((i) => ' ' + label + i).join('、') + '，补上后才能发送'
 })
 
@@ -855,10 +857,15 @@ function setSlotError(index: number, message: string): void {
  * 两步：① 把每个 ref-slot 的最新 item 登记进编辑器；② 触发整体重渲染。
  */
 function refreshSlotChips(): void {
+  try {
+  if (typeof window === 'undefined') return
+  ;(window as any).__chipRuns = ((window as any).__chipRuns || 0) + 1
+  ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, tiles: refTiles.value.map((t) => ({ key: t.key, pending: t.pending, name: t.name })), mats: shownMaterials.value.map((m) => ({ id: m.id, refName: m.refName })) }
   // SSR / 编辑器未挂载时跳过（只影响标签 UI，不影响数据）
   if (typeof document === 'undefined') return
   if (!editorComponentRef.value) return
   for (const tile of refTiles.value) {
+    try {
     const key = tile.slotKey
     if (tile.pending) {
       // 待输入的格子：把「虚线待输入」的 item 登记进去（tile.url 是空的）
@@ -868,7 +875,7 @@ function refreshSlotChips(): void {
       const k = parts[0] === 'slot' ? parts[1] : parts[0]
       const i = parts[0] === 'slot' ? parts[2] : parts[1]
       if (k !== 'image' && k !== 'video' && k !== 'audio') continue
-      const label = REF_SLOT_META[k as RefSlotKind].label
+      const label = REF_SLOT_META[k as RefSlotKind]?.label ?? ''
       registerItem({
         id: 'ref-slot:' + key,
         name: label + Number(i),
@@ -882,23 +889,38 @@ function refreshSlotChips(): void {
     // 用显示名找会匹配不上（refNameToSlotKey 认不出「拖我B」）→ 从未调 replaceResource
     //（这就是「上传后连线有了、但正文标签仍是虚线」的根因）
     const refName = shownMaterials.value.find((m) => m.id === tile.key.replace(/^card:/, ''))?.refName
-    const parsed = refNameToSlotKey(refName ?? tile.name, 'image') ?? refNameToSlotKey(refName ?? tile.name, 'video') ?? refNameToSlotKey(refName ?? tile.name, 'audio')
-    if (!parsed) continue
-    const kind = parsed.kind
-    const index = parsed.index
+    // refNameToSlotKey 返回的是「槽位键字符串」（image:2），不是对象 —— 拆出 kind/index
+    const parsedStr = refNameToSlotKey(refName ?? tile.name, 'image') ?? refNameToSlotKey(refName ?? tile.name, 'video') ?? refNameToSlotKey(refName ?? tile.name, 'audio')
+    if (!parsedStr) continue
+    const [kind, indexStr] = parsedStr.split(':') as [RefSlotKind, string]
+    const index = Number(indexStr)
     const slotKey = kind + ':' + index
-    const label = REF_SLOT_META[kind as RefSlotKind].label
+    const label = REF_SLOT_META[kind as RefSlotKind]?.label ?? ''
     const item: ResourceItem = {
-      id: 'ref-slot:' + parsed.kind + ':' + parsed.index,
-      name: tile.name || label + tile.index,
+      id: 'ref-slot:' + kind + ':' + index,
+      // 名字必须用 refName（图片N）：正文里按序号引用的是「第 N 格」的 refName，
+      // 不是节点标题（真机踩过：排序后缩略图与序号对不上，因为 name 用了 tile.name）
+      name: label + index,
       category: '素材',
       url: tile.url,
       mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
     }
     registerItem(item)
-    // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）
-    const replaced = editorComponentRef.value?.replaceResource?.(item)
-    void replaced
+    // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）。
+    // 正文里这个标签有两种身份：@声明转出来的 attrs.id = ref-slot:image:N；
+    // 手工/资源面板插进来的 attrs.id = 上游节点 id（真机踩过：只按 ref-slot 找，
+    // 排序后那类标签的缩略图永远不更新）。两个 id 各刷一次，找不到的那次是 no-op。
+    const nodeId = tile.key.replace(/^card:/, '')
+    const r1 = editorComponentRef.value?.replaceResource?.(item)
+    const r2 = editorComponentRef.value?.replaceResource?.({ ...item, id: nodeId })
+    ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, slotId: item.id, nodeId, url: (item.url || '').match(/resources\/([a-z0-9.]+)/)?.[1] || (item.url || '').slice(0, 20), r1, r2 }
+    } catch (err) {
+      ;(window as any).__chipErr = { tile: tile.key, msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
+    }
+  }
+  } catch (err) {
+    // 整体兜底：芯片刷新是纯 UI 增强，绝不能炸掉底栏（真机/单测都踩过 watcher 抛错）
+    ;(window as any).__chipErr = { tile: '(outer)', msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
   }
 }
 
