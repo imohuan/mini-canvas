@@ -59,35 +59,40 @@ describe('visibleCull（可见剔除纯逻辑）', () => {
   })
 })
 
-describe('nodesFromStore × cullIds（hidden 标记注入）', () => {
-  it('不在剔除集合内的节点带 hidden:true；集合内/不传集合则不带', () => {
+describe('nodesFromStore × cullIds（_cullState 派生，2026-10-26 hidden 退役）', () => {
+  it('集合内 visible；集合外按 linkedIds 派生 culled / culled-linked；hidden 恒 false（连线不消失）', () => {
     const s = makeStore()
     s.addNodes([
       { type: 'text', position: { x: 0, y: 0 }, id: 'vis' },
       { type: 'text', position: { x: 9000, y: 9000 }, id: 'hid' },
     ])
-    // 不传 → 全量、hidden 显式 false（禁用剔除也要写：清残留的 true，见 canvasHostCore 合并语义注释）
+    // 不传 → 全量、状态恒 visible；hidden 显式 false（VueFlow 合并语义清除旧存档残留）
     const plain = nodesFromStore(s)
+    expect(plain.map((n) => (n.data as Record<string, unknown>)._cullState)).toEqual(['visible', 'visible'])
     expect(plain.map((n) => n.hidden)).toEqual([false, false])
-    // 传集合 → 集合内显式 false（清残留），集合外 true
+    // 传集合：集合外 + 不在 linkedIds → culled；hidden 仍 false（节点常驻，壳降级绘制）
     const culled = nodesFromStore(s, undefined, new Set(['vis']))
-    expect(culled.find((n) => n.id === 'vis')!.hidden).toBe(false)
-    expect(culled.find((n) => n.id === 'hid')!.hidden).toBe(true)
+    expect(culled.find((n) => n.id === 'vis')!.data._cullState).toBe('visible')
+    expect(culled.find((n) => n.id === 'hid')!.data._cullState).toBe('culled')
+    expect(culled.find((n) => n.id === 'hid')!.hidden).toBe(false)
+    // 传 linkedIds：集合外但有连线 → culled-linked（至少一端画布内的连线保持完整）
+    const linked = nodesFromStore(s, undefined, new Set(['vis']), new Set(['hid']))
+    expect(linked.find((n) => n.id === 'hid')!.data._cullState).toBe('culled-linked')
   })
 
-  it('临时节点（拖线菜单卡）永不剔除 —— 新建时不在 cullIds 里，若被 hidden 用户看不到菜单（2026-10-16 拖线弹菜单失效根因）', () => {
+  it('临时节点（拖线菜单卡）永不剔除 —— 不写 _cullState（壳恒全量绘制）', () => {
     const s = makeStore()
     s.addNodes([
       { type: 'text', position: { x: 0, y: 0 }, id: 'normal' },
       { type: 'text', position: { x: 150, y: 150 }, id: 'temp', data: { transient: true } },
     ])
-    // cullIds 只含 'normal'：temp 不在集合里，但它是 transient → 永不 hidden
+    // cullIds 只含 'normal'：temp 不在集合里，但它是 transient → 不派生状态（恒全量）
     const culled = nodesFromStore(s, undefined, new Set(['normal']))
-    expect(culled.find((n) => n.id === 'temp')!.hidden).toBe(false)
-    expect(culled.find((n) => n.id === 'normal')!.hidden).toBe(false) // 在集合内 = 可见
+    expect(culled.find((n) => n.id === 'temp')!.data._cullState).toBeUndefined()
+    expect(culled.find((n) => n.id === 'normal')!.data._cullState).toBe('visible')
   })
 
-  it('全选场景：选中标记与 hidden 标记独立共存（选中不豁免剔除）', () => {
+  it('全选场景：选中标记与剔除独立共存（选中不豁免剔除）', () => {
     const s = makeStore()
     s.addNodes([
       { type: 'text', position: { x: 0, y: 0 }, id: 'a' },
@@ -97,9 +102,9 @@ describe('nodesFromStore × cullIds（hidden 标记注入）', () => {
     const a = out.find((n) => n.id === 'a')!
     const b = out.find((n) => n.id === 'b')!
     expect(a.selected).toBe(true)
-    expect(a.hidden).toBe(false) // 可见节点显式 false（合并语义清除残留 true）
+    expect(a.data._cullState).toBe('visible')
     expect(b.selected).toBe(true) // 选中状态完整保留（全选 = 全部选中）
-    expect(b.hidden).toBe(true) // 但不渲染（零例外）
+    expect(b.data._cullState).toBe('culled') // 但按状态降级绘制（零例外）
   })
 
   it('分组父节点走同一判定：子命中时父按自身矩形命中（几何包含关系，无特判）', () => {

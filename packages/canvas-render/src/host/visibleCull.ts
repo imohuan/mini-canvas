@@ -1,15 +1,13 @@
 /**
- * visibleCull —— 可见节点剔除（性能优化主逻辑，零 Vue / 零 DOM，纯函数可单测）。
+ * visibleCull —— 可见节点判定（性能优化主逻辑，零 Vue / 零 DOM，纯函数可单测）。
  *
  * 背景（2026-10-15 性能诊断）：160 节点拖动时每帧 70ms（14FPS），瓶颈是浏览器渲染准备作业
- * （样式/布局/滤镜）随**节点总数**线性增长。方案：视口外的节点不渲染（hidden），只留数据。
+ * （样式/布局/滤镜）随**节点总数**线性增长。原方案：视口外节点 hidden=true。
  *
- * 为什么用 hidden 标记而不是从数组里删掉（诊断报告 §9.3，子代理审核定案）：
- * - VueFlow NodeWrapper 对 hidden 节点 render null —— 真·不渲染，收益与数组剔除等价
- *   （vue-flow-core.mjs:9559 实证）；
- * - 节点保留在 VueFlow 内部 store → 边解析不断（不会 EDGE_MISSING）、原生多选拖拽不掉队、
- *   updateNodeVisual 对它们仍然有效；
- * - 重进视口不重挂（无尺寸空窗导致的闪变，实测尺寸仍在 nodeLayout 缓存里）。
+ * 2026-10-26 hidden 路线退役（docs/plan/2026-10-26-node-visibility-states.md）：
+ * VueFlow EdgeWrapper 对任一端 hidden 的边 render null —— 连线跟着节点消失（用户实测断线）。
+ * 本文件保留，职责改为**产出视口内 id 集合**，由宿主派生 data._cullState
+ * （visible / culled / culled-linked），节点一律常驻，绘制深度由壳按状态自选。
  *
  * 零例外规则（与用户逐条对齐，2026-10-15）：所有节点——普通/分组父/被选中/拖拽中——
  * 一律走同一相交判定，不做特判。理由：

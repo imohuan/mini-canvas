@@ -35,10 +35,10 @@ describe('nodesFromStore', () => {
       type: 'text',
       position: { x: 10, y: 20 },
       // label 是建节点时按类型模板生成的默认名（nodeStore.nextDefaultName），随 data 一起过来
-      data: { label: '文本 1', text: 'hi' },
+      data: { label: '文本 1', text: 'hi', _cullState: 'visible' },
       // 显式分层：普通节点落 LAYERS.node（不再靠 DOM 顺序）
       zIndex: LAYERS.node,
-      // 可见剔除（2026-10-15）总是显式写 hidden（VueFlow 合并语义，false 必须显式清除残留 true）
+      // 可见状态（2026-10-26）：hidden 路线退役后显式 false 清除旧存档残留；未传 cullIds → 恒 visible
       hidden: false,
     })
     // data 是浅拷贝：改 flow 的 data 不污染内核 store

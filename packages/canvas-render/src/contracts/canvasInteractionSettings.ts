@@ -146,8 +146,8 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
   ),
   visibleCullEnabled: bool(
     'visibleCullEnabled',
-    '只渲染可见节点',
-    '视口外（含缓冲带）的节点不渲染，节点多时拖动/缩放更流畅。选中状态不受影响（全选仍选中全部）。',
+    '视口外节点降级绘制',
+    '视口外的节点不再完整绘制（内容由壳按状态降级），节点多时拖动/缩放更流畅；与其相连的连线保持完整。选中状态不受影响（全选仍选中全部）。',
   ),
   visibleCullBuffer: num(
     'visibleCullBuffer',

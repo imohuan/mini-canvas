@@ -73,6 +73,12 @@ const props = defineProps<{
   interactionSettings: CanvasInteractionSettings
   /** 可视矩形变化回调（剔除刷新入口）：viewport/pane 每次变化都会带最新 FlowRect 调用（可为 null=不可用） */
   onVisibleRectChange?: (rect: FlowRect | null) => void
+  /**
+   * 节点可见状态（2026-10-26）：宿主灌渲染态时写入每个节点 data._cullState
+   * （'visible' | 'culled' | 'culled-linked'；transient 不写=恒全量）。
+   * 壳（BaseNode 等）经 NodeProps.data 消费并自选绘制深度；宿主不做任何绘制决策。
+   */
+  cullStateKey?: '_cullState'
   // —— VueFlow 交互回调（均在 CanvasHost 持有，引用其 refs）——
   isValidConnection: (conn: Connection) => boolean
   onConnect: (conn: Connection) => void

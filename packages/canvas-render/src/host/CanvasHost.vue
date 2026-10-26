@@ -207,12 +207,35 @@ const interactionSettings = reactive<CanvasInteractionSettings>(resolveCanvasInt
 
 // ==================== 可见剔除（2026-10-15 性能优化，docs/plan/2026-10-15-canvas-perf-diagnosis.md） ====================
 /**
- * cullIds = 当前应渲染的节点 id 集合（视口 + 缓冲相交；null = 不剔除）。
- * 为什么是 hidden 路线而非数组删除：见 visibleCull.ts 头注（边不断/原生拖拽不掉队）。
+ * cullIds = 视口(+缓冲带)内节点 id 集合（null = 不剔除）。
+ * hidden 路线已退役（2026-10-26）：VueFlow EdgeWrapper 对 hidden 端点的边整体不画，
+ * 连线跟着节点消失（用户实测断线）。集合现在只用于派生 data._cullState
+ * （visible / culled / culled-linked，见 canvasHostCore.nodesFromStore），
+ * 节点一律常驻渲染，绘制深度由壳按状态自选。
  * 刷新时机：CanvasSurface 的 visibleRect 每帧变化回调（rAF 节流）+ store/选中重灌前现算，
- * 保证两条重灌路径拿到的都是同一份最新集合（否则选中变化会把被剔节点灌回来）。
+ * 保证两条重灌路径拿到的都是同一份最新集合。
  */
 const cullIds = shallowRef<ReadonlySet<string> | null>(null)
+/**
+ * 与被剔除节点相连的节点 id 集（任一端在剔除集合外 ⇒ 两端都算 linked）。
+ * 壳据此区分 culled / culled-linked：至少一端在画布内的连线必须继续画，
+ * 该连线的两端节点常驻成骨架（锚点/标题/量测保留），连线端点永远锚在真实几何上。
+ * 邻接表在 syncFromStore 内随 edgeStore 变化重建，平移/缩放只读不重建。
+ */
+let linkedIds = new Set<string>()
+function rebuildLinkedIds(): void {
+  const h = hostRef.value
+  if (!h) return
+  const culled = cullIds.value
+  const next = new Set<string>()
+  if (!culled) { linkedIds = next; return }
+  for (const e of h.edgeStore.getEdges()) {
+    const sOut = !culled.has(e.source)
+    const tOut = !culled.has(e.target)
+    if (sOut !== tOut) { next.add(e.source); next.add(e.target) }
+  }
+  linkedIds = next
+}
 let cullRaf = 0
 function cullConfigFromSettings(): VisibleCullConfig {
   return {
@@ -254,6 +277,7 @@ function onVisibleRectFrame(): void {
     // 是 160 节点 DTO 全量重建，每帧都做的话剔除本身反成瓶颈）。
     const prev = cullIds.value
     refreshCull()
+    rebuildLinkedIds()
     const next = cullIds.value
     const same = prev === next || (prev && next && prev.size === next.size && [...next].every((id) => prev.has(id)))
     if (!same) syncNodesFromStore()
@@ -272,7 +296,7 @@ let stagedTarget: ReturnType<typeof nodesFromStore> = []
 function syncNodesFromStore(): void {
   const h = hostRef.value
   if (!h) return
-  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value)
+  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds)
   /*
    * 分批进行中：已有节点必须**立即**吃到新数据（远端改内容、进度帧、拖动位置），
    * 只有尚未挂载的新节点继续排队。以前这里直接 return，分批窗口内所有更新都只写进
@@ -468,6 +492,10 @@ function syncFromStore(): void {
     // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
     edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )
+  // 灌节点前现算剔除集合与邻接表：保证 syncNodesFromStore 拿到同一份最新状态
+  //（store 变化包含节点/边增删改；视口帧回调路径已在 onVisibleRectFrame 内算过，此处幂等重算）。
+  refreshCull()
+  rebuildLinkedIds()
   syncNodesFromStore()
   // —— 新增节点重扫可视区域（2026-10-16 用户口径：**不要聚焦、不要移动视口**，
   //  只需要新建节点时手动重扫一遍剔除集合，让新节点不被误隐藏）：
