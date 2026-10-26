@@ -737,6 +737,7 @@ async function reloadAiActions(): Promise<void> {
   }
 }
 reloadAiActions()
+const offAiActions = ctx.on('ctx:plugin-installed', () => void reloadAiActions())
 
 /** 底栏右侧渲染的 AI 按钮（enabled 才出；icon 缺省给星形） */
 const aiButtons = computed(() => aiActions.value.filter((a) => a.enabled).map((a) => ({ ...a, icon: a.icon || DEFAULT_AI_ICON })))
@@ -836,6 +837,7 @@ onBeforeUnmount(() => {
   if (aiFlushTimer) { clearTimeout(aiFlushTimer); aiFlushTimer = null }
   if (aiFlushPending) { aiFlushPending = false; flushAiPrompt() }
   aiAbort?.abort()
+  offAiActions.dispose()
 })
 
 // ===== 「看图」@ 素材槽位（用户口径 2026-10-25）=====
