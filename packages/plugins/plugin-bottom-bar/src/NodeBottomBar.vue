@@ -81,6 +81,7 @@ const { ctx, renderEdges, renderNodes } = useCanvasRender()
 const Select = useUiComponent('select')
 const ToolParamField = useUiComponent('toolParamField')
 const ToolParamGroup = useUiComponent('toolParamGroup')
+const Tooltip = useUiComponent('tooltip')
 
 // 单选才显示（与既有三份面板同语义）
 const visible = useSoleNodeSelected(props.id)
@@ -593,6 +594,10 @@ const refGapHint = computed(() => {
   const label = meta.label
   return '还缺' + gap.missing.map((i) => ' ' + label + i).join('、') + '，补上后才能发送'
 })
+
+const ICON_WARN =
+  '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+
 
 
 /**
@@ -1544,8 +1549,10 @@ function onGlobalLeave(el: Element): void {
           <span aria-hidden="true" v-html="ICON_SETTINGS" />
         </button>
         <span class="nb-count" :title="'最多 ' + CHAR_LIMIT + ' 字'">{{ charCount }}/{{ CHAR_LIMIT }}</span>
-        <!-- 参考序号有缺时，在发送按钮左边说清楚缺哪一格（不然用户只看到按钮点不动） -->
-        <span v-if="refGapHint" class="nb-gap-hint" :title="refGapHint">{{ refGapHint }}</span>
+        <!-- 参考序号有缺时：发送按钮左边一个警告图标，hover 出 tooltip 说清楚缺哪一格 -->
+        <Tooltip v-if="refGapHint" :content="refGapHint" placement="bottom">
+          <span class="nb-gap-hint" role="button" tabindex="0"><span aria-hidden="true" v-html="ICON_WARN" /></span>
+        </Tooltip>
         <button
           class="nb-run"
           :class="{ 'is-running': running }"
@@ -2256,14 +2263,12 @@ function onGlobalLeave(el: Element): void {
   font-variant-numeric: tabular-nums;
   color: var(--ui-ink-mute, #8c95a3);
 }
-/* 参考序号缺格提示：贴着发送按钮，短、能截断（详情在 title 里） */
+/* 参考序号缺格提示：小警告图标贴着发送按钮，hover 出鼠标跟随提示（详情走 tip 服务） */
 .nb-gap-hint {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
   color: var(--ui-warn, #b45309);
+  cursor: help;
 }
 
 /* 发送按钮：32×32、圆角 12（照参考站；浅色主题下白底深箭头，由 token 决定） */
