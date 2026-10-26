@@ -123,29 +123,32 @@
 /* 1. 当 ProseMirror 将其标记为选中节点时 */
 .prose-mirror-editor .ProseMirror-selectednode.resource-node {
   /* 用户口径（2026-10-26）：标签选中用默认黑白主题，不跟主题色 */
-  background-color: var(--ui-ink, #18202b) !important;
-  color: var(--ui-paper, #ffffff) !important;
-  outline: none;
+  /* 选中态保持 chip 原样可见（黑底会把缩略图整个盖成黑块，实测踩过），只用描边表达 */
+  background-color: transparent !important;
+  color: inherit !important;
+  outline: 2px solid var(--ui-ink, #18202b);
+  outline-offset: 1px;
   /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
   align-items: center;
 }
 
 .prose-mirror-editor .ProseMirror-selectednode.resource-node .label {
-  color: #ffffff !important;
+  color: inherit !important;
 }
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: var(--ui-ink, #18202b) !important;
-  color: var(--ui-paper, #ffffff) !important;
-  outline: none;
+  background-color: transparent !important;
+  color: inherit !important;
+  outline: 2px solid var(--ui-ink, #18202b);
+  outline-offset: 1px;
   height: 24px;
   align-items: center;
 }
 
 .prose-mirror-editor .resource-node.resource-node-selected .label {
-  color: #ffffff !important;
+  color: inherit !important;
 }
 
 /* 变量节点选中样式 */

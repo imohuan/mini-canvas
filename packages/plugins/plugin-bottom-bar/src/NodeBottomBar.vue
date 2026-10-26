@@ -997,6 +997,12 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
   // 在同一次手势里拦掉 dragstart，才能让我们的影子跟住鼠标。
   const blockNativeDrag = (e: Event) => { e.preventDefault() }
   window.addEventListener('dragstart', blockNativeDrag, { capture: true, once: true })
+  // img 默认 draggable —— 直接把本次手势源头关掉，双保险（部分 Chrome 版本里
+  // dragstart preventDefault 之前影子会先僵住）。
+  if (ev.target instanceof HTMLElement) {
+    const img = ev.target.closest('img')
+    if (img) { img.setAttribute('draggable', 'false'); ;(ev.target as HTMLElement).setAttribute?.('draggable', 'false') }
+  }
   // 影子 = 缩略图 + 名字（用户口径 2026-10-26：「可以做成图片的缩略图跟随鼠标」）
   const ghost = document.createElement('div')
   ghost.className = 'nb-drag-ghost'
@@ -1706,6 +1712,9 @@ function onGlobalLeave(el: Element): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* 出现即明显：轻微放大 + 实心边框（用户要求拖拽时必须有可见跟随物） */
+  transform: scale(1.05);
+  border-width: 2px;
 }
 .nb-drag-ghost img {
   width: 34px;
