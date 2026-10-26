@@ -173,9 +173,12 @@ function onDragPointerDown(ev: PointerEvent): void {
 
 <style scoped>
 /* 通用面孔（两种模式一致）：紫描边/淡紫底/角标/灰罩，走 --ui-* token */
-.nso-layer { position: absolute; inset: 0; border-radius: inherit; }
+.nso-layer { position: absolute; inset: 0; border-radius: inherit;
+  /* 父容器 .v2-overlay 是 pointer-events:none（BaseNode 红线文件）——
+     不显式设 auto 的话本层点击/拖拽会全部穿透到节点（真机踩过）。 */
+  pointer-events: auto; }
 .nso-layer.is-reference { cursor: pointer; }
-.nso-layer.is-ctrl-drag { pointer-events: none; }
+.nso-layer.is-ctrl-drag { cursor: grab; }
 .nso-layer.is-selectable { background: transparent; }
 .nso-layer.is-reference.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 14%, transparent); }
 .nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); }
