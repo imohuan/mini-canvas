@@ -5,6 +5,34 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-27，底栏「翻译 / 提示词优化」改成可配置 AI 按钮）
+
+用户口径（附截图）：底栏右侧那两个按钮要**可配置**（列表：图标 / 描述 / 系统提示词模板），
+点按钮请求后台 AI，流式结果直接写进输入框；历史分批落（500ms 一拍）；流里「思考」要过滤；
+渠道与模型直接用 Agent 插件配好的那套；失败重试 3 轮。
+
+**落地（plugin-bottom-bar 6 个 commit，4ce1fc44…37d48a3c）**：
+
+- `aiActions.ts`（新，纯逻辑零 Vue）：AiActionConfig（id/name/description/icon/template/enabled）；
+  内置默认「翻译 / 提示词优化」两条；模板变量 `{{prompt}} / {{nodeType}} / {{action}} / {{nodeId}}`
+  （不认得的原样保留）；`StreamTextFilter` 过滤 think 标签段（跨帧半标签扣住拼接）+ 丢弃
+  `delta.reasoning_content`；`requestAiText` 流式 + 退避重试（默认 3 轮，4xx 一次判死）；
+  清单存云端 KV `config/bottomBarAiActions`（没存过 = 内置默认，GET /api/kv/config?values=1 / PUT）。
+- `NodeBottomBar.vue`：右侧按钮组改为 v-for 渲染 aiButtons（跑动转圈、期间禁点、失败还原正文 +
+  琥珀错误提示 4s 自动消）；流式 onDelta 直接写输入框（promptDoc 清掉防顶回），落盘走 500ms
+  节拍 `doc.updateNode`（text 绑定写 data.text，其余写 data.barPrompt，卸载前 flush）；
+  旧「翻译指令追加」按钮与 promptActions 模块退役删除。
+- `PromptActionSettings.vue`（新）+ `nodeBarPlugin` Config：设置面板出现「底栏」组 ——
+  AI 后台地址（留空 = 同源）+ AI 按钮清单自绘页（新增/删除/上下移/显隐、名称/描述/图标预设、
+  模板文本域 + 变量 chips 点插），整包保存到 KV。
+- 请求接口 = `POST /api/agent/chat/completion`（stream:true，不带 model → 后端 resolveModel
+  落到 Agent 默认渠道；带 x-admin-token，与 agentApi 同一出口口径）。
+
+**验证**：plugin-bottom-bar typecheck 干净 + 195/195 全绿（aiActions 契约 12 条）；
+ui vue-tsc 干净、413/413、vite build 通过；plugin-agent 384/384（不受影响）；
+canvas-render typecheck 干净。codegraph index 已更新。
+
+
 ### 追记（2026-10-26，ColorField 取色器贴满下拉面板）
 
 用户报：颜色选择器的下拉右侧空白一大片（截图：面板 257px，取色器只有 225px）。
