@@ -822,7 +822,13 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
         addEdge: (source, target) => {
           try { return doc.addEdge({ source, target }) } catch { return null }
         },
-        refOrder: () => refOrder.value,
+        /**
+         * 排位用的「当前顺序」：refOrder 可能从没存过（老画布/从未拖过）——
+         * 直接拿空数组去 placeRefAtSlot 会把新素材插到第 0 位，于是第 8 格上传的图
+         * 跑到了第 1 格（真机踩过）。没存过时用当前实际素材顺序兜底。
+         */
+        refOrder: () =>
+          refOrder.value.length > 0 ? refOrder.value : shownMaterials.value.map((m) => m.id),
         writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
         pickCreated: () => {
           ;(window as any).__upDbg.step = 'pick-created'
@@ -885,14 +891,19 @@ function refreshSlotChips(): void {
       if (k !== 'image' && k !== 'video' && k !== 'audio') continue
       const label = REF_SLOT_META[k as RefSlotKind]?.label ?? ''
       registerItem({
-        id: 'ref-slot:' + key,
+        // id 必须是 ref-slot:<kind>:<n>（之前用了 'ref-slot:slot:image:3' 这种错 id，
+        // 删除资源后正文标签清不回「待输入」——真机踩过）
+        id: 'ref-slot:' + k + ':' + i,
         name: label + Number(i),
         category: '素材',
-        mediaType: k === 'av' ? undefined : (k as 'image' | 'video' | 'audio'),
+        // 待输入格没有媒体类型 → toDOM 走文本/图标分支（虚线待输入样式）
+        mediaType: undefined,
         // 借资源条目的 renderEditor：不带的化 toDOM 走默认分支（@名字样式），
         // 与卡片样式的 chip 并存 = 正文出现两套标签外观（真机踩过）。
         renderEditor: editorResources.value[0]?.renderEditor,
       })
+      // 删除/断开后该格回到待输入：正文同名标签的缩略图要清掉（否则还显示旧图）
+      editorComponentRef.value?.replaceResourceThumbByName?.(label + Number(i), '')
       continue
     }
     // 已填的格子：key = card:<节点id>，序号与内容来自连线素材
@@ -2050,7 +2061,8 @@ function onGlobalLeave(el: Element): void {
 .nb-editor :deep(.resource-chip.ProseMirror-selectednode),
 .nb-editor :deep(.resource-chip.resource-node-selected) {
   border-color: transparent;
-  background: var(--ui-selection-bg, rgb(178 205 245)); /* 浏览器默认选区蓝 */
+  /* 与文本选区同一个背景变量（用户口径：标签选中和文字选中背景一致，用灰） */
+  background: var(--ui-selection-bg, rgb(0 0 0 / 0.18));
 }
 .nb-placeholder {
   position: absolute;

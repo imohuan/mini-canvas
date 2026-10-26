@@ -125,7 +125,7 @@
   /* 用户口径（2026-10-26）：标签选中用默认黑白主题，不跟主题色 */
   /* 选中态保持 chip 原样可见（黑底会把缩略图整个盖成黑块，实测踩过），只用描边表达 */
   /* 与文本选区同色（浏览器默认选区蓝）—— 用户口径：和文本选中背景一致 */
-  background-color: var(--ui-selection-bg, rgb(178 205 245)) !important;
+  background-color: var(--ui-selection-bg, rgb(0 0 0 / 0.18)) !important;
   color: inherit !important;
   /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
@@ -138,7 +138,7 @@
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: var(--ui-selection-bg, rgb(178 205 245)) !important;
+  background-color: var(--ui-selection-bg, rgb(0 0 0 / 0.18)) !important;
   color: inherit !important;
   height: 24px;
   align-items: center;
@@ -165,8 +165,12 @@
   outline: none;
 }
 
-/* 2. 文本选区：不覆盖 —— 用浏览器默认选中色（用户口径：默认黑白主题应有颜色，
-   之前强设 accent/半透明黑都会让选区观感失控，实测踩过） */
+/* 2. 文本选区：与标签选中**同一个背景色变量**（用户口径 2026-10-26：
+   标签选中和文字选中的背景要一致，用灰）。 */
+.prose-mirror-editor .ProseMirror ::selection {
+  background-color: var(--ui-selection-bg, rgb(0 0 0 / 0.18));
+  color: inherit;
+}
 
 /* 强制图片在选中区域内背景透明，防止白块 */
 .prose-mirror-editor .resource-node img::selection {
