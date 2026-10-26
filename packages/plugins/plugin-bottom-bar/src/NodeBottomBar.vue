@@ -788,10 +788,17 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
   const w = Number(me?.width) || 320
   try {
     // 建节点 → 还选中 → 等一帧 → 连线 → 按序号排位；顺序在 uploadToRefSlot 里钉死（已单测）
+    ;(window as any).__upDbg.step = 'before-upload'
     const result = await uploadToRefSlot(
       { file, kind, index, targetId: props.id },
       {
-        addFiles: (files, at) => fileDrop.addFiles(files, at),
+        addFiles: (files, at) => {
+          ;(window as any).__upDbg.step = 'add-files-called'
+          return fileDrop.addFiles(files, at).then((n) => {
+            ;(window as any).__upDbg.addFilesResult = n
+            return n
+          })
+        },
         waitTick: () => nextTick(),
         afterCreate: () => {
           // file-drop 建完会把选中改成新节点；底栏挂在原节点上，必须还回去
@@ -803,6 +810,7 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
         refOrder: () => refOrder.value,
         writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
         pickCreated: (before) => {
+          ;(window as any).__upDbg.step = 'pick-created'
           // 为什么不能到 shownMaterials 里找：素材是**按边**收集的（collectUpstreamMaterials），
           // 而此刻连线还没建 —— 新节点根本不在里面，永远找不到 → 提前 return（这就是
           // 「上传只建节点、没连线」的根因）。这里直接查 doc：file-drop 刚建的那个新节点。
@@ -850,7 +858,11 @@ function refreshSlotChips(): void {
     if (tile.pending) {
       // 待输入的格子：把「虚线待输入」的 item 登记进去（tile.url 是空的）
       if (!key) continue
-      const [k, i] = key.split(':')
+      // key 形如 slot:image:3 / card:174 —— slot: 前缀时种类在第 2 段
+      const parts = key.split(':')
+      const k = parts[0] === 'slot' ? parts[1] : parts[0]
+      const i = parts[0] === 'slot' ? parts[2] : parts[1]
+      if (k !== 'image' && k !== 'video' && k !== 'audio') continue
       const label = REF_SLOT_META[k as RefSlotKind].label
       registerItem({
         id: 'ref-slot:' + key,
