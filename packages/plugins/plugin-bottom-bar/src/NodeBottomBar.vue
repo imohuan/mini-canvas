@@ -58,6 +58,8 @@ import { exitReference, referenceActive, referenceEpoch, referenceOwner, toggleR
 import { openPreview } from './mediaPreview'
 // 右侧图标按钮里"改提示词"的小动作（翻译提示词）
 import { hasTranslateInstruction, toggleTranslateInstruction } from './promptActions'
+// AI 按钮（可配置的「翻译 / 提示词优化」等）：清单/模板/请求链路在 aiActions.ts。
+import { loadAiActions, requestAiText, renderTemplate, DEFAULT_AI_ICON, type AiActionConfig } from './aiActions'
 // 「看图」@ 素材槽位：标签解析 / 落点判定（纯函数，已单测）
 import {
   parseRefSlots,
@@ -720,6 +722,137 @@ function toggleTranslate(): void {
  * （类似底部状态栏慢慢增高，带一条分割线，内容暂用占位文本）。
  */
 const settingsOpen = ref(false)
+
+// ===== AI 按钮（可配置的「翻译 / 提示词优化」，用户口径 2026-10-26）=====
+//
+// - 清单来自云端 KV（config/bottomBarAiActions，没配 = 内置「翻译 / 提示词优化」两条）；
+// - 点按钮 → 请求 /api/agent/chat/completion（不带 model = 用 Agent 插件配好的默认渠道），
+//   流式返回**直接写进输入框**（替换原正文，AI 输出就是新的提示词）；
+// - 「思考」段过滤在 aiActions 里做（think 标签 + reasoning_content 都不留）；
+// - 历史**分批**落：500ms 一拍（doc.updateNode 一拍一条，不逐字进撤销栈）；
+// - 失败自动重试 3 轮（aiActions 内置退避），全失败提示错误；跑着时按钮转圈并禁点。
+const aiActions = ref<AiActionConfig[]>([])
+const aiRunningId = ref<string | null>(null)
+const aiError = ref('')
+let aiAbort: AbortController | null = null
+let aiFlushTimer: ReturnType<typeof setTimeout> | null = null
+let aiFlushPending = false
+let aiLoadSeq = 0
+
+/** 拉一次按钮清单（挂载时调；后到的响应作废先到的） */
+async function reloadAiActions(): Promise<void> {
+  const seq = ++aiLoadSeq
+  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
+  const baseRaw = settings?.get('bottomBarAiBaseUrl')
+  const base = typeof baseRaw === 'string' ? baseRaw : ''
+  try {
+    const list = await loadAiActions({ baseUrl: base })
+    if (seq === aiLoadSeq) aiActions.value = list
+  } catch {
+    if (seq === aiLoadSeq) aiActions.value = []
+  }
+}
+reloadAiActions()
+
+/** 底栏右侧渲染的 AI 按钮（enabled 才出；icon 缺省给星形） */
+const aiButtons = computed(() => aiActions.value.filter((a) => a.enabled).map((a) => ({ ...a, icon: a.icon || DEFAULT_AI_ICON })))
+
+/** 流式写入：改内存 prompt + 排一拍 500ms 批量落盘（编辑器 promptDoc 清掉防顶回） */
+function onAiDelta(fullText: string): void {
+  prompt.value = fullText
+  promptDoc.value = undefined
+  scheduleAiFlush()
+}
+
+/**
+ * 500ms 批量落盘：把当前 prompt 写进节点 data（'text' 绑定写 data.text，
+ * 其余写 data.barPrompt）。窗口内的多次 onAiDelta 合并成一拍 —— 用户口径：
+ * 「不希望每一个字都写入历史记录，一批一批地写入」。
+ */
+function scheduleAiFlush(): void {
+  aiFlushPending = true
+  if (aiFlushTimer) return
+  aiFlushTimer = setTimeout(() => {
+    aiFlushTimer = null
+    if (!aiFlushPending) return
+    aiFlushPending = false
+    flushAiPrompt()
+  }, 500)
+}
+
+function flushAiPrompt(): void {
+  try {
+    const doc = ctx.get<{ updateNode(id: string, patch: { data: Record<string, unknown> }): void }>('doc')
+    if (promptBinding.value === 'text') {
+      doc.updateNode(props.id, { data: { text: prompt.value } })
+    } else {
+      doc.updateNode(props.id, { data: promptPersistFields(promptBinding.value, prompt.value) })
+    }
+  } catch {
+    /* 节点已不在等情况：忽略（下一拍还会再写） */
+  }
+}
+
+/** 点一颗 AI 按钮：渲染模板 → 请求（重试在 aiActions 里）→ 结果已在输入框 */
+async function runAiAction(action: AiActionConfig): Promise<void> {
+  if (aiRunningId.value) return
+  const source = prompt.value
+  if (!source.trim()) return
+  const settings = ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')
+  const baseRaw = settings?.get('bottomBarAiBaseUrl')
+  const base = typeof baseRaw === 'string' ? baseRaw : ''
+  aiRunningId.value = action.id
+  aiError.value = ''
+  aiAbort = new AbortController()
+  // 第一帧到来前先清空正文：AI 输出是「替换」语义，残留旧文会和新文拼在一起
+  prompt.value = ''
+  promptDoc.value = undefined
+  let full = ''
+  try {
+    const res = await requestAiText({
+      template: action.template,
+      vars: {
+        prompt: source,
+        nodeType: nodeType.value ?? '',
+        action: currentAction.value?.title ?? '',
+        nodeId: props.id,
+      },
+      baseUrl: base,
+      signal: aiAbort.signal,
+      onDelta: (delta) => {
+        full += delta
+        onAiDelta(full)
+      },
+    })
+    if (res.ok) {
+      onAiDelta(full)
+      flushAiPrompt()
+    } else {
+      // 失败：把原文还回去（别让用户内容被一次失败吃掉）
+      prompt.value = source
+      promptDoc.value = undefined
+      flushAiPrompt()
+      aiError.value = res.error
+      setTimeout(() => { if (aiError.value === res.error) aiError.value = '' }, 4000)
+    }
+  } finally {
+    aiRunningId.value = null
+    aiAbort = null
+    if (aiFlushTimer) { clearTimeout(aiFlushTimer); aiFlushTimer = null }
+    aiFlushPending = false
+  }
+}
+
+function cancelAi(): void {
+  aiAbort?.abort()
+}
+
+onBeforeUnmount(() => {
+  // 卸载前把没落的那一拍 flush 掉（流式中途关底栏不丢内容）
+  if (aiFlushTimer) { clearTimeout(aiFlushTimer); aiFlushTimer = null }
+  if (aiFlushPending) { aiFlushPending = false; flushAiPrompt() }
+  aiAbort?.abort()
+})
 
 // ===== 「看图」@ 素材槽位（用户口径 2026-10-25）=====
 //
@@ -1520,20 +1653,28 @@ function onGlobalLeave(el: Element): void {
 
       <div class="nb-actions">
         <span v-if="infoText" class="nb-info">{{ infoText }}</span>
+        <!-- AI 按钮（可配置）：翻译 / 提示词优化等，清单来自云端 KV；
+             点击请求后台 AI，流式结果直接写进输入框（历史 500ms 一批落） -->
         <button
+          v-for="ai in aiButtons"
+          :key="ai.id"
           class="nb-icon-btn"
-          :class="{ 'is-on': translated }"
+          :class="{ 'is-running': aiRunningId === ai.id }"
           type="button"
-          :disabled="!showEditor"
-          :title="translated ? '取消翻译指令' : '让模型用英文输出（在提示词里追加一句指令）'"
-          aria-label="翻译提示词"
-          @click.stop="toggleTranslate"
+          :disabled="!showEditor || aiRunningId !== null"
+          :title="ai.description || ai.name"
+          :aria-label="ai.name"
+          @click.stop="runAiAction(ai)"
         >
-          <span aria-hidden="true" v-html="ICON_TRANSLATE" />
+          <span v-if="aiRunningId === ai.id" class="nb-ai-spinner" aria-hidden="true" />
+          <span v-else aria-hidden="true" v-html="ai.icon" />
         </button>
-        <span class="nb-icon-btn nb-icon-btn--static" :title="fieldSummary || '生成参数'">
-          <span aria-hidden="true" v-html="ICON_SPARKLE" />
-        </span>
+        <span
+          v-if="aiError"
+          class="nb-ai-error"
+          role="alert"
+          :title="aiError"
+        >{{ aiError }}</span>
         <!-- 全局设置（右侧 = 跟插件/动作无关的全局项）：点它在底栏下面展开一块设置区 -->
         <button
           class="nb-icon-btn"
@@ -1793,6 +1934,27 @@ function onGlobalLeave(el: Element): void {
 .nb-icon-btn.is-on {
   background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
   color: var(--ui-accent, #0891b2);
+}
+
+/* AI 按钮跑动中的小转圈（与发送按钮的 spinner 同款观感，尺寸 14） */
+.nb-ai-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--ui-ink-dim, #6b7280) 40%, transparent);
+  border-top-color: var(--ui-accent, #0891b2);
+  border-radius: 999px;
+  animation: nb-spin 0.7s linear infinite;
+}
+
+/* AI 失败提示：琥珀短句贴在按钮右侧，4 秒自动消（详情在 title 里） */
+.nb-ai-error {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--ui-warn, #b45309);
+  cursor: help;
 }
 .nb-icon-btn:disabled {
   opacity: 0.4;
