@@ -5,6 +5,20 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-26，节点可见状态写入文档站与 API 手册）
+
+用户要求把本轮剔除改造沉淀进文档：
+
+- **packages/docs（VitePress 文档站）**：`plugins/theme-components/base-node.md`
+  新增「视口外状态与降级绘制」章节（`_cullState` 四态表 / `culledNodeRendering`
+  三档配置 / 自写壳接入 `culledPolicy` 纯函数 / 三条红线）+ 功能说明清单补一条；
+  dev server (:5291) 真机核验渲染正常（TOC/表格/代码块全就位，无残留前缀）。
+- **docs/代码开发（API 手册）**：canvas-render 新篇 `12-节点可见状态与剔除.md`
+  （宿主侧机制、cullCompactShells、改动前必读的坑）；`plugins/plugin-theme-default.md`
+  补小节 + 默认值常量行；`00-总览与架构.md` 索引表登记。
+- 说明：`pnpm -C packages/docs build` 当前红在 `cloud-server/admin-auth.md`
+  （既有问题，147 行附近 Vue 模板解析，非本轮引入）。
+
 ### 追记（2026-10-26，屏外壳压缩开关 cullCompactShells）
 
 用户口径（1000 节点/屏内 20）：壳也要省 —— "视口外无连线牵扯的节点连壳都不要渲染"。
