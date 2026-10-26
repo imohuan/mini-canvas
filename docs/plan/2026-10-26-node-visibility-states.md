@@ -1,0 +1,62 @@
+# 节点可见状态（visible / culled / culled-linked）——连线不随剔除消失
+
+日期：2026-10-26。用户口径：节点可以不显示，但连线必须保持；且希望把"节点该画到什么程度"
+做成节点状态，BaseNode（默认主题壳）按状态自由选择绘制方式。
+
+## 背景
+
+2026-10-15 上线的可见剔除走 VueFlow `hidden` 标记路线：视口（含 300px 缓冲带）外的节点
+hidden=true，VueFlow NodeWrapper render null，不产出 DOM。当时只盯着节点性能，漏了连线：
+VueFlow EdgeWrapper 源码（vue-flow-core.mjs:8892）写死
+`if (edge.hidden || sourceNode.hidden || targetNode.hidden) return null` —— 任一端被剔除，
+这条边就整体不画。于是出现"画布内节点的连线凭空断掉"。
+
+## 方案（用户选定：宿主下发状态，壳自选绘制）
+
+1. **取消 hidden 路线**：所有节点一律常驻渲染（hidden 恒 false）。性能回收靠壳的策略层——
+   剔除态不挂内容组件（图片/文本/视频等重组件正是当初诊断的性能大头），壳本体 + 标题 +
+   端口锚点保留，连线端点永远锚在真实几何上。
+2. **宿主下发状态，不掺决策**：CanvasHost 在灌渲染态时给每个节点打
+   `data._cullState: 'visible' | 'culled' | 'culled-linked' | 'transient'`。
+   - visible：视口 + 缓冲带相交（判定逻辑不变，visibleCull.ts 纯函数复用）。
+   - culled：视口外，且没有任何连线连着它。
+   - culled-linked：视口外，但至少有一条连线连着它（另一端画内画外均可）。
+   - transient：拖线菜单卡等临时节点，永不剔除（沿用 2026-10-16 规则）。
+   - 分组父子沿用"零例外"：各按自身矩形判定，不特判。
+3. **壳策略（plugin-theme-default 默认实现）**：
+   - visible：全量绘制（现状行为，逐像素不变）。
+   - culled-linked：骨架——标题条与 MovingHandle（真实 Handle 锚点）保留，
+     内容段/控制栏/多选标记/区域条不挂载，卡片本体 visibility:hidden（占位、不可点）。
+   - culled：同骨架（默认主题不再区分这两档的画法，区分留给自定义壳；
+     但仍然常驻、保持量测与端口几何）。
+   - transient：全量绘制。
+   - 新增本插件设置项 `culledNodeRendering`（skeleton 骨架 / full 全量 / ghost 占位框），
+     缺省 skeleton。ghost 档画一个可见的空心占位框（调试/大屏场景用）。
+
+## 为什么不是另两条路
+
+- 给屏外端点补"假锚点占位节点"：占位进出集合时连线端点会跳；连线点击/删除/吸附都要补
+  "还原成真节点"逻辑，散落多处。
+- 宿主 SVG 自绘被剔除端点的连线：要复刻 CustomEdge 的贝塞尔/流光/选中高亮/剪切钮，
+  等于维护两套连线系统。
+
+## 改动清单
+
+| 文件 | 改动 |
+| --- | --- |
+| canvas-render/src/host/canvasHostCore.ts | nodesFromStore：hidden 恒 false；新增 _cullState 注入（纯函数，接受 linkedIds） |
+| canvas-render/src/host/visibleCull.ts | 头注更新（hidden 路线退役原因） |
+| canvas-render/src/host/CanvasHost.vue | 计算 linkedIds（edgeStore 建邻接表）；刷新时机沿用；去掉 hidden 旧注释 |
+| canvas-render/src/host/CanvasSurface.vue | renderCtx 增补 nodeVisibility 说明（壳经 props.data 消费） |
+| canvas-render/src/contracts/canvasInteractionSettings.ts | visibleCullEnabled 文案改为"视口外节点降级绘制" |
+| plugin-theme-default/src/index.ts | Config 新增 culledNodeRendering（默认 skeleton） |
+| plugin-theme-default/src/components/node/BaseNode.vue | 按 _cullState + 配置选择绘制；骨架 CSS |
+| 测试 | canvasHostCore.test.ts / visibleCull.test.ts 改写 hidden 断言为 _cullState；新增 linked 判定、设置三档、transient 用例 |
+
+## 验收
+
+1. 画布内节点的连线，即使另一端在画布外也完整显示，端点锚在真实端口上。
+2. 平移/缩放视口，剔除集合变化时连线不闪断（节点常驻，几何连续）。
+3. 设置面板"只渲染可见节点"文案与行为一致；culledNodeRendering 三档切换即时生效。
+4. 性能不回退：剔除态不挂载内容组件（重组件不再创建），量测/拖拽/多选/分组行为不变。
+5. 包内 vitest 全绿（canvas-render / plugin-theme-default），typecheck 干净。
