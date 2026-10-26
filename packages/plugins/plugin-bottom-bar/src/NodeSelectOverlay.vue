@@ -40,7 +40,8 @@ const props = defineProps<{
  * 宿主可通过 props 覆盖单个字段。
  */
 const border = computed(() => ({
-  color: props.borderColor ?? 'var(--canvas-node-border-selected, #111827d9)',
+  /* 用户口径（2026-10-26）：边框颜色用主题色（当前设置的紫色），不是默认灰 */
+  color: props.borderColor ?? 'var(--ui-accent, #7c3aed)',
   style: props.borderStyle ?? 'solid',
   width: props.borderWidth ?? '1px',
 }))

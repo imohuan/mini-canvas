@@ -36,7 +36,7 @@ onBeforeUnmount(() => {
     <div v-if="active" class="cd-root" data-testid="ctrl-drag-overlay">
       <div class="cd-top" @pointerdown.stop>
         <span class="cd-top-text">按住 Ctrl 拖资源到参考格</span>
-        <button class="cd-top-close" type="button" title="退出 (Esc)" aria-label="退出" @pointerdown.stop @click="syncActive">
+        <button class="cd-top-close" type="button" title="退出 (Esc)" @pointerdown.stop @click="syncActive">
           <span aria-hidden="true" v-html="ICON_CLOSE" />
         </button>
       </div>
@@ -54,7 +54,7 @@ onBeforeUnmount(() => {
 .cd-top { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 14px; background: var(--ui-accent); color: #ffffff; box-shadow: var(--ui-shadow-lg, 0 12px 32px rgb(15 23 42 / 0.28)); pointer-events: auto; }
 .cd-top-text { font-size: 13px; font-weight: 600; white-space: nowrap; }
 /* 主题色白名单: 紫底上的白色半透明按钮，白与紫成对 */
-.cd-top-close { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 10px; background: rgb(255 255 255 / 0.16); color: #ffffff; cursor: pointer; }
+.cd-top-close { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 1px solid rgb(255 255 255 / 0.4); border-radius: 10px; background: rgb(255 255 255 / 0.16); color: #ffffff; cursor: pointer; }
 .cd-top-close:hover { /* 主题色白名单: 同上 */ background: rgb(255 255 255 / 0.28); }
 .cd-top-close svg { width: 15px; height: 15px; }
 .cd-esc { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 8px; background: var(--ui-tip); color: var(--ui-tip-ink); font-size: 12px; }
