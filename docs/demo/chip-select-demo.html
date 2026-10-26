@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>标签选中 UI 方案对比</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #f6f7f9; margin: 0; padding: 24px; color: #18202b; }
+  h1 { font-size: 18px; }
+  p.tip { color: #6b7280; font-size: 13px; }
+  .toolbar { display: flex; gap: 8px; margin: 16px 0; flex-wrap: wrap; }
+  .toolbar button { padding: 6px 14px; border-radius: 8px; border: 1px solid #d5dae2; background: #fff; cursor: pointer; font-size: 13px; }
+  .toolbar button.on { background: #18202b; color: #fff; border-color: #18202b; }
+  .canvas {
+    background: #fff; border: 1px solid #e3e7ee; border-radius: 14px; padding: 18px 20px;
+    line-height: 2.1; font-size: 14px; min-height: 140px;
+  }
+  /* chip 基础样式（与线上一致） */
+  .chip { display: inline-flex; align-items: center; gap: 5px; max-width: 160px; height: 22px;
+    padding: 0 7px 0 3px; margin: 0 2px; border-radius: 6px; vertical-align: bottom; line-height: 1;
+    border: 1px solid rgb(24 32 43 / .18); background: rgb(0 0 0 / .04); }
+  .chip img { width: 16px; height: 16px; border-radius: 4px; object-fit: cover; }
+  .chip .nm { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip img { pointer-events: none; }
+  .chip .th { width: 16px; height: 16px; border-radius: 4px; flex: none;
+    background: linear-gradient(135deg, #f2a2a2, #e26d6d); }
+
+  /* ===== 方案 ===== */
+  /* A 描边：内容原样，黑描边 */
+  .scheme-a .sel { outline: 2px solid #18202b; outline-offset: 1px; border-radius: 7px; }
+  /* B 底色加深：chip 背景加深一档，边框变实 */
+  .scheme-b .sel { background: rgb(24 32 43 / .1) !important; border-color: #18202b; }
+  /* C 反色：黑底白字（缩略图保留） */
+  .scheme-c .sel { background: #18202b !important; border-color: #18202b; }
+  .scheme-c .sel .nm { color: #fff; }
+  /* D 缩放+投影：内容不变，微微放大 + 阴影 */
+  .scheme-d .sel { transform: scale(1.12); box-shadow: 0 4px 14px rgb(15 23 42 / .25); border-color: #18202b; position: relative; z-index: 1; }
+  /* E 下划线加粗：不加底色，底部粗线 */
+  .scheme-e .sel { border-bottom: 3px solid #18202b; border-radius: 6px 6px 2px 2px; }
+  /* F 虚线框：手绘感虚线 */
+  .scheme-f .sel { outline: 2px dashed #18202b; outline-offset: 2px; border-radius: 7px; }
+
+  /* 文本选区示例 */
+  .txt ::selection { background: rgb(24 32 43 / .85); color: #fff; }
+  .txt-native ::selection { background: rgb(178 205 245); color: inherit; }
+  .label-row { margin-top: 14px; font-size: 12px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h1>标签选中 UI 方案对比</h1>
+<p class="tip">点击下方按钮切换方案；再点输入框里的标签/拖选文字，看每种方案的实际观感。</p>
+<div class="toolbar" id="tb"></div>
+<div class="canvas" id="stage">
+  <span class="chip"><span class="th"></span><span class="nm">图片2</span></span>
+  阿斯蒂芬按时发的发生的回复看啦收到了
+  <span class="chip"><span class="th" style="background:linear-gradient(135deg,#2c2c2c,#000)"></span><span class="nm">图片3</span></span>
+  打撒发生的是的啊的
+  <span class="chip"><span class="th" style="background:linear-gradient(135deg,#e26d6d,#c94b4b)"></span><span class="nm">图片1</span></span>
+</div>
+<div class="label-row" id="desc"></div>
+<script>
+const SCHEMES = [
+  ['scheme-a', 'A 黑描边（当前线上方案）', '内容原样可见，2px 黑描边圈住 chip。'],
+  ['scheme-b', 'B 底色加深', 'chip 背景加深一档 + 边框变实，柔和的选中感。'],
+  ['scheme-c', 'C 反色黑底白字', '黑底白字，选中感最强（缩略图保留可见）。'],
+  ['scheme-d', 'D 缩放+投影', '微微放大 + 阴影浮起，动态感强，不影响配色。'],
+  ['scheme-e', 'E 底部粗线', '只压一条底部粗线，最轻量。'],
+  ['scheme-f', 'F 虚线框', '虚线描边，有"待编辑"的手绘感。'],
+]
+const tb = document.getElementById('tb')
+const stage = document.getElementById('stage')
+const desc = document.getElementById('desc')
+let cur = SCHEMES[0][0]
+for (const [id, label] of SCHEMES) {
+  const b = document.createElement('button')
+  b.textContent = label
+  b.onclick = () => set(id)
+  b.dataset.id = id
+  tb.appendChild(b)
+}
+function set(id) {
+  stage.className = 'canvas ' + id
+  cur = id
+  for (const b of tb.children) b.classList.toggle('on', b.dataset.id === id)
+  desc.textContent = SCHEMES.find(s => s[0] === id)[2] + ' —— 点击标签看选中效果。'
+}
+set(cur)
+stage.addEventListener('click', e => {
+  const chip = e.target.closest('.chip')
+  if (!chip) return
+  for (const c of stage.querySelectorAll('.chip')) c.classList.toggle('sel', c === chip && !chip.classList.contains('sel'))
+})
+</script>
+</body>
+</html>
