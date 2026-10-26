@@ -72,7 +72,7 @@ function toggle(): void {
     v-model="open"
     placement="bottom-start"
     :offset="6"
-    menu-width="257px"
+    menu-width="225px"
     menu-role="dialog"
     body-class="cf-menu-body"
   >
@@ -247,6 +247,18 @@ function toggle(): void {
 
 :global(.cf-menu-body) {
   padding: 0;
+}
+
+/*
+ * 面板宽度 = 取色器宽度，两个尺寸绑在一起：@ckpack/vue-color 的 Chrome 自带
+ * width:225px（box-sizing:initial，含边框阴影恰为 257px 视觉），改成只在菜单
+ * 上写 225px、再让 .vc-chrome 撑满菜单，就永远不会出现"面板宽、取色器窄、
+ * 右侧空一条"的错位（用户实测：257px 面板 + 225px 取色器右侧空 32px）。
+ */
+:global(.cf-menu-body .vc-chrome) {
+  width: 100%;
+  box-shadow: none;
+  border-radius: inherit;
 }
 
 /* 已清空态：触发器不画色块、文字改「跟随主题」 */
