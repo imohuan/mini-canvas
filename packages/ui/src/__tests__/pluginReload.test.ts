@@ -135,8 +135,10 @@ describe('createPluginReloader', () => {
     })
     // 没有全局名可纠（清单里也是空）→ 只能接受首次结果，但至少不应崩
     const res = await r.reload('/plugins/plugin-style-library/plugin-style-library.js')
+    // 旧约定兜底：mod.name='wrong-plugin' 推导 MiniCanvasPluginWrongPlugin ≠ 对齐名，
+    // 加载器第二次仍返回 wrong-plugin → 保留首次结果，共 2 次调用
     expect(res.name).toBe('wrong-plugin')
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
   })
 
   it('清单里没有该插件 → 抛清晰错误', async () => {

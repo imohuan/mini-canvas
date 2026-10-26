@@ -252,6 +252,34 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     const loadUmd = deps.loadUmd ?? defaultLoadUmd
     const mod = await loadUmd(url, globalName)
 
+    /**
+     * 纠错兜底（无清单提示的路径）：加载器没拿到全局名时会扫 window 猜，
+     * 多个插件并存时可能挑到别的那个（实测踩过：重装 bottom-bar 挑到 align-guide，
+     * 卸旧装新 → "[core] Duplicate plugin name: align-guide"）。
+     * UMD 全局名有稳定约定 MiniCanvasPlugin<PascalCase(插件名)> —— 按加载出的 mod.name
+     * 推导真名再 load 一次，对得上才替换，对不上保留首次结果。
+     */
+    if (!globalName && mod?.name) {
+      const pascal = mod.name
+        .split(/[-_]/)
+        .filter(Boolean)
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join('')
+      const guessed = 'MiniCanvasPlugin' + pascal
+      if (guessed !== 'MiniCanvasPlugin') {
+        try {
+          const retry = await loadUmd(url, guessed)
+          if (retry && retry.name === mod.name) {
+            mod.name = retry.name
+            if (typeof retry.apply === 'function') mod.apply = retry.apply
+            if (typeof retry.setup === 'function') mod.setup = retry.setup
+          }
+        } catch {
+          /* 重加载失败：保留首次结果 */
+        }
+      }
+    }
+
     // 纠错兜底：加载器在**没有全局名提示**时会扫 window 猜，可能挑到别的插件。
     // 若对上的清单项说这个地址的插件名是 A、而实际加载出来的是 B，说明挑错了 ——
     // 按清单里的全局名**重加载一次**，避免"以为重装了 X，其实把 Y 卸了重装"（实测踩过）。

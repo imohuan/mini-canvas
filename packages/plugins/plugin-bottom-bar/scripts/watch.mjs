@@ -26,7 +26,7 @@
  */
 import { watch } from '../../plugin-hot-reload-demo/node_modules/chokidar/index.js'
 import { spawn } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -60,9 +60,14 @@ const PLUGIN_NAME = pkg.miniCanvas?.pluginName || String(pkg.name || '').replace
 const PKG_DIR = PKG_ROOT.split(/[\\/]/).filter(Boolean).pop() || PLUGIN_NAME
 const KV_URL = BACKEND + '/api/kv/config/plugin-watch:' + encodeURIComponent(PLUGIN_NAME)
 
-/** 找 dist 里的前端产物（与 vite.config 的 fileName 一致） */
+/** 找 dist 里的前端产物（实际扫描 dist，避免 vite fileName 与插件名不一致时拼错地址） */
 function frontUrlNow() {
   if (FRONT_OVERRIDE) return FRONT_OVERRIDE
+  const distDir = join(PKG_ROOT, 'dist')
+  if (existsSync(distDir)) {
+    const found = readdirSync(distDir).find((f) => f === PLUGIN_NAME + '.js' || f.endsWith('.js'))
+    if (found) return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + found
+  }
   return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + PLUGIN_NAME + '.js'
 }
 
