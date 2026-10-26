@@ -246,14 +246,18 @@ function toggle(): void {
 }
 
 :global(.cf-menu-body) {
+  /* Dropdown 的 scoped 规则是 .dd-menu[data-v-x]（特异性更高），直接写 padding: 0
+     盖不过它 —— 走变量：scoped 规则读 var(--dd-padding, 6px)，这里把变量归零。 */
+  --dd-padding: 0;
   padding: 0;
 }
 
 /*
  * 面板宽度 = 取色器宽度，两个尺寸绑在一起：@ckpack/vue-color 的 Chrome 自带
- * width:225px（box-sizing:initial，含边框阴影恰为 257px 视觉），改成只在菜单
- * 上写 225px、再让 .vc-chrome 撑满菜单，就永远不会出现"面板宽、取色器窄、
- * 右侧空一条"的错位（用户实测：257px 面板 + 225px 取色器右侧空 32px）。
+ * width:225px（写死，不许外部拉伸），菜单却给了 257px（内容区 243px），
+ * 右侧永远空 18px（用户实测报"下拉右侧空白一大片"）。
+ * 现在只在菜单上写 225px，再让 .vc-chrome 撑满菜单内容区 —— 以后要改宽度
+ * 只动 menu-width 一处，面板和取色器永远同宽，不会再错位。
  */
 :global(.cf-menu-body .vc-chrome) {
   width: 100%;
