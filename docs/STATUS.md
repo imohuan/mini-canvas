@@ -5,6 +5,23 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-26，ColorField 取色器贴满下拉面板）
+
+用户报：颜色选择器的下拉右侧空白一大片（截图：面板 257px，取色器只有 225px）。
+
+**根因**：`@ckpack/vue-color` 的 Chrome 组件自带 `width:225px`（写死不许外部拉伸），
+而 `ColorField.vue` 给下拉菜单写了 `menu-width="257px"`，右侧永远空 18px（内容区
+243px − 225px）。
+
+**修法（`ColorField.vue` 一处）**：菜单改 225px 与取色器同宽；新增
+`:global(.cf-menu-body .vc-chrome)` 让取色器撑满菜单内容区（去自身阴影、圆角
+inherit）；`cf-menu-body` 用 `--dd-padding: 0` 归零浮层内边距（Dropdown 的
+scoped 规则特异性更高，直接写 padding: 0 盖不过，走变量才真正归零）。
+以后要改宽度只动 menu-width 一处，面板和取色器永远同宽。
+
+**验证**：真机 Chromium（dev :5288 设置面板实测）菜单 225 / 取色器 223（剩 2px 为
+面板边框），左右各 1px 对称无空白；plugin-theme-default 320 全绿、typecheck 干净。
+
 ### 追记（2026-10-26，节点可见状态写入文档站与 API 手册）
 
 用户要求把本轮剔除改造沉淀进文档：
