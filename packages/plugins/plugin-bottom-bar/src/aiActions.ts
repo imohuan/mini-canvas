@@ -303,7 +303,7 @@ export async function requestAiText(opts: AiRequestOptions): Promise<AiRequestRe
     if (opts.signal?.aborted) return { ok: false, error: '已取消', attempts: attempt - 1 }
     try {
       const res = await f(base + '/api/agent/chat/completion', {
-      method: 'POST',
+        method: 'POST',
         headers: withAdminToken({ 'content-type': 'application/json', accept: 'text/event-stream' }),
         body: JSON.stringify({ stream: true, messages: [{ role: 'user', content }] }),
         ...(opts.signal ? { signal: opts.signal } : {}),
