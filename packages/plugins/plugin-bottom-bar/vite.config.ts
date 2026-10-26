@@ -1,19 +1,12 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { fileURLToPath, URL } from 'node:url'
+import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
+import { pluginLibBuild } from '../vite-plugin-lib'
 
+// plugin-bottom-bar —— lib 打包（UMD + CSS 注入）供热重载/插件管理加载。
+// external / globals 走共享表（../vite-plugin-lib），与其它插件同一份事实源。
 export default defineConfig({
-  plugins: [vue()],
-  build: {
-    lib: {
-      entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginBottomBar',
-      fileName: 'plugin-bottom-bar',
-    },
-    rollupOptions: {
-      external: ['vue', '@mini-canvas/kernel', '@mini-canvas/canvas-data', '@mini-canvas/canvas-base', '@mini-canvas/canvas-render', 'prosemirror-editor-bundle'],
-      output: { globals: { vue: 'Vue' } },
-    },
-  },
+  plugins: [vue(), cssInjectedByJs()],
+  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginBottomBar' }),
 })
 
