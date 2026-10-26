@@ -60,3 +60,22 @@ VueFlow EdgeWrapper 源码（vue-flow-core.mjs:8892）写死
 3. 设置面板"只渲染可见节点"文案与行为一致；culledNodeRendering 三档切换即时生效。
 4. 性能不回退：剔除态不挂载内容组件（重组件不再创建），量测/拖拽/多选/分组行为不变。
 5. 包内 vitest 全绿（canvas-render / plugin-theme-default），typecheck 干净。
+
+## DOM 审计（2026-10-26 真机 Chromium 实测，回答"DOM 为什么还在"）
+
+此前 hidden 路线的真实行为：hidden=true 时 VueFlow NodeWrapper **render null，节点壳 DOM
+整个消失**（不是 display:none）——用户看到的"DOM 还在"不是旧方案残留。改造后节点常驻，
+DOM 分层如下（同一画布实测）：
+
+| 层 | culled 节点 | visible 节点 |
+| --- | --- | --- |
+| VueFlow 内部 store 数据记录 | 有（连线解析必需） | 有 |
+| .vue-flow__node 壳元素 | 有（保连线端点几何） | 有 |
+| .v2-node 节点壳组件实例 | 有（标题/锚点载体） | 有 |
+| .v2-card 卡片盒子 | 有，visibility:hidden 隐身占位 | 可见 |
+| 内容组件（img/text/video 等） | **无（v-if 摘除）** | 有 |
+| 节点子树 DOM 元素数（实测） | **8 个** | **24 个** |
+
+即降级把"渲染成本大头"（内容组件树，本例 24→8，砍掉 2/3）真正摘掉了；
+留下的壳是连线正确性与滚回视野零闪变的最小集合。VueFlow 把节点记录留在
+内部 store 与"DOM 渲染了它"是两回事 —— store 记录只是 JS 对象，不进渲染树。
