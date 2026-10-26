@@ -5,6 +5,21 @@
 
 ## 一、现在该做什么（2026-09-17）
 
+### 追记（2026-10-26，屏外壳压缩开关 cullCompactShells）
+
+用户口径（1000 节点/屏内 20）：壳也要省 —— "视口外无连线牵扯的节点连壳都不要渲染"。
+
+**落地**：canvas-render 设置组（常规/画布）新增 `cullCompactShells`（缺省开）：
+开 = 纯 culled 节点（视口外且不在 linkedIds）hidden=true，VueFlow 零 DOM，
+壳数量 ≈ 可视节点数 + 跨线节点数；关 = 壳全挂（只降级内容）。**hidden 绝不落在
+linkedIds 节点上**（跨内外连线会被 VueFlow 连坐消失 —— 同日断线教训的硬约束），
+culled-linked 与 transient 恒常驻。压缩隐藏的节点不注入 _cullState（无壳无消费方）。
+
+**真机验证**（Chromium 实测）：压缩档下屏外无连线节点 DOM 里不存在；节点拖出屏时若
+有连线跨内外 → 节点保持 culled-linked 常驻、连线 path 持续渲染；两端都出屏后连线 DOM
+同步消失；pan/zoom 回滚节点壳即时恢复。canvas-render 484 全绿、typecheck 干净
+（ui 有一条 themeColorHygiene 红在并行任务 bottom-bar 的 WIP，与本改动无关）。
+
 ### 追记（2026-10-26，视口外节点改「状态下发 + 壳自选绘制」，连线不再随剔除消失）
 
 用户口径：画布内节点的连线，另一端节点被可见剔除（hidden）后整条线不画了 —— VueFlow
