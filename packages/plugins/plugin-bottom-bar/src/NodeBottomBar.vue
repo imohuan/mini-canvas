@@ -976,7 +976,13 @@ let ctrlDrag: {
 
 function moveGhost(x: number, y: number): void {
   const g = ctrlDrag?.ghost
-  if (g) { g.style.left = x + 12 + 'px'; g.style.top = y + 12 + 'px' }
+  // 贴合鼠标：资源居中在指针上（不再右下偏移 —— 用户口径：定位与鼠标有间隔不对）
+  if (g) {
+    const w = g.offsetWidth || 100
+    const h = g.offsetHeight || 100
+    g.style.left = x - w / 2 + 'px'
+    g.style.top = y - h / 2 + 'px'
+  }
 }
 
 /** pointerdown（捕获）：底栏开着 + Ctrl + 鼠标下是图片/视频/音频节点 → 进入拖资源模式。
@@ -1005,11 +1011,26 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
     img.src = media.url
     img.alt = ''
     ghost.appendChild(img)
+  } else if (media.url && media.mediaType === 'video') {
+    // 视频取首帧当缩略图（静音、不播放、仅显示第一帧画面）
+    const video = document.createElement('video')
+    video.src = media.url
+    video.muted = true
+    video.preload = 'metadata'
+    video.className = 'nb-drag-ghost-media'
+    ghost.appendChild(video)
+  } else if (media.mediaType === 'audio') {
+    // 音频没有画面 —— 用一个音符图标圆片表达（用户口径：音频简单用图标即可）
+    const icon = document.createElement('div')
+    icon.className = 'nb-drag-ghost-icon'
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+    ghost.appendChild(icon)
+  } else if (media.url) {
+    const img = document.createElement('img')
+    img.src = media.url
+    img.alt = ''
+    ghost.appendChild(img)
   }
-  const label = document.createElement('span')
-  label.className = 'nb-drag-ghost-name'
-  label.textContent = media.name
-  ghost.appendChild(label)
   document.body.appendChild(ghost)
   ctrlDrag = { nodeId, mediaType: media.mediaType, url: media.url, name: media.name, ghost }
   moveGhost(ev.clientX, ev.clientY)
@@ -2241,30 +2262,43 @@ function onGlobalLeave(el: Element): void {
   pointer-events: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 6px;
+  padding: 0;
   border-radius: 10px;
-  background: var(--ui-overlay-solid, #fff);
-  border: 2px solid var(--ui-accent, #0891b2);
-  color: var(--ui-ink, #18202b);
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.3));
-  max-width: 220px;
+  /* 只展示资源本身（用户口径：不要标题）—— 图片/视频直接缩略图，音频用图标 */
+  overflow: hidden;
+  box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.35));
+  outline: 2px solid var(--ui-accent, #0891b2);
+  outline-offset: -1px;
   overflow: hidden;
 }
 .nb-drag-ghost img {
-  width: 72px;
-  height: 72px;
-  border-radius: 6px;
+  width: 96px;
+  height: 96px;
   object-fit: cover;
   flex: none;
+  display: block;
 }
-.nb-drag-ghost .nb-drag-ghost-name {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.nb-drag-ghost .nb-drag-ghost-media {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  flex: none;
+  display: block;
+  background: #000;
+}
+.nb-drag-ghost .nb-drag-ghost-icon {
+  width: 96px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  background: var(--ui-overlay-solid, #fff);
+  color: var(--ui-ink, #18202b);
+}
+.nb-drag-ghost .nb-drag-ghost-icon svg {
+  width: 40px;
+  height: 40px;
 }
 </style>
  
