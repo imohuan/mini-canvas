@@ -54,6 +54,23 @@ export function ctrlDragNodeState(input: {
   return input.connected ? 'connected' : 'selectable'
 }
 
+/**
+ * 拖拽启动的**对象数据通道**：覆盖层（长在节点里）拿到 props.id/props.data 的对象数据，
+ * 直接调用这里注册的处理器发起拖拽 —— 不再走 window pointerdown + DOM closest 判定
+ * （用户口径：DOM 判定会误触节点选中）。
+ * 处理器由底栏宿主注册（影子/全局监听都在它那里）。
+ */
+type StartDragHandler = (nodeId: string, ev: PointerEvent) => void
+let startDragHandler: StartDragHandler | null = null
+export function registerStartDragHandler(h: StartDragHandler | null): void {
+  startDragHandler = h
+}
+export function requestStartDrag(nodeId: string, ev: PointerEvent): boolean {
+  if (!startDragHandler) return false
+  startDragHandler(nodeId, ev)
+  return true
+}
+
 /** 盖层悬停提醒（connected 的提醒 = 用户口径：已连接的要有提醒） */
 export function ctrlDragHintText(state: CtrlDragNodeState, title: string): string {
   if (state === 'connected') return '已连接 · 不可重复拖拽'

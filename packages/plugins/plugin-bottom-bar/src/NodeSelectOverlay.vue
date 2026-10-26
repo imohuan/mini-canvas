@@ -22,6 +22,7 @@ import {
   type ReferenceNodeState,
 } from './referenceMode'
 import { nodeMediaOf } from './refSlotDrag'
+import { requestStartDrag } from './ctrlDragMode'
 
 const props = defineProps<{
   id: string
@@ -137,6 +138,19 @@ function onPick(): void {
     .map((e) => e.id)
   if (ids.length > 0) d.removeEdges(ids)
 }
+
+/**
+ * pointerdown 捕获：ctrl-drag 模式发起拖拽并 stop（防节点选中误触）；
+ * reference 模式直接放行（点击 = 连/断，stop 会吞掉后续 click）。
+ */
+function onDragPointerDown(ev: PointerEvent): void {
+  if (props.mode !== 'ctrl-drag') return
+  const session = readSession()
+  if (!session.active) return
+  requestStartDrag(props.id, ev)
+  ev.preventDefault()
+  ev.stopPropagation()
+}
 </script>
 
 <template>
@@ -147,6 +161,7 @@ function onPick(): void {
     :class="['is-' + state, 'is-' + mode]"
     :style="{ border: border.width + ' ' + border.style + ' ' + border.color, borderRadius: radius }"
     data-testid="node-select-layer"
+    @pointerdown.capture="onDragPointerDown($event)"
     @click.stop="onPick()"
   >
     <span v-if="state === 'selectable'" class="nso-badge">

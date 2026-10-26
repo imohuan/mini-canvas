@@ -70,8 +70,8 @@ import {
 // 参考区合并 + 缺号校验（纯函数，已单测）
 import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
-import { nodeMediaOf, isDraggableTarget } from './refSlotDrag'
-import { enterCtrlDragMode, exitCtrlDragMode } from './ctrlDragMode'
+import { nodeMediaOf } from './refSlotDrag'
+import { enterCtrlDragMode, exitCtrlDragMode, registerStartDragHandler } from './ctrlDragMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -995,18 +995,9 @@ function onCtrlModeKeyup(ev: KeyboardEvent): void {
   exitCtrlDragMode()
 }
 
-/** pointerdown（捕获）：底栏开着 + Ctrl + 鼠标下是图片/视频/音频节点 → 进入拖资源模式。
- *  在捕获阶段拦掉，画布收不到这次按下 —— Ctrl 拖资源**不会**顺带选中节点。 */
-function onCtrlDragPointerDown(ev: PointerEvent): void {
-  if (!(ev.ctrlKey || ev.metaKey)) return
-  // 只在选择态里允许拖（选择态 = Ctrl 按下时进入的预告层；用户口径：与参考选择同款交互）
-  if (!(globalThis as { __miniCanvasCtrlDrag?: { active: boolean } }).__miniCanvasCtrlDrag?.active) return
-  if (!isDraggableTarget(ev.target)) return
-  const el = (ev.target as HTMLElement).closest('.vue-flow__node') as HTMLElement | null
-  const nodeId = el?.getAttribute('data-id')
-  if (!nodeId) return
-  // 已连接的禁止（选择态里它是 connected 面孔 + 提醒，这里双保险）
-  if (nodeId === props.id) return
+/** 拖拽启动：由 NodeSelectOverlay 覆盖层经**对象数据通道**调起（props.id/props.data），
+ *  不再走 window pointerdown + DOM closest 判定 —— DOM 判定会误触节点选中。 */
+function startCtrlDrag(nodeId: string, ev: PointerEvent): void {
   const doc = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')
   const media = nodeMediaOf(doc?.getNode(nodeId))
   if (!media) return
@@ -1129,7 +1120,7 @@ function onCtrlDragPointerUp(ev: PointerEvent): void {
 }
 
 onMounted(() => {
-  window.addEventListener('pointerdown', onCtrlDragPointerDown, true)
+  registerStartDragHandler(startCtrlDrag)
   window.addEventListener('pointermove', onCtrlDragPointerMove, true)
   window.addEventListener('pointerup', onCtrlDragPointerUp, true)
   window.addEventListener('dragover', onCtrlDragOver, true)
@@ -1140,7 +1131,7 @@ onMounted(() => {
   window.addEventListener('keyup', onCtrlModeKeyup, true)
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('pointerdown', onCtrlDragPointerDown, true)
+  registerStartDragHandler(null)
   window.removeEventListener('pointermove', onCtrlDragPointerMove, true)
   window.removeEventListener('pointerup', onCtrlDragPointerUp, true)
   window.removeEventListener('dragover', onCtrlDragOver, true)
