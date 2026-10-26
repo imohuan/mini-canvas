@@ -2,7 +2,7 @@
  * canvasInteractionSettings.test —— 画布交互配置（「常规/画布」）的纯逻辑单测。
  *
  * 覆盖（对齐 v1 core 的 VueFlow 交互开关，全收进一组）：
- * - schema 声明：18 项（13 开关 + 网格间距 X/Y + 可见剔除三项 visibleCullEnabled/
+ * - schema 声明：19 项（13 开关 + 网格间距 X/Y + 可见剔除三项 visibleCullEnabled/
  *   visibleCullBuffer/dragRapidMode —— 2026-10-15 自研可见剔除上线，见
  *   docs/plan/2026-10-15-canvas-perf-diagnosis.md；onlyRenderVisibleElements（库级）
  *   仍移除，见 CANVAS_INTERACTION_DEFAULTS 注释）、分组恒为「常规/画布」、类型正确；
@@ -21,9 +21,9 @@ import {
 } from '../canvasInteractionSettings'
 
 describe('canvasInteractionSettings schema 声明', () => {
-  it('18 项配置、分组恒为「常规/画布」', () => {
+  it('19 项配置、分组恒为「常规/画布」', () => {
     const keys = Object.keys(CANVAS_INTERACTION_SCHEMA)
-    expect(keys).toHaveLength(18)
+    expect(keys).toHaveLength(19)
     for (const key of keys) {
       expect(CANVAS_INTERACTION_SCHEMA[key].group).toBe(CANVAS_INTERACTION_GROUP)
     }
@@ -50,6 +50,7 @@ describe('canvasInteractionSettings schema 声明', () => {
     // —— 2026-10-15 自研可见剔除（hidden 路线，与库级开关无关）——
     expect(CANVAS_INTERACTION_DEFAULTS.visibleCullEnabled).toBe(true)
     expect(CANVAS_INTERACTION_DEFAULTS.visibleCullBuffer).toBe(300)
+    expect(CANVAS_INTERACTION_DEFAULTS.cullCompactShells).toBe(true)
     // 默认关（2026-10-16）：大画布 will-change 位图超 GPU 限会导致整机卡死（见八续）
     expect(CANVAS_INTERACTION_DEFAULTS.dragRapidMode).toBe(false)
     expect(CANVAS_INTERACTION_DEFAULTS.preventScrolling).toBe(true)

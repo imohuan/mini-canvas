@@ -97,6 +97,13 @@ export function nodesFromStore(
   cullIds?: ReadonlySet<string> | null,
   /** 与被剔除节点相连的节点 id 集（任一端被剔除的边，其两端都算 linked） */
   linkedIds?: ReadonlySet<string>,
+  /**
+   * 屏外壳压缩（canvasInteractionSettings.cullCompactShells）：true 时纯 culled 节点
+   * （视口外且不在 linkedIds）hidden=true —— VueFlow 不产出任何 DOM（壳数量压到
+   * 可视 + 跨线节点数）。**绝不允许 hidden 落在 linkedIds 里的节点**：VueFlow 对
+   * hidden 端点的边整体不画（2026-10-26 断线教训）。false = 壳全挂（缺省兜底）。
+   */
+  compactShells?: boolean,
 ): FlowNode[] {
   return store.getNodes().map((n: CanvasNode) => {
     const selected = selectedIds ? selectedIds.has(n.id) : false
@@ -110,15 +117,22 @@ export function nodesFromStore(
       zIndex: selected ? LAYERS.nodeSelected : LAYERS.node,
     }
     if (selectedIds) out.selected = selected
-    // hidden 路线退役（见 culledState 注释）：一律 false 且**显式写** —— VueFlow 内部 store
-    // 对节点更新是合并语义，旧存档节点若残留 hidden:true，不带显式 false 就永远消失。
-    out.hidden = false
+    // hidden 只允许出现在压缩档的**纯 culled**节点上（不在 linkedIds —— 与任何跨内外连线无关，
+    // 连线不会被连坐）。visible / culled-linked / transient 一律 false 且**显式写**：
+    // VueFlow 内部 store 对节点更新是合并语义，旧残留的 true 必须显式清除。
+    const compactHide =
+      compactShells === true && !isTransient(n) && Boolean(cullIds) && !cullIds!.has(n.id) && !linkedIds?.has(n.id)
+    out.hidden = compactHide
     // 可见状态注入 data（壳消费；VueFlow 不认识该字段，零副作用）。
     // transient 不参与剔除（2026-10-16 拖线弹菜单失效的根因），恒 visible。
     if (!isTransient(n)) {
       const culled = cullIds ? !cullIds.has(n.id) : false
       const data = out.data as Record<string, unknown>
-      data._cullState = !culled ? 'visible' : (linkedIds?.has(n.id) ? 'culled-linked' : 'culled')
+      // 压缩档的纯 culled 节点没有壳，状态无消费方 —— 不注入，保持 data 干净。
+      const compactHidden = compactShells === true && culled && !linkedIds?.has(n.id)
+      if (!compactHidden) {
+        data._cullState = !culled ? 'visible' : (linkedIds?.has(n.id) ? 'culled-linked' : 'culled')
+      }
     }
     // —— v2 渲染投影：CanvasNode.parentId/size → VueFlow 父子/尺寸（group 插件依赖）——
     // parentNode：VueFlow(1.48) 的父子字段。挂上后子节点 position 按相对父解析，

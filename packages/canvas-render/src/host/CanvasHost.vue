@@ -244,6 +244,10 @@ function cullConfigFromSettings(): VisibleCullConfig {
     buffer: typeof interactionSettings.visibleCullBuffer === 'number' ? interactionSettings.visibleCullBuffer : 300,
   }
 }
+/** 压缩档开关（屏外无连线节点连壳不渲染）—— 缺省开（用户场景：1000 节点壳压到 ~50） */
+function compactShellsEnabled(): boolean {
+  return interactionSettings.cullCompactShells !== false
+}
 function refreshCull(): void {
   const h = hostRef.value
   if (!h) return
@@ -297,7 +301,7 @@ let stagedTarget: ReturnType<typeof nodesFromStore> = []
 function syncNodesFromStore(): void {
   const h = hostRef.value
   if (!h) return
-  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds)
+  const target = nodesFromStore(h.nodeStore, h.selection.ids, cullIds.value, linkedIds, compactShellsEnabled())
   /*
    * 分批进行中：已有节点必须**立即**吃到新数据（远端改内容、进度帧、拖动位置），
    * 只有尚未挂载的新节点继续排队。以前这里直接 return，分批窗口内所有更新都只写进
@@ -1255,8 +1259,9 @@ onMounted(async () => {
         // 原地写回（引用不变，Vue 响应式可感知 → VueFlow 绑定实时跟随）
         applyCanvasInteractionChangeInto(interactionSettings, key, value)
         // 可见剔除配置变化 → 立即重算集合并重灌（不等下一次视口变化，否则关掉剔除画面不恢复）
-        if (key === 'visibleCullEnabled' || key === 'visibleCullBuffer') {
+        if (key === 'visibleCullEnabled' || key === 'visibleCullBuffer' || key === 'cullCompactShells') {
           refreshCull()
+          rebuildLinkedIds()
           syncNodesFromStore()
         }
       }),

@@ -54,6 +54,14 @@ export interface CanvasInteractionSettings {
   visibleCullEnabled: boolean
   /** 可见剔除缓冲距离（flow px）：视口外扩这么远的节点仍渲染 */
   visibleCullBuffer: number
+  /**
+   * 屏外壳压缩（2026-10-26）：true = 视口外且无连线牵扯的节点**连壳也不渲染**
+   * （VueFlow hidden，零 DOM；壳数量 ≈ 可视节点数 + 跨线节点数）。
+   * false = 壳全挂（视口外只降级内容，壳保留 —— 连线端点随时可读，滚回视野零闪变）。
+   * 注意：压缩档只压"不在 linkedIds 里的节点"（culled），culled-linked 恒常驻 ——
+   * 否则跨内外连线会被 hidden 连坐消失（2026-10-26 断线教训，绝不可用 hidden 于有跨线牵扯的节点）。
+   */
+  cullCompactShells: boolean
   /** 拖拽快速模式：手势期间给节点层加 will-change: transform（快但略糊） */
   dragRapidMode: boolean
   preventScrolling: boolean
@@ -84,6 +92,9 @@ export const CANVAS_INTERACTION_DEFAULTS: Readonly<CanvasInteractionSettings> = 
   // —— 自研可见剔除（2026-10-15 性能优化，见 docs/plan/2026-10-15-canvas-perf-diagnosis.md）——
   visibleCullEnabled: true,
   visibleCullBuffer: 300,
+  // 压缩档缺省开：用户场景（1000 节点/屏内 20）壳数量从 1000 → ~50，滚回视野的闪变由
+  // 缓冲带 300px 提前挂载兜住大半；关掉即回到"壳全挂"（零闪变但壳多）。
+  cullCompactShells: true,
   // 默认关（2026-10-16 卡死排查实锤）：大画布下节点层 will-change:transform 会固化为超大位图，
   // 超 GPU 显存限制时 Chrome 反复分配/回收 → GPU 进程打满 → 整机卡死（AI 对话改画布后触发）。
   // 小画布用户可在设置里手动开启（仍有加速收益）。
@@ -156,6 +167,11 @@ export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingS
     2000,
     50,
     '视口外多远范围内的节点仍渲染（画布像素）。太小快速拖动会闪白，太大省不了多少。',
+  ),
+  cullCompactShells: bool(
+    'cullCompactShells',
+    '屏外壳压缩',
+    '视口外且没有连线牵扯的节点连壳都不渲染（画布超多节点时大幅降内存/CPU）。代价：这类节点快速拖回视野时可能闪一帧（缓冲带已兜住慢速平移）。与其相连跨屏连线的节点不受影响，连线保持完整。',
   ),
   dragRapidMode: bool(
     'dragRapidMode',

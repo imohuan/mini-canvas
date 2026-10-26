@@ -151,4 +151,27 @@ describe('nodesFromStore × cullIds（_cullState 派生，2026-10-26 hidden 退�
     expect(states2.find((n) => n.id === 'in1')!.data._cullState).toBe('visible')
     expect(states2.find((n) => n.id === 'out1')!.data._cullState).toBe('culled-linked')
   })
+
+  it('压缩档（compactShells）：纯 culled hidden=true 无壳；culled-linked/visible 恒常驻；关掉恢复', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'vis' },
+      { type: 'text', position: { x: 9000, y: 9000 }, id: 'out-link' },
+      { type: 'text', position: { x: 9500, y: 9500 }, id: 'out-alone' },
+      { type: 'text', position: { x: 120, y: 120 }, id: 'temp', data: { transient: true } },
+    ])
+    const visible = new Set(['vis', 'temp']) // temp 是 transient，宿主算集合时也不会给它（这里保守含入）
+    const linked = new Set(['out-link'])
+    const compact = nodesFromStore(s, undefined, visible, linked, true)
+    expect(compact.find((n) => n.id === 'out-alone')!.hidden).toBe(true)  // 纯屏外：零 DOM
+    expect(compact.find((n) => n.id === 'out-link')!.hidden).toBe(false)  // 跨线节点恒常驻（连线断线教训）
+    expect(compact.find((n) => n.id === 'vis')!.hidden).toBe(false)
+    expect(compact.find((n) => n.id === 'temp')!.hidden).toBe(false)      // transient 永不隐藏
+    // 压缩档纯 culled 不注入 _cullState（无壳无消费方）
+    expect(compact.find((n) => n.id === 'out-alone')!.data._cullState).toBeUndefined()
+    // 关掉压缩 = 壳全挂（现状），hidden 全显式 false
+    const full = nodesFromStore(s, undefined, visible, linked, false)
+    expect(full.map((n) => n.hidden)).toEqual([false, false, false, false])
+    expect(full.find((n) => n.id === 'out-alone')!.data._cullState).toBe('culled')
+  })
 })
