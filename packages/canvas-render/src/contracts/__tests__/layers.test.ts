@@ -22,6 +22,11 @@ describe('LAYERS：画布层叠带相对顺序', () => {
     expect(LAYERS.node).toBeLessThan(LAYERS.nodeSelected)
   })
 
+  it('选中节点的连线抬到普通节点之上、选中节点之下（用户口述：选中节点 > 其连线 > 其余）', () => {
+    expect(LAYERS.node).toBeLessThan(LAYERS.edgeSelected)
+    expect(LAYERS.edgeSelected).toBeLessThan(LAYERS.nodeSelected)
+  })
+
   it('选中节点**仍在**置顶连线之下（用户口述：抬层后依然在置顶连线下面）', () => {
     expect(LAYERS.nodeSelected).toBeLessThan(LAYERS.edgeTop)
   })

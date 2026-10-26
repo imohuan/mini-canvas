@@ -27,6 +27,7 @@ const EXPECTED: Array<[keyof typeof LAYERS, string]> = [
   ['edge', 'layer-edge'],
   ['node', 'layer-node'],
   ['nodeSelected', 'layer-node-selected'],
+  ['edgeSelected', 'layer-edge-selected'],
   ['tempEdge', 'layer-temp-edge'],
   ['edgeTop', 'layer-edge-top'],
   ['tempNode', 'layer-temp-node'],

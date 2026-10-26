@@ -403,6 +403,38 @@ describe('edgesFromStore（B 项：渲染 DTO 保留端口句柄 + 滤悬挂边�
   })
 })
 
+describe('edgesFromStore：选中节点连线的层级（选中节点 > 其连线 > 其余）', () => {
+  it('任一端选中的边抬到 edgeSelected，普通边不带 zIndex', () => {
+    const edges = [
+      { id: 'sel-src', source: 'a', target: 'b', type: 'custom' },
+      { id: 'sel-tgt', source: 'c', target: 'a', type: 'custom' },
+      { id: 'plain', source: 'c', target: 'd', type: 'custom' },
+    ]
+    const out = edgesFromStore(edges, new Set(['a', 'b', 'c', 'd']), new Set(['a']))
+    const byId = (id: string) => out.find((e) => e.id === id)!
+    expect(byId('sel-src').zIndex).toBe(LAYERS.edgeSelected)
+    expect(byId('sel-tgt').zIndex).toBe(LAYERS.edgeSelected)
+    expect(byId('plain').zIndex).toBeUndefined()
+  })
+
+  it('临时边仍置顶（tempEdge 优先，选中判定只管普通边）', () => {
+    const out = edgesFromStore(
+      [{ id: 'temp', source: 'a', target: 'b', type: 'custom', data: { isTemp: true } }],
+      new Set(['a', 'b']),
+      new Set(['a']),
+    )
+    expect(out[0]!.zIndex).toBe(LAYERS.tempEdge)
+  })
+
+  it('不传选中集 = 全部普通边（向后兼容，不写 zIndex）', () => {
+    const out = edgesFromStore(
+      [{ id: 'e1', source: 'a', target: 'b', type: 'custom' }],
+      new Set(['a', 'b']),
+    )
+    expect(out[0]!.zIndex).toBeUndefined()
+  })
+})
+
 describe('默认外观常量字段完整（P2-8 防漂移）', () => {
   it('DEFAULT_EDGE_VISUAL 覆盖 EdgeVisual 全部字段（结构完整，CustomEdge 读不到 undefined）', () => {
     const expected = [

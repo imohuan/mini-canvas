@@ -150,6 +150,7 @@
   --layer-group-nested: 60;
   --layer-edge: 100;
   --layer-node: 200;
+  --layer-edge-selected: 250;
   --layer-node-selected: 300;
   --layer-temp-edge: 380;
   --layer-edge-top: 400;

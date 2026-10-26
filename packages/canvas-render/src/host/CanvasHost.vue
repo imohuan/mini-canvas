@@ -379,8 +379,9 @@ function syncSelected(): void {
   if (!h) return
   selectedIds.value = new Set(h.selection.ids)
   selectedEdgeSelRef.value = new Set(h.selection.edgeIds)
-  // 重建渲染态节点并带 selected 标记：内核选中(单击/框选/Ctrl+A)驱动 VueFlow 节点高亮一致
-  syncNodesFromStore()
+  // 重建渲染态节点与连线：内核选中(单击/框选/Ctrl+A)驱动 VueFlow 节点高亮一致，
+  // 同时选中节点的连线要抬到 edgeSelected 档（连线的 z 在 syncFromStore 里随 selection 重算）
+  syncFromStore()
   h.ctx.emit(RenderEvents.SelectionChange, {
     nodeIds: [...h.selection.ids],
     edgeIds: [...h.selection.edgeIds],
@@ -491,9 +492,11 @@ function syncFromStore(): void {
   // 边数据源 = 内核 edgeStore（边下沉后唯一数据源）；渲染态取 source/target 仍存活的边(删除路径已在 edgeStore 清边,此处兜底过滤)。
   // B 项：DTO 保留端口句柄（edgesFromStore 也滤悬挂边，纯逻辑单测覆盖）
   const edgeOnTop = (edgeVisualToProvide as { edgeOnTop?: boolean } | undefined)?.edgeOnTop ?? false
-  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive).map((e) =>
+  edges.value = edgesFromStore(h.edgeStore.getEdges(), alive, edgeOnTop ? undefined : h.selection.ids).map((e) =>
     // 连线分层：普通边走 LAYERS.edge（在节点之下），置顶边走 LAYERS.edgeTop（压过所有节点，
-    // 含选中节点）。临时边自己的 z 在 edgesFromStore 里按 LAYERS.tempEdge 给。
+    // 含选中节点）；选中节点的连线在 edgesFromStore 里按 LAYERS.edgeSelected 抬到普通节点
+    // 之上、选中节点之下（edgeOnTop 开启时不抬，全部走置顶档）。临时边自己的 z 在
+    // edgesFromStore 里按 LAYERS.tempEdge 给。
     // 层值唯一事实源 = contracts/layers（见门牌注释与 docs/plans/2026-09-29-canvas-z-layers.md）。
     edgeOnTop && !e.zIndex ? { ...e, zIndex: LAYERS.edgeTop } : e,
   )

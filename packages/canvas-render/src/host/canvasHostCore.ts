@@ -401,6 +401,9 @@ export interface FlowEdge {
 export function edgesFromStore(
   edges: Array<{ id: string; type?: string; source: string; target: string; sourceHandle?: string; targetHandle?: string; data?: Record<string, unknown> }>,
   aliveNodeIds: ReadonlySet<string>,
+  /** 选中节点 id 集：任一端选中的普通边抬到 LAYERS.edgeSelected（选中节点 > 其连线 > 其余）。
+   *  不传 = 全部普通边不带 zIndex（向后兼容；置顶开关路径也不传，见 CanvasHost.syncFromStore）。 */
+  selectedNodeIds?: ReadonlySet<string>,
 ): FlowEdge[] {
   return edges
     .filter((e) => aliveNodeIds.has(e.source) && aliveNodeIds.has(e.target))
@@ -416,6 +419,8 @@ export function edgesFromStore(
       // 判定读内核通用契约，不认识具体插件。
       ...(isTransient(e)
         ? { selectable: false, focusable: false, deletable: false, zIndex: LAYERS.tempEdge }
-        : {}),
+        : selectedNodeIds && (selectedNodeIds.has(e.source) || selectedNodeIds.has(e.target))
+          ? { zIndex: LAYERS.edgeSelected }
+          : {}),
     }))
 }
