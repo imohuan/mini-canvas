@@ -41,6 +41,7 @@ import {
 } from "./components/ui";
 import MediaViewer from "./components/ui/MediaViewer.vue";
 import Tooltip from "./components/ui/Tooltip.vue";
+import CursorTooltip from "./components/ui/CursorTooltip.vue";
 import ToolParamGroup from "./components/ui/ToolParamGroup.vue";
 import ToolOptionGrid from "./components/ui/ToolOptionGrid.vue";
 import ToolRatioGrid from "./components/ui/ToolRatioGrid.vue";
@@ -707,6 +708,9 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   // 悬浮提示（设计系统件）：插件按名取用，气泡观感随主题一起换。
   // 放在这里而不是各插件自绘，理由与 dropdown 完全相同 —— 见 components/ui/Tooltip.vue 顶部注释。
   ui.add("tooltip", Tooltip, { id: "default" });
+  // 跟随鼠标的暗色提示（无固定触发器的场景：拖线非法 / 选择态提醒等）。
+  // 与 tooltip 成对：一个锚定触发器，一个跟指针。渲染层 tip 服务(ctx.get('tip'))驱动它。
+  ui.add("cursorTip", CursorTooltip, { id: "default" });
   ui.add("select", Select, { id: "default" });
   // 全屏媒体预览（文本/图片/视频/音频内置；#stage 插槽可扩展新资源类型）。
   // 底栏插件的素材预览浮层与成品应用（生成历史/资产面板）都用它；换主题时一起换。
@@ -730,6 +734,15 @@ export function apply(ctx: Context, config?: ThemeConfig) {
   ctx.theme.register("settingsPanel", PluginSettingsContent, {
     id: "default",
     order: 0,
+  });
+
+  // 全局鼠标跟随提示层：渲染层 tip 服务(ctx.get('tip'))驱动，观感 = AxTooltip 同款暗色。
+  // 与节点同级的基础设施 —— 其它插件 show/hide 即可，不各自自绘（用户口径 2026-10-26）。
+  ctx.slots.register('overlay', {
+    id: 'theme-default/cursor-tip',
+    order: 90,
+    component: CursorTooltip,
+    meta: { title: '鼠标提示' },
   });
 }
 
