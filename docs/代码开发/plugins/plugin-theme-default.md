@@ -117,8 +117,25 @@ const NodeToolbarButton = useUiComponent('button')   // 返回响应式 Ref；�
 | `DEFAULT_THEME_LAYOUT` + `LAYOUT_SETTING_KEYS` | 布局 / 控制栏贴边距离 |
 | `DEFAULT_THEME_PANEL` + `PANEL_SETTING_KEYS` | 生成控制栏尺寸 |
 | `DEFAULT_THEME_DEBUG` + `DEBUG_SETTING_KEYS` | 调试可视化 |
+| `DEFAULT_THEME_CULLED` | 视口外节点绘制深度（`culledNodeRendering`） |
 
 > 用 manifest 给每个插件单独传 config 的写法见 `kernel/配置装配configSchema与ctx-settings.md`。
+
+### 节点可见状态（_cullState）——壳按状态自选绘制
+
+宿主（canvas-render）给每个节点下发 `data._cullState`：`visible`（视口内）/
+`culled`（屏外无连线）/`culled-linked`（屏外但有连线相连，**壳必须常驻**，
+否则连线断）；transient 临时节点不下发（恒全量）。BaseNode 读它 + 本插件的
+`culledNodeRendering` 设置（`skeleton` 骨架缺省 / `full` 全量 / `ghost` 可见空心
+占位框）决定屏外节点画多深：内容段/控制栏/区域条**不挂载**（不是藏起来），
+标题条与 MovingHandle 端口锚点保留，skeleton 下卡片 `visibility:hidden` 占位。
+
+自己写壳想复用这套判定：决策在纯函数
+`src/components/node/culledRenderingPolicy.ts` 的
+`culledPolicy(state, rendering)` 返回 `{ reduced, visibleCard, ghost }`，直接
+import 用；**别给 MovingHandle 的挂载门加剔除条件**（端口 DOM 常驻是 VueFlow
+handleBounds 稳定的前提）。完整机制、压缩开关（cullCompactShells）与红线见
+`../canvas-render/12-节点可见状态与剔除.md`。
 
 ---
 
