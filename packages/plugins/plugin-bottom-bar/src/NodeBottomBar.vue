@@ -514,6 +514,28 @@ function onCardsClickCapture(ev: MouseEvent): void {
   }
 }
 
+/**
+ * 键盘排序（无障碍 + 真实操作可测）：聚焦卡片后 Ctrl+←/Ctrl+→ 左右移动。
+ * 走 onReorderTiles 同一条落盘路径 —— 与鼠标拖拽行为完全一致。
+ */
+function onCardsKeydown(ev: KeyboardEvent): void {
+  if (!(ev.ctrlKey || ev.metaKey)) return
+  if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return
+  const card = (ev.target as HTMLElement).closest('.nb-card') as HTMLElement | null
+  if (!card) return
+  const key = card.getAttribute('data-tile-key') ?? ''
+  const cur = refTiles.value.findIndex((t) => t.key === key)
+  if (cur < 0) return
+  const to = ev.key === 'ArrowLeft' ? cur - 1 : cur + 1
+  if (to < 0 || to >= refTiles.value.length) return
+  const next = [...refTiles.value]
+  const [moved] = next.splice(cur, 1)
+  next.splice(to, 0, moved)
+  ev.preventDefault()
+  ev.stopPropagation()
+  onReorderTiles(next.map((t) => ({ key: t.key })))
+}
+
 // —— 参考：两态开关（用户实测反馈「点击之后就无法取消」——这里做成开/关切换） ——
 const referencing = ref(false)
 function syncReference(): void {
@@ -1388,11 +1410,13 @@ function onGlobalLeave(el: Element): void {
       :force-fallback="true"
       @update:model-value="onReorderTiles"
       @click.capture="onCardsClickCapture"
+      @keydown="onCardsKeydown"
     >
       <div
         v-for="tile in refTiles"
         :key="tile.key"
         :data-tile-key="tile.key"
+        tabindex="0"
         class="nb-card"
         :class="{ 'is-pending': tile.pending }"
         :title="tile.pending ? '待输入：点击上传 / 拖文件进来 / Ctrl 拖节点' : tile.name + '（可拖动调整顺序）'"
@@ -1419,6 +1443,7 @@ function onGlobalLeave(el: Element): void {
           <span class="nb-card-index">{{ tile.index }}</span>
         </span>
         <span v-if="slotErrorOf(tile)" class="nb-slot-error">{{ slotErrorOf(tile) }}</span>
+        <!-- 键盘排序（无障碍 + 自动化可测）：聚焦卡片后 Ctrl+←/→ 移动 -->
         <button
           v-if="!tile.pending"
           class="nb-card-hit"
