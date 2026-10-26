@@ -232,8 +232,37 @@ export function registerBarApplier(ctx: PluginScope, kind: string, fn: BarApplie
 export const name = 'bottom-bar'
 export const inject = ['doc', 'nodeRegistry', 'themeRegistry'] as string[]
 
+/**
+ * 插件可配置项（设置面板「底栏」组）：
+ * - bottomBarAiBaseUrl：AI 请求后台根地址。留空 = 与画布同源（cloud-server 托管时就是同源），
+ *   与 Agent 插件的 agentBaseUrl 同一口径；真正调的接口是 /api/agent/chat/completion，
+ *   渠道与模型由 Agent 插件里配好的默认渠道决定（这里不重复配模型）。
+ * - 结构化清单（按钮图标 / 描述 / 提示词模板）不走标量 schema，见 PromptActionSettings。
+ */
+export const Config = {
+  bottomBarAiBaseUrl: {
+    type: 'string' as const,
+    default: '',
+    label: 'AI 后台地址',
+    group: '底栏',
+    description: 'AI 按钮请求的后台根地址。留空 = 与画布同源；模型用 Agent 插件配好的默认渠道。',
+  },
+}
+
+// 「AI 按钮」自定义配置界面（设置面板「底栏」组的内容插槽）；插件后端地址用 Config 声明。
+// Config 的标量项自动登记进 settings 单一数据源（面板左树出现「底栏」分组）；
+// 结构化清单（图标/描述/提示词）由 PromptActionSettings 自绘（内容插槽优先于平铺字段）。
+import PromptActionSettings from './PromptActionSettings.vue'
+
 /** 应用插件：上架服务 + 挂底栏宿主/覆盖层 + 刷新续查（默认皮登记见 Task 5） */
 export function apply(ctx: Context) {
+  // 设置面板「底栏」组的内容插槽：AI 按钮清单（增删改 / 模板 / 图标）自绘页。
+  ctx.slots.register('settingsGroup/底栏', {
+    id: 'bottom-bar/prompt-actions',
+    order: 5,
+    component: PromptActionSettings,
+  })
+
   // 构造即上架（随本插件 scope 回收）
   new NodeBarService(ctx)
   const task = new NodeTaskService(ctx)
