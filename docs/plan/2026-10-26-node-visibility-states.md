@@ -13,11 +13,15 @@ VueFlow EdgeWrapper 源码（vue-flow-core.mjs:8892）写死
 
 ## 方案（用户选定：宿主下发状态，壳自选绘制）
 
-1. **取消 hidden 路线**：所有节点一律常驻渲染（hidden 恒 false）。性能回收靠壳的策略层——
-   剔除态不挂内容组件（图片/文本/视频等重组件正是当初诊断的性能大头），壳本体 + 标题 +
-   端口锚点保留，连线端点永远锚在真实几何上。
+1. **hidden 只做压缩档工具**（2026-10-26 当日二次演进）：基础方案是节点一律常驻
+   （hidden 恒 false），性能回收靠壳的策略层剔除内容；随后用户要求壳也省
+   （1000 节点/屏内 20 场景），新增设置 `cullCompactShells`（缺省开）——
+   **纯 culled**（视口外且不在 linkedIds）节点 hidden=true 零 DOM，
+   culled-linked 与 transient 绝不 hidden（否则跨内外连线被 VueFlow 连坐消失——
+   本方案立项的原始 bug）。hidden 的安全边界由此从"全部禁用"收窄为"只许压无牵扯节点"。
 2. **宿主下发状态，不掺决策**：CanvasHost 在灌渲染态时给每个节点打
-   `data._cullState: 'visible' | 'culled' | 'culled-linked' | 'transient'`。
+   `data._cullState: 'visible' | 'culled' | 'culled-linked'`（transient **不下发**，
+   壳读不到该字段即按 visible 全量处理——与"transient 永不剔除"语义等价且 data 更干净）。
    - visible：视口 + 缓冲带相交（判定逻辑不变，visibleCull.ts 纯函数复用）。
    - culled：视口外，且没有任何连线连着它。
    - culled-linked：视口外，但至少有一条连线连着它（另一端画内画外均可）。
@@ -44,7 +48,7 @@ VueFlow EdgeWrapper 源码（vue-flow-core.mjs:8892）写死
 
 | 文件 | 改动 |
 | --- | --- |
-| canvas-render/src/host/canvasHostCore.ts | nodesFromStore：hidden 恒 false；新增 _cullState 注入（纯函数，接受 linkedIds） |
+| canvas-render/src/host/canvasHostCore.ts | nodesFromStore：_cullState 注入（接受 linkedIds 与 compactShells）；hidden 仅用于压缩档纯 culled |
 | canvas-render/src/host/visibleCull.ts | 头注更新（hidden 路线退役原因） |
 | canvas-render/src/host/CanvasHost.vue | 计算 linkedIds（edgeStore 建邻接表）；刷新时机沿用；去掉 hidden 旧注释 |
 | canvas-render/src/host/CanvasSurface.vue | renderCtx 增补 nodeVisibility 说明（壳经 props.data 消费） |

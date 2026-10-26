@@ -41,6 +41,7 @@ import {
 } from './multiRadio'
 import { useNodeCardSize } from '../../composables/useNodeCardSize'
 import { useNodeDebugOverlay } from '../../composables/useNodeDebugOverlay'
+import { CULLED_RENDERING_DEFAULT, culledPolicy, normalizeCulledRendering } from './culledRenderingPolicy'
 
 const log = createV2Logger('base-node')
 const props = defineProps<NodeProps>()
@@ -151,13 +152,10 @@ const lowDetail = computed(() => zoom.value < LOW_DETAIL_ZOOM.value)
  * 为什么壳常驻：VueFlow EdgeWrapper 对 hidden 端点的边整体不画 —— 剔除绝不能再用 hidden，
  * 否则画布内节点的连线凭空断掉（用户实测）。壳在这里按状态决定"画多深"。
  */
-type CullState = 'visible' | 'culled' | 'culled-linked'
 const CULLED_STATE_KEY = '_cullState'
 const rawCullState = computed(() => (props.data as Record<string, unknown> | undefined)?.[CULLED_STATE_KEY])
-const isCulledState = (v: unknown): v is CullState => v === 'visible' || v === 'culled' || v === 'culled-linked'
-const cullState = computed<CullState>(() => (isCulledState(rawCullState.value) ? rawCullState.value : 'visible'))
-const isCulled = computed(() => cullState.value !== 'visible')
-const isCulledLinked = computed(() => cullState.value === 'culled-linked')
+const isCulled = computed(() => rawCullState.value === 'culled' || rawCullState.value === 'culled-linked')
+const isCulledLinked = computed(() => rawCullState.value === 'culled-linked')
 
 /**
  * 视口外节点绘制深度（本插件 Config：culledNodeRendering）。
@@ -170,11 +168,10 @@ const isCulledLinked = computed(() => cullState.value === 'culled-linked')
  */
 const CULLED_RENDERING_KEY = 'culledNodeRendering'
 type CulledRendering = 'skeleton' | 'full' | 'ghost'
-const CULLED_RENDERING_DEFAULT: CulledRendering = 'skeleton'
 const culledRendering = ref<CulledRendering>(CULLED_RENDERING_DEFAULT)
 const applyCulledRendering = (key: string, value: unknown): void => {
   if (key !== CULLED_RENDERING_KEY) return
-  if (value === 'skeleton' || value === 'full' || value === 'ghost') culledRendering.value = value
+  culledRendering.value = normalizeCulledRendering(value)
 }
 const culledSettingsOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) => void): { dispose(): void } }>('settings')?.onChange(
   (key, value) => applyCulledRendering(key, value),
@@ -182,7 +179,7 @@ const culledSettingsOff = ctx?.get<{ onChange(cb: (key: string, value: unknown) 
 // 初值从 settings 读（settings 单一数据源；onChange 只管后续变化）
 {
   const v = settingsStore()?.get(CULLED_RENDERING_KEY)
-  if (v === 'skeleton' || v === 'full' || v === 'ghost') culledRendering.value = v
+  culledRendering.value = normalizeCulledRendering(v)
 }
 onBeforeUnmount(() => culledSettingsOff?.dispose())
 
@@ -190,7 +187,8 @@ onBeforeUnmount(() => culledSettingsOff?.dispose())
  * 骨架/占位框生效门：culled 两档都降级（full 档不降级）。
  * 降级 = 内容不挂载 + 卡片本体隐身(skeleton)或空心框(ghost)。
  */
-const culledReduced = computed(() => isCulled.value && culledRendering.value !== 'full')
+const culledReduced = computed(() => culledPolicy(rawCullState.value, culledRendering.value).reduced)
+const culledGhost = computed(() => culledPolicy(rawCullState.value, culledRendering.value).ghost)
 const titleScale = computed(() => 1 / Math.max(zoom.value, TITLE_MIN_ZOOM.value))
 
 // ============ 多选相关显隐（配置由 multi-select 插件声明）============
@@ -959,7 +957,7 @@ function clamp(value: number, min: number, max: number): number {
     'is-low-detail': lowDetail,
     'is-culled': isCulled,
     'is-culled-linked': isCulledLinked,
-    'is-culled-ghost': culledReduced && culledRendering === 'ghost',
+    'is-culled-ghost': culledGhost,
     'is-connection-valid': isConnectionValidTarget,
     'is-connection-invalid': isConnectionInvalidTarget,
   }" @mouseenter="onCardMouseEnter" @mouseleave="onCardMouseLeave">
@@ -1187,7 +1185,8 @@ function clamp(value: number, min: number, max: number): number {
   background: transparent;
   box-shadow: none;
   border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-  border-radius: 8px;
+  /* 圆角继承卡片本体（cardFrame 单一出处），不自造数值（ui-style-guide） */
+  border-radius: inherit;
 }
 
 /* —— 上/下插槽定位层（位置由壳给，插件只放内容）——

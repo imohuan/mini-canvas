@@ -55,12 +55,9 @@ export interface FlowNode {
   selected?: boolean
   /**
    * 节点可见状态（2026-10-26，docs/plan/2026-10-26-node-visibility-states.md）。
-   * - visible：视口(+缓冲带)内；culled：视口外且无连线；culled-linked：视口外但有连线相连；
-   * - transient：临时脚手架节点（拖线菜单卡），永不剔除。
-   * hidden 路线已退役：VueFlow EdgeWrapper 对 hidden 端点的边 render null（连线随节点消失，
-   * 用户实测断线）。节点改为一律常驻，壳按 _cullState 自选绘制深度（性能回收在壳层）。
+   * 通过 data._cullState 下发（'visible' | 'culled' | 'culled-linked'；transient 不下发），
+   * 壳按状态自选绘制深度。hidden 只用于压缩档的纯 culled 节点（见 compactShells 参数注释）。
    */
-  culledState?: 'visible' | 'culled' | 'culled-linked'
   /** 兼容保留：hidden 路线已退役，恒 false（显式写以清除 VueFlow 合并语义的旧残留） */
   hidden?: boolean
   /** 父节点 id（内核 CanvasNode.parentId 投影；VueFlow 父子嵌套字段名是 parentNode，
@@ -120,16 +117,14 @@ export function nodesFromStore(
     // hidden 只允许出现在压缩档的**纯 culled**节点上（不在 linkedIds —— 与任何跨内外连线无关，
     // 连线不会被连坐）。visible / culled-linked / transient 一律 false 且**显式写**：
     // VueFlow 内部 store 对节点更新是合并语义，旧残留的 true 必须显式清除。
-    const compactHide =
-      compactShells === true && !isTransient(n) && Boolean(cullIds) && !cullIds!.has(n.id) && !linkedIds?.has(n.id)
-    out.hidden = compactHide
+    const culled = Boolean(cullIds) && !cullIds!.has(n.id)
+    const compactHidden = compactShells === true && culled && !linkedIds?.has(n.id)
+    out.hidden = compactHidden
     // 可见状态注入 data（壳消费；VueFlow 不认识该字段，零副作用）。
     // transient 不参与剔除（2026-10-16 拖线弹菜单失效的根因），恒 visible。
     if (!isTransient(n)) {
-      const culled = cullIds ? !cullIds.has(n.id) : false
       const data = out.data as Record<string, unknown>
       // 压缩档的纯 culled 节点没有壳，状态无消费方 —— 不注入，保持 data 干净。
-      const compactHidden = compactShells === true && culled && !linkedIds?.has(n.id)
       if (!compactHidden) {
         data._cullState = !culled ? 'visible' : (linkedIds?.has(n.id) ? 'culled-linked' : 'culled')
       }
