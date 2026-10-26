@@ -455,9 +455,41 @@ function openCard(card: MaterialCard): void {
  * 进行关闭，即删除与该图片相关的连接线」。连线没了，卡片自然从底栏消失（卡是边派生的）。
  */
 function removeCard(card: MaterialCard): void {
+  if (!card) {
+    console.warn('[bottom-bar] removeCard: tile.card 为空（格子数据缺 card 字段）')
+    return
+  }
+  ;(window as any).__rmDbg = { cardId: card.id, propsId: props.id, edgeCount: renderEdges.value.length, sample: renderEdges.value.slice(0, 5).map((e) => ({ id: e.id, s: e.source, t: e.target })) }
   const edge = renderEdges.value.find((e) => e.source === card.id && e.target === props.id)
   const doc = ctx.tryGet<{ removeEdges(ids: string[]): number }>('doc')
   if (edge && doc) doc.removeEdges([edge.id])
+}
+
+/** 卡片区域 click 委托（捕获阶段）：vue-draggable 移动 DOM 会让子元素 Vue 绑定失联，
+ *  所以在容器上统一分发 —— 删除按钮 / 预览按钮 / 待输入格点击都从这里走。 */
+function onCardsClickCapture(ev: MouseEvent): void {
+  ;(window as any).__capDbg = { target: (ev.target as HTMLElement)?.className?.toString().slice(0, 40), t: Date.now() }
+  const target = ev.target as HTMLElement | null
+  if (!target) return
+  const card = target.closest<HTMLElement>('.nb-card')
+  if (!card) return
+  const key = card.getAttribute('data-tile-key') ?? ''
+  const tile = refTiles.value.find((t) => t.key === key)
+  if (target.closest('.nb-remove')) {
+    ev.stopPropagation()
+    if (tile?.card) removeCard(tile.card)
+    return
+  }
+  if (target.closest('.nb-card-hit')) {
+    ev.stopPropagation()
+    if (tile?.card) openCard(tile.card)
+    return
+  }
+  // 待输入格：卡片本体点击 = 点上传
+  if (tile?.pending && tile.slotKey) {
+    ev.stopPropagation()
+    pickSlotFile(tile.slotKey)
+  }
 }
 
 // —— 参考：两态开关（用户实测反馈「点击之后就无法取消」——这里做成开/关切换） ——
@@ -668,9 +700,6 @@ const refTiles = computed(() =>
 /** 正文里的 @ 声明（只用来「标出哪个序号被点了」与算缺号，不产生内容） */
 const promptRefSlots = computed(() => parseRefSlots(prompt.value))
 
-/** 连线变了（上传/替换/断开/初始载入）→ 正文里对应的标签跟着刷成已填状态 */
-watch(shownMaterials, () => refreshSlotChips(), { immediate: true })
-
 /** 错误提示按「序号」记（格子由连线派生，键会随内容变化，不能按 key 存） */
 const slotErrors = ref<Record<string, string>>({})
 /** 某个待输入格的错误文案（按种类+序号查） */
@@ -855,6 +884,11 @@ function refreshSlotChips(): void {
     void replaced
   }
 }
+
+/** 连线变了（上传/替换/断开/初始载入）→ 正文里对应的标签跟着刷成已填状态。
+ *  注意：必须放在 refreshSlotChips / editorComponentRef 定义之后 —— immediate 会同步执行一次，
+ *  放前面会踩 const TDZ（真机踩过：ReferenceError before initialization）。 */
+watch(shownMaterials, () => refreshSlotChips(), { immediate: true })
 
 // ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
 
@@ -1127,6 +1161,7 @@ function onGlobalLeave(el: Element): void {
       drag-class="nb-card--drag"
       :force-fallback="true"
       @update:model-value="onReorderTiles"
+      @click.capture="onCardsClickCapture"
     >
       <div
         v-for="tile in refTiles"
@@ -1163,7 +1198,6 @@ function onGlobalLeave(el: Element): void {
           class="nb-card-hit"
           type="button"
           :aria-label="'预览素材 ' + tile.name"
-          @click.stop="tile.card && openCard(tile.card)"
         />
         <button
           v-if="!tile.pending"
@@ -1171,8 +1205,6 @@ function onGlobalLeave(el: Element): void {
           type="button"
           :aria-label="'移除素材 ' + tile.name"
           title="移除素材（断开连线）"
-          @click.stop="removeCard(tile.card!)"
-          @pointerdown.stop
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
         </button>

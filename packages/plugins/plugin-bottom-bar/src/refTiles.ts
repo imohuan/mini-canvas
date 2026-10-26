@@ -22,6 +22,8 @@ export interface RefTile {
   name: string
   url?: string
   isText: boolean
+  /** 有内容格对应的素材（卡片删除/预览要拿它找连线）；待输入格没有 */
+  card?: TileCardLike
 }
 
 /** 正文槽位（@ 标签）的最小形状 */
@@ -114,6 +116,7 @@ export function mergeRefTiles(
         name: card?.name ?? (label + ' ' + index),
         url: card?.url,
         isText: false,
+        card,
       })
     }
   }
@@ -128,6 +131,7 @@ export function mergeRefTiles(
       name: card.name,
       url: card.url,
       isText: card.isText,
+      card,
     })
   }
   return tiles.sort((a, b) => a.index - b.index)
