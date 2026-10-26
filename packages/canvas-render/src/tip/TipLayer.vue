@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * MouseTipLayer —— 全局鼠标跟随提示层（默认主题提供，全站唯一一个）。
+ * TipLayer —— 全局鼠标跟随提示层（渲染层提供，全站唯一一个）。
  *
- * 用户口径：提示是基础设施（和节点同级），其它插件直接调 ctx.get("tip").show("...") 即可；
- * 位置统一在鼠标右下角、无间隔。
+ * 消费方：任何插件/渲染组件 ctx.get("tip").show("...") —— 不必自绘气泡。
+ * 位置：左上角对齐指针（右下角显示）、无间隔。
  */
 import { onBeforeUnmount, onMounted, ref } from "vue"
-import { TIP_EVENT } from "../../ui/tipService"
+import { TIP_EVENT } from "./tipService"
 
 const message = ref("")
 const pos = ref({ x: 0, y: 0 })
@@ -35,15 +35,15 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="message" class="mouse-tip" role="tooltip" :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
+    <div v-if="message" class="ctip-layer" role="tooltip" :style="{ left: pos.x + 'px', top: pos.y + 'px' }">
       {{ message }}
     </div>
   </Teleport>
 </template>
 
 <style>
-/* 非 scoped：Teleport 到 body（scoped 会命不中）。 */
-.mouse-tip {
+/* 非 scoped：Teleport 到 body。 */
+.ctip-layer {
   position: fixed;
   z-index: 3200;
   padding: 5px 10px;

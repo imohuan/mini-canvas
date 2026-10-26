@@ -38,6 +38,8 @@ import type {
   ThemeRegistry,
 } from '@mini-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
+import { tipService } from '../tip/tipService'
+import TipLayer from '../tip/TipLayer.vue'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService } from '../viewport/viewportService'
 import {
@@ -211,6 +213,15 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
   // 从而自己装卸别的插件（用户诉求：用一个插件去管理其他插件的装/卸/重装）。
   // 放在冷启动之前注入：插件一 start 就能 ctx.get('pluginManager') 拿到。
   ctx.inject('pluginManager', manager)
+  // 通用鼠标跟随提示（基础服务）：任何插件/渲染组件 ctx.get('tip').show('...') 即可显示。
+  // 放渲染层而不是主题：拖线非法提示属于渲染反馈，换主题也应可用（用户口径 2026-10-26）。
+  ctx.inject('tip', tipService)
+  ctx.slots.register('overlay', {
+    id: 'canvas-render/tip-layer',
+    order: 95,
+    component: TipLayer,
+    meta: { title: '鼠标提示' },
+  })
 
   // —— 冷启动插件：manifest 模式走 applyManifest(disabled/config覆盖/同id换版本)；缺省 coldPlugins(顺序装载) ——
   if (opts.manifest) {

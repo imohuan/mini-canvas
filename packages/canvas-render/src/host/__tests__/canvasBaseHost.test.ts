@@ -16,7 +16,7 @@ import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
 import type { PluginModule } from '@mini-canvas/kernel'
 
 describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤3', () => {
-  it('createMiniCanvasHost.ts 只剩 nodeLayout / viewport / pluginManager 三处 ctx.inject', () => {
+  it('createMiniCanvasHost.ts 只剩 nodeLayout / viewport / pluginManager / tip 四处 ctx.inject', () => {
     const src = readFileSync(fileURLToPath(new URL('../createMiniCanvasHost.ts', import.meta.url)), 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
@@ -24,12 +24,15 @@ describe('步骤 4 完成标准① —— ctx.inject 从 15 处降到 ≤3', () 
       .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//'))
       .join('\n')
     const hits = code.match(/ctx\.inject\(/g) ?? []
-    // 三处：两件渲染服务（nodeLayout/viewport）+「统一安装句柄 pluginManager」。
-    // 后者是 2026-10-02 新增：插件管理插件要能按名装卸别的插件（用户诉求），故宿主把它上架成服务。
-    expect(hits.length).toBeLessThanOrEqual(3)
+    // 四处：两件渲染服务（nodeLayout/viewport）+「统一安装句柄 pluginManager」+「通用鼠标提示 tip」。
+    // pluginManager：插件管理插件要能按名装卸别的插件（2026-10-02 用户诉求）。
+    // tip：全局鼠标跟随提示属于渲染反馈的基础设施（2026-10-26 用户口径：拖线非法提示、
+    // 选择态提示等统一走它），与主题无关，故由渲染宿主上架。
+    expect(hits.length).toBeLessThanOrEqual(4)
     expect(src).toContain("ctx.inject('nodeLayout'")
     expect(src).toContain("ctx.inject('viewport'")
     expect(src).toContain("ctx.inject('pluginManager'")
+    expect(src).toContain("ctx.inject('tip'")
   })
 
   it('其余服务由基础插件的 apply 注入（业务插件 ctx.get 照样取得到）', async () => {

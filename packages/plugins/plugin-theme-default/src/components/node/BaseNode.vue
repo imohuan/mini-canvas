@@ -674,6 +674,30 @@ const isConnectionValidTarget = computed(() => connectionHover.value?.status ===
 const isConnectionInvalidTarget = computed(() => connectionHover.value?.status === 'invalid')
 /** 悬停到我且本连接会使输入口满额挤最老一条（UI 提示"将替换"） */
 const isWillEvictTarget = computed(() => connectionHover.value?.willEvict === true)
+/**
+ * 拖线非法/满额提示 → 渲染层 tip 服务（跟随鼠标的全局提示，与其它提示同一套观感）。
+ * 节点内不再自绘气泡（用户口径 2026-10-26）。
+ */
+/** 本节点是否正持有提示（离场时只有持有者才 hide，避免多节点互相覆盖） */
+let tipOwner = false
+watch(
+  () => [isConnectionInvalidTarget.value, isWillEvictTarget.value, connectionHover.value?.reason] as const,
+  ([invalid, evict, reason]) => {
+    const tip = ctx.tryGet<{ show(m: string): void; hide(): void }>('tip')
+    if (!tip) return
+    if (invalid) {
+      tipOwner = true
+      tip.show(reason || '无法连接')
+    } else if (evict) {
+      tipOwner = true
+      tip.show('将替换已有连接')
+    } else if (tipOwner) {
+      tipOwner = false
+      tip.hide()
+    }
+  },
+  { immediate: true },
+)
 
 /** 是否对我做"可连接"3D 反馈：仅由数据层「合法连接目标」(hoverNode.status=valid) 决定，
  *  与物理鼠标 hover 无关（物理 hover 只控制端口显隐 shouldShowHandles）。 */
@@ -1034,15 +1058,8 @@ function clamp(value: number, min: number, max: number): number {
         </BaseTitle>
       </div>
 
-      <!-- 非法连接气泡 -->
-      <div v-if="isConnectionInvalidTarget" class="invalid-connection-tooltip" :style="invalidTooltipStyle">
-        {{ connectionHover?.reason || '无法连接' }}
-      </div>
-
-      <!-- 输入口满额"将替换最老一条"提示（willEvict；UI 可选渲染，仅当目标输入口将挤掉旧连接时显示） -->
-      <div v-if="isWillEvictTarget" class="will-evict-tooltip" :style="invalidTooltipStyle">
-        <span class="we-dot" />将替换已有连接
-      </div>
+      <!-- 非法连接 / 满额替换提示：统一由渲染层 tip 服务显示（跟随鼠标，与其它提示同一套观感）。
+           节点内不再自绘气泡 —— 用户口径 2026-10-26：提示是全局基础设施。 -->
 
       <!-- 调试叠加：吸附带 + 卡片接收区（吸附调试 connectionSnapDebugVisible，拖线目标态才显示）。
            用 SVG 在卡内坐标画，overflow:visible 让负 x 的吸附带也能画出去（v1 用 clip-path div，效果差）。 -->
