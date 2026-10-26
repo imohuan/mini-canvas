@@ -248,6 +248,20 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
       }
     }
 
+    // 兜底推导：热重载走 KV 上报地址（不在清单里）时没有全局名提示。
+    // UMD 全局名有稳定约定 MiniCanvasPlugin<PascalCase(插件名)>，按 opts.name（卸旧依据，
+    // 上报方给出，最权威）推导。有提示时加载器按名取件，绝不会扫 window 挑错
+    // （实测踩过：重装 bottom-bar 时扫到 align-guide → 卸旧装新 → Duplicate plugin name）。
+    if (!globalName && opts.name) {
+      globalName =
+        'MiniCanvasPlugin' +
+        opts.name
+          .split(/[-_]/)
+          .filter(Boolean)
+          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+          .join('')
+    }
+
     // ② 加载最新产物（破缓存由加载器内部加 ?t= 完成）
     const loadUmd = deps.loadUmd ?? defaultLoadUmd
     const mod = await loadUmd(url, globalName)

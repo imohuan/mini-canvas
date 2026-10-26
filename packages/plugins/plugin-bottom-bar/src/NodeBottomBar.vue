@@ -790,6 +790,10 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
   try {
     // 建节点 → 还选中 → 等一帧 → 连线 → 按序号排位；顺序在 uploadToRefSlot 里钉死（已单测）
     ;(window as any).__upDbg.step = 'before-upload'
+    // 上传前抓一次全部节点 id：pickCreated 用它区分「这次新建的节点」。
+    // 不能用 refOrder 当 before —— refOrder 可能含已断线的死 id，会把别的节点误认成新节点
+    //（真机踩过：连线连到错误的对象）。
+    const idsBeforeUpload = new Set(doc.getNodes().map((n) => n.id))
     const result = await uploadToRefSlot(
       { file, kind, index, targetId: props.id },
       {
@@ -810,12 +814,12 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
         },
         refOrder: () => refOrder.value,
         writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
-        pickCreated: (before) => {
+        pickCreated: () => {
           ;(window as any).__upDbg.step = 'pick-created'
           // 为什么不能到 shownMaterials 里找：素材是**按边**收集的（collectUpstreamMaterials），
           // 而此刻连线还没建 —— 新节点根本不在里面，永远找不到 → 提前 return（这就是
           // 「上传只建节点、没连线」的根因）。这里直接查 doc：file-drop 刚建的那个新节点。
-          const freshNode = doc.getNodes().find((n) => !before.has(n.id) && n.id !== props.id)
+          const freshNode = doc.getNodes().find((n) => !idsBeforeUpload.has(n.id) && n.id !== props.id)
           if (!freshNode) return null
           const d = freshNode.data ?? {}
           const s = (v: unknown) => (typeof v === 'string' && v ? v : '')
@@ -901,7 +905,9 @@ function refreshSlotChips(): void {
 /** 连线变了（上传/替换/断开/初始载入）→ 正文里对应的标签跟着刷成已填状态。
  *  注意：必须放在 refreshSlotChips / editorComponentRef 定义之后 —— immediate 会同步执行一次，
  *  放前面会踩 const TDZ（真机踩过：ReferenceError before initialization）。 */
-watch(shownMaterials, () => refreshSlotChips(), { immediate: true })
+// refOrder 也要听：拖拽排序会改 refName 编号（图片2 变图片1），正文里标签的序号/缩略图
+// 跟着变 —— 只听 shownMaterials 会漏掉「内容没变、只是换序」的情况（真机踩过）。
+watch([shownMaterials, refOrder], () => refreshSlotChips(), { immediate: true })
 
 // ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
 
@@ -935,6 +941,10 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
   if (!media) return
   ev.preventDefault()
   ev.stopPropagation()
+  // 原生 HTML5 拖拽会接管指针（img 默认可拖），pointermove 从此不再派发 → 影子不动。
+  // 在同一次手势里拦掉 dragstart，才能让我们的影子跟住鼠标。
+  const blockNativeDrag = (e: Event) => { e.preventDefault() }
+  window.addEventListener('dragstart', blockNativeDrag, { capture: true, once: true })
   // 影子 = 缩略图 + 名字（用户口径 2026-10-26：「可以做成图片的缩略图跟随鼠标」）
   const ghost = document.createElement('div')
   ghost.className = 'nb-drag-ghost'
