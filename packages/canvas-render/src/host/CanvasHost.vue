@@ -226,12 +226,13 @@ let linkedIds = new Set<string>()
 function rebuildLinkedIds(): void {
   const h = hostRef.value
   if (!h) return
-  const culled = cullIds.value
+  // 注意：cullIds 的语义是「视口内可见集合」（不是视口外集合）——名字来自 computeVisibleIds
+  const visible = cullIds.value
   const next = new Set<string>()
-  if (!culled) { linkedIds = next; return }
+  if (!visible) { linkedIds = next; return }
   for (const e of h.edgeStore.getEdges()) {
-    const sOut = !culled.has(e.source)
-    const tOut = !culled.has(e.target)
+    const sOut = !visible.has(e.source)
+    const tOut = !visible.has(e.target)
     if (sOut !== tOut) { next.add(e.source); next.add(e.target) }
   }
   linkedIds = next

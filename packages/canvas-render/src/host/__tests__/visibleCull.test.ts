@@ -116,4 +116,39 @@ describe('nodesFromStore × cullIds（_cullState 派生，2026-10-26 hidden 退�
     const ids = computeVisibleIds(layout, VIEW, { enabled: true, buffer: 0 })
     expect(ids!.has('g1')).toBe(true)
   })
+
+  it('linkedIds 只收"跨内外"的边：两端都视口外（cullIds 外）或都在内的边不进 linked', () => {
+    const s = makeStore()
+    s.addNodes([
+      { type: 'text', position: { x: 0, y: 0 }, id: 'in1' },
+      { type: 'text', position: { x: 9000, y: 9000 }, id: 'out1' },
+      { type: 'text', position: { x: 9500, y: 9500 }, id: 'out2' },
+    ])
+    // cullIds = 视口内可见集合；out1/out2 都在视口外（不在集合里）
+    const visible = new Set(['in1'])
+    const culled = (id: string): boolean => !visible.has(id)
+    // out1—out2 两端都在视口外：这条边两端点都在画布外，不进 linkedIds（两端按 culled 处理）
+    let linked = new Set<string>()
+    for (const e of [{ source: 'out1', target: 'out2' }]) {
+      const sOut = culled(e.source)
+      const tOut = culled(e.target)
+      if (sOut !== tOut) { linked.add(e.source); linked.add(e.target) }
+    }
+    expect(linked.size).toBe(0)
+    // in1 (0,0) 在视口内，不在 culled 集合 —— 状态按 cullIds 判 visible
+    const states = nodesFromStore(s, undefined, visible, linked)
+    expect(states.find((n) => n.id === 'out1')!.data._cullState).toBe('culled')
+    // in1—out1 跨内外：两端都进 linkedIds（连线必须保持完整，两端骨架常驻）
+    linked = new Set<string>()
+    for (const e of [{ source: 'in1', target: 'out1' }]) {
+      const sOut = culled(e.source)
+      const tOut = culled(e.target)
+      if (sOut !== tOut) { linked.add(e.source); linked.add(e.target) }
+    }
+    expect(linked.has('in1')).toBe(true)
+    expect(linked.has('out1')).toBe(true)
+    const states2 = nodesFromStore(s, undefined, visible, linked)
+    expect(states2.find((n) => n.id === 'in1')!.data._cullState).toBe('visible')
+    expect(states2.find((n) => n.id === 'out1')!.data._cullState).toBe('culled-linked')
+  })
 })
