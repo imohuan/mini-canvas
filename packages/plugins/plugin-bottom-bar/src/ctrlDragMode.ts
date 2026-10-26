@@ -31,12 +31,16 @@ export function enterCtrlDragMode(ownerId: string): void {
   owner.value = ownerId
   active.value = true
   epoch.value += 1
+  ;(globalThis as { __miniCanvasCtrlDrag?: { active: boolean; owner: string } }).__miniCanvasCtrlDrag = { active: true, owner: ownerId }
+  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:ctrl-drag-mode'))
 }
 /** 退出（幂等） */
 export function exitCtrlDragMode(): void {
   if (!active.value) return
   active.value = false
   epoch.value += 1
+  ;(globalThis as { __miniCanvasCtrlDrag?: { active: boolean; owner: string } }).__miniCanvasCtrlDrag = { active: false, owner: '' }
+  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:ctrl-drag-mode'))
 }
 
 /** 节点在 Ctrl 拖选择态里的面孔（复用参考选择的状态语义） */

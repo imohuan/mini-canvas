@@ -71,7 +71,7 @@ import {
 import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf, isDraggableTarget } from './refSlotDrag'
-import { ctrlDragActive, enterCtrlDragMode, exitCtrlDragMode } from './ctrlDragMode'
+import { enterCtrlDragMode, exitCtrlDragMode } from './ctrlDragMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -1000,7 +1000,7 @@ function onCtrlModeKeyup(ev: KeyboardEvent): void {
 function onCtrlDragPointerDown(ev: PointerEvent): void {
   if (!(ev.ctrlKey || ev.metaKey)) return
   // 只在选择态里允许拖（选择态 = Ctrl 按下时进入的预告层；用户口径：与参考选择同款交互）
-  if (!ctrlDragActive()) return
+  if (!(globalThis as { __miniCanvasCtrlDrag?: { active: boolean } }).__miniCanvasCtrlDrag?.active) return
   if (!isDraggableTarget(ev.target)) return
   const el = (ev.target as HTMLElement).closest('.vue-flow__node') as HTMLElement | null
   const nodeId = el?.getAttribute('data-id')
