@@ -1715,40 +1715,6 @@ function onGlobalLeave(el: Element): void {
   color: var(--ui-danger, #ef4444);
   pointer-events: none;
 }
-/* Ctrl 拖资源时的「影子」：跟鼠标走，提示用户正拿着一个资源 */
-.nb-drag-ghost {
-  position: fixed;
-  z-index: 1000;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 9px 4px 4px;
-  border-radius: 8px;
-  background: var(--ui-overlay-solid, #fff);
-  border: 1px solid var(--ui-accent, #0891b2);
-  color: var(--ui-ink, #18202b);
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: var(--ui-shadow-md, 0 8px 20px rgb(15 23 42 / 0.24));
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  /* 出现即明显：轻微放大 + 实心边框（用户要求拖拽时必须有可见跟随物） */
-  transform: scale(1.05);
-  border-width: 2px;
-}
-.nb-drag-ghost img {
-  width: 72px;
-  height: 72px;
-  border-radius: 5px;
-  object-fit: cover;
-  flex: none;
-}
-.nb-drag-ghost .nb-drag-ghost-name {
-  max-width: 96px;
-}
 /* Ctrl 拖资源悬停到的目标格：描边高亮（待输入/已填通用） */
 .nb-card.is-target {
   border-color: var(--ui-accent, #0891b2) !important;
@@ -2263,6 +2229,42 @@ function onGlobalLeave(el: Element): void {
   .nb-spinner {
     animation: none;
   }
+}
+</style>
+<style>
+/* Ctrl 拖资源的「影子」：跟鼠标走 —— 手建 DOM（document.createElement），必须是
+   非 scoped 样式才能命中（scoped 的 data-v 属性选择器匹配不上手建节点，实测踩过：
+   影子 position:fixed 全失效，铺成一个看不见的巨大静态块）。 */
+.nb-drag-ghost {
+  position: fixed;
+  z-index: 3000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 10px;
+  background: var(--ui-overlay-solid, #fff);
+  border: 2px solid var(--ui-accent, #0891b2);
+  color: var(--ui-ink, #18202b);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--ui-shadow-lg, 0 24px 64px rgb(15 23 42 / 0.3));
+  max-width: 220px;
+  overflow: hidden;
+}
+.nb-drag-ghost img {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: none;
+}
+.nb-drag-ghost .nb-drag-ghost-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
  
