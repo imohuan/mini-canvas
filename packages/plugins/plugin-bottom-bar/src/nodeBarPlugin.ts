@@ -25,6 +25,8 @@ import NodeBottomBarOverlay from './NodeBottomBarOverlay.vue'
 import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
 // 全屏媒体预览浮层（素材卡点开看大图/全文）
 import MediaPreviewOverlay from './MediaPreviewOverlay.vue'
+// Ctrl 拖选择态浮层（按住 Ctrl 时的画布选择态，视觉复刻参考选择）
+import CtrlDragOverlay from './CtrlDragOverlay.vue'
 
 /** 底栏整体换皮的主题槽名（与 settingsPanel 同构：order 最小者赢） */
 export const BOTTOM_BAR_SLOT = 'bottomBar'
@@ -267,6 +269,14 @@ export function apply(ctx: Context) {
     order: 42,
     component: MediaPreviewOverlay,
     meta: { title: '媒体预览' },
+  })
+
+  // Ctrl 拖选择态浮层：按住 Ctrl 时的画布选择态（视觉复刻参考选择：紫描边/角标/提醒）。
+  ctx.slots.register(BOTTOM_BAR_SLOT_NAME, {
+    id: 'bottom-bar/ctrl-drag',
+    order: 43,
+    component: CtrlDragOverlay,
+    meta: { title: 'Ctrl 拖选择态' },
   })
 
   // 刷新续查（§0.5）：冷启动与热装两条时机都挂，只跑一次；

@@ -71,6 +71,7 @@ import {
 import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf, isDraggableTarget } from './refSlotDrag'
+import { ctrlDragActive, enterCtrlDragMode, exitCtrlDragMode } from './ctrlDragMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -980,15 +981,32 @@ function moveGhost(x: number, y: number): void {
   if (g) { g.style.left = x + 'px'; g.style.top = y + 'px' }
 }
 
+/** Ctrl 按下（底栏开着）→ 进入选择态（画布出高亮/角标/提醒，复刻参考选择）。
+ *  松开 Ctrl → 退出。选择态与影子拖拽是两个独立层：选择态是「预告」，拖拽是动作。 */
+function onCtrlModeKeydown(ev: KeyboardEvent): void {
+  if (ev.key !== 'Control' || ev.repeat) return
+  if (!document.querySelector('.nb-overlay')) return
+  if (referenceActive()) return // 参考选择态已激活时不叠加 Ctrl 选择态
+  if (ev.target instanceof HTMLElement && ev.target.closest('input, textarea, select, [contenteditable="true"]')) return
+  enterCtrlDragMode(props.id)
+}
+function onCtrlModeKeyup(ev: KeyboardEvent): void {
+  if (ev.key !== 'Control') return
+  exitCtrlDragMode()
+}
+
 /** pointerdown（捕获）：底栏开着 + Ctrl + 鼠标下是图片/视频/音频节点 → 进入拖资源模式。
  *  在捕获阶段拦掉，画布收不到这次按下 —— Ctrl 拖资源**不会**顺带选中节点。 */
 function onCtrlDragPointerDown(ev: PointerEvent): void {
   if (!(ev.ctrlKey || ev.metaKey)) return
+  // 只在选择态里允许拖（选择态 = Ctrl 按下时进入的预告层；用户口径：与参考选择同款交互）
+  if (!ctrlDragActive()) return
   if (!isDraggableTarget(ev.target)) return
-  if (!document.querySelector('.nb-overlay')) return
   const el = (ev.target as HTMLElement).closest('.vue-flow__node') as HTMLElement | null
   const nodeId = el?.getAttribute('data-id')
   if (!nodeId) return
+  // 已连接的禁止（选择态里它是 connected 面孔 + 提醒，这里双保险）
+  if (nodeId === props.id) return
   const doc = ctx.tryGet<{ getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined }>('doc')
   const media = nodeMediaOf(doc?.getNode(nodeId))
   if (!media) return
@@ -1117,6 +1135,9 @@ onMounted(() => {
   window.addEventListener('dragover', onCtrlDragOver, true)
   window.addEventListener('drop', onCtrlDragDrop, true)
   window.addEventListener('dragend', onCtrlDragEnd, true)
+  // Ctrl 按下 = 进入选择态（用户口径：与「参考选择」同款 —— 画布节点出高亮/角标/提醒）
+  window.addEventListener('keydown', onCtrlModeKeydown, true)
+  window.addEventListener('keyup', onCtrlModeKeyup, true)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('pointerdown', onCtrlDragPointerDown, true)
@@ -1125,6 +1146,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('dragover', onCtrlDragOver, true)
   window.removeEventListener('drop', onCtrlDragDrop, true)
   window.removeEventListener('dragend', onCtrlDragEnd, true)
+  window.removeEventListener('keydown', onCtrlModeKeydown, true)
+  window.removeEventListener('keyup', onCtrlModeKeyup, true)
 })
 
 /**

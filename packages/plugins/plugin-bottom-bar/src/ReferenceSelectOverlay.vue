@@ -355,7 +355,8 @@ const ICON_CLOSE =
 .rs-root {
   position: fixed;
   inset: 0;
-  z-index: 55;
+  /* 70 > 底栏浮层 60：顶栏不能被节点边框盖住，点击也不能穿透到节点（真机踩过） */
+  z-index: 70;
   pointer-events: none;
 }
 
