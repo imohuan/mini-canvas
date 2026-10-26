@@ -1412,21 +1412,56 @@ export function useEditor(
     if (!view) return false
     const nodeType = mySchema.nodes.resource
     if (!nodeType) return false
-    itemRegistry.set(item.id, item)
+    // 名字 undefined = 保留注册表里原条目的名字（引用名是提示词的一部分，
+    // 排序/替换只换图 —— 注册表条目如果被 undefined 覆盖，chip 文字会漂移）。
+    const prev = itemRegistry.get(item.id)
+    // renderEditor 等外观字段也要从 prev 继承（item 只带数据，不带渲染函数）。
+    itemRegistry.set(item.id, item.name === undefined && prev ? { ...prev, ...item, name: prev.name } : item)
     let found = false
     const tr = view.state.tr
     view.state.doc.descendants((node, pos) => {
       if (found || node.type.name !== 'resource' || node.attrs.id !== item.id) return
       found = true
+      // registry（按节点 id 存）也要同步 url —— chip 走 renderEditor 分支渲染时
+      // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
+      const reg = itemRegistry.get(node.attrs.id)
+      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '' })
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
-        name: item.name,
+        // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
+        // 排序/替换只换缩略图，绝不能改写它（真机踩过：排序后"图片3"被改成别的名字）。
+        name: item.name ?? node.attrs.name,
         url: item.url ?? '',
         // 缩略图必须跟着新 url 重算：留着旧 attrs 的话 toDOM 会继续用旧 thumbnail_url，
         // 表现为「排序/替换后标签缩略图不更新」（真机踩过）。
         thumbnail_url: item.thumbnail_url ?? '',
         value: item.value ?? '',
         category: item.category,
+      })
+    })
+    if (!found) return false
+    view.dispatch(tr)
+    return true
+  }
+  /**
+   * 按**标签名字**（图片2）更新正文中该标签的缩略图 —— 名字（引用）保持不动。
+   * 用户口径：资源卡片排序只换「第 N 格现在放哪张图」，正文标签的名字绝不能变。
+   * 找不到同名标签 → false（调用方决定要不要插入）。
+   */
+  function replaceResourceThumbByName(name: string, url: string): boolean {
+    if (!view) return false
+    const nodeType = mySchema.nodes.resource
+    if (!nodeType) return false
+    let found = false
+    const tr = view.state.tr
+    view.state.doc.descendants((node, pos) => {
+      if (found || node.type.name !== 'resource' || node.attrs.name !== name) return
+      found = true
+      tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        url,
+        // 缩略图跟着新 url 重算（旧 thumbnail_url 不清会显示旧图，真机踩过）
+        thumbnail_url: '',
       })
     })
     if (!found) return false
@@ -1499,6 +1534,7 @@ export function useEditor(
     setText,
     insertResource,
     replaceResource,
+    replaceResourceThumbByName,
     refreshChips,
   };
 }

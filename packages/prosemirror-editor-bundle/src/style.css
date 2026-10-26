@@ -122,8 +122,9 @@
 /* 终极修复：选中背景 */
 /* 1. 当 ProseMirror 将其标记为选中节点时 */
 .prose-mirror-editor .ProseMirror-selectednode.resource-node {
-  background-color: var(--ui-accent, #0891b2) !important;
-  color: #ffffff !important;
+  /* 用户口径（2026-10-26）：标签选中用默认黑白主题，不跟主题色 */
+  background-color: var(--ui-ink, #18202b) !important;
+  color: var(--ui-paper, #ffffff) !important;
   outline: none;
   /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
@@ -136,8 +137,8 @@
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: var(--ui-accent, #0891b2) !important;
-  color: #ffffff !important;
+  background-color: var(--ui-ink, #18202b) !important;
+  color: var(--ui-paper, #ffffff) !important;
   outline: none;
   height: 24px;
   align-items: center;
@@ -166,8 +167,9 @@
 
 /* 2. 处理原生拖拽选中时的背景覆盖 */
 .prose-mirror-editor .ProseMirror ::selection {
-  background-color: var(--ui-accent, #0891b2) !important;
-  color: #ffffff !important;
+  /* 文本选中同样用默认黑白，不跟主题色 */
+  background-color: color-mix(in srgb, var(--ui-ink, #18202b) 78%, transparent) !important;
+  color: var(--ui-paper, #ffffff) !important;
 }
 
 /* 强制图片在选中区域内背景透明，防止白块 */

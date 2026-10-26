@@ -436,14 +436,19 @@ function onReorder(next?: MaterialCard[]): void {
 /** 素材卡点击 → 预览（参考图里卡片点开就是看大图） */
 function openCard(card: MaterialCard): void {
   // 多张同类素材：把地址列成 list 交给 MediaViewer —— 预览里就有 ← / → 切换与页码。
-  const multi = previewListFor(cards.value, card)
+  // tile.card（mergeRefTiles 输出）只有 {id,name,url,isText}，没有 kind —— 直接传会让
+  // 预览的 kind 变 undefined → MediaViewer 认不出媒体类型 → stage 空白（真机踩过）。
+  // 从 shownMaterials 里补全成完整 MaterialCard 再开预览。
+  const full = cards.value.find((c) => c.id === card.id) ?? card
+  const multi = previewListFor(cards.value, full)
+  ;(window as any).__previewDbg = { cardId: card.id, url: (card.url || '').slice(0, 60), kind: card.kind, isText: card.isText, multiLen: multi?.list.length ?? null }
   // 全屏预览：用户要求「要的是全屏，是整个视图」
   openPreview({
-    name: card.name,
-    nodeId: card.id,
-    kind: card.isText ? 'text' : (card.kind as 'image' | 'video' | 'audio'),
-    url: card.url,
-    text: card.value,
+    name: full.name,
+    nodeId: full.id,
+    kind: full.isText ? 'text' : (full.kind as 'image' | 'video' | 'audio'),
+    url: full.url,
+    text: full.value,
     ...(multi ?? {}),
   }, props.id)
 }
@@ -736,6 +741,7 @@ function onReorderTiles(next?: Array<{ key?: string }>): void {
 const editorComponentRef = ref<{
   insertResource?(item: ResourceItem): void
   replaceResource?(item: ResourceItem): boolean
+  replaceResourceThumbByName?(name: string, url: string): boolean
 } | null>(null)
 
 /** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
@@ -881,6 +887,9 @@ function refreshSlotChips(): void {
         name: label + Number(i),
         category: '素材',
         mediaType: k === 'av' ? undefined : (k as 'image' | 'video' | 'audio'),
+        // 借资源条目的 renderEditor：不带的化 toDOM 走默认分支（@名字样式），
+        // 与卡片样式的 chip 并存 = 正文出现两套标签外观（真机踩过）。
+        renderEditor: editorResources.value[0]?.renderEditor,
       })
       continue
     }
@@ -905,15 +914,24 @@ function refreshSlotChips(): void {
       url: tile.url,
       mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
     }
+    const nodeId = tile.key.replace(/^card:/, '')
+    // 同上：带上 renderEditor，保证 chip 外观与资源面板插入的一致
+    const resItem = editorResources.value.find((r) => r.id === nodeId)
+    if (resItem) item.renderEditor = resItem.renderEditor
     registerItem(item)
     // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）。
     // 正文里这个标签有两种身份：@声明转出来的 attrs.id = ref-slot:image:N；
     // 手工/资源面板插进来的 attrs.id = 上游节点 id（真机踩过：只按 ref-slot 找，
     // 排序后那类标签的缩略图永远不更新）。两个 id 各刷一次，找不到的那次是 no-op。
-    const nodeId = tile.key.replace(/^card:/, '')
-    const r1 = editorComponentRef.value?.replaceResource?.(item)
-    const r2 = editorComponentRef.value?.replaceResource?.({ ...item, id: nodeId })
-    ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, slotId: item.id, nodeId, url: (item.url || '').match(/resources\/([a-z0-9.]+)/)?.[1] || (item.url || '').slice(0, 20), r1, r2 }
+    // 用户口径（2026-10-26）：排序/替换只更新**缩略图**，标签名字（用户提示词里的
+    // 引用名）绝不能被改写 —— name 传 undefined，replaceResource 保留原 attrs.name。
+    // 用户口径（2026-10-26）：资源卡片排序 = 「第 N 格现在放哪张图」。正文里名字为
+    // 图片N 的标签：名字（用户提示词的引用名）绝不能被改写，只把缩略图换成
+    // 第 N 格当前资源 —— 按名字找标签、只换图；找不到同名标签就不动。
+    // 只在「名字→图」映射变化时才 dispatch：多轮 watch（新旧数据各一拍）会互相覆盖，
+    // 最后一拍必须是正确数据 —— 变化检测让错误的中间拍被正确拍覆盖后不再回写。
+    const replaced = editorComponentRef.value?.replaceResourceThumbByName?.(item.name, tile.url ?? '')
+    ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, name: item.name, url: (tile.url || '').match(/resources\/([a-z0-9.]+)/)?.[1] || 'svg', replaced }
     } catch (err) {
       ;(window as any).__chipErr = { tile: tile.key, msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
     }
@@ -929,7 +947,13 @@ function refreshSlotChips(): void {
  *  放前面会踩 const TDZ（真机踩过：ReferenceError before initialization）。 */
 // refOrder 也要听：拖拽排序会改 refName 编号（图片2 变图片1），正文里标签的序号/缩略图
 // 跟着变 —— 只听 shownMaterials 会漏掉「内容没变、只是换序」的情况（真机踩过）。
-watch([shownMaterials, refOrder], () => refreshSlotChips(), { immediate: true })
+// 两拍缓冲：refName 重编号要等 collectUpstreamMaterials 的异步 resolve 链回灌，
+// 单拍 nextTick 仍会拿「新格子 × 旧编号」的错配组合（真机踩过：缩略图整体偏移一位）。
+watch([shownMaterials, refOrder], () => {
+  void nextTick()
+    .then(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
+    .then(() => refreshSlotChips())
+}, { immediate: true })
 
 // ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
 
