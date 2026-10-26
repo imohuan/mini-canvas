@@ -718,6 +718,7 @@ function slotErrorOf(tile: { slotKey?: string }): string {
  * 字段（上一版从这里拿，永远是 undefined → 函数一进来就 return → 排序看起来没生效）。
  */
 function onReorderTiles(next?: Array<{ key?: string }>): void {
+  ;(window as any).__reorderDbg = { at: Date.now(), next: next?.map((t) => t.key) }
   if (!next || next.length === 0) return
   const ids = next
     .map((t) => (t.key ?? '').replace(/^card:/, ''))
