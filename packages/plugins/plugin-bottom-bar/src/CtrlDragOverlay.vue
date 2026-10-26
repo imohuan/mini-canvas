@@ -69,7 +69,6 @@ function sameLayers(a: NodeLayer[], b: NodeLayer[]): boolean {
 function refresh(): void {
   const scratch: NodeLayer[] = []
   measure(scratch)
-  ;(window as unknown as { __cdDbg?: unknown }).__cdDbg = { active: active.value, count: scratch.length, first: scratch[0] ?? null }
   if (sameLayers(layers.value, scratch)) return
   layers.value = scratch
 }
@@ -77,7 +76,6 @@ function refresh(): void {
 const hoverId = ref<string | null>(null)
 
 onMounted(() => {
-  ;(window as unknown as { __cdMounted?: number }).__cdMounted = ((window as unknown as { __cdMounted?: number }).__cdMounted || 0) + 1
   window.addEventListener('mini-canvas:ctrl-drag-mode', syncActive)
   const timer = window.setInterval(() => {
     refresh()
