@@ -130,6 +130,9 @@ function onPick(): void {
   if (!d) return
   if (state.value === 'selectable') {
     d.connectEdge({ source: props.id, target: session.owner })
+    // 连上后要刷新本层（以及其它层）的面孔 —— 否则 state 停留在 selectable，
+    // 再点一次会重复走 connect 分支（用户看到的"第二次点击没取消"就是这个）。
+    onModeChange()
     return
   }
   const ids = d
@@ -137,6 +140,7 @@ function onPick(): void {
     .filter((e) => e.source === props.id && e.target === session.owner)
     .map((e) => e.id)
   if (ids.length > 0) d.removeEdges(ids)
+  onModeChange()
 }
 
 /**
