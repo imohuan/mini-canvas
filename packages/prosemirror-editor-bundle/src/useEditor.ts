@@ -1425,7 +1425,7 @@ export function useEditor(
       // registry（按节点 id 存）也要同步 url —— chip 走 renderEditor 分支渲染时
       // 读的是 registry 条目，只改 attrs 不改 registry 的话缩略图不会变（真机踩过）。
       const reg = itemRegistry.get(node.attrs.id)
-      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '' })
+      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url: item.url ?? '', thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
         // name 传 undefined = 保留原名字：标签名是用户提示词的一部分（引用名），
@@ -1457,6 +1457,11 @@ export function useEditor(
     view.state.doc.descendants((node, pos) => {
       if (found || node.type.name !== 'resource' || node.attrs.name !== name) return
       found = true
+      // registry（按节点 id 存）同步 url —— chip 走 renderEditor(registry item) 渲染，
+      // 只改 attrs 不改 registry，toDOM 重渲染时缩略图还是旧图（真机踩过）。
+      const reg = itemRegistry.get(node.attrs.id)
+      // 名字固定为正文 attrs.name（用户提示词的引用名，绝不改写）；图随格子换。
+      if (reg) itemRegistry.set(node.attrs.id, { ...reg, url, thumbnail_url: '', name: String(node.attrs.name ?? reg.name) })
       tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
         url,
@@ -1485,8 +1490,10 @@ export function useEditor(
     const tr = view.state.tr
     view.state.doc.descendants((node, pos) => {
       if (node.type.name !== 'resource') return
-      const id = String(node.attrs.id ?? '')
-      if (!id.startsWith('ref-slot:')) return
+      // 刷所有**注册表里有条目**的资源节点：正文标签的身份有两种（@声明的 ref-slot:*、
+      // 资源面板插入的节点 id）—— 只刷 ref-slot:* 会漏掉后者（真机踩过：排序后那类
+      // 标签的缩略图不更新）。registry 没有的（用户手打的裸引用）不动。
+      if (!itemRegistry.has(String(node.attrs.id ?? ''))) return
       tr.setNodeMarkup(pos, undefined, { ...node.attrs })
     })
     view.dispatch(tr)

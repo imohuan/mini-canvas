@@ -742,6 +742,7 @@ const editorComponentRef = ref<{
   insertResource?(item: ResourceItem): void
   replaceResource?(item: ResourceItem): boolean
   replaceResourceThumbByName?(name: string, url: string): boolean
+  refreshChips?(): void
 } | null>(null)
 
 /** 点击槽位：空的 = 选文件上传；已填的 = 把光标带回正文那个标签 */
@@ -919,18 +920,21 @@ function refreshSlotChips(): void {
     const resItem = editorResources.value.find((r) => r.id === nodeId)
     if (resItem) item.renderEditor = resItem.renderEditor
     registerItem(item)
+    // 用户口径（2026-10-26）：拖卡排序 = 「第 N 格现在放哪张图」→ 正文里名字为
+    // 图片N 的标签，缩略图要换成第 N 格当前资源；名字（引用名）绝不能改写。
+    // 按 **attrs.name**（用户当前看到的名字）找 chip、只换图 —— 不依赖 refName
+    // 回灌时序（真机踩过：tiles 新旧错位导致偏移一位）。
+    editorComponentRef.value?.replaceResourceThumbByName?.(item.name, tile.url ?? '')
     // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）。
     // 正文里这个标签有两种身份：@声明转出来的 attrs.id = ref-slot:image:N；
     // 手工/资源面板插进来的 attrs.id = 上游节点 id（真机踩过：只按 ref-slot 找，
     // 排序后那类标签的缩略图永远不更新）。两个 id 各刷一次，找不到的那次是 no-op。
     // 用户口径（2026-10-26）：排序/替换只更新**缩略图**，标签名字（用户提示词里的
     // 引用名）绝不能被改写 —— name 传 undefined，replaceResource 保留原 attrs.name。
-    // 用户口径（2026-10-26）：资源卡片排序 = 「第 N 格现在放哪张图」。正文里名字为
-    // 图片N 的标签：名字（用户提示词的引用名）绝不能被改写，只把缩略图换成
-    // 第 N 格当前资源 —— 按名字找标签、只换图；找不到同名标签就不动。
-    // 只在「名字→图」映射变化时才 dispatch：多轮 watch（新旧数据各一拍）会互相覆盖，
-    // 最后一拍必须是正确数据 —— 变化检测让错误的中间拍被正确拍覆盖后不再回写。
     const replaced = editorComponentRef.value?.replaceResourceThumbByName?.(item.name, tile.url ?? '')
+    // 排序/替换影响所有格子的 refName 编号 —— 逐颗改完统一强制重渲染一次
+    //（toDOM 读 registry，registry 已在上面更新；只改 attrs 不触发渲染的漏网之鱼由它兜住）。
+    editorComponentRef.value?.refreshChips?.()
     ;(window as any).__chipDbg = { runs: (window as any).__chipRuns, name: item.name, url: (tile.url || '').match(/resources\/([a-z0-9.]+)/)?.[1] || 'svg', replaced }
     } catch (err) {
       ;(window as any).__chipErr = { tile: tile.key, msg: String(err), stack: (err as Error)?.stack?.slice(0, 500) }
@@ -951,7 +955,9 @@ function refreshSlotChips(): void {
 // 单拍 nextTick 仍会拿「新格子 × 旧编号」的错配组合（真机踩过：缩略图整体偏移一位）。
 watch([shownMaterials, refOrder], () => {
   void nextTick()
-    .then(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
+    .then(() => typeof requestAnimationFrame === 'function'
+      ? new Promise<void>((r) => requestAnimationFrame(() => r()))
+      : undefined)
     .then(() => refreshSlotChips())
 }, { immediate: true })
 
