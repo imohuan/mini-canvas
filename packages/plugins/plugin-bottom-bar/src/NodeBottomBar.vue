@@ -63,11 +63,12 @@ import {
   judgeSlotDrop,
   dropVerdictMessage,
   hitSlotAtPoint,
+  refSlotKey,
   REF_SLOT_META,
   type RefSlotKind,
 } from './refSlots'
 // 参考区合并 + 缺号校验（纯函数，已单测）
-import { mergeRefTiles, findRefGap, uploadToRefSlot } from './refTiles'
+import { mergeRefTiles, findRefGap, uploadToRefSlot, refNameToSlotKey } from './refTiles'
 // Ctrl 拖资源到参考格：节点媒体判定 / 目标放行（纯函数，已单测）
 import { nodeMediaOf, isDraggableTarget } from './refSlotDrag'
 
@@ -677,12 +678,18 @@ function slotErrorOf(tile: { slotKey?: string }): string {
 /**
  * 一行格子的拖拽排序。
  *
- * 格子由连线派生：拖完把**有内容的那些**（即连线素材）按新顺序写回 data.refOrder，
- * 待输入格跟着序号走（它没有 id，位置由相邻素材决定）。
+ * 格子 key 有两种：`card:<节点id>`（有连线的内容）与 `slot:<kind>:<n>`（待输入）。
+ * 拖完把**有内容的**（card:*）按新顺序写回 data.refOrder —— collectUpstreamMaterials
+ * 会按 refOrder 重排连线素材并重新编号，于是待输入格的位置也跟着对齐。
+ *
+ * 为什么不能从 `t.card` 拿 id：refTiles 是 mergeRefTiles 的输出，那个形状里没有 card
+ * 字段（上一版从这里拿，永远是 undefined → 函数一进来就 return → 排序看起来没生效）。
  */
-function onReorderTiles(next?: Array<{ key?: string; card?: MaterialCard }>): void {
+function onReorderTiles(next?: Array<{ key?: string }>): void {
   if (!next || next.length === 0) return
-  const ids = next.map((t) => t.card?.id).filter((id): id is string => !!id)
+  const ids = next
+    .map((t) => (t.key ?? '').replace(/^card:/, ''))
+    .filter((id) => id && !id.includes(':')) // slot:image:2 这种不是节点 id
   if (ids.length === 0) return
   try {
     ctx.get('doc').updateNode(props.id, { data: { refOrder: ids } })
@@ -735,7 +742,8 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
     return
   }
   const doc = ctx.tryGet<{
-    getNode(id: string): { position?: { x: number; y: number }; width?: number } | undefined
+    getNode(id: string): { type?: string; data?: Record<string, unknown>; position?: { x: number; y: number }; width?: number } | undefined
+    getNodes(): Array<{ id: string; type?: string; data?: Record<string, unknown> }>
     addEdge(input: { source: string; target: string }): string
     updateNode(id: string, patch: { data: Record<string, unknown> }): void
   }>('doc')
@@ -760,8 +768,17 @@ async function fillSlotFromFile(kind: RefSlotKind, index: number, file: File): P
         refOrder: () => refOrder.value,
         writeOrder: (ids) => doc.updateNode(props.id, { data: { refOrder: ids } }),
         pickCreated: (before) => {
-          const fresh = shownMaterials.value.find((m) => !before.has(m.id))
-          return fresh ? { id: fresh.id, name: fresh.name, url: fresh.url } : null
+          // 为什么不能到 shownMaterials 里找：素材是**按边**收集的（collectUpstreamMaterials），
+          // 而此刻连线还没建 —— 新节点根本不在里面，永远找不到 → 提前 return（这就是
+          // 「上传只建节点、没连线」的根因）。这里直接查 doc：file-drop 刚建的那个新节点。
+          const freshNode = doc.getNodes().find((n) => !before.has(n.id) && n.id !== props.id)
+          if (!freshNode) return null
+          const d = freshNode.data ?? {}
+          const s = (v: unknown) => (typeof v === 'string' && v ? v : '')
+          const mediaType = verdict.mediaType
+          const url = s(d.imageUrl) || s(d.videoUrl) || s(d.audioUrl)
+          const name = s(d.label) || s(d.imageName) || s(d.videoName) || s(d.audioName) || file.name
+          return { id: freshNode.id, name, url, mediaType }
         },
         positionFor: (index) => ({ x: base.x - w - 24 - (index - 1) * (w + 24), y: base.y }),
       },
@@ -792,18 +809,42 @@ function setSlotError(index: number, message: string): void {
 function refreshSlotChips(): void {
   for (const tile of refTiles.value) {
     const key = tile.slotKey
-    if (!key || tile.pending) continue
-    const [kind, indexRaw] = key.split(':')
+    if (tile.pending) {
+      // 待输入的格子：把「虚线待输入」的 item 登记进去（tile.url 是空的）
+      if (!key) continue
+      const [k, i] = key.split(':')
+      const label = REF_SLOT_META[k as RefSlotKind].label
+      registerItem({
+        id: 'ref-slot:' + key,
+        name: label + Number(i),
+        category: '素材',
+        mediaType: k === 'av' ? undefined : (k as 'image' | 'video' | 'audio'),
+      })
+      continue
+    }
+    // 已填的格子：key = card:<节点id>，序号与内容来自连线素材
+    // 序号从 **refName**（图片N）取，不是 tile.name（那是节点 label，如「拖我B」）——
+    // 用显示名找会匹配不上（refNameToSlotKey 认不出「拖我B」）→ 从未调 replaceResource
+    //（这就是「上传后连线有了、但正文标签仍是虚线」的根因）
+    const refName = shownMaterials.value.find((m) => m.id === tile.key.replace(/^card:/, ''))?.refName
+    const parsed = refNameToSlotKey(refName ?? tile.name, 'image') ?? refNameToSlotKey(refName ?? tile.name, 'video') ?? refNameToSlotKey(refName ?? tile.name, 'audio')
+    if (!parsed) continue
+    const kind = parsed.kind
+    const index = parsed.index
+    const slotKey = kind + ':' + index
     const label = REF_SLOT_META[kind as RefSlotKind].label
-    registerItem({
-      id: 'ref-slot:' + key,
+    const item: ResourceItem = {
+      id: 'ref-slot:' + parsed.kind + ':' + parsed.index,
       name: tile.name || label + tile.index,
       category: '素材',
       url: tile.url,
       mediaType: kind === 'av' ? undefined : (kind as 'image' | 'video' | 'audio'),
-    })
+    }
+    registerItem(item)
+    // 已填的格子：用 replaceResource 原地替换正文里对应的标签（虚线→实线 + 缩略图）
+    const replaced = editorComponentRef.value?.replaceResource?.(item)
+    void replaced
   }
-  editorComponentRef.value?.refreshChips?.()
 }
 
 // ===== Ctrl 拖资源到参考格（判定在 refSlotDrag.ts，事件绑定在这里） =====
@@ -838,9 +879,18 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
   if (!media) return
   ev.preventDefault()
   ev.stopPropagation()
+  // 影子 = 缩略图 + 名字（用户口径 2026-10-26：「可以做成图片的缩略图跟随鼠标」）
   const ghost = document.createElement('div')
   ghost.className = 'nb-drag-ghost'
-  ghost.textContent = media.name
+  if (media.url && media.mediaType === 'image') {
+    const img = document.createElement('img')
+    img.src = media.url
+    img.alt = ''
+    ghost.appendChild(img)
+  }
+  const label = document.createElement('span')
+  label.textContent = media.name
+  ghost.appendChild(label)
   document.body.appendChild(ghost)
   ctrlDrag = { nodeId, mediaType: media.mediaType, url: media.url, name: media.name, ghost }
   moveGhost(ev.clientX, ev.clientY)
@@ -849,7 +899,9 @@ function onCtrlDragPointerDown(ev: PointerEvent): void {
 function onCtrlDragPointerMove(ev: PointerEvent): void {
   if (!ctrlDrag) return
   moveGhost(ev.clientX, ev.clientY)
-  const host = (ev.target as HTMLElement | null)?.closest?.('.nb-card') as HTMLElement | null
+  // 用坐标找鼠标下的格子（不用 ev.target：拖资源时鼠标在画布上，
+  // 而参考格在另一个 teleport 层 —— target 永远不会是它）
+  const host = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
   const key = host?.dataset.tileKey
   if (ctrlDrag.targetTileKey && ctrlDrag.targetTileKey !== key) {
     document.querySelector('.nb-card[data-tile-key="' + ctrlDrag.targetTileKey + '"]')?.classList.remove('is-target')
@@ -868,6 +920,9 @@ function onCtrlDragPointerUp(ev: PointerEvent): void {
   if (drag?.targetTileKey) document.querySelector('.nb-card[data-tile-key="' + drag.targetTileKey + '"]')?.classList.remove('is-target')
   drag?.ghost?.remove()
   if (!drag || !drag.targetTileKey) return
+  // 松手点 = 落在参考格上的（用户松手那一刻鼠标在哪，替换就在哪）
+  const dropHost = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.nb-card') as HTMLElement | null
+  if (dropHost?.dataset.tileKey) drag.targetTileKey = dropHost.dataset.tileKey
   const tile = refTiles.value.find((t) => t.key === drag.targetTileKey)
   if (!tile?.slotKey) return
   const kind = tile.slotKey.split(':')[0] as RefSlotKind
@@ -908,8 +963,8 @@ async function replaceSlotMaterial(
     removeEdges(ids: string[]): number
   }>('doc')
   if (!doc) return
-  // 该格原本的连线 = 连到本节点、且素材序号正好是这个格子的那条
-  const material = shownMaterials.value.find((m) => parseSlotFromRefName(m.refName)?.index === index && parseSlotFromRefName(m.refName)?.label === REF_SLOT_META[kind].label)
+  // 该格原本的连线 = 连到本节点、且素材 refName 正好对应这个槽位的那条
+  const material = shownMaterials.value.find((m) => refNameToSlotKey(m.refName, kind) === refSlotKey(kind, index))
   const oldEdge = material ? renderEdges.value.find((e) => e.source === material.id && e.target === props.id) : undefined
   try {
     if (oldEdge) doc.removeEdges([oldEdge.id])
@@ -918,6 +973,12 @@ async function replaceSlotMaterial(
     const order = placeRefAtSlot(refOrder.value, kind, index, source.nodeId)
     doc.updateNode(props.id, { data: { refOrder: order } })
     slotErrors.value = {}
+    // 等一拍：shownMaterials 是「按边收集」的 computed，连线刚写入 doc 但渲染层
+    // 还没回灌 —— 不等的话这里读到的是**旧素材**（没有刚连线的那格）→ 刷不上去
+    // 渲染层的 renderEdges 回灌比 nextTick 晚一拍（宿主在 VueFlow 回调里更新），
+    // 只等 nextTick 会读到旧素材（刚连线的那格还是 pending）→ 刷不上去
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 300))
     refreshSlotChips()
   } catch (err) {
     console.warn('[bottom-bar] 替换参考失败', err)
@@ -1514,7 +1575,10 @@ function onGlobalLeave(el: Element): void {
   position: fixed;
   z-index: 1000;
   pointer-events: none;
-  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px 4px 4px;
   border-radius: 8px;
   background: var(--ui-overlay-solid, #fff);
   border: 1px solid var(--ui-accent, #0891b2);
@@ -1526,6 +1590,13 @@ function onGlobalLeave(el: Element): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.nb-drag-ghost img {
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex: none;
 }
 /* Ctrl 拖资源悬停到的目标格：描边高亮（待输入/已填通用） */
 .nb-card.is-target {

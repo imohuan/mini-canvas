@@ -462,17 +462,29 @@ function createSlotTagPlugin() {
             mediaType: slotKind === 'av' ? undefined : (slotKind as 'image' | 'video' | 'audio'),
           }
           item.renderEditor = (self) => {
+            // **渲染时**读注册表：正文标签的内容随连线变化（上传/替换后从待输入变已填），
+            // 如果这里读闭包里的旧 item，标签就永远是虚线（实测：上传成功后正文标签不变）
+            const latest = itemRegistry.get(self.id) ?? self
             const span = document.createElement('span')
-            span.className = 'resource-node resource-chip is-pending'
+            const isPending = !latest.url
+            span.className = 'resource-node resource-chip' + (isPending ? ' is-pending' : '')
             span.dataset.id = self.id
-            span.dataset.name = self.name
-            const ic = document.createElement('span')
-            ic.className = 'resource-chip-icon'
-            ic.innerHTML = SLOT_CHIP_ICON
-            span.append(ic)
+            span.dataset.name = latest.name
+            if (latest.url && latest.mediaType === 'image') {
+              const img = document.createElement('img')
+              img.className = 'resource-chip-thumb'
+              img.src = latest.url
+              img.alt = ''
+              span.append(img)
+            } else {
+              const ic = document.createElement('span')
+              ic.className = 'resource-chip-icon'
+              ic.innerHTML = SLOT_CHIP_ICON
+              span.append(ic)
+            }
             const nm = document.createElement('span')
             nm.className = 'resource-chip-name'
-            nm.textContent = self.name
+            nm.textContent = latest.name
             span.append(nm)
             return span
           }
