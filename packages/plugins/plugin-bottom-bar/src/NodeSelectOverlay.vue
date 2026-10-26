@@ -23,6 +23,7 @@ import {
 } from './referenceMode'
 import { nodeMediaOf } from './refSlotDrag'
 import { requestStartDrag } from './ctrlDragMode'
+import { hideTip, showTip } from './tipBus'
 
 const props = defineProps<{
   id: string
@@ -110,7 +111,7 @@ function syncRadius(): void {
   if (r && r !== radius.value) radius.value = r
 }
 
-const hint = computed(() => {
+const hintText = computed(() => {
   if (!state.value || state.value === 'owner' || state.value === 'blocked') return ''
   if (props.mode === 'ctrl-drag') {
     if (state.value === 'connected') return '已连接 · 不可重复拖拽'
@@ -119,6 +120,14 @@ const hint = computed(() => {
   const label = (props.data?.label as string) || props.id
   return referenceHintText(state.value, label)
 })
+
+/** 悬停：显示通用鼠标提示（用户口径：底部文字标签不要，改成跟随鼠标的提示） */
+function onEnter(): void {
+  if (hintText.value) showTip(hintText.value)
+}
+function onLeave(): void {
+  hideTip()
+}
 
 /** 点击行为（仅 reference 模式）：连上/取消；ctrl-drag 模式点击不动作（操作是拖拽） */
 function onPick(): void {
@@ -166,12 +175,13 @@ function onDragPointerDown(ev: PointerEvent): void {
     :style="{ border: border.width + ' ' + border.style + ' ' + border.color, borderRadius: radius }"
     data-testid="node-select-layer"
     @pointerdown.capture="onDragPointerDown($event)"
+    @pointerenter="onEnter"
+    @pointerleave="onLeave"
     @click.stop="onPick()"
   >
     <span v-if="state === 'selectable'" class="nso-badge">
       {{ state === 'connected' ? '✓' : '+' }}
     </span>
-    <span v-if="hint" class="nso-hint" :class="{ 'is-connected': state === 'connected' }">{{ hint }}</span>
   </div>
 </template>
 
@@ -189,6 +199,4 @@ function onDragPointerDown(ev: PointerEvent): void {
 .nso-layer.is-owner { pointer-events: none; }
 .nso-layer.is-blocked { background: color-mix(in srgb, var(--ui-scrim) 42%, transparent); pointer-events: none; }
 .nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
-.nso-hint { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: var(--ui-tip); color: var(--ui-tip-ink); font-size: 12px; font-weight: 600; white-space: nowrap; z-index: 71; }
-.nso-hint.is-connected { background: var(--ui-accent); color: var(--ui-primary-ink, #fff); }
 </style>
