@@ -30,6 +30,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 - **能力包**：每条区域条目可以声明 `needs: ['node','zoom','selection',...]`，
   由它按条目取袋并 provide 给子树（每个节点一份实例）。
 - **其它**：低细节模式（缩小到一定程度只画框）、多选标记、可选拖拽缩放手柄、连接反馈高亮。
+- **视口外降级**：节点滚出画面后壳按宿主下发的状态自动降级（见下文「视口外状态与降级绘制」）。
 
 ## Props
 
@@ -137,3 +138,49 @@ const node = useCapability('node')
 4. **同一区域可以叠多层**：按 `order` 升序（小者在外），同 id 会去重。
 5. **标题条只有单格换肤**：往 `title` 区域注册会用你那条替换默认标题条，
    想"保留默认再叠东西"要用别的区域。
+
+## 视口外状态与降级绘制
+
+宿主（CanvasHost）会判断每个节点在不在画面里，并把结果写进节点的 `data._cullState`，
+BaseNode 读它决定画多深。四个值：
+
+| 状态 | 什么时候 | BaseNode 画什么 |
+| --- | --- | --- |
+| `visible`（或不下发） | 在画面里（含 300px 缓冲带）/ 临时节点 | 全部照常画 |
+| `culled` | 在画面外，且没有连线牵扯它 | 降级：内容、控制栏、区域条**不挂载**；卡片占位（看不见但占着位置） |
+| `culled-linked` | 在画面外，但有连线连到画面里的节点 | 同上降级，**但壳必须常驻** —— 连线端点要锚在它的端口上 |
+
+为什么壳不能直接删：VueFlow 的规则是"连线任一端 hidden，整条线不画"。曾经直接给屏外节点打
+hidden，结果画布内节点的连线凭空断掉 —— 这就是现在这套状态机制的由来。
+
+### 画多深可以配（三个档）
+
+设置面板「默认主题 → 节点/低细节 → 视口外节点绘制」（`culledNodeRendering`）：
+
+- **骨架**（默认）：卡片隐身占位，端口锚点还在，连线不断。
+- **全量**：等同关闭降级，屏外节点照常完整画。
+- **占位框**：内容不画，但画一个空心细框，远处的连线走向一目了然。
+
+### 自己写壳想接这套状态
+
+判定逻辑收在纯函数里，直接 import：
+
+```ts
+// 文件：packages/plugins/plugin-theme-default/src/components/node/culledRenderingPolicy.ts
+import { culledPolicy } from '../culledRenderingPolicy' // 路径按你的包调整
+
+// state = props.data?._cullState；rendering = 你壳的绘制档位（skeleton/full/ghost）
+const { reduced, visibleCard, ghost } = culledPolicy(props.data?._cullState, rendering)
+// reduced=true → 内容段/控制栏不挂载（v-if，不是藏起来）；visibleCard/ghost → 卡片可见性与占位框画法
+```
+
+三条红线：
+
+1. **MovingHandle（端口锚点）的挂载门永远不要加剔除条件** —— 端口 DOM 常驻是 VueFlow
+   handleBounds 稳定的前提，摘了它连线端点全错。
+2. **culled-linked 的节点不要 hidden** —— 它有连线牵扯，hidden 会把线连坐消失（本机制的立项原因）。
+3. **内容用 v-if 摘，不要 visibility/opacity 藏** —— 藏着的话图片解码、文本布局照跑，等于白优化。
+
+> 另有一个画布级开关「屏外壳压缩」（`cullCompactShells`，常规/画布分组）：开后纯 `culled`
+> 节点连壳都不渲染（零 DOM），`visible` 与 `culled-linked` 不受影响。宿主侧完整机制见
+> 仓库 `docs/代码开发/canvas-render/12-节点可见状态与剔除.md`。
