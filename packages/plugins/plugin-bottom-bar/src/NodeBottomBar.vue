@@ -1986,11 +1986,15 @@ function onGlobalLeave(el: Element): void {
   font-weight: 600;
   color: var(--ui-ink, #18202b);
 }
-/* 选中态：跟主题强调色走 */
+/* 选中态：反色黑底白字（用户选定方案 C，demo docs/demo/chip-select-demo.html） */
 .nb-editor :deep(.resource-chip.ProseMirror-selectednode),
 .nb-editor :deep(.resource-chip.resource-node-selected) {
-  border-color: color-mix(in srgb, var(--ui-accent, #0891b2) 60%, transparent);
-  background: var(--ui-accent-soft, color-mix(in srgb, var(--ui-accent, #0891b2) 12%, transparent));
+  border-color: var(--ui-ink, #18202b);
+  background: var(--ui-ink, #18202b);
+}
+.nb-editor :deep(.resource-chip.ProseMirror-selectednode .resource-chip-name),
+.nb-editor :deep(.resource-chip.resource-node-selected .resource-chip-name) {
+  color: var(--ui-paper, #ffffff);
 }
 .nb-placeholder {
   position: absolute;

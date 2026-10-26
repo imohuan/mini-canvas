@@ -124,10 +124,8 @@
 .prose-mirror-editor .ProseMirror-selectednode.resource-node {
   /* 用户口径（2026-10-26）：标签选中用默认黑白主题，不跟主题色 */
   /* 选中态保持 chip 原样可见（黑底会把缩略图整个盖成黑块，实测踩过），只用描边表达 */
-  background-color: transparent !important;
-  color: inherit !important;
-  outline: 2px solid var(--ui-ink, #18202b);
-  outline-offset: 1px;
+  background-color: var(--ui-ink, #18202b) !important;
+  color: var(--ui-paper, #ffffff) !important;
   /* 确保选中时也保持正确的高度和对齐 */
   height: 24px;
   align-items: center;
@@ -139,10 +137,8 @@
 
 /* 2. 装饰插件添加的选中样式 */
 .prose-mirror-editor .resource-node.resource-node-selected {
-  background-color: transparent !important;
-  color: inherit !important;
-  outline: 2px solid var(--ui-ink, #18202b);
-  outline-offset: 1px;
+  background-color: var(--ui-ink, #18202b) !important;
+  color: var(--ui-paper, #ffffff) !important;
   height: 24px;
   align-items: center;
 }
