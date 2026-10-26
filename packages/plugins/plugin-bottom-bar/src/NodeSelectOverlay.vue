@@ -28,7 +28,22 @@ const props = defineProps<{
   data: Record<string, unknown>
   /** 选择态种类：reference=点击连/断；ctrl-drag=按住拖拽替换 */
   mode: 'reference' | 'ctrl-drag'
+  /** 边框配置项（缺省 = BaseNode 选中态同款） */
+  borderColor?: string
+  borderStyle?: string
+  borderWidth?: string
 }>()
+
+/**
+ * 边框外观配置项（用户口径：复用 BaseNode 原生边框效果 + 可配置颜色/样式）。
+ * 默认值 = BaseNode 选中态的同款 token（--canvas-node-border-selected / 1px 实线），
+ * 宿主可通过 props 覆盖单个字段。
+ */
+const border = computed(() => ({
+  color: props.borderColor ?? 'var(--canvas-node-border-selected, #111827d9)',
+  style: props.borderStyle ?? 'solid',
+  width: props.borderWidth ?? '1px',
+}))
 
 const { ctx } = useCanvasRender()
 
@@ -49,6 +64,13 @@ function onModeChange(): void {
 }
 onMounted(() => window.addEventListener(EVENT(props.mode), onModeChange))
 onBeforeUnmount(() => window.removeEventListener(EVENT(props.mode), onModeChange))
+onMounted(() => {
+  syncRadius()
+  radiusTimer = setInterval(syncRadius, 250)
+})
+onBeforeUnmount(() => {
+  if (radiusTimer) clearInterval(radiusTimer)
+})
 
 type DocLike = {
   getNode(id: string): { type?: string; data?: Record<string, unknown> } | undefined
@@ -75,11 +97,22 @@ const state = computed<null | ReferenceNodeState>(() => {
   return referenceNodeState({ isOwner: props.id === session.owner, canReference: canUse, connected })
 })
 
+/** 圆角跟随卡片实算值（over:inset 容器是方角，inherit 拿到 0 —— 真机踩过） */
+const rootEl = ref<HTMLElement | null>(null)
+const radius = ref('8px')
+let radiusTimer: ReturnType<typeof setInterval> | null = null
+function syncRadius(): void {
+  const cardEl = rootEl.value?.closest('.v2-node')?.querySelector('.v2-card') as HTMLElement | null
+  if (!cardEl) return
+  const r = getComputedStyle(cardEl).borderRadius
+  if (r && r !== radius.value) radius.value = r
+}
+
 const hint = computed(() => {
   if (!state.value || state.value === 'owner' || state.value === 'blocked') return ''
   if (props.mode === 'ctrl-drag') {
     if (state.value === 'connected') return '已连接 · 不可重复拖拽'
-    return '按住拖到参考格'
+    return ''
   }
   const label = (props.data?.label as string) || props.id
   return referenceHintText(state.value, label)
@@ -108,12 +141,14 @@ function onPick(): void {
 <template>
   <div
     v-if="state"
+    ref="rootEl"
     class="nso-layer"
     :class="['is-' + state, 'is-' + mode]"
+    :style="{ border: border.width + ' ' + border.style + ' ' + border.color, borderRadius: radius }"
     data-testid="node-select-layer"
     @click.stop="onPick()"
   >
-    <span v-if="state === 'selectable' || state === 'connected'" class="nso-badge">
+    <span v-if="state === 'selectable'" class="nso-badge">
       {{ state === 'connected' ? '✓' : '+' }}
     </span>
     <span v-if="hint" class="nso-hint" :class="{ 'is-connected': state === 'connected' }">{{ hint }}</span>
@@ -125,10 +160,10 @@ function onPick(): void {
 .nso-layer { position: absolute; inset: 0; border-radius: inherit; }
 .nso-layer.is-reference { cursor: pointer; }
 .nso-layer.is-ctrl-drag { pointer-events: none; }
-.nso-layer.is-selectable { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ui-accent) 55%, transparent); }
-.nso-layer.is-reference.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 14%, transparent); box-shadow: inset 0 0 0 2px var(--ui-accent); }
-.nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); box-shadow: inset 0 0 0 1.5px var(--ui-accent); }
-.nso-layer.is-owner { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ui-accent) 40%, transparent); pointer-events: none; }
+.nso-layer.is-selectable { background: transparent; }
+.nso-layer.is-reference.is-selectable:hover { background: color-mix(in srgb, var(--ui-accent) 14%, transparent); }
+.nso-layer.is-connected { background: color-mix(in srgb, var(--ui-accent) 10%, transparent); }
+.nso-layer.is-owner { pointer-events: none; }
 .nso-layer.is-blocked { background: color-mix(in srgb, var(--ui-scrim) 42%, transparent); pointer-events: none; }
 .nso-badge { position: absolute; left: 6px; top: 6px; display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 999px; background: var(--ui-accent); color: var(--ui-primary-ink, #fff); font-size: 12px; font-weight: 700; line-height: 1; }
 .nso-hint { position: absolute; left: 50%; top: calc(100% + 6px); transform: translateX(-50%); padding: 4px 10px; border-radius: 8px; background: var(--ui-tip); color: var(--ui-tip-ink); font-size: 12px; font-weight: 600; white-space: nowrap; z-index: 71; }
